@@ -82,8 +82,18 @@ cat .sillyspec/codebase/CONVENTIONS.md 2>/dev/null
 🔴 RED    → 先写测试，运行确认失败
 🟢 GREEN  → 写最少代码让测试通过
 🔵 REFACTOR → 清理，保持测试通过
-✅ COMMIT  → git add -A && git commit
+✅ COMMIT  → git 提交（见下方规则）
 ```
+
+**Git 提交规则：**
+- 检查当前目录是否为 Git 仓库：`git rev-parse --is-inside-work-tree`
+- 如果是 Git 仓库 → `git add -A && git commit`
+- 如果不是 Git 仓库（工作区模式下子项目在父目录外）：
+  1. 尝试 `cd` 到正在修改的子项目目录
+  2. 检查该子项目是否为 Git 仓库
+  3. 如果是 → 在子项目目录执行 `git add -A && git commit`
+  4. 如果不是 → 跳过提交，但记录在任务完成报告中
+- **不要跳过可以提交的 Git 仓库。**
 
 **绝对禁止：**
 - ❌ 先写代码后补测试
