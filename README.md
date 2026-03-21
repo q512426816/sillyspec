@@ -20,8 +20,13 @@
 ## 安装
 
 ```bash
+# 远程安装（推荐）
+curl -fsSL https://raw.githubusercontent.com/q512426816/sillyspec/main/scripts/init.sh | bash
+
+# 或本地安装
 cd your-project
-bash /path/to/sillyspec/scripts/init.sh
+git clone https://github.com/q512426816/sillyspec.git
+bash sillyspec/scripts/init.sh
 ```
 
 ## 入口选择
