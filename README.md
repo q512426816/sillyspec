@@ -29,6 +29,14 @@ git clone https://github.com/q512426816/sillyspec.git
 bash sillyspec/scripts/init.sh
 ```
 
+安装后重新打开终端，启动 Claude Code：
+
+```bash
+claude --dangerously-skip-permissions
+```
+
+> 💡 **推荐使用跳过权限模式。** SillySpec 的命令会频繁执行 `git commit`、文件读写、校验脚本等操作，停下来 50 次批准会失去意义。这是 GSD 和 OpenSpec 的预期使用方式。
+
 ## 入口选择
 
 ```
