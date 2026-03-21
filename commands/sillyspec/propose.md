@@ -154,7 +154,7 @@ Response: { userId: string, message: "verification email sent" }
 Hard Gate 自检通过后，运行校验脚本：
 
 ```bash
-bash scripts/validate-proposal.sh openspec/changes/$ARGUMENTS
+bash scripts/validate-proposal.sh .sillyspec/changes/$ARGUMENTS
 ```
 
 - 脚本返回 0 → 自检通过，继续展示文件
@@ -162,7 +162,7 @@ bash scripts/validate-proposal.sh openspec/changes/$ARGUMENTS
 
 ### 7. 最后说：
 
-> 规范已生成到 `openspec/changes/$ARGUMENTS/`。
+> 规范已生成到 `.sillyspec/changes/$ARGUMENTS/`。
 >
 > 审阅 `proposal.md`（为什么做）和 `design.md`（怎么做）。
 > 确认后运行 `/sillyspec:plan` 生成详细实现计划。

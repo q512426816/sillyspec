@@ -23,7 +23,7 @@ fi
 # 2. 检查当前变更
 echo ""
 echo "📋 检查变更..."
-LATEST=$(ls -d openspec/changes/*/ 2>/dev/null | grep -v archive | tail -1)
+LATEST=$(ls -d .sillyspec/changes/*/ 2>/dev/null | grep -v archive | tail -1)
 if [ -n "$LATEST" ]; then
   echo "  📁 当前变更: $LATEST"
   "$SCRIPT_DIR/validate-proposal.sh" "$LATEST" || ((ERRORS++))

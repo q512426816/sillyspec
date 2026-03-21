@@ -1,7 +1,7 @@
 #!/bin/bash
 # SillySpec 校验：propose 阶段输出
 # 用法：validate-proposal.sh <change-dir>
-# 示例：validate-proposal.sh openspec/changes/docsite-redesign
+# 示例：validate-proposal.sh .sillyspec/changes/docsite-redesign
 
 CHANGE_DIR="${1:?用法: validate-proposal.sh <change-dir>}"
 ERRORS=0

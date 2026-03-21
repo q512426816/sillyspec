@@ -22,7 +22,7 @@ if [ -n "$PLAN" ]; then
   cat "$PLAN"
 fi
 
-# 已有的上下文
+# 已有的交接文件
 cat .sillyspec/HANDOFF.json 2>/dev/null
 ```
 
@@ -34,7 +34,16 @@ cat .sillyspec/HANDOFF.json 2>/dev/null
 - tasks.md 全完成 → Phase 5 (Verify)
 - 其他 → Phase 1 (Brainstorm)
 
-### 3. 生成交接文件
+### 3. 确认归档
+
+在保存之前，展示即将保存的内容：
+- 变更目录名
+- 当前阶段和进度
+- 下一步建议
+
+**等待用户确认后再执行保存。**
+
+### 4. 生成交接文件
 
 保存到 `.sillyspec/HANDOFF.json`：
 
@@ -55,7 +64,7 @@ cat .sillyspec/HANDOFF.json 2>/dev/null
 }
 ```
 
-### 4. Git 提交
+### 5. Git 提交
 
 ```bash
 git add .sillyspec/HANDOFF.json

@@ -1,7 +1,7 @@
 #!/bin/bash
 # SillySpec 校验：scan 阶段输出
 # 用法：validate-scan.sh [codebase-dir]
-# 默认检查 .planning/codebase/
+# 默认检查 .sillyspec/codebase/
 
 CODEBASE_DIR="${1:-.planning/codebase}"
 ERRORS=0
@@ -34,7 +34,7 @@ for f in "${REQUIRED_FILES[@]}"; do
 done
 
 # 检查 PROJECT.md
-if [ -f ".planning/PROJECT.md" ]; then
+if [ -f ".sillyspec/PROJECT.md" ]; then
   echo "  ✅ PROJECT.md 存在"
 else
   echo "  ⚠️ PROJECT.md 不存在（建议生成）"

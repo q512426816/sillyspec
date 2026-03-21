@@ -183,7 +183,7 @@ cat .sillyspec/REQUIREMENTS.md 2>/dev/null
 Hard Gate 自检通过后，运行校验脚本：
 
 ```bash
-bash scripts/validate-plan.sh openspec/changes/<当前变更目录>
+bash scripts/validate-plan.sh .sillyspec/changes/<当前变更目录>
 ```
 
 - 脚本返回 0 → 自检通过，继续

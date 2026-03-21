@@ -125,10 +125,10 @@ sillyspec/
 
 ```bash
 # 校验 propose 阶段输出
-./sillyspec/scripts/validate-proposal.sh openspec/changes/your-change
+./sillyspec/scripts/validate-proposal.sh .sillyspec/changes/your-change
 
 # 校验 plan 阶段输出
-./sillyspec/scripts/validate-plan.sh openspec/changes/your-change
+./sillyspec/scripts/validate-plan.sh .sillyspec/changes/your-change
 
 # 校验 scan 阶段输出（7 份文档）
 ./sillyspec/scripts/validate-scan.sh .planning/codebase
