@@ -2,6 +2,8 @@
 
 > 融合 Superpowers + OpenSpec + GSD，**15 个真实的 Claude Code slash commands**。
 > 支持绿地项目和棕地项目。
+>
+> 📖 **在线文档**：https://sillyspec.ppdmq.top/
 
 ## 这是什么？
 
