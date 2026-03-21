@@ -178,7 +178,18 @@ cat .sillyspec/REQUIREMENTS.md 2>/dev/null
 
 **任何一项不通过 → 修正后重新检查。**
 
-### 7. 最后说：
+### 脚本校验（硬验证）
+
+Hard Gate 自检通过后，运行校验脚本：
+
+```bash
+bash scripts/validate-plan.sh openspec/changes/<当前变更目录>
+```
+
+- 脚本返回 0 → 自检通过，继续
+- 脚本返回非 0 → 根据提示修正后重新运行
+
+### 8. 最后说：
 
 > 计划已保存到 `.sillyspec/plans/xxx.md`。
 > 确认后运行 `/sillyspec:execute` 开始执行。

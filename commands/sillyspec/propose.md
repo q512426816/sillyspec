@@ -149,9 +149,20 @@ Response: { userId: string, message: "verification email sent" }
 
 **任何一项不通过 → 修正后重新检查，不准跳过。**
 
-### 6. 最后说：
+### 脚本校验（硬验证）
 
-> 规范已生成到 `.sillyspec/changes/$ARGUMENTS/`。
+Hard Gate 自检通过后，运行校验脚本：
+
+```bash
+bash scripts/validate-proposal.sh openspec/changes/$ARGUMENTS
+```
+
+- 脚本返回 0 → 自检通过，继续展示文件
+- 脚本返回非 0 → 根据错误提示修正文件，重新运行脚本
+
+### 7. 最后说：
+
+> 规范已生成到 `openspec/changes/$ARGUMENTS/`。
 >
 > 审阅 `proposal.md`（为什么做）和 `design.md`（怎么做）。
 > 确认后运行 `/sillyspec:plan` 生成详细实现计划。

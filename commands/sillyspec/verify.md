@@ -86,6 +86,16 @@ grep -r "TODO\|FIXME\|HACK\|XXX" src/ lib/ app/ --include="*.ts" --include="*.ts
 ⚠️ PASS WITH NOTES
 ```
 
+## 脚本校验（硬验证）
+
+在输出验证报告之前，运行综合校验脚本：
+
+```bash
+bash scripts/validate-all.sh
+```
+
+将脚本输出纳入验证报告中的"设计一致性"部分。
+
 ### 7. 最后说：
 - PASS → `运行 /sillyspec:archive 完成归档`
 - PASS WITH NOTES → 列出建议修复项，用户决定是否修复

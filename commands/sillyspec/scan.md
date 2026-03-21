@@ -353,3 +353,14 @@ git commit -m "chore: sillyspec scan - codebase mapped"
 - [ ] PROJECT.md 是否生成？
 
 **7 份文档 + PROJECT.md 全部生成才算通过。**
+
+### 脚本校验（硬验证）
+
+Hard Gate 自检通过后，运行校验脚本：
+
+```bash
+bash scripts/validate-scan.sh .planning/codebase
+```
+
+- 脚本返回 0 → 自检通过，继续
+- 脚本返回非 0 → 根据错误提示修正文档，重新运行脚本
