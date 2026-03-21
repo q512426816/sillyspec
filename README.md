@@ -1,6 +1,6 @@
-# SillySpec v2.0 — 规范驱动开发工具包
+# SillySpec v2.1 — 规范驱动开发工具包
 
-> 融合 Superpowers + OpenSpec + GSD，**14 个真实的 Claude Code slash commands**。
+> 融合 Superpowers + OpenSpec + GSD，**15 个真实的 Claude Code slash commands**。
 > 支持绿地项目和棕地项目。
 
 ## 这是什么？
@@ -44,7 +44,7 @@ bash /path/to/sillyspec/scripts/init.sh
 - 中断恢复：`/sillyspec:resume`
 - 不知道下一步：`/sillyspec:continue`
 
-## 14 个命令
+## 15 个命令
 
 | 命令 | 来源 | 用途 |
 |---|---|---|
@@ -62,6 +62,16 @@ bash /path/to/sillyspec/scripts/init.sh
 | `/sillyspec:handoff` | GSD pause-work | 保存状态 |
 | `/sillyspec:resume` | GSD resume-work | 恢复工作 |
 | `/sillyspec:quick` | GSD quick | 快速模式 |
+| `/sillyspec:workspace` | SillySpec | 工作区管理：多项目子项目管理 |
+
+## 可靠性保障
+
+SillySpec 不仅仅是 prompt，还有硬校验：
+
+- **锚定确认** — propose/plan/execute/verify 执行前必须逐个确认读过规范文件
+- **Hard Gate 自检** — 关键命令生成文件后强制自检格式，不通过则修正
+- **校验脚本** — shell 脚本可自动化验证 AI 输出（validate-proposal/plan/scan/all）
+- **归档确认** — archive 操作前展示内容等待用户确认
 
 ## 目录结构
 
@@ -89,6 +99,8 @@ sillyspec/
 │   ├── validate-plan.sh             # 校验 plan 阶段输出
 │   ├── validate-scan.sh             # 校验 scan 阶段输出（7 份文档）
 │   └── validate-all.sh              # 综合校验，一键检查项目状态
+├── workspace.md                     # 工作区管理命令
+├── 操作文档.md                       # 详细操作指南
 └── README.md
 ```
 
