@@ -121,22 +121,30 @@ cat .sillyspec/codebase/ARCHITECTURE.md
 ### 2. 读取同模块已有代码（关键！）
 
 ```bash
-# 如果要写 Controller → 先读同模块已有的 Controller
-find . -path "*/controller*" -name "*.java" -o -name "*.ts" \
-  -not -path "*/node_modules/*" -not -path "*/dist/*" | head -10
+# 如果要写 Controller/Handler/Router → 先读同模块已有的
+find . \( -path "*/controller*" -o -path "*/handler*" -o -path "*/router*" -o -path "*/api*" \) \
+  -type f \( -name "*.java" -o -name "*.ts" -o -name "*.py" -o -name "*.go" \
+  -o -name "*.rs" -o -name "*.kt" -o -name "*.rb" -o -name "*.php" \) \
+  -not -path "*/node_modules/*" -not -path "*/dist/*" -not -path "*/.git/*" \
+  -not -path "*/vendor/*" -not -path "*/build/*" | head -15
 
-# 如果要调用 Service → 先读目标 Service 接口
-find . -name "*Service.java" -o -name "*Service.ts" -o -name "*Service.py" \
-  -not -path "*/node_modules/*" | head -10
+# 如果要调用 Service/Manager/UseCase → 先读目标接口
+find . \( -name "*Service*" -o -name "*Manager*" -o -name "*UseCase*" -o -name "*Repository*" \) \
+  -type f \( -name "*.java" -o -name "*.ts" -o -name "*.py" -o -name "*.go" \
+  -o -name "*.rs" -o -name "*.kt" -o -name "*.rb" -o -name "*.php" \) \
+  -not -path "*/node_modules/*" -not -path "*/dist/*" -not -path "*/.git/*" \
+  -not -path "*/vendor/*" -not -path "*/build/*" | head -15
 ```
+
+根据项目语言只读取匹配的文件，忽略不相关的语言文件。
 
 ### 3. 铁律（违反 = 幻觉风险）
 
-- ❌ **禁止编造不存在的方法调用** — 调用 Service 方法前必须确认该方法签名存在
-- ❌ **禁止编造不存在的注解** — 权限注解、校验注解必须与项目已有风格一致
-- ❌ **禁止编造路径前缀** — 必须确认项目的 URL 前缀是全局配置还是手动写
-- ❌ **禁止编造不存在的类/字段** — 实体类字段、VO 字段必须来自已有定义
-- ❌ **禁止自行补全缺失的接口** — 发现 Service 没有某方法 → 告诉用户，不要自己实现
+- ❌ **禁止编造不存在的方法调用** — 调用任何方法前必须确认该方法签名存在
+- ❌ **禁止编造不存在的注解/装饰器** — 权限注解、校验注解必须与项目已有风格一致
+- ❌ **禁止编造路径前缀/URL** — 必须确认项目的路由前缀是全局配置还是手动写
+- ❌ **禁止编造不存在的类/字段/常量** — 必须来自已有源码定义
+- ❌ **禁止自行补全缺失的接口/方法** — 发现缺失 → 告诉用户，不要自己实现
 - ✅ 需要新增方法/接口 → 先在 plan 中声明，用户确认后再实现
 
 ### 4. 如果找不到相关代码
