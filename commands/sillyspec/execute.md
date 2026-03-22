@@ -105,6 +105,51 @@ cat .sillyspec/codebase/CONVENTIONS.md 2>/dev/null
 
 **例外（需人工确认）：** 抛弃型原型、生成代码、配置文件。
 
+## 🚨 写代码前必须读取现有源码（防幻觉）
+
+**在编写任何 Controller、Service、Model、SQL 之前，必须执行：**
+
+### 1. 读取相关约定
+
+```bash
+# 读取编码约定
+cat .sillyspec/codebase/CONVENTIONS.md
+# 读取架构（特别是 API 约定和数据模型摘要）
+cat .sillyspec/codebase/ARCHITECTURE.md
+```
+
+### 2. 读取同模块已有代码（关键！）
+
+```bash
+# 如果要写 Controller → 先读同模块已有的 Controller
+find . -path "*/controller*" -name "*.java" -o -name "*.ts" \
+  -not -path "*/node_modules/*" -not -path "*/dist/*" | head -10
+
+# 如果要调用 Service → 先读目标 Service 接口
+find . -name "*Service.java" -o -name "*Service.ts" -o -name "*Service.py" \
+  -not -path "*/node_modules/*" | head -10
+```
+
+### 3. 铁律（违反 = 幻觉风险）
+
+- ❌ **禁止编造不存在的方法调用** — 调用 Service 方法前必须确认该方法签名存在
+- ❌ **禁止编造不存在的注解** — 权限注解、校验注解必须与项目已有风格一致
+- ❌ **禁止编造路径前缀** — 必须确认项目的 URL 前缀是全局配置还是手动写
+- ❌ **禁止编造不存在的类/字段** — 实体类字段、VO 字段必须来自已有定义
+- ❌ **禁止自行补全缺失的接口** — 发现 Service 没有某方法 → 告诉用户，不要自己实现
+- ✅ 需要新增方法/接口 → 先在 plan 中声明，用户确认后再实现
+
+### 4. 如果找不到相关代码
+
+```
+⚠️ 未找到相关的 [Controller/Service/Model] 源码。
+请提供：
+1. 同模块已有的 Controller 路径和风格参考
+2. 目标 Service 的接口定义
+```
+
+**不要猜。不要"看起来合理"就写。没有源码参考就不写。**
+
 ## 两阶段审查
 
 每个任务完成后：
@@ -127,9 +172,11 @@ cat .sillyspec/codebase/CONVENTIONS.md 2>/dev/null
 
 遇到问题时的规则：
 1. **停** — 不要自作主张
-2. **报告** — 列出问题和解决方案
+2. **报告** — 列出问题和建议方案
 3. **等** — 人工确认后再继续
 4. 代码缺关键部分 → 报告缺失，不自行补充
+5. Service 方法不存在 → 报告缺失，不要自己实现或调用不确认的方法
+6. 缺少权限注解/路径前缀 → 先读已有 Controller 确认风格，再问用户
 
 ## 模型建议
 
