@@ -173,3 +173,4 @@ bash scripts/validate-proposal.sh .sillyspec/changes/$ARGUMENTS
 - tasks.md 只列任务名，不写具体步骤
 - 必须包含可量化的成功标准
 - 用户场景用 Given/When/Then 格式
+- **禁止编造不存在的表名、字段名、API 端点。** design.md 中引用的数据库对象必须来自 ARCHITECTURE.md 的数据模型章节，或明确标注为"新增"

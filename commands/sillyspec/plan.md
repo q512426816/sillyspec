@@ -199,3 +199,4 @@ bash scripts/validate-plan.sh .sillyspec/changes/<当前变更目录>
 - 不写实现代码（只写计划中的代码示例）
 - 每个步骤必须有验证命令和预期输出
 - 不要遗漏边界情况
+- **计划中引用的表名、字段名必须来自 ARCHITECTURE.md 数据模型或 design.md 中声明的新增表。禁止编造。**

@@ -107,6 +107,46 @@ find . -type f -not -path "*/node_modules/*" -not -path "*/dist/*" -not -path "*
 git log --oneline -20
 ```
 
+## 🚨 数据库 Schema 强制扫描（必须执行）
+
+**无论快速还是深度模式，必须执行以下步骤。** 这是防止 AI 在后续阶段"瞎猜"表名和字段名的关键。
+
+```bash
+# 查找所有数据库相关文件
+find . \( -name "schema.prisma" -o -name "*.model.ts" -o -name "*.entity.ts" \
+  -o -name "models.py" -o -name "models.go" -o -name "*.sql" \) \
+  -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" | head -30
+
+# 逐个读取找到的文件，获取完整表名、字段名、关系定义
+```
+
+**将所有数据库表名、字段名、关系写入 `ARCHITECTURE.md` 的"数据模型"章节。** 格式：
+
+```markdown
+## 数据模型
+
+### 表：users
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | UUID (PK) | 主键 |
+| email | VARCHAR(255) (UNIQUE) | 邮箱 |
+
+### 表：orders
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | SERIAL (PK) | 主键 |
+| user_id | INT (FK → users.id) | 下单用户 |
+
+### 关系
+- users 1:N orders
+```
+
+**铁律：后续所有阶段（brainstorm/propose/plan/execute）引用的表名必须出现在此列表中。** 需要新表必须在 propose 的 design.md 中明确声明。
+
+如果项目没有数据库 → 在 ARCHITECTURE.md 中写"本项目无数据库"，后续阶段不准引用任何表。
+
+---
+
 **生成 3 份文档：**
 
 创建目录 `mkdir -p .sillyspec/codebase`
