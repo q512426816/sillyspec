@@ -109,41 +109,64 @@ git log --oneline -20
 
 ## 🚨 数据库 Schema 强制扫描（必须执行）
 
-**无论快速还是深度模式，必须执行以下步骤。** 这是防止 AI 在后续阶段"瞎猜"表名和字段名的关键。
+**无论快速还是深度模式，必须执行以下步骤。** 防止 AI 在后续阶段编造表名和字段名。
+
+### 第一步：查找 Schema 定义文件
 
 ```bash
-# 查找所有数据库相关文件
 find . \( -name "schema.prisma" -o -name "*.model.ts" -o -name "*.entity.ts" \
-  -o -name "models.py" -o -name "models.go" -o -name "*.sql" \) \
-  -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" | head -30
-
-# 逐个读取找到的文件，获取完整表名、字段名、关系定义
+  -o -name "models.py" -o -name "models.go" \
+  -o -name "*.sql" -o -name "migration*" \
+  \) \
+  -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" \
+  -not -path "*/build/*" -not -path "*/vendor/*" | head -30
 ```
 
-**将所有数据库表名、字段名、关系写入 `ARCHITECTURE.md` 的"数据模型"章节。** 格式：
+支持的格式：
+
+| 框架 | 识别文件 |
+|---|---|
+| Prisma | `prisma/schema.prisma` |
+| SQLAlchemy / Django | `**/models.py` |
+| TypeORM | `**/*.entity.ts` |
+| Mongoose | `**/*.model.ts`（检查 mongoose schema） |
+| Java JPA / Hibernate | `**/entity/*.java`、`**/model/*.java`（含 `@Entity` / `@Table` 注解的类） |
+| MyBatis | `**/*Mapper.xml`（提取 `resultMap` 和表名） |
+| Go GORM | `**/models.go`、`**/model.go` |
+| Drizzle | `**/schema.ts` |
+| 原始 SQL | `**/migrations/*.sql` |
+
+### 第二步：生成 Schema 摘要
+
+**只记录表名 + 说明 + 字段数量，不展开字段细节。** 写入 ARCHITECTURE.md：
 
 ```markdown
-## 数据模型
+## 数据模型（摘要）
 
-### 表：users
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| id | UUID (PK) | 主键 |
-| email | VARCHAR(255) (UNIQUE) | 邮箱 |
-
-### 表：orders
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| id | SERIAL (PK) | 主键 |
-| user_id | INT (FK → users.id) | 下单用户 |
+| 表名 | 说明 | 字段数 | 来源文件 |
+|---|---|---|---|
+| users | 用户表 | 12 | `src/entity/User.java` |
+| roles | 角色表 | 5 | `src/entity/Role.java` |
+| orders | 订单表 | 18 | `prisma/schema.prisma` |
 
 ### 关系
+- users 1:N roles
 - users 1:N orders
 ```
 
-**铁律：后续所有阶段（brainstorm/propose/plan/execute）引用的表名必须出现在此列表中。** 需要新表必须在 propose 的 design.md 中明确声明。
+如果项目没有数据库 → 写"本项目无数据库"，后续阶段不准引用任何表。
 
-如果项目没有数据库 → 在 ARCHITECTURE.md 中写"本项目无数据库"，后续阶段不准引用任何表。
+### 第三步：在后续命令中按需深挖
+
+**brainstorm/propose/plan 阶段，根据当前需求只读取相关表的详细 schema。**
+
+执行规则：
+1. 先读 ARCHITECTURE.md 的 Schema 摘要，确定涉及哪些表
+2. 只读取相关表的源文件（`cat src/entity/User.java`）
+3. 没涉及的表不要读，节省上下文
+4. 如果摘要中没有但需要新表 → 必须在 propose 的 design.md 中声明
+
+**铁律：所有阶段引用的表名必须来自 Schema 摘要列表，或 design.md 中声明的新增表。**
 
 ---
 
