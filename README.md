@@ -1,40 +1,23 @@
-# SillySpec v2.1 — 规范驱动开发工具包
+# SillySpec v2.2 — 规范驱动开发工具包
 
-> 融合 Superpowers + OpenSpec + GSD，**16 个真实的 Claude Code slash commands**。
-> 支持绿地项目和棕地项目。
+> 融合 Superpowers + OpenSpec + GSD，**16 个命令**，从"你说要啥"到"代码能跑"的完整流程。
+> Claude Code / Cursor / Codex / OpenCode / OpenClaw 都能用。
 >
 > 📖 **在线文档**：https://sillyspec.ppdmq.top/
 
-## 这是什么？
-
-不是参考文档。是 Claude Code 里的**真命令**——输入 `/sillyspec:` 就能看到。
-
-基于三个顶级工具的**真实源码**重构：
-
-| 来源 | 借鉴了什么 | 原版位置 |
-|---|---|---|
-| **Superpowers** | brainstorming skill、subagent-driven-dev、writing-plans、TDD | `skills/brainstorming/SKILL.md` 等 |
-| **OpenSpec** | propose/verify/archive 变更管理、explore 思考模式 | `src/core/templates/workflows/explore.ts` |
-| **GSD** | map-codebase 7 文档扫描、new-project 深度提问、HANDOFF 状态恢复 | `workflows/map-codebase.md` 等 |
-
 ## 安装
 
+**macOS / Linux：**
 ```bash
-# 远程安装（推荐，自动检测已安装的 AI 工具）
 curl -fsSL https://raw.githubusercontent.com/q512426816/sillyspec/main/scripts/init.sh | bash
-
-# 指定安装某个工具
-curl -fsSL ... | bash -s -- --tool cursor
-
-# 多项目工作区模式
-curl -fsSL ... | bash -s -- --workspace
-
-# 本地安装
-cd your-project
-bash sillyspec/scripts/init.sh
 ```
 
-默认自动检测项目中已存在的 AI 工具目录（`.claude`、`.cursor`、`.opencode` 等），为它们生成对应格式的文件。未检测到任何工具时默认安装 Claude Code。
+**Windows PowerShell：**
+```powershell
+powershell -c "irm https://raw.githubusercontent.com/q512426816/sillyspec/main/install.ps1 | iex"
+```
+
+就这一行，装完就能用。
 
 ### 支持的 AI 工具
 
