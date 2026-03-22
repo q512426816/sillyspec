@@ -1,6 +1,6 @@
 # SillySpec v2.1 — 规范驱动开发工具包
 
-> 融合 Superpowers + OpenSpec + GSD，**15 个真实的 Claude Code slash commands**。
+> 融合 Superpowers + OpenSpec + GSD，**16 个真实的 Claude Code slash commands**。
 > 支持绿地项目和棕地项目。
 >
 > 📖 **在线文档**：https://sillyspec.ppdmq.top/
@@ -75,6 +75,7 @@ claude --dangerously-skip-permissions
 | `/sillyspec:status` | GSD progress | 查看进度 |
 | `/sillyspec:continue` | GSD next | 自动下一步 |
 | `/sillyspec:handoff` | GSD pause-work | 保存状态 |
+| `/sillyspec:export` | SillySpec | 导出成功方案为可复用模板 |
 | `/sillyspec:resume` | GSD resume-work | 恢复工作 |
 | `/sillyspec:quick` | GSD quick | 快速模式 |
 | `/sillyspec:workspace` | SillySpec | 工作区管理：多项目子项目管理 |
@@ -93,7 +94,7 @@ SillySpec 不仅仅是 prompt，还有硬校验：
 ```
 sillyspec/
 ├── SKILL.md                         # 全局 skill
-├── commands/sillyspec/              # ⭐ 14 个 slash commands
+├── commands/sillyspec/              # ⭐ 16 个 slash commands
 │   ├── init.md                      # 绿地入口
 │   ├── scan.md                      # 棕地扫描
 │   ├── explore.md                   # 自由思考
@@ -107,7 +108,8 @@ sillyspec/
 │   ├── continue.md                  # 自动推进
 │   ├── handoff.md                   # 状态保存
 │   ├── resume.md                    # 恢复
-│   └── quick.md                     # 快速模式
+│   ├── quick.md                     # 快速模式
+│   └── export.md                    # 模板导出
 ├── scripts/
 │   ├── init.sh                      # 一键安装
 │   ├── validate-proposal.sh         # 校验 propose 阶段输出

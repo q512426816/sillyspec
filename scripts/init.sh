@@ -47,6 +47,8 @@ mkdir -p .sillyspec/plans
 mkdir -p .sillyspec/codebase
 mkdir -p .sillyspec/phases
 
+mkdir -p ~/.sillyspec/templates
+
 if [ "${WORKSPACE_MODE}" = true ]; then
   mkdir -p .sillyspec/shared
   mkdir -p .sillyspec/workspace
