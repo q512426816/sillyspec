@@ -85,6 +85,12 @@ foreach ($cmd in $COMMANDS) {
 }
 Write-Host "  OK`n" -ForegroundColor Green
 
+# ── 写文件（无 BOM UTF-8，避免乱码） ──
+
+function Write-Utf8NoBom($path, $content) {
+    [System.IO.File]::WriteAllText((Resolve-Path -Path ".").Path + "\" + $path, $content, [System.Text.UTF8Encoding]::new($false))
+}
+
 # ── 自动检测 ──
 
 $tools = @()
@@ -127,31 +133,31 @@ foreach ($t in $tools) {
                 $outDir = ".claude\commands\sillyspec"
                 New-Item -ItemType Directory -Path $outDir -Force | Out-Null
                 $fm = "---`r`ndescription: $desc`r`nargument-hint: `"$argHint`"`r`n---"
-                Set-Content -Path "$outDir\$cmd.md" -Value "$fm`r`n`r`n$body" -Encoding UTF8
+                Write-Utf8NoBom "$outDir\$cmd.md" "$fm`n`n$body"
             }
             "cursor" {
                 $outDir = ".cursor\commands"
                 New-Item -ItemType Directory -Path $outDir -Force | Out-Null
                 $fm = "---`r`nname: /sillyspec-$cmd`r`nid: sillyspec-$cmd`r`ndescription: $desc`r`n---"
-                Set-Content -Path "$outDir\sillyspec-$cmd.md" -Value "$fm`r`n`r`n$body" -Encoding UTF8
+                Write-Utf8NoBom "$outDir\sillyspec-$cmd.md" "$fm`n`n$body"
             }
             "codex" {
                 $outDir = Join-Path $agentsDir "sillyspec-$cmd"
                 New-Item -ItemType Directory -Path $outDir -Force | Out-Null
                 $fm = "---`r`nname: sillyspec:$cmd`r`ndescription: $desc`r`n---"
-                Set-Content -Path "$outDir\SKILL.md" -Value "$fm`r`n`r`n$body" -Encoding UTF8
+                Write-Utf8NoBom "$outDir\SKILL.md" "$fm`n`n$body"
             }
             "opencode" {
                 $outDir = ".opencode\skills\sillyspec-$cmd"
                 New-Item -ItemType Directory -Path $outDir -Force | Out-Null
                 $fm = "---`r`nname: sillyspec:$cmd`r`ndescription: $desc`r`n---"
-                Set-Content -Path "$outDir\SKILL.md" -Value "$fm`r`n`r`n$body" -Encoding UTF8
+                Write-Utf8NoBom "$outDir\SKILL.md" "$fm`n`n$body"
             }
             "openclaw" {
                 $outDir = ".openclaw\skills\sillyspec-$cmd"
                 New-Item -ItemType Directory -Path $outDir -Force | Out-Null
                 $fm = "---`r`nname: sillyspec:$cmd`r`ndescription: $desc`r`n---"
-                Set-Content -Path "$outDir\SKILL.md" -Value "$fm`r`n`r`n$body" -Encoding UTF8
+                Write-Utf8NoBom "$outDir\SKILL.md" "$fm`n`n$body"
             }
         }
         $count++
