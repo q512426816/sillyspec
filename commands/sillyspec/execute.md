@@ -149,6 +149,9 @@ find . \( -name "*Service*" -o -name "*Manager*" -o -name "*UseCase*" -o -name "
 
 ### 4. 如果找不到相关代码
 
+分两种情况：
+
+**棕地项目（有已有代码但找不到同模块的）：**
 ```
 ⚠️ 未找到相关的 [Controller/Service/Model] 源码。
 请提供：
@@ -156,7 +159,14 @@ find . \( -name "*Service*" -o -name "*Manager*" -o -name "*UseCase*" -o -name "
 2. 目标 Service 的接口定义
 ```
 
-**不要猜。不要"看起来合理"就写。没有源码参考就不写。**
+**绿地项目 / 全新模块（完全没有参考代码）：**
+- 读 CONVENTIONS.md 获取编码风格（命名、目录结构、设计模式）
+- 读 ARCHITECTURE.md 获取技术选型和架构约定
+- 读 brainstorm 设计方案（`.sillyspec/specs/` 下的设计文档）
+- 按 plan 中声明的文件路径和规范执行
+- 首次编写某类文件时，先让用户确认风格是否正确
+
+**核心原则：没有源码参考时靠约定和设计方案驱动，而不是靠猜。**
 
 ## 两阶段审查
 
