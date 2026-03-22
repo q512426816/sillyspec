@@ -20,14 +20,34 @@
 ## 安装
 
 ```bash
-# 远程安装（推荐）
+# 远程安装（推荐，自动检测已安装的 AI 工具）
 curl -fsSL https://raw.githubusercontent.com/q512426816/sillyspec/main/scripts/init.sh | bash
 
-# 或本地安装
+# 指定安装某个工具
+curl -fsSL ... | bash -s -- --tool cursor
+
+# 多项目工作区模式
+curl -fsSL ... | bash -s -- --workspace
+
+# 本地安装
 cd your-project
-git clone https://github.com/q512426816/sillyspec.git
 bash sillyspec/scripts/init.sh
 ```
+
+默认自动检测项目中已存在的 AI 工具目录（`.claude`、`.cursor`、`.opencode` 等），为它们生成对应格式的文件。未检测到任何工具时默认安装 Claude Code。
+
+### 支持的 AI 工具
+
+| 工具 | `--tool` 参数 | 输出目录 | 格式 |
+|---|---|---|---|
+| Claude Code (commands) | `claude` | `.claude/commands/sillyspec/` | slash commands |
+| Claude Code (skills) | `claude_skills` | `.claude/skills/sillyspec-<name>/` | SKILL.md |
+| Cursor | `cursor` | `.cursor/commands/` | custom commands |
+| Codex | `codex` | `~/.agents/skills/sillyspec-<name>/` | SKILL.md |
+| OpenCode | `opencode` | `.opencode/skills/sillyspec-<name>/` | SKILL.md |
+| OpenClaw | `openclaw` | `.openclaw/skills/sillyspec-<name>/` | SKILL.md |
+
+> 💡 现有 Claude Code commands 用户不受影响，16 个原始命令文件保持不变。
 
 安装后重新打开终端，启动 Claude Code：
 
@@ -94,7 +114,10 @@ SillySpec 不仅仅是 prompt，还有硬校验：
 ```
 sillyspec/
 ├── SKILL.md                         # 全局 skill
-├── commands/sillyspec/              # ⭐ 16 个 slash commands
+├── commands/sillyspec/              # ⭐ 16 个 slash commands（Claude Code 原始文件，不动）
+├── templates/                       # 🆕 16 个纯 prompt 模板（工具无关）
+├── adapters/                        # 🆕 适配器定义（多工具格式转换）
+│   └── adapters.sh
 │   ├── init.md                      # 绿地入口
 │   ├── scan.md                      # 棕地扫描
 │   ├── explore.md                   # 自由思考

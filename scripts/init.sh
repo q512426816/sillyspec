@@ -1,52 +1,78 @@
-#!/bin/bash
-# SillySpec v2.0 — 一键初始化
-set -e
+#!/usr/bin/env bash
+# SillySpec v2.2 — 多工具一键初始化
+set -euo pipefail
 
-# 用法：curl -fsSL .../init.sh | bash -s -- [选项]
-#   bash -s -- --workspace     安装工作区模式
-#   bash -s -- --dir ./myapp   指定项目目录（默认当前目录）
+# 加载适配器
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/../adapters/adapters.sh"
 
+# ── 参数解析 ──
+
+TOOLS=()
+SPECIFIC_TOOL=""
 PROJECT_DIR="."
 WORKSPACE_MODE=false
 
-while [ $# -gt 0 ]; do
-  case "$1" in
-    --workspace) WORKSPACE_MODE=true ;;
-    --dir) PROJECT_DIR="$2"; shift ;;
-    -w) WORKSPACE_MODE=true ;;
-    -d) PROJECT_DIR="$2"; shift ;;
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --tool)      SPECIFIC_TOOL="$2"; shift 2 ;;
+    --workspace|-w) WORKSPACE_MODE=true; shift ;;
+    --dir|-d)    PROJECT_DIR="$2"; shift 2 ;;
+    *)
+      echo "未知参数: $1"
+      echo "用法: ./init.sh [--tool <claude|claude_skills|cursor|codex|opencode|openclaw>] [--workspace] [--dir <path>]"
+      exit 1
+      ;;
   esac
-  shift
 done
 
 cd "$PROJECT_DIR"
 
-echo "🤪 SillySpec v2.0 — 规范驱动开发"
+# ── 自动检测已安装的工具 ──
+
+detect_tools() {
+  local found=()
+  [ -d .claude ]              && found+=("claude")
+  [ -d .claude/skills ]       && found+=("claude_skills")
+  [ -d .cursor ]              && found+=("cursor")
+  [ -d .opencode ]            && found+=("opencode")
+  [ -d .openclaw ]            && found+=("openclaw")
+  [ -d ~/.agents/skills ]     && found+=("codex")
+
+  # 如果什么都没检测到，默认安装 claude
+  if [ ${#found[@]} -eq 0 ]; then
+    found=("claude")
+  fi
+
+  echo "${found[@]}"
+}
+
+# 确定要安装的工具
+if [ -n "$SPECIFIC_TOOL" ]; then
+  if ! is_valid_tool "$SPECIFIC_TOOL"; then
+    echo "❌ 未知工具: $SPECIFIC_TOOL"
+    echo "支持的工具: $VALID_TOOLS"
+    exit 1
+  fi
+  TOOLS=("$SPECIFIC_TOOL")
+else
+  read -ra TOOLS <<< "$(detect_tools)"
+fi
+
+echo "🤪 SillySpec v2.2 — 规范驱动开发"
 echo "===================================="
 echo ""
-
-# 检查 Claude Code
-if ! command -v claude &> /dev/null; then
-    echo "⚠️  Claude Code 未安装: npm install -g @anthropic-ai/claude-code"
-fi
-
+echo "📦 安装工具: ${TOOLS[*]}"
 if [ "${WORKSPACE_MODE}" = true ]; then
   echo "📦 工作区模式"
-else
-  echo "📦 单项目模式"
 fi
 echo ""
 
-# 创建目录
-mkdir -p .claude/commands/sillyspec
-mkdir -p .claude/skills/sillyspec
-mkdir -p .sillyspec/changes/archive
-mkdir -p .sillyspec/specs
-mkdir -p .sillyspec/specs
-mkdir -p .sillyspec/plans
-mkdir -p .sillyspec/codebase
-mkdir -p .sillyspec/phases
+# ── 创建基础目录 ──
 
+mkdir -p .sillyspec/{codebase,changes,plans,specs}
+mkdir -p .sillyspec/changes/archive
+mkdir -p .sillyspec/phases
 mkdir -p ~/.sillyspec/templates
 
 if [ "${WORKSPACE_MODE}" = true ]; then
@@ -54,42 +80,35 @@ if [ "${WORKSPACE_MODE}" = true ]; then
   mkdir -p .sillyspec/workspace
 fi
 
-# 下载命令文件
-REPO="q512426816/sillyspec"
-BRANCH="main"
-BASE_URL="https://raw.githubusercontent.com/${REPO}/${BRANCH}"
-
-COMMANDS=(
-  init scan explore brainstorm propose plan execute
-  continue status verify resume quick handoff archive workspace
-)
-
-for cmd in "${COMMANDS[@]}"; do
-  echo -n "  下载 /sillyspec:${cmd}... "
-  if curl -fsSL "${BASE_URL}/commands/sillyspec/${cmd}.md" -o ".claude/commands/sillyspec/${cmd}.md" 2>/dev/null; then
-    echo "✓"
-  else
-    echo "✗ 跳过"
-  fi
-done
-
-echo "🔧 $(ls .claude/commands/sillyspec/*.md 2>/dev/null | wc -l | tr -d ' ') 个 slash commands → .claude/commands/sillyspec/ ✓"
-
-# 下载 SKILL.md
-echo -n "  下载 SKILL.md... "
-if curl -fsSL "${BASE_URL}/SKILL.md" -o ".claude/skills/sillyspec/SKILL.md" 2>/dev/null; then
-  echo "✓"
-fi
-echo "📄 全局 skill → .claude/skills/sillyspec/ ✓"
-
 # .gitignore
 if [ ! -f ".gitignore" ]; then
-    cat > .gitignore << 'EOF'
+  cat > .gitignore << 'EOF'
 .sillyspec/HANDOFF.json
 EOF
 fi
 
-# 工作区模式：生成 config.yaml
+# ── 为每个工具生成文件 ──
+
+TEMPLATE_DIR="$SCRIPT_DIR/../templates"
+TEMPLATE_COUNT=0
+
+for tool in "${TOOLS[@]}"; do
+  echo "🔧 安装 $tool..."
+  for template_file in "$TEMPLATE_DIR"/*.md; do
+    name=$(basename "$template_file" .md)
+    desc=$(get_description "$name")
+    arg_hint=$(get_argument_hint "$name")
+    "generate_${tool}" "$name" "$desc" "$template_file" "$arg_hint"
+    ((TEMPLATE_COUNT++)) || true
+  done
+  echo "  ✅ $tool 完成"
+done
+
+echo ""
+echo "📄 ${TEMPLATE_COUNT} 个命令已安装"
+
+# ── 工作区模式配置 ──
+
 if [ "${WORKSPACE_MODE}" = true ]; then
   if [ ! -f .sillyspec/config.yaml ]; then
     cat > .sillyspec/config.yaml << 'CONFIG'
@@ -106,40 +125,30 @@ projects: {}
   #   role: 后端 - Node.js + PostgreSQL
 
 shared: []
-  # 跨项目共享规范文件，放在 .sillyspec/shared/ 目录下
-  # 示例：
-  # - api-contract.md
-  # - data-models.md
 CONFIG
     echo "📄 .sillyspec/config.yaml → 工作区配置 ✓"
   fi
 fi
 
+# ── 完成 ──
+
 echo ""
 echo "====================================="
 if [ "${WORKSPACE_MODE}" = true ]; then
-  echo "✅ SillySpec v2.0 安装完成！（工作区模式）"
+  echo "✅ SillySpec v2.2 安装完成！（工作区模式）"
   echo ""
-  echo "重新打开终端，然后："
-  echo "  claude"
+  echo "已安装工具: ${TOOLS[*]}"
   echo ""
-  echo "工作区模式已启用："
+  echo "工作区命令："
   echo "  /sillyspec:workspace add    — 添加子项目"
   echo "  /sillyspec:workspace status — 查看工作区状态"
-  echo "  /sillyspec:scan <name>      — 扫描子项目"
-  echo "  /sillyspec:init             — 初始化子项目"
 else
-  echo "✅ SillySpec v2.0 安装完成！"
+  echo "✅ SillySpec v2.2 安装完成！"
   echo ""
-  echo "重新打开终端，然后："
-  echo "  claude"
+  echo "已安装工具: ${TOOLS[*]}"
   echo ""
-  echo "绿地项目（空目录）："
-  echo "  /sillyspec:init"
-  echo ""
-  echo "棕地项目（已有代码）："
-  echo "  /sillyspec:scan"
-  echo ""
-  echo "自由思考（随时可用）："
-  echo "  /sillyspec:explore \"你的想法\""
+  echo "入口选择："
+  echo "  绿地项目：/sillyspec:init"
+  echo "  棕地项目：/sillyspec:scan"
+  echo "  自由思考：/sillyspec:explore \"你的想法\""
 fi
