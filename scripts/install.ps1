@@ -10,9 +10,9 @@
 .PARAMETER Dir
     指定安装目录（默认当前目录）
 .EXAMPLE
-    powershell -c "irm https://raw.githubusercontent.com/q512426816/sillyspec/main/install.ps1 | iex"
-    powershell -c "irm https://raw.githubusercontent.com/q512426816/sillyspec/main/install.ps1 | iex; SillySpec-Install -Workspace"
-    powershell -c "irm https://raw.githubusercontent.com/q512426816/sillyspec/main/install.ps1 | iex; SillySpec-Install -Tool cursor -Workspace"
+    powershell -c "irm https://raw.githubusercontent.com/q512426816/sillyspec/main/scripts/install.ps1 | iex"
+    powershell -c "irm https://raw.githubusercontent.com/q512426816/sillyspec/main/scripts/install.ps1 | iex; SillySpec-Install -Workspace"
+    powershell -c "irm https://raw.githubusercontent.com/q512426816/sillyspec/main/scripts/install.ps1 | iex; SillySpec-Install -Tool cursor -Workspace"
 #>
 
 $ErrorActionPreference = "Stop"

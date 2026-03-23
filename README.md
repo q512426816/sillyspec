@@ -14,7 +14,7 @@ curl -fsSL https://raw.githubusercontent.com/q512426816/sillyspec/main/scripts/i
 
 **Windows PowerShell：**
 ```powershell
-powershell -c "irm https://raw.githubusercontent.com/q512426816/sillyspec/main/install.ps1 | iex"
+powershell -c "irm https://raw.githubusercontent.com/q512426816/sillyspec/main/scripts/install.ps1 | iex"
 ```
 
 就这一行，装完就能用。
