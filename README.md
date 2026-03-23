@@ -1,6 +1,6 @@
-# SillySpec v2.2 — 规范驱动开发工具包
+# SillySpec v2.3 — 规范驱动开发工具包
 
-> 融合 Superpowers + OpenSpec + GSD，**16 个命令**，从"你说要啥"到"代码能跑"的完整流程。
+> 融合 Superpowers + OpenSpec + GSD，从"你说要啥"到"代码能跑"的完整流程。
 > Claude Code / Cursor / Codex / OpenCode / OpenClaw 都能用。
 >
 > 📖 **在线文档**：https://sillyspec.ppdmq.top/
@@ -30,8 +30,6 @@ powershell -c "irm https://raw.githubusercontent.com/q512426816/sillyspec/main/i
 | OpenCode | `opencode` | `.opencode/skills/sillyspec-<name>/` | SKILL.md |
 | OpenClaw | `openclaw` | `.openclaw/skills/sillyspec-<name>/` | SKILL.md |
 
-> 💡 现有 Claude Code commands 用户不受影响，16 个原始命令文件保持不变。
-
 安装后重新打开终端，启动 Claude Code：
 
 ```bash
@@ -46,6 +44,7 @@ claude --dangerously-skip-permissions
 绿地项目（空目录）：/sillyspec:init
 棕地项目（有代码）：/sillyspec:scan
 随时自由思考：      /sillyspec:explore "想法"
+大模块（多页面）：  /sillyspec:brainstorm（直接贴原型图）
 ```
 
 ## 完整工作流
@@ -53,6 +52,7 @@ claude --dangerously-skip-permissions
 ```
 绿地：init → brainstorm → propose → plan → execute → verify → archive
 棕地：scan → brainstorm → propose → plan → execute → verify → archive
+大模块：brainstorm(多图) → 拆分 → MASTER.md → stage-1 全流程 → stage-2 全流程 → ... → archive
 ```
 
 ### 也可以跳过
@@ -62,26 +62,33 @@ claude --dangerously-skip-permissions
 - 中断恢复：`/sillyspec:resume`
 - 不知道下一步：`/sillyspec:continue`
 
-## 15 个命令
+## 命令列表
 
-| 命令 | 来源 | 用途 |
-|---|---|---|
-| `/sillyspec:init` | GSD new-project | 绿地项目：深度提问→需求→路线图 |
-| `/sillyspec:scan` | GSD map-codebase | 棕地项目：生成 7 份代码库文档 |
-| `/sillyspec:explore` | OpenSpec explore | 自由思考：画图、讨论、调研 |
-| `/sillyspec:brainstorm` | Superpowers brainstorming | 需求探索：逐个提问→设计方案 |
-| `/sillyspec:propose` | OpenSpec propose | 生成规范：proposal+design+tasks |
-| `/sillyspec:plan` | Superpowers writing-plans | 实现计划：精确文件路径+代码 |
-| `/sillyspec:execute` | Superpowers subagent-dev | TDD 执行：子代理并行+两阶段审查 |
-| `/sillyspec:verify` | OpenSpec verify | 验证：对照规范+测试套件 |
-| `/sillyspec:archive` | OpenSpec archive | 归档：规范沉淀 |
-| `/sillyspec:status` | GSD progress | 查看进度 |
-| `/sillyspec:continue` | GSD next | 自动下一步 |
-| `/sillyspec:handoff` | GSD pause-work | 保存状态 |
-| `/sillyspec:export` | SillySpec | 导出成功方案为可复用模板 |
-| `/sillyspec:resume` | GSD resume-work | 恢复工作 |
-| `/sillyspec:quick` | GSD quick | 快速模式 |
-| `/sillyspec:workspace` | SillySpec | 工作区管理：多项目子项目管理 |
+### 核心流程
+
+| 命令 | 用途 |
+|---|---|
+| `/sillyspec:init` | 绿地项目：深度提问→需求→路线图 |
+| `/sillyspec:scan` | 棕地项目：交互式引导扫描，生成代码库文档 |
+| `/sillyspec:brainstorm` | 需求探索：支持原型图分析，大模块自动拆分 |
+| `/sillyspec:propose` | 生成规范：proposal+design+tasks |
+| `/sillyspec:plan` | 实现计划：精确文件路径+代码 |
+| `/sillyspec:execute` | TDD 执行：子代理并行+两阶段审查 |
+| `/sillyspec:verify` | 验证：对照规范+测试套件 |
+| `/sillyspec:archive` | 归档：规范沉淀 |
+
+### 辅助工具
+
+| 命令 | 用途 |
+|---|---|
+| `/sillyspec:status` | 查看进度 |
+| `/sillyspec:continue` | 自动下一步 |
+| `/sillyspec:explore` | 自由思考：画图、讨论、调研 |
+| `/sillyspec:quick` | 快速模式：跳过完整流程 |
+| `/sillyspec:handoff` | 保存状态，下班走人 |
+| `/sillyspec:resume` | 恢复工作：支持大模块阶段进度 |
+| `/sillyspec:workspace` | 工作区管理：多项目子项目 |
+| `/sillyspec:export` | 导出成功方案为可复用模板 |
 
 ## 可靠性保障
 
@@ -90,59 +97,37 @@ SillySpec 不仅仅是 prompt，还有硬校验：
 - **锚定确认** — propose/plan/execute/verify 执行前必须逐个确认读过规范文件
 - **Hard Gate 自检** — 关键命令生成文件后强制自检格式，不通过则修正
 - **校验脚本** — shell 脚本可自动化验证 AI 输出（validate-proposal/plan/scan/all）
+- **框架隐形规则扫描** — scan 阶段自动检测多租户/逻辑删除/审计字段/实体基类，写入 CONVENTIONS.md
+- **实体继承规范扫描** — 新建表时必须包含基类所有字段，防止 Unknown column
 - **归档确认** — archive 操作前展示内容等待用户确认
+
+## 防幻觉机制
+
+| 环节 | 机制 |
+|---|---|
+| scan | 强制扫描数据库 schema + 框架隐形规则 + 实体基类字段 |
+| brainstorm | 必须读 ARCHITECTURE.md 数据模型，支持原型图分析 |
+| execute | 写代码前强制读现有源码，禁止编造方法调用 |
+| 全流程 | shell 校验脚本兜底 |
 
 ## 目录结构
 
 ```
 sillyspec/
 ├── SKILL.md                         # 全局 skill
-├── commands/sillyspec/              # ⭐ 16 个 slash commands（Claude Code 原始文件，不动）
-├── templates/                       # 🆕 16 个纯 prompt 模板（工具无关）
-├── adapters/                        # 🆕 适配器定义（多工具格式转换）
-│   └── adapters.sh
-│   ├── init.md                      # 绿地入口
-│   ├── scan.md                      # 棕地扫描
-│   ├── explore.md                   # 自由思考
-│   ├── brainstorm.md                # 需求探索
-│   ├── propose.md                   # 规范生成
-│   ├── plan.md                      # 实现计划
-│   ├── execute.md                   # TDD 执行
-│   ├── verify.md                    # 验证
-│   ├── archive.md                   # 归档
-│   ├── status.md                    # 进度
-│   ├── continue.md                  # 自动推进
-│   ├── handoff.md                   # 状态保存
-│   ├── resume.md                    # 恢复
-│   ├── quick.md                     # 快速模式
-│   └── export.md                    # 模板导出
+├── commands/sillyspec/              # slash commands（Claude Code）
+├── templates/                       # 纯 prompt 模板（工具无关）
+├── adapters/
+│   └── adapters.sh                  # 多工具格式转换函数
 ├── scripts/
 │   ├── init.sh                      # 一键安装
-│   ├── validate-proposal.sh         # 校验 propose 阶段输出
-│   ├── validate-plan.sh             # 校验 plan 阶段输出
-│   ├── validate-scan.sh             # 校验 scan 阶段输出（7 份文档）
-│   └── validate-all.sh              # 综合校验，一键检查项目状态
-├── workspace.md                     # 工作区管理命令
+│   ├── install.ps1                  # Windows 安装
+│   ├── validate-proposal.sh         # 校验 propose 输出
+│   ├── validate-plan.sh             # 校验 plan 输出
+│   ├── validate-scan.sh             # 校验 scan 输出
+│   └── validate-all.sh              # 综合校验
 ├── 操作文档.md                       # 详细操作指南
 └── README.md
-```
-
-## 校验脚本
-
-验证 AI 生成文件是否符合规范：
-
-```bash
-# 校验 propose 阶段输出
-./sillyspec/scripts/validate-proposal.sh .sillyspec/changes/your-change
-
-# 校验 plan 阶段输出
-./sillyspec/scripts/validate-plan.sh .sillyspec/changes/your-change
-
-# 校验 scan 阶段输出（7 份文档）
-./sillyspec/scripts/validate-scan.sh .planning/codebase
-
-# 综合校验，一键检查当前项目状态
-./sillyspec/scripts/validate-all.sh
 ```
 
 ## 致谢
