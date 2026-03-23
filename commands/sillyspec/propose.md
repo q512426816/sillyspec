@@ -14,6 +14,19 @@ $ARGUMENTS
 读取相关文档：
 
 ```bash
+# 检测是否是子阶段变更
+if [[ "$ARGUMENTS" == */stage-* ]]; then
+  MASTER_NAME="${ARGUMENTS%%/*}"
+  STAGE_NAME="${ARGUMENTS#*/}"
+  MASTER_DIR=".sillyspec/changes/$MASTER_NAME"
+  CHANGE_DIR="$MASTER_DIR/stages/$STAGE_NAME"
+else
+  CHANGE_DIR=".sillyspec/changes/$ARGUMENTS"
+fi
+
+# 如果存在 MASTER.md，读取主变更上下文
+cat .sillyspec/changes/*/MASTER.md 2>/dev/null
+
 # 最新设计文档
 ls -t .sillyspec/specs/*.md | head -1
 # 需求
@@ -21,9 +34,18 @@ cat .sillyspec/REQUIREMENTS.md 2>/dev/null
 # 代码库约定（棕地）
 cat .sillyspec/codebase/CONVENTIONS.md 2>/dev/null
 cat .sillyspec/codebase/ARCHITECTURE.md 2>/dev/null
-# 已有变更
+# 已有变更（排除子阶段）
 ls .sillyspec/changes/ | grep -v archive
 ```
+
+如果是子阶段变更（如 `reward-punishment/stage-1`）：
+- 读取 MASTER.md 获取整体方向和技术决策
+- 读取 MASTER.md 中"经验记录"章节（前面阶段的踩坑经验）
+- 读取前面已完成阶段的设计文件（保持一致性）
+- 读取该阶段对应的原型分析结果
+- 规范文件保存到 `changes/<变更名>/stages/<stage-N>/`
+
+如果是普通变更，照原流程执行。
 
 如果没有设计文档 → 提示先运行 `/sillyspec:brainstorm`
 
