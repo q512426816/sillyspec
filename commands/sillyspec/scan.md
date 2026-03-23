@@ -416,21 +416,99 @@ find . -name "*.php" -path "*/Models/*" -not -path "*/vendor/*" | head -10
 
 ## 深度扫描
 
-**读取所有源代码文件（排除依赖和构建产物目录）：**
+### Step 0: 运行预处理脚本（必须）
+
+**深度扫描前，必须先运行预处理脚本。** 这是零 token 的 shell 操作：
 
 ```bash
-find . -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.js" -o -name "*.jsx" -o -name "*.py" -o -name "*.rs" -o -name "*.go" -o -name "*.java" -o -name "*.rb" -o -name "*.php" -o -name "*.vue" -o -name "*.svelte" -o -name "*.md" -o -name "*.yaml" -o -name "*.yml" -o -name "*.json" -o -name "*.toml" \) -not -path "*/node_modules/*" -not -path "*/dist/*" -not -path "*/.git/*" -not -path "*/vendor/*" -not -path "*/build/*" -not -path "*/__pycache__/*" -not -path "*/.next/*" -not -path "*/coverage/*" -not -path "*/.nuxt/*" -not -path "*/target/*"
+bash scripts/scan-preprocess.sh [扫描区域]
 ```
 
-**并行分析以下 7 个维度：**
+如果 `scripts/scan-preprocess.sh` 不存在（Windows 或远程项目），跳过此步骤，AI 直接基于快速扫描结果进行深度分析。
 
-1. `.sillyspec/codebase/STACK.md` — 技术栈
+**预处理脚本会自动完成：**
+- 统计源文件数量和大小
+- 估算扫描耗时（按文件数量动态计算，不是写死的 3 分钟）
+- 提取配置文件内容（package.json、pom.xml 等）
+- 提取目录结构树
+- 提取 import/依赖关系（按语言分别分析）
+- 提取类名/函数名/注解（Java @Entity、@Controller 等）
+- 检测数据库 Schema 文件位置
+- 检测框架和 ORM
+- 检测框架配置文件（拦截器、审计、基类等）
+
+所有结果写入 `.sillyspec/codebase/SCAN-RAW.md`。
+
+**脚本输出示例：**
+```
+📊 文件统计：
+  Java: 280
+  Vue: 180
+  配置文件: 3
+  ────────────────
+  源文件总计: 460 个
+  源码总大小: 3200KB
+  预计耗时: 约 5-8 分钟
+  上下文风险: 中
+```
+
+### Step 1: 断点续扫检查
+
+**检查已生成的文档，跳过已完成的：**
+
+```bash
+for f in STACK ARCHITECTURE STRUCTURE CONVENTIONS INTEGRATIONS TESTING CONCERNS; do
+  if [ -f ".sillyspec/codebase/${f}.md" ]; then
+    echo "✅ ${f}.md 已存在，跳过"
+  else
+    echo "⬜ ${f}.md 待生成"
+  fi
+done
+```
+
+**只生成缺失的文档。** 如果中断后重新执行，不会重复生成已有文档，也不会重复消耗 token。
+
+将检查结果展示给用户：
+```
+📊 扫描进度检查：
+  ✅ STACK.md         已存在
+  ✅ ARCHITECTURE.md  已存在
+  ✅ STRUCTURE.md     已存在
+  ⬜ CONVENTIONS.md   待生成 ← 从这里继续
+  ⬜ INTEGRATIONS.md  待生成
+  ⬜ TESTING.md       待生成
+  ⬜ CONCERNS.md      待生成
+
+  继续生成剩余 4 份文档。
+```
+
+### Step 2: 基于 SCAN-RAW.md 分析
+
+**不要直接读取原始源码。** 读取预处理脚本生成的 SCAN-RAW.md：
+
+```bash
+cat .sillyspec/codebase/SCAN-RAW.md
+```
+
+基于 SCAN-RAW.md 中的结构化信息，**只按需深挖**相关文件：
+
+1. **架构分析** → 如果 SCAN-RAW.md 标注了 460 个文件，不要全部读。读核心入口文件 + 目录结构推断架构
+2. **编码约定** → 如果 SCAN-RAW.md 有 import 分析，基于高频 import 推断约定。必要时抽样读 3-5 个文件确认
+3. **集成分析** → 读 SCAN-RAW.md 中的配置文件内容，不需要重新读原始文件
+4. **数据库 Schema** → 读 SCAN-RAW.md 中标注的 schema 文件位置，只读相关文件
+
+**铁律：每份文档写完立即保存。** 不要攒在一起最后统一写。这样即使中断，已生成的文档不会丢失。
+
+**按以下顺序生成缺失的文档：**
+
+1. `.sillyspec/codebase/STACK.md` — 技术栈（基于 SCAN-RAW.md 的框架检测 + 配置文件）
 2. `.sillyspec/codebase/ARCHITECTURE.md` — 架构（含数据模型摘要）
-3. `.sillyspec/codebase/STRUCTURE.md` — 目录结构
+3. `.sillyspec/codebase/STRUCTURE.md` — 目录结构（基于 SCAN-RAW.md 的目录分布）
 4. `.sillyspec/codebase/CONVENTIONS.md` — 代码约定
 5. `.sillyspec/codebase/INTEGRATIONS.md` — 集成
 6. `.sillyspec/codebase/TESTING.md` — 测试现状
-7. `.sillyspec/codebase/CONCERNS.md` — 技术债务和风险
+7. `.sillyspec/codebase/CONVENTIONS.md` — 编码约定（含框架隐形规则）
+8. `.sillyspec/codebase/CONCERNS.md` — 技术债务和风险
 
 同时更新 `.sillyspec/PROJECT.md`。
 
