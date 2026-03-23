@@ -83,7 +83,7 @@ fi
 # .gitignore
 if [ ! -f ".gitignore" ]; then
   cat > .gitignore << 'EOF'
-.sillyspec/HANDOFF.json
+.sillyspec/STATE.md
 EOF
 fi
 

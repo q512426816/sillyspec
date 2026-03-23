@@ -220,7 +220,7 @@ foreach ($t in $tools) {
                 Write-Utf8NoBom "$outDir\sillyspec-$cmd.md" "$fm`n`n$body"
             }
             "codex" {
-                $outDir = "sillyspec-$cmd"
+                $outDir = Join-Path $agentsDir "sillyspec-$cmd"
                 $fm = "---`r`nname: sillyspec:$cmd`r`ndescription: $desc`r`n---"
                 Write-Utf8NoBom "$outDir\SKILL.md" "$fm`n`n$body"
             }
