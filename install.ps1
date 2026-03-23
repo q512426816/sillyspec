@@ -12,10 +12,10 @@ $ErrorActionPreference = "Stop"
 $REPO   = "q512426816/sillyspec"
 $BRANCH = "main"
 $BASE   = "https://raw.githubusercontent.com/$REPO/$BRANCH"
-$VERSION = "2.2"
+$VERSION = "2.3"
 
 $COMMANDS = @("init","scan","explore","brainstorm","propose","plan","execute",
-              "verify","archive","status","continue","handoff","resume","quick",
+              "verify","archive","status","continue","state","resume","quick",
               "workspace","export")
 
 # ── 元数据 ──
