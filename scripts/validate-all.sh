@@ -34,8 +34,8 @@ fi
 # 3. 检查代码库文档
 echo ""
 echo "🗂️ 检查代码库文档..."
-if [ -d ".planning/codebase" ]; then
-  "$SCRIPT_DIR/validate-scan.sh" ".planning/codebase" || ((ERRORS++))
+if [ -d ".sillyspec/codebase" ]; then
+  "$SCRIPT_DIR/validate-scan.sh" ".sillyspec/codebase" || ((ERRORS++))
 else
   echo "  ℹ️ 无代码库文档（新项目或未 scan）"
 fi
