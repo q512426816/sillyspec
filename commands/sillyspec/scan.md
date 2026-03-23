@@ -222,6 +222,104 @@ find . \( -name "schema.prisma" -o -name "*.model.ts" -o -name "*.entity.ts" \
 
 **铁律：所有阶段引用的表名必须来自 Schema 摘要列表，或 design.md 中声明的新增表。**
 
+## 🚨 框架隐形规则扫描（必须执行）
+
+**无论快速还是深度模式，必须执行。** 防止 AI 生成 SQL/代码时违反项目框架的自动处理机制。
+
+### 为什么需要这一步
+
+很多项目有"隐形规则"——某些字段由框架自动处理，SQL 里不需要写；某些拦截器会自动注入条件，手动写反而会冲突。这些规则不在 schema 里，AI 扫不到就会犯错。
+
+**典型踩坑：**
+- MyBatis 多租户插件自动注入 tenant_id → SQL 里再写就重复了
+- JPA @CreatedDate 自动填充 create_time → INSERT 里再写就冲突了
+- 逻辑删除拦截器把 DELETE 改成 UPDATE → AI 直接写 DELETE FROM 就错了
+
+### 扫描步骤
+
+```bash
+# 1. MyBatis 拦截器 / 插件配置
+find . \( -name "*Interceptor*.java" -o -name "*Plugin*.java" \
+  -o -name "mybatis-config.xml" -o -name "mybatis*.yml" -o -name "mybatis*.yaml" \) \
+  -not -path "*/node_modules/*" -not -path "*/.git/*" | head -20
+
+# 2. JPA / Hibernate 配置和审计注解
+find . \( -name "*Auditor*.java" -o -name "*EventListener*.java" \
+  -o -name "persistence.xml" -o -name "application*.yml" -o -name "application*.yaml" \) \
+  -not -path "*/node_modules/*" -not -path "*/.git/*" | head -20
+
+# 3. Django 配置（中间件、模型 Meta）
+find . -name "settings.py" -not -path "*/node_modules/*" | head -5
+find . -name "models.py" -not -path "*/node_modules/*" | head -10
+
+# 4. SQLAlchemy 事件监听
+find . \( -name "*event*.py" -o -name "*listener*.py" -o -name "*mixin*.py" \) \
+  -not -path "*/node_modules/*" -not -path "*/.git/*" | head -10
+
+# 5. Prisma 中间件 / 扩展
+cat prisma/schema.prisma 2>/dev/null | grep -i "middleware\|plugin\|previewFeatures"
+
+# 6. Go GORM 插件 / 回调
+find . -name "*.go" -not -path "*/vendor/*" | xargs grep -l "gorm:\|Callback\|Plugin" 2>/dev/null | head -10
+
+# 7. TypeORM 订阅器 / 监听器
+find . -name "*.ts" -not -path "*/node_modules/*" | xargs grep -l "EventSubscriber\|@BeforeInsert\|@AfterUpdate\|@DeleteDateColumn" 2>/dev/null | head -10
+
+# 8. Rails / Active Record 回调
+find . -name "*.rb" -not -path "*/vendor/*" | xargs grep -l "before_save\|before_create\|acts_as_paranoid\|acts_as_tenant" 2>/dev/null | head -10
+
+# 9. Laravel / Eloquent 作用域和 trait
+find . \( -name "*Scope*.php" -o -name "boot*.php" -o -name "ServiceProvider.php" \) \
+  -not -path "*/vendor/*" | head -10
+
+# 10. 通用逻辑删除 / 审计字段检测
+find . \( -name "*.java" -o -name "*.py" -o -name "*.go" -o -name "*.ts" \
+  -o -name "*.php" -o -name "*.rb" \) \
+  -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/vendor/*" \
+  -not -path "*/dist/*" -not -path "*/build/*" \
+  | xargs grep -li "is_deleted\|deleted_at\|soft_delete\|paranoid\|tenant_id\|tenantId" 2>/dev/null | head -20
+```
+
+### 将结果写入 CONVENTIONS.md
+
+**创建或追加到 `.sillyspec/codebase/CONVENTIONS.md`，添加"框架隐形规则"章节。**
+
+格式：
+
+```markdown
+## 框架隐形规则
+
+### 自动注入字段（SQL 中不要手动写）
+
+| 字段 | 来源 | 说明 |
+|---|---|---|
+| tenant_id | MyBatis 多租户拦截器 TenantLineInnerInterceptor | 自动注入租户过滤条件，SQL 不需要 WHERE tenant_id=? |
+| is_deleted | 逻辑删除拦截器 | DELETE 自动改为 UPDATE xxx SET is_deleted=1 |
+
+### 自动填充字段（INSERT/UPDATE 不需要手动赋值）
+
+| 字段 | 来源 | 说明 |
+|---|---|---|
+| create_time | JPA @CreatedDate / MyBatis-Plus MetaObjectHandler | INSERT 时自动填充 |
+| update_time | JPA @LastModifiedDate / MyBatis-Plus MetaObjectHandler | INSERT 和 UPDATE 时自动填充 |
+| create_by | MetaObjectHandler | 从 SecurityContext 获取当前用户 |
+
+### 查询增强（框架自动追加条件）
+
+| 规则 | 说明 |
+|---|---|
+| 数据权限过滤 | 某些表自动追加 WHERE 条件，SQL 中不需要手动加 |
+| 软删除过滤 | 查询自动排除 is_deleted=1 的数据，SQL 不需要 WHERE is_deleted=0 |
+
+### DELETE 行为
+
+- 不要写 `DELETE FROM` → 使用 `UPDATE xxx SET is_deleted = 1 WHERE id = ?`
+```
+
+**如果项目没有发现任何隐形规则** → 写"未发现框架级别的自动处理配置，SQL 可以按常规方式编写"。
+
+**铁律：后续阶段生成 SQL 或数据操作代码时，必须遵守这些规则。违反 = 生成的代码会报错或产生数据错误。**
+
 ---
 
 **快速扫描生成 3 份文档：**
