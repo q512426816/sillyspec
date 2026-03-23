@@ -316,6 +316,88 @@ find . \( -name "*.java" -o -name "*.py" -o -name "*.go" -o -name "*.ts" \
 
 **铁律：后续阶段生成 SQL 或数据操作代码时，必须遵守这些规则。违反 = 生成的代码会报错或产生数据错误。**
 
+## 🚨 实体继承规范扫描（必须执行）
+
+**无论快速还是深度模式，必须执行。** 防止 AI 新建表时漏掉基类的通用字段，导致 MyBatis-Plus/JPA 自动查询报 Unknown column。
+
+### 为什么需要这一步
+
+很多项目用实体基类（BaseModel、BaseEntity、BasePO 等）定义通用字段（审计字段、逻辑删除、多租户等）。子类继承基类后，ORM 框架会自动查询这些字段。如果新建表的 DDL 漏掉了这些列，SQL 就会报错。
+
+**典型踩坑：**
+- 实体类继承了 BaseModel，有 remarks、dept_id 字段
+- AI 生成建表 SQL 时只写了业务字段，漏了通用字段
+- MyBatis-Plus 自动 SELECT 包含 remarks → Unknown column
+
+### 扫描步骤
+
+```bash
+# 1. Java: 查找实体基类（BaseModel / BaseEntity / BasePO）
+find . \( -name "Base*.java" -o -name "Abstract*.java" \) \
+  -path "*/entity/*" -o -path "*/model/*" -o -path "*/po/*" -o -path "*/entity/*" \
+  -not -path "*/node_modules/*" -not -path "*/.git/*" | head -20
+
+# 2. Java: 查找 @MappedSuperclass 注解的类
+find . -name "*.java" -not -path "*/node_modules/*" -not -path "*/.git/*" \
+  | xargs grep -l "@MappedSuperclass" 2>/dev/null | head -10
+
+# 3. Java: 查看子类继承关系
+grep -rn "extends Base" --include="*.java" \
+  -not -path "*/node_modules/*" -not -path "*/.git/*" | head -20
+
+# 4. Python / Django: 查找 Abstract 模型
+find . -name "models.py" -not -path "*/node_modules/*" | xargs grep -l "class.*Abstract\|class.*Base" 2>/dev/null | head -10
+
+# 5. Go: 查找嵌入的 BaseModel struct
+find . -name "*.go" -not -path "*/vendor/*" | xargs grep -l "type.*struct" | xargs grep -l "BaseModel\|BaseEntity" 2>/dev/null | head -10
+
+# 6. TypeORM: 查找 @Entity 基类的子类
+find . -name "*.entity.ts" -not -path "*/node_modules/*" | xargs grep -l "extends\|@ChildEntity" 2>/dev/null | head -10
+
+# 7. Prisma: 查找 model 共用字段（通过 generator 或注释）
+cat prisma/schema.prisma 2>/dev/null
+
+# 8. Rails: 查找 ApplicationRecord concern
+find . -name "*.rb" -not -path "*/vendor/*" | xargs grep -l "include.*Concern\|include.*Module" 2>/dev/null | head -10
+
+# 9. Laravel: 查找 Model trait
+find . -name "*.php" -path "*/Models/*" -not -path "*/vendor/*" | head -10
+```
+
+### 将结果写入 CONVENTIONS.md
+
+在"框架隐形规则"章节后追加：
+
+```markdown
+## 实体继承规范
+
+### 基类通用字段（新建表必须包含）
+
+以下字段来自基类 BaseModel，所有子类实体自动继承，DDL 必须包含：
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | BIGINT | 主键 |
+| remarks | VARCHAR(500) | 备注 |
+| dept_id | BIGINT | 部门ID |
+| create_time | DATETIME | 创建时间 |
+| update_time | DATETIME | 更新时间 |
+| create_by | VARCHAR(64) | 创建人 |
+| update_by | VARCHAR(64) | 更新人 |
+| is_deleted | TINYINT(1) | 逻辑删除 |
+
+### 铁律
+- 新建表的 DDL 必须包含基类的所有字段，不能只写业务字段
+- ORM 自动查询基类字段，数据库缺少这些列会报 Unknown column
+- 如果基类有变更（新增通用字段），需要同步更新所有子表的 DDL
+```
+
+**注意：** 上表是示例，实际字段必须从扫描到的基类源码中提取，不要编造。
+
+**如果项目没有实体基类** → 写"本项目没有实体基类，所有字段在各自实体中定义"。
+
+**铁律：后续阶段新建表或修改表结构时，必须包含基类的所有通用字段。**
+
 ---
 
 **快速扫描生成 3 份文档：**
