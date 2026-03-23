@@ -9,6 +9,7 @@
 
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
 import { join, resolve } from 'path';
+import { cmdInit } from './init.js';
 
 const SILLYSPEC_DIR = '.sillyspec';
 const CODEBASE_DIR = `${SILLYSPEC_DIR}/codebase`;
@@ -480,6 +481,10 @@ SillySpec CLI — 流程状态机
   sillyspec status [--json]    显示当前项目状态
   sillyspec next [--json]      显示下一步该执行的命令
   sillyspec check [--json]     检查文档完整性和路径
+  sillyspec init               初始化 SillySpec（安装到各工具）
+    [--tool <name>]            只安装指定工具
+    [--workspace]              工作区模式
+    [--dir <path>]             指定目录
 
 选项:
   --json                       输出 JSON（给 AI 程序化读取）
@@ -504,6 +509,8 @@ function main() {
   // 解析全局选项
   let json = false;
   let targetDir = process.cwd();
+  let tool = null;
+  let workspace = false;
   const filteredArgs = [];
   
   for (let i = 0; i < args.length; i++) {
@@ -512,6 +519,11 @@ function main() {
     } else if (args[i] === '--dir' && args[i + 1]) {
       targetDir = resolve(args[i + 1]);
       i++;
+    } else if (args[i] === '--tool' && args[i + 1]) {
+      tool = args[i + 1];
+      i++;
+    } else if (args[i] === '--workspace' || args[i] === '-w') {
+      workspace = true;
     } else {
       filteredArgs.push(args[i]);
     }
@@ -534,6 +546,9 @@ function main() {
       break;
     case 'check':
       cmdCheck(dir, { json });
+      break;
+    case 'init':
+      cmdInit(dir, { tool, workspace });
       break;
     default:
       console.error(`❌ 未知命令: ${command}`);
