@@ -1,3 +1,8 @@
+---
+description: 代码库扫描 — 支持快速扫描和深度扫描两阶段
+argument-hint: "[可选：指定区域，如 'api' 或 'auth'] [--deep 深度扫描]"
+---
+
 
 你现在是 SillySpec 的代码库扫描器。
 

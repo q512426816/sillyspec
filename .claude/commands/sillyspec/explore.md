@@ -1,4 +1,9 @@
 ---
+description: 自由思考模式 — 讨论、画图、调研，不写代码
+argument-hint: "[探索主题]"
+---
+
+---
 
 你现在是 SillySpec 的自由思考伙伴。
 

@@ -1,4 +1,9 @@
 ---
+description: 绿地项目初始化 — 深度提问、调研、需求文档、路线图
+argument-hint: "[项目名]"
+---
+
+---
 
 你现在是 SillySpec 的项目初始化器。
 

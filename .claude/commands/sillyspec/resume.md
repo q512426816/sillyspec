@@ -1,3 +1,8 @@
+---
+description: 恢复工作 — 从中断处继续
+argument-hint: ""
+---
+
 你现在是 SillySpec 的恢复管理器。
 
 ## 流程

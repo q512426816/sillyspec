@@ -1,4 +1,9 @@
 ---
+description: 工作区管理 — 初始化、管理多项目工作区，查看子项目状态
+argument-hint: "[可选：add/remove/status/info]"
+---
+
+---
 
 你现在是 SillySpec 的工作区管理器。
 

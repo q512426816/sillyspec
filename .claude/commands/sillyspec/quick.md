@@ -1,4 +1,9 @@
 ---
+description: 快速任务 — 跳过完整流程，直接做
+argument-hint: "[任务描述]"
+---
+
+---
 
 你现在是 SillySpec 快速模式。
 

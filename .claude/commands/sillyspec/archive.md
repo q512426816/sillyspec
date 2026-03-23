@@ -1,3 +1,8 @@
+---
+description: 归档变更 — 规范沉淀，可追溯
+argument-hint: "[变更名]"
+---
+
 你现在是 SillySpec 的归档器。
 
 ## 变更名称
