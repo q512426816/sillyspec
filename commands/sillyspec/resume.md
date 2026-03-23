@@ -77,11 +77,18 @@ cat .sillyspec/ROADMAP.md 2>/dev/null
 | 探测到的文件 | 推断阶段 | 建议操作 |
 |---|---|---|
 | 无任何 .sillyspec/ 内容 | 未开始 | `/sillyspec:init` 或 `/sillyspec:scan` |
-| 有 codebase/ 但无 changes/ | 已扫描，未开始需求 | `/sillyspec:brainstorm "想法"` |
+| 有 SCAN-RAW.md 但缺失文档 | 扫描中断 | `/sillyspec:scan --deep`（断点续扫） |
+| 有 codebase/ 但文档不全（快扫 3 份缺失） | 快扫中断 | `/sillyspec:scan`（补全缺失文档） |
+| 有 codebase/ 7 份齐全但无 changes/ | 已扫描，未开始需求 | `/sillyspec:brainstorm "想法"` |
 | 有 REQUIREMENTS.md 但无 changes/ | 绿地项目，已有需求 | `/sillyspec:propose 变更名` |
 | changes/ 下有 proposal，无 tasks | 已有规范，待计划 | `/sillyspec:plan` |
 | changes/ 下有 tasks，有未完成 checkbox | 执行中 | `/sillyspec:execute` |
 | tasks.md 全部完成 | 待验证 | `/sillyspec:verify` |
+
+**扫描中断检测逻辑：**
+- 有 `SCAN-RAW.md` → 说明深度扫描预处理已完成，检查 7 份文档缺哪些
+- 有部分 codebase 文档（如只有 STACK 和 STRUCTURE）→ 说明快扫或深扫中断
+- 缺失的文档列表直接展示给用户，告知 `/sillyspec:scan` 会自动跳过已存在的文档
 
 **同时创建 STATE.md** 记录推断的状态。
 
