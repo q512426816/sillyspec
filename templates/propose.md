@@ -186,6 +186,15 @@ bash scripts/validate-proposal.sh .sillyspec/changes/$ARGUMENTS
 > 确认后运行 `/sillyspec:plan` 生成详细实现计划。
 > 需要修改直接告诉我。
 
+### 8. 更新 STATE.md
+
+propose 完成后，**必须自动更新** `.sillyspec/STATE.md`：
+
+- 当前阶段改为 `propose ✅`
+- 下一步改为 `/sillyspec:plan`
+- 历史记录追加时间 + propose 完成
+- 如果是子阶段（stages/ 下），更新阶段进度
+
 ## 绝对规则
 - 不写实现代码
 - tasks.md 只列任务名，不写具体步骤

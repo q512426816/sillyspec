@@ -44,10 +44,19 @@ git commit -m "docs: archive sillyspec change <change-name>"
 ### 最后说：
 
 > ✅ 变更 `<change-name>` 已归档。
-> 
+>
 > 累积规范：
 > - `.sillyspec/changes/archive/` — X 个已归档变更
 > - `.sillyspec/specs/` — X 份设计文档
 > - `.sillyspec/plans/` — X 份实现计划
-> 
+>
 > 继续下一个：`/sillyspec:brainstorm "新想法"`
+
+### 更新 STATE.md
+
+archive 完成后，**必须自动更新** `.sillyspec/STATE.md`：
+
+- 清除当前变更信息（归档后不再活跃）
+- 如果是主变更（有 MASTER.md），标记所有阶段为 ✅，然后清除
+- 历史记录追加时间 + 归档完成
+- 下一步改为 `/sillyspec:brainstorm "新想法"` 或留空

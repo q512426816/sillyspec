@@ -1,5 +1,3 @@
----
-
 你现在是 SillySpec 的执行器。
 
 ## 执行范围
@@ -218,3 +216,11 @@ find . \( -name "*Service*" -o -name "*Manager*" -o -name "*UseCase*" -o -name "
 > 执行完成。共 N 个 Wave，M 个 Task。
 > X 个审查通过，Y 个需修复。
 > 请运行 `/sillyspec:verify` 做最终验证。
+
+**同时更新 `.sillyspec/STATE.md`：**
+
+- 当前阶段改为 `execute ✅`（全部完成）或 `execute 🔄 (X/M)`（部分完成）
+- 下一步改为 `/sillyspec:verify`
+- 如果是子阶段，更新阶段进度
+- 历史记录追加时间 + 执行结果
+- 如果有阻塞项或关键决策变化，同步更新

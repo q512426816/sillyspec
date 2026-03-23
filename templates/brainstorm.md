@@ -355,8 +355,34 @@ git commit -m "docs: design for <topic>"
 ### 8. 用户确认
 
 > 设计已保存到 `.sillyspec/specs/xxx-design.md`。
-> 
+>
 > 确认后请运行 `/sillyspec:propose <change-name>` 生成规范。
+
+### 9. 更新 STATE.md
+
+每次 brainstorm 完成后，**必须自动更新** `.sillyspec/STATE.md`。
+
+**如果 STATE.md 不存在则创建。** 追加或更新以下内容：
+
+```markdown
+# 项目状态
+
+## 当前变更
+- 名称：<变更名>
+- 当前阶段：brainstorm ✅
+- 下一步：/sillyspec:propose <变更名>
+
+## 阶段进度（大模块）
+（如果有 MASTER.md，列出各阶段状态）
+
+## 关键决策
+- （brainstorm 中确定的关键技术决策）
+
+## 历史记录
+- <时间> brainstorm 完成：<主题>
+```
+
+**不需要 Git 提交 STATE.md。** 这是工作状态文件，随时变化，不需要版本控制（可以加入 `.gitignore`）。
 
 ## 关键原则
 - 一次一个问题，不要连续轰炸

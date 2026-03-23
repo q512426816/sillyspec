@@ -195,6 +195,15 @@ bash scripts/validate-plan.sh .sillyspec/changes/<当前变更目录>
 > 确认后运行 `/sillyspec:execute` 开始执行。
 > 指定范围：`/sillyspec:execute wave-1` 或 `/sillyspec:execute task-3`
 
+### 9. 更新 STATE.md
+
+plan 完成后，**必须自动更新** `.sillyspec/STATE.md`：
+
+- 当前阶段改为 `plan ✅`
+- 下一步改为 `/sillyspec:execute`
+- 历史记录追加时间 + plan 完成
+- 追加 Wave 数量信息
+
 ## 绝对规则
 - 不写实现代码（只写计划中的代码示例）
 - 每个步骤必须有验证命令和预期输出

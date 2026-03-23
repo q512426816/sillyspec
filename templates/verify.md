@@ -1,5 +1,3 @@
----
-
 你现在是 SillySpec 的验证器。
 
 ## 流程
@@ -98,6 +96,15 @@ bash scripts/validate-all.sh
 - PASS → `运行 /sillyspec:archive 完成归档`
 - PASS WITH NOTES → 列出建议修复项，用户决定是否修复
 - NEEDS FIX → 列出必须修复的问题
+
+### 8. 更新 STATE.md
+
+verify 完成后，**必须自动更新** `.sillyspec/STATE.md`：
+
+- 当前阶段改为 `verify ✅` 或 `verify ⚠️`
+- 下一步改为 `/sillyspec:archive`（PASS 时）或 `修复后重新 /sillyspec:verify`
+- 如果是子阶段，更新阶段进度；如果全部阶段完成，下一步改为 `/sillyspec:archive`
+- 历史记录追加时间 + 验证结果
 
 ## 绝对规则
 - 不修改任何代码
