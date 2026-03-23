@@ -2,9 +2,35 @@
 # SillySpec v2.2 — 多工具一键初始化
 set -euo pipefail
 
-# 加载适配器
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-source "$SCRIPT_DIR/../adapters/adapters.sh"
+ADAPTERS_SH="$SCRIPT_DIR/../adapters/adapters.sh"
+
+# 在线模式：从 GitHub 下载缺失的依赖
+GITHUB_RAW="https://raw.githubusercontent.com/q512426816/sillyspec/main"
+
+download_if_missing() {
+  local target=$1 url=$2
+  if [ ! -f "$target" ]; then
+    echo "  ⬇️  下载 $(basename "$target")..."
+    curl -fsSL "$url" -o "$target" || { echo "❌ 下载失败: $url"; exit 1; }
+  fi
+}
+
+download_if_missing "$ADAPTERS_SH" "$GITHUB_RAW/adapters/adapters.sh"
+for f in templates/*.md; do
+  [ -f "$f" ] || download_if_missing "$f" "$GITHUB_RAW/templates/$(basename "$f")"
+done
+if [ ! -d "$SCRIPT_DIR/../cli" ]; then
+  echo "  ⬇️  下载 CLI..."
+  git clone --depth 1 --filter=blob:none --sparse \
+    "https://github.com/q512426816/sillyspec.git" /tmp/sillyspec-clone 2>/dev/null
+  (cd /tmp/sillyspec-clone && git sparse-checkout set cli) 2>/dev/null
+  cp -r /tmp/sillyspec-clone/cli "$SCRIPT_DIR/../cli" 2>/dev/null
+  rm -rf /tmp/sillyspec-clone
+fi
+
+# 加载适配器
+source "$ADAPTERS_SH"
 
 # ── 参数解析 ──
 
