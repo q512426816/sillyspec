@@ -62,6 +62,33 @@ fi
 echo "🤪 SillySpec v2.2 — 规范驱动开发"
 echo "===================================="
 echo ""
+
+# ── 安装 CLI 到全局 ──
+
+echo "⚡ 安装 SillySpec CLI..."
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+CLI_DIR="$SCRIPT_DIR/../cli"
+if [ -d "$CLI_DIR" ]; then
+  # 用 npm link 安装到全局
+  (cd "$CLI_DIR" && npm install -g . 2>/dev/null)
+  if command -v sillyspec &>/dev/null; then
+    echo "  ✅ sillyspec CLI 已安装"
+  else
+    # npm link 可能需要权限，尝试直接软链
+    mkdir -p ~/.local/bin 2>/dev/null
+    ln -sf "$CLI_DIR/bin/sillyspec.js" ~/.local/bin/sillyspec 2>/dev/null
+    if [ -f ~/.local/bin/sillyspec ]; then
+      echo "  ✅ sillyspec CLI 已安装到 ~/.local/bin/sillyspec"
+      echo "  ⚠️  确保 ~/.local/bin 在 PATH 中"
+    else
+      echo "  ⚠️  CLI 安装失败，可手动运行: cd cli && npm install -g ."
+    fi
+  fi
+else
+  echo "  ⚠️  cli/ 目录不存在，跳过 CLI 安装"
+fi
+echo ""
+
 echo "📦 安装工具: ${TOOLS[*]}"
 if [ "${WORKSPACE_MODE}" = true ]; then
   echo "📦 工作区模式"

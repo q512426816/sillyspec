@@ -119,6 +119,40 @@ Write-Host ""
 Write-Host "SillySpec v$VERSION" -ForegroundColor Magenta
 Write-Host "=================="
 Write-Host ""
+
+# ── 安装 CLI ──
+
+Write-Host " 安装 SillySpec CLI..." -ForegroundColor Cyan
+$cliDir = Join-Path $PSScriptRoot "..\cli"
+if (Test-Path $cliDir) {
+    Push-Location $cliDir
+    try {
+        npm install -g . 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "  ✅ sillyspec CLI 已安装" -ForegroundColor Green
+        } else {
+            # 直接复制 bin 到 PATH 目录
+            $npmPrefix = npm config get prefix 2>$null
+            if ($npmPrefix) {
+                $destDir = Join-Path $npmPrefix
+                if (Test-Path (Join-Path $destDir "sillyspec.cmd")) {
+                    Write-Host "  ✅ sillyspec CLI 已安装" -ForegroundColor Green
+                } else {
+                    Write-Host "  ⚠️  CLI 安装需要管理员权限，请以管理员运行" -ForegroundColor Yellow
+                }
+            }
+        }
+    } catch {
+        Write-Host "  ⚠️  CLI 安装失败，可手动: cd cli && npm install -g ." -ForegroundColor Yellow
+    }
+    Pop-Location
+} else {
+    Write-Host "  ⚠️  cli/ 不存在，跳过 CLI 安装（npm 安装模式无 CLI）" -ForegroundColor Yellow
+}
+Write-Host ""
+
+# ── 下载模板 ──
+
 Write-Host " 下载模板..." -ForegroundColor Cyan
 
 foreach ($cmd in $COMMANDS) {

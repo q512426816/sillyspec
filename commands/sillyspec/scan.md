@@ -17,6 +17,24 @@ argument-hint: "[可选：直接指定区域或模式，跳过交互引导]"
 
 ---
 
+## 🛑 流程控制（必须先执行）
+
+**在开始任何工作之前，先调用 SillySpec CLI 检查当前状态：**
+
+```bash
+sillyspec status --json
+```
+
+**如果 CLI 返回的 phase 不是 "init"，说明已经有扫描数据。** 根据 CLI 返回结果决定：
+
+- `phase: "scan:quick_done"` → 已有快速扫描，建议深度扫描
+- `phase: "scan:resume"` → 深度扫描中断过，调用 `sillyspec check --json` 获取缺失文档列表
+- `phase` 是其他值 → 不需要扫描，提示用户 CLI 建议的下一步命令
+
+**不要自己推断项目状态，以 CLI 返回为准。**
+
+---
+
 ## 交互式引导流程
 
 ### Step 0: 检查工作区模式
@@ -518,28 +536,41 @@ cat .sillyspec/codebase/SCAN-RAW.md
 
 ### 快速扫描完成后
 
+**用 CLI 验证结果：**
+
+```bash
+sillyspec status --json
+```
+
+展示给用户：
 > ✅ 快速扫描完成！
->
+> 
 > 生成文档到 `.sillyspec/codebase/`：
 > - STACK.md — 技术栈
 > - STRUCTURE.md — 目录结构
 > - PROJECT.md — 项目概览
 
-然后根据项目特点给出**个性化建议**：
+**下一步由 CLI 决定：**
 
-- **没有测试目录** → "⚠️ 未发现测试文件，建议在 execute 阶段注意补充测试"
-- **发现数据库** → "检测到数据库（X 张表），后续 brainstorm/propose 阶段会自动读取相关 schema"
-- **发现 API 框架** → "检测到 API 层，execute 阶段会强制读取现有 Controller/Service 再写新代码"
-- **项目较大**（超过 100 个源文件）→ "项目较大，建议使用 `/sillyspec:scan --deep` 获取完整的 7 份分析文档"
-- **技术债务多** → "发现多个技术关注点，详情见 CONCERNS.md"
+```bash
+sillyspec next
+```
 
-最后说：
-> 建议下一步：`/sillyspec:brainstorm '你的需求'`
+将 CLI 返回的命令推荐给用户。
 
 ### 深度扫描完成后
 
+**用 CLI 验证结果：**
+
+```bash
+sillyspec status --json
+```
+
+CLI 应返回 `phase: "brainstorm"`。如果返回其他阶段，说明有文档缺失，需要补全。
+
+展示给用户：
 > ✅ 深度扫描完成！
->
+> 
 > 生成 7 份文档到 `.sillyspec/codebase/`：
 > - STACK.md — 技术栈
 > - ARCHITECTURE.md — 架构（含数据模型摘要）
@@ -549,10 +580,13 @@ cat .sillyspec/codebase/SCAN-RAW.md
 > - TESTING.md — 测试现状
 > - CONCERNS.md — 技术债务和风险
 
-同样给出**个性化建议**（同上）。
+**下一步由 CLI 决定，不要自己编建议：**
 
-最后说：
-> 建议下一步：`/sillyspec:brainstorm '你的需求'`
+```bash
+sillyspec next
+```
+
+将 CLI 返回的命令推荐给用户。
 
 ### 工作区扫描完成后
 

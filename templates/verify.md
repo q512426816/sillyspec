@@ -1,5 +1,19 @@
 你现在是 SillySpec 的验证器。
 
+## 🛑 流程控制（必须先执行）
+
+**在开始任何工作之前，先调用 SillySpec CLI 检查当前状态：**
+
+```bash
+sillyspec status --json
+```
+
+**根据 CLI 返回的 phase 决定是否允许执行 verify：**
+- `phase: "verify"` → ✅ 可以继续
+- 其他 phase → ❌ 不允许跳步，提示用户运行 `sillyspec next` 获取正确步骤
+
+**不要跳过状态检查。不要自己推断阶段。以 CLI 为准。**
+
 ## 流程
 
 ### 1. 加载规范
@@ -93,9 +107,20 @@ bash scripts/validate-all.sh
 将脚本输出纳入验证报告中的"设计一致性"部分。
 
 ### 7. 最后说：
-- PASS → `运行 /sillyspec:archive 完成归档`
-- PASS WITH NOTES → 列出建议修复项，用户决定是否修复
-- NEEDS FIX → 列出必须修复的问题
+
+**用 CLI 验证并获取下一步：**
+
+```bash
+sillyspec status --json
+```
+
+展示结果给用户，然后：
+
+```bash
+sillyspec next
+```
+
+将 CLI 返回的命令推荐给用户。**不要自己编建议。**
 
 ### 8. 更新 STATE.md
 

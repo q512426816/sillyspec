@@ -17,6 +17,21 @@ $ARGUMENTS
 
 ## 流程
 
+### 0. 检查状态（必须先执行）
+
+**在开始任何工作之前，先调用 SillySpec CLI 检查当前状态：**
+
+```bash
+sillyspec status --json
+```
+
+**根据 CLI 返回的 phase 决定是否允许执行 brainstorm：**
+- `phase: "brainstorm"` → ✅ 可以继续
+- `phase: "init"` → ❌ 还没扫描，提示 `sillyspec next` 获取正确的下一步
+- 其他 phase → ⚠️ 提示用户当前阶段，建议先完成当前阶段
+
+**不要跳过状态检查。不要自己推断阶段。以 CLI 为准。**
+
 ### 1. 加载项目上下文
 
 首先检查是否在工作区中：
@@ -380,9 +395,24 @@ git commit -m "docs: design for <topic>"
 
 ### 8. 用户确认
 
+**设计保存后，用 CLI 验证状态：**
+
+```bash
+sillyspec status --json
+```
+
+CLI 应返回 `phase: "propose"`。
+
+展示给用户：
 > 设计已保存到 `.sillyspec/specs/xxx-design.md`。
->
-> 确认后请运行 `/sillyspec:propose <change-name>` 生成规范。
+> 
+> 下一步：
+
+```bash
+sillyspec next
+```
+
+将 CLI 返回的命令推荐给用户。**不要自己编建议。**
 
 ### 9. 更新 STATE.md
 
