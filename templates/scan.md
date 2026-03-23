@@ -577,6 +577,39 @@ git commit -m "chore: sillyspec scan - codebase mapped"
 - 如果项目为空 → 告知用户使用 `/sillyspec:init` 初始化新项目
 - **交互模式下，每一步都要等用户回复再继续，不要一次性全部输出**
 
+### 路径校验（写入后立即检查）
+
+**每份文档写完后，必须用脚本验证路径正确。这是防止 AI 把文件写错目录的硬约束。**
+
+```bash
+# 检查所有 codebase 文档是否在正确位置
+for f in STACK ARCHITECTURE STRUCTURE CONVENTIONS INTEGRATIONS TESTING CONCERNS PROJECT SCAN-RAW; do
+  if [ -f ".sillyspec/codebase/${f}.md" ]; then
+    echo "✅ .sillyspec/codebase/${f}.md"
+  elif [ -f "${f}.md" ] || [ -f ".sillyspec/${f}.md" ] || [ -f "codebase/${f}.md" ]; then
+    echo "❌ ${f}.md 路径错误！必须在 .sillyspec/codebase/ 下"
+    # 自动修正：移动到正确位置
+    mkdir -p .sillyspec/codebase
+    if [ -f "${f}.md" ]; then mv "${f}.md" ".sillyspec/codebase/${f}.md" && echo "  已修正: ${f}.md → .sillyspec/codebase/${f}.md"; fi
+    if [ -f ".sillyspec/${f}.md" ]; then mv ".sillyspec/${f}.md" ".sillyspec/codebase/${f}.md" && echo "  已修正: .sillyspec/${f}.md → .sillyspec/codebase/${f}.md"; fi
+    if [ -f "codebase/${f}.md" ]; then mv "codebase/${f}.md" ".sillyspec/codebase/${f}.md" && echo "  已修正: codebase/${f}.md → .sillyspec/codebase/${f}.md"; fi
+  fi
+done
+
+# 额外检查：扫描整个项目，找出误放的文档
+for f in $(find . -maxdepth 2 -name "ARCHITECTURE.md" -o -name "STACK.md" -o -name "STRUCTURE.md" -o -name "CONVENTIONS.md" -o -name "INTEGRATIONS.md" -o -name "TESTING.md" -o -name "CONCERNS.md" -o -name "PROJECT.md" | grep -v ".sillyspec/codebase/"); do
+  if [ -f "$f" ]; then
+    echo "❌ 发现误放文件: $f（应该在 .sillyspec/codebase/ 下）"
+    mkdir -p .sillyspec/codebase
+    name=$(basename "$f")
+    mv "$f" ".sillyspec/codebase/${name}"
+    echo "  已自动修正: $f → .sillyspec/codebase/${name}"
+  fi
+done
+```
+
+**铁律：所有扫描生成的文档必须且只能在 `.sillyspec/codebase/` 目录下。** 如果发现 AI 生成到了其他位置，立即移动到正确位置。
+
 ### 自检门控（Hard Gate）
 
 - [ ] STACK.md 是否包含主要语言和框架？
