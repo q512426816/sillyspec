@@ -10,5 +10,5 @@
     "node": ">=18"
   },
   "keywords": ["sillyspec", "ai", "claude", "cursor", "spec-driven"],
-  "license": "MIT",
+  "license": "MIT"
 }
