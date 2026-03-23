@@ -1,5 +1,6 @@
 ---
 description: 编写实现计划 — 2-5 分钟粒度，精确到文件路径和代码
+argument-hint: "[计划名]"
 ---
 
 你现在是 SillySpec 的计划编写器。

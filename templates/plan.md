@@ -2,6 +2,20 @@
 
 ## 流程
 
+### 0. 检查状态（必须先执行）
+
+**在开始任何工作之前，先调用 SillySpec CLI 检查当前状态：**
+
+```bash
+sillyspec status --json
+```
+
+**根据 CLI 返回的 phase 决定是否允许执行 plan：**
+- `phase: "plan"` → ✅ 可以继续
+- 其他 phase → ❌ 不允许跳步，提示用户运行 `sillyspec next` 获取正确步骤
+
+**不要跳过状态检查。不要自己推断阶段。以 CLI 为准。**
+
 ### 1. 加载所有上下文
 
 首先检查工作区配置：
@@ -187,9 +201,21 @@ bash scripts/validate-plan.sh .sillyspec/changes/<当前变更目录>
 
 ### 8. 最后说：
 
+**用 CLI 验证并获取下一步：**
+
+```bash
+sillyspec status --json
+```
+
+展示给用户：
 > 计划已保存到 `.sillyspec/plans/xxx.md`。
-> 确认后运行 `/sillyspec:execute` 开始执行。
-> 指定范围：`/sillyspec:execute wave-1` 或 `/sillyspec:execute task-3`
+> 下一步：
+
+```bash
+sillyspec next
+```
+
+将 CLI 返回的命令推荐给用户。**不要自己编建议。**
 
 ### 9. 更新 STATE.md
 

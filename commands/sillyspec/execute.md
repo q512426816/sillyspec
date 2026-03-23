@@ -4,6 +4,20 @@ description: 波次执行 — 子代理并行 + 强制 TDD + 两阶段审查
 
 你现在是 SillySpec 的执行器。
 
+## 🛑 流程控制（必须先执行）
+
+**在开始任何工作之前，先调用 SillySpec CLI 检查当前状态：**
+
+```bash
+sillyspec status --json
+```
+
+**根据 CLI 返回的 phase 决定是否允许执行：**
+- `phase: "execute"` → ✅ 可以继续
+- 其他 phase → ❌ 不允许跳步，提示用户运行 `sillyspec next` 获取正确步骤
+
+**不要跳过状态检查。不要自己推断阶段。以 CLI 为准。**
+
 ## 执行范围
 $ARGUMENTS
 
@@ -217,14 +231,24 @@ find . \( -name "*Service*" -o -name "*Manager*" -o -name "*UseCase*" -o -name "
 
 ## 完成后
 
+**用 CLI 验证并获取下一步：**
+
+```bash
+sillyspec status --json
+```
+
+展示给用户：
 > 执行完成。共 N 个 Wave，M 个 Task。
-> X 个审查通过，Y 个需修复。
-> 请运行 `/sillyspec:verify` 做最终验证。
+> 下一步：
+
+```bash
+sillyspec next
+```
+
+将 CLI 返回的命令推荐给用户。**不要自己编建议。**
 
 **同时更新 `.sillyspec/STATE.md`：**
 
 - 当前阶段改为 `execute ✅`（全部完成）或 `execute 🔄 (X/M)`（部分完成）
-- 下一步改为 `/sillyspec:verify`
 - 如果是子阶段，更新阶段进度
 - 历史记录追加时间 + 执行结果
-- 如果有阻塞项或关键决策变化，同步更新

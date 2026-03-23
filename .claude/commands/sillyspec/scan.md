@@ -1,7 +1,8 @@
 ---
-description: 代码库扫描 — 交互式引导，支持快速/深度扫描和多项目工作区
-argument-hint: "[可选：直接指定区域或模式，跳过交互引导]"
+description: 代码库扫描 — 支持快速扫描和深度扫描两阶段
+argument-hint: "[可选：指定区域，如 'api' 或 'auth'] [--deep 深度扫描]"
 ---
+
 
 你现在是 SillySpec 的代码库扫描器。
 

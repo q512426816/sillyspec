@@ -7,17 +7,30 @@
 
 ## 安装
 
-**macOS / Linux：**
+需要 Node.js >= 18。所有平台一条命令：
+
 ```bash
-curl -fsSL https://raw.githubusercontent.com/q512426816/sillyspec/main/scripts/init.sh | bash
+npx sillyspec init
 ```
 
-**Windows PowerShell：**
-```powershell
-powershell -c "irm https://raw.githubusercontent.com/q512426816/sillyspec/main/scripts/install.ps1 | iex"
+> 📦 首次运行自动安装 CLI，之后 `sillyspec status`/`sillyspec next` 等命令也可直接使用。
+
+**指定工具：**
+```bash
+npx sillyspec init --tool claude
+npx sillyspec init --tool cursor
+npx sillyspec init --tool openclaw
 ```
 
-就这一行，装完就能用。
+**工作区模式（多项目）：**
+```bash
+npx sillyspec init --workspace
+```
+
+**指定目录：**
+```bash
+npx sillyspec init --dir /path/to/project
+```
 
 ### 支持的 AI 工具
 
@@ -114,14 +127,18 @@ SillySpec 不仅仅是 prompt，还有硬校验：
 
 ```
 sillyspec/
-├── SKILL.md                         # 全局 skill
+├── cli/                              # Node.js CLI（npx sillyspec）
+│   ├── bin/sillyspec.js              # 入口
+│   ├── src/
+│   │   ├── index.js                  # status/next/check/init 命令
+│   │   └── init.js                   # init 逻辑 + 工具适配器
+│   └── templates/                    # 内置命令模板
 ├── commands/sillyspec/              # slash commands（Claude Code）
 ├── templates/                       # 纯 prompt 模板（工具无关）
 ├── adapters/
-│   └── adapters.sh                  # 多工具格式转换函数
+│   └── adapters.sh                  # 多工具格式转换函数（bash 版，已废弃）
 ├── scripts/
-│   ├── init.sh                      # 一键安装
-│   ├── install.ps1                  # Windows 安装
+│   ├── init.sh                      # init 入口（转发给 CLI）
 │   ├── validate-proposal.sh         # 校验 propose 输出
 │   ├── validate-plan.sh             # 校验 plan 输出
 │   ├── validate-scan.sh             # 校验 scan 输出
