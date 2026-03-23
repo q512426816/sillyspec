@@ -18,7 +18,7 @@ get_description() {
     archive)    echo "归档变更 — 规范沉淀，可追溯" ;;
     status)     echo "查看项目进度和状态" ;;
     continue)   echo "自动判断并执行下一步" ;;
-    handoff)    echo "保存工作状态 — GSD Phase Context 模式" ;;
+    state)      echo "查看当前工作状态 — 显示 STATE.md 内容" ;;
     resume)     echo "恢复工作 — 从中断处继续" ;;
     quick)      echo "快速任务 — 跳过完整流程，直接做" ;;
     workspace)  echo "工作区管理 — 初始化、管理多项目工作区，查看子项目状态" ;;
@@ -41,7 +41,7 @@ get_argument_hint() {
     archive)    echo "[变更名]" ;;
     status)     echo "" ;;
     continue)   echo "" ;;
-    handoff)    echo "[交接备注]" ;;
+    state)      echo "[可选备注]" ;;
     resume)     echo "" ;;
     quick)      echo "[任务描述]" ;;
     workspace)  echo "[可选：add/remove/status/info]" ;;
