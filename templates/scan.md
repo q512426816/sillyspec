@@ -49,7 +49,7 @@ ls .sillyspec/codebase/ 2>/dev/null
 
 ### Step 3-5: 扫描模式、范围、排除目录
 
-AskUserQuestion 依次确认：快速⚡/深度🔍、扫描范围（留空全量）、排除目录。
+AskUserQuestion 依次确认：快速⚡/深度🔍、扫描范围（留空全量）、排除目录（默认选中 `node_modules`、`.git`、`dist`、`build`、`vendor`、`target`、`__pycache__`、`.next`、`coverage`、`.nuxt`，用户可调整）。
 
 ### Step 6: 确认并开始
 
