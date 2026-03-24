@@ -1,8 +1,3 @@
----
-description: 恢复工作 — 从中断处继续
-argument-hint: ""
----
-
 ## 交互规范
 **当需要用户从多个选项中做出选择时，必须使用 Claude Code 内置的 AskUserQuestion 工具，将选项以参数传入。**
 
@@ -28,7 +23,7 @@ cat .sillyspec/STATE.md 2>/dev/null
 ls .sillyspec/changes/*/MASTER.md 2>/dev/null
 ls -d .sillyspec/changes/*/ | grep -v archive | grep -v stages | tail -1 2>/dev/null
 ls .sillyspec/changes/*/stages/*/proposal.md 2>/dev/null
-ls .sillyspec/codebase/*.md .sillyspec/plans/*.md .sillyspec/{REQUIREMENTS,ROADMAP}.md 2>/dev/null
+ls .sillyspec/codebase/*.md .sillyspec/changes/*/plan.md .sillyspec/{REQUIREMENTS,ROADMAP}.md 2>/dev/null
 ```
 
 **探测结果推断：**

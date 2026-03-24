@@ -63,7 +63,7 @@ cat .sillyspec/REQUIREMENTS.md 2>/dev/null
 
 ### 4. 保存
 
-保存到 `.sillyspec/plans/YYYY-MM-DD-<change-name>.md`
+保存到 `.sillyspec/changes/<变更名>/plan.md`
 
 ### 5. 自检门控
 

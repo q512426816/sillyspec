@@ -36,7 +36,7 @@ cat .sillyspec/config.yaml 2>/dev/null
 
 **单项目模式：**
 ```bash
-PLAN=$(ls -t .sillyspec/plans/*.md | head -1); cat "$PLAN"
+PLAN=$(ls -t .sillyspec/changes/*/plan.md 2>/dev/null | head -1); cat "$PLAN"
 LATEST=$(ls -d .sillyspec/changes/*/ | grep -v archive | tail -1)
 cat "$LATEST"/{tasks,design}.md 2>/dev/null
 cat .sillyspec/codebase/CONVENTIONS.md 2>/dev/null
