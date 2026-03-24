@@ -46,7 +46,10 @@ cat .sillyspec/REQUIREMENTS.md 2>/dev/null
 
 **每个 Task 必须包含：**
 - 精确文件路径
+- **精确方法签名**（参数类型、返回值类型、注解）— ❌ "实现用户创建接口" → ✅ `public Result<UserVO> createUser(@RequestBody @Valid UserDTO dto)`，参考 `RoleController.createRole`
 - 完整可运行的代码示例（不写"添加验证逻辑"这种模糊描述）
+- 涉及已有类调用时，标注"参考 `XxxService.java` 的 `xxx` 方法"
+- 新增方法必须列出方法签名，方法签名必须来自已有代码风格或 design.md
 - 运行命令和预期输出
 - TDD 步骤：🔴 写失败测试 → 🟢 写最少代码 → 🔵 重构 → ✅ commit
 

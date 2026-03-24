@@ -1,3 +1,8 @@
+---
+description: 查看项目进度和状态
+argument-hint: ""
+---
+
 ## 交互规范
 **当需要用户从多个选项中做出选择时，必须使用 Claude Code 内置的 AskUserQuestion 工具，将选项以参数传入。**
 

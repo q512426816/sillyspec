@@ -163,6 +163,19 @@ find . -name "*.java" -not -path "*/{node_modules,.git}/*" | xargs grep -l "@Map
 
 无基类 → 写"本项目没有实体基类"。
 
+### D. 代码风格深度提取
+
+读取 2-3 个典型的 Controller、Service、ServiceImpl、Entity 源文件，提取具体风格（从源码提取，禁止编造）：
+
+1. **注解风格**：Controller 用 `@RestController` 还是 `@Controller`？方法用什么映射注解？参数校验方式？
+2. **返回值约定**：统一返回 `Result<T>` / `ResponseEntity<T>` / 其他？
+3. **异常处理**：用什么异常类？有没有全局异常处理器？
+4. **Service 层约定**：实现类命名、是否继承基类、基类通用方法、事务注解用法
+5. **实体/POJO 风格**：是否继承基类、Lombok 用法、ID 生成策略、`@TableId`
+6. **Mapper/DAO 风格**：XML Mapper 还是注解？有没有通用 Mapper 基类？
+
+将以上信息写入 CONVENTIONS.md「代码风格」章节。非 Java 项目参考同等概念提取。前端-only 项目写"不适用"。
+
 ---
 
 ## 深度扫描

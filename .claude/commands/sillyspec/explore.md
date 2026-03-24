@@ -1,3 +1,8 @@
+---
+description: 自由思考模式 — 讨论、画图、调研，不写代码
+argument-hint: "[探索主题]"
+---
+
 ## 交互规范
 **当需要用户从多个选项中做出选择时，必须使用 Claude Code 内置的 AskUserQuestion 工具，将选项以参数传入。**
 

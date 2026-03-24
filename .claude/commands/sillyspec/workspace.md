@@ -1,3 +1,8 @@
+---
+description: 工作区管理 — 初始化、管理多项目工作区，查看子项目状态
+argument-hint: "[可选：add/remove/status/info]"
+---
+
 ## 交互规范
 **当需要用户从多个选项中做出选择时，必须使用 Claude Code 内置的 AskUserQuestion 工具，将选项以参数传入。**
 

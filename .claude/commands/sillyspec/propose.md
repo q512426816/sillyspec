@@ -51,7 +51,7 @@ ls .sillyspec/changes/ | grep -v archive
 
 **`specs/requirements.md`：** 功能需求（REQ-001 格式）、Given/When/Then 用户场景、非功能需求
 
-**`design.md`：** 架构决策及理由、文件变更清单表格、数据模型、API 设计
+**`design.md`：** 架构决策及理由、文件变更清单表格、数据模型、API 设计、**代码风格参照**（参考已有的 Controller/Service/Entity 源文件，标注返回值类型、异常类型、注解风格）
 
 **`tasks.md`：** 准备 → 实现 → 收尾的任务列表（每个 task 标注文件路径）
 

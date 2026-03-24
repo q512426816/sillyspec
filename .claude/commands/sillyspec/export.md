@@ -1,3 +1,8 @@
+---
+description: 导出成功方案为可复用模板
+argument-hint: "<change-name> [--to <path>]"
+---
+
 ## 核心约束（必须遵守）
 - ❌ 修改任何文件（只读）
 

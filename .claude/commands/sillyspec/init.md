@@ -1,3 +1,8 @@
+---
+description: 绿地项目初始化 — 深度提问、调研、需求文档、路线图
+argument-hint: "[项目名]"
+---
+
 ## 交互规范
 **当需要用户从多个选项中做出选择时，必须使用 Claude Code 内置的 AskUserQuestion 工具，将选项以参数传入。**
 

@@ -62,7 +62,7 @@ cat .sillyspec/codebase/CONVENTIONS.md 2>/dev/null
 ### 有 subagent 能力时（推荐）
 1. 按计划的 Wave 分组
 2. 每个 Task 启动独立子代理（不继承主 session 历史）
-3. 子代理上下文：任务描述 + TDD 纪律 + 精确文件路径 + 相关约定
+3. 子代理上下文：任务描述 + TDD 纪律 + 精确文件路径 + 相关约定 + **要修改文件的当前源码** + **被调用类的源码**
 
 ### 无 subagent 时
 当前会话逐任务串行执行。
@@ -80,7 +80,12 @@ cat .sillyspec/codebase/CONVENTIONS.md 2>/dev/null
 
 **违反 TDD → 删掉代码从测试重新开始。例外（需人工确认）：** 抛弃型原型、生成代码、配置文件。
 
-## 写代码前必须读取现有源码（防幻觉）
+## 写代码前必须读取现有源码（先读后写）
+
+**⛔ 铁律：**
+- 没有读过相关源文件，不允许写任何代码
+- 方法签名必须来自已有代码或 plan 中的明确定义，禁止凭空编造
+- 调用已有方法时，必须先 `cat` 源文件确认方法签名（参数、返回值、异常）
 
 ```bash
 cat .sillyspec/codebase/{CONVENTIONS,ARCHITECTURE}.md 2>/dev/null

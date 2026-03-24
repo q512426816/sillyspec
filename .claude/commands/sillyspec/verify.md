@@ -1,3 +1,8 @@
+---
+description: 验证实现 — 对照规范检查 + 测试套件
+argument-hint: "[可选：指定验证范围]"
+---
+
 ## 交互规范
 **当需要用户从多个选项中做出选择时，必须使用 Claude Code 内置的 AskUserQuestion 工具，将选项以参数传入。**
 
