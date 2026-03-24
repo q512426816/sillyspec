@@ -107,6 +107,16 @@ cat .sillyspec/codebase/CONVENTIONS.md 2>/dev/null
 - 没有读过相关源文件，不允许写任何代码
 - 方法签名必须来自已有代码或 plan 中的明确定义，禁止凭空编造
 - 调用已有方法时，必须先 `cat` 源文件确认方法签名（参数、返回值、异常）
+- **调用任何已有方法前，必须 grep 确认方法存在**：
+
+```bash
+# 调用 userService.getById() 之前
+grep -rn "public.*getById" --include="*.java" src/main/java/**/service/
+# 调用 result.success() 之前
+grep -rn "public.*success" --include="*.java" src/main/java/**/common/
+```
+
+grep 不到 → 方法不存在或名字不同 → 不许调用，先查清楚。
 
 ```bash
 cat .sillyspec/codebase/{CONVENTIONS,ARCHITECTURE}.md 2>/dev/null
