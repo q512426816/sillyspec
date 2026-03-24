@@ -77,7 +77,7 @@ cat .sillyspec/codebase/CONVENTIONS.md 2>/dev/null
 🔴 RED    → 先写测试，运行确认失败
 🟢 GREEN  → 写最少代码让测试通过
 🔵 REFACTOR → 清理，保持测试通过
-✅ COMMIT  → git 提交
+✅ COMMIT  → git 提交（测试文件必须包含在提交中）
 ☑️ CHECK  → 勾选 tasks.md 中对应的 checkbox
 ```
 
@@ -85,7 +85,16 @@ cat .sillyspec/codebase/CONVENTIONS.md 2>/dev/null
 
 **勾选 tasks：** 每个 Task 完成后，**必须立即**在 `.sillyspec/changes/<变更名>/tasks.md` 中将对应 checkbox 标记为 `[x]`。这是 Task 完成的最后一步，不允许跳过。
 
-**违反 TDD → 删掉代码从测试重新开始。例外（需人工确认）：** 抛弃型原型、生成代码、配置文件。
+**测试文件必须保留：** 测试是产出物，不是草稿。写完的测试文件必须保留在项目中，随代码一起 commit，不能删除。
+
+**哪些任务可以跳过 TDD（不需要人工确认）：**
+- 纯配置文件（YAML、properties、.env、JSON 配置）
+- 纯数据文件（SQL seed、fixture）
+- 纯文档（README、注释）
+
+**其他情况一律走 TDD：** Service、Controller、Mapper、组件、工具类、DTO（需要验证序列化/校验逻辑时）、API 接口 — 全部先写测试。
+
+**违反 TDD → 删掉代码从测试重新开始。没有例外。**
 
 ## 写代码前必须读取现有源码（先读后写）
 
