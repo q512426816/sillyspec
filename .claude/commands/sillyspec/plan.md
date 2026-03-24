@@ -42,7 +42,7 @@ cat .sillyspec/REQUIREMENTS.md 2>/dev/null
 
 ### 2. 逐任务展开
 
-把 tasks.md 每个 checkbox 展开为详细步骤。工作区模式下每个 Task 标注所属项目。
+把 tasks.md 每个 checkbox 展开为详细步骤，按 Wave 分组组织。工作区模式下每个 Task 标注所属项目。
 
 **每个 Task 必须包含：**
 - 精确文件路径
@@ -57,20 +57,31 @@ cat .sillyspec/REQUIREMENTS.md 2>/dev/null
 
 按 Wave 分组，标注依赖关系：
 ```markdown
-**Wave 1**（并行，无依赖）：Task 1, Task 2
-**Wave 2**（依赖 Wave 1）：Task 3
+### Wave 1（并行，无依赖）
+- [ ] 添加用户创建接口
+  - 修改: `UserController.java`
+  - 方法签名: `public Result<UserVO> createUser(@RequestBody @Valid UserDTO dto)`
+  - 参考: `RoleController.createRole`
+  - TDD: 🔴 测试 → 🟢 实现 → 🔵 重构
+
+- [ ] 添加角色创建接口
+  - ...
+
+### Wave 2（依赖 Wave 1）
+- [ ] 添加用户列表查询（依赖用户创建完成）
+  - ...
 ```
 
 ### 4. 保存
 
-保存到 `.sillyspec/changes/<变更名>/plan.md`
+**直接覆盖** `.sillyspec/changes/<变更名>/tasks.md`。不再生成单独的 plan.md 文件。
 
 ### 5. 自检门控
 
 - [ ] 每个 task 有具体文件路径？
 - [ ] 每个 task 有验证命令和预期输出？
 - [ ] 标注了 Wave 和执行顺序？
-- [ ] plan 与 design.md 文件变更清单一致？
+- [ ] 与 design.md 文件变更清单一致？
 
 ```bash
 bash scripts/validate-plan.sh .sillyspec/changes/<当前变更目录> 2>/dev/null

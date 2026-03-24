@@ -179,7 +179,7 @@ async function doInstall(projectDir, tools, isWorkspace, subprojects = []) {
   // .sillyspec/codebase/    → scan
   // .sillyspec/changes/     → brainstorm/propose
   // .sillyspec/changes/archive/ → archive
-  // .sillyspec/plans/        → plan
+  // (plan 内容已合并到 tasks.md)
   // .sillyspec/specs/        → propose
   if (isWorkspace) {
     mkdirSync(join(projectDir, '.sillyspec', 'shared'), { recursive: true });

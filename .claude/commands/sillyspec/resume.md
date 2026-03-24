@@ -23,7 +23,7 @@ cat .sillyspec/STATE.md 2>/dev/null
 ls .sillyspec/changes/*/MASTER.md 2>/dev/null
 ls -d .sillyspec/changes/*/ | grep -v archive | grep -v stages | tail -1 2>/dev/null
 ls .sillyspec/changes/*/stages/*/proposal.md 2>/dev/null
-ls .sillyspec/codebase/*.md .sillyspec/changes/*/plan.md .sillyspec/{REQUIREMENTS,ROADMAP}.md 2>/dev/null
+ls .sillyspec/codebase/*.md .sillyspec/changes/*/tasks.md .sillyspec/{REQUIREMENTS,ROADMAP}.md 2>/dev/null
 ```
 
 **探测结果推断：**
