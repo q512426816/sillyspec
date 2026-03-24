@@ -45,7 +45,7 @@ $ARGUMENTS
 
 **追加记录格式：**
 ```markdown
-## YYYY-MM-DD HH:MM | fix: 任务描述
+## YYYY-MM-DD HH:MM:SS | fix: 任务描述
 - 文件：`修改的文件列表`
 - commit：`commit hash`
 - 关联归档：`相关的已归档变更名`（如有）
