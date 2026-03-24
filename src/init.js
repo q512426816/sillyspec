@@ -186,10 +186,16 @@ async function doInstall(projectDir, tools, isWorkspace, subprojects = []) {
     mkdirSync(join(projectDir, '.sillyspec', 'workspace'), { recursive: true });
   }
 
-  // .gitignore
+  // .gitignore — 确保 STATE.md 被忽略
   const gitignorePath = join(projectDir, '.gitignore');
-  if (!existsSync(gitignorePath)) {
-    writeFileSync(gitignorePath, '.sillyspec/STATE.md\n');
+  const stateIgnoreRule = '.sillyspec/STATE.md';
+  if (existsSync(gitignorePath)) {
+    const content = readFileSync(gitignorePath, 'utf8');
+    if (!content.includes(stateIgnoreRule)) {
+      writeFileSync(gitignorePath, content.trimEnd() + '\n' + stateIgnoreRule + '\n');
+    }
+  } else {
+    writeFileSync(gitignorePath, stateIgnoreRule + '\n');
   }
 
   // 生成文件
