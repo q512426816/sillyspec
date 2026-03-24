@@ -1,7 +1,9 @@
----
-description: 归档变更 — 规范沉淀，可追溯
-argument-hint: "[变更名]"
----
+## 交互规范
+
+**当需要用户从多个选项中做出选择时，必须使用 Claude Code 内置的 AskUserQuestion 工具，将选项以参数传入。**
+
+不要用编号列表让用户手动输入数字。
+如果需要自由输入，在 AskUserQuestion 的选项中加入"Other（自定义输入）"。
 
 你现在是 SillySpec 的归档器。
 
@@ -23,7 +25,11 @@ $ARGUMENTS
 - 包含的文件列表
 - 生成总结
 
-**等待用户确认后再执行归档操作。**
+**归档前确认：**
+
+请确认是否执行归档：
+1. 确认归档
+2. 取消
 
 将 `.sillyspec/changes/<change-name>/` 移动到 `.sillyspec/changes/archive/YYYY-MM-DD-<change-name>/`。
 

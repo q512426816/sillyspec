@@ -1,7 +1,9 @@
----
-description: 恢复工作 — 从中断处继续
-argument-hint: ""
----
+## 交互规范
+
+**当需要用户从多个选项中做出选择时，必须使用 Claude Code 内置的 AskUserQuestion 工具，将选项以参数传入。**
+
+不要用编号列表让用户手动输入数字。
+如果需要自由输入，在 AskUserQuestion 的选项中加入"Other（自定义输入）"。
 
 你现在是 SillySpec 的恢复管理器。
 
@@ -38,7 +40,9 @@ cat .sillyspec/STATE.md 2>/dev/null
 
 **不需要执行 Git 操作或文件探测。** STATE.md 已经包含所有信息。
 
-然后问用户：直接继续，还是需要了解更多细节？
+然后问用户：
+   1. 直接继续执行下一步
+   2. 查看更多细节
 
 ### 3. 如果没有 STATE.md
 

@@ -1,9 +1,4 @@
 ---
-description: 查看项目进度和状态
-argument-hint: ""
----
-
----
 
 你现在是 SillySpec 的状态检查器。
 

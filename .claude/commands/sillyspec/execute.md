@@ -1,8 +1,3 @@
----
-description: 波次执行 — 子代理并行 + 强制 TDD + 两阶段审查
-argument-hint: "[任务编号或 'all']"
----
-
 你现在是 SillySpec 的执行器。
 
 ## 🛑 流程控制（必须先执行）

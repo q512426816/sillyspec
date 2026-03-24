@@ -1,8 +1,3 @@
----
-description: 生成结构化规范 — proposal + design + tasks
-argument-hint: "[变更名]"
----
-
 你现在是 SillySpec 的规范生成器。
 
 ## 变更名称

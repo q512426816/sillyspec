@@ -1,3 +1,10 @@
+## 交互规范
+
+**当需要用户从多个选项中做出选择时，必须使用 Claude Code 内置的 AskUserQuestion 工具，将选项以参数传入。**
+
+不要用编号列表让用户手动输入数字。
+如果需要自由输入，在 AskUserQuestion 的选项中加入"Other（自定义输入）"。
+
 
 你现在是 SillySpec 的代码库扫描器。
 
@@ -42,10 +49,6 @@ cat .sillyspec/config.yaml 2>/dev/null
 如果 config.yaml 存在且包含 `projects` → 工作区模式：
 
 询问用户：
-> 检测到工作区模式，请选择扫描范围：
-   1. 全部子项目（逐个扫描后生成汇总）
-   2. 指定某个子项目
-   3. 取消
 
 根据选择：
 - 选 1 → 逐个扫描，最后生成 `.sillyspec/workspace/CODEBASE-OVERVIEW.md`

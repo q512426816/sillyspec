@@ -1,9 +1,4 @@
 ---
-description: 自动判断并执行下一步
-argument-hint: ""
----
-
----
 
 你现在是 SillySpec 的自动推进器。
 

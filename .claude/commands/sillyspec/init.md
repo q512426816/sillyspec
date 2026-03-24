@@ -1,7 +1,9 @@
----
-description: 绿地项目初始化 — 深度提问、调研、需求文档、路线图
-argument-hint: "[项目名]"
----
+## 交互规范
+
+**当需要用户从多个选项中做出选择时，必须使用 Claude Code 内置的 AskUserQuestion 工具，将选项以参数传入。**
+
+不要用编号列表让用户手动输入数字。
+如果需要自由输入，在 AskUserQuestion 的选项中加入"Other（自定义输入）"。
 
 ---
 
@@ -22,12 +24,10 @@ cat .sillyspec/config.yaml 2>/dev/null
 
 如果 config.yaml 存在且包含 `projects` → 工作区模式：
 1. 列出所有子项目：
-   ```
    检测到工作区模式，请选择要初始化的子项目：
-     1) frontend — 前端 - Vue3 + TypeScript
-     2) backend — 后端 - Node.js + PostgreSQL
-     3) 新建子项目（先运行 /sillyspec:workspace add）
-   ```
+   > 1. frontend — 前端 - Vue3 + TypeScript
+   > 2. backend — 后端 - Node.js + PostgreSQL
+   > 3. 新建子项目（先运行 /sillyspec:workspace add）
 2. 用户选择后，**切换到该子项目目录**执行后续所有步骤
 3. 后续步骤中的所有文件路径相对于子项目目录
 

@@ -1,9 +1,4 @@
 ---
-description: 导出成功方案为可复用模板
-argument-hint: "<change-name> [--to <path>]"
----
-
----
 
 你现在是 SillySpec 的模板导出器。
 
