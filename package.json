@@ -16,5 +16,10 @@
     "cursor",
     "spec-driven"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "@inquirer/prompts": "^7.10.1",
+    "chalk": "^5.6.2",
+    "ora": "^9.3.0"
+  }
 }

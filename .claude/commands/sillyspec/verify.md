@@ -1,18 +1,21 @@
-你现在是 SillySpec 的验证器。
+## 交互规范
+**当需要用户从多个选项中做出选择时，必须使用 Claude Code 内置的 AskUserQuestion 工具，将选项以参数传入。**
 
-## 🛑 流程控制（必须先执行）
+## 核心约束（必须遵守）
+- ❌ 修改任何代码（只做检查和报告）
+- ❌ 跳过状态检查
+- ❌ 自行推进到下一阶段
 
-**在开始任何工作之前，先调用 SillySpec CLI 检查当前状态：**
+## 状态检查（必须先执行）
 
 ```bash
 sillyspec status --json
 ```
 
-**根据 CLI 返回的 phase 决定是否允许执行 verify：**
-- `phase: "verify"` → ✅ 可以继续
-- 其他 phase → ❌ 不允许跳步，提示用户运行 `sillyspec next` 获取正确步骤
+- `phase: "verify"` → ✅ 继续
+- 其他 phase → 提示 `sillyspec next`
 
-**不要跳过状态检查。不要自己推断阶段。以 CLI 为准。**
+---
 
 ## 流程
 
@@ -20,53 +23,28 @@ sillyspec status --json
 
 ```bash
 LATEST=$(ls -d .sillyspec/changes/*/ | grep -v archive | tail -1)
-cat "$LATEST/proposal.md"
-cat "$LATEST/design.md"
-cat "$LATEST/tasks.md"
-cat "$LATEST/specs/requirements.md" 2>/dev/null
+cat "$LATEST"/{proposal,design,tasks}.md "$LATEST/specs/requirements.md" 2>/dev/null
 ```
 
-### 1.5 锚定确认（必须完成）
-
-读取相关规范文件。对于存在的文件，确认理解；对于不存在的文件，标注跳过：
-
-```
-已读取并理解：
-- [x] proposal.md — 变更动机和范围（如果存在）
-- [x] design.md — 技术方案和文件变更（如果存在）
-- [x] tasks.md — 实现清单（如果存在）
-- [x] specs/requirements.md — 需求和场景（如果存在）
-
-所有可用上下文已加载，开始验证。
-```
-
-**文件不存在不是错误**。只确认实际存在的文件。不准跳过此步骤。
+锚定确认实际存在的文件。
 
 ### 2. 逐项检查 tasks.md
 
-对每个 checkbox 报告状态：
-- ✅ 已完成 / ❌ 未完成 / ⚠️ 部分完成
+对每个 checkbox 报告：✅ 已完成 / ❌ 未完成 / ⚠️ 部分完成
 
 ### 3. 对照 design.md
 
-- 架构决策是否遵循？
-- 文件变更清单是否一致？
-- 数据模型是否符合？
-- API 设计是否符合？
+架构决策？文件变更一致性？数据模型？API 设计？
 
-### 4. 运行完整测试套件（fresh run）
+### 4. 运行测试套件
 
 ```bash
-# 根据项目技术栈运行
 pnpm test 2>/dev/null || npm test 2>/dev/null || pytest 2>/dev/null || go test ./... 2>/dev/null
 ```
-
-记录通过/失败数量。如有失败，分析原因。
 
 ### 5. 代码质量扫描
 
 ```bash
-# 搜索技术债务标记
 grep -r "TODO\|FIXME\|HACK\|XXX" src/ lib/ app/ --include="*.ts" --include="*.tsx" --include="*.py" --include="*.js" 2>/dev/null | head -20
 ```
 
@@ -74,63 +52,21 @@ grep -r "TODO\|FIXME\|HACK\|XXX" src/ lib/ app/ --include="*.ts" --include="*.ts
 
 ```markdown
 # SillySpec 验证报告
-
-## 任务完成度
-- [x] Task 1: xxx ✅
-- [x] Task 2: xxx ✅
-- [ ] Task 3: xxx ❌ 未实现
-完成度：2/3
-
+## 任务完成度：X/Y
 ## 设计一致性
-- ✅ 架构决策遵循
-- ⚠️ API 返回格式与 design.md 略有差异（缺少 error 字段）
-
-## 测试结果
-- passed: 42, failed: 3
-
+## 测试结果：passed N, failed N
 ## 技术债务标记
-- src/auth/login.ts:15 // TODO: add rate limiting
-- src/auth/login.ts:45 // FIXME: token expiry
-
-## 结论
-⚠️ PASS WITH NOTES
+## 结论：✅ PASS / ⚠️ PASS WITH NOTES / ❌ FAIL
 ```
-
-## 脚本校验（硬验证）
-
-在输出验证报告之前，运行综合校验脚本：
 
 ```bash
-bash scripts/validate-all.sh
+bash scripts/validate-all.sh 2>/dev/null
 ```
 
-将脚本输出纳入验证报告中的"设计一致性"部分。
-
-### 7. 最后说：
-
-**用 CLI 验证并获取下一步：**
+### 7. 完成
 
 ```bash
-sillyspec status --json
+sillyspec status --json && sillyspec next
 ```
 
-展示结果给用户，然后：
-
-```bash
-sillyspec next
-```
-
-将 CLI 返回的命令推荐给用户。**不要自己编建议。**
-
-### 8. 更新 STATE.md
-
-verify 完成后，**必须自动更新** `.sillyspec/STATE.md`：
-
-- 当前阶段改为 `verify ✅` 或 `verify ⚠️`
-- 下一步改为 `/sillyspec:archive`（PASS 时）或 `修复后重新 /sillyspec:verify`
-- 如果是子阶段，更新阶段进度；如果全部阶段完成，下一步改为 `/sillyspec:archive`
-- 历史记录追加时间 + 验证结果
-
-## 绝对规则
-- 不修改任何代码
-- 只做检查和报告
+更新 `.sillyspec/STATE.md`：阶段改为 `verify ✅` 或 `verify ⚠️`。

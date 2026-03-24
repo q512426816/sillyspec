@@ -1,0 +1,13 @@
+# SillySpec 工作区配置
+# 修改此文件后运行 /sillyspec:workspace 更新
+
+projects: {}
+  # 示例：
+  # frontend:
+  #   path: ./frontend
+  #   role: 前端 - Vue3 + TypeScript
+  # backend:
+  #   path: ./backend
+  #   role: 后端 - Node.js + PostgreSQL
+
+shared: []
