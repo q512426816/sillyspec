@@ -10,7 +10,7 @@
 - ❌ 在 checklist 未完成前开始写设计文档
 - ❌ 编造不存在的表名、字段名、API 端点
 - ❌ 一次性抛出多个问题（必须逐个等待回答）
-- ❌ 用户确认前自行推进到 propose 或任何后续阶段
+- ❌ 用户确认前自行推进到 plan 或任何后续阶段
 
 ## 状态检查（必须先执行）
 
@@ -37,9 +37,11 @@ $ARGUMENTS
 - [ ] **Step 5** — 分段展示设计，逐段确认
 - [ ] **Step 6** — 写设计文档并保存
 - [ ] **Step 7** — AI 自审（对照约束检查）
-- [ ] **Step 8** — 用户确认 → 调用 `/sillyspec:propose`
+- [ ] **Step 8** — 用户确认设计方案
+- [ ] **Step 9** — 输出 design.md
+- [ ] **Step 10** — 更新 STATE.md
 
-**终态：** brainstorm 完成后唯一出口是 `/sillyspec:propose`。不允许直接进入 execute、plan 或任何代码操作。
+**终态：** brainstorm 完成后唯一出口是 `/sillyspec:plan`。不允许直接进入 execute 或任何代码操作。
 
 ---
 
@@ -157,13 +159,20 @@ git commit -m "docs: master change plan for <变更名>"
 sillyspec status --json
 ```
 
-展示设计方案，AskUserQuestion：确认进入 propose / 需要修改 / 推翻重来。
+展示设计方案，AskUserQuestion：确认 / 需要修改 / 推翻重来。
 
-用户确认 → `sillyspec next`，将 CLI 返回命令推荐给用户。
+### Step 9: 输出技术方案
 
-### Step 9: 更新 STATE.md
+用户确认后，直接产出 `design.md` 写入 `.sillyspec/changes/<变更名>/design.md`。内容包含：
+- 架构决策及理由
+- 文件变更清单表格
+- 数据模型
+- API 设计
+- 代码风格参照（参考已有 Controller/Service/Entity 源文件，标注返回值类型、异常类型、注解风格）
 
-自动更新 `.sillyspec/STATE.md`（不存在则创建）：当前变更、阶段、下一步、关键决策、历史记录。不需要 Git 提交。
+### Step 10: 更新 STATE.md
+
+自动更新 `.sillyspec/STATE.md`（不存在则创建）：当前变更、阶段、下一步 `/sillyspec:plan`、关键决策、历史记录。不需要 Git 提交。
 
 ## 关键原则
 - YAGNI — 无情砍掉不需要的功能

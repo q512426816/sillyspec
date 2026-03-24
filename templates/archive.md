@@ -18,7 +18,6 @@ $ARGUMENTS
 
 读取 `.sillyspec/changes/<change-name>/` 下所有必要文件，逐项检查：
 
-- [ ] **verify 状态：** 检查是否有验证记录，无则提示先执行 `/sillyspec:verify`
 - [ ] **文件完整性：** 检查 `proposal.md` 和 `design.md` 是否存在，缺失则警告
 - [ ] **任务完成度：** 读取 `tasks.md`，统计已完成/未完成任务数。**有未完成的 → 用 AskUserQuestion 询问：**
   - ① 继续归档（未完成任务将被标记完成）

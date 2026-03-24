@@ -160,6 +160,11 @@ find . \( -name "*Service*" -o -name "*Manager*" -o -name "*UseCase*" -o -name "
 
 ## 完成后
 
+所有任务完成后，用 AskUserQuestion 询问用户下一步：
+1. **验证** — 执行 `/sillyspec:verify` 全面验证
+2. **归档** — 跳过 verify，执行 `/sillyspec:archive`
+3. **继续开发** — 不结束当前阶段
+
 ```bash
 sillyspec status --json
 sillyspec next

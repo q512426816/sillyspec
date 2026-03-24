@@ -1,6 +1,8 @@
 ## 交互规范
 **当需要用户从多个选项中做出选择时，必须使用 Claude Code 内置的 AskUserQuestion 工具，将选项以参数传入。**
 
+> **提示：** 通常不需要单独执行 propose。brainstorm 阶段会自动产出 design.md。仅当需求已经明确、跳过 brainstorm 时才手动执行 propose。
+
 ## 核心约束（必须遵守）
 - ❌ 写实现代码
 - ❌ tasks.md 写具体步骤（只列任务名）

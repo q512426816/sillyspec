@@ -33,7 +33,7 @@ ls .sillyspec/codebase/*.md .sillyspec/changes/*/tasks.md .sillyspec/{REQUIREMEN
 | 无 .sillyspec/ 内容 | 未开始 | `/sillyspec:init` 或 `/sillyspec:scan` |
 | 有 SCAN-RAW.md 或 codebase 文档不全 | 扫描中断 | `/sillyspec:scan`（断点续扫） |
 | codebase 7 份齐全无 changes/ | 已扫描未开始需求 | `/sillyspec:brainstorm` |
-| 有 REQUIREMENTS.md 无 changes/ | 绿地有需求 | `/sillyspec:propose` |
+| 有 REQUIREMENTS.md 无 changes/ | 绿地有需求 | `/sillyspec:brainstorm` |
 | changes/ 有 proposal 无 tasks | 待计划 | `/sillyspec:plan` |
 | tasks.md 有未完成 checkbox | 执行中 | `/sillyspec:execute` |
 | tasks.md 全完成 | 待验证 | `/sillyspec:verify` |
