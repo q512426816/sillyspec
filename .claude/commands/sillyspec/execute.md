@@ -88,7 +88,7 @@ cat .sillyspec/codebase/CONVENTIONS.md 2>/dev/null
 
 用户确认后才执行 `git commit`。工作区模式下在子项目目录提交。
 
-**勾选 tasks：** 每个 Task 完成后，**必须立即**在 `.sillyspec/changes/<变更名>/tasks.md` 中将对应 checkbox 标记为 `[x]`。这是 Task 完成的最后一步，不允许跳过。
+**勾选 tasks：** 每个 Task 完成后，**必须立即**在 `.sillyspec/changes/<变更名>/tasks.md` 中将对应 checkbox 标记为 `[x]`，并附上完成时间：`- [x] [YYYY-MM-DD HH:MM:SS] 任务描述`。这是 Task 完成的最后一步，不允许跳过。
 
 **测试文件必须保留：** 测试是产出物，不是草稿。写完的测试文件必须保留在项目中，随代码一起 commit，不能删除。
 

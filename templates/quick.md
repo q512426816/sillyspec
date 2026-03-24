@@ -35,7 +35,7 @@ $ARGUMENTS
 6. **运行相关测试：** `pnpm test 2>/dev/null || npm test 2>/dev/null || pytest 2>/dev/null`
 7. **Git commit：** 展示 commit message 给用户确认后提交
 8. **记录：**
-   - **有 `--change`：** 在 `.sillyspec/changes/<变更名>/tasks.md` 追加 task 并勾选 `[x]`，格式：`- [x] [YYYY-MM-DD HH:MM:SS] quick: 任务描述`
+   - **有 `--change`：** 在 `.sillyspec/changes/<变更名>/tasks.md` 追加 task 并勾选 `[x]`
    - **无 `--change`：** 记录到 `.sillyspec/QUICKLOG.md`（见下方规则）
 9. **检查复杂度：** 任务比预期复杂 → 建议用完整流程
 
