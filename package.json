@@ -1,6 +1,6 @@
 {
   "name": "sillyspec",
-  "version": "2.4.0",
+  "version": "2.4.1",
   "description": "SillySpec CLI — 流程状态机，让 AI 严格按步骤来",
   "type": "module",
   "bin": {
@@ -9,6 +9,12 @@
   "engines": {
     "node": ">=18"
   },
-  "keywords": ["sillyspec", "ai", "claude", "cursor", "spec-driven"],
+  "keywords": [
+    "sillyspec",
+    "ai",
+    "claude",
+    "cursor",
+    "spec-driven"
+  ],
   "license": "MIT"
 }
