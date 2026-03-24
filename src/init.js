@@ -175,20 +175,16 @@ function isTTY() {
 
 async function doInstall(projectDir, tools, isWorkspace, subprojects = []) {
   // 创建基础目录
-  const dirs = [
-    '.sillyspec/codebase',
-    '.sillyspec/changes/archive',
-    '.sillyspec/plans',
-    '.sillyspec/specs',
-    '.sillyspec/phases',
-  ];
+  // 不预创建子目录，由各命令按需创建
+  // .sillyspec/codebase/    → scan
+  // .sillyspec/changes/     → brainstorm/propose
+  // .sillyspec/changes/archive/ → archive
+  // .sillyspec/plans/        → plan
+  // .sillyspec/specs/        → propose
   if (isWorkspace) {
-    dirs.push('.sillyspec/shared', '.sillyspec/workspace');
+    mkdirSync(join(projectDir, '.sillyspec', 'shared'), { recursive: true });
+    mkdirSync(join(projectDir, '.sillyspec', 'workspace'), { recursive: true });
   }
-  for (const d of dirs) {
-    mkdirSync(join(projectDir, d), { recursive: true });
-  }
-  mkdirSync(join(homedir(), '.sillyspec', 'templates'), { recursive: true });
 
   // .gitignore
   const gitignorePath = join(projectDir, '.gitignore');
