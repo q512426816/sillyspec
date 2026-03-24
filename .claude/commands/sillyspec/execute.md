@@ -81,7 +81,12 @@ cat .sillyspec/codebase/CONVENTIONS.md 2>/dev/null
 ☑️ CHECK  → 勾选 tasks.md 中对应的 checkbox
 ```
 
-**Git 提交：** 检查 Git 仓库 → `git add -A && git commit`。工作区模式下在子项目目录提交。跳过不可提交的情况但记录在报告中。
+**Git 提交：** 检查 Git 仓库 → `git add -A` → 生成 commit message → **用 AskUserQuestion 展示 commit message 给用户确认**：
+1. 确认提交 — 执行 `git commit`
+2. 修改提交信息 — 用户调整后重新确认
+3. 跳过提交 — 本任务不 commit（记录原因）
+
+用户确认后才执行 `git commit`。工作区模式下在子项目目录提交。
 
 **勾选 tasks：** 每个 Task 完成后，**必须立即**在 `.sillyspec/changes/<变更名>/tasks.md` 中将对应 checkbox 标记为 `[x]`。这是 Task 完成的最后一步，不允许跳过。
 
