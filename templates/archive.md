@@ -18,7 +18,11 @@ $ARGUMENTS
 - 包含的文件列表
 - 生成总结
 
-**等待用户确认后再执行归档操作。**
+**归档前确认：**
+
+请确认是否执行归档：
+1. 确认归档
+2. 取消
 
 将 `.sillyspec/changes/<change-name>/` 移动到 `.sillyspec/changes/archive/YYYY-MM-DD-<change-name>/`。
 

@@ -42,11 +42,9 @@ cat .sillyspec/config.yaml 2>/dev/null
 
 **如果是工作区模式：**
 1. 询问本次需求属于哪个子项目：
-   ```
    检测到工作区模式，请选择需求所属的子项目：
-     1) frontend — 前端 - Vue3 + TypeScript
-     2) backend — 后端 - Node.js + PostgreSQL
-   ```
+   > 1. frontend — 前端 - Vue3 + TypeScript
+   > 2. backend — 后端 - Node.js + PostgreSQL
 2. 加载该子项目的上下文 + 工作区共享规范：
 
 ```bash

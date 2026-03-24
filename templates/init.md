@@ -17,12 +17,10 @@ cat .sillyspec/config.yaml 2>/dev/null
 
 如果 config.yaml 存在且包含 `projects` → 工作区模式：
 1. 列出所有子项目：
-   ```
    检测到工作区模式，请选择要初始化的子项目：
-     1) frontend — 前端 - Vue3 + TypeScript
-     2) backend — 后端 - Node.js + PostgreSQL
-     3) 新建子项目（先运行 /sillyspec:workspace add）
-   ```
+   > 1. frontend — 前端 - Vue3 + TypeScript
+   > 2. backend — 后端 - Node.js + PostgreSQL
+   > 3. 新建子项目（先运行 /sillyspec:workspace add）
 2. 用户选择后，**切换到该子项目目录**执行后续所有步骤
 3. 后续步骤中的所有文件路径相对于子项目目录
 

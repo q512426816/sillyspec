@@ -13,7 +13,9 @@ $ARGUMENTS
 cat .sillyspec/config.yaml 2>/dev/null
 ```
 
-如果不存在 → 这是一个尚未配置工作区的项目。询问用户是否要初始化工作区。
+如果不存在 → 这是一个尚未配置工作区的项目。询问用户：
+> 1. 初始化工作区
+> 2. 跳过
 
 ### Step 2: 解析指令
 
@@ -35,7 +37,9 @@ cat .sillyspec/config.yaml 2>/dev/null
    - 询问子项目路径（相对于工作区根目录，如 `./frontend`）
    - 询问子项目角色描述（如 `前端 - Vue3 + TypeScript`）
    - 验证路径存在
-   - 问是否继续添加
+   添加完后询问：
+   > 1. 继续添加子项目
+   > 2. 完成，配置共享规范
 3. 询问共享规范文件
 4. 生成 `.sillyspec/config.yaml`
 5. 创建 `.sillyspec/shared/` 目录
@@ -50,7 +54,9 @@ cat .sillyspec/config.yaml 2>/dev/null
 #### 3c. 移除子项目（`remove`）
 
 1. 显示当前所有子项目列表
-2. 询问要移除哪个
+2. 询问要移除哪个：
+   > 1. （列出子项目名称）
+   > 2. 取消
 3. 从 config.yaml 中删除对应条目
 4. Git 提交
 
