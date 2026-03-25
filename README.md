@@ -1,4 +1,4 @@
-# SillySpec v2.3 — 规范驱动开发工具包
+# SillySpec v3.0 — 规范驱动开发工具包
 
 > 融合 Superpowers + OpenSpec + GSD，从"你说要啥"到"代码能跑"的完整流程。
 > Claude Code / Cursor / Codex / OpenCode / OpenClaw 都能用。
@@ -63,8 +63,8 @@ claude --dangerously-skip-permissions
 ## 完整工作流
 
 ```
-绿地：init → brainstorm → propose → plan → execute → verify → archive
-棕地：scan → brainstorm → propose → plan → execute → verify → archive
+绿地：init → brainstorm → plan → execute → [verify] → archive
+棕地：scan → brainstorm → plan → execute → [verify] → archive
 大模块：brainstorm(多图) → 拆分 → MASTER.md → stage-1 全流程 → stage-2 全流程 → ... → archive
 ```
 
@@ -83,12 +83,11 @@ claude --dangerously-skip-permissions
 |---|---|
 | `/sillyspec:init` | 绿地项目：深度提问→需求→路线图 |
 | `/sillyspec:scan` | 棕地项目：交互式引导扫描，生成代码库文档 |
-| `/sillyspec:brainstorm` | 需求探索：支持原型图分析，大模块自动拆分 |
-| `/sillyspec:propose` | 生成规范：proposal+design+tasks |
-| `/sillyspec:plan` | 实现计划：精确文件路径+代码 |
-| `/sillyspec:execute` | TDD 执行：子代理并行+两阶段审查 |
-| `/sillyspec:verify` | 验证：对照规范+测试套件 |
-| `/sillyspec:archive` | 归档：规范沉淀 |
+| `/sillyspec:brainstorm` | 需求探索+规范生成：直接产出 design.md + tasks.md |
+| `/sillyspec:plan` | 实现计划：文件路径+任务描述+Wave 分组 |
+| `/sillyspec:execute` | TDD 执行：子代理并行+用户自选确认频率 |
+| `/sillyspec:verify` | 验证（可选）：对照规范+测试套件 |
+| `/sillyspec:archive` | 归档：规范沉淀到 knowledge/ |
 
 ### 辅助工具
 
@@ -107,7 +106,7 @@ claude --dangerously-skip-permissions
 
 SillySpec 不仅仅是 prompt，还有硬校验：
 
-- **锚定确认** — propose/plan/execute/verify 执行前必须逐个确认读过规范文件
+- **锚定确认** — brainstorm/plan/execute/verify 执行前必须逐个确认读过规范文件
 - **Hard Gate 自检** — 关键命令生成文件后强制自检格式，不通过则修正
 - **校验脚本** — shell 脚本可自动化验证 AI 输出（validate-proposal/plan/scan/all）
 - **框架隐形规则扫描** — scan 阶段自动检测多租户/逻辑删除/审计字段/实体基类，写入 CONVENTIONS.md

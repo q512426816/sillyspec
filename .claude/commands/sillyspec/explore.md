@@ -15,18 +15,6 @@ argument-hint: "[探索主题]"
 ## 话题
 $ARGUMENTS
 
-## 交互规范
-**当需要用户从多个选项中做出选择时，必须使用 Claude Code 内置的 AskUserQuestion 工具，将选项以参数传入。**
-
-## 核心约束（必须遵守）
-- ❌ 写实现代码
-- ❌ 安装依赖
-- ❌ 修改文件（除非用户明确要求保存发现）
-- ❌ 强行下结论或强行结构化
-
-## 话题
-$ARGUMENTS
-
 ---
 
 ## 这是什么模式
@@ -48,7 +36,7 @@ ls .sillyspec/changes/ 2>/dev/null | grep -v archive
 cat .sillyspec/{REQUIREMENTS,ROADMAP}.md 2>/dev/null
 ```
 
-有进行中变更时读取其 proposal/design/tasks，自然引用。发现重要决策时可提议保存（不自动保存）。
+有进行中变更时读取其 design/tasks，自然引用。发现重要决策时可提议保存（不自动保存）。
 
 ## 没有必需的结束
 

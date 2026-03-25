@@ -21,7 +21,7 @@ cat .sillyspec/config.yaml 2>/dev/null
 ### Step 2-5: 单项目检查
 
 1. **项目基础：** PROJECT.md、codebase 文档、REQUIREMENTS.md、ROADMAP.md
-2. **进行中变更：** 对每个变更检查 proposal/design/requirements/tasks 完成度
+2. **进行中变更：** 对每个变更检查 design/tasks 完成度
 3. **归档历史：** `ls .sillyspec/changes/archive/ | wc -l`
 4. **代码库文档：** `ls .sillyspec/codebase/`
 

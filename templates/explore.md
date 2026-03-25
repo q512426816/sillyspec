@@ -31,7 +31,7 @@ ls .sillyspec/changes/ 2>/dev/null | grep -v archive
 cat .sillyspec/{REQUIREMENTS,ROADMAP}.md 2>/dev/null
 ```
 
-有进行中变更时读取其 proposal/design/tasks，自然引用。发现重要决策时可提议保存（不自动保存）。
+有进行中变更时读取其 design/tasks，自然引用。发现重要决策时可提议保存（不自动保存）。
 
 ## 没有必需的结束
 

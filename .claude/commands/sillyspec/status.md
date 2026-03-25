@@ -9,12 +9,6 @@ argument-hint: ""
 ## 核心约束（必须遵守）
 - ❌ 修改任何文件（只读）
 
-## 交互规范
-**当需要用户从多个选项中做出选择时，必须使用 Claude Code 内置的 AskUserQuestion 工具，将选项以参数传入。**
-
-## 核心约束（必须遵守）
-- ❌ 修改任何文件（只读）
-
 ---
 
 ## 流程
@@ -32,7 +26,7 @@ cat .sillyspec/config.yaml 2>/dev/null
 ### Step 2-5: 单项目检查
 
 1. **项目基础：** PROJECT.md、codebase 文档、REQUIREMENTS.md、ROADMAP.md
-2. **进行中变更：** 对每个变更检查 proposal/design/requirements/tasks 完成度
+2. **进行中变更：** 对每个变更检查 design/tasks 完成度
 3. **归档历史：** `ls .sillyspec/changes/archive/ | wc -l`
 4. **代码库文档：** `ls .sillyspec/codebase/`
 
