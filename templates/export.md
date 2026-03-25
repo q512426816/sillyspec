@@ -8,7 +8,7 @@
 
 ## 流程
 
-1. **读取变更文件：** `cat .sillyspec/changes/$ARGUMENTS/{proposal,design}.md specs/requirements.md 2>/dev/null`。不存在则报错。
+1. **读取变更文件：** `cat .sillyspec/changes/$ARGUMENTS/{design}.md 2>/dev/null`。不存在则报错。
 2. **清理为通用模板：** 移除项目特定信息，保留通用设计方案，添加 `notes.md` 使用建议。
 3. **导出：** `mkdir -p ~/.sillyspec/templates/<change-name>` 并复制文件。
 4. **确认：** 展示摘要和模板路径。

@@ -25,7 +25,7 @@ sillyspec status --json
 
 ```bash
 LATEST=$(ls -d .sillyspec/changes/*/ | grep -v archive | tail -1)
-cat "$LATEST"/{proposal,design,tasks}.md "$LATEST/specs/requirements.md" 2>/dev/null
+cat "$LATEST"/{design,tasks}.md 2>/dev/null
 ```
 
 锚定确认实际存在的文件。

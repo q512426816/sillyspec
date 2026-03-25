@@ -14,6 +14,17 @@ argument-hint: "[可选：add/remove/status/info]"
 ## 用户指令
 $ARGUMENTS
 
+## 交互规范
+**当需要用户从多个选项中做出选择时，必须使用 Claude Code 内置的 AskUserQuestion 工具，将选项以参数传入。**
+
+## 核心约束（必须遵守）
+- ❌ 修改子项目目录下的任何文件
+- ❌ 写非法 YAML
+- ❌ 使用绝对路径（必须是相对路径）
+
+## 用户指令
+$ARGUMENTS
+
 ---
 
 ## 流程

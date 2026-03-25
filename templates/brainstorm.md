@@ -53,14 +53,14 @@ $ARGUMENTS
 cat .sillyspec/config.yaml 2>/dev/null
 ```
 
-**工作区模式：** AskUserQuestion 选子项目，加载子项目上下文 + 共享规范 + 工作区概览，设计文档保存到子项目 `.sillyspec/specs/`。
+**工作区模式：** AskUserQuestion 选子项目，加载子项目上下文 + 共享规范 + 工作区概览，设计文档保存到子项目 `.sillyspec/changes/`。
 
 **单项目模式：**
 ```bash
 cat .sillyspec/{PROJECT,REQUIREMENTS,ROADMAP}.md 2>/dev/null
 cat .sillyspec/codebase/{STRUCTURE,CONVENTIONS}.md 2>/dev/null
 ls .sillyspec/changes/ 2>/dev/null | grep -v archive
-ls .sillyspec/specs/ 2>/dev/null
+ls .sillyspec/knowledge/ 2>/dev/null
 ```
 
 ### Step 1.5: 协作与复用检查
@@ -126,18 +126,24 @@ git commit -m "docs: master change plan for <变更名>"
 
 ### Step 6: 写设计文档
 
-保存到 `.sillyspec/specs/YYYY-MM-DD-<topic>-design.md`：
+保存到 `.sillyspec/changes/<变更名>/design.md`：
 
 ```markdown
 # [Feature Name] 设计
 
-## 概述
-## 功能描述
+## 动机与范围
+（为什么做、范围边界、成功标准）
+
+## 功能需求
+（需求场景、验收标准）
+- [ ] 标准 1
+
 ## 技术方案
 ## 约束和假设
 ## 不在范围内
-## 验收标准
-- [ ] 标准 1
+## 文件变更
+## 代码风格参照
+（参考已有源文件，标注返回值类型、异常类型、注解风格）
 ```
 
 **注意：** 引用的表名必须来自 ARCHITECTURE.md 数据模型或明确标注"新增"。必须先读取 `.sillyspec/codebase/ARCHITECTURE.md`。
@@ -163,12 +169,7 @@ sillyspec status --json
 
 ### Step 9: 输出技术方案
 
-用户确认后，直接产出 `design.md` 写入 `.sillyspec/changes/<变更名>/design.md`。内容包含：
-- 架构决策及理由
-- 文件变更清单表格
-- 数据模型
-- API 设计
-- 代码风格参照（参考已有 Controller/Service/Entity 源文件，标注返回值类型、异常类型、注解风格）
+用户确认后，确认 design.md 已包含完整内容（动机、需求、方案、文件变更、代码风格参照）。如 Step 6 已保存则无需重复。
 
 ### Step 10: 更新 STATE.md
 

@@ -41,7 +41,7 @@ $ARGUMENTS
 
 ### QUICKLOG.md 规则
 
-文件路径：`.sillyspec/QUICKLOG.md`
+文件路径：`.sillyspec/quicklog/QUICKLOG.md`
 
 **追加记录格式：**
 ```markdown

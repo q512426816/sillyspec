@@ -28,7 +28,7 @@ $ARGUMENTS
 
 ```bash
 cat .sillyspec/changes/*/MASTER.md 2>/dev/null  # 子阶段变更
-ls -t .sillyspec/specs/*.md | head -1
+ls -t .sillyspec/knowledge/*.md | head -1
 cat .sillyspec/{REQUIREMENTS}.md .sillyspec/codebase/{CONVENTIONS,ARCHITECTURE}.md 2>/dev/null
 ls .sillyspec/changes/ | grep -v archive
 ```
@@ -49,23 +49,19 @@ ls .sillyspec/changes/ | grep -v archive
 
 创建 `.sillyspec/changes/$ARGUMENTS/`：
 
-**`proposal.md`：** 动机、变更范围、不在范围内、可量化成功标准
-
-**`specs/requirements.md`：** 功能需求（REQ-001 格式）、Given/When/Then 用户场景、非功能需求
-
-**`design.md`：** 架构决策及理由、文件变更清单表格、数据模型、API 设计、**代码风格参照**（参考已有的 Controller/Service/Entity 源文件，标注返回值类型、异常类型、注解风格）
+**`design.md`：** 动机与范围、功能需求（REQ-001 格式、Given/When/Then 用户场景、非功能需求）、架构决策及理由、文件变更清单表格、数据模型、API 设计、**代码风格参照**（参考已有的 Controller/Service/Entity 源文件，标注返回值类型、异常类型、注解风格）
 
 **`tasks.md`：** 准备 → 实现 → 收尾的任务列表（每个 task 标注文件路径）
 
 ### 4. 展示关键文件
 
-展示 proposal.md 和 design.md 给用户审阅。tasks.md 只展示任务列表。
+展示 design.md 给用户审阅。tasks.md 只展示任务列表。
 
 ### 5. 自检门控
 
-- [ ] proposal.md 含"动机、变更范围、不在范围内、成功标准"？
+- [ ] design.md 含"动机、变更范围、功能需求"？
 - [ ] design.md 含"文件变更清单"表格？
-- [ ] requirements.md 含 Given/When/Then 用户场景？
+- [ ] design.md 含 Given/When/Then 用户场景？
 - [ ] tasks.md 每个 task 有文件路径？
 
 ```bash

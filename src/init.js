@@ -175,27 +175,31 @@ function isTTY() {
 
 async function doInstall(projectDir, tools, isWorkspace, subprojects = []) {
   // 创建基础目录
-  // 不预创建子目录，由各命令按需创建
   // .sillyspec/codebase/    → scan
+  // .sillyspec/codebase/details/ → scan (deep)
   // .sillyspec/changes/     → brainstorm/propose
   // .sillyspec/changes/archive/ → archive
+  // .sillyspec/quicklog/    → quick
+  // .sillyspec/knowledge/   → archive (spec 沉淀)
   // (plan 内容已合并到 tasks.md)
-  // .sillyspec/specs/        → propose
   if (isWorkspace) {
     mkdirSync(join(projectDir, '.sillyspec', 'shared'), { recursive: true });
     mkdirSync(join(projectDir, '.sillyspec', 'workspace'), { recursive: true });
   }
 
-  // .gitignore — 确保 STATE.md 被忽略
   const gitignorePath = join(projectDir, '.gitignore');
-  const stateIgnoreRule = '.sillyspec/STATE.md';
+  const ignoreRules = ['.sillyspec/STATE.md', '.sillyspec/codebase/SCAN-RAW.md'];
   if (existsSync(gitignorePath)) {
     const content = readFileSync(gitignorePath, 'utf8');
-    if (!content.includes(stateIgnoreRule)) {
-      writeFileSync(gitignorePath, content.trimEnd() + '\n' + stateIgnoreRule + '\n');
+    let updated = content.trimEnd();
+    for (const rule of ignoreRules) {
+      if (!updated.includes(rule)) {
+        updated += '\n' + rule;
+      }
     }
+    writeFileSync(gitignorePath, updated + '\n');
   } else {
-    writeFileSync(gitignorePath, stateIgnoreRule + '\n');
+    writeFileSync(gitignorePath, ignoreRules.join('\n') + '\n');
   }
 
   // 生成文件

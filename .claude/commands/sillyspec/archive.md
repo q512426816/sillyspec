@@ -18,7 +18,7 @@ $ARGUMENTS
 
 读取 `.sillyspec/changes/<change-name>/` 下所有必要文件，逐项检查：
 
-- [ ] **文件完整性：** 检查 `proposal.md` 和 `design.md` 是否存在，缺失则警告
+- [ ] **文件完整性：** 检查 `design.md` 是否存在，缺失则警告
 - [ ] **任务完成度：** 读取 `tasks.md`，统计已完成/未完成任务数。**有未完成的 → 用 AskUserQuestion 询问：**
   - ① 继续归档（未完成任务将被标记完成）
   - ② 取消，回去完成任务
@@ -35,7 +35,7 @@ $ARGUMENTS
 
 ### 3. Spec 沉淀
 
-将 `.sillyspec/changes/<change-name>/specs/` 下的设计文档**复制到 `.sillyspec/specs/` 主目录**，确保已完成的设计规范可被后续变更参考。如目标已存在同名文件则跳过并提示。
+将 `.sillyspec/changes/<change-name>/` 下的设计文档**复制到 `.sillyspec/knowledge/` 主目录**，确保已完成的设计规范可被后续变更参考。如目标已存在同名文件则跳过并提示。
 
 ### 4. 用户确认
 
