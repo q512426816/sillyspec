@@ -42,16 +42,15 @@ cat .sillyspec/REQUIREMENTS.md 2>/dev/null
 
 ### 2. 逐任务展开
 
-把 tasks.md 每个 checkbox 展开为详细步骤，按 Wave 分组组织。工作区模式下每个 Task 标注所属项目。
+把 tasks.md 每个 checkbox 展开为任务描述，按 Wave 分组组织。工作区模式下每个 Task 标注所属项目。
 
-**每个 Task 必须包含：**
-- 精确文件路径
-- **精确方法签名**（参数类型、返回值类型、注解）— ❌ "实现用户创建接口" → ✅ `public Result<UserVO> createUser(@RequestBody @Valid UserDTO dto)`，参考 `RoleController.createRole`
-- 完整可运行的代码示例（不写"添加验证逻辑"这种模糊描述）
-- 涉及已有类调用时，标注"参考 `XxxService.java` 的 `xxx` 方法"
-- 新增方法必须列出方法签名，方法签名必须来自已有代码风格或 design.md
-- 运行命令和预期输出
-- TDD 步骤：🔴 写失败测试 → 🟢 写最少代码 → 🔵 重构 → ✅ commit
+**每个 Task 包含：**
+- 精确文件路径（修改哪个文件）
+- 任务描述（做什么，一两句话说清楚）
+- 涉及已有类调用时，标注参考文件（如"参考 `RoleController.createRole`）
+- 依赖关系
+
+**注意：不需要写精确方法签名和代码示例。** 方法签名和代码风格由 execute 阶段先读后写确认。plan 专注"做什么"，execute 负责"怎么做"。
 
 ### 3. 标注执行顺序
 
@@ -59,10 +58,8 @@ cat .sillyspec/REQUIREMENTS.md 2>/dev/null
 ```markdown
 ### Wave 1（并行，无依赖）
 - [ ] 添加用户创建接口
-  - 修改: `UserController.java`
-  - 方法签名: `public Result<UserVO> createUser(@RequestBody @Valid UserDTO dto)`
+  - 修改: `UserController.java`、`UserService.java`
   - 参考: `RoleController.createRole`
-  - TDD: 🔴 测试 → 🟢 实现 → 🔵 重构
 
 - [ ] 添加角色创建接口
   - ...
@@ -79,13 +76,7 @@ cat .sillyspec/REQUIREMENTS.md 2>/dev/null
 ### 5. 自检门控
 
 - [ ] 每个 task 有具体文件路径？
-- [ ] 每个 task 有验证命令和预期输出？
-- [ ] 标注了 Wave 和执行顺序？
-- [ ] 与 design.md 文件变更清单一致？
-
-```bash
-bash scripts/validate-plan.sh .sillyspec/changes/<当前变更目录> 2>/dev/null
-```
+- [ ] 标注了 Wave 和依赖关系？
 
 ### 6. 完成
 
