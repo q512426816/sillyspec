@@ -310,9 +310,16 @@ sillyspec next
 
 ### Git 提交
 
+**单项目模式：**
 ```bash
-git add .sillyspec/
-git commit -m "chore: sillyspec scan - codebase mapped"
+git add .sillyspec/ && git commit -m "chore: sillyspec scan - codebase mapped"
+```
+
+**工作区模式：** 在每个子项目目录分别 commit（主工作区无 git 则跳过）：
+```bash
+for proj in $(cat .sillyspec/config.yaml | grep -oP 'path:\s*\K.*'); do
+  cd "$proj" && git add .sillyspec/ 2>/dev/null && git commit -m "chore: sillyspec scan - codebase mapped" && cd - > /dev/null
+done
 ```
 
 ### 路径校验 + 自检门控

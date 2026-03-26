@@ -56,6 +56,8 @@ $ARGUMENTS
 - **STATE.md：** 清除当前变更信息，历史记录追加归档完成
 - **Git 提交：** `git add .sillyspec/ && git commit -m "docs: archive sillyspec change <change-name>"`
 
+**工作区模式下：** 如果变更属于某个子项目，cd 到子项目目录执行 git commit。工作区根目录无 git 则跳过。
+
 ### 最后说：
 
 > ✅ 变更 `<change-name>` 已归档到 `archive/YYYY-MM-DD-<change-name>/`。继续：`/sillyspec:brainstorm "新想法"`

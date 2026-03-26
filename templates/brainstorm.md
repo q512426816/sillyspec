@@ -53,7 +53,7 @@ $ARGUMENTS
 cat .sillyspec/config.yaml 2>/dev/null
 ```
 
-**工作区模式：** AskUserQuestion 选子项目，加载子项目上下文 + 共享规范 + 工作区概览，设计文档保存到子项目 `.sillyspec/changes/`。
+**工作区模式：** AskUserQuestion 选子项目，**cd 到子项目目录执行**，加载子项目上下文 + 共享规范 + 工作区概览，设计文档保存到子项目 `.sillyspec/changes/`。git commit 在子项目目录执行。
 
 **单项目模式：**
 ```bash

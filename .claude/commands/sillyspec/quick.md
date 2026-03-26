@@ -33,7 +33,7 @@ $ARGUMENTS
    - 纯配置/数据/文档可跳过 TDD
    - 其他情况一律走 TDD
 6. **运行相关测试：** `pnpm test 2>/dev/null || npm test 2>/dev/null || pytest 2>/dev/null`
-7. **Git commit：** 展示 commit message 给用户确认后提交
+7. **Git commit：** 展示 commit message 给用户确认后提交。**工作区模式下，确认当前在正确的子项目目录中执行 commit。**
 8. **记录：**
    - **有 `--change`：** 在 `.sillyspec/changes/<变更名>/tasks.md` 追加 task 并勾选 `[x]`
    - **无 `--change`：** 记录到 `.sillyspec/quicklog/QUICKLOG.md`（见下方规则）
