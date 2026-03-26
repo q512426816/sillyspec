@@ -29,7 +29,7 @@ $ARGUMENTS
 cat .sillyspec/config.yaml 2>/dev/null
 ```
 
-**工作区模式：** 根据计划 Task 标注确定子项目，额外加载共享规范 + CODEBASE-OVERVIEW.md，执行前 cd 到对应子项目目录。
+**工作区模式：** 根据计划 Task 标注确定子项目，额外加载共享规范 + CODEBASE-OVERVIEW.md，**执行前必须 cd 到对应子项目目录**。所有代码修改、测试运行、git commit 都在子项目目录中执行。一个 Task 属于哪个子项目，就 cd 到哪个子项目。
 
 **单项目模式：**
 ```bash
@@ -149,7 +149,16 @@ mvn test -pl <模块> -Dtest=<测试类> 2>/dev/null || ./gradlew test --tests <
 
 ### 4. Git commit
 
+**先确认当前在 git 仓库中：**
+```bash
+git rev-parse --is-inside-work-tree 2>/dev/null
+```
+
+如果不在 git 仓库中，提示用户当前目录没有 git 管理，跳过 commit 或让用户指定仓库路径。
+
 `git add -A` → 生成 commit message → **根据用户选择的确认频率决定是否立即确认或批量确认**。
+
+**工作区模式下，每个子项目的 commit 独立执行，不要跨子项目 commit。**
 
 ---
 
