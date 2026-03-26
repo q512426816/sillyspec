@@ -94,9 +94,72 @@ find . -type f -not -path "*/node_modules/*" -not -path "*/{dist,.git,vendor,bui
 git log --oneline -20
 ```
 
-## 🚨 三项强制扫描（快速和深度都必须执行）
+## 🚨 四项强制扫描（快速和深度都必须执行）
 
-### A. 数据库 Schema 扫描
+### A. 构建环境探测（IDE vs 终端差异修复）
+
+**目的：** 解决 IDEA 有私服配置但终端跑不了 `mvn test` / `npm test` 的问题。
+
+**探测步骤：**
+
+```bash
+# 检测项目使用的构建工具
+ls pom.xml build.gradle package.json requirements.txt go.mod Cargo.toml pyproject.toml 2>/dev/null
+# 检测是否有 wrapper
+ls mvnw gradlew package-lock.json yarn.lock pnpm-lock.yaml 2>/dev/null
+# 检测是否有 IDEA 特殊配置
+grep -r "mavenHome\|settings\.xml\|gradleHome\|nodeInterpreter" .idea/workspace.xml 2>/dev/null | head -5
+# 检测是否有本地配置文件
+cat .mvn/maven.config 2>/dev/null
+cat .mvn/jvm.config 2>/dev/null
+cat .npmrc 2>/dev/null
+cat pip.conf .pip/pip.conf ~/.pip/pip.conf 2>/dev/null
+cat ~/.gradle/gradle.properties 2>/dev/null
+```
+
+**AskUserQuestion 询问用户：**
+
+> "检测到本项目使用 [Maven/Gradle/npm/pip/Go]，终端执行构建命令时是否需要特殊配置？"
+> 选项：
+> - 不需要，默认配置就能跑
+> - 需要指定配置文件（如 Maven 的 settings.xml）→ 让用户输入路径
+> - 需要额外参数（如私服地址、代理等）→ 让用户输入
+> - 不确定，先试试默认命令
+
+**如果用户选择了需要配置，测试默认命令是否能跑通：**
+
+```bash
+# Maven
+mvn test -s <用户提供的路径> --fail-at-end 2>&1 | tail -5
+# Gradle
+./gradlew test 2>&1 | tail -5 || gradle test 2>&1 | tail -5
+# npm
+npm test 2>&1 | tail -5 || pnpm test 2>&1 | tail -5
+# pip
+pip install -e . 2>&1 | tail -5 && pytest --collect-only 2>&1 | tail -5
+# Go
+go test ./... 2>&1 | tail -5
+```
+
+**写入 CONVENTIONS.md：**
+
+```markdown
+## 构建命令
+
+| 场景 | 命令 |
+|------|------|
+| 运行单个测试 | `mvn test -s "D:/software/maven/conf/settings.xml" -pl service -Dtest=UserServiceTest` |
+| 运行全部测试 | `mvn test -s "D:/software/maven/conf/settings.xml"` |
+| 编译检查 | `mvn compile -s "D:/software/maven/conf/settings.xml"` |
+
+> ⚠️ 本项目依赖私服仓库，终端执行 Maven 命令必须指定 `-s` 参数。
+```
+
+**铁律：后续 execute / verify 阶段执行构建或测试命令时，必须使用 CONVENTIONS.md 中记录的命令，禁止使用默认命令。**
+
+无构建工具 → 跳过此步骤。
+
+### B. 数据库 Schema 扫描
 
 **目的：** 防止后续阶段编造表名和字段名。
 
@@ -119,7 +182,7 @@ find . \( -name "schema.prisma" -o -name "*.model.ts" -o -name "*.entity.ts" -o 
 
 无数据库 → 写"本项目无数据库"。**铁律：所有阶段引用的表名必须来自此摘要，或 design.md 中声明的新增表。**
 
-### B. 框架隐形规则扫描
+### C. 框架隐形规则扫描
 
 **目的：** 防止 AI 生成的 SQL/代码违反框架自动处理机制（如自动注入字段、逻辑删除拦截器）。
 
@@ -156,7 +219,7 @@ find . \( -name "*.java" -o -name "*.py" -o -name "*.go" -o -name "*.ts" -o -nam
 
 无发现 → 写"未发现框架级别的自动处理配置"。**铁律：后续阶段生成 SQL/数据操作代码必须遵守这些规则。**
 
-### C. 实体继承规范扫描
+### D. 实体继承规范扫描
 
 **目的：** 防止新建表时漏掉基类通用字段，导致 ORM 查询报 Unknown column。
 
@@ -181,7 +244,7 @@ find . -name "*.java" -not -path "*/{node_modules,.git}/*" | xargs grep -l "@Map
 
 无基类 → 写"本项目没有实体基类"。
 
-### D. 代码风格深度提取
+### E. 代码风格深度提取
 
 读取 2-3 个典型的 Controller、Service、ServiceImpl、Entity 源文件，提取具体风格（从源码提取，禁止编造）：
 
