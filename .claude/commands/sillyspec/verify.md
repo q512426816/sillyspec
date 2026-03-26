@@ -11,11 +11,27 @@
 ## 状态检查（必须先执行）
 
 ```bash
-sillyspec status --json
+cat .sillyspec/STATE.md 2>/dev/null
 ```
 
-- `phase: "verify"` → ✅ 继续
-- 其他 phase → 提示 `sillyspec next`
+检查当前阶段。如果没有 STATE.md，检查是否有未归档变更：
+
+```bash
+ls .sillyspec/changes/ 2>/dev/null | grep -v archive
+```
+
+无 STATE.md 且无未归档变更 → 提示用户先完成 execute 或用 `/sillyspec:status` 查看状态。
+
+---
+
+## 工作区模式处理
+
+如果 `.sillyspec/config.yaml` 包含 `projects` 字段：
+
+1. 检查工作区根目录 `.sillyspec/changes/` 下的未归档变更
+2. 检查每个子项目 `<子项目路径>/.sillyspec/changes/` 下的未归档变更
+3. 列出所有未归档变更，让用户选择要验证哪个
+4. 根据 $ARGUMENTS 或用户选择，cd 到对应目录执行验证
 
 ---
 
@@ -24,8 +40,13 @@ sillyspec status --json
 ### 1. 加载规范
 
 ```bash
-LATEST=$(ls -d .sillyspec/changes/*/ | grep -v archive | tail -1)
-cat "$LATEST"/{design,tasks}.md 2>/dev/null
+# 确定变更目录
+if [ -n "$ARGUMENTS" ]; then
+  CHANGE_DIR=".sillyspec/changes/$ARGUMENTS"
+else
+  CHANGE_DIR=$(ls -d .sillyspec/changes/*/ 2>/dev/null | grep -v archive | tail -1)
+fi
+cat "$CHANGE_DIR"/{design,tasks}.md 2>/dev/null
 ```
 
 锚定确认实际存在的文件。
@@ -61,14 +82,6 @@ grep -r "TODO\|FIXME\|HACK\|XXX" src/ lib/ app/ --include="*.ts" --include="*.ts
 ## 结论：✅ PASS / ⚠️ PASS WITH NOTES / ❌ FAIL
 ```
 
-```bash
-bash scripts/validate-all.sh 2>/dev/null
-```
-
 ### 7. 完成
 
-```bash
-sillyspec status --json && sillyspec next
-```
-
-更新 `.sillyspec/STATE.md`：阶段改为 `verify ✅` 或 `verify ⚠️`。
+更新 `.sillyspec/STATE.md`（如存在）：阶段改为 `verify ✅` 或 `verify ⚠️`。
