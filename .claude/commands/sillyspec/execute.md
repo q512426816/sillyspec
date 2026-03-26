@@ -84,17 +84,48 @@ grep -rn "public.*getById" --include="*.java" src/main/java/**/service/
 ```
 grep 不到 → 不许调用，先查清楚或报告给用户。
 
-### 2. TDD
+### 2. TDD（强制执行，不可跳过）
 
+#### 🔴 RED — 写失败测试
+
+先写测试文件，再写实现代码。写代码前测试必须先存在。
+
+**写完测试后，立即运行确认失败：**
+
+```bash
+mvn test -pl <模块> -Dtest=<测试类> 2>/dev/null || ./gradlew test --tests <测试类> 2>/dev/null || npm test -- --testPathPattern=<测试文件> 2>/dev/null || pytest <测试文件> 2>/dev/null
 ```
-🔴 RED    → 写测试，运行确认失败
-🟢 GREEN  → 写最少代码让测试通过
-🔵 REFACTOR → 清理，保持测试通过
+
+确认：
+- 测试失败（不是编译错误）
+- 失败原因是功能未实现（不是语法错误）
+
+**测试直接通过？** 你在测试已有行为，重写测试。**测试编译报错？** 先修测试语法。
+
+#### 🟢 GREEN — 写最少代码
+
+写刚好让测试通过的最少代码。不加额外功能。
+
+**写完后立即运行确认通过：**
+
+```bash
+mvn test -pl <模块> -Dtest=<测试类> 2>/dev/null || ./gradlew test --tests <测试类> 2>/dev/null || npm test -- --testPathPattern=<测试文件> 2>/dev/null || pytest <测试文件> 2>/dev/null
 ```
 
-TDD 中间步骤（RED→GREEN→REFACTOR）连续执行，不需要每步等用户确认。
+确认：
+- 测试通过
+- 其他已有测试没有因此失败
+- 无编译错误、无 warnings
 
-**测试文件必须保留**，随代码一起 commit。违反 TDD → 删代码重来。
+**编译不通过或测试失败？** 修代码，不是改测试。**其他测试被破坏？** 立即修复。
+
+#### 🔵 REFACTOR — 清理
+
+在测试全绿的前提下清理：提取重复、改善命名、简化逻辑。重构后重新运行测试确认仍然通过。
+
+**TDD 中间步骤（RED→GREEN→REFACTOR）连续执行，不需要每步等用户确认。但每一步都必须运行测试命令并确认结果，不可省略。**
+
+**测试文件必须保留**，随代码一起 commit。违反 TDD（先写代码后补测试）→ 删代码重来。
 
 **可跳过 TDD（不需要确认）：** 纯配置（YAML/properties）、纯数据（SQL seed）、纯文档（README/注释）。
 
