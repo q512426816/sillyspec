@@ -1,201 +1,135 @@
 ## 交互规范
 **当需要用户从多个选项中做出选择时，必须使用 Claude Code 内置的 AskUserQuestion 工具，将选项以参数传入。**
 
-## 核心约束（必须遵守）
-- ❌ 修改任何代码
-- ❌ 编造文件路径或代码模式（必须包含真实路径）
-- ❌ 跳过构建环境探测
-- ❌ 跳过 Schema/框架隐形规则/实体继承/代码风格扫描
-- ❌ 生成文档到非 `.sillyspec/codebase/` 目录
-
-## 状态检查（必须先执行）
-
-```bash
-cat .sillyspec/STATE.md 2>/dev/null
-```
-
-无 STATE.md 或 phase 为 init → 继续。其他 phase → 提示用 `/sillyspec:continue`。
+你现在是 SillySpec 代码库扫描器（编排器）。**你不读源码，只编排子代理或串行执行。**
 
 ## 参数处理
+- 空白 → 交互式引导（逐步询问）
+- `--deep` → 直接深度扫描
+- 其他 → 快速扫描该区域
 
-`$ARGUMENTS` 包含 `--quick` → **快速扫描模式**：只读配置文件和目录结构，不读源码，不执行五项强制扫描。流程参考 `.sillyspec/.templates/scan-quick.md`，或直接执行：读配置 → 生成 ARCHITECTURE.md + STRUCTURE.md + PROJECT.md → git commit → 完成。
+## 流程控制（必须先执行）
 
-其余情况 → 继续下方深度扫描流程。
+```bash
+sillyspec status --json
+```
+
+非 `init` phase → 以 CLI 返回为准决定下一步。
 
 ---
 
-## Step 1: 检查工作区模式
+## 交互式引导（参数为空时）
+
+### 检查工作区 & 已有文档
 
 ```bash
-cat .sillyspec/config.yaml 2>/dev/null
+cat .sillyspec/config.yaml 2>/dev/null   # 有 projects → 工作区模式
+ls .sillyspec/codebase/ 2>/dev/null       # 检查已有文档
+wc -l .sillyspec/codebase/*.md 2>/dev/null
 ```
 
-有 `projects` 字段 → 工作区模式。
+- 已有 3 份 → 建议升级深度扫描
+- 已有 7 份 → 建议刷新或跳过
+- 工作区 → 逐个扫描 / 选子项目 / 退出
 
-## 🚨 工作区扫描铁律
-
-**工作区模式下，必须逐个子项目扫描并写入，禁止跨子项目累积上下文：**
-
-```
-子项目 A → 构建探测 → 代码扫描 → 写入文档 → cd 回工作区
-子项目 B → 构建探测 → 代码扫描 → 写入文档 → cd 回工作区
-...
-最后 → 读各子项目 ARCHITECTURE.md 生成 CODEBASE-OVERVIEW.md
-```
-
-- ✅ 每个子项目**立即写入**后再扫描下一个
-- ❌ 禁止同时读取多个子项目源码
+### 选择扫描模式、范围、排除目录、确认
+按原流程交互，确认后进入扫描。
 
 ---
 
-## Step 2: 构建环境探测（每个子项目/项目执行一次）
-
-**目的：** 解决 IDEA 有私服配置但终端跑不了测试的问题。
+## 构建环境探测（主代理执行）
 
 ```bash
-ls pom.xml build.gradle package.json requirements.txt go.mod pyproject.toml 2>/dev/null
-ls mvnw gradlew 2>/dev/null
-grep -r "mavenHome\|settings\.xml" .idea/workspace.xml 2>/dev/null | head -5
+cat package.json pom.xml build.gradle go.mod Cargo.toml requirements.txt pyproject.toml Gemfile composer.json 2>/dev/null
+find . -maxdepth 2 -name "*.config.*" -not -path "*/node_modules/*" -not -path "*/.git/*" | head -20 | xargs cat 2>/dev/null
 ```
 
-**AskUserQuestion：** "检测到 [Maven/Gradle/npm/...]，终端执行构建命令是否需要特殊配置？"
-- 不需要
-- 需要指定配置文件 → 输入路径
-- 不确定，先试试默认命令
-
-**写入 `.sillyspec/local.yaml`（不提交 git）：**
-
-```yaml
-build:
-  tool: maven
-  test_cmd: 'mvn test -s "D:/software/maven/conf/settings.xml"'
-  compile_cmd: 'mvn compile -s "D:/software/maven/conf/settings.xml"'
-  single_test_cmd: 'mvn test -s "D:/software/maven/conf/settings.xml" -pl {module} -Dtest={test_class}'
-```
-
-**铁律：execute / verify 必须先读 local.yaml 中的 build 配置再执行测试命令。**
-
-无构建工具 → 写"本项目无构建工具，跳过构建环境探测"并跳过。
+结果保存到 `.sillyspec/codebase/_env-detect.md`（临时文件，扫描完删除）。
 
 ---
 
-## Step 3: 数据库 Schema 扫描
+## 深度扫描
+
+`mkdir -p .sillyspec/codebase`
+
+### 断点续扫
 
 ```bash
-find . \( -name "*.entity.java" -o -name "*Mapper.xml" -o -name "*.sql" -o -name "schema.prisma" -o -name "*.model.ts" -o -name "models.py" \) \
-  -not -path "*/node_modules/*" -not -path "*/{.git,dist,build,vendor,target}/*" | head -30
-```
-
-**写入 ARCHITECTURE.md：**
-
-```markdown
-## 数据模型（摘要）
-| 表名 | 说明 | 字段数 | 来源文件 |
-|---|---|---|---|
-```
-
-无数据库 → 写"本项目无数据库"。**铁律：所有阶段引用的表名必须来自此摘要。**
-
-## Step 4: 框架隐形规则扫描
-
-```bash
-find . \( -name "*Interceptor*.java" -o -name "*Listener*.java" -o -name "*Auditor*.java" -o -name "*Plugin*.java" \) \
-  -not -path "*/node_modules/*" -not -path "*/{.git,dist,build,vendor,target}/*" | head -20
-find . -name "*.java" -not -path "*/{node_modules,.git}/*" | xargs grep -li "is_deleted\|deleted_at\|soft_delete" 2>/dev/null | head -10
-```
-
-**写入 CONVENTIONS.md：**
-
-```markdown
-## 框架隐形规则
-### 自动注入字段（SQL 中不要手动写）
-| 字段 | 来源 | 说明 |
-|---|---|---|
-
-### DELETE 行为
-- 逻辑删除 / 物理删除说明
-```
-
-无发现 → 写"未发现框架级别的自动处理配置"。
-
-## Step 5: 实体继承规范扫描
-
-```bash
-find . \( -name "Base*.java" -o -name "Abstract*.java" \) \
-  \( -path "*/entity/*" -o -path "*/model/*" -o -path "*/po/*" \) \
-  -not -path "*/{node_modules,.git}/*" | head -10
-find . -name "*.java" -not -path "*/{node_modules,.git}/*" | xargs grep -l "@MappedSuperclass" 2>/dev/null | head -10
-```
-
-**追加到 CONVENTIONS.md：**
-
-```markdown
-## 实体继承规范
-### 基类通用字段（新建表必须包含）
-| 字段 | 类型 | 说明 |
-|---|---|---|
-```
-
-无基类 → 写"本项目没有实体基类"。
-
-## Step 6: 代码风格深度提取
-
-读取 2-3 个典型的 Controller、Service、Entity 源文件，提取：
-
-1. **注解风格**：Controller 用 `@RestController`？映射注解？参数校验？
-2. **返回值约定**：`Result<T>` / `ResponseEntity<T>` / 其他？
-3. **异常处理**：全局异常处理器？
-4. **Service 层约定**：命名、继承、事务注解
-5. **实体风格**：Lombok、ID 生成策略
-6. **Mapper/DAO**：XML 还是注解？通用基类？
-
-写入 CONVENTIONS.md「代码风格」章节。非 Java 项目参考同等概念。
-
-## Step 7: 补充深扫文档
-
-```bash
-mkdir -p .sillyspec/codebase/details
-```
-
-生成以下文档（从已有信息提取，不额外读大量源码）：
-1. `codebase/details/STRUCTURE.md` — 目录结构
-2. `codebase/details/INTEGRATIONS.md` — 外部依赖和集成
-3. `codebase/details/TESTING.md` — 测试现状
-4. `codebase/details/CONCERNS.md` — 技术债务和风险
-
-更新 `.sillyspec/PROJECT.md`。
-
----
-
-## 完成后
-
-### 路径校验
-
-```bash
-for f in $(find . -maxdepth 2 -name "{ARCHITECTURE,STRUCTURE,CONVENTIONS,INTEGRATIONS,TESTING,CONCERNS,PROJECT}.md" ! -path "./.sillyspec/codebase/*" ! -path "./.sillyspec/codebase/details/*"); do
-  [ -f "$f" ] && mkdir -p .sillyspec/codebase && mv "$f" ".sillyspec/codebase/$(basename $f)"
+for f in ARCHITECTURE STRUCTURE CONVENTIONS INTEGRATIONS TESTING CONCERNS PROJECT; do
+  [ -f ".sillyspec/codebase/${f}.md" ] && echo "✅ ${f}.md" || echo "⬜ ${f}.md"
 done
 ```
 
-### 自检
+只生成缺失的文档。
 
-- [ ] ARCHITECTURE.md 含架构 + 技术栈 + 数据模型摘要？
-- [ ] CONVENTIONS.md 含框架隐形规则 + 实体继承规范 + 代码风格？
-- [ ] details/ 下 4 份深扫文档存在？
-- [ ] local.yaml 构建命令已配置（如有构建工具）？
+### 检测子代理可用性
+检查是否有 Task/Spawn 工具。有 → 子代理模式，无 → 串行模式。
 
-### Git 提交
+---
 
-**单项目：**
+### 子代理模式（4 个并行）
+
+#### Agent 1: tech → ARCHITECTURE.md
+扫描技术栈 + 数据库 Schema + 架构模式。参考 `_env-detect.md`。
+用 grep/rg 搜索（`@Entity`、`schema.prisma`、`models.py` 等），**禁止读源码全文**。
+Schema 只记表名+说明+字段数。含 `## 技术栈` `## 架构概览` `## 数据模型（摘要）`。路径用反引号，不编造。
+
+#### Agent 2: conventions → CONVENTIONS.md
+扫描框架隐形规则 + 实体继承 + 代码风格。参考 `_env-detect.md`。
+用 grep 搜索拦截器/插件/逻辑删除/基类/审计字段，**禁止读源码全文**。
+根据检测到的语言/框架自行决定搜索什么模式，提取 3-5 个典型示例。
+含 `## 框架隐形规则` `## 实体继承规范` `## 代码风格`。路径用反引号，不编造。
+
+#### Agent 3: structure → STRUCTURE.md + INTEGRATIONS.md
+扫描目录结构 + 外部集成。参考 `_env-detect.md`。
+用 find/ls/tree 和 grep，**禁止读源码全文**。
+搜索 API 调用、MQ 配置、缓存、第三方 SDK。STRUCTURE.md 含目录树+模块说明。INTEGRATIONS.md 按类型分组。路径用反引号，不编造。
+
+#### Agent 4: quality → TESTING.md + CONCERNS.md + PROJECT.md
+扫描测试现状 + 技术债务 + 项目概览。参考 `_env-detect.md`。
+用 grep 搜索测试文件、TODO/FIXME、过时依赖，**禁止读源码全文**。
+TESTING.md 含测试结构。CONCERNS.md 按严重程度分组。PROJECT.md 含项目信息。路径用反引号，不编造。
+
+---
+
+### 串行模式（降级）
+无子代理时，按 tech → conventions → structure → quality 顺序执行。
+每个 area 完成后**立即写文件**，下一个 area 开始前清除源码上下文。
+
+---
+
+## 工作区模式
+对每个子项目：cd → 环境探测 → 扫描 → cd 回工作区。
+全部完成后汇总 `.sillyspec/workspace/CODEBASE-OVERVIEW.md`（只读各子项目的 ARCHITECTURE.md + CONVENTIONS.md）。
+
+---
+
+## 扫描完成
+
 ```bash
+# 路径校验
+for f in ARCHITECTURE STRUCTURE CONVENTIONS INTEGRATIONS TESTING CONCERNS PROJECT; do
+  [ -f ".sillyspec/codebase/${f}.md" ] && echo "✅ ${f}.md"
+done
+
+# 验证 CLI
+sillyspec status --json   # 应返回 phase: "brainstorm"
+sillyspec next            # 推荐给用户
+
+# 清理 + 提交
+rm -f .sillyspec/codebase/_env-detect.md
 git add .sillyspec/ && git commit -m "chore: sillyspec scan - codebase mapped"
 ```
 
-**工作区：**
-```bash
-for proj in $(cat .sillyspec/config.yaml | grep -oP 'path:\s*\K.*'); do
-  cd "$proj" && git add .sillyspec/ 2>/dev/null && git commit -m "chore: sillyspec scan - codebase mapped" && cd - > /dev/null
-done
-```
+### 自检门控
+- [ ] ARCHITECTURE.md：技术栈 + Schema 摘要？
+- [ ] CONVENTIONS.md：隐形规则 + 代码风格？
+- [ ] STRUCTURE.md：目录结构？
+- [ ] INTEGRATIONS.md：外部依赖？
+- [ ] TESTING.md：测试现状？
+- [ ] CONCERNS.md：技术债务？
+- [ ] PROJECT.md：项目概览？
 
-工作区扫描完成后生成 `.sillyspec/workspace/CODEBASE-OVERVIEW.md`。
+## 绝对规则
+- ❌ 修改代码 / 编造路径 / 主代理读源码全文
+- ✅ 交互模式每步等用户 / 文档只写 `.sillyspec/codebase/`
