@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, copyFileSync } from 'fs';
 import { join, resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { homedir } from 'os';
@@ -50,16 +50,44 @@ const ARG_HINTS = {
   export: '<change-name> [--to <path>]',
 };
 
-const VALID_TOOLS = ['claude', 'claude_skills', 'cursor', 'codex', 'opencode', 'openclaw'];
+const VALID_TOOLS = ['claude', 'claude_skills', 'cursor', 'openclaw', 'codex', 'gemini', 'opencode'];
 
 const TOOL_LABELS = {
   claude: 'Claude Code',
   claude_skills: 'Claude Skills',
   cursor: 'Cursor',
-  codex: 'Codex CLI',
-  opencode: 'OpenCode',
   openclaw: 'OpenClaw',
+  codex: 'OpenAI Codex (通过 AGENTS.md)',
+  gemini: 'Gemini CLI (通过 GEMINI.md)',
+  opencode: 'OpenCode (通过 INSTRUCTIONS.md)',
 };
+
+// Slash commands 工具：安装 markdown 模板命令
+const SLASH_COMMAND_TOOLS = ['claude', 'claude_skills', 'cursor', 'openclaw'];
+
+// 指令文件工具：注入规范引用到指令文件
+const INSTRUCTION_TOOLS = ['codex', 'gemini', 'opencode'];
+
+const INSTRUCTION_FILE_MAP = {
+  codex: 'AGENTS.md',
+  gemini: 'GEMINI.md',
+  opencode: 'INSTRUCTIONS.md',
+};
+
+const INJECTION_CONTENT = `## SillySpec — 规范驱动开发
+
+在执行开发任务时，遵循以下规范：
+
+### 代码规范
+- 写代码前先读取 \`.sillyspec/codebase/CONVENTIONS.md\`（代码风格）和 \`.sillyspec/codebase/ARCHITECTURE.md\`（架构）
+- 调用已有方法前，用 grep 确认方法存在，不许编造
+- 遵循 \`.sillyspec/codebase/CONVENTIONS.md\` 中的代码风格
+
+### 工作流程
+- 读取 \`.sillyspec/STATE.md\` 确认当前阶段
+- 各阶段产出文件位于 \`.sillyspec/changes/<变更名>/\` 下
+- 详细流程参考模板文件：\`.sillyspec/.templates/\`（brainstorm.md, plan.md, execute.md 等）
+`;
 
 // ── 适配器 ──
 
@@ -103,32 +131,6 @@ ${body}`
   );
 }
 
-function generateCodex(projectDir, name, desc, body, argHint) {
-  const outDir = join(homedir(), '.agents', 'skills', `sillyspec-${name}`);
-  mkdirSync(outDir, { recursive: true });
-  writeFileSync(join(outDir, 'SKILL.md'),
-`---
-name: sillyspec:${name}
-description: ${desc}
----
-
-${body}`
-  );
-}
-
-function generateOpencode(projectDir, name, desc, body, argHint) {
-  const outDir = join(projectDir, '.opencode', 'skills', `sillyspec-${name}`);
-  mkdirSync(outDir, { recursive: true });
-  writeFileSync(join(outDir, 'SKILL.md'),
-`---
-name: sillyspec:${name}
-description: ${desc}
----
-
-${body}`
-  );
-}
-
 function generateOpenclaw(projectDir, name, desc, body, argHint) {
   const outDir = join(projectDir, '.openclaw', 'skills', `sillyspec-${name}`);
   mkdirSync(outDir, { recursive: true });
@@ -146,10 +148,29 @@ const GENERATORS = {
   claude: generateClaude,
   claude_skills: generateClaudeSkills,
   cursor: generateCursor,
-  codex: generateCodex,
-  opencode: generateOpencode,
   openclaw: generateOpenclaw,
 };
+
+// ── 指令文件注入 ──
+
+function injectInstructions(tool, projectDir) {
+  const fileName = INSTRUCTION_FILE_MAP[tool];
+  if (!fileName) return;
+  const filePath = join(projectDir, fileName);
+
+  // 文件不存在则创建
+  if (!existsSync(filePath)) {
+    writeFileSync(filePath, INJECTION_CONTENT);
+    return;
+  }
+
+  // 已存在 SillySpec 标记则跳过
+  const content = readFileSync(filePath, 'utf8');
+  if (content.includes('## SillySpec')) return;
+
+  // 追加到末尾
+  writeFileSync(filePath, content.trimEnd() + '\n\n' + INJECTION_CONTENT);
+}
 
 // ── 检测工具 ──
 
@@ -158,9 +179,10 @@ function detectTools(projectDir) {
   if (existsSync(join(projectDir, '.claude'))) found.push('claude');
   if (existsSync(join(projectDir, '.claude', 'skills'))) found.push('claude_skills');
   if (existsSync(join(projectDir, '.cursor'))) found.push('cursor');
-  if (existsSync(join(projectDir, '.opencode'))) found.push('opencode');
   if (existsSync(join(projectDir, '.openclaw'))) found.push('openclaw');
-  if (existsSync(join(homedir(), '.agents', 'skills'))) found.push('codex');
+  if (existsSync(join(projectDir, 'AGENTS.md'))) found.push('codex');
+  if (existsSync(join(projectDir, 'GEMINI.md'))) found.push('gemini');
+  if (existsSync(join(projectDir, 'INSTRUCTIONS.md'))) found.push('opencode');
   if (found.length === 0) found.push('claude');
   return found;
 }
@@ -202,13 +224,38 @@ async function doInstall(projectDir, tools, isWorkspace, subprojects = []) {
     writeFileSync(gitignorePath, ignoreRules.join('\n') + '\n');
   }
 
-  // 生成文件
+  // 生成 slash command 文件
   const templateFiles = readdirSync(TEMPLATE_DIR).filter(f => f.endsWith('.md'));
   let count = 0;
 
   for (let i = 0; i < tools.length; i++) {
     const toolName = tools[i];
     const label = TOOL_LABELS[toolName] || toolName;
+
+    if (INSTRUCTION_TOOLS.includes(toolName)) {
+      const spinner = ora(`安装 ${label}... (${i + 1}/${tools.length})`).start();
+      try {
+        injectInstructions(toolName, projectDir);
+        // 复制模板文件到 .sillyspec/.templates/
+        const templatesSourceDir = join(TEMPLATE_DIR);
+        const templatesDir = join(projectDir, '.sillyspec', '.templates');
+        if (!existsSync(templatesDir)) {
+          mkdirSync(templatesDir, { recursive: true });
+          for (const file of readdirSync(templatesSourceDir)) {
+            if (file.endsWith('.md')) {
+              copyFileSync(join(templatesSourceDir, file), join(templatesDir, file));
+            }
+          }
+        }
+        spinner.succeed(`${label} 完成`);
+        count++;
+      } catch (err) {
+        spinner.fail(`${label} 失败: ${err.message}`);
+        throw err;
+      }
+      continue;
+    }
+
     const spinner = ora(`安装 ${label}... (${i + 1}/${tools.length})`).start();
     try {
       const gen = GENERATORS[toolName];
@@ -345,7 +392,7 @@ export async function cmdInit(projectDir, options = {}) {
   const detected = detectTools(projectDir);
 
   const toolChoices = VALID_TOOLS.map(v => ({
-    name: `${TOOL_LABELS[v]}${v === 'claude' ? ' (slash commands)' : v === 'claude_skills' ? ' (skills 目录)' : ''}`,
+    name: `${TOOL_LABELS[v]}${v === 'claude' ? ' (推荐)' : ''}`,
     value: v,
     checked: detected.includes(v),
   }));
