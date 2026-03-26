@@ -92,6 +92,13 @@ grep 不到 → 不许调用，先查清楚或报告给用户。
 
 **写完测试后，立即运行确认失败：**
 
+先检查 STATE.md 是否有构建命令配置：
+```bash
+grep -A 3 "构建命令" .sillyspec/STATE.md 2>/dev/null
+```
+
+如果有，使用 STATE.md 中的命令（含 `-s` 等参数）；否则使用默认命令：
+
 ```bash
 mvn test -pl <模块> -Dtest=<测试类> 2>/dev/null || ./gradlew test --tests <测试类> 2>/dev/null || npm test -- --testPathPattern=<测试文件> 2>/dev/null || pytest <测试文件> 2>/dev/null
 ```
@@ -107,6 +114,13 @@ mvn test -pl <模块> -Dtest=<测试类> 2>/dev/null || ./gradlew test --tests <
 写刚好让测试通过的最少代码。不加额外功能。
 
 **写完后立即运行确认通过：**
+
+先检查 STATE.md 是否有构建命令配置：
+```bash
+grep -A 3 "构建命令" .sillyspec/STATE.md 2>/dev/null
+```
+
+如果有，使用 STATE.md 中的命令；否则使用默认命令：
 
 ```bash
 mvn test -pl <模块> -Dtest=<测试类> 2>/dev/null || ./gradlew test --tests <测试类> 2>/dev/null || npm test -- --testPathPattern=<测试文件> 2>/dev/null || pytest <测试文件> 2>/dev/null

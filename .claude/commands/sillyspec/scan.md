@@ -141,21 +141,19 @@ pip install -e . 2>&1 | tail -5 && pytest --collect-only 2>&1 | tail -5
 go test ./... 2>&1 | tail -5
 ```
 
-**写入 CONVENTIONS.md（注意不写绝对路径）：**
+**写入 STATE.md（本地路径，不提交到 git）：**
+
+在 STATE.md 中追加构建命令区块（如果已有则跳过）：
 
 ```markdown
-## 构建命令
-
-| 场景 | 命令 |
-|------|------|
-| 运行单个测试 | `mvn test -s "<你的 settings.xml 路径>" -pl service -Dtest=UserServiceTest` |
-| 运行全部测试 | `mvn test -s "<你的 settings.xml 路径>"` |
-| 编译检查 | `mvn compile -s "<你的 settings.xml 路径>"` |
-
-> ⚠️ 本项目依赖私服仓库，终端执行构建命令必须指定 `-s` 参数。每人 settings.xml 路径不同，请替换为本地实际路径。首次使用前请先运行 `mvn test` 确认能正常执行。
+## 构建命令（本地配置，不提交）
+- 工具：Maven
+- settings.xml：D:/software/maven/conf/settings.xml
+- 运行测试：mvn test -s "D:/software/maven/conf/settings.xml"
+- 编译检查：mvn compile -s "D:/software/maven/conf/settings.xml"
 ```
 
-**铁律：后续 execute / verify 阶段执行构建或测试命令时，必须使用 CONVENTIONS.md 中记录的命令格式（含 `-s` 等必要参数），禁止使用默认命令。AI 首次执行时先用正确格式运行，如果失败则提示用户替换路径。**
+**铁律：后续 execute / verify 阶段执行构建或测试命令时，必须先读取 STATE.md 中的构建命令，使用记录的配置执行。如果 STATE.md 无构建命令，使用默认命令。**
 
 无构建工具 → 跳过此步骤。
 
