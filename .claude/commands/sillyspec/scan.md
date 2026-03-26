@@ -141,19 +141,22 @@ pip install -e . 2>&1 | tail -5 && pytest --collect-only 2>&1 | tail -5
 go test ./... 2>&1 | tail -5
 ```
 
-**写入 STATE.md（本地路径，不提交到 git）：**
+**写入 `.sillyspec/local.yaml`（本地记忆文件，不提交到 git）：**
 
-在 STATE.md 中追加构建命令区块（如果已有则跳过）：
+此文件存储每个开发者独立的本地配置。如果文件已存在则追加，已有字段则跳过：
 
-```markdown
-## 构建命令（本地配置，不提交）
-- 工具：Maven
-- settings.xml：D:/software/maven/conf/settings.xml
-- 运行测试：mvn test -s "D:/software/maven/conf/settings.xml"
-- 编译检查：mvn compile -s "D:/software/maven/conf/settings.xml"
+```yaml
+# .sillyspec/local.yaml — 本地记忆文件（已在 .gitignore 中，不提交）
+# 每个开发者独立配置，clone 后重新 scan 即可生成
+
+build:
+  tool: maven
+  test_cmd: 'mvn test -s "D:/software/maven/conf/settings.xml"'
+  compile_cmd: 'mvn compile -s "D:/software/maven/conf/settings.xml"'
+  single_test_cmd: 'mvn test -s "D:/software/maven/conf/settings.xml" -pl {module} -Dtest={test_class}'
 ```
 
-**铁律：后续 execute / verify 阶段执行构建或测试命令时，必须先读取 STATE.md 中的构建命令，使用记录的配置执行。如果 STATE.md 无构建命令，使用默认命令。**
+**铁律：后续 execute / verify 阶段执行构建或测试命令时，必须先读取 `.sillyspec/local.yaml` 中的 build 配置，使用记录的命令执行。如果 local.yaml 不存在或无 build 配置，使用默认命令。**
 
 无构建工具 → 跳过此步骤。
 

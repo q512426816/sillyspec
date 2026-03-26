@@ -210,7 +210,7 @@ async function doInstall(projectDir, tools, isWorkspace, subprojects = []) {
   }
 
   const gitignorePath = join(projectDir, '.gitignore');
-  const ignoreRules = ['.sillyspec/STATE.md', '.sillyspec/codebase/SCAN-RAW.md'];
+  const ignoreRules = ['.sillyspec/STATE.md', '.sillyspec/codebase/SCAN-RAW.md', '.sillyspec/local.yaml'];
   if (existsSync(gitignorePath)) {
     const content = readFileSync(gitignorePath, 'utf8');
     let updated = content.trimEnd();
