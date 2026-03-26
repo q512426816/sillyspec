@@ -1,8 +1,3 @@
----
-description: 查看项目进度和状态
-argument-hint: ""
----
-
 ## 交互规范
 **当需要用户从多个选项中做出选择时，必须使用 Claude Code 内置的 AskUserQuestion 工具，将选项以参数传入。**
 
@@ -19,7 +14,37 @@ argument-hint: ""
 cat .sillyspec/config.yaml 2>/dev/null
 ```
 
-**工作区模式：** 读取 config.yaml 子项目列表，对每个子项目检查 PROJECT.md、codebase 文档数、进行中变更、归档数。检查共享规范和工作区概览。输出汇总后结束，不执行单项目流程。
+**工作区模式：** 读取 config.yaml 子项目列表，对每个子项目检查 PROJECT.md、codebase 文档数、进行中变更、归档数。**同时检查工作区根目录 `.sillyspec/changes/` 下的未归档变更。** 检查共享规范和工作区概览。输出汇总后结束，不执行单项目流程。
+
+工作区变更检查命令：
+```bash
+# 工作区根目录的变更
+ls .sillyspec/changes/ 2>/dev/null | grep -v archive
+ls .sillyspec/changes/archive/ 2>/dev/null | wc -l
+
+# 每个子项目的变更
+for proj in $(cat .sillyspec/config.yaml | grep -oP 'path:\s*\K.*'); do
+  echo "=== $(basename $proj) changes ==="
+  ls "$proj/.sillyspec/changes/" 2>/dev/null | grep -v archive
+  ls "$proj/.sillyspec/changes/archive/" 2>/dev/null | wc -l
+done
+```
+
+**汇总输出格式：**
+```
+📊 SillySpec 状态
+📋 工作区模式 — N 个子项目
+
+工作区变更：
+  🔄 进行中：sec-bonus-penalty（tasks: 3/5）
+  ✅ 已归档：1 个
+
+┌───────────────────┬────────────┬────────────┬────────┬────────┐
+│ 子项目            │ PROJECT.md │ 代码库文档 │ 进行中 │ 已归档 │
+├───────────────────┼────────────┼────────────┼────────┼────────┤
+│ back-service      │ ✗          │ 7 份       │ 1      │ 0      │
+└───────────────────┴────────────┴────────────┴────────┴────────┘
+```
 
 **单项目模式：** 继续 Step 2。
 
