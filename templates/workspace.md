@@ -52,6 +52,7 @@ projects:
   <name>:
     path: <relative-path>
     role: <description>
+    repo: <git-remote-url>  # 可选，git remote get-url origin
 shared:
   - <filename.md>
 ```

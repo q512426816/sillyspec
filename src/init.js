@@ -281,7 +281,7 @@ async function doInstall(projectDir, tools, isWorkspace, subprojects = []) {
       let projectsYaml = '';
       if (subprojects.length > 0) {
         projectsYaml = subprojects.map(p =>
-          `  ${p.name}:\n    path: ${p.path}\n    role: ${p.role || p.name}`
+          `  ${p.name}:\n    path: ${p.path}\n    role: ${p.role || p.name}${p.repo ? `\n    repo: ${p.repo}` : ''}`
         ).join('\n');
       }
 
@@ -462,10 +462,19 @@ export async function cmdInit(projectDir, options = {}) {
           default: '',
         });
 
+        // 检测 git 远程地址
+        let repo = '';
+        try {
+          const { execSync } = require('child_process');
+          const absPath = resolve(projectDir, subPath.trim() || `./${name.trim()}`);
+          repo = execSync('git remote get-url origin', { cwd: absPath, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+        } catch {}
+
         subprojects.push({
           name: name.trim(),
           path: subPath.trim() || `./${name.trim()}`,
           role: role.trim(),
+          repo,
         });
 
         // 从建议中移除已添加的
