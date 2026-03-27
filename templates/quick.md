@@ -43,7 +43,7 @@ $ARGUMENTS
    - **无 `--change`：** 记录到 `.sillyspec/quicklog/QUICKLOG.md`（见下方规则）
 9. **检查复杂度：** 任务比预期复杂 → 建议用完整流程
 
-10. **记录发现的坑：** 执行过程中如果发现项目特有的规律、陷阱或约定（如"某方法参数顺序容易搞反"、"某表有隐藏软删除字段"），追加到 `.sillyspec/codebase/CONVENTIONS.md` 的「注意事项」章节（如不存在则创建）。这样后续所有阶段都能避免踩坑。
+10. **记录发现的坑：** 执行过程中如果发现项目特有的规律、陷阱或约定（如"某方法参数顺序容易搞反"、"某表有隐藏软删除字段"），追加到 CONVENTIONS.md 的「注意事项」章节。**工作区模式下：** 只影响当前子项目 → 写入当前子项目 `.sillyspec/codebase/CONVENTIONS.md`；影响多个子项目 → 写入 `.sillyspec/shared/CONVENTIONS.md`（共享规范，所有子项目可见）。
 
 ### QUICKLOG.md 规则
 
