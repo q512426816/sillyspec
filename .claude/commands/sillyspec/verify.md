@@ -84,4 +84,4 @@ grep -r "TODO\|FIXME\|HACK\|XXX" src/ lib/ app/ --include="*.ts" --include="*.ts
 
 ### 7. 完成
 
-更新 `.sillyspec/STATE.md`（如存在）：阶段改为 `verify ✅` 或 `verify ⚠️`。
+更新 `.sillyspec/STATE.md`（如存在）：阶段改为 `verify ✅` 或 `verify ⚠️`，记录精确到秒的时间戳。

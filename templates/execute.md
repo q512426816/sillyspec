@@ -145,7 +145,19 @@ mvn test -pl <模块> -Dtest=<测试类> 2>/dev/null || ./gradlew test --tests <
 
 ### 3. 勾选 tasks
 
-完成后在 `.sillyspec/changes/<变更名>/tasks.md` 勾选对应 checkbox：`- [x] [YYYY-MM-DD HH:MM:SS] 任务描述`
+完成后**立即**在 `.sillyspec/changes/<变更名>/tasks.md` 勾选对应 checkbox。
+
+**格式要求（必须精确到秒）：**
+```
+- [x] [YYYY-MM-DD HH:MM:SS] 任务描述
+```
+
+获取当前时间的命令：
+```bash
+date '+%Y-%m-%d %H:%M:%S'
+```
+
+**铁律：每个 task 完成后必须勾选并记录精确到秒的时间戳，不可省略。禁止只写 `[x]` 不写时间。**
 
 ### 4. Git commit
 
@@ -177,4 +189,4 @@ git rev-parse --is-inside-work-tree 2>/dev/null
 sillyspec status --json && sillyspec next
 ```
 
-更新 `.sillyspec/STATE.md`：阶段改为 `execute ✅` 或 `execute 🔄 (X/M)`，历史记录追加执行结果。
+更新 `.sillyspec/STATE.md`：阶段改为 `execute ✅` 或 `execute 🔄 (X/M)`，历史记录追加执行结果（含精确到秒的时间戳）。

@@ -35,7 +35,11 @@ $ARGUMENTS
 6. **运行相关测试：** `pnpm test 2>/dev/null || npm test 2>/dev/null || pytest 2>/dev/null`
 7. **Git commit：** 展示 commit message 给用户确认后提交。**工作区模式下，确认当前在正确的子项目目录中执行 commit。**
 8. **记录：**
-   - **有 `--change`：** 在 `.sillyspec/changes/<变更名>/tasks.md` 追加 task 并勾选 `[x]`
+   - **有 `--change`：** 在 `.sillyspec/changes/<变更名>/tasks.md` 追加 task 并勾选，**记录精确到秒的时间戳**：
+
+```
+- [x] [YYYY-MM-DD HH:MM:SS] 任务描述
+```
    - **无 `--change`：** 记录到 `.sillyspec/quicklog/QUICKLOG.md`（见下方规则）
 9. **检查复杂度：** 任务比预期复杂 → 建议用完整流程
 
@@ -43,7 +47,7 @@ $ARGUMENTS
 
 文件路径：`.sillyspec/quicklog/QUICKLOG.md`
 
-**追加记录格式：**
+**追加记录格式（时间精确到秒）：**
 ```markdown
 ## YYYY-MM-DD HH:MM:SS | fix: 任务描述
 - 文件：`修改的文件列表`
