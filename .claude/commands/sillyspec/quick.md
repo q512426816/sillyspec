@@ -8,7 +8,7 @@
 
 ## 用法
 
-- `/sillyspec:quick "修复用户创建接口漏了手机号校验"` — 独立记录到 QUICKLOG.md
+- `/sillyspec:quick "修复用户创建接口漏了手机号校验"` — 独立记录到按用户名隔离的 QUICKLOG
 - `/sillyspec:quick --change user-module "修复用户创建接口漏了手机号校验"` — 追加到 user-module 变更的 tasks.md
 
 ## 任务
@@ -40,14 +40,21 @@ $ARGUMENTS
 ```
 - [x] [YYYY-MM-DD HH:MM:SS] 任务描述
 ```
-   - **无 `--change`：** 记录到 `.sillyspec/quicklog/QUICKLOG.md`（见下方规则）
+   - **无 `--change`：** 记录到 `.sillyspec/quicklog/QUICKLOG-<git用户名>.md`（见下方规则）
 9. **检查复杂度：** 任务比预期复杂 → 建议用完整流程
 
 10. **记录发现的坑：** 执行过程中如果发现项目特有的规律、陷阱或约定（如"某方法参数顺序容易搞反"、"某表有隐藏软删除字段"），追加到 CONVENTIONS.md 的「注意事项」章节。**工作区模式下：** 只影响当前子项目 → 写入当前子项目 `.sillyspec/codebase/CONVENTIONS.md`；影响多个子项目 → 写入 `.sillyspec/shared/CONVENTIONS.md`（共享规范，所有子项目可见）。
 
-### QUICKLOG.md 规则
+### QUICKLOG 规则
 
-文件路径：`.sillyspec/quicklog/QUICKLOG.md`
+**按 git 用户名隔离，避免多人同时操作冲突：**
+
+```bash
+USER=$(git config user.name 2>/dev/null || echo "default")
+LOG_FILE=".sillyspec/quicklog/QUICKLOG-${USER}.md"
+```
+
+文件路径：`$LOG_FILE`
 
 **追加记录格式（时间精确到秒）：**
 ```markdown
@@ -58,5 +65,5 @@ $ARGUMENTS
 ```
 
 **文件轮转：** 追加前检查文件大小，超过 500 行则：
-1. 将当前 `QUICKLOG.md` 重命名为 `QUICKLOG-YYYY-MM-DD.md`
-2. 创建新的空 `QUICKLOG.md`
+1. 将当前文件重命名为 `QUICKLOG-${USER}-YYYY-MM-DD.md`
+2. 创建新的空 `QUICKLOG-${USER}.md`
