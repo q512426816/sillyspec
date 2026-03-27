@@ -12,11 +12,16 @@
 ## 状态检查（必须先执行）
 
 ```bash
-sillyspec status --json
+cat .sillyspec/STATE.md 2>/dev/null
 ```
 
-- `phase: "execute"` → ✅ 继续
-- 其他 phase → 提示用户 `sillyspec next`
+有 STATE.md 且 phase 为 execute → 继续。无 STATE.md 或 phase 不对 → 检查是否有未完成的 tasks.md：
+
+```bash
+ls .sillyspec/changes/*/tasks.md 2>/dev/null | xargs grep -l '\- \[ \]' 2>/dev/null
+```
+
+有未完成的 tasks.md → 继续。没有 → 提示 `/sillyspec:continue`。
 
 ## 执行范围
 $ARGUMENTS
@@ -158,9 +163,5 @@ git rev-parse --is-inside-work-tree 2>/dev/null
 1. **验证** — 执行 `/sillyspec:verify` 全面验证
 2. **归档** — 跳过 verify，执行 `/sillyspec:archive`
 3. **继续开发** — 不结束当前阶段
-
-```bash
-sillyspec status --json && sillyspec next
-```
 
 更新 `.sillyspec/STATE.md`：阶段改为 `execute ✅` 或 `execute 🔄 (X/M)`，历史记录追加执行结果（含精确到秒的时间戳）。
