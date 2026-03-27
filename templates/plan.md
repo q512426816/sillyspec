@@ -41,7 +41,21 @@ cat .sillyspec/REQUIREMENTS.md 2>/dev/null
 
 ### 2. 逐任务展开
 
-把 tasks.md 每个 checkbox 展开为任务描述，按 Wave 分组组织。工作区模式下每个 Task 标注所属项目。
+把 tasks.md 每个 checkbox **保留 `- [ ]` 格式**并展开为任务描述，按 Wave 分组组织。工作区模式下每个 Task 标注所属项目。
+
+**输出格式要求（必须严格遵守）：**
+
+```markdown
+### Wave 1（并行，无依赖）
+- [ ] 添加用户创建接口
+  - 修改: `UserController.java`、`UserService.java`
+  - 参考: `RoleController.createRole`
+
+- [ ] 添加角色创建接口
+  - ...
+```
+
+**每个 Task 必须保留 `- [ ]` checkbox，这是 execute 阶段勾选完成状态的依据。** 禁止写成纯文本列表。
 
 **每个 Task 包含：**
 - 精确文件路径（修改哪个文件）
