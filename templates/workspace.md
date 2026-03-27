@@ -26,7 +26,7 @@ cat .sillyspec/config.yaml 2>/dev/null
 - 无参数 / `status` → 显示状态
 - `add` → 添加子项目
 - `remove` → 移除子项目
-- `info <name>` → 子项目详情
+- `sync` → 同步子项目（clone 缺失的，检查冲突）
 
 ### Step 3: 执行操作
 
