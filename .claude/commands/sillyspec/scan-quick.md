@@ -27,11 +27,12 @@ find . -maxdepth 2 -name "*.config.*" -not -path "*/node_modules/*" -not -path "
 
 ### Step 3: 生成文档
 
-`mkdir -p .sillyspec/codebase`，生成 3 份文档：
+`mkdir -p .sillyspec/codebase`，生成 4 份文档：
 
 1. **ARCHITECTURE.md** — 架构 + 技术栈（合并原 STACK.md）
 2. **STRUCTURE.md** — 目录结构（`find . -type f | head -200`）
-3. **PROJECT.md** — 项目概览
+3. **CONVENTIONS.md** — 空骨架文件，含章节标题（注意事项、代码风格等），供后续 quick/execute 追加
+4. **PROJECT.md** — 项目概览
 
 ### Step 4: Git 提交
 

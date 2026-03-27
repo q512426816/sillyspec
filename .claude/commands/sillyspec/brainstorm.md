@@ -58,7 +58,7 @@ cat .sillyspec/config.yaml 2>/dev/null
 **单项目模式：**
 ```bash
 cat .sillyspec/{PROJECT,REQUIREMENTS,ROADMAP}.md 2>/dev/null
-cat .sillyspec/codebase/{STRUCTURE,CONVENTIONS}.md 2>/dev/null
+cat .sillyspec/codebase/{STRUCTURE,CONVENTIONS,ARCHITECTURE}.md 2>/dev/null
 ls .sillyspec/changes/ 2>/dev/null | grep -v archive
 ls .sillyspec/knowledge/ 2>/dev/null
 ```
