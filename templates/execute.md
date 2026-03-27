@@ -41,7 +41,7 @@ cat .sillyspec/config.yaml 2>/dev/null
 PLAN=$(ls -t .sillyspec/changes/*/tasks.md 2>/dev/null | head -1); cat "$PLAN"
 LATEST=$(ls -d .sillyspec/changes/*/ | grep -v archive | tail -1)
 cat "$LATEST"/{tasks,design}.md 2>/dev/null
-cat .sillyspec/codebase/{CONVENTIONS,ARCHITECTURE,KNOW-HOW}.md 2>/dev/null
+cat .sillyspec/codebase/{CONVENTIONS,ARCHITECTURE}.md 2>/dev/null
 cat .sillyspec/local.yaml 2>/dev/null
 ```
 
@@ -81,9 +81,6 @@ cat .sillyspec/local.yaml 2>/dev/null
 
 ## 项目约定
 {CONVENTIONS.md 全文}
-
-## 已知坑和规律
-{KNOW-HOW.md 全文}
 
 ## 项目架构
 {ARCHITECTURE.md 全文}

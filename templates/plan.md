@@ -31,7 +31,7 @@ cat .sillyspec/config.yaml 2>/dev/null
 ```bash
 LATEST=$(ls -d .sillyspec/changes/*/ | grep -v archive | tail -1)
 cat "$LATEST"/{design,tasks}.md 2>/dev/null
-cat .sillyspec/codebase/{CONVENTIONS,ARCHITECTURE,KNOW-HOW}.md 2>/dev/null
+cat .sillyspec/codebase/{CONVENTIONS,ARCHITECTURE}.md 2>/dev/null
 cat .sillyspec/REQUIREMENTS.md 2>/dev/null
 ```
 

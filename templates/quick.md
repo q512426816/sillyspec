@@ -20,7 +20,7 @@ $ARGUMENTS
 
 1. **解析参数：** 检查是否携带 `--change <变更名>`，确定记录方式
 2. **理解任务：** 模糊则问一个问题确认
-3. **加载上下文：** `cat .sillyspec/codebase/{CONVENTIONS,ARCHITECTURE,KNOW-HOW}.md 2>/dev/null`
+3. **加载上下文：** `cat .sillyspec/codebase/{CONVENTIONS,ARCHITECTURE}.md 2>/dev/null`
 4. **先读后写：** 调用已有方法前 `cat` 源文件确认签名，`grep` 确认方法存在
 5. **TDD 执行：**
    ```
@@ -43,7 +43,7 @@ $ARGUMENTS
    - **无 `--change`：** 记录到 `.sillyspec/quicklog/QUICKLOG-<git用户名>.md`（见下方规则）
 9. **检查复杂度：** 任务比预期复杂 → 建议用完整流程
 
-10. **记录发现的坑：** 执行过程中如果发现项目特有的规律、陷阱或约定（如"某方法参数顺序容易搞反"、"某表有隐藏软删除字段"），追加到 `KNOW-HOW.md` 的对应章节。**工作区模式下：** 只影响当前子项目 → 写入当前子项目 `.sillyspec/codebase/KNOW-HOW.md`；影响多个子项目 → 写入 `.sillyspec/shared/KNOW-HOW.md`。追加前检查文件大小，超过 200 行则轮转归档（重命名为 `KNOW-HOW-YYYY-MM-DD.md`，创建新的空文件）。
+10. **记录发现的坑：** 执行过程中如果发现项目特有的规律、陷阱或约定（如"某方法参数顺序容易搞反"、"某表有隐藏软删除字段"），追加到 CONVENTIONS.md 的「注意事项」章节。**工作区模式下：** 只影响当前子项目 → 写入当前子项目 `.sillyspec/codebase/CONVENTIONS.md`；影响多个子项目 → 写入 `.sillyspec/shared/CONVENTIONS.md`（共享规范，所有子项目可见）。
 
 ### QUICKLOG 规则
 
