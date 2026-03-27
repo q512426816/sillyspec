@@ -25,6 +25,15 @@ cat .sillyspec/config.yaml 2>/dev/null
 
 - 无参数 / `status` → 显示状态
 - `add` → 添加子项目
+
+**添加流程：**
+1. AskUserQuestion 询问子项目名称、目录路径、角色描述
+2. **自动检测 git 远程地址：**
+```bash
+git -C <path> remote get-url origin 2>/dev/null
+```
+检测到则写入 repo 字段，检测不到则留空
+3. 更新 config.yaml，追加子项目配置
 - `remove` → 移除子项目
 - `sync` → 同步子项目（clone 缺失的，检查冲突）
 
