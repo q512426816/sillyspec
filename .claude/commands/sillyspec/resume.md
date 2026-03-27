@@ -17,12 +17,19 @@ cat .sillyspec/STATE.md 2>/dev/null
 
 **有 STATE.md：** 提取并展示当前变更、阶段、进度、下一步命令、阶段进度表、关键决策。AskUserQuestion：直接继续 / 查看更多细节。
 
-**无 STATE.md：** 自动探测：
+**无 STATE.md：** 自动探测（工作区模式下同时检查子项目）：
 
 ```bash
+cat .sillyspec/config.yaml 2>/dev/null  # 检查是否工作区模式
 ls .sillyspec/changes/*/MASTER.md 2>/dev/null
 ls -d .sillyspec/changes/*/ | grep -v archive | grep -v stages | tail -1 2>/dev/null
 ls .sillyspec/codebase/*.md .sillyspec/codebase/details/*.md .sillyspec/changes/*/tasks.md .sillyspec/{REQUIREMENTS,ROADMAP}.md 2>/dev/null
+# 工作区模式：检查每个子项目的状态
+for proj in $(cat .sillyspec/config.yaml | grep -oP 'path:\s*\K.*'); do
+  echo "=== $(basename $proj) ==="
+  cat "$proj/.sillyspec/STATE.md" 2>/dev/null
+  ls "$proj/.sillyspec/changes/" 2>/dev/null | grep -v archive
+done
 ```
 
 **探测结果推断：**

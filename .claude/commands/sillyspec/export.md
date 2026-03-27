@@ -1,14 +1,3 @@
----
-description: 导出成功方案为可复用模板
-argument-hint: "<change-name> [--to <path>]"
----
-
-## 核心约束（必须遵守）
-- ❌ 修改任何文件（只读）
-
-## 参数解析
-`$ARGUMENTS`：变更名 + 可选 `--to` 输出路径（默认 `~/.sillyspec/templates/<change-name>/`）
-
 ## 核心约束（必须遵守）
 - ❌ 修改任何文件（只读）
 
@@ -19,7 +8,9 @@ argument-hint: "<change-name> [--to <path>]"
 
 ## 流程
 
-1. **读取变更文件：** `cat .sillyspec/changes/$ARGUMENTS/{design}.md 2>/dev/null`。不存在则报错。
+1. **读取变更文件：** 
+   - 先检查根目录：`cat .sillyspec/changes/$ARGUMENTS/{design}.md 2>/dev/null`
+   - 根目录没有 → 检查子项目：遍历 config.yaml 中的子项目路径，查找 `$ARGUMENTS`
 2. **清理为通用模板：** 移除项目特定信息，保留通用设计方案，添加 `notes.md` 使用建议。
 3. **导出：** `mkdir -p ~/.sillyspec/templates/<change-name>` 并复制文件。
 4. **确认：** 展示摘要和模板路径。
