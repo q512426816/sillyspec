@@ -215,6 +215,18 @@ async function doInstall(projectDir, tools, isWorkspace, subprojects = []) {
     mkdirSync(join(projectDir, '.sillyspec', 'workspace'), { recursive: true });
   }
 
+  // 创建知识库骨架（所有模式）
+  const knowledgeDir = join(projectDir, '.sillyspec', 'knowledge');
+  mkdirSync(knowledgeDir, { recursive: true });
+  const indexPath = join(knowledgeDir, 'INDEX.md');
+  if (!existsSync(indexPath)) {
+    writeFileSync(indexPath, `# Knowledge Index\n\n> 子代理任务开始前查询此文件，按关键词匹配，只读命中的知识文件。\n> execute/quick 执行中发现的坑自动追加到 uncategorized.md，经用户确认后归类到对应文件。\n\n<!-- 格式：关键词1|关键词2|关键词3 → 文件路径 -->\n<!-- 示例：mybatis-plus|分页|Page → pagination.md -->\n<!-- 示例：跨域|CORS|preflight → cors.md -->\n`);
+  }
+  const uncatPath = join(knowledgeDir, 'uncategorized.md');
+  if (!existsSync(uncatPath)) {
+    writeFileSync(uncatPath, `# 未分类知识\n\n> execute/quick 执行中发现的坑暂存于此，用户审阅后归类到对应文件并更新 INDEX.md。\n`);
+  }
+
   const gitignorePath = join(projectDir, '.gitignore');
   const ignoreRules = ['.sillyspec/STATE.md', '.sillyspec/codebase/SCAN-RAW.md', '.sillyspec/local.yaml'];
   if (existsSync(gitignorePath)) {
