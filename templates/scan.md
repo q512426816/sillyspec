@@ -139,10 +139,12 @@ fi
 sillyspec status --json   # 应返回 phase: "brainstorm"
 sillyspec next            # 推荐给用户
 
-# 清理 + 提交
+# 清理
 rm -f .sillyspec/codebase/_env-detect.md
-git add .sillyspec/ && git commit -m "chore: sillyspec scan - codebase mapped"
+git add .sillyspec/
 ```
+
+💡 扫描产出已暂存。准备好后用 `/sillyspec:commit` 提交。
 
 ### 自检门控
 - [ ] ARCHITECTURE.md：技术栈 + Schema 摘要？

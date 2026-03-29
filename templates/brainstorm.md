@@ -53,7 +53,7 @@ $ARGUMENTS
 cat .sillyspec/config.yaml 2>/dev/null
 ```
 
-**工作区模式：** AskUserQuestion 选子项目，**cd 到子项目目录执行**，加载子项目上下文 + 共享规范 + 工作区概览，设计文档保存到子项目 `.sillyspec/changes/`。git commit 在子项目目录执行。
+**工作区模式：** AskUserQuestion 选子项目，**cd 到子项目目录执行**，加载子项目上下文 + 共享规范 + 工作区概览，设计文档保存到子项目 `.sillyspec/changes/`。修改在子项目目录中暂存。
 
 **单项目模式：**
 ```bash
@@ -100,8 +100,9 @@ mkdir -p .sillyspec/changes/<变更名>/stages
 
 ```bash
 git add .sillyspec/changes/<变更名>/MASTER.md
-git commit -m "docs: master change plan for <变更名>"
 ```
+
+💡 大模块计划已暂存。准备好后用 `/sillyspec:commit` 提交。
 
 提示用户：`/sillyspec:brainstorm <变更名>/stage-1`
 

@@ -49,8 +49,10 @@ ls -la
 ### Step 6: Git 初始化
 
 ```bash
-git init && git add . && git commit -m "chore: sillyspec init - project initialized"
+git init && git add .
 ```
+
+💡 项目已初始化并暂存。准备好后用 `/sillyspec:commit` 提交。
 
 ### 最后说：
 

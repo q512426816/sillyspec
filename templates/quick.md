@@ -32,7 +32,7 @@ $ARGUMENTS
    🔴 RED    → 先写测试，运行确认失败
    🟢 GREEN  → 写最少代码让测试通过
    🔵 REFACTOR → 清理，保持测试通过
-   ✅ COMMIT  → git 提交（测试文件必须包含在提交中）
+   ✅ STAGE   → git add 暂存（测试文件必须包含在暂存中）
    ```
    测试文件必须保留在项目中，不能删除。违反 TDD → 删掉代码从测试重新开始。
    - 纯配置/数据/文档可跳过 TDD
@@ -45,7 +45,7 @@ cat .sillyspec/local.yaml 2>/dev/null
 ```bash
 mvn test -pl <模块> -Dtest=<测试类> 2>/dev/null || ./gradlew test --tests <测试类> 2>/dev/null || pnpm test 2>/dev/null || npm test 2>/dev/null || pytest <测试文件> 2>/dev/null
 ```
-8. **Git commit：** 展示 commit message 给用户确认后提交。**工作区模式下，确认当前在正确的子项目目录中执行 commit。**
+8. **Git 暂存：** `git add -A`。**不要 commit**，由用户通过 `/sillyspec:commit` 统一提交。**工作区模式下，确认当前在正确的子项目目录中执行暂存。**
 9. **记录：**
    - **有 `--change`：** 在 `.sillyspec/changes/<变更名>/tasks.md` 追加 task 并勾选，**记录精确到秒的时间戳**：
 
@@ -85,7 +85,6 @@ LOG_FILE=".sillyspec/quicklog/QUICKLOG-${USER}.md"
 ```markdown
 ## YYYY-MM-DD HH:MM:SS | fix: 任务描述
 - 文件：`修改的文件列表`
-- commit：`commit hash`
 - 关联归档：`相关的已归档变更名`（如有）
 ```
 

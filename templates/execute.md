@@ -34,7 +34,7 @@ $ARGUMENTS
 cat .sillyspec/config.yaml 2>/dev/null
 ```
 
-**工作区模式：** 根据计划 Task 标注确定子项目，额外加载共享规范 + CODEBASE-OVERVIEW.md。所有代码修改、测试运行、git commit 都在子项目目录中执行。
+**工作区模式：** 根据计划 Task 标注确定子项目，额外加载共享规范 + CODEBASE-OVERVIEW.md。所有代码修改、测试运行在子项目目录中执行。
 
 **加载以下文件（主代理读取，后续注入子代理）：**
 ```bash
@@ -108,7 +108,7 @@ cat .sillyspec/knowledge/INDEX.md 2>/dev/null
 4. **不自行补全：** 发现缺失接口/方法，不自己写，报告 BLOCKED
 5. **TDD 不跳步：** 按任务步骤逐步执行，每步必须运行测试命令并确认结果
 6. **测试直接通过 = 测了已有行为，重写测试**
-7. **commit：** 完成后在工作目录执行 git add -A && git commit
+7. **暂存：** 完成后在工作目录执行 git add -A（不要 commit，由用户通过 /sillyspec:commit 统一提交）
 8. **不修改计划外的文件**，如必须修改则在报告中说明
 
 ## 完成后报告（严格按此格式）
@@ -151,6 +151,8 @@ grep -c '^\### \[待确认\]' .sillyspec/knowledge/uncategorized.md 2>/dev/null
 如果有待确认条目，提示用户：
 > 📚 本轮执行发现了 N 条新知识，请审阅：`cat .sillyspec/knowledge/uncategorized.md`
 > 确认后请将 `[待确认]` 改为 `[已确认]`，并可归类到 knowledge/ 下的专题文件中更新 INDEX.md。
+
+💡 所有修改已暂存。准备好后用 `/sillyspec:commit` 提交。
 
 所有任务完成后，用 AskUserQuestion 询问用户下一步：
 1. **验证** — 执行 `/sillyspec:verify` 全面验证

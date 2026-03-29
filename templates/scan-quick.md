@@ -34,13 +34,15 @@ find . -maxdepth 2 -name "*.config.*" -not -path "*/node_modules/*" -not -path "
 3. **CONVENTIONS.md** — 空骨架文件，含章节标题（注意事项、代码风格等），供后续 quick/execute 追加
 4. **PROJECT.md** — 项目概览
 
-### Step 4: Git 提交
+### Step 4: 暂存修改
 
 ```bash
-git add .sillyspec/ && git commit -m "chore: sillyspec quick scan"
+git add .sillyspec/
 ```
 
-工作区模式在每个子项目分别提交。
+工作区模式在每个子项目分别暂存。
+
+💡 扫描产出已暂存。准备好后用 `/sillyspec:commit` 提交。
 
 ### 完成
 
