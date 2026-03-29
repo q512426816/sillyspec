@@ -45,6 +45,13 @@ cat .sillyspec/codebase/{CONVENTIONS,ARCHITECTURE}.md 2>/dev/null
 cat .sillyspec/local.yaml 2>/dev/null
 ```
 
+**知识库查询（强制步骤）：**
+主代理在 dispatch 每个子代理前，必须执行：
+```bash
+cat .sillyspec/knowledge/INDEX.md 2>/dev/null
+```
+根据当前 task 描述中的关键词（技术名词、模块名、文件路径等）匹配 INDEX.md 条目。命中时读取对应 knowledge 文件，将内容注入子代理 prompt 的「相关知识」段。未命中则跳过，不注入空段。
+
 如果 `$ARGUMENTS` 指定范围（如 `wave-1`、`task-3`），只执行对应部分。
 
 ---
@@ -91,6 +98,9 @@ cat .sillyspec/local.yaml 2>/dev/null
 ## 工作目录
 {子项目目录路径，工作区模式需要 cd 到此目录}
 
+## 相关知识（如有）
+{主代理从 knowledge/ 中按任务关键词匹配到的内容，未命中则删除此段}
+
 ## 铁律（必须遵守）
 1. **先读后写：** 先 cat 要修改的文件和参考文件，确认风格和方法签名后再写
 2. **grep 确认：** 调用已有方法前必须 grep 确认存在，grep 不到 → 报告 BLOCKED
@@ -108,6 +118,7 @@ cat .sillyspec/local.yaml 2>/dev/null
 - **测试结果：** {通过/失败/跳过及原因}
 - **Commit:** {hash 或 "无"}
 - **问题：** {BLOCKED 原因 / DONE_WITH_CONCERNS 描述 / 无}
+- **发现的坑：** {执行过程中发现的项目特有规律/陷阱/约定，如无则写"无"。示例："XxxMapper.selectPage() 第一个参数必须是 IPage 对象，传 null 会 NPE 而非返回全部"}
 ```
 
 ### 子代理结果处理
@@ -121,9 +132,25 @@ cat .sillyspec/local.yaml 2>/dev/null
    - 跳过（勾选并标注 SKIPPED）
    - 停止（暂停执行，用户处理后继续）
 
+**知识库写入：** 如果子代理报告中「发现的坑」不为"无"，主代理将内容追加到 `.sillyspec/knowledge/uncategorized.md`，格式：
+```markdown
+### [待确认] {简短标题}
+> 来源：{变更名} / {task 编号} | {时间戳}
+
+{坑的具体描述}
+```
+
 ---
 
 ## 完成后
+
+**知识库审阅：** 检查是否有待确认的知识条目：
+```bash
+grep -c '^\### \[待确认\]' .sillyspec/knowledge/uncategorized.md 2>/dev/null
+```
+如果有待确认条目，提示用户：
+> 📚 本轮执行发现了 N 条新知识，请审阅：`cat .sillyspec/knowledge/uncategorized.md`
+> 确认后请将 `[待确认]` 改为 `[已确认]`，并可归类到 knowledge/ 下的专题文件中更新 INDEX.md。
 
 所有任务完成后，用 AskUserQuestion 询问用户下一步：
 1. **验证** — 执行 `/sillyspec:verify` 全面验证

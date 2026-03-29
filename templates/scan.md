@@ -112,6 +112,29 @@ for f in ARCHITECTURE STRUCTURE CONVENTIONS INTEGRATIONS TESTING CONCERNS PROJEC
   [ -f ".sillyspec/codebase/${f}.md" ] && echo "✅ ${f}.md"
 done
 
+# 生成知识库骨架
+mkdir -p .sillyspec/knowledge
+if [ ! -f ".sillyspec/knowledge/INDEX.md" ]; then
+  cat > .sillyspec/knowledge/INDEX.md << 'EOF'
+# Knowledge Index
+
+> 子代理任务开始前查询此文件，按关键词匹配，只读命中的知识文件。
+> execute/quick 执行中发现的坑自动追加到 uncategorized.md，经用户确认后归类到对应文件。
+
+<!-- 格式：关键词1|关键词2|关键词3 → 文件路径 -->
+<!-- 示例：mybatis-plus|分页|Page → pagination.md -->
+<!-- 示例：跨域|CORS|preflight → cors.md -->
+EOF
+fi
+if [ ! -f ".sillyspec/knowledge/uncategorized.md" ]; then
+  cat > .sillyspec/knowledge/uncategorized.md << 'EOF'
+# 未分类知识
+
+> execute/quick 执行中发现的坑暂存于此，用户审阅后归类到对应文件并更新 INDEX.md。
+
+EOF
+fi
+
 # 验证 CLI
 sillyspec status --json   # 应返回 phase: "brainstorm"
 sillyspec next            # 推荐给用户
