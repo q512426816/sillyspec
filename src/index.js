@@ -9,7 +9,7 @@
 
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
 import { join, resolve } from 'path';
-import { cmdInit } from './init.js';
+import { cmdInit, getVersion } from './init.js';
 
 const SILLYSPEC_DIR = '.sillyspec';
 const CODEBASE_DIR = `${SILLYSPEC_DIR}/codebase`;
@@ -501,6 +501,11 @@ SillySpec CLI — 流程状态机
 async function main() {
   const args = process.argv.slice(2);
   
+  if (args[0] === '--version' || args[0] === '-v') {
+    console.log(getVersion());
+    process.exit(0);
+  }
+
   if (args.length === 0 || args[0] === 'help' || args[0] === '--help' || args[0] === '-h') {
     printUsage();
     process.exit(0);

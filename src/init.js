@@ -91,33 +91,35 @@ const INJECTION_CONTENT = `## SillySpec — 规范驱动开发
 
 // ── 适配器 ──
 
-function generateClaude(projectDir, name, desc, body, argHint) {
+function generateClaude(projectDir, name, desc, body, argHint, version) {
   const outDir = join(projectDir, '.claude', 'commands', 'sillyspec');
   mkdirSync(outDir, { recursive: true });
   writeFileSync(join(outDir, `${name}.md`),
 `---
 description: ${desc}
 argument-hint: "${argHint}"
+version: "${version}"
 ---
 
 ${body}`
   );
 }
 
-function generateClaudeSkills(projectDir, name, desc, body, argHint) {
+function generateClaudeSkills(projectDir, name, desc, body, argHint, version) {
   const outDir = join(projectDir, '.claude', 'skills', `sillyspec-${name}`);
   mkdirSync(outDir, { recursive: true });
   writeFileSync(join(outDir, 'SKILL.md'),
 `---
 name: sillyspec:${name}
 description: ${desc}
+version: "${version}"
 ---
 
 ${body}`
   );
 }
 
-function generateCursor(projectDir, name, desc, body, argHint) {
+function generateCursor(projectDir, name, desc, body, argHint, version) {
   const outDir = join(projectDir, '.cursor', 'commands');
   mkdirSync(outDir, { recursive: true });
   writeFileSync(join(outDir, `sillyspec-${name}.md`),
@@ -125,19 +127,21 @@ function generateCursor(projectDir, name, desc, body, argHint) {
 name: /sillyspec-${name}
 id: sillyspec-${name}
 description: ${desc}
+version: "${version}"
 ---
 
 ${body}`
   );
 }
 
-function generateOpenclaw(projectDir, name, desc, body, argHint) {
+function generateOpenclaw(projectDir, name, desc, body, argHint, version) {
   const outDir = join(projectDir, '.openclaw', 'skills', `sillyspec-${name}`);
   mkdirSync(outDir, { recursive: true });
   writeFileSync(join(outDir, 'SKILL.md'),
 `---
 name: sillyspec:${name}
 description: ${desc}
+version: "${version}"
 ---
 
 ${body}`
@@ -259,12 +263,13 @@ async function doInstall(projectDir, tools, isWorkspace, subprojects = []) {
     const spinner = ora(`安装 ${label}... (${i + 1}/${tools.length})`).start();
     try {
       const gen = GENERATORS[toolName];
+      const ver = getVersion();
       for (const file of templateFiles) {
         const name = file.replace('.md', '');
         const desc = DESCRIPTIONS[name] || `SillySpec ${name}`;
         const argHint = ARG_HINTS[name] || '';
         const body = readFileSync(join(TEMPLATE_DIR, file), 'utf8');
-        gen(projectDir, name, desc, body, argHint);
+        gen(projectDir, name, desc, body, argHint, ver);
         count++;
       }
       spinner.succeed(`${label} 完成`);
@@ -329,7 +334,7 @@ function showSummary(version, tools, isWorkspace, count) {
 
 // ── 读取版本号 ──
 
-function getVersion() {
+export function getVersion() {
   try {
     const pkg = JSON.parse(readFileSync(resolve(__dirname, '..', 'package.json'), 'utf8'));
     return pkg.version;
