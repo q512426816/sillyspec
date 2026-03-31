@@ -90,14 +90,16 @@ npx playwright test 2>/dev/null || npx cypress run 2>/dev/null
 - fixAttempts 未达上限 → 调 `/sillyspec:quick "修复 E2E 失败：<失败描述>"` → 重跑该测试 → 更新 local.yaml
 - fixAttempts 达到上限 → 停止，报告失败详情，提示人工介入
 
-**更新测试结果到 `.sillyspec/local.yaml`：**
+**更新测试结果到 `.sillyspec/local.yaml`（按变更名隔离，覆盖写入）：**
 ```yaml
-e2e-results:
-  - name: login.spec.ts
-    status: passed
-    duration: "2.3s"
-    time: "2026-03-31T12:30:00+08:00"
-    fixAttempts: 0
+e2e:
+  {变更名}:
+    login.spec.ts:
+      status: passed
+      fixAttempts: 0
+    form-submit.spec.ts:
+      status: failed
+      fixAttempts: 3
 ```
 
 ### 5. 代码质量扫描
