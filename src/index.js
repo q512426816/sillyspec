@@ -481,6 +481,7 @@ SillySpec CLI — 流程状态机
   sillyspec status [--json]    显示当前项目状态
   sillyspec next [--json]      显示下一步该执行的命令
   sillyspec check [--json]     检查文档完整性和路径
+  sillyspec setup [--list]     安装推荐 MCP 工具（Context7、grep.app、浏览器）
   sillyspec init               初始化 SillySpec（安装到各工具）
     [--tool <name>]            只安装指定工具
     [--workspace]              工作区模式
@@ -495,6 +496,8 @@ SillySpec CLI — 流程状态机
   sillyspec status --json
   sillyspec next --json
   sillyspec check
+  sillyspec setup
+  sillyspec setup --list
 `);
 }
 
@@ -529,6 +532,8 @@ async function main() {
       i++;
     } else if (args[i] === '--workspace' || args[i] === '-w') {
       workspace = true;
+    } else if (args[i] === '--list' || args[i] === '-l') {
+      filteredArgs.push('--list');
     } else {
       filteredArgs.push(args[i]);
     }
@@ -554,6 +559,10 @@ async function main() {
       break;
     case 'init':
       await cmdInit(dir, { tool, workspace });
+      break;
+    case 'setup':
+      const setupList = filteredArgs.includes('--list') || filteredArgs.includes('-l');
+      await (await import('./setup.js')).cmdSetup(dir, { json, list: setupList });
       break;
     default:
       console.error(`❌ 未知命令: ${command}`);

@@ -117,7 +117,7 @@ git add .sillyspec/changes/<变更名>/MASTER.md
 3. 探索顺序按需：目的 → 约束 → 边界 → 成功标准
 4. **大多数 brainstorm 2-3 轮就应进入方案讨论**
 
-探索阶段可使用 grep.app、Context7、web search 调研技术方案和 API 用法，不要凭记忆写方案。
+探索阶段可使用项目已配置的 MCP 工具或 web search 调研技术方案和 API 用法，不要凭记忆写方案。检测可用工具：`cat .claude/mcp.json .cursor/mcp.json 2>/dev/null`
 
 ### Step 4: 提出 2-3 种方案
 

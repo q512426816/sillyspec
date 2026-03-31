@@ -344,6 +344,9 @@ function showSummary(version, tools, isWorkspace, count) {
   console.log('');
   console.log(chalk.gray('  重启你的 AI 工具以使 slash commands 生效。'));
   console.log('');
+  console.log(chalk.dim('  💡 推荐安装 MCP 工具增强 AI 能力：sillyspec setup'));
+  console.log(chalk.dim('     Context7 — 查最新文档 | grep.app — 搜开源实现 | Chrome DevTools — 浏览器自动化'));
+  console.log('');
 }
 
 // ── 读取版本号 ──
