@@ -56,6 +56,15 @@ const DB_MCP_TOOLS = [
     envTemplate: { MYSQL_HOST: 'localhost', MYSQL_PORT: '3306', MYSQL_USER: 'root', MYSQL_PASSWORD: '', MYSQL_DATABASE: '' },
     url: 'https://github.com/modelcontextprotocol/servers',
   },
+  {
+    id: 'redis',
+    name: 'Redis',
+    description: '访问 Redis 数据库，查看缓存和键值数据',
+    command: 'npx',
+    args: ['-y', '@modelcontextprotocol/server-redis'],
+    envTemplate: { REDIS_URL: 'redis://localhost:6379' },
+    url: 'https://github.com/modelcontextprotocol/servers/tree/main/src/redis',
+  },
 ];
 
 // ── 全局工具定义 ──
