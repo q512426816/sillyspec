@@ -52,6 +52,8 @@ cat .sillyspec/knowledge/INDEX.md 2>/dev/null
 ```
 根据当前 task 描述中的关键词（技术名词、模块名、文件路径等）匹配 INDEX.md 条目。命中时读取对应 knowledge 文件，将内容注入子代理 prompt 的「相关知识」段。未命中则跳过，不注入空段。
 
+子代理遇到不熟悉的库或 API 时，优先使用 Context7 查最新文档，不要凭记忆猜测用法。
+
 如果 `$ARGUMENTS` 指定范围（如 `wave-1`、`task-3`），只执行对应部分。
 
 ---
