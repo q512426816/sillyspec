@@ -363,160 +363,150 @@ export function getVersion() {
 // ── 主命令 ──
 
 export async function cmdInit(projectDir, options = {}) {
-  const { tool, workspace } = options;
+  const { tool, workspace, interactive } = options;
   const version = getVersion();
 
-  // CLI 参数模式（非交互）
+  // ── 交互式模式（--interactive 或 -i）──
+  if (interactive && isTTY()) {
+    // 欢迎画面
+    console.log('');
+    console.log(chalk.cyan('🤪 SillySpec v' + version + ' — 规范驱动开发'));
+    console.log(chalk.cyan('  ===================================='));
+    console.log('');
+    console.log('  让 AI 像高级工程师一样工作：');
+    console.log('  先思考、先规划、先验证，再写代码。');
+    console.log('');
+    console.log(chalk.gray('  支持的 AI 工具：'));
+    console.log(chalk.gray('    Claude Code · Claude Skills · Cursor · Codex CLI · OpenCode · OpenClaw'));
+    console.log('');
+
+    // 工具多选
+    const detected = detectTools(projectDir);
+
+    const toolChoices = VALID_TOOLS.map(v => ({
+      name: `${TOOL_LABELS[v]}${v === 'claude' ? ' (推荐)' : ''}`,
+      value: v,
+      checked: detected.includes(v),
+    }));
+
+    const selectedTools = await checkbox({
+      message: '选择要安装的 AI 工具（空格选择，回车确认）',
+      choices: toolChoices,
+      validate: (answer) => answer.length > 0 || '至少选择一个工具',
+    });
+
+    // 工作区模式
+    const isWorkspace = await select({
+      message: '选择项目模式',
+      choices: [
+        { name: '单项目模式', value: 'false' },
+        { name: '多项目工作区', value: 'true' },
+      ],
+    }) === 'true';
+
+    // 工作区子项目引导
+    let subprojects = [];
+    if (isWorkspace) {
+      console.log('');
+      console.log(chalk.yellow('📋 工作区模式 — 添加子项目'));
+      console.log(chalk.dim('   子项目是工作区中的独立项目目录（如 frontend/、backend/）'));
+      console.log('');
+
+      const addMore = await confirm({ message: '现在添加子项目？', default: true });
+      if (addMore) {
+        let suggestions = [];
+        try {
+          const entries = readdirSync(projectDir, { withFileTypes: true });
+          suggestions = entries
+            .filter(e => e.isDirectory() && !e.name.startsWith('.') && e.name !== 'node_modules')
+            .map(e => e.name)
+            .sort();
+        } catch {}
+
+        if (suggestions.length > 0) {
+          console.log('');
+          console.log(chalk.dim(`   检测到以下目录：${suggestions.join(', ')}`));
+          console.log('');
+        }
+
+        let adding = true;
+        while (adding) {
+          const name = await input({
+            message: '子项目名称（如 frontend，留空结束）',
+            default: suggestions.find(s => !subprojects.find(p => p.name === s)) || '',
+          });
+
+          if (!name.trim()) {
+            adding = false;
+            break;
+          }
+
+          const pathHint = suggestions.includes(name.trim()) ? `./${name.trim()}` : '';
+          const subPath = await input({
+            message: '子项目目录路径',
+            default: pathHint,
+          });
+
+          const role = await input({
+            message: '子项目描述（如 前端 - Vue3 + TypeScript）',
+            default: '',
+          });
+
+          let repo = '';
+          try {
+            const { execSync } = await import('child_process');
+            const absPath = resolve(projectDir, subPath.trim() || `./${name.trim()}`);
+            repo = execSync('git remote get-url origin', { cwd: absPath, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+          } catch {}
+
+          subprojects.push({ name: name.trim(), path: subPath.trim() || `./${name.trim()}`, role: role.trim(), repo });
+
+          const idx = suggestions.indexOf(name.trim());
+          if (idx >= 0) suggestions.splice(idx, 1);
+
+          const again = await confirm({ message: '继续添加子项目？', default: subprojects.length < suggestions.length });
+          if (!again) adding = false;
+        }
+      }
+    }
+
+    console.log('');
+    const count = await doInstall(projectDir, selectedTools, isWorkspace, subprojects);
+    showSummary(version, selectedTools, isWorkspace, count);
+    return;
+  }
+
+  // ── 默认快速模式：检测 → 安装 → 结束 ──
+
+  let tools = [];
   if (tool) {
     if (!VALID_TOOLS.includes(tool)) {
       console.error(`❌ 未知工具: ${tool}`);
       console.error(`支持的工具: ${VALID_TOOLS.join(', ')}`);
       process.exit(1);
     }
-
-    console.log(chalk.cyan(`🤪 SillySpec v${version}`));
-    console.log(chalk.cyan(`📦 安装工具: ${tool}`));
-    console.log('');
-
-    const count = await doInstall(projectDir, [tool], workspace);
-    showSummary(version, [tool], workspace, count);
-    return;
+    tools = [tool];
+  } else {
+    tools = detectTools(projectDir);
   }
 
-  // 非交互模式
-  if (!isTTY()) {
-    const tools = detectTools(projectDir);
-    console.log(chalk.cyan(`🤪 SillySpec v${version} (非交互模式)`));
-    console.log(chalk.cyan(`📦 自动检测工具: ${tools.join(', ')}`));
-    console.log('');
-    const count = await doInstall(projectDir, tools, workspace);
-    showSummary(version, tools, workspace, count);
-    return;
+  const count = await doInstall(projectDir, tools, !!workspace);
+
+  console.log('');
+  console.log(chalk.green(`  ✅ SillySpec v${version} 安装完成！`));
+  console.log('');
+  console.log(`  📄 ${count} 个命令已就绪`);
+  console.log('  📁 .sillyspec/ — 项目规范目录');
+  console.log('');
+  console.log('  下一步：');
+  console.log(`    全新项目 → ${chalk.bold('/sillyspec:init')}`);
+  console.log(`    已有代码 → ${chalk.bold('/sillyspec:scan')}`);
+  console.log(`    自由探索 → ${chalk.bold('/sillyspec:explore "你的想法"')}`);
+  if (workspace) {
+    console.log(`    管理子项目 → ${chalk.bold('/sillyspec:workspace add')}`);
   }
-
-  // ── 交互式引导 ──
-
-  // 欢迎画面
   console.log('');
-  console.log(chalk.cyan('🤪 SillySpec v' + version + ' — 规范驱动开发'));
-  console.log(chalk.cyan('  ===================================='));
+  console.log(chalk.dim('  💡 增强能力：sillyspec setup（安装 MCP 工具）'));
+  console.log(chalk.dim('  💡 完整配置：sillyspec init --interactive'));
   console.log('');
-  console.log('  让 AI 像高级工程师一样工作：');
-  console.log('  先思考、先规划、先验证，再写代码。');
-  console.log('');
-  console.log(chalk.gray('  支持的 AI 工具：'));
-  console.log(chalk.gray('    Claude Code · Claude Skills · Cursor · Codex CLI · OpenCode · OpenClaw'));
-  console.log('');
-
-  await confirm({ message: '按回车开始设置...', default: true });
-
-  // 工具多选
-  const detected = detectTools(projectDir);
-
-  const toolChoices = VALID_TOOLS.map(v => ({
-    name: `${TOOL_LABELS[v]}${v === 'claude' ? ' (推荐)' : ''}`,
-    value: v,
-    checked: detected.includes(v),
-  }));
-
-  const selectedTools = await checkbox({
-    message: '选择要安装的 AI 工具',
-    choices: toolChoices,
-    validate: (answer) => answer.length > 0 || '至少选择一个工具',
-  });
-
-  // 工作区模式
-  const isWorkspace = await select({
-    message: '选择项目模式',
-    choices: [
-      { name: '单项目模式', value: 'false' },
-      { name: '多项目工作区', value: 'true' },
-    ],
-  }) === 'true';
-
-  // 工作区子项目引导
-  if (isWorkspace) {
-    console.log('');
-    console.log(chalk.yellow('📋 工作区模式 — 添加子项目'));
-    console.log(chalk.dim('   子项目是工作区中的独立项目目录（如 frontend/、backend/）'));
-    console.log('');
-
-    const addMore = await confirm({ message: '现在添加子项目？', default: true });
-    if (addMore) {
-      // 读取当前目录下的子目录作为建议
-      let suggestions = [];
-      try {
-        const entries = readdirSync(projectDir, { withFileTypes: true });
-        suggestions = entries
-          .filter(e => e.isDirectory() && !e.name.startsWith('.') && e.name !== 'node_modules')
-          .map(e => e.name)
-          .sort();
-      } catch {}
-
-      if (suggestions.length > 0) {
-        console.log('');
-        console.log(chalk.dim(`   检测到以下目录：${suggestions.join(', ')}`));
-        console.log('');
-      }
-
-      const subprojects = [];
-      let adding = true;
-
-      while (adding) {
-        const name = await input({
-          message: '子项目名称（如 frontend）',
-          default: suggestions.find(s => !subprojects.find(p => p.name === s)) || '',
-        });
-
-        if (!name.trim()) {
-          adding = false;
-          break;
-        }
-
-        const pathHint = suggestions.includes(name.trim()) ? `./${name.trim()}` : '';
-        const subPath = await input({
-          message: `子项目目录路径`,
-          default: pathHint,
-        });
-
-        const role = await input({
-          message: '子项目描述（如 前端 - Vue3 + TypeScript）',
-          default: '',
-        });
-
-        // 检测 git 远程地址
-        let repo = '';
-        try {
-          const { execSync } = require('child_process');
-          const absPath = resolve(projectDir, subPath.trim() || `./${name.trim()}`);
-          repo = execSync('git remote get-url origin', { cwd: absPath, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
-        } catch {}
-
-        subprojects.push({
-          name: name.trim(),
-          path: subPath.trim() || `./${name.trim()}`,
-          role: role.trim(),
-          repo,
-        });
-
-        // 从建议中移除已添加的
-        const idx = suggestions.indexOf(name.trim());
-        if (idx >= 0) suggestions.splice(idx, 1);
-
-        const again = await confirm({ message: '继续添加子项目？', default: subprojects.length < suggestions.length });
-        if (!again) adding = false;
-      }
-
-      // 保存子项目到临时变量，安装后写入 config.yaml
-      // 存到全局变量让 doInstall 后使用
-      global.__sillyspec_subprojects = subprojects;
-    }
-  }
-
-  // 安装
-  console.log('');
-  const count = await doInstall(projectDir, selectedTools, isWorkspace, global.__sillyspec_subprojects || []);
-
-  // 总结
-  showSummary(version, selectedTools, isWorkspace, count);
 }

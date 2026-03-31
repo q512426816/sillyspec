@@ -482,9 +482,10 @@ SillySpec CLI — 流程状态机
   sillyspec next [--json]      显示下一步该执行的命令
   sillyspec check [--json]     检查文档完整性和路径
   sillyspec setup [--list]     安装推荐 MCP 工具（Context7、grep.app、浏览器）
-  sillyspec init               初始化 SillySpec（安装到各工具）
+  sillyspec init               初始化 SillySpec（自动检测工具，零交互）
     [--tool <name>]            只安装指定工具
     [--workspace]              工作区模式
+    [--interactive]            交互式引导（选择工具、配置工作区）
     [--dir <path>]             指定目录
 
 选项:
@@ -519,6 +520,7 @@ async function main() {
   let targetDir = process.cwd();
   let tool = null;
   let workspace = false;
+  let interactive = false;
   const filteredArgs = [];
   
   for (let i = 0; i < args.length; i++) {
@@ -532,6 +534,8 @@ async function main() {
       i++;
     } else if (args[i] === '--workspace' || args[i] === '-w') {
       workspace = true;
+    } else if (args[i] === '--interactive' || args[i] === '-i') {
+      interactive = true;
     } else if (args[i] === '--list' || args[i] === '-l') {
       filteredArgs.push('--list');
     } else {
@@ -558,7 +562,7 @@ async function main() {
       cmdCheck(dir, { json });
       break;
     case 'init':
-      await cmdInit(dir, { tool, workspace });
+      await cmdInit(dir, { tool, workspace, interactive });
       break;
     case 'setup':
       const setupList = filteredArgs.includes('--list') || filteredArgs.includes('-l');
