@@ -3,7 +3,7 @@ import { join, dirname } from 'path';
 import { execSync } from 'child_process';
 import chalk from 'chalk';
 import ora from 'ora';
-import { checkbox, confirm } from '@inquirer/prompts';
+import { checkbox, confirm, input, select } from '@inquirer/prompts';
 
 // ── MCP 工具定义 ──
 
@@ -23,6 +23,38 @@ const MCP_TOOLS = [
     command: 'npx',
     args: ['chrome-devtools-mcp@latest'],
     url: 'https://github.com/ChromeDevTools/chrome-devtools-mcp',
+  },
+];
+
+// ── 数据库 MCP 定义（需要连接信息）──
+
+const DB_MCP_TOOLS = [
+  {
+    id: 'postgres',
+    name: 'PostgreSQL',
+    description: '只读访问 PostgreSQL 数据库',
+    command: 'npx',
+    args: ['-y', '@modelcontextprotocol/server-postgres'],
+    envTemplate: { POSTGRES_CONNECTION_STRING: 'postgresql://user:password@localhost:5432/dbname' },
+    url: 'https://github.com/modelcontextprotocol/servers/tree/main/src/postgres',
+  },
+  {
+    id: 'sqlite',
+    name: 'SQLite',
+    description: '访问 SQLite 数据库文件',
+    command: 'npx',
+    args: ['-y', '@modelcontextprotocol/server-sqlite'],
+    envTemplate: { SQLITE_DB_PATH: './data.db' },
+    url: 'https://github.com/modelcontextprotocol/servers/tree/main/src/sqlite',
+  },
+  {
+    id: 'mysql',
+    name: 'MySQL / MariaDB',
+    description: '访问 MySQL / MariaDB 数据库',
+    command: 'npx',
+    args: ['-y', '@nicobailon/mysql-mcp-server'],
+    envTemplate: { MYSQL_HOST: 'localhost', MYSQL_PORT: '3306', MYSQL_USER: 'root', MYSQL_PASSWORD: '', MYSQL_DATABASE: '' },
+    url: 'https://github.com/modelcontextprotocol/servers',
   },
 ];
 
@@ -66,10 +98,12 @@ function writeMcpConfig(dir, configPath, config) {
 
 function installMcp(config, mcpTool) {
   if (!config.mcpServers) config.mcpServers = {};
-  config.mcpServers[mcpTool.id] = {
+  const entry = {
     command: mcpTool.command,
     args: mcpTool.args,
   };
+  if (mcpTool.env) entry.env = mcpTool.env;
+  config.mcpServers[mcpTool.id] = entry;
   return config;
 }
 
@@ -98,6 +132,9 @@ export async function cmdSetup(dir, options = {}) {
       for (const mcp of MCP_TOOLS) {
         mcpStatus[mcp.id] = hasMcpInstalled(config, mcp.id);
       }
+      for (const db of DB_MCP_TOOLS) {
+        mcpStatus[db.id] = hasMcpInstalled(config, db.id);
+      }
       results[tool] = { configPath: path, mcp: mcpStatus };
     }
 
@@ -122,6 +159,10 @@ export async function cmdSetup(dir, options = {}) {
           for (const mcp of MCP_TOOLS) {
             const status = data.mcp[mcp.id] ? chalk.green('✅') : chalk.gray('⬜');
             console.log(`  ${status} ${mcp.name} — ${mcp.description}`);
+          }
+          for (const db of DB_MCP_TOOLS) {
+            const status = data.mcp[db.id] ? chalk.green('✅') : chalk.gray('⬜');
+            console.log(`  ${status} ${db.name} — ${db.description}`);
           }
         } else {
           console.log(chalk.bold(`🛠️  ${tool}`));
@@ -193,9 +234,27 @@ export async function cmdSetup(dir, options = {}) {
     checked: false,
   }));
 
+  // ── 数据库 MCP 选择 ──
+
+  const dbInstalled = new Set();
+  for (const { path } of availableTools) {
+    const config = readMcpConfig(dir, path);
+    for (const db of DB_MCP_TOOLS) {
+      if (hasMcpInstalled(config, db.id)) dbInstalled.add(db.id);
+    }
+  }
+
+  const dbChoices = DB_MCP_TOOLS.filter(d => !dbInstalled.has(d.id)).map(d => ({
+    name: `${d.name} — ${d.description}（需要连接信息）`,
+    value: `db:${d.id}`,
+    checked: false,
+  }));
+
   const allChoices = [
-    ...mcpChoices.length > 0 ? [{ name: chalk.bold('── MCP 工具（AI 工具配置）──'), value: '_mcp_header', disabled: true }] : [],
+    ...mcpChoices.length > 0 ? [{ name: chalk.bold('── MCP 工具（AI 能力增强）──'), value: '_mcp_header', disabled: true }] : [],
     ...mcpChoices,
+    ...dbChoices.length > 0 ? [{ name: chalk.bold('── 数据库 MCP ──'), value: '_db_header', disabled: true }] : [],
+    ...dbChoices,
     ...globalChoices.length > 0 ? [{ name: chalk.bold('── 全局工具 ──'), value: '_global_header', disabled: true }] : [],
     ...globalChoices,
   ];
@@ -216,11 +275,37 @@ export async function cmdSetup(dir, options = {}) {
   }
 
   const selectedMcp = MCP_TOOLS.filter(m => selected.includes(`mcp:${m.id}`));
+  const selectedDb = DB_MCP_TOOLS.filter(d => selected.includes(`db:${d.id}`));
   const selectedGlobal = GLOBAL_TOOLS.filter(t => selected.includes(`global:${t.id}`));
+
+  // ── 收集数据库连接信息 ──
+
+  if (selectedDb.length > 0) {
+    console.log('');
+    console.log(chalk.yellow('📡 数据库连接配置'));
+    console.log('');
+
+    for (const db of selectedDb) {
+      console.log(chalk.cyan(`  ${db.name}：`));
+      const dbWithEnv = { ...db, env: {} };
+      for (const [key, placeholder] of Object.entries(db.envTemplate)) {
+        const value = await input({
+          message: `    ${key}`,
+          default: placeholder,
+        });
+        dbWithEnv.env[key] = value;
+      }
+      // 用带 env 的版本替换
+      const idx = selectedDb.indexOf(db);
+      selectedDb[idx] = dbWithEnv;
+    }
+  }
 
   // ── 安装 MCP 工具 ──
 
-  if (selectedMcp.length > 0) {
+  const allMcp = [...selectedMcp, ...selectedDb];
+
+  if (allMcp.length > 0) {
     const toolChoices = availableTools.map(t => ({
       name: t.tool,
       value: t.key,
@@ -238,11 +323,11 @@ export async function cmdSetup(dir, options = {}) {
     for (const { tool, path } of targets) {
       const spinner = ora(`安装 MCP 到 ${tool}...`).start();
       let config = readMcpConfig(dir, path) || { mcpServers: {} };
-      for (const mcp of selectedMcp) {
+      for (const mcp of allMcp) {
         config = installMcp(config, mcp);
       }
       writeMcpConfig(dir, path, config);
-      spinner.succeed(`${tool} MCP 完成 (${selectedMcp.length} 个工具)`);
+      spinner.succeed(`${tool} MCP 完成 (${allMcp.length} 个工具)`);
     }
   }
 
@@ -271,6 +356,10 @@ export async function cmdSetup(dir, options = {}) {
   for (const mcp of selectedMcp) {
     console.log(`  🔌 ${chalk.cyan(mcp.name)} — ${mcp.description}`);
     console.log(chalk.dim(`     ${mcp.url}`));
+  }
+  for (const db of selectedDb) {
+    console.log(`  🗄️  ${chalk.cyan(db.name)} — ${db.description}`);
+    console.log(chalk.dim(`     ${db.url}`));
   }
   for (const g of selectedGlobal) {
     console.log(`  🛠️  ${chalk.cyan(g.name)} — ${g.description}`);
