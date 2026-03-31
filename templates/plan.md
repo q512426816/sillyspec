@@ -9,11 +9,11 @@
 ## 状态检查（必须先执行）
 
 ```bash
-sillyspec status --json
+cat .sillyspec/STATE.md 2>/dev/null
 ```
 
-- `phase: "plan"` → ✅ 继续
-- 其他 phase → 提示 `sillyspec next`
+- phase 为 `plan` 或 STATE.md 中下一步为 `/sillyspec:plan` → ✅ 继续
+- 其他 phase → 提示用户当前阶段
 
 ---
 
@@ -126,8 +126,8 @@ cat .claude/mcp.json .cursor/mcp.json 2>/dev/null | grep -i "browser\|chrome\|de
 
 ### 7. 完成
 
-```bash
-sillyspec status --json && sillyspec next
-```
-
 更新 `.sillyspec/STATE.md`：阶段改为 `plan ✅`，下一步 `/sillyspec:execute`。
+
+```bash
+cat .sillyspec/STATE.md 2>/dev/null
+```

@@ -15,10 +15,10 @@
 ## 状态检查（必须先执行）
 
 ```bash
-sillyspec status --json
+cat .sillyspec/STATE.md 2>/dev/null
 ```
 
-- `phase: "brainstorm"` → ✅ 继续
+- phase 为 `brainstorm` 或无 STATE.md → ✅ 继续
 - 其他 phase → 提示用户当前阶段，建议先完成
 
 ## 用户想法
@@ -166,10 +166,6 @@ git add .sillyspec/changes/<变更名>/MASTER.md
 发现问题 → 修改文档，重新自审。不确定的标注「⚠️ 自审存疑」让用户判断。
 
 ### Step 8: 用户确认（⛔ 门禁）
-
-```bash
-sillyspec status --json
-```
 
 展示设计方案，AskUserQuestion：确认 / 需要修改 / 推翻重来。
 

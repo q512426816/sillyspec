@@ -11,11 +11,11 @@
 ## 状态检查（必须先执行）
 
 ```bash
-sillyspec status --json
+cat .sillyspec/STATE.md 2>/dev/null
 ```
 
-- `phase: "propose"` → ✅ 继续
-- 其他 phase → 提示 `sillyspec next`
+- phase 为 `propose` 或 STATE.md 中下一步为 `/sillyspec:propose` → ✅ 继续
+- 其他 phase → 提示用户当前阶段
 
 ## 变更名称
 $ARGUMENTS
@@ -69,9 +69,5 @@ bash scripts/validate-proposal.sh .sillyspec/changes/$ARGUMENTS 2>/dev/null
 ```
 
 ### 6. 完成
-
-```bash
-sillyspec status --json && sillyspec next
-```
 
 更新 `.sillyspec/STATE.md`：阶段改为 `propose ✅`，下一步 `/sillyspec:plan`。

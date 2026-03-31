@@ -11,10 +11,11 @@
 ## 流程控制（必须先执行）
 
 ```bash
-sillyspec status --json
+cat .sillyspec/STATE.md 2>/dev/null
 ```
 
-非 `init` phase → 以 CLI 返回为准决定下一步。
+有 STATE.md 且 phase 为 `scan` 或未记录 → 继续。
+其他 phase → STATE.md 中记录的下一步命令为准。
 
 ---
 
@@ -135,9 +136,20 @@ if [ ! -f ".sillyspec/knowledge/uncategorized.md" ]; then
 EOF
 fi
 
-# 验证 CLI
-sillyspec status --json   # 应返回 phase: "brainstorm"
-sillyspec next            # 推荐给用户
+# 更新状态
+cat > .sillyspec/STATE.md << 'EOF'
+# 项目状态
+
+## 当前阶段
+- 阶段：scan ✅
+- 下一步：/sillyspec:brainstorm
+
+## 关键决策
+- （扫描中发现的技术决策）
+
+## 历史记录
+- $(date '+%Y-%m-%d %H:%M:%S') scan 完成
+EOF
 
 # 清理
 rm -f .sillyspec/codebase/_env-detect.md
