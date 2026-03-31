@@ -120,7 +120,7 @@ done
 
 ## 数据操作
 {主代理根据 MCP 检测结果动态注入：如检测到数据库 MCP，提示可用}
-⛔ 数据写入操作（INSERT/UPDATE/DELETE/DROP，新建表除外）必须暂停并报告给用户确认，不得自动执行。
+⛔ 任何改变现有数据的操作（DML: INSERT/UPDATE/DELETE/DML、DDL: ALTER/DROP/TRUNCATE/RENAME，以及所有非 SELECT 的数据库操作）必须暂停并报告给用户确认，不得自动执行。新建表不受此限制。
 
 ## 铁律（必须遵守）
 1. **先读后写：** 先 cat 要修改的文件和参考文件，确认风格和方法签名后再写
