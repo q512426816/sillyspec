@@ -98,12 +98,27 @@ cat .sillyspec/REQUIREMENTS.md 2>/dev/null
 
 **直接覆盖** `.sillyspec/changes/<变更名>/tasks.md`。不再生成单独的 plan.md 文件。
 
-### 5. 自检门控
+### 5. E2E 测试规划
+
+识别 design.md 中是否有 UI 交互功能（页面跳转、表单提交、按钮操作等），如有则：
+
+**检测测试框架：**
+```bash
+cat package.json 2>/dev/null | grep -E "playwright|cypress|vitest" ; ls node_modules/playwright node_modules/cypress 2>/dev/null
+```
+
+- **已有框架** → 在 tasks.md 中，将 E2E 测试任务排在对应功能任务之后（同波次内，编码完成后编写）
+- **无框架** → 提示用户选择安装（Playwright / Cypress），用户确认后安装，然后在 tasks.md 中添加 E2E 测试任务
+
+纯后端/无 UI 的变更跳过此步骤。
+
+### 6. 自检门控
 
 - [ ] 每个 task 有具体文件路径？
 - [ ] 标注了 Wave 和依赖关系？
+- [ ] 涉及 UI 的任务是否有对应的 E2E 测试任务？
 
-### 6. 完成
+### 7. 完成
 
 ```bash
 sillyspec status --json && sillyspec next

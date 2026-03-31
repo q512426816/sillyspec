@@ -65,6 +65,41 @@ cat "$CHANGE_DIR"/{design,tasks}.md 2>/dev/null
 pnpm test 2>/dev/null || npm test 2>/dev/null || pytest 2>/dev/null || go test ./... 2>/dev/null
 ```
 
+### 4b. E2E 测试
+
+检测项目中是否有 E2E 测试：
+```bash
+ls tests/e2e/ e2e/ cypress/e2e/ 2>/dev/null | head -5
+cat .sillyspec/local.yaml 2>/dev/null | grep -A1 "e2e-framework"
+```
+
+**无 E2E 测试** → 跳过此步骤。
+
+**有 E2E 测试** → 先确认修复策略（AskUserQuestion）：
+1. 自动修复，同一用例最多 5 次（超过停止，提示人工介入）
+2. 一直修复直到全绿
+3. 只报告，不自动修复
+
+**执行测试：**
+```bash
+npx playwright test 2>/dev/null || npx cypress run 2>/dev/null
+```
+
+**自动修复循环（选了策略 1 或 2 时）：**
+读取 `.sillyspec/local.yaml` 中 `e2e-results` 的 `fixAttempts`，对每个失败测试：
+- fixAttempts 未达上限 → 调 `/sillyspec:quick "修复 E2E 失败：<失败描述>"` → 重跑该测试 → 更新 local.yaml
+- fixAttempts 达到上限 → 停止，报告失败详情，提示人工介入
+
+**更新测试结果到 `.sillyspec/local.yaml`：**
+```yaml
+e2e-results:
+  - name: login.spec.ts
+    status: passed
+    duration: "2.3s"
+    time: "2026-03-31T12:30:00+08:00"
+    fixAttempts: 0
+```
+
 ### 5. 代码质量扫描
 
 ```bash
@@ -82,6 +117,7 @@ grep -r "TODO\|FIXME\|HACK\|XXX" src/ lib/ app/ --include="*.ts" --include="*.ts
 ## 测试结果：passed N, failed N
 ## 技术债务标记
 ## 代码审查：🔴 N / 🟡 N / 🔵 N
+## E2E 测试：passed N / failed N / fixAttempts 详情
 ## 结论：✅ PASS / ⚠️ PASS WITH NOTES / ❌ FAIL
 ```
 
