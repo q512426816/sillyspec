@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
+import { execSync } from 'child_process';
 import chalk from 'chalk';
 import ora from 'ora';
 import { checkbox, confirm } from '@inquirer/prompts';
@@ -16,20 +17,25 @@ const MCP_TOOLS = [
     url: 'https://github.com/upstash/context7-mcp',
   },
   {
-    id: 'grep-app',
-    name: 'grep.app',
-    description: '搜索开源代码实现和参考',
-    command: 'npx',
-    args: ['-y', '@nicobailon/grep-app-mcp'],
-    url: 'https://grep.app',
-  },
-  {
     id: 'chrome-devtools',
     name: 'Chrome DevTools MCP',
     description: '浏览器自动化，支持 E2E 测试（需 Chrome 已运行）',
     command: 'npx',
-    args: ['-y', '@nicholasxjy/chrome-devtools-mcp'],
+    args: ['chrome-devtools-mcp@latest'],
     url: 'https://github.com/ChromeDevTools/chrome-devtools-mcp',
+  },
+];
+
+// ── 全局工具定义 ──
+
+const GLOBAL_TOOLS = [
+  {
+    id: 'playwright',
+    name: 'Playwright',
+    description: 'E2E 测试框架，支持浏览器自动化测试',
+    checkCommand: 'npx playwright --version',
+    installCommand: 'npm install -g @playwright/test && npx playwright install chromium',
+    url: 'https://playwright.dev',
   },
 ];
 
@@ -81,26 +87,29 @@ export async function cmdSetup(dir, options = {}) {
     return existsSync(join(dir, path));
   });
 
-  if (availableTools.length === 0) {
-    if (json) {
-      console.log(JSON.stringify({ installed: [], message: '未检测到 AI 工具配置文件，请先运行 sillyspec init' }));
-    } else {
-      console.log(chalk.yellow('⚠️  未检测到 AI 工具配置文件（.claude/mcp.json 或 .cursor/mcp.json）'));
-      console.log(chalk.dim('   请先运行 sillyspec init 初始化项目'));
-    }
-    return;
-  }
-
-  // --list 模式：只查看状态
+  // --list 模式：只查看状态（不依赖 AI 工具配置）
   if (options.list) {
     const results = {};
+
+    // MCP 状态
     for (const { tool, path } of availableTools) {
       const config = readMcpConfig(dir, path);
-      const installed = {};
+      const mcpStatus = {};
       for (const mcp of MCP_TOOLS) {
-        installed[mcp.id] = hasMcpInstalled(config, mcp.id);
+        mcpStatus[mcp.id] = hasMcpInstalled(config, mcp.id);
       }
-      results[tool] = { configPath: path, mcp: installed };
+      results[tool] = { configPath: path, mcp: mcpStatus };
+    }
+
+    // 全局工具状态
+    results['全局工具'] = {};
+    for (const g of GLOBAL_TOOLS) {
+      try {
+        execSync(g.checkCommand, { stdio: 'pipe', encoding: 'utf8' });
+        results['全局工具'][g.id] = true;
+      } catch {
+        results['全局工具'][g.id] = false;
+      }
     }
 
     if (json) {
@@ -108,10 +117,18 @@ export async function cmdSetup(dir, options = {}) {
     } else {
       console.log('');
       for (const [tool, data] of Object.entries(results)) {
-        console.log(chalk.bold(`📋 ${tool} (${data.configPath})`));
-        for (const mcp of MCP_TOOLS) {
-          const status = data.mcp[mcp.id] ? chalk.green('✅') : chalk.gray('⬜');
-          console.log(`  ${status} ${mcp.name} — ${mcp.description}`);
+        if (data.mcp) {
+          console.log(chalk.bold(`📋 ${tool} (${data.configPath})`));
+          for (const mcp of MCP_TOOLS) {
+            const status = data.mcp[mcp.id] ? chalk.green('✅') : chalk.gray('⬜');
+            console.log(`  ${status} ${mcp.name} — ${mcp.description}`);
+          }
+        } else {
+          console.log(chalk.bold(`🛠️  ${tool}`));
+          for (const g of GLOBAL_TOOLS) {
+            const status = data[g.id] ? chalk.green('✅') : chalk.gray('⬜');
+            console.log(`  ${status} ${g.name} — ${g.description}`);
+          }
         }
         console.log('');
       }
@@ -119,7 +136,7 @@ export async function cmdSetup(dir, options = {}) {
     return;
   }
 
-  // 非交互模式
+  // 非交互模式（或没有 AI 工具但有全局工具要装）
   if (!process.stdin.isTTY) {
     if (json) {
       console.log(JSON.stringify({ message: '交互模式需要 TTY，请运行 sillyspec setup' }));
@@ -132,13 +149,20 @@ export async function cmdSetup(dir, options = {}) {
   // ── 交互式安装 ──
 
   console.log('');
-  console.log(chalk.cyan('🔧 SillySpec Setup — 安装推荐 MCP 工具'));
+  console.log(chalk.cyan('🔧 SillySpec Setup — 增强工具安装'));
   console.log('');
-  console.log('  MCP 工具让 AI 能力增强：查文档、搜代码、控制浏览器。');
+
+  if (availableTools.length === 0) {
+    console.log(chalk.dim('  未检测到 AI 工具配置文件，MCP 工具将跳过。'));
+    console.log(chalk.dim('  请先运行 sillyspec init 初始化项目。'));
+    console.log('');
+  }
+
   console.log('  选择要安装的工具（已安装的会跳过）：');
   console.log('');
 
-  // 检测已安装状态（从所有配置文件合并）
+  // ── MCP 工具选择 ──
+
   const installedSet = new Set();
   for (const { path } of availableTools) {
     const config = readMcpConfig(dir, path);
@@ -147,20 +171,43 @@ export async function cmdSetup(dir, options = {}) {
     }
   }
 
-  const choices = MCP_TOOLS.filter(m => !installedSet.has(m.id)).map(m => ({
+  const mcpChoices = MCP_TOOLS.filter(m => !installedSet.has(m.id)).map(m => ({
     name: `${m.name} — ${m.description}`,
-    value: m.id,
+    value: `mcp:${m.id}`,
     checked: false,
   }));
 
-  if (choices.length === 0) {
-    console.log(chalk.green('  ✅ 所有推荐的 MCP 工具已安装！'));
+  // ── 全局工具选择 ──
+
+  const globalInstalled = new Set();
+  for (const tool of GLOBAL_TOOLS) {
+    try {
+      execSync(tool.checkCommand, { stdio: 'pipe', encoding: 'utf8' });
+      globalInstalled.add(tool.id);
+    } catch {}
+  }
+
+  const globalChoices = GLOBAL_TOOLS.filter(t => !globalInstalled.has(t.id)).map(t => ({
+    name: `${t.name} — ${t.description}（全局安装）`,
+    value: `global:${t.id}`,
+    checked: false,
+  }));
+
+  const allChoices = [
+    ...mcpChoices.length > 0 ? [{ name: chalk.bold('── MCP 工具（AI 工具配置）──'), value: '_mcp_header', disabled: true }] : [],
+    ...mcpChoices,
+    ...globalChoices.length > 0 ? [{ name: chalk.bold('── 全局工具 ──'), value: '_global_header', disabled: true }] : [],
+    ...globalChoices,
+  ];
+
+  if (allChoices.length === 0) {
+    console.log(chalk.green('  ✅ 所有推荐工具已安装！'));
     return;
   }
 
   const selected = await checkbox({
-    message: '选择要安装的 MCP 工具',
-    choices,
+    message: '选择要安装的工具',
+    choices: allChoices,
   });
 
   if (selected.length === 0) {
@@ -168,47 +215,70 @@ export async function cmdSetup(dir, options = {}) {
     return;
   }
 
-  const selectedTools = MCP_TOOLS.filter(m => selected.includes(m.id));
+  const selectedMcp = MCP_TOOLS.filter(m => selected.includes(`mcp:${m.id}`));
+  const selectedGlobal = GLOBAL_TOOLS.filter(t => selected.includes(`global:${t.id}`));
 
-  // 选择安装到哪些 AI 工具
-  const toolChoices = availableTools.map(t => ({
-    name: t.tool,
-    value: t.key,
-    checked: true,
-  }));
+  // ── 安装 MCP 工具 ──
 
-  const targetTools = await checkbox({
-    message: '安装到哪些 AI 工具？',
-    choices: toolChoices,
-  });
+  if (selectedMcp.length > 0) {
+    const toolChoices = availableTools.map(t => ({
+      name: t.tool,
+      value: t.key,
+      checked: true,
+    }));
 
-  const targets = availableTools.filter(t => targetTools.includes(t.key));
+    const targetTools = await checkbox({
+      message: 'MCP 工具安装到哪些 AI 工具？',
+      choices: toolChoices,
+    });
 
-  // 安装
-  console.log('');
-  for (const { tool, path } of targets) {
-    const spinner = ora(`安装到 ${tool}...`).start();
-    let config = readMcpConfig(dir, path) || { mcpServers: {} };
+    const targets = availableTools.filter(t => targetTools.includes(t.key));
 
-    for (const mcp of selectedTools) {
-      config = installMcp(config, mcp);
+    console.log('');
+    for (const { tool, path } of targets) {
+      const spinner = ora(`安装 MCP 到 ${tool}...`).start();
+      let config = readMcpConfig(dir, path) || { mcpServers: {} };
+      for (const mcp of selectedMcp) {
+        config = installMcp(config, mcp);
+      }
+      writeMcpConfig(dir, path, config);
+      spinner.succeed(`${tool} MCP 完成 (${selectedMcp.length} 个工具)`);
     }
-
-    writeMcpConfig(dir, path, config);
-    spinner.succeed(`${tool} 完成 (${selected.length} 个工具)`);
   }
 
-  // 总结
+  // ── 安装全局工具 ──
+
+  if (selectedGlobal.length > 0) {
+    console.log('');
+    for (const tool of selectedGlobal) {
+      const spinner = ora(`安装 ${tool.name}...`).start();
+      try {
+        execSync(tool.installCommand, { stdio: 'pipe', encoding: 'utf8', timeout: 120000 });
+        spinner.succeed(`${tool.name} 安装完成`);
+      } catch (err) {
+        spinner.fail(`${tool.name} 安装失败: ${err.message}`);
+      }
+    }
+  }
+
+  // ── 总结 ──
+
   console.log('');
   console.log(chalk.green('  ═══════════════════════════════════════'));
-  console.log(chalk.green('  ✅ MCP 工具安装完成！'));
+  console.log(chalk.green('  ✅ 工具安装完成！'));
   console.log(chalk.green('  ═══════════════════════════════════════'));
   console.log('');
-  for (const mcp of selectedTools) {
+  for (const mcp of selectedMcp) {
     console.log(`  🔌 ${chalk.cyan(mcp.name)} — ${mcp.description}`);
     console.log(chalk.dim(`     ${mcp.url}`));
   }
+  for (const g of selectedGlobal) {
+    console.log(`  🛠️  ${chalk.cyan(g.name)} — ${g.description}`);
+    console.log(chalk.dim(`     ${g.url}`));
+  }
   console.log('');
-  console.log(chalk.dim('  重启你的 AI 工具以使 MCP 配置生效。'));
+  if (selectedMcp.length > 0) {
+    console.log(chalk.dim('  重启你的 AI 工具以使 MCP 配置生效。'));
+  }
   console.log('');
 }
