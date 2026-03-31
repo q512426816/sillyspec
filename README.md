@@ -86,7 +86,7 @@ claude --dangerously-skip-permissions
 | `/sillyspec:brainstorm` | 需求探索+规范生成：直接产出 design.md + tasks.md |
 | `/sillyspec:plan` | 实现计划：文件路径+任务描述+Wave 分组 |
 | `/sillyspec:execute` | TDD 执行：子代理并行+用户自选确认频率 |
-| `/sillyspec:verify` | 验证（可选）：对照规范+测试套件 |
+| `/sillyspec:verify` | 验证（可选）：对照规范+测试套件+代码审查+E2E |
 | `/sillyspec:archive` | 归档：规范沉淀到 knowledge/ |
 
 ### 辅助工具
@@ -97,10 +97,43 @@ claude --dangerously-skip-permissions
 | `/sillyspec:continue` | 自动下一步 |
 | `/sillyspec:explore` | 自由思考：画图、讨论、调研 |
 | `/sillyspec:quick` | 快速模式：跳过完整流程 |
-| `/sillyspec:handoff` | 保存状态，下班走人 |
+| `/sillyspec:commit` | 智能提交 |
+| `/sillyspec:state` | 查看当前工作状态 |
 | `/sillyspec:resume` | 恢复工作：支持大模块阶段进度 |
 | `/sillyspec:workspace` | 工作区管理：多项目子项目 |
 | `/sillyspec:export` | 导出成功方案为可复用模板 |
+
+## CLI 命令
+
+```bash
+sillyspec status [--json]    显示当前项目状态
+sillyspec next [--json]      显示下一步命令
+sillyspec check [--json]     检查文档完整性
+sillyspec setup              安装推荐 MCP 工具（交互式）
+sillyspec setup --list       查看已安装 MCP 状态
+sillyspec init               初始化（零交互，自动检测工具）
+sillyspec init --tool <name> 指定工具安装
+sillyspec init --workspace   工作区模式
+sillyspec init --interactive 交互式引导
+```
+
+## MCP 增强
+
+通过 `sillyspec setup` 安装 MCP 工具增强 AI 能力：
+
+- **Context7** — 查询最新库文档和 API 参考
+- **grep.app** — 搜索开源代码实现
+- **Chrome DevTools** — 浏览器自动化，支持 E2E 验证
+
+## E2E 测试流程
+
+```
+plan:  识别 UI 功能 → 检测测试能力（E2E框架 > 通用测试 > 浏览器MCP）→ 添加 E2E 任务
+execute: 编码完成后编写 E2E 测试（测试文件或 e2e-steps.md）
+verify: 按优先级执行 → 用户确认修复策略 → 自动修复循环（quick）→ 结果记录
+```
+
+自动修复支持跨会话：测试结果持久化在 `.sillyspec/local.yaml`，按变更名隔离。
 
 ## 可靠性保障
 
@@ -126,23 +159,13 @@ SillySpec 不仅仅是 prompt，还有硬校验：
 
 ```
 sillyspec/
-├── cli/                              # Node.js CLI（npx sillyspec）
-│   ├── bin/sillyspec.js              # 入口
-│   ├── src/
-│   │   ├── index.js                  # status/next/check/init 命令
-│   │   └── init.js                   # init 逻辑 + 工具适配器
-│   └── templates/                    # 内置命令模板
-├── commands/sillyspec/              # slash commands（Claude Code）
-├── templates/                       # 纯 prompt 模板（工具无关）
-├── adapters/
-│   └── adapters.sh                  # 多工具格式转换函数（bash 版，已废弃）
-├── scripts/
-│   ├── init.sh                      # init 入口（转发给 CLI）
-│   ├── validate-proposal.sh         # 校验 propose 输出
-│   ├── validate-plan.sh             # 校验 plan 输出
-│   ├── validate-scan.sh             # 校验 scan 输出
-│   └── validate-all.sh              # 综合校验
-├── 操作文档.md                       # 详细操作指南
+├── bin/sillyspec.js              # CLI 入口
+├── src/
+│   ├── index.js                  # status/next/check 命令
+│   ├── init.js                   # init 逻辑 + 工具适配器
+│   └── setup.js                  # MCP 工具安装
+├── templates/                    # 命令模板（19 个）
+├── SKILL.md                      # 技能描述
 └── README.md
 ```
 
