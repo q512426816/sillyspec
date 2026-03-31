@@ -26,7 +26,9 @@ $ARGUMENTS
    cat .sillyspec/knowledge/INDEX.md 2>/dev/null
    ```
    根据当前任务描述中的关键词匹配 INDEX.md 条目，命中时 `cat` 对应知识文件，将内容纳入后续开发考量。未命中则跳过。
+   **MCP 检测：** `cat .claude/mcp.json .cursor/mcp.json 2>/dev/null`，有 Context7 则用 MCP 查文档，无则用 web search。
 5. **先读后写：** 调用已有方法前 `cat` 源文件确认签名，`grep` 确认方法存在
+6. **数据操作安全：** 数据写入操作（INSERT/UPDATE/DELETE/DROP，新建表除外）必须暂停并报告给用户确认，不得自动执行
 6. **TDD 执行：**
    ```
    🔴 RED    → 先写测试，运行确认失败
