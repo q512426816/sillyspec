@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
-import { join } from 'path';
+import { join, dirname } from 'path';
 import chalk from 'chalk';
 import ora from 'ora';
 import { checkbox, confirm } from '@inquirer/prompts';
@@ -54,7 +54,7 @@ function readMcpConfig(dir, configPath) {
 
 function writeMcpConfig(dir, configPath, config) {
   const fullPath = join(dir, configPath);
-  mkdirSync(join(dir, configPath).replace(/[^/]+$/, ''), { recursive: true });
+  mkdirSync(dirname(fullPath), { recursive: true });
   writeFileSync(fullPath, JSON.stringify(config, null, 2) + '\n');
 }
 
