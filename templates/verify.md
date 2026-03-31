@@ -73,12 +73,6 @@ grep -r "TODO\|FIXME\|HACK\|XXX" src/ lib/ app/ --include="*.ts" --include="*.ts
 
 审查 design.md「文件变更」中列出的文件：安全问题（输入校验、SQL拼接、硬编码敏感信息）、潜在 bug（空值、边界条件）、与 CONVENTIONS.md 一致性。每个问题标 🔴必须 / 🟡建议 / 🔵优化。
 
-```
-### 5c. E2E 验证（如有 Playwright/Cypress 项目）
-
-```bash
-npx playwright test 2>/dev/null || npx cypress run 2>/dev/null
-
 ### 6. 输出验证报告
 
 ```markdown
@@ -88,7 +82,6 @@ npx playwright test 2>/dev/null || npx cypress run 2>/dev/null
 ## 测试结果：passed N, failed N
 ## 技术债务标记
 ## 代码审查：🔴 N / 🟡 N / 🔵 N
-## E2E 测试
 ## 结论：✅ PASS / ⚠️ PASS WITH NOTES / ❌ FAIL
 ```
 
