@@ -54,6 +54,18 @@ cat .sillyspec/knowledge/INDEX.md 2>/dev/null
 
 子代理遇到不熟悉的库或 API 时，优先使用已配置的 MCP 工具（Context7 等）或 web search 查最新文档，不要凭记忆猜测用法。
 
+**MCP 能力检测（主代理执行）：**
+```bash
+for cfg in .claude/mcp.json .cursor/mcp.json; do
+  [ -f "$cfg" ] && echo "=== $cfg ===" && cat "$cfg"
+done
+```
+根据检测结果，在子代理 prompt 的「文档查询指引」段动态注入：
+- 有 `context7` → `遇到不熟悉的库/API，使用 Context7 MCP（resolve-library-id → query-docs）查询最新文档`
+- 无 `context7` → `遇到不熟悉的库/API，使用 web search 查询最新官方文档`
+- 有数据库 MCP（postgres/sqlite/mysql/redis）→ 在「数据操作」段注入对应 MCP 可用
+- 检测为空 → 不注入额外提示
+
 如果 `$ARGUMENTS` 指定范围（如 `wave-1`、`task-3`），只执行对应部分。
 
 ---
@@ -102,6 +114,13 @@ cat .sillyspec/knowledge/INDEX.md 2>/dev/null
 
 ## 相关知识（如有）
 {主代理从 knowledge/ 中按任务关键词匹配到的内容，未命中则删除此段}
+
+## 文档查询指引
+{主代理根据 MCP 检测结果动态注入：有 Context7 提示用 MCP，无则提示用 web search}
+
+## 数据操作
+{主代理根据 MCP 检测结果动态注入：如检测到数据库 MCP，提示可用}
+⛔ 数据写入操作（INSERT/UPDATE/DELETE/DROP，新建表除外）必须暂停并报告给用户确认，不得自动执行。
 
 ## 铁律（必须遵守）
 1. **先读后写：** 先 cat 要修改的文件和参考文件，确认风格和方法签名后再写
