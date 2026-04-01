@@ -17,7 +17,7 @@ const SKILLS = [
     name: 'Playwright E2E 测试参考',
     description: 'E2E 测试编写最佳实践，AI 执行测试任务时自动读取',
     source: join(__dirname, '..', 'templates', 'skills', 'playwright-e2e'),
-    target: '.sillyspec/skills/playwright-e2e',
+    target: 'playwright-e2e',
   },
 ];
 
@@ -283,11 +283,20 @@ export async function cmdSetup(dir, options = {}) {
     ...globalChoices.length > 0 ? [{ name: chalk.bold('── 全局工具 ──'), value: '_global_header', disabled: true }] : [],
     ...globalChoices,
     ...[{ name: chalk.bold('── AI Skills（编写参考）──'), value: '_skill_header', disabled: true }],
-    ...SKILLS.filter(s => !existsSync(join(dir, s.target, 'SKILL.md'))).map(s => ({
-      name: `${s.name} — ${s.description}`,
-      value: `skill:${s.id}`,
-      checked: false,
-    })),
+    ...(() => {
+      const installed = new Set();
+      for (const { path } of availableTools) {
+        const skillDir = join(dir, dirname(path), 'skills');
+        for (const s of SKILLS) {
+          if (existsSync(join(skillDir, s.target, 'SKILL.md'))) installed.add(s.id);
+        }
+      }
+      return SKILLS.filter(s => !installed.has(s.id)).map(s => ({
+        name: `${s.name} — ${s.description}`,
+        value: `skill:${s.id}`,
+        checked: false,
+      }));
+    })(),
   ];
 
   if (allChoices.length === 0) {
@@ -382,16 +391,32 @@ export async function cmdSetup(dir, options = {}) {
   const selectedSkills = SKILLS.filter(s => selected.includes(`skill:${s.id}`));
 
   if (selectedSkills.length > 0) {
+    // 跟 MCP 一样，选择安装到哪些 AI 工具
+    const skillTargets = availableTools.map(t => ({
+      name: t.tool,
+      value: t.key,
+      checked: true,
+    }));
+
+    const selectedTools = await checkbox({
+      message: 'Skill 安装到哪些 AI 工具？',
+      choices: skillTargets,
+    });
+
+    const targets = availableTools.filter(t => selectedTools.includes(t.key));
+
     console.log('');
-    for (const skill of selectedSkills) {
-      const spinner = ora(`安装 ${skill.name}...`).start();
-      try {
-        const targetDir = join(dir, skill.target);
-        mkdirSync(targetDir, { recursive: true });
-        cpSync(skill.source, targetDir, { recursive: true });
-        spinner.succeed(`${skill.name} 安装完成 → ${skill.target}/SKILL.md`);
-      } catch (err) {
-        spinner.fail(`${skill.name} 安装失败: ${err.message}`);
+    for (const { tool, path } of targets) {
+      const spinner = ora(`安装 Skills 到 ${tool}...`).start();
+      for (const skill of selectedSkills) {
+        try {
+          const targetDir = join(dir, dirname(path), 'skills', skill.target);
+          mkdirSync(targetDir, { recursive: true });
+          cpSync(skill.source, targetDir, { recursive: true });
+          spinner.succeed(`${tool} → ${dirname(path)}/skills/${skill.target}/SKILL.md`);
+        } catch (err) {
+          spinner.fail(`${skill.name} 安装失败: ${err.message}`);
+        }
       }
     }
   }
