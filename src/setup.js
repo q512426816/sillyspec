@@ -387,6 +387,7 @@ export async function cmdSetup(dir, options = {}) {
       const spinner = ora(`安装 ${skill.name}...`).start();
       try {
         const targetDir = join(dir, skill.target);
+        mkdirSync(targetDir, { recursive: true });
         cpSync(skill.source, targetDir, { recursive: true });
         spinner.succeed(`${skill.name} 安装完成 → ${skill.target}/SKILL.md`);
       } catch (err) {
