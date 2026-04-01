@@ -1,9 +1,21 @@
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync, cpSync } from 'fs';
 import { join, dirname } from 'path';
 import { execSync } from 'child_process';
 import chalk from 'chalk';
 import ora from 'ora';
 import { checkbox, confirm, input, select } from '@inquirer/prompts';
+
+// ── Skill 定义 ──
+
+const SKILLS = [
+  {
+    id: 'playwright-e2e',
+    name: 'Playwright E2E 测试参考',
+    description: 'E2E 测试编写最佳实践，AI 执行测试任务时自动读取',
+    source: join(__dirname, '..', 'templates', 'skills', 'playwright-e2e'),
+    target: '.sillyspec/skills/playwright-e2e',
+  },
+];
 
 // ── MCP 工具定义 ──
 
@@ -266,6 +278,12 @@ export async function cmdSetup(dir, options = {}) {
     ...dbChoices,
     ...globalChoices.length > 0 ? [{ name: chalk.bold('── 全局工具 ──'), value: '_global_header', disabled: true }] : [],
     ...globalChoices,
+    ...[{ name: chalk.bold('── AI Skills（编写参考）──'), value: '_skill_header', disabled: true }],
+    ...SKILLS.filter(s => !existsSync(join(dir, s.target, 'SKILL.md'))).map(s => ({
+      name: `${s.name} — ${s.description}`,
+      value: `skill:${s.id}`,
+      checked: false,
+    })),
   ];
 
   if (allChoices.length === 0) {
@@ -355,6 +373,24 @@ export async function cmdSetup(dir, options = {}) {
     }
   }
 
+  // ── 安装 Skills ──
+
+  const selectedSkills = SKILLS.filter(s => selected.includes(`skill:${s.id}`));
+
+  if (selectedSkills.length > 0) {
+    console.log('');
+    for (const skill of selectedSkills) {
+      const spinner = ora(`安装 ${skill.name}...`).start();
+      try {
+        const targetDir = join(dir, skill.target);
+        cpSync(skill.source, targetDir, { recursive: true });
+        spinner.succeed(`${skill.name} 安装完成 → ${skill.target}/SKILL.md`);
+      } catch (err) {
+        spinner.fail(`${skill.name} 安装失败: ${err.message}`);
+      }
+    }
+  }
+
   // ── 总结 ──
 
   console.log('');
@@ -373,6 +409,10 @@ export async function cmdSetup(dir, options = {}) {
   for (const g of selectedGlobal) {
     console.log(`  🛠️  ${chalk.cyan(g.name)} — ${g.description}`);
     console.log(chalk.dim(`     ${g.url}`));
+  }
+  for (const s of selectedSkills) {
+    console.log(`  📚 ${chalk.cyan(s.name)} — ${s.description}`);
+    console.log(chalk.dim(`     → ${s.target}/SKILL.md`));
   }
   console.log('');
   if (selectedMcp.length > 0) {

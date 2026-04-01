@@ -27,7 +27,7 @@ $ARGUMENTS
    cat .sillyspec/knowledge/INDEX.md 2>/dev/null
    ```
    根据当前任务描述中的关键词匹配 INDEX.md 条目，命中时 `cat` 对应知识文件，将内容纳入后续开发考量。未命中则跳过。
-   **MCP 检测：** `cat .claude/mcp.json .cursor/mcp.json 2>/dev/null`，根据检测结果动态利用：
+   **MCP 检测：** 检查当前可用工具列表中是否存在 MCP 工具（Context7/浏览器/数据库/搜索等），根据检测结果动态利用：
    - 有 Context7 → 查询不熟悉库/API 的最新文档
    - 有浏览器 MCP → 验证页面改动效果
    - 有数据库 MCP → 查询表结构和数据验证（只读）

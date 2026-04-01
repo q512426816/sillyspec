@@ -37,9 +37,7 @@ cat .sillyspec/knowledge/INDEX.md 2>/dev/null
 
 ## MCP 能力（按需使用）
 
-```bash
-cat .claude/mcp.json .cursor/mcp.json 2>/dev/null
-```
+检查当前可用工具列表中是否存在 MCP 工具（Context7/浏览器/数据库/搜索等），不依赖配置文件路径。
 
 - 有 Context7 → 探索时查询最新文档，验证技术方案的可行性
 - 有浏览器 MCP → 可浏览相关网站、查竞品实现

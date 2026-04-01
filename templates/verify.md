@@ -167,9 +167,14 @@ grep -r "TODO\|FIXME\|HACK\|XXX" src/ lib/ app/ --include="*.ts" --include="*.ts
 检测已配置的 MCP 服务，利用它们做实际验证（不只查文档）：
 
 **MCP 能力检测：**
-```bash
-cat .claude/mcp.json .cursor/mcp.json 2>/dev/null
-```
+
+不要只检查配置文件路径（不同客户端配置位置不同），直接检查当前可用工具列表中是否存在以下工具：
+
+- 数据库相关工具（包含 postgres/sqlite/mysql/redis 关键词）
+- 浏览器相关工具（包含 browser/chrome/puppeteer/playwright/devtools 关键词）
+- 搜索相关工具（包含 search/web_search 关键词）
+
+**判断方式：** 尝试调用或列出当前可用的 MCP 工具，有就用来验证，没有就跳过。
 
 **按检测结果执行对应验证：**
 

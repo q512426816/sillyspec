@@ -96,12 +96,55 @@ cat package.json 2>/dev/null | grep -A5 '"lint\|"format\|"typecheck\|"type-check
 将此摘要注入到每个子代理 prompt 的「项目约定」段之后，并追加一条铁律：
 > **10. 遵守编码规范：** 以上「编码规范约束」中的所有规则必须严格遵守。如规则与任务描述冲突，优先遵守规范约束并报告。
 
-**MCP 能力检测（主代理执行）：**
+**测试模式扫描（主代理执行）：**
+对包含 E2E/测试任务时，扫描项目已有的测试文件，提取测试风格注入子代理 prompt 的「测试模式参考」段。
+
 ```bash
-for cfg in .claude/mcp.json .cursor/mcp.json; do
-  [ -f "$cfg" ] && echo "=== $cfg ===" && cat "$cfg"
-done
+# 检测测试框架
+cat package.json 2>/dev/null | grep -E "playwright|cypress|jest|vitest|mocha"
+
+# 查找已有测试文件
+find . -name "*.spec.ts" -o -name "*.test.ts" -o -name "*.spec.tsx" -o -name "*.spec.js" \
+     -o -name "playwright.config.*" -o -name "vitest.config.*" -o -name "jest.config.*" \
+  2>/dev/null | grep -v node_modules | head -10
+
+# 读取 1-2 个已有测试文件作为风格参考
+# 优先读 E2E 测试，其次读通用测试
+find tests/e2e e2e cypress/e2e __tests__ src -name "*.spec.ts" -o -name "*.test.ts" \
+  2>/dev/null | grep -v node_modules | head -3 | xargs cat 2>/dev/null
 ```
+
+扫描后生成**测试模式摘要**：
+
+```
+## 测试模式参考（自动扫描）
+
+### 测试框架
+{检测到的框架及版本，如：Playwright 1.42、Vitest 1.2}
+
+### 断言风格
+{从已有测试提取的断言模式，如：expect(page).toHaveText()、toEqual、toBeTruthy 等}
+
+### Fixtures / Helper
+{项目自定义的 test fixtures、page objects、helper 函数}
+
+### 文件组织
+{测试文件目录结构、命名约定、文件内组织方式}
+
+### 配置要点
+{playwright.config.ts 中的 baseURL、timeout、retries 等关键配置}
+```
+
+将此摘要注入到每个 E2E/测试子代理 prompt 的「任务描述」段之后，并追加一条铁律：
+> **11. 参照已有测试风格：** 编写新测试时必须参照以上「测试模式参考」中的风格，包括断言方式、fixtures 使用、文件组织。不要凭记忆写测试。
+> **12. 参考已有实现：** 写新功能前，先 grep 项目中类似功能的已有代码（`grep -r "关键词" src/`），照着项目现有的模式、风格和封装方式写，不要凭记忆编造。
+
+**MCP 能力检测（主代理执行）：**
+检查当前可用工具列表中是否存在以下类型的 MCP 工具（不要只依赖配置文件路径，不同客户端配置位置不同）：
+- Context7 / 文档查询工具
+- 数据库工具（postgres/sqlite/mysql/redis）
+- 浏览器工具（browser/chrome/playwright/devtools）
+- 搜索工具（search/web_search）
 根据检测结果，在子代理 prompt 的「文档查询指引」段动态注入：
 - 有 `context7` → `遇到不熟悉的库/API，使用 Context7 MCP（resolve-library-id → query-docs）查询最新文档`
 - 无 `context7` → `遇到不熟悉的库/API，使用 web search 查询最新官方文档`
@@ -148,6 +191,9 @@ done
 ## 编码规范约束（自动扫描）
 {主代理扫描项目配置文件后生成的规范摘要，见上方「编码规范扫描」步骤}
 
+## 测试模式参考（自动扫描，仅 E2E/测试任务注入）
+{主代理扫描项目已有测试文件后生成的测试风格摘要，见上方「测试模式扫描」步骤。非 E2E/测试任务省略此段}
+
 ## 项目架构
 {ARCHITECTURE.md 全文}
 
@@ -174,7 +220,12 @@ done
 4. **不自行补全：** 发现缺失接口/方法，不自己写，报告 BLOCKED
 5. **TDD 不跳步：** 按任务步骤逐步执行，每步必须运行测试命令并确认结果
 6. **测试直接通过 = 测了已有行为，重写测试**
-7. **E2E 任务：** 如果任务描述包含"E2E"或"端到端"，先 cat 相关功能代码和页面组件，理解交互逻辑。有测试框架则编写测试文件，无框架则编写 `.sillyspec/changes/<变更名>/e2e-steps.md` 结构化测试步骤（每条包含操作和断言）
+7. **E2E 任务：** 如果任务描述包含"E2E"或"端到端"：
+   - 先 cat 相关功能代码和页面组件，理解交互逻辑
+   - 参考 prompt 中「测试模式参考」段的已有测试风格
+   - **查阅 Playwright 用法：** 优先使用已安装的 playwright skill（SKILL.md），不要凭记忆写 API。未安装则通过 Context7 MCP 或 web search 查最新文档
+   - 有测试框架则编写测试文件，无框架则编写 `.sillyspec/changes/<变更名>/e2e-steps.md` 结构化测试步骤
+   - **写完必须立即跑一遍确认通过**，失败则修复后重跑，不要"写了就算完成"
 8. **暂存：** 完成后在工作目录执行 git add -A（不要 commit，由用户通过 /sillyspec:commit 统一提交）
 9. **不修改计划外的文件**，如必须修改则在报告中说明
 10. **遵守编码规范：** prompt 中「编码规范约束」段的所有规则必须严格遵守。如规范与任务描述冲突，优先遵守规范并报告
