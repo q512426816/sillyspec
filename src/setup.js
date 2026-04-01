@@ -40,6 +40,22 @@ const MCP_TOOLS = [
     args: ['chrome-devtools-mcp@latest'],
     url: 'https://github.com/ChromeDevTools/chrome-devtools-mcp',
   },
+  {
+    id: 'agent-browser',
+    name: 'Agent Browser (Vercel)',
+    description: 'Rust 原生浏览器 CLI，token 消耗极低，50+ 命令覆盖导航/表单/截图/网络',
+    command: 'npx',
+    args: ['@anthropic-ai/agent-browser@latest'],
+    url: 'https://github.com/vercel-labs/agent-browser',
+  },
+  {
+    id: 'pinchtab',
+    name: 'PinchTab',
+    description: '12MB Go 二进制，零依赖，accessibility tree 极省 token，有 MCP 支持',
+    command: 'npx',
+    args: ['pinchtab-mcp@latest'],
+    url: 'https://github.com/pinchtab/pinchtab',
+  },
 ];
 
 // ── 数据库 MCP 定义（需要连接信息）──

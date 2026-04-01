@@ -139,6 +139,21 @@ find tests/e2e e2e cypress/e2e __tests__ src -name "*.spec.ts" -o -name "*.test.
 > **11. 参照已有测试风格：** 编写新测试时必须参照以上「测试模式参考」中的风格，包括断言方式、fixtures 使用、文件组织。不要凭记忆写测试。
 > **12. 参考已有实现：** 写新功能前，先 grep 项目中类似功能的已有代码（`grep -r "关键词" src/`），照着项目现有的模式、风格和封装方式写，不要凭记忆编造。
 
+**Skill 扫描（主代理执行）：**
+对每个子代理 dispatch 前，扫描项目中已安装的 skill，匹配相关 skill 注入子代理 prompt 的「本地 Skills」段。
+
+```bash
+for skill_dir in .claude/skills/*/SKILL.md .cursor/skills/*/SKILL.md .opencode/skills/*/SKILL.md; do
+  [ -f "$skill_dir" ] && echo "=== $skill_dir ===" && cat "$skill_dir"
+done
+```
+
+扫描后，根据当前任务描述的关键词匹配 skill 的 name 和 description：
+- 任务包含"E2E"/"端到端"/"测试用例" → 匹配 playwright-e2e skill
+- 未来可扩展更多 skill
+
+匹配到的 skill → 将 SKILL.md 全文注入子代理 prompt。未匹配则省略该段。
+
 **MCP 能力检测（主代理执行）：**
 检查当前可用工具列表中是否存在以下类型的 MCP 工具（不要只依赖配置文件路径，不同客户端配置位置不同）：
 - Context7 / 文档查询工具
@@ -208,6 +223,9 @@ find tests/e2e e2e cypress/e2e __tests__ src -name "*.spec.ts" -o -name "*.test.
 
 ## 文档查询指引
 {主代理根据 MCP 检测结果动态注入：有 Context7 提示用 MCP，无则提示用 web search}
+
+## 本地 Skills（如有）
+{主代理在 dispatch 前扫描 .claude/skills/、.cursor/skills/、.opencode/skills/ 下的 SKILL.md，根据当前任务关键词匹配相关 skill，将 SKILL.md 全文注入此段。无匹配 skill 则省略此段。}
 
 ## 数据操作
 {主代理根据 MCP 检测结果动态注入：如检测到数据库 MCP，提示可用}

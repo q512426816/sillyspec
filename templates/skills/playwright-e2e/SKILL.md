@@ -1,6 +1,6 @@
 ---
 name: playwright-e2e
-description: Playwright E2E 测试编写参考。AI 执行 E2E 任务时自动读取，不要凭记忆编写 Playwright API。
+description: Playwright E2E 测试编写参考。当任务涉及编写端到端测试、浏览器自动化测试、Playwright 测试用例时自动读取，不要凭记忆编写 Playwright API。
 ---
 
 # Playwright E2E 测试编写参考
