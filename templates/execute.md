@@ -54,6 +54,48 @@ cat .sillyspec/knowledge/INDEX.md 2>/dev/null
 
 子代理遇到不熟悉的库或 API 时，优先使用已配置的 MCP 工具（Context7 等）或 web search 查最新文档，不要凭记忆猜测用法。
 
+**编码规范扫描（主代理执行）：**
+主代理在 dispatch 子代理前，扫描项目中常见的编码规范配置文件，将关键规则注入子代理 prompt 的「编码规范约束」段。
+
+```bash
+# 检测存在的配置文件
+for f in .eslintrc .eslintrc.js .eslintrc.cjs .eslintrc.json .eslintrc.yml \
+         .prettierrc .prettierrc.js .prettierrc.json .prettierrc.yml \
+         tsconfig.json tsconfig.base.json \
+         .editorconfig \
+         .tailwind.config.js .tailwind.config.ts \
+         .stylelintrc .stylelintrc.js .stylelintrc.json \
+         CONTRIBUTING.md CODE_STYLE.md; do
+  [ -f "$f" ] && echo "=== $f ===" && cat "$f"
+done
+# 也检查 package.json 中的 lint/format 脚本
+cat package.json 2>/dev/null | grep -A5 '"lint\|"format\|"typecheck\|"type-check'
+```
+
+扫描后，主代理根据检测结果生成**编码规范摘要**（不是原文粘贴，是提炼关键约束），格式如下。如果某个类别未检测到对应配置文件，则省略该段：
+
+```
+## 编码规范约束（自动扫描）
+
+### ESLint
+{提取的关键规则，如：禁止 var、要求分号、禁止未使用变量、特定插件规则等}
+
+### Prettier
+{提取的格式化规则，如：单引号、2空格缩进、无分号、行宽 80 等}
+
+### TypeScript
+{从 tsconfig 提取的严格模式设置，如：strict: true、noUncheckedIndexedAccess 等}
+
+### Import / 命名约定
+{从 eslint/import 插件或 editorconfig 提取的导入排序、命名风格等}
+
+### 框架约定
+{检测到的框架特定约定，如：Next.js App Router、Tailwind 类名风格等}
+```
+
+将此摘要注入到每个子代理 prompt 的「项目约定」段之后，并追加一条铁律：
+> **10. 遵守编码规范：** 以上「编码规范约束」中的所有规则必须严格遵守。如规则与任务描述冲突，优先遵守规范约束并报告。
+
 **MCP 能力检测（主代理执行）：**
 ```bash
 for cfg in .claude/mcp.json .cursor/mcp.json; do
@@ -103,6 +145,9 @@ done
 ## 项目约定
 {CONVENTIONS.md 全文}
 
+## 编码规范约束（自动扫描）
+{主代理扫描项目配置文件后生成的规范摘要，见上方「编码规范扫描」步骤}
+
 ## 项目架构
 {ARCHITECTURE.md 全文}
 
@@ -132,6 +177,7 @@ done
 7. **E2E 任务：** 如果任务描述包含"E2E"或"端到端"，先 cat 相关功能代码和页面组件，理解交互逻辑。有测试框架则编写测试文件，无框架则编写 `.sillyspec/changes/<变更名>/e2e-steps.md` 结构化测试步骤（每条包含操作和断言）
 8. **暂存：** 完成后在工作目录执行 git add -A（不要 commit，由用户通过 /sillyspec:commit 统一提交）
 9. **不修改计划外的文件**，如必须修改则在报告中说明
+10. **遵守编码规范：** prompt 中「编码规范约束」段的所有规则必须严格遵守。如规范与任务描述冲突，优先遵守规范并报告
 
 ## 完成后报告（严格按此格式）
 
@@ -165,6 +211,20 @@ done
 ---
 
 ## 完成后
+
+**任务勾选自检（必须执行）：**
+所有任务完成后，主代理必须执行以下检查：
+
+```bash
+cat .sillyspec/changes/*/tasks.md 2>/dev/null
+```
+
+逐条验证：
+1. **所有返回 DONE/DONE_WITH_CONCERNS 的任务是否已勾选 `- [x]`？**
+2. **勾选的任务是否都记录了精确到秒的时间戳 `[YYYY-MM-DD HH:MM:SS]`？**
+3. **tasks.md 中是否还有未勾选 `- [ ]` 的已完成任务？**
+
+发现遗漏 → 立即补勾选 + 补时间戳，不要等用户提醒。
 
 **知识库审阅：** 检查是否有待确认的知识条目：
 ```bash

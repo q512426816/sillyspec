@@ -123,6 +123,30 @@ cat .claude/mcp.json .cursor/mcp.json 2>/dev/null | grep -i "browser\|chrome\|de
 - [ ] 每个 task 有具体文件路径？
 - [ ] 标注了 Wave 和依赖关系？
 - [ ] 涉及 UI 的任务是否有对应的 E2E 测试任务？
+- [ ] **design.md 中的每个功能点是否都在 tasks.md 中有对应任务？**
+
+### 6.5 设计完整性对照（必须完成）
+
+逐条检查 design.md 中的功能描述，确保每个功能点都有对应的 task。特别关注：
+
+1. **逐功能点扫描：** 将 design.md 中描述的每个功能点（含子功能）列出，与 tasks.md 逐条对照
+2. **前后端覆盖检查：** 涉及前后端协作的功能，确认前端和后端各有独立 task
+3. **遗漏项处理：** 发现未覆盖的功能点 → 追加 task 到对应 Wave，并提示用户确认
+
+**执行方式：**
+```
+从 design.md 提取功能点清单：
+  功能 A（后端接口）
+  功能 B（前端页面）
+  功能 C（前后端联动）
+
+与 tasks.md 对照：
+  ✅ 功能 A → task-3
+  ❌ 功能 B → 无对应 task → 追加
+  ⚠️ 功能 C → 只有后端 task，缺少前端 task → 追加
+```
+
+发现遗漏时用 AskUserQuestion 确认追加内容，用户确认后再写入 tasks.md。
 
 ### 7. 完成
 

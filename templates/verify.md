@@ -47,6 +47,7 @@ else
   CHANGE_DIR=$(ls -d .sillyspec/changes/*/ 2>/dev/null | grep -v archive | tail -1)
 fi
 cat "$CHANGE_DIR"/{design,tasks}.md 2>/dev/null
+cat .sillyspec/local.yaml 2>/dev/null
 ```
 
 锚定确认实际存在的文件。
@@ -97,9 +98,49 @@ npx vitest run 2>/dev/null || npx jest 2>/dev/null
 > ⚠️ 使用 MCP 执行时 AI 判断可能不如测试框架精确。追求可靠性建议安装 Playwright。
 
 **自动修复循环（选了策略 1 或 2 时）：**
-读取 `.sillyspec/local.yaml` 中当前变更的 `fixAttempts`，对每个失败测试：
-- fixAttempts 未达上限 → 调 `/sillyspec:quick "修复 E2E 失败：<失败描述>"` → 重跑该测试 → 更新 local.yaml
-- fixAttempts 达到上限 → 停止，报告失败详情，提示人工介入
+
+必须按以下流程严格执行，不可跳过：
+
+```
+ROUND = 1
+MAX_ROUNDS = 策略1时为5，策略2时为50
+
+while ROUND <= MAX_ROUNDS:
+    1. 运行失败测试，捕获完整输出（错误信息、堆栈、期望值 vs 实际值）
+    2. 如果全部通过 → 跳出循环，标记 ✅
+    3. 读取 .sillyspec/local.yaml 中当前变更的 fixAttempts
+    4. 对每个失败测试：
+       a. 如果 fixAttempts >= MAX_ROUNDS → 跳过，标记 ❌ MAX_REACHED
+       b. 否则 → 调 /sillyspec:quick 修复，prompt 必须包含：
+          - 失败的测试文件路径和测试名
+          - 完整错误信息（含期望值 vs 实际值）
+          - 相关源文件路径
+          - "只修复这个测试失败，不要改其他代码"
+       c. 修复后重跑该测试确认是否通过
+       d. 通过 → fixAttempts 保持不变；仍失败 → fixAttempts + 1
+    5. 写入 .sillyspec/local.yaml 更新 fixAttempts
+    6. ROUND++
+    7. 如果本轮无任何修复（所有失败都已 MAX_REACHED）→ 跳出循环
+```
+
+**quick 修复 prompt 模板：**
+```
+/sillyspec:quick "修复测试失败：<测试文件路径>:<测试名>
+
+错误信息：
+<完整错误输出，包含期望值和实际值>
+
+相关文件：
+<被测源文件路径>
+
+只修复这个测试失败，不要改其他代码。修完后运行该测试确认通过。"
+```
+
+**禁止行为：**
+- ❌ 只看错误摘要就修复（必须看完整输出）
+- ❌ 跳过 fixAttempts 计数
+- ❌ 一次 quick 修复多个不相关的失败（逐个修复，每次修复后重跑确认）
+- ❌ 主代理直接修改代码（verify 阶段禁止改代码，必须通过 /sillyspec:quick）
 
 **更新测试结果到 `.sillyspec/local.yaml`（按变更名隔离，覆盖写入）：**
 ```yaml
@@ -121,7 +162,73 @@ grep -r "TODO\|FIXME\|HACK\|XXX" src/ lib/ app/ --include="*.ts" --include="*.ts
 
 审查 design.md「文件变更」中列出的文件：安全问题（输入校验、SQL拼接、硬编码敏感信息）、潜在 bug（空值、边界条件）、与 CONVENTIONS.md 一致性。每个问题标 🔴必须 / 🟡建议 / 🔵优化。
 
-### 6. 输出验证报告
+### 5.5 MCP 基础设施验证
+
+检测已配置的 MCP 服务，利用它们做实际验证（不只查文档）：
+
+**MCP 能力检测：**
+```bash
+cat .claude/mcp.json .cursor/mcp.json 2>/dev/null
+```
+
+**按检测结果执行对应验证：**
+
+**数据库 MCP（postgres/sqlite/mysql/redis）：**
+- 对照 design.md 中的数据模型，验证表/集合是否存在
+- 验证字段类型、约束（主键、外键、唯一索引）是否与设计一致
+- 验证新增的 API 是否能正确读写对应数据
+- ⚠️ 只执行 SELECT 查询，禁止任何写操作
+
+**浏览器 MCP（chrome-devtools/puppeteer/playwright）：**
+- 验证页面能否正常加载（无 404/500 错误）
+- 验证关键 UI 元素是否存在（导航、表单、按钮等）
+- 验证基础交互（点击、提交、跳转）
+
+**API MCP：**
+- 验证新增接口是否可达
+- 验证请求/响应格式是否与设计一致
+
+**无 MCP → 跳过此步骤，不影响验证结论。**
+
+将验证结果纳入验证报告。
+
+### 6. Lint / Format 检查
+
+自动检测并运行项目配置的 lint/format 工具，验证代码是否符合规范：
+
+```bash
+# ESLint
+if [ -f .eslintrc -o -f .eslintrc.js -o -f .eslintrc.cjs -o -f .eslintrc.json -o -f .eslintrc.yml ] || grep -q '"eslint"' package.json 2>/dev/null; then
+  echo "=== ESLint ==="
+  npx eslint . --max-warnings 0 2>&1 | tail -50
+fi
+
+# Prettier（检查而非修复）
+if [ -f .prettierrc -o -f .prettierrc.js -o -f .prettierrc.json -o -f .prettierrc.yml ] || grep -q '"prettier"' package.json 2>/dev/null; then
+  echo "=== Prettier ==="
+  npx prettier --check . 2>&1 | tail -30
+fi
+
+# TypeScript 类型检查
+if [ -f tsconfig.json ]; then
+  echo "=== TypeScript ==="
+  npx tsc --noEmit 2>&1 | tail -30
+fi
+
+# Stylelint
+if [ -f .stylelintrc -o -f .stylelintrc.js -o -f .stylelintrc.json ] || grep -q '"stylelint"' package.json 2>/dev/null; then
+  echo "=== Stylelint ==="
+  npx stylelint "**/*.{css,scss,less}" 2>&1 | tail -30
+fi
+```
+
+**处理策略（AskUserQuestion）：**
+1. **自动修复** — 对支持 `--fix` 的工具（ESLint、Prettier、Stylelint）自动修复后重跑检查，同一问题最多修复 3 次
+2. **只报告** — 仅列出所有 lint 错误，不修改代码
+
+将 lint 结果纳入验证报告（步骤 7）。
+
+### 7. 输出验证报告
 
 ```markdown
 # SillySpec 验证报告
@@ -130,6 +237,8 @@ grep -r "TODO\|FIXME\|HACK\|XXX" src/ lib/ app/ --include="*.ts" --include="*.ts
 ## 测试结果：passed N, failed N
 ## 技术债务标记
 ## 代码审查：🔴 N / 🟡 N / 🔵 N
+## Lint 检查：ESLint ✅/❌ | Prettier ✅/❌ | TypeScript ✅/❌ | Stylelint ✅/❌
+## MCP 基础设施验证：数据库 ✅/❌/跳过 | 页面 ✅/❌/跳过 | API ✅/❌/跳过
 ## E2E 测试：passed N / failed N / fixAttempts 详情
 ## 结论：✅ PASS / ⚠️ PASS WITH NOTES / ❌ FAIL
 ```

@@ -29,9 +29,33 @@ $ARGUMENTS
 ```bash
 ls .sillyspec/changes/ 2>/dev/null | grep -v archive
 cat .sillyspec/{REQUIREMENTS,ROADMAP}.md 2>/dev/null
+cat .sillyspec/codebase/{CONVENTIONS,ARCHITECTURE}.md 2>/dev/null
+cat .sillyspec/knowledge/INDEX.md 2>/dev/null
 ```
 
 有进行中变更时读取其 design/tasks，自然引用。发现重要决策时可提议保存（不自动保存）。
+
+## MCP 能力（按需使用）
+
+```bash
+cat .claude/mcp.json .cursor/mcp.json 2>/dev/null
+```
+
+- 有 Context7 → 探索时查询最新文档，验证技术方案的可行性
+- 有浏览器 MCP → 可浏览相关网站、查竞品实现
+- 有搜索 MCP → 搜索技术方案、最佳实践
+- 无 MCP → 使用 web search
+
+## 话题升级提示
+
+探索过程中，当对话达到一定深度时（讨论了 5+ 轮、或涉及具体实现方案、或用户表达"试试看"/"能不能做"/"怎么搞"），主动用 AskUserQuestion 提示用户：
+
+1. **🧠 头脑风暴** — `/sillyspec:brainstorm` 深度探索需求和方案
+2. **⚡ 快速执行** — `/sillyspec:quick` 直接动手做
+3. **📋 创建规范** — `/sillyspec:propose` 生成结构化规范
+4. **🔍 继续探索** — 还没聊透，继续
+
+不需要每次都提示，只在对话**明显转向执行意图**时触发。纯讨论、提问、查资料时不要打断。
 
 ## 没有必需的结束
 

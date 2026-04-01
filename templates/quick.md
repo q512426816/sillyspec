@@ -21,12 +21,19 @@ $ARGUMENTS
 1. **解析参数：** 检查是否携带 `--change <变更名>`，确定记录方式
 2. **理解任务：** 模糊则问一个问题确认
 3. **加载上下文：** `cat .sillyspec/codebase/{CONVENTIONS,ARCHITECTURE}.md 2>/dev/null`
+3b. **编码规范扫描：** 检测项目中的编码规范配置文件（`.eslintrc*`、`.prettierrc*`、`tsconfig.json`、`.editorconfig`、`tailwind.config.*`、`CONTRIBUTING.md`），提取关键规则生成摘要。写作代码时必须严格遵守这些规则（分号/引号/缩进/命名风格等），如不确定优先遵守规范约束。
 4. **知识库查询（强制步骤）：**
    ```bash
    cat .sillyspec/knowledge/INDEX.md 2>/dev/null
    ```
    根据当前任务描述中的关键词匹配 INDEX.md 条目，命中时 `cat` 对应知识文件，将内容纳入后续开发考量。未命中则跳过。
-   **MCP 检测：** `cat .claude/mcp.json .cursor/mcp.json 2>/dev/null`，有 Context7 则用 MCP 查文档，无则用 web search。
+   **MCP 检测：** `cat .claude/mcp.json .cursor/mcp.json 2>/dev/null`，根据检测结果动态利用：
+   - 有 Context7 → 查询不熟悉库/API 的最新文档
+   - 有浏览器 MCP → 验证页面改动效果
+   - 有数据库 MCP → 查询表结构和数据验证（只读）
+   - 有搜索 MCP → 搜索最佳实践和解决方案
+   - 有其他 MCP → 按任务需要灵活使用
+   - 无 MCP → 使用 web search
 5. **先读后写：** 调用已有方法前 `cat` 源文件确认签名，`grep` 确认方法存在
 6. **数据操作安全：** 任何改变现有数据的操作（非 SELECT 的数据库操作）必须暂停并报告给用户确认，不得自动执行。新建表不受此限制
 6. **TDD 执行：**
