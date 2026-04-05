@@ -81,13 +81,13 @@ const INJECTION_CONTENT = `## SillySpec — 规范驱动开发
 在执行开发任务时，遵循以下规范：
 
 ### 代码规范
-- 写代码前先读取 \`.sillyspec/codebase/CONVENTIONS.md\`（代码风格）和 \`.sillyspec/codebase/ARCHITECTURE.md\`（架构）
+- 写代码前先读取 \`.sillyspec/docs/<project>/scan/CONVENTIONS.md\`（代码风格）和 \`.sillyspec/docs/<project>/scan/ARCHITECTURE.md\`（架构）
 - 调用已有方法前，用 grep 确认方法存在，不许编造
-- 遵循 \`.sillyspec/codebase/CONVENTIONS.md\` 中的代码风格
+- 遵循 \`.sillyspec/docs/<project>/scan/CONVENTIONS.md\` 中的代码风格
 
 ### 工作流程
 - 读取 \`.sillyspec/STATE.md\` 确认当前阶段
-- 各阶段产出文件位于 \`.sillyspec/changes/<变更名>/\` 下
+- 各阶段产出文件位于 \`.sillyspec/docs/<project>/changes/<变更名>/\` 下
 - 详细流程参考模板文件：\`.sillyspec/.templates/\`（brainstorm.md, plan.md, execute.md 等）
 `;
 
@@ -220,7 +220,10 @@ async function doInstall(projectDir, tools, isWorkspace, subprojects = []) {
   // 创建 docs/<projectName>/ 子目录结构
   const docsBase = join(projectDir, '.sillyspec', 'docs', projectName);
   for (const sub of ['scan', 'brainstorm', 'plan', 'changes', 'archive', 'quicklog']) {
-    mkdirSync(join(docsBase, sub), { recursive: true });
+    const subDir = join(docsBase, sub);
+    mkdirSync(subDir, { recursive: true });
+    const gitkeepPath = join(subDir, '.gitkeep');
+    if (!existsSync(gitkeepPath)) writeFileSync(gitkeepPath, '');
   }
 
   // 兼容：保留旧的 codebase/ changes/ quicklog/ 目录（如果已存在不删除）
