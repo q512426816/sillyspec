@@ -7,7 +7,7 @@
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, readdirSync, unlinkSync } from 'fs';
-import { join, resolve, dirname } from 'path';
+import { join, resolve, dirname, basename } from 'path';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -103,7 +103,7 @@ export class ProgressManager {
       return this.read(cwd);
     }
 
-    const project = require('path').basename(cwd);
+    const project = basename(cwd);
     const data = makeInitialProgress(project);
     this._write(cwd, data);
     console.log(`✅ 已创建 ${join(RUNTIME_DIR, PROGRESS_FILE)}`);
@@ -209,7 +209,7 @@ export class ProgressManager {
 
     // 标记所有未完成步骤为 completed
     for (const step of stageData.steps) {
-      if (step.status !== 'completed') step.status = 'completed';
+      if (step.status === 'pending') step.status = 'completed';
     }
 
     // 推进到下一个未完成阶段
@@ -358,7 +358,7 @@ export class ProgressManager {
       this._ensureDir(cwd);
       const progressPath = this._path(cwd, PROGRESS_FILE);
       if (!existsSync(progressPath)) {
-        data = makeInitialProgress(require('path').basename(cwd));
+        data = makeInitialProgress(basename(cwd));
         this._write(cwd, data);
       } else {
         console.log('❌ progress.json 损坏，请运行 sillyspec progress validate');

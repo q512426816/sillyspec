@@ -120,8 +120,8 @@ async function main() {
     case 'progress': {
       const pm = new ProgressManager();
       const subCommand = filteredArgs[1];
-      const stageIdx = args.indexOf('--stage');
-      const stage = stageIdx >= 0 && args[stageIdx + 1] ? args[stageIdx + 1] : null;
+      const stageIdx = filteredArgs.indexOf('--stage');
+      const stage = stageIdx >= 0 && filteredArgs[stageIdx + 1] ? filteredArgs[stageIdx + 1] : null;
 
       switch (subCommand) {
         case 'init':

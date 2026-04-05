@@ -3,6 +3,7 @@ import { join, resolve, dirname, basename } from 'path';
 import { fileURLToPath } from 'url';
 import { homedir } from 'os';
 import { checkbox, select, confirm, input } from '@inquirer/prompts';
+import { ProgressManager } from './progress.js';
 import chalk from 'chalk';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -154,19 +155,8 @@ async function doInstall(projectDir, tools, isWorkspace, subprojects = []) {
   // 创建初始 progress.json
   const progressPath = join(runtimeDir, 'progress.json');
   if (!existsSync(progressPath)) {
-    const initialProgress = {
-      project: projectName,
-      currentStage: '',
-      stages: {
-        brainstorm: { status: 'pending', steps: [], startedAt: null, completedAt: null },
-        propose: { status: 'pending', steps: [], startedAt: null, completedAt: null },
-        plan: { status: 'pending', steps: [], startedAt: null, completedAt: null },
-        execute: { status: 'pending', steps: [], startedAt: null, completedAt: null },
-        verify: { status: 'pending', steps: [], startedAt: null, completedAt: null }
-      },
-      lastActive: null
-    };
-    writeFileSync(progressPath, JSON.stringify(initialProgress, null, 2) + '\n');
+    const pm = new ProgressManager();
+    pm.init(dir);
   }
 
   // 创建初始 user-inputs.md

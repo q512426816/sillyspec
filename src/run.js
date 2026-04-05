@@ -194,13 +194,15 @@ function validateMetadata(cwd, stageName) {
   function walk(dir) {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       const full = join(dir, entry.name)
-      if (entry.isDirectory()) { walk(full); continue }
-      if (!/\.(md|yaml|yml)$/.test(entry.name)) continue
-      const mtime = statSync(full).mtimeMs
-      if (mtime < cutoff) continue
-      const content = readFileSync(full, 'utf-8')
-      if (!content.includes('author:') && !content.includes('author：')) missing.push(full)
-      if (!content.includes('created_at:') && !content.includes('created_at：')) missing.push(full)
+      try {
+        if (entry.isDirectory()) { walk(full); continue }
+        if (!/\.(md|yaml|yml)$/.test(entry.name)) continue
+        const mtime = statSync(full).mtimeMs
+        if (mtime < cutoff) continue
+        const content = readFileSync(full, 'utf-8')
+        if (!content.includes('author:') && !content.includes('author：')) missing.push(full)
+        if (!content.includes('created_at:') && !content.includes('created_at：')) missing.push(full)
+      } catch (e) { /* skip unreadable files */ }
     }
   }
 
