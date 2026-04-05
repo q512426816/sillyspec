@@ -12,7 +12,8 @@ export function useDashboard() {
     activeStep: null,
     logs: [],
     isPanelOpen: true,
-    executingProject: null
+    executingProject: null,
+    isLoading: true
   })
 
   /**
@@ -109,6 +110,7 @@ export function useDashboard() {
    * @param {array} projects - New projects array
    */
   function updateProjects(projects) {
+    state.isLoading = false
     state.projects = projects
 
     // Restore active project if it still exists

@@ -1,14 +1,12 @@
 <template>
   <div class="relative">
-    <!-- Connector line + node -->
     <div class="flex items-start gap-3">
-      <!-- Vertical connector -->
-      <div class="flex flex-col items-center flex-shrink-0 pt-1">
+      <!-- Node indicator -->
+      <div class="flex flex-col items-center flex-shrink-0 pt-1.5">
         <div
-          :class="[
-            'w-2.5 h-2.5 rounded-full border-2 transition-colors duration-100',
-            nodeClass
-          ]"
+          class="w-2 h-2 transition-colors duration-200"
+          :style="nodeStyle"
+          :class="{ 'animate-pulse-dot': isActive || status === 'in-progress' }"
         />
       </div>
 
@@ -16,16 +14,19 @@
       <div class="flex-1 min-w-0 -mt-0.5">
         <!-- Stage Header -->
         <div class="flex items-center gap-2.5 mb-3">
-          <span :class="['font-medium text-[13px]', isActive ? 'text-primary' : 'text-text']">
+          <span
+            class="text-[12px] font-semibold font-[JetBrains_Mono,monospace] tracking-tight"
+            :style="{ color: isActive ? '#FBBF24' : '#E4E4E7' }"
+          >
             {{ title }}
           </span>
           <StageBadge :status="status" />
         </div>
 
-        <!-- Steps List -->
-        <div class="space-y-1.5">
-          <div v-if="steps.length === 0" class="text-xs text-text-secondary italic py-1">
-            暂无步骤
+        <!-- Steps -->
+        <div class="space-y-1">
+          <div v-if="steps.length === 0" class="text-[11px] italic py-1" style="color: #525252;">
+            No steps yet
           </div>
           <StepCard
             v-for="step in steps"
@@ -46,44 +47,26 @@ import StageBadge from './StageBadge.vue'
 import StepCard from './StepCard.vue'
 
 const props = defineProps({
-  name: {
-    type: String,
-    required: true
-  },
-  title: {
-    type: String,
-    required: true
-  },
-  steps: {
-    type: Array,
-    default: () => []
-  },
-  status: {
-    type: String,
-    default: 'pending'
-  },
-  isActive: {
-    type: Boolean,
-    default: false
-  },
-  activeStep: {
-    type: Object,
-    default: null
-  }
+  name: { type: String, required: true },
+  title: { type: String, required: true },
+  steps: { type: Array, default: () => [] },
+  status: { type: String, default: 'pending' },
+  isActive: { type: Boolean, default: false },
+  activeStep: { type: Object, default: null }
 })
 
 const emit = defineEmits(['select-step'])
 
-const nodeClass = computed(() => {
-  if (props.isActive) return 'border-primary bg-primary animate-pulse-dot'
+const nodeStyle = computed(() => {
+  if (props.isActive) return { background: '#FBBF24', boxShadow: '0 0 8px rgba(251,191,36,0.4)' }
   const colors = {
-    'completed': 'border-primary bg-primary',
-    'in-progress': 'border-primary bg-primary',
-    'blocked': 'border-warning bg-warning',
-    'failed': 'border-danger bg-danger',
-    'pending': 'border-border bg-transparent'
+    'completed': '#34D399',
+    'in-progress': '#FBBF24',
+    'blocked': '#FB923C',
+    'failed': '#EF4444',
+    'pending': '#2A2A2D'
   }
-  return colors[props.status] || colors.pending
+  return { background: colors[props.status] || colors.pending }
 })
 
 function isActiveStep(step) {

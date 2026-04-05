@@ -1,18 +1,22 @@
 <template>
-  <div class="h-screen w-screen flex flex-col bg-[#0D1117] overflow-hidden">
-    <!-- Main Content: Three-column layout -->
-    <div class="flex-1 flex overflow-hidden">
+  <div class="h-screen w-screen flex flex-col overflow-hidden font-[DM_Sans,sans-serif] relative" style="background-color: #0A0A0B;">
+    <!-- Ambient background -->
+    <div class="absolute inset-0 pointer-events-none" style="background: radial-gradient(ellipse 60% 40% at 10% 20%, rgba(251,191,36,0.04) 0%, transparent 70%), radial-gradient(ellipse 50% 50% at 90% 80%, rgba(251,191,36,0.02) 0%, transparent 70%);" />
+
+    <!-- Main Content -->
+    <div class="flex-1 flex overflow-hidden relative z-10">
       <!-- Left: Project List -->
-      <aside class="w-[240px] bg-[#161B22] border-r border-[#30363D] flex-shrink-0">
+      <aside class="w-[240px] flex-shrink-0 relative" style="background: #111113; border-right: 1px solid #1F1F22;">
         <ProjectList
           :projects="dashboard.state.projects"
           :active-project="dashboard.state.activeProject"
+          :is-loading="dashboard.state.isLoading"
           @select="handleSelectProject"
         />
       </aside>
 
       <!-- Center: Pipeline View -->
-      <main class="flex-1 bg-[#161B22] overflow-hidden">
+      <main class="flex-1 overflow-hidden accent-stripe">
         <PipelineView
           :project="dashboard.state.activeProject"
           :active-step="dashboard.state.activeStep"
@@ -23,9 +27,10 @@
       <!-- Right: Detail Panel -->
       <aside
         :class="[
-          'bg-[#161B22] border-l border-[#30363D] flex-shrink-0 transition-all duration-300',
-          dashboard.state.isPanelOpen ? 'w-[320px]' : 'w-0 opacity-0'
+          'flex-shrink-0 transition-all duration-300 relative overflow-hidden',
+          dashboard.state.isPanelOpen ? 'w-[340px]' : 'w-0'
         ]"
+        style="background: #111113; border-left: 1px solid #1F1F22;"
       >
         <DetailPanel
           :is-open="dashboard.state.isPanelOpen"
@@ -93,40 +98,25 @@ useDashboardKeyboard({
 
 // WebSocket event handlers
 onMounted(() => {
-  // Initial projects
-  ws.on('projects:init', (projects) => {
-    dashboard.updateProjects(projects)
-  })
-
-  // Projects updated
-  ws.on('projects:updated', (projects) => {
-    dashboard.updateProjects(projects)
-  })
-
-  // CLI output
+  ws.on('projects:init', (projects) => { dashboard.updateProjects(projects) })
+  ws.on('projects:updated', (projects) => { dashboard.updateProjects(projects) })
   ws.on('cli:output', (data) => {
     if (data.projectName === dashboard.activeProjectName.value) {
       dashboard.appendLog(data.output)
     }
   })
-
-  // CLI complete
   ws.on('cli:complete', (data) => {
     if (data.projectName === dashboard.activeProjectName.value) {
       dashboard.setExecuting(null)
       executionResult.value = { exitCode: data.exitCode, signal: data.signal }
     }
   })
-
-  // CLI started
   ws.on('cli:started', (data) => {
     if (data.projectName === dashboard.activeProjectName.value) {
       dashboard.setExecuting(data.projectName)
       executionResult.value = null
     }
   })
-
-  // CLI killed
   ws.on('cli:killed', (data) => {
     if (data.projectName === dashboard.activeProjectName.value) {
       dashboard.setExecuting(null)
@@ -135,68 +125,30 @@ onMounted(() => {
   })
 })
 
-// Project selection
-function handleSelectProject(project) {
-  dashboard.selectProject(project)
-}
-
-// Stage selection from command palette
-function handleSelectStage({ project, stage }) {
-  dashboard.selectProject(project)
-  // TODO: Navigate to specific stage
-}
-
-// Step selection
-function handleSelectStep(step) {
-  dashboard.selectStep(step)
-}
-
-// Execute next step
+function handleSelectProject(project) { dashboard.selectProject(project) }
+function handleSelectStage({ project, stage }) { dashboard.selectProject(project) }
+function handleSelectStep(step) { dashboard.selectStep(step) }
 function handleExecute() {
   const projectName = dashboard.activeProjectName.value
   if (!projectName) return
-
   dashboard.clearLogs()
-
-  ws.send({
-    type: 'cli:execute',
-    data: {
-      projectName,
-      command: 'next'
-    }
-  })
+  ws.send({ type: 'cli:execute', data: { projectName, command: 'next' } })
 }
-
-// Kill running process
 function handleKill() {
   const projectName = dashboard.activeProjectName.value
   if (!projectName) return
-
-  ws.send({
-    type: 'cli:kill',
-    data: {
-      projectName
-    }
-  })
+  ws.send({ type: 'cli:kill', data: { projectName } })
 }
 </script>
 
 <style>
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
+* { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-#app {
-  width: 100vw;
-  height: 100vh;
-  overflow: hidden;
-}
+#app { width: 100vw; height: 100vh; overflow: hidden; }
 </style>
