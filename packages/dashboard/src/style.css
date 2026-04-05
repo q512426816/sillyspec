@@ -1,0 +1,28 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #0D1117;
+  --color-primary: #00D4AA;
+  --color-warning: #F59E0B;
+  --color-danger: #F87171;
+  --color-muted: #6B7280;
+  --color-surface: #161B22;
+  --color-border: #30363D;
+
+  --animate-pulse-glow: pulse-glow 200ms ease-in-out;
+  --transition-fade: fade 100ms ease-in-out;
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.8; }
+}
+
+@keyframes fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.font-mono-log {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
