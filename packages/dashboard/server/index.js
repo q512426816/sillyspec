@@ -37,8 +37,44 @@ async function discoverProjects() {
   const home = homedir()
   const cwd = process.cwd()
 
+  // Directories to exclude (system junk, cache, etc.)
+  const excludeDirs = new Set([
+    '.Trash', '.cache', '.npm', '.local', '.vscode', 'Library',
+    '.git', 'node_modules', '.Trash-*', '.DS_Store', '.config',
+    '.cocoapods', '.gem', '.rvm', '.nvm', '.asdf', '.brew'
+  ])
+
+  // Helper to check if directory should be excluded
+  const shouldExclude = (name) => {
+    // Check exact matches
+    if (excludeDirs.has(name)) return true
+    // Check wildcard patterns (like .Trash-*)
+    for (const pattern of excludeDirs) {
+      if (pattern.includes('*')) {
+        const regex = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$')
+        if (regex.test(name)) return true
+      }
+    }
+    // Exclude hidden directories (starting with .) unless it's the cwd basename
+    if (name.startsWith('.') && name !== cwd.split('/').pop()) {
+      return true
+    }
+    return false
+  }
+
+  // Build scan directories: cwd + home subdirs + common project locations
   const scanDirs = [cwd, home]
+  const extraDirs = ['Desktop', 'Documents', 'Projects', 'Work', 'Repos', 'Code', 'src', 'dev']
+
+  for (const extra of extraDirs) {
+    const extraPath = join(home, extra)
+    if (existsSync(extraPath)) {
+      scanDirs.push(extraPath)
+    }
+  }
+
   const projects = []
+  const seen = new Set() // Dedupe by path
 
   for (const baseDir of scanDirs) {
     try {
@@ -47,8 +83,15 @@ async function discoverProjects() {
 
       for (const entry of entries) {
         if (!entry.isDirectory()) continue
+        if (shouldExclude(entry.name)) continue
 
         const dirPath = join(baseDir, entry.name)
+
+        // Skip if we've already seen this path (handles symlinks, dupes)
+        const realPath = dirPath // Could add realpath for true deduping
+        if (seen.has(realPath)) continue
+        seen.add(realPath)
+
         const sillyspecPath = join(dirPath, '.sillyspec')
 
         if (existsSync(sillyspecPath)) {
@@ -191,26 +234,17 @@ function startServer({ port = 3456, open: openBrowser = true } = {}) {
       return
     }
 
-    // Serve static files in production
-    if (process.env.NODE_ENV === 'production') {
-      const indexPath = join(__dirname, '../dist/index.html')
-
-      if (existsSync(indexPath)) {
-        // For SPA routing, serve index.html for all non-API routes
-        const ext = req.url?.split('.').pop()
-        if (!ext || ext === req.url) {
-          readFileSync(indexPath, (err, data) => {
-            if (err) {
-              res.writeHead(404)
-              res.end('Not found')
-            } else {
-              res.setHeader('Content-Type', 'text/html')
-              res.writeHead(200)
-              res.end(data)
-            }
-          })
-          return
-        }
+    // Serve static files (dist/)
+    const indexPath = join(__dirname, '../dist/index.html')
+    if (existsSync(indexPath)) {
+      const ext = req.url?.split('.').pop()
+      // Serve index.html for SPA routing (non-API, non-asset routes)
+      if (!ext || ext === req.url) {
+        const data = readFileSync(indexPath, 'utf8')
+        res.setHeader('Content-Type', 'text/html')
+        res.writeHead(200)
+        res.end(data)
+        return
       }
     }
 
@@ -221,6 +255,10 @@ function startServer({ port = 3456, open: openBrowser = true } = {}) {
 
   // WebSocket Server
   wss = new WebSocketServer({ server })
+
+  wss.on('error', (err) => {
+    console.error('WebSocket server error:', err)
+  })
 
   wss.on('connection', (ws) => {
     console.log('WebSocket client connected')
@@ -276,13 +314,17 @@ function startServer({ port = 3456, open: openBrowser = true } = {}) {
     })
   })
 
-  // Start file watcher
-  startWatcher((projects) => {
-    broadcast({
-      type: 'projects:updated',
-      data: projects
+  // Start file watcher (wrapped to avoid crashing server)
+  try {
+    startWatcher((projects) => {
+      broadcast({
+        type: 'projects:updated',
+        data: projects
+      })
     })
-  })
+  } catch (err) {
+    console.error('Failed to start file watcher:', err)
+  }
 
   server.listen(port, () => {
     console.log(`Dashboard server running on http://localhost:${port}`)

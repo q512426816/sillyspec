@@ -23,20 +23,62 @@ export function startWatcher(callback) {
   // Discover all .sillyspec directories
   const home = homedir()
   const cwd = process.cwd()
+
+  // Directories to exclude (system junk, cache, etc.)
+  const excludeDirs = new Set([
+    '.Trash', '.cache', '.npm', '.local', '.vscode', 'Library',
+    '.git', 'node_modules', '.Trash-*', '.DS_Store', '.config',
+    '.cocoapods', '.gem', '.rvm', '.nvm', '.asdf', '.brew'
+  ])
+
+  // Helper to check if directory should be excluded
+  const shouldExclude = (name) => {
+    // Check exact matches
+    if (excludeDirs.has(name)) return true
+    // Check wildcard patterns (like .Trash-*)
+    for (const pattern of excludeDirs) {
+      if (pattern.includes('*')) {
+        const regex = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$')
+        if (regex.test(name)) return true
+      }
+    }
+    // Exclude hidden directories (starting with .) unless it's the cwd basename
+    if (name.startsWith('.') && name !== cwd.split('/').pop()) {
+      return true
+    }
+    return false
+  }
+
+  // Build scan directories: cwd + home subdirs + common project locations
   const scanDirs = [cwd, home]
+  const extraDirs = ['Desktop', 'Documents', 'Projects', 'Work', 'Repos', 'Code', 'src', 'dev']
+
+  for (const extra of extraDirs) {
+    const extraPath = join(home, extra)
+    if (existsSync(extraPath)) {
+      scanDirs.push(extraPath)
+    }
+  }
 
   const watchPaths = []
   const projects = []
+  const seen = new Set() // Dedupe by path
 
   for (const baseDir of scanDirs) {
     try {
-      const { readdirSync, statSync } = require('fs')
+      const { readdirSync } = require('fs')
       const entries = readdirSync(baseDir, { withFileTypes: true })
 
       for (const entry of entries) {
         if (!entry.isDirectory()) continue
+        if (shouldExclude(entry.name)) continue
 
         const dirPath = join(baseDir, entry.name)
+
+        // Skip if we've already seen this path
+        if (seen.has(dirPath)) continue
+        seen.add(dirPath)
+
         const sillyspecPath = join(dirPath, '.sillyspec')
 
         if (existsSync(sillyspecPath)) {
@@ -134,7 +176,40 @@ async function handleFileChange(filePath) {
 async function rescanProjects() {
   const home = homedir()
   const cwd = process.cwd()
+
+  // Directories to exclude (system junk, cache, etc.)
+  const excludeDirs = new Set([
+    '.Trash', '.cache', '.npm', '.local', '.vscode', 'Library',
+    '.git', 'node_modules', '.Trash-*', '.DS_Store', '.config',
+    '.cocoapods', '.gem', '.rvm', '.nvm', '.asdf', '.brew'
+  ])
+
+  const shouldExclude = (name) => {
+    if (excludeDirs.has(name)) return true
+    for (const pattern of excludeDirs) {
+      if (pattern.includes('*')) {
+        const regex = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$')
+        if (regex.test(name)) return true
+      }
+    }
+    if (name.startsWith('.') && name !== cwd.split('/').pop()) {
+      return true
+    }
+    return false
+  }
+
+  // Build scan directories
   const scanDirs = [cwd, home]
+  const extraDirs = ['Desktop', 'Documents', 'Projects', 'Work', 'Repos', 'Code', 'src', 'dev']
+
+  for (const extra of extraDirs) {
+    const extraPath = join(home, extra)
+    if (existsSync(extraPath)) {
+      scanDirs.push(extraPath)
+    }
+  }
+
+  const seen = new Set()
 
   for (const baseDir of scanDirs) {
     try {
@@ -143,8 +218,12 @@ async function rescanProjects() {
 
       for (const entry of entries) {
         if (!entry.isDirectory()) continue
+        if (shouldExclude(entry.name)) continue
 
         const dirPath = join(baseDir, entry.name)
+        if (seen.has(dirPath)) continue
+        seen.add(dirPath)
+
         const sillyspecPath = join(dirPath, '.sillyspec')
 
         if (existsSync(sillyspecPath) && !projectStates.has(entry.name)) {
@@ -196,4 +275,3 @@ export function getProjectState(projectName) {
   return projectStates.get(projectName) || null
 }
 
-export { startWatcher, stopWatcher, getProjectStates, getProjectState }
