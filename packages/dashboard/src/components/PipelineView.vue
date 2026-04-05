@@ -3,7 +3,7 @@
     <!-- Header -->
     <div class="px-6 pt-6 pb-4" style="border-bottom: 1px solid #1F1F22;">
       <h2 class="text-[11px] font-semibold uppercase tracking-[0.2em] font-[JetBrains_Mono,monospace]" style="color: #525252;">
-        Pipeline
+        项目流水线
       </h2>
       <p v-if="project" class="text-[12px] mt-1.5 font-[JetBrains_Mono,monospace]" style="color: #8B8B8E;">
         {{ project.name }} <span style="color: #2A2A2D;">/</span> <span style="color: #FBBF24;">{{ currentStage }}</span>
@@ -20,25 +20,25 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
             </svg>
           </div>
-          <p class="text-[12px] font-[JetBrains_Mono,monospace]" style="color: #525252;">Select a project</p>
+          <p class="text-[12px] font-[JetBrains_Mono,monospace]" style="color: #525252;">选择一个项目查看流水线</p>
         </div>
       </div>
 
       <div v-else class="space-y-5">
-        <PipelineStage name="brainstorm" title="BRAINSTORM" :steps="getStageSteps('brainstorm')" :status="getStageStatus('brainstorm')" :is-active="currentStage === 'brainstorm'" :active-step="activeStep" @select-step="handleSelectStep" />
+        <PipelineStage name="brainstorm" title="头脑风暴" :steps="getStageSteps('brainstorm')" :status="getStageStatus('brainstorm')" :is-active="currentStage === 'brainstorm'" :active-step="activeStep" @select-step="handleSelectStep" />
         <div v-if="hasStage('plan')" class="flex items-center pl-[3px]"><div class="w-px h-4" style="background: #1F1F22;" /></div>
-        <PipelineStage name="plan" title="PLAN" :steps="getStageSteps('plan')" :status="getStageStatus('plan')" :is-active="currentStage === 'plan'" :active-step="activeStep" @select-step="handleSelectStep" />
+        <PipelineStage name="plan" title="规划" :steps="getStageSteps('plan')" :status="getStageStatus('plan')" :is-active="currentStage === 'plan'" :active-step="activeStep" @select-step="handleSelectStep" />
         <div v-if="hasStage('execute')" class="flex items-center pl-[3px]"><div class="w-px h-4" style="background: #1F1F22;" /></div>
-        <PipelineStage name="execute" title="EXECUTE" :steps="getStageSteps('execute')" :status="getStageStatus('execute')" :is-active="currentStage === 'execute'" :active-step="activeStep" @select-step="handleSelectStep" />
+        <PipelineStage name="execute" title="执行" :steps="getStageSteps('execute')" :status="getStageStatus('execute')" :is-active="currentStage === 'execute'" :active-step="activeStep" @select-step="handleSelectStep" />
         <div v-if="hasStage('verify')" class="flex items-center pl-[3px]"><div class="w-px h-4" style="background: #1F1F22;" /></div>
-        <PipelineStage name="verify" title="VERIFY" :steps="getStageSteps('verify')" :status="getStageStatus('verify')" :is-active="currentStage === 'verify'" :active-step="activeStep" @select-step="handleSelectStep" />
+        <PipelineStage name="verify" title="验证" :steps="getStageSteps('verify')" :status="getStageStatus('verify')" :is-active="currentStage === 'verify'" :active-step="activeStep" @select-step="handleSelectStep" />
       </div>
     </div>
 
     <!-- Activity Log -->
     <div v-if="project?.state?.progress" style="border-top: 1px solid #1F1F22; background: rgba(10,10,11,0.6);">
       <div class="px-6 py-2.5 flex items-center justify-between">
-        <div class="text-[9px] font-semibold uppercase tracking-[0.25em] font-[JetBrains_Mono,monospace]" style="color: #525252;">Activity</div>
+        <div class="text-[9px] font-semibold uppercase tracking-[0.25em] font-[JetBrains_Mono,monospace]" style="color: #525252;">活动日志</div>
         <div class="text-[10px] font-mono-log" style="color: #3A3A3D;">{{ activityLogs.length }}</div>
       </div>
       <div class="px-6 pb-3 space-y-0.5 max-h-32 overflow-y-auto">
@@ -47,7 +47,7 @@
           <span :style="{ color: log.status === 'completed' ? '#34D399' : '#FBBF24' }">›</span>
           <span style="color: #8B8B8E;">{{ log.description }}</span>
         </div>
-        <div v-if="activityLogs.length === 0" class="text-[10px] py-1" style="color: #3A3A3D;">No activity</div>
+        <div v-if="activityLogs.length === 0" class="text-[10px] py-1" style="color: #3A3A3D;">暂无活动记录</div>
       </div>
     </div>
   </div>
@@ -68,12 +68,20 @@ const currentStage = computed(() => props.project?.state?.currentStage || 'unkno
 const progress = computed(() => props.project?.state?.progress || {})
 const stages = computed(() => progress.value.stages || {})
 
+const stageNameMap = {
+  brainstorm: '头脑风暴',
+  plan: '规划',
+  execute: '执行',
+  verify: '验证'
+}
+
 const activityLogs = computed(() => {
   if (!props.project?.state) return []
   const logs = []
   for (const [name, data] of Object.entries(progress.value.stages || {})) {
-    if (data.status === 'completed') logs.push({ time: data.completedAt ? formatTime(data.completedAt) : '--:--', status: 'completed', description: `${name} completed` })
-    else if (data.status === 'in-progress') logs.push({ time: '--:--', status: 'in-progress', description: `${name} running` })
+    const label = stageNameMap[name] || name
+    if (data.status === 'completed') logs.push({ time: data.completedAt ? formatTime(data.completedAt) : '--:--', status: 'completed', description: `${label} 已完成` })
+    else if (data.status === 'in-progress') logs.push({ time: '--:--', status: 'in-progress', description: `${label} 运行中` })
   }
   return logs.reverse()
 })

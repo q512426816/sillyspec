@@ -11,7 +11,7 @@
         <StageBadge v-if="project.state?.currentStage" :status="getProjectStatus()" :label="stageLabel()" />
       </div>
       <div v-else class="text-[10px] font-[JetBrains_Mono,monospace]" style="color: #3A3A3D;">
-        no project
+        未选择项目
       </div>
     </div>
 
@@ -19,11 +19,11 @@
     <div class="flex items-center gap-2">
       <div v-if="isExecuting" class="flex items-center gap-2">
         <div class="w-1 h-1 rounded-full animate-pulse-dot" style="background: #FBBF24;" />
-        <span class="text-[10px] font-[JetBrains_Mono,monospace]" style="color: #FBBF24;">running</span>
+        <span class="text-[10px] font-[JetBrains_Mono,monospace]" style="color: #FBBF24;">执行中...</span>
       </div>
       <div v-else-if="executionResult" class="flex items-center gap-1.5">
         <span class="text-[10px] font-[JetBrains_Mono,monospace]" :style="{ color: executionResult.exitCode === 0 ? '#34D399' : '#EF4444' }">
-          {{ executionResult.exitCode === 0 ? '● done' : `● exit ${executionResult.exitCode}` }}
+          {{ executionResult.exitCode === 0 ? '● 完成' : `● 失败 (${executionResult.exitCode})` }}
         </span>
       </div>
     </div>
@@ -36,7 +36,7 @@
         style="color: #525252;"
         @mouseenter="$event.target.style.color='#FBBF24';$event.target.style.background='rgba(251,191,36,0.06)'"
         @mouseleave="$event.target.style.color='#525252';$event.target.style.background='transparent'"
-        title="Toggle detail panel"
+        title="切换详情面板"
       >
         <svg :class="['w-3.5 h-3.5 transition-transform duration-200', { 'rotate-180': !isPanelOpen }]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
@@ -49,7 +49,7 @@
         class="px-2.5 py-1 rounded-sm text-[10px] font-[JetBrains_Mono,monospace] transition-colors duration-100"
         style="background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2); color: #EF4444;"
       >
-        kill
+        停止
       </button>
 
       <button
@@ -58,7 +58,7 @@
         style="color: #525252;"
         @mouseenter="$event.target.style.color='#FBBF24';$event.target.style.background='rgba(251,191,36,0.06)'"
         @mouseleave="$event.target.style.color='#525252';$event.target.style.background='transparent'"
-        title="Command palette (⌘K)"
+        title="命令面板 (⌘K)"
       >
         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />

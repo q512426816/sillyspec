@@ -1,11 +1,12 @@
 import { createServer } from 'http'
 import { WebSocketServer } from 'ws'
-import { existsSync, readFileSync } from 'fs'
-import { join, dirname } from 'path'
+import { existsSync, readFileSync, readdirSync } from 'fs'
+import { join, dirname, basename, sep } from 'path'
 import { fileURLToPath } from 'url'
+import { homedir } from 'os'
 import open from 'open'
 import { parseProjectState } from './parser.js'
-import { startWatcher, stopWatcher } from './watcher.js'
+import { startWatcher, stopWatcher, addCustomScanPath, removeCustomScanPath, getCustomScanPaths, customScanPaths } from './watcher.js'
 import { executeCommand } from './executor.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -28,83 +29,93 @@ function broadcast(data) {
   })
 }
 
+// --- Shared scan logic (aligned with watcher.js) ---
+
+const excludeDirs = new Set([
+  '.Trash', '.cache', '.npm', '.local', '.vscode', 'Library',
+  '.git', 'node_modules', '.Trash-*', '.DS_Store', '.config',
+  '.cocoapods', '.gem', '.rvm', '.nvm', '.asdf', '.brew',
+  'AppData', 'Application Data', '.cargo', '.rustup',
+  '.nuget', '.android', '.gradle', '.m2', '.vscode-server'
+])
+
+function shouldExclude(name, cwd) {
+  if (excludeDirs.has(name)) return true
+  for (const pattern of excludeDirs) {
+    if (pattern.includes('*')) {
+      const regex = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$')
+      if (regex.test(name)) return true
+    }
+  }
+  const cwdName = cwd.split(sep).pop() || cwd.split('/').pop() || ''
+  if (name.startsWith('.') && name !== cwdName) return true
+  return false
+}
+
+function scanDirectory(baseDir, seen, maxDepth = 2, currentDepth = 0) {
+  const cwd = process.cwd()
+  const projects = []
+  try {
+    const entries = readdirSync(baseDir, { withFileTypes: true })
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue
+      if (shouldExclude(entry.name, cwd)) continue
+      const dirPath = join(baseDir, entry.name)
+      if (seen.has(dirPath)) continue
+      seen.add(dirPath)
+      if (existsSync(join(dirPath, '.sillyspec'))) {
+        projects.push({ name: entry.name, path: dirPath })
+      }
+      if (currentDepth < maxDepth) {
+        projects.push(...scanDirectory(dirPath, seen, maxDepth, currentDepth + 1))
+      }
+    }
+  } catch (err) {}
+  return projects
+}
+
 /**
  * Discover all SillySpec projects
  * @returns {Promise<Array>} Array of project objects
  */
 async function discoverProjects() {
-  const { homedir } = await import('os')
   const home = homedir()
   const cwd = process.cwd()
 
-  // Directories to exclude (system junk, cache, etc.)
-  const excludeDirs = new Set([
-    '.Trash', '.cache', '.npm', '.local', '.vscode', 'Library',
-    '.git', 'node_modules', '.Trash-*', '.DS_Store', '.config',
-    '.cocoapods', '.gem', '.rvm', '.nvm', '.asdf', '.brew'
-  ])
+  const scanDirs = new Set()
+  scanDirs.add(cwd)
+  scanDirs.add(dirname(cwd))
+  scanDirs.add(dirname(dirname(cwd)))
+  scanDirs.add(home)
 
-  // Helper to check if directory should be excluded
-  const shouldExclude = (name) => {
-    // Check exact matches
-    if (excludeDirs.has(name)) return true
-    // Check wildcard patterns (like .Trash-*)
-    for (const pattern of excludeDirs) {
-      if (pattern.includes('*')) {
-        const regex = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$')
-        if (regex.test(name)) return true
-      }
-    }
-    // Exclude hidden directories (starting with .) unless it's the cwd basename
-    if (name.startsWith('.') && name !== cwd.split('/').pop()) {
-      return true
-    }
-    return false
-  }
-
-  // Build scan directories: cwd + home subdirs + common project locations
-  const scanDirs = [cwd, home]
-  const extraDirs = ['Desktop', 'Documents', 'Projects', 'Work', 'Repos', 'Code', 'src', 'dev']
+  const extraDirs = [
+    'Desktop', '桌面', 'Documents', '文档', 'Downloads', '下载',
+    'Projects', '项目', 'Work', '工作', 'Repos', 'Code', 'src', 'dev',
+    'workspace', '工作区'
+  ]
 
   for (const extra of extraDirs) {
     const extraPath = join(home, extra)
-    if (existsSync(extraPath)) {
-      scanDirs.push(extraPath)
+    if (existsSync(extraPath)) scanDirs.add(extraPath)
+  }
+
+  for (const customPath of customScanPaths) {
+    if (existsSync(customPath)) scanDirs.add(customPath)
+  }
+
+  const seen = new Set()
+  const projects = []
+
+  // Check cwd itself
+  if (!seen.has(cwd)) {
+    seen.add(cwd)
+    if (existsSync(join(cwd, '.sillyspec'))) {
+      projects.push({ name: basename(cwd), path: cwd })
     }
   }
 
-  const projects = []
-  const seen = new Set() // Dedupe by path
-
   for (const baseDir of scanDirs) {
-    try {
-      const { readdirSync } = await import('fs')
-      const entries = readdirSync(baseDir, { withFileTypes: true })
-
-      for (const entry of entries) {
-        if (!entry.isDirectory()) continue
-        if (shouldExclude(entry.name)) continue
-
-        const dirPath = join(baseDir, entry.name)
-
-        // Skip if we've already seen this path (handles symlinks, dupes)
-        const realPath = dirPath // Could add realpath for true deduping
-        if (seen.has(realPath)) continue
-        seen.add(realPath)
-
-        const sillyspecPath = join(dirPath, '.sillyspec')
-
-        if (existsSync(sillyspecPath)) {
-          projects.push({
-            name: entry.name,
-            path: dirPath
-          })
-        }
-      }
-    } catch (err) {
-      // Skip directories we can't read
-      continue
-    }
+    projects.push(...scanDirectory(baseDir, seen, 2, 0))
   }
 
   return projects
@@ -126,7 +137,6 @@ function handleCliExecute(ws, data) {
     return
   }
 
-  // Find project
   discoverProjects().then(projects => {
     const project = projects.find(p => p.name === projectName)
     if (!project) {
@@ -137,45 +147,29 @@ function handleCliExecute(ws, data) {
       return
     }
 
-    // Kill existing process for this project if any
     const existingKill = activeProcesses.get(projectName)
-    if (existingKill) {
-      existingKill()
-    }
+    if (existingKill) existingKill()
 
-    // Execute command
     const kill = executeCommand(
       project.path,
       command,
       (output) => {
         broadcast({
           type: 'cli:output',
-          data: {
-            projectName,
-            output: output.data,
-            outputType: output.type
-          }
+          data: { projectName, output: output.data, outputType: output.type }
         })
       },
       (result) => {
         activeProcesses.delete(projectName)
         broadcast({
           type: 'cli:complete',
-          data: {
-            projectName,
-            exitCode: result.code,
-            signal: result.signal
-          }
+          data: { projectName, exitCode: result.code, signal: result.signal }
         })
       }
     )
 
     activeProcesses.set(projectName, kill)
-
-    broadcast({
-      type: 'cli:started',
-      data: { projectName, command }
-    })
+    broadcast({ type: 'cli:started', data: { projectName, command } })
   })
 }
 
@@ -186,7 +180,6 @@ function handleCliExecute(ws, data) {
  */
 function startServer({ port = 3456, open: openBrowser = true } = {}) {
   const server = createServer((req, res) => {
-    // CORS headers
     res.setHeader('Access-Control-Allow-Origin', '*')
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
@@ -197,7 +190,6 @@ function startServer({ port = 3456, open: openBrowser = true } = {}) {
       return
     }
 
-    // API: List all projects
     if (req.url === '/api/projects') {
       discoverProjects().then(projects => {
         res.setHeader('Content-Type', 'application/json')
@@ -210,7 +202,6 @@ function startServer({ port = 3456, open: openBrowser = true } = {}) {
       return
     }
 
-    // API: Get project details with state
     if (req.url?.startsWith('/api/project/')) {
       const projectName = decodeURIComponent(req.url.split('/').pop())
       discoverProjects().then(projects => {
@@ -219,10 +210,7 @@ function startServer({ port = 3456, open: openBrowser = true } = {}) {
           const state = parseProjectState(project.path)
           res.setHeader('Content-Type', 'application/json')
           res.writeHead(200)
-          res.end(JSON.stringify({
-            ...project,
-            state
-          }))
+          res.end(JSON.stringify({ ...project, state }))
         } else {
           res.writeHead(404)
           res.end(JSON.stringify({ error: 'Project not found' }))
@@ -247,7 +235,6 @@ function startServer({ port = 3456, open: openBrowser = true } = {}) {
         res.end(readFileSync(filePath))
         return
       }
-      // SPA fallback: serve index.html for unknown routes
       if (existsSync(indexPath)) {
         res.setHeader('Content-Type', 'text/html')
         res.writeHead(200)
@@ -256,12 +243,10 @@ function startServer({ port = 3456, open: openBrowser = true } = {}) {
       }
     }
 
-    // 404
     res.writeHead(404)
     res.end('Not found')
   })
 
-  // WebSocket Server
   wss = new WebSocketServer({ server })
 
   wss.on('error', (err) => {
@@ -282,6 +267,12 @@ function startServer({ port = 3456, open: openBrowser = true } = {}) {
         type: 'projects:init',
         data: projectsWithState
       }))
+
+      // Send current scan paths
+      ws.send(JSON.stringify({
+        type: 'scan:paths',
+        data: getCustomScanPaths()
+      }))
     }).catch(err => {
       console.error('Error sending initial projects:', err)
     })
@@ -299,11 +290,30 @@ function startServer({ port = 3456, open: openBrowser = true } = {}) {
             if (kill) {
               kill()
               activeProcesses.delete(data.data.projectName)
-              broadcast({
-                type: 'cli:killed',
-                data: { projectName: data.data.projectName }
+              broadcast({ type: 'cli:killed', data: { projectName: data.data.projectName } })
+            }
+            break
+          case 'scan:add-path':
+            if (data.data?.path) {
+              addCustomScanPath(data.data.path)
+              broadcast({ type: 'scan:paths', data: getCustomScanPaths() })
+              // Resend projects after scan
+              discoverProjects().then(projects => {
+                broadcast({
+                  type: 'projects:updated',
+                  data: projects.map(p => ({ ...p, state: parseProjectState(p.path) }))
+                })
               })
             }
+            break
+          case 'scan:remove-path':
+            if (data.data?.path) {
+              removeCustomScanPath(data.data.path)
+              ws.send(JSON.stringify({ type: 'scan:paths', data: getCustomScanPaths() }))
+            }
+            break
+          case 'scan:get-paths':
+            ws.send(JSON.stringify({ type: 'scan:paths', data: getCustomScanPaths() }))
             break
           default:
             console.log('Unknown message type:', data.type)
@@ -322,13 +332,9 @@ function startServer({ port = 3456, open: openBrowser = true } = {}) {
     })
   })
 
-  // Start file watcher (wrapped to avoid crashing server)
   try {
     startWatcher((projects) => {
-      broadcast({
-        type: 'projects:updated',
-        data: projects
-      })
+      broadcast({ type: 'projects:updated', data: projects })
     })
   } catch (err) {
     console.error('Failed to start file watcher:', err)
@@ -336,13 +342,11 @@ function startServer({ port = 3456, open: openBrowser = true } = {}) {
 
   server.listen(port, () => {
     console.log(`Dashboard server running on http://localhost:${port}`)
-
     if (openBrowser) {
       open(`http://localhost:${port}`)
     }
   })
 
-  // Handle shutdown
   const shutdown = () => {
     stopWatcher()
     activeProcesses.forEach(kill => kill())

@@ -5,7 +5,7 @@
       <input
         v-model="searchQuery"
         type="text"
-        placeholder="filter logs..."
+        placeholder="过滤日志..."
         class="flex-1 px-2 py-1 rounded-sm text-[10px] font-mono-log outline-none transition-colors duration-100"
         style="background: #141416; border: 1px solid #1F1F22; color: #8B8B8E;"
       />
@@ -14,7 +14,7 @@
         class="px-2 py-1 text-[10px] rounded-sm transition-colors duration-100"
         style="color: #525252; border: 1px solid #1F1F22;"
       >
-        clear
+        清空
       </button>
       <button
         @click="toggleAutoScroll"
@@ -25,14 +25,14 @@
           border: autoScroll ? '1px solid rgba(251,191,36,0.2)' : '1px solid #1F1F22'
         }"
       >
-        {{ autoScroll ? 'auto' : 'pause' }}
+        {{ autoScroll ? '自动' : '暂停' }}
       </button>
     </div>
 
     <!-- Log output -->
     <div ref="logContainer" class="flex-1 overflow-y-auto px-2 py-1.5 font-mono-log text-[10px]" style="background: #0A0A0B;" @scroll="handleScroll">
       <div v-if="filteredLogs.length === 0" class="flex items-center justify-center h-full">
-        <span class="font-mono-log" style="color: #2A2A2D;">{{ logs.length === 0 ? 'no logs' : 'no match' }}</span>
+        <span class="font-mono-log" style="color: #2A2A2D;">{{ logs.length === 0 ? '暂无日志' : '无匹配' }}</span>
       </div>
       <div v-else class="space-y-px">
         <div v-for="log in filteredLogs" :key="log.id" class="px-1.5 py-px rounded-sm" :style="{ background: logBg(log.type) }">
@@ -45,7 +45,7 @@
     <!-- Footer -->
     <div class="px-3 py-1 flex items-center justify-between text-[9px] font-mono-log" style="border-top: 1px solid #1F1F22; background: #0E0E10; color: #3A3A3D;">
       <span>{{ filteredLogs.length }}/{{ logs.length }}</span>
-      <span v-if="!autoScroll" style="color: #FB923C;">paused</span>
+      <span v-if="!autoScroll" style="color: #FB923C;">已暂停</span>
     </div>
   </div>
 </template>

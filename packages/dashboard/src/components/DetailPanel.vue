@@ -5,7 +5,7 @@
   >
     <!-- Header -->
     <div class="px-4 py-3 flex items-center justify-between flex-shrink-0" style="border-bottom: 1px solid #1F1F22;">
-      <h2 class="text-[11px] font-semibold uppercase tracking-[0.2em] font-[JetBrains_Mono,monospace]" style="color: #525252;">Detail</h2>
+      <h2 class="text-[11px] font-semibold uppercase tracking-[0.2em] font-[JetBrains_Mono,monospace]" style="color: #525252;">详情</h2>
       <button
         @click="$emit('close')"
         class="p-1 rounded-sm transition-colors duration-100 hover:bg-white/5"
@@ -27,7 +27,7 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
             </svg>
           </div>
-          <p class="text-[11px] font-[JetBrains_Mono,monospace]" style="color: #3A3A3D;">Select a step</p>
+          <p class="text-[11px] font-[JetBrains_Mono,monospace]" style="color: #3A3A3D;">选择一个步骤</p>
         </div>
       </div>
 
@@ -45,25 +45,25 @@
 
         <!-- Description -->
         <div v-if="activeStep.description || activeStep.summary" class="px-4 py-3" style="border-bottom: 1px solid #1F1F22;">
-          <h4 class="text-[9px] font-semibold uppercase tracking-[0.2em] mb-1.5 font-[JetBrains_Mono,monospace]" style="color: #525252;">Description</h4>
+          <h4 class="text-[9px] font-semibold uppercase tracking-[0.2em] mb-1.5 font-[JetBrains_Mono,monospace]" style="color: #525252;">描述</h4>
           <p class="text-[11px] leading-relaxed" style="color: #8B8B8E;">{{ activeStep.description || activeStep.summary }}</p>
         </div>
 
         <!-- Conclusion -->
         <div v-if="activeStep.conclusion" class="px-4 py-3" style="border-bottom: 1px solid #1F1F22;">
-          <h4 class="text-[9px] font-semibold uppercase tracking-[0.2em] mb-1.5 font-[JetBrains_Mono,monospace]" style="color: #525252;">Conclusion</h4>
+          <h4 class="text-[9px] font-semibold uppercase tracking-[0.2em] mb-1.5 font-[JetBrains_Mono,monospace]" style="color: #525252;">结论</h4>
           <p class="text-[11px] leading-relaxed" style="color: #E4E4E7;">{{ activeStep.conclusion }}</p>
         </div>
 
         <!-- Decision -->
         <div v-if="activeStep.decision" class="px-4 py-3" style="border-bottom: 1px solid #1F1F22;">
-          <h4 class="text-[9px] font-semibold uppercase tracking-[0.2em] mb-1.5 font-[JetBrains_Mono,monospace]" style="color: #525252;">Decision</h4>
+          <h4 class="text-[9px] font-semibold uppercase tracking-[0.2em] mb-1.5 font-[JetBrains_Mono,monospace]" style="color: #525252;">决策</h4>
           <p class="text-[11px] leading-relaxed" style="color: #E4E4E7;">{{ activeStep.decision }}</p>
         </div>
 
         <!-- User Query -->
         <div v-if="activeStep.userQuery" class="px-4 py-3" style="border-bottom: 1px solid #1F1F22;">
-          <h4 class="text-[9px] font-semibold uppercase tracking-[0.2em] mb-1.5 font-[JetBrains_Mono,monospace]" style="color: #525252;">User Query</h4>
+          <h4 class="text-[9px] font-semibold uppercase tracking-[0.2em] mb-1.5 font-[JetBrains_Mono,monospace]" style="color: #525252;">用户提问</h4>
           <div class="px-3 py-2 rounded-md" style="background: #0E0E10; border: 1px solid #1F1F22;">
             <p class="text-[11px] italic" style="color: #8B8B8E;">"{{ activeStep.userQuery }}"</p>
           </div>
@@ -71,16 +71,16 @@
 
         <!-- Metadata -->
         <div v-if="activeStep.duration || activeStep.timestamp" class="px-4 py-3" style="border-bottom: 1px solid #1F1F22;">
-          <h4 class="text-[9px] font-semibold uppercase tracking-[0.2em] mb-1.5 font-[JetBrains_Mono,monospace]" style="color: #525252;">Meta</h4>
+          <h4 class="text-[9px] font-semibold uppercase tracking-[0.2em] mb-1.5 font-[JetBrains_Mono,monospace]" style="color: #525252;">元信息</h4>
           <div class="space-y-1 text-[11px]" style="color: #525252;">
-            <div v-if="activeStep.duration"><span style="color: #8B8B8E;">Time:</span> {{ activeStep.duration }}</div>
-            <div v-if="activeStep.timestamp"><span style="color: #8B8B8E;">At:</span> {{ formatTimestamp(activeStep.timestamp) }}</div>
+            <div v-if="activeStep.duration"><span style="color: #8B8B8E;">耗时：</span> {{ activeStep.duration }}</div>
+            <div v-if="activeStep.timestamp"><span style="color: #8B8B8E;">时间：</span> {{ formatTimestamp(activeStep.timestamp) }}</div>
           </div>
         </div>
 
         <!-- Output -->
         <div v-if="activeStep.output || activeStep.files" class="px-4 py-3" style="border-bottom: 1px solid #1F1F22;">
-          <h4 class="text-[9px] font-semibold uppercase tracking-[0.2em] mb-1.5 font-[JetBrains_Mono,monospace]" style="color: #525252;">Output</h4>
+          <h4 class="text-[9px] font-semibold uppercase tracking-[0.2em] mb-1.5 font-[JetBrains_Mono,monospace]" style="color: #525252;">输出</h4>
           <div v-if="activeStep.output" class="px-3 py-2 rounded-md max-h-40 overflow-y-auto" style="background: #0E0E10; border: 1px solid #1F1F22;">
             <pre class="text-[10px] whitespace-pre-wrap font-mono-log" style="color: #8B8B8E;">{{ activeStep.output }}</pre>
           </div>

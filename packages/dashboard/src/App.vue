@@ -11,7 +11,10 @@
           :projects="dashboard.state.projects"
           :active-project="dashboard.state.activeProject"
           :is-loading="dashboard.state.isLoading"
+          :scan-paths="scanPaths"
           @select="handleSelectProject"
+          @scan:add-path="handleAddScanPath"
+          @scan:remove-path="handleRemoveScanPath"
         />
       </aside>
 
@@ -81,6 +84,7 @@ const ws = useWebSocket()
 const dashboard = useDashboard()
 const isCommandPaletteOpen = ref(false)
 const executionResult = ref(null)
+const scanPaths = ref([])
 
 // Keyboard shortcuts
 useDashboardKeyboard({
@@ -123,6 +127,7 @@ onMounted(() => {
       executionResult.value = { exitCode: -1, signal: 'SIGTERM' }
     }
   })
+  ws.on('scan:paths', (paths) => { scanPaths.value = paths })
 })
 
 function handleSelectProject(project) { dashboard.selectProject(project) }
@@ -138,6 +143,12 @@ function handleKill() {
   const projectName = dashboard.activeProjectName.value
   if (!projectName) return
   ws.send({ type: 'cli:kill', data: { projectName } })
+}
+function handleAddScanPath(path) {
+  ws.send({ type: 'scan:add-path', data: { path } })
+}
+function handleRemoveScanPath(path) {
+  ws.send({ type: 'scan:remove-path', data: { path } })
 }
 </script>
 

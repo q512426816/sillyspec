@@ -17,7 +17,7 @@
                 ref="searchInput"
                 v-model="searchQuery"
                 type="text"
-                placeholder="Search projects or stages..."
+                placeholder="搜索项目或命令..."
                 class="flex-1 bg-transparent border-none outline-none text-[12px] font-[JetBrains_Mono,monospace]"
                 style="color: #E4E4E7;"
                 @keydown="handleKeydown"
@@ -29,7 +29,7 @@
           <!-- Results -->
           <div class="max-h-72 overflow-y-auto">
             <div v-if="filteredItems.length === 0" class="py-10 text-center">
-              <p class="text-[11px] font-[JetBrains_Mono,monospace]" style="color: #3A3A3D;">No results</p>
+              <p class="text-[11px] font-[JetBrains_Mono,monospace]" style="color: #3A3A3D;">无结果</p>
             </div>
             <div v-else class="py-0.5">
               <div
@@ -54,9 +54,9 @@
 
           <!-- Footer -->
           <div class="px-4 py-2 flex items-center gap-4 text-[9px] font-mono-log" style="border-top: 1px solid #1F1F22; color: #3A3A3D;">
-            <span><kbd class="px-1 rounded-sm" style="background: #0A0A0B; border: 1px solid #1F1F22;">↑↓</kbd> nav</span>
-            <span><kbd class="px-1 rounded-sm" style="background: #0A0A0B; border: 1px solid #1F1F22;">↵</kbd> open</span>
-            <span><kbd class="px-1 rounded-sm" style="background: #0A0A0B; border: 1px solid #1F1F22;">esc</kbd> close</span>
+            <span><kbd class="px-1 rounded-sm" style="background: #0A0A0B; border: 1px solid #1F1F22;">↑↓</kbd> 导航</span>
+            <span><kbd class="px-1 rounded-sm" style="background: #0A0A0B; border: 1px solid #1F1F22;">↵</kbd> 打开</span>
+            <span><kbd class="px-1 rounded-sm" style="background: #0A0A0B; border: 1px solid #1F1F22;">esc</kbd> 关闭</span>
           </div>
         </div>
       </div>
