@@ -4,7 +4,7 @@
  * CLI 成为流程引擎，AI 变成步骤执行器。
  */
 import { basename, join } from 'path'
-import { existsSync, readdirSync } from 'fs'
+import { existsSync, readdirSync, mkdirSync, writeFileSync } from 'fs'
 import { ProgressManager } from './progress.js'
 import { stageRegistry, getNextStage } from './stages/index.js'
 import { buildExecuteSteps } from './stages/execute.js'
@@ -192,7 +192,17 @@ function completeStep(pm, progress, stageName, cwd, outputText) {
   steps[currentIdx].status = 'completed'
   steps[currentIdx].completedAt = new Date().toISOString()
   if (outputText) {
-    steps[currentIdx].output = outputText
+    const MAX_OUTPUT = 200
+    if (outputText.length > MAX_OUTPUT) {
+      steps[currentIdx].output = outputText.slice(0, MAX_OUTPUT) + '…'
+      // Save full output to artifacts/
+      const artifactsDir = join(cwd, '.sillyspec', '.runtime', 'artifacts')
+      mkdirSync(artifactsDir, { recursive: true })
+      const ts = new Date().toISOString().replace(/[:.]/g, '-')
+      writeFileSync(join(artifactsDir, `${stageName}-step${currentIdx + 1}-${ts}.txt`), outputText)
+    } else {
+      steps[currentIdx].output = outputText
+    }
   }
 
   // 检查是否还有下一步

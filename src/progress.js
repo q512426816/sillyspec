@@ -67,7 +67,10 @@ export class ProgressManager {
 
   _write(cwd, data) {
     const progressPath = this._path(cwd, PROGRESS_FILE);
-    writeFileSync(progressPath, JSON.stringify(data, null, 2) + '\n');
+    const tmpPath = progressPath + '.tmp';
+    this._ensureDir(cwd);
+    writeFileSync(tmpPath, JSON.stringify(data, null, 2) + '\n');
+    renameSync(tmpPath, progressPath);
   }
 
   _ensureDir(cwd) {

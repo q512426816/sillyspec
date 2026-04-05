@@ -1,6 +1,6 @@
 import { createServer } from 'http'
 import { WebSocketServer } from 'ws'
-import { existsSync, readFileSync, readdirSync, realpathSync } from 'fs'
+import { existsSync, readFileSync, readdirSync, realpathSync, watch } from 'fs'
 import { join, dirname, basename, sep, resolve } from 'path'
 import { fileURLToPath } from 'url'
 import { homedir } from 'os'
@@ -14,6 +14,44 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 // WebSocket clients and active processes
 let wss = null
 const activeProcesses = new Map()
+
+// Progress file watchers: projectPath -> { watcher, timer, refCount }
+const progressWatchers = new Map()
+
+function startProgressWatch(projectPath) {
+  if (progressWatchers.has(projectPath)) {
+    progressWatchers.get(projectPath).refCount++
+    return
+  }
+  const progressFile = join(projectPath, '.sillyspec', '.runtime', 'progress.json')
+  if (!existsSync(progressFile)) return
+
+  let timer = null
+  try {
+    const watcher = watch(progressFile, (eventType) => {
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => {
+        timer = null
+        try {
+          const state = parseProjectState(projectPath)
+          broadcast({ type: 'project:update', data: { path: projectPath, state } })
+        } catch {}
+      }, 200)
+    })
+    progressWatchers.set(projectPath, { watcher, timer, refCount: 1 })
+  } catch {}
+}
+
+function stopProgressWatch(projectPath) {
+  const entry = progressWatchers.get(projectPath)
+  if (!entry) return
+  entry.refCount--
+  if (entry.refCount <= 0) {
+    entry.watcher.close()
+    if (entry.timer) clearTimeout(entry.timer)
+    progressWatchers.delete(projectPath)
+  }
+}
 
 /**
  * Broadcast message to all connected WebSocket clients
@@ -358,6 +396,11 @@ function startServer({ port = 3456, open: openBrowser = true } = {}) {
         data: projectsWithState
       }))
 
+      // Start watching progress files for all discovered projects
+      for (const p of projectsWithState) {
+        startProgressWatch(p.path)
+      }
+
       // Send current scan paths
       ws.send(JSON.stringify({
         type: 'scan:paths',
@@ -421,6 +464,12 @@ function startServer({ port = 3456, open: openBrowser = true } = {}) {
 
     ws.on('close', () => {
       console.log('WebSocket client disconnected')
+      // Decrement progress watchers — we track which projects this client was watching
+      // via the initial projects:init. For simplicity, stop all that we started.
+      // (Other clients will re-start via their connection if still active)
+      for (const [path] of progressWatchers) {
+        stopProgressWatch(path)
+      }
     })
 
     ws.on('error', (err) => {
