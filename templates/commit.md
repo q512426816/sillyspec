@@ -43,6 +43,8 @@ git diff --cached --stat
 ```bash
 USER=$(git config user.name 2>/dev/null || echo "default")
 cat .sillyspec/quicklog/QUICKLOG-${USER}.md 2>/dev/null
+# 同时扫描活跃变更目录下的归属 quicklog
+for dir in .sillyspec/changes/*/quicklog/*.md; do [ -f "$dir" ] && cat "$dir"; done 2>/dev/null
 ```
 
 **来源 B — tasks.md（execute 产生的修改）：**

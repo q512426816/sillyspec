@@ -209,6 +209,7 @@ async function doInstall(projectDir, tools, isWorkspace, subprojects = []) {
   // .sillyspec/changes/archive/ → archive
   // .sillyspec/quicklog/    → quick
   // .sillyspec/knowledge/   → archive (spec 沉淀)
+  // .sillyspec/.runtime/    → progress (gitignored)
   // (plan 内容已合并到 tasks.md)
   if (isWorkspace) {
     mkdirSync(join(projectDir, '.sillyspec', 'shared'), { recursive: true });
@@ -227,8 +228,29 @@ async function doInstall(projectDir, tools, isWorkspace, subprojects = []) {
     writeFileSync(uncatPath, `# 未分类知识\n\n> execute/quick 执行中发现的坑暂存于此，用户审阅后归类到对应文件并更新 INDEX.md。\n`);
   }
 
+  // 创建 .sillyspec/.runtime/ 目录结构
+  const runtimeDir = join(projectDir, '.sillyspec', '.runtime');
+  for (const sub of ['artifacts', 'history', 'logs', 'templates']) {
+    mkdirSync(join(runtimeDir, sub), { recursive: true });
+  }
+
+  // 复制 resume-dialog.md 到 .runtime/templates/
+  const resumeDialogSrc = join(TEMPLATE_DIR, 'resume-dialog.md');
+  if (existsSync(resumeDialogSrc)) {
+    const dest = join(runtimeDir, 'templates', 'resume-dialog.md');
+    if (!existsSync(dest)) {
+      copyFileSync(resumeDialogSrc, dest);
+    }
+  }
+
+  // 创建初始 user-inputs.md
+  const inputsPath = join(runtimeDir, 'user-inputs.md');
+  if (!existsSync(inputsPath)) {
+    writeFileSync(inputsPath, '# 用户输入记录\n\n> 每步完成时由 AI 自动追加，记录用户所有原话。\n\n');
+  }
+
   const gitignorePath = join(projectDir, '.gitignore');
-  const ignoreRules = ['.sillyspec/STATE.md', '.sillyspec/codebase/SCAN-RAW.md', '.sillyspec/local.yaml'];
+  const ignoreRules = ['.sillyspec/STATE.md', '.sillyspec/codebase/SCAN-RAW.md', '.sillyspec/local.yaml', '.sillyspec/.runtime/'];
   if (existsSync(gitignorePath)) {
     const content = readFileSync(gitignorePath, 'utf8');
     let updated = content.trimEnd();

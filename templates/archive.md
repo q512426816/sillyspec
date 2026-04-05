@@ -32,6 +32,7 @@ $ARGUMENTS
 - 包含的文件列表
 - 任务完成统计（✅ 已完成 / ⬜ 未完成）
 - 一句话总结本次变更
+- quicklog 修改记录（如有 `.sillyspec/changes/<change-name>/quicklog/` 目录）
 
 ### 3. Spec 沉淀
 
@@ -42,6 +43,61 @@ $ARGUMENTS
 用 AskUserQuestion 让用户确认：
 - ① 确认归档
 - ② 取消
+
+### 4.5 生成归档摘要
+
+在变更目录下自动生成 `SUMMARY.md`：
+
+```markdown
+# <变更名> 归档
+
+- 创建：YYYY-MM-DD
+- 完成：YYYY-MM-DD
+- 涉及阶段：brainstorm → plan → execute → verify
+
+## 关键决策
+- （从 design.md 提取 3-5 条核心决策）
+
+## 产出文件
+- design.md — 设计文档
+- tasks.md — 任务清单
+- quicklog/ — 关联 quick 修改（N次）
+  - quick1: 描述
+  - quick2: 描述
+
+## 代码变更统计
+- 新增 X 文件，修改 Y 文件，删除 Z 文件
+- 详见 CHANGELOG.md
+```
+
+在变更目录下自动生成 `CHANGELOG.md`：
+
+```bash
+# 收集该变更相关的 git commit（按变更名过滤或按时间范围）
+git log --oneline --no-merges -- .sillyspec/changes/<change-name>/ 2>/dev/null
+# 以及变更目录创建后的所有 commit
+git log --oneline --no-merges --since="<创建时间>" -- "*.ts" "*.js" "*.vue" "*.java" 2>/dev/null
+```
+
+写入 CHANGELOG.md，格式：
+```markdown
+# <变更名> 变更日志
+
+## brainstorm 阶段
+- (相关 commit)
+
+## plan 阶段
+- (相关 commit)
+
+## execute 阶段
+- (相关 commit)
+
+## quick 修改
+- (相关 commit)
+
+## verify 阶段
+- (相关 commit)
+```
 
 ### 5. 执行归档
 

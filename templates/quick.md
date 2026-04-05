@@ -19,6 +19,14 @@ $ARGUMENTS
 ## 流程
 
 1. **解析参数：** 检查是否携带 `--change <变更名>`，确定记录方式
+1.5 **归属检查：** 如果没有 `--change` 参数，检查 `.sillyspec/changes/` 下是否有非 archive 的活跃变更目录：
+   ```bash
+   ls -d .sillyspec/changes/*/ 2>/dev/null | grep -v archive
+   ```
+   - 有活跃变更 → AskUserQuestion 询问本次 quick 归属哪个变更，默认选当前活跃的
+   - 用户选择后将日志写入 `.sillyspec/changes/<变更名>/quicklog/` 而非独立 QUICKLOG
+   - 用户选择"无归属" → 走原有的独立 QUICKLOG 流程
+   - 无活跃变更 → 走原有的独立 QUICKLOG 流程
 2. **理解任务：** 模糊则问一个问题确认
 3. **加载上下文：** `cat .sillyspec/codebase/{CONVENTIONS,ARCHITECTURE}.md 2>/dev/null`
 3b. **编码规范扫描：** 检测项目中的编码规范配置文件（`.eslintrc*`、`.prettierrc*`、`tsconfig.json`、`.editorconfig`、`tailwind.config.*`、`CONTRIBUTING.md`），提取关键规则生成摘要。写作代码时必须严格遵守这些规则（分号/引号/缩进/命名风格等），如不确定优先遵守规范约束。
@@ -54,14 +62,39 @@ cat .sillyspec/local.yaml 2>/dev/null
 ```bash
 mvn test -pl <模块> -Dtest=<测试类> 2>/dev/null || ./gradlew test --tests <测试类> 2>/dev/null || pnpm test 2>/dev/null || npm test 2>/dev/null || pytest <测试文件> 2>/dev/null
 ```
-8. **Git 暂存：** `git add -A`。**不要 commit**，由用户通过 `/sillyspec:commit` 统一提交。**工作区模式下，确认当前在正确的子项目目录中执行暂存。**
-9. **记录：**
+8. **Lint 校验（如项目配置了）：** 写完代码后、暂存前，运行项目的 lint 工具验证代码质量：
+   ```bash
+   # 检测并运行可用的 lint 工具
+   npx eslint <修改的文件> 2>/dev/null || \
+   npx prettier --check <修改的文件> 2>/dev/null || \
+   npx tsc --noEmit 2>/dev/null || \
+   true  # 没有 lint 工具则跳过
+   ```
+   - **有报错 → 自动修复：** `npx eslint --fix <修改的文件>` / `npx prettier --write <修改的文件>`
+   - **修复后仍有报错 → 在 QUICKLOG 中标注，提醒用户手动处理**
+   - **工作区模式下，在子项目目录中执行，不要在主项目目录执行**
+9. **Git 暂存：** `git add -A`。**不要 commit**，由用户通过 `/sillyspec:commit` 统一提交。**工作区模式下，确认当前在正确的子项目目录中执行暂存。**
+10. **记录：**
    - **有 `--change`：** 在 `.sillyspec/changes/<变更名>/tasks.md` 追加 task 并勾选，**记录精确到秒的时间戳**：
 
 ```
 - [x] [YYYY-MM-DD HH:MM:SS] 任务描述
 ```
-   - **无 `--change`：** 记录到 `.sillyspec/quicklog/QUICKLOG-<git用户名>.md`（见下方规则）
+   - **无 `--change` 但步骤 1.5 确认了归属变更：** 记录到 `.sillyspec/changes/<变更名>/quicklog/YYYY-MM-DD-HHMMSS-任务简述.md`，格式：
+
+```markdown
+# quick: 任务描述
+
+- 时间：YYYY-MM-DD HH:MM:SS
+- 关联变更：<变更名>
+- 修改文件：
+  - `path/to/file1`
+  - `path/to/file2`
+- 改动说明：（2-3 句描述做了什么）
+- 发现的坑：（如有，简要记录）
+```
+
+   - **无 `--change` 且无归属：** 记录到 `.sillyspec/quicklog/QUICKLOG-<git用户名>.md`（见下方规则）
 10. **检查复杂度：** 任务比预期复杂 → 建议用完整流程
 
 11. **记录发现的坑：** 执行过程中如果发现项目特有的规律、陷阱或约定（如"某方法参数顺序容易搞反"、"某表有隐藏软删除字段"），追加到 `.sillyspec/knowledge/uncategorized.md`，格式：
