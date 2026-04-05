@@ -1,12 +1,12 @@
 <template>
-  <div class="h-screen w-screen flex flex-col overflow-hidden font-[DM_Sans,sans-serif] relative" style="background-color: #0A0A0B;">
+  <div class="h-screen w-screen flex flex-col overflow-hidden font-[DM_Sans,sans-serif] relative" style="background-color: #151820;">
     <!-- Ambient background -->
     <div class="absolute inset-0 pointer-events-none" style="background: radial-gradient(ellipse 60% 40% at 10% 20%, rgba(251,191,36,0.04) 0%, transparent 70%), radial-gradient(ellipse 50% 50% at 90% 80%, rgba(251,191,36,0.02) 0%, transparent 70%);" />
 
     <!-- Main Content -->
     <div class="flex-1 flex overflow-hidden relative z-10">
       <!-- Left: Project List -->
-      <aside class="w-[240px] flex-shrink-0 relative" style="background: #111113; border-right: 1px solid #1F1F22;">
+      <aside class="w-[240px] flex-shrink-0 relative" style="background: #1A1E28; border-right: 1px solid #2A3040;">
         <ProjectList
           :projects="dashboard.state.projects"
           :active-project="dashboard.state.activeProject"
@@ -33,7 +33,7 @@
           'flex-shrink-0 transition-all duration-300 relative overflow-hidden',
           dashboard.state.isPanelOpen ? 'w-[340px]' : 'w-0'
         ]"
-        style="background: #111113; border-left: 1px solid #1F1F22;"
+        style="background: #1A1E28; border-left: 1px solid #2A3040;"
       >
         <DetailPanel
           :is-open="dashboard.state.isPanelOpen"

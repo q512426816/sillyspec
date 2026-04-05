@@ -100,7 +100,7 @@
       <div v-else class="px-3 space-y-0.5">
         <div
           v-for="project in projects"
-          :key="project.name"
+          :key="project.path"
           :class="[
             'relative rounded-md cursor-pointer transition-all duration-150 overflow-hidden group',
           ]"
@@ -178,7 +178,7 @@ watch(showAddInput, (v) => {
 })
 
 function isActive(project) {
-  return props.activeProject?.name === project.name
+  return props.activeProject?.path === project.path
 }
 
 function getProjectStatus(project) {

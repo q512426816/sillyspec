@@ -1,18 +1,18 @@
 @import "tailwindcss";
 
 @theme {
-  --color-bg: #0A0A0B;
+  --color-bg: #111318;
   --color-primary: #FBBF24;
   --color-primary-dim: #B45309;
   --color-warning: #FB923C;
   --color-danger: #EF4444;
-  --color-muted: #525252;
-  --color-surface: #141416;
-  --color-surface-2: #1C1C1F;
-  --color-border: #2A2A2D;
-  --color-border-light: #3A3A3D;
-  --color-text: #E4E4E7;
-  --color-text-secondary: #8B8B8E;
+  --color-muted: #6B7280;
+  --color-surface: #1A1D24;
+  --color-surface-2: #23272F;
+  --color-border: #2E3340;
+  --color-border-light: #3D4455;
+  --color-text: #F0F0F2;
+  --color-text-secondary: #9CA3AF;
   --color-info: #38BDF8;
   --color-success: #34D399;
 
@@ -96,7 +96,7 @@
 
 /* Skeleton shimmer */
 .skeleton-shimmer {
-  background: linear-gradient(90deg, #1C1C1F 25%, #2A2A2D 50%, #1C1C1F 75%);
+  background: linear-gradient(90deg, #1A1E28 25%, #2A3040 50%, #1A1E28 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s ease-in-out infinite;
 }
@@ -112,12 +112,12 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #2A2A2D;
+  background: #2A3040;
   border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #3A3A3D;
+  background: #3A4555;
 }
 
 * {

@@ -21,13 +21,13 @@ export function useDashboard() {
    * @param {string} name - Project name
    * @returns {object|null} Project or null
    */
-  function getProject(name) {
-    return state.projects.find(p => p.name === name) || null
+  function getProject(path) {
+    return state.projects.find(p => p.path === path) || null
   }
 
   /**
    * Select a project as active
-   * @param {object|string} project - Project object or name
+   * @param {object|string} project - Project object or path
    */
   function selectProject(project) {
     const proj = typeof project === 'string'
@@ -115,7 +115,7 @@ export function useDashboard() {
 
     // Restore active project if it still exists
     if (state.activeProject) {
-      const updated = getProject(state.activeProject.name)
+      const updated = getProject(state.activeProject.path)
       if (updated) {
         state.activeProject = updated
       }
@@ -141,6 +141,7 @@ export function useDashboard() {
 
   // Computed properties
   const activeProjectName = computed(() => state.activeProject?.name || null)
+  const activeProjectPath = computed(() => state.activeProject?.path || null)
   const activeProjectStage = computed(() => state.activeProject?.state?.currentStage || null)
   const hasProjects = computed(() => state.projects.length > 0)
   const activeProjectSteps = computed(() => {
@@ -164,6 +165,7 @@ export function useDashboard() {
     setExecuting,
     isExecuting,
     activeProjectName,
+    activeProjectPath,
     activeProjectStage,
     hasProjects,
     activeProjectSteps

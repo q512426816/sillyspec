@@ -1,6 +1,6 @@
 import { createServer } from 'http'
 import { WebSocketServer } from 'ws'
-import { existsSync, readFileSync, readdirSync } from 'fs'
+import { existsSync, readFileSync, readdirSync, realpathSync } from 'fs'
 import { join, dirname, basename, sep } from 'path'
 import { fileURLToPath } from 'url'
 import { homedir } from 'os'
@@ -61,8 +61,11 @@ function scanDirectory(baseDir, seen, maxDepth = 2, currentDepth = 0) {
       if (!entry.isDirectory()) continue
       if (shouldExclude(entry.name, cwd)) continue
       const dirPath = join(baseDir, entry.name)
-      if (seen.has(dirPath)) continue
-      seen.add(dirPath)
+      let realPath
+      try { realPath = realpathSync(dirPath) } catch { realPath = dirPath }
+      const normalizedPath = realPath.toLowerCase()
+      if (seen.has(normalizedPath)) continue
+      seen.add(normalizedPath)
       if (existsSync(join(dirPath, '.sillyspec'))) {
         projects.push({ name: entry.name, path: dirPath })
       }
@@ -106,12 +109,12 @@ async function discoverProjects() {
   const seen = new Set()
   const projects = []
 
-  // Check cwd itself
-  if (!seen.has(cwd)) {
-    seen.add(cwd)
-    if (existsSync(join(cwd, '.sillyspec'))) {
-      projects.push({ name: basename(cwd), path: cwd })
-    }
+  // Normalize cwd for dedup
+  let cwdReal
+  try { cwdReal = realpathSync(cwd) } catch { cwdReal = cwd }
+  seen.add(cwdReal.toLowerCase())
+  if (existsSync(join(cwd, '.sillyspec'))) {
+    projects.push({ name: basename(cwd), path: cwd })
   }
 
   for (const baseDir of scanDirs) {

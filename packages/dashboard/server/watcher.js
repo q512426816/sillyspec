@@ -1,7 +1,7 @@
 import chokidar from 'chokidar'
 import { join, basename, dirname, sep } from 'path'
 import { homedir } from 'os'
-import { existsSync, readdirSync } from 'fs'
+import { existsSync, readdirSync, realpathSync } from 'fs'
 import { parseProjectState } from './parser.js'
 
 let watcher = null
@@ -110,8 +110,11 @@ function scanDirectory(baseDir, seen, maxDepth = 2, currentDepth = 0) {
 
       const dirPath = join(baseDir, entry.name)
 
-      if (seen.has(dirPath)) continue
-      seen.add(dirPath)
+      let realPath
+      try { realPath = realpathSync(dirPath) } catch { realPath = dirPath }
+      const normalizedPath = realPath.toLowerCase()
+      if (seen.has(normalizedPath)) continue
+      seen.add(normalizedPath)
 
       // Check if this dir has .sillyspec
       const sillyspecPath = join(dirPath, '.sillyspec')
