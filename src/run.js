@@ -6,7 +6,7 @@
 import { basename, join } from 'path'
 import { existsSync, readdirSync, mkdirSync, writeFileSync } from 'fs'
 import { ProgressManager } from './progress.js'
-import { stageRegistry, getNextStage } from './stages/index.js'
+import { stageRegistry, getNextStage, auxiliaryStages } from './stages/index.js'
 import { buildExecuteSteps } from './stages/execute.js'
 
 /**
@@ -76,6 +76,11 @@ function outputStep(stageName, stepIndex, steps, cwd) {
   console.log(`---\n`)
   console.log(`## Step ${stepIndex + 1}/${total}: ${step.name}\n`)
   console.log(step.prompt)
+  console.log(`\n### ⚠️ 铁律`)
+  console.log('- 只做本步骤描述的操作，不得自行扩展或跳过')
+  console.log('- 不要回头修改已完成的步骤')
+  console.log('- 完成后立即执行 --done 命令，不得跳过')
+  console.log('- 生成的文件头部必须包含 author（git 用户名）和 created_at（精确到秒）')
   console.log(`\n### 完成后执行`)
   console.log(`sillyspec run ${stageName} --done --output "你的摘要"`)
 }
@@ -106,12 +111,18 @@ export function runCommand(args, cwd) {
     outputText = flags[outputIdx + 1]
   }
 
+  const isAuxiliary = auxiliaryStages.includes(stageName)
+
   const pm = new ProgressManager()
   let progress = pm.read(cwd)
 
   if (!progress) {
-    console.error('❌ 未找到 progress.json，请先运行 sillyspec init')
-    process.exit(1)
+    // 辅助命令可以在没有 progress.json 时工作（比如 scan）
+    if (!isAuxiliary) {
+      console.error('❌ 未找到 progress.json，请先运行 sillyspec init')
+      process.exit(1)
+    }
+    progress = pm.init(cwd)
   }
 
   // --reset

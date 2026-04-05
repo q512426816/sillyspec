@@ -17,7 +17,7 @@ const PROGRESS_FILE = 'progress.json';
 const BACKUP_FILE = 'progress.json.bak';
 
 const CURRENT_VERSION = 2;
-const VALID_STAGES = ['brainstorm', 'propose', 'plan', 'execute', 'verify'];
+const VALID_STAGES = ['brainstorm', 'propose', 'plan', 'execute', 'verify', 'scan', 'quick', 'archive', 'status'];
 const VALID_STATUSES = ['pending', 'in-progress', 'completed', 'failed', 'blocked'];
 
 const STAGE_LABELS = {
@@ -26,6 +26,10 @@ const STAGE_LABELS = {
   plan: '📐 实现计划',
   execute: '⚡ 波次执行',
   verify: '🔍 验证确认',
+  scan: '🔍 代码扫描',
+  quick: '⚡ 快速任务',
+  archive: '📦 归档变更',
+  status: '📊 状态查看',
 };
 
 function emptyStage() {
