@@ -1,0 +1,4 @@
+.DS_Store
+STATE.md
+node_modules/
+.npm-publish-token
