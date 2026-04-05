@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, copyFileSync } from 'fs';
-import { join, resolve, dirname } from 'path';
+import { join, resolve, dirname, basename } from 'path';
 import { fileURLToPath } from 'url';
 import { homedir } from 'os';
 import { checkbox, select, confirm, input } from '@inquirer/prompts';
@@ -209,7 +209,7 @@ async function doInstall(projectDir, tools, isWorkspace, subprojects = []) {
   // .sillyspec/.runtime/    → progress (gitignored)
 
   // 注册当前项目到 projects/
-  const projectName = projectDir.split('/').pop() || projectDir.split('\\').pop() || 'project';
+  const projectName = basename(projectDir) || 'project';
   const projectsDir = join(projectDir, '.sillyspec', 'projects');
   mkdirSync(projectsDir, { recursive: true });
   const projectYamlPath = join(projectsDir, `${projectName}.yaml`);
