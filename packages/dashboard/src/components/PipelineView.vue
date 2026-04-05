@@ -57,19 +57,22 @@
       </div>
     </div>
 
-    <!-- Timeline -->
+    <!-- Activity Log -->
     <div v-if="project?.state?.progress" class="p-4 border-t border-[#30363D] bg-[#0D1117]">
-      <div class="text-xs text-[#8B949E] mb-2">时间线</div>
-      <div class="flex items-center gap-1 overflow-x-auto">
-        <div
-          v-for="(step, index) in timelineSteps"
-          :key="index"
-          :class="[
-            'flex-shrink-0 w-2 h-8 rounded-sm transition-all duration-300',
-            getTimelineColor(step.status)
-          ]"
-          :title="`${step.title} · ${step.duration || '进行中'}`"
-        />
+      <div class="flex items-center justify-between mb-2">
+        <div class="text-xs text-[#8B949E]">活动日志</div>
+        <div class="text-xs text-[#6B7280]">{{ activityLogs.length }} 条记录</div>
+      </div>
+      <div class="space-y-1 max-h-40 overflow-y-auto">
+        <div v-for="(log, index) in activityLogs" :key="index"
+             class="flex items-start gap-2 text-xs py-1">
+          <span class="text-[#6B7280] flex-shrink-0 w-12">{{ log.time }}</span>
+          <span :class="getStatusIcon(log.status)">{{ getStatusEmoji(log.type) }}</span>
+          <span class="text-[#C9D1D9]">{{ log.description }}</span>
+        </div>
+        <div v-if="activityLogs.length === 0" class="text-xs text-[#6B7280] py-2">
+          暂无活动记录
+        </div>
       </div>
     </div>
   </div>
@@ -104,25 +107,49 @@ const stages = computed(() => {
   return progress.value.stages || {}
 })
 
-const timelineSteps = computed(() => {
-  const steps = []
-  const stageNames = ['brainstorm', 'plan', 'execute', 'verify']
+const activityLogs = computed(() => {
+  if (!props.project?.state) return []
 
-  for (const stageName of stageNames) {
-    const stage = stages.value[stageName]
-    if (stage?.steps) {
-      for (const step of stage.steps) {
-        steps.push({
-          title: step.title || step.name,
-          status: step.status || 'pending',
-          duration: step.duration
-        })
-      }
+  const logs = []
+  const stageIcons = {
+    init: '🚀', explore: '🔍', quick: '⚡', scan: '📊',
+    brainstorm: '💡', propose: '📝', plan: '📋',
+    execute: '⚙️', verify: '✅', archive: '📦', resume: '🔄'
+  }
+
+  const allStages = progress.value.stages || {}
+  for (const [stageName, stageData] of Object.entries(allStages)) {
+    if (stageData.status === 'completed') {
+      logs.push({
+        time: stageData.completedAt ? formatTime(stageData.completedAt) : '--:--',
+        type: stageName,
+        status: 'completed',
+        description: `${stageIcons[stageName] || '📌'} ${stageName} 完成`
+      })
+    } else if (stageData.status === 'in-progress') {
+      logs.push({
+        time: '--:--',
+        type: stageName,
+        status: 'in-progress',
+        description: `${stageIcons[stageName] || '📌'} ${stageName} 进行中`
+      })
     }
   }
 
-  return steps
+  return logs.reverse()
 })
+
+function formatTime(isoString) {
+  try {
+    const d = new Date(isoString)
+    return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
+  } catch { return '--:--' }
+}
+
+function getStatusEmoji(type) { return '' }
+function getStatusIcon(status) {
+  return status === 'completed' ? 'text-[#00D4AA]' : 'text-[#F59E0B]'
+}
 
 function getStageSteps(stageName) {
   const stage = stages.value[stageName]
@@ -149,17 +176,6 @@ function getStageStatus(stageName) {
   if (allCompleted) return 'completed'
 
   return 'pending'
-}
-
-function getTimelineColor(status) {
-  const colors = {
-    'completed': 'bg-emerald-500',
-    'in-progress': 'bg-teal-500',
-    'blocked': 'bg-amber-500',
-    'failed': 'bg-red-500',
-    'pending': 'bg-gray-700'
-  }
-  return colors[status] || colors.pending
 }
 
 function handleSelectStep(step) {

@@ -235,15 +235,23 @@ function startServer({ port = 3456, open: openBrowser = true } = {}) {
     }
 
     // Serve static files (dist/)
-    const indexPath = join(__dirname, '../dist/index.html')
-    if (existsSync(indexPath)) {
-      const ext = req.url?.split('.').pop()
-      // Serve index.html for SPA routing (non-API, non-asset routes)
-      if (!ext || ext === req.url) {
-        const data = readFileSync(indexPath, 'utf8')
+    const distDir = join(__dirname, '../dist')
+    const indexPath = join(distDir, 'index.html')
+    if (existsSync(distDir)) {
+      const filePath = join(distDir, req.url === '/' ? 'index.html' : req.url.replace(/^\//, ''))
+      if (existsSync(filePath) && !filePath.includes('..')) {
+        const ext = filePath.split('.').pop()
+        const mimeTypes = { html: 'text/html', js: 'application/javascript', css: 'text/css', svg: 'image/svg+xml', png: 'image/png', jpg: 'image/jpeg' }
+        res.setHeader('Content-Type', mimeTypes[ext] || 'application/octet-stream')
+        res.writeHead(200)
+        res.end(readFileSync(filePath))
+        return
+      }
+      // SPA fallback: serve index.html for unknown routes
+      if (existsSync(indexPath)) {
         res.setHeader('Content-Type', 'text/html')
         res.writeHead(200)
-        res.end(data)
+        res.end(readFileSync(indexPath, 'utf8'))
         return
       }
     }

@@ -84,4 +84,3 @@ export function executeReset(projectPath, stage, onOutput, onComplete) {
   return executeCommand(projectPath, `progress reset --stage ${stage}`, onOutput, onComplete)
 }
 
-export { executeCommand, executeNextStep, executeProgressStatus, executeReset }

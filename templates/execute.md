@@ -244,7 +244,8 @@ done
    - **查阅 Playwright 用法：** 优先使用已安装的 playwright skill（SKILL.md），不要凭记忆写 API。未安装则通过 Context7 MCP 或 web search 查最新文档
    - 有测试框架则编写测试文件，无框架则编写 `.sillyspec/changes/<变更名>/e2e-steps.md` 结构化测试步骤
    - **写完必须立即跑一遍确认通过**，失败则修复后重跑，不要"写了就算完成"
-8. **暂存：** 完成后在工作目录执行 git add -A（不要 commit，由用户通过 /sillyspec:commit 统一提交）
+8. **Lint 校验：** 完成后对修改的文件运行 lint 工具（与 quick 相同规则），自动修复可修复的问题，不可修复的标注在报告中
+9. **暂存：** lint 通过后执行 git add -A（不要 commit，由用户通过 /sillyspec:commit 统一提交）
 9. **不修改计划外的文件**，如必须修改则在报告中说明
 10. **遵守编码规范：** prompt 中「编码规范约束」段的所有规则必须严格遵守。如规范与任务描述冲突，优先遵守规范并报告
 
