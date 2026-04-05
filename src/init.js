@@ -199,9 +199,12 @@ async function doInstall(projectDir, tools, isWorkspace, subprojects = []) {
   }
 
   // 复制 skills 到 .claude/skills/（给 Claude Code 使用）
-  const skillsSource = join(homedir(), '.agents', 'skills');
   const claudeSkillsDir = join(projectDir, '.claude', 'skills');
-  if (existsSync(skillsSource)) {
+  // 优先从 npm 包自带位置复制，其次从 ~/.agents/skills/
+  const npmSkillsDir = join(__dirname, '..', '.claude', 'skills');
+  const localSkillsDir = join(homedir(), '.agents', 'skills');
+  const skillsSource = existsSync(npmSkillsDir) ? npmSkillsDir : existsSync(localSkillsDir) ? localSkillsDir : null;
+  if (skillsSource) {
     const sillyspecSkills = readdirSync(skillsSource).filter(f => f.startsWith('sillyspec-') && statSync(join(skillsSource, f)).isDirectory());
     if (sillyspecSkills.length > 0) {
       mkdirSync(claudeSkillsDir, { recursive: true });
@@ -211,7 +214,7 @@ async function doInstall(projectDir, tools, isWorkspace, subprojects = []) {
       console.log(chalk.green('    ✓ Claude Code skills 已同步 (' + sillyspecSkills.length + ' 个)'));
     }
   } else {
-    console.log(chalk.yellow('    ⚠ 未找到 ~/.agents/skills/，跳过 Claude Code skills 同步'));
+    console.log(chalk.yellow('    ⚠ 未找到 skills 目录，跳过 Claude Code skills 同步'));
   }
 
 
