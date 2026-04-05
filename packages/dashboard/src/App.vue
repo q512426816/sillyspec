@@ -199,23 +199,4 @@ body {
   height: 100vh;
   overflow: hidden;
 }
-
-/* Custom scrollbar */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: #0D1117;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #30363D;
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #484F58;
-}
 </style>

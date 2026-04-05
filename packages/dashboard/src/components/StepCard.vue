@@ -1,48 +1,56 @@
 <template>
   <div
     :class="[
-      'group relative p-3 rounded-lg border transition-all duration-200 cursor-pointer',
-      'hover:shadow-lg hover:scale-[1.02]',
-      isActive ? 'ring-2 ring-[#00D4AA] bg-[#00D4AA]/5' : 'bg-[#0D1117] border-[#30363D]',
-      isClickable && 'hover:border-[#00D4AA]/50'
+      'group relative rounded-xl border transition-all duration-100 cursor-pointer overflow-hidden',
+      isActive
+        ? 'border-primary/40 bg-primary/[0.06]'
+        : 'border-border bg-bg hover:border-border hover:-translate-y-px hover:shadow-lg hover:shadow-black/20',
+      isClickable && 'hover:border-primary/30'
     ]"
     @click="handleClick"
   >
-    <!-- Default: Title only -->
-    <div class="flex items-center gap-2">
-      <span class="text-lg">{{ statusIcon }}</span>
-      <h3 class="font-medium text-[#C9D1D9] group-hover:text-[#00D4AA] transition-colors">
-        {{ step.title || step.name }}
-      </h3>
-      <StageBadge v-if="step.status" :status="step.status" :label="statusLabel" />
-    </div>
-
-    <!-- Hover: Summary reveal -->
+    <!-- Left color bar -->
     <div
-      v-if="step.summary || step.description"
-      class="max-h-0 opacity-0 group-hover:max-h-20 group-hover:opacity-100 transition-all duration-300 overflow-hidden"
-    >
-      <p class="mt-2 text-sm text-[#8B949E] line-clamp-2">
-        {{ step.summary || step.description }}
-      </p>
-    </div>
+      :class="[
+        'absolute left-0 top-0 bottom-0 w-[3px] rounded-l-xl',
+        barColor
+      ]"
+    />
 
-    <!-- Active: Full details -->
-    <div v-if="isActive" class="mt-3 space-y-2">
-      <p v-if="step.conclusion" class="text-sm text-[#C9D1D9]">
-        <span class="text-[#00D4AA] font-medium">结论:</span> {{ step.conclusion }}
-      </p>
-      <p v-if="step.decision" class="text-sm text-[#C9D1D9]">
-        <span class="text-[#00D4AA] font-medium">决策:</span> {{ step.decision }}
-      </p>
-      <p v-if="step.userQuery" class="text-sm text-[#8B949E] italic">
-        "{{ step.userQuery }}"
-      </p>
-    </div>
+    <div class="pl-4 pr-3 py-3">
+      <div class="flex items-center gap-2.5">
+        <h3 class="text-[13px] font-medium text-text group-hover:text-primary transition-colors duration-100">
+          {{ step.title || step.name }}
+        </h3>
+        <StageBadge v-if="step.status" :status="step.status" :label="statusLabel" />
+      </div>
 
-    <!-- Timeline indicator for active step -->
-    <div v-if="step.duration" class="mt-2 text-xs text-[#8B949E]">
-      ⏱ {{ step.duration }}
+      <!-- Hover: Summary -->
+      <div
+        v-if="step.summary || step.description"
+        class="max-h-0 opacity-0 group-hover:max-h-20 group-hover:opacity-100 transition-all duration-200 overflow-hidden"
+      >
+        <p class="mt-1.5 text-xs text-text-secondary line-clamp-2">
+          {{ step.summary || step.description }}
+        </p>
+      </div>
+
+      <!-- Active: Full details -->
+      <div v-if="isActive" class="mt-2.5 space-y-1.5">
+        <p v-if="step.conclusion" class="text-xs text-text">
+          <span class="text-primary font-medium">结论:</span> {{ step.conclusion }}
+        </p>
+        <p v-if="step.decision" class="text-xs text-text">
+          <span class="text-primary font-medium">决策:</span> {{ step.decision }}
+        </p>
+        <p v-if="step.userQuery" class="text-xs text-text-secondary italic">
+          "{{ step.userQuery }}"
+        </p>
+      </div>
+
+      <div v-if="step.duration" class="mt-1.5 text-[11px] text-text-secondary">
+        ⏱ {{ step.duration }}
+      </div>
     </div>
   </div>
 </template>
@@ -68,16 +76,16 @@ const props = defineProps({
 
 const emit = defineEmits(['select'])
 
-const statusIcon = computed(() => {
+const barColor = computed(() => {
   const status = props.step.status || 'pending'
-  const icons = {
-    'completed': '✅',
-    'in-progress': '⏳',
-    'blocked': '🟡',
-    'failed': '🔴',
-    'pending': '⬜'
+  const colors = {
+    'completed': 'bg-primary',
+    'in-progress': 'bg-primary',
+    'blocked': 'bg-warning',
+    'failed': 'bg-danger',
+    'pending': 'bg-muted'
   }
-  return icons[status] || '⬜'
+  return colors[status] || colors.pending
 })
 
 const statusLabel = computed(() => {

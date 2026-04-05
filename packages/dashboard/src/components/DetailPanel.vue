@@ -1,18 +1,18 @@
 <template>
   <div
     :class="[
-      'flex flex-col bg-[#161B22] border-l border-[#30363D] transition-all duration-300',
-      isOpen ? 'w-[320px]' : 'w-0 opacity-0'
+      'flex flex-col bg-surface border-l border-border transition-all duration-200',
+      isOpen ? 'w-[320px]' : 'w-0 opacity-0 overflow-hidden'
     ]"
   >
     <!-- Header -->
-    <div class="p-4 border-b border-[#30363D] flex items-center justify-between flex-shrink-0">
-      <h2 class="font-semibold text-[#C9D1D9]">详情</h2>
+    <div class="px-4 py-3.5 border-b border-border flex items-center justify-between flex-shrink-0">
+      <h2 class="text-sm font-semibold text-text">详情</h2>
       <button
         @click="$emit('close')"
-        class="p-1 text-[#8B949E] hover:text-[#00D4AA] transition-colors"
+        class="p-1 rounded-md text-text-secondary hover:text-primary hover:bg-white/[0.05] transition-colors duration-100"
       >
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
         </svg>
       </button>
@@ -20,78 +20,84 @@
 
     <!-- Step Details -->
     <div class="flex-1 overflow-y-auto">
-      <div v-if="!activeStep" class="p-4 text-center text-[#8B949E]">
-        <div class="text-4xl mb-2">📋</div>
-        <p>选择一个步骤查看详情</p>
+      <div v-if="!activeStep" class="flex items-center justify-center h-full">
+        <div class="text-center">
+          <div class="w-10 h-10 rounded-full bg-border/30 flex items-center justify-center mx-auto mb-3">
+            <svg class="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>
+          </div>
+          <p class="text-xs text-text-secondary">选择一个步骤查看详情</p>
+        </div>
       </div>
 
-      <div v-else class="p-4 space-y-4">
-        <!-- Step Title -->
-        <div>
-          <h3 class="text-lg font-semibold text-[#00D4AA]">
+      <div v-else class="divide-y divide-border">
+        <!-- Title Section -->
+        <div class="px-4 py-3.5">
+          <h3 class="text-[13px] font-semibold text-primary">
             {{ activeStep.title || activeStep.name }}
           </h3>
-          <StageBadge
-            v-if="activeStep.status"
-            :status="activeStep.status"
-            class="mt-2"
-          />
+          <div v-if="activeStep.status" class="mt-2">
+            <StageBadge :status="activeStep.status" />
+          </div>
         </div>
 
-        <!-- Step Description/Summary -->
-        <div v-if="activeStep.description || activeStep.summary" class="space-y-2">
-          <h4 class="text-sm font-medium text-[#8B949E] uppercase tracking-wide">描述</h4>
-          <p class="text-sm text-[#C9D1D9]">
+        <!-- Description -->
+        <div v-if="activeStep.description || activeStep.summary" class="px-4 py-3">
+          <h4 class="text-[10px] font-medium text-text-secondary uppercase tracking-wider mb-1.5">描述</h4>
+          <p class="text-xs text-text leading-relaxed">
             {{ activeStep.description || activeStep.summary }}
           </p>
         </div>
 
-        <!-- Step Conclusion -->
-        <div v-if="activeStep.conclusion" class="space-y-2">
-          <h4 class="text-sm font-medium text-[#8B949E] uppercase tracking-wide">结论</h4>
-          <p class="text-sm text-[#C9D1D9]">{{ activeStep.conclusion }}</p>
+        <!-- Conclusion -->
+        <div v-if="activeStep.conclusion" class="px-4 py-3">
+          <h4 class="text-[10px] font-medium text-text-secondary uppercase tracking-wider mb-1.5">结论</h4>
+          <p class="text-xs text-text leading-relaxed">{{ activeStep.conclusion }}</p>
         </div>
 
-        <!-- Step Decision -->
-        <div v-if="activeStep.decision" class="space-y-2">
-          <h4 class="text-sm font-medium text-[#8B949E] uppercase tracking-wide">决策</h4>
-          <p class="text-sm text-[#C9D1D9]">{{ activeStep.decision }}</p>
+        <!-- Decision -->
+        <div v-if="activeStep.decision" class="px-4 py-3">
+          <h4 class="text-[10px] font-medium text-text-secondary uppercase tracking-wider mb-1.5">决策</h4>
+          <p class="text-xs text-text leading-relaxed">{{ activeStep.decision }}</p>
         </div>
 
         <!-- User Query -->
-        <div v-if="activeStep.userQuery" class="space-y-2">
-          <h4 class="text-sm font-medium text-[#8B949E] uppercase tracking-wide">用户原话</h4>
-          <div class="p-3 bg-[#0D1117] rounded border border-[#30363D]">
-            <p class="text-sm text-[#C9D1D9] italic">"{{ activeStep.userQuery }}"</p>
+        <div v-if="activeStep.userQuery" class="px-4 py-3">
+          <h4 class="text-[10px] font-medium text-text-secondary uppercase tracking-wider mb-1.5">用户原话</h4>
+          <div class="px-3 py-2 bg-bg rounded-lg border border-border">
+            <p class="text-xs text-text italic">"{{ activeStep.userQuery }}"</p>
           </div>
         </div>
 
-        <!-- Step Metadata -->
-        <div v-if="activeStep.duration || activeStep.timestamp" class="space-y-2">
-          <h4 class="text-sm font-medium text-[#8B949E] uppercase tracking-wide">元数据</h4>
-          <div class="space-y-1 text-xs text-[#8B949E]">
+        <!-- Metadata -->
+        <div v-if="activeStep.duration || activeStep.timestamp" class="px-4 py-3">
+          <h4 class="text-[10px] font-medium text-text-secondary uppercase tracking-wider mb-1.5">元数据</h4>
+          <div class="space-y-1 text-[11px] text-text-secondary">
             <div v-if="activeStep.duration">
-              <span class="text-[#C9D1D9]">耗时:</span> {{ activeStep.duration }}
+              <span class="text-text">耗时:</span> {{ activeStep.duration }}
             </div>
             <div v-if="activeStep.timestamp">
-              <span class="text-[#C9D1D9]">时间:</span> {{ formatTimestamp(activeStep.timestamp) }}
+              <span class="text-text">时间:</span> {{ formatTimestamp(activeStep.timestamp) }}
             </div>
           </div>
         </div>
 
-        <!-- Step Output/Files -->
-        <div v-if="activeStep.output || activeStep.files" class="space-y-2">
-          <h4 class="text-sm font-medium text-[#8B949E] uppercase tracking-wide">输出</h4>
-          <div v-if="activeStep.output" class="p-3 bg-[#0D1117] rounded border border-[#30363D] max-h-40 overflow-y-auto">
-            <pre class="text-xs text-[#C9D1D9] whitespace-pre-wrap">{{ activeStep.output }}</pre>
+        <!-- Output -->
+        <div v-if="activeStep.output || activeStep.files" class="px-4 py-3">
+          <h4 class="text-[10px] font-medium text-text-secondary uppercase tracking-wider mb-1.5">输出</h4>
+          <div v-if="activeStep.output" class="px-3 py-2 bg-bg rounded-lg border border-border max-h-40 overflow-y-auto">
+            <pre class="text-[11px] text-text whitespace-pre-wrap font-mono-log">{{ activeStep.output }}</pre>
           </div>
-          <div v-if="activeStep.files" class="space-y-1">
+          <div v-if="activeStep.files" class="mt-2 space-y-1">
             <div
               v-for="(file, index) in activeStep.files"
               :key="index"
-              class="flex items-center gap-2 text-xs text-[#C9D1D9]"
+              class="flex items-center gap-2 text-[11px] text-text"
             >
-              <span>📄</span>
+              <svg class="w-3.5 h-3.5 text-text-secondary flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+              </svg>
               <span class="truncate">{{ file }}</span>
             </div>
           </div>
@@ -100,7 +106,7 @@
     </div>
 
     <!-- Log Stream -->
-    <div class="border-t border-[#30363D] flex-shrink-0" style="height: 200px;">
+    <div class="border-t border-border flex-shrink-0" style="height: 200px;">
       <LogStream :logs="logs" @clear="$emit('clear-logs')" />
     </div>
   </div>

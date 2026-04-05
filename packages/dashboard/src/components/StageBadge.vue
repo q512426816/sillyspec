@@ -1,12 +1,12 @@
 <template>
   <span
     :class="[
-      'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium',
-      'border transition-colors duration-200',
+      'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium',
+      'border transition-colors duration-100',
       statusClasses
     ]"
   >
-    <span class="text-sm">{{ statusIcon }}</span>
+    <span :class="['w-1.5 h-1.5 rounded-full', dotClass]" />
     <span>{{ label }}</span>
   </span>
 </template>
@@ -23,27 +23,31 @@ const props = defineProps({
   label: {
     type: String,
     default: ''
+  },
+  size: {
+    type: String,
+    default: 'md'
   }
 })
 
-const statusIcon = computed(() => {
-  const icons = {
-    'completed': '✓',
-    'in-progress': '◐',
-    'blocked': '◑',
-    'failed': '✕',
-    'pending': '○'
+const dotClass = computed(() => {
+  const classes = {
+    'completed': 'bg-primary',
+    'in-progress': 'bg-primary animate-pulse-dot',
+    'blocked': 'bg-warning',
+    'failed': 'bg-danger',
+    'pending': 'bg-muted'
   }
-  return icons[props.status] || '○'
+  return classes[props.status] || classes.pending
 })
 
 const statusClasses = computed(() => {
   const classes = {
-    'completed': 'bg-emerald-950/30 border-emerald-700/50 text-emerald-400',
-    'in-progress': 'bg-teal-950/30 border-teal-700/50 text-teal-400',
-    'blocked': 'bg-amber-950/30 border-amber-700/50 text-amber-400',
-    'failed': 'bg-red-950/30 border-red-700/50 text-red-400',
-    'pending': 'bg-gray-800/30 border-gray-700/50 text-gray-400'
+    'completed': 'bg-primary/10 border-primary/20 text-primary',
+    'in-progress': 'bg-primary/10 border-primary/20 text-primary',
+    'blocked': 'bg-warning/10 border-warning/20 text-warning',
+    'failed': 'bg-danger/10 border-danger/20 text-danger',
+    'pending': 'bg-white/[0.03] border-border text-muted'
   }
   return classes[props.status] || classes.pending
 })
