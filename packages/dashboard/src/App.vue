@@ -23,7 +23,14 @@
         <PipelineView
           :project="dashboard.state.activeProject"
           :active-step="dashboard.state.activeStep"
+          :active-tab="dashboard.state.activeTab"
+          :docs="dashboard.state.docs"
+          :selected-doc-file="dashboard.state.selectedDocFile"
+          :doc-content="dashboard.state.docContent"
+          :doc-loading="dashboard.state.docLoading"
           @select-step="handleSelectStep"
+          @switch-tab="handleSwitchTab"
+          @select-doc-file="handleSelectDocFile"
         />
       </main>
 
@@ -128,11 +135,34 @@ onMounted(() => {
     }
   })
   ws.on('scan:paths', (paths) => { scanPaths.value = paths })
+  ws.on('docs:tree', (docs) => { dashboard.updateDocs(docs) })
 })
 
-function handleSelectProject(project) { dashboard.selectProject(project) }
+function handleSelectProject(project) {
+  dashboard.selectProject(project)
+  // Request docs for this project
+  if (project?.path) {
+    ws.send({ type: 'docs:get', data: { projectPath: project.path } })
+  }
+}
 function handleSelectStage({ project, stage }) { dashboard.selectProject(project) }
 function handleSelectStep(step) { dashboard.selectStep(step) }
+function handleSwitchTab(tab) { dashboard.setActiveTab(tab) }
+function handleSelectDocFile(file) {
+  dashboard.selectDocFile(file)
+  dashboard.setDocLoading(true)
+  // Fetch doc content via REST API
+  fetch(`/api/docs/content?path=${encodeURIComponent(file.path)}`)
+    .then(r => r.ok ? r.text() : '')
+    .then(content => {
+      dashboard.setDocContent(content)
+      dashboard.setDocLoading(false)
+    })
+    .catch(() => {
+      dashboard.setDocContent('')
+      dashboard.setDocLoading(false)
+    })
+}
 function handleExecute() {
   const projectName = dashboard.activeProjectName.value
   if (!projectName) return

@@ -5,7 +5,7 @@ import { join, dirname, basename, sep } from 'path'
 import { fileURLToPath } from 'url'
 import { homedir } from 'os'
 import open from 'open'
-import { parseProjectState } from './parser.js'
+import { parseProjectState, parseDocsTree } from './parser.js'
 import { startWatcher, stopWatcher, addCustomScanPath, removeCustomScanPath, getCustomScanPaths, customScanPaths } from './watcher.js'
 import { executeCommand } from './executor.js'
 
@@ -225,6 +225,54 @@ function startServer({ port = 3456, open: openBrowser = true } = {}) {
       return
     }
 
+    // Docs API
+    if (req.url?.startsWith('/api/docs/content')) {
+      const url = new URL(req.url, `http://${req.headers.host}`)
+      const filePath = url.searchParams.get('path')
+      if (!filePath) {
+        res.writeHead(400)
+        res.end(JSON.stringify({ error: 'Missing path parameter' }))
+        return
+      }
+      // Security: only allow reading files under .sillyspec/docs/
+      const normalizedPath = resolve(filePath)
+      if (!normalizedPath.includes('.sillyspec' + sep + 'docs')) {
+        res.writeHead(403)
+        res.end(JSON.stringify({ error: 'Access denied' }))
+        return
+      }
+      if (existsSync(normalizedPath)) {
+        try {
+          const content = readFileSync(normalizedPath, 'utf-8')
+          res.setHeader('Content-Type', 'text/plain; charset=utf-8')
+          res.writeHead(200)
+          res.end(content)
+        } catch (err) {
+          res.writeHead(500)
+          res.end(JSON.stringify({ error: err.message }))
+        }
+      } else {
+        res.writeHead(404)
+        res.end(JSON.stringify({ error: 'File not found' }))
+      }
+      return
+    }
+
+    if (req.url?.startsWith('/api/docs')) {
+      const url = new URL(req.url, `http://${req.headers.host}`)
+      const projectPath = url.searchParams.get('project')
+      if (!projectPath) {
+        res.writeHead(400)
+        res.end(JSON.stringify({ error: 'Missing project parameter' }))
+        return
+      }
+      const docs = parseDocsTree(projectPath)
+      res.setHeader('Content-Type', 'application/json')
+      res.writeHead(200)
+      res.end(JSON.stringify(docs))
+      return
+    }
+
     // Serve static files (dist/)
     const distDir = join(__dirname, '../dist')
     const indexPath = join(distDir, 'index.html')
@@ -317,6 +365,12 @@ function startServer({ port = 3456, open: openBrowser = true } = {}) {
             break
           case 'scan:get-paths':
             ws.send(JSON.stringify({ type: 'scan:paths', data: getCustomScanPaths() }))
+            break
+          case 'docs:get':
+            if (data.data?.projectPath) {
+              const docs = parseDocsTree(data.data.projectPath)
+              ws.send(JSON.stringify({ type: 'docs:tree', data: docs }))
+            }
             break
           default:
             console.log('Unknown message type:', data.type)

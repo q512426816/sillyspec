@@ -31,7 +31,8 @@ SillySpec CLI — 规范驱动开发工具包
     validate                  校验并修复进度文件
     reset [--stage X]         重置进度（全部或指定阶段）
     complete --stage X        归档已完成阶段
-  sillyspec dashboard          启动 Dashboard Web UI
+  sillyspec docs migrate       迁移旧文档到统一结构
+    sillyspec dashboard          启动 Dashboard Web UI
     [--port <number>]          指定端口（默认 3456）
     [--no-open]                不自动打开浏览器
 
@@ -131,6 +132,16 @@ async function main() {
           break;
         default:
           console.log('用法: sillyspec progress <init|status|validate|reset|complete> [--stage <stage>]');
+      }
+      break;
+    }
+    case 'docs': {
+      const docsSubCmd = filteredArgs[1];
+      if (docsSubCmd === 'migrate') {
+        const { migrateDocs } = await import('./migrate.js');
+        migrateDocs(dir);
+      } else {
+        console.log('用法: sillyspec docs migrate');
       }
       break;
     }

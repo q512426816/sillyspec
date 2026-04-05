@@ -203,14 +203,27 @@ function isTTY() {
 
 async function doInstall(projectDir, tools, isWorkspace, subprojects = []) {
   // 创建基础目录
-  // .sillyspec/codebase/    → scan
-  // .sillyspec/codebase/details/ → scan (deep)
-  // .sillyspec/changes/     → brainstorm/propose
-  // .sillyspec/changes/archive/ → archive
-  // .sillyspec/quicklog/    → quick
-  // .sillyspec/knowledge/   → archive (spec 沉淀)
+  // .sillyspec/projects/    → 项目注册表
+  // .sillyspec/docs/<name>/ → 统一文档中心
+  // .sillyspec/knowledge/   → 跨项目共享知识库
   // .sillyspec/.runtime/    → progress (gitignored)
-  // (plan 内容已合并到 tasks.md)
+
+  // 注册当前项目到 projects/
+  const projectName = projectDir.split('/').pop() || projectDir.split('\\').pop() || 'project';
+  const projectsDir = join(projectDir, '.sillyspec', 'projects');
+  mkdirSync(projectsDir, { recursive: true });
+  const projectYamlPath = join(projectsDir, `${projectName}.yaml`);
+  if (!existsSync(projectYamlPath)) {
+    writeFileSync(projectYamlPath, `name: ${projectName}\npath: .\nstatus: active\n`);
+  }
+
+  // 创建 docs/<projectName>/ 子目录结构
+  const docsBase = join(projectDir, '.sillyspec', 'docs', projectName);
+  for (const sub of ['scan', 'brainstorm', 'plan', 'changes', 'archive', 'quicklog']) {
+    mkdirSync(join(docsBase, sub), { recursive: true });
+  }
+
+  // 兼容：保留旧的 codebase/ changes/ quicklog/ 目录（如果已存在不删除）
   if (isWorkspace) {
     mkdirSync(join(projectDir, '.sillyspec', 'shared'), { recursive: true });
     mkdirSync(join(projectDir, '.sillyspec', 'workspace'), { recursive: true });

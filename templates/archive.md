@@ -16,7 +16,7 @@ $ARGUMENTS
 
 ### 1. 前置检查（门禁）
 
-读取 `.sillyspec/changes/<change-name>/` 下所有必要文件，逐项检查：
+读取 `.sillyspec/docs/<project>/changes/<change-name>/` 下所有必要文件，逐项检查：
 
 - [ ] **文件完整性：** 检查 `design.md` 是否存在，缺失则警告
 - [ ] **任务完成度：** 读取 `tasks.md`，统计已完成/未完成任务数。**有未完成的 → 用 AskUserQuestion 询问：**
@@ -32,11 +32,11 @@ $ARGUMENTS
 - 包含的文件列表
 - 任务完成统计（✅ 已完成 / ⬜ 未完成）
 - 一句话总结本次变更
-- quicklog 修改记录（如有 `.sillyspec/changes/<change-name>/quicklog/` 目录）
+- quicklog 修改记录（如有 `.sillyspec/docs/<project>/changes/<change-name>/quicklog/` 目录）
 
 ### 3. Spec 沉淀
 
-将 `.sillyspec/changes/<change-name>/` 下的设计文档**复制到 `.sillyspec/knowledge/` 主目录**，确保已完成的设计规范可被后续变更参考。如目标已存在同名文件则跳过并提示。
+将 `.sillyspec/docs/<project>/changes/<change-name>/` 下的设计文档**复制到 `.sillyspec/knowledge/` 主目录**，确保已完成的设计规范可被后续变更参考。如目标已存在同名文件则跳过并提示。
 
 ### 4. 用户确认
 
@@ -74,7 +74,7 @@ $ARGUMENTS
 
 ```bash
 # 收集该变更相关的 git commit（按变更名过滤或按时间范围）
-git log --oneline --no-merges -- .sillyspec/changes/<change-name>/ 2>/dev/null
+git log --oneline --no-merges -- .sillyspec/docs/<project>/changes/<change-name>/ 2>/dev/null
 # 以及变更目录创建后的所有 commit
 git log --oneline --no-merges --since="<创建时间>" -- "*.ts" "*.js" "*.vue" "*.java" 2>/dev/null
 ```
@@ -101,7 +101,7 @@ git log --oneline --no-merges --since="<创建时间>" -- "*.ts" "*.js" "*.vue" 
 
 ### 5. 执行归档
 
-- 目标路径：`.sillyspec/changes/archive/YYYY-MM-DD-<change-name>/`
+- 目标路径：`.sillyspec/docs/<project>/archive/YYYY-MM-DD-<change-name>/`
 - **检查目标路径是否已存在**，存在则中止并报错，防止覆盖
 - 移动变更目录到归档路径
 

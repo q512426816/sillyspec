@@ -18,7 +18,7 @@ cat .sillyspec/STATE.md 2>/dev/null
 有 STATE.md 且 phase 为 execute → 继续。无 STATE.md 或 phase 不对 → 检查是否有未完成的 tasks.md：
 
 ```bash
-ls .sillyspec/changes/*/tasks.md 2>/dev/null | xargs grep -l '\- \[ \]' 2>/dev/null
+ls .sillyspec/docs/<project>/changes/*/tasks.md 2>/dev/null | xargs grep -l '\- \[ \]' 2>/dev/null
 ```
 
 有未完成的 tasks.md → 继续。没有 → 提示 `/sillyspec:continue`。
@@ -38,10 +38,10 @@ cat .sillyspec/config.yaml 2>/dev/null
 
 **加载以下文件（主代理读取，后续注入子代理）：**
 ```bash
-PLAN=$(ls -t .sillyspec/changes/*/tasks.md 2>/dev/null | head -1); cat "$PLAN"
-LATEST=$(ls -d .sillyspec/changes/*/ | grep -v archive | tail -1)
+PLAN=$(ls -t .sillyspec/docs/<project>/changes/*/tasks.md 2>/dev/null | head -1); cat "$PLAN"
+LATEST=$(ls -d .sillyspec/docs/<project>/changes/*/ | grep -v archive | tail -1)
 cat "$LATEST"/{tasks,design}.md 2>/dev/null
-cat .sillyspec/codebase/{CONVENTIONS,ARCHITECTURE}.md 2>/dev/null
+cat .sillyspec/docs/<project>/scan/{CONVENTIONS,ARCHITECTURE}.md 2>/dev/null
 cat .sillyspec/local.yaml 2>/dev/null
 ```
 
@@ -242,7 +242,7 @@ done
    - 先 cat 相关功能代码和页面组件，理解交互逻辑
    - 参考 prompt 中「测试模式参考」段的已有测试风格
    - **查阅 Playwright 用法：** 优先使用已安装的 playwright skill（SKILL.md），不要凭记忆写 API。未安装则通过 Context7 MCP 或 web search 查最新文档
-   - 有测试框架则编写测试文件，无框架则编写 `.sillyspec/changes/<变更名>/e2e-steps.md` 结构化测试步骤
+   - 有测试框架则编写测试文件，无框架则编写 `.sillyspec/docs/<project>/changes/<变更名>/e2e-steps.md` 结构化测试步骤
    - **写完必须立即跑一遍确认通过**，失败则修复后重跑，不要"写了就算完成"
 8. **Lint 校验：** 完成后对修改的文件运行 lint 工具（与 quick 相同规则），自动修复可修复的问题，不可修复的标注在报告中
 9. **暂存：** lint 通过后执行 git add -A（不要 commit，由用户通过 /sillyspec:commit 统一提交）
@@ -286,7 +286,7 @@ done
 所有任务完成后，主代理必须执行以下检查：
 
 ```bash
-cat .sillyspec/changes/*/tasks.md 2>/dev/null
+cat .sillyspec/docs/<project>/changes/*/tasks.md 2>/dev/null
 ```
 
 逐条验证：

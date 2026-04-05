@@ -18,6 +18,12 @@
 cat .sillyspec/STATE.md 2>/dev/null
 ```
 
+**确定当前项目名：**
+```bash
+ls .sillyspec/projects/*.yaml 2>/dev/null
+```
+从 projects/ 目录确定当前项目名。后续设计文档输出到 `.sillyspec/docs/<project>/brainstorm/`。
+
 - phase 为 `brainstorm` 或无 STATE.md → ✅ 继续
 - 其他 phase → 提示用户当前阶段，建议先完成
 
@@ -71,19 +77,19 @@ $ARGUMENTS
 cat .sillyspec/config.yaml 2>/dev/null
 ```
 
-**工作区模式：** AskUserQuestion 选子项目，**cd 到子项目目录执行**，加载子项目上下文 + 共享规范 + 工作区概览，设计文档保存到子项目 `.sillyspec/changes/`。修改在子项目目录中暂存。
+**工作区模式：** AskUserQuestion 选子项目，**cd 到子项目目录执行**，加载子项目上下文 + 共享规范 + 工作区概览，设计文档保存到子项目 `.sillyspec/docs/<project>/changes/`。修改在子项目目录中暂存。
 
-**单项目模式：**
+**加载项目上下文：**
 ```bash
 cat .sillyspec/{PROJECT,REQUIREMENTS,ROADMAP}.md 2>/dev/null
-cat .sillyspec/codebase/{STRUCTURE,CONVENTIONS,ARCHITECTURE}.md 2>/dev/null
-ls .sillyspec/changes/ 2>/dev/null | grep -v archive
+cat .sillyspec/docs/<project>/scan/{STRUCTURE,CONVENTIONS,ARCHITECTURE}.md 2>/dev/null
+ls .sillyspec/docs/<project>/changes/ 2>/dev/null
 ls .sillyspec/knowledge/ 2>/dev/null
 ```
 
 ### Step 2: 协作与复用检查
 
-- **同名变更：** `ls .sillyspec/changes/ | grep -v archive` — 有相关变更则提示避免冲突
+- **同名变更：** `ls .sillyspec/docs/<project>/changes/ | grep -v archive` — 有相关变更则提示避免冲突
 - **全局模板：** `ls ~/.sillyspec/templates/ 2>/dev/null` — 有匹配模板则建议复用
 
 无匹配则跳过，不输出。
@@ -111,20 +117,20 @@ ls .sillyspec/knowledge/ 2>/dev/null
 确认拆分后生成 MASTER.md：
 
 ```bash
-mkdir -p .sillyspec/changes/<变更名>/stages
+mkdir -p .sillyspec/docs/<project>/changes/<变更名>/stages
 ```
 
 `MASTER.md` 内容：概述、拆分计划表（阶段/范围/状态）、整体技术方向、阶段间依赖、原型分析摘要、经验记录。
 
 ```bash
-git add .sillyspec/changes/<变更名>/MASTER.md
+git add .sillyspec/docs/<project>/changes/<变更名>/MASTER.md
 ```
 
 💡 大模块计划已暂存。准备好后用 `/sillyspec:commit` 提交。
 
 提示用户：`/sillyspec:brainstorm <变更名>/stage-1`
 
-**子阶段 brainstorm：** 读取 MASTER.md + 前序阶段经验 + 对应原型，设计文档保存到 `.sillyspec/changes/<变更名>/stages/<stage-N>/`。
+**子阶段 brainstorm：** 读取 MASTER.md + 前序阶段经验 + 对应原型，设计文档保存到 `.sillyspec/docs/<project>/changes/<变更名>/stages/<stage-N>/`。
 
 ### Step 5: 对话式探索
 
@@ -147,7 +153,7 @@ git add .sillyspec/changes/<变更名>/MASTER.md
 
 ### Step 8: 写设计文档
 
-保存到 `.sillyspec/changes/<变更名>/design.md`：
+保存到 `.sillyspec/docs/<project>/brainstorm/<变更名>.md`：
 
 ```markdown
 # [Feature Name] 设计

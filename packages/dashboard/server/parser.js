@@ -6,11 +6,91 @@ import { dirname } from 'path'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
 /**
+ * Parse docs tree for a project
+ * @param {string} projectPath - Path to the project directory
+ * @returns {object} Docs tree grouped by type
+ */
+export function parseDocsTree(projectPath) {
+  const sillyspecDir = join(projectPath, '.sillyspec')
+  const docsDir = join(sillyspecDir, 'docs')
+
+  if (!existsSync(docsDir)) {
+    return { groups: [] }
+  }
+
+  const groupConfig = [
+    { key: 'brainstorm', label: '📋 设计文档', icon: '📋', dir: 'brainstorm' },
+    { key: 'plan', label: '📐 实现计划', icon: '📐', dir: 'plan' },
+    { key: 'changes', label: '⚙️ 当前变更', icon: '⚙️', dir: 'changes' },
+    { key: 'archive', label: '📦 已归档', icon: '📦', dir: 'archive' },
+    { key: 'scan', label: '🔍 架构文档', icon: '🔍', dir: 'scan' },
+    { key: 'quicklog', label: '⚡ 快速修复', icon: '⚡', dir: 'quicklog' },
+  ]
+
+  const groups = []
+
+  // Find project dirs under docs/
+  const projectDirs = existsSync(docsDir) ? readdirSync(docsDir, { withFileTypes: true })
+    .filter(d => d.isDirectory()).map(d => d.name) : []
+
+  for (const projName of projectDirs) {
+    const projDocsDir = join(docsDir, projName)
+
+    for (const group of groupConfig) {
+      const groupDir = join(projDocsDir, group.dir)
+      if (!existsSync(groupDir)) continue
+
+      const files = []
+      try {
+        const entries = readdirSync(groupDir, { withFileTypes: true })
+        for (const entry of entries) {
+          if (entry.isDirectory()) {
+            // For changes/ and archive/ subdirs
+            const subDir = join(groupDir, entry.name)
+            try {
+              const subFiles = readdirSync(subDir).filter(f => f.endsWith('.md'))
+              for (const sf of subFiles) {
+                const filePath = join(subDir, sf)
+                files.push({
+                  name: `${entry.name}/${sf}`,
+                  path: filePath,
+                  title: sf.replace('.md', '')
+                })
+              }
+            } catch {}
+          } else if (entry.name.endsWith('.md')) {
+            const filePath = join(groupDir, entry.name)
+            let title = entry.name.replace('.md', '')
+            try {
+              const content = readFileSync(filePath, 'utf-8')
+              const titleMatch = content.match(/^#\s+(.+)$/m)
+              if (titleMatch) title = titleMatch[1]
+            } catch {}
+            files.push({ name: entry.name, path: filePath, title })
+          }
+        }
+      } catch {}
+
+      if (files.length > 0) {
+        groups.push({
+          key: group.key,
+          label: group.label,
+          project: projName,
+          files
+        })
+      }
+    }
+  }
+
+  return { groups }
+}
+
+/**
  * Parse project state from .sillyspec directory
  * @param {string} projectPath - Path to the project directory
  * @returns {object} Project state with currentStage, nextStep, progress, stages, specs, lastActive
  */
-export async function parseProjectState(projectPath) {
+export function parseProjectState(projectPath) {
   const sillyspecDir = join(projectPath, '.sillyspec')
 
   if (!existsSync(sillyspecDir)) {
@@ -29,8 +109,8 @@ export async function parseProjectState(projectPath) {
   if (existsSync(statePath)) {
     try {
       const stateContent = readFileSync(statePath, 'utf-8')
-      const stageMatch = stateContent.match(/current_stage:\s*(\w+)/i)
-      const stepMatch = stateContent.match(/next_step:\s*(.+)/i)
+      const stageMatch = stateContent.match(/当前阶段[：:]\s*(\w+)/) || stateContent.match(/current_stage:\s*(\w+)/i)
+      const stepMatch = stateContent.match(/下一步[：:]\s*(.+)/) || stateContent.match(/next_step:\s*(.+)/i)
 
       if (stageMatch) currentStage = stageMatch[1]
       if (stepMatch) nextStep = stepMatch[1].trim()

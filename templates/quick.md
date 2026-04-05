@@ -19,16 +19,16 @@ $ARGUMENTS
 ## 流程
 
 1. **解析参数：** 检查是否携带 `--change <变更名>`，确定记录方式
-1.5 **归属检查：** 如果没有 `--change` 参数，检查 `.sillyspec/changes/` 下是否有非 archive 的活跃变更目录：
+1.5 **归属检查：** 如果没有 `--change` 参数，检查 `.sillyspec/docs/<project>/changes/` 下是否有非 archive 的活跃变更目录：
    ```bash
-   ls -d .sillyspec/changes/*/ 2>/dev/null | grep -v archive
+   ls -d .sillyspec/docs/<project>/changes/*/ 2>/dev/null | grep -v archive
    ```
    - 有活跃变更 → AskUserQuestion 询问本次 quick 归属哪个变更，默认选当前活跃的
-   - 用户选择后将日志写入 `.sillyspec/changes/<变更名>/quicklog/` 而非独立 QUICKLOG
+   - 用户选择后将日志写入 `.sillyspec/docs/<project>/changes/<变更名>/quicklog/` 而非独立 QUICKLOG
    - 用户选择"无归属" → 走原有的独立 QUICKLOG 流程
    - 无活跃变更 → 走原有的独立 QUICKLOG 流程
 2. **理解任务：** 模糊则问一个问题确认
-3. **加载上下文：** `cat .sillyspec/codebase/{CONVENTIONS,ARCHITECTURE}.md 2>/dev/null`
+3. **加载上下文：** `cat .sillyspec/docs/<project>/scan/{CONVENTIONS,ARCHITECTURE}.md 2>/dev/null`
 3b. **编码规范扫描：** 检测项目中的编码规范配置文件（`.eslintrc*`、`.prettierrc*`、`tsconfig.json`、`.editorconfig`、`tailwind.config.*`、`CONTRIBUTING.md`），提取关键规则生成摘要。写作代码时必须严格遵守这些规则（分号/引号/缩进/命名风格等），如不确定优先遵守规范约束。
 4. **知识库查询（强制步骤）：**
    ```bash
@@ -75,12 +75,12 @@ mvn test -pl <模块> -Dtest=<测试类> 2>/dev/null || ./gradlew test --tests <
    - **工作区模式下，在子项目目录中执行，不要在主项目目录执行**
 9. **Git 暂存：** `git add -A`。**不要 commit**，由用户通过 `/sillyspec:commit` 统一提交。**工作区模式下，确认当前在正确的子项目目录中执行暂存。**
 10. **记录：**
-   - **有 `--change`：** 在 `.sillyspec/changes/<变更名>/tasks.md` 追加 task 并勾选，**记录精确到秒的时间戳**：
+   - **有 `--change`：** 在 `.sillyspec/docs/<project>/changes/<变更名>/tasks.md` 追加 task 并勾选，**记录精确到秒的时间戳**：
 
 ```
 - [x] [YYYY-MM-DD HH:MM:SS] 任务描述
 ```
-   - **无 `--change` 但步骤 1.5 确认了归属变更：** 记录到 `.sillyspec/changes/<变更名>/quicklog/YYYY-MM-DD-HHMMSS-任务简述.md`，格式：
+   - **无 `--change` 但步骤 1.5 确认了归属变更：** 记录到 `.sillyspec/docs/<project>/changes/<变更名>/quicklog/YYYY-MM-DD-HHMMSS-任务简述.md`，格式：
 
 ```markdown
 # quick: 任务描述
@@ -94,7 +94,7 @@ mvn test -pl <模块> -Dtest=<测试类> 2>/dev/null || ./gradlew test --tests <
 - 发现的坑：（如有，简要记录）
 ```
 
-   - **无 `--change` 且无归属：** 记录到 `.sillyspec/quicklog/QUICKLOG-<git用户名>.md`（见下方规则）
+   - **无 `--change` 且无归属：** 记录到 `.sillyspec/docs/<project>/quicklog/QUICKLOG-<git用户名>.md`（见下方规则）
 10. **检查复杂度：** 任务比预期复杂 → 建议用完整流程
 
 11. **记录发现的坑：** 执行过程中如果发现项目特有的规律、陷阱或约定（如"某方法参数顺序容易搞反"、"某表有隐藏软删除字段"），追加到 `.sillyspec/knowledge/uncategorized.md`，格式：
@@ -118,7 +118,7 @@ mvn test -pl <模块> -Dtest=<测试类> 2>/dev/null || ./gradlew test --tests <
 
 ```bash
 USER=$(git config user.name 2>/dev/null || echo "default")
-LOG_FILE=".sillyspec/quicklog/QUICKLOG-${USER}.md"
+LOG_FILE=".sillyspec/docs/<project>/quicklog/QUICKLOG-${USER}.md"
 ```
 
 文件路径：`$LOG_FILE`

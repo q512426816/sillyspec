@@ -1,19 +1,36 @@
 <template>
   <div class="flex flex-col h-full" style="background: #0E0E10;">
-    <!-- Header -->
-    <div class="px-6 pt-6 pb-4" style="border-bottom: 1px solid #1F1F22;">
-      <h2 class="text-[11px] font-semibold uppercase tracking-[0.2em] font-[JetBrains_Mono,monospace]" style="color: #525252;">
-        项目流水线
-      </h2>
-      <p v-if="project" class="text-[12px] mt-1.5 font-[JetBrains_Mono,monospace]" style="color: #8B8B8E;">
-        {{ project.name }} <span style="color: #2A2A2D;">/</span> <span style="color: #FBBF24;">{{ currentStage }}</span>
-      </p>
+    <!-- Header with Tabs -->
+    <div class="px-6 pt-4 pb-0" style="border-bottom: 1px solid #1F1F22;">
+      <div class="flex items-center gap-6">
+        <h2 class="text-[11px] font-semibold uppercase tracking-[0.2em] font-[JetBrains_Mono,monospace]" style="color: #525252;">
+          {{ project?.name || '项目' }}
+        </h2>
+        <div class="flex gap-1">
+          <button
+            @click="$emit('switch-tab', 'pipeline')"
+            class="px-3 py-1.5 text-[11px] font-[JetBrains_Mono,monospace] transition-colors rounded"
+            :style="{ color: activeTab === 'pipeline' ? '#FBBF24' : '#525252', background: activeTab === 'pipeline' ? 'rgba(251,191,36,0.08)' : 'transparent' }"
+          >流水线</button>
+          <button
+            @click="$emit('switch-tab', 'docs')"
+            class="px-3 py-1.5 text-[11px] font-[JetBrains_Mono,monospace] transition-colors rounded"
+            :style="{ color: activeTab === 'docs' ? '#FBBF24' : '#525252', background: activeTab === 'docs' ? 'rgba(251,191,36,0.08)' : 'transparent' }"
+          >文档</button>
+        </div>
+      </div>
     </div>
 
-    <!-- Stages -->
-    <div class="flex-1 overflow-y-auto px-6 py-5">
+    <!-- Pipeline Tab -->
+    <div v-if="activeTab === 'pipeline'" class="flex flex-col flex-1 overflow-hidden">
+      <div class="px-6 pt-4 pb-2">
+        <p v-if="project" class="text-[12px] font-[JetBrains_Mono,monospace]" style="color: #8B8B8E;">
+          <span style="color: #FBBF24;">{{ currentStage }}</span>
+        </p>
+      </div>
+
       <!-- Empty state -->
-      <div v-if="!project || !project.state" class="flex items-center justify-center h-full">
+      <div v-if="!project || !project.state" class="flex items-center justify-center flex-1">
         <div class="text-center">
           <div class="w-14 h-14 mx-auto mb-4 rounded-md flex items-center justify-center" style="border: 1px dashed #2A2A2D; transform: rotate(45deg);">
             <svg class="w-5 h-5" style="color: #525252; transform: rotate(-45deg);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -24,7 +41,8 @@
         </div>
       </div>
 
-      <div v-else class="space-y-5">
+      <!-- Stages -->
+      <div v-else class="flex-1 overflow-y-auto px-6 pb-5 space-y-5">
         <PipelineStage name="brainstorm" title="头脑风暴" :steps="getStageSteps('brainstorm')" :status="getStageStatus('brainstorm')" :is-active="currentStage === 'brainstorm'" :active-step="activeStep" @select-step="handleSelectStep" />
         <div v-if="hasStage('plan')" class="flex items-center pl-[3px]"><div class="w-px h-4" style="background: #1F1F22;" /></div>
         <PipelineStage name="plan" title="规划" :steps="getStageSteps('plan')" :status="getStageStatus('plan')" :is-active="currentStage === 'plan'" :active-step="activeStep" @select-step="handleSelectStep" />
@@ -33,21 +51,31 @@
         <div v-if="hasStage('verify')" class="flex items-center pl-[3px]"><div class="w-px h-4" style="background: #1F1F22;" /></div>
         <PipelineStage name="verify" title="验证" :steps="getStageSteps('verify')" :status="getStageStatus('verify')" :is-active="currentStage === 'verify'" :active-step="activeStep" @select-step="handleSelectStep" />
       </div>
+
+      <!-- Activity Log -->
+      <div v-if="project?.state?.progress" style="border-top: 1px solid #1F1F22; background: rgba(10,10,11,0.6);">
+        <div class="px-6 py-2.5 flex items-center justify-between">
+          <div class="text-[9px] font-semibold uppercase tracking-[0.25em] font-[JetBrains_Mono,monospace]" style="color: #525252;">活动日志</div>
+          <div class="text-[10px] font-mono-log" style="color: #3A3A3D;">{{ activityLogs.length }}</div>
+        </div>
+        <div class="px-6 pb-3 space-y-0.5 max-h-32 overflow-y-auto">
+          <div v-for="(log, i) in activityLogs" :key="i" class="flex items-start gap-2.5 text-[11px] py-0.5">
+            <span class="w-10 font-mono-log flex-shrink-0" style="color: #3A3A3D;">{{ log.time }}</span>
+            <span :style="{ color: log.status === 'completed' ? '#34D399' : '#FBBF24' }">›</span>
+            <span style="color: #8B8B8E;">{{ log.description }}</span>
+          </div>
+          <div v-if="activityLogs.length === 0" class="text-[10px] py-1" style="color: #3A3A3D;">暂无活动记录</div>
+        </div>
+      </div>
     </div>
 
-    <!-- Activity Log -->
-    <div v-if="project?.state?.progress" style="border-top: 1px solid #1F1F22; background: rgba(10,10,11,0.6);">
-      <div class="px-6 py-2.5 flex items-center justify-between">
-        <div class="text-[9px] font-semibold uppercase tracking-[0.25em] font-[JetBrains_Mono,monospace]" style="color: #525252;">活动日志</div>
-        <div class="text-[10px] font-mono-log" style="color: #3A3A3D;">{{ activityLogs.length }}</div>
+    <!-- Docs Tab -->
+    <div v-if="activeTab === 'docs'" class="flex-1 flex overflow-hidden">
+      <div class="w-[200px] flex-shrink-0 overflow-hidden" style="border-right: 1px solid #1F1F22;">
+        <DocTree :groups="docs.groups" :selected-file="selectedDocFile" @select-file="$emit('select-doc-file', $event)" />
       </div>
-      <div class="px-6 pb-3 space-y-0.5 max-h-32 overflow-y-auto">
-        <div v-for="(log, i) in activityLogs" :key="i" class="flex items-start gap-2.5 text-[11px] py-0.5">
-          <span class="w-10 font-mono-log flex-shrink-0" style="color: #3A3A3D;">{{ log.time }}</span>
-          <span :style="{ color: log.status === 'completed' ? '#34D399' : '#FBBF24' }">›</span>
-          <span style="color: #8B8B8E;">{{ log.description }}</span>
-        </div>
-        <div v-if="activityLogs.length === 0" class="text-[10px] py-1" style="color: #3A3A3D;">暂无活动记录</div>
+      <div class="flex-1 overflow-hidden">
+        <DocPreview :content="docContent" :loading="docLoading" />
       </div>
     </div>
   </div>
@@ -56,13 +84,20 @@
 <script setup>
 import { computed } from 'vue'
 import PipelineStage from './PipelineStage.vue'
+import DocTree from './DocTree.vue'
+import DocPreview from './DocPreview.vue'
 
 const props = defineProps({
   project: { type: Object, default: null },
-  activeStep: { type: Object, default: null }
+  activeStep: { type: Object, default: null },
+  activeTab: { type: String, default: 'pipeline' },
+  docs: { type: Object, default: () => ({ groups: [] }) },
+  selectedDocFile: { type: Object, default: null },
+  docContent: { type: String, default: '' },
+  docLoading: { type: Boolean, default: false }
 })
 
-const emit = defineEmits(['select-step'])
+const emit = defineEmits(['select-step', 'switch-tab', 'select-doc-file'])
 
 const currentStage = computed(() => props.project?.state?.currentStage || 'unknown')
 const progress = computed(() => props.project?.state?.progress || {})

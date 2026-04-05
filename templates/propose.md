@@ -29,11 +29,11 @@ $ARGUMENTS
 ```bash
 cat .sillyspec/changes/*/MASTER.md 2>/dev/null  # 子阶段变更
 ls -t .sillyspec/knowledge/*.md | head -1
-cat .sillyspec/{REQUIREMENTS}.md .sillyspec/codebase/{CONVENTIONS,ARCHITECTURE}.md 2>/dev/null
+cat .sillyspec/{REQUIREMENTS}.md .sillyspec/docs/<project>/scan/{CONVENTIONS,ARCHITECTURE}.md 2>/dev/null
 ls .sillyspec/changes/ | grep -v archive
 ```
 
-**子阶段变更（如 `name/stage-1`）：** 读 MASTER.md 获取方向 + 前序经验 + 原型分析。规范保存到 `changes/<name>/stages/<stage-N>/`。
+**子阶段变更（如 `name/stage-1`）：** 读 MASTER.md 获取方向 + 前序经验 + 原型分析。规范保存到 `.sillyspec/docs/<project>/changes/<name>/stages/<stage-N>/`。
 
 无设计文档 → 提示先 `/sillyspec:brainstorm`。
 
@@ -47,7 +47,7 @@ ls .sillyspec/changes/ | grep -v archive
 
 ### 3. 生成规范文件
 
-创建 `.sillyspec/changes/$ARGUMENTS/`：
+创建 `.sillyspec/docs/<project>/changes/$ARGUMENTS/`：
 
 **`design.md`：** 动机与范围、功能需求（REQ-001 格式、Given/When/Then 用户场景、非功能需求）、架构决策及理由、文件变更清单表格、数据模型、API 设计、**代码风格参照**（参考已有的 Controller/Service/Entity 源文件，标注返回值类型、异常类型、注解风格）
 

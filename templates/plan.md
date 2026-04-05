@@ -29,9 +29,9 @@ cat .sillyspec/config.yaml 2>/dev/null
 
 **单项目模式：**
 ```bash
-LATEST=$(ls -d .sillyspec/changes/*/ | grep -v archive | tail -1)
+LATEST=$(ls -d .sillyspec/docs/<project>/changes/*/ | grep -v archive | tail -1)
 cat "$LATEST"/{design,tasks}.md 2>/dev/null
-cat .sillyspec/codebase/{CONVENTIONS,ARCHITECTURE}.md 2>/dev/null
+cat .sillyspec/docs/<project>/scan/{CONVENTIONS,ARCHITECTURE}.md 2>/dev/null
 cat .sillyspec/REQUIREMENTS.md 2>/dev/null
 ```
 
@@ -96,7 +96,7 @@ cat .sillyspec/REQUIREMENTS.md 2>/dev/null
 
 ### 4. 保存
 
-**直接覆盖** `.sillyspec/changes/<变更名>/tasks.md`。不再生成单独的 plan.md 文件。
+**直接覆盖** `.sillyspec/docs/<project>/changes/<变更名>/tasks.md`。不再生成单独的 plan.md 文件。
 
 ### 5. E2E 测试规划
 

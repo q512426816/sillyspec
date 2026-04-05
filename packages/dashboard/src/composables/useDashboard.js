@@ -13,7 +13,12 @@ export function useDashboard() {
     logs: [],
     isPanelOpen: true,
     executingProject: null,
-    isLoading: true
+    isLoading: true,
+    activeTab: 'pipeline',
+    docs: { groups: [] },
+    selectedDocFile: null,
+    docContent: '',
+    docLoading: false
   })
 
   /**
@@ -38,6 +43,8 @@ export function useDashboard() {
       state.activeProject = proj
       state.activeStep = null
       state.logs = []
+      state.selectedDocFile = null
+      state.docContent = ''
 
       // Load initial logs from project state if available
       if (proj.state?.progress?.currentLogs) {
@@ -168,6 +175,11 @@ export function useDashboard() {
     activeProjectPath,
     activeProjectStage,
     hasProjects,
-    activeProjectSteps
+    activeProjectSteps,
+  setActiveTab(tab) { state.activeTab = tab },
+  updateDocs(docs) { state.docs = docs },
+  selectDocFile(file) { state.selectedDocFile = file },
+  setDocContent(content) { state.docContent = content },
+  setDocLoading(loading) { state.docLoading = loading }
   }
 }
