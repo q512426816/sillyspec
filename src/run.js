@@ -4,7 +4,7 @@
  * CLI 成为流程引擎，AI 变成步骤执行器。
  */
 import { basename, join } from 'path'
-import { existsSync, readdirSync, mkdirSync, writeFileSync, appendFileSync } from 'fs'
+import { existsSync, readdirSync, mkdirSync, writeFileSync, appendFileSync, readFileSync, statSync } from 'fs'
 import { ProgressManager } from './progress.js'
 import { stageRegistry, getNextStage, auxiliaryStages } from './stages/index.js'
 import { buildExecuteSteps } from './stages/execute.js'
@@ -167,20 +167,48 @@ function runStage(progress, stageName, cwd) {
   const currentIdx = steps.findIndex(s => s.status !== 'completed' && s.status !== 'skipped')
 
   if (currentIdx === -1) {
-    const total = steps.length
-    console.log(`✅ ${stageName} 阶段已完成（${total}/${total} 步）`)
-    const next = getNextStage(stageName)
-    if (next) {
-      console.log(`\n下一步：sillyspec run ${next}`)
-      console.log(`或：/sillyspec:${next}`)
-    }
-    process.exit(2)
+    // 阶段已完成，自动重置，允许重复执行
+    steps.forEach(s => { s.status = 'pending'; s.completedAt = null; s.output = null; s.startedAt = null })
+    stageData.status = 'in_progress'
+    stageData.completedAt = null
+    console.log(`🔄 ${stageName} 阶段已完成，重新开始...\n`)
+    currentIdx = 0
   }
 
   const stageDef = stageRegistry[stageName]
   const defSteps = getStageSteps(stageName, cwd)
   if (defSteps && defSteps[currentIdx]) {
     outputStep(stageName, currentIdx, defSteps, cwd)
+  }
+}
+
+function validateMetadata(cwd, stageName) {
+  const changesDir = join(cwd, '.sillyspec', 'changes')
+  if (!existsSync(changesDir)) return
+
+  // 找最近 10 分钟内修改的 md/yaml 文件
+  const cutoff = Date.now() - 10 * 60 * 1000
+  const missing = []
+
+  function walk(dir) {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name)
+      if (entry.isDirectory()) { walk(full); continue }
+      if (!/\.(md|yaml|yml)$/.test(entry.name)) continue
+      const mtime = statSync(full).mtimeMs
+      if (mtime < cutoff) continue
+      const content = readFileSync(full, 'utf-8')
+      if (!content.includes('author:') && !content.includes('author：')) missing.push(full)
+      if (!content.includes('created_at:') && !content.includes('created_at：')) missing.push(full)
+    }
+  }
+
+  walk(changesDir)
+  const unique = [...new Set(missing)]
+  if (unique.length > 0) {
+    console.log(`\n⚠️  以下文件缺少 author 或 created_at 元数据：`)
+    unique.forEach(f => console.log(`  - ${f.replace(cwd + '/', '')}`))
+    console.log('请在文件头部添加 author（git 用户名）和 created_at（精确到秒）')
   }
 }
 
@@ -243,6 +271,9 @@ function completeStep(pm, progress, stageName, cwd, outputText) {
       const entry = `\n## ${new Date().toISOString()} | ${stageName}: ${steps[currentIdx].name}\n- 输出：${outputText}\n`
       appendFileSync(inputsPath, entry)
     }
+
+    // 验证：检查生成的文件是否包含 author 和 created_at
+    validateMetadata(cwd, stageName)
 
     const total = steps.length
     console.log(`✅ ${stageName} 阶段已完成（${total}/${total} 步）`)
