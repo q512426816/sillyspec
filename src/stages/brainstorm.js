@@ -165,7 +165,7 @@ export const definition = {
       prompt: `撰写 design 文档并进行 AI 自审。
 
 ### 操作
-1. 将确认的设计写入 \`.sillyspec/specs/YYYY-MM-DD-<topic>-design.md\`
+1. 将确认的设计写入 \`.sillyspec/changes/<变更名>/design.md\`
 2. 自审检查：
    - 需求覆盖：是否完整覆盖 Step 6 确认的需求
    - 约束一致性：是否与 CONVENTIONS.md、ARCHITECTURE.md 一致

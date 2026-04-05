@@ -48,24 +48,7 @@ export function migrateDocs(projectDir) {
     }
   }
 
-  // 2. specs/ → docs/<project>/brainstorm/
-  const specsDir = join(sillyspecDir, 'specs');
-  if (existsSync(specsDir)) {
-    const targetDir = join(docsBase, 'brainstorm');
-    mkdirSync(targetDir, { recursive: true });
-    const files = readdirSync(specsDir).filter(f => f.endsWith('.md'));
-    for (const file of files) {
-      const src = join(specsDir, file);
-      const dest = join(targetDir, file);
-      if (!existsSync(dest)) {
-        copyFileSync(src, dest);
-        console.log(chalk.green('  ✅') + ` brainstorm/${file}`);
-        migrated++;
-      } else {
-        console.log(chalk.yellow('  ⏭️') + ` brainstorm/${file} (已存在)`);
-      }
-    }
-  }
+  // 2. specs/ is deprecated — designs live in changes/<变更名>/design.md
 
   // 3. changes/archive/ → docs/<project>/archive/
   const archiveDir = join(sillyspecDir, 'changes', 'archive');

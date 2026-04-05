@@ -67,7 +67,7 @@ export const definition = {
 
 ### 操作
 1. 生成 proposal.md：动机、变更范围、不在范围内、成功标准
-2. 生成 specs/requirements.md：功能需求、用户场景（Given/When/Then）、非功能需求
+2. 生成 requirements.md：功能需求、用户场景（Given/When/Then）、非功能需求
 3. 生成 design.md：架构决策、文件变更清单、数据模型、API 设计、代码风格参照
 4. 生成 tasks.md：任务列表（只列名称，不展开步骤）
 

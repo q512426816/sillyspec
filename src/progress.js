@@ -16,6 +16,7 @@ const RUNTIME_DIR = '.sillyspec/.runtime';
 const PROGRESS_FILE = 'progress.json';
 const BACKUP_FILE = 'progress.json.bak';
 
+const CURRENT_VERSION = 2;
 const VALID_STAGES = ['brainstorm', 'propose', 'plan', 'execute', 'verify'];
 const VALID_STATUSES = ['pending', 'in-progress', 'completed', 'failed', 'blocked'];
 
@@ -34,7 +35,7 @@ function emptyStage() {
 function makeInitialProgress(project) {
   const stages = {};
   for (const s of VALID_STAGES) stages[s] = emptyStage();
-  return { project: project || '', currentStage: '', stages, lastActive: null };
+  return { _version: CURRENT_VERSION, project: project || '', currentStage: '', stages, lastActive: null };
 }
 
 // ── ProgressManager ──
@@ -293,6 +294,9 @@ export class ProgressManager {
     if (!data) { console.log('❌ 无法读取 progress.json'); return false; }
 
     const errors = [];
+    if (!data._version || !Number.isInteger(data._version) || data._version < 1) {
+      errors.push(`_version 缺失或无效（期望正整数，实际为 ${JSON.stringify(data._version)}）`);
+    }
     if (!data.stages || typeof data.stages !== 'object') errors.push('缺少 stages');
     if (!VALID_STAGES.every(s => data.stages[s])) errors.push('缺少阶段定义');
 
@@ -301,6 +305,10 @@ export class ProgressManager {
     console.log(`⚠️  发现问题，尝试修复...`);
     let fixed = { ...data, stages: { ...data.stages } };
     let changed = false;
+    if (!fixed._version || !Number.isInteger(fixed._version) || fixed._version < 1) {
+      fixed._version = CURRENT_VERSION;
+      changed = true;
+    }
     for (const s of VALID_STAGES) {
       if (!fixed.stages[s]) { fixed.stages[s] = emptyStage(); changed = true; }
     }
