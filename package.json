@@ -1,6 +1,6 @@
 {
   "name": "sillyspec",
-  "version": "3.7.8",
+  "version": "3.7.10",
   "description": "SillySpec CLI — 流程状态机，让 AI 严格按步骤来",
   "type": "module",
   "bin": {
@@ -20,6 +20,9 @@
   "dependencies": {
     "@inquirer/prompts": "^7.10.1",
     "chalk": "^5.6.2",
-    "ora": "^9.3.0"
+    "chokidar": "^4.0",
+    "open": "^10.1",
+    "ora": "^9.3.0",
+    "ws": "^8.18"
   }
 }
