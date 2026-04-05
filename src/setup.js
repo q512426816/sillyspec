@@ -11,15 +11,7 @@ const __dirname = dirname(__filename);
 
 // ── Skill 定义 ──
 
-const SKILLS = [
-  {
-    id: 'playwright-e2e',
-    name: 'Playwright E2E 测试参考',
-    description: 'E2E 测试编写最佳实践，AI 执行测试任务时自动读取',
-    source: join(__dirname, '..', 'templates', 'skills', 'playwright-e2e'),
-    target: 'playwright-e2e',
-  },
-];
+const SKILLS = [];
 
 // ── MCP 工具定义 ──
 

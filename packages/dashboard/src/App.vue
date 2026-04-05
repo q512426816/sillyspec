@@ -1,5 +1,6 @@
 <template>
-  <div class="h-screen w-screen flex flex-col overflow-hidden font-[DM_Sans,sans-serif] relative" style="background-color: #151820;">
+  <n-config-provider :theme-overrides="themeOverrides">
+  <div class="h-screen w-screen flex flex-col overflow-hidden font-[DM_Sans,sans-serif] relative" style="background-color: #F5F5F7;">
     <!-- Ambient background -->
     <div class="absolute inset-0 pointer-events-none" style="background: radial-gradient(ellipse 60% 40% at 10% 20%, rgba(251,191,36,0.04) 0%, transparent 70%), radial-gradient(ellipse 50% 50% at 90% 80%, rgba(251,191,36,0.02) 0%, transparent 70%);" />
 
@@ -11,7 +12,7 @@
       <!-- Left: Project List -->
       <aside
         class="flex-shrink-0 relative overflow-hidden"
-        :style="`width: ${leftWidth}px; background: #1A1E28; border-right: none;`"
+        :style="`width: ${leftWidth}px; background: #FFFFFF; border-right: none;`"
       >
         <ProjectList
           :projects="dashboard.state.projects"
@@ -26,13 +27,14 @@
 
       <!-- Left ↔ Center resize handle -->
       <div
-        class="w-[2px] flex-shrink-0 cursor-col-resize hover:bg-[#FBBF24] active:bg-[#FBBF24] relative z-20"
+        class="w-[2px] flex-shrink-0 cursor-col-resize hover:bg-[#D97706] active:bg-[#D97706] relative z-20"
         style="background: #2A3040;"
         @mousedown="startDragLeft"
       />
 
       <!-- Center: Pipeline View -->
-      <main class="flex-1 overflow-hidden accent-stripe" style="min-width: 300px;">
+      <main class="flex-1 overflow-hidden accent-stripe flex flex-col" style="min-width: 300px;">
+        <ProjectOverview :project="dashboard.state.activeProject" @show-detail="handleShowDetail" />
         <PipelineView
           :project="dashboard.state.activeProject"
           :active-step="dashboard.state.activeStep"
@@ -50,7 +52,7 @@
       <!-- Center ↔ Right resize handle -->
       <div
         v-if="dashboard.state.isPanelOpen"
-        class="w-[2px] flex-shrink-0 cursor-col-resize hover:bg-[#FBBF24] active:bg-[#FBBF24] relative z-20"
+        class="w-[2px] flex-shrink-0 cursor-col-resize hover:bg-[#D97706] active:bg-[#D97706] relative z-20"
         style="background: #2A3040;"
         @mousedown="startDragRight"
       />
@@ -61,14 +63,17 @@
           'flex-shrink-0 relative overflow-hidden',
           dashboard.state.isPanelOpen ? '' : 'w-0'
         ]"
-        :style="dashboard.state.isPanelOpen ? `width: ${rightWidth}px; background: #1A1E28; transition: none;` : 'background: #1A1E28;'"
+        :style="dashboard.state.isPanelOpen ? `width: ${rightWidth}px; background: #FFFFFF; transition: none;` : 'background: #FFFFFF;'"
       >
         <DetailPanel
           :is-open="dashboard.state.isPanelOpen"
           :active-step="dashboard.state.activeStep"
           :logs="dashboard.state.logs"
-          @close="dashboard.closePanel"
+          :detail-type="detailType"
+          :detail-data="detailData"
+          @close="handleDetailClose"
           @clear-logs="dashboard.clearLogs"
+          @open-doc-file="handleOpenDocFromDetail"
         />
       </aside>
     </div>
@@ -94,10 +99,11 @@
       @select-stage="handleSelectStage"
     />
   </div>
+  </n-config-provider>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, readonly } from 'vue'
 import { useWebSocket } from './composables/useWebSocket.js'
 import { useDashboard } from './composables/useDashboard.js'
 import { useDashboardKeyboard } from './composables/useKeyboard.js'
@@ -105,6 +111,7 @@ import ProjectList from './components/ProjectList.vue'
 import PipelineView from './components/PipelineView.vue'
 import DetailPanel from './components/DetailPanel.vue'
 import ActionBar from './components/ActionBar.vue'
+import ProjectOverview from './components/ProjectOverview.vue'
 import CommandPalette from './components/CommandPalette.vue'
 
 // Composables
@@ -113,6 +120,8 @@ const dashboard = useDashboard()
 const isCommandPaletteOpen = ref(false)
 const executionResult = ref(null)
 const scanPaths = ref([])
+const detailType = ref(null)
+const detailData = ref(null)
 
 // Panel resize state
 const STORAGE_KEY = 'dashboard-panel-widths'
@@ -263,6 +272,43 @@ function handleAddScanPath(path) {
 }
 function handleRemoveScanPath(path) {
   ws.send({ type: 'scan:remove-path', data: { path } })
+}
+
+async function handleShowDetail(type) {
+  const project = dashboard.state.activeProject
+  if (!project?.path) return
+  detailType.value = type
+  detailData.value = null
+  dashboard.openPanel()
+  try {
+    const url = `/api/projects/${encodeURIComponent(project.path)}/detail?type=${type}`
+    const res = await fetch(url)
+    if (res.ok) detailData.value = await res.json()
+  } catch {}
+}
+
+function handleDetailClose() {
+  detailType.value = null
+  detailData.value = null
+  dashboard.closePanel()
+}
+
+function handleOpenDocFromDetail(file) {
+  detailType.value = null
+  detailData.value = null
+  dashboard.setActiveTab('docs')
+  handleSelectDocFile(file)
+}
+
+const themeOverrides = {
+  common: {
+    primaryColor: '#D97706',
+    primaryColorHover: '#F59E0B',
+    primaryColorPressed: '#B45309',
+    borderRadius: '6px',
+    fontFamily: 'DM Sans, sans-serif',
+    fontFamilyMono: 'JetBrains Mono, monospace'
+  }
 }
 </script>
 

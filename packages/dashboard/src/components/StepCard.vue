@@ -11,7 +11,7 @@
 
     <div class="pl-3.5 pr-3 py-2.5">
       <div class="flex items-center gap-2">
-        <h3 class="text-[12px] font-medium transition-colors duration-150" :style="{ color: isActive ? '#FBBF24' : '#E4E4E7', fontFamily: '\'JetBrains Mono\', monospace' }">
+        <h3 class="text-[12px] font-medium transition-colors duration-150" :style="{ color: isActive ? '#D97706' : '#1C1C1E', fontFamily: '\'JetBrains Mono\', monospace' }">
           {{ step.title || step.name }}
         </h3>
         <StageBadge v-if="step.status" :status="step.status" :label="statusLabel" />
@@ -23,25 +23,25 @@
         class="overflow-hidden transition-all duration-200"
         :style="{ maxHeight: hovered ? '60px' : '0', opacity: hovered ? 1 : 0 }"
       >
-        <p class="mt-1.5 text-[11px] line-clamp-2" style="color: #A0A4B5;">
+        <p class="mt-1.5 text-[11px] line-clamp-2" style="color: #636366;">
           {{ step.summary || step.description }}
         </p>
       </div>
 
       <!-- Active details -->
       <div v-if="isActive" class="mt-2 space-y-1">
-        <p v-if="step.conclusion" class="text-[11px]" style="color: #E4E4E7;">
-          <span style="color: #FBBF24; font-weight: 600;">结论:</span> {{ step.conclusion }}
+        <p v-if="step.conclusion" class="text-[11px]" style="color: #1C1C1E;">
+          <span style="color: #D97706; font-weight: 600;">结论:</span> {{ step.conclusion }}
         </p>
-        <p v-if="step.decision" class="text-[11px]" style="color: #E4E4E7;">
-          <span style="color: #FBBF24; font-weight: 600;">决策:</span> {{ step.decision }}
+        <p v-if="step.decision" class="text-[11px]" style="color: #1C1C1E;">
+          <span style="color: #D97706; font-weight: 600;">决策:</span> {{ step.decision }}
         </p>
-        <p v-if="step.userQuery" class="text-[11px] italic" style="color: #A0A4B5;">
+        <p v-if="step.userQuery" class="text-[11px] italic" style="color: #636366;">
           "{{ step.userQuery }}"
         </p>
       </div>
 
-      <div v-if="step.duration" class="mt-1 text-[10px] font-mono-log" style="color: #8B8FA3;">
+      <div v-if="step.duration" class="mt-1 text-[10px] font-mono-log" style="color: #6B7280;">
         {{ step.duration }}
       </div>
     </div>
@@ -62,13 +62,13 @@ const emit = defineEmits(['select'])
 const hovered = ref(false)
 
 const barColor = computed(() => {
-  const colors = { 'completed': '#34D399', 'in-progress': '#FBBF24', 'blocked': '#FB923C', 'failed': '#EF4444', 'pending': '#2A2A2D' }
+  const colors = { 'completed': '#16A34A', 'in-progress': '#D97706', 'blocked': '#EA580C', 'failed': '#DC2626', 'pending': '#E5E5EA' }
   return colors[props.step.status] || colors.pending
 })
 
 const cardStyle = computed(() => ({
-  background: props.isActive ? 'rgba(251,191,36,0.04)' : (hovered.value ? 'rgba(255,255,255,0.015)' : '#141416'),
-  border: `1px solid ${props.isActive ? 'rgba(251,191,36,0.2)' : '#1F1F22'}`,
+  background: props.isActive ? 'rgba(217,119,6,0.08)' : (hovered.value ? 'rgba(0,0,0,0.02)' : '#FFFFFF'),
+  border: `1px solid ${props.isActive ? 'rgba(251,191,36,0.2)' : '#F0F0F3'}`,
 }))
 
 const statusLabel = computed(() => {

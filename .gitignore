@@ -2,3 +2,6 @@
 STATE.md
 node_modules/
 .npm-publish-token
+.sillyspec/codebase/SCAN-RAW.md
+.sillyspec/local.yaml
+.sillyspec/.runtime/

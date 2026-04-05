@@ -1,4 +1,5 @@
-import { readFileSync, existsSync, readdirSync } from 'fs'
+import { readFileSync, existsSync, readdirSync, statSync } from 'fs'
+import { execSync } from 'child_process'
 import { join } from 'path'
 import { fileURLToPath } from 'url'
 import { dirname } from 'path'
@@ -10,6 +11,243 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
  * @param {string} projectPath - Path to the project directory
  * @returns {object} Docs tree grouped by type
  */
+// Known framework detection keywords in package.json dependencies
+const FRAMEWORK_PATTERNS = [
+  { keys: ['react', 'react-dom'], name: 'React' },
+  { keys: ['vue'], name: 'Vue' },
+  { keys: ['next'], name: 'Next.js' },
+  { keys: ['nuxt'], name: 'Nuxt' },
+  { keys: ['express'], name: 'Express' },
+  { keys: ['koa'], name: 'Koa' },
+  { keys: ['fastify'], name: 'Fastify' },
+  { keys: ['nestjs', '@nestjs/core'], name: 'NestJS' },
+  { keys: ['svelte'], name: 'Svelte' },
+  { keys: ['astro'], name: 'Astro' },
+  { keys: ['vite'], name: 'Vite' },
+  { keys: ['webpack'], name: 'Webpack' },
+  { keys: ['typescript'], name: 'TypeScript' },
+  { keys: ['tailwindcss'], name: 'Tailwind' },
+  { keys: ['prisma'], name: 'Prisma' },
+  { keys: ['drizzle-orm'], name: 'Drizzle' },
+]
+
+/**
+ * Parse project overview info
+ * @param {string} projectPath
+ * @returns {object} Overview data
+ */
+export function parseProjectOverview(projectPath) {
+  const result = {
+    techStack: [],
+    lastActive: null,
+    docStats: { design: 0, plan: 0, archive: 0, changes: 0, scan: 0, quicklog: 0, total: 0 },
+    git: { branch: '', lastCommit: '', dirtyCount: 0 }
+  }
+
+  // --- Tech stack ---
+  const pkgPath = join(projectPath, 'package.json')
+  if (existsSync(pkgPath)) {
+    try {
+      const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'))
+      const deps = Object.keys({ ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) })
+      for (const pattern of FRAMEWORK_PATTERNS) {
+        if (pattern.keys.some(k => deps.includes(k))) {
+          result.techStack.push(pattern.name)
+        }
+      }
+    } catch {}
+  }
+  if (existsSync(join(projectPath, 'pom.xml'))) {
+    result.techStack.push('Java')
+    try {
+      const content = readFileSync(join(projectPath, 'pom.xml'), 'utf-8')
+      if (content.includes('spring-boot')) result.techStack.push('Spring Boot')
+    } catch {}
+  }
+  if (existsSync(join(projectPath, 'build.gradle')) || existsSync(join(projectPath, 'build.gradle.kts'))) {
+    if (!result.techStack.includes('Java')) result.techStack.push('Gradle')
+  }
+  if (existsSync(join(projectPath, 'requirements.txt')) || existsSync(join(projectPath, 'pyproject.toml'))) {
+    result.techStack.push('Python')
+  }
+  if (existsSync(join(projectPath, 'go.mod'))) {
+    result.techStack.push('Go')
+  }
+  if (result.techStack.length === 0) result.techStack = []
+
+  // --- Last active ---
+  const sillyspecDir = join(projectPath, '.sillyspec')
+  const progressPath = join(sillyspecDir, '.runtime', 'progress.json')
+  if (existsSync(progressPath)) {
+    try {
+      const progress = JSON.parse(readFileSync(progressPath, 'utf-8'))
+      if (progress.stages) {
+        for (const stageData of Object.values(progress.stages)) {
+          if (stageData.lastActive && (!result.lastActive || new Date(stageData.lastActive) > new Date(result.lastActive))) {
+            result.lastActive = stageData.lastActive
+          }
+        }
+      }
+      if (progress.lastActive) result.lastActive = progress.lastActive
+    } catch {}
+  }
+  if (!result.lastActive) {
+    // Fallback: most recently modified file in .sillyspec
+    try {
+      const findRecent = (dir) => {
+        let latest = null
+        if (!existsSync(dir)) return latest
+        for (const entry of readdirSync(dir, { withFileTypes: true })) {
+          const p = join(dir, entry.name)
+          try {
+            const s = statSync(p)
+            if (entry.isDirectory()) {
+              const sub = findRecent(p)
+              if (sub && (!latest || sub > latest)) latest = sub
+            } else if (!latest || s.mtimeMs > latest) {
+              latest = s.mtimeMs
+            }
+          } catch {}
+        }
+        return latest
+      }
+      const ts = findRecent(sillyspecDir)
+      if (ts) result.lastActive = new Date(ts).toISOString()
+    } catch {}
+  }
+
+  // --- Doc stats ---
+  const docsDir = join(sillyspecDir, 'docs')
+  if (existsSync(docsDir)) {
+    const typeMap = { brainstorm: 'design', plan: 'plan', archive: 'archive', changes: 'changes', scan: 'scan', quicklog: 'quicklog' }
+    try {
+      for (const projDir of readdirSync(docsDir, { withFileTypes: true }).filter(d => d.isDirectory())) {
+        for (const typeDir of readdirSync(join(docsDir, projDir.name), { withFileTypes: true }).filter(d => d.isDirectory())) {
+          const key = typeMap[typeDir.name]
+          if (!key) continue
+          const count = countMdFiles(join(docsDir, projDir.name, typeDir.name))
+          result.docStats[key] += count
+          result.docStats.total += count
+        }
+      }
+    } catch {}
+  }
+
+  // --- Git info ---
+  try {
+    result.git.lastCommit = execSync('git log -1 --format=%s', { cwd: projectPath, encoding: 'utf-8' }).trim()
+  } catch {}
+  try {
+    result.git.branch = execSync('git branch --show-current', { cwd: projectPath, encoding: 'utf-8' }).trim()
+  } catch {}
+  try {
+    result.git.dirtyCount = parseInt(execSync('git status --porcelain', { cwd: projectPath, encoding: 'utf-8' }).trim().split('\n').filter(Boolean).length, 10) || 0
+  } catch {}
+
+  return result
+}
+
+export function parseGitDetail(projectPath) {
+  const result = { branch: '', commits: [], untracked: [] }
+  try {
+    result.branch = execSync('git branch --show-current', { cwd: projectPath, encoding: 'utf-8' }).trim()
+  } catch {}
+  try {
+    const log = execSync('git log -5 --format=%h|%s|%an|%aI', { cwd: projectPath, encoding: 'utf-8' }).trim()
+    result.commits = log.split('\n').filter(Boolean).map(line => {
+      const [hash, message, author, date] = line.split('|')
+      return { hash, message, author, date }
+    })
+  } catch {}
+  try {
+    const status = execSync('git status --porcelain', { cwd: projectPath, encoding: 'utf-8' }).trim()
+    result.untracked = status.split('\n').filter(Boolean).map(line => ({
+      status: line.slice(0, 2).trim(),
+      file: line.slice(3)
+    }))
+  } catch {}
+  return result
+}
+
+export function parseTechStackDetail(projectPath) {
+  const result = { frameworks: [], dependencies: {}, devDependencies: {} }
+  const pkgPath = join(projectPath, 'package.json')
+  if (existsSync(pkgPath)) {
+    try {
+      const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'))
+      result.dependencies = pkg.dependencies || {}
+      result.devDependencies = pkg.devDependencies || {}
+      const allDeps = Object.keys({ ...result.dependencies, ...result.devDependencies })
+      for (const pattern of FRAMEWORK_PATTERNS) {
+        if (pattern.keys.some(k => allDeps.includes(k))) {
+          result.frameworks.push(pattern.name)
+        }
+      }
+    } catch {}
+  }
+  return result
+}
+
+export function parseDocsList(projectPath) {
+  const sillyspecDir = join(projectPath, '.sillyspec')
+  const docsDir = join(sillyspecDir, 'docs')
+  const groups = []
+  if (!existsSync(docsDir)) return groups
+  const typeMap = {
+    brainstorm: { label: '设计文档', icon: '📋' },
+    plan: { label: '实现计划', icon: '📐' },
+    archive: { label: '已归档', icon: '📦' },
+    changes: { label: '当前变更', icon: '⚙️' },
+    scan: { label: '架构文档', icon: '🔍' },
+    quicklog: { label: '快速修复', icon: '⚡' }
+  }
+  try {
+    for (const projDir of readdirSync(docsDir, { withFileTypes: true }).filter(d => d.isDirectory())) {
+      for (const typeDir of readdirSync(join(docsDir, projDir.name), { withFileTypes: true }).filter(d => d.isDirectory())) {
+        const cfg = typeMap[typeDir.name]
+        if (!cfg) continue
+        const files = listFilesRecursive(join(docsDir, projDir.name, typeDir.name))
+        if (files.length) {
+          groups.push({ key: typeDir.name, label: cfg.label, icon: cfg.icon, files })
+        }
+      }
+    }
+  } catch {}
+  return groups
+}
+
+function listFilesRecursive(dir) {
+  const files = []
+  try {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const p = join(dir, entry.name)
+      if (entry.isDirectory()) {
+        const sub = listFilesRecursive(p)
+        for (const f of sub) f.name = entry.name + '/' + f.name
+        files.push(...sub)
+      } else if (entry.name.endsWith('.md')) {
+        const s = statSync(p)
+        files.push({ name: entry.name, path: p, size: s.size, mtime: s.mtime.toISOString() })
+      }
+    }
+  } catch {}
+  return files
+}
+
+function countMdFiles(dir) {
+  let count = 0
+  try {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (entry.isDirectory()) {
+        count += countMdFiles(join(dir, entry.name))
+      } else if (entry.name.endsWith('.md')) {
+        count++
+      }
+    }
+  } catch {}
+  return count
+}
+
 export function parseDocsTree(projectPath) {
   const sillyspecDir = join(projectPath, '.sillyspec')
   const docsDir = join(sillyspecDir, 'docs')
@@ -97,43 +335,29 @@ export function parseProjectState(projectPath) {
     return null
   }
 
-  let currentStage = 'unknown'
+  let currentStage = ''
   let nextStep = null
   let progress = { stages: {} }
   let stages = []
   let specs = []
   let lastActive = null
 
-  // Read STATE.md for current stage and next step
-  const statePath = join(sillyspecDir, 'STATE.md')
-  if (existsSync(statePath)) {
-    try {
-      const stateContent = readFileSync(statePath, 'utf-8')
-      const stageMatch = stateContent.match(/当前阶段[：:]\s*(\w+)/) || stateContent.match(/current_stage:\s*(\w+)/i)
-      const stepMatch = stateContent.match(/下一步[：:]\s*(.+)/) || stateContent.match(/next_step:\s*(.+)/i)
-
-      if (stageMatch) currentStage = stageMatch[1]
-      if (stepMatch) nextStep = stepMatch[1].trim()
-    } catch (err) {
-      // State file exists but couldn't be read
-    }
-  }
-
-  // Read progress.json from .runtime directory
+  // Read progress.json for current stage
   const progressPath = join(sillyspecDir, '.runtime', 'progress.json')
   if (existsSync(progressPath)) {
     try {
-      const progressContent = readFileSync(progressPath, 'utf-8')
-      progress = JSON.parse(progressContent)
-      stages = Object.keys(progress.stages || {})
+      const progressData = JSON.parse(readFileSync(progressPath, 'utf-8'))
+      progress = progressData
+      currentStage = progressData.currentStage || ''
+      stages = Object.keys(progressData.stages || {})
 
-      // Find last active stage
-      if (progress.stages) {
-        for (const [stageName, stageData] of Object.entries(progress.stages)) {
-          if (stageData.lastActive) {
-            if (!lastActive || new Date(stageData.lastActive) > new Date(lastActive)) {
-              lastActive = stageData.lastActive
-            }
+      // Find last active
+      if (progressData.lastActive) lastActive = progressData.lastActive
+      if (progressData.stages) {
+        for (const [stageName, stageData] of Object.entries(progressData.stages)) {
+          if (stageData.lastActive || stageData.startedAt) {
+            const t = stageData.lastActive || stageData.startedAt
+            if (!lastActive || new Date(t) > new Date(lastActive)) lastActive = t
           }
         }
       }

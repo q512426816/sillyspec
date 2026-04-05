@@ -5,7 +5,7 @@ import { join, dirname, basename, sep, resolve } from 'path'
 import { fileURLToPath } from 'url'
 import { homedir } from 'os'
 import open from 'open'
-import { parseProjectState, parseDocsTree } from './parser.js'
+import { parseProjectState, parseDocsTree, parseProjectOverview, parseGitDetail, parseTechStackDetail, parseDocsList } from './parser.js'
 import { startWatcher, stopWatcher, addCustomScanPath, removeCustomScanPath, getCustomScanPaths, customScanPaths } from './watcher.js'
 import { executeCommand } from './executor.js'
 
@@ -205,6 +205,44 @@ function startServer({ port = 3456, open: openBrowser = true } = {}) {
       return
     }
 
+    // Detail API
+    const detailMatch = req.url?.match(/^\/api\/projects\/(.+)\/detail(\?|$)/)
+    if (detailMatch) {
+      const projectPath = decodeURIComponent(detailMatch[1])
+      const url = new URL(req.url, `http://${req.headers.host}`)
+      const type = url.searchParams.get('type')
+      let data
+      try {
+        if (type === 'git') data = parseGitDetail(projectPath)
+        else if (type === 'tech') data = parseTechStackDetail(projectPath)
+        else if (type === 'docs') data = parseDocsList(projectPath)
+        else { res.writeHead(400); res.end(JSON.stringify({ error: 'Invalid type' })); return }
+        res.setHeader('Content-Type', 'application/json')
+        res.writeHead(200)
+        res.end(JSON.stringify(data))
+      } catch (err) {
+        res.writeHead(500)
+        res.end(JSON.stringify({ error: err.message }))
+      }
+      return
+    }
+
+    // Overview API
+    if (req.url?.startsWith('/api/projects/') && req.url.endsWith('/overview')) {
+      const parts = req.url.replace('/api/projects/', '').replace('/overview', '').split('/')
+      const projectPath = decodeURIComponent(parts.join('/'))
+      try {
+        const overview = parseProjectOverview(projectPath)
+        res.setHeader('Content-Type', 'application/json')
+        res.writeHead(200)
+        res.end(JSON.stringify(overview))
+      } catch (err) {
+        res.writeHead(500)
+        res.end(JSON.stringify({ error: err.message }))
+      }
+      return
+    }
+
     if (req.url?.startsWith('/api/project/')) {
       const projectName = decodeURIComponent(req.url.split('/').pop())
       discoverProjects().then(projects => {
@@ -311,7 +349,8 @@ function startServer({ port = 3456, open: openBrowser = true } = {}) {
     discoverProjects().then(projects => {
       const projectsWithState = projects.map(p => ({
         ...p,
-        state: parseProjectState(p.path)
+        state: parseProjectState(p.path),
+        overview: parseProjectOverview(p.path)
       }))
 
       ws.send(JSON.stringify({

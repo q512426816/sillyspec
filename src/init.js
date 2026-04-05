@@ -1,56 +1,31 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, copyFileSync } from 'fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, statSync } from 'fs';
 import { join, resolve, dirname, basename } from 'path';
 import { fileURLToPath } from 'url';
 import { homedir } from 'os';
 import { checkbox, select, confirm, input } from '@inquirer/prompts';
 import chalk from 'chalk';
-import ora from 'ora';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const TEMPLATE_DIR = resolve(__dirname, '..', 'templates');
+
+// ── 递归复制目录 ──
+function copyDirSync(src, dst) {
+  mkdirSync(dst, { recursive: true });
+  for (const entry of readdirSync(src, { withFileTypes: true })) {
+    if (entry.name === 'node_modules' || entry.name === '.git') continue;
+    const srcPath = join(src, entry.name);
+    const dstPath = join(dst, entry.name);
+    if (entry.isDirectory()) {
+      copyDirSync(srcPath, dstPath);
+    } else if (entry.name.endsWith('.md')) {
+      writeFileSync(dstPath, readFileSync(srcPath));
+    }
+  }
+}
 
 // ── 元数据映射 ──
 
-const DESCRIPTIONS = {
-  init: '绿地项目初始化 — 深度提问、调研、需求文档、路线图',
-  scan: '代码库扫描 — 支持快速扫描和深度扫描两阶段',
-  explore: '自由思考模式 — 讨论、画图、调研，不写代码',
-  brainstorm: '需求探索 — 结构化头脑风暴，生成设计文档（创建性工作前必用）',
-  propose: '生成结构化规范 — proposal + design + tasks',
-  plan: '编写实现计划 — 2-5 分钟粒度，精确到文件路径和代码',
-  execute: '波次执行 — 子代理并行 + 强制 TDD + 两阶段审查',
-  verify: '验证实现 — 对照规范检查 + 测试套件',
-  archive: '归档变更 — 规范沉淀，可追溯',
-  commit: '智能提交 — 自动收集变更信息，生成 commit message',
-  status: '查看项目进度和状态',
-  continue: '自动判断并执行下一步',
-  state: '查看当前工作状态 — 显示 STATE.md 内容',
-  resume: '恢复工作 — 从中断处继续',
-  quick: '快速任务 — 跳过完整流程，直接做',
-  workspace: '工作区管理 — 初始化、管理多项目工作区，查看子项目状态',
-  export: '导出成功方案为可复用模板',
-};
 
-const ARG_HINTS = {
-  init: '[项目名]',
-  scan: '[可选：指定区域，如 \'api\' 或 \'auth\'] [--deep 深度扫描]',
-  explore: '[探索主题]',
-  brainstorm: '[需求或想法描述]',
-  propose: '[变更名]',
-  plan: '[计划名]',
-  execute: '[任务编号或 \'all\']',
-  verify: '[可选：指定验证范围]',
-  archive: '[变更名]',
-  commit: '[可选：自定义 commit message]',
-  status: '',
-  continue: '',
-  state: '[可选备注]',
-  resume: '',
-  quick: '[任务描述]',
-  workspace: '[可选：add/remove/status/info]',
-  export: '<change-name> [--to <path>]',
-};
 
 const VALID_TOOLS = ['claude', 'claude_skills', 'cursor', 'openclaw', 'codex', 'gemini', 'opencode'];
 
@@ -64,10 +39,6 @@ const TOOL_LABELS = {
   opencode: 'OpenCode (通过 INSTRUCTIONS.md)',
 };
 
-// Slash commands 工具：安装 markdown 模板命令
-const SLASH_COMMAND_TOOLS = ['claude', 'claude_skills', 'cursor', 'openclaw'];
-
-// 指令文件工具：注入规范引用到指令文件
 const INSTRUCTION_TOOLS = ['codex', 'gemini', 'opencode'];
 
 const INSTRUCTION_FILE_MAP = {
@@ -86,78 +57,11 @@ const INJECTION_CONTENT = `## SillySpec — 规范驱动开发
 - 遵循 \`.sillyspec/docs/<project>/scan/CONVENTIONS.md\` 中的代码风格
 
 ### 工作流程
-- 读取 \`.sillyspec/STATE.md\` 确认当前阶段
-- 各阶段产出文件位于 \`.sillyspec/docs/<project>/changes/<变更名>/\` 下
-- 详细流程参考模板文件：\`.sillyspec/.templates/\`（brainstorm.md, plan.md, execute.md 等）
+- 读取 \`.sillyspec/.runtime/progress.json\` 确认当前阶段（使用 \`sillyspec progress show\`）
+- 各阶段产出文件位于 \`.sillyspec/changes/<变更名>/\` 下
 `;
 
-// ── 适配器 ──
-
-function generateClaude(projectDir, name, desc, body, argHint, version) {
-  const outDir = join(projectDir, '.claude', 'commands', 'sillyspec');
-  mkdirSync(outDir, { recursive: true });
-  writeFileSync(join(outDir, `${name}.md`),
-`---
-description: ${desc}
-argument-hint: "${argHint}"
-version: "${version}"
----
-
-${body}`
-  );
-}
-
-function generateClaudeSkills(projectDir, name, desc, body, argHint, version) {
-  const outDir = join(projectDir, '.claude', 'skills', `sillyspec-${name}`);
-  mkdirSync(outDir, { recursive: true });
-  writeFileSync(join(outDir, 'SKILL.md'),
-`---
-name: sillyspec:${name}
-description: ${desc}
-version: "${version}"
----
-
-${body}`
-  );
-}
-
-function generateCursor(projectDir, name, desc, body, argHint, version) {
-  const outDir = join(projectDir, '.cursor', 'commands');
-  mkdirSync(outDir, { recursive: true });
-  writeFileSync(join(outDir, `sillyspec-${name}.md`),
-`---
-name: /sillyspec-${name}
-id: sillyspec-${name}
-description: ${desc}
-version: "${version}"
----
-
-${body}`
-  );
-}
-
-function generateOpenclaw(projectDir, name, desc, body, argHint, version) {
-  const outDir = join(projectDir, '.openclaw', 'skills', `sillyspec-${name}`);
-  mkdirSync(outDir, { recursive: true });
-  writeFileSync(join(outDir, 'SKILL.md'),
-`---
-name: sillyspec:${name}
-description: ${desc}
-version: "${version}"
----
-
-${body}`
-  );
-}
-
-const GENERATORS = {
-  claude: generateClaude,
-  claude_skills: generateClaudeSkills,
-  cursor: generateCursor,
-  openclaw: generateOpenclaw,
-};
-
-// ── 指令文件注入 ──
+// ── 注入指令文件 ──
 
 function injectInstructions(tool, projectDir) {
   const fileName = INSTRUCTION_FILE_MAP[tool];
@@ -217,14 +121,11 @@ async function doInstall(projectDir, tools, isWorkspace, subprojects = []) {
     writeFileSync(projectYamlPath, `name: ${projectName}\npath: .\nstatus: active\n`);
   }
 
-  // 创建 docs/<projectName>/ 子目录结构
-  const docsBase = join(projectDir, '.sillyspec', 'docs', projectName);
-  for (const sub of ['scan', 'brainstorm', 'plan', 'changes', 'archive', 'quicklog']) {
-    const subDir = join(docsBase, sub);
-    mkdirSync(subDir, { recursive: true });
-    const gitkeepPath = join(subDir, '.gitkeep');
-    if (!existsSync(gitkeepPath)) writeFileSync(gitkeepPath, '');
-  }
+  // 创建 docs/<projectName>/scan/ 子目录（代码扫描结果）
+  const scanDir = join(projectDir, '.sillyspec', 'docs', projectName, 'scan');
+  mkdirSync(scanDir, { recursive: true });
+  const gitkeepPath = join(scanDir, '.gitkeep');
+  if (!existsSync(gitkeepPath)) writeFileSync(gitkeepPath, '');
 
   // 兼容：保留旧的 codebase/ changes/ quicklog/ 目录（如果已存在不删除）
   if (isWorkspace) {
@@ -250,13 +151,22 @@ async function doInstall(projectDir, tools, isWorkspace, subprojects = []) {
     mkdirSync(join(runtimeDir, sub), { recursive: true });
   }
 
-  // 复制 resume-dialog.md 到 .runtime/templates/
-  const resumeDialogSrc = join(TEMPLATE_DIR, 'resume-dialog.md');
-  if (existsSync(resumeDialogSrc)) {
-    const dest = join(runtimeDir, 'templates', 'resume-dialog.md');
-    if (!existsSync(dest)) {
-      copyFileSync(resumeDialogSrc, dest);
-    }
+  // 创建初始 progress.json
+  const progressPath = join(runtimeDir, 'progress.json');
+  if (!existsSync(progressPath)) {
+    const initialProgress = {
+      project: projectName,
+      currentStage: '',
+      stages: {
+        brainstorm: { status: 'pending', steps: [], startedAt: null, completedAt: null },
+        propose: { status: 'pending', steps: [], startedAt: null, completedAt: null },
+        plan: { status: 'pending', steps: [], startedAt: null, completedAt: null },
+        execute: { status: 'pending', steps: [], startedAt: null, completedAt: null },
+        verify: { status: 'pending', steps: [], startedAt: null, completedAt: null }
+      },
+      lastActive: null
+    };
+    writeFileSync(progressPath, JSON.stringify(initialProgress, null, 2) + '\n');
   }
 
   // 创建初始 user-inputs.md
@@ -266,7 +176,7 @@ async function doInstall(projectDir, tools, isWorkspace, subprojects = []) {
   }
 
   const gitignorePath = join(projectDir, '.gitignore');
-  const ignoreRules = ['.sillyspec/STATE.md', '.sillyspec/codebase/SCAN-RAW.md', '.sillyspec/local.yaml', '.sillyspec/.runtime/'];
+  const ignoreRules = ['.sillyspec/codebase/SCAN-RAW.md', '.sillyspec/local.yaml', '.sillyspec/.runtime/'];
   if (existsSync(gitignorePath)) {
     const content = readFileSync(gitignorePath, 'utf8');
     let updated = content.trimEnd();
@@ -280,56 +190,30 @@ async function doInstall(projectDir, tools, isWorkspace, subprojects = []) {
     writeFileSync(gitignorePath, ignoreRules.join('\n') + '\n');
   }
 
-  // 生成 slash command 文件
-  const templateFiles = readdirSync(TEMPLATE_DIR).filter(f => f.endsWith('.md'));
-  let count = 0;
-
+  // 注入指令文件（codex/gemini/opencode）
   for (let i = 0; i < tools.length; i++) {
     const toolName = tools[i];
-    const label = TOOL_LABELS[toolName] || toolName;
-
     if (INSTRUCTION_TOOLS.includes(toolName)) {
-      const spinner = ora(`安装 ${label}... (${i + 1}/${tools.length})`).start();
-      try {
-        injectInstructions(toolName, projectDir);
-        // 复制模板文件到 .sillyspec/.templates/
-        const templatesSourceDir = join(TEMPLATE_DIR);
-        const templatesDir = join(projectDir, '.sillyspec', '.templates');
-        if (!existsSync(templatesDir)) {
-          mkdirSync(templatesDir, { recursive: true });
-          for (const file of readdirSync(templatesSourceDir)) {
-            if (file.endsWith('.md')) {
-              copyFileSync(join(templatesSourceDir, file), join(templatesDir, file));
-            }
-          }
-        }
-        spinner.succeed(`${label} 完成`);
-        count++;
-      } catch (err) {
-        spinner.fail(`${label} 失败: ${err.message}`);
-        throw err;
-      }
-      continue;
-    }
-
-    const spinner = ora(`安装 ${label}... (${i + 1}/${tools.length})`).start();
-    try {
-      const gen = GENERATORS[toolName];
-      const ver = getVersion();
-      for (const file of templateFiles) {
-        const name = file.replace('.md', '');
-        const desc = DESCRIPTIONS[name] || `SillySpec ${name}`;
-        const argHint = ARG_HINTS[name] || '';
-        const body = readFileSync(join(TEMPLATE_DIR, file), 'utf8');
-        gen(projectDir, name, desc, body, argHint, ver);
-        count++;
-      }
-      spinner.succeed(`${label} 完成`);
-    } catch (err) {
-      spinner.fail(`${label} 失败: ${err.message}`);
-      throw err;
+      injectInstructions(toolName, projectDir);
     }
   }
+
+  // 复制 skills 到 .claude/skills/（给 Claude Code 使用）
+  const skillsSource = join(homedir(), '.agents', 'skills');
+  const claudeSkillsDir = join(projectDir, '.claude', 'skills');
+  if (existsSync(skillsSource)) {
+    const sillyspecSkills = readdirSync(skillsSource).filter(f => f.startsWith('sillyspec-') && statSync(join(skillsSource, f)).isDirectory());
+    if (sillyspecSkills.length > 0) {
+      mkdirSync(claudeSkillsDir, { recursive: true });
+      for (const skill of sillyspecSkills) {
+        copyDirSync(join(skillsSource, skill), join(claudeSkillsDir, skill));
+      }
+      console.log(chalk.green('    ✓ Claude Code skills 已同步 (' + sillyspecSkills.length + ' 个)'));
+    }
+  } else {
+    console.log(chalk.yellow('    ⚠ 未找到 ~/.agents/skills/，跳过 Claude Code skills 同步'));
+  }
+
 
   // 工作区配置
   if (isWorkspace) {
@@ -354,13 +238,11 @@ shared: []
       );
     }
   }
-
-  return count;
 }
 
 // ── 安装完成总结 ──
 
-function showSummary(version, tools, isWorkspace, count) {
+function showSummary(version, tools, isWorkspace) {
   const toolLabels = tools.map(t => TOOL_LABELS[t] || t);
   const mode = isWorkspace ? '多项目工作区' : '单项目';
 
@@ -371,19 +253,13 @@ function showSummary(version, tools, isWorkspace, count) {
   console.log('');
   console.log(`  已安装工具: ${chalk.cyan(toolLabels.join(', '))}`);
   console.log(`  模式: ${chalk.yellow(mode)}`);
-  console.log('');
-  console.log(`  📄 ${count} 个命令已就绪`);
   console.log('  📁 .sillyspec/ — 项目规范目录');
   console.log('');
-  console.log('  入口选择：');
-  console.log('    全新项目：' + chalk.bold('/sillyspec:init'));
-  console.log('    已有代码：' + chalk.bold('/sillyspec:scan'));
-  console.log('    自由思考：' + chalk.bold('/sillyspec:explore "你的想法"'));
-  console.log('');
-  console.log(chalk.gray('  重启你的 AI 工具以使 slash commands 生效。'));
+  console.log('  下一步：使用 AI 技能开始工作');
+  console.log('    OpenClaw:    ' + chalk.bold('/sillyspec:brainstorm'));
+  console.log('    Claude Code: ' + chalk.bold('/sillyspec:brainstorm'));
   console.log('');
   console.log(chalk.dim('  💡 推荐安装 MCP 工具增强 AI 能力：sillyspec setup'));
-  console.log(chalk.dim('     Context7 — 查最新文档 | grep.app — 搜开源实现 | Chrome DevTools — 浏览器自动化'));
   console.log('');
 }
 
@@ -510,7 +386,7 @@ export async function cmdInit(projectDir, options = {}) {
 
     console.log('');
     const count = await doInstall(projectDir, selectedTools, isWorkspace, subprojects);
-    showSummary(version, selectedTools, isWorkspace, count);
+    showSummary(version, selectedTools, isWorkspace);
     return;
   }
 
@@ -528,23 +404,17 @@ export async function cmdInit(projectDir, options = {}) {
     tools = detectTools(projectDir);
   }
 
-  const count = await doInstall(projectDir, tools, !!workspace);
+  await doInstall(projectDir, tools, !!workspace);
 
   console.log('');
   console.log(chalk.green(`  ✅ SillySpec v${version} 安装完成！`));
   console.log('');
-  console.log(`  📄 ${count} 个命令已就绪`);
   console.log('  📁 .sillyspec/ — 项目规范目录');
   console.log('');
-  console.log('  下一步：');
-  console.log(`    全新项目 → ${chalk.bold('/sillyspec:init')}`);
-  console.log(`    已有代码 → ${chalk.bold('/sillyspec:scan')}`);
-  console.log(`    自由探索 → ${chalk.bold('/sillyspec:explore "你的想法"')}`);
-  if (workspace) {
-    console.log(`    管理子项目 → ${chalk.bold('/sillyspec:workspace add')}`);
-  }
+  console.log('  下一步：使用 AI 技能开始工作');
+  console.log(`    OpenClaw:    ${chalk.bold('/sillyspec:brainstorm')}`);
+  console.log(`    Claude Code: ${chalk.bold('/sillyspec:brainstorm')}`);
   console.log('');
   console.log(chalk.dim('  💡 增强能力：sillyspec setup（安装 MCP 工具）'));
-  console.log(chalk.dim('  💡 完整配置：sillyspec init --interactive'));
   console.log('');
 }

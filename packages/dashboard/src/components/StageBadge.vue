@@ -19,19 +19,19 @@ const props = defineProps({
 
 const displayLabel = computed(() => {
   if (props.label) return props.label
-  const labels = { 'completed': 'done', 'in-progress': 'running', 'blocked': 'blocked', 'failed': 'error', 'pending': 'idle' }
-  return labels[props.status] || 'idle'
+  const labels = { 'completed': 'done', 'in-progress': 'running', 'blocked': 'blocked', 'failed': 'error' }
+  return labels[props.status] || ''
 })
 
 const sizeClass = computed(() => props.size === 'sm' ? 'px-1.5 py-0.5' : 'px-2 py-1')
 
 const badgeStyle = computed(() => {
   const styles = {
-    'completed': { background: 'rgba(52,211,153,0.1)', color: '#34D399' },
-    'in-progress': { background: 'rgba(251,191,36,0.1)', color: '#FBBF24' },
-    'blocked': { background: 'rgba(251,146,60,0.1)', color: '#FB923C' },
-    'failed': { background: 'rgba(239,68,68,0.1)', color: '#EF4444' },
-    'pending': { background: 'rgba(82,82,82,0.15)', color: '#8B8FA3' }
+    'completed': { background: 'rgba(22,163,74,0.1)', color: '#16A34A' },
+    'in-progress': { background: 'rgba(251,191,36,0.1)', color: '#D97706' },
+    'blocked': { background: 'rgba(251,146,60,0.1)', color: '#EA580C' },
+    'failed': { background: 'rgba(239,68,68,0.1)', color: '#DC2626' },
+    'pending': { background: 'rgba(82,82,82,0.15)', color: '#6B7280' }
   }
   return styles[props.status] || styles.pending
 })
@@ -42,12 +42,12 @@ const dotClass = computed(() => {
 
 const dotStyle = computed(() => {
   const colors = {
-    'completed': '#34D399',
-    'in-progress': '#FBBF24',
-    'blocked': '#FB923C',
-    'failed': '#EF4444',
-    'pending': '#8B8FA3'
+    'completed': '#16A34A',
+    'in-progress': '#D97706',
+    'blocked': '#EA580C',
+    'failed': '#DC2626',
+    'pending': '#6B7280'
   }
-  return { background: colors[props.status] || '#8B8FA3' }
+  return { background: colors[props.status] || '#6B7280' }
 })
 </script>

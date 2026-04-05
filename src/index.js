@@ -4,7 +4,7 @@
  * SillySpec CLI — 安装工具
  *
  * 只负责两件事：init（安装命令模板）和 setup（安装 MCP 工具）。
- * 状态管理由 AI 直接读文件（STATE.md）完成，不需要 CLI。
+ * 状态管理通过 progress.json 完成，使用 `sillyspec progress` 命令。
  */
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
 import { join, resolve } from 'path';
@@ -25,11 +25,15 @@ SillySpec CLI — 规范驱动开发工具包
     [--dir <path>]             指定目录
   sillyspec setup [--list]     安装推荐 MCP 工具
     [--list]                   查看已安装状态
-  sillyspec progress <cmd>    进度恢复管理
-    init                      初始化进度文件
-    status                    查看当前进度
-    validate                  校验并修复进度文件
-    reset [--stage X]         重置进度（全部或指定阶段）
+  sillyspec progress <cmd>    进度管理
+    init                      初始化 progress.json
+    show                      查看当前进度
+    set-stage <stage>         设置当前阶段
+    add-step <stage> <name>   添加步骤
+    update-step <s> <n> --status <st> [--output <t>]
+    complete-stage <stage>    完成阶段并推进
+    validate                  校验并修复
+    reset [--stage X]         重置进度
     complete --stage X        归档已完成阶段
   sillyspec docs migrate       迁移旧文档到统一结构
     sillyspec dashboard          启动 Dashboard Web UI
@@ -93,6 +97,11 @@ async function main() {
   }
 
   const command = filteredArgs[0];
+  // 支持 sillyspec init /path/to/project 语法：如果第二个参数看起来像路径，当作 targetDir
+  if (command === 'init' && filteredArgs[1] && !filteredArgs[1].startsWith('-')) {
+    targetDir = resolve(filteredArgs[1]);
+    filteredArgs.splice(1, 1);
+  }
   const dir = targetDir;
 
   if (!existsSync(dir)) {
@@ -119,7 +128,8 @@ async function main() {
           pm.init(dir);
           break;
         case 'status':
-          pm.status(dir);
+        case 'show':
+          pm.show(dir);
           break;
         case 'validate':
           pm.validate(dir);
@@ -130,8 +140,40 @@ async function main() {
         case 'complete':
           pm.complete(dir, stage);
           break;
+        case 'set-stage': {
+          const setStageName = filteredArgs[2];
+          if (!setStageName) { console.log('❌ 用法: sillyspec progress set-stage <stage>'); break; }
+          pm.setStage(dir, setStageName);
+          break;
+        }
+        case 'add-step': {
+          const addStepStage = filteredArgs[2];
+          const addStepName = filteredArgs[3];
+          if (!addStepStage || !addStepName) { console.log('❌ 用法: sillyspec progress add-step <stage> <step-name>'); break; }
+          pm.addStep(dir, addStepStage, addStepName);
+          break;
+        }
+        case 'update-step': {
+          const updStepStage = filteredArgs[2];
+          const updStepName = filteredArgs[3];
+          if (!updStepStage || !updStepName) { console.log('❌ 用法: sillyspec progress update-step <stage> <step-name> --status <status> [--output <text>]'); break; }
+          // Parse --status and --output from args
+          let updStatus = null, updOutput = undefined;
+          for (let ai = 0; ai < args.length; ai++) {
+            if (args[ai] === '--status' && args[ai + 1]) { updStatus = args[ai + 1]; ai++; }
+            if (args[ai] === '--output' && args[ai + 1]) { updOutput = args[ai + 1]; ai++; }
+          }
+          pm.updateStep(dir, updStepStage, updStepName, { status: updStatus, output: updOutput });
+          break;
+        }
+        case 'complete-stage': {
+          const compStageName = filteredArgs[2];
+          if (!compStageName) { console.log('❌ 用法: sillyspec progress complete-stage <stage>'); break; }
+          pm.completeStage(dir, compStageName);
+          break;
+        }
         default:
-          console.log('用法: sillyspec progress <init|status|validate|reset|complete> [--stage <stage>]');
+          console.log('用法: sillyspec progress <init|show|validate|reset|complete|set-stage|add-step|update-step|complete-stage>');
       }
       break;
     }
@@ -144,6 +186,11 @@ async function main() {
         console.log('用法: sillyspec docs migrate');
       }
       break;
+    }
+    case 'run': {
+      const { runCommand } = await import('./run.js')
+      runCommand(filteredArgs.slice(1), dir)
+      break
     }
     case 'dashboard': {
       // Parse dashboard options
