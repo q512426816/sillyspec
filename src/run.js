@@ -4,7 +4,7 @@
  * CLI 成为流程引擎，AI 变成步骤执行器。
  */
 import { basename, join } from 'path'
-import { existsSync, readdirSync, mkdirSync, writeFileSync } from 'fs'
+import { existsSync, readdirSync, mkdirSync, writeFileSync, appendFileSync } from 'fs'
 import { ProgressManager } from './progress.js'
 import { stageRegistry, getNextStage, auxiliaryStages } from './stages/index.js'
 import { buildExecuteSteps } from './stages/execute.js'
@@ -237,6 +237,13 @@ function completeStep(pm, progress, stageName, cwd, outputText) {
     progress.lastActive = new Date().toISOString()
     pm._write(cwd, progress)
 
+    // Append to user-inputs.md
+    if (outputText) {
+      const inputsPath = join(cwd, '.sillyspec', '.runtime', 'user-inputs.md')
+      const entry = `\n## ${new Date().toISOString()} | ${stageName}: ${steps[currentIdx].name}\n- 输出：${outputText}\n`
+      appendFileSync(inputsPath, entry)
+    }
+
     const total = steps.length
     console.log(`✅ ${stageName} 阶段已完成（${total}/${total} 步）`)
     if (next) {
@@ -248,6 +255,13 @@ function completeStep(pm, progress, stageName, cwd, outputText) {
 
   progress.lastActive = new Date().toISOString()
   pm._write(cwd, progress)
+
+  // Append to user-inputs.md
+  if (outputText) {
+    const inputsPath = join(cwd, '.sillyspec', '.runtime', 'user-inputs.md')
+    const entry = `\n## ${new Date().toISOString()} | ${stageName}: ${steps[currentIdx].name}\n- 输出：${outputText}\n`
+    appendFileSync(inputsPath, entry)
+  }
 
   const defSteps = getStageSteps(stageName, cwd)
   console.log(`✅ Step ${currentIdx + 1}/${steps.length} 完成：${steps[currentIdx].name}\n`)
