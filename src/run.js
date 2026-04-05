@@ -164,7 +164,7 @@ function runStage(progress, stageName, cwd) {
   }
 
   const steps = stageData.steps
-  const currentIdx = steps.findIndex(s => s.status !== 'completed' && s.status !== 'skipped')
+  let currentIdx = steps.findIndex(s => s.status !== 'completed' && s.status !== 'skipped')
 
   if (currentIdx === -1) {
     // 阶段已完成，自动重置，允许重复执行
@@ -172,6 +172,7 @@ function runStage(progress, stageName, cwd) {
     stageData.status = 'in_progress'
     stageData.completedAt = null
     console.log(`🔄 ${stageName} 阶段已完成，重新开始...\n`)
+    pm._write(cwd, progress)
     currentIdx = 0
   }
 
