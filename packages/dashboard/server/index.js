@@ -1,15 +1,23 @@
 import { createServer } from 'http'
 import { WebSocketServer } from 'ws'
-import { existsSync } from 'fs'
+import { existsSync, readFileSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import open from 'open'
+import { parseProjectState } from './parser.js'
+import { startWatcher, stopWatcher } from './watcher.js'
+import { executeCommand } from './executor.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
-// WebSocket clients
+// WebSocket clients and active processes
 let wss = null
+const activeProcesses = new Map()
 
+/**
+ * Broadcast message to all connected WebSocket clients
+ * @param {object} data - Data to broadcast
+ */
 function broadcast(data) {
   if (!wss) return
   const message = JSON.stringify(data)
@@ -20,18 +28,21 @@ function broadcast(data) {
   })
 }
 
+/**
+ * Discover all SillySpec projects
+ * @returns {Promise<Array>} Array of project objects
+ */
 async function discoverProjects() {
   const { homedir } = await import('os')
   const home = homedir()
   const cwd = process.cwd()
 
   const scanDirs = [cwd, home]
-
   const projects = []
 
   for (const baseDir of scanDirs) {
     try {
-      const { readdirSync, statSync } = await import('fs')
+      const { readdirSync } = await import('fs')
       const entries = readdirSync(baseDir, { withFileTypes: true })
 
       for (const entry of entries) {
@@ -56,6 +67,80 @@ async function discoverProjects() {
   return projects
 }
 
+/**
+ * Handle WebSocket message for CLI execution
+ * @param {object} ws - WebSocket client
+ * @param {object} data - Message data
+ */
+function handleCliExecute(ws, data) {
+  const { projectName, command } = data
+
+  if (!projectName || !command) {
+    ws.send(JSON.stringify({
+      type: 'cli:error',
+      data: { message: 'Missing projectName or command' }
+    }))
+    return
+  }
+
+  // Find project
+  discoverProjects().then(projects => {
+    const project = projects.find(p => p.name === projectName)
+    if (!project) {
+      ws.send(JSON.stringify({
+        type: 'cli:error',
+        data: { message: `Project not found: ${projectName}` }
+      }))
+      return
+    }
+
+    // Kill existing process for this project if any
+    const existingKill = activeProcesses.get(projectName)
+    if (existingKill) {
+      existingKill()
+    }
+
+    // Execute command
+    const kill = executeCommand(
+      project.path,
+      command,
+      (output) => {
+        broadcast({
+          type: 'cli:output',
+          data: {
+            projectName,
+            output: output.data,
+            outputType: output.type
+          }
+        })
+      },
+      (result) => {
+        activeProcesses.delete(projectName)
+        broadcast({
+          type: 'cli:complete',
+          data: {
+            projectName,
+            exitCode: result.code,
+            signal: result.signal
+          }
+        })
+      }
+    )
+
+    activeProcesses.set(projectName, kill)
+
+    broadcast({
+      type: 'cli:started',
+      data: { projectName, command }
+    })
+  })
+}
+
+/**
+ * Start the dashboard server
+ * @param {object} options - Server options
+ * @returns {object} HTTP server instance
+ */
 function startServer({ port = 3456, open: openBrowser = true } = {}) {
   const server = createServer((req, res) => {
     // CORS headers
@@ -69,7 +154,7 @@ function startServer({ port = 3456, open: openBrowser = true } = {}) {
       return
     }
 
-    // API Routes
+    // API: List all projects
     if (req.url === '/api/projects') {
       discoverProjects().then(projects => {
         res.setHeader('Content-Type', 'application/json')
@@ -82,15 +167,19 @@ function startServer({ port = 3456, open: openBrowser = true } = {}) {
       return
     }
 
-    // Project detail route
+    // API: Get project details with state
     if (req.url?.startsWith('/api/project/')) {
-      const projectName = req.url.split('/').pop()
+      const projectName = decodeURIComponent(req.url.split('/').pop())
       discoverProjects().then(projects => {
         const project = projects.find(p => p.name === projectName)
         if (project) {
+          const state = parseProjectState(project.path)
           res.setHeader('Content-Type', 'application/json')
           res.writeHead(200)
-          res.end(JSON.stringify(project))
+          res.end(JSON.stringify({
+            ...project,
+            state
+          }))
         } else {
           res.writeHead(404)
           res.end(JSON.stringify({ error: 'Project not found' }))
@@ -104,21 +193,24 @@ function startServer({ port = 3456, open: openBrowser = true } = {}) {
 
     // Serve static files in production
     if (process.env.NODE_ENV === 'production') {
-      const { readFile } = require('fs')
       const indexPath = join(__dirname, '../dist/index.html')
 
       if (existsSync(indexPath)) {
-        readFile(indexPath, (err, data) => {
-          if (err) {
-            res.writeHead(404)
-            res.end('Not found')
-          } else {
-            res.setHeader('Content-Type', 'text/html')
-            res.writeHead(200)
-            res.end(data)
-          }
-        })
-        return
+        // For SPA routing, serve index.html for all non-API routes
+        const ext = req.url?.split('.').pop()
+        if (!ext || ext === req.url) {
+          readFileSync(indexPath, (err, data) => {
+            if (err) {
+              res.writeHead(404)
+              res.end('Not found')
+            } else {
+              res.setHeader('Content-Type', 'text/html')
+              res.writeHead(200)
+              res.end(data)
+            }
+          })
+          return
+        }
       }
     }
 
@@ -132,8 +224,63 @@ function startServer({ port = 3456, open: openBrowser = true } = {}) {
 
   wss.on('connection', (ws) => {
     console.log('WebSocket client connected')
+
+    // Send initial projects list
+    discoverProjects().then(projects => {
+      const projectsWithState = projects.map(p => ({
+        ...p,
+        state: parseProjectState(p.path)
+      }))
+
+      ws.send(JSON.stringify({
+        type: 'projects:init',
+        data: projectsWithState
+      }))
+    }).catch(err => {
+      console.error('Error sending initial projects:', err)
+    })
+
+    ws.on('message', (message) => {
+      try {
+        const data = JSON.parse(message)
+
+        switch (data.type) {
+          case 'cli:execute':
+            handleCliExecute(ws, data.data)
+            break
+          case 'cli:kill':
+            const kill = activeProcesses.get(data.data.projectName)
+            if (kill) {
+              kill()
+              activeProcesses.delete(data.data.projectName)
+              broadcast({
+                type: 'cli:killed',
+                data: { projectName: data.data.projectName }
+              })
+            }
+            break
+          default:
+            console.log('Unknown message type:', data.type)
+        }
+      } catch (err) {
+        console.error('Error handling message:', err)
+      }
+    })
+
     ws.on('close', () => {
       console.log('WebSocket client disconnected')
+    })
+
+    ws.on('error', (err) => {
+      console.error('WebSocket error:', err)
+    })
+  })
+
+  // Start file watcher
+  startWatcher((projects) => {
+    broadcast({
+      type: 'projects:updated',
+      data: projects
     })
   })
 
@@ -144,6 +291,17 @@ function startServer({ port = 3456, open: openBrowser = true } = {}) {
       open(`http://localhost:${port}`)
     }
   })
+
+  // Handle shutdown
+  const shutdown = () => {
+    stopWatcher()
+    activeProcesses.forEach(kill => kill())
+    activeProcesses.clear()
+    server.close()
+  }
+
+  process.on('SIGTERM', shutdown)
+  process.on('SIGINT', shutdown)
 
   return server
 }

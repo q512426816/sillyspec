@@ -2,11 +2,10 @@
 
 /**
  * SillySpec CLI — 安装工具
- * 
+ *
  * 只负责两件事：init（安装命令模板）和 setup（安装 MCP 工具）。
  * 状态管理由 AI 直接读文件（STATE.md）完成，不需要 CLI。
  */
-
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
 import { join, resolve } from 'path';
 import { cmdInit, getVersion } from './init.js';
@@ -32,6 +31,9 @@ SillySpec CLI — 规范驱动开发工具包
     validate                  校验并修复进度文件
     reset [--stage X]         重置进度（全部或指定阶段）
     complete --stage X        归档已完成阶段
+  sillyspec dashboard          启动 Dashboard Web UI
+    [--port <number>]          指定端口（默认 3456）
+    [--no-open]                不自动打开浏览器
 
 选项:
   --json                       输出 JSON（给 AI 程序化读取）
@@ -43,12 +45,14 @@ SillySpec CLI — 规范驱动开发工具包
   sillyspec init --workspace
   sillyspec setup
   sillyspec setup --list
+  sillyspec dashboard
+  sillyspec dashboard --port 8080 --no-open
 `);
 }
 
 async function main() {
   const args = process.argv.slice(2);
-  
+
   if (args[0] === '--version' || args[0] === '-v') {
     console.log(getVersion());
     process.exit(0);
@@ -58,7 +62,7 @@ async function main() {
     printUsage();
     process.exit(0);
   }
-  
+
   // 解析全局选项
   let json = false;
   let targetDir = process.cwd();
@@ -66,7 +70,7 @@ async function main() {
   let workspace = false;
   let interactive = false;
   const filteredArgs = [];
-  
+
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--json') {
       json = true;
@@ -86,15 +90,15 @@ async function main() {
       filteredArgs.push(args[i]);
     }
   }
-  
+
   const command = filteredArgs[0];
   const dir = targetDir;
-  
+
   if (!existsSync(dir)) {
     console.error(`❌ 目录不存在: ${dir}`);
     process.exit(1);
   }
-  
+
   switch (command) {
     case 'init':
       await cmdInit(dir, { tool, workspace, interactive });
@@ -128,6 +132,28 @@ async function main() {
         default:
           console.log('用法: sillyspec progress <init|status|validate|reset|complete> [--stage <stage>]');
       }
+      break;
+    }
+    case 'dashboard': {
+      // Parse dashboard options
+      let port = 3456;
+      let openBrowser = true;
+
+      for (let i = 1; i < args.length; i++) {
+        if (args[i] === '--port' && args[i + 1]) {
+          port = parseInt(args[i + 1], 10);
+          i++;
+        } else if (args[i] === '--no-open') {
+          openBrowser = false;
+        }
+      }
+
+      // Import and start dashboard server
+      const { startServer } = await import('../packages/dashboard/server/index.js');
+      startServer({ port, open: openBrowser });
+
+      // Keep process alive
+      console.log('按 Ctrl+C 停止服务器');
       break;
     }
     default:
