@@ -1,10 +1,10 @@
 <template>
   <div class="h-full overflow-y-auto px-6 py-4">
     <div v-if="!content && !loading" class="flex items-center justify-center h-full">
-      <p class="text-[12px] font-[JetBrains_Mono,monospace]" style="color: #525252;">选择一个文档查看内容</p>
+      <p class="text-[12px] font-[JetBrains_Mono,monospace]" style="color: #8B8FA3;">选择一个文档查看内容</p>
     </div>
     <div v-else-if="loading" class="flex items-center justify-center h-full">
-      <p class="text-[12px] font-[JetBrains_Mono,monospace]" style="color: #525252;">加载中...</p>
+      <p class="text-[12px] font-[JetBrains_Mono,monospace]" style="color: #8B8FA3;">加载中...</p>
     </div>
     <div v-else class="doc-preview" v-html="renderedContent"></div>
   </div>
@@ -34,8 +34,8 @@ function simpleMarkdown(md) {
     .replace(/\*\*([^*]+)\*\*/g, '<strong style="color:#E5E5E5;">$1</strong>')
     .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" style="color:#FBBF24;">$1</a>')
     .replace(/^- \[x\] (.+)$/gm, '<div style="color:#34D399;">☑ $1</div>')
-    .replace(/^- \[ \] (.+)$/gm, '<div style="color:#8B8B8E;">☐ $1</div>')
-    .replace(/^- (.+)$/gm, '<div style="padding-left:12px;color:#8B8B8E;">• $1</div>')
+    .replace(/^- \[ \] (.+)$/gm, '<div style="color:#A0A4B5;">☐ $1</div>')
+    .replace(/^- (.+)$/gm, '<div style="padding-left:12px;color:#A0A4B5;">• $1</div>')
     .replace(/\n\n/g, '<br/><br/>')
     .replace(/\n/g, '<br/>')
   return html

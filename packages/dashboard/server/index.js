@@ -1,7 +1,7 @@
 import { createServer } from 'http'
 import { WebSocketServer } from 'ws'
 import { existsSync, readFileSync, readdirSync, realpathSync } from 'fs'
-import { join, dirname, basename, sep } from 'path'
+import { join, dirname, basename, sep, resolve } from 'path'
 import { fileURLToPath } from 'url'
 import { homedir } from 'os'
 import open from 'open'

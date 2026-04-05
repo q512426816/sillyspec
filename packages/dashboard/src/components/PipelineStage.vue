@@ -25,7 +25,7 @@
 
         <!-- Steps -->
         <div class="space-y-1">
-          <div v-if="steps.length === 0" class="text-[11px] italic py-1" style="color: #525252;">
+          <div v-if="steps.length === 0" class="text-[11px] italic py-1" style="color: #8B8FA3;">
             No steps yet
           </div>
           <StepCard

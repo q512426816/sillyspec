@@ -4,9 +4,15 @@
     <div class="absolute inset-0 pointer-events-none" style="background: radial-gradient(ellipse 60% 40% at 10% 20%, rgba(251,191,36,0.04) 0%, transparent 70%), radial-gradient(ellipse 50% 50% at 90% 80%, rgba(251,191,36,0.02) 0%, transparent 70%);" />
 
     <!-- Main Content -->
-    <div class="flex-1 flex overflow-hidden relative z-10">
+    <div
+      class="flex-1 flex overflow-hidden relative z-10"
+      :style="isDragging ? 'user-select: none' : ''"
+    >
       <!-- Left: Project List -->
-      <aside class="w-[240px] flex-shrink-0 relative" style="background: #1A1E28; border-right: 1px solid #2A3040;">
+      <aside
+        class="flex-shrink-0 relative overflow-hidden"
+        :style="`width: ${leftWidth}px; background: #1A1E28; border-right: none;`"
+      >
         <ProjectList
           :projects="dashboard.state.projects"
           :active-project="dashboard.state.activeProject"
@@ -18,8 +24,15 @@
         />
       </aside>
 
+      <!-- Left ↔ Center resize handle -->
+      <div
+        class="w-[2px] flex-shrink-0 cursor-col-resize hover:bg-[#FBBF24] active:bg-[#FBBF24] relative z-20"
+        style="background: #2A3040;"
+        @mousedown="startDragLeft"
+      />
+
       <!-- Center: Pipeline View -->
-      <main class="flex-1 overflow-hidden accent-stripe">
+      <main class="flex-1 overflow-hidden accent-stripe" style="min-width: 300px;">
         <PipelineView
           :project="dashboard.state.activeProject"
           :active-step="dashboard.state.activeStep"
@@ -34,13 +47,21 @@
         />
       </main>
 
+      <!-- Center ↔ Right resize handle -->
+      <div
+        v-if="dashboard.state.isPanelOpen"
+        class="w-[2px] flex-shrink-0 cursor-col-resize hover:bg-[#FBBF24] active:bg-[#FBBF24] relative z-20"
+        style="background: #2A3040;"
+        @mousedown="startDragRight"
+      />
+
       <!-- Right: Detail Panel -->
       <aside
         :class="[
-          'flex-shrink-0 transition-all duration-300 relative overflow-hidden',
-          dashboard.state.isPanelOpen ? 'w-[340px]' : 'w-0'
+          'flex-shrink-0 relative overflow-hidden',
+          dashboard.state.isPanelOpen ? '' : 'w-0'
         ]"
-        style="background: #1A1E28; border-left: 1px solid #2A3040;"
+        :style="dashboard.state.isPanelOpen ? `width: ${rightWidth}px; background: #1A1E28; transition: none;` : 'background: #1A1E28;'"
       >
         <DetailPanel
           :is-open="dashboard.state.isPanelOpen"
@@ -93,6 +114,67 @@ const isCommandPaletteOpen = ref(false)
 const executionResult = ref(null)
 const scanPaths = ref([])
 
+// Panel resize state
+const STORAGE_KEY = 'dashboard-panel-widths'
+const MIN_LEFT = 180
+const MIN_CENTER = 300
+const MIN_RIGHT = 260
+const DEFAULT_LEFT = 240
+const DEFAULT_RIGHT = 340
+
+const leftWidth = ref(DEFAULT_LEFT)
+const rightWidth = ref(DEFAULT_RIGHT)
+const isDragging = ref(false)
+
+// Load persisted widths
+try {
+  const saved = JSON.parse(localStorage.getItem(STORAGE_KEY))
+  if (saved?.left >= MIN_LEFT) leftWidth.value = saved.left
+  if (saved?.right >= MIN_RIGHT) rightWidth.value = saved.right
+} catch {}
+
+function persistWidths() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ left: leftWidth.value, right: rightWidth.value }))
+}
+
+function startDragLeft(e) {
+  e.preventDefault()
+  isDragging.value = true
+  const startX = e.clientX
+  const startW = leftWidth.value
+  const onMove = (ev) => {
+    const delta = ev.clientX - startX
+    leftWidth.value = Math.max(MIN_LEFT, startW + delta)
+  }
+  const onUp = () => {
+    window.removeEventListener('mousemove', onMove)
+    window.removeEventListener('mouseup', onUp)
+    isDragging.value = false
+    persistWidths()
+  }
+  window.addEventListener('mousemove', onMove)
+  window.addEventListener('mouseup', onUp)
+}
+
+function startDragRight(e) {
+  e.preventDefault()
+  isDragging.value = true
+  const startX = e.clientX
+  const startW = rightWidth.value
+  const onMove = (ev) => {
+    const delta = startX - ev.clientX
+    rightWidth.value = Math.max(MIN_RIGHT, startW + delta)
+  }
+  const onUp = () => {
+    window.removeEventListener('mousemove', onMove)
+    window.removeEventListener('mouseup', onUp)
+    isDragging.value = false
+    persistWidths()
+  }
+  window.addEventListener('mousemove', onMove)
+  window.addEventListener('mouseup', onUp)
+}
+
 // Keyboard shortcuts
 useDashboardKeyboard({
   onOpenCommandPalette: () => { isCommandPaletteOpen.value = true },
@@ -140,6 +222,8 @@ onMounted(() => {
 
 function handleSelectProject(project) {
   dashboard.selectProject(project)
+  dashboard.selectDocFile(null)
+  dashboard.setDocContent('')
   // Request docs for this project
   if (project?.path) {
     ws.send({ type: 'docs:get', data: { projectPath: project.path } })

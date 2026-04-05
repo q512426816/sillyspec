@@ -7,12 +7,12 @@
         type="text"
         placeholder="过滤日志..."
         class="flex-1 px-2 py-1 rounded-sm text-[10px] font-mono-log outline-none transition-colors duration-100"
-        style="background: #141416; border: 1px solid #1F1F22; color: #8B8B8E;"
+        style="background: #141416; border: 1px solid #1F1F22; color: #A0A4B5;"
       />
       <button
         @click="clearLogs"
         class="px-2 py-1 text-[10px] rounded-sm transition-colors duration-100"
-        style="color: #525252; border: 1px solid #1F1F22;"
+        style="color: #8B8FA3; border: 1px solid #1F1F22;"
       >
         清空
       </button>
@@ -20,7 +20,7 @@
         @click="toggleAutoScroll"
         class="px-2 py-1 text-[10px] rounded-sm font-mono-log transition-colors duration-100"
         :style="{
-          color: autoScroll ? '#FBBF24' : '#525252',
+          color: autoScroll ? '#FBBF24' : '#8B8FA3',
           background: autoScroll ? 'rgba(251,191,36,0.08)' : 'transparent',
           border: autoScroll ? '1px solid rgba(251,191,36,0.2)' : '1px solid #1F1F22'
         }"
@@ -69,7 +69,7 @@ const filteredLogs = computed(() => {
 function formatTime(ts) { if (!ts) return ''; const d = new Date(ts); return d.toLocaleTimeString('zh-CN', { hour12: false }) }
 function escapeHtml(t) { if (!t) return ''; return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') }
 function logBg(t) { return t === 'error' ? 'rgba(239,68,68,0.05)' : t === 'warn' ? 'rgba(251,146,60,0.05)' : 'transparent' }
-function logColor(t) { return t === 'error' ? '#EF4444' : t === 'warn' ? '#FB923C' : t === 'debug' ? '#525252' : '#8B8B8E' }
+function logColor(t) { return t === 'error' ? '#EF4444' : t === 'warn' ? '#FB923C' : t === 'debug' ? '#8B8FA3' : '#A0A4B5' }
 function clearLogs() { emit('clear') }
 function toggleAutoScroll() { autoScroll.value = !autoScroll.value; if (autoScroll.value) scrollToBottom() }
 function handleScroll() {

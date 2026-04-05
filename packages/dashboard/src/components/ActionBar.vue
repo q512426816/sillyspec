@@ -6,7 +6,7 @@
     <!-- Left: Status -->
     <div class="flex items-center gap-3">
       <div v-if="project" class="flex items-center gap-2">
-        <span class="text-[11px] font-[JetBrains_Mono,monospace]" style="color: #525252;">{{ project.name }}</span>
+        <span class="text-[11px] font-[JetBrains_Mono,monospace]" style="color: #8B8FA3;">{{ project.name }}</span>
         <span style="color: #1F1F22;">|</span>
         <StageBadge v-if="project.state?.currentStage" :status="getProjectStatus()" :label="stageLabel()" />
       </div>
@@ -33,9 +33,9 @@
       <button
         @click="$emit('toggle-panel')"
         class="p-1.5 rounded-sm transition-colors duration-100"
-        style="color: #525252;"
+        style="color: #8B8FA3;"
         @mouseenter="$event.target.style.color='#FBBF24';$event.target.style.background='rgba(251,191,36,0.06)'"
-        @mouseleave="$event.target.style.color='#525252';$event.target.style.background='transparent'"
+        @mouseleave="$event.target.style.color='#8B8FA3';$event.target.style.background='transparent'"
         title="切换详情面板"
       >
         <svg :class="['w-3.5 h-3.5 transition-transform duration-200', { 'rotate-180': !isPanelOpen }]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -55,9 +55,9 @@
       <button
         @click="$emit('open-palette')"
         class="p-1.5 rounded-sm transition-colors duration-100"
-        style="color: #525252;"
+        style="color: #8B8FA3;"
         @mouseenter="$event.target.style.color='#FBBF24';$event.target.style.background='rgba(251,191,36,0.06)'"
-        @mouseleave="$event.target.style.color='#525252';$event.target.style.background='transparent'"
+        @mouseleave="$event.target.style.color='#8B8FA3';$event.target.style.background='transparent'"
         title="命令面板 (⌘K)"
       >
         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

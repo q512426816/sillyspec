@@ -6,17 +6,18 @@
         <div class="w-8 h-8 rounded-md flex items-center justify-center" style="background: linear-gradient(135deg, #FBBF24 0%, #F59E0B 100%); clip-path: polygon(0 0, 100% 0, 85% 100%, 15% 100%);">
           <span class="text-[10px] font-bold text-black font-[JetBrains_Mono,monospace]">S</span>
         </div>
+        <img src="/logo.jpg" style="width:28px;height:28px;border-radius:6px;margin-right:8px;">
         <div class="flex-1">
           <h1 class="text-[13px] font-semibold tracking-tight font-[JetBrains_Mono,monospace]" style="color: #E4E4E7;">
             SillySpec
           </h1>
-          <p class="text-[10px] tracking-widest uppercase" style="color: #525252;">控制台</p>
+          <p class="text-[10px] tracking-widest uppercase" style="color: #8B8FA3;">控制台</p>
         </div>
         <!-- Scan paths gear button -->
         <button
           @click="showScanPanel = !showScanPanel"
           class="p-1.5 rounded-sm transition-colors duration-100"
-          :style="{ color: showScanPanel ? '#FBBF24' : '#525252', background: showScanPanel ? 'rgba(251,191,36,0.08)' : 'transparent' }"
+          :style="{ color: showScanPanel ? '#FBBF24' : '#8B8FA3', background: showScanPanel ? 'rgba(251,191,36,0.08)' : 'transparent' }"
           title="扫描路径设置"
         >
           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -29,12 +30,12 @@
       <!-- Scan paths panel (inline) -->
       <Transition name="slide">
         <div v-if="showScanPanel" class="mt-3 rounded-md p-3" style="background: #141416; border: 1px solid #1F1F22;">
-          <div class="text-[10px] font-semibold uppercase tracking-[0.15em] mb-2 font-[JetBrains_Mono,monospace]" style="color: #525252;">扫描路径</div>
+          <div class="text-[10px] font-semibold uppercase tracking-[0.15em] mb-2 font-[JetBrains_Mono,monospace]" style="color: #8B8FA3;">扫描路径</div>
 
           <div v-if="scanPaths.length === 0" class="text-[10px] py-1" style="color: #3A3A3D;">暂无自定义路径</div>
           <div v-else class="space-y-1 mb-2">
             <div v-for="(p, i) in scanPaths" :key="i" class="flex items-center gap-2 text-[10px] group">
-              <span class="flex-1 truncate font-mono-log" style="color: #8B8B8E;">{{ p }}</span>
+              <span class="flex-1 truncate font-mono-log" style="color: #A0A4B5;">{{ p }}</span>
               <button
                 @click="removePath(p)"
                 class="opacity-0 group-hover:opacity-100 transition-opacity text-[9px] px-1 rounded-sm"
@@ -61,7 +62,7 @@
             v-else
             @click="showAddInput = true"
             class="text-[10px] px-2 py-1 rounded-sm transition-colors duration-100"
-            style="color: #525252; border: 1px dashed #2A2A2D;"
+            style="color: #8B8FA3; border: 1px dashed #2A2A2D;"
           >
             + 添加目录
           </button>
@@ -80,7 +81,7 @@
           <div class="h-3 rounded w-20 skeleton-shimmer mb-2"></div>
           <div class="h-2 rounded w-32 skeleton-shimmer"></div>
         </div>
-        <p class="text-center text-[10px] mt-4 font-[JetBrains_Mono,monospace]" style="color: #525252;">
+        <p class="text-center text-[10px] mt-4 font-[JetBrains_Mono,monospace]" style="color: #8B8FA3;">
           正在扫描项目...
         </p>
       </div>
@@ -88,12 +89,12 @@
       <!-- Empty state -->
       <div v-else-if="projects.length === 0" class="px-4 py-12 text-center">
         <div class="w-10 h-10 mx-auto mb-3 rounded-full flex items-center justify-center" style="border: 1px dashed #2A2A2D;">
-          <svg class="w-4 h-4" style="color: #525252;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-4 h-4" style="color: #8B8FA3;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
           </svg>
         </div>
-        <p class="text-[11px]" style="color: #8B8B8E;">未发现 SillySpec 项目</p>
-        <p class="text-[10px] mt-1" style="color: #525252;">正在扫描项目目录...</p>
+        <p class="text-[11px]" style="color: #A0A4B5;">未发现 SillySpec 项目</p>
+        <p class="text-[10px] mt-1" style="color: #8B8FA3;">正在扫描项目目录...</p>
       </div>
 
       <!-- Projects -->
@@ -121,7 +122,7 @@
                 >
                   {{ project.name }}
                 </h3>
-                <p class="text-[10px] mt-0.5 truncate font-mono-log" style="color: #525252;">
+                <p class="text-[10px] mt-0.5 truncate font-mono-log" style="color: #8B8FA3;">
                   {{ project.path }}
                 </p>
               </div>
@@ -148,8 +149,8 @@
     <!-- Footer -->
     <div class="relative z-10 px-4 py-2.5" style="border-top: 1px solid #1F1F22;">
       <div class="flex items-center justify-between">
-        <span class="text-[10px] font-[JetBrains_Mono,monospace]" style="color: #525252;">{{ projects.length }} 个项目</span>
-        <kbd class="text-[9px] px-1.5 py-0.5 rounded font-mono-log" style="color: #525252; background: #141416; border: 1px solid #2A2A2D;">⌘K</kbd>
+        <span class="text-[10px] font-[JetBrains_Mono,monospace]" style="color: #8B8FA3;">{{ projects.length }} 个项目</span>
+        <kbd class="text-[9px] px-1.5 py-0.5 rounded font-mono-log" style="color: #8B8FA3; background: #141416; border: 1px solid #2A2A2D;">⌘K</kbd>
       </div>
     </div>
   </div>

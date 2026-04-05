@@ -2,6 +2,12 @@
   "name": "sillyspec",
   "version": "3.7.13",
   "description": "SillySpec CLI — 流程状态机，让 AI 严格按步骤来",
+  "icon": "logo.jpg",
+  "homepage": "https://sillyspec.ppdmq.top/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/q512426816/sillyspec.git"
+  },
   "type": "module",
   "bin": {
     "sillyspec": "./bin/sillyspec.js"

@@ -10,7 +10,7 @@
           <!-- Search -->
           <div class="px-4 py-3" style="border-bottom: 1px solid #1F1F22;">
             <div class="flex items-center gap-3">
-              <svg class="w-3.5 h-3.5 flex-shrink-0" style="color: #525252;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg class="w-3.5 h-3.5 flex-shrink-0" style="color: #8B8FA3;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
               </svg>
               <input
@@ -22,7 +22,7 @@
                 style="color: #E4E4E7;"
                 @keydown="handleKeydown"
               />
-              <kbd v-if="searchQuery" class="text-[9px] px-1 py-0.5 rounded-sm font-mono-log" style="color: #525252; background: #0A0A0B; border: 1px solid #2A2A2D;">ESC</kbd>
+              <kbd v-if="searchQuery" class="text-[9px] px-1 py-0.5 rounded-sm font-mono-log" style="color: #8B8FA3; background: #0A0A0B; border: 1px solid #2A2A2D;">ESC</kbd>
             </div>
           </div>
 
@@ -40,12 +40,12 @@
                 @click="selectItem(item)"
                 @mouseenter="selectedIndex = index"
               >
-                <div class="w-6 h-6 rounded-sm flex items-center justify-center text-[10px] font-[JetBrains_Mono,monospace] flex-shrink-0" style="background: #0A0A0B; border: 1px solid #1F1F22; color: #525252;">
+                <div class="w-6 h-6 rounded-sm flex items-center justify-center text-[10px] font-[JetBrains_Mono,monospace] flex-shrink-0" style="background: #0A0A0B; border: 1px solid #1F1F22; color: #8B8FA3;">
                   {{ item.type === 'project' ? '□' : '◇' }}
                 </div>
                 <div class="flex-1 min-w-0">
                   <div class="text-[12px] font-medium truncate font-[JetBrains_Mono,monospace]" style="color: #E4E4E7;">{{ item.title }}</div>
-                  <div class="text-[10px] truncate" style="color: #525252;">{{ item.subtitle }}</div>
+                  <div class="text-[10px] truncate" style="color: #8B8FA3;">{{ item.subtitle }}</div>
                 </div>
                 <StageBadge v-if="item.status" :status="item.status" size="sm" />
               </div>

@@ -31,7 +31,7 @@ const badgeStyle = computed(() => {
     'in-progress': { background: 'rgba(251,191,36,0.1)', color: '#FBBF24' },
     'blocked': { background: 'rgba(251,146,60,0.1)', color: '#FB923C' },
     'failed': { background: 'rgba(239,68,68,0.1)', color: '#EF4444' },
-    'pending': { background: 'rgba(82,82,82,0.15)', color: '#525252' }
+    'pending': { background: 'rgba(82,82,82,0.15)', color: '#8B8FA3' }
   }
   return styles[props.status] || styles.pending
 })
@@ -46,8 +46,8 @@ const dotStyle = computed(() => {
     'in-progress': '#FBBF24',
     'blocked': '#FB923C',
     'failed': '#EF4444',
-    'pending': '#525252'
+    'pending': '#8B8FA3'
   }
-  return { background: colors[props.status] || '#525252' }
+  return { background: colors[props.status] || '#8B8FA3' }
 })
 </script>

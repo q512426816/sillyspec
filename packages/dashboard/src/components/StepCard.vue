@@ -23,7 +23,7 @@
         class="overflow-hidden transition-all duration-200"
         :style="{ maxHeight: hovered ? '60px' : '0', opacity: hovered ? 1 : 0 }"
       >
-        <p class="mt-1.5 text-[11px] line-clamp-2" style="color: #8B8B8E;">
+        <p class="mt-1.5 text-[11px] line-clamp-2" style="color: #A0A4B5;">
           {{ step.summary || step.description }}
         </p>
       </div>
@@ -36,12 +36,12 @@
         <p v-if="step.decision" class="text-[11px]" style="color: #E4E4E7;">
           <span style="color: #FBBF24; font-weight: 600;">决策:</span> {{ step.decision }}
         </p>
-        <p v-if="step.userQuery" class="text-[11px] italic" style="color: #8B8B8E;">
+        <p v-if="step.userQuery" class="text-[11px] italic" style="color: #A0A4B5;">
           "{{ step.userQuery }}"
         </p>
       </div>
 
-      <div v-if="step.duration" class="mt-1 text-[10px] font-mono-log" style="color: #525252;">
+      <div v-if="step.duration" class="mt-1 text-[10px] font-mono-log" style="color: #8B8FA3;">
         {{ step.duration }}
       </div>
     </div>

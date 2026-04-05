@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="logo.jpg" width="80" />
+</p>
+
 # SillySpec v3.0 — 规范驱动开发工具包
 
 > 融合 Superpowers + OpenSpec + GSD，从"你说要啥"到"代码能跑"的完整流程。
