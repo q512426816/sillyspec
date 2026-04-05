@@ -156,7 +156,7 @@ async function doInstall(projectDir, tools, isWorkspace, subprojects = []) {
   const progressPath = join(runtimeDir, 'progress.json');
   if (!existsSync(progressPath)) {
     const pm = new ProgressManager();
-    pm.init(dir);
+    pm.init(projectDir);
   }
 
   // 创建初始 user-inputs.md

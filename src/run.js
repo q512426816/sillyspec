@@ -153,10 +153,10 @@ export function runCommand(args, cwd) {
   }
 
   // 默认：输出当前步骤
-  return runStage(progress, stageName, cwd)
+  return runStage(pm, progress, stageName, cwd)
 }
 
-function runStage(progress, stageName, cwd) {
+function runStage(pm, progress, stageName, cwd) {
   const stageData = progress.stages[stageName]
   if (!stageData || !stageData.steps) {
     console.error(`❌ 阶段 ${stageName} 未初始化`)
