@@ -5,18 +5,18 @@ export const definition = {
   auxiliary: true,
   steps: [
     {
-      name: '检查工作区和已有文档',
-      prompt: `检查工作区模式和已有扫描文档。
+      name: '检查已有扫描文档和子项目列表',
+      prompt: `检查已有扫描文档和子项目列表。
 
 ### 操作
-1. \`ls .sillyspec/projects/*.yaml 2>/dev/null | grep -q .\` — 判断是否工作区模式
-2. \`ls docs/*/scan/ 2>/dev/null\` — 检查已有文档
-3. \`wc -l docs/*/scan/*.md 2>/dev/null\` — 文档行数
-4. 已有 3 份 → 建议升级深度扫描；已有 7 份 → 建议刷新或跳过
-5. 工作区模式 → 询问扫描范围（逐个/选子项目/退出）
+1. \`ls .sillyspec/projects/*.yaml 2>/dev/null | grep -q .\` — 检查已有文档
+1. \`ls docs/*/scan/ 2>/dev/null\` — 检查已有文档
+2. \`wc -l docs/*/scan/*.md 2>/dev/null\` — 文档行数
+3. 已有 3 份 → 建议升级深度扫描；已有 7 份 → 建议刷新或跳过
+5. 显示子项目列表供选择扫描范围
 
 ### 输出
-工作区模式判断 + 已有文档状态 + 扫描建议`,
+已有文档状态 + 扫描建议`,
       outputHint: '工作区和文档状态',
       optional: false
     },
@@ -127,14 +127,14 @@ TESTING.md、CONCERNS.md、PROJECT.md 路径`,
 1. 检查 7 份文档是否全部生成
 2. 自检门控：ARCHITECTURE（技术栈+Schema摘要）、CONVENTIONS（隐形规则+代码风格）、STRUCTURE（目录结构）、INTEGRATIONS（外部依赖）、TESTING（测试现状）、CONCERNS（技术债务）、PROJECT（项目概览）
 3. 清理：\`rm -f docs/<project>/scan/_env-detect.md\`
-4. \`git add . && git commit -m "chore: sillyspec scan - codebase mapped"\`
+4. \`git add .\` — **不要 commit**，由用户通过统一提交工具处理
 
 ### 输出
-扫描完整性报告 + commit hash
+扫描完整性报告
 
 ### 注意
 - ❌ 修改代码 / 编造路径 / 读源码全文`,
-      outputHint: '自检报告 + commit hash',
+      outputHint: '自检报告',
       optional: false
     }
   ]

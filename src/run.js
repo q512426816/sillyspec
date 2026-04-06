@@ -106,11 +106,13 @@ function outputStep(stageName, stepIndex, steps, cwd) {
   console.log(`\n### ⚠️ 铁律`)
   console.log('- 只做本步骤描述的操作，不得自行扩展或跳过')
  console.log('- 不要回头修改已完成的步骤')
+  console.log('- 不要使用 npx 命令，直接使用 sillyspec（已全局安装）')
+  console.log('- 不要编造不存在的 CLI 子命令')
   console.log('- 完成后立即执行 --done 命令，不得跳过')
   console.log('- 生成的文件头部必须包含 author（git 用户名）和 created_at（精确到秒）')
   console.log('- 执行构建/测试前必须先读 local.yaml，优先使用其中配置的命令、路径和环境变量；未配置时才使用默认值')
   console.log(`\n### 完成后执行`)
-  console.log(`sillyspec run ${stageName} --done --output "你的摘要"`)
+  console.log(`sillyspec run ${stageName} --done --input "用户原始需求/反馈" --output "你的摘要"`)
 }
 
 /**
@@ -137,6 +139,13 @@ export async function runCommand(args, cwd) {
   const outputIdx = flags.indexOf('--output')
   if (outputIdx !== -1 && flags[outputIdx + 1]) {
     outputText = flags[outputIdx + 1]
+  }
+
+  // 解析 --input
+  let inputText = null
+  const inputIdx = flags.indexOf('--input')
+  if (inputIdx !== -1 && flags[inputIdx + 1]) {
+    inputText = flags[inputIdx + 1]
   }
 
   // 解析 --change <name>
@@ -193,7 +202,7 @@ export async function runCommand(args, cwd) {
 
   // --done
   if (isDone) {
-    return await completeStep(pm, progress, stageName, cwd, outputText)
+    return await completeStep(pm, progress, stageName, cwd, outputText, inputText)
   }
 
   // 默认：输出当前步骤
@@ -211,13 +220,21 @@ async function runStage(pm, progress, stageName, cwd) {
   let currentIdx = steps.findIndex(s => s.status !== 'completed' && s.status !== 'skipped')
 
   if (currentIdx === -1) {
-    // 阶段已完成，自动重置，允许重复执行
+    // 阶段已完成
+    console.log(`✅ ${stageName} 阶段已完成。`)
+    console.log(`  继续执行将重新开始，可用 --reset 显式重置。\n`)
+    // 自动重置，允许重复执行
     steps.forEach(s => { s.status = 'pending'; s.completedAt = null; s.output = null; s.startedAt = null })
     stageData.status = 'in_progress'
     stageData.completedAt = null
-    console.log(`🔄 ${stageName} 阶段已完成，重新开始...\n`)
     pm._write(cwd, progress)
     currentIdx = 0
+  } else if (currentIdx > 0) {
+    // 有进行中的步骤，提示用户
+    const completed = currentIdx
+    const total = steps.length
+    console.log(`⚠️  ${stageName} 已进行到第 ${currentIdx + 1}/${total} 步（前 ${completed} 步已完成）。`)
+    console.log(`  继续执行将从中断处恢复，用 --reset 可重新开始。\n`)
   }
 
   const stageDef = stageRegistry[stageName]
@@ -259,7 +276,7 @@ function validateMetadata(cwd, stageName) {
   }
 }
 
-async function completeStep(pm, progress, stageName, cwd, outputText) {
+async function completeStep(pm, progress, stageName, cwd, outputText, inputText = null) {
   const stageData = progress.stages[stageName]
   if (!stageData || !stageData.steps) {
     console.error(`❌ 阶段 ${stageName} 未初始化`)
@@ -284,7 +301,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText) {
       // Save full output to artifacts/
       const artifactsDir = join(cwd, '.sillyspec', '.runtime', 'artifacts')
       mkdirSync(artifactsDir, { recursive: true })
-      const ts = new Date().toLocaleString('zh-CN',{hour12:false}).replace(/[:.]/g, '-')
+      const ts = new Date().toISOString().slice(0,19).replace(/[-T:]/g, '')
       writeFileSync(join(artifactsDir, `${stageName}-step${currentIdx + 1}-${ts}.txt`), outputText)
     } else {
       steps[currentIdx].output = outputText
@@ -315,7 +332,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText) {
     // Append to user-inputs.md
     if (outputText) {
       const inputsPath = join(cwd, '.sillyspec', '.runtime', 'user-inputs.md')
-      const entry = `\n## ${new Date().toLocaleString('zh-CN',{hour12:false})} | ${stageName}: ${steps[currentIdx].name}\n- 输出：${outputText}\n`
+      const entry = `\n## ${new Date().toLocaleString('zh-CN',{hour12:false})} | ${stageName}: ${steps[currentIdx].name}\n${inputText ? "- 输入：" + inputText + "\n" : ""}- 输出：${outputText}\n`
       appendFileSync(inputsPath, entry)
     }
 
@@ -337,7 +354,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText) {
   // Append to user-inputs.md
   if (outputText) {
     const inputsPath = join(cwd, '.sillyspec', '.runtime', 'user-inputs.md')
-    const entry = `\n## ${new Date().toLocaleString('zh-CN',{hour12:false})} | ${stageName}: ${steps[currentIdx].name}\n- 输出：${outputText}\n`
+    const entry = `\n## ${new Date().toLocaleString('zh-CN',{hour12:false})} | ${stageName}: ${steps[currentIdx].name}\n${inputText ? "- 输入：" + inputText + "\n" : ""}- 输出：${outputText}\n`
     appendFileSync(inputsPath, entry)
   }
 

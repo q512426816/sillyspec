@@ -22,7 +22,7 @@ export const definition = {
       prompt: `加载所有相关规范和代码库上下文。
 
 ### 操作
-1. 检测工作区模式
+1. 加载 CODEBASE-OVERVIEW.md 和子项目上下文
 2. 读取最新设计文档、需求文档、代码库约定
 3. 如果是子阶段变更，读取 MASTER.md 和前序阶段设计
 

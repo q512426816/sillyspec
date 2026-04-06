@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, statSy
 import { join, resolve, dirname, basename } from 'path';
 import { fileURLToPath } from 'url';
 import { homedir } from 'os';
-import { checkbox, select, confirm, input } from '@inquirer/prompts';
+import { checkbox, confirm, input } from '@inquirer/prompts';
 import { ProgressManager } from './progress.js';
 import chalk from 'chalk';
 
@@ -106,7 +106,7 @@ function isTTY() {
 
 // ── 核心安装逻辑 ──
 
-async function doInstall(projectDir, tools, isWorkspace, subprojects = []) {
+async function doInstall(projectDir, tools, subprojects = []) {
   // 创建基础目录
   // .sillyspec/projects/    → 项目注册表
   // .sillyspec/docs/<name>/ → 统一文档中心
@@ -128,13 +128,11 @@ async function doInstall(projectDir, tools, isWorkspace, subprojects = []) {
   const gitkeepPath = join(scanDir, '.gitkeep');
   if (!existsSync(gitkeepPath)) writeFileSync(gitkeepPath, '');
 
-  // 兼容：保留旧的 codebase/ changes/ quicklog/ 目录（如果已存在不删除）
-  if (isWorkspace) {
-    mkdirSync(join(projectDir, '.sillyspec', 'shared'), { recursive: true });
-    mkdirSync(join(projectDir, '.sillyspec', 'workspace'), { recursive: true });
-  }
+  // 创建 shared/workspace 目录
+  mkdirSync(join(projectDir, '.sillyspec', 'shared'), { recursive: true });
+  mkdirSync(join(projectDir, '.sillyspec', 'workspace'), { recursive: true });
 
-  // 创建知识库骨架（所有模式）
+  // 创建知识库骨架
   const knowledgeDir = join(projectDir, '.sillyspec', 'knowledge');
   mkdirSync(knowledgeDir, { recursive: true });
   const indexPath = join(knowledgeDir, 'INDEX.md');
@@ -207,19 +205,17 @@ async function doInstall(projectDir, tools, isWorkspace, subprojects = []) {
     console.log(chalk.yellow('    ⚠ 未找到 skills 目录，跳过 Claude Code skills 同步'));
   }
 
-
   // 工作区配置
-  if (isWorkspace) {
-    const configPath = join(projectDir, '.sillyspec', 'config.yaml');
-    if (!existsSync(configPath)) {
-      let projectsYaml = '';
-      if (subprojects.length > 0) {
-        projectsYaml = subprojects.map(p =>
-          `  ${p.name}:\n    path: ${p.path}\n    role: ${p.role || p.name}${p.repo ? `\n    repo: ${p.repo}` : ''}`
-        ).join('\n');
-      }
+  const configPath = join(projectDir, '.sillyspec', 'config.yaml');
+  if (!existsSync(configPath)) {
+    let projectsYaml = '';
+    if (subprojects.length > 0) {
+      projectsYaml = subprojects.map(p =>
+        `  ${p.name}:\n    path: ${p.path}\n    role: ${p.role || p.name}${p.repo ? `\n    repo: ${p.repo}` : ''}`
+      ).join('\n');
+    }
 
-      writeFileSync(configPath,
+    writeFileSync(configPath,
 `# SillySpec 工作区配置
 # 修改此文件后运行 /sillyspec:workspace 更新
 
@@ -228,16 +224,14 @@ ${projectsYaml || '  # 运行 /sillyspec:workspace add 添加子项目'}
 
 shared: []
 `
-      );
-    }
+    );
   }
 }
 
 // ── 安装完成总结 ──
 
-function showSummary(version, tools, isWorkspace) {
+function showSummary(version, tools) {
   const toolLabels = tools.map(t => TOOL_LABELS[t] || t);
-  const mode = isWorkspace ? '多项目工作区' : '单项目';
 
   console.log('');
   console.log(chalk.green('  ═══════════════════════════════════════'));
@@ -245,7 +239,6 @@ function showSummary(version, tools, isWorkspace) {
   console.log(chalk.green('  ═══════════════════════════════════════'));
   console.log('');
   console.log(`  已安装工具: ${chalk.cyan(toolLabels.join(', '))}`);
-  console.log(`  模式: ${chalk.yellow(mode)}`);
   console.log('  📁 .sillyspec/ — 项目规范目录');
   console.log('');
   console.log('  下一步：使用 AI 技能开始工作');
@@ -270,7 +263,7 @@ export function getVersion() {
 // ── 主命令 ──
 
 export async function cmdInit(projectDir, options = {}) {
-  const { tool, workspace, interactive } = options;
+  const { tool, interactive } = options;
   const version = getVersion();
 
   // ── 交互式模式（--interactive 或 -i）──
@@ -302,20 +295,11 @@ export async function cmdInit(projectDir, options = {}) {
       validate: (answer) => answer.length > 0 || '至少选择一个工具',
     });
 
-    // 工作区模式
-    const isWorkspace = await select({
-      message: '选择项目模式',
-      choices: [
-        { name: '单项目模式', value: 'false' },
-        { name: '多项目工作区', value: 'true' },
-      ],
-    }) === 'true';
-
-    // 工作区子项目引导
+    // 子项目引导（始终执行）
     let subprojects = [];
-    if (isWorkspace) {
+    {
       console.log('');
-      console.log(chalk.yellow('📋 工作区模式 — 添加子项目'));
+      console.log(chalk.yellow('📋 添加子项目'));
       console.log(chalk.dim('   子项目是工作区中的独立项目目录（如 frontend/、backend/）'));
       console.log('');
 
@@ -378,8 +362,8 @@ export async function cmdInit(projectDir, options = {}) {
     }
 
     console.log('');
-    const count = await doInstall(projectDir, selectedTools, isWorkspace, subprojects);
-    showSummary(version, selectedTools, isWorkspace);
+    await doInstall(projectDir, selectedTools, subprojects);
+    showSummary(version, selectedTools);
     return;
   }
 
@@ -397,7 +381,7 @@ export async function cmdInit(projectDir, options = {}) {
     tools = detectTools(projectDir);
   }
 
-  await doInstall(projectDir, tools, !!workspace);
+  await doInstall(projectDir, tools);
 
   console.log('');
   console.log(chalk.green(`  ✅ SillySpec v${version} 安装完成！`));

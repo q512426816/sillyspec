@@ -1,0 +1,7 @@
+# SillySpec 工作区配置
+# 修改此文件后运行 /sillyspec:workspace 更新
+
+projects:
+  # 运行 /sillyspec:workspace add 添加子项目
+
+shared: []

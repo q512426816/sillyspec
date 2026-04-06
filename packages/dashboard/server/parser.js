@@ -311,7 +311,7 @@ export function parseDocsTree(projectPath) {
 
       if (files.length > 0) {
         groups.push({
-          key: group.key,
+          key: `${projName}::${group.key}`,
           label: group.label,
           project: projName,
           files

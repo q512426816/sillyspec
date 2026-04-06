@@ -148,7 +148,6 @@ ls -la
 ```bash
 git init
 git add .
-git commit -m "chore: sillyspec init - project initialized"
 ```
 
 ### 最后说：

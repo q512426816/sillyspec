@@ -7,6 +7,7 @@ import { definition as scan } from './scan.js'
 import { definition as quick } from './quick.js'
 import { definition as archive } from './archive.js'
 import { definition as status } from './status.js'
+import { definition as doctor } from './doctor.js'
 
 export const stageRegistry = {
   brainstorm,
@@ -17,11 +18,12 @@ export const stageRegistry = {
   scan,
   quick,
   archive,
-  status
+  status,
+  doctor
 }
 
 // 流程阶段顺序，用于 getNextStage
-const stageOrder = ['brainstorm', 'propose', 'plan', 'execute', 'verify']
+const stageOrder = ['brainstorm', 'plan', 'execute', 'verify']
 
 export function getNextStage(currentStage) {
   const index = stageOrder.indexOf(currentStage)
@@ -30,4 +32,4 @@ export function getNextStage(currentStage) {
 }
 
 // 辅助命令（不影响流程阶段推进）
-export const auxiliaryStages = ['scan', 'quick', 'archive', 'status']
+export const auxiliaryStages = ['scan', 'quick', 'archive', 'status', 'doctor']

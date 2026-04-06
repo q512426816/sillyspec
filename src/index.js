@@ -20,7 +20,6 @@ SillySpec CLI — 规范驱动开发工具包
 用法:
   sillyspec init               初始化（零交互，自动检测工具）
     [--tool <name>]            只安装指定工具
-    [--workspace]              工作区模式
     [--interactive]            交互式引导
     [--dir <path>]             指定目录
   sillyspec setup [--list]     安装推荐 MCP 工具
@@ -47,7 +46,7 @@ SillySpec CLI — 规范驱动开发工具包
 示例:
   sillyspec init
   sillyspec init --tool claude
-  sillyspec init --workspace
+
   sillyspec setup
   sillyspec setup --list
   sillyspec dashboard
@@ -72,7 +71,6 @@ async function main() {
   let json = false;
   let targetDir = process.cwd();
   let tool = null;
-  let workspace = false;
   let interactive = false;
   const filteredArgs = [];
 
@@ -85,8 +83,6 @@ async function main() {
     } else if (args[i] === '--tool' && args[i + 1]) {
       tool = args[i + 1];
       i++;
-    } else if (args[i] === '--workspace' || args[i] === '-w') {
-      workspace = true;
     } else if (args[i] === '--interactive' || args[i] === '-i') {
       interactive = true;
     } else if (args[i] === '--list' || args[i] === '-l') {
@@ -111,7 +107,7 @@ async function main() {
 
   switch (command) {
     case 'init':
-      await cmdInit(dir, { tool, workspace, interactive });
+      await cmdInit(dir, { tool, interactive });
       break;
     case 'setup':
       const setupList = filteredArgs.includes('--list') || filteredArgs.includes('-l');

@@ -27,17 +27,16 @@ export const definition = {
       prompt: `加载项目现有上下文，理解代码结构和约定。
 
 ### 操作
-1. 检查是否工作区模式：\`ls .sillyspec/projects/*.yaml\`
-2. 工作区模式：加载 CODEBASE-OVERVIEW.md + 共享规范 + 子项目上下文
-3. 单项目模式：加载 PROJECT.md、REQUIREMENTS.md、ROADMAP.md
-4. 棕地项目：读取 docs/<project>/scan/ 下的 STRUCTURE.md、CONVENTIONS.md、ARCHITECTURE.md
-5. 查看进行中的变更：\`ls .sillyspec/changes/ | grep -v archive\`
+1. 读取 CODEBASE-OVERVIEW.md + 共享规范 + 子项目上下文
+2. 询问本次需求属于哪个子项目
+3. 棕地项目：读取 docs/<project>/scan/ 下的 STRUCTURE.md、CONVENTIONS.md、ARCHITECTURE.md
+4. 查看进行中的变更：\`ls .sillyspec/changes/ | grep -v archive\`
 
 ### 输出
 项目现状理解摘要（3-5 句话，关键约定和架构决策）
 
 ### 注意
-- 工作区模式下需要询问本次需求属于哪个子项目
+- 始终询问本次需求属于哪个子项目
 - 棕地项目必须读取数据模型章节`,
       outputHint: '上下文摘要',
       optional: false
@@ -165,8 +164,9 @@ export const definition = {
       prompt: `撰写 design 文档并进行 AI 自审。
 
 ### 操作
-1. 将确认的设计写入 \`.sillyspec/changes/<变更名>/design.md\`
-2. 自审检查：
+1. 确认变更目录存在：\`mkdir -p .sillyspec/changes/<变更名>\`（Windows 用 \`mkdir .sillyspec\\changes\\<变更名>\` 或 PowerShell \`New-Item -ItemType Directory -Force -Path .sillyspec/changes/<变更名>\`）
+2. 将确认的设计写入 \`.sillyspec/changes/<变更名>/design.md\`
+3. 自审检查：
    - 需求覆盖：是否完整覆盖 Step 6 确认的需求
    - 约束一致性：是否与 CONVENTIONS.md、ARCHITECTURE.md 一致
    - 真实性：表名/字段名来自真实 schema 或标注"新增"
@@ -185,25 +185,30 @@ design.md 文件路径 + 自审结果
       optional: false
     },
     {
-      name: '用户确认并输出技术方案',
-      prompt: `用户确认设计方案，生成最终技术方案。
+      name: '用户确认并生成规范文件',
+      prompt: `用户确认设计方案，生成规范文件。
 
 ### 操作
 1. 展示 design.md 摘要给用户
 2. 请用户选择：✅ 确认 / ✏️ 修改 / ❌ 推翻重来
-3. 确认后：
-   - 将技术方案写入 \`.sillyspec/changes/<变更名>/design.md\`
-   - 包含：架构决策、文件变更清单、数据模型、API 设计、代码风格参照
-   - Git 提交
+3. 确认后，在 \`.sillyspec/changes/<变更名>/\` 下生成所有规范文件：
+   - **design.md**：架构决策、文件变更清单、数据模型、API 设计、代码风格参照
+   - **proposal.md**：动机、变更范围、不在范围内、成功标准
+   - **requirements.md**：功能需求、用户场景（Given/When/Then 格式）、非功能需求
+   - **tasks.md**：任务列表（只列名称和对应文件路径，细节在 plan 阶段展开）
+   - \`git add .sillyspec/\` — **不要 commit**
 
 ### 输出
-最终 design.md 路径 + Git commit hash
+所有规范文件路径
 
 ### 注意
 - 必须等待用户明确确认
 - 禁止在确认前推进到后续阶段
-- 推翻重来回到 Step 6`,
-      outputHint: '最终 design.md 路径 + commit hash',
+- 禁止自动 commit
+- 推翻重来回到 Step 6
+- 表名/字段名必须来自真实 schema 或标注"新增"
+- tasks.md 只列任务名，细节在 plan 阶段展开`,
+      outputHint: '规范文件路径',
       optional: false
     }
   ]

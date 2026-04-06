@@ -1,6 +1,6 @@
 <template>
   <div
-    :class="['group relative rounded-md cursor-pointer overflow-hidden transition-all duration-200']"
+    :class="['group relative rounded-md cursor-pointer transition-all duration-200']"
     :style="cardStyle"
     @mouseenter="hovered = true"
     @mouseleave="hovered = false"
@@ -9,7 +9,7 @@
     <!-- Left accent bar -->
     <div class="absolute left-0 top-0 bottom-0 w-[2px]" :style="{ background: barColor }" />
 
-    <div class="pl-3.5 pr-3 py-2.5">
+    <div class="pl-4 pr-4 py-3">
       <div class="flex items-center gap-2">
         <h3 class="text-[12px] font-medium transition-colors duration-150" :style="{ color: isActive ? '#D97706' : '#1C1C1E', fontFamily: '\'JetBrains Mono\', monospace' }">
           {{ step.title || step.name }}
@@ -20,8 +20,8 @@
       <!-- Hover summary -->
       <div
         v-if="step.summary || step.description"
-        class="overflow-hidden transition-all duration-200"
-        :style="{ maxHeight: hovered ? '60px' : '0', opacity: hovered ? 1 : 0 }"
+        class="transition-all duration-200"
+        :style="{ maxHeight: hovered ? '80px' : '0', opacity: hovered ? 1 : 0, overflow: 'hidden' }"
       >
         <p class="mt-1.5 text-[11px] line-clamp-2" style="color: #636366;">
           {{ step.summary || step.description }}

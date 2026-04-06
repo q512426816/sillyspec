@@ -5,33 +5,6 @@ export const definition = {
   auxiliary: true,
   steps: [
     {
-      name: '检查工作区模式',
-      prompt: `判断是否为工作区模式。
-
-### 操作
-1. \`ls .sillyspec/projects/*.yaml 2>/dev/null | grep -q .\`
-2. 是 → 工作区模式，对每个子项目执行状态检查
-3. 否 → 单项目模式，继续后续步骤
-
-### 工作区模式输出格式：
-\`\`\`
-🏢 工作区状态
-📦 子项目：
-  ✅ frontend  ./frontend
-     📋 项目：已初始化
-     📂 代码库：已扫描（7 份文档）
-     🔄 进行中：1 个变更
-  ⚠️ backend   ./backend
-     📂 代码库：未扫描
-📄 共享规范：2 份
-\`\`\`
-
-### 输出
-工作区/单项目判断`,
-      outputHint: '模式判断',
-      optional: false
-    },
-    {
       name: '项目基础信息',
       prompt: `收集项目基础信息。
 

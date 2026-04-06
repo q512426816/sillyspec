@@ -35,11 +35,11 @@ export const definition = {
     },
     {
       name: '更新路线图和提交',
-      prompt: `更新路线图并 Git 提交。
+      prompt: `更新路线图并暂存变更。
 
 ### 操作
 1. 如果 \`.sillyspec/ROADMAP.md\` 存在，标记对应 Phase 为已完成
-2. \`git add .sillyspec/ && git commit -m "docs: archive sillyspec change <change-name>"\`
+2. \`git add .sillyspec/\` — **不要 commit**，由用户通过统一提交工具处理
 3. 更新 progress.json：
    - 清除当前变更信息（归档后不再活跃）
    - 如果是主变更（有 MASTER.md），标记所有阶段为 ✅，然后清除

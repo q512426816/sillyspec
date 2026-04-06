@@ -14,15 +14,17 @@ export function useKeyboard(options = {}) {
     onEnter = null,
     onArrowUp = null,
     onArrowDown = null,
-    disabled = false
+    disabled: initialDisabled = false
   } = options
+
+  let isDisabled = initialDisabled
 
   /**
    * Handle keyboard events
    * @param {KeyboardEvent} event
    */
   function handleKeyDown(event) {
-    if (disabled) return
+    if (isDisabled) return
 
     // Ignore if in input field
     const target = event.target
@@ -87,8 +89,8 @@ export function useKeyboard(options = {}) {
   })
 
   return {
-    disable: () => { disabled = true },
-    enable: () => { disabled = false }
+    disable: () => { isDisabled = true },
+    enable: () => { isDisabled = false }
   }
 }
 

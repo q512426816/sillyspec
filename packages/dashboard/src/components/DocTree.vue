@@ -39,7 +39,7 @@ const groupIcons = {
 const treeData = computed(() => {
   return props.groups.map(group => ({
     key: `group-${group.key}`,
-    label: group.label,
+    label: group.project ? `${group.label} (${group.project})` : group.label,
     prefix: () => groupIcons[group.label] || '📄',
     children: group.files.map(file => ({
       key: file.path,

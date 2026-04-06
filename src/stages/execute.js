@@ -33,7 +33,7 @@ const fixedPrefix = [
 2. 读取 design.md（技术方案）
 3. 读取 CONVENTIONS.md、ARCHITECTURE.md
 4. 读取 local.yaml（构建命令）
-5. 工作区模式：额外加载 CODEBASE-OVERVIEW.md
+5. 加载 CODEBASE-OVERVIEW.md
 
 ### 输出
 已加载的上下文摘要`,
@@ -93,7 +93,7 @@ const fixedSuffix = [
    - 验证 → sillyspec run verify
    - 归档 → /sillyspec:archive
    - 继续开发
-2. 提示 git 提交
+2. 提示 git add 暂存变更
 
 ### 输出
 用户选择 + 下一步命令
@@ -112,23 +112,51 @@ function parseWavesFromPlan(planContent) {
   const waves = []
   const lines = planContent.split('\n')
   let currentWave = null
+  let currentTask = null
 
   for (const line of lines) {
     const waveMatch = line.match(/^#+\s*Wave\s+(\d+)/i)
     if (waveMatch) {
       currentWave = { index: parseInt(waveMatch[1]), tasks: [] }
+      currentTask = null
       waves.push(currentWave)
       continue
     }
 
-    if (currentWave) {
-      const taskMatch = line.match(/^[-*]\s*\[[ x]\]\s*(.+)/)
-      if (taskMatch) {
-        const fileMatch = taskMatch[1].match(/\(([^)]+)\)/)
-        currentWave.tasks.push({
-          name: taskMatch[1].replace(/\([^)]+\)/, '').trim(),
-          file: fileMatch ? fileMatch[1] : '未知'
-        })
+    if (!currentWave) continue
+
+    const taskMatch = line.match(/^[-*]\s*\[[ x]\]\s*(.+)/)
+    if (taskMatch) {
+      currentTask = {
+        name: taskMatch[1].trim(),
+        file: '',
+        steps: '',
+        reference: ''
+      }
+      // 兼容旧格式：任务名后跟 (文件路径)
+      const fileMatch = taskMatch[1].match(/\(([^)]+)\)$/)
+      if (fileMatch) {
+        currentTask.file = fileMatch[1]
+        currentTask.name = taskMatch[1].replace(/\([^)]+\)$/, '').trim()
+      }
+      currentWave.tasks.push(currentTask)
+      continue
+    }
+
+    // 解析子行信息（修改/参考/步骤）
+    if (currentTask) {
+      const modMatch = line.match(/^\s+-\s*修改:\s*(.+)/)
+      if (modMatch) { currentTask.file = modMatch[1].trim(); continue }
+
+      const refMatch = line.match(/^\s+-\s*参考:\s*(.+)/)
+      if (refMatch) { currentTask.reference = refMatch[1].trim(); continue }
+
+      const stepMatch = line.match(/^\s+-\s*步骤:/)
+      if (stepMatch) { currentTask.steps = line.replace(/^\s+-\s*步骤:\s*/, '').trim(); continue }
+
+      // 步骤续行（数字开头的子步骤）
+      if (currentTask.steps && line.match(/^\s+\d+\./)) {
+        currentTask.steps += '\n' + line.trim()
       }
     }
   }
@@ -140,7 +168,13 @@ function parseWavesFromPlan(planContent) {
  * 为 Wave 生成 prompt
  */
 function buildWavePrompt(wave, waveIndex) {
-  const taskList = wave.tasks.map(t => `- [ ] ${t.name} (${t.file})`).join('\n')
+  const taskList = wave.tasks.map(t => {
+    let s = `- [ ] ${t.name}`
+    if (t.file) s += ` (${t.file})`
+    if (t.reference) s += `\n  参考: ${t.reference}`
+    if (t.steps) s += `\n  步骤: ${t.steps}`
+    return s
+  }).join('\n')
   return `## Wave ${waveIndex}: 执行以下任务
 
 ### 本 Wave 任务
@@ -149,13 +183,18 @@ ${taskList}
 ### 执行要求
 1. 按任务顺序执行，同一 Wave 内任务可并行
 2. 铁律：先读后写、grep 确认方法存在、不编造、TDD
-3. 每个任务完成后：
+3. **不要频繁编译！** 编译很慢，只在以下情况运行：
+   - 写了大量代码后需要验证语法正确性
+   - 最后一个 Wave 完成后做一次全量编译验证
+   - 用户明确要求编译时
+4. 单个任务完成后只跑**对应模块的单元测试**（TDD 绿灯确认），不要跑全量编译
+5. 每个任务完成后：
    - 勾选 tasks.md 中对应 checkbox
    - 记录改动文件和测试结果
-4. 遇到 BLOCKED → 记录原因，选择：重试/跳过/停止
+6. 遇到 BLOCKED → 记录原因，选择：重试/跳过/停止
 
 ### 完成后
-运行 sillyspec run execute --done --output "Wave ${waveIndex} 结果摘要"`
+运行 sillyspec run execute --done --input "用户原始反馈" --output "Wave ${waveIndex} 结果摘要"`
 }
 
 /**

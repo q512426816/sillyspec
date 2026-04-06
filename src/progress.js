@@ -17,12 +17,11 @@ const PROGRESS_FILE = 'progress.json';
 const BACKUP_FILE = 'progress.json.bak';
 
 const CURRENT_VERSION = 2;
-const VALID_STAGES = ['brainstorm', 'propose', 'plan', 'execute', 'verify', 'scan', 'quick', 'archive', 'status'];
+const VALID_STAGES = ['brainstorm', 'plan', 'execute', 'verify', 'scan', 'quick', 'archive', 'status', 'doctor'];
 const VALID_STATUSES = ['pending', 'in-progress', 'completed', 'failed', 'blocked'];
 
 const STAGE_LABELS = {
   brainstorm: '🧠 需求探索',
-  propose: '📋 方案设计',
   plan: '📐 实现计划',
   execute: '⚡ 波次执行',
   verify: '🔍 验证确认',
@@ -30,6 +29,7 @@ const STAGE_LABELS = {
   quick: '⚡ 快速任务',
   archive: '📦 归档变更',
   status: '📊 状态查看',
+  doctor: '🩺 项目自检',
 };
 
 function emptyStage() {
@@ -312,6 +312,10 @@ export class ProgressManager {
     console.log(`⚠️  发现问题，尝试修复...`);
     let fixed = { ...data, stages: { ...data.stages } };
     let changed = false;
+    if (!fixed.project) {
+      fixed.project = basename(cwd);
+      changed = true;
+    }
     if (!fixed._version || !Number.isInteger(fixed._version) || fixed._version < 1) {
       fixed._version = CURRENT_VERSION;
       changed = true;

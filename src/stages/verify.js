@@ -64,13 +64,23 @@ export const definition = {
     },
     {
       name: '运行测试和质量扫描',
-      prompt: `运行完整测试套件和代码质量扫描。
+      prompt: `运行测试和代码质量扫描。
 
 ### 操作
-1. 运行测试：\`pnpm test\` 或 \`npm test\` 或 \`pytest\`
-2. 记录通过/失败数量，分析失败原因
-3. 搜索技术债务：grep TODO/FIXME/HACK/XXX
-4. 运行综合校验（lint、测试等）
+1. 读取 \`.sillyspec/local.yaml\` 获取构建和测试命令
+2. 如果 local.yaml 有 test 命令，使用它（仅测试变更涉及的模块，非全量）
+3. 如果 local.yaml 无 test 命令，根据项目类型选择：
+   - Maven：\`mvn test -pl <变更模块> -am\`（仅编译变更模块及其依赖）
+   - Gradle：\`./gradlew :<模块>:test\`
+   - npm/pnpm：\`pnpm test --filter=<包名>\` 或 \`npm test -- --testPathPattern=<相关文件>\`
+   - Python：\`pytest <变更模块路径>/\`
+4. 记录通过/失败数量，分析失败原因
+5. 搜索技术债务：grep TODO/FIXME/HACK/XXX（仅限变更文件）
+6. 如果 local.yaml 有 lint 命令，运行 lint 检查
+
+### 注意
+- 不要全量编译/测试整个项目，只测变更涉及的模块
+- 如果变更模块不确定，优先使用 local.yaml 中的命令
 
 ### 输出
 测试结果 + 技术债务标记`,

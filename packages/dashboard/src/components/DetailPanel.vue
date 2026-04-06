@@ -81,7 +81,7 @@
         <!-- Output -->
         <div v-if="activeStep.output || activeStep.files" class="px-4 py-3" style="border-bottom: 1px solid #F0F0F3;">
           <h4 class="text-[9px] font-semibold uppercase tracking-[0.2em] mb-1.5 font-[JetBrains_Mono,monospace]" style="color: #6B7280;">输出</h4>
-          <n-code v-if="activeStep.output" :code="activeStep.output" language="text" word-wrap style="max-height: 160px; overflow-y: auto;" />
+          <n-code v-if="activeStep.output" :code="activeStep.output" language="text" word-wrap style="max-height: 300px; overflow-y: auto; padding: 8px; border-radius: 4px; background: #F5F5F7;" />
           <div v-if="activeStep.files" class="mt-2 space-y-1">
             <div v-for="(file, i) in activeStep.files" :key="i" class="flex items-center gap-2 text-[10px]" style="color: #6B7280;">
               <svg class="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
