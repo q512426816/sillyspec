@@ -12,26 +12,31 @@ import { buildExecuteSteps } from './stages/execute.js'
 /**
  * 获取阶段的步骤定义（execute 需要动态构建）
  */
-function getStageSteps(stageName, cwd) {
+function getStageSteps(stageName, cwd, progress) {
   if (stageName === 'execute') {
     const changesDir = join(cwd, '.sillyspec', 'changes')
     let planFile = null
-    if (existsSync(changesDir)) {
-      // 递归查找 changes/ 下所有 plan.md，取最新的
-      function findPlans(dir) {
-        const results = []
-        for (const entry of readdirSync(dir, { withFileTypes: true })) {
-          const full = join(dir, entry.name)
-          if (entry.isDirectory() && entry.name !== 'archive') {
-            results.push(...findPlans(full))
-          } else if (entry.name === 'plan.md') {
-            results.push(full)
-          }
-        }
-        return results
+    // 优先用 currentChange 指定的变更名
+    if (progress.currentChange) {
+      const target = join(changesDir, progress.currentChange, 'plan.md')
+      if (existsSync(target)) planFile = target
+    }
+    // fallback：扫描 changes/ 非 archive 目录下的 plan.md
+    if (!planFile && existsSync(changesDir)) {
+      const candidates = []
+      for (const entry of readdirSync(changesDir, { withFileTypes: true })) {
+        if (!entry.isDirectory() || entry.name === 'archive') continue
+        const p = join(changesDir, entry.name, 'plan.md')
+        if (existsSync(p)) candidates.push({ name: entry.name, path: p })
       }
-      const plans = findPlans(changesDir).sort()
-      if (plans.length > 0) planFile = plans[plans.length - 1]
+      if (candidates.length === 1) {
+        planFile = candidates[0].path
+      } else if (candidates.length > 1) {
+        console.log('⚠️  检测到多个变更，请指定当前变更：')
+        candidates.forEach((c, i) => console.log(`  ${i + 1}. ${c.name}`))
+        console.log(`\n使用：sillyspec run execute --change <变更名>`)
+        process.exit(1)
+      }
     }
     return buildExecuteSteps(planFile)
   }
@@ -45,7 +50,7 @@ function getStageSteps(stageName, cwd) {
 function ensureStageSteps(progress, stageName, cwd) {
   if (!progress.stages) progress.stages = {}
 
-  const steps = getStageSteps(stageName, cwd)
+  const steps = getStageSteps(stageName, cwd, progress)
   if (!steps) return false
 
   if (!progress.stages[stageName] || !progress.stages[stageName].steps || progress.stages[stageName].steps.length === 0) {
@@ -125,6 +130,13 @@ export function runCommand(args, cwd) {
     outputText = flags[outputIdx + 1]
   }
 
+  // 解析 --change <name>
+  let changeName = null
+  const changeIdx = flags.indexOf('--change')
+  if (changeIdx !== -1 && flags[changeIdx + 1]) {
+    changeName = flags[changeIdx + 1]
+  }
+
   const isAuxiliary = auxiliaryStages.includes(stageName)
 
   const pm = new ProgressManager()
@@ -137,6 +149,15 @@ export function runCommand(args, cwd) {
       process.exit(1)
     }
     progress = pm.init(cwd)
+  }
+
+  // --change 设置当前变更名
+  if (changeName) {
+    progress.currentChange = changeName
+    progress.lastActive = new Date().toLocaleString('zh-CN', { hour12: false })
+    pm._write(cwd, progress)
+    console.log(`✅ 当前变更设置为：${changeName}`)
+    return
   }
 
   // --reset
@@ -191,7 +212,7 @@ function runStage(pm, progress, stageName, cwd) {
   }
 
   const stageDef = stageRegistry[stageName]
-  const defSteps = getStageSteps(stageName, cwd)
+  const defSteps = getStageSteps(stageName, cwd, progress)
   if (defSteps && defSteps[currentIdx]) {
     outputStep(stageName, currentIdx, defSteps, cwd)
   }
@@ -311,7 +332,7 @@ function completeStep(pm, progress, stageName, cwd, outputText) {
     appendFileSync(inputsPath, entry)
   }
 
-  const defSteps = getStageSteps(stageName, cwd)
+  const defSteps = getStageSteps(stageName, cwd, progress)
   console.log(`✅ Step ${currentIdx + 1}/${steps.length} 完成：${steps[currentIdx].name}\n`)
   outputStep(stageName, nextPendingIdx, defSteps, cwd)
 }
@@ -331,7 +352,7 @@ function skipStep(pm, progress, stageName, cwd) {
     process.exit(1)
   }
 
-  const defSteps = getStageSteps(stageName, cwd)
+  const defSteps = getStageSteps(stageName, cwd, progress)
   const stepDef = defSteps ? defSteps[currentIdx] : null
   if (stepDef && !stepDef.optional) {
     console.error(`❌ 步骤 "${steps[currentIdx].name}" 不可跳过`)
@@ -380,7 +401,7 @@ function showStatus(progress, stageName) {
 }
 
 function resetStage(pm, progress, stageName, cwd) {
-  const defSteps = getStageSteps(stageName, cwd)
+  const defSteps = getStageSteps(stageName, cwd, progress)
   progress.stages[stageName] = {
     status: 'in-progress',
     startedAt: new Date().toLocaleString('zh-CN',{hour12:false}),

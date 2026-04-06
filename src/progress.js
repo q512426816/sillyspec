@@ -39,7 +39,7 @@ function emptyStage() {
 function makeInitialProgress(project) {
   const stages = {};
   for (const s of VALID_STAGES) stages[s] = emptyStage();
-  return { _version: CURRENT_VERSION, project: project || '', currentStage: '', stages, lastActive: null };
+  return { _version: CURRENT_VERSION, project: project || '', currentStage: '', currentChange: null, stages, lastActive: null };
 }
 
 // ── ProgressManager ──
