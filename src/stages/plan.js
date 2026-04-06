@@ -107,7 +107,7 @@ Wave 3（依赖 Wave 2）：Task 4`,
       prompt: `保存计划文件，更新进度。
 
 ### 操作
-1. 保存到 \`.sillyspec/plans/YYYY-MM-DD-<change-name>.md\`
+1. 保存到 \`.sillyspec/changes/<变更名>/plan.md\`
 
 ### 输出
 计划文件路径 + 下一步命令`,

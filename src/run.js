@@ -14,11 +14,24 @@ import { buildExecuteSteps } from './stages/execute.js'
  */
 function getStageSteps(stageName, cwd) {
   if (stageName === 'execute') {
-    const plansDir = join(cwd, '.sillyspec', 'plans')
+    const changesDir = join(cwd, '.sillyspec', 'changes')
     let planFile = null
-    if (existsSync(plansDir)) {
-      const files = readdirSync(plansDir).filter(f => f.endsWith('.md')).sort()
-      if (files.length > 0) planFile = join(plansDir, files[files.length - 1])
+    if (existsSync(changesDir)) {
+      // 递归查找 changes/ 下所有 plan.md，取最新的
+      function findPlans(dir) {
+        const results = []
+        for (const entry of readdirSync(dir, { withFileTypes: true })) {
+          const full = join(dir, entry.name)
+          if (entry.isDirectory() && entry.name !== 'archive') {
+            results.push(...findPlans(full))
+          } else if (entry.name === 'plan.md') {
+            results.push(full)
+          }
+        }
+        return results
+      }
+      const plans = findPlans(changesDir).sort()
+      if (plans.length > 0) planFile = plans[plans.length - 1]
     }
     return buildExecuteSteps(planFile)
   }
