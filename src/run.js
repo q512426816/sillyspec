@@ -12,7 +12,7 @@ import { buildExecuteSteps } from './stages/execute.js'
 /**
  * 获取阶段的步骤定义（execute 需要动态构建）
  */
-function getStageSteps(stageName, cwd, progress) {
+async function getStageSteps(stageName, cwd, progress) {
   if (stageName === 'execute') {
     const changesDir = join(cwd, '.sillyspec', 'changes')
     let planFile = null
@@ -32,10 +32,19 @@ function getStageSteps(stageName, cwd, progress) {
       if (candidates.length === 1) {
         planFile = candidates[0].path
       } else if (candidates.length > 1) {
-        console.log('⚠️  检测到多个变更，默认使用最新的：')
-        candidates.forEach((c, i) => console.log(`  ${i + 1}. ${c.name}${i === candidates.length - 1 ? ' ← 使用此变更' : ''}`))
-        console.log(`\n切换变更：sillyspec run execute --change <变更名>`)
-        planFile = candidates[candidates.length - 1].path
+        console.log('⚠️  检测到多个变更，请选择：')
+        candidates.forEach((c, i) => console.log(`  ${i + 1}. ${c.name}`))
+        const { default: createInterface } = await import('readline')
+        const rl = createInterface({ input: process.stdin, output: process.stdout })
+        const answer = await new Promise(resolve => {
+          rl.question(`\n请输入编号（默认 1）：`, input => {
+            rl.close()
+            const num = parseInt(input) || 1
+            resolve(num >= 1 && num <= candidates.length ? num - 1 : 0)
+          })
+        })
+        planFile = candidates[answer].path
+        console.log(`✅ 已选择：${candidates[answer].name}\n`)
       }
     }
     return buildExecuteSteps(planFile)
