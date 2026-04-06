@@ -38,7 +38,7 @@ function ensureStageSteps(progress, stageName, cwd) {
   if (!progress.stages[stageName] || !progress.stages[stageName].steps || progress.stages[stageName].steps.length === 0) {
     progress.stages[stageName] = {
       status: 'in-progress',
-      startedAt: new Date().toISOString(),
+      startedAt: new Date().toLocaleString('zh-CN',{hour12:false}),
       completedAt: null,
       steps: steps.map(s => ({ name: s.name, status: 'pending' }))
     }
@@ -78,9 +78,10 @@ function outputStep(stageName, stepIndex, steps, cwd) {
   console.log(step.prompt)
   console.log(`\n### ⚠️ 铁律`)
   console.log('- 只做本步骤描述的操作，不得自行扩展或跳过')
-  console.log('- 不要回头修改已完成的步骤')
+ console.log('- 不要回头修改已完成的步骤')
   console.log('- 完成后立即执行 --done 命令，不得跳过')
   console.log('- 生成的文件头部必须包含 author（git 用户名）和 created_at（精确到秒）')
+  console.log('- 执行构建/测试前必须先读 local.yaml，优先使用其中配置的命令、路径和环境变量；未配置时才使用默认值')
   console.log(`\n### 完成后执行`)
   console.log(`sillyspec run ${stageName} --done --output "你的摘要"`)
 }
@@ -232,7 +233,7 @@ function completeStep(pm, progress, stageName, cwd, outputText) {
 
   // 标记完成
   steps[currentIdx].status = 'completed'
-  steps[currentIdx].completedAt = new Date().toISOString()
+  steps[currentIdx].completedAt = new Date().toLocaleString('zh-CN',{hour12:false})
   if (outputText) {
     const MAX_OUTPUT = 200
     if (outputText.length > MAX_OUTPUT) {
@@ -240,7 +241,7 @@ function completeStep(pm, progress, stageName, cwd, outputText) {
       // Save full output to artifacts/
       const artifactsDir = join(cwd, '.sillyspec', '.runtime', 'artifacts')
       mkdirSync(artifactsDir, { recursive: true })
-      const ts = new Date().toISOString().replace(/[:.]/g, '-')
+      const ts = new Date().toLocaleString('zh-CN',{hour12:false}).replace(/[:.]/g, '-')
       writeFileSync(join(artifactsDir, `${stageName}-step${currentIdx + 1}-${ts}.txt`), outputText)
     } else {
       steps[currentIdx].output = outputText
@@ -253,7 +254,7 @@ function completeStep(pm, progress, stageName, cwd, outputText) {
   if (nextPendingIdx === -1) {
     // 全部完成
     stageData.status = 'completed'
-    stageData.completedAt = new Date().toISOString()
+    stageData.completedAt = new Date().toLocaleString('zh-CN',{hour12:false})
 
     const next = getNextStage(stageName)
     if (next) {
@@ -261,17 +262,17 @@ function completeStep(pm, progress, stageName, cwd, outputText) {
       if (!progress.stages[next]) progress.stages[next] = { status: 'pending', steps: [], startedAt: null, completedAt: null }
       if (progress.stages[next].status === 'pending' || !progress.stages[next].status) {
         progress.stages[next].status = 'in-progress'
-        progress.stages[next].startedAt = new Date().toISOString()
+        progress.stages[next].startedAt = new Date().toLocaleString('zh-CN',{hour12:false})
       }
     }
 
-    progress.lastActive = new Date().toISOString()
+    progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
     pm._write(cwd, progress)
 
     // Append to user-inputs.md
     if (outputText) {
       const inputsPath = join(cwd, '.sillyspec', '.runtime', 'user-inputs.md')
-      const entry = `\n## ${new Date().toISOString()} | ${stageName}: ${steps[currentIdx].name}\n- 输出：${outputText}\n`
+      const entry = `\n## ${new Date().toLocaleString('zh-CN',{hour12:false})} | ${stageName}: ${steps[currentIdx].name}\n- 输出：${outputText}\n`
       appendFileSync(inputsPath, entry)
     }
 
@@ -287,13 +288,13 @@ function completeStep(pm, progress, stageName, cwd, outputText) {
     return
   }
 
-  progress.lastActive = new Date().toISOString()
+  progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
   pm._write(cwd, progress)
 
   // Append to user-inputs.md
   if (outputText) {
     const inputsPath = join(cwd, '.sillyspec', '.runtime', 'user-inputs.md')
-    const entry = `\n## ${new Date().toISOString()} | ${stageName}: ${steps[currentIdx].name}\n- 输出：${outputText}\n`
+    const entry = `\n## ${new Date().toLocaleString('zh-CN',{hour12:false})} | ${stageName}: ${steps[currentIdx].name}\n- 输出：${outputText}\n`
     appendFileSync(inputsPath, entry)
   }
 
@@ -325,8 +326,8 @@ function skipStep(pm, progress, stageName, cwd) {
   }
 
   steps[currentIdx].status = 'skipped'
-  steps[currentIdx].skippedAt = new Date().toISOString()
-  progress.lastActive = new Date().toISOString()
+  steps[currentIdx].skippedAt = new Date().toLocaleString('zh-CN',{hour12:false})
+  progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
   pm._write(cwd, progress)
 
   console.log(`⏭️ Step ${currentIdx + 1}/${steps.length} 已跳过：${steps[currentIdx].name}`)
@@ -369,11 +370,11 @@ function resetStage(pm, progress, stageName, cwd) {
   const defSteps = getStageSteps(stageName, cwd)
   progress.stages[stageName] = {
     status: 'in-progress',
-    startedAt: new Date().toISOString(),
+    startedAt: new Date().toLocaleString('zh-CN',{hour12:false}),
     completedAt: null,
     steps: defSteps ? defSteps.map(s => ({ name: s.name, status: 'pending' })) : []
   }
-  progress.lastActive = new Date().toISOString()
+  progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
   pm._write(cwd, progress)
   console.log(`🔄 ${stageName} 阶段已重置`)
 }

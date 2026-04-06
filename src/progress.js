@@ -133,9 +133,9 @@ export class ProgressManager {
     data.currentStage = stage;
     if (stageData.status === 'pending') {
       stageData.status = 'in-progress';
-      stageData.startedAt = new Date().toISOString();
+      stageData.startedAt = new Date().toLocaleString('zh-CN',{hour12:false});
     }
-    data.lastActive = new Date().toISOString();
+    data.lastActive = new Date().toLocaleString('zh-CN',{hour12:false});
 
     this._backup(cwd);
     this._write(cwd, data);
@@ -154,7 +154,7 @@ export class ProgressManager {
     }
 
     stageData.steps.push({ name: stepName, status: 'pending' });
-    data.lastActive = new Date().toISOString();
+    data.lastActive = new Date().toLocaleString('zh-CN',{hour12:false});
 
     this._backup(cwd);
     this._write(cwd, data);
@@ -183,11 +183,11 @@ export class ProgressManager {
     // 检查是否所有步骤都 completed
     if (stageData.steps.length > 0 && stageData.steps.every(s => s.status === 'completed')) {
       stageData.status = 'completed';
-      stageData.completedAt = new Date().toISOString();
+      stageData.completedAt = new Date().toLocaleString('zh-CN',{hour12:false});
       console.log(`✅ 阶段 ${stage} 所有步骤已完成，阶段已标记为 completed`);
     }
 
-    data.lastActive = new Date().toISOString();
+    data.lastActive = new Date().toLocaleString('zh-CN',{hour12:false});
     this._backup(cwd);
     this._write(cwd, data);
     console.log(`✅ 步骤已更新: ${stage}/${stepName} → ${status || step.status}`);
@@ -205,7 +205,7 @@ export class ProgressManager {
     if (!data.stages[stage]) data.stages[stage] = emptyStage();
     const stageData = data.stages[stage];
     stageData.status = 'completed';
-    stageData.completedAt = new Date().toISOString();
+    stageData.completedAt = new Date().toLocaleString('zh-CN',{hour12:false});
 
     // 标记所有未完成步骤为 completed
     for (const step of stageData.steps) {
@@ -228,7 +228,7 @@ export class ProgressManager {
       if (!data.stages[nextStage]) data.stages[nextStage] = emptyStage();
       if (data.stages[nextStage].status === 'pending') {
         data.stages[nextStage].status = 'in-progress';
-        data.stages[nextStage].startedAt = new Date().toISOString();
+        data.stages[nextStage].startedAt = new Date().toLocaleString('zh-CN',{hour12:false});
       }
       console.log(`✅ 阶段 ${stage} 已完成，推进到: ${STAGE_LABELS[nextStage] || nextStage}`);
     } else {
@@ -236,12 +236,12 @@ export class ProgressManager {
       console.log(`✅ 阶段 ${stage} 已完成（已是最后阶段）`);
     }
 
-    data.lastActive = new Date().toISOString();
+    data.lastActive = new Date().toLocaleString('zh-CN',{hour12:false});
 
     // 归档到 history/
     const historyDir = this._path(cwd, 'history');
     mkdirSync(historyDir, { recursive: true });
-    const ts = new Date().toISOString().replace(/[:.]/g, '-');
+    const ts = new Date().toLocaleString('zh-CN',{hour12:false}).replace(/[:.]/g, '-');
     writeFileSync(join(historyDir, `${stage}-${ts}.json`), JSON.stringify({ stage, data: stageData, completedAt: stageData.completedAt }, null, 2) + '\n');
 
     this._backup(cwd);
@@ -336,7 +336,7 @@ export class ProgressManager {
       if (!data) { console.log('❌ 无法读取 progress.json'); return; }
       if (!data.stages[stage]) { console.log(`❌ 未知阶段: ${stage}`); return; }
       data.stages[stage] = emptyStage();
-      data.lastActive = new Date().toISOString();
+      data.lastActive = new Date().toLocaleString('zh-CN',{hour12:false});
       this._write(cwd, data);
       console.log(`✅ 已重置阶段: ${stage}`);
     } else {
