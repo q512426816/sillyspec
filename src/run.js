@@ -32,10 +32,10 @@ function getStageSteps(stageName, cwd, progress) {
       if (candidates.length === 1) {
         planFile = candidates[0].path
       } else if (candidates.length > 1) {
-        console.log('⚠️  检测到多个变更，请指定当前变更：')
-        candidates.forEach((c, i) => console.log(`  ${i + 1}. ${c.name}`))
-        console.log(`\n使用：sillyspec run execute --change <变更名>`)
-        process.exit(1)
+        console.log('⚠️  检测到多个变更，默认使用最新的：')
+        candidates.forEach((c, i) => console.log(`  ${i + 1}. ${c.name}${i === candidates.length - 1 ? ' ← 使用此变更' : ''}`))
+        console.log(`\n切换变更：sillyspec run execute --change <变更名>`)
+        planFile = candidates[candidates.length - 1].path
       }
     }
     return buildExecuteSteps(planFile)
