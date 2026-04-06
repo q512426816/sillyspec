@@ -189,7 +189,7 @@ async function main() {
     }
     case 'run': {
       const { runCommand } = await import('./run.js')
-      runCommand(filteredArgs.slice(1), dir)
+      await runCommand(filteredArgs.slice(1), dir)
       break
     }
     case 'dashboard': {

@@ -34,8 +34,8 @@ async function getStageSteps(stageName, cwd, progress) {
       } else if (candidates.length > 1) {
         console.log('⚠️  检测到多个变更，请选择：')
         candidates.forEach((c, i) => console.log(`  ${i + 1}. ${c.name}`))
-        const { default: createInterface } = await import('readline')
-        const rl = createInterface({ input: process.stdin, output: process.stdout })
+        const readline = await import('readline')
+        const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
         const answer = await new Promise(resolve => {
           rl.question(`\n请输入编号（默认 1）：`, input => {
             rl.close()
@@ -56,10 +56,10 @@ async function getStageSteps(stageName, cwd, progress) {
 /**
  * 确保阶段的 steps 已初始化到 progress.json
  */
-function ensureStageSteps(progress, stageName, cwd) {
+async function ensureStageSteps(progress, stageName, cwd) {
   if (!progress.stages) progress.stages = {}
 
-  const steps = getStageSteps(stageName, cwd, progress)
+  const steps = await getStageSteps(stageName, cwd, progress)
   if (!steps) return false
 
   if (!progress.stages[stageName] || !progress.stages[stageName].steps || progress.stages[stageName].steps.length === 0) {
@@ -116,7 +116,7 @@ function outputStep(stageName, stepIndex, steps, cwd) {
 /**
  * sillyspec run <stage> 主命令
  */
-export function runCommand(args, cwd) {
+export async function runCommand(args, cwd) {
   // 解析参数
   const stageName = args[0]
   const flags = args.slice(1)
@@ -171,11 +171,11 @@ export function runCommand(args, cwd) {
 
   // --reset
   if (isReset) {
-    return resetStage(pm, progress, stageName, cwd)
+    return await resetStage(pm, progress, stageName, cwd)
   }
 
   // 确保步骤已初始化
-  const changed = ensureStageSteps(progress, stageName, cwd)
+  const changed = await ensureStageSteps(progress, stageName, cwd)
   if (changed) {
     pm._write(cwd, progress)
     progress = pm.read(cwd)
@@ -188,19 +188,19 @@ export function runCommand(args, cwd) {
 
   // --skip
   if (isSkip) {
-    return skipStep(pm, progress, stageName, cwd)
+    return await skipStep(pm, progress, stageName, cwd)
   }
 
   // --done
   if (isDone) {
-    return completeStep(pm, progress, stageName, cwd, outputText)
+    return await completeStep(pm, progress, stageName, cwd, outputText)
   }
 
   // 默认：输出当前步骤
-  return runStage(pm, progress, stageName, cwd)
+  return await runStage(pm, progress, stageName, cwd)
 }
 
-function runStage(pm, progress, stageName, cwd) {
+async function runStage(pm, progress, stageName, cwd) {
   const stageData = progress.stages[stageName]
   if (!stageData || !stageData.steps) {
     console.error(`❌ 阶段 ${stageName} 未初始化`)
@@ -221,7 +221,7 @@ function runStage(pm, progress, stageName, cwd) {
   }
 
   const stageDef = stageRegistry[stageName]
-  const defSteps = getStageSteps(stageName, cwd, progress)
+  const defSteps = await getStageSteps(stageName, cwd, progress)
   if (defSteps && defSteps[currentIdx]) {
     outputStep(stageName, currentIdx, defSteps, cwd)
   }
@@ -259,7 +259,7 @@ function validateMetadata(cwd, stageName) {
   }
 }
 
-function completeStep(pm, progress, stageName, cwd, outputText) {
+async function completeStep(pm, progress, stageName, cwd, outputText) {
   const stageData = progress.stages[stageName]
   if (!stageData || !stageData.steps) {
     console.error(`❌ 阶段 ${stageName} 未初始化`)
@@ -341,12 +341,12 @@ function completeStep(pm, progress, stageName, cwd, outputText) {
     appendFileSync(inputsPath, entry)
   }
 
-  const defSteps = getStageSteps(stageName, cwd, progress)
+  const defSteps = await getStageSteps(stageName, cwd, progress)
   console.log(`✅ Step ${currentIdx + 1}/${steps.length} 完成：${steps[currentIdx].name}\n`)
   outputStep(stageName, nextPendingIdx, defSteps, cwd)
 }
 
-function skipStep(pm, progress, stageName, cwd) {
+async function skipStep(pm, progress, stageName, cwd) {
   const stageData = progress.stages[stageName]
   if (!stageData || !stageData.steps) {
     console.error(`❌ 阶段 ${stageName} 未初始化`)
@@ -361,7 +361,7 @@ function skipStep(pm, progress, stageName, cwd) {
     process.exit(1)
   }
 
-  const defSteps = getStageSteps(stageName, cwd, progress)
+  const defSteps = await getStageSteps(stageName, cwd, progress)
   const stepDef = defSteps ? defSteps[currentIdx] : null
   if (stepDef && !stepDef.optional) {
     console.error(`❌ 步骤 "${steps[currentIdx].name}" 不可跳过`)
@@ -409,8 +409,8 @@ function showStatus(progress, stageName) {
   })
 }
 
-function resetStage(pm, progress, stageName, cwd) {
-  const defSteps = getStageSteps(stageName, cwd, progress)
+async function resetStage(pm, progress, stageName, cwd) {
+  const defSteps = await getStageSteps(stageName, cwd, progress)
   progress.stages[stageName] = {
     status: 'in-progress',
     startedAt: new Date().toLocaleString('zh-CN',{hour12:false}),
