@@ -128,7 +128,7 @@ async function main() {
           pm.show(dir);
           break;
         case 'validate':
-          pm.validate(dir);
+          await pm.validate(dir, filteredArgs.includes('--deep'));
           break;
         case 'reset':
           pm.reset(dir, stage);
@@ -166,6 +166,32 @@ async function main() {
           const compStageName = filteredArgs[2];
           if (!compStageName) { console.log('❌ 用法: sillyspec progress complete-stage <stage>'); break; }
           pm.completeStage(dir, compStageName);
+          break;
+        }
+        case 'batch': {
+          if (filteredArgs.includes('--status')) {
+            const bp = pm.readBatchProgress(dir);
+            if (!bp) { console.log('📭 无批量进度数据'); break; }
+            const line = pm._renderBatchProgress(bp);
+            console.log(line || '📭 无批量进度数据');
+            console.log(JSON.stringify(bp, null, 2));
+          } else {
+            let batchData = {};
+            const a = args;
+            for (let i = 0; i < a.length; i++) {
+              if (a[i] === '--total' && a[i + 1]) { batchData.total = parseInt(a[i + 1]); i++; }
+              if (a[i] === '--completed' && a[i + 1]) { batchData.completed = parseInt(a[i + 1]); i++; }
+              if (a[i] === '--failed' && a[i + 1]) { batchData.failed = parseInt(a[i + 1]); i++; }
+              if (a[i] === '--skipped' && a[i + 1]) { batchData.skipped = parseInt(a[i + 1]); i++; }
+            }
+            if (Object.keys(batchData).length === 0) {
+              console.log('用法: sillyspec progress batch --total 100 --completed 73');
+              console.log('     sillyspec progress batch --status');
+              break;
+            }
+            pm.updateBatchProgress(dir, batchData);
+            console.log('✅ 批量进度已更新');
+          }
           break;
         }
         default:

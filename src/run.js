@@ -8,6 +8,7 @@ import { existsSync, readdirSync, mkdirSync, writeFileSync, appendFileSync, read
 import { ProgressManager } from './progress.js'
 import { stageRegistry, getNextStage, auxiliaryStages } from './stages/index.js'
 import { buildExecuteSteps } from './stages/execute.js'
+import { buildPlanSteps } from './stages/plan.js'
 
 /**
  * 获取阶段的步骤定义（execute 需要动态构建）
@@ -48,6 +49,19 @@ async function getStageSteps(stageName, cwd, progress) {
       }
     }
     return buildExecuteSteps(planFile)
+  }
+  if (stageName === 'plan') {
+    const changesDir = join(cwd, '.sillyspec', 'changes')
+    let changeDir = null
+    if (progress.currentChange) {
+      const target = join(changesDir, progress.currentChange)
+      if (existsSync(target)) changeDir = target
+    }
+    if (!changeDir && existsSync(changesDir)) {
+      const entries = readdirSync(changesDir, { withFileTypes: true }).filter(e => e.isDirectory() && e.name !== 'archive')
+      if (entries.length === 1) changeDir = join(changesDir, entries[0].name)
+    }
+    return buildPlanSteps(changeDir)
   }
   const def = stageRegistry[stageName]
   return def ? def.steps : null
@@ -95,12 +109,29 @@ function outputStep(stageName, stepIndex, steps, cwd) {
   const total = steps.length
   const projectName = basename(cwd)
 
+  const personas = {
+    brainstorm: `### 🎯 你的角色：资深架构师
+你是一位有 15 年经验的系统架构师。先理解业务本质，再设计技术方案。决策附理由，方案列 trade-off。不确定就说不确定，不猜。`,
+    plan: `### 📋 你的角色：技术项目经理
+你是一位经验丰富的技术项目经理。任务拆解粒度均匀，依赖关系明确。每个任务有完成标准，Wave 间有依赖说明。条理清晰，不做模糊描述。`,
+    execute: `### 💻 你的角色：高级工程师
+你是一位严谨的高级工程师。先读规范再写代码，严格遵循 CONVENTIONS.md 和 plan.md。**你不是设计师，是执行者——按 plan 搬砖，禁止发散思维。** 发现 plan 不合理就停下来反馈，不要自己改方案。代码有清晰职责划分，边界处理完善。少说多做，遇到规范冲突优先问。`,
+    verify: `### 🔍 你的角色：QA 专家
+你是一位吹毛求疵的 QA 专家。假设所有代码都有 bug，用最坏情况测试。关注边界、异常、并发。有问题直说，用证据说话，不写"看起来没问题"。`,
+    quick: `### 💻 你的角色：全栈老兵
+你是一位实战经验丰富的全栈工程师。不纠结架构和流程，理解需求就直接干。不确定的地方先问清楚再动手，先读后写，改完就收。问题排查思路开阔，前端报错不一定是前端问题——可能是后端数据、浏览器兼容、甚至设备硬件。解决方案实用接地气，用户描述有误敢于直接指出。`
+  }
+
   console.log(`---`)
   console.log(`stage: ${stageName}`)
   console.log(`step: ${stepIndex + 1}/${total}`)
   console.log(`stepName: ${step.name}`)
   console.log(`project: ${projectName}`)
   console.log(`---\n`)
+  if (personas[stageName]) {
+    console.log(personas[stageName])
+    console.log('')
+  }
   console.log(`## Step ${stepIndex + 1}/${total}: ${step.name}\n`)
   console.log(step.prompt)
   console.log(`\n### ⚠️ 铁律`)
@@ -123,9 +154,15 @@ export async function runCommand(args, cwd) {
   const stageName = args[0]
   const flags = args.slice(1)
 
-  if (!stageName || !stageRegistry[stageName]) {
-    console.error(`❌ 未知阶段: ${stageName || '(未指定)'}`)
-    console.error(`可选: ${Object.keys(stageRegistry).join(', ')}`)
+  if (!stageName) {
+    console.error('❌ 请指定阶段，例如: sillyspec run brainstorm')
+    console.error(`可选: ${Object.keys(stageRegistry).join(', ')}, auto`)
+    process.exit(1)
+  }
+
+  if (!stageRegistry[stageName] && stageName !== 'auto') {
+    console.error(`❌ 未知阶段: ${stageName}`)
+    console.error(`可选: ${Object.keys(stageRegistry).join(', ')}, auto`)
     process.exit(1)
   }
 
@@ -167,6 +204,11 @@ export async function runCommand(args, cwd) {
       process.exit(1)
     }
     progress = pm.init(cwd)
+  }
+
+  // -- auto 模式：自动推进所有流程阶段
+  if (stageName === 'auto') {
+    return await runAutoMode(pm, progress, cwd, flags)
   }
 
   // --change 设置当前变更名
@@ -309,6 +351,31 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
   }
 
   // 检查是否还有下一步
+  // plan 阶段 Step 4（展开任务）完成后，动态追加 task 蓝图步骤
+  if (stageName === 'plan' && currentIdx === 3 && progress.currentChange) {
+    const planFile = join(cwd, '.sillyspec', 'changes', progress.currentChange, 'plan.md')
+    if (existsSync(planFile)) {
+      const planContent = readFileSync(planFile, 'utf8')
+      const { buildPlanSteps } = await import('./stages/plan.js')
+      const fullSteps = buildPlanSteps(join(cwd, '.sillyspec', 'changes', progress.currentChange), planContent)
+      // fullSteps[0..4] = fixedPrefix, fullSteps[-2..-1] = fixedSuffix
+      // 中间的是 task 蓝图步骤，插入到当前 steps 中
+      // 当前 steps 已有 5 个 fixedPrefix，找到需要插入的 task 步骤
+      const taskSteps = fullSteps.slice(5, -2) // 排除 5 个前缀和 2 个后缀
+      if (taskSteps.length > 0) {
+        // 插入审查一致性 + 保存步骤（后缀）
+        const suffixSteps = fullSteps.slice(-2)
+        for (const ts of taskSteps) {
+          steps.push({ name: ts.name, status: 'pending', prompt: ts.prompt, outputHint: ts.outputHint, optional: false })
+        }
+        for (const ss of suffixSteps) {
+          steps.push({ name: ss.name, status: 'pending', prompt: ss.prompt, outputHint: ss.outputHint, optional: false })
+        }
+        // 重新查找下一步
+      }
+    }
+  }
+
   const nextPendingIdx = steps.findIndex(s => s.status === 'pending')
 
   if (nextPendingIdx === -1) {
@@ -328,6 +395,15 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
 
     progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
     pm._write(cwd, progress)
+
+    // deriveState 轻量校验
+    try {
+      const { deriveState } = await import('./derive.js')
+      const result = deriveState(cwd, { mode: 'light', fix: true, pm, progress })
+      if (result.fixed > 0) {
+        console.log(`⚠️ 状态修复：${result.fixed} 个步骤已从 artifacts 恢复`)
+      }
+    } catch {}
 
     // Append to user-inputs.md
     if (outputText) {
@@ -419,6 +495,23 @@ function showStatus(progress, stageName) {
 
   const firstPending = steps.findIndex(s => s.status === 'pending')
 
+  // 批量进度
+  if (progress.batchProgress) {
+    const bp = progress.batchProgress
+    const total = bp.total || 0
+    const completed = bp.completed || 0
+    const failed = bp.failed || 0
+    const skipped = bp.skipped || 0
+    const barLen = 20
+    const filled = Math.round((completed / Math.max(total, 1)) * barLen)
+    const bar = '█'.repeat(filled) + '░'.repeat(barLen - filled)
+    const parts = []
+    if (failed > 0) parts.push(`${failed} 失败`)
+    if (skipped > 0) parts.push(`${skipped} 跳过`)
+    const suffix = parts.length ? ` (${parts.join(', ')})` : ''
+    console.log(`\n📊 批量进度: ${bar} ${completed}/${total}${suffix}\n`)
+  }
+
   steps.forEach((step, i) => {
     const icon = step.status === 'completed' ? '✅' : step.status === 'skipped' ? '⏭️' : '⬜'
     const isCurrent = step.status === 'pending' && i === firstPending
@@ -437,4 +530,111 @@ async function resetStage(pm, progress, stageName, cwd) {
   progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
   pm._write(cwd, progress)
   console.log(`🔄 ${stageName} 阶段已重置`)
+}
+
+/**
+ * auto 模式：自动推进 brainstorm → plan → execute → verify
+ */
+async function runAutoMode(pm, progress, cwd, flags) {
+  const flowStages = ['brainstorm', 'plan', 'execute', 'verify']
+  const isDone = flags.includes('--done')
+  let outputText = null
+  const outputIdx = flags.indexOf('--output')
+  if (outputIdx !== -1 && flags[outputIdx + 1]) outputText = flags[outputIdx + 1]
+  let inputText = null
+  const inputIdx = flags.indexOf('--input')
+  if (inputIdx !== -1 && flags[inputIdx + 1]) inputText = flags[inputIdx + 1]
+
+  if (!isDone) {
+    // 首次启动：显示当前状态和下一步
+    const currentStage = progress.currentStage || flowStages[0]
+    const stageIdx = flowStages.indexOf(currentStage)
+    if (stageIdx === -1) {
+      console.error(`❌ 当前阶段 ${currentStage} 不在 auto 流程中`)
+      console.error(`auto 流程: ${flowStages.join(' → ')}`)
+      process.exit(1)
+    }
+    // 显示进度概览
+    console.log('════════════════════════════════════════')
+    console.log('  🤖 SillySpec Auto Mode')
+    console.log('════════════════════════════════════════')
+    console.log(`  流程: ${flowStages.join(' → ')}`)
+    console.log(`  当前: ${currentStage}`)
+    for (let i = 0; i < flowStages.length; i++) {
+      const s = flowStages[i]
+      const stageData = progress.stages[s]
+      const done = stageData?.status === 'completed'
+      const active = s === currentStage
+      const total = stageData?.steps?.length || '?'
+      const completed = stageData?.steps?.filter(st => st.status === 'completed').length || 0
+      const icon = done ? '✅' : active ? '🔵' : '⬜'
+      console.log(`  ${icon} ${s} (${completed}/${total})`)
+    }
+    console.log('')
+    // 输出当前步骤 prompt
+    const steps = await getStageSteps(currentStage, cwd, progress)
+    if (!steps) {
+      console.error(`❌ 无法获取 ${currentStage} 步骤`)
+      process.exit(1)
+    }
+    const pendingIdx = steps.findIndex(s => s.status === 'pending')
+    if (pendingIdx === -1) {
+      // 阶段已完成，提示进入下一阶段
+      const next = getNextStage(currentStage)
+      if (next) {
+        console.log(`✅ ${currentStage} 已完成，下一步：sillyspec run auto --done --output "${currentStage} 完成"`)
+      } else {
+        console.log('🎉 全部流程已完成！')
+      }
+      return
+    }
+    outputStepPrompt(steps, pendingIdx, currentStage, cwd, progress)
+    return
+  }
+
+  // --done：完成当前步骤，如果阶段完成则自动推进
+  if (!outputText) {
+    console.error('❌ auto --done 需要 --output 参数')
+    process.exit(1)
+  }
+
+  const currentStage = progress.currentStage
+  const stageIdx = flowStages.indexOf(currentStage)
+  if (stageIdx === -1) {
+    console.error(`❌ 当前阶段 ${currentStage} 不在 auto 流程中`)
+    process.exit(1)
+  }
+
+  // 完成当前步骤
+  const completed = await completeStep(pm, progress, currentStage, cwd, outputText, inputText)
+  if (!completed) return
+
+  // 检查阶段是否完成
+  const nextPendingIdx = progress.stages[currentStage]?.steps?.findIndex(s => s.status === 'pending')
+  if (nextPendingIdx === -1) {
+    // 阶段已完成
+    const next = getNextStage(currentStage)
+    if (next) {
+      console.log(`\n✅ ${currentStage} 阶段完成，自动进入 ${next}`)
+      // 输出下一阶段第一步 prompt
+      const nextSteps = await getStageSteps(next, cwd, progress)
+      if (nextSteps) {
+        const firstPending = nextSteps.findIndex(s => s.status === 'pending')
+        if (firstPending !== -1) {
+          outputStepPrompt(nextSteps, firstPending, next, cwd, progress)
+        }
+      }
+    } else {
+      console.log('\n🎉 全部流程已完成！建议运行 /sillyspec:commit 提交改动')
+    }
+  } else {
+    // 阶段内下一步
+    const steps = await getStageSteps(currentStage, cwd, progress)
+    if (steps) {
+      const firstPending = steps.findIndex(s => s.status === 'pending')
+      if (firstPending !== -1) {
+        outputStepPrompt(steps, firstPending, currentStage, cwd, progress)
+      }
+    }
+  }
 }

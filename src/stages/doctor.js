@@ -108,7 +108,16 @@ done
 
 ### 注意
 - 不要编造路径或结果，严格基于命令输出
-- 如果 .sillyspec/ 不存在，直接输出 ❌ 并跳过后续检查`,
+- 如果 .sillyspec/ 不存在，直接输出 ❌ 并跳过后续检查
+- 额外运行 deriveState 全量校验：
+  \
+\
+\
+  node -e "import('./src/derive.js').then(m => { const pm = require('./progress.js'); const r = m.deriveState('.', {mode:'full',fix:false,progress:pm.read('.')}); console.log(JSON.stringify(r, null, 2)); })" 2>/dev/null || echo "deriveState 不可用"
+  \
+\
+\
+  将 deriveState 的 issues 列表纳入 SillySpec 内部检查结果中`,
       outputHint: 'SillySpec 内部检查结果',
       optional: false
     },

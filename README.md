@@ -8,6 +8,8 @@
 > Claude Code / Cursor / Codex / OpenCode / OpenClaw 都能用。
 >
 > 📖 **在线文档**：https://sillyspec.ppdmq.top/
+>
+> 💡 **核心理念：Code is Cheap, Context is Expensive.** 规范（Spec）才是核心资产，代码只是规范的衍生物。
 
 ## 安装
 

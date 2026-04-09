@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from 'fs'
+import path from 'path'
 
 export const definition = {
   name: 'execute',
@@ -167,15 +168,28 @@ function parseWavesFromPlan(planContent) {
 /**
  * 为 Wave 生成 prompt
  */
-function buildWavePrompt(wave, waveIndex) {
-  const taskList = wave.tasks.map(t => {
+function buildWavePrompt(wave, waveIndex, changeDir) {
+  const taskList = wave.tasks.map((t, ti) => {
+    const taskNum = String(t.index || (ti + 1)).padStart(2, '0')
+    const taskFile = changeDir ? `${changeDir}/tasks/task-${taskNum}.md` : ''
     let s = `- [ ] ${t.name}`
     if (t.file) s += ` (${t.file})`
+    if (taskFile) s += `
+  📋 **执行前必须读取任务蓝图：\`cat ${taskFile}\`**`
     if (t.reference) s += `\n  参考: ${t.reference}`
     if (t.steps) s += `\n  步骤: ${t.steps}`
     return s
   }).join('\n')
   return `## Wave ${waveIndex}: 执行以下任务
+
+### Wave 开始前
+1. 读取 design.md 的「编码铁律」章节（如果存在），严格遵守
+2. 确认本 Wave 的输入/输出契约（前置 Wave 产出了什么，本 Wave 需要消费什么）
+3. 检查前置 Wave 的产出是否完整（文件是否存在、测试是否通过）
+4. **上下文分层加载**：
+   - 🔥 热上下文：design.md 编码铁律 + 当前 Wave 任务（必须加载）
+   - 🌡️ 温上下文：CONVENTIONS.md + ARCHITECTURE.md（需要时加载）
+   - ❄️ 冷上下文：其他变更的 design.md、历史 plan.md（不要主动加载，除非明确需要）
 
 ### 本 Wave 任务
 ${taskList}
@@ -183,6 +197,8 @@ ${taskList}
 ### 执行要求
 1. 按任务顺序执行，同一 Wave 内任务可并行
 2. 铁律：先读后写、grep 确认方法存在、不编造、TDD
+3. **禁止发散思维**：你是代码搬运工，严格按 plan 执行，不要自行发挥"更好的方案"。如果发现 plan 不合理，**停下来反馈**，不要自己改方案。问题归因：实现困难 → plan 没做好；plan 做不好 → design 有缺陷。链路可追溯，不要在中途偷偷修设计。
+4. **Reverse Sync**：发现 Bug 或实现与 design.md 不一致时，先检查是代码错了还是 design.md 有遗漏，有遗漏则先修 design.md 再修代码。design.md 是唯一 truth source。
 3. **不要频繁编译！** 编译很慢，只在以下情况运行：
    - 写了大量代码后需要验证语法正确性
    - 最后一个 Wave 完成后做一次全量编译验证
@@ -204,10 +220,13 @@ ${taskList}
  */
 export function buildExecuteSteps(planFilePath = null) {
   let waves
+  let changeDir = null
 
   if (planFilePath && existsSync(planFilePath)) {
     const planContent = readFileSync(planFilePath, 'utf8')
     waves = parseWavesFromPlan(planContent)
+    // 从 planFilePath 推导 changeDir: .sillyspec/changes/<name>/plan.md
+    changeDir = path.dirname(planFilePath)
   }
 
   // 如果没解析出 Wave，生成默认 3 个
@@ -220,7 +239,7 @@ export function buildExecuteSteps(planFilePath = null) {
 
   const waveSteps = waves.map((wave, i) => ({
     name: `Wave ${i + 1} 执行`,
-    prompt: buildWavePrompt(wave, i + 1),
+    prompt: buildWavePrompt(wave, i + 1, changeDir),
     outputHint: `Wave ${i + 1} 执行结果`,
     optional: false
   }))

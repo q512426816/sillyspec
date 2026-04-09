@@ -204,28 +204,6 @@ async function doInstall(projectDir, tools, subprojects = []) {
   } else {
     console.log(chalk.yellow('    ⚠ 未找到 skills 目录，跳过 Claude Code skills 同步'));
   }
-
-  // 工作区配置
-  const configPath = join(projectDir, '.sillyspec', 'config.yaml');
-  if (!existsSync(configPath)) {
-    let projectsYaml = '';
-    if (subprojects.length > 0) {
-      projectsYaml = subprojects.map(p =>
-        `  ${p.name}:\n    path: ${p.path}\n    role: ${p.role || p.name}${p.repo ? `\n    repo: ${p.repo}` : ''}`
-      ).join('\n');
-    }
-
-    writeFileSync(configPath,
-`# SillySpec 工作区配置
-# 修改此文件后运行 /sillyspec:workspace 更新
-
-projects:
-${projectsYaml || '  # 运行 /sillyspec:workspace add 添加子项目'}
-
-shared: []
-`
-    );
-  }
 }
 
 // ── 安装完成总结 ──

@@ -5,14 +5,17 @@ export const definition = {
   auxiliary: true,
   steps: [
     {
-      name: '解析参数和上下文',
+      name: '理解任务',
       prompt: `解析任务参数，加载项目上下文。
 
 ### 操作
 1. 检查是否携带 \`--change <变更名>\`，确定记录方式
 2. 理解任务：模糊则问一个问题确认
-3. 加载上下文：\`cat .sillyspec/codebase/{CONVENTIONS,ARCHITECTURE}.md 2>/dev/null\`
-4. 加载扫描文档（如存在）：\`cat docs/<project>/scan/{CONVENTIONS,ARCHITECTURE}.md 2>/dev/null\`
+3. 加载项目信息：\`cat .sillyspec/projects/*.yaml 2>/dev/null\`（了解项目结构和技术栈）
+4. 加载上下文：\`cat .sillyspec/docs/<project>/scan/CONVENTIONS.md 2>/dev/null\`
+5. 加载本地配置：\`cat .sillyspec/local.yaml 2>/dev/null\`（构建命令、测试命令、环境变量等）
+6. 如有 \`--change\`，加载设计文档：\`cat .sillyspec/changes/<变更名>/design.md 2>/dev/null\`（理解设计意图）
+7. 如有需要，查询知识库：\`cat .sillyspec/knowledge/INDEX.md 2>/dev/null\`
 
 ### 输出
 任务理解 + 上下文摘要`,
@@ -20,55 +23,23 @@ export const definition = {
       optional: false
     },
     {
-      name: '知识库和文档查询',
-      prompt: `查询知识库和外部文档。
-
-### 操作
-1. \`cat .sillyspec/knowledge/INDEX.md 2>/dev/null\` — 根据关键词匹配
-2. 命中时 \`cat\` 对应知识文件
-3. 如果涉及不熟悉的库/框架/API：通过 Context7 查询官方文档
-4. 将查询结果纳入后续开发考量
-
-### 输出
-相关知识条目和文档查询结果`,
-      outputHint: '知识查询结果',
-      optional: true
-    },
-    {
-      name: 'TDD 实现',
-      prompt: `按 TDD 流程实现任务。
+      name: '实现并验证',
+      prompt: `实现任务。
 
 ### 操作
 1. 先读后写：调用已有方法前 \`cat\` 源文件确认签名，\`grep\` 确认方法存在
-2. 🔴 RED → 先写测试，运行确认失败
-3. 🟢 GREEN → 写最少代码让测试通过
-4. 🔵 REFACTOR → 清理，保持测试通过
-5. ✅ STAGE → git add 暂存（测试文件必须包含）
-
-### 纯配置/数据/文档可跳过 TDD，其他一律走 TDD。
+2. 写代码完成任务
+3. 如涉及逻辑变更，建议写单元测试验证（不强制，纯配置/文档/小改动可跳过）
+4. **不要编译！** 除非用户明确要求或改动量很大
 
 ### 输出
 实现摘要 + 修改文件列表
 
 ### 铁律
-- ❌ 不写测试（底线是仍然要写测试）
-- ❌ 修改无关文件
-- ❌ 跳过测试因为"任务太简单"`,
+- 不要修改无关文件
+- 不要编造不存在的 CLI 子命令
+- **Reverse Sync**：如果发现 Bug 是 design.md 遗漏导致的，先修 design.md 再修代码`,
       outputHint: '实现摘要',
-      optional: false
-    },
-    {
-      name: '运行测试',
-      prompt: `运行测试确认通过。
-
-### 操作
-1. 检查 local.yaml 构建命令配置：\`cat .sillyspec/local.yaml 2>/dev/null\`
-2. 有则使用 local.yaml 中的命令，否则使用默认命令
-3. 默认命令：\`mvn test -pl <模块> -Dtest=<测试类>\` 或 \`./gradlew test --tests <测试类>\` 或 \`pnpm test\` 或 \`npm test\` 或 \`pytest <测试文件>\`
-
-### 输出
-测试通过/失败结果`,
-      outputHint: '测试结果',
       optional: false
     },
     {

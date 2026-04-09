@@ -289,6 +289,15 @@ export class ProgressManager {
       }
     }
 
+    // 批量进度
+    if (data.batchProgress) {
+      const batchLine = this._renderBatchProgress(data.batchProgress);
+      if (batchLine) {
+        console.log('');
+        console.log(`  ${batchLine}`);
+      }
+    }
+
     console.log('');
   }
 
@@ -296,7 +305,7 @@ export class ProgressManager {
     this.show(cwd);
   }
 
-  validate(cwd) {
+  async validate(cwd, deep = false) {
     const data = this.read(cwd);
     if (!data) { console.log('❌ 无法读取 progress.json'); return false; }
 
@@ -328,6 +337,26 @@ export class ProgressManager {
       this._write(cwd, fixed);
       console.log('✅ 已修复并备份');
     }
+
+    if (deep) {
+      try {
+        const { deriveState } = await import('./derive.js');
+        const result = deriveState(cwd, { mode: 'full', fix: true, pm: this, progress: this.read(cwd) });
+        if (result.issues.length > 0) {
+          console.log(`\n📋 deriveState 深度校验（${result.issues.length} 项）：`);
+          for (const issue of result.issues) {
+            const icon = issue.severity === 'issue' ? '🔴' : issue.severity === 'warning' ? '🟡' : '⚪';
+            console.log(`  ${icon} ${issue.stage} step ${issue.step}: ${issue.message}`);
+          }
+          if (result.fixed > 0) console.log(`  🔧 已自动修复 ${result.fixed} 项`);
+        } else {
+          console.log('✅ deriveState 深度校验通过，无不一致');
+        }
+      } catch (e) {
+        console.log(`⚠️ deriveState 校验失败: ${e.message}`);
+      }
+    }
+
     return true;
   }
 
@@ -412,6 +441,44 @@ export class ProgressManager {
     const h = Math.floor(m / 60);
     if (h < 24) return `${h} 小时前`;
     return `${Math.floor(h / 24)} 天前`;
+  }
+
+  // ── 批量进度 ──
+
+  updateBatchProgress(cwd, batchData) {
+    const data = this._readOrInit(cwd);
+    if (!data) return;
+
+    if (!data.batchProgress) {
+      data.batchProgress = { total: 0, completed: 0, failed: 0, skipped: 0 };
+    }
+    if (batchData.total !== undefined) data.batchProgress.total = batchData.total;
+    if (batchData.completed !== undefined) data.batchProgress.completed = batchData.completed;
+    if (batchData.failed !== undefined) data.batchProgress.failed = batchData.failed;
+    if (batchData.skipped !== undefined) data.batchProgress.skipped = batchData.skipped;
+
+    data.lastActive = new Date().toLocaleString('zh-CN', { hour12: false });
+    this._backup(cwd);
+    this._write(cwd, data);
+  }
+
+  readBatchProgress(cwd) {
+    const data = this.read(cwd);
+    return data?.batchProgress || null;
+  }
+
+  _renderBatchProgress(batchProgress) {
+    if (!batchProgress || !batchProgress.total) return null;
+    const { total, completed = 0, failed = 0, skipped = 0 } = batchProgress;
+    const done = Math.min(completed + failed + skipped, total);
+    const barLen = 20;
+    const filled = Math.round((completed / total) * barLen);
+    const bar = '█'.repeat(filled) + '░'.repeat(barLen - filled);
+    const parts = [];
+    if (failed > 0) parts.push(`${failed} 失败`);
+    if (skipped > 0) parts.push(`${skipped} 跳过`);
+    const suffix = parts.length ? ` (${parts.join(', ')})` : '';
+    return `📊 批量进度: ${bar} ${completed}/${total}${suffix}`;
   }
 
   _ensureGitignore(cwd) {
