@@ -9,7 +9,7 @@
 >
 > 📖 **在线文档**：https://sillyspec.ppdmq.top/
 >
-> 💡 **核心理念：Code is Cheap, Context is Expensive.** 规范（Spec）才是核心资产，代码只是规范的衍生物。
+> 💡 **核心理念：Code is Cheap, Context is Expensive.** 文档是核心资产，代码是文档的产物。没有文档就没有代码——文档是 AI 的记忆，是团队协作的基础，是后续维护的唯一依据。
 
 ## 安装
 

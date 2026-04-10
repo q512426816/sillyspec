@@ -172,18 +172,27 @@ function buildWavePrompt(wave, waveIndex, changeDir) {
   const taskList = wave.tasks.map((t, ti) => {
     const taskNum = String(t.index || (ti + 1)).padStart(2, '0')
     const taskFile = changeDir ? `${changeDir}/tasks/task-${taskNum}.md` : ''
+    const taskFileExists = taskFile && existsSync(taskFile)
     let s = `- [ ] ${t.name}`
     if (t.file) s += ` (${t.file})`
-    if (taskFile) s += `
-  📋 **执行前必须读取任务蓝图：\`cat ${taskFile}\`**`
+    if (taskFileExists) {
+      const taskContent = readFileSync(taskFile, 'utf8').trim()
+      s += `
+\n### 📋 任务蓝图（task-${taskNum}.md）\n${taskContent}`
+    }
     if (t.reference) s += `\n  参考: ${t.reference}`
     if (t.steps) s += `\n  步骤: ${t.steps}`
     return s
   }).join('\n')
+  const hasTaskBlueprints = changeDir && existsSync(join(changeDir, 'tasks'))
+  const taskBlueprintRule = hasTaskBlueprints
+    ? '每个任务有独立的 task-N.md 蓝图——只做蓝图里写的事，不要实现蓝图之外的功能。如果蓝图有问题，**停下来反馈**，不要自己改。问题归因：实现困难 → task 蓝图没写好 → plan 没做好 → design 有缺陷。'
+    : '如果发现 plan 不合理，**停下来反馈**，不要自己改方案。问题归因：实现困难 → plan 没做好 → design 有缺陷。'
   return `## Wave ${waveIndex}: 执行以下任务
 
 ### Wave 开始前
 1. 读取 design.md 的「编码铁律」章节（如果存在），严格遵守
+2. 读取 plan.md 了解全局任务划分和依赖关系
 2. 确认本 Wave 的输入/输出契约（前置 Wave 产出了什么，本 Wave 需要消费什么）
 3. 检查前置 Wave 的产出是否完整（文件是否存在、测试是否通过）
 4. **上下文分层加载**：
@@ -197,15 +206,16 @@ ${taskList}
 ### 执行要求
 1. 按任务顺序执行，同一 Wave 内任务可并行
 2. 铁律：先读后写、grep 确认方法存在、不编造、TDD
-3. **禁止发散思维**：你是代码搬运工，严格按 plan 执行，不要自行发挥"更好的方案"。如果发现 plan 不合理，**停下来反馈**，不要自己改方案。问题归因：实现困难 → plan 没做好；plan 做不好 → design 有缺陷。链路可追溯，不要在中途偷偷修设计。
-4. **Reverse Sync**：发现 Bug 或实现与 design.md 不一致时，先检查是代码错了还是 design.md 有遗漏，有遗漏则先修 design.md 再修代码。design.md 是唯一 truth source。
+3. **禁止发散思维**：你是代码搬运工，严格按任务描述执行，不增不减不改。${taskBlueprintRule}
+4. **Reverse Sync**：发现 Bug 或实现与 design.md/task-N.md 不一致时，先检查是代码错了还是文档有遗漏，有遗漏则先修文档再修代码。
 3. **不要频繁编译！** 编译很慢，只在以下情况运行：
    - 写了大量代码后需要验证语法正确性
    - 最后一个 Wave 完成后做一次全量编译验证
    - 用户明确要求编译时
 4. 单个任务完成后只跑**对应模块的单元测试**（TDD 绿灯确认），不要跑全量编译
 5. 每个任务完成后：
-   - 勾选 tasks.md 中对应 checkbox
+   - 勾选 task-N.md 中的验收标准 checkbox
+   - 勾选 plan.md / tasks.md 中对应任务的 checkbox
    - 记录改动文件和测试结果
 6. 遇到 BLOCKED → 记录原因，选择：重试/跳过/停止
 

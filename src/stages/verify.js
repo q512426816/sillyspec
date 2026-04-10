@@ -22,7 +22,10 @@ export const definition = {
 
 ### 操作
 1. 读取 proposal.md、design.md、tasks.md、requirements.md
-2. 标注每个文件的存在/不存在状态
+2. 加载项目信息：\`cat .sillyspec/projects/*.yaml 2>/dev/null\`
+3. 加载本地配置：\`cat .sillyspec/local.yaml 2>/dev/null\`（构建命令、测试命令、lint 命令等）
+4. 加载代码规范：\`cat .sillyspec/docs/<project>/scan/CONVENTIONS.md 2>/dev/null\`
+5. 标注每个文件的存在/不存在状态
 
 ### 输出
 文件加载确认清单`,
@@ -67,6 +70,23 @@ export const definition = {
 ### 输出
 一致性检查结果`,
       outputHint: '设计一致性报告',
+      optional: false
+    },
+    {
+      name: '任务蓝图验收',
+      prompt: `检查每个 task-N.md 的验收标准是否全部满足。
+
+### 操作
+1. 检查变更目录下 tasks/ 是否存在
+2. 如果存在：
+   - 逐个读取 tasks/task-NN.md
+   - 检查每个文件的「验收标准」checkbox 是否全部勾选
+   - 未勾选的项列为不通过
+3. 如果不存在：跳过此步骤
+
+### 输出
+验收结果：通过/不通过 + 未通过的项`,
+      outputHint: '验收结果',
       optional: false
     },
     {

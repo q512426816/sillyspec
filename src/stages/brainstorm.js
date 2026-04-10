@@ -28,9 +28,11 @@ export const definition = {
 
 ### 操作
 1. 读取 CODEBASE-OVERVIEW.md + 共享规范 + 子项目上下文
-2. 询问本次需求属于哪个子项目
-3. 棕地项目：读取 docs/<project>/scan/ 下的 STRUCTURE.md、CONVENTIONS.md、ARCHITECTURE.md
-4. 查看进行中的变更：\`ls .sillyspec/changes/ | grep -v archive\`
+2. 加载项目信息：\`cat .sillyspec/projects/*.yaml 2>/dev/null\`
+3. 加载本地配置：\`cat .sillyspec/local.yaml 2>/dev/null\`
+4. 询问本次需求属于哪个子项目
+5. 棕地项目：读取 docs/<project>/scan/ 下的 STRUCTURE.md、CONVENTIONS.md、ARCHITECTURE.md
+6. 查看进行中的变更：\`ls .sillyspec/changes/ | grep -v archive\`
 
 ### 输出
 项目现状理解摘要（3-5 句话，关键约定和架构决策）
