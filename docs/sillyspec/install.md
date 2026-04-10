@@ -11,7 +11,7 @@
 npm i -g sillyspec@latest
 ```
 
-> 💡 **强烈推荐全局安装。** `npx` 方式虽然能跑，但每次有额外下载开销，且可能出现命令找不到的问题。
+> 💡 **推荐全局安装**，安装后直接使用 `sillyspec` 命令。
 
 ## 升级
 
@@ -37,7 +37,6 @@ npm i -g sillyspec@latest
 ```bash
 sillyspec init                    # 自动检测工具
 sillyspec init --tool claude      # 指定工具
-sillyspec init --workspace        # 工作区模式（多项目）
 sillyspec init --interactive      # 交互式引导
 sillyspec init --dir /path/to    # 指定目录
 ```

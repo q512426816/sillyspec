@@ -6,6 +6,7 @@ export default defineConfig({
   lang: 'zh-CN',
   head: [['link', { rel: 'preconnect', href: 'https://fonts.googleapis.com' }], ['link', { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' }], ['link', { href: 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap', rel: 'stylesheet' }]],
   themeConfig: {
+    logo: '/logo.jpg',
     nav: [
       { text: '首页', link: '/' },
       { text: '快速上手', link: '/sillyspec/getting-started' },

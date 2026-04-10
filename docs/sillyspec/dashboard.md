@@ -20,7 +20,7 @@ sillyspec dashboard --no-open    # 不自动打开浏览器
 
 ```
 scan → brainstorm → plan → execute → verify → archive
-  ✅       ✅        ✅      🔄
+  ✅       ✅        ✅      🔄       ⏳
 ```
 
 每个阶段的完成状态一目了然。
