@@ -30,6 +30,7 @@ export default defineConfig({
           { text: '命令参考', link: '/sillyspec/commands' },
           { text: '生命周期', link: '/sillyspec/lifecycle' },
           { text: '目录结构', link: '/sillyspec/structure' },
+          { text: '文件读写一览', link: '/sillyspec/file-io' },
         ],
       },
       {
