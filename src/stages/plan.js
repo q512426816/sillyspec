@@ -29,7 +29,7 @@ const fixedPrefix = [
 
 ### 操作
 1. 读取 CODEBASE-OVERVIEW.md + 各子项目上下文
-2. 读取 proposal.md、design.md、requirements.md
+2. 读取 proposal.md、design.md、requirements.md、tasks.md
 3. 读取 CONVENTIONS.md、ARCHITECTURE.md、STACK.md
 4. 读取 local.yaml 获取构建/测试命令
 

@@ -184,7 +184,8 @@ function buildWavePrompt(wave, waveIndex, changeDir) {
     if (t.steps) s += `\n  步骤: ${t.steps}`
     return s
   }).join('\n')
-  const hasTaskBlueprints = changeDir && existsSync(join(changeDir, 'tasks'))
+  const { join } = path
+const hasTaskBlueprints = changeDir && existsSync(join(changeDir, 'tasks'))
   const taskBlueprintRule = hasTaskBlueprints
     ? '每个任务有独立的 task-N.md 蓝图——只做蓝图里写的事，不要实现蓝图之外的功能。如果蓝图有问题，**停下来反馈**，不要自己改。问题归因：实现困难 → task 蓝图没写好 → plan 没做好 → design 有缺陷。'
     : '如果发现 plan 不合理，**停下来反馈**，不要自己改方案。问题归因：实现困难 → plan 没做好 → design 有缺陷。'
