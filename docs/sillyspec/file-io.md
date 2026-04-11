@@ -2,14 +2,14 @@
 
 | 阶段 | 📥 读取 | 📤 产出 |
 |------|---------|---------|
-| **brainstorm** | CODEBASE-OVERVIEW.md、projects/*.yaml、local.yaml、STRUCTURE.md、CONVENTIONS.md、ARCHITECTURE.md、changes/、templates/ | design.md、proposal.md、requirements.md、tasks.md |
-| **plan** | CODEBASE-OVERVIEW.md、proposal.md、design.md、requirements.md、tasks.md、CONVENTIONS.md、ARCHITECTURE.md、STACK.md、local.yaml | plan.md（总览）、tasks/task-NN.md（蓝图） |
-| **execute** | design.md、plan.md、tasks/task-NN.md（CLI 自动注入）、CONVENTIONS.md、ARCHITECTURE.md（按需）、local.yaml、CODEBASE-OVERVIEW.md、knowledge/INDEX.md | 代码文件、勾选 task-N.md + plan.md checkbox |
-| **verify** | proposal.md、design.md、tasks.md、requirements.md、projects/*.yaml、local.yaml、CONVENTIONS.md、tasks/task-NN.md | 验证报告、可能更新 design.md（Reverse Sync） |
-| **quick** | projects/*.yaml、CONVENTIONS.md、local.yaml、knowledge/INDEX.md、design.md（有 --change） | 代码文件、tasks.md（有 --change）、QUICKLOG |
-| **scan** | projects/*.yaml、已有 scan/*.md、package.json/pom.xml 等、源文件（grep） | ARCHITECTURE.md、CONVENTIONS.md、STRUCTURE.md、INTEGRATIONS.md、TESTING.md、CONCERNS.md、PROJECT.md |
-| **archive** | tasks.md、changes/<变更名>/ 目录下文件 | archive/YYYY-MM-DD-<变更名>/（移动）、更新 progress.json |
-| **doctor** | progress.json、projects/*.yaml、local.yaml、MCP 配置、构建文件 | 无（只检查报告） |
+| **brainstorm** | CODEBASE-OVERVIEW.md<br>projects/*.yaml<br>local.yaml<br>STRUCTURE.md（棕地）<br>CONVENTIONS.md（棕地）<br>ARCHITECTURE.md（棕地）<br>changes/（进行中）<br>~/.sillyspec/templates/ | design.md<br>proposal.md<br>requirements.md<br>tasks.md |
+| **plan** | CODEBASE-OVERVIEW.md<br>proposal.md<br>design.md<br>requirements.md<br>tasks.md<br>CONVENTIONS.md<br>ARCHITECTURE.md<br>STACK.md<br>local.yaml | plan.md（总览）<br>tasks/task-NN.md（蓝图） |
+| **execute** | design.md<br>plan.md<br>tasks/task-NN.md（CLI 自动注入）<br>CONVENTIONS.md（按需）<br>ARCHITECTURE.md（按需）<br>local.yaml<br>CODEBASE-OVERVIEW.md<br>knowledge/INDEX.md | 代码文件<br>勾选 task-N.md + plan.md checkbox |
+| **verify** | proposal.md<br>design.md<br>tasks.md<br>requirements.md<br>projects/*.yaml<br>local.yaml<br>CONVENTIONS.md<br>tasks/task-NN.md | 验证报告<br>可能更新 design.md（Reverse Sync） |
+| **quick** | projects/*.yaml<br>CONVENTIONS.md<br>local.yaml<br>knowledge/INDEX.md<br>design.md（有 --change） | 代码文件<br>tasks.md（有 --change）<br>QUICKLOG |
+| **scan** | projects/*.yaml<br>已有 scan/*.md<br>package.json / pom.xml 等<br>源文件（grep 搜索） | ARCHITECTURE.md<br>CONVENTIONS.md<br>STRUCTURE.md<br>INTEGRATIONS.md<br>TESTING.md<br>CONCERNS.md<br>PROJECT.md |
+| **archive** | tasks.md<br>changes/<变更名>/ 目录下文件 | archive/YYYY-MM-DD-<变更名>/（移动）<br>更新 progress.json |
+| **doctor** | progress.json<br>projects/*.yaml<br>local.yaml<br>MCP 配置<br>构建文件 | 无（只检查报告） |
 
 ## 全局注入（每个 step）
 
