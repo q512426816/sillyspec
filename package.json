@@ -1,6 +1,6 @@
 {
   "name": "sillyspec",
-  "version": "3.8.6",
+  "version": "3.8.7",
   "description": "SillySpec CLI \u2014 \u6d41\u7a0b\u72b6\u6001\u673a\uff0c\u8ba9 AI \u4e25\u683c\u6309\u6b65\u9aa4\u6765",
   "type": "module",
   "bin": {
