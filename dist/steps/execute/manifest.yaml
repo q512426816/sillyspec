@@ -1,0 +1,28 @@
+phase: execute
+description: 任务执行
+requires: [plan]
+loop:
+  start: 5
+  end: 9
+  description: 写测试→写代码→跑测试→修复→下一个任务，循环直到所有任务完成
+steps:
+  - file: 01-load-context.md
+    name: 加载上下文
+  - file: 02-scan-conventions.md
+    name: 规范扫描
+  - file: 03-skill-mcp.md
+    name: Skill/MCP 检测
+  - file: 04-assign-task.md
+    name: 分配任务
+  - file: 04b-prompt-template.md
+    name: 子代理 Prompt 模板
+  - file: 05-write-test.md
+    name: 写测试
+  - file: 06-write-code.md
+    name: 写代码
+  - file: 07-run-test.md
+    name: 运行测试
+  - file: 08-fix-issues.md
+    name: 修复问题
+  - file: 09-next-task.md
+    name: 下一个任务

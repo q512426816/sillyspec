@@ -214,6 +214,12 @@ async function main() {
       await runCommand(filteredArgs.slice(1), dir)
       break
     }
+    case 'step': {
+      const stepArgs = filteredArgs.slice(1);
+      if (json) stepArgs.push('--json');
+      await (await import('./step.js')).cmdStep(dir, stepArgs);
+      break;
+    }
     case 'dashboard': {
       // Parse dashboard options
       let port = 3456;

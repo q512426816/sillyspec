@@ -1,0 +1,18 @@
+phase: plan
+description: 任务分解与执行计划
+requires: [brainstorm]
+steps:
+  - file: 01-load-context.md
+    name: 加载上下文
+  - file: 02-anchor-confirm.md
+    name: 锚定确认
+  - file: 03-expand-tasks.md
+    name: 逐任务展开
+  - file: 04-mark-order.md
+    name: 标注执行顺序
+  - file: 05-e2e-planning.md
+    name: E2E 测试规划
+  - file: 06-self-check.md
+    name: 自检门控
+  - file: 07-save.md
+    name: 保存

@@ -1,0 +1,16 @@
+phase: scan
+description: 项目代码库扫描
+requires: []
+steps:
+  - file: 01-env-detect.md
+    name: 环境探测
+  - file: 02-tech-stack.md
+    name: 技术栈识别
+  - file: 03-conventions.md
+    name: 代码风格提取
+  - file: 04-structure.md
+    name: 项目结构分析
+  - file: 05-quality.md
+    name: 质量评估
+  - file: 06-complete.md
+    name: 扫描完成
