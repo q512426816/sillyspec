@@ -1,7 +1,6 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, statSync } from 'fs';
 import { join, resolve, dirname, basename } from 'path';
 import { fileURLToPath } from 'url';
-import { homedir } from 'os';
 import { checkbox, confirm, input } from '@inquirer/prompts';
 import { ProgressManager } from './progress.js';
 import chalk from 'chalk';
@@ -188,11 +187,8 @@ async function doInstall(projectDir, tools, subprojects = []) {
 
   // 复制 skills 到 .claude/skills/（给 Claude Code 使用）
   const claudeSkillsDir = join(projectDir, '.claude', 'skills');
-  // 优先从 npm 包自带位置复制，其次从 ~/.agents/skills/
-  const npmSkillsDir = join(__dirname, '..', '.claude', 'skills');
-  const localSkillsDir = join(homedir(), '.agents', 'skills');
-  const skillsSource = existsSync(npmSkillsDir) ? npmSkillsDir : existsSync(localSkillsDir) ? localSkillsDir : null;
-  if (skillsSource) {
+  const skillsSource = join(__dirname, '..', '.claude', 'skills');
+  if (existsSync(skillsSource)) {
     const sillyspecSkills = readdirSync(skillsSource).filter(f => f.startsWith('sillyspec-') && statSync(join(skillsSource, f)).isDirectory());
     if (sillyspecSkills.length > 0) {
       mkdirSync(claudeSkillsDir, { recursive: true });
@@ -202,7 +198,7 @@ async function doInstall(projectDir, tools, subprojects = []) {
       console.log(chalk.green('    ✓ Claude Code skills 已同步 (' + sillyspecSkills.length + ' 个)'));
     }
   } else {
-    console.log(chalk.yellow('    ⚠ 未找到 skills 目录，跳过 Claude Code skills 同步'));
+    console.log(chalk.yellow('    ⚠ 未找到 skills 目录（npm 包内无 .claude/skills/），跳过同步'));
   }
 }
 
@@ -273,7 +269,7 @@ export async function cmdInit(projectDir, options = {}) {
       validate: (answer) => answer.length > 0 || '至少选择一个工具',
     });
 
-    // 子项目引导（始终执行）
+    // 子项目引导（仅交互模式）
     let subprojects = [];
     {
       console.log('');

@@ -6,18 +6,15 @@
  * Schema v2: { project, currentStage, stages: { [name]: { status, steps, startedAt, completedAt } }, lastActive }
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, readdirSync, unlinkSync } from 'fs';
-import { join, resolve, dirname, basename } from 'path';
-import { fileURLToPath } from 'url';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, copyFileSync, unlinkSync } from 'fs';
+import { join, basename } from 'path';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 const RUNTIME_DIR = '.sillyspec/.runtime';
 const PROGRESS_FILE = 'progress.json';
 const BACKUP_FILE = 'progress.json.bak';
 
 const CURRENT_VERSION = 2;
-const VALID_STAGES = ['brainstorm', 'plan', 'execute', 'verify', 'scan', 'quick', 'archive', 'status', 'doctor'];
+const VALID_STAGES = ['brainstorm', 'plan', 'execute', 'verify', 'scan', 'quick', 'archive'];
 const VALID_STATUSES = ['pending', 'in-progress', 'completed', 'failed', 'blocked'];
 
 const STAGE_LABELS = {
@@ -28,8 +25,6 @@ const STAGE_LABELS = {
   scan: '🔍 代码扫描',
   quick: '⚡ 快速任务',
   archive: '📦 归档变更',
-  status: '📊 状态查看',
-  doctor: '🩺 项目自检',
 };
 
 function emptyStage() {
@@ -89,7 +84,7 @@ export class ProgressManager {
 
   _backup(cwd) {
     const p = this._path(cwd, PROGRESS_FILE);
-    if (existsSync(p)) renameSync(p, this._path(cwd, BACKUP_FILE));
+    if (existsSync(p)) copyFileSync(p, this._path(cwd, BACKUP_FILE));
   }
 
   // ── CLI 命令 ──
@@ -212,40 +207,18 @@ export class ProgressManager {
       if (step.status === 'pending') step.status = 'completed';
     }
 
-    // 推进到下一个未完成阶段
-    const idx = VALID_STAGES.indexOf(stage);
-    let nextStage = null;
-    for (let i = idx + 1; i < VALID_STAGES.length; i++) {
-      const s = data.stages[VALID_STAGES[i]];
-      if (!s || s.status !== 'completed') {
-        nextStage = VALID_STAGES[i];
-        break;
-      }
-    }
-
-    if (nextStage) {
-      data.currentStage = nextStage;
-      if (!data.stages[nextStage]) data.stages[nextStage] = emptyStage();
-      if (data.stages[nextStage].status === 'pending') {
-        data.stages[nextStage].status = 'in-progress';
-        data.stages[nextStage].startedAt = new Date().toLocaleString('zh-CN',{hour12:false});
-      }
-      console.log(`✅ 阶段 ${stage} 已完成，推进到: ${STAGE_LABELS[nextStage] || nextStage}`);
-    } else {
-      data.currentStage = stage;
-      console.log(`✅ 阶段 ${stage} 已完成（已是最后阶段）`);
-    }
-
     data.lastActive = new Date().toLocaleString('zh-CN',{hour12:false});
 
-    // 归档到 history/
+    // 归档到 history/（ISO 时间戳，去掉所有非法路径字符）
     const historyDir = this._path(cwd, 'history');
     mkdirSync(historyDir, { recursive: true });
-    const ts = new Date().toLocaleString('zh-CN',{hour12:false}).replace(/[:.]/g, '-');
+    const ts = new Date().toISOString().replace(/[:.TZ-]/g, '');
     writeFileSync(join(historyDir, `${stage}-${ts}.json`), JSON.stringify({ stage, data: stageData, completedAt: stageData.completedAt }, null, 2) + '\n');
 
     this._backup(cwd);
     this._write(cwd, data);
+
+    console.log(`✅ 阶段 ${stage} 已标记为完成（不自动推进，下一步由你决定）`);
   }
 
   show(cwd) {
@@ -305,7 +278,7 @@ export class ProgressManager {
     this.show(cwd);
   }
 
-  async validate(cwd, deep = false) {
+  async validate(cwd) {
     const data = this.read(cwd);
     if (!data) { console.log('❌ 无法读取 progress.json'); return false; }
 
@@ -338,25 +311,6 @@ export class ProgressManager {
       console.log('✅ 已修复并备份');
     }
 
-    if (deep) {
-      try {
-        const { deriveState } = await import('./derive.js');
-        const result = deriveState(cwd, { mode: 'full', fix: true, pm: this, progress: this.read(cwd) });
-        if (result.issues.length > 0) {
-          console.log(`\n📋 deriveState 深度校验（${result.issues.length} 项）：`);
-          for (const issue of result.issues) {
-            const icon = issue.severity === 'issue' ? '🔴' : issue.severity === 'warning' ? '🟡' : '⚪';
-            console.log(`  ${icon} ${issue.stage} step ${issue.step}: ${issue.message}`);
-          }
-          if (result.fixed > 0) console.log(`  🔧 已自动修复 ${result.fixed} 项`);
-        } else {
-          console.log('✅ deriveState 深度校验通过，无不一致');
-        }
-      } catch (e) {
-        console.log(`⚠️ deriveState 校验失败: ${e.message}`);
-      }
-    }
-
     return true;
   }
 
@@ -377,10 +331,6 @@ export class ProgressManager {
       if (existsSync(p)) { unlinkSync(p); console.log('✅ 已重置所有进度（备份已保留）'); }
       else console.log('ℹ️  无进度文件可重置');
     }
-  }
-
-  complete(cwd, stage) {
-    this.completeStage(cwd, stage);
   }
 
   // ── 内部辅助 ──

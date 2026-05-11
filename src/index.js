@@ -22,20 +22,31 @@ SillySpec CLI — 规范驱动开发工具包
     [--tool <name>]            只安装指定工具
     [--interactive]            交互式引导
     [--dir <path>]             指定目录
+
   sillyspec setup [--list]     安装推荐 MCP 工具
     [--list]                   查看已安装状态
-  sillyspec progress <cmd>    进度管理
-    init                      初始化 progress.json
-    show                      查看当前进度
-    set-stage <stage>         设置当前阶段
-    add-step <stage> <name>   添加步骤
+
+  sillyspec run <stage>        执行阶段步骤（核心命令）
+    --done --output "..."      完成当前步骤
+    --skip                     跳过可选步骤
+    --status                   查看阶段进度
+    --reset                    重置阶段
+    --change <name>            设置当前变更名
+    auto                       连续推进 brainstorm→plan→execute→verify
+
+  sillyspec progress <cmd>     进度记录（轻量，不强制顺序）
+    init                       初始化 progress.json
+    show                       查看当前进度
+    set-stage <stage>          设置当前阶段
+    add-step <stage> <name>    添加步骤
     update-step <s> <n> --status <st> [--output <t>]
-    complete-stage <stage>    完成阶段并推进
-    validate                  校验并修复
-    reset [--stage X]         重置进度
-    complete --stage X        归档已完成阶段
+    complete-stage <stage>     标记阶段完成
+    validate                   校验并修复
+    reset [--stage X]          重置进度
+
   sillyspec docs migrate       迁移旧文档到统一结构
-    sillyspec dashboard          启动 Dashboard Web UI
+
+  sillyspec dashboard          启动 Dashboard Web UI
     [--port <number>]          指定端口（默认 3456）
     [--no-open]                不自动打开浏览器
 
@@ -45,11 +56,9 @@ SillySpec CLI — 规范驱动开发工具包
 
 示例:
   sillyspec init
-  sillyspec init --tool claude
-
-  sillyspec setup
+  sillyspec run brainstorm
+  sillyspec run brainstorm --done --output "需求已澄清"
   sillyspec setup --list
-  sillyspec dashboard
   sillyspec dashboard --port 8080 --no-open
 `);
 }
@@ -128,13 +137,10 @@ async function main() {
           pm.show(dir);
           break;
         case 'validate':
-          await pm.validate(dir, filteredArgs.includes('--deep'));
+          await pm.validate(dir);
           break;
         case 'reset':
           pm.reset(dir, stage);
-          break;
-        case 'complete':
-          pm.complete(dir, stage);
           break;
         case 'set-stage': {
           const setStageName = filteredArgs[2];
@@ -195,7 +201,7 @@ async function main() {
           break;
         }
         default:
-          console.log('用法: sillyspec progress <init|show|validate|reset|complete|set-stage|add-step|update-step|complete-stage>');
+          console.log('用法: sillyspec progress <init|show|validate|reset|set-stage|add-step|update-step|complete-stage>');
       }
       break;
     }
@@ -213,12 +219,6 @@ async function main() {
       const { runCommand } = await import('./run.js')
       await runCommand(filteredArgs.slice(1), dir)
       break
-    }
-    case 'step': {
-      const stepArgs = filteredArgs.slice(1);
-      if (json) stepArgs.push('--json');
-      await (await import('./step.js')).cmdStep(dir, stepArgs);
-      break;
     }
     case 'dashboard': {
       // Parse dashboard options

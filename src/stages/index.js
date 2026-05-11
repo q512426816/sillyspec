@@ -22,14 +22,5 @@ export const stageRegistry = {
   doctor
 }
 
-// 流程阶段顺序，用于 getNextStage
-const stageOrder = ['brainstorm', 'plan', 'execute', 'verify']
-
-export function getNextStage(currentStage) {
-  const index = stageOrder.indexOf(currentStage)
-  if (index === -1 || index >= stageOrder.length - 1) return null
-  return stageOrder[index + 1]
-}
-
-// 辅助命令（不影响流程阶段推进）
+// 辅助命令（在没有 progress.json 时也可执行）
 export const auxiliaryStages = ['scan', 'quick', 'archive', 'status', 'doctor']

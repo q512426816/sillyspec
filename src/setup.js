@@ -1,17 +1,9 @@
-import { existsSync, readFileSync, writeFileSync, mkdirSync, cpSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
 import chalk from 'chalk';
 import ora from 'ora';
-import { checkbox, confirm, input, select } from '@inquirer/prompts';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-// ── Skill 定义 ──
-
-const SKILLS = [];
+import { checkbox, input } from '@inquirer/prompts';
 
 // ── MCP 工具定义 ──
 
@@ -290,21 +282,6 @@ export async function cmdSetup(dir, options = {}) {
     ...dbChoices,
     ...globalChoices.length > 0 ? [{ name: chalk.bold('── 全局工具 ──'), value: '_global_header', disabled: true }] : [],
     ...globalChoices,
-    ...[{ name: chalk.bold('── AI Skills（编写参考）──'), value: '_skill_header', disabled: true }],
-    ...(() => {
-      const installed = new Set();
-      for (const { path } of availableTools) {
-        const skillDir = join(dir, dirname(path), 'skills');
-        for (const s of SKILLS) {
-          if (existsSync(join(skillDir, s.target, 'SKILL.md'))) installed.add(s.id);
-        }
-      }
-      return SKILLS.filter(s => !installed.has(s.id)).map(s => ({
-        name: `${s.name} — ${s.description}`,
-        value: `skill:${s.id}`,
-        checked: false,
-      }));
-    })(),
   ];
 
   if (allChoices.length === 0) {
@@ -394,41 +371,6 @@ export async function cmdSetup(dir, options = {}) {
     }
   }
 
-  // ── 安装 Skills ──
-
-  const selectedSkills = SKILLS.filter(s => selected.includes(`skill:${s.id}`));
-
-  if (selectedSkills.length > 0) {
-    // 跟 MCP 一样，选择安装到哪些 AI 工具
-    const skillTargets = availableTools.map(t => ({
-      name: t.tool,
-      value: t.key,
-      checked: true,
-    }));
-
-    const selectedTools = await checkbox({
-      message: 'Skill 安装到哪些 AI 工具？',
-      choices: skillTargets,
-    });
-
-    const targets = availableTools.filter(t => selectedTools.includes(t.key));
-
-    console.log('');
-    for (const { tool, path } of targets) {
-      const spinner = ora(`安装 Skills 到 ${tool}...`).start();
-      for (const skill of selectedSkills) {
-        try {
-          const targetDir = join(dir, dirname(path), 'skills', skill.target);
-          mkdirSync(targetDir, { recursive: true });
-          cpSync(skill.source, targetDir, { recursive: true });
-          spinner.succeed(`${tool} → ${dirname(path)}/skills/${skill.target}/SKILL.md`);
-        } catch (err) {
-          spinner.fail(`${skill.name} 安装失败: ${err.message}`);
-        }
-      }
-    }
-  }
-
   // ── 总结 ──
 
   console.log('');
@@ -447,10 +389,6 @@ export async function cmdSetup(dir, options = {}) {
   for (const g of selectedGlobal) {
     console.log(`  🛠️  ${chalk.cyan(g.name)} — ${g.description}`);
     console.log(chalk.dim(`     ${g.url}`));
-  }
-  for (const s of selectedSkills) {
-    console.log(`  📚 ${chalk.cyan(s.name)} — ${s.description}`);
-    console.log(chalk.dim(`     → ${s.target}/SKILL.md`));
   }
   console.log('');
   if (selectedMcp.length > 0) {
