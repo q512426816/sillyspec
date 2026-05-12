@@ -170,7 +170,7 @@ function parseWavesFromPlan(planContent) {
  */
 function buildWavePrompt(wave, waveIndex, changeDir) {
   const taskList = wave.tasks.map((t, ti) => {
-    const taskNum = String(t.index || (ti + 1)).padStart(2, '0')
+    const taskNum = String(ti + 1).padStart(2, '0')
     const taskFile = changeDir ? `${changeDir}/tasks/task-${taskNum}.md` : ''
     const taskFileExists = taskFile && existsSync(taskFile)
     let s = `- [ ] ${t.name}`

@@ -483,17 +483,17 @@ function showStatus(progress, stageName) {
   if (progress.batchProgress) {
     const bp = progress.batchProgress
     const total = bp.total || 0
-    const completed = bp.completed || 0
+    const bpCompleted = bp.completed || 0
     const failed = bp.failed || 0
     const skipped = bp.skipped || 0
     const barLen = 20
-    const filled = Math.round((completed / Math.max(total, 1)) * barLen)
+    const filled = Math.round((bpCompleted / Math.max(total, 1)) * barLen)
     const bar = '█'.repeat(filled) + '░'.repeat(barLen - filled)
     const parts = []
     if (failed > 0) parts.push(`${failed} 失败`)
     if (skipped > 0) parts.push(`${skipped} 跳过`)
     const suffix = parts.length ? ` (${parts.join(', ')})` : ''
-    console.log(`\n📊 批量进度: ${bar} ${completed}/${total}${suffix}\n`)
+    console.log(`\n📊 批量进度: ${bar} ${bpCompleted}/${total}${suffix}\n`)
   }
 
   steps.forEach((step, i) => {
@@ -576,7 +576,7 @@ async function runAutoMode(pm, progress, cwd, flags) {
       }
       return
     }
-    outputStepPrompt(steps, pendingIdx, currentStage, cwd, progress)
+    outputStep(currentStage, pendingIdx, steps, cwd)
     return
   }
 
@@ -594,8 +594,7 @@ async function runAutoMode(pm, progress, cwd, flags) {
   }
 
   // 完成当前步骤
-  const completed = await completeStep(pm, progress, currentStage, cwd, outputText, inputText)
-  if (!completed) return
+  await completeStep(pm, progress, currentStage, cwd, outputText, inputText)
 
   // 检查阶段是否完成
   const nextPendingIdx = progress.stages[currentStage]?.steps?.findIndex(s => s.status === 'pending')
@@ -618,7 +617,7 @@ async function runAutoMode(pm, progress, cwd, flags) {
       if (nextSteps) {
         const firstPending = nextSteps.findIndex(s => s.status === 'pending')
         if (firstPending !== -1) {
-          outputStepPrompt(nextSteps, firstPending, next, cwd, progress)
+          outputStep(next, firstPending, nextSteps, cwd)
         }
       }
     } else {
@@ -630,7 +629,7 @@ async function runAutoMode(pm, progress, cwd, flags) {
     if (steps) {
       const firstPending = steps.findIndex(s => s.status === 'pending')
       if (firstPending !== -1) {
-        outputStepPrompt(steps, firstPending, currentStage, cwd, progress)
+        outputStep(currentStage, firstPending, steps, cwd)
       }
     }
   }
