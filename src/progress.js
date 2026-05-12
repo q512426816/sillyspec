@@ -329,9 +329,10 @@ export class ProgressManager {
     } else {
       const p = this._path(cwd, PROGRESS_FILE);
       const backup = this._path(cwd, BACKUP_FILE);
-      if (existsSync(p)) unlinkSync(p);
-      if (existsSync(backup)) unlinkSync(backup);
-      if (existsSync(p) || existsSync(backup)) {
+      let didReset = false;
+      if (existsSync(p)) { unlinkSync(p); didReset = true; }
+      if (existsSync(backup)) { unlinkSync(backup); didReset = true; }
+      if (didReset) {
         console.log('✅ 已重置所有进度');
       } else {
         console.log('ℹ️  无进度文件可重置');
@@ -390,13 +391,20 @@ export class ProgressManager {
 
   _timeAgo(dateStr) {
     if (!dateStr) return '未知';
-    const diff = Date.now() - new Date(dateStr).getTime();
-    const m = Math.floor(diff / 60000);
-    if (m < 1) return '刚刚';
-    if (m < 60) return `${m} 分钟前`;
-    const h = Math.floor(m / 60);
-    if (h < 24) return `${h} 小时前`;
-    return `${Math.floor(h / 24)} 天前`;
+    let ts = Date.parse(dateStr);
+    // toLocaleString('zh-CN') 格式（如 2026/5/12 21:09:00）可能解析失败，尝试手动解析
+    if (isNaN(ts)) {
+      const m = dateStr.match(/(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})[\s,]+(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+      if (m) ts = new Date(+m[1], +m[2]-1, +m[3], +m[4], +m[5], +(m[6]||0)).getTime();
+    }
+    if (isNaN(ts)) return dateStr;
+    const diff = Date.now() - ts;
+    const minutes = Math.floor(diff / 60000);
+    if (minutes < 1) return '刚刚';
+    if (minutes < 60) return `${minutes} 分钟前`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours} 小时前`;
+    return `${Math.floor(hours / 24)} 天前`;
   }
 
   // ── 批量进度 ──

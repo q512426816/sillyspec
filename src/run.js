@@ -334,7 +334,8 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
     process.exit(1)
   }
 
-  // 标记完成
+  // 标记完成（先标记，再处理动态步骤插入）
+
   steps[currentIdx].status = 'completed'
   steps[currentIdx].completedAt = new Date().toLocaleString('zh-CN',{hour12:false})
   if (outputText) {
@@ -351,28 +352,25 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
     }
   }
 
-  // 检查是否还有下一步
-  // plan 阶段 Step 4（展开任务）完成后，动态追加 task 蓝图步骤
-  if (stageName === 'plan' && currentIdx === 3 && progress.currentChange) {
+  // plan 阶段 "展开任务" 完成后，动态插入 task 蓝图步骤
+  if (stageName === 'plan' && steps[currentIdx]?.name === '展开任务并分组' && progress.currentChange) {
     const planFile = join(cwd, '.sillyspec', 'changes', progress.currentChange, 'plan.md')
     if (existsSync(planFile)) {
       const planContent = readFileSync(planFile, 'utf8')
-      const { buildPlanSteps } = await import('./stages/plan.js')
+      const { buildPlanSteps, fixedPrefix, fixedSuffix } = await import('./stages/plan.js')
       const fullSteps = buildPlanSteps(join(cwd, '.sillyspec', 'changes', progress.currentChange), planContent)
-      // fullSteps[0..4] = fixedPrefix, fullSteps[-2..-1] = fixedSuffix
-      // 中间的是 task 蓝图步骤，插入到当前 steps 中
-      // 当前 steps 已有 5 个 fixedPrefix，找到需要插入的 task 步骤
-      const taskSteps = fullSteps.slice(5, -2) // 排除 5 个前缀和 2 个后缀
+      const prefixLen = fixedPrefix.length
+      const suffixLen = fixedSuffix.length
+      const taskSteps = fullSteps.slice(prefixLen, suffixLen > 0 ? -suffixLen : undefined)
       if (taskSteps.length > 0) {
-        // 插入审查一致性 + 保存步骤（后缀）
         const oldSteps = [...steps]
         const rebuilt = fullSteps.map(stepDef => {
-          const existing = oldSteps.find(s => s.name === stepDef.name)
+          const existing = oldSteps.find(s => s.name === stepDef.name && s.status !== 'pending')
           if (existing) return existing
           return { name: stepDef.name, status: 'pending' }
         })
         steps.splice(0, steps.length, ...rebuilt)
-        // 重新查找下一步
+        console.log(`  📝 已动态插入 ${taskSteps.length} 个任务蓝图步骤`)
       }
     }
   }
@@ -479,18 +477,18 @@ function showStatus(progress, stageName) {
   // 批量进度
   if (progress.batchProgress) {
     const bp = progress.batchProgress
-    const total = bp.total || 0
-    const completed = bp.completed || 0
-    const failed = bp.failed || 0
-    const skipped = bp.skipped || 0
-    const barLen = 20
-    const filled = Math.round((completed / Math.max(total, 1)) * barLen)
-    const bar = '█'.repeat(filled) + '░'.repeat(barLen - filled)
-    const parts = []
-    if (failed > 0) parts.push(`${failed} 失败`)
-    if (skipped > 0) parts.push(`${skipped} 跳过`)
-    const suffix = parts.length ? ` (${parts.join(', ')})` : ''
-    console.log(`\n📊 批量进度: ${bar} ${completed}/${total}${suffix}\n`)
+    const bpTotal = bp.total || 0
+    const bpCompleted = bp.completed || 0
+    const bpFailed = bp.failed || 0
+    const bpSkipped = bp.skipped || 0
+    const bpBarLen = 20
+    const bpFilled = Math.round((bpCompleted / Math.max(bpTotal, 1)) * bpBarLen)
+    const bpBar = '█'.repeat(bpFilled) + '░'.repeat(bpBarLen - bpFilled)
+    const bpParts = []
+    if (bpFailed > 0) bpParts.push(`${bpFailed} 失败`)
+    if (bpSkipped > 0) bpParts.push(`${bpSkipped} 跳过`)
+    const bpSuffix = bpParts.length ? ` (${bpParts.join(', ')})` : ''
+    console.log(`\n📊 批量进度: ${bpBar} ${bpCompleted}/${bpTotal}${bpSuffix}\n`)
   }
 
   steps.forEach((step, i) => {
@@ -546,8 +544,14 @@ async function runAutoMode(pm, progress, cwd, flags) {
     return
   }
   if (!flowStages.includes(currentStage)) {
-    console.error(`current stage ${currentStage} is not in auto flow`)
-    process.exit(1)
+    // 当前在辅助阶段（scan/quick/archive 等），自动跳到第一个未完成的流程阶段
+    const openStage = firstOpenStage()
+    if (!openStage) {
+      console.log('All auto flow stages are complete.')
+      return
+    }
+    console.log(`⚠️  当前阶段 ${currentStage} 不在 auto 流程中，自动跳转到 ${openStage}`)
+    currentStage = openStage
   }
   await ensureAutoStage(currentStage)
 
@@ -560,7 +564,7 @@ async function runAutoMode(pm, progress, cwd, flags) {
     for (const stage of flowStages) {
       const stageData = progress.stages?.[stage]
       const total = stageData?.steps?.length || '?'
-      const completed = stageData?.steps?.filter(step => step.status === 'completed').length || 0
+      const completed = stageData?.steps?.filter(step => step.status === 'completed' || step.status === 'skipped').length || 0
       const marker = stageData?.status === 'completed' ? 'done' : stage === currentStage ? 'active' : 'pending'
       console.log(`  ${marker} ${stage} (${completed}/${total})`)
     }

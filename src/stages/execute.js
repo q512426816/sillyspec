@@ -178,7 +178,8 @@ function buildWavePrompt(wave, waveIndex, changeDir) {
     let s = `- [ ] ${t.name}`
     if (t.file) s += ` (${t.file})`
     if (taskFileExists) {
-      const taskContent = readFileSync(taskFile, 'utf8').trim()
+      let taskContent = ''
+      try { taskContent = readFileSync(taskFile, 'utf8').trim() } catch { taskContent = '（无法读取任务蓝图文件）' }
       s += `
 \n### 📋 任务蓝图（task-${taskNum}.md）\n${taskContent}`
     }
@@ -211,16 +212,16 @@ ${taskList}
 2. 铁律：先读后写、grep 确认方法存在、不编造、TDD
 3. **禁止发散思维**：你是代码搬运工，严格按任务描述执行，不增不减不改。${taskBlueprintRule}
 4. **Reverse Sync**：发现 Bug 或实现与 design.md/task-N.md 不一致时，先检查是代码错了还是文档有遗漏，有遗漏则先修文档再修代码。
-3. **不要频繁编译！** 编译很慢，只在以下情况运行：
+4. **不要频繁编译！** 编译很慢，只在以下情况运行：
    - 写了大量代码后需要验证语法正确性
    - 最后一个 Wave 完成后做一次全量编译验证
    - 用户明确要求编译时
-4. 单个任务完成后只跑**对应模块的单元测试**（TDD 绿灯确认），不要跑全量编译
-5. 每个任务完成后：
+5. 单个任务完成后只跑**对应模块的单元测试**（TDD 绿灯确认），不要跑全量编译
+6. 每个任务完成后：
    - 勾选 task-N.md 中的验收标准 checkbox
    - 勾选 plan.md / tasks.md 中对应任务的 checkbox
    - 记录改动文件和测试结果
-6. 遇到 BLOCKED → 记录原因，选择：重试/跳过/停止
+7. 遇到 BLOCKED → 记录原因，选择：重试/跳过/停止
 
 ### 完成后
 运行 sillyspec run execute --done --input "用户原始反馈" --output "Wave ${waveIndex} 结果摘要"`

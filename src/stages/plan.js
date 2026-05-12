@@ -9,7 +9,7 @@ export const definition = {
 }
 
 // 固定前缀步骤
-const fixedPrefix = [
+export const fixedPrefix = [
   {
     name: '状态检查',
     prompt: `检查当前状态，确认可以执行 plan。
@@ -115,7 +115,7 @@ plan.md 总览内容`,
 ]
 
 // 固定后缀步骤
-const fixedSuffix = [
+export const fixedSuffix = [
   {
     name: '审查一致性',
     prompt: `审查所有 task-N.md 的一致性。
@@ -153,6 +153,7 @@ const fixedSuffix = [
  * 解析 plan.md 获取任务数量
  */
 function parseTaskCount(planContent) {
+  if (!planContent || typeof planContent !== 'string') return 0
   const matches = planContent.match(/^[-*]\s*\[[ x]\]\s*task-\d+/gm)
   return matches ? matches.length : 0
 }
@@ -218,6 +219,19 @@ ${taskName}
 }
 
 /**
+ * 从 plan.md 解析任务名列表
+ */
+function parseTaskNames(planContent) {
+  const names = []
+  const lines = planContent.split('\n')
+  for (const line of lines) {
+    const m = line.match(/^[-*]\s*\[[ x]\]\s*task-\d+:\s*(.+)/i)
+    if (m) names.push(m[1].trim())
+  }
+  return names
+}
+
+/**
  * 动态构建 plan 步骤列表
  * @param {string|null} changeDir - 变更目录路径
  * @param {string|null} planContent - plan.md 内容（可选，用于解析任务数）
@@ -242,14 +256,23 @@ export function buildPlanSteps(changeDir = null, planContent = null) {
   }
 
   // 动态生成每个任务的蓝图写作步骤
+  // 尝试从 plan.md 解析任务名
+  let taskNames = []
+  if (planContent) {
+    taskNames = parseTaskNames(planContent)
+  } else if (changeDir) {
+    const planFile = path.join(changeDir, 'plan.md')
+    if (existsSync(planFile)) {
+      taskNames = parseTaskNames(readFileSync(planFile, 'utf8'))
+    }
+  }
+
   const taskSteps = []
   for (let i = 1; i <= taskCount; i++) {
+    const taskName = taskNames[i - 1] || '（从 plan.md 读取任务名）'
     taskSteps.push({
       name: `写任务蓝图 task-${String(i).padStart(2, '0')}`,
-      prompt: `### 注意
-这是第 ${i}/${taskCount} 个任务蓝图。focus 在这一个任务上，不要写其他任务的内容。
-
-${buildTaskPrompt(i, '（从 plan.md 读取任务名）', changeDir)}`,
+      prompt: `### 注意\n这是第 ${i}/${taskCount} 个任务蓝图。focus 在这一个任务上，不要写其他任务的内容。\n\n${buildTaskPrompt(i, taskName, changeDir)}`,
       outputHint: `task-${String(i).padStart(2, '0')} 蓝图`,
       optional: false
     })
