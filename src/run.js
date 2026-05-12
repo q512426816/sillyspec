@@ -269,15 +269,9 @@ async function runStage(pm, progress, stageName, cwd) {
   let currentIdx = steps.findIndex(s => s.status !== 'completed' && s.status !== 'skipped')
 
   if (currentIdx === -1) {
-    // 阶段已完成
     console.log(`✅ ${stageName} 阶段已完成。`)
-    console.log(`  继续执行将重新开始，可用 --reset 显式重置。\n`)
-    // 自动重置，允许重复执行
-    steps.forEach(s => { s.status = 'pending'; s.completedAt = null; s.output = null; s.startedAt = null })
-    stageData.status = 'in-progress'
-    stageData.completedAt = null
-    pm._write(cwd, progress)
-    currentIdx = 0
+    console.log(`  如需重新开始，请显式执行 --reset。\n`)
+    return
   } else if (currentIdx > 0) {
     // 有进行中的步骤，提示用户
     const completed = currentIdx

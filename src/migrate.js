@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync, renameSync, copyFileSync } from 'fs';
-import { join, resolve } from 'path';
+import { basename, join, resolve } from 'path';
 import chalk from 'chalk';
 
 /**
@@ -14,7 +14,7 @@ export function migrateDocs(projectDir) {
   }
 
   // Determine project name from projects/*.yaml or directory name
-  let projectName = projectDir.split('/').pop();
+  let projectName = basename(resolve(projectDir));
   const projectsDir = join(sillyspecDir, 'projects');
   if (existsSync(projectsDir)) {
     const yamlFiles = readdirSync(projectsDir).filter(f => f.endsWith('.yaml'));

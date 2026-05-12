@@ -109,6 +109,11 @@ async function main() {
   }
   const dir = targetDir;
 
+  if (command === 'init' && !existsSync(dir)) {
+    const { mkdirSync } = await import('fs');
+    mkdirSync(dir, { recursive: true });
+  }
+
   if (!existsSync(dir)) {
     console.error(`❌ 目录不存在: ${dir}`);
     process.exit(1);

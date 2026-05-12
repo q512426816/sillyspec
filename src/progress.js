@@ -316,9 +316,9 @@ export class ProgressManager {
 
   reset(cwd, stage) {
     this._ensureDir(cwd);
-    this._backup(cwd);
 
     if (stage) {
+      this._backup(cwd);
       const data = this.read(cwd);
       if (!data) { console.log('❌ 无法读取 progress.json'); return; }
       if (!data.stages[stage]) { console.log(`❌ 未知阶段: ${stage}`); return; }
@@ -328,8 +328,14 @@ export class ProgressManager {
       console.log(`✅ 已重置阶段: ${stage}`);
     } else {
       const p = this._path(cwd, PROGRESS_FILE);
-      if (existsSync(p)) { unlinkSync(p); console.log('✅ 已重置所有进度（备份已保留）'); }
-      else console.log('ℹ️  无进度文件可重置');
+      const backup = this._path(cwd, BACKUP_FILE);
+      if (existsSync(p)) unlinkSync(p);
+      if (existsSync(backup)) unlinkSync(backup);
+      if (existsSync(p) || existsSync(backup)) {
+        console.log('✅ 已重置所有进度');
+      } else {
+        console.log('ℹ️  无进度文件可重置');
+      }
     }
   }
 
