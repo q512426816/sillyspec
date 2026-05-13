@@ -173,13 +173,15 @@ export const definition = {
 2. 复杂项目：每段 200-300 字，逐段展示
 3. 每段展示后等待用户确认
 4. 收集修改意见，调整设计
+5. 确认设计后，确定变更名（格式：\`YYYY-MM-DD-<简短描述>\`，例如 \`2026-05-13-user-auth\`）
 
 ### 输出
-用户确认的完整设计方案
+用户确认的完整设计方案 + 变更名
 
 ### 注意
 - 不要一次输出大段文字
-- 逐段确认，确保用户跟上`,
+- 逐段确认，确保用户跟上
+- 变更名必须以当天日期开头（YYYY-MM-DD-），后跟英文短横线分隔的简短描述`,
       outputHint: '用户确认的设计方案',
       optional: false
     },
@@ -192,7 +194,7 @@ export const definition = {
    - 适合：有 UI 组件/布局/交互流程/状态转换/架构图
    - 不适合：纯后端逻辑/配置修改/无可视化意义
 2. 如果适合，生成一个独立的 HTML 文件（内联 CSS + JS），保存到：
-   \`.sillyspec/changes/<变更名>/prototype-<名称>.html\`
+   \`.sillyspec/changes/<变更名>/prototype-<名称>.html\`（变更名格式：YYYY-MM-DD-<简短描述>）
 3. 原型要求：
    - 单文件，浏览器直接打开
    - 展示关键布局结构和交互流程
@@ -211,6 +213,7 @@ HTML 原型文件路径（或"跳过"如果不适合）`,
 
 ### 操作
 1. 确认变更目录存在：\`mkdir -p .sillyspec/changes/<变更名>\`（Windows 用 \`mkdir .sillyspec\\changes\\<变更名>\` 或 PowerShell \`New-Item -ItemType Directory -Force -Path .sillyspec/changes/<变更名>\`）
+   - 变更名格式必须为 \`YYYY-MM-DD-<简短描述>\`（如 \`2026-05-13-user-auth\`）
 2. 将确认的设计写入 \`.sillyspec/changes/<变更名>/design.md\`
 3. 自审检查：
    - 需求覆盖：是否完整覆盖 Step 6 确认的需求
