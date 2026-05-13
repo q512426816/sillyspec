@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard 双层布局原型（可拖动）</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #F5F5F7;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ========== 概览区域 - 默认 30% ========== */
+    .overview-section {
+      height: 30%;
+      min-height: 200px;
+      max-height: 70%;
+      background: #FFFFFF;
+      border-bottom: 2px solid #2A3040;
+      padding: 16px 24px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+    .section-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: #1A1A1A;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .section-title .badge {
+      font-size: 12px;
+      padding: 2px 8px;
+      background: #E5E7EB;
+      border-radius: 10px;
+      color: #6B7280;
+      font-weight: 500;
+    }
+    .section-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .btn {
+      padding: 6px 12px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+    .btn:hover {
+      opacity: 0.9;
+    }
+    .btn-primary {
+      background: #D97706;
+      color: white;
+    }
+    .btn-secondary {
+      background: #E5E7EB;
+      color: #374151;
+    }
+    .btn-icon {
+      padding: 6px;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #F3F4F6;
+      border-radius: 6px;
+    }
+    .btn-icon:hover {
+      background: #E5E7EB;
+    }
+
+    /* 水平滚动卡片容器 */
+    .cards-container {
+      flex: 1;
+      display: flex;
+      gap: 16px;
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding-bottom: 8px;
+    }
+    .cards-container::-webkit-scrollbar {
+      height: 8px;
+    }
+    .cards-container::-webkit-scrollbar-track {
+      background: #F3F4F6;
+      border-radius: 4px;
+    }
+    .cards-container::-webkit-scrollbar-thumb {
+      background: #D1D5DB;
+      border-radius: 4px;
+    }
+
+    /* 项目卡片 */
+    .project-card {
+      width: 280px;
+      height: 120px;
+      background: white;
+      border: 2px solid #E5E7EB;
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      cursor: pointer;
+      transition: all 0.2s;
+      flex-shrink: 0;
+    }
+    .project-card:hover {
+      border-color: #D97706;
+      box-shadow: 0 4px 12px rgba(217, 119, 6, 0.15);
+    }
+    .project-card.selected {
+      border-color: #D97706;
+      box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.2);
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+    .project-name {
+      font-size: 16px;
+      font-weight: 600;
+      color: #1A1A1A;
+    }
+    .last-active {
+      font-size: 11px;
+      color: #9CA3AF;
+    }
+
+    .stage-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .stage-badge.in-progress {
+      background: #DBEAFE;
+      color: #1D4ED8;
+    }
+    .stage-badge.completed {
+      background: #D1FAE5;
+      color: #047857;
+    }
+    .stage-badge.pending {
+      background: #F3F4F6;
+      color: #6B7280;
+    }
+
+    .progress-section {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .progress-bar {
+      flex: 1;
+      height: 6px;
+      background: #E5E7EB;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.3s;
+    }
+    .progress-fill.in-progress { background: #3B82F6; }
+    .progress-fill.completed { background: #10B981; }
+    .progress-fill.pending { background: #9CA3AF; }
+    .progress-text {
+      font-size: 12px;
+      font-weight: 600;
+      color: #374151;
+    }
+
+    /* ========== 垂直拖动分割线（概览 ↔ 详情） ========== */
+    .v-resize-handle {
+      height: 6px;
+      background: #2A3040;
+      cursor: row-resize;
+      flex-shrink: 0;
+      position: relative;
+      transition: background 0.2s;
+    }
+    .v-resize-handle:hover, .v-resize-handle.dragging {
+      background: #D97706;
+    }
+    .v-resize-handle::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 40px;
+      height: 4px;
+      background: rgba(255,255,255,0.3);
+      border-radius: 2px;
+    }
+
+    /* ========== 详情区域 - 默认 70% ========== */
+    .detail-section {
+      flex: 1;
+      background: #FAFAFA;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-height: 100px;
+    }
+
+    .detail-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 24px;
+      background: white;
+      border-bottom: 1px solid #E5E7EB;
+      flex-shrink: 0;
+    }
+    .detail-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #374151;
+    }
+    .detail-tabs {
+      display: flex;
+      gap: 4px;
+    }
+    .detail-tab {
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      color: #6B7280;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .detail-tab:hover {
+      background: #F3F4F6;
+    }
+    .detail-tab.active {
+      background: #D97706;
+      color: white;
+    }
+
+    /* 三栏布局容器 */
+    .detail-content {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
+
+    /* 水平拖动分割线 */
+    .h-resize-handle {
+      width: 4px;
+      background: #E5E7EB;
+      cursor: col-resize;
+      flex-shrink: 0;
+      position: relative;
+      transition: background 0.2s;
+    }
+    .h-resize-handle:hover, .h-resize-handle.dragging {
+      background: #D97706;
+    }
+
+    /* 左栏 - 项目信息 默认 33.3% */
+    .detail-left {
+      width: 33.33%;
+      min-width: 150px;
+      background: white;
+      padding: 16px;
+      overflow-y: auto;
+    }
+    .detail-section-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: #9CA3AF;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+    .detail-item {
+      margin-bottom: 16px;
+    }
+    .detail-label {
+      font-size: 11px;
+      color: #9CA3AF;
+      margin-bottom: 4px;
+    }
+    .detail-value {
+      font-size: 14px;
+      color: #1A1A1A;
+      font-weight: 500;
+    }
+
+    /* 中栏 - Pipeline 默认 33.3% */
+    .detail-center {
+      width: 33.33%;
+      min-width: 200px;
+      background: white;
+      padding: 16px;
+      overflow-y: auto;
+    }
+    .stage-timeline {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .stage-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      border: 1px solid #E5E7EB;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .stage-item:hover {
+      background: #F9FAFB;
+    }
+    .stage-item.active {
+      border-color: #D97706;
+      background: #FFFBEB;
+    }
+    .stage-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+    .stage-icon.completed {
+      background: #D1FAE5;
+      color: #047857;
+    }
+    .stage-icon.in-progress {
+      background: #DBEAFE;
+      color: #1D4ED8;
+    }
+    .stage-icon.pending {
+      background: #F3F4F6;
+      color: #9CA3AF;
+    }
+    .stage-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .stage-name {
+      font-size: 14px;
+      font-weight: 500;
+      color: #1A1A1A;
+    }
+    .stage-status {
+      font-size: 12px;
+      color: #9CA3AF;
+    }
+
+    /* 右栏 - 详情面板 默认 33.3% */
+    .detail-right {
+      flex: 1;
+      min-width: 200px;
+      background: white;
+      padding: 16px;
+      overflow-y: auto;
+    }
+    .log-entry {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      padding: 8px;
+      background: #F9FAFB;
+      border-radius: 4px;
+      margin-bottom: 8px;
+      color: #374151;
+    }
+    .log-entry.success {
+      color: #047857;
+      background: #D1FAE5;
+    }
+    .log-entry.error {
+      color: #DC2626;
+      background: #FEE2E2;
+    }
+
+    /* 尺寸显示 */
+    .size-indicator {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      background: rgba(0,0,0,0.7);
+      color: white;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-family: monospace;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .size-indicator.visible {
+      opacity: 1;
+    }
+
+    /* 淡入动画 */
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .fade-in {
+      animation: fadeIn 0.2s ease-out;
+    }
+
+    /* 拖动时禁用选择 */
+    body.resizing {
+      user-select: none;
+    }
+    body.resizing * {
+      cursor: inherit !important;
+    }
+  </style>
+</head>
+<body>
+  <!-- 概览区域 -->
+  <div class="overview-section" id="overview">
+    <div class="section-header">
+      <h1 class="section-title">
+        项目概览
+        <span class="badge">4 个项目</span>
+      </h1>
+      <div class="section-actions">
+        <button class="btn btn-icon" title="刷新">↻</button>
+        <button class="btn btn-primary">+ 添加项目</button>
+        <button class="btn btn-secondary" id="resetLayout">重置布局</button>
+      </div>
+    </div>
+    <div class="cards-container">
+      <!-- 项目卡片 1 -->
+      <div class="project-card selected" data-project="sillyspec">
+        <div class="card-header">
+          <span class="project-name">sillyspec</span>
+          <span class="last-active">2分钟前</span>
+        </div>
+        <div>
+          <span class="stage-badge in-progress">需求探索</span>
+        </div>
+        <div class="progress-section">
+          <div class="progress-bar">
+            <div class="progress-fill in-progress" style="width: 40%"></div>
+          </div>
+          <span class="progress-text">40%</span>
+        </div>
+      </div>
+      <!-- 项目卡片 2 -->
+      <div class="project-card" data-project="my-blog">
+        <div class="card-header">
+          <span class="project-name">my-blog</span>
+          <span class="last-active">15分钟前</span>
+        </div>
+        <div>
+          <span class="stage-badge in-progress">实现计划</span>
+        </div>
+        <div class="progress-section">
+          <div class="progress-bar">
+            <div class="progress-fill in-progress" style="width: 75%"></div>
+          </div>
+          <span class="progress-text">75%</span>
+        </div>
+      </div>
+      <!-- 项目卡片 3 -->
+      <div class="project-card" data-project="user-service">
+        <div class="card-header">
+          <span class="project-name">user-service</span>
+          <span class="last-active">1小时前</span>
+        </div>
+        <div>
+          <span class="stage-badge completed">验证确认</span>
+        </div>
+        <div class="progress-section">
+          <div class="progress-bar">
+            <div class="progress-fill completed" style="width: 100%"></div>
+          </div>
+          <span class="progress-text">100%</span>
+        </div>
+      </div>
+      <!-- 项目卡片 4 -->
+      <div class="project-card" data-project="payment-api">
+        <div class="card-header">
+          <span class="project-name">payment-api</span>
+          <span class="last-active">昨天</span>
+        </div>
+        <div>
+          <span class="stage-badge pending">未开始</span>
+        </div>
+        <div class="progress-section">
+          <div class="progress-bar">
+            <div class="progress-fill pending" style="width: 0%"></div>
+          </div>
+          <span class="progress-text">0%</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 垂直拖动分割线 -->
+  <div class="v-resize-handle" id="vResizeHandle"></div>
+
+  <!-- 详情区域 -->
+  <div class="detail-section" id="detail">
+    <div class="detail-header">
+      <span class="detail-title">sillyspec / 需求探索</span>
+      <div class="detail-tabs">
+        <span class="detail-tab active">Pipeline</span>
+        <span class="detail-tab">文档</span>
+        <span class="detail-tab">日志</span>
+      </div>
+    </div>
+    <div class="detail-content fade-in">
+      <!-- 左栏：项目信息 -->
+      <div class="detail-left" id="detailLeft">
+        <div class="detail-section-title">项目信息</div>
+        <div class="detail-item">
+          <div class="detail-label">项目名称</div>
+          <div class="detail-value">sillyspec</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-label">路径</div>
+          <div class="detail-value">/Users/qinyi/...</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-label">当前阶段</div>
+          <div class="detail-value">需求探索</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-label">进度</div>
+          <div class="detail-value">4/10 步骤</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-label">耗时</div>
+          <div class="detail-value">8 分钟</div>
+        </div>
+      </div>
+
+      <!-- 水平拖动分割线 1 -->
+      <div class="h-resize-handle" id="hResizeHandle1"></div>
+
+      <!-- 中栏：Pipeline -->
+      <div class="detail-center" id="detailCenter">
+        <div class="detail-section-title">阶段流程</div>
+        <div class="stage-timeline">
+          <div class="stage-item">
+            <div class="stage-icon completed">✓</div>
+            <div class="stage-info">
+              <div class="stage-name">✅ 代码扫描</div>
+              <div class="stage-status">已完成 · 8分钟</div>
+            </div>
+          </div>
+          <div class="stage-item active">
+            <div class="stage-icon in-progress">◷</div>
+            <div class="stage-info">
+              <div class="stage-name">🧠 需求探索</div>
+              <div class="stage-status">进行中 · 步骤 4/10</div>
+            </div>
+          </div>
+          <div class="stage-item">
+            <div class="stage-icon pending">○</div>
+            <div class="stage-info">
+              <div class="stage-name">📐 实现计划</div>
+              <div class="stage-status">未开始</div>
+            </div>
+          </div>
+          <div class="stage-item">
+            <div class="stage-icon pending">○</div>
+            <div class="stage-info">
+              <div class="stage-name">⚡ 波次执行</div>
+              <div class="stage-status">未开始</div>
+            </div>
+          </div>
+          <div class="stage-item">
+            <div class="stage-icon pending">○</div>
+            <div class="stage-info">
+              <div class="stage-name">🔍 验证确认</div>
+              <div class="stage-status">未开始</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 水平拖动分割线 2 -->
+      <div class="h-resize-handle" id="hResizeHandle2"></div>
+
+      <!-- 右栏：日志 -->
+      <div class="detail-right" id="detailRight">
+        <div class="detail-section-title">最近活动</div>
+        <div class="log-entry">✅ Step 3 完成：协作与复用检查</div>
+        <div class="log-entry">✅ Step 4 完成：原型/设计图分析</div>
+        <div class="log-entry">✅ Step 5 完成：需求范围评估</div>
+        <div class="log-entry">◷ Step 6 进行中：对话式探索...</div>
+        <div class="log-entry">📝 正在收集需求细节...</div>
+        <div class="log-entry">📝 分析信息架构...</div>
+        <div class="log-entry">📝 准备设计方案...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 尺寸指示器 -->
+  <div class="size-indicator" id="sizeIndicator">概览 30% | 详情 70%</div>
+
+  <script>
+    // 常量
+    const STORAGE_KEY = 'dashboard-layout-v2';
+    const DEFAULT_OVERVIEW_HEIGHT = 30; // %
+    const DEFAULT_COLUMN_WIDTHS = [33.33, 33.33, 33.33]; // %
+
+    // 状态
+    let layout = {
+      overviewHeight: DEFAULT_OVERVIEW_HEIGHT,
+      columnWidths: [...DEFAULT_COLUMN_WIDTHS]
+    };
+
+    // DOM 元素
+    const overview = document.getElementById('overview');
+    const detail = document.getElementById('detail');
+    const vResizeHandle = document.getElementById('vResizeHandle');
+    const detailLeft = document.getElementById('detailLeft');
+    const detailCenter = document.getElementById('detailCenter');
+    const detailRight = document.getElementById('detailRight');
+    const hResizeHandle1 = document.getElementById('hResizeHandle1');
+    const hResizeHandle2 = document.getElementById('hResizeHandle2');
+    const sizeIndicator = document.getElementById('sizeIndicator');
+    const resetBtn = document.getElementById('resetLayout');
+
+    // 加载保存的布局
+    function loadLayout() {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          layout = JSON.parse(saved);
+          applyLayout();
+        }
+      } catch (e) {
+        console.error('Failed to load layout:', e);
+      }
+    }
+
+    // 保存布局
+    function saveLayout() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(layout));
+    }
+
+    // 应用布局
+    function applyLayout() {
+      overview.style.height = layout.overviewHeight + '%';
+      updateColumnWidths();
+    }
+
+    // 更新三栏宽度
+    function updateColumnWidths() {
+      detailLeft.style.width = layout.columnWidths[0] + '%';
+      detailCenter.style.width = layout.columnWidths[1] + '%';
+      // detailRight 使用 flex: 1 自动填充
+    }
+
+    // 显示尺寸指示器
+    function showSizeIndicator(text) {
+      sizeIndicator.textContent = text;
+      sizeIndicator.classList.add('visible');
+      clearTimeout(sizeIndicator.timeout);
+      sizeIndicator.timeout = setTimeout(() => {
+        sizeIndicator.classList.remove('visible');
+      }, 1500);
+    }
+
+    // 垂直拖动（概览 ↔ 详情）
+    function initVResize() {
+      let startY, startHeight;
+
+      vResizeHandle.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        document.body.classList.add('resizing');
+        vResizeHandle.classList.add('dragging');
+        startY = e.clientY;
+        startHeight = overview.offsetHeight;
+
+        const onMove = (e) => {
+          const deltaY = e.clientY - startY;
+          const newHeight = startHeight + deltaY;
+          const newPercent = (newHeight / window.innerHeight) * 100;
+
+          // 限制范围 15%-75%
+          if (newPercent >= 15 && newPercent <= 75) {
+            layout.overviewHeight = Math.round(newPercent * 10) / 10;
+            overview.style.height = layout.overviewHeight + '%';
+            showSizeIndicator(`概览 ${Math.round(layout.overviewHeight)}% | 详情 ${Math.round(100 - layout.overviewHeight)}%`);
+          }
+        };
+
+        const onUp = () => {
+          document.body.classList.remove('resizing');
+          vResizeHandle.classList.remove('dragging');
+          window.removeEventListener('mousemove', onMove);
+          window.removeEventListener('mouseup', onUp);
+          saveLayout();
+        };
+
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+      });
+    }
+
+    // 水平拖动（三栏分割）
+    function initHResize() {
+      // 分割线 1：左栏 ↔ 中栏
+      hResizeHandle1.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        startHResize(e, 0, 1);
+      });
+
+      // 分割线 2：中栏 ↔ 右栏
+      hResizeHandle2.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        startHResize(e, 1, 2);
+      });
+    }
+
+    function startHResize(e, colIndex, nextColIndex) {
+      document.body.classList.add('resizing');
+      const startX = e.clientX;
+      const containerWidth = detailContent.offsetWidth;
+      const startWidths = [
+        detailLeft.offsetWidth,
+        detailCenter.offsetWidth
+      ];
+
+      const handle = colIndex === 0 ? hResizeHandle1 : hResizeHandle2;
+      handle.classList.add('dragging');
+
+      const onMove = (e) => {
+        const deltaX = e.clientX - startX;
+        const deltaPercent = (deltaX / containerWidth) * 100;
+
+        let newWidth1, newWidth2;
+
+        if (colIndex === 0) {
+          // 左栏 ↔ 中栏
+          newWidth1 = ((startWidths[0] + deltaX) / containerWidth) * 100;
+          newWidth2 = ((startWidths[1] - deltaX) / containerWidth) * 100;
+        } else {
+          // 中栏 ↔ 右栏
+          newWidth1 = layout.columnWidths[1];
+          newWidth2 = ((startWidths[1] - deltaX) / containerWidth) * 100;
+        }
+
+        // 限制最小宽度
+        const minWidth = 10;
+        if (newWidth1 >= minWidth && newWidth2 >= minWidth) {
+          if (colIndex === 0) {
+            layout.columnWidths[0] = Math.round(newWidth1 * 10) / 10;
+            layout.columnWidths[1] = Math.round(newWidth2 * 10) / 10;
+          } else {
+            layout.columnWidths[1] = Math.round(newWidth1 * 10) / 10;
+            layout.columnWidths[2] = Math.round(newWidth2 * 10) / 10;
+          }
+          updateColumnWidths();
+          showSizeIndicator(`三栏: ${Math.round(layout.columnWidths[0])}% | ${Math.round(layout.columnWidths[1])}% | ${Math.round(layout.columnWidths[2])}%`);
+        }
+      };
+
+      const onUp = () => {
+        document.body.classList.remove('resizing');
+        handle.classList.remove('dragging');
+        window.removeEventListener('mousemove', onMove);
+        window.removeEventListener('mouseup', onUp);
+        saveLayout();
+      };
+
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onUp);
+    }
+
+    // 重置布局
+    resetBtn.addEventListener('click', () => {
+      layout = {
+        overviewHeight: DEFAULT_OVERVIEW_HEIGHT,
+        columnWidths: [...DEFAULT_COLUMN_WIDTHS]
+      };
+      applyLayout();
+      saveLayout();
+      showSizeIndicator('布局已重置');
+    });
+
+    // 选择项目
+    const cards = document.querySelectorAll('.project-card');
+    cards.forEach(card => {
+      card.addEventListener('click', () => {
+        cards.forEach(c => c.classList.remove('selected'));
+        card.classList.add('selected');
+        const content = document.querySelector('.detail-content');
+        content.classList.remove('fade-in');
+        void content.offsetWidth;
+        content.classList.add('fade-in');
+      });
+    });
+
+    // 初始化
+    const detailContent = document.querySelector('.detail-content');
+    loadLayout();
+    initVResize();
+    initHResize();
+  </script>
+</body>
+</html>
