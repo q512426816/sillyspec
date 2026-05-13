@@ -35,7 +35,7 @@
       <div class="flex-1 flex overflow-hidden">
         <!-- 左栏：项目信息 -->
         <div
-          class="flex-shrink-0 bg-white overflow-hidden p-4"
+          class="detail-column flex-shrink-0 bg-white overflow-hidden"
           :style="{ width: layout.columnWidths[0] + '%', minWidth: '150px' }"
           :class="{ 'fade-in': projectSwitched }"
         >
@@ -47,7 +47,7 @@
             </div>
             <div class="detail-item">
               <div class="detail-label">路径</div>
-              <div class="detail-value text-xs">{{ shortPath }}</div>
+              <div class="detail-value detail-path">{{ shortPath }}</div>
             </div>
             <div class="detail-item">
               <div class="detail-label">当前阶段</div>
@@ -70,7 +70,7 @@
 
         <!-- 中栏：Pipeline -->
         <div
-          class="flex-1 bg-white overflow-hidden"
+          class="pipeline-column flex-1 bg-white overflow-hidden"
           :style="{ minWidth: '200px' }"
         >
           <PipelineView
@@ -96,7 +96,7 @@
 
         <!-- 右栏：日志/详情 -->
         <div
-          class="flex-shrink-0 bg-white overflow-hidden flex flex-col"
+          class="activity-column flex-shrink-0 bg-white overflow-hidden flex flex-col"
           :style="{ width: layout.columnWidths[2] + '%', minWidth: '200px' }"
         >
           <div class="detail-section-title px-4 pt-4">最近活动</div>
@@ -313,8 +313,11 @@ function startDragHorizontal(colIndex) {
 
 // WebSocket 事件处理
 onMounted(() => {
-  ws.on('projects:init', (projects) => { dashboard.updateProjects(projects) })
-  ws.on('projects:updated', (projects) => { dashboard.updateProjects(projects) })
+  ws.on('projects:init', handleProjectsUpdate)
+  ws.on('projects:updated', handleProjectsUpdate)
+  ws.on('project:update', (project) => {
+    dashboard.updateProject(project)
+  })
   ws.on('cli:output', (data) => {
     if (data.projectName === dashboard.activeProjectName.value) {
       dashboard.appendLog(data.output)
@@ -341,6 +344,15 @@ onMounted(() => {
   ws.on('scan:paths', (paths) => { scanPaths.value = paths })
   ws.on('docs:tree', (docs) => { dashboard.updateDocs(docs) })
 })
+
+function handleProjectsUpdate(projects) {
+  const previousPath = dashboard.activeProjectPath.value
+  dashboard.updateProjects(projects)
+
+  if (!previousPath && dashboard.state.activeProject?.path) {
+    ws.send({ type: 'docs:get', data: { projectPath: dashboard.state.activeProject.path } })
+  }
+}
 
 function handleSelectProject(project) {
   dashboard.selectProject(project)
@@ -412,7 +424,7 @@ body {
   -moz-osx-smoothing: grayscale;
 }
 
-#app { width: 100vw; height: 100vh; overflow: hidden; min-width: 1024px; }
+#app { width: 100vw; height: 100vh; overflow: hidden; min-width: 0; }
 
 /* 拖动时禁用选择 */
 body.resizing {
@@ -436,6 +448,39 @@ body.resizing * {
 }
 
 /* 项目信息样式 */
+.detail-column,
+.activity-column {
+  padding: 18px 20px;
+}
+
+.pipeline-column {
+  border-left: 1px solid #EEF0F4;
+  border-right: 1px solid #EEF0F4;
+}
+
+.pipeline-column > * {
+  min-width: 0;
+  padding-left: 18px;
+  padding-right: 18px;
+}
+
+.activity-column {
+  gap: 12px;
+}
+
+.activity-column .detail-section-title {
+  padding: 0;
+  margin-bottom: 0;
+}
+
+.activity-column > .flex-1 {
+  padding: 0;
+}
+
+.project-info {
+  min-width: 0;
+}
+
 .detail-section-title {
   font-size: 12px;
   font-weight: 600;
@@ -458,6 +503,16 @@ body.resizing * {
   font-size: 14px;
   color: #1A1A1A;
   font-weight: 500;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.45;
+}
+
+.detail-path {
+  font-size: 12px;
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  white-space: normal;
 }
 
 /* 日志条目样式 */

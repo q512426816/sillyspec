@@ -219,6 +219,88 @@ ${taskName}
 }
 
 /**
+ * 构建任务蓝图协调器步骤（单步，子代理并行写蓝图）
+ */
+export function buildCoordinatorStep(changeDir, taskNames) {
+  const taskList = taskNames.map((name, i) => {
+    const num = String(i + 1).padStart(2, '0')
+    return `- task-${num}: ${name}`
+  }).join('\n')
+
+  const subagentPrompts = taskNames.map((name, i) => {
+    const num = String(i + 1).padStart(2, '0')
+    return `\`\`\`
+任务编号：task-${num}
+任务名称：${name}
+文件路径：${changeDir}/tasks/task-${num}.md
+
+操作：
+1. 读取 ${changeDir}/design.md 和 ${changeDir}/plan.md 了解上下文
+2. 读取相关源文件了解现有代码
+3. 按以下格式编写任务蓝图并保存到 ${changeDir}/tasks/task-${num}.md：
+
+# task-${num}: ${name}
+
+## 修改文件
+- 文件路径列表
+
+## 实现要求
+1. 具体做什么
+
+## 接口定义
+（代码类任务必填）
+
+## 边界处理
+- 异常场景
+
+## 参考
+- 可参考的模式
+
+## TDD 步骤
+1. 写测试 → 2. 确认失败 → 3. 写代码 → 4. 确认通过
+
+## 验收标准
+- [ ] 具体可测试的条件
+
+关键规则：
+- 必须独立完整，execute 子代理只读这一个文件就能干活
+- 不要依赖其他 task-N.md 的内容
+- 接口定义写到"搬砖工照着做"的程度
+- 写完后用 Write tool 保存到文件
+\`\`\``
+  }).join('\n\n')
+
+  return {
+    name: '生成任务蓝图（子代理并行）',
+    prompt: `为 plan.md 中的每个任务生成独立蓝图文件。
+
+## 任务清单
+${taskList}
+
+## 执行方式（必须严格遵守）
+
+**你必须使用 Agent tool 启动子代理来写每个蓝图，不要自己写。**
+
+1. 确认 \`${changeDir}/tasks/\` 目录存在（不存在则创建）
+2. 为每个任务启动一个独立子代理（Agent tool），可并行启动多个
+3. 每个子代理使用对应的 prompt（见下方模板）
+4. 等待所有子代理完成
+5. 验证每个 task-N.md 文件已生成且非空
+
+### 子代理 prompt 模板
+为每个任务使用以下 prompt 启动子代理：
+
+${subagentPrompts}
+
+## 验收
+- 每个 task-N.md 文件存在且非空
+- 包含所有必要章节：修改文件、实现要求、接口定义、边界处理、TDD 步骤、验收标准`,
+    outputHint: '蓝图生成结果',
+    optional: false
+  }
+}
+
+/**
  * 从 plan.md 解析任务名列表
  */
 function parseTaskNames(planContent) {
@@ -255,8 +337,7 @@ export function buildPlanSteps(changeDir = null, planContent = null) {
     return [...fixedPrefix, ...fixedSuffix]
   }
 
-  // 动态生成每个任务的蓝图写作步骤
-  // 尝试从 plan.md 解析任务名
+  // 解析任务名
   let taskNames = []
   if (planContent) {
     taskNames = parseTaskNames(planContent)
@@ -267,16 +348,7 @@ export function buildPlanSteps(changeDir = null, planContent = null) {
     }
   }
 
-  const taskSteps = []
-  for (let i = 1; i <= taskCount; i++) {
-    const taskName = taskNames[i - 1] || '（从 plan.md 读取任务名）'
-    taskSteps.push({
-      name: `写任务蓝图 task-${String(i).padStart(2, '0')}`,
-      prompt: `### 注意\n这是第 ${i}/${taskCount} 个任务蓝图。focus 在这一个任务上，不要写其他任务的内容。\n\n${buildTaskPrompt(i, taskName, changeDir)}`,
-      outputHint: `task-${String(i).padStart(2, '0')} 蓝图`,
-      optional: false
-    })
-  }
-
-  return [...fixedPrefix, ...taskSteps, ...fixedSuffix]
+  // 生成单个协调器步骤（子代理并行写蓝图）
+  const coordinatorStep = buildCoordinatorStep(changeDir, taskNames)
+  return [...fixedPrefix, coordinatorStep, ...fixedSuffix]
 }

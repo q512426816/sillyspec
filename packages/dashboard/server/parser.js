@@ -1,6 +1,6 @@
 import { readFileSync, existsSync, readdirSync, statSync } from 'fs'
 import { execSync } from 'child_process'
-import { join } from 'path'
+import { join, relative, sep } from 'path'
 import { fileURLToPath } from 'url'
 import { dirname } from 'path'
 
@@ -318,6 +318,114 @@ export function parseDocsTree(projectPath) {
         })
       }
     }
+  }
+
+  return { groups }
+}
+
+const VIEWABLE_SILLYSPEC_DOC_EXTENSIONS = new Set([
+  '.md', '.markdown', '.mdx',
+  '.html', '.htm',
+  '.txt', '.log',
+  '.json', '.yaml', '.yml', '.toml',
+  '.xml', '.csv'
+])
+
+const SILLYSPEC_DOC_GROUPS = [
+  { key: 'docs', label: '📚 docs', dir: 'docs' },
+  { key: 'changes', label: '⚙️ changes', dir: 'changes' },
+  { key: 'plans', label: '🧾 plans', dir: 'plans' },
+  { key: 'quicklog', label: '⚡ quicklog', dir: 'quicklog' },
+  { key: 'knowledge', label: '🧠 knowledge', dir: 'knowledge' },
+  { key: 'projects', label: '📁 projects', dir: 'projects' },
+  { key: 'workspace', label: '🗂️ workspace', dir: 'workspace' },
+  { key: 'shared', label: '🔗 shared', dir: 'shared' },
+  { key: 'runtime', label: '🧰 .runtime', dir: '.runtime' }
+]
+
+function sillyspecDocExt(fileName) {
+  const index = fileName.lastIndexOf('.')
+  return index === -1 ? '' : fileName.slice(index).toLowerCase()
+}
+
+function isViewableSillyspecDoc(fileName) {
+  return VIEWABLE_SILLYSPEC_DOC_EXTENSIONS.has(sillyspecDocExt(fileName))
+}
+
+function titleFromSillyspecDoc(filePath, fileName) {
+  const ext = sillyspecDocExt(fileName)
+  if (ext === '.md' || ext === '.markdown' || ext === '.mdx') {
+    try {
+      const content = readFileSync(filePath, 'utf-8')
+      const titleMatch = content.match(/^#\s+(.+)$/m)
+      if (titleMatch) return titleMatch[1]
+    } catch {}
+  }
+  return fileName.replace(/\.(md|markdown|mdx|html?|txt|log|json|ya?ml|toml|xml|csv)$/i, '')
+}
+
+function listSillyspecDocsRecursive(dir, rootDir) {
+  const files = []
+  try {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const filePath = join(dir, entry.name)
+      if (entry.isDirectory()) {
+        files.push(...listSillyspecDocsRecursive(filePath, rootDir))
+      } else if (entry.isFile() && isViewableSillyspecDoc(entry.name)) {
+        const s = statSync(filePath)
+        files.push({
+          name: relative(rootDir, filePath).split(sep).join('/'),
+          path: filePath,
+          title: titleFromSillyspecDoc(filePath, entry.name),
+          extension: sillyspecDocExt(entry.name).slice(1),
+          size: s.size,
+          mtime: s.mtime.toISOString()
+        })
+      }
+    }
+  } catch {}
+  return files
+}
+
+export function parseSillyspecDocsTree(projectPath) {
+  const sillyspecDir = join(projectPath, '.sillyspec')
+  if (!existsSync(sillyspecDir)) return { groups: [] }
+
+  const groups = []
+  const seen = new Set()
+
+  for (const group of SILLYSPEC_DOC_GROUPS) {
+    const groupDir = join(sillyspecDir, group.dir)
+    if (!existsSync(groupDir)) continue
+
+    const files = listSillyspecDocsRecursive(groupDir, groupDir)
+      .sort((a, b) => a.name.localeCompare(b.name))
+
+    if (files.length === 0) continue
+    for (const file of files) seen.add(file.path)
+    groups.push({ key: group.key, label: group.label, project: '.sillyspec', files })
+  }
+
+  const rootFiles = []
+  try {
+    for (const entry of readdirSync(sillyspecDir, { withFileTypes: true })) {
+      if (!entry.isFile() || !isViewableSillyspecDoc(entry.name)) continue
+      const filePath = join(sillyspecDir, entry.name)
+      if (seen.has(filePath)) continue
+      const s = statSync(filePath)
+      rootFiles.push({
+        name: entry.name,
+        path: filePath,
+        title: titleFromSillyspecDoc(filePath, entry.name),
+        extension: sillyspecDocExt(entry.name).slice(1),
+        size: s.size,
+        mtime: s.mtime.toISOString()
+      })
+    }
+  } catch {}
+
+  if (rootFiles.length > 0) {
+    groups.unshift({ key: 'root', label: '📄 .sillyspec', project: '.sillyspec', files: rootFiles })
   }
 
   return { groups }

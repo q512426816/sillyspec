@@ -125,7 +125,34 @@ export function useDashboard() {
       const updated = getProject(state.activeProject.path)
       if (updated) {
         state.activeProject = updated
+        return
       }
+    }
+
+    state.activeProject = state.projects[0] || null
+  }
+
+  /**
+   * Merge a single project update into the current project list.
+   * @param {object} project - Partial project payload containing at least path
+   */
+  function updateProject(project) {
+    if (!project?.path) return
+
+    const index = state.projects.findIndex(p => p.path === project.path)
+    if (index === -1) return
+
+    const updated = {
+      ...state.projects[index],
+      ...project,
+      state: project.state ?? state.projects[index].state,
+      overview: project.overview ?? state.projects[index].overview
+    }
+
+    state.projects.splice(index, 1, updated)
+
+    if (state.activeProject?.path === project.path) {
+      state.activeProject = updated
     }
   }
 
@@ -169,6 +196,7 @@ export function useDashboard() {
     openPanel,
     closePanel,
     updateProjects,
+    updateProject,
     setExecuting,
     isExecuting,
     activeProjectName,

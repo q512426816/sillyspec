@@ -62,12 +62,12 @@
     </div>
 
     <!-- Docs Tab -->
-    <div v-if="activeTab === 'docs'" class="flex-1 flex overflow-hidden">
-      <div class="w-[200px] flex-shrink-0 overflow-hidden" style="border-right: 1px solid #F0F0F3;">
+    <div v-if="activeTab === 'docs'" class="docs-panel flex-1 flex overflow-hidden">
+      <div class="docs-tree-pane flex-shrink-0 overflow-hidden" style="border-right: 1px solid #F0F0F3;">
         <DocTree :groups="docs.groups" :selected-file="selectedDocFile" @select-file="$emit('select-doc-file', $event)" />
       </div>
       <div class="flex-1 overflow-hidden">
-        <DocPreview :content="docContent" :loading="docLoading" />
+        <DocPreview :content="docContent" :loading="docLoading" :selected-file="selectedDocFile" />
       </div>
     </div>
   </div>
@@ -127,3 +127,14 @@ function getStageStatus(n) {
 }
 function handleSelectStep(step) { emit('select-step', step) }
 </script>
+
+<style scoped>
+.docs-panel {
+  min-height: 0;
+}
+
+.docs-tree-pane {
+  width: clamp(220px, 42%, 320px);
+  min-width: 180px;
+}
+</style>

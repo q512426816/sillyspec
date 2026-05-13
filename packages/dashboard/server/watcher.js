@@ -2,7 +2,7 @@ import chokidar from 'chokidar'
 import { join, basename, dirname, sep } from 'path'
 import { homedir } from 'os'
 import { existsSync, readdirSync, realpathSync } from 'fs'
-import { parseProjectState } from './parser.js'
+import { parseProjectState, parseProjectOverview } from './parser.js'
 
 let watcher = null
 let updateCallback = null
@@ -146,8 +146,12 @@ function scanSelf(seen) {
   const cwd = process.cwd()
   const projects = []
 
-  if (!seen.has(cwd)) {
-    seen.add(cwd)
+  let realPath
+  try { realPath = realpathSync(cwd) } catch { realPath = cwd }
+  const normalizedPath = realPath.toLowerCase()
+
+  if (!seen.has(normalizedPath)) {
+    seen.add(normalizedPath)
     const sillyspecPath = join(cwd, '.sillyspec')
     if (existsSync(sillyspecPath)) {
       projects.push({
@@ -200,8 +204,9 @@ export function startWatcher(callback) {
   // Parse initial states
   for (const project of projects) {
     const state = parseProjectState(project.path)
+    const overview = parseProjectOverview(project.path)
     if (state) {
-      projectStates.set(project.name, { ...project, state })
+      projectStates.set(project.name, { ...project, state, overview })
     }
   }
 
@@ -261,8 +266,9 @@ async function handleFileChange(filePath) {
   const project = projectStates.get(projectName)
   if (project) {
     const newState = parseProjectState(project.path)
+    const overview = parseProjectOverview(project.path)
     if (newState) {
-      projectStates.set(projectName, { ...project, state: newState })
+      projectStates.set(projectName, { ...project, state: newState, overview })
     }
   }
 
@@ -280,11 +286,13 @@ async function rescanProjects() {
   for (const project of projects) {
     if (!projectStates.has(project.name)) {
       const state = parseProjectState(project.path)
+      const overview = parseProjectOverview(project.path)
       if (state) {
         projectStates.set(project.name, {
           name: project.name,
           path: project.path,
-          state
+          state,
+          overview
         })
       }
     }

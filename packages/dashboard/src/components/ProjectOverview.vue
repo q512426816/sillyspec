@@ -37,8 +37,6 @@ const props = defineProps({
 
 const emit = defineEmits(['select'])
 
-const { resetLayout } = useLayout()
-
 function handleSelect(project) {
   emit('select', project)
 }

@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard 概览区域原型</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #F5F5F7;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    /* 概览区域 - 40% */
+    .overview-section {
+      height: 40%;
+      background: #FFFFFF;
+      border-bottom: 2px solid #2A3040;
+      padding: 16px 24px;
+      display: flex;
+      flex-direction: column;
+    }
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+    .section-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: #1A1A1A;
+    }
+    .section-actions {
+      display: flex;
+      gap: 8px;
+    }
+    .btn {
+      padding: 6px 12px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .btn-primary {
+      background: #D97706;
+      color: white;
+    }
+    .btn-secondary {
+      background: #E5E7EB;
+      color: #374151;
+    }
+    /* 水平滚动卡片容器 */
+    .cards-container {
+      flex: 1;
+      display: flex;
+      gap: 16px;
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding-bottom: 8px;
+    }
+    .cards-container::-webkit-scrollbar {
+      height: 8px;
+    }
+    .cards-container::-webkit-scrollbar-track {
+      background: #F3F4F6;
+      border-radius: 4px;
+    }
+    .cards-container::-webkit-scrollbar-thumb {
+      background: #D1D5DB;
+      border-radius: 4px;
+    }
+    /* 项目卡片 */
+    .project-card {
+      width: 280px;
+      height: 120px;
+      background: white;
+      border: 2px solid #E5E7EB;
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      cursor: pointer;
+      transition: all 0.2s;
+      flex-shrink: 0;
+    }
+    .project-card:hover {
+      border-color: #D97706;
+      box-shadow: 0 4px 12px rgba(217, 119, 6, 0.15);
+    }
+    .project-card.selected {
+      border-color: #D97706;
+      box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.2);
+    }
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+    .project-name {
+      font-size: 16px;
+      font-weight: 600;
+      color: #1A1A1A;
+    }
+    .last-active {
+      font-size: 11px;
+      color: #9CA3AF;
+    }
+    .stage-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .stage-badge.in-progress {
+      background: #DBEAFE;
+      color: #1D4ED8;
+    }
+    .stage-badge.completed {
+      background: #D1FAE5;
+      color: #047857;
+    }
+    .stage-badge.pending {
+      background: #F3F4F6;
+      color: #6B7280;
+    }
+    .progress-section {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .progress-bar {
+      flex: 1;
+      height: 6px;
+      background: #E5E7EB;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.3s;
+    }
+    .progress-fill.in-progress { background: #3B82F6; }
+    .progress-fill.completed { background: #10B981; }
+    .progress-fill.pending { background: #9CA3AF; }
+    .progress-text {
+      font-size: 12px;
+      font-weight: 600;
+      color: #374151;
+    }
+    /* 详情区域 - 60% */
+    .detail-section {
+      flex: 1;
+      background: #FAFAFA;
+      padding: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #9CA3AF;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <!-- 概览区域 -->
+  <div class="overview-section">
+    <div class="section-header">
+      <h1 class="section-title">项目概览</h1>
+      <div class="section-actions">
+        <button class="btn btn-secondary">刷新</button>
+        <button class="btn btn-primary">添加项目</button>
+      </div>
+    </div>
+    <div class="cards-container">
+      <!-- 项目卡片 1 - 进行中 -->
+      <div class="project-card selected">
+        <div class="card-header">
+          <span class="project-name">sillyspec</span>
+          <span class="last-active">2分钟前</span>
+        </div>
+        <div>
+          <span class="stage-badge in-progress">需求探索</span>
+        </div>
+        <div class="progress-section">
+          <div class="progress-bar">
+            <div class="progress-fill in-progress" style="width: 40%"></div>
+          </div>
+          <span class="progress-text">40%</span>
+        </div>
+      </div>
+      <!-- 项目卡片 2 - 进行中 -->
+      <div class="project-card">
+        <div class="card-header">
+          <span class="project-name">my-blog</span>
+          <span class="last-active">15分钟前</span>
+        </div>
+        <div>
+          <span class="stage-badge in-progress">实现计划</span>
+        </div>
+        <div class="progress-section">
+          <div class="progress-bar">
+            <div class="progress-fill in-progress" style="width: 75%"></div>
+          </div>
+          <span class="progress-text">75%</span>
+        </div>
+      </div>
+      <!-- 项目卡片 3 - 已完成 -->
+      <div class="project-card">
+        <div class="card-header">
+          <span class="project-name">user-service</span>
+          <span class="last-active">1小时前</span>
+        </div>
+        <div>
+          <span class="stage-badge completed">验证确认</span>
+        </div>
+        <div class="progress-section">
+          <div class="progress-bar">
+            <div class="progress-fill completed" style="width: 100%"></div>
+          </div>
+          <span class="progress-text">100%</span>
+        </div>
+      </div>
+      <!-- 项目卡片 4 - 未开始 -->
+      <div class="project-card">
+        <div class="card-header">
+          <span class="project-name">payment-api</span>
+          <span class="last-active">昨天</span>
+        </div>
+        <div>
+          <span class="stage-badge pending">未开始</span>
+        </div>
+        <div class="progress-section">
+          <div class="progress-bar">
+            <div class="progress-fill pending" style="width: 0%"></div>
+          </div>
+          <span class="progress-text">0%</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- 详情区域 -->
+  <div class="detail-section">
+    点击上方卡片查看项目详情
+  </div>
+</body>
+</html>

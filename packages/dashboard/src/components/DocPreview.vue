@@ -1,27 +1,57 @@
 <template>
-  <div class="h-full overflow-y-auto px-6 py-4">
-    <div v-if="!content && !loading" class="flex items-center justify-center h-full">
-      <p class="text-[12px] font-[JetBrains_Mono,monospace]" style="color: #636366;">选择一个文档查看内容</p>
+  <div class="doc-preview-shell">
+    <div v-if="!content && !loading" class="doc-empty">
+      <p>选择一个文档查看内容</p>
     </div>
-    <div v-else-if="loading" class="flex items-center justify-center h-full">
-      <p class="text-[12px] font-[JetBrains_Mono,monospace]" style="color: #636366;">加载中...</p>
+    <div v-else-if="loading" class="doc-empty">
+      <p>加载中...</p>
     </div>
-    <div v-else class="doc-preview" v-html="renderedContent"></div>
+    <template v-else>
+      <div class="doc-toolbar">
+        <div class="doc-title" :title="fileTitle">{{ fileTitle }}</div>
+        <n-button size="tiny" type="primary" @click="isModalOpen = true">弹窗阅读</n-button>
+      </div>
+      <div class="doc-preview-scroll">
+        <div class="doc-preview" v-html="renderedContent"></div>
+      </div>
+    </template>
+
+    <n-modal
+      v-model:show="isModalOpen"
+      preset="card"
+      :title="fileTitle"
+      style="width: min(920px, calc(100vw - 48px));"
+    >
+      <div class="doc-modal-body">
+        <div class="doc-preview doc-preview-large" v-html="renderedContent"></div>
+      </div>
+    </n-modal>
   </div>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { marked } from 'marked'
 
 const props = defineProps({
   content: { type: String, default: '' },
-  loading: { type: Boolean, default: false }
+  loading: { type: Boolean, default: false },
+  selectedFile: { type: Object, default: null }
 })
+
+const isModalOpen = ref(false)
 
 marked.setOptions({
   breaks: true,
   gfm: true
+})
+
+watch(() => props.selectedFile?.path, () => {
+  isModalOpen.value = false
+})
+
+const fileTitle = computed(() => {
+  return props.selectedFile?.title || props.selectedFile?.name || '文档'
 })
 
 const renderedContent = computed(() => {
@@ -31,10 +61,69 @@ const renderedContent = computed(() => {
 </script>
 
 <style scoped>
+.doc-preview-shell {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: #FFFFFF;
+}
+
+.doc-empty {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+  font-size: 12px;
+  color: #636366;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.doc-toolbar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #F0F0F3;
+}
+
+.doc-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+  color: #1C1C1E;
+}
+
+.doc-preview-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 14px 16px 22px;
+}
+
+.doc-modal-body {
+  max-height: min(72vh, 760px);
+  overflow: auto;
+  padding-right: 4px;
+}
+
 .doc-preview {
   font-size: 13px;
   line-height: 1.7;
   color: #374151;
+  overflow-wrap: anywhere;
+}
+
+.doc-preview-large {
+  font-size: 14px;
+  line-height: 1.75;
 }
 
 .doc-preview :deep(h1) {
@@ -46,11 +135,19 @@ const renderedContent = computed(() => {
   padding-bottom: 8px;
 }
 
+.doc-preview-large :deep(h1) {
+  font-size: 22px;
+}
+
 .doc-preview :deep(h2) {
   color: #1C1C1E;
   font-size: 15px;
   font-weight: 600;
   margin: 20px 0 10px;
+}
+
+.doc-preview-large :deep(h2) {
+  font-size: 17px;
 }
 
 .doc-preview :deep(h3) {

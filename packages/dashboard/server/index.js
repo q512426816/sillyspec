@@ -5,7 +5,7 @@ import { join, dirname, basename, sep, resolve, relative } from 'path'
 import { fileURLToPath } from 'url'
 import { homedir } from 'os'
 import open from 'open'
-import { parseProjectState, parseDocsTree, parseProjectOverview, parseGitDetail, parseTechStackDetail, parseDocsList } from './parser.js'
+import { parseProjectState, parseSillyspecDocsTree, parseProjectOverview, parseGitDetail, parseTechStackDetail } from './parser.js'
 import { startWatcher, stopWatcher, addCustomScanPath, removeCustomScanPath, getCustomScanPaths, customScanPaths } from './watcher.js'
 import { executeCommand } from './executor.js'
 
@@ -97,12 +97,13 @@ function isInside(parent, child) {
   return rel === '' || (!!rel && !rel.startsWith('..') && !rel.includes(`..${sep}`))
 }
 
-function isSillyspecDocsPath(filePath) {
+function isSillyspecPath(filePath) {
   const parts = resolve(filePath).split(/[\\/]+/)
-  for (let i = 0; i < parts.length - 1; i++) {
-    if (parts[i] === '.sillyspec' && parts[i + 1] === 'docs') return true
-  }
-  return false
+  return parts.includes('.sillyspec')
+}
+
+function isViewableDocPath(filePath) {
+  return /\.(md|markdown|mdx|html?|txt|log|json|ya?ml|toml|xml|csv)$/i.test(filePath)
 }
 
 function isLocalOrigin(origin) {
@@ -316,7 +317,7 @@ function startServer({ port = 3456, open: openBrowser = true } = {}) {
       try {
         if (type === 'git') data = parseGitDetail(projectPath)
         else if (type === 'tech') data = parseTechStackDetail(projectPath)
-        else if (type === 'docs') data = parseDocsList(projectPath)
+        else if (type === 'docs') data = parseSillyspecDocsTree(projectPath).groups
         else { res.writeHead(400); res.end(JSON.stringify({ error: 'Invalid type' })); return }
         res.setHeader('Content-Type', 'application/json')
         res.writeHead(200)
@@ -373,9 +374,9 @@ function startServer({ port = 3456, open: openBrowser = true } = {}) {
         res.end(JSON.stringify({ error: 'Missing path parameter' }))
         return
       }
-      // Security: only allow reading files under a .sillyspec/docs/ tree.
+      // Security: only allow reading viewable text documents under a .sillyspec tree.
       const normalizedPath = resolve(filePath)
-      if (!isSillyspecDocsPath(normalizedPath)) {
+      if (!isSillyspecPath(normalizedPath) || !isViewableDocPath(normalizedPath)) {
         res.writeHead(403)
         res.end(JSON.stringify({ error: 'Access denied' }))
         return
@@ -405,7 +406,7 @@ function startServer({ port = 3456, open: openBrowser = true } = {}) {
         res.end(JSON.stringify({ error: 'Missing project parameter' }))
         return
       }
-      const docs = parseDocsTree(projectPath)
+      const docs = parseSillyspecDocsTree(projectPath)
       res.setHeader('Content-Type', 'application/json')
       res.writeHead(200)
       res.end(JSON.stringify(docs))
@@ -508,7 +509,11 @@ function startServer({ port = 3456, open: openBrowser = true } = {}) {
               discoverProjects().then(projects => {
                 broadcast({
                   type: 'projects:updated',
-                  data: projects.map(p => ({ ...p, state: parseProjectState(p.path) }))
+                  data: projects.map(p => ({
+                    ...p,
+                    state: parseProjectState(p.path),
+                    overview: parseProjectOverview(p.path)
+                  }))
                 })
               })
             }
@@ -524,7 +529,7 @@ function startServer({ port = 3456, open: openBrowser = true } = {}) {
             break
           case 'docs:get':
             if (data.data?.projectPath) {
-              const docs = parseDocsTree(data.data.projectPath)
+              const docs = parseSillyspecDocsTree(data.data.projectPath)
               ws.send(JSON.stringify({ type: 'docs:tree', data: docs }))
             }
             break

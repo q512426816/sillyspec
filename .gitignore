@@ -5,3 +5,4 @@ node_modules/
 .sillyspec/codebase/SCAN-RAW.md
 .sillyspec/local.yaml
 .sillyspec/.runtime/
+.idea

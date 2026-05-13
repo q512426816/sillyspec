@@ -11,56 +11,58 @@ import { buildExecuteSteps } from './stages/execute.js'
 import { buildPlanSteps } from './stages/plan.js'
 
 /**
+ * 统一查找变更目录
+ */
+function resolveChangeDir(cwd, progress) {
+  const changesDir = join(cwd, '.sillyspec', 'changes')
+  if (!existsSync(changesDir)) return null
+
+  // 1. 优先用 currentChange
+  if (progress.currentChange) {
+    const target = join(changesDir, progress.currentChange)
+    if (existsSync(target)) return target
+  }
+
+  // 2. fallback：唯一非 archive 目录
+  const entries = readdirSync(changesDir, { withFileTypes: true })
+    .filter(e => e.isDirectory() && e.name !== 'archive')
+  if (entries.length === 1) return join(changesDir, entries[0].name)
+
+  return null
+}
+
+/**
+ * 自动探测并设置 currentChange（唯一变更目录时）
+ * @returns {boolean} 是否设置了 currentChange
+ */
+function autoDetectChange(progress, cwd) {
+  if (progress.currentChange) return false
+  const changesDir = join(cwd, '.sillyspec', 'changes')
+  if (!existsSync(changesDir)) return false
+  const entries = readdirSync(changesDir, { withFileTypes: true })
+    .filter(e => e.isDirectory() && e.name !== 'archive')
+  if (entries.length === 1) {
+    progress.currentChange = entries[0].name
+    return true
+  }
+  return false
+}
+
+/**
  * 获取阶段的步骤定义（execute 需要动态构建）
  */
 async function getStageSteps(stageName, cwd, progress) {
   if (stageName === 'execute') {
-    const changesDir = join(cwd, '.sillyspec', 'changes')
+    const changeDir = resolveChangeDir(cwd, progress)
     let planFile = null
-    // 优先用 currentChange 指定的变更名
-    if (progress.currentChange) {
-      const target = join(changesDir, progress.currentChange, 'plan.md')
-      if (existsSync(target)) planFile = target
-    }
-    // fallback：扫描 changes/ 非 archive 目录下的 plan.md
-    if (!planFile && existsSync(changesDir)) {
-      const candidates = []
-      for (const entry of readdirSync(changesDir, { withFileTypes: true })) {
-        if (!entry.isDirectory() || entry.name === 'archive') continue
-        const p = join(changesDir, entry.name, 'plan.md')
-        if (existsSync(p)) candidates.push({ name: entry.name, path: p })
-      }
-      if (candidates.length === 1) {
-        planFile = candidates[0].path
-      } else if (candidates.length > 1) {
-        console.log('⚠️  检测到多个变更，请选择：')
-        candidates.forEach((c, i) => console.log(`  ${i + 1}. ${c.name}`))
-        const readline = await import('readline')
-        const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
-        const answer = await new Promise(resolve => {
-          rl.question(`\n请输入编号（默认 1）：`, input => {
-            rl.close()
-            const num = parseInt(input) || 1
-            resolve(num >= 1 && num <= candidates.length ? num - 1 : 0)
-          })
-        })
-        planFile = candidates[answer].path
-        console.log(`✅ 已选择：${candidates[answer].name}\n`)
-      }
+    if (changeDir) {
+      const p = join(changeDir, 'plan.md')
+      if (existsSync(p)) planFile = p
     }
     return buildExecuteSteps(planFile)
   }
   if (stageName === 'plan') {
-    const changesDir = join(cwd, '.sillyspec', 'changes')
-    let changeDir = null
-    if (progress.currentChange) {
-      const target = join(changesDir, progress.currentChange)
-      if (existsSync(target)) changeDir = target
-    }
-    if (!changeDir && existsSync(changesDir)) {
-      const entries = readdirSync(changesDir, { withFileTypes: true }).filter(e => e.isDirectory() && e.name !== 'archive')
-      if (entries.length === 1) changeDir = join(changesDir, entries[0].name)
-    }
+    const changeDir = resolveChangeDir(cwd, progress)
     return buildPlanSteps(changeDir)
   }
   const def = stageRegistry[stageName]
@@ -252,6 +254,12 @@ export async function runCommand(args, cwd) {
 }
 
 async function runStage(pm, progress, stageName, cwd) {
+  // 自动探测 currentChange
+  if (autoDetectChange(progress, cwd)) {
+    progress.lastActive = new Date().toLocaleString('zh-CN', { hour12: false })
+    pm._write(cwd, progress)
+  }
+
   const stageData = progress.stages[stageName]
   if (!stageData || !stageData.steps) {
     console.error(`❌ 阶段 ${stageName} 未初始化`)
@@ -352,25 +360,26 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
     }
   }
 
-  // plan 阶段 "展开任务" 完成后，动态插入 task 蓝图步骤
-  if (stageName === 'plan' && steps[currentIdx]?.name === '展开任务并分组' && progress.currentChange) {
-    const planFile = join(cwd, '.sillyspec', 'changes', progress.currentChange, 'plan.md')
-    if (existsSync(planFile)) {
-      const planContent = readFileSync(planFile, 'utf8')
-      const { buildPlanSteps, fixedPrefix, fixedSuffix } = await import('./stages/plan.js')
-      const fullSteps = buildPlanSteps(join(cwd, '.sillyspec', 'changes', progress.currentChange), planContent)
-      const prefixLen = fixedPrefix.length
-      const suffixLen = fixedSuffix.length
-      const taskSteps = fullSteps.slice(prefixLen, suffixLen > 0 ? -suffixLen : undefined)
-      if (taskSteps.length > 0) {
-        const oldSteps = [...steps]
-        const rebuilt = fullSteps.map(stepDef => {
-          const existing = oldSteps.find(s => s.name === stepDef.name && s.status !== 'pending')
-          if (existing) return existing
-          return { name: stepDef.name, status: 'pending' }
-        })
-        steps.splice(0, steps.length, ...rebuilt)
-        console.log(`  📝 已动态插入 ${taskSteps.length} 个任务蓝图步骤`)
+  // plan 阶段 "展开任务" 完成后，动态插入任务蓝图协调器步骤
+  if (stageName === 'plan' && steps[currentIdx]?.name === '展开任务并分组') {
+    const changeDir = resolveChangeDir(cwd, progress)
+    if (changeDir) {
+      const planFile = join(changeDir, 'plan.md')
+      if (existsSync(planFile)) {
+        const planContent = readFileSync(planFile, 'utf8')
+        const { buildPlanSteps, fixedPrefix, fixedSuffix } = await import('./stages/plan.js')
+        const fullSteps = buildPlanSteps(changeDir, planContent)
+        const prefixLen = fixedPrefix.length
+        const suffixLen = fixedSuffix.length
+        // 提取协调器步骤（prefix 和 suffix 之间）
+        const coordinatorSteps = fullSteps.slice(prefixLen, suffixLen > 0 ? -suffixLen : undefined)
+        if (coordinatorSteps.length > 0) {
+          // 在当前步骤之后插入协调器步骤
+          for (let i = 0; i < coordinatorSteps.length; i++) {
+            steps.splice(currentIdx + 1 + i, 0, { name: coordinatorSteps[i].name, status: 'pending' })
+          }
+          console.log(`  📝 已动态插入 ${coordinatorSteps.length} 个任务蓝图步骤（${coordinatorSteps.map(s => s.name).join(', ')}）`)
+        }
       }
     }
   }

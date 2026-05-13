@@ -1,0 +1,27 @@
+---
+name: sillyspec:doctor
+description: 项目自检 — 检查 CLI、配置、构建环境和外部依赖
+---
+
+## 前置检查
+
+**在执行任何检查之前，先确认 SillySpec CLI 是否可用：**
+
+1. 运行 `sillyspec --version`
+2. 如果失败：
+   - 输出：❌ SillySpec CLI 未安装
+   - 给出安装命令：`npm install -g sillyspec`
+   - 停止，不要继续后续步骤
+
+## 执行
+
+**CLI 可用后，使用 exec 工具（shell）执行以下命令，不要自己编造流程：**
+
+1. 运行 `sillyspec run doctor` — 读取输出的步骤 prompt
+2. 按照输出的 prompt **严格执行**，不要跳过或自行添加步骤
+3. 步骤完成后，运行 `sillyspec run doctor --done --output "你的摘要"`
+4. 重复 2-3 直到阶段完成
+5. **禁止**在没有运行 CLI 的情况下自行决定流程
+
+## 用户指令
+$ARGUMENTS

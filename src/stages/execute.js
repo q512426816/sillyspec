@@ -168,38 +168,67 @@ function parseWavesFromPlan(planContent) {
 }
 
 /**
- * 为 Wave 生成 prompt
+ * 为 Wave 生成 prompt（强制子代理执行）
  */
 function buildWavePrompt(wave, waveIndex, changeDir) {
-  const taskList = wave.tasks.map((t, ti) => {
+  // 构建子代理 prompt 模板（每个任务的蓝图内容）
+  const subagentTemplates = wave.tasks.map((t, ti) => {
     const taskNum = String(t.index || (ti + 1)).padStart(2, '0')
     const taskFile = changeDir ? `${changeDir}/tasks/task-${taskNum}.md` : ''
     const taskFileExists = taskFile && existsSync(taskFile)
+    let taskContent = ''
+    if (taskFileExists) {
+      try { taskContent = readFileSync(taskFile, 'utf8').trim() } catch { taskContent = '（无法读取任务蓝图文件）' }
+    }
+    const fileInfo = t.file ? ` (${t.file})` : ''
+    return `\`\`\`
+任务：${t.name}${fileInfo}
+${taskContent ? `蓝图内容：\n${taskContent}` : '（无蓝图文件，按任务描述执行）'}
+
+操作：
+1. 先读后写 — 读取要修改的文件，理解现有结构
+2. 按 TDD 步骤实现
+3. 运行对应测试确认通过
+4. 报告改动文件和测试结果
+
+铁律：
+- 只做蓝图/任务描述里写的事，不增不减
+- 蓝图有问题 → 报告问题，不要自己改
+- 先写测试，再写代码
+- grep 确认方法存在，不要编造
+\`\`\``
+  }).join('\n\n')
+
+  const taskList = wave.tasks.map((t, ti) => {
+    const taskNum = String(t.index || (ti + 1)).padStart(2, '0')
     let s = `- [ ] ${t.name}`
     if (t.file) s += ` (${t.file})`
-    if (taskFileExists) {
-      let taskContent = ''
-      try { taskContent = readFileSync(taskFile, 'utf8').trim() } catch { taskContent = '（无法读取任务蓝图文件）' }
-      s += `
-\n### 📋 任务蓝图（task-${taskNum}.md）\n${taskContent}`
-    }
-    if (t.reference) s += `\n  参考: ${t.reference}`
-    if (t.steps) s += `\n  步骤: ${t.steps}`
     return s
   }).join('\n')
-  const { join } = path
-const hasTaskBlueprints = changeDir && existsSync(join(changeDir, 'tasks'))
-  const taskBlueprintRule = hasTaskBlueprints
-    ? '每个任务有独立的 task-N.md 蓝图——只做蓝图里写的事，不要实现蓝图之外的功能。如果蓝图有问题，**停下来反馈**，不要自己改。问题归因：实现困难 → task 蓝图没写好 → plan 没做好 → design 有缺陷。'
-    : '如果发现 plan 不合理，**停下来反馈**，不要自己改方案。问题归因：实现困难 → plan 没做好 → design 有缺陷。'
+
   return `## Wave ${waveIndex}: 执行以下任务
+
+## 执行方式（必须严格遵守）
+
+**每个任务必须由独立子代理执行，你不要自己写代码。**
+
+你的角色是调度者 + 审查者：
+1. 为每个任务启动一个子代理（Agent tool），同 Wave 内可并行
+2. 子代理完成后审查结果
+3. 勾选 plan.md 中的 checkbox
+4. 记录改动文件和测试结果
+
+### 子代理 prompt 模板
+为每个任务使用以下 prompt 启动子代理：
+
+${subagentTemplates}
 
 ### Wave 开始前
 1. 读取 design.md 的「编码铁律」章节（如果存在），严格遵守
 2. 读取 plan.md 了解全局任务划分和依赖关系
-2. 确认本 Wave 的输入/输出契约（前置 Wave 产出了什么，本 Wave 需要消费什么）
-3. 检查前置 Wave 的产出是否完整（文件是否存在、测试是否通过）
-4. **上下文分层加载**：
+3. 确认本 Wave 的输入/输出契约（前置 Wave 产出了什么，本 Wave 需要消费什么）
+4. 检查前置 Wave 的产出是否完整（文件是否存在、测试是否通过）
+5. **上下文分层加载**：
    - 🔥 热上下文：design.md 编码铁律 + 当前 Wave 任务（必须加载）
    - 🌡️ 温上下文：CONVENTIONS.md + ARCHITECTURE.md（需要时加载）
    - ❄️ 冷上下文：其他变更的 design.md、历史 plan.md（不要主动加载，除非明确需要）
@@ -207,21 +236,17 @@ const hasTaskBlueprints = changeDir && existsSync(join(changeDir, 'tasks'))
 ### 本 Wave 任务
 ${taskList}
 
-### 执行要求
-1. 按任务顺序执行，同一 Wave 内任务可并行
-2. 铁律：先读后写、grep 确认方法存在、不编造、TDD
-3. **禁止发散思维**：你是代码搬运工，严格按任务描述执行，不增不减不改。${taskBlueprintRule}
-4. **Reverse Sync**：发现 Bug 或实现与 design.md/task-N.md 不一致时，先检查是代码错了还是文档有遗漏，有遗漏则先修文档再修代码。
-4. **不要频繁编译！** 编译很慢，只在以下情况运行：
+### 调度要求
+1. 同一 Wave 内任务可并行启动子代理
+2. **Reverse Sync**：子代理报告实现与 design.md 不一致时，先检查是代码错了还是文档有遗漏
+3. **不要频繁编译！** 编译很慢，只在以下情况运行：
    - 写了大量代码后需要验证语法正确性
    - 最后一个 Wave 完成后做一次全量编译验证
    - 用户明确要求编译时
-5. 单个任务完成后只跑**对应模块的单元测试**（TDD 绿灯确认），不要跑全量编译
-6. 每个任务完成后：
-   - 勾选 task-N.md 中的验收标准 checkbox
+4. 每个任务完成后：
    - 勾选 plan.md / tasks.md 中对应任务的 checkbox
    - 记录改动文件和测试结果
-7. 遇到 BLOCKED → 记录原因，选择：重试/跳过/停止
+5. 遇到 BLOCKED → 记录原因，选择：重试/跳过/停止
 
 ### 完成后
 运行 sillyspec run execute --done --input "用户原始反馈" --output "Wave ${waveIndex} 结果摘要"`
