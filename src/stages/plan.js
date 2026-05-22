@@ -140,7 +140,6 @@ export const fixedSuffix = [
 
 ### 操作
 1. 确认 plan.md 和所有 tasks/task-NN.md 已存在
-2. \`git add .sillyspec/\` — **不要 commit**
 
 ### 输出
 文件列表 + 下一步命令`,

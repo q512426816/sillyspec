@@ -120,6 +120,45 @@ TESTING.md、CONCERNS.md、PROJECT.md 路径`,
       optional: false
     },
     {
+      name: '生成本地配置',
+      prompt: `自动生成 .sillyspec/.runtime/local.yaml 本地配置文件。
+
+### 操作
+1. 检查 .sillyspec/.runtime/local.yaml 是否已存在，已存在则跳过（提示"local.yaml 已存在，跳过生成"）
+2. 根据项目类型生成默认配置：
+   - **Node.js**（有 package.json）：build: "npm run build", test: "npm test", lint: "npm run lint", type: nodejs
+   - **Maven**（有 pom.xml）：build: "mvn compile", test: "mvn test", lint: "mvn checkstyle:check", type: maven
+   - **Gradle**（有 build.gradle）：build: "./gradlew build", test: "./gradlew test", type: gradle
+   - **通用项目**：只写注释模板, type: generic
+3. 确保目录存在：mkdir -p .sillyspec/.runtime
+4. 原子写入（先写 tmp 文件再 rename）
+
+### 文件格式
+\`\`\`yaml
+# SillySpec 本地配置（自动生成，可手动修改）
+project:
+  type: nodejs  # nodejs/maven/gradle/generic
+
+commands:
+  build: "npm run build"
+  test: "npm test"
+  lint: "npm run lint"
+
+# 测试策略：full=全量测试, module=只测变更模块, skip=跳过测试
+test_strategy: module
+
+# 模块测试路径映射（可选）
+# module_paths:
+#   user-service: "user/"
+#   order-service: "order/"
+\`\`\`
+
+### 输出
+local.yaml 生成结果（已存在/已生成）`,
+      outputHint: 'local.yaml 生成状态',
+      optional: false
+    },
+    {
       name: '自检和提交',
       prompt: `验证扫描完整性，清理并提交。
 
@@ -127,7 +166,7 @@ TESTING.md、CONCERNS.md、PROJECT.md 路径`,
 1. 检查 7 份文档是否全部生成
 2. 自检门控：ARCHITECTURE（技术栈+Schema摘要）、CONVENTIONS（隐形规则+代码风格）、STRUCTURE（目录结构）、INTEGRATIONS（外部依赖）、TESTING（测试现状）、CONCERNS（技术债务）、PROJECT（项目概览）
 3. 清理：\`rm -f .sillyspec/docs/<project>/scan/_env-detect.md\`
-4. \`git add .\` — **不要 commit**，由用户通过统一提交工具处理
+4. \`git add .sillyspec/\` — 暂存扫描结果（不要 commit，由用户通过统一提交工具处理）
 
 ### 输出
 扫描完整性报告

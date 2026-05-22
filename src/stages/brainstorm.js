@@ -245,7 +245,7 @@ design.md 文件路径 + 自审结果
    - **proposal.md**：动机、变更范围、不在范围内、成功标准
    - **requirements.md**：功能需求、用户场景（Given/When/Then 格式）、非功能需求
    - **tasks.md**：任务列表（只列名称和对应文件路径，细节在 plan 阶段展开）
-   - \`git add .sillyspec/\` — **不要 commit**
+   - \`git add .sillyspec/\` — 暂存规范文件（不要 commit）
 
 ### 输出
 所有规范文件路径

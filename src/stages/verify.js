@@ -58,9 +58,38 @@ export const definition = {
     },
     {
       name: '对照设计检查',
-      prompt: `对照 design.md 检查实现一致性。**design.md 是唯一 truth source，不符合 design.md 的实现 = Bug。**
+      prompt: `先运行自动探针，再对照 design.md 检查实现一致性。**design.md 是唯一 truth source，不符合 design.md 的实现 = Bug。**
 
-### 操作
+### 自动探针（必须先执行）
+在检查前，依次运行以下三个探针，将结果作为验证输入：
+
+**探针 1：未实现标记扫描**
+在项目源码目录中搜索未实现标记：
+\`\`\`bash
+grep -rn "尚未实现\|TODO\|FIXME\|HACK\|XXX" <源码目录>/ --include="*.java" --include="*.js" --include="*.ts" --include="*.jsx" --include="*.tsx" --include="*.py"
+\`\`\`
+记录每个匹配的文件、行号和内容。
+
+**探针 2：设计关键词覆盖探针**
+1. 读取 design.md，从中提取所有能力关键词（如"登录"、"导出"、"批量"、"删除"、"搜索"等动作词）
+2. 对每个关键词，在源码目录中 grep 确认是否有对应的实现代码：
+\`\`\`bash
+grep -rl "<关键词>" <源码目录>/ --include="*.java" --include="*.js" --include="*.ts" --include="*.jsx" --include="*.tsx" --include="*.py"
+\`\`\`
+3. 如果某个关键词在源码中完全没有匹配，标记为 ⚠️ 可能未实现
+
+**探针 3：验收标准测试覆盖探针**
+1. 读取变更目录下的 tasks.md，提取所有 checkbox 任务
+2. 对每个 task，检查对应模块目录下是否存在测试文件（*test*、*spec*、*Test*、*Spec*）
+3. 没有测试文件的 task 标记为 ⚠️ 缺少测试
+
+### 探针结果处理
+- 将三个探针的结果汇总为「探针报告」
+- 如果探针发现问题（未实现标记、关键词缺失、测试缺失），在最终验证报告中明确标注
+- 探针发现的问题不等同于验证失败，但必须在报告中列出
+
+### 设计一致性检查
+基于探针结果，继续检查：
 1. 架构决策是否遵循
 2. 文件变更清单是否一致
 3. 数据模型是否符合
@@ -68,7 +97,7 @@ export const definition = {
 5. **Reverse Sync 检查**：如果发现实现合理但 design.md 未覆盖，先更新 design.md 补充遗漏
 
 ### 输出
-一致性检查结果`,
+探针报告 + 设计一致性检查结果`,
       outputHint: '设计一致性报告',
       optional: false
     },
@@ -126,8 +155,8 @@ export const definition = {
 验证报告 markdown + 下一步命令
 
 ### 注意
-- PASS → 下一步 archive
-- FAIL → 修复后重新 verify`,
+- PASS → 运行 \`sillyspec run archive\` 归档
+- FAIL → 修复后运行 \`sillyspec run verify\` 重新验证`,
       outputHint: '验证报告',
       optional: false
     }

@@ -10,7 +10,7 @@ description: 查看当前工作状态 — 显示 progress.json 内容
 ### 1. 读取 progress.json
 
 ```bash
-sillyspec progress show 2>/dev/null
+sillyspec run state --status 2>/dev/null
 ```
 
 ### 2. 如果有 progress.json

@@ -47,7 +47,7 @@ export const definition = {
       prompt: `Git 暂存并记录任务。
 
 ### 操作
-1. \`git add -A\` — **不要 commit**，由用户通过统一提交
+1. \`git add -A\` — 暂存改动文件（不要 commit，由用户通过统一提交工具处理）
 2. 记录：
    - 有 \`--change\`：在 \`.sillyspec/changes/<变更名>/tasks.md\` 追加 task 并勾选，记录精确到秒的时间戳
    - 无 \`--change\`：记录到 \`.sillyspec/quicklog/QUICKLOG-<git用户名>.md\`（按 git 用户名隔离）

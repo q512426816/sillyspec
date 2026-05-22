@@ -174,6 +174,7 @@ export async function runCommand(args, cwd) {
   const isSkip = flags.includes('--skip')
   const isStatus = flags.includes('--status')
   const isReset = flags.includes('--reset')
+  const isConfirm = flags.includes('--confirm')
 
   // 解析 --output
   let outputText = null
@@ -248,7 +249,7 @@ export async function runCommand(args, cwd) {
 
   // --done
   if (isDone) {
-    return await completeStep(pm, progress, stageName, cwd, outputText, inputText)
+    return await completeStep(pm, progress, stageName, cwd, outputText, inputText, { confirm: isConfirm })
   }
 
   // 默认：输出当前步骤
@@ -329,7 +330,7 @@ function validateMetadata(cwd, stageName) {
 }
 
 async function completeStep(pm, progress, stageName, cwd, outputText, inputText = null, options = {}) {
-  const { printNext = true } = options
+  const { printNext = true, confirm = false } = options
   const stageData = progress.stages[stageName]
   if (!stageData || !stageData.steps) {
     console.error(`❌ 阶段 ${stageName} 未初始化`)
@@ -405,9 +406,74 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
     // 验证：检查生成的文件是否包含 author 和 created_at
     validateMetadata(cwd, stageName)
 
+    // archive 阶段 Step 2（确认归档）完成时自动执行归档移动
+    if (stageName === 'archive' && steps[currentIdx]?.name === '确认归档') {
+      if (confirm) {
+        const { renameSync } = await import('fs')
+        const changeName = progress.currentChange
+        if (!changeName) {
+          console.error('❌ 归档失败：未找到当前变更名（currentChange）')
+          process.exit(1)
+        }
+        const changesDir = join(cwd, '.sillyspec', 'changes')
+        const archiveDir = join(changesDir, 'archive')
+        const srcDir = join(changesDir, changeName)
+        const date = new Date().toISOString().slice(0, 10)
+        const destDir = join(archiveDir, `${date}-${changeName}`)
+
+        if (!existsSync(srcDir)) {
+          console.error(`❌ 归档失败：源目录不存在 ${srcDir}`)
+          process.exit(1)
+        }
+        if (existsSync(destDir)) {
+          console.error(`❌ 归档失败：目标目录已存在 ${destDir}`)
+          process.exit(1)
+        }
+        mkdirSync(archiveDir, { recursive: true })
+        renameSync(srcDir, destDir)
+
+        // 校验
+        if (!existsSync(destDir) || existsSync(srcDir)) {
+          console.error('❌ 归档校验失败：移动操作异常')
+          process.exit(1)
+        }
+
+        // 清除 currentChange
+        progress.currentChange = null
+        console.log(`📦 已归档：${changeName} → archive/${date}-${changeName}/`)
+      } else {
+        console.log('⚠️  请添加 --confirm 确认归档，例如：sillyspec run archive --done --confirm --output "确认归档"')
+      }
+    }
+
+    // 辅助阶段（archive/scan/quick 等）完成后重置步骤，允许重复执行
+    const stageDef = stageRegistry[stageName]
+    if (stageDef?.auxiliary) {
+      const freshSteps = (stageDef.steps || []).map(s => ({
+        name: s.name,
+        status: 'pending',
+        output: null,
+        completedAt: null
+      }))
+      stageData.steps = freshSteps
+      stageData.status = 'pending'
+      stageData.completedAt = null
+      pm._write(cwd, progress)
+    }
+
     const total = steps.length
     console.log(`✅ ${stageName} 阶段已完成（${total}/${total} 步）`)
-    console.log(`\n下一步由你决定：sillyspec run <stage>（brainstorm/plan/execute/verify/archive 等）`)
+
+    // 阶段完成后提示下一步
+    if (stageName === 'execute') {
+      console.log('\n👉 下一步：sillyspec run verify（验证通过后才能归档）')
+    } else if (stageName === 'verify') {
+      console.log('\n👉 下一步：sillyspec run archive（验证通过，可以归档了）')
+    } else if (stageName === 'archive') {
+      console.log('\n👉 归档完成！现在可以提交了：git commit -m "..."')
+    } else {
+      console.log(`\n下一步由你决定：sillyspec run <stage>（brainstorm/plan/execute/verify/archive 等）`)
+    }
     return { stageCompleted: true, currentIdx, nextPendingIdx: -1 }
   }
 

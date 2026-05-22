@@ -69,6 +69,73 @@ Wave 分组 + 模型分配 + 确认模式 + 知识库匹配结果
   }
 ]
 
+// 全局验收步骤定义
+const acceptanceSteps = [
+  {
+    name: '对照设计检查',
+    mode: 'acceptance',
+    prompt: `对照 design.md 检查所有实现是否与设计一致。
+
+### 执行方式
+本步骤由当前 agent 汇总执行，不需要为每个检查项启动独立子代理。
+如需深入验证某个模块，可启动单个 QA 子代理统一处理。
+
+### 操作
+1. 读取 design.md（技术方案）
+2. 逐一对照 design.md 中的设计要点与实际代码实现
+3. 检查接口签名、数据结构、模块划分是否一致
+4. 记录偏差项（偏差 ≠ 错误，可能是合理的实现调整）
+
+### 输出
+检查清单：每项设计要点的实现状态 ✅/⚠️/❌ + 偏差说明`,
+    outputHint: '设计对照检查清单',
+    optional: false
+  },
+  {
+    name: '运行测试',
+    mode: 'acceptance',
+    prompt: `运行所有测试，验证代码质量。
+
+### 执行方式
+本步骤由当前 agent 执行，不需要启动独立子代理。
+
+### 操作
+1. 读取 local.yaml 获取构建和测试命令
+2. 运行测试套件（单元测试、集成测试）
+3. 运行 lint 检查
+4. 如果有测试失败 → 分析原因，标注是代码问题还是测试本身的问题
+5. 汇总测试结果
+
+### 输出
+测试结果摘要：通过/失败/跳过数量 + 失败项分析`,
+    outputHint: '测试结果摘要',
+    optional: false
+  },
+  {
+    name: '代码审查',
+    mode: 'acceptance',
+    prompt: `对本次变更进行代码审查。
+
+### 执行方式
+本步骤由当前 agent 或一个 QA agent 汇总执行，不需要为每个文件启动独立子代理。
+
+### 操作
+1. 检查 git diff 查看所有变更
+2. 审查要点：
+   - 代码风格是否符合 CONVENTIONS.md
+   - 是否有明显的 bug 或安全漏洞
+   - 是否有未处理的 TODO/FIXME
+   - 错误处理是否完善
+   - 是否有冗余代码或可简化的逻辑
+3. 对照 ARCHITECTURE.md 检查架构合规性
+
+### 输出
+审查结果：问题列表（严重程度 + 建议修复方式）+ 总体评价`,
+    outputHint: '代码审查结果',
+    optional: true
+  }
+]
+
 // 固定后缀步骤定义
 const fixedSuffix = [
   {
@@ -90,11 +157,10 @@ const fixedSuffix = [
     prompt: `所有任务完成后的收尾。
 
 ### 操作
-1. 询问用户下一步：
-   - 验证 → sillyspec run verify
-   - 归档 → /sillyspec:archive
-   - 继续开发
-2. 提示 git add 暂存变更
+1. 建议下一步：
+   - 运行 \`sillyspec run verify\` 进行验证（验证通过后才能归档）
+   - 如果发现问题需要修复，先修复再验证
+   - 用户也可以选择继续开发（不验证）
 
 ### 输出
 用户选择 + 下一步命令
@@ -171,33 +237,15 @@ function parseWavesFromPlan(planContent) {
  * 为 Wave 生成 prompt（强制子代理执行）
  */
 function buildWavePrompt(wave, waveIndex, changeDir) {
-  // 构建子代理 prompt 模板（每个任务的蓝图内容）
-  const subagentTemplates = wave.tasks.map((t, ti) => {
+  // 构建任务摘要（不再内联完整蓝图，减少上下文污染）
+  const taskSummary = wave.tasks.map((t, ti) => {
     const taskNum = String(t.index || (ti + 1)).padStart(2, '0')
-    const taskFile = changeDir ? `${changeDir}/tasks/task-${taskNum}.md` : ''
-    const taskFileExists = taskFile && existsSync(taskFile)
-    let taskContent = ''
-    if (taskFileExists) {
-      try { taskContent = readFileSync(taskFile, 'utf8').trim() } catch { taskContent = '（无法读取任务蓝图文件）' }
-    }
+    const taskRelPath = changeDir
+      ? `.sillyspec/changes/${path.basename(changeDir)}/tasks/task-${taskNum}.md`
+      : `task-${taskNum}.md`
     const fileInfo = t.file ? ` (${t.file})` : ''
-    return `\`\`\`
-任务：${t.name}${fileInfo}
-${taskContent ? `蓝图内容：\n${taskContent}` : '（无蓝图文件，按任务描述执行）'}
-
-操作：
-1. 先读后写 — 读取要修改的文件，理解现有结构
-2. 按 TDD 步骤实现
-3. 运行对应测试确认通过
-4. 报告改动文件和测试结果
-
-铁律：
-- 只做蓝图/任务描述里写的事，不增不减
-- 蓝图有问题 → 报告问题，不要自己改
-- 先写测试，再写代码
-- grep 确认方法存在，不要编造
-\`\`\``
-  }).join('\n\n')
+    return `task-${taskNum}: ${t.name}${fileInfo} → ${taskRelPath}`
+  }).join('\n')
 
   const taskList = wave.tasks.map((t, ti) => {
     const taskNum = String(t.index || (ti + 1)).padStart(2, '0')
@@ -218,10 +266,15 @@ ${taskContent ? `蓝图内容：\n${taskContent}` : '（无蓝图文件，按任
 3. 勾选 plan.md 中的 checkbox
 4. 记录改动文件和测试结果
 
-### 子代理 prompt 模板
-为每个任务使用以下 prompt 启动子代理：
+### 任务摘要（按需读取完整蓝图）
+为每个任务启动子代理时，**只需告知任务目标和蓝图文件路径，让子代理按需读取**：
 
-${subagentTemplates}
+${taskSummary}
+
+子代理 prompt 要点：
+1. 任务目标（简短描述）
+2. 蓝图文件路径（让子代理自行读取详情）
+3. 编码铁律：先读后写、TDD、不编造方法、只做蓝图里写的事
 
 ### Wave 开始前
 1. 读取 design.md 的「编码铁律」章节（如果存在），严格遵守
@@ -252,6 +305,7 @@ ${taskList}
 运行 sillyspec run execute --done --input "用户原始反馈" --output "Wave ${waveIndex} 结果摘要"`
 }
 
+
 /**
  * 动态构建 execute 步骤列表
  * @param {string|null} planFilePath - plan 文件路径，null 则用默认 3 Wave
@@ -278,10 +332,11 @@ export function buildExecuteSteps(planFilePath = null) {
 
   const waveSteps = waves.map((wave, i) => ({
     name: `Wave ${i + 1} 执行`,
+    mode: 'implementation',
     prompt: buildWavePrompt(wave, i + 1, changeDir),
     outputHint: `Wave ${i + 1} 执行结果`,
     optional: false
   }))
 
-  return [...fixedPrefix, ...waveSteps, ...fixedSuffix]
+  return [...fixedPrefix, ...waveSteps, ...acceptanceSteps, ...fixedSuffix]
 }

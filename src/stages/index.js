@@ -10,18 +10,21 @@ import { definition as archive } from './archive.js'
 import { definition as status } from './status.js'
 import { definition as doctor } from './doctor.js'
 
+// 标记辅助阶段
+const auxiliaryFlag = { auxiliary: true }
+
 export const stageRegistry = {
   brainstorm,
   propose,
   plan,
   execute,
   verify,
-  scan,
-  quick,
-  explore,
-  archive,
-  status,
-  doctor
+  scan: { ...scan, ...auxiliaryFlag },
+  quick: { ...quick, ...auxiliaryFlag },
+  explore: { ...explore, ...auxiliaryFlag },
+  archive: { ...archive, ...auxiliaryFlag },
+  status: { ...status, ...auxiliaryFlag },
+  doctor: { ...doctor, ...auxiliaryFlag }
 }
 
 // 辅助命令（在没有 progress.json 时也可执行）

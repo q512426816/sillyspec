@@ -17,7 +17,7 @@ description: 恢复工作 — 从中断处继续
 ### 1. 读取 progress.json
 
 ```bash
-sillyspec progress show 2>/dev/null
+sillyspec run resume --status 2>/dev/null
 ```
 
 ### 2. 如果有 progress.json
@@ -45,7 +45,7 @@ sillyspec progress show 2>/dev/null
 
 **不需要执行 Git 操作或文件探测。** progress.json 已经包含所有信息。
 
-使用 `sillyspec progress show` 查看。
+使用 `sillyspec run resume --status` 查看。
 
 然后问用户：
    1. 直接继续执行下一步
@@ -80,7 +80,7 @@ cat .sillyspec/ROADMAP.md 2>/dev/null
 
 检查各阶段状态并输出阶段进度表（同步骤 2 格式）。
 
-同时**运行 `sillyspec progress init`**，将探测到的信息写入 progress.json，后续命令执行时会自动更新。
+同时**运行 `sillyspec run resume --init`**，将探测到的信息写入 progress.json，后续命令执行时会自动更新。
 
 #### 如果是普通变更（无 MASTER.md）
 
@@ -102,10 +102,10 @@ cat .sillyspec/ROADMAP.md 2>/dev/null
 - 有部分 codebase 文档（如只有 STACK 和 STRUCTURE）→ 说明快扫或深扫中断
 - 缺失的文档列表直接展示给用户，告知 `/sillyspec:scan` 会自动跳过已存在的文档
 
-**同时运行 `sillyspec progress init`** 记录推断的状态。
+**同时运行 `sillyspec run resume --init`** 记录推断的状态。
 
 ### 4. 关键原则
 
 - **不需要 HANDOFF.json**。progress.json 是唯一的恢复数据源。
 - **progress.json 不需要 Git 提交**（已在 .runtime/ 下，被 .gitignore 忽略）。
-- **每次命令执行完自动更新 progress.json**（通过 `sillyspec progress` CLI），不需要用户手动保存。
+- **每次命令执行完自动更新 progress.json**（通过 `sillyspec run <stage> --done`），不需要用户手动保存。
