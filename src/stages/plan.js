@@ -367,9 +367,7 @@ allowed_paths:
   }).join('\n\n')
 
 
-  return {
-    name: '生成任务蓝图（子代理并行）',
-    prompt: `为 plan.md 中的每个任务生成独立蓝图文件。
+  const prompt = `为 plan.md 中的每个任务生成独立蓝图文件。
 
 ## 任务清单
 ${taskList}
@@ -393,7 +391,11 @@ ${subagentPrompts}
 - 每个 task-N.md 文件存在且非空
 - 包含 YAML frontmatter（id、title、priority、depends_on、blocks、allowed_paths）
 - 包含所有必要章节：修改文件、实现要求、接口定义、边界处理（≥5条）、非目标、TDD 步骤、验收标准（表格格式）
-- 边界处理覆盖：null/空值、兼容性、异常处理、参数不可变、歧义场景`,
+- 边界处理覆盖：null/空值、兼容性、异常处理、参数不可变、歧义场景`
+
+  return {
+    name: '生成任务蓝图（子代理并行）',
+    prompt,
     outputHint: '蓝图生成结果',
     optional: false
   }

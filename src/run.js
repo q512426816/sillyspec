@@ -387,9 +387,15 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
         // 提取协调器步骤（prefix 和 suffix 之间）
         const coordinatorSteps = fullSteps.slice(prefixLen, suffixLen > 0 ? -suffixLen : undefined)
         if (coordinatorSteps.length > 0) {
-          // 在当前步骤之后插入协调器步骤
+          // 在当前步骤之后插入协调器步骤（含 prompt，否则 outputStep 无法打印）
           for (let i = 0; i < coordinatorSteps.length; i++) {
-            steps.splice(currentIdx + 1 + i, 0, { name: coordinatorSteps[i].name, status: 'pending' })
+            steps.splice(currentIdx + 1 + i, 0, {
+              name: coordinatorSteps[i].name,
+              status: 'pending',
+              prompt: coordinatorSteps[i].prompt,
+              outputHint: coordinatorSteps[i].outputHint,
+              optional: coordinatorSteps[i].optional
+            })
           }
           console.log(`  📝 已动态插入 ${coordinatorSteps.length} 个任务蓝图步骤（${coordinatorSteps.map(s => s.name).join(', ')}）`)
         }
