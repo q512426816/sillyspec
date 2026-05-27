@@ -3,6 +3,10 @@ name: sillyspec:brainstorm
 description: 需求探索 — 结构化头脑风暴，含技术方案输出（创建性工作前必用）
 ---
 
+## 多变更说明
+
+如果项目有多个活跃变更（`.sillyspec/changes/` 下有多个目录），所有 `sillyspec run` 命令需要加 `--change <变更名>`。只有一个变更时可省略（CLI 自动检测）。
+
 ## 执行
 
 **你必须使用 exec 工具（shell）执行以下命令，不要自己编造流程：**

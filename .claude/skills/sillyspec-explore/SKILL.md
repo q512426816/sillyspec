@@ -17,6 +17,10 @@ description: 自由思考模式 — 讨论、画图、调研，不写代码
 ## 话题
 $ARGUMENTS
 
+## 多变更说明
+
+如果项目有多个活跃变更（`.sillyspec/changes/` 下有多个目录），所有 `sillyspec run` 命令需要加 `--change <变更名>`。只有一个变更时可省略（CLI 自动检测）。
+
 ## 执行
 
 **你必须先使用 exec 工具（shell）执行以下命令读取统一 CLI prompt：**

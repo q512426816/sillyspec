@@ -13,6 +13,10 @@ description: 项目自检 — 检查 CLI、配置、构建环境和外部依赖
    - 给出安装命令：`npm install -g sillyspec`
    - 停止，不要继续后续步骤
 
+## 多变更说明
+
+如果项目有多个活跃变更（`.sillyspec/changes/` 下有多个目录），所有 `sillyspec run` 命令需要加 `--change <变更名>`。只有一个变更时可省略（CLI 自动检测）。
+
 ## 执行
 
 **CLI 可用后，使用 exec 工具（shell）执行以下命令，不要自己编造流程：**
