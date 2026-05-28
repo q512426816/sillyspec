@@ -144,7 +144,11 @@ function outputStep(stageName, stepIndex, steps, cwd, changeName) {
   console.log(`step: ${stepIndex + 1}/${total}`)
   console.log(`stepName: ${step.name}`)
   console.log(`project: ${projectName}`)
-  if (changeName) console.log(`change: ${changeName}`)
+  if (changeName) {
+    console.log(`change: ${changeName}`)
+    const changeDir = join('.sillyspec', 'changes', changeName)
+    console.log(`changeDir: ${changeDir}`)
+  }
   console.log(`---\n`)
   if (personas[stageName]) {
     console.log(personas[stageName])
@@ -160,6 +164,11 @@ function outputStep(stageName, stepIndex, steps, cwd, changeName) {
   console.log('- 完成后立即执行 --done 命令，不得跳过')
   console.log('- 文档类型文件（.md/.yaml/.json 等）头部必须包含 author（git 用户名）和 created_at（精确到秒）')
   console.log('- 执行构建/测试前必须先读 local.yaml，优先使用其中配置的命令、路径和环境变量；未配置时才使用默认值')
+  // 路径安全规则：防止 AI 拼错变更目录
+  if (changeName) {
+    const changeDir = join('.sillyspec', 'changes', changeName)
+    console.log(`- **文件路径规则：所有变更文件必须写入 \`${changeDir}/\` 目录下。不要自己拼接路径，直接使用 changeDir 值。示例：\`${changeDir}/proposal.md\`**`)
+  }
   const changeFlag = changeName ? ` --change ${changeName}` : ''
   console.log(`\n### 完成后执行`)
   console.log(`sillyspec run ${stageName} --done${changeFlag} --input "用户原始需求/反馈" --output "你的摘要"`)
