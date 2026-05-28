@@ -233,6 +233,14 @@ export async function runCommand(args, cwd) {
     if (autoChange) {
       progress = pm.initChange(cwd, autoChange)
     } else if (!isAuxiliary) {
+      // brainstorm / propose 作为流程入口，可以自动创建变更
+      if (stageName === 'brainstorm' || stageName === 'propose') {
+        // 引导用户指定变更名
+        console.error('❌ 请指定变更名')
+        console.error('  用法: sillyspec run brainstorm --change <变更名>')
+        console.error('  示例: sillyspec run brainstorm --change 2026-05-28-agent-log-streaming')
+        process.exit(1)
+      }
       console.error('❌ 未找到 progress.json，请先运行 sillyspec init')
       console.error('  提示：使用 --change <name> 指定变更名')
       process.exit(1)

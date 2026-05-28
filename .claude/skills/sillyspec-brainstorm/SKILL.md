@@ -3,19 +3,39 @@ name: sillyspec:brainstorm
 description: 用于正式开始开发前的需求澄清和技术方案设计。适合用户提出新功能、新模块、架构调整、复杂改造，或说"先做需求分析、输出技术方案、创建变更前先梳理、帮我设计下"。产出结构化方案，但不直接写代码。
 ---
 
-## 多变更说明
+# SillySpec Brainstorm — 需求探索
 
-如果项目有多个活跃变更（`.sillyspec/changes/` 下有多个目录），所有 `sillyspec run` 命令需要加 `--change <变更名>`。只有一个变更时可省略（CLI 自动检测）。
+## 用法
+用户触发此 skill 时，使用 `sillyspec run brainstorm` 逐步执行需求探索。
 
-## 执行
+**⚠️ 必须指定变更名！**
 
-**你必须使用 exec 工具（shell）执行以下命令，不要自己编造流程：**
+## 执行步骤
 
-1. 运行 `sillyspec run brainstorm` — 读取输出的步骤 prompt
-2. 按照输出的 prompt **严格执行**，不要跳过或自行添加步骤
-3. 步骤完成后，运行 `sillyspec run brainstorm --done --output "你的摘要"`
-4. 重复 2-3 直到阶段完成
-5. **禁止**在没有运行 CLI 的情况下自行决定流程
+1. 确定变更名（格式：`YYYY-MM-DD-<简短描述>`，如 `2026-05-28-agent-log-streaming`）
+2. 运行 `sillyspec run brainstorm --change <变更名>` 获取当前步骤指令
+3. 按步骤指令执行（对话、分析需求、设计方案等）
+4. 完成步骤后运行 `sillyspec run brainstorm --done --change <变更名> --output "步骤摘要"`
+5. CLI 会自动输出下一步的指令，重复 3-4 直到阶段完成
 
-## 用户指令
-$ARGUMENTS
+## 示例
+
+```bash
+# 首次启动
+sillyspec run brainstorm --change 2026-05-28-agent-log-streaming
+
+# 完成当前步骤
+sillyspec run brainstorm --done --change 2026-05-28-agent-log-streaming --output "需求已澄清"
+
+# 查看进度
+sillyspec run brainstorm --status --change 2026-05-28-agent-log-streaming
+
+# 重置阶段
+sillyspec run brainstorm --reset --change 2026-05-28-agent-log-streaming
+```
+
+## 注意
+- **必须带 `--change <变更名>`**，否则会报错
+- 步骤 prompt 由 CLI 管理，不需要手动读取
+- 依赖 scan 阶段完成，CLI 会自动提醒
+- brainstorm 完成后，运行 `sillyspec run propose --change <变更名>` 进入方案设计
