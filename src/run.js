@@ -377,6 +377,53 @@ function validateMetadata(cwd, stageName) {
   }
 }
 
+/**
+ * 验证关键文件是否存在于正确的变更目录下
+ * 防止 AI 将文件写到错误的路径
+ */
+function validateFileLocations(cwd, stageName, progress, changeName) {
+  const effectiveChange = changeName || progress.currentChange
+  if (!effectiveChange) return
+
+  const changeDir = join(cwd, '.sillyspec', 'changes', effectiveChange)
+  if (!existsSync(changeDir)) return
+
+  // 每个阶段完成后预期存在的文件
+  const expectedFiles = {
+    propose: ['proposal.md', 'design.md', 'requirements.md', 'tasks.md'],
+    plan: ['plan.md'],
+    verify: ['verify-result.md'],
+    archive: ['module-impact.md'],
+  }
+
+  const expected = expectedFiles[stageName]
+  if (!expected) return
+
+  const missing = []
+  for (const file of expected) {
+    if (!existsSync(join(changeDir, file))) {
+      missing.push(file)
+    }
+  }
+
+  if (missing.length > 0) {
+    console.log(`\n⚠️  文件位置验证：以下文件未在变更目录中找到`)
+    console.log(`  变更目录：${changeDir.replace(cwd + '/', '')}/`)
+    for (const f of missing) {
+      // 检查是否写到了错误的位置
+      const wrongPath = join(cwd, '.sillyspec', 'changes', 'change', effectiveChange, f)
+      if (existsSync(wrongPath)) {
+        console.log(`  ❌ ${f} — 不存在，但发现了错误路径：${wrongPath.replace(cwd + '/', '')}`)
+        console.log(`     提示：应该写入 ${changeDir.replace(cwd + '/', '')}/${f}`)
+      } else {
+        console.log(`  ⬜ ${f} — 未找到（该阶段可能未产出此文件）`)
+      }
+    }
+  } else {
+    console.log(`\n✅ 文件位置验证：所有 ${expected.length} 个预期文件均在变更目录中`)
+  }
+}
+
 async function completeStep(pm, progress, stageName, cwd, outputText, inputText = null, options = {}) {
   const { printNext = true, confirm = false, changeName } = options
   const stageData = progress.stages[stageName]
@@ -452,6 +499,9 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
     }
 
     validateMetadata(cwd, stageName)
+
+    // 验证关键文件是否在正确的变更目录下
+    validateFileLocations(cwd, stageName, progress, changeName)
 
     // archive 阶段确认归档
     if (stageName === 'archive' && steps[currentIdx]?.name === '确认归档') {
