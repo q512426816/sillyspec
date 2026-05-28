@@ -1,0 +1,36 @@
+# SillySpec 模块映射
+# 自动生成，可手动修改
+
+modules:
+  stages:
+    name: stages
+    paths:
+      - src/stages/**
+    description: 工作流阶段定义和 prompt 组织（brainstorm/plan/execute/verify/archive等）
+
+  runtime:
+    name: runtime
+    paths:
+      - src/run.js
+      - src/progress.js
+    description: CLI 执行引擎、进度管理和状态跟踪
+
+  cli-entry:
+    name: cli-entry
+    paths:
+      - src/index.js
+      - src/init.js
+      - src/setup.js
+    description: CLI 入口、初始化和 MCP 工具安装
+
+  dashboard:
+    name: dashboard
+    paths:
+      - packages/dashboard/**
+    description: Dashboard Web UI
+
+  migration:
+    name: migration
+    paths:
+      - src/migrate.js
+    description: 旧文档迁移工具
