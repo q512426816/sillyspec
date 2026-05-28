@@ -36,8 +36,14 @@ const fixedPrefix = [
 4. 读取 local.yaml（构建命令）
 5. 加载 CODEBASE-OVERVIEW.md
 
+### 模块文档加载
+6. 读取 \`.sillyspec/docs/<project>/modules/_module-map.yaml\`（不存在则跳过以下步骤）
+7. 根据 plan.md 中的任务文件路径匹配 _module-map.yaml 中的模块
+8. 读取匹配到的 \`.sillyspec/docs/<project>/modules/<module>.md\`
+9. 实现代码时遵循模块文档中描述的接口约定、数据流和依赖关系
+
 ### 输出
-已加载的上下文摘要`,
+已加载的上下文摘要（含模块文档）`,
     outputHint: '上下文摘要',
     optional: false
   },

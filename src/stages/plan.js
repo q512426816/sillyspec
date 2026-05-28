@@ -33,8 +33,14 @@ export const fixedPrefix = [
 3. 读取 CONVENTIONS.md、ARCHITECTURE.md、STACK.md
 4. 读取 local.yaml 获取构建/测试命令
 
+### 模块文档加载
+5. 读取 \`.sillyspec/docs/<project>/modules/_module-map.yaml\`（不存在则跳过以下步骤）
+6. 根据 design.md 的文件变更清单匹配 _module-map.yaml 中的模块
+7. 读取匹配到的 \`.sillyspec/docs/<project>/modules/<module>.md\`
+8. 将模块文档作为制定计划的上下文，确保计划符合模块当前设计
+
 ### 输出
-已加载的文件清单`,
+已加载的文件清单（含模块文档）`,
     outputHint: '文件清单',
     optional: false
   },

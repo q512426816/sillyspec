@@ -26,8 +26,14 @@ export const definition = {
 2. 读取最新设计文档、需求文档、代码库约定
 3. 如果是子阶段变更，读取 MASTER.md 和前序阶段设计
 
+### 模块文档加载
+4. 读取 \`.sillyspec/docs/<project>/modules/_module-map.yaml\`（不存在则跳过以下步骤）
+5. 根据当前提案初步判断涉及的模块（匹配提案中的文件路径到 _module-map.yaml 的 paths）
+6. 读取匹配到的 \`.sillyspec/docs/<project>/modules/<module>.md\`
+7. 如果发现提案中的变更范围与某个模块文档描述的当前设计存在潜在冲突，在后续提案中明确标注并说明处理方案
+
 ### 输出
-已加载的文件列表`,
+已加载的文件列表（含模块文档）`,
       outputHint: '文件列表',
       optional: false
     },

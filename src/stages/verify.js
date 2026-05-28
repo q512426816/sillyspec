@@ -27,8 +27,13 @@ export const definition = {
 4. 加载代码规范：\`cat .sillyspec/docs/<project>/scan/CONVENTIONS.md 2>/dev/null\`
 5. 标注每个文件的存在/不存在状态
 
+### 模块文档加载
+6. 读取 \`.sillyspec/docs/<project>/modules/_module-map.yaml\`（不存在则跳过以下步骤）
+7. 根据 design.md 的文件变更清单匹配 _module-map.yaml 中的模块
+8. 读取匹配到的 \`.sillyspec/docs/<project>/modules/<module>.md\`
+
 ### 输出
-文件加载确认清单`,
+文件加载确认清单（含模块文档）`,
       outputHint: '文件确认清单',
       optional: false
     },
@@ -95,9 +100,10 @@ grep -rl "<关键词>" <源码目录>/ --include="*.java" --include="*.js" --inc
 3. 数据模型是否符合
 4. API 设计是否符合
 5. **Reverse Sync 检查**：如果发现实现合理但 design.md 未覆盖，先更新 design.md 补充遗漏
+6. **模块文档一致性检查**：如果在"加载规范并锚定"步骤中加载了模块文档，检查实现是否符合模块文档描述的当前设计（特别关注接口签名、数据流、依赖关系）。不符合时标记 ⚠️（不阻断，模块文档可能未及时更新）
 
 ### 输出
-探针报告 + 设计一致性检查结果`,
+探针报告 + 设计一致性检查结果 + 模块文档一致性检查结果`,
       outputHint: '设计一致性报告',
       optional: false
     },
