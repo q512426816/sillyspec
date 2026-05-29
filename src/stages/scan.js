@@ -5,6 +5,38 @@ export const definition = {
   auxiliary: true,
   steps: [
     {
+      name: '探测项目结构并建议子项目',
+      prompt: `扫描项目顶层目录结构，自动发现可能的子项目，**需用户确认后才创建 projects 配置**。
+
+### 操作
+1. 列出项目顶层目录：\`ls -d */ 2>/dev/null | grep -v node_modules | grep -v '.git' | grep -v '.sillyspec'\`
+2. 对每个顶层目录，快速判断是否为独立项目（检查 package.json / pom.xml / build.gradle / pyproject.toml / go.mod 等构建文件）
+3. 对每个疑似独立项目，检测技术栈：\`cat <dir>/package.json 2>/dev/null | head -5\` 或类似
+4. 对比 \`.sillyspec/projects/\` 已有配置，找出未注册的子项目
+
+### 判断标准（满足任一即为子项目）
+- 有独立的构建文件（package.json, pom.xml, build.gradle, pyproject.toml 等）
+- 有独立的源码目录结构（src/, app/, lib/ 等）
+- 有独立的测试目录（test/, tests/, __tests__/ 等）
+- 不是 .git / node_modules / .sillyspec / dist / build 等工具目录
+
+### 输出格式
+列出发现的可能子项目列表，每个含：
+- 目录名
+- 技术栈（如 Next.js + TypeScript、FastAPI + Python）
+- 是否已注册到 projects/
+- 建议：注册 / 跳过
+
+### ⛔ 红线
+- **不要自动创建 projects 配置文件**，只列出建议供用户确认
+- **不要修改任何文件**，只做探测和报告
+
+### 输出
+子项目建议列表（含技术栈和注册状态）`,
+      outputHint: '子项目建议列表',
+      optional: false
+    },
+    {
       name: '检查已有扫描文档和子项目列表',
       prompt: `检查已有扫描文档和子项目列表。
 
