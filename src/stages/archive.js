@@ -142,22 +142,18 @@ module-impact.md 路径 + 影响模块数量 + 未匹配文件数量`,
     },
     {
       name: '确认归档',
-      prompt: `展示即将归档的内容，请用户确认。
+      prompt: `确认归档内容并执行目录移动。
 
 ### 操作
 1. 展示：变更目录名、包含的文件列表（含 module-impact.md）、生成总结
-2. 请用户确认是否执行归档
-3. 确认后：将 \`.sillyspec/changes/<change-name>/\` 移动到 \`.sillyspec/changes/archive/YYYY-MM-DD-<change-name>/\`
-4. 确保所有 checkbox 都已勾选
-
-### 归档执行
-确认归档后，执行以下命令自动完成目录移动：
-\t\tsillyspec run archive --done --confirm --output "确认归档"
-- \`--confirm\` 标志会自动执行目录移动（原子操作）
-- 不带 \`--confirm\` 则只提示需要确认
+2. **直接执行归档**（本步骤完成后自动移动）：
+   - 创建 archive 目录：\`mkdir -p .sillyspec/changes/archive\`
+   - 移动变更目录：\`mv .sillyspec/changes/<change-name> .sillyspec/changes/archive/<change-name>\`
+   - 确认移动成功：\`ls .sillyspec/changes/archive/<change-name>/\`
+3. 确保所有 checkbox 都已勾选
 
 ### 输出
-归档确认`,
+归档完成 + archive 目录路径`,
       outputHint: '归档确认',
       optional: false
     },

@@ -27,7 +27,7 @@ export const definition = {
 ### 只允许的操作
 - git status / git diff / git show / git log / git stash list（只读）
 - cat / head / grep / find / wc（只读检查）
-- 写入 .sillyspec/changes/ 下的报告文件（verification.md）
+- 写入 .sillyspec/changes/ 下的报告文件（verify-result.md）
 - 运行测试命令（不修改源码）
 - 运行 lint 命令（不自动修复）
 
@@ -185,14 +185,14 @@ grep -rl "<关键词>" <源码目录>/ --include="*.java" --include="*.js" --inc
     },
     {
       name: '输出验证报告',
-      prompt: `生成完整验证报告，并写入 verification.md。
+      prompt: `生成完整验证报告，并写入 verify-result.md。
 
 ### 操作
 1. 汇总以上所有检查结果
-2. 生成 verification.md 文件，保存到 \`.sillyspec/changes/<change-name>/verification.md\`
+2. 生成 verify-result.md 文件，保存到 \`.sillyspec/changes/<change-name>/verify-result.md\`
 3. 给出结论：PASS / PASS WITH NOTES / FAIL
 
-### verification.md 格式
+### verify-result.md 格式
 \`\`\`markdown
 # 验证报告
 
@@ -221,12 +221,12 @@ PASS / PASS WITH NOTES / FAIL
 \`\`\`
 
 ### 输出
-verification.md 路径 + 验证报告摘要 + 下一步命令
+verify-result.md 路径 + 验证报告摘要 + 下一步命令
 
 ### 注意
 - PASS → 运行 \`sillyspec run archive\` 归档
 - FAIL → 修复后运行 \`sillyspec run verify\` 重新验证
-- verification.md 是变更包的正式验收记录，归档后保留`,
+- verify-result.md 是变更包的正式验收记录，归档后保留`,
       outputHint: '验证报告',
       optional: false
     }
