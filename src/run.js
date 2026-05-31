@@ -12,6 +12,33 @@ import { buildExecuteSteps } from './stages/execute.js'
 import { buildPlanSteps } from './stages/plan.js'
 
 /**
+ * 同步触发辅助函数：_write 后 best-effort 同步到平台
+ */
+async function triggerSync(cwd, changeName) {
+  try {
+    const { sync } = await import('./sync.js')
+    await sync.sync(cwd, changeName)
+  } catch (e) {
+    // sync.js 不存在或同步失败，静默跳过
+    console.warn('⚠️ 同步失败:', e.message)
+  }
+}
+
+/**
+ * 审批检查辅助函数：execute 阶段启动前检查
+ * @returns {{ status: string, reason?: string } | null}
+ */
+async function checkApproval(cwd, changeName) {
+  try {
+    const { sync } = await import('./sync.js')
+    return await sync.checkApproval(cwd, changeName)
+  } catch (e) {
+    // sync.js 不存在或检查失败，静默跳过
+    return null
+  }
+}
+
+/**
  * 统一查找变更目录（与 progress.js 的变更检测逻辑一致）
  */
 function resolveChangeDir(cwd, progress) {
@@ -207,6 +234,7 @@ export async function runCommand(args, cwd) {
   const isStatus = flags.includes('--status')
   const isReset = flags.includes('--reset')
   const isConfirm = flags.includes('--confirm')
+  const isSkipApproval = flags.includes('--skip-approval')
 
   // 解析 --output
   let outputText = null
@@ -232,14 +260,13 @@ export async function runCommand(args, cwd) {
   const isAuxiliary = auxiliaryStages.includes(stageName)
 
   const pm = new ProgressManager()
-  pm._migrateIfNeeded(cwd)
-  let progress = pm.read(cwd, changeName)
+  let progress = await pm.read(cwd, changeName)
 
   if (!progress) {
     // 如果指定了变更名或有变更目录，自动初始化变更的 progress
     const autoChange = changeName || resolveChangeNameAuto(cwd)
     if (autoChange) {
-      progress = pm.initChange(cwd, autoChange)
+      progress = await pm.initChange(cwd, autoChange)
     } else if (!isAuxiliary) {
       // brainstorm / propose 作为流程入口，自动生成变更名并初始化
       if (stageName === 'brainstorm' || stageName === 'propose') {
@@ -247,7 +274,7 @@ export async function runCommand(args, cwd) {
         const autoName = `${date}-new-change`
         console.log(`🔄 自动创建变更：${autoName}`)
         console.log(`  提示：可以用 --change <名称> 指定自定义变更名`)
-        progress = pm.initChange(cwd, autoName)
+        progress = await pm.initChange(cwd, autoName)
         changeName = autoName
       } else {
         console.error('❌ 未找到 progress.json，请先运行 sillyspec init 或指定 --change <变更名>')
@@ -267,7 +294,7 @@ export async function runCommand(args, cwd) {
   // --change 只作为变更名标识，不再拦截流程
   // 注册变更到全局活跃列表（如果尚未注册）
   if (effectiveChange) {
-    pm.registerChange(cwd, effectiveChange)
+    await pm.registerChange(cwd, effectiveChange)
   }
 
   // --reset
@@ -278,8 +305,9 @@ export async function runCommand(args, cwd) {
   // 确保步骤已初始化
   const changed = await ensureStageSteps(progress, stageName, cwd)
   if (changed) {
-    pm._write(cwd, progress, effectiveChange)
-    progress = pm.read(cwd, effectiveChange)
+    await pm._write(cwd, progress, effectiveChange)
+    triggerSync(cwd, effectiveChange)
+    progress = await pm.read(cwd, effectiveChange)
   }
 
   // --status
@@ -298,7 +326,7 @@ export async function runCommand(args, cwd) {
   }
 
   // 默认：输出当前步骤
-  return await runStage(pm, progress, stageName, cwd, effectiveChange)
+  return await runStage(pm, progress, stageName, cwd, effectiveChange, isSkipApproval)
 }
 
 /**
@@ -313,11 +341,27 @@ function resolveChangeNameAuto(cwd) {
   return null
 }
 
-async function runStage(pm, progress, stageName, cwd, changeName) {
+async function runStage(pm, progress, stageName, cwd, changeName, skipApproval = false) {
+  // execute 阶段启动前检查审批
+  if (stageName === 'execute' && !skipApproval) {
+    const approval = await checkApproval(cwd, changeName)
+    if (approval) {
+      if (approval.status === 'rejected') {
+        console.error(`❌ 变更 ${changeName} 的执行已被拒绝：${approval.reason || '无原因'}`)
+        process.exit(1)
+      }
+      if (approval.status === 'pending') {
+        console.log(`⏳ 变更 ${changeName} 的执行审批待处理中...`)
+        console.log('  提示：使用 --skip-approval 跳过审批检查')
+      }
+    }
+  }
+
   // 自动探测 currentChange
   if (autoDetectChange(progress, cwd)) {
     progress.lastActive = new Date().toLocaleString('zh-CN', { hour12: false })
-    pm._write(cwd, progress, changeName)
+    await pm._write(cwd, progress, changeName)
+    triggerSync(cwd, changeName)
   }
 
   const stageData = progress.stages[stageName]
@@ -330,7 +374,8 @@ async function runStage(pm, progress, stageName, cwd, changeName) {
   if (progress.currentStage !== stageName) {
     progress.currentStage = stageName
     progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
-    pm._write(cwd, progress, changeName)
+    await pm._write(cwd, progress, changeName)
+    triggerSync(cwd, changeName)
   }
 
   const steps = stageData.steps
@@ -345,7 +390,8 @@ async function runStage(pm, progress, stageName, cwd, changeName) {
     stageData.status = 'in-progress'
     stageData.startedAt = new Date().toLocaleString('zh-CN', { hour12: false })
     stageData.completedAt = null
-    pm._write(cwd, progress, changeName)
+    await pm._write(cwd, progress, changeName)
+    triggerSync(cwd, changeName)
     currentIdx = 0
     console.log(`🔄 ${stageName} 阶段已自动重置，重新开始。\n`)
   }
@@ -506,7 +552,8 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
     stageData.status = 'completed'
     stageData.completedAt = new Date().toLocaleString('zh-CN',{hour12:false})
     progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
-    pm._write(cwd, progress, changeName)
+    await pm._write(cwd, progress, changeName)
+    triggerSync(cwd, changeName)
 
     // Append to user-inputs.md
     if (outputText) {
@@ -552,7 +599,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
         }
 
         // 从全局活跃列表移除
-        pm.unregisterChange(cwd, archiveChangeName)
+        await pm.unregisterChange(cwd, archiveChangeName)
         console.log(`📦 已归档：${archiveChangeName} → archive/${date}-${archiveChangeName}/`)
       } else {
         console.log('⚠️  请添加 --confirm 确认归档，例如：sillyspec run archive --done --confirm --output "确认归档"')
@@ -571,7 +618,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
       stageData.steps = freshSteps
       stageData.status = 'pending'
       stageData.completedAt = null
-      pm._write(cwd, progress, changeName)
+      await pm._write(cwd, progress, changeName)
     }
 
     const total = steps.length
@@ -590,7 +637,8 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
   }
 
   progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
-  pm._write(cwd, progress, changeName)
+  await pm._write(cwd, progress, changeName)
+  triggerSync(cwd, changeName)
 
   // Append to user-inputs.md
   if (outputText) {
@@ -632,7 +680,8 @@ async function skipStep(pm, progress, stageName, cwd, changeName) {
   steps[currentIdx].status = 'skipped'
   steps[currentIdx].skippedAt = new Date().toLocaleString('zh-CN',{hour12:false})
   progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
-  pm._write(cwd, progress, changeName)
+  await pm._write(cwd, progress, changeName)
+  triggerSync(cwd, changeName)
 
   console.log(`⏭️ Step ${currentIdx + 1}/${steps.length} 已跳过：${steps[currentIdx].name}`)
 
@@ -694,7 +743,8 @@ async function resetStage(pm, progress, stageName, cwd, changeName) {
     steps: defSteps ? defSteps.map(s => ({ name: s.name, status: 'pending' })) : []
   }
   progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
-  pm._write(cwd, progress, changeName)
+  await pm._write(cwd, progress, changeName)
+  triggerSync(cwd, changeName)
   console.log(`🔄 ${stageName} 阶段已重置`)
 }
 
@@ -708,6 +758,7 @@ async function runAutoMode(pm, progress, cwd, flags, changeName) {
   const outputText = outputIdx !== -1 && flags[outputIdx + 1] ? flags[outputIdx + 1] : null
   const inputIdx = flags.indexOf('--input')
   const inputText = inputIdx !== -1 && flags[inputIdx + 1] ? flags[inputIdx + 1] : null
+  const skipApproval = flags.includes('--skip-approval')
   const nextInFlow = (stage) => {
     const i = flowStages.indexOf(stage)
     return i >= 0 && i < flowStages.length - 1 ? flowStages[i + 1] : null
@@ -717,8 +768,11 @@ async function runAutoMode(pm, progress, cwd, flags, changeName) {
     const stageChanged = progress.currentStage !== stage
     progress.currentStage = stage
     const changed = await ensureStageSteps(progress, stage, cwd)
-    if (stageChanged || changed) pm._write(cwd, progress, changeName)
-    progress = pm.read(cwd, changeName)
+    if (stageChanged || changed) {
+      await pm._write(cwd, progress, changeName)
+      triggerSync(cwd, changeName)
+    }
+    progress = await pm.read(cwd, changeName)
     return progress
   }
 
@@ -765,6 +819,20 @@ async function runAutoMode(pm, progress, cwd, flags, changeName) {
       else console.log('All auto flow stages are complete.')
       return
     }
+    // execute 阶段启动前检查审批
+    if (currentStage === 'execute' && !skipApproval) {
+      const approval = await checkApproval(cwd, changeName)
+      if (approval) {
+        if (approval.status === 'rejected') {
+          console.error(`❌ 变更 ${changeName} 的执行已被拒绝：${approval.reason || '无原因'}`)
+          process.exit(1)
+        }
+        if (approval.status === 'pending') {
+          console.log(`⏳ 变更 ${changeName} 的执行审批待处理中...`)
+          console.log('  提示：使用 --skip-approval 跳过审批检查')
+        }
+      }
+    }
     outputStep(currentStage, pendingIdx, defSteps, cwd, changeName)
     return
   }
@@ -776,11 +844,25 @@ async function runAutoMode(pm, progress, cwd, flags, changeName) {
 
   const result = await completeStep(pm, progress, currentStage, cwd, outputText, inputText, { printNext: false, changeName })
   if (!result) return
-  progress = pm.read(cwd, changeName)
+  progress = await pm.read(cwd, changeName)
 
   const nextPendingIdx = progress.stages[currentStage]?.steps?.findIndex(step => step.status === 'pending') ?? -1
   if (nextPendingIdx !== -1) {
     const defSteps = await getStageSteps(currentStage, cwd, progress)
+    // execute 阶段启动前检查审批
+    if (currentStage === 'execute' && !skipApproval) {
+      const approval = await checkApproval(cwd, changeName)
+      if (approval) {
+        if (approval.status === 'rejected') {
+          console.error(`❌ 变更 ${changeName} 的执行已被拒绝：${approval.reason || '无原因'}`)
+          process.exit(1)
+        }
+        if (approval.status === 'pending') {
+          console.log(`⏳ 变更 ${changeName} 的执行审批待处理中...`)
+          console.log('  提示：使用 --skip-approval 跳过审批检查')
+        }
+      }
+    }
     outputStep(currentStage, nextPendingIdx, defSteps, cwd, changeName)
     return
   }
@@ -801,11 +883,28 @@ async function runAutoMode(pm, progress, cwd, flags, changeName) {
   }
   progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
   await ensureStageSteps(progress, next, cwd)
-  pm._write(cwd, progress, changeName)
-  progress = pm.read(cwd, changeName)
+  await pm._write(cwd, progress, changeName)
+  triggerSync(cwd, changeName)
+  progress = await pm.read(cwd, changeName)
 
   console.log(`\n${currentStage} complete. Auto advanced to ${next}.`)
   const nextSteps = await getStageSteps(next, cwd, progress)
   const firstPending = progress.stages[next]?.steps?.findIndex(step => step.status === 'pending') ?? -1
-  if (firstPending !== -1) outputStep(next, firstPending, nextSteps, cwd, changeName)
+  if (firstPending !== -1) {
+    // execute 阶段启动前检查审批
+    if (next === 'execute' && !skipApproval) {
+      const approval = await checkApproval(cwd, changeName)
+      if (approval) {
+        if (approval.status === 'rejected') {
+          console.error(`❌ 变更 ${changeName} 的执行已被拒绝：${approval.reason || '无原因'}`)
+          process.exit(1)
+        }
+        if (approval.status === 'pending') {
+          console.log(`⏳ 变更 ${changeName} 的执行审批待处理中...`)
+          console.log('  提示：使用 --skip-approval 跳过审批检查')
+        }
+      }
+    }
+    outputStep(next, firstPending, nextSteps, cwd, changeName)
+  }
 }

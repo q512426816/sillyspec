@@ -50,6 +50,15 @@ SillySpec CLI — 规范驱动开发工具包
 
   sillyspec docs migrate       迁移旧文档到统一结构
 
+  sillyspec platform <cmd>      SillyHub 平台同步
+    connect <url> [--token <t>]  连接平台
+    disconnect                    断开连接
+    sync [--change <name>]        同步变更状态
+    sync-docs [--change <name>]   同步四件套文档
+    status                        查看同步状态
+    approve <change-name>         审批变更
+    reject <change-name> [--reason <r>]  拒绝变更
+
   sillyspec dashboard          启动 Dashboard Web UI
     [--port <number>]          指定端口（默认 3456）
     [--no-open]                不自动打开浏览器
@@ -136,7 +145,6 @@ async function main() {
       break;
     case 'progress': {
       const pm = new ProgressManager();
-      pm._migrateIfNeeded(dir);
       const subCommand = filteredArgs[1];
       const stageIdx = filteredArgs.indexOf('--stage');
       const stage = stageIdx >= 0 && filteredArgs[stageIdx + 1] ? filteredArgs[stageIdx + 1] : null;
@@ -368,6 +376,94 @@ SillySpec worktree — git worktree 隔离管理
         default:
           console.error(`❌ 未知子命令: worktree ${wtSubCmd}`);
           console.log('   运行 sillyspec worktree --help 查看帮助');
+          process.exit(1);
+      }
+      break;
+    }
+    case 'platform': {
+      const platformSub = filteredArgs[1];
+      const platformArgs = filteredArgs.slice(2);
+
+      if (!platformSub || platformSub === 'help' || platformSub === '--help' || platformSub === '-h') {
+        console.log(`
+SillySpec platform — SillyHub 平台同步
+
+用法:
+  sillyspec platform connect <url> [--token <token>]
+  sillyspec platform disconnect
+  sillyspec platform sync [--change <name>]
+  sillyspec platform sync-docs [--change <name>]
+  sillyspec platform status
+  sillyspec platform approve <change-name>
+  sillyspec platform reject <change-name> [--reason <reason>]
+`);
+        break;
+      }
+
+      let syncModule;
+      try {
+        syncModule = await import('./sync.js');
+      } catch {
+        console.error('❌ 平台同步功能不可用（sync.js 未实现）');
+        process.exit(1);
+      }
+
+      switch (platformSub) {
+        case 'connect': {
+          const url = platformArgs[0];
+          if (!url) {
+            console.error('❌ 用法: sillyspec platform connect <url> [--token <token>]');
+            process.exit(1);
+          }
+          const tokenIdx = args.indexOf('--token');
+          const token = tokenIdx >= 0 && args[tokenIdx + 1] ? args[tokenIdx + 1] : undefined;
+          if (!token) {
+            console.error('⚠️ 未提供 --token，将使用交互式输入（TODO: task-11）');
+          }
+          await syncModule.connect(url, token, dir);
+          break;
+        }
+        case 'disconnect':
+          await syncModule.disconnect(dir);
+          break;
+        case 'sync': {
+          const syncChangeIdx = args.indexOf('--change');
+          const syncChangeName = syncChangeIdx >= 0 && args[syncChangeIdx + 1] ? args[syncChangeIdx + 1] : null;
+          await syncModule.sync(syncChangeName, dir);
+          break;
+        }
+        case 'sync-docs': {
+          const syncDocsChangeIdx = args.indexOf('--change');
+          const syncDocsChangeName = syncDocsChangeIdx >= 0 && args[syncDocsChangeIdx + 1] ? args[syncDocsChangeIdx + 1] : null;
+          await syncModule.syncDocuments(syncDocsChangeName, dir);
+          break;
+        }
+        case 'status':
+          await syncModule.status(dir);
+          break;
+        case 'approve': {
+          const approveName = platformArgs[0];
+          if (!approveName) {
+            console.error('❌ 用法: sillyspec platform approve <change-name>');
+            process.exit(1);
+          }
+          await syncModule.approve(approveName, dir);
+          break;
+        }
+        case 'reject': {
+          const rejectName = platformArgs[0];
+          if (!rejectName) {
+            console.error('❌ 用法: sillyspec platform reject <change-name> [--reason <reason>]');
+            process.exit(1);
+          }
+          const reasonIdx = args.indexOf('--reason');
+          const reason = reasonIdx >= 0 && args[reasonIdx + 1] ? args[reasonIdx + 1] : undefined;
+          await syncModule.reject(rejectName, reason, dir);
+          break;
+        }
+        default:
+          console.error(`❌ 未知子命令: platform ${platformSub}`);
+          console.log('   运行 sillyspec platform --help 查看帮助');
           process.exit(1);
       }
       break;

@@ -147,15 +147,9 @@ async function doInstall(projectDir, tools, subprojects = []) {
     mkdirSync(join(runtimeDir, sub), { recursive: true });
   }
 
-  // 创建全局状态文件
+  // 初始化 SQLite 数据库（创建 DB + 建表 + 写入 project 行 + user-inputs.md）
   const pm = new ProgressManager();
-  pm.init(projectDir);
-
-  // 创建初始 user-inputs.md
-  const inputsPath = join(runtimeDir, 'user-inputs.md');
-  if (!existsSync(inputsPath)) {
-    writeFileSync(inputsPath, '# 用户输入记录\n\n> 每步完成时由 AI 自动追加，记录用户所有原话。\n\n');
-  }
+  await pm.init(projectDir);
 
   const gitignorePath = join(projectDir, '.gitignore');
   const ignoreRules = ['.sillyspec/codebase/SCAN-RAW.md', '.sillyspec/local.yaml', '.sillyspec/.runtime/'];
