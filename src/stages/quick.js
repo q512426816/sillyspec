@@ -17,6 +17,11 @@ export const definition = {
 6. 如有 \`--change\`，加载设计文档：\`cat .sillyspec/changes/<change-name>/design.md 2>/dev/null\`（理解设计意图）
 7. 如有需要，查询知识库：\`cat .sillyspec/knowledge/INDEX.md 2>/dev/null\`
 
+### 模块文档加载
+8. 读取 \`.sillyspec/docs/<project>/modules/_module-map.yaml\`（不存在则跳过以下步骤）
+9. 根据任务描述初步判断可能涉及的模块
+10. 读取匹配到的 \`.sillyspec/docs/<project>/modules/<module>.md\`
+
 ### 创建任务记录（必须执行）
 理解完任务后，立即创建记录文件：
 1. \`git config user.name\` 获取用户名
@@ -57,7 +62,7 @@ worktree 路径 + 变更名 + 分支名`,
       prompt: `实现任务。
 
 ### 工作目录
-你必须在 worktree 中工作（将子代理的 cwd 设为上一步记录的 worktree 路径）。
+你必须在上一步记录的 worktree 路径中工作。
 不要在主工作区修改源码文件。所有代码变更只在 worktree 中进行。
 
 ### 操作

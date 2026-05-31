@@ -3,11 +3,12 @@
  *
  * 纯 Node.js，无外部依赖。支持多变更并行。
  *
- * 存储结构（v3）：
- *   .sillyspec/.runtime/global.json          — 全局状态（项目名、活跃变更列表）
- *   .sillyspec/changes/<name>/progress.json  — 每个变更独立的阶段/步骤状态
+ * 存储结构：
+ *   .sillyspec/.runtime/sillyspec.db          — SQLite 数据库（权威状态源）
+ *   .sillyspec/.runtime/global.json           — 全局状态缓存（项目名、活跃变更列表）
+ *   .sillyspec/.runtime/gate-status.json      — worktree-guard 门禁状态缓存
  *
- * 向后兼容：如果存在旧的 .sillyspec/.runtime/progress.json，自动迁移。
+ * 历史迁移：v1/v2 使用 progress.json 文件，v3 已全部迁移至 SQLite。
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, unlinkSync } from 'fs';
@@ -17,7 +18,6 @@ import { DB } from './db.js';
 const RUNTIME_DIR = '.sillyspec/.runtime';
 const CHANGES_DIR = '.sillyspec/changes';
 const GLOBAL_FILE = 'global.json';
-const PROGRESS_FILE = 'progress.json';
 const CURRENT_VERSION = 3;
 const VALID_STAGES = ['scan', 'brainstorm', 'propose', 'plan', 'execute', 'verify', 'archive', 'quick', 'explore'];
 const VALID_STATUSES = ['pending', 'in-progress', 'completed', 'failed', 'blocked'];
@@ -154,7 +154,7 @@ export class ProgressManager {
    * 读取指定变更的 progress（SQL 版）
    * @param {string} cwd
    * @param {string|null} changeName - 变更名，null 时尝试自动检测
-   * @returns {Promise<object|null>} 与旧版 progress.json 结构完全一致的 JS 对象
+   * @returns {Promise<object|null>} 与 SQLite 查询结果一致的 JS 对象
    */
   async read(cwd, changeName = null) {
     // 自动检测变更名
@@ -759,7 +759,7 @@ export class ProgressManager {
   async _showChange(cwd, changeName) {
     const data = await this.read(cwd, changeName);
     if (!data) {
-      console.log(`❌ 未找到变更 ${changeName} 的 progress.json`);
+      console.log(`❌ 未找到变更 ${changeName}`);
       return;
     }
 
@@ -816,7 +816,7 @@ export class ProgressManager {
 
   async validate(cwd, changeName = null) {
     const data = await this.read(cwd, changeName);
-    if (!data) { console.log('❌ 无法读取 progress.json'); return false; }
+    if (!data) { console.log('❌ 无法读取进度数据'); return false; }
 
     const errors = [];
     if (!data._version || !Number.isInteger(data._version) || data._version < 1) {
@@ -825,7 +825,7 @@ export class ProgressManager {
     if (!data.stages || typeof data.stages !== 'object') errors.push('缺少 stages');
     if (!VALID_STAGES.every(s => data.stages[s])) errors.push('缺少阶段定义');
 
-    if (errors.length === 0) { console.log('✅ progress.json 格式正确'); return true; }
+    if (errors.length === 0) { console.log('✅ 进度数据格式正确'); return true; }
 
     console.log(`⚠️  发现问题，尝试修复...`);
     let fixed = { ...data, stages: { ...data.stages } };
@@ -852,7 +852,7 @@ export class ProgressManager {
   async reset(cwd, stage, changeName = null) {
     if (stage) {
       const data = await this.read(cwd, changeName);
-      if (!data) { console.log('❌ 无法读取 progress.json'); return; }
+      if (!data) { console.log('❌ 无法读取进度数据'); return; }
       if (!data.stages[stage]) { console.log(`❌ 未知阶段: ${stage}`); return; }
       data.stages[stage] = emptyStage();
       data.lastActive = new Date().toLocaleString('zh-CN',{hour12:false});

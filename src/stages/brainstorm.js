@@ -5,7 +5,7 @@ export const definition = {
   steps: [
     {
       name: '状态检查',
-      prompt: `检查当前变更的 progress.json 确认当前状态。
+      prompt: `检查当前变更的进度状态（sillyspec.db）。
 
 ### 操作
 1. 运行 \`sillyspec progress show\`

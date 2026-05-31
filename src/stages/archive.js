@@ -165,7 +165,7 @@ module-impact.md 路径 + 影响模块数量 + 未匹配文件数量`,
 1. 如果 \`.sillyspec/ROADMAP.md\` 存在，标记对应 Phase 为已完成
 2. \`git add .sillyspec/changes/\` — 暂存归档结果（不要 commit，由用户通过统一提交工具处理）
 3. \`git add .sillyspec/docs/\` — 暂存模块文档更新（如有）
-4. 更新 progress.json：
+4. 更新 sillyspec.db 中的阶段状态：
    - 清除当前变更信息（归档后不再活跃）
    - 如果是主变更（有 MASTER.md），标记所有阶段为 ✅，然后清除
    - 历史记录追加时间 + 归档完成

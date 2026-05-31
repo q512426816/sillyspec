@@ -4,7 +4,7 @@
  * SillySpec CLI — 安装工具
  *
  * 只负责两件事：init（安装命令模板）和 setup（安装 MCP 工具）。
- * 状态管理通过 progress.json 完成，使用 `sillyspec progress` 命令。
+ * 状态管理通过 sillyspec.db（SQLite）完成，使用 `sillyspec progress` 命令。
  */
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
 import { join, resolve } from 'path';
@@ -39,7 +39,7 @@ SillySpec CLI — 规范驱动开发工具包
     quick, explore, status, doctor
 
   sillyspec progress <cmd>     进度记录（轻量，不强制顺序）
-    init                       初始化 progress.json
+    init                       初始化项目数据库
     show                       查看当前进度
     set-stage <stage>          设置当前阶段
     add-step <stage> <name>    添加步骤

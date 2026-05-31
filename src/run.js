@@ -2,7 +2,7 @@
  * sillyspec run 命令实现
  *
  * CLI 成为流程引擎，AI 变成步骤执行器。
- * 支持多变更并行：每个变更独立 progress.json。
+ * 支持多变更并行：每个变更状态存储在 sillyspec.db 中。
  */
 import { basename, join } from 'path'
 import { existsSync, readdirSync, mkdirSync, writeFileSync, appendFileSync, readFileSync, statSync } from 'fs'
@@ -281,7 +281,7 @@ export async function runCommand(args, cwd) {
         progress = await pm.initChange(cwd, autoName)
         changeName = autoName
       } else {
-        console.error('❌ 未找到 progress.json，请先运行 sillyspec init 或指定 --change <变更名>')
+        console.error('❌ 未找到进度数据，请先运行 sillyspec init 或指定 --change <变更名>')
         process.exit(1)
       }
     }

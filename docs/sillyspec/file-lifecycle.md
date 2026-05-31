@@ -527,7 +527,7 @@ PASS / PASS WITH NOTES / FAIL
 
 **临时文件：** `_env-detect.md`（环境探测中间产物，扫描完成后删除）
 
-**断点续扫：** "断点续扫检测"步骤检查已有文档，只生成缺失的
+**断点续扫：** "检查已有扫描文档和子项目列表"步骤检查已有文档，**必须停下来问用户**选择「全部重新扫描」或「只补缺失文档」，不能自行决定跳过。
 
 **生命周期：** scan 阶段生成 → 被后续所有阶段（brainstorm/propose/plan/execute/verify）作为上下文读取
 
@@ -578,7 +578,9 @@ modules:
 
 ### `<module>.md` — 模块当前状态描述
 
-**创建时机：** archive 阶段 `sync-module-docs` 步骤（首次受影响时创建，后续更新）
+**创建时机：**
+- scan 阶段"生成模块核心文档"步骤（可选，首次全量生成，需用户确认）
+- archive 阶段 `sync-module-docs` 步骤（首次受影响时创建，后续更新）
 
 **大体结构：**
 ```markdown
@@ -627,7 +629,8 @@ modules:
 - 更新头部元数据：`> 最后更新：YYYY-MM-DD` 和 `> 最近变更：<change-name>`
 
 **更新时机：**
-- archive 阶段 `sync-module-docs` 步骤（通过 module-impact.md 驱动）
+- scan 阶段"生成模块核心文档"步骤（首次全量生成，需用户确认）
+- archive 阶段 `sync-module-docs` 步骤（通过 module-impact.md 驱动增量更新）
 - quick 阶段"暂存和更新记录"步骤（直接匹配 git diff 文件到模块，同步更新）
 
 **消费方：** brainstorm/propose/plan/execute 阶段"加载上下文"时读取，作为开发参考
@@ -1034,6 +1037,7 @@ graph LR
 | `AGENTS.md` 等 | 选了 codex/gemini/opencode 工具 | init | AI 工具读取 |
 | `projects/*.yaml` | init 自动创建 | init | 子项目上下文加载 |
 | `modules/_module-map.yaml` | scan 可选步骤 | scan | archive/plan/execute |
+| `modules/<module>.md` | scan 可选步骤（全量生成）+ archive sync-module-docs | scan/archive | propose/plan/execute/verify/quick |
 | `verify-result.md` | verify 阶段输出 | verify | 验证报告存档 |
 
 
@@ -1047,7 +1051,7 @@ sillyspec init
     ├─→ .sillyspec/knowledge/
     └─→ .gitignore (追加 .sillyspec/.runtime/)
 
-scan 阶段
+scan 阶段（12 步，完成后重置）
     │
     ├─→ docs/<name>/scan/ARCHITECTURE.md
     ├─→ docs/<name>/scan/CONVENTIONS.md
@@ -1057,6 +1061,7 @@ scan 阶段
     ├─→ docs/<name>/scan/CONCERNS.md
     ├─→ docs/<name>/scan/PROJECT.md
     ├─→ docs/<name>/modules/_module-map.yaml (可选)
+    ├─→ docs/<name>/modules/<module>.md (可选，需用户确认)
     └─→ .sillyspec/local.yaml
 
 brainstorm 阶段
@@ -1093,12 +1098,14 @@ verify 阶段
     │
     └─→ changes/<name>/verify-result.md
 
-quick 阶段（辅助阶段，不走完整流程）
+quick 阶段（辅助阶段，不走完整流程，完成后重置）
     │
     ├─→ .sillyspec/quicklog/QUICKLOG-<user>.md (无 --change 时)
     ├─→ .sillyspec/.runtime/worktrees/<name>/meta.json
     ├─→ .sillyspec/.runtime/gate-status.json
     └─→ docs/<name>/modules/<module>.md (直接同步，不经过 module-impact.md)
+
+> quick 阶段"理解任务"步骤会加载模块文档作为上下文参考。
 
 archive 阶段
     │

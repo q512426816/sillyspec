@@ -27,5 +27,5 @@ export const stageRegistry = {
   doctor: { ...doctor, ...auxiliaryFlag }
 }
 
-// 辅助命令（在没有 progress.json 时也可执行）
+// 辅助命令（在无活跃变更时也可执行）
 export const auxiliaryStages = ['scan', 'quick', 'explore', 'archive', 'status', 'doctor']

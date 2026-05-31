@@ -56,7 +56,7 @@ const INJECTION_CONTENT = `## SillySpec — 规范驱动开发
 - 遵循 \`.sillyspec/docs/<project>/scan/CONVENTIONS.md\` 中的代码风格
 
 ### 工作流程
-- 读取当前变更的 progress.json 确认当前阶段（使用 \`sillyspec progress show\`）
+- 读取 sillyspec.db 确认当前阶段（使用 \`sillyspec progress show\`）
 - 各阶段产出文件位于 \`.sillyspec/changes/<变更名>/\` 下
 `;
 

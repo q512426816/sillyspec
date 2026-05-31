@@ -5,7 +5,7 @@
  * 纯判断模块，不做实际的 hook 注入。
  *
  * P0 优化：
- * - 阶段检测 fallback：gate-status.json → progress.json currentStage
+ * - 阶段检测 fallback：gate-status.json → sillyspec.db currentStage
  * - 拦截提示针对每个阶段给出具体修复建议
  */
 
@@ -100,41 +100,27 @@ function readGateStatus(cwd) {
 }
 
 /**
- * 从 progress.json fallback 读取 currentStage
- * 优先级：gate-status.json > 全局 progress.json > 变更级 progress.json
+ * 从 sillyspec.db 读取 currentStage
+ * 优先级：gate-status.json > sillyspec.db
  * @param {string} cwd
  * @returns {string|null} 阶段名，null 表示无法确定
  */
 function readCurrentStage(cwd) {
-  // 1. gate-status.json（权威来源）
+  // 1. gate-status.json（高速缓存，权威来源）
   const gateStatus = readGateStatus(cwd)
   if (gateStatus && gateStatus.stage) return gateStatus.stage
 
-  // 2. 全局 progress.json
-  const globalProgress = path.join(cwd, '.sillyspec', '.runtime', 'progress.json')
-  if (existsSync(globalProgress)) {
-    try {
-      const data = JSON.parse(readFileSync(globalProgress, 'utf8'))
-      if (data.currentStage) return data.currentStage
-    } catch { /* skip */ }
-  }
-
-  // 3. 变更级 progress.json（从 global.json 找到活跃变更）
-  const globalFile = path.join(cwd, '.sillyspec', '.runtime', 'global.json')
-  if (existsSync(globalFile)) {
-    try {
-      const global = JSON.parse(readFileSync(globalFile, 'utf8'))
-      const changesDir = path.join(cwd, '.sillyspec', 'changes')
-      for (const cn of (global.activeChanges || [])) {
-        const pp = path.join(changesDir, cn, 'progress.json')
-        if (!existsSync(pp)) continue
-        try {
-          const data = JSON.parse(readFileSync(pp, 'utf8'))
-          if (data.currentStage) return data.currentStage
-        } catch { /* skip */ }
-      }
-    } catch { /* skip */ }
-  }
+  // 2. 从 sillyspec.db 读取（通过 sqlite3 CLI 同步调用）
+  const dbPath = path.join(cwd, '.sillyspec', '.runtime', 'sillyspec.db')
+  if (!existsSync(dbPath)) return null
+  try {
+    const { execSync } = require('child_process')
+    const result = execSync(
+      `sqlite3 "${dbPath}" "SELECT current_stage FROM changes WHERE status='active' AND current_stage IN ('execute','quick') ORDER BY last_active DESC LIMIT 1"`,
+      { encoding: 'utf8', timeout: 2000 }
+    ).trim()
+    return result || null
+  } catch { /* sqlite3 CLI 不可用或查询失败 */ }
 
   return null
 }
@@ -149,35 +135,17 @@ function isNoWorktreeMode(cwd) {
   const gateStatus = readGateStatus(cwd)
   if (gateStatus && gateStatus.noWorktree) return true
 
-  // 2. 检查 progress.json
-  const progressFiles = [
-    path.join(cwd, '.sillyspec', '.runtime', 'progress.json'),
-  ]
-  for (const p of progressFiles) {
-    if (!existsSync(p)) continue
-    try {
-      const data = JSON.parse(readFileSync(p, 'utf8'))
-      if (data.noWorktree) return true
-    } catch { /* skip */ }
-  }
-
-  // 3. 检查变更级 progress.json
-  const runtimeDir = path.join(cwd, '.sillyspec', '.runtime')
-  const globalFile = path.join(runtimeDir, 'global.json')
-  if (existsSync(globalFile)) {
-    try {
-      const global = JSON.parse(readFileSync(globalFile, 'utf8'))
-      const changesDir = path.join(cwd, '.sillyspec', 'changes')
-      for (const cn of (global.activeChanges || [])) {
-        const pp = path.join(changesDir, cn, 'progress.json')
-        if (!existsSync(pp)) continue
-        try {
-          const data = JSON.parse(readFileSync(pp, 'utf8'))
-          if (data.noWorktree) return true
-        } catch { /* skip */ }
-      }
-    } catch { /* skip */ }
-  }
+  // 2. 从 sillyspec.db 读取
+  const dbPath = path.join(cwd, '.sillyspec', '.runtime', 'sillyspec.db')
+  if (!existsSync(dbPath)) return false
+  try {
+    const { execSync } = require('child_process')
+    const result = execSync(
+      `sqlite3 "${dbPath}" "SELECT no_worktree FROM changes WHERE status='active' AND current_stage IN ('execute','quick') LIMIT 1"`,
+      { encoding: 'utf8', timeout: 2000 }
+    ).trim()
+    return result === '1'
+  } catch { /* sqlite3 CLI 不可用或查询失败 */ }
 
   return false
 }

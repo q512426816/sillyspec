@@ -18,15 +18,10 @@ export const definition = {
 for d in .sillyspec .sillyspec/projects .sillyspec/docs .sillyspec/changes .sillyspec/.runtime; do
   [ -d "$d" ] && echo "✅ $d" || echo "❌ $d"
 done
-# 检查 progress.json（支持新版按变更隔离和旧版全局）
-if [ -d .sillyspec/changes ]; then
-  PROGRESS_FILE=$(find .sillyspec/changes -maxdepth 2 -name progress.json | head -1)
-fi
-if [ -z "$PROGRESS_FILE" ]; then
-  PROGRESS_FILE='.sillyspec/.runtime/progress.json'
-fi
-[ -f "$PROGRESS_FILE" ] && echo "✅ progress.json 存在 ($PROGRESS_FILE)" || echo "❌ progress.json 不存在"
-node -e "JSON.parse(require('fs').readFileSync('$PROGRESS_FILE','utf8')); console.log('✅ progress.json 可解析')" 2>/dev/null || echo "⚠️ progress.json 不可解析"
+# 检查 sillyspec.db（SQLite 权威状态源）
+DB_FILE='.sillyspec/.runtime/sillyspec.db'
+[ -f "$DB_FILE" ] && echo "✅ sillyspec.db 存在" || echo "❌ sillyspec.db 不存在"
+sqlite3 "$DB_FILE" "SELECT count(*) FROM project" 2>/dev/null && echo "✅ sillyspec.db 可查询" || echo "⚠️ sillyspec.db 不可查询"
 \`\`\`
 
 ### 2. 项目配置检查
@@ -46,40 +41,31 @@ done
 
 ### 3. 进度数据一致性
 \`\`\`bash
-# 读取 currentChange 并检查目录存在性
-node -e "
-const p = JSON.parse(require('fs').readFileSync(process.env.PROGRESS_FILE || '.sillyspec/.runtime/progress.json','utf8'));
-const cc = p.currentChange;
-if (!cc) { console.log('ℹ️ 无当前变更'); process.exit(0); }
-const dir = '.sillyspec/changes/' + cc;
-const exists = require('fs').existsSync(dir);
-console.log(exists ? '✅ currentChange 目录存在: ' + cc : '❌ currentChange 目录不存在: ' + cc);
-// 检查各阶段产出
-const stages = p.stages || {};
-for (const [name, sd] of Object.entries(stages)) {
-  if (sd.status === 'completed' && sd.steps.length > 0) {
-    const hasOutput = sd.steps.some(s => s.output && s.output.trim());
-    console.log('  ' + name + ': ' + (hasOutput ? '✅ 有产出' : '⚠️ 已完成但无产出记录'));
-  }
-}
-" 2>/dev/null || echo "⚠️ 无法读取 progress.json"
+# 从 sillyspec.db 读取活跃变更并检查目录存在性
+DB_FILE='.sillyspec/.runtime/sillyspec.db'
+if [ ! -f "$DB_FILE" ]; then echo "⚠️ sillyspec.db 不存在"; exit 0; fi
+ACTIVE_CHANGE=$(sqlite3 "$DB_FILE" "SELECT name FROM changes WHERE status='active' ORDER BY last_active DESC LIMIT 1" 2>/dev/null)
+if [ -z "$ACTIVE_CHANGE" ]; then echo "ℹ️ 无当前变更"; exit 0; fi
+echo "当前变更: $ACTIVE_CHANGE"
+DIR=".sillyspec/changes/$ACTIVE_CHANGE"
+[ -d "$DIR" ] && echo "✅ 变更目录存在: $ACTIVE_CHANGE" || echo "❌ 变更目录不存在: $ACTIVE_CHANGE"
+# 检查各阶段状态
+sqlite3 -header -column "$DB_FILE" "SELECT stage, status FROM stages s JOIN changes c ON s.change_id=c.id WHERE c.name='$ACTIVE_CHANGE' ORDER BY s.stage" 2>/dev/null || echo "⚠️ 无法查询阶段数据"
 \`\`\`
 
 ### 4. 孤儿文件检查
 \`\`\`bash
+DB_FILE='.sillyspec/.runtime/sillyspec.db'
+if [ ! -f "$DB_FILE" ]; then echo "⚠️ sillyspec.db 不存在"; exit 0; fi
 node -e "
 const fs = require('fs');
 const dir = '.sillyspec/changes';
 if (!fs.existsSync(dir)) { console.log('ℹ️ changes/ 目录不存在'); process.exit(0); }
 const subs = fs.readdirSync(dir).filter(f => fs.statSync(dir+'/'+f).isDirectory());
 if (subs.length === 0) { console.log('ℹ️ 无变更目录'); process.exit(0); }
-let progress;
-try { progress = JSON.parse(fs.readFileSync(process.env.PROGRESS_FILE || '.sillyspec/.runtime/progress.json','utf8')); } catch { console.log('⚠️ 无法读取 progress.json'); subs.forEach(s => console.log('❓ ' + s)); process.exit(0); }
-const known = new Set();
-if (progress.currentChange) known.add(progress.currentChange);
-for (const sd of Object.values(progress.stages || {})) {
-  (sd.steps || []).forEach(s => { if (s.output) known.add(s.output); });
-}
+const { execSync } = require('child_process');
+let known;
+try { const rows = execSync('sqlite3 -json \".sillyspec/.runtime/sillyspec.db\" \"SELECT name FROM changes WHERE status=\\\"active\\\"\"', {encoding:'utf8'}).trim(); known = new Set(JSON.parse(rows).map(r => r.name)); } catch { known = new Set(); }
 subs.forEach(s => {
   console.log(known.has(s) ? '✅ ' + s + ' — 已关联' : '⚠️ ' + s + ' — 孤儿目录（可清理）');
 });
@@ -124,12 +110,12 @@ done
 
 ### 1. 探测构建工具
 \`\`\`bash
-# 确定项目路径（使用 progress.json 中的项目或当前目录）
-PROJECT_DIR=$(node -e "
+# 确定项目路径（使用 sillyspec.db 中的项目路径或当前目录）
+PROJECT_DIR=$(sqlite3 -json '.sillyspec/.runtime/sillyspec.db' "SELECT name FROM project WHERE id=1" 2>/dev/null | node -e "const r=JSON.parse(require('fs').readFileSync(0,'utf8'));console.log(r.length>0&&r[0].name?r[0].name:'.')" 2>/dev/null || node -e "
 const fs=require('fs');
-try{const fs=require('fs'),path=require('path');const changesDir='.sillyspec/changes';let pp=null;if(fs.existsSync(changesDir)){const entries=fs.readdirSync(changesDir,{withFileTypes:true}).filter(e=>e.isDirectory()&&e.name!=='archive');if(entries.length===1)pp=path.join(changesDir,entries[0].name,'progress.json');}if(!pp)pp='.sillyspec/.runtime/progress.json';const p=JSON.parse(fs.readFileSync(pp,'utf8'));if(p.project){console.log(p.project);process.exit(0)}}catch{}
-const files=fs.readdirSync('.sillyspec/projects').filter(f=>f.endsWith('.yaml'));
+try{const files=fs.readdirSync('.sillyspec/projects').filter(f=>f.endsWith('.yaml'));
 if(files.length>0){const c=fs.readFileSync('.sillyspec/projects/'+files[0],'utf8');const m=c.match(/^path:\\s*(.+)/m);console.log(m?m[1].trim():'.')}else console.log('.')
+}catch{console.log('.')}
 " 2>/dev/null)
 echo "项目目录: $PROJECT_DIR"
 
@@ -264,7 +250,7 @@ timeout 5 which docker 2>/dev/null && echo "✅ Docker 可用" || echo "ℹ️ D
 ✅ .sillyspec/ 目录结构 — 正常
 ✅ projects/*.yaml — N 个项目已注册
 ⚠️  local.yaml (xxx) — 缺少 test 命令
-❌ progress.json — brainstorm 标记完成但 design.md 不存在
+❌ sillyspec.db 阶段状态 — brainstorm 标记完成但 design.md 不存在
 
 ## 构建环境
 ✅ Node.js v23.4.0 — 可用
@@ -291,7 +277,7 @@ timeout 5 which docker 2>/dev/null && echo "✅ Docker 可用" || echo "ℹ️ D
 - 缺少 local.yaml → \`sillyspec init\` 重新生成，或手动创建
 - local.yaml 缺少 build/test → 补充对应命令
 - 缺少 STACK.md → \`sillyspec run scan\` 重新扫描
-- progress.json 不一致 → \`sillyspec run <阶段> --reset\` 重置对应阶段
+- sillyspec.db 状态不一致 → \`sillyspec run <阶段> --reset\` 重置对应阶段
 - 孤儿目录 → 确认后 \`rm -rf .sillyspec/changes/<目录名>\`
 - Maven 私服不可达 → 检查 VPN、settings.xml 配置、私服状态
 - Git remote 不可达 → 检查网络、SSH key 或凭证

@@ -316,8 +316,13 @@ export function buildCoordinatorStep(changeDir, taskNames) {
 
 操作：
 1. 读取 ${changeDir}/design.md 和 ${changeDir}/plan.md 了解上下文
-2. 读取相关源文件了解现有代码
-3. 按以下格式编写任务蓝图并保存到 ${changeDir}/tasks/task-${num}.md：
+2. 读取相关模块文档（如存在）：
+   - \
+ls .sillyspec/docs/*/modules/_module-map.yaml 2>/dev/null\
+   确认模块划分，读取涉及模块的 \
+ls .sillyspec/docs/*/modules/*.md 2>/dev/null\
+3. 读取相关源文件了解现有代码
+4. 按以下格式编写任务蓝图并保存到 ${changeDir}/tasks/task-${num}.md：
 
 ---
 id: task-${num}
