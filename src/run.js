@@ -16,8 +16,8 @@ import { buildPlanSteps } from './stages/plan.js'
  */
 async function triggerSync(cwd, changeName) {
   try {
-    const { sync } = await import('./sync.js')
-    await sync.sync(cwd, changeName)
+    const syncMod = await import('./sync.js')
+    await syncMod.sync(cwd, changeName)
   } catch (e) {
     // sync.js 不存在或同步失败，静默跳过
     console.warn('⚠️ 同步失败:', e.message)
@@ -30,8 +30,8 @@ async function triggerSync(cwd, changeName) {
  */
 async function checkApproval(cwd, changeName) {
   try {
-    const { sync } = await import('./sync.js')
-    return await sync.checkApproval(cwd, changeName)
+    const syncMod = await import('./sync.js')
+    return await syncMod.checkApproval(cwd, changeName)
   } catch (e) {
     // sync.js 不存在或检查失败，静默跳过
     return null
