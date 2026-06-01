@@ -301,6 +301,8 @@ function isSingleCommandReadonly(cmd, extraReadonlyCommands = []) {
     if (READONLY_GIT_SUBS.has(sub)) return true
     // git stash list
     if (sub === 'stash' && (parts[2] === 'list' || parts.length === 2)) return true
+    // git worktree 管理（list/add/remove）放行
+    if (sub === 'worktree') return true
     return false
   }
 
