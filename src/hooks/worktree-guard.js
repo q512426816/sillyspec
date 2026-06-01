@@ -48,11 +48,11 @@ const DANGER_PREFIXES = ['sudo', 'rm -rf', 'rm -r', 'rmdir']
 const STAGE_HINTS = {
   '(none)': [
     '没有检测到活跃的 SillySpec 流程。',
-    '你需要先启动一个任务流程才能修改源码：',
+    '你需要先启动一个任务流程才能修改源码（调用对应的 sillyspec skill）：',
     '',
-    '  小改动（≤3 文件）：sillyspec run quick "任务描述"',
-    '  大改动（>3 文件）：sillyspec run brainstorm → plan → execute',
-    '  全自动模式：    sillyspec run auto "任务描述"',
+    '  BUG修复(skill sillyspec-quick)：sillyspec run quick "任务描述"',
+    '  逻辑变更(skill sillyspec-brainstorm)：sillyspec run brainstorm → plan → execute → verify → archive',
+    '  全自动模式(skill sillyspec-auto)：sillyspec run auto "任务描述"',
   ],
   'brainstorm': [
     '当前在 brainstorm（需求分析）阶段，这个阶段只写文档，不写代码。',
@@ -306,12 +306,8 @@ function isSingleCommandReadonly(cmd, extraReadonlyCommands = []) {
     return false
   }
 
-  // sillyspec worktree 命令
-  if (cmdName === 'sillyspec') {
-    const sub = parts[1] || ''
-    if (sub === 'worktree') return true
-    return false
-  }
+  // sillyspec 命令全部放行（CLI 工具本身安全）
+  if (cmdName === 'sillyspec') return true
 
   return false
 }

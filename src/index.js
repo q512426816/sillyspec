@@ -268,7 +268,8 @@ async function main() {
     case 'worktree': {
       const { WorktreeManager } = await import('./worktree.js');
       const wtSubCmd = filteredArgs[1];
-      const wtName = filteredArgs[2];
+      // 提取第一个非 -- 开头的位置参数作为 wtName
+      const wtName = filteredArgs.slice(2).find(a => !a.startsWith('-'));
       const wm = new WorktreeManager({ cwd: dir });
 
       if (!wtSubCmd || wtSubCmd === 'help' || wtSubCmd === '--help' || wtSubCmd === '-h') {
@@ -337,6 +338,11 @@ SillySpec worktree — git worktree 隔离管理
             }
           } else {
             console.log(`✅ 已应用 ${result.changedFiles.length} 个文件变更`);
+          }
+          if (result.warnings && result.warnings.length > 0) {
+            for (const w of result.warnings) {
+              console.log(`⚠️  ${w}`);
+            }
           }
           break;
         }

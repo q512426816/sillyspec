@@ -265,7 +265,7 @@ _module-map.yaml 生成结果（已存在/已生成/模块列表）`,
 3. 按以下模板写入目标文件：
 
 # <module-name>
-> 最后更新：YYYY-MM-DD
+> 最后更新：<now-date>
 > 最近变更：scan（初始生成）
 > 模块路径：<glob patterns>
 

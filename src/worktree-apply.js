@@ -251,8 +251,13 @@ export function applyWorktree(changeName, { cwd, checkOnly = false } = {}) {
 
     result.ok = true;
 
-    // --- 8. 成功后自动 cleanup ---
-    wm.cleanup(changeName);
+    // --- 8. 成功后自动 cleanup（失败不影响整体结果） ---
+    try {
+      wm.cleanup(changeName);
+    } catch (cleanupErr) {
+      result.warnings = result.warnings || [];
+      result.warnings.push(`cleanup 失败（不影响应用结果）: ${cleanupErr.message}`);
+    }
 
   } catch (e) {
     result.errors.push(`patch 生成/应用异常: ${e.message}`);

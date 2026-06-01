@@ -24,10 +24,10 @@ export const definition = {
 
 ### 创建任务记录（必须执行）
 理解完任务后，立即创建记录文件：
-1. \`git config user.name\` 获取用户名
-2. 无 \`--change\`：创建 .sillyspec/quicklog/QUICKLOG-<git用户名>.md\`（已存在则追加），写入：
+1. 使用预注入的 git 用户名：\`<git-user>\`
+2. 无 \`--change\`：创建 .sillyspec/quicklog/QUICKLOG-\`<git-user>\`.md\`（已存在则追加），写入：
    \`\`\`
-   ## YYYY-MM-DD HH:mm:ss — <一句话任务描述>
+   ## <now-datetime> — <一句话任务描述>
    状态：进行中
    文件：<预估要改的文件>
    \`\`\`
@@ -47,7 +47,7 @@ export const definition = {
 ### 操作
 1. 确定变更名（change name）：
    - 如携带 \`--change <变更名>\`，使用该变更名
-   - 否则，生成临时变更名：\`quick-<当前时间戳 YYYYMMDD-HHmmss>\`
+   - 否则，生成临时变更名：\`quick-<now-timestamp>\`
 2. 运行 \`sillyspec worktree create <变更名>\`
 3. 记录输出的 worktree 路径（后续步骤需要使用）
 4. 如果创建失败 → 报错并停止（不要在无隔离状态下继续）

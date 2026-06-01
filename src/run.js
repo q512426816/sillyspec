@@ -195,6 +195,24 @@ async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjec
   if (projectName && promptText.includes('<project>')) {
     promptText = promptText.replace(/<project>/g, projectName)
   }
+  // 替换 <git-user> 占位符
+  if (promptText.includes('<git-user>')) {
+    const { execSync } = await import('child_process')
+    try {
+      const gitUser = execSync('git config user.name', { cwd, encoding: 'utf8', timeout: 5000 }).trim()
+      promptText = promptText.replace(/<git-user>/g, gitUser)
+    } catch {
+      promptText = promptText.replace(/<git-user>/g, 'unknown')
+    }
+  }
+  // 替换时间戳占位符
+  const now = new Date()
+  const nowDatetime = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0') + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0')
+  const nowTimestamp = now.getFullYear() + String(now.getMonth()+1).padStart(2,'0') + String(now.getDate()).padStart(2,'0') + '-' + String(now.getHours()).padStart(2,'0') + String(now.getMinutes()).padStart(2,'0') + String(now.getSeconds()).padStart(2,'0')
+  const nowDate = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0')
+  promptText = promptText.replace(/<now-datetime>/g, nowDatetime)
+  promptText = promptText.replace(/<now-timestamp>/g, nowTimestamp)
+  promptText = promptText.replace(/<now-date>/g, nowDate)
   console.log(promptText)
   console.log(`\n### ⚠️ 铁律`)
   console.log('- **文档是核心资产，代码是文档的产物。** 没有文档就没有代码——文档是 AI 的记忆，是团队协作的基础，是后续维护的唯一依据。任何代码产出必须先有对应的设计/规范文档支撑。')

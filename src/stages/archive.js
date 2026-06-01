@@ -46,8 +46,8 @@ export const definition = {
 \`\`\`markdown
 # 模块影响分析
 
-author: <git用户名>
-created_at: <YYYY-MM-DD HH:mm:ss>
+author: <git-user>
+created_at: <now-datetime>
 
 ## 变更：<change-name>
 
@@ -90,7 +90,7 @@ module-impact.md 路径 + 影响模块数量 + 未匹配文件数量`,
       - 更新：只改相关章节（当前设计/对外接口/依赖关系等），保持其他章节不变
       - 正文重写为当前状态，不追加历史
       - 底部"变更索引"追加一行：\`| <日期> | <变更名> | <一句话摘要> |\`
-   d. 更新头部元数据：\`> 最后更新：YYYY-MM-DD\`、\`> 最近变更：<change-name>\`
+   d. 更新头部元数据：\`> 最后更新：<now-date>\`、\`> 最近变更：<change-name>\`
 4. 展示所有模块文档的更新内容（diff 摘要），请用户确认
 5. 用户确认后，写入 \`.sillyspec/docs/<project>/modules/*.md\`
 6. 用户拒绝时，不写入模块文档，但提示"module-impact.md 已保留，可稍后手动同步"
@@ -100,7 +100,7 @@ module-impact.md 路径 + 影响模块数量 + 未匹配文件数量`,
 \`\`\`markdown
 # <module-name>
 
-> 最后更新：YYYY-MM-DD
+> 最后更新：<now-date>
 > 最近变更：<change-name>
 > 模块路径：<glob patterns>
 
