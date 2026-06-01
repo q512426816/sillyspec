@@ -146,10 +146,10 @@ async function ensureStageSteps(progress, stageName, cwd) {
 /**
  * 输出当前步骤的 prompt
  */
-function outputStep(stageName, stepIndex, steps, cwd, changeName) {
+async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjectName) {
   const step = steps[stepIndex]
   const total = steps.length
-  const projectName = basename(cwd)
+  const projectName = dbProjectName || basename(cwd)
 
   const personas = {
     brainstorm: `### 🎯 你的角色：资深架构师
@@ -190,7 +190,12 @@ function outputStep(stageName, stepIndex, steps, cwd, changeName) {
     console.log(guardrails.trim())
     console.log('')
   }
-  console.log(step.prompt)
+  let promptText = step.prompt
+  // 替换 prompt 中的占位符
+  if (projectName && promptText.includes('<project>')) {
+    promptText = promptText.replace(/<project>/g, projectName)
+  }
+  console.log(promptText)
   console.log(`\n### ⚠️ 铁律`)
   console.log('- **文档是核心资产，代码是文档的产物。** 没有文档就没有代码——文档是 AI 的记忆，是团队协作的基础，是后续维护的唯一依据。任何代码产出必须先有对应的设计/规范文档支撑。')
   console.log('- 只做本步骤描述的操作，不得自行扩展或跳过')
@@ -268,9 +273,14 @@ export async function runCommand(args, cwd) {
     if (autoChange) {
       progress = await pm.initChange(cwd, autoChange)
     } else if (isAuxiliary) {
-      // 辅助阶段（scan/explore/quick/doctor/status）不需要 currentChange
-      // 但仍然需要初始化一个空的 progress 对象以避免后续引用报错
-      progress = { currentStage: stageName, stages: {}, lastActive: new Date().toLocaleString('zh-CN', { hour12: false }) }
+      // 辅助阶段（scan/explore/quick/doctor/status）自动使用默认变更名
+      const autoName = changeName || resolveChangeNameAuto(cwd) || 'default'
+      changeName = autoName
+      progress = await pm.initChange(cwd, autoName)
+      // initChange 可能因 project 表为空返回 null
+      if (!progress) {
+        progress = { currentStage: stageName, stages: {}, lastActive: new Date().toLocaleString('zh-CN', { hour12: false }), project: '' }
+      }
     } else {
       // brainstorm / propose 作为流程入口，自动生成变更名并初始化
       if (stageName === 'brainstorm' || stageName === 'propose') {
@@ -409,7 +419,7 @@ async function runStage(pm, progress, stageName, cwd, changeName, skipApproval =
 
   const defSteps = await getStageSteps(stageName, cwd, progress)
   if (defSteps && defSteps[currentIdx]) {
-    outputStep(stageName, currentIdx, defSteps, cwd, changeName)
+    await outputStep(stageName, currentIdx, defSteps, cwd, changeName, progress.project || null)
   }
 }
 
@@ -654,7 +664,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
   const defSteps = await getStageSteps(stageName, cwd, progress)
   console.log(`✅ Step ${currentIdx + 1}/${steps.length} 完成：${steps[currentIdx].name}\n`)
   if (printNext) {
-    outputStep(stageName, nextPendingIdx, defSteps, cwd, changeName)
+    await outputStep(stageName, nextPendingIdx, defSteps, cwd, changeName, progress.project || null)
   }
   return { stageCompleted: false, currentIdx, nextPendingIdx }
 }
@@ -692,7 +702,7 @@ async function skipStep(pm, progress, stageName, cwd, changeName) {
   const nextPendingIdx = steps.findIndex(s => s.status === 'pending')
   if (nextPendingIdx !== -1 && defSteps) {
     console.log('')
-    outputStep(stageName, nextPendingIdx, defSteps, cwd, changeName)
+    await outputStep(stageName, nextPendingIdx, defSteps, cwd, changeName, progress.project || null)
   }
 }
 
@@ -837,7 +847,7 @@ async function runAutoMode(pm, progress, cwd, flags, changeName) {
         }
       }
     }
-    outputStep(currentStage, pendingIdx, defSteps, cwd, changeName)
+    await outputStep(currentStage, pendingIdx, defSteps, cwd, changeName, progress.project || null)
     return
   }
 
@@ -867,7 +877,7 @@ async function runAutoMode(pm, progress, cwd, flags, changeName) {
         }
       }
     }
-    outputStep(currentStage, nextPendingIdx, defSteps, cwd, changeName)
+    await outputStep(currentStage, nextPendingIdx, defSteps, cwd, changeName, progress.project || null)
     return
   }
 
@@ -909,6 +919,6 @@ async function runAutoMode(pm, progress, cwd, flags, changeName) {
         }
       }
     }
-    outputStep(next, firstPending, nextSteps, cwd, changeName)
+    await outputStep(next, firstPending, nextSteps, cwd, changeName, progress.project || null)
   }
 }
