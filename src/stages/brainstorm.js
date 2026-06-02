@@ -275,6 +275,14 @@ design.md 文件路径 + 自审结果
    - **tasks.md**：任务列表（只列名称和对应文件路径，细节在 plan 阶段展开）
    - \`git add .sillyspec/\` — 暂存规范文件（不要 commit）
 
+所有规范文件头部必须包含 YAML frontmatter：
+\`\`\`\`yaml
+---
+author: <git-user>
+created_at: <now-datetime>
+---
+\`\`\`\`
+
 ### proposal.md 格式要求
 \`\`\`markdown
 # Proposal
@@ -332,6 +340,7 @@ Then 期望结果
    - \`requirements.md\`：从 MASTER.md 中提取该包的需求范围（标记为「待完善」）
    - \`tasks.md\`：创建空任务列表，标记为「待 plan 阶段展开」
 4. \`git add .sillyspec/\` — 暂存所有新增文件（不要 commit）
+5. 后续变更包的骨架文件同样必须包含 \`author: <git-user>\` 和 \`created_at: <now-datetime>\`
 
 ### 输出
 所有规范文件路径（含后续变更包目录列表）

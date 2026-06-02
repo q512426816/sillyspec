@@ -166,6 +166,32 @@ plan.md 总览内容`,
 // 固定后缀步骤
 export const fixedSuffix = [
   {
+    name: '重排 Wave（基于 depends_on）',
+    prompt: `根据蓝图的 depends_on 字段重排 Wave 分组，更新 plan.md。
+
+### 操作
+1. 读取所有 tasks/task-NN.md 的 frontmatter，提取每个任务的 depends_on 列表
+2. 拓扑排序：无依赖的任务 → Wave 1，依赖 Wave 1 的 → Wave 2，依此类推
+3. 检查是否存在循环依赖，如有则报错暂停
+4. 用重排结果更新 plan.md：
+   - Wave 分组（含 checkbox 列表）
+   - 任务总表的 Wave 列
+   - 依赖关系图（Mermaid）
+   - 关键路径
+5. 如果 Wave 分组与原始 plan.md 一致，只需确认一致即可，不需要重写
+
+### 规则
+- **Wave 是执行单元，同 Wave 内任务必须无依赖（可并行）**
+- 有 depends_on 关系的任务必须在不同的 Wave
+- depends_on 为空的任务放 Wave 1
+- 取决于拓扑排序的最大深度决定 Wave 编号
+
+### 输出
+重排后的 Wave 分组摘要（如果与原 plan.md 一致则说明一致）`,
+    outputHint: 'Wave 重排结果',
+    optional: false
+  },
+  {
     name: '审查一致性',
     prompt: `审查所有 task-N.md 的一致性。
 
@@ -212,6 +238,9 @@ function parseTaskCount(planContent) {
 function buildTaskPrompt(taskNum, taskName, changeDir) {
   const num = String(taskNum).padStart(2, '0')
   return `编写任务蓝图 tasks/task-${num}.md
+
+当前时间：<now-datetime>（frontmatter 的 created_at 使用此值）
+当前用户：<git-user>（frontmatter 的 author 使用此值）
 
 ### 任务
 ${taskName}
@@ -313,6 +342,8 @@ export function buildCoordinatorStep(changeDir, taskNames) {
 任务编号：task-${num}
 任务名称：${name}
 文件路径：${changeDir}/tasks/task-${num}.md
+当前时间：<now-datetime>（frontmatter 的 created_at 使用此值）
+当前用户：<git-user>（frontmatter 的 author 使用此值）
 
 操作：
 1. 读取 ${changeDir}/design.md 和 ${changeDir}/plan.md 了解上下文
@@ -382,6 +413,10 @@ allowed_paths:
 
 ## 任务清单
 ${taskList}
+
+## 时间和用户
+当前时间：<now-datetime>
+当前用户：<git-user>
 
 ## 执行方式（必须严格遵守）
 
