@@ -224,9 +224,24 @@ function checkOutput(outputDef, projectName, cwd) {
  * @param {string} projectName - 项目名
  * @returns {{ passed: boolean, roleResults: Array<{ roleId: string, roleName: string, passed: boolean, failures: string[] }>, workflowFailures: string[] }}
  */
+/**
+ * 统一的 Workflow Check 结果协议
+ * CLI 和 run.js 共用同一份结构化结果
+ *
+ * 返回结构：
+ * {
+ *   workflow: string,       // workflow 名称
+ *   project: string,        // 项目名
+ *   status: 'pass'|'fail', // 总体状态
+ *   spec_version: number,   // spec 版本
+ *   roles: [{ id, name, status, outputs: [{ path, status, checks: [{ type, status, detail }] }] }],
+ *   workflow_checks: [{ type, status, detail }],
+ *   failures: [{ level: 'role'|'workflow', role_id?, output?, check, message }],
+ *   retry_prompts: [{ role_id, role_name, prompt }]
+ * }
+ */
 export function runPostCheck(wf, cwd, projectName, placeholders = {}) {
   let resolved = replaceProjectPlaceholder(wf, projectName)
-  // 额外占位符替换
   if (Object.keys(placeholders).length > 0) {
     let json = JSON.stringify(resolved)
     for (const [key, value] of Object.entries(placeholders)) {
@@ -234,32 +249,58 @@ export function runPostCheck(wf, cwd, projectName, placeholders = {}) {
     }
     resolved = JSON.parse(json)
   }
+  return _checkWorkflow(resolved, cwd, projectName)
+}
 
-  const workflowChecks = resolved.checks?.workflow_level || []
-  const roleResults = []
-  const workflowFailures = []
+function _checkWorkflow(wf, cwd, projectName) {
+  const workflowName = wf.name || 'unknown'
+  const specVersion = wf.spec_version || wf.version || 0
+  const workflowChecks = wf.checks?.workflow_level || []
+  const roles = []
+  const failures = []
+  const workflowCheckResults = []
 
   // 1. 角色级别检查
-  for (const role of resolved.roles || []) {
+  for (const role of wf.roles || []) {
     const roleId = role.id
     const roleName = role.name || roleId
-    const outputs = role.outputs || []
-    const failures = []
+    const outputDefs = role.outputs || []
+    const outputs = []
 
-    for (const output of outputs) {
-      const results = checkOutput(output, projectName, cwd)
-      for (const r of results) {
-        if (!r.passed) {
-          failures.push(`${r.detail}`)
+    for (const outputDef of outputDefs) {
+      const rawPath = (outputDef.path || '').replace(/<project>/g, projectName)
+      const checkResults = checkOutput(outputDef, projectName, cwd)
+      const outputPassed = checkResults.every(c => c.passed)
+
+      outputs.push({
+        path: rawPath,
+        status: outputPassed ? 'pass' : 'fail',
+        checks: checkResults.map(c => ({
+          type: c.check,
+          status: c.passed ? 'pass' : 'fail',
+          detail: c.detail
+        }))
+      })
+
+      for (const cr of checkResults) {
+        if (!cr.passed) {
+          failures.push({
+            level: 'role',
+            role_id: roleId,
+            output: rawPath,
+            check: cr.check,
+            message: cr.detail
+          })
         }
       }
     }
 
-    roleResults.push({
-      roleId,
-      roleName,
-      passed: failures.length === 0,
-      failures
+    const rolePassed = outputs.every(o => o.status === 'pass')
+    roles.push({
+      id: roleId,
+      name: roleName,
+      status: rolePassed ? 'pass' : 'fail',
+      outputs
     })
   }
 
@@ -272,10 +313,16 @@ export function runPostCheck(wf, cwd, projectName, placeholders = {}) {
           const files = readdirSync(scanDir).filter(f => f.endsWith('.md'))
           const min = check.min || 0
           if (files.length < min) {
-            workflowFailures.push(`文件数不足: ${scanDir} 有 ${files.length} 个 .md 文件，要求至少 ${min} 个`)
+            const detail = `文件数不足: ${scanDir} 有 ${files.length} 个 .md 文件，要求至少 ${min} 个`
+            workflowCheckResults.push({ type: 'file_count', status: 'fail', detail })
+            failures.push({ level: 'workflow', check: 'file_count', message: detail })
+          } else {
+            workflowCheckResults.push({ type: 'file_count', status: 'pass', detail: '' })
           }
         } else {
-          workflowFailures.push(`目录不存在: ${scanDir}`)
+          const detail = `目录不存在: ${scanDir}`
+          workflowCheckResults.push({ type: 'file_count', status: 'fail', detail })
+          failures.push({ level: 'workflow', check: 'file_count', message: detail })
         }
         break
       }
@@ -283,52 +330,102 @@ export function runPostCheck(wf, cwd, projectName, placeholders = {}) {
         const scanDir = join(cwd, '.sillyspec', 'docs', projectName, check.path || 'scan/')
         if (existsSync(scanDir)) {
           const files = readdirSync(scanDir).filter(f => f.endsWith('.md'))
+          let anyEmpty = false
           for (const f of files) {
             const content = readFileSync(join(scanDir, f), 'utf8')
             if (content.trim().length === 0) {
-              workflowFailures.push(`空文件: ${join(scanDir, f)}`)
+              const detail = `空文件: ${join(scanDir, f)}`
+              workflowCheckResults.push({ type: 'no_empty_files', status: 'fail', detail })
+              failures.push({ level: 'workflow', check: 'no_empty_files', message: detail })
+              anyEmpty = true
             }
           }
+          if (!anyEmpty) {
+            workflowCheckResults.push({ type: 'no_empty_files', status: 'pass', detail: '' })
+          }
+        } else {
+          const detail = `目录不存在: ${scanDir}`
+          workflowCheckResults.push({ type: 'no_empty_files', status: 'fail', detail })
+          failures.push({ level: 'workflow', check: 'no_empty_files', message: detail })
         }
         break
       }
-      case 'no_duplicates': {
-        // TODO: 按需实现
-        break
+      default:
+        workflowCheckResults.push({ type: check.type, status: 'pass', detail: '' })
+    }
+  }
+
+  const allPassed = roles.every(r => r.status === 'pass') && workflowCheckResults.every(c => c.status === 'pass')
+
+  // 生成 retry prompts
+  const retryPrompts = []
+  if (!allPassed) {
+    for (const role of roles.filter(r => r.status === 'fail')) {
+      const roleFailures = failures.filter(f => f.role_id === role.id)
+      const targetFiles = [...new Set(roleFailures.map(f => f.output).filter(Boolean))]
+      const roleDef = (wf.roles || []).find(r => r.id === role.id)
+      const constraints = roleDef?.constraints || []
+      let prompt = `上一次 workflow 执行存在失败项，请重试。\n\n`
+      prompt += `### 失败角色：${role.name} (${role.id})\n失败原因：\n`
+      for (const f of roleFailures) {
+        prompt += `- ${f.message}\n`
       }
+      prompt += `\n`
+      for (const fp of targetFiles) {
+        prompt += `目标文件：\`${fp}\`\n`
+      }
+      if (constraints.length > 0) {
+        prompt += `约束：\n`
+        for (const c of constraints) {
+          prompt += `- ${c}\n`
+        }
+      }
+      prompt += `\n⚠️ 你必须确保文件写入指定路径。不要只报告完成，请用 write 工具实际写入。`
+      retryPrompts.push({ role_id: role.id, role_name: role.name, prompt })
     }
   }
 
   return {
-    passed: roleResults.every(r => r.passed) && workflowFailures.length === 0,
-    roleResults,
-    workflowFailures
+    workflow: workflowName,
+    project: projectName,
+    status: allPassed ? 'pass' : 'fail',
+    spec_version: specVersion,
+    roles,
+    workflow_checks: workflowCheckResults,
+    failures,
+    retry_prompts: retryPrompts
   }
 }
 
 /**
- * 格式化 post_check 结果为人类可读报告
+ * 格式化检查结果为人类可读报告（兼容旧接口）
  */
 export function formatCheckReport(result) {
   const lines = []
   lines.push('\n📋 Workflow Post-Check 报告\n')
 
-  for (const r of result.roleResults) {
-    const icon = r.passed ? '✅' : '❌'
-    lines.push(`${icon} ${r.roleName} (${r.roleId})`)
-    for (const f of r.failures) {
+  for (const r of (result.roles || [])) {
+    const icon = r.status === 'pass' ? '✅' : '❌'
+    lines.push(`${icon} ${r.name} (${r.id})`)
+    // 兼容新旧格式
+    const outputFailures = (r.outputs || []).flatMap(o =>
+      (o.checks || []).filter(c => c.status === 'fail').map(c => c.detail)
+    )
+    for (const f of outputFailures) {
       lines.push(`   └─ ${f}`)
     }
   }
 
-  if (result.workflowFailures.length > 0) {
+  if ((result.workflow_checks || []).some(c => c.status === 'fail')) {
     lines.push('')
-    for (const f of result.workflowFailures) {
-      lines.push(`❌ 全局检查失败: ${f}`)
+    for (const c of result.workflow_checks) {
+      if (c.status === 'fail') {
+        lines.push(`❌ 全局检查失败: ${c.detail}`)
+      }
     }
   }
 
-  if (result.passed) {
+  if (result.status === 'pass') {
     lines.push('\n✅ 全部检查通过')
   } else {
     lines.push('\n❌ 存在失败项，请根据以下重试提示修复：')
@@ -337,14 +434,11 @@ export function formatCheckReport(result) {
   return lines.join('\n')
 }
 
-// ─── 重试 Prompt 生成 ───
+// ─── 兼容适配层 ───
 
 /**
- * 根据检查失败结果生成重试 prompt
- * @param {object} wf - workflow 定义
- * @param {object} checkResult - runPostCheck 的返回值
- * @param {string} projectName - 项目名
- * @returns {string} 重试 prompt
+ * 兼容旧接口：generateRetryPrompt
+ * @deprecated 直接用 runPostCheck 返回的 retry_prompts
  */
 export function generateRetryPrompt(wf, checkResult, projectName) {
   const resolved = replaceProjectPlaceholder(wf, projectName)
@@ -352,24 +446,24 @@ export function generateRetryPrompt(wf, checkResult, projectName) {
   lines.push('上一次 workflow 执行存在失败项，请重试。\n')
 
   const roles = resolved.roles || []
-  for (const r of checkResult.roleResults) {
-    if (r.passed) continue
-    const role = roles.find(rl => rl.id === r.roleId)
+  const roleResults = checkResult.roles || []
+  for (const r of roleResults) {
+    if (r.status === 'pass') continue
+    const role = roles.find(rl => rl.id === r.id)
     if (!role) continue
 
-    lines.push(`### 失败角色：${r.roleName} (${r.roleId})`)
+    lines.push(`### 失败角色：${r.name} (${r.id})`)
     lines.push(`失败原因：`)
-    for (const f of r.failures) {
-      lines.push(`- ${f}`)
+    const roleFailures = (checkResult.failures || []).filter(f => f.role_id === r.id)
+    for (const f of roleFailures) {
+      lines.push(`- ${f.message}`)
     }
     lines.push('')
 
-    // 输出目标文件
     for (const output of (role.outputs || [])) {
       lines.push(`目标文件：\`${output.path}\``)
     }
 
-    // 约束
     if (role.constraints && role.constraints.length > 0) {
       lines.push('约束：')
       for (const c of role.constraints) {

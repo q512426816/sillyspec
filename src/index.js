@@ -516,7 +516,7 @@ SillySpec workflow — 工作流管理
         break;
       }
       if (wfSub === 'check') {
-        const { loadWorkflow, runPostCheck, formatCheckReport, listWorkflows } = await import('./workflow.js');
+        const { loadWorkflow, runPostCheck, listWorkflows } = await import('./workflow.js');
         const wfName = filteredArgs[2];
         if (!wfName) {
           console.error('❌ 请指定 workflow 名称，例如：sillyspec workflow check scan-docs --project sillyspec');
@@ -576,23 +576,25 @@ SillySpec workflow — 工作流管理
         if (isJson) {
           console.log(JSON.stringify(result, null, 2));
         } else {
-          // 带项目维度前缀的输出
-          const lines = [`\n📋 Workflow Post-Check: ${wfName} (project: ${projectName})\n`];
-          for (const r of result.roleResults) {
-            const icon = r.passed ? '✅' : '❌';
-            lines.push(`${icon} [${projectName}] ${r.roleName} (${r.roleId})`);
-            for (const f of r.failures) {
-              lines.push(`   └─ ${f}`);
+          // 带项目维度前缀的输出（从统一结果对象格式化）
+          const lines = [`\n📋 Workflow Post-Check: ${result.workflow} (project: ${result.project})\n`];
+          for (const r of (result.roles || [])) {
+            const icon = r.status === 'pass' ? '✅' : '❌';
+            lines.push(`${icon} [${result.project}] ${r.name} (${r.id})`);
+            const roleFailures = (result.failures || []).filter(f => f.role_id === r.id);
+            for (const f of roleFailures) {
+              lines.push(`   └─ ${f.message}`);
             }
           }
-          if (result.workflowFailures.length > 0) {
+          const wfFailures = (result.workflow_checks || []).filter(c => c.status === 'fail');
+          if (wfFailures.length > 0) {
             lines.push('');
-            for (const f of result.workflowFailures) {
-              lines.push(`❌ [${projectName}] 全局: ${f}`);
+            for (const f of wfFailures) {
+              lines.push(`❌ [${result.project}] 全局: ${f.detail}`);
             }
           }
           lines.push('');
-          if (result.passed) {
+          if (result.status === 'pass') {
             lines.push('✅ 全部检查通过');
           } else {
             lines.push('❌ 存在失败项');
@@ -601,7 +603,7 @@ SillySpec workflow — 工作流管理
         }
 
         // exit code: 0=通过, 1=检查失败, 2=参数/YAML错误
-        process.exit(result.passed ? 0 : 1);
+        process.exit(result.status === 'pass' ? 0 : 1);
       } else {
         console.error(`❌ 未知子命令: workflow ${wfSub}`);
         process.exit(1);

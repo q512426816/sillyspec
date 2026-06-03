@@ -800,11 +800,13 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
           const result = runPostCheck(wf, cwd, pName)
           const report = formatCheckReport(result)
           console.log(report)
-          if (!result.passed) {
+          if (result.status === 'fail') {
             anyFailed = true
-            const retryPrompt = generateRetryPrompt(wf, result, pName)
-            console.log(`\n🔄 重试提示（项目 ${pName}）：\n`)
-            console.log(retryPrompt)
+            // retry_prompts 由 _checkWorkflow 自动生成
+            for (const rp of (result.retry_prompts || [])) {
+              console.log(`\n🔄 重试提示（项目 ${pName}）：\n`)
+              console.log(rp.prompt)
+            }
           }
         }
         if (anyFailed) {
@@ -826,11 +828,11 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
         const resolved = JSON.parse(raw.replace(/<change-name>/g, changeName))
         const result = runPostCheck(resolved, cwd, 'sillyspec')
         // 只报告 impact-analyzer 的结果（doc-syncer 是后续步骤）
-        const impactResult = result.roleResults.find(r => r.roleId === 'impact-analyzer')
+        const impactResult = (result.roles || []).find(r => r.id === 'impact-analyzer')
         if (impactResult) {
- const icon = impactResult.passed ? '✅' : '❌'
-          console.log(`${icon} module-impact.md 检查${impactResult.passed ? '通过' : '失败'}`)
-          for (const f of impactResult.failures) {
+          const icon = impactResult.status === 'pass' ? '✅' : '❌'
+          console.log(`${icon} module-impact.md 检查${impactResult.status === 'pass' ? '通过' : '失败'}`)
+          for (const f of (result.failures || []).filter(f => f.role_id === 'impact-analyzer')) {
             console.log(`   └─ ${f}`)
           }
         }
