@@ -125,6 +125,22 @@ async function doInstall(projectDir, tools, subprojects = []) {
   const gitkeepPath = join(scanDir, '.gitkeep');
   if (!existsSync(gitkeepPath)) writeFileSync(gitkeepPath, '');
 
+  // 复制 workflow 模板到 .sillyspec/workflows/
+  const workflowsDir = join(projectDir, '.sillyspec', 'workflows');
+  const templatesDir = join(__dirname, '..', 'templates', 'workflows');
+  if (existsSync(templatesDir)) {
+    mkdirSync(workflowsDir, { recursive: true });
+    for (const file of readdirSync(templatesDir)) {
+      if (file.endsWith('.yaml')) {
+        const srcPath = join(templatesDir, file);
+        const dstPath = join(workflowsDir, file);
+        if (!existsSync(dstPath)) {
+          writeFileSync(dstPath, readFileSync(srcPath));
+        }
+      }
+    }
+  }
+
   // 创建 shared/workspace 目录
   mkdirSync(join(projectDir, '.sillyspec', 'shared'), { recursive: true });
   mkdirSync(join(projectDir, '.sillyspec', 'workspace'), { recursive: true });
