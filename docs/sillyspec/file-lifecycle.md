@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-05-31 11:00:00
-updated_at: 2026-05-31 21:35:00
+updated_at: 2026-06-03 16:00:00
 ---
 
 # SillySpec 文件生命周期描述
@@ -20,6 +20,8 @@ updated_at: 2026-05-31 21:35:00
 │   ├── history/                 ← 已完成阶段的历史快照
 │   ├── logs/                    ← 日志
 │   ├── templates/               ← 模板
+│   ├── workflow-runs/           ← workflow check 结果归档（JSON）
+│   │   └── <timestamp>-<workflow>-<project>-<status>.json
 │   └── worktrees/              ← git worktree 隔离环境
 │       └── <change-name>/
 │           └── meta.json        ← worktree 元数据
@@ -59,6 +61,9 @@ updated_at: 2026-05-31 21:35:00
 ├── knowledge/                   ← 跨项目共享知识库
 │   ├── INDEX.md               ← 知识索引（关键词匹配）
 │   └── uncategorized.md       ← 待分类知识
+├── workflows/                   ← workflow 定义（init 自动生成，可自定义）
+│   ├── scan-docs.yaml          ← scan 阶段产物检查 workflow
+│   └── archive-impact.yaml     ← archive 阶段影响分析 workflow
 ├── shared/                     ← 共享目录
 ├── workspace/                  ← 工作区
 ├── ROADMAP.md                  ← 路线图（可选）
@@ -529,6 +534,8 @@ PASS / PASS WITH NOTES / FAIL
 
 **断点续扫：** "检查已有扫描文档和子项目列表"步骤检查已有文档，**必须停下来问用户**选择「全部重新扫描」或「只补缺失文档」，不能自行决定跳过。
 
+**Workflow 检查（post_check）：** scan 阶段完成后（verify 步骤），`run.js` 自动加载 `workflows/scan-docs.yaml`，对每个项目的 7 份文档执行结构化产物校验。检查结果为结构化 JSON 对象，包含 `roles[].outputs[].checks[]` 和 `failures[]`。校验规则定义在 `scan-docs.yaml` 的各 role output checks 中（file_exists / min_lines / contains_sections / no_placeholder 等）。检查失败时自动生成 `retry_prompts`，精确到角色级别。
+
 **生命周期：** scan 阶段生成 → 被后续所有阶段（brainstorm/propose/plan/execute/verify）作为上下文读取
 
 ---
@@ -752,6 +759,51 @@ test_strategy: module
 ```
 
 **作用：** 存储项目构建/测试/lint 命令，execute 阶段执行前读取。根据项目类型（package.json/pom.xml/build.gradle）自动识别并生成默认值。
+
+---
+
+### `workflow-runs/` — Workflow Check 结果归档
+
+**创建时机：**
+- `run.js` 在 scan/verify 步骤和 archive extract-module-impact 步骤执行 `runPostCheck()` 后自动归档
+- CLI `sillyspec workflow check ... --save` 手动触发
+
+**存储位置：** `.sillyspec/.runtime/workflow-runs/`
+
+**命名格式：** `<YYYYMMDDHHmmss>-<workflow>-<project>-<status>.json`
+
+**示例：** `20260603035731-scan-docs-dashboard-pass.json`
+
+**内容结构（结构化结果对象）：**
+```json
+{
+  "run_id": "20260603035731-scan-docs-dashboard",
+  "created_at": "2026-06-03T03:57:31.000Z",
+  "source": "run.js",
+  "stage": "verify",
+  "workflow": "scan-docs",
+  "project": "dashboard",
+  "status": "pass",
+  "spec_version": 1,
+  "roles": [
+    { "id": "arch", "name": "技术架构", "status": "pass", "outputs": [...] }
+  ],
+  "workflow_checks": [...],
+  "failures": [],
+  "retry_prompts": []
+}
+```
+
+**写入方：**
+- `run.js` — scan/verify 和 archive post_check 后自动调用 `saveWorkflowRun()`
+- `index.js` — CLI `--save` 时调用 `saveWorkflowRun()`
+
+**读取方：** 人工查阅 / 后续查询命令（待实现）
+
+**注意：**
+- 保存失败只输出 warning，不影响 workflow check 的 exit code
+- CLI `--json --save` 时 stdout 仍为纯净 JSON，保存提示不混入
+- 文件路径在 `.gitignore` 中（`.sillyspec/.runtime/`）
 
 ---
 
@@ -1039,6 +1091,7 @@ graph LR
 | `modules/_module-map.yaml` | scan 可选步骤 | scan | archive/plan/execute |
 | `modules/<module>.md` | scan 可选步骤（全量生成）+ archive sync-module-docs | scan/archive | propose/plan/execute/verify/quick |
 | `verify-result.md` | verify 阶段输出 | verify | 验证报告存档 |
+| `workflows/*.yaml` | init 自动生成（scan-docs.yaml, archive-impact.yaml） | init | run.js post_check + CLI workflow check |
 
 
 ```
@@ -1048,6 +1101,7 @@ sillyspec init
     ├─→ .sillyspec/.runtime/user-inputs.md
     ├─→ .sillyspec/projects/<name>.yaml
     ├─→ .sillyspec/docs/<name>/scan/  (骨架)
+    ├─→ .sillyspec/workflows/  (scan-docs.yaml, archive-impact.yaml 模板)
     ├─→ .sillyspec/knowledge/
     └─→ .gitignore (追加 .sillyspec/.runtime/)
 
@@ -1063,6 +1117,9 @@ scan 阶段（12 步，完成后重置）
     ├─→ docs/<name>/modules/_module-map.yaml (可选)
     ├─→ docs/<name>/modules/<module>.md (可选，需用户确认)
     └─→ .sillyspec/local.yaml
+
+    [scan 完成后 run.js 自动执行 workflow check]
+    └─→ .sillyspec/.runtime/workflow-runs/<ts>-scan-docs-<project>-<status>.json
 
 brainstorm 阶段
     │
@@ -1112,4 +1169,7 @@ archive 阶段
     ├─→ changes/<name>/module-impact.md
     ├─→ docs/<name>/modules/<module>.md (通过 module-impact.md 同步)
     └─→ changes/<name>/ → changes/archive/YYYY-MM-DD-<name>/
+
+    [archive extract-module-impact 后 run.js 自动执行 workflow check]
+    └─→ .sillyspec/.runtime/workflow-runs/<ts>-archive-impact-<project>-<status>.json
 ```
