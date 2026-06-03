@@ -27,10 +27,14 @@ export const definition = {
 1. 使用预注入的 git 用户名：\`<git-user>\`
 2. 无 \`--change\`：创建 .sillyspec/quicklog/QUICKLOG-\`<git-user>\`.md\`（已存在则追加），写入：
    \`\`\`
-   ## <now-datetime> — <一句话任务描述>
+   ## ql-<YYYYMMDD>-<NNN> | <now-datetime> | <一句话任务描述>
    状态：进行中
    文件：<预估要改的文件>
    \`\`\`
+   - ID 格式：\`ql-YYYYMMDD-NNN\`（如 ql-20260603-001）
+   - 追加前扫描文件中已有的 \`ql-<当天日期>-\` 前缀的最大序号，+1 作为新序号
+   - 每天从 001 开始，跨日重新计数
+   - 此 ID 可被 design.md / plan.md / archive 引用
 3. 有 \`--change\`：在 \`.sillyspec/changes/<change-name>/tasks.md\` 追加未勾选的 task
 
 这样 Gate 检测到 .sillyspec/\` 下有变更，就不会拦截后续的代码修改。
@@ -67,9 +71,9 @@ export const definition = {
 ### 操作
 1. \`git add -A\` — 暂存改动文件（不要 commit，由用户通过统一提交工具处理）
 2. 更新 Step 1 创建的记录：
-   - 无 \`--change\`：更新 QUICKLOG 条目，将「状态：进行中」改为「状态：已完成」，补充实际改动文件和结果摘要
+   - 无 \`--change\`：找到对应 ql-ID 的条目，将「状态：进行中」改为「状态：已完成」，补充实际改动文件和结果摘要
    - 有 \`--change\`：勾选 tasks.md 中对应的 task checkbox
-3. QUICKLOG 轮转：超过 500 行则重命名为 \`QUICKLOG-<USER>-YYYY-MM-DD.md\`
+3. QUICKLOG 轮转：超过 500 行则重命名为 \`QUICKLOG-<USER>-YYYY-MM-DD.md\`（日期取最后一条记录的日期）。新文件从空开始，ql-ID 需扫描同目录所有 QUICKLOG 文件中当天最大序号 +1
 4. 如果发现项目特有的坑，追加到 \`.sillyspec/knowledge/uncategorized.md\`
 5. 任务比预期复杂 → 建议用完整流程
 
