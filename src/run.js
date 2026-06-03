@@ -10,6 +10,7 @@ import { ProgressManager } from './progress.js'
 import { stageRegistry, auxiliaryStages } from './stages/index.js'
 import { buildExecuteSteps } from './stages/execute.js'
 import { buildPlanSteps } from './stages/plan.js'
+import { formatExecuteSummary } from './worktree-apply.js'
 
 /**
  * 同步触发辅助函数：_write 后 best-effort 同步到平台
@@ -745,7 +746,20 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
     console.log(`✅ ${stageName} 阶段已完成（${total}/${total} 步）`)
 
     if (stageName === 'execute') {
-      console.log('\n👉 下一步：sillyspec run verify（验证通过后才能归档）')
+      // execute run summary：展示真实可得的结构化信息
+      try {
+        const lastOutput = steps[steps.length - 1]?.output || ''
+        const summary = formatExecuteSummary({
+          changeName,
+          stepsCompleted: total,
+          stepsTotal: total,
+          agentSummary: lastOutput,
+        })
+        console.log(`\n${summary}`)
+      } catch (e) {
+        // summary 失败不影响主流程
+        console.log('\n👉 下一步：sillyspec run verify（验证通过后才能归档）')
+      }
     } else if (stageName === 'verify') {
       console.log('\n👉 下一步：sillyspec run archive（验证通过，可以归档了）')
     } else if (stageName === 'archive') {

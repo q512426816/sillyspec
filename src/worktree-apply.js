@@ -301,3 +301,84 @@ export function applyWorktree(changeName, { cwd, checkOnly = false } = {}) {
 
   return result;
 }
+
+/**
+ * 格式化 execute run summary（人类可读）
+ *
+ * 只展示 CLI 真实掌握的信息，不声称知道 per-task 状态。
+ * @param {object} opts
+ * @param {string} opts.changeName - 变更名
+ * @param {number} opts.stepsCompleted - 已完成步骤数
+ * @param {number} opts.stepsTotal - 总步骤数
+ * @param {string} opts.agentSummary - Agent 最终输出摘要
+ * @returns {string} 格式化的 summary 文本
+ */
+export function formatExecuteSummary({ changeName, stepsCompleted, stepsTotal, agentSummary }) {
+  const wm = new WorktreeManager();
+  const meta = wm.getMeta(changeName);
+  const lines = [];
+
+  const SEPARATOR = '─'.repeat(32);
+
+  // --- Header ---
+  lines.push(`Execute Summary`);
+  lines.push(SEPARATOR);
+
+  // --- Status ---
+  if (!meta) {
+    // worktree 不存在（可能已 cleanup 或没有用过 worktree）
+    lines.push(`Status:     COMPLETED`);
+    lines.push(`Steps:      ${stepsCompleted} / ${stepsTotal}`);
+    lines.push(`Worktree:   N/A`);
+  } else {
+    const hasBaseline = meta.baselineCommit != null;
+    const wtExists = existsSync(meta.worktreePath);
+
+    // 检查 worktree 是否已 apply（不存在 = 已 cleanup = 已 apply，或从未创建）
+    const worktreeStatus = wtExists ? 'not applied' : 'applied (cleaned up)';
+    const baselineStatus = hasBaseline
+      ? `dirty (${meta.baselineFiles?.length || 0} files overlaid)`
+      : 'clean';
+
+    lines.push(`Status:     COMPLETED`);
+    lines.push(`Steps:      ${stepsCompleted} / ${stepsTotal}`);
+    lines.push(`Baseline:   ${baselineStatus}`);
+    lines.push(`Worktree:   ${worktreeStatus}`);
+  }
+
+  // --- Changed files ---
+  // 从主工作区 diff 获取（worktree 已 apply）或从 worktree diff 获取
+  if (meta && existsSync(meta.worktreePath)) {
+    // worktree 还在，用 baselineCommit 或 baseHash 做 diff
+    try {
+      const diffBase = meta.baselineCommit || meta.baseHash;
+      const { execSync: es } = require('child_process');
+      const filesRaw = es(`git -C ${meta.worktreePath} diff --name-only ${diffBase} 2>/dev/null`, { encoding: 'utf8' });
+      const files = filesRaw ? filesRaw.trim().split('\n').filter(Boolean) : [];
+      if (files.length > 0) {
+        lines.push(``);
+        lines.push(`Changed Files (${files.length})`);
+        files.forEach(f => lines.push(`  ${f}`));
+      }
+    } catch {}
+  }
+
+  // --- Agent Summary ---
+  if (agentSummary) {
+    lines.push(``);
+    lines.push(`Agent Summary`);
+    // 缩进每行，截断过长内容
+    const maxLen = 200;
+    const summary = agentSummary.length > maxLen
+      ? agentSummary.slice(0, maxLen) + '...'
+      : agentSummary;
+    summary.split('\n').forEach(l => lines.push(`  ${l}`));
+  }
+
+  // --- Next ---
+  lines.push(``);
+  lines.push(`Next`);
+  lines.push(`  → sillyspec run verify`);
+
+  return lines.join('\n');
+}
