@@ -114,6 +114,8 @@ sillyspec run scan   --spec-root <storage-root>   --runtime-root <runtime-root> 
 | `.sillyspec/workflows/` | `<spec-root>/.sillyspec/workflows/` |
 | `.sillyspec/knowledge/` | `<spec-root>/.sillyspec/knowledge/` |
 | `.sillyspec/.runtime/` | `<runtime-root>/` |
+| `.sillyspec/.runtime/artifacts/` | `<runtime-root>/scan-runs/<scan-run-id>/` |
+| `.sillyspec/.runtime/workflow-runs/` | `<runtime-root>/scan-runs/<scan-run-id>/workflow-runs/` |
 
 **不传参数时，行为与本地模式完全一致。**
 

@@ -630,8 +630,12 @@ export function generateAllRolePrompts(wf, projectName, context = {}) {
  * @returns {string|null} 保存路径，失败返回 null
  */
 export function saveWorkflowRun(result, options = {}) {
-  const { cwd = '.', source = 'unknown', stage, step } = options
-  const runDir = join(cwd, '.sillyspec', '.runtime', 'workflow-runs')
+  const { cwd = '.', source = 'unknown', stage, step, runtimeRoot, scanRunId } = options
+  // 平台模式：写入 runtime-root/scan-runs/<scan-run-id>/workflow-runs/
+  // 本地模式：写入 cwd/.sillyspec/.runtime/workflow-runs/
+  const runDir = runtimeRoot
+    ? join(runtimeRoot, 'scan-runs', scanRunId || 'unknown', 'workflow-runs')
+    : join(cwd, '.sillyspec', '.runtime', 'workflow-runs')
   try {
     mkdirSync(runDir, { recursive: true })
   } catch (e) {
