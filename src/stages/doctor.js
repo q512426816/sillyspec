@@ -91,6 +91,34 @@ for f in .sillyspec/projects/*.yaml; do
 done
 \`\`\`
 
+### 6. Worktree 隔离环境检查
+\`\`\`bash
+# 检测当前目录是否在 submodule 中
+SUPERPROJECT=$(git rev-parse --show-superproject-working-tree 2>/dev/null)
+if [ -n "$SUPERPROJECT" ]; then
+  echo "⚠️ 当前目录在 git submodule 内，worktree 隔离不可用"
+else
+  echo "✅ 不在 submodule 中"
+fi
+
+# 检测是否已在 linked worktree 中
+GIT_DIR=$(cd "$(git rev-parse --git-dir)" 2>/dev/null && pwd -P)
+GIT_COMMON=$(cd "$(git rev-parse --git-common-dir)" 2>/dev/null && pwd -P)
+if [ "$GIT_DIR" != "$GIT_COMMON" ] && [ -z "$SUPERPROJECT" ]; then
+  echo "✅ 已在 linked worktree 中"
+else
+  echo "ℹ️ 在主仓库中（非 worktree）"
+fi
+
+# 检查 worktree 存储目录是否被 .gitignore 忽略
+WT_DIR='.sillyspec/.runtime/worktrees'
+if git check-ignore -q "$WT_DIR" 2>/dev/null; then
+  echo "✅ worktree 目录已被 .gitignore 忽略 ($WT_DIR)"
+else
+  echo "❌ worktree 目录未被 .gitignore 忽略 ($WT_DIR) — worktree 创建将被阻断"
+  echo "   修复: 在 .gitignore 中添加 $WT_DIR/"
+fi
+\`\`\`\n
 ### 输出
 汇总所有检查结果，按以下格式：
 \`\`\`

@@ -17,6 +17,45 @@ const WORKTREES_REL = '.sillyspec/.runtime/worktrees';
 const BRANCH_PREFIX = 'sillyspec/';
 const META_FILE = 'meta.json';
 
+/**
+ * 检测当前目录的隔离状态
+ * 返回 { inWorktree: boolean, inSubmodule: boolean }
+ *
+ * 用 git rev-parse --git-dir 和 --git-common-dir 判断：
+ * - GIT_DIR != GIT_COMMON 通常是 linked worktree
+ * - 但在 git submodule 里也会出现这种情况
+ * - 所以必须额外检查 --show-superproject-working-tree 排除 submodule
+ */
+export function detectIsolation(cwd = process.cwd()) {
+  try {
+    const gitDir = execSync('git rev-parse --git-dir', { cwd, encoding: 'utf8', stdio: ['pipe','pipe','pipe'] }).trim();
+    const gitCommonDir = execSync('git rev-parse --git-common-dir', { cwd, encoding: 'utf8', stdio: ['pipe','pipe','pipe'] }).trim();
+    const superProject = gitQuiet(cwd, 'rev-parse --show-superproject-working-tree');
+
+    const inWorktree = gitDir !== gitCommonDir && !superProject;
+    const inSubmodule = !!superProject;
+
+    return { inWorktree, inSubmodule, gitDir, gitCommonDir };
+  } catch {
+    return { inWorktree: false, inSubmodule: false, gitDir: null, gitCommonDir: null };
+  }
+}
+
+/**
+ * 检查 worktree 存储目录是否被 .gitignore 忽略
+ * @param {string} cwd - 项目根目录
+ * @returns {{ ignored: boolean, path: string }}
+ */
+export function checkWorktreeDirIgnored(cwd = process.cwd()) {
+  const relPath = WORKTREES_REL;
+  try {
+    execSync(`git check-ignore -q ${relPath}`, { cwd, encoding: 'utf8', stdio: ['pipe','pipe','pipe'] });
+    return { ignored: true, path: relPath };
+  } catch {
+    return { ignored: false, path: relPath };
+  }
+}
+
 function git(cwd, args) {
   return execSync(`git ${args}`, { cwd, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
 }
@@ -115,7 +154,31 @@ export class WorktreeManager {
     const worktreePath = this.getWorktreePath(name);
     const branch = BRANCH_PREFIX + name;
 
-    // 1. 检查 worktree 是否已存在
+    // 0. 检测当前环境隔离状态（submodule guard）
+    const isolation = detectIsolation(this.cwd);
+    if (isolation.inSubmodule) {
+      throw new Error(
+        '当前目录在 git submodule 内，SillySpec worktree 不支持在 submodule 中创建。' +
+        '\n请在主仓库中执行，或使用 --no-worktree 跳过隔离。'
+      );
+    }
+    if (isolation.inWorktree) {
+      // 已在 linked worktree 中，提示信息而非报错
+      console.log(`ℹ️  已在 linked worktree 中（git-dir: ${isolation.gitDir}），复用当前隔离环境。`);
+    }
+
+    // 1. 检查 worktree 目录是否被 gitignore
+    const ignoreStatus = checkWorktreeDirIgnored(this.cwd);
+    if (!ignoreStatus.ignored) {
+      throw new Error(
+        `worktree 存储目录 ${ignoreStatus.path} 未被 .gitignore 忽略，` +
+        `创建 worktree 可能导致内容被误提交。\n` +
+        `请先在 .gitignore 中添加: ${ignoreStatus.path}/\n` +
+        `或运行 sillyspec doctor 检查修复。`
+      );
+    }
+
+    // 2. 检查 worktree 是否已存在
     if (existsSync(worktreePath)) {
       // 目录在但 meta.json 不存在（幽灵状态），自动清理
       if (!this.getMeta(name)) {

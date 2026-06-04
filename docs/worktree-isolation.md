@@ -146,6 +146,37 @@ sillyspec worktree create feature-ui
 | `SILLYSPEC_DISABLE_HOOKS` | 设为 `1` 时禁用所有 hook（紧急逃生） |
 | `SILLYSPEC_WORKTREE_DIR` | 自定义 worktree 存储目录（默认 `.sillyspec/.runtime/worktrees/`） |
 
+## 环境隔离检测
+
+SillySpec 在创建 worktree 前会自动检测当前环境的隔离状态：
+
+### submodule 防护
+
+使用 `git rev-parse --git-dir` 和 `--git-common-dir` 判断是否在 linked worktree 中。
+同时用 `--show-superproject-working-tree` 排除 git submodule 的误判：
+
+```
+if GIT_DIR != GIT_COMMON && 无 superproject:
+  → 已在 linked worktree，复用当前隔离环境
+if 无 superproject 为空:
+  → 在 git submodule 内，阻断创建并提示
+else:
+  → 在主仓库中，正常创建 worktree
+```
+
+### .gitignore 强制校验
+
+worktree 存储目录 `.sillyspec/.runtime/worktrees/` 必须被 `.gitignore` 忽略：
+
+- **init / doctor 阶段：** 预检查并提示修复
+- **execute 阶段：** 未 ignore 则直接阻断 worktree 创建，抛出明确错误
+- **不会自动修改 .gitignore：** 避免污染 baseline
+
+修复方式：在项目 `.gitignore` 中添加：
+```
+.sillyspec/.runtime/worktrees/
+```
+
 ## 常见问题和故障排除
 
 ### worktree 残留无法清理
