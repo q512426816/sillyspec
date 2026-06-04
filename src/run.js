@@ -19,8 +19,9 @@ import { formatExecuteSummary } from './worktree-apply.js'
 /**
  * quick 完成审计：对比 baseline 与实际变更
  */
-async function auditQuickCompletion(cwd, guard) {
-  const { baselineFiles, allowedFiles } = guard
+async function auditQuickCompletion(cwd, guard, options = {}) {
+  const { baselineFiles, allowedFiles = [], allowNew = false, forceBaseline = false } = guard
+  const { isConfirm } = options
   const result = { status: 'safe', reasons: [], changedFiles: [], newFiles: [], deletedFiles: [], baselineHit: [] }
 
   try {
@@ -52,40 +53,71 @@ async function auditQuickCompletion(cwd, guard) {
         result.baselineHit.push(file)
       }
 
-      // 检查危险文件
-      if (DANGEROUS_PATTERNS.some(p => file.includes(p))) {
+      // 检查危险文件（除非 force-baseline）
+      if (DANGEROUS_PATTERNS.some(p => file.includes(p)) && !forceBaseline) {
         result.reasons.push(`危险文件变更: ${file}`)
       }
     }
 
     // 检查 deleted files
     for (const f of result.deletedFiles) {
-      if (!result.reasons.includes(`删除文件: ${f}`)) {
-        result.reasons.push(`删除文件: ${f}`)
+      result.reasons.push(`删除文件: ${f}`)
+    }
+
+    // 检查 baseline hit（除非 force-baseline）
+    if (!forceBaseline) {
+      for (const f of result.baselineHit) {
+        result.reasons.push(`覆盖 baseline 文件: ${f}`)
       }
     }
 
-    // 检查 baseline hit
-    for (const f of result.baselineHit) {
-      if (!result.reasons.includes(`覆盖 baseline 文件: ${f}`)) {
-        result.reasons.push(`覆盖 baseline 文件: ${f}`)
+    // 检查 new files（除非 allow-new）
+    if (!allowNew) {
+      for (const f of result.newFiles) {
+        if (!f.startsWith('.sillyspec/quicklog/') && !f.startsWith('.sillyspec/.runtime/')) {
+          result.reasons.push(`新增文件（需 --allow-new）: ${f}`)
+        }
       }
     }
 
     // 检查 allowedFiles 范围
     if (allowedFiles.length > 0) {
       for (const f of result.changedFiles) {
-        if (!allowedFiles.includes(f) && !f.startsWith('.sillyspec/quicklog/')) {
+        if (!allowedFiles.includes(f) && !f.startsWith('.sillyspec/')) {
           result.reasons.push(`超出 allowedFiles: ${f}`)
         }
       }
     }
 
     // 判定结果
-    if (result.baselineHit.length > 0 || result.deletedFiles.length > 0 || result.reasons.some(r => r.startsWith('危险'))) {
+    if (result.baselineHit.length > 0 || result.deletedFiles.length > 0 || result.reasons.some(r => r.startsWith('危险') || r.startsWith('删除'))) {
       result.status = 'blocked'
-    } else if (result.newFiles.length > 0 || (allowedFiles.length > 0 && result.reasons.length > 0)) {
+    } else if (result.newFiles.length > 0 || (allowedFiles.length > 0 && result.reasons.some(r => r.startsWith('超出')))) {
       result.status = 'warning'
+    }
+
+    // --confirm 模式：展示 diff 并等待确认
+    if (isConfirm && (result.status === 'warning' || result.status === 'blocked')) {
+      console.log(`\n📋 quick 变更概览：`)
+      console.log(`   新增: ${result.newFiles.length}, 修改: ${result.changedFiles.length - result.newFiles.length - result.deletedFiles.length}, 删除: ${result.deletedFiles.length}`)
+      if (result.changedFiles.length > 0) {
+        console.log(`\n   变更文件：`)
+        for (const f of result.changedFiles) {
+          const isBaseline = baselineFiles.includes(f)
+          const isDangerous = DANGEROUS_PATTERNS.some(p => f.includes(p))
+          const marker = isBaseline ? '🔴' : isDangerous ? '⚠️' : '  '
+          console.log(`   ${marker} ${f}`)
+        }
+      }
+      console.log(`\n   状态: ${result.status.toUpperCase()}`)
+      if (result.reasons.length > 0) {
+        console.log(`   原因:`)
+        for (const r of result.reasons) {
+          console.log(`     - ${r}`)
+        }
+      }
+      console.log(`\n   如确认接受这些变更，重新运行：sillyspec run quick --done --confirm --output "..."`)
+      console.log(`   或使用 --force-baseline 允许覆盖 baseline 文件，--allow-new 允许新增文件`)
     }
   } catch (e) {
     result.reasons.push(`审计失败: ${e.message}`)
@@ -448,11 +480,22 @@ export async function runCommand(args, cwd) {
     changeName = flags[changeIdx + 1]
   }
 
+  // 解析 --files a.js,b.js（quick 专用：显式声明 allowedFiles）
+  let quickFiles = []
+  const filesIdx = flags.indexOf('--files')
+  if (filesIdx !== -1 && flags[filesIdx + 1]) {
+    quickFiles = flags[filesIdx + 1].split(',').map(f => f.trim()).filter(Boolean)
+  }
+
+  const isAllowNew = flags.includes('--allow-new')
+  const isForceBaseline = flags.includes('--force-baseline')
+
   // 未知参数 fail-fast
   const knownFlags = new Set([
     '--done', '--skip', '--status', '--reset', '--confirm', '--skip-approval',
     '--output', '--input', '--change',
     '--spec-root', '--runtime-root', '--workspace-id', '--scan-run-id',
+    '--files', '--allow-new', '--force-baseline',
     '--json', '--dir', '--help',
   ])
   for (let i = 0; i < flags.length; i++) {
@@ -638,16 +681,24 @@ async function runStage(pm, progress, stageName, cwd, changeName, skipApproval =
         .trim().split('\n').filter(Boolean)
         .map(line => line.slice(3).trim())
         .filter(f => !f.startsWith('.sillyspec/'))
+      const allowedFiles = quickFiles || []
+      const allowNew = isAllowNew || false
+      const forceBaseline = isForceBaseline || false
       progress.quickGuard = {
         baselineCommit: execSync('git rev-parse HEAD', { cwd, encoding: 'utf8', timeout: 5000 }).trim(),
         baselineFiles,
-        allowedFiles: [],
+        allowedFiles,
+        allowNew,
+        forceBaseline,
         startedAt: new Date().toISOString(),
       }
       // 写入 quick-guard.json 供 worktree-guard hook 读取
       const guardFile = join(cwd, '.sillyspec', '.runtime', 'quick-guard.json')
       writeFileSync(guardFile, JSON.stringify(progress.quickGuard, null, 2))
-      console.log(`🛡️ quick 变更边界已记录: ${baselineFiles.length} 个已有脏文件`)
+      const parts = [`${baselineFiles.length} 个已有脏文件`]
+      if (allowedFiles.length > 0) parts.push(`${allowedFiles.length} 个 allowedFiles`)
+      if (allowNew) parts.push('允许新增文件')
+      console.log(`🛡️ quick 变更边界已记录: ${parts.join(', ')}`)
       await pm._write(cwd, progress, changeName)
     } catch (e) {
       console.warn(`⚠️ baseline 记录失败: ${e.message}`)
@@ -822,6 +873,24 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
       return { stageCompleted: false, currentIdx, nextPendingIdx: currentIdx }
     }
     await archiveChangeDirectory(pm, cwd, progress)
+  }
+
+  // archive "确认归档" 步骤完成后，校验归档完整性
+  if (stageName === 'archive' && steps[currentIdx]?.name === '确认归档' && confirm) {
+    const projectName = progress.project || basename(cwd)
+    const contractResult = runValidators('archive', cwd, changeName, { projectName })
+    if (contractResult.errors.length > 0) {
+      console.error(`\n❌ 归档校验失败：`)
+      for (const err of contractResult.errors) {
+        console.error(`   - ${err}`)
+      }
+    }
+    if (contractResult.warnings.length > 0) {
+      console.warn(`\n⚠️ 归档校验警告：`)
+      for (const w of contractResult.warnings) {
+        console.warn(`   - ${w}`)
+      }
+    }
   }
 
   // plan 阶段 "展开任务" 完成后，动态插入任务蓝图协调器步骤
@@ -1069,7 +1138,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
 
   // quick 阶段完成审计
   if (stageName === 'quick' && progress.quickGuard) {
-    const review = await auditQuickCompletion(cwd, progress.quickGuard)
+    const review = await auditQuickCompletion(cwd, progress.quickGuard, { isConfirm })
     progress.quickGuard.review = review
     progress.quickGuard.completedAt = new Date().toISOString()
     // 清理 quick-guard.json

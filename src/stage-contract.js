@@ -102,6 +102,64 @@ function validateVerifyOutputs(cwd, changeName) {
   return { ok: errors.length === 0, errors, warnings }
 }
 
+/**
+ * archive 完成校验：检查归档目录完整性
+ */
+function validateArchiveOutputs(cwd, changeName) {
+  const errors = []
+  const warnings = []
+  const archiveDir = join(cwd, '.sillyspec', 'changes', 'archive')
+  const date = new Date().toISOString().slice(0, 10)
+  const destDir = join(archiveDir, `${date}-${changeName}`)
+
+  // 检查归档目录是否存在
+  if (!existsSync(destDir)) {
+    errors.push(`归档目录缺失: ${destDir}`)
+    return { ok: false, errors, warnings }
+  }
+
+  // 检查核心文档
+  const requiredDocs = ['plan.md']
+  const recommendedDocs = ['design.md', 'module-impact.md']
+
+  for (const doc of requiredDocs) {
+    if (!existsSync(join(destDir, doc))) {
+      errors.push(`归档目录缺失核心文档: ${doc}`)
+    }
+  }
+
+  for (const doc of recommendedDocs) {
+    if (!existsSync(join(destDir, doc))) {
+      warnings.push(`归档目录缺少推荐文档: ${doc}`)
+    }
+  }
+
+  return { ok: errors.length === 0, errors, warnings }
+}
+
+/**
+ * archive 前置校验：所有主流程阶段完成
+ */
+function validateChangeClosed(cwd, changeName) {
+  const errors = []
+  const warnings = []
+
+  // 检查前置阶段状态
+  const progressDir = join(cwd, '.sillyspec', '.runtime')
+  // 这里只做文件层面的检查，DB 检查在 run.js 里做
+  const changeDir = join(cwd, '.sillyspec', 'changes', changeName)
+  if (!existsSync(changeDir)) {
+    errors.push(`变更目录不存在: ${changeDir}`)
+    return { ok: false, errors, warnings }
+  }
+
+  if (!existsSync(join(changeDir, 'plan.md'))) {
+    errors.push(`plan.md 缺失 — 请确保 plan 阶段已完成`)
+  }
+
+  return { ok: errors.length === 0, errors, warnings }
+}
+
 // ============ Contract Registry ============
 
 /**
@@ -152,7 +210,7 @@ const contracts = {
     description: '归档与收口',
     allowedFrom: ['verify'],
     allowedTo: [],
-    validators: [],
+    validators: [validateChangeClosed, validateArchiveOutputs],
   },
 
   // === 辅助阶段 ===
