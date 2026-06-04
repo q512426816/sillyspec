@@ -341,10 +341,24 @@ export function formatExecuteSummary({ changeName, stepsCompleted, stepsTotal, a
       ? `dirty (${baselineCount} baseline file${baselineCount === 1 ? '' : 's'} protected)`
       : 'clean';
 
+    // Worktree 最终状态
+    const mode = meta.mode || 'worktree';
+    let worktreeStatus;
+    if (mode === 'native-worktree') {
+      worktreeStatus = 'kept (external worktree)';
+    } else if (mode === 'in-place-fallback') {
+      worktreeStatus = 'none (in-place)';
+    } else if (!wtExists) {
+      worktreeStatus = 'cleaned';
+    } else {
+      worktreeStatus = 'exists';
+    }
+
     lines.push(`Status:     COMPLETED`);
     lines.push(`Steps:      ${stepsCompleted} / ${stepsTotal}`);
     lines.push(`Baseline:   ${baselineStatus}`);
     lines.push(`Apply:      ${applyStatus}`);
+    lines.push(`Worktree:   ${worktreeStatus}`);
   }
 
   // --- Changed files ---

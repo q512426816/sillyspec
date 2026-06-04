@@ -190,19 +190,40 @@ const fixedSuffix = [
     name: '完成确认',
     prompt: `所有任务完成后的收尾。
 
-### 操作（有 worktree）
+先检查当前 worktree 的隔离模式：
+\`\`\`bash
+node -e "import('./src/worktree.js').then(w => { const wm = new w.WorktreeManager(); const m = wm.getMeta('<change-name>'); console.log(m ? JSON.stringify({mode: m.mode, path: m.worktreePath}) : 'no meta'); })"
+# 或从 DB 读取：
+sqlite3 -json .sillyspec/.runtime/sillyspec.db "SELECT isolation_status, isolation_mode, isolation_reason FROM changes WHERE name='<change-name>'" 2>/dev/null
+\`\`\`
+
+### 操作（mode = worktree，SillySpec 创建的隔离 worktree）
 1. 运行 \`sillyspec worktree apply --check-only <change-name>\`
 2. 展示 diff 摘要（文件列表 + 变更统计）
 3. 检查结果说明（是否通过文件清单校验）
 4. 用户确认后运行 \`sillyspec worktree apply <change-name>\`
-5. apply 成功 → 自动 cleanup
+5. apply 成功 → 运行 \`sillyspec worktree cleanup <change-name>\` → 输出 Worktree: cleaned
 6. apply 失败 → 展示错误详情，用户选择重试或手动处理
 7. 如果用户不想 apply → 运行 \`sillyspec worktree cleanup <change-name>\` 丢弃
 8. 建议下一步：\`sillyspec run verify\`
 
+### 操作（mode = native-worktree，用户已有的 linked worktree）
+1. 运行 \`sillyspec worktree apply --check-only <change-name>\`
+2. 展示 diff 摘要
+3. 用户确认后运行 \`sillyspec worktree apply <change-name>\`
+4. **不要运行 cleanup** — 这是用户自己的 worktree，SillySpec 不能删除
+5. 输出 Worktree: kept（SillySpec 未创建此 worktree，保留不动）
+6. 建议下一步：\`sillyspec run verify\`
+
+### 操作（mode = in-place-fallback，降级模式无隔离目录）
+1. 展示本次执行摘要（\`git diff\` 查看变更）
+2. 跳过 apply 和 cleanup（没有隔离 worktree）
+3. 输出 Worktree: none（降级为 in-place，无隔离目录需要清理）
+4. 建议下一步：\`sillyspec run verify\`
+
 ### 操作（无 worktree / --no-worktree 模式）
-1. 跳过 apply 和 cleanup 步骤（因为没有 worktree）
-2. 展示本次执行摘要
+1. 展示本次执行摘要
+2. 输出 Worktree: none
 3. 提示用户直接使用 \`git diff\` 查看变更
 4. 建议下一步：\`sillyspec run verify\`
 

@@ -399,9 +399,17 @@ SillySpec worktree — git worktree 隔离管理
             console.error('❌ 用法: sillyspec worktree cleanup <change-name>');
             process.exit(1);
           }
+          const forceFlag = args.includes('--force');
           try {
-            wm.cleanup(wtName);
-            console.log(`✅ worktree 已清理: ${wtName}`);
+            const result = wm.cleanup(wtName, { force: forceFlag });
+            if (result.result === 'cleaned') {
+              console.log(`✅ worktree 已清理: ${wtName} (mode: ${result.mode})`);
+            } else if (result.result === 'skipped') {
+              console.log(`⏭️  worktree 跳过清理: ${wtName} (mode: ${result.mode})`);
+              console.log(`   原因: in-place 模式没有隔离目录需要清理`);
+            } else {
+              console.log(`ℹ️  worktree 未找到: ${wtName}`);
+            }
           } catch (e) {
             console.error(`❌ ${e.message}`);
             process.exit(1);

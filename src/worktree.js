@@ -409,17 +409,35 @@ export class WorktreeManager {
   }
 
   /**
-   * 清理 worktree（强制删除，不 apply）
+   * 清理 worktree（仅限 SillySpec 创建的临时 worktree）
    * @param {string} changeName
-   * @throws {Error} worktree 不存在
+   * @param {{ force?: boolean }} opts - force: 跳过 mode 安检（仅用于 worktree 目录本身）
+   * @throws {Error} worktree 不存在、不允许删除
+   * @returns {{ result: 'cleaned'|'skipped'|'kept', mode: string }}
    */
-  cleanup(changeName) {
+  cleanup(changeName, { force = false } = {}) {
     const name = validateChangeName(changeName);
     const meta = this.getMeta(name);
     const worktreePath = this.getWorktreePath(name);
 
     if (!meta && !existsSync(worktreePath)) {
-      throw new Error(`worktree not found: ${name}。meta.json 不存在，目录也不存在，可能已被清理或从未创建。`);
+      return { result: 'skipped', mode: null };
+    }
+
+    const mode = meta?.mode || 'worktree';
+
+    // 安全检查：只有 SillySpec 创建的 worktree 才允许删除
+    if (!force) {
+      if (mode === 'native-worktree') {
+        throw new Error(
+          `当前 worktree 是外部/原生隔离环境（mode: native-worktree），SillySpec 不允许删除。\n` +
+          `此 worktree 不是由 SillySpec 创建的，请手动管理。\n` +
+          `如需强制清理，使用 --force 标志。`
+        );
+      }
+      if (mode === 'in-place-fallback') {
+        return { result: 'skipped', mode };
+      }
     }
 
     // 1. 尝试 git worktree remove
@@ -446,6 +464,14 @@ export class WorktreeManager {
     if (existsSync(worktreePath)) {
       rmSync(worktreePath, { recursive: true, force: true });
     }
+
+    // 5. 清除 meta 目录（如果 worktree 目录在 worktreeBase 下）
+    const metaDir = join(this.worktreeBase, name);
+    if (existsSync(metaDir)) {
+      rmSync(metaDir, { recursive: true, force: true });
+    }
+
+    return { result: 'cleaned', mode };
   }
 
   /**
