@@ -147,7 +147,7 @@ async function ensureStageSteps(progress, stageName, cwd) {
 /**
  * 输出当前步骤的 prompt
  */
-async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjectName) {
+async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjectName, platformOpts = {}) {
   const step = steps[stepIndex]
   const total = steps.length
   const projectName = dbProjectName || basename(cwd)
@@ -218,6 +218,39 @@ async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjec
   if (changeName && promptText.includes('<change-name>')) {
     promptText = promptText.replace(/<change-name>/g, changeName)
   }
+  // 平台模式：注入路径覆盖指令（仅 scan 阶段）
+  if (stageName === 'scan' && (platformOpts.specRoot || platformOpts.runtimeRoot)) {
+    const platformDirectives = []
+    if (platformOpts.specRoot) {
+      platformDirectives.push(
+        `## ⚠️ 平台模式 — 文档输出路径覆盖\n` +
+        `本次 scan 的所有正式文档必须写入以下路径（替代默认的 \.sillyspec/docs/<project>/）：\n\n` +
+        `| 类型 | 输出路径 |\n|------|----------|\n` +
+        `| scan 文档 | ${platformOpts.specRoot}/scan/ |\n` +
+        `| 模块文档 | ${platformOpts.specRoot}/modules/ |\n` +
+        `| 流程文档 | ${platformOpts.specRoot}/flows/ |\n` +
+        `| 术语表 | ${platformOpts.specRoot}/glossary.md |\n` +
+        `| manifest | ${platformOpts.specRoot}/manifest.json |\n\n` +
+        `创建目录：\`mkdir -p ${platformOpts.specRoot}/{scan,modules,flows}\`\n` +
+        `所有写入操作使用上述绝对路径，不要回退到 \.sillyspec/docs/。`
+      )
+    }
+    if (platformOpts.runtimeRoot) {
+      const scanRunId = platformOpts.scanRunId || 'scan-' + new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-')
+      platformDirectives.push(
+        `\n运行时产物写入：\n` +
+        `\`mkdir -p ${platformOpts.runtimeRoot}/scan-runs/${scanRunId}\`\n` +
+        `原始输出、日志等运行时文件写入此目录。`
+      )
+    }
+    if (platformOpts.workspaceId) {
+      platformDirectives.push(
+        `\nworkspace_id: ${platformOpts.workspaceId}`
+      )
+    }
+    promptText = platformDirectives.join('\n') + '\n\n' + promptText
+  }
+
   console.log(promptText)
   console.log(`\n### ⚠️ 铁律`)
   console.log('- **文档是核心资产，代码是文档的产物。** 没有文档就没有代码——文档是 AI 的记忆，是团队协作的基础，是后续维护的唯一依据。任何代码产出必须先有对应的设计/规范文档支撑。')
@@ -264,6 +297,18 @@ export async function runCommand(args, cwd) {
   const isReset = flags.includes('--reset')
   const isConfirm = flags.includes('--confirm')
   const isSkipApproval = flags.includes('--skip-approval')
+
+  // 平台模式参数（供 SillyHub 等平台调用）
+  const getFlagValue = (name) => {
+    const idx = flags.indexOf(name)
+    return idx !== -1 && flags[idx + 1] ? flags[idx + 1] : null
+  }
+  const platformOpts = {
+    specRoot: getFlagValue('--spec-root'),
+    runtimeRoot: getFlagValue('--runtime-root'),
+    workspaceId: getFlagValue('--workspace-id'),
+    scanRunId: getFlagValue('--scan-run-id'),
+  }
 
   // 解析 --output
   let outputText = null
@@ -444,7 +489,7 @@ async function runStage(pm, progress, stageName, cwd, changeName, skipApproval =
 
   const defSteps = await getStageSteps(stageName, cwd, progress)
   if (defSteps && defSteps[currentIdx]) {
-    await outputStep(stageName, currentIdx, defSteps, cwd, changeName, progress.project || null)
+    await outputStep(stageName, currentIdx, defSteps, cwd, changeName, progress.project || null, platformOpts)
   }
 }
 
@@ -683,6 +728,35 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
       appendFileSync(inputsPath, entry)
     }
 
+    // 平台模式：scan 完成后生成 manifest.json
+    if (stageName === 'scan' && platformOpts.specRoot) {
+      try {
+        const { mkdirSync, writeFileSync } = await import('fs')
+        const { join } = await import('path')
+        const { execSync } = await import('child_process')
+        mkdirSync(platformOpts.specRoot, { recursive: true })
+        let sourceCommit = null
+        try {
+          sourceCommit = execSync('git rev-parse HEAD', { cwd, encoding: 'utf8', timeout: 5000 }).trim()
+        } catch {}
+        const manifest = {
+          workspace_id: platformOpts.workspaceId || null,
+          scan_run_id: platformOpts.scanRunId || null,
+          source_commit: sourceCommit,
+          generated_at: new Date().toISOString(),
+          schema_version: 1,
+        }
+        const manifestPath = join(platformOpts.specRoot, 'manifest.json')
+        writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n')
+        console.log(`📄 manifest.json 已写入: ${manifestPath}`)
+        if (!sourceCommit) {
+          console.log(`⚠️  source_commit 无法获取（可能非 git 目录），已设为 null`)
+        }
+      } catch (e) {
+        console.warn(`⚠️  manifest.json 写入失败: ${e.message}`)
+      }
+    }
+
     validateMetadata(cwd, stageName)
 
     // 验证关键文件是否在正确的变更目录下
@@ -862,7 +936,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
   }
 
   if (printNext) {
-    await outputStep(stageName, nextPendingIdx, defSteps, cwd, changeName, progress.project || null)
+    await outputStep(stageName, nextPendingIdx, defSteps, cwd, changeName, progress.project || null, platformOpts)
   }
   return { stageCompleted: false, currentIdx, nextPendingIdx }
 }
@@ -900,7 +974,7 @@ async function skipStep(pm, progress, stageName, cwd, changeName) {
   const nextPendingIdx = steps.findIndex(s => s.status === 'pending')
   if (nextPendingIdx !== -1 && defSteps) {
     console.log('')
-    await outputStep(stageName, nextPendingIdx, defSteps, cwd, changeName, progress.project || null)
+    await outputStep(stageName, nextPendingIdx, defSteps, cwd, changeName, progress.project || null, platformOpts)
   }
 }
 
@@ -1045,7 +1119,7 @@ async function runAutoMode(pm, progress, cwd, flags, changeName) {
         }
       }
     }
-    await outputStep(currentStage, pendingIdx, defSteps, cwd, changeName, progress.project || null)
+    await outputStep(currentStage, pendingIdx, defSteps, cwd, changeName, progress.project || null, platformOpts)
     return
   }
 
@@ -1075,7 +1149,7 @@ async function runAutoMode(pm, progress, cwd, flags, changeName) {
         }
       }
     }
-    await outputStep(currentStage, nextPendingIdx, defSteps, cwd, changeName, progress.project || null)
+    await outputStep(currentStage, nextPendingIdx, defSteps, cwd, changeName, progress.project || null, platformOpts)
     return
   }
 
@@ -1117,6 +1191,6 @@ async function runAutoMode(pm, progress, cwd, flags, changeName) {
         }
       }
     }
-    await outputStep(next, firstPending, nextSteps, cwd, changeName, progress.project || null)
+    await outputStep(next, firstPending, nextSteps, cwd, changeName, progress.project || null, platformOpts)
   }
 }
