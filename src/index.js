@@ -404,6 +404,9 @@ SillySpec worktree — git worktree 隔离管理
             const result = wm.cleanup(wtName, { force: forceFlag });
             if (result.result === 'cleaned') {
               console.log(`✅ worktree 已清理: ${wtName} (mode: ${result.mode})`);
+            } else if (result.result === 'force-cleaned') {
+              console.log(`⚠️  worktree 已强制清理: ${wtName} (mode: ${result.mode})`);
+              console.log(`   原因: git worktree remove 失败，通过直接删除目录完成`);
             } else if (result.result === 'skipped') {
               console.log(`⏭️  worktree 跳过清理: ${wtName} (mode: ${result.mode})`);
               console.log(`   原因: in-place 模式没有隔离目录需要清理`);

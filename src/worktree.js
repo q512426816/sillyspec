@@ -441,10 +441,11 @@ export class WorktreeManager {
     }
 
     // 1. 尝试 git worktree remove
+    let gitRemoveOk = true;
     try {
       git(this.cwd, `worktree remove ${worktreePath} --force`);
-    } catch {
-      // git worktree remove 失败，尝试直接删除目录
+    } catch (e) {
+      gitRemoveOk = false;
     }
     const branch = (meta && meta.branch) || BRANCH_PREFIX + name;
 
@@ -471,7 +472,7 @@ export class WorktreeManager {
       rmSync(metaDir, { recursive: true, force: true });
     }
 
-    return { result: 'cleaned', mode };
+    return { result: gitRemoveOk ? 'cleaned' : 'force-cleaned', mode };
   }
 
   /**
