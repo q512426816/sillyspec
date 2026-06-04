@@ -119,6 +119,16 @@ sillyspec run scan   --spec-root <storage-root>   --runtime-root <runtime-root> 
 
 **不传参数时，行为与本地模式完全一致。**
 
+**路径占位符机制：**
+scan.js 模板中使用 `{DOCS_ROOT}` 和 `{PROJECTS_ROOT}` 占位符，由 `run.js` 的 `outputStep` 在输出 prompt 前替换：
+
+| 占位符 | 本地模式 | 平台模式 |
+|--------|---------|---------|
+| `{DOCS_ROOT}` | `cwd/.sillyspec/docs/<project>` | `<spec-root>/.sillyspec/docs/<project>` |
+| `{PROJECTS_ROOT}` | `cwd/.sillyspec/projects` | `<spec-root>/.sillyspec/projects` |
+
+> 这确保 agent 看到的 prompt 中路径已替换为真实路径，不会因为模板硬编码而写错位置。
+
 ---
 
 
@@ -567,7 +577,11 @@ PASS / PASS WITH NOTES / FAIL
 
 **创建时机：** scan 阶段的深度扫描步骤
 
-**存储位置：** `.sillyspec/docs/<project>/scan/`
+**存储位置：**
+- 本地模式：`.sillyspec/docs/<project>/scan/`
+- 平台模式：`<spec-root>/.sillyspec/docs/<project>/scan/`
+
+> scan.js 模板中使用 `{DOCS_ROOT}` 占位符，由 `outputStep` 在运行时替换为实际路径。平台模式通过 `--spec-root` 参数指定 storage root。
 
 **七份文档：**
 | 文件 | 生成步骤 | 内容 |
@@ -893,7 +907,9 @@ test_strategy: module
 | `generated_at` | string | ISO 时间戳 |
 | `schema_version` | integer | manifest 格式版本，当前为 1 |
 
-**写入方：** `runStage()` 中 scan 阶段完成回调
+**写入方：** `runStage()` 中 scan 阶段完成回调（使用 `platformOpts.specRoot` 解析路径）
+
+**后置校验：** scan 完成后检查 source_root（cwd）的 `.sillyspec/docs/` 是否被意外污染，发现时输出 warning。
 
 **读取方：** SillyHub 后端读取 workspace spec 信息
 
