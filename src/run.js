@@ -8,6 +8,7 @@ import { basename, join } from 'path'
 import { existsSync, readdirSync, mkdirSync, writeFileSync, appendFileSync, readFileSync, statSync } from 'fs'
 import { ProgressManager } from './progress.js'
 import { stageRegistry, auxiliaryStages } from './stages/index.js'
+import { checkTransition, runValidators } from './stage-contract.js'
 import { buildExecuteSteps } from './stages/execute.js'
 import { buildPlanSteps } from './stages/plan.js'
 import { formatExecuteSummary } from './worktree-apply.js'
@@ -15,6 +16,85 @@ import { formatExecuteSummary } from './worktree-apply.js'
 /**
  * 同步触发辅助函数：_write 后 best-effort 同步到平台
  */
+/**
+ * quick 完成审计：对比 baseline 与实际变更
+ */
+async function auditQuickCompletion(cwd, guard) {
+  const { baselineFiles, allowedFiles } = guard
+  const result = { status: 'safe', reasons: [], changedFiles: [], newFiles: [], deletedFiles: [], baselineHit: [] }
+
+  try {
+    const { execSync } = await import('child_process')
+    const gitStatus = execSync('git status --porcelain', { cwd, encoding: 'utf8', timeout: 10000 })
+    const currentEntries = gitStatus.trim().split('\n').filter(Boolean)
+
+    const DANGEROUS_PATTERNS = [
+      '.sillyspec/',
+      'package.json',
+      'package-lock.json',
+      'yarn.lock',
+      'pnpm-lock.yaml',
+      '.eslintrc',
+      'tsconfig.json',
+    ]
+
+    for (const entry of currentEntries) {
+      const status = entry.slice(0, 2).trim()
+      const file = entry.slice(3).trim()
+      if (!file || file.startsWith('??. ')) continue
+
+      result.changedFiles.push(file)
+      if (status === 'D' || status === ' D') result.deletedFiles.push(file)
+      if (status === '??') result.newFiles.push(file)
+
+      // 检查是否命中 baseline protected files
+      if (baselineFiles.includes(file)) {
+        result.baselineHit.push(file)
+      }
+
+      // 检查危险文件
+      if (DANGEROUS_PATTERNS.some(p => file.includes(p))) {
+        result.reasons.push(`危险文件变更: ${file}`)
+      }
+    }
+
+    // 检查 deleted files
+    for (const f of result.deletedFiles) {
+      if (!result.reasons.includes(`删除文件: ${f}`)) {
+        result.reasons.push(`删除文件: ${f}`)
+      }
+    }
+
+    // 检查 baseline hit
+    for (const f of result.baselineHit) {
+      if (!result.reasons.includes(`覆盖 baseline 文件: ${f}`)) {
+        result.reasons.push(`覆盖 baseline 文件: ${f}`)
+      }
+    }
+
+    // 检查 allowedFiles 范围
+    if (allowedFiles.length > 0) {
+      for (const f of result.changedFiles) {
+        if (!allowedFiles.includes(f) && !f.startsWith('.sillyspec/quicklog/')) {
+          result.reasons.push(`超出 allowedFiles: ${f}`)
+        }
+      }
+    }
+
+    // 判定结果
+    if (result.baselineHit.length > 0 || result.deletedFiles.length > 0 || result.reasons.some(r => r.startsWith('危险'))) {
+      result.status = 'blocked'
+    } else if (result.newFiles.length > 0 || (allowedFiles.length > 0 && result.reasons.length > 0)) {
+      result.status = 'warning'
+    }
+  } catch (e) {
+    result.reasons.push(`审计失败: ${e.message}`)
+    result.status = 'warning'
+  }
+
+  return result
+}
+
 async function triggerSync(cwd, changeName) {
   try {
     if (changeName && !existsSync(join(cwd, '.sillyspec', 'changes', changeName))) return
@@ -483,6 +563,18 @@ function resolveChangeNameAuto(cwd) {
 }
 
 async function runStage(pm, progress, stageName, cwd, changeName, skipApproval = false, platformOpts = {}) {
+  // 状态转换校验
+  const prevStage = progress.currentStage || ''
+  const transition = checkTransition(prevStage, stageName)
+  if (!transition.allowed) {
+    console.error(`❌ 阶段转换不允许: ${prevStage || '(起始)'} → ${stageName}`)
+    console.error(`   原因: ${transition.reason}`)
+    console.error(`   提示: 使用 --skip-approval 绕过（需明确意图）`)
+    if (!skipApproval) {
+      process.exit(1)
+    }
+  }
+
   // execute 阶段启动前检查审批
   if (stageName === 'execute' && !skipApproval) {
     const approval = await checkApproval(cwd, changeName)
@@ -535,6 +627,31 @@ async function runStage(pm, progress, stageName, cwd, changeName, skipApproval =
     triggerSync(cwd, changeName)
     currentIdx = 0
     console.log(`🔄 ${stageName} 阶段已自动重置，重新开始。\n`)
+  }
+
+  // quick 阶段：记录 baselineFiles
+  if (stageName === 'quick' && !progress.quickGuard) {
+    try {
+      const { execSync } = await import('child_process')
+      const gitStatus = execSync('git status --porcelain', { cwd, encoding: 'utf8', timeout: 10000 })
+      const baselineFiles = gitStatus
+        .trim().split('\n').filter(Boolean)
+        .map(line => line.slice(3).trim())
+        .filter(f => !f.startsWith('.sillyspec/'))
+      progress.quickGuard = {
+        baselineCommit: execSync('git rev-parse HEAD', { cwd, encoding: 'utf8', timeout: 5000 }).trim(),
+        baselineFiles,
+        allowedFiles: [],
+        startedAt: new Date().toISOString(),
+      }
+      // 写入 quick-guard.json 供 worktree-guard hook 读取
+      const guardFile = join(cwd, '.sillyspec', '.runtime', 'quick-guard.json')
+      writeFileSync(guardFile, JSON.stringify(progress.quickGuard, null, 2))
+      console.log(`🛡️ quick 变更边界已记录: ${baselineFiles.length} 个已有脏文件`)
+      await pm._write(cwd, progress, changeName)
+    } catch (e) {
+      console.warn(`⚠️ baseline 记录失败: ${e.message}`)
+    }
   }
 
   if (currentIdx > 0) {
@@ -931,6 +1048,50 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
       console.log(`\n下一步由你决定：sillyspec run <stage>（brainstorm/plan/execute/verify/archive 等）`)
     }
     return { stageCompleted: true, currentIdx, nextPendingIdx: -1 }
+  }
+
+  // 阶段完成校验
+  const projectName = progress.project || basename(cwd)
+  const contractResult = runValidators(stageName, cwd, changeName, { projectName })
+  if (contractResult.errors.length > 0) {
+    console.error(`\n❌ 阶段 ${stageName} 校验失败：`)
+    for (const err of contractResult.errors) {
+      console.error(`   - ${err}`)
+    }
+    console.error(`\n   提示：修复缺失产物后重新运行此步骤，或使用 --skip-approval 跳过校验`)
+  }
+  if (contractResult.warnings.length > 0) {
+    console.warn(`\n⚠️ 阶段 ${stageName} 校验警告：`)
+    for (const w of contractResult.warnings) {
+      console.warn(`   - ${w}`)
+    }
+  }
+
+  // quick 阶段完成审计
+  if (stageName === 'quick' && progress.quickGuard) {
+    const review = await auditQuickCompletion(cwd, progress.quickGuard)
+    progress.quickGuard.review = review
+    progress.quickGuard.completedAt = new Date().toISOString()
+    // 清理 quick-guard.json
+    try {
+      const { unlinkSync } = await import('fs')
+      const guardFile = join(cwd, '.sillyspec', '.runtime', 'quick-guard.json')
+      unlinkSync(guardFile)
+    } catch {}
+    if (review.status === 'blocked') {
+      console.error(`\n🚫 quick 变更边界审计 — BLOCKED：`)
+      for (const r of review.reasons) {
+        console.error(`   - ${r}`)
+      }
+      console.error(`\n   这些文件是 baseline 保护的，不应被修改。`)
+    } else if (review.status === 'warning') {
+      console.warn(`\n⚠️ quick 变更边界审计 — WARNING：`)
+      for (const r of review.reasons) {
+        console.warn(`   - ${r}`)
+      }
+    } else {
+      console.log(`\n✅ quick 变更边界审计 — SAFE (变更 ${review.changedFiles.length} 个文件)`)
+    }
   }
 
   progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})

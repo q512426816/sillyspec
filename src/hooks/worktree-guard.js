@@ -502,8 +502,29 @@ export function shouldBlockWrite(filePath, cwd) {
     }
   }
 
-  // quick 阶段直接放行（不要求 worktree）
-  if (stage === 'quick') return { blocked: false }
+  // quick 阶段：检查 quick-guard.json 的 baselineFiles
+  if (stage === 'quick') {
+    try {
+      const guardFile = path.join(projectRoot, '.sillyspec', '.runtime', 'quick-guard.json')
+      const guard = JSON.parse(readFileSync(guardFile, 'utf8'))
+      const baselineFiles = guard.baselineFiles || []
+      const relTarget = path.relative(projectRoot, absPath)
+      // 如果目标是 baseline protected file，阻止写入
+      if (baselineFiles.some(f => relTarget === f || relTarget.startsWith(f + path.sep))) {
+        return {
+          blocked: true,
+          reason: [
+            `⚠️ quick 变更边界保护：${relTarget} 是 baseline 文件，不允许覆盖。`,
+            `当前 quick 任务不能修改任务开始前已修改的文件。`,
+            `如确需修改，请在 quick 完成后单独处理此文件。`,
+          ].join('\n')
+        }
+      }
+    } catch {
+      // quick-guard.json 不存在（非 quick 任务或未记录），放行
+    }
+    return { blocked: false }
+  }
 
   // execute 阶段：位置门禁
   if (isInsideRegisteredWorktree(absPath, projectRoot)) return { blocked: false }
@@ -565,12 +586,24 @@ export function shouldBlockBash(command, cwd) {
     }
   }
 
-  // quick 阶段直接放行（不要求 worktree）
+  // quick 阶段：检查 quick-guard.json
   if (stage === 'quick') {
     // 危险黑名单仍然拦截
     if (matchDangerBlacklist(command)) {
       return { blocked: true, reason: `dangerous command blocked: ${command.trim()}` }
     }
+    // 检查命令是否会覆盖 baseline files
+    try {
+      const guardFile = path.join(projectRoot, '.sillyspec', '.runtime', 'quick-guard.json')
+      const guard = JSON.parse(readFileSync(guardFile, 'utf8'))
+      const baselineFiles = guard.baselineFiles || []
+      // 检查命令中是否引用了 baseline file
+      for (const f of baselineFiles) {
+        if (command.includes(f) && (command.includes('> ') || command.includes(' tee ') || command.includes('sed ') || command.includes('mv '))) {
+          return { blocked: true, reason: `quick 变更边界保护：命令可能覆盖 baseline 文件 ${f}` }
+        }
+      }
+    } catch {}
     return { blocked: false }
   }
 
