@@ -27,12 +27,12 @@ export const definition = {
 1. 使用预注入的 git 用户名：\`<git-user>\`
 2. 无 \`--change\`：创建 .sillyspec/quicklog/QUICKLOG-\`<git-user>\`.md\`（已存在则追加），写入：
    \`\`\`
-   ## ql-<YYYYMMDD>-<NNN>-<short4> | <now-datetime> | <一句话任务描述>
+   ## ql-<YYYYMMDD>-<NNN>-<XXXX> | <now-datetime> | <一句话任务描述>
    状态：进行中
    文件：<预估要改的文件>
    \`\`\`
-   - ID 格式：\`ql-YYYYMMDD-NNN-XXXX\`（如 ql-20260603-001-a3f2）
-   - \`XXXX\` 是 4 位随机十六进制（防多文件/并发冲突）
+   - ID 格式：\`ql-YYYYMMDD-NNN-XXXX\`
+   - \`XXXX\` 是 4 位随机十六进制字符（如 a3f2、b7c1、00ef），**不是描述词缩写**
    - 追加前扫描文件中已有的 \`ql-<当天日期>-\` 前缀的最大序号，+1 作为新序号
    - 每天从 001 开始，跨日重新计数
    - 此 ID 可被 design.md / plan.md / archive / module 变更索引引用
