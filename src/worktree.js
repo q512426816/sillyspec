@@ -73,9 +73,11 @@ function parseJSON(raw) {
 }
 
 function computeBaselineHash(cwd) {
-  const staged = gitQuiet(cwd, 'diff --cached') || '';
-  const unstaged = gitQuiet(cwd, 'diff') || '';
-  const untracked = gitQuiet(cwd, 'ls-files --others --exclude-standard') || '';
+  // 排除 .sillyspec/ 元数据目录，避免 brainstorm/plan 阶段修改的蓝图文件污染 baseline
+  const exclude = '-- . ":(exclude).sillyspec/"';
+  const staged = gitQuiet(cwd, `diff --cached ${exclude}`) || '';
+  const unstaged = gitQuiet(cwd, `diff ${exclude}`) || '';
+  const untracked = gitQuiet(cwd, `ls-files --others --exclude-standard ${exclude}`) || '';
   const raw = `staged:${staged}
 unstaged:${unstaged}
 untracked:${untracked}`;

@@ -212,7 +212,13 @@ const contracts = {
     description: '归档与收口',
     allowedFrom: ['verify'],
     allowedTo: [],
-    validators: [validateChangeClosed, validateArchiveOutputs],
+    // 阶段级 validator 全部移除，改为 run.js 中 step 4 完成后的硬编码校验。
+    // 理由：两个 validator 的生效窗口互斥 ——
+    // validateChangeClosed 要求变更目录存在（step 4 --confirm 后已被移到 archive 目录）
+    // validateArchiveOutputs 要求 archive 目录存在（step 4 前还不存在）
+    // 注册为阶段级 validator 会导致每步都误报错误。
+    // run.js:893-909 已在正确的时机（step 4 完成后）执行相同检查。
+    validators: [],
   },
 
   // === 辅助阶段 ===

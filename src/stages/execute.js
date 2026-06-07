@@ -322,15 +322,21 @@ function buildWavePrompt(wave, waveIndex, changeDir, worktreePath) {
 
   const worktreeSection = (worktreePath)
     ? `
-### 工作目录
-你必须在以下 worktree 中工作（子代理的 cwd 设为此路径）：
-\`${worktreePath}\`
+### 工作目录（必须严格遵守）
 
-不要在主工作区修改源码文件。所有代码变更只在 worktree 中进行。
+调用 Task 工具启动子代理时，**workdir 参数是强制必传的**。
+不传 workdir 会导致子代理把文件写到主工作区而非 worktree，破坏隔离。
+
+\`\`\`json
+{
+  "subagent_type": "general",
+  "workdir": "${worktreePath}",
+  "prompt": "在此编写任务描述..."
+}
+\`\`\`
 
 ### 注意
 蓝图文件（tasks.md / design.md / proposal.md / requirements.md）在主工作区 .sillyspec/changes/<change>/ 下，它们可能不在 worktree 中。读取蓝图时使用主工作区路径，不要拼接到 worktree 路径下。
-子代理的 cwd 参数设为 \`${worktreePath}\`。
 `
     : ''
 

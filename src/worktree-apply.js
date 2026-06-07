@@ -148,10 +148,12 @@ export function applyWorktree(changeName, { cwd, checkOnly = false } = {}) {
   }
 
   // --- 4.5 校验：主工作区 baseline 是否变化（防 execute 期间主工作区被修改）---
+  // 注意：必须和 computeBaselineHash (worktree.js) 使用相同的排除规则
   if (meta.baselineHash) {
-    const staged = gitQuiet(projectRoot, 'diff --cached') || '';
-    const unstaged = gitQuiet(projectRoot, 'diff') || '';
-    const untracked = gitQuiet(projectRoot, 'ls-files --others --exclude-standard') || '';
+    const exclude = '-- . ":(exclude).sillyspec/"';
+    const staged = gitQuiet(projectRoot, `diff --cached ${exclude}`) || '';
+    const unstaged = gitQuiet(projectRoot, `diff ${exclude}`) || '';
+    const untracked = gitQuiet(projectRoot, `ls-files --others --exclude-standard ${exclude}`) || '';
     const raw = `staged:${staged}\nunstaged:${unstaged}\nuntracked:${untracked}`;
     const currentHash = createHash('sha256').update(raw).digest('hex').slice(0, 16);
     if (currentHash !== meta.baselineHash) {
