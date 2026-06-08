@@ -6,6 +6,8 @@
  */
 import { basename, join, resolve } from 'path'
 import { existsSync, readdirSync, mkdirSync, writeFileSync, appendFileSync, readFileSync, rmSync, statSync } from 'fs'
+import { createRequire } from 'module'
+const require = createRequire(import.meta.url)
 import { ProgressManager } from './progress.js'
 
 /**
@@ -392,6 +394,23 @@ async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjec
       platformDirectives.push(`workspace_id: ${platformOpts.workspaceId}`)
     }
     promptText = platformDirectives.join('\n') + '\n\n' + promptText
+  }
+
+  // 注入 scanProfile 硬约束指令
+  if (stageName === 'scan' && platformOpts?.scanProfile) {
+    const sp = platformOpts.scanProfile
+    const profileDirectives = []
+    profileDirectives.push(`## 📊 Scan Profile: ${sp.mode} (${sp.reason})`)
+    if (sp.maxAgentCalls === 0) {
+      profileDirectives.push(`**⛔ 严禁使用子代理（Agent/Task 工具）。** 必须在本 turn 内完成所有工作。`)
+    } else if (sp.maxAgentCalls > 0) {
+      profileDirectives.push(`**子代理上限：${sp.maxAgentCalls} 个。** 不要超出。`)
+    }
+    if (sp.maxDocs < 99) {
+      profileDirectives.push(`**文档上限：${sp.maxDocs} 份。** 只生成核心文档，不要额外生成 flows/glossary/module-card。`)
+    }
+    profileDirectives.push(`--output 只需要列出文件名，不要写长篇总结。`)
+    promptText = profileDirectives.join('\n') + '\n\n' + promptText
   } else {
     // 非 platform 模式也要替换占位符
     if (stageName === 'scan') {
@@ -431,6 +450,198 @@ async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjec
   const changeFlag = changeName ? ` --change ${changeName}` : ''
   console.log(`\n### 完成后执行`)
   console.log(`sillyspec run ${stageName} --done${changeFlag} --input "用户原始需求/反馈" --output "你的摘要"`)
+}
+
+/**
+ * 根据 project 规模计算 scan profile
+ * quick:   fileCount≤30 && sourceBytes≤80KB && projectCount≤3 → 3 步，0 子代理，5 份文档
+ * standard: fileCount≤200 && sourceBytes≤800KB → 压缩步骤，最多 1 子代理
+ * deep:    大项目或 --deep → 完整流程
+ */
+function computeScanProfile(cwd, platformOpts) {
+  // --deep 标志强制 deep
+  const flags = process.argv.slice(2)
+  if (flags.includes('--deep')) {
+    return { mode: 'deep', reason: '用户指定 --deep', maxAgentCalls: 4, maxDocs: 99 }
+  }
+
+  const specDir = platformOpts?.specRoot || join(cwd, '.sillyspec')
+  const projectsDir = join(specDir, 'projects')
+  let projectCount = 1
+  try {
+    if (existsSync(projectsDir)) {
+      projectCount = readdirSync(projectsDir).filter(f => f.endsWith('.yaml')).length
+    }
+  } catch {}
+
+  // 快速估算源码规模
+  let fileCount = 0
+  let sourceBytes = 0
+  try {
+    const { execSync } = require('child_process')
+    const findCmd = `find "${cwd}" -type f \\( -name '*.js' -o -name '*.ts' -o -name '*.tsx' -o -name '*.py' -o -name '*.java' -o -name '*.go' -o -name '*.rs' -o -name '*.rb' -o -name '*.php' -o -name '*.c' -o -name '*.cpp' -o -name '*.h' -o -name '*.jsx' -o -name '*.vue' -o -name '*.svelte' \\) -not -path '*/node_modules/*' -not -path '*/.git/*' -not -path '*/dist/*' -not -path '*/build/*' -not -path '*/__pycache__/*' -not -path '*/.sillyspec/*' -not -path '*/.claude/*' 2>/dev/null`
+    const files = execSync(findCmd, { encoding: 'utf8', timeout: 10000 }).trim().split('\n').filter(Boolean)
+    fileCount = files.length
+    for (const f of files) {
+      try { sourceBytes += statSync(f).size } catch {}
+    }
+  } catch {
+    // find 失败时假设中等规模
+    return { mode: 'standard', reason: '无法估算项目规模', maxAgentCalls: 1, maxDocs: 8 }
+  }
+
+  if (fileCount <= 30 && sourceBytes <= 80_000 && projectCount <= 3) {
+    return { mode: 'quick', reason: `${fileCount} 源文件, ${Math.round(sourceBytes / 1024)}KB`, maxAgentCalls: 0, maxDocs: 5, _fileCount: fileCount, _sourceBytes: sourceBytes, _projectCount: projectCount }
+  }
+  if (fileCount <= 200 && sourceBytes <= 800_000) {
+    return { mode: 'standard', reason: `${fileCount} 源文件, ${Math.round(sourceBytes / 1024)}KB`, maxAgentCalls: 1, maxDocs: 8, _fileCount: fileCount, _sourceBytes: sourceBytes, _projectCount: projectCount }
+  }
+  return { mode: 'deep', reason: `${fileCount} 源文件, ${Math.round(sourceBytes / 1024)}KB`, maxAgentCalls: 4, maxDocs: 99, _fileCount: fileCount, _sourceBytes: sourceBytes, _projectCount: projectCount }
+}
+
+/**
+ * 根据 scanProfile 裁剪步骤
+ * quick:   3 步 — CLI preflight / AI generate / CLI postcheck
+ * standard: 跳过续扫检测(4), 跳过可选步骤(9)
+ */
+function applyScanProfileSteps(stageData, profile, cwd, platformOpts) {
+  const steps = stageData.steps
+  const mode = profile.mode
+
+  if (mode === 'quick') {
+    const specBase = platformOpts?.specRoot || join(cwd, '.sillyspec')
+    const projectName = basename(cwd)
+    const docsRoot = join(specBase, 'docs', projectName)
+
+    // Step 1: CLI preflight（不调 AI，自动完成）
+    const step1 = {
+      name: '项目概览（自动探测）',
+      status: 'pending',
+      noAI: true,
+      _cliAction: 'scanPreflight',
+      prompt: '',
+      outputHint: 'preflight 结果',
+      optional: false
+    }
+    // Step 2: AI 生成核心文档（唯一 AI roundtrip）
+    const step2 = {
+      name: '生成核心文档',
+      status: 'pending',
+      prompt: `## Quick Scan — 核心文档生成
+
+项目规模较小（quick profile），请一次性生成所有核心文档。
+
+### 操作
+1. 读取项目结构和关键文件（package.json / pyproject.toml / README / 入口文件）
+2. 生成以下 4 份文档并写入 \`{DOCS_ROOT}/scan/\`：
+   - **PROJECT.md** — 项目简介、技术栈、模块划分
+   - **ARCHITECTURE.md** — 架构概览、模块关系、技术决策
+   - **CONVENTIONS.md** — 代码风格、框架隐形规则
+   - **STRUCTURE.md** — 目录树 + 模块说明
+3. 如发现子项目，注册到 \`{PROJECTS_ROOT}/\` 下
+
+每份文档头必须包含 frontmatter：\`author\` 和 \`created_at\`。
+
+### ⛔ 硬约束
+- **严禁使用子代理（Agent/Task 工具）。** 所有文档在一个 turn 内完成。
+- 不要搜索 .sillyspec/ .claude/ .git/ node_modules/ dist/ build/
+- --output 只需要列出生成的文件名，不要写长篇总结
+
+### 输出
+生成的文件列表`,
+      outputHint: '文件列表',
+      optional: false
+    }
+    // Step 3: CLI postcheck（不调 AI，自动完成）
+    const selfCheck = steps.find(s => s.name === '自检和提交') || {
+      name: '自检和提交', status: 'pending', prompt: '', outputHint: '结果', optional: false
+    }
+    const step3 = { ...selfCheck, status: 'pending', noAI: true, _cliAction: 'scanPostcheck', prompt: '' }
+    stageData.steps = [step1, step2, step3]
+    return
+  }
+
+  if (mode === 'standard') {
+    // 跳过 Step 4（断点续扫检测），跳过 Step 9（flows+glossary，可选）
+    const skipNames = ['断点续扫检测', '生成业务流程和术语表（可选）']
+    for (const step of stageData.steps) {
+      if (skipNames.includes(step.name) && step.status === 'pending') {
+        step.status = 'skipped'
+        step.skippedAt = new Date().toLocaleString('zh-CN', { hour12: false })
+      }
+    }
+  }
+}
+
+/**
+ * CLI-only: quick scan preflight
+ * 收集项目快照，打印 summary，不调 AI
+ */
+async function executeScanPreflight(cwd, platformOpts, scanProfile) {
+  const specBase = platformOpts?.specRoot || join(cwd, '.sillyspec')
+  const projectName = basename(cwd)
+  console.log(`  📁 项目: ${projectName}`)
+  console.log(`  📊 Profile: ${scanProfile.mode} (${scanProfile.reason})`)
+  // 快速列出顶层结构
+  try {
+    const { execSync } = await import('child_process')
+    const dirs = execSync(`ls -d */ 2>/dev/null | grep -v node_modules | grep -v '.git' | grep -v '.sillyspec' | grep -v '.claude' | head -20`, { cwd, encoding: 'utf8' }).trim()
+    if (dirs) {
+      console.log(`  📂 目录: ${dirs.split('\n').map(d => d.replace(/\/$/, '')).join(', ')}`)
+    }
+  } catch {}
+  console.log(`  ✅ Preflight 完成，准备生成核心文档\n`)
+}
+
+/**
+ * CLI-only: quick scan postcheck
+ * 执行文件存在性 + manifest 检查，不调 AI
+ */
+async function executeScanPostcheck(cwd, platformOpts, scanProfile) {
+  const { runScanPostCheck, printScanPostCheckResult } = await import('./scan-postcheck.js')
+  const specDir = platformOpts?.specRoot || null
+  const result = runScanPostCheck({
+    cwd,
+    specDir,
+    scanMeta: {
+      projectListParsed: true,
+      manifestWritten: undefined,
+    },
+  })
+  printScanPostCheckResult(result)
+  // 写 manifest（如果还没写）
+  if (platformOpts?.specRoot) {
+    try {
+      const { mkdirSync, writeFileSync } = await import('fs')
+      const { join: pJoin, basename: pBasename } = await import('path')
+      const { execSync } = await import('child_process')
+      const manifestDir = platformOpts.specRoot
+      let sourceCommit = null
+      try {
+        sourceCommit = execSync('git rev-parse HEAD', { cwd, encoding: 'utf8', timeout: 5000 }).trim()
+      } catch {}
+      mkdirSync(manifestDir, { recursive: true })
+      const manifest = {
+        scan_profile: {
+          mode: scanProfile.mode,
+          file_count: scanProfile._fileCount || 0,
+          source_bytes: scanProfile._sourceBytes || 0,
+          project_count: scanProfile._projectCount || 0,
+          reason: scanProfile.reason,
+        },
+        workspace_id: platformOpts.workspaceId || null,
+        scan_run_id: platformOpts.scanRunId || null,
+        source_commit: sourceCommit,
+        generated_at: new Date().toISOString(),
+        schema_version: 2,
+      }
+      const manifestPath = pJoin(manifestDir, 'manifest.json')
+      writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n')
+      console.log(`  📄 manifest.json 已写入: ${manifestPath}`)
+    } catch (e) {
+      console.warn(`  ⚠️ manifest 写入失败: ${e.message}`)
+    }
+  }
 }
 
 /**
@@ -753,6 +964,24 @@ async function runStage(pm, progress, stageName, cwd, changeName, skipApproval =
   const steps = stageData.steps
   let currentIdx = steps.findIndex(s => s.status !== 'completed' && s.status !== 'skipped')
 
+  // ── scanProfile: 根据 project 规模动态裁剪步骤 ──
+  let scanProfile = null
+  if (stageName === 'scan' && steps.length > 0 && currentIdx === 0) {
+    scanProfile = computeScanProfile(cwd, platformOpts)
+    console.log(`\n📊 Scan Profile: ${scanProfile.mode} (原因: ${scanProfile.reason})`)
+    if (scanProfile.mode !== 'deep') {
+      applyScanProfileSteps(stageData, scanProfile, cwd, platformOpts)
+      // 步骤被裁剪后 currentIdx 需要重新计算
+      currentIdx = 0
+    }
+    // 保存 profile 供后续 postcheck 使用
+    stageData.scanProfile = scanProfile
+    await pm._write(cwd, progress, changeName)
+  } else if (stageName === 'scan' && stageData.scanProfile) {
+    scanProfile = stageData.scanProfile
+  }
+  if (scanProfile) platformOpts.scanProfile = scanProfile
+
   if (currentIdx === -1) {
     // 已完成 → 自动重置，重新开始
     const freshSteps = await getStageSteps(stageName, cwd, progress)
@@ -810,6 +1039,33 @@ async function runStage(pm, progress, stageName, cwd, changeName, skipApproval =
 
   const defSteps = await getStageSteps(stageName, cwd, progress)
   if (defSteps && defSteps[currentIdx]) {
+    // noAI 步骤自动完成（CLI-only，不需要 Agent 参与）
+    if (defSteps[currentIdx].noAI || stageData.steps[currentIdx]?.noAI) {
+      const stepName = defSteps[currentIdx].name
+      const cliAction = defSteps[currentIdx]._cliAction || stageData.steps[currentIdx]?._cliAction
+      console.log(`⚙️ Step ${currentIdx + 1}/${stageData.steps.length}: ${stepName}（CLI 自动执行，无需 Agent）`)
+      if (cliAction === 'scanPreflight') {
+        await executeScanPreflight(cwd, platformOpts, scanProfile)
+      } else if (cliAction === 'scanPostcheck') {
+        await executeScanPostcheck(cwd, platformOpts, scanProfile)
+      }
+      stageData.steps[currentIdx].status = 'completed'
+      stageData.steps[currentIdx].completedAt = new Date().toLocaleString('zh-CN', { hour12: false })
+      await pm._write(cwd, progress, changeName)
+      // 自动前进到下一步
+      const nextIdx = stageData.steps.findIndex(s => s.status === 'pending')
+      if (nextIdx !== -1 && defSteps[nextIdx]) {
+        console.log('')
+        await outputStep(stageName, nextIdx, defSteps, cwd, changeName, progress.project || null, platformOpts)
+      } else {
+        // 所有步骤完成
+        stageData.status = 'completed'
+        stageData.completedAt = new Date().toLocaleString('zh-CN', { hour12: false })
+        await pm._write(cwd, progress, changeName)
+        console.log(`\n✅ ${stageName} 阶段全部完成。`)
+      }
+      return
+    }
     await outputStep(stageName, currentIdx, defSteps, cwd, changeName, progress.project || null, platformOpts)
   }
 }
@@ -929,6 +1185,13 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
   const { printNext = true, confirm = false, changeName, platformOpts = {} } = options
   const specBase = platformOpts.specRoot || join(cwd, '.sillyspec')
   const stageData = progress.stages[stageName]
+  const scanProfile = stageData?.scanProfile || null
+
+  // scanProfile 非 deep 模式：截断 outputText 减少 token 传递
+  let effectiveOutput = outputText
+  if (scanProfile && scanProfile.mode !== 'deep' && outputText && outputText.length > 1000) {
+    effectiveOutput = outputText.slice(0, 1000) + '\n\n…[输出已截断，完整内容见 artifact]'
+  }
   if (!stageData || !stageData.steps) {
     console.error(`❌ 阶段 ${stageName} 未初始化`)
     process.exit(1)
@@ -948,6 +1211,8 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
     const MAX_OUTPUT = 200
     if (outputText.length > MAX_OUTPUT) {
       steps[currentIdx].output = outputText.slice(0, MAX_OUTPUT) + '…'
+      steps[currentIdx].output_truncated = true
+      steps[currentIdx].output_original_length = outputText.length
       // 平台模式：artifact 写入 runtime-root，否则写 .sillyspec/.runtime/artifacts
       const artifactBase = platformOpts?.runtimeRoot
         ? join(platformOpts.runtimeRoot, 'scan-runs', platformOpts.scanRunId || 'unknown')
