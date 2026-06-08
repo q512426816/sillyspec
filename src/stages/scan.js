@@ -453,8 +453,24 @@ step1 → step2 → step3
 5. 清理：\`rm -f {DOCS_ROOT}/scan/_env-detect.md\`
 6. \`git add .sillyspec/\` — 暂存扫描结果（不要 commit，由用户通过统一提交工具处理）
 
+### ⛔ 路径合规检查（平台模式下必须执行）
+7. 确认所有文档都写入 \`{DOCS_ROOT}/\`（spec-root 下），**而非源码目录下的 .sillyspec/**
+8. 检查是否出现 tool_use_error 或 API Error 未恢复
+9. 检查 7 份文档 header 是否包含 author 和 created_at
+10. 检查 local.yaml 中 commands 是否在 package.json scripts 中真实存在，不存在的必须标记 unavailable
+
+### ⛔ 最终状态判定
+如果出现以下**任意**情况，最终状态**不能**写"全部通过"，只能写 \`completed_with_warnings\` 或 \`failed_post_check\`：
+- 源码目录下存在 docs（路径合规检查失败）
+- source_commit 为 null
+- Write 工具出现过失败
+- API Error 529 或 rate_limit
+- fallback / retry / skipped validation
+- 文档引用不存在的文件或模块
+- 文档内容包含 .sillyspec/ 等工具目录的扫描结果
+
 ### 输出
-每个项目的扫描完整性报告
+每个项目的扫描完整性报告（必须包含路径合规检查结果和最终状态）
 
 ### 注意
 - ❌ 修改代码 / 编造路径 / 读源码全文`,

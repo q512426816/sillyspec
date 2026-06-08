@@ -15,8 +15,10 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, unlinkS
 import { join, basename } from 'path';
 import { DB } from './db.js';
 
-const RUNTIME_DIR = '.sillyspec/.runtime';
-const CHANGES_DIR = '.sillyspec/changes';
+// 默认规范目录名（相对于 cwd）
+const SPEC_DIR_NAME = '.sillyspec';
+const RUNTIME_SUBDIR = '.runtime';
+const CHANGES_SUBDIR = 'changes';
 const GLOBAL_FILE = 'global.json';
 const CURRENT_VERSION = 3;
 const VALID_STAGES = ['scan', 'brainstorm', 'propose', 'plan', 'execute', 'verify', 'archive', 'quick', 'explore'];
@@ -50,14 +52,27 @@ function makeInitialGlobal(project) {
 // ── ProgressManager ──
 
 export class ProgressManager {
+  /**
+   * @param {object} [opts]
+   * @param {string} [opts.specDir] - 规范目录绝对路径（默认 cwd/.sillyspec）
+   */
+  constructor(opts = {}) {
+    this._customSpecDir = opts.specDir || null;
+  }
+
   // ── 路径工具 ──
 
+  /** 获取 specDir（优先自定义，否则 cwd/.sillyspec） */
+  _getSpecDir(cwd) {
+    return this._customSpecDir || join(cwd, SPEC_DIR_NAME);
+  }
+
   _runtimePath(cwd, ...parts) {
-    return join(cwd, RUNTIME_DIR, ...parts);
+    return join(this._getSpecDir(cwd), RUNTIME_SUBDIR, ...parts);
   }
 
   _changePath(cwd, changeName, ...parts) {
-    return join(cwd, CHANGES_DIR, changeName, ...parts);
+    return join(this._getSpecDir(cwd), CHANGES_SUBDIR, changeName, ...parts);
   }
 
   _ensureRuntimeDir(cwd) {
@@ -1207,6 +1222,8 @@ export class ProgressManager {
   }
 
   _ensureGitignore(cwd) {
+    // 外部 specDir 不需要修改项目 .gitignore
+    if (this._customSpecDir) return;
     const gitignorePath = join(cwd, '.gitignore');
     const rule = '.sillyspec/.runtime/';
     if (existsSync(gitignorePath)) {

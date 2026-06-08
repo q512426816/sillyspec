@@ -4,9 +4,21 @@
  * CLI 成为流程引擎，AI 变成步骤执行器。
  * 支持多变更并行：每个变更状态存储在 sillyspec.db 中。
  */
-import { basename, join } from 'path'
+import { basename, join, resolve } from 'path'
 import { existsSync, readdirSync, mkdirSync, writeFileSync, appendFileSync, readFileSync, statSync } from 'fs'
 import { ProgressManager } from './progress.js'
+
+/**
+ * 解析规范目录路径
+ * @param {string} cwd - 项目根目录
+ * @param {object} [opts]
+ * @param {string} [opts.specDir] - 用户指定的 specDir（通过 --spec-dir 或 --spec-root）
+ * @returns {string} 规范目录的绝对路径
+ */
+function resolveSpecDir(cwd, opts = {}) {
+  if (opts.specDir) return resolve(opts.specDir)
+  return join(cwd, '.sillyspec')
+}
 import { stageRegistry, auxiliaryStages } from './stages/index.js'
 import { checkTransition, runValidators } from './stage-contract.js'
 import { buildExecuteSteps } from './stages/execute.js'
@@ -155,8 +167,8 @@ async function checkApproval(cwd, changeName) {
 /**
  * 统一查找变更目录（与 progress.js 的变更检测逻辑一致）
  */
-function resolveChangeDir(cwd, progress) {
-  const changesDir = join(cwd, '.sillyspec', 'changes')
+function resolveChangeDir(cwd, progress, specDir = null) {
+  const changesDir = join(specDir || resolveSpecDir(cwd), 'changes')
   if (!existsSync(changesDir)) return null
 
   // 1. 优先用 currentChange
@@ -177,9 +189,9 @@ function resolveChangeDir(cwd, progress) {
  * 自动探测并设置 currentChange（唯一变更目录时）
  * @returns {boolean} 是否设置了 currentChange
  */
-function autoDetectChange(progress, cwd) {
+function autoDetectChange(progress, cwd, specDir = null) {
   if (progress.currentChange) return false
-  const changesDir = join(cwd, '.sillyspec', 'changes')
+  const changesDir = join(specDir || resolveSpecDir(cwd), 'changes')
   if (!existsSync(changesDir)) return false
   const entries = readdirSync(changesDir, { withFileTypes: true })
     .filter(e => e.isDirectory() && e.name !== 'archive')
@@ -193,9 +205,9 @@ function autoDetectChange(progress, cwd) {
 /**
  * 从 progress 或变更目录推导变更名
  */
-function resolveChangeName(cwd, progress) {
+function resolveChangeName(cwd, progress, specDir = null) {
   if (progress.currentChange) return progress.currentChange
-  const changesDir = join(cwd, '.sillyspec', 'changes')
+  const changesDir = join(specDir || resolveSpecDir(cwd), 'changes')
   if (!existsSync(changesDir)) return null
   const entries = readdirSync(changesDir, { withFileTypes: true })
     .filter(e => e.isDirectory() && e.name !== 'archive')
@@ -206,9 +218,9 @@ function resolveChangeName(cwd, progress) {
 /**
  * 获取阶段的步骤定义（execute 需要动态构建）
  */
-async function getStageSteps(stageName, cwd, progress) {
+async function getStageSteps(stageName, cwd, progress, specDir = null) {
   if (stageName === 'execute') {
-    const changeDir = resolveChangeDir(cwd, progress)
+    const changeDir = resolveChangeDir(cwd, progress, specDir)
     let planFile = null
     if (changeDir) {
       const p = join(changeDir, 'plan.md')
@@ -217,7 +229,7 @@ async function getStageSteps(stageName, cwd, progress) {
     return buildExecuteSteps(planFile)
   }
   if (stageName === 'plan') {
-    const changeDir = resolveChangeDir(cwd, progress)
+    const changeDir = resolveChangeDir(cwd, progress, specDir)
     return buildPlanSteps(changeDir)
   }
   const def = stageRegistry[stageName]
@@ -227,10 +239,10 @@ async function getStageSteps(stageName, cwd, progress) {
 /**
  * 确保阶段的 steps 已初始化到 progress
  */
-async function ensureStageSteps(progress, stageName, cwd) {
+async function ensureStageSteps(progress, stageName, cwd, specDir = null) {
   if (!progress.stages) progress.stages = {}
 
-  const steps = await getStageSteps(stageName, cwd, progress)
+  const steps = await getStageSteps(stageName, cwd, progress, specDir)
   if (!steps) return false
 
   if (!progress.stages[stageName] || !progress.stages[stageName].steps || progress.stages[stageName].steps.length === 0) {
@@ -331,40 +343,59 @@ async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjec
   if (changeName && promptText.includes('<change-name>')) {
     promptText = promptText.replace(/<change-name>/g, changeName)
   }
-  // 平台模式：注入路径覆盖指令（仅 scan 阶段）
-  if (stageName === 'scan') {
+  // 平台模式：注入路径覆盖指令
+  if (platformOpts?.specRoot || platformOpts?.runtimeRoot) {
     const projectName = dbProjectName || basename(cwd)
-    const specSillyspec = platformOpts?.specRoot
-      ? join(platformOpts.specRoot, '.sillyspec')
-      : join(cwd, '.sillyspec')
+    // platformOpts.specRoot 现在指向 specDir 本身（可能是 cwd/.sillyspec 或外部路径）
+    const specSillyspec = platformOpts.specRoot || join(cwd, '.sillyspec')
     const docsRoot = join(specSillyspec, 'docs', projectName)
     const projectsRoot = join(specSillyspec, 'projects')
+    const changesRoot = join(specSillyspec, 'changes')
 
     promptText = promptText.replace(/\{DOCS_ROOT\}/g, docsRoot)
     promptText = promptText.replace(/\{PROJECTS_ROOT\}/g, projectsRoot)
 
-    // 平台模式附加指令
-    if (platformOpts?.specRoot || platformOpts?.runtimeRoot) {
-      const platformDirectives = []
-      if (platformOpts.specRoot) {
-        platformDirectives.push(
-          `## ⚠️ 平台模式\n` +
-          `文档路径已参数化：\n` +
-          `- 文档根目录: \`${docsRoot}/\`\n` +
-          `- 项目注册表: \`${projectsRoot}/\`\n` +
-          `创建目录: \`mkdir -p ${docsRoot}/{scan,modules,flows} ${projectsRoot}\`\n`
-        )
-      }
-      if (platformOpts.runtimeRoot) {
-        const scanRunId = platformOpts.scanRunId || 'scan-' + new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-')
-        platformDirectives.push(
-          `运行时产物写入: \`${platformOpts.runtimeRoot}/scan-runs/${scanRunId}/\`\n`
-        )
-      }
-      if (platformOpts.workspaceId) {
-        platformDirectives.push(`workspace_id: ${platformOpts.workspaceId}`)
-      }
-      promptText = platformDirectives.join('\n') + '\n\n' + promptText
+    const platformDirectives = []
+    platformDirectives.push(
+      `## ⚠️ 平台模式 — 写入路径约束（必须严格遵守）\n` +
+      `\n` +
+      `规范目录（specDir）: \`${specSillyspec}\`\n` +
+      `- 文档根目录: \`${docsRoot}/\`\n` +
+      `- 项目注册表: \`${projectsRoot}/\`\n` +
+      `- 变更目录: \`${changesRoot}/\`\n` +
+      `\n` +
+      `### ⛔ 写入规则\n` +
+      `1. **所有文档、配置、产物只能写入上述路径**。严禁写入源码目录或相对路径 \`.sillyspec/\`。\n` +
+      `2. **不允许**从 cwd 推导文档路径，必须使用上面列出的绝对路径。\n` +
+      `3. **源码扫描范围**必须排除：.sillyspec/、.claude/、.git/、node_modules/、dist/、build/、__pycache__/\n` +
+      `4. **local.yaml 校验**：commands 中引用的命令必须在 package.json 的 scripts 中存在，不存在的标记为 unavailable，不能写 "配置良好"\n` +
+      `\n` +
+      `### ⛔ Write 工具规则\n` +
+      `1. 如果 Write 返回 \"File has not been read yet\"，正确动作是：先 Read 目标文件 → 再 Write 覆盖。\n` +
+      `2. **不允许**用 cat >、tee、heredoc 等 Bash 方式绕过 Write 工具。\n` +
+      `3. 如果 Write 和 Read 均失败，记录失败并停止当前 step。\n` +
+      `\n` +
+      `创建目录: \`mkdir -p ${docsRoot}/{scan,modules,flows} ${projectsRoot} ${changesRoot}\`\n`
+    )
+    if (platformOpts.runtimeRoot) {
+      const scanRunId = platformOpts.scanRunId || 'scan-' + new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-')
+      platformDirectives.push(
+        `运行时产物写入: \`${platformOpts.runtimeRoot}/scan-runs/${scanRunId}/\`\n`
+      )
+    }
+    if (platformOpts.workspaceId) {
+      platformDirectives.push(`workspace_id: ${platformOpts.workspaceId}`)
+    }
+    promptText = platformDirectives.join('\n') + '\n\n' + promptText
+  } else {
+    // 非 platform 模式也要替换占位符
+    if (stageName === 'scan') {
+      const projectName = dbProjectName || basename(cwd)
+      const specSillyspec = join(cwd, '.sillyspec')
+      const docsRoot = join(specSillyspec, 'docs', projectName)
+      const projectsRoot = join(specSillyspec, 'projects')
+      promptText = promptText.replace(/\{DOCS_ROOT\}/g, docsRoot)
+      promptText = promptText.replace(/\{PROJECTS_ROOT\}/g, projectsRoot)
     }
   }
 
@@ -378,6 +409,13 @@ async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjec
   console.log('- 不要用 mv/rename 重命名变更目录，必须用 `sillyspec change-rename <旧名> <新名>`')
   console.log('- 文档类型文件（.md/.yaml/.json 等）头部必须包含 author（git 用户名）和 created_at（精确到秒）')
   console.log('- 执行构建/测试前必须先读 local.yaml，优先使用其中配置的命令、路径和环境变量；未配置时才使用默认值')
+  // 平台模式额外铁律
+  if (platformOpts?.specRoot || platformOpts?.runtimeRoot) {
+    const specSillyspec = platformOpts.specRoot || join(cwd, '.sillyspec')
+    console.log(`- **平台模式：所有文件只能写入 \`${specSillyspec}/\` 下的对应子目录，严禁写入源码目录。**`)
+    console.log('- **平台模式：Write 工具失败时，不允许用 cat > / tee / heredoc 等方式绕过。先 Read 再 Write，仍失败则记录并停止。**')
+    console.log('- **平台模式：local.yaml 中的 commands 必须在 package.json scripts 中真实存在，不存在的标记 unavailable。**')
+  }
   // 路径安全规则：防止 AI 拼错变更目录
   if (changeName) {
     const changeDir = join('.sillyspec', 'changes', changeName)
@@ -391,7 +429,7 @@ async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjec
 /**
  * sillyspec run <stage> 主命令
  */
-export async function runCommand(args, cwd) {
+export async function runCommand(args, cwd, specDir = null) {
   // 解析参数
   const stageName = args[0]
   const flags = args.slice(1)
@@ -416,20 +454,24 @@ export async function runCommand(args, cwd) {
   const isSkipApproval = flags.includes('--skip-approval')
 
   // 平台模式参数（供 SillyHub 等平台调用）
+  // --spec-dir 是统一参数名，--spec-root 保留为向后兼容别名
   const getFlagValue = (name) => {
     const idx = flags.indexOf(name)
     return idx !== -1 && flags[idx + 1] ? flags[idx + 1] : null
   }
+  const resolvedSpecDir = specDir || getFlagValue('--spec-dir') || getFlagValue('--spec-root');
   const platformOpts = {
-    specRoot: getFlagValue('--spec-root'),
-    runtimeRoot: getFlagValue('--runtime-root'),
+    specRoot: resolvedSpecDir ? resolve(resolvedSpecDir) : null,
+    runtimeRoot: getFlagValue('--runtime-root') ? resolve(getFlagValue('--runtime-root')) : null,
     workspaceId: getFlagValue('--workspace-id'),
     scanRunId: getFlagValue('--scan-run-id'),
   }
 
   // 跨 --done 生命周期：从 metadata 文件恢复 platformOpts
   // 首次 scan 时写入，所有后续调用（包括 run、--done、--skip）都读取
-  const platformOptsFile = join(cwd, '.sillyspec', '.runtime', 'platform-scan.json')
+  // 优先在 specDir 下查找，否则回退到 cwd/.sillyspec/.runtime/
+  const specRoot = platformOpts.specRoot || resolveSpecDir(cwd)
+  const platformOptsFile = join(specRoot, '.runtime', 'platform-scan.json')
   let platformFileExists = existsSync(platformOptsFile)
   // 如果命令行没传 spec-root，尝试从持久化文件恢复
   if (!platformOpts.specRoot && !platformOpts.runtimeRoot) {
@@ -461,7 +503,7 @@ export async function runCommand(args, cwd) {
   if (platformOpts.specRoot || platformOpts.runtimeRoot) {
     try {
       const { mkdirSync, writeFileSync } = await import('fs')
-      mkdirSync(join(cwd, '.sillyspec', '.runtime'), { recursive: true })
+      mkdirSync(join(specRoot, '.runtime'), { recursive: true })
       writeFileSync(platformOptsFile, JSON.stringify({
         specRoot: platformOpts.specRoot,
         runtimeRoot: platformOpts.runtimeRoot,
@@ -509,7 +551,7 @@ export async function runCommand(args, cwd) {
   const knownFlags = new Set([
     '--done', '--skip', '--status', '--reset', '--confirm', '--skip-approval',
     '--output', '--input', '--change',
-    '--spec-root', '--runtime-root', '--workspace-id', '--scan-run-id',
+    '--spec-dir', '--spec-root', '--runtime-root', '--workspace-id', '--scan-run-id',
     '--files', '--allow-new', '--force-baseline',
     '--json', '--dir', '--help',
   ])
@@ -528,17 +570,17 @@ export async function runCommand(args, cwd) {
 
   const isAuxiliary = auxiliaryStages.includes(stageName)
 
-  const pm = new ProgressManager()
+  const pm = new ProgressManager({ specDir: specRoot })
   let progress = await pm.read(cwd, changeName)
 
   if (!progress) {
     // 如果指定了变更名或有变更目录，自动初始化变更的 progress
-    const autoChange = changeName || resolveChangeNameAuto(cwd)
+    const autoChange = changeName || resolveChangeNameAuto(cwd, specRoot)
     if (autoChange) {
       progress = await pm.initChange(cwd, autoChange)
     } else if (isAuxiliary) {
       // 辅助阶段（scan/explore/quick/doctor/status）自动使用默认变更名
-      const autoName = changeName || resolveChangeNameAuto(cwd) || 'default'
+      const autoName = changeName || resolveChangeNameAuto(cwd, specRoot) || 'default'
       changeName = autoName
       progress = await pm.initChange(cwd, autoName)
       // initChange 可能因 project 表为空返回 null
@@ -563,7 +605,7 @@ export async function runCommand(args, cwd) {
   }
 
   // 确保 progress 有 currentChange
-  const effectiveChange = changeName || progress.currentChange || resolveChangeName(cwd, progress)
+  const effectiveChange = changeName || progress.currentChange || resolveChangeName(cwd, progress, specRoot)
 
   // -- auto 模式：自动推进所有流程阶段
   if (stageName === 'auto') {
@@ -582,7 +624,7 @@ export async function runCommand(args, cwd) {
   }
 
   // 确保步骤已初始化
-  const changed = await ensureStageSteps(progress, stageName, cwd)
+  const changed = await ensureStageSteps(progress, stageName, cwd, specRoot)
   if (changed && effectiveChange) {
     await pm._write(cwd, progress, effectiveChange)
     triggerSync(cwd, effectiveChange)
@@ -611,8 +653,8 @@ export async function runCommand(args, cwd) {
 /**
  * 自动推导变更名（不依赖 progress）
  */
-function resolveChangeNameAuto(cwd) {
-  const changesDir = join(cwd, '.sillyspec', 'changes')
+function resolveChangeNameAuto(cwd, specDir = null) {
+  const changesDir = join(specDir || resolveSpecDir(cwd), 'changes')
   if (!existsSync(changesDir)) return null
   const entries = readdirSync(changesDir, { withFileTypes: true })
     .filter(e => e.isDirectory() && e.name !== 'archive')
@@ -1034,8 +1076,8 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
       appendFileSync(inputsPath, entry)
     }
 
-    // 平台模式：scan 完成后生成 manifest.json
-    if (stageName === 'scan' && platformOpts.specRoot) {
+    // 平台模式：scan 完成后生成 manifest.json + post-check
+    if (stageName === 'scan' && (platformOpts.specRoot || platformOpts.runtimeRoot)) {
       try {
         const { mkdirSync, writeFileSync } = await import('fs')
         const { join } = await import('path')
@@ -1061,27 +1103,50 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
         }
         // 清理平台参数临时文件
         const { unlinkSync } = await import('fs')
-        const platformOptsFile = join(cwd, '.sillyspec', '.runtime', 'platform-scan.json')
+        const platformOptsFile = join(specRoot, '.runtime', 'platform-scan.json')
         try { unlinkSync(platformOptsFile) } catch {}
 
-        // 平台模式后置校验：检查 source_root 是否被污染
-        if (platformOpts.specRoot) {
-          const { readdirSync } = await import('fs')
-          const localDocsDir = join(cwd, '.sillyspec', 'docs')
-          try {
-            if (existsSync(localDocsDir)) {
-              const entries = readdirSync(localDocsDir, { recursive: true }).filter(e => e.endsWith('.md'))
-              if (entries.length > 0) {
-                console.warn(`⚠️ 平台模式后置校验：source_root 下存在 ${entries.length} 个文档文件：`)
-                console.warn(`   路径：${localDocsDir}/`)  
-                console.warn(`   可能原因：agent 未遵守路径覆盖，将文档写入到了 cwd 而非 spec-root`)
-              }
-            }
-          } catch {}
+        // CLI 层 post-check（替代旧的简单检查）
+        const { runScanPostCheck, printScanPostCheckResult } = await import('./scan-postcheck.js')
+        const postResult = runScanPostCheck({
+          cwd,
+          specDir: platformOpts.specRoot,
+          outputText,
+        })
+        printScanPostCheckResult(postResult)
+
+        // 将 post-check 结果写入 manifest
+        manifest.scan_post_check = {
+          status: postResult.status,
+          checks: postResult.checks,
+        }
+        // 更新 manifest
+        writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n')
+        console.log(`📄 manifest.json 已更新（含 post-check 结果）`)
+
+        // failed_post_check 时强制阻止 clean success
+        if (postResult.status === 'failed_post_check') {
+          stageData.status = 'failed_post_check'
+          stageData.completedAt = new Date().toLocaleString('zh-CN',{hour12:false})
+          await pm._write(cwd, progress, changeName)
+          console.error(`\n❌ scan post-check 失败，状态设为 failed_post_check。不允许 clean success。`)
+          console.error(`   请检查上方错误信息并修复后重新 scan。`)
+        } else if (postResult.status === 'completed_with_warnings') {
+          // 警告不阻止完成，但记录
+          stageData.status = 'completed'
+          stageData.completedAt = new Date().toLocaleString('zh-CN',{hour12:false})
+          await pm._write(cwd, progress, changeName)
         }
       } catch (e) {
         console.warn(`⚠️  manifest.json 写入失败: ${e.message}`)
       }
+    }
+
+    // 非 platform 模式 scan 也做轻量 post-check
+    if (stageName === 'scan' && !platformOpts.specRoot && !platformOpts.runtimeRoot) {
+      const { runScanPostCheck, printScanPostCheckResult } = await import('./scan-postcheck.js')
+      const postResult = runScanPostCheck({ cwd, specDir: null, outputText })
+      printScanPostCheckResult(postResult)
     }
 
     validateMetadata(cwd, stageName)

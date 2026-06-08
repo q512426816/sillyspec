@@ -22,6 +22,7 @@ SillySpec CLI — 规范驱动开发工具包
     [--tool <name>]            只安装指定工具
     [--interactive]            交互式引导
     [--dir <path>]             指定目录
+    [--spec-dir <path>]        指定规范目录（默认 <项目>/.sillyspec）
 
   sillyspec setup [--list]     安装推荐 MCP 工具
     [--list]                   查看已安装状态
@@ -32,7 +33,7 @@ SillySpec CLI — 规范驱动开发工具包
     --status                   查看阶段进度
     --reset                    重置阶段
     --change <name>            设置当前变更名
-    --spec-root <path>         平台模式：SillySpec storage root 路径
+    --spec-dir <path>          指定规范目录（默认 <项目>/.sillyspec）
     --runtime-root <path>       平台模式：运行时产物根路径
     --workspace-id <id>         平台模式：workspace ID
     --scan-run-id <id>          平台模式：scan run ID
@@ -70,9 +71,11 @@ SillySpec CLI — 规范驱动开发工具包
 选项:
   --json                       输出 JSON（给 AI 程序化读取）
   --dir <path>                 指定项目目录（默认当前目录）
+  --spec-dir <path>            指定规范目录（默认 <项目目录>/.sillyspec）
 
 示例:
   sillyspec init
+  sillyspec init --spec-dir /data/specs/my-project
   sillyspec run scan
   sillyspec run brainstorm
   sillyspec run quick
@@ -100,6 +103,7 @@ async function main() {
   let json = false;
   let saveWorkflowRunFlag = false;
   let targetDir = process.cwd();
+  let specDir = null;
   let tool = null;
   let interactive = false;
   const filteredArgs = [];
@@ -111,6 +115,9 @@ async function main() {
       saveWorkflowRunFlag = true;
     } else if (args[i] === '--dir' && args[i + 1]) {
       targetDir = resolve(args[i + 1]);
+      i++;
+    } else if (args[i] === '--spec-dir' && args[i + 1]) {
+      specDir = resolve(args[i + 1]);
       i++;
     } else if (args[i] === '--tool' && args[i + 1]) {
       tool = args[i + 1];
@@ -144,7 +151,7 @@ async function main() {
 
   switch (command) {
     case 'init':
-      await cmdInit(dir, { tool, interactive });
+      await cmdInit(dir, { tool, interactive, specDir });
       break;
     case 'setup':
       const setupList = filteredArgs.includes('--list') || filteredArgs.includes('-l');
@@ -247,7 +254,7 @@ async function main() {
     }
     case 'run': {
       const { runCommand } = await import('./run.js')
-      await runCommand(filteredArgs.slice(1), dir)
+      await runCommand(filteredArgs.slice(1), dir, specDir)
       break
     }
     case 'dashboard': {
@@ -278,7 +285,7 @@ async function main() {
       const wtSubCmd = filteredArgs[1];
       const wtName = filteredArgs.slice(2).find(a => !a.startsWith('-'));
       const wm = new WorktreeManager({ cwd: dir });
-      const pm = new ProgressManager();
+      const pm = new ProgressManager({ specDir });
 
       // isolation 写入 DB 的辅助函数
       async function _writeIsolationToDB(cwd, changeName, info) {
@@ -525,7 +532,7 @@ SillySpec platform — SillyHub 平台同步
         console.error('❌ 用法: sillyspec change-rename <旧变更名> <新变更名>');
         process.exit(1);
       }
-      const pm = new ProgressManager();
+      const pm = new ProgressManager({ specDir });
       await pm.renameChange(dir, oldName, newName);
       break;
     }

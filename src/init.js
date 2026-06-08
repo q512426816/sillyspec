@@ -103,30 +103,35 @@ function isTTY() {
 
 // ── 核心安装逻辑 ──
 
-async function doInstall(projectDir, tools, subprojects = []) {
+async function doInstall(projectDir, tools, subprojects = [], specDir = null) {
+  // specDir: 规范目录（默认 projectDir/.sillyspec）
+  // projectDir: 源码项目根目录（用于工具检测、指令注入、.gitignore）
+  const spec = specDir || join(projectDir, '.sillyspec');
+
   // 创建基础目录
-  // .sillyspec/projects/    → 项目注册表
-  // .sillyspec/docs/<name>/ → 统一文档中心
-  // .sillyspec/knowledge/   → 跨项目共享知识库
-  // .sillyspec/.runtime/    → progress (gitignored)
+  // spec/projects/    → 项目注册表
+  // spec/docs/<name>/ → 统一文档中心
+  // spec/knowledge/   → 跨项目共享知识库
+  // spec/.runtime/    → progress (gitignored)
 
   // 注册当前项目到 projects/
   const projectName = basename(projectDir) || 'project';
-  const projectsDir = join(projectDir, '.sillyspec', 'projects');
+  const projectsDir = join(spec, 'projects');
   mkdirSync(projectsDir, { recursive: true });
   const projectYamlPath = join(projectsDir, `${projectName}.yaml`);
   if (!existsSync(projectYamlPath)) {
-    writeFileSync(projectYamlPath, `name: ${projectName}\npath: .\nstatus: active\n`);
+    // path 相对于 specDir，跨平台可寻址
+    writeFileSync(projectYamlPath, `name: ${projectName}\npath: ${projectDir}\nstatus: active\n`);
   }
 
-  // 创建 .sillyspec/docs/<projectName>/scan/ 子目录（代码扫描结果）
-  const scanDir = join(projectDir, '.sillyspec', 'docs', projectName, 'scan');
+  // 创建 docs/<projectName>/scan/ 子目录（代码扫描结果）
+  const scanDir = join(spec, 'docs', projectName, 'scan');
   mkdirSync(scanDir, { recursive: true });
   const gitkeepPath = join(scanDir, '.gitkeep');
   if (!existsSync(gitkeepPath)) writeFileSync(gitkeepPath, '');
 
-  // 复制 workflow 模板到 .sillyspec/workflows/
-  const workflowsDir = join(projectDir, '.sillyspec', 'workflows');
+  // 复制 workflow 模板到 workflows/
+  const workflowsDir = join(spec, 'workflows');
   const templatesDir = join(__dirname, '..', 'templates', 'workflows');
   if (existsSync(templatesDir)) {
     mkdirSync(workflowsDir, { recursive: true });
@@ -142,11 +147,11 @@ async function doInstall(projectDir, tools, subprojects = []) {
   }
 
   // 创建 shared/workspace 目录
-  mkdirSync(join(projectDir, '.sillyspec', 'shared'), { recursive: true });
-  mkdirSync(join(projectDir, '.sillyspec', 'workspace'), { recursive: true });
+  mkdirSync(join(spec, 'shared'), { recursive: true });
+  mkdirSync(join(spec, 'workspace'), { recursive: true });
 
   // 创建知识库骨架
-  const knowledgeDir = join(projectDir, '.sillyspec', 'knowledge');
+  const knowledgeDir = join(spec, 'knowledge');
   mkdirSync(knowledgeDir, { recursive: true });
   const indexPath = join(knowledgeDir, 'INDEX.md');
   if (!existsSync(indexPath)) {
@@ -157,29 +162,33 @@ async function doInstall(projectDir, tools, subprojects = []) {
     writeFileSync(uncatPath, `# 未分类知识\n\n> execute/quick 执行中发现的坑暂存于此，用户审阅后归类到对应文件并更新 INDEX.md。\n`);
   }
 
-  // 创建 .sillyspec/.runtime/ 目录结构（全局状态）
-  const runtimeDir = join(projectDir, '.sillyspec', '.runtime');
+  // 创建 .runtime/ 目录结构（全局状态）
+  const runtimeDir = join(spec, '.runtime');
   for (const sub of ['artifacts', 'history', 'logs', 'templates']) {
     mkdirSync(join(runtimeDir, sub), { recursive: true });
   }
 
-  // 初始化 SQLite 数据库（创建 DB + 建表 + 写入 project 行 + user-inputs.md）
-  const pm = new ProgressManager();
+  // 初始化 SQLite 数据库
+  const pm = new ProgressManager({ specDir: spec });
   await pm.init(projectDir);
 
-  const gitignorePath = join(projectDir, '.gitignore');
-  const ignoreRules = ['.sillyspec/codebase/SCAN-RAW.md', '.sillyspec/local.yaml', '.sillyspec/.runtime/'];
-  if (existsSync(gitignorePath)) {
-    const content = readFileSync(gitignorePath, 'utf8');
-    let updated = content.trimEnd();
-    for (const rule of ignoreRules) {
-      if (!updated.includes(rule)) {
-        updated += '\n' + rule;
+  // .gitignore 只在 specDir 在项目内时才修改
+  const isExternalSpec = specDir && resolve(spec) !== resolve(projectDir, '.sillyspec');
+ if (!isExternalSpec) {
+    const gitignorePath = join(projectDir, '.gitignore');
+    const ignoreRules = ['.sillyspec/codebase/SCAN-RAW.md', '.sillyspec/local.yaml', '.sillyspec/.runtime/'];
+    if (existsSync(gitignorePath)) {
+      const content = readFileSync(gitignorePath, 'utf8');
+      let updated = content.trimEnd();
+      for (const rule of ignoreRules) {
+        if (!updated.includes(rule)) {
+          updated += '\n' + rule;
+        }
       }
+      writeFileSync(gitignorePath, updated + '\n');
+    } else {
+      writeFileSync(gitignorePath, ignoreRules.join('\n') + '\n');
     }
-    writeFileSync(gitignorePath, updated + '\n');
-  } else {
-    writeFileSync(gitignorePath, ignoreRules.join('\n') + '\n');
   }
 
   // 注入指令文件（codex/gemini/opencode）
@@ -218,7 +227,7 @@ async function doInstall(projectDir, tools, subprojects = []) {
 
 // ── 安装完成总结 ──
 
-function showSummary(version, tools) {
+function showSummary(version, tools, specDir) {
   const toolLabels = tools.map(t => TOOL_LABELS[t] || t);
 
   console.log('');
@@ -227,7 +236,7 @@ function showSummary(version, tools) {
   console.log(chalk.green('  ═══════════════════════════════════════'));
   console.log('');
   console.log(`  已安装工具: ${chalk.cyan(toolLabels.join(', '))}`);
-  console.log('  📁 .sillyspec/ — 项目规范目录');
+  console.log(`  📁 规范目录: ${chalk.cyan(specDir || '.sillyspec')}`);
   console.log('');
   console.log('  下一步：使用 AI 技能开始工作');
   console.log('    OpenClaw:    ' + chalk.bold('/sillyspec:brainstorm'));
@@ -251,8 +260,9 @@ export function getVersion() {
 // ── 主命令 ──
 
 export async function cmdInit(projectDir, options = {}) {
-  const { tool, interactive } = options;
+  const { tool, interactive, specDir } = options;
   const version = getVersion();
+  const resolvedSpecDir = specDir ? resolve(specDir) : null;
 
   // ── 交互式模式（--interactive 或 -i）──
   if (interactive && isTTY()) {
@@ -350,8 +360,8 @@ export async function cmdInit(projectDir, options = {}) {
     }
 
     console.log('');
-    await doInstall(projectDir, selectedTools, subprojects);
-    showSummary(version, selectedTools);
+    await doInstall(projectDir, selectedTools, subprojects, resolvedSpecDir);
+    showSummary(version, selectedTools, resolvedSpecDir);
     return;
   }
 
@@ -369,12 +379,13 @@ export async function cmdInit(projectDir, options = {}) {
     tools = detectTools(projectDir);
   }
 
-  await doInstall(projectDir, tools);
+  await doInstall(projectDir, tools, [], resolvedSpecDir);
 
   console.log('');
   console.log(chalk.green(`  ✅ SillySpec v${version} 安装完成！`));
   console.log('');
-  console.log('  📁 .sillyspec/ — 项目规范目录');
+  const specDisplay = resolvedSpecDir || '.sillyspec';
+  console.log(`  📁 规范目录: ${chalk.cyan(specDisplay)}`);
   console.log('');
   console.log('  下一步：使用 AI 技能开始工作');
   console.log(`    OpenClaw:    ${chalk.bold('/sillyspec:brainstorm')}`);
