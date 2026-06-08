@@ -475,19 +475,12 @@ export async function runCommand(args, cwd, specDir = null) {
   // 首次 scan 时写入，所有后续调用（包括 run、--done、--skip）都读取
   // 优先在 specDir 下查找，否则回退到 cwd/.sillyspec/.runtime/
   const specRoot = platformOpts.specRoot || resolveSpecDir(cwd)
-  // platform-scan.json 搜索策略（多路径兼容）：
-  // 平台模式首次 scan 写入 specRoot/.runtime/，但后续 --done 可能不带 --spec-root
-  // 需要在多个候选位置搜索
-  const candidatePaths = []
-  if (platformOpts.specRoot) {
-    candidatePaths.push(join(platformOpts.specRoot, '.runtime', 'platform-scan.json'))
-  }
-  if (resolvedSpecDir) {
-    candidatePaths.push(join(resolve(resolvedSpecDir), '.runtime', 'platform-scan.json'))
-  }
-  candidatePaths.push(join(specRoot, '.runtime', 'platform-scan.json')) // cwd/.sillyspec/.runtime/
-
-  let platformOptsFile = candidatePaths.find(p => existsSync(p)) || candidatePaths[0]
+  // 平台参数恢复策略：
+  // 1. 优先检查 cwd/.sillyspec-platform.json（轻量指针文件，不污染 .sillyspec 结构）
+  // 2. 然后检查 specRoot/.runtime/platform-scan.json（首次 scan 写入）
+  const platformPointer = join(cwd, '.sillyspec-platform.json')
+  const platformScanFile = join(specRoot, '.runtime', 'platform-scan.json')
+  let platformOptsFile = existsSync(platformPointer) ? platformPointer : platformScanFile
   let platformFileExists = existsSync(platformOptsFile)
   // 如果命令行没传 spec-root，尝试从持久化文件恢复
   if (!platformOpts.specRoot && !platformOpts.runtimeRoot) {
@@ -528,10 +521,9 @@ export async function runCommand(args, cwd, specDir = null) {
         scanRunId: platformOpts.scanRunId,
         savedAt: new Date().toISOString(),
       }, null, 2) + '\n')
-      // 恢复指针：在 cwd/.sillyspec/.runtime/ 也写一份，供后续 --done（不带 --spec-root）找到
-      const cwdRuntimeDir = join(cwd, '.sillyspec', '.runtime')
-      mkdirSync(cwdRuntimeDir, { recursive: true })
-      writeFileSync(join(cwdRuntimeDir, 'platform-scan.json'), JSON.stringify({
+      // 恢复指针：在 cwd 下写 .sillyspec-platform.json（不在 .sillyspec 内，不污染源码结构）
+      // 供后续 --done（不带 --spec-root）找到 specDir
+      writeFileSync(join(cwd, '.sillyspec-platform.json'), JSON.stringify({
         specRoot: platformOpts.specRoot,
         runtimeRoot: platformOpts.runtimeRoot,
         workspaceId: platformOpts.workspaceId,
@@ -542,6 +534,10 @@ export async function runCommand(args, cwd, specDir = null) {
       // 静默失败，不影响主流程
     }
   }
+
+  // 统一规范基路径：平台模式用 specRoot，本地模式用 cwd/.sillyspec
+  // runCommand 后续所有 .sillyspec/ 操作必须用 specBase
+  const specBase = platformOpts.specRoot || join(cwd, '.sillyspec')
 
   // 解析 --output
   let outputText = null
@@ -777,7 +773,7 @@ async function runStage(pm, progress, stageName, cwd, changeName, skipApproval =
         startedAt: new Date().toISOString(),
       }
       // 写入 quick-guard.json 供 worktree-guard hook 读取
-      const guardFile = join(cwd, '.sillyspec', '.runtime', 'quick-guard.json')
+      const guardFile = join(specBase, '.runtime', 'quick-guard.json')
       writeFileSync(guardFile, JSON.stringify(progress.quickGuard, null, 2))
       const parts = [`${baselineFiles.length} 个已有脏文件`]
       if (allowedFiles.length > 0) parts.push(`${allowedFiles.length} 个 allowedFiles`)
@@ -802,8 +798,8 @@ async function runStage(pm, progress, stageName, cwd, changeName, skipApproval =
   }
 }
 
-function validateMetadata(cwd, stageName) {
-  const changesDir = join(cwd, '.sillyspec', 'changes')
+function validateMetadata(cwd, stageName, specBase) {
+  const changesDir = join(specBase, 'changes')
   if (!existsSync(changesDir)) return
 
   const cutoff = Date.now() - 10 * 60 * 1000
@@ -837,11 +833,11 @@ function validateMetadata(cwd, stageName) {
  * 验证关键文件是否存在于正确的变更目录下
  * 防止 AI 将文件写到错误的路径
  */
-function validateFileLocations(cwd, stageName, progress, changeName) {
+function validateFileLocations(cwd, stageName, progress, changeName, specBase) {
   const effectiveChange = changeName || progress.currentChange
   if (!effectiveChange) return
 
-  const changeDir = join(cwd, '.sillyspec', 'changes', effectiveChange)
+  const changeDir = join(specBase, 'changes', effectiveChange)
   if (!existsSync(changeDir)) return
 
   // 每个阶段完成后预期存在的文件
@@ -867,7 +863,7 @@ function validateFileLocations(cwd, stageName, progress, changeName) {
     console.log(`  变更目录：${changeDir.replace(cwd + '/', '')}/`)
     for (const f of missing) {
       // 检查是否写到了错误的位置
-      const wrongPath = join(cwd, '.sillyspec', 'changes', 'change', effectiveChange, f)
+      const wrongPath = join(specBase, 'changes', 'change', effectiveChange, f)
       if (existsSync(wrongPath)) {
         console.log(`  ❌ ${f} — 不存在，但发现了错误路径：${wrongPath.replace(cwd + '/', '')}`)
         console.log(`     提示：应该写入 ${changeDir.replace(cwd + '/', '')}/${f}`)
@@ -887,7 +883,7 @@ async function archiveChangeDirectory(pm, cwd, progress) {
     console.error('❌ 归档失败：未找到当前变更名（currentChange）')
     process.exit(1)
   }
-  const changesDir = join(cwd, '.sillyspec', 'changes')
+  const changesDir = join(specBase, 'changes')
   const archiveDir = join(changesDir, 'archive')
   const srcDir = join(changesDir, archiveChangeName)
   const date = new Date().toISOString().slice(0, 10)
@@ -915,6 +911,7 @@ async function archiveChangeDirectory(pm, cwd, progress) {
 
 async function completeStep(pm, progress, stageName, cwd, outputText, inputText = null, options = {}) {
   const { printNext = true, confirm = false, changeName, platformOpts = {} } = options
+  const specBase = platformOpts.specRoot || join(cwd, '.sillyspec')
   const stageData = progress.stages[stageName]
   if (!stageData || !stageData.steps) {
     console.error(`❌ 阶段 ${stageName} 未初始化`)
@@ -938,7 +935,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
       // 平台模式：artifact 写入 runtime-root，否则写 .sillyspec/.runtime/artifacts
       const artifactBase = platformOpts?.runtimeRoot
         ? join(platformOpts.runtimeRoot, 'scan-runs', platformOpts.scanRunId || 'unknown')
-        : join(cwd, '.sillyspec', '.runtime', 'artifacts')
+        : join(specBase, '.runtime', 'artifacts')
       mkdirSync(artifactBase, { recursive: true })
       const ts = new Date().toISOString().slice(0,19).replace(/[-T:]/g, '')
       writeFileSync(join(artifactBase, `${changeName || 'unknown'}-${stageName}-step${currentIdx + 1}-${ts}.txt`), outputText)
@@ -1019,7 +1016,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
     if (projectNames.length === 0) {
       // 回退：读取所有已注册项目
       console.warn('⚠️ 未能从 step 2 输出解析项目列表，回退扫描所有注册项目')
-      const projectsDir = join(cwd, '.sillyspec', 'projects')
+      const projectsDir = join(specBase, 'projects')
       if (existsSync(projectsDir)) {
         projectNames = readdirSync(projectsDir)
           .filter(f => f.endsWith('.yaml'))
@@ -1031,8 +1028,8 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
     }
 
     // 保存到 runtime 供后续使用 + 防重复展开
-    const scanStatePath = join(cwd, '.sillyspec', '.runtime', 'scan-projects.json')
-    mkdirSync(join(cwd, '.sillyspec', '.runtime'), { recursive: true })
+    const scanStatePath = join(specBase, '.runtime', 'scan-projects.json')
+    mkdirSync(join(specBase, '.runtime'), { recursive: true })
     let scanState = { projects: projectNames, expanded: false }
     if (existsSync(scanStatePath)) {
       try { scanState = JSON.parse(readFileSync(scanStatePath, 'utf8')) } catch {}
@@ -1051,14 +1048,14 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
       let insertPos = insertBase
       for (const pName of projectNames) {
         // 读取项目配置获取 projectRoot
-        const projYaml = join(cwd, '.sillyspec', 'projects', `${pName}.yaml`)
+        const projYaml = join(specBase, 'projects', `${pName}.yaml`)
         let projectRoot = '.'
         if (existsSync(projYaml)) {
           const yamlContent = readFileSync(projYaml, 'utf8')
           const pathMatch = yamlContent.match(/^path:\s*(.+)/m)
           if (pathMatch) projectRoot = pathMatch[1].trim()
         }
-        const docOutputDir = `.sillyspec/docs/${pName}`
+        const docOutputDir = platformOpts.specRoot ? `${specBase}/docs/${pName}` : `.sillyspec/docs/${pName}`
         const contextPrefix = `\n---\n## 当前项目\n- **项目名**: ${pName}\n- **项目路径**: ${projectRoot}\n- **文档输出**: ${docOutputDir}\n\n⚠️ 本步骤只处理上面这个项目，不要处理其他项目。\n---\n\n`
 
         for (const ppStep of perProjectSteps) {
@@ -1098,7 +1095,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
 
     // Append to user-inputs.md
     if (outputText) {
-      const inputsPath = join(cwd, '.sillyspec', '.runtime', 'user-inputs.md')
+      const inputsPath = join(specBase, '.runtime', 'user-inputs.md')
       const entry = `\n## ${new Date().toLocaleString('zh-CN',{hour12:false})} | ${changeName || '?'} | ${stageName}: ${steps[currentIdx].name}\n${inputText ? "- 输入：" + inputText + "\n" : ""}- 输出：${outputText}\n`
       appendFileSync(inputsPath, entry)
     }
@@ -1109,7 +1106,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
         const { mkdirSync, writeFileSync } = await import('fs')
         const { join } = await import('path')
         const { execSync } = await import('child_process')
-        const manifestDir = join(platformOpts.specRoot, '.sillyspec')
+        const manifestDir = platformOpts.specRoot
         mkdirSync(manifestDir, { recursive: true })
         let sourceCommit = null
         try {
@@ -1176,10 +1173,10 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
       printScanPostCheckResult(postResult)
     }
 
-    validateMetadata(cwd, stageName)
+    validateMetadata(cwd, stageName, specBase)
 
     // 验证关键文件是否在正确的变更目录下
-    validateFileLocations(cwd, stageName, progress, changeName)
+    validateFileLocations(cwd, stageName, progress, changeName, specBase)
 
     // 辅助阶段完成后重置步骤
     const stageDef = stageRegistry[stageName]
@@ -1251,7 +1248,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
     // 清理 quick-guard.json
     try {
       const { unlinkSync } = await import('fs')
-      const guardFile = join(cwd, '.sillyspec', '.runtime', 'quick-guard.json')
+      const guardFile = join(specBase, '.runtime', 'quick-guard.json')
       unlinkSync(guardFile)
     } catch {}
     if (review.status === 'blocked') {
@@ -1276,7 +1273,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
 
   // Append to user-inputs.md
   if (outputText) {
-    const inputsPath = join(cwd, '.sillyspec', '.runtime', 'user-inputs.md')
+    const inputsPath = join(specBase, '.runtime', 'user-inputs.md')
     const entry = `\n## ${new Date().toLocaleString('zh-CN',{hour12:false})} | ${changeName || '?'} | ${stageName}: ${steps[currentIdx].name}\n${inputText ? "- 输入：" + inputText + "\n" : ""}- 输出：${outputText}\n`
     appendFileSync(inputsPath, entry)
   }
@@ -1302,7 +1299,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
           projectsToCheck = [currentProjectName]
         } else {
           // 兼容旧模式（未展开）：检查所有项目
-          const projectsDir = join(cwd, '.sillyspec', 'projects')
+          const projectsDir = join(specBase, 'projects')
           const projectFiles = existsSync(projectsDir)
             ? readdirSync(projectsDir).filter(f => f.endsWith('.yaml'))
             : []

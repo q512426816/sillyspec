@@ -60,14 +60,16 @@ console.log('\n=== Test 1: platform-scan.json 写入位置 ===')
   run(`node "${binCLI}" --dir "${cwd}" --spec-dir "${sd}" run scan --spec-root "${sd}" --runtime-root "${sd}/runtime" --workspace-id ws1 --scan-run-id sr1`)
 
   const inSpecDir = join(sd, '.runtime', 'platform-scan.json')
-  const inCwd = join(cwd, '.sillyspec', '.runtime', 'platform-scan.json')
+  const pointerFile = join(cwd, '.sillyspec-platform.json')
   assert(existsSync(inSpecDir), `platform-scan.json 在 specDir/.runtime/`)
-  assert(existsSync(inCwd), `恢复指针也写入 cwd/.sillyspec/.runtime/`)
+  assert(existsSync(pointerFile), `恢复指针在 cwd/.sillyspec-platform.json（不在 .sillyspec 内）`)
 
   const content = JSON.parse(readFileSync(inSpecDir, 'utf8'))
   assert(content.specRoot === sd, `specRoot 指向 specDir`)
   assert(content.workspaceId === 'ws1', `workspaceId 保存正确`)
   assert(content.scanRunId === 'sr1', `scanRunId 保存正确`)
+  // 关键：cwd/.sillyspec/ 不应被创建
+  assert(!existsSync(join(cwd, '.sillyspec')), `cwd/.sillyspec/ 未被创建（源码零污染）`)
   clean(cwd, sd)
 }
 
