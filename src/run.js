@@ -1515,7 +1515,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
       const numbered = outputText.match(/^\s*\d+\.\s+(\S+)/gm)
       if (numbered) {
         projectNames = numbered.map(m => m.replace(/^\s*\d+\.\s+/, '').replace(/[—\-:].*$/, '').trim())
-        if (projectNames.length > 0) _scanProjectListParsed = true
+        if (projectNames.length > 0) { _scanProjectListParsed = true; stageData.scanMeta = stageData.scanMeta || {}; stageData.scanMeta.projectListParsed = true; }
       }
       // 匹配方式 2: 括号枚举 "子项目frontend/order-service/user-service" 或 "项目: a, b, c"
       if (projectNames.length === 0) {
@@ -1525,7 +1525,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
             .split(/[\/、,，]+/)
             .map(s => s.trim())
             .filter(Boolean)
-          if (projectNames.length > 0) _scanProjectListParsed = true
+          if (projectNames.length > 0) { _scanProjectListParsed = true; stageData.scanMeta = stageData.scanMeta || {}; stageData.scanMeta.projectListParsed = true; }
         }
       }
       // 匹配方式 3: 结构化 YAML block "scan_projects:\n  - id: name"
@@ -1533,14 +1533,14 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
         const yamlMatch = outputText.match(/scan_projects:\s*\n((?:\s+-\s+id:\s+\S+\s*\n?)+)/)
         if (yamlMatch) {
           projectNames = [...yamlMatch[1].matchAll(/-\s+id:\s*(\S+)/g)].map(m => m[1])
-          if (projectNames.length > 0) _scanProjectListParsed = true
+          if (projectNames.length > 0) { _scanProjectListParsed = true; stageData.scanMeta = stageData.scanMeta || {}; stageData.scanMeta.projectListParsed = true; }
         }
       }
     }
     if (projectNames.length === 0) {
       // 回退：读取所有已注册项目
       console.warn('⚠️ 未能从 step 2 输出解析项目列表，回退扫描所有注册项目')
-      _scanProjectListParsed = false
+      _scanProjectListParsed = false; stageData.scanMeta = stageData.scanMeta || {}; stageData.scanMeta.projectListParsed = false;
       const projectsDir = join(specBase, 'projects')
       if (existsSync(projectsDir)) {
         projectNames = readdirSync(projectsDir)
@@ -1660,7 +1660,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
     // 平台模式：scan 完成后生成 manifest.json + post-check
     if (stageName === 'scan' && (platformOpts.specRoot || platformOpts.runtimeRoot)) {
       try {
-        _scanManifestWritten = false // 默认失败
+        _scanManifestWritten = false; stageData.scanMeta = stageData.scanMeta || {}; stageData.scanMeta.manifestWritten = false; // 默认失败
         const { mkdirSync, writeFileSync } = await import('fs')
         const { join } = await import('path')
         const { execSync } = await import('child_process')
@@ -1680,7 +1680,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
         const manifestPath = join(manifestDir, 'manifest.json')
         writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n')
         console.log(`📄 manifest.json 已写入: ${manifestPath}`)
-        _scanManifestWritten = true
+        _scanManifestWritten = true; stageData.scanMeta = stageData.scanMeta || {}; stageData.scanMeta.manifestWritten = true;
         if (!sourceCommit) {
           console.log(`⚠️  source_commit 无法获取（可能非 git 目录），已设为 null`)
         }
@@ -1696,8 +1696,8 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
           specDir: platformOpts.specRoot,
           outputText,
           scanMeta: {
-            projectListParsed: _scanProjectListParsed,
-            manifestWritten: _scanManifestWritten,
+            projectListParsed: stageData.scanMeta?.projectListParsed ?? null,
+            manifestWritten: stageData.scanMeta?.manifestWritten ?? null,
           },
         })
         printScanPostCheckResult(postResult)
