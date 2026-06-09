@@ -169,6 +169,12 @@ export class DB {
     this._migrateAddColumn('changes', 'isolation_status', 'TEXT');
     this._migrateAddColumn('changes', 'isolation_mode', 'TEXT');
     this._migrateAddColumn('changes', 'isolation_reason', 'TEXT');
+
+    // Migration: add waiting support columns to steps table (idempotent)
+    this._migrateAddColumn('steps', 'wait_reason', 'TEXT');
+    this._migrateAddColumn('steps', 'wait_options', 'TEXT');
+    this._migrateAddColumn('steps', 'wait_answer', 'TEXT');
+    this._migrateAddColumn('steps', 'waited_at', 'TEXT');
   }
 
   /**

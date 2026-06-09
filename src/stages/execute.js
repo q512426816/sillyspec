@@ -87,17 +87,15 @@ sillyspec run execute --done --output "worktree 路径 + 分支名"`,
    - 简单修改 → 快速模型
    - 文档/写作 → 写作模型
 3. 用户在 tasks.md 中的 [model:xxx] 标签优先
-4. 询问用户执行确认频率：
-   - 每个 Wave 确认 — 每个 Wave 完成后展示结果
-   - AI 自主判断 — BLOCKED 或计划外变更时才询问
-   - 全自动 — 全部自动执行
+4. 读取 \`--confirm-mode\` 参数（由 CLI 传入，不需要询问用户）：
+   - wave — 每个 Wave 完成后展示结果（默认）
+   - task — 每个 Task 完成后展示结果
+   - auto — 全部自动执行
 5. 查询知识库：读取 \`.sillyspec/knowledge/INDEX.md\`，根据 Task 关键词匹配
 
-### 输出
-Wave 分组 + 模型分配 + 确认模式 + 知识库匹配结果
-
-### 注意
-- 默认推荐"每个 Wave 确认"`,
+### 铁律
+- **不要询问用户确认频率**，确认模式由 CLI \`--confirm-mode\` 参数决定
+- 如果未检测到 \`--confirm-mode\`，默认使用 wave 模式`,
     outputHint: 'Wave 分组 + 模型分配',
     optional: false
   }

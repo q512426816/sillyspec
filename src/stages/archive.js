@@ -11,7 +11,8 @@ export const definition = {
 1. 读取 \`.sillyspec/changes/<change-name>/plan.md\`
 2. 检查所有 \`- [x]\` checkbox 是否已勾选
 3. 如果 plan.md 不存在，回退读取 tasks.md 作为备选
-4. 如有遗漏 → 询问用户是否继续归档
+4. 如有遗漏 → **必须暂停等待用户决定**，不要自行判断"可以归档"
+   - 调用：\`sillyspec run archive --wait --reason "存在未完成任务，是否继续归档" --options "继续归档,回到execute完成剩余任务" --output "未完成任务列表"\`
 
 ### 输出
 完成度报告（已勾选/总数 + 未完成任务列表）`,
@@ -110,8 +111,10 @@ module_id: <module-id>
 <!-- MANUAL_NOTES_END -->
 \`\`\`
 
-4. 展示所有更新内容（diff 摘要），请用户确认
-5. 用户确认后，写入 _module-map.yaml 和受影响的模块卡片
+4. 展示所有更新内容（diff 摘要），**必须暂停等待用户确认**
+   - 调用：\`sillyspec run archive --wait --reason "等待用户确认模块文档同步" --options "确认写入,跳过同步" --output "diff 摘要"\`
+5. **只有用户通过 --continue --answer "确认写入" 后才写入文件**
+   - 写入 _module-map.yaml 和受影响的模块卡片
 6. 用户拒绝时，不写入，但提示"module-impact.md 已保留，可稍后手动同步"
 7. 回填 module-impact.md 的"更新结果"表格，区分目标：
    - 目标列写 "\`_module-map.yaml: <module-id>\`" 或 "\`modules/<module-id>.md\`"

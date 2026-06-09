@@ -22,7 +22,7 @@ const CHANGES_SUBDIR = 'changes';
 const GLOBAL_FILE = 'global.json';
 const CURRENT_VERSION = 3;
 const VALID_STAGES = ['scan', 'brainstorm', 'propose', 'plan', 'execute', 'verify', 'archive', 'quick', 'explore'];
-const VALID_STATUSES = ['pending', 'in-progress', 'completed', 'failed', 'blocked'];
+const VALID_STATUSES = ['pending', 'in-progress', 'completed', 'failed', 'blocked', 'waiting'];
 
 const STAGE_LABELS = {
   brainstorm: '🧠 需求探索',
@@ -207,16 +207,22 @@ export class ProgressManager {
     if (stageIds.length > 0) {
       const placeholders = stageIds.map(() => '?').join(',');
       stepRows = sqlDb.exec(
-        `SELECT stage_id, name, status, output, completed_at, ordering FROM steps WHERE stage_id IN (${placeholders}) ORDER BY stage_id, ordering`,
+        `SELECT stage_id, name, status, output, completed_at, ordering, wait_reason, wait_options, wait_answer, waited_at FROM steps WHERE stage_id IN (${placeholders}) ORDER BY stage_id, ordering`,
         stageIds
       );
     }
     // 按阶段分组步骤
     const stepsByStage = {};
     if (stepRows && stepRows.length > 0) {
-      for (const [stageId, name, status, output, completedAt, ordering] of stepRows[0].values) {
+      for (const [stageId, name, status, output, completedAt, ordering, waitReason, waitOptions, waitAnswer, waitedAt] of stepRows[0].values) {
         if (!stepsByStage[stageId]) stepsByStage[stageId] = [];
-        stepsByStage[stageId].push({ name, status, output, completedAt });
+        stepsByStage[stageId].push({
+          name, status, output, completedAt,
+          ...(waitReason ? { waitReason } : {}),
+          ...(waitOptions ? { waitOptions } : {}),
+          ...(waitAnswer ? { waitAnswer } : {}),
+          ...(waitedAt ? { waitedAt } : {}),
+        });
       }
     }
 
@@ -247,6 +253,10 @@ export class ProgressManager {
         status: s.status,
         output: s.output,
         completedAt: s.completedAt,
+        ...(s.waitReason ? { waitReason: s.waitReason } : {}),
+        ...(s.waitOptions ? { waitOptions: s.waitOptions } : {}),
+        ...(s.waitAnswer ? { waitAnswer: s.waitAnswer } : {}),
+        ...(s.waitedAt ? { waitedAt: s.waitedAt } : {}),
       }));
       stages[stage] = {
         status: info.status,
@@ -330,8 +340,9 @@ export class ProgressManager {
               // UPSERT 步骤（先删再插，steps 表无 UNIQUE 约束）
               sqlDb.run('DELETE FROM steps WHERE stage_id = ? AND name = ?', [stageId, step.name]);
               sqlDb.run(
-                'INSERT INTO steps (stage_id, name, status, output, completed_at, ordering) VALUES (?, ?, ?, ?, ?, ?)',
-                [stageId, step.name, step.status || 'pending', step.output || null, step.completedAt || null, i]
+                'INSERT INTO steps (stage_id, name, status, output, completed_at, ordering, wait_reason, wait_options, wait_answer, waited_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                [stageId, step.name, step.status || 'pending', step.output || null, step.completedAt || null, i,
+                  step.waitReason || null, step.waitOptions || null, step.waitAnswer || null, step.waitedAt || null]
               );
             }
           }
@@ -917,7 +928,7 @@ export class ProgressManager {
     console.log('  ═══════════════════════════════════════');
     console.log('');
 
-    const statusIcons = { pending: '⬜', 'in-progress': '🔵', completed: '✅', failed: '❌', blocked: '🚫' };
+    const statusIcons = { pending: '⬜', 'in-progress': '🔵', completed: '✅', failed: '❌', blocked: '🚫', waiting: '⏸️' };
 
     for (const stage of VALID_STAGES) {
       const stageData = data.stages[stage] || emptyStage();
@@ -931,7 +942,13 @@ export class ProgressManager {
         for (const step of stageData.steps) {
           const si = statusIcons[step.status] || '○';
           const out = step.output ? ` — ${step.output.slice(0, 60)}` : '';
-          console.log(`    ${si} ${step.name}${out}`);
+          const waitingTag = step.status === 'waiting' ? ' [WAITING]' : ''
+          console.log(`    ${si} ${step.name}${out}${waitingTag}`);
+          if (step.status === 'waiting') {
+            if (step.waitReason) console.log(`       原因：${step.waitReason}`);
+            if (step.waitOptions) console.log(`       选项：${(() => { try { const p = JSON.parse(step.waitOptions); return Array.isArray(p) ? p.join(', ') : step.waitOptions; } catch { return step.waitOptions; }})()}`);
+            if (step.waitedAt) console.log(`       等待时间：${step.waitedAt}`);
+          }
         }
       }
 
