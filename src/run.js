@@ -1859,6 +1859,18 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
       if (steps[wsIdx].waitReason) console.log(`   原因：${steps[wsIdx].waitReason}`)
       return { stageCompleted: false, currentIdx, nextPendingIdx: -1 }
     }
+    // quick 阶段完成前强制检查 quicklog 是否创建
+    if (stageName === 'quick') {
+      const quicklogDir = join(specBase, '.sillyspec', 'quicklog')
+      const hasQuicklog = existsSync(quicklogDir) && readdirSync(quicklogDir).some(f => f.endsWith('.md') && f.startsWith('QUICKLOG'))
+      if (!hasQuicklog) {
+        console.error(`\n❌ quick 阶段完成校验失败：未检测到 QUICKLOG 记录文件。`)
+        console.error(`   step 2 要求创建 quicklog 记录，但文件不存在。`) 
+        console.error(`   请先创建 quicklog 记录再 --done，或使用 --skip-approval 跳过此校验。`)
+        return { stageCompleted: false, currentIdx, nextPendingIdx: -1 }
+      }
+    }
+
     stageData.status = 'completed'
     stageData.completedAt = new Date().toLocaleString('zh-CN',{hour12:false})
     progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
