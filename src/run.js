@@ -1073,9 +1073,7 @@ export async function runCommand(args, cwd, specDir = null) {
   }
 
   const isAuxiliary = auxiliaryStages.includes(stageName)
-  // scan 元数据追踪（供 postcheck 使用）
-  let _scanProjectListParsed = undefined // undefined=未到达step2, true=解析成功, false=解析失败
-  let _scanManifestWritten = undefined // undefined=未尝试, true=成功, false=失败
+  // scan 元数据追踪（存储在 stageData.scanMeta 中，completeStep 通过 progress 访问）
 
   const pm = new ProgressManager({ specDir: specRoot })
   let progress = await pm.read(cwd, changeName)
@@ -1725,37 +1723,42 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
   if (stageName === 'scan' && steps[currentIdx]?.name === '构建扫描项目列表') {
     // 解析项目列表：从 step 2 输出提取，或回退读取 projects/*.yaml
     let projectNames = []
+    // 项目名清洗：只保留 ASCII 字母/数字/横线/下划线/点，过滤中文和特殊字符
+    const sanitizeProjectName = (name) => {
+      const clean = name.replace(/[^a-zA-Z0-9_\-.]/g, '').trim()
+      return clean || null
+    }
     if (outputText) {
       // 匹配方式 1: "1. project-name" 编号列表
       const numbered = outputText.match(/^\s*\d+\.\s+(\S+)/gm)
       if (numbered) {
-        projectNames = numbered.map(m => m.replace(/^\s*\d+\.\s+/, '').replace(/[—\-:].*$/, '').trim())
-        if (projectNames.length > 0) { _scanProjectListParsed = true; stageData.scanMeta = stageData.scanMeta || {}; stageData.scanMeta.projectListParsed = true; }
+        const raw = numbered.map(m => m.replace(/^\s*\d+\.\s+/, '').replace(/[—\-:].*$/, '').trim())
+        projectNames = raw.map(sanitizeProjectName).filter(Boolean)
+        if (projectNames.length > 0) { stageData.scanMeta = stageData.scanMeta || {}; stageData.scanMeta.projectListParsed = true; }
       }
       // 匹配方式 2: 括号枚举 "子项目frontend/order-service/user-service" 或 "项目: a, b, c"
       if (projectNames.length === 0) {
         const parenMatch = outputText.match(/(?:子项目|项目)[\s:：]*(\S+(?:[\/、,，]+\S+)*)/)
         if (parenMatch) {
-          projectNames = parenMatch[1]
-            .split(/[\/、,，]+/)
-            .map(s => s.trim())
-            .filter(Boolean)
-          if (projectNames.length > 0) { _scanProjectListParsed = true; stageData.scanMeta = stageData.scanMeta || {}; stageData.scanMeta.projectListParsed = true; }
+          const raw = parenMatch[1].split(/[\/、,，]+/).map(s => s.trim()).filter(Boolean)
+          projectNames = raw.map(sanitizeProjectName).filter(Boolean)
+          if (projectNames.length > 0) { stageData.scanMeta = stageData.scanMeta || {}; stageData.scanMeta.projectListParsed = true; }
         }
       }
       // 匹配方式 3: 结构化 YAML block "scan_projects:\n  - id: name"
       if (projectNames.length === 0) {
         const yamlMatch = outputText.match(/scan_projects:\s*\n((?:\s+-\s+id:\s+\S+\s*\n?)+)/)
         if (yamlMatch) {
-          projectNames = [...yamlMatch[1].matchAll(/-\s+id:\s*(\S+)/g)].map(m => m[1])
-          if (projectNames.length > 0) { _scanProjectListParsed = true; stageData.scanMeta = stageData.scanMeta || {}; stageData.scanMeta.projectListParsed = true; }
+          const raw = [...yamlMatch[1].matchAll(/-\s+id:\s*(\S+)/g)].map(m => m[1])
+          projectNames = raw.map(sanitizeProjectName).filter(Boolean)
+          if (projectNames.length > 0) { stageData.scanMeta = stageData.scanMeta || {}; stageData.scanMeta.projectListParsed = true; }
         }
       }
     }
     if (projectNames.length === 0) {
       // 回退：读取所有已注册项目
       console.warn('⚠️ 未能从 step 2 输出解析项目列表，回退扫描所有注册项目')
-      _scanProjectListParsed = false; stageData.scanMeta = stageData.scanMeta || {}; stageData.scanMeta.projectListParsed = false;
+      stageData.scanMeta = stageData.scanMeta || {}; stageData.scanMeta.projectListParsed = false;
       const projectsDir = join(specBase, 'projects')
       if (existsSync(projectsDir)) {
         projectNames = readdirSync(projectsDir)
@@ -1887,7 +1890,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
     // 平台模式：scan 完成后生成 manifest.json + post-check
     if (stageName === 'scan' && (platformOpts.specRoot || platformOpts.runtimeRoot)) {
       try {
-        _scanManifestWritten = false; stageData.scanMeta = stageData.scanMeta || {}; stageData.scanMeta.manifestWritten = false; // 默认失败
+        stageData.scanMeta = stageData.scanMeta || {}; stageData.scanMeta.manifestWritten = false; // 默认失败
         const { mkdirSync, writeFileSync } = await import('fs')
         const { join } = await import('path')
         const { execSync } = await import('child_process')
@@ -1908,7 +1911,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
         const manifestPath = join(manifestDir, 'manifest.json')
         writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n')
         console.log(`📄 manifest.json 已写入: ${manifestPath}`)
-        _scanManifestWritten = true; stageData.scanMeta = stageData.scanMeta || {}; stageData.scanMeta.manifestWritten = true;
+        stageData.scanMeta = stageData.scanMeta || {}; stageData.scanMeta.manifestWritten = true;
         if (!sourceCommit) {
           console.log(`⚠️  source_commit 无法获取（可能非 git 目录），已设为 null`)
         }

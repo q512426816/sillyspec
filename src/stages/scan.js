@@ -462,6 +462,11 @@ step1 → step2 → step3
 9. 检查 7 份文档 header 是否包含 author 和 created_at
 10. 检查 local.yaml 中 commands 是否在 package.json scripts 中真实存在，不存在的必须标记 unavailable
 
+### ⛔ API 错误处理
+- 遇到 API Error 529（服务过载）或 rate_limit 时，**停止当前操作并报告**，不要自动重试
+- 遇到 tool_use_error 时，记录错误信息并跳过该文件/操作，继续处理下一项
+- 如果连续 3 次操作失败，输出失败摘要并停止
+
 ### ⛔ 最终状态判定
 如果出现以下**任意**情况，最终状态**不能**写"全部通过"，只能写 \`completed_with_warnings\` 或 \`failed_post_check\`：
 - 源码目录下存在 docs（路径合规检查失败）
