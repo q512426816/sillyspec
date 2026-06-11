@@ -1864,7 +1864,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
     }
     // quick 阶段完成前强制检查 quicklog 是否创建
     if (stageName === 'quick') {
-      const quicklogDir = join(specBase, '.sillyspec', 'quicklog')
+      const quicklogDir = join(specBase, 'quicklog')
       const hasQuicklog = existsSync(quicklogDir) && readdirSync(quicklogDir).some(f => f.endsWith('.md') && f.startsWith('QUICKLOG'))
       if (!hasQuicklog) {
         console.error(`\n❌ quick 阶段完成校验失败：未检测到 QUICKLOG 记录文件。`)
