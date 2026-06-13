@@ -62,7 +62,7 @@ export function runScanPostCheck({ cwd, specDir, outputText = '', scanMeta = {} 
         const leaked = readdirSync(localSub, { recursive: true }).filter(e => String(e).endsWith('.md') || String(e).endsWith('.yaml') || String(e).endsWith('.json'))
         if (leaked.length > 0) {
           checks.push({
-            name: 'source_root_leak',
+            name: sub === 'docs' ? 'source_root_docs_leak' : 'source_root_leak',
             severity: 'failed',
             detail: `source_root/.sillyspec/${sub}/ 下存在 ${leaked.length} 个文件（${localSub}/），agent 写入到了错误路径`
           })

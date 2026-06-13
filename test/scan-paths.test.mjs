@@ -62,7 +62,7 @@ if (content.includes('{PROJECTS_ROOT}/')) {
 
 if (failed) {
   console.error('\n💥 有测试失败！scan.js 路径占位符可能被回退为硬编码。')
-  process.exit(1)
+  throw new Error("test failed")
 } else {
   console.log('\n✅ 全部通过 — scan.js 路径占位符防回归测试 OK')
 }

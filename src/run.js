@@ -613,21 +613,29 @@ async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjec
     }
     profileDirectives.push(`--output 只需要列出文件名，不要写长篇总结。`)
     promptText = profileDirectives.join('\n') + '\n\n' + promptText
+
+    // scanProfile 分支也要替换占位符（非 platform 模式也会走到这里）
+    const _pName = dbProjectName || basename(cwd)
+    const _specSS = platformOpts?.specRoot || join(cwd, '.sillyspec')
+    const _docsRoot = join(_specSS, 'docs', _pName)
+    promptText = promptText.replace(/\{DOCS_ROOT\}/g, _docsRoot)
+    promptText = promptText.replace(/\{PROJECTS_ROOT\}/g, join(_specSS, 'projects'))
+    promptText = promptText.replace(/\{WORKFLOWS_ROOT\}/g, join(_specSS, 'workflows'))
+    promptText = promptText.replace(/\{KNOWLEDGE_ROOT\}/g, join(_specSS, 'knowledge'))
+    promptText = promptText.replace(/\{SPEC_ROOT\}/g, _specSS)
   } else {
     // 非 platform 模式也要替换占位符
-    if (stageName === 'scan') {
-      const projectName = dbProjectName || basename(cwd)
-      const specSillyspec = join(cwd, '.sillyspec')
-      const docsRoot = join(specSillyspec, 'docs', projectName)
-      const projectsRoot = join(specSillyspec, 'projects')
-      const workflowsRoot = join(specSillyspec, 'workflows')
-      const knowledgeRoot = join(specSillyspec, 'knowledge')
-      promptText = promptText.replace(/\{DOCS_ROOT\}/g, docsRoot)
-      promptText = promptText.replace(/\{PROJECTS_ROOT\}/g, projectsRoot)
-      promptText = promptText.replace(/\{WORKFLOWS_ROOT\}/g, workflowsRoot)
-      promptText = promptText.replace(/\{KNOWLEDGE_ROOT\}/g, knowledgeRoot)
-      promptText = promptText.replace(/\{SPEC_ROOT\}/g, specSillyspec)
-    }
+    const projectName = dbProjectName || basename(cwd)
+    const specSillyspec = join(cwd, '.sillyspec')
+    const docsRoot = join(specSillyspec, 'docs', projectName)
+    const projectsRoot = join(specSillyspec, 'projects')
+    const workflowsRoot = join(specSillyspec, 'workflows')
+    const knowledgeRoot = join(specSillyspec, 'knowledge')
+    promptText = promptText.replace(/\{DOCS_ROOT\}/g, docsRoot)
+    promptText = promptText.replace(/\{PROJECTS_ROOT\}/g, projectsRoot)
+    promptText = promptText.replace(/\{WORKFLOWS_ROOT\}/g, workflowsRoot)
+    promptText = promptText.replace(/\{KNOWLEDGE_ROOT\}/g, knowledgeRoot)
+    promptText = promptText.replace(/\{SPEC_ROOT\}/g, specSillyspec)
   }
 
   // 注入模块上下文（brainstorm/plan/execute 阶段，基于 Module Context Index）

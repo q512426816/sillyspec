@@ -156,4 +156,4 @@ console.log('\n=== Test 7: 非平台模式缺文档 → 路径含 .sillyspec ===
 console.log(`\n${'='.repeat(50)}`)
 console.log(`✅ 通过: ${passed}  ❌ 失败: ${failed}`)
 console.log(`${'='.repeat(50)}`)
-process.exit(failed > 0 ? 1 : 0)
+if (failed > 0) throw new Error(`${failed} test(s) failed`)

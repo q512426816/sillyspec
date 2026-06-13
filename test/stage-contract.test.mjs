@@ -182,4 +182,4 @@ if (unknown === null) {
 
 // === 结果 ===
 console.log(`\n${failed === 0 ? '✅ 全部通过' : `❌ ${failed} 项失败`}`)
-process.exit(failed > 0 ? 1 : 0)
+if (failed > 0) throw new Error(`${failed} test(s) failed`)

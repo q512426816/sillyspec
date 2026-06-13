@@ -166,7 +166,7 @@ if (failed.length > 0) {
     console.log(`  ❌ ${f.label}`)
     if (f.detail) console.log(`     ${f.detail}`)
   }
-  process.exit(1)
+  throw new Error("test failed")
 } else {
   console.log('\n🎉 全部 P0 测试通过!')
 }
