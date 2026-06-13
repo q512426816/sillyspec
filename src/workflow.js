@@ -12,6 +12,7 @@
 import { readFileSync, existsSync, readdirSync, writeFileSync, mkdirSync } from 'fs'
 import { join, resolve, basename } from 'path'
 import jsYaml from 'js-yaml'
+import { WORKFLOW_STATUS } from './constants.js'
 
 // ─── Workflow 加载 ───
 

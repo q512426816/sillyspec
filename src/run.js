@@ -9,6 +9,7 @@ import { existsSync, readdirSync, mkdirSync, writeFileSync, appendFileSync, read
 import { createRequire } from 'module'
 const require = createRequire(import.meta.url)
 import { ProgressManager } from './progress.js'
+import { SCAN_STATUS, POINTER_STATUS, isPointerCorrupted } from './constants.js'
 
 /**
  * 在容器/Docker 环境下，git 可能因目录所有权不匹配报 dubious ownership。
@@ -1923,7 +1924,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
             ? join(platformOpts.runtimeRoot, 'scan-runs', platformOpts.scanRunId || 'unknown', 'workflow-runs')
             : null,
           platform_pointer_path: join(cwd, '.sillyspec-platform.json'),
-          platform_pointer_status: 'active',
+          platform_pointer_status: POINTER_STATUS.ACTIVE,
         }
         const manifestPath = join(manifestDir, 'manifest.json')
         writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n')
@@ -1980,7 +1981,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
         const pointerPath = join(cwd, '.sillyspec-platform.json')
         try {
           const pointer = JSON.parse(_readFileSync(pointerPath, 'utf8'))
-          pointer.status = 'scan_completed'
+          pointer.status = POINTER_STATUS.SCAN_COMPLETED
           pointer.completedAt = new Date().toISOString()
           pointer.scanStatus = postResult.status
           writeFileSync(pointerPath, JSON.stringify(pointer, null, 2) + '\n')
@@ -1988,7 +1989,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
 
         // failed_post_check 时强制阻止 clean success
         if (postResult.status === 'failed_post_check') {
-          stageData.status = 'failed_post_check'
+          stageData.status = SCAN_STATUS.FAILED_POST_CHECK
           stageData.completedAt = new Date().toLocaleString('zh-CN',{hour12:false})
           await pm._write(cwd, progress, changeName)
           console.error(`\n❌ scan post-check 失败，状态设为 failed_post_check。不允许 clean success。`)

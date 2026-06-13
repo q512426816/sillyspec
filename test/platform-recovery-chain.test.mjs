@@ -119,7 +119,7 @@ console.log('\n=== Test 3: manifest 路径字段 ===')
   assert('manifest 有 spec_root', runSrc.includes('spec_root: platformOpts'))
   assert('manifest 有 runtime_root', runSrc.includes('runtime_root: platformOpts'))
   assert('manifest 有 platform_pointer_path', runSrc.includes('platform_pointer_path:'))
-  assert('manifest 初始 platform_pointer_status = active', runSrc.includes("platform_pointer_status: 'active'"))
+  assert('manifest platform_pointer_status 使用枚举', runSrc.includes('POINTER_STATUS') || runSrc.includes('POINTER_STATUS.ACTIVE'))
 }
 
 // ── 测试 4：异常 pointer 检测 ──

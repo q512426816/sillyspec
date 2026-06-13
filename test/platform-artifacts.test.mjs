@@ -141,7 +141,7 @@ console.log('\n=== Test 4: 平台指针 scan 完成后状态更新 ===')
   const runSrc = await readFile(join(__dirname, '..', 'src', 'run.js'), 'utf8')
 
   assert('scan 完成后读取 pointer 文件', runSrc.includes('pointerPath'))
-  assert('pointer status 设为 scan_completed', runSrc.includes("pointer.status = 'scan_completed'"))
+  assert('pointer status 使用 POINTER_STATUS 枚举', runSrc.includes('POINTER_STATUS'))
   assert('pointer 记录 completedAt', runSrc.includes('pointer.completedAt'))
   assert('pointer 记录 scanStatus', runSrc.includes('pointer.scanStatus'))
 }

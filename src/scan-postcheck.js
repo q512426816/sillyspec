@@ -7,6 +7,7 @@
 
 import { existsSync, readdirSync, readFileSync, mkdirSync, writeFileSync } from 'fs'
 import { join, basename } from 'path'
+import { SCAN_STATUS, CHECK_SEVERITY } from './constants.js'
 
 const REQUIRED_SCAN_DOCS = [
   'ARCHITECTURE.md',
@@ -41,7 +42,7 @@ export function runScanPostCheck({ cwd, specDir, outputText = '', scanMeta = {} 
     // 检查 7 份文档是否存在
     const missing = REQUIRED_SCAN_DOCS.filter(f => !existsSync(join(scanDir, f)))
     if (missing.length > 0) {
-      checks.push({ name: 'missing_docs', severity: 'warning', detail: `缺少 ${missing.length} 份 scan 文档: ${missing.join(', ')}` })
+      checks.push({ name: 'missing_docs', severity: CHECK_SEVERITY.WARNING, detail: `缺少 ${missing.length} 份 scan 文档: ${missing.join(', ')}` })
     }
 
     const hasWarning = checks.some(c => c.severity === 'warning')
@@ -63,7 +64,7 @@ export function runScanPostCheck({ cwd, specDir, outputText = '', scanMeta = {} 
         if (leaked.length > 0) {
           checks.push({
             name: sub === 'docs' ? 'source_root_docs_leak' : 'source_root_leak',
-            severity: 'failed',
+            severity: CHECK_SEVERITY.FAILED,
             detail: `source_root/.sillyspec/${sub}/ 下存在 ${leaked.length} 个文件（${localSub}/），agent 写入到了错误路径`
           })
         }
@@ -75,7 +76,7 @@ export function runScanPostCheck({ cwd, specDir, outputText = '', scanMeta = {} 
     if (existsSync(filePath)) {
       checks.push({
         name: 'source_root_leak',
-        severity: 'failed',
+        severity: CHECK_SEVERITY.FAILED,
         detail: `source_root/.sillyspec/${file} 存在，agent 写入到了错误路径（${filePath}）`
       })
     }
@@ -87,7 +88,7 @@ export function runScanPostCheck({ cwd, specDir, outputText = '', scanMeta = {} 
   if (missingDocs.length > 0) {
     checks.push({
       name: missingDocs.length === REQUIRED_SCAN_DOCS.length ? 'all_docs_missing' : 'partial_docs_missing',
-      severity: 'failed',
+      severity: CHECK_SEVERITY.FAILED,
       detail: missingDocs.length === REQUIRED_SCAN_DOCS.length
         ? `spec_root 下无任何 scan 文档（${specScanDir}/），扫描可能未执行`
         : `spec_root 缺少必需文档: ${missingDocs.join(', ')}（7 份 scan 文档均为 required）`
@@ -106,7 +107,7 @@ export function runScanPostCheck({ cwd, specDir, outputText = '', scanMeta = {} 
   if (docsMissingHeader.length > 0) {
     checks.push({
       name: 'docs_missing_header',
-      severity: 'warning',
+      severity: CHECK_SEVERITY.WARNING,
       detail: `${docsMissingHeader.length} 份文档缺少 author/created_at: ${docsMissingHeader.join(', ')}`
     })
   }
@@ -143,7 +144,7 @@ export function runScanPostCheck({ cwd, specDir, outputText = '', scanMeta = {} 
     if (invalidCommands.length > 0) {
       checks.push({
         name: 'local_config_invalid',
-        severity: 'warning',
+        severity: CHECK_SEVERITY.WARNING,
         detail: `local.yaml 引用不存在的命令: ${invalidCommands.join('; ')}`
       })
     }
@@ -159,7 +160,7 @@ export function runScanPostCheck({ cwd, specDir, outputText = '', scanMeta = {} 
     ]
     for (const ep of errorPatterns) {
       if (ep.pattern.test(outputText)) {
-        checks.push({ name: ep.name, severity: 'warning', detail: ep.detail })
+        checks.push({ name: ep.name, severity: CHECK_SEVERITY.WARNING, detail: ep.detail })
       }
     }
   }
@@ -168,7 +169,7 @@ export function runScanPostCheck({ cwd, specDir, outputText = '', scanMeta = {} 
   if (scanMeta.manifestWritten === false) {
     checks.push({
       name: 'manifest_write_failed',
-      severity: 'failed',
+      severity: CHECK_SEVERITY.FAILED,
       detail: 'manifest.json 写入失败，平台无法消费 scan 结果'
     })
   }
@@ -177,22 +178,22 @@ export function runScanPostCheck({ cwd, specDir, outputText = '', scanMeta = {} 
   if (scanMeta.projectListParsed === false) {
     checks.push({
       name: 'project_list_parse_failed',
-      severity: 'warning',
+      severity: CHECK_SEVERITY.WARNING,
       detail: 'Step 2 项目列表解析失败，回退到注册项目列表，可能遗漏子项目'
     })
   }
 
   // 8. 计算 finalStatus
-  const hasFailed = checks.some(c => c.severity === 'failed')
-  const hasWarning = checks.some(c => c.severity === 'warning')
+  const hasFailed = checks.some(c => c.severity === CHECK_SEVERITY.FAILED)
+  const hasWarning = checks.some(c => c.severity === CHECK_SEVERITY.WARNING)
 
   let status
   if (hasFailed) {
-    status = 'failed_post_check'
+    status = SCAN_STATUS.FAILED_POST_CHECK
   } else if (hasWarning) {
-    status = 'completed_with_warnings'
+    status = SCAN_STATUS.COMPLETED_WITH_WARNINGS
   } else {
-    status = 'success'
+    status = SCAN_STATUS.SUCCESS
   }
 
   return { status, checks }

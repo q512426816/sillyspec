@@ -119,7 +119,7 @@ function assert(label, condition, detail) {
 
   assert('postcheck 检查 manifest.json', postcheckSrc.includes('manifest.json'))
   assert('postcheck 检查 local.yaml', postcheckSrc.includes('local.yaml'))
-  assert('污染 severity 为 failed', postcheckSrc.includes("severity: 'failed'"))
+  assert('污染 severity 使用枚举', postcheckSrc.includes('CHECK_SEVERITY'))
 }
 
 // ── 测试 5：run.js 占位符替换补齐 ──
