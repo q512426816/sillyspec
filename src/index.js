@@ -451,6 +451,7 @@ SillySpec platform — SillyHub 平台同步
   sillyspec platform sync [--change <name>]
   sillyspec platform sync-docs [--change <name>]
   sillyspec platform status
+  sillyspec platform pointer [--cleanup]
   sillyspec platform approve <change-name>
   sillyspec platform reject <change-name> [--reason <reason>]
 `);
@@ -466,6 +467,60 @@ SillySpec platform — SillyHub 平台同步
       }
 
       switch (platformSub) {
+        case 'pointer': {
+          // 指针状态检查（不依赖 sync 模块）
+          const { readFileSync, existsSync } = await import('fs')
+          const { join } = await import('path')
+          const { POINTER_STATUS, isPointerStale, isPointerCorrupted } = await import('./constants.js')
+          const pointerPath = join(dir, '.sillyspec-platform.json')
+
+          if (!existsSync(pointerPath)) {
+            console.log('ℹ️  无平台指针文件。当前不在平台模式或未进行过平台 scan。')
+            break
+          }
+
+          try {
+            const pointer = JSON.parse(readFileSync(pointerPath, 'utf8'))
+            console.log(`📄 指针文件: ${pointerPath}`)
+            console.log(`   specRoot: ${pointer.specRoot || '(缺失 ❌)'}`)
+            console.log(`   runtimeRoot: ${pointer.runtimeRoot || '(未设置)'}`)
+            console.log(`   workspaceId: ${pointer.workspaceId || '(未设置)'}`)
+            console.log(`   scanRunId: ${pointer.scanRunId || '(未设置)'}`)
+            console.log(`   savedAt: ${pointer.savedAt || '(未知)'}`)
+
+            if (isPointerCorrupted(pointer)) {
+              console.log(`   状态: ${POINTER_STATUS.CORRUPTED} ❌`) 
+              console.log(`   ⚠️ 指针损坏（缺少 specRoot），建议删除后重新运行平台 scan。`)
+              if (platformArgs.includes('--cleanup')) {
+                const { unlinkSync } = await import('fs')
+                unlinkSync(pointerPath)
+                console.log(`   🗑️ 已清理损坏指针。`)
+              }
+            } else if (pointer.status === POINTER_STATUS.SCAN_COMPLETED) {
+              if (isPointerStale(pointer)) {
+                console.log(`   状态: ${POINTER_STATUS.STALE} ⚠️`)
+                console.log(`   completedAt: ${pointer.completedAt}`)
+                console.log(`   scanStatus: ${pointer.scanStatus || '(未知)'}`)
+                console.log(`   ⚠️ 指针已过时（完成超过 24h），可以安全删除。`)
+                if (platformArgs.includes('--cleanup')) {
+                  const { unlinkSync } = await import('fs')
+                  unlinkSync(pointerPath)
+                  console.log(`   🗑️ 已清理过时指针。`)
+                }
+              } else {
+                console.log(`   状态: ${pointer.status} ✅`)
+                console.log(`   completedAt: ${pointer.completedAt}`)
+                console.log(`   scanStatus: ${pointer.scanStatus || '(未知)'}`)
+              }
+            } else {
+              console.log(`   状态: ${POINTER_STATUS.ACTIVE} 🔄`)
+            }
+          } catch (e) {
+            console.log(`   状态: ${POINTER_STATUS.CORRUPTED} ❌`)
+            console.log(`   ⚠️ 指针文件损坏: ${e.message}`)
+          }
+          break;
+        }
         case 'connect': {
           const url = platformArgs[0];
           if (!url) {

@@ -255,7 +255,7 @@ export function formatStructuredResult(result, meta = {}) {
     const entry = { name: check.name, detail: check.detail, severity }
 
     // 路径污染类
-    if (check.name === 'source_root_leak') {
+    if (check.name === 'source_root_leak' || check.name === 'source_root_docs_leak') {
       structured.failure_categories.path_pollution.push(entry)
       structured.failure_categories.violations.push(entry)
     }
