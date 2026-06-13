@@ -1915,6 +1915,10 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
           source_commit_error: sourceCommit === null ? (scErr || 'unknown') : undefined,
           generated_at: new Date().toISOString(),
           schema_version: 1,
+          postcheck_result_path: null,  // 下游填充
+          workflow_runs_dir: platformOpts.runtimeRoot
+            ? join(platformOpts.runtimeRoot, 'scan-runs', platformOpts.scanRunId || 'unknown', 'workflow-runs')
+            : null,
         }
         const manifestPath = join(manifestDir, 'manifest.json')
         writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n')
@@ -1955,6 +1959,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
         })
         if (postcheckJsonPath) {
           console.log(`📄 postcheck-result.json 已写入: ${postcheckJsonPath}`)
+          manifest.postcheck_result_path = postcheckJsonPath
         }
 
         // 将 post-check 结果写入 manifest
@@ -2143,7 +2148,14 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
               console.log(rp.prompt)
             }
           }
-          const saved = saveWorkflowRun(result, { cwd, source: 'run.js', stage: 'verify', step: steps[currentIdx]?.name })
+          const saved = saveWorkflowRun(result, {
+            cwd,
+            source: 'run.js',
+            stage: 'scan',
+            step: steps[currentIdx]?.name,
+            ...(platformOpts.runtimeRoot ? { runtimeRoot: platformOpts.runtimeRoot } : {}),
+            ...(platformOpts.scanRunId ? { scanRunId: platformOpts.scanRunId } : {})
+          })
           if (saved) console.log(`📁 结果已归档：${saved}`)
         }
         if (anyFailed) {
@@ -2173,7 +2185,14 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
             console.log(`   └─ ${f}`)
           }
         }
-        const saved = saveWorkflowRun(result, { cwd, source: 'run.js', stage: 'archive', step: steps[currentIdx]?.name })
+        const saved = saveWorkflowRun(result, {
+          cwd,
+          source: 'run.js',
+          stage: 'archive',
+          step: steps[currentIdx]?.name,
+          ...(platformOpts.runtimeRoot ? { runtimeRoot: platformOpts.runtimeRoot } : {}),
+          ...(platformOpts.scanRunId ? { scanRunId: platformOpts.scanRunId } : {})
+        })
         if (saved) console.log(`📁 结果已归档：${saved}`)
       }
     } catch (e) {
