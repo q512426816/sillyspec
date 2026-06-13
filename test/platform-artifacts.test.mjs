@@ -134,8 +134,20 @@ console.log('\n=== Test 3: manifest.json 结构字段 ===')
   assert('workflow_runs_dir 基于 runtimeRoot', runSrc.includes("join(platformOpts.runtimeRoot, 'scan-runs'"))
 }
 
-// ── 测试 4：saveWorkflowRun 调用点传入 runtimeRoot（源码检查） ──
-console.log('\n=== Test 4: run.js 调用 saveWorkflowRun 传入平台参数 ===')
+// ── 测试 4：平台指针状态更新（源码检查） ──
+console.log('\n=== Test 4: 平台指针 scan 完成后状态更新 ===')
+{
+  const { readFile } = await import('fs/promises')
+  const runSrc = await readFile(join(__dirname, '..', 'src', 'run.js'), 'utf8')
+
+  assert('scan 完成后读取 pointer 文件', runSrc.includes('pointerPath'))
+  assert('pointer status 设为 scan_completed', runSrc.includes("pointer.status = 'scan_completed'"))
+  assert('pointer 记录 completedAt', runSrc.includes('pointer.completedAt'))
+  assert('pointer 记录 scanStatus', runSrc.includes('pointer.scanStatus'))
+}
+
+// ── 测试 5：saveWorkflowRun 调用点传入 runtimeRoot（源码检查） ──
+console.log('\n=== Test 5: run.js 调用 saveWorkflowRun 传入平台参数 ===')
 {
   const { readFile } = await import('fs/promises')
   const runSrc = await readFile(join(__dirname, '..', 'src', 'run.js'), 'utf8')

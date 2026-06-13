@@ -1899,7 +1899,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
     if (stageName === 'scan' && (platformOpts.specRoot || platformOpts.runtimeRoot)) {
       try {
         stageData.scanMeta = stageData.scanMeta || {}; stageData.scanMeta.manifestWritten = false; // 默认失败
-        const { mkdirSync, writeFileSync } = await import('fs')
+        const { mkdirSync, writeFileSync, readFileSync: _readFileSync } = await import('fs')
         const { join } = await import('path')
         const { execSync } = await import('child_process')
         const manifestDir = platformOpts.specRoot
@@ -1911,14 +1911,19 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
         const manifest = {
           workspace_id: platformOpts.workspaceId || null,
           scan_run_id: platformOpts.scanRunId || null,
+          source_root: cwd,
+          spec_root: platformOpts.specRoot || null,
+          runtime_root: platformOpts.runtimeRoot || null,
           source_commit: sourceCommit,
           source_commit_error: sourceCommit === null ? (scErr || 'unknown') : undefined,
           generated_at: new Date().toISOString(),
           schema_version: 1,
-          postcheck_result_path: null,  // 下游填充
+          postcheck_result_path: null,
           workflow_runs_dir: platformOpts.runtimeRoot
             ? join(platformOpts.runtimeRoot, 'scan-runs', platformOpts.scanRunId || 'unknown', 'workflow-runs')
             : null,
+          platform_pointer_path: join(cwd, '.sillyspec-platform.json'),
+          platform_pointer_status: 'active',
         }
         const manifestPath = join(manifestDir, 'manifest.json')
         writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n')
@@ -1970,6 +1975,16 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
         // 更新 manifest
         writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n')
         console.log(`📄 manifest.json 已更新（含 post-check 结果）`)
+
+        // 更新平台指针状态为 scan_completed
+        const pointerPath = join(cwd, '.sillyspec-platform.json')
+        try {
+          const pointer = JSON.parse(_readFileSync(pointerPath, 'utf8'))
+          pointer.status = 'scan_completed'
+          pointer.completedAt = new Date().toISOString()
+          pointer.scanStatus = postResult.status
+          writeFileSync(pointerPath, JSON.stringify(pointer, null, 2) + '\n')
+        } catch {}
 
         // failed_post_check 时强制阻止 clean success
         if (postResult.status === 'failed_post_check') {
