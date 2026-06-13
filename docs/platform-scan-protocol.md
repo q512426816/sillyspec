@@ -2,6 +2,37 @@
 
 SillySpec 平台执行模式的核心设计：**SillySpec 写产物，SillyHub 读产物**。平台不看 stdout，只靠文件系统判断 scan 成功、失败原因和证据文件位置。
 
+## 状态枚举（src/constants.js）
+
+所有平台产物共享同一套枚举值，SillyHub 直接使用常量，不猜字符串。
+
+### SCAN_STATUS
+
+| 值 | 说明 |
+---|---|
+| `pending` | scan 未开始 |
+| `in_progress` | scan 进行中 |
+| `success` | scan 成功，所有检查通过 |
+| `completed_with_warnings` | scan 成功但有警告 |
+| `failed_post_check` | scan 失败，post-check 不通过 |
+
+### POINTER_STATUS
+
+| 值 | 说明 |
+---|---|
+| `active` | 指针活跃，任务进行中 |
+| `scan_completed` | scan 已完成 |
+| `stale` | 指针过时（完成超过 24h，建议清理） |
+| `corrupted` | 指针损坏（缺少必要字段） |
+
+### CHECK_SEVERITY
+
+| 值 | 说明 |
+---|---|
+| `failed` | 严重：阻止成功 |
+| `warning` | 警告：不阻止成功 |
+| `passed` | 通过 |
+
 ## 目录结构
 
 ```
@@ -103,7 +134,37 @@ SillyHub 消费 manifest 的方式：
 | **更新** | 每次 `run` 时刷新 `savedAt` |
 | **完成标记** | scan post-check 后追加 `status=scan_completed` + `completedAt` + `scanStatus` |
 | **异常检测** | pointer 存在但缺 `specRoot` 时报错退出 |
-| **清理** | 当前无自动清理，由 SillyHub 或用户手动管理 |
+| **清理** | 无自动清理。`sillyspec platform pointer` 查看状态，`sillyspec platform pointer --cleanup` 手动清理 |
+
+### CLI 检查命令
+
+```bash
+# 查看指针状态
+sillyspec platform pointer
+
+# 清理过时/损坏指针
+sillyspec platform pointer --cleanup
+```
+
+输出示例：
+```
+📄 指针文件: /path/to/source/.sillyspec-platform.json
+   specRoot: /path/to/spec
+   runtimeRoot: /path/to/runtime
+   workspaceId: ws-xxx
+   scanRunId: scan-2026-06-14-test-001
+   savedAt: 2026-06-14T01:50:00.000Z
+   状态: stale ⚠️
+   completedAt: 2026-06-12T01:00:00.000Z
+   scanStatus: success
+   ⚠️ 指针已过时（完成超过 24h），可以安全删除。
+```
+
+状态判定逻辑：
+- 缺少 `specRoot` → `corrupted`
+- `status=scan_completed` 且 `completedAt` 超过 24h → `stale`
+- `status=scan_completed` 且未超时 → `scan_completed` ✅
+- 无 `status` 字段 → `active` 🔄
 
 ### 结构
 
@@ -215,9 +276,23 @@ post-check 会检查以下路径是否存在泄漏：
 
 SillyHub 判断 scan 结果的推荐顺序：
 
-1. `manifest.json` → `scan_post_check.status` → 快速判断成功/失败
-2. `postcheck-result.json` → 完整检查明细
+1. `manifest.json` → `scan_post_check.overall_status` → 快速判断成功/失败
+2. `postcheck-result.json` → 完整检查明细 + failure_categories
 3. `workflow-runs/*.json` → workflow 检查证据
 4. `docs/<project>/scan/*.md` → 实际文档内容
+
+### failure_categories
+
+`postcheck-result.json` 中的 `failure_categories` 提供分类视图：
+
+| 类别 | 包含的 check |
+---|---|
+| `path_pollution` | source_root_leak, source_root_docs_leak |
+| `missing_outputs` | all_docs_missing, partial_docs_missing, missing_docs |
+| `bad_references` | local_config_invalid |
+| `quality_warnings` | tool_use_error, api_error_529, rate_limit_exhausted, fallback_or_skip |
+| `violations` | manifest_write_failed, project_list_parse_failed + 所有 path_pollution |
+
+SillyHub 可以按类别快速定位问题域，而不需要遍历所有 checks。
 
 不需要解析 stdout。
