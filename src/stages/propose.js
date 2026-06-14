@@ -1,3 +1,8 @@
+/**
+ * @deprecated propose 阶段已移除入口（2026-06-14）。
+ * brainstorm 现在拥有四件套（design/proposal/requirements/tasks）的生成职责。
+ * 本文件保留以备未来需要恢复，但未注册到 stageRegistry。
+ */
 export const definition = {
   name: 'propose',
   title: '方案设计',

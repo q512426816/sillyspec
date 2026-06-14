@@ -1446,7 +1446,6 @@ function validateFileLocations(cwd, stageName, progress, changeName, specBase) {
   const expectedFiles = {
     brainstorm: ['design.md', 'proposal.md', 'requirements.md', 'tasks.md'],
     plan: ['plan.md'],
-    verify: ['verify-result.md'],
     archive: ['module-impact.md'],
   }
 
