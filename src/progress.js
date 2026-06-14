@@ -224,21 +224,29 @@ export class ProgressManager {
     if (stageIds.length > 0) {
       const placeholders = stageIds.map(() => '?').join(',');
       stepRows = sqlDb.exec(
-        `SELECT stage_id, name, status, output, completed_at, ordering, wait_reason, wait_options, wait_answer, waited_at FROM steps WHERE stage_id IN (${placeholders}) ORDER BY stage_id, ordering`,
+        `SELECT stage_id, name, status, output, completed_at, ordering, wait_reason, wait_options, wait_answer, waited_at, wait_answers, wait_round, max_wait_rounds FROM steps WHERE stage_id IN (${placeholders}) ORDER BY stage_id, ordering`,
         stageIds
       );
     }
     // 按阶段分组步骤
     const stepsByStage = {};
     if (stepRows && stepRows.length > 0) {
-      for (const [stageId, name, status, output, completedAt, ordering, waitReason, waitOptions, waitAnswer, waitedAt] of stepRows[0].values) {
+      for (const row of stepRows[0].values) {
+        const [stageId, name, status, output, completedAt, ordering, waitReason, waitOptions, waitAnswer, waitedAt, waitAnswersJson, waitRound, maxWaitRounds] = row;
         if (!stepsByStage[stageId]) stepsByStage[stageId] = [];
+        let waitAnswers = null;
+        if (waitAnswersJson) {
+          try { waitAnswers = JSON.parse(waitAnswersJson); } catch {}
+        }
         stepsByStage[stageId].push({
           name, status, output, completedAt,
           ...(waitReason ? { waitReason } : {}),
           ...(waitOptions ? { waitOptions } : {}),
           ...(waitAnswer ? { waitAnswer } : {}),
           ...(waitedAt ? { waitedAt } : {}),
+          ...(waitAnswers ? { waitAnswers } : {}),
+          ...(waitRound != null ? { waitRound } : {}),
+          ...(maxWaitRounds != null ? { maxWaitRounds } : {}),
         });
       }
     }
@@ -274,6 +282,9 @@ export class ProgressManager {
         ...(s.waitOptions ? { waitOptions: s.waitOptions } : {}),
         ...(s.waitAnswer ? { waitAnswer: s.waitAnswer } : {}),
         ...(s.waitedAt ? { waitedAt: s.waitedAt } : {}),
+        ...(s.waitAnswers ? { waitAnswers: s.waitAnswers } : {}),
+        ...(s.waitRound != null ? { waitRound: s.waitRound } : {}),
+        ...(s.maxWaitRounds != null ? { maxWaitRounds: s.maxWaitRounds } : {}),
       }));
       stages[stage] = {
         status: info.status,
@@ -357,9 +368,11 @@ export class ProgressManager {
               // UPSERT 步骤（先删再插，steps 表无 UNIQUE 约束）
               sqlDb.run('DELETE FROM steps WHERE stage_id = ? AND name = ?', [stageId, step.name]);
               sqlDb.run(
-                'INSERT INTO steps (stage_id, name, status, output, completed_at, ordering, wait_reason, wait_options, wait_answer, waited_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                'INSERT INTO steps (stage_id, name, status, output, completed_at, ordering, wait_reason, wait_options, wait_answer, waited_at, wait_answers, wait_round, max_wait_rounds) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
                 [stageId, step.name, step.status || 'pending', step.output || null, step.completedAt || null, i,
-                  step.waitReason || null, step.waitOptions || null, step.waitAnswer || null, step.waitedAt || null]
+                  step.waitReason || null, step.waitOptions || null, step.waitAnswer || null, step.waitedAt || null,
+                  Array.isArray(step.waitAnswers) ? JSON.stringify(step.waitAnswers) : null,
+                  step.waitRound || null, step.maxWaitRounds || null]
               );
             }
           }

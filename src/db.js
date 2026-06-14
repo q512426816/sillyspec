@@ -175,6 +175,10 @@ export class DB {
     this._migrateAddColumn('steps', 'wait_options', 'TEXT');
     this._migrateAddColumn('steps', 'wait_answer', 'TEXT');
     this._migrateAddColumn('steps', 'waited_at', 'TEXT');
+    // repeatableWait support
+    this._migrateAddColumn('steps', 'wait_answers', 'TEXT'); // JSON array
+    this._migrateAddColumn('steps', 'wait_round', 'INTEGER');
+    this._migrateAddColumn('steps', 'max_wait_rounds', 'INTEGER');
   }
 
   /**
