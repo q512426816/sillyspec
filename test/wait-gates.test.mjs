@@ -463,6 +463,30 @@ console.log('\n=== Test 12: waitRound=0 正确持久化 ===')
   cleanup(projectDir)
 }
 
+// ================================================================
+// Test 13: 已有 waiting 步骤时 --wait 被拒绝
+// ================================================================
+console.log('\n=== Test 13: 已有 waiting 步骤时 --wait 被拒绝 ===')
+{
+  const { projectDir, changeName } = setupProject('existing-wait')
+
+  run(`node "${binCLI}" --dir "${projectDir}" run brainstorm --change ${changeName}`)
+
+  const progress = await readProgress(projectDir, changeName)
+  const brainstormData = progress.stages.brainstorm
+  // Set step 0 to waiting
+  brainstormData.steps[0].status = 'waiting'
+  brainstormData.steps[0].waitReason = '等待中'
+  brainstormData.steps[0].waitedAt = new Date().toISOString()
+  await writeProgress(projectDir, changeName, progress)
+
+  // Try --wait on another step (should be refused)
+  const output = run(`node "${binCLI}" --dir "${projectDir}" run brainstorm --wait --reason "新问题" --output "新等待" --change ${changeName}`)
+  assert(output.includes('已有步骤处于等待状态') || output.includes('等待状态'), '已有 waiting 步骤时 --wait 被拒绝')
+
+  cleanup(projectDir)
+}
+
 // ── Summary ──
 console.log(`\n${'='.repeat(50)}`)
 if (failed === 0) {

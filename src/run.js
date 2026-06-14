@@ -1531,6 +1531,15 @@ async function waitStep(pm, progress, stageName, cwd, outputText, waitReason, wa
     process.exit(1)
   }
 
+  // 前置检查：不允许已有 waiting 步骤时再 --wait
+  const existingWaitingIdx = stageData.steps.findIndex(s => s.status === 'waiting')
+  if (existingWaitingIdx !== -1) {
+    const ws = stageData.steps[existingWaitingIdx]
+    console.error(`❌ 已有步骤处于等待状态：Step ${existingWaitingIdx + 1} "${ws.name}"`)
+    console.error(`   请先 --continue 或 --reset 该步骤，再开始新的 --wait`)
+    process.exit(1)
+  }
+
   // maxWaitRounds 硬上限：达到后拒绝继续 --wait
   const currentStep = stageData.steps[currentIdx]
   const defSteps = await getStageSteps(stageName, cwd, progress, platformOpts?.specRoot || null)
@@ -1637,7 +1646,7 @@ async function continueStep(pm, progress, stageName, cwd, answer, options = {}) 
     question: prevOutput || null,
     answeredAt: now,
   })
-  currentStep.maxWaitRounds = currentStepDef.maxWaitRounds || currentStep.maxWaitRounds
+  currentStep.maxWaitRounds = currentStepDef.maxWaitRounds ?? currentStep.maxWaitRounds
 
   // 合并 waiting 信息到 output
   const waitInfo = currentStep.waitReason || ''
