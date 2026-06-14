@@ -1146,8 +1146,8 @@ export async function runCommand(args, cwd, specDir = null) {
         progress = { currentStage: stageName, stages: {}, lastActive: new Date().toLocaleString('zh-CN', { hour12: false }), project: '' }
       }
     } else {
-      // brainstorm / propose 作为流程入口，自动生成变更名并初始化
-      if (stageName === 'brainstorm' || stageName === 'propose') {
+      // brainstorm 作为流程入口，自动生成变更名并初始化
+      if (stageName === 'brainstorm') {
         const date = new Date().toISOString().slice(0, 10)
         const autoName = `${date}-new-change`
         console.log(`🔄 自动创建变更：${autoName}`)
@@ -1445,7 +1445,6 @@ function validateFileLocations(cwd, stageName, progress, changeName, specBase) {
   // 每个阶段完成后预期存在的文件
   const expectedFiles = {
     brainstorm: ['design.md', 'proposal.md', 'requirements.md', 'tasks.md'],
-    propose: ['proposal.md', 'design.md', 'requirements.md', 'tasks.md'],
     plan: ['plan.md'],
     verify: ['verify-result.md'],
     archive: ['module-impact.md'],

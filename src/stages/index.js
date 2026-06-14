@@ -1,5 +1,4 @@
 import { definition as brainstorm } from './brainstorm.js'
-import { definition as propose } from './propose.js'
 import { definition as plan } from './plan.js'
 import { definition as execute } from './execute.js'
 import { definition as verify } from './verify.js'
@@ -15,7 +14,6 @@ const auxiliaryFlag = { auxiliary: true }
 
 export const stageRegistry = {
   brainstorm,
-  propose,
   plan,
   execute,
   verify,

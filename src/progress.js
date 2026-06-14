@@ -37,7 +37,7 @@ export function resolveSpecDir(startDir) {
 const CHANGES_SUBDIR = 'changes';
 const GLOBAL_FILE = 'global.json';
 const CURRENT_VERSION = 3;
-const VALID_STAGES = ['scan', 'brainstorm', 'propose', 'plan', 'execute', 'verify', 'archive', 'quick', 'explore'];
+const VALID_STAGES = ['scan', 'brainstorm', 'plan', 'execute', 'verify', 'archive', 'quick', 'explore'];
 const VALID_STATUSES = ['pending', 'in-progress', 'completed', 'failed', 'blocked', 'waiting'];
 
 const STAGE_LABELS = {
@@ -661,7 +661,7 @@ export class ProgressManager {
       const changeId = changeRow[0].values[0][0];
 
       // 批量插入 9 个阶段（INSERT OR IGNORE 跳过已存在的）
-      const allStages = ['scan', 'brainstorm', 'plan', 'execute', 'verify', 'archive', 'quick', 'explore', 'propose'];
+      const allStages = ['scan', 'brainstorm', 'plan', 'execute', 'verify', 'archive', 'quick', 'explore'];
       for (const stage of allStages) {
         sqlDb.run(
           `INSERT OR IGNORE INTO stages (change_id, stage, status)

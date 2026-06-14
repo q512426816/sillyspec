@@ -5,7 +5,6 @@ import { buildExecuteSteps } from '../src/stages/execute.js'
 
 const stageSteps = {
   brainstorm: stageRegistry.brainstorm.steps,
-  propose: stageRegistry.propose.steps,
   scan: stageRegistry.scan.steps,
   quick: stageRegistry.quick.steps,
   archive: stageRegistry.archive.steps,
@@ -27,9 +26,6 @@ function assertContains(stage, expectedNames) {
 
 assert.equal(stageSteps.brainstorm.length, 11, 'brainstorm should expose design self-review and final confirmation separately')
 assertContains('brainstorm', ['写设计文档并自审', '用户确认并生成规范文件'])
-
-assert.equal(stageSteps.propose.length, 7, 'propose should expose generation and self-check separately')
-assertContains('propose', ['生成规范文件', '自检门控', '展示并更新进度'])
 
 assert.equal(stageSteps.scan.length, 10, 'scan base definition should stay at 10 steps before per-project expansion')
 assertContains('scan', ['构建扫描项目列表', '生成本地配置', '生成模块映射'])

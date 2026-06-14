@@ -138,9 +138,11 @@ function validateBrainstormOutputs(cwd, changeName, context = {}) {
 /**
  * plan 完成校验：检查 plan.md 生成
  */
-function validatePlanOutputs(cwd, changeName) {
-  const planDir = join(cwd, '.sillyspec', 'changes', changeName)
-  const planFile = join(planDir, 'plan.md')
+function validatePlanOutputs(cwd, changeName, context = {}) {
+  const { specRoot } = context
+  const changesRoot = specRoot ? join(specRoot, 'changes') : join(cwd, '.sillyspec', 'changes')
+  const changeDir = join(changesRoot, changeName)
+  const planFile = join(changeDir, 'plan.md')
   const errors = []
 
   if (!existsSync(planFile)) {
@@ -152,16 +154,32 @@ function validatePlanOutputs(cwd, changeName) {
 }
 
 /**
- * verify 完成校验：检查 verify 报告存在
+ * verify 完成校验：检查变更目录和 verify 产物
  */
-function validateVerifyOutputs(cwd, changeName) {
-  const planDir = join(cwd, '.sillyspec', 'changes', changeName)
+function validateVerifyOutputs(cwd, changeName, context = {}) {
+  const { specRoot } = context
+  const changesRoot = specRoot ? join(specRoot, 'changes') : join(cwd, '.sillyspec', 'changes')
+  const changeDir = join(changesRoot, changeName)
   const errors = []
   const warnings = []
 
-  // verify 至少应该有 run 记录
-  if (!existsSync(join(planDir, 'plan.md'))) {
-    errors.push(`变更目录缺失: ${planDir}`)
+  if (!existsSync(changeDir)) {
+    errors.push(`变更目录缺失: ${changeDir}`)
+    return { ok: false, errors, warnings }
+  }
+
+  // verify 阶段应该产出 verify-result.md（或类似报告）
+  const verifyResult = join(changeDir, 'verify-result.md')
+  if (!existsSync(verifyResult)) {
+    warnings.push('verify-result.md 不存在（verify 阶段建议产出验证报告）')
+  }
+
+  // 确保核心规范文件仍然存在
+  const requiredDocs = ['design.md', 'plan.md']
+  for (const doc of requiredDocs) {
+    if (!existsSync(join(changeDir, doc))) {
+      errors.push(`核心文档缺失: ${join(changeDir, doc)}`)
+    }
   }
 
   return { ok: errors.length === 0, errors, warnings }
