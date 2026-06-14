@@ -1608,6 +1608,8 @@ async function continueStep(pm, progress, stageName, cwd, answer, options = {}) 
   const currentStepDef = defSteps?.[currentIdx] || {}
   const currentStep = stageData.steps[currentIdx]
   const isRepeatableWait = currentStepDef.repeatableWait === true || currentStep.repeatableWait === true
+  const requiresWait = currentStepDef.requiresWait === true || currentStep.requiresWait === true
+  const shouldReturnToCurrentStep = isRepeatableWait || requiresWait
 
   const now = new Date().toLocaleString('zh-CN', { hour12: false })
   const prevOutput = currentStep.output || ''
@@ -1636,7 +1638,7 @@ async function continueStep(pm, progress, stageName, cwd, answer, options = {}) 
   delete currentStep.waitOptions
   delete currentStep.waitedAt
 
-  if (isRepeatableWait) {
+  if (shouldReturnToCurrentStep) {
     currentStep.status = 'pending'
     currentStep.completedAt = null
   } else {
@@ -1656,10 +1658,12 @@ async function continueStep(pm, progress, stageName, cwd, answer, options = {}) 
   const entry = `\n## ${now} | ${changeName || '?'} | ${stageName}: ${currentStep.name} [CONTINUED]\n- 回答：${answer}\n`
  appendFileSync(inputsPath, entry)
 
-  // repeatableWait: 回到当前步骤继续澄清
-  if (isRepeatableWait) {
-    console.log(`\n🔁 Step ${currentIdx + 1}/${stageData.steps.length} 是 repeatableWait，已回到当前步骤继续澄清。`)
-    console.log(`   已收集回答轮次：${waitRound}${currentStep.maxWaitRounds ? `/${currentStep.maxWaitRounds}` : ''}`)
+  // shouldReturnToCurrentStep: 回到当前步骤继续执行（repeatable=多轮探索，requiresWait=确认后执行动作）
+  if (shouldReturnToCurrentStep) {
+    console.log(`\n🔁 Step ${currentIdx + 1}/${stageData.steps.length} 已收到用户输入，回到当前步骤继续执行。`)
+    if (isRepeatableWait) {
+      console.log(`   已收集回答轮次：${waitRound}${currentStep.maxWaitRounds ? `/${currentStep.maxWaitRounds}` : ''}`)
+    }
     if (defSteps && defSteps[currentIdx]) {
       console.log('')
       await outputStep(
