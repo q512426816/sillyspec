@@ -80,9 +80,10 @@ function validateScanOutputs(cwd, changeName, context = {}) {
  */
 function validateBrainstormOutputs(cwd, changeName, context = {}) {
   const { specRoot } = context
-  const base = specRoot || join(cwd, '.sillyspec')
-  const isSpecDir = existsSync(join(base, 'changes'))
-  const changesRoot = isSpecDir ? join(base, 'changes') : join(cwd, '.sillyspec', 'changes')
+  const changesRoot = specRoot ? join(specRoot, 'changes') : join(cwd, '.sillyspec', 'changes')
+  if (specRoot && !existsSync(changesRoot)) {
+    return { ok: false, errors: [`平台模式 specRoot 缺少 changes 目录: ${changesRoot}`], warnings: [] }
+  }
   const changeDir = join(changesRoot, changeName)
   const errors = []
   const warnings = []

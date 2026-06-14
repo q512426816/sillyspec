@@ -336,6 +336,133 @@ console.log('\n=== Test 7: tasks.md 空列表只 warning 不 error ===')
 }
 
 
+// ================================================================
+// Test 8: 多个 waiting 步骤 → --continue 必须报错
+// ================================================================
+console.log('\n=== Test 8: 多个 waiting 步骤 → --continue 报错 ===')
+{
+  const { projectDir, changeName } = setupProject('multi-waiting')
+
+  run(`node "${binCLI}" --dir "${projectDir}" run brainstorm --change ${changeName}`)
+
+  const progress = await readProgress(projectDir, changeName)
+  const brainstormData = progress.stages.brainstorm
+  // Set two steps to waiting
+  brainstormData.steps[0].status = 'waiting'
+  brainstormData.steps[0].waitReason = '等待1'
+  brainstormData.steps[0].waitedAt = new Date().toISOString()
+  brainstormData.steps[1].status = 'waiting'
+  brainstormData.steps[1].waitReason = '等待2'
+  brainstormData.steps[1].waitedAt = new Date().toISOString()
+  await writeProgress(projectDir, changeName, progress)
+
+  const output = run(`node "${binCLI}" --dir "${projectDir}" run brainstorm --continue --answer "test" --change ${changeName}`)
+  assert(output.includes('检测到') && output.includes('等待中的步骤'), '多个 waiting 步骤时报错')
+
+  cleanup(projectDir)
+}
+
+// ================================================================
+// Test 9: --skip-approval 不能绕过 requiresWait
+// ================================================================
+console.log('\n=== Test 9: --skip-approval 不能绕过 requiresWait ===')
+{
+  const { projectDir, changeName } = setupProject('skip-approval')
+
+  run(`node "${binCLI}" --dir "${projectDir}" run brainstorm --change ${changeName}`)
+
+  const progress = await readProgress(projectDir, changeName)
+  const brainstormData = progress.stages.brainstorm
+  const proposeIdx = brainstormData.steps.findIndex(s => s.name === '提出 2-3 种方案')
+  for (let i = 0; i < proposeIdx; i++) {
+    brainstormData.steps[i].status = 'completed'
+    brainstormData.steps[i].completedAt = new Date().toISOString()
+  }
+  brainstormData.steps[proposeIdx].status = 'pending'
+  await writeProgress(projectDir, changeName, progress)
+
+  const output = run(`node "${binCLI}" --dir "${projectDir}" run brainstorm --done --skip-approval --output "推荐方案A" --change ${changeName}`)
+  assert(output.includes('必须先等待用户输入') || output.includes('不能直接'), '--skip-approval 无法绕过 requiresWait')
+
+  cleanup(projectDir)
+}
+
+// ================================================================
+// Test 10: repeatableWait 达到 maxWaitRounds 后再次 --wait 被拒绝
+// ================================================================
+console.log('\n=== Test 10: maxWaitRounds 达到上限后 --wait 被拒绝 ===')
+{
+  const { projectDir, changeName } = setupProject('max-rounds')
+
+  run(`node "${binCLI}" --dir "${projectDir}" run brainstorm --change ${changeName}`)
+
+  const progress = await readProgress(projectDir, changeName)
+  const brainstormData = progress.stages.brainstorm
+  const exploreIdx = brainstormData.steps.findIndex(s => s.name === '对话式探索')
+  for (let i = 0; i < exploreIdx; i++) {
+    brainstormData.steps[i].status = 'completed'
+    brainstormData.steps[i].completedAt = new Date().toISOString()
+  }
+  // Simulate already having maxRounds (3) rounds
+  brainstormData.steps[exploreIdx].status = 'pending'
+  brainstormData.steps[exploreIdx].waitRound = 3
+  brainstormData.steps[exploreIdx].maxWaitRounds = 3
+  brainstormData.steps[exploreIdx].waitAnswer = 'previous answer'
+  await writeProgress(projectDir, changeName, progress)
+
+  // Try to --wait again (should be refused)
+  const output = run(`node "${binCLI}" --dir "${projectDir}" run brainstorm --wait --reason "还想再问" --output "再问一个问题" --change ${changeName}`)
+  assert(output.includes('已达到最大等待轮次') || output.includes('maxWaitRounds'), '达到 maxWaitRounds 后 --wait 被拒绝')
+
+  // But --done should still work (has waitAnswer)
+  const output2 = run(`node "${binCLI}" --dir "${projectDir}" run brainstorm --done --output "需求已明确" --change ${changeName}`)
+  const progress2 = await readProgress(projectDir, changeName)
+  const step = progress2.stages.brainstorm.steps[exploreIdx]
+  assert(step.status === 'completed', '达到上限后 --done 仍可推进')
+
+  cleanup(projectDir)
+}
+
+// ================================================================
+// Test 11: specRoot 模式下 changes 缺失 → validator error
+// ================================================================
+console.log('\n=== Test 11: specRoot 模式下 changes 缺失 → fail-fast ===')
+{
+  const specRoot = tmpDir('specroot-nofail')
+  const { runValidators } = await imp(join(root, 'src', 'stage-contract.js'))
+  // specRoot exists but has no changes/ directory
+  const result = runValidators('brainstorm', '/some/project', 'test-change', { specRoot })
+  assert(result.ok === false, 'specRoot 缺 changes 目录时 ok=false')
+  assert(result.errors.some(e => e.includes('缺少 changes 目录')), 'error 包含「缺少 changes 目录」')
+
+  cleanup(specRoot)
+}
+
+// ================================================================
+// Test 12: waitRound=0 正确写入读取（不被 || 吞掉）
+// ================================================================
+console.log('\n=== Test 12: waitRound=0 正确持久化 ===')
+{
+  const { projectDir, changeName } = setupProject('waitround-zero')
+
+  run(`node "${binCLI}" --dir "${projectDir}" run brainstorm --change ${changeName}`)
+
+  const progress = await readProgress(projectDir, changeName)
+  const brainstormData = progress.stages.brainstorm
+  // Manually set waitRound=0 (simulates edge case)
+  brainstormData.steps[0].status = 'pending'
+  brainstormData.steps[0].waitRound = 0
+  brainstormData.steps[0].maxWaitRounds = 3
+  await writeProgress(projectDir, changeName, progress)
+
+  const p2 = await readProgress(projectDir, changeName)
+  // waitRound=0 should be read back as 0 (not null/undefined)
+  assert(p2.stages.brainstorm.steps[0].waitRound === 0, `waitRound=0 正确读取 (实际: ${p2.stages.brainstorm.steps[0].waitRound})`)
+  assert(p2.stages.brainstorm.steps[0].maxWaitRounds === 3, `maxWaitRounds=3 正确读取 (实际: ${p2.stages.brainstorm.steps[0].maxWaitRounds})`)
+
+  cleanup(projectDir)
+}
+
 // ── Summary ──
 console.log(`\n${'='.repeat(50)}`)
 if (failed === 0) {

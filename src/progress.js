@@ -370,9 +370,9 @@ export class ProgressManager {
               sqlDb.run(
                 'INSERT INTO steps (stage_id, name, status, output, completed_at, ordering, wait_reason, wait_options, wait_answer, waited_at, wait_answers, wait_round, max_wait_rounds) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
                 [stageId, step.name, step.status || 'pending', step.output || null, step.completedAt || null, i,
-                  step.waitReason || null, step.waitOptions || null, step.waitAnswer || null, step.waitedAt || null,
+                  step.waitReason ?? null, step.waitOptions ?? null, step.waitAnswer ?? null, step.waitedAt ?? null,
                   Array.isArray(step.waitAnswers) ? JSON.stringify(step.waitAnswers) : null,
-                  step.waitRound || null, step.maxWaitRounds || null]
+                  step.waitRound ?? null, step.maxWaitRounds ?? null]
               );
             }
           }

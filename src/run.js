@@ -1531,6 +1531,19 @@ async function waitStep(pm, progress, stageName, cwd, outputText, waitReason, wa
     process.exit(1)
   }
 
+  // maxWaitRounds 硬上限：达到后拒绝继续 --wait
+  const currentStep = stageData.steps[currentIdx]
+  const defSteps = await getStageSteps(stageName, cwd, progress, platformOpts?.specRoot || null)
+  const stepDef = defSteps?.[currentIdx] || {}
+  const maxWaitRounds = currentStep.maxWaitRounds ?? stepDef.maxWaitRounds
+  const currentWaitRound = currentStep.waitRound || 0
+  if (maxWaitRounds && currentWaitRound >= maxWaitRounds) {
+    console.error(`❌ Step "${currentStep.name}" 已达到最大等待轮次（maxWaitRounds=${maxWaitRounds}）`) 
+    console.error(`   请基于已有回答完成本步骤：`)
+    console.error(`   sillyspec run ${stageName} --done${changeName ? ` --change ${changeName}` : ''} --output "需求理解摘要"`)
+    process.exit(1)
+  }
+
   // 非交互模式下拒绝等待
   if (nonInteractive) {
     console.error(`❌ Human decision required in non-interactive mode.`)
