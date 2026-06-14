@@ -49,6 +49,30 @@ function formatWaitOptions(raw) {
 }
 
 /**
+ * 格式化 repeatableWait 步骤的历史用户回答，注入到重新输出的 step prompt 前。
+ * @param {object} step - progress 中的 step 对象（含 waitAnswers 数组）
+ * @returns {string|null} 格式化的历史文本，或 null（无历史）
+ */
+function formatWaitHistory(step) {
+  const answers = Array.isArray(step.waitAnswers) ? step.waitAnswers : []
+  if (answers.length === 0) return null
+  let text = `本步骤历史用户回答（共 ${answers.length} 轮）：\n`
+  for (const item of answers) {
+    text += `\n${item.round}. ${item.answer}`
+    if (item.question) {
+      text += `\n   对应问题/摘要：${item.question}`
+    }
+  }
+  const maxRounds = step.maxWaitRounds || null
+  if (maxRounds && answers.length >= maxRounds) {
+    text += `\n\n已达到 maxWaitRounds=${maxRounds}。请基于以上回答总结需求；除非仍有阻塞问题，否则完成本步骤并进入方案讨论。`
+  } else {
+    text += `\n\n请判断信息是否足够：如果足够，完成本步骤；如果仍缺关键约束，再提出一个问题并 --wait。`
+  }
+  return text
+}
+
+/**
  * 解析规范目录路径
  * 向上查找含 .sillyspec 的祖先目录，类似 git 找 .git 的逻辑。
  * @param {string} cwd - 项目根目录（或子目录）
@@ -706,11 +730,22 @@ async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjec
   const changeFlag = changeName ? ` --change ${changeName}` : ''
   // 检测当前 step prompt 是否包含 WAIT 指令（即可能需要等待用户）
   const stepPrompt = promptText || ''
-  const mayNeedWait = WAIT_MARKER_RE.test(stepPrompt)
+  const requiresWait = step.requiresWait === true
+  const conditionalWait = step.conditionalWait === true
+  const mayNeedWait = WAIT_MARKER_RE.test(stepPrompt) || requiresWait || conditionalWait
+
   console.log(`\n### 完成后执行`)
-  if (mayNeedWait) {
+  if (requiresWait) {
+    console.log(`本步骤必须等待用户输入，不能直接 --done：`)
+    console.log(`sillyspec run ${stageName} --wait --reason "${step.waitReason || '等待用户输入'}" --options "${(step.waitOptions || ['确认']).join(',')}"${changeFlag} --output "你的问题/方案摘要"`)
+    console.log(``)
+    console.log(`用户回答后执行：`)
+    console.log(`sillyspec run ${stageName} --continue --answer "用户回答"${changeFlag}`)
+    console.log(``)
+    console.log(`收到回答并完成本步骤总结后，再执行：`)
+  } else if (mayNeedWait) {
     console.log(`如果需要用户决策（选择方案/确认设计等）：`)
-    console.log(`sillyspec run ${stageName} --wait --reason "等待原因" --options "选项1,选项2"${changeFlag} --output "你的摘要"`)
+    console.log(`sillyspec run ${stageName} --wait --reason "${step.waitReason || '等待原因'}" --options "${(step.waitOptions || ['选项1', '选项2']).join(',')}"${changeFlag} --output "你的摘要"`)
     console.log(``)
     console.log(`如果不需要用户决策，正常完成：`)
   }
@@ -1569,37 +1604,77 @@ async function continueStep(pm, progress, stageName, cwd, answer, options = {}) 
     process.exit(1)
   }
   const currentIdx = waitingSteps[0].idx
+  const defSteps = await getStageSteps(stageName, cwd, progress, platformOpts?.specRoot || null)
+  const currentStepDef = defSteps?.[currentIdx] || {}
+  const currentStep = stageData.steps[currentIdx]
+  const isRepeatableWait = currentStepDef.repeatableWait === true || currentStep.repeatableWait === true
 
   const now = new Date().toLocaleString('zh-CN', { hour12: false })
-  stageData.steps[currentIdx].status = 'completed'
-  stageData.steps[currentIdx].completedAt = now
-  stageData.steps[currentIdx].waitAnswer = answer
+  const prevOutput = currentStep.output || ''
+  const waitRound = (currentStep.waitRound || 0) + 1
+  currentStep.waitRound = waitRound
+  currentStep.waitAnswer = answer
+  currentStep.waitAnswers = Array.isArray(currentStep.waitAnswers) ? currentStep.waitAnswers : []
+  currentStep.waitAnswers.push({
+    round: waitRound,
+    answer,
+    question: prevOutput || null,
+    answeredAt: now,
+  })
+  currentStep.maxWaitRounds = currentStepDef.maxWaitRounds || currentStep.maxWaitRounds
 
   // 合并 waiting 信息到 output
-  const prevOutput = stageData.steps[currentIdx].output || ''
-  const waitInfo = stageData.steps[currentIdx].waitReason || ''
+  const waitInfo = currentStep.waitReason || ''
   if (waitInfo) {
-    stageData.steps[currentIdx].output = prevOutput
-      ? `${prevOutput} | 用户选择：${answer}`
-      : `用户选择：${answer}`
+    currentStep.output = prevOutput
+      ? `${prevOutput} | 用户回答#${waitRound}：${answer}`
+      : `用户回答#${waitRound}：${answer}`
   }
 
   // 清除等待状态
-  delete stageData.steps[currentIdx].waitReason
-  delete stageData.steps[currentIdx].waitOptions
-  delete stageData.steps[currentIdx].waitedAt
+  delete currentStep.waitReason
+  delete currentStep.waitOptions
+  delete currentStep.waitedAt
+
+  if (isRepeatableWait) {
+    currentStep.status = 'pending'
+    currentStep.completedAt = null
+  } else {
+    currentStep.status = 'completed'
+    currentStep.completedAt = now
+  }
 
   progress.lastActive = now
   await pm._write(cwd, progress, changeName)
   triggerSync(cwd, changeName, platformOpts)
 
-  console.log(`✅ Step ${currentIdx + 1}/${stageData.steps.length} 已继续：${stageData.steps[currentIdx].name}`)
+  console.log(`✅ Step ${currentIdx + 1}/${stageData.steps.length} 已继续：${currentStep.name}`)
   console.log(`   回答：${answer}`)
 
   // Append to user-inputs.md
   const inputsPath = join(specBase, '.runtime', 'user-inputs.md')
-  const entry = `\n## ${now} | ${changeName || '?'} | ${stageName}: ${stageData.steps[currentIdx].name} [CONTINUED]\n- 回答：${answer}\n`
+  const entry = `\n## ${now} | ${changeName || '?'} | ${stageName}: ${currentStep.name} [CONTINUED]\n- 回答：${answer}\n`
  appendFileSync(inputsPath, entry)
+
+  // repeatableWait: 回到当前步骤继续澄清
+  if (isRepeatableWait) {
+    console.log(`\n🔁 Step ${currentIdx + 1}/${stageData.steps.length} 是 repeatableWait，已回到当前步骤继续澄清。`)
+    console.log(`   已收集回答轮次：${waitRound}${currentStep.maxWaitRounds ? `/${currentStep.maxWaitRounds}` : ''}`)
+    if (defSteps && defSteps[currentIdx]) {
+      console.log('')
+      await outputStep(
+        stageName,
+        currentIdx,
+        defSteps,
+        cwd,
+        changeName,
+        progress.project || null,
+        platformOpts,
+        formatWaitHistory(currentStep)
+      )
+    }
+    return { stageCompleted: false, currentIdx, nextPendingIdx: currentIdx }
+  }
 
   // 检查阶段是否全部完成
   const nextPendingIdx = stageData.steps.findIndex(s => s.status === 'pending')
@@ -1613,7 +1688,6 @@ async function continueStep(pm, progress, stageName, cwd, answer, options = {}) 
   }
 
   // 输出下一步
-  const defSteps = await getStageSteps(stageName, cwd, progress)
   if (nextPendingIdx !== -1 && defSteps) {
     console.log('')
     await outputStep(stageName, nextPendingIdx, defSteps, cwd, changeName, progress.project || null, platformOpts, answer)
@@ -1658,6 +1732,25 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
 
   const steps = stageData.steps
   const currentIdx = steps.findIndex(s => s.status === 'pending' || s.status === 'in-progress')
+  if (currentIdx === -1) {
+    console.error('没有待完成的步骤')
+    process.exit(1)
+  }
+
+  // ── requiresWait 硬门控 ──
+  const defStepsForCurrent = await getStageSteps(stageName, cwd, progress, platformOpts?.specRoot || null)
+  const currentStepDef = defStepsForCurrent?.[currentIdx] || {}
+  const currentStep = steps[currentIdx]
+  if (currentStepDef.requiresWait === true && !currentStep.waitAnswer) {
+    console.error(`❌ Step "${currentStep.name}" 必须先等待用户输入，不能直接 --done。`)
+    console.error(`   原因：${currentStepDef.waitReason || '该步骤需要人工确认/回答'}`)
+    if (currentStepDef.waitOptions) {
+      console.error(`   选项：${currentStepDef.waitOptions.join(', ')}`)
+    }
+    console.error(`   请先执行：`)
+    console.error(`   sillyspec run ${stageName} --wait --reason "${currentStepDef.waitReason || '等待用户输入'}" --options "${(currentStepDef.waitOptions || ['确认']).join(',')}"${changeName ? ` --change ${changeName}` : ''} --output "你的问题/方案摘要"`)
+    process.exit(1)
+  }
 
   steps[currentIdx].status = 'completed'
   steps[currentIdx].completedAt = new Date().toLocaleString('zh-CN',{hour12:false})

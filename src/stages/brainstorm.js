@@ -98,6 +98,9 @@ export const definition = {
     },
     {
       name: '需求范围评估',
+      conditionalWait: true,
+      waitReason: '等待用户确认拆分/批量模式方案',
+      waitOptions: ['同意拆分', '不需要拆分', '走批量模式'],
       prompt: `评估需求复杂度，判断是否需要拆分或走批量模式。
 
 ### 操作
@@ -146,6 +149,11 @@ export const definition = {
     },
     {
       name: '对话式探索',
+      requiresWait: true,
+      repeatableWait: true,
+      maxWaitRounds: 3,
+      waitReason: '等待用户回答需求问题',
+      waitOptions: ['继续补充', '信息够了，进入方案讨论'],
       prompt: `通过对话探索需求细节。
 
 ### 操作
@@ -174,6 +182,9 @@ export const definition = {
     },
     {
       name: '提出 2-3 种方案',
+      requiresWait: true,
+      waitReason: '等待用户选择方案',
+      waitOptions: ['方案A', '方案B', '方案C'],
       prompt: `基于需求理解，提出 2-3 种实现方案。
 
 ### 操作
@@ -197,6 +208,9 @@ export const definition = {
     },
     {
       name: '分段展示设计',
+      requiresWait: true,
+      waitReason: '等待用户确认设计方案',
+      waitOptions: ['确认', '需要修改', '推翻重来'],
       prompt: `展示完整设计方案供用户确认。
 
 ### 操作
@@ -302,6 +316,9 @@ design.md 文件路径 + 自审结果
     },
     {
       name: '用户确认并生成规范文件',
+      requiresWait: true,
+      waitReason: '等待用户最终确认设计方案',
+      waitOptions: ['确认', '需要修改', '推翻重来'],
       prompt: `用户确认设计方案，生成规范文件。
 
 ### 操作
