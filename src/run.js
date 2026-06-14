@@ -4,7 +4,7 @@
  * CLI 成为流程引擎，AI 变成步骤执行器。
  * 支持多变更并行：每个变更状态存储在 sillyspec.db 中。
  */
-import { basename, join, resolve } from 'path'
+import { basename, join, resolve, dirname } from 'path'
 import { existsSync, readdirSync, mkdirSync, writeFileSync, appendFileSync, readFileSync, rmSync, statSync } from 'fs'
 import { createRequire } from 'module'
 const require = createRequire(import.meta.url)
@@ -50,14 +50,23 @@ function formatWaitOptions(raw) {
 
 /**
  * 解析规范目录路径
- * @param {string} cwd - 项目根目录
+ * 向上查找含 .sillyspec 的祖先目录，类似 git 找 .git 的逻辑。
+ * @param {string} cwd - 项目根目录（或子目录）
  * @param {object} [opts]
  * @param {string} [opts.specDir] - 用户指定的 specDir（通过 --spec-dir 或 --spec-root）
  * @returns {string} 规范目录的绝对路径
  */
 function resolveSpecDir(cwd, opts = {}) {
   if (opts.specDir) return resolve(opts.specDir)
-  return join(cwd, '.sillyspec')
+  let dir = resolve(cwd)
+  while (true) {
+    const candidate = join(dir, '.sillyspec')
+    if (existsSync(candidate)) return candidate
+    const parent = dirname(dir)
+    if (parent === dir) break
+    dir = parent
+  }
+  return join(resolve(cwd), '.sillyspec')
 }
 import { stageRegistry, auxiliaryStages } from './stages/index.js'
 import { checkTransition, runValidators } from './stage-contract.js'
@@ -1434,7 +1443,7 @@ function validateFileLocations(cwd, stageName, progress, changeName, specBase) {
   }
 }
 
-async function archiveChangeDirectory(pm, cwd, progress) {
+async function archiveChangeDirectory(pm, cwd, progress, specBase) {
   const { renameSync } = await import('fs')
   const archiveChangeName = progress.currentChange
   if (!archiveChangeName) {
@@ -1679,7 +1688,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
       console.log('⚠️  请添加 --confirm 确认归档，例如：sillyspec run archive --done --confirm --output "确认归档"')
       return { stageCompleted: false, currentIdx, nextPendingIdx: currentIdx }
     }
-    await archiveChangeDirectory(pm, cwd, progress)
+    await archiveChangeDirectory(pm, cwd, progress, specBase)
   }
 
   // archive "确认归档" 步骤完成后，校验归档完整性

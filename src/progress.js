@@ -12,12 +12,28 @@
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, unlinkSync } from 'fs';
-import { join, basename } from 'path';
+import { join, basename, dirname, resolve } from 'path';
 import { DB } from './db.js';
 
 // 默认规范目录名（相对于 cwd）
 const SPEC_DIR_NAME = '.sillyspec';
 const RUNTIME_SUBDIR = '.runtime';
+
+/**
+ * 向上查找含 .sillyspec 目录的祖先目录，类似 git 找 .git 的逻辑。
+ * 找到则返回 <祖先>/.sillyspec，否则 fallback 到 <cwd>/.sillyspec。
+ */
+export function resolveSpecDir(startDir) {
+  let dir = resolve(startDir);
+  while (true) {
+    const candidate = join(dir, SPEC_DIR_NAME);
+    if (existsSync(candidate)) return candidate;
+    const parent = dirname(dir);
+    if (parent === dir) break; // 到达根目录
+    dir = parent;
+  }
+  return join(resolve(startDir), SPEC_DIR_NAME);
+}
 const CHANGES_SUBDIR = 'changes';
 const GLOBAL_FILE = 'global.json';
 const CURRENT_VERSION = 3;
@@ -62,9 +78,10 @@ export class ProgressManager {
 
   // ── 路径工具 ──
 
-  /** 获取 specDir（优先自定义，否则 cwd/.sillyspec） */
+  /** 获取 specDir（优先自定义，否则向上查找含 .sillyspec 的目录，fallback 到 cwd/.sillyspec） */
   _getSpecDir(cwd) {
-    return this._customSpecDir || join(cwd, SPEC_DIR_NAME);
+    if (this._customSpecDir) return this._customSpecDir;
+    return resolveSpecDir(cwd);
   }
 
   _runtimePath(cwd, ...parts) {
@@ -411,11 +428,8 @@ export class ProgressManager {
          VALUES (?, ?, ?)`,
         [changeName, now, now]
       );
-      // 如果已存在但为 archived，恢复为 active
-      sqlDb.run(
-        `UPDATE changes SET status = 'active', last_active = ? WHERE name = ? AND status = 'archived'`,
-        [now, changeName]
-      );
+      // 注意：不复活已归档的变更——归档是不可逆操作
+      // 如果变更已存在且为 archived，保持 archived 状态不变
     });
   }
 
