@@ -1444,6 +1444,7 @@ function validateFileLocations(cwd, stageName, progress, changeName, specBase) {
 
   // 每个阶段完成后预期存在的文件
   const expectedFiles = {
+    brainstorm: ['design.md', 'proposal.md', 'requirements.md', 'tasks.md'],
     propose: ['proposal.md', 'design.md', 'requirements.md', 'tasks.md'],
     plan: ['plan.md'],
     verify: ['verify-result.md'],

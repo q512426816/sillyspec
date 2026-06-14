@@ -5,7 +5,7 @@
  * CLI 不再相信 prompt 完成，completeStep 后必须过 validator。
  */
 
-import { existsSync, readdirSync } from 'fs'
+import { existsSync, readdirSync, readFileSync } from 'fs'
 import { join, basename } from 'path'
 
 /**
@@ -69,6 +69,65 @@ function validateScanOutputs(cwd, changeName, context = {}) {
     const modules = readdirSync(modulesRoot).filter(f => f.endsWith('.md'))
     if (modules.length === 0) {
       warnings.push('modules 目录为空')
+    }
+  }
+
+  return { ok: errors.length === 0, errors, warnings }
+}
+
+/**
+ * brainstorm 完成校验：检查四件套规范文件是否生成
+ */
+function validateBrainstormOutputs(cwd, changeName, context = {}) {
+  const { specRoot } = context
+  const base = specRoot || join(cwd, '.sillyspec')
+  const isSpecDir = existsSync(join(base, 'changes'))
+  const changesRoot = isSpecDir ? join(base, 'changes') : join(cwd, '.sillyspec', 'changes')
+  const changeDir = join(changesRoot, changeName)
+  const errors = []
+  const warnings = []
+
+  const requiredFiles = ['design.md', 'proposal.md', 'requirements.md', 'tasks.md']
+
+  for (const file of requiredFiles) {
+    if (!existsSync(join(changeDir, file))) {
+      errors.push(`brainstorm 产物缺失: ${join(changeDir, file)}`)
+    }
+  }
+
+  // 内容校验（文件存在时检查关键章节）
+  if (existsSync(join(changeDir, 'proposal.md'))) {
+    const content = readFileSync(join(changeDir, 'proposal.md'), 'utf8')
+    if (!content.includes('不在范围内') && !content.includes('Non-Goals') && !content.includes('非目标')) {
+      warnings.push('proposal.md 缺少「不在范围内/Non-Goals」章节')
+    }
+  }
+
+  if (existsSync(join(changeDir, 'requirements.md'))) {
+    const content = readFileSync(join(changeDir, 'requirements.md'), 'utf8')
+    if (!/FR-\d+/i.test(content)) {
+      warnings.push('requirements.md 缺少 FR 编号的需求项')
+    }
+  }
+
+  if (existsSync(join(changeDir, 'design.md'))) {
+    const content = readFileSync(join(changeDir, 'design.md'), 'utf8')
+    if (!content.includes('文件变更清单') && !content.includes('File Changes') && !content.includes('文件清单')) {
+      warnings.push('design.md 缺少「文件变更清单」章节')
+    }
+    if (!content.includes('风险登记') && !content.includes('Risk') && !content.includes('风险')) {
+      warnings.push('design.md 缺少「风险登记」章节')
+    }
+    if (!content.includes('自审') && !content.includes('Self-Review') && !content.includes('Self-review')) {
+      warnings.push('design.md 缺少「自审」章节')
+    }
+  }
+
+  if (existsSync(join(changeDir, 'tasks.md'))) {
+    const content = readFileSync(join(changeDir, 'tasks.md'), 'utf8')
+    const lines = content.split('\n').filter(l => l.trim().startsWith('-') || l.trim().startsWith('*') || /^\d+\./.test(l.trim()))
+    if (lines.length === 0) {
+      warnings.push('tasks.md 没有任务列表项')
     }
   }
 
@@ -187,7 +246,7 @@ const contracts = {
     description: '需求分析与设计',
     allowedFrom: [],           // 任何变更的起始阶段
     allowedTo: ['plan'],
-    validators: [],
+    validators: [validateBrainstormOutputs],
   },
   plan: {
     stage: 'plan',

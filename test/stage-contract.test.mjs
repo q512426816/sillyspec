@@ -87,12 +87,12 @@ if (scanResult.ok === false && scanResult.errors.length > 0) {
   failed++
 }
 
-// 无 validator 的阶段应该 pass
+// brainstorm 有 validator，但变更目录不存在时应该报错（因为产物不存在）
 const brainstormResult = runValidators('brainstorm', '.', 'test')
-if (brainstormResult.ok === true) {
-  console.log('✅ brainstorm 无 validator 直接通过')
+if (brainstormResult.ok === false && brainstormResult.errors.length > 0) {
+  console.log('✅ brainstorm validator 检测到缺失产物文件')
 } else {
-  console.log('❌ brainstorm 无 validator 但失败了')
+  console.log('❌ brainstorm validator 未检测到缺失产物')
   failed++
 }
 
