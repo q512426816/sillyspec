@@ -55,7 +55,7 @@ function validateScanOutputs(cwd, changeName, context = {}) {
 
   for (const doc of requiredDocs) {
     if (!existsSync(join(docsRoot, doc))) {
-      errors.push(`scan 文档缺失: ${docsRoot}/${doc}`)
+      errors.push(`scan 文档缺失: ${join(docsRoot, doc)}`)
     }
   }
 

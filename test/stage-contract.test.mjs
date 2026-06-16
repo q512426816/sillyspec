@@ -79,7 +79,7 @@ if (verifyResult.ok === false && verifyResult.errors.length > 0) {
 }
 
 // scan validator：文档目录不存在应报错
-const scanResult = runValidators('scan', '/tmp/nonexistent-project', 'test', { projectName: 'test' })
+const scanResult = runValidators('scan', join(tmpdir(), 'nonexistent-project'), 'test', { projectName: 'test' })
 if (scanResult.ok === false && scanResult.errors.length > 0) {
   console.log('✅ scan validator 检测到缺失 scan 文档')
 } else {
@@ -138,7 +138,7 @@ if (localResult.ok === false && localResult.errors.length > 0) {
 // 测试3：校验路径指向 specRoot 而非 sourceRoot
 const errors1 = localResult.errors.join(' ')
 const errors2 = specResult.errors.join(' ')
-if (errors1.includes(sourceRoot.replace('/tmp/', '')) || errors1.includes(join(sourceRoot, '.sillyspec').slice(-30))) {
+if (errors1.includes(sourceRoot) || errors1.includes(join(sourceRoot, '.sillyspec'))) {
   console.log('✅ 未传 specRoot 时校验路径指向 source_root')
 } else {
   console.log('✅ 未传 specRoot 时校验失败（文档确实不在 source_root 下）')

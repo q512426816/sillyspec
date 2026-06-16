@@ -13,6 +13,7 @@
 import { join, basename } from 'path'
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'fs'
 import { randomUUID } from 'crypto'
+import { tmpdir } from 'os'
 import { SCAN_STATUS, CHECK_SEVERITY } from '../src/constants.js'
 
 const passed = []
@@ -34,8 +35,8 @@ function cleanup(dir) {
 }
 
 function setup(name) {
-  const base = `/tmp/failure-test-${name}-${randomUUID().slice(0, 8)}`
-  const spec = `/tmp/failure-test-spec-${name}-${randomUUID().slice(0, 8)}`
+  const base = join(tmpdir(), `failure-test-${name}-${randomUUID().slice(0, 8)}`)
+  const spec = join(tmpdir(), `failure-test-spec-${name}-${randomUUID().slice(0, 8)}`)
   mkdirSync(base, { recursive: true })
   mkdirSync(spec, { recursive: true })
   writeFileSync(join(base, 'package.json'), '{}')

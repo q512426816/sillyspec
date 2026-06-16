@@ -5,6 +5,7 @@
 import { join, resolve, dirname, basename } from 'path'
 import { existsSync, mkdirSync, writeFileSync, rmSync } from 'fs'
 import { fileURLToPath, pathToFileURL } from 'url'
+import { tmpdir } from 'os'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -20,12 +21,12 @@ function assert(cond, msg) {
 }
 
 function setup(name) {
-  const cwd = join('/tmp', `pc-${name}`)
+  const cwd = join(tmpdir(), `pc-${name}`)
   mkdirSync(cwd, { recursive: true })
   return cwd
 }
 function specSetup(name) {
-  const d = join('/tmp', `pc-${name}-spec`)
+  const d = join(tmpdir(), `pc-${name}-spec`)
   mkdirSync(d, { recursive: true })
   return d
 }

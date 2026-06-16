@@ -15,6 +15,7 @@ import { join, resolve, basename, dirname } from 'path'
 import { existsSync, mkdirSync, writeFileSync, rmSync } from 'fs'
 import { fileURLToPath, pathToFileURL } from 'url'
 import { execSync } from 'child_process'
+import { tmpdir } from 'os'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -39,7 +40,7 @@ function assert(condition, msg) {
 }
 
 function tmpDir(name) {
-  const dir = join('/tmp', `spec-dir-test-${name}-${Date.now()}`)
+  const dir = join(tmpdir(), `spec-dir-test-${name}-${Date.now()}`)
   mkdirSync(dir, { recursive: true })
   return dir
 }

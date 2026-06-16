@@ -72,24 +72,27 @@ quicklog 已创建（必须放在输出的第一行确认）+ 任务理解 + 上
       prompt: `Git 暂存并更新任务记录。
 
 ### 操作
-1. \`git add -A\` — 暂存改动文件（不要 commit，由用户通过统一提交工具处理）
-2. 更新 Step 1 创建的记录：
+1. 查看 \`git status --porcelain\`，确认只包含本次 quick 相关文件
+2. 使用 \`git add -- <file...>\` 暂存本次 quick 实际修改的文件（不要 commit，由用户通过统一提交工具处理）
+   - 禁止使用 \`git add -A\`
+   - 不要暂存 quick 开始前就已存在的无关改动
+3. 更新 Step 1 创建的记录：
    - 无 \`--change\`：找到对应 ql-ID 的条目，将「状态：进行中」改为「状态：已完成」，补充实际改动文件和结果摘要
    - 有 \`--change\`：勾选 tasks.md 中对应的 task checkbox
-3. QUICKLOG 轮转：超过 500 行则重命名为 \`QUICKLOG-<USER>-YYYY-MM-DD.md\`（日期取最后一条记录的日期）。新文件从空开始，ql-ID 需扫描同目录所有 QUICKLOG 文件中当天最大序号 +1
-4. 如果发现项目特有的坑，追加到 \`.sillyspec/knowledge/uncategorized.md\`
-5. 任务比预期复杂 → 建议用完整流程
+4. QUICKLOG 轮转：超过 500 行则重命名为 \`QUICKLOG-<USER>-YYYY-MM-DD.md\`（日期取最后一条记录的日期）。新文件从空开始，ql-ID 需扫描同目录所有 QUICKLOG 文件中当天最大序号 +1
+5. 如果发现项目特有的坑，追加到 \`.sillyspec/knowledge/uncategorized.md\`
+6. 任务比预期复杂 → 建议用完整流程
 
 ### 模块文档同步
-6. 读取 \`.sillyspec/docs/<project>/modules/_module-map.yaml\`（不存在则跳过以下步骤）
-7. 对比本次修改的文件（\`git diff --name-only\`）与模块映射
-8. 如果命中模块 → 直接同步模块文档：
+7. 读取 \`.sillyspec/docs/<project>/modules/_module-map.yaml\`（不存在则跳过以下步骤）
+8. 对比本次修改的文件（\`git diff --name-only HEAD\`）与模块映射
+9. 如果命中模块 → 直接同步模块文档：
    - 读取对应的 \`.sillyspec/docs/<project>/modules/<module>.md\`（如不存在则新建）
    - 根据本次改动内容更新模块文档（正文描述当前状态，底部变更索引追加本次 ql-ID）
    - 变更索引格式：\`- ql-YYYYMMDD-NNN-XXXX | <一句话描述>\`
    - 写入模块文档
-   - 将更新的模块文件加入 \`git add\`
-9. 未命中任何模块 → 跳过，不做额外操作
+   - 使用 \`git add -- <module-doc>\` 暂存更新的模块文件
+10. 未命中任何模块 → 跳过，不做额外操作
 
 ### 输出
 暂存确认 + 记录路径 + 模块文档同步结果（如有）`,

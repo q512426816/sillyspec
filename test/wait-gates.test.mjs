@@ -14,6 +14,7 @@ import { join, resolve, basename, dirname } from 'path'
 import { existsSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'fs'
 import { fileURLToPath, pathToFileURL } from 'url'
 import { execSync } from 'child_process'
+import { tmpdir } from 'os'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -46,7 +47,7 @@ function run(cmd, opts = {}) {
 }
 
 function tmpDir(label) {
-  const dir = join('/tmp', `sillyspec-wait-test-${label}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`)
+  const dir = join(tmpdir(), `sillyspec-wait-test-${label}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`)
   mkdirSync(dir, { recursive: true })
   return dir
 }

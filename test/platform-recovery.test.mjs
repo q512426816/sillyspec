@@ -6,6 +6,7 @@ import { join, resolve, dirname, basename } from 'path'
 import { existsSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'fs'
 import { fileURLToPath, pathToFileURL } from 'url'
 import { execSync } from 'child_process'
+import { tmpdir } from 'os'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -21,16 +22,23 @@ function assert(cond, msg) {
 
 const P = 'recover'
 function setup(name) {
-  const d = join('/tmp', `${P}-${name}`)
+  const d = join(tmpdir(), `${P}-${name}`)
   mkdirSync(d, { recursive: true })
   return d
 }
 function spec(name) {
-  const d = join('/tmp', `${P}-${name}-spec`)
+  const d = join(tmpdir(), `${P}-${name}-spec`)
   mkdirSync(d, { recursive: true })
   return d
 }
 function clean(...dirs) { for (const d of dirs) try { rmSync(d, { recursive: true, force: true }) } catch {} }
+function hasPathSegments(value, segments) {
+  const parts = value.split(/[\\/]+/)
+  for (let i = 0; i <= parts.length - segments.length; i++) {
+    if (segments.every((segment, offset) => parts[i + offset] === segment)) return true
+  }
+  return false
+}
 
 function run(cmd) {
   return execSync(cmd, { encoding: 'utf8', timeout: 15000, stdio: ['pipe', 'pipe', 'pipe'] })
@@ -127,8 +135,8 @@ console.log('\n=== Test 5: specDir 缺文档 → 校验失败，路径不含 .si
   assert(!result.ok, `specDir 缺文档: ok=${result.ok}`)
   assert(result.errors.length > 0, `有 errors`)
   const errMsg = result.errors[0]
-  assert(!errMsg.includes('.sillyspec/docs'), `路径不含 .sillyspec: ${errMsg}`)
-  assert(errMsg.includes('/docs/'), `路径含 /docs/: ${errMsg}`)
+  assert(!hasPathSegments(errMsg, ['.sillyspec', 'docs']), `路径不含 .sillyspec: ${errMsg}`)
+  assert(hasPathSegments(errMsg, ['docs', proj, 'scan']), `路径含 docs/${proj}/scan: ${errMsg}`)
   clean(cwd, sd)
 }
 
@@ -149,7 +157,7 @@ console.log('\n=== Test 7: 非平台模式缺文档 → 路径含 .sillyspec ===
   const result = runValidators('scan', cwd, 'default', { projectName: proj })
   assert(!result.ok, `非平台缺文档: ok=${result.ok}`)
   const errMsg = result.errors[0]
-  assert(errMsg.includes('.sillyspec/docs'), `路径含 .sillyspec/docs/: ${errMsg}`)
+  assert(hasPathSegments(errMsg, ['.sillyspec', 'docs']), `路径含 .sillyspec/docs: ${errMsg}`)
   clean(cwd)
 }
 

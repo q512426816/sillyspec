@@ -257,19 +257,34 @@ async function auditQuickCompletion(cwd, guard, options = {}) {
     const gitStatus = execSync('git status --porcelain', { cwd, encoding: 'utf8', timeout: 10000 })
     const currentEntries = gitStatus.trim().split('\n').filter(Boolean)
 
+    const normalizeGitPath = (p) => p.replace(/\\/g, '/')
+    const isQuickMetadata = (p) => {
+      const file = normalizeGitPath(p)
+      return file.startsWith('.sillyspec/quicklog/')
+        || file.startsWith('.sillyspec/.runtime/')
+        || file === '.sillyspec/knowledge/uncategorized.md'
+        || (/^\.sillyspec\/docs\/[^/]+\/modules\/[^/]+\.md$/.test(file))
+        || (/^\.sillyspec\/docs\/[^/]+\/modules\/_module-map\.yaml$/.test(file))
+    }
     const DANGEROUS_PATTERNS = [
-      '.sillyspec/',
       'package.json',
       'package-lock.json',
       'yarn.lock',
       'pnpm-lock.yaml',
       '.eslintrc',
       'tsconfig.json',
+      'src/db.js',
+      'src/progress.js',
+      'src/run.js',
+      'src/stage-contract.js',
+      'src/worktree.js',
+      'src/worktree-apply.js',
+      'src/hooks/',
     ]
 
     for (const entry of currentEntries) {
       const status = entry.slice(0, 2).trim()
-      const file = entry.slice(3).trim()
+      const file = normalizeGitPath(entry.slice(3).trim())
       if (!file || file.startsWith('??. ')) continue
 
       result.changedFiles.push(file)
@@ -282,7 +297,11 @@ async function auditQuickCompletion(cwd, guard, options = {}) {
       }
 
       // 检查危险文件（除非 force-baseline）
-      if (DANGEROUS_PATTERNS.some(p => file.includes(p)) && !forceBaseline) {
+      if (file.startsWith('.sillyspec/') && !isQuickMetadata(file) && !forceBaseline) {
+        result.reasons.push(`危险文件变更: ${file}`)
+      }
+
+      if (DANGEROUS_PATTERNS.some(p => file === p || file.startsWith(p)) && !forceBaseline) {
         result.reasons.push(`危险文件变更: ${file}`)
       }
     }
@@ -302,7 +321,7 @@ async function auditQuickCompletion(cwd, guard, options = {}) {
     // 检查 new files（除非 allow-new）
     if (!allowNew) {
       for (const f of result.newFiles) {
-        if (!f.startsWith('.sillyspec/quicklog/') && !f.startsWith('.sillyspec/.runtime/')) {
+        if (!isQuickMetadata(f)) {
           result.reasons.push(`新增文件（需 --allow-new）: ${f}`)
         }
       }
@@ -311,7 +330,7 @@ async function auditQuickCompletion(cwd, guard, options = {}) {
     // 检查 allowedFiles 范围
     if (allowedFiles.length > 0) {
       for (const f of result.changedFiles) {
-        if (!allowedFiles.includes(f) && !f.startsWith('.sillyspec/')) {
+        if (!allowedFiles.includes(f) && !isQuickMetadata(f)) {
           result.reasons.push(`超出 allowedFiles: ${f}`)
         }
       }
@@ -368,6 +387,23 @@ async function auditQuickCompletion(cwd, guard, options = {}) {
   }
 
   return result
+}
+
+function printQuickAuditReview(review) {
+  if (review.status === 'blocked') {
+    console.error(`\n🚫 quick 变更边界审计 — BLOCKED：`)
+    for (const r of review.reasons) {
+      console.error(`   - ${r}`)
+    }
+    console.error(`\n   quick 已停止：请恢复/拆分这些变更，或重新运行 quick 并显式声明范围。`)
+  } else if (review.status === 'warning') {
+    console.warn(`\n⚠️ quick 变更边界审计 — WARNING：`)
+    for (const r of review.reasons) {
+      console.warn(`   - ${r}`)
+    }
+  } else {
+    console.log(`\n✅ quick 变更边界审计 — SAFE (变更 ${review.changedFiles.length} 个文件)`)
+  }
 }
 
 async function triggerSync(cwd, changeName, platformOpts = {}) {
@@ -917,9 +953,14 @@ async function executeScanPostcheck(cwd, platformOpts, scanProfile) {
       const { execSync } = await import('child_process')
       const manifestDir = platformOpts.specRoot
       let sourceCommit = null
+      let sourceCommitError = null
       try {
-        const { value: sourceCommit, error: scErr } = safeGit(cwd, ['rev-parse', 'HEAD'])
-      } catch {}
+        const gitResult = safeGit(cwd, ['rev-parse', 'HEAD'])
+        sourceCommit = gitResult.value
+        sourceCommitError = gitResult.error
+      } catch (e) {
+        sourceCommitError = e.message
+      }
       mkdirSync(manifestDir, { recursive: true })
       const manifest = {
         scan_profile: {
@@ -932,7 +973,7 @@ async function executeScanPostcheck(cwd, platformOpts, scanProfile) {
         workspace_id: platformOpts.workspaceId || null,
         scan_run_id: platformOpts.scanRunId || null,
         source_commit: sourceCommit,
-        source_commit_error: sourceCommit === null ? (scErr || 'unknown') : undefined,
+        source_commit_error: sourceCommit === null ? (sourceCommitError || 'unknown') : undefined,
         generated_at: new Date().toISOString(),
         schema_version: 2,
       }
@@ -1101,6 +1142,7 @@ export async function runCommand(args, cwd, specDir = null) {
 
   const isAllowNew = flags.includes('--allow-new')
   const isForceBaseline = flags.includes('--force-baseline')
+  const isForceRescan = flags.includes('--force-rescan')
 
   // 未知参数 fail-fast
   const knownFlags = new Set([
@@ -1109,7 +1151,7 @@ export async function runCommand(args, cwd, specDir = null) {
     '--reason', '--options', '--answer', '--confirm-mode',
     '--output', '--input', '--change',
     '--spec-dir', '--spec-root', '--runtime-root', '--workspace-id', '--scan-run-id',
-    '--files', '--allow-new', '--force-baseline',
+    '--files', '--allow-new', '--force-baseline', '--force-rescan',
     '--json', '--dir', '--help',
   ])
   for (let i = 0; i < flags.length; i++) {
@@ -1215,7 +1257,7 @@ export async function runCommand(args, cwd, specDir = null) {
   }
 
   // 默认：输出当前步骤
-  return await runStage(pm, progress, stageName, cwd, effectiveChange, isSkipApproval, platformOpts, { quickFiles, isAllowNew, isForceBaseline })
+  return await runStage(pm, progress, stageName, cwd, effectiveChange, isSkipApproval, platformOpts, { quickFiles, isAllowNew, isForceBaseline, isForceRescan })
 }
 
 /**
@@ -1231,6 +1273,7 @@ function resolveChangeNameAuto(cwd, specDir = null) {
 }
 
 async function runStage(pm, progress, stageName, cwd, changeName, skipApproval = false, platformOpts = {}, quickOpts = {}) {
+  const specBase = platformOpts.specRoot || join(cwd, '.sillyspec')
   // 状态转换校验
   const prevStage = progress.currentStage || ''
   const transition = checkTransition(prevStage, stageName)
@@ -1311,6 +1354,28 @@ async function runStage(pm, progress, stageName, cwd, changeName, skipApproval =
     scanProfile = stageData.scanProfile
   }
   if (scanProfile) platformOpts.scanProfile = scanProfile
+
+  if (stageName === 'scan') {
+    try {
+      const gitResult = safeGit(cwd, ['rev-parse', 'HEAD'])
+      const scanGuard = {
+        sourceCommit: gitResult.value,
+        sourceCommitError: gitResult.error,
+        startedAt: new Date().toISOString(),
+        forceRescan: quickOpts?.isForceRescan || false,
+      }
+      const guardFile = join(specBase, '.runtime', 'scan-guard.json')
+      mkdirSync(dirname(guardFile), { recursive: true })
+      writeFileSync(guardFile, JSON.stringify(scanGuard, null, 2) + '\n')
+      if (scanGuard.forceRescan) {
+        console.log('🛡️ scan 覆盖保护已记录: --force-rescan 已开启')
+      } else {
+        console.log('🛡️ scan 覆盖保护已记录: existing scan docs require current source_commit/updated_at')
+      }
+    } catch (e) {
+      console.warn(`⚠️ scan 覆盖保护记录失败: ${e.message}`)
+    }
+  }
 
   if (currentIdx === -1) {
     // 已完成 → 自动重置，重新开始
@@ -2008,6 +2073,25 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
         console.error(`   请先创建 quicklog 记录再 --done，或使用 --skip-approval 跳过此校验。`)
         return { stageCompleted: false, currentIdx, nextPendingIdx: -1 }
       }
+      if (progress.quickGuard) {
+        const review = await auditQuickCompletion(cwd, progress.quickGuard, { isConfirm })
+        progress.quickGuard.review = review
+        progress.quickGuard.completedAt = new Date().toISOString()
+        printQuickAuditReview(review)
+        if (review.status === 'blocked') {
+          steps[currentIdx].status = 'pending'
+          steps[currentIdx].completedAt = null
+          if (outputText) steps[currentIdx].output = null
+          process.exit(1)
+        }
+        try {
+          const { unlinkSync } = await import('fs')
+          const guardFile = join(specBase, '.runtime', 'quick-guard.json')
+          unlinkSync(guardFile)
+        } catch {}
+        progress.lastQuickReview = review
+        delete progress.quickGuard
+      }
     }
 
     stageData.status = 'completed'
@@ -2033,9 +2117,14 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
         const manifestDir = platformOpts.specRoot
         mkdirSync(manifestDir, { recursive: true })
         let sourceCommit = null
+        let sourceCommitError = null
         try {
-          const { value: sourceCommit, error: scErr } = safeGit(cwd, ['rev-parse', 'HEAD'])
-        } catch {}
+          const gitResult = safeGit(cwd, ['rev-parse', 'HEAD'])
+          sourceCommit = gitResult.value
+          sourceCommitError = gitResult.error
+        } catch (e) {
+          sourceCommitError = e.message
+        }
         const manifest = {
           workspace_id: platformOpts.workspaceId || null,
           scan_run_id: platformOpts.scanRunId || null,
@@ -2043,7 +2132,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
           spec_root: platformOpts.specRoot || null,
           runtime_root: platformOpts.runtimeRoot || null,
           source_commit: sourceCommit,
-          source_commit_error: sourceCommit === null ? (scErr || 'unknown') : undefined,
+          source_commit_error: sourceCommit === null ? (sourceCommitError || 'unknown') : undefined,
           generated_at: new Date().toISOString(),
           schema_version: 1,
           postcheck_result_path: null,
@@ -2209,33 +2298,6 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
     console.warn(`\n⚠️ 阶段 ${stageName} 校验警告：`)
     for (const w of contractResult.warnings) {
       console.warn(`   - ${w}`)
-    }
-  }
-
-  // quick 阶段完成审计
-  if (stageName === 'quick' && progress.quickGuard) {
-    const review = await auditQuickCompletion(cwd, progress.quickGuard, { isConfirm })
-    progress.quickGuard.review = review
-    progress.quickGuard.completedAt = new Date().toISOString()
-    // 清理 quick-guard.json
-    try {
-      const { unlinkSync } = await import('fs')
-      const guardFile = join(specBase, '.runtime', 'quick-guard.json')
-      unlinkSync(guardFile)
-    } catch {}
-    if (review.status === 'blocked') {
-      console.error(`\n🚫 quick 变更边界审计 — BLOCKED：`)
-      for (const r of review.reasons) {
-        console.error(`   - ${r}`)
-      }
-      console.error(`\n   这些文件是 baseline 保护的，不应被修改。`)
-    } else if (review.status === 'warning') {
-      console.warn(`\n⚠️ quick 变更边界审计 — WARNING：`)
-      for (const r of review.reasons) {
-        console.warn(`   - ${r}`)
-      }
-    } else {
-      console.log(`\n✅ quick 变更边界审计 — SAFE (变更 ${review.changedFiles.length} 个文件)`)
     }
   }
 

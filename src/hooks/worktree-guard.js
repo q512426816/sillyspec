@@ -126,6 +126,96 @@ function isPathInside(child, parent) {
   return absChild === absParent || absChild.startsWith(absParent + path.sep)
 }
 
+function toPosixPath(filePath) {
+  return filePath.replace(/\\/g, '/')
+}
+
+function parseFrontmatter(content) {
+  if (!content.startsWith('---\n') && !content.startsWith('---\r\n')) return {}
+  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n/)
+  if (!match) return {}
+  const result = {}
+  for (const line of match[1].split(/\r?\n/)) {
+    const m = line.match(/^([A-Za-z0-9_-]+):\s*(.*)$/)
+    if (!m) continue
+    result[m[1]] = m[2].replace(/^['"]|['"]$/g, '').trim()
+  }
+  return result
+}
+
+function parseTimestamp(value) {
+  if (!value) return null
+  const time = Date.parse(value)
+  return Number.isNaN(time) ? null : time
+}
+
+function getScanDocInfo(filePath) {
+  const normalized = toPosixPath(path.resolve(filePath))
+  const match = normalized.match(/^(.*)\/docs\/([^/]+)\/scan\/([^/]+\.md)$/)
+  if (!match) return null
+  return {
+    specRoot: path.resolve(match[1]),
+    projectName: match[2],
+    docName: match[3],
+  }
+}
+
+function readScanGuard(scanDocInfo, projectRoot) {
+  const candidates = [
+    path.join(scanDocInfo.specRoot, '.runtime', 'scan-guard.json'),
+    path.join(projectRoot, '.sillyspec', '.runtime', 'scan-guard.json'),
+  ]
+  for (const p of candidates) {
+    if (!existsSync(p)) continue
+    try {
+      return JSON.parse(readFileSync(p, 'utf8'))
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
+function shouldBlockScanDocOverwrite(filePath, projectRoot) {
+  const scanDocInfo = getScanDocInfo(filePath)
+  if (!scanDocInfo || !existsSync(filePath)) return { blocked: false }
+
+  const guard = readScanGuard(scanDocInfo, projectRoot)
+  if (!guard || guard.forceRescan) return { blocked: false }
+
+  let frontmatter = {}
+  try {
+    frontmatter = parseFrontmatter(readFileSync(filePath, 'utf8'))
+  } catch {
+    return { blocked: false }
+  }
+
+  const relPath = toPosixPath(path.relative(projectRoot, filePath))
+  if (frontmatter.source_commit && guard.sourceCommit && frontmatter.source_commit !== guard.sourceCommit) {
+    return {
+      blocked: true,
+      reason: [
+        `scan 覆盖保护：${relPath} 的 source_commit=${frontmatter.source_commit} 与当前 scan source_commit=${guard.sourceCommit} 不一致。`,
+        '如确认要重新生成，请重新运行 scan 并添加 --force-rescan。',
+      ].join('\n')
+    }
+  }
+
+  const existingUpdatedAt = parseTimestamp(frontmatter.updated_at)
+  const scanStartedAt = parseTimestamp(guard.startedAt)
+  if (existingUpdatedAt && scanStartedAt && existingUpdatedAt > scanStartedAt) {
+    return {
+      blocked: true,
+      reason: [
+        `scan 覆盖保护：${relPath} 的 updated_at 晚于本次 scan 开始时间，可能包含手工编辑。`,
+        '如确认要覆盖，请重新运行 scan 并添加 --force-rescan。',
+      ].join('\n')
+    }
+  }
+
+  return { blocked: false }
+}
+
 function isInsideWorktreeStorage(filePath, cwd) {
   const absPath = path.isAbsolute(filePath) ? filePath : path.resolve(cwd || process.cwd(), filePath)
   return isPathInside(absPath, resolveWorktreeDir(cwd || process.cwd()))
@@ -489,11 +579,14 @@ export function shouldBlockWrite(filePath, cwd) {
   const projectRoot = findProjectRoot(callerCwd)
   const absPath = path.isAbsolute(filePath) ? filePath : path.resolve(callerCwd, filePath)
 
-  // 1. 文件门禁：文档类/配置类始终放行，但 worktree 存储区内的源码必须继续走登记校验。
-  if (!isInsideWorktreeStorage(absPath, projectRoot) && matchFileWhitelist(absPath)) return { blocked: false }
-
-  // 2. 阶段门禁（使用 fallback 读取）
+  // 1. 阶段门禁（使用 fallback 读取）
   const stage = readCurrentStage(projectRoot) || '(none)'
+
+  const scanGuardResult = shouldBlockScanDocOverwrite(absPath, projectRoot)
+  if (scanGuardResult.blocked) return scanGuardResult
+
+  // 2. 文件门禁：文档类/配置类始终放行，但 worktree 存储区内的源码必须继续走登记校验。
+  if (!isInsideWorktreeStorage(absPath, projectRoot) && matchFileWhitelist(absPath)) return { blocked: false }
 
   if (!['execute', 'quick'].includes(stage)) {
     return {

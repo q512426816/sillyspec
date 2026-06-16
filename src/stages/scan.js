@@ -122,6 +122,18 @@ export const definition = {
    对每个项目分别执行（将 \`<project>\` 替换为实际项目名）
 4. 如果检查报告有失败项，按报告中的角色和文件重试失败的部分
 
+### 覆盖保护
+- 生成每份 scan 文档时，frontmatter 必须包含：
+  \`\`\`yaml
+  ---
+  source_commit: <git-head-short>
+  updated_at: <now-iso-datetime>
+  generator: sillyspec-scan
+  ---
+  \`\`\`
+- 覆盖已有 scan 文档前先读取旧 frontmatter；如果旧文档的 \`source_commit\` 与当前 HEAD 不一致，或旧文档 \`updated_at\` 晚于本次 scan 开始时间，不要覆盖。
+- 如果用户明确传入 \`--force-rescan\`，允许覆盖，但仍需写入新的 \`source_commit\` 和 \`updated_at\`。
+
 ### 子代理上下文注入
 启动每个子代理前，将以下信息拼入子代理 prompt：
 - 项目名（直接用实际项目名）

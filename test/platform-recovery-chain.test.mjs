@@ -16,6 +16,7 @@ import { execSync } from 'child_process'
 import { fileURLToPath } from 'url'
 import { dirname } from 'path'
 import { randomUUID } from 'crypto'
+import { tmpdir } from 'os'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const binCLI = join(__dirname, '..', 'src', 'index.js')
@@ -48,9 +49,9 @@ function run(cmd, opts = {}) {
 // ── 测试 1：pointer 文件创建和内容 ──
 console.log('\n=== Test 1: pointer 文件创建 ===')
 {
-  const tmpCwd = `/tmp/recovery-test-${randomUUID().slice(0, 8)}`
-  const tmpSpec = `/tmp/recovery-test-spec-${randomUUID().slice(0, 8)}`
-  const tmpRuntime = `/tmp/recovery-test-rt-${randomUUID().slice(0, 8)}`
+  const tmpCwd = join(tmpdir(), `recovery-test-${randomUUID().slice(0, 8)}`)
+  const tmpSpec = join(tmpdir(), `recovery-test-spec-${randomUUID().slice(0, 8)}`)
+  const tmpRuntime = join(tmpdir(), `recovery-test-rt-${randomUUID().slice(0, 8)}`)
 
   try {
     mkdirSync(tmpCwd, { recursive: true })
@@ -82,9 +83,9 @@ console.log('\n=== Test 1: pointer 文件创建 ===')
 // ── 测试 2：--done 不带参数能恢复 ──
 console.log('\n=== Test 2: --done 恢复平台参数 ===')
 {
-  const tmpCwd = `/tmp/recovery-test2-${randomUUID().slice(0, 8)}`
-  const tmpSpec = `/tmp/recovery-test2-spec-${randomUUID().slice(0, 8)}`
-  const tmpRuntime = `/tmp/recovery-test2-rt-${randomUUID().slice(0, 8)}`
+  const tmpCwd = join(tmpdir(), `recovery-test2-${randomUUID().slice(0, 8)}`)
+  const tmpSpec = join(tmpdir(), `recovery-test2-spec-${randomUUID().slice(0, 8)}`)
+  const tmpRuntime = join(tmpdir(), `recovery-test2-rt-${randomUUID().slice(0, 8)}`)
   const scanRunId = `scan-${Date.now()}`
 
   try {
@@ -125,8 +126,8 @@ console.log('\n=== Test 3: manifest 路径字段 ===')
 // ── 测试 4：异常 pointer 检测 ──
 console.log('\n=== Test 4: 异常 pointer 残留检测 ===')
 {
-  const tmpCwd = `/tmp/recovery-test4-${randomUUID().slice(0, 8)}`
-  const tmpSpec = `/tmp/recovery-test4-spec-${randomUUID().slice(0, 8)}`
+  const tmpCwd = join(tmpdir(), `recovery-test4-${randomUUID().slice(0, 8)}`)
+  const tmpSpec = join(tmpdir(), `recovery-test4-spec-${randomUUID().slice(0, 8)}`)
 
   try {
     mkdirSync(tmpCwd, { recursive: true })
@@ -147,7 +148,7 @@ console.log('\n=== Test 4: 异常 pointer 残留检测 ===')
     // 模拟有效 pointer（手动修复）
     writeFileSync(pointerPath, JSON.stringify({
       specRoot: tmpSpec,
-      runtimeRoot: '/tmp/fake-rt',
+      runtimeRoot: join(tmpdir(), 'fake-rt'),
       workspaceId: 'test',
       scanRunId: 'scan-test',
       savedAt: new Date().toISOString(),

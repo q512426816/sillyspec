@@ -142,11 +142,14 @@ function assert(label, condition, detail) {
 {
   const { definition } = await import('../src/stages/quick.js')
   const step1Prompt = definition.steps[0].prompt
+  const step3Prompt = definition.steps[2].prompt
 
   assert('quick step 1 包含 ⛔ 标记', step1Prompt.includes('⛔'))
   assert('quick step 1 包含「不能跳过」', step1Prompt.includes('不能跳过'))
   assert('quick step 1 包含 quicklog 未创建 warning', step1Prompt.includes('quicklog 未创建'))
   assert('quick step 1 输出要求 quicklog 第一行', step1Prompt.includes('第一行确认'))
+  assert('quick step 3 禁止 git add -A', step3Prompt.includes('禁止使用 `git add -A`'))
+  assert('quick step 3 使用 scoped git add', step3Prompt.includes('git add -- <file...>'))
 
   // run.js 审计包含 quicklog 检查
   const runSrc = await readFile(join(__dirname, '..', 'src', 'run.js'), 'utf8')

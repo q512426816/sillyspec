@@ -13,6 +13,7 @@ import { join, dirname } from 'path'
 import { existsSync, mkdirSync, rmSync, readFileSync, readdirSync, writeFileSync } from 'fs'
 import { fileURLToPath } from 'url'
 import { randomUUID } from 'crypto'
+import { tmpdir } from 'os'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const passed = []
@@ -33,11 +34,19 @@ function cleanup(dir) {
   try { rmSync(dir, { recursive: true, force: true }) } catch {}
 }
 
+function hasPathSegments(value, segments) {
+  const parts = value.split(/[\\/]+/)
+  for (let i = 0; i <= parts.length - segments.length; i++) {
+    if (segments.every((segment, offset) => parts[i + offset] === segment)) return true
+  }
+  return false
+}
+
 // ── 测试 1：saveWorkflowRun 平台模式路径正确 ──
 console.log('\n=== Test 1: saveWorkflowRun 平台模式写入路径 ===')
 {
   const { saveWorkflowRun } = await import('../src/workflow.js')
-  const tmpRoot = `/tmp/test-artifacts-${randomUUID().slice(0, 8)}`
+  const tmpRoot = join(tmpdir(), `test-artifacts-${randomUUID().slice(0, 8)}`)
   const runtimeRoot = join(tmpRoot, 'runtime')
   const scanRunId = 'scan-20260614-test-001'
 
@@ -63,8 +72,8 @@ console.log('\n=== Test 1: saveWorkflowRun 平台模式写入路径 ===')
   assert('workflow-runs 目录存在', existsSync(expectedDir))
   assert('workflow-runs 文件存在', existsSync(saved), `路径: ${saved}`)
   assert('路径在 runtime-root 下', saved.startsWith(runtimeRoot), `路径: ${saved}`)
-  assert('路径包含 scan-runs', saved.includes('scan-runs'), `路径: ${saved}`)
-  assert('路径包含 scanRunId', saved.includes(scanRunId), `路径: ${saved}`)
+  assert('路径包含 scan-runs', hasPathSegments(saved, ['scan-runs', scanRunId, 'workflow-runs']), `路径: ${saved}`)
+  assert('路径包含 scanRunId', hasPathSegments(saved, [scanRunId]), `路径: ${saved}`)
 
   // 验证 JSON 内容
   const content = JSON.parse(readFileSync(saved, 'utf8'))
@@ -81,7 +90,7 @@ console.log('\n=== Test 1: saveWorkflowRun 平台模式写入路径 ===')
 console.log('\n=== Test 2: saveWorkflowRun 本地模式写入路径 ===')
 {
   const { saveWorkflowRun } = await import('../src/workflow.js')
-  const tmpCwd = `/tmp/test-artifacts-local-${randomUUID().slice(0, 8)}`
+  const tmpCwd = join(tmpdir(), `test-artifacts-local-${randomUUID().slice(0, 8)}`)
   const sillyspecDir = join(tmpCwd, '.sillyspec', '.runtime', 'workflow-runs')
 
   const result = {
@@ -102,7 +111,7 @@ console.log('\n=== Test 2: saveWorkflowRun 本地模式写入路径 ===')
   })
 
   assert('本地模式文件存在', existsSync(saved))
-  assert('本地路径在 .sillyspec/.runtime 下', saved.includes('.sillyspec/.runtime/workflow-runs'), `路径: ${saved}`)
+  assert('本地路径在 .sillyspec/.runtime 下', hasPathSegments(saved, ['.sillyspec', '.runtime', 'workflow-runs']), `路径: ${saved}`)
 
   const content = JSON.parse(readFileSync(saved, 'utf8'))
   assert('本地 JSON status = fail', content.status === 'fail')
