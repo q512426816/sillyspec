@@ -26,6 +26,11 @@
 文件：src/stages/brainstorm.js, src/stages/plan.js, src/stages/verify.js, src/stage-contract.js, test/stage-contract.test.mjs, test/stage-definitions.test.mjs
 结果：Design Grill 改为设计后的默认交叉审查步骤，支持显式跳过与小型单模块豁免；decisions.md 引入 D-xxx@vN 版本链和 supersedes 机制；plan/verify/stage-contract 按当前决策版本追踪覆盖，并阻断 P0/P1 未决项；npm run lint 与 npm test 通过。
 
+## ql-20260617-003-c3d9 | 2026-06-17 13:32:42 | 收紧 Grill 流程语义与决策 ID 解析
+状态：已完成
+文件：src/stages/brainstorm.js, src/stage-contract.js, test/stage-contract.test.mjs, test/stage-definitions.test.mjs, .sillyspec/docs/sillyspec/modules/stages.md
+结果：合并 Grill 触发判断和深度追问为可选的需求澄清 Grill，保留 Design Grill 作为设计后默认交叉审查；决策 ID 抽取改为结构化行解析；decision record 支持 heading 与 list/YAML 风格；新增误提取和 YAML 决策阻断回归测试；npm run lint 与 npm test 通过。
+
 ## ql-20260617-001-9c4a | 2026-06-17 11:16:23 | 接入 Grill 深度追问与决策追踪链路
 状态：已完成
 文件：src/stages/brainstorm.js, src/stages/plan.js, src/stages/verify.js, src/stage-contract.js, test/stage-contract.test.mjs, test/stage-definitions.test.mjs

@@ -31,16 +31,57 @@ function resolveChangeDir(cwd, changeName, specRoot = null) {
   return join(changesRoot, changeName)
 }
 
+function collectIdsFromLine(line, re, ids) {
+  for (const match of line.matchAll(re)) {
+    ids.add(match[0].toUpperCase())
+  }
+}
+
 function extractIds(content, prefix) {
   if (!content) return []
-  const re = new RegExp(`\\b${prefix}-\\d+(?:@v\\d+)?\\b`, 'gi')
-  return [...new Set((content.match(re) || []).map(id => id.toUpperCase()))].sort()
+  const ids = new Set()
+  const idRe = new RegExp(`\\b${prefix}-\\d+(?:@v\\d+)?\\b`, 'gi')
+  const headingLineRe = /^\s{0,3}#{1,6}\s+/i
+  const fieldLineRe = /^\s*(?:[-*]\s*)?(?:id|decision[-_ ]?ids?|requirement[-_ ]?ids?|covers?|coverage|references?|impacts?|覆盖(?:来源|决策|需求)?)\s*[:：]/i
+  const tableLineRe = /^\s*\|/
+  const listStartsWithIdRe = new RegExp(`^\\s*(?:[-*]|\\d+\\.)\\s*(?:\\[[ xX]\\]\\s*)?${prefix}-\\d+(?:@v\\d+)?\\b`, 'i')
+
+  for (const line of content.split(/\r?\n/)) {
+    if (!headingLineRe.test(line) && !fieldLineRe.test(line) && !tableLineRe.test(line) && !listStartsWithIdRe.test(line)) continue
+    collectIdsFromLine(line, idRe, ids)
+  }
+  return [...ids].sort()
+}
+
+function readDecisionField(body, fieldPattern, fallback = '') {
+  const re = new RegExp(`^\\s*(?:[-*]\\s*)?(?:${fieldPattern})\\s*[:：]\\s*([^\\n]+)`, 'im')
+  return (body.match(re)?.[1] || fallback).trim()
+}
+
+function buildDecisionRecord(id, body) {
+  const status = readDecisionField(body, 'status', 'accepted').toLowerCase()
+  const priority = (readDecisionField(body, 'priority|level|severity', 'P2').match(/P[0-2]/i)?.[0] || 'P2').toUpperCase()
+  const blockerValue = readDecisionField(body, 'blocker', 'false').toLowerCase()
+  const blocker = ['true', 'yes', '1'].includes(blockerValue)
+  return { id: id.toUpperCase(), body, status, priority, blocker }
+}
+
+function findNextDecisionBoundary(content, startIndex) {
+  const boundaryRe = /^(\s{0,3}#{2,6}\s+D-\d+(?:@v\d+)?\b|\s*(?:[-*]\s*)?(?:id|decision[-_ ]?id|decision)\s*[:：]\s*D-\d+(?:@v\d+)?\b)/gmi
+  boundaryRe.lastIndex = startIndex
+  const next = boundaryRe.exec(content)
+  return next ? next.index : content.length
+}
+
+function isInsideRange(index, ranges) {
+  return ranges.some(range => index >= range.start && index < range.end)
 }
 
 function parseDecisionRecords(content) {
   if (!content) return []
   const records = []
-  const headingRe = /^##\s+(D-\d+(?:@v\d+)?):[^\n]*$/gmi
+  const ranges = []
+  const headingRe = /^\s{0,3}#{2,6}\s+(D-\d+(?:@v\d+)?)(?:\b|:)[^\n]*$/gmi
   const headings = []
   let match
   while ((match = headingRe.exec(content)) !== null) {
@@ -50,11 +91,19 @@ function parseDecisionRecords(content) {
     const current = headings[i]
     const next = headings[i + 1]
     const body = content.slice(current.end, next ? next.index : content.length)
-    const status = (body.match(/^-\s*status:\s*([^\n]+)/im)?.[1] || 'accepted').trim().toLowerCase()
-    const priority = (body.match(/^-\s*(?:priority|level|severity):\s*(P[0-2])/im)?.[1] || 'P2').toUpperCase()
-    const blocker = /^-\s*blocker:\s*true\s*$/im.test(body)
-    records.push({ id: current.id, body, status, priority, blocker })
+    const end = next ? next.index : content.length
+    ranges.push({ start: current.index, end })
+    records.push(buildDecisionRecord(current.id, body))
   }
+
+  const idLineRe = /^\s*(?:[-*]\s*)?(?:id|decision[-_ ]?id|decision)\s*[:：]\s*(D-\d+(?:@v\d+)?)(?:\b|$)/gmi
+  while ((match = idLineRe.exec(content)) !== null) {
+    if (isInsideRange(match.index, ranges)) continue
+    const bodyEnd = findNextDecisionBoundary(content, idLineRe.lastIndex)
+    const body = content.slice(match.index, bodyEnd)
+    records.push(buildDecisionRecord(match[1], body))
+  }
+
   return records
 }
 

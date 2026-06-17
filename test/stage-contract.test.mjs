@@ -215,6 +215,26 @@ if (blockerTrace.ok === false && blockerTrace.errors.some(e => e.includes('P0/P1
   failed++
 }
 
+writeFileSync(join(traceDir, 'decisions.md'), '# Decisions\n\n- id: D-003@v1\n  priority: P1\n  status: blocking\n  type: boundary\n')
+const yamlBlockerTrace = runValidators('plan', traceRoot, 'trace')
+if (yamlBlockerTrace.ok === false && yamlBlockerTrace.errors.some(e => e.includes('P0/P1 未决阻塞') && e.includes('D-003@V1'))) {
+  console.log('✅ plan validator 支持 list/YAML 风格 decision record')
+} else {
+  console.log('❌ plan validator 未识别 list/YAML 风格 decision record', yamlBlockerTrace)
+  failed++
+}
+
+writeFileSync(join(traceDir, 'decisions.md'), '# Decisions\n')
+writeFileSync(join(traceDir, 'requirements.md'), '# Requirements\n\n普通说明提到 https://example.test/spec/FR-404 和注释里的 FR-405，但它们不是结构化需求 ID。\n')
+writeFileSync(join(traceDir, 'plan.md'), '# Plan\n\nNo structured requirement IDs here.\n')
+const looseIdTrace = runValidators('plan', traceRoot, 'trace')
+if (!looseIdTrace.warnings.some(w => w.includes('FR-404') || w.includes('FR-405'))) {
+  console.log('✅ plan validator 忽略普通正文/URL 中的 FR ID')
+} else {
+  console.log('❌ plan validator 误提取普通正文/URL 中的 FR ID', looseIdTrace)
+  failed++
+}
+
 rmSync(traceRoot, { recursive: true })
 
 // === StageContract 结构测试 ===

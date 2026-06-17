@@ -181,13 +181,18 @@ export const definition = {
       optional: false
     },
     {
-      name: 'Grill 触发判断',
+      name: '需求澄清 Grill',
       conditionalWait: true,
-      waitReason: '等待用户确认是否进入 Grill 深度追问',
-      waitOptions: ['进入Grill', '内联解决', '跳过Grill'],
-      prompt: `判断本次需求是否需要进入 Grill 深度追问 pass。
+      repeatableWait: true,
+      maxWaitRounds: 8,
+      waitReason: '等待用户回答需求澄清 Grill',
+      waitOptions: ['回答见--answer', '信息够了，结束需求澄清'],
+      prompt: `执行可选的需求澄清 Grill pass。
 
-### 操作
+### 定位
+这是 design.md 之前的需求澄清，不是设计后的 Design Grill。目标是把需求/术语/边界中仍需要人类判断的点问清楚；Design Grill 后续仍会默认执行，用来审查已经写出的 design.md 是否自洽。
+
+### 入口判断
 1. 汇总「对话式探索」后仍未稳定的歧义点，按类型列出：
    - 术语歧义：同一个词可能指向不同实体/角色/状态
    - 边界歧义：哪些场景做、哪些不做、失败怎么处理
@@ -202,51 +207,11 @@ export const definition = {
    - P0：影响数据模型、权限边界、状态机/工作流、兼容策略、不可逆架构取舍、跨模块所有权
    - P1：影响用户场景、验收标准、错误处理、默认值
    - P2：文案、展示细节、低风险交互偏好
-4. 触发规则：
-   - P1/P2 歧义 0-2 个且无 P0：在 brainstorm 内联解决，不进入 Grill
-   - P1/P2 歧义 >= 3 个：建议进入 Grill
-   - 任意 P0 歧义：强烈建议进入 Grill，即使只有 1 个
-5. 需要 Grill 时，输出歧义清单、推荐理由和预期收益，暂停等待用户确认。
-
-### 输出格式
-\`\`\`markdown
-## Grill Trigger Assessment
-
-trigger: yes | no
-reason: <一句话说明>
-
-## Ambiguity Inventory
-| ID | 等级 | 类型 | 问题 | 已查证据 | 建议处理 |
-|---|---|---|---|---|---|
-| A-001 | P0/P1/P2 | term/boundary/premise/code | ... | ... | grill/inline/skip |
-
-## Recommendation
-进入 Grill / 内联解决 / 跳过 Grill
-\`\`\`
-
-### 铁律 — 何时等待用户
-- 如果 trigger=yes：必须调用
-  \`sillyspec run brainstorm --wait --reason "等待用户确认是否进入 Grill 深度追问" --options "进入Grill,内联解决,跳过Grill" --output "Grill 触发判断摘要"\`
-- 如果 trigger=no：正常完成本步骤，输出"无需 Grill，歧义可在后续设计中内联处理"
-- 不要替用户选择是否进入 Grill`,
-      outputHint: 'Grill 触发判断',
-      optional: false
-    },
-    {
-      name: 'Grill 深度追问',
-      conditionalWait: true,
-      repeatableWait: true,
-      maxWaitRounds: 8,
-      waitReason: '等待用户回答 Grill 深度追问',
-      waitOptions: ['回答见--answer', '信息够了，结束Grill'],
-      prompt: `执行可选的 Grill 深度追问 pass。
-
-### 入口判断
-1. 先查看上一阶段输出/用户选择：
-   - 用户选择"进入Grill"或仍有 P0/P1 歧义 → 执行本步骤
-   - 用户选择"内联解决"或"跳过Grill" → 输出"Grill 已跳过"并正常完成
-   - trigger=no → 输出"Grill 不需要"并正常完成
-2. 如果执行 Grill，只处理上一步 Ambiguity Inventory 中未解决的问题。
+4. 执行规则：
+   - P1/P2 歧义 0-2 个且无 P0：输出"需求澄清 Grill skipped"，在后续设计中内联处理并记录依据
+   - P1/P2 歧义 >= 3 个：进入本 pass，按优先级逐个澄清
+   - 任意 P0 歧义：进入本 pass；如果需要用户判断，必须暂停问一个问题
+5. 不要问用户"要不要 Grill"。本步骤由 AI 根据歧义风险决定是否执行；只在需要业务判断/取舍时等待用户回答。
 
 ### 追问策略
 1. **一次只问一个问题**：按 P0 → P1 → P2 顺序，深度优先处理最关键歧义。
@@ -273,13 +238,13 @@ reason: <一句话说明>
 
 ### 铁律 — 等待用户
 - 每轮最多提出一个问题，然后调用：
-  \`sillyspec run brainstorm --wait --reason "等待用户回答 Grill 深度追问" --options "回答见--answer,信息够了，结束Grill" --output "你的单个问题或查证结论"\`
+  \`sillyspec run brainstorm --wait --reason "等待用户回答需求澄清 Grill" --options "回答见--answer,信息够了，结束需求澄清" --output "你的单个问题或查证结论"\`
 - 用户通过 \`--continue --answer "回答"\` 回答后，本步骤会再次执行；继续处理下一个最关键歧义。
 - 达到 maxWaitRounds=8 后，必须总结已确认内容和剩余风险，不要无限追问。
 
 ### 输出
-Grill 结论摘要 + D-xxx@vN 决策记录草稿 + 剩余风险（如有）`,
-      outputHint: 'Grill 结论和决策记录草稿',
+需求澄清结论摘要 + D-xxx@vN 决策记录草稿 + 剩余风险（如有）`,
+      outputHint: '需求澄清和决策记录草稿',
       optional: true
     },
     {

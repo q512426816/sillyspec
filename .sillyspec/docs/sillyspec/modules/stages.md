@@ -33,7 +33,7 @@ created_at: 2026-06-04T16:55:00+08:00
 | 阶段 | 步骤数 | 说明 |
 |---|---:|---|
 | scan | 10 | step 2 后按项目动态展开 perProject 步骤 |
-| brainstorm | 11 | `写设计文档并自审` 与 `用户确认并生成规范文件` 是独立步骤 |
+| brainstorm | 13 | 含可选的需求澄清 Grill 和默认执行的 Design Grill 交叉审查 |
 | propose | 7 | `生成规范文件` 与 `自检门控` 是独立步骤 |
 | verify | 7 | 只读验证并写 `verify-result.md` |
 | archive | 5 | 第 4 步必须带 `--confirm` 才移动归档目录 |
@@ -50,4 +50,5 @@ created_at: 2026-06-04T16:55:00+08:00
 
 <!-- MANUAL_NOTES_START -->
 - ql-20260604-001-7a4c | 对齐 file-lifecycle 文档与阶段实现，修复 brainstorm/propose 步骤丢失和 archive confirm 生命周期。
+- ql-20260617-003-c3d9 | 收紧 Grill 流程语义，合并需求澄清 pass，并增强决策 ID/record 解析。
 <!-- MANUAL_NOTES_END -->
