@@ -60,10 +60,13 @@ function readDecisionField(body, fieldPattern, fallback = '') {
 
 function buildDecisionRecord(id, body) {
   const status = readDecisionField(body, 'status', 'accepted').toLowerCase()
-  const priority = (readDecisionField(body, 'priority|level|severity', 'P2').match(/P[0-2]/i)?.[0] || 'P2').toUpperCase()
   const blockerValue = readDecisionField(body, 'blocker', 'false').toLowerCase()
   const blocker = ['true', 'yes', '1'].includes(blockerValue)
-  return { id: id.toUpperCase(), body, status, priority, blocker }
+  const priorityValue = readDecisionField(body, 'priority|level|severity')
+  const priorityMissing = priorityValue.length === 0
+  const fallbackPriority = (['unresolved', 'blocking'].includes(status) || blocker) ? 'P1' : 'P2'
+  const priority = (priorityValue.match(/P[0-2]/i)?.[0] || fallbackPriority).toUpperCase()
+  return { id: id.toUpperCase(), body, status, priority, blocker, priorityMissing }
 }
 
 function findNextDecisionBoundary(content, startIndex) {
@@ -119,7 +122,7 @@ function extractCurrentDecisionIds(content) {
 function findBlockingDecisionIssues(content) {
   return parseDecisionRecords(content)
     .filter(r => (r.blocker || ['unresolved', 'blocking'].includes(r.status)) && ['P0', 'P1'].includes(r.priority))
-    .map(r => `${r.id} (${r.priority}, status=${r.status})`)
+    .map(r => `${r.id} (${r.priority}${r.priorityMissing ? ', priority=missing->P1' : ''}, status=${r.status})`)
 }
 
 function readIfExists(file) {

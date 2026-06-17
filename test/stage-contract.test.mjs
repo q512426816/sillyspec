@@ -224,6 +224,26 @@ if (yamlBlockerTrace.ok === false && yamlBlockerTrace.errors.some(e => e.include
   failed++
 }
 
+writeFileSync(join(traceDir, 'decisions.md'), '# Decisions\n\n- id: D-004@v1\n  status: blocking\n  type: boundary\n')
+const missingPriorityTrace = runValidators('plan', traceRoot, 'trace')
+if (missingPriorityTrace.ok === false
+  && missingPriorityTrace.errors.some(e => e.includes('P0/P1 未决阻塞') && e.includes('D-004@V1') && e.includes('priority=missing->P1'))) {
+  console.log('✅ plan validator 将缺 priority 的 blocking decision 按 P1 阻断')
+} else {
+  console.log('❌ plan validator 未阻断缺 priority 的 blocking decision', missingPriorityTrace)
+  failed++
+}
+
+writeFileSync(join(traceDir, 'decisions.md'), '# Decisions\n\n- id: D-005@v1\n  status: accepted\n  type: term\n')
+writeFileSync(join(traceDir, 'plan.md'), '# Plan\n\n- [ ] task-01: implement naming（覆盖：FR-01）\n')
+const yamlAcceptedTrace = runValidators('plan', traceRoot, 'trace')
+if (yamlAcceptedTrace.ok === true && yamlAcceptedTrace.warnings.some(w => w.includes('plan.md 未引用') && w.includes('D-005@V1'))) {
+  console.log('✅ plan validator 将 YAML accepted decision 纳入追踪')
+} else {
+  console.log('❌ plan validator 未追踪 YAML accepted decision', yamlAcceptedTrace)
+  failed++
+}
+
 writeFileSync(join(traceDir, 'decisions.md'), '# Decisions\n')
 writeFileSync(join(traceDir, 'requirements.md'), '# Requirements\n\n普通说明提到 https://example.test/spec/FR-404 和注释里的 FR-405，但它们不是结构化需求 ID。\n')
 writeFileSync(join(traceDir, 'plan.md'), '# Plan\n\nNo structured requirement IDs here.\n')
@@ -232,6 +252,15 @@ if (!looseIdTrace.warnings.some(w => w.includes('FR-404') || w.includes('FR-405'
   console.log('✅ plan validator 忽略普通正文/URL 中的 FR ID')
 } else {
   console.log('❌ plan validator 误提取普通正文/URL 中的 FR ID', looseIdTrace)
+  failed++
+}
+
+writeFileSync(join(traceDir, 'decisions.md'), '# Decisions\n\n普通说明提到 https://example.test/spec/D-404@v1 和注释里的 D-405@v1，但它们不是结构化决策 ID。\n')
+const looseBrainstormTrace = runValidators('brainstorm', traceRoot, 'trace')
+if (!looseBrainstormTrace.warnings.some(w => w.includes('D-404@V1') || w.includes('D-405@V1'))) {
+  console.log('✅ brainstorm validator 忽略普通正文/URL 中的 D ID')
+} else {
+  console.log('❌ brainstorm validator 误提取普通正文/URL 中的 D ID', looseBrainstormTrace)
   failed++
 }
 

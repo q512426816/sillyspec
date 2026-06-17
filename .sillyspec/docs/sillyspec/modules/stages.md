@@ -51,4 +51,5 @@ created_at: 2026-06-04T16:55:00+08:00
 <!-- MANUAL_NOTES_START -->
 - ql-20260604-001-7a4c | 对齐 file-lifecycle 文档与阶段实现，修复 brainstorm/propose 步骤丢失和 archive confirm 生命周期。
 - ql-20260617-003-c3d9 | 收紧 Grill 流程语义，合并需求澄清 pass，并增强决策 ID/record 解析。
+- ql-20260617-004-a91f | 缺 priority 的 unresolved/blocking decision 按 P1 阻断，并补充 parser 回归测试。
 <!-- MANUAL_NOTES_END -->

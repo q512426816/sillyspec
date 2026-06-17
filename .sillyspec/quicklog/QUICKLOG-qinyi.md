@@ -31,6 +31,11 @@
 文件：src/stages/brainstorm.js, src/stage-contract.js, test/stage-contract.test.mjs, test/stage-definitions.test.mjs, .sillyspec/docs/sillyspec/modules/stages.md
 结果：合并 Grill 触发判断和深度追问为可选的需求澄清 Grill，保留 Design Grill 作为设计后默认交叉审查；决策 ID 抽取改为结构化行解析；decision record 支持 heading 与 list/YAML 风格；新增误提取和 YAML 决策阻断回归测试；npm run lint 与 npm test 通过。
 
+## ql-20260617-004-a91f | 2026-06-17 13:52:11 | 收紧缺省 priority 的未决决策阻断
+状态：已完成
+文件：src/stage-contract.js, test/stage-contract.test.mjs, .sillyspec/docs/sillyspec/modules/stages.md
+结果：缺 priority 的 unresolved/blocking/blocker decision 默认按 P1 处理并阻断；错误信息标注 priority=missing->P1；新增 YAML accepted decision 追踪、缺 priority 阻断、brainstorm 普通正文 D-ID 过滤回归测试；npm run lint 与 npm test 通过。
+
 ## ql-20260617-001-9c4a | 2026-06-17 11:16:23 | 接入 Grill 深度追问与决策追踪链路
 状态：已完成
 文件：src/stages/brainstorm.js, src/stages/plan.js, src/stages/verify.js, src/stage-contract.js, test/stage-contract.test.mjs, test/stage-definitions.test.mjs
