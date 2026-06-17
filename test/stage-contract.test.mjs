@@ -153,6 +153,70 @@ if (!errors2.includes(specRoot)) {
 rmSync(specRoot, { recursive: true })
 rmSync(sourceRoot, { recursive: true })
 
+// === decisions.md traceability validator 测试 ===
+console.log('\n=== decisions traceability validator 测试 ===')
+
+const traceRoot = mkdtempSync(join(tmpdir(), 'sillyspec-trace-'))
+const traceDir = join(traceRoot, '.sillyspec', 'changes', 'trace')
+mkdirSync(traceDir, { recursive: true })
+writeFileSync(join(traceDir, 'proposal.md'), '# Proposal\n\n## 不在范围内\n- none\n')
+writeFileSync(join(traceDir, 'design.md'), '# Design\n\n## 文件变更清单\n\n## 风险登记\n\n## 自审\n\nD-001@v1\n')
+writeFileSync(join(traceDir, 'decisions.md'), '# Decisions\n\n## D-001@v1: Choose canonical account term\n- priority: P1\n- status: accepted\n')
+writeFileSync(join(traceDir, 'requirements.md'), '# Requirements\n\n### FR-01: Account naming\nGiven x\nWhen y\nThen z\n')
+writeFileSync(join(traceDir, 'tasks.md'), '- [ ] task-01: implement naming (D-001@v1)\n')
+
+const brainstormTrace = runValidators('brainstorm', traceRoot, 'trace')
+if (brainstormTrace.ok === true && brainstormTrace.warnings.some(w => w.includes('requirements.md 未引用') && w.includes('D-001@V1'))) {
+  console.log('✅ brainstorm validator 检测到 requirements.md 缺少 D-001@v1 引用')
+} else {
+  console.log('❌ brainstorm validator 未检测到 requirements.md 缺少 D-001@v1 引用', brainstormTrace)
+  failed++
+}
+
+writeFileSync(join(traceDir, 'requirements.md'), '# Requirements\n\n### FR-01: Account naming\n覆盖决策：D-001@v1\nGiven x\nWhen y\nThen z\n')
+writeFileSync(join(traceDir, 'plan.md'), '# Plan\n\n- [ ] task-01: implement naming\n')
+
+const planTrace = runValidators('plan', traceRoot, 'trace')
+if (planTrace.ok === true
+  && planTrace.warnings.some(w => w.includes('plan.md 未引用') && w.includes('FR-01'))
+  && planTrace.warnings.some(w => w.includes('plan.md 未引用') && w.includes('D-001@V1'))) {
+  console.log('✅ plan validator 检测到 plan.md 缺少 FR-01/D-001@v1 引用')
+} else {
+  console.log('❌ plan validator 未检测到 plan.md 缺少追踪 ID', planTrace)
+  failed++
+}
+
+writeFileSync(join(traceDir, 'plan.md'), '# Plan\n\n- [ ] task-01: implement naming（覆盖：FR-01, D-001@v1）\n')
+writeFileSync(join(traceDir, 'verify-result.md'), '# Verify\n\nPASS\n')
+
+const verifyTrace = runValidators('verify', traceRoot, 'trace')
+if (verifyTrace.ok === true && verifyTrace.warnings.some(w => w.includes('verify-result.md 未引用') && w.includes('D-001@V1'))) {
+  console.log('✅ verify validator 检测到 verify-result.md 缺少 D-001@v1 引用')
+} else {
+  console.log('❌ verify validator 未检测到 verify-result.md 缺少 D-001@v1 引用', verifyTrace)
+  failed++
+}
+
+writeFileSync(join(traceDir, 'verify-result.md'), '# Verify\n\n## 决策追踪矩阵\n| D-001@v1 | FR-01 | task-01 | evidence | PASS |\n')
+const verifyTraceOk = runValidators('verify', traceRoot, 'trace')
+if (verifyTraceOk.ok === true && !verifyTraceOk.warnings.some(w => w.includes('D-001@V1'))) {
+  console.log('✅ verify validator 在 D-001@v1 已覆盖时不再报警')
+} else {
+  console.log('❌ verify validator 覆盖后仍报警', verifyTraceOk)
+  failed++
+}
+
+writeFileSync(join(traceDir, 'decisions.md'), '# Decisions\n\n## D-002@v1: Unresolved schema conflict\n- priority: P0\n- status: unresolved\n')
+const blockerTrace = runValidators('plan', traceRoot, 'trace')
+if (blockerTrace.ok === false && blockerTrace.errors.some(e => e.includes('P0/P1 未决阻塞') && e.includes('D-002@V1'))) {
+  console.log('✅ plan validator 阻止 P0 unresolved decision 进入 plan')
+} else {
+  console.log('❌ plan validator 未阻止 P0 unresolved decision', blockerTrace)
+  failed++
+}
+
+rmSync(traceRoot, { recursive: true })
+
 // === StageContract 结构测试 ===
 console.log('\n=== Contract 结构测试 ===')
 

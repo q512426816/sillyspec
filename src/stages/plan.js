@@ -84,22 +84,25 @@ needs_human_review: true | false
 ### 操作
 1. 读取 CODEBASE-OVERVIEW.md + 各子项目上下文
 2. 读取 proposal.md、design.md、requirements.md、tasks.md
-3. 读取 CONVENTIONS.md、ARCHITECTURE.md、STACK.md
-4. 读取 local.yaml 获取构建/测试命令
+3. 如果存在 decisions.md，必须读取并提取所有当前版本 D-xxx@vN 决策 ID
+   - 如果发现 priority=P0/P1 且 status=unresolved/blocking 的决策，停止生成计划，要求先回到 brainstorm 的 Design Grill 修正
+   - 如果发现 superseded 决策，只引用最新版本，不引用旧版本
+4. 读取 CONVENTIONS.md、ARCHITECTURE.md、STACK.md
+5. 读取 local.yaml 获取构建/测试命令
 
 ### 模块文档加载
-5. 读取 \`.sillyspec/docs/<project>/modules/_module-map.yaml\`（不存在则跳过以下步骤）
-6. 根据 design.md 的文件变更清单匹配 _module-map.yaml 中的模块
-7. 读取匹配到的 \`.sillyspec/docs/<project>/modules/<module>.md\`
-8. 将模块文档作为制定计划的上下文，确保计划符合模块当前设计
-9. **利用模块依赖关系辅助分析**：
+6. 读取 \`.sillyspec/docs/<project>/modules/_module-map.yaml\`（不存在则跳过以下步骤）
+7. 根据 design.md 的文件变更清单匹配 _module-map.yaml 中的模块
+8. 读取匹配到的 \`.sillyspec/docs/<project>/modules/<module>.md\`
+9. 将模块文档作为制定计划的上下文，确保计划符合模块当前设计
+10. **利用模块依赖关系辅助分析**：
    - 用 depends_on 判断哪些模块会被间接影响
    - 用 used_by 判断变更会不会影响下游模块
    - 将依赖关系纳入 Wave 分组决策（依赖同一模块的任务尽量同 Wave）
    - 如果变更涉及多个有依赖关系的模块，在 plan.md 的任务总表中标注模块依赖
 
 ### 输出
-已加载的文件清单（含模块文档 + 模块依赖关系摘要）`,
+已加载的文件清单（含 decisions.md 当前版本/未决项状态、模块文档 + 模块依赖关系摘要）`,
     outputHint: '文件清单',
     optional: false
   },
@@ -170,12 +173,17 @@ plan_level: light
 - 涉及的文件/模块清单
 
 ## Tasks
-- [ ] task-01: ...
+- [ ] task-01: ...（覆盖：FR-01, D-001@v1）
 - [ ] task-02: ...
 - [ ] task-03: ...
 
 ## 验收
 - 具体可验证的验收条目
+
+## 覆盖矩阵（如存在 decisions.md）
+| ID | 覆盖任务 | 验收证据 |
+|---|---|---|
+| D-001@v1 | task-01 | AC-01 |
 \`\`\`
 
 light 计划的约束：
@@ -184,6 +192,8 @@ light 计划的约束：
 - **禁止**泛泛风险 分析（如"需要充分测试"）
 - **禁止**放实现细节（函数签名、代码示例）
 - 来源/目标直接引用已有文档，不重新生成
+- 如果存在 decisions.md，所有当前版本 D-xxx@vN 必须在 Tasks 或覆盖矩阵中出现
+- 如果存在 P0/P1 unresolved blocker，不生成 plan.md
 - 任务列表控制在 10 条以内
 - **任务必须使用 checkbox 格式**（\`- [ ] task-XX:\`），不要用纯编号列表（\`1. 2.\`），execute 阶段依赖此格式解析任务
 
@@ -207,18 +217,18 @@ plan_level: full
 > 技术不确定性高时才需要 Spike。无不确定性则跳过此节。
 
 ## Wave 1（并行，无依赖）
-- [ ] task-01: 添加用户创建接口
-- [ ] task-02: 添加角色创建接口
+- [ ] task-01: 添加用户创建接口（覆盖：FR-01, D-001@v1）
+- [ ] task-02: 添加角色创建接口（覆盖：FR-02）
 
 ## Wave 2（依赖 Wave 1）
 - [ ] task-03: 用户创建接口联调
 
 ## 任务总表
-| 编号 | 任务 | Wave | 优先级 | 依赖 | 说明 |
-|---|---|---|---|---|---|
-| task-01 | 添加用户创建接口 | W1 | P0 | — | ... |
-| task-02 | 添加角色创建接口 | W1 | P0 | — | ... |
-| task-03 | 用户创建接口联调 | W2 | P0 | task-01,02 | ... |
+| 编号 | 任务 | Wave | 优先级 | 依赖 | 覆盖 FR/D | 说明 |
+|---|---|---|---|---|---|---|
+| task-01 | 添加用户创建接口 | W1 | P0 | — | FR-01, D-001@v1 | ... |
+| task-02 | 添加角色创建接口 | W1 | P0 | — | FR-02 | ... |
+| task-03 | 用户创建接口联调 | W2 | P0 | task-01,02 | FR-03 | ... |
 
 ## 关键路径
 task-01 → task-03（最长路径，决定最短交付周期）
@@ -226,6 +236,11 @@ task-01 → task-03（最长路径，决定最短交付周期）
 ## 全局验收标准
 - [ ] 所有单元测试通过
 - [ ] （brownfield）未配置新功能时行为不变
+
+## 覆盖矩阵（如存在 decisions.md）
+| ID | 覆盖任务 | 验收证据 |
+|---|---|---|
+| D-001@v1 | task-01 | AC-01 |
 \`\`\`
 
 full 计划的约束：
@@ -234,6 +249,8 @@ full 计划的约束：
 - Mermaid 依赖关系图**仅当依赖关系非平凡时生成**（线性依赖或全并行时不生成）
 - **Wave 下的 checkbox 行必须保留**（execute 阶段解析依赖 \`- [ ] task-XX:\` 格式）
 - plan.md 包含 Wave 分组 + 任务总表 + 关键路径 + 全局验收标准，**不放实现细节**
+- 如果存在 decisions.md，plan.md 必须包含当前版本 D-xxx@vN/FR-xxx 覆盖矩阵
+- 如果存在 P0/P1 unresolved blocker，不生成 plan.md，输出阻塞清单
 - 实现细节写到后续的 tasks/task-NN.md 中
 - 每个任务编号格式：task-01、task-02 ...
 - 任务总表的优先级：P0（必须）/ P1（重要）/ P2（可选）
@@ -290,6 +307,8 @@ plan_level + 计划内容（none 级别输出建议操作）`,
 - [ ] 任务列表清晰且无实现细节
 - [ ] 任务使用 checkbox 格式（\`- [ ] task-XX:\`），不是纯编号列表
 - [ ] 验收标准具体可验证（非笼统表述）
+- [ ] 如果存在 decisions.md，所有当前版本 D-xxx@vN 在 plan.md 中可追踪
+- [ ] 不存在 P0/P1 unresolved blocker
 - [ ] 没有 Mermaid 图、估时、风险分析
 - [ ] 没有函数签名、代码示例等实现细节
 - [ ] plan.md 与 design.md 的文件变更清单一致
@@ -302,6 +321,8 @@ plan_level + 计划内容（none 级别输出建议操作）`,
 - [ ] 有任务总表（含优先级、依赖列，**无估时列**）
 - [ ] 有关键路径标注
 - [ ] 有全局验收标准
+- [ ] 如果存在 decisions.md，任务总表或覆盖矩阵覆盖全部当前版本 D-xxx@vN
+- [ ] 不存在 P0/P1 unresolved blocker
 - [ ] （brownfield）全局验收包含兼容性条款
 - [ ] 没有实现细节（接口定义、代码示例等不应该在 plan.md 里）
 - [ ] plan.md 与 design.md 的文件变更清单一致
@@ -413,6 +434,8 @@ priority: P0
 estimated_hours: N
 depends_on: []
 blocks: []
+requirement_ids: [FR-01]
+decision_ids: [D-001@v1]
 allowed_paths:
   - 允许修改的路径范围
 ---
@@ -421,6 +444,10 @@ allowed_paths:
 
 ## 修改文件（必填）
 - 精确到文件路径，列出所有需要新增或修改的文件
+
+## 覆盖来源
+- Requirements: FR-xx（来自 requirements.md）
+- Decisions: D-xxx@vN（如存在 decisions.md）
 
 ## 实现要求
 1. 具体做什么，写清楚
@@ -463,6 +490,8 @@ allowed_paths:
 - \`estimated_hours\`: 预估工时，单个 task ≤ 8h
 - \`depends_on\`: 依赖的前序 task 编号列表
 - \`blocks\`: 被本 task 阻塞的后续 task 编号列表
+- \`requirement_ids\`: 本任务覆盖的 FR-xxx 列表
+- \`decision_ids\`: 本任务覆盖的当前版本 D-xxx@vN 列表；无 decisions.md 时可为空数组
 - \`allowed_paths\`: AI executor 可以修改的文件路径范围（安全边界）
 
 ### 关键规则
@@ -471,6 +500,7 @@ allowed_paths:
 - 接口定义写到"搬砖工照着做"的程度
 - 边界处理至少覆盖 5 条规则
 - 验收标准用表格格式，每条可点击验证，禁止"功能可演示"类笼统表述
+- 如果存在 decisions.md，不允许丢失当前版本 D-xxx@vN；无法覆盖的 D-xxx@vN 必须写入非目标或剩余风险
 - 写完后保存到文件
 
 ### 操作
@@ -518,6 +548,8 @@ priority: P0/P1/P2
 estimated_hours: N
 depends_on: [task-XX]
 blocks: [task-XX]
+requirement_ids: [FR-XX]
+decision_ids: [D-XXX@vN]
 allowed_paths:
   - ...
 ---
@@ -526,6 +558,10 @@ allowed_paths:
 
 ## 修改文件（必填）
 - 精确到文件路径
+
+## 覆盖来源
+- Requirements: FR-xx
+- Decisions: D-xxx@vN（如存在）
 
 ## 实现要求
 1. 具体做什么
@@ -560,6 +596,7 @@ allowed_paths:
 - 接口定义写到"搬砖工照着做"的程度
 - 边界处理至少 5 条
 - 验收标准用表格，禁止笼统表述
+- 如果存在 decisions.md，不允许丢失当前版本 D-xxx@vN；无法覆盖的 D-xxx@vN 必须写入非目标或剩余风险
 - 写完后用 Write tool 保存到文件
 \`\`\``
   }).join('\n\n')
@@ -591,8 +628,8 @@ ${subagentPrompts}
 
 ## 验收
 - 每个 task-N.md 文件存在且非空
-- 包含 YAML frontmatter（id、title、priority、depends_on、blocks、allowed_paths）
-- 包含所有必要章节：修改文件、实现要求、接口定义、边界处理（≥5条）、非目标、TDD 步骤、验收标准（表格格式）
+- 包含 YAML frontmatter（id、title、priority、depends_on、blocks、requirement_ids、decision_ids、allowed_paths）
+- 包含所有必要章节：修改文件、覆盖来源、实现要求、接口定义、边界处理（≥5条）、非目标、TDD 步骤、验收标准（表格格式）
 - 边界处理覆盖：null/空值、兼容性、异常处理、参数不可变、歧义场景`
 
   return {

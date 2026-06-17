@@ -53,20 +53,23 @@ export const definition = {
       prompt: `加载规范文件并确认。
 
 ### 操作
-1. 读取 proposal.md、design.md、tasks.md、requirements.md
-2. 加载项目信息：\`cat .sillyspec/projects/*.yaml 2>/dev/null\`
-3. 加载本地配置：\`cat .sillyspec/local.yaml 2>/dev/null\`（构建命令、测试命令、lint 命令等）
-4. 加载代码规范：\`cat .sillyspec/docs/<project>/scan/CONVENTIONS.md 2>/dev/null\`
-5. 标注每个文件的存在/不存在状态
+1. 读取 proposal.md、design.md、tasks.md、requirements.md、plan.md
+2. 如果存在 decisions.md，必须读取并提取所有当前版本 D-xxx@vN 决策 ID
+   - 如果存在 P0/P1 unresolved/blocking 决策，验证结论不能为 PASS
+   - 如果发现 superseded 决策被下游引用，标记为 ⚠️ stale decision reference
+3. 加载项目信息：\`cat .sillyspec/projects/*.yaml 2>/dev/null\`
+4. 加载本地配置：\`cat .sillyspec/local.yaml 2>/dev/null\`（构建命令、测试命令、lint 命令等）
+5. 加载代码规范：\`cat .sillyspec/docs/<project>/scan/CONVENTIONS.md 2>/dev/null\`
+6. 标注每个文件的存在/不存在状态
 
 ### 模块文档加载
-6. 读取 \`.sillyspec/docs/<project>/modules/_module-map.yaml\`（不存在则跳过以下步骤）
-7. 根据 design.md 的文件变更清单匹配 _module-map.yaml 中的模块
-8. 读取匹配到的 \`.sillyspec/docs/<project>/modules/<module>.md\`
-9. **检查模块索引可信度**：如果相关模块的 needs_review 为 true，提示"该模块索引可能不可信，需要回看模块卡片或源码"
+7. 读取 \`.sillyspec/docs/<project>/modules/_module-map.yaml\`（不存在则跳过以下步骤）
+8. 根据 design.md 的文件变更清单匹配 _module-map.yaml 中的模块
+9. 读取匹配到的 \`.sillyspec/docs/<project>/modules/<module>.md\`
+10. **检查模块索引可信度**：如果相关模块的 needs_review 为 true，提示"该模块索引可能不可信，需要回看模块卡片或源码"
 
 ### 输出
-文件加载确认清单（含模块文档 + 索引可信度）`,
+文件加载确认清单（含 decisions.md 当前版本/未决项状态、模块文档 + 索引可信度）`,
       outputHint: '文件确认清单',
       optional: false
     },
@@ -123,9 +126,17 @@ grep -rl "<关键词>" <源码目录>/ --include="*.java" --include="*.js" --inc
 2. 对每个 task，检查对应模块目录下是否存在测试文件（*test*、*spec*、*Test*、*Spec*）
 3. 没有测试文件的 task 标记为 ⚠️ 缺少测试
 
+**探针 4：决策追踪覆盖探针（如存在 decisions.md）**
+1. 从 decisions.md 提取所有当前版本 D-xxx@vN
+2. 检查 requirements.md 是否引用每个 D-xxx@vN，并映射到 FR-xxx
+3. 检查 plan.md 或 tasks/task-NN.md 是否引用每个 FR-xxx/D-xxx@vN
+4. 检查本步骤收集的实现证据是否能回指到对应 D-xxx@vN/FR-xxx
+5. 任意 D-xxx@vN 无下游覆盖时标记为 ⚠️ 决策未闭环
+6. 任意 P0/P1 unresolved/blocking 决策标记为 FAIL blocker
+
 ### 探针结果处理
-- 将三个探针的结果汇总为「探针报告」
-- 如果探针发现问题（未实现标记、关键词缺失、测试缺失），在最终验证报告中明确标注
+- 将四个探针的结果汇总为「探针报告」
+- 如果探针发现问题（未实现标记、关键词缺失、测试缺失、决策未闭环），在最终验证报告中明确标注
 - 探针发现的问题不等同于验证失败，但必须在报告中列出
 
 ### 设计一致性检查
@@ -136,9 +147,10 @@ grep -rl "<关键词>" <源码目录>/ --include="*.java" --include="*.js" --inc
 4. API 设计是否符合
 5. **Reverse Sync 检查**：如果发现实现合理但 design.md 未覆盖，先更新 design.md 补充遗漏
 6. **模块文档一致性检查**：如果在"加载规范并锚定"步骤中加载了模块文档，检查实现是否符合模块文档描述的当前设计（特别关注接口签名、数据流、依赖关系）。不符合时标记 ⚠️（不阻断，模块文档可能未及时更新）
+7. **决策链路检查**：如果存在 decisions.md，输出 D-xxx@vN → FR-xxx → task-xx → evidence 的追踪矩阵；缺失项必须列为风险
 
 ### 输出
-探针报告 + 设计一致性检查结果 + 模块文档一致性检查结果`,
+探针报告 + 设计一致性检查结果 + 模块文档一致性检查结果 + 决策追踪矩阵（如有）`,
       outputHint: '设计一致性报告',
       optional: false
     },
@@ -210,6 +222,12 @@ PASS / PASS WITH NOTES / FAIL
 - 未实现标记扫描：...
 - 关键词覆盖：...
 - 测试覆盖：...
+- 决策追踪覆盖：...
+
+## 决策追踪矩阵（如存在 decisions.md）
+| 决策 ID | FR | Task | Evidence | 状态 |
+|---|---|---|---|---|
+| D-001@v1 | FR-01 | task-01 | test/file/path | PASS/PARTIAL/MISSING |
 
 ## 测试结果
 （测试套件执行结果）

@@ -181,15 +181,118 @@ export const definition = {
       optional: false
     },
     {
+      name: 'Grill 触发判断',
+      conditionalWait: true,
+      waitReason: '等待用户确认是否进入 Grill 深度追问',
+      waitOptions: ['进入Grill', '内联解决', '跳过Grill'],
+      prompt: `判断本次需求是否需要进入 Grill 深度追问 pass。
+
+### 操作
+1. 汇总「对话式探索」后仍未稳定的歧义点，按类型列出：
+   - 术语歧义：同一个词可能指向不同实体/角色/状态
+   - 边界歧义：哪些场景做、哪些不做、失败怎么处理
+   - 前提风险：这个需求是否不该存在，是否已有更简单的现有方案
+   - 代码冲突：用户描述与现有代码/scan/module 文档不一致
+2. 能通过代码或文档确认的不要问用户，先读取：
+   - \`.sillyspec/docs/<project>/scan/ARCHITECTURE.md\`
+   - \`.sillyspec/docs/<project>/scan/CONVENTIONS.md\`
+   - \`.sillyspec/docs/<project>/modules/_module-map.yaml\`
+   - 相关源码文件
+3. 给每个未解决歧义分级：
+   - P0：影响数据模型、权限边界、状态机/工作流、兼容策略、不可逆架构取舍、跨模块所有权
+   - P1：影响用户场景、验收标准、错误处理、默认值
+   - P2：文案、展示细节、低风险交互偏好
+4. 触发规则：
+   - P1/P2 歧义 0-2 个且无 P0：在 brainstorm 内联解决，不进入 Grill
+   - P1/P2 歧义 >= 3 个：建议进入 Grill
+   - 任意 P0 歧义：强烈建议进入 Grill，即使只有 1 个
+5. 需要 Grill 时，输出歧义清单、推荐理由和预期收益，暂停等待用户确认。
+
+### 输出格式
+\`\`\`markdown
+## Grill Trigger Assessment
+
+trigger: yes | no
+reason: <一句话说明>
+
+## Ambiguity Inventory
+| ID | 等级 | 类型 | 问题 | 已查证据 | 建议处理 |
+|---|---|---|---|---|---|
+| A-001 | P0/P1/P2 | term/boundary/premise/code | ... | ... | grill/inline/skip |
+
+## Recommendation
+进入 Grill / 内联解决 / 跳过 Grill
+\`\`\`
+
+### 铁律 — 何时等待用户
+- 如果 trigger=yes：必须调用
+  \`sillyspec run brainstorm --wait --reason "等待用户确认是否进入 Grill 深度追问" --options "进入Grill,内联解决,跳过Grill" --output "Grill 触发判断摘要"\`
+- 如果 trigger=no：正常完成本步骤，输出"无需 Grill，歧义可在后续设计中内联处理"
+- 不要替用户选择是否进入 Grill`,
+      outputHint: 'Grill 触发判断',
+      optional: false
+    },
+    {
+      name: 'Grill 深度追问',
+      conditionalWait: true,
+      repeatableWait: true,
+      maxWaitRounds: 8,
+      waitReason: '等待用户回答 Grill 深度追问',
+      waitOptions: ['回答见--answer', '信息够了，结束Grill'],
+      prompt: `执行可选的 Grill 深度追问 pass。
+
+### 入口判断
+1. 先查看上一阶段输出/用户选择：
+   - 用户选择"进入Grill"或仍有 P0/P1 歧义 → 执行本步骤
+   - 用户选择"内联解决"或"跳过Grill" → 输出"Grill 已跳过"并正常完成
+   - trigger=no → 输出"Grill 不需要"并正常完成
+2. 如果执行 Grill，只处理上一步 Ambiguity Inventory 中未解决的问题。
+
+### 追问策略
+1. **一次只问一个问题**：按 P0 → P1 → P2 顺序，深度优先处理最关键歧义。
+2. **能查代码就不问**：如果问题可由源码、scan 文档、模块文档回答，先查证并给出结论；只有业务判断/取舍才问用户。
+3. **术语碰撞立即指出**：用户用词与 glossary/代码实体/模块文档冲突时，当场说明冲突并要求选择 canonical term。
+4. **模糊词精化**：把"账户/任务/状态/会话/执行"这类多义词拆成明确实体或状态。
+5. **场景压力测试**：用具体 case 逼出边界，例如失败重试、部分成功、历史数据、权限不足、并发修改、兼容旧配置。
+6. **前提挑战优先**：如果现有设计或代码已有简单路径，先说明"可能不该新增"，不要直接优化错误前提。
+
+### 决策记录草稿
+每解决一个有实现影响的问题，生成一个稳定 ID 的记录草稿。不要把闲聊都记录进去。
+
+\`\`\`markdown
+## D-001@v1: <短标题>
+- type: term | boundary | premise | architecture | compatibility | risk
+- status: accepted | rejected | superseded
+- source: user | code | docs
+- question: <被解决的问题>
+- answer: <用户确认或代码查证结果>
+- normalized_requirement: <可测试的约束>
+- impacts: [FR-?, task-?, verify-?]
+- evidence: <文件路径/代码位置/用户回答轮次>
+\`\`\`
+
+### 铁律 — 等待用户
+- 每轮最多提出一个问题，然后调用：
+  \`sillyspec run brainstorm --wait --reason "等待用户回答 Grill 深度追问" --options "回答见--answer,信息够了，结束Grill" --output "你的单个问题或查证结论"\`
+- 用户通过 \`--continue --answer "回答"\` 回答后，本步骤会再次执行；继续处理下一个最关键歧义。
+- 达到 maxWaitRounds=8 后，必须总结已确认内容和剩余风险，不要无限追问。
+
+### 输出
+Grill 结论摘要 + D-xxx@vN 决策记录草稿 + 剩余风险（如有）`,
+      outputHint: 'Grill 结论和决策记录草稿',
+      optional: true
+    },
+    {
       name: '提出 2-3 种方案',
       requiresWait: true,
       waitReason: '等待用户选择方案',
       waitOptions: ['方案A', '方案B', '方案C'],
-      prompt: `基于需求理解，提出 2-3 种实现方案。
+      prompt: `基于需求理解和 Grill 结果，提出 2-3 种实现方案。
 
 ### 操作
 1. 每种方案列出：核心思路、优势、劣势
-2. 给出推荐方案和理由
+2. 如果 Grill 产生 D-xxx@vN 决策记录，方案必须说明覆盖/违反哪些当前版本决策
+3. 给出推荐方案和理由
 
 ### 铁律 — 必须等待用户选择方案
 - **不要替用户选择方案。** 列出方案对比表和推荐后，必须暂停等待用户选择。
@@ -287,14 +390,26 @@ HTML 原型文件路径（或"跳过"如果不适合）`,
 |---|---|---|---|
 | R-01 | ... | P0/P1/P2 | ... |
 
-11. **自审**（AI 对自身设计的校验）
+11. **决策追踪**（如存在 Grill/重大决策）：
+   - 列出当前版本 D-xxx@vN 决策 ID
+   - 说明每个 D-xxx@vN 被哪些 FR-xxx / 设计章节覆盖
+   - 标注仍未解决的 D-xxx@vN 或剩余风险
+12. **自审**（AI 对自身设计的校验）
 
 ### 操作
 1. 确认变更目录存在：\`mkdir -p .sillyspec/changes/<change-name>\`（Windows 用 \`mkdir .sillyspec\\changes\\<变更名>\` 或 PowerShell \`New-Item -ItemType Directory -Force -Path .sillyspec/changes/<change-name>\`）
    - 变更名格式必须为 \`YYYY-MM-DD-<简短描述>\`（如 \`2026-05-13-user-auth\`）
 2. 将确认的设计写入 \`.sillyspec/changes/<change-name>/design.md\`
-3. 自审检查：
+3. 如果 Grill 或方案讨论产生了实现相关决策，写入 \`.sillyspec/changes/<change-name>/decisions.md\`：
+   - decisions.md 是本次变更的决策台账，不是长期术语表
+   - 只记录有实现/验收影响的决策，闲聊和低风险偏好不记录
+   - 每条记录必须有稳定版本 ID：D-001@v1、D-002@v1 ...
+   - 若后续 Design Grill 修正该决策，新记录使用 D-001@v2，并写明 supersedes: D-001@v1
+   - 每条记录必须包含：type、status、source、question、answer、normalized_requirement、impacts、evidence、priority
+   - 长期术语只在 archive/scan 时再提升到 \`.sillyspec/docs/<project>/glossary.md\`
+4. 自审检查：
    - 需求覆盖：是否完整覆盖对话式探索中确认的需求
+   - Grill 覆盖：如果存在 decisions.md，design.md 是否引用所有当前版本 D-xxx@vN
    - 约束一致性：是否与 CONVENTIONS.md、ARCHITECTURE.md 一致
    - 真实性：表名/字段名/类名/方法名来自真实代码或标注"新增"
    - YAGNI：是否包含不必要功能
@@ -302,8 +417,8 @@ HTML 原型文件路径（或"跳过"如果不适合）`,
    - 非目标清晰：是否明确界定了不做的事
    - 兼容策略（brownfield）：是否说明了回退路径
    - 风险识别：是否识别了关键技术风险和对策
-4. 自审发现问题 → 修改后重新检查
-5. 全部通过 → 进入下一步
+5. 自审发现问题 → 修改后重新检查
+6. 全部通过 → 进入下一步
 
 ### 输出
 design.md 文件路径 + 自审结果
@@ -312,6 +427,103 @@ design.md 文件路径 + 自审结果
 - 自审不通过不要进入下一步
 - 不确定的问题标注「⚠️ 自审存疑」`,
       outputHint: 'design.md 文件路径 + 自审结果',
+      optional: false
+    },
+    {
+      name: 'Design Grill 交叉审查',
+      conditionalWait: true,
+      waitReason: '等待用户处理 Design Grill 发现的结构性问题',
+      waitOptions: ['按推荐修正', '补充回答', '显式跳过'],
+      prompt: `默认执行 Design Grill，对已经写出的 design.md 做交叉审查。
+
+### 定位
+这是设计完成后的质量门，不是需求探索。目标不是继续发散，而是找出 design.md 内部、四件套之间、文档与外部约束之间的结构性矛盾。
+
+### 默认行为
+1. 默认必须执行一次交叉审查；不要让用户凭主观判断决定"要不要 Grill"。
+2. 只有以下情况可以轻量跳过，并必须记录原因：
+   - 用户明确要求 no-grill / 显式跳过
+   - 文档是一页以内、单模块、无状态流转、无 schema/API/兼容策略变更
+   - plan_level 明确为 none，且只改 1-2 个文件
+3. 即使跳过，也要输出"Design Grill skipped"和原因，不能静默跳过。
+
+### 输入材料
+1. 必须读取完整 \`.sillyspec/changes/<change-name>/design.md\`
+2. 读取 proposal.md、requirements.md、tasks.md、decisions.md（如存在）
+3. 读取 scan/module docs：
+   - \`.sillyspec/docs/<project>/scan/ARCHITECTURE.md\`
+   - \`.sillyspec/docs/<project>/scan/CONVENTIONS.md\`
+   - \`.sillyspec/docs/<project>/modules/_module-map.yaml\`
+   - 命中的模块文档
+4. 按 design.md 文件变更清单读取相关源码、测试、配置、schema 或样例数据；矛盾经常藏在设计与外部约束交叉处，素材宁可多读，不要只读摘要。
+
+### 交叉审查模型
+按三层检查并输出 cross-check matrix：
+1. **定义层**：模糊概念是否有可测试定义。例如"高可用""异常数据""本地缓存""重试"。
+2. **一致性层**：跨章节/跨产物是否打架。例如数据流 vs 容错策略、schema vs 输入格式、非目标 vs tasks。
+3. **可行性层**：关键假设是否有来源。例如 P99 延迟、上游 SLA、缓存 TTL、数据量、权限模型、兼容旧配置。
+
+### 交叉点抽取
+重点找这些交叉点：
+- 模块 A 依赖模块 B 的实体/状态/接口
+- requirements.md 的 FR 与 design.md 的数据模型/API/状态机
+- design.md 的容错策略与数据流、缓存、重试、回滚
+- tasks.md 的执行范围与 design.md 的非目标
+- decisions.md 的 D-xxx@vN 与 design.md 当前说法
+- scan/module docs 或源码中的真实约束与 design.md 假设
+
+### 问答处理
+1. 先自动交叉审查，不要一上来问用户。
+2. 没有结构性问题：正常完成，输出"Design Grill passed"，附 cross-check matrix。
+3. 发现问题：
+   - 对能从代码/文档确定的问题，直接给出推荐修正。
+   - 对需要业务判断的问题，每次只问一个最关键问题，然后等待用户。
+   - P0/P1 未决项必须进入 Unresolved Blockers，不能带着进入 plan。
+4. 用户回答后，更新 design.md 和 decisions.md；如果推翻旧决策，新增版本 D-xxx@v2，而不是覆盖 D-xxx@v1。
+
+### decisions.md 版本规则
+\`\`\`markdown
+## D-001@v2: 缓存异常时的 fallback 语义
+- type: definition | consistency | feasibility | boundary | architecture | compatibility | risk
+- priority: P0 | P1 | P2
+- status: accepted | unresolved | rejected | superseded
+- supersedes: D-001@v1
+- source: design-grill
+- question: §3 数据流与 §7 容错策略冲突时以哪个为准？
+- answer: 采用 §7 的重试语义，缓存只作为只读 fallback。
+- normalized_requirement: TTL 过期且上游仍异常时返回 stale 标记，不刷新缓存。
+- impacts: [FR-02, task-03, verify-02]
+- evidence: design.md §3/§7, src/cache/...
+\`\`\`
+
+### 输出格式
+\`\`\`markdown
+## Design Grill Result
+status: passed | needs-user-input | blocked | skipped
+
+## Cross-Check Matrix
+| ID | 层级 | 交叉点 | 证据 A | 证据 B | 结论 | 决策 |
+|---|---|---|---|---|---|---|
+| X-001 | consistency | 数据流 vs 容错 | design §3 | design §7 | conflict | D-001@v2 |
+
+## Question Distribution
+| 分类 | 数量 | 含义 |
+|---|---|---|
+| immediately_answered | N | 心里清楚但文档缺失 |
+| needs_thinking | N | 需要用户判断 |
+| unresolved | N | 真正设计漏洞 |
+
+## Unresolved Blockers
+| ID | priority | 问题 | 阻塞原因 | 下一步 |
+|---|---|---|---|---|
+\`\`\`
+
+### 铁律 — 等待用户
+- 发现 P0/P1 结构性矛盾且需要用户判断时，调用：
+  \`sillyspec run brainstorm --wait --reason "等待用户处理 Design Grill 发现的结构性问题" --options "按推荐修正,补充回答,显式跳过" --output "Design Grill 问题摘要"\`
+- 用户显式跳过时，必须在 decisions.md 记录 accepted risk；P0/P1 skip 仍必须写入 Unresolved Blockers。
+- 完成前必须确认：没有 P0/P1 unresolved blocker；否则不能进入 plan。`,
+      outputHint: 'Design Grill 交叉审查结果',
       optional: false
     },
     {
@@ -326,9 +538,10 @@ design.md 文件路径 + 自审结果
 2. 暂停等待用户选择：✅ 确认 / ✏️ 修改 / ❌ 推翻重来
 3. 确认后，在 \`.sillyspec/changes/<change-name>/\` 下生成所有规范文件：
    - **design.md**：架构决策、文件变更清单、数据模型、API 设计、兼容策略、风险登记、自审
+   - **decisions.md**（可选）：Grill/重大决策台账，使用 D-001@v1 稳定版本 ID
    - **proposal.md**：动机、关键问题（为什么现有方案不够）、变更范围、不在范围内（显式清单）、成功标准（可验证条件）
-   - **requirements.md**：角色表 + FR 编号需求 + Given/When/Then 行为规格 + 非功能需求
-   - **tasks.md**：任务列表（只列名称和对应文件路径，细节在 plan 阶段展开）
+   - **requirements.md**：角色表 + FR 编号需求 + Given/When/Then 行为规格 + 非功能需求 + D-xxx@vN 覆盖关系
+   - **tasks.md**：任务列表（只列名称、对应文件路径、覆盖的 FR-xxx/D-xxx@vN，细节在 plan 阶段展开）
    - \`git add .sillyspec/\` — 暂存规范文件（不要 commit）
 
 所有规范文件头部必须包含 YAML frontmatter：
@@ -374,6 +587,7 @@ created_at: <now-datetime>
 ## 功能需求
 
 ### FR-01: 需求名称
+覆盖决策：D-001@v1, D-002@v1（如适用）
 Given 前提条件
 When 触发动作
 Then 期望结果
@@ -384,6 +598,28 @@ Then 期望结果
 - 兼容性：...
 - 可回退：...
 - 可测试：...
+
+## 决策覆盖矩阵（如存在 decisions.md）
+| 决策 ID | 覆盖的 FR | 说明 |
+|---|---|---|
+| D-001@v1 | FR-01 | ... |
+\`\`\`
+
+### decisions.md 格式要求（仅在有 Grill/重大决策时生成）
+\`\`\`markdown
+# Decisions
+
+## D-001@v1: 决策短标题
+- type: definition | consistency | feasibility | term | boundary | premise | architecture | compatibility | risk
+- priority: P0 | P1 | P2
+- status: accepted | unresolved | rejected | superseded
+- supersedes:
+- source: user | code | docs
+- question: 被解决的问题
+- answer: 用户确认或代码查证结果
+- normalized_requirement: 可测试的约束
+- impacts: [FR-01, task-01, verify-01]
+- evidence: 用户回答轮次或代码/文档路径
 \`\`\`
 
 ### 后续变更包处理
@@ -412,6 +648,8 @@ Then 期望结果
 - 禁止自动 commit
 - 推翻重来回到 Step 6（对话式探索）
 - 表名/字段名/类名必须来自真实代码或标注"新增"
+- 如果存在 decisions.md，requirements.md 必须引用全部当前版本 D-xxx@vN；没有覆盖的 D-xxx@vN 必须标注为剩余风险
+- 如果 Design Grill 产生 P0/P1 unresolved blocker，必须回到 design 修正，不能进入 plan
 - tasks.md 只列任务名，细节在 plan 阶段展开`,
 
     }

@@ -26,6 +26,65 @@ import { join, basename } from 'path'
 
 // ============ Validators ============
 
+function resolveChangeDir(cwd, changeName, specRoot = null) {
+  const changesRoot = specRoot ? join(specRoot, 'changes') : join(cwd, '.sillyspec', 'changes')
+  return join(changesRoot, changeName)
+}
+
+function extractIds(content, prefix) {
+  if (!content) return []
+  const re = new RegExp(`\\b${prefix}-\\d+(?:@v\\d+)?\\b`, 'gi')
+  return [...new Set((content.match(re) || []).map(id => id.toUpperCase()))].sort()
+}
+
+function parseDecisionRecords(content) {
+  if (!content) return []
+  const records = []
+  const headingRe = /^##\s+(D-\d+(?:@v\d+)?):[^\n]*$/gmi
+  const headings = []
+  let match
+  while ((match = headingRe.exec(content)) !== null) {
+    headings.push({ id: match[1].toUpperCase(), index: match.index, end: headingRe.lastIndex })
+  }
+  for (let i = 0; i < headings.length; i++) {
+    const current = headings[i]
+    const next = headings[i + 1]
+    const body = content.slice(current.end, next ? next.index : content.length)
+    const status = (body.match(/^-\s*status:\s*([^\n]+)/im)?.[1] || 'accepted').trim().toLowerCase()
+    const priority = (body.match(/^-\s*(?:priority|level|severity):\s*(P[0-2])/im)?.[1] || 'P2').toUpperCase()
+    const blocker = /^-\s*blocker:\s*true\s*$/im.test(body)
+    records.push({ id: current.id, body, status, priority, blocker })
+  }
+  return records
+}
+
+function extractCurrentDecisionIds(content) {
+  const records = parseDecisionRecords(content)
+  if (records.length === 0) return extractIds(content, 'D')
+  return records
+    .filter(r => !['superseded', 'rejected'].includes(r.status))
+    .map(r => r.id)
+    .sort()
+}
+
+function findBlockingDecisionIssues(content) {
+  return parseDecisionRecords(content)
+    .filter(r => (r.blocker || ['unresolved', 'blocking'].includes(r.status)) && ['P0', 'P1'].includes(r.priority))
+    .map(r => `${r.id} (${r.priority}, status=${r.status})`)
+}
+
+function readIfExists(file) {
+  return existsSync(file) ? readFileSync(file, 'utf8') : ''
+}
+
+function warnMissingIds(warnings, ids, targetContent, targetName, sourceName) {
+  for (const id of ids) {
+    if (!targetContent.toUpperCase().includes(id)) {
+      warnings.push(`${targetName} 未引用 ${sourceName} 中的 ${id}`)
+    }
+  }
+}
+
 /**
  * scan 完成校验：检查 7 份 scan 文档 + manifest
  */
@@ -84,7 +143,7 @@ function validateBrainstormOutputs(cwd, changeName, context = {}) {
   if (specRoot && !existsSync(changesRoot)) {
     return { ok: false, errors: [`平台模式 specRoot 缺少 changes 目录: ${changesRoot}`], warnings: [] }
   }
-  const changeDir = join(changesRoot, changeName)
+  const changeDir = resolveChangeDir(cwd, changeName, specRoot)
   const errors = []
   const warnings = []
 
@@ -132,6 +191,26 @@ function validateBrainstormOutputs(cwd, changeName, context = {}) {
     }
   }
 
+  const decisionsFile = join(changeDir, 'decisions.md')
+  if (existsSync(decisionsFile)) {
+    const decisions = readFileSync(decisionsFile, 'utf8')
+    const blockers = findBlockingDecisionIssues(decisions)
+    for (const issue of blockers) {
+      errors.push(`decisions.md 存在 P0/P1 未决阻塞: ${issue}`)
+    }
+    const decisionIds = extractCurrentDecisionIds(decisions)
+    if (decisionIds.length === 0) {
+      warnings.push('decisions.md 存在但没有当前版本 D-xxx@vN 决策 ID')
+    } else {
+      const design = readIfExists(join(changeDir, 'design.md'))
+      const requirements = readIfExists(join(changeDir, 'requirements.md'))
+      const tasks = readIfExists(join(changeDir, 'tasks.md'))
+      warnMissingIds(warnings, decisionIds, design, 'design.md', 'decisions.md')
+      warnMissingIds(warnings, decisionIds, requirements, 'requirements.md', 'decisions.md')
+      warnMissingIds(warnings, decisionIds, tasks, 'tasks.md', 'decisions.md')
+    }
+  }
+
   return { ok: errors.length === 0, errors, warnings }
 }
 
@@ -140,8 +219,7 @@ function validateBrainstormOutputs(cwd, changeName, context = {}) {
  */
 function validatePlanOutputs(cwd, changeName, context = {}) {
   const { specRoot } = context
-  const changesRoot = specRoot ? join(specRoot, 'changes') : join(cwd, '.sillyspec', 'changes')
-  const changeDir = join(changesRoot, changeName)
+  const changeDir = resolveChangeDir(cwd, changeName, specRoot)
   const planFile = join(changeDir, 'plan.md')
   const errors = []
 
@@ -150,6 +228,20 @@ function validatePlanOutputs(cwd, changeName, context = {}) {
   }
 
   const warnings = []
+  if (existsSync(planFile)) {
+    const plan = readFileSync(planFile, 'utf8')
+    const requirements = readIfExists(join(changeDir, 'requirements.md'))
+    const requirementIds = extractIds(requirements, 'FR')
+    warnMissingIds(warnings, requirementIds, plan, 'plan.md', 'requirements.md')
+
+    const decisions = readIfExists(join(changeDir, 'decisions.md'))
+    const blockers = findBlockingDecisionIssues(decisions)
+    for (const issue of blockers) {
+      errors.push(`decisions.md 存在 P0/P1 未决阻塞: ${issue}`)
+    }
+    const decisionIds = extractCurrentDecisionIds(decisions)
+    warnMissingIds(warnings, decisionIds, plan, 'plan.md', 'decisions.md')
+  }
   return { ok: errors.length === 0, errors, warnings }
 }
 
@@ -158,8 +250,7 @@ function validatePlanOutputs(cwd, changeName, context = {}) {
  */
 function validateVerifyOutputs(cwd, changeName, context = {}) {
   const { specRoot } = context
-  const changesRoot = specRoot ? join(specRoot, 'changes') : join(cwd, '.sillyspec', 'changes')
-  const changeDir = join(changesRoot, changeName)
+  const changeDir = resolveChangeDir(cwd, changeName, specRoot)
   const errors = []
   const warnings = []
 
@@ -180,6 +271,17 @@ function validateVerifyOutputs(cwd, changeName, context = {}) {
     if (!existsSync(join(changeDir, doc))) {
       errors.push(`核心文档缺失: ${join(changeDir, doc)}`)
     }
+  }
+
+  if (existsSync(verifyResult)) {
+    const verify = readFileSync(verifyResult, 'utf8')
+    const decisions = readIfExists(join(changeDir, 'decisions.md'))
+    const blockers = findBlockingDecisionIssues(decisions)
+    for (const issue of blockers) {
+      errors.push(`decisions.md 存在 P0/P1 未决阻塞: ${issue}`)
+    }
+    const decisionIds = extractCurrentDecisionIds(decisions)
+    warnMissingIds(warnings, decisionIds, verify, 'verify-result.md', 'decisions.md')
   }
 
   return { ok: errors.length === 0, errors, warnings }
