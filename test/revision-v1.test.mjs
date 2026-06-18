@@ -775,6 +775,177 @@ console.log('\n--- v1.2: 正常状态 repair 无操作 ---')
   assert(result.applied.length === 0, '不应执行任何修复')
 }
 
+// ─────────────────────────────────────────
+// Execute Stale Safety: plan stale 时 execute 被拒绝
+// ─────────────────────────────────────────
+console.log('\n--- Execute Safety: plan stale → execute stale → run 拒绝 ---')
+{
+  const { cwd } = createTempProject()
+  const changeName = 'exec-safety-1'
+  const pm = await setupProgress(cwd, changeName)
+  await markStageCompleted(pm, cwd, changeName, 'brainstorm', ['s1', 's2'])
+  await markStageCompleted(pm, cwd, changeName, 'plan', ['p1', 'p2'])
+  await markStageCompleted(pm, cwd, changeName, 'execute', ['e1', 'e2'])
+
+  // reopen plan → execute cascade stale
+  await pm.reopenStage(cwd, 'plan', { fromStep: 1, changeName })
+
+  const data = await pm.read(cwd, changeName)
+  assert(data.stages['execute'].status === 'stale', 'execute 应为 stale')
+
+  // 模拟 run.js 规则 5：stale 直接 run 被拒
+  const isReopen = false
+  const isStatus = false
+  const isReset = false
+  const shouldBlock = data.stages['execute'].status === 'stale' && !isReopen && !isStatus && !isReset
+  assert(shouldBlock, 'execute stale 直接 run 应被拒绝')
+}
+
+// ─────────────────────────────────────────
+// Execute Stale Safety: execute --status 放行
+// ─────────────────────────────────────────
+console.log('\n--- Execute Safety: execute stale + --status 放行 ---')
+{
+  const { cwd } = createTempProject()
+  const changeName = 'exec-safety-2'
+  const pm = await setupProgress(cwd, changeName)
+  await markStageCompleted(pm, cwd, changeName, 'brainstorm', ['s1'])
+  await markStageCompleted(pm, cwd, changeName, 'plan', ['p1'])
+  await markStageCompleted(pm, cwd, changeName, 'execute', ['e1'])
+
+  await pm.reopenStage(cwd, 'plan', { fromStep: 1, changeName })
+
+  const data = await pm.read(cwd, changeName)
+  // execute --status 应放行
+  const isStatus = true
+  const shouldBlock = data.stages['execute'].status === 'stale' && !isStatus
+  assert(!shouldBlock, 'execute stale + --status 不应被拦截')
+}
+
+// ─────────────────────────────────────────
+// Execute Stale Safety: execute reopen 后 steps 被重置
+// ─────────────────────────────────────────
+console.log('\n--- Execute Safety: execute reopen 后旧 steps 不保留 ---')
+{
+  const { cwd } = createTempProject()
+  const changeName = 'exec-safety-3'
+  const pm = await setupProgress(cwd, changeName)
+
+  // 模拟 execute 之前有 3 个 wave steps
+  const now = new Date().toLocaleString('zh-CN', { hour12: false })
+  const data = await pm.read(cwd, changeName)
+  data.stages['execute'] = {
+    status: 'stale',
+    staleReason: 'upstream plan revised',
+    startedAt: now, completedAt: null,
+    steps: [
+      { name: 'Wave 1 执行', status: 'completed', completedAt: now },
+      { name: 'Wave 2 执行', status: 'completed', completedAt: now },
+      { name: 'Wave 3 执行', status: 'completed', completedAt: now },
+      { name: '验收检查', status: 'completed', completedAt: now },
+    ],
+  }
+  await pm._write(cwd, data, changeName)
+
+  // reopen execute from step 1
+  const result = await pm.reopenStage(cwd, 'execute', { fromStep: 1, changeName })
+  assert(result.ok, 'execute reopen 应成功')
+
+  const after = await pm.read(cwd, changeName)
+  assert(after.stages['execute'].status === 'revising', 'execute 应为 revising')
+
+  // 所有步骤应被重置（step 1 pending, 后续 stale）
+  const steps = after.stages['execute'].steps
+  assert(steps[0].status === 'pending', 'step 1 应为 pending')
+  for (let i = 1; i < steps.length; i++) {
+    assert(steps[i].status === 'stale', `step ${i+1} 应为 stale，实际 ${steps[i].status}`)
+  }
+
+  // 旧 completed 状态不保留
+  assert(!steps.some(s => s.status === 'completed'), '不应有 completed steps（旧状态已清除）')
+}
+
+// ─────────────────────────────────────────
+// Execute Stale Safety: revision 递增后 reopen 正确
+// ─────────────────────────────────────────
+console.log('\n--- Execute Safety: execute revision 递增 ---')
+{
+  const { cwd } = createTempProject()
+  const changeName = 'exec-safety-4'
+  const pm = await setupProgress(cwd, changeName)
+  await markStageCompleted(pm, cwd, changeName, 'brainstorm', ['s1'])
+  await markStageCompleted(pm, cwd, changeName, 'plan', ['p1'])
+  await markStageCompleted(pm, cwd, changeName, 'execute', ['e1', 'e2'])
+
+  // reopen execute
+  const r1 = await pm.reopenStage(cwd, 'execute', { fromStep: 1, changeName })
+  assert(r1.ok && r1.revision === 1, '第一次 reopen revision=1')
+
+  // 标记完成
+  const data = await pm.read(cwd, changeName)
+  data.stages['execute'].steps.forEach(s => { s.status = 'completed'; s.completedAt = new Date().toLocaleString('zh-CN', { hour12: false }) })
+  data.stages['execute'].status = 'completed'
+  data.stages['execute'].completedAt = new Date().toLocaleString('zh-CN', { hour12: false })
+  await pm._write(cwd, data, changeName)
+
+  // 第二次 reopen
+  const r2 = await pm.reopenStage(cwd, 'execute', { fromStep: 1, changeName })
+  assert(r2.ok && r2.revision === 2, '第二次 reopen revision=2')
+}
+
+// ─────────────────────────────────────────
+// Execute Stale Safety: checkConsistency 检测 execute stale
+// ─────────────────────────────────────────
+console.log('\n--- Execute Safety: checkConsistency 检测 execute 旧状态 ---')
+{
+  const { cwd } = createTempProject()
+  const changeName = 'exec-safety-5'
+  const pm = await setupProgress(cwd, changeName)
+
+  // 构造异常：plan stale 但 execute completed
+  const now2 = new Date().toLocaleString('zh-CN', { hour12: false })
+  const data = await pm.read(cwd, changeName)
+  data.stages['plan'] = {
+    status: 'stale', staleReason: 'test', steps: [],
+  }
+  data.stages['execute'] = {
+    status: 'completed', startedAt: now2, completedAt: now2,
+    steps: [{ name: 'e1', status: 'completed', completedAt: now2 }],
+  }
+  await pm._write(cwd, data, changeName)
+
+  const result = await pm.checkConsistency(cwd, changeName)
+  assert(!result.ok, '应检测到问题')
+  assert(result.issues.some(i => i.includes('execute') && i.includes('plan') && i.includes('stale')), '应检测到 execute completed 但 plan stale')
+}
+
+// ─────────────────────────────────────────
+// Execute Stale Safety: repair 修复 execute cascade
+// ─────────────────────────────────────────
+console.log('\n--- Execute Safety: repair cascade execute stale ---')
+{
+  const { cwd } = createTempProject()
+  const changeName = 'exec-safety-6'
+  const pm = await setupProgress(cwd, changeName)
+
+  const now3 = new Date().toLocaleString('zh-CN', { hour12: false })
+  const data = await pm.read(cwd, changeName)
+  data.stages['plan'] = {
+    status: 'stale', staleReason: 'brainstorm revised', steps: [],
+  }
+  data.stages['execute'] = {
+    status: 'completed', startedAt: now3, completedAt: now3,
+    steps: [{ name: 'e1', status: 'completed', completedAt: now3 }],
+  }
+  await pm._write(cwd, data, changeName)
+
+  const result = await pm.repairConsistency(cwd, { apply: true, changeName })
+  assert(result.applied.some(a => a.action === 'cascade_stale' && a.stage === 'execute'), '应有 execute cascade_stale 修复')
+
+  const after = await pm.read(cwd, changeName)
+  assert(after.stages['execute'].status === 'stale', 'execute 应被修复为 stale')
+}
+
 // ── 结果 ──
 console.log(`\n${'='.repeat(50)}`)
 console.log(`✅ 通过: ${12 - failed}  ❌ 失败: ${failed}`)

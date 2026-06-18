@@ -1258,12 +1258,15 @@ export async function runCommand(args, cwd, specDir = null) {
 
   // ── --reopen 处理 ──
   if (isReopen) {
-    // stale 阶段可能 steps 为空（被 cascade 但从未真正执行过）
-    // 先确保步骤定义存在
+    // stale/revising 阶段可能 steps 为空，或者 execute 阶段的 steps 需要从最新 plan.md 刷新
     const stageDataPre = progress.stages[stageName]
-    if (stageDataPre && (!stageDataPre.steps || stageDataPre.steps.length === 0)) {
-      const changed2 = await ensureStageSteps(progress, stageName, cwd, specRoot)
-      if (changed2) {
+    const needsInit = !stageDataPre || !stageDataPre.steps || stageDataPre.steps.length === 0
+    // execute 阶段在 reopen 时需要从最新 plan.md 重新解析 steps（plan 可能已变更）
+    if (needsInit || stageName === 'execute') {
+      const freshSteps = await getStageSteps(stageName, cwd, progress, specRoot)
+      if (freshSteps && freshSteps.length > 0) {
+        if (!progress.stages[stageName]) progress.stages[stageName] = { status: 'stale', steps: [] }
+        progress.stages[stageName].steps = freshSteps.map(s => ({ name: s.name, status: 'pending' }))
         await pm._write(cwd, progress, effectiveChange)
         progress = await pm.read(cwd, effectiveChange) || progress
       }
@@ -1282,7 +1285,9 @@ export async function runCommand(args, cwd, specDir = null) {
     }
     console.log(`\n🔧 ${stageName} 阶段已重新打开（revision ${result.revision}）`)
     console.log(`   从步骤「${result.fromStep}」开始修订`)
-    console.log(`   该步骤及之后的产出需要重新生成。\n`)
+    console.log(`   该步骤及之后的产出需要重新生成。`)
+    if (stageName === 'execute') console.log(`   ⚡ execute 步骤已从最新 plan.md 重新解析。`)
+    console.log('')
 
     // 重新读取 progress
     progress = await pm.read(cwd, effectiveChange) || progress
