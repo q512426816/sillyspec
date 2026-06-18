@@ -1,6 +1,86 @@
 import { existsSync, readFileSync } from 'fs'
 import path from 'path'
 
+/**
+ * 校验 plan.md 是否满足 execute 执行契约
+ * @param {string} planContent - plan.md 文件内容
+ * @returns {{ ok: boolean, errors: string[], warnings: string[], tasks: object[], waves: object[] }}
+ */
+export function validatePlanForExecute(planContent) {
+  const errors = []
+  const warnings = []
+
+  if (!planContent || !planContent.trim()) {
+    return { ok: false, errors: ['plan.md 内容为空'], warnings, tasks: [], waves: [] }
+  }
+
+  const waves = parseWavesFromPlan(planContent)
+
+  // 收集所有 task
+  const allTasks = []
+  for (const wave of waves) {
+    for (const task of wave.tasks) {
+      allTasks.push(task)
+    }
+  }
+
+  // 检查 1: 至少有一个 checkbox task
+  if (allTasks.length === 0) {
+    errors.push('plan.md 中没有找到 checkbox task（格式: "- [ ] task-XX: 任务名"）')
+    return { ok: false, errors, warnings, tasks: allTasks, waves }
+  }
+
+  // 检查 2: task id 唯一性
+  const idCounts = {}
+  for (const task of allTasks) {
+    if (task.index != null) {
+      const key = `task-${task.index}`
+      idCounts[key] = (idCounts[key] || 0) + 1
+    }
+  }
+  for (const [id, count] of Object.entries(idCounts)) {
+    if (count > 1) {
+      errors.push(`task id 重复: ${id} 出现 ${count} 次`)
+    }
+  }
+
+  // 检查 3: task id 连续性（从 1 开始）
+  const ids = allTasks
+    .map(t => t.index)
+    .filter(i => i != null)
+    .sort((a, b) => a - b)
+  if (ids.length > 0) {
+    const expected = Array.from({ length: ids.length }, (_, i) => ids[0] + i)
+    // 只检查以 task-01 起始的情况（常见模式）
+    if (ids[0] === 1) {
+      for (let i = 0; i < ids.length; i++) {
+        if (ids[i] !== i + 1) {
+          errors.push(`task id 不连续: 期望 task-${String(i + 1).padStart(2, '0')}, 实际 task-${String(ids[i]).padStart(2, '0')}`)
+          break
+        }
+      }
+    }
+  }
+
+  // 检查 4: task name 非空
+  for (const task of allTasks) {
+    if (!task.name || !task.name.trim()) {
+      errors.push(`task-${String(task.index || '?').padStart(2, '0')}: 任务名为空`)
+    }
+  }
+
+  // 检查 5: task 无 id 的 warning（不限制只在有 id 时检查）
+  for (const wave of waves) {
+    for (const task of wave.tasks) {
+      if (task.index == null) {
+        warnings.push(`Wave ${wave.index}: task "${task.name}" 没有 task id（建议格式 task-XX: 名称）`)
+      }
+    }
+  }
+
+  return { ok: errors.length === 0, errors, warnings, tasks: allTasks, waves }
+}
+
 export const definition = {
   name: 'execute',
   title: '波次执行',
@@ -403,13 +483,25 @@ export function buildExecuteSteps(planFilePath = null, options = {}) {
 
   if (planFilePath && existsSync(planFilePath)) {
     const planContent = readFileSync(planFilePath, 'utf8')
-    waves = parseWavesFromPlan(planContent)
-    // 从 planFilePath 推导 changeDir: .sillyspec/changes/<name>/plan.md
-    changeDir = path.dirname(planFilePath)
-  }
 
-  // 如果没解析出 Wave，生成默认 3 个
-  if (!waves || waves.length === 0) {
+    // ── Plan → Execute Contract 校验 ──
+    const validation = validatePlanForExecute(planContent)
+    if (!validation.ok) {
+      console.error(`\n❌ plan.md 校验失败，无法进入 execute 阶段：`)
+      for (const err of validation.errors) console.error(`   - ${err}`)
+      console.error(`\n   修复 plan.md 后重试，或使用 --reset 重新规划。`)
+      process.exit(1)
+    }
+    if (validation.warnings.length > 0) {
+      console.log(`\n⚠️  plan.md 校验警告：`)
+      for (const w of validation.warnings) console.log(`   - ${w}`)
+      console.log()
+    }
+
+    waves = validation.waves
+    changeDir = path.dirname(planFilePath)
+  } else {
+    // plan.md 不存在：生成默认 3 Wave（向后兼容）
     waves = []
     for (let i = 1; i <= 3; i++) {
       waves.push({ index: i, tasks: [{ name: `默认任务 ${i}`, file: 'TBD' }] })
