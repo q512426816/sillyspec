@@ -36,7 +36,7 @@
         <div v-if="hasStage('verify')" class="flex items-center pl-[3px]"><div class="w-px h-4" style="background: #F0F0F3;" /></div>
         <PipelineStage name="verify" title="验证" :steps="getStageSteps('verify')" :status="getStageStatus('verify')" :is-active="currentStage === 'verify'" :active-step="activeStep" @select-step="handleSelectStep" />
         <div v-if="hasStage('archive')" class="flex items-center pl-[3px]"><div class="w-px h-4" style="background: #F0F0F3;" /></div>
-        <PipelineStage name="archive" title="归档" :steps="getStageSteps('archive')" :status="getStageStatus('archive')" :is-active="currentStage === 'archive'" :active-step="activeStep" @select-step="handleSelectStep" />
+        <PipelineStage name="archive" title="归档" :steps="getStageSteps('archive')" :status="getStageStatus('archive')" :is-active="currentStage === 'archive'" :active-step="activeStep" :stale-reason="getStageStaleReason('archive')" :revision="getStageRevision('archive')" :reopened-from-step="getStageReopenedFromStep('archive')" @select-step="handleSelectStep" />
       </div>
 
       <!-- Activity Log -->
@@ -50,7 +50,7 @@
             <n-timeline-item
               v-for="(log, i) in activityLogs"
               :key="i"
-              :type="log.status === 'completed' ? 'success' : 'warning'"
+              :type="log.status === 'completed' ? 'success' : (log.status === 'stale' ? 'warning' : (log.status === 'revising' ? 'info' : 'default'))"
             >
               <template #default>
                 <span class="text-[11px]" style="color: #636366;">{{ log.description }}</span>
@@ -117,6 +117,8 @@ const activityLogs = computed(() => {
     const label = stageNameMap[name] || name
     if (data.status === 'completed') logs.push({ time: data.completedAt ? formatTime(data.completedAt) : '--:--', status: 'completed', description: `${label} 已完成` })
     else if (data.status === 'in-progress') logs.push({ time: '--:--', status: 'in-progress', description: `${label} 运行中` })
+    else if (data.status === 'revising') logs.push({ time: '--:--', status: 'revising', description: `${label} 修订中 (revision ${data.revision || 1})` })
+    else if (data.status === 'stale') logs.push({ time: '--:--', status: 'stale', description: `${label} 已失效：${data.staleReason || '上游修订'}` })
   }
   return logs.reverse()
 })
@@ -126,6 +128,9 @@ function hasStage(n) { return !!stages.value[n] }
 function getStageSteps(n) { return stages.value[n]?.steps || [] }
 function getStageStatus(n) {
   const s = stages.value[n]; if (!s) return 'pending'
+  // 优先用 stage 自身的 status（支持 revising/stale）
+  if (s.status === 'revising' || s.status === 'stale') return s.status
+  // 没有明确 status 时从 step 推导
   const steps = s.steps || []
   if (steps.some(x => x.status === 'failed')) return 'failed'
   if (steps.some(x => x.status === 'blocked')) return 'blocked'
@@ -133,6 +138,9 @@ function getStageStatus(n) {
   if (steps.every(x => x.status === 'completed')) return 'completed'
   return 'pending'
 }
+function getStageStaleReason(n) { return stages.value[n]?.staleReason || '' }
+function getStageRevision(n) { return stages.value[n]?.revision || 0 }
+function getStageReopenedFromStep(n) { return stages.value[n]?.reopenedFromStep || '' }
 function handleSelectStep(step) { emit('select-step', step) }
 </script>
 

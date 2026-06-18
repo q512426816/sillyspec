@@ -19,7 +19,15 @@ const props = defineProps({
 
 const displayLabel = computed(() => {
   if (props.label) return props.label
-  const labels = { 'completed': 'done', 'in-progress': 'running', 'blocked': 'blocked', 'failed': 'error' }
+  const labels = {
+    'completed': 'done',
+    'in-progress': 'running',
+    'blocked': 'blocked',
+    'failed': 'error',
+    'revising': 'revising',
+    'stale': 'stale',
+    'waiting': 'waiting',
+  }
   return labels[props.status] || ''
 })
 
@@ -31,7 +39,10 @@ const badgeStyle = computed(() => {
     'in-progress': { background: 'rgba(251,191,36,0.1)', color: '#D97706' },
     'blocked': { background: 'rgba(251,146,60,0.1)', color: '#EA580C' },
     'failed': { background: 'rgba(239,68,68,0.1)', color: '#DC2626' },
-    'pending': { background: 'rgba(82,82,82,0.15)', color: '#6B7280' }
+    'pending': { background: 'rgba(82,82,82,0.15)', color: '#6B7280' },
+    'revising': { background: 'rgba(139,92,246,0.1)', color: '#7C3AED' },
+    'stale': { background: 'rgba(234,179,8,0.1)', color: '#CA8A04' },
+    'waiting': { background: 'rgba(59,130,246,0.1)', color: '#2563EB' },
   }
   return styles[props.status] || styles.pending
 })
@@ -46,7 +57,10 @@ const dotStyle = computed(() => {
     'in-progress': '#D97706',
     'blocked': '#EA580C',
     'failed': '#DC2626',
-    'pending': '#6B7280'
+    'pending': '#6B7280',
+    'revising': '#7C3AED',
+    'stale': '#CA8A04',
+    'waiting': '#2563EB',
   }
   return { background: colors[props.status] || '#6B7280' }
 })

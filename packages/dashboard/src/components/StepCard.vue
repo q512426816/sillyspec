@@ -62,7 +62,10 @@ const emit = defineEmits(['select'])
 const hovered = ref(false)
 
 const barColor = computed(() => {
-  const colors = { 'completed': '#16A34A', 'in-progress': '#D97706', 'blocked': '#EA580C', 'failed': '#DC2626', 'pending': '#E5E5EA' }
+  const colors = {
+    'completed': '#16A34A', 'in-progress': '#D97706', 'blocked': '#EA580C', 'failed': '#DC2626', 'pending': '#E5E5EA',
+    'revising': '#7C3AED', 'stale': '#CA8A04', 'waiting': '#2563EB',
+  }
   return colors[props.step.status] || colors.pending
 })
 
@@ -72,7 +75,9 @@ const cardStyle = computed(() => ({
 }))
 
 const statusLabel = computed(() => {
-  const labels = { 'completed': '完成', 'in-progress': '进行中', 'blocked': '阻塞', 'failed': '失败', 'pending': '待办' }
+  const labels = { 'completed': '完成', 'in-progress': '进行中', 'blocked': '阻塞', 'failed': '失败', 'pending': '待办',
+    'revising': '修订中', 'stale': '已失效', 'waiting': '等待中',
+  }
   return labels[props.step.status] || '待办'
 })
 

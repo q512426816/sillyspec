@@ -24,6 +24,13 @@
         </div>
 
         <!-- Steps -->
+        <div v-if="status === 'stale' && staleReason" class="mb-2 text-[10px] italic" style="color: #CA8A04;">
+          ⚠️ {{ staleReason }}
+          <span v-if="name === 'archive'">（已有归档文件保留但不再可信）</span>
+        </div>
+        <div v-if="status === 'revising' && revisionInfo" class="mb-2 text-[10px]" style="color: #7C3AED;">
+          🔧 {{ revisionInfo }}
+        </div>
         <div class="space-y-1">
           <div v-if="steps.length === 0" class="text-[11px] italic py-1" style="color: #6B7280;">
             No steps yet
@@ -52,10 +59,20 @@ const props = defineProps({
   steps: { type: Array, default: () => [] },
   status: { type: String, default: 'pending' },
   isActive: { type: Boolean, default: false },
-  activeStep: { type: Object, default: null }
+  activeStep: { type: Object, default: null },
+  staleReason: { type: String, default: '' },
+  revision: { type: Number, default: 0 },
+  reopenedFromStep: { type: String, default: '' },
 })
 
 const emit = defineEmits(['select-step'])
+
+const revisionInfo = computed(() => {
+  if (!props.revision) return ''
+  const parts = [`revision ${props.revision}`]
+  if (props.reopenedFromStep) parts.push(`from: ${props.reopenedFromStep}`)
+  return parts.join(', ')
+})
 
 const nodeStyle = computed(() => {
   if (props.isActive) return { background: '#D97706', boxShadow: '0 0 8px rgba(251,191,36,0.4)' }
@@ -64,7 +81,10 @@ const nodeStyle = computed(() => {
     'in-progress': '#D97706',
     'blocked': '#EA580C',
     'failed': '#DC2626',
-    'pending': '#E5E5EA'
+    'pending': '#E5E5EA',
+    'revising': '#7C3AED',
+    'stale': '#CA8A04',
+    'waiting': '#2563EB',
   }
   return { background: colors[props.status] || colors.pending }
 })
