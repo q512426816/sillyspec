@@ -11,11 +11,18 @@ description: 用于按 plan 执行代码实现。适合用户说"开始写代码
 
 **你必须使用 exec 工具（shell）执行以下命令，不要自己编造流程：**
 
-1. 运行 `sillyspec run execute` — 读取输出的步骤 prompt
+1. 运行 `sillyspec run execute` — CLI 会自动创建 worktree 隔离环境，然后输出步骤 prompt
 2. 按照输出的 prompt **严格执行**，不要跳过或自行添加步骤
 3. 步骤完成后，运行 `sillyspec run execute --done --output "你的摘要"`
 4. 重复 2-3 直到阶段完成
 5. **禁止**在没有运行 CLI 的情况下自行决定流程
+
+## Worktree 隔离
+
+- CLI 启动 execute 阶段时**自动创建 git worktree**，AI agent 不需要手动创建
+- Worktree 路径在 Step 3（确认 worktree 路径）中输出，后续子代理的 cwd 必须设为该路径
+- **禁止跳过 worktree 或在主仓库直接写代码**
+- 如果 worktree 创建失败，CLI 会报错并退出，需要排查后再重试
 
 ## 用户指令
 $ARGUMENTS

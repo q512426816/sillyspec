@@ -52,27 +52,25 @@ const fixedPrefix = [
     optional: false
   },
   {
-    name: '创建 worktree',
-    prompt: `为本次执行创建隔离的 git worktree。
+    name: '确认 worktree 路径',
+    prompt: `确认当前 worktree 状态，提取隔离路径。
 
 ### 操作
-1. 运行 \`sillyspec worktree create <change-name>\`
-2. 记录输出的 worktree 路径
-3. 后续所有子代理的 cwd 设为该 worktree 路径
-4. 如果创建失败 → 报错并停止（不要在无隔离状态下继续）
+1. 运行 \`sillyspec worktree meta <change-name>\` 读取 meta.json
+2. 从输出中提取 worktreePath、branch、mode 字段
+3. 确认 worktree 目录存在（如果是 worktree/native-worktree 模式）
 
-### 降级模式
-CLI 可能自动降级（sandbox 限制、已在 linked worktree 中）：
-- \`mode: native-worktree\` — 已在 linked worktree，直接复用
-- \`mode: in-place-fallback\` — git worktree add 失败，降级为 in-place + baseline protection
-- 这两种模式都会输出 worktree 路径和分支名，正常继续即可
+### 铁律
+- **worktree 已由 CLI 在 execute 阶段启动时自动创建，不要自行创建或跳过**
+- **后续所有子代理的 cwd 必须设为该 worktree 路径**
+- 如果 meta.json 不存在（说明创建失败），停止并报错
 
 ### 输出
-worktree 路径 + 分支名 + 模式（如果有）
+worktree 路径 + 分支名 + 模式
 
 ### 完成后执行
-sillyspec run execute --done --output "worktree 路径 + 分支名"`,
-    outputHint: 'worktree 路径 + 分支名',
+sillyspec run execute --done --output "worktree 路径 + 分支名 + 模式"`,
+    outputHint: 'worktree 路径 + 分支名 + 模式',
     optional: false
   },
   {

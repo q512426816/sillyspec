@@ -520,6 +520,11 @@ export function checkTransition(fromStage, toStage) {
     return { allowed: true }
   }
 
+  // 同阶段内重复运行：允许（继续执行当前阶段的下一步）
+  if (fromStage === toStage) {
+    return { allowed: true }
+  }
+
   // archive 特殊处理：从 verify 来的允许，从其他主流程阶段来的需要校验
   if (toStage === 'archive') {
     if (fromStage === 'verify') {

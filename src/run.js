@@ -1253,7 +1253,8 @@ export async function runCommand(args, cwd, specDir = null) {
 
   // --done
   if (isDone) {
-    return await completeStep(pm, progress, stageName, cwd, outputText, inputText, { confirm: isConfirm, changeName: effectiveChange, nonInteractive: isNonInteractive && !isInteractive, platformOpts, confirmMode })
+    const doneAnswer = getFlagValue('--answer')
+    return await completeStep(pm, progress, stageName, cwd, outputText, inputText, { confirm: isConfirm, changeName: effectiveChange, nonInteractive: isNonInteractive && !isInteractive, platformOpts, confirmMode, doneAnswer })
   }
 
   // 默认：输出当前步骤
@@ -1297,6 +1298,26 @@ async function runStage(pm, progress, stageName, cwd, changeName, skipApproval =
       if (approval.status === 'pending') {
         console.log(`⏳ 变更 ${changeName} 的执行审批待处理中...`)
         console.log('  提示：使用 --skip-approval 跳过审批检查')
+      }
+    }
+  }
+
+  // execute 阶段：CLI 自动创建 worktree（不等 AI agent）
+  if (stageName === 'execute' && changeName) {
+    const effectiveChange = changeName
+    const { WorktreeManager } = await import('./worktree.js')
+    const wm = new WorktreeManager({ cwd })
+    const existingMeta = wm.getMeta(effectiveChange)
+    if (existingMeta) {
+      console.log(`🔗 worktree 已存在: ${existingMeta.worktreePath} (${existingMeta.mode})`)
+    } else {
+      try {
+        const result = wm.create(effectiveChange)
+        console.log(`🔗 worktree 已创建: ${result.worktreePath} (分支: ${result.branch}, 模式: ${result.mode})`)
+      } catch (e) {
+        console.error(`❌ worktree 创建失败: ${e.message}`)
+        console.error(`   继续执行前请解决上述问题，或使用 --no-worktree 跳过。`)
+        process.exit(1)
       }
     }
   }
@@ -1832,14 +1853,24 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
   const currentStepDef = defStepsForCurrent?.[currentIdx] || {}
   const currentStep = steps[currentIdx]
   if (currentStepDef.requiresWait === true && !currentStep.waitAnswer) {
-    console.error(`❌ Step "${currentStep.name}" 必须先等待用户输入，不能直接 --done。`)
-    console.error(`   原因：${currentStepDef.waitReason || '该步骤需要人工确认/回答'}`)
-    if (currentStepDef.waitOptions) {
-      console.error(`   选项：${currentStepDef.waitOptions.join(', ')}`)
+    // 检查 --done 是否带了 --answer：如果是，自动补全 waitAnswer 状态，一步完成
+    const doneAnswer = typeof options !== 'undefined' && options.doneAnswer ? options.doneAnswer : null
+    if (doneAnswer) {
+      currentStep.status = 'waiting'
+      currentStep.waitAnswer = doneAnswer
+      currentStep.waitReason = currentStepDef.waitReason || '等待用户输入'
+      console.log(`⚠️  Step "${currentStep.name}" 需要 wait，但 --done 带了 --answer，自动补全 wait 状态。`)
+    } else {
+      console.error(`❌ Step "${currentStep.name}" 必须先等待用户输入，不能直接 --done。`)
+      console.error(`   原因：${currentStepDef.waitReason || '该步骤需要人工确认/回答'}`)
+      if (currentStepDef.waitOptions) {
+        console.error(`   选项：${currentStepDef.waitOptions.join(', ')}`)
+      }
+      console.error(`   请先执行：`)
+      console.error(`   sillyspec run ${stageName} --wait --reason "${currentStepDef.waitReason || '等待用户输入'}" --options "${(currentStepDef.waitOptions || ['确认']).join(',')}"${changeName ? ` --change ${changeName}` : ''} --output "你的问题/方案摘要"`)
+      console.error(`   或使用 --done --answer "用户回答" 一步完成 wait + done`)
+      process.exit(1)
     }
-    console.error(`   请先执行：`)
-    console.error(`   sillyspec run ${stageName} --wait --reason "${currentStepDef.waitReason || '等待用户输入'}" --options "${(currentStepDef.waitOptions || ['确认']).join(',')}"${changeName ? ` --change ${changeName}` : ''} --output "你的问题/方案摘要"`)
-    process.exit(1)
   }
 
   steps[currentIdx].status = 'completed'
@@ -2234,10 +2265,16 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
       }
     }
 
+    // 防御性守卫变量：确认所有步骤确实标记为 completed
+    const actualCompleted = steps.filter(s => s.status === 'completed').length
+    const actualTotal = steps.length
+
     validateMetadata(cwd, stageName, specBase)
 
-    // 验证关键文件是否在正确的变更目录下
-    validateFileLocations(cwd, stageName, progress, changeName, specBase)
+    // 验证关键文件是否在正确的变更目录下（仅当所有步骤确实完成时才校验）
+    if (actualCompleted === actualTotal && actualTotal > 0) {
+      validateFileLocations(cwd, stageName, progress, changeName, specBase)
+    }
 
     // 辅助阶段完成后重置步骤
     const stageDef = stageRegistry[stageName]
@@ -2281,24 +2318,30 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
     } else {
       console.log(`\n下一步由你决定：sillyspec run <stage>（brainstorm/plan/execute/verify/archive 等）`)
     }
-    return { stageCompleted: true, currentIdx, nextPendingIdx: -1 }
-  }
 
-  // 阶段完成校验
-  const projectName = progress.project || basename(cwd)
-  const contractResult = runValidators(stageName, cwd, changeName, { projectName, specRoot: platformOpts?.specRoot })
-  if (contractResult.errors.length > 0) {
-    console.error(`\n❌ 阶段 ${stageName} 校验失败：`)
-    for (const err of contractResult.errors) {
-      console.error(`   - ${err}`)
+    // 阶段完成校验 — 防御性守卫：仅当所有步骤确实标记为 completed 时才跑 validator
+    if (actualCompleted === actualTotal && actualTotal > 0) {
+      const projectName = progress.project || basename(cwd)
+      const contractResult = runValidators(stageName, cwd, changeName, { projectName, specRoot: platformOpts?.specRoot })
+      if (contractResult.errors.length > 0) {
+        console.error(`\n❌ 阶段 ${stageName} 校验失败：`)
+        for (const err of contractResult.errors) {
+          console.error(`   - ${err}`)
+        }
+        console.error(`\n   提示：修复缺失产物后重新运行此步骤，或使用 --skip-approval 跳过校验`)
+      }
+      if (contractResult.warnings.length > 0) {
+        console.warn(`\n⚠️ 阶段 ${stageName} 校验警告：`)
+        for (const w of contractResult.warnings) {
+          console.warn(`   - ${w}`)
+        }
+      }
+    } else if (actualCompleted < actualTotal) {
+      // 实际步骤未全部完成，跳过 validator（状态可能不同步）
+      console.log(`\n⚠️ 阶段校验跳过：${actualTotal} 步中仅 ${actualCompleted} 步标记为已完成，可能存在状态不同步。如确认阶段已完成，请运行 --status 确认。`)
     }
-    console.error(`\n   提示：修复缺失产物后重新运行此步骤，或使用 --skip-approval 跳过校验`)
-  }
-  if (contractResult.warnings.length > 0) {
-    console.warn(`\n⚠️ 阶段 ${stageName} 校验警告：`)
-    for (const w of contractResult.warnings) {
-      console.warn(`   - ${w}`)
-    }
+
+    return { stageCompleted: true, currentIdx, nextPendingIdx: -1 }
   }
 
   progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
