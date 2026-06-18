@@ -57,6 +57,7 @@ SillySpec CLI — 规范驱动开发工具包
     update-step <s> <n> --status <st> [--output <t>]
     complete-stage <stage>     标记阶段完成
     check                      状态一致性检查（只报告，不修复）
+    repair [--apply]           修复状态元数据（默认 dry-run，--apply 才修改）
     validate                   校验并修复
     reset [--stage X]          重置进度
 
@@ -184,6 +185,11 @@ async function main() {
         case 'check':
           await pm.checkConsistency(dir, progChangeName);
           break;
+        case 'repair': {
+          const repairApply = filteredArgs.includes('--apply');
+          await pm.repairConsistency(dir, { apply: repairApply, changeName: progChangeName });
+          break;
+        }
         case 'validate':
           await pm.validate(dir, progChangeName);
           break;

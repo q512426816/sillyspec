@@ -635,6 +635,146 @@ console.log('\n--- v1.1: checkConsistency 正常状态无问题 ---')
   assert(result.issues.length === 0, '不应有 issues')
 }
 
+// ─────────────────────────────────────────
+// v1.2: repair dry-run 不修改 DB
+// ─────────────────────────────────────────
+console.log('\n--- v1.2: repair dry-run 不修改 DB ---')
+{
+  const { cwd } = createTempProject()
+  const changeName = 'rev-12-1'
+  const pm = await setupProgress(cwd, changeName)
+
+  // 构造 stale 缺 staleReason
+  const now = new Date().toLocaleString('zh-CN', { hour12: false })
+  const data = await pm.read(cwd, changeName)
+  data.stages['plan'] = { status: 'stale', steps: [], staleReason: null }
+  await pm._write(cwd, data, changeName)
+
+  // dry-run
+  const result = await pm.repairConsistency(cwd, { apply: false, changeName })
+  assert(result.fixable.length > 0, '应有可修复项')
+  assert(result.applied.length === 0, 'dry-run 不应执行修复')
+
+  // 验证 DB 未变
+  const after = await pm.read(cwd, changeName)
+  assert(!after.stages['plan'].staleReason, 'dry-run 后 staleReason 仍应为空')
+}
+
+// ─────────────────────────────────────────
+// v1.2: repair --apply 修复 stale_reason
+// ─────────────────────────────────────────
+console.log('\n--- v1.2: repair --apply 修复 stale_reason ---')
+{
+  const { cwd } = createTempProject()
+  const changeName = 'rev-12-2'
+  const pm = await setupProgress(cwd, changeName)
+
+  const data = await pm.read(cwd, changeName)
+  data.stages['plan'] = { status: 'stale', steps: [], staleReason: null }
+  await pm._write(cwd, data, changeName)
+
+  const result = await pm.repairConsistency(cwd, { apply: true, changeName })
+  assert(result.applied.length > 0, '应有已修复项')
+  assert(result.applied.some(a => a.action === 'set_stale_reason'), '应有 set_stale_reason 修复')
+
+  const after = await pm.read(cwd, changeName)
+  assert(!!after.stages['plan'].staleReason, '修复后 plan 应有 staleReason')
+  assert(after.stages['plan'].staleReason.includes('upstream'), 'staleReason 应包含 upstream')
+}
+
+// ─────────────────────────────────────────
+// v1.2: repair --apply cascade 下游 completed -> stale
+// ─────────────────────────────────────────
+console.log('\n--- v1.2: repair --apply cascade 下游 completed -> stale ---')
+{
+  const { cwd } = createTempProject()
+  const changeName = 'rev-12-3'
+  const pm = await setupProgress(cwd, changeName)
+
+  const now2 = new Date().toLocaleString('zh-CN', { hour12: false })
+  const data = await pm.read(cwd, changeName)
+  data.stages['brainstorm'] = {
+    status: 'stale', staleReason: 'test', steps: [],
+  }
+  data.stages['plan'] = {
+    status: 'completed', startedAt: now2, completedAt: now2,
+    steps: [{ name: 'p1', status: 'completed', completedAt: now2 }],
+  }
+  await pm._write(cwd, data, changeName)
+
+  const result = await pm.repairConsistency(cwd, { apply: true, changeName })
+  assert(result.applied.some(a => a.action === 'cascade_stale' && a.stage === 'plan'), '应有 plan cascade_stale 修复')
+
+  const after = await pm.read(cwd, changeName)
+  assert(after.stages['plan'].status === 'stale', '修复后 plan 应为 stale')
+  assert(!!after.stages['plan'].staleReason, 'plan 应有 staleReason')
+}
+
+// ─────────────────────────────────────────
+// v1.2: repair --apply 补 revising reopened_at
+// ─────────────────────────────────────────
+console.log('\n--- v1.2: repair --apply 补 revising reopened_at ---')
+{
+  const { cwd } = createTempProject()
+  const changeName = 'rev-12-4'
+  const pm = await setupProgress(cwd, changeName)
+
+  const data = await pm.read(cwd, changeName)
+  data.stages['brainstorm'] = {
+    status: 'revising', revision: 1, reopenedFromStep: '1: s1',
+    reopenedAt: null, steps: [{ name: 's1', status: 'pending' }],
+  }
+  await pm._write(cwd, data, changeName)
+
+  const result = await pm.repairConsistency(cwd, { apply: true, changeName })
+  assert(result.applied.some(a => a.action === 'set_reopened_at'), '应有 set_reopened_at 修复')
+
+  const after = await pm.read(cwd, changeName)
+  assert(!!after.stages['brainstorm'].reopenedAt, '修复后应有 reopenedAt')
+}
+
+// ─────────────────────────────────────────
+// v1.2: completed + stale steps 只报告 manual，不修改
+// ─────────────────────────────────────────
+console.log('\n--- v1.2: completed + stale steps 只报告不修复 ---')
+{
+  const { cwd } = createTempProject()
+  const changeName = 'rev-12-5'
+  const pm = await setupProgress(cwd, changeName)
+
+  const now3 = new Date().toLocaleString('zh-CN', { hour12: false })
+  const data = await pm.read(cwd, changeName)
+  data.stages['brainstorm'] = {
+    status: 'completed', startedAt: now3, completedAt: now3,
+    steps: [
+      { name: 's1', status: 'completed', completedAt: now3 },
+      { name: 's2', status: 'stale' }, // 异常
+    ],
+  }
+  await pm._write(cwd, data, changeName)
+
+  const result = await pm.repairConsistency(cwd, { apply: true, changeName })
+  assert(result.manual.length > 0, '应有 manual 项')
+  assert(result.manual.some(m => m.includes('stale') && m.includes('completed')), '应有 stale step + completed manual')
+  assert(result.applied.length === 0, '不应有自动修复')
+}
+
+// ─────────────────────────────────────────
+// v1.2: 正常状态 repair 无操作
+// ─────────────────────────────────────────
+console.log('\n--- v1.2: 正常状态 repair 无操作 ---')
+{
+  const { cwd } = createTempProject()
+  const changeName = 'rev-12-6'
+  const pm = await setupProgress(cwd, changeName)
+  await markStageCompleted(pm, cwd, changeName, 'brainstorm', ['s1', 's2'])
+
+  const result = await pm.repairConsistency(cwd, { apply: true, changeName })
+  assert(result.fixable.length === 0, '不应有可修复项')
+  assert(result.manual.length === 0, '不应有 manual 项')
+  assert(result.applied.length === 0, '不应执行任何修复')
+}
+
 // ── 结果 ──
 console.log(`\n${'='.repeat(50)}`)
 console.log(`✅ 通过: ${12 - failed}  ❌ 失败: ${failed}`)
