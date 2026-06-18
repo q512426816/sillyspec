@@ -31,7 +31,9 @@ SillySpec CLI — 规范驱动开发工具包
     --done --output "..."      完成当前步骤
     --skip                     跳过可选步骤
     --status                   查看阶段进度
-    --reset                    重置阶段
+    --reset                    重置阶段（从头开始）
+    --reopen                   重新打开已完成阶段进入修订模式
+    --from-step <index|name>   配合 --reopen：从指定步骤开始修订
     --change <name>            设置当前变更名
     --spec-dir <path>          指定规范目录（默认 <项目>/.sillyspec）
     --runtime-root <path>       平台模式：运行时产物根路径

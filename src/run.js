@@ -547,6 +547,18 @@ async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjec
   const total = steps.length
   const projectName = dbProjectName || basename(cwd)
 
+  // ── Revision context injection ──
+  const revisionCtx = platformOpts?._revision
+  if (revisionCtx) {
+    console.log(`### 🔄 Revision Context`)
+    console.log(`本阶段处于修订模式（revision ${revisionCtx.revision}），不是首次执行。`)
+    console.log(`- 修订起始步骤：${revisionCtx.fromStep}`)
+    console.log(`- 当前步骤之前已完成的步骤仍然有效，不需要重做。`)
+    console.log(`- 当前步骤及之后的步骤需要重新生成或调整已有产物。`)
+    console.log(`- 已有产物文件（design.md、plan.md 等）被保留，审视并更新它们，而不是从零创建。`)
+    console.log(`- 不要绕过 CLI 进度追踪。\n`)
+  }
+
   const personas = {
     brainstorm: `### 🎯 你的角色：资深架构师
 你是一位有 15 年经验的系统架构师。先理解业务本质，再设计技术方案。决策附理由，方案列 trade-off。不确定就说不确定，不猜。`,
@@ -1016,6 +1028,8 @@ export async function runCommand(args, cwd, specDir = null) {
   const isSkip = flags.includes('--skip')
   const isStatus = flags.includes('--status')
   const isReset = flags.includes('--reset')
+  const isReopen = flags.includes('--reopen')
+  const fromStepValue = getFlagValue('--from-step')
   const isConfirm = flags.includes('--confirm')
   const isSkipApproval = flags.includes('--skip-approval')
   const isWait = flags.includes('--wait')
@@ -1153,6 +1167,7 @@ export async function runCommand(args, cwd, specDir = null) {
     '--spec-dir', '--spec-root', '--runtime-root', '--workspace-id', '--scan-run-id',
     '--files', '--allow-new', '--force-baseline', '--force-rescan',
     '--json', '--dir', '--help',
+    '--reopen', '--from-step',
   ])
   for (let i = 0; i < flags.length; i++) {
     const f = flags[i]
@@ -1221,6 +1236,54 @@ export async function runCommand(args, cwd, specDir = null) {
   // --reset
   if (isReset) {
     return await resetStage(pm, progress, stageName, cwd, effectiveChange, platformOpts)
+  }
+
+  // ── 规则 1：completed 阶段直接 run，拒绝 ──
+  const stageStatus = progress.stages[stageName]?.status
+  if (stageStatus === 'completed' && !isReopen) {
+    console.error(`\n❌ ${stageName} 阶段已完成。`)
+    console.error(`   使用 --reopen 进行修订，或 --reset 从头开始。`)
+    console.error(`   修订示例: sillyspec run ${stageName} --reopen --from-step <步骤序号或名称>`)
+    process.exit(1)
+  }
+
+  // ── 规则 5：stale 阶段直接 run，拒绝 ──
+  if (stageStatus === 'stale' && !isReopen) {
+    const staleReason = progress.stages[stageName]?.staleReason || '上游阶段已修订'
+    console.error(`\n⚠️ ${stageName} 阶段已失效（stale）。`)
+    console.error(`   原因：${staleReason}`)
+    console.error(`   使用 --reopen --from-step <步骤> 进行修订，或 --reset 从头开始。`)
+    process.exit(1)
+  }
+
+  // ── --reopen 处理 ──
+  if (isReopen) {
+    const result = await pm.reopenStage(cwd, stageName, {
+      fromStep: fromStepValue,
+      changeName: effectiveChange,
+    })
+    if (!result.ok) {
+      console.error(`\n❌ ${result.error}`)
+      if (stageStatus === 'completed') {
+        console.error(`\n   提示：sillyspec run ${stageName} --reopen --from-step <步骤序号或名称>`)
+      }
+      process.exit(1)
+    }
+    console.log(`\n🔧 ${stageName} 阶段已重新打开（revision ${result.revision}）`)
+    console.log(`   从步骤「${result.fromStep}」开始修订`)
+    console.log(`   该步骤及之后的产出需要重新生成。\n`)
+
+    // 重新读取 progress
+    progress = await pm.read(cwd, effectiveChange) || progress
+
+    // 注入 revision context 到 platformOpts，供 outputStep 使用
+    const stageData = progress.stages[stageName]
+    if (stageData && stageData.revision > 0) {
+      platformOpts._revision = {
+        revision: stageData.revision,
+        fromStep: stageData.reopenedFromStep,
+      }
+    }
   }
 
   // 确保步骤已初始化
@@ -1357,6 +1420,13 @@ async function runStage(pm, progress, stageName, cwd, changeName, skipApproval =
   }
 
   let currentIdx = steps.findIndex(s => s.status !== 'completed' && s.status !== 'skipped')
+
+  // stale 步骤视为可执行（等同于 pending）
+  if (currentIdx !== -1 && steps[currentIdx].status === 'stale') {
+    steps[currentIdx].status = 'pending'
+    await pm._write(cwd, progress, changeName)
+    triggerSync(cwd, changeName, platformOpts)
+  }
 
   // ── scanProfile: 根据 project 规模动态裁剪步骤 ──
   let scanProfile = null

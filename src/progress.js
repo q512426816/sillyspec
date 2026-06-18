@@ -38,7 +38,13 @@ const CHANGES_SUBDIR = 'changes';
 const GLOBAL_FILE = 'global.json';
 const CURRENT_VERSION = 3;
 const VALID_STAGES = ['scan', 'brainstorm', 'plan', 'execute', 'verify', 'archive', 'quick', 'explore'];
-const VALID_STATUSES = ['pending', 'in-progress', 'completed', 'failed', 'blocked', 'waiting'];
+const VALID_STATUSES = ['pending', 'in-progress', 'completed', 'failed', 'blocked', 'waiting', 'stale'];
+
+// Stage statuses (superset of step statuses)
+const VALID_STAGE_STATUSES = ['pending', 'in-progress', 'completed', 'failed', 'blocked', 'revising', 'stale'];
+
+// Main flow stage order (for downstream cascade)
+const MAIN_FLOW_ORDER = ['brainstorm', 'plan', 'execute', 'verify', 'archive'];
 
 const STAGE_LABELS = {
   brainstorm: '🧠 需求探索',
@@ -208,13 +214,18 @@ export class ProgressManager {
     if (!changeRows || changeRows.length === 0 || changeRows[0].values.length === 0) return null;
     const [changeId, cName, currentStage, noWorktree, lastActive] = changeRows[0].values[0];
 
-    // 2. 从 stages 表获取所有阶段
-    const stageRows = sqlDb.exec('SELECT id, stage, status, started_at, completed_at FROM stages WHERE change_id = ? ORDER BY id', [changeId]);
+    // 2. 从 stages 表获取所有阶段（含 revision 列）
+    const stageRows = sqlDb.exec('SELECT id, stage, status, started_at, completed_at, revision, reopened_from_step, reopened_at, stale_reason FROM stages WHERE change_id = ? ORDER BY id', [changeId]);
     const stageMap = {};
     const stageIds = [];
     if (stageRows && stageRows.length > 0) {
-      for (const [sId, stage, status, startedAt, completedAt] of stageRows[0].values) {
-        stageMap[stage] = { _dbId: sId, status, startedAt, completedAt };
+      for (const [sId, stage, status, startedAt, completedAt, revision, reopenedFromStep, reopenedAt, staleReason] of stageRows[0].values) {
+        stageMap[stage] = { _dbId: sId, status, startedAt, completedAt,
+          ...(revision ? { revision } : {}),
+          ...(reopenedFromStep ? { reopenedFromStep } : {}),
+          ...(reopenedAt ? { reopenedAt } : {}),
+          ...(staleReason ? { staleReason } : {}),
+        };
         stageIds.push(sId);
       }
     }
@@ -291,6 +302,11 @@ export class ProgressManager {
         steps,
         startedAt: info.startedAt,
         completedAt: info.completedAt,
+        // Revision v1 fields
+        ...(info.revision ? { revision: info.revision } : {}),
+        ...(info.reopenedFromStep ? { reopenedFromStep: info.reopenedFromStep } : {}),
+        ...(info.reopenedAt ? { reopenedAt: info.reopenedAt } : {}),
+        ...(info.staleReason ? { staleReason: info.staleReason } : {}),
       };
     }
 
@@ -343,15 +359,20 @@ export class ProgressManager {
       // 3. 遍历 stages，UPSERT stages 表和 steps 表
       if (data.stages && typeof data.stages === 'object') {
         for (const [stageName, stageData] of Object.entries(data.stages)) {
-          // UPSERT stages 行
+          // UPSERT stages 行（含 revision 列）
           sqlDb.run(
-            `INSERT INTO stages (change_id, stage, status, started_at, completed_at)
-             VALUES (?, ?, ?, ?, ?)
+            `INSERT INTO stages (change_id, stage, status, started_at, completed_at, revision, reopened_from_step, reopened_at, stale_reason)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT(change_id, stage) DO UPDATE SET
                status = excluded.status,
                started_at = excluded.started_at,
-               completed_at = excluded.completed_at`,
-            [changeId, stageName, stageData.status || 'pending', stageData.startedAt || null, stageData.completedAt || null]
+               completed_at = excluded.completed_at,
+               revision = COALESCE(excluded.revision, stages.revision),
+               reopened_from_step = excluded.reopened_from_step,
+               reopened_at = excluded.reopened_at,
+               stale_reason = excluded.stale_reason`,
+            [changeId, stageName, stageData.status || 'pending', stageData.startedAt || null, stageData.completedAt || null,
+             stageData.revision || 0, stageData.reopenedFromStep || null, stageData.reopenedAt || null, stageData.staleReason || null]
           );
 
           // 获取 stage_id
@@ -955,7 +976,7 @@ export class ProgressManager {
     console.log('  ═══════════════════════════════════════');
     console.log('');
 
-    const statusIcons = { pending: '⬜', 'in-progress': '🔵', completed: '✅', failed: '❌', blocked: '🚫', waiting: '⏸️' };
+    const statusIcons = { pending: '⬜', 'in-progress': '🔵', completed: '✅', failed: '❌', blocked: '🚫', waiting: '⏸️', revising: '🔧', stale: '⚠️' };
 
     for (const stage of VALID_STAGES) {
       const stageData = data.stages[stage] || emptyStage();
@@ -964,6 +985,14 @@ export class ProgressManager {
       const isCurrent = data.currentStage === stage ? ' ◀' : '';
 
       console.log(`  ${icon} ${label}${isCurrent}`);
+
+      // Show revision info
+      if (stageData.revision && stageData.revision > 0) {
+        console.log(`    📋 revision: ${stageData.revision}${stageData.reopenedFromStep ? `, from step: ${stageData.reopenedFromStep}` : ''}`);
+      }
+      if (stageData.staleReason) {
+        console.log(`    ⚠️ stale: ${stageData.staleReason}`);
+      }
 
       if (stageData.steps && stageData.steps.length > 0) {
         for (const step of stageData.steps) {
@@ -1036,6 +1065,121 @@ export class ProgressManager {
     }
 
     return true;
+  }
+
+  /**
+   * 重新打开已完成的阶段进入修订模式
+   * - 不带 fromStep：只允许存在 pending/stale/waiting/failed 步骤时继续
+   * - 带 fromStep：从该步骤起，当前及后续步骤标记 stale/pending
+   * - 自动级联标记下游阶段为 stale
+   *
+   * @param {string} cwd
+   * @param {string} stage - 要重开的阶段
+   * @param {object} opts
+   * @param {string|number} [opts.fromStep] - 步骤名或序号（1-based）
+   * @param {string} [opts.changeName]
+   * @returns {{ ok: boolean, error?: string }}
+   */
+  async reopenStage(cwd, stage, opts = {}) {
+    const { fromStep, changeName = null } = opts;
+
+    const data = await this.read(cwd, changeName);
+    if (!data) return { ok: false, error: '无法读取进度数据' };
+
+    const stageData = data.stages[stage];
+    if (!stageData) return { ok: false, error: `未知阶段: ${stage}` };
+
+    const steps = stageData.steps || [];
+
+    // 确定 fromStep 对应的 index
+    let fromIdx = null;
+    if (fromStep != null) {
+      if (typeof fromStep === 'number' || /^\d+$/.test(String(fromStep))) {
+        fromIdx = parseInt(String(fromStep), 10) - 1; // 1-based → 0-based
+        if (fromIdx < 0 || fromIdx >= steps.length) {
+          return { ok: false, error: `步骤序号超出范围: ${fromStep}（共 ${steps.length} 步）` };
+        }
+      } else {
+        // 按名称匹配
+        fromIdx = steps.findIndex(s => s.name === fromStep);
+        if (fromIdx === -1) {
+          return { ok: false, error: `步骤不存在: ${fromStep}` };
+        }
+      }
+    }
+
+    // 如果不带 fromStep，检查是否存在中断步骤
+    if (fromIdx === null) {
+      const hasInterrupted = steps.some(s =>
+        ['pending', 'stale', 'waiting', 'failed'].includes(s.status)
+      );
+      if (!hasInterrupted) {
+        return { ok: false, error: `阶段 ${stage} 所有步骤均已完成，请使用 --from-step 指定从哪一步开始修订` };
+      }
+      // 找到第一个中断步骤
+      fromIdx = steps.findIndex(s =>
+        ['pending', 'stale', 'waiting', 'failed'].includes(s.status)
+      );
+    }
+
+    // 执行重开操作
+    const newRevision = (stageData.revision || 0) + 1;
+    const fromStepName = steps[fromIdx].name;
+    const now = new Date().toLocaleString('zh-CN', { hour12: false });
+
+    // 更新步骤状态：fromStep 之前的保持 completed，fromStep 变 pending，之后的变 stale
+    for (let i = 0; i < steps.length; i++) {
+      if (i === fromIdx) {
+        steps[i].status = 'pending';
+        steps[i].completedAt = null;
+        steps[i].output = null;
+      } else if (i > fromIdx) {
+        steps[i].status = 'stale';
+        steps[i].completedAt = null;
+      }
+      // i < fromIdx: 保持原状（completed）
+    }
+
+    stageData.status = 'revising';
+    stageData.completedAt = null;
+    stageData.revision = newRevision;
+    stageData.reopenedFromStep = fromStepName;
+    stageData.reopenedAt = now;
+    stageData.steps = steps;
+
+    data.lastActive = now;
+    data.currentStage = stage;
+
+    await this._write(cwd, data, changeName);
+
+    // 级联标记下游阶段为 stale
+    const downstreamStages = this._getDownstreamStages(stage);
+    if (downstreamStages.length > 0) {
+      const data2 = await this.read(cwd, changeName); // 重新读取以获取最新状态
+      if (data2) {
+        for (const ds of downstreamStages) {
+          if (data2.stages[ds] && data2.stages[ds].status === 'completed') {
+            data2.stages[ds].status = 'stale';
+            data2.stages[ds].staleReason = `上游阶段 ${stage} 已修订 (revision ${newRevision})`;
+            data2.stages[ds].completedAt = null;
+          }
+        }
+        await this._write(cwd, data2, changeName);
+      }
+    }
+
+    return { ok: true, revision: newRevision, fromStep: fromStepName };
+  }
+
+  /**
+   * 获取指定阶段的下游主流程阶段列表
+   * @param {string} stage
+   * @returns {string[]}
+   */
+  _getDownstreamStages(stage) {
+    const idx = MAIN_FLOW_ORDER.indexOf(stage);
+    if (idx === -1) return [];
+    return MAIN_FLOW_ORDER.slice(idx + 1);
   }
 
   async reset(cwd, stage, changeName = null) {

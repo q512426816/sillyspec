@@ -179,6 +179,12 @@ export class DB {
     this._migrateAddColumn('steps', 'wait_answers', 'TEXT'); // JSON array
     this._migrateAddColumn('steps', 'wait_round', 'INTEGER');
     this._migrateAddColumn('steps', 'max_wait_rounds', 'INTEGER');
+
+    // Revision v1 support
+    this._migrateAddColumn('stages', 'revision', 'INTEGER DEFAULT 0');
+    this._migrateAddColumn('stages', 'reopened_from_step', 'TEXT');
+    this._migrateAddColumn('stages', 'reopened_at', 'TEXT');
+    this._migrateAddColumn('stages', 'stale_reason', 'TEXT');
   }
 
   /**

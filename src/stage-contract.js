@@ -520,7 +520,7 @@ export function checkTransition(fromStage, toStage) {
     return { allowed: true }
   }
 
-  // 同阶段内重复运行：允许（继续执行当前阶段的下一步）
+  // 同阶段内重复运行：允许（继续执行当前阶段的下一步、或修订模式继续）
   if (fromStage === toStage) {
     return { allowed: true }
   }
@@ -537,7 +537,7 @@ export function checkTransition(fromStage, toStage) {
     return { allowed: false, reason: 'archive 的前置阶段是 verify，不能从 ' + fromStage + ' 跳转' }
   }
 
-  // 从辅助阶段进入主流程：允许（用户可能 scan 完直接 brainstorm 或 plan）
+  // 从辅助阶段进入主流程：允许
   if (auxiliaryStages.includes(fromStage)) {
     return { allowed: true }
   }
