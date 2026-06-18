@@ -2431,6 +2431,34 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
           console.warn(`   - ${w}`)
         }
       }
+
+      // ── Plan postcheck contract：plan.md 必须满足 execute 契约 ──
+      if (stageName === 'plan') {
+        const planFile = resolveChangeDir(cwd, progress, platformOpts?.specRoot)
+        const planPath = planFile ? join(planFile, 'plan.md') : null
+        if (planPath && existsSync(planPath)) {
+          const { validatePlanForExecute } = await import('./stages/execute.js')
+          const planContent = readFileSync(planPath, 'utf8')
+          const planValidation = validatePlanForExecute(planContent)
+          if (!planValidation.ok) {
+            console.error(`\n❌ Plan → Execute Contract 校验失败：`)
+            for (const err of planValidation.errors) console.error(`   - ${err}`)
+            console.error(`\n   plan.md 不满足 execute 契约，请修复后重新完成此步骤。`)
+            // 阻断 completed
+            progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
+            await pm._write(cwd, progress, changeName)
+            triggerSync(cwd, changeName, platformOpts)
+            return { stageCompleted: false, currentIdx, nextPendingIdx: currentIdx }
+          }
+          if (planValidation.warnings.length > 0) {
+            console.warn(`\n⚠️  Plan contract 警告（不阻断完成）：`)
+            for (const w of planValidation.warnings) console.warn(`   - ${w}`)
+          }
+          if (planValidation.ok) {
+            console.log(`\n✅ Plan → Execute Contract 校验通过（${planValidation.tasks.length} tasks, ${planValidation.waves.length} waves）`)
+          }
+        }
+      }
     } else if (actualCompleted < actualTotal) {
       // 实际步骤未全部完成，跳过 validator（状态可能不同步）
       console.log(`\n⚠️ 阶段校验跳过：${actualTotal} 步中仅 ${actualCompleted} 步标记为已完成，可能存在状态不同步。如确认阶段已完成，请运行 --status 确认。`)

@@ -112,3 +112,12 @@ execute 进入前调用 `validatePlanForExecute(planContent)`：
 | task id 重复 | fail-fast |
 | task id 不连续 | fail-fast |
 | plan.md 被修改后 execute reopen | 重新解析，使用最新 wave/task |
+
+## 双重校验
+
+契约在两个时点执行：
+
+1. **plan 完成时**（plan postcheck）：plan.md 不合法 → 阻断 completed，plan 阶段无法完成
+2. **execute 启动时**（execute entry）：plan.md 不合法 → fail-fast，不进入 execute
+
+这确保 plan.md 在进入 execute 之前就是合法的，execute 启动时的校验是二次保险。

@@ -243,6 +243,81 @@ console.log('\n--- Case 12: 多 Wave 各自有 task ---')
   assert(result.waves[2].tasks[0].index === 3, 'wave 3 task 应为 task-03')
 }
 
+// ─────────────────────────────────────────
+// Plan Postcheck Contract: valid none plan 通过
+// ─────────────────────────────────────────
+console.log('\n--- Plan Postcheck: valid none plan 通过 ---')
+{
+  const plan = `# Plan\n\n## Wave 1\n- [ ] task-01: 修复 bug\n`
+  const result = validatePlanForExecute(plan)
+  assert(result.ok, 'none plan 应通过 postcheck contract')
+  assert(result.errors.length === 0, '不应有 errors')
+}
+
+// ─────────────────────────────────────────
+// Plan Postcheck Contract: valid light plan 通过
+// ─────────────────────────────────────────
+console.log('\n--- Plan Postcheck: valid light plan 通过 ---')
+{
+  const plan = `# Plan\n\n## Wave 1\n- [ ] task-01: API\n- [ ] task-02: 前端\n`
+  const result = validatePlanForExecute(plan)
+  assert(result.ok, 'light plan 应通过 postcheck contract')
+}
+
+// ─────────────────────────────────────────
+// Plan Postcheck Contract: valid full plan 通过
+// ─────────────────────────────────────────
+console.log('\n--- Plan Postcheck: valid full plan 通过 ---')
+{
+  const plan = `# Plan\n\n## Wave 1\n- [ ] task-01: A\n## Wave 2\n- [ ] task-02: B\n## Wave 3\n- [ ] task-03: C\n`
+  const result = validatePlanForExecute(plan)
+  assert(result.ok, 'full plan 应通过 postcheck contract')
+  assert(result.waves.length === 3, '应有 3 个 wave')
+}
+
+// ─────────────────────────────────────────
+// Plan Postcheck Contract: missing checkbox 失败
+// ─────────────────────────────────────────
+console.log('\n--- Plan Postcheck: missing checkbox 失败 ---')
+{
+  const plan = `# Plan\n\n只有描述没有 task。\n`
+  const result = validatePlanForExecute(plan)
+  assert(!result.ok, '无 checkbox 应不通过 postcheck')
+  assert(result.errors.length > 0, '应有 errors')
+  assert(result.errors.some(e => e.includes('checkbox task')), '应有 checkbox task 错误')
+}
+
+// ─────────────────────────────────────────
+// Plan Postcheck Contract: warning 不阻断
+// ─────────────────────────────────────────
+console.log('\n--- Plan Postcheck: warning 不阻断 completed ---')
+{
+  const plan = `# Plan\n\n## Wave 1\n- [ ] 实现功能（无 task id）\n`
+  const result = validatePlanForExecute(plan)
+  assert(result.ok, '有 warning 但应通过 postcheck（不阻断 completed）')
+  assert(result.warnings.length > 0, '应有 warning')
+}
+
+// ─────────────────────────────────────────
+// Plan Postcheck Contract: id 重复失败
+// ─────────────────────────────────────────
+console.log('\n--- Plan Postcheck: task id 重复失败 ---')
+{
+  const plan = `# Plan\n\n## Wave 1\n- [ ] task-01: A\n- [ ] task-01: B\n`
+  const result = validatePlanForExecute(plan)
+  assert(!result.ok, 'id 重复应不通过 postcheck')
+}
+
+// ─────────────────────────────────────────
+// Plan Postcheck Contract: id 不连续失败
+// ─────────────────────────────────────────
+console.log('\n--- Plan Postcheck: task id 不连续失败 ---')
+{
+  const plan = `# Plan\n\n## Wave 1\n- [ ] task-01: A\n- [ ] task-03: C\n`
+  const result = validatePlanForExecute(plan)
+  assert(!result.ok, 'id 不连续应不通过 postcheck')
+}
+
 // ── 结果 ──
 console.log(`\n${'='.repeat(50)}`)
 console.log(`✅ 通过: ${12 - failed}  ❌ 失败: ${failed}`)
