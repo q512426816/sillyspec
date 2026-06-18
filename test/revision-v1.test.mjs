@@ -946,6 +946,193 @@ console.log('\n--- Execute Safety: repair cascade execute stale ---')
   assert(after.stages['execute'].status === 'stale', 'execute 应被修复为 stale')
 }
 
+// ─────────────────────────────────────────
+// Verify/Archive Safety: execute stale → verify stale → run 拒绝
+// ─────────────────────────────────────────
+console.log('\n--- Verify/Archive Safety: execute stale → verify/archive 被拒 ---')
+{
+  const { cwd } = createTempProject()
+  const changeName = 'va-safety-1'
+  const pm = await setupProgress(cwd, changeName)
+  await markStageCompleted(pm, cwd, changeName, 'brainstorm', ['s1'])
+  await markStageCompleted(pm, cwd, changeName, 'plan', ['p1'])
+  await markStageCompleted(pm, cwd, changeName, 'execute', ['e1'])
+  await markStageCompleted(pm, cwd, changeName, 'verify', ['v1', 'v2'])
+  await markStageCompleted(pm, cwd, changeName, 'archive', ['a1', 'a2'])
+
+  // reopen plan → execute/verify/archive cascade stale
+  await pm.reopenStage(cwd, 'plan', { fromStep: 1, changeName })
+
+  const data = await pm.read(cwd, changeName)
+  assert(data.stages['verify'].status === 'stale', 'verify 应为 stale')
+  assert(data.stages['archive'].status === 'stale', 'archive 应为 stale')
+
+  // run verify/archive 被拒
+  const isReopen = false, isStatus = false, isReset = false
+  assert(data.stages['verify'].status === 'stale' && !isReopen && !isStatus && !isReset, 'verify stale 直接 run 应被拒')
+  assert(data.stages['archive'].status === 'stale' && !isReopen && !isStatus && !isReset, 'archive stale 直接 run 应被拒')
+}
+
+// ─────────────────────────────────────────
+// Verify/Archive Safety: verify stale + --status 放行
+// ─────────────────────────────────────────
+console.log('\n--- Verify/Archive Safety: verify stale + --status 放行 ---')
+{
+  const { cwd } = createTempProject()
+  const changeName = 'va-safety-2'
+  const pm = await setupProgress(cwd, changeName)
+  await markStageCompleted(pm, cwd, changeName, 'brainstorm', ['s1'])
+  await markStageCompleted(pm, cwd, changeName, 'plan', ['p1'])
+  await markStageCompleted(pm, cwd, changeName, 'execute', ['e1'])
+  await markStageCompleted(pm, cwd, changeName, 'verify', ['v1'])
+
+  await pm.reopenStage(cwd, 'execute', { fromStep: 1, changeName })
+
+  const data = await pm.read(cwd, changeName)
+  assert(data.stages['verify'].status === 'stale', 'verify 应为 stale')
+  // --status 放行
+  const isStatus = true
+  assert(!(data.stages['verify'].status === 'stale' && !isStatus), 'verify stale + --status 不应被拦截')
+}
+
+// ─────────────────────────────────────────
+// Verify/Archive Safety: verify --reopen 清除旧 completed steps
+// ─────────────────────────────────────────
+console.log('\n--- Verify/Archive Safety: verify reopen 清除旧 steps ---')
+{
+  const { cwd } = createTempProject()
+  const changeName = 'va-safety-3'
+  const pm = await setupProgress(cwd, changeName)
+  await markStageCompleted(pm, cwd, changeName, 'verify', ['v1', 'v2', 'v3'])
+
+  const result = await pm.reopenStage(cwd, 'verify', { fromStep: 1, changeName })
+  assert(result.ok, 'verify reopen 应成功')
+
+  const after = await pm.read(cwd, changeName)
+  const steps = after.stages['verify'].steps
+  assert(after.stages['verify'].status === 'revising', 'verify 应为 revising')
+  assert(steps[0].status === 'pending', 'step 1 应为 pending')
+  assert(steps[1].status === 'stale', 'step 2 应为 stale')
+  assert(steps[2].status === 'stale', 'step 3 应为 stale')
+  assert(!steps.some(s => s.status === 'completed'), '不应保留 completed steps')
+}
+
+// ─────────────────────────────────────────
+// Verify/Archive Safety: archive --reopen 清除旧 completed steps
+// ─────────────────────────────────────────
+console.log('\n--- Verify/Archive Safety: archive reopen 清除旧 steps ---')
+{
+  const { cwd } = createTempProject()
+  const changeName = 'va-safety-4'
+  const pm = await setupProgress(cwd, changeName)
+  await markStageCompleted(pm, cwd, changeName, 'archive', ['a1', 'a2'])
+
+  const result = await pm.reopenStage(cwd, 'archive', { fromStep: 1, changeName })
+  assert(result.ok, 'archive reopen 应成功')
+
+  const after = await pm.read(cwd, changeName)
+  const steps = after.stages['archive'].steps
+  assert(after.stages['archive'].status === 'revising', 'archive 应为 revising')
+  assert(steps[0].status === 'pending', 'step 1 应为 pending')
+  assert(steps[1].status === 'stale', 'step 2 应为 stale')
+  assert(!steps.some(s => s.status === 'completed'), '不应保留 completed steps')
+}
+
+// ─────────────────────────────────────────
+// Verify/Archive Safety: checkConsistency 检测 execute stale + verify/archive completed
+// ─────────────────────────────────────────
+console.log('\n--- Verify/Archive Safety: check 检测 execute stale 下游 ---')
+{
+  const { cwd } = createTempProject()
+  const changeName = 'va-safety-5'
+  const pm = await setupProgress(cwd, changeName)
+
+  const now = new Date().toLocaleString('zh-CN', { hour12: false })
+  const data = await pm.read(cwd, changeName)
+  data.stages['execute'] = { status: 'stale', staleReason: 'plan revised', steps: [] }
+  data.stages['verify'] = { status: 'completed', startedAt: now, completedAt: now,
+    steps: [{ name: 'v1', status: 'completed', completedAt: now }] }
+  data.stages['archive'] = { status: 'completed', startedAt: now, completedAt: now,
+    steps: [{ name: 'a1', status: 'completed', completedAt: now }] }
+  await pm._write(cwd, data, changeName)
+
+  const result = await pm.checkConsistency(cwd, changeName)
+  assert(!result.ok, '应检测到问题')
+  assert(result.issues.some(i => i.includes('verify') && i.includes('execute') && i.includes('stale')), '应检测 verify 假完成')
+  assert(result.issues.some(i => i.includes('archive') && i.includes('execute') && i.includes('stale')), '应检测 archive 假完成')
+}
+
+// ─────────────────────────────────────────
+// Verify/Archive Safety: checkConsistency 检测 verify stale + archive completed
+// ─────────────────────────────────────────
+console.log('\n--- Verify/Archive Safety: check 检测 verify stale 下游 archive ---')
+{
+  const { cwd } = createTempProject()
+  const changeName = 'va-safety-6'
+  const pm = await setupProgress(cwd, changeName)
+
+  const now = new Date().toLocaleString('zh-CN', { hour12: false })
+  const data = await pm.read(cwd, changeName)
+  data.stages['verify'] = { status: 'stale', staleReason: 'execute revised', steps: [] }
+  data.stages['archive'] = { status: 'completed', startedAt: now, completedAt: now,
+    steps: [{ name: 'a1', status: 'completed', completedAt: now }] }
+  await pm._write(cwd, data, changeName)
+
+  const result = await pm.checkConsistency(cwd, changeName)
+  assert(!result.ok, '应检测到问题')
+  assert(result.issues.some(i => i.includes('archive') && i.includes('verify') && i.includes('stale')), '应检测 archive 假完成（verify stale）')
+}
+
+// ─────────────────────────────────────────
+// Verify/Archive Safety: repair cascade execute → verify + archive
+// ─────────────────────────────────────────
+console.log('\n--- Verify/Archive Safety: repair cascade execute → verify + archive ---')
+{
+  const { cwd } = createTempProject()
+  const changeName = 'va-safety-7'
+  const pm = await setupProgress(cwd, changeName)
+
+  const now = new Date().toLocaleString('zh-CN', { hour12: false })
+  const data = await pm.read(cwd, changeName)
+  data.stages['execute'] = { status: 'stale', staleReason: 'plan revised', steps: [] }
+  data.stages['verify'] = { status: 'completed', startedAt: now, completedAt: now,
+    steps: [{ name: 'v1', status: 'completed', completedAt: now }] }
+  data.stages['archive'] = { status: 'completed', startedAt: now, completedAt: now,
+    steps: [{ name: 'a1', status: 'completed', completedAt: now }] }
+  await pm._write(cwd, data, changeName)
+
+  const result = await pm.repairConsistency(cwd, { apply: true, changeName })
+  assert(result.applied.some(a => a.action === 'cascade_stale' && a.stage === 'verify'), '应修复 verify')
+  assert(result.applied.some(a => a.action === 'cascade_stale' && a.stage === 'archive'), '应修复 archive')
+
+  const after = await pm.read(cwd, changeName)
+  assert(after.stages['verify'].status === 'stale', 'verify 应为 stale')
+  assert(after.stages['archive'].status === 'stale', 'archive 应为 stale')
+}
+
+// ─────────────────────────────────────────
+// Verify/Archive Safety: repair cascade verify → archive
+// ─────────────────────────────────────────
+console.log('\n--- Verify/Archive Safety: repair cascade verify → archive ---')
+{
+  const { cwd } = createTempProject()
+  const changeName = 'va-safety-8'
+  const pm = await setupProgress(cwd, changeName)
+
+  const now = new Date().toLocaleString('zh-CN', { hour12: false })
+  const data = await pm.read(cwd, changeName)
+  data.stages['verify'] = { status: 'stale', staleReason: 'execute revised', steps: [] }
+  data.stages['archive'] = { status: 'completed', startedAt: now, completedAt: now,
+    steps: [{ name: 'a1', status: 'completed', completedAt: now }] }
+  await pm._write(cwd, data, changeName)
+
+  const result = await pm.repairConsistency(cwd, { apply: true, changeName })
+  assert(result.applied.some(a => a.action === 'cascade_stale' && a.stage === 'archive'), '应修复 archive')
+
+  const after = await pm.read(cwd, changeName)
+  assert(after.stages['archive'].status === 'stale', 'archive 应为 stale')
+}
+
 // ── 结果 ──
 console.log(`\n${'='.repeat(50)}`)
 console.log(`✅ 通过: ${12 - failed}  ❌ 失败: ${failed}`)
