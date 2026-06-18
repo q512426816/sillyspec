@@ -226,6 +226,9 @@ console.log('\n--- Case 7: 下游 stage cascade stale ---')
   // 检查 staleReason
   const planStaleReason = data.stages['plan'].staleReason
   assert(planStaleReason && planStaleReason.includes('brainstorm'), 'plan staleReason 应包含 brainstorm')
+
+  // 验证 scan 不在 cascade 中（scan 是 brainstorm 的上游）
+  assert(data.stages['scan'].status !== 'stale', 'scan 不应被 cascade（它是 brainstorm 的上游，不是下游）')
 }
 rmSync(mkdtempSync(join(tmpdir(), 'sillyspec-rev-test-')), { recursive: true })
 
@@ -344,6 +347,25 @@ console.log('\n--- Bonus: 多次 reopen revision 递增 ---')
   // 第二次 reopen
   const r2 = await pm.reopenStage(cwd, 'brainstorm', { fromStep: 3, changeName })
   assert(r2.ok && r2.revision === 2, '第二次 reopen revision=2')
+}
+
+// ─────────────────────────────────────────
+// Bonus: scan reopen → brainstorm cascade
+// ─────────────────────────────────────────
+console.log('\n--- Bonus: scan reopen 应 cascade 到 brainstorm ---')
+{
+  const { cwd } = createTempProject()
+  const changeName = 'rev-test-scan'
+  const pm = await setupProgress(cwd, changeName)
+  await markStageCompleted(pm, cwd, changeName, 'scan', ['s1', 's2'])
+  await markStageCompleted(pm, cwd, changeName, 'brainstorm', ['b1', 'b2'])
+
+  const result = await pm.reopenStage(cwd, 'scan', { fromStep: 2, changeName })
+  assert(result.ok, 'reopen scan 应成功')
+
+  const data = await pm.read(cwd, changeName)
+  assert(data.stages['scan'].status === 'revising', 'scan 应为 revising')
+  assert(data.stages['brainstorm'].status === 'stale', 'brainstorm 应被 cascade 为 stale')
 }
 
 // ── 结果 ──

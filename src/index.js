@@ -45,6 +45,10 @@ SillySpec CLI — 规范驱动开发工具包
     scan, brainstorm, plan, execute, verify, archive
     quick, explore, status, doctor
 
+  Revision mode:
+    已完成阶段不能直接重跑。使用 --reopen --from-step 进入受控修订。
+    重开会使下游阶段自动标记为 stale，但不修改已有产物文件。
+
   sillyspec progress <cmd>     进度记录（轻量，不强制顺序）
     init                       初始化项目数据库
     show                       查看当前进度

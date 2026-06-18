@@ -44,7 +44,10 @@ const VALID_STATUSES = ['pending', 'in-progress', 'completed', 'failed', 'blocke
 const VALID_STAGE_STATUSES = ['pending', 'in-progress', 'completed', 'failed', 'blocked', 'revising', 'stale'];
 
 // Main flow stage order (for downstream cascade)
-const MAIN_FLOW_ORDER = ['brainstorm', 'plan', 'execute', 'verify', 'archive'];
+// 完整主流程顺序（含 scan），用于下游 cascade
+const STAGE_ORDER = ['scan', 'brainstorm', 'plan', 'execute', 'verify', 'archive'];
+// 主流程阶段（不含 scan/quick/explore 等辅助阶段）
+const MAIN_FLOW_ORDER = STAGE_ORDER;
 
 const STAGE_LABELS = {
   brainstorm: '🧠 需求探索',
@@ -992,6 +995,9 @@ export class ProgressManager {
       }
       if (stageData.staleReason) {
         console.log(`    ⚠️ stale: ${stageData.staleReason}`);
+        if (stage === 'archive') {
+          console.log(`    📁 已有归档文件仍保留在磁盘上，但不再可信。`);
+        }
       }
 
       if (stageData.steps && stageData.steps.length > 0) {
@@ -1143,7 +1149,7 @@ export class ProgressManager {
     stageData.status = 'revising';
     stageData.completedAt = null;
     stageData.revision = newRevision;
-    stageData.reopenedFromStep = fromStepName;
+    stageData.reopenedFromStep = `${fromIdx + 1}: ${fromStepName}`; // 存 "index: name" 格式
     stageData.reopenedAt = now;
     stageData.steps = steps;
 

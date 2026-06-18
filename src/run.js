@@ -1284,6 +1284,15 @@ export async function runCommand(args, cwd, specDir = null) {
         fromStep: stageData.reopenedFromStep,
       }
     }
+  } else {
+    // 非 reopen 的正常执行：如果阶段处于 revising 状态，也注入 revision context
+    const revStageData = progress.stages[stageName]
+    if (revStageData && revStageData.status === 'revising' && revStageData.revision > 0 && !platformOpts._revision) {
+      platformOpts._revision = {
+        revision: revStageData.revision,
+        fromStep: revStageData.reopenedFromStep,
+      }
+    }
   }
 
   // 确保步骤已初始化
