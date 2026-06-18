@@ -1548,6 +1548,29 @@ async function runStage(pm, progress, stageName, cwd, changeName, skipApproval =
     console.log(`  继续执行将从中断处恢复，用 --reset 可重新开始。\n`)
   }
 
+  // ── Brainstorm → Plan Contract：plan 启动前校验 design.md ──
+  if (stageName === 'plan' && currentIdx === 0) {
+    const changeDir = resolveChangeDir(cwd, progress, platformOpts?.specRoot || null)
+    const designPath = changeDir ? join(changeDir, 'design.md') : null
+    if (designPath && existsSync(designPath)) {
+      const { validateDesignForPlan } = await import('./stages/plan.js')
+      const designContent = readFileSync(designPath, 'utf8')
+      const designValidation = validateDesignForPlan(designContent)
+      if (!designValidation.ok) {
+        console.error(`\n❌ Brainstorm → Plan Contract 校验失败：`)
+        for (const err of designValidation.errors) console.error(`   - ${err}`)
+        console.error(`\n   design.md 不满足 plan 契约，请先修复后重试。`)
+        console.error(`   提示：sillyspec run brainstorm --reopen --from-step <步骤> 修订设计文档`)
+        process.exit(1)
+      }
+      if (designValidation.warnings.length > 0) {
+        console.log(`⚠️  Design contract 警告（不阻断）：`)
+        for (const w of designValidation.warnings) console.log(`   - ${w}`)
+        console.log()
+      }
+    }
+  }
+
   const defSteps = await getStageSteps(stageName, cwd, progress)
   if (defSteps && defSteps[currentIdx]) {
     // noAI 步骤自动完成（CLI-only，不需要 Agent 参与）

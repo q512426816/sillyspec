@@ -1,6 +1,64 @@
 import { existsSync, readFileSync } from 'fs'
 import path from 'path'
 
+/**
+ * 校验 design.md 是否满足 plan 执行契约
+ * 第一版是轻量 markdown 结构检查，不强 schema。
+ * @param {string} designContent - design.md 文件内容
+ * @returns {{ ok: boolean, errors: string[], warnings: string[] }}
+ */
+export function validateDesignForPlan(designContent) {
+  const errors = []
+  const warnings = []
+
+  if (!designContent || !designContent.trim()) {
+    return { ok: false, errors: ['design.md 内容为空'], warnings }
+  }
+
+  const lower = designContent.toLowerCase()
+
+  // 检查 1: 必须包含目标/问题描述（error）
+  const hasGoal = /(^|\n)#{2,}\s*.*(目标|goal|objective|背景|background|问题|problem|purpose|目的)/i.test(designContent)
+  if (!hasGoal) {
+    errors.push('design.md 缺少「目标/背景/问题描述」章节 — plan 需要知道要达成什么')
+  }
+
+  // 检查 2: 必须包含范围/scope（error）
+  const hasScope = /(^|\n)#{2,}\s*.*(范围|scope|总体方案|方案|approach|solution|设计|design)/i.test(designContent)
+  if (!hasScope) {
+    errors.push('design.md 缺少「范围/总体方案/设计」章节 — plan 需要知道做什么和怎么做')
+  }
+
+  // 检查 3: 必须包含决策/方案选择（error）
+  const hasDecisions = /(^|\n)#{2,}\s*.*(决策|decision|选择|choice|方案选择)/i.test(designContent)
+  || /d-\d+@v\d+/i.test(designContent) // decisions.md 引用 ID
+  || /decisions?\.md/i.test(designContent) // 引用 decisions.md
+  if (!hasDecisions) {
+    errors.push('design.md 缺少「决策/方案选择」— plan 需要基于明确的技术决策来拆分任务')
+  }
+
+  // 检查 4 (warning): 缺非目标/non-goals
+  const hasNonGoals = /(^|\n)#{2,}\s*.*(非目标|non-goals?|不做|out of scope|不在范围)/i.test(designContent)
+  if (!hasNonGoals) {
+    warnings.push('design.md 缺少「非目标/Non-goals」— 建议明确不做什么，防止 scope creep')
+  }
+
+  // 检查 5 (warning): 缺约束/风险
+  const hasConstraints = /(^|\n)#{2,}\s*.*(约束|constraint|限制|limitation|风险|risk|trade-?off)/i.test(designContent)
+  if (!hasConstraints) {
+    warnings.push('design.md 缺少「约束/风险/Trade-off」— 建议记录已知约束和风险')
+  }
+
+  // 检查 6 (warning): 缺文件变更清单
+  const hasFileChanges = /文件变更|file change|变更清单|changed files/i.test(designContent)
+  || /^\|\s*(新增|修改|删除|删除|new|modify|delete|update)\s*\|/im.test(designContent)
+  if (!hasFileChanges) {
+    warnings.push('design.md 缺少「文件变更清单」— 建议列出预期改动的文件')
+  }
+
+  return { ok: errors.length === 0, errors, warnings }
+}
+
 export const definition = {
   name: 'plan',
   title: '实现计划',
