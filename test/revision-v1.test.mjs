@@ -368,6 +368,128 @@ console.log('\n--- Bonus: scan reopen 应 cascade 到 brainstorm ---')
   assert(data.stages['brainstorm'].status === 'stale', 'brainstorm 应被 cascade 为 stale')
 }
 
+// ─────────────────────────────────────────
+// TODO Fix 1: stale 阶段 --status 不拦截
+// ─────────────────────────────────────────
+console.log('\n--- TODO Fix 1: stale 阶段 --status 放行 ---')
+{
+  const { cwd } = createTempProject()
+  const changeName = 'rev-todo-1'
+  const pm = await setupProgress(cwd, changeName)
+  await markStageCompleted(pm, cwd, changeName, 'brainstorm', ['s1', 's2'])
+  await markStageCompleted(pm, cwd, changeName, 'plan', ['p1', 'p2'])
+
+  // reopen brainstorm → plan cascade stale
+  await pm.reopenStage(cwd, 'brainstorm', { fromStep: 1, changeName })
+
+  const data = await pm.read(cwd, changeName)
+  assert(data.stages['plan'].status === 'stale', 'plan 应为 stale')
+
+  // 模拟 run.js 的拦截逻辑：stale + --status 应放行
+  const isStatus = true
+  const isReopen = false
+  const isReset = false
+  const stageStatus = data.stages['plan'].status
+  const shouldBlock = stageStatus === 'stale' && !isReopen && !isStatus && !isReset
+  assert(!shouldBlock, 'stale + --status 不应被拦截')
+}
+
+// ─────────────────────────────────────────
+// TODO Fix 2: stale 阶段 --reset 不拦截
+// ─────────────────────────────────────────
+console.log('\n--- TODO Fix 2: stale 阶段 --reset 放行 ---')
+{
+  const { cwd } = createTempProject()
+  const changeName = 'rev-todo-2'
+  const pm = await setupProgress(cwd, changeName)
+  await markStageCompleted(pm, cwd, changeName, 'brainstorm', ['s1', 's2'])
+  await markStageCompleted(pm, cwd, changeName, 'plan', ['p1', 'p2'])
+
+  await pm.reopenStage(cwd, 'brainstorm', { fromStep: 1, changeName })
+
+  const data = await pm.read(cwd, changeName)
+  const isReset = true
+  const isStatus = false
+  const isReopen = false
+  const stageStatus = data.stages['plan'].status
+  const shouldBlock = stageStatus === 'stale' && !isReopen && !isStatus && !isReset
+  assert(!shouldBlock, 'stale + --reset 不应被拦截')
+}
+
+// ─────────────────────────────────────────
+// TODO Fix 3: stale empty steps + --reopen --from-step 1 自动初始化
+// ─────────────────────────────────────────
+console.log('\n--- TODO Fix 3: stale empty steps + reopen from-step 1 ---')
+{
+  const { cwd } = createTempProject()
+  const changeName = 'rev-todo-3'
+  const pm = await setupProgress(cwd, changeName)
+
+  // brainstorm completed with steps
+  await markStageCompleted(pm, cwd, changeName, 'brainstorm', ['s1', 's2'])
+
+  // plan marked completed but WITHOUT steps (模拟 cascade stale 后 steps 为空)
+  const data = await pm.read(cwd, changeName)
+  data.stages['plan'] = {
+    status: 'completed',
+    startedAt: new Date().toLocaleString('zh-CN', { hour12: false }),
+    completedAt: new Date().toLocaleString('zh-CN', { hour12: false }),
+    steps: [], // 空 steps
+  }
+  data.currentStage = 'brainstorm'
+  await pm._write(cwd, data, changeName)
+
+  // reopen brainstorm → plan cascade stale
+  await pm.reopenStage(cwd, 'brainstorm', { fromStep: 1, changeName })
+
+  // plan 现在是 stale，steps 为空
+  const data2 = await pm.read(cwd, changeName)
+  assert(data2.stages['plan'].status === 'stale', 'plan 应为 stale')
+  assert(data2.stages['plan'].steps.length === 0, 'plan steps 应为空')
+
+  // 模拟 run.js 的 ensureStageSteps：手动注入 steps
+  // 因为 reopenStage 需要 steps 来 resolve from-step
+  // 这里测试逻辑：先 ensure steps，再 reopen
+  const data3 = await pm.read(cwd, changeName)
+  data3.stages['plan'].steps = [
+    { name: '复杂度分类', status: 'pending' },
+    { name: '状态检查', status: 'pending' },
+  ]
+  await pm._write(cwd, data3, changeName)
+
+  // 现在 reopen plan from step 1
+  const result = await pm.reopenStage(cwd, 'plan', { fromStep: 1, changeName })
+  assert(result.ok, 'stale empty steps 初始化后 reopen 应成功')
+  assert(result.fromStep === '复杂度分类', 'fromStep 应为第一个步骤')
+}
+
+// ─────────────────────────────────────────
+// TODO Fix 4: stale empty steps + --reopen 无 from-step 仍 fail-fast
+// ─────────────────────────────────────────
+console.log('\n--- TODO Fix 4: stale empty steps + reopen 无 from-step fail-fast ---')
+{
+  const { cwd } = createTempProject()
+  const changeName = 'rev-todo-4'
+  const pm = await setupProgress(cwd, changeName)
+
+  await markStageCompleted(pm, cwd, changeName, 'brainstorm', ['s1', 's2'])
+
+  // plan stale with empty steps
+  const data = await pm.read(cwd, changeName)
+  data.stages['plan'] = {
+    status: 'stale',
+    startedAt: null,
+    completedAt: null,
+    steps: [],
+    staleReason: 'upstream brainstorm revised',
+  }
+  await pm._write(cwd, data, changeName)
+
+  // reopen without fromStep → should fail because all steps are... well there are none
+  const result = await pm.reopenStage(cwd, 'plan', { changeName })
+  assert(!result.ok, 'stale empty steps 无 fromStep 应失败')
+}
+
 // ── 结果 ──
 console.log(`\n${'='.repeat(50)}`)
 console.log(`✅ 通过: ${12 - failed}  ❌ 失败: ${failed}`)

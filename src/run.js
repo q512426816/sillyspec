@@ -1238,17 +1238,17 @@ export async function runCommand(args, cwd, specDir = null) {
     return await resetStage(pm, progress, stageName, cwd, effectiveChange, platformOpts)
   }
 
-  // ── 规则 1：completed 阶段直接 run，拒绝 ──
+  // ── 规则 1：completed 阶段直接 run，拒绝（但 --status 放行）──
   const stageStatus = progress.stages[stageName]?.status
-  if (stageStatus === 'completed' && !isReopen) {
+  if (stageStatus === 'completed' && !isReopen && !isStatus) {
     console.error(`\n❌ ${stageName} 阶段已完成。`)
     console.error(`   使用 --reopen 进行修订，或 --reset 从头开始。`)
     console.error(`   修订示例: sillyspec run ${stageName} --reopen --from-step <步骤序号或名称>`)
     process.exit(1)
   }
 
-  // ── 规则 5：stale 阶段直接 run，拒绝 ──
-  if (stageStatus === 'stale' && !isReopen) {
+  // ── 规则 5：stale 阶段直接 run，拒绝（但 --status / --reset 放行）──
+  if (stageStatus === 'stale' && !isReopen && !isStatus && !isReset) {
     const staleReason = progress.stages[stageName]?.staleReason || '上游阶段已修订'
     console.error(`\n⚠️ ${stageName} 阶段已失效（stale）。`)
     console.error(`   原因：${staleReason}`)
@@ -1258,6 +1258,17 @@ export async function runCommand(args, cwd, specDir = null) {
 
   // ── --reopen 处理 ──
   if (isReopen) {
+    // stale 阶段可能 steps 为空（被 cascade 但从未真正执行过）
+    // 先确保步骤定义存在
+    const stageDataPre = progress.stages[stageName]
+    if (stageDataPre && (!stageDataPre.steps || stageDataPre.steps.length === 0)) {
+      const changed2 = await ensureStageSteps(progress, stageName, cwd, specRoot)
+      if (changed2) {
+        await pm._write(cwd, progress, effectiveChange)
+        progress = await pm.read(cwd, effectiveChange) || progress
+      }
+    }
+
     const result = await pm.reopenStage(cwd, stageName, {
       fromStep: fromStepValue,
       changeName: effectiveChange,
