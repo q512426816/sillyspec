@@ -1031,11 +1031,171 @@ export class ProgressManager {
       }
     }
 
+    // ── Next 建议 ──
+    const suggestion = this._getNextSuggestion(data);
+    if (suggestion) {
+      console.log('');
+      console.log(`  💡 ${suggestion.text}`);
+      if (suggestion.command) console.log(`     ${suggestion.command}`);
+    }
+
     console.log('');
+  }
+
+  /**
+   * 根据当前状态给出下一步建议
+   * @param {object} data - progress data
+   * @returns {{ text: string, command?: string }|null}
+   */
+  _getNextSuggestion(data) {
+    // 找到第一个 revising 阶段
+    const revisingStage = STAGE_ORDER.find(s => data.stages[s]?.status === 'revising');
+    if (revisingStage) {
+      const sd = data.stages[revisingStage];
+      return {
+        text: `${STAGE_LABELS[revisingStage] || revisingStage} 正在修订中（revision ${sd.revision || 1}），请继续完成修订。`,
+        command: `sillyspec run ${revisingStage}`,
+      };
+    }
+
+    // 找到第一个 stale 阶段（上游已修，下游需要重建）
+    const staleStage = STAGE_ORDER.find(s => data.stages[s]?.status === 'stale');
+    if (staleStage) {
+      const sd = data.stages[staleStage];
+      return {
+        text: `${STAGE_LABELS[staleStage] || staleStage} 已失效（${sd.staleReason || '上游修订'}），需要从第一步重建。`,
+        command: `sillyspec run ${staleStage} --reopen --from-step 1`,
+      };
+    }
+
+    // 找到第一个有 pending/waiting/failed 步骤的 in-progress 阶段
+    for (const s of STAGE_ORDER) {
+      const sd = data.stages[s];
+      if (!sd) continue;
+      if (sd.status === 'in-progress' && sd.steps) {
+        const hasPending = sd.steps.some(st => ['pending', 'waiting', 'failed'].includes(st.status));
+        if (hasPending) {
+          return {
+            text: `${STAGE_LABELS[s] || s} 进行中，继续执行下一步。`,
+            command: `sillyspec run ${s}`,
+          };
+        }
+      }
+    }
+
+    // 找到第一个 pending 主流程阶段
+    for (const s of STAGE_ORDER) {
+      const sd = data.stages[s];
+      if (sd && sd.status === 'pending' && sd.steps && sd.steps.length > 0) {
+        // 检查上游是否都 completed
+        const idx = STAGE_ORDER.indexOf(s);
+        const upstream = STAGE_ORDER.slice(0, idx);
+        const upstreamOk = upstream.every(us =>
+          data.stages[us]?.status === 'completed' || !data.stages[us] || data.stages[us].status === 'pending'
+        );
+        if (upstreamOk) {
+          return {
+            text: `可以开始 ${STAGE_LABELS[s] || s}。`,
+            command: `sillyspec run ${s}`,
+          };
+        }
+      }
+    }
+
+    return null;
   }
 
   async status(cwd, changeName = null) {
     await this.show(cwd, changeName);
+  }
+
+  /**
+   * Revision v1 状态一致性检查
+   * 只报告，不自动修复。
+   * @param {string} cwd
+   * @param {string|null} changeName
+   * @returns {{ ok: boolean, issues: string[], warnings: string[] }}
+   */
+  async checkConsistency(cwd, changeName = null) {
+    const data = await this.read(cwd, changeName);
+    if (!data) {
+      return { ok: false, issues: ['无法读取进度数据'], warnings: [] };
+    }
+
+    const issues = [];
+    const warnings = [];
+
+    for (const stageName of STAGE_ORDER) {
+      const sd = data.stages[stageName];
+      if (!sd) continue;
+
+      // a. completed stage 不能有 pending/stale steps
+      if (sd.status === 'completed' && sd.steps) {
+        const badSteps = sd.steps.filter(s => ['pending', 'stale', 'in-progress'].includes(s.status));
+        for (const step of badSteps) {
+          issues.push(`${stageName}/${step.name}: step 状态为 ${step.status}，但 stage 状态为 completed`);
+        }
+      }
+
+      // b. revising stage 应有 revision > 0 或 reopenedFromStep
+      if (sd.status === 'revising') {
+        if (!sd.revision || sd.revision < 1) {
+          issues.push(`${stageName}: 状态为 revising 但 revision 缺失或为 0`);
+        }
+        if (!sd.reopenedFromStep) {
+          warnings.push(`${stageName}: 状态为 revising 但未记录 reopenedFromStep`);
+        }
+      }
+
+      // c. stale stage 应有 staleReason
+      if (sd.status === 'stale') {
+        if (!sd.staleReason) {
+          warnings.push(`${stageName}: 状态为 stale 但缺少 staleReason`);
+        }
+      }
+
+      // d. 下游 completed 不能出现在上游 stale/revising 之后
+      const stageIdx = STAGE_ORDER.indexOf(stageName);
+      for (let i = 0; i < stageIdx; i++) {
+        const upstream = STAGE_ORDER[i];
+        const upData = data.stages[upstream];
+        if (upData && (upData.status === 'stale' || upData.status === 'revising')) {
+          if (sd.status === 'completed') {
+            issues.push(`${stageName}: 状态为 completed，但上游 ${upstream} 状态为 ${upData.status}（下游不应在上游修订/失效时保持 completed）`);
+          }
+        }
+      }
+
+      // e. step stale 时 stage 不应是 completed
+      if (sd.status === 'completed' && sd.steps) {
+        const staleSteps = sd.steps.filter(s => s.status === 'stale');
+        for (const step of staleSteps) {
+          issues.push(`${stageName}/${step.name}: step 状态为 stale，但 stage 状态为 completed`);
+        }
+      }
+    }
+
+    // 输出报告
+    console.log('');
+    console.log('  ═══════════════════════════════════════');
+    console.log('  状态一致性检查');
+    console.log('  ═══════════════════════════════════════');
+
+    if (issues.length === 0 && warnings.length === 0) {
+      console.log('  ✅ 未发现一致性问题');
+    } else {
+      if (issues.length > 0) {
+        console.log(`\n  ❌ 问题 (${issues.length}):`);
+        for (const issue of issues) console.log(`     - ${issue}`);
+      }
+      if (warnings.length > 0) {
+        console.log(`\n  ⚠️ 警告 (${warnings.length}):`);
+        for (const w of warnings) console.log(`     - ${w}`);
+      }
+    }
+    console.log('');
+
+    return { ok: issues.length === 0, issues, warnings };
   }
 
   async validate(cwd, changeName = null) {

@@ -56,6 +56,7 @@ SillySpec CLI — 规范驱动开发工具包
     add-step <stage> <name>    添加步骤
     update-step <s> <n> --status <st> [--output <t>]
     complete-stage <stage>     标记阶段完成
+    check                      状态一致性检查（只报告，不修复）
     validate                   校验并修复
     reset [--stage X]          重置进度
 
@@ -179,6 +180,9 @@ async function main() {
         case 'status':
         case 'show':
           pm.show(dir, progChangeName);
+          break;
+        case 'check':
+          await pm.checkConsistency(dir, progChangeName);
           break;
         case 'validate':
           await pm.validate(dir, progChangeName);

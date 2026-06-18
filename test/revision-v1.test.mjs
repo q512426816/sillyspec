@@ -490,6 +490,151 @@ console.log('\n--- TODO Fix 4: stale empty steps + reopen 无 from-step fail-fas
   assert(!result.ok, 'stale empty steps 无 fromStep 应失败')
 }
 
+// ─────────────────────────────────────────
+// v1.1: progress 展示 revising + stale 信息
+// ─────────────────────────────────────────
+console.log('\n--- v1.1: progress 展示 revising 信息 ---')
+{
+  const { cwd } = createTempProject()
+  const changeName = 'rev-11-1'
+  const pm = await setupProgress(cwd, changeName)
+  await markStageCompleted(pm, cwd, changeName, 'brainstorm', ['s1', 's2', 's3'])
+  await markStageCompleted(pm, cwd, changeName, 'plan', ['p1', 'p2'])
+
+  await pm.reopenStage(cwd, 'brainstorm', { fromStep: 2, changeName })
+
+  const data = await pm.read(cwd, changeName)
+  // 验证 revision 信息存在
+  assert(data.stages['brainstorm'].revision === 1, 'brainstorm revision 应为 1')
+  assert(!!data.stages['brainstorm'].reopenedFromStep, 'brainstorm 应有 reopenedFromStep')
+  assert(data.stages['plan'].status === 'stale', 'plan 应为 stale')
+  assert(!!data.stages['plan'].staleReason, 'plan 应有 staleReason')
+
+  // 验证 _getNextSuggestion 返回正确建议
+  const suggestion = pm._getNextSuggestion(data)
+  assert(suggestion !== null, '应有 suggestion')
+  assert(suggestion.text.includes('brainstorm') || suggestion.text.includes('需求探索'), 'suggestion 应提到 brainstorm 修订中')
+  assert(suggestion.command === 'sillyspec run brainstorm', 'suggestion command 应为继续 brainstorm')
+}
+
+// ─────────────────────────────────────────
+// v1.1: _getNextSuggestion 返回 stale 建议
+// ─────────────────────────────────────────
+console.log('\n--- v1.1: suggestion 返回 stale 阶段建议 ---')
+{
+  const { cwd } = createTempProject()
+  const changeName = 'rev-11-2'
+  const pm = await setupProgress(cwd, changeName)
+  await markStageCompleted(pm, cwd, changeName, 'brainstorm', ['s1', 's2'])
+  await markStageCompleted(pm, cwd, changeName, 'plan', ['p1', 'p2'])
+
+  // reopen brainstorm → plan stale
+  await pm.reopenStage(cwd, 'brainstorm', { fromStep: 1, changeName })
+
+  // 手动完成 brainstorm 修订（不再 revising）
+  const data = await pm.read(cwd, changeName)
+  data.stages['brainstorm'].status = 'completed'
+  data.stages['brainstorm'].completedAt = new Date().toLocaleString('zh-CN', { hour12: false })
+  await pm._write(cwd, data, changeName)
+
+  // 现在 brainstorm completed, plan stale
+  const data2 = await pm.read(cwd, changeName)
+  const suggestion = pm._getNextSuggestion(data2)
+  assert(suggestion !== null, '应有 suggestion')
+  assert(suggestion.text.includes('plan') || suggestion.text.includes('实现计划'), 'suggestion 应提到 plan')
+  assert(suggestion.command.includes('--reopen --from-step 1'), 'suggestion 应建议 reopen plan')
+}
+
+// ─────────────────────────────────────────
+// v1.1: checkConsistency 发现 completed + stale steps
+// ─────────────────────────────────────────
+console.log('\n--- v1.1: checkConsistency 发现 completed stage 有 stale steps ---')
+{
+  const { cwd } = createTempProject()
+  const changeName = 'rev-11-3'
+  const pm = await setupProgress(cwd, changeName)
+
+  // 手动构造异常状态：stage completed 但 step stale
+  const now = new Date().toLocaleString('zh-CN', { hour12: false })
+  const data = await pm.read(cwd, changeName)
+  data.stages['brainstorm'] = {
+    status: 'completed',
+    startedAt: now, completedAt: now,
+    steps: [
+      { name: 's1', status: 'completed', completedAt: now },
+      { name: 's2', status: 'stale' }, // 异常
+    ],
+  }
+  await pm._write(cwd, data, changeName)
+
+  const result = await pm.checkConsistency(cwd, changeName)
+  assert(!result.ok, '应检测到问题')
+  assert(result.issues.length > 0, '应有 issue')
+  assert(result.issues.some(i => i.includes('stale') && i.includes('completed')), '应有 stale step + completed stage 问题')
+}
+
+// ─────────────────────────────────────────
+// v1.1: checkConsistency 发现 stale stage 缺 staleReason
+// ─────────────────────────────────────────
+console.log('\n--- v1.1: checkConsistency 发现 stale 缺 staleReason ---')
+{
+  const { cwd } = createTempProject()
+  const changeName = 'rev-11-4'
+  const pm = await setupProgress(cwd, changeName)
+
+  const now = new Date().toLocaleString('zh-CN', { hour12: false })
+  const data = await pm.read(cwd, changeName)
+  data.stages['plan'] = {
+    status: 'stale',
+    steps: [],
+    staleReason: null, // 缺失
+  }
+  await pm._write(cwd, data, changeName)
+
+  const result = await pm.checkConsistency(cwd, changeName)
+  assert(result.warnings.some(w => w.includes('plan') && w.includes('staleReason')), '应警告 plan 缺 staleReason')
+}
+
+// ─────────────────────────────────────────
+// v1.1: checkConsistency 发现上游 stale 但下游 completed
+// ─────────────────────────────────────────
+console.log('\n--- v1.1: checkConsistency 发现上游 stale 下游 completed ---')
+{
+  const { cwd } = createTempProject()
+  const changeName = 'rev-11-5'
+  const pm = await setupProgress(cwd, changeName)
+
+  const now = new Date().toLocaleString('zh-CN', { hour12: false })
+  const data = await pm.read(cwd, changeName)
+  data.stages['brainstorm'] = {
+    status: 'stale', staleReason: 'test', steps: [],
+  }
+  data.stages['plan'] = {
+    status: 'completed', startedAt: now, completedAt: now,
+    steps: [{ name: 'p1', status: 'completed', completedAt: now }],
+  }
+  await pm._write(cwd, data, changeName)
+
+  const result = await pm.checkConsistency(cwd, changeName)
+  assert(!result.ok, '应检测到问题')
+  assert(result.issues.some(i => i.includes('plan') && i.includes('brainstorm') && i.includes('stale')), '应检测到 plan completed 但 brainstorm stale')
+}
+
+// ─────────────────────────────────────────
+// v1.1: checkConsistency 正常状态无问题
+// ─────────────────────────────────────────
+console.log('\n--- v1.1: checkConsistency 正常状态无问题 ---')
+{
+  const { cwd } = createTempProject()
+  const changeName = 'rev-11-6'
+  const pm = await setupProgress(cwd, changeName)
+  await markStageCompleted(pm, cwd, changeName, 'brainstorm', ['s1', 's2'])
+
+  const result = await pm.checkConsistency(cwd, changeName)
+  assert(result.ok, '正常状态应无问题')
+  assert(result.issues.length === 0, '不应有 issues')
+}
+
 // ── 结果 ──
 console.log(`\n${'='.repeat(50)}`)
 console.log(`✅ 通过: ${12 - failed}  ❌ 失败: ${failed}`)

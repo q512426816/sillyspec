@@ -2599,8 +2599,12 @@ function showStatus(progress, stageName) {
   const stageDef = stageRegistry[stageName]
 
   if (!stageData || !stageData.steps || stageData.steps.length === 0) {
-    console.log(`阶段：${stageName}（${stageDef.title}）`)
+    console.log(`阶段：${stageName}（${stageDef?.title || stageName}）`)
     console.log(`进度：未初始化`)
+    if (stageData?.status) {
+      console.log(`状态：${stageData.status}`)
+      if (stageData.staleReason) console.log(`⚠️ 失效原因：${stageData.staleReason}`)
+    }
     return
   }
 
@@ -2608,8 +2612,25 @@ function showStatus(progress, stageName) {
   const completed = steps.filter(s => s.status === 'completed' || s.status === 'skipped').length
   const bar = '█'.repeat(completed) + '░'.repeat(steps.length - completed)
 
-  console.log(`阶段：${stageName}（${stageDef.title}）`)
-  console.log(`进度：[${bar}] ${completed}/${steps.length}\n`)
+  console.log(`阶段：${stageName}（${stageDef?.title || stageName}）`)
+  console.log(`进度：[${bar}] ${completed}/${steps.length}`)
+
+  // ── Revision v1 信息 ──
+  if (stageData.status === 'revising') {
+    console.log(`\n🔧 修订中 (revision ${stageData.revision || 1})`)
+    if (stageData.reopenedFromStep) console.log(`   从步骤：${stageData.reopenedFromStep}`)
+    if (stageData.reopenedAt) console.log(`   重开时间：${stageData.reopenedAt}`)
+  }
+  if (stageData.status === 'stale') {
+    console.log(`\n⚠️ 已失效`)
+    if (stageData.staleReason) console.log(`   原因：${stageData.staleReason}`)
+    console.log(`   建议：sillyspec run ${stageName} --reopen --from-step 1`)
+  }
+  if (stageData.status === 'completed') {
+    console.log(`\n✅ 已完成`)
+  }
+
+  console.log('')
 
   const firstPending = steps.findIndex(s => s.status === 'pending' || s.status === 'in-progress')
 
