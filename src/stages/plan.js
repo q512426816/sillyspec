@@ -384,6 +384,8 @@ plan_level + 计划内容（none 级别输出建议操作）`,
 - [ ] （brownfield）全局验收包含兼容性条款
 - [ ] 没有实现细节（接口定义、代码示例等不应该在 plan.md 里）
 - [ ] plan.md 与 design.md 的文件变更清单一致
+- [ ] 如果涉及构造函数/接口/DTO/client 方法变更，是否搜索了所有调用点并纳入任务范围？
+- [ ] 调用点搜索命令的输出是否记录在 plan.md 或 task-NN.md 中？
 - [ ] 如果有 Mermaid 图，依赖关系确实非平凡（非线性/非全并行）
 - [ ] 没有泛泛风险分析（如"需要充分测试"）
 
@@ -434,6 +436,28 @@ export const fixedSuffix = [
    - 依赖关系和 plan.md 的 Wave 分组是否一致
    - 验收标准和 plan.md 的全局标准是否矛盾
    - 接口定义是否自洽
+5. **生产接线路径检查**（Critical）：
+   - 读取 design.md，搜索以下关键词：
+     - 注入 / inject / 构造 / constructor / 初始化 / init / 启动路径 / startup / main / cli / entrypoint / daemon start / bootstrap
+     - 如果命中，提取提到的具体文件名（如 "在 cli.ts 中"、"main.ts 中实例化"、"Daemon 构造函数"）
+   - 收集所有 tasks/task-NN.md 的 frontmatter 中 \`allowed_paths\` 列表
+   - 检查：design 中提到的生产入口文件是否在某个 task 的 allowed_paths 中？
+   - 如果 design 提到了入口文件但所有 task 的 allowed_paths 都不含该文件：
+     - **这是 plan contract 失败**
+     - 列出具体矛盾：\`design says: X 实例化 Y，但 allowed_paths 不含 Z\`
+     - **不自动修复**，暂停等待用户决定
+   - 如果 design 明确说"不需要改入口文件"并给出了理由，视为通过
+   - 调用：\`sillyspec run plan --wait --reason "生产接线路径检查失败" --options "修改 allowed_paths,修改 design,确认不需要改入口" --output "矛盾清单"\`
+6. **符号影响面检查**（Critical）：
+   - 对每个 task 涉及的文件，检查是否修改了构造函数、接口、DTO、API client 方法签名
+   - 如果是，搜索所有调用点：
+     \`\`\`bash
+     rg "new <ClassName>" src/
+     rg "<methodName>" src/ --type ts --type js
+     \`\`\`
+   - 对比调用点与 plan.md/task 的 allowed_paths
+   - 发现调用点不在任务范围内 → **plan contract 失败**
+   - 调用：\`sillyspec run plan --wait --reason "符号影响面检查发现遗漏调用点" --options "扩展 allowed_paths,添加新任务,确认不需要改" --output "遗漏调用点清单"\`
 3. 发现问题 → 列出问题清单，暂停等待用户决定
    - 调用：\`sillyspec run plan --wait --reason "审查发现一致性问题" --options "自动修复,手动修复,忽略并继续" --output "问题清单"\`
    - **绝对禁止**：自己决定修复方向然后自动修复

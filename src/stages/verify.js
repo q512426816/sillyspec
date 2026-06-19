@@ -202,8 +202,32 @@ grep -rl "<关键词>" <源码目录>/ --include="*.java" --include="*.js" --inc
 
 ### 操作
 1. 汇总以上所有检查结果
-2. 生成 verify-result.md 文件，保存到 \`.sillyspec/changes/<change-name>/verify-result.md\`
-3. 给出结论：PASS / PASS WITH NOTES / FAIL
+2. **判定变更风险等级（change_risk_profile）**：
+
+### 变更风险分级规则
+扫描 design.md 和 plan.md 的关键词，自动判定 verify 强度：
+
+| 触发条件 | verify 要求 |
+|---|---|
+| 只改文案/文档 | 静态检查即可 |
+| 单模块纯函数 | 单测即可 |
+| API contract / DTO / client | 单测 + contract test |
+| daemon/backend 跨进程 | **必须真实集成** |
+| session/lease/run 状态机 | **必须生命周期端到端验证** |
+| 部署启动路径 | **必须真实启动一次** |
+
+触发关键词：daemon, backend, session, lease, agent_run, lifecycle, state_transition, claim, heartbeat, cross-process, cli.ts, main.ts, server.ts, bootstrap, entrypoint
+
+### 风险门控规则
+- **integration-critical** 或 **deployment-critical** 变更：
+  - 结论为 PASS WITH NOTES → **降级为 FAIL**
+  - mock 单测通过但没有真实集成证据 → **FAIL**
+  - 必须在 verify-result.md 中包含 **Runtime Evidence** section
+- **contract-required** 变更：需要 contract test 证据
+- **unit-sufficient** 变更：单测即可
+
+3. 生成 verify-result.md 文件，保存到 \`.sillyspec/changes/<change-name>/verify-result.md\`
+4. 给出结论：PASS / PASS WITH NOTES / FAIL（受风险门控约束）
 
 ### verify-result.md 格式
 \`\`\`markdown
@@ -234,6 +258,18 @@ PASS / PASS WITH NOTES / FAIL
 
 ## 技术债务
 （TODO/FIXME/HACK 统计）
+
+## 变更风险等级
+（自动检测的 change_risk_profile: doc-only / unit-sufficient / contract-required / integration-critical / deployment-critical）
+
+## Runtime Evidence（integration-critical / deployment-critical 必填）
+- daemon 启动命令：
+- backend 地址：
+- 创建 session / 调用核心 API 的请求：
+- daemon 日志关键片段（不能出现 session_control_no_manager / fallback to task_runner / submitMessages agent_run_id empty / 422）：
+- backend 状态（AgentRun running -> completed/failed）：
+- session / lease end 状态：
+- 失败模式排除：
 
 ## 代码审查
 （问题列表 + 总体评价）

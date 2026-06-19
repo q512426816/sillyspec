@@ -344,6 +344,28 @@ HTML 原型文件路径（或"跳过"如果不适合）`,
 | 删除 | src/xxx/OldFile.java | 已被 xx 替代 |
 
 7. **接口定义**：方法签名、数据结构（代码类任务必填）
+7.5. **生命周期契约表**（涉及以下关键词时必填，否则可省略）：
+
+   如果本次变更涉及以下任何关键词：
+   session / lease / agent_run / daemon / lifecycle / state transition / complete / end / claim / heartbeat
+
+   则必须在 design.md 中包含「生命周期契约表」章节，格式如下：
+
+   | 事件 | 发起方 | 接收方 | 必需字段 | 状态变化 |
+   |---|---|---|---|---|
+   | claim lease | daemon | backend | leaseId, claimToken, agentRunId | pending → running |
+   | create session | backend | daemon | sessionId, leaseId, claimToken | session active |
+   | submit message | daemon | backend | leaseId, claimToken, agentRunId | append messages |
+   | turn result | daemon | backend | runId, status, output | running → completed/failed |
+   | session end | daemon | backend | sessionId, reason | active → ended |
+
+   判断规则：
+   - design.md 或需求中出现上述关键词 → 必须生成此表
+   - 表中的每个事件 → 必须有对应代码任务、接口任务、测试任务
+   - 表中的必需字段 → 必须出现在相关 DTO/interface 定义中
+   - 缺少任一事件 → 在 design.md 风险登记中明确记录
+
+   **判定方法**：在自审阶段，如果检测到上述关键词但 design.md 中没有此表 → 自审不通过
 8. **数据模型**（如涉及）：表结构/字段变更
 9. **兼容策略**（brownfield 必填）：
    - 未配置新功能时行为不变
@@ -382,6 +404,7 @@ HTML 原型文件路径（或"跳过"如果不适合）`,
    - 非目标清晰：是否明确界定了不做的事
    - 兼容策略（brownfield）：是否说明了回退路径
    - 风险识别：是否识别了关键技术风险和对策
+   - **生命周期契约表**（如涉及 session/lease/agent_run/daemon/lifecycle/claim/heartbeat 等关键词）：design.md 是否包含完整的生命周期契约表？每个事件是否有必需字段定义？字段是否出现在 DTO/interface 中？
 5. 自审发现问题 → 修改后重新检查
 6. 全部通过 → 进入下一步
 

@@ -7,6 +7,7 @@
 
 import { existsSync, readdirSync, readFileSync } from 'fs'
 import { join, basename } from 'path'
+import { detectChangeRisk, checkIntegrationEvidence } from './change-risk-profile.js'
 
 /**
  * 校验结果
@@ -233,6 +234,17 @@ function validateBrainstormOutputs(cwd, changeName, context = {}) {
     if (!content.includes('自审') && !content.includes('Self-Review') && !content.includes('Self-review')) {
       warnings.push('design.md 缺少「自审」章节')
     }
+
+    // P1: 涉及生命周期关键词时，design.md 必须包含生命周期契约表
+    const hasLifecycleKeyword = /\b(session|lease|agent[._-]?run|daemon|lifecycle|state[._-]?transition|claim|heartbeat)\b/i.test(content)
+    if (hasLifecycleKeyword) {
+      const hasLifecycleTable =
+        /生命周期契约表|lifecycle[._-]?contract|lifecycle[._-]?matrix|Lifecycle Contract/i.test(content) ||
+        /事件.*发起方.*接收方.*必需字段.*状态变化/.test(content)
+      if (!hasLifecycleTable) {
+        errors.push('design.md 涉及生命周期关键词（session/lease/agent_run/daemon/lifecycle）但缺少「生命周期契约表」— 必须列出完整的事件×状态转换矩阵')
+      }
+    }
   }
 
   if (existsSync(join(changeDir, 'tasks.md'))) {
@@ -294,12 +306,62 @@ function validatePlanOutputs(cwd, changeName, context = {}) {
     const decisionIds = extractCurrentDecisionIds(decisions)
     warnMissingIds(warnings, decisionIds, plan, 'plan.md', 'decisions.md')
   }
+  // ── P0: 生产接线路径检查：design 提到入口但 task 的 allowed_paths 不含入口文件 ──
+  const designContent = readIfExists(join(changeDir, 'design.md'))
+  if (designContent) {
+    const entryPointPatterns = [
+      /\b(cli\.ts|main\.ts|server\.(?:js|ts)|index\.(?:js|ts))\b.*\b(?:实例化|instantiate|构造|new\s)/gi,
+      /\bnew\s+(Daemon|SessionManager|App|Server|Application)\b/gi,
+      /\b(?:在|from)\s+['"]?(cli\.ts|main\.ts|server\.(?:js|ts)|index\.(?:js|ts))['"]?/gi,
+      /\b(?:注入|inject)\b.*\b(?:构造|constructor|初始化|init|实例化|instantiate)\b/gi,
+      /\b(?:启动路径|startup|entrypoint|bootstrap|daemon[._-]?start|main.*entry)\b/gi,
+    ]
+    const mentionedFiles = new Set()
+    for (const pattern of entryPointPatterns) {
+      pattern.lastIndex = 0
+      for (const match of designContent.matchAll(pattern)) {
+        const fileMatch = match[0].match(/\b(cli\.ts|main\.ts|server\.(?:js|ts)|index\.(?:js|ts))\b/i)
+        if (fileMatch) mentionedFiles.add(fileMatch[1].toLowerCase())
+      }
+    }
+    if (mentionedFiles.size > 0) {
+      const tasksDir = join(changeDir, 'tasks')
+      const allAllowedPaths = new Set()
+      if (existsSync(tasksDir)) {
+        const taskFiles = readdirSync(tasksDir).filter(f => /^task-\d+\.md$/i.test(f))
+        for (const taskFile of taskFiles) {
+          const taskContent = readFileSync(join(tasksDir, taskFile), 'utf8')
+          const allowedSection = taskContent.match(/allowed_paths:\s*\n((?:\s+-\s+.+\n?)+)/)
+          if (allowedSection) {
+            const paths = allowedSection[1].match(/-\s+(.+)/g) || []
+            for (const p of paths) allAllowedPaths.add(p.replace(/^-\s+/, '').trim().toLowerCase())
+          }
+        }
+      }
+      // 也从 plan.md 文件变更清单中收集
+      if (existsSync(planFile)) {
+        const planContent = readFileSync(planFile, 'utf8')
+        const planFileChanges = planContent.match(/\|\s*(?:新增|修改|new|modify|update)\s*\|\s*`?([^`|]+)`?\s*\|/gi) || []
+        for (const line of planFileChanges) {
+          const file = line.match(/\|\s*(?:新增|修改|new|modify|update)\s*\|\s*`?([^`|]+)`?\s*\|/i)
+          if (file) allAllowedPaths.add(file[1].trim().toLowerCase())
+        }
+      }
+      for (const mentionedFile of mentionedFiles) {
+        const found = [...allAllowedPaths].some(p => p.includes(mentionedFile))
+        if (!found) {
+          const noChangePattern = new RegExp(`不需要改.*${mentionedFile}|${mentionedFile}.*不需要|不修改.*${mentionedFile}|${mentionedFile}.*不变|${mentionedFile}.*no.?change`, 'i')
+          if (!noChangePattern.test(designContent)) {
+            errors.push(`生产接线路径矛盾: design.md 提到了入口文件 "${mentionedFile}" 但所有 task 的 allowed_paths 中均不含该文件`)
+            warnings.push(`提示: 如果确实不需要修改 ${mentionedFile}，请在 design.md 中明确写明理由`)
+          }
+        }
+      }
+    }
+  }
+
   return { ok: errors.length === 0, errors, warnings }
 }
-
-/**
- * verify 完成校验：检查变更目录和 verify 产物
- */
 function validateVerifyOutputs(cwd, changeName, context = {}) {
   const { specRoot } = context
   const changeDir = resolveChangeDir(cwd, changeName, specRoot)
@@ -334,6 +396,24 @@ function validateVerifyOutputs(cwd, changeName, context = {}) {
     }
     const decisionIds = extractCurrentDecisionIds(decisions)
     warnMissingIds(warnings, decisionIds, verify, 'verify-result.md', 'decisions.md')
+
+    // ── P0: Change Risk Gate — 核心功能缺少真实集成验证时 FAIL ──
+    const changeRiskProfile = detectChangeRisk({
+      designContent: readIfExists(join(changeDir, 'design.md')),
+      planContent: readIfExists(join(changeDir, 'plan.md')),
+    })
+    if (['integration-critical', 'deployment-critical'].includes(changeRiskProfile.level)) {
+      const conclusionMatch = verify.match(/^## 结论\s*\n\s*(PASS|PASS WITH NOTES|FAIL)/im)
+      const conclusion = conclusionMatch ? conclusionMatch[1] : ''
+      if (conclusion === 'PASS WITH NOTES' || conclusion === 'PASS') {
+        const evidenceCheck = checkIntegrationEvidence(verify, changeRiskProfile.requiredVerification)
+        if (!evidenceCheck.ok) {
+          errors.push(`[${changeRiskProfile.level}] 验证结论为 ${conclusion}，但缺少真实集成证据：${evidenceCheck.errors.join('; ')}`)
+          errors.push(`触发词: ${changeRiskProfile.triggers.join(', ')} — PASS WITH NOTES 不被允许，必须 FAIL 或提供集成证据`)
+        }
+        warnings.push(...evidenceCheck.warnings)
+      }
+    }
   }
 
   return { ok: errors.length === 0, errors, warnings }

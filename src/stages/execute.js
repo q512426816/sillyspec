@@ -126,6 +126,27 @@ const fixedPrefix = [
     - 用 main_symbols 字段找到核心类/函数的定义位置
     - 子代理优先读模块卡片理解语义，再读 entrypoints/main_symbols 对应的源码
 
+### 符号影响面扩展检查
+11. **符号影响面扫描**（Critical — execute 前必做）：
+    - 读取所有 tasks/task-NN.md，提取每个任务涉及的修改文件
+    - 对每个修改文件，检查是否涉及以下变更类型：
+      - class 构造函数参数变更（新增/删除/修改参数）
+      - 接口（interface）定义变更
+      - DTO / 类型定义变更
+      - API client 方法签名变更
+      - 函数/方法签名变更（参数增删改）
+    - 如果涉及上述变更类型，执行调用点搜索：
+      \`\`\`bash
+      rg "new ClassName\(" src/
+      rg "ClassName\(" src/
+      rg "methodName\(" src/
+      rg "import.*from.*filePath" src/
+      \`\`\`
+    - 将搜索到的调用点与 plan.md 和 tasks/task-NN.md 的 allowed_paths 对比
+    - **发现调用点不在任何 task 的 allowed_paths 中 → 直接阻断 execute**
+    - 报告：列出每个受影响符号、调用点位置、是否在任务范围内
+    - 如果调用点不在范围内但任务明确写了"不改原因"，记录但不阻断
+
 ### 输出
 已加载的上下文摘要（含模块文档 + 源码锚点）`,
     outputHint: '上下文摘要',
