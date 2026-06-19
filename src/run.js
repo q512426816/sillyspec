@@ -726,7 +726,19 @@ async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjec
       const { matchKnowledge } = await import('./knowledge-match.js')
       const effectiveSpecBase = platformOpts?.specRoot || join(cwd, '.sillyspec')
       const knowledgeDir = join(effectiveSpecBase, 'knowledge')
-      const taskContext = changeName || ''
+      // taskContext: changeName + plan.md task names for better matching
+      let taskContext = changeName || ''
+      if (changeName) {
+        const planPath = join(effectiveSpecBase, 'changes', changeName, 'plan.md')
+        try {
+          const planContent = readFileSync(planPath, 'utf8')
+          // match both "- [ ] task-01: title" and "## task-01: title" formats
+          const taskLines = [...planContent.matchAll(/(?:^\- \[[ x]\] |^## )task-\d+[^:]*:?\s*(.+)/gm)]
+          if (taskLines.length > 0) {
+            taskContext += ' ' + taskLines.map(t => t[1]).join(' ')
+          }
+        } catch {}
+      }
       const knowledgeResult = matchKnowledge(knowledgeDir, taskContext)
       promptText = promptText.replace(/\{KNOWLEDGE_HIT_REPORT\}/g, knowledgeResult.report)
       // 写入 runtime JSON
