@@ -720,6 +720,24 @@ async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjec
     promptText = promptText.replace(/\{SPEC_ROOT\}/g, specSillyspec)
   }
 
+  // Knowledge hit report: execute 阶段注入匹配结果
+  if (stageName === 'execute' && promptText.includes('{KNOWLEDGE_HIT_REPORT}')) {
+    try {
+      const { matchKnowledge } = await import('./knowledge-match.js')
+      const effectiveSpecBase = platformOpts?.specRoot || join(cwd, '.sillyspec')
+      const knowledgeDir = join(effectiveSpecBase, 'knowledge')
+      const taskContext = changeName || ''
+      const knowledgeResult = matchKnowledge(knowledgeDir, taskContext)
+      promptText = promptText.replace(/\{KNOWLEDGE_HIT_REPORT\}/g, knowledgeResult.report)
+      // 写入 runtime JSON
+      const runtimeDir = join(effectiveSpecBase, '.runtime')
+      mkdirSync(runtimeDir, { recursive: true })
+      writeFileSync(join(runtimeDir, 'knowledge-hit-report.json'), JSON.stringify(knowledgeResult.json, null, 2) + '\n')
+    } catch (e) {
+      promptText = promptText.replace(/\{KNOWLEDGE_HIT_REPORT\}/g, 'Status: no matches (error: ' + e.message + ')')
+    }
+  }
+
   // 注入模块上下文（brainstorm/plan/execute 阶段，基于 Module Context Index）
   if (['brainstorm', 'plan', 'execute'].includes(stageName) && projectName) {
     const effectiveSpecBase = platformOpts?.specRoot || join(cwd, '.sillyspec')

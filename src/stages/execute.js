@@ -171,6 +171,12 @@ sillyspec run execute --done --output "worktree 路径 + 分支名 + 模式"`,
    - auto — 全部自动执行
 5. 查询知识库：读取 \`.sillyspec/knowledge/INDEX.md\`，根据 Task 关键词匹配
 
+### 知识命中报告
+{KNOWLEDGE_HIT_REPORT}
+
+如上所示的知识条目与本次任务相关。请阅读这些条目以获取项目约定和已知模式。
+如无命中条目（Status: no matches），跳过本节。
+
 ### 铁律
 - **不要询问用户确认频率**，确认模式由 CLI \`--confirm-mode\` 参数决定
 - 如果未检测到 \`--confirm-mode\`，默认使用 wave 模式`,
