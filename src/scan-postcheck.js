@@ -183,6 +183,37 @@ export function runScanPostCheck({ cwd, specDir, outputText = '', scanMeta = {} 
     })
   }
 
+  // 7.5 knowledge 产物校验
+  const knowledgeDir = join(specDir, 'knowledge')
+  if (existsSync(knowledgeDir)) {
+    const indexPath = join(knowledgeDir, 'INDEX.md')
+    if (!existsSync(indexPath)) {
+      checks.push({
+        name: 'knowledge_index_missing',
+        severity: CHECK_SEVERITY.WARNING,
+        detail: `knowledge/INDEX.md 不存在`
+      })
+    } else {
+      // 检查 INDEX.md 引用的文件是否真实存在
+      const indexContent = readFileSync(indexPath, 'utf8')
+      const referencedFiles = [...indexContent.matchAll(/\(([^)]+\.md)/g)].map(m => m[1])
+      const missingRefs = referencedFiles.filter(f => !existsSync(join(knowledgeDir, f)))
+      if (missingRefs.length > 0) {
+        checks.push({
+          name: 'knowledge_broken_refs',
+          severity: CHECK_SEVERITY.WARNING,
+          detail: `INDEX.md 引用了不存在的文件: ${missingRefs.join(', ')}`
+        })
+      }
+    }
+  } else {
+    checks.push({
+      name: 'knowledge_dir_missing',
+      severity: CHECK_SEVERITY.WARNING,
+      detail: `knowledge/ 目录不存在`
+    })
+  }
+
   // 8. 计算 finalStatus
   const hasFailed = checks.some(c => c.severity === CHECK_SEVERITY.FAILED)
   const hasWarning = checks.some(c => c.severity === CHECK_SEVERITY.WARNING)

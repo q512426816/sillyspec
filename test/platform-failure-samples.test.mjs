@@ -167,6 +167,10 @@ console.log('\n=== Test 5: 正常成功场景 ===')
     // 在 specDir 写 local.yaml
     writeFileSync(join(specDir, 'local.yaml'), 'build: echo ok\ntest: echo ok\n')
 
+    // 创建 knowledge 目录和 INDEX.md（scan 已产出知识）
+    mkdirSync(join(specDir, 'knowledge'), { recursive: true })
+    writeFileSync(join(specDir, 'knowledge', 'INDEX.md'), '# Knowledge Index\n')
+
     const { runScanPostCheck } = await import('../src/scan-postcheck.js')
     const result = runScanPostCheck({ cwd, specDir })
 

@@ -42,6 +42,9 @@ function writeFull(cwd, specDir) {
     mkdirSync(dirname(p), { recursive: true })
     writeFileSync(p, 'author: bot\ncreated_at: 2026-06-08 10:00:00\n# doc\n')
   }
+  // knowledge 目录 + INDEX.md（scan 已产出知识）
+  mkdirSync(join(specDir, 'knowledge'), { recursive: true })
+  writeFileSync(join(specDir, 'knowledge', 'INDEX.md'), '# Knowledge Index\n')
 }
 
 // 写入前 N 份文档

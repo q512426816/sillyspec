@@ -455,6 +455,46 @@ step1 → step2 → step3
       optional: true
     },
     {
+      name: 'Extract Project Knowledge',
+      perProject: true,
+      prompt: `从本次 scan 产物中提取长期有效、跨变更复用的项目知识，写入知识库。
+
+### 知识分类
+| 文件 | 内容 |
+|------|------|
+| conventions.md | 项目约定：目录规范、命名规范、提交规范、测试规范 |
+| patterns.md | 可复用模式：鉴权方式、错误处理方式、模块组织方式 |
+| known-issues.md | 已知坑：不可直接改的模块、历史兼容问题、代理限制 |
+| uncategorized.md | 不确定分类、需要人工确认的知识 |
+
+INDEX.md 维护索引，格式：
+\`\`\`markdown
+# Knowledge Index
+
+## Conventions
+- [条目名称](conventions.md#锚点)
+\`\`\`
+
+### ⛔ 硬规则（必须遵守）
+1. **只写未来变更会反复用到的知识** — 不要把 scan 报告摘要塞进知识库
+2. **不要重复 knowledge 文件中已有的内容** — 读取现有文件，追加新条目，不覆盖
+3. **不确定分类或不确定长期有效 → uncategorized.md** — 宁可不确定也不要放错
+4. **每个正式分类条目必须更新 INDEX.md** — 添加对应分类下的链接
+5. **每个条目用 markdown 锚点格式** — 文件内用 \`## 标题\`，INDEX 用 \`[#标题]\` 或 \`(文件名#标题)\`
+
+### 操作
+1. 读取现有 knowledge 文件：\`{KNOWLEDGE_ROOT}/INDEX.md\`、\`{KNOWLEDGE_ROOT}/conventions.md\` 等
+2. 遍历 scan 产物（\`{DOCS_ROOT}/scan/*.md\`、\`{DOCS_ROOT}/modules/*.md\`），识别可复用知识
+3. 将新知识按分类写入对应文件（追加模式，不覆盖已有内容）
+4. 更新 INDEX.md 索引
+5. 如果确实没有新知识可提取（已有文件已覆盖），输出"无新知识"而非创建空条目
+
+### 输出
+新增知识条目数量 + 分类分布（或"无新知识"）`,
+      outputHint: '知识条目数量',
+      optional: false
+    },
+    {
       name: '自检和提交',
       perProject: true,
       prompt: `验证当前项目的扫描完整性，清理并提交。
