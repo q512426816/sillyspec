@@ -41,6 +41,23 @@ export function parseKnowledgeIndex(indexDir) {
   return entries
 }
 
+function escapeRegex(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/**
+ * 单个关键词是否命中上下文。
+ * - 过短关键词（<2 字符）视为噪音，不参与匹配
+ * - 非 ASCII（中文等）用子串匹配
+ * - ASCII 关键词用词边界匹配，避免子串误命中（如 "DB" 不命中 "dashboard"）
+ */
+function keywordMatchesContext(keyword, contextLower) {
+  const kw = keyword.toLowerCase().trim()
+  if (kw.length < 2) return false
+  if (/[^\x00-\x7f]/.test(kw)) return contextLower.includes(kw)
+  return new RegExp(`(^|[^a-z0-9])${escapeRegex(kw)}([^a-z0-9]|$)`).test(contextLower)
+}
+
 /**
  * 用任务上下文匹配知识条目
  * @param {string} indexDir - knowledge 目录路径
@@ -72,7 +89,7 @@ export function matchKnowledge(indexDir, taskContext) {
 
   const contextLower = taskContext.toLowerCase()
   const matched = allEntries.filter(entry => {
-    return entry.keywords.some(kw => contextLower.includes(kw.toLowerCase()))
+    return entry.keywords.some(kw => keywordMatchesContext(kw, contextLower))
   })
 
   if (matched.length === 0) {

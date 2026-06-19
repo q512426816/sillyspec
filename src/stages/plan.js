@@ -51,7 +51,7 @@ export function validateDesignForPlan(designContent) {
 
   // 检查 6 (warning): 缺文件变更清单
   const hasFileChanges = /文件变更|file change|变更清单|changed files/i.test(designContent)
-  || /^\|\s*(新增|修改|删除|删除|new|modify|delete|update)\s*\|/im.test(designContent)
+  || /^\|\s*(新增|修改|删除|new|modify|delete|update)\s*\|/im.test(designContent)
   if (!hasFileChanges) {
     warnings.push('design.md 缺少「文件变更清单」— 建议列出预期改动的文件')
   }

@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-05-31 11:00:00
-updated_at: 2026-06-04 16:55:00
+updated_at: 2026-06-19 15:00:00
 ---
 
 # SillySpec 文件生命周期
@@ -24,6 +24,8 @@ updated_at: 2026-06-04 16:55:00
 
 - `src/init.js`
 - `src/db.js`
+- `src/scan-postcheck.js`
+- `src/knowledge-match.js`
 - `src/progress.js`
 - `src/run.js`
 - `src/stages/*.js`
@@ -39,7 +41,7 @@ updated_at: 2026-06-04 16:55:00
 
 | 阶段 | 当前步骤数 | 备注 |
 |---|---:|---|
-| scan | 10 | 辅助阶段；step 2 后会按项目动态展开 `perProject` 步骤 |
+| scan | 11 | 辅助阶段；step 2 后会按项目动态展开 `perProject` 步骤；第 10 步「Extract Project Knowledge」写入 `knowledge/` |
 | brainstorm | 11 | 独立包含“写设计文档并自审”和“用户确认并生成规范文件” |
 | propose | 7 | 包含“生成规范文件”与“自检门控”，四件套是该阶段预期产物 |
 | plan | 动态 | 默认 8 步；`plan.md` 解析到任务后插入任务蓝图协调器 |
@@ -62,12 +64,12 @@ updated_at: 2026-06-04 16:55:00
 | `.sillyspec/docs/<project>/modules/` | 是 | scan 可选步骤、archive sync、`modules` 子命令 | 模块索引和模块卡片 |
 | `.sillyspec/changes/<change>/` | 是 | `ProgressManager.initChange()` 确保目录；阶段 prompt 写入 | 单个变更包文档和验收产物 |
 | `.sillyspec/changes/archive/` | 是 | archive `确认归档 --confirm` 分支 | 已归档变更目录 |
-| `.sillyspec/knowledge/` | 是 | `init.js` | `INDEX.md` 和 `uncategorized.md` |
+| `.sillyspec/knowledge/` | 是 | `init.js` 建目录；scan「Extract Project Knowledge」步骤产出 | `INDEX.md`、`uncategorized.md`，以及 scan 提取的 `conventions.md`/`patterns.md`/`known-issues.md` |
 | `.sillyspec/workflows/` | 是 | `init.js` 从模板复制 | workflow check 定义 |
 | `.sillyspec/quicklog/` | 是 | quick prompt | 无 `--change` quick 任务记录 |
 | `.sillyspec/shared/` | 是 | `init.js` | 共享目录，当前无核心生命周期逻辑 |
 | `.sillyspec/workspace/` | 是 | `init.js` | 工作区目录，当前无核心生命周期逻辑 |
-| `.sillyspec/.runtime/` | 否 | `init.js`、`ProgressManager`、运行时命令 | DB、gate、artifacts、history、workflow-runs、worktrees |
+| `.sillyspec/.runtime/` | 否 | `init.js`、`ProgressManager`、运行时命令 | DB、gate、artifacts、history、workflow-runs、worktrees、knowledge-hit-report.json、postcheck-result.json |
 
 `init.js` 会把 `.sillyspec/.runtime/`、`.sillyspec/local.yaml`、`.sillyspec/codebase/SCAN-RAW.md` 追加到 `.gitignore`。
 
@@ -85,7 +87,10 @@ sillyspec run scan
   -> .sillyspec/docs/<project>/scan/*.md
   -> .sillyspec/docs/<project>/modules/_module-map.yaml      (optional prompt)
   -> .sillyspec/docs/<project>/modules/<module>.md           (optional prompt)
+  -> .sillyspec/knowledge/{conventions,patterns,known-issues}.md  (Extract Project Knowledge)
+  -> .sillyspec/knowledge/INDEX.md                           (索引更新)
   -> .sillyspec/.runtime/scan-projects.json                  (step expansion state)
+  -> .sillyspec/.runtime/postcheck-result.json              (scan-postcheck 结构化结果)
 
 brainstorm / propose / plan / execute / verify / archive
   -> .sillyspec/changes/<change>/...
@@ -95,6 +100,7 @@ brainstorm / propose / plan / execute / verify / archive
 
 execute
   -> .sillyspec/.runtime/worktrees/<change>/meta.json
+  -> .sillyspec/.runtime/knowledge-hit-report.json           (启动时按 taskContext 匹配 knowledge)
   -> worktree branch sillyspec/<change>
   -> apply patch back to main workspace, then cleanup
 
@@ -114,3 +120,6 @@ quick
 - `.sillyspec/local.yaml` 是当前主配置口径；scan prompt 写这里，sync 读写这里，hook 优先读这里并兼容根目录 fallback。
 - 平台模式的 `manifest.json` 已接入 scan 完成回调；`workflow-runs` 的 runtimeRoot 路径支持在 `workflow.js` 中存在，但 `run.js` 当前调用没有传入 `runtimeRoot`。
 - `archive` 的目录移动已经由 `run.js` 在第 4 步 `--confirm` 时执行；未带 `--confirm` 会回退该步骤并提示补参。
+- scan 第 10 步「Extract Project Knowledge」把长期有效的项目知识写入 `.sillyspec/knowledge/`（`conventions.md`/`patterns.md`/`known-issues.md` + 更新 `INDEX.md`）；`scan-postcheck.js` 校验产物（INDEX.md 存在、引用文件真实存在）。
+- execute 启动时由 `knowledge-match.js` 按 plan.md 的 task 关键词匹配知识库，命中报告注入 prompt 并写 `.runtime/knowledge-hit-report.json`。
+- Revision v1：`stages` 表新增 `revision`/`reopened_from_step`/`reopened_at`/`stale_reason` 列；阶段新增 `revising`/`stale` 状态；`sillyspec run <stage> --reopen --from-step <n>` 重开已完成阶段、级联标记下游 stale；`.runtime/postcheck-result.json` 由 `scan-postcheck.js` 的 `writeStructuredResult` 落盘（本地写 `specDir/.runtime`，平台写 `runtimeRoot/scan-runs/<id>`）。

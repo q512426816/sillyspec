@@ -38,17 +38,19 @@ created_at: 2026-06-19T11:10:00+08:00
 
 ### INDEX.md 格式
 
+每行格式 `关键词1|关键词2 → [条目名](文件#锚点)`。关键词供 execute 阶段做命中匹配，需给出能区分该知识的词。
+
 ```markdown
 # Knowledge Index
 
 ## Conventions
-- [Backend module layout](conventions.md#backend-module-layout)
+- backend|module|layout → [Backend module layout](conventions.md#backend-module-layout)
 
 ## Patterns
-- [Scan runtime isolation](patterns.md#scan-runtime-isolation)
+- scan|runtime|isolation → [Scan runtime isolation](patterns.md#scan-runtime-isolation)
 
 ## Known Issues
-- [GLM proxy usage metadata](known-issues.md#glm-proxy-usage-metadata)
+- glm|proxy|metadata → [GLM proxy usage metadata](known-issues.md#glm-proxy-usage-metadata)
 ```
 
 ### 步骤插入位置

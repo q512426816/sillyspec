@@ -489,25 +489,14 @@ export function buildExecuteSteps(planFilePath = null, options = {}) {
 
   if (planFilePath && existsSync(planFilePath)) {
     const planContent = readFileSync(planFilePath, 'utf8')
-
-    // ── Plan → Execute Contract 校验 ──
-    const validation = validatePlanForExecute(planContent)
-    if (!validation.ok) {
-      console.error(`\n❌ plan.md 校验失败，无法进入 execute 阶段：`)
-      for (const err of validation.errors) console.error(`   - ${err}`)
-      console.error(`\n   修复 plan.md 后重试，或使用 --reset 重新规划。`)
-      process.exit(1)
-    }
-    if (validation.warnings.length > 0) {
-      console.log(`\n⚠️  plan.md 校验警告：`)
-      for (const w of validation.warnings) console.log(`   - ${w}`)
-      console.log()
-    }
-
-    waves = validation.waves
+    // Plan → Execute 契约由 plan 阶段完成时的 postcheck 把关（run.js completeStep），
+    // 此处只负责解析 waves，避免 buildExecuteSteps 与进程退出耦合。
+    waves = parseWavesFromPlan(planContent)
     changeDir = path.dirname(planFilePath)
-  } else {
-    // plan.md 不存在：生成默认 3 Wave（向后兼容）
+  }
+
+  // 没解析出 Wave（plan 不存在或不含可识别 task）→ 默认 3 Wave（向后兼容）
+  if (!waves || waves.length === 0) {
     waves = []
     for (let i = 1; i <= 3; i++) {
       waves.push({ index: i, tasks: [{ name: `默认任务 ${i}`, file: 'TBD' }] })

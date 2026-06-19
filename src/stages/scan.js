@@ -467,12 +467,12 @@ step1 → step2 → step3
 | known-issues.md | 已知坑：不可直接改的模块、历史兼容问题、代理限制 |
 | uncategorized.md | 不确定分类、需要人工确认的知识 |
 
-INDEX.md 维护索引，格式：
+INDEX.md 维护索引，格式（每行：关键词1|关键词2 → [条目名](文件#锚点)；关键词用于 execute 阶段命中匹配，必须给出能区分该知识的词）：
 \`\`\`markdown
 # Knowledge Index
 
 ## Conventions
-- [条目名称](conventions.md#锚点)
+- ESM|module|import → [ESM Only](conventions.md#esm-only)
 \`\`\`
 
 ### ⛔ 硬规则（必须遵守）

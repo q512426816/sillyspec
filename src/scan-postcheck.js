@@ -95,12 +95,13 @@ export function runScanPostCheck({ cwd, specDir, outputText = '', scanMeta = {} 
     })
   }
 
-  // 3. 检查文档 header（author / created_at）
+  // 3. 检查文档 header（author / created_at）— 只看文件头部，避免正文出现同名词被误判
   const existingDocs = REQUIRED_SCAN_DOCS.filter(f => existsSync(join(specScanDir, f)))
   const docsMissingHeader = []
   for (const doc of existingDocs) {
     const content = readFileSync(join(specScanDir, doc), 'utf8')
-    if (!content.includes('author') || !content.includes('created_at')) {
+    const headerSlice = content.slice(0, 512)
+    if (!/author\s*:/.test(headerSlice) || !/created_at\s*:/.test(headerSlice)) {
       docsMissingHeader.push(doc)
     }
   }
