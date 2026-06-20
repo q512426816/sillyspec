@@ -1148,11 +1148,32 @@ export async function runCommand(args, cwd, specDir = null) {
   // runCommand 后续所有 .sillyspec/ 操作必须用 specBase
   const specBase = platformOpts.specRoot || join(cwd, '.sillyspec')
 
-  // 平台模式：清理旧版本残留的 cwd/.sillyspec/（防止源码污染）
+  // 平台模式：清理旧版本残留的 cwd/.sillyspec/（防止源码污染）。
+  // ⚠️ 同 init.js：必须保护真实资产（changes/、projects/、sillyspec.db）。
   if (platformOpts.specRoot) {
     const legacyDir = join(cwd, '.sillyspec')
     if (existsSync(legacyDir)) {
-      try { rmSync(legacyDir, { recursive: true, force: true }) } catch {}
+      let hasChanges = false;
+      try {
+        const cd = join(legacyDir, 'changes');
+        if (existsSync(cd)) hasChanges = readdirSync(cd).length > 0;
+      } catch {}
+      let hasProjects = false;
+      try {
+        const pd = join(legacyDir, 'projects');
+        if (existsSync(pd)) hasProjects = readdirSync(pd).length > 0;
+      } catch {}
+      const hasDb = existsSync(join(legacyDir, 'sillyspec.db'));
+
+      if (hasChanges || hasProjects || hasDb) {
+        console.error('❌ [sillyspec] 拒绝删除源码目录的 .sillyspec/：检测到真实资产。仅清理运行时残留。');
+        for (const residue of ['.runtime', 'local.yaml', 'codebase']) {
+          const p = join(legacyDir, residue);
+          if (existsSync(p)) { try { rmSync(p, { recursive: true, force: true }) } catch {} }
+        }
+      } else {
+        try { rmSync(legacyDir, { recursive: true, force: true }) } catch {}
+      }
     }
   }
 
