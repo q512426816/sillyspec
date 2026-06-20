@@ -406,6 +406,48 @@ function parseWavesFromPlan(planContent) {
  * 为 Wave 生成 prompt（强制子代理执行）
  */
 function buildWavePrompt(wave, waveIndex, changeDir, worktreePath) {
+  // ── Contract Matrix：检查是否有 provider/consumer 契约需要注入 ──
+  let contractInjection = ''
+  if (changeDir) {
+    try {
+      const { buildContractMatrix, buildConsumerInjection } = require('../contract-matrix.js')
+      const planFile = path.join(changeDir, 'plan.md')
+      if (existsSync(planFile)) {
+        const planContent = readFileSync(planFile, 'utf8')
+        const contracts = buildContractMatrix(planContent, changeDir)
+        if (contracts.length > 0) {
+          // 收集本 wave 所有 task 的注入内容
+          const waveTasks = wave.tasks.map((t, ti) => {
+            const num = String(t.index || (ti + 1)).padStart(2, '0')
+            return `task-${num}`
+          })
+          const relevantContracts = contracts.filter(c => waveTasks.includes(c.consumer))
+          if (relevantContracts.length > 0) {
+            contractInjection = `
+### API Contract Matrix
+本 Wave 存在前端/后端跨 task 契约：
+${relevantContracts.map(c => `- **${c.consumer}** 消费 **${c.provider}** 产出的 API`).join('\n')}
+`
+            // 为每个 consumer task 生成详细注入
+            for (const taskName of waveTasks) {
+              const injection = buildConsumerInjection(changeDir, join(changeDir, '..', '..'), taskName, contracts)
+              if (injection) {
+                contractInjection += `
+### 子代理 ${taskName} 的契约注入
+为 ${taskName} 启动子代理时，在子代理 prompt 末尾追加以下内容：
+
+<contract-injection>
+${injection}
+</contract-injection>
+`
+              }
+            }
+          }
+        }
+      }
+    } catch {}
+  }
+
   // 构建任务摘要（不再内联完整蓝图，减少上下文污染）
   const taskSummary = wave.tasks.map((t, ti) => {
     const taskNum = String(t.index || (ti + 1)).padStart(2, '0')
@@ -476,7 +518,7 @@ ${taskSummary}
    - 🔥 热上下文：design.md 编码铁律 + 当前 Wave 任务（必须加载）
    - 🌡️ 温上下文：CONVENTIONS.md + ARCHITECTURE.md（需要时加载）
    - ❄️ 冷上下文：其他变更的 design.md、历史 plan.md（不要主动加载，除非明确需要）
-
+${contractInjection}
 ### 本 Wave 任务
 ${taskList}
 
@@ -493,7 +535,11 @@ ${taskList}
 5. 遇到 BLOCKED → 记录原因，选择：重试/跳过/停止
 
 ### 完成后
-运行 sillyspec run execute --done --input "用户原始反馈" --output "Wave ${waveIndex} 结果摘要"`
+1. 为每个后端 router task，扫描变更文件提取 API 端点 artifact：
+   - 在变更文件中搜索所有 router 注册路径（@router.get/post/put/delete）
+   - 将端点清单写入 .sillyspec/.runtime/contract-artifacts/<task-name>/endpoints.json
+   - 格式: { "task": "task-XX", "type": "backend_endpoints", "endpoints": [{ "method": "GET", "path": "/api/ppm/xxx" }] }
+2. 运行 sillyspec run execute --done --input "用户原始反馈" --output "Wave ${waveIndex} 结果摘要"`
 }
 
 

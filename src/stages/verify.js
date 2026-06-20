@@ -134,6 +134,31 @@ grep -rl "<关键词>" <源码目录>/ --include="*.java" --include="*.js" --inc
 5. 任意 D-xxx@vN 无下游覆盖时标记为 ⚠️ 决策未闭环
 6. 任意 P0/P1 unresolved/blocking 决策标记为 FAIL blocker
 
+**探针 5：API Contract Parity Check（跨前后端契约对账）**
+此探针仅在以下条件满足时执行：
+- 存在 \.sillyspec/.runtime/contract-artifacts/ 目录（说明 execute 阶段生成了 endpoint artifact）
+- 或者项目同时有 backend/ 和 frontend/ 目录
+
+执行步骤：
+1. 收集所有 provider endpoint artifacts：
+   - 读取 .sillyspec/.runtime/contract-artifacts/*/endpoints.json
+   - 汇总为 backend 端点清单
+2. 扫描前端 API 调用：
+   - 在 frontend/ 目录中搜索 apiFetch/request/axios/fetch 调用
+   - 提取所有 API 路径（归一化动态参数为 {param}）
+3. Diff 对账：
+   - 前端调用路径在 backend 端点清单中找不到 → **❌ Missing backend endpoint**（FAIL blocker）
+   - backend 端点在前端无调用 → ⚠️ Unused backend endpoint（warning，不阻断）
+4. 输出对账结果表格：
+   \
+\
+   | 状态 | 前端调用 | 后端端点 | 文件 |
+   |---|---|---|---|
+   | ❌ missing | GET /api/ppm/project-plan/{param}/plan-nodes | — | frontend/src/lib/ppm/plan.ts |
+\
+\
+   如果发现 Missing backend endpoint，必须在验证报告中标记为 ❌ contract gap。
+
 ### 探针结果处理
 - 将四个探针的结果汇总为「探针报告」
 - 如果探针发现问题（未实现标记、关键词缺失、测试缺失、决策未闭环），在最终验证报告中明确标注
