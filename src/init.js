@@ -108,12 +108,39 @@ async function doInstall(projectDir, tools, subprojects = [], specDir = null) {
   // projectDir: 源码项目根目录（用于工具检测、指令注入、.gitignore）
   const spec = specDir || join(projectDir, '.sillyspec');
 
-  // 外部 specDir 时清理旧版本残留的 cwd/.sillyspec/（防止源码污染）
+  // 外部 specDir 时清理旧版本残留的 cwd/.sillyspec/（防止源码污染）。
+  // ⚠️ 必须保护真实资产：若本地 .sillyspec 含 changes/（非空）、projects/（非空）
+  // 或 sillyspec.db（进度库），说明该项目本身就用 SillySpec 管理，整体删除会丢资产。
+  // 此时只清运行时残留，拒绝整删；确无资产时才视为旧残留清理。
   const legacyDir = join(projectDir, '.sillyspec');
   if (specDir && existsSync(legacyDir)) {
-    try { rmSync(legacyDir, { recursive: true, force: true }) } catch {}
-    if (!existsSync(legacyDir)) console.log('🧹 已清理旧版本残留的源码 .sillyspec/ 目录');
-    else console.error('⚠️ 清理残留 .sillyspec/ 失败');
+    let hasChanges = false;
+    try {
+      const changesDir = join(legacyDir, 'changes');
+      if (existsSync(changesDir)) hasChanges = readdirSync(changesDir).length > 0;
+    } catch {}
+    let hasProjects = false;
+    try {
+      const projectsDir = join(legacyDir, 'projects');
+      if (existsSync(projectsDir)) hasProjects = readdirSync(projectsDir).length > 0;
+    } catch {}
+    const hasDb = existsSync(join(legacyDir, 'sillyspec.db'));
+
+    if (hasChanges || hasProjects || hasDb) {
+      // 真实资产存在：拒绝整体删除，仅清理运行时残留
+      console.error('❌ [sillyspec] 拒绝删除源码目录的 .sillyspec/：检测到真实资产（changes/、projects/ 或 sillyspec.db）。');
+      console.error('   该项目似乎本身就用 SillySpec 管理。如需改用外部 spec 目录，请先手动迁移/备份。');
+      console.error('   本次仅清理运行时残留（.runtime/、local.yaml、codebase/）。');
+      for (const residue of ['.runtime', 'local.yaml', 'codebase']) {
+        const p = join(legacyDir, residue);
+        if (existsSync(p)) { try { rmSync(p, { recursive: true, force: true }) } catch {} }
+      }
+    } else {
+      // 无真实资产：确属旧版本残留，安全删除
+      try { rmSync(legacyDir, { recursive: true, force: true }) } catch {}
+      if (!existsSync(legacyDir)) console.log('🧹 已清理旧版本残留的源码 .sillyspec/ 目录');
+      else console.error('⚠️ 清理残留 .sillyspec/ 失败');
+    }
   }
 
   // 创建基础目录
