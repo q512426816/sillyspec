@@ -239,6 +239,8 @@ export class WorktreeManager {
     }
 
     // 5.5 自动同步远程最新代码（防止 worktree 基于过时的 commit）
+    let syncStatus = 'ok';
+    let syncError = null;
     try {
       // 先 fetch origin
       gitQuiet(worktreePath, 'fetch origin');
@@ -262,8 +264,10 @@ export class WorktreeManager {
           }
         }
       }
-    } catch {
- // fetch/merge 失败不影响 worktree 创建，只记录警告
+    } catch (e) {
+      syncStatus = 'failed';
+      syncError = e.message || String(e);
+      console.warn(`⚠️  worktree 远程同步失败：${syncError}`);
     }
 
     // 5.6 Dirty baseline overlay：将主工作区未提交变更同步到 worktree
@@ -290,6 +294,8 @@ export class WorktreeManager {
       baselineFiles,
       baselineCommit,
       baselineHash,
+      syncStatus,
+      ...(syncError ? { syncError } : {}),
     };
 
     const metaPath = join(worktreePath, META_FILE);
@@ -412,18 +418,22 @@ export class WorktreeManager {
 
   /**
    * 清理 worktree（仅限 SillySpec 创建的临时 worktree）
+   * 幂等：重复调用不报错。
+   * 三重清理：git worktree 注册 + worktree 目录 + meta 目录。
    * @param {string} changeName
-   * @param {{ force?: boolean }} opts - force: 跳过 mode 安检（仅用于 worktree 目录本身）
-   * @throws {Error} worktree 不存在、不允许删除
-   * @returns {{ result: 'cleaned'|'skipped'|'kept', mode: string }}
+   * @param {{ force?: boolean, maxRetries?: number }} opts
+   * @returns {{ result: 'cleaned'|'force-cleaned'|'skipped'|'kept', mode: string|null, details: string[] }}
    */
-  cleanup(changeName, { force = false } = {}) {
+  cleanup(changeName, { force = false, maxRetries = 3 } = {}) {
     const name = validateChangeName(changeName);
     const meta = this.getMeta(name);
     const worktreePath = this.getWorktreePath(name);
+    const metaDir = join(this.worktreeBase, name);
+    const details = [];
 
-    if (!meta && !existsSync(worktreePath)) {
-      return { result: 'skipped', mode: null };
+    // 幂等：什么都不存在 → 直接跳过
+    if (!meta && !existsSync(worktreePath) && !existsSync(metaDir)) {
+      return { result: 'skipped', mode: null, details };
     }
 
     const mode = meta?.mode || 'worktree';
@@ -431,50 +441,269 @@ export class WorktreeManager {
     // 安全检查：只有 SillySpec 创建的 worktree 才允许删除
     if (!force) {
       if (mode === 'native-worktree') {
-        throw new Error(
-          `当前 worktree 是外部/原生隔离环境（mode: native-worktree），SillySpec 不允许删除。\n` +
-          `此 worktree 不是由 SillySpec 创建的，请手动管理。\n` +
-          `如需强制清理，使用 --force 标志。`
-        );
+        return { result: 'kept', mode, details: ['native-worktree: 外部隔离环境，跳过清理'] };
       }
       if (mode === 'in-place-fallback') {
-        return { result: 'skipped', mode };
+        return { result: 'skipped', mode, details: ['in-place-fallback: 无隔离目录，跳过清理'] };
       }
     }
 
-    // 1. 尝试 git worktree remove
-    let gitRemoveOk = true;
-    try {
-      git(this.cwd, `worktree remove ${worktreePath} --force`);
-    } catch (e) {
-      gitRemoveOk = false;
-    }
     const branch = (meta && meta.branch) || BRANCH_PREFIX + name;
 
-    // 2. 确保目录已删除
-    try {
-      if (existsSync(worktreePath)) {
-        rmSync(worktreePath, { recursive: true, force: true });
-      }
-    } catch (e) {
-      throw new Error(`清理 worktree 目录失败: ${e.message}`);
-    }
-
-    // 3. 删除分支（忽略分支不存在的错误）
-    gitQuiet(this.cwd, `branch -D ${branch}`);
-
-    // 4. 确保目录已删除
+    // 1. git worktree remove（带 retry）
+    let gitRemoveOk = false;
     if (existsSync(worktreePath)) {
-      rmSync(worktreePath, { recursive: true, force: true });
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          git(this.cwd, `worktree remove ${worktreePath} --force`);
+          gitRemoveOk = true;
+          details.push(`git worktree remove succeeded (attempt ${attempt})`);
+          break;
+        } catch (e) {
+          details.push(`git worktree remove attempt ${attempt}/${maxRetries} failed: ${e.message}`);
+          if (attempt < maxRetries) {
+            // 短暂等待后重试
+            execSync('sleep 0.5', { stdio: 'pipe' });
+          }
+        }
+      }
     }
 
-    // 5. 清除 meta 目录（如果 worktree 目录在 worktreeBase 下）
-    const metaDir = join(this.worktreeBase, name);
+    // 2. fallback: 确保 worktree 目录已删除
+    if (existsSync(worktreePath)) {
+      try {
+        rmSync(worktreePath, { recursive: true, force: true });
+        details.push('worktree directory force-removed (fallback)');
+      } catch (e) {
+        details.push(`worktree directory force-remove failed: ${e.message}`);
+      }
+    }
+
+    // 3. git worktree prune（清理 git 内部注册信息）
+    try {
+      gitQuiet(this.cwd, 'worktree prune');
+    } catch {
+      // prune 失败不阻断
+    }
+
+    // 4. 删除分支（忽略分支不存在的错误）
+    try {
+      gitQuiet(this.cwd, `branch -D ${branch}`);
+      details.push('branch deleted');
+    } catch {
+      // 分支可能已被删除，幂等跳过
+    }
+
+    // 5. 清除 meta 目录
     if (existsSync(metaDir)) {
-      rmSync(metaDir, { recursive: true, force: true });
+      try {
+        rmSync(metaDir, { recursive: true, force: true });
+        details.push('meta directory cleaned');
+      } catch (e) {
+        details.push(`meta directory cleanup failed: ${e.message}`);
+      }
     }
 
-    return { result: gitRemoveOk ? 'cleaned' : 'force-cleaned', mode };
+    // 6. 最终验证：确认三重清理完成
+    const residual = [];
+    if (existsSync(worktreePath)) residual.push(`worktree dir: ${worktreePath}`);
+    if (existsSync(metaDir)) residual.push(`meta dir: ${metaDir}`);
+    if (gitQuiet(this.cwd, `worktree list`)?.includes(worktreePath)) {
+      residual.push('git worktree list still references this worktree');
+    }
+    if (residual.length > 0) {
+      details.push(`⚠️ 残留: ${residual.join('; ')}`);
+    }
+
+    return { result: gitRemoveOk ? 'cleaned' : 'force-cleaned', mode, details };
+  }
+
+  /**
+   * worktree 健康检查 + 可选修复
+   * 检查项：
+   * - git worktree list 中的孤儿条目（目录不存在）
+   * - worktree 目录存在但 git 不认识
+   * - meta 存在但 worktree 目录不存在
+   * - worktree 目录存在但 meta 不存在（幽灵目录）
+   * - SillySpec 分支残留（sillyspec/* 但无对应 meta）
+   * - 超过指定小时的过期 worktree
+   *
+   * @param {{ fix?: boolean, staleHours?: number }} opts
+   * @returns {{ issues: Array<{ type: string, name: string, detail: string, fixable: boolean }>, fixed: string[], unfixable: string[] }}
+   */
+  doctor({ fix = false, staleHours = 24 } = {}) {
+    const issues = [];
+    const fixed = [];
+    const unfixable = [];
+
+    // 1. 列出 git worktree list 中的条目
+    let gitWorktreeList = [];
+    try {
+      const raw = execSync(`git worktree list --porcelain`, { cwd: this.cwd, encoding: 'utf8', stdio: ['pipe','pipe','pipe'] });
+      const entries = raw.split(/\n\n/).filter(Boolean);
+      for (const entry of entries) {
+        const lines = entry.split('\n');
+        const wtPath = lines.find(l => l.startsWith('worktree '))?.replace('worktree ', '');
+        if (wtPath && wtPath !== this.cwd) { // 排除主工作区
+          gitWorktreeList.push({ path: wtPath, raw: entry });
+        }
+      }
+    } catch {
+      // git worktree 不可用，跳过
+    }
+
+    // 2. 列出 SillySpec meta 条目
+    const metaEntries = this.list();
+    const metaNames = new Set(metaEntries.map(m => m.changeName));
+
+    // 3. 检查 git worktree list 中的孤儿条目
+    for (const wt of gitWorktreeList) {
+      if (!existsSync(wt.path)) {
+        const name = this._pathToChangeName(wt.path);
+        issues.push({ type: 'orphan-git-entry', name: name || wt.path, detail: `git worktree 引用存在但目录不存在: ${wt.path}`, fixable: true });
+        if (fix) {
+          try { gitQuiet(this.cwd, 'worktree prune'); fixed.push(`pruned orphan: ${wt.path}`); } catch { unfixable.push(`prune failed for: ${wt.path}`); }
+        }
+      }
+    }
+
+    // 4. 扫描 worktreeBase 目录，检查幽灵目录和孤儿 meta
+    if (existsSync(this.worktreeBase)) {
+      const entries = readdirSync(this.worktreeBase, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        const name = entry.name;
+        const dirPath = join(this.worktreeBase, name);
+        const hasMeta = existsSync(join(dirPath, META_FILE));
+        const meta = hasMeta ? this.getMeta(name) : null;
+
+        // meta 存在但 worktree 目录不存在
+        if (meta && meta.worktreePath && !existsSync(meta.worktreePath)) {
+          issues.push({ type: 'meta-no-dir', name, detail: `meta 存在但 worktree 目录不存在: ${meta.worktreePath}`, fixable: true });
+          if (fix) {
+            try { rmSync(dirPath, { recursive: true, force: true }); fixed.push(`cleaned orphan meta: ${name}`); } catch { unfixable.push(`cleanup failed for: ${name}`); }
+          }
+        }
+
+        // worktree 目录存在但 meta 不存在（幽灵目录）
+        if (!hasMeta && existsSync(dirPath)) {
+          // 可能是 in-place 模式的 meta-only 目录，或者真正的幽灵
+          const files = readdirSync(dirPath);
+          if (files.length === 0 || (files.length === 1 && files[0] === META_FILE)) {
+            issues.push({ type: 'ghost-dir', name, detail: `空目录/幽灵目录: ${dirPath}`, fixable: true });
+            if (fix) {
+              try { rmSync(dirPath, { recursive: true, force: true }); fixed.push(`removed ghost dir: ${name}`); } catch { unfixable.push(`remove failed for: ${name}`); }
+            }
+          } else {
+            issues.push({ type: 'ghost-dir-with-files', name, detail: `目录存在但无 meta.json: ${dirPath} (含 ${files.length} 文件)`, fixable: false });
+          }
+        }
+
+        // 检查过期 worktree
+        if (meta && meta.createdAt) {
+          const ageMs = Date.now() - new Date(meta.createdAt).getTime();
+          const ageHours = ageMs / (1000 * 60 * 60);
+          if (ageHours > staleHours) {
+            issues.push({ type: 'stale', name, detail: `worktree 已存在 ${Math.round(ageHours)} 小时（超过 ${staleHours}h 阈值）`, fixable: true });
+            if (fix && meta.mode !== 'native-worktree') {
+              try {
+                const result = this.cleanup(name);
+                if (result.result === 'cleaned' || result.result === 'force-cleaned') {
+                  fixed.push(`cleaned stale: ${name}`);
+                } else {
+                  unfixable.push(`cleanup skipped: ${name}`);
+                }
+              } catch { unfixable.push(`cleanup failed: ${name}`); }
+            }
+          }
+        }
+      }
+    }
+
+    // 5. 检查 SillySpec 分支残留
+    try {
+      const branches = execSync(`git branch --list '${BRANCH_PREFIX}*'`, { cwd: this.cwd, encoding: 'utf8', stdio: ['pipe','pipe','pipe'] }).trim();
+      if (branches) {
+        for (const line of branches.split('\n').filter(Boolean)) {
+          const branch = line.replace(/^\*?\s+/, '').trim();
+          const name = branch.replace(BRANCH_PREFIX, '');
+          if (!metaNames.has(name)) {
+            issues.push({ type: 'orphan-branch', name, detail: `分支残留（无对应 meta）: ${branch}`, fixable: true });
+            if (fix) {
+              try { gitQuiet(this.cwd, `branch -D ${branch}`); fixed.push(`deleted orphan branch: ${branch}`); } catch { unfixable.push(`branch delete failed: ${branch}`); }
+            }
+          }
+        }
+      }
+    } catch {}
+
+    return { issues, fixed, unfixable };
+  }
+
+  /**
+   * 检查 worktree 是否有未 apply 到主工作区的变更
+   * @param {string} changeName
+   * @returns {{ hasChanges: boolean, changedFiles: string[], reason?: string }}
+   */
+  hasUnappliedChanges(changeName) {
+    const name = validateChangeName(changeName);
+    const meta = this.getMeta(name);
+    if (!meta) return { hasChanges: false, changedFiles: [], reason: 'no meta' };
+
+    const worktreePath = meta.worktreePath;
+    if (!worktreePath || !existsSync(worktreePath)) {
+      return { hasChanges: false, changedFiles: [], reason: 'worktree dir not found' };
+    }
+
+    // in-place 模式没有隔离目录，不算有未 apply 的变更
+    if (meta.mode === 'in-place-fallback') {
+      return { hasChanges: false, changedFiles: [], reason: 'in-place mode' };
+    }
+
+    const diffBase = meta.baselineCommit || meta.baseHash;
+    if (!diffBase) {
+      return { hasChanges: false, changedFiles: [], reason: 'no diff base' };
+    }
+
+    try {
+      // tracked 文件变更
+      const statusRaw = gitQuiet(worktreePath, `diff --name-status ${diffBase}`) || '';
+      const statusFiles = new Set();
+      if (statusRaw) {
+        for (const line of statusRaw.split('\n').filter(Boolean)) {
+          const parts = line.split('\t');
+          if (parts.length >= 2) statusFiles.add(parts[parts.length - 1]);
+          if (parts.length >= 3) statusFiles.add(parts[parts.length - 2]);
+        }
+      }
+
+      // untracked 文件
+      const untrackedRaw = gitQuiet(worktreePath, `ls-files --others --exclude-standard`) || '';
+      const untrackedFiles = untrackedRaw
+        ? untrackedRaw.split('\n').filter(Boolean).filter(f => !f.startsWith('.sillyspec/') && f !== 'meta.json')
+        : [];
+
+      const changedFiles = [...new Set([...statusFiles, ...untrackedFiles])];
+      return { hasChanges: changedFiles.length > 0, changedFiles };
+    } catch (e) {
+      // 检测失败时保守处理：视为有变更
+      return { hasChanges: true, changedFiles: [], reason: `diff failed: ${e.message}` };
+    }
+  }
+
+  /**
+   * 从 worktree 路径反推 changeName
+   * @private
+   */
+  _pathToChangeName(wtPath) {
+    try {
+      const resolved = resolve(wtPath);
+      const baseResolved = resolve(this.worktreeBase);
+      if (resolved.startsWith(baseResolved + '/')) {
+        return resolved.slice(baseResolved.length + 1);
+      }
+    } catch {}
+    return null;
   }
 
   /**

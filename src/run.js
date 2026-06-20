@@ -1943,12 +1943,38 @@ async function continueStep(pm, progress, stageName, cwd, answer, options = {}) 
     stageData.completedAt = now
     await pm._write(cwd, progress, changeName)
     console.log(`\n✅ ${stageName} 阶段已完成（${stageData.steps.length}/${stageData.steps.length} 步）`)
+    // ── execute 阶段完成时条件性清理 worktree ──
+    if (stageName === 'execute' && changeName) {
+      try {
+        const { WorktreeManager } = await import('./worktree.js');
+        const wm = new WorktreeManager({ cwd });
+        const meta = wm.getMeta(changeName);
+        if (!meta) {
+          console.log('🔗 Worktree: n/a (no meta)');
+        } else if (meta.mode === 'native-worktree') {
+          console.log('🔗 Worktree: kept (外部隔离环境)');
+        } else if (meta.mode === 'in-place-fallback') {
+          console.log('🔗 Worktree: n/a (in-place 模式)');
+        } else {
+          const check = wm.hasUnappliedChanges(changeName);
+          if (check.hasChanges) {
+            console.log(`🔗 Worktree: pending apply (${check.changedFiles.length} 个未应用变更)`);
+            console.log(`   下一步: sillyspec worktree apply ${changeName}`);
+          } else {
+            const cleanResult = wm.cleanup(changeName);
+            console.log(`🔗 Worktree: ${cleanResult.result}`);
+          }
+        }
+      } catch (e) {
+        console.warn(`🔗 Worktree: check failed — ${e.message}`);
+      }
+    }
     return { stageCompleted: true, currentIdx, nextPendingIdx: -1 }
   }
 
   // 输出下一步
-  if (nextPendingIdx !== -1 && defSteps) {
-    console.log('')
+    if (nextPendingIdx !== -1 && defSteps) {
+      console.log('')
     await outputStep(stageName, nextPendingIdx, defSteps, cwd, changeName, progress.project || null, platformOpts, answer)
   } else if (nextWaitingIdx !== -1 && defSteps) {
     // 下一个步骤也在等待状态
@@ -2515,6 +2541,42 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
     } else if (actualCompleted < actualTotal) {
       // 实际步骤未全部完成，跳过 validator（状态可能不同步）
       console.log(`\n⚠️ 阶段校验跳过：${actualTotal} 步中仅 ${actualCompleted} 步标记为已完成，可能存在状态不同步。如确认阶段已完成，请运行 --status 确认。`)
+    }
+
+    // ── execute 阶段完成时条件性清理 worktree（不依赖 AI agent 的完成确认步骤）──
+    if (stageName === 'execute' && changeName) {
+      try {
+        const { WorktreeManager } = await import('./worktree.js');
+        const wm = new WorktreeManager({ cwd });
+        const meta = wm.getMeta(changeName);
+        if (!meta) {
+          console.log('🔗 Worktree: n/a (no meta)');
+        } else if (meta.mode === 'native-worktree') {
+          console.log('🔗 Worktree: kept (外部隔离环境)');
+        } else if (meta.mode === 'in-place-fallback') {
+          console.log('🔗 Worktree: n/a (in-place 模式)');
+        } else {
+          const check = wm.hasUnappliedChanges(changeName);
+          if (check.hasChanges) {
+            console.log(`🔗 Worktree: pending apply (${check.changedFiles.length} 个未应用变更)`);
+            console.log(`   下一步: sillyspec worktree apply ${changeName}`);
+          } else {
+            const cleanResult = wm.cleanup(changeName);
+            if (cleanResult.result === 'skipped' || cleanResult.result === 'kept') {
+              console.log(`🔗 Worktree: ${cleanResult.result}`);
+            } else {
+              console.log(`🔗 Worktree: ${cleanResult.result}`);
+              if (cleanResult.details?.length > 0) {
+                for (const d of cleanResult.details) {
+                  if (d.startsWith('⚠️')) console.log(`   ${d}`);
+                }
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.warn(`🔗 Worktree: check failed — ${e.message}`);
+      }
     }
 
     return { stageCompleted: true, currentIdx, nextPendingIdx: -1 }

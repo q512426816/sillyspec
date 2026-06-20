@@ -329,7 +329,8 @@ SillySpec worktree — git worktree 隔离管理
   sillyspec worktree create <change-name> [--base <branch>]   创建隔离 worktree
   sillyspec worktree apply <change-name> [--check-only]        校验并应用变更到主工作区
   sillyspec worktree list                                      列出所有活跃 worktree
-  sillyspec worktree cleanup <change-name>                      强制清理 worktree
+  sillyspec worktree cleanup <change-name> [--force]           强制清理 worktree
+  sillyspec worktree doctor [--fix] [--stale-hours N]          健康检查 + 修复
 
 选项:
   --base <branch>       create: 指定基础分支（默认当前 HEAD）
@@ -429,11 +430,13 @@ SillySpec worktree — git worktree 隔离管理
           const forceFlag = args.includes('--force');
           try {
             const result = wm.cleanup(wtName, { force: forceFlag });
-            if (result.result === 'cleaned') {
+            if (result.result === 'cleaned' || result.result === 'force-cleaned') {
               console.log(`✅ worktree 已清理: ${wtName} (mode: ${result.mode})`);
-            } else if (result.result === 'force-cleaned') {
-              console.log(`⚠️  worktree 已强制清理: ${wtName} (mode: ${result.mode})`);
-              console.log(`   原因: git worktree remove 失败，通过直接删除目录完成`);
+              if (result.details?.length > 0) {
+                for (const d of result.details) {
+                  if (d.startsWith('⚠️')) console.log(`   ${d}`);
+                }
+              }
             } else if (result.result === 'skipped') {
               console.log(`⏭️  worktree 跳过清理: ${wtName} (mode: ${result.mode})`);
               console.log(`   原因: in-place 模式没有隔离目录需要清理`);
@@ -443,6 +446,34 @@ SillySpec worktree — git worktree 隔离管理
           } catch (e) {
             console.error(`❌ ${e.message}`);
             process.exit(1);
+          }
+          break;
+        }
+        case 'doctor': {
+          const fixFlag = args.includes('--fix');
+          const staleIdx = args.indexOf('--stale-hours');
+          const staleHours = staleIdx !== -1 && args[staleIdx + 1] ? parseInt(args[staleIdx + 1], 10) : 24;
+          const diag = wm.doctor({ fix: fixFlag, staleHours });
+          if (diag.issues.length === 0) {
+            console.log('✅ worktree 健康检查通过，无异常');
+          } else {
+            console.log(`🔍 发现 ${diag.issues.length} 个问题：\n`);
+            for (const issue of diag.issues) {
+              const icon = issue.fixable ? '⚠️' : '❌';
+              console.log(`  ${icon} [${issue.type}] ${issue.name}: ${issue.detail}`);
+            }
+            if (fixFlag) {
+              console.log(`\n🔧 修复完成：`);
+              for (const f of diag.fixed) console.log(`  ✅ ${f}`);
+              if (diag.unfixable.length > 0) {
+                for (const u of diag.unfixable) console.log(`  ❌ ${u}`);
+              }
+              if (diag.fixed.length === 0 && diag.unfixable.length === 0) {
+                console.log('  无需修复');
+              }
+            } else {
+              console.log(`\n💡 运行 sillyspec worktree doctor --fix 自动修复`);
+            }
           }
           break;
         }
