@@ -48,12 +48,13 @@ function startProgressWatch(projectPath) {
     progressWatchers.get(projectPath).refCount++
     return
   }
-  const progressFile = join(projectPath, '.sillyspec', '.runtime', 'progress.json')
-  if (!existsSync(progressFile)) return
+  // Watch the SQLite database file for changes (replaces old progress.json watch)
+  const dbFile = join(projectPath, '.sillyspec', '.runtime', 'sillyspec.db')
+  if (!existsSync(dbFile)) return
 
   let timer = null
   try {
-    const watcher = watch(progressFile, (eventType) => {
+    const watcher = watch(dbFile, (eventType) => {
       if (timer) clearTimeout(timer)
       timer = setTimeout(() => {
         timer = null

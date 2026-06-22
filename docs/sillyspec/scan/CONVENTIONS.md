@@ -31,7 +31,7 @@ export const definition = {
 执行构建/测试前必须先读 `local.yaml`，优先使用其中配置的命令、路径和环境变量；未配置时才使用默认值。
 
 ### 4. 辅助命令独立执行
-辅助阶段（`['scan', 'quick', 'archive', 'status', 'doctor']`）在没有 `progress.json` 时也可执行。
+辅助阶段（`['scan', 'quick', 'archive', 'status', 'doctor']`）在没有活跃变更时也可独立执行。
 
 ## 实体继承规范
 
@@ -39,7 +39,7 @@ export const definition = {
 位置：`src/progress.js`
 
 核心职责：
-- 管理 `.sillyspec/.runtime/progress.json`
+- 管理 `.sillyspec/.runtime/sillyspec.db`（SQLite 数据库）
 - 提供状态恢复、备份、版本迁移功能
 - 纯 Node.js 实现，无外部依赖
 

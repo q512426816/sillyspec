@@ -89,9 +89,11 @@ SillySpec 支持集成多个 MCP 服务器，扩展 AI 能力：
 - Lint 命令
 - 环境变量
 
-### progress.json
-运行时状态，存储：
+### SQLite 数据库 (sillyspec.db)
+运行时状态存储于 `.sillyspec/.runtime/sillyspec.db`，存储：
 - 当前阶段
 - 当前步骤
 - 项目路径
 - 开始时间
+
+通过 `sillyspec progress show` CLI 命令查看状态。

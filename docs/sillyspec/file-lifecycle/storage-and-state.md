@@ -43,7 +43,7 @@ created_at: 2026-06-04 16:25:42
 | `batch_progress` | 批量任务统计 |
 | `approvals` | 平台审批状态 |
 
-`progress.js` 通过 SQL 读写这些表，并组装成兼容旧 progress JSON 的 JS 对象。当前没有看到 `progress.json` 被作为权威状态写入。
+`progress.js` 通过 SQL 读写这些表，并组装成兼容旧 progress 格式的 JS 对象。进度数据仅存储在 SQLite 数据库中，不再使用 progress.json 文件。
 
 注意：`db.js` 的 `project.schema_version` DDL 默认值是 `4`，但 `progress.js` 的 `CURRENT_VERSION` 是 `3`，并在初始化/写入时使用 `3`。文档不要把这里写成稳定的 v4 schema 事实。
 

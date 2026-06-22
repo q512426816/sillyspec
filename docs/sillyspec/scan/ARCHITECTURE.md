@@ -41,7 +41,7 @@ SillySpec 是一个阶段驱动的 AI 辅助开发流程框架，通过严格的
 - `setup.js`: 环境配置
 
 #### 阶段定义 (`src/stages/`)
-核心阶段（需 progress.json）:
+核心阶段（需进度数据，存储于 SQLite 数据库）:
 - `brainstorm`: 需求探索
 - `propose`: 生成结构化规范
 - `plan`: 编写实现计划
@@ -62,12 +62,13 @@ SillySpec 是一个阶段驱动的 AI 辅助开发流程框架，通过严格的
 
 ### 数据模型
 
-#### progress.json
-运行时状态文件，存储：
-- 当前阶段
-- 当前步骤
-- 项目路径
-- 开始时间
+#### SQLite 数据库 (sillyspec.db)
+运行时状态存储于 `.sillyspec/.runtime/sillyspec.db`，存储：
+- 项目和变更信息
+- 各阶段状态和步骤进度
+- 时间戳和修订记录
+
+通过 `sillyspec progress show` CLI 命令查看状态。
 
 #### 项目配置 (`.sillyspec/projects/*.yaml`)
 ```yaml

@@ -77,18 +77,13 @@ export function parseProjectOverview(projectPath) {
 
   // --- Last active ---
   const sillyspecDir = join(projectPath, '.sillyspec')
-  const progressPath = join(sillyspecDir, '.runtime', 'progress.json')
-  if (existsSync(progressPath)) {
+  // Progress is stored in SQLite (.sillyspec/.runtime/sillyspec.db), not progress.json
+  // Use mtime of the DB file as a fallback for lastActive
+  const dbPath = join(sillyspecDir, '.runtime', 'sillyspec.db')
+  if (existsSync(dbPath)) {
     try {
-      const progress = JSON.parse(readFileSync(progressPath, 'utf-8'))
-      if (progress.stages) {
-        for (const stageData of Object.values(progress.stages)) {
-          if (stageData.lastActive && (!result.lastActive || new Date(stageData.lastActive) > new Date(result.lastActive))) {
-            result.lastActive = stageData.lastActive
-          }
-        }
-      }
-      if (progress.lastActive) result.lastActive = progress.lastActive
+      const s = statSync(dbPath)
+      result.lastActive = s.mtime.toISOString()
     } catch {}
   }
   if (!result.lastActive) {
@@ -432,81 +427,46 @@ export function parseSillyspecDocsTree(projectPath) {
 }
 
 /**
- * Parse project state from .sillyspec directory
+ * Parse project state from .sillyspec SQLite database via CLI.
+ * Progress data is stored in SQLite (.sillyspec/.runtime/sillyspec.db),
+ * accessed through `sillyspec progress show`.
  * @param {string} projectPath - Path to the project directory
- * @returns {object} Project state with currentStage, nextStep, progress, stages, specs, lastActive
+ * @returns {object|null} Project state with currentStage, stages, lastActive
  */
 export function parseProjectState(projectPath) {
   const sillyspecDir = join(projectPath, '.sillyspec')
+  const dbPath = join(sillyspecDir, '.runtime', 'sillyspec.db')
 
-  if (!existsSync(sillyspecDir)) {
+  if (!existsSync(sillyspecDir) || !existsSync(dbPath)) {
     return null
   }
 
   let currentStage = ''
-  let nextStep = null
-  let progress = { stages: {} }
-  let stages = []
-  let specs = []
   let lastActive = null
 
-  // Read progress.json for current stage
-  const progressPath = join(sillyspecDir, '.runtime', 'progress.json')
-  if (existsSync(progressPath)) {
-    try {
-      const progressData = JSON.parse(readFileSync(progressPath, 'utf-8'))
-      progress = progressData
-      currentStage = progressData.currentStage || ''
-      stages = Object.keys(progressData.stages || {})
+  // Use DB file mtime as lastActive indicator
+  try {
+    const s = statSync(dbPath)
+    lastActive = s.mtime.toISOString()
+  } catch {}
 
-      // Find last active
-      if (progressData.lastActive) lastActive = progressData.lastActive
-      if (progressData.stages) {
-        for (const [stageName, stageData] of Object.entries(progressData.stages)) {
-          if (stageData.lastActive || stageData.startedAt) {
-            const t = stageData.lastActive || stageData.startedAt
-            if (!lastActive || new Date(t) > new Date(lastActive)) lastActive = t
-          }
-        }
-      }
-    } catch (err) {
-      // Progress file exists but couldn't be parsed
-    }
-  }
-
-  // List all spec files
-  const specsDir = join(sillyspecDir, 'specs')
-  if (existsSync(specsDir)) {
-    try {
-      const specFiles = readdirSync(specsDir)
-        .filter(f => f.endsWith('.md'))
-        .sort()
-
-      specs = specFiles.map(f => {
-        const specPath = join(specsDir, f)
-        try {
-          const content = readFileSync(specPath, 'utf-8')
-          const titleMatch = content.match(/^#\s+(.+)$/m)
-          return {
-            name: f,
-            title: titleMatch ? titleMatch[1] : f,
-            path: specPath
-          }
-        } catch {
-          return { name: f, title: f, path: specPath }
-        }
-      })
-    } catch (err) {
-      // Specs directory couldn't be read
-    }
+  // Use CLI to read current stage from SQLite
+  try {
+    const output = execSync('sillyspec progress show 2>/dev/null', {
+      cwd: projectPath, encoding: 'utf-8', timeout: 5000
+    })
+    const stageMatch = output.match(/当前阶段:\s*(\S+)/)
+    if (stageMatch) currentStage = stageMatch[1]
+  } catch {
+    // CLI unavailable or no active change
   }
 
   return {
     currentStage,
-    nextStep,
-    progress,
-    stages,
-    specs,
+    nextStep: null,
+    progress: { stages: {} },
+    stages: [],
+    specs: [],
     lastActive
   }
 }

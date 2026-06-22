@@ -39,7 +39,7 @@ sillyspec/
 │   └── skills/           # 技能目录（20+ 技能）
 ├── .sillyspec/           # SillySpec 运行时
 │   ├── .runtime/         # 运行时状态
-│   │   ├── progress.json # 当前进度
+│   │   ├── sillyspec.db  # SQLite 进度数据库
 │   │   ├── artifacts/    # 临时产物
 │   │   ├── history/      # 执行历史
 │   │   ├── logs/         # 执行日志

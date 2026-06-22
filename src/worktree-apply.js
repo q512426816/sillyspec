@@ -214,7 +214,7 @@ export function applyWorktree(changeName, { cwd, checkOnly = false } = {}) {
   const patchFiles = hasAllowList
     ? [...allowSet].filter(f => changedFiles.includes(f))
     : changedFiles;
-  const fileArgs = patchFiles.map(f => `-- ${f}`).join(' ');
+  const fileArgs = patchFiles.length > 0 ? `-- ${patchFiles.join(' ')}` : '';
 
   // 创建临时文件
   const tmpDir = mkdtempSync(join(tmpdir(), 'sillyspec-patch-'));
@@ -236,7 +236,7 @@ export function applyWorktree(changeName, { cwd, checkOnly = false } = {}) {
 
     // tracked 文件：git diff baseHash
     if (trackedFiles.length > 0) {
-      const trackedArgs = trackedFiles.map(f => `-- ${f}`).join(' ');
+      const trackedArgs = trackedFiles.length > 0 ? `-- ${trackedFiles.join(' ')}` : '';
       patchContent += execSync(
         `git diff --binary ${diffBase} ${trackedArgs}`,
         { cwd: worktreePath, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }
@@ -245,11 +245,12 @@ export function applyWorktree(changeName, { cwd, checkOnly = false } = {}) {
 
     // untracked 新文件：git add 到 index，git diff --cached，然后 reset
     if (untrackedPatchFiles.length > 0) {
-      const addArgs = untrackedPatchFiles.map(f => `-- ${f}`).join(' ');
+      const addArgs = untrackedPatchFiles.length > 0 ? `-- ${untrackedPatchFiles.join(' ')}` : '';
       git(worktreePath, `add ${addArgs}`);
       try {
+        const diffCachedArgs = untrackedPatchFiles.length > 0 ? `-- ${untrackedPatchFiles.join(' ')}` : '';
         patchContent += execSync(
-          `git diff --binary --cached ${untrackedPatchFiles.map(f => `-- ${f}`).join(' ')}`,
+          `git diff --binary --cached ${diffCachedArgs}`,
           { cwd: worktreePath, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }
         );
       } finally {

@@ -165,6 +165,7 @@ const fixedPrefix = [
 - **worktree 已由 CLI 在 execute 阶段启动时自动创建，不要自行创建或跳过**
 - **后续所有子代理的 cwd 必须设为该 worktree 路径**
 - 如果 meta.json 不存在（说明创建失败），停止并报错
+- **不要自行检查 git dirty/uncommitted 状态来判断是否可以进入 worktree，CLI 已自动处理**
 
 ### 输出
 worktree 路径 + 分支名 + 模式
