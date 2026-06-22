@@ -145,6 +145,21 @@ async function main() {
     targetDir = resolve(filteredArgs[1]);
     filteredArgs.splice(1, 1);
   }
+  // ── 自动纠正 cwd ──
+  // 当 agent 在 worktree 内跑 pnpm 等工具后 shell cwd 可能被改变，
+  // 导致 sillyspec 命令找不到 .sillyspec。此函数尝试从 git root 解析。
+  function resolveEffectiveDir(baseDir) {
+    if (existsSync(join(baseDir, '.sillyspec'))) return baseDir
+    try {
+      const { execSync } = require('child_process')
+      const gitRoot = execSync('git rev-parse --show-toplevel', {
+        cwd: baseDir, encoding: 'utf8', timeout: 5000
+      }).trim()
+      if (gitRoot && existsSync(join(gitRoot, '.sillyspec'))) return gitRoot
+    } catch {}
+    return baseDir
+  }
+
   const dir = targetDir;
 
   if (command === 'init' && !existsSync(dir)) {
@@ -167,6 +182,7 @@ async function main() {
       break;
     case 'progress': {
       const pm = new ProgressManager();
+      const progDir = resolveEffectiveDir(dir);
       const subCommand = filteredArgs[1];
       const stageIdx = filteredArgs.indexOf('--stage');
       const stage = stageIdx >= 0 && filteredArgs[stageIdx + 1] ? filteredArgs[stageIdx + 1] : null;
@@ -176,18 +192,18 @@ async function main() {
 
       switch (subCommand) {
         case 'init':
-          pm.init(dir);
+          pm.init(progDir);
           break;
         case 'status':
         case 'show':
-          pm.show(dir, progChangeName);
+          pm.show(progDir, progChangeName);
           break;
         case 'check':
-          await pm.checkConsistency(dir, progChangeName);
+          await pm.checkConsistency(progDir, progChangeName);
           break;
         case 'repair': {
           const repairApply = filteredArgs.includes('--apply');
-          await pm.repairConsistency(dir, { apply: repairApply, changeName: progChangeName });
+          await pm.repairConsistency(progDir, { apply: repairApply, changeName: progChangeName });
           break;
         }
         case 'validate':
@@ -270,7 +286,7 @@ async function main() {
     }
     case 'run': {
       const { runCommand } = await import('./run.js')
-      await runCommand(filteredArgs.slice(1), dir, specDir)
+      await runCommand(filteredArgs.slice(1), resolveEffectiveDir(dir), specDir)
       break
     }
     case 'dashboard': {
