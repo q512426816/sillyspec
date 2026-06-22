@@ -587,9 +587,11 @@ export function getContract(stageName) {
  * 校验状态转换是否允许
  * @param {string} fromStage - 当前阶段（空字符串表示变更起始）
  * @param {string} toStage - 目标阶段
+ * @param {{ fromStageData?: { status?: string } | undefined }} [options] - 可选，从 progress.stages[prevStage] 提取
  * @returns {{ allowed: boolean, reason?: string }}
  */
-export function checkTransition(fromStage, toStage) {
+export function checkTransition(fromStage, toStage, options = {}) {
+  const { fromStageData } = options  // { status?: string } | undefined
   const contract = contracts[toStage]
   if (!contract) {
     return { allowed: false, reason: `未知阶段: ${toStage}` }
@@ -603,6 +605,17 @@ export function checkTransition(fromStage, toStage) {
   // 同阶段内重复运行：允许（继续执行当前阶段的下一步、或修订模式继续）
   if (fromStage === toStage) {
     return { allowed: true }
+  }
+
+  // task-07: failed_post_check 门控
+  // scan post-check 未通过时，禁止进入主流程的下游阶段（brainstorm/plan/execute/verify/archive）
+  // 必须先重跑 scan 修复。toStage === 'scan' 的重跑路径已被上方 fromStage === toStage 放行。
+  // fromStageData.status 缺失（旧数据）时门控不触发（向后兼容）。
+  if (fromStage === 'scan' && fromStageData?.status === 'failed_post_check' && toStage !== 'scan') {
+    return {
+      allowed: false,
+      reason: 'scan post-check 未通过（failed_post_check），需修复后重跑 scan 再进入 ' + toStage,
+    }
   }
 
   // archive 特殊处理：从 verify 来的允许，从其他主流程阶段来的需要校验

@@ -12,6 +12,22 @@ import { ProgressManager } from './progress.js'
 import { SCAN_STATUS, POINTER_STATUS, isPointerCorrupted } from './constants.js'
 
 /**
+ * 清洗项目名：只保留 ASCII 字母/数字/横线/下划线/点，过滤中文和特殊字符。
+ * - 必须含至少一个字母（拒绝纯数字 "0"/"7"/"07"，避免 scan-projects.json 脏数据）
+ * - 长度必须 ≥ 2（拒绝单字符 "a"/"0"）
+ * @param {string} name - 原始项目名候选
+ * @returns {string | null} 合法项目名或 null（拒绝）
+ */
+export function sanitizeProjectName(name) {
+  if (!name) return null
+  const clean = String(name).replace(/[^a-zA-Z0-9_\-.]/g, '').trim()
+  if (!clean) return null
+  if (!/[a-zA-Z]/.test(clean)) return null    // 纯数字/符号拒绝（"0"/"7"/"07"）
+  if (clean.length < 2) return null           // 单字符拒绝（"a"/"0"）
+  return clean
+}
+
+/**
  * 在容器/Docker 环境下，git 可能因目录所有权不匹配报 dubious ownership。
  * 使用 -c safe.directory= 临时参数，不污染全局 git config。
  * @param {string} cwd - 仓库根目录
@@ -665,6 +681,12 @@ async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjec
       `1. 如果 Write 返回 \"File has not been read yet\"，正确动作是：先 Read 目标文件 → 再 Write 覆盖。\n` +
       `2. **不允许**用 cat >、tee、heredoc 等 Bash 方式绕过 Write 工具。\n` +
       `3. 如果 Write 和 Read 均失败，记录失败并停止当前 step。\n` +
+      `\n` +
+      `### 📍 Workflow YAML 占位符映射（task-05）\n` +
+      `读取 \`{WORKFLOWS_ROOT}/scan-docs.yaml\` 时，yaml 内的占位符按以下映射替换为绝对路径：\n` +
+      `- \`{SPEC_ROOT}\` → \`${specSillyspec}\`（规范目录根）\n` +
+      `- \`<project>\` → 当前项目名（见下方 step 提示，等于 \`${projectName}\`）\n` +
+      `- 例：\`{SPEC_ROOT}/docs/<project>/scan/ARCHITECTURE.md\` → \`${docsRoot}/scan/ARCHITECTURE.md\`\n` +
       `\n` +
       `创建目录: \`mkdir -p ${docsRoot}/{scan,modules,flows} ${projectsRoot} ${changesRoot}\`\n`
     )
@@ -1416,7 +1438,9 @@ async function runStage(pm, progress, stageName, cwd, changeName, skipApproval =
   const specBase = platformOpts.specRoot || join(cwd, '.sillyspec')
   // 状态转换校验
   const prevStage = progress.currentStage || ''
-  const transition = checkTransition(prevStage, stageName)
+  // task-07: 提取 prevStage 的 stageData，传给 checkTransition 检测 failed_post_check 门控
+  const fromStageData = (progress.stages && prevStage && progress.stages[prevStage]) || undefined
+  const transition = checkTransition(prevStage, stageName, fromStageData ? { fromStageData } : {})
   if (!transition.allowed) {
     console.error(`❌ 阶段转换不允许: ${prevStage || '(起始)'} → ${stageName}`)
     console.error(`   原因: ${transition.reason}`)
@@ -2150,16 +2174,15 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
   if (stageName === 'scan' && steps[currentIdx]?.name === '构建扫描项目列表') {
     // 解析项目列表：从 step 2 输出提取，或回退读取 projects/*.yaml
     let projectNames = []
-    // 项目名清洗：只保留 ASCII 字母/数字/横线/下划线/点，过滤中文和特殊字符
-    const sanitizeProjectName = (name) => {
-      const clean = name.replace(/[^a-zA-Z0-9_\-.]/g, '').trim()
-      return clean || null
-    }
+    // sanitizeProjectName 已提取到模块顶层（含字母校验 + 长度≥2）
     if (outputText) {
       // 匹配方式 1: "1. project-name" 编号列表
-      const numbered = outputText.match(/^\s*\d+\.\s+(\S+)/gm)
+      // 正则收紧：token 必须以字母开头，避免误捕获纯数字 "0"/"7" 和步骤说明中英文行
+      const numbered = outputText.match(/^\s*\d+\.\s+([a-zA-Z][\w\-.]*)/gm)
       if (numbered) {
-        const raw = numbered.map(m => m.replace(/^\s*\d+\.\s+/, '').replace(/[—\-:].*$/, '').trim())
+        // task-05 B2 延伸修正：原 /[—\-:].*$/ 会把 ASCII 连字符当后缀分隔符，
+        // 把 order-service 切成 order。现只针对中文长破折号 `—`（LLM 输出列表时常作分隔符）。
+        const raw = numbered.map(m => m.replace(/^\s*\d+\.\s+/, '').replace(/—.*$/, '').trim())
         projectNames = raw.map(sanitizeProjectName).filter(Boolean)
         if (projectNames.length > 0) { stageData.scanMeta = stageData.scanMeta || {}; stageData.scanMeta.projectListParsed = true; }
       }
@@ -2434,8 +2457,18 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
           stageData.status = SCAN_STATUS.FAILED_POST_CHECK
           stageData.completedAt = new Date().toLocaleString('zh-CN',{hour12:false})
           await pm._write(cwd, progress, changeName)
+          triggerSync(cwd, changeName, platformOpts)
           console.error(`\n❌ scan post-check 失败，状态设为 failed_post_check。不允许 clean success。`)
           console.error(`   请检查上方错误信息并修复后重新 scan。`)
+          // 平台模式：exit(1) 让 daemon/SillyHub 感知非 0 退出码（manifest.json 已落盘，不会被撤销）
+          if (platformOpts.specRoot || platformOpts.runtimeRoot) {
+            console.error('   平台模式：CLI 将以 exit code 1 退出，通知 SillyHub scan 失败。')
+            process.exit(1)
+          }
+          // 接口与 plan contract (run.js:2551 附近 plan 失败分支) 对齐：
+          // 返回 { stageCompleted:false, currentIdx, nextPendingIdx: currentIdx }
+          // 让上层 runStage 走"完成但不推进"分支，--done 被拒
+          return { stageCompleted: false, currentIdx, nextPendingIdx: currentIdx }
         } else if (postResult.status === 'completed_with_warnings') {
           // 警告不阻止完成，但记录
           stageData.status = 'completed'
@@ -2623,8 +2656,17 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
       const { loadWorkflow, runPostCheck, formatCheckReport, saveWorkflowRun } = await import('./workflow.js')
       const wf = loadWorkflow(cwd, 'scan-docs')
       if (wf) {
-        // 确定当前项目：优先从 step metadata 读取，回退从 display name 提取
-        const currentProjectName = steps[currentIdx].project
+        // 确定当前项目（优先级链）：
+        //   progress.project (dbProjectName，平台模式真实项目名，与 outputStep 占位符渲染对齐)
+        //   > change?.project (变更对象的项目字段，平台模式 change 创建时传入)
+        //   > steps[idx].project (perProject 展开标记，兼容旧模式)
+        //   > steps[idx].name 正则提取 [xxx] 后缀
+        //   > null（回退检查所有项目）
+        // task-05 修复：日志显示项目名变 frontend 是 perProject 误展开 bug，
+        // 用 progress.project（与 outputStep 占位符渲染路径一致）修正 myaaa/frontend 分裂。
+        const currentProjectName = progress.project
+          || (typeof change !== 'undefined' && change ? change.project : null)
+          || steps[currentIdx].project
           || (steps[currentIdx].name.match(/\[([^\]]+)\]\s*$/) || [])[1]
           || null
 
@@ -2644,7 +2686,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
 
         let anyFailed = false
         for (const pName of projectsToCheck) {
-          const result = runPostCheck(wf, cwd, pName)
+          const result = runPostCheck(wf, cwd, pName, {}, specBase)
           const report = formatCheckReport(result)
           console.log(report)
           if (result.status === 'fail') {
@@ -2667,6 +2709,10 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
         }
         if (anyFailed) {
           console.log(`\n⚠️ 存在检查失败项，请按上面的重试提示修复后再继续。`)
+          // task-07: 阻断推进（与 task-06 平台模式 scan-postcheck 失败分支 return 结构对齐）
+          // scan 深度扫描产物校验未通过时，不允许 clean success / 进入下一 step，
+          // 让上层走"完成但不推进"分支，--done 被拒。
+          return { stageCompleted: false, currentIdx, nextPendingIdx: currentIdx }
         }
       }
     } catch (e) {
@@ -2682,7 +2728,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
       if (wf && changeName) {
         const raw = JSON.stringify(wf)
         const resolved = JSON.parse(raw.replace(/<change-name>/g, changeName))
-        const result = runPostCheck(resolved, cwd, 'sillyspec')
+        const result = runPostCheck(resolved, cwd, 'sillyspec', {}, specBase)
         // 只报告 impact-analyzer 的结果（doc-syncer 是后续步骤）
         const impactResult = (result.roles || []).find(r => r.id === 'impact-analyzer')
         if (impactResult) {

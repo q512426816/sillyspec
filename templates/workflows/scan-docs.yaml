@@ -13,7 +13,7 @@ roles:
       hints:
         grep_patterns: ["class ", "export ", "import ", "schema", "CREATE TABLE"]
     outputs:
-      - path: ".sillyspec/docs/<project>/scan/ARCHITECTURE.md"
+      - path: "{SPEC_ROOT}/docs/<project>/scan/ARCHITECTURE.md"
         required: true
         checks:
           - type: file_exists
@@ -33,7 +33,7 @@ roles:
       hints:
         grep_patterns: ["function ", "const ", "async ", "try ", "catch "]
     outputs:
-      - path: ".sillyspec/docs/<project>/scan/CONVENTIONS.md"
+      - path: "{SPEC_ROOT}/docs/<project>/scan/CONVENTIONS.md"
         required: true
         checks:
           - type: file_exists
@@ -53,13 +53,13 @@ roles:
       hints:
         grep_patterns: ["fetch", "http", "WebSocket", "ws", "chokidar"]
     outputs:
-      - path: ".sillyspec/docs/<project>/scan/STRUCTURE.md"
+      - path: "{SPEC_ROOT}/docs/<project>/scan/STRUCTURE.md"
         required: true
         checks:
           - type: file_exists
           - type: min_lines
             min: 15
-      - path: ".sillyspec/docs/<project>/scan/INTEGRATIONS.md"
+      - path: "{SPEC_ROOT}/docs/<project>/scan/INTEGRATIONS.md"
         required: true
         checks:
           - type: file_exists
@@ -77,14 +77,14 @@ roles:
       hints:
         grep_patterns: ["TODO", "FIXME", "deprecated", "test", "describe"]
     outputs:
-      - path: ".sillyspec/docs/<project>/scan/TESTING.md"
+      - path: "{SPEC_ROOT}/docs/<project>/scan/TESTING.md"
         required: true
         checks:
           - type: file_exists
           - type: min_lines
             min: 10
           - type: no_placeholder
-      - path: ".sillyspec/docs/<project>/scan/CONCERNS.md"
+      - path: "{SPEC_ROOT}/docs/<project>/scan/CONCERNS.md"
         required: true
         checks:
           - type: file_exists
@@ -92,7 +92,7 @@ roles:
             min: 10
           - type: contains_sections
             sections: ["代码质量", "依赖风险"]
-      - path: ".sillyspec/docs/<project>/scan/PROJECT.md"
+      - path: "{SPEC_ROOT}/docs/<project>/scan/PROJECT.md"
         required: true
         checks:
           - type: file_exists
@@ -126,7 +126,7 @@ on_check_failure: prompt_retry
 permissions:
   write_mode: direct
   write_scope:
-    - ".sillyspec/docs/<project>/scan/"
+    - "{SPEC_ROOT}/docs/<project>/scan/"
   allow_shell: true
   allow_network: false
   allow_git: false

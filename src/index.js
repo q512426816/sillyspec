@@ -289,6 +289,21 @@ async function main() {
       await runCommand(filteredArgs.slice(1), resolveEffectiveDir(dir), specDir)
       break
     }
+    // task-10: 顶层命令别名，转发 runCommand，与 case 'run': 路径行为一致
+    // help 文本(:44-46)已宣称这些 stage 可直接使用，这里补齐路由避免落 default 分支。
+    // 注意：filteredArgs[0] === command，直接透传 filteredArgs 即可让 runCommand
+    // 从 args[0] 取到 stage 名（run.js:1036）。与 case 'run': 的 filteredArgs.slice(1)
+    // 区别只在于 slice(1) 去掉的是 'run' 字面量，这里 command 本身就是 stage 名不能丢。
+    case 'doctor':
+    case 'scan':
+    case 'status':
+    case 'quick':
+    case 'explore': {
+      const { runCommand } = await import('./run.js')
+      const stageArgs = [command, ...filteredArgs.slice(1)]
+      await runCommand(stageArgs, resolveEffectiveDir(dir), specDir)
+      break
+    }
     case 'dashboard': {
       // Parse dashboard options
       let port = 3456;

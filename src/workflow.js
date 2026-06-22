@@ -149,10 +149,13 @@ function replaceProjectPlaceholder(wf, projectName) {
  * @param {string} cwd - 项目根目录
  * @returns {CheckResult}
  */
-function checkOutput(outputDef, projectName, cwd) {
+function checkOutput(outputDef, projectName, cwd, specBase) {
+  // specBase 优先（平台模式 platformOpts.specRoot，已含或不含 .sillyspec 语义）；
+  // 未传时回退 join(cwd, '.sillyspec')，等价于旧行为 resolve(cwd, '.sillyspec/...')
+  const effectiveBase = specBase || join(cwd, '.sillyspec')
   // 将 <project> 替换为实际项目名
   const rawPath = (outputDef.path || '').replace(/<project>/g, projectName)
-  const fullPath = resolve(cwd, rawPath)
+  const fullPath = resolve(effectiveBase, rawPath)
   const checks = outputDef.checks || []
   const results = []
 
@@ -241,7 +244,7 @@ function checkOutput(outputDef, projectName, cwd) {
  *   retry_prompts: [{ role_id, role_name, prompt }]
  * }
  */
-export function runPostCheck(wf, cwd, projectName, placeholders = {}) {
+export function runPostCheck(wf, cwd, projectName, placeholders = {}, specBase) {
   let resolved = replaceProjectPlaceholder(wf, projectName)
   if (Object.keys(placeholders).length > 0) {
     let json = JSON.stringify(resolved)
@@ -250,10 +253,11 @@ export function runPostCheck(wf, cwd, projectName, placeholders = {}) {
     }
     resolved = JSON.parse(json)
   }
-  return _checkWorkflow(resolved, cwd, projectName)
+  return _checkWorkflow(resolved, cwd, projectName, specBase)
 }
 
-function _checkWorkflow(wf, cwd, projectName) {
+function _checkWorkflow(wf, cwd, projectName, specBase) {
+  const effectiveBase = specBase || join(cwd, '.sillyspec')
   const workflowName = wf.name || 'unknown'
   const specVersion = wf.spec_version || wf.version || 0
   const workflowChecks = wf.checks?.workflow_level || []
@@ -270,7 +274,7 @@ function _checkWorkflow(wf, cwd, projectName) {
 
     for (const outputDef of outputDefs) {
       const rawPath = (outputDef.path || '').replace(/<project>/g, projectName)
-      const checkResults = checkOutput(outputDef, projectName, cwd)
+      const checkResults = checkOutput(outputDef, projectName, cwd, effectiveBase)
       const outputPassed = checkResults.every(c => c.passed)
 
       outputs.push({
@@ -309,7 +313,7 @@ function _checkWorkflow(wf, cwd, projectName) {
   for (const check of workflowChecks) {
     switch (check.type) {
       case 'file_count': {
-        const scanDir = join(cwd, '.sillyspec', 'docs', projectName, check.path || 'scan/')
+        const scanDir = join(effectiveBase, 'docs', projectName, check.path || 'scan/')
         if (existsSync(scanDir)) {
           const files = readdirSync(scanDir).filter(f => f.endsWith('.md'))
           const min = check.min || 0
@@ -328,7 +332,7 @@ function _checkWorkflow(wf, cwd, projectName) {
         break
       }
       case 'no_empty_files': {
-        const scanDir = join(cwd, '.sillyspec', 'docs', projectName, check.path || 'scan/')
+        const scanDir = join(effectiveBase, 'docs', projectName, check.path || 'scan/')
         if (existsSync(scanDir)) {
           const files = readdirSync(scanDir).filter(f => f.endsWith('.md'))
           let anyEmpty = false
