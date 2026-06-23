@@ -154,7 +154,12 @@ function checkOutput(outputDef, projectName, cwd, specBase) {
   // 未传时回退 join(cwd, '.sillyspec')，等价于旧行为 resolve(cwd, '.sillyspec/...')
   const effectiveBase = specBase || join(cwd, '.sillyspec')
   // 将 <project> 替换为实际项目名
-  const rawPath = (outputDef.path || '').replace(/<project>/g, projectName)
+  let rawPath = (outputDef.path || '').replace(/<project>/g, projectName)
+  // 旧版兼容：如果 path 以 .sillyspec/ 开头（相对路径），strip 前缀避免双拼接
+  // 新版 yaml 用 {SPEC_ROOT} 已在 runPostCheck 中替换为绝对路径，不会走这里
+  if (rawPath.startsWith('.sillyspec/')) {
+    rawPath = rawPath.slice('.sillyspec/'.length)
+  }
   const fullPath = resolve(effectiveBase, rawPath)
   const checks = outputDef.checks || []
   const results = []
@@ -204,7 +209,7 @@ function checkOutput(outputDef, projectName, cwd, specBase) {
           const patterns = check.patterns || ['待补充', 'TODO', 'TBD', '未分析', '根据项目情况', '根据实际情况', '按需填写']
           // 只匹配独立成行的占位文本，不匹配行内引用
           const lineMatches = patterns.filter(p => {
-            const regex = new RegExp(`^\s*[-*]?\s*${p}\s*$`, 'm')
+            const regex = new RegExp(`^\\s*[-*]?\\s*${p}\\s*$`, 'm')
             return regex.test(content)
           })
           results.push({ passed: lineMatches.length === 0, check: 'no_placeholder', detail: lineMatches.length > 0 ? `包含占位文本: ${lineMatches.map(m => `"${m}"`).join(', ')} — ${rawPath}` : '' })
@@ -246,13 +251,20 @@ function checkOutput(outputDef, projectName, cwd, specBase) {
  */
 export function runPostCheck(wf, cwd, projectName, placeholders = {}, specBase) {
   let resolved = replaceProjectPlaceholder(wf, projectName)
-  if (Object.keys(placeholders).length > 0) {
-    let json = JSON.stringify(resolved)
-    for (const [key, value] of Object.entries(placeholders)) {
-      json = json.replace(new RegExp(`<${key}>`, 'g'), value)
-    }
-    resolved = JSON.parse(json)
+
+  // 自动注入 {SPEC_ROOT} 占位符（yaml 模板用 {SPEC_ROOT} 表示规范根目录）
+  // effectiveBase 与 _checkWorkflow 内部一致：specBase || join(cwd, '.sillyspec')
+  const effectiveBase = specBase || join(cwd, '.sillyspec')
+  const allPlaceholders = { SPEC_ROOT: effectiveBase, ...placeholders }
+
+  let json = JSON.stringify(resolved)
+  for (const [key, value] of Object.entries(allPlaceholders)) {
+    // 支持 {key} 和 <key> 两种占位符语法
+    json = json.replace(new RegExp(`\{${key}\}`, 'g'), value)
+    json = json.replace(new RegExp(`<${key}>`, 'g'), value)
   }
+  resolved = JSON.parse(json)
+
   return _checkWorkflow(resolved, cwd, projectName, specBase)
 }
 
@@ -261,6 +273,7 @@ function _checkWorkflow(wf, cwd, projectName, specBase) {
   const workflowName = wf.name || 'unknown'
   const specVersion = wf.spec_version || wf.version || 0
   const workflowChecks = wf.checks?.workflow_level || []
+  const roleLevelChecks = wf.checks?.role_level || []
   const roles = []
   const failures = []
   const workflowCheckResults = []
@@ -274,7 +287,11 @@ function _checkWorkflow(wf, cwd, projectName, specBase) {
 
     for (const outputDef of outputDefs) {
       const rawPath = (outputDef.path || '').replace(/<project>/g, projectName)
-      const checkResults = checkOutput(outputDef, projectName, cwd, effectiveBase)
+      // role_level checks: 全局施加到每个 output（与 output 自身的 checks 合并）
+      const mergedOutputDef = roleLevelChecks.length > 0
+        ? { ...outputDef, checks: [...(outputDef.checks || []), ...roleLevelChecks] }
+        : outputDef
+      const checkResults = checkOutput(mergedOutputDef, projectName, cwd, effectiveBase)
       const outputPassed = checkResults.every(c => c.passed)
 
       outputs.push({
@@ -355,8 +372,97 @@ function _checkWorkflow(wf, cwd, projectName, specBase) {
         }
         break
       }
+      case 'file_exists': {
+        // workflow_level file_exists: check.path 可以是目录或文件，相对 effectiveBase
+        let checkPath = check.path || ''
+        // 兼容 .sillyspec/ 前缀
+        if (checkPath.startsWith('.sillyspec/')) checkPath = checkPath.slice('.sillyspec/'.length)
+        // 替换 <change-name> 占位符（archive-impact 用）
+        checkPath = checkPath.replace(/<change-name>/g, wf._changeName || '')
+        const fullPath = join(effectiveBase, checkPath)
+        if (!existsSync(fullPath)) {
+          const detail = `文件不存在: ${checkPath}`
+          workflowCheckResults.push({ type: 'file_exists', status: 'fail', detail })
+          failures.push({ level: 'workflow', check: 'file_exists', message: detail })
+        } else {
+          workflowCheckResults.push({ type: 'file_exists', status: 'pass', detail: '' })
+        }
+        break
+      }
+      case 'min_lines': {
+        let checkPath = check.path || ''
+        if (checkPath.startsWith('.sillyspec/')) checkPath = checkPath.slice('.sillyspec/'.length)
+        checkPath = checkPath.replace(/<change-name>/g, wf._changeName || '')
+        const fullPath = join(effectiveBase, checkPath)
+        if (existsSync(fullPath)) {
+          const content = readFileSync(fullPath, 'utf8')
+          const lines = content.split('\n').length
+          const min = check.min || 1
+          if (lines < min) {
+            const detail = `文件只有 ${lines} 行，要求至少 ${min} 行: ${checkPath}`
+            workflowCheckResults.push({ type: 'min_lines', status: 'fail', detail })
+            failures.push({ level: 'workflow', check: 'min_lines', message: detail })
+          } else {
+            workflowCheckResults.push({ type: 'min_lines', status: 'pass', detail: '' })
+          }
+        } else {
+          const detail = `文件不存在: ${checkPath}`
+          workflowCheckResults.push({ type: 'min_lines', status: 'fail', detail })
+          failures.push({ level: 'workflow', check: 'min_lines', message: detail })
+        }
+        break
+      }
+      case 'contains_sections': {
+        let checkPath = check.path || ''
+        if (checkPath.startsWith('.sillyspec/')) checkPath = checkPath.slice('.sillyspec/'.length)
+        checkPath = checkPath.replace(/<change-name>/g, wf._changeName || '')
+        const fullPath = join(effectiveBase, checkPath)
+        if (existsSync(fullPath)) {
+          const content = readFileSync(fullPath, 'utf8')
+          const sections = check.sections || []
+          const missing = sections.filter(s => !content.includes(`## ${s}`))
+          if (missing.length > 0) {
+            const detail = `缺少章节: ${missing.join(', ')} — ${checkPath}`
+            workflowCheckResults.push({ type: 'contains_sections', status: 'fail', detail })
+            failures.push({ level: 'workflow', check: 'contains_sections', message: detail })
+          } else {
+            workflowCheckResults.push({ type: 'contains_sections', status: 'pass', detail: '' })
+          }
+        } else {
+          const detail = `文件不存在: ${checkPath}`
+          workflowCheckResults.push({ type: 'contains_sections', status: 'fail', detail })
+          failures.push({ level: 'workflow', check: 'contains_sections', message: detail })
+        }
+        break
+      }
+      case 'no_placeholder': {
+        let checkPath = check.path || ''
+        if (checkPath.startsWith('.sillyspec/')) checkPath = checkPath.slice('.sillyspec/'.length)
+        checkPath = checkPath.replace(/<change-name>/g, wf._changeName || '')
+        const fullPath = join(effectiveBase, checkPath)
+        if (existsSync(fullPath)) {
+          const content = readFileSync(fullPath, 'utf8')
+          const patterns = check.patterns || ['待补充', 'TODO', 'TBD', '未分析', '根据项目情况', '根据实际情况', '按需填写']
+          const lineMatches = patterns.filter(p => {
+            const regex = new RegExp(`^\\s*[-*]?\\s*${p}\\s*$`, 'm')
+            return regex.test(content)
+          })
+          if (lineMatches.length > 0) {
+            const detail = `包含占位文本: ${lineMatches.map(m => `"${m}"`).join(', ')} — ${checkPath}`
+            workflowCheckResults.push({ type: 'no_placeholder', status: 'fail', detail })
+            failures.push({ level: 'workflow', check: 'no_placeholder', message: detail })
+          } else {
+            workflowCheckResults.push({ type: 'no_placeholder', status: 'pass', detail: '' })
+          }
+        } else {
+          const detail = `文件不存在: ${checkPath}`
+          workflowCheckResults.push({ type: 'no_placeholder', status: 'fail', detail })
+          failures.push({ level: 'workflow', check: 'no_placeholder', message: detail })
+        }
+        break
+      }
       default:
-        workflowCheckResults.push({ type: check.type, status: 'pass', detail: '' })
+        workflowCheckResults.push({ type: check.type, status: 'pass', detail: `未知检查类型，跳过: ${check.type}` })
     }
   }
 

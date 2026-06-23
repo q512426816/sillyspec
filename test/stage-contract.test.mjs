@@ -108,14 +108,15 @@ const specRoot = mkdtempSync(join(tmpdir(), 'sillyspec-test-'))
 const sourceRoot = mkdtempSync(join(tmpdir(), 'sillyspec-source-'))
 const projectName = 'myaaa'
 
-// 在 specRoot 下创建正确的 scan 文档
-const specDocsDir = join(specRoot, '.sillyspec', 'docs', projectName, 'scan')
+// specRoot 在实际代码中等价于 .sillyspec 目录本身（run.js: join(specRoot, 'docs', ...)）
+// 所以 scan 文档路径为 specRoot/docs/<project>/scan/，不需要额外的 .sillyspec/ 前缀
+const specDocsDir = join(specRoot, 'docs', projectName, 'scan')
 mkdirSync(specDocsDir, { recursive: true })
 for (const doc of ['ARCHITECTURE.md', 'CONVENTIONS.md', 'STRUCTURE.md', 'INTEGRATIONS.md', 'TESTING.md', 'CONCERNS.md', 'PROJECT.md']) {
   writeFileSync(join(specDocsDir, doc), '# ' + doc)
 }
-mkdirSync(join(specRoot, '.sillyspec', 'docs', projectName, 'modules'), { recursive: true })
-writeFileSync(join(specRoot, '.sillyspec', 'docs', projectName, 'modules', 'app.md'), '# app')
+mkdirSync(join(specRoot, 'docs', projectName, 'modules'), { recursive: true })
+writeFileSync(join(specRoot, 'docs', projectName, 'modules', 'app.md'), '# app')
 
 // 测试1：使用 specRoot 校验成功
 const specResult = runValidators('scan', sourceRoot, 'test', { projectName, specRoot })
