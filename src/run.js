@@ -772,6 +772,23 @@ async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjec
     }
   }
 
+  // Execute: 注入 currentExecuteRunId（从 runtime 标记文件读取）
+  if (stageName === 'execute' && promptText.includes('{EXECUTE_RUN_ID}')) {
+    const execSpecBase = platformOpts?.specRoot || join(cwd, '.sillyspec')
+    const runIdFile = join(execSpecBase, '.runtime', 'current-execute-run-id')
+    let runId = ''
+    try {
+      if (existsSync(runIdFile)) {
+        runId = readFileSync(runIdFile, 'utf8').trim()
+      }
+    } catch {}
+    if (!runId) {
+      const { generateExecuteRunId, getLatestExecuteRunId } = await import('./task-review.js')
+ runId = getLatestExecuteRunId(join(execSpecBase, '.runtime')) || generateExecuteRunId()
+    }
+    promptText = promptText.replace(/\{EXECUTE_RUN_ID\}/g, runId)
+  }
+
   // 注入模块上下文（brainstorm/plan/execute 阶段，基于 Module Context Index）
   if (['brainstorm', 'plan', 'execute'].includes(stageName) && projectName) {
     const effectiveSpecBase = platformOpts?.specRoot || join(cwd, '.sillyspec')
@@ -1483,6 +1500,18 @@ async function runStage(pm, progress, stageName, cwd, changeName, skipApproval =
         process.exit(1)
       }
     }
+  }
+
+  // ── execute 阶段启动时固定 executeRunId ──
+  let currentExecuteRunId = null
+  if (stageName === 'execute') {
+    const { generateExecuteRunId, getLatestExecuteRunId } = await import('./task-review.js')
+    const execSpecBase = platformOpts?.specRoot || join(cwd, '.sillyspec')
+    const runtimeRoot = join(execSpecBase, '.runtime')
+    currentExecuteRunId = getLatestExecuteRunId(runtimeRoot) || generateExecuteRunId()
+    // 写入 runtime 标记文件，确保整个 execute 生命周期内 runId 不变
+    mkdirSync(runtimeRoot, { recursive: true })
+    writeFileSync(join(runtimeRoot, 'current-execute-run-id'), currentExecuteRunId + '\n')
   }
 
   // 自动探测 currentChange
@@ -2590,6 +2619,56 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
           if (planValidation.ok) {
             console.log(`\n✅ Plan → Execute Contract 校验通过（${planValidation.tasks.length} tasks, ${planValidation.waves.length} waves）`)
           }
+        }
+      }
+
+      // ── Execute Task Review Gate：所有 task 必须有 review.json 且 verdict 通过 ──
+      if (stageName === 'execute') {
+        try {
+          const { validateTaskReviews, printReviewResult, writeVerifyRequiredEvidence, getLatestExecuteRunId, generateExecuteRunId } = await import('./task-review.js')
+          const effectiveSpecBase = platformOpts?.specRoot || specBase
+          const planFile = resolveChangeDir(cwd, progress, platformOpts?.specRoot)
+          const planPath = planFile ? join(planFile, 'plan.md') : null
+
+          if (planPath && existsSync(planPath)) {
+            const planContent = readFileSync(planPath, 'utf8')
+            const runtimeRoot = join(effectiveSpecBase, '.runtime')
+
+            // 找到 execute run id：优先从 runtime 目录找最新，否则生成新的
+            let executeRunId = getLatestExecuteRunId(runtimeRoot)
+            if (!executeRunId) {
+              executeRunId = generateExecuteRunId()
+            }
+
+            const reviewResult = validateTaskReviews({ planContent, runtimeRoot, executeRunId })
+            printReviewResult(reviewResult)
+
+            if (!reviewResult.ok) {
+              // Task review 校验失败，阻断 execute 完成
+              // 检查是否存在 checkbox 已勾但 review 不通过的情况
+              const uncheckedTasks = reviewResult.errors.filter(e => e.includes('缺少 review.json'))
+              if (uncheckedTasks.length > 0) {
+                console.error('\n⚠️  部分任务已在 plan.md 中勾选，但 review.json 不存在。')
+                console.error('   请取消勾选这些任务的 checkbox，或补充对应的 review.json。')
+              }
+              progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
+              await pm._write(cwd, progress, changeName)
+              triggerSync(cwd, changeName, platformOpts)
+              return { stageCompleted: false, currentIdx, nextPendingIdx: currentIdx }
+            }
+
+            // cannot_verify 的 requiredEvidence 写入 change 目录，供 verify 阶段消费
+            if (reviewResult.requiredEvidence.length > 0) {
+              const evidencePath = writeVerifyRequiredEvidence(join(effectiveSpecBase, 'changes', changeName), reviewResult.requiredEvidence)
+              if (evidencePath) {
+                console.log(`📄 verify-required-evidence.json 已写入: ${evidencePath}`)
+                console.log('   verify 阶段必须满足这些证据要求。')
+              }
+            }
+          }
+        } catch (e) {
+          console.warn(`⚠️ Task Review Gate 异常: ${e.message}`)
+          // 不阻断，但记录异常
         }
       }
     } else if (actualCompleted < actualTotal) {

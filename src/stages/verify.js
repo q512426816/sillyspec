@@ -62,6 +62,14 @@ export const definition = {
 5. 加载代码规范：\`cat .sillyspec/docs/<project>/scan/CONVENTIONS.md 2>/dev/null\`
 6. 标注每个文件的存在/不存在状态
 
+### Execute Evidence 传递检查
+7. 检查 verify-required-evidence.json 是否存在（由 execute 阶段 Task Review Gate 写入）
+   - 路径：变更目录下的 verify-required-evidence.json
+   - 如果存在 → 读取其中的 requiredEvidence 列表，逐条验证是否已满足
+   - 每条 evidence 必须在 verify-result.md 中给出明确结论（satisfied / missing / partial）
+   - 如果有任何 evidence 为 missing → verify 结论不能为 PASS
+   - 如果文件不存在 → 表示 execute 阶段无 cannot_verify 任务，正常继续
+
 ### 模块文档加载
 7. 读取 \`.sillyspec/docs/<project>/modules/_module-map.yaml\`（不存在则跳过以下步骤）
 8. 根据 design.md 的文件变更清单匹配 _module-map.yaml 中的模块

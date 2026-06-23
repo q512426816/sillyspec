@@ -531,9 +531,39 @@ ${taskList}
    - 最后一个 Wave 完成后做一次全量编译验证
    - 用户明确要求编译时
 4. 每个任务完成后：
-   - 勾选 plan.md / tasks.md 中对应任务的 checkbox
+   - **先写 review.json 再勾选 checkbox**（见下方 Task Review Gate）
    - 记录改动文件和测试结果
 5. 遇到 BLOCKED → 记录原因，选择：重试/跳过/停止
+
+### Task Review Gate（必须执行，不可跳过）
+
+每个子代理完成后、勾选 checkbox **之前**，你必须创建 task review。
+
+**操作步骤：**
+1. 读取当前 task 的 git diff（从 task 开始到完成的变更）
+2. 对照 plan.md 中该 task 的描述和 tasks/task-XX.md（如果存在）检查实现是否符合要求
+3. 写入 review.json 文件
+4. **只有 review.json 写入成功后，才允许勾选 plan.md 中的 checkbox**
+
+**review.json 路径：**
+
+task-XX 对应：.sillyspec/.runtime/execute-runs/{EXECUTE_RUN_ID}/tasks/task-XX/review.json
+
+本 execute run 的固定 ID 是：{EXECUTE_RUN_ID}
+**所有 task 的 review.json 必须使用这个 ID，不要自行创建新目录。**
+
+**review.json 必填字段：**
+
+{ "schemaVersion": 1, "task": "task-XX", "base": "<git-base-commit>", "head": "<git-head-commit>",
+ "changedFiles": ["src/foo.js"], "specVerdict": "pass|fail|cannot_verify",
+ "qualityVerdict": "pass|fail|cannot_verify", "reviewerNotes": "评审说明",
+ "requiredEvidence": [] }
+
+**评审铁律：**
+- 不信任 implementer 自报结果，对照 diff 和 task brief 验证
+- 只看当前 task 的 diff，不做全仓库漫游审查
+- \`cannot_verify\` 只在确实无法验证且有待补充证据时使用，且 requiredEvidence 必须非空
+- \`sillyspec run execute --done\` 会校验所有 task 的 review.json，缺失或 fail 会阻断完成
 
 ### 完成后
 1. 为每个后端 router task，扫描变更文件提取 API 端点 artifact：
@@ -542,7 +572,6 @@ ${taskList}
    - 格式: { "task": "task-XX", "type": "backend_endpoints", "endpoints": [{ "method": "GET", "path": "/api/ppm/xxx" }] }
 2. 运行 sillyspec run execute --done --input "用户原始反馈" --output "Wave ${waveIndex} 结果摘要"`
 }
-
 
 /**
  * 动态构建 execute 步骤列表
