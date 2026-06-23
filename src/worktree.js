@@ -9,7 +9,7 @@
  */
 
 import { execSync } from 'child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, readdirSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, readdirSync, statSync } from 'fs';
 import { join, resolve, dirname } from 'path';
 import { createHash } from 'crypto';
 
@@ -120,7 +120,43 @@ export function isGitWorktreeSupported(cwd = process.cwd()) {
 export class WorktreeManager {
   constructor({ cwd, worktreeDir } = {}) {
     this.cwd = cwd || process.cwd();
-    this.worktreeBase = worktreeDir || resolve(this.cwd, WORKTREES_REL);
+
+    // worktreeBase 必须固定到主仓库路径，不能跟着 cwd 变化。
+    // native-worktree 模式下 cwd 是 worktree 子目录，用 cwd 推导 worktreeBase
+    // 会导致 meta 写入 worktree 内部路径，worktree 内再次执行时找不到。
+    // 解决：用 git rev-parse --git-common-dir 反推主仓库路径。
+    if (worktreeDir) {
+      this.worktreeBase = worktreeDir;
+    } else {
+      this.worktreeBase = resolve(this._resolveMainRepoRoot(), WORKTREES_REL);
+    }
+  }
+
+  /**
+   * 解析当前 git 环境对应的主仓库根目录
+   * 在主仓库内执行：返回 cwd 自身
+   * 在 linked worktree 内执行：返回 git-common-dir 的父目录（即主仓库 .git 所在地）
+   * @private
+   */
+  _resolveMainRepoRoot() {
+    try {
+      // git-common-dir 在主仓库内 = <main>/.git
+      // 在 linked worktree 内 = <main>/.git（git 共享 .git 目录）
+      const commonDir = gitQuiet(this.cwd, 'rev-parse --git-common-dir');
+      if (!commonDir) return this.cwd;
+
+      // commonDir 应该是 <main-repo>/.git
+      // dirname(commonDir) = <main-repo>
+      if (existsSync(commonDir)) {
+        const st = statSync(commonDir);
+        if (st.isDirectory()) {
+          return dirname(commonDir);
+        }
+      }
+    } catch (e) {
+      // 静默 fallback：主仓库内执行或 git 异常
+    }
+    return this.cwd;
   }
 
   /**
@@ -167,11 +203,19 @@ export class WorktreeManager {
     if (isolation.inWorktree) {
       // 已在 linked worktree 中，复用当前目录作为 worktree 路径
       console.log(`ℹ️  已在 linked worktree 中（git-dir: ${isolation.gitDir}），复用当前隔离环境。`);
-      return this._createInPlaceMeta(name, {
+
+      // 幂等守卫：meta 已存在时不重新 overlay baseline
+      const existingMeta = this.getMeta(name)
+      if (existingMeta) {
+        return { branch: existingMeta.branch, worktreePath: existingMeta.worktreePath, baseHash: existingMeta.baseHash, mode: existingMeta.mode }
+      }
+
+      // meta 不存在但已在 worktree 内：可能是 meta 被损坏/误删。
+      // 绝对禁止 overlay baseline（source === target 会冲突），
+      // 只恢复 meta 引用，不触碰文件系统。
+      return this._recoverNativeWorktreeMeta(name, {
         worktreePath: this.cwd,
         branch: gitQuiet(this.cwd, 'symbolic-ref --short HEAD') || 'detached',
-        mode: 'native-worktree',
-        base,
       });
     }
 
@@ -305,11 +349,75 @@ export class WorktreeManager {
   }
 
   /**
+   * native-worktree 模式下恢复 meta 引用
+   * 当 meta.json 被损坏/误删时，只重建 meta 文件，不触碰文件系统（不 overlay）
+   * @private
+   */
+  _recoverNativeWorktreeMeta(name, { worktreePath, branch }) {
+    const baseHash = gitQuiet(worktreePath, 'rev-parse HEAD') || null
+    const meta = {
+      changeName: name,
+      branch: branch || BRANCH_PREFIX + name,
+      baseBranch: branch,
+      baseHash,
+      actualBaseHash: baseHash,
+      createdAt: new Date().toISOString(),
+      worktreePath,
+      mode: 'native-worktree',
+      baselineFiles: [],
+      baselineCommit: null,
+      baselineHash: null,
+      recoveredAt: new Date().toISOString(),
+      recoveryNote: 'meta was missing in native-worktree; recovered without baseline overlay',
+    }
+    if (!existsSync(this.worktreeBase)) mkdirSync(this.worktreeBase, { recursive: true })
+    const metaDir = join(this.worktreeBase, name)
+    if (!existsSync(metaDir)) mkdirSync(metaDir, { recursive: true })
+    writeFileSync(join(metaDir, META_FILE), JSON.stringify(meta, null, 2) + '\n')
+    console.log(`🔗 native-worktree meta 已恢复: ${metaDir}/meta.json`)
+    return { branch: meta.branch, worktreePath, baseHash, mode: meta.mode }
+  }
+
+  /**
    * 创建 in-place 模式的 meta.json（降级路径）
    * 不创建 git worktree，直接在当前目录记录 baseline 并写入 meta
    * @private
    */
   _createInPlaceMeta(name, { worktreePath, branch, baseBranch, baseHash, mode } = {}) {
+    // 幂等守卫：meta 已存在时不重新创建（避免 overlay baseline 和已有改动冲突）
+    const existingMeta = this.getMeta(name)
+    if (existingMeta) {
+      return { branch: existingMeta.branch, worktreePath: existingMeta.worktreePath, baseHash: existingMeta.baseHash, mode: existingMeta.mode }
+    }
+
+    // 硬规则：禁止 self-overlay（source 和 target 相同时 overlay 必然冲突）
+    const resolvedSource = resolve(this.cwd)
+    const resolvedTarget = resolve(worktreePath)
+    if (resolvedSource === resolvedTarget) {
+      console.warn('⚠️  跳过 baseline overlay：当前目录与目标目录相同（native-worktree 或 in-place 模式）')
+      // 写 meta 但不 overlay
+      baseBranch = baseBranch || gitQuiet(this.cwd, 'symbolic-ref --short HEAD') || gitQuiet(this.cwd, 'rev-parse HEAD')
+      baseHash = baseHash || git(this.cwd, 'rev-parse HEAD')
+      const meta = {
+        changeName: name,
+        branch: branch || BRANCH_PREFIX + name,
+        baseBranch,
+        baseHash,
+        actualBaseHash: gitQuiet(worktreePath, 'rev-parse HEAD') || baseHash,
+        createdAt: new Date().toISOString(),
+        worktreePath,
+        mode: mode || 'in-place-fallback',
+        baselineFiles: [],
+        baselineCommit: null,
+        baselineHash: null,
+      }
+      if (!existsSync(this.worktreeBase)) mkdirSync(this.worktreeBase, { recursive: true })
+      const metaDir = join(this.worktreeBase, name)
+      if (!existsSync(metaDir)) mkdirSync(metaDir, { recursive: true })
+      writeFileSync(join(metaDir, META_FILE), JSON.stringify(meta, null, 2) + '\n')
+      return { branch: meta.branch, worktreePath, baseHash, mode: meta.mode }
+    }
+
     // 解析 base
     if (!baseHash) {
       baseBranch = baseBranch || gitQuiet(this.cwd, 'symbolic-ref --short HEAD') || gitQuiet(this.cwd, 'rev-parse HEAD');
