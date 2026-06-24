@@ -1787,6 +1787,7 @@ function validateFileLocations(cwd, stageName, progress, changeName, specBase) {
 
 async function archiveChangeDirectory(pm, cwd, progress, specBase) {
   const { renameSync } = await import('fs')
+  const specBase = join(cwd, '.sillyspec')
   const archiveChangeName = progress.currentChange
   if (!archiveChangeName) {
     console.error('❌ 归档失败：未找到当前变更名（currentChange）')
