@@ -63,6 +63,13 @@ SillySpec CLI — 规范驱动开发工具包
 
   sillyspec docs migrate       迁移旧文档到统一结构
 
+  sillyspec knowledge <cmd>    知识库管理（agent-safe，输出 JSON）
+    search --query "<text>" --limit N  搜索知识库
+    inspect --id "<id>"            读取知识条目详情
+    validate                        校验知识库健康度
+    refresh                         从 scan 文档刷新自动知识（仅写 generated/）
+    propose --title "<title>" --category <name>  提议新知识（写入 proposed/）
+
   sillyspec platform <cmd>      SillyHub 平台同步
     connect <url> [--token <t>]  连接平台
     disconnect                    断开连接
@@ -302,6 +309,11 @@ async function main() {
       const { runCommand } = await import('./run.js')
       const stageArgs = [command, ...filteredArgs.slice(1)]
       await runCommand(stageArgs, resolveEffectiveDir(dir), specDir)
+      break
+    }
+    case 'knowledge': {
+      const { cmdKnowledge } = await import('./stages/knowledge.js')
+      await cmdKnowledge(filteredArgs.slice(1), resolveEffectiveDir(dir), { specDir })
       break
     }
     case 'dashboard': {
