@@ -1,141 +1,69 @@
 ---
 author: qinyi
-created_at: 2026-06-03T17:35:00+08:00
-updated_at: 2026-06-03T17:35:00+08:00
+created_at: 2026-06-01T09:05:00
 ---
 
-# Worktree 管理模块文档
+# worktree
+> 最后更新：2026-06-01
+> 最近变更：scan（初始生成）
+> 模块路径：src/worktree.js, src/worktree-apply.js
 
-## 模块信息
+## 职责
+Git worktree 的创建、管理和变更应用 — 为 SillySpec 提供隔离的开发环境。
 
-| 属性 | 值 |
-|------|-----|
-| 模块 ID | worktree |
-| 文件 | src/worktree.js, src/worktree-apply.js |
-| 依赖 | git >= 2.15 |
+## 当前设计
 
-## 定位
+worktree 模块提供基于 git worktree 的分支隔离机制，让每个变更在独立的工作树中开发，避免主工作区被污染。由两个文件组成：
 
-Worktree 管理为 execute 阶段提供代码隔离环境。
+**worktree.js** 核心是 `WorktreeManager` 类，管理 worktree 的完整生命周期。worktree 存放在 `.sillyspec/worktrees/<change-name>/` 目录下，每个 worktree 对应一个 `change/<name>` 格式的分支。WorktreeManager 提供创建（create）、列出（list）、清理（cleanup）、查询元数据（getMeta）等操作。每个 worktree 附带一个 meta.json 文件记录分支名、基础提交、创建时间等元信息。
 
-**负责什么**：
-- 创建 git worktree 作为子代理的隔离工作目录
-- overlay 主工作区未提交变更（staged + unstaged + untracked）到 worktree
-- 创建 baseline checkpoint commit 区分"前置改动"和"子代理新增改动"
-- 生成 task-only diff 和 full diff
-- 校验主工作区 baseline 是否在 execute 期间被修改
-- 3way apply task patch 回主工作区
+**worktree-apply.js** 提供 `applyWorktree()` 函数，负责将 worktree 中的变更安全地应用回主工作区。它执行冲突检测（检查主工作区和 worktree 是否修改了相同文件），支持仅检查模式（checkOnly）和实际应用模式。应用时使用 `git diff` 生成补丁并通过 `git apply` 应用。
 
-**不负责什么**：
-- 不启动子代理进程
-- 不做代码审查（那是 verify 的职责）
-- 不做 CI/CD 集成
+## 对外接口（表格）
 
-## 核心设计原则
+### src/worktree.js
+| 函数/常量 | 说明 | 参数 |
+|-----------|------|------|
+| `isGitWorktreeSupported(cwd?)` | 检测当前环境是否支持 git worktree | `cwd?`（默认 process.cwd） |
+| `WorktreeManager` (class) | worktree 生命周期管理器 | `constructor({ cwd, worktreeDir? })` |
+| `WorktreeManager.getWorktreePath(changeName)` | 获取指定变更的 worktree 路径 | `changeName` |
+| `WorktreeManager.getMeta(changeName)` | 读取 worktree 元数据（meta.json） | `changeName` |
+| `WorktreeManager.create(changeName, { base? })` | 创建 worktree — 建分支、checkout、fetch+merge | `changeName, { base? }` |
+| `WorktreeManager.list()` | 列出所有 worktree 及其状态 | — |
+| `WorktreeManager.cleanup(changeName)` | 清理 worktree — 删除分支和工作目录 | `changeName` |
 
-1. **用户不需要为了并行子代理强制 commit**。execute 创建 worktree 时会 overlay 主工作区 dirty baseline。
-2. **dirty baseline overlay 是 execute 的前置条件，不是 best-effort 优化**。有 dirty baseline 时 overlay 失败必须 fail-fast。
-3. **overlay 后创建 baseline checkpoint commit**。这个 commit 不进主分支 git log，只用来做 diff 分界点。
-4. **子代理产物从 baselineCommit 开始计算**。task diff 只包含子代理新增改动。
-5. **verify 可以看 full diff，但 merge 只合 task diff**。不会重复合并前置 dirty 改动。
-6. **merge 前必须校验主工作区 baseline 未变化**。变化则禁止自动 apply。
+### src/worktree-apply.js
+| 函数/常量 | 说明 | 参数 |
+|-----------|------|------|
+| `applyWorktree(changeName, { cwd, checkOnly? })` | 将 worktree 变更应用到主工作区 | `changeName, { cwd, checkOnly? }` |
 
-## 文件
+## 关键数据流
 
-| 文件 | 职责 |
-|------|------|
-| src/worktree.js | 创建、overlay、checkpoint、cleanup |
-| src/worktree-apply.js | diff 生成、校验、3way apply |
+1. **创建流**: WorktreeManager.create → 验证 changeName → 创建分支 → git worktree add → fetch origin → merge default branch → 写 meta.json
+2. **应用流**: applyWorktree → 检查 worktree 存在 → git diff 生成文件列表 → 冲突检测 → 生成补丁 → git apply → 处理未跟踪文件
+3. **清理流**: WorktreeManager.cleanup → git worktree remove --force → git branch -D → rmSync 工作目录
 
-## 完整链路
+## 设计决策（表格）
 
-```
-主工作区（可能有 dirty baseline）
-  ↓
-采集 staged / unstaged / untracked
-  ↓
-创建 worktree（分支：sillyspec/<change-name>）
-  ↓
-overlay dirty baseline（git diff + git apply）
-  ↓
-创建 baseline checkpoint commit（有 dirty 时）
-  ↓
-子代理在 worktree 内执行
-  ↓
-生成 task.patch（baselineCommit → 工作区）和 full.patch（baseHash → 工作区）
-  ↓
-merge 前校验主工作区 baseline hash 未变化
-  ↓
-git apply --3way task.patch 回主工作区
-  ↓
-cleanup worktree + 删除分支
-```
+| 决策 | 原因 | 替代方案 |
+|------|------|----------|
+| git worktree 而非 git stash/cherry-pick | 物理隔离，支持同时多变更并行 | git stash |
+| meta.json 存储元数据 | 独立于 git，便于快速查询 | git config |
+| change/ 前缀的分支命名 | 避免与功能分支冲突 | 无前缀 |
+| 补丁方式应用而非 merge | 保持线性历史，避免合并提交 | git merge |
+| cleanup 支持 force 参数 | worktree 可能处于异常状态 | 仅允许正常清理 |
 
-## meta.json 结构
+## 依赖关系
+- 内部依赖：src/worktree.js（worktree-apply.js 导入 WorktreeManager）、src/change-list.js（worktree-apply.js 导入 parseFileChangeList）
+- 外部依赖：child_process（execSync）、fs、path、os（tmpdir）
 
-```json
-{
-  "changeName": "2026-06-03-some-change",
-  "branch": "sillyspec/2026-06-03-some-change",
-  "baseBranch": "main",
-  "baseHash": "abc1234...",
-  "actualBaseHash": "def5678...",
-  "createdAt": "2026-06-03T17:30:00+08:00",
-  "worktreePath": "/path/to/.sillyspec/.runtime/worktrees/...",
-  "baselineFiles": ["src/a.js", "src/b.py"],
-  "baselineCommit": "ghi9012...",
-  "baselineHash": "953c8ed30ac21c88"
-}
-```
+## 注意事项
+- isGitWorktreeSupported 通过 `git worktree list` 检测支持性，需要在 git 仓库中调用
+- create 方法会自动 fetch origin 并尝试 ff-only merge 默认分支
+- applyWorktree 在冲突时会报告冲突文件列表但不自动解决
+- worktree 目录位于 `.sillyspec/worktrees/`，需要在 .gitignore 中配置
+- cleanup 会强制删除 worktree 和对应分支，操作不可逆
 
-### 字段说明
-
-| 字段 | 说明 |
-|------|------|
-| baseHash | worktree 创建时的 HEAD commit |
-| actualBaseHash | fetch+merge 远程后的实际 HEAD |
-| baselineFiles | 从主工作区 overlay 过来的文件列表 |
-| baselineCommit | overlay 后创建的 checkpoint commit hash；无 dirty baseline 时为 null |
-| baselineHash | 主工作区 dirty baseline 的 sha256 摘要（前 16 位），用于 merge 前防漂移校验；无 dirty baseline 时为 null |
-
-**注意**：`baselineCommit: null` 不是异常，表示主工作区创建时是 clean 的，diff 起始点 fallback 到 baseHash。
-
-## CLI 用法
-
-```bash
-# 创建 worktree（自动 overlay dirty baseline + 创建 baseline checkpoint）
-sillyspec worktree create <change-name>
-
-# 检查 worktree 变更（只输出检查结果）
-sillyspec worktree apply <change-name> --check-only
-
-# 应用 worktree 变更到主工作区（只合 task diff）
-sillyspec worktree apply <change-name>
-
-# 清理 worktree（删除目录 + 分支）
-sillyspec worktree cleanup <change-name>
-```
-
-## Baseline Hash 计算
-
-```js
-raw = `staged:${git diff --cached}\nunstaged:${git diff}\nuntracked:${git ls-files --others}`
-hash = sha256(raw).slice(0, 16)
-```
-
-## 回归测试结果
-
-7 个 case 全部通过（2026-06-03）：
-`.sillyspec/changes/workflow-system-archive/baseline-checkpoint-test.md`
-
-## 已知约束
-
-- baseline commit 使用临时 git identity（sillyspec / sillyspec@baseline），不影响用户 git config
-- overlay 使用 git diff --binary + git apply，理论上覆盖 delete/rename/binary
-- worktree 存储在 `.sillyspec/.runtime/worktrees/`，已在 .gitignore 中
-- untracked 文件通过逐文件复制，不处理空目录
-
-## 人工备注
-
-<!-- MANUAL_NOTES_START -->
-<!-- MANUAL_NOTES_END -->
+## 变更索引（表格，初始为空）
+| 日期 | 变更名 | 摘要 |
+|------|--------|------|

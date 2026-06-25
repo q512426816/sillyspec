@@ -1,62 +1,110 @@
 ---
 author: qinyi
-created_at: 2026-06-03T06:40:00+08:00
+created_at: 2026-05-13T08:37:40
+source_commit: 850b485
+updated_at: 2026-06-24T10:18:40+08:00
+generator: sillyspec-scan
 ---
 
-# CONVENTIONS — 代码约定
+# CONVENTIONS
+
+> 本文档记录 sillyspec 仓库中**实际存在但未显式写在 lint/格式化配置里**的隐形约定（项目无 eslint/prettier/biome）。每条约定均由 grep 扫描真实代码佐证。
 
 ## 框架隐形规则
 
-- **ESM 优先**：项目 `"type": "module"`，所有 `.js` 文件使用 ES Module 语法（`import`/`export`），禁止 CJS `require()`（`.cjs` 文件除外，如 hooks）
-- **Node ≥ 18**：运行时最低要求 Node.js 18，可安全使用 `fs/promises`、`structuredClone`、`fetch` 等原生 API
-- **SQLite 驱动状态**：使用 `sql.js`（WASM SQLite），数据存储在 `.sillyspec/sillyspec.db`，所有状态查询通过 `src/db.js` 的 `DB` 类
-- **CLI 单入口**：`bin/sillyspec.js` → `src/index.js`，所有命令通过 `main()` 函数分发
-- **零配置 init**：`sillyspec init` 自动检测开发工具（Claude Code、Cursor 等），非交互式默认
+### 1. ESM 顶层 + 函数体内 CJS 懒加载混用
+
+项目 `package.json` 声明 `"type":"module"`，所有源文件顶层一律用 `import ... from`（如 `src/worktree.js:11-14`、`src/setup.js:1-6`）。**但有少量文件在函数体内用 `require()` 做惰性加载**，这是一种刻意模式——把可选/重依赖推迟到真正调用时再加载，避免影响 CLI 启动速度或形成循环依赖：
+
+```
+src/run.js:38       const { execSync } = require('child_process')
+src/run.js:127-128  const { existsSync, readFileSync } = require('fs')
+                     const { join } = require('path')
+src/worktree-apply.js:373  const { execSync: es } = require('child_process');
+src/stages/execute.js:414  const { buildContractMatrix } = require('../contract-matrix.js')
+src/stages/doctor.js:61    const fs = require('fs');
+```
+
+**隐形规则**：新代码默认顶层 `import`；只有当需要 (a) 推迟启动开销、(b) 打破循环依赖、(c) 在 bash heredoc 嵌入的 node 单行脚本里（doctor.js 中的内联诊断脚本）时，才在函数体内用 `require`。**不要把这种混用统一改成纯 import**——doctor.js 内嵌的 bash 诊断脚本必须保留 `require`（它在独立 node 进程里执行，没有 ESM 上下文）。
+
+### 2. 阶段（stage）定义的固定 shape
+
+`src/stages/*.js` 每个文件 `export const definition`，字段顺序和命名高度统一（见 `verify.js`、`scan.js`、`quick.js`、`explore.js` 等）：
+
+```js
+export const definition = {
+  name: 'verify',                    // kebab/lower，与文件名一致
+  title: '验证确认',                  // 中文短标题
+  description: '对照规范检查 + 测试套件',
+  auxiliary: true,                   // 可选：辅助阶段（scan/status/quick/explore 带）
+  _globalGuardrails: `...`,          // 可选：阶段级护栏 prompt（verify 强制有）
+  steps: [ { name, prompt, ... } ]   // execute 的 steps 动态构建（= []，由 buildExecuteSteps 生成）
+}
+```
+
+**隐形规则**：`name` 必须等于文件名（去 `.js`）；辅助/查询类阶段（不推进主流程）必须加 `auxiliary: true`；verify 这类「只读护栏」阶段必须用 `_globalGuardrails` 字段（下划线前缀）声明禁止操作清单，且 prompt 里固定出现 `### ⛔ verify 阶段绝对禁止的操作` 段。
+
+### 3. 步骤 prompt 的「铁律」段固定格式
+
+子代理步骤 prompt 普遍内嵌一个 `### 铁律` 段（中文标题），用 `- ` 列表枚举绝对禁止动作。grep 实证：
+
+```
+src/stages/explore.js:25  ### 铁律
+src/stages/quick.js:63    ### 铁律
+src/stages/scan.js:536    - ❌ 修改代码 / 编造路径 / 读源码全文
+```
+
+**隐形规则**：任何会派发给子代理的 step prompt，结尾必须有 `### 铁律`（或 `⚠️ 路径注意` 等同义警示段），用 `❌/✅/⚠️` emoji + 中文短句声明边界。这是 sillyspec 控制 AI 行为的核心机制——**新增 step 时不可省略此段**。
+
+### 4. 同步/网络类代码「只 warn 不抛」vs 本地校验「throw 中文」
+
+`src/sync.js` 文件头注释明确写出该模块契约：`Best effort：所有网络失败 console.warn，不抛错，不阻塞主流程。`（`src/sync.js:5`）。grep 全文一致执行：
+
+```
+src/sync.js:99   console.warn(`[sync] ${method} ${url} → ${res.status} ...`)
+src/sync.js:109  console.warn(`[sync] ${url} 请求超时`)
+src/sync.js:111  console.warn(`[sync] ${url} 请求失败: ${err.message}`)
+```
+
+而 `src/worktree.js` 这类**本地确定性操作**则相反——参数校验失败用中文 `throw new Error`：
+
+```
+src/worktree.js:89   throw new Error('changeName 不能为空');
+src/worktree.js:94   throw new Error(`changeName 不合法: "${changeName}"，不能包含 ..、/ 或 \\`);
+```
+
+**隐形规则**：网络/平台类「尽力而为」逻辑用 `console.warn` 吞掉异常；本地文件/git/参数校验类「必须成立」逻辑用 `throw new Error('中文消息')`。CLI 入口 `src/index.js` 统一 `try/catch` 后 `console.error` + `process.exit(1)`（见 index.js 大量 `process.exit(1)`/`process.exit(2)`）。**不要给 sync 类加 throw，也不要给参数校验类加 warn 吞错。**
+
+### 5. 资产保护「双标记」注释
+
+涉及删除/清理的代码点有刻意保留的 `// ⚠️` 中文警示注释，指向同一份「真实资产」清单：
+
+```
+src/init.js:1191   // ⚠️ 同 init.js：必须保护真实资产（changes/、projects/、sillyspec.db）。
+src/init.js:112    // ⚠️ 必须保护真实资产：若本地 .sillyspec 含 changes/（非空）、projects/（非空）...
+```
+
+**隐形规则**：任何会触碰 `.sillyspec/changes/`、`.sillyspec/projects/`、`.sillyspec/.runtime/sillyspec.db` 的清理/重置代码，必须保留 `// ⚠️ 必须保护真实资产` 注释并枚举受保护路径。修改这些函数时不可删除该注释。
 
 ## 代码风格
 
-### 命名
-- **文件命名**：kebab-case（`change-list.js`、`worktree-guard.js`）
-- **函数命名**：camelCase（`parseFileChangeList`、`ensureStageSteps`）
-- **导出类**：PascalCase（`DB`、`ProgressManager`）
-- **常量/配置**：UPPER_SNAKE_CASE 或小写字符串常量
+- **模块系统**：ESM only（`"type":"module"`），顶层 `import/export`，例外见上方「框架隐形规则 #1」。入口 `bin/sillyspec.js` 仅 2 行：`#!/usr/bin/env node` + `import '../src/index.js'`。
+- **导出**：命名导出为主（`export function`/`export const`/`export class`），仅 `src/db.js` 的 `DB` 用 `export class`。无默认导出（stages 用 `export const definition` 而非 `export default`）。
+- **git 子进程**：统一走 `execSync(\`git ${args}\`, { cwd, encoding:'utf8', stdio:['pipe','pipe','pipe'] })`（见 `worktree.js`/`worktree-apply.js` 多处），**stdio 三段 pipe 是为了吞掉 stderr 噪音**——新增 git 调用请沿用此形状。
+- **数字解析**：优先 `parseInt(x, 10)`（显式基数，见 `worktree.js:109-110`、`progress.js:1407`），NaN 判断用 `Number.isNaN`（`worktree-guard.js:149`）而非全局 `isNaN`。
+- **时间戳**：落盘统一 `new Date().toISOString()`（`contract-matrix.js:152`、`scan-postcheck.js:256`）。
 
-### 错误处理
-- CLI 层：`process.exit(1)` 终止并打印错误信息
-- 业务逻辑层：抛出具体错误消息字符串，由调用方捕获处理
-- 数据库操作：`DB` 类封装了错误处理，调用方通过 try/catch 处理
-- 无自定义 Error 类，使用原生 `Error` 或字符串消息
+## 命名规范
 
-### 日志
-- 使用 `console.log` / `console.error` / `console.warn` 直接输出
-- 用户友好提示使用 `chalk` 库着色
-- 进度展示使用 `ora`（spinner）
-- 交互式提示使用 `@inquirer/prompts`
+- **文件名**：`src/` 下全部 **kebab-case**（`worktree-apply.js`、`change-risk-profile.js`、`stage-contract.js`、`scan-postcheck.js`），包括多词模块。`src/stages/` 下每个阶段一个文件，文件名 = `definition.name`。
+- **目录**：`src/stages/`（阶段定义）、`src/hooks/`（CLI 钩子）。子目录复数名词。
+- **函数/变量**：camelCase（`detectIsolation`、`loadWorkflow`、`validateTaskReviews`）。
+- **常量**：UPPER_SNAKE_CASE（`REVIEW_SCHEMA_VERSION`、`VALID_VERDICTS`、`BRANCH_PREFIX`）。
+- **prompt 内标题**：中文（`### 铁律`、`### ⚠️ 重要`、`### ⛔ verify 阶段绝对禁止的操作`），不用英文。
 
-### 模块组织
-- `src/index.js` — CLI 入口，命令分发
-- `src/init.js` — 初始化与工具安装
-- `src/db.js` — SQLite 数据库封装
-- `src/progress.js` — 进度管理
-- `src/run.js` — 阶段执行引擎
-- `src/modules.js` — 模块管理
-- `src/stages/*.js` — 各阶段独立模块（scan、brainstorm、plan、execute 等）
-- `src/hooks/` — Git hooks 和工作树守卫
-- `packages/dashboard/` — Vue 3 前端仪表盘（子包）
+## 文档 / prompt 约定
 
-## 典型模式
-
-### 1. 阶段步骤模式
-每个阶段（stage）对应 `src/stages/` 下的独立模块，导出阶段步骤数组。`run.js` 的 `getStageSteps()` 动态加载步骤并逐步执行，支持 `--done`/`--skip`/`--status` 控制。
-
-### 2. 数据库先行模式
-项目数据（进度、变更记录）全部存储在 SQLite 中。`ProgressManager` 类封装所有 CRUD，代码不直接操作文件状态（除文件扫描阶段外）。
-
-### 3. 模板指令模式
-每个阶段的步骤通过 markdown 模板文件（`.sillyspec/docs/` 下）定义，包含 `@` 指令（如 `@read`、`@exec`、`@write`）供 AI 执行器解析。阶段执行器读取模板后按指令顺序驱动 AI。
-
-### 4. 自动检测模式
-`init.js` 中的 `detectTools()` 自动扫描项目目录检测开发工具，无需用户手动配置。类似的自动检测在 `run.js` 的 `autoDetectChange()` 中也有体现。
-
-### 5. 子包隔离模式
-`packages/dashboard/` 作为独立子包存在，使用 Vue 3 + Vite 构建。与 CLI 核心松耦合，通过共享数据库文件（`sillyspec.db`）进行数据交互。
+- **用户面向语言**：全中文（prompt、错误消息、`console.warn/error` 文案、注释、阶段 title/description 均中文）。`throw new Error('changeName 不能为空')` 这类也是中文。
+- **prompt 结构**：步骤 prompt 普遍含「状态检查 → 加载锚定 → 主体 → 铁律/护栏」四段式；带 emoji 标记位（`✅/❌/⚠️/⛔`）做视觉分级。
+- **护栏段位置**：阶段级护栏放 `definition._globalGuardrails`（下划线前缀表示「元字段，非 step」）；step 级护栏放 prompt 结尾 `### 铁律`。
+- **design.md 是 truth source**：`verify` 阶段 prompt 明确写 `design.md 是唯一 truth source，不符合 design.md 的实现 = Bug`（`verify.js:112`），且 quick 阶段要求 **Reverse Sync**（发现 Bug 是 design 遗漏时先改 design 再改代码，`quick.js:66`）。

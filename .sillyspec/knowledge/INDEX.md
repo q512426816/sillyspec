@@ -17,6 +17,9 @@ created_at: 2026-06-19T12:40:00+08:00
 - 日志|log|console|chalk|ora → [conventions.md#logging](conventions.md#logging)
 - CLI入口|index.js|main → [conventions.md#cli-entry](conventions.md#cli-entry)
 - 零配置|init|detect → [conventions.md#zero-config-init](conventions.md#zero-config-init)
+- 阶段定义|definition|stageRegistry|auxiliary → [conventions.md#stage-definition-shape](conventions.md#stage-definition-shape)
+- 铁律|guardrail|子代理prompt → [conventions.md#铁律段格式](conventions.md#铁律段格式)
+- 资产保护|保护真实资产|清理 → [conventions.md#资产保护注释](conventions.md#资产保护注释)
 
 ## Patterns
 - 阶段定义|stage|stages → [patterns.md#stage-step-pattern](patterns.md#stage-step-pattern)
@@ -32,3 +35,6 @@ created_at: 2026-06-19T12:40:00+08:00
 - WASM|sql.js|native|native binding → [known-issues.md#sqljs-wasm-only](known-issues.md#sqljs-wasm-only)
 - 子包|packages|dashboard → [known-issues.md#sub-package-isolation](known-issues.md#sub-package-isolation)
 - hook|worktree-guard|npm-test → [known-issues.md#hook-import-restriction](known-issues.md#hook-import-restriction)
+- propose|死代码|deprecated → [known-issues.md#propose-死代码](known-issues.md#propose-死代码)
+- 平台审核|approve|reject|SillyHub → [known-issues.md#平台审核占位](known-issues.md#平台审核占位)
+- 无build|无lint|check-syntax → [known-issues.md#无-buildlint-框架](known-issues.md#无-buildlint-框架)

@@ -1,148 +1,92 @@
-# STRUCTURE.md — 项目目录结构
+---
+author: qinyi
+created_at: 2026-05-13T08:38:05
+source_commit: 850b485
+updated_at: 2026-06-24T10:18:40+08:00
+generator: sillyspec-scan
+---
 
-> author: qinyi | created_at: 2026-06-03T06:30:00+08:00
+# STRUCTURE
 
-## 目录结构
+sillyspec 是一个 Node.js ESM CLI（v3.19.2），通过状态机驱动 AI 严格按阶段步骤完成 spec-driven 开发。入口为 `bin/sillyspec.js`，实际逻辑全在 `src/` 下。
+
+## 顶层目录树
 
 ```
 sillyspec/
-├── bin/
-│   └── sillyspec.js            # CLI 入口，#!/usr/bin/env node → src/index.js
-├── src/
-│   ├── index.js                # 主入口，注册所有 stage 命令
-│   ├── run.js                  # Stage 运行器，执行 stage 生命周期
-│   ├── init.js                 # sillyspec init — 初始化项目配置
-│   ├── setup.js                # 环境检查与工具安装（claude/cursor 等）
-│   ├── db.js                   # sql.js 封装，SQLite 数据库初始化与操作
-│   ├── progress.js             # ProgressManager — 变更/阶段/步骤状态机核心
-│   ├── sync.js                 # SyncManager — SillyHub 平台同步（HTTP fetch）
-│   ├── modules.js              # 项目模块扫描与描述生成
-│   ├── change-list.js          # 变更列表查询与展示
-│   ├── migrate.js              # 数据库 schema 迁移
-│   ├── worktree.js             # Git worktree 创建与管理
-│   ├── worktree-apply.js       # Worktree 变更应用（合并回主分支）
-│   ├── stages/                 # 各 stage 命令实现
-│   │   ├── index.js            # Stage 注册表
-│   │   ├── scan.js             # scan — 项目扫描与文档生成
-│   │   ├── explore.js          # explore — 项目探索
-│   │   ├── brainstorm.js       # brainstorm — 需求头脑风暴
-│   │   ├── plan.js             # plan — 制定实施计划
-│   │   ├── propose.js          # propose — 提出变更方案
-│   │   ├── execute.js          # execute — 执行变更
-│   │   ├── quick.js            # quick — 快速执行（跳过 plan）
-│   │   ├── verify.js           # verify — 验证变更
-│   │   ├── status.js           # status — 查看当前进度
-│   │   ├── doctor.js           # doctor — 诊断与修复
-│   │   └── archive.js          # archive — 归档已完成变更
-│   └── hooks/                  # Git hooks 与辅助钩子
-│       ├── claude-pre-tool-use.cjs  # Claude pre-tool-use hook（CJS 格式）
-│       └── worktree-guard.js       # Worktree 保护守卫（读写权限控制）
-├── packages/
-│   └── dashboard/              # Web Dashboard 子项目（独立 package）
-│       ├── package.json
-│       ├── vite.config.js      # Vite 构建配置
-│       ├── index.html          # SPA 入口
-│       ├── public/             # 静态资源
-│       │   ├── favicon.jpg
-│       │   ├── logo.jpg
-│       │   ├── prototype-dashboard.html  # 原型页面
-│       │   └── prototype-overview.html   # 原型页面
-│       ├── server/             # 后端服务（Node.js）
-│       │   ├── index.js        # HTTP + WebSocket 服务器入口
-│       │   ├── watcher.js      # 文件监听（chokidar）
-│       │   ├── executor.js     # CLI 命令执行器
-│       │   └── parser.js       # 输出解析器
-│       └── src/                # 前端源码（Vue 3）
-│           ├── main.js         # Vue 应用入口
-│           ├── App.vue         # 根组件
-│           ├── style.css       # 全局样式
-│           ├── composables/    # Vue composables
-│           │   ├── useDashboard.js   # Dashboard 状态管理
-│           │   ├── useWebSocket.js   # WebSocket 连接（自动重连）
-│           │   ├── useKeyboard.js    # 键盘快捷键
-│           │   └── useLayout.js      # 布局管理
-│           └── components/     # Vue 组件
-│               ├── ProjectList.vue      # 项目列表
-│               ├── ProjectCard.vue      # 项目卡片
-│               ├── ProjectOverview.vue  # 项目概览
-│               ├── PipelineView.vue     # 流水线视图
-│               ├── PipelineStage.vue    # 流水线阶段
-│               ├── StepCard.vue         # 步骤卡片
-│               ├── StageBadge.vue       # 阶段标签
-│               ├── CommandPalette.vue   # 命令面板
-│               ├── ActionBar.vue        # 操作栏
-│               ├── DetailPanel.vue      # 详情面板
-│               ├── LogStream.vue        # 日志流
-│               ├── DocTree.vue          # 文档树
-│               ├── DocPreview.vue       # 文档预览
-│               ├── VResizeHandle.vue    # 垂直拖拽分割
-│               ├── HResizeHandle.vue    # 水平拖拽分割
-│               └── detail/
-│                   ├── GitDetail.vue     # Git 详情
-│                   ├── TechDetail.vue    # 技术详情
-│                   └── DocsDetail.vue    # 文档详情
-├── .claude/skills/             # Claude Code skills 定义
-│   ├── sillyspec-scan/SKILL.md
-│   ├── sillyspec-explore/SKILL.md
-│   ├── ... (共 18+ 个 skill)
-│   └── sillyspec-auto/SKILL.md
-├── docs/
-│   └── sillyspec/
-│       ├── scan/               # Scan 阶段生成的文档
-│       │   ├── ARCHITECTURE.md
-│       │   ├── CONVENTIONS.md
-│       │   ├── STRUCTURE.md
-│       │   ├── INTEGRATIONS.md
-│       │   ├── PROJECT.md
-│       │   ├── TESTING.md
-│       │   └── CONCERNS.md
-│       └── file-lifecycle.md   # 文件生命周期说明
-├── .sillyspec/                 # 运行时数据（运行时生成）
-├── CLAUDE.md                   # Claude Code 项目指令
-├── SKILL.md                    # SillySpec 自身 skill 描述
-├── README.md                   # 项目说明文档
-├── package.json                # 主包配置（type: module, bin: sillyspec）
-└── package-lock.json
+├── bin/                      CLI 可执行入口
+│   └── sillyspec.js          #!/usr/bin/env node shebang，仅 import '../src/index.js'
+├── src/                      核心源码（全部 .js ESM）
+│   ├── index.js              命令分发：解析 argv，路由到各阶段/子命令
+│   ├── run.js                运行引擎：阶段状态机、步骤流转、门禁
+│   ├── constants.js          全局常量定义
+│   ├── init.js               绿地项目初始化（交互式）
+│   ├── setup.js              MCP 服务器配置引导（chalk/ora/inquirer）
+│   ├── migrate.js            v1/v2 → v3 历史进度迁移
+│   ├── progress.js           ProgressManager：进度恢复，封装 DB 读写
+│   ├── db.js                 SQLite WASM 存储层（sql.js/initSqlJs）
+│   ├── sync.js               SillyHub 平台同步（原生 fetch，best effort）
+│   ├── workflow.js           工作流解析（js-yaml）
+│   ├── modules.js            模块映射与影响分析
+│   ├── worktree.js           Git worktree 管理（隔离/原生元数据/overlay）
+│   ├── worktree-apply.js     Worktree 变更应用
+│   ├── task-review.js        任务评审逻辑
+│   ├── change-list.js        变更清单聚合
+│   ├── change-risk-profile.js 变更风险评估
+│   ├── contract-matrix.js    契约矩阵
+│   ├── knowledge-match.js    知识库匹配
+│   ├── endpoint-extractor.js API 端点提取（扫描代码中的 fetch/apiFetch）
+│   ├── stage-contract.js     阶段契约校验
+│   ├── scan-postcheck.js     扫描后置检查
+│   ├── stages/               阶段定义（每个文件 = 一个流程阶段）
+│   │   ├── index.js          阶段注册表/导出
+│   │   ├── scan.js           scan 扫描项目生成文档
+│   │   ├── brainstorm.js     brainstorm 需求澄清
+│   │   ├── plan.js           plan 拆解实现计划
+│   │   ├── execute.js        execute 代码实现
+│   │   ├── verify.js         verify 验证
+│   │   ├── archive.js        archive 归档
+│   │   ├── doctor.js         doctor 状态自检/修复
+│   │   ├── explore.js        explore 自由调研
+│   │   ├── propose.js        propose 生成规范
+│   │   ├── quick.js          quick 轻量直改
+│   │   └── status.js         status 查看进度
+│   └── hooks/                Git/工具钩子
+│       ├── worktree-guard.js       Worktree 门禁（解析 local.yaml）
+│       └── claude-pre-tool-use.cjs Claude Code PreToolUse 钩子（CJS）
+├── test/                     测试套件（原生 node:test，.mjs）
+│   ├── run-tests.mjs         测试聚合入口（npm test）
+│   ├── check-syntax.mjs      语法/lint 检查入口（npm run lint）
+│   └── *.test.mjs            约定式契约与平台回归测试（platform-* / scan-* / worktree-* 等）
+├── templates/                模板资源
+│   └── workflows/            工作流 YAML 模板（archive-impact.yaml、scan-docs.yaml）
+├── docs/                     项目文档
+│   ├── sillyspec/            sillyspec 自身规范文档（file-lifecycle、scan 子目录等）
+│   ├── brainstorm-plan-contract.md
+│   ├── plan-execute-contract.md
+│   ├── platform-scan-protocol.md
+│   ├── revision-mode.md
+│   ├── workflow-contract-regression.md
+│   └── worktree-isolation.md
+├── packages/                 子包（独立）
+│   └── dashboard/            可视化面板（独立 Vite 项目，不参与 CLI 主流程）
+├── package.json              依赖与脚本（type: module，engines.node >= 18）
+├── package-lock.json
+├── README.md
+├── SKILL.md
+├── CLAUDE.md                 Claude Code 项目指引
+└── logo.jpg
 ```
 
-## 核心模块说明
+## 关键模块说明
 
-### CLI 核心 (`src/`)
-
-| 模块 | 职责 |
-|---|---|
-| `index.js` | 程序入口，解析命令行参数并路由到对应 stage |
-| `run.js` | Stage 运行器，管理 stage 执行生命周期 |
-| `db.js` | 基于 sql.js（WebAssembly SQLite）的数据库层，提供初始化与查询接口 |
-| `progress.js` | **核心状态机**，管理变更（change）→ 阶段（stage）→ 步骤（step）的完整生命周期 |
-| `sync.js` | SillyHub 平台同步模块，通过 HTTP fetch 实现变更/文档/审批的云端同步 |
-| `init.js` | 项目初始化，创建 `.sillyspec/` 目录结构、检测 git 信息 |
-| `setup.js` | 环境检查与 AI 工具（Claude/Cursor）安装引导 |
-| `worktree.js` | Git worktree 管理，为变更创建隔离工作环境 |
-| `worktree-apply.js` | 将 worktree 中的变更应用回主分支 |
-| `modules.js` | 扫描项目结构，生成模块描述（供 Claude 理解项目） |
-| `change-list.js` | 查询和展示变更列表 |
-| `migrate.js` | 数据库 schema 版本迁移 |
-
-### Stages (`src/stages/`)
-
-每个文件对应一个 `sillyspec <stage>` 子命令，遵循统一的 stage 接口。流水线顺序：
-
-**scan → explore → brainstorm → plan → propose → execute → verify → archive**
-
-另有工具型 stage：`status`（进度查看）、`doctor`（诊断修复）、`quick`（快速执行）。
-
-### Hooks (`src/hooks/`)
-
-| Hook | 职责 |
-|---|---|
-| `claude-pre-tool-use.cjs` | Claude pre-tool-use hook，在 Claude 调用工具前进行拦截检查 |
-| `worktree-guard.js` | Worktree 保护守卫，控制文件读写权限，防止越界操作 |
-
-### Dashboard (`packages/dashboard/`)
-
-独立的 Web Dashboard 子项目，提供 SillySpec 可视化界面：
-
-- **后端**：Node.js HTTP + WebSocket 服务器，集成 CLI 命令执行、文件监听、输出解析
-- **前端**：Vue 3 + Naive UI + Tailwind CSS，实时展示流水线进度、文档树、日志流
-- **通信**：WebSocket 双向通信，自动重连机制
+- **bin/sillyspec.js** — shebang 入口，仅 `import '../src/index.js'`，由 package.json `bin` 字段注册为 `sillyspec` 命令。
+- **src/index.js** — 命令分发中枢，解析顶层子命令并路由到对应阶段处理函数。
+- **src/run.js** — 核心运行引擎，承载阶段状态机、步骤流转、门禁（gate）与同步触发。
+- **src/stages/** — 12 个阶段定义文件，每个对应一个 sillyspec 流程阶段（scan/brainstorm/plan/execute/verify/archive/doctor/explore/propose/quick/status）。
+- **src/db.js + src/progress.js** — 存储层：db.js 封装 sql.js（SQLite WASM），progress.js 提供 ProgressManager，权威状态存于 `.sillyspec/.runtime/sillyspec.db`。
+- **src/sync.js** — SillyHub 平台同步，使用 Node 18+ 原生 fetch，best effort 不阻塞主流程。
+- **src/worktree.js / worktree-apply.js / hooks/worktree-guard.js** — Git worktree 隔离体系，含原生元数据与 overlay 防自覆盖。
+- **src/workflow.js** — 工作流 YAML 解析（js-yaml）。
+- **test/** — 原生 `node:test` + .mjs，覆盖平台同步回归、scan 契约、worktree 隔离、阶段定义等。
+- **packages/dashboard/** — 独立可视化面板子项目（自带 server/watcher/WebSocket），与 CLI 主流程解耦，本扫描不深入。

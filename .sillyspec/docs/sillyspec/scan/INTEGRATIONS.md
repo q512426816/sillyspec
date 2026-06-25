@@ -1,94 +1,71 @@
-# INTEGRATIONS.md — 外部集成文档
+---
+author: qinyi
+created_at: 2026-05-13T08:38:20
+source_commit: 850b485
+updated_at: 2026-06-24T10:18:40+08:00
+generator: sillyspec-scan
+---
 
-> author: qinyi | created_at: 2026-06-03T06:30:00+08:00
+# INTEGRATIONS
 
-## 依赖集成
+sillyspec 主 CLI 仅依赖 7 个外部 npm 包（见 package.json dependencies），按职责分组如下。所有使用位置均经 grep 在 `src/` 与 `bin/` 下确认。
 
-### Node.js 运行时依赖
+## 网络 / 平台同步
 
-| 包名 | 用途 | 集成位置 |
-|---|---|---|
-| `@inquirer/prompts` ^7.10 | 交互式 CLI 提示（选择、确认、输入） | `src/stages/` 各 stage 的用户交互 |
-| `chalk` ^5.6 | 终端彩色输出 | 全局 — 日志、状态展示、错误提示 |
-| `chokidar` ^4.0 | 文件系统监听（实时监控变更） | `packages/dashboard/server/watcher.js` |
-| `open` ^10.1 | 用默认浏览器打开 URL | `packages/dashboard/server/index.js`（启动时打开 dashboard） |
-| `ora` ^9.3 | 终端 spinner 动画 | 各 stage 的加载/等待状态 |
-| `sql.js` ^1.14 | WebAssembly SQLite，嵌入式数据库 | `src/db.js` — 数据库初始化与查询 |
-| `ws` ^8.18 | WebSocket 服务器/客户端 | `packages/dashboard/` 前后端通信 |
+- **Node.js 原生 fetch（HTTP POST）** — 用于 SillyHub 平台同步
+  - 使用位置：`src/sync.js`（`fetch(url, {...options, signal})` 行 96；`method: 'POST'` 行 213、283；`AbortController` 超时控制行 93）
+  - 用法要点：SyncManager 独立于 ProgressManager，best effort——所有网络失败仅 `console.warn`，不抛错、不阻塞主流程；超时 10s；读取 `.sillyspec/local.yaml` 的 platform 段配置；同步 proposal/design/requirements/tasks 四件套文档。
+  - 注意：依赖 Node 18+ 内置 fetch，无额外 HTTP 库依赖。
 
-### Dashboard 子项目额外依赖
+## 存储 / 数据持久化
 
-| 包名 | 用途 |
-|---|---|
-| `vue` ^3.5 | 前端框架 |
-| `naive-ui` ^2.44 | UI 组件库 |
-| `marked` ^17.0 | Markdown 渲染（文档预览） |
-| `@vicons/ionicons5` ^0.13 | 图标库 |
-| `tailwindcss` ^4.0 | 原子化 CSS 框架 |
-| `vite` ^6.0 | 构建工具与开发服务器 |
+- **sql.js（SQLite WASM）** — 进度权威状态源
+  - 使用位置：`src/db.js`（`import initSqlJs from 'sql.js'` 行 1；`const SQL = await initSqlJs()` 行 17）
+  - 用法要点：封装为 DB 抽象层；`src/progress.js` 通过 `sqlDb.exec()` / `sqlDb.run()` 操作（行 137、161、216、352 等多处）。数据库文件位于 `.sillyspec/.runtime/sillyspec.db`，v1/v2 的 progress.json 已全部迁移至 SQLite。
 
-## 外部服务
+## 终端 UI
 
-### SillyHub 平台同步
+- **chalk** — 彩色终端输出
+  - 使用位置：`src/init.js`（行 6）、`src/migrate.js`（行 3）、`src/setup.js`（行 4）
+  - 用法要点：用于初始化、迁移、MCP 配置引导过程中的彩色提示信息。
 
-**模块：** `src/sync.js`
+- **ora** — 终端加载动画 spinner
+  - 使用位置：`src/setup.js`（行 5）
+  - 用法要点：setup 流程中的长时间操作反馈（如 MCP 服务器安装）。
 
-通过 Node.js 原生 `fetch`（Node 22+）与 SillyHub 后端 API 通信：
+## 交互式输入
 
-| 接口 | 方法 | 用途 |
-|---|---|---|
-| Health check | GET | 检查平台可用性 |
-| Sync | POST | 同步变更信息到平台 |
-| Doc sync | POST | 同步文档内容 |
-| Approval | POST | 提交/查询审批状态 |
+- **@inquirer/prompts** — 命令行交互式提示
+  - 使用位置：`src/init.js`（`checkbox, confirm, input` 行 4）、`src/setup.js`（`checkbox, input` 行 6）
+  - 用法要点：绿地初始化与 MCP 配置引导中的多选/确认/文本输入。
 
-**配置来源：** `.sillyspec/local.yaml` 中的 `platform` 段
+## 配置 / 数据解析
 
-**容错策略：** Best effort — 所有网络失败 `console.warn`，不抛错，不阻塞主流程。
+- **js-yaml** — YAML 解析
+  - 使用位置：`src/workflow.js`（`import jsYaml from 'js-yaml'` 行 14）
+  - 用法要点：解析工作流定义（templates/workflows/*.yaml）。注意：`local.yaml` 的轻量读取在 sync.js / worktree-guard.js 中用手写解析，未使用 js-yaml。
 
-### WebSocket 实时通信（Dashboard）
+## 文件监听（仅子包，主 CLI 不使用）
 
-**后端：** `packages/dashboard/server/index.js`  
-**前端：** `packages/dashboard/src/composables/useWebSocket.js`
+- **chokidar** — 跨平台文件监听
+  - 使用位置：`packages/dashboard/server/watcher.js`（`import chokidar from 'chokidar'` 行 1；`chokidar.watch(watchPaths, ...)` 行 219）
+  - 用法要点：**仅 dashboard 子包使用**，主 CLI（src/、bin/）未引入。监听项目文件变更并推送至面板。
 
-- 协议：WebSocket（ws 库）
-- 后端广播消息类型：`stage:update`、`scan:paths`、`docs:tree`、命令执行输出流
-- 前端自动重连机制
-- Origin 校验（`127.0.0.1`）
+## WebSocket（仅子包，主 CLI 不使用）
 
-## 平台对接
+- **ws（WebSocket / WebSocketServer）** — 实时通信
+  - 使用位置：`packages/dashboard/server/index.js`（`WebSocketServer` from 'ws' 行 2；`new WebSocketServer({ server })` 行 449）、`packages/dashboard/src/composables/useWebSocket.js`（前端 `new WebSocket(wsUrl)`）
+  - 用法要点：**仅 dashboard 子包使用**，主 CLI 未引入。服务端推送文件变更事件至前端面板。
 
-### AI 编码工具集成
+## 外部动作（仅子包，主 CLI 不使用）
 
-通过 `src/setup.js` 和 hooks 与以下 AI 编码工具集成：
+- **open** — 打开系统默认浏览器
+  - 使用位置：`packages/dashboard/server/index.js`（`import open from 'open'` 行 7）
+  - 用法要点：**仅 dashboard 子包使用**，启动面板后自动打开浏览器。
 
-| 工具 | 集成方式 | 说明 |
-|---|---|---|
-| Claude Code | `.claude/skills/` 目录下的 SKILL.md | 为 Claude Code 提供每个 stage 的技能定义，引导 AI 按 SillySpec 流程工作 |
-| Claude Code | `src/hooks/claude-pre-tool-use.cjs` | pre-tool-use hook，在 Claude 执行工具前拦截检查 |
-| Cursor | CLAUDE.md / CLAUDE.md 等配置 | 通过项目级指令文件引导 Cursor 遵循流程 |
-| 通用 AI | `.claude/skills/` SKILL.md | 18+ 个 skill 文件覆盖全部 stage，供任意支持 skill 格式的 AI 工具加载 |
+## 备注
 
-### Git 集成
-
-| 功能 | 集成位置 | 说明 |
-|---|---|---|
-| Worktree 管理 | `src/worktree.js`, `src/worktree-apply.js` | 为每个变更创建隔离 git worktree |
-| Worktree 保护 | `src/hooks/worktree-guard.js` | 控制文件读写权限，防止跨 worktree 越界操作 |
-| Git 信息检测 | `src/init.js`, `src/modules.js` | 读取 remote URL、HEAD commit 等信息 |
-| Git 操作执行 | `src/stages/doctor.js` | 直接调用 sqlite3 命令行工具 |
-
-### 文件系统集成
-
-| 功能 | 集成位置 | 说明 |
-|---|---|---|
-| 文件监听 | `packages/dashboard/server/watcher.js` | chokidar 监控 `.sillyspec/` 下文件变更，实时推送 WebSocket 更新 |
-| 嵌入式数据库 | `src/db.js` | sql.js 将 SQLite 运行在内存/文件中，无需外部数据库服务 |
-
-### 操作系统集成
-
-| 功能 | 集成位置 | 说明 |
-|---|---|---|
-| 浏览器打开 | `packages/dashboard/server/index.js` | 使用 `open` 包在 dashboard 启动时自动打开浏览器 |
-| 终端 spinner | 全局 ora 调用 | 在长时间操作时显示加载动画 |
-| 子进程执行 | `src/setup.js`, `src/run.js` 等 | 通过 `child_process.execSync` 执行 git、npm 等系统命令 |
+- 主 CLI（src/、bin/）实际引入的外部依赖：sql.js、js-yaml、@inquirer/prompts、chalk、ora 共 5 个。
+- chokidar、ws、open 三个依赖虽在 package.json 中声明，但仅在 `packages/dashboard/` 子包内使用，主 CLI 流程不依赖。
+- 所有网络通信依赖 Node 18+ 内置能力（fetch），无 axios/node-fetch 等额外 HTTP 库。
+- 测试入口 `test/run-tests.mjs` 使用原生 `node:test`，无第三方测试框架依赖。
