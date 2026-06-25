@@ -1,7 +1,6 @@
 ---
 name: sillyspec
 description: "规范驱动开发工具包。绿地用 /sillyspec:init，棕地用 /sillyspec:scan，全自动用 /sillyspec:auto。完整流程：scan → brainstorm → plan → execute → verify → archive。支持 TDD、子代理并行、worktree 隔离、E2E 验证。兼容 Claude Code / Cursor / Codex / OpenCode / OpenClaw。"
-version: "3.12.7"
 ---
 
 # SillySpec
