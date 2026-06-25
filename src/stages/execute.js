@@ -297,45 +297,55 @@ const fixedSuffix = [
 先检查当前 worktree 的隔离模式：
 \`\`\`bash
 node -e "import('./src/worktree.js').then(w => { const wm = new w.WorktreeManager(); const m = wm.getMeta('<change-name>'); console.log(m ? JSON.stringify({mode: m.mode, path: m.worktreePath}) : 'no meta'); })"
-# 或从 DB 读取：
-sqlite3 -json .sillyspec/.runtime/sillyspec.db "SELECT isolation_status, isolation_mode, isolation_reason FROM changes WHERE name='<change-name>'" 2>/dev/null
 \`\`\`
 
 ### 操作（mode = worktree，SillySpec 创建的隔离 worktree）
-1. 运行 \`sillyspec worktree apply --check-only <change-name>\`
-2. 展示 diff 摘要（文件列表 + 变更统计）
-3. 检查结果说明（是否通过文件清单校验）
-4. 用户确认后运行 \`sillyspec worktree apply <change-name>\`
-5. apply 成功 → 运行 \`sillyspec worktree cleanup <change-name>\` → 输出 Worktree: cleaned
-6. apply 失败 → 展示错误详情，用户选择重试或手动处理
-7. 如果用户不想 apply → 运行 \`sillyspec worktree cleanup <change-name>\` 丢弃
-8. 建议下一步：\`sillyspec run verify\`
+
+**自动审计流程（不需要用户确认代码）：**
+
+1. 运行 \`sillyspec worktree assess <change-name>\` 自动风险审计
+2. 系统自动检查：
+   - patch --check 是否通过
+   - 变更是否在 allowed_paths 内
+   - 主工作区 baseline 是否变化
+   - 是否有高风险文件（lockfile/migration/配置/入口）
+   - diff 规模是否异常
+3. 输出 Apply Decision：
+
+\`\`\`
+Worktree Apply Decision
+────────────────────────
+Decision: SAFE | WARNING | BLOCKED
+Changed files: N
+Additions: +N  Deletions: -N
+Risky files: none | <list>
+Action: auto-applied | blocked
+\`\`\`
+
+4. **SAFE** → 自动 \`sillyspec worktree apply <change-name>\` + cleanup
+5. **WARNING** → 自动 apply（有警告但不阻断）+ cleanup
+6. **BLOCKED** → 不 apply，输出原因，提示用户检查：
+   - \`sillyspec worktree diff <change-name>\` 查看具体变更
+   - \`sillyspec worktree cleanup <change-name>\` 丢弃
+7. 建议下一步：\`sillyspec run verify\`
 
 ### 操作（mode = native-worktree，用户已有的 linked worktree）
-1. 运行 \`sillyspec worktree apply --check-only <change-name>\`
-2. 展示 diff 摘要
-3. 用户确认后运行 \`sillyspec worktree apply <change-name>\`
-4. **不要运行 cleanup** — 这是用户自己的 worktree，SillySpec 不能删除
-5. 输出 Worktree: kept（SillySpec 未创建此 worktree，保留不动）
-6. 建议下一步：\`sillyspec run verify\`
+1. 同上自动审计流程
+2. SAFE/WARNING → \`sillyspec worktree apply <change-name>\`
+3. **不要运行 cleanup**
+4. 输出 Worktree: kept
+5. 建议下一步：\`sillyspec run verify\`
 
 ### 操作（mode = in-place-fallback，降级模式无隔离目录）
 1. 展示本次执行摘要（\`git diff\` 查看变更）
-2. 跳过 apply 和 cleanup（没有隔离 worktree）
-3. 输出 Worktree: none（降级为 in-place，无隔离目录需要清理）
-4. 建议下一步：\`sillyspec run verify\`
-
-### 操作（无 worktree / --no-worktree 模式）
-1. 展示本次执行摘要
-2. 输出 Worktree: none
-3. 提示用户直接使用 \`git diff\` 查看变更
+2. 跳过 apply 和 cleanup
+3. 输出 Worktree: none
 4. 建议下一步：\`sillyspec run verify\`
 
 ### 输出
-apply 结果 + 下一步建议（或执行摘要）
+Apply Decision + 下一步建议
 
 ### 注意
-- 如果用户不想 apply → 运行 cleanup 丢弃
 - 完成后运行 \`sillyspec run execute --done\` 即可自动推进阶段`,
     outputHint: 'apply 结果',
     optional: false

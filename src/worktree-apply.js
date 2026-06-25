@@ -306,6 +306,147 @@ export function applyWorktree(changeName, { cwd, checkOnly = false } = {}) {
 }
 
 /**
+ * 风险审计：评估 worktree 变更是否可以安全自动 apply
+ *
+ * 检查项：
+ * 1. patch --check 通过
+ * 2. 所有变更在 allowed_paths 内
+ * 3. 主工作区 baseline 未变化
+ * 4. 没有删除/重命名关键文件
+ * 5. 没有改高风险文件（lockfile/migration/配置/入口）除非任务显式允许
+ * 6. diff 规模没有异常膨胀
+ *
+ * @param {string} changeName
+ * @param {{ cwd?: string }} opts
+ * @returns {{
+ *   decision: 'SAFE' | 'WARNING' | 'BLOCKED',
+ *   changedFiles: string[],
+ *   reasons: string[],
+ *   warnings: string[],
+ *   stats: { additions: number, deletions: number }
+ * }}
+ */
+export function assessApplyRisk(changeName, { cwd } = {}) {
+  const projectRoot = cwd || process.cwd();
+  const reasons = [];
+  const warnings = [];
+
+  // 先跑 --check-only 模式的 applyWorktree 获取变更文件列表
+  const checkResult = applyWorktree(changeName, { cwd: projectRoot, checkOnly: true });
+
+  if (checkResult.errors.length > 0) {
+    return {
+      decision: 'BLOCKED',
+      changedFiles: checkResult.changedFiles,
+      reasons: checkResult.errors,
+      warnings: [],
+      stats: { additions: 0, deletions: 0 }
+    };
+  }
+
+  const changedFiles = checkResult.changedFiles;
+
+  if (changedFiles.length === 0) {
+    return {
+      decision: 'SAFE',
+      changedFiles: [],
+      reasons: ['无变更需要应用'],
+      warnings: [],
+      stats: { additions: 0, deletions: 0 }
+    };
+  }
+
+  // 解析 TaskCard allowed_paths
+  const wm = new WorktreeManager({ cwd: projectRoot });
+  const meta = wm.getMeta(changeName);
+  const tasksDir = join(projectRoot, CHANGES_REL, changeName, 'tasks');
+  const allowedPaths = new Set();
+  if (existsSync(tasksDir)) {
+    const { readdirSync, readFileSync } = require('fs');
+    for (const tf of readdirSync(tasksDir).filter(f => /^task-\d+\.md$/.test(f))) {
+      const content = readFileSync(join(tasksDir, tf), 'utf8');
+      const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
+      if (!fmMatch) continue;
+      const fm = fmMatch[1];
+      const inline = fm.match(/allowed_paths:\s*\[([^\]]*)\]/);
+      if (inline) {
+        inline[1].split(',').forEach(s => { const v = s.trim().replace(/['"]/g, ''); if (v) allowedPaths.add(v); });
+      }
+      const block = fm.match(/allowed_paths:\s*\n((?:\s+-\s+.+\n?)+)/);
+      if (block) {
+        block[1].match(/-\s+(.+)/g)?.forEach(s => { const v = s.replace(/^-\s+/, '').trim().replace(/['"]/g, ''); if (v) allowedPaths.add(v); });
+      }
+    }
+  }
+
+  // 检查 2: 变更在 allowed_paths 内（仅在 TaskCard 存在时）
+  if (allowedPaths.size > 0) {
+    const outsidePaths = changedFiles.filter(f => !
+      [...allowedPaths].some(allowed => f === allowed || f.startsWith(allowed.replace(/\*$/, '')))
+    );
+    if (outsidePaths.length > 0) {
+      reasons.push(`变更文件超出 allowed_paths：\n  ${outsidePaths.join('\n  ')}`);
+    }
+  }
+
+  // 检查 4+5: 高风险文件模式
+  const HIGH_RISK_PATTERNS = [
+    /(^|\/)package-lock\.json$/,
+    /(^|\/)pnpm-lock\.yaml$/,
+    /(^|\/)yarn\.lock$/,
+    /(^|\/)\.env($|\.)/,
+    /(^|\/)docker-compose.*\.ya?ml$/,
+    /(^|\/)Dockerfile$/,
+    /migration[\w.-]*\.(sql|js|ts)$/i,
+    /(^|\/).*entry.*\.(js|ts)$/i,
+    /(^|\/)main\.(js|ts)$/i,
+    /(^|\/)index\.(js|ts)$/i,
+    /(^|\/)app\.(js|ts)$/i,
+  ];
+  const riskyFiles = changedFiles.filter(f => HIGH_RISK_PATTERNS.some(p => p.test(f)));
+  if (riskyFiles.length > 0) {
+    // 高风险文件只有在 allowedPaths 显式包含时才放行
+    const trulyRisky = riskyFiles.filter(f => !
+      [...allowedPaths].some(allowed => f === allowed)
+    );
+    if (trulyRisky.length > 0) {
+      reasons.push(`高风险文件变更（未在 allowed_paths 中显式声明）：\n  ${trulyRisky.join('\n  ')}`);
+    } else {
+      warnings.push(`高风险文件变更（已在 allowed_paths 中声明）：${riskyFiles.join(', ')}`);
+    }
+  }
+
+  // 检查 6: diff 规模异常（>2000 行变更视为异常）
+  const wtPath = meta?.worktreePath;
+  const diffBase = meta?.baselineCommit || meta?.baseHash;
+  let additions = 0, deletions = 0;
+  if (wtPath && diffBase) {
+    try {
+      const shortstat = gitQuiet(wtPath, `diff --shortstat ${diffBase}`);
+      const insMatch = shortstat?.match(/(\d+) insertion/);
+      const delMatch = shortstat?.match(/(\d+) deletion/);
+      additions = insMatch ? parseInt(insMatch[1]) : 0;
+      deletions = delMatch ? parseInt(delMatch[1]) : 0;
+      if (additions + deletions > 2000) {
+        reasons.push(`diff 规模异常（${additions} additions + ${deletions} deletions = ${additions + deletions} 行）`);
+      }
+    } {}
+  }
+
+  // 判定
+  let decision;
+  if (reasons.length > 0) {
+    decision = 'BLOCKED';
+  } else if (warnings.length > 0) {
+    decision = 'WARNING';
+  } else {
+    decision = 'SAFE';
+  }
+
+  return { decision, changedFiles, reasons, warnings, stats: { additions, deletions } };
+}
+
+/**
  * 格式化 execute run summary（人类可读）
  *
  * 只展示 CLI 真实掌握的信息，不声称知道 per-task 状态。

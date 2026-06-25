@@ -371,6 +371,7 @@ SillySpec worktree — git worktree 隔离管理
 用法:
   sillyspec worktree create <change-name> [--base <branch>]   创建隔离 worktree
   sillyspec worktree apply <change-name> [--check-only]        校验并应用变更到主工作区
+  sillyspec worktree assess <change-name>                     风险审计 + 自动 apply
   sillyspec worktree list                                      列出所有活跃 worktree
   sillyspec worktree cleanup <change-name> [--force]           强制清理 worktree
   sillyspec worktree doctor [--fix] [--stale-hours N]          健康检查 + 修复
@@ -443,6 +444,52 @@ SillySpec worktree — git worktree 隔离管理
             for (const w of result.warnings) {
               console.log(`⚠️  ${w}`);
             }
+          }
+          break;
+        }
+        case 'assess': {
+          if (!wtName) {
+            console.error('❌ 用法: sillyspec worktree assess <change-name>');
+            process.exit(1);
+          }
+          const { assessApplyRisk } = await import('./worktree-apply.js');
+          const assessment = assessApplyRisk(wtName, { cwd: dir });
+
+          const SEPARATOR = '─'.repeat(32);
+          console.log('Worktree Apply Decision');
+          console.log(SEPARATOR);
+          const decisionIcon = assessment.decision === 'SAFE' ? '✅' : assessment.decision === 'WARNING' ? '⚠️ ' : '🚫';
+          console.log(`Decision:    ${decisionIcon} ${assessment.decision}`);
+          console.log(`Changed files: ${assessment.changedFiles.length}`);
+          if (assessment.stats.additions > 0 || assessment.stats.deletions > 0) {
+            console.log(`Additions:   +${assessment.stats.additions}  Deletions: -${assessment.stats.deletions}`);
+          }
+
+          if (assessment.reasons.length > 0) {
+            console.log('');
+            console.log('Blocked reasons:');
+            for (const r of assessment.reasons) r.split('\n').forEach(l => console.log(`   ${l}`));
+          }
+          if (assessment.warnings.length > 0) {
+            console.log('');
+            console.log('Warnings:');
+            for (const w of assessment.warnings) console.log(`   ⚠️  ${w}`);
+          }
+
+          console.log('');
+          if (assessment.decision === 'SAFE' || assessment.decision === 'WARNING') {
+            console.log('Action: auto-applying...');
+            const { applyWorktree } = await import('./worktree-apply.js');
+            const applyResult = applyWorktree(wtName, { cwd: dir });
+            if (applyResult.errors.length > 0) {
+              console.error('❌ apply 失败:', applyResult.errors.join('; '));
+            } else {
+              console.log(`✅ 已自动应用 ${applyResult.changedFiles.length} 个文件变更`);
+            }
+          } else {
+            console.log('Action: blocked');
+            console.log('   → 检查变更: sillyspec worktree diff ' + wtName);
+            console.log('   → 丢弃变更: sillyspec worktree cleanup ' + wtName);
           }
           break;
         }
