@@ -1100,6 +1100,19 @@ export async function runCommand(args, cwd, specDir = null) {
     process.exit(1)
   }
 
+  // ── cwd 纠正：向上查找真实项目根 ──
+  // 防止多 project 工作区中 cwd 停在子目录（如 backend/）时
+  // 状态写入子目录下误建的 .sillyspec，导致状态分裂
+  if (!specDir) {
+    const resolvedRoot = resolveSpecDir(cwd)
+    if (resolvedRoot && resolvedRoot !== join(cwd, '.sillyspec')) {
+      const realRoot = dirname(resolvedRoot)
+      if (realRoot !== cwd) {
+        cwd = realRoot
+      }
+    }
+  }
+
   // 平台模式参数（供 SillyHub 等平台调用）
   // --spec-dir 是统一参数名，--spec-root 保留为向后兼容别名
   const getFlagValue = (name) => {
