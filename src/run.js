@@ -1068,155 +1068,16 @@ async function executeScanPostcheck(cwd, platformOpts, scanProfile) {
 }
 
 /**
- * Plan postcheck：Wave 重排 + 一致性校验（noAI，全代码化）
+ * Plan postcheck 的执行代理：委托给 plan-postcheck.js 模块
  */
 async function executePlanPostcheck(cwd, platformOpts) {
-  const { validateBlueprintConsistency, topoSortWaves } = await import('./stages/plan.js')
-  const { existsSync, readFileSync, readdirSync, writeFileSync, mkdirSync } = await import('fs')
-  const { join: pJoin } = await import('path')
-
-  const specDir = platformOpts?.specRoot || pJoin(cwd, '.sillyspec')
-  const changesDir = pJoin(specDir, 'changes')
-  if (!existsSync(changesDir)) {
-    console.warn('  ⚠️ 未找到 changes 目录，跳过 postcheck')
-    return
-  }
-
-  // 找到当前变更目录（取最新或有 progress 标记的）
+  const { executePlanPostcheck: runPostcheck } = await import('./stages/plan-postcheck.js')
   const { resolveChangeDir } = await import('./modules.js')
-  const progressPath = pJoin(specDir, '.runtime', 'progress.json')
-  let changeDir = null
-  if (existsSync(progressPath)) {
-    const progress = JSON.parse(readFileSync(progressPath, 'utf8'))
-    changeDir = resolveChangeDir(cwd, progress, specDir)
-  }
-  if (!changeDir) {
-    // 回退：找最新的变更目录
-    const dirs = readdirSync(changesDir)
-      .filter(d => existsSync(pJoin(changesDir, d, 'plan.md')))
-      .sort().reverse()
-    if (dirs.length > 0) changeDir = pJoin(changesDir, dirs[0])
-  }
-  if (!changeDir) {
-    console.warn('  ⚠️ 未找到当前变更目录，跳过 postcheck')
-    return
-  }
-
-  console.log(`  📂 变更目录: ${changeDir}`)
-
-  // ── 1. 一致性校验 ──
-  const result = validateBlueprintConsistency(changeDir)
-  if (result.errors.length > 0) {
-    console.error('\n❌ 蓝图一致性校验失败：')
-    for (const err of result.errors) console.error(`   - ${err}`)
-    console.error('\n   请修复上述问题后重新完成此步骤。')
-    throw new Error('planPostcheck: blueprint consistency check failed')
-  }
-  if (result.warnings.length > 0) {
-    console.warn('\n⚠️  蓝图一致性警告（不阻断）：')
-    for (const w of result.warnings) console.warn(`   - ${w}`)
-  }
-
-  // ── 2. Wave 重排（基于 depends_on 拓扑排序）──
-  const tasksDir = pJoin(changeDir, 'tasks')
-  if (existsSync(tasksDir)) {
-    const taskFiles = readdirSync(tasksDir).filter(f => /^task-\d+\.md$/.test(f))
-    const depMap = new Map()
-    for (const file of taskFiles) {
-      const content = readFileSync(pJoin(tasksDir, file), 'utf8')
-      // 解析 task id
-      const fmMatch = content.match(/^---\n([\s\S]*?)\n---/)
-      let taskId = file.replace('.md', '')
-      if (fmMatch) {
-        const idMatch = fmMatch[1].match(/^id:\s*(.+)/m)
-        if (idMatch) taskId = idMatch[1].trim()
-      }
-      // 解析 depends_on
-      let dependsOn = []
-      if (fmMatch) {
-        const inline = fmMatch[1].match(/depends_on:\s*\[([^\]]*)\]/)
-        if (inline) {
-          dependsOn = inline[1].split(',').map(s => s.trim().replace(/['"]/g, '')).filter(Boolean)
-        } else {
-          const block = fmMatch[1].match(/depends_on:\s*\n((?:\s+-\s+.+\n?)+)/)
-          if (block) {
-            dependsOn = block[1].match(/-\s+(.+)/g)?.map(s => s.replace(/^-\s+/, '').trim().replace(/['"]/g, '')) || []
-          }
-        }
-      }
-      depMap.set(taskId, dependsOn)
-    }
-
-    const { waves, error: topoError } = topoSortWaves(depMap)
-    if (topoError) {
-      console.error(`\n❌ Wave 重排失败: ${topoError}`)
-      throw new Error('planPostcheck: ' + topoError)
-    }
-
-    // 输出 Wave 分组摘要
-    console.log('\n  📊 Wave 分组（基于 depends_on 拓扑排序）：')
-    waves.forEach((wave, i) => {
-      console.log(`     Wave ${i + 1}: ${wave.join(', ')}`)
-    })
-
-    // 如果有多个 Wave，更新 plan.md 中的 Wave 分组
-    if (waves.length > 1 && taskFiles.length > 1) {
-      const planPath = pJoin(changeDir, 'plan.md')
-      if (existsSync(planPath)) {
-        let planContent = readFileSync(planPath, 'utf8')
-        // 只在 plan.md 有 Wave 标记时更新
-        if (/##\s*Wave\s+\d/i.test(planContent)) {
-          // 检查现有 Wave 分组是否与拓扑排序一致
-          const existingWaves = []
-          const lines = planContent.split('\n')
-          let currentWaveTasks = null
-          for (const line of lines) {
-            const wm = line.match(/^#+\s*Wave\s+(\d+)/i)
-            if (wm) {
-              if (currentWaveTasks) existingWaves.push(currentWaveTasks)
-              currentWaveTasks = []
-              continue
-            }
-            const tm = line.match(/^[-*]\s*\[[ x]\]\s*task-(\d+)/i)
-            if (tm && currentWaveTasks) {
-              currentWaveTasks.push(`task-${tm[1]}`)
-            }
-          }
-          if (currentWaveTasks) existingWaves.push(currentWaveTasks)
-
-          // 比较（排序后比较内容）
-          const sameStructure = waves.length === existingWaves.length &&
-            waves.every((w, i) => {
-              const a = [...w].sort().join(',')
-              const b = [...(existingWaves[i] || [])].sort().join(',')
-              return a === b
-            })
-
-          if (sameStructure) {
-            console.log('  ✅ Wave 分组与拓扑排序一致，无需更新 plan.md')
-          } else {
-            console.log('  ⚠️  Wave 分组与拓扑排序不一致，建议手动调整 plan.md')
-            console.log('     拓扑排序建议的 Wave 分组见上方')
-          }
-        }
-      }
-    }
-  }
-
-  // ── 3. 保存确认 ──
-  const planPath = pJoin(changeDir, 'plan.md')
-  if (!existsSync(planPath)) {
-    console.error('❌ plan.md 不存在')
-    throw new Error('planPostcheck: plan.md not found')
-  }
-  console.log('\n  ✅ plan.md 存在')
-
-  if (existsSync(tasksDir)) {
-    const taskFiles = readdirSync(tasksDir).filter(f => /^task-\d+\.md$/.test(f))
-    console.log(`  ✅ tasks/ 目录有 ${taskFiles.length} 个蓝图文件`)
-  }
-
-  console.log('\n  ✅ Plan postcheck 完成')
+  await runPostcheck({
+    cwd,
+    specRoot: platformOpts?.specRoot,
+    resolveChangeDir
+  })
 }
 
 /**
