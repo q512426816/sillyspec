@@ -67,7 +67,12 @@ function buildDecisionRecord(id, body) {
   const priorityMissing = priorityValue.length === 0
   const fallbackPriority = (['unresolved', 'blocking'].includes(status) || blocker) ? 'P1' : 'P2'
   const priority = (priorityValue.match(/P[0-2]/i)?.[0] || fallbackPriority).toUpperCase()
-  return { id: id.toUpperCase(), body, status, priority, blocker, priorityMissing }
+  // 解析 supersedes 字段：记录本条决策取代了哪个旧版本
+  const supersedesRaw = readDecisionField(body, 'supersedes', '')
+  const supersedes = supersedesRaw
+    ? supersedesRaw.split(',').map(s => s.trim().toUpperCase().replace(/['"]/g, '')).filter(Boolean)
+    : []
+  return { id: id.toUpperCase(), body, status, priority, blocker, priorityMissing, supersedes }
 }
 
 function findNextDecisionBoundary(content, startIndex) {
@@ -114,8 +119,16 @@ function parseDecisionRecords(content) {
 function extractCurrentDecisionIds(content) {
   const records = parseDecisionRecords(content)
   if (records.length === 0) return extractIds(content, 'D')
+  // 收集所有被 supersedes 声明取代的旧版本 ID
+  const supersededIds = new Set()
+  for (const r of records) {
+    for (const oldId of r.supersedes) {
+      supersededIds.add(oldId)
+    }
+  }
   return records
     .filter(r => !['superseded', 'rejected'].includes(r.status))
+    .filter(r => !supersededIds.has(r.id)) // 被新版本显式取代的旧版本不再校验
     .map(r => r.id)
     .sort()
 }
