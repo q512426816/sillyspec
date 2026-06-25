@@ -15,7 +15,8 @@ import {
   fixedSuffix,
   topoSortWaves,
   validateBlueprintConsistency,
-  validateDesignForPlan
+  validateDesignForPlan,
+  validatePlanFeasibility
 } from '../src/stages/plan.js'
 import { validatePlanForExecute } from '../src/stages/execute.js'
 import { existsSync, mkdirSync, writeFileSync, mkdtempSync, rmSync } from 'fs'
@@ -63,8 +64,8 @@ console.log('\n--- Test 1b: buildPlanSteps 有 task 时返回 4 步 ---')
 
   const steps = buildPlanSteps(changeDir, planContent)
   assert(steps.length === 4, `有 task 时应有 4 步，实际 ${steps.length}`)
-  assert(steps[2].name === '生成任务蓝图（子代理并行）', `第 3 步应为蓝图生成，实际 "${steps[2].name}"`)
-  assert(steps[3].name === 'Wave 重排与一致性校验', `第 4 步应为 postcheck，实际 "${steps[3].name}"`)
+  assert(steps[2].name === '生成 TaskCard（子代理并行）', `第 3 步应为 TaskCard 生成，实际 "${steps[2].name}"`)
+  assert(steps[3].name === 'Wave 重排与可行性校验', `第 4 步应为 postcheck，实际 "${steps[3].name}"`)
   assert(steps[3].noAI === true, `第 4 步应为 noAI`)
   assert(steps[3]._cliAction === 'planPostcheck', `第 4 步 _cliAction 应为 planPostcheck`)
 
@@ -391,9 +392,176 @@ console.log('\n--- Test 8: 链式依赖分 4 Wave ---')
   assert(waves[3][0] === 'task-04', `Wave 4 应为 task-04`)
 }
 
+// ───────────────────────────────────────
+// Test 9: validatePlanFeasibility 缺必要字段失败
+// ───────────────────────────────────────
+console.log('\n--- Test 9: validatePlanFeasibility 缺字段失败 ---')
+{
+  const tmpDir = mkdtempSync(join(tmpdir(), 'sillyspec-feas-'))
+  const tasksDir = join(tmpDir, 'tasks')
+  mkdirSync(tasksDir, { recursive: true })
+
+  writeFileSync(join(tasksDir, 'task-01.md'), `---
+id: task-01
+title: 测试
+priority: P0
+depends_on: []
+blocks: []
+allowed_paths:
+  - src/foo.js
+---
+
+some body
+`)
+
+  const result = validatePlanFeasibility(tmpDir)
+  assert(!result.ok, '缺必要字段应失败')
+  assert(result.errors.some(e => e.includes('goal')), '应有 goal 错误')
+  assert(result.errors.some(e => e.includes('implementation')), '应有 implementation 错误')
+  assert(result.errors.some(e => e.includes('acceptance')), '应有 acceptance 错误')
+  assert(result.errors.some(e => e.includes('verify')), '应有 verify 错误')
+  assert(result.errors.some(e => e.includes('constraints')), '应有 constraints 错误')
+
+  rmSync(tmpDir, { recursive: true, force: true })
+}
+
+// ───────────────────────────────────────
+// Test 10: validatePlanFeasibility 完整 TaskCard 通过
+// ───────────────────────────────────────
+console.log('\n--- Test 10: validatePlanFeasibility 完整 TaskCard 通过 ---')
+{
+  const tmpDir = mkdtempSync(join(tmpdir(), 'sillyspec-feas-ok-'))
+  const tasksDir = join(tmpDir, 'tasks')
+  mkdirSync(tasksDir, { recursive: true })
+
+  writeFileSync(join(tasksDir, 'task-01.md'), `---
+id: task-01
+title: 做 A
+priority: P0
+depends_on: []
+blocks: []
+allowed_paths:
+  - src/a.js
+goal: >
+  做事 A。
+implementation:
+  - 步骤 1
+  - 步骤 2
+acceptance:
+  - 验收 1
+verify:
+  - npm test
+constraints:
+  - 不加测试
+---
+`)
+
+  const result = validatePlanFeasibility(tmpDir)
+  assert(result.ok, `完整 TaskCard 应通过，errors: ${JSON.stringify(result.errors)}`)
+
+  rmSync(tmpDir, { recursive: true, force: true })
+}
+
+// ───────────────────────────────────────
+// Test 11: validatePlanFeasibility depends_on 引用不存在失败
+// ───────────────────────────────────────
+console.log('\n--- Test 11: depends_on 引用不存在失败 ---')
+{
+  const tmpDir = mkdtempSync(join(tmpdir(), 'sillyspec-dep-'))
+  const tasksDir = join(tmpDir, 'tasks')
+  mkdirSync(tasksDir, { recursive: true })
+
+  writeFileSync(join(tasksDir, 'task-01.md'), `---
+id: task-01
+title: A
+priority: P0
+depends_on: []
+blocks: []
+allowed_paths:
+  - src/a.js
+goal: >
+  A.
+implementation:
+  - do
+acceptance:
+  - ok
+verify:
+  - npm test
+constraints:
+  - none
+---
+`)
+
+  writeFileSync(join(tasksDir, 'task-02.md'), `---
+id: task-02
+title: B
+priority: P0
+depends_on: [task-99]
+blocks: []
+allowed_paths:
+  - src/b.js
+goal: >
+  B.
+implementation:
+  - do
+acceptance:
+  - ok
+verify:
+  - npm test
+constraints:
+  - none
+---
+`)
+
+  const result = validatePlanFeasibility(tmpDir)
+  assert(!result.ok, '引用不存在的 task-99 应失败')
+  assert(result.errors.some(e => e.includes('task-99')), '错误应提到 task-99')
+
+  rmSync(tmpDir, { recursive: true, force: true })
+}
+
+// ───────────────────────────────────────
+// Test 12: validatePlanFeasibility task id 不连续失败
+// ───────────────────────────────────────
+console.log('\n--- Test 12: task id 不连续失败 ---')
+{
+  const tmpDir = mkdtempSync(join(tmpdir(), 'sillyspec-gap-'))
+  const tasksDir = join(tmpDir, 'tasks')
+  mkdirSync(tasksDir, { recursive: true })
+
+  for (const { id, num } of [{ id: 'task-01', num: '01' }, { id: 'task-03', num: '03' }]) {
+    writeFileSync(join(tasksDir, `task-${num}.md`), `---
+id: ${id}
+title: ${id}
+priority: P0
+depends_on: []
+blocks: []
+allowed_paths:
+  - src/a.js
+goal: >
+  test.
+implementation:
+  - do
+acceptance:
+  - ok
+verify:
+  - npm test
+constraints:
+  - none
+---
+`)
+  }
+
+  const result = validatePlanFeasibility(tmpDir)
+  assert(!result.ok, 'task id 不连续应失败')
+  assert(result.errors.some(e => e.includes('不连续')), '错误应提到不连续')
+
+  rmSync(tmpDir, { recursive: true, force: true })
+}
+
 // ── 结果 ──
 console.log(`\n${'='.repeat(50)}`)
-const total = 8 + 3 + 3 // test groups
+const total = 12
 console.log(`✅ 通过: ${total - failed}  ❌ 失败: ${failed}`)
 if (failures.length > 0) {
   console.log(`失败项:`)

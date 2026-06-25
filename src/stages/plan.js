@@ -5,7 +5,8 @@ import path from 'path'
 export {
   topoSortWaves,
   validateBlueprintConsistency,
-  validatePlanArtifacts
+  validatePlanArtifacts,
+  validatePlanFeasibility
 } from './plan-postcheck.js'
 
 // 这些解析函数已迁移到 plan-postcheck.js，此处不再定义
@@ -367,12 +368,12 @@ plan_level + 计划内容 + 自检结果（一次输出）`,
 }
 
 // ═══════════════════════════════════════════════════════════════
-// 第 3 步（LLM）：生成任务蓝图（保留原 ⑦，内嵌一致性要求）
+// 第 3 步（LLM）：生成紧凑 TaskCard（子代理并行）
 // ═══════════════════════════════════════════════════════════════
 
 /**
- * 构建任务蓝图协调器步骤（单步，子代理并行写蓝图）
- * 内嵌一致性要求，减少后续 review 步骤的需求
+ * 构建紧凑 TaskCard 协调器步骤（单步，子代理并行写卡片）
+ * 每个 task 生成 20~40 行紧凑可执行卡片
  */
 export function buildCoordinatorStep(changeDir, taskNames) {
   const taskList = taskNames.map((name, i) => {
@@ -391,76 +392,54 @@ export function buildCoordinatorStep(changeDir, taskNames) {
 
 操作：
 1. 读取 ${changeDir}/design.md 和 ${changeDir}/plan.md 了解上下文
-2. 读取相关模块文档（如存在）：
-   - \`ls .sillyspec/docs/*/modules/_module-map.yaml 2>/dev/null\`
-   确认模块划分，读取涉及模块的 \`ls .sillyspec/docs/*/modules/*.md 2>/dev/null\`
-3. 读取相关源文件了解现有代码
-4. 按以下格式编写任务蓝图并保存到 ${changeDir}/tasks/task-${num}.md：
+2. 读取相关源文件了解现有代码
+3. 生成紧凑 TaskCard（20~40 行），格式如下：
 
 ---
 id: task-${num}
 title: ${name}
 author: <git-user>
 created_at: <now-datetime>
-priority: P0/P1/P2
-estimated_hours: N
-depends_on: [task-XX]
-blocks: [task-XX]
+priority: P0
+depends_on: []
+blocks: []
 requirement_ids: [FR-XX]
 decision_ids: [D-XXX@vN]
 allowed_paths:
-  - ...
+  - frontend/src/lib/errors.ts
+goal: >
+  一句话说明这个 task 要做什么、为什么。
+implementation:
+  - 具体步骤 1
+  - 具体步骤 2
+  - 具体步骤 3
+acceptance:
+  - 可验证的验收条件 1
+  - 可验证的验收条件 2
+  - 可验证的验收条件 3
+verify:
+  - cd frontend && pnpm exec tsc --noEmit
+constraints:
+  - 边界约束 1（如：不加测试）
+  - 边界约束 2（如：不修改传入参数）
 ---
 
-# task-${num}: ${name}
-
-## 修改文件（必填）
-- 精确到文件路径
-
-## 覆盖来源
-- Requirements: FR-xx
-- Decisions: D-xxx@vN（如存在）
-
-## 实现要求
-1. 具体做什么
-
-## 接口定义（代码类任务必填）
-方法签名、数据结构、控制流伪代码
-
-## 边界处理（必填）
-- null/空值行为
-- 兼容旧行为（brownfield：未配置新功能时行为不变）
-- 异常不静默吞掉（明确返回值或抛出）
-- 不修改传入参数
-- 歧义/冲突场景的处理策略
-
-## 非目标（本任务不做的事）
-- 明确边界，防止 scope creep
-
-## 参考
-- 可参考的模式
-
-## TDD 步骤
-1. 写测试 → 2. 确认失败 → 3. 写代码 → 4. 确认通过 → 5. 回归
-
-## 验收标准
-| # | 验证步骤 | 通过标准 |
-|---|---|---|
-| AC-01 | ... | ... |
-
-关键规则：
-- 必须独立完整，execute 子代理只读这一个文件就能干活
-- 不要依赖其他 task-N.md 的内容
-- 接口定义写到"搬砖工照着做"的程度
-- 边界处理至少 5 条
-- 验收标准用表格，禁止笼统表述
-- 如果存在 decisions.md，不允许丢失当前版本 D-xxx@vN；无法覆盖的 D-xxx@vN 必须写入非目标或剩余风险
+TaskCard 格式规则（必须严格遵守）：
+- 总长度 20~40 行，不要写成长文档
+- frontmatter 只含必要字段，不加 estimated_hours
+- goal: 一句话，用 > 多行字符串
+- implementation: 列表，每条一个具体步骤
+- acceptance: 列表，每条可独立验证（不是表格）
+- verify: 列表，实际可执行的命令
+- constraints: 列表，明确边界（含 brownfield 兼容、异常处理）
+- 不需要：修改文件章节、覆盖来源章节、接口定义章节、TDD 步骤章节、参考章节
+- 如果存在 decisions.md，无法覆盖的 D-xxx@vN 在 constraints 中标注
 - 写完后用 Write tool 保存到文件
 \`\`\``
   }).join('\n\n')
 
 
-  const prompt = `为 plan.md 中的每个任务生成独立蓝图文件。
+  const prompt = `为 plan.md 中的每个任务生成紧凑 TaskCard。
 
 ## 任务清单
 ${taskList}
@@ -471,7 +450,7 @@ ${taskList}
 
 ## 执行方式（必须严格遵守）
 
-**你必须使用 Agent tool 启动子代理来写每个蓝图，不要自己写。**
+**你必须使用 Agent tool 启动子代理来写每个卡片，不要自己写。**
 
 1. 确认 \`${changeDir}/tasks/\` 目录存在（不存在则创建）
 2. 为每个任务启动一个独立子代理（Agent tool），可并行启动多个
@@ -486,21 +465,19 @@ ${subagentPrompts}
 
 ## 验收（生成后自查，不另开步骤）
 - 每个 task-N.md 文件存在且非空
-- 包含 YAML frontmatter（id、title、author、created_at、priority、depends_on、blocks、requirement_ids、decision_ids、allowed_paths）
-- 包含所有必要章节：修改文件、覆盖来源、实现要求、接口定义、边界处理（≥5条）、非目标、TDD 步骤、验收标准（表格格式）
-- 边界处理覆盖：null/空值、兼容性、异常处理、参数不可变、歧义场景
-- **一致性检查**（生成完毕后自查）：
-  - 文件路径有没有冲突（两个任务改同一个文件在同一 allowed_paths 下）
-  - 依赖关系和 plan.md 的 Wave 分组是否一致
-  - 验收标准和 plan.md 的全局标准是否矛盾
-  - 接口定义是否自洽
+- frontmatter 包含：id、title、author、created_at、priority、depends_on、blocks、allowed_paths
+- body 包含：goal、implementation、acceptance、verify、constraints
+- 每个 task 总长度 20~40 行
+- **一致性自查**：
+  - allowed_paths 有无冲突
+  - depends_on 与 plan.md Wave 分组是否一致
   - 如发现矛盾，列出问题清单，不要自动修复`
 
   return {
     id: 'generate_blueprints',
-    name: '生成任务蓝图（子代理并行）',
+    name: '生成 TaskCard（子代理并行）',
     prompt,
-    outputHint: '蓝图生成结果',
+    outputHint: 'TaskCard 生成结果',
     optional: false
   }
 }
@@ -511,13 +488,13 @@ ${subagentPrompts}
 // ═══════════════════════════════════════════════════════════════
 
 /**
- * noAI postcheck 步骤：Wave 重排 + 一致性校验 + 保存确认
+ * noAI postcheck 步骤：Wave 重排 + 一致性校验 + 可行性校验 + 保存确认
  * 核心逻辑见 plan-postcheck.js
  */
 export function buildPostcheckStep(changeDir) {
   return {
     id: 'postcheck',
-    name: 'Wave 重排与一致性校验',
+    name: 'Wave 重排与可行性校验',
     prompt: '', // noAI 步骤不需要 prompt
     outputHint: 'Wave 重排 + 校验结果',
     optional: false,
@@ -528,7 +505,6 @@ export function buildPostcheckStep(changeDir) {
 
 // ═══════════════════════════════════════════════════════════════
 // 向后兼容：导出 fixedPrefix / fixedSuffix（供 run.js 切片用）
-// 新结构只有 3 个 LLM 步骤，fixedSuffix 只含 postcheck
 // ═══════════════════════════════════════════════════════════════
 
 export const fixedPrefix = [stepClassify, stepGeneratePlan]
@@ -562,112 +538,6 @@ function parseTaskNames(planContent) {
 }
 
 /**
- * 生成单个任务的蓝图写作 prompt（保留供外部调用）
- */
-function buildTaskPrompt(taskNum, taskName, changeDir) {
-  const num = String(taskNum).padStart(2, '0')
-  return `编写任务蓝图 tasks/task-${num}.md
-
-当前时间：<now-datetime>（frontmatter 的 created_at 使用此值）
-当前用户：<git-user>（frontmatter 的 author 使用此值）
-
-### 任务
-${taskName}
-
-### 文件路径
-\`.sillyspec/changes/<change-name>/tasks/task-${num}.md\`
-
-### 格式要求（必须严格遵守）
-\`\`\`markdown
----
-id: task-${num}
-title: ${taskName}
-author: <git-user>
-created_at: <now-datetime>
-priority: P0
-estimated_hours: N
-depends_on: []
-blocks: []
-requirement_ids: [FR-01]
-decision_ids: [D-001@v1]
-allowed_paths:
-  - 允许修改的路径范围
----
-
-# task-${num}: ${taskName}
-
-## 修改文件（必填）
-- 精确到文件路径，列出所有需要新增或修改的文件
-
-## 覆盖来源
-- Requirements: FR-xx（来自 requirements.md）
-- Decisions: D-xxx@vN（如存在 decisions.md）
-
-## 实现要求
-1. 具体做什么，写清楚
-2. ...
-
-## 接口定义（代码类任务必填）
-写方法签名、数据结构、控制流伪代码。AI executor 应能照着直接编码。
-
-## 边界处理（必填）
-- null/空值行为
-- 兼容旧行为（brownfield：未配置新功能时行为不变）
-- 异常不静默吞掉（明确返回值或抛出）
-- 不修改传入参数
-- 歧义/冲突场景的处理策略
-
-## 非目标（本任务不做的事）
-- 明确列出边界，防止 scope creep
-
-## 参考
-- 已有代码可参考的模式
-- 相关的 CONVENTIONS.md 条目
-
-## TDD 步骤
-1. 写 XxxTest，覆盖场景 A/B/C
-2. 运行 <test-cmd> 确认测试失败
-3. 实现 Xxx
-4. 运行 <test-cmd> 确认测试通过
-5. 运行全量测试确认无回退
-（纯配置/文档类任务简化为：1. 实现 2. 验证）
-
-## 验收标准
-| # | 验证步骤 | 通过标准 |
-|---|---|---|
-| AC-01 | 具体操作 | 期望结果 |
-| AC-02 | ... | ... |
-\`\`\`
-
-### frontmatter 元数据说明
-- \`priority\`: P0（必须）/ P1（重要）/ P2（可选）
-- \`estimated_hours\`: 预估工时，单个 task ≤ 8h
-- \`depends_on\`: 依赖的前序 task 编号列表
-- \`blocks\`: 被本 task 阻塞的后续 task 编号列表
-- \`requirement_ids\`: 本任务覆盖的 FR-xxx 列表
-- \`decision_ids\`: 本任务覆盖的当前版本 D-xxx@vN 列表；无 decisions.md 时可为空数组
-- \`allowed_paths\`: AI executor 可以修改的文件路径范围（安全边界）
-
-### 关键规则
-- task-N.md 必须独立完整，execute 子代理只读这一个文件就能干活
-- 不要依赖其他 task-N.md 的内容
-- 接口定义写到"搬砖工照着做"的程度
-- 边界处理至少覆盖 5 条规则
-- 验收标准用表格格式，每条可点击验证，禁止"功能可演示"类笼统表述
-- 如果存在 decisions.md，不允许丢失当前版本 D-xxx@vN；无法覆盖的 D-xxx@vN 必须写入非目标或剩余风险
-- 写完后保存到文件
-
-### 操作
-1. 读取 design.md 和 plan.md 了解上下文
-2. 读取相关源文件了解现有代码
-3. 编写任务蓝图
-4. 保存到 tasks/task-${num}.md
-
-### 输出
-任务蓝图内容摘要`
-}
-
-/**
  * 动态构建 plan 步骤列表
  * 新架构：3 个 LLM 步骤 + 1 个 noAI 步骤 = 4 阶段
  *
@@ -690,7 +560,6 @@ export function buildPlanSteps(changeDir = null, planContent = null) {
 
   // 没有任务数则用固定步骤（兼容旧流程，无蓝图步骤无 postcheck）
   if (taskCount === 0) {
-    // 只返回前两个 LLM 步骤 + postcheck（无蓝图生成）
     const postcheck = changeDir ? [buildPostcheckStep(changeDir)] : []
     return [...fixedPrefix, ...postcheck]
   }
@@ -706,7 +575,7 @@ export function buildPlanSteps(changeDir = null, planContent = null) {
     }
   }
 
-  // 生成协调器步骤（蓝图生成）+ postcheck
+  // 生成协调器步骤（TaskCard 生成）+ postcheck
   const coordinatorStep = buildCoordinatorStep(changeDir, taskNames)
   const postcheckStep = buildPostcheckStep(changeDir)
   return [...fixedPrefix, coordinatorStep, postcheckStep]

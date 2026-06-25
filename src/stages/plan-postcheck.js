@@ -223,6 +223,121 @@ export function validateBlueprintConsistency(changeDir) {
 }
 
 /**
+ * Plan 可行性校验器（本地代码证明 execute 前置条件）
+ * 检查 TaskCard 的完整性和可行性
+ * @param {string} changeDir - 变更目录
+ * @param {string} projectRoot - 项目根目录（用于检查 allowed_paths 是否存在）
+ * @returns {{ ok: boolean, errors: string[], warnings: string[] }}
+ */
+export function validatePlanFeasibility(changeDir, projectRoot = null) {
+  const errors = []
+  const warnings = []
+
+  const tasksDir = pJoin(changeDir, 'tasks')
+  if (!existsSync(tasksDir)) {
+    return { ok: true, errors, warnings } // none/light 可能没有 tasks/
+  }
+
+  const taskFiles = readdirSync(tasksDir).filter(f => /^task-\d+\.md$/.test(f)).sort()
+  if (taskFiles.length === 0) {
+    return { ok: true, errors, warnings }
+  }
+
+  const allTaskIds = []
+  const depMap = new Map()
+
+  for (const file of taskFiles) {
+    const content = readFileSync(pJoin(tasksDir, file), 'utf8')
+    const fmMatch = content.match(/^---\n([\s\S]*?)\n---/)
+    if (!fmMatch) {
+      errors.push(`${file}: 缺少 YAML frontmatter`)
+      continue
+    }
+    const fm = fmMatch[1]
+    const body = content.slice(fmMatch[0].length)
+
+    // 1. 必要字段检查
+    const taskId = (fm.match(/^id:\s*(.+)/m)?.[1] || '').trim()
+    const title = (fm.match(/^title:\s*(.+)/m)?.[1] || '').trim()
+    const allowedPathsRaw = fm.match(/allowed_paths:\s*\n((?:\s+-\s+.+\n?)+)/)?.[1] || ''
+    const allowedPaths = allowedPathsRaw.match(/-\s+(.+)/g)?.map(s => s.replace(/^-\s+/, '').trim()) || []
+
+    if (!taskId) errors.push(`${file}: frontmatter 缺少 id`)
+    if (!title) errors.push(`${file}: frontmatter 缺少 title`)
+    if (taskId) allTaskIds.push(taskId)
+
+    // 2. allowed_paths 不为空
+    if (allowedPaths.length === 0) {
+      errors.push(`${taskId || file}: allowed_paths 为空`)
+    }
+
+    // 3. allowed_paths 文件存在或父目录存在（仅在 projectRoot 提供时检查）
+    if (projectRoot && allowedPaths.length > 0) {
+      for (const p of allowedPaths) {
+        const fullPath = pJoin(projectRoot, p)
+        const parentDir = pJoin(fullPath, '..')
+        if (!existsSync(fullPath) && !existsSync(parentDir)) {
+          warnings.push(`${taskId}: allowed_paths 中的 ${p} 文件和父目录都不存在`)
+        }
+      }
+    }
+
+    // 4. depends_on 引用存在
+    const dependsOn = parseDependsOn(content)
+    if (taskId) depMap.set(taskId, dependsOn)
+
+    // 5. body/frontmatter 包含必要字段（TaskCard 格式中这些字段在 frontmatter 内）
+    const hasGoal = /^goal:/m.test(fm)
+    const hasImplementation = /implementation:/m.test(fm)
+    const hasAcceptance = /acceptance:/m.test(fm)
+    const hasVerify = /verify:/m.test(fm)
+    const hasConstraints = /constraints:/m.test(fm)
+
+    if (!hasGoal) errors.push(`${taskId || file}: 缺少 goal 字段`)
+    if (!hasImplementation) errors.push(`${taskId || file}: 缺少 implementation 字段`)
+    if (!hasAcceptance) errors.push(`${taskId || file}: 缺少 acceptance 字段`)
+    if (!hasVerify) errors.push(`${taskId || file}: 缺少 verify 字段`)
+    if (!hasConstraints) errors.push(`${taskId || file}: 缺少 constraints 字段`)
+  }
+
+  // 4b. depends_on 引用存在性
+  for (const [taskId, deps] of depMap) {
+    for (const dep of deps) {
+      if (!depMap.has(dep)) {
+        errors.push(`${taskId}: depends_on 引用了不存在的 ${dep}`)
+      }
+    }
+  }
+
+  // 5b. depends_on 无环（topoSortWaves 已含循环检测）
+  const { error: topoError } = topoSortWaves(depMap)
+  if (topoError) {
+    errors.push(topoError)
+  }
+
+  // 7. task id 连续性
+  if (allTaskIds.length > 0) {
+    const nums = allTaskIds.map(id => {
+      const m = id.match(/task-(\d+)/i)
+      return m ? parseInt(m[1]) : null
+    }).filter(n => n !== null).sort((a, b) => a - b)
+    if (nums.length > 0 && nums[0] === 1) {
+      for (let i = 0; i < nums.length; i++) {
+        if (nums[i] !== i + 1) {
+          errors.push(`task id 不连续: 期望 task-${String(i + 1).padStart(2, '0')}, 实际 task-${String(nums[i]).padStart(2, '0')}`)
+          break
+        }
+      }
+    }
+  }
+
+  // 9. plan.md 通过 validatePlanForExecute（延迟导入避免循环依赖）
+  // 这在 run.js 的 postcheck contract 中已检查，这里不重复
+
+  return { ok: errors.length === 0, errors, warnings }
+}
+
+/**
  * Plan 产物校验：检查 plan.md 和 tasks/ 是否齐全
  * @param {string} changeDir - 变更目录
  * @returns {{ ok: boolean, errors: string[], warnings: string[], planExists: boolean, taskCount: number }}
@@ -299,6 +414,18 @@ export async function executePlanPostcheck(context) {
   if (consistency.warnings.length > 0) {
     console.warn('\n⚠️  蓝图一致性警告（不阻断）：')
     for (const w of consistency.warnings) console.warn(`   - ${w}`)
+  }
+
+  // ── 1b. 可行性校验 ──
+  const feasibility = validatePlanFeasibility(changeDir, context.cwd)
+  if (feasibility.errors.length > 0) {
+    console.error('\n❌ Plan 可行性校验失败：')
+    for (const err of feasibility.errors) console.error(`   - ${err}`)
+    throw new Error('planPostcheck: feasibility check failed')
+  }
+  if (feasibility.warnings.length > 0) {
+    console.warn('\n⚠️  Plan 可行性警告（不阻断）：')
+    for (const w of feasibility.warnings) console.warn(`   - ${w}`)
   }
 
   // ── 2. Wave 重排 ──
@@ -379,7 +506,7 @@ export async function executePlanPostcheck(context) {
   console.log('\n  ✅ plan.md 存在')
 
   if (artifacts.taskCount > 0) {
-    console.log(`  ✅ tasks/ 目录有 ${artifacts.taskCount} 个蓝图文件`)
+    console.log(`  ✅ tasks/ 目录有 ${artifacts.taskCount} 个 TaskCard 文件`)
   }
 
   console.log('\n  ✅ Plan postcheck 完成')
