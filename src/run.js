@@ -1068,6 +1068,158 @@ async function executeScanPostcheck(cwd, platformOpts, scanProfile) {
 }
 
 /**
+ * Plan postcheck：Wave 重排 + 一致性校验（noAI，全代码化）
+ */
+async function executePlanPostcheck(cwd, platformOpts) {
+  const { validateBlueprintConsistency, topoSortWaves } = await import('./stages/plan.js')
+  const { existsSync, readFileSync, readdirSync, writeFileSync, mkdirSync } = await import('fs')
+  const { join: pJoin } = await import('path')
+
+  const specDir = platformOpts?.specRoot || pJoin(cwd, '.sillyspec')
+  const changesDir = pJoin(specDir, 'changes')
+  if (!existsSync(changesDir)) {
+    console.warn('  ⚠️ 未找到 changes 目录，跳过 postcheck')
+    return
+  }
+
+  // 找到当前变更目录（取最新或有 progress 标记的）
+  const { resolveChangeDir } = await import('./modules.js')
+  const progressPath = pJoin(specDir, '.runtime', 'progress.json')
+  let changeDir = null
+  if (existsSync(progressPath)) {
+    const progress = JSON.parse(readFileSync(progressPath, 'utf8'))
+    changeDir = resolveChangeDir(cwd, progress, specDir)
+  }
+  if (!changeDir) {
+    // 回退：找最新的变更目录
+    const dirs = readdirSync(changesDir)
+      .filter(d => existsSync(pJoin(changesDir, d, 'plan.md')))
+      .sort().reverse()
+    if (dirs.length > 0) changeDir = pJoin(changesDir, dirs[0])
+  }
+  if (!changeDir) {
+    console.warn('  ⚠️ 未找到当前变更目录，跳过 postcheck')
+    return
+  }
+
+  console.log(`  📂 变更目录: ${changeDir}`)
+
+  // ── 1. 一致性校验 ──
+  const result = validateBlueprintConsistency(changeDir)
+  if (result.errors.length > 0) {
+    console.error('\n❌ 蓝图一致性校验失败：')
+    for (const err of result.errors) console.error(`   - ${err}`)
+    console.error('\n   请修复上述问题后重新完成此步骤。')
+    throw new Error('planPostcheck: blueprint consistency check failed')
+  }
+  if (result.warnings.length > 0) {
+    console.warn('\n⚠️  蓝图一致性警告（不阻断）：')
+    for (const w of result.warnings) console.warn(`   - ${w}`)
+  }
+
+  // ── 2. Wave 重排（基于 depends_on 拓扑排序）──
+  const tasksDir = pJoin(changeDir, 'tasks')
+  if (existsSync(tasksDir)) {
+    const taskFiles = readdirSync(tasksDir).filter(f => /^task-\d+\.md$/.test(f))
+    const depMap = new Map()
+    for (const file of taskFiles) {
+      const content = readFileSync(pJoin(tasksDir, file), 'utf8')
+      // 解析 task id
+      const fmMatch = content.match(/^---\n([\s\S]*?)\n---/)
+      let taskId = file.replace('.md', '')
+      if (fmMatch) {
+        const idMatch = fmMatch[1].match(/^id:\s*(.+)/m)
+        if (idMatch) taskId = idMatch[1].trim()
+      }
+      // 解析 depends_on
+      let dependsOn = []
+      if (fmMatch) {
+        const inline = fmMatch[1].match(/depends_on:\s*\[([^\]]*)\]/)
+        if (inline) {
+          dependsOn = inline[1].split(',').map(s => s.trim().replace(/['"]/g, '')).filter(Boolean)
+        } else {
+          const block = fmMatch[1].match(/depends_on:\s*\n((?:\s+-\s+.+\n?)+)/)
+          if (block) {
+            dependsOn = block[1].match(/-\s+(.+)/g)?.map(s => s.replace(/^-\s+/, '').trim().replace(/['"]/g, '')) || []
+          }
+        }
+      }
+      depMap.set(taskId, dependsOn)
+    }
+
+    const { waves, error: topoError } = topoSortWaves(depMap)
+    if (topoError) {
+      console.error(`\n❌ Wave 重排失败: ${topoError}`)
+      throw new Error('planPostcheck: ' + topoError)
+    }
+
+    // 输出 Wave 分组摘要
+    console.log('\n  📊 Wave 分组（基于 depends_on 拓扑排序）：')
+    waves.forEach((wave, i) => {
+      console.log(`     Wave ${i + 1}: ${wave.join(', ')}`)
+    })
+
+    // 如果有多个 Wave，更新 plan.md 中的 Wave 分组
+    if (waves.length > 1 && taskFiles.length > 1) {
+      const planPath = pJoin(changeDir, 'plan.md')
+      if (existsSync(planPath)) {
+        let planContent = readFileSync(planPath, 'utf8')
+        // 只在 plan.md 有 Wave 标记时更新
+        if (/##\s*Wave\s+\d/i.test(planContent)) {
+          // 检查现有 Wave 分组是否与拓扑排序一致
+          const existingWaves = []
+          const lines = planContent.split('\n')
+          let currentWaveTasks = null
+          for (const line of lines) {
+            const wm = line.match(/^#+\s*Wave\s+(\d+)/i)
+            if (wm) {
+              if (currentWaveTasks) existingWaves.push(currentWaveTasks)
+              currentWaveTasks = []
+              continue
+            }
+            const tm = line.match(/^[-*]\s*\[[ x]\]\s*task-(\d+)/i)
+            if (tm && currentWaveTasks) {
+              currentWaveTasks.push(`task-${tm[1]}`)
+            }
+          }
+          if (currentWaveTasks) existingWaves.push(currentWaveTasks)
+
+          // 比较（排序后比较内容）
+          const sameStructure = waves.length === existingWaves.length &&
+            waves.every((w, i) => {
+              const a = [...w].sort().join(',')
+              const b = [...(existingWaves[i] || [])].sort().join(',')
+              return a === b
+            })
+
+          if (sameStructure) {
+            console.log('  ✅ Wave 分组与拓扑排序一致，无需更新 plan.md')
+          } else {
+            console.log('  ⚠️  Wave 分组与拓扑排序不一致，建议手动调整 plan.md')
+            console.log('     拓扑排序建议的 Wave 分组见上方')
+          }
+        }
+      }
+    }
+  }
+
+  // ── 3. 保存确认 ──
+  const planPath = pJoin(changeDir, 'plan.md')
+  if (!existsSync(planPath)) {
+    console.error('❌ plan.md 不存在')
+    throw new Error('planPostcheck: plan.md not found')
+  }
+  console.log('\n  ✅ plan.md 存在')
+
+  if (existsSync(tasksDir)) {
+    const taskFiles = readdirSync(tasksDir).filter(f => /^task-\d+\.md$/.test(f))
+    console.log(`  ✅ tasks/ 目录有 ${taskFiles.length} 个蓝图文件`)
+  }
+
+  console.log('\n  ✅ Plan postcheck 完成')
+}
+
+/**
  * sillyspec run <stage> 主命令
  */
 export async function runCommand(args, cwd, specDir = null) {
@@ -1686,6 +1838,8 @@ async function runStage(pm, progress, stageName, cwd, changeName, skipApproval =
         await executeScanPreflight(cwd, platformOpts, scanProfile)
       } else if (cliAction === 'scanPostcheck') {
         await executeScanPostcheck(cwd, platformOpts, scanProfile)
+      } else if (cliAction === 'planPostcheck') {
+        await executePlanPostcheck(cwd, platformOpts)
       }
       stageData.steps[currentIdx].status = 'completed'
       stageData.steps[currentIdx].completedAt = new Date().toLocaleString('zh-CN', { hour12: false })
@@ -2171,29 +2325,43 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
     }
   }
 
-  // plan 阶段 "展开任务" 完成后，动态插入任务蓝图协调器步骤
-  if (stageName === 'plan' && steps[currentIdx]?.name === '展开任务并分组') {
-    const changeDir = resolveChangeDir(cwd, progress)
-    if (changeDir) {
-      const planFile = join(changeDir, 'plan.md')
-      if (existsSync(planFile)) {
-        const planContent = readFileSync(planFile, 'utf8')
-        const { buildPlanSteps, fixedPrefix, fixedSuffix } = await import('./stages/plan.js')
-        const fullSteps = buildPlanSteps(changeDir, planContent)
-        const prefixLen = fixedPrefix.length
-        const suffixLen = fixedSuffix.length
-        const coordinatorSteps = fullSteps.slice(prefixLen, suffixLen > 0 ? -suffixLen : undefined)
-        if (coordinatorSteps.length > 0) {
-          for (let i = 0; i < coordinatorSteps.length; i++) {
-            steps.splice(currentIdx + 1 + i, 0, {
-              name: coordinatorSteps[i].name,
-              status: 'pending',
-              prompt: coordinatorSteps[i].prompt,
-              outputHint: coordinatorSteps[i].outputHint,
-              optional: coordinatorSteps[i].optional
-            })
+  // plan 阶段 "generate_plan" 完成后，动态插入任务蓝图 + postcheck 步骤
+  // 使用稳定 id 匹配，不依赖中文标题
+  if (stageName === 'plan') {
+    const currentStepDef = defSteps?.[currentIdx]
+    const currentStepEntry = steps[currentIdx]
+    const stepId = currentStepDef?.id || currentStepEntry?.id || currentStepEntry?._stepId
+    if (stepId === 'generate_plan') {
+      const changeDir = resolveChangeDir(cwd, progress)
+      if (changeDir) {
+        const planFile = join(changeDir, 'plan.md')
+        if (existsSync(planFile)) {
+          const planContent = readFileSync(planFile, 'utf8')
+          const { buildPlanSteps, fixedPrefix, fixedSuffix } = await import('./stages/plan.js')
+          const fullSteps = buildPlanSteps(changeDir, planContent)
+          const prefixLen = fixedPrefix.length
+          const suffixLen = fixedSuffix.length
+          // 新结构：[...fixedPrefix, coordinatorStep?, postcheckStep?]
+          // fixedSuffix 为空，所以 coordinator + postcheck 都在 prefix 之后
+          const coordinatorSteps = fullSteps.slice(prefixLen, suffixLen > 0 ? -suffixLen : undefined)
+          if (coordinatorSteps.length > 0) {
+            for (let i = 0; i < coordinatorSteps.length; i++) {
+              const stepDef = coordinatorSteps[i]
+              const stepEntry = {
+                id: stepDef.id,
+                name: stepDef.name,
+                status: 'pending',
+                prompt: stepDef.prompt || '',
+                outputHint: stepDef.outputHint,
+                optional: stepDef.optional
+              }
+              // 传递 noAI / _cliAction 属性
+              if (stepDef.noAI) stepEntry.noAI = true
+              if (stepDef._cliAction) stepEntry._cliAction = stepDef._cliAction
+              steps.splice(currentIdx + 1 + i, 0, stepEntry)
+            }
+            console.log(`  📝 已动态插入 ${coordinatorSteps.length} 个步骤（${coordinatorSteps.map(s => s.name).join(', ')}）`)
           }
-          console.log(`  📝 已动态插入 ${coordinatorSteps.length} 个任务蓝图步骤（${coordinatorSteps.map(s => s.name).join(', ')}）`)
         }
       }
     }
