@@ -430,7 +430,7 @@ export function assessApplyRisk(changeName, { cwd } = {}) {
       if (additions + deletions > 2000) {
         reasons.push(`diff 规模异常（${additions} additions + ${deletions} deletions = ${additions + deletions} 行）`);
       }
-    } {}
+    } catch {}
   }
 
   // 判定
