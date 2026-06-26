@@ -113,6 +113,9 @@ import { checkTransition, runValidators } from './stage-contract.js'
 import { buildExecuteSteps } from './stages/execute.js'
 import { buildPlanSteps } from './stages/plan.js'
 import { formatExecuteSummary } from './worktree-apply.js'
+import { classifyChange } from './classify-change.js'
+import { detectRiskProfile } from './change-risk-profile.js'
+import { definition as brainstormAutoDef } from './stages/brainstorm-auto.js'
 
 /**
  * 从 _module-map.yaml 读取模块上下文索引
@@ -772,19 +775,19 @@ async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjec
     }
   }
 
-  // Execute: 注入 currentExecuteRunId（从 runtime 标记文件读取）
+  // Execute: 注入 currentExecuteRunId（从变更专属标记文件读取）
   if (stageName === 'execute' && promptText.includes('{EXECUTE_RUN_ID}')) {
-    const execSpecBase = platformOpts?.specRoot || join(cwd, '.sillyspec')
-    const runIdFile = join(execSpecBase, '.runtime', 'current-execute-run-id')
     let runId = ''
+    const execSpecBase = platformOpts?.specRoot || join(cwd, '.sillyspec')
+    const runIdFile = join(execSpecBase, '.runtime', `current-execute-run-id-${effectiveChange}`)
     try {
       if (existsSync(runIdFile)) {
         runId = readFileSync(runIdFile, 'utf8').trim()
       }
     } catch {}
     if (!runId) {
-      const { generateExecuteRunId, getLatestExecuteRunId } = await import('./task-review.js')
- runId = getLatestExecuteRunId(join(execSpecBase, '.runtime')) || generateExecuteRunId()
+      const { generateExecuteRunId } = await import('./task-review.js')
+      runId = generateExecuteRunId()
     }
     promptText = promptText.replace(/\{EXECUTE_RUN_ID\}/g, runId)
   }
@@ -1283,7 +1286,7 @@ export async function runCommand(args, cwd, specDir = null) {
     '--spec-dir', '--spec-root', '--runtime-root', '--workspace-id', '--scan-run-id',
     '--files', '--allow-new', '--force-baseline', '--force-rescan',
     '--json', '--dir', '--help',
-    '--reopen', '--from-step',
+    '--reopen', '--from-step', '--mode',
   ])
   for (let i = 0; i < flags.length; i++) {
     const f = flags[i]
@@ -1340,7 +1343,7 @@ export async function runCommand(args, cwd, specDir = null) {
 
   // -- auto 模式：自动推进所有流程阶段
   if (stageName === 'auto') {
-    return await runAutoMode(pm, progress, cwd, flags, effectiveChange)
+    return await runAutoMode(pm, progress, cwd, flags, effectiveChange, platformOpts)
   }
 
   // --change 只作为变更名标识，不再拦截流程
@@ -1528,16 +1531,24 @@ async function runStage(pm, progress, stageName, cwd, changeName, skipApproval =
     }
   }
 
-  // ── execute 阶段启动时固定 executeRunId ──
+  // ── execute 阶段启动时固定 executeRunId（绑定变更名，避免跨变更复用） ──
   let currentExecuteRunId = null
   if (stageName === 'execute') {
-    const { generateExecuteRunId, getLatestExecuteRunId } = await import('./task-review.js')
+    const { generateExecuteRunId } = await import('./task-review.js')
     const execSpecBase = platformOpts?.specRoot || join(cwd, '.sillyspec')
     const runtimeRoot = join(execSpecBase, '.runtime')
-    currentExecuteRunId = getLatestExecuteRunId(runtimeRoot) || generateExecuteRunId()
-    // 写入 runtime 标记文件，确保整个 execute 生命周期内 runId 不变
+    const runIdFile = join(runtimeRoot, `current-execute-run-id-${changeName}`)
     mkdirSync(runtimeRoot, { recursive: true })
-    writeFileSync(join(runtimeRoot, 'current-execute-run-id'), currentExecuteRunId + '\n')
+    // 优先读取已有的变更专属标记文件
+    try {
+      if (existsSync(runIdFile)) {
+        currentExecuteRunId = readFileSync(runIdFile, 'utf8').trim()
+      }
+    } catch {}
+    if (!currentExecuteRunId) {
+      currentExecuteRunId = generateExecuteRunId()
+      writeFileSync(runIdFile, currentExecuteRunId + '\n')
+    }
   }
 
   // 自动探测 currentChange
@@ -2202,7 +2213,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
   // plan 阶段 "generate_plan" 完成后，动态插入任务蓝图 + postcheck 步骤
   // 使用稳定 id 匹配，不依赖中文标题
   if (stageName === 'plan') {
-    const currentStepDef = defSteps?.[currentIdx]
+    const currentStepDef = defStepsForCurrent?.[currentIdx]
     const currentStepEntry = steps[currentIdx]
     const stepId = currentStepDef?.id || currentStepEntry?.id || currentStepEntry?._stepId
     if (stepId === 'generate_plan') {
@@ -2667,7 +2678,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
       // ── Execute Task Review Gate：所有 task 必须有 review.json 且 verdict 通过 ──
       if (stageName === 'execute') {
         try {
-          const { validateTaskReviews, printReviewResult, writeVerifyRequiredEvidence, getLatestExecuteRunId, generateExecuteRunId } = await import('./task-review.js')
+          const { validateTaskReviews, printReviewResult, writeVerifyRequiredEvidence } = await import('./task-review.js')
           const effectiveSpecBase = platformOpts?.specRoot || specBase
           const planFile = resolveChangeDir(cwd, progress, platformOpts?.specRoot)
           const planPath = planFile ? join(planFile, 'plan.md') : null
@@ -2676,9 +2687,16 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
             const planContent = readFileSync(planPath, 'utf8')
             const runtimeRoot = join(effectiveSpecBase, '.runtime')
 
-            // 找到 execute run id：优先从 runtime 目录找最新，否则生成新的
-            let executeRunId = getLatestExecuteRunId(runtimeRoot)
+            // execute run id：从变更专属标记文件读取
+            const runIdFile = join(runtimeRoot, `current-execute-run-id-${changeName}`)
+            let executeRunId = ''
+            try {
+              if (existsSync(runIdFile)) {
+                executeRunId = readFileSync(runIdFile, 'utf8').trim()
+              }
+            } catch {}
             if (!executeRunId) {
+              const { generateExecuteRunId } = await import('./task-review.js')
               executeRunId = generateExecuteRunId()
             }
 
@@ -3016,14 +3034,28 @@ async function resetStage(pm, progress, stageName, cwd, changeName, platformOpts
 /**
  * auto 模式：自动推进 brainstorm → plan → execute → verify
  */
-async function runAutoMode(pm, progress, cwd, flags, changeName) {
-  const flowStages = ['brainstorm', 'plan', 'execute', 'verify']
+async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts = {}) {
+  const flowStages = ['brainstorm', 'plan', 'execute', 'verify', 'archive']
   const isDone = flags.includes('--done')
   const outputIdx = flags.indexOf('--output')
   const outputText = outputIdx !== -1 && flags[outputIdx + 1] ? flags[outputIdx + 1] : null
   const inputIdx = flags.indexOf('--input')
   const inputText = inputIdx !== -1 && flags[inputIdx + 1] ? flags[inputIdx + 1] : null
   const skipApproval = flags.includes('--skip-approval')
+  const explicitMode = (() => {
+    const m = flags.indexOf('--mode')
+    return m !== -1 && flags[m + 1] ? flags[m + 1] : null
+  })()
+  const specBase = platformOpts?.specRoot || join(cwd, '.sillyspec')
+
+  // Helper: 在 auto 模式下获取步骤定义
+  const getAutoSteps = async (stage) => {
+    if (stage === 'brainstorm') {
+      return brainstormAutoDef.steps
+    }
+    return getStageSteps(stage, cwd, progress, platformOpts?.specRoot || null)
+  }
+
   const nextInFlow = (stage) => {
     const i = flowStages.indexOf(stage)
     return i >= 0 && i < flowStages.length - 1 ? flowStages[i + 1] : null
@@ -3032,6 +3064,24 @@ async function runAutoMode(pm, progress, cwd, flags, changeName) {
   const ensureAutoStage = async (stage) => {
     const stageChanged = progress.currentStage !== stage
     progress.currentStage = stage
+    // Auto 模式下 brainstorm 使用 artifact-first 步骤
+    if (stage === 'brainstorm') {
+      const existingSteps = progress.stages?.brainstorm?.steps
+      const isAutoModeSteps = existingSteps?.length === 4 && existingSteps?.[0]?.name === '状态检查与上下文加载'
+      if (!isAutoModeSteps) {
+        if (!progress.stages) progress.stages = {}
+        progress.stages.brainstorm = {
+          status: 'in-progress',
+          startedAt: new Date().toLocaleString('zh-CN', { hour12: false }),
+          completedAt: null,
+          steps: brainstormAutoDef.steps.map(s => ({ name: s.name, status: 'pending' }))
+        }
+        await pm._write(cwd, progress, changeName)
+        triggerSync(cwd, changeName, platformOpts)
+        progress = await pm.read(cwd, changeName)
+        return progress
+      }
+    }
     const changed = await ensureStageSteps(progress, stage, cwd)
     if (stageChanged || changed) {
       await pm._write(cwd, progress, changeName)
@@ -3039,6 +3089,18 @@ async function runAutoMode(pm, progress, cwd, flags, changeName) {
     }
     progress = await pm.read(cwd, changeName)
     return progress
+  }
+
+  // ── Classify change on first entry ──
+  if (!progress.stages?.brainstorm?.status && !progress.stages?.plan?.status) {
+    const { classifyChange } = await import('./classify-change.js')
+    const classification = classifyChange({ description: inputText || '', explicitMode })
+    if (classification.mode === 'quick') {
+      console.log(`📊 auto 模式分类：${classification.mode}（${classification.reason}）`)
+      console.log(`   此变更建议使用 quick 模式，运行：sillyspec run quick "${inputText || '需求'}"`)
+      return
+    }
+    console.log(`📊 auto 模式分类：${classification.mode}（${classification.reason}）`)
   }
 
   let currentStage = progress.currentStage
@@ -3076,7 +3138,7 @@ async function runAutoMode(pm, progress, cwd, flags, changeName) {
     }
     console.log('')
 
-    const defSteps = await getStageSteps(currentStage, cwd, progress)
+    const defSteps = await getAutoSteps(currentStage)
     const pendingIdx = progress.stages[currentStage]?.steps?.findIndex(step => step.status === 'pending' || step.status === 'in-progress') ?? -1
     if (pendingIdx === -1) {
       const wsIdx = progress.stages[currentStage]?.steps?.findIndex(step => step.status === 'waiting') ?? -1
@@ -3121,7 +3183,7 @@ async function runAutoMode(pm, progress, cwd, flags, changeName) {
 
   const nextPendingIdx = progress.stages[currentStage]?.steps?.findIndex(step => step.status === 'pending' || step.status === 'in-progress') ?? -1
   if (nextPendingIdx !== -1) {
-    const defSteps = await getStageSteps(currentStage, cwd, progress)
+    const defSteps = await getAutoSteps(currentStage)
     // execute 阶段启动前检查审批
     if (currentStage === 'execute' && !skipApproval) {
       const approval = await checkApproval(cwd, changeName, platformOpts)
@@ -3146,6 +3208,31 @@ async function runAutoMode(pm, progress, cwd, flags, changeName) {
     return
   }
 
+  // ── next-action.json 驱动：brainstorm → plan 推进判断 ──
+  if (currentStage === 'brainstorm' && next === 'plan') {
+    const changeDir = resolveChangeDir(cwd, progress, platformOpts?.specRoot || null)
+    if (changeDir) {
+      const nextActionFile = join(changeDir, 'brainstorm', 'next-action.json')
+      try {
+        const nextAction = JSON.parse(readFileSync(nextActionFile, 'utf8'))
+        if (nextAction.has_blocking_questions === true) {
+          console.log(`\n⏸️  brainstorm 有阻塞问题，无法自动进入 plan：`)
+          for (const q of (nextAction.questions || [])) {
+            console.log(`   Q-${q.id}: ${q.question}`)
+            if (q.options) console.log(`      选项：${q.options.join(' / ')}`)
+            if (q.recommended) console.log(`      推荐：${q.recommended}`)
+          }
+          console.log(`\n   请回答阻塞问题后继续：sillyspec run auto --done --output "已回答"`)
+          return
+        }
+        console.log(`\n✅ next-action.json: ${nextAction.status}，自动进入 plan`)
+      } catch (e) {
+        // next-action.json 不存在或格式错误，继续推进（向后兼容）
+        console.log(`\n⚠️  next-action.json 未找到，继续进入 plan`)
+      }
+    }
+  }
+
   progress.currentStage = next
   if (!progress.stages[next]) {
     progress.stages[next] = { status: 'pending', steps: [], startedAt: null, completedAt: null }
@@ -3161,7 +3248,7 @@ async function runAutoMode(pm, progress, cwd, flags, changeName) {
   progress = await pm.read(cwd, changeName)
 
   console.log(`\n${currentStage} complete. Auto advanced to ${next}.`)
-  const nextSteps = await getStageSteps(next, cwd, progress)
+  const nextSteps = await getAutoSteps(next)
   const firstPending = progress.stages[next]?.steps?.findIndex(step => step.status === 'pending' || step.status === 'in-progress') ?? -1
   if (firstPending !== -1) {
     // execute 阶段启动前检查审批
