@@ -189,7 +189,7 @@ async function main() {
       break;
     case 'progress': {
       const pm = new ProgressManager();
-      const progDir = resolveEffectiveDir(dir);
+      const progDir = specDir ? dir : resolveEffectiveDir(dir);
       const subCommand = filteredArgs[1];
       const stageIdx = filteredArgs.indexOf('--stage');
       const stage = stageIdx >= 0 && filteredArgs[stageIdx + 1] ? filteredArgs[stageIdx + 1] : null;
@@ -293,7 +293,9 @@ async function main() {
     }
     case 'run': {
       const { runCommand } = await import('./run.js')
-      await runCommand(filteredArgs.slice(1), resolveEffectiveDir(dir), specDir)
+      // 平台模式（--spec-dir 已指定）时，--dir 是明确的 source_root，不应被 resolveEffectiveDir 纠正
+      const effectiveDir = specDir ? dir : resolveEffectiveDir(dir)
+      await runCommand(filteredArgs.slice(1), effectiveDir, specDir)
       break
     }
     // task-10: 顶层命令别名，转发 runCommand，与 case 'run': 路径行为一致
@@ -308,12 +310,13 @@ async function main() {
     case 'explore': {
       const { runCommand } = await import('./run.js')
       const stageArgs = [command, ...filteredArgs.slice(1)]
-      await runCommand(stageArgs, resolveEffectiveDir(dir), specDir)
+      const effectiveDir = specDir ? dir : resolveEffectiveDir(dir)
+      await runCommand(stageArgs, effectiveDir, specDir)
       break
     }
     case 'knowledge': {
       const { cmdKnowledge } = await import('./stages/knowledge.js')
-      await cmdKnowledge(filteredArgs.slice(1), resolveEffectiveDir(dir), { specDir })
+      await cmdKnowledge(filteredArgs.slice(1), specDir ? dir : resolveEffectiveDir(dir), { specDir })
       break
     }
     case 'dashboard': {
