@@ -151,19 +151,22 @@ export function runScanPostCheck({ cwd, specDir, outputText = '', scanMeta = {} 
     }
   }
 
-  // 5. 检查 AI 输出中的错误标记
+  // 5. 检查 AI 输出中的真实错误标记
+  // 注意：不对 agent 描述性文本做全文正则匹配，防止误报。
+  // 只检测明显是 agent 运行时失败的信号（未被捕获的错误块），
+  // 而非 agent 正常描述中提到这些词。
   if (outputText) {
-    const errorPatterns = [
-      { pattern: /tool_use_error/i, name: 'tool_use_error', detail: 'AI 输出中包含 tool_use_error' },
-      { pattern: /API Error.*529/i, name: 'api_error_529', detail: 'AI 输出中包含 API Error 529' },
-      { pattern: /rate.?limit.*exhausted/i, name: 'rate_limit_exhausted', detail: 'AI 输出中包含 rate_limit exhausted' },
-      { pattern: /fallback|retry.*failed|skipped.*validat/i, name: 'fallback_or_skip', detail: 'AI 输出中出现 fallback/retry failed/skipped validation' },
-    ]
-    for (const ep of errorPatterns) {
-      if (ep.pattern.test(outputText)) {
-        checks.push({ name: ep.name, severity: CHECK_SEVERITY.WARNING, detail: ep.detail })
-      }
+    // 5a: 检测未被恢复的 API 错误（连续多次、非描述性提及）
+    const apiErrorCount = (outputText.match(/API Error\b.*?\b529\b/gi) || []).length
+    if (apiErrorCount >= 2) {
+      checks.push({ name: 'api_error_529', severity: CHECK_SEVERITY.WARNING, detail: 'AI 输出中包含多次 API Error 529' })
     }
+    const rateLimitCount = (outputText.match(/rate.?limit.*?exhausted/gi) || []).length
+    if (rateLimitCount >= 2) {
+      checks.push({ name: 'rate_limit_exhausted', severity: CHECK_SEVERITY.WARNING, detail: 'AI 输出中包含多次 rate_limit exhausted' })
+    }
+    // tool_use_error 和 fallback 已移除：agent 描述性文本中正常提及这些词
+    // 不应触发 warning。真正的问题会通过文档缺失、manifest 失败等其他检查捕获。
   }
 
   // 6. manifest 写入状态检查
@@ -300,7 +303,7 @@ export function formatStructuredResult(result, meta = {}) {
       structured.failure_categories.bad_references.push(entry)
     }
     // AI 输出质量类
-    else if (['tool_use_error', 'api_error_529', 'rate_limit_exhausted', 'fallback_or_skip'].includes(check.name)) {
+    else if (['api_error_529', 'rate_limit_exhausted'].includes(check.name)) {
       structured.failure_categories.quality_warnings.push(entry)
     }
     // manifest/project 列表问题
