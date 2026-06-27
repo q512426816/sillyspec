@@ -62,9 +62,26 @@ export const definition = {
 - 最终确定的项目列表将用于后续所有步骤
 - **后续每个需要生成文档的步骤，都必须对列表中的每个项目分别执行**
 
-### 输出
-确认后的扫描项目列表（项目名 + 扫描策略）`,
-      outputHint: '扫描项目列表',
+### 输出格式规范
+--output 必须使用以下结构化格式之一（CLI 只解析这些格式，**不要输出自由文本列表**）：
+
+**格式 A：scan_projects YAML block**
+在 --output 中输出：
+    scan_projects:
+      - id: backend
+      - id: frontend
+      - id: daemon
+
+**格式 B：BEGIN_PROJECT_LIST 标记块**
+在 --output 中输出：
+    BEGIN_PROJECT_LIST
+    - backend
+    - frontend
+    - daemon
+    END_PROJECT_LIST
+
+如果不需要解析项目列表（如单项目已明确），--output 写普通摘要即可。`,
+      outputHint: '结构化项目列表（YAML block 或 BEGIN_PROJECT_LIST）',
       optional: false
     },
     {
