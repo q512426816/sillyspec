@@ -106,11 +106,10 @@ console.log('\n=== Test 4: local.yaml 命令不存在 → completed_with_warning
 }
 
 // ── 5-8: AI 输出错误标记 → warnings ──
+// 注意：tool_use_error 和 fallback 已移除（agent 描述性文本正常提及不应触发）
 const errorCases = [
-  { id: 'e5', name: 'tool_use_error', output: 'tool_use_error: file not found' },
-  { id: 'e6', name: 'API Error 529', output: 'API Error 529 server overloaded' },
-  { id: 'e7', name: 'rate_limit', output: 'rate limit exhausted' },
-  { id: 'e8', name: 'fallback', output: 'fallback to default, skipped validation' },
+  { id: 'e6', name: 'API Error 529', output: 'API Error 529 server overloaded. API Error 529 retry failed' },
+  { id: 'e7', name: 'rate_limit', output: 'rate limit exhausted, rate limit exhausted again' },
 ]
 for (const ec of errorCases) {
   console.log(`\n=== Test: ${ec.name} → completed_with_warnings ===`)
@@ -118,6 +117,21 @@ for (const ec of errorCases) {
   writeFull(cwd, spec)
   const r = runScanPostCheck({ cwd, specDir: spec, outputText: ec.output })
   assert(r.status === 'completed_with_warnings', `${ec.name}: 状态 ${r.status}`)
+  clean(cwd, spec)
+}
+
+// ── tool_use_error / fallback 不再触发 warning（描述性文本正常提及） ──
+const noWarnCases = [
+  { id: 'e5', name: 'tool_use_error', output: 'tool_use_error: file not found' },
+  { id: 'e8', name: 'fallback', output: '作为 fallback 方案，跳过了这个步骤' },
+]
+for (const ec of noWarnCases) {
+  console.log(`\n=== Test: ${ec.name} → 不触发 warning ===`)
+  const cwd = setup(ec.id), spec = specSetup(ec.id)
+  writeFull(cwd, spec)
+  const r = runScanPostCheck({ cwd, specDir: spec, outputText: ec.output })
+  assert(!r.checks.some(c => c.name === 'tool_use_error' || c.name === 'fallback_or_skip'),
+    `${ec.name}: 不应有 tool_use_error/fallback_or_skip warning`)
   clean(cwd, spec)
 }
 

@@ -28,6 +28,52 @@ export function sanitizeProjectName(name) {
 }
 
 /**
+ * 校验从 step 2 解析出的项目列表。
+ * 不通过则不落盘 projects/*.yaml、不展开 perProject 步骤。
+ *
+ * @param {Array<{id: string, path?: string}>} projects - 项目列表（含可选 path）
+ * @param {string} sourceRoot - 源码根目录，用于 path 安全校验
+ */
+export function validateParsedProjects(projects, sourceRoot) {
+  const errors = []
+  if (!projects || projects.length === 0) {
+    return { ok: false, errors: ['项目列表为空'] }
+  }
+  if (projects.length > 10) {
+    return { ok: false, errors: [`项目数量 ${projects.length} 超过上限 10，疑似误解析`] }
+  }
+  const safeRoot = resolve(sourceRoot)
+  const seen = new Set()
+  for (const proj of projects) {
+    const id = proj.id || proj
+    if (seen.has(id)) {
+      errors.push(`重复项目名: ${id}`)
+    }
+    seen.add(id)
+    // slug 合法性：只允许 a-z 0-9 _ - .，长度 2-64
+    if (!/^[a-zA-Z][\w\-.]{1,63}$/.test(id)) {
+      errors.push(`项目名 "${id}" 不合法（需 slug 格式：字母开头，只含 a-zA-Z0-9_-., 长度 2-64）`)
+    }
+    // path 安全校验（如果提供了 path）
+    if (proj.path) {
+      if (proj.path.includes('..')) {
+        errors.push(`项目 "${id}" 的 path 包含 .. ，拒绝越界`)
+      } else {
+        const absPath = resolve(safeRoot, proj.path)
+        if (!absPath.startsWith(safeRoot + '/') && absPath !== safeRoot) {
+          errors.push(`项目 "${id}" 的 path "${proj.path}" 解析后超出 source_root`)
+        }
+        if (!existsSync(absPath)) {
+          errors.push(`项目 "${id}" 的 path "${proj.path}" 不存在`)
+        }
+      }
+    }
+  }
+  if (errors.length > 0) return { ok: false, errors }
+  return { ok: true, errors: [] }
+}
+
+/**
  * 在容器/Docker 环境下，git 可能因目录所有权不匹配报 dubious ownership。
  * 使用 -c safe.directory= 临时参数，不污染全局 git config。
  * @param {string} cwd - 仓库根目录
@@ -2254,91 +2300,132 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
 
   // scan 阶段 step 2 "构建扫描项目列表" 完成后，按项目展开 perProject 步骤
   if (stageName === 'scan' && steps[currentIdx]?.name === '构建扫描项目列表') {
-    // 解析项目列表：从 step 2 输出提取，或回退读取 projects/*.yaml
-    let projectNames = []
-    // sanitizeProjectName 已提取到模块顶层（含字母校验 + 长度≥2）
+    // 解析项目列表：只接受结构化输出（YAML block 或 BEGIN_PROJECT_LIST 标记）
+    // 不再从自由文本猜测项目名——自由文本列表的误解析会导致垃圾项目落盘
+    let parsedProjects = [] // Array<{id, path?}>
+    let parsedFromStructuredOutput = false
     if (outputText) {
-      // 匹配方式 1: "1. project-name" 编号列表
-      // 正则收紧：token 必须以字母开头，避免误捕获纯数字 "0"/"7" 和步骤说明中英文行
-      const numbered = outputText.match(/^\s*\d+\.\s+([a-zA-Z][\w\-.]*)/gm)
-      if (numbered) {
-        // task-05 B2 延伸修正：原 /[—\-:].*$/ 会把 ASCII 连字符当后缀分隔符，
-        // 把 order-service 切成 order。现只针对中文长破折号 `—`（LLM 输出列表时常作分隔符）。
-        const raw = numbered.map(m => m.replace(/^\s*\d+\.\s+/, '').replace(/—.*$/, '').trim())
-        projectNames = raw.map(sanitizeProjectName).filter(Boolean)
-        if (projectNames.length > 0) { stageData.scanMeta = stageData.scanMeta || {}; stageData.scanMeta.projectListParsed = true; }
-      }
-      // 匹配方式 2: 括号枚举 "子项目frontend/order-service/user-service" 或 "项目: a, b, c"
-      if (projectNames.length === 0) {
-        const parenMatch = outputText.match(/(?:子项目|项目)[\s:：]*(\S+(?:[\/、,，]+\S+)*)/)
-        if (parenMatch) {
-          const raw = parenMatch[1].split(/[\/、,，]+/).map(s => s.trim()).filter(Boolean)
-          projectNames = raw.map(sanitizeProjectName).filter(Boolean)
-          if (projectNames.length > 0) { stageData.scanMeta = stageData.scanMeta || {}; stageData.scanMeta.projectListParsed = true; }
+      // 格式 A: YAML block — 匹配 scan_projects: 下所有 - id: xxx 条目（含多行属性）
+      const yamlBlock = outputText.match(/scan_projects:\s*\n([\s\S]+?)(?=$|\n[^\s])/)
+      if (yamlBlock) {
+        const entries = [...yamlBlock[1].matchAll(/-\s+id:\s*(\S+)(?:[\s\S]*?)(?=\n\s+-\s+id:|$)/g)]
+        for (const m of entries) {
+          const id = sanitizeProjectName(m[1])
+          if (!id) continue
+          // 提取可选 path 字段
+          const pathMatch = m[0].match(/path:\s*(\S+)/)
+          const entry = pathMatch ? { id, path: pathMatch[1].trim() } : { id }
+          parsedProjects.push(entry)
         }
+        parsedFromStructuredOutput = parsedProjects.length > 0
       }
-      // 匹配方式 3: 结构化 YAML block "scan_projects:\n  - id: name"
-      if (projectNames.length === 0) {
-        const yamlMatch = outputText.match(/scan_projects:\s*\n((?:\s+-\s+id:\s+\S+\s*\n?)+)/)
-        if (yamlMatch) {
-          const raw = [...yamlMatch[1].matchAll(/-\s+id:\s*(\S+)/g)].map(m => m[1])
-          projectNames = raw.map(sanitizeProjectName).filter(Boolean)
-          if (projectNames.length > 0) { stageData.scanMeta = stageData.scanMeta || {}; stageData.scanMeta.projectListParsed = true; }
+      // 格式 B: BEGIN_PROJECT_LIST ... END_PROJECT_LIST 标记块
+      if (!parsedFromStructuredOutput) {
+        const blockMatch = outputText.match(/BEGIN_PROJECT_LIST\s*\n([\s\S]*?)\n*END_PROJECT_LIST/)
+        if (blockMatch) {
+          const raw = [...blockMatch[1].matchAll(/^-\s+(\S+)/gm)].map(m => m[1])
+          parsedProjects = raw.map(s => sanitizeProjectName(s)).filter(Boolean).map(id => ({ id }))
+          parsedFromStructuredOutput = parsedProjects.length > 0
         }
       }
     }
-    if (projectNames.length === 0) {
-      // 回退：读取所有已注册项目
-      console.warn('⚠️ 未能从 step 2 输出解析项目列表，回退扫描所有注册项目')
-      stageData.scanMeta = stageData.scanMeta || {}; stageData.scanMeta.projectListParsed = false;
+
+    const projectNames = parsedProjects.map(p => p.id)
+
+    if (parsedFromStructuredOutput) {
+      stageData.scanMeta = stageData.scanMeta || {}
+      stageData.scanMeta.projectListParsed = true
+    } else {
+      // 结构化输出未解析到 → 回退读取已有 projects/*.yaml
+      // 读取时也校验：path 不存在的 yaml 视为垃圾，直接跳过
+      console.warn('⚠️  step 2 未输出结构化项目列表，回退扫描已注册项目')
+      stageData.scanMeta = stageData.scanMeta || {}
+      stageData.scanMeta.projectListParsed = false
       const projectsDir = join(specBase, 'projects')
       if (existsSync(projectsDir)) {
-        projectNames = readdirSync(projectsDir)
-          .filter(f => f.endsWith('.yaml'))
-          .map(f => f.replace(/\.yaml$/, ''))
+        const yamlFiles = readdirSync(projectsDir).filter(f => f.endsWith('.yaml'))
+        const fallbackProjects = []
+        const fallbackSkipped = []
+        for (const yf of yamlFiles) {
+          const pName = yf.replace(/\.yaml$/, '')
+          const yamlContent = readFileSync(join(projectsDir, yf), 'utf8')
+          const pathMatch = yamlContent.match(/^path:\s*(.+)/m)
+          const pPath = pathMatch ? pathMatch[1].trim() : pName
+          // 校验 path 是否存在且在 source_root 内
+          const absPath = resolve(cwd, pPath)
+          if (pPath.includes('..') || (!absPath.startsWith(resolve(cwd)) && absPath !== resolve(cwd))) {
+            fallbackSkipped.push(`${pName} (path 越界: ${pPath})`)
+            continue
+          }
+          if (!existsSync(absPath)) {
+            fallbackSkipped.push(`${pName} (path 不存在: ${pPath})`)
+            continue
+          }
+          fallbackProjects.push({ id: pName, path: pPath })
+        }
+        if (fallbackSkipped.length > 0) {
+          console.warn(`⚠️  跳过 ${fallbackSkipped.length} 个垃圾/过期项目配置：${fallbackSkipped.join(', ')}`)
+          console.warn('   建议清理 projects/ 下的无效 yaml 文件')
+        }
+        parsedProjects = fallbackProjects
+        projectNames.length = 0
+        projectNames.push(...fallbackProjects.map(p => p.id))
+      }
+      if (parsedProjects.length === 0) {
+        // 无结构化输出 + 无合法已有项目 → step 2 失败
+        console.error('❌ step 2 未输出结构化项目列表，且 projects/ 下无合法项目配置')
+        console.error('   请在 --output 中输出 scan_projects YAML block 或 BEGIN_PROJECT_LIST 标记块')
+        steps[currentIdx].validationError = '未输出结构化项目列表且无合法 fallback'
+        // 不展开 perProject 步骤，直接跳到下一步
       }
     }
-    if (projectNames.length === 0) {
-      projectNames = ['sillyspec'] // 最终兜底
+
+    // 校验解析出的项目列表（原子守卫：不通过就不落盘）
+    const validation = validateParsedProjects(parsedProjects, cwd)
+    if (!validation.ok) {
+      console.error(`❌ 项目列表校验失败: ${validation.errors.join('; ')}`)
+      console.error('   step 2 完成，但不展开 perProject 步骤。请检查 --output 中的项目列表。')
+      steps[currentIdx].validationError = validation.errors.join('; ')
     }
 
-    // 自动注册未注册的子项目（确保 projects/*.yaml 存在，避免展开时 projectRoot 缺失）
+    // 自动注册 + 保存 runtime + 展开 perProject 步骤（仅在校验通过时）
     const projectsDir = join(specBase, 'projects')
-    for (const pName of projectNames) {
-      const projYaml = join(projectsDir, `${pName}.yaml`)
-      if (!existsSync(projYaml)) {
-        mkdirSync(projectsDir, { recursive: true })
-        // 子项目路径推测：检查 cwd 下是否有同名目录
-        const candidates = [
-          join(cwd, pName),                              // cwd/frontend
-          join(cwd, 'backend', pName),                 // cwd/backend/user-service
-          join(cwd, 'packages', pName),                // monorepo packages
-          join(cwd, 'apps', pName),                     // monorepo apps
-          join(cwd, 'services', pName),                // monorepo services
-        ]
-        const detected = candidates.find(c => existsSync(c))
-        const regPath = detected || join(cwd, pName)
-        writeFileSync(projYaml, `name: ${pName}\npath: ${regPath}\nstatus: active\n`)
-        console.log(`  📝 自动注册子项目: ${pName} → ${regPath}`)
+    if (validation.ok) {
+      for (const proj of parsedProjects) {
+        const pName = proj.id
+        const projYaml = join(projectsDir, `${pName}.yaml`)
+        if (!existsSync(projYaml)) {
+          mkdirSync(projectsDir, { recursive: true })
+          const candidates = [
+            join(cwd, pName),
+            join(cwd, 'backend', pName),
+            join(cwd, 'packages', pName),
+            join(cwd, 'apps', pName),
+            join(cwd, 'services', pName),
+          ]
+          const detected = candidates.find(c => existsSync(c))
+          const regPath = detected || join(cwd, pName)
+          writeFileSync(projYaml, `name: ${pName}\npath: ${regPath}\nstatus: active\n`)
+          console.log(`  📝 自动注册子项目: ${pName} → ${regPath}`)
+        }
       }
-    }
 
-    // 保存到 runtime 供后续使用 + 防重复展开
-    const scanStatePath = join(specBase, '.runtime', 'scan-projects.json')
-    mkdirSync(join(specBase, '.runtime'), { recursive: true })
-    let scanState = { projects: projectNames, expanded: false }
-    if (existsSync(scanStatePath)) {
-      try { scanState = JSON.parse(readFileSync(scanStatePath, 'utf8')) } catch {}
-    }
+      // 保存 runtime 状态
+      const scanStatePath = join(specBase, '.runtime', 'scan-projects.json')
+      mkdirSync(join(specBase, '.runtime'), { recursive: true })
+      let scanState = { projects: projectNames, expanded: false }
+      if (existsSync(scanStatePath)) {
+        try { scanState = JSON.parse(readFileSync(scanStatePath, 'utf8')) } catch {}
+      }
 
-    // 收集当前步骤之后所有 perProject 步骤
-    const stageDef = stageRegistry[stageName]
-    const allSteps = stageDef?.steps || []
-    const perProjectSteps = allSteps.filter(s => s.perProject)
+      // 收集当前步骤之后所有 perProject 步骤
+      const stageDef = stageRegistry[stageName]
+      const allSteps = stageDef?.steps || []
+      const perProjectSteps = allSteps.filter(s => s.perProject)
 
-    // 防重复展开：runtime 标记 或 steps 已含项目标识
-    const alreadyExpanded = scanState.expanded || steps.some(s => s.name?.match(/\[.+\]\s*$/))
-    if (!alreadyExpanded && perProjectSteps.length > 0) {
+      // 防重复展开
+      const alreadyExpanded = scanState.expanded || steps.some(s => s.name?.match(/\[.+\]\s*$/))
+      if (!alreadyExpanded && perProjectSteps.length > 0) {
       // 找到当前步骤（step 2）在动态 steps 中的位置
       const insertBase = currentIdx + 1
       let insertPos = insertBase
@@ -2377,8 +2464,9 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
       // 标记已展开，防止 resume 重复插入
       scanState.expanded = true
       writeFileSync(scanStatePath, JSON.stringify(scanState))
-    }
-  }
+    } // end !alreadyExpanded
+    } // end validation.ok
+  } // end step 2
 
   const nextPendingIdx = steps.findIndex(s => s.status === 'pending' || s.status === 'in-progress')
 
