@@ -34,3 +34,9 @@ modules:
     needs_review: false
     review_reasons: []
 
+  worktree:
+    status: active
+    doc: modules/worktree.md
+    needs_review: false
+    review_reasons: []
+

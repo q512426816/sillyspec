@@ -1,6 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-06-04 16:25:42
+updated_at: 2026-06-28
 ---
 
 # Worktree 与 Hook 门禁
@@ -51,6 +52,7 @@ sillyspec/<change-name>
    - 其他失败降级为 `in-place-fallback`，在主工作区记录 meta。
 9. 创建普通 worktree 后，会 best-effort `fetch origin` 并尝试 fast-forward 到默认远端分支。
 10. 主工作区已有 staged/unstaged/untracked 变更时，会 overlay 到 worktree，并创建 baseline checkpoint commit。
+11. **依赖供给**（change `2026-06-28-worktree-deps-provision`）：baseline overlay 后调用 `provisionDeps(worktreePath, mainCwd)`（`src/worktree-deps.js`）——lockfile 一致时 junction/symlink 主 checkout 的 `node_modules`（瞬时零网络），否则按 `local.yaml` 的 `project.type` + lockfile 推断并执行 install。结果写入 meta（`depsStatus` 等字段）。**供给失败不阻断 create**，只记 `depsStatus=failed`，交由 execute 验证硬门阻断。
 
 ## `meta.json`
 
@@ -77,6 +79,12 @@ sillyspec/<change-name>
 | `baselineFiles` | 从主工作区 overlay 的未提交文件 |
 | `baselineCommit` | baseline checkpoint commit |
 | `baselineHash` | execute 前主工作区 dirty baseline hash |
+| `depsStatus` | 依赖供给状态：`linked` / `installed` / `n/a` / `failed` / `missing` / `stale`（provisionDeps 写入） |
+| `depsMethod` | 供给机制：`junction` / `symlink` / `install` / `null` |
+| `depsSource` | 依赖来源：`main-checkout` / `install` / `null` |
+| `depsLockHash` | 供给时 lockfile/package.json 的 sha256 前 16 位 |
+| `depsCheckedAt` | 上次供给时间（ISO8601） |
+| `depsError` | 仅 `depsStatus=failed` 时填，install/junction 失败信息 |
 
 ## `apply`
 
@@ -127,6 +135,16 @@ sillyspec worktree create <change-name>
 - 无 worktree：只展示 diff 摘要。
 
 注意：`buildExecuteSteps()` 有 `noWorktree` 参数，但当前 `runCommand()` 没有解析 `--no-worktree` flag，CLI help 也没有列出该 flag。文档不要把 `--no-worktree` 写成已接通的公开流程。
+
+### execute 依赖验证硬门（change `2026-06-28-worktree-deps-provision`）
+
+`run.js completeStep` 在 execute 分支标记 step done **之前**调用 `enforceDepsGate()`：
+
+1. 读 `meta.depsStatus`：∈ `{linked, installed, n/a}` 放行。
+2. 否则判断 wave 级 opt-out（`isCurrentWaveAllNoDepsVerify`）：仅当前 wave（如 `Wave 2 执行`）内**全部** task 的 `tasks/task-NN.md` frontmatter `no_deps_verify: true` 才跳门。非 wave 步骤（确认执行范围/acceptance/suffix）恒过门。
+3. 不达标 → step 置 `blocked` + `process.exit(1)` 拒绝 `--done`，提示 `sillyspec worktree doctor --fix` 或手动 install。
+
+execute **入口自检**：已存在 worktree（`create()` short-circuit 不供给）时，入口校验 `depsStatus` 缺失 / `node_modules` 丢失（missing）/ `lockfileHash` 变化（stale）→ 触发 `provisionDeps` 重供给并更新 meta，再交门判定。
 
 ## quick 阶段
 

@@ -121,6 +121,10 @@ export function runScanPostCheck({ cwd, specDir, outputText = '', scanMeta = {} 
     const invalidCommands = []
 
     // 简单提取 local.yaml 中的 commands
+    // 注意（X-3, change 2026-06-28-worktree-deps-provision）：仅校验 build/test/lint 这类
+    // `npm run <script>` 形式命令在 package.json scripts 中存在。install/typecheck 是直接
+    // 包管理器调用（pnpm install / npm ci / npx tsc），不是 npm script，不在此校验范围——
+    // 下方的 /npm run (\S+)/g 正则天然不会匹配它们，无需也不应对其做 scripts 校验。
     const commandMatch = yamlContent.match(/build:\s*"([^"]+)"/) ||
                         yamlContent.match(/test:\s*"([^"]+)"/) ||
                         yamlContent.match(/lint:\s*"([^"]+)"/)

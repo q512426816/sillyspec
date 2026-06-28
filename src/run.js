@@ -610,6 +610,17 @@ async function ensureStageSteps(progress, stageName, cwd, specDir = null) {
 async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjectName, platformOpts = {}, prevStepAnswer = null) {
   const step = steps[stepIndex]
   const total = steps.length
+  // ── 越界防御 ──
+  // steps/defSteps 来自 getStageSteps（如 buildPlanSteps），其长度可能与 progress.steps
+  // 不一致（例如平台模式下 changeDir 解析失败导致 buildPlanSteps(null) 只返回 2 步 fixedPrefix）。
+  // 此时 stepIndex 可能越界，访问 step.name 会 TypeError 崩溃。降级处理而非崩溃。
+  if (!step) {
+    console.error(`⚠️  无法输出步骤 ${stepIndex + 1}/${total}：步骤定义缺失`)
+    console.error(`   stage=${stageName} stepIndex=${stepIndex} defSteps.length=${steps.length}`)
+    console.error(`   可能原因：平台模式下 getStageSteps 未传 specRoot，或 plan/execute 步骤动态生成后 defSteps 未同步。`)
+    console.error(`   请检查 --change 指定的变更目录是否存在、specRoot 是否正确，然后重试。`)
+    return false
+  }
   const projectName = dbProjectName || basename(cwd)
 
   // ── Revision context injection ──
@@ -1575,6 +1586,11 @@ async function runStage(pm, progress, stageName, cwd, changeName, skipApproval =
         process.exit(1)
       }
     }
+    // 入口 deps 自检（D-002）：已存在 worktree（create short-circuit 不供给）时重供给
+    if (existingMeta) {
+      const execSpecBase = platformOpts?.specRoot || join(cwd, '.sillyspec')
+      await ensureDepsFreshness(cwd, effectiveChange, execSpecBase, existingMeta)
+    }
   }
 
   // ── execute 阶段启动时固定 executeRunId（绑定变更名，避免跨变更复用） ──
@@ -1682,7 +1698,7 @@ async function runStage(pm, progress, stageName, cwd, changeName, skipApproval =
 
   if (currentIdx === -1) {
     // 已完成 → 自动重置，重新开始
-    const freshSteps = await getStageSteps(stageName, cwd, progress)
+    const freshSteps = await getStageSteps(stageName, cwd, progress, platformOpts?.specRoot || null)
     stageData.steps = freshSteps
       ? freshSteps.map(s => ({ name: s.name, status: 'pending' }))
       : []
@@ -1758,7 +1774,7 @@ async function runStage(pm, progress, stageName, cwd, changeName, skipApproval =
     }
   }
 
-  const defSteps = await getStageSteps(stageName, cwd, progress)
+  const defSteps = await getStageSteps(stageName, cwd, progress, platformOpts?.specRoot || null)
   if (defSteps && defSteps[currentIdx]) {
     // noAI 步骤自动完成（CLI-only，不需要 Agent 参与）
     if (defSteps[currentIdx].noAI || stageData.steps[currentIdx]?.noAI) {
@@ -2146,6 +2162,93 @@ async function continueStep(pm, progress, stageName, cwd, answer, options = {}) 
   return { stageCompleted: false, currentIdx, nextPendingIdx: nextPendingIdx }
 }
 
+/**
+ * 判断当前 execute step 所在 wave 是否全部 task 都声明 no_deps_verify: true（D-006@v2）。
+ * 仅 wave 执行步骤（名如 "Wave N 执行"）可 opt-out；非 wave 步骤恒返回 false（保守过门）。
+ */
+function isCurrentWaveAllNoDepsVerify(stepName, changeDir) {
+  if (!stepName) return false
+  const m = String(stepName).match(/^Wave\s+(\d+)/i)
+  if (!m) return false
+  const waveN = parseInt(m[1], 10)
+  if (!changeDir) return false
+  const planPath = join(changeDir, 'plan.md')
+  if (!existsSync(planPath)) return false
+  const plan = readFileSync(planPath, 'utf8')
+  const waveRe = new RegExp(`^##\\s*Wave\\s+${waveN}\\b[^\\n]*\\n([\\s\\S]*?)(?=\\n##\\s|\\n#\\s|$)`, 'm')
+  const waveMatch = plan.match(waveRe)
+  if (!waveMatch) return false
+  const taskIds = [...waveMatch[1].matchAll(/^[-*]\s*\[[ x]\]\s*(task-\d+)/gim)].map(x => x[1])
+  if (taskIds.length === 0) return false
+  for (const id of taskIds) {
+    const cardPath = join(changeDir, 'tasks', `${id}.md`)
+    if (!existsSync(cardPath)) return false // 卡片缺失 → 保守不跳
+    const card = readFileSync(cardPath, 'utf8')
+    const fm = card.match(/^---\n([\s\S]*?)\n---/)
+    if (!fm) return false
+    if (!/no_deps_verify:\s*true/i.test(fm[1])) return false
+  }
+  return true
+}
+
+/**
+ * execute deps 验证硬门（change 2026-06-28-worktree-deps-provision / D-001@v1, D-003@v1, D-006@v2）。
+ * depsStatus 不达标且非 wave 级 opt-out 时阻断 --done：置 step=blocked + exit(1)，与 requiresWait 同范式。
+ * 放行返回 true；阻断时 process.exit(1) 不返回。
+ */
+async function enforceDepsGate(stageName, cwd, changeName, step, steps, currentIdx, specBase, platformOpts) {
+  if (stageName !== 'execute') return true
+  let meta = null
+  try {
+    const { WorktreeManager } = await import('./worktree.js')
+    meta = new WorktreeManager({ cwd }).getMeta(changeName)
+  } catch {}
+  const depsStatus = meta?.depsStatus
+  if (['linked', 'installed', 'n/a'].includes(depsStatus)) return true
+  const changeDir = changeName ? join(specBase, 'changes', changeName) : null
+  if (isCurrentWaveAllNoDepsVerify(step?.name, changeDir)) return true
+  if (steps && steps[currentIdx]) steps[currentIdx].status = 'blocked'
+  console.error(`❌ 拒绝 --done：依赖未就绪（depsStatus=${depsStatus || 'unknown'}），不得在无构建/测试能力时声称完成。`)
+  console.error(`   修复：sillyspec worktree doctor --fix${changeName ? ` --change ${changeName}` : ''}`)
+  console.error(`   或在 worktree 内手动安装依赖后重试。`)
+  if (meta?.depsError) console.error(`   上次供给错误：${meta.depsError}`)
+  process.exit(1)
+}
+
+/**
+ * execute 入口 deps 自检（D-002，change 2026-06-28-worktree-deps-provision）。
+ * 已存在 worktree（create short-circuit 不供给）时，校验 depsStatus 缺失 / node_modules
+ * 丢失(missing) / lockfile 变化(stale) → 触发 provisionDeps 重供给并写回 meta。
+ */
+async function ensureDepsFreshness(cwd, changeName, specBase, worktreeMeta) {
+  if (!worktreeMeta || !worktreeMeta.worktreePath) return
+  const { provisionDeps, lockfileHash } = await import('./worktree-deps.js')
+  const wtPath = worktreeMeta.worktreePath
+  const nodeModulesExists = existsSync(join(wtPath, 'node_modules'))
+  const currentHash = lockfileHash(wtPath)
+  const noStatus = !worktreeMeta.depsStatus
+  const missing = ['linked', 'installed'].includes(worktreeMeta.depsStatus) && !nodeModulesExists
+  const stale = !!(worktreeMeta.depsLockHash && currentHash && currentHash !== worktreeMeta.depsLockHash)
+  if (!noStatus && !missing && !stale) return
+  const reason = noStatus ? 'depsStatus 缺失' : (missing ? 'node_modules 丢失' : 'lockfile 变化')
+  console.log(`🔄 worktree deps 自检：${reason}（depsStatus=${worktreeMeta.depsStatus || 'unknown'}），重新供给...`)
+  let deps = {}
+  try {
+    deps = provisionDeps(wtPath, cwd, { specBase }) || {}
+  } catch (e) {
+    deps = { depsStatus: 'failed', depsError: `provisionDeps crashed: ${e.message}` }
+  }
+  try {
+    const { WorktreeManager } = await import('./worktree.js')
+    const metaPath = join(new WorktreeManager({ cwd }).getWorktreePath(changeName), 'meta.json')
+    const updated = { ...worktreeMeta, ...deps }
+    writeFileSync(metaPath, JSON.stringify(updated, null, 2) + '\n')
+    console.log(`✅ deps 重新供给完成：depsStatus=${deps.depsStatus}`)
+  } catch (e) {
+    console.warn(`⚠️  deps meta 写回失败：${e.message}`)
+  }
+}
+
 async function completeStep(pm, progress, stageName, cwd, outputText, inputText = null, options = {}) {
   const { printNext = true, confirm = false, changeName, platformOpts = {}, nonInteractive = false, confirmMode = null } = options
   const specBase = platformOpts.specRoot || join(cwd, '.sillyspec')
@@ -2205,6 +2308,9 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
       process.exit(1)
     }
   }
+
+  // ── execute deps 验证硬门（change 2026-06-28-worktree-deps-provision）──
+  await enforceDepsGate(stageName, cwd, changeName, steps[currentIdx], steps, currentIdx, specBase, platformOpts)
 
   steps[currentIdx].status = 'completed'
   steps[currentIdx].completedAt = new Date().toLocaleString('zh-CN',{hour12:false})
@@ -2874,7 +2980,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
     appendFileSync(inputsPath, entry)
   }
 
-  const defSteps = await getStageSteps(stageName, cwd, progress)
+  const defSteps = await getStageSteps(stageName, cwd, progress, platformOpts?.specRoot || null)
   console.log(`✅ Step ${currentIdx + 1}/${steps.length} 完成：${steps[currentIdx].name}\n`)
 
   // Workflow post_check：scan 深度扫描完成后自动检查产物
@@ -3007,7 +3113,7 @@ async function skipStep(pm, progress, stageName, cwd, changeName) {
     process.exit(1)
   }
 
-  const defSteps = await getStageSteps(stageName, cwd, progress)
+  const defSteps = await getStageSteps(stageName, cwd, progress, platformOpts?.specRoot || null)
   const stepDef = defSteps ? defSteps[currentIdx] : null
   if (stepDef && !stepDef.optional) {
     console.error(`❌ 步骤 "${steps[currentIdx].name}" 不可跳过`)
@@ -3106,7 +3212,7 @@ function showStatus(progress, stageName) {
 }
 
 async function resetStage(pm, progress, stageName, cwd, changeName, platformOpts = {}) {
-  const defSteps = await getStageSteps(stageName, cwd, progress)
+  const defSteps = await getStageSteps(stageName, cwd, progress, platformOpts?.specRoot || null)
   progress.stages[stageName] = {
     status: 'in-progress',
     startedAt: new Date().toLocaleString('zh-CN',{hour12:false}),

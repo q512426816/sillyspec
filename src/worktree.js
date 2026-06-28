@@ -12,6 +12,7 @@ import { execSync } from 'child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, readdirSync, statSync } from 'fs';
 import { join, resolve, dirname } from 'path';
 import { createHash } from 'crypto';
+import { provisionDeps, lockfileHash } from './worktree-deps.js';
 
 const WORKTREES_REL = '.sillyspec/.runtime/worktrees';
 const BRANCH_PREFIX = 'sillyspec/';
@@ -325,6 +326,15 @@ export class WorktreeManager {
       baselineCommit = this._createBaselineCheckpoint(worktreePath, name);
     }
 
+    // 5.8 依赖供给（change 2026-06-28-worktree-deps-provision）
+    // baseline overlay 后让 worktree 立即可构建/测试；失败不阻断 create，只记 meta。
+    let deps = {};
+    try {
+      deps = provisionDeps(worktreePath, this.cwd, { specBase: join(this.cwd, '.sillyspec') }) || {};
+    } catch (e) {
+      deps = { depsStatus: 'failed', depsError: `provisionDeps crashed: ${e.message}` };
+    }
+
     // 6. 写入 meta.json
     const meta = {
       changeName: name,
@@ -340,6 +350,12 @@ export class WorktreeManager {
       baselineHash,
       syncStatus,
       ...(syncError ? { syncError } : {}),
+      depsStatus: deps.depsStatus,
+      depsMethod: deps.depsMethod || null,
+      depsSource: deps.depsSource || null,
+      depsLockHash: deps.depsLockHash || null,
+      depsCheckedAt: deps.depsCheckedAt || null,
+      ...(deps.depsError ? { depsError: deps.depsError } : {}),
     };
 
     const metaPath = join(worktreePath, META_FILE);
@@ -639,6 +655,18 @@ export class WorktreeManager {
    * @param {{ fix?: boolean, staleHours?: number }} opts
    * @returns {{ issues: Array<{ type: string, name: string, detail: string, fixable: boolean }>, fixed: string[], unfixable: string[] }}
    */
+  _doctorReprovision(name, wtPath) {
+    try {
+      const deps = provisionDeps(wtPath, this.cwd, { specBase: join(this.cwd, '.sillyspec') }) || {};
+      const metaPath = join(this.getWorktreePath(name), META_FILE);
+      const meta = this.getMeta(name) || {};
+      writeFileSync(metaPath, JSON.stringify({ ...meta, ...deps }, null, 2) + '\n');
+      return { ok: true, msg: `re-provisioned ${name}: depsStatus=${deps.depsStatus}` };
+    } catch (e) {
+      return { ok: false, msg: `re-provision failed for ${name}: ${e.message}` };
+    }
+  }
+
   doctor({ fix = false, staleHours = 24 } = {}) {
     const issues = [];
     const fixed = [];
@@ -684,6 +712,28 @@ export class WorktreeManager {
         const dirPath = join(this.worktreeBase, name);
         const hasMeta = existsSync(join(dirPath, META_FILE));
         const meta = hasMeta ? this.getMeta(name) : null;
+
+        // deps 依赖状态检查（change 2026-06-28-worktree-deps-provision）
+        if (meta && meta.worktreePath && existsSync(meta.worktreePath) && meta.mode !== 'in-place-fallback') {
+          const wtPath = meta.worktreePath;
+          const nmExists = existsSync(join(wtPath, 'node_modules'));
+          const curHash = lockfileHash(wtPath);
+          let depsIssue = null;
+          if (['linked', 'installed'].includes(meta.depsStatus) && !nmExists) {
+            depsIssue = { type: 'deps-missing', detail: 'meta.depsStatus=' + meta.depsStatus + ' 但 node_modules 缺失' };
+          } else if (meta.depsLockHash && curHash && curHash !== meta.depsLockHash) {
+            depsIssue = { type: 'deps-stale', detail: 'lockfile 变化 (' + meta.depsLockHash + ' -> ' + curHash + ')' };
+          } else if (meta.depsStatus === 'failed') {
+            depsIssue = { type: 'deps-failed', detail: '上次依赖供给失败' + (meta.depsError ? ': ' + meta.depsError : '') };
+          }
+          if (depsIssue) {
+            issues.push({ type: depsIssue.type, name, detail: depsIssue.detail, fixable: true });
+            if (fix) {
+              const r = this._doctorReprovision(name, wtPath);
+              (r.ok ? fixed : unfixable).push(r.msg);
+            }
+          }
+        }
 
         // meta 存在但 worktree 目录不存在
         if (meta && meta.worktreePath && !existsSync(meta.worktreePath)) {
