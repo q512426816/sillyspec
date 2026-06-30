@@ -376,6 +376,7 @@ SillySpec worktree — git worktree 隔离管理
   sillyspec worktree apply <change-name> [--check-only]        校验并应用变更到主工作区
   sillyspec worktree assess <change-name>                     风险审计 + 自动 apply
   sillyspec worktree list                                      列出所有活跃 worktree
+  sillyspec worktree meta <change-name>                        读取 worktree meta.json
   sillyspec worktree cleanup <change-name> [--force]           强制清理 worktree
   sillyspec worktree doctor [--fix] [--stale-hours N]          健康检查 + 修复
 
@@ -494,6 +495,27 @@ SillySpec worktree — git worktree 隔离管理
             console.log('   → 检查变更: sillyspec worktree diff ' + wtName);
             console.log('   → 丢弃变更: sillyspec worktree cleanup ' + wtName);
           }
+          break;
+        }
+        case 'meta': {
+          if (!wtName) {
+            console.error('❌ 用法: sillyspec worktree meta <change-name>');
+            process.exit(1);
+          }
+          const meta = wm.getMeta(wtName);
+          if (!meta) {
+            console.error(`❌ 未找到 worktree meta: ${wtName}（可能未创建或已被清理）`);
+            process.exit(1);
+          }
+          console.log(`change:       ${wtName}`);
+          console.log(`worktreePath: ${meta.worktreePath || '(未设置)'}`);
+          console.log(`branch:       ${meta.branch || '(未设置)'}`);
+          console.log(`mode:         ${meta.mode || '(未设置)'}`);
+          if (meta.baseBranch) console.log(`baseBranch:   ${meta.baseBranch}`);
+          if (meta.baseHash) console.log(`baseHash:     ${String(meta.baseHash).slice(0, 8)}`);
+          console.log('');
+          console.log('JSON:');
+          console.log(JSON.stringify(meta, null, 2));
           break;
         }
         case 'list': {

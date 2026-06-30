@@ -836,7 +836,7 @@ async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjec
   if (stageName === 'execute' && promptText.includes('{EXECUTE_RUN_ID}')) {
     let runId = ''
     const execSpecBase = platformOpts?.specRoot || join(cwd, '.sillyspec')
-    const runIdFile = join(execSpecBase, '.runtime', `current-execute-run-id-${effectiveChange}`)
+    const runIdFile = join(execSpecBase, '.runtime', `current-execute-run-id-${changeName}`)
     try {
       if (existsSync(runIdFile)) {
         runId = readFileSync(runIdFile, 'utf8').trim()
@@ -1130,13 +1130,14 @@ async function executeScanPostcheck(cwd, platformOpts, scanProfile) {
 /**
  * Plan postcheck 的执行代理：委托给 plan-postcheck.js 模块
  */
-async function executePlanPostcheck(cwd, platformOpts) {
+async function executePlanPostcheck(cwd, platformOpts, progress) {
   const { executePlanPostcheck: runPostcheck } = await import('./stages/plan-postcheck.js')
   const { resolveChangeDir } = await import('./modules.js')
   await runPostcheck({
     cwd,
     specRoot: platformOpts?.specRoot,
-    resolveChangeDir
+    resolveChangeDir,
+    progress
   })
 }
 
@@ -1786,7 +1787,7 @@ async function runStage(pm, progress, stageName, cwd, changeName, skipApproval =
       } else if (cliAction === 'scanPostcheck') {
         await executeScanPostcheck(cwd, platformOpts, scanProfile)
       } else if (cliAction === 'planPostcheck') {
-        await executePlanPostcheck(cwd, platformOpts)
+        await executePlanPostcheck(cwd, platformOpts, progress)
       }
       stageData.steps[currentIdx].status = 'completed'
       stageData.steps[currentIdx].completedAt = new Date().toLocaleString('zh-CN', { hour12: false })

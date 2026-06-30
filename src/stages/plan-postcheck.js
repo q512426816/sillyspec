@@ -369,11 +369,11 @@ export function validatePlanArtifacts(changeDir) {
 /**
  * Plan postcheck 主函数：Wave 重排 + 一致性校验 + 产物确认
  *
- * @param {{ cwd: string, specRoot?: string, resolveChangeDir: Function }} context
+ * @param {{ cwd: string, specRoot?: string, resolveChangeDir: Function, progress?: object }} context
  * @throws {Error} 校验失败时抛出
  */
 export async function executePlanPostcheck(context) {
-  const { cwd, specRoot, resolveChangeDir } = context
+  const { cwd, specRoot, resolveChangeDir, progress } = context
 
   const specDir = specRoot || pJoin(cwd, '.sillyspec')
   const changesDir = pJoin(specDir, 'changes')
@@ -382,11 +382,9 @@ export async function executePlanPostcheck(context) {
     return
   }
 
-  // 找到当前变更目录
-  const progressPath = pJoin(specDir, '.runtime', 'progress.json')
+  // 找到当前变更目录（progress 由调用方从 SQLite 读取并传入；.runtime/progress.json 已废弃）
   let changeDir = null
-  if (existsSync(progressPath)) {
-    const progress = JSON.parse(readFileSync(progressPath, 'utf8'))
+  if (progress) {
     changeDir = resolveChangeDir(cwd, progress, specDir)
   }
   if (!changeDir) {
