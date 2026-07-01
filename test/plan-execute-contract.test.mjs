@@ -318,9 +318,36 @@ console.log('\n--- Plan Postcheck: task id 不连续失败 ---')
   assert(!result.ok, 'id 不连续应不通过 postcheck')
 }
 
+// ─────────────────────────────────────────
+// Bug C 回归: 「## 自检」段的 - [x] checkbox 不应被解析为 task
+// 详见 docs/sillyspec/plan-postcheck-self-check-checkbox-false-dup.md
+// ─────────────────────────────────────────
+console.log('\n--- Bug C 回归: 自检段 checkbox 不误解析 ---')
+{
+  const plan = `# Plan
+
+## Wave 1
+- [ ] task-01: 建立 schema
+- [ ] task-02: 接口实现
+
+## Wave 2
+- [ ] task-03: 前端对接
+- [ ] task-04: 集成测试
+
+## 自检
+- [x] 每个 task 有编号(task-01~04),总数 4(≤15)
+- [x] 无泛泛风险(转为具体验收条目与 task-04/task-06 等)
+`
+  const result = validatePlanForExecute(plan)
+  assert(result.ok, `自检段含 - [x] 不应误报，errors: ${result.errors.join('; ')}`)
+  assert(result.tasks.length === 4, `应只解析 4 个 task，实际 ${result.tasks.length}（自检 checkbox 被误纳入）`)
+  const ids = result.tasks.map(t => t.index).sort((a, b) => a - b)
+  assert(JSON.stringify(ids) === JSON.stringify([1, 2, 3, 4]), `task id 应为 1-4，实际 ${ids}`)
+}
+
 // ── 结果 ──
 console.log(`\n${'='.repeat(50)}`)
-console.log(`✅ 通过: ${12 - failed}  ❌ 失败: ${failed}`)
+console.log(`✅ 通过: ${13 - failed}  ❌ 失败: ${failed}`)
 if (failures.length > 0) {
   console.log(`失败项:`)
   failures.forEach(f => console.log(`  - ${f}`))

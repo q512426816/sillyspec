@@ -470,6 +470,13 @@ export async function executePlanPostcheck(context) {
               currentWaveTasks = []
               continue
             }
+            // 非 Wave 标题行（## 自检 等）退出当前 Wave 段，避免自检 checkbox
+            // 被混入 task 列表导致 Wave 结构比对误判。
+            if (/^#+\s/.test(line)) {
+              if (currentWaveTasks) existingWaves.push(currentWaveTasks)
+              currentWaveTasks = null
+              continue
+            }
             const tm = line.match(/^[-*]\s*\[[ x]\]\s*task-(\d+)/i)
             if (tm && currentWaveTasks) {
               currentWaveTasks.push(`task-${tm[1]}`)

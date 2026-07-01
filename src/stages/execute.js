@@ -370,6 +370,15 @@ function parseWavesFromPlan(planContent) {
       continue
     }
 
+    // 遇到任何非 Wave 的标题行（## 自检、## 备注 等）时退出当前 Wave 段，
+    // 避免「## 自检」段里的 - [x] checkbox 被误当 task 定义解析（导致
+    // Contract 校验报 task id 重复/不连续）。详见 docs/sillyspec/plan-postcheck-self-check-checkbox-false-dup.md
+    if (/^#+\s/.test(line)) {
+      currentWave = null
+      currentTask = null
+      continue
+    }
+
     if (!currentWave) continue
 
     const taskMatch = line.match(/^[-*]\s*\[[ x]\]\s*(.+)/)

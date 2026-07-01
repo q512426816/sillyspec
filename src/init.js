@@ -8,6 +8,48 @@ import chalk from 'chalk';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+// ── .runtime/ 残留清理（平台模式防源码污染） ──
+// 平台模式（specRoot 指向外部）下，源码目录的 .sillyspec/.runtime/ 是旧残留，
+// 应让 specRoot 成为唯一运行时根。但若源码目录的 .sillyspec/ 本身就是该项目
+// 的 specDir（含真实资产），其 .runtime/ 里的 worktrees/、sillyspec.db、
+// global.json、gate-status.json 是真实工作状态，整删会摧毁 worktree meta、
+// 导致 depsStatus 恒为 unknown、branch already exists 死循环。
+// 详见 docs/sillyspec/runtime-cleanup-destroys-worktree-meta.md
+//
+// 策略：白名单保留权威状态，逐项删除可重建的缓存子项；未知子项默认保留（安全侧倾斜）。
+const RUNTIME_KEEP = new Set([
+  'worktrees',          // worktree 目录 + meta.json（worktree.js:17）
+  'sillyspec.db',       // SQLite 进度库（权威状态源，progress.js:7）
+  'global.json',        // 项目名/活跃变更缓存（progress.js:8）
+  'gate-status.json',   // worktree-guard 门禁状态（progress.js:9）
+  'contract-artifacts', // execute endpoint 契约（verify 阶段读取）
+  'execute-runs',       // task review 结果（task-review.js）
+]);
+
+/**
+ * 清理 .sillyspec/ 下的运行时残留，保留权威状态。
+ * 同时清理 local.yaml、codebase/（这些非权威，整删安全）。
+ * @param {string} legacyDir - 源码目录的 .sillyspec/ 路径
+ */
+export function cleanupRuntimeResidue(legacyDir) {
+  // local.yaml、codebase/ 非权威，整删
+  for (const residue of ['local.yaml', 'codebase']) {
+    const p = join(legacyDir, residue);
+    if (existsSync(p)) { try { rmSync(p, { recursive: true, force: true }) } catch {} }
+  }
+  // .runtime/ 逐项清理，白名单保留
+  const runtimeDir = join(legacyDir, '.runtime');
+  if (existsSync(runtimeDir)) {
+    let entries = [];
+    try { entries = readdirSync(runtimeDir, { withFileTypes: true }); } catch {}
+    for (const entry of entries) {
+      if (RUNTIME_KEEP.has(entry.name)) continue;
+      const p = join(runtimeDir, entry.name);
+      try { rmSync(p, { recursive: true, force: true }) } catch {}
+    }
+  }
+}
+
 // ── 递归复制目录 ──
 function copyDirSync(src, dst) {
   mkdirSync(dst, { recursive: true });
@@ -130,11 +172,8 @@ async function doInstall(projectDir, tools, subprojects = [], specDir = null) {
       // 真实资产存在：拒绝整体删除，仅清理运行时残留
       console.error('❌ [sillyspec] 拒绝删除源码目录的 .sillyspec/：检测到真实资产（changes/、projects/ 或 sillyspec.db）。');
       console.error('   该项目似乎本身就用 SillySpec 管理。如需改用外部 spec 目录，请先手动迁移/备份。');
-      console.error('   本次仅清理运行时残留（.runtime/、local.yaml、codebase/）。');
-      for (const residue of ['.runtime', 'local.yaml', 'codebase']) {
-        const p = join(legacyDir, residue);
-        if (existsSync(p)) { try { rmSync(p, { recursive: true, force: true }) } catch {} }
-      }
+      console.error('   本次仅清理运行时残留（.runtime/ 缓存、local.yaml、codebase/），保留 worktrees 与进度状态。');
+      cleanupRuntimeResidue(legacyDir);
     } else {
       // 无真实资产：确属旧版本残留，安全删除
       try { rmSync(legacyDir, { recursive: true, force: true }) } catch {}

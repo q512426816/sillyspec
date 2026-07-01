@@ -1131,8 +1131,10 @@ async function executeScanPostcheck(cwd, platformOpts, scanProfile) {
  * Plan postcheck 的执行代理：委托给 plan-postcheck.js 模块
  */
 async function executePlanPostcheck(cwd, platformOpts, progress) {
+  // resolveChangeDir 是本模块 line 505 定义的本地函数；历史上曾误从 ./modules.js
+  // 导入（该模块未导出此函数，得到 undefined），导致 plan-postcheck.js:388 抛
+  // "resolveChangeDir is not a function"。详见 docs/sillyspec/plan-postcheck-resolvechangedir-not-a-function.md
   const { executePlanPostcheck: runPostcheck } = await import('./stages/plan-postcheck.js')
-  const { resolveChangeDir } = await import('./modules.js')
   await runPostcheck({
     cwd,
     specRoot: platformOpts?.specRoot,
@@ -1292,11 +1294,9 @@ export async function runCommand(args, cwd, specDir = null) {
       const hasDb = existsSync(join(legacyDir, 'sillyspec.db'));
 
       if (hasChanges || hasProjects || hasDb) {
-        console.error('❌ [sillyspec] 拒绝删除源码目录的 .sillyspec/：检测到真实资产。仅清理运行时残留。');
-        for (const residue of ['.runtime', 'local.yaml', 'codebase']) {
-          const p = join(legacyDir, residue);
-          if (existsSync(p)) { try { rmSync(p, { recursive: true, force: true }) } catch {} }
-        }
+        console.error('❌ [sillyspec] 拒绝删除源码目录的 .sillyspec/：检测到真实资产。仅清理运行时残留，保留 worktrees 与进度状态。');
+        const { cleanupRuntimeResidue } = await import('./init.js')
+        cleanupRuntimeResidue(legacyDir);
       } else {
         try { rmSync(legacyDir, { recursive: true, force: true }) } catch {}
       }
