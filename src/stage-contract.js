@@ -144,8 +144,14 @@ function readIfExists(file) {
 }
 
 function warnMissingIds(warnings, ids, targetContent, targetName, sourceName) {
+  // 剥版本后缀（@vN）按基号词边界匹配：target 里写裸号 D-001 即视为引用了 D-001@V1
+  // 的当前版本（prompt 常裸号引用，旧版字面 includes("D-001@V1") 会批量误报）。
+  // 大小写不敏感：target 整体大写后比对。
+  const targetUpper = targetContent.toUpperCase()
   for (const id of ids) {
-    if (!targetContent.toUpperCase().includes(id)) {
+    const base = id.replace(/@V\d+$/, '')
+    const re = new RegExp(`\\b${base}\\b`)
+    if (!re.test(targetUpper)) {
       warnings.push(`${targetName} 未引用 ${sourceName} 中的 ${id}`)
     }
   }
@@ -281,9 +287,9 @@ function validateBrainstormOutputs(cwd, changeName, context = {}) {
       const design = readIfExists(join(changeDir, 'design.md'))
       const requirements = readIfExists(join(changeDir, 'requirements.md'))
       const tasks = readIfExists(join(changeDir, 'tasks.md'))
+      // decision 的天然引用落点是 design.md；requirements（需求按 FR 组织）与
+      // tasks（骨架，待 plan 展开）不强求逐条引用每个架构决策，否则批量误报。
       warnMissingIds(warnings, decisionIds, design, 'design.md', 'decisions.md')
-      warnMissingIds(warnings, decisionIds, requirements, 'requirements.md', 'decisions.md')
-      warnMissingIds(warnings, decisionIds, tasks, 'tasks.md', 'decisions.md')
     }
   }
 

@@ -167,10 +167,12 @@ writeFileSync(join(traceDir, 'requirements.md'), '# Requirements\n\n### FR-01: A
 writeFileSync(join(traceDir, 'tasks.md'), '- [ ] task-01: implement naming (D-001@v1)\n')
 
 const brainstormTrace = runValidators('brainstorm', traceRoot, 'trace')
-if (brainstormTrace.ok === true && brainstormTrace.warnings.some(w => w.includes('requirements.md 未引用') && w.includes('D-001@V1'))) {
-  console.log('✅ brainstorm validator 检测到 requirements.md 缺少 D-001@v1 引用')
+// 修 B：requirements.md / tasks.md 不再强制引用每个 decision（decision 天然落点 design.md）。
+// 此处 requirements.md 没有 D-001，但 design.md 有，故不应报 requirements 未引用。
+if (brainstormTrace.ok === true && !brainstormTrace.warnings.some(w => w.includes('requirements.md 未引用'))) {
+  console.log('✅ brainstorm validator 不再强制 requirements.md 引用 decision（修B：落点 design）')
 } else {
-  console.log('❌ brainstorm validator 未检测到 requirements.md 缺少 D-001@v1 引用', brainstormTrace)
+  console.log('❌ brainstorm validator 仍强制 requirements.md 引用 decision', brainstormTrace.warnings)
   failed++
 }
 
