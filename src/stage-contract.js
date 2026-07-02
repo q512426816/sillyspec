@@ -391,10 +391,11 @@ function validateVerifyOutputs(cwd, changeName, context = {}) {
     return { ok: false, errors, warnings }
   }
 
-  // verify 阶段应该产出 verify-result.md（或类似报告）
+  // verify 阶段必须产出 verify-result.md —— 不存在则不能完成。
+  // 历史教训：AI 可能跳过报告直接 --done，导致"假完成"。此处提级为 error 强制阻断。
   const verifyResult = join(changeDir, 'verify-result.md')
   if (!existsSync(verifyResult)) {
-    warnings.push('verify-result.md 不存在（verify 阶段建议产出验证报告）')
+    errors.push(`verify-result.md 不存在 — verify 阶段必须产出验证报告才能完成（${verifyResult}）`)
   }
 
   // 确保核心规范文件仍然存在
@@ -414,6 +415,17 @@ function validateVerifyOutputs(cwd, changeName, context = {}) {
     }
     const decisionIds = extractCurrentDecisionIds(decisions)
     warnMissingIds(warnings, decisionIds, verify, 'verify-result.md', 'decisions.md')
+
+    // ── FAIL 结论门控（适用于所有变更，不限风险等级）──
+    // verify-result.md 结论为 FAIL 时，verify 阶段不能 completed。
+    // 历史教训：CLI 曾不校验结论，AI 写 FAIL 后 verify 仍被标记完成并提示"验证通过可以归档"。
+    const conclusionLine = verify.match(/^##\s*结论\s*\n\s*(PASS(?:\s+WITH\s+NOTES)?|FAIL)/im)
+    const conclusionStr = conclusionLine ? conclusionLine[1].toUpperCase().replace(/\s+/g, ' ') : ''
+    if (conclusionStr === 'FAIL') {
+      errors.push('verify-result.md 结论为 FAIL — 验证未通过，不能标记 verify 完成；请修复后重新运行验证')
+    } else if (!conclusionStr) {
+      warnings.push('verify-result.md 未识别到「## 结论」章节（应为 PASS / PASS WITH NOTES / FAIL）')
+    }
 
     // ── P0: Change Risk Gate — 核心功能缺少真实集成验证时 FAIL ──
     const changeRiskProfile = detectChangeRisk({

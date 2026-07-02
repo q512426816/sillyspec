@@ -46,8 +46,8 @@ updated_at: 2026-07-02 11:00:00
 | propose | 7 | 包含“生成规范文件”与“自检门控”，四件套是该阶段预期产物 |
 | plan | 动态 | 默认 8 步；`plan.md` 解析到任务后插入任务蓝图协调器 |
 | execute | 动态 | 默认 12 步；Wave 来自 `plan.md`，解析失败时默认 3 个 Wave |
-| verify | 7 | 只读校验 + 写 `verify-result.md` |
-| archive | 5 | 辅助阶段；第 4 步必须带 `--confirm`，由 `run.js` 移动目录并注销 active change |
+| verify | 7 | 只读校验 + 写 `verify-result.md`；完成时 `validateVerifyOutputs` 校验 `verify-result.md` 存在且结论非 FAIL，缺失或 FAIL 则阻断完成 |
+| archive | 5 | 辅助阶段；第 4 步必须带 `--confirm`，由 `run.js` 移动目录并注销 active change；移动前硬校验 `plan.md` 存在，移动后校验 `design.md`/`module-impact.md` |
 | quick | 3 | 辅助阶段；直接在主工作区实现，不创建 worktree |
 | explore | 1 | 只读探索 |
 | status | 3 | 状态展示 |

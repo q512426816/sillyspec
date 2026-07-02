@@ -2024,6 +2024,13 @@ async function archiveChangeDirectory(pm, cwd, progress, specBase) {
     console.error(`❌ 归档失败：源目录不存在 ${srcDir}`)
     process.exit(1)
   }
+  // 移动前硬校验：变更包必须含 plan.md，否则不该归档。
+  // 在移动前阻断（而非移动后），目录尚未动，用户可直接修复后重试。
+  if (!existsSync(join(srcDir, 'plan.md'))) {
+    console.error(`❌ 归档失败：变更目录缺少 plan.md（${srcDir}）`)
+    console.error(`   plan.md 是归档的必需产物。请先补全 plan 阶段产出再归档。`)
+    process.exit(1)
+  }
   if (existsSync(destDir)) {
     console.error(`❌ 归档失败：目标目录已存在 ${destDir}`)
     process.exit(1)
@@ -2038,6 +2045,7 @@ async function archiveChangeDirectory(pm, cwd, progress, specBase) {
 
   await pm.unregisterChange(cwd, archiveChangeName)
   console.log(`📦 已归档：${archiveChangeName} → archive/${date}-${archiveChangeName}/`)
+  return destDir
 }
 
 // ── Wait Step ──
@@ -2375,6 +2383,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
   const specBase = platformOpts.specRoot || join(cwd, '.sillyspec')
   const stageData = progress.stages[stageName]
   const scanProfile = stageData?.scanProfile || null
+  let archivedDir = null // archive step「确认归档」实际归档目录（archiveChangeDirectory 返回）
 
   // ── WAIT MARKER 硬校验 ──
   // 如果 output 包含等待标记，拒绝 --done 推进
@@ -2462,23 +2471,22 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
       console.log('⚠️  请添加 --confirm 确认归档，例如：sillyspec run archive --done --confirm --output "确认归档"')
       return { stageCompleted: false, currentIdx, nextPendingIdx: currentIdx }
     }
-    await archiveChangeDirectory(pm, cwd, progress, specBase)
+    archivedDir = await archiveChangeDirectory(pm, cwd, progress, specBase)
   }
 
   // archive "确认归档" 步骤完成后，校验归档完整性
   if (stageName === 'archive' && steps[currentIdx]?.name === '确认归档' && confirm) {
-    const projectName = progress.project || basename(cwd)
-    const contractResult = runValidators('archive', cwd, changeName, { projectName, specRoot: platformOpts?.specRoot })
-    if (contractResult.errors.length > 0) {
-      console.error(`\n❌ 归档校验失败：`)
-      for (const err of contractResult.errors) {
-        console.error(`   - ${err}`)
-      }
-    }
-    if (contractResult.warnings.length > 0) {
-      console.warn(`\n⚠️ 归档校验警告：`)
-      for (const w of contractResult.warnings) {
-        console.warn(`   - ${w}`)
+    // contracts.archive.validators 为空数组（两个 validator 生效窗口互斥，注册为阶段级会误报），
+    // 故 runValidators('archive') 是空跑。这里直接对实际归档目录做内容完整性校验。
+    // plan.md 已在 archiveChangeDirectory 移动前硬校验阻断，此处只查推荐文档。
+    if (archivedDir && existsSync(archivedDir)) {
+      const recommendedDocs = ['design.md', 'module-impact.md']
+      const missingRecommended = recommendedDocs.filter(d => !existsSync(join(archivedDir, d)))
+      if (missingRecommended.length > 0) {
+        console.warn(`\n⚠️ 归档校验警告：归档目录缺少推荐文档`)
+        for (const d of missingRecommended) console.warn(`   - ${d}（${archivedDir}）`)
+      } else {
+        console.log(`\n✅ 归档校验通过：核心文档齐全`)
       }
     }
   }
@@ -2936,10 +2944,11 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
         // summary 失败不影响主流程
         console.log('\n👉 下一步：sillyspec run verify（验证通过后才能归档）')
       }
-    } else if (stageName === 'verify') {
-      console.log('\n👉 下一步：sillyspec run archive（验证通过，可以归档了）')
     } else if (stageName === 'archive') {
       console.log('\n👉 归档完成！现在可以提交了：git commit -m "..."')
+    } else if (stageName === 'verify') {
+      // verify 的"验证通过"提示延后到下方 validator 通过后才打印，
+      // 避免校验失败（FAIL / 缺 verify-result.md）时仍声称"验证通过可以归档"。
     } else {
       console.log(`\n下一步由你决定：sillyspec run <stage>（brainstorm/plan/execute/verify/archive 等）`)
     }
@@ -2954,12 +2963,24 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
           console.error(`   - ${err}`)
         }
         console.error(`\n   提示：修复缺失产物后重新运行此步骤，或使用 --skip-approval 跳过校验`)
+        // 产物校验失败必须阻断完成 —— 否则 validator 形同虚设，
+        // verify 会带着 FAIL/缺 verify-result.md 被 ✅ 标记完成（历史教训）。
+        // plan/execute 的专项契约校验（下方）在产物齐全后才需要继续跑，故此处先 return。
+        progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
+        await pm._write(cwd, progress, changeName)
+        triggerSync(cwd, changeName, platformOpts)
+        return { stageCompleted: false, currentIdx, nextPendingIdx: currentIdx }
       }
       if (contractResult.warnings.length > 0) {
         console.warn(`\n⚠️ 阶段 ${stageName} 校验警告：`)
         for (const w of contractResult.warnings) {
           console.warn(`   - ${w}`)
         }
+      }
+
+      // verify 产物校验通过 + 结论非 FAIL（否则上面已阻断），此时才能声称"验证通过"
+      if (stageName === 'verify') {
+        console.log('\n✅ 验证通过，下一步：sillyspec run archive')
       }
 
       // ── Plan postcheck contract：plan.md 必须满足 execute 契约 ──
