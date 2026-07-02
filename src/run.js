@@ -1291,30 +1291,39 @@ export async function runCommand(args, cwd, specDir = null) {
   // runCommand 后续所有 .sillyspec/ 操作必须用 specBase
   const specBase = platformOpts.specRoot || join(cwd, '.sillyspec')
 
-  // 平台模式：清理旧版本残留的 cwd/.sillyspec/（防止源码污染）。
+  // 平台模式：首次接入时清理旧版本残留的 cwd/.sillyspec/（防止源码污染）。
   // ⚠️ 同 init.js：必须保护真实资产（changes/、projects/、sillyspec.db）。
+  // 只在「首次」执行一次——用 cwd 下的 .sillyspec-platform-cleaned 标记文件记录已处理，
+  // 后续每次 run 直接跳过，避免重复检查 + 红叉噪声（此清理不阻塞流程、不动真实资产）。
   if (platformOpts.specRoot) {
     const legacyDir = join(cwd, '.sillyspec')
-    if (existsSync(legacyDir)) {
-      let hasChanges = false;
-      try {
-        const cd = join(legacyDir, 'changes');
-        if (existsSync(cd)) hasChanges = readdirSync(cd).length > 0;
-      } catch {}
-      let hasProjects = false;
-      try {
-        const pd = join(legacyDir, 'projects');
-        if (existsSync(pd)) hasProjects = readdirSync(pd).length > 0;
-      } catch {}
-      const hasDb = existsSync(join(legacyDir, 'sillyspec.db'));
+    const cleanedMarker = join(cwd, '.sillyspec-platform-cleaned')
+    if (!existsSync(cleanedMarker)) {
+      if (existsSync(legacyDir)) {
+        let hasChanges = false;
+        try {
+          const cd = join(legacyDir, 'changes');
+          if (existsSync(cd)) hasChanges = readdirSync(cd).length > 0;
+        } catch {}
+        let hasProjects = false;
+        try {
+          const pd = join(legacyDir, 'projects');
+          if (existsSync(pd)) hasProjects = readdirSync(pd).length > 0;
+        } catch {}
+        const hasDb = existsSync(join(legacyDir, 'sillyspec.db'));
 
-      if (hasChanges || hasProjects || hasDb) {
-        console.error('❌ [sillyspec] 拒绝删除源码目录的 .sillyspec/：检测到真实资产。仅清理运行时残留，保留 worktrees 与进度状态。');
-        const { cleanupRuntimeResidue } = await import('./init.js')
-        cleanupRuntimeResidue(legacyDir);
-      } else {
-        try { rmSync(legacyDir, { recursive: true, force: true }) } catch {}
+        if (hasChanges || hasProjects || hasDb) {
+          // 真实资产存在：只清运行时残留（白名单保留 worktrees/进度），不整删
+          const { cleanupRuntimeResidue } = await import('./init.js')
+          cleanupRuntimeResidue(legacyDir);
+          console.log('ℹ️  [sillyspec] 源码目录 .sillyspec/ 含真实资产，已跳过整删，仅清理运行时残留（仅本次首次，后续不再提示）。');
+        } else {
+          try { rmSync(legacyDir, { recursive: true, force: true }) } catch {}
+          if (!existsSync(legacyDir)) console.log('🧹 已清理旧版本残留的源码 .sillyspec/ 目录');
+        }
       }
+      // 标记本 cwd 已做平台残留清理决策，后续 run 跳过（即使之后 .sillyspec/ 被重建也不误清）
+      try { writeFileSync(cleanedMarker, new Date().toISOString() + '\n') } catch {}
     }
   }
 
@@ -1340,10 +1349,15 @@ export async function runCommand(args, cwd, specDir = null) {
     changeName = flags[changeIdx + 1]
     if (stageName === 'quick') {
       linkedChanges = changeName.split(',').map(s => s.trim()).filter(Boolean)
-      // quick 的 progress 键固定走 'default'（不污染关联变更的 execute progress）；
-      // 归属语义完全由 linkedChanges 承担
       changeName = null
     }
+  }
+  // quick 的 progress 键固定走 'default'：归属语义已由 linkedChanges 承担（→ quick-guard.json
+  // → <linked-changes> 占位符注入 prompt）。progress 不能走 pm.read(cwd, null) 的自动检测——
+  // 多活跃 change 项目里 quick 步骤进度会随活跃 change 增减在各 change/default 间漂移，
+  // 表现为 --done 时「回退」到更早步骤。固定 default 后无论是否带 --change 都稳定。
+  if (stageName === 'quick') {
+    changeName = 'default'
   }
 
   // 解析 --files a.js,b.js（quick 专用：显式声明 allowedFiles）
@@ -1414,6 +1428,12 @@ export async function runCommand(args, cwd, specDir = null) {
     } else {
       // brainstorm 作为流程入口，自动生成变更名并初始化
       if (stageName === 'brainstorm') {
+        if (isDone) {
+          console.error('❌ --done 找不到变更进度数据。')
+          console.error('   请用 --change <变更名> 指定要完成的变更，')
+          console.error('   或先运行 sillyspec run brainstorm --change <变更名> 初始化。')
+          process.exit(1)
+        }
         const date = new Date().toISOString().slice(0, 10)
         const autoName = `${date}-new-change`
         console.log(`🔄 自动创建变更：${autoName}`)

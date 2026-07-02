@@ -1,6 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-06-04 16:25:42
+updated_at: 2026-07-02 11:00:00
 ---
 
 # 平台模式、Workflow 与 Sync
@@ -23,6 +24,10 @@ created_at: 2026-06-04 16:25:42
 ```
 
 后续 `--done` / `--skip` 会从该文件恢复参数。
+
+## 平台残留清理（一次性）
+
+`run.js` 在平台模式（`specRoot` 指向外部）首次启动时，会检查源码目录 `cwd/.sillyspec/` 是否为旧版本残留并清理（复用 `init.js` 的 `cleanupRuntimeResidue`）。该清理**仅在首次执行一次**：完成后在 cwd 根写入 `.sillyspec-platform-cleaned` 标记文件，后续每次 `run` 直接跳过，避免重复检查与噪声。清理白名单与边界见总览的「平台模式残留清理边界」。
 
 ## 路径替换
 
