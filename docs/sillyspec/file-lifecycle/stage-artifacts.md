@@ -31,7 +31,7 @@ created_at: 2026-06-04 16:25:42
 | execute | 12+ | 生成/使用 worktree，按 Wave 执行；最终 apply/cleanup |
 | verify | 7 | 写 `verify-result.md` |
 | archive | 5 | 写 `module-impact.md`，同步模块文档，归档目录 |
-| quick | 3 | 写 quicklog 或追加 change tasks；直接改主工作区 |
+| quick | 3 | 始终写 quicklog；关联变更时另在各 change tasks.md 追加并勾选 task；直接改主工作区 |
 
 ## 变更四件套
 
@@ -42,7 +42,7 @@ created_at: 2026-06-04 16:25:42
 | `proposal.md` | brainstorm 第 11 步；propose 第 5 步 | propose/plan/verify/archive prompt |
 | `design.md` | brainstorm 第 10/11 步；propose 第 5 步 | plan、execute、verify、worktree apply 的文件清单 |
 | `requirements.md` | brainstorm 第 11 步；propose 第 5 步 | plan、verify |
-| `tasks.md` | brainstorm 第 11 步；propose 第 5 步；quick `--change` 可追加 task | plan、execute、verify、archive |
+| `tasks.md` | brainstorm 第 11 步；propose 第 5 步；quick 关联变更时可追加 task | plan、execute、verify、archive |
 
 `run.js validateFileLocations()` 在阶段完成时会检查：
 
@@ -140,7 +140,7 @@ created_at: 2026-06-04 16:25:42
 
 路径：`.sillyspec/quicklog/QUICKLOG-<git-user>.md`
 
-创建方式：quick 阶段“理解任务”prompt，且没有 `--change` 时创建/追加。
+创建方式：quick 阶段“理解任务”prompt，**每次 quick 都创建/追加**（无论是否关联变更）。关联变更时，同一 ql-ID 会同步写入各关联变更的 tasks.md 作为未勾选 task，step 3 完成时勾选。
 
 格式规则来自 prompt：
 

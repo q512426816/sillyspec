@@ -10,6 +10,7 @@ import { createRequire } from 'module'
 const require = createRequire(import.meta.url)
 import { ProgressManager } from './progress.js'
 import { SCAN_STATUS, POINTER_STATUS, isPointerCorrupted } from './constants.js'
+import { checkbox } from '@inquirer/prompts'
 
 /**
  * 清洗项目名：只保留 ASCII 字母/数字/横线/下划线/点，过滤中文和特殊字符。
@@ -703,6 +704,20 @@ async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjec
   if (changeName && promptText.includes('<change-name>')) {
     promptText = promptText.replace(/<change-name>/g, changeName)
   }
+  // 替换 <linked-changes> 占位符（quick 阶段：从 .runtime/quick-guard.json 读关联变更）
+  if (promptText.includes('<linked-changes>')) {
+    const specBaseLc = platformOpts?.specRoot || join(cwd, '.sillyspec')
+    let linkedChanges = []
+    try {
+      const guardFile = join(specBaseLc, '.runtime', 'quick-guard.json')
+      if (existsSync(guardFile)) {
+        const guard = JSON.parse(readFileSync(guardFile, 'utf8'))
+        linkedChanges = Array.isArray(guard.linkedChanges) ? guard.linkedChanges : []
+      }
+    } catch {}
+    const display = linkedChanges.length > 0 ? linkedChanges.join(', ') : '（无）'
+    promptText = promptText.replace(/<linked-changes>/g, display)
+  }
   // 平台模式：注入路径覆盖指令
   if (platformOpts?.specRoot || platformOpts?.runtimeRoot) {
     const projectName = dbProjectName || basename(cwd)
@@ -1317,11 +1332,18 @@ export async function runCommand(args, cwd, specDir = null) {
     inputText = flags[inputIdx + 1]
   }
 
-  // 解析 --change <name>
+  // 解析 --change <name>（quick 阶段支持逗号分隔多值，作为「关联变更」）
   let changeName = null
+  let linkedChanges = []
   const changeIdx = flags.indexOf('--change')
   if (changeIdx !== -1 && flags[changeIdx + 1]) {
     changeName = flags[changeIdx + 1]
+    if (stageName === 'quick') {
+      linkedChanges = changeName.split(',').map(s => s.trim()).filter(Boolean)
+      // quick 的 progress 键固定走 'default'（不污染关联变更的 execute progress）；
+      // 归属语义完全由 linkedChanges 承担
+      changeName = null
+    }
   }
 
   // 解析 --files a.js,b.js（quick 专用：显式声明 allowedFiles）
@@ -1363,6 +1385,16 @@ export async function runCommand(args, cwd, specDir = null) {
   // scan 元数据追踪（存储在 stageData.scanMeta 中，completeStep 通过 progress 访问）
 
   const pm = new ProgressManager({ specDir: specRoot })
+
+  // quick 阶段：多变更交互式选择关联变更（--change 未指定时）
+  if (stageName === 'quick' && linkedChanges.length === 0) {
+    linkedChanges = await resolveQuickLinkedChanges({
+      pm, cwd, specDir: specRoot, quickFiles,
+      taskDescription: inputText || '',
+      nonInteractive: isNonInteractive,
+    })
+  }
+
   let progress = await pm.read(cwd, changeName)
 
   if (!progress) {
@@ -1523,7 +1555,7 @@ export async function runCommand(args, cwd, specDir = null) {
   }
 
   // 默认：输出当前步骤
-  return await runStage(pm, progress, stageName, cwd, effectiveChange, isSkipApproval, platformOpts, { quickFiles, isAllowNew, isForceBaseline, isForceRescan })
+  return await runStage(pm, progress, stageName, cwd, effectiveChange, isSkipApproval, platformOpts, { quickFiles, isAllowNew, isForceBaseline, isForceRescan, linkedChanges })
 }
 
 /**
@@ -1536,6 +1568,73 @@ function resolveChangeNameAuto(cwd, specDir = null) {
     .filter(e => e.isDirectory() && e.name !== 'archive')
   if (entries.length === 1) return entries[0].name
   return null
+}
+
+/**
+ * quick 阶段多变更交互式选择关联变更。
+ * - 0 活跃变更 → []（仅记 QUICKLOG，不关联）
+ * - 1 活跃变更 → 默认关联它（保持现状友好，不弹交互）
+ * - ≥2 活跃变更 + 交互 → checkbox 多选（推荐项默认勾，空选 = 不关联）
+ * - ≥2 活跃变更 + 非交互 → []（不关联）+ 提示用 --change a,b
+ */
+async function resolveQuickLinkedChanges({ pm, cwd, specDir, quickFiles, taskDescription, nonInteractive }) {
+  let activeChanges = []
+  try {
+    activeChanges = await pm.listChanges(cwd)
+  } catch {
+    activeChanges = []
+  }
+  if (activeChanges.length === 0) return []
+  if (activeChanges.length === 1) return [activeChanges[0]]
+
+  if (nonInteractive || process.stdin.isTTY === false) {
+    console.log('💡 非交互环境，已默认不关联变更；如需关联请用 --change a,b')
+    return []
+  }
+
+  // 脏文件（推荐信号之一）
+  let baselineFiles = []
+  try {
+    const { execSync } = await import('child_process')
+    const gs = execSync('git status --porcelain', { cwd, encoding: 'utf8', timeout: 10000 })
+    baselineFiles = gs.trim().split('\n').filter(Boolean)
+      .map(l => l.slice(3).trim())
+      .filter(f => !f.startsWith('.sillyspec/'))
+  } catch {}
+
+  // 推荐打分（脏文件 + 任务描述双信号）
+  let recommendations = []
+  try {
+    const { recommendChanges } = await import('./quick-recommend.js')
+    recommendations = recommendChanges({ activeChanges, specDir, baselineFiles, quickFiles, taskDescription })
+  } catch {
+    recommendations = activeChanges.map(name => ({ name, score: 0, reasons: [] }))
+  }
+  const scoreMap = new Map(recommendations.map(r => [r.name, r.score]))
+  const reasonMap = new Map(recommendations.map(r => [r.name, r.reasons]))
+  const recommendedSet = new Set(recommendations.filter(r => r.score > 0).map(r => r.name))
+
+  // 按推荐分降序展示
+  const ordered = [...activeChanges].sort((a, b) =>
+    (scoreMap.get(b) || 0) - (scoreMap.get(a) || 0) || a.localeCompare(b))
+
+  const choices = ordered.map(name => {
+    const reasons = reasonMap.get(name) || []
+    const isRec = recommendedSet.has(name)
+    return {
+      name: `${isRec ? '⭐ ' : '   '}${name}`,
+      value: name,
+      description: reasons.length > 0 ? reasons.join('；') : '无推荐信号',
+      checked: isRec,
+    }
+  })
+
+  console.log('🔗 检测到多个活跃变更，选择本次 quick 关联哪些（可多选；不勾选任何项 = 仅记 QUICKLOG，不关联变更）')
+  if (recommendedSet.size > 0) {
+    console.log('   ⭐ = 基于脏文件/任务描述推荐，已默认勾选')
+  }
+  const selected = await checkbox({ message: '关联变更（空格切换，回车确认）', choices })
+  return selected
 }
 
 async function runStage(pm, progress, stageName, cwd, changeName, skipApproval = false, platformOpts = {}, quickOpts = {}) {
@@ -1730,6 +1829,7 @@ async function runStage(pm, progress, stageName, cwd, changeName, skipApproval =
         allowedFiles,
         allowNew,
         forceBaseline,
+        linkedChanges: Array.isArray(quickOpts?.linkedChanges) ? quickOpts.linkedChanges : [],
         startedAt: new Date().toISOString(),
       }
       // 写入 quick-guard.json 供 worktree-guard hook 读取

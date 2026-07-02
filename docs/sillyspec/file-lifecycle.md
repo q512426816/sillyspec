@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-05-31 11:00:00
-updated_at: 2026-07-01 15:00:00
+updated_at: 2026-07-02 10:00:00
 ---
 
 # SillySpec 文件生命周期
@@ -66,7 +66,7 @@ updated_at: 2026-07-01 15:00:00
 | `.sillyspec/changes/archive/` | 是 | archive `确认归档 --confirm` 分支 | 已归档变更目录 |
 | `.sillyspec/knowledge/` | 是 | `init.js` 建目录；scan「Extract Project Knowledge」步骤产出 | `INDEX.md`、`uncategorized.md`，以及 scan 提取的 `conventions.md`/`patterns.md`/`known-issues.md` |
 | `.sillyspec/workflows/` | 是 | `init.js` 从模板复制 | workflow check 定义 |
-| `.sillyspec/quicklog/` | 是 | quick prompt | 无 `--change` quick 任务记录 |
+| `.sillyspec/quicklog/` | 是 | quick prompt | 每次 quick 任务记录（始终写入；关联变更另在各 change tasks.md 勾选） |
 | `.sillyspec/shared/` | 是 | `init.js` | 共享目录，当前无核心生命周期逻辑 |
 | `.sillyspec/workspace/` | 是 | `init.js` | 工作区目录，当前无核心生命周期逻辑 |
 | `.sillyspec/.runtime/` | 否 | `init.js`、`ProgressManager`、运行时命令 | DB、gate、artifacts、history、workflow-runs、worktrees、knowledge-hit-report.json、postcheck-result.json |

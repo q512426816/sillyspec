@@ -151,10 +151,21 @@ function assert(label, condition, detail) {
   assert('quick step 3 禁止 git add -A', step3Prompt.includes('禁止使用 `git add -A`'))
   assert('quick step 3 使用 scoped git add', step3Prompt.includes('git add -- <file...>'))
 
+  // 新语义：QUICKLOG 始终记录 + 多变更关联
+  assert('quick step 1 含 <linked-changes> 占位符', step1Prompt.includes('<linked-changes>'))
+  assert('quick step 1 含「关联变更」措辞', step1Prompt.includes('关联变更'))
+  assert('quick step 1 QUICKLOG 始终创建', step1Prompt.includes('始终创建 QUICKLOG'))
+  assert('quick step 3 QUICKLOG 始终更新', step3Prompt.includes('始终做'))
+
   // run.js 审计包含 quicklog 检查
   const runSrc = await readFile(join(__dirname, '..', 'src', 'run.js'), 'utf8')
   assert('quick 审计检查 quicklog 目录存在', runSrc.includes('quicklog 目录不存在'))
   assert('quick 审计检查 quicklog 为空', runSrc.includes('quicklog 目录为空'))
+
+  // run.js 多变更交互入口 + 推荐打分
+  assert('run.js 含 resolveQuickLinkedChanges 交互入口', runSrc.includes('resolveQuickLinkedChanges'))
+  assert('run.js 含 recommendChanges 推荐打分', runSrc.includes('recommendChanges'))
+  assert('run.js 含 <linked-changes> 占位符注入', runSrc.includes('<linked-changes>'))
 }
 
 // ── 结果 ──
