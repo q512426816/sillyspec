@@ -10,7 +10,7 @@
   },
   "type": "module",
   "bin": {
-    "sillyspec": "./bin/sillyspec.js"
+    "sillyspec": "bin/sillyspec.js"
   },
   "engines": {
     "node": ">=18"
