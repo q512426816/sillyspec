@@ -10,6 +10,7 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from 'fs';
 import { join } from 'path';
+import { resolvePlatformSpecDir } from './progress.js';
 
 const LOCAL_YAML = '.sillyspec/local.yaml';
 const CHANGES_DIR = '.sillyspec/changes';
@@ -200,7 +201,7 @@ export class SyncManager {
     let progressData;
     try {
       const { ProgressManager } = await import('./progress.js');
-      const pm = new ProgressManager();
+      const pm = new ProgressManager({ specDir: resolvePlatformSpecDir(this.cwd) });
       progressData = await pm.read(this.cwd, changeName);
     } catch (err) {
       console.warn(`[sync] 读取 progress 失败 (${changeName}): ${err.message}`);
@@ -225,7 +226,7 @@ export class SyncManager {
     // 更新 platform_last_sync
     try {
       const { ProgressManager } = await import('./progress.js');
-      const pm = new ProgressManager();
+      const pm = new ProgressManager({ specDir: resolvePlatformSpecDir(this.cwd) });
       await pm._updatePlatformLastSync(this.cwd, changeName);
     } catch (err) {
       console.warn(`[sync] 更新 platform_last_sync 失败: ${err.message}`);
@@ -326,7 +327,7 @@ export class SyncManager {
     // 更新本地 approvals 表
     try {
       const { ProgressManager } = await import('./progress.js');
-      const pm = new ProgressManager();
+      const pm = new ProgressManager({ specDir: resolvePlatformSpecDir(this.cwd) });
       await pm._updateApprovalStatus(this.cwd, changeName, result.status, result.reason);
     } catch (err) {
       console.warn(`[sync] 更新本地审批状态失败: ${err.message}`);

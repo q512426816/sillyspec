@@ -34,6 +34,24 @@ export function resolveSpecDir(startDir) {
   }
   return join(resolve(startDir), SPEC_DIR_NAME);
 }
+
+/**
+ * 平台感知的 specDir 解析（所有 CLI 子命令统一入口）。
+ * 优先级：显式 --spec-dir > 平台 pointer(.sillyspec-platform.json 的 specRoot) > resolveSpecDir(cwd)
+ * 修复 run 读 pointer、其它子命令读 legacy .sillyspec 的割裂。
+ */
+export function resolvePlatformSpecDir(cwd, explicitSpecDir = null) {
+  if (explicitSpecDir) return resolve(explicitSpecDir);
+  const pointerPath = join(resolve(cwd), '.sillyspec-platform.json');
+  if (existsSync(pointerPath)) {
+    try {
+      const ptr = JSON.parse(readFileSync(pointerPath, 'utf8'));
+      if (ptr.specRoot) return ptr.specRoot;
+    } catch { /* 损坏的 pointer 落到 fallback */ }
+  }
+  return resolveSpecDir(cwd);
+}
+
 const CHANGES_SUBDIR = 'changes';
 const GLOBAL_FILE = 'global.json';
 const CURRENT_VERSION = 3;

@@ -9,7 +9,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
 import { join, resolve } from 'path';
 import { cmdInit, getVersion } from './init.js';
-import { ProgressManager } from './progress.js';
+import { ProgressManager, resolvePlatformSpecDir } from './progress.js';
 
 // ── CLI 入口 ──
 
@@ -188,7 +188,7 @@ async function main() {
       await (await import('./setup.js')).cmdSetup(dir, { json, list: setupList });
       break;
     case 'progress': {
-      const pm = new ProgressManager();
+      const pm = new ProgressManager({ specDir: resolvePlatformSpecDir(dir, specDir) });
       const progDir = specDir ? dir : resolveEffectiveDir(dir);
       const subCommand = filteredArgs[1];
       const stageIdx = filteredArgs.indexOf('--stage');
@@ -347,7 +347,7 @@ async function main() {
       const wtSubCmd = filteredArgs[1];
       const wtName = filteredArgs.slice(2).find(a => !a.startsWith('-'));
       const wm = new WorktreeManager({ cwd: dir });
-      const pm = new ProgressManager({ specDir });
+      const pm = new ProgressManager({ specDir: resolvePlatformSpecDir(dir, specDir) });
 
       // isolation 写入 DB 的辅助函数
       async function _writeIsolationToDB(cwd, changeName, info) {
@@ -749,7 +749,7 @@ SillySpec platform — SillyHub 平台同步
         console.error('❌ 用法: sillyspec change-rename <旧变更名> <新变更名>');
         process.exit(1);
       }
-      const pm = new ProgressManager({ specDir });
+      const pm = new ProgressManager({ specDir: resolvePlatformSpecDir(dir, specDir) });
       await pm.renameChange(dir, oldName, newName);
       break;
     }
