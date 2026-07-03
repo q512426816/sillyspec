@@ -91,6 +91,8 @@ created_at: 2026-06-04 16:25:42
 - `depends_on`
 - `blocks`
 - `allowed_paths`
+- `provides`（可选，跨任务字段契约：provider 声明产出的 contract + fields）
+- `expects_from`（可选，跨任务字段契约：consumer 声明依赖某 provider 的 contract + needs，plan-postcheck 会与 provider 的 `provides` 对账）
 
 ## `verify-result.md`
 

@@ -113,6 +113,51 @@ execute 进入前调用 `validatePlanForExecute(planContent)`：
 | task id 不连续 | fail-fast |
 | plan.md 被修改后 execute reopen | 重新解析，使用最新 wave/task |
 
+## 跨任务字段契约（provides / expects_from）
+
+### 问题背景
+
+跨 task 的接口/DTO/响应消费场景中，consumer task 常因「误以为 provider 已实现某字段」而 fallback 编造，导致运行时 403/500。
+
+典型链路：前端 task 期望后端 DTO 含 `daemon_instance_id` → 后端 task 漏实现该字段 → 前端拿不到 → fallback 成 `runtime_id` → PUT 鉴权 403。这类 bug 在 plan/execute 阶段无任何拦截，到运行时才暴露。
+
+### 机制
+
+TaskCard frontmatter 新增两个**可选**字段，让跨任务契约显式化：
+
+```yaml
+# provider task（产出接口/DTO/响应的一方）
+provides:
+  - contract: DaemonRuntimeRead        # 对外契约名（DTO/接口/响应类型）
+    fields: [id, runtime_id, daemon_instance_id]
+
+# consumer task（消费的一方）
+expects_from:
+  task-05:                             # provider task id
+    - contract: DaemonRuntimeRead
+      needs: [daemon_instance_id]      # 必须从该 provider 拿到的字段
+```
+
+### 三层防线
+
+| 阶段 | 校验函数 | 缺字段时行为 |
+|------|---------|-------------|
+| plan 完成时（postcheck） | `validateCrossTaskContracts`：每个 `expects_from[provider].needs` 必须是 provider `provides.fields` 子集 | **阻断 plan，不进入 execute** |
+| execute 启动子代理前 | `buildContractFieldInjection`：把 needs↔provides 对比注入 consumer 子代理 | 注入 `CONTRACT_GAP`，铁律要求子代理 **stop and report，禁止 fallback 编造** |
+| verify | 既有 `verifyApiParity`（端点级 parity check） | 端点缺失报告 |
+
+### 向后兼容
+
+`provides` / `expects_from` 均为可选字段：未声明时不触发校验。单 task 变更、无跨任务接口的场景无需填写；老 TaskCard（无这两个字段）完全兼容，不会被阻断。
+
+### 何时填写
+
+- 前后端联动（后端产出 API + DTO，前端消费）
+- 一个 task 定义接口/类型，另一个 task 实现调用方
+- 任何「task-A 的产出形状被 task-B 依赖」的场景
+
+不要把内部实现字段塞进 `provides`；只暴露给其他 task 的对外契约形状。
+
 ## 双重校验
 
 契约在两个时点执行：

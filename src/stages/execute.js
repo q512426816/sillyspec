@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'fs'
 import path from 'path'
+import { buildContractMatrix, buildConsumerInjection, buildContractFieldInjection } from '../contract-matrix.js'
 
 /**
  * 校验 plan.md 是否满足 execute 执行契约
@@ -430,42 +431,60 @@ function buildWavePrompt(wave, waveIndex, changeDir, worktreePath) {
   let contractInjection = ''
   if (changeDir) {
     try {
-      const { buildContractMatrix, buildConsumerInjection } = require('../contract-matrix.js')
       const planFile = path.join(changeDir, 'plan.md')
       if (existsSync(planFile)) {
         const planContent = readFileSync(planFile, 'utf8')
+        // 收集本 wave 所有 task（端点注入与字段注入共用）
+        const waveTasks = wave.tasks.map((t, ti) => {
+          const num = String(t.index || (ti + 1)).padStart(2, '0')
+          return `task-${num}`
+        })
+
+        // 1) 端点级契约（provider/consumer via buildContractMatrix）
         const contracts = buildContractMatrix(planContent, changeDir)
-        if (contracts.length > 0) {
-          // 收集本 wave 所有 task 的注入内容
-          const waveTasks = wave.tasks.map((t, ti) => {
-            const num = String(t.index || (ti + 1)).padStart(2, '0')
-            return `task-${num}`
-          })
-          const relevantContracts = contracts.filter(c => waveTasks.includes(c.consumer))
-          if (relevantContracts.length > 0) {
-            contractInjection = `
+        const relevantContracts = contracts.filter(c => waveTasks.includes(c.consumer))
+        if (relevantContracts.length > 0) {
+          contractInjection = `
 ### API Contract Matrix
 本 Wave 存在前端/后端跨 task 契约：
 ${relevantContracts.map(c => `- **${c.consumer}** 消费 **${c.provider}** 产出的 API`).join('\n')}
 `
-            // 为每个 consumer task 生成详细注入
-            for (const taskName of waveTasks) {
-              const injection = buildConsumerInjection(changeDir, join(changeDir, '..', '..'), taskName, contracts)
-              if (injection) {
-                contractInjection += `
-### 子代理 ${taskName} 的契约注入
+          for (const taskName of waveTasks) {
+            const injection = buildConsumerInjection(changeDir, path.join(changeDir, '..', '..'), taskName, contracts)
+            if (injection) {
+              contractInjection += `
+### 子代理 ${taskName} 的端点契约注入
 为 ${taskName} 启动子代理时，在子代理 prompt 末尾追加以下内容：
 
 <contract-injection>
 ${injection}
 </contract-injection>
 `
-              }
             }
           }
         }
+
+        // 2) 字段级契约（expects_from ↔ provides）
+        // 命中「provider 漏字段、consumer fallback 编造 → 运行时 403/500」这类 bug：
+        // 把 consumer 期望字段 vs provider 承诺字段显式注入子代理 prompt
+        for (const taskName of waveTasks) {
+          const fi = buildContractFieldInjection(changeDir, taskName)
+          if (fi) {
+            contractInjection += `
+### 子代理 ${taskName} 的字段契约注入
+为 ${taskName} 启动子代理时，在子代理 prompt 末尾追加以下内容：
+
+<contract-field-injection>
+${fi}
+</contract-field-injection>
+`
+          }
+        }
       }
-    } catch {}
+    } catch (e) {
+      // 契约注入是 best-effort：失败不阻断 execute，只记录
+      console.warn(`  ⚠️ 契约注入跳过: ${e?.message || e}`)
+    }
   }
 
   // 构建任务摘要（不再内联完整蓝图，减少上下文污染）

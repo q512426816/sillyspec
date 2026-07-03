@@ -358,6 +358,8 @@ full 计划的约束：
 - [ ] plan.md 与 design.md 的文件变更清单一致
 - [ ] 如果涉及构造函数/接口/DTO/client 方法变更，是否搜索了所有调用点并纳入任务范围？
 - [ ] 调用点搜索命令的输出是否记录在 plan.md 或 task-NN.md 中？
+- [ ] 跨任务契约自检：若 task-A 的产出（接口/DTO/响应）被 task-B 消费，consumer 是否在 TaskCard expects_from 里声明所需字段、provider 是否在 provides 里承诺这些字段、两边字段是否一致？（plan-postcheck 会硬校验，此处先自查）
+- [ ] 文件覆盖自检：design.md「文件变更清单」中的每个源码文件，是否都被至少一个 task 的 allowed_paths 覆盖？（plan-postcheck 会硬校验，漏覆盖 = execute 必然漏改，此处先自查）
 - [ ] 如果有 Mermaid 图，依赖关系确实非平凡（非线性/非全并行）
 - [ ] 没有泛泛风险分析（如"需要充分测试"）
 
@@ -407,6 +409,13 @@ requirement_ids: [FR-XX]
 decision_ids: [D-XXX@vN]
 allowed_paths:
   - frontend/src/lib/errors.ts
+provides:                              # 可选。仅当本 task 给其他 task 提供接口/DTO/响应时填
+  - contract: <DTO或响应类型名>          # 如 DaemonRuntimeRead
+    fields: [field_a, field_b]
+expects_from:                          # 可选。仅当本 task 消费其他 task 的契约时填
+  <provider-task-id>:                  # 如 task-05（占位符，不要照抄）
+    - contract: <DTO或响应类型名>
+      needs: [field_a]                 # 必须从该 provider 拿到的字段
 goal: >
   一句话说明这个 task 要做什么、为什么。
 implementation:
@@ -433,6 +442,9 @@ TaskCard 格式规则（必须严格遵守）：
 - verify: 列表，实际可执行的命令
 - constraints: 列表，明确边界（含 brownfield 兼容、异常处理）
 - 不需要：修改文件章节、覆盖来源章节、接口定义章节、TDD 步骤章节、参考章节
+- provides / expects_from 是可选字段：仅当跨 task 契约（一个 task 的接口/DTO/响应被另一个 task 消费）时才填，单 task 或无对外接口场景留空即可
+- 填写后 plan-postcheck 会做硬对账：consumer 的每个 expects_from[provider].needs 字段必须在对应 provider 的 provides.fields 里，否则 plan 阶段阻断（不进入 execute）
+- 不要把内部实现字段塞进 provides；只暴露给其他 task 的对外契约形状
 - 如果存在 decisions.md，无法覆盖的 D-xxx@vN 在 constraints 中标注
 - 写完后用 Write tool 保存到文件
 \`\`\``
@@ -471,6 +483,7 @@ ${subagentPrompts}
 - **一致性自查**：
   - allowed_paths 有无冲突
   - depends_on 与 plan.md Wave 分组是否一致
+  - provides/expects_from 契约自洽：每个 expects_from[provider].needs 字段都在该 provider task 的 provides.fields 里（plan-postcheck 会硬校验，这里提前自查）
   - 如发现矛盾，列出问题清单，不要自动修复`
 
   return {

@@ -11,6 +11,8 @@
  */
 import { existsSync, readFileSync, readdirSync } from 'fs'
 import { join as pJoin } from 'path'
+import jsYaml from 'js-yaml'
+import { parseFileChangeList } from '../change-list.js'
 
 // ═══════════════════════════════════════════════════════════════
 // 解析工具（从 plan.js 迁移）
@@ -88,6 +90,47 @@ function hasAcceptanceCriteria(content) {
  */
 function hasTddOrVerify(content) {
   return /##\s*TDD/.test(content) || /##\s*验证/.test(content) || /##\s*Verify/.test(content)
+}
+
+/**
+ * 解析 task-NN.md 的跨任务契约字段 provides / expects_from
+ * 用 js-yaml 解析 frontmatter（嵌套结构，正则不可靠）。
+ * provides/expects_from 为可选字段；缺失或解析失败时返回空（不阻断）。
+ * @param {string} content - task 文件内容
+ * @returns {{ provides: Array<{contract, fields}>, expectsFrom: Record<string, Array<{contract, needs}>> }}
+ */
+export function parseTaskContracts(content) {
+  const fmMatch = content.match(/^---\n([\s\S]*?)\n---/)
+  if (!fmMatch) return { provides: [], expectsFrom: {} }
+  let fm
+  try {
+    fm = jsYaml.load(fmMatch[1]) || {}
+  } catch {
+    // frontmatter 非合法 YAML（老格式/手写不规范）—— 当作无契约字段，不阻断
+    return { provides: [], expectsFrom: {} }
+  }
+
+  const provides = Array.isArray(fm.provides)
+    ? fm.provides.map(p => ({
+        contract: String(p?.contract || ''),
+        fields: Array.isArray(p?.fields) ? p.fields.map(String) : [],
+      })).filter(p => p.contract)
+    : []
+
+  const expectsFrom = {}
+  if (fm.expects_from && typeof fm.expects_from === 'object' && !Array.isArray(fm.expects_from)) {
+    for (const [providerTask, contracts] of Object.entries(fm.expects_from)) {
+      if (!Array.isArray(contracts)) continue
+      expectsFrom[providerTask] = contracts
+        .map(c => ({
+          contract: String(c?.contract || ''),
+          needs: Array.isArray(c?.needs) ? c.needs.map(String) : [],
+        }))
+        .filter(c => c.contract)
+    }
+  }
+
+  return { provides, expectsFrom }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -220,6 +263,171 @@ export function validateBlueprintConsistency(changeDir) {
   }
 
   return { ok: errors.length === 0, errors, warnings }
+}
+
+/**
+ * 跨任务契约校验器：对账 consumer.expects_from ↔ provider.provides
+ *
+ * 修复场景：consumer task 声明期望 provider 产出某 DTO 的某字段，
+ * 但 provider 的 provides 未承诺（或字段缺失）→ plan 阶段阻断，
+ * 避免到 execute/verify 才暴露（典型表现：前端 fallback 错误字段 → 403/500）。
+ *
+ * provides / expects_from 均为可选字段：未声明时不校验（向后兼容）。
+ * @param {string} changeDir - 变更目录
+ * @returns {{ ok: boolean, errors: string[], warnings: string[] }}
+ */
+export function validateCrossTaskContracts(changeDir) {
+  const errors = []
+  const warnings = []
+
+  const tasksDir = pJoin(changeDir, 'tasks')
+  if (!existsSync(tasksDir)) {
+    return { ok: true, errors, warnings }
+  }
+
+  const taskFiles = readdirSync(tasksDir).filter(f => /^task-\d+\.md$/.test(f))
+  if (taskFiles.length === 0) {
+    return { ok: true, errors, warnings }
+  }
+
+  // 第一遍：收集每个 task 的 provides（taskId → Map(contract → Set(fields))）
+  const providesByTask = new Map()
+  for (const file of taskFiles) {
+    const content = readFileSync(pJoin(tasksDir, file), 'utf8')
+    const taskId = parseTaskId(content, file)
+    if (!taskId) continue
+    const { provides } = parseTaskContracts(content)
+    const contractMap = new Map()
+    for (const p of provides) {
+      contractMap.set(p.contract, new Set(p.fields))
+    }
+    providesByTask.set(taskId, contractMap)
+  }
+
+  // 第二遍：校验每个 consumer 的 expects_from 是否被 provider.provides 覆盖
+  for (const file of taskFiles) {
+    const content = readFileSync(pJoin(tasksDir, file), 'utf8')
+    const consumerId = parseTaskId(content, file)
+    if (!consumerId) continue
+    const { expectsFrom } = parseTaskContracts(content)
+
+    for (const [providerTask, contracts] of Object.entries(expectsFrom)) {
+      if (!providesByTask.has(providerTask)) {
+        for (const c of contracts) {
+          errors.push(`${consumerId}: expects_from 引用了不存在的 ${providerTask}（contract "${c.contract}", needs [${c.needs.join(', ')}]）`)
+        }
+        continue
+      }
+
+      const providerContracts = providesByTask.get(providerTask)
+      for (const c of contracts) {
+        const providerFields = providerContracts.get(c.contract)
+        if (providerFields === undefined) {
+          errors.push(`${consumerId}: expects_from ${providerTask} contract "${c.contract}" needs [${c.needs.join(', ')}] — ${providerTask} 的 provides 未声明此契约`)
+          continue
+        }
+        const missing = c.needs.filter(f => !providerFields.has(f))
+        if (missing.length > 0) {
+          errors.push(`${consumerId}: expects_from ${providerTask} contract "${c.contract}" needs [${missing.join(', ')}] — ${providerTask}.provides 仅含 [${[...providerFields].join(', ')}]`)
+        }
+      }
+    }
+  }
+
+  return { ok: errors.length === 0, errors, warnings }
+}
+
+// ── 路径匹配工具（与 change-list.js 的 normalizeEntry 同源语义）─────────
+// allowed_paths 真实写法常带行内注释（`src/worktree.js (新增)`），匹配前必须归一化。
+function normalizePath(raw) {
+  if (!raw) return ''
+  return raw
+    .replace(/`/g, '')
+    .replace(/\s*（[^）]*）\s*$/, '')
+    .replace(/\s*\([^)]*\)\s*$/, '')
+    .replace(/\\/g, '/')
+    .replace(/\/+$/, '')
+    .trim()
+}
+
+function globMatch(str, pattern) {
+  if (!pattern.includes('*')) return false
+  const re = '^' + pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^/]*') + '$'
+  try { return new RegExp(re).test(str) } catch { return false }
+}
+
+/**
+ * 双向容差匹配：design 清单文件 vs task allowed_paths
+ * 命中条件（任一）：完全相等 / 目录前缀包含（双向）/ glob 通配（双向）
+ */
+function pathMatches(designFile, allowedPath) {
+  const a = normalizePath(designFile)
+  const b = normalizePath(allowedPath)
+  if (!a || !b) return false
+  if (a === b) return true
+  if (a.startsWith(b + '/') || b.startsWith(a + '/')) return true
+  if (globMatch(a, b) || globMatch(b, a)) return true
+  return false
+}
+
+/**
+ * design.md 文件变更清单 → tasks allowed_paths 覆盖对账
+ *
+ * 修复场景：design.md 声明要改某源码文件（如 access-guide UI），但没有任何 task 的
+ * allowed_paths 覆盖它 → execute 子代理被 allowed_paths 锁死不能碰它 → UI 没改
+ * （「页面还是错的」），而 verify 一路对照 task 卡片循环验证照样 PASS。
+ *
+ * 在 plan-postcheck（execute 前）确定性拦截：design 清单中每个源码文件必须被
+ * 至少一个 task 的 allowed_paths 覆盖（前缀 / glob 容差匹配）。
+ *
+ * fail-open 边界（不阻断）：design.md 不存在、无清单章节、解析为空、无 tasks/、
+ * 无 allowed_paths —— 保持与 none/light 级别及老变更向后兼容。
+ *
+ * @param {string} changeDir - 变更目录
+ * @returns {{ ok: boolean, errors: string[], warnings: string[], designFiles: string[], uncovered: string[] }}
+ */
+export function validateDesignFileCoverage(changeDir) {
+  const errors = []
+  const warnings = []
+
+  const designPath = pJoin(changeDir, 'design.md')
+  if (!existsSync(designPath)) {
+    return { ok: true, errors, warnings, designFiles: [], uncovered: [] }
+  }
+
+  const designFiles = [...parseFileChangeList(designPath)]
+  if (designFiles.length === 0) {
+    warnings.push('design.md 未找到「文件变更清单」或清单为空，跳过文件覆盖对账')
+    return { ok: true, errors, warnings, designFiles: [], uncovered: [] }
+  }
+
+  const tasksDir = pJoin(changeDir, 'tasks')
+  if (!existsSync(tasksDir)) {
+    return { ok: true, errors, warnings, designFiles, uncovered: [] }
+  }
+
+  const taskFiles = readdirSync(tasksDir).filter(f => /^task-\d+\.md$/.test(f))
+  const allAllowed = []
+  for (const file of taskFiles) {
+    const content = readFileSync(pJoin(tasksDir, file), 'utf8')
+    allAllowed.push(...parseAllowedPaths(content))
+  }
+  if (allAllowed.length === 0) {
+    return { ok: true, errors, warnings, designFiles, uncovered: [] }
+  }
+
+  const uncovered = designFiles.filter(df => !allAllowed.some(ap => pathMatches(df, ap)))
+  if (uncovered.length > 0) {
+    errors.push(
+      `design.md 文件变更清单中 ${uncovered.length} 个文件未被任何 task 的 allowed_paths 覆盖：\n` +
+      uncovered.map(f => `     • ${f}`).join('\n') +
+      `\n   这些文件在 execute 阶段将无 task 有权修改 → 必然漏改。` +
+      `\n   修复：为每个遗漏文件新建/补充 task 并在其 allowed_paths 声明，` +
+      `或在 design.md「不修改文件」章节说明不改原因。`
+    )
+  }
+
+  return { ok: errors.length === 0, errors, warnings, designFiles, uncovered }
 }
 
 /**
@@ -424,6 +632,32 @@ export async function executePlanPostcheck(context) {
   if (feasibility.warnings.length > 0) {
     console.warn('\n⚠️  Plan 可行性警告（不阻断）：')
     for (const w of feasibility.warnings) console.warn(`   - ${w}`)
+  }
+
+  // ── 1c. 跨任务契约校验 ──
+  // 对账 consumer.expects_from ↔ provider.provides，拦截「consumer 期望字段
+  // 但 provider 未承诺」的契约断裂（避免到 execute/verify 才暴露成 403/500）
+  const crossTask = validateCrossTaskContracts(changeDir)
+  if (crossTask.errors.length > 0) {
+    console.error('\n❌ 跨任务契约校验失败（consumer 期望的字段未被 provider 承诺）：')
+    for (const err of crossTask.errors) console.error(`   - ${err}`)
+    console.error('\n   修复方式：要么在 provider task 的 provides.fields 补上缺失字段，')
+    console.error('   要么修正 consumer task 的 expects_from.needs（确认依赖是否真实）。')
+    throw new Error('planPostcheck: cross-task contract check failed')
+  }
+
+  // ── 1d. design 文件覆盖对账 ──
+  // design.md 清单中的每个源码文件必须被某 task 的 allowed_paths 覆盖，
+  // 否则 execute 子代理无权改它 → 漏改（典型表现：「页面还是错的」）。
+  const coverage = validateDesignFileCoverage(changeDir)
+  for (const w of coverage.warnings) console.warn(`\n  ⚠️  ${w}`)
+  if (coverage.errors.length > 0) {
+    console.error('\n❌ design.md 文件覆盖对账失败（清单中的文件未被任何 task 覆盖）：')
+    for (const err of coverage.errors) console.error(`   - ${err}`)
+    throw new Error('planPostcheck: design file coverage check failed')
+  }
+  if (coverage.designFiles.length > 0 && coverage.uncovered.length === 0) {
+    console.log(`  ✅ design.md ${coverage.designFiles.length} 个文件全部被 task allowed_paths 覆盖`)
   }
 
   // ── 2. Wave 重排 ──

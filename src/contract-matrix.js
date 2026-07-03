@@ -15,6 +15,7 @@ import {
   scanFrontendApiCalls,
   normalizePath,
 } from './endpoint-extractor.js'
+import { parseTaskContracts } from './stages/plan-postcheck.js'
 
 // ─── 关键词检测 ─────────────────────────────────────────────────────────
 
@@ -216,6 +217,72 @@ export function buildConsumerInjection(changeDir, specBase, taskName, contracts)
   parts.push('3. If you need to add new endpoints, you must also update the backend provider task.')
 
   return parts.join('\n')
+}
+
+/**
+ * 为 consumer task 构建字段级契约注入：对比 expects_from.needs vs provider.provides.fields
+ *
+ * 让 consumer 子代理带着明确的字段清单核验上游产出：
+ * - provider 已承诺 → 编码时只使用 provides.fields，运行时缺字段上报
+ * - provider 未承诺某 needs 字段 → 标 CONTRACT_GAP，要求 stop and report（禁止 fallback 编造）
+ *
+ * 命中场景：provider task 漏实现某字段（如 DaemonRuntimeRead 缺 daemon_instance_id），
+ * consumer 若 fallback 编造 → 运行时 403/500。此处把"缺字段"暴露在子代理启动前。
+ *
+ * 注：plan-postcheck 已对账 expects_from↔provides，此处是 execute 时的二次保险，
+ * 拦截 plan-postcheck 之后 task 文件被手改、或 provider 实际实现漏字段的情况。
+ *
+ * @param {string} changeDir - changes/<name>/ 目录
+ * @param {string} taskName - consumer task（如 task-11）
+ * @returns {string|null} 注入文本，无 expects_from 时返回 null
+ */
+export function buildContractFieldInjection(changeDir, taskName) {
+  const consumerFile = join(changeDir, 'tasks', `${taskName}.md`)
+  if (!existsSync(consumerFile)) return null
+  const { expectsFrom } = parseTaskContracts(readFileSync(consumerFile, 'utf8'))
+  const providers = Object.keys(expectsFrom)
+  if (providers.length === 0) return null
+
+  const lines = []
+  lines.push('## Upstream Contract Fields（字段级核验）')
+  lines.push('')
+
+  for (const providerTask of providers) {
+    const providerFile = join(changeDir, 'tasks', `${providerTask}.md`)
+    let providerProvides = []
+    if (existsSync(providerFile)) {
+      providerProvides = parseTaskContracts(readFileSync(providerFile, 'utf8')).provides
+    }
+
+    for (const c of expectsFrom[providerTask]) {
+      const providerEntry = providerProvides.find(p => p.contract === c.contract)
+      if (!providerEntry) {
+        lines.push(`### ⚠️ CONTRACT_GAP: ${providerTask} → ${c.contract}`)
+        lines.push(`你需要字段 [${c.needs.join(', ')}]，但 ${providerTask} 的 provides 未声明此契约。`)
+        lines.push(`**立即停止编码并上报**：不要 fallback、不要编造字段，先确认 ${providerTask} 是否应产出此契约。`)
+      } else {
+        const providerFields = new Set(providerEntry.fields)
+        const missing = c.needs.filter(f => !providerFields.has(f))
+        if (missing.length > 0) {
+          lines.push(`### ⚠️ CONTRACT_GAP: ${providerTask} → ${c.contract}`)
+          lines.push(`你需要字段 [${missing.join(', ')}]，但 ${providerTask}.provides 仅承诺 [${providerEntry.fields.join(', ')}]。`)
+          lines.push(`**立即停止编码并上报**：不要 fallback、不要编造字段，先要求 ${providerTask} 在 provides.fields 补上 [${missing.join(', ')}]。`)
+        } else {
+          lines.push(`### ✅ ${providerTask} → ${c.contract}`)
+          lines.push(`你需要的字段 [${c.needs.join(', ')}] 均在 ${providerTask}.provides 承诺内：[${providerEntry.fields.join(', ')}]。`)
+          lines.push(`编码时**只使用上述字段**；若运行时实际返回缺字段，说明 provider 实现漏了 → 上报 CONTRACT_GAP，不要 fallback。`)
+        }
+      }
+      lines.push('')
+    }
+  }
+
+  lines.push('### 字段级铁律')
+  lines.push('1. 禁止 fallback 编造：若上游返回缺字段，停止并上报 CONTRACT_GAP，不要用 `x || defaultValue` 之类的防御性回退掩盖契约破裂。')
+  lines.push('2. 只消费 provides 承诺的字段；需要新字段必须先让 provider 更新 provides。')
+  lines.push('3. 启动子代理前，先读 provider task 的 review.json / acceptance，确认其已声明完成上述契约字段。')
+
+  return lines.join('\n')
 }
 
 // ─── Verify 阶段：parity check ──────────────────────────────────────────
