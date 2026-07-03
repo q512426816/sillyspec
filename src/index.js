@@ -308,7 +308,61 @@ async function main() {
     // 注意：filteredArgs[0] === command，直接透传 filteredArgs 即可让 runCommand
     // 从 args[0] 取到 stage 名。与 case 'run': 的 filteredArgs.slice(1) 区别只在于
     // slice(1) 去掉的是 'run' 字面量，这里 command 本身就是 stage 名不能丢。
-    case 'doctor':
+    case 'doctor': {
+      const doctorEffectiveDir = specDir ? dir : resolveEffectiveDir(dir);
+      // 执行流：--cleanup-remnant / --dump-db（结构化诊断之外的修复/取证动作）
+      const cleanupRemnant = filteredArgs.includes('--cleanup-remnant');
+      const dumpDbFlag = filteredArgs.includes('--dump-db');
+      const doctorConfirm = filteredArgs.includes('--confirm');
+      const pathIdx = filteredArgs.indexOf('--path');
+      const dbPath = pathIdx >= 0 && filteredArgs[pathIdx + 1] ? filteredArgs[pathIdx + 1] : null;
+
+      if (cleanupRemnant) {
+        const { cleanupRemnantDbs } = await import('./doctor-diagnostics.js');
+        const r = await cleanupRemnantDbs({ cwd: doctorEffectiveDir, confirm: doctorConfirm });
+        if (json) {
+          console.log(JSON.stringify(r, null, 2));
+        } else {
+          const list = doctorConfirm ? r.deleted : r.would_delete.map((x) => x.path);
+          console.log(`🗑️  空占位 db ${doctorConfirm ? '已删除' : '待清理（dry-run）'}：${r.count} 个`);
+          for (const p of list) console.log(`   ${doctorConfirm ? '✅' : '-'} ${p}`);
+          for (const e of r.errors) console.log(`   ❌ ${e.path}: ${e.error}`);
+          if (!doctorConfirm && r.count > 0) console.log(`\n加 --confirm 执行删除（仅删 0 字节占位，不动有内容的 db）。`);
+        }
+        process.exitCode = r.errors.length > 0 ? 1 : 0;
+        break;
+      }
+      if (dumpDbFlag) {
+        if (!dbPath) { console.error('❌ --dump-db 需要 --path <db 路径>'); process.exitCode = 2; break; }
+        const { dumpDb } = await import('./doctor-diagnostics.js');
+        const r = await dumpDb({ dbPath, cwd: doctorEffectiveDir });
+        if (json) {
+          console.log(JSON.stringify(r, null, 2));
+        } else if (r.ok === false && r.error) {
+          console.error(`❌ ${r.error}`);
+        } else {
+          console.log(`📦 dump ${dbPath} (${r.meta?.size}B)：${r.changes?.length || 0} changes, ${r.stages?.length || 0} stages`);
+          if (r.written_to) console.log(`   写入：${r.written_to}`);
+        }
+        process.exitCode = r.ok === false ? 1 : 0;
+        break;
+      }
+      // --json：走结构化诊断（doctor-diagnostics.js），输出 JSON + 落盘 doctor-diagnosis.json
+      if (json) {
+        const { runDoctorDiagnostics, formatDoctorJson, writeDoctorDiagnosis } = await import('./doctor-diagnostics.js');
+        const result = await runDoctorDiagnostics({ cwd: doctorEffectiveDir });
+        const output = formatDoctorJson(result, { source_root: dir });
+        const written = writeDoctorDiagnosis(output, result.authoritySpecDir);
+        if (written) console.error(`📁 诊断结果已写入: ${written}`);
+        console.log(JSON.stringify(output, null, 2));
+        process.exitCode = output.overall_status === 'pass' ? 0 : 1;
+        break;
+      }
+      // 否则：保持原有 prompt 驱动的 bash 自检流程
+      const { runCommand } = await import('./run.js');
+      await runCommand([command, ...filteredArgs.slice(1)], doctorEffectiveDir, specDir);
+      break;
+    }
     case 'scan':
     case 'status':
     case 'quick':
@@ -929,4 +983,12 @@ SillySpec modules — 模块文档管理
   }
 }
 
-main();
+main().catch((err) => {
+  // 平台指针失效：fail-closed，打印修复引导而非静默回退/stack trace
+  if (err?.name === 'PointerUnreachableError') {
+    console.error(`❌ ${err.message}`);
+    process.exit(1);
+  }
+  console.error(err);
+  process.exit(1);
+});

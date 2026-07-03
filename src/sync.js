@@ -12,6 +12,16 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from '
 import { join } from 'path';
 import { resolvePlatformSpecDir } from './progress.js';
 
+// sync 是 best-effort（网络失败只 warn）：平台指针失效时不抛，跳过平台、回退本地。
+function safePlatformSpecDir(cwd) {
+  try {
+    return resolvePlatformSpecDir(cwd);
+  } catch (e) {
+    console.warn(`[sync] 平台指针不可用，跳过平台同步：${String(e.message).split('\n')[0]}`);
+    return undefined;
+  }
+}
+
 const LOCAL_YAML = '.sillyspec/local.yaml';
 const CHANGES_DIR = '.sillyspec/changes';
 const REQUEST_TIMEOUT_MS = 10_000;
@@ -201,7 +211,7 @@ export class SyncManager {
     let progressData;
     try {
       const { ProgressManager } = await import('./progress.js');
-      const pm = new ProgressManager({ specDir: resolvePlatformSpecDir(this.cwd) });
+      const pm = new ProgressManager({ specDir: safePlatformSpecDir(this.cwd) });
       progressData = await pm.read(this.cwd, changeName);
     } catch (err) {
       console.warn(`[sync] 读取 progress 失败 (${changeName}): ${err.message}`);
@@ -226,7 +236,7 @@ export class SyncManager {
     // 更新 platform_last_sync
     try {
       const { ProgressManager } = await import('./progress.js');
-      const pm = new ProgressManager({ specDir: resolvePlatformSpecDir(this.cwd) });
+      const pm = new ProgressManager({ specDir: safePlatformSpecDir(this.cwd) });
       await pm._updatePlatformLastSync(this.cwd, changeName);
     } catch (err) {
       console.warn(`[sync] 更新 platform_last_sync 失败: ${err.message}`);
@@ -327,7 +337,7 @@ export class SyncManager {
     // 更新本地 approvals 表
     try {
       const { ProgressManager } = await import('./progress.js');
-      const pm = new ProgressManager({ specDir: resolvePlatformSpecDir(this.cwd) });
+      const pm = new ProgressManager({ specDir: safePlatformSpecDir(this.cwd) });
       await pm._updateApprovalStatus(this.cwd, changeName, result.status, result.reason);
     } catch (err) {
       console.warn(`[sync] 更新本地审批状态失败: ${err.message}`);

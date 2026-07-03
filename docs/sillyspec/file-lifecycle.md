@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-05-31 11:00:00
-updated_at: 2026-07-02 11:00:00
+updated_at: 2026-07-03 11:00:00
 ---
 
 # SillySpec 文件生命周期
@@ -114,6 +114,16 @@ quick
   -> code changes are made in the main workspace
 ```
 
+sillyspec doctor --json（结构化诊断，平台模式状态分裂检测）
+  -> <authoritySpecDir>/.runtime/doctor-diagnosis.json
+  （authoritySpecDir = pointer.specRoot 平台模式 / <cwd>/.sillyspec 本地模式；只读检测，不写 db）
+
+sillyspec doctor --dump-db --path <db>
+  -> <authoritySpecDir>/.runtime/doctor-dumps/dump-<ts>.json（只读取证：schema_version + 全量 changes + stages）
+
+sillyspec doctor --cleanup-remnant [--confirm]
+  -> 删除 0 字节空占位 db（默认 dry-run；--confirm 才真删；只删 size===0，不动有内容的 db）
+
 ## 核心修正
 
 这版文档相对旧版长文档做了几项关键修正：
@@ -130,3 +140,4 @@ quick
 - plan→execute Contract 校验（`parseWavesFromPlan`）只解析 `## Wave N` 段内的 `- [ ] task-XX:` 行；遇到非 Wave 标题行（`## 自检` 等）即退出当前 Wave 段，避免自检 `- [x]` checkbox 被误当 task 定义。
 - `executePlanPostcheck` 的 `resolveChangeDir` 复用 `run.js` 模块内本地函数，不从 `./modules.js` 导入（该模块未导出此函数）。
 - Revision v1：`stages` 表新增 `revision`/`reopened_from_step`/`reopened_at`/`stale_reason` 列；阶段新增 `revising`/`stale` 状态；`sillyspec run <stage> --reopen --from-step <n>` 重开已完成阶段、级联标记下游 stale；`.runtime/postcheck-result.json` 由 `scan-postcheck.js` 的 `writeStructuredResult` 落盘（本地写 `specDir/.runtime`，平台写 `runtimeRoot/scan-runs/<id>`）。
+- 平台指针 fail-closed（2026-07-03）：`resolvePlatformSpecDir`（`progress.js`）在 pointer 存在但失效（specRoot 不可达/损坏/缺字段）时抛 `PointerUnreachableError`，`index.js` 顶层 catch 打印修复引导 + exit 1，**不再静默回退本地孤儿 db**；无 pointer 的纯本地项目不受影响。`sync.js` 用 `safePlatformSpecDir` best-effort 包裹保持容错。逃生口：显式 `--spec-dir`。

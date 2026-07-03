@@ -36,20 +36,70 @@ export function resolveSpecDir(startDir) {
 }
 
 /**
- * 平台感知的 specDir 解析（所有 CLI 子命令统一入口）。
- * 优先级：显式 --spec-dir > 平台 pointer(.sillyspec-platform.json 的 specRoot) > resolveSpecDir(cwd)
- * 修复 run 读 pointer、其它子命令读 legacy .sillyspec 的割裂。
+ * 平台指针不可达错误。pointer 存在但失效时抛出，阻止静默回退到本地孤儿 db。
+ * 逃生口：显式 --spec-dir 绕过 pointer 校验。
+ */
+export class PointerUnreachableError extends Error {
+  constructor({ pointerPath, specRoot, reason, hint }) {
+    super(
+      `平台指针不可用：${reason}\n` +
+      `  pointer: ${pointerPath}\n` +
+      `  specRoot: ${specRoot || '(缺失)'}\n` +
+      `修复：${hint}`
+    );
+    this.name = 'PointerUnreachableError';
+    this.pointerPath = pointerPath;
+    this.specRoot = specRoot || null;
+  }
+}
+
+/**
+ * 平台感知的 specDir 解析（fail-closed，所有 CLI 子命令统一入口）。
+ *
+ * 优先级：显式 --spec-dir > pointer.specRoot（可达）> resolveSpecDir(cwd)。
+ *
+ * fail-closed 语义（修复"状态穿越"定时炸弹）：
+ *   一旦项目进入过平台模式（pointer 文件存在），pointer 失效（specRoot 不可达 /
+ *   损坏 / 缺字段）不再静默回退到本地——否则会读到切平台前的过期本地 db。
+ *   此时抛 PointerUnreachableError，由 CLI 顶层捕获并打印修复引导。
+ *
+ *   无 pointer = 纯本地项目（从未平台 scan），正常走本地解析，不受影响。
  */
 export function resolvePlatformSpecDir(cwd, explicitSpecDir = null) {
   if (explicitSpecDir) return resolve(explicitSpecDir);
   const pointerPath = join(resolve(cwd), '.sillyspec-platform.json');
-  if (existsSync(pointerPath)) {
-    try {
-      const ptr = JSON.parse(readFileSync(pointerPath, 'utf8'));
-      if (ptr.specRoot) return ptr.specRoot;
-    } catch { /* 损坏的 pointer 落到 fallback */ }
+  if (!existsSync(pointerPath)) {
+    return resolveSpecDir(cwd);
   }
-  return resolveSpecDir(cwd);
+  // pointer 存在 = 进过平台模式，严格校验，不静默回退
+  let ptr;
+  try {
+    ptr = JSON.parse(readFileSync(pointerPath, 'utf8'));
+  } catch (e) {
+    throw new PointerUnreachableError({
+      pointerPath,
+      specRoot: null,
+      reason: `pointer 文件损坏（${e.message}）`,
+      hint: `sillyspec platform pointer --cleanup 删除后重跑平台 scan`,
+    });
+  }
+  if (!ptr.specRoot) {
+    throw new PointerUnreachableError({
+      pointerPath,
+      specRoot: null,
+      reason: 'pointer 缺少 specRoot 字段',
+      hint: `sillyspec platform pointer --cleanup 删除后重跑平台 scan`,
+    });
+  }
+  if (!existsSync(ptr.specRoot)) {
+    throw new PointerUnreachableError({
+      pointerPath,
+      specRoot: ptr.specRoot,
+      reason: 'pointer.specRoot 路径不存在（daemon 未起？已迁移？）',
+      hint: `启动 SillyHub daemon；或 sillyspec doctor --json 诊断；或显式 --spec-dir <本地路径> 临时走本地`,
+    });
+  }
+  return ptr.specRoot;
 }
 
 const CHANGES_SUBDIR = 'changes';
