@@ -1,7 +1,22 @@
-.idea/
+# 测试与文档（工具运行时不依赖；init 只读 templates/ 和 .claude/skills/）
+test/
+docs/
+
+# sillyspec 仓库自身用 sillyspec 管理变更的 spec 目录（非工具运行时）
 .sillyspec/
-docs/sillyspec/scan/
+
+# 开发 / IDE
+.idea/
+.DS_Store
+STATE.md
+
+# 依赖
 node_modules/
 packages/dashboard/node_modules/
+
+# 构建产物 / 敏感凭证
 *.tgz
 .npm-publish-token
+
+# ⚠️ 不要忽略 .claude/skills/ 和 templates/ ——
+# sillyspec init 从这两个目录复制 skill 模板和 workflow 到用户项目（init.js:209,283）。
