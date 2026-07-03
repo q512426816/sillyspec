@@ -705,8 +705,10 @@ export class WorktreeManager {
       for (const entry of entries) {
         const lines = entry.split('\n');
         const wtPath = lines.find(l => l.startsWith('worktree '))?.replace('worktree ', '');
+        // git 2.20+ porcelain 在目录缺失时输出 `missing` 行；作为 existsSync 的权威交叉验证
+        const missing = lines.some(l => l === 'missing');
         if (wtPath && wtPath !== this.cwd) { // 排除主工作区
-          gitWorktreeList.push({ path: wtPath, raw: entry });
+          gitWorktreeList.push({ path: wtPath, missing, raw: entry });
         }
       }
     } catch {
@@ -718,12 +720,25 @@ export class WorktreeManager {
     const metaNames = new Set(metaEntries.map(m => m.changeName));
 
     // 3. 检查 git worktree list 中的孤儿条目
+    // ⚠️ 只在 git 自己标记 missing 时自动 prune。目录不可见但 git 未标记 missing 的
+    // 情况（平台模式/容器路径不一致、符号链接、Windows 路径格式、旧 git 无 missing 标记）
+    // 只告警不自动 prune —— existsSync 在这些场景会误判，自动 prune 会杀死实际在用的
+    // worktree（sillyspec-worktree-platform-mode-bug）。git 内部状态是 worktree 生命周期的
+    // 权威来源，用它做 prune 前提可杜绝误杀。
     for (const wt of gitWorktreeList) {
       if (!existsSync(wt.path)) {
         const name = this._pathToChangeName(wt.path);
-        issues.push({ type: 'orphan-git-entry', name: name || wt.path, detail: `git worktree 引用存在但目录不存在: ${wt.path}`, fixable: true });
-        if (fix) {
-          try { gitQuiet(this.cwd, 'worktree prune'); fixed.push(`pruned orphan: ${wt.path}`); } catch { unfixable.push(`prune failed for: ${wt.path}`); }
+        if (wt.missing === true) {
+          // git 明确标记目录缺失（git 2.20+）→ 真 orphan，prune 安全
+          issues.push({ type: 'orphan-git-entry', name: name || wt.path, detail: `git worktree 标记 missing: ${wt.path}`, fixable: true });
+          if (fix) {
+            try { gitQuiet(this.cwd, 'worktree prune'); fixed.push(`pruned orphan: ${wt.path}`); } catch { unfixable.push(`prune failed for: ${wt.path}`); }
+          }
+        } else {
+          // 目录不可见但 git 未标记 missing → 可能 existsSync 误判，保守不自动 prune
+          issues.push({ type: 'orphan-git-entry', name: name || wt.path,
+            detail: `git worktree 引用 ${wt.path} 目录不可见但 git 未标记 missing——可能路径/权限导致误判，未自动 prune（避免误杀在用的 worktree）。确认废弃后手动: git worktree prune`,
+            fixable: false });
         }
       }
     }
