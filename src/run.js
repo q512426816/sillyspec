@@ -1341,7 +1341,18 @@ export async function runCommand(args, cwd, specDir = null) {
     inputText = flags[inputIdx + 1]
   }
 
-  // 解析 --change <name>（quick 阶段支持逗号分隔多值，作为「关联变更」）
+  // 解析 --linked-changes <a,b|none>（quick 专用：显式声明关联变更，CI/脚本友好）
+  // 与 --change 解耦：--linked-changes 语义清晰（关联变更），不与「指定变更名」混淆。
+  // null = 未指定（走持久化/交互/兼容回退）；[] = 显式 none（不关联）；[...] = 显式列表
+  let explicitLinked = null
+  const linkedIdx = flags.indexOf('--linked-changes')
+  if (linkedIdx !== -1 && flags[linkedIdx + 1]) {
+    const v = flags[linkedIdx + 1].trim()
+    explicitLinked = v.toLowerCase() === 'none' ? [] : v.split(',').map(s => s.trim()).filter(Boolean)
+  }
+
+  // 解析 --change <name>（quick 阶段向后兼容：逗号分隔作为「关联变更」；
+  // 历史写法，语义与「指定变更名」冲突，新用法建议改用 --linked-changes）
   let changeName = null
   let linkedChanges = []
   const changeIdx = flags.indexOf('--change')
@@ -1351,6 +1362,10 @@ export async function runCommand(args, cwd, specDir = null) {
       linkedChanges = changeName.split(',').map(s => s.trim()).filter(Boolean)
       changeName = null
     }
+  }
+  // --linked-changes 优先于 --change（显式 > 隐式兼容）
+  if (explicitLinked !== null) {
+    linkedChanges = explicitLinked
   }
   // quick 的 progress 键固定走 'default'：归属语义已由 linkedChanges 承担（→ quick-guard.json
   // → <linked-changes> 占位符注入 prompt）。progress 不能走 pm.read(cwd, null) 的自动检测——
@@ -1376,7 +1391,7 @@ export async function runCommand(args, cwd, specDir = null) {
     '--done', '--skip', '--status', '--reset', '--confirm', '--skip-approval',
     '--wait', '--continue', '--non-interactive', '--interactive',
     '--reason', '--options', '--answer', '--confirm-mode',
-    '--output', '--input', '--change',
+    '--output', '--input', '--change', '--linked-changes',
     '--spec-dir', '--spec-root', '--runtime-root', '--workspace-id', '--scan-run-id',
     '--files', '--allow-new', '--force-baseline', '--force-rescan',
     '--json', '--dir', '--help',
@@ -1400,13 +1415,28 @@ export async function runCommand(args, cwd, specDir = null) {
 
   const pm = new ProgressManager({ specDir: specRoot })
 
-  // quick 阶段：多变更交互式选择关联变更（--change 未指定时）
-  if (stageName === 'quick' && linkedChanges.length === 0) {
-    linkedChanges = await resolveQuickLinkedChanges({
-      pm, cwd, specDir: specRoot, quickFiles,
-      taskDescription: inputText || '',
-      nonInteractive: isNonInteractive,
-    })
+  // quick 阶段：确定关联变更
+  // 优先级：--linked-changes / --change 显式 > 已持久化 quick-guard.json（--done 复用）> 交互式 > 非交互 fallback
+  // 关键：--done 收尾时复用首次 run 持久化的 linkedChanges，不在管道/CI 下重复弹交互 prompt。
+  // explicitLinked === null 且未传 --change 时才进入此分支（显式 --linked-changes none 不应触发交互）。
+  if (stageName === 'quick' && explicitLinked === null && linkedChanges.length === 0) {
+    const guardFile = join(specRoot, '.runtime', 'quick-guard.json')
+    let persistedLinked = null
+    try {
+      if (existsSync(guardFile)) {
+        const g = JSON.parse(readFileSync(guardFile, 'utf8'))
+        if (Array.isArray(g.linkedChanges)) persistedLinked = g.linkedChanges
+      }
+    } catch {}
+    if (persistedLinked) {
+      linkedChanges = persistedLinked
+    } else {
+      linkedChanges = await resolveQuickLinkedChanges({
+        pm, cwd, specDir: specRoot, quickFiles,
+        taskDescription: inputText || '',
+        nonInteractive: isNonInteractive,
+      })
+    }
   }
 
   let progress = await pm.read(cwd, changeName)
@@ -1607,7 +1637,7 @@ async function resolveQuickLinkedChanges({ pm, cwd, specDir, quickFiles, taskDes
   if (activeChanges.length === 0) return []
   if (activeChanges.length === 1) return [activeChanges[0]]
 
-  if (nonInteractive || process.stdin.isTTY === false) {
+  if (nonInteractive || !process.stdin.isTTY) {
     console.log('💡 非交互环境，已默认不关联变更；如需关联请用 --change a,b')
     return []
   }
