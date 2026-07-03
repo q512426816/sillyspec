@@ -18,86 +18,91 @@ function printUsage() {
 SillySpec CLI — 规范驱动开发工具包
 
 用法:
-  sillyspec init               初始化（零交互，自动检测工具）
-    [--tool <name>]            只安装指定工具
-    [--interactive]            交互式引导
-    [--dir <path>]             指定目录
-    [--spec-dir <path>]        指定规范目录（默认 <项目>/.sillyspec）
+  sillyspec init [--tool <name>] [--interactive] [--dir <path>] [--spec-dir <path>]
+                                      初始化（零交互，自动检测工具并安装命令模板）
+  sillyspec setup [--list]            安装推荐 MCP 工具（--list 查看已安装状态）
 
-  sillyspec setup [--list]     安装推荐 MCP 工具
-    [--list]                   查看已安装状态
+  sillyspec run <stage> [options]     执行阶段步骤（核心命令）
+  sillyspec <stage> [options]         顶层别名，等同 run <stage>
+    stage: scan | brainstorm | plan | execute | verify | archive |
+           quick | explore | status | doctor | auto
 
-  sillyspec run <stage>        执行阶段步骤（核心命令）
-    --done --output "..."      完成当前步骤
-    --skip                     跳过可选步骤
-    --status                   查看阶段进度
-    --reset                    重置阶段（从头开始）
-    --reopen                   重新打开已完成阶段进入修订模式
-    --from-step <index|name>   配合 --reopen：从指定步骤开始修订
-    --change <name>            设置当前变更名
-    --spec-dir <path>          指定规范目录（默认 <项目>/.sillyspec）
-    --runtime-root <path>       平台模式：运行时产物根路径
-    --workspace-id <id>         平台模式：workspace ID
-    --scan-run-id <id>          平台模式：scan run ID
-    auto                       连续推进 brainstorm→plan→execute→verify
+  run 通用参数（所有 stage 适用）:
+    --done --output "摘要" [--input "用户原话"]   完成当前步骤
+    --status                           查看阶段进度
+    --skip                             跳过可选步骤
+    --reset                            重置阶段（从头开始）
+    --reopen --from-step <序号|名称>   重新打开已完成阶段进入修订
+    --wait --reason "..." --options "A,B"          暂停等用户决策
+    --continue --answer "..."                      恢复等待中的步骤
+    --done --answer "..." --output "..."           一步完成 wait+done
+    --change <名>                      指定变更名（多活跃变更必填，单变更可省）
+    --spec-dir <path>                  指定规范目录（默认 <项目>/.sillyspec）
+    --non-interactive                  CI/脚本：禁用交互式 prompt
+    --interactive                      强制交互（即便 stdin 非 TTY）
+    --skip-approval                    跳过审批/校验门控（需明确意图）
+    --json                             输出 JSON（程序化读取）
 
-  可选阶段:
-    scan, brainstorm, plan, execute, verify, archive
-    quick, explore, status, doctor
-
-  Revision mode:
-    已完成阶段不能直接重跑。使用 --reopen --from-step 进入受控修订。
-    重开会使下游阶段自动标记为 stale，但不修改已有产物文件。
+  阶段特有参数:
+    quick:   --linked-changes none|a,b   显式关联变更（取代 --change，推荐）
+             --files a.js,b.js           显式声明允许修改的文件
+             --allow-new                 允许新增文件（默认禁止）
+             --force-baseline            允许覆盖 baseline 受保护文件
+             --confirm                   完成时确认接受变更审计
+    scan:    --deep                      强制 deep 扫描 profile
+             --force-rescan              覆盖已有 scan 文档保护
+    archive: --confirm                   归档确认（必须）
+    auto:    --mode <模式>               显式指定流程模式
+    平台:    --runtime-root <path> / --workspace-id <id> / --scan-run-id <id>
 
   sillyspec progress <cmd>     进度记录（轻量，不强制顺序）
-    init                       初始化项目数据库
-    show                       查看当前进度
-    set-stage <stage>          设置当前阶段
-    add-step <stage> <name>    添加步骤
-    update-step <s> <n> --status <st> [--output <t>]
-    complete-stage <stage>     标记阶段完成
-    check                      状态一致性检查（只报告，不修复）
-    repair [--apply]           修复状态元数据（默认 dry-run，--apply 才修改）
-    validate                   校验并修复
-    reset [--stage X]          重置进度
+    init | show | set-stage <stage> | add-step <stage> <name> |
+    update-step <stage> <name> --status <st> [--output <t>] | complete-stage <stage> |
+    check | repair [--apply] | validate | reset [--stage X] |
+    batch --total N --completed M [--failed F] [--skipped K] | batch --status
 
-  sillyspec docs migrate       迁移旧文档到统一结构
+  sillyspec worktree <cmd>     git worktree 隔离管理（execute 阶段相关）
+    create <change> [--base <branch>]   创建隔离 worktree
+    apply <change> [--check-only]       校验并应用变更到主工作区
+    assess <change>                     风险审计 + 自动 apply
+    list | meta <change>                列出 / 读取 meta.json
+    cleanup <change> [--force]          清理 worktree
+    doctor [--fix] [--stale-hours N]    健康检查 + 修复
 
-  sillyspec knowledge <cmd>    知识库管理（agent-safe，输出 JSON）
-    search --query "<text>" --limit N  搜索知识库
-    inspect --id "<id>"            读取知识条目详情
-    validate                        校验知识库健康度
-    refresh                         从 scan 文档刷新自动知识（仅写 generated/）
-    propose --title "<title>" --category <name>  提议新知识（写入 proposed/）
+  sillyspec workflow check <name> [--project <p>] [--change <c>] [--json]
+  sillyspec workflow list
+  sillyspec modules <rebuild | status | migrate>
+  sillyspec change-rename <旧变更名> <新变更名>
+  sillyspec knowledge <search --query "..." --limit N
+                        | inspect --id "..."
+                        | validate | refresh
+                        | propose --title "..." --category <name>>
+  sillyspec platform <connect <url> [--token <t>]
+                      | disconnect
+                      | sync [--change <name>] | sync-docs [--change <name>]
+                      | status | pointer [--cleanup]
+                      | approve <change> | reject <change> [--reason <r>]>
+  sillyspec docs migrate
+  sillyspec dashboard [--port <N>] [--no-open]
 
-  sillyspec platform <cmd>      SillyHub 平台同步
-    connect <url> [--token <t>]  连接平台
-    disconnect                    断开连接
-    sync [--change <name>]        同步变更状态
-    sync-docs [--change <name>]   同步四件套文档
-    status                        查看同步状态
-    approve <change-name>         审批变更
-    reject <change-name> [--reason <r>]  拒绝变更
-
-  sillyspec dashboard          启动 Dashboard Web UI
-    [--port <number>]          指定端口（默认 3456）
-    [--no-open]                不自动打开浏览器
-
-选项:
-  --json                       输出 JSON（给 AI 程序化读取）
-  --dir <path>                 指定项目目录（默认当前目录）
-  --spec-dir <path>            指定规范目录（默认 <项目目录>/.sillyspec）
+全局选项:
+  --json              输出 JSON
+  --dir <path>        指定项目目录（默认当前目录）
+  --spec-dir <path>   指定规范目录（默认 <项目目录>/.sillyspec）
+  --tool <name>       指定工具（init 用）
+  --interactive, -i   交互式引导
+  --version, -v       查看版本
 
 示例:
   sillyspec init
-  sillyspec init --spec-dir /data/specs/my-project
-  sillyspec run scan
-  sillyspec run brainstorm
-  sillyspec run quick
-  sillyspec run explore
-  sillyspec run brainstorm --done --output "需求已澄清"
-  sillyspec setup --list
-  sillyspec dashboard --port 8080 --no-open
+  sillyspec run brainstorm --change 2026-07-03-add-login
+  sillyspec run quick --linked-changes none --done --output "修复手机号校验"
+  sillyspec run verify --done --output "验证通过，测试全绿"
+  sillyspec run archive --done --confirm --output "归档完成"
+  sillyspec run plan --reopen --from-step 2          # 修订 plan，从第 2 步重做
+  sillyspec run quick --non-interactive --done --output "CI 内的快修"  # 脚本/CI
+  sillyspec progress show
+  sillyspec worktree apply 2026-07-03-add-login
 `);
 }
 
@@ -298,16 +303,21 @@ async function main() {
       await runCommand(filteredArgs.slice(1), effectiveDir, specDir)
       break
     }
-    // task-10: 顶层命令别名，转发 runCommand，与 case 'run': 路径行为一致
-    // help 文本(:44-46)已宣称这些 stage 可直接使用，这里补齐路由避免落 default 分支。
+    // 顶层命令别名：转发 runCommand，与 case 'run': 路径行为一致。
+    // printUsage 宣称所有 stage 都可直接使用，这里补齐全部路由避免落 default 分支。
     // 注意：filteredArgs[0] === command，直接透传 filteredArgs 即可让 runCommand
-    // 从 args[0] 取到 stage 名（run.js:1036）。与 case 'run': 的 filteredArgs.slice(1)
-    // 区别只在于 slice(1) 去掉的是 'run' 字面量，这里 command 本身就是 stage 名不能丢。
+    // 从 args[0] 取到 stage 名。与 case 'run': 的 filteredArgs.slice(1) 区别只在于
+    // slice(1) 去掉的是 'run' 字面量，这里 command 本身就是 stage 名不能丢。
     case 'doctor':
     case 'scan':
     case 'status':
     case 'quick':
-    case 'explore': {
+    case 'explore':
+    case 'brainstorm':
+    case 'plan':
+    case 'execute':
+    case 'verify':
+    case 'archive': {
       const { runCommand } = await import('./run.js')
       const stageArgs = [command, ...filteredArgs.slice(1)]
       const effectiveDir = specDir ? dir : resolveEffectiveDir(dir)
