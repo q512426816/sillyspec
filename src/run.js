@@ -1732,7 +1732,10 @@ async function runStage(pm, progress, stageName, cwd, changeName, skipApproval =
         console.log(`🔗 worktree 已创建: ${result.worktreePath} (分支: ${result.branch}, 模式: ${result.mode})`)
       } catch (e) {
         console.error(`❌ worktree 创建失败: ${e.message}`)
-        console.error(`   继续执行前请解决上述问题，或使用 --no-worktree 跳过。`)
+        console.error(`   修复建议：`)
+        console.error(`   1. 运行 sillyspec worktree doctor --fix 检查并修复 worktree 状态`)
+        console.error(`   2. 或手动清理残留：git worktree prune && git branch -D sillyspec/${effectiveChange}`)
+        console.error(`   3. 必要时删除残留目录 .sillyspec/.runtime/worktrees/${effectiveChange}/ 后重试`)
         process.exit(1)
       }
     }
@@ -2074,6 +2077,30 @@ async function archiveChangeDirectory(pm, cwd, progress, specBase) {
   }
 
   await pm.unregisterChange(cwd, archiveChangeName)
+
+  // 归档时清理可能残留的 worktree（execute 自动清理未走到 / 有未 apply 变更被遗弃）。
+  // 安全策略：有未 apply 变更时保留 worktree 并警告，避免误删用户未应用的代码。
+  try {
+    const { WorktreeManager } = await import('./worktree.js')
+    const wm = new WorktreeManager({ cwd })
+    const meta = wm.getMeta(archiveChangeName)
+    if (meta) {
+      const check = meta.mode !== 'in-place-fallback' ? wm.hasUnappliedChanges(archiveChangeName) : { hasChanges: false }
+      if (check.hasChanges) {
+        console.warn(`⚠️  归档时 worktree 仍有 ${check.changedFiles.length} 个未 apply 变更，保留 worktree`)
+        console.warn(`   确认不需要后手动清理: sillyspec worktree cleanup ${archiveChangeName} --force`)
+      } else {
+        const cleanResult = wm.cleanup(archiveChangeName)
+        if (cleanResult.residual?.length > 0) {
+          console.warn(`⚠️  归档 worktree 清理残留: ${cleanResult.residual.join('; ')}`)
+          console.warn(`   手动处理: sillyspec worktree cleanup ${archiveChangeName} --force`)
+        }
+      }
+    }
+  } catch (e) {
+    console.warn(`⚠️  归档 worktree 清理失败（不阻断归档）: ${e.message}`)
+  }
+
   console.log(`📦 已归档：${archiveChangeName} → archive/${date}-${archiveChangeName}/`)
   return destDir
 }
@@ -2287,9 +2314,8 @@ async function continueStep(pm, progress, stageName, cwd, answer, options = {}) 
           console.log('🔗 Worktree: n/a (no meta)');
         } else if (meta.mode === 'native-worktree') {
           console.log('🔗 Worktree: kept (外部隔离环境)');
-        } else if (meta.mode === 'in-place-fallback') {
-          console.log('🔗 Worktree: n/a (in-place 模式)');
         } else {
+          // in-place 模式不再短路：cleanup 现在能安全处理 in-place（只清 meta，不碰主工作区）
           const check = wm.hasUnappliedChanges(changeName);
           if (check.hasChanges) {
             console.log(`🔗 Worktree: pending apply (${check.changedFiles.length} 个未应用变更)`);
@@ -2297,6 +2323,10 @@ async function continueStep(pm, progress, stageName, cwd, answer, options = {}) 
           } else {
             const cleanResult = wm.cleanup(changeName);
             console.log(`🔗 Worktree: ${cleanResult.result}`);
+            if (cleanResult.residual?.length > 0) {
+              console.warn(`   ⚠️ 清理残留: ${cleanResult.residual.join('; ')}`);
+              console.warn(`   手动处理: sillyspec worktree cleanup ${changeName} --force`);
+            }
           }
         }
       } catch (e) {
@@ -3112,23 +3142,21 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
           console.log('🔗 Worktree: n/a (no meta)');
         } else if (meta.mode === 'native-worktree') {
           console.log('🔗 Worktree: kept (外部隔离环境)');
-        } else if (meta.mode === 'in-place-fallback') {
-          console.log('🔗 Worktree: n/a (in-place 模式)');
         } else {
+          // in-place 模式不再短路：cleanup 现在能安全处理 in-place（只清 meta，不碰主工作区）
           const check = wm.hasUnappliedChanges(changeName);
           if (check.hasChanges) {
             console.log(`🔗 Worktree: pending apply (${check.changedFiles.length} 个未应用变更)`);
             console.log(`   下一步: sillyspec worktree apply ${changeName}`);
           } else {
             const cleanResult = wm.cleanup(changeName);
-            if (cleanResult.result === 'skipped' || cleanResult.result === 'kept') {
-              console.log(`🔗 Worktree: ${cleanResult.result}`);
-            } else {
-              console.log(`🔗 Worktree: ${cleanResult.result}`);
-              if (cleanResult.details?.length > 0) {
-                for (const d of cleanResult.details) {
-                  if (d.startsWith('⚠️')) console.log(`   ${d}`);
-                }
+            console.log(`🔗 Worktree: ${cleanResult.result}`);
+            if (cleanResult.residual?.length > 0) {
+              console.warn(`   ⚠️ 清理残留: ${cleanResult.residual.join('; ')}`);
+              console.warn(`   手动处理: sillyspec worktree cleanup ${changeName} --force`);
+            } else if (cleanResult.details?.length > 0) {
+              for (const d of cleanResult.details) {
+                if (d.startsWith('⚠️')) console.log(`   ${d}`);
               }
             }
           }
@@ -3384,6 +3412,28 @@ function showStatus(progress, stageName) {
 }
 
 async function resetStage(pm, progress, stageName, cwd, changeName, platformOpts = {}) {
+  // execute 阶段 reset 时清理自建 worktree，否则下次 run execute 会因 existingMeta 存在
+  // 直接复用带脏状态的旧 worktree（启动逻辑：meta 存在即复用，不查健康状态）
+  if (stageName === 'execute' && changeName) {
+    try {
+      const { WorktreeManager } = await import('./worktree.js')
+      const wm = new WorktreeManager({ cwd })
+      const meta = wm.getMeta(changeName)
+      if (meta) {
+        const cleanResult = wm.cleanup(changeName)
+        if (cleanResult.residual?.length > 0) {
+          console.warn(`⚠️  reset 清理 worktree 残留: ${cleanResult.residual.join('; ')}`)
+          console.warn(`   手动处理: sillyspec worktree cleanup ${changeName} --force`)
+        } else if (cleanResult.result === 'kept') {
+          console.log(`🔗 旧 worktree 保留 (${cleanResult.mode}: 外部隔离环境)`)
+        } else if (cleanResult.result !== 'skipped') {
+          console.log(`🧹 已清理旧 worktree (${cleanResult.result}, mode: ${cleanResult.mode})，下次 execute 将重建干净环境`)
+        }
+      }
+    } catch (e) {
+      console.warn(`⚠️  reset 清理 worktree 失败（不阻断 reset）: ${e.message}`)
+    }
+  }
   const defSteps = await getStageSteps(stageName, cwd, progress, platformOpts?.specRoot || null)
   progress.stages[stageName] = {
     status: 'in-progress',

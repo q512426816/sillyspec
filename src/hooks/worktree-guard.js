@@ -627,9 +627,9 @@ export function shouldBlockWrite(filePath, cwd) {
     return {
       blocked: true,
       reason: [
-        '当前处于 --no-worktree 降级模式，不允许源码写入。',
-        '如需修改源码，请移除 --no-worktree 标志重新执行。',
-        '紧急情况可设置 SILLYSPEC_DISABLE_HOOKS=1 绕过限制。',
+        '当前变更处于无 worktree 隔离模式（changes.no_worktree=1），不允许源码写入。',
+        '如需修改源码，请在 worktree 隔离环境中工作。',
+        '若误入此模式，检查 sillyspec.db 该变更的 no_worktree 字段；紧急情况可设置 SILLYSPEC_DISABLE_HOOKS=1 绕过限制。',
       ].join('\n')
     }
   }

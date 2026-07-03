@@ -114,7 +114,7 @@ allowWrite = stageGate && locationGate && fileGate
 | 场景 | 处理方式 |
 |------|---------|
 | **git < 2.15** | 不支持 worktree，报错停止 |
-| **`--no-worktree` 标志** | 跳过隔离创建，但 hook 仍然拦截源码写入 |
+| **`--no-worktree` 标志** | ⚠️ **未接通**（`runCommand` 未解析此 flag，相关错误提示已移除）。worktree 失败改用 `sillyspec worktree doctor --fix` 或手动清理残留（`git worktree prune && git branch -D sillyspec/<change>`）；紧急用 `SILLYSPEC_DISABLE_HOOKS=1`。详见 `docs/sillyspec/file-lifecycle/known-implementation-gaps.md` |
 | **`SILLYSPEC_DISABLE_HOOKS=1`** | 紧急禁用所有 hook，全部放行 |
 | **无 gate-status.json** | stageGate=false，默认禁止源码写入 |
 | **worktree 创建失败** | 自动降级为 in-place + baseline protection（mode: in-place-fallback） |

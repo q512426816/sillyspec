@@ -73,6 +73,17 @@ function parseJSON(raw) {
   try { return JSON.parse(raw); } catch { return null; }
 }
 
+/**
+ * 跨平台同步等待（cleanup 重试退避用）
+ * 不依赖外部 sleep 命令——Windows cmd.exe 无 sleep；当 Git for Windows 未把 usr/bin 加入
+ * PATH 时，execSync('sleep 0.5') 会抛错并从 catch 块冒泡，直接中断整个 cleanup()。
+ * 改用 busy-wait 规避，保证 retry 之间真有间隔且不依赖环境。
+ */
+function sleepMs(ms) {
+  const end = Date.now() + ms;
+  while (Date.now() < end) { /* spin */ }
+}
+
 function computeBaselineHash(cwd) {
   // 排除 .sillyspec/ 元数据目录，避免 brainstorm/plan 阶段修改的蓝图文件污染 baseline
   const exclude = '-- . ":(exclude).sillyspec/"';
@@ -198,7 +209,7 @@ export class WorktreeManager {
     if (isolation.inSubmodule) {
       throw new Error(
         '当前目录在 git submodule 内，SillySpec worktree 不支持在 submodule 中创建。' +
-        '\n请在主仓库中执行，或使用 --no-worktree 跳过隔离。'
+        '\n请在主仓库根目录执行 execute。'
       );
     }
     if (isolation.inWorktree) {
@@ -237,6 +248,10 @@ export class WorktreeManager {
       if (!this.getMeta(name)) {
         console.log(`⚠️  检测到幽灵 worktree 目录（无 meta.json），自动清理...`);
         try { rmSync(worktreePath, { recursive: true, force: true }); } catch {}
+        // 同步清理 git worktree 注册 + 残留分支，否则目录虽删但 git 内部状态未清，
+        // 后续 git worktree add 会因「worktree 已注册」或「分支已存在」失败
+        try { gitQuiet(this.cwd, 'worktree prune'); } catch {}
+        try { gitQuiet(this.cwd, `branch -D ${branch}`); } catch {}
       } else {
         throw new Error(`worktree already exists: ${name}. Run cleanup first.`);
       }
@@ -269,7 +284,7 @@ export class WorktreeManager {
     } catch (e) {
       const check = isGitWorktreeSupported(this.cwd);
       if (!check.supported) {
-        throw new Error(`git worktree add 失败: ${e.stderr || e.message}\n\n${check.reason ? `原因: ${check.reason}` : ''}\n建议: 使用 --no-worktree 标志跳过隔离，或升级 git 到 >= 2.15`);
+        throw new Error(`git worktree add 失败: ${e.stderr || e.message}\n\n${check.reason ? `原因: ${check.reason}` : ''}\n建议: 升级 git 到 >= 2.15；或运行 \`sillyspec worktree doctor --fix\` 检查 worktree 状态。`);
       }
       // sandbox/permission fallback: 降级为 in-place + baseline protection
       console.log(`⚠️  git worktree add 失败（可能是沙箱权限限制），降级为 in-place 模式 + baseline protection`);
@@ -546,7 +561,10 @@ export class WorktreeManager {
    * 三重清理：git worktree 注册 + worktree 目录 + meta 目录。
    * @param {string} changeName
    * @param {{ force?: boolean, maxRetries?: number }} opts
-   * @returns {{ result: 'cleaned'|'force-cleaned'|'skipped'|'kept', mode: string|null, details: string[] }}
+   * @returns {{ result: 'cleaned'|'force-cleaned'|'skipped'|'kept'|'partial', mode: string|null, details: string[], residual: string[] }}
+   *   result 取值：cleaned=git remove 成功；force-cleaned=git remove 失败但 fallback 清理完成；
+   *   partial=有残留（目录/meta/git 注册未清）；skipped=无需清理；kept=native-worktree 保留。
+   *   residual：未清干净的路径/引用列表（空数组表示干净）。
    */
   cleanup(changeName, { force = false, maxRetries = 3 } = {}) {
     const name = validateChangeName(changeName);
@@ -561,22 +579,20 @@ export class WorktreeManager {
     }
 
     const mode = meta?.mode || 'worktree';
+    // in-place 模式：worktreePath === 主工作区，绝对禁止删除目录本身，但 meta 目录仍应清理
+    // （否则永久残留）。native-worktree：外部隔离环境，整体跳过。
+    const isInPlace = mode === 'in-place-fallback';
 
-    // 安全检查：只有 SillySpec 创建的 worktree 才允许删除
-    if (!force) {
-      if (mode === 'native-worktree') {
-        return { result: 'kept', mode, details: ['native-worktree: 外部隔离环境，跳过清理'] };
-      }
-      if (mode === 'in-place-fallback') {
-        return { result: 'skipped', mode, details: ['in-place-fallback: 无隔离目录，跳过清理'] };
-      }
+    // 安全检查：native-worktree 是外部隔离环境，非 force 不碰
+    if (!force && mode === 'native-worktree') {
+      return { result: 'kept', mode, details: ['native-worktree: 外部隔离环境，跳过清理'], residual: [] };
     }
 
     const branch = (meta && meta.branch) || BRANCH_PREFIX + name;
 
-    // 1. git worktree remove（带 retry）
+    // 1. git worktree remove（带 retry）—— in-place 跳过：无 git worktree 注册，且 worktreePath 即主工作区
     let gitRemoveOk = false;
-    if (existsSync(worktreePath)) {
+    if (!isInPlace && existsSync(worktreePath)) {
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
           git(this.cwd, `worktree remove ${worktreePath} --force`);
@@ -586,15 +602,15 @@ export class WorktreeManager {
         } catch (e) {
           details.push(`git worktree remove attempt ${attempt}/${maxRetries} failed: ${e.message}`);
           if (attempt < maxRetries) {
-            // 短暂等待后重试
-            execSync('sleep 0.5', { stdio: 'pipe' });
+            // 短暂等待后重试（跨平台 busy-wait，见 sleepMs）
+            sleepMs(500);
           }
         }
       }
     }
 
-    // 2. fallback: 确保 worktree 目录已删除
-    if (existsSync(worktreePath)) {
+    // 2. fallback: 确保 worktree 目录已删除（in-place 跳过——worktreePath 是主工作区）
+    if (!isInPlace && existsSync(worktreePath)) {
       try {
         rmSync(worktreePath, { recursive: true, force: true });
         details.push('worktree directory force-removed (fallback)');
@@ -618,7 +634,7 @@ export class WorktreeManager {
       // 分支可能已被删除，幂等跳过
     }
 
-    // 5. 清除 meta 目录
+    // 5. 清除 meta 目录（in-place 模式也执行——这是 in-place meta 残留的修复点）
     if (existsSync(metaDir)) {
       try {
         rmSync(metaDir, { recursive: true, force: true });
@@ -628,18 +644,27 @@ export class WorktreeManager {
       }
     }
 
-    // 6. 最终验证：确认三重清理完成
+    // 6. 最终验证：确认清理完成（in-place 模式 worktreePath=主工作区，不纳入残留检查）
     const residual = [];
-    if (existsSync(worktreePath)) residual.push(`worktree dir: ${worktreePath}`);
+    if (!isInPlace && existsSync(worktreePath)) residual.push(`worktree dir: ${worktreePath}`);
     if (existsSync(metaDir)) residual.push(`meta dir: ${metaDir}`);
-    if (gitQuiet(this.cwd, `worktree list`)?.includes(worktreePath)) {
+    if (!isInPlace && gitQuiet(this.cwd, `worktree list`)?.includes(worktreePath)) {
       residual.push('git worktree list still references this worktree');
     }
     if (residual.length > 0) {
       details.push(`⚠️ 残留: ${residual.join('; ')}`);
     }
 
-    return { result: gitRemoveOk ? 'cleaned' : 'force-cleaned', mode, details };
+    // result：有残留→partial；in-place（无隔离目录可删，只清了 meta）→cleaned；否则按 git remove 成败
+    let result;
+    if (residual.length > 0) {
+      result = 'partial';
+    } else if (isInPlace) {
+      result = 'cleaned';
+    } else {
+      result = gitRemoveOk ? 'cleaned' : 'force-cleaned';
+    }
+    return { result, mode, details, residual };
   }
 
   /**
@@ -761,9 +786,10 @@ export class WorktreeManager {
         if (meta && meta.createdAt) {
           const ageMs = Date.now() - new Date(meta.createdAt).getTime();
           const ageHours = ageMs / (1000 * 60 * 60);
+          const staleFixable = meta.mode !== 'native-worktree';
           if (ageHours > staleHours) {
-            issues.push({ type: 'stale', name, detail: `worktree 已存在 ${Math.round(ageHours)} 小时（超过 ${staleHours}h 阈值）`, fixable: true });
-            if (fix && meta.mode !== 'native-worktree') {
+            issues.push({ type: 'stale', name, detail: `worktree 已存在 ${Math.round(ageHours)} 小时（超过 ${staleHours}h 阈值）${staleFixable ? '' : '（native-worktree 外部环境，不可自动清理）'}`, fixable: staleFixable });
+            if (fix && staleFixable) {
               try {
                 const result = this.cleanup(name);
                 if (result.result === 'cleaned' || result.result === 'force-cleaned') {
