@@ -44,3 +44,11 @@
 状态：已完成
 文件：src/stages/brainstorm.js, src/stages/propose.js, src/stages/scan.js, src/run.js, src/progress.js, src/hooks/worktree-guard.js, test/*.mjs, docs/sillyspec/file-lifecycle*.md, .sillyspec/docs/sillyspec/modules/{stages,runtime}.md
 结果：修复阶段步骤丢失、local.yaml 口径、archive confirm、sync/approval 参数接线和 worktree guard 登记校验；更新生命周期文档与剩余差异清单；新增回归测试并通过 lint/test。
+
+## ql-20260703-001-a079 | 2026-07-03 10:10:20 | 修复 worktree 生命周期 7 个 bug
+状态：已完成（代码并入 commit 4a5f596，与 --no-worktree 谎言修复混提；message 漏标 7 bug）
+关联变更：（无）
+文件：src/worktree.js, src/run.js（实际改动，已随 4a5f596 提交）；docs/sillyspec/file-lifecycle.md（待 doctor 工作提交后单独补 archive worktree 段落）
+结果：Bug1(resetStage 清 execute worktree) Bug2(sleep 0.5 改跨平台 busy-wait) Bug3(幽灵清理补 prune+删分支) Bug5(cleanup 返回 residual + 新增 partial result) Bug6(archive 清 worktree，未 apply 变更保留警告) Bug7(doctor stale fixable 跟随 mode) 缺口3(in-place 模式也清 metaDir)。lint 通过；测试 3 个失败为 pre-existing（stash 对比验证零新增失败）。
+剔除：Bug4(BLOCKED 时保留 worktree 是正确设计，apply 成功会自动 cleanup) 缺口1(崩溃恢复范围大，单列) 缺口2(doctor 两套分叉，pre-existing 进行中)。
+注意：本会话期间改动被提交到 4a5f596，commit message 只描述 --no-worktree 谎言修复，未提 7 bug；同一 commit 还混入 worktree-guard.js / worktree-isolation.md 改动。代码归属以本条目为准。
