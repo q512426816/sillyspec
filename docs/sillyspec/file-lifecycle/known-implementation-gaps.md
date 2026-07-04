@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-06-04 16:25:42
-updated_at: 2026-06-04 16:55:00
+updated_at: 2026-07-04
 ---
 
 # 剩余实现差异清单
@@ -29,21 +29,18 @@ updated_at: 2026-06-04 16:55:00
 - 自动 post-check 的 workflow run 当前写本地 `.sillyspec/.runtime/workflow-runs/`。
 - 平台模式下不能按旧文档断言它会写入 `<runtime-root>/scan-runs/<scan-run-id>/workflow-runs/`。
 
-## `--no-worktree` 未作为 run flag 接通
+## `--no-worktree` 决定不接通（与降级铁律冲突）
 
-代码位置：`src/run.js`、`src/stages/execute.js`、`src/worktree.js`、`src/hooks/worktree-guard.js`
+代码位置：`src/run.js`、`src/stages/execute.js`、`src/hooks/worktree-guard.js`
 
-现象：
+决策：有意不接通。`design.md` 降级铁律（"降级只收紧不放松，不存在降级到放行的路径"）决定了 `--no-worktree` 即使接通也无实用价值：
 
-- execute prompt 和 worktree 错误信息提到 `--no-worktree`。
-- `buildExecuteSteps()` 也有 `noWorktree` option。
-- `runCommand()` 的 known flags 不包含 `--no-worktree`。
-- CLI usage 也没有列出 `--no-worktree`。
+- 单独使用：execute 跳过 worktree 创建，但 hook 仍按 `isNoWorktreeMode` 拦截主仓库源码写入 → 写不了代码。
+- 叠加 `SILLYSPEC_DISABLE_HOOKS=1`：能写，但那时 flag 多余（`DISABLE_HOOKS` 已全放行）。
 
-影响：
+worktree 创建失败的逃生口是 `sillyspec worktree doctor --fix` / 手动清理（`run.js` execute 块的三步提示），不是 `--no-worktree`。`buildExecuteSteps()` 的 `noWorktree` 参数、`changes.no_worktree` 列、`isNoWorktreeMode()` 读端是为该模式预留的基础设施，保留但无 CLI 写入入口。
 
-- 文档不能把 `--no-worktree` 描述成已可用的公开 run 参数。
-- `changes.no_worktree` / gate `noWorktree` 字段存在，但当前没有清晰 CLI 生命周期入口。
+不要再尝试接通此 flag，除非先重审降级铁律（例如给平台模式开 apply 绕过特例）。
 
 ## DB schema version 口径不统一
 
