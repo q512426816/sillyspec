@@ -12,7 +12,7 @@
 import { existsSync, readFileSync, readdirSync } from 'fs'
 import { join as pJoin } from 'path'
 import jsYaml from 'js-yaml'
-import { parseFileChangeList } from '../change-list.js'
+import { parseFileChangeList, pathMatches } from '../change-list.js'
 
 // ═══════════════════════════════════════════════════════════════
 // 解析工具（从 plan.js 迁移）
@@ -337,38 +337,8 @@ export function validateCrossTaskContracts(changeDir) {
   return { ok: errors.length === 0, errors, warnings }
 }
 
-// ── 路径匹配工具（与 change-list.js 的 normalizeEntry 同源语义）─────────
-// allowed_paths 真实写法常带行内注释（`src/worktree.js (新增)`），匹配前必须归一化。
-function normalizePath(raw) {
-  if (!raw) return ''
-  return raw
-    .replace(/`/g, '')
-    .replace(/\s*（[^）]*）\s*$/, '')
-    .replace(/\s*\([^)]*\)\s*$/, '')
-    .replace(/\\/g, '/')
-    .replace(/\/+$/, '')
-    .trim()
-}
-
-function globMatch(str, pattern) {
-  if (!pattern.includes('*')) return false
-  const re = '^' + pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^/]*') + '$'
-  try { return new RegExp(re).test(str) } catch { return false }
-}
-
-/**
- * 双向容差匹配：design 清单文件 vs task allowed_paths
- * 命中条件（任一）：完全相等 / 目录前缀包含（双向）/ glob 通配（双向）
- */
-function pathMatches(designFile, allowedPath) {
-  const a = normalizePath(designFile)
-  const b = normalizePath(allowedPath)
-  if (!a || !b) return false
-  if (a === b) return true
-  if (a.startsWith(b + '/') || b.startsWith(a + '/')) return true
-  if (globMatch(a, b) || globMatch(b, a)) return true
-  return false
-}
+// 路径容差匹配（normalizePath / globMatch / pathMatches）复用自 change-list.js，
+// design 清单解析与 allowed_paths 对账共用同一套匹配语义，避免两处逻辑漂移。
 
 /**
  * design.md 文件变更清单 → tasks allowed_paths 覆盖对账
@@ -380,8 +350,10 @@ function pathMatches(designFile, allowedPath) {
  * 在 plan-postcheck（execute 前）确定性拦截：design 清单中每个源码文件必须被
  * 至少一个 task 的 allowed_paths 覆盖（前缀 / glob 容差匹配）。
  *
- * fail-open 边界（不阻断）：design.md 不存在、无清单章节、解析为空、无 tasks/、
- * 无 allowed_paths —— 保持与 none/light 级别及老变更向后兼容。
+ * fail-open 边界（不阻断）：design.md 不存在、无 task 卡片（none 级别）、
+ * task 卡片均无 allowed_paths（由 validatePlanFeasibility 把关）。
+ * 阻断边界：有 task 卡片但 design 缺清单章节（light/full 已生成 task → design 必有清单）、
+ * 清单文件未被任何 task 的 allowed_paths 覆盖。
  *
  * @param {string} changeDir - 变更目录
  * @returns {{ ok: boolean, errors: string[], warnings: string[], designFiles: string[], uncovered: string[] }}
@@ -395,18 +367,26 @@ export function validateDesignFileCoverage(changeDir) {
     return { ok: true, errors, warnings, designFiles: [], uncovered: [] }
   }
 
-  const designFiles = [...parseFileChangeList(designPath)]
-  if (designFiles.length === 0) {
-    warnings.push('design.md 未找到「文件变更清单」或清单为空，跳过文件覆盖对账')
+  const tasksDir = pJoin(changeDir, 'tasks')
+  const taskFiles = existsSync(tasksDir)
+    ? readdirSync(tasksDir).filter(f => /^task-\d+\.md$/.test(f))
+    : []
+
+  // 无 task 卡片（plan_level=none 或老变更）→ 无对账对象，fail-open
+  if (taskFiles.length === 0) {
     return { ok: true, errors, warnings, designFiles: [], uncovered: [] }
   }
 
-  const tasksDir = pJoin(changeDir, 'tasks')
-  if (!existsSync(tasksDir)) {
-    return { ok: true, errors, warnings, designFiles, uncovered: [] }
+  const designFiles = [...parseFileChangeList(designPath)]
+  if (designFiles.length === 0) {
+    // 走到 plan-postcheck 说明已生成 task 卡片（light/full），brainstorm 模板规定清单必填。
+    // 无清单 = design↔execute 偏差温床（覆盖对账无从对起），阻断，不让它静默放过。
+    errors.push(
+      'design.md 缺少「文件变更清单」章节（或清单解析为空），无法做文件覆盖对账。' +
+      '该章节在 brainstorm 模板中为必填；请在 design.md 补上完整的文件变更清单（列出本次新增/修改/删除的源码文件）后重试。'
+    )
+    return { ok: false, errors, warnings, designFiles: [], uncovered: [] }
   }
-
-  const taskFiles = readdirSync(tasksDir).filter(f => /^task-\d+\.md$/.test(f))
   const allAllowed = []
   for (const file of taskFiles) {
     const content = readFileSync(pJoin(tasksDir, file), 'utf8')

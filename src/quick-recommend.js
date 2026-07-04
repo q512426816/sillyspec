@@ -8,7 +8,7 @@
  */
 import { join } from 'path'
 import { existsSync, readFileSync } from 'fs'
-import { parseFileChangeList } from './change-list.js'
+import { parseFileChangeList, pathMatches } from './change-list.js'
 
 function escapeRegex(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -60,13 +60,13 @@ function readProposalContext(specDir, changeName) {
 
 /**
  * 判断单个脏文件是否命中 design.md 声明的文件清单。
- * 支持精确匹配 + 目录前缀匹配（design 可能写目录、脏文件是目录下文件，或反之）。
+ * 复用 change-list.js 的 pathMatches：完全相等 / 目录前缀（双向）/ glob 通配（双向），
+ * 与 plan-postcheck 的文件覆盖对账共用同一套匹配语义；并修复了 design 清单含 glob
+ * （如 `src/stages/scan/*.md`）时纯前缀匹配漏召回的问题。
  */
 function fileHitsList(dirtyFile, fileList) {
-  if (fileList.has(dirtyFile)) return true
   for (const declared of fileList) {
-    if (declared === dirtyFile) continue
-    if (dirtyFile.startsWith(declared + '/') || declared.startsWith(dirtyFile + '/')) return true
+    if (pathMatches(dirtyFile, declared)) return true
   }
   return false
 }
