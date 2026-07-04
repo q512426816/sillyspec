@@ -114,10 +114,10 @@ export const definition = {
 ### 自动探针（必须先执行）
 在检查前，依次运行以下三个探针，将结果作为验证输入：
 
-**探针 1：未实现标记扫描**
-在项目源码目录中搜索未实现标记：
+**探针 1：未实现标记扫描（仅变更文件）**
+只扫描本次变更涉及的文件，不要全项目扫描——历史 TODO 与本次变更无关，徒增噪音与 token。变更文件 = design.md「文件变更清单」列出的源码文件（你已在「加载规范」步骤读取 design.md，glob 路径需展开为具体文件）：
 \`\`\`bash
-grep -rn "尚未实现\|TODO\|FIXME\|HACK\|XXX" <源码目录>/ --include="*.java" --include="*.js" --include="*.ts" --include="*.jsx" --include="*.tsx" --include="*.py"
+grep -n "尚未实现\|TODO\|FIXME\|HACK\|XXX" <design 清单中的源码文件>
 \`\`\`
 记录每个匹配的文件、行号和内容。
 
