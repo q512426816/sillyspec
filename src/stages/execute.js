@@ -361,30 +361,48 @@ function parseWavesFromPlan(planContent) {
   const lines = planContent.split('\n')
   let currentWave = null
   let currentTask = null
+  // light/none plan.md 用 `## Tasks`（无 `## Wave N`）包任务，需识别为隐式任务区，
+  // 让其中的 task checkbox 能被收进惰性创建的隐式 Wave（见下方 taskMatch 分支）。
+  let inImplicitTaskSection = false
 
   for (const line of lines) {
     const waveMatch = line.match(/^#+\s*Wave\s+(\d+)/i)
     if (waveMatch) {
       currentWave = { index: parseInt(waveMatch[1]), tasks: [] }
       currentTask = null
+      inImplicitTaskSection = false
       waves.push(currentWave)
       continue
     }
 
-    // 遇到任何非 Wave 的标题行（## 自检、## 备注 等）时退出当前 Wave 段，
-    // 避免「## 自检」段里的 - [x] checkbox 被误当 task 定义解析（导致
-    // Contract 校验报 task id 重复/不连续）。详见 docs/sillyspec/plan-postcheck-self-check-checkbox-false-dup.md
-    if (/^#+\s/.test(line)) {
+    // 任何非 Wave 的标题行：
+    //   1) 退出当前显式 Wave 段，避免「## 自检」段里的 - [x] checkbox 被误当 task 定义解析
+    //      （导致 Contract 校验报 task id 重复/不连续，详见 docs/sillyspec/plan-postcheck-self-check-checkbox-false-dup.md）
+    //   2) 识别 light/none 的 `## Tasks`/`## 任务` 任务区（无 Wave 标题），置位隐式任务区标志
+    const headingMatch = line.match(/^#+\s+(.+?)\s*$/)
+    if (headingMatch) {
       currentWave = null
       currentTask = null
+      const headingText = headingMatch[1].trim().toLowerCase()
+      inImplicitTaskSection = /^(tasks?|任务)$/.test(headingText)
       continue
     }
-
-    if (!currentWave) continue
 
     const taskMatch = line.match(/^[-*]\s*\[[ x]\]\s*(.+)/)
     if (taskMatch) {
       const taskNoMatch = taskMatch[1].match(/\btask-(\d+)\b/i)
+      // full plan.md：task 必须在显式 Wave 段内（currentWave 非 null），正常收容。
+      // light/none plan.md（无 Wave 标题，任务在 `## Tasks` 下）：在隐式任务区内，遇含
+      // task-XX 编号的 checkbox 时惰性创建隐式 Wave 收容，否则 validatePlanForExecute 会报
+      // "没有找到 checkbox task"。详见 docs/sillyspec/plan-light-needs-wave-heading.md
+      // 不收的情况：非任务区（## 自检/## 验收 等）的 checkbox，或任务区内无 task-XX 编号的 checkbox。
+      if (!currentWave) {
+        if (!inImplicitTaskSection || !taskNoMatch) continue
+        const nextIndex = waves.length === 0 ? 1 : (waves[waves.length - 1].index || waves.length) + 1
+        currentWave = { index: nextIndex, tasks: [], implicit: true }
+        currentTask = null
+        waves.push(currentWave)
+      }
       currentTask = {
         index: taskNoMatch ? parseInt(taskNoMatch[1], 10) : null,
         name: taskMatch[1].trim(),
@@ -549,12 +567,12 @@ ${taskSummary}
 4. 如存在模块文档（.sillyspec/docs/*/modules/），按需读取涉及模块的 <module>.md 参考接口约定和数据流
 
 ### Wave 开始前
-1. 读取 design.md 的「编码铁律」章节（如果存在），严格遵守
+1. 读取 design.md 的「非目标」与「兼容策略」章节（如存在），确保子代理不超范围、不破坏旧逻辑
 2. 读取 plan.md 了解全局任务划分和依赖关系
 3. 确认本 Wave 的输入/输出契约（前置 Wave 产出了什么，本 Wave 需要消费什么）
 4. 检查前置 Wave 的产出是否完整（文件是否存在、测试是否通过）
 5. **上下文分层加载**：
-   - 🔥 热上下文：design.md 编码铁律 + 当前 Wave 任务（必须加载）
+   - 🔥 热上下文：design.md 非目标/兼容策略 + 当前 Wave 任务（必须加载）
    - 🌡️ 温上下文：CONVENTIONS.md + ARCHITECTURE.md（需要时加载）
    - ❄️ 冷上下文：其他变更的 design.md、历史 plan.md（不要主动加载，除非明确需要）
 ${contractInjection}

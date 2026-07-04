@@ -9,9 +9,11 @@
 import { validatePlanForExecute } from '../src/stages/execute.js'
 
 let failed = 0
+let total = 0
 const failures = []
 
 function assert(condition, msg) {
+  total++
   if (!condition) {
     failed++
     failures.push(msg)
@@ -345,9 +347,112 @@ console.log('\n--- Bug C 回归: 自检段 checkbox 不误解析 ---')
   assert(JSON.stringify(ids) === JSON.stringify([1, 2, 3, 4]), `task id 应为 1-4，实际 ${ids}`)
 }
 
+// ─────────────────────────────────────────
+// light plan.md 用 `## Tasks`（无 `## Wave N`）通过 — 详见 docs/sillyspec/plan-light-needs-wave-heading.md
+// ─────────────────────────────────────────
+console.log('\n--- light plan（## Tasks 无 Wave）contract 通过 ---')
+{
+  const plan = `# 轻量计划：某需求
+
+## 来源
+直接引用 brainstorm 结论。
+
+## 范围
+- 涉及的文件/模块清单
+
+## Tasks
+- [ ] task-01: 添加 API 端点（覆盖：FR-01）
+- [ ] task-02: 添加前端调用
+- [ ] task-03: 联调
+
+## 验收
+- [ ] 所有单元测试通过
+- [ ] 接口契约符合设计
+
+## 覆盖矩阵
+| ID | 覆盖任务 | 验收证据 |
+|---|---|---|
+| FR-01 | task-01 | AC-01 |
+`
+  const result = validatePlanForExecute(plan)
+  assert(result.ok, `light plan（## Tasks）应校验通过，errors: ${result.errors.join('; ')}`)
+  assert(result.tasks.length === 3, `应解析 3 个 task，实际 ${result.tasks.length}`)
+  assert(result.waves.length === 1, `应归入 1 个隐式 Wave，实际 ${result.waves.length}`)
+  assert(result.waves[0].implicit === true, '隐式 Wave 应标记 implicit: true')
+  assert(result.waves[0].tasks[0].index === 1, '首个 task index 应为 1')
+}
+
+// ─────────────────────────────────────────
+// none plan.md 用 `## Tasks`（无 Wave）通过
+// ─────────────────────────────────────────
+console.log('\n--- none plan（## Tasks 无 Wave）contract 通过 ---')
+{
+  const plan = `# 计划跳过
+
+## 原因
+小范围明确修改。
+
+## 建议直接 execute
+直接进入 execute 阶段完成下列最小任务。
+
+## Tasks
+- [ ] task-01: 按用户需求完成小范围明确修改
+
+## 验收
+- 修改范围符合用户需求
+`
+  const result = validatePlanForExecute(plan)
+  assert(result.ok, `none plan（## Tasks）应校验通过，errors: ${result.errors.join('; ')}`)
+  assert(result.tasks.length === 1, `应解析 1 个 task，实际 ${result.tasks.length}`)
+}
+
+// ─────────────────────────────────────────
+// light plan 的 `## 验收`/`## 自检` 段 checkbox 不误收为 task（回归防护）
+// light 引入隐式 Wave 后，须确保自检段 "- [x] ...task-XX..." 文本不被重新误收
+// （与 plan-postcheck-self-check-checkbox-false-dup 同源风险）
+// ─────────────────────────────────────────
+console.log('\n--- light plan 验收/自检段 checkbox 不误收 ---')
+{
+  const plan = `# 轻量计划
+
+## Tasks
+- [ ] task-01: 实现 A
+- [ ] task-02: 实现 B
+
+## 验收
+- [ ] 所有单元测试通过
+- [ ] task-01 与 task-02 联调通过
+
+## 自检
+- [x] 每个 task 有编号(task-01~02),总数 2
+- [x] 无泛泛风险(转为具体验收条目与 task-01/task-02 等)
+`
+  const result = validatePlanForExecute(plan)
+  assert(result.ok, `验收/自检段含 checkbox 不应误报，errors: ${result.errors.join('; ')}`)
+  assert(result.tasks.length === 2, `应只解析 2 个 task，实际 ${result.tasks.length}（验收/自检 checkbox 被误纳入）`)
+  const ids = result.tasks.map(t => t.index).sort((a, b) => a - b)
+  assert(JSON.stringify(ids) === JSON.stringify([1, 2]), `task id 应为 1-2，实际 ${ids}`)
+}
+
+// ─────────────────────────────────────────
+// light plan `## Tasks` 段内无 task-XX 编号的 checkbox 不触发隐式 Wave
+// ─────────────────────────────────────────
+console.log('\n--- light plan 无编号 checkbox 不触发隐式 Wave ---')
+{
+  const plan = `# 轻量计划
+
+## Tasks
+- [ ] 实现登录功能（无 task id）
+`
+  const result = validatePlanForExecute(plan)
+  // 无 task-XX 编号 → 不触发隐式 Wave → allTasks 为空 → 报"没有找到 checkbox task"
+  assert(!result.ok, '任务区无 task-XX 编号应失败（不触发隐式 Wave）')
+  assert(result.errors.some(e => e.includes('checkbox task')), '错误应提到 checkbox task')
+}
+
 // ── 结果 ──
 console.log(`\n${'='.repeat(50)}`)
-console.log(`✅ 通过: ${13 - failed}  ❌ 失败: ${failed}`)
+console.log(`✅ 通过: ${total - failed}/${total}  ❌ 失败: ${failed}`)
 if (failures.length > 0) {
   console.log(`失败项:`)
   failures.forEach(f => console.log(`  - ${f}`))

@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-05-31 11:00:00
-updated_at: 2026-07-04 01:00:00
+updated_at: 2026-07-04 08:30:00
 ---
 
 # SillySpec 文件生命周期
@@ -137,7 +137,7 @@ sillyspec doctor --cleanup-remnant [--confirm]
 - scan 第 10 步「Extract Project Knowledge」把长期有效的项目知识写入 `.sillyspec/knowledge/`（`conventions.md`/`patterns.md`/`known-issues.md` + 更新 `INDEX.md`）；`scan-postcheck.js` 校验产物（INDEX.md 存在、引用文件真实存在）。
 - execute 启动时由 `knowledge-match.js` 按 plan.md 的 task 关键词匹配知识库，命中报告注入 prompt 并写 `.runtime/knowledge-hit-report.json`。
 - 平台模式残留清理只删缓存、保留权威状态（`worktrees/`、`sillyspec.db`、`global.json`、`gate-status.json`、`contract-artifacts/`、`execute-runs/`），不再整删 `.runtime/`——否则 worktree meta 被清掉会导致 `depsStatus` 恒为 unknown、`branch already exists` 死循环、`worktree doctor` orphan 误判。
-- plan→execute Contract 校验（`parseWavesFromPlan`）只解析 `## Wave N` 段内的 `- [ ] task-XX:` 行；遇到非 Wave 标题行（`## 自检` 等）即退出当前 Wave 段，避免自检 `- [x]` checkbox 被误当 task 定义。
+- plan→execute Contract 校验（`parseWavesFromPlan`）解析 `## Wave N` 段内的 `- [ ] task-XX:` 行；遇到非 Wave 标题行（`## 自检` 等）即退出当前 Wave 段，避免自检 `- [x]` checkbox 被误当 task 定义。light/none plan.md 用 `## Tasks`/`## 任务`（无 `## Wave N`）包任务时，识别为隐式任务区，对其中的 `- [ ] task-XX:` 惰性创建隐式 Wave 收容（非任务区 `## 验收`/`## 自检` 的 checkbox、任务区内无 `task-XX` 编号的 checkbox 仍忽略），隐式 Wave 标记 `implicit: true`。
 - `executePlanPostcheck` 的 `resolveChangeDir` 复用 `run.js` 模块内本地函数，不从 `./modules.js` 导入（该模块未导出此函数）。
 - `executePlanPostcheck`（noAI，execute 前最后关口）顺序跑确定性校验：`validateBlueprintConsistency`（task 结构/路径冲突/拓扑无环）、`validatePlanFeasibility`（TaskCard 字段齐全/依赖存在/id 连续）、`validateCrossTaskContracts`（consumer `expects_from` ↔ provider `provides` 字段对账）、`validateDesignFileCoverage`（`design.md` 文件变更清单 → tasks `allowed_paths` 覆盖对账；未覆盖的源码文件阻断 execute，避免子代理被 allowed_paths 锁死而无权改 → 漏改）、`validatePlanArtifacts`（plan.md/tasks/ 产物存在）。`parseFileChangeList`（`change-list.js`）兼容表格与分类列表两种清单格式、表头列顺序自适应，跳过 `.sillyspec/` 与「不修改文件」子段，CRLF 容错；覆盖对账用双向前缀 + glob 容差匹配，与 `quick-recommend` 共用 `change-list.js` 的 `pathMatches`。
 - Revision v1：`stages` 表新增 `revision`/`reopened_from_step`/`reopened_at`/`stale_reason` 列；阶段新增 `revising`/`stale` 状态；`sillyspec run <stage> --reopen --from-step <n>` 重开已完成阶段、级联标记下游 stale；`.runtime/postcheck-result.json` 由 `scan-postcheck.js` 的 `writeStructuredResult` 落盘（本地写 `specDir/.runtime`，平台写 `runtimeRoot/scan-runs/<id>`）。
