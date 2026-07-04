@@ -48,6 +48,8 @@ sillyspec run brainstorm --done --answer "..." --output "..."    # 一步完成 
 
 某些步骤（如"对话式探索"）需要用户输入。两种方式：
 
+> 自动去重：若前置 step 已对同一问题（waitReason 归一化后相同，如"确认设计方案" vs "最终确认设计方案"）确认过，后续重复 wait 会自动跳过，无需再 `--wait`。
+
 - **方式一（推荐）**：AI 自行与用户交互后，一步完成：
   ```bash
   sillyspec run brainstorm --done --change <名> --answer "用户回答" --output "需求已澄清"

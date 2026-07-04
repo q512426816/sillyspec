@@ -57,7 +57,7 @@ sillyspec worktree doctor --fix --change <变更名>
 
 ### Task Review Gate
 
-execute 完成时，每个 task 必须有 `review.json` 且 verdict 通过，否则阻断完成。`cannot_verify` 的 task 会写入 `verify-required-evidence.json`，由 verify 阶段消费。
+execute 完成时，每个 task 必须有 `review.json` 且 verdict 通过，否则阻断完成。**例外**：task 在 `tasks/task-XX.md` frontmatter 声明 `low_risk: true`（type-only / 机械迁移等低逻辑风险）时，缺 review.json 只发 warning 不阻断。`cannot_verify` 的 task 会写入 `verify-required-evidence.json`，由 verify 阶段消费。
 
 ## worktree 子命令（execute 相关）
 
