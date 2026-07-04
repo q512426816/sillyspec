@@ -2481,7 +2481,19 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
   if (currentStepDef.requiresWait === true && !currentStep.waitAnswer) {
     // 检查 --done 是否带了 --answer：如果是，自动补全 waitAnswer 状态，一步完成
     const doneAnswer = typeof options !== 'undefined' && options.doneAnswer ? options.doneAnswer : null
-    if (doneAnswer) {
+    // B4: 前置 step 已对同一问题确认则自动跳过重复 wait。
+    // 归一化去掉「最终/再次/重复」等修饰词，避免 step N「确认 X」与 step M「最终确认 X」重复打断。
+    const normalizeReason = (r) => (r || '').replace(/(最终|再次|重复|最后|首|初次|首次)/g, '').trim()
+    const currentReason = normalizeReason(currentStepDef.waitReason)
+    const priorConfirmed = currentReason && steps.slice(0, currentIdx).some(s =>
+      s.waitAnswer && s.status === 'completed' && normalizeReason(s.waitReason) === currentReason
+    )
+    if (priorConfirmed) {
+      currentStep.status = 'waiting'
+      currentStep.waitAnswer = '前置步骤已对同一问题确认 — 自动跳过重复 wait'
+      currentStep.waitReason = currentStepDef.waitReason || '等待用户输入'
+      console.log(`⚠️  Step "${currentStep.name}" 的确认（${currentStepDef.waitReason}）已在前置步骤完成，自动跳过。`)
+    } else if (doneAnswer) {
       currentStep.status = 'waiting'
       currentStep.waitAnswer = doneAnswer
       currentStep.waitReason = currentStepDef.waitReason || '等待用户输入'
@@ -3096,7 +3108,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
               executeRunId = generateExecuteRunId()
             }
 
-            const reviewResult = validateTaskReviews({ planContent, runtimeRoot, executeRunId })
+            const reviewResult = validateTaskReviews({ planContent, runtimeRoot, executeRunId, changeDir: planFile })
             printReviewResult(reviewResult)
 
             if (!reviewResult.ok) {

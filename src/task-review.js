@@ -128,8 +128,26 @@ export function readReview(reviewPath) {
  * @param {boolean} [opts.allowCannotVerify=true] - 是否允许 cannot_verify（默认允许，给 warning）
  * @returns {{ ok: boolean, errors: string[], warnings: string[], requiredEvidence: Array<{task: string, verdict: string, evidence: string[]}> }}
  */
+/**
+ * 读取 task-XX.md frontmatter，判断是否声明 low_risk: true（type-only/机械迁移等低逻辑风险）。
+ * 声明 low_risk 的 task 缺 review.json 时只 warning 不 error（B2：免逐个评审仪式）。
+ */
+function isTaskLowRisk(changeDir, taskId) {
+  if (!changeDir) return false
+  const taskFile = join(changeDir, 'tasks', `${taskId}.md`)
+  if (!existsSync(taskFile)) return false
+  try {
+    const content = readFileSync(taskFile, 'utf8')
+    const fm = content.match(/^---\n([\s\S]*?)\n---/)
+    if (!fm) return false
+    return /^low_risk:\s*true\s*$/im.test(fm[1])
+  } catch {
+    return false
+  }
+}
+
 export function validateTaskReviews(opts) {
-  const { planContent, runtimeRoot, executeRunId, allowCannotVerify = true } = opts
+  const { planContent, runtimeRoot, executeRunId, allowCannotVerify = true, changeDir = null } = opts
 
   const taskIds = parseTaskIdsFromPlan(planContent)
 
@@ -156,8 +174,12 @@ export function validateTaskReviews(opts) {
         // review.json 存在且 JSON 合法，但 schema 校验失败
         errors.push(`${taskId}: review.json 校验失败 — ${result.errors.join('; ')}`)
       } else {
-        // review.json 不存在
-        errors.push(`${taskId}: 缺少 review.json — task 未经过评审`)
+        // review.json 不存在：声明 low_risk 的 task 豁免（B2：type-only/机械迁移免逐个评审）
+        if (isTaskLowRisk(changeDir, taskId)) {
+          warnings.push(`${taskId}: 缺少 review.json — task 声明 low_risk: true，已豁免评审（type-only/机械迁移）`)
+        } else {
+          errors.push(`${taskId}: 缺少 review.json — task 未经过评审`)
+        }
       }
       continue
     }

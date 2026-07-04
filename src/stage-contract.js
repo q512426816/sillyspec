@@ -253,14 +253,21 @@ function validateBrainstormOutputs(cwd, changeName, context = {}) {
       warnings.push('design.md 缺少「自审」章节')
     }
 
-    // P1: 涉及生命周期关键词时，design.md 必须包含生命周期契约表
+    // P1: 涉及生命周期关键词时，design.md 必须包含生命周期契约表（除非显式声明不涉及）
     const hasLifecycleKeyword = /\b(session|lease|agent[._-]?run|daemon|lifecycle|state[._-]?transition|claim|heartbeat)\b/i.test(content)
     if (hasLifecycleKeyword) {
-      const hasLifecycleTable =
-        /生命周期契约表|lifecycle[._-]?contract|lifecycle[._-]?matrix|Lifecycle Contract/i.test(content) ||
-        /事件.*发起方.*接收方.*必需字段.*状态变化/.test(content)
-      if (!hasLifecycleTable) {
-        errors.push('design.md 涉及生命周期关键词（session/lease/agent_run/daemon/lifecycle）但缺少「生命周期契约表」— 必须列出完整的事件×状态转换矩阵')
+      // 显式声明本变更不涉及生命周期契约（覆盖字段名/错误码/否定声明场景）：
+      // 历史教训：design 提到 daemon_id 字段名或 daemon_not_owned 错误码就触发，被迫加空表（B3a）
+      const declaresNotApplicable = /(生命周期|lifecycle)[^\n]{0,40}(n\/?a|不涉及|无|none|not[ _-]?applicable)|(不涉及|无需|没有)[^\n]{0,40}(生命周期|lifecycle)/i.test(content)
+      if (declaresNotApplicable) {
+        warnings.push('design.md 显式声明不涉及生命周期契约 — 已豁免「生命周期契约表」要求')
+      } else {
+        const hasLifecycleTable =
+          /生命周期契约表|lifecycle[._-]?contract|lifecycle[._-]?matrix|Lifecycle Contract/i.test(content) ||
+          /事件.*发起方.*接收方.*必需字段.*状态变化/.test(content)
+        if (!hasLifecycleTable) {
+          errors.push('design.md 涉及生命周期关键词（session/lease/agent_run/daemon/lifecycle）但缺少「生命周期契约表」— 必须列出完整的事件×状态转换矩阵；或显式声明「不涉及生命周期契约」并附理由豁免')
+        }
       }
     }
   }
@@ -380,6 +387,22 @@ function validatePlanOutputs(cwd, changeName, context = {}) {
 
   return { ok: errors.length === 0, errors, warnings }
 }
+/**
+ * 从 verify-result.md 提取结论关键词（PASS / PASS WITH NOTES / FAIL）。
+ * 标题放宽：含「结论/Conclusion/Result/结果」的二级标题均可（B3c），
+ * PASS/FAIL 可在标题行本身（如「## 验收结论：✅ PASS」）或紧邻标题的正文里。
+ * 历史教训：原正则锚定确切「## 结论」，用户写「## 验收结论：✅ PASS」不被识别。
+ */
+function extractVerifyConclusion(verify) {
+  const headingRe = /^##\s[^\n]*(?:结论|conclusion|result|结果)/im
+  const headingMatch = verify.match(headingRe)
+  if (!headingMatch) return ''
+  const start = headingMatch.index
+  const slice = verify.slice(start, start + 400)
+  const kw = slice.match(/\b(PASS(?:\s+WITH\s+NOTES)?|FAIL)\b/i)
+  return kw ? kw[1].toUpperCase().replace(/\s+/g, ' ') : ''
+}
+
 function validateVerifyOutputs(cwd, changeName, context = {}) {
   const { specRoot } = context
   const changeDir = resolveChangeDir(cwd, changeName, specRoot)
@@ -419,12 +442,11 @@ function validateVerifyOutputs(cwd, changeName, context = {}) {
     // ── FAIL 结论门控（适用于所有变更，不限风险等级）──
     // verify-result.md 结论为 FAIL 时，verify 阶段不能 completed。
     // 历史教训：CLI 曾不校验结论，AI 写 FAIL 后 verify 仍被标记完成并提示"验证通过可以归档"。
-    const conclusionLine = verify.match(/^##\s*结论\s*\n\s*(PASS(?:\s+WITH\s+NOTES)?|FAIL)/im)
-    const conclusionStr = conclusionLine ? conclusionLine[1].toUpperCase().replace(/\s+/g, ' ') : ''
+    const conclusionStr = extractVerifyConclusion(verify)
     if (conclusionStr === 'FAIL') {
       errors.push('verify-result.md 结论为 FAIL — 验证未通过，不能标记 verify 完成；请修复后重新运行验证')
     } else if (!conclusionStr) {
-      warnings.push('verify-result.md 未识别到「## 结论」章节（应为 PASS / PASS WITH NOTES / FAIL）')
+      warnings.push('verify-result.md 未识别到结论章节（含 结论/Conclusion/Result/结果 的二级标题，后跟 PASS / PASS WITH NOTES / FAIL）')
     }
 
     // ── P0: Change Risk Gate — 核心功能缺少真实集成验证时 FAIL ──
@@ -433,8 +455,7 @@ function validateVerifyOutputs(cwd, changeName, context = {}) {
       planContent: readIfExists(join(changeDir, 'plan.md')),
     })
     if (['integration-critical', 'deployment-critical'].includes(changeRiskProfile.level)) {
-      const conclusionMatch = verify.match(/^## 结论\s*\n\s*(PASS|PASS WITH NOTES|FAIL)/im)
-      const conclusion = conclusionMatch ? conclusionMatch[1] : ''
+      const conclusion = extractVerifyConclusion(verify)
       if (conclusion === 'PASS WITH NOTES' || conclusion === 'PASS') {
         const evidenceCheck = checkIntegrationEvidence(verify, changeRiskProfile.requiredVerification)
         if (!evidenceCheck.ok) {
