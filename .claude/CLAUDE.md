@@ -1,5 +1,9 @@
 # Claude Code 指引
 
+# 定期解决这些问题
+ 此目录下的 C:\Users\qinyi\IdeaProjects\multi-agent-platform\docs\sillyspec 文件（排除 finished 目录下的）
+ 若已解决则将对于的文件 移动到 C:\Users\qinyi\IdeaProjects\multi-agent-platform\docs\sillyspec\finished 目录下
+
 # SillySpec工具定位
 1. SillySpec 是给 Agent 调用的 CLI 工具，不是给人类直接使用的产品
 2. SillySpec 是管理 Agent 工作流的 CLI 工具，不是处理业务逻辑的工具
@@ -7,6 +11,7 @@
 
 ## 文件生命周期文档同步
 每次修改 `src/stages/` 下的阶段定义（prompt、步骤、输出文件名等）或 `src/run.js`、`src/progress.js` 等影响文件生命周期的代码后，**必须同步更新** `docs/sillyspec/file-lifecycle.md`，确保文档与代码一致。
+修改后，如涉及到对应的SillySpec SKILLS，要同步更新[.claude\skills\]
 
 ### 触发更新的典型改动
 - 新增/删除/重命名阶段步骤

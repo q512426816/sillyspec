@@ -20,3 +20,7 @@ packages/dashboard/node_modules/
 
 # ⚠️ 不要忽略 .claude/skills/ 和 templates/ ——
 # sillyspec init 从这两个目录复制 skill 模板和 workflow 到用户项目（init.js:209,283）。
+
+# .claude/CLAUDE.md 是项目级 Claude 指引（含开发者本地路径），不是工具运行时依赖，不进 npm 包。
+# .claude/skills/ 仍保留（见上，init.js 复制 skill 模板用）。
+.claude/CLAUDE.md
