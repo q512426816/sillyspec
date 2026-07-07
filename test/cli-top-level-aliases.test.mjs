@@ -52,14 +52,18 @@ function runCLI(args, cwd) {
 }
 
 function cleanSillySpec(cwd) {
-  // 清掉 sillyspec 写入 cwd 的进度副作用，保证两路字节级环境一致
-  // Windows 下 sillyspec.db 文件锁释放有延迟，子进程退出后立即 rmSync 可能 EBUSY → 重试 + busy-wait
+  // runCommand 的 resolveSpecDir 会向上查找 .sillyspec（多项目/子目录支持），
+  // 故两路比较前需上溯清掉沿途 .sillyspec（含 parent，如 tmpRoot/），否则 parent
+  // 残留的 default change 会让 doctor 顶层与 run doctor 读到不同状态 → 不等价。
   const sleep = (ms) => { const t = Date.now(); while (Date.now() - t < ms) {} }
-  for (let i = 0; i < 10; i++) {
-    try { rmSync(join(cwd, '.sillyspec'), { recursive: true, force: true }); break } catch { sleep(100) }
-  }
-  for (let i = 0; i < 10; i++) {
-    try { rmSync(join(cwd, '.sillyspec-platform.json'), { force: true }); break } catch { sleep(100) }
+  const tryRemove = (p) => { for (let r = 0; r < 10; r++) { try { rmSync(p, { recursive: true, force: true }); return } catch { sleep(50) } } }
+  let cur = cwd
+  for (let i = 0; i < 3; i++) {
+    tryRemove(join(cur, '.sillyspec'))
+    tryRemove(join(cur, '.sillyspec-platform.json'))
+    const parent = dirname(cur)
+    if (parent === cur) break
+    cur = parent
   }
 }
 
@@ -159,9 +163,11 @@ try {
   {
     const top = runCLI(['doctor', '--json'], tmpRoot)
     const viaRun = runCLI(['run', 'doctor', '--json'], tmpRoot)
+    // generated_at 是运行时间戳，两次调用必然不同，比较前 normalize 掉
+    const norm = (s) => s.replace(/"generated_at":\s*"[^"]*"/g, '"generated_at":"X"')
     assert(
-      top.stdout === viaRun.stdout,
-      `doctor --json stdout 与 run doctor --json 一致 (len=${top.stdout.length})`
+      norm(top.stdout) === norm(viaRun.stdout),
+      `doctor --json stdout 与 run doctor --json 一致（忽略 generated_at, len=${top.stdout.length}）`
     )
     assert(
       top.status === viaRun.status,

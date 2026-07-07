@@ -297,6 +297,20 @@ async function main() {
       break;
     }
     case 'run': {
+      // doctor --json 等价 doctor 顶层 --json（结构化诊断），与 case 'doctor' 行为一致——
+      // 否则 sillyspec doctor --json 走 runDoctorDiagnostics，sillyspec run doctor --json 走 runCommand
+      // prompt 自检，两者输出不等价（违反"顶层别名 == run <stage>"契约）。
+      if (filteredArgs[1] === 'doctor' && json) {
+        const doctorEffectiveDir = specDir ? dir : resolveEffectiveDir(dir)
+        const { runDoctorDiagnostics, formatDoctorJson, writeDoctorDiagnosis } = await import('./doctor-diagnostics.js')
+        const result = await runDoctorDiagnostics({ cwd: doctorEffectiveDir })
+        const output = formatDoctorJson(result, { source_root: dir })
+        const written = writeDoctorDiagnosis(output, result.authoritySpecDir)
+        if (written) console.error(`📁 诊断结果已写入: ${written}`)
+        console.log(JSON.stringify(output, null, 2))
+        process.exitCode = output.overall_status === 'pass' ? 0 : 1
+        break
+      }
       const { runCommand } = await import('./run.js')
       // 平台模式（--spec-dir 已指定）时，--dir 是明确的 source_root，不应被 resolveEffectiveDir 纠正
       const effectiveDir = specDir ? dir : resolveEffectiveDir(dir)
