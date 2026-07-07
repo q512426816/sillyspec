@@ -309,6 +309,24 @@ export class WorktreeManager {
       });
     }
 
+    // 5.4b 立即写占位 meta（防 create 中断导致幽灵 worktree：目录在 + meta 没 →
+    // 下次 create 误判幽灵强删）。后续 fetch/overlay/provision 步骤若抛错，占位
+    // meta 让 getMeta 返回非 null，下次 create 走 "already exists" 分支（保护
+    // worktree 内任何已写入的内容，不触发幽灵清理）。最终完整 meta 在 step 6 覆盖。
+    try {
+      const placeholderMeta = {
+        changeName: name,
+        branch,
+        baseBranch,
+        baseHash,
+        worktreePath,
+        mode: 'worktree',
+        createdAt: new Date().toISOString(),
+        provisioning: true,
+      };
+      writeFileSync(join(worktreePath, META_FILE), JSON.stringify(placeholderMeta, null, 2) + '\n');
+    } catch {}
+
     // 5.5 自动同步远程最新代码（防止 worktree 基于过时的 commit）
     let syncStatus = 'ok';
     let syncError = null;
