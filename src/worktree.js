@@ -244,9 +244,20 @@ export class WorktreeManager {
 
     // 2. 检查 worktree 是否已存在
     if (existsSync(worktreePath)) {
-      // 目录在但 meta.json 不存在（幽灵状态），自动清理
+      // 目录在但 meta.json 不存在（幽灵状态）—— 删之前必须确认无未提交改动，
+      // 否则会丢失 execute 期间未 commit 的代码（不可恢复，3.22.4 修复）。
       if (!this.getMeta(name)) {
-        console.log(`⚠️  检测到幽灵 worktree 目录（无 meta.json），自动清理...`);
+        let uncommitted = '';
+        try { uncommitted = git(worktreePath, 'status --porcelain') } catch {}
+        if (uncommitted.trim()) {
+          throw new Error(
+            `检测到幽灵 worktree（无 meta.json）但含未提交改动，拒绝自动清理（防丢代码）。\n` +
+            `  目录：${worktreePath}\n` +
+            `  请先检查/commit/备份该目录，再手动清理：sillyspec worktree cleanup ${name} --force\n` +
+            `  （未提交文件数：${uncommitted.trim().split('\n').length}）`
+          );
+        }
+        console.log(`⚠️  检测到幽灵 worktree 目录（无 meta.json，无未提交改动），自动清理...`);
         try { rmSync(worktreePath, { recursive: true, force: true }); } catch {}
         // 同步清理 git worktree 注册 + 残留分支，否则目录虽删但 git 内部状态未清，
         // 后续 git worktree add 会因「worktree 已注册」或「分支已存在」失败
