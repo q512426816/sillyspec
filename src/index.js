@@ -317,6 +317,57 @@ async function main() {
       const pathIdx = filteredArgs.indexOf('--path');
       const dbPath = pathIdx >= 0 && filteredArgs[pathIdx + 1] ? filteredArgs[pathIdx + 1] : null;
 
+      // --align-execute-progress：基于 plan.md 声明对齐 execute 派生戳（仿 --cleanup-remnant 范式）
+      // 默认 dry-run（只报告将补哪些 step），加 --confirm 才写。命中即 break，绝不 fall-through。
+      const alignFlag = filteredArgs.includes('--align-execute-progress');
+      if (alignFlag) {
+        // --change 解析：显式优先，缺省用单活跃变更自动兜底（与 run.js resolveChangeNameAuto 同逻辑）
+        const alignChangeIdx = filteredArgs.indexOf('--change');
+        let alignChange = alignChangeIdx >= 0 && filteredArgs[alignChangeIdx + 1] ? filteredArgs[alignChangeIdx + 1] : null;
+        if (!alignChange) {
+          const changesDir = join(resolvePlatformSpecDir(doctorEffectiveDir, specDir) || join(doctorEffectiveDir, '.sillyspec'), 'changes');
+          if (existsSync(changesDir)) {
+            const activeChanges = readdirSync(changesDir, { withFileTypes: true })
+              .filter(e => e.isDirectory() && e.name !== 'archive')
+              .map(e => e.name);
+            if (activeChanges.length === 1) alignChange = activeChanges[0];
+          }
+        }
+        if (!alignChange) {
+          console.error('❌ 无法确定变更名：请用 --change <name>，或确保仅有一个活跃变更');
+          process.exitCode = 2;
+          break;
+        }
+
+        // 复用顶层静态 import（line 12），不动态 await import
+        const pm = new ProgressManager({ specDir: resolvePlatformSpecDir(doctorEffectiveDir, specDir) });
+        const specBase = resolvePlatformSpecDir(doctorEffectiveDir, specDir) || join(doctorEffectiveDir, '.sillyspec');
+        let r;
+        try {
+          r = await pm.alignExecuteToPlan(doctorEffectiveDir, alignChange, specBase, { confirm: doctorConfirm });
+        } catch (e) {
+          console.error(`❌ 对齐失败：${e.message}`);
+          process.exitCode = 1;
+          break;
+        }
+
+        if (json) {
+          console.log(JSON.stringify(r, null, 2));
+        } else if (r.ok === false) {
+          console.error(`❌ ${r.reason || '对齐未执行'}`);
+        } else {
+          console.log(`✅ 已基于 plan.md 声明对齐 ${r.aligned} 个 step（plan: ${r.planChecked}/${r.planTotal}）。`);
+          if (!doctorConfirm) {
+            console.log(`   （dry-run：未写盘。加 --confirm 实际落盘，并置 execute 阶段 status=completed。）`);
+          } else {
+            console.log(`   已落盘，execute 阶段 status=completed。请确认 verify 通过。`);
+          }
+        }
+        // ok=false 或 reason 非空 → 1；否则 0（与 --cleanup-remnant 的 r.errors 逻辑同构）
+        process.exitCode = (r.ok === false || r.reason) ? 1 : 0;
+        break;
+      }
+
       if (cleanupRemnant) {
         const { cleanupRemnantDbs } = await import('./doctor-diagnostics.js');
         const r = await cleanupRemnantDbs({ cwd: doctorEffectiveDir, confirm: doctorConfirm });

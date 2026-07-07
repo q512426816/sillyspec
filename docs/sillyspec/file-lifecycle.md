@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-05-31 11:00:00
-updated_at: 2026-07-04 08:30:00
+updated_at: 2026-07-07 07:50:00
 ---
 
 # SillySpec 文件生命周期
@@ -124,6 +124,14 @@ sillyspec doctor --dump-db --path <db>
 sillyspec doctor --cleanup-remnant [--confirm]
   -> 删除 0 字节空占位 db（默认 dry-run；--confirm 才真删；只删 size===0，不动有内容的 db）
 
+sillyspec doctor --align-execute-progress [--confirm] [--change <name>]
+  -> 按 plan.md 声明对齐 execute 阶段派生进度戳（默认 dry-run，只报告将补哪些 step；
+     --confirm 才落盘：把 execute 阶段所有非 completed step 标 completed，并显式置
+     execute stageData.status='completed' + completedAt）。仅当 plan.md 所有 task checkbox
+     全勾时才对齐（信任声明、verify 兜底，同 archive 真相源语义）；--change 缺省时按单活跃
+     变更自动兜底。典型用于 worktree 已 cleanup（终态）但 execute 派生戳未盖上的死锁场景。
+     只写 stages 表 step 状态（经 ProgressManager._write），不改 schema。
+
 ## 核心修正
 
 这版文档相对旧版长文档做了几项关键修正：
@@ -142,3 +150,4 @@ sillyspec doctor --cleanup-remnant [--confirm]
 - `executePlanPostcheck`（noAI，execute 前最后关口）顺序跑确定性校验：`validateBlueprintConsistency`（task 结构/路径冲突/拓扑无环）、`validatePlanFeasibility`（TaskCard 字段齐全/依赖存在/id 连续）、`validateCrossTaskContracts`（consumer `expects_from` ↔ provider `provides` 字段对账）、`validateDesignFileCoverage`（`design.md` 文件变更清单 → tasks `allowed_paths` 覆盖对账；未覆盖的源码文件阻断 execute，避免子代理被 allowed_paths 锁死而无权改 → 漏改）、`validatePlanArtifacts`（plan.md/tasks/ 产物存在）。`parseFileChangeList`（`change-list.js`）兼容表格与分类列表两种清单格式、表头列顺序自适应，跳过 `.sillyspec/` 与「不修改文件」子段，CRLF 容错；覆盖对账用双向前缀 + glob 容差匹配，与 `quick-recommend` 共用 `change-list.js` 的 `pathMatches`。
 - Revision v1：`stages` 表新增 `revision`/`reopened_from_step`/`reopened_at`/`stale_reason` 列；阶段新增 `revising`/`stale` 状态；`sillyspec run <stage> --reopen --from-step <n>` 重开已完成阶段、级联标记下游 stale；`.runtime/postcheck-result.json` 由 `scan-postcheck.js` 的 `writeStructuredResult` 落盘（本地写 `specDir/.runtime`，平台写 `runtimeRoot/scan-runs/<id>`）。
 - 平台指针 fail-closed（2026-07-03）：`resolvePlatformSpecDir`（`progress.js`）在 pointer 存在但失效（specRoot 不可达/损坏/缺字段）时抛 `PointerUnreachableError`，`index.js` 顶层 catch 打印修复引导 + exit 1，**不再静默回退本地孤儿 db**；无 pointer 的纯本地项目不受影响。`sync.js` 用 `safePlatformSpecDir` best-effort 包裹保持容错。逃生口：显式 `--spec-dir`。
+- doctor 结构化诊断新增 `execute-progress-plan-mismatch` 维度（2026-07-07，`doctor-diagnostics.js` D5）：检测某 change 的 execute stage status≠completed 但其 `plan.md` 所有 task checkbox 全勾（只读 `plan.md`/`tasks.md` + 只读查 stages 表，**绝不写 db**）。命中即输出 `safe_action` 建议 `sillyspec doctor --align-execute-progress --change <name>`（advisory/WARNING，不阻断任何流程）。写操作由独立的 `ProgressManager.alignExecuteToPlan` 承担（诊断/写分离，D-001@v2）。

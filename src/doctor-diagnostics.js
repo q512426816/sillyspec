@@ -5,7 +5,8 @@
  *   现状 doctor 阶段是 prompt 驱动的 bash 清单，假设单一本地 .sillyspec/，
  *   看不见平台模式下的本地/平台状态分裂（孤儿 db、changes 历史断裂、pointer
  *   失效静默回退）。本模块补这一层：
- *     - 维度化检测（D1 多 db / D2 pointer / D3 changes 分裂 / D4 change↔db 一致）
+ *     - 维度化检测（D1 多 db / D2 pointer / D3 changes 分裂 / D4 change↔db 一致
+ *                          / D5 execute-progress-plan-mismatch execute 派生戳 vs plan.md 声明）
  *     - 结构化 JSON 输出（sillyspec doctor --json），agent 可直接解析
  *     - safe_actions：只描述建议动作与风险等级，绝不自动执行
  *
@@ -13,6 +14,8 @@
  *   - 所有检测只读。DB 以内存副本打开，不调用 export/writeFileSync，不跑建表/迁移，
  *     close 后丢弃——绝不写回原 db 文件。
  *   - 不删除/移动任何文件；orphan db 仅报告，处理交给后续 --dump-db / --confirm 流程。
+ *   - execute-progress-plan-mismatch 维度同样只读：仅读 plan.md checkbox + 只读查 stages 表，
+ *     绝不调用 ProgressManager 写方法（写操作是 progress.alignExecuteToPlan 的职责，D-001@v2 诊断/写分离）。
  *
  * 风格对齐 scan-postcheck.js：checks 用 CHECK_SEVERITY，formatter 产出 schema_version JSON，
  * writer 落盘到 <authoritySpecDir>/.runtime/。
@@ -79,6 +82,22 @@ async function probeDb(dbPath, SQL) {
         return r.length ? r[0].values.map((row) => row[0]) : [];
       } catch { return []; }
     };
+    // 每个 active change 的 execute stage status（只读查询；stages 表的 status 列）。
+    // 用于 execute-progress-plan-mismatch 诊断：execute 派生戳 vs plan.md 声明。
+    // change_name → execute stage status（无 execute 行则 absent）。
+    const pickExecuteStatusByChange = () => {
+      try {
+        const r = db.exec(
+          `SELECT c.name, s.status FROM changes c
+           LEFT JOIN stages s ON s.change_id = c.id AND s.stage = 'execute'`
+        );
+        const out = {};
+        if (r.length) {
+          for (const [name, status] of r[0].values) out[name] = status || null;
+        }
+        return out;
+      } catch { return {}; }
+    };
     return {
       ...base,
       readable: true,
@@ -86,6 +105,7 @@ async function probeDb(dbPath, SQL) {
       change_count: pick('SELECT count(*) FROM changes', 0),
       active_changes: pickCol("SELECT name FROM changes WHERE status='active'"),
       last_active: pick('SELECT MAX(last_active) FROM changes'),
+      execute_status_by_change: pickExecuteStatusByChange(),
     };
   } catch (e) {
     return { ...base, readable: false, reason: `打开失败: ${e.message}` };
@@ -369,6 +389,105 @@ function detectChangeDbConsistency(cwd, pointer, multiDb) {
   };
 }
 
+// ── D5 execute-progress-plan-mismatch（execute 派生戳 vs plan.md 声明）─────
+
+/**
+ * 只读解析 plan.md（回退 tasks.md）的 task checkbox 全勾状态。
+ * 真相源语义对齐 run.js:832 + execute.js 的 checkbox 格式：
+ *   `- [ ] task-NN: ...` / `- [x] task-NN: ...`
+ * 只读文件，不调用任何 ProgressManager 写方法（D-001@v2 诊断/写分离）。
+ * @returns {{total:number, checked:number} | null} null = plan/tasks.md 都不存在或无 task 行
+ */
+function readPlanCheckboxStatus(changeDir) {
+  const planPath = join(changeDir, 'plan.md');
+  const tasksPath = join(changeDir, 'tasks.md');
+  let content = null;
+  if (existsSync(planPath)) {
+    try { content = readFileSync(planPath, 'utf8'); } catch { content = null; }
+  }
+  if (content == null && existsSync(tasksPath)) {
+    try { content = readFileSync(tasksPath, 'utf8'); } catch { content = null; }
+  }
+  if (content == null) return null;
+  // match both "- [ ] task-01: title" and "- [x] task-01: title"
+  const taskLine = /(?:^- \[[ x]\] )task-\d+[^:]*:?\s*.+$/gm;
+  const matches = content.match(taskLine) || [];
+  if (matches.length === 0) return null;
+  const checked = matches.filter((l) => /^- \[x\] task-\d+/i.test(l)).length;
+  return { total: matches.length, checked };
+}
+
+/**
+ * D5 诊断维度（advisory，CHECK_SEVERITY.WARNING，不阻断）：
+ *   触发条件：change 的 execute stage status≠completed，且其 plan.md 所有 task checkbox 全勾。
+ *   命中即输出 safe_action 建议显式对齐命令（绝不执行）。
+ * 只读：仅读 changes/<name>/plan.md + 只读用 probeDb 已取回的 execute stage status 字段，
+ *       绝不写 db、不动文件（D-001@v2）。
+ */
+function detectExecuteProgressPlanMismatch(authoritySpecRoot, authDb) {
+  const dim = {
+    name: 'execute-progress-plan-mismatch',
+    label: 'execute 派生戳 vs plan.md 声明',
+    safe_actions: [],
+    findings: [],
+    per_change: [],
+  };
+  if (!authoritySpecRoot || !existsSync(authoritySpecRoot)) {
+    dim.pass = true;
+    dim.severity = null;
+    dim.findings = ['无权威 specRoot，跳过 execute-progress-plan-mismatch 诊断'];
+    return dim;
+  }
+  const executeStatusByChange = (authDb && authDb.execute_status_by_change) || {};
+  const changes = listChanges(authoritySpecRoot);
+  let triggered = false;
+  let severity = null;
+  for (const name of changes) {
+    const planStatus = readPlanCheckboxStatus(join(authoritySpecRoot, 'changes', name));
+    if (!planStatus || planStatus.total === 0) {
+      dim.per_change.push({ change: name, plan_total: 0, skipped: '无 task checkbox' });
+      continue;
+    }
+    const execStatus = executeStatusByChange[name] !== undefined
+      ? executeStatusByChange[name]
+      : null;
+    dim.per_change.push({
+      change: name,
+      plan_total: planStatus.total,
+      plan_checked: planStatus.checked,
+      execute_status: execStatus,
+    });
+    const allChecked = planStatus.checked >= planStatus.total;
+    const execNotCompleted = execStatus !== 'completed';
+    // 触发：execute status≠completed 且 plan.md 全勾
+    if (allChecked && execNotCompleted) {
+      triggered = true;
+      severity = CHECK_SEVERITY.WARNING;
+      dim.findings.push(
+        `change [${name}]：plan.md ${planStatus.checked}/${planStatus.total} task 全勾，` +
+        `但 execute stage status=${execStatus || 'absent'}（≠completed）——派生戳未对齐真相源声明`
+      );
+      dim.safe_actions.push({
+        dimension: 'execute-progress-plan-mismatch',
+        action: `sillyspec doctor --align-execute-progress --change ${name}`,
+        risk: 'low',
+        rationale: `plan.md 声明全完成但 execute 派生戳未对齐（${planStatus.checked}/${planStatus.total} 全勾，execute status=${execStatus || 'absent'}）；doctor 信任 plan.md 声明，对齐由 --confirm 显式触发`,
+        next_step: 'sillyspec doctor --align-execute-progress --change ' + name + ' --confirm',
+      });
+    }
+  }
+  dim.pass = !triggered;
+  dim.severity = triggered ? CHECK_SEVERITY.WARNING : null;
+  if (!triggered) {
+    dim.findings.push(
+      changes.length === 0
+        ? '无 changes，无 execute-progress-plan-mismatch 可检测'
+        : `所有 ${changes.length} 个 change 的 execute 派生戳与 plan.md 声明一致（或 plan.md 未全勾）`
+    );
+  }
+  return dim;
+}
+
 // ── 主入口 ────────────────────────────────────────────────────────────
 
 export async function runDoctorDiagnostics({ cwd }) {
@@ -379,15 +498,17 @@ export async function runDoctorDiagnostics({ cwd }) {
   const changesSplit = detectChangesSplit(cwd, pointer);
   const changeDb = detectChangeDbConsistency(cwd, pointer, multiDb);
 
-  const dimensions = [multiDb, pointerHealth, changesSplit, changeDb];
-
-  // 权威 specDir（用于落盘诊断结果）
+  // 权威 specDir（用于 D5 execute-progress-plan-mismatch 读 plan.md）
   const authoritySpecDir =
     pointer.present && pointer.specRoot && existsSync(pointer.specRoot)
       ? pointer.specRoot
       : existsSync(join(cwd, '.sillyspec'))
         ? join(cwd, '.sillyspec')
         : null;
+  const authDb = (multiDb.dbs || []).find((d) => d.role === DB_ROLE.AUTHORITY);
+  const executeMismatch = detectExecuteProgressPlanMismatch(authoritySpecDir, authDb);
+
+  const dimensions = [multiDb, pointerHealth, changesSplit, changeDb, executeMismatch];
 
   return {
     dimensions,

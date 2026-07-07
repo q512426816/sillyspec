@@ -1585,7 +1585,7 @@ export async function runCommand(args, cwd, specDir = null) {
 
   // --skip
   if (isSkip) {
-    return await skipStep(pm, progress, stageName, cwd, effectiveChange)
+    return await skipStep(pm, progress, stageName, cwd, effectiveChange, platformOpts)
   }
 
   // --wait: 将 step 设为 waiting（独立于 --done）
@@ -2388,19 +2388,35 @@ function isCurrentWaveAllNoDepsVerify(stepName, changeDir) {
 async function enforceDepsGate(stageName, cwd, changeName, step, steps, currentIdx, specBase, platformOpts) {
   if (stageName !== 'execute') return true
   let meta = null
+  let wm = null
   try {
     const { WorktreeManager } = await import('./worktree.js')
-    meta = new WorktreeManager({ cwd }).getMeta(changeName)
+    wm = new WorktreeManager({ cwd })
+    meta = wm.getMeta(changeName)
   } catch {}
   const depsStatus = meta?.depsStatus
   if (['linked', 'installed', 'n/a'].includes(depsStatus)) return true
   const changeDir = changeName ? join(specBase, 'changes', changeName) : null
   if (isCurrentWaveAllNoDepsVerify(step?.name, changeDir)) return true
   if (steps && steps[currentIdx]) steps[currentIdx].status = 'blocked'
-  console.error(`❌ 拒绝 --done：依赖未就绪（depsStatus=${depsStatus || 'unknown'}），不得在无构建/测试能力时声称完成。`)
-  console.error(`   修复：sillyspec worktree doctor --fix${changeName ? ` --change ${changeName}` : ''}`)
-  console.error(`   或在 worktree 内手动安装依赖后重试。`)
-  if (meta?.depsError) console.error(`   上次供给错误：${meta.depsError}`)
+  // ── 诊断分支（Phase 2，G2/R3 修正：判定基于物理目录而非 !meta）──
+  // getMeta 对"目录不存在"与"meta 损坏"都返回 null，后者会误判终态 → 用物理目录存在性判定。
+  let worktreeGone = true
+  try {
+    worktreeGone = !!(wm && changeName) && !existsSync(wm.getWorktreePath(changeName))
+  } catch {}
+  // ── fail-loud 块（Phase 3，D-005@v1：仅改拒绝侧 stderr）──
+  console.error('❌ ── deps 门控阻断（本次 --done 未完成，进度未推进）──')
+  if (worktreeGone) {
+    console.error('   worktree 不可用（已 cleanup 或目录不存在）。')
+    console.error(`   修复：sillyspec doctor --align-execute-progress${changeName ? ` --change ${changeName}` : ''} 按 plan.md 对齐进度`)
+    console.error(`   或：  sillyspec worktree create ${changeName || '<change>'} 重建 worktree 继续跑`)
+  } else {
+    console.error(`   原因：依赖未就绪（depsStatus=${depsStatus || 'unknown'}），不得在无构建/测试能力时声称完成。`)
+    console.error(`   修复：sillyspec worktree doctor --fix${changeName ? ` --change ${changeName}` : ''}`)
+    console.error('   或在 worktree 内手动安装依赖后重试。')
+    if (meta?.depsError) console.error(`   上次供给错误：${meta.depsError}`)
+  }
   process.exit(1)
 }
 
@@ -3304,7 +3320,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
   return { stageCompleted: false, currentIdx, nextPendingIdx }
 }
 
-async function skipStep(pm, progress, stageName, cwd, changeName) {
+async function skipStep(pm, progress, stageName, cwd, changeName, platformOpts = {}) {
   const stageData = progress.stages[stageName]
   if (!stageData || !stageData.steps) {
     console.error(`❌ 阶段 ${stageName} 未初始化`)

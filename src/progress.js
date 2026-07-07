@@ -1799,4 +1799,115 @@ export class ProgressManager {
       writeFileSync(gitignorePath, rule + '\n');
     }
   }
+
+  // ── plan.md 对齐（doctor --align-execute-progress 入口）──
+
+  /**
+   * 解析 changeDir/plan.md（回退 tasks.md）的 task checkbox 统计。
+   * 仅匹配 `- [ ] task-NN` / `- [x] task-NN` 形态的行（task- 前缀锚定，避免误捞非任务项）。
+   * @param {string} changeDir - 变更目录绝对路径（含 plan.md/tasks.md）
+   * @returns {{ total: number, checked: number }}
+   */
+  readPlanCheckboxStatus(changeDir) {
+    if (!changeDir || typeof changeDir !== 'string') {
+      throw new Error('changeDir 不能为空');
+    }
+    const planPath = join(changeDir, 'plan.md');
+    const tasksPath = join(changeDir, 'tasks.md');
+    let content = null;
+    if (existsSync(planPath)) {
+      content = readFileSync(planPath, 'utf8');
+    } else if (existsSync(tasksPath)) {
+      content = readFileSync(tasksPath, 'utf8');
+    } else {
+      return { total: 0, checked: 0 };
+    }
+    // 匹配 `- [ ] task-NN` / `- [x] task-NN`（允许 [x] 大小写、空格弹性、task- 前缀）
+    const re = /^\s*[-*]\s+\[([ xX])\]\s+task-\d+/gm;
+    let total = 0;
+    let checked = 0;
+    let m;
+    while ((m = re.exec(content)) !== null) {
+      total++;
+      if (m[1] === 'x' || m[1] === 'X') checked++;
+    }
+    return { total, checked };
+  }
+
+  /**
+   * 按 plan.md 声明对齐 execute 阶段派生进度戳。
+   * 仅当 plan.md 所有 task checkbox 全勾时，把 execute 阶段所有非 completed step 标 completed，
+   * 并显式置 execute stageData.status='completed' + completedAt（绕过 completeStep 推导，D-003@v2）。
+   * 不复核代码，信任 plan.md 声明（与 archive 同源，verify 阶段兜底，D-002/D-004）。
+   *
+   * @param {string} cwd
+   * @param {string} changeName
+   * @param {string} specBase - platformOpts.specRoot || join(cwd, '.sillyspec')，用于定位 changes 目录
+   * @param {object} [opts]
+   * @param {boolean} [opts.confirm=false] - 默认 dry-run，仅当 confirm=true 才落盘
+   * @returns {Promise<{ ok: boolean, aligned: number, skipped: number, planTotal: number, planChecked: number, reason?: string, dryRun?: boolean }>}
+   */
+  async alignExecuteToPlan(cwd, changeName, specBase, opts = {}) {
+    if (!changeName) throw new Error('changeName 不能为空');
+    const { confirm = false } = opts;
+
+    // 1. 读 progress；无 progress / 无 execute 阶段 → 拒绝
+    const progress = await this.read(cwd, changeName);
+    if (!progress || !progress.stages || !progress.stages.execute) {
+      return { ok: false, aligned: 0, skipped: 0, planTotal: 0, planChecked: 0, reason: 'execute 阶段无进度数据' };
+    }
+    const executeStage = progress.stages.execute;
+    const steps = Array.isArray(executeStage.steps) ? executeStage.steps : [];
+    if (steps.length === 0) {
+      return { ok: false, aligned: 0, skipped: 0, planTotal: 0, planChecked: 0, reason: 'execute 阶段无进度数据' };
+    }
+
+    // 2. 读 plan.md checkbox；未全勾 → 拒绝（D-002）
+    const specRoot = specBase || this._getSpecDir(cwd);
+    const changeDir = join(specRoot, CHANGES_SUBDIR, changeName);
+    const { total: planTotal, checked: planChecked } = this.readPlanCheckboxStatus(changeDir);
+    if (planTotal === 0) {
+      return { ok: false, aligned: 0, skipped: 0, planTotal, planChecked, reason: 'plan.md 无 task checkbox（无法判定完成度）' };
+    }
+    if (planChecked < planTotal) {
+      return {
+        ok: false,
+        aligned: 0,
+        skipped: 0,
+        planTotal,
+        planChecked,
+        reason: `plan.md 有未勾选 task（${planChecked}/${planTotal}），拒绝对齐`,
+      };
+    }
+
+    // 3. 全勾：计算将补哪些 step
+    const now = new Date().toISOString();
+    let aligned = 0;
+    let skipped = 0;
+    for (const step of steps) {
+      if (step.status === 'completed') {
+        skipped++;
+        continue;
+      }
+      aligned++;
+      if (confirm) {
+        step.status = 'completed';
+        step.completedAt = now;
+      }
+    }
+
+    // dry-run：只报告，不落盘
+    if (!confirm) {
+      return { ok: true, aligned, skipped, planTotal, planChecked, dryRun: true };
+    }
+
+    // 4. confirm：显式置 execute stageData.status='completed' + completedAt（D-003@v2，复刻 run.js:2303-2304）
+    executeStage.status = 'completed';
+    executeStage.completedAt = now;
+    progress.currentStage = progress.currentStage || 'execute';
+    progress.lastActive = now;
+    await this._write(cwd, progress, changeName);
+
+    return { ok: true, aligned, skipped, planTotal, planChecked };
+  }
 }

@@ -4,8 +4,8 @@ created_at: 2026-06-01T09:05:00
 ---
 
 # worktree
-> 最后更新：2026-06-28
-> 最近变更：2026-06-28-worktree-deps-provision（修路径/分支脱节 + 补依赖供给）
+> 最后更新：2026-07-07
+> 最近变更：2026-07-06-execute-deps-gate-deadlock（enforceDepsGate 诊断分支：cleanup 终态指向 doctor 对齐 + fail-loud；门放行标准不变）
 > 模块路径：src/worktree.js, src/worktree-apply.js, src/worktree-deps.js
 
 ## 职责
@@ -58,6 +58,14 @@ worktree 模块提供基于 git worktree 的分支隔离机制，让每个变更
 | `depsError` | string? | 仅 failed 时填 |
 
 execute 验证硬门（`run.js completeStep` execute 分支）读 `depsStatus`：非 `{linked, installed, n/a}` 且非 wave 级 `no_deps_verify` opt-out 时拒绝 `--done`（step 置 `blocked` + exit 1）。
+
+### enforceDepsGate 诊断分支（`run.js`）
+
+门控拒绝（depsStatus 不达标）时区分两种成因，**门核心放行标准 `['linked','installed','n/a']` 不变**（fail-closed），只改提示文案 + fail-loud：
+
+- **worktree 已 cleanup（终态）**：判定基于物理目录 `!existsSync(WorktreeManager.getWorktreePath(changeName))`（非 `!meta`——`getMeta` 对「目录不存在」和「meta 损坏」都返回 null，用 `!meta` 会把后者误判为终态，R3）。终态提示指向 `sillyspec doctor --align-execute-progress --change <name>`（按 plan.md 对齐 execute 派生戳）或 `sillyspec worktree create <change>`（重建 worktree 继续跑）。
+- **worktree 存在但 depsStatus 不达标**（`meta` 非空、目录在）：维持原提示 `sillyspec worktree doctor --fix` 重供给。
+- **fail-loud 块**：拒绝时 stderr 输出显眼阻断块 `❌ ── deps 门控阻断（本次 --done 未完成，进度未推进）──`，明确标注进度未推进，避免被上一次 `completeStep` 的 stdout 残留掩盖。仅改拒绝侧 stderr，不动成功侧 stdout（D-005@v1）。
 
 ## 关键数据流
 
