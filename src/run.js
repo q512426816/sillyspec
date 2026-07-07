@@ -4,7 +4,7 @@
  * CLI 成为流程引擎，AI 变成步骤执行器。
  * 支持多变更并行：每个变更状态存储在 sillyspec.db 中。
  */
-import { basename, join, resolve, dirname } from 'path'
+import { basename, join, resolve, dirname, relative, isAbsolute } from 'path'
 import { existsSync, readdirSync, mkdirSync, writeFileSync, appendFileSync, readFileSync, rmSync, statSync } from 'fs'
 import { createRequire } from 'module'
 const require = createRequire(import.meta.url)
@@ -61,7 +61,8 @@ export function validateParsedProjects(projects, sourceRoot) {
         errors.push(`项目 "${id}" 的 path 包含 .. ，拒绝越界`)
       } else {
         const absPath = resolve(safeRoot, proj.path)
-        if (!absPath.startsWith(safeRoot + '/') && absPath !== safeRoot) {
+        const rel = relative(safeRoot, absPath)
+        if (rel.startsWith('..') || isAbsolute(rel)) {
           errors.push(`项目 "${id}" 的 path "${proj.path}" 解析后超出 source_root`)
         }
         if (!existsSync(absPath)) {

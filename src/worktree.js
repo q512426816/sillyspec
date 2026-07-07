@@ -9,7 +9,7 @@
  */
 
 import { execSync } from 'child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, readdirSync, statSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, readdirSync, statSync, lstatSync, readlinkSync, unlinkSync } from 'fs';
 import { join, resolve, dirname } from 'path';
 import { createHash } from 'crypto';
 import { provisionDeps, lockfileHash } from './worktree-deps.js';
@@ -589,6 +589,29 @@ export class WorktreeManager {
     }
 
     const branch = (meta && meta.branch) || BRANCH_PREFIX + name;
+
+    // Windows 保护：先解链接 worktree/node_modules（junction 指向主 checkout），
+    // 否则后续 git worktree remove / rmSync recursive 会跟随 junction 误删主 node_modules 内容。
+    if (!isInPlace && existsSync(worktreePath)) {
+      const wtNodeModules = join(worktreePath, 'node_modules');
+      if (existsSync(wtNodeModules)) {
+        let isLink = false;
+        try { isLink = lstatSync(wtNodeModules).isSymbolicLink(); } catch {}
+        if (isLink) {
+          try {
+            if (process.platform === 'win32') {
+              // Windows rmdir 删 junction（reparse point）不跟随目标，保护主 checkout
+              execSync(`rmdir "${wtNodeModules}"`, { shell: 'cmd.exe' });
+            } else {
+              unlinkSync(wtNodeModules);
+            }
+            details.push('worktree node_modules junction/symlink removed (protect main checkout)');
+          } catch (e) {
+            details.push(`node_modules link remove failed: ${e.message}`);
+          }
+        }
+      }
+    }
 
     // 1. git worktree remove（带 retry）—— in-place 跳过：无 git worktree 注册，且 worktreePath 即主工作区
     let gitRemoveOk = false;

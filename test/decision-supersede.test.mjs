@@ -5,6 +5,7 @@
  */
 import { readFileSync } from 'fs'
 import { join } from 'path'
+import { pathToFileURL } from 'url'
 
 // 直接测试 extractCurrentDecisionIds 的行为
 // 由于它不是 exported，我们通过 validateBrainstormOutputs 间接测试
@@ -36,7 +37,7 @@ const { join: pJoin } = await import('path')
 const { tmpdir } = await import('os')
 
 // 我们通过 validateBrainstormOutputs 来端到端测试
-const mod = await import(pJoin(import.meta.dirname, '..', 'src', 'stage-contract.js'))
+const mod = await import(pathToFileURL(pJoin(import.meta.dirname, '..', 'src', 'stage-contract.js')).href)
 
 // ─────────────────────────────────────────
 // Test 1: 被 supersede 的旧版本不警告

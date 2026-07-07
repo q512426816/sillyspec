@@ -13,7 +13,7 @@
  */
 
 import { execSync } from 'child_process';
-import { existsSync, unlinkSync, writeFileSync, mkdtempSync, rmSync } from 'fs';
+import { existsSync, unlinkSync, writeFileSync, mkdtempSync, rmSync, readdirSync, readFileSync } from 'fs';
 import { join, resolve } from 'path';
 import { tmpdir } from 'os';
 import { createHash } from 'crypto';
@@ -362,7 +362,6 @@ export function assessApplyRisk(changeName, { cwd } = {}) {
   const tasksDir = join(projectRoot, CHANGES_REL, changeName, 'tasks');
   const allowedPaths = new Set();
   if (existsSync(tasksDir)) {
-    const { readdirSync, readFileSync } = require('fs');
     for (const tf of readdirSync(tasksDir).filter(f => /^task-\d+\.md$/.test(f))) {
       const content = readFileSync(join(tasksDir, tf), 'utf8');
       const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
@@ -511,8 +510,7 @@ export function formatExecuteSummary({ changeName, stepsCompleted, stepsTotal, a
     // worktree 还在，用 baselineCommit 或 baseHash 做 diff
     try {
       const diffBase = meta.baselineCommit || meta.baseHash;
-      const { execSync: es } = require('child_process');
-      const filesRaw = es(`git -C ${meta.worktreePath} diff --name-only ${diffBase} 2>/dev/null`, { encoding: 'utf8' });
+      const filesRaw = execSync(`git -C ${meta.worktreePath} diff --name-only ${diffBase} 2>/dev/null`, { encoding: 'utf8' });
       const files = filesRaw ? filesRaw.trim().split('\n').filter(Boolean) : [];
       if (files.length > 0) {
         lines.push(``);

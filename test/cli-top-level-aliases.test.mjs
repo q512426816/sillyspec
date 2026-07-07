@@ -53,8 +53,14 @@ function runCLI(args, cwd) {
 
 function cleanSillySpec(cwd) {
   // 清掉 sillyspec 写入 cwd 的进度副作用，保证两路字节级环境一致
-  try { rmSync(join(cwd, '.sillyspec'), { recursive: true, force: true }) } catch {}
-  try { rmSync(join(cwd, '.sillyspec-platform.json'), { force: true }) } catch {}
+  // Windows 下 sillyspec.db 文件锁释放有延迟，子进程退出后立即 rmSync 可能 EBUSY → 重试 + busy-wait
+  const sleep = (ms) => { const t = Date.now(); while (Date.now() - t < ms) {} }
+  for (let i = 0; i < 10; i++) {
+    try { rmSync(join(cwd, '.sillyspec'), { recursive: true, force: true }); break } catch { sleep(100) }
+  }
+  for (let i = 0; i < 10; i++) {
+    try { rmSync(join(cwd, '.sillyspec-platform.json'), { force: true }); break } catch { sleep(100) }
+  }
 }
 
 const tmpRoot = join(tmpdir(), `sillyspec-cli-aliases-${Date.now()}`)
