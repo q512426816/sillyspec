@@ -77,7 +77,7 @@ sillyspec run quick --files src/phone.ts,src/phone.test.ts
 - **必须用 exec 工具（shell）执行 CLI，不要自己编造流程**
 - quick 直接在主工作区改代码（不创建 worktree），范围必须小且明确
 - 完成后立即 `--done`，不跳过
-- step 2 会创建 `.sillyspec/quicklog/QUICKLOG-<user>.md` 记录，完成前 CLI 会校验它存在
+- step 1 会创建 `.sillyspec/quicklog/QUICKLOG-<user>.md` 记录（理解任务时），完成前 CLI 会校验它存在
 - **禁止**在没有运行 CLI 的情况下自行决定流程
 
 ## 用户指令
