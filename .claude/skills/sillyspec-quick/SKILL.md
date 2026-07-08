@@ -7,6 +7,7 @@ description: 用于明确、低风险、范围很小的直接任务。适合用�
 
 - 明确、低风险、范围小的直接修改：改文案、修小 bug、更新单个文件
 - 用户说"直接改、快速修、顺手调整、不要完整流程"
+- brainstorm 判定 `scale=small` 的变更：带 design.md 进 quick（`sillyspec run quick --linked-changes <变更名>`），design 当背景
 - 跳过 brainstorm/plan，但仍走 quick 的 3 步流程（理解任务 → 实现 → 自检提交）
 
 ## 多变更说明（quick 特殊，务必注意）

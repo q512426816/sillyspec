@@ -329,6 +329,9 @@ HTML 原型文件路径（或"跳过"如果不适合）`,
       name: '写设计文档并自审',
       prompt: `撰写 design 文档并进行 AI 自审。
 
+### 文件标题规则（sillyhub 平台解析识别用）
+design.md 第一行标题必须用中文：`# 设计文档（Design）— <变更简述>`
+
 ### design.md 必须包含的章节
 1. **背景**：为什么做、解决什么问题
 2. **设计目标**：要达成什么
@@ -519,18 +522,21 @@ status: passed | needs-user-input | blocked | skipped
       requiresWait: true,
       waitReason: '等待用户最终确认设计方案',
       waitOptions: ['确认', '需要修改', '推翻重来'],
-      prompt: `用户确认设计方案，生成规范文件。
+      prompt: `用户确认设计方案，按变更规模生成规范文件并给出实现路径建议。
+
+### 规模评估（展示前先做）
+读取 design.md 的「文件变更清单」，判断本次变更规模：
+- **small（小变更）**：改动 ≤ 2 个文件、单模块、无跨模块依赖、无状态机/schema/API 变更
+- **large（大变更）**：不满足上述任意一条
+在 design.md frontmatter 写入 \`scale: small\` 或 \`scale: large\`（frontmatter 不存在则补 \`author\`/\`created_at\`/\`scale\`）。规模决定下面的产物范围和实现路径。
 
 ### 操作
-1. 展示 design.md 摘要给用户
+1. 展示 design.md 摘要 + **规模评估结果（small/large + 一句依据）** 给用户
 2. 暂停等待用户选择：✅ 确认 / ✏️ 修改 / ❌ 推翻重来
-3. 确认后，在 \`.sillyspec/changes/<change-name>/\` 下生成所有规范文件：
-   - **design.md**：架构决策、文件变更清单、数据模型、API 设计、兼容策略、风险登记、自审
-   - **decisions.md**（可选）：Grill/重大决策台账，使用 D-001@v1 稳定版本 ID
-   - **proposal.md**：动机、关键问题（为什么现有方案不够）、变更范围、不在范围内（显式清单）、成功标准（可验证条件）
-   - **requirements.md**：角色表 + FR 编号需求 + Given/When/Then 行为规格 + 非功能需求 + D-xxx@vN 覆盖关系
-   - **tasks.md**：任务列表（只列名称、对应文件路径、覆盖的 FR-xxx/D-xxx@vN，细节在 plan 阶段展开）
-   - \`git add .sillyspec/\` — 暂存规范文件（不要 commit）
+3. 确认后，**按规模生成规范文件**：
+   - **scale=large**：在 \`.sillyspec/changes/<change-name>/\` 下生成完整四件套（design.md / decisions.md 可选 / proposal.md / requirements.md / tasks.md），实现路径 → \`sillyspec run plan --change <变更名>\`
+   - **scale=small**：只生成/补全 design.md（proposal/requirements/tasks 对 quick 无用，不生成），实现路径 → \`sillyspec run quick --linked-changes <变更名>\`
+   - 两种规模都执行 \`git add .sillyspec/\` — 暂存规范文件（不要 commit）
 
 所有规范文件头部必须包含 YAML frontmatter：
 \`\`\`\`yaml
@@ -542,7 +548,7 @@ created_at: <now-datetime>
 
 ### proposal.md 格式要求
 \`\`\`markdown
-# Proposal
+# 提案书（Proposal）
 
 ## 动机
 为什么做、解决什么核心问题
@@ -565,7 +571,7 @@ created_at: <now-datetime>
 
 ### requirements.md 格式要求
 \`\`\`markdown
-# Requirements
+# 需求规格（Requirements）
 
 ## 角色
 | 角色 | 说明 |
@@ -595,7 +601,7 @@ Then 期望结果
 
 ### decisions.md 格式要求（仅在有 Grill/重大决策时生成）
 \`\`\`markdown
-# Decisions
+# 决策记录（Decisions）
 
 ## D-001@v1: 决策短标题
 - type: definition | consistency | feasibility | term | boundary | premise | architecture | compatibility | risk
@@ -637,8 +643,9 @@ Then 期望结果
 - 推翻重来回到 Step 6（对话式探索）
 - 表名/字段名/类名必须来自真实代码或标注"新增"
 - 如果存在 decisions.md，requirements.md 必须引用全部当前版本 D-xxx@vN；没有覆盖的 D-xxx@vN 必须标注为剩余风险
-- 如果 Design Grill 产生 P0/P1 unresolved blocker，必须回到 design 修正，不能进入 plan
-- tasks.md 只列任务名，细节在 plan 阶段展开`,
+- 如果 Design Grill 产生 P0/P1 unresolved blocker，必须回到 design 修正，不能进入 plan/quick
+- tasks.md 只列任务名，细节在 plan 阶段展开
+- **规范 md 文件第一行标题用中文**（sillyhub 平台解析识别用）：tasks.md 用 `# 任务清单（Tasks）`（proposal/design/requirements/decisions 见各自模板，均已含中文标题）`,
 
     }
   ]

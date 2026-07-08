@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-05-31 11:00:00
-updated_at: 2026-07-07 07:50:00
+updated_at: 2026-07-09
 ---
 
 # SillySpec 文件生命周期
@@ -42,7 +42,7 @@ updated_at: 2026-07-07 07:50:00
 | 阶段 | 当前步骤数 | 备注 |
 |---|---:|---|
 | scan | 11 | 辅助阶段；step 2 后会按项目动态展开 `perProject` 步骤；第 10 步「Extract Project Knowledge」写入 `knowledge/` |
-| brainstorm | 11 | 独立包含“写设计文档并自审”和“用户确认并生成规范文件” |
+| brainstorm | 13 | 独立包含“写设计文档并自审”、“Design Grill 交叉审查”、“用户确认并生成规范文件”；完成时按 design.md frontmatter `scale` 分叉产物（large→四件套进 plan / small→仅 design.md 进 quick） |
 | propose | 7 | 包含“生成规范文件”与“自检门控”，四件套是该阶段预期产物 |
 | plan | 动态 | 默认 8 步；`plan.md` 解析到任务后插入任务蓝图协调器；postcheck 含确定性校验（结构/可行性/跨任务契约/design 文件覆盖/产物） |
 | execute | 动态 | 默认 12 步；Wave 来自 `plan.md`，解析失败时默认 3 个 Wave |
