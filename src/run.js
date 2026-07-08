@@ -1832,6 +1832,7 @@ async function runStage(pm, progress, stageName, cwd, changeName, skipApproval =
     try {
       const gitResult = safeGit(cwd, ['rev-parse', 'HEAD'])
       const scanGuard = {
+        name_zh: '扫描守卫',
         sourceCommit: gitResult.value,
         sourceCommitError: gitResult.error,
         startedAt: new Date().toISOString(),
@@ -1878,6 +1879,7 @@ async function runStage(pm, progress, stageName, cwd, changeName, skipApproval =
       const allowNew = quickOpts?.isAllowNew || false
       const forceBaseline = quickOpts?.isForceBaseline || false
       progress.quickGuard = {
+        name_zh: '快速任务守卫',
         baselineCommit: safeGit(cwd, ['rev-parse', 'HEAD']).value,
         baselineFiles,
         allowedFiles,

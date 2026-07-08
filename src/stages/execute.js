@@ -627,7 +627,7 @@ task-XX 对应：.sillyspec/.runtime/execute-runs/{EXECUTE_RUN_ID}/tasks/task-XX
 
 **review.json 必填字段：**
 
-{ "schemaVersion": 1, "task": "task-XX", "base": "<git-base-commit>", "head": "<git-head-commit>",
+{ "name_zh": "任务评审", "schemaVersion": 1, "task": "task-XX", "base": "<git-base-commit>", "head": "<git-head-commit>",
  "changedFiles": ["src/foo.js"], "specVerdict": "pass|fail|cannot_verify",
  "qualityVerdict": "pass|fail|cannot_verify", "reviewerNotes": "评审说明",
  "requiredEvidence": [] }

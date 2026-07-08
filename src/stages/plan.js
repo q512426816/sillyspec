@@ -200,7 +200,7 @@ plan_level: none
 plan_level: light
 ---
 
-# 轻量计划：<需求简述>
+# 轻量计划（Light Plan）：<需求简述>
 
 ## 来源
 直接引用 brainstorm 结论或用户原始需求，不重新扩写。
@@ -243,7 +243,7 @@ light 计划的约束：
 plan_level: full
 ---
 
-# 实现计划
+# 实现计划（Plan）
 
 ## Spike 前置验证（如需要）
 | Spike | 验证内容 | 不通过后果 |
@@ -400,6 +400,7 @@ export function buildCoordinatorStep(changeDir, taskNames) {
 ---
 id: task-${num}
 title: ${name}
+title_zh: <任务中文标题>
 author: <git-user>
 created_at: <now-datetime>
 priority: P0

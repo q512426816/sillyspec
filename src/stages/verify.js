@@ -264,7 +264,7 @@ grep -rl "<关键词>" <源码目录>/ --include="*.java" --include="*.js" --inc
 
 ### verify-result.md 格式
 \`\`\`markdown
-# 验证报告
+# 验证报告（Verify Result）
 
 ## 结论
 PASS / PASS WITH NOTES / FAIL

@@ -330,7 +330,7 @@ HTML 原型文件路径（或"跳过"如果不适合）`,
       prompt: `撰写 design 文档并进行 AI 自审。
 
 ### 文件标题规则（sillyhub 平台解析识别用）
-design.md 第一行标题必须用中文：`# 设计文档（Design）— <变更简述>`
+design.md 第一行标题必须用中文：# 设计文档（Design）— <变更简述>
 
 ### design.md 必须包含的章节
 1. **背景**：为什么做、解决什么问题
@@ -645,7 +645,7 @@ Then 期望结果
 - 如果存在 decisions.md，requirements.md 必须引用全部当前版本 D-xxx@vN；没有覆盖的 D-xxx@vN 必须标注为剩余风险
 - 如果 Design Grill 产生 P0/P1 unresolved blocker，必须回到 design 修正，不能进入 plan/quick
 - tasks.md 只列任务名，细节在 plan 阶段展开
-- **规范 md 文件第一行标题用中文**（sillyhub 平台解析识别用）：tasks.md 用 `# 任务清单（Tasks）`（proposal/design/requirements/decisions 见各自模板，均已含中文标题）`,
+- **规范 md 文件第一行标题用中文**（sillyhub 平台解析识别用）：tasks.md 第一行用 # 任务清单（Tasks）（proposal/design/requirements/decisions 见各自模板，均已含中文标题）`,
 
     }
   ]

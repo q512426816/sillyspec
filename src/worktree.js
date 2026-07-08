@@ -315,7 +315,8 @@ export class WorktreeManager {
     // worktree 内任何已写入的内容，不触发幽灵清理）。最终完整 meta 在 step 6 覆盖。
     try {
       const placeholderMeta = {
-        changeName: name,
+        name_zh: 'worktree 元数据',
+      changeName: name,
         branch,
         baseBranch,
         baseHash,
@@ -381,6 +382,7 @@ export class WorktreeManager {
 
     // 6. 写入 meta.json
     const meta = {
+      name_zh: 'worktree 元数据',
       changeName: name,
       branch,
       baseBranch,
@@ -416,6 +418,7 @@ export class WorktreeManager {
   _recoverNativeWorktreeMeta(name, { worktreePath, branch }) {
     const baseHash = gitQuiet(worktreePath, 'rev-parse HEAD') || null
     const meta = {
+      name_zh: 'worktree 元数据',
       changeName: name,
       branch: branch || BRANCH_PREFIX + name,
       baseBranch: branch,
@@ -459,7 +462,8 @@ export class WorktreeManager {
       baseBranch = baseBranch || gitQuiet(this.cwd, 'symbolic-ref --short HEAD') || gitQuiet(this.cwd, 'rev-parse HEAD')
       baseHash = baseHash || git(this.cwd, 'rev-parse HEAD')
       const meta = {
-        changeName: name,
+        name_zh: 'worktree 元数据',
+      changeName: name,
         branch: branch || BRANCH_PREFIX + name,
         baseBranch,
         baseHash,
@@ -494,6 +498,7 @@ export class WorktreeManager {
     }
 
     const meta = {
+      name_zh: 'worktree 元数据',
       changeName: name,
       branch: branch || BRANCH_PREFIX + name,
       baseBranch,

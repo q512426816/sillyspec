@@ -159,6 +159,14 @@ export const definition = {
 - 断点续扫步骤列出的缺失文档列表
 - 环境探测结果摘要（如有 _env-detect.md，直接贴入）
 - **⚠️ 必须强调：子代理必须用 write 工具将文件写入磁盘**
+- **文件标题用中文**（sillyhub 平台解析识别用）：每份 scan 文档第一行用 # 中文名（English）格式：
+  - STRUCTURE.md = # 目录结构（Structure）
+  - CONVENTIONS.md = # 代码约定（Conventions）
+  - ARCHITECTURE.md = # 架构（Architecture）
+  - TESTING.md = # 测试（Testing）
+  - CONCERNS.md = # 关注点（Concerns）
+  - INTEGRATIONS.md = # 集成（Integrations）
+  - PROJECT.md = # 项目（Project）
 
 ### 完成后
 列出每个项目的 7 份文档状态：
@@ -451,7 +459,7 @@ step1 → step2 → step3
 
 文件格式：
 \`\`\`markdown
-# Glossary
+# 术语表（Glossary）
 
 ## Session
 在本项目中，session 指...（项目内特殊含义）
@@ -486,9 +494,9 @@ step1 → step2 → step3
 
 INDEX.md 维护索引，格式（每行：关键词1|关键词2 → [条目名](文件#锚点)；关键词用于 execute 阶段命中匹配，必须给出能区分该知识的词）：
 \`\`\`markdown
-# Knowledge Index
+# 知识索引（Knowledge Index）
 
-## Conventions
+## 约定（Conventions）
 - ESM|module|import → [ESM Only](conventions.md#esm-only)
 \`\`\`
 
@@ -498,6 +506,7 @@ INDEX.md 维护索引，格式（每行：关键词1|关键词2 → [条目名](
 3. **不确定分类或不确定长期有效 → uncategorized.md** — 宁可不确定也不要放错
 4. **每个正式分类条目必须更新 INDEX.md** — 添加对应分类下的链接
 5. **每个条目用 markdown 锚点格式** — 文件内用 \`## 标题\`，INDEX 用 \`[#标题]\` 或 \`(文件名#标题)\`
+6. **knowledge 文件标题用中文**（sillyhub 平台解析识别用）：conventions.md 第一行 # 项目约定（Conventions）、patterns.md = # 复用模式（Patterns）、known-issues.md = # 已知问题（Known Issues）、uncategorized.md = # 未分类知识（Uncategorized）、INDEX.md 见模板（知识索引）
 
 ### 操作
 1. 读取现有 knowledge 文件：\`{KNOWLEDGE_ROOT}/INDEX.md\`、\`{KNOWLEDGE_ROOT}/conventions.md\` 等

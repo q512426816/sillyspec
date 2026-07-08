@@ -23,6 +23,9 @@ export const definition = {
       name: 'extract-module-impact',
       prompt: `按照 \`.sillyspec/workflows/archive-impact.yaml\` 中定义的 \`impact-analyzer\` 角色规则，分析本次变更影响的模块。
 
+### 文件标题规则（sillyhub 平台解析识别用）
+module-impact.md 第一行标题必须用中文：# 模块影响分析（Module Impact）— <变更简述>
+
 ### 操作
 1. 读取 \`.sillyspec/workflows/archive-impact.yaml\`，了解角色定义和检查规则
 2. 读取变更目录下的 proposal.md、design.md、tasks.md
