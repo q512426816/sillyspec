@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'fs'
+import { existsSync, readFileSync, readdirSync } from 'fs'
 import path from 'path'
 import { buildContractMatrix, buildConsumerInjection, buildContractFieldInjection } from '../contract-matrix.js'
 
@@ -447,6 +447,7 @@ function parseWavesFromPlan(planContent) {
 function buildWavePrompt(wave, waveIndex, changeDir, worktreePath) {
   // ── Contract Matrix：检查是否有 provider/consumer 契约需要注入 ──
   let contractInjection = ''
+  let prototypeInjection = ''
   if (changeDir) {
     try {
       const planFile = path.join(changeDir, 'plan.md')
@@ -503,6 +504,22 @@ ${fi}
       // 契约注入是 best-effort：失败不阻断 execute，只记录
       console.warn(`  ⚠️ 契约注入跳过: ${e?.message || e}`)
     }
+
+    // 原型引用注入：brainstorm 阶段的 HTML 原型（确认过的布局/组件/交互），
+    // 让 execute 实现前端/UI task 时参考原型，而非凭 design 文字重新发明（避免原型浪费）。
+    try {
+      const prototypes = readdirSync(changeDir).filter(f => /^prototype-.*\.html$/i.test(f))
+      if (prototypes.length > 0) {
+        const protoRelDir = `.sillyspec/changes/${path.basename(changeDir)}`
+        prototypeInjection = `
+### 📐 原型参考（brainstorm 可视化确认）
+本次变更有 HTML 原型（brainstorm 阶段确认过的视觉/交互），实现前端/UI 相关 task 时参考：
+${prototypes.map(p => `- \`${path.join(protoRelDir, p)}\``).join('\n')}
+
+照原型的布局/组件/交互实现，不要凭 design.md 文字重新发明。纯后端/无 UI 的 task 忽略本节。
+`
+      }
+    } catch {}
   }
 
   // 构建任务摘要（不再内联完整蓝图，减少上下文污染）
@@ -575,7 +592,7 @@ ${taskSummary}
    - 🔥 热上下文：design.md 非目标/兼容策略 + 当前 Wave 任务（必须加载）
    - 🌡️ 温上下文：CONVENTIONS.md + ARCHITECTURE.md（需要时加载）
    - ❄️ 冷上下文：其他变更的 design.md、历史 plan.md（不要主动加载，除非明确需要）
-${contractInjection}
+${contractInjection}${prototypeInjection}
 ### 本 Wave 任务
 ${taskList}
 
