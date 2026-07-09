@@ -1571,6 +1571,25 @@ export async function runCommand(args, cwd, specDir = null) {
     }
   }
 
+  // quick 启动（非 --done）：reset steps + 生成 quickRunId，避免多会话共享 progress.default.quick
+  // 继承并行会话的 step1（会话 B 复用会话 A 的 ql，本会话改动无 ql 记录）。C-实用方案：
+  // 每次 quick 启动 reset steps（逻辑隔离，本会话从 step1 重跑建独立 ql）+ 写 current-quick-run-id。
+  if (stageName === 'quick' && !isDone && !isStatus && !isSkip && !isReset && !isReopen) {
+    const qStage = progress.stages?.quick
+    if (qStage?.steps?.length) {
+      qStage.steps = qStage.steps.map(s => ({ ...s, status: 'pending', completedAt: null }))
+      qStage.status = 'in-progress'
+    }
+    try {
+      const now = new Date()
+      const pad = (n) => String(n).padStart(2, '0')
+      const quickRunId = `quick-${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`
+      const runtimeRoot = platformOpts.runtimeRoot || join(specRoot, '.runtime')
+      mkdirSync(runtimeRoot, { recursive: true })
+      writeFileSync(join(runtimeRoot, 'current-quick-run-id'), quickRunId)
+    } catch {}
+  }
+
   // 确保步骤已初始化
   const changed = await ensureStageSteps(progress, stageName, cwd, specRoot)
   if (changed && effectiveChange) {
