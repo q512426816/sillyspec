@@ -776,6 +776,16 @@ async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjec
       platformDirectives.push(`workspace_id: ${platformOpts.workspaceId}`)
     }
     promptText = platformDirectives.join('\n') + '\n\n' + promptText
+  } else {
+    // 常规模式（无平台 specRoot）：占位符替换为 cwd/.sillyspec 下对应路径
+    // 让用 {SPEC_ROOT}/{DOCS_ROOT} 等占位符的 prompt（如 quick/scan）在常规模式也写到正确位置
+    const projectName = dbProjectName || basename(cwd)
+    const specSillyspec = join(cwd, '.sillyspec')
+    promptText = promptText.replace(/\{SPEC_ROOT\}/g, specSillyspec)
+    promptText = promptText.replace(/\{DOCS_ROOT\}/g, join(specSillyspec, 'docs', projectName))
+    promptText = promptText.replace(/\{PROJECTS_ROOT\}/g, join(specSillyspec, 'projects'))
+    promptText = promptText.replace(/\{WORKFLOWS_ROOT\}/g, join(specSillyspec, 'workflows'))
+    promptText = promptText.replace(/\{KNOWLEDGE_ROOT\}/g, join(specSillyspec, 'knowledge'))
   }
 
   // 注入 scanProfile 硬约束指令
@@ -2353,6 +2363,48 @@ async function continueStep(pm, progress, stageName, cwd, answer, options = {}) 
         }
       } catch (e) {
         console.warn(`🔗 Worktree: check failed — ${e.message}`);
+      }
+    }
+    // 阶段完成后明确下一步（agent 常卡：stageData completed 但不知要 run <下一阶段> 推进 currentStage）
+    const nextStageHint = { brainstorm: 'plan', plan: 'execute', execute: 'verify', verify: 'archive' }[stageName]
+    if (nextStageHint) {
+      console.log(`\n👉 ${stageName} 已完成。下一步：sillyspec run ${nextStageHint}${changeName ? ` --change ${changeName}` : ''}`)
+      if (stageName === 'execute') {
+        console.log(`   ⚠️ 若 worktree 改动还没 apply 到主工作区，先：sillyspec worktree apply ${changeName}`)
+        console.log(`   （apply 不需要先 commit，支持 working tree 未提交改动）`)
+        // plan.md checkbox auto-check：execute 完成 + review.json pass → 自动勾选（治本，比警告可靠）
+        try {
+          const specBaseLc = platformOpts.specRoot || join(cwd, '.sillyspec')
+          const changeDir = join(specBaseLc, 'changes', changeName)
+          const planPath = join(changeDir, 'plan.md')
+          const runtimeRoot = platformOpts.runtimeRoot || join(specBaseLc, '.runtime')
+          const runIdFile = join(runtimeRoot, `current-execute-run-id-${changeName}`)
+          if (existsSync(planPath) && existsSync(runIdFile)) {
+            const executeRunId = readFileSync(runIdFile, 'utf8').trim()
+            const planContent = readFileSync(planPath, 'utf8')
+            const { readReview } = await import('./task-review.js')
+            let checkedCount = 0
+            let skippedCount = 0
+            const updated = planContent.replace(/^(\s*[-*]\s*\[)\s(\]\s*task-\d+)/gim, (match, p1, p2) => {
+              const taskNum = match.match(/task-(\d+)/)[1].padStart(2, '0')
+              const reviewPath = join(runtimeRoot, 'execute-runs', executeRunId, 'tasks', `task-${taskNum}`, 'review.json')
+              const r = readReview(reviewPath)
+              if (r.ok && r.review?.specVerdict !== 'fail' && r.review?.qualityVerdict !== 'fail') {
+                checkedCount++
+                return `${p1}x${p2}`   // 勾选
+              }
+              skippedCount++
+              return match              // 不勾
+            })
+            if (checkedCount > 0) {
+              writeFileSync(planPath, updated)
+              console.log(`   ✅ 自动勾选 ${checkedCount} 个 task checkbox（基于 review.json pass）`)
+            }
+            if (skippedCount > 0) {
+              console.warn(`   ⚠️ ${skippedCount} 个 task 未勾（review.json 缺失/fail）→ archive 会拦。补 review 后重跑 execute --done 触发自动勾`)
+            }
+          }
+        } catch {}
       }
     }
     return { stageCompleted: true, currentIdx, nextPendingIdx: -1 }
