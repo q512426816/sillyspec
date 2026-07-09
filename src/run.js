@@ -6,6 +6,7 @@
  */
 import { basename, join, resolve, dirname, relative, isAbsolute } from 'path'
 import { existsSync, readdirSync, mkdirSync, writeFileSync, appendFileSync, readFileSync, rmSync, statSync } from 'fs'
+import { randomBytes } from 'crypto'
 import { createRequire } from 'module'
 const require = createRequire(import.meta.url)
 import { ProgressManager } from './progress.js'
@@ -1476,7 +1477,7 @@ export async function runCommand(args, cwd, specDir = null) {
           process.exit(1)
         }
         const date = new Date().toISOString().slice(0, 10)
-        const autoName = `${date}-new-change`
+        const autoName = `${date}-new-change-${randomBytes(4).toString('hex')}`
         console.log(`🔄 自动创建变更：${autoName}`)
         console.log(`  提示：可以用 --change <名称> 指定自定义变更名`)
         console.log(`  或事后重命名：sillyspec change-rename ${autoName} <新名称>`)

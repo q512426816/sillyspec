@@ -12,7 +12,7 @@ export const definition = {
 2. 确认 currentStage 为 "brainstorm"
 3. 如果有进行中的 brainstorm，提示选择继续或重新开始
 4. 如果未初始化，提示先运行 sillyspec init
-5. **检查变更名称是否有意义**：如果当前变更名是自动生成的（如 \`2026-06-02-new-change\`），询问用户确认实际变更名，然后运行 \`sillyspec change-rename <旧名> <新名>\` 重命名
+5. **检查变更名称是否有意义**：如果当前变更名是自动生成的（如 \`2026-06-02-new-change-a3f2b7c1\`），询问用户确认实际变更名，然后运行 \`sillyspec change-rename <旧名> <新名>\` 重命名
 
 ### 输出
 当前状态摘要（1-2 句话）

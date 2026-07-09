@@ -22,7 +22,7 @@ export const definition = {
 ### 操作
 1. 运行 \`sillyspec progress show\`，确认 currentStage 为 "brainstorm"
 2. 如果未初始化，提示先运行 sillyspec init
-3. **检查变更名称**：如果当前变更名是自动生成的（如 \`2026-06-02-new-change\`），直接重命名为有意义名称，然后运行 \`sillyspec change-rename <旧名> <新名>\`
+3. **检查变更名称**：如果当前变更名是自动生成的（如 \`2026-06-02-new-change-a3f2b7c1\`），直接重命名为有意义名称，然后运行 \`sillyspec change-rename <旧名> <新名>\`
 
 ### 加载上下文
 4. 读取 CODEBASE-OVERVIEW.md + 共享规范 + 子项目上下文
