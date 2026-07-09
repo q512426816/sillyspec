@@ -2529,6 +2529,26 @@ async function ensureDepsFreshness(cwd, changeName, specBase, worktreeMeta) {
   }
 }
 
+/**
+ * 阶段完成校验失败时回滚状态。
+ *
+ * completeStep 在跑 validator 之前就把 stageData.status 写成 'completed'，
+ * 若校验失败不回滚，DB 会与真实产物不一致（hook/doctor/下游阶段全部误判），
+ * 且所有步骤都是 completed 时 agent 无法重新 --done（"没有待完成的步骤"）。
+ * 此处将 stage 回滚为 in-progress，最后一步重置为 pending，供修复产物后重做。
+ */
+function rollbackStageCompletion(stageData, steps, currentIdx) {
+  // 辅助阶段在 validator 前已被重置为 pending（steps 也换成了新数组），不要覆盖
+  if (stageData.status === 'completed') {
+    stageData.status = 'in-progress'
+    stageData.completedAt = null
+  }
+  if (steps[currentIdx] && steps[currentIdx].status === 'completed') {
+    steps[currentIdx].status = 'pending'
+    steps[currentIdx].completedAt = null
+  }
+}
+
 async function completeStep(pm, progress, stageName, cwd, outputText, inputText = null, options = {}) {
   const { printNext = true, confirm = false, changeName, platformOpts = {}, nonInteractive = false, confirmMode = null } = options
   const specBase = platformOpts.specRoot || join(cwd, '.sillyspec')
@@ -2887,7 +2907,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
       if (!hasQuicklog) {
         console.error(`\n❌ quick 阶段完成校验失败：未检测到 QUICKLOG 记录文件。`)
         console.error(`   step 2 要求创建 quicklog 记录，但文件不存在。`) 
-        console.error(`   请先创建 quicklog 记录再 --done，或使用 --skip-approval 跳过此校验。`)
+        console.error(`   请先创建 quicklog 记录再 --done。`)
         return { stageCompleted: false, currentIdx, nextPendingIdx: -1 }
       }
       if (progress.quickGuard) {
@@ -3125,10 +3145,11 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
         for (const err of contractResult.errors) {
           console.error(`   - ${err}`)
         }
-        console.error(`\n   提示：修复缺失产物后重新运行此步骤，或使用 --skip-approval 跳过校验`)
+        console.error(`\n   提示：修复缺失产物后重新完成此步骤（--skip-approval 只跳过阶段转换/审批检查，不能跳过产物校验）`)
         // 产物校验失败必须阻断完成 —— 否则 validator 形同虚设，
         // verify 会带着 FAIL/缺 verify-result.md 被 ✅ 标记完成（历史教训）。
         // plan/execute 的专项契约校验（下方）在产物齐全后才需要继续跑，故此处先 return。
+        rollbackStageCompletion(stageData, steps, currentIdx)
         progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
         await pm._write(cwd, progress, changeName)
         triggerSync(cwd, changeName, platformOpts)
@@ -3141,8 +3162,22 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
         }
       }
 
-      // verify 产物校验通过 + 结论非 FAIL（否则上面已阻断），此时才能声称"验证通过"
+      // verify 产物校验通过 + 结论非 FAIL（否则上面已阻断）。
+      // 再由 CLI 亲自执行 local.yaml 的测试命令，与 verify-result.md 的自报告对账：
+      // 自报告 PASS 但实测失败 → 阻断（防止"文案通过"绕过验证）。
       if (stageName === 'verify') {
+        const { runVerifyTestCheck, printVerifyTestCheck } = await import('./verify-postcheck.js')
+        const testCheck = runVerifyTestCheck({ cwd, specBase, changeName })
+        printVerifyTestCheck(testCheck)
+        if (testCheck.status === 'failed') {
+          console.error('\n❌ verify 阶段被阻断：verify-result.md 自报告通过，但 CLI 实测测试失败。')
+          console.error('   请修复失败的测试并更新 verify-result.md 后重新完成此步骤。')
+          rollbackStageCompletion(stageData, steps, currentIdx)
+          progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
+          await pm._write(cwd, progress, changeName)
+          triggerSync(cwd, changeName, platformOpts)
+          return { stageCompleted: false, currentIdx, nextPendingIdx: currentIdx }
+        }
         console.log('\n✅ 验证通过，下一步：sillyspec run archive')
       }
 
@@ -3159,6 +3194,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
             for (const err of planValidation.errors) console.error(`   - ${err}`)
             console.error(`\n   plan.md 不满足 execute 契约，请修复后重新完成此步骤。`)
             // 阻断 completed
+            rollbackStageCompletion(stageData, steps, currentIdx)
             progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
             await pm._write(cwd, progress, changeName)
             triggerSync(cwd, changeName, platformOpts)
@@ -3199,7 +3235,18 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
               executeRunId = generateExecuteRunId()
             }
 
-            const reviewResult = validateTaskReviews({ planContent, runtimeRoot, executeRunId, changeDir: planFile })
+            // git 真实性校验目录：worktree 存在则用 worktree（base/head commit 在其中），否则主仓库
+            let reviewGitDir = cwd
+            try {
+              const { WorktreeManager } = await import('./worktree.js')
+              const wm = new WorktreeManager({ cwd })
+              const meta = wm.getMeta(changeName)
+              if (meta?.worktreePath && meta.mode !== 'in-place-fallback' && existsSync(meta.worktreePath)) {
+                reviewGitDir = meta.worktreePath
+              }
+            } catch {}
+
+            const reviewResult = validateTaskReviews({ planContent, runtimeRoot, executeRunId, changeDir: planFile, gitDir: reviewGitDir })
             printReviewResult(reviewResult)
 
             if (!reviewResult.ok) {
@@ -3210,6 +3257,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
                 console.error('\n⚠️  部分任务已在 plan.md 中勾选，但 review.json 不存在。')
                 console.error('   请取消勾选这些任务的 checkbox，或补充对应的 review.json。')
               }
+              rollbackStageCompletion(stageData, steps, currentIdx)
               progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
               await pm._write(cwd, progress, changeName)
               triggerSync(cwd, changeName, platformOpts)
@@ -3226,8 +3274,14 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
             }
           }
         } catch (e) {
-          console.warn(`⚠️ Task Review Gate 异常: ${e.message}`)
-          // 不阻断，但记录异常
+          // fail-closed：Gate 自身异常时不能默认放行，否则异常成了绕过评审的通道
+          console.error(`❌ Task Review Gate 异常，阻断 execute 完成: ${e.message}`)
+          console.error('   请检查 review.json / plan.md 是否可读，修复后重新完成此步骤。')
+          rollbackStageCompletion(stageData, steps, currentIdx)
+          progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
+          await pm._write(cwd, progress, changeName)
+          triggerSync(cwd, changeName, platformOpts)
+          return { stageCompleted: false, currentIdx, nextPendingIdx: currentIdx }
         }
       }
     } else if (actualCompleted < actualTotal) {

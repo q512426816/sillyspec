@@ -11,7 +11,7 @@
  * 历史迁移：v1/v2 使用 progress.json 文件，v3 已全部迁移至 SQLite。
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, unlinkSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, unlinkSync, appendFileSync } from 'fs';
 import { join, basename, dirname, resolve } from 'path';
 import { DB } from './db.js';
 
@@ -893,6 +893,7 @@ export class ProgressManager {
     const stepId = stepRow[0].values[0][0];
 
     // UPDATE steps
+    let stageCompletionCandidateId = null;
     db.transaction((tDb) => {
       const now = new Date().toISOString();
       if (status) {
@@ -902,7 +903,8 @@ export class ProgressManager {
         tDb.run('UPDATE steps SET output = ? WHERE id = ? AND name = ?', [output, stepId, stepName]);
       }
 
-      // 自动完成检测：同 stage_id 下所有 steps 都 completed 时，标记 stage completed
+      // 自动完成检测：同 stage_id 下所有 steps 都 completed 时，候选标记 stage completed
+      // （实际标记延后到事务外，先过产物校验门，防止 update-step 成为绕过 validator 的后门）
       if (status === 'completed') {
         // 获取 stage_id
         const stRow = tDb.exec('SELECT stage_id FROM steps WHERE id = ?', [stepId]);
@@ -910,8 +912,7 @@ export class ProgressManager {
           const stId = stRow[0].values[0][0];
           const pendingRows = tDb.exec('SELECT COUNT(*) FROM steps WHERE stage_id = ? AND status != "completed"', [stId]);
           if (pendingRows && pendingRows.length > 0 && pendingRows[0].values[0][0] === 0) {
-            tDb.run('UPDATE stages SET status = "completed", completed_at = ? WHERE id = ?', [now, stId]);
-            console.log(`✅ 阶段 ${stage} 所有步骤已完成，阶段已标记为 completed`);
+            stageCompletionCandidateId = stId;
           }
         }
       }
@@ -919,10 +920,70 @@ export class ProgressManager {
       tDb.run('UPDATE changes SET last_active = ? WHERE name = ?', [now, cn]);
     });
 
+    if (stageCompletionCandidateId !== null) {
+      const { force = false } = options;
+      const validation = await this._validateStageArtifacts(cwd, stage, cn);
+      if (!validation.ok && !force) {
+        console.error(`⚠️  阶段 ${stage} 所有步骤已完成，但产物校验未通过，阶段不标记为 completed：`);
+        for (const err of validation.errors) console.error(`   - ${err}`);
+        console.error(`   请修复产物后走正常流程 sillyspec run ${stage} --done，或使用 --force（将记录审计日志）。`);
+      } else {
+        if (!validation.ok && force) {
+          console.warn(`⚠️  --force 强制标记阶段 ${stage} completed（校验未通过，已记录审计日志）`);
+          this._appendAuditLog(cwd, {
+            action: 'update-step --force (stage auto-complete)',
+            stage,
+            change: cn,
+            validationErrors: validation.errors,
+          });
+        }
+        db.transaction((tDb) => {
+          tDb.run('UPDATE stages SET status = "completed", completed_at = ? WHERE id = ?', [new Date().toISOString(), stageCompletionCandidateId]);
+        });
+        console.log(`✅ 阶段 ${stage} 所有步骤已完成，阶段已标记为 completed`);
+      }
+    }
+
     console.log(`✅ 步骤已更新: ${stage}/${stepName} → ${status || '（仅更新 output）'}`);
   }
 
-  async completeStage(cwd, stage, changeName = null) {
+  /**
+   * 强制状态变更的审计记录（--force 逃生口专用）。
+   * 追加到 .runtime/audit.log，供人工/doctor 追溯"谁在什么时候绕过了校验"。
+   */
+  _appendAuditLog(cwd, entry) {
+    try {
+      this._ensureRuntimeDir(cwd);
+      const auditPath = this._runtimePath(cwd, 'audit.log');
+      const line = JSON.stringify({ at: new Date().toISOString(), ...entry });
+      appendFileSync(auditPath, line + '\n');
+    } catch (e) {
+      console.warn(`⚠️  审计日志写入失败: ${e.message}`);
+    }
+  }
+
+  /**
+   * 阶段产物校验门：progress complete-stage / update-step 自动完成时复用
+   * stage-contract 的 validator，防止零产物阶段被直接标 completed。
+   */
+  async _validateStageArtifacts(cwd, stage, changeName) {
+    const { runValidators } = await import('./stage-contract.js');
+    const specDir = this._getSpecDir(cwd);
+    const defaultSpec = join(resolve(cwd), SPEC_DIR_NAME);
+    const specRoot = resolve(specDir) === defaultSpec ? null : specDir;
+    let projectName = null;
+    try {
+      const g = await this.readGlobal(cwd);
+      projectName = g?.project || null;
+    } catch {}
+    return runValidators(stage, cwd, changeName, {
+      projectName: projectName || basename(resolve(cwd)),
+      specRoot,
+    });
+  }
+
+  async completeStage(cwd, stage, changeName = null, opts = {}) {
+    const { force = false } = opts;
     if (!VALID_STAGES.includes(stage)) {
       console.log(`❌ 未知阶段: ${stage}`);
       return;
@@ -937,6 +998,30 @@ export class ProgressManager {
       const changes = await this.listChanges(cwd);
       if (changes.length === 1) cn = changes[0];
       if (!cn) { console.log('❌ 无法确定当前变更，请指定 --change <name>'); return; }
+    }
+
+    // ── 产物校验门：complete-stage 不再是零校验后门 ──
+    // 与 run.js completeStep 的 validator 同源；--force 为显式逃生口（留审计）。
+    const validation = await this._validateStageArtifacts(cwd, stage, cn);
+    if (!validation.ok) {
+      if (!force) {
+        console.error(`❌ complete-stage 被拒绝：阶段 ${stage} 产物校验未通过`);
+        for (const err of validation.errors) console.error(`   - ${err}`);
+        console.error(`   请修复产物后重试，或走正常流程 sillyspec run ${stage} --done。`);
+        console.error(`   确需强制标记（如 doctor 修复），使用 --force（将记录审计日志）。`);
+        return;
+      }
+      console.warn(`⚠️  --force 强制完成阶段 ${stage}（校验未通过，已记录审计日志）`);
+      for (const err of validation.errors) console.warn(`   - ${err}`);
+      this._appendAuditLog(cwd, {
+        action: 'complete-stage --force',
+        stage,
+        change: cn,
+        validationErrors: validation.errors,
+      });
+    } else if (force) {
+      // 校验通过但仍显式 --force：也留一条审计记录，保持行为可追溯
+      this._appendAuditLog(cwd, { action: 'complete-stage --force', stage, change: cn, validationErrors: [] });
     }
 
     db.transaction((sqlDb) => {
@@ -1878,6 +1963,26 @@ export class ProgressManager {
         planChecked,
         reason: `plan.md 有未勾选 task（${planChecked}/${planTotal}），拒绝对齐`,
       };
+    }
+
+    // 2.5 最低事实核验：plan.md checkbox 可被手动勾选伪造，
+    // 对齐前用 git 客观核验是否存在真实代码变更（能确证零变更时才拒绝，
+    // unknown 不阻断——worktree 已清理且变更已提交的正常场景无法对账）。
+    try {
+      const { checkExecuteCodeEvidence } = await import('./stage-contract.js');
+      const evidence = checkExecuteCodeEvidence(cwd, changeName);
+      if (evidence.status === 'unchanged') {
+        return {
+          ok: false,
+          aligned: 0,
+          skipped: 0,
+          planTotal,
+          planChecked,
+          reason: `plan.md 全勾但代码零变更（${evidence.detail}），拒绝对齐 — 请先运行 sillyspec doctor --json 诊断`,
+        };
+      }
+    } catch (e) {
+      console.warn(`⚠️  代码变更核验异常（不阻断对齐）: ${e.message}`);
     }
 
     // 3. 全勾：计算将补哪些 step

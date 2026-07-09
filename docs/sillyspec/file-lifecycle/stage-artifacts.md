@@ -1,6 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-06-04 16:25:42
+updated_at: 2026-07-09
 ---
 
 # 阶段与变更产物
@@ -28,8 +29,8 @@ created_at: 2026-06-04 16:25:42
 | brainstorm | 13 | 第 11 步写 `design.md` 并自审，第 12 步 Design Grill 交叉审查，第 13 步确认后按 `scale` 分叉（large→四件套 / small→仅 design.md），可选生成 `MASTER.md`、prototype、后续包骨架 |
 | propose | 7 | 第 5 步生成四件套，第 6 步自检门控 |
 | plan | 8+ | 生成 `plan.md`；如解析到任务，会动态插入任务蓝图协调器 |
-| execute | 12+ | 生成/使用 worktree，按 Wave 执行；最终 apply/cleanup |
-| verify | 7 | 写 `verify-result.md` |
+| execute | 12+ | 生成/使用 worktree，按 Wave 执行；最终 apply/cleanup；完成时 `validateExecuteOutputs` 核验真实代码变更 + Task Review Gate 做 review.json git 交叉校验 |
+| verify | 7 | 写 `verify-result.md`；完成时 CLI 实测 `commands.test` 与自报告对账 |
 | archive | 5 | 写 `module-impact.md`，同步模块文档，归档目录 |
 | quick | 3 | 始终写 quicklog；关联变更时另在各 change tasks.md 追加并勾选 task；直接改主工作区 |
 
@@ -101,7 +102,12 @@ created_at: 2026-06-04 16:25:42
 
 创建方式：verify 阶段最后一步 prompt。
 
-`run.js` 不生成报告正文，只在 verify 阶段完成后检查文件是否存在，并提示下一步 `sillyspec run archive`。
+`run.js` 不生成报告正文；verify 阶段完成时依次执行：
+
+1. `validateVerifyOutputs`：文件必须存在、结论非 FAIL、集成证据满足风险门控，否则阻断并回滚阶段状态。
+2. CLI 实测对账（`verify-postcheck.js`）：执行 `local.yaml` 的 `commands.test`，结果写 `.runtime/verify-runs/<ts>/test-result.json`；自报告通过但实测失败 → 阻断完成。未配置 test 命令时降级 warning。
+
+均通过后才提示下一步 `sillyspec run archive`。
 
 ## `module-impact.md`
 

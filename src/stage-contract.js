@@ -7,6 +7,7 @@
 
 import { existsSync, readdirSync, readFileSync } from 'fs'
 import { join, basename } from 'path'
+import { execFileSync } from 'child_process'
 import { detectChangeRisk, checkIntegrationEvidence } from './change-risk-profile.js'
 
 /**
@@ -528,6 +529,111 @@ function validateChangeClosed(cwd, changeName) {
   return { ok: errors.length === 0, errors, warnings }
 }
 
+// ============ Execute 代码变更客观核验 ============
+
+function gitTry(dir, args) {
+  try {
+    const out = execFileSync('git', args, {
+      cwd: dir,
+      encoding: 'utf8',
+      timeout: 15000,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }).trim()
+    return { ok: true, out }
+  } catch (e) {
+    return { ok: false, out: '', error: e.message?.split('\n')[0] || String(e) }
+  }
+}
+
+/**
+ * 客观核验 execute 阶段是否产生了真实代码变更。
+ *
+ * 历史漏洞：execute 无 stage-level validator，agent 勾选 plan.md 全部 checkbox
+ * 即可让 execute 被标 completed，代码完成度与真实变更完全脱钩。
+ *
+ * 判定顺序（fail-open on uncertainty，避免环境差异误杀）：
+ *   1. worktree meta 存在且有 baseHash → 在 worktree 内查 baseHash..HEAD diff + 未提交改动
+ *   2. sillyspec/<change> 分支存在 → 查 merge-base..branch diff
+ *   3. 主工作区存在未提交改动（apply 后未 commit 的常见形态）→ changed
+ *   4. 均无法判定 → unknown（由调用方降级为 warning）
+ *
+ * @returns {{ status: 'changed'|'unchanged'|'unknown', detail: string }}
+ */
+export function checkExecuteCodeEvidence(cwd, changeName) {
+  const metaPath = join(cwd, '.sillyspec', '.runtime', 'worktrees', changeName, 'meta.json')
+  let meta = null
+  if (existsSync(metaPath)) {
+    try { meta = JSON.parse(readFileSync(metaPath, 'utf8')) } catch {}
+  }
+
+  // 1. worktree（或 in-place）meta 有 baseHash：最权威的对账基准
+  if (meta?.baseHash) {
+    const gitDir = (meta.worktreePath && meta.mode !== 'in-place-fallback' && existsSync(meta.worktreePath))
+      ? meta.worktreePath
+      : cwd
+    const diff = gitTry(gitDir, ['diff', '--name-only', `${meta.baseHash}..HEAD`])
+    const status = gitTry(gitDir, ['status', '--porcelain'])
+    if (diff.ok && status.ok) {
+      const committedFiles = diff.out ? diff.out.split('\n').filter(Boolean).length : 0
+      const hasUncommitted = status.out.trim().length > 0
+      if (committedFiles > 0 || hasUncommitted) {
+        return { status: 'changed', detail: `${committedFiles} 个已提交变更文件${hasUncommitted ? ' + 未提交改动' : ''}（base ${meta.baseHash.slice(0, 8)}）` }
+      }
+      return { status: 'unchanged', detail: `${gitDir} 相对 base ${meta.baseHash.slice(0, 8)} 无任何提交或未提交改动` }
+    }
+    return { status: 'unknown', detail: `git 核验失败: ${diff.error || status.error}` }
+  }
+
+  // 2. worktree 已清理但分支残留：diff merge-base..branch
+  const branch = `sillyspec/${changeName}`
+  const branchHash = gitTry(cwd, ['rev-parse', '--verify', '--quiet', branch])
+  if (branchHash.ok && branchHash.out) {
+    const mergeBase = gitTry(cwd, ['merge-base', 'HEAD', branch])
+    if (mergeBase.ok && mergeBase.out) {
+      const diff = gitTry(cwd, ['diff', '--name-only', `${mergeBase.out}..${branch}`])
+      if (diff.ok && diff.out.split('\n').filter(Boolean).length > 0) {
+        return { status: 'changed', detail: `分支 ${branch} 相对 merge-base 有变更` }
+      }
+    }
+  }
+
+  // 3. 主工作区未提交改动（worktree apply 后的常见形态）
+  const status = gitTry(cwd, ['status', '--porcelain'])
+  if (status.ok && status.out.trim()) {
+    return { status: 'changed', detail: '主工作区存在未提交改动' }
+  }
+
+  return { status: 'unknown', detail: '无 worktree meta 且无可对账的分支/未提交改动（变更可能已 apply 并提交），无法客观判定' }
+}
+
+/**
+ * execute 完成校验：plan.md 声明了任务时，必须存在真实代码变更。
+ * 防止"勾选 checkbox = 完成 execute"的谎报路径。
+ */
+function validateExecuteOutputs(cwd, changeName, context = {}) {
+  const { specRoot } = context
+  const errors = []
+  const warnings = []
+
+  const changeDir = resolveChangeDir(cwd, changeName, specRoot)
+  const planPath = join(changeDir, 'plan.md')
+  // 无 plan.md 的 execute（旧流程/quick 混用）不在此核验范围
+  if (!existsSync(planPath)) return { ok: true, errors, warnings }
+
+  const planContent = readFileSync(planPath, 'utf8')
+  const hasTasks = /^\s*[-*]\s*\[[ xX]\]\s*task-\d+/m.test(planContent)
+  if (!hasTasks) return { ok: true, errors, warnings }
+
+  const evidence = checkExecuteCodeEvidence(cwd, changeName)
+  if (evidence.status === 'unchanged') {
+    errors.push(`execute 代码变更核验失败：plan.md 声明了任务，但 ${evidence.detail} — 勾选 checkbox 不等于完成实现`)
+  } else if (evidence.status === 'unknown') {
+    warnings.push(`execute 代码变更无法客观核验：${evidence.detail}`)
+  }
+
+  return { ok: errors.length === 0, errors, warnings }
+}
+
 // ============ Contract Registry ============
 
 /**
@@ -564,7 +670,7 @@ const contracts = {
     description: '代码实现',
     allowedFrom: ['plan'],
     allowedTo: ['verify'],
-    validators: [],
+    validators: [validateExecuteOutputs],
   },
   verify: {
     stage: 'verify',

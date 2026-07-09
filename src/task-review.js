@@ -10,6 +10,7 @@
 
 import { existsSync, readFileSync, mkdirSync, writeFileSync, readdirSync } from 'fs'
 import { join, resolve } from 'path'
+import { execFileSync } from 'child_process'
 
 // ── review.json schema version ──
 export const REVIEW_SCHEMA_VERSION = 1
@@ -147,7 +148,7 @@ function isTaskLowRisk(changeDir, taskId) {
 }
 
 export function validateTaskReviews(opts) {
-  const { planContent, runtimeRoot, executeRunId, allowCannotVerify = true, changeDir = null } = opts
+  const { planContent, runtimeRoot, executeRunId, allowCannotVerify = true, changeDir = null, gitDir = null } = opts
 
   const taskIds = parseTaskIdsFromPlan(planContent)
 
@@ -201,6 +202,24 @@ export function validateTaskReviews(opts) {
       continue
     }
 
+    // ── git 真实性交叉校验：base/head 必须是真实 commit，diff 不能为空 ──
+    if (gitDir) {
+      const evidence = verifyReviewGitEvidence(review, gitDir)
+      for (const w of evidence.warnings) warnings.push(`${taskId}: ${w}`)
+      if (!evidence.ok) {
+        for (const err of evidence.errors) errors.push(`${taskId}: ${err}`)
+        continue
+      }
+      if (evidence.emptyDiff) {
+        if (isTaskLowRisk(changeDir, taskId)) {
+          warnings.push(`${taskId}: base..head 无代码变更（task 声明 low_risk: true，不阻断）`)
+        } else {
+          errors.push(`${taskId}: base..head（${review.base.slice(0, 8)}..${review.head.slice(0, 8)}）无任何代码变更 — 评审了一个零改动的任务，review 疑似伪造`)
+          continue
+        }
+      }
+    }
+
     // 检查 cannot_verify
     if (review.specVerdict === 'cannot_verify' || review.qualityVerdict === 'cannot_verify') {
       if (!allowCannotVerify) {
@@ -250,6 +269,90 @@ export function validateTaskReviews(opts) {
     warnings,
     requiredEvidence,
   }
+}
+
+// ── Git 真实性交叉校验 ──
+
+function runGit(gitDir, args) {
+  return execFileSync('git', args, {
+    cwd: gitDir,
+    encoding: 'utf8',
+    timeout: 15000,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  }).trim()
+}
+
+/**
+ * 校验 review.json 的 base/head 是否指向真实 git 提交，且 diff 非空。
+ *
+ * 历史漏洞：base/head 只做非空字符串检查，agent 可以填任意假 hash 批量伪造
+ * review.json 通过 Task Review Gate。此函数用 git 做客观交叉校验：
+ *   1. base/head 必须是仓库中可解析的真实 commit
+ *   2. base..head 的 diff 不能为空（评审一个零改动的"任务"无意义）
+ *   3. review.changedFiles（如提供）必须与实际 diff 文件有交集
+ *
+ * git 环境不可用（非 git 仓库 / git 缺失）时返回 unavailable，由调用方降级为
+ * warning——不因环境问题误杀，但记录在输出中。
+ *
+ * @param {object} review - 已通过 schema 校验的 review 对象
+ * @param {string} gitDir - 执行 git 命令的目录（worktree 优先，回退主仓库）
+ * @returns {{ ok: boolean, emptyDiff: boolean, errors: string[], warnings: string[], unavailable: boolean }}
+ */
+export function verifyReviewGitEvidence(review, gitDir) {
+  const errors = []
+  const warnings = []
+
+  // git 环境探测：失败即 unavailable，交由调用方降级
+  try {
+    runGit(gitDir, ['rev-parse', '--git-dir'])
+  } catch (e) {
+    return {
+      ok: true,
+      emptyDiff: false,
+      errors: [],
+      warnings: [`git 环境不可用（${gitDir}），跳过 review 真实性交叉校验: ${e.message?.split('\n')[0] || e.message}`],
+      unavailable: true,
+    }
+  }
+
+  for (const field of ['base', 'head']) {
+    const hash = review[field]
+    try {
+      runGit(gitDir, ['rev-parse', '--verify', '--quiet', `${hash}^{commit}`])
+    } catch {
+      errors.push(`${field} "${hash}" 不是仓库中的真实 commit — review.json 疑似伪造`)
+    }
+  }
+  if (errors.length > 0) {
+    return { ok: false, emptyDiff: false, errors, warnings, unavailable: false }
+  }
+
+  let diffFiles = []
+  try {
+    const out = runGit(gitDir, ['diff', '--name-only', `${review.base}..${review.head}`])
+    diffFiles = out ? out.split('\n').filter(Boolean) : []
+  } catch (e) {
+    warnings.push(`git diff ${review.base}..${review.head} 执行失败，跳过 diff 校验: ${e.message?.split('\n')[0] || e.message}`)
+    return { ok: true, emptyDiff: false, errors, warnings, unavailable: false }
+  }
+
+  const emptyDiff = diffFiles.length === 0
+
+  // changedFiles 交叉比对：完全不相交 = review 描述的改动与实际 diff 无关
+  if (!emptyDiff && Array.isArray(review.changedFiles) && review.changedFiles.length > 0) {
+    const normalize = (p) => String(p).replace(/^\.\//, '')
+    const diffSet = new Set(diffFiles.map(normalize))
+    const hasOverlap = review.changedFiles.some(f => {
+      const nf = normalize(f)
+      // 兼容 review 写相对/部分路径：前后缀匹配即可
+      return diffSet.has(nf) || diffFiles.some(d => d.endsWith(nf) || nf.endsWith(d))
+    })
+    if (!hasOverlap) {
+      errors.push(`changedFiles 与实际 git diff（${review.base.slice(0, 8)}..${review.head.slice(0, 8)}，${diffFiles.length} 个文件）完全不相交 — review 内容与代码变更无关`)
+    }
+  }
+
+  return { ok: errors.length === 0, emptyDiff, errors, warnings, unavailable: false }
 }
 
 /**

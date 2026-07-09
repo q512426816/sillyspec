@@ -45,8 +45,8 @@ updated_at: 2026-07-09
 | brainstorm | 13 | 独立包含“写设计文档并自审”、“Design Grill 交叉审查”、“用户确认并生成规范文件”；完成时按 design.md frontmatter `scale` 分叉产物（large→四件套进 plan / small→仅 design.md 进 quick） |
 | propose | 7 | 包含“生成规范文件”与“自检门控”，四件套是该阶段预期产物 |
 | plan | 动态 | 默认 8 步；`plan.md` 解析到任务后插入任务蓝图协调器；postcheck 含确定性校验（结构/可行性/跨任务契约/design 文件覆盖/产物） |
-| execute | 动态 | 默认 12 步；Wave 来自 `plan.md`，解析失败时默认 3 个 Wave |
-| verify | 7 | 只读校验 + 写 `verify-result.md`；完成时 `validateVerifyOutputs` 校验 `verify-result.md` 存在且结论非 FAIL，缺失或 FAIL 则阻断完成 |
+| execute | 动态 | 默认 12 步；Wave 来自 `plan.md`，解析失败时默认 3 个 Wave；完成时 `validateExecuteOutputs` 客观核验存在真实代码变更（plan 有 task 但确证零变更则阻断），Task Review Gate 另做 review.json git 真实性交叉校验 |
+| verify | 7 | 只读校验 + 写 `verify-result.md`；完成时 `validateVerifyOutputs` 校验 `verify-result.md` 存在且结论非 FAIL，缺失或 FAIL 则阻断完成；随后 CLI 亲自执行 `local.yaml` 的 `commands.test` 与自报告对账（实测失败阻断，结果写 `.runtime/verify-runs/<ts>/test-result.json`） |
 | archive | 5 | 辅助阶段；第 4 步必须带 `--confirm`，由 `run.js` 移动目录并注销 active change；移动前硬校验 `plan.md` 存在，移动后校验 `design.md`/`module-impact.md` |
 | quick | 3 | 辅助阶段；直接在主工作区实现，不创建 worktree |
 | explore | 1 | 只读探索 |
@@ -151,3 +151,12 @@ sillyspec doctor --align-execute-progress [--confirm] [--change <name>]
 - Revision v1：`stages` 表新增 `revision`/`reopened_from_step`/`reopened_at`/`stale_reason` 列；阶段新增 `revising`/`stale` 状态；`sillyspec run <stage> --reopen --from-step <n>` 重开已完成阶段、级联标记下游 stale；`.runtime/postcheck-result.json` 由 `scan-postcheck.js` 的 `writeStructuredResult` 落盘（本地写 `specDir/.runtime`，平台写 `runtimeRoot/scan-runs/<id>`）。
 - 平台指针 fail-closed（2026-07-03）：`resolvePlatformSpecDir`（`progress.js`）在 pointer 存在但失效（specRoot 不可达/损坏/缺字段）时抛 `PointerUnreachableError`，`index.js` 顶层 catch 打印修复引导 + exit 1，**不再静默回退本地孤儿 db**；无 pointer 的纯本地项目不受影响。`sync.js` 用 `safePlatformSpecDir` best-effort 包裹保持容错。逃生口：显式 `--spec-dir`。
 - doctor 结构化诊断新增 `execute-progress-plan-mismatch` 维度（2026-07-07，`doctor-diagnostics.js` D5）：检测某 change 的 execute stage status≠completed 但其 `plan.md` 所有 task checkbox 全勾（只读 `plan.md`/`tasks.md` + 只读查 stages 表，**绝不写 db**）。命中即输出 `safe_action` 建议 `sillyspec doctor --align-execute-progress --change <name>`（advisory/WARNING，不阻断任何流程）。写操作由独立的 `ProgressManager.alignExecuteToPlan` 承担（诊断/写分离，D-001@v2）。
+- Agent 门控强化（2026-07-09）：
+  - **validator 失败回滚**：`completeStep()` 在 validator 之前就把 stage 写成 `completed`，历史上失败分支不回滚导致 DB 与真实产物不一致。现在阶段完成校验（`runValidators`、plan postcheck、Task Review Gate、verify 实测）任一失败时，`rollbackStageCompletion()` 把 stage 回滚为 `in-progress`、最后一步重置为 `pending` 并落盘。
+  - **`progress complete-stage` / `update-step` 校验门**：两者曾是零校验后门（`progress.js completeStage/updateStep`）。现在标记 stage completed 前必跑 `runValidators`（经 `_validateStageArtifacts`），失败拒绝；`--force` 为显式逃生口，使用即向 `.runtime/audit.log` 追加审计记录。
+  - **Task Review Gate fail-closed**：Gate 自身异常时不再 warning 放行，改为阻断 execute 完成并回滚。
+  - **review.json git 真实性交叉校验**（`task-review.js verifyReviewGitEvidence`）：base/head 必须是仓库真实 commit（`git rev-parse --verify`）；base..head 空 diff 的非 low_risk task 报 error；`changedFiles` 与实际 diff 完全不相交报 error；git 环境不可用降级 warning 不误杀。校验目录优先 worktree（`meta.worktreePath`，排除 in-place），回退主仓库。
+  - **execute stage validator**（`stage-contract.js validateExecuteOutputs` + `checkExecuteCodeEvidence`）：plan.md 声明了 task 时客观核验真实代码变更——worktree meta 的 `baseHash..HEAD` diff + 未提交改动 → 分支 `sillyspec/<change>` merge-base diff → 主工作区未提交改动，能确证零变更则阻断（"勾选 checkbox 不等于完成实现"），无法判定时降级 warning（fail-open on uncertainty）。
+  - **`alignExecuteToPlan` 事实核验**：对齐前调用 `checkExecuteCodeEvidence`，plan 全勾但确证代码零变更时拒绝对齐。
+  - **verify 实测对账**（`verify-postcheck.js`）：verify 产物校验通过后，CLI 用 `execSync` 执行 `local.yaml` 的 `commands.test`（10 分钟超时），结果写 `.runtime/verify-runs/<ts>/test-result.json`；自报告 PASS 但实测失败 → 阻断 verify 完成并回滚。未配置 test（或 unavailable）降级 warning 不阻断。
+  - **文案修正**：validator 失败提示不再声称 `--skip-approval` 可跳过产物校验（该 flag 只作用于阶段转换/审批检查）；quick 阶段 quicklog 缺失提示同步移除。

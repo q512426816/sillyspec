@@ -1,6 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-06-04 16:25:42
+updated_at: 2026-07-09
 ---
 
 # 存储与状态
@@ -16,10 +17,12 @@ created_at: 2026-06-04 16:25:42
 ├── gate-status.json              (按阶段动态生成/删除)
 ├── platform-scan.json            (平台 scan 参数暂存)
 ├── scan-projects.json            (scan step 2 后的项目展开状态)
+├── audit.log                     (--force 绕过校验的审计记录，JSONL)
 ├── artifacts/
 ├── history/
 ├── logs/
 ├── templates/
+├── verify-runs/                  (verify 阶段 CLI 实测测试结果)
 ├── workflow-runs/
 └── worktrees/
 ```
@@ -130,6 +133,30 @@ created_at: 2026-06-04 16:25:42
 ```
 
 `sillyspec run <stage> --done` 的普通流程不直接调用 `completeStage()`；它通过 `_write()` 更新 DB。只有使用 `sillyspec progress complete-stage <stage>` 这类 progress 子命令时会写 history 文件。
+
+注意：`progress complete-stage` / `update-step`（触发阶段自动完成时）现在会先跑 `stage-contract.js` 的阶段产物校验（`_validateStageArtifacts`），校验失败拒绝标记 completed；`--force` 可强制通过，但会向 `audit.log` 追加审计记录。
+
+## `audit.log`
+
+位置：`.sillyspec/.runtime/audit.log`
+
+写入方：`ProgressManager._appendAuditLog()`。
+
+触发条件：`sillyspec progress complete-stage <stage> --force` 或 `update-step ... --force`（阶段自动完成路径）在校验未通过或显式 force 时追加。
+
+格式：JSONL，每行一条：
+
+```json
+{"at":"2026-07-09T12:00:00.000Z","action":"complete-stage --force","stage":"execute","change":"my-change","validationErrors":["..."]}
+```
+
+## `verify-runs/`
+
+位置：`.sillyspec/.runtime/verify-runs/<YYYYMMDDHHMMSS>/test-result.json`
+
+写入方：`verify-postcheck.js` 的 `runVerifyTestCheck()`，在 verify 阶段完成、产物校验通过后由 `run.js` 触发。
+
+内容：CLI 亲自执行 `local.yaml` `commands.test` 的客观结果（`command`、`exit_code`、`status`、`duration_ms`、`output_tail`、`reason`、`ran_at`）。实测失败会阻断 verify 阶段完成（与 verify-result.md 自报告对账）。未配置 test 命令（或标记 `unavailable`）时跳过执行、不落盘、不阻断。
 
 ## `local.yaml` 路径口径
 

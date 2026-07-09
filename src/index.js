@@ -57,7 +57,7 @@ SillySpec CLI — 规范驱动开发工具包
 
   sillyspec progress <cmd>     进度记录（轻量，不强制顺序）
     init | show | set-stage <stage> | add-step <stage> <name> |
-    update-step <stage> <name> --status <st> [--output <t>] | complete-stage <stage> |
+    update-step <stage> <name> --status <st> [--output <t>] [--force] | complete-stage <stage> [--force] |
     check | repair [--apply] | validate | reset [--stage X] |
     batch --total N --completed M [--failed F] [--skipped K] | batch --status
 
@@ -246,13 +246,14 @@ async function main() {
             if (args[ai] === '--status' && args[ai + 1]) { updStatus = args[ai + 1]; ai++; }
             if (args[ai] === '--output' && args[ai + 1]) { updOutput = args[ai + 1]; ai++; }
           }
-          pm.updateStep(dir, updStepStage, updStepName, { status: updStatus, output: updOutput }, progChangeName);
+          const updForce = args.includes('--force');
+          await pm.updateStep(dir, updStepStage, updStepName, { status: updStatus, output: updOutput, force: updForce }, progChangeName);
           break;
         }
         case 'complete-stage': {
           const compStageName = filteredArgs[2];
-          if (!compStageName) { console.log('❌ 用法: sillyspec progress complete-stage <stage>'); break; }
-          pm.completeStage(dir, compStageName, progChangeName);
+          if (!compStageName) { console.log('❌ 用法: sillyspec progress complete-stage <stage> [--force]'); break; }
+          await pm.completeStage(dir, compStageName, progChangeName, { force: args.includes('--force') });
           break;
         }
         case 'batch': {
