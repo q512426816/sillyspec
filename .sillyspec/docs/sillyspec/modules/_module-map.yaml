@@ -40,3 +40,9 @@ modules:
     needs_review: false
     review_reasons: []
 
+  machine-interface:
+    status: active
+    doc: modules/machine-interface.md
+    needs_review: false
+    review_reasons: []
+
