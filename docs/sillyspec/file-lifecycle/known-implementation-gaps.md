@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-06-04 16:25:42
-updated_at: 2026-07-04
+updated_at: 2026-07-09T13:10:00+08:00
 ---
 
 # 剩余实现差异清单
@@ -14,20 +14,8 @@ updated_at: 2026-07-04
 - archive 第 4 步正常流程不触发自动归档。
 - 自动 sync / approval 参数顺序不匹配。
 - `ProgressManager._updatePlatformLastSync()` / `_updateApprovalStatus()` 缺失。
-
-## workflow-runs 平台路径支持未从 run.js 接通
-
-代码位置：`src/workflow.js`、`src/run.js`
-
-现象：
-
-- `saveWorkflowRun()` 支持传 `runtimeRoot`。
-- `run.js` scan/archive post-check 调用时没有传 `runtimeRoot` / `scanRunId`。
-
-影响：
-
-- 自动 post-check 的 workflow run 当前写本地 `.sillyspec/.runtime/workflow-runs/`。
-- 平台模式下不能按旧文档断言它会写入 `<runtime-root>/scan-runs/<scan-run-id>/workflow-runs/`。
+- platform `approve` / `reject` 未实现（2026-07-09 已补齐：`sync.js` `_submitApproval` 真实 HTTP POST 到 `{url}/api/changes/{changeName}/approval`，body `{decision[,reason]}`，成功后落 `approvals` 表；端点待 SillyHub 对齐，见 `interface-contract.md` §7 TBD-hub-api）。
+- workflow-runs 平台路径未从 `run.js` 接通（2026-07-09 已补齐：`run.js` scan/archive 两处 post-check 均透传 `runtimeRoot` / `scanRunId` 给 `saveWorkflowRun`；平台模式落 `<runtimeRoot>/scan-runs/<scanRunId>/workflow-runs/`）。
 
 ## `--no-worktree` 决定不接通（与降级铁律冲突）
 
@@ -81,16 +69,3 @@ worktree 创建失败的逃生口是 `sillyspec worktree doctor --fix` / 手动�
 影响：
 
 - 文档不能写成 archive impact workflow 对所有项目自动按 project 维度检查。
-
-## platform approve / reject 尚未实现
-
-代码位置：`src/sync.js`
-
-现象：
-
-- `sillyspec platform approve <change-name>` 和 `reject <change-name>` 有 CLI 分支。
-- 当前实现只打印 “尚未实现” warning。
-
-影响：
-
-- 本地 `checkApproval()` 能读取并记录平台审批状态，但 CLI 端还不能主动向平台发起 approve/reject。

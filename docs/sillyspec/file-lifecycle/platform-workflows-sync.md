@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-06-04 16:25:42
-updated_at: 2026-07-02 11:00:00
+updated_at: 2026-07-09T13:10:00+08:00
 ---
 
 # 平台模式、Workflow 与 Sync
@@ -130,7 +130,14 @@ sillyspec workflow check <name> --project <project> [--json] [--save]
 - `failures`
 - `retry_prompts`
 
-当前接线限制：`run.js` 在 scan/archive post-check 中调用 `saveWorkflowRun(result, { cwd, source, stage, step })`，没有传 `runtimeRoot` 和 `scanRunId`。所以即使平台 scan 有 runtimeRoot，当前 run.js 自动 workflow 归档仍会落在本地 `.sillyspec/.runtime/workflow-runs/`。
+落盘路径（`workflow.js saveWorkflowRun()`，2026-07-09 起 `run.js` 已透传平台参数）：
+
+- **本地模式**（无 `runtimeRoot`）：`<cwd>/.sillyspec/.runtime/workflow-runs/`
+- **平台模式**（`platformOpts.runtimeRoot` 存在）：`<runtimeRoot>/scan-runs/<scanRunId>/workflow-runs/`
+
+`run.js` 在 scan（`深度扫描` step）与 archive（`extract-module-impact` step）两处 post-check 调用 `saveWorkflowRun` 时，均按 `platformOpts` 是否提供 `runtimeRoot` / `scanRunId` 条件透传（`...(platformOpts.runtimeRoot ? { runtimeRoot } : {})` 等）。因此平台模式 scan 的自动 workflow 归档会落在 `<runtimeRoot>/scan-runs/<scanRunId>/workflow-runs/`，本地模式仍落 `cwd/.sillyspec/.runtime/workflow-runs/`。
+
+文件名：
 
 ## scan post-check
 
@@ -192,8 +199,9 @@ sillyspec platform reject <change-name> [--reason <reason>]
 
 当前真实情况：
 
-- `connect`、`disconnect`、`sync`、`sync-docs`、`status` 有实现。
-- `approve` / `reject` 目前只打印 “尚未实现” warning。
+- `connect`、`disconnect`、`sync`、`sync-docs`、`status`、`approve`、`reject` 均有真实实现。
+- `approve` / `reject` 向平台真实提交审批决定：`POST {url}/api/changes/{changeName}/approval`，body `{ decision: "approved" }` 或 `{ decision: "rejected", reason }`；HTTP 成功后调 `ProgressManager._updateApprovalStatus()` 落 `approvals` 表。端点路径/body 字段以 SillyHub 实际 API 为准（待对齐清单见 `interface-contract.md` §7 TBD-hub-api），全部封装在 `sync.js` `_submitApproval` 单点，对齐时只改这一处。
+- `approve` / `reject` 是显式用户/daemon 动作，失败语义不同于自动 sync：网络失败 / 非 2xx / 非 JSON 响应 → 打 error 并置 `process.exitCode = 1`（失败必须可见），而非 best-effort 的 warning 放行。未连接平台同样 exit 1。
 - `sync()` 和 `syncDocuments()` 网络失败只 warning，不抛错。
 - `sync()` 成功后会调用 `ProgressManager._updatePlatformLastSync()`，更新 `changes.platform_last_sync` 并打开 `platform_sync_enabled`。
 - `checkApproval()` 成功后会调用 `ProgressManager._updateApprovalStatus()`，把平台审批状态写入 `approvals` 表。

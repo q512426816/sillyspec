@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-05-31 11:00:00
-updated_at: 2026-07-09
+updated_at: 2026-07-09T13:10:00+08:00
 ---
 
 # SillySpec 文件生命周期
@@ -34,6 +34,7 @@ updated_at: 2026-07-09
 - `src/hooks/worktree-guard.js`
 - `src/workflow.js`
 - `src/sync.js`
+- `src/machine-interface.js`
 - `src/modules.js`
 - `src/index.js`
 
@@ -114,6 +115,23 @@ quick
   -> code changes are made in the main workspace
 ```
 
+## 机器接口（gate / derive）
+
+`sillyspec gate <stage>` 与 `sillyspec derive <facet>` 是面向 SillyHub driver 模式的**只读查询子命令**（实现 `src/machine-interface.js`，路由 `src/index.js`）。它们复用既有的门控与事实核验引擎，把"埋在 `run <stage> --done` 人类可读输出里的结论"抽象成统一 JSON envelope + 退出码契约。
+
+**只读语义边界（无状态副作用）**：
+
+| 行为 | gate / derive | 说明 |
+|---|---|---|
+| 写 `sillyspec.db` | ❌ 不写 | 仅调 `ProgressManager.read`，调用前后 db 文件 byte-identical |
+| 写 `gate-status.json` | ❌ 不产生/不变化 | — |
+| `triggerSync` | ❌ 不触发 | 无自动同步副作用 |
+| 推进 step / stage | ❌ 不推进 | 状态推进仍走 `run <stage> --done` 或平台显式调用 |
+
+**唯一例外（取证落盘，非状态写入）**：`derive verify-test` 与 `gate verify`（verify stage）会真实执行 `local.yaml` 的 `commands.test`，并把结果落盘到 `.runtime/verify-runs/<ts>/test-result.json`。这是产物取证——记录测试结果事实，不进 `sillyspec.db`、不进 `gate-status.json`、不推进进度。daemon 消费 `verify-test` 的 `data.resultPath` 即可定位该取证文件。
+
+命令面与退出码语义（0=通过 / 1=事实阻断 / 2=无法核验）、envelope schema、facet 白名单（`execute-evidence` / `verify-test` / `task-reviews` / `artifacts`）、TBD-hub-api 待对账清单，以 **[interface-contract.md](interface-contract.md)** 为两仓库对账基准。本组文档不重复这些契约细节；当 envelope schema 或副作用声明变更时，须同步修订契约文档与本节。
+
 sillyspec doctor --json（结构化诊断，平台模式状态分裂检测）
   -> <authoritySpecDir>/.runtime/doctor-diagnosis.json
   （authoritySpecDir = pointer.specRoot 平台模式 / <cwd>/.sillyspec 本地模式；只读检测，不写 db）
@@ -140,7 +158,7 @@ sillyspec doctor --align-execute-progress [--confirm] [--change <name>]
 - `scan` 当前定义是 10 步，并且 step 2 后会动态展开项目级步骤，不是固定 12 步。
 - `brainstorm` 和 `propose` 的重复 object key 已拆成独立步骤，运行时步骤数分别是 11 和 7。
 - `.sillyspec/local.yaml` 是当前主配置口径；scan prompt 写这里，sync 读写这里，hook 优先读这里并兼容根目录 fallback。
-- 平台模式的 `manifest.json` 已接入 scan 完成回调；`workflow-runs` 的 runtimeRoot 路径支持在 `workflow.js` 中存在，但 `run.js` 当前调用没有传入 `runtimeRoot`。
+- 平台模式的 `manifest.json` 已接入 scan 完成回调；`workflow-runs` 在平台模式下落盘到 `<runtimeRoot>/scan-runs/<scanRunId>/workflow-runs/`——`run.js` scan/archive 两处 post-check 已向 `saveWorkflowRun` 透传 `runtimeRoot` / `scanRunId`（本地模式仍落 `cwd/.sillyspec/.runtime/workflow-runs/`，详见 `platform-workflows-sync.md`）。
 - `archive` 的目录移动已经由 `run.js` 在第 4 步 `--confirm` 时执行；未带 `--confirm` 会回退该步骤并提示补参。
 - scan 第 10 步「Extract Project Knowledge」把长期有效的项目知识写入 `.sillyspec/knowledge/`（`conventions.md`/`patterns.md`/`known-issues.md` + 更新 `INDEX.md`）；`scan-postcheck.js` 校验产物（INDEX.md 存在、引用文件真实存在）。
 - execute 启动时由 `knowledge-match.js` 按 plan.md 的 task 关键词匹配知识库，命中报告注入 prompt 并写 `.runtime/knowledge-hit-report.json`。

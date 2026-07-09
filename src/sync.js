@@ -75,7 +75,9 @@ function parseSimpleYaml(content) {
   for (const line of content.split('\n')) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith('#')) continue;
-    if (!trimmed.startsWith(' ')) {
+    // 用原始 line（非 trimmed）判断缩进：trimmed 已去前导空格，startsWith(' ') 恒 false
+    // 会导致缩进子段（如 platform 下 url/token）被误判为 root 行、section 恒为空 {}
+    if (!line.startsWith(' ')) {
       const m = trimmed.match(/^(\S+)\s*:\s*(.*)$/);
       if (m) {
         const key = m[1];
@@ -413,14 +415,80 @@ export async function checkApproval(changeName, cwd) {
   return new SyncManager(cwd).checkApproval(changeName);
 }
 
+// TBD-hub-api: approve/reject 端点路径与请求体以 SillyHub 仓库实际 API 为准；
+// 对齐时只改本函数（_submitApproval），无需动 approve/reject 入口。
+/**
+ * 向平台提交审批决定（approve/reject 共用）。
+ *
+ * 显式用户/daemon 动作：网络/平台失败必须可见（decisions.md D-006@v1）——
+ * 与 best-effort 的 sync 不同，此处失败打 error 并置 process.exitCode = 1。
+ *
+ * @param {string} cwd - 工作目录
+ * @param {string} changeName - 变更名称
+ * @param {'approved'|'rejected'} decision - 审批决定
+ * @param {string|null} reason - rejected 时的原因（approved 时忽略）
+ * @returns {Promise<boolean>} 是否成功
+ */
+async function _submitApproval(cwd, changeName, decision, reason = null) {
+  const sm = new SyncManager(cwd);
+  const platform = sm._getPlatform();
+  if (!platform) {
+    console.error('❌ 未连接平台，请先 sillyspec platform connect');
+    process.exitCode = 1;
+    return false;
+  }
+
+  if (!changeName) {
+    console.error('❌ 审批需要指定变更名称 (changeName)');
+    process.exitCode = 1;
+    return false;
+  }
+
+  // TBD-hub-api: 端点路径/body 以 SillyHub 实际 API 为准，对齐时只改此处
+  const approvalUrl = `${platform.url}/api/changes/${encodeURIComponent(changeName)}/approval`;
+  const body = decision === 'rejected'
+    ? { decision: 'rejected', reason }
+    : { decision: 'approved' };
+
+  const result = await fetchJson(approvalUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${platform.token}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  // fetchJson 在非 2xx / 网络错 / 超时 / 非 JSON 时返回 null
+  if (result === null) {
+    console.error(`❌ 审批请求失败 (${changeName} → ${decision})，详情见上方 [sync] 警告`);
+    process.exitCode = 1;
+    return false;
+  }
+
+  // HTTP 成功后更新本地 approvals 表（HTTP 已成功是主要目标，落库失败只 warn 不阻断）
+  try {
+    const { ProgressManager } = await import('./progress.js');
+    const pm = new ProgressManager({ specDir: safePlatformSpecDir(cwd) });
+    await pm._updateApprovalStatus(cwd, changeName, decision, reason);
+  } catch (err) {
+    console.warn(`[sync] 更新本地审批状态失败 (${changeName}): ${err.message}`);
+  }
+
+  if (decision === 'approved') {
+    console.log(`✅ 已批准变更 ${changeName}`);
+  } else {
+    console.log(`✅ 已拒绝变更 ${changeName}${reason ? `（原因: ${reason}）` : ''}`);
+  }
+  return true;
+}
+
 export async function approve(changeName, cwd) {
-  // TODO: SillyHub 平台侧实现后启用
-  console.warn(`[sync] approve 尚未实现 (${changeName})`);
+  return _submitApproval(cwd, changeName, 'approved');
 }
 
 export async function reject(changeName, reason, cwd) {
-  // TODO: SillyHub 平台侧实现后启用
-  console.warn(`[sync] reject 尚未实现 (${changeName})`);
+  return _submitApproval(cwd, changeName, 'rejected', reason);
 }
 
 export async function status(cwd) {

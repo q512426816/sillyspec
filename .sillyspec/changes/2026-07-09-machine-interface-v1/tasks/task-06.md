@@ -4,6 +4,7 @@ title: src/run.js 两处 saveWorkflowRun 透传 runtimeRoot/scanRunId
 author: qinyi
 created_at: 2026-07-09 19:58:30
 priority: P1
+low_risk: true  # 代码已存在于 baseline(run.js:3395/3436 透传 + workflow.js:744 支持)，本 task 为验证确认性质，无新增代码 diff
 depends_on: []
 blocks: [task-07, task-08]
 allowed_paths:

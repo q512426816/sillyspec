@@ -29,26 +29,26 @@ gate / derive 为全新子命令，无既有调用点。
 
 ## Wave 1（并行，无依赖）
 
-- [ ] task-01: 新建 src/machine-interface.js — envelope/退出码/输出纪律 + gate 命令
-- [ ] task-05: src/sync.js 实现 platform approve/reject（HTTP + approvals 表）
-- [ ] task-06: src/run.js 两处 saveWorkflowRun 透传 runtimeRoot/scanRunId
+- [x] task-01: 新建 src/machine-interface.js — envelope/退出码/输出纪律 + gate 命令
+- [x] task-05: src/sync.js 实现 platform approve/reject（HTTP + approvals 表）
+- [x] task-06: src/run.js 两处 saveWorkflowRun 透传 runtimeRoot/scanRunId
 
 ## Wave 2（依赖 Wave 1）
 
-- [ ] task-02: machine-interface.js — derive 四个 facet 实现
+- [x] task-02: machine-interface.js — derive 四个 facet 实现
 
 ## Wave 3（依赖 Wave 2）
 
-- [ ] task-03: src/index.js 路由 gate/derive 子命令 + usage 文本
+- [x] task-03: src/index.js 路由 gate/derive 子命令 + usage 文本
 
 ## Wave 4（依赖 Wave 3）
 
-- [ ] task-04: 新建 docs/sillyspec/interface-contract.md — v1 契约冻结
-- [ ] task-07: 新增 test/machine-interface.test.mjs — 覆盖 9 条全局验收标准
+- [x] task-04: 新建 docs/sillyspec/interface-contract.md — v1 契约冻结
+- [x] task-07: 新增 test/machine-interface.test.mjs — 覆盖 9 条全局验收标准
 
 ## Wave 5（依赖 Wave 4）
 
-- [ ] task-08: 同步 file-lifecycle 三份文档
+- [x] task-08: 同步 file-lifecycle 三份文档
 
 ## 任务总表
 

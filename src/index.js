@@ -71,6 +71,8 @@ SillySpec CLI — 规范驱动开发工具包
 
   sillyspec workflow check <name> [--project <p>] [--change <c>] [--json]
   sillyspec workflow list
+  sillyspec gate <stage> --change <name> [--json]      机器门控：阶段能否标记完成（只读）
+  sillyspec derive <facet> --change <name> [--json]    单项事实核验（facet: execute-evidence|verify-test|task-reviews|artifacts）
   sillyspec modules <rebuild | status | migrate>
   sillyspec change-rename <旧变更名> <新变更名>
   sillyspec knowledge <search --query "..." --limit N
@@ -104,6 +106,23 @@ SillySpec CLI — 规范驱动开发工具包
   sillyspec progress show
   sillyspec worktree apply 2026-07-03-add-login
 `);
+}
+
+// --json 模式输出纪律（design §8 风险表）：machine-interface 的 runGate/runDerive 执行期间，
+// 被调模块（validators/task-review/verify-postcheck）的人类可读 console.log 会污染 stdout 破坏 JSON。
+// 在整个调用期间把 console.log/info 重定向到 stderr，stdout 留给最终 JSON envelope（D-005@v1）。
+async function withJsonOutput(json, fn) {
+  if (!json) return fn();
+  const origLog = console.log;
+  const origInfo = console.info;
+  console.log = (...a) => process.stderr.write(a.map(String).join(' ') + '\n');
+  console.info = (...a) => process.stderr.write(a.map(String).join(' ') + '\n');
+  try {
+    return await fn();
+  } finally {
+    console.log = origLog;
+    console.info = origInfo;
+  }
 }
 
 async function main() {
@@ -285,6 +304,59 @@ async function main() {
         default:
           console.log('用法: sillyspec progress <init|show|validate|reset|set-stage|add-step|update-step|complete-stage>');
       }
+      break;
+    }
+    case 'gate': {
+      // 机器门控（machine-interface v1）：聚合「变更的 <stage> 阶段此刻能否标记完成」的综合结论。
+      // 只读查询，不依赖 worktree、不写状态（D-002@v1）。
+      const gateStage = filteredArgs[1];
+      const gateChangeIdx = args.indexOf('--change');
+      const gateChange = gateChangeIdx >= 0 && args[gateChangeIdx + 1] ? args[gateChangeIdx + 1] : null;
+      if (!gateStage || gateStage.startsWith('-') || !gateChange) {
+        console.error('用法: sillyspec gate <stage> --change <name> [--json]\n  stage: brainstorm | plan | execute | verify | archive | ...');
+        process.exit(2);
+      }
+      const { runGate } = await import('./machine-interface.js');
+      const { envelope, exitCode } = await withJsonOutput(json, () => runGate(gateStage, gateChange, { cwd: dir }));
+      if (json) {
+        process.stdout.write(JSON.stringify(envelope));
+      } else {
+        const icon = envelope.ok ? '✅' : '❌';
+        console.log(`${icon} gate ${gateStage} [${gateChange}]: ${envelope.ok ? '通过' : '未通过'} (exit ${exitCode})`);
+        for (const c of (envelope.checks || [])) {
+          const ci = c.ok ? '✅' : '❌';
+          const tag = c.informational ? ' (informational)' : '';
+          console.log(`  ${ci} ${c.id}${tag}`);
+          for (const e of (c.errors || [])) console.log(`     ✗ ${e}`);
+          for (const w of (c.warnings || [])) console.log(`     ⚠ ${w}`);
+        }
+        for (const e of (envelope.errors || [])) console.log(`  ✗ ${e}`);
+        for (const w of (envelope.warnings || [])) console.log(`  ⚠ ${w}`);
+      }
+      process.exitCode = exitCode;
+      break;
+    }
+    case 'derive': {
+      // 单项事实核验（machine-interface v1）：查询变更某一 facet 的真实状态，返回结构化 data。
+      const facet = filteredArgs[1];
+      const deriveChangeIdx = args.indexOf('--change');
+      const deriveChange = deriveChangeIdx >= 0 && args[deriveChangeIdx + 1] ? args[deriveChangeIdx + 1] : null;
+      if (!facet || facet.startsWith('-') || !deriveChange) {
+        console.error('用法: sillyspec derive <facet> --change <name> [--json]\n  facet: execute-evidence | verify-test | task-reviews | artifacts');
+        process.exit(2);
+      }
+      const { runDerive } = await import('./machine-interface.js');
+      const { envelope, exitCode } = await withJsonOutput(json, () => runDerive(facet, deriveChange, { cwd: dir }));
+      if (json) {
+        process.stdout.write(JSON.stringify(envelope));
+      } else {
+        const icon = envelope.ok ? '✅' : '❌';
+        console.log(`${icon} derive ${facet} [${deriveChange}]: ${envelope.ok ? '通过' : '未通过'} (exit ${exitCode})`);
+        if (envelope.data) console.log(`  data: ${JSON.stringify(envelope.data, null, 2)}`);
+        for (const e of (envelope.errors || [])) console.log(`  ✗ ${e}`);
+        for (const w of (envelope.warnings || [])) console.log(`  ⚠ ${w}`);
+      }
+      process.exitCode = exitCode;
       break;
     }
     case 'docs': {
