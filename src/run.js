@@ -2966,32 +2966,42 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
         console.error(`   请先创建 quicklog 记录再 --done。`)
         return { stageCompleted: false, currentIdx, nextPendingIdx: -1 }
       }
-      if (progress.quickGuard) {
-        const review = await auditQuickCompletion(cwd, progress.quickGuard, { isConfirm })
-        progress.quickGuard.review = review
-        progress.quickGuard.completedAt = new Date().toISOString()
-        printQuickAuditReview(review)
-        if (review.status === 'blocked') {
-          steps[currentIdx].status = 'pending'
-          steps[currentIdx].completedAt = null
-          if (outputText) steps[currentIdx].output = null
-          process.exit(1)
-        }
+      // §4.6 quick 收尾：从 session guard.json 读 guard（不依赖 progress.quickGuard）。
+      // D-003@v1：progress._write 不持久化顶层 quickGuard，跨进程 --done 时读出的 progress 无 quickGuard，
+      // 若仍用 if (progress.quickGuard) 驱动收尾会整体跳过，导致 .runtime/quick-sessions/<sessionId>/ 残留僵尸。
+      // 改为从文件读 guard：优先 session 目录 guard.json，回退旧单文件 quick-guard.json（task-03 前兼容）。
+      // sessionId == changeName == quick-<uuid8>（completeStep 作用域内 changeName 已解构自 options）。
+      {
+        const runtimeBase = platformOpts.runtimeRoot || join(specBase, '.runtime')
+        const sessionGuardFile = join(runtimeBase, 'quick-sessions', changeName, 'guard.json')
+        const legacyGuardFile = join(specBase, '.runtime', 'quick-guard.json')
+        let guard = null
         try {
-          // §4.6 清理：删本会话 session 目录 .runtime/quick-sessions/<sessionId>/（D-002 guard 按 session 存）。
-          // sessionId == changeName == quick-<uuid8>（completeStep 作用域内 changeName 已解构自 options，--done 恢复后确定，见 §4.4）。
-          // 兼容兜底：同时清理旧版单文件 quick-guard.json（task-03 前 guard 写单文件，老仓库可能残留）。
+          guard = existsSync(sessionGuardFile)
+            ? JSON.parse(readFileSync(sessionGuardFile, 'utf8'))
+            : (existsSync(legacyGuardFile) ? JSON.parse(readFileSync(legacyGuardFile, 'utf8')) : null)
+        } catch {}
+        if (guard) {
+          const review = await auditQuickCompletion(cwd, guard, { isConfirm: confirm })
+          printQuickAuditReview(review)
+          if (review.status === 'blocked') {
+            steps[currentIdx].status = 'pending'
+            steps[currentIdx].completedAt = null
+            if (outputText) steps[currentIdx].output = null
+            process.exit(1)
+          }
+          progress.lastQuickReview = review
+        }
+        // 清理：guard 命中与缺失两种情况都执行（guard 缺失 → 跳过审计，仅清理不抛错）。
+        // rmSync {recursive,force} / unlinkSync 都容忍文件不存在（brownfield）。
+        try {
           const { unlinkSync } = await import('fs')
-          const runtimeBase = platformOpts.runtimeRoot || join(specBase, '.runtime')
           if (changeName) {
             const sessionDir = join(runtimeBase, 'quick-sessions', changeName)
-            if (existsSync(sessionDir)) rmSync(sessionDir, { recursive: true, force: true })
+            rmSync(sessionDir, { recursive: true, force: true })
           }
-          const guardFile = join(specBase, '.runtime', 'quick-guard.json')
-          if (existsSync(guardFile)) unlinkSync(guardFile)
+          if (existsSync(legacyGuardFile)) unlinkSync(legacyGuardFile)
         } catch {}
-        progress.lastQuickReview = review
-        delete progress.quickGuard
       }
     }
 

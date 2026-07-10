@@ -182,19 +182,15 @@ export const definition = {
 
 ### 操作
 1. 检查 {SPEC_ROOT}/local.yaml 是否已存在，已存在则跳过（提示"local.yaml 已存在，跳过生成"）
-2. 根据项目类型生成默认配置：
-   - **Node.js**（有 package.json）：build: "npm run build", test: "npm test", lint: "npm run lint", type: nodejs
-   - **Maven**（有 pom.xml）：build: "mvn compile", test: "mvn test", lint: "mvn checkstyle:check", type: maven
-   - **Gradle**（有 build.gradle）：build: "./gradlew build", test: "./gradlew test", type: gradle
-   - **通用项目**：只写注释模板, type: generic
-3. 确保目录存在：mkdir -p {SPEC_ROOT}
-4. 原子写入（先写 tmp 文件再 rename）
+2. 调用 \`sillyspec local detect\` 命令生成 local.yaml（该命令封装了纯 fs 项目类型嗅探：package.json→nodejs / pom.xml→maven / build.gradle→gradle / Makefile→make / 否则 generic，对应默认 commands）。**不要自行嗅探 package.json/pom.xml/build.gradle 等文件**——探测逻辑唯一归属 local-detect.js，本步骤只负责调用命令并报告结果。
+3. 该命令内部已处理：确保目录存在（mkdir -p）、已存在则跳过、原子写入（先写 tmp 再 rename）。
+4. 报告生成的 project.type 与 local.yaml 路径。
 
-### 文件格式
+### 输出格式参考（由 \`sillyspec local detect\` 自动产出）
 \`\`\`yaml
 # SillySpec 本地配置（自动生成，可手动修改）
 project:
-  type: nodejs  # nodejs/maven/gradle/generic
+  type: nodejs  # nodejs/maven/gradle/make/generic
 
 commands:
   build: "npm run build"
@@ -203,15 +199,10 @@ commands:
 
 # 测试策略：full=全量测试, module=只测变更模块, skip=跳过测试
 test_strategy: module
-
-# 模块测试路径映射（可选）
-# module_paths:
-#   user-service: "user/"
-#   order-service: "order/"
 \`\`\`
 
 ### 输出
-local.yaml 生成结果（已存在/已生成）`,
+local.yaml 生成结果（已存在/已生成 + project.type）`,
       outputHint: 'local.yaml 生成状态',
       optional: false
     },

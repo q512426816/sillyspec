@@ -6,10 +6,11 @@
  * 只负责两件事：init（安装命令模板）和 setup（安装 MCP 工具）。
  * 状态管理通过 sillyspec.db（SQLite）完成，使用 `sillyspec progress` 命令。
  */
-import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'fs';
 import { join, resolve } from 'path';
 import { cmdInit, getVersion } from './init.js';
 import { ProgressManager, resolvePlatformSpecDir } from './progress.js';
+import { detectLocalYaml } from './local-detect.js';
 
 // ── CLI 入口 ──
 
@@ -68,6 +69,8 @@ SillySpec CLI — 规范驱动开发工具包
     list | meta <change>                列出 / 读取 meta.json
     cleanup <change> [--force]          清理 worktree
     doctor [--fix] [--stale-hours N]    健康检查 + 修复
+
+  sillyspec local detect [--dir <path>]   生成本地配置 local.yaml（纯 fs 嗅探，零 token、不跑 scan）
 
   sillyspec workflow check <name> [--project <p>] [--change <c>] [--json]
   sillyspec workflow list
@@ -1112,6 +1115,55 @@ SillySpec modules — 模块文档管理
         console.error(`❌ 未知子命令: modules ${modulesSub}`);
         process.exit(1);
       }
+      break;
+    }
+    case 'local': {
+      // 本地配置探测（task-04 / D-001@v1）：纯 fs 嗅探项目类型 → 生成 local.yaml。
+      // 轻量独立路由，不跑 scan、不消耗 token。探测逻辑归属 local-detect.js（task-02）。
+      const localSubCmd = filteredArgs[1];
+      if (localSubCmd !== 'detect') {
+        console.error('用法: sillyspec local detect [--dir <path>]\n  纯 fs 嗅探项目类型并生成 local.yaml（不跑 scan、零 token）');
+        process.exit(2);
+      }
+
+      const detected = detectLocalYaml(dir);
+      const specRoot = resolvePlatformSpecDir(dir, specDir) || join(dir, '.sillyspec');
+      const localYamlPath = join(specRoot, 'local.yaml');
+
+      if (existsSync(localYamlPath)) {
+        console.log(`ℹ️  local.yaml 已存在，跳过: ${localYamlPath}`);
+        break;
+      }
+
+      // 序列化为 local.yaml 文本（与 scan.js 生成本地配置步骤的 yaml 模板格式一致，向后兼容）
+      const c = detected.commands || {};
+      const lines = [];
+      lines.push('# SillySpec 本地配置（自动生成，可手动修改）');
+      lines.push('project:');
+      lines.push(`  type: ${detected.project.type}  # nodejs/maven/gradle/make/generic`);
+      lines.push('');
+      lines.push('commands:');
+      if (c.build) lines.push(`  build: "${c.build}"`);
+      if (c.test) lines.push(`  test: "${c.test}"`);
+      if (c.lint) lines.push(`  lint: "${c.lint}"`);
+      lines.push('');
+      lines.push('# 测试策略：full=全量测试, module=只测变更模块, skip=跳过测试');
+      lines.push('test_strategy: module');
+      lines.push('');
+      lines.push('# 模块测试路径映射（可选）');
+      lines.push('# module_paths:');
+      lines.push('#   user-service: "user/"');
+      lines.push('#   order-service: "order/"');
+      const yamlText = lines.join('\n') + '\n';
+
+      // 原子写：mkdir -p specRoot → 写 tmp → rename
+      mkdirSync(specRoot, { recursive: true });
+      const tmpPath = localYamlPath + '.tmp';
+      writeFileSync(tmpPath, yamlText, 'utf8');
+      renameSync(tmpPath, localYamlPath);
+
+      console.log(`✅ 已生成 local.yaml (type: ${detected.project.type})`);
+      console.log(`   路径: ${localYamlPath}`);
       break;
     }
     default:
