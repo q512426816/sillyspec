@@ -35,6 +35,20 @@ function gitQuiet(cwd, args) {
 }
 
 /**
+ * 过滤掉 worktree 基础设施文件（非交付物），让 apply 只关心真正的变更产出：
+ *   - meta.json：worktree 元数据，baseline commit 中被跟踪、working-tree 被 CLI 改写
+ *     （provisioning→linked 等）。它必须保持 modified（其 baselineCommit 字段是 apply diff
+ *     的锚点，保证 baseline overlay 文件不被误判为变更）。若不排除，modified-tracked 的
+ *     meta.json 会落入 changedFiles，触发「不在 design.md 清单」误判，导致每个 execute 的
+ *     assess 恒 BLOCKED。
+ *   - .sillyspec/：变更文档 / 运行时产物，不属于源码交付。
+ * 对 modified-tracked（git diff）与 untracked（ls-files --others）一视同仁。
+ */
+export function filterDeliverableFiles(files) {
+  return files.filter(f => !f.startsWith('.sillyspec/') && f !== 'meta.json');
+}
+
+/**
  * 获取文件在 git 中的 blob hash（基于某个 commit/tree）
  * @param {string} cwd - git 工作区路径
  * @param {string} treeish - commit hash、分支等
@@ -106,11 +120,12 @@ export function applyWorktree(changeName, { cwd, checkOnly = false } = {}) {
 
     // untracked 新文件（diffBase 中不存在的文件）
     const untrackedRaw = gitQuiet(worktreePath, `ls-files --others --exclude-standard`);
-    const untrackedFiles = untrackedRaw
-      ? untrackedRaw.split('\n').filter(Boolean).filter(f => !f.startsWith('.sillyspec/') && f !== 'meta.json')
-      : [];
+    const untrackedFiles = untrackedRaw ? untrackedRaw.split('\n').filter(Boolean) : [];
 
-    changedFiles = [...new Set([...statusFiles, ...untrackedFiles])];
+    // 排除 worktree 基础设施文件（meta.json / .sillyspec/，见 filterDeliverableFiles）。
+    // 对 modified-tracked（statusFiles）与 untracked 一视同仁——否则 modified 的 meta.json
+    // 会被误算入 changedFiles，触发 design.md 清单校验失败（assess 恒 BLOCKED）。
+    changedFiles = filterDeliverableFiles([...new Set([...statusFiles, ...untrackedFiles])]);
   } catch (e) {
     result.errors.push(`获取变更文件列表失败: ${e.message}`);
     return result;
