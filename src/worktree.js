@@ -453,6 +453,16 @@ export class WorktreeManager {
       return { branch: existingMeta.branch, worktreePath: existingMeta.worktreePath, baseHash: existingMeta.baseHash, mode: existingMeta.mode }
     }
 
+    // 供给 deps（与 native worktree 路径一致）。in-place-fallback 模式漏写 depsStatus 会致
+    // enforceDepsGate（run.js）把 undefined 当 unknown 阻断 execute --done，死锁无法推进。
+    // 见 docs/sillyspec/execute-inplace-deps-gate.md（2026-07-08 发现）。
+    let deps = {}
+    try {
+      deps = provisionDeps(worktreePath, this.cwd, { specBase: join(this.cwd, '.sillyspec') }) || {}
+    } catch (e) {
+      deps = { depsStatus: 'failed', depsError: `provisionDeps crashed: ${e.message}` }
+    }
+
     // 硬规则：禁止 self-overlay（source 和 target 相同时 overlay 必然冲突）
     const resolvedSource = resolve(this.cwd)
     const resolvedTarget = resolve(worktreePath)
@@ -474,6 +484,7 @@ export class WorktreeManager {
         baselineFiles: [],
         baselineCommit: null,
         baselineHash: null,
+        ...deps,
       }
       if (!existsSync(this.worktreeBase)) mkdirSync(this.worktreeBase, { recursive: true })
       const metaDir = join(this.worktreeBase, name)
@@ -510,6 +521,7 @@ export class WorktreeManager {
       baselineFiles,
       baselineCommit,
       baselineHash,
+      ...deps,
     };
 
     // in-place 模式下 meta 写入 worktreeBase（避免污染主工作区）
