@@ -9,7 +9,7 @@
  * - 拦截提示针对每个阶段给出具体修复建议
  */
 
-import { existsSync, readFileSync } from 'fs'
+import { existsSync, readFileSync, readdirSync } from 'fs'
 import path from 'path'
 
 // ── 常量 ──
@@ -555,6 +555,72 @@ function buildStageHint(stage) {
   return hint.join('\n')
 }
 
+/**
+ * 读取并合并所有活跃 quick session 的 guard（D-002@v1）
+ *
+ * 为什么合并而不是读单个 session：
+ * - hook 是独立进程（agent 写文件时触发，非 quick CLI），无法可靠知道当前 agent 属于哪个 quick session。
+ * - `current-quick-run-id` 是单文件多会话覆盖，读到的可能是他者 session。
+ * - 对策：读所有活跃 quick-sessions 下各 session 的 guard.json，合并 baselineFiles / allowedFiles 并集。
+ *   多会话时保护范围过宽（保护所有 session 的 baseline），但不误拦任何 session 的合法写——安全侧倾斜。
+ *
+ * 兼容：旧版单文件 `.runtime/quick-guard.json`（task-03 前格式，无 session 目录）也并入合并。
+ *
+ * @param {string} projectRoot
+ * @returns {{ baselineFiles: string[], allowedFiles: string[], hasGuard: boolean }}
+ *   - baselineFiles/allowedFiles 为所有活跃 session 的并集（去重，保持首次出现顺序）
+ *   - hasGuard 表示是否存在任何 guard（用于区分"无 quick 任务"与"有 guard 但列表为空"）
+ */
+function readAllQuickGuards(projectRoot) {
+  const baselineSet = new Set()
+  const allowedSet = new Set()
+  let hasGuard = false
+
+  const sessionsDir = path.join(projectRoot, '.sillyspec', '.runtime', 'quick-sessions')
+  let sessionDirs = []
+  try {
+    const entries = readdirSync(sessionsDir, { withFileTypes: true })
+    sessionDirs = entries.filter(e => e.isDirectory()).map(e => e.name)
+  } catch { /* 目录不存在或不可读 → 无活跃 session */ }
+
+  for (const sessionName of sessionDirs) {
+    const guardFile = path.join(sessionsDir, sessionName, 'guard.json')
+    if (!existsSync(guardFile)) continue
+    let guard
+    try {
+      guard = JSON.parse(readFileSync(guardFile, 'utf8'))
+    } catch { continue } // 损坏的 guard.json 跳过（不污染并集）
+    hasGuard = true
+    for (const f of Array.isArray(guard.baselineFiles) ? guard.baselineFiles : []) {
+      if (typeof f === 'string' && f) baselineSet.add(f)
+    }
+    for (const f of Array.isArray(guard.allowedFiles) ? guard.allowedFiles : []) {
+      if (typeof f === 'string' && f) allowedSet.add(f)
+    }
+  }
+
+  // 兼容：旧版单文件 quick-guard.json（task-03 前格式，迁移期残留）
+  const legacyGuardFile = path.join(projectRoot, '.sillyspec', '.runtime', 'quick-guard.json')
+  if (existsSync(legacyGuardFile)) {
+    try {
+      const guard = JSON.parse(readFileSync(legacyGuardFile, 'utf8'))
+      hasGuard = true
+      for (const f of Array.isArray(guard.baselineFiles) ? guard.baselineFiles : []) {
+        if (typeof f === 'string' && f) baselineSet.add(f)
+      }
+      for (const f of Array.isArray(guard.allowedFiles) ? guard.allowedFiles : []) {
+        if (typeof f === 'string' && f) allowedSet.add(f)
+      }
+    } catch { /* 旧文件损坏，忽略 */ }
+  }
+
+  return {
+    baselineFiles: [...baselineSet],
+    allowedFiles: [...allowedSet],
+    hasGuard,
+  }
+}
+
 // ── 公共接口 ──
 
 /**
@@ -595,26 +661,20 @@ export function shouldBlockWrite(filePath, cwd) {
     }
   }
 
-  // quick 阶段：检查 quick-guard.json 的 baselineFiles
+  // quick 阶段：检查 baselineFiles（合并所有活跃 session guard 并集，D-002@v1）
   if (stage === 'quick') {
-    try {
-      const guardFile = path.join(projectRoot, '.sillyspec', '.runtime', 'quick-guard.json')
-      const guard = JSON.parse(readFileSync(guardFile, 'utf8'))
-      const baselineFiles = guard.baselineFiles || []
-      const relTarget = path.relative(projectRoot, absPath)
-      // 如果目标是 baseline protected file，阻止写入
-      if (baselineFiles.some(f => relTarget === f || relTarget.startsWith(f + path.sep))) {
-        return {
-          blocked: true,
-          reason: [
-            `⚠️ quick 变更边界保护：${relTarget} 是 baseline 文件，不允许覆盖。`,
-            `当前 quick 任务不能修改任务开始前已修改的文件。`,
-            `如确需修改，请在 quick 完成后单独处理此文件。`,
-          ].join('\n')
-        }
+    const { baselineFiles } = readAllQuickGuards(projectRoot)
+    const relTarget = path.relative(projectRoot, absPath)
+    // 如果目标是 baseline protected file，阻止写入（并集 = 保护所有 session 的 baseline）
+    if (baselineFiles.some(f => relTarget === f || relTarget.startsWith(f + path.sep))) {
+      return {
+        blocked: true,
+        reason: [
+          `⚠️ quick 变更边界保护：${relTarget} 是 baseline 文件，不允许覆盖。`,
+          `当前 quick 任务不能修改任务开始前已修改的文件。`,
+          `如确需修改，请在 quick 完成后单独处理此文件。`,
+        ].join('\n')
       }
-    } catch {
-      // quick-guard.json 不存在（非 quick 任务或未记录），放行
     }
     return { blocked: false }
   }
@@ -679,24 +739,19 @@ export function shouldBlockBash(command, cwd) {
     }
   }
 
-  // quick 阶段：检查 quick-guard.json
+  // quick 阶段：检查合并后的 baselineFiles（所有活跃 session guard 并集，D-002@v1）
   if (stage === 'quick') {
     // 危险黑名单仍然拦截
     if (matchDangerBlacklist(command)) {
       return { blocked: true, reason: `dangerous command blocked: ${command.trim()}` }
     }
-    // 检查命令是否会覆盖 baseline files
-    try {
-      const guardFile = path.join(projectRoot, '.sillyspec', '.runtime', 'quick-guard.json')
-      const guard = JSON.parse(readFileSync(guardFile, 'utf8'))
-      const baselineFiles = guard.baselineFiles || []
-      // 检查命令中是否引用了 baseline file
-      for (const f of baselineFiles) {
-        if (command.includes(f) && (command.includes('> ') || command.includes(' tee ') || command.includes('sed ') || command.includes('mv '))) {
-          return { blocked: true, reason: `quick 变更边界保护：命令可能覆盖 baseline 文件 ${f}` }
-        }
+    // 检查命令是否会覆盖 baseline files（并集 = 保护所有 session 的 baseline）
+    const { baselineFiles } = readAllQuickGuards(projectRoot)
+    for (const f of baselineFiles) {
+      if (command.includes(f) && (command.includes('> ') || command.includes(' tee ') || command.includes('sed ') || command.includes('mv '))) {
+        return { blocked: true, reason: `quick 变更边界保护：命令可能覆盖 baseline 文件 ${f}` }
       }
-    } catch {}
+    }
     return { blocked: false }
   }
 

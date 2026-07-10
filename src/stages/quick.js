@@ -8,6 +8,12 @@ export const definition = {
       name: '理解任务',
       prompt: `解析任务参数，加载项目上下文。
 
+### 📌 本 quick 会话 sessionId: \`<quick-session-id>\`
+- CLI 是短进程，run 与 done 是独立进程，sessionId 靠 \`--change\` 跨进程传递
+- **完成每个 step 用**：\`sillyspec run quick --done --change <quick-session-id> --output "..."\`
+  - 多会话并发时**必须带 \`--change <quick-session-id>\`**，否则可能命中他者会话的状态
+  - 不带 \`--change\` 时 fallback 读 \`current-quick-run-id\`（单会话兼容；多会话不可靠）
+
 ### 操作
 1. 检查关联变更（\`<linked-changes>\`，逗号分隔的变更名列表；显示「（无）」= 不关联变更），确定记录方式
 2. 理解任务：模糊则问一个问题确认
@@ -80,6 +86,11 @@ quicklog 已创建（必须放在输出的第一行确认）+ 任务理解 + 上
     {
       name: '暂存和更新记录',
       prompt: `Git 暂存并更新任务记录。
+
+### 📌 收尾确认 — sessionId: \`<quick-session-id>\`
+- 本步骤是最后一步，完成后 quick 会话即结束
+- **完成本 step 用**：\`sillyspec run quick --done --change <quick-session-id> --output "暂存和记录确认"\`
+  - 多会话并发**必须带 \`--change <quick-session-id>\`**，不带会 fallback 读 \`current-quick-run-id\` 可能命中他者会话
 
 ### 操作
 1. 查看 \`git status --porcelain\`，确认只包含本次 quick 相关文件

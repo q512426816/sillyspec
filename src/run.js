@@ -6,7 +6,7 @@
  */
 import { basename, join, resolve, dirname, relative, isAbsolute } from 'path'
 import { existsSync, readdirSync, mkdirSync, writeFileSync, appendFileSync, readFileSync, rmSync, statSync } from 'fs'
-import { randomBytes } from 'crypto'
+import { randomBytes, randomUUID } from 'crypto'
 import { createRequire } from 'module'
 const require = createRequire(import.meta.url)
 import { ProgressManager } from './progress.js'
@@ -706,16 +706,23 @@ async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjec
   if (changeName && promptText.includes('<change-name>')) {
     promptText = promptText.replace(/<change-name>/g, changeName)
   }
-  // 替换 <linked-changes> 占位符（quick 阶段：从 .runtime/quick-guard.json 读关联变更）
+  // 替换 <quick-session-id> 占位符（quick 阶段专用：sessionId == changeName == quick-<uuid8>，
+  // 见 runStage 参数解析 quickSessionId 生成。告知 agent 本会话 id + --done 需带 --change）
+  if (changeName && promptText.includes('<quick-session-id>')) {
+    promptText = promptText.replace(/<quick-session-id>/g, changeName)
+  }
+  // 替换 <linked-changes> 占位符（quick 阶段：从 .runtime/quick-sessions/<sessionId>/guard.json 读关联变更）
   if (promptText.includes('<linked-changes>')) {
     const specBaseLc = platformOpts?.specRoot || join(cwd, '.sillyspec')
     let linkedChanges = []
     try {
-      const guardFile = join(specBaseLc, '.runtime', 'quick-guard.json')
-      if (existsSync(guardFile)) {
-        const guard = JSON.parse(readFileSync(guardFile, 'utf8'))
-        linkedChanges = Array.isArray(guard.linkedChanges) ? guard.linkedChanges : []
-      }
+      // D-002：guard 按 session 存。changeName == quick-<uuid8>（见 runStage 参数解析）。回退读旧单文件（兼容 task-03 前）
+      const sessionGuardFile = join(specBaseLc, '.runtime', 'quick-sessions', changeName, 'guard.json')
+      const legacyGuardFile = join(specBaseLc, '.runtime', 'quick-guard.json')
+      const guard = existsSync(sessionGuardFile)
+        ? JSON.parse(readFileSync(sessionGuardFile, 'utf8'))
+        : (existsSync(legacyGuardFile) ? JSON.parse(readFileSync(legacyGuardFile, 'utf8')) : null)
+      if (guard) linkedChanges = Array.isArray(guard.linkedChanges) ? guard.linkedChanges : []
     } catch {}
     const display = linkedChanges.length > 0 ? linkedChanges.join(', ') : '（无）'
     promptText = promptText.replace(/<linked-changes>/g, display)
@@ -1379,12 +1386,52 @@ export async function runCommand(args, cwd, specDir = null) {
   if (explicitLinked !== null) {
     linkedChanges = explicitLinked
   }
-  // quick 的 progress 键固定走 'default'：归属语义已由 linkedChanges 承担（→ quick-guard.json
-  // → <linked-changes> 占位符注入 prompt）。progress 不能走 pm.read(cwd, null) 的自动检测——
-  // 多活跃 change 项目里 quick 步骤进度会随活跃 change 增减在各 change/default 间漂移，
-  // 表现为 --done 时「回退」到更早步骤。固定 default 后无论是否带 --change 都稳定。
+  // quick 会话隔离（D-001@v1 + D-003@v1 + §4.4 跨进程传递）：每会话用 sessionId 作 changeName，
+  // DB 分行 progress.quick-<uuid8>，避免并行 quick 会话共享单行 progress.default.quick 互相覆盖。
+  // sessionId = crypto.randomUUID 前 8 hex（摒弃旧 quick-YYYYMMDD-HHMMSS 时间戳，同秒并发撞）。
+  // crypto.randomUUID 从 node:crypto import（兼容 engines node>=18，不依赖 Node 19+ 全局）。
+  //
+  // --done 跨进程恢复 sessionId 的优先级（§4.4）：
+  //   1. --change quick-<uuid8>（单值且匹配 sessionId 形态）→ 精确指定本会话 sessionId
+  //      （quick 的 --change 历史被复用为 linkedChanges 见上 1370-1377；此处对「恰好一个 quick-<8hex>」
+  //       特例识别为 sessionId，多值/不匹配仍走 linkedChanges 语义，向后兼容）
+  //   2. 未识别出 sessionId 且为 --done → fallback 读 .runtime/current-quick-run-id（单会话兼容；
+  //      多会话时可能拿到他者，文档声明建议带 --change）
+  //   3. 仍读不到 → 生成新 UUID（兼容旧行为；进度可能命中空行，由后续 pm.read 兜底）
+  const QUICK_SID_RE = /^quick-[0-9a-f]{8}$/
+  let quickSessionId = null
   if (stageName === 'quick') {
-    changeName = 'default'
+    // 1373-1376 已把 quick 的 --change 值清进 linkedChanges、changeName 置 null。
+    // 此处回看 --change 原始值：若恰好是单个 quick-<8hex> → 识别为本会话 sessionId（精确恢复），
+    // 并撤销把它当 linkedChanges 的误判。多值或不匹配 → 维持 linkedChanges 语义（旧兼容）。
+    const rawChange = changeIdx !== -1 && flags[changeIdx + 1] ? flags[changeIdx + 1].trim() : null
+    const rawIsSingleSid = rawChange && rawChange.indexOf(',') === -1 && QUICK_SID_RE.test(rawChange)
+    if (rawIsSingleSid) {
+      // --done --change quick-<uuid8>：精确恢复（撤销 1373-1376 把它误当 linkedChanges）
+      quickSessionId = rawChange
+      changeName = rawChange
+      linkedChanges = []
+    } else if (!changeName) {
+      // 未精确指定：非 --done 必生成新 sessionId；--done 先 fallback current-quick-run-id，读不到再生成
+      const isDoneLike = isDone || isStatus || isSkip || isReset || isReopen
+      if (isDoneLike) {
+        try {
+          const runtimeRoot = platformOpts.runtimeRoot || join(specRoot, '.runtime')
+          const idFile = join(runtimeRoot, 'current-quick-run-id')
+          if (existsSync(idFile)) {
+            const v = readFileSync(idFile, 'utf8').trim()
+            if (QUICK_SID_RE.test(v)) quickSessionId = v
+          }
+        } catch {}
+      }
+      if (!quickSessionId) {
+        quickSessionId = 'quick-' + randomUUID().slice(0, 8)
+      }
+      changeName = quickSessionId
+    } else {
+      // 用户显式传了非 sessionId 形态的变更名 → 尊重，不生成 UUID（旧兼容路径）
+      quickSessionId = changeName
+    }
   }
 
   // 解析 --files a.js,b.js（quick 专用：显式声明 allowedFiles）
@@ -1432,13 +1479,16 @@ export async function runCommand(args, cwd, specDir = null) {
   // 关键：--done 收尾时复用首次 run 持久化的 linkedChanges，不在管道/CI 下重复弹交互 prompt。
   // explicitLinked === null 且未传 --change 时才进入此分支（显式 --linked-changes none 不应触发交互）。
   if (stageName === 'quick' && explicitLinked === null && linkedChanges.length === 0) {
-    const guardFile = join(specRoot, '.runtime', 'quick-guard.json')
+    // D-002：guard 按 session 存（.runtime/quick-sessions/<sessionId>/guard.json）。
+    // sessionId == changeName == quick-<uuid8>（上面参数解析已确定）。回退读旧单文件 quick-guard.json（task-03 前兼容）。
     let persistedLinked = null
     try {
-      if (existsSync(guardFile)) {
-        const g = JSON.parse(readFileSync(guardFile, 'utf8'))
-        if (Array.isArray(g.linkedChanges)) persistedLinked = g.linkedChanges
-      }
+      const sessionGuardFile = join(specRoot, '.runtime', 'quick-sessions', changeName, 'guard.json')
+      const legacyGuardFile = join(specRoot, '.runtime', 'quick-guard.json')
+      const g = existsSync(sessionGuardFile)
+        ? JSON.parse(readFileSync(sessionGuardFile, 'utf8'))
+        : (existsSync(legacyGuardFile) ? JSON.parse(readFileSync(legacyGuardFile, 'utf8')) : null)
+      if (g && Array.isArray(g.linkedChanges)) persistedLinked = g.linkedChanges
     } catch {}
     if (persistedLinked) {
       linkedChanges = persistedLinked
@@ -1582,9 +1632,10 @@ export async function runCommand(args, cwd, specDir = null) {
     }
   }
 
-  // quick 启动（非 --done）：reset steps + 生成 quickRunId，避免多会话共享 progress.default.quick
-  // 继承并行会话的 step1（会话 B 复用会话 A 的 ql，本会话改动无 ql 记录）。C-实用方案：
-  // 每次 quick 启动 reset steps（逻辑隔离，本会话从 step1 重跑建独立 ql）+ 写 current-quick-run-id。
+  // quick 启动（非 --done）：reset steps + 写 current-quick-run-id（本会话 sessionId，作 --done fallback）。
+  // sessionId 已在参数解析阶段生成（quickSessionId == changeName == quick-<uuid8>），
+  // 这里复用同一值写 current-quick-run-id，保证两处一致。
+  // 旧 quick-YYYYMMDD-HHMMSS 时间戳已摒弃（D-003@v1：同秒并发撞）。
   if (stageName === 'quick' && !isDone && !isStatus && !isSkip && !isReset && !isReopen) {
     const qStage = progress.stages?.quick
     if (qStage?.steps?.length) {
@@ -1592,13 +1643,14 @@ export async function runCommand(args, cwd, specDir = null) {
       qStage.status = 'in-progress'
     }
     try {
-      const now = new Date()
-      const pad = (n) => String(n).padStart(2, '0')
-      const quickRunId = `quick-${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`
       const runtimeRoot = platformOpts.runtimeRoot || join(specRoot, '.runtime')
       mkdirSync(runtimeRoot, { recursive: true })
-      writeFileSync(join(runtimeRoot, 'current-quick-run-id'), quickRunId)
+      writeFileSync(join(runtimeRoot, 'current-quick-run-id'), quickSessionId + '\n')
     } catch {}
+    // 显式告知 agent 本会话 sessionId + --done 需带 --change（CLI 短进程，run/done 独立进程，
+    // sessionId 靠 --change 跨进程传递；不带 --change 时 fallback 读 current-quick-run-id，多会话不可靠）
+    console.log(`📌 本 quick 会话 sessionId: ${quickSessionId}`)
+    console.log(`   完成时用: sillyspec run quick --done --change ${quickSessionId} --output "..."`)
   }
 
   // 确保步骤已初始化
@@ -1909,6 +1961,7 @@ async function runStage(pm, progress, stageName, cwd, changeName, skipApproval =
       const allowNew = quickOpts?.isAllowNew || false
       const forceBaseline = quickOpts?.isForceBaseline || false
       progress.quickGuard = {
+        sessionId: changeName,
         name_zh: '快速任务守卫',
         baselineCommit: safeGit(cwd, ['rev-parse', 'HEAD']).value,
         baselineFiles,
@@ -1918,8 +1971,11 @@ async function runStage(pm, progress, stageName, cwd, changeName, skipApproval =
         linkedChanges: Array.isArray(quickOpts?.linkedChanges) ? quickOpts.linkedChanges : [],
         startedAt: new Date().toISOString(),
       }
-      // 写入 quick-guard.json 供 worktree-guard hook 读取
-      const guardFile = join(specBase, '.runtime', 'quick-guard.json')
+      // 写入 .runtime/quick-sessions/<sessionId>/guard.json 供 worktree-guard hook 读取
+      // （D-002：按 session 存，多会话各自 guard 不互覆盖。runStage 作用域内 sessionId == changeName == quick-<uuid8>，见 §4.4/4.5）
+      const sessionGuardDir = join(specBase, '.runtime', 'quick-sessions', changeName)
+      mkdirSync(sessionGuardDir, { recursive: true })
+      const guardFile = join(sessionGuardDir, 'guard.json')
       writeFileSync(guardFile, JSON.stringify(progress.quickGuard, null, 2))
       const parts = [`${baselineFiles.length} 个已有脏文件`]
       if (allowedFiles.length > 0) parts.push(`${allowedFiles.length} 个 allowedFiles`)
@@ -2922,9 +2978,17 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
           process.exit(1)
         }
         try {
+          // §4.6 清理：删本会话 session 目录 .runtime/quick-sessions/<sessionId>/（D-002 guard 按 session 存）。
+          // sessionId == changeName == quick-<uuid8>（completeStep 作用域内 changeName 已解构自 options，--done 恢复后确定，见 §4.4）。
+          // 兼容兜底：同时清理旧版单文件 quick-guard.json（task-03 前 guard 写单文件，老仓库可能残留）。
           const { unlinkSync } = await import('fs')
+          const runtimeBase = platformOpts.runtimeRoot || join(specBase, '.runtime')
+          if (changeName) {
+            const sessionDir = join(runtimeBase, 'quick-sessions', changeName)
+            if (existsSync(sessionDir)) rmSync(sessionDir, { recursive: true, force: true })
+          }
           const guardFile = join(specBase, '.runtime', 'quick-guard.json')
-          unlinkSync(guardFile)
+          if (existsSync(guardFile)) unlinkSync(guardFile)
         } catch {}
         progress.lastQuickReview = review
         delete progress.quickGuard
