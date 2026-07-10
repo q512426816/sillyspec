@@ -221,7 +221,7 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot } 
         id: 'verify-test',
         ok: vt.status !== 'failed',
         errors: vt.status === 'failed' ? [`测试失败: ${vt.reason || ''}`] : [],
-        warnings: vt.status === 'skipped' ? ['测试被跳过'] : [],
+        warnings: vt.status === 'skipped' ? ['⚠️ verify-test SKIPPED — gate 未核验测试（local.yaml 未配置 commands.test 或显式无测试）。本次 gate 结论不含测试客观核验，driver 不应据 exit 0 判定测试通过；integration-critical 变更应在 verify 阶段降级 FAIL'] : [],
         data: {
           status: vt.status,
           exitCode: vt.exitCode,

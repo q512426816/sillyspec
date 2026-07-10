@@ -15,7 +15,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 
 // 测试命令最长执行时间；超时视为失败（防止 CLI 被挂起的测试卡死）
-const TEST_TIMEOUT_MS = 10 * 60 * 1000
+const TEST_TIMEOUT_MS = Number(process.env.SILLYSPEC_TEST_TIMEOUT_MS) || 10 * 60 * 1000
 const OUTPUT_TAIL_CHARS = 4000
 
 /**
