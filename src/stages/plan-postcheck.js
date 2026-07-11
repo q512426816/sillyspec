@@ -80,6 +80,10 @@ function parseAllowedPaths(content) {
  * @returns {boolean}
  */
 function hasAcceptanceCriteria(content) {
+  // 新模板把 goal/implementation/acceptance/verify/constraints 放在 frontmatter
+  // （acceptance: 作为 fm 字段），老格式或人工写的卡片可能用 body 章节。
+  // 两种都认，避免「模板格式」与「postcheck 判定」不一致导致卡片过不了校验。
+  if (/^acceptance:/m.test(content)) return true
   return /##\s*验收标准/.test(content) || /##\s*Acceptance/.test(content)
 }
 
@@ -89,6 +93,8 @@ function hasAcceptanceCriteria(content) {
  * @returns {boolean}
  */
 function hasTddOrVerify(content) {
+  // 同 hasAcceptanceCriteria：新模板用 frontmatter 的 verify: 字段，老格式用 body 章节。
+  if (/^verify:/m.test(content)) return true
   return /##\s*TDD/.test(content) || /##\s*验证/.test(content) || /##\s*Verify/.test(content)
 }
 
@@ -230,13 +236,13 @@ export function validateBlueprintConsistency(changeDir) {
     taskInfo.set(taskId, { dependsOn, allowedPaths, hasAcceptance, hasTdd, file })
 
     if (allowedPaths.length === 0) {
-      errors.push(`${taskId} (${file}): 缺少 allowed_paths`)
+      errors.push(`${taskId} (${file}): frontmatter 缺少 allowed_paths（需非空数组，列出本 task 真实改动的源文件；回归类 task 无源码改动时填被验证的关键入口文件）`)
     }
     if (!hasAcceptance) {
-      errors.push(`${taskId} (${file}): 缺少「验收标准」章节`)
+      errors.push(`${taskId} (${file}): 缺少验收标准——frontmatter 需有 acceptance: 列表字段，或 body 需有「## 验收标准」/「## Acceptance」章节`)
     }
     if (!hasTdd) {
-      warnings.push(`${taskId} (${file}): 缺少 TDD/验证步骤章节`)
+      warnings.push(`${taskId} (${file}): 缺少验证步骤——frontmatter 需有 verify: 字段，或 body 需有「## TDD」/「## 验证」/「## Verify」章节`)
     }
 
     for (const p of allowedPaths) {

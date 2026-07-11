@@ -447,6 +447,10 @@ TaskCard 格式规则（必须严格遵守）：
 - 填写后 plan-postcheck 会做硬对账：consumer 的每个 expects_from[provider].needs 字段必须在对应 provider 的 provides.fields 里，否则 plan 阶段阻断（不进入 execute）
 - 不要把内部实现字段塞进 provides；只暴露给其他 task 的对外契约形状
 - 如果存在 decisions.md，无法覆盖的 D-xxx@vN 在 constraints 中标注
+- **保存前格式自检**（plan-postcheck 会硬校验，不通过到 Step 4 会批量报错，先在这里逐条自查）：
+  - frontmatter 字段齐全：id、title、title_zh、author、created_at、priority、depends_on、blocks、allowed_paths、goal、implementation、acceptance、verify、constraints
+  - allowed_paths 非空（至少一个真实源文件路径；回归类 task 无源码改动时填被验证的关键入口文件）
+  - acceptance 与 verify 都在 frontmatter 内（漏写会被 plan-postcheck 报「缺少验收标准」/「缺少验证步骤」）
 - 写完后用 Write tool 保存到文件
 \`\`\``
   }).join('\n\n')
@@ -478,8 +482,7 @@ ${subagentPrompts}
 
 ## 验收（生成后自查，不另开步骤）
 - 每个 task-N.md 文件存在且非空
-- frontmatter 包含：id、title、author、created_at、priority、depends_on、blocks、allowed_paths
-- body 包含：goal、implementation、acceptance、verify、constraints
+- frontmatter 包含：id、title、author、created_at、priority、depends_on、blocks、allowed_paths、goal、implementation、acceptance、verify、constraints
 - 每个 task 总长度 20~40 行
 - **一致性自查**：
   - allowed_paths 有无冲突
