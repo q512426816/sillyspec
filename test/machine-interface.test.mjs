@@ -589,6 +589,80 @@ console.log('\n--- 8. saveWorkflowRun（平台/本地两分支路径）---')
 }
 
 // ─────────────────────────────────────────
+// 9. --spec-dir 透传 specBase（CLI 接线：derive verify-test 读对 local.yaml）
+//    回归 P3 坑 3 sillyspec 侧：index.js gate/derive case 必须把 --spec-dir 作为
+//    specBase 透传给 runGate/runDerive；漏传则 --spec-dir 对 verify-test 无效。
+//    对照设计：cwd（--dir）下放"注定失败"的 local.yaml，specDir（--spec-dir）下放
+//    成功命令 + progress。透传对 → 读 specDir 成功命令 → passed；透传错 → 读 cwd 失败
+//    命令 → failed。（gate/derive 透传代码对称，见 index.js case 'gate'/'derive'；
+//    此处用 derive verify-test facet 端到端，覆盖 --spec-dir 解析→透传→runVerifyTestCheck 全链路。）
+// ─────────────────────────────────────────
+console.log('\n--- 9. --spec-dir 透传 specBase（derive verify-test 读对 local.yaml）---')
+{
+  const binPath = join(worktreeRoot, 'bin', 'sillyspec.js')
+
+  // cwd（--dir）：.sillyspec 下建 progress + 放"失败 local.yaml"做对照。
+  // runDerive 内部 ProgressManager 无参，progress 永远从 cwd 的 resolveSpecDir 读，
+  // specBase 只影响 local.yaml 读取——透传错时 local.yaml 也回退到 cwd/.sillyspec。
+  const proj = makeTmpDir('mi-specdir-proj-')
+  const projSpec = join(proj, '.sillyspec')
+  mkdirSync(projSpec, { recursive: true })
+  const pm = new ProgressManager({ specDir: projSpec })
+  await pm.init(proj)
+  await pm.initChange(proj, 'c1')
+  writeFileSync(join(projSpec, 'local.yaml'),
+    "commands:\n  test: 'node -e \"process.exit(1)\"'\n")
+
+  // specDir（--spec-dir）：独立目录，只放"成功 local.yaml"（透传对时被读取）
+  const specDir = makeTmpDir('mi-specdir-spec-')
+  mkdirSync(specDir, { recursive: true })
+  writeFileSync(join(specDir, 'local.yaml'), 'commands:\n  test: "node --version"\n')
+
+  // 9a. derive verify-test --spec-dir → 读 specDir 成功命令 → passed
+  {
+    let stdout, status
+    try {
+      stdout = execFileSync('node',
+        [binPath, 'derive', 'verify-test', '--change', 'c1', '--json', '--dir', proj, '--spec-dir', specDir],
+        { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+      status = 0
+    } catch (e) {
+      stdout = e.stdout ? e.stdout.toString() : ''
+      status = e.status ?? 1
+    }
+    let env
+    try { env = JSON.parse(stdout) } catch (e) { env = null }
+    assert(env !== null, `derive --spec-dir stdout 可 JSON.parse（实际 ${stdout.slice(0, 120)}）`)
+    assert(env && env.facet === 'verify-test', 'envelope.facet=verify-test')
+    assert(env && env.data && env.data.status === 'passed',
+      `--spec-dir 透传：读到 specDir 的成功命令 → status=passed（实际 ${env && env.data && env.data.status}；若透传错读 cwd 失败命令会 =failed）`)
+    // resultPath 落在透传的 specDir 下（间接证明 specBase=specDir 生效）
+    assert(env && env.data && env.data.resultPath && env.data.resultPath.includes(specDir),
+      `resultPath 落 specDir 下（实际 ${env && env.data && env.data.resultPath}），证明 specBase 透传`)
+  }
+
+  // 9b. 同一 proj 不带 --spec-dir → 读 cwd 失败命令 → failed
+  //     （唯一变量是 --spec-dir，证明 9a 的 passed 由透传带来）
+  {
+    let stdout, status
+    try {
+      stdout = execFileSync('node',
+        [binPath, 'derive', 'verify-test', '--change', 'c1', '--json', '--dir', proj],
+        { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+      status = 0
+    } catch (e) {
+      stdout = e.stdout ? e.stdout.toString() : ''
+      status = e.status ?? 1
+    }
+    let env
+    try { env = JSON.parse(stdout) } catch (e) { env = null }
+    assert(env !== null, `对照 stdout 可 JSON.parse（实际 ${stdout.slice(0, 120)}）`)
+    assert(env && env.data && env.data.status === 'failed',
+      `无 --spec-dir 对照：读 cwd 失败命令 → status=failed（实际 ${env && env.data && env.data.status}，证明 9a 的 passed 由透传带来）`)
+  }
+}
+
+// ─────────────────────────────────────────
 // 清理 & 汇总
 // ─────────────────────────────────────────
 for (const dir of tmpRoots) {

@@ -320,7 +320,13 @@ async function main() {
         process.exit(2);
       }
       const { runGate } = await import('./machine-interface.js');
-      const { envelope, exitCode } = await withJsonOutput(json, () => runGate(gateStage, gateChange, { cwd: dir }));
+      // --spec-dir 透传 runGate.specBase（gate CLI 接线修复，P3 坑 3 sillyspec 侧）。
+      // runGate 已分离 cwd(跑测试) + specBase(读 local.yaml/spec)，但 gate case 之前
+      // 只传 cwd 致 --spec-dir 对 gate verify 无效。不传 --spec-dir 时 specBase 走默认
+      // resolveSpecDir(cwd)，向后兼容。
+      const gateOpts = { cwd: dir };
+      if (specDir) gateOpts.specBase = specDir;
+      const { envelope, exitCode } = await withJsonOutput(json, () => runGate(gateStage, gateChange, gateOpts));
       if (json) {
         process.stdout.write(JSON.stringify(envelope));
       } else {
@@ -349,7 +355,12 @@ async function main() {
         process.exit(2);
       }
       const { runDerive } = await import('./machine-interface.js');
-      const { envelope, exitCode } = await withJsonOutput(json, () => runDerive(facet, deriveChange, { cwd: dir }));
+      // --spec-dir 透传 runDerive.specBase（与 gate case 对称，P3 坑 3 sillyspec 侧）。
+      // derive verify-test facet 内部同样调 runVerifyTestCheck 依赖 specBase，平台模式
+      // 下需透传；不传 --spec-dir 时走默认 resolveSpecDir(cwd)，向后兼容。
+      const deriveOpts = { cwd: dir };
+      if (specDir) deriveOpts.specBase = specDir;
+      const { envelope, exitCode } = await withJsonOutput(json, () => runDerive(facet, deriveChange, deriveOpts));
       if (json) {
         process.stdout.write(JSON.stringify(envelope));
       } else {
