@@ -1078,8 +1078,12 @@ export class WorktreeManager {
       if (!status) {
         return gitQuiet(worktreePath, 'rev-parse HEAD');
       }
+      // --no-verify：baseline 是锚点不是交付物，只是把主仓库 dirty 文件快照到 worktree
+      // 分支上以便区分「前置 baseline」与「子代理新增改动」。它不该触发项目 pre-commit
+      // hook（如 ruff format），否则主仓库 dirty 文件中任一不达标的会被 hook reformat
+      // 致 commit 失败 → worktree 创建失败 → execute 无法启动。
       execSync(
-        `git commit -m "sillyspec: baseline checkpoint for ${changeName}"`,
+        `git commit --no-verify -m "sillyspec: baseline checkpoint for ${changeName}"`,
         { cwd: worktreePath, encoding: 'utf8', stdio: ['pipe','pipe','pipe'], env }
       );
       const hash = git(worktreePath, 'rev-parse HEAD');
