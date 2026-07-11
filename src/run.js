@@ -315,7 +315,7 @@ function parseModuleMapSimple(content) {
 /**
  * quick 完成审计：对比 baseline 与实际变更
  */
-async function auditQuickCompletion(cwd, guard, options = {}) {
+export async function auditQuickCompletion(cwd, guard, options = {}) {
   const { baselineFiles, allowedFiles = [], allowNew = false, forceBaseline = false } = guard
   const { isConfirm } = options
   const result = { status: 'safe', reasons: [], changedFiles: [], newFiles: [], deletedFiles: [], baselineHit: [] }
@@ -326,6 +326,10 @@ async function auditQuickCompletion(cwd, guard, options = {}) {
     const currentEntries = gitStatus.trim().split('\n').filter(Boolean)
 
     const normalizeGitPath = (p) => p.replace(/\\/g, '/')
+    // step1 启动时记录的全量脏文件 = 预存改动（非本次 quick 产生）。审计必须排除它们，
+    // 否则脏工作区下预存文件持续留在 git status → 命中 baselineFiles → 误判「覆盖 baseline」
+    // → 永远 blocked（--force-baseline 也救不回来，因为 status 判定看 baselineHit 数组）。
+    const baselineFilesSet = new Set((baselineFiles || []).map(f => normalizeGitPath(f)))
     const isQuickMetadata = (p) => {
       const file = normalizeGitPath(p)
       return file.startsWith('.sillyspec/quicklog/')
@@ -354,6 +358,9 @@ async function auditQuickCompletion(cwd, guard, options = {}) {
       const status = entry.slice(0, 2).trim()
       const file = normalizeGitPath(entry.slice(3).trim())
       if (!file || file.startsWith('??. ')) continue
+
+      // 预存脏文件：step1 baseline 已记录，非本次 quick 产生，跳过审计
+      if (baselineFilesSet.has(file)) continue
 
       result.changedFiles.push(file)
       if (status === 'D' || status === ' D') result.deletedFiles.push(file)
@@ -404,10 +411,11 @@ async function auditQuickCompletion(cwd, guard, options = {}) {
       }
     }
 
-    // 判定结果
-    if (result.baselineHit.length > 0 || result.deletedFiles.length > 0 || result.reasons.some(r => r.startsWith('危险') || r.startsWith('删除'))) {
+    // 判定结果（force-baseline 降级 baselineHit → 非 blocked；allow-new 降级新增文件 → 非 warning。
+    // reasons 文案本就受这两个 flag 控制，但原判定直接看数组长度，致 flag 对 status 失效。）
+    if ((!forceBaseline && result.baselineHit.length > 0) || result.deletedFiles.length > 0 || result.reasons.some(r => r.startsWith('危险') || r.startsWith('删除'))) {
       result.status = 'blocked'
-    } else if (result.newFiles.length > 0 || (allowedFiles.length > 0 && result.reasons.some(r => r.startsWith('超出')))) {
+    } else if ((!allowNew && result.newFiles.length > 0) || (allowedFiles.length > 0 && result.reasons.some(r => r.startsWith('超出')))) {
       result.status = 'warning'
     }
 
