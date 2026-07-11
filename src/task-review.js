@@ -179,7 +179,7 @@ export function validateTaskReviews(opts) {
         if (isTaskLowRisk(changeDir, taskId)) {
           warnings.push(`${taskId}: 缺少 review.json — task 声明 low_risk: true，已豁免评审（type-only/机械迁移）`)
         } else {
-          errors.push(`${taskId}: 缺少 review.json — task 未经过评审`)
+          errors.push(`${taskId}: 缺少 review.json — task 未经过评审（期望路径：${reviewPath}，execute run ID: ${executeRunId}）`)
         }
       }
       continue
@@ -447,7 +447,7 @@ export function ensureTaskReviewDir(runtimeRoot, executeRunId, taskId) {
  * 打印校验结果
  * @param {{ ok: boolean, errors: string[], warnings: string[], requiredEvidence: Array }} result
  */
-export function printReviewResult(result) {
+export function printReviewResult(result, context = {}) {
   if (result.ok && result.warnings.length === 0) {
     console.log('\n✅ Task Review Gate — 所有任务评审通过')
     return
@@ -458,7 +458,10 @@ export function printReviewResult(result) {
     for (const err of result.errors) {
       console.error(`   - ${err}`)
     }
-    console.error('\n   提示：为缺失/失败的任务补充 review.json，然后重新 --done')
+    const hint = context.runtimeRoot && context.executeRunId
+      ? `期望路径：${context.runtimeRoot}/execute-runs/${context.executeRunId}/tasks/<task-XX>/review.json`
+      : '为缺失/失败的任务补充 review.json'
+    console.error(`\n   提示：${hint}，然后重新 --done`)
   }
 
   if (result.warnings.length > 0) {

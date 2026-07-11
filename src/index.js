@@ -632,12 +632,13 @@ SillySpec worktree — git worktree 隔离管理
         }
         case 'apply': {
           if (!wtName) {
-            console.error('❌ 用法: sillyspec worktree apply <change-name> [--check-only]');
+            console.error('❌ 用法: sillyspec worktree apply <change-name> [--check-only] [--merge]');
             process.exit(1);
           }
           const checkOnly = args.includes('--check-only');
+          const merge = args.includes('--merge');
           const { applyWorktree } = await import('./worktree-apply.js');
-          const result = applyWorktree(wtName, { cwd: dir, checkOnly });
+          const result = applyWorktree(wtName, { cwd: dir, checkOnly, merge });
 
           if (result.errors.length > 0) {
             console.error(`❌ 校验失败:`);
@@ -657,6 +658,8 @@ SillySpec worktree — git worktree 隔离管理
             for (const f of result.changedFiles) {
               console.log(`   ${f}`);
             }
+          } else if (result.merged) {
+            console.log(`✅ 已通过 git merge 应用变更（baseline 漂移降级，引入合并提交）${result.mergeSummary ? '：' + result.mergeSummary : ''}`);
           } else {
             console.log(`✅ 已应用 ${result.changedFiles.length} 个文件变更`);
           }
@@ -710,6 +713,7 @@ SillySpec worktree — git worktree 隔离管理
             console.log('Action: blocked');
             console.log('   → 检查变更: sillyspec worktree diff ' + wtName);
             console.log('   → 丢弃变更: sillyspec worktree cleanup ' + wtName);
+            console.log('   → baseline 漂移降级: sillyspec worktree apply ' + wtName + ' --merge');
           }
           break;
         }

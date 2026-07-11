@@ -4,6 +4,7 @@ doc_type: module-card
 module_id: stages
 author: qinyi
 created_at: 2026-06-04T16:55:00+08:00
+updated_at: 2026-07-11T21:05:00+08:00
 ---
 
 # stages
@@ -27,6 +28,8 @@ created_at: 2026-06-04T16:55:00+08:00
 
 **核心阶段**（按流程顺序）：brainstorm → propose → plan → execute → verify → archive
 **辅助阶段**：scan、quick、explore、status、doctor
+
+**execute prompt 路径约定**（2026-07-11 占位符化，坑 2）：execute stage prompt 中 review.json / endpoints.json 路径用 `{SPEC_ROOT}/.runtime/` 占位符（非裸 `.sillyspec/.runtime/` 硬编码）。`{SPEC_ROOT}` 由 `run.js` 平台路径重写消费——仓库内模式→`.sillyspec`，平台模式（specDir 指向外部目录）→specDir。修复平台模式下 review.json 落盘路径错位（`execute.js:623/644`）。
 
 当前固定阶段步骤数：
 

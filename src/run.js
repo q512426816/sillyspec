@@ -3321,7 +3321,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
             } catch {}
 
             const reviewResult = validateTaskReviews({ planContent, runtimeRoot, executeRunId, changeDir: planFile, gitDir: reviewGitDir })
-            printReviewResult(reviewResult)
+            printReviewResult(reviewResult, { runtimeRoot, executeRunId })
 
             if (!reviewResult.ok) {
               // Task review 校验失败，阻断 execute 完成
@@ -3329,7 +3329,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
               const uncheckedTasks = reviewResult.errors.filter(e => e.includes('缺少 review.json'))
               if (uncheckedTasks.length > 0) {
                 console.error('\n⚠️  部分任务已在 plan.md 中勾选，但 review.json 不存在。')
-                console.error('   请取消勾选这些任务的 checkbox，或补充对应的 review.json。')
+                console.error(`   请取消勾选这些任务的 checkbox，或补充对应的 review.json（execute run ID: ${executeRunId}）。`)
               }
               rollbackStageCompletion(stageData, steps, currentIdx)
               progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})

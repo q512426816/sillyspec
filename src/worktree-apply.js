@@ -73,7 +73,7 @@ function getFileBlobHash(cwd, treeish, filePath) {
  *   errors: string[]
  * }}
  */
-export function applyWorktree(changeName, { cwd, checkOnly = false } = {}) {
+export function applyWorktree(changeName, { cwd, checkOnly = false, merge = false } = {}) {
   const projectRoot = cwd || process.cwd();
   const wm = new WorktreeManager({ cwd: projectRoot });
   const meta = wm.getMeta(changeName);
@@ -84,6 +84,7 @@ export function applyWorktree(changeName, { cwd, checkOnly = false } = {}) {
     hashMismatchFiles: [],
     patchPath: null,
     errors: [],
+    merged: false,
   };
 
   // --- 1. 校验 worktree 存在 + meta.json 有效 ---
@@ -172,9 +173,13 @@ export function applyWorktree(changeName, { cwd, checkOnly = false } = {}) {
     const raw = `staged:${staged}\nunstaged:${unstaged}\nuntracked:${untracked}`;
     const currentHash = createHash('sha256').update(raw).digest('hex').slice(0, 16);
     if (currentHash !== meta.baselineHash) {
+      if (merge && !checkOnly) {
+        // baseline 漂移 + --merge 降级（D-001）：跳过步骤 5-7（patch 路径），走 git merge
+        return applyByMerge(result, changeName, projectRoot, wm);
+      }
       result.errors.push(
         `主工作区 baseline 已变化（execute 前后不一致），不能直接 apply task.patch。\n` +
-        `建议：重新创建 worktree 或手动检查冲突。\n` +
+        `建议：重新创建 worktree，或用 --merge 降级（git merge sillyspec/${changeName} 替代 patch，会引入合并提交）。\n` +
         `execute 前 baseline: ${meta.baselineHash}\n` +
         `当前 baseline: ${currentHash}`
       );
@@ -317,6 +322,53 @@ export function applyWorktree(changeName, { cwd, checkOnly = false } = {}) {
     try { rmSync(tmpDir, { recursive: true, force: true }); } catch {}
   }
 
+  return result;
+}
+
+/**
+ * baseline 漂移时的 merge 降级路径（D-001）。
+ *
+ * 当主工作区 baseline 在 execute 期间漂移、patch 无法干净应用时，用
+ * `git merge sillyspec/<change>` 替代 patch apply（BRANCH_PREFIX='sillyspec/'，worktree.js:18）。
+ * git merge 比 patch 鲁棒，能处理 baseline 漂移 + 潜在冲突。会引入合并提交
+ * （D-002：与 worktree.md:84「patch 而非 merge 保持线性历史」架构决策的张力——
+ * 仅作 --merge 显式 opt-in，不改变默认 patch 行为）。
+ *
+ * merge 冲突时不自动解决：git merge --abort 回滚到合并前状态 + 报冲突文件列表。
+ *
+ * @param {object} result - applyWorktree 的 result 对象（mutate 后返回）
+ * @param {string} changeName
+ * @param {string} projectRoot - 主仓库根
+ * @param {object} wm - WorktreeManager 实例
+ * @returns {object} result（merged=true 表示走了 merge 降级）
+ */
+function applyByMerge(result, changeName, projectRoot, wm) {
+  try {
+    git(projectRoot, `merge --no-ff sillyspec/${changeName}`);
+    result.merged = true;
+    result.ok = true;
+    try { result.mergeSummary = git(projectRoot, `log --oneline -1`); } catch {}
+    // 成功后自动 cleanup（与 patch 路径步骤 8 一致；分支已合并，删除安全）
+    try {
+      wm.cleanup(changeName);
+    } catch (cleanupErr) {
+      result.warnings = result.warnings || [];
+      result.warnings.push(`cleanup 失败（不影响 merge 结果）: ${cleanupErr.message}`);
+    }
+  } catch (e) {
+    // merge 冲突：先取冲突文件列表，再 abort 回滚（避免半成品合并）
+    let conflictFiles = [];
+    try {
+      const cf = gitQuiet(projectRoot, `diff --name-only --diff-filter=U`);
+      conflictFiles = cf ? cf.split('\n').filter(Boolean) : [];
+    } catch {}
+    try { gitQuiet(projectRoot, `merge --abort`); } catch {}
+    result.errors.push(
+      `git merge sillyspec/${changeName} 冲突，请手动解决。冲突文件：\n` +
+      (conflictFiles.length ? `  ${conflictFiles.join('\n  ')}\n` : `  (未能获取冲突文件列表)\n`) +
+      `已执行 git merge --abort 回滚到合并前状态。`
+    );
+  }
   return result;
 }
 

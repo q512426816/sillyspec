@@ -620,7 +620,7 @@ ${taskList}
 
 **review.json 路径：**
 
-task-XX 对应：.sillyspec/.runtime/execute-runs/{EXECUTE_RUN_ID}/tasks/task-XX/review.json
+task-XX 对应：{SPEC_ROOT}/.runtime/execute-runs/{EXECUTE_RUN_ID}/tasks/task-XX/review.json
 
 本 execute run 的固定 ID 是：{EXECUTE_RUN_ID}
 **所有 task 的 review.json 必须使用这个 ID，不要自行创建新目录。**
@@ -641,7 +641,7 @@ task-XX 对应：.sillyspec/.runtime/execute-runs/{EXECUTE_RUN_ID}/tasks/task-XX
 ### 完成后
 1. 为每个后端 router task，扫描变更文件提取 API 端点 artifact：
    - 在变更文件中搜索所有 router 注册路径（@router.get/post/put/delete）
-   - 将端点清单写入 .sillyspec/.runtime/contract-artifacts/<task-name>/endpoints.json
+   - 将端点清单写入 {SPEC_ROOT}/.runtime/contract-artifacts/<task-name>/endpoints.json
    - 格式: { "task": "task-XX", "type": "backend_endpoints", "endpoints": [{ "method": "GET", "path": "/api/ppm/xxx" }] }
 2. 运行 sillyspec run execute --done --input "用户原始反馈" --output "Wave ${waveIndex} 结果摘要"`
 }
