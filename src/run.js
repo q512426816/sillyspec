@@ -1645,11 +1645,11 @@ export async function runCommand(args, cwd, specDir = null) {
   // 这里复用同一值写 current-quick-run-id，保证两处一致。
   // 旧 quick-YYYYMMDD-HHMMSS 时间戳已摒弃（D-003@v1：同秒并发撞）。
   if (stageName === 'quick' && !isDone && !isStatus && !isSkip && !isReset && !isReopen) {
-    const qStage = progress.stages?.quick
-    if (qStage?.steps?.length) {
-      qStage.steps = qStage.steps.map(s => ({ ...s, status: 'pending', completedAt: null }))
-      qStage.status = 'in-progress'
-    }
+    // 不再无条件 reset steps：原逻辑把任何 quick 非 --done 启动都重置为 pending，致 in-progress
+    // 的 quick 中途查 prompt（sillyspec run quick）丢已 done 的 step 进度（报告
+    // quick-state-reset-platform-mode）。现保留进度——completed 重跑由 runStage 内
+    // currentIdx === -1 自动重置（~1944 行）；in-progress 输出当前 step；全新由
+    // ensureStageSteps 初始化；显式从头用 --reset（已由 !isReset 排除出本分支）。
     try {
       const runtimeRoot = platformOpts.runtimeRoot || join(specRoot, '.runtime')
       mkdirSync(runtimeRoot, { recursive: true })
