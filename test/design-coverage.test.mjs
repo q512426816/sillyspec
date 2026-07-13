@@ -139,6 +139,19 @@ describe('parseFileChangeList', () => {
     assert.deepEqual([...parseFileChangeList(join(dir, 'design.md'))], ['src/b.js'])
   })
 
+  it('标题带编号前缀「6. 文件变更清单」→ 仍能解析（P1-4，修 plan-postcheck 硬阻断）', () => {
+    // 回归：brainstorm Step11 模板鼓励 design 章节带编号（## 6. 文件变更清单），
+    // 旧 FILE_LIST_SECTION_RE 不认编号前缀 → parseFileChangeList 返回空 → plan Step4 误判「清单解析为空」阻断。
+    writeDesign(dir, designMd({ sectionTitle: '6. 文件变更清单', table: [
+      { op: '新增', path: 'src/a.js' },
+      { op: '修改', path: 'src/b.js' },
+    ] }))
+    assert.deepEqual([...parseFileChangeList(join(dir, 'design.md'))].sort(), ['src/a.js', 'src/b.js'])
+    // 括号编号也兼容
+    writeDesign(dir, designMd({ sectionTitle: '6) 文件变更清单', table: [{ op: '修改', path: 'src/c.js' }] }))
+    assert.deepEqual([...parseFileChangeList(join(dir, 'design.md'))], ['src/c.js'])
+  })
+
   it('分类列表格式 B：新增/修改加入，不修改排除', () => {
     writeDesign(dir, designMd({ list: {
       add: ['.sillyspec/docs/x.md'],
@@ -284,6 +297,17 @@ describe('validateDesignFileCoverage', () => {
     const r = validateDesignFileCoverage(dir)
     assert.equal(r.ok, false)
     assert.ok(r.errors.some(e => e.includes('文件变更清单')), r.errors.join('; '))
+  })
+
+  it('design 清单章节带编号（## 6. 文件变更清单）→ 覆盖对账正常，不再误判缺清单（P1-4）', () => {
+    // 回归 2026-07-13 issue：编号前缀让 parseFileChangeList 返回空 → postcheck 抛
+    // 「design file coverage check failed」硬阻断。修复后应与无编号写法一致地通过。
+    writeDesign(dir, designMd({ sectionTitle: '6. 文件变更清单', table: [{ op: '修改', path: 'src/a.js' }] }))
+    writeTask(dir, 'task-01', ['src/a.js'])
+    const r = validateDesignFileCoverage(dir)
+    assert.equal(r.ok, true, JSON.stringify(r.errors))
+    assert.equal(r.uncovered.length, 0)
+    assert.ok(r.designFiles.includes('src/a.js'))
   })
 
   it('fail-open：无 task 卡片 + design 无清单 → ok（none 级别兼容，P1-3）', () => {

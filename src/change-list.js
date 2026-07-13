@@ -70,8 +70,10 @@ export function pathMatches(a, b) {
 /**
  * 「文件变更清单」章节标题同义词（与 src/stage-contract.js 的识别集对齐，
  * 避免两个校验器对「有没有清单」给出矛盾结论）。
+ * 容忍可选编号前缀（`## 6. 文件变更清单` / `## 6) 文件变更清单`）——
+ * brainstorm Step11 模板鼓励 design 章节带编号，编号前缀不应让 plan-postcheck 解析失败。
  */
-const FILE_LIST_SECTION_RE = /^#{2,3}\s*(文件变更清单|变更文件清单|文件清单|File Changes|Files to Change)/im
+const FILE_LIST_SECTION_RE = /^#{2,3}\s*(?:\d+[.)]\s*)?(文件变更清单|变更文件清单|文件清单|File Changes|Files to Change)/im
 
 /**
  * exclude 子标题词集：「不修改/暂缓/保留」类 —— 其下路径从清单移除，不强制 task 覆盖。

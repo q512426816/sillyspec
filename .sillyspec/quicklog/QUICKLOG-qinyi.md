@@ -52,3 +52,15 @@
 结果：Bug1(resetStage 清 execute worktree) Bug2(sleep 0.5 改跨平台 busy-wait) Bug3(幽灵清理补 prune+删分支) Bug5(cleanup 返回 residual + 新增 partial result) Bug6(archive 清 worktree，未 apply 变更保留警告) Bug7(doctor stale fixable 跟随 mode) 缺口3(in-place 模式也清 metaDir)。lint 通过；测试 3 个失败为 pre-existing（stash 对比验证零新增失败）。
 剔除：Bug4(BLOCKED 时保留 worktree 是正确设计，apply 成功会自动 cleanup) 缺口1(崩溃恢复范围大，单列) 缺口2(doctor 两套分叉，pre-existing 进行中)。
 注意：本会话期间改动被提交到 4a5f596，commit message 只描述 --no-worktree 谎言修复，未提 7 bug；同一 commit 还混入 worktree-guard.js / worktree-isolation.md 改动。代码归属以本条目为准。
+
+## ql-20260713-001-3e46 | 2026-07-13 13:12:51 | 修复 design/plan 契约校验两处正则误判（文件清单编号前缀 + 生命周期假豁免）
+状态：已完成
+关联变更：（无）
+文件：src/change-list.js, src/stage-contract.js, test/design-coverage.test.mjs, test/stage-contract.test.mjs, .sillyspec/docs/sillyspec/modules/change-management.md
+结果：(1) src/change-list.js:74 FILE_LIST_SECTION_RE 加可选编号前缀 `(?:\d+[.)]\s*)?`——`## 6. 文件变更清单` 不再让 parseFileChangeList 返回空、plan Step4 postcheck 不再硬阻断。(2) src/stage-contract.js validateBrainstormOutputs 的 declaresNotApplicable：去掉裸单字「无」/「na」与 40 字符宽窗口，改为要求明确多字否定短语且与「生命周期(契约)/lifecycle(contract)」紧邻（分隔符强制）——正常 design 不再被误判「已豁免」，合法豁免仍生效。回归测试：design-coverage 加编号章节单元+覆盖对账两层；stage-contract 加 3 个 lifecycle 用例。node 预验 22 用例全符预期；npm test 全套 50 文件 0 失败；npm run lint 通过。同步更新 change-management 模块文档。
+
+## ql-20260713-002-7628 | 2026-07-13 15:07:23 | 修复 quick 守卫两缺陷：baseline 漏捕 .sillyspec/ untracked + --done 忽略 force/allow flag
+状态：已完成
+关联变更：（无）
+文件：src/run.js, test/quick-baseline-dirty-worktree.test.mjs, .sillyspec/docs/sillyspec/modules/core-engine.md
+结果：Fix A：run.js baseline 录入去掉 `.sillyspec/` 粗过滤（line ~1967），预存 untracked `.sillyspec/changes/` 现进 baseline、audit 经 baselineFilesSet 排除；quick 自身元数据本由 audit 侧 isQuickMetadata 精确豁免，不需粗过滤。Fix B：`--done` 的 `--force-baseline`/`--allow-new` 经 completeStep 选项并入 guard（调用点 1695 + 解构 2617 + 审计调用 2993 取或），原只传 `{isConfirm}` 致 flag 静默无效；并修正审计复审误导文案。回归：quick-baseline-dirty-worktree 加场景 8（预存 untracked → safe）+ 场景 9（对照：本次新建仍 blocked，守卫未弱化）。合并语义 5 用例 + 全套 npm test 50 文件 0 失败 + lint 通过。同步 core-engine 模块文档。注：本会话 step 1 已声明 --force-baseline（动 src/run.js DANGEROUS 文件）；后续会话可改在 --done 传 flag（Fix B 生效）。

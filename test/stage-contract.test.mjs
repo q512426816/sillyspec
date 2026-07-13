@@ -267,6 +267,63 @@ if (!looseBrainstormTrace.warnings.some(w => w.includes('D-404@V1') || w.include
   failed++
 }
 
+// === 生命周期契约表「已豁免」误判回归（2026-07-13 issue）===
+// 旧 declaresNotApplicable 正则用裸单字「无」/「na」+ 40 字符宽窗口，
+// 把「lifecycle 状态无变化」「无需 lifecycle 事件」等正常 design 误判成「显式声明不涉及」→ 假豁免。
+console.log('\n=== 生命周期契约表假豁免回归 ===')
+
+// Case A：design 有完整契约表 + 关键词 + 一句旧正则会误判的假阳性短语
+//   期望：不报「已豁免」警告（表确实在），也不报缺表 error。
+writeFileSync(join(traceDir, 'design.md'), [
+  '# Design', '## 文件变更清单', '',
+  '| 操作 | 文件路径 | 说明 |', '|---|---|---|', '| 修改 | src/lease.js | 续约逻辑 |',
+  '', '## 风险登记', '## 自审', '',
+  '## 7.5 生命周期契约表', '',
+  '| 事件 | 发起方 | 接收方 | 必需字段 | 状态变化 |',
+  '|---|---|---|---|---|',
+  '| renew | lease | daemon | lease_id | active→active |',
+  '',
+  '注：worker 空闲时 lifecycle 状态无变化，不触发重算。',
+  'D-001@v1', ''
+].join('\n'))
+const lcCaseA = runValidators('brainstorm', traceRoot, 'trace')
+if (!lcCaseA.warnings.some(w => w.includes('已豁免')) && lcCaseA.errors.length === 0) {
+  console.log('✅ lifecycle：有契约表 + 假阳性短语「lifecycle 状态无变化」不再被误判「已豁免」')
+} else {
+  console.log('❌ lifecycle Case A 误判', lcCaseA.warnings, lcCaseA.errors)
+  failed++
+}
+
+// Case B：design 有 lifecycle 关键词但无契约表，明确声明「不涉及生命周期契约」
+//   期望：报「已豁免」警告，但不阻断（errors 空）——合法豁免仍生效。
+writeFileSync(join(traceDir, 'design.md'), [
+  '# Design', '## 文件变更清单', '## 风险登记', '## 自审', '',
+  '本变更仅把 daemon 字段重命名为 worker，不涉及生命周期契约（理由：纯 rename，状态机未改）。',
+  'D-001@v1', ''
+].join('\n'))
+const lcCaseB = runValidators('brainstorm', traceRoot, 'trace')
+if (lcCaseB.warnings.some(w => w.includes('已豁免') && w.includes('生命周期')) && lcCaseB.errors.length === 0) {
+  console.log('✅ lifecycle：明确声明「不涉及生命周期契约」→ 正确豁免，不阻断')
+} else {
+  console.log('❌ lifecycle Case B 真实豁免失效', lcCaseB.warnings, lcCaseB.errors)
+  failed++
+}
+
+// Case C：design 有 lifecycle 关键词、无契约表、也未声明豁免（含旧正则会误判的假阳性短语）
+//   期望：阻断（errors 含「生命周期契约表」）——收紧后假阳性短语不能再溜过去。
+writeFileSync(join(traceDir, 'design.md'), [
+  '# Design', '## 文件变更清单', '## 风险登记', '## 自审', '',
+  '本变更引入新的 lease 续约逻辑；worker 空闲时 lifecycle 状态无变化。',
+  'D-001@v1', ''
+].join('\n'))
+const lcCaseC = runValidators('brainstorm', traceRoot, 'trace')
+if (lcCaseC.errors.some(e => e.includes('生命周期契约表'))) {
+  console.log('✅ lifecycle：有关键词无表未豁免 → 阻断（假阳性短语「状态无变化」不再开溜）')
+} else {
+  console.log('❌ lifecycle Case C 未阻断', lcCaseC.warnings, lcCaseC.errors)
+  failed++
+}
+
 rmSync(traceRoot, { recursive: true })
 
 // === StageContract 结构测试 ===

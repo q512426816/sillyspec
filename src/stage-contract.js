@@ -258,8 +258,21 @@ function validateBrainstormOutputs(cwd, changeName, context = {}) {
     const hasLifecycleKeyword = /\b(session|lease|agent[._-]?run|daemon|lifecycle|state[._-]?transition|claim|heartbeat)\b/i.test(content)
     if (hasLifecycleKeyword) {
       // 显式声明本变更不涉及生命周期契约（覆盖字段名/错误码/否定声明场景）：
-      // 历史教训：design 提到 daemon_id 字段名或 daemon_not_owned 错误码就触发，被迫加空表（B3a）
-      const declaresNotApplicable = /(生命周期|lifecycle)[^\n]{0,40}(n\/?a|不涉及|无|none|not[ _-]?applicable)|(不涉及|无需|没有)[^\n]{0,40}(生命周期|lifecycle)/i.test(content)
+      // 历史教训：design 提到 daemon_id 字段名或 daemon_not_owned 错误码就触发，被迫加空表（B3a）。
+      //
+      // 收紧原则（修：正常 design 不应被误判「已豁免」）：
+      //   - 否定词必须是明确多字短语（不涉及/不适用/未涉及/不包含/没有/n\/a/not applicable/none），
+      //     杜绝裸单字「无」与裸「na」在 40 字符宽窗口内任意命中——
+      //     「lifecycle 状态无变化」「本变更无需 lifecycle 事件」「lifecycle canal 不涉及」等不再误判；
+      //   - 否定词必须与「生命周期(契约)/lifecycle(contract)」紧邻（仅允许少量空白/分隔符/「任何」），
+      //     不再用 40 字符宽松窗口；工具错误信息本身就指引写「不涉及生命周期契约」这个规范短语。
+      const declaresNotApplicable =
+        // 否定在前：「不涉及生命周期(契约)」「不适用 lifecycle contract」
+        /(?:不涉及|不适用|未涉及|不包含|没有(?:任何)?)\s?(?:任何\s?)?(?:生命周期(?:契约)?|lifecycle(?:[ _=-]?contract)?)/i.test(content) ||
+        // 主题在前（表格/列表单元「生命周期契约：不涉及 / N/A / 无」——分隔符强制，杜绝宽窗口）
+        /(?:生命周期(?:契约)?|lifecycle(?:[ _=-]?contract)?)\s?[：:=]\s?(?:不涉及|不适用|未涉及|无|n\/?a\b|not[ _=-]?applicable|none\b)/i.test(content) ||
+        // 英文谓语句：「does not involve / not applicable ... lifecycle」
+        /(?:does[ _-]?not[ _-]?involve|not[ _-]?applicable)[^\n]{0,15}lifecycle/i.test(content)
       if (declaresNotApplicable) {
         warnings.push('design.md 显式声明不涉及生命周期契约 — 已豁免「生命周期契约表」要求')
       } else {
