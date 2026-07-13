@@ -4,8 +4,8 @@ created_at: 2026-06-01T09:05:00
 ---
 
 # core-engine
-> 最后更新：2026-06-01
-> 最近变更：scan（初始生成）
+> 最后更新：2026-07-13
+> 最近变更：ql-20260713-002-7628（quick 守卫：baseline 不再过滤 .sillyspec/ + --done 荣获 force/allow flag）
 > 模块路径：src/run.js, src/index.js, src/progress.js, src/db.js
 
 ## 职责
@@ -93,7 +93,9 @@ core-engine 是 SillySpec 的基础设施层，由三个层次组成：持久化
 - VALID_STAGES 必须与 stageRegistry 的 key 保持一致
 - runCommand 中的 resolveChangeName 有多级回退：显式指定 > progress.currentChange > 自动检测
 - 自动模式 (runAutoMode) 按 brainstorm→propose→plan→execute→verify 顺序推进，跳过已完成的阶段
+- quick 守卫（`auditQuickCompletion`）：step 1 记录 baselineFiles（预存脏文件），`--done` 审计时排除它们；quick 自身写入的 `.sillyspec/` 元数据（quicklog/.runtime/modules/_module-map）由 `isQuickMetadata` 精确豁免。`--force-baseline`（覆盖受保护/危险文件如 src/run.js）/`--allow-new`（允许新增）在 step 1 持久化进 guard.json，也可在 `--done` 时传入（与持久化值取或）
 
 ## 变更索引（表格，初始为空）
 | 日期 | 变更名 | 摘要 |
 |------|--------|------|
+| 2026-07-13 | ql-20260713-002-7628 | quick 守卫两修复：(1) baseline 录入去掉 `.sillyspec/` 粗过滤，预存 untracked `.sillyspec/changes/` 不再被误判危险/新增；(2) `--done` 的 `--force-baseline`/`--allow-new` 并入 guard（原只传 `{isConfirm}` 致 flag 静默无效），并修正审计复审误导文案 |

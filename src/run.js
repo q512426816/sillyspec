@@ -454,8 +454,10 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
           console.log(`     - ${r}`)
         }
       }
-      console.log(`\n   如确认接受这些变更，重新运行：sillyspec run quick --done --confirm --output "..."`)
-      console.log(`   或使用 --force-baseline 允许覆盖 baseline 文件，--allow-new 允许新增文件`)
+      console.log(`\n   如确认接受这些变更，重新运行 --done 时带上对应 flag 即可解锁：`)
+      console.log(`     sillyspec run quick --done --force-baseline --allow-new --change <id> --output "..."`)
+      console.log(`     （--force-baseline 覆盖受保护/危险文件如 src/run.js；--allow-new 允许新增文件）`)
+      console.log(`   或在首个 sillyspec run quick 启动（step 1）时就声明这些 flag，持久化进 guard。`)
     }
   } catch (e) {
     result.reasons.push(`审计失败: ${e.message}`)
@@ -1692,7 +1694,7 @@ export async function runCommand(args, cwd, specDir = null) {
   // --done
   if (isDone) {
     const doneAnswer = getFlagValue('--answer')
-    return await completeStep(pm, progress, stageName, cwd, outputText, inputText, { confirm: isConfirm, changeName: effectiveChange, nonInteractive: isNonInteractive && !isInteractive, platformOpts, confirmMode, doneAnswer })
+    return await completeStep(pm, progress, stageName, cwd, outputText, inputText, { confirm: isConfirm, changeName: effectiveChange, nonInteractive: isNonInteractive && !isInteractive, platformOpts, confirmMode, doneAnswer, isForceBaseline, isAllowNew })
   }
 
   // 默认：输出当前步骤
@@ -1961,10 +1963,13 @@ async function runStage(pm, progress, stageName, cwd, changeName, skipApproval =
     try {
       const { execSync } = await import('child_process')
       const gitStatus = execSync('git status --porcelain', { cwd, encoding: 'utf8', timeout: 10000 })
+      // 记录全部预存脏文件（含 untracked + .sillyspec/ 路径）。quick 会话期间自身写入的元数据
+      // （quicklog/.runtime/modules/_module-map 等）由 auditQuickCompletion 的 isQuickMetadata 精确豁免，
+      // 不需要这里粗放过滤 .sillyspec/——旧过滤致预存 untracked .sillyspec/changes/ 不进 baseline，
+      // 却在 audit 被当「危险(.sillyspec/)+新增」误判永久 blocked（ql-20260713-002-7628 修复）。
       const baselineFiles = gitStatus
         .trim().split('\n').filter(Boolean)
         .map(line => line.slice(3).trim())
-        .filter(f => !f.startsWith('.sillyspec/'))
       const allowedFiles = quickOpts?.quickFiles || []
       const allowNew = quickOpts?.isAllowNew || false
       const forceBaseline = quickOpts?.isForceBaseline || false
@@ -2614,7 +2619,7 @@ function rollbackStageCompletion(stageData, steps, currentIdx) {
 }
 
 async function completeStep(pm, progress, stageName, cwd, outputText, inputText = null, options = {}) {
-  const { printNext = true, confirm = false, changeName, platformOpts = {}, nonInteractive = false, confirmMode = null } = options
+  const { printNext = true, confirm = false, changeName, platformOpts = {}, nonInteractive = false, confirmMode = null, isForceBaseline = false, isAllowNew = false } = options
   const specBase = platformOpts.specRoot || join(cwd, '.sillyspec')
   const stageData = progress.stages[stageName]
   const scanProfile = stageData?.scanProfile || null
@@ -2990,7 +2995,15 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
             : (existsSync(legacyGuardFile) ? JSON.parse(readFileSync(legacyGuardFile, 'utf8')) : null)
         } catch {}
         if (guard) {
-          const review = await auditQuickCompletion(cwd, guard, { isConfirm: confirm })
+          // --done 的 --force-baseline/--allow-new 并入 guard（与 step1 持久化值取或）。
+          // 修复 ql-20260713-002-7628：旧代码解析了这两个 flag 但只传 {isConfirm} 给审计，
+          // 致 --done --force-baseline 静默无效、用户被误导「重跑 --confirm」也无法解锁。
+          const mergedGuard = {
+            ...guard,
+            forceBaseline: guard.forceBaseline || isForceBaseline,
+            allowNew: guard.allowNew || isAllowNew,
+          }
+          const review = await auditQuickCompletion(cwd, mergedGuard, { isConfirm: confirm })
           printQuickAuditReview(review)
           if (review.status === 'blocked') {
             steps[currentIdx].status = 'pending'

@@ -11,6 +11,11 @@
  *   2. status 判定尊重 force-baseline（baselineHit）和 allow-new（newFiles）
  *      —— 原判定直接看数组长度，flag 只压 reasons 文案不降级 status
  *
+ * ql-20260713-002-7628 追加修复：
+ *   3. baseline 录入不再粗放过滤 .sillyspec/ —— 预存 untracked .sillyspec/changes/ 现进 baseline，
+ *      audit 不再误判「危险+新增」（场景 8/9）
+ *   4. --done 的 --force-baseline/--allow-new 并入 guard（原只传 {isConfirm}，flag 静默无效）
+ *
  * 风格：自研 assert + mkdtemp 临时 git 仓库，参照 quick-session-isolation.test.mjs
  */
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
@@ -143,6 +148,37 @@ async function main() {
     const review = await auditQuickCompletion(dir, guard, {})
     assert(review.status === 'warning', `场景7 超出 allowedFiles → warning（实际 ${review.status}）`)
     assert(review.reasons.some(r => r.includes('Y.txt') && r.startsWith('超出')), `场景7 Y.txt 应报超出 allowedFiles（实际 ${JSON.stringify(review.reasons)}）`)
+  }
+
+  // 场景 8：预存 untracked .sillyspec/changes/ 进 baseline → audit 不再误判危险/新增
+  // （ql-20260713-002-7628 修复：旧 run.js baseline 录入粗放过滤 .sillyspec/，
+  //  致预存 untracked 变更目录不进 baseline，却在 audit 被当「危险(.sillyspec/)+新增」永久 blocked）
+  {
+    const dir = makeTmpDir('qk-dirty-8-')
+    initGitRepo(dir)
+    // 预存：另一个变更的 untracked 目录（典型：多变更并行时别人的 .sillyspec/changes/）
+    mkdirSync(join(dir, '.sillyspec', 'changes', 'other-change'), { recursive: true })
+    writeFileSync(join(dir, '.sillyspec', 'changes', 'other-change', 'design.md'), '# other\n')
+    // 用 git 实报路径作 baseline（目录折叠时路径可能是 .sillyspec/changes/ 或 .../other-change/，避免硬编码）
+    const reported = git(dir, ['status', '--porcelain'])
+      .split('\n').filter(l => l.includes('other-change') || l.includes('changes'))
+      .map(l => l.slice(3).trim())
+    const guard = { baselineFiles: reported, allowedFiles: [], allowNew: false, forceBaseline: false }
+    const review = await auditQuickCompletion(dir, guard, {})
+    assert(review.status === 'safe', `场景8 预存 untracked .sillyspec/changes/ 进 baseline → safe（实际 ${review.status}，修复前 blocked）`)
+    assert(!review.reasons.some(r => r.includes('危险') || r.includes('新增')), `场景8 不应报危险/新增（实际 ${JSON.stringify(review.reasons)}）`)
+  }
+
+  // 场景 9：对照——同样 untracked .sillyspec/changes/ 但不在 baseline（本次新建）→ 仍 blocked
+  // （证明 Fix A 没有弱化守卫：仅预存项被排除，本次新建的 .sillyspec/ 仍拦截）
+  {
+    const dir = makeTmpDir('qk-dirty-9-')
+    initGitRepo(dir)
+    mkdirSync(join(dir, '.sillyspec', 'changes', 'sneaky'), { recursive: true })
+    writeFileSync(join(dir, '.sillyspec', 'changes', 'sneaky', 'design.md'), '# sneaky\n')
+    const guard = { baselineFiles: [], allowedFiles: [], allowNew: false, forceBaseline: false }
+    const review = await auditQuickCompletion(dir, guard, {})
+    assert(review.status === 'blocked', `场景9 本次新建 .sillyspec/changes/ 不在 baseline → 仍 blocked（实际 ${review.status}）`)
   }
 
   for (const d of tmpRoots) {
