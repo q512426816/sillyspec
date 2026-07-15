@@ -134,8 +134,10 @@ function parseTaskDependencies(planContent) {
  * @param {string} taskName - task-04
  * @returns {{ ok: boolean, endpoints: Array, artifactPath: string|null }}
  */
-export function extractProviderArtifact(changeDir, worktreePath, specBase, taskName) {
-  const artifactDir = join(specBase, '.runtime', 'contract-artifacts', taskName)
+export function extractProviderArtifact(changeDir, worktreePath, specBase, taskName, runtimeRoot) {
+  // 平台模式 contract-artifacts 落 runtimeRoot；否则落 specBase/.runtime
+  const artifactRoot = runtimeRoot || join(specBase, '.runtime')
+  const artifactDir = join(artifactRoot, 'contract-artifacts', taskName)
   const artifactPath = join(artifactDir, 'endpoints.json')
 
   if (!worktreePath || !existsSync(worktreePath)) {
@@ -179,13 +181,15 @@ export function extractProviderArtifact(changeDir, worktreePath, specBase, taskN
  * @param {Array<{ provider: string, consumer: string, type: string }>} contracts
  * @returns {string|null} 注入到 prompt 的契约文本，无契约时返回 null
  */
-export function buildConsumerInjection(changeDir, specBase, taskName, contracts) {
+export function buildConsumerInjection(changeDir, specBase, taskName, contracts, runtimeRoot) {
+  // 平台模式 contract-artifacts 落 runtimeRoot；否则落 specBase/.runtime
+  const artifactRoot = runtimeRoot || join(specBase, '.runtime')
   const myContracts = contracts.filter(c => c.consumer === taskName)
   if (myContracts.length === 0) return null
 
   const parts = []
   for (const contract of myContracts) {
-    const artifactDir = join(specBase, '.runtime', 'contract-artifacts', contract.provider)
+    const artifactDir = join(artifactRoot, 'contract-artifacts', contract.provider)
     const artifactFile = join(artifactDir, 'endpoints.json')
 
     let endpoints = []
@@ -293,11 +297,13 @@ export function buildContractFieldInjection(changeDir, taskName) {
  * @param {string} worktreePath - worktree 路径
  * @returns {{ ok: boolean, missingBackend: Array, unusedBackend: Array, summary: string }}
  */
-export function verifyApiParity(specBase, worktreePath) {
+export function verifyApiParity(specBase, worktreePath, runtimeRoot) {
   const { diffApiParity } = require('./endpoint-extractor.js')
 
+  // 平台模式 contract-artifacts 落 runtimeRoot；否则落 specBase/.runtime
+  const artifactRoot = runtimeRoot || join(specBase, '.runtime')
   // 读取所有 provider artifacts
-  const artifactBase = join(specBase, '.runtime', 'contract-artifacts')
+  const artifactBase = join(artifactRoot, 'contract-artifacts')
   const allProviderEndpoints = []
 
   if (existsSync(artifactBase)) {

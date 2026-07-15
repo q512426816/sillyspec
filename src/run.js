@@ -1511,6 +1511,15 @@ export async function runCommand(args, cwd, specDir = null) {
     }
   }
 
+  // execute 阶段必须带 --change：不允许自动检测或默认值，变更名必须由 agent 显式传入
+  // --status 豁免（纯查看不需要指定变更）
+  if (stageName === 'execute' && !changeName && !isStatus) {
+    console.error('❌ execute 阶段必须用 --change <变更名> 指定要操作的变更。')
+    console.error('   agent 必须传参，不设默认值、不做自动检测。')
+    console.error('   请加 --change <变更名> 重新执行。')
+    process.exit(1)
+  }
+
   let progress = await pm.read(cwd, changeName)
 
   if (!progress) {
@@ -1844,7 +1853,7 @@ async function runStage(pm, progress, stageName, cwd, changeName, skipApproval =
   if (stageName === 'execute') {
     const { generateExecuteRunId } = await import('./task-review.js')
     const execSpecBase = platformOpts?.specRoot || join(cwd, '.sillyspec')
-    const runtimeRoot = join(execSpecBase, '.runtime')
+    const runtimeRoot = platformOpts?.runtimeRoot || join(execSpecBase, '.runtime')
     const runIdFile = join(runtimeRoot, `current-execute-run-id-${changeName}`)
     mkdirSync(runtimeRoot, { recursive: true })
     // 优先读取已有的变更专属标记文件
@@ -3315,7 +3324,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
 
           if (planPath && existsSync(planPath)) {
             const planContent = readFileSync(planPath, 'utf8')
-            const runtimeRoot = join(effectiveSpecBase, '.runtime')
+            const runtimeRoot = platformOpts?.runtimeRoot || join(effectiveSpecBase, '.runtime')
 
             // execute run id：从变更专属标记文件读取
             const runIdFile = join(runtimeRoot, `current-execute-run-id-${changeName}`)
