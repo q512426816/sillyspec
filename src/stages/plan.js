@@ -154,14 +154,14 @@ needs_human_review: true | false
 
 const stepGeneratePlan = {
   id: 'generate_plan',
-  name: '生成分级计划与自检',
-  prompt: `根据上一步的 plan_level 结果，按对应级别生成计划，然后立即自检。
+  name: '生成分级计划',
+  prompt: `根据上一步的 plan_level 结果，按对应级别生成计划。
 
 ### 操作
 1. 读取上一步输出的 plan_level 分类结果
 2. 读取 tasks.md 和 design.md 了解需求范围
 3. 按 plan_level 选择对应模板输出
-4. 生成后立即自检（见下方自检清单）
+4. 保存 plan.md（审查在下一步"审查计划"独立进行，不在本步自审——避免生成与自审同一次输出）
 
 ---
 
@@ -319,53 +319,59 @@ full 计划的约束：
 
 ---
 
-### 自检（生成后立即执行，不另开步骤）
+### 输出
+plan_level + 计划内容（审查在下一步独立进行）`,
+  outputHint: 'plan_level + 计划内容',
+  optional: false
+}
 
-读取上一步的 plan_level 分类结果，按级别执行对应的自检：
+// ═══════════════════════════════════════════════════════════════
+// 第 2.5 步（LLM）：审查计划（独立于生成，按规模分级）
+// ═══════════════════════════════════════════════════════════════
 
-#### plan_level = none
-- [ ] plan.md 文件存在且包含 plan_level: none
-- [ ] 给出了可操作的修改建议（2-5 条）
-- [ ] 不含 Wave、Mermaid、估时、任务总表、依赖关系等完整蓝图内容
-- [ ] 建议了直接 execute
-- [ ] 包含至少一个 \`- [ ] task-XX:\` 格式的 checkbox 任务（execute 解析依赖此格式）
+/**
+ * 审查计划 step —— 把"审查"从生成 step 拆出（原 stepGeneratePlan 生成+自检同次输出是最严重的 self-review）。
+ * 按规模分级：tier=self 当前 agent 自审；tier=independent 强制独立子代理 + review.json。
+ * 占位符 {REVIEW_TIER} / {REVIEW_TIER_REASON} / {STAGE_REVIEW_RUN_ID} 由 run.js 注入。
+ */
+const stepReviewPlan = {
+  id: 'review_plan',
+  name: '审查计划',
+  prompt: `对上一步生成的 plan.md 做审查。生成与审查分离——不在生成 plan 的同一上下文里自审，避免确认偏差。
 
-#### plan_level = light
-- [ ] 输出明确标注 plan_level: light
-- [ ] 有来源、范围、任务列表、验收标准四个部分
-- [ ] 来源直接引用已有文档，未重新扩写
-- [ ] 任务列表清晰且无实现细节
-- [ ] 任务使用 checkbox 格式（\`- [ ] task-XX:\`），不是纯编号列表
-- [ ] 验收标准具体可验证（非笼统表述）
-- [ ] 如果存在 decisions.md，所有当前版本 D-xxx@vN 在 plan.md 中可追踪
-- [ ] 不存在 P0/P1 unresolved blocker
-- [ ] 没有 Mermaid 图、估时、风险分析
-- [ ] 没有函数签名、代码示例等实现细节
-- [ ] plan.md 与 design.md 的文件变更清单一致
-- [ ] 包含至少一个 \`- [ ] task-XX:\` 格式的 checkbox 任务（execute 解析依赖此格式）
+### 当前审查分级（CLI 按变更规模判定，占位符由 run.js 注入）
+tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
+- tier=self：当前 agent 直接执行下方审查清单（小变更，独立审查仪式成本 > 收益）
+- tier=independent：必须用 Agent tool 启动一个独立的计划审查子代理（独立上下文，不共享你生成 plan 时的分析与倾向），由子代理执行下方审查清单并输出 review.json
 
-#### plan_level = full
-- [ ] 每个 task 有编号（task-01、task-02 ...）
-- [ ] 每个 task 在 Wave 下有 checkbox（\`- [ ] task-XX:\` 格式，execute 解析依赖此格式）
-- [ ] 已标注 Wave 分组和依赖关系
-- [ ] 有任务总表（含优先级、依赖列，**无估时列**）
-- [ ] 有关键路径标注
-- [ ] 有全局验收标准
-- [ ] 如果存在 decisions.md，任务总表或覆盖矩阵覆盖全部当前版本 D-xxx@vN
-- [ ] 不存在 P0/P1 unresolved blocker
-- [ ] （brownfield）全局验收包含兼容性条款
-- [ ] 没有实现细节（接口定义、代码示例等不应该在 plan.md 里）
-- [ ] plan.md 与 design.md 的文件变更清单一致
-- [ ] 如果涉及构造函数/接口/DTO/client 方法变更，是否搜索了所有调用点并纳入任务范围？
-- [ ] 调用点搜索命令的输出是否记录在 plan.md 或 task-NN.md 中？
-- [ ] 跨任务契约自检：若 task-A 的产出（接口/DTO/响应）被 task-B 消费，consumer 是否在 TaskCard expects_from 里声明所需字段、provider 是否在 provides 里承诺这些字段、两边字段是否一致？（plan-postcheck 会硬校验，此处先自查）
-- [ ] 文件覆盖自检：design.md「文件变更清单」中的每个源码文件，是否都被至少一个 task 的 allowed_paths 覆盖？（plan-postcheck 会硬校验，漏覆盖 = execute 必然漏改，此处先自查）
-- [ ] 如果有 Mermaid 图，依赖关系确实非平凡（非线性/非全并行）
-- [ ] 没有泛泛风险分析（如"需要充分测试"）
+### 审查清单（读取 plan.md 的 plan_level，逐条核对）
+- [ ] task 编号与 Wave checkbox 格式正确，execute 依赖此格式解析任务
+- [ ] plan_level 档位与实际复杂度匹配（none/light/full 没选错）
+- [ ] 跨任务契约：task-A 的产出（接口/DTO/响应）被 task-B 消费时，consumer 是否在 TaskCard expects_from 声明所需字段、provider 是否在 provides 承诺、两边字段一致？（plan-postcheck 会硬校验，此处是独立视角复查）
+- [ ] 文件覆盖：design.md 文件变更清单中的每个源码文件，是否都被至少一个 task 的 allowed_paths 覆盖？（漏覆盖 = execute 必然漏改）
+- [ ] 不存在 P0/P1 unresolved blocker 残留
+- [ ] 没有实现细节泄漏到 plan.md（接口签名/代码示例应在 tasks/task-NN.md）
+- [ ] 关键路径与 Wave 依赖合理（无循环依赖、无遗漏前置）
+
+### tier=independent 时：启动 plan-review 子代理
+用 Agent tool 启动子代理（subagent_type: general），prompt 要点：
+1. 独立读取 {SPEC_ROOT}/changes/<change>/plan.md + design.md + tasks/*.md（不要让生成者喂结论给你，自己读原始文件）
+2. 执行上方审查清单，每条给 pass/gap/fail + 证据
+3. 输出 review.json 到 {SPEC_ROOT}/.runtime/stage-reviews/plan-{STAGE_REVIEW_RUN_ID}/review.json，字段：
+   - schemaVersion: 1
+   - reviewType: plan ; stage: plan
+   - specVerdict / qualityVerdict: pass | fail | cannot_verify
+   - reviewedFiles: [changes/<change>/plan.md]
+   - docHash: plan.md 内容的 sha256（必须真实读取文件计算，禁止编造——CLI 会重算对比）
+   - checklist: 每条 { item, result: pass|gap|fail, note }
+   - requiredEvidence: cannot_verify 时必填非空
+   - reviewerNotes: 说明
+4. verdict=fail 时在 reviewerNotes 写明阻断项
 
 ### 输出
-plan_level + 计划内容 + 自检结果（一次输出）`,
-  outputHint: '计划内容 + 自检结果',
+- tier=self：审查清单结果（每条状态 + 偏差说明）
+- tier=independent：子代理产出的 review.json 路径 + verdict 摘要`,
+  outputHint: 'plan 审查结果（self=清单 / independent=review.json 路径+verdict）',
   optional: false
 }
 
@@ -524,7 +530,7 @@ export function buildPostcheckStep(changeDir) {
 // 向后兼容：导出 fixedPrefix / fixedSuffix（供 run.js 切片用）
 // ═══════════════════════════════════════════════════════════════
 
-export const fixedPrefix = [stepClassify, stepGeneratePlan]
+export const fixedPrefix = [stepClassify, stepGeneratePlan, stepReviewPlan]
 
 export const fixedSuffix = [] // postcheck 是动态生成的（需要 changeDir）
 

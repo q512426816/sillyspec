@@ -138,7 +138,12 @@ export const definition = {
     },
     {
       name: '自检门控',
-      prompt: `自检生成的规范文件。
+      prompt: `自检生成的规范文件（按规模分级）。
+
+### 当前审查分级（CLI 按变更规模判定，占位符由 run.js 注入）
+tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
+- tier=self：当前 agent 直接执行下方 checklist
+- tier=independent：必须用 Agent tool 启动一个独立的规范审查子代理（独立上下文，不共享你的分析），子代理执行下方 checklist 并输出 review.json 到 {SPEC_ROOT}/.runtime/stage-reviews/propose-{STAGE_REVIEW_RUN_ID}/review.json。字段：reviewType=proposal；reviewedFiles=[proposal.md, design.md, requirements.md, tasks.md]（相对 changes/<change>/）；docHash=proposal.md 的 sha256（禁止编造）；specVerdict/qualityVerdict=pass|fail|cannot_verify；checklist 每条 pass|gap|fail。
 
 ### 操作
 检查以下各项：

@@ -893,6 +893,39 @@ async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjec
     promptText = promptText.replace(/\{EXECUTE_RUN_ID\}/g, runId)
   }
 
+  // Stage Review Tier：brainstorm/plan/propose/execute 阶段注入审查分级占位符
+  // （scanProfile 只在 scan 生效、change-risk-profile 只管 apply/verify，都不约束这些阶段的审查方式，
+  //  故按 plan_level / 变更文件数分级：self 当前 agent 自审，independent 强制独立子代理 + review.json）
+  if (['brainstorm', 'plan', 'propose', 'execute'].includes(stageName) && promptText.includes('{REVIEW_TIER}')) {
+    try {
+      const { classifyReviewTier } = await import('./review-tier.js')
+      const { generateStageReviewRunId } = await import('./stage-review.js')
+      const tierSpecBase = platformOpts?.specRoot || join(cwd, '.sillyspec')
+      const tierChangeDir = changeName ? join(tierSpecBase, 'changes', changeName) : null
+      const designPath = tierChangeDir ? join(tierChangeDir, 'design.md') : null
+      let planLevel = null
+      if (tierChangeDir) {
+        const planPath = join(tierChangeDir, 'plan.md')
+        if (existsSync(planPath)) {
+          const fmLine = readFileSync(planPath, 'utf8').split('\n').find(l => l.trim().startsWith('plan_level:'))
+          if (fmLine) planLevel = fmLine.split(':')[1].trim()
+        }
+      }
+      const tier = classifyReviewTier({ planLevel, designPath })
+      const reviewRunId = generateStageReviewRunId()
+      promptText = promptText
+        .split('{REVIEW_TIER}').join(tier.tier)
+        .split('{REVIEW_TIER_REASON}').join(tier.reason)
+        .split('{STAGE_REVIEW_RUN_ID}').join(reviewRunId)
+    } catch (e) {
+      // 降级 self，避免 prompt 残留占位符
+      promptText = promptText
+        .split('{REVIEW_TIER}').join('self')
+        .split('{REVIEW_TIER_REASON}').join('分级异常降级 self: ' + e.message)
+        .split('{STAGE_REVIEW_RUN_ID}').join('review-unknown')
+    }
+  }
+
   // 注入模块上下文（brainstorm/plan/execute 阶段，基于 Module Context Index）
   if (['brainstorm', 'plan', 'execute'].includes(stageName) && projectName) {
     const effectiveSpecBase = platformOpts?.specRoot || join(cwd, '.sillyspec')
@@ -3314,6 +3347,56 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
         }
       }
 
+      // ── Stage Review Gate：brainstorm/plan/propose/execute 独立审查（按 tier 分级）──
+      // tier=self 放行+审计打印；tier=independent 必须 review.json 且 verdict 非 fail，fail-closed
+      if (['brainstorm', 'plan', 'propose', 'execute'].includes(stageName)) {
+        try {
+          const { classifyReviewTier } = await import('./review-tier.js')
+          const { validateStageReview, getLatestStageReviewRunId, printStageReviewResult } = await import('./stage-review.js')
+          const effectiveSpecBase = platformOpts?.specRoot || specBase
+          const reviewChangeDir = resolveChangeDir(cwd, progress, platformOpts?.specRoot)
+          const designPath = reviewChangeDir ? join(reviewChangeDir, 'design.md') : null
+          let planLevel = null
+          if (reviewChangeDir) {
+            const planPath = join(reviewChangeDir, 'plan.md')
+            if (existsSync(planPath)) {
+              const fmLine = readFileSync(planPath, 'utf8').split('\n').find(l => l.trim().startsWith('plan_level:'))
+              if (fmLine) planLevel = fmLine.split(':')[1].trim()
+            }
+          }
+          const tier = classifyReviewTier({ planLevel, designPath })
+          const runtimeRoot = platformOpts?.runtimeRoot || join(effectiveSpecBase, '.runtime')
+
+          if (tier.tier === 'self') {
+            console.log('\nℹ️  Stage Review: ' + stageName + ' tier=self（' + tier.reason + '），已降级为当前 agent 自审，不强制独立子代理。')
+          } else {
+            const reviewRunId = getLatestStageReviewRunId(runtimeRoot, stageName)
+            const reviewType = stageName === 'brainstorm' ? 'design'
+              : stageName === 'plan' ? 'plan'
+              : stageName === 'propose' ? 'proposal'
+              : 'acceptance'
+            const searchDirs = [effectiveSpecBase, reviewChangeDir, cwd].filter(Boolean)
+            const reviewResult = validateStageReview({ stage: stageName, reviewType, runtimeRoot, reviewRunId, searchDirs })
+            printStageReviewResult(reviewResult, { stage: stageName })
+            if (!reviewResult.ok) {
+              rollbackStageCompletion(stageData, steps, currentIdx)
+              progress.lastActive = new Date().toLocaleString('zh-CN', { hour12: false })
+              await pm._write(cwd, progress, changeName)
+              triggerSync(cwd, changeName, platformOpts)
+              return { stageCompleted: false, currentIdx, nextPendingIdx: currentIdx }
+            }
+          }
+        } catch (e) {
+          // fail-closed：Gate 自身异常阻断完成，不静默放行（与 Task Review Gate 一致）
+          console.error('❌ Stage Review Gate 异常，阻断 ' + stageName + ' 完成: ' + e.message)
+          rollbackStageCompletion(stageData, steps, currentIdx)
+          progress.lastActive = new Date().toLocaleString('zh-CN', { hour12: false })
+          await pm._write(cwd, progress, changeName)
+          triggerSync(cwd, changeName, platformOpts)
+          return { stageCompleted: false, currentIdx, nextPendingIdx: currentIdx }
+        }
+      }
+
       // ── Execute Task Review Gate：所有 task 必须有 review.json 且 verdict 通过 ──
       if (stageName === 'execute') {
         try {
@@ -3522,7 +3605,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
       if (wf && changeName) {
         const raw = JSON.stringify(wf)
         const resolved = JSON.parse(raw.replace(/<change-name>/g, changeName))
-        const result = runPostCheck(resolved, cwd, 'sillyspec', {}, specBase)
+        const result = runPostCheck(resolved, cwd, progress.project || basename(cwd), {}, specBase)
         // 只报告 impact-analyzer 的结果（doc-syncer 是后续步骤）
         const impactResult = (result.roles || []).find(r => r.id === 'impact-analyzer')
         if (impactResult) {

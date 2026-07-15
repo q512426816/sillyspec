@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-05-31 11:00:00
-updated_at: 2026-07-15T00:00:00+08:00
+updated_at: 2026-07-16T00:00:00+08:00
 ---
 
 # SillySpec 文件生命周期
@@ -37,6 +37,8 @@ updated_at: 2026-07-15T00:00:00+08:00
 - `src/machine-interface.js`
 - `src/modules.js`
 - `src/index.js`
+- `src/review-tier.js`
+- `src/stage-review.js`
 
 运行时阶段列表以导入 `src/stages/index.js` 后得到的对象为准。当前导入结果：
 
@@ -45,7 +47,7 @@ updated_at: 2026-07-15T00:00:00+08:00
 | scan | 11 | 辅助阶段；step 2 后会按项目动态展开 `perProject` 步骤；第 10 步「Extract Project Knowledge」写入 `knowledge/` |
 | brainstorm | 13 | 独立包含“写设计文档并自审”、“Design Grill 交叉审查”、“用户确认并生成规范文件”；完成时按 design.md frontmatter `scale` 分叉产物（large→四件套进 plan / small→仅 design.md 进 quick） |
 | propose | 7 | 包含“生成规范文件”与“自检门控”，四件套是该阶段预期产物 |
-| plan | 动态 | 默认 8 步；`plan.md` 解析到任务后插入任务蓝图协调器；postcheck 含确定性校验（结构/可行性/跨任务契约/design 文件覆盖/产物） |
+| plan | 动态 | 默认 9 步（含独立"审查计划"step，按规模分级 tier=self 自审 / tier=independent 独立子代理 + stage review.json）；`plan.md` 解析到任务后插入任务蓝图协调器；postcheck 含确定性校验（结构/可行性/跨任务契约/design 文件覆盖/产物） |
 | execute | 动态 | 默认 12 步；Wave 来自 `plan.md`，解析失败时默认 3 个 Wave；完成时 `validateExecuteOutputs` 客观核验存在真实代码变更（plan 有 task 但确证零变更则阻断），Task Review Gate 另做 review.json git 真实性交叉校验 |
 | verify | 7 | 只读校验 + 写 `verify-result.md`；完成时 `validateVerifyOutputs` 校验 `verify-result.md` 存在且结论非 FAIL，缺失或 FAIL 则阻断完成；随后 CLI 亲自执行 `local.yaml` 的 `commands.test` 与自报告对账（实测失败阻断，结果写 `.runtime/verify-runs/<ts>/test-result.json`） |
 | archive | 5 | 辅助阶段；第 4 步必须带 `--confirm`，由 `run.js` 移动目录并注销 active change；移动前硬校验 `plan.md` 存在，移动后校验 `design.md`/`module-impact.md` |
@@ -70,7 +72,7 @@ updated_at: 2026-07-15T00:00:00+08:00
 | `.sillyspec/quicklog/` | 是 | quick prompt | 每次 quick 任务记录（始终写入；关联变更另在各 change tasks.md 勾选） |
 | `.sillyspec/shared/` | 是 | `init.js` | 共享目录，当前无核心生命周期逻辑 |
 | `.sillyspec/workspace/` | 是 | `init.js` | 工作区目录，当前无核心生命周期逻辑 |
-| `.sillyspec/.runtime/` | 否 | `init.js`、`ProgressManager`、运行时命令 | DB、gate、artifacts、history、workflow-runs、worktrees、knowledge-hit-report.json、postcheck-result.json |
+| `.sillyspec/.runtime/` | 否 | `init.js`、`ProgressManager`、运行时命令 | DB、gate、artifacts、history、workflow-runs、worktrees、knowledge-hit-report.json、postcheck-result.json、stage-reviews（brainstorm/plan/propose/execute 独立审查 review.json） |
 
 `init.js` 会把 `.sillyspec/.runtime/`、`.sillyspec/local.yaml`、`.sillyspec/codebase/SCAN-RAW.md` 追加到 `.gitignore`。
 
@@ -179,3 +181,4 @@ sillyspec doctor --align-execute-progress [--confirm] [--change <name>]
   - **`alignExecuteToPlan` 事实核验**：对齐前调用 `checkExecuteCodeEvidence`，plan 全勾但确证代码零变更时拒绝对齐。
   - **verify 实测对账**（`verify-postcheck.js`）：verify 产物校验通过后，CLI 用 `execSync` 执行 `local.yaml` 的 `commands.test`（10 分钟超时），结果写 `.runtime/verify-runs/<ts>/test-result.json`；自报告 PASS 但实测失败 → 阻断 verify 完成并回滚。未配置 test（或 unavailable）降级 warning 不阻断。
   - **文案修正**：validator 失败提示不再声称 `--skip-approval` 可跳过产物校验（该 flag 只作用于阶段转换/审批检查）；quick 阶段 quicklog 缺失提示同步移除。
+- **Stage Review Gate**（2026-07-16）：brainstorm/plan/propose/execute 的"审查/自检"从当前 agent 自审改为按规模分级。`classifyReviewTier`（`review-tier.js`）按 plan_level=none 或变更文件数 ≤3 判定 tier=self（当前 agent 自审，放行+审计打印），否则 tier=independent（强制独立审查子代理，与执行子代理一样要求独立上下文）。tier=independent 时 done gate 要求 `.runtime/stage-reviews/<stage>-<runId>/review.json` 存在且 verdict 非 fail，由 `stage-review.js` 校验（schema + docHash 真实性重算防伪造 + cannot_verify 必须带 requiredEvidence 的反逃逸），异常 fail-closed 回滚（与 Task Review Gate 一致）。plan 的"审查计划"从生成 step 拆成独立 step（fixedPrefix 2→3 步），消除"生成+自检同一次输出"的 self-review。运行时占位符 `{REVIEW_TIER}`/`{REVIEW_TIER_REASON}`/`{STAGE_REVIEW_RUN_ID}` 由 run.js 注入 stage prompt。scanProfile（决定 maxAgentCalls）只在 scan 生效、change-risk-profile 的 P0/P1/P2 只管 apply/verify 证据，都不约束这些阶段的审查方式，故新选 plan_level/文件数维度。

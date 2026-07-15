@@ -46,9 +46,10 @@ console.log('--- Test 1: buildPlanSteps fast path（无 plan.md） ---')
   // 没有 changeDir 也没有 planContent → fast path
   const steps = buildPlanSteps(null, null)
   // 应该只有 fixedPrefix（2 步），无蓝图无 postcheck
-  assert(steps.length === 2, `无 task 时应有 2 步（fixedPrefix），实际 ${steps.length}`)
+  assert(steps.length === 3, `无 task 时应有 3 步（fixedPrefix = classify + generate_plan + review_plan），实际 ${steps.length}`)
   assert(steps[0].name === '复杂度分类与上下文加载', `第 1 步应为「复杂度分类与上下文加载」，实际 "${steps[0].name}"`)
-  assert(steps[1].name === '生成分级计划与自检', `第 2 步应为「生成分级计划与自检」，实际 "${steps[1].name}"`)
+  assert(steps[1].name === '生成分级计划', `第 2 步应为「生成分级计划」，实际 "${steps[1].name}"`)
+  assert(steps[2].name === '审查计划', `第 3 步应为「审查计划」（独立审查 step），实际 "${steps[2].name}"`)
 }
 
 // ─────────────────────────────────────────
@@ -63,11 +64,12 @@ console.log('\n--- Test 1b: buildPlanSteps 有 task 时返回 4 步 ---')
   writeFileSync(join(changeDir, 'plan.md'), planContent)
 
   const steps = buildPlanSteps(changeDir, planContent)
-  assert(steps.length === 4, `有 task 时应有 4 步，实际 ${steps.length}`)
-  assert(steps[2].name === '生成 TaskCard（子代理并行）', `第 3 步应为 TaskCard 生成，实际 "${steps[2].name}"`)
-  assert(steps[3].name === 'Wave 重排与可行性校验', `第 4 步应为 postcheck，实际 "${steps[3].name}"`)
-  assert(steps[3].noAI === true, `第 4 步应为 noAI`)
-  assert(steps[3]._cliAction === 'planPostcheck', `第 4 步 _cliAction 应为 planPostcheck`)
+  assert(steps.length === 5, `有 task 时应有 5 步（3 fixedPrefix + TaskCard + postcheck），实际 ${steps.length}`)
+  assert(steps[2].name === '审查计划', `第 3 步应为「审查计划」，实际 "${steps[2].name}"`)
+  assert(steps[3].name === '生成 TaskCard（子代理并行）', `第 4 步应为 TaskCard 生成，实际 "${steps[3].name}"`)
+  assert(steps[4].name === 'Wave 重排与可行性校验', `第 5 步应为 postcheck，实际 "${steps[4].name}"`)
+  assert(steps[4].noAI === true, `第 5 步应为 noAI`)
+  assert(steps[4]._cliAction === 'planPostcheck', `第 5 步 _cliAction 应为 planPostcheck`)
 
   rmSync(tmpDir, { recursive: true, force: true })
 }
@@ -371,7 +373,7 @@ console.log('\n--- Test 7: fixedSuffix 为空（新架构） ---')
   assert(Array.isArray(fixedSuffix), `fixedSuffix 应为数组`)
   assert(fixedSuffix.length === 0, `fixedSuffix 应为空数组，实际长度 ${fixedSuffix.length}`)
   assert(Array.isArray(fixedPrefix), `fixedPrefix 应为数组`)
-  assert(fixedPrefix.length === 2, `fixedPrefix 应有 2 个步骤，实际 ${fixedPrefix.length}`)
+  assert(fixedPrefix.length === 3, `fixedPrefix 应有 3 个步骤（含审查计划），实际 ${fixedPrefix.length}`)
 }
 
 // ─────────────────────────────────────────

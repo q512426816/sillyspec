@@ -70,7 +70,7 @@ scan → brainstorm ┤
 ```
 
 brainstorm 完成时按 design.md frontmatter 的 `scale` 分叉：
-- **large**（多文件/跨模块/有状态机或 schema 变更）：四件套齐 + 自审通过 → `sillyspec run plan --change <变更名>`
+- **large**（多文件/跨模块/有状态机或 schema 变更）：四件套齐 + Design Grill 审查通过（tier=independent 时由独立审查子代理产出 stage review.json）→ `sillyspec run plan --change <变更名>`
 - **small**（≤2 文件、单模块、无跨模块依赖）：仅生成 design.md → `sillyspec run quick --linked-changes <变更名>`
 
 > 规模由 AI 在 brainstorm 最后一步评估并写入 design.md frontmatter。判错可手动改 `scale` 后再跑相应阶段。
