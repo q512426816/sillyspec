@@ -4,8 +4,7 @@
  * 纯 Node.js，无外部依赖。支持多变更并行。
  *
  * 存储结构：
- *   .sillyspec/.runtime/sillyspec.db          — SQLite 数据库（权威状态源）
- *   .sillyspec/.runtime/global.json           — 全局状态缓存（项目名、活跃变更列表）
+ *   .sillyspec/.runtime/sillyspec.db          — SQLite 数据库（权威状态源，含全局状态/项目名/活跃变更）
  *   .sillyspec/.runtime/gate-status.json      — worktree-guard 门禁状态缓存
  *
  * 历史迁移：v1/v2 使用 progress.json 文件，v3 已全部迁移至 SQLite。
@@ -103,7 +102,6 @@ export function resolvePlatformSpecDir(cwd, explicitSpecDir = null) {
 }
 
 const CHANGES_SUBDIR = 'changes';
-const GLOBAL_FILE = 'global.json';
 const CURRENT_VERSION = 3;
 const VALID_STAGES = ['scan', 'brainstorm', 'plan', 'execute', 'verify', 'archive', 'quick', 'explore'];
 const VALID_STATUSES = ['pending', 'in-progress', 'completed', 'failed', 'blocked', 'waiting', 'stale'];

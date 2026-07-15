@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-06-04 16:25:42
-updated_at: 2026-07-09T13:10:00+08:00
+updated_at: 2026-07-16T00:00:00+08:00
 ---
 
 # 剩余实现差异清单
@@ -16,6 +16,9 @@ updated_at: 2026-07-09T13:10:00+08:00
 - `ProgressManager._updatePlatformLastSync()` / `_updateApprovalStatus()` 缺失。
 - platform `approve` / `reject` 未实现（2026-07-09 已补齐：`sync.js` `_submitApproval` 真实 HTTP POST 到 `{url}/api/changes/{changeName}/approval`，body `{decision[,reason]}`，成功后落 `approvals` 表；端点待 SillyHub 对齐，见 `interface-contract.md` §7 TBD-hub-api）。
 - workflow-runs 平台路径未从 `run.js` 接通（2026-07-09 已补齐：`run.js` scan/archive 两处 post-check 均透传 `runtimeRoot` / `scanRunId` 给 `saveWorkflowRun`；平台模式落 `<runtimeRoot>/scan-runs/<scanRunId>/workflow-runs/`）。
+- DB schema version 口径不统一（2026-07-16 已修复）：`db.js` project 表 `schema_version` DEFAULT 从 4 对齐为 `progress.js` `CURRENT_VERSION=3`（旧值 4 是遗留误写；CREATE TABLE IF NOT EXISTS 不影响已存在的行）。
+- `global.json` 遗留口径（2026-07-16 已修复）：`progress.js` 删除未引用的 `GLOBAL_FILE` 常量与存储结构注释里的 `global.json` 行——全局状态实际走 SQLite，无实体 global.json 生命周期。
+- workflow archive 固定 project 为 `sillyspec`（2026-07-16 已修复）：`run.js` archive `extract-module-impact` post-check 从硬编码 `'sillyspec'` 改为 `progress.project || basename(cwd)`，与 scan 的动态 project 口径一致。
 
 ## `--no-worktree` 决定不接通（与降级铁律冲突）
 
@@ -29,43 +32,3 @@ updated_at: 2026-07-09T13:10:00+08:00
 worktree 创建失败的逃生口是 `sillyspec worktree doctor --fix` / 手动清理（`run.js` execute 块的三步提示），不是 `--no-worktree`。`buildExecuteSteps()` 的 `noWorktree` 参数、`changes.no_worktree` 列、`isNoWorktreeMode()` 读端是为该模式预留的基础设施，保留但无 CLI 写入入口。
 
 不要再尝试接通此 flag，除非先重审降级铁律（例如给平台模式开 apply 绕过特例）。
-
-## DB schema version 口径不统一
-
-代码位置：`src/db.js`、`src/progress.js`
-
-现象：
-
-- `db.js` 的 `project.schema_version` 默认值是 4。
-- `progress.js` 的 `CURRENT_VERSION` 是 3。
-- `ProgressManager.init()` 写 project 行时使用 `CURRENT_VERSION`。
-
-影响：
-
-- 文档只描述表结构，不把当前状态存储称为明确 v4 schema。
-
-## `global.json` 是遗留口径
-
-代码位置：`src/progress.js`
-
-现象：
-
-- 注释和常量还提到 `.sillyspec/.runtime/global.json`。
-- 实际 `readGlobal()` / `writeGlobal()` 已经走 SQL。
-
-影响：
-
-- 文档应写成“当前没有实际 global.json 生命周期”。
-
-## workflow archive 固定 project 为 `sillyspec`
-
-代码位置：`src/run.js`
-
-现象：
-
-- archive `extract-module-impact` post-check 调用 `runPostCheck(resolved, cwd, 'sillyspec')`。
-- 不按当前项目注册表动态选择 project。
-
-影响：
-
-- 文档不能写成 archive impact workflow 对所有项目自动按 project 维度检查。
