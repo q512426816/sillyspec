@@ -731,7 +731,11 @@ export class ProgressManager {
       console.warn('⚠️  initChange: changeName 为空，跳过');
       return null;
     }
-    this._ensureChangeDir(cwd, changeName);
+    // quick 会话 id（quick-<uuid8>，见 run.js QUICK_SID_RE）只作 progress 的跨进程 session key，
+    // 进度存 SQL 不需要实体 change 目录——跳过避免 changes/quick-<uuid>/ 空目录残留。
+    if (!/^quick-[0-9a-f]{8}$/.test(changeName)) {
+      this._ensureChangeDir(cwd, changeName);
+    }
 
     const db = await this._ensureDB(cwd);
     db.transaction((sqlDb) => {
