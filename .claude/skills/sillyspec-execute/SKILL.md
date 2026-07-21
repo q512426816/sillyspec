@@ -43,6 +43,7 @@ sillyspec run execute --reopen --from-step N   # 重新打开已完成阶段修�
 - **禁止跳过 worktree 或在主仓库直接写代码**
 - worktree 创建失败时 CLI 报错退出，排查后重试
 - dirty 状态/未提交文件**不影响** worktree 创建和进入，直接按 CLI 输出的路径操作，不要自行检查 git 状态
+- create 时若检测到 base 落后/分叉 `origin/<默认分支>`，CLI 会醒目报告（⚠️「落后 N 个 commit」+ 对齐命令），**不阻断** execute。看到此报告时评估是否提示用户先对齐 main，但**不要自行 fetch/ff**——对齐是用户/主仓库的显式动作
 
 ### 依赖门控（depsStatus）
 

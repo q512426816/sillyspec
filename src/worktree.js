@@ -69,6 +69,79 @@ function gitQuiet(cwd, args) {
   }
 }
 
+/**
+ * 检测 worktree base（主仓库 HEAD）与 origin 默认分支的同步状态（只读：不 ff、不改 HEAD）。
+ * 替代旧的 fetch + merge --ff-only：旧逻辑分叉时 ff 失败被静默吞（syncStatus=failed），
+ * 成功时 baseHash 锚点又不更新（ff 引入的 main 内容污染 apply patch）。现改为只检测+报告，
+ * 不阻断 create，对齐 origin 的动作留给用户/agent。
+ *
+ * @param {string} cwd 主仓库目录
+ * @param {string} baseHash worktree base commit（= 主仓库 HEAD）
+ * @returns {{ status: 'up-to-date'|'behind'|'diverged'|'ahead'|'unknown', defaultBranch: string|null, behind: number, ahead: number }}
+ */
+export function computeBaseSync(cwd, baseHash) {
+  const diag = { status: 'unknown', defaultBranch: null, behind: 0, ahead: 0 };
+  // 推断默认分支：优先 origin/HEAD 指向的真实分支名（修复旧 339-342 的运算符优先级 bug
+  // ——旧代码在 origin/HEAD 存在时恒返回 'main'，丢弃 symbolic-ref 的真实结果）。
+  const headRef = gitQuiet(cwd, 'symbolic-ref refs/remotes/origin/HEAD --short');
+  let defaultBranch = headRef ? headRef.replace('origin/', '') : null;
+  if (!defaultBranch) {
+    // fallback：origin/HEAD 未设置时，探测常见默认分支是否存在
+    for (const cand of ['main', 'master']) {
+      if (gitQuiet(cwd, `rev-parse --verify --quiet refs/remotes/origin/${cand}`)) {
+        defaultBranch = cand;
+        break;
+      }
+    }
+  }
+  if (!defaultBranch) return diag; // 无 origin 或推不出默认分支 → unknown
+  diag.defaultBranch = defaultBranch;
+
+  // best-effort fetch（只更新 remote-tracking，不改工作区/HEAD/分支；失败静默降级用缓存）
+  gitQuiet(cwd, 'fetch origin --quiet');
+  const remoteHead = gitQuiet(cwd, `rev-parse --verify --quiet refs/remotes/origin/${defaultBranch}`);
+  if (!baseHash || !remoteHead) return diag;
+  if (baseHash === remoteHead) {
+    diag.status = 'up-to-date';
+    return diag;
+  }
+  const behind = Number(gitQuiet(cwd, `rev-list --count ${baseHash}..${remoteHead}`) || 0);
+  const ahead = Number(gitQuiet(cwd, `rev-list --count ${remoteHead}..${baseHash}`) || 0);
+  diag.behind = behind;
+  diag.ahead = ahead;
+  diag.status = (behind > 0 && ahead > 0) ? 'diverged' : (behind > 0 ? 'behind' : 'ahead');
+  return diag;
+}
+
+/**
+ * 把 base 同步检测结果打印到 stdout（醒目但不阻断 create）。
+ * up-to-date 静默不刷屏；其余给风险等级 + 对齐命令，由用户/agent 决定是否处理。
+ */
+function printSyncReport(diag, baseHash, changeName) {
+  const short = (baseHash || '').slice(0, 8);
+  if (diag.status === 'up-to-date') return;
+  if (diag.status === 'unknown') {
+    console.log(`ℹ️  base 同步检测：无 origin 远端或未设置默认分支，跳过（base ${short}）`);
+    return;
+  }
+  const b = diag.defaultBranch;
+  const ch = changeName || '<change>';
+  if (diag.status === 'behind') {
+    console.log(`⚠️  base 同步检测：落后 origin/${b} ${diag.behind} 个 commit（base ${short}）`);
+    console.log(`    execute 期间若主仓库对齐 main，apply 回来可能冲突。建议先对齐：`);
+    console.log(`      git merge --ff-only origin/${b}`);
+    console.log(`      sillyspec worktree cleanup ${ch} && sillyspec run execute --change ${ch}`);
+    console.log(`    或继续，apply 时用 --merge 降级（会引入合并提交）。`);
+  } else if (diag.status === 'diverged') {
+    console.log(`⚠️  base 同步检测：与 origin/${b} 分叉（领先 ${diag.ahead} / 落后 ${diag.behind}，base ${short}）`);
+    console.log(`    apply 回 main 大概率冲突。建议先在主仓库对齐（rebase 或 merge origin/${b}），`);
+    console.log(`    再 sillyspec worktree cleanup ${ch} + 重跑 execute。`);
+  } else {
+    // ahead：本地有未 push 的提交，无 apply 冲突风险
+    console.log(`ℹ️  base 同步检测：领先 origin/${b} ${diag.ahead} 个 commit（本地有未 push 的提交，无冲突风险）`);
+  }
+}
+
 function parseJSON(raw) {
   try { return JSON.parse(raw); } catch { return null; }
 }
@@ -328,37 +401,12 @@ export class WorktreeManager {
       writeFileSync(join(worktreePath, META_FILE), JSON.stringify(placeholderMeta, null, 2) + '\n');
     } catch {}
 
-    // 5.5 自动同步远程最新代码（防止 worktree 基于过时的 commit）
-    let syncStatus = 'ok';
-    let syncError = null;
-    try {
-      // 先 fetch origin
-      gitQuiet(worktreePath, 'fetch origin');
-
-      // 尝试 merge origin/main（或 origin/master）到 worktree 分支
-      const defaultBranch = gitQuiet(this.cwd, 'symbolic-ref refs/remotes/origin/HEAD --short')?.replace('origin/', '')
-        || gitQuiet(this.cwd, 'rev-parse --abbrev-ref origin/main') ? 'main'
-        : gitQuiet(this.cwd, 'rev-parse --abbrev-ref origin/master') ? 'master'
-        : null;
-
-      if (defaultBranch) {
-        // 检查 worktree 是否落后于远程
-        const localHead = gitQuiet(worktreePath, 'rev-parse HEAD');
-        const remoteHead = gitQuiet(worktreePath, `rev-parse origin/${defaultBranch}`);
-
-        if (localHead && remoteHead && localHead !== remoteHead) {
- // 检查是否有共同祖先（避免完全不相关的分支强行 merge）
-          const mergeBase = gitQuiet(worktreePath, `merge-base ${localHead} origin/${defaultBranch}`);
-          if (mergeBase) {
-            git(worktreePath, `merge origin/${defaultBranch} --ff-only`);
-          }
-        }
-      }
-    } catch (e) {
-      syncStatus = 'failed';
-      syncError = e.message || String(e);
-      console.warn(`⚠️  worktree 远程同步失败：${syncError}`);
-    }
+    // 5.5 base 同步检测（只读：不 ff、不改 HEAD；best-effort fetch 失败降级用缓存）。
+    // 旧逻辑 fetch + merge --ff-only：分叉时 ff 失败被静默吞（syncStatus=failed），成功时
+    // baseHash 锚点又不更新（ff 引入的 main 内容污染 apply patch）。现改为只检测 + 报告，
+    // 不阻断 create，对齐 origin 的动作留给用户/agent。
+    const syncDiagnostic = computeBaseSync(this.cwd, baseHash);
+    printSyncReport(syncDiagnostic, baseHash, name);
 
     // 5.6 Dirty baseline overlay：将主工作区未提交变更同步到 worktree
     const baselineResult = this._overlayBaseline(this.cwd, worktreePath);
@@ -394,8 +442,7 @@ export class WorktreeManager {
       baselineFiles,
       baselineCommit,
       baselineHash,
-      syncStatus,
-      ...(syncError ? { syncError } : {}),
+      syncDiagnostic,
       depsStatus: deps.depsStatus,
       depsMethod: deps.depsMethod || null,
       depsSource: deps.depsSource || null,
@@ -407,7 +454,7 @@ export class WorktreeManager {
     const metaPath = join(worktreePath, META_FILE);
     writeFileSync(metaPath, JSON.stringify(meta, null, 2) + '\n');
 
-    return { branch, worktreePath, baseHash, mode: meta.mode };
+    return { branch, worktreePath, baseHash, mode: meta.mode, syncDiagnostic };
   }
 
   /**

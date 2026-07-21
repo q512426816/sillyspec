@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-06-04 16:25:42
-updated_at: 2026-06-28
+updated_at: 2026-07-20
 ---
 
 # Worktree 与 Hook 门禁
@@ -50,7 +50,7 @@ sillyspec/<change-name>
 8. `git worktree add` 失败时：
    - 如果 git 版本低于 2.15 或不可用，报错。
    - 其他失败降级为 `in-place-fallback`，在主工作区记录 meta。
-9. 创建普通 worktree 后，会 best-effort `fetch origin` 并尝试 fast-forward 到默认远端分支。
+9. 创建普通 worktree 后，**只读检测** base（主仓库 HEAD）与 `origin/<默认分支>` 的落后/分叉状态，报告风险 + 对齐命令，写 `syncDiagnostic` 到 meta。**不自动 fetch+ff、不阻断 create**（对齐 origin 的动作留给用户/agent）。
 10. 主工作区已有 staged/unstaged/untracked 变更时，会 overlay 到 worktree，并创建 baseline checkpoint commit。
 11. **依赖供给**（change `2026-06-28-worktree-deps-provision`）：baseline overlay 后调用 `provisionDeps(worktreePath, mainCwd)`（`src/worktree-deps.js`）——lockfile 一致时 junction/symlink 主 checkout 的 `node_modules`（瞬时零网络），否则按 `local.yaml` 的 `project.type` + lockfile 推断并执行 install。结果写入 meta（`depsStatus` 等字段）。**供给失败不阻断 create**，只记 `depsStatus=failed`，交由 execute 验证硬门阻断。
 
@@ -72,13 +72,14 @@ sillyspec/<change-name>
 | `branch` | worktree 分支 |
 | `baseBranch` | 基准分支或 ref |
 | `baseHash` | 创建时基准 commit |
-| `actualBaseHash` | worktree 当前 HEAD |
+| `actualBaseHash` | worktree 当前 HEAD（去掉自动 ff 后 == `baseHash`） |
 | `createdAt` | 创建时间 |
 | `worktreePath` | 实际执行目录 |
 | `mode` | `worktree` / `native-worktree` / `in-place-fallback` |
 | `baselineFiles` | 从主工作区 overlay 的未提交文件 |
 | `baselineCommit` | baseline checkpoint commit |
 | `baselineHash` | execute 前主工作区 dirty baseline hash |
+| `syncDiagnostic` | base 与 `origin/<默认分支>` 的同步检测：`{ status, defaultBranch, behind, ahead }`。status 为 `up-to-date` / `behind` / `diverged` / `ahead` / `unknown`。落后/分叉时 create 会报告风险 + 对齐命令，不阻断 |
 | `depsStatus` | 依赖供给状态：`linked` / `installed` / `n/a` / `failed` / `missing` / `stale`（provisionDeps 写入） |
 | `depsMethod` | 供给机制：`junction` / `symlink` / `install` / `null` |
 | `depsSource` | 依赖来源：`main-checkout` / `install` / `null` |
