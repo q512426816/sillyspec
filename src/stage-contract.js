@@ -56,6 +56,20 @@ export function validateChangeExists(specBase, stageName, changeName) {
   if (!changeName || !STAGES_REQUIRE_EXISTING_CHANGE.has(stageName)) return null
   if (/^quick-[0-9a-f]{8}$/.test(changeName)) return null
   if (existsSync(join(specBase, 'changes', changeName))) return null
+
+  // archive 特例：step4 --confirm 已把变更从 changes/<name>/ 移到 changes/archive/<date>-<name>/。
+  // step5（更新路线图/提交）--change <name> 不应因 changes/<name>/ 已移走而被前置校验误拦。
+  // 精确匹配归档目录名（YYYY-MM-DD-<changeName>），避免后缀子串误匹配（auth ≠ deep-auth）。
+  if (stageName === 'archive') {
+    const archiveRoot = join(specBase, 'changes', 'archive')
+    if (existsSync(archiveRoot)) {
+      const archived = readdirSync(archiveRoot).find(d => {
+        const m = d.match(/^\d{4}-\d{2}-\d{2}-(.+)$/)
+        return m && m[1] === changeName
+      })
+      if (archived) return null
+    }
+  }
   return {
     changeName,
     specBase,

@@ -57,6 +57,16 @@ assert(validateChangeExists(specBase, 'plan', null) === null, 'changeName null �
 // 7. 已存在变更 + 各阶段 → 通过（回归保护）
 assert(validateChangeExists(specBase, 'execute', 'real-change') === null, 'execute + 已存在变更 → 通过')
 
+// 8. archive 特例：变更已被 step4 移到 changes/archive/<date>-<name>/ → 放行（修复 verify-archive-pitfalls 坑3）
+{
+  mkdirSync(join(specBase, 'changes', 'archive', '2026-07-23-archived-change'), { recursive: true })
+  assert(validateChangeExists(specBase, 'archive', 'archived-change') === null, 'archive + 已归档变更（changes/<name>/ 已移走）→ 放行')
+  // 精确匹配：后缀子串不算（auth ≠ deep-auth）
+  mkdirSync(join(specBase, 'changes', 'archive', '2026-07-22-deep-auth'), { recursive: true })
+  assert(validateChangeExists(specBase, 'archive', 'auth') !== null, 'archive + 后缀子串不算已归档（auth ≠ deep-auth）→ 失败')
+  // 其他阶段不享受 archive 特例
+  assert(validateChangeExists(specBase, 'plan', 'archived-change') !== null, 'plan 阶段不享受 archive 已归档放行 → 失败')
+}
 // 清理
 try { rmSync(specBase, { recursive: true, force: true }) } catch {}
 
