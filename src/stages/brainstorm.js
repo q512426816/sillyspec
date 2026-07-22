@@ -30,14 +30,14 @@ export const definition = {
 
 ### 操作
 1. 读取 CODEBASE-OVERVIEW.md + 共享规范 + 子项目上下文
-2. 加载项目信息：\`cat .sillyspec/projects/*.yaml 2>/dev/null\`
-3. 加载本地配置：\`cat .sillyspec/local.yaml 2>/dev/null\`
-4. 棕地项目：读取 .sillyspec/docs/<project>/scan/ 下的 STRUCTURE.md、CONVENTIONS.md、ARCHITECTURE.md
-5. **加载模块索引**：读取 \`.sillyspec/docs/<project>/modules/_module-map.yaml\`（如存在）
+2. 加载项目信息：\`cat {SPEC_ROOT}/projects/*.yaml 2>/dev/null\`
+3. 加载本地配置：\`cat {SPEC_ROOT}/local.yaml 2>/dev/null\`
+4. 棕地项目：读取 {SPEC_ROOT}/docs/<project>/scan/ 下的 STRUCTURE.md、CONVENTIONS.md、ARCHITECTURE.md
+5. **加载模块索引**：读取 \`{SPEC_ROOT}/docs/<project>/modules/_module-map.yaml\`（如存在）
    - 这一步是高频操作，_module-map.yaml 回答"哪个文件属于哪个模块、模块之间怎么依赖"
    - 用 tags/aliases 字段做需求关键词→模块的粗匹配
    - 用 entrypoints 字段快速了解模块对外能力
-6. 查看进行中的变更：\`ls .sillyspec/changes/ | grep -v archive\`
+6. 查看进行中的变更：\`ls {SPEC_ROOT}/changes/ | grep -v archive\`
    - 有相关同名变更 → 提示用户，避免重复
 7. 检查全局模板：\`ls ~/.sillyspec/templates/\`
    - 有匹配模板 → 询问是否基于模板
@@ -132,9 +132,9 @@ export const definition = {
 - 代码冲突：用户描述与现有代码/scan/module 文档不一致
 
 **能通过代码或文档确认的不要问用户，先读取**：
-- \`.sillyspec/docs/<project>/scan/ARCHITECTURE.md\`
-- \`.sillyspec/docs/<project>/scan/CONVENTIONS.md\`
-- \`.sillyspec/docs/<project>/modules/_module-map.yaml\`
+- \`{SPEC_ROOT}/docs/<project>/scan/ARCHITECTURE.md\`
+- \`{SPEC_ROOT}/docs/<project>/scan/CONVENTIONS.md\`
+- \`{SPEC_ROOT}/docs/<project>/modules/_module-map.yaml\`
 - 相关源码文件
 
 **给每个未解决歧义分级**：
@@ -228,7 +228,7 @@ export const definition = {
 - 适合：有 UI 组件/布局/交互流程/状态转换/架构图
 - 不适合：纯后端逻辑/配置修改/无可视化意义
 如果适合，生成一个独立的 HTML 文件（内联 CSS + JS），保存到：
-\`.sillyspec/changes/<change-name>/prototype-<名称>.html\`
+\`{SPEC_ROOT}/changes/<change-name>/prototype-<名称>.html\`
 - 单文件，浏览器直接打开
 - 展示关键布局结构和交互流程
 - 不需要完整功能，重点是让用户确认设计方向
@@ -309,16 +309,16 @@ design.md 第一行标题必须用中文：# 设计文档（Design）— <变更
 12. **自审**（AI 对自身设计的校验）
 
 ### 操作
-1. 确认变更目录存在：\`mkdir -p .sillyspec/changes/<change-name>\`（Windows 用 \`mkdir .sillyspec\\changes\\<变更名>\` 或 PowerShell \`New-Item -ItemType Directory -Force -Path .sillyspec/changes/<change-name>\`）
+1. 确认变更目录存在：\`mkdir -p {SPEC_ROOT}/changes/<change-name>\`（Windows 用 \`mkdir {SPEC_ROOT}/changes\\<变更名>\` 或 PowerShell \`New-Item -ItemType Directory -Force -Path {SPEC_ROOT}/changes/<change-name>\`）
    - 变更名格式必须为 \`YYYY-MM-DD-<简短描述>\`（如 \`2026-05-13-user-auth\`）
-2. 将确认的设计写入 \`.sillyspec/changes/<change-name>/design.md\`
-3. 如果对话探索或方案讨论产生了实现相关决策，写入 \`.sillyspec/changes/<change-name>/decisions.md\`：
+2. 将确认的设计写入 \`{SPEC_ROOT}/changes/<change-name>/design.md\`
+3. 如果对话探索或方案讨论产生了实现相关决策，写入 \`{SPEC_ROOT}/changes/<change-name>/decisions.md\`：
    - decisions.md 是本次变更的决策台账，不是长期术语表
    - 只记录有实现/验收影响的决策，闲聊和低风险偏好不记录
    - 每条记录必须有稳定版本 ID：D-001@v1、D-002@v1 ...
    - 若后续 Design Grill 修正该决策，新记录使用 D-001@v2，并写明 supersedes: D-001@v1
    - 每条记录必须包含：type、status、source、question、answer、normalized_requirement、impacts、evidence、priority
-   - 长期术语只在 archive/scan 时再提升到 \`.sillyspec/docs/<project>/glossary.md\`
+   - 长期术语只在 archive/scan 时再提升到 \`{SPEC_ROOT}/docs/<project>/glossary.md\`
 4. 格式自检（只查章节齐全；语义一致性/可行性/YAGNI 不在本步查，交给下一步 Design Grill 独立审查）：
    - design.md 含全部必填章节（背景/设计目标/非目标/总体方案/文件变更清单/接口定义/风险登记）
    - 如存在 decisions.md，design.md 是否引用所有当前版本 D-xxx@vN
@@ -358,12 +358,12 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
 3. 即使跳过，也要输出"Design Grill skipped"和原因，不能静默跳过。
 
 ### 输入材料
-1. 必须读取完整 \`.sillyspec/changes/<change-name>/design.md\`
+1. 必须读取完整 \`{SPEC_ROOT}/changes/<change-name>/design.md\`
 2. 读取 proposal.md、requirements.md、tasks.md、decisions.md（如存在）
 3. 读取 scan/module docs：
-   - \`.sillyspec/docs/<project>/scan/ARCHITECTURE.md\`
-   - \`.sillyspec/docs/<project>/scan/CONVENTIONS.md\`
-   - \`.sillyspec/docs/<project>/modules/_module-map.yaml\`
+   - \`{SPEC_ROOT}/docs/<project>/scan/ARCHITECTURE.md\`
+   - \`{SPEC_ROOT}/docs/<project>/scan/CONVENTIONS.md\`
+   - \`{SPEC_ROOT}/docs/<project>/modules/_module-map.yaml\`
    - 命中的模块文档
 4. 按 design.md 文件变更清单读取相关源码、测试、配置、schema 或样例数据；矛盾经常藏在设计与外部约束交叉处，素材宁可多读，不要只读摘要。
 
@@ -453,9 +453,9 @@ status: passed | needs-user-input | blocked | skipped
 1. 展示 design.md 摘要 + **规模评估结果（small/large + 一句依据）** 给用户
 2. 暂停等待用户选择：✅ 确认 / ✏️ 修改 / ❌ 推翻重来
 3. 确认后，**按规模生成规范文件**：
-   - **scale=large**：在 \`.sillyspec/changes/<change-name>/\` 下生成完整四件套（design.md / decisions.md 可选 / proposal.md / requirements.md / tasks.md），实现路径 → \`sillyspec run plan --change <变更名>\`
+   - **scale=large**：在 \`{SPEC_ROOT}/changes/<change-name>/\` 下生成完整四件套（design.md / decisions.md 可选 / proposal.md / requirements.md / tasks.md），实现路径 → \`sillyspec run plan --change <变更名>\`
    - **scale=small**：只生成/补全 design.md（proposal/requirements/tasks 对 quick 无用，不生成），实现路径 → \`sillyspec run quick --linked-changes <变更名>\`
-   - 两种规模都执行 \`git add .sillyspec/\` — 暂存规范文件（不要 commit）
+   - 两种规模都执行 \`git add .sillyspec/\` — 暂存规范文件（不要 commit，由用户通过统一提交工具处理）。**平台模式跳过 git add**（specRoot 不在 sourceRoot 的 git repo 内）
 
 所有规范文件头部必须包含 YAML frontmatter：
 \`\`\`yaml
@@ -538,13 +538,13 @@ Then 期望结果
 ### 后续变更包处理
 如果 MASTER.md 中规划了后续变更包（拆分后的子阶段），**必须同时为每个后续包创建独立变更目录**：
 1. 读取 MASTER.md 中的变更包列表（包名 + 边界描述）
-2. 为每个后续包创建目录：\`mkdir -p .sillyspec/changes/<后续包名>\`
+2. 为每个后续包创建目录：\`mkdir -p {SPEC_ROOT}/changes/<后续包名>\`
 3. 每个目录生成骨架文件：
    - \`proposal.md\`：从 MASTER.md 中提取该包的动机和边界
    - \`design.md\`：从 MASTER.md 中提取该包的职责描述（标记为「待设计 - 本包 design 在该包进入 brainstorm 时完善」）
    - \`requirements.md\`：从 MASTER.md 中提取该包的需求范围（标记为「待完善」）
    - \`tasks.md\`：创建空任务列表，标记为「待 plan 阶段展开」
-4. \`git add .sillyspec/\` — 暂存所有新增文件（不要 commit）
+4. \`git add .sillyspec/\` — 暂存所有新增文件（不要 commit，由用户通过统一提交工具处理）。**平台模式跳过 git add**（specRoot 不在 sourceRoot 的 git repo 内）
 5. 后续变更包的骨架文件同样必须包含 \`author: <git-user>\` 和 \`created_at: <now-datetime>\`
 
 ### 铁律 — 必须等待用户最终确认

@@ -94,7 +94,7 @@ const stepClassify = {
    - 如果发现 superseded 决策，只引用最新版本，不引用旧版本
 5. 读取 CONVENTIONS.md、ARCHITECTURE.md、STACK.md
 6. 读取 local.yaml 获取构建/测试命令
-7. 读取 \`.sillyspec/docs/<project>/modules/_module-map.yaml\`（不存在则跳过）
+7. 读取 \`{SPEC_ROOT}/docs/<project>/modules/_module-map.yaml\`（不存在则跳过）
    - 根据 design.md 的文件变更清单匹配模块
    - 读取匹配到的模块文档
    - 利用模块依赖关系辅助分析（depends_on / used_by）
@@ -314,7 +314,7 @@ full 计划的约束：
 2. 读取 design.md 获取文件变更清单
 3. 读取上一步的 plan_level 分类结果
 4. 按对应级别模板生成内容
-5. 保存到变更目录下的 plan.md（路径格式：\`.sillyspec/changes/<change-name>/plan.md\`，其中 <change-name> 是变更目录名，直接使用，不加子目录。正确路径示例：\`.sillyspec/changes/2026-05-28-agent-log-streaming/plan.md\`）
+5. 保存到变更目录下的 plan.md（路径格式：\`{SPEC_ROOT}/changes/<change-name>/plan.md\`，其中 <change-name> 是变更目录名，直接使用，不加子目录。正确路径示例：\`{SPEC_ROOT}/changes/2026-05-28-agent-log-streaming/plan.md\`）
 **plan_level 为 none 时生成最小 plan.md（占位），不生成完整蓝图。**
 
 ---
