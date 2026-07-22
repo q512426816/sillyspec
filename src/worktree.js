@@ -1093,6 +1093,14 @@ export class WorktreeManager {
 
       if (files.length > 0) {
         console.log(`📁 baseline overlay: ${files.length} 个未提交文件已同步到 worktree`);
+        // 非阻断 advisory（治「已做完没提交」被裹进 execute 交付）：这批未提交改动会单独 commit
+        // 成 baseline checkpoint（git 历史与本阶段新改动分层，可分开验收），但 apply 回 main 时会
+        // 随本阶段交付落地。若它们是独立变更、需要独立验收，先提交到独立分支另行处理——
+        // 注意不能在 main 直接 commit（那等于无验收并入主干、污染 main，正是坑1 形态）。
+        // sillyspec 只做确定性提示（改动是事实），该不该拆分属意图判定，留给 agent/用户。
+        console.log(`    ℹ️  它们将作为独立 baseline checkpoint 提交到 worktree 分支（与本阶段新改动分层、可分开验收），`);
+        console.log(`       但 apply 回 main 会随本阶段交付。若是独立变更、需独立验收：先提交到独立分支另行处理`);
+        console.log(`       （不要在 main 直接 commit——那等于无验收并入主干、污染 main），再回到本变更跑 execute。`);
       }
     } catch (e) {
       errors.push(`unexpected: ${e.message}`);
