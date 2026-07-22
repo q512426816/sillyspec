@@ -362,6 +362,14 @@ export class WorktreeManager {
       mkdirSync(this.worktreeBase, { recursive: true });
     }
 
+    // 4.5 Windows 长路径支持：archive/ 下嵌套的 .runtime/artifacts 超长文件名（>260 字符）
+    // 会让 worktree add 的 checkout 报 "Filename too long" 失败 → 降级 in-place 且主工作区
+    // 未切分支，直接写代码污染 main（见缺陷 execute-in-place-windows-pitfalls 坑1）。
+    // core.longpaths=true 让 git 用 \\?\ 前缀绕过 MAX_PATH，幂等、Windows 推荐、低风险，失败不阻断。
+    if (process.platform === 'win32') {
+      try { gitQuiet(this.cwd, 'config core.longpaths true'); } catch {}
+    }
+
     // 5. 创建 worktree（含版本检测 + sandbox fallback）
     try {
       git(this.cwd, `worktree add ${worktreePath} -b ${branch} ${baseHash}`);
