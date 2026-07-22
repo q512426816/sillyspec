@@ -33,6 +33,36 @@ function resolveChangeDir(cwd, changeName, specRoot = null) {
   return join(changesRoot, changeName)
 }
 
+/**
+ * --change 变更名存在性校验（治 cwd 漂移误匹配，缺陷 execute-in-place-windows-pitfalls 坑5）。
+ *
+ * 多项目 monorepo 下，cwd 在子项目目录会让 resolveSpecDir 命中子项目 spec，
+ * 此时 --change 传根项目变更名，旧逻辑（resolveChangeDir 纯拼路径）不报错而静默
+ * fallback 误启动子项目流程。本校验对「操作已有变更」的阶段强制 changes/<changeName>
+ * 存在，不存在则 fail-fast，把 cwd 漂移暴露给用户。
+ *
+ * 豁免：
+ *   - 非 plan/execute/verify/archive 阶段（scan/brainstorm/quick/explore 不校验：
+ *     brainstorm 可新建变更、quick 用 sessionId、scan/explore 无 change 语义）
+ *   - quick-<8hex> sessionId（quick 会话 changeName 是 sessionId，不在 changes/）
+ *
+ * @param {string} specBase - 规范根目录（.sillyspec 或平台 specRoot）
+ * @param {string} stageName - 阶段名
+ * @param {string} changeName - 变更名（--change 或 auto）
+ * @returns {{ changeName: string, specBase: string, message: string } | null} null=通过，对象=失败
+ */
+export function validateChangeExists(specBase, stageName, changeName) {
+  const STAGES_REQUIRE_EXISTING_CHANGE = new Set(['plan', 'execute', 'verify', 'archive'])
+  if (!changeName || !STAGES_REQUIRE_EXISTING_CHANGE.has(stageName)) return null
+  if (/^quick-[0-9a-f]{8}$/.test(changeName)) return null
+  if (existsSync(join(specBase, 'changes', changeName))) return null
+  return {
+    changeName,
+    specBase,
+    message: `变更 "${changeName}" 在当前 spec 下不存在：${join(specBase, 'changes', changeName)}`,
+  }
+}
+
 function collectIdsFromLine(line, re, ids) {
   for (const match of line.matchAll(re)) {
     ids.add(match[0].toUpperCase())

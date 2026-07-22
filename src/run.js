@@ -159,7 +159,7 @@ function resolveSpecDir(cwd, opts = {}) {
   return join(resolve(cwd), '.sillyspec')
 }
 import { stageRegistry, auxiliaryStages } from './stages/index.js'
-import { checkTransition, runValidators } from './stage-contract.js'
+import { checkTransition, runValidators, validateChangeExists } from './stage-contract.js'
 import { buildExecuteSteps } from './stages/execute.js'
 import { buildPlanSteps } from './stages/plan.js'
 import { formatExecuteSummary } from './worktree-apply.js'
@@ -1564,6 +1564,18 @@ export async function runCommand(args, cwd, specDir = null) {
     console.error('❌ execute 阶段必须用 --change <变更名> 指定要操作的变更。')
     console.error('   agent 必须传参，不设默认值、不做自动检测。')
     console.error('   请加 --change <变更名> 重新执行。')
+    process.exit(1)
+  }
+
+  // --change 变更名存在性校验（治 cwd 漂移误匹配，缺陷 execute-in-place-windows-pitfalls 坑5）：
+  // 必须在 pm.read/initChange 之前——initChange 会为 --change 指定的新名字创建 changes/ 目录，
+  // 校验若在其后则目录已存在、永远通过。用原始 changeName（--change 参数），覆盖 plan/execute/
+  // verify/archive；quick-<8hex> sessionId 与 brainstorm 新建豁免（见 validateChangeExists）。
+  const changeMissing = validateChangeExists(specBase, stageName, changeName)
+  if (changeMissing) {
+    console.error(`❌ ${changeMissing.message}`)
+    console.error(`   可能 cwd 漂移——当前 cwd=${cwd}，命中的 spec=${specBase}。`)
+    console.error(`   若意图操作别的项目，请 cd 到对应项目根，或用 --spec-dir 指定正确的 spec 目录。`)
     process.exit(1)
   }
 

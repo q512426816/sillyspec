@@ -64,3 +64,10 @@
 关联变更：（无）
 文件：src/run.js, test/quick-baseline-dirty-worktree.test.mjs, .sillyspec/docs/sillyspec/modules/core-engine.md
 结果：Fix A：run.js baseline 录入去掉 `.sillyspec/` 粗过滤（line ~1967），预存 untracked `.sillyspec/changes/` 现进 baseline、audit 经 baselineFilesSet 排除；quick 自身元数据本由 audit 侧 isQuickMetadata 精确豁免，不需粗过滤。Fix B：`--done` 的 `--force-baseline`/`--allow-new` 经 completeStep 选项并入 guard（调用点 1695 + 解构 2617 + 审计调用 2993 取或），原只传 `{isConfirm}` 致 flag 静默无效；并修正审计复审误导文案。回归：quick-baseline-dirty-worktree 加场景 8（预存 untracked → safe）+ 场景 9（对照：本次新建仍 blocked，守卫未弱化）。合并语义 5 用例 + 全套 npm test 50 文件 0 失败 + lint 通过。同步 core-engine 模块文档。注：本会话 step 1 已声明 --force-baseline（动 src/run.js DANGEROUS 文件）；后续会话可改在 --done 传 flag（Fix B 生效）。
+
+## ql-20260722-001-25e4 | 2026-07-22 14:39:37 | (quick 任务)
+状态：已完成
+关联变更：（无）
+文件：src/run.js
+
+结果：validateChangeExists 新增于 stage-contract.js（plan/execute/verify/archive 阶段强制 changes/<name> 存在，quick sessionId/brainstorm 等豁免）；runCommand 在 pm.read/initChange 之前调用校验（关键：initChange 会先建 changes/ 目录）；test/change-exists-validation.test.mjs 16/16 通过；端到端验证 plan --change ghost 报错且不建目录。模块文档跳过（无 _module-map）。
