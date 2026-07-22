@@ -14,7 +14,7 @@ description: 用于明确、低风险、范围很小的直接任务。适合用�
 
 quick 阶段的 `--change` 语义是「关联变更」**且会触发步骤重置**，**不要用 `--change` 来指定关联变更**。多活跃变更时改用：
 
-- `--linked-changes none`：不关联，仅记 QUICKLOG
+- `--linked-changes none`：不关联，仅记 QUICKLOG（CLI 启动时写入）
 - `--linked-changes a,b`：显式关联到变更 a、b
 - `--non-interactive`：CI/脚本环境，默认不关联（避免交互 prompt 崩溃）
 
@@ -78,7 +78,7 @@ sillyspec run quick --files src/phone.ts,src/phone.test.ts
 - **必须用 exec 工具（shell）执行 CLI，不要自己编造流程**
 - quick 直接在主工作区改代码（不创建 worktree），范围必须小且明确
 - 完成后立即 `--done`，不跳过
-- step 1 会创建 `.sillyspec/quicklog/QUICKLOG-<user>.md` 记录（理解任务时），完成前 CLI 会校验它存在
+- QUICKLOG 记录由 **CLI 接管**：启动时 CLI 自动分配 ql-ID 并在 `.sillyspec/quicklog/QUICKLOG-<user>.md` 写「进行中」条目（含关联变更 tasks.md），完成时 CLI 自动翻「已完成」并勾选 task。**你无需手写 QUICKLOG / tasks.md**，只需用注入的 `<quicklog-id>` 在模块文档变更索引引用
 - **禁止**在没有运行 CLI 的情况下自行决定流程
 
 ## 用户指令

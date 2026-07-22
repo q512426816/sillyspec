@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-06-04 16:25:42
-updated_at: 2026-07-09
+updated_at: 2026-07-22
 ---
 
 # 阶段与变更产物
@@ -32,7 +32,7 @@ updated_at: 2026-07-09
 | execute | 12+ | 生成/使用 worktree，按 Wave 执行；最终 apply/cleanup；完成时 `validateExecuteOutputs` 核验真实代码变更 + Task Review Gate 做 review.json git 交叉校验 |
 | verify | 7 | 写 `verify-result.md`；完成时 CLI 实测 `commands.test` 与自报告对账 |
 | archive | 5 | 写 `module-impact.md`，同步模块文档，归档目录 |
-| quick | 3 | 始终写 quicklog；关联变更时另在各 change tasks.md 追加并勾选 task；直接改主工作区 |
+| quick | 3 | quicklog 由 CLI 写入（启动分配 ql-ID + 「进行中」，完成翻「已完成」）；关联变更时 CLI 在各 change tasks.md 追加/勾选 task；直接改主工作区 |
 
 ## 变更四件套
 
@@ -149,18 +149,19 @@ updated_at: 2026-07-09
 
 路径：`.sillyspec/quicklog/QUICKLOG-<git-user>.md`
 
-创建方式：quick 阶段“理解任务”prompt，**每次 quick 都创建/追加**（无论是否关联变更）。关联变更时，同一 ql-ID 会同步写入各关联变更的 tasks.md 作为未勾选 task，step 3 完成时勾选。
+创建方式：**CLI 接管**（`src/quicklog.js`，O_EXCL lockfile 串行化，无新 npm 依赖）。quick 启动（`runStage` guard 首次写入）时，CLI 持锁分配 ql-ID 并写「进行中」条目（描述取任务位置参数/`--input`），同时向每个关联变更的 tasks.md 追加未勾选 task；step 3 完成（`completeStep` quick 收尾）时，CLI 强校验条目存在后翻「已完成」+ 追加结果行 + 勾选 task。Agent 全程不手写 QUICKLOG / tasks.md。
 
-格式规则来自 prompt：
+格式规则（`allocateQuicklogEntry`）：
 
 - ID 为 `ql-YYYYMMDD-NNN-XXXX`
-- `NNN` 每天从 001 递增
-- `XXXX` 是 4 位随机十六进制字符
-- 第一步写“进行中”
-- 第三步改为“已完成”
-- 超过 500 行时 prompt 要求轮转为 `QUICKLOG-<USER>-YYYY-MM-DD.md`
+- `NNN` 每天从 001 递增（锁内扫描所有 `QUICKLOG-*.md` 当天最大序号 +1，并发安全）
+- `XXXX` 是 4 位随机十六进制后缀（`crypto.randomBytes`，当天查重）
+- 启动写「进行中」，step 3 完成改「已完成」+ 追加「结果：」行
+- 超过 500 行时 CLI 轮转为 `QUICKLOG-<USER>-YYYY-MM-DD.md`（日期取最后记录日期）
 
-这些写入和轮转由 AI 按 prompt 执行，当前没有独立 JS 函数自动完成。
+幂等：分配判据是 session guard.json 的 `quicklogId` 字段（跨进程可靠），同 sessionId 重入不重复分配/写条目。收尾强校验：条目被删或缺失时 `completeStep` 阻断 `--done`（治「报 SAFE 但漏写」缺陷）；guard 缺失（brownfield）不阻断，兜底补写一条记录。这些写入、轮转、状态机、锁由 `src/quicklog.js` 的 JS 函数完成，不再由 AI 按 prompt 执行。
+
+并发与原子写（`writeAtomic`）：锁只保证**写者互斥**（多 quick 会话串行），但 **reader 不持锁**（agent `cat`、dashboard 轮询、commit 收集），锁挡不住 reader。故所有「读-改-写」路径（`completeQuicklogEntry` 翻状态、`rotateIfNeeded` 同日已轮转分支、`checkTaskCheckbox` 勾选）经 `writeAtomic` —— 同目录临时文件 + `rename` 原子覆盖，reader 永远读到完整旧版或完整新版，绝不读半截/空。Windows 差异：`rename` 覆盖正被读取的目标会抛 `EPERM/EBUSY`，故 `writeAtomic` 为 async，对占用类错误做退避重试；这也让上述三个函数为 async。追加路径（`allocateQuicklogEntry` 的条目 append、`appendTaskCheckbox`）走 `appendFileSync`（O_APPEND 单次追加原子），无需原子包装。
 
 ## 归档目录
 

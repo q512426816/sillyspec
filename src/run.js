@@ -11,6 +11,7 @@ import { createRequire } from 'module'
 const require = createRequire(import.meta.url)
 import { ProgressManager } from './progress.js'
 import { SCAN_STATUS, POINTER_STATUS, isPointerCorrupted } from './constants.js'
+import { allocateQuicklogEntry, completeQuicklogEntry, findQuicklogEntry } from './quicklog.js'
 import { checkbox } from '@inquirer/prompts'
 
 /**
@@ -720,6 +721,19 @@ async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjec
   // 见 runStage 参数解析 quickSessionId 生成。告知 agent 本会话 id + --done 需带 --change）
   if (changeName && promptText.includes('<quick-session-id>')) {
     promptText = promptText.replace(/<quick-session-id>/g, changeName)
+  }
+  // 替换 <quicklog-id> 占位符（quick 阶段：从 session guard.json 读 CLI 分配的 ql-ID，
+  // 供 agent 在模块文档变更索引等处引用）
+  if (promptText.includes('<quicklog-id>')) {
+    const specBaseQl = platformOpts?.specRoot || join(cwd, '.sillyspec')
+    let qlIdVal = ''
+    try {
+      const sessionGuardFile = join(specBaseQl, '.runtime', 'quick-sessions', changeName, 'guard.json')
+      if (existsSync(sessionGuardFile)) {
+        qlIdVal = JSON.parse(readFileSync(sessionGuardFile, 'utf8')).quicklogId || ''
+      }
+    } catch {}
+    promptText = promptText.replace(/<quicklog-id>/g, qlIdVal || '(未分配)')
   }
   // 替换 <linked-changes> 占位符（quick 阶段：从 .runtime/quick-sessions/<sessionId>/guard.json 读关联变更）
   if (promptText.includes('<linked-changes>')) {
@@ -1740,7 +1754,7 @@ export async function runCommand(args, cwd, specDir = null) {
   }
 
   // 默认：输出当前步骤
-  return await runStage(pm, progress, stageName, cwd, effectiveChange, isSkipApproval, platformOpts, { quickFiles, isAllowNew, isForceBaseline, isForceRescan, linkedChanges })
+  return await runStage(pm, progress, stageName, cwd, effectiveChange, isSkipApproval, platformOpts, { quickFiles, isAllowNew, isForceBaseline, isForceRescan, linkedChanges, taskDescription: inputText })
 }
 
 /**
@@ -2000,45 +2014,67 @@ async function runStage(pm, progress, stageName, cwd, changeName, skipApproval =
     console.log(`🔄 ${stageName} 阶段已自动重置，重新开始。\n`)
   }
 
-  // quick 阶段：记录 baselineFiles
-  if (stageName === 'quick' && !progress.quickGuard) {
+  // quick 阶段：记录 baselineFiles + 分配 ql-ID（CLI 接管 QUICKLOG 写入）
+  // 幂等判据是 session guard.json 文件（跨进程可靠），不是 progress.quickGuard
+  // （D-003@v1：顶层 quickGuard 不跨进程持久化；agent 在 step 间用 `run quick` 取下一步
+  // prompt 时每个新进程都进此块，按文件判幂等才不会重复分配 ql-ID / 重复写条目）。
+  if (stageName === 'quick') {
+    const sessionGuardDir = join(specBase, '.runtime', 'quick-sessions', changeName)
+    const guardFile = join(sessionGuardDir, 'guard.json')
+    let existingGuard = null
     try {
-      const { execSync } = await import('child_process')
-      const gitStatus = execSync('git status --porcelain', { cwd, encoding: 'utf8', timeout: 10000 })
-      // 记录全部预存脏文件（含 untracked + .sillyspec/ 路径）。quick 会话期间自身写入的元数据
-      // （quicklog/.runtime/modules/_module-map 等）由 auditQuickCompletion 的 isQuickMetadata 精确豁免，
-      // 不需要这里粗放过滤 .sillyspec/——旧过滤致预存 untracked .sillyspec/changes/ 不进 baseline，
-      // 却在 audit 被当「危险(.sillyspec/)+新增」误判永久 blocked（ql-20260713-002-7628 修复）。
-      const baselineFiles = gitStatus
-        .trim().split('\n').filter(Boolean)
-        .map(line => line.slice(3).trim())
-      const allowedFiles = quickOpts?.quickFiles || []
-      const allowNew = quickOpts?.isAllowNew || false
-      const forceBaseline = quickOpts?.isForceBaseline || false
-      progress.quickGuard = {
-        sessionId: changeName,
-        name_zh: '快速任务守卫',
-        baselineCommit: safeGit(cwd, ['rev-parse', 'HEAD']).value,
-        baselineFiles,
-        allowedFiles,
-        allowNew,
-        forceBaseline,
-        linkedChanges: Array.isArray(quickOpts?.linkedChanges) ? quickOpts.linkedChanges : [],
-        startedAt: new Date().toISOString(),
+      if (existsSync(guardFile)) existingGuard = JSON.parse(readFileSync(guardFile, 'utf8'))
+    } catch {}
+    if (existingGuard) {
+      // 跨进程重入：复用已分配的 ql-ID，跳过 baseline 重捕与分配（幂等）
+      progress.quickGuard = existingGuard
+    } else {
+      try {
+        const { execSync } = await import('child_process')
+        const gitStatus = execSync('git status --porcelain', { cwd, encoding: 'utf8', timeout: 10000 })
+        // 记录全部预存脏文件（含 untracked + .sillyspec/ 路径）。quick 会话期间自身写入的元数据
+        // （quicklog/.runtime/modules/_module-map 等）由 auditQuickCompletion 的 isQuickMetadata 精确豁免，
+        // 不需要这里粗放过滤 .sillyspec/——旧过滤致预存 untracked .sillyspec/changes/ 不进 baseline，
+        // 却在 audit 被当「危险(.sillyspec/)+新增」误判永久 blocked（ql-20260713-002-7628 修复）。
+        const baselineFiles = gitStatus
+          .trim().split('\n').filter(Boolean)
+          .map(line => line.slice(3).trim())
+        const allowedFiles = quickOpts?.quickFiles || []
+        const allowNew = quickOpts?.isAllowNew || false
+        const forceBaseline = quickOpts?.isForceBaseline || false
+        const linkedChanges = Array.isArray(quickOpts?.linkedChanges) ? quickOpts.linkedChanges : []
+        // CLI 接管：分配 ql-ID + 写 QUICKLOG「进行中」条目 + 关联 tasks.md（持锁、当天唯一）
+        const gitUser = safeGit(cwd, ['config', 'user.name']).value || 'unknown'
+        const { qlId } = await allocateQuicklogEntry(specBase, gitUser, {
+          description: quickOpts?.taskDescription || '',
+          linkedChanges,
+          allowedFiles,
+        })
+        progress.quickGuard = {
+          sessionId: changeName,
+          name_zh: '快速任务守卫',
+          baselineCommit: safeGit(cwd, ['rev-parse', 'HEAD']).value,
+          baselineFiles,
+          allowedFiles,
+          allowNew,
+          forceBaseline,
+          linkedChanges,
+          quicklogId: qlId,
+          startedAt: new Date().toISOString(),
+        }
+        // 写入 .runtime/quick-sessions/<sessionId>/guard.json 供 worktree-guard hook 读取
+        // （D-002：按 session 存，多会话各自 guard 不互覆盖。runStage 作用域内 sessionId == changeName == quick-<uuid8>，见 §4.4/4.5）
+        mkdirSync(sessionGuardDir, { recursive: true })
+        writeFileSync(guardFile, JSON.stringify(progress.quickGuard, null, 2))
+        const parts = [`${baselineFiles.length} 个已有脏文件`]
+        if (allowedFiles.length > 0) parts.push(`${allowedFiles.length} 个 allowedFiles`)
+        if (allowNew) parts.push('允许新增文件')
+        console.log(`🛡️ quick 变更边界已记录: ${parts.join(', ')}`)
+        console.log(`📝 QUICKLOG 条目已创建: ${qlId}`)
+        await pm._write(cwd, progress, changeName)
+      } catch (e) {
+        console.warn(`⚠️ baseline 记录失败: ${e.message}`)
       }
-      // 写入 .runtime/quick-sessions/<sessionId>/guard.json 供 worktree-guard hook 读取
-      // （D-002：按 session 存，多会话各自 guard 不互覆盖。runStage 作用域内 sessionId == changeName == quick-<uuid8>，见 §4.4/4.5）
-      const sessionGuardDir = join(specBase, '.runtime', 'quick-sessions', changeName)
-      mkdirSync(sessionGuardDir, { recursive: true })
-      const guardFile = join(sessionGuardDir, 'guard.json')
-      writeFileSync(guardFile, JSON.stringify(progress.quickGuard, null, 2))
-      const parts = [`${baselineFiles.length} 个已有脏文件`]
-      if (allowedFiles.length > 0) parts.push(`${allowedFiles.length} 个 allowedFiles`)
-      if (allowNew) parts.push('允许新增文件')
-      console.log(`🛡️ quick 变更边界已记录: ${parts.join(', ')}`)
-      await pm._write(cwd, progress, changeName)
-    } catch (e) {
-      console.warn(`⚠️ baseline 记录失败: ${e.message}`)
     }
   }
 
@@ -3011,61 +3047,96 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
       if (steps[wsIdx].waitReason) console.log(`   原因：${steps[wsIdx].waitReason}`)
       return { stageCompleted: false, currentIdx, nextPendingIdx: -1 }
     }
-    // quick 阶段完成前强制检查 quicklog 是否创建
+    // quick 收尾：强校验 QUICKLOG 条目 + 翻状态 + 勾 tasks.md（CLI 接管）
     if (stageName === 'quick') {
-      const quicklogDir = join(specBase, 'quicklog')
-      const hasQuicklog = existsSync(quicklogDir) && readdirSync(quicklogDir).some(f => f.endsWith('.md') && f.startsWith('QUICKLOG'))
-      if (!hasQuicklog) {
-        console.error(`\n❌ quick 阶段完成校验失败：未检测到 QUICKLOG 记录文件。`)
-        console.error(`   step 2 要求创建 quicklog 记录，但文件不存在。`) 
-        console.error(`   请先创建 quicklog 记录再 --done。`)
-        return { stageCompleted: false, currentIdx, nextPendingIdx: -1 }
-      }
-      // §4.6 quick 收尾：从 session guard.json 读 guard（不依赖 progress.quickGuard）。
+      // §4.6 从 session guard.json 读 guard（不依赖 progress.quickGuard）。
       // D-003@v1：progress._write 不持久化顶层 quickGuard，跨进程 --done 时读出的 progress 无 quickGuard，
       // 若仍用 if (progress.quickGuard) 驱动收尾会整体跳过，导致 .runtime/quick-sessions/<sessionId>/ 残留僵尸。
       // 改为从文件读 guard：优先 session 目录 guard.json，回退旧单文件 quick-guard.json（task-03 前兼容）。
       // sessionId == changeName == quick-<uuid8>（completeStep 作用域内 changeName 已解构自 options）。
-      {
-        const runtimeBase = platformOpts.runtimeRoot || join(specBase, '.runtime')
-        const sessionGuardFile = join(runtimeBase, 'quick-sessions', changeName, 'guard.json')
-        const legacyGuardFile = join(specBase, '.runtime', 'quick-guard.json')
-        let guard = null
-        try {
-          guard = existsSync(sessionGuardFile)
-            ? JSON.parse(readFileSync(sessionGuardFile, 'utf8'))
-            : (existsSync(legacyGuardFile) ? JSON.parse(readFileSync(legacyGuardFile, 'utf8')) : null)
-        } catch {}
-        if (guard) {
-          // --done 的 --force-baseline/--allow-new 并入 guard（与 step1 持久化值取或）。
-          // 修复 ql-20260713-002-7628：旧代码解析了这两个 flag 但只传 {isConfirm} 给审计，
-          // 致 --done --force-baseline 静默无效、用户被误导「重跑 --confirm」也无法解锁。
-          const mergedGuard = {
-            ...guard,
-            forceBaseline: guard.forceBaseline || isForceBaseline,
-            allowNew: guard.allowNew || isAllowNew,
-          }
-          const review = await auditQuickCompletion(cwd, mergedGuard, { isConfirm: confirm })
-          printQuickAuditReview(review)
-          if (review.status === 'blocked') {
-            steps[currentIdx].status = 'pending'
-            steps[currentIdx].completedAt = null
-            if (outputText) steps[currentIdx].output = null
-            process.exit(1)
-          }
-          progress.lastQuickReview = review
+      const runtimeBase = platformOpts.runtimeRoot || join(specBase, '.runtime')
+      const sessionGuardFile = join(runtimeBase, 'quick-sessions', changeName, 'guard.json')
+      const legacyGuardFile = join(specBase, '.runtime', 'quick-guard.json')
+      let guard = null
+      try {
+        guard = existsSync(sessionGuardFile)
+          ? JSON.parse(readFileSync(sessionGuardFile, 'utf8'))
+          : (existsSync(legacyGuardFile) ? JSON.parse(readFileSync(legacyGuardFile, 'utf8')) : null)
+      } catch {}
+
+      // 强校验 / 收尾：本会话必须有一条真实 QUICKLOG 条目（治「报 SAFE 但漏写」bug）。
+      // guard 缺失（brownfield：新代码前启动的会话）不阻断——兜底补写一条记录，保住「完成必有记录」不变量。
+      const gitUser = safeGit(cwd, ['config', 'user.name']).value || 'unknown'
+      let qlId = guard?.quicklogId || null
+      const linkedChanges = Array.isArray(guard?.linkedChanges) ? guard.linkedChanges : []
+
+      // 审计：仅在有 guard 时跑（brownfield 无 guard 跳过，兼容 D-003 brownfield 行为）。
+      if (guard) {
+        // --done 的 --force-baseline/--allow-new 并入 guard（与 step1 持久化值取或）。
+        // 修复 ql-20260713-002-7628：旧代码解析了这两个 flag 但只传 {isConfirm} 给审计，
+        // 致 --done --force-baseline 静默无效、用户被误导「重跑 --confirm」也无法解锁。
+        const mergedGuard = {
+          ...guard,
+          forceBaseline: guard.forceBaseline || isForceBaseline,
+          allowNew: guard.allowNew || isAllowNew,
         }
-        // 清理：guard 命中与缺失两种情况都执行（guard 缺失 → 跳过审计，仅清理不抛错）。
-        // rmSync {recursive,force} / unlinkSync 都容忍文件不存在（brownfield）。
-        try {
-          const { unlinkSync } = await import('fs')
-          if (changeName) {
-            const sessionDir = join(runtimeBase, 'quick-sessions', changeName)
-            rmSync(sessionDir, { recursive: true, force: true })
-          }
-          if (existsSync(legacyGuardFile)) unlinkSync(legacyGuardFile)
-        } catch {}
+        const review = await auditQuickCompletion(cwd, mergedGuard, { isConfirm: confirm })
+        printQuickAuditReview(review)
+        if (review.status === 'blocked') {
+          steps[currentIdx].status = 'pending'
+          steps[currentIdx].completedAt = null
+          if (outputText) steps[currentIdx].output = null
+          process.exit(1)
+        }
+        progress.lastQuickReview = review
       }
+
+      if (!qlId) {
+        // 无 ql-ID（guard 缺失或 brownfield 无 quicklogId）：补分配后立即完成，不阻断。
+        try {
+          const alloc = await allocateQuicklogEntry(specBase, gitUser, {
+            description: guard?.taskDescription || '(补分配)',
+            linkedChanges,
+            allowedFiles: Array.isArray(guard?.allowedFiles) ? guard.allowedFiles : [],
+          })
+          qlId = alloc.qlId
+          console.log(`📝 QUICKLOG 兜底补写: ${qlId}（guard 缺失/brownfield 会话）`)
+        } catch (e) {
+          console.error(`\n❌ QUICKLOG 补分配失败: ${e.message}`)
+          steps[currentIdx].status = 'pending'
+          steps[currentIdx].completedAt = null
+          if (outputText) steps[currentIdx].output = null
+          process.exit(1)
+        }
+      }
+      if (!findQuicklogEntry(specBase, gitUser, qlId)) {
+        console.error(`\n❌ quick 阶段完成校验失败：QUICKLOG 条目 ${qlId} 不存在。`)
+        console.error(`   会话期间记录被删除或从未写入。请检查 .sillyspec/quicklog/ 后重跑 --done。`)
+        steps[currentIdx].status = 'pending'
+        steps[currentIdx].completedAt = null
+        if (outputText) steps[currentIdx].output = null
+        process.exit(1)
+      }
+      // 翻状态进行中→已完成 + 追加结果 + 勾选关联 tasks.md
+      try {
+        await completeQuicklogEntry(specBase, gitUser, qlId, {
+          resultText: outputText ? outputText.slice(0, 500) : '',
+          linkedChanges,
+        })
+        console.log(`📝 QUICKLOG 条目 ${qlId} 已标记完成`)
+      } catch (e) {
+        console.warn(`⚠️ QUICKLOG 完成态写入失败: ${e.message}`)
+      }
+
+      // 清理 session 目录（rmSync/unlinkSync 容忍不存在）。
+      try {
+        const { unlinkSync } = await import('fs')
+        if (changeName) {
+          const sessionDir = join(runtimeBase, 'quick-sessions', changeName)
+          rmSync(sessionDir, { recursive: true, force: true })
+        }
+        if (existsSync(legacyGuardFile)) unlinkSync(legacyGuardFile)
+      } catch {}
     }
 
     stageData.status = 'completed'

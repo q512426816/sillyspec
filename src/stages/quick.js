@@ -28,38 +28,15 @@ export const definition = {
 9. 根据任务描述初步判断可能涉及的模块
 10. 读取匹配到的 \`{SPEC_ROOT}/docs/<project>/modules/<module>.md\`
 
-### 创建任务记录（⛔ 此步骤不能跳过，没有 quicklog 记录 = 未完成）
-理解完任务后，**必须**立即创建记录文件，再输出任何其他内容：
+### QUICKLOG 记录（CLI 已接管，无需你手动创建）
+本 quick 会话的 ql-ID 由 CLI 在启动时分配，已注入为 \`<quicklog-id>\`。CLI 同时已自动：
+- 在 \`{SPEC_ROOT}/quicklog/QUICKLOG-<git-user>.md\` 写入「进行中」条目（含关联变更与预估文件）
+- 对每个关联变更 \`<c>\`：在 \`{SPEC_ROOT}/changes/<c>/tasks.md\` 追加未勾选 task \`- [ ] <quicklog-id> <任务描述>\`
 
-**A. 始终创建 QUICKLOG（无论是否关联变更）**
-1. 使用预注入的 git 用户名：\`<git-user>\`
-2. 创建/追加 \`{SPEC_ROOT}/quicklog/QUICKLOG-\`<git-user>\`.md\`，写入：
-   \`\`\`
-   ## ql-<YYYYMMDD>-<NNN>-<XXXX> | <now-datetime> | <一句话任务描述>
-   状态：进行中
-   关联变更：<linked-changes>
-   文件：<预估要改的文件>
-   \`\`\`
-   - ID 格式：\`ql-YYYYMMDD-NNN-XXXX\`
-   - \`XXXX\` 是 4 位随机十六进制字符（如 a3f2、b7c1、00ef），**不是描述词缩写**
-   - 追加前扫描文件中已有的 \`ql-<当天日期>-\` 前缀的最大序号，+1 作为新序号
-   - 每天从 001 开始，跨日重新计数
-   - 此 ID 可被 design.md / plan.md / archive / module 变更索引引用
-
-**B. 若关联变更（\`<linked-changes>\` 不为「（无）」）**
-3. 解析 \`<linked-changes>\`（逗号分隔的变更名列表，可能有多个 = 一次 quick 同时归属多个变更）
-4. 对**每个**变更 \`<c>\`：在 \`{SPEC_ROOT}/changes/<c>/tasks.md\` 追加一条未勾选 task：
-   \`- [ ] <ql-ID> <一句话任务描述>\`（复用步骤 A 生成的同一个 ql-ID）
-   - 若 \`changes/<c>/\` 目录或 tasks.md 不存在，先 \`mkdir -p {SPEC_ROOT}/changes/<c>\` 再创建 tasks.md
-   - 同一个 ql-ID 出现在 QUICKLOG 和所有关联变更的 tasks.md 中，便于交叉引用
-   - \`<linked-changes>\` 为「（无）」时跳过本步，仅保留 QUICKLOG
-
-这样 Gate 检测到 \`{SPEC_ROOT}/\` 下有变更，就不会拦截后续的代码修改。
+**你不要创建或修改任何 QUICKLOG / tasks.md 记录**——完成本任务时 CLI 会自动将条目翻为「已完成」并勾选 task（含轮转）。\`<quicklog-id>\` 可用于 design.md / plan.md / archive / 模块变更索引引用。
 
 ### 输出
-quicklog 已创建（必须放在输出的第一行确认）+ 任务理解 + 上下文摘要
-
-⚠️ **先创建 quicklog，再输出任务理解。** 如果 quicklog 未创建，CLI post-check 会报 warning。`,
+任务理解 + 上下文摘要`,
       outputHint: '任务理解',
       optional: false
     },
@@ -97,23 +74,20 @@ quicklog 已创建（必须放在输出的第一行确认）+ 任务理解 + 上
 2. 使用 \`git add -- <file...>\` 暂存本次 quick 实际修改的文件（不要 commit，由用户通过统一提交工具处理）
    - 禁止使用 \`git add -A\`
    - 不要暂存 quick 开始前就已存在的无关改动
-3. 更新 Step 1 创建的记录：
-   - QUICKLOG：找到对应 ql-ID 的条目，将「状态：进行中」改为「状态：已完成」，补充实际改动文件和结果摘要（**始终做**，无论是否关联变更）
-   - 关联变更：对 Step 1 在每个 \`changes/<c>/tasks.md\` 写入的 ql-ID task，将其 checkbox 由 \`- [ ]\` 勾选为 \`- [x]\`；若 Step 1 未写入（用户事后才决定关联），则按 Step 1 的格式补写并直接勾选
-4. QUICKLOG 轮转：超过 500 行则重命名为 \`QUICKLOG-<USER>-YYYY-MM-DD.md\`（日期取最后一条记录的日期）。新文件从空开始，ql-ID 需扫描同目录所有 QUICKLOG 文件中当天最大序号 +1
-5. 如果发现项目特有的坑，追加到 \`{SPEC_ROOT}/knowledge/uncategorized.md\`
-6. 任务比预期复杂 → 建议用完整流程
+3. QUICKLOG / tasks.md 记录由 CLI 在本 step 完成时自动收尾（翻「已完成」+ 勾选 task + 轮转），你无需手动更新
+4. 如果发现项目特有的坑，追加到 \`{SPEC_ROOT}/knowledge/uncategorized.md\`
+5. 任务比预期复杂 → 建议用完整流程
 
 ### 模块文档同步
-7. 读取 \`{SPEC_ROOT}/docs/<project>/modules/_module-map.yaml\`（不存在则跳过以下步骤）
-8. 对比本次修改的文件（\`git diff --name-only HEAD\`）与模块映射
-9. 如果命中模块 → 直接同步模块文档：
+6. 读取 \`{SPEC_ROOT}/docs/<project>/modules/_module-map.yaml\`（不存在则跳过以下步骤）
+7. 对比本次修改的文件（\`git diff --name-only HEAD\`）与模块映射
+8. 如果命中模块 → 直接同步模块文档：
    - 读取对应的 \`{SPEC_ROOT}/docs/<project>/modules/<module>.md\`（如不存在则新建）
-   - 根据本次改动内容更新模块文档（正文描述当前状态，底部变更索引追加本次 ql-ID）
-   - 变更索引格式：\`- ql-YYYYMMDD-NNN-XXXX | <一句话描述>\`
+   - 根据本次改动内容更新模块文档（正文描述当前状态，底部变更索引追加本步骤预注入的 ql-ID）
+   - 变更索引格式：\`- <quicklog-id> | <一句话描述>\`
    - 写入模块文档
    - 使用 \`git add -- <module-doc>\` 暂存更新的模块文件
-10. 未命中任何模块 → 跳过，不做额外操作
+9. 未命中任何模块 → 跳过，不做额外操作
 
 ### 输出
 暂存确认 + 记录路径 + 模块文档同步结果（如有）`,

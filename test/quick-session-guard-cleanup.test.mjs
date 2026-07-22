@@ -22,7 +22,7 @@
  * 隔离：mkdtempSync 临时 git 仓库 + 临时 specDir，不污染真实仓库。
  * 风格：自研 assert（无测试框架），参照 test/quick-session-isolation.test.mjs。
  */
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { execFileSync } from 'node:child_process'
@@ -110,15 +110,18 @@ console.log('--- 验收 1：跨进程 progress 无 quickGuard，收尾从文件�
   const guardFile = join(sessionDir, 'guard.json')
   assert(existsSync(guardFile), `启动后 session guard.json 落盘在 quick-sessions/${sid}/`)
 
+  // 新契约（CLI 接管 QUICKLOG）：启动时 CLI 已分配 ql-ID 写入 guard.json + QUICKLOG「进行中」条目
+  const guardData = JSON.parse(readFileSync(guardFile, 'utf8'))
+  const qlId = guardData.quicklogId
+  assert(qlId && /^ql-\d{8}-\d{3}-[0-9a-f]{4}$/.test(qlId), `启动时 CLI 分配了合法 ql-ID（${qlId}）`)
+  const quicklogPath = join(specBase, 'quicklog', 'QUICKLOG-test.md')
+  assert(existsSync(quicklogPath) && readFileSync(quicklogPath, 'utf8').includes(`## ${qlId} |`), `启动时 CLI 已写 QUICKLOG 进行中条目`)
+
   // 模拟跨进程：用全新 ProgressManager 实例从 db 读回 progress（强制不共享内存缓存）。
   // 读回的 progress 顶层无 quickGuard 字段（_write 不持久化它）——这正是 Bug2 的触发条件。
   const pmFresh = new ProgressManager({ specDir: specBase })
   const progFresh = await pmFresh.read(repo, sid)
   assert(progFresh && progFresh.quickGuard === undefined, '跨进程读出的 progress 无 quickGuard（D-003 触发条件）')
-
-  // 建 quicklog fixture（step3 收尾的 quicklog 存在性校验，run.js:2959-2968）
-  mkdirSync(join(specBase, 'quicklog'), { recursive: true })
-  writeFileSync(join(specBase, 'quicklog', 'QUICKLOG-test.md'), '## test task\n状态：进行中\n')
 
   // 推完 3 步，step3 --done 触发收尾（读 guard → audit → 清理 sessionDir）
   // 捕获 step3 done 的 stdout，断言审计消息出现（证明从文件读到 guard 并跑了 auditQuickCompletion）
@@ -142,6 +145,11 @@ console.log('--- 验收 1：跨进程 progress 无 quickGuard，收尾从文件�
     /quick 变更边界审计/.test(step3Out),
     `跨进程收尾打印了审计结果（证明从文件读到 guard 并跑了 auditQuickCompletion）`
   )
+
+  // 核心断言 3：收尾时 CLI 把该 ql-ID 条目翻为已完成 + 追加结果（CLI 接管收尾）
+  const finalLog = readFileSync(quicklogPath, 'utf8')
+  assert(finalLog.includes('状态：已完成'), `收尾后 QUICKLOG 条目已翻为已完成`)
+  assert(finalLog.includes('结果：'), `收尾后 QUICKLOG 条目追加了结果行`)
 
   // 注：quick 是 auxiliary 阶段（src/stages/quick.js: auxiliary=true），完成后会按设计
   // 重置 steps + stage.status 回 pending（run.js:3172-3185），以便下次 quick 重启。
@@ -176,9 +184,6 @@ console.log('\n--- 验收 2：fallback 旧单文件 quick-guard.json 仍被审�
     baselineFiles: [], allowedFiles: [], allowNew: false, forceBaseline: false,
   }))
   assert(existsSync(legacyGuardFile), '旧单文件 quick-guard.json 已构造')
-
-  mkdirSync(join(specBase, 'quicklog'), { recursive: true })
-  writeFileSync(join(specBase, 'quicklog', 'QUICKLOG-test.md'), '## legacy\n')
 
   // 推 3 步收尾，应回退读旧单文件跑审计、不抛错、清理旧文件
   let step3Out = ''
@@ -222,9 +227,6 @@ console.log('\n--- 验收 3：无任何 guard 文件 → 跳过审计仅清理�
   rmSync(legacyGuardFile, { force: true })
   assert(!existsSync(sessionDir) && !existsSync(legacyGuardFile), '已清空所有 guard 文件')
 
-  mkdirSync(join(specBase, 'quicklog'), { recursive: true })
-  writeFileSync(join(specBase, 'quicklog', 'QUICKLOG-test.md'), '## noGuard\n')
-
   // 推 3 步收尾，guard 为空 → 跳过 auditQuickCompletion，仅清理，不抛错
   let step3Out = ''
   let threw = null
@@ -238,6 +240,12 @@ console.log('\n--- 验收 3：无任何 guard 文件 → 跳过审计仅清理�
   assert(threw === null, `无 guard 场景 step3 收尾不抛异常（brownfield，实际 ${threw ? threw.message : '无'}）`)
   // guard 为空 → 不跑 auditQuickCompletion → stdout 不含审计行（反向证明跳过了审计）
   assert(!/quick 变更边界审计/.test(step3Out), `无 guard 时跳过审计（stdout 不含审计行）`)
+
+  // 新契约：即便 guard 缺失，兜底也补写了一条 QUICKLOG 记录（「完成必有记录」不变量）
+  const qlFiles = readdirSync(join(specBase, 'quicklog')).filter(f => f.startsWith('QUICKLOG') && f.endsWith('.md'))
+  assert(qlFiles.length > 0, 'guard 缺失时兜底补写了 QUICKLOG 文件')
+  const anyCompleted = qlFiles.some(f => readFileSync(join(specBase, 'quicklog', f), 'utf8').includes('状态：已完成'))
+  assert(anyCompleted, '兜底补写的 QUICKLOG 条目已翻为已完成')
 }
 
 // ─────────────────────────────────────────

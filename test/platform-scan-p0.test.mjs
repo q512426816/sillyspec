@@ -144,18 +144,18 @@ function assert(label, condition, detail) {
   const step1Prompt = definition.steps[0].prompt
   const step3Prompt = definition.steps[2].prompt
 
-  assert('quick step 1 包含 ⛔ 标记', step1Prompt.includes('⛔'))
-  assert('quick step 1 包含「不能跳过」', step1Prompt.includes('不能跳过'))
-  assert('quick step 1 包含 quicklog 未创建 warning', step1Prompt.includes('quicklog 未创建'))
-  assert('quick step 1 输出要求 quicklog 第一行', step1Prompt.includes('第一行确认'))
+  // 新契约（B-1 CLI 接管）：QUICKLOG 由 CLI 分配/写入/收尾，agent 不再手写
+  assert('quick step 1 声明 CLI 已接管 QUICKLOG', step1Prompt.includes('CLI 已接管'))
+  assert('quick step 1 含 <quicklog-id> 占位符', step1Prompt.includes('<quicklog-id>'))
+  assert('quick step 1 禁止 agent 手写记录', step1Prompt.includes('你不要创建或修改任何 QUICKLOG'))
+  assert('quick step 1 关联变更 tasks.md 由 CLI 追加', step1Prompt.includes('tasks.md` 追加未勾选 task'))
   assert('quick step 3 禁止 git add -A', step3Prompt.includes('禁止使用 `git add -A`'))
   assert('quick step 3 使用 scoped git add', step3Prompt.includes('git add -- <file...>'))
 
-  // 新语义：QUICKLOG 始终记录 + 多变更关联
-  assert('quick step 1 含 <linked-changes> 占位符', step1Prompt.includes('<linked-changes>'))
+  // 新语义：QUICKLOG 始终记录 + 多变更关联（CLI 侧不变量）
   assert('quick step 1 含「关联变更」措辞', step1Prompt.includes('关联变更'))
-  assert('quick step 1 QUICKLOG 始终创建', step1Prompt.includes('始终创建 QUICKLOG'))
-  assert('quick step 3 QUICKLOG 始终更新', step3Prompt.includes('始终做'))
+  assert('quick step 3 声明 CLI 自动收尾', step3Prompt.includes('由 CLI 在本 step 完成时自动收尾'))
+  assert('quick step 3 变更索引引用 <quicklog-id>', step3Prompt.includes('- <quicklog-id> |'))
 
   // run.js 审计包含 quicklog 检查
   const runSrc = await readFile(join(__dirname, '..', 'src', 'run.js'), 'utf8')
