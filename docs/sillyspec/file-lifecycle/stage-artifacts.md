@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-06-04 16:25:42
-updated_at: 2026-07-22
+updated_at: 2026-07-22T16:00:00+08:00
 ---
 
 # 阶段与变更产物
@@ -26,7 +26,7 @@ updated_at: 2026-07-22
 | 阶段 | 步骤数 | 产物口径 |
 |---|---:|---|
 | scan | 10 | 生成 `.sillyspec/docs/<project>/...`，step 2 后动态展开项目级步骤 |
-| brainstorm | 13 | 第 11 步写 `design.md` 并自审，第 12 步 Design Grill 交叉审查，第 13 步确认后按 `scale` 分叉（large→四件套 / small→仅 design.md），可选生成 `MASTER.md`、prototype、后续包骨架 |
+| brainstorm | 8 | 第 6 步写 `design.md` 并自审，第 7 步 Design Grill 交叉审查，第 8 步确认后按 `scale` 分叉（large→四件套 / small→仅 design.md）；第 2 步含早期规模筛查（明显小变更建议走 quick），第 3 步合并对话探索+原型分析+范围评估+需求澄清Grill；可选生成 `MASTER.md`、prototype、后续包骨架 |
 | propose | 7 | 第 5 步生成四件套，第 6 步自检门控 |
 | plan | 8+ | 生成 `plan.md`；如解析到任务，会动态插入任务蓝图协调器 |
 | execute | 12+ | 生成/使用 worktree，按 Wave 执行；最终 apply/cleanup；完成时 `validateExecuteOutputs` 核验真实代码变更 + Task Review Gate 做 review.json git 交叉校验 |
@@ -40,10 +40,10 @@ updated_at: 2026-07-22
 
 | 文件 | 当前创建方式 | 后续消费者 |
 |---|---|---|
-| `proposal.md` | brainstorm 第 13 步（仅 large）；propose 第 5 步 | propose/plan/verify/archive prompt |
-| `design.md` | brainstorm 第 11 步（frontmatter 含 `scale`）；propose 第 5 步 | plan、execute、verify、worktree apply、quick 的文件清单 |
-| `requirements.md` | brainstorm 第 13 步（仅 large）；propose 第 5 步 | plan、verify |
-| `tasks.md` | brainstorm 第 13 步（仅 large）；propose 第 5 步；quick 关联变更时可追加 task | plan、execute、verify、archive |
+| `proposal.md` | brainstorm 第 8 步（仅 large）；propose 第 5 步 | propose/plan/verify/archive prompt |
+| `design.md` | brainstorm 第 6 步（frontmatter 含 `scale`）；propose 第 5 步 | plan、execute、verify、worktree apply、quick 的文件清单 |
+| `requirements.md` | brainstorm 第 8 步（仅 large）；propose 第 5 步 | plan、verify |
+| `tasks.md` | brainstorm 第 8 步（仅 large）；propose 第 5 步；quick 关联变更时可追加 task | plan、execute、verify、archive |
 
 `run.js validateFileLocations()` 在阶段完成时会检查：
 

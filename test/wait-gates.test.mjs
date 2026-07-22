@@ -106,7 +106,7 @@ console.log('\n=== Test 1: repeatableWait --continue 后仍 pending ===')
   assert(brainstormData && brainstormData.steps, 'brainstorm steps initialized')
 
   // Find 对话式探索 step index
-  const exploreIdx = brainstormData.steps.findIndex(s => s.name === '对话式探索')
+  const exploreIdx = brainstormData.steps.findIndex(s => s.name === '对话式探索与需求澄清')
   assert(exploreIdx !== -1, '找到"对话式探索"步骤')
 
   // Set steps before explore to completed, set explore to waiting
@@ -252,7 +252,7 @@ console.log('\n=== Test 5: repeatableWait 多轮后 --done 可推进 ===')
   const progress = await readProgress(projectDir, changeName)
   const brainstormData = progress.stages.brainstorm
 
-  const exploreIdx = brainstormData.steps.findIndex(s => s.name === '对话式探索')
+  const exploreIdx = brainstormData.steps.findIndex(s => s.name === '对话式探索与需求澄清')
   for (let i = 0; i < exploreIdx; i++) {
     brainstormData.steps[i].status = 'completed'
     brainstormData.steps[i].completedAt = new Date().toISOString()
@@ -399,7 +399,7 @@ console.log('\n=== Test 10: maxWaitRounds 达到上限后 --wait 被拒绝 ===')
 
   const progress = await readProgress(projectDir, changeName)
   const brainstormData = progress.stages.brainstorm
-  const exploreIdx = brainstormData.steps.findIndex(s => s.name === '对话式探索')
+  const exploreIdx = brainstormData.steps.findIndex(s => s.name === '对话式探索与需求澄清')
   for (let i = 0; i < exploreIdx; i++) {
     brainstormData.steps[i].status = 'completed'
     brainstormData.steps[i].completedAt = new Date().toISOString()

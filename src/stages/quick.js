@@ -8,11 +8,9 @@ export const definition = {
       name: '理解任务',
       prompt: `解析任务参数，加载项目上下文。
 
-### 📌 本 quick 会话 sessionId: \`<quick-session-id>\`
-- CLI 是短进程，run 与 done 是独立进程，sessionId 靠 \`--change\` 跨进程传递
-- **完成每个 step 用**：\`sillyspec run quick --done --change <quick-session-id> --output "..."\`
-  - 多会话并发时**必须带 \`--change <quick-session-id>\`**，否则可能命中他者会话的状态
-  - 不带 \`--change\` 时 fallback 读 \`current-quick-run-id\`（单会话兼容；多会话不可靠）
+### 📌 本 quick 会话 sessionId: <quick-session-id>
+- CLI 是短进程，run 与 done 是独立进程，sessionId 靠 --change 跨进程传递
+- **完成每个 step 必须带 --change <quick-session-id>**（命令由 CLI 在下方注入）；多会话并发时不带会命中他者会话状态（不带时 fallback 读 current-quick-run-id，单会话兼容；多会话不可靠）
 
 ### 操作
 1. 检查关联变更（\`<linked-changes>\`，逗号分隔的变更名列表；显示「（无）」= 不关联变更），确定记录方式
@@ -44,6 +42,9 @@ export const definition = {
       name: '实现并验证',
       prompt: `直接在主工作区实现任务。
 
+### 边界声明（quick 不校验 design.md）
+关联变更的 design.md 仅供理解意图，**不作为验收基准**——quick 不 enforce design 一致性。需要 design 一致性保证 → 走完整流程（plan + verify）。发现 design 本身有错时，可 Reverse Sync 回写（见下方铁律）。
+
 ### 操作
 1. 先读后写：调用已有方法前 \`cat\` 源文件确认签名，\`grep\` 确认方法存在
 2. 写代码完成任务
@@ -64,10 +65,8 @@ export const definition = {
       name: '暂存和更新记录',
       prompt: `Git 暂存并更新任务记录。
 
-### 📌 收尾确认 — sessionId: \`<quick-session-id>\`
-- 本步骤是最后一步，完成后 quick 会话即结束
-- **完成本 step 用**：\`sillyspec run quick --done --change <quick-session-id> --output "<结构见下，结果摘要写这里>"\`
-  - 多会话并发**必须带 \`--change <quick-session-id>\`**，不带会 fallback 读 \`current-quick-run-id\` 可能命中他者会话
+### 📌 收尾确认
+- 本步骤是最后一步，完成后 quick 会话即结束（--change 传递见首步 sessionId 说明）
 
 ### ⚠️ 结果摘要模板（必填，CLI 会校验结构）
 \`--output\` 是 QUICKLOG「结果：」归档的唯一来源，**必须按此结构给全四项**（逐项一句话，不可用「见前述」替代）：

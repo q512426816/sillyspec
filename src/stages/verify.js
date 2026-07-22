@@ -100,10 +100,7 @@ export const definition = {
 ### 输出
 任务完成度列表 + 完成率
 
-### ⛔ 红线提醒
-- **绝对禁止** git checkout/restore/reset 或删除/覆盖任何文件
-- 发现文件缺失只报告，不尝试恢复
-- verify 阶段的唯一职责是「检查 + 报告」，不是「修复」`,
+`,
       outputHint: '任务完成度报告',
       optional: false
     },
@@ -111,61 +108,7 @@ export const definition = {
       name: '对照设计检查',
       prompt: `先运行自动探针，再对照 design.md 检查实现一致性。**design.md 是唯一 truth source，不符合 design.md 的实现 = Bug。**
 
-### 自动探针（必须先执行）
-在检查前，依次运行以下三个探针，将结果作为验证输入：
-
-**探针 1：未实现标记扫描（仅变更文件）**
-只扫描本次变更涉及的文件，不要全项目扫描——历史 TODO 与本次变更无关，徒增噪音与 token。变更文件 = design.md「文件变更清单」列出的源码文件（你已在「加载规范」步骤读取 design.md，glob 路径需展开为具体文件）：
-\`\`\`bash
-grep -n "尚未实现\|TODO\|FIXME\|HACK\|XXX" <design 清单中的源码文件>
-\`\`\`
-记录每个匹配的文件、行号和内容。
-
-**探针 2：设计关键词覆盖探针**
-1. 读取 design.md，从中提取所有能力关键词（如"登录"、"导出"、"批量"、"删除"、"搜索"等动作词）
-2. 对每个关键词，在源码目录中 grep 确认是否有对应的实现代码：
-\`\`\`bash
-grep -rl "<关键词>" <源码目录>/ --include="*.java" --include="*.js" --include="*.ts" --include="*.jsx" --include="*.tsx" --include="*.py"
-\`\`\`
-3. 如果某个关键词在源码中完全没有匹配，标记为 ⚠️ 可能未实现
-
-**探针 3：验收标准测试覆盖探针**
-1. 读取变更目录下的 tasks.md，提取所有 checkbox 任务
-2. 对每个 task，检查对应模块目录下是否存在测试文件（*test*、*spec*、*Test*、*Spec*）
-3. 没有测试文件的 task 标记为 ⚠️ 缺少测试
-
-**探针 4：决策追踪覆盖探针（如存在 decisions.md）**
-1. 从 decisions.md 提取所有当前版本 D-xxx@vN
-2. 检查 requirements.md 是否引用每个 D-xxx@vN，并映射到 FR-xxx
-3. 检查 plan.md 或 tasks/task-NN.md 是否引用每个 FR-xxx/D-xxx@vN
-4. 检查本步骤收集的实现证据是否能回指到对应 D-xxx@vN/FR-xxx
-5. 任意 D-xxx@vN 无下游覆盖时标记为 ⚠️ 决策未闭环
-6. 任意 P0/P1 unresolved/blocking 决策标记为 FAIL blocker
-
-**探针 5：API Contract Parity Check（跨前后端契约对账）**
-此探针仅在以下条件满足时执行：
-- 存在 \.sillyspec/.runtime/contract-artifacts/ 目录（说明 execute 阶段生成了 endpoint artifact）
-- 或者项目同时有 backend/ 和 frontend/ 目录
-
-执行步骤：
-1. 收集所有 provider endpoint artifacts：
-   - 读取 .sillyspec/.runtime/contract-artifacts/*/endpoints.json
-   - 汇总为 backend 端点清单
-2. 扫描前端 API 调用：
-   - 在 frontend/ 目录中搜索 apiFetch/request/axios/fetch 调用
-   - 提取所有 API 路径（归一化动态参数为 {param}）
-3. Diff 对账：
-   - 前端调用路径在 backend 端点清单中找不到 → **❌ Missing backend endpoint**（FAIL blocker）
-   - backend 端点在前端无调用 → ⚠️ Unused backend endpoint（warning，不阻断）
-4. 输出对账结果表格：
-   \
-\
-   | 状态 | 前端调用 | 后端端点 | 文件 |
-   |---|---|---|---|
-   | ❌ missing | GET /api/ppm/project-plan/{param}/plan-nodes | — | frontend/src/lib/ppm/plan.ts |
-\
-\
-   如果发现 Missing backend endpoint，必须在验证报告中标记为 ❌ contract gap。
+{{include: verify-probes}}
 
 ### 探针结果处理
 - 将四个探针的结果汇总为「探针报告」
@@ -236,29 +179,8 @@ grep -rl "<关键词>" <源码目录>/ --include="*.java" --include="*.js" --inc
 
 ### 操作
 1. 汇总以上所有检查结果
-2. **判定变更风险等级（change_risk_profile）**：
-
-### 变更风险分级规则
-扫描 design.md 和 plan.md 的关键词，自动判定 verify 强度：
-
-| 触发条件 | verify 要求 |
-|---|---|
-| 只改文案/文档 | 静态检查即可 |
-| 单模块纯函数 | 单测即可 |
-| API contract / DTO / client | 单测 + contract test |
-| daemon/backend 跨进程 | **必须真实集成** |
-| session/lease/run 状态机 | **必须生命周期端到端验证** |
-| 部署启动路径 | **必须真实启动一次** |
-
-触发关键词：daemon, backend, session, lease, agent_run, lifecycle, state_transition, claim, heartbeat, cross-process, cli.ts, main.ts, server.ts, bootstrap, entrypoint
-
-### 风险门控规则
-- **integration-critical** 或 **deployment-critical** 变更：
-  - 结论为 PASS WITH NOTES → **降级为 FAIL**
-  - mock 单测通过但没有真实集成证据 → **FAIL**
-  - 必须在 verify-result.md 中包含 **Runtime Evidence** section
-- **contract-required** 变更：需要 contract test 证据
-- **unit-sufficient** 变更：单测即可
+2. **变更风险等级（change_risk_profile）由 CLI 自动判定与门控**：你无需自己扫描关键词。本步骤 --done 时，CLI 会用 detectChangeRisk 扫描 design.md / plan.md 自动判定等级（doc-only / unit-sufficient / contract-required / integration-critical / deployment-critical）并强制门控：integration-critical / deployment-critical 变更若结论为 PASS / PASS WITH NOTES 但缺少真实集成证据，CLI 直接阻断 verify 完成——谎报结论无效。
+   你只需：在 verify-result.md 的「变更风险等级」section 如实记录变更性质；若变更涉及 daemon/backend 跨进程、session/lease/lifecycle 状态机、或部署启动路径，在「Runtime Evidence」section 提供真实集成证据（启动命令、daemon↔backend 调用与日志关键片段、终态断言）。
 
 3. 生成 verify-result.md 文件，保存到 \`.sillyspec/changes/<change-name>/verify-result.md\`
 4. 给出结论：PASS / PASS WITH NOTES / FAIL（受风险门控约束）

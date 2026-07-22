@@ -9,6 +9,25 @@ import { existsSync, readdirSync, mkdirSync, writeFileSync, appendFileSync, read
 import { randomBytes, randomUUID } from 'crypto'
 import { createRequire } from 'module'
 const require = createRequire(import.meta.url)
+import { fileURLToPath } from 'url'
+const __dirname = dirname(fileURLToPath(import.meta.url))
+
+/**
+ * 解析 prompt 中的 {{include: <name>}} 占位符：读包内 templates/prompts/<name>.md 注入。
+ * 把 stage step prompt 里 self-contained 的大块（如 verify 探针）抽到外部模板，
+ * CLI 端组装时注入——agent 收到的仍是自包含 prompt 字符串，无需自己 Read。
+ * 单次替换（不递归）；模板缺失则保留占位符并 warn，便于发现配置错误。
+ */
+function resolvePromptIncludes(text) {
+  return text.replace(/\{\{include:\s*([\w.-]+)\s*\}\}/g, (match, name) => {
+    const tplPath = join(__dirname, '..', 'templates', 'prompts', `${name}.md`)
+    if (!existsSync(tplPath)) {
+      console.warn(`⚠️ prompt include 模板缺失: ${name} (期望: ${tplPath})`)
+      return match
+    }
+    return readFileSync(tplPath, 'utf8')
+  })
+}
 import { ProgressManager } from './progress.js'
 import { SCAN_STATUS, POINTER_STATUS, isPointerCorrupted } from './constants.js'
 import { allocateQuicklogEntry, completeQuicklogEntry, findQuicklogEntry, validateQuickResult } from './quicklog.js'
@@ -677,7 +696,8 @@ async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjec
     console.log(`changeDir: ${changeDir}`)
   }
   console.log(`---\n`)
-  if (personas[stageName]) {
+  // persona 只在 stage 首步注入（step0）——角色设定一次即可，后续 step 重复注入纯属 token 浪费
+  if (personas[stageName] && stepIndex === 0) {
     console.log(personas[stageName])
     console.log('')
   }
@@ -690,7 +710,9 @@ async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjec
     console.log(guardrails.trim())
     console.log('')
   }
-  let promptText = step.prompt
+  // 先解析 {{include: name}}（把外部模板片段拉进 prompt），再做下方占位符替换，
+  // 保证模板内容里的 {SPEC_ROOT}/<change-name> 等也能被替换
+  let promptText = resolvePromptIncludes(step.prompt)
   // 替换 prompt 中的占位符
   if (projectName && promptText.includes('<project>')) {
     promptText = promptText.replace(/<project>/g, projectName)

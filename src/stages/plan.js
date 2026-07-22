@@ -362,7 +362,7 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
    - reviewType: plan ; stage: plan
    - specVerdict / qualityVerdict: pass | fail | cannot_verify
    - reviewedFiles: [changes/<change>/plan.md]
-   - docHash: plan.md 内容的 sha256（必须真实读取文件计算，禁止编造——CLI 会重算对比）
+   - docHash: plan.md 内容的 sha256
    - checklist: 每条 { item, result: pass|gap|fail, note }
    - requiredEvidence: cannot_verify 时必填非空
    - reviewerNotes: 说明

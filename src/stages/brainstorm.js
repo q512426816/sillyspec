@@ -26,7 +26,7 @@ export const definition = {
     },
     {
       name: '加载项目上下文',
-      prompt: `加载项目现有上下文，理解代码结构和约定。
+      prompt: `加载项目现有上下文，理解代码结构和约定；并做一次早期规模筛查，判断小变更是否该直接走 quick。
 
 ### 操作
 1. 读取 CODEBASE-OVERVIEW.md + 共享规范 + 子项目上下文
@@ -38,6 +38,10 @@ export const definition = {
    - 用 tags/aliases 字段做需求关键词→模块的粗匹配
    - 用 entrypoints 字段快速了解模块对外能力
 6. 查看进行中的变更：\`ls .sillyspec/changes/ | grep -v archive\`
+   - 有相关同名变更 → 提示用户，避免重复
+7. 检查全局模板：\`ls ~/.sillyspec/templates/\`
+   - 有匹配模板 → 询问是否基于模板
+   - 无相关内容 → 跳过，不输出
 
 ### 模块匹配方法
 读取 _module-map.yaml 后，根据用户描述的需求关键词，匹配相关模块：
@@ -50,8 +54,14 @@ export const definition = {
 - 多项目且用户已指定：直接确认，不需要等待
 - 多项目且用户未指定：列出项目列表，需要用户确认本次需求属于哪个子项目
 
+### 早期规模筛查（判断是否该走 quick）
+加载上下文后，用需求描述 + 模块上下文**粗判**本次变更规模：
+- **明显 small**（满足：预计改动 ≤ 2 个文件、单模块、无 schema/API/状态机/权限变更；或属于改文案/修 bug/样式调整/配置微调等纯执行类）→ 输出：「此变更规模较小，建议直接走 quick 流程」+ 一句依据，给出建议命令 \`sillyspec run quick "<需求>"\`。用户同意则本阶段可在此收尾（\`--done\` 并提示转 quick），不必继续走完整设计流程。
+- **拿不准或明显 large**（涉及多模块、schema、状态流转、新架构等）→ 不要提示 quick，继续进入下一步「对话式探索与需求澄清」。
+- 这是**粗判**，只为让明显的小变更免走完整设计流程；不确定就继续，后续「用户确认并生成规范文件」步骤会基于 design.md 文件清单做精判兜底。
+
 ### 输出
-项目现状理解摘要（3-5 句话，关键约定和架构决策）+ 可能涉及的模块列表 + 本次需求所属子项目
+项目现状理解摘要（3-5 句话，关键约定和架构决策）+ 可能涉及的模块列表 + 本次需求所属子项目 + （如命中）quick 建议
 
 ### 注意
 - 棕地项目必须读取数据模型章节
@@ -60,169 +70,93 @@ export const definition = {
       optional: false
     },
     {
-      name: '协作与复用检查',
-      prompt: `检查是否有同名变更或可复用模板。
+      name: '对话式探索与需求澄清',
+      conditionalWait: true,
+      repeatableWait: true,
+      maxWaitRounds: 8,
+      waitReason: '等待用户回答需求问题或澄清',
+      waitOptions: ['回答见--answer', '信息够了，进入方案讨论'],
+      prompt: `通过对话探索需求细节、分析原型（如有）、判断拆分/批量、并对歧义点做需求澄清 Grill。本步骤合并了原有的对话探索、原型分析、需求范围评估、需求澄清 Grill 四个环节——按下方 A→D 顺序按需执行，能一次问清的不要拆成多轮。
 
-### 操作
-1. 检查已有变更：\`ls .sillyspec/changes/ | grep -v archive\`
-   - 有相关变更 → 提示用户，避免重复
-2. 检查全局模板：\`ls ~/.sillyspec/templates/\`
-   - 有匹配模板 → 询问是否基于模板
-3. 无相关内容 → 跳过，不输出
-
-### 输出
-检测到的相关变更和可用模板（无则输出"无冲突，继续"）`,
-      outputHint: '已有变更和可用模板',
-      optional: true
-    },
-    {
-      name: '原型/设计图分析',
-      prompt: `如果用户提供了截图、图片或 HTML 原型，分析提取结构。
-
-### 操作
+### A. 原型/设计图分析（如用户提供）
+如果用户提供了截图、图片或 HTML 原型，先分析提取：
 1. 识别图片中的页面结构（区域、组件、布局）
 2. 提取表单字段（名称、类型、必填、选项）
 3. 提取交互流程（页面跳转、按钮行为）
 4. 提取标注和备注（业务规则、权限说明）
 5. 展示分析结果，请用户确认遗漏
+- 没有原型则跳过本节
+- 图片信息 > 文字描述，不要忽略视觉信息
 
-### 输出
-页面结构树 + 字段列表 + 交互流程图
+### B. 对话式探索
+1. 从最核心的一个问题开始（用户到底想要什么？）
+2. **提出问题后必须暂停等待用户回答**，不要替用户回答
+3. 根据用户回答判断：信息够了 → 进入 C/D 或正常完成 / 需要追问 → 暂停等待下一个回答
+4. 探索顺序（按需）：目的 → 约束 → 边界 → 成功标准
+5. 多选题优于开放式问题
+6. YAGNI — 砍掉不需要的功能
 
-### 注意
-- 没有原型则跳过此步骤
-- 多页面时逐页分析，不要一次全部输出
-- 图片信息 > 文字描述，不要忽略视觉信息`,
-      outputHint: '页面结构和交互流程',
-      optional: true
-    },
-    {
-      name: '需求范围评估',
-      conditionalWait: true,
-      waitReason: '等待用户确认拆分/批量模式方案',
-      waitOptions: ['同意拆分', '不需要拆分', '走批量模式'],
-      prompt: `评估需求复杂度，判断是否需要拆分或走批量模式。
-
-### 操作
-1. 根据分析结果判断复杂度
-2. 满足以下任意 2 条建议拆分：
+### C. 需求范围评估（拆分/批量判断）
+1. 根据分析结果判断复杂度。满足以下任意 2 条建议拆分：
    - 3+ 个可独立交付的功能模块
    - 3+ 种角色有不同权限和视图
    - 跨页面状态流转（审批流、多步表单）
    - 模块间耦合度低可独立开发
-3. 满足以下条件建议走**批量模式**：
+2. 满足以下条件建议走**批量模式**：
    - 任务数量 > 10 且任务间有重复模式（如 100 个报表、50 个表单、N 个相似页面）
    - 本质是「模板 × 数据」而非 N 个独立功能
    - 直接逐个开发会导致 plan.md 膨胀和上下文溢出
-4. 需要拆分 → 生成 MASTER.md，规划子阶段
-5. 检测到批量模式 → 输出提示并建议用户确认
-6. 都不需要 → 继续
+3. 需要拆分 → 生成 MASTER.md，规划子阶段
+4. 检测到批量模式 → 输出提示并建议用户确认
+5. 都不需要 → 继续（简单 CRUD 不拆）
 
-### 批量模式指引
-确认后，后续 plan/execute 按以下原则调整：
+**批量模式指引**（确认后，后续 plan/execute 按此调整）：
 - **不要**把每个实例列为独立任务（不要写 100 个 checkbox）
 - plan 设计通用架构（引擎/模板/配置格式），任务数控制在 10 个以内
 - 数据转换用脚本完成（Excel → 配置文件），不消耗 AI 上下文
 - execute 每个 Wave 独立模块，Wave 间通过接口定义解耦
 - verify 用脚本全量验证 + AI 抽查边界案例
 
-### 半批量场景
-如果任务中大部分相似但有少量特殊任务（如 20 个任务中 15 个相似、5 个特殊）：
+**半批量场景**（大部分相似但有少量特殊任务）：
 - **主簇**（>10 个相似）→ 走批量模式（引擎 + 配置）
 - **小簇**（2-5 个相似）→ 走简化版批量（基于主簇模板扩展）
 - **孤立任务**（1 个）→ 走标准开发流程
 - 建议用「继承 + override」配置解决特殊任务，配置解决不了的才写定制代码
-- 架构设计时预留扩展点（hooks/overrides），让特殊任务能"挂上去"而不是"另起炉灶"
+- 架构设计时预留扩展点（hooks/overrides）
 
-### 铁律 — 何时需要等待用户
-- **需要拆分或批量模式时**：列出方案并暂停等待用户确认
-  - 调用：\`sillyspec run brainstorm --wait --reason "等待用户确认拆分方案" --options "同意拆分,不需要拆分" --output "拆分方案摘要"\`
-- **不需要拆分也不需要批量模式时**：正常完成即可
+### D. 需求澄清 Grill（对仍未稳定的歧义点）
+汇总 B/C 后仍未稳定的歧义点，按类型列出：
+- 术语歧义：同一个词可能指向不同实体/角色/状态
+- 边界歧义：哪些场景做、哪些不做、失败怎么处理
+- 前提风险：这个需求是否不该存在，是否已有更简单的现有方案
+- 代码冲突：用户描述与现有代码/scan/module 文档不一致
 
-### 输出
-拆分方案 / 批量模式确认 / "无需拆分"确认
+**能通过代码或文档确认的不要问用户，先读取**：
+- \`.sillyspec/docs/<project>/scan/ARCHITECTURE.md\`
+- \`.sillyspec/docs/<project>/scan/CONVENTIONS.md\`
+- \`.sillyspec/docs/<project>/modules/_module-map.yaml\`
+- 相关源码文件
 
-### 注意
-- 简单 CRUD 不拆`,
-      outputHint: '拆分方案或无需拆分确认',
-      optional: true
-    },
-    {
-      name: '对话式探索',
-      requiresWait: true,
-      repeatableWait: true,
-      maxWaitRounds: 3,
-      waitReason: '等待用户回答需求问题',
-      waitOptions: ['继续补充', '信息够了，进入方案讨论'],
-      prompt: `通过对话探索需求细节。
+**给每个未解决歧义分级**：
+- P0：影响数据模型、权限边界、状态机/工作流、兼容策略、不可逆架构取舍、跨模块所有权
+- P1：影响用户场景、验收标准、错误处理、默认值
+- P2：文案、展示细节、低风险交互偏好
 
-### 操作
-1. 从最核心的一个问题开始（用户到底想要什么？）
-2. **提出问题后必须暂停等待用户回答**，不要替用户回答
-3. 根据用户回答判断：信息够了 → 正常完成 / 需要追问 → 暂停等待下一个回答
-4. 探索顺序（按需）：目的 → 约束 → 边界 → 成功标准
+**执行规则**：
+- P1/P2 歧义 0-2 个且无 P0：不进入 Grill 追问，在后续设计中内联处理并记录依据
+- P1/P2 歧义 >= 3 个：按优先级逐个澄清
+- 任意 P0 歧义：必须澄清；如果需要用户判断，暂停问一个问题
+- 不要问用户"要不要 Grill"。由你根据歧义风险决定；只在需要业务判断/取舍时等待用户回答
 
-### 铁律 — 不要自问自答
-- **这是人机协作步骤，你必须暂停等待用户输入。**
-- 每次提出问题后，调用：
-  \`sillyspec run brainstorm --wait --reason "等待用户回答需求问题" --options "回答见--answer" --output "你的问题"\`
-- **绝对禁止**：在自己输出中模拟用户的回答，然后说"需求已明确"
-- 2-3 轮问答就应进入方案讨论
-- 多选题优于开放式问题
-- YAGNI — 砍掉不需要的功能
+**追问策略**（进入澄清时）：
+1. **一次只问一个问题**：按 P0 → P1 → P2 顺序，深度优先处理最关键歧义
+2. **能查代码就不问**：问题可由源码、scan 文档、模块文档回答时，先查证并给出结论
+3. **术语碰撞立即指出**：用户用词与 glossary/代码实体/模块文档冲突时，当场说明冲突并要求选择 canonical term
+4. **模糊词精化**：把"账户/任务/状态/会话/执行"这类多义词拆成明确实体或状态
+5. **场景压力测试**：用具体 case 逼出边界（失败重试、部分成功、历史数据、权限不足、并发修改、兼容旧配置）
+6. **前提挑战优先**：如果现有设计或代码已有简单路径，先说明"可能不该新增"
 
-### 输出
-需求理解摘要（用户确认的需求点列表）
-
-### 注意
-- 第一次进入此步骤时，提出第一个问题并暂停
-- 用户通过 \`--continue --answer "回答"\` 回答后，本步骤会再次执行，此时检查是否需要追问或可以结束`,
-      outputHint: '需求理解摘要',
-      optional: false
-    },
-    {
-      name: '需求澄清 Grill',
-      conditionalWait: true,
-      repeatableWait: true,
-      maxWaitRounds: 8,
-      waitReason: '等待用户回答需求澄清 Grill',
-      waitOptions: ['回答见--answer', '信息够了，结束需求澄清'],
-      prompt: `执行可选的需求澄清 Grill pass。
-
-### 定位
-这是 design.md 之前的需求澄清，不是设计后的 Design Grill。目标是把需求/术语/边界中仍需要人类判断的点问清楚；Design Grill 后续仍会默认执行，用来审查已经写出的 design.md 是否自洽。
-
-### 入口判断
-1. 汇总「对话式探索」后仍未稳定的歧义点，按类型列出：
-   - 术语歧义：同一个词可能指向不同实体/角色/状态
-   - 边界歧义：哪些场景做、哪些不做、失败怎么处理
-   - 前提风险：这个需求是否不该存在，是否已有更简单的现有方案
-   - 代码冲突：用户描述与现有代码/scan/module 文档不一致
-2. 能通过代码或文档确认的不要问用户，先读取：
-   - \`.sillyspec/docs/<project>/scan/ARCHITECTURE.md\`
-   - \`.sillyspec/docs/<project>/scan/CONVENTIONS.md\`
-   - \`.sillyspec/docs/<project>/modules/_module-map.yaml\`
-   - 相关源码文件
-3. 给每个未解决歧义分级：
-   - P0：影响数据模型、权限边界、状态机/工作流、兼容策略、不可逆架构取舍、跨模块所有权
-   - P1：影响用户场景、验收标准、错误处理、默认值
-   - P2：文案、展示细节、低风险交互偏好
-4. 执行规则：
-   - P1/P2 歧义 0-2 个且无 P0：输出"需求澄清 Grill skipped"，在后续设计中内联处理并记录依据
-   - P1/P2 歧义 >= 3 个：进入本 pass，按优先级逐个澄清
-   - 任意 P0 歧义：进入本 pass；如果需要用户判断，必须暂停问一个问题
-5. 不要问用户"要不要 Grill"。本步骤由 AI 根据歧义风险决定是否执行；只在需要业务判断/取舍时等待用户回答。
-
-### 追问策略
-1. **一次只问一个问题**：按 P0 → P1 → P2 顺序，深度优先处理最关键歧义。
-2. **能查代码就不问**：如果问题可由源码、scan 文档、模块文档回答，先查证并给出结论；只有业务判断/取舍才问用户。
-3. **术语碰撞立即指出**：用户用词与 glossary/代码实体/模块文档冲突时，当场说明冲突并要求选择 canonical term。
-4. **模糊词精化**：把"账户/任务/状态/会话/执行"这类多义词拆成明确实体或状态。
-5. **场景压力测试**：用具体 case 逼出边界，例如失败重试、部分成功、历史数据、权限不足、并发修改、兼容旧配置。
-6. **前提挑战优先**：如果现有设计或代码已有简单路径，先说明"可能不该新增"，不要直接优化错误前提。
-
-### 决策记录草稿
-每解决一个有实现影响的问题，生成一个稳定 ID 的记录草稿。不要把闲聊都记录进去。
+**决策记录草稿**：每解决一个有实现影响的问题，生成一个稳定 ID 的记录草稿（不要把闲聊都记录进去）：
 
 \`\`\`markdown
 ## D-001@v1: <短标题>
@@ -236,34 +170,35 @@ export const definition = {
 - evidence: <文件路径/代码位置/用户回答轮次>
 \`\`\`
 
-### 铁律 — 等待用户
-- 每轮最多提出一个问题，然后调用：
-  \`sillyspec run brainstorm --wait --reason "等待用户回答需求澄清 Grill" --options "回答见--answer,信息够了，结束需求澄清" --output "你的单个问题或查证结论"\`
-- 用户通过 \`--continue --answer "回答"\` 回答后，本步骤会再次执行；继续处理下一个最关键歧义。
-- 达到 maxWaitRounds=8 后，必须总结已确认内容和剩余风险，不要无限追问。
+### 铁律 — 不要自问自答 / 等待用户
+- 这是人机协作步骤：提出问题后必须暂停等用户回答，**不要在输出里模拟用户回答然后说"需求已明确"**（命令由 CLI 在下方注入）
+- 需要拆分或批量模式时：列出方案并暂停等用户确认
+- 不需要追问、无歧义、需求已清晰时：可正常完成本步骤（不必强行 --wait）
+- 2-3 轮问答即进入方案讨论；达到 maxWaitRounds=8 后必须总结已确认内容与剩余风险，不要无限追问
 
 ### 输出
-需求澄清结论摘要 + D-xxx@vN 决策记录草稿 + 剩余风险（如有）`,
-      outputHint: '需求澄清和决策记录草稿',
-      optional: true
+需求理解摘要（用户确认的需求点列表）+ 拆分/批量结论（如适用）+ D-xxx@vN 决策记录草稿 + 剩余风险（如有）
+
+### 注意
+- 第一次进入此步骤时，按 A→D 顺序处理；有原型先分析，再探索，再判规模，再澄清
+- 用户通过 \`--continue --answer "回答"\` 回答后，本步骤会再次执行，此时检查是否需要追问或可以结束`,
+      outputHint: '需求理解与决策记录草稿',
+      optional: false
     },
     {
       name: '提出 2-3 种方案',
       requiresWait: true,
       waitReason: '等待用户选择方案',
       waitOptions: ['方案A', '方案B', '方案C'],
-      prompt: `基于需求理解和 Grill 结果，提出 2-3 种实现方案。
+      prompt: `基于需求理解和澄清结果，提出 2-3 种实现方案。
 
 ### 操作
 1. 每种方案列出：核心思路、优势、劣势
-2. 如果 Grill 产生 D-xxx@vN 决策记录，方案必须说明覆盖/违反哪些当前版本决策
+2. 如果上一步产生了 D-xxx@vN 决策记录，方案必须说明覆盖/违反哪些当前版本决策
 3. 给出推荐方案和理由
 
 ### 铁律 — 必须等待用户选择方案
-- **不要替用户选择方案。** 列出方案对比表和推荐后，必须暂停等待用户选择。
-- 列出方案后，调用：
-  \`sillyspec run brainstorm --wait --reason "等待用户选择方案" --options "方案A,方案B,方案C" --output "方案对比摘要"\`
-- **绝对禁止**：在输出中自己说"推荐方案 A"然后当用户选了
+- 列出方案对比表和推荐后必须暂停等用户选择，**不要自己说"推荐方案 A"然后当用户选了**（命令由 CLI 在下方注入）
 
 ### 输出
 方案对比表 + 推荐方案
@@ -279,7 +214,7 @@ export const definition = {
       requiresWait: true,
       waitReason: '等待用户确认设计方案',
       waitOptions: ['确认', '需要修改', '推翻重来'],
-      prompt: `展示完整设计方案供用户确认。
+      prompt: `展示完整设计方案供用户确认；如适合可视化，顺带生成 HTML 原型。
 
 ### 操作
 1. 简单项目：几句话整体描述
@@ -288,42 +223,29 @@ export const definition = {
 4. 确认变更名（格式：\`YYYY-MM-DD-<简短描述>\`，例如 \`2026-05-13-user-auth\`）
 5. 暂停等待用户确认或修改意见
 
+### HTML 原型生成（适合可视化时）
+判断本次设计是否适合生成 HTML 原型：
+- 适合：有 UI 组件/布局/交互流程/状态转换/架构图
+- 不适合：纯后端逻辑/配置修改/无可视化意义
+如果适合，生成一个独立的 HTML 文件（内联 CSS + JS），保存到：
+\`.sillyspec/changes/<change-name>/prototype-<名称>.html\`
+- 单文件，浏览器直接打开
+- 展示关键布局结构和交互流程
+- 不需要完整功能，重点是让用户确认设计方向
+- 使用 ASCII/流程图/线框图风格，不需要精美 UI
+展示给用户确认设计方向。不适合则跳过。
+
 ### 铁律 — 必须等待用户确认设计
-- **不要替用户确认设计。** 展示完整设计方案后，必须暂停等待用户确认。
-- 列出设计后，调用：
-  \`sillyspec run brainstorm --wait --reason "等待用户确认设计方案" --options "确认,需要修改,推翻重来" --output "设计方案摘要"\`
-- **绝对禁止**：在输出中自己说"设计已充分确认"然后推进
+- 展示完整设计方案后必须暂停等用户确认，**不要自己说"设计已充分确认"然后推进**（命令由 CLI 在下方注入）
 
 ### 输出
-完整设计方案 + 变更名
+完整设计方案 + 变更名（+ 原型文件路径，如生成）
 
 ### 注意
 - 不要一次输出大段文字，按模块/Phase 分段
 - 变更名必须以当天日期开头（YYYY-MM-DD-），后跟英文短横线分隔的简短描述`,
       outputHint: '用户确认的设计方案',
       optional: false
-    },
-    {
-      name: 'HTML 原型生成',
-      prompt: `为设计方案生成可交互的 HTML 原型，帮助用户可视化确认。
-
-### 操作
-1. 判断本次设计是否适合生成 HTML 原型：
-   - 适合：有 UI 组件/布局/交互流程/状态转换/架构图
-   - 不适合：纯后端逻辑/配置修改/无可视化意义
-2. 如果适合，生成一个独立的 HTML 文件（内联 CSS + JS），保存到：
-   \`.sillyspec/changes/<change-name>/prototype-<名称>.html\`（变更名格式：YYYY-MM-DD-<简短描述>）
-3. 原型要求：
-   - 单文件，浏览器直接打开
-   - 展示关键布局结构和交互流程
-   - 不需要完整功能，重点是让用户确认设计方向
-   - 使用 ASCII/流程图/线框图风格，不需要精美 UI
-4. 展示给用户确认设计方向
-
-### 输出
-HTML 原型文件路径（或"跳过"如果不适合）`,
-      outputHint: '原型文件路径或跳过',
-      optional: true
     },
     {
       name: '写设计文档并自审',
@@ -390,26 +312,18 @@ design.md 第一行标题必须用中文：# 设计文档（Design）— <变更
 1. 确认变更目录存在：\`mkdir -p .sillyspec/changes/<change-name>\`（Windows 用 \`mkdir .sillyspec\\changes\\<变更名>\` 或 PowerShell \`New-Item -ItemType Directory -Force -Path .sillyspec/changes/<change-name>\`）
    - 变更名格式必须为 \`YYYY-MM-DD-<简短描述>\`（如 \`2026-05-13-user-auth\`）
 2. 将确认的设计写入 \`.sillyspec/changes/<change-name>/design.md\`
-3. 如果 Grill 或方案讨论产生了实现相关决策，写入 \`.sillyspec/changes/<change-name>/decisions.md\`：
+3. 如果对话探索或方案讨论产生了实现相关决策，写入 \`.sillyspec/changes/<change-name>/decisions.md\`：
    - decisions.md 是本次变更的决策台账，不是长期术语表
    - 只记录有实现/验收影响的决策，闲聊和低风险偏好不记录
    - 每条记录必须有稳定版本 ID：D-001@v1、D-002@v1 ...
    - 若后续 Design Grill 修正该决策，新记录使用 D-001@v2，并写明 supersedes: D-001@v1
    - 每条记录必须包含：type、status、source、question、answer、normalized_requirement、impacts、evidence、priority
    - 长期术语只在 archive/scan 时再提升到 \`.sillyspec/docs/<project>/glossary.md\`
-4. 自审检查：
-   - 需求覆盖：是否完整覆盖对话式探索中确认的需求
-   - Grill 覆盖：如果存在 decisions.md，design.md 是否引用所有当前版本 D-xxx@vN
-   - 约束一致性：是否与 CONVENTIONS.md、ARCHITECTURE.md 一致
-   - 真实性：表名/字段名/类名/方法名来自真实代码或标注"新增"
-   - YAGNI：是否包含不必要功能
-   - 验收标准：是否具体可测试
-   - 非目标清晰：是否明确界定了不做的事
-   - 兼容策略（brownfield）：是否说明了回退路径
-   - 风险识别：是否识别了关键技术风险和对策
-   - **生命周期契约表**（如涉及 session/lease/agent_run/daemon/lifecycle/claim/heartbeat 等关键词）：design.md 是否包含完整的生命周期契约表？每个事件是否有必需字段定义？字段是否出现在 DTO/interface 中？
-5. 自审发现问题 → 修改后重新检查
-6. 全部通过 → 进入下一步
+4. 格式自检（只查章节齐全；语义一致性/可行性/YAGNI 不在本步查，交给下一步 Design Grill 独立审查）：
+   - design.md 含全部必填章节（背景/设计目标/非目标/总体方案/文件变更清单/接口定义/风险登记）
+   - 如存在 decisions.md，design.md 是否引用所有当前版本 D-xxx@vN
+   - 涉及 session/lease/agent_run/daemon/lifecycle 等关键词时，是否含「生命周期契约表」
+5. 缺章节 → 补齐后重检；章节齐全 → 进入下一步（Design Grill 做语义层交叉审查）
 
 ### 输出
 design.md 文件路径 + 自审结果
@@ -433,7 +347,7 @@ design.md 文件路径 + 自审结果
 ### 审查执行方式（CLI 按变更规模判定，占位符由 run.js 注入）
 tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
 - tier=self：当前 agent 直接执行下方交叉审查（小变更）
-- tier=independent：必须用 Agent tool 启动一个独立的设计审查子代理（独立上下文，不共享你的分析与倾向），子代理按下方"交叉审查模型"审查 design.md 并输出 review.json 到 {SPEC_ROOT}/.runtime/stage-reviews/brainstorm-{STAGE_REVIEW_RUN_ID}/review.json。字段：reviewType=design；reviewedFiles=[changes/<change>/design.md]；docHash=design.md 的 sha256（必须真实读取文件计算，禁止编造，CLI 会重算对比）；specVerdict/qualityVerdict=pass|fail|cannot_verify；checklist 按"定义层/一致性层/可行性层"每条给 pass|gap|fail。子代理只产出 review + Unresolved Blockers，**是否调用 sillyspec run brainstorm --wait 仍由你（主 agent）根据其 verdict 决定**（子代理不直接操作 CLI 状态机）。
+- tier=independent：必须用 Agent tool 启动一个独立的设计审查子代理（独立上下文，不共享你的分析与倾向），子代理按下方"交叉审查模型"审查 design.md 并输出 review.json 到 {SPEC_ROOT}/.runtime/stage-reviews/brainstorm-{STAGE_REVIEW_RUN_ID}/review.json。字段：reviewType=design；reviewedFiles=[changes/<change>/design.md]；docHash=design.md 的 sha256；specVerdict/qualityVerdict=pass|fail|cannot_verify；checklist 按"定义层/一致性层/可行性层"每条给 pass|gap|fail。子代理只产出 review + Unresolved Blockers，**是否调用 sillyspec run brainstorm --wait 仍由你（主 agent）根据其 verdict 决定**（子代理不直接操作 CLI 状态机）。
 
 ### 默认行为
 1. 默认必须执行一次交叉审查；不要让用户凭主观判断决定"要不要 Grill"。
@@ -515,10 +429,9 @@ status: passed | needs-user-input | blocked | skipped
 \`\`\`
 
 ### 铁律 — 等待用户
-- 发现 P0/P1 结构性矛盾且需要用户判断时，调用：
-  \`sillyspec run brainstorm --wait --reason "等待用户处理 Design Grill 发现的结构性问题" --options "按推荐修正,补充回答,显式跳过" --output "Design Grill 问题摘要"\`
-- 用户显式跳过时，必须在 decisions.md 记录 accepted risk；P0/P1 skip 仍必须写入 Unresolved Blockers。
-- 完成前必须确认：没有 P0/P1 unresolved blocker；否则不能进入 plan。`,
+- 发现 P0/P1 结构性矛盾且需要用户判断时，暂停等用户（命令由 CLI 在下方注入）
+- 用户显式跳过时必须在 decisions.md 记录 accepted risk；P0/P1 skip 仍必须写入 Unresolved Blockers
+- 完成前必须确认没有 P0/P1 unresolved blocker，否则不能进入 plan。`,
       outputHint: 'Design Grill 交叉审查结果',
       optional: false
     },
@@ -534,6 +447,7 @@ status: passed | needs-user-input | blocked | skipped
 - **small（小变更）**：改动 ≤ 2 个文件、单模块、无跨模块依赖、无状态机/schema/API 变更
 - **large（大变更）**：不满足上述任意一条
 在 design.md frontmatter 写入 \`scale: small\` 或 \`scale: large\`（frontmatter 不存在则补 \`author\`/\`created_at\`/\`scale\`）。规模决定下面的产物范围和实现路径。
+（注：早期「加载项目上下文」步骤已做过一次粗判并可能建议过走 quick；此处基于 design.md 文件清单做精判兜底。）
 
 ### 操作
 1. 展示 design.md 摘要 + **规模评估结果（small/large + 一句依据）** 给用户
@@ -544,12 +458,12 @@ status: passed | needs-user-input | blocked | skipped
    - 两种规模都执行 \`git add .sillyspec/\` — 暂存规范文件（不要 commit）
 
 所有规范文件头部必须包含 YAML frontmatter：
-\`\`\`\`yaml
+\`\`\`yaml
 ---
 author: <git-user>
 created_at: <now-datetime>
 ---
-\`\`\`\`
+\`\`\`
 
 ### proposal.md 格式要求
 \`\`\`markdown
@@ -634,10 +548,8 @@ Then 期望结果
 5. 后续变更包的骨架文件同样必须包含 \`author: <git-user>\` 和 \`created_at: <now-datetime>\`
 
 ### 铁律 — 必须等待用户最终确认
-- **展示 design.md 摘要后，暂停等待用户确认。** 不要替用户确认。
-- 调用：\`sillyspec run brainstorm --wait --reason "等待用户确认设计方案" --options "确认,需要修改,推翻重来" --output "design.md 摘要"\`
-- **绝对禁止**：在输出中自己说"用户已确认"然后生成文件
-- **只有用户通过 --continue --answer "确认" 后才生成规范文件**
+- 展示 design.md 摘要后暂停等用户确认，**不要自己说"用户已确认"然后生成文件**（命令由 CLI 在下方注入）
+- 只有用户明确确认（--answer "确认"）后才生成规范文件**
 
 ### 输出
 所有规范文件路径（含后续变更包目录列表）
@@ -645,7 +557,7 @@ Then 期望结果
 ### 注意
 - 禁止在确认前推进到后续阶段
 - 禁止自动 commit
-- 推翻重来回到 Step 6（对话式探索）
+- 推翻重来回到「对话式探索与需求澄清」步骤
 - 表名/字段名/类名必须来自真实代码或标注"新增"
 - 如果存在 decisions.md，requirements.md 必须引用全部当前版本 D-xxx@vN；没有覆盖的 D-xxx@vN 必须标注为剩余风险
 - 如果 Design Grill 产生 P0/P1 unresolved blocker，必须回到 design 修正，不能进入 plan/quick

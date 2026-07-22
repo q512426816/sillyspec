@@ -46,7 +46,7 @@ sillyspec run brainstorm --done --answer "..." --output "..."    # 一步完成 
 
 ## brainstorm 特有：requiresWait 步骤
 
-某些步骤（如"对话式探索"）需要用户输入。两种方式：
+某些步骤（如"对话式探索与需求澄清"）需要用户输入。两种方式：
 
 > 自动去重：若前置 step 已对同一问题（waitReason 归一化后相同，如"确认设计方案" vs "最终确认设计方案"）确认过，后续重复 wait 会自动跳过，无需再 `--wait`。
 

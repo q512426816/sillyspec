@@ -171,8 +171,7 @@ const fixedPrefix = [
 ### 输出
 worktree 路径 + 分支名 + 模式
 
-### 完成后执行
-sillyspec run execute --done --output "worktree 路径 + 分支名 + 模式"`,
+"`,
     outputHint: 'worktree 路径 + 分支名 + 模式',
     optional: false
   },
@@ -218,7 +217,7 @@ const acceptanceSteps = [
 ### 执行方式（CLI 按变更规模判定，占位符由 run.js 注入）
 tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
 - tier=self：当前 agent 汇总执行（对照 design.md 逐项检查 + 偏差说明）
-- tier=independent：必须用 Agent tool 启动一个独立的 QA 子代理（独立上下文，不共享实现者的分析），子代理对照 design.md 逐项检查实现一致性并输出 review.json 到 {SPEC_ROOT}/.runtime/stage-reviews/execute-{STAGE_REVIEW_RUN_ID}/review.json。字段：reviewType=acceptance；reviewedFiles=[changes/<change>/design.md] + git diff 涉及的源码文件；docHash=design.md 的 sha256（禁止编造）；specVerdict/qualityVerdict=pass|fail|cannot_verify；checklist 按每个设计要点给 pass|gap|fail。该 acceptance review 同时覆盖"代码审查"视角（风格/bug/安全/冗余），后续代码审查步骤仅需轻量复审。
+- tier=independent：必须用 Agent tool 启动一个独立的 QA 子代理（独立上下文，不共享实现者的分析），子代理对照 design.md 逐项检查实现一致性并输出 review.json 到 {SPEC_ROOT}/.runtime/stage-reviews/execute-{STAGE_REVIEW_RUN_ID}/review.json。字段：reviewType=acceptance；reviewedFiles=[changes/<change>/design.md] + git diff 涉及的源码文件；docHash=design.md 的 sha256；specVerdict/qualityVerdict=pass|fail|cannot_verify；checklist 按每个设计要点给 pass|gap|fail。该 acceptance review 同时覆盖"代码审查"视角（风格/bug/安全/冗余），后续代码审查步骤仅需轻量复审。
 
 ### 操作
 1. 读取 design.md（技术方案）
@@ -644,7 +643,7 @@ task-XX 对应：{SPEC_ROOT}/.runtime/execute-runs/{EXECUTE_RUN_ID}/tasks/task-X
    - 在变更文件中搜索所有 router 注册路径（@router.get/post/put/delete）
    - 将端点清单写入 {SPEC_ROOT}/.runtime/contract-artifacts/<task-name>/endpoints.json
    - 格式: { "task": "task-XX", "type": "backend_endpoints", "endpoints": [{ "method": "GET", "path": "/api/ppm/xxx" }] }
-2. 运行 sillyspec run execute --done --input "用户原始反馈" --output "Wave ${waveIndex} 结果摘要"`
+"`
 }
 
 /**

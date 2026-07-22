@@ -24,8 +24,8 @@ function assertContains(stage, expectedNames) {
   }
 }
 
-assert.equal(stageSteps.brainstorm.length, 13, 'brainstorm should include optional demand clarification and default Design Grill gates')
-assertContains('brainstorm', ['需求澄清 Grill', '写设计文档并自审', 'Design Grill 交叉审查', '用户确认并生成规范文件'])
+assert.equal(stageSteps.brainstorm.length, 8, 'brainstorm folded to 8 steps: 协作复用/原型/范围/Grill inlined into adjacent steps')
+assertContains('brainstorm', ['对话式探索与需求澄清', '写设计文档并自审', 'Design Grill 交叉审查', '用户确认并生成规范文件'])
 
 assert.equal(stageSteps.scan.length, 11, 'scan base definition should be 11 steps (with Extract Project Knowledge) before per-project expansion')
 assertContains('scan', ['构建扫描项目列表', '生成本地配置', '生成模块映射'])
