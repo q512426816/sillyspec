@@ -9,7 +9,11 @@
  *
  * 这些都是 noAI 步骤，不需要 LLM 参与。
  */
-import { existsSync, readFileSync, readdirSync } from 'fs'
+import { existsSync, readFileSync as _readFileSync, readdirSync } from 'fs'
+// 归一化行尾为 LF：Windows 下 python/编辑器文本模式写 .md 会产生 CRLF，致本模块多处
+// frontmatter/字段正则（`^---\n`、`allowed_paths:\s*\n…`、`^goal:` 等）失配，报「缺 frontmatter
+// /缺字段」假错误（见缺陷 windows-python-crlf-taskcard）。读取时统一转 LF，一处覆盖全部正则。
+const readFileSync = (filePath, encoding) => _readFileSync(filePath, encoding).replace(/\r\n/g, '\n')
 import { join as pJoin } from 'path'
 import jsYaml from 'js-yaml'
 import { parseFileChangeList, pathMatches } from '../change-list.js'
