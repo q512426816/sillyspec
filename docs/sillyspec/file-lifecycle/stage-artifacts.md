@@ -149,14 +149,15 @@ updated_at: 2026-07-22
 
 路径：`.sillyspec/quicklog/QUICKLOG-<git-user>.md`
 
-创建方式：**CLI 接管**（`src/quicklog.js`，O_EXCL lockfile 串行化，无新 npm 依赖）。quick 启动（`runStage` guard 首次写入）时，CLI 持锁分配 ql-ID 并写「进行中」条目（描述取任务位置参数/`--input`），同时向每个关联变更的 tasks.md 追加未勾选 task；step 3 完成（`completeStep` quick 收尾）时，CLI 强校验条目存在后翻「已完成」+ 追加结果行 + 勾选 task。Agent 全程不手写 QUICKLOG / tasks.md。
+创建方式：**CLI 接管**（`src/quicklog.js`，O_EXCL lockfile 串行化，无新 npm 依赖）。quick 启动（`runStage` guard 首次写入）时，CLI 持锁分配 ql-ID 并写「进行中」条目（描述取任务位置参数/`--input`），同时向每个关联变更的 tasks.md 追加未勾选 task；step 3 完成（`completeStep` quick 收尾）时，CLI 强校验条目存在 + 校验 step3 `--output` 结构（需求/根因/方案/结果）后翻「已完成」+ 追加结果块 + 勾选 task。Agent 全程不手写 QUICKLOG / tasks.md。
 
 格式规则（`allocateQuicklogEntry`）：
 
 - ID 为 `ql-YYYYMMDD-NNN-XXXX`
 - `NNN` 每天从 001 递增（锁内扫描所有 `QUICKLOG-*.md` 当天最大序号 +1，并发安全）
 - `XXXX` 是 4 位随机十六进制后缀（`crypto.randomBytes`，当天查重）
-- 启动写「进行中」，step 3 完成改「已完成」+ 追加「结果：」行
+- 启动写「进行中」，step 3 完成改「已完成」+ 追加结果块
+- step 3 的 `--done --output` 是「结果：」归档的唯一来源，须按 **需求/根因/方案/结果** 模板给全（见 `src/stages/quick.js` step 3 prompt）；`completeStep` 对该 output 做结构校验（`validateQuickResult`，只查必填字段齐全、不判内容质量），缺字段则本次不完成（回滚 step + exit 1），补全后重跑 `--done`。多行结果写成字段化块（每字段一行）；单行结果仍写 `结果：<一句话>`
 - 超过 500 行时 CLI 轮转为 `QUICKLOG-<USER>-YYYY-MM-DD.md`（日期取最后记录日期）
 
 幂等：分配判据是 session guard.json 的 `quicklogId` 字段（跨进程可靠），同 sessionId 重入不重复分配/写条目。收尾强校验：条目被删或缺失时 `completeStep` 阻断 `--done`（治「报 SAFE 但漏写」缺陷）；guard 缺失（brownfield）不阻断，兜底补写一条记录。这些写入、轮转、状态机、锁由 `src/quicklog.js` 的 JS 函数完成，不再由 AI 按 prompt 执行。

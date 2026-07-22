@@ -69,7 +69,7 @@ updated_at: 2026-07-22T00:00:00+08:00
 | `.sillyspec/changes/archive/` | 是 | archive `确认归档 --confirm` 分支 | 已归档变更目录 |
 | `.sillyspec/knowledge/` | 是 | `init.js` 建目录；scan「Extract Project Knowledge」步骤产出 | `INDEX.md`、`uncategorized.md`，以及 scan 提取的 `conventions.md`/`patterns.md`/`known-issues.md` |
 | `.sillyspec/workflows/` | 是 | `init.js` 从模板复制 | workflow check 定义 |
-| `.sillyspec/quicklog/` | 是 | `src/quicklog.js`（CLI 接管，O_EXCL 锁 + writeAtomic 原子写） | 每次 quick 任务记录（CLI 启动时写「进行中」条目 + 分配 ql-ID，完成时翻「已完成」；关联变更另由 CLI 在各 change tasks.md 追加/勾选。读-改-写经 writeAtomic 原子覆盖，reader 不读半截） |
+| `.sillyspec/quicklog/` | 是 | `src/quicklog.js`（CLI 接管，O_EXCL 锁 + writeAtomic 原子写） | 每次 quick 任务记录（CLI 启动时写「进行中」条目 + 分配 ql-ID，完成时翻「已完成」+ 追加结构化结果块 需求/根因/方案/结果，step3 --output 缺字段则 --done 被拒；关联变更另由 CLI 在各 change tasks.md 追加/勾选。读-改-写经 writeAtomic 原子覆盖，reader 不读半截） |
 | `.sillyspec/shared/` | 是 | `init.js` | 共享目录，当前无核心生命周期逻辑 |
 | `.sillyspec/workspace/` | 是 | `init.js` | 工作区目录，当前无核心生命周期逻辑 |
 | `.sillyspec/.runtime/` | 否 | `init.js`、`ProgressManager`、运行时命令 | DB、gate、artifacts、history、workflow-runs、worktrees、knowledge-hit-report.json、postcheck-result.json、stage-reviews（brainstorm/plan/propose/execute 独立审查 review.json） |
@@ -112,7 +112,7 @@ execute
   -> apply patch back to main workspace, then cleanup
 
 quick
-  -> .sillyspec/quicklog/QUICKLOG-<git-user>.md              (CLI 写入：启动分配 ql-ID 写「进行中」，完成翻「已完成」)
+  -> .sillyspec/quicklog/QUICKLOG-<git-user>.md              (CLI 写入：启动分配 ql-ID 写「进行中」，完成翻「已完成」+ 追加结构化结果块 需求/根因/方案/结果，缺字段则 step3 --done 被拒)
   -> CLI appends/checks checkbox in .sillyspec/changes/<change>/tasks.md
   -> code changes are made in the main workspace
 ```

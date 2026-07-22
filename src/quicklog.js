@@ -81,8 +81,24 @@ function sanitizeDesc(description) {
 }
 
 function sanitizeResult(resultText) {
-  const s = String(resultText || '').replace(/\n\s*\n/g, ' ').replace(/\r?\n/g, ' ').trim()
-  return s
+  // 保留换行：结果块支持字段化结构（需求：/根因：/方案：/结果：...）。多行时 flipEntryInContent
+  // 写成字段块（追加在「状态：」行下方），不是单条「结果：<长行>」。仅去首尾空白。
+  return String(resultText || '').trim()
+}
+
+// 结果块必填字段（quick step3 --done --output 的结构化结果模板，见 src/stages/quick.js）。
+const RESULT_REQUIRED_LABELS = ['需求：', '根因：', '方案：', '结果：']
+
+/**
+ * quick step3 结果摘要结构校验（确定性：只查「必填字段是否都在」，不判内容质量——
+ * 内容好坏属语义软判定，不归 CLI）。对齐 docs/sillyspec/quick-done-quicklog-duplicate-status-line
+ * 的第二诉求：--output 不自动展开丰富格式时，用约束模板 + 结构校验保证 QUICKLOG 记录完整。
+ * @param {string} text --done --output 原文
+ * @returns {{ ok: boolean, missing: string[] }} ok=true 通过；missing=缺失的字段名列表
+ */
+export function validateQuickResult(text) {
+  const missing = RESULT_REQUIRED_LABELS.filter(label => !String(text || '').includes(label))
+  return { ok: missing.length === 0, missing }
 }
 
 function escapeRe(s) {
@@ -217,7 +233,14 @@ function flipEntryInContent(content, qlId, result) {
     endIdx += 1
   }
   if (result && !hasResult) {
-    lines.splice(endIdx, 0, `结果：${result}`)
+    // 多行结果（结构化 需求/根因/方案/结果 字段块）：逐行插入为独立字段行。
+    // 单行结果：保持「结果：<一句话>」一行，向后兼容简单用例。
+    if (/\r?\n/.test(result)) {
+      const resultLines = result.split(/\r?\n/).filter(l => l.trim() !== '')
+      lines.splice(endIdx, 0, ...resultLines)
+    } else {
+      lines.splice(endIdx, 0, `结果：${result}`)
+    }
   }
   return lines.join('\n')
 }

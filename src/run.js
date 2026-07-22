@@ -11,7 +11,7 @@ import { createRequire } from 'module'
 const require = createRequire(import.meta.url)
 import { ProgressManager } from './progress.js'
 import { SCAN_STATUS, POINTER_STATUS, isPointerCorrupted } from './constants.js'
-import { allocateQuicklogEntry, completeQuicklogEntry, findQuicklogEntry } from './quicklog.js'
+import { allocateQuicklogEntry, completeQuicklogEntry, findQuicklogEntry, validateQuickResult } from './quicklog.js'
 import { checkbox } from '@inquirer/prompts'
 
 /**
@@ -3103,6 +3103,27 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
         progress.lastQuickReview = review
       }
 
+      // 结果摘要结构校验（最后一步、isDone 且带了 --output 时）：--output 是 QUICKLOG「结果：」
+      // 归档的唯一来源，要求按 需求/根因/方案/结果 模板给全（见 stages/quick.js step3 prompt）。
+      // 确定性校验：只查必填字段是否齐全，不判内容质量。缺字段 → 本次不完成（回滚 step 状态 +
+      // exit 1），保留「进行中」条目，agent 补全 --output 后重跑 --done 即可，不丢进度。
+      // 仅 completeQuicklogEntry 会实际持久化时才校验；前两个 step 的 --done output 不入 QUICKLOG，不校验。
+      if (outputText) {
+        const resultCheck = validateQuickResult(outputText)
+        if (!resultCheck.ok) {
+          console.error(`\n❌ quick 结果摘要结构不完整：缺少字段 ${resultCheck.missing.join('、')}`)
+          console.error(`   --output 会写入 QUICKLOG「结果：」，请按模板补全再重跑 --done：`)
+          console.error(`     需求：用户/任务要什么`)
+          console.error(`     根因：为什么这样改（纯新增/样式则写「无，纯新增/纯样式」）`)
+          console.error(`     方案：怎么改的`)
+          console.error(`     结果：验证情况（测试数 / lint / typecheck / 部署状态）`)
+          steps[currentIdx].status = 'pending'
+          steps[currentIdx].completedAt = null
+          if (outputText) steps[currentIdx].output = null
+          process.exit(1)
+        }
+      }
+
       if (!qlId) {
         // 无 ql-ID（guard 缺失或 brownfield 无 quicklogId）：补分配后立即完成，不阻断。
         try {
@@ -3130,9 +3151,10 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
         process.exit(1)
       }
       // 翻状态进行中→已完成 + 追加结果 + 勾选关联 tasks.md
+      // resultText 不再截断：结构化结果块（需求/根因/方案/结果）完整落盘，多行写成字段化块。
       try {
         await completeQuicklogEntry(specBase, gitUser, qlId, {
-          resultText: outputText ? outputText.slice(0, 500) : '',
+          resultText: outputText || '',
           linkedChanges,
         })
         console.log(`📝 QUICKLOG 条目 ${qlId} 已标记完成`)

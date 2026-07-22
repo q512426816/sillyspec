@@ -66,8 +66,20 @@ export const definition = {
 
 ### 📌 收尾确认 — sessionId: \`<quick-session-id>\`
 - 本步骤是最后一步，完成后 quick 会话即结束
-- **完成本 step 用**：\`sillyspec run quick --done --change <quick-session-id> --output "暂存和记录确认"\`
+- **完成本 step 用**：\`sillyspec run quick --done --change <quick-session-id> --output "<结构见下，结果摘要写这里>"\`
   - 多会话并发**必须带 \`--change <quick-session-id>\`**，不带会 fallback 读 \`current-quick-run-id\` 可能命中他者会话
+
+### ⚠️ 结果摘要模板（必填，CLI 会校验结构）
+\`--output\` 是 QUICKLOG「结果：」归档的唯一来源，**必须按此结构给全四项**（逐项一句话，不可用「见前述」替代）：
+
+\`\`\`
+需求：用户/任务要什么
+根因：为什么这样改（若纯新增/配置/样式无根因，写「无，纯新增/纯样式」）
+方案：怎么改的
+结果：验证情况（测试数 / lint / typecheck / 部署状态）
+\`\`\`
+
+缺任一项，\`--done\` 会被拒并提示缺失字段，补全后重跑即可（不丢进度）。
 
 ### 操作
 1. 查看 \`git status --porcelain\`，确认只包含本次 quick 相关文件

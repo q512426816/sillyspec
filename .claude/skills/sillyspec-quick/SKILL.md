@@ -79,6 +79,7 @@ sillyspec run quick --files src/phone.ts,src/phone.test.ts
 - quick 直接在主工作区改代码（不创建 worktree），范围必须小且明确
 - 完成后立即 `--done`，不跳过
 - QUICKLOG 记录由 **CLI 接管**：启动时 CLI 自动分配 ql-ID 并在 `.sillyspec/quicklog/QUICKLOG-<user>.md` 写「进行中」条目（含关联变更 tasks.md），完成时 CLI 自动翻「已完成」并勾选 task。**你无需手写 QUICKLOG / tasks.md**，只需用注入的 `<quicklog-id>` 在模块文档变更索引引用
+- **最后一步 `--done --output` 必须按结构化结果模板给全四字段**（逐项一句话）：`需求：… 根因：… 方案：… 结果：…`。这是 QUICKLOG「结果：」归档的唯一来源；CLI 校验缺字段会拒绝 `--done`（exit 1），补全后重跑即可。前两个 step 的 `--output` 是中间摘要，不用此模板
 - **禁止**在没有运行 CLI 的情况下自行决定流程
 
 ## 用户指令

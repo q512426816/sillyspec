@@ -75,13 +75,36 @@ assert(readFileSync(join(specBase, 'changes', '2026-07-06-kanban-better-board', 
   assert(count === 1, `同 sessionId 重入 run quick 不重复写条目（当前 ${count} 条）`)
 }
 
-// 验收 3：step1/2/3 done → 翻完成 + 结果 + 勾 tasks.md
+// 验收 3：step1/2 done（中间摘要不入 QUICKLOG、不校验结构）+ step3 done（结构化结果模板）
 await captureStdout(() => runCommand(['quick', '--done', '--change', sid, '--output', '理解完成', '--confirm'], repo))
 await captureStdout(() => runCommand(['quick', '--done', '--change', sid, '--output', '实现完成', '--confirm'], repo))
-await captureStdout(() => runCommand(['quick', '--done', '--change', sid, '--output', '暂存完成', '--confirm'], repo))
+const structured = '需求：列表默认最新在前\n根因：apply_sort 遇空 order_by 跳过\n方案：service 兜底 order_by=created_at\n结果：52 passed + ruff 过'
+await captureStdout(() => runCommand(['quick', '--done', '--change', sid, '--output', structured, '--confirm'], repo))
 assert(qlog().includes('状态：已完成'), 'step3 done 后条目翻为「已完成」')
-assert(qlog().includes('结果：'), 'step3 done 后追加结果行')
+assert(qlog().includes('结果：52 passed'), 'step3 done 后结构化结果落盘（结果：字段）')
+assert(qlog().includes('需求：列表默认最新在前'), '结构化结果含「需求：」字段')
+assert(qlog().includes('根因：apply_sort'), '结构化结果含「根因：」字段')
+assert(qlog().includes('方案：service 兜底'), '结构化结果含「方案：」字段')
 assert(readFileSync(join(specBase, 'changes', '2026-07-06-kanban-better-board', 'tasks.md'), 'utf8').includes(`- [x] ${guard.quicklogId}`), 'tasks.md 已勾选 - [x]')
+
+// 验收 3b：step3 --output 缺结构字段 → 阻断（exit 1），补全后可重跑完成
+{
+  const out3 = await captureStdout(() => runCommand(['quick', '结构校验测试', '--linked-changes', 'none', '--non-interactive'], repo))
+  const sidV = extractSessionId(out3)
+  await captureStdout(() => runCommand(['quick', '--done', '--change', sidV, '--output', '理解完成', '--confirm'], repo))
+  await captureStdout(() => runCommand(['quick', '--done', '--change', sidV, '--output', '实现完成', '--confirm'], repo))
+  const origExit = process.exit
+  let exitErr = null
+  process.exit = (code) => { throw new Error('EXIT_' + code) }
+  try { await captureStdout(() => runCommand(['quick', '--done', '--change', sidV, '--output', '暂存确认', '--confirm'], repo)) }
+  catch (e) { exitErr = e }
+  process.exit = origExit
+  assert(exitErr && exitErr.message === 'EXIT_1', 'step3 --output 缺结构字段（无 需求/根因/方案/结果）被阻断（exit 1）')
+  // 补全结构后重跑应成功完成
+  await captureStdout(() => runCommand(['quick', '--done', '--change', sidV, '--output', structured, '--confirm'], repo))
+  const qfile2 = readFileSync(join(specBase, 'quicklog', 'QUICKLOG-test.md'), 'utf8')
+  assert(qfile2.includes('结果：52 passed'), '补全结构后 step3 重跑成功，结果已落盘')
+}
 
 // 验收 4：强校验 — 手动删条目后 step3 done 被阻断（桩 process.exit 捕获）
 {
@@ -98,7 +121,8 @@ assert(readFileSync(join(specBase, 'changes', '2026-07-06-kanban-better-board', 
   const origExit = process.exit
   let exitErr = null
   process.exit = (code) => { throw new Error('EXIT_' + code) }
-  try { await captureStdout(() => runCommand(['quick', '--done', '--change', sid2, '--output', 's3', '--confirm'], repo)) }
+  // step3 用结构化 output（避开结果结构校验），确保此处测的是「条目被删→强校验阻断」而非「结构缺失」
+  try { await captureStdout(() => runCommand(['quick', '--done', '--change', sid2, '--output', structured, '--confirm'], repo)) }
   catch (e) { exitErr = e }
   process.exit = origExit
   assert(exitErr && exitErr.message === 'EXIT_1', `删条目后 step3 done 被强校验阻断（process.exit(1)）`)

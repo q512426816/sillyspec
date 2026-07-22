@@ -30,6 +30,10 @@ import { execFileSync } from 'node:child_process'
 import { runCommand } from '../src/run.js'
 import { ProgressManager } from '../src/progress.js'
 
+// step3 --done 的结构化结果（最后一步 --output 需含 需求/根因/方案/结果，见 stages/quick.js step3 模板 + run.js 结构校验）。
+// 本测试聚焦收尾/审计/清理语义，step3 用合规结构化 output 避开结构校验，step1/2 的短摘要不变（仅最后一步校验）。
+const structured = '需求：收尾测试\n根因：无，测试用例\n方案：跨进程 --done\n结果：审计通过'
+
 let total = 0
 let failed = 0
 
@@ -130,7 +134,7 @@ console.log('--- 验收 1：跨进程 progress 无 quickGuard，收尾从文件�
   try {
     await captureStdout(() => runCommand(['quick', '--done', '--change', sid, '--output', 'step1 done', '--confirm'], repo))
     await captureStdout(() => runCommand(['quick', '--done', '--change', sid, '--output', 'step2 done', '--confirm'], repo))
-    step3Out = await captureStdout(() => runCommand(['quick', '--done', '--change', sid, '--output', 'step3 done', '--confirm'], repo))
+    step3Out = await captureStdout(() => runCommand(['quick', '--done', '--change', sid, '--output', structured, '--confirm'], repo))
   } catch (e) {
     step3Threw = e
   }
@@ -191,7 +195,7 @@ console.log('\n--- 验收 2：fallback 旧单文件 quick-guard.json 仍被审�
   try {
     await captureStdout(() => runCommand(['quick', '--done', '--change', sid, '--output', 's1', '--confirm'], repo))
     await captureStdout(() => runCommand(['quick', '--done', '--change', sid, '--output', 's2', '--confirm'], repo))
-    step3Out = await captureStdout(() => runCommand(['quick', '--done', '--change', sid, '--output', 's3', '--confirm'], repo))
+    step3Out = await captureStdout(() => runCommand(['quick', '--done', '--change', sid, '--output', structured, '--confirm'], repo))
   } catch (e) {
     threw = e
   }
@@ -233,7 +237,7 @@ console.log('\n--- 验收 3：无任何 guard 文件 → 跳过审计仅清理�
   try {
     await captureStdout(() => runCommand(['quick', '--done', '--change', sid, '--output', 's1', '--confirm'], repo))
     await captureStdout(() => runCommand(['quick', '--done', '--change', sid, '--output', 's2', '--confirm'], repo))
-    step3Out = await captureStdout(() => runCommand(['quick', '--done', '--change', sid, '--output', 's3', '--confirm'], repo))
+    step3Out = await captureStdout(() => runCommand(['quick', '--done', '--change', sid, '--output', structured, '--confirm'], repo))
   } catch (e) {
     threw = e
   }
