@@ -241,6 +241,34 @@ console.log('\n--- 验收 7：writeAtomic 原子写行为 ---')
 }
 
 // ─────────────────────────────────────────
+// 验收 7b：CRLF 文件 flip — 缺陷 quick-done-quicklog-duplicate-status-line 回归
+// Windows 下 QUICKLOG 可能是 CRLF。原 flipEntryInContent 用 `lines[i] === '状态：进行中'`
+// 精确匹配，split('\n') 后行带 \r 恒匹配失败 → 走 splice「兜底插入」→ 条目内同时
+// 「状态：已完成」+「状态：进行中」。修复后前缀匹配容忍 \r，替换而非插入。
+// ─────────────────────────────────────────
+console.log('\n--- 验收 7b：CRLF 文件 flip 无重复状态行 ---')
+{
+  const specBase = makeTmpDir('qlm-crlf-')
+  const qlId = 'ql-20260722-002-abcd'
+  const userFile = join(specBase, 'quicklog', 'QUICKLOG-crlf.md')
+  mkdirSync(join(specBase, 'quicklog'), { recursive: true })
+  // 预置 CRLF 进行中条目（含 进行中 行带 \r）
+  const crlfEntry = ['', `## ${qlId} | 2026-07-22 10:00:00 | 测试任务`, '状态：进行中', '关联变更：（无）', '文件：（见实际改动）', '']
+    .join('\r\n')
+  writeFileSync(userFile, crlfEntry)
+
+  await completeQuicklogEntry(specBase, 'crlf', qlId, { resultText: '已完成', linkedChanges: [] })
+  const out = readFileSync(userFile, 'utf8')
+  const doneCount = (out.match(/状态：已完成/g) || []).length
+  const doingCount = (out.match(/状态：进行中/g) || []).length
+  assert(doneCount === 1, `CRLF flip 后恰好一条「状态：已完成」（实际 ${doneCount}）`)
+  assert(doingCount === 0, `CRLF flip 后无残留「状态：进行中」（实际 ${doingCount}，旧 bug 会留下 1 条）`)
+  assert(out.includes('结果：已完成'), 'CRLF flip 追加了结果行')
+  assert(!out.includes('状态：已完成\n状态：进行中') && !out.includes('状态：已完成\r\n状态：进行中'),
+    '无「已完成+进行中」相邻重复状态行')
+}
+
+// ─────────────────────────────────────────
 // 验收 8：reader-writer 并发 — writer 循环 complete，独立 reader 进程校验每次读到完整文件
 // 守护用户原始故障：「agent 读 QUICKLOG 时，quick 写入的新日志落进其读到的文件」。
 // writeAtomic 保证 reader 永远看到完整旧版或完整新版，绝不读半截/空。

@@ -193,6 +193,10 @@ async function checkTaskCheckbox(specBase, change, qlId) {
 }
 
 // 就地翻某 qlId 条目：状态进行中→已完成，追加结果行
+// CRLF 修复（缺陷 quick-done-quicklog-duplicate-status-line）：QUICKLOG 在 Windows 下
+// 可能是 CRLF，split('\n') 后每行带 \r。原代码 `lines[i] === '状态：进行中'` 精确匹配
+// 恒失败 → 走 splice「兜底插入」→ 条目内同时出现「状态：已完成」+「状态：进行中」。
+// 状态行匹配与「已完成」判断统一用行首前缀匹配，容忍行尾 \r；写入保持 CRLF 不扩大改动。
 function flipEntryInContent(content, qlId, result) {
   const lines = content.split('\n')
   const startIdx = lines.findIndex(l => l.startsWith(`## ${qlId} |`))
@@ -204,10 +208,10 @@ function flipEntryInContent(content, qlId, result) {
   let hasResult = false
   let flipped = false
   for (let i = startIdx + 1; i < endIdx; i++) {
-    if (lines[i] === '状态：进行中') { lines[i] = '状态：已完成'; flipped = true }
+    if (/^状态：进行中\r?$/.test(lines[i])) { lines[i] = '状态：已完成'; flipped = true }
     if (lines[i].startsWith('结果：')) hasResult = true
   }
-  if (!flipped && !lines.slice(startIdx, endIdx).includes('状态：已完成')) {
+  if (!flipped && !lines.slice(startIdx, endIdx).some(l => /^状态：已完成\r?$/.test(l))) {
     // 无状态行（异常），插一条已完成
     lines.splice(startIdx + 1, 0, '状态：已完成')
     endIdx += 1
