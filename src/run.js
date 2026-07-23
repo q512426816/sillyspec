@@ -632,11 +632,26 @@ async function getStageSteps(stageName, cwd, progress, specDir = null) {
   if (stageName === 'execute') {
     const changeDir = resolveChangeDir(cwd, progress, specDir)
     let planFile = null
+    let worktreePath = null
     if (changeDir) {
       const p = join(changeDir, 'plan.md')
       if (existsSync(p)) planFile = p
+      // 自动检测 worktree 路径，注入 Wave prompt 的 workdir 指令
+      // 修复：之前未传 worktreePath 给 buildExecuteSteps，导致 Wave prompt 缺失工作目录指令，
+      // 子代理可能把文件写到主工作区而非 worktree 内，破坏隔离。
+      try {
+        const changeName = basename(changeDir)
+        const { WorktreeManager } = await import('./worktree.js')
+        const wm = new WorktreeManager({ cwd })
+        const meta = wm.getMeta(changeName)
+        if (meta?.worktreePath && existsSync(meta.worktreePath)) {
+          worktreePath = meta.worktreePath
+        }
+      } catch {
+        // 无 worktree meta 不阻断——可能是首次启动或 in-place 模式
+      }
     }
-    return buildExecuteSteps(planFile)
+    return buildExecuteSteps(planFile, { worktreePath })
   }
   if (stageName === 'plan') {
     const changeDir = resolveChangeDir(cwd, progress, specDir)
