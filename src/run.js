@@ -3207,11 +3207,12 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
         const resultCheck = validateQuickResult(outputText)
         if (!resultCheck.ok) {
           console.error(`\n❌ quick 结果摘要结构不完整：缺少字段 ${resultCheck.missing.join('、')}`)
-          console.error(`   --output 会写入 QUICKLOG「结果：」，请按模板补全再重跑 --done：`)
-          console.error(`     需求：用户/任务要什么`)
+          console.error(`   --output 是 QUICKLOG「结果：」归档的唯一来源，四个标签必须放在 --output 里（不是 --input）。`)
+          console.error(`   补全后重跑 --done（不丢进度），直接照抄此模板：`)
+          console.error(`     sillyspec run quick --done --change <changeName> --output "需求：用户/任务要什么`)
           console.error(`     根因：为什么这样改（纯新增/样式则写「无，纯新增/纯样式」）`)
           console.error(`     方案：怎么改的`)
-          console.error(`     结果：验证情况（测试数 / lint / typecheck / 部署状态）`)
+          console.error(`     结果：验证情况（测试数 / lint / typecheck / 部署状态）"`)
           steps[currentIdx].status = 'pending'
           steps[currentIdx].completedAt = null
           if (outputText) steps[currentIdx].output = null
