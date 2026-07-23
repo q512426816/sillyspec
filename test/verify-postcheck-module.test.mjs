@@ -12,6 +12,7 @@ import {
   extractModules,
   pickHitModules,
   aggregateStatus,
+  computeFullFallbackReason,
 } from '../src/verify-postcheck.js'
 
 let passed = 0
@@ -258,6 +259,46 @@ assertEqual(
 assertEqual(
   'aggregateStatus: null 输入 → null',
   aggregateStatus(null),
+  null,
+)
+
+// ── computeFullFallbackReason ───────────────────────────────────
+// 全量 fallback 原因判定（3.24 verify 坑1：让 fallback 不再静默）。
+// hitCount 语义：-1 = git 不可用；0 = 无命中；>0 = 命中（走子集，不该 fallback）。
+
+assertEqual(
+  'computeFullFallbackReason: 显式 full → null（用户有意跑全量，不 hint）',
+  computeFullFallbackReason({ strategy: 'full', modulesPresent: false, hitCount: 0 }),
+  null,
+)
+
+assertEqual(
+  'computeFullFallbackReason: 缺省 null → hint（默认全量）',
+  computeFullFallbackReason({ strategy: null, modulesPresent: false, hitCount: 0 }),
+  'local.yaml 未配置 test_strategy（默认全量 commands.test，未按变更范围收窄）',
+)
+
+assertEqual(
+  'computeFullFallbackReason: module 但无 modules 块 → hint',
+  computeFullFallbackReason({ strategy: 'module', modulesPresent: false, hitCount: 0 }),
+  'test_strategy: module 但 local.yaml 未配置有效的 modules: 块（需 inline flow: name: { path, test }），回退全量',
+)
+
+assertEqual(
+  'computeFullFallbackReason: module 有块但 git 不可用(hitCount=-1) → hint',
+  computeFullFallbackReason({ strategy: 'module', modulesPresent: true, hitCount: -1 }),
+  'test_strategy: module 但 git 不可用/非 git 仓库，无法判定命中模块，回退全量',
+)
+
+assertEqual(
+  'computeFullFallbackReason: module 有块但 0 命中 → hint',
+  computeFullFallbackReason({ strategy: 'module', modulesPresent: true, hitCount: 0 }),
+  'test_strategy: module 但本次 git diff 未命中任何已配置 modules，回退全量',
+)
+
+assertEqual(
+  'computeFullFallbackReason: module 命中(hitCount>0) → null（走子集，不 fallback）',
+  computeFullFallbackReason({ strategy: 'module', modulesPresent: true, hitCount: 2 }),
   null,
 )
 

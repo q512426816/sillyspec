@@ -59,7 +59,7 @@ schema_version: 1
   | facet | 复用实现 | 返回 data 要点 |
   |---|---|---|
   | `execute-evidence` | `checkExecuteCodeEvidence` | `{ status, detail }`，status ∈ changed/unchanged/unknown |
-  | `verify-test` | `runVerifyTestCheck` | `{ status, exitCode, durationMs, resultPath }`，status ∈ passed/failed/skipped |
+  | `verify-test` | `runVerifyTestCheck` | `{ status, exitCode, durationMs, resultPath, mode?, fallbackReason? }`，status ∈ passed/failed/skipped；mode ∈ full/module-subset，fallbackReason 非 null 表示本次全量为非显式 fallback（仅供解读，不影响 ok 判定） |
   | `task-reviews` | `validateTaskReviews` | `{ ok, errors, warnings, requiredEvidence }` |
   | `artifacts` | `runValidators(currentStage, ...)` | `{ ok, errors, warnings }`；仅此 facet 会回填顶层 `stage`（产物校验绑定阶段语义） |
 

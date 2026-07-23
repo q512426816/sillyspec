@@ -62,6 +62,47 @@ export function extractTestStrategy(yamlText) {
 }
 
 /**
+ * 计算全量 fallback 的原因文本（供 printVerifyTestCheck / facet 给 agent/daemon 明示）。
+ *
+ * 返回 null 表示不需要 hint：显式 test_strategy:full（用户有意跑全量），
+ * 或 test_strategy:module 已成功命中模块子集（该情况不会走到全量路径）。
+ * 其余走全量路径的情况都返回原因字符串，让结果可正确解读——
+ * 否则 agent/daemon 会把"全量 commands.test"当成"按变更范围测的"，误把
+ * 未变更模块的预存错误归因到本次变更（见 3.24 verify 坑1）。
+ *
+ * 语义对齐 runVerifyTestCheck 的分支：
+ *   - strategy==='full' → null
+ *   - strategy==='module' 但无有效 modules 块 → hint
+ *   - strategy==='module' 有块但 git 不可用（hitCount=-1）→ hint
+ *   - strategy==='module' 有块但 0 命中（hitCount=0）→ hint
+ *   - strategy==='module' 有块且命中（hitCount>0）→ null（走子集）
+ *   - strategy===null（缺省）→ hint（默认全量）
+ *
+ * @param {object} ctx
+ * @param {'full'|'module'|null} ctx.strategy
+ * @param {boolean} ctx.modulesPresent - extractModules 是否返回有效映射
+ * @param {number} ctx.hitCount - git diff 命中的模块数；-1 表示 git 不可用/非仓库
+ * @returns {string|null}
+ */
+export function computeFullFallbackReason({ strategy, modulesPresent, hitCount }) {
+  if (strategy === 'full') return null
+  if (strategy === 'module') {
+    if (!modulesPresent) {
+      return 'test_strategy: module 但 local.yaml 未配置有效的 modules: 块（需 inline flow: name: { path, test }），回退全量'
+    }
+    if (hitCount < 0) {
+      return 'test_strategy: module 但 git 不可用/非 git 仓库，无法判定命中模块，回退全量'
+    }
+    if (hitCount === 0) {
+      return 'test_strategy: module 但本次 git diff 未命中任何已配置 modules，回退全量'
+    }
+    return null
+  }
+  // strategy === null（缺省 → 默认全量）
+  return 'local.yaml 未配置 test_strategy（默认全量 commands.test，未按变更范围收窄）'
+}
+
+/**
  * 从 local.yaml 文本解析 modules 映射块。
  * 设计约定（见 change 2026-07-10-tooling-followups design.md #2 方案 A）：
  *
@@ -258,29 +299,42 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null }) {
   const localYamlPath = join(specBase, 'local.yaml')
   const yamlText = existsSync(localYamlPath) ? readFileSync(localYamlPath, 'utf8') : null
 
-  // —— 模块子集路径（test_strategy: module）——
   const strategy = extractTestStrategy(yamlText)
+
+  // —— 模块子集路径（test_strategy: module）——
+  // 算出 modulesPresent / hitCount 供 fallback hint 判定（computeFullFallbackReason）；
+  // 命中即走子集。gitChangedFiles 返回 null 表示 git 不可用 → hitCount=-1（与 0 命中区分）。
+  let modulesPresent = false
+  let hitCount = 0
   if (strategy === 'module') {
     const modules = extractModules(yamlText)
     if (modules) {
+      modulesPresent = true
       const changedFiles = gitChangedFiles(cwd)
-      const hits = changedFiles ? pickHitModules(changedFiles, modules) : []
-      if (hits.length > 0) {
-        return runModuleSubset({ cwd, specBase, changeName, hits })
+      if (changedFiles === null) {
+        hitCount = -1 // git 不可用 / 非仓库
+      } else {
+        const hits = pickHitModules(changedFiles, modules)
+        hitCount = hits.length
+        if (hitCount > 0) {
+          return runModuleSubset({ cwd, specBase, changeName, hits })
+        }
+        // 有 modules 配置但无命中 → fallback commands.test（D-002@v1 向后兼容）
       }
-      // 有 modules 配置但无命中 / git 不可用 → fallback commands.test（D-002@v1 向后兼容）
     }
     // test_strategy:module 但无 modules 配置 → fallback commands.test（brownfield 友好）
   }
 
   // —— 全量路径（默认 full / fallback）——
-  return runFullCommand({ yamlText, localYamlPath, cwd, specBase, changeName })
+  // fallbackReason 非 null 表示本次全量是"非显式"的（缺省/配置不全/未命中），需明示。
+  const fallbackReason = computeFullFallbackReason({ strategy, modulesPresent, hitCount })
+  return runFullCommand({ yamlText, localYamlPath, cwd, specBase, changeName, fallbackReason })
 }
 
 /**
  * 全量跑 commands.test（现有逻辑，brownfield 行为不变）。
  */
-function runFullCommand({ yamlText, localYamlPath, cwd, specBase, changeName }) {
+function runFullCommand({ yamlText, localYamlPath, cwd, specBase, changeName, fallbackReason = null }) {
   const command = extractTestCommand(yamlText)
 
   if (!command) {
@@ -294,6 +348,8 @@ function runFullCommand({ yamlText, localYamlPath, cwd, specBase, changeName }) 
         ? 'local.yaml 未配置 commands.test（或标记 unavailable）'
         : `local.yaml 不存在（${localYamlPath}）`,
       resultPath: null,
+      mode: 'full',
+      fallbackReason,
     }
   }
 
@@ -327,9 +383,11 @@ function runFullCommand({ yamlText, localYamlPath, cwd, specBase, changeName }) 
     outputTail,
     reason,
     resultPath: null,
+    mode: 'full',
+    fallbackReason,
   }
 
-  writeRunResult({ specBase, changeName, result })
+  writeRunResult({ specBase, changeName, result, extra: fallbackReason ? { fallback_reason: fallbackReason } : {} })
   return result
 }
 
@@ -362,6 +420,8 @@ function runModuleSubset({ cwd, specBase, changeName, hits }) {
     outputTail: outputTail.length > OUTPUT_TAIL_CHARS ? '…' + outputTail.slice(-OUTPUT_TAIL_CHARS) : outputTail,
     reason,
     resultPath: null,
+    mode: 'module-subset',
+    fallbackReason: null,
   }
 
   writeRunResult({
@@ -425,6 +485,19 @@ export function printVerifyTestCheck(result) {
       const tail = result.outputTail.split('\n').slice(-20).join('\n')
       console.error('   输出（末尾）：')
       for (const line of tail.split('\n')) console.error(`   | ${line}`)
+    }
+  }
+  // —— 全量 fallback 明示（skipped 已提前 return，此处仅 passed/failed）——
+  // 让 agent 知道本次跑的是全量 commands.test、非变更范围子集；失败可能含未变更模块
+  // 的预存错误，需先核对用例归属再归因到本次变更（见 3.24 verify 坑1）。
+  if (result.mode === 'full' && result.fallbackReason) {
+    if (result.status === 'failed') {
+      console.warn(`   ⚠️  本次跑的是 commands.test 全量（${result.fallbackReason}）。`)
+      console.warn('      失败可能含与本变更无关的预存错误——先核对失败用例是否属于你的变更范围；')
+      console.warn('      或在 local.yaml 配置 test_strategy: module + modules: 块以收窄到变更模块。')
+    } else {
+      console.warn(`   ⚠️  本次跑的是 commands.test 全量（${result.fallbackReason}）。`)
+      console.warn('      如耗时过长，可在 local.yaml 配置 test_strategy: module + modules: 块按模块收窄。')
     }
   }
   if (result.resultPath) {

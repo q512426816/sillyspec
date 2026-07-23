@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-06-04 16:25:42
-updated_at: 2026-07-09
+updated_at: 2026-07-23
 ---
 
 # 存储与状态
@@ -156,7 +156,7 @@ updated_at: 2026-07-09
 
 写入方：`verify-postcheck.js` 的 `runVerifyTestCheck()`，在 verify 阶段完成、产物校验通过后由 `run.js` 触发。
 
-内容：CLI 亲自执行 `local.yaml` `commands.test` 的客观结果（`command`、`exit_code`、`status`、`duration_ms`、`output_tail`、`reason`、`ran_at`）。实测失败会阻断 verify 阶段完成（与 verify-result.md 自报告对账）。未配置 test 命令（或标记 `unavailable`）时跳过执行、不落盘、不阻断。
+内容：CLI 亲自执行 `local.yaml` `commands.test` 的客观结果（`command`、`exit_code`、`status`、`duration_ms`、`output_tail`、`reason`、`ran_at`）。实测失败会阻断 verify 阶段完成（与 verify-result.md 自报告对账）。未配置 test 命令（或标记 `unavailable`）时跳过执行、不落盘、不阻断。额外字段：全量 fallback 时含 `fallback_reason`（非 null 表示本次全量是非显式 fallback——未配 `test_strategy` / `modules:` 块无效 / git 未命中——失败可能含未变更模块的预存错误）；`test_strategy: module` 命中子集时含 `modules` 各模块明细（`name`/`command`/`exit_code`/`status` 等）。
 
 ## `local.yaml` 路径口径
 

@@ -217,16 +217,27 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot } 
     // ── d. verify 阶段追加 verify-test（CLI 实测 local.yaml commands.test）──
     if (stage === 'verify') {
       const vt = runVerifyTestCheck({ cwd, specBase: specRoot, changeName });
+      const vtWarnings = [];
+      if (vt.status === 'skipped') {
+        vtWarnings.push('⚠️ verify-test SKIPPED — gate 未核验测试（local.yaml 未配置 commands.test 或显式无测试）。本次 gate 结论不含测试客观核验，driver 不应据 exit 0 判定测试通过；integration-critical 变更应在 verify 阶段降级 FAIL');
+      }
+      // 全量 fallback 明示：跑了全量 commands.test 但非变更范围子集，失败可能含未变更
+      // 模块的预存错误——driver 不应据 exit 0 判定本次变更范围已客观测试（见 3.24 verify 坑1）。
+      if (vt.status !== 'skipped' && vt.mode === 'full' && vt.fallbackReason) {
+        vtWarnings.push(`⚠️ verify-test 跑的是全量 commands.test（${vt.fallbackReason}）；失败可能含未变更模块的预存错误，driver 不应据 exit 0 判定本次变更范围已测`);
+      }
       checks.push({
         id: 'verify-test',
         ok: vt.status !== 'failed',
         errors: vt.status === 'failed' ? [`测试失败: ${vt.reason || ''}`] : [],
-        warnings: vt.status === 'skipped' ? ['⚠️ verify-test SKIPPED — gate 未核验测试（local.yaml 未配置 commands.test 或显式无测试）。本次 gate 结论不含测试客观核验，driver 不应据 exit 0 判定测试通过；integration-critical 变更应在 verify 阶段降级 FAIL'] : [],
+        warnings: vtWarnings,
         data: {
           status: vt.status,
           exitCode: vt.exitCode,
           durationMs: vt.durationMs,
           resultPath: vt.resultPath,
+          mode: vt.mode ?? null,
+          fallbackReason: vt.fallbackReason ?? null,
         },
       });
     }
@@ -351,10 +362,16 @@ export async function runDerive(facet, changeName, { cwd, specBase, runtimeRoot 
           exitCode: vt.exitCode,
           durationMs: vt.durationMs,
           resultPath: vt.resultPath,
+          mode: vt.mode ?? null,
+          fallbackReason: vt.fallbackReason ?? null,
         };
         ok = vt.status !== 'failed';
         errors = vt.status === 'failed' ? [`测试失败: ${vt.reason || ''}`] : [];
-        warnings = vt.status === 'skipped' ? ['测试被跳过'] : [];
+        warnings = vt.status === 'skipped'
+          ? ['测试被跳过']
+          : (vt.mode === 'full' && vt.fallbackReason)
+            ? [`⚠️ verify-test 跑的是全量 commands.test（${vt.fallbackReason}）；失败可能含未变更模块的预存错误`]
+            : [];
         exitCode = ok ? EXIT_OK : EXIT_BLOCKED;
         break;
       }
