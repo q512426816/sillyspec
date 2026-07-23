@@ -337,9 +337,22 @@ export function verifyReviewGitEvidence(review, gitDir) {
   }
 
   const emptyDiff = diffFiles.length === 0
+  // emptyDiff 回退：子代理可能未 commit，base..head 无 commit diff 但 working-tree 有改动。
+  // 对齐 checkExecuteCodeEvidence（stage-contract.js 同时查 working-tree）语义，避免误判零改动伪造。
+  let workingTreeChanged = false
+  if (emptyDiff) {
+    try {
+      const wtStatus = runGit(gitDir, ['status', '--porcelain'])
+      workingTreeChanged = !!wtStatus && wtStatus.trim().length > 0
+    } catch {}
+    if (workingTreeChanged) {
+      warnings.push(`base..head 无 commit diff（${review.base.slice(0, 8)}..${review.head.slice(0, 8)}），但 working-tree 有未提交改动 —— 按有效改动处理，不判零改动伪造`)
+    }
+  }
+  const effectiveEmptyDiff = emptyDiff && !workingTreeChanged
 
   // changedFiles 交叉比对：完全不相交 = review 描述的改动与实际 diff 无关
-  if (!emptyDiff && Array.isArray(review.changedFiles) && review.changedFiles.length > 0) {
+  if (!effectiveEmptyDiff && Array.isArray(review.changedFiles) && review.changedFiles.length > 0) {
     const normalize = (p) => String(p).replace(/^\.\//, '')
     const diffSet = new Set(diffFiles.map(normalize))
     const hasOverlap = review.changedFiles.some(f => {
@@ -352,7 +365,7 @@ export function verifyReviewGitEvidence(review, gitDir) {
     }
   }
 
-  return { ok: errors.length === 0, emptyDiff, errors, warnings, unavailable: false }
+  return { ok: errors.length === 0, emptyDiff: effectiveEmptyDiff, errors, warnings, unavailable: false }
 }
 
 /**

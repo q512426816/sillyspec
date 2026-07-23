@@ -384,16 +384,16 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
  * 每个 task 生成 20~40 行紧凑可执行卡片
  */
 export function buildCoordinatorStep(changeDir, taskNames) {
-  const taskList = taskNames.map((name, i) => {
-    const num = String(i + 1).padStart(2, '0')
-    return `- task-${num}: ${name}`
+  const taskList = taskNames.map(t => {
+    const num = t.num
+    return `- task-${num}: ${t.name}`
   }).join('\n')
 
-  const subagentPrompts = taskNames.map((name, i) => {
-    const num = String(i + 1).padStart(2, '0')
+  const subagentPrompts = taskNames.map(t => {
+    const num = t.num
     return `\`\`\`
 任务编号：task-${num}
-任务名称：${name}
+任务名称：${t.name}
 文件路径：${changeDir}/tasks/task-${num}.md
 当前时间：<now-datetime>（frontmatter 的 created_at 使用此值）
 当前用户：<git-user>（frontmatter 的 author 使用此值）
@@ -405,7 +405,7 @@ export function buildCoordinatorStep(changeDir, taskNames) {
 
 ---
 id: task-${num}
-title: ${name}
+title: ${t.name}
 title_zh: <任务中文标题>
 author: <git-user>
 created_at: <now-datetime>
@@ -551,13 +551,14 @@ function parseTaskCount(planContent) {
  * 从 plan.md 解析任务名列表
  */
 function parseTaskNames(planContent) {
-  const names = []
+  // 返回 [{name, num}]：保留 plan.md 原始编号，避免 buildCoordinatorStep 按 i+1 重编号与 execute 原始编号错位
+  const tasks = []
   const lines = planContent.split('\n')
   for (const line of lines) {
-    const m = line.match(/^[-*]\s*\[[ x]\]\s*task-\d+:\s*(.+)/i)
-    if (m) names.push(m[1].trim())
+    const m = line.match(/^[-*]\s*\[[ x]\]\s*task-(\d+):\s*(.+)/i)
+    if (m) tasks.push({ num: String(m[1]).padStart(2, '0'), name: m[2].trim() })
   }
-  return names
+  return tasks
 }
 
 /**

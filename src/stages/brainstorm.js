@@ -71,6 +71,7 @@ export const definition = {
     },
     {
       name: '对话式探索与需求澄清',
+      migratedFrom: ['协作与复用检查', '原型/设计图分析', '需求范围评估', '对话式探索', '需求澄清 Grill'],
       conditionalWait: true,
       repeatableWait: true,
       maxWaitRounds: 8,
@@ -211,6 +212,7 @@ export const definition = {
     },
     {
       name: '分段展示设计',
+      migratedFrom: ['HTML 原型生成'],
       requiresWait: true,
       waitReason: '等待用户确认设计方案',
       waitOptions: ['确认', '需要修改', '推翻重来'],

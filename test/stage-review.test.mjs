@@ -160,6 +160,13 @@ console.log('\n=== 3. verifyStageReviewDocHash（docHash 防伪造）===\n')
   )
   assert(r1.ok, `docHash 匹配 → ok`)
 
+  // 大写 docHash（PowerShell Get-FileHash）也应匹配——大小写不敏感（修复 stage-review 大小写敏感 bug）
+  const r1b = verifyStageReviewDocHash(
+    { reviewedFiles: ['plan.md'], docHash: realHash.toUpperCase() },
+    [dir],
+  )
+  assert(r1b.ok, `docHash 大写（PowerShell Get-FileHash）→ ok（大小写不敏感）`)
+
   // 不匹配 → fail（伪造）
   const r2 = verifyStageReviewDocHash(
     { reviewedFiles: ['plan.md'], docHash: 'deadbeef' },

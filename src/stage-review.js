@@ -134,7 +134,7 @@ export function verifyStageReviewDocHash(review, searchDirs) {
     const actual = computeDocHash(abs)
     if (actual === null) continue
     // 找到主文档，比对 hash
-    if (review.docHash !== actual) {
+    if (review.docHash.toLowerCase() !== actual.toLowerCase()) {
       errors.push(`docHash 与主审查文档 ${primaryRel} 的实际内容不匹配 — review.json 疑似伪造（未真正读取文档）`)
       return { ok: false, errors, warnings }
     }

@@ -607,7 +607,7 @@ async function getStageSteps(stageName, cwd, progress, specDir = null) {
 /**
  * 确保阶段的 steps 已初始化到 progress
  */
-async function ensureStageSteps(progress, stageName, cwd, specDir = null) {
+export async function ensureStageSteps(progress, stageName, cwd, specDir = null) {
   if (!progress.stages) progress.stages = {}
 
   const steps = await getStageSteps(stageName, cwd, progress, specDir)
@@ -628,7 +628,15 @@ async function ensureStageSteps(progress, stageName, cwd, specDir = null) {
     const oldSteps = progress.stages[stageName].steps
     progress.stages[stageName].steps = steps.map(s => {
       const old = oldSteps.find(step => step.name === s.name)
-      if (old) return old
+      if (old) return old  // 精确名命中 → 保留旧状态
+      // migratedFrom：新步骤是合并/重命名来的（如 brainstorm 13→8 折叠）。
+      // 吸收的旧步骤全部 completed → 新步骤标 completed，避免 completed 丢失导致 currentIdx 回跳。
+      if (Array.isArray(s.migratedFrom) && s.migratedFrom.length > 0) {
+        const migrated = oldSteps.filter(step => s.migratedFrom.includes(step.name))
+        if (migrated.length > 0 && migrated.every(step => step.status === 'completed')) {
+          return { name: s.name, status: 'completed', migratedFrom: true }
+        }
+      }
       return { name: s.name, status: 'pending' }
     })
     return true
@@ -916,7 +924,8 @@ async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjec
   if (stageName === 'execute' && promptText.includes('{EXECUTE_RUN_ID}')) {
     let runId = ''
     const execSpecBase = platformOpts?.specRoot || join(cwd, '.sillyspec')
-    const runIdFile = join(execSpecBase, '.runtime', `current-execute-run-id-${changeName}`)
+    const runtimeRoot = platformOpts?.runtimeRoot || join(execSpecBase, '.runtime')
+    const runIdFile = join(runtimeRoot, `current-execute-run-id-${changeName}`)
     try {
       if (existsSync(runIdFile)) {
         runId = readFileSync(runIdFile, 'utf8').trim()
@@ -925,6 +934,8 @@ async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjec
     if (!runId) {
       const { generateExecuteRunId } = await import('./task-review.js')
       runId = generateExecuteRunId()
+      // 落盘（与启动站点一致），保证 agent 收到的 ID == gate/checkbox 读取的 ID
+      try { mkdirSync(runtimeRoot, { recursive: true }); writeFileSync(runIdFile, runId + '\n') } catch {}
     }
     promptText = promptText.replace(/\{EXECUTE_RUN_ID\}/g, runId)
   }
@@ -1609,13 +1620,31 @@ export async function runCommand(args, cwd, specDir = null) {
     if (autoChange) {
       progress = await pm.initChange(cwd, autoChange)
     } else if (isAuxiliary) {
-      // 辅助阶段（scan/explore/quick/doctor/status）自动使用默认变更名
-      const autoName = changeName || resolveChangeNameAuto(cwd, specRoot) || 'default'
+      let autoName = changeName || resolveChangeNameAuto(cwd, specRoot) || 'default'
+      // archive 特例：归档后变更从活跃列表排除（listChanges WHERE status='active'），
+      // 不带 --change 回退 default 会读错变更。无活跃变更时取最新归档变更，读其现有 progress。
+      if (stageName === 'archive' && autoName === 'default') {
+        try {
+          const archiveDir = join(specBase, 'changes', 'archive')
+          if (existsSync(archiveDir)) {
+            const latest = readdirSync(archiveDir)
+              .filter(d => /^\d{4}-\d{2}-\d{2}-.+/.test(d))
+              .sort()
+              .pop()
+            if (latest) {
+              autoName = latest.replace(/^\d{4}-\d{2}-\d{2}-/, '')
+              progress = await pm.read(cwd, autoName)
+            }
+          }
+        } catch {}
+      }
       changeName = autoName
-      progress = await pm.initChange(cwd, autoName)
-      // initChange 可能因 project 表为空返回 null
       if (!progress) {
-        progress = { currentStage: stageName, stages: {}, lastActive: new Date().toLocaleString('zh-CN', { hour12: false }), project: '' }
+        progress = await pm.initChange(cwd, autoName)
+        // initChange 可能因 project 表为空返回 null
+        if (!progress) {
+          progress = { currentStage: stageName, stages: {}, lastActive: new Date().toLocaleString('zh-CN', { hour12: false }), project: '' }
+        }
       }
     } else {
       // brainstorm 作为流程入口，自动生成变更名并初始化
@@ -3547,6 +3576,8 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
             if (!executeRunId) {
               const { generateExecuteRunId } = await import('./task-review.js')
               executeRunId = generateExecuteRunId()
+              // 落盘（marker 缺失时 fallback 生成后写盘，保证后续 checkbox/gate 读到同一 ID）
+              try { mkdirSync(runtimeRoot, { recursive: true }); writeFileSync(runIdFile, executeRunId + '\n') } catch {}
             }
 
             // git 真实性校验目录：worktree 存在则用 worktree（base/head commit 在其中），否则主仓库

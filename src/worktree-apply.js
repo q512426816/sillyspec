@@ -343,20 +343,15 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
  * @returns {object} result（merged=true 表示走了 merge 降级）
  */
 function applyByMerge(result, changeName, projectRoot, wm) {
+  const meta = wm.getMeta(changeName);
+  const changedFiles = result.changedFiles || [];
+  // 用 meta.branch（native-worktree 模式分支名可能不是 sillyspec/<change>），不硬编码。
+  const branch = meta.branch || `sillyspec/${changeName}`;
+
   try {
-    git(projectRoot, `merge --no-ff sillyspec/${changeName}`);
-    result.merged = true;
-    result.ok = true;
-    try { result.mergeSummary = git(projectRoot, `log --oneline -1`); } catch {}
-    // 成功后自动 cleanup（与 patch 路径步骤 8 一致；分支已合并，删除安全）
-    try {
-      wm.cleanup(changeName);
-    } catch (cleanupErr) {
-      result.warnings = result.warnings || [];
-      result.warnings.push(`cleanup 失败（不影响 merge 结果）: ${cleanupErr.message}`);
-    }
+    git(projectRoot, `merge --no-ff ${branch}`);
   } catch (e) {
-    // merge 冲突：先取冲突文件列表，再 abort 回滚（避免半成品合并）
+    // merge 冲突：取冲突文件列表 + abort 回滚（不 cleanup，保留 worktree）
     let conflictFiles = [];
     try {
       const cf = gitQuiet(projectRoot, `diff --name-only --diff-filter=U`);
@@ -364,10 +359,35 @@ function applyByMerge(result, changeName, projectRoot, wm) {
     } catch {}
     try { gitQuiet(projectRoot, `merge --abort`); } catch {}
     result.errors.push(
-      `git merge sillyspec/${changeName} 冲突，请手动解决。冲突文件：\n` +
+      `git merge ${branch} 冲突，请手动解决。冲突文件：\n` +
       (conflictFiles.length ? `  ${conflictFiles.join('\n  ')}\n` : `  (未能获取冲突文件列表)\n`) +
       `已执行 git merge --abort 回滚到合并前状态。`
     );
+    return result;
+  }
+
+  // 落地校验：merge 报成功（exit 0）不代表交付物真进 main——
+  // 分支可能只含 baseline checkpoint（子代理改动未 commit），merge 产生空内容合并，文件零落地。
+  // 逐个确认 changedFiles 在 main HEAD 存在。任一缺失 → 不 cleanup（fail-open：保留 worktree 唯一副本）。
+  result.merged = true;
+  const notLanded = changedFiles.filter(f => gitQuiet(projectRoot, `cat-file -e HEAD:${f}`) === null);
+  if (notLanded.length > 0) {
+    result.ok = false;
+    result.errors.push(
+      `git merge ${branch} 报成功，但 ${notLanded.length}/${changedFiles.length} 个交付文件未出现在 main HEAD` +
+      `（分支可能只含 baseline checkpoint，子代理改动未 commit）。worktree 已保留（未 cleanup），` +
+      `请用 git cherry-pick 或手动 cp 落地：\n  ${notLanded.join('\n  ')}`
+    );
+    return result;
+  }
+
+  result.ok = true;
+  try { result.mergeSummary = git(projectRoot, `log --oneline -1`); } catch {}
+  try {
+    wm.cleanup(changeName);
+  } catch (cleanupErr) {
+    result.warnings = result.warnings || [];
+    result.warnings.push(`cleanup 失败（不影响 merge 结果）: ${cleanupErr.message}`);
   }
   return result;
 }
