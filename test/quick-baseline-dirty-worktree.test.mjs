@@ -13,8 +13,13 @@
  *
  * ql-20260713-002-7628 追加修复：
  *   3. baseline 录入不再粗放过滤 .sillyspec/ —— 预存 untracked .sillyspec/changes/ 现进 baseline，
- *      audit 不再误判「危险+新增」（场景 8/9）
+ *      audit 不再误判「危险+新增」（场景 8）
  *   4. --done 的 --force-baseline/--allow-new 并入 guard（原只传 {isConfirm}，flag 静默无效）
+ *
+ * ql-20260723 追加修复（多会话并发时别人的 .sillyspec/changes/ 误判 BLOCKED）：
+ *   5. isQuickMetadata 放行非关联 changes/（场景 9/11）；关联变更仍审计（场景 12）
+ *   6. baseline 前缀匹配：折叠目录 token（尾斜杠）放行其下文件级路径（场景 10）
+ *   7. parsePorcelainPath 修 .trim() 削首行空格致首文件丢首字符（场景 13/14）
  *
  * 风格：自研 assert + mkdtemp 临时 git 仓库，参照 quick-session-isolation.test.mjs
  */
@@ -23,7 +28,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { execFileSync } from 'node:child_process'
 
-import { auditQuickCompletion } from '../src/run.js'
+import { auditQuickCompletion, parsePorcelainPath } from '../src/run.js'
 
 let total = 0
 let failed = 0
@@ -162,23 +167,108 @@ async function main() {
     // 用 git 实报路径作 baseline（目录折叠时路径可能是 .sillyspec/changes/ 或 .../other-change/，避免硬编码）
     const reported = git(dir, ['status', '--porcelain'])
       .split('\n').filter(l => l.includes('other-change') || l.includes('changes'))
-      .map(l => l.slice(3).trim())
+      .map(l => parsePorcelainPath(l))
     const guard = { baselineFiles: reported, allowedFiles: [], allowNew: false, forceBaseline: false }
     const review = await auditQuickCompletion(dir, guard, {})
     assert(review.status === 'safe', `场景8 预存 untracked .sillyspec/changes/ 进 baseline → safe（实际 ${review.status}，修复前 blocked）`)
     assert(!review.reasons.some(r => r.includes('危险') || r.includes('新增')), `场景8 不应报危险/新增（实际 ${JSON.stringify(review.reasons)}）`)
   }
 
-  // 场景 9：对照——同样 untracked .sillyspec/changes/ 但不在 baseline（本次新建）→ 仍 blocked
-  // （证明 Fix A 没有弱化守卫：仅预存项被排除，本次新建的 .sillyspec/ 仍拦截）
+  // 场景 9（语义更新）：非关联变更 .sillyspec/changes/ 不再阻断。quick 没有自己的 changes/ 目录，
+  // 该路径下内容要么是关联变更（reverse-sync）要么是并发其他会话工作；确定性审计无法区分后者
+  // 与「本 quick 偷建变更」，按定位把意图软判定留给 sillyhub，故非关联 changes/ 整体放行。
+  // 关联变更仍审计（见场景 12）。
   {
     const dir = makeTmpDir('qk-dirty-9-')
     initGitRepo(dir)
     mkdirSync(join(dir, '.sillyspec', 'changes', 'sneaky'), { recursive: true })
     writeFileSync(join(dir, '.sillyspec', 'changes', 'sneaky', 'design.md'), '# sneaky\n')
-    const guard = { baselineFiles: [], allowedFiles: [], allowNew: false, forceBaseline: false }
+    const guard = { baselineFiles: [], allowedFiles: [], allowNew: false, forceBaseline: false, linkedChanges: [] }
     const review = await auditQuickCompletion(dir, guard, {})
-    assert(review.status === 'blocked', `场景9 本次新建 .sillyspec/changes/ 不在 baseline → 仍 blocked（实际 ${review.status}）`)
+    assert(review.status !== 'blocked', `场景9 非关联 changes/ 不再阻断（实际 ${review.status}）`)
+    assert(!review.reasons.some(r => r.includes('危险')), `场景9 不应报危险（实际 ${JSON.stringify(review.reasons)}）`)
+  }
+
+  // 场景 10（Fix 1 折叠目录前缀匹配）：baseline 录入时整片 changes/ 未跟踪 → git 折叠成
+  // `?? .sillyspec/changes/`（带尾斜杠 token）。审计时该目录下文件已被并发会话跟踪而展开成
+  // 文件级 `.../concurrent/design.md`——精确匹配对不上，靠尾斜杠 token 前缀匹配放行。
+  // 用 linkedChanges=['concurrent'] 隔离 Fix 2（关联变更不被 Fix 2 放行，只能靠 Fix 1 跳过）。
+  {
+    const dir = makeTmpDir('qk-dirty-10-')
+    initGitRepo(dir)
+    mkdirSync(join(dir, '.sillyspec', 'changes', 'concurrent'), { recursive: true })
+    writeFileSync(join(dir, '.sillyspec', 'changes', 'concurrent', 'design.md'), '# v1\n')
+    const baseline = git(dir, ['status', '--porcelain']).split('\n').filter(Boolean).map(parsePorcelainPath)
+    git(dir, ['add', '-A'])                 // 并发会话提交 → changes/ 下文件变跟踪
+    git(dir, ['commit', '-q', '-m', 'concurrent'])
+    writeFileSync(join(dir, '.sillyspec', 'changes', 'concurrent', 'design.md'), '# v2\n')
+    const guard = { baselineFiles: baseline, allowedFiles: [], allowNew: false, forceBaseline: false, linkedChanges: ['concurrent'] }
+    const review = await auditQuickCompletion(dir, guard, {})
+    assert(baseline.some(b => b.startsWith('.sillyspec/changes/')), `场景10 baseline 应含折叠 changes/ token（实际 ${JSON.stringify(baseline)}）`)
+    assert(review.status === 'safe', `场景10 折叠 token 前缀匹配文件级路径 → safe（实际 ${review.status}）`)
+    assert(!review.changedFiles.some(f => f.includes('concurrent')), `场景10 concurrent 文件应被 baseline 跳过（实际 ${JSON.stringify(review.changedFiles)}）`)
+  }
+
+  // 场景 11（Fix 2 非关联变更放行，文件级）：并发会话已跟踪并修改某非关联变更文件 → 不阻断。
+  {
+    const dir = makeTmpDir('qk-dirty-11-')
+    initGitRepo(dir)
+    mkdirSync(join(dir, '.sillyspec', 'changes', 'other'), { recursive: true })
+    writeFileSync(join(dir, '.sillyspec', 'changes', 'other', 'design.md'), '# v1\n')
+    git(dir, ['add', '-A']); git(dir, ['commit', '-q', '-m', 'other'])
+    writeFileSync(join(dir, '.sillyspec', 'changes', 'other', 'design.md'), '# v2\n')
+    const guard = { baselineFiles: [], allowedFiles: [], allowNew: false, forceBaseline: false, linkedChanges: ['myown'] }
+    const review = await auditQuickCompletion(dir, guard, {})
+    assert(review.status !== 'blocked', `场景11 非关联变更文件不阻断（实际 ${review.status}）`)
+    assert(!review.reasons.some(r => r.includes('危险')), `场景11 不应报危险（实际 ${JSON.stringify(review.reasons)}）`)
+  }
+
+  // 场景 12（Fix 2 关联变更仍审计）：关联变更文件被改且不在 baseline → 不放行，仍阻断
+  // （保护 reverse-sync 可见性：动自己关联变更的 design.md 需 --force-baseline 显式确认）。
+  {
+    const dir = makeTmpDir('qk-dirty-12-')
+    initGitRepo(dir)
+    mkdirSync(join(dir, '.sillyspec', 'changes', 'mylinked'), { recursive: true })
+    writeFileSync(join(dir, '.sillyspec', 'changes', 'mylinked', 'design.md'), '# v1\n')
+    git(dir, ['add', '-A']); git(dir, ['commit', '-q', '-m', 'linked'])
+    writeFileSync(join(dir, '.sillyspec', 'changes', 'mylinked', 'design.md'), '# v2\n')
+    const guard = { baselineFiles: [], allowedFiles: [], allowNew: false, forceBaseline: false, linkedChanges: ['mylinked'] }
+    const review = await auditQuickCompletion(dir, guard, {})
+    assert(review.status === 'blocked', `场景12 关联变更文件仍阻断（实际 ${review.status}）`)
+    assert(review.reasons.some(r => r.includes('危险')), `场景12 应报危险（实际 ${JSON.stringify(review.reasons)}）`)
+  }
+
+  // 场景 13（Fix 3 porcelain 解析单元）：去引号 / rename 取新路径 / 归一化，且首行不丢首字符。
+  {
+    assert(parsePorcelainPath(' M frontend/src/app/(dashboard)/page.tsx') === 'frontend/src/app/(dashboard)/page.tsx', `场景13a 普通路径不丢首字符`)
+    assert(parsePorcelainPath('?? "front end.txt"') === 'front end.txt', `场景13b 去引号`)
+    assert(parsePorcelainPath('R  old/name.ts -> new/name.ts') === 'new/name.ts', `场景13c rename 取新路径`)
+    const multi = ' M AAA.txt\n M BBB.txt\n'
+    const parsed = multi.split('\n').filter(Boolean).map(parsePorcelainPath)
+    assert(parsed[0] === 'AAA.txt' && parsed[1] === 'BBB.txt', `场景13d 多行首行完整（实际 ${JSON.stringify(parsed)}）`)
+    // 对照：旧 .trim().split 会削首行前导空格 → 首文件丢首字符（证明 Fix 3 修复的 bug 真实存在）
+    const oldStyle = multi.trim().split('\n').filter(Boolean).map(l => l.slice(3).trim())
+    assert(oldStyle[0] === 'AA.txt', `场景13e 旧 .trim() 削首行空格致首文件丢首字符（实际 ${JSON.stringify(oldStyle)}）`)
+  }
+
+  // 场景 14（Fix 3 集成）：baseline 首行是【空格前导状态】的危险文件（` M src/run.js`）。
+  // 修复前 run.js 的 .trim().split 削首行前导空格 → slice(3) 吃掉 's' → baseline 存 'rc/run.js'
+  // → 审计 src/run.js 对不上 → 既没被 baseline 跳过、危险 pattern 又因路径错位…实际危险 pattern
+  // 用审计侧正确路径仍命中 → 误判 blocked。修复后两侧都正确 → 匹配 → 跳过 → safe。
+  {
+    const dir = makeTmpDir('qk-dirty-14-')
+    initGitRepo(dir)
+    writeFileSync(join(dir, 'src', 'run.js'), 'v1\n')
+    git(dir, ['add', '-A']); git(dir, ['commit', '-q', '-m', 'run'])   // 跟踪
+    writeFileSync(join(dir, 'src', 'run.js'), 'v2\n')                  // 修改 → ` M src/run.js`（首行前导空格）
+    // 注意：用 execFileSync 原始读取，不能用 git() helper——后者 .trim() 会削首行前导空格
+    // （与 run.js 旧 bug 同源）；run.js 实际用 execSync 原始输出 + split，不 trim。
+    const raw = execFileSync('git', ['status', '--porcelain'], { cwd: dir, encoding: 'utf8' })
+    const baseline = raw.split('\n').filter(Boolean).map(parsePorcelainPath)
+    const guard = { baselineFiles: baseline, allowedFiles: [], allowNew: false, forceBaseline: false }
+    const review = await auditQuickCompletion(dir, guard, {})
+    assert(baseline[0] === 'src/run.js', `场景14 baseline 首文件应完整（实际 ${JSON.stringify(baseline)}）`)
+    assert(review.status === 'safe', `场景14 首行(空格前导)危险文件在 baseline → safe（实际 ${review.status}，修复前丢首字符致误判 blocked）`)
   }
 
   for (const d of tmpRoots) {

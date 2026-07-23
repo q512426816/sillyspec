@@ -333,6 +333,27 @@ function parseModuleMapSimple(content) {
  * 同步触发辅助函数：_write 后 best-effort 同步到平台
  */
 /**
+ * 解析单行 `git status --porcelain` 输出为文件路径。
+ * porcelain 格式：`XY<SP>path`（XY = 2 字符状态码）。
+ * - 路径含空格/特殊字符时 git 以 C 风格加引号（如 `?? "front end.txt"`），需去引号 + 反转义。
+ * - 重命名显示为 `R  old -> new`，取新路径（当前存在的文件）。
+ * - 反斜杠归一化为正斜杠（Windows 路径）。
+ * ⚠️ 调用方不要对【整段多行】输出先 .trim() 再 split——会削掉首行前导空格（首行 status 的空格），
+ *   使 slice(3) 误吃首文件路径首字符（实测 ` M frontend/...` → "rontend/..."，见 guard.json baseline）。
+ *   应直接 split('\n').filter(Boolean)，每行单独解析。
+ */
+export function parsePorcelainPath(line) {
+  if (!line) return ''
+  let path = line.slice(3).trim()
+  if (path.length >= 2 && path.startsWith('"') && path.endsWith('"')) {
+    path = path.slice(1, -1).replace(/\\(.)/g, (_, c) => c)
+  }
+  const arrow = path.indexOf(' -> ')
+  if (arrow !== -1) path = path.slice(arrow + 4)
+  return path.replace(/\\/g, '/')
+}
+
+/**
  * quick 完成审计：对比 baseline 与实际变更
  */
 export async function auditQuickCompletion(cwd, guard, options = {}) {
@@ -343,20 +364,41 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
   try {
     const { execSync } = await import('child_process')
     const gitStatus = execSync('git status --porcelain', { cwd, encoding: 'utf8', timeout: 10000 })
-    const currentEntries = gitStatus.trim().split('\n').filter(Boolean)
+    // 不对整段 .trim()：会削首行前导空格致首文件路径丢首字符（见 parsePorcelainPath 注释）。
+    const currentEntries = gitStatus.split('\n').filter(Boolean)
 
     const normalizeGitPath = (p) => p.replace(/\\/g, '/')
     // step1 启动时记录的全量脏文件 = 预存改动（非本次 quick 产生）。审计必须排除它们，
     // 否则脏工作区下预存文件持续留在 git status → 命中 baselineFiles → 误判「覆盖 baseline」
     // → 永远 blocked（--force-baseline 也救不回来，因为 status 判定看 baselineHit 数组）。
-    const baselineFilesSet = new Set((baselineFiles || []).map(f => normalizeGitPath(f)))
+    // 前缀匹配：baseline 录入时未跟踪目录会被 git 折叠成 `dir/`（带尾斜杠）token，审计时若该
+    // 目录下文件被跟踪则展开成文件级 `dir/file`——精确匹配对不上，故尾斜杠 token 按目录前缀放行。
+    const normBaseline = (baselineFiles || []).map(f => normalizeGitPath(f))
+    const baselineExact = new Set(normBaseline.filter(f => !f.endsWith('/')))
+    const baselineDirs = normBaseline.filter(f => f.endsWith('/'))
+    const isBaselineFile = (p) => {
+      const f = normalizeGitPath(p)
+      return baselineExact.has(f) || baselineDirs.some(d => f.startsWith(d))
+    }
+    // quick 自己没有 .sillyspec/changes/ 目录——该路径下任何文件要么是关联变更（reverse-sync），
+    // 要么是并发其他会话的变更工作。多会话并行时别人的 changes/ 不应被本 quick 审计拦截
+    // （确定性校验无法区分「并发工作」与「本 quick 偷建变更」，后者这类意图软判定留给 sillyhub）。
+    // 故：非关联变更目录整体放行；关联变更的文件仍走正常审计（reverse-sync 可见，需 --force-baseline）。
+    const linkedChangeNames = new Set((Array.isArray(guard.linkedChanges) ? guard.linkedChanges : []).map(c => normalizeGitPath(c)))
     const isQuickMetadata = (p) => {
       const file = normalizeGitPath(p)
-      return file.startsWith('.sillyspec/quicklog/')
+      if (file.startsWith('.sillyspec/quicklog/')
         || file.startsWith('.sillyspec/.runtime/')
         || file === '.sillyspec/knowledge/uncategorized.md'
         || (/^\.sillyspec\/docs\/[^/]+\/modules\/[^/]+\.md$/.test(file))
-        || (/^\.sillyspec\/docs\/[^/]+\/modules\/_module-map\.yaml$/.test(file))
+        || (/^\.sillyspec\/docs\/[^/]+\/modules\/_module-map\.yaml$/.test(file))) return true
+      // .sillyspec/changes/ 下：bare 折叠 token（git 把全新未跟踪 changes/ 折叠成 `changes/`）
+      // 或具体但【非关联】的变更 → 都属并发其他会话工作，放行；关联变更文件仍走审计。
+      if (file.startsWith('.sillyspec/changes/')) {
+        const m = file.match(/^\.sillyspec\/changes\/([^/]+)(\/|$)/)
+        if (!m || !linkedChangeNames.has(m[1])) return true
+      }
+      return false
     }
     const DANGEROUS_PATTERNS = [
       'package.json',
@@ -376,11 +418,11 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
 
     for (const entry of currentEntries) {
       const status = entry.slice(0, 2).trim()
-      const file = normalizeGitPath(entry.slice(3).trim())
-      if (!file || file.startsWith('??. ')) continue
+      const file = parsePorcelainPath(entry)   // 已去引号/处理 rename/归一化，修正首行丢首字符
+      if (!file) continue
 
-      // 预存脏文件：step1 baseline 已记录，非本次 quick 产生，跳过审计
-      if (baselineFilesSet.has(file)) continue
+      // 预存脏文件：step1 baseline 已记录，非本次 quick 产生，跳过审计（含折叠目录前缀匹配）
+      if (isBaselineFile(file)) continue
 
       result.changedFiles.push(file)
       if (status === 'D' || status === ' D') result.deletedFiles.push(file)
@@ -1859,8 +1901,9 @@ async function resolveQuickLinkedChanges({ pm, cwd, specDir, quickFiles, taskDes
   try {
     const { execSync } = await import('child_process')
     const gs = execSync('git status --porcelain', { cwd, encoding: 'utf8', timeout: 10000 })
-    baselineFiles = gs.trim().split('\n').filter(Boolean)
-      .map(l => l.slice(3).trim())
+    baselineFiles = gs.split('\n').filter(Boolean)
+      .map(l => parsePorcelainPath(l))
+      .filter(Boolean)
       .filter(f => !f.startsWith('.sillyspec/'))
   } catch {}
 
@@ -2100,8 +2143,9 @@ async function runStage(pm, progress, stageName, cwd, changeName, skipApproval =
         // 不需要这里粗放过滤 .sillyspec/——旧过滤致预存 untracked .sillyspec/changes/ 不进 baseline，
         // 却在 audit 被当「危险(.sillyspec/)+新增」误判永久 blocked（ql-20260713-002-7628 修复）。
         const baselineFiles = gitStatus
-          .trim().split('\n').filter(Boolean)
-          .map(line => line.slice(3).trim())
+          .split('\n').filter(Boolean)
+          .map(line => parsePorcelainPath(line))
+          .filter(Boolean)
         const allowedFiles = quickOpts?.quickFiles || []
         const allowNew = quickOpts?.isAllowNew || false
         const forceBaseline = quickOpts?.isForceBaseline || false
