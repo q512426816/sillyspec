@@ -4,7 +4,7 @@
  * CLI 成为流程引擎，AI 变成步骤执行器。
  * 支持多变更并行：每个变更状态存储在 sillyspec.db 中。
  */
-import { basename, join, resolve, dirname, relative, isAbsolute } from 'path'
+import { basename, join, resolve, dirname, relative, isAbsolute, extname } from 'path'
 import { existsSync, readdirSync, mkdirSync, writeFileSync, appendFileSync, readFileSync, rmSync, statSync } from 'fs'
 import { writeAtomicSync, renameSyncRetry } from './fs-atomic.js'
 import { randomBytes, randomUUID } from 'crypto'
@@ -895,10 +895,14 @@ async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjec
     if (platformOpts.workspaceId) {
       platformDirectives.push(`workspace_id: ${platformOpts.workspaceId}`)
     }
-    // 平台 directives 仅 step0 前置（对齐 persona 仅 step0 策略）：路径列表/Write 规则/
-    // 占位符映射一次建立即可；后续 step 靠 agent 跨步记忆 + 每步 changeDir header +
-    // footer 平台规则（下方 L1077+）维持写入约束，避免每步重复注入 ~500 tokens。
-    if (stepIndex === 0) {
+    // 平台 directives 前置条件：
+    //   - step0（对齐 persona 仅 step0 策略）：路径列表/Write 规则/占位符映射一次建立即可；
+    //   - scan 阶段所有 step：scan 的 profileDirectives 本就每步注入（见下方 L917），平台路径
+    //     约束也需每步可见——否则 quick profile 的 step0 是 noAI preflight（自动执行），run scan
+    //     输出的首个可见 step 是 step1，会漏掉 specDir 路径，导致平台模式写入约束丢失。
+    //     后续 step 靠 changeDir header + footer 平台规则（L1077+）维持，platformDirectives
+    //     每步重复约 500 tokens 仅在 scan（步数有限）可接受。
+    if (stepIndex === 0 || stageName === 'scan') {
       promptText = platformDirectives.join('\n') + '\n\n' + promptText
     }
   } else {
@@ -1117,6 +1121,36 @@ async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjec
 }
 
 /**
+ * 估算源码规模（文件数 + 字节数）—— 跨平台 Node 遍历，替代 Unix `find`（原生 Windows 无 find，
+ * 原 find 失效会让所有 Windows 项目永远 fallback 到 standard profile）。
+ * 扩展名与排除目录与原 find 命令逐字一致；maxFiles 封顶避免超大仓库遍历过久
+ * （超限时 fileCount 已远超 quick/standard 阈值，不影响 profile 判定）。
+ */
+function estimateSourceSize(cwd, maxFiles = 5000) {
+  const sourceExts = new Set(['.js','.ts','.tsx','.py','.java','.go','.rs','.rb','.php','.c','.cpp','.h','.jsx','.vue','.svelte'])
+  const skipDirs = new Set(['node_modules','.git','dist','build','__pycache__','.sillyspec','.claude'])
+  let fileCount = 0
+  let sourceBytes = 0
+  const stack = [cwd]
+  while (stack.length) {
+    const dir = stack.pop()
+    let entries
+    try { entries = readdirSync(dir, { withFileTypes: true }) }
+    catch { continue }
+    for (const e of entries) {
+      if (e.isDirectory()) {
+        if (!skipDirs.has(e.name)) stack.push(join(dir, e.name))
+      } else if (e.isFile() && sourceExts.has(extname(e.name))) {
+        fileCount++
+        try { sourceBytes += statSync(join(dir, e.name)).size } catch {}
+        if (fileCount >= maxFiles) return { fileCount, sourceBytes }
+      }
+    }
+  }
+  return { fileCount, sourceBytes }
+}
+
+/**
  * 根据 project 规模计算 scan profile
  * quick:   fileCount≤30 && sourceBytes≤80KB && projectCount≤3 → 3 步，0 子代理，5 份文档
  * standard: fileCount≤200 && sourceBytes≤800KB → 压缩步骤，最多 1 子代理
@@ -1138,19 +1172,15 @@ function computeScanProfile(cwd, platformOpts) {
     }
   } catch {}
 
-  // 快速估算源码规模
+  // 快速估算源码规模（Node 遍历，跨平台；原 Unix find 在原生 Windows 上失效会永远 fallback standard）
   let fileCount = 0
   let sourceBytes = 0
   try {
-    const { execSync } = require('child_process')
-    const findCmd = `find "${cwd}" -type f \\( -name '*.js' -o -name '*.ts' -o -name '*.tsx' -o -name '*.py' -o -name '*.java' -o -name '*.go' -o -name '*.rs' -o -name '*.rb' -o -name '*.php' -o -name '*.c' -o -name '*.cpp' -o -name '*.h' -o -name '*.jsx' -o -name '*.vue' -o -name '*.svelte' \\) -not -path '*/node_modules/*' -not -path '*/.git/*' -not -path '*/dist/*' -not -path '*/build/*' -not -path '*/__pycache__/*' -not -path '*/.sillyspec/*' -not -path '*/.claude/*' 2>/dev/null`
-    const files = execSync(findCmd, { encoding: 'utf8', timeout: 10000 }).trim().split('\n').filter(Boolean)
-    fileCount = files.length
-    for (const f of files) {
-      try { sourceBytes += statSync(f).size } catch {}
-    }
+    const est = estimateSourceSize(cwd)
+    fileCount = est.fileCount
+    sourceBytes = est.sourceBytes
   } catch {
-    // find 失败时假设中等规模
+    // 遍历异常时假设中等规模
     return { mode: 'standard', reason: '无法估算项目规模', maxAgentCalls: 1, maxDocs: 8 }
   }
 
