@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-05-31 11:00:00
-updated_at: 2026-07-23T20:30:00+08:00
+updated_at: 2026-07-24T00:00:00+08:00
 ---
 
 # SillySpec 文件生命周期
@@ -116,6 +116,30 @@ quick
   -> CLI appends/checks checkbox in .sillyspec/changes/<change>/tasks.md
   -> code changes are made in the main workspace
 ```
+
+## scan 产出的下游消费
+
+> 本表对照 scan 各产物在下游阶段的实际消费（"读" = 阶段 prompt 里含读取/cat 指令；"运行时注入" = 由 CLI 程序化注入，非 agent 自行 cat）。历史上此表缺失，导致 `CODEBASE-OVERVIEW.md`、`STACK.md` 等幽灵引用（scan 不产出但下游仍 cat）长期未被发现，已于 2026-07-24 修复。
+
+| scan 产物 | brainstorm | plan | execute | verify | quick | doctor |
+|---|---|---|---|---|---|---|
+| PROJECT.md | 读（总览入口） | 读（总览入口） | 读（总览入口） | — | — | — |
+| ARCHITECTURE.md | 读 | 读（含技术栈） | 读 | — | — | 检查存在 |
+| STRUCTURE.md | 读 | — | — | — | — | — |
+| CONVENTIONS.md | 读 | 读 | 读 | 读 | 读 | — |
+| INTEGRATIONS.md | — | — | — | — | — | — |
+| TESTING.md | — | — | — | 读（验收对照） | — | — |
+| CONCERNS.md | — | — | — | 读（技术债触碰标注） | — | — |
+| _module-map.yaml | 读（需求→模块匹配） | 读 | 读（源码定位） | 读 | 读 | 读 |
+| modules/`<m>`.md | 读 | 读 | 读 | 读 | 读 | 健康检查 |
+| knowledge/INDEX.md | — | — | 运行时注入 | — | 读 | — |
+| flows/*.md | — | — | — | — | — | — |
+| glossary.md | 术语碰撞时读 | — | — | — | — | — |
+
+说明：
+- `INTEGRATIONS.md`、`flows/*.md` 当前无下游消费者（scan 产但无人读），属已知死文档——待后续接消费，或明确承认其仅供 knowledge 提取与人类查阅。
+- 技术栈信息统一在 `ARCHITECTURE.md`；早期 `STACK.md` 是 `codebase/` 时代的遗物（`src/migrate.js` 把 `codebase/` 迁到 `docs/<project>/scan/` 时未对应到新 7 份文档），scan 重构后下游 prompt 未同步，已于 2026-07-24 清理。
+- `knowledge/` 经 `src/knowledge-match.js` 在 execute 启动时按 task 关键词命中后注入 prompt（落 `.runtime/knowledge-hit-report.json`），是 scan 产出**唯一**的程序化注入管道；其余消费都是 prompt 内 cat 指令 + agent 自行解析（module-map 的 tags/aliases/entrypoints 用法即由各阶段 prompt 指导 agent 使用）。
 
 ## 机器接口（gate / derive）
 

@@ -87,12 +87,12 @@ const stepClassify = {
 
 ### 操作
 1. 运行 \`sillyspec progress show\`，确认 currentStage 为 "plan"
-2. 读取 CODEBASE-OVERVIEW.md + 各子项目上下文
+2. 读取项目总览 \`{SPEC_ROOT}/docs/<project>/scan/PROJECT.md\` + 各子项目上下文
 3. 读取 proposal.md、design.md、requirements.md、tasks.md
 4. 如果存在 decisions.md，必须读取并提取所有当前版本 D-xxx@vN 决策 ID
    - 如果发现 priority=P0/P1 且 status=unresolved/blocking 的决策，停止生成计划，要求先回到 brainstorm 的 Design Grill 修正
    - 如果发现 superseded 决策，只引用最新版本，不引用旧版本
-5. 读取 CONVENTIONS.md、ARCHITECTURE.md、STACK.md
+5. 读取 CONVENTIONS.md、ARCHITECTURE.md（技术栈含在 ARCHITECTURE.md）
 6. 读取 local.yaml 获取构建/测试命令
 7. 读取 \`{SPEC_ROOT}/docs/<project>/modules/_module-map.yaml\`（不存在则跳过）
    - 根据 design.md 的文件变更清单匹配模块

@@ -115,7 +115,7 @@ const fixedPrefix = [
 2. 读取 design.md（技术方案）
 3. 读取 CONVENTIONS.md、ARCHITECTURE.md
 4. 读取 local.yaml（构建命令）
-5. 加载 CODEBASE-OVERVIEW.md
+5. 加载项目总览 \`.sillyspec/docs/<project>/scan/PROJECT.md\`（如存在）
 
 ### 模块文档加载
 6. 读取 \`.sillyspec/docs/<project>/modules/_module-map.yaml\`（不存在则跳过以下步骤）

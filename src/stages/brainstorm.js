@@ -29,7 +29,7 @@ export const definition = {
       prompt: `加载项目现有上下文，理解代码结构和约定；并做一次早期规模筛查，判断小变更是否该直接走 quick。
 
 ### 操作
-1. 读取 CODEBASE-OVERVIEW.md + 共享规范 + 子项目上下文
+1. 读取项目总览 \`{SPEC_ROOT}/docs/<project>/scan/PROJECT.md\` + 共享规范 + 子项目上下文
 2. 加载项目信息：\`cat {SPEC_ROOT}/projects/*.yaml 2>/dev/null\`
 3. 加载本地配置：\`cat {SPEC_ROOT}/local.yaml 2>/dev/null\`
 4. 棕地项目：读取 {SPEC_ROOT}/docs/<project>/scan/ 下的 STRUCTURE.md、CONVENTIONS.md、ARCHITECTURE.md

@@ -60,6 +60,8 @@ export const definition = {
 3. 加载项目信息：\`cat .sillyspec/projects/*.yaml 2>/dev/null\`
 4. 加载本地配置：\`cat .sillyspec/local.yaml 2>/dev/null\`（构建命令、测试命令、lint 命令等）
 5. 加载代码规范：\`cat .sillyspec/docs/<project>/scan/CONVENTIONS.md 2>/dev/null\`
+   - 测试现状：\`cat .sillyspec/docs/<project>/scan/TESTING.md 2>/dev/null\`（了解既有测试约定与覆盖范围，验收时对照）
+   - 技术债清单：\`cat .sillyspec/docs/<project>/scan/CONCERNS.md 2>/dev/null\`（🔴/🟡 区域；本次变更若触碰须在 verify-result.md 标注）
 6. 标注每个文件的存在/不存在状态
 
 ### Execute Evidence 传递检查

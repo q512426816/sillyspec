@@ -42,9 +42,8 @@ SillySpec 平台执行模式的核心设计：**SillySpec 写产物，SillyHub �
 │   ├── ARCHITECTURE.md
 │   ├── CONVENTIONS.md
 │   ├── PROJECT.md
-│   ├── STACK.md
 │   ├── STRUCTURE.md
-│   └── ... (7 份必需文档)
+│   └── ... (共 7 份：ARCHITECTURE/STRUCTURE/CONVENTIONS/INTEGRATIONS/TESTING/CONCERNS/PROJECT)
 ├── projects/*.yaml                         # 子项目注册
 ├── changes/<change-name>/                  # 变更目录
 └── .runtime/

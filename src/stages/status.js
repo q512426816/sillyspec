@@ -9,7 +9,7 @@ export const definition = {
       prompt: `收集项目基础信息。
 
 ### 操作
-1. \`cat .sillyspec/PROJECT.md 2>/dev/null || echo "未初始化"\`
+1. \`cat .sillyspec/docs/*/scan/PROJECT.md 2>/dev/null | head -20 || echo "未初始化"\`
 2. 获取 project 名
 3. \`ls .sillyspec/docs/<project>/scan/ 2>/dev/null | head -10\`
 4. \`cat .sillyspec/REQUIREMENTS.md 2>/dev/null | head -20\`

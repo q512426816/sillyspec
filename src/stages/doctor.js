@@ -77,19 +77,19 @@ subs.forEach(s => {
 
 ### 5. 配置文件检查
 \`\`\`bash
-# 检查 local.yaml 和 STACK.md
+# 检查 local.yaml 和 scan 总览文档
 for f in .sillyspec/projects/*.yaml; do
   [ -f "$f" ] || continue
   name=$(grep '^name:' "$f" | head -1 | sed 's/^name:[[:space:]]*//')
   p=$(grep '^path:' "$f" | head -1 | sed 's/^path:[[:space:]]*//')
   [ -z "$p" ] && continue
   local_yaml="$p/.sillyspec/local.yaml"
-  stack_md="$p/.sillyspec/STACK.md"
+  arch_md=".sillyspec/docs/$name/scan/ARCHITECTURE.md"
   [ -f "$local_yaml" ] && echo "✅ local.yaml ($name)" || echo "⚠️ local.yaml ($name) — 不存在"
   if [ -f "$local_yaml" ]; then
     grep -q 'test:' "$local_yaml" && echo "  ✅ test 命令已配置" || echo "  ⚠️ 缺少 test 命令"
   fi
-  [ -f "$stack_md" ] && echo "✅ STACK.md ($name)" || echo "⚠️ STACK.md ($name) — 不存在"
+  [ -f "$arch_md" ] && echo "✅ scan/ARCHITECTURE.md ($name)" || echo "⚠️ scan/ARCHITECTURE.md ($name) — 不存在（运行 sillyspec run scan）"
 done
 \`\`\`
 
@@ -167,7 +167,7 @@ echo "项目目录: $PROJECT_DIR"
 for f in pom.xml build.gradle package.json requirements.txt pyproject.toml go.mod Cargo.toml; do
   [ -f "$PROJECT_DIR/$f" ] && echo "检测到: $f"
 done
-[ -f "$PROJECT_DIR/.sillyspec/STACK.md" ] && cat "$PROJECT_DIR/.sillyspec/STACK.md" | head -30
+cat .sillyspec/docs/*/scan/ARCHITECTURE.md 2>/dev/null | head -30 || echo "（无 scan/ARCHITECTURE.md）"
 \`\`\`
 
 ### 2. 构建工具可用性
@@ -349,7 +349,7 @@ timeout 5 which docker 2>/dev/null && echo "✅ Docker 可用" || echo "ℹ️ D
 - CLI 未安装 → \`npm install -g sillyspec\`
 - 缺少 local.yaml → \`sillyspec init\` 重新生成，或手动创建
 - local.yaml 缺少 test 命令 → 补充对应命令
-- 缺少 STACK.md → \`sillyspec run scan\` 重新扫描
+- 缺少 scan 文档（ARCHITECTURE.md 等）→ \`sillyspec run scan\` 重新扫描
 - sillyspec.db 状态不一致 → \`sillyspec run <阶段> --reset\` 重置对应阶段
 - 孤儿目录 → 确认后 \`rm -rf .sillyspec/changes/<目录名>\`
 - Maven 私服不可达 → 检查 VPN、settings.xml 配置、私服状态

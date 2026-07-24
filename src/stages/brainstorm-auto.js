@@ -25,7 +25,7 @@ export const definition = {
 3. **检查变更名称**：如果当前变更名是自动生成的（如 \`2026-06-02-new-change-a3f2b7c1\`），直接重命名为有意义名称，然后运行 \`sillyspec change-rename <旧名> <新名>\`
 
 ### 加载上下文
-4. 读取 CODEBASE-OVERVIEW.md + 共享规范 + 子项目上下文
+4. 读取项目总览 \`.sillyspec/docs/<project>/scan/PROJECT.md\`（如存在）+ 共享规范 + 子项目上下文
 5. 加载项目信息：\`cat .sillyspec/projects/*.yaml 2>/dev/null\`
 6. 加载本地配置：\`cat .sillyspec/local.yaml 2>/dev/null\`
 7. 棕地项目：读取 scan 下的 STRUCTURE.md、CONVENTIONS.md、ARCHITECTURE.md
