@@ -13,6 +13,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, unlinkSync, appendFileSync } from 'fs';
 import { join, basename, dirname, resolve } from 'path';
 import { DB } from './db.js';
+import { writeAtomicSync } from './fs-atomic.js';
 
 // 默认规范目录名（相对于 cwd）
 const SPEC_DIR_NAME = '.sillyspec';
@@ -156,7 +157,14 @@ export class ProgressManager {
   /** 获取 specDir（优先自定义，否则向上查找含 .sillyspec 的目录，fallback 到 cwd/.sillyspec） */
   _getSpecDir(cwd) {
     if (this._customSpecDir) return this._customSpecDir;
-    return resolveSpecDir(cwd);
+    // specDir 对给定 cwd 在进程生命周期内不变（.sillyspec 目录不会被移动），
+    // 按 cwd 缓存，避免每次路径解析都向上 existsSync 遍历目录树（热路径）。
+    if (!this._specDirCache) this._specDirCache = new Map();
+    const cached = this._specDirCache.get(cwd);
+    if (cached) return cached;
+    const resolved = resolveSpecDir(cwd);
+    this._specDirCache.set(cwd, resolved);
+    return resolved;
   }
 
   _runtimePath(cwd, ...parts) {
@@ -1064,7 +1072,7 @@ export class ProgressManager {
       mkdirSync(historyDir, { recursive: true });
       const ts = now.replace(/[:.TZ-]/g, '');
       const stageData = data.stages[stage];
-      writeFileSync(
+      writeAtomicSync(
         join(historyDir, `${cn}-${stage}-${ts}.json`),
         JSON.stringify({ change: cn, stage, data: stageData, completedAt: now }, null, 2) + '\n'
       );
@@ -1666,8 +1674,7 @@ export class ProgressManager {
             const changeId = changeRow[0].values[0][0];
             sqlDb.run('DELETE FROM steps WHERE stage_id IN (SELECT id FROM stages WHERE change_id = ?)', [changeId]);
             sqlDb.run('DELETE FROM stages WHERE change_id = ?', [changeId]);
-            sqlDb.run('UPDATE stages SET status = "pending", started_at = NULL, completed_at = NULL WHERE change_id = ?', [changeId]);
-            // 重新插入所有阶段
+            // 重新插入所有阶段（注意：上方已 DELETE stages，无需再 UPDATE）
             for (const s of VALID_STAGES) {
               sqlDb.run('INSERT OR IGNORE INTO stages (change_id, stage, status) VALUES (?, ?, "pending")', [changeId, s]);
             }
@@ -1865,9 +1872,7 @@ export class ProgressManager {
         updatedAt: new Date().toISOString(),
         ...(hasNoWorktree ? { noWorktree: true } : {}),
       };
-      const tmpPath = gatePath + '.tmp';
-      writeFileSync(tmpPath, JSON.stringify(gateData, null, 2) + '\n');
-      renameSync(tmpPath, gatePath);
+      writeAtomicSync(gatePath, JSON.stringify(gateData, null, 2) + '\n');
     } catch (err) {
       console.warn('⚠️  写入 gate-status.json 失败:', err.message);
     }

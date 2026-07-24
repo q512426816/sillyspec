@@ -68,3 +68,15 @@ export function isPointerStale(pointer) {
 export function isPointerCorrupted(pointer) {
   return !pointer || !pointer.specRoot || !pointer.savedAt
 }
+
+// ── scan 必需文档清单（stage-contract validator 与 scan-postcheck 共用单一真相源）──
+// 曾分两处硬编码同一份清单，加新文档需同步改两处，易分叉。现收敛到此处一处。
+export const SCAN_REQUIRED_DOCS = Object.freeze([
+  'ARCHITECTURE.md',
+  'CONVENTIONS.md',
+  'STRUCTURE.md',
+  'INTEGRATIONS.md',
+  'TESTING.md',
+  'CONCERNS.md',
+  'PROJECT.md',
+])

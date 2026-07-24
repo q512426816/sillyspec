@@ -7,6 +7,7 @@
  * 状态管理通过 sillyspec.db（SQLite）完成，使用 `sillyspec progress` 命令。
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'fs';
+import { writeAtomicSync } from './fs-atomic.js';
 import { join, resolve } from 'path';
 import { cmdInit, getVersion } from './init.js';
 import { ProgressManager, resolvePlatformSpecDir } from './progress.js';
@@ -280,7 +281,7 @@ async function main() {
         }
         case 'batch': {
           if (filteredArgs.includes('--status')) {
-            const bp = pm.readBatchProgress(dir, progChangeName);
+            const bp = await pm.readBatchProgress(dir, progChangeName);
             if (!bp) { console.log('📭 无批量进度数据'); break; }
             const line = pm._renderBatchProgress(bp);
             console.log(line || '📭 无批量进度数据');
@@ -299,7 +300,7 @@ async function main() {
               console.log('     sillyspec progress batch --status');
               break;
             }
-            pm.updateBatchProgress(dir, batchData, progChangeName);
+            await pm.updateBatchProgress(dir, batchData, progChangeName);
             console.log('✅ 批量进度已更新');
           }
           break;
@@ -1171,11 +1172,9 @@ SillySpec modules — 模块文档管理
       lines.push('#   order-service: "order/"');
       const yamlText = lines.join('\n') + '\n';
 
-      // 原子写：mkdir -p specRoot → 写 tmp → rename
+      // 原子写（tmp + rename + Windows EPERM 重试），避免半截 local.yaml
       mkdirSync(specRoot, { recursive: true });
-      const tmpPath = localYamlPath + '.tmp';
-      writeFileSync(tmpPath, yamlText, 'utf8');
-      renameSync(tmpPath, localYamlPath);
+      writeAtomicSync(localYamlPath, yamlText);
 
       console.log(`✅ 已生成 local.yaml (type: ${detected.project.type})`);
       console.log(`   路径: ${localYamlPath}`);

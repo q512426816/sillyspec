@@ -79,7 +79,7 @@ export async function rebuildModuleMap(cwd) {
       const content = readFileSync(join(modulesDir, f), 'utf8');
       const fm = parseModuleCardFrontmatter(content);
       const moduleId = fm.module_id || parseModuleIdFromFilename(f);
-      cards.push({ filename: f, moduleId });
+      cards.push({ filename: f, moduleId, content });
     }
   }
 
@@ -134,7 +134,7 @@ export async function rebuildModuleMap(cwd) {
 
   for (const moduleId of allModuleIds) {
     const card = cards.find(c => c.moduleId === moduleId);
-    const cardContent = card ? readFileSync(join(modulesDir, card.filename), 'utf8') : '';
+    const cardContent = card?.content || '';
 
     // 从模块卡片提取 context index 字段
     const role = extractSection(cardContent, '定位') || '';

@@ -7,17 +7,9 @@
 
 import { existsSync, readdirSync, readFileSync, mkdirSync, writeFileSync } from 'fs'
 import { join, basename } from 'path'
-import { SCAN_STATUS, CHECK_SEVERITY } from './constants.js'
+import { SCAN_STATUS, CHECK_SEVERITY, SCAN_REQUIRED_DOCS } from './constants.js'
 
-const REQUIRED_SCAN_DOCS = [
-  'ARCHITECTURE.md',
-  'CONVENTIONS.md',
-  'STRUCTURE.md',
-  'INTEGRATIONS.md',
-  'TESTING.md',
-  'CONCERNS.md',
-  'PROJECT.md',
-]
+const REQUIRED_SCAN_DOCS = SCAN_REQUIRED_DOCS
 
 /**
  * @param {object} opts

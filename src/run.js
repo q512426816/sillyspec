@@ -6,6 +6,7 @@
  */
 import { basename, join, resolve, dirname, relative, isAbsolute } from 'path'
 import { existsSync, readdirSync, mkdirSync, writeFileSync, appendFileSync, readFileSync, rmSync, statSync } from 'fs'
+import { writeAtomicSync, renameSyncRetry } from './fs-atomic.js'
 import { randomBytes, randomUUID } from 'crypto'
 import { createRequire } from 'module'
 const require = createRequire(import.meta.url)
@@ -1245,12 +1246,15 @@ async function executeScanPreflight(cwd, platformOpts, scanProfile) {
   const projectName = basename(cwd)
   console.log(`  📁 项目: ${projectName}`)
   console.log(`  📊 Profile: ${scanProfile.mode} (${scanProfile.reason})`)
-  // 快速列出顶层结构
+  // 快速列出顶层结构（readdirSync 跨平台，避免 spawn shell + 5 个 grep 进程）
   try {
-    const { execSync } = await import('child_process')
-    const dirs = execSync(`ls -d */ 2>/dev/null | grep -v node_modules | grep -v '.git' | grep -v '.sillyspec' | grep -v '.claude' | head -20`, { cwd, encoding: 'utf8' }).trim()
-    if (dirs) {
-      console.log(`  📂 目录: ${dirs.split('\n').map(d => d.replace(/\/$/, '')).join(', ')}`)
+    const skip = new Set(['node_modules', '.git', '.sillyspec', '.claude'])
+    const dirNames = readdirSync(cwd, { withFileTypes: true })
+      .filter(d => d.isDirectory() && !skip.has(d.name) && !d.name.startsWith('.'))
+      .slice(0, 20)
+      .map(d => d.name)
+    if (dirNames.length) {
+      console.log(`  📂 目录: ${dirNames.join(', ')}`)
     }
   } catch {}
   console.log(`  ✅ Preflight 完成，准备生成核心文档\n`)
@@ -2199,7 +2203,7 @@ async function runStage(pm, progress, stageName, cwd, changeName, skipApproval =
         // 写入 .runtime/quick-sessions/<sessionId>/guard.json 供 worktree-guard hook 读取
         // （D-002：按 session 存，多会话各自 guard 不互覆盖。runStage 作用域内 sessionId == changeName == quick-<uuid8>，见 §4.4/4.5）
         mkdirSync(sessionGuardDir, { recursive: true })
-        writeFileSync(guardFile, JSON.stringify(progress.quickGuard, null, 2))
+        writeAtomicSync(guardFile, JSON.stringify(progress.quickGuard, null, 2))
         const parts = [`${baselineFiles.length} 个已有脏文件`]
         if (allowedFiles.length > 0) parts.push(`${allowedFiles.length} 个 allowedFiles`)
         if (allowNew) parts.push('允许新增文件')
@@ -2383,7 +2387,13 @@ async function archiveChangeDirectory(pm, cwd, progress, specBase) {
     process.exit(1)
   }
   mkdirSync(archiveDir, { recursive: true })
-  renameSync(srcDir, destDir)
+  try {
+    renameSyncRetry(srcDir, destDir)
+  } catch (e) {
+    console.error(`❌ 归档失败：移动变更目录时出错（${e.message}）`)
+    console.error(`   常见原因：变更目录内文件被 IDE / 杀毒 / 索引占用，已重试 5 次仍失败。请关闭相关程序后重试。`)
+    process.exit(1)
+  }
 
   if (!existsSync(destDir) || existsSync(srcDir)) {
     console.error('❌ 归档校验失败：移动操作异常')
@@ -2749,7 +2759,11 @@ async function enforceDepsGate(stageName, cwd, changeName, step, steps, currentI
     const { WorktreeManager } = await import('./worktree.js')
     wm = new WorktreeManager({ cwd })
     meta = wm.getMeta(changeName)
-  } catch {}
+  } catch (e) {
+    // WorktreeManager 构造/读取失败（git 不可用 / worktree 元数据损坏）不阻断 deps gate；
+    // 下游已有物理目录存在性判定兜底（G2/R3），这里 warn 留下根因线索，避免静默误诊。
+    console.warn(`⚠️ worktree meta 读取失败（deps gate 将走物理目录判定）: ${e.message}`)
+  }
   const depsStatus = meta?.depsStatus
   if (['linked', 'installed', 'n/a'].includes(depsStatus)) return true
   const changeDir = changeName ? join(specBase, 'changes', changeName) : null
@@ -3402,8 +3416,12 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
           pointer.status = POINTER_STATUS.SCAN_COMPLETED
           pointer.completedAt = new Date().toISOString()
           pointer.scanStatus = postResult.status
-          writeFileSync(pointerPath, JSON.stringify(pointer, null, 2) + '\n')
-        } catch {}
+          writeAtomicSync(pointerPath, JSON.stringify(pointer, null, 2) + '\n')
+        } catch (e) {
+          // 不阻断 scan 主流程，但暴露失败——pointer 写失败会让平台看不到 scan_completed，
+          // 与项目 fail-loud 原则一致：宁可可见地 warn，也不静默吞错。
+          console.warn(`⚠️ 更新平台指针状态失败（scan_completed 可能未落盘）: ${e.message}`)
+        }
 
         // failed_post_check 时强制阻止 clean success
         if (postResult.status === 'failed_post_check') {

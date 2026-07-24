@@ -9,6 +9,7 @@ import { existsSync, readdirSync, readFileSync } from 'fs'
 import { join, basename } from 'path'
 import { execFileSync } from 'child_process'
 import { detectChangeRisk, checkIntegrationEvidence } from './change-risk-profile.js'
+import { SCAN_REQUIRED_DOCS } from './constants.js'
 
 /**
  * 校验结果
@@ -215,15 +216,7 @@ function validateScanOutputs(cwd, changeName, context = {}) {
     ? join(specBase, 'docs', projectName, 'scan')
     : join(specBase, 'docs', 'scan')
 
-  const requiredDocs = [
-    'ARCHITECTURE.md',
-    'CONVENTIONS.md',
-    'STRUCTURE.md',
-    'INTEGRATIONS.md',
-    'TESTING.md',
-    'CONCERNS.md',
-    'PROJECT.md',
-  ]
+  const requiredDocs = SCAN_REQUIRED_DOCS
 
   const errors = []
   const warnings = []
