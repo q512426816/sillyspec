@@ -1,6 +1,6 @@
 ---
 name: sillyspec:quick
-description: 用于明确、低风险、范围很小的直接任务。适合用户说"直接改、快速修、顺手调整、改个文案、修个小 bug、更新一个文件、不要完整流程"。跳过 brainstorm/plan，但仍按 sillyspec quick 流程执行。
+description: 用于明确、低风险、小范围的直接修改（改文案/修小 bug/更新单文件）。跳过 brainstorm/plan，仍走 quick 流程。
 ---
 
 ## 何时使用

@@ -14,7 +14,7 @@
  */
 
 import { spawnSync } from 'node:child_process'
-import { mkdirSync, rmSync } from 'node:fs'
+import { mkdirSync, rmSync, renameSync, existsSync } from 'node:fs'
 import { join, resolve, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
@@ -56,7 +56,22 @@ function cleanSillySpec(cwd) {
   // 故两路比较前需上溯清掉沿途 .sillyspec（含 parent，如 tmpRoot/），否则 parent
   // 残留的 default change 会让 doctor 顶层与 run doctor 读到不同状态 → 不等价。
   const sleep = (ms) => { const t = Date.now(); while (Date.now() - t < ms) {} }
-  const tryRemove = (p) => { for (let r = 0; r < 10; r++) { try { rmSync(p, { recursive: true, force: true }); return } catch { sleep(50) } } }
+  // .sillyspec/.runtime/ 里的 sillyspec.db / .bak 在 Windows 上可能被杀毒/索引
+  // 瞬时锁定，rmSync recursive 删目录会因其中某个文件被占而失败。策略：多次重试
+  // 等锁释放（通常 <1s）；仍失败则把整个目录 rename 移走——只要原路径不存在，
+  // resolveSpecDir 就找不到它，测试的"干净环境"目的即达成。
+  const tryRemove = (p) => {
+    if (!existsSync(p)) return
+    for (let r = 0; r < 20; r++) {
+      try { rmSync(p, { recursive: true, force: true }) } catch { sleep(50) }
+      if (!existsSync(p)) return
+    }
+    try {
+      const trash = `${p}.__trash__${Date.now()}`
+      renameSync(p, trash)
+      try { rmSync(trash, { recursive: true, force: true }) } catch {}
+    } catch { /* 锁仍未释放；已尽力，原路径若仍在下次重试或后续 run 再清 */ }
+  }
   let cur = cwd
   for (let i = 0; i < 3; i++) {
     tryRemove(join(cur, '.sillyspec'))

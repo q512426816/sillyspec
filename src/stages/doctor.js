@@ -12,6 +12,8 @@ export const definition = {
       name: 'SillySpec 内部检查',
       prompt: `运行 SillySpec 内部检查。逐项执行以下命令并汇总结果：
 
+> ⚠️ Windows 兼容：下列 sqlite3 查询依赖外部 sqlite3 CLI（Windows 默认没有）。若某条 sqlite3 失败，改用 sillyspec 自身命令替代——sillyspec progress show 查看当前变更与各阶段状态（等价于查 changes/stages 表），sillyspec doctor --json 查看 db 健康与活跃变更列表。
+
 ### 1. 目录结构完整性
 \`\`\`bash
 # 检查 .sillyspec/ 及子目录
@@ -21,7 +23,8 @@ done
 # 检查 sillyspec.db（SQLite 权威状态源）
 DB_FILE='.sillyspec/.runtime/sillyspec.db'
 [ -f "$DB_FILE" ] && echo "✅ sillyspec.db 存在" || echo "❌ sillyspec.db 不存在"
-sqlite3 "$DB_FILE" "SELECT count(*) FROM project" 2>/dev/null && echo "✅ sillyspec.db 可查询" || echo "⚠️ sillyspec.db 不可查询"
+# 用 sillyspec 自身命令验证 db 可读（fallback 不依赖外部 sqlite3 CLI，兼容 Windows）
+sqlite3 "$DB_FILE" "SELECT count(*) FROM project" 2>/dev/null && echo "✅ sillyspec.db 可查询" || (sillyspec progress show >/dev/null 2>&1 && echo "✅ sillyspec.db 可查询（经 sillyspec 命令）" || echo "⚠️ sillyspec.db 不可查询")
 \`\`\`
 
 ### 2. 项目配置检查

@@ -894,7 +894,12 @@ async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjec
     if (platformOpts.workspaceId) {
       platformDirectives.push(`workspace_id: ${platformOpts.workspaceId}`)
     }
-    promptText = platformDirectives.join('\n') + '\n\n' + promptText
+    // 平台 directives 仅 step0 前置（对齐 persona 仅 step0 策略）：路径列表/Write 规则/
+    // 占位符映射一次建立即可；后续 step 靠 agent 跨步记忆 + 每步 changeDir header +
+    // footer 平台规则（下方 L1077+）维持写入约束，避免每步重复注入 ~500 tokens。
+    if (stepIndex === 0) {
+      promptText = platformDirectives.join('\n') + '\n\n' + promptText
+    }
   } else {
     // 常规模式（无平台 specRoot）：占位符替换为 cwd/.sillyspec 下对应路径
     // 让用 {SPEC_ROOT}/{DOCS_ROOT} 等占位符的 prompt（如 quick/scan）在常规模式也写到正确位置
@@ -1063,7 +1068,7 @@ async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjec
 
   console.log(promptText)
   console.log(`\n### ⚠️ 铁律`)
-  console.log('- **文档是核心资产，代码是文档的产物。** 没有文档就没有代码——文档是 AI 的记忆，是团队协作的基础，是后续维护的唯一依据。任何代码产出必须先有对应的设计/规范文档支撑。')
+  console.log('- 文档优先：代码产出必须先有对应的设计/规范文档支撑。')
   console.log('- 只做本步骤描述的操作，不得自行扩展或跳过')
   console.log('- 不要回头修改已完成的步骤')
   console.log('- 不要编造不存在的 CLI 子命令')
@@ -1347,7 +1352,10 @@ export async function runCommand(args, cwd, specDir = null) {
   // ── cwd 纠正：向上查找真实项目根 ──
   // 防止多 project 工作区中 cwd 停在子目录（如 backend/）时
   // 状态写入子目录下误建的 .sillyspec，导致状态分裂
-  if (!specDir) {
+  if (!specDir && !existsSync(join(cwd, '.sillyspec-platform.json'))) {
+    // 平台模式（cwd 有 .sillyspec-platform.json 指针）不做 cwd 纠正：指针已明确 specDir，
+    // 向上找 .sillyspec 反而会撞到无关项目（如用户 home 的 .sillyspec），导致 --done 恢复
+    // 读写 ~/.sillyspec-platform.json 出错的 specRoot。
     const resolvedRoot = resolveSpecDir(cwd)
     if (resolvedRoot && resolvedRoot !== join(cwd, '.sillyspec')) {
       const realRoot = dirname(resolvedRoot)
@@ -2121,18 +2129,22 @@ async function runStage(pm, progress, stageName, cwd, changeName, skipApproval =
   }
 
   if (currentIdx === -1) {
-    // 已完成 → 自动重置，重新开始
-    const freshSteps = await getStageSteps(stageName, cwd, progress, platformOpts?.specRoot || null)
-    stageData.steps = freshSteps
-      ? freshSteps.map(s => ({ name: s.name, status: 'pending' }))
-      : []
-    stageData.status = 'in-progress'
-    stageData.startedAt = new Date().toLocaleString('zh-CN', { hour12: false })
-    stageData.completedAt = null
-    await pm._write(cwd, progress, changeName)
-    triggerSync(cwd, changeName, platformOpts)
-    currentIdx = 0
-    console.log(`🔄 ${stageName} 阶段已自动重置，重新开始。\n`)
+    // 所有步骤已 completed/skipped，但阶段未盖到 completed —— 这是上次最后一步完成后、
+    // stage 升级事务未提交的崩溃中间态（正常完成会被上方 stageStatus==='completed' 守卫拦下）。
+    // 旧逻辑无条件清空 steps 为 pending 会丢掉已完成的进度且不可恢复。改为走正式
+    // completeStage：产物齐则补盖完成戳，不齐则给出 actionable 提示，永不静默清空步骤。
+    console.log(`\nℹ️  ${stageName} 所有步骤已完成，但阶段未标记完成（上次可能中断）。尝试补盖完成戳…`)
+    await pm.completeStage(cwd, stageName, changeName)
+    const after = await pm.read(cwd, changeName)
+    if (after?.stages?.[stageName]?.status === 'completed') {
+      console.log(`   ✅ 已补盖完成戳。下一步: sillyspec run <下一阶段>，或 sillyspec run ${stageName} --status 查看。`)
+      process.exit(0)
+    }
+    // completeStage 已打印产物校验失败的明细；这里只补充恢复指引
+    console.error(`\n   ⚠️ 已保留步骤进度（未清空）。修复产物后重跑，或：`)
+    console.error(`   - 重新开始: sillyspec run ${stageName} --reset`)
+    console.error(`   - 强制补盖: sillyspec progress complete-stage ${stageName}${changeName ? ` --change ${changeName}` : ''} --force`)
+    process.exit(1)
   }
 
   // quick 阶段：记录 baselineFiles + 分配 ql-ID（CLI 接管 QUICKLOG 写入）

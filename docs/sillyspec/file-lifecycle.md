@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-05-31 11:00:00
-updated_at: 2026-07-22T19:50:00+08:00
+updated_at: 2026-07-23T20:30:00+08:00
 ---
 
 # SillySpec 文件生命周期
@@ -101,7 +101,7 @@ sillyspec run scan
 
 brainstorm / propose / plan / execute / verify / archive
   -> .sillyspec/changes/<change>/...
-  -> .sillyspec/.runtime/sillyspec.db
+  -> .sillyspec/.runtime/sillyspec.db                    (原子写：tmp+rename 覆盖，旧版自动保留为 sillyspec.db.bak；读取时主库损坏/为空从 .bak 回滚，两者均坏则 fail-loud；sillyspec.db.tmp 仅写入中瞬时存在)
   -> .sillyspec/.runtime/user-inputs.md
   -> .sillyspec/.runtime/artifacts/*.txt                     (long step output)
 

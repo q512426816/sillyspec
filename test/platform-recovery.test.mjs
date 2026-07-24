@@ -21,9 +21,21 @@ function assert(cond, msg) {
 }
 
 const P = 'recover'
+function gitInit(d) {
+  try {
+    execSync('git init -q', { cwd: d, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+    execSync('git config user.email t@t.local', { cwd: d, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+    execSync('git config user.name t', { cwd: d, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+  } catch {}
+}
 function setup(name) {
   const d = join(tmpdir(), `${P}-${name}`)
   mkdirSync(d, { recursive: true })
+  // git init 隔离：使 resolveEffectiveDir 的 `git rev-parse --show-toplevel` 返回本目录自身。
+  // 否则 tmpdir 裸目录落在用户 home 的 git repo 内、且 home 有 .sillyspec 时，effectiveDir
+  // 会被纠正到 home，导致平台指针 (.sillyspec-platform.json) 读写落到 ~/.sillyspec-platform.json，
+  // 跨测试污染 → --done 恢复出错的 specRoot（platform-recovery 基线 flaky 根因）。
+  gitInit(d)
   return d
 }
 function spec(name) {

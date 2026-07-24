@@ -11,6 +11,9 @@
 
 import { existsSync, readFileSync, readdirSync } from 'fs'
 import path from 'path'
+import { execFileSync } from 'child_process'
+import { createRequire } from 'module'
+import { pathToFileURL } from 'url'
 
 // ── 常量 ──
 
@@ -237,6 +240,35 @@ function readGateStatus(cwd) {
 }
 
 /**
+ * 同步只读查询 sillyspec.db 第一行第一列（不依赖外部 sqlite3 CLI）。
+ * sql.js 的 init 是 async，故用子进程跑（execFileSync 等待）；sql.js 模块经 hook 进程的
+ * require.resolve 解析出绝对路径传入，避免子进程 cwd（项目目录）找不到 sql.js。
+ * 全平台一致（node 是 SillySpec 自身运行时）。返回字符串值或 null。
+ */
+function queryDbFirstCell(cwd, sql) {
+  const dbPath = path.join(cwd, '.sillyspec', '.runtime', 'sillyspec.db')
+  if (!existsSync(dbPath)) return null
+  let sqlJsPath
+  try { sqlJsPath = createRequire(import.meta.url).resolve('sql.js') } catch { return null }
+  // Windows 上 dynamic import 不接受裸 "C:\..." 路径，必须转 file:// URL（全平台合法）
+  const libUrl = pathToFileURL(sqlJsPath).href
+  const script =
+    "const fs=require('fs');" +
+    "const dbPath=" + JSON.stringify(dbPath) + ",sql=" + JSON.stringify(sql) + ",lib=" + JSON.stringify(libUrl) + ";" +
+    "if(!fs.existsSync(dbPath))process.exit(0);" +
+    "import(lib).then(async m=>{const SQL=await m.default();" +
+    "const db=new SQL.Database(fs.readFileSync(dbPath));const r=db.exec(sql);" +
+    "if(r.length&&r[0].values.length)process.stdout.write(String(r[0].values[0][0]??''));db.close()}).catch(()=>{});"
+  try {
+    return execFileSync(process.execPath, ['-e', script], {
+      encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'pipe'],
+    }).trim() || null
+  } catch { return null }
+}
+
+export { queryDbFirstCell as _queryDbFirstCellForTest };
+
+/**
  * 从 sillyspec.db 读取 currentStage
  * 优先级：gate-status.json > sillyspec.db
  * @param {string} cwd
@@ -247,19 +279,9 @@ function readCurrentStage(cwd) {
   const gateStatus = readGateStatus(cwd)
   if (gateStatus && gateStatus.stage) return gateStatus.stage
 
-  // 2. 从 sillyspec.db 读取（通过 sqlite3 CLI 同步调用）
-  const dbPath = path.join(cwd, '.sillyspec', '.runtime', 'sillyspec.db')
-  if (!existsSync(dbPath)) return null
-  try {
-    const { execSync } = require('child_process')
-    const result = execSync(
-      `sqlite3 "${dbPath}" "SELECT current_stage FROM changes WHERE status='active' AND current_stage IN ('execute','quick') ORDER BY last_active DESC LIMIT 1"`,
-      { encoding: 'utf8', timeout: 2000 }
-    ).trim()
-    return result || null
-  } catch { /* sqlite3 CLI 不可用或查询失败 */ }
-
-  return null
+  // 2. 从 sillyspec.db 读取（node + sql.js 子进程，不依赖外部 sqlite3 CLI——Windows 默认没有）
+  const v = queryDbFirstCell(cwd, "SELECT current_stage FROM changes WHERE status='active' AND current_stage IN ('execute','quick') ORDER BY last_active DESC LIMIT 1")
+  return v || null
 }
 
 /**
@@ -272,19 +294,8 @@ function isNoWorktreeMode(cwd) {
   const gateStatus = readGateStatus(cwd)
   if (gateStatus && gateStatus.noWorktree) return true
 
-  // 2. 从 sillyspec.db 读取
-  const dbPath = path.join(cwd, '.sillyspec', '.runtime', 'sillyspec.db')
-  if (!existsSync(dbPath)) return false
-  try {
-    const { execSync } = require('child_process')
-    const result = execSync(
-      `sqlite3 "${dbPath}" "SELECT no_worktree FROM changes WHERE status='active' AND current_stage IN ('execute','quick') LIMIT 1"`,
-      { encoding: 'utf8', timeout: 2000 }
-    ).trim()
-    return result === '1'
-  } catch { /* sqlite3 CLI 不可用或查询失败 */ }
-
-  return false
+  // 2. 从 sillyspec.db 读取（node + sql.js，同 readCurrentStage）
+  return queryDbFirstCell(cwd, "SELECT no_worktree FROM changes WHERE status='active' AND current_stage IN ('execute','quick') LIMIT 1") === '1'
 }
 
 /**

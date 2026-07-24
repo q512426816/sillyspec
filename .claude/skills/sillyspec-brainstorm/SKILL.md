@@ -1,6 +1,6 @@
 ---
 name: sillyspec:brainstorm
-description: 用于正式开始开发前的需求澄清和技术方案设计。适合用户提出新功能、新模块、架构调整、复杂改造，或说"先做需求分析、输出技术方案、创建变更前先梳理、帮我设计下"。产出结构化方案（design/proposal/requirements/tasks 四件套），但不直接写代码。
+description: 正式开发前的需求澄清与技术方案设计。产出结构化方案（design/proposal/requirements/tasks 四件套），不直接写代码。
 ---
 
 ## 交互规范

@@ -1,6 +1,6 @@
 import initSqlJs from 'sql.js';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
-import { dirname } from 'path';
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'fs';
+import { basename, dirname, join } from 'path';
 
 export class DB {
   constructor(dbPath) {
@@ -16,13 +16,8 @@ export class DB {
     // 2. 初始化 sql.js
     const SQL = await initSqlJs();
 
-    // 3. 加载已有数据库或创建新库
-    if (existsSync(this.dbPath)) {
-      const buf = readFileSync(this.dbPath);
-      this.db = new SQL.Database(buf);
-    } else {
-      this.db = new SQL.Database();
-    }
+    // 3. 加载已有数据库（含损坏检测 + .bak 回滚）或创建新库
+    this.db = this._loadDatabase(SQL);
 
     // 4. 设置 PRAGMA
     this.db.run('PRAGMA journal_mode = WAL');
@@ -64,17 +59,119 @@ export class DB {
     return this.db;
   }
 
-  /** 将内存中的数据库持久化到磁盘 */
+  /**
+   * 将内存中的数据库持久化到磁盘（原子写 + 保留上一版 .bak 备份）。
+   * 任何时刻磁盘上的主库要么是完整的上一版、要么是完整的新版，
+   * 不会出现写入中途崩溃导致的截断态。sql.js 是纯内存库，
+   * PRAGMA journal_mode=WAL 对它无意义——真正的持久化原子性在这里保证。
+   */
   _save() {
     if (!this.db) return;
     const data = this.db.export();
     const buffer = Buffer.from(data);
-    writeFileSync(this.dbPath, buffer);
+    this._atomicWriteSync(this.dbPath, buffer);
     // sql.js 的 export() 会重置 PRAGMA 状态，需要重新设置
     this.db.run('PRAGMA journal_mode = WAL');
     this.db.run('PRAGMA busy_timeout = 5000');
     this.db.run('PRAGMA foreign_keys = ON');
     this.db.run('PRAGMA synchronous = NORMAL');
+  }
+
+  /**
+   * 原子落盘：同目录 tmp 写入 → 旧主库改名 .bak → tmp 改名为主库。
+   * 三步保证主库永不处于半写状态；.bak 始终保留上一完整版本。
+   * Windows 上 rename 偶发 EPERM/EBUSY（杀毒/索引扫描占文件），带短退避重试。
+   */
+  _atomicWriteSync(filePath, buffer) {
+    const dir = dirname(filePath);
+    const tmpPath = join(dir, `${basename(filePath)}.tmp`);
+    const bakPath = `${filePath}.bak`;
+    // 1. 完整内容先落 tmp（同目录，保证 rename 不跨卷）
+    writeFileSync(tmpPath, buffer);
+    // 2. 旧主库 → .bak（保留上一版；不存在则跳过；失败不阻断主流程）
+    if (existsSync(filePath)) {
+      try { this._renameSyncRetry(filePath, bakPath); }
+      catch { /* 备份失败最坏只是少一个 .bak，主库仍会被新内容替换 */ }
+    }
+    // 3. tmp → 主库（成功后主库即新版完整态）
+    this._renameSyncRetry(tmpPath, filePath);
+  }
+
+  /** rename 带退避重试，覆盖 Windows 偶发的 EPERM/EBUSY/EACCES/ENOTEMPTY。 */
+  _renameSyncRetry(from, to, retries = 5) {
+    let lastErr;
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        renameSync(from, to);
+        return;
+      } catch (err) {
+        lastErr = err;
+        const code = err && err.code;
+        if (!code || !['EPERM', 'EBUSY', 'EACCES', 'ENOTEMPTY'].includes(code)) throw err;
+        if (attempt < retries) this._sleepSync(15 * (attempt + 1));
+      }
+    }
+    throw lastErr;
+  }
+
+  /** 同步退避：优先 Atomics.wait，不可用时退化为忙等（仅在 rename 冲突的极端情况触发）。 */
+  _sleepSync(ms) {
+    try {
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+    } catch {
+      const end = Date.now() + ms;
+      while (Date.now() < end) { /* busy wait */ }
+    }
+  }
+
+  /**
+   * 加载数据库：主库 → .bak → 报错/空库，逐级回退。
+   *  - 主库可正常打开：直接用。
+   *  - 主库缺失/为空/损坏：尝试 .bak；成功则 warn 后用 .bak。
+   *  - 主库与 .bak 都不可用：
+   *      · 全新项目（两者都不存在）：创建空库；
+   *      · 主库曾存在却无法恢复（截断/损坏且无可用备份）：fail-loud 抛错，
+   *        不静默建空库——那会无声吞掉用户所有进度。
+   */
+  _loadDatabase(SQL) {
+    const bakPath = `${this.dbPath}.bak`;
+    // readValid: null=文件不存在；'empty'=存在但 0 字节；Buffer=有内容
+    const readValid = (p) => {
+      if (!existsSync(p)) return null;
+      const b = readFileSync(p);
+      return (b && b.length > 0) ? b : 'empty';
+    };
+    const tryOpen = (raw) => {
+      if (!raw || raw === 'empty') return null;
+      let instance;
+      try { instance = new SQL.Database(raw); }
+      catch { return null; }
+      // 双保险：损坏 buffer 偶尔被 sql.js 静默打开为空库，用一次查询确认它真能用
+      try { instance.exec('SELECT count(*) FROM sqlite_master'); return instance; }
+      catch { try { instance.close(); } catch {} return null; }
+    };
+
+    const primaryRaw = readValid(this.dbPath);
+    const primaryDb = tryOpen(primaryRaw);
+    if (primaryDb) return primaryDb;
+
+    const bakDb = tryOpen(readValid(bakPath));
+    if (bakDb) {
+      const reason = primaryRaw === 'empty'
+        ? 'sillyspec.db 为空（可能被截断）'
+        : primaryRaw === null
+          ? 'sillyspec.db 不存在'
+          : 'sillyspec.db 损坏';
+      console.warn(`⚠️  ${reason}，已从 .bak 备份恢复。`);
+      return bakDb;
+    }
+
+    if (primaryRaw === null) {
+      // 主库与备份都不存在 → 全新项目
+      return new SQL.Database();
+    }
+    // 主库曾存在（空/损坏）但无法恢复 → 数据丢失，必须 fail-loud
+    throw new Error('sillyspec.db 损坏且 .bak 备份不可用，无法恢复。请从版本控制或其他备份恢复 .sillyspec/.runtime/ 后重试。');
   }
 
   _createSchema() {
