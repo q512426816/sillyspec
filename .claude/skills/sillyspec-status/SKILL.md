@@ -1,6 +1,6 @@
 ---
 name: sillyspec:status
-description: 查看 SillySpec 当前进度与状态：当前阶段、步骤完成度、活跃变更。
+description: 用于查看 SillySpec 当前进度和状态。适合用户说"看下状态、当前进度、status"。显示当前阶段、步骤完成度、活跃变更。
 ---
 
 ## 何时使用

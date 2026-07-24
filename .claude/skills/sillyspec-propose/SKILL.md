@@ -1,6 +1,6 @@
 ---
 name: sillyspec:propose
-description: 生成结构化规范：proposal.md + design.md + tasks.md（+ 可能 requirements.md）。
+description: 生成结构化规范 — proposal + design + tasks。适合用户说"生成规范、补全四件套、propose"。产出 proposal.md + design.md + tasks.md（+ 可能的 requirements.md）。
 ---
 
 ## 何时使用

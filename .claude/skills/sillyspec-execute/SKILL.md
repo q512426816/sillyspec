@@ -1,6 +1,6 @@
 ---
 name: sillyspec:execute
-description: 按 plan 执行代码实现：依 plan.md 的 Wave/Task 逐步实现，遵循 design.md 与模块文档。
+description: 用于按 plan 执行代码实现。适合用户说"开始写代码、执行任务、跑 execute、开干"。按 plan.md 中的 Wave 和 Task 逐步实现，遵循 design.md 和模块文档。
 ---
 
 ## 何时使用
