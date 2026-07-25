@@ -340,8 +340,8 @@ async function main() {
           for (const e of (c.errors || [])) console.log(`     ✗ ${e}`);
           for (const w of (c.warnings || [])) console.log(`     ⚠ ${w}`);
         }
-        for (const e of (envelope.errors || [])) console.log(`  ✗ ${e}`);
-        for (const w of (envelope.warnings || [])) console.log(`  ⚠ ${w}`);
+        // 顶层 errors/warnings 是各 check 的聚合，已在上面按 check 分组显示；不再重复打印——
+        // 非 json 是 agent 默认消费路径，重复文本纯耗 context（W1-J）。
       }
       process.exitCode = exitCode;
       break;
@@ -402,7 +402,7 @@ async function main() {
       const { runCommand } = await import('./run.js')
       // 平台模式（--spec-dir 已指定）时，--dir 是明确的 source_root，不应被 resolveEffectiveDir 纠正
       const effectiveDir = specDir ? dir : resolveEffectiveDir(dir)
-      await runCommand(filteredArgs.slice(1), effectiveDir, specDir)
+      await runCommand(filteredArgs.slice(1), effectiveDir, specDir, { json })
       break
     }
     // 顶层命令别名：转发 runCommand，与 case 'run': 路径行为一致。
@@ -513,7 +513,7 @@ async function main() {
       }
       // 否则：保持原有 prompt 驱动的 bash 自检流程
       const { runCommand } = await import('./run.js');
-      await runCommand([command, ...filteredArgs.slice(1)], doctorEffectiveDir, specDir);
+      await runCommand([command, ...filteredArgs.slice(1)], doctorEffectiveDir, specDir, { json });
       break;
     }
     case 'scan':
@@ -528,7 +528,7 @@ async function main() {
       const { runCommand } = await import('./run.js')
       const stageArgs = [command, ...filteredArgs.slice(1)]
       const effectiveDir = specDir ? dir : resolveEffectiveDir(dir)
-      await runCommand(stageArgs, effectiveDir, specDir)
+      await runCommand(stageArgs, effectiveDir, specDir, { json })
       break
     }
     case 'knowledge': {

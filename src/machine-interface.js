@@ -125,10 +125,16 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot } 
     const currentStage = progress.currentStage || '';
     const checks = [];
 
+    // W4-G (D-008)：execute 阶段预计算 code evidence 一次，供 artifacts check（经 runValidators
+    // → validateExecuteOutputs）与下方 execute-evidence check 共享——避免各调一次 checkExecuteCodeEvidence
+    // 各 spawn 2 个 git 进程（gate execute 一次省 ≈ 60-200ms on Windows）。
+    const sharedEvidence = stage === 'execute' ? checkExecuteCodeEvidence(cwd, changeName) : undefined;
+
     // ── a. artifacts：阶段产物校验（全部阶段）──
     const r = runValidators(stage, cwd, changeName, {
       projectName: progress.project,
       specRoot,
+      ...(sharedEvidence ? { evidence: sharedEvidence } : {}),
     });
     checks.push({
       id: 'artifacts',
@@ -137,24 +143,24 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot } 
       warnings: r.warnings || [],
     });
 
-    // ── b. transition：状态转换合法性（信息性，不参与综合 ok）──
-    // 与 run.js:1727 同源：传 fromStageData 触发 failed_post_check 门控，避免 gate 的
-    // transition 结论与 completeStep 漂移（design §8「聚合语义漂移」风险对策）。
+    // ── b. transition：状态转换合法性（参与综合 ok，与 completeStep 硬阻断一致）──
+    // 与 run.js runStage 同源：传 fromStageData 触发 failed_post_check 门控。
+    // transition 必须参与 ok：否则 gate 返回 ok=true、exit 0，Agent 据此 --done 却被
+    // runStage 的 checkTransition 硬阻断（exit 1），gate/run 判定分裂（design §8 漂移）。
     const fromStageData = (progress.stages && currentStage && progress.stages[currentStage]) || undefined;
     const t = checkTransition(currentStage, stage, fromStageData ? { fromStageData } : {});
     checks.push({
       id: 'transition',
       ok: t.allowed,
-      informational: true,
       errors: t.allowed ? [] : [t.reason].filter(Boolean),
       warnings: [],
     });
 
     // ── c. execute 阶段追加 execute-evidence + task-reviews ──
-    // D-008@v1 去重：checkExecuteCodeEvidence 整个 runGate 只调一次，
-    // 结果同时供 execute-evidence check 的 data 与综合结论。
+    // D-008 + W4-G：checkExecuteCodeEvidence 整个 runGate 只调一次（顶部 sharedEvidence 预计算），
+    // 这里复用——真正落实去重（原注释声称"只调一次"但实现里 execute-evidence check 仍重复调了第二次）。
     if (stage === 'execute') {
-      const ev = checkExecuteCodeEvidence(cwd, changeName);
+      const ev = sharedEvidence;
       checks.push({
         id: 'execute-evidence',
         ok: ev.status !== 'unchanged',

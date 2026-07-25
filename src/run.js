@@ -773,8 +773,14 @@ async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjec
 
   console.log(`## Step ${stepIndex + 1}/${total}: ${step.name}\n`)
   if (guardrails) {
-    console.log(guardrails.trim())
-    console.log('')
+    if (stepIndex === 0) {
+      console.log(guardrails.trim())
+      console.log('')
+    } else {
+      // 护栏已在首步全文注入并留在 context；后续步只留一行精简提醒——
+      // 防 context 压缩后 agent 遗忘安全约束（如 verify 禁破坏性 git/源码操作），又避免每步重复 ~1KB。
+      console.log(`⛔ 本阶段护栏生效中（禁止破坏性操作，详见首步护栏）\n`)
+    }
   }
   // 先解析 {{include: name}}（把外部模板片段拉进 prompt），再做下方占位符替换，
   // 保证模板内容里的 {SPEC_ROOT}/<change-name> 等也能被替换
@@ -850,11 +856,7 @@ async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjec
     const workflowsRoot = join(specSillyspec, 'workflows')
     const knowledgeRoot = join(specSillyspec, 'knowledge')
 
-    promptText = promptText.replace(/\{DOCS_ROOT\}/g, docsRoot)
-    promptText = promptText.replace(/\{PROJECTS_ROOT\}/g, projectsRoot)
-    promptText = promptText.replace(/\{WORKFLOWS_ROOT\}/g, workflowsRoot)
-    promptText = promptText.replace(/\{KNOWLEDGE_ROOT\}/g, knowledgeRoot)
-    promptText = promptText.replace(/\{SPEC_ROOT\}/g, specSillyspec)
+    promptText = applyRootPlaceholders(promptText, { specRoot: specSillyspec, docsRoot, projectsRoot, workflowsRoot, knowledgeRoot })
 
     const platformDirectives = []
     platformDirectives.push(
@@ -910,11 +912,13 @@ async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjec
     // 让用 {SPEC_ROOT}/{DOCS_ROOT} 等占位符的 prompt（如 quick/scan）在常规模式也写到正确位置
     const projectName = dbProjectName || basename(cwd)
     const specSillyspec = join(cwd, '.sillyspec')
-    promptText = promptText.replace(/\{SPEC_ROOT\}/g, specSillyspec)
-    promptText = promptText.replace(/\{DOCS_ROOT\}/g, join(specSillyspec, 'docs', projectName))
-    promptText = promptText.replace(/\{PROJECTS_ROOT\}/g, join(specSillyspec, 'projects'))
-    promptText = promptText.replace(/\{WORKFLOWS_ROOT\}/g, join(specSillyspec, 'workflows'))
-    promptText = promptText.replace(/\{KNOWLEDGE_ROOT\}/g, join(specSillyspec, 'knowledge'))
+    promptText = applyRootPlaceholders(promptText, {
+      specRoot: specSillyspec,
+      docsRoot: join(specSillyspec, 'docs', projectName),
+      projectsRoot: join(specSillyspec, 'projects'),
+      workflowsRoot: join(specSillyspec, 'workflows'),
+      knowledgeRoot: join(specSillyspec, 'knowledge'),
+    })
   }
 
   // 注入 scanProfile 硬约束指令
@@ -937,11 +941,13 @@ async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjec
     const _pName = dbProjectName || basename(cwd)
     const _specSS = platformOpts?.specRoot || join(cwd, '.sillyspec')
     const _docsRoot = join(_specSS, 'docs', _pName)
-    promptText = promptText.replace(/\{DOCS_ROOT\}/g, _docsRoot)
-    promptText = promptText.replace(/\{PROJECTS_ROOT\}/g, join(_specSS, 'projects'))
-    promptText = promptText.replace(/\{WORKFLOWS_ROOT\}/g, join(_specSS, 'workflows'))
-    promptText = promptText.replace(/\{KNOWLEDGE_ROOT\}/g, join(_specSS, 'knowledge'))
-    promptText = promptText.replace(/\{SPEC_ROOT\}/g, _specSS)
+    promptText = applyRootPlaceholders(promptText, {
+      specRoot: _specSS,
+      docsRoot: _docsRoot,
+      projectsRoot: join(_specSS, 'projects'),
+      workflowsRoot: join(_specSS, 'workflows'),
+      knowledgeRoot: join(_specSS, 'knowledge'),
+    })
   } else {
     // 非 platform 模式也要替换占位符
     const projectName = dbProjectName || basename(cwd)
@@ -950,11 +956,7 @@ async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjec
     const projectsRoot = join(specSillyspec, 'projects')
     const workflowsRoot = join(specSillyspec, 'workflows')
     const knowledgeRoot = join(specSillyspec, 'knowledge')
-    promptText = promptText.replace(/\{DOCS_ROOT\}/g, docsRoot)
-    promptText = promptText.replace(/\{PROJECTS_ROOT\}/g, projectsRoot)
-    promptText = promptText.replace(/\{WORKFLOWS_ROOT\}/g, workflowsRoot)
-    promptText = promptText.replace(/\{KNOWLEDGE_ROOT\}/g, knowledgeRoot)
-    promptText = promptText.replace(/\{SPEC_ROOT\}/g, specSillyspec)
+    promptText = applyRootPlaceholders(promptText, { specRoot: specSillyspec, docsRoot, projectsRoot, workflowsRoot, knowledgeRoot })
   }
 
   // Knowledge hit report: execute 阶段注入匹配结果
@@ -1062,7 +1064,7 @@ async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjec
       console.error(`❌ [sillyspec] BUG: 平台模式 scan prompt 包含写入指令指向裸相对路径 .sillyspec/`)
       console.error(`   这会导致 agent 写入源码目录而非 spec-root，属于源码污染 bug。`)
       console.error(`   请将路径改为对应的 {DOCS_ROOT}/{PROJECTS_ROOT}/{WORKFLOWS_ROOT}/{KNOWLEDGE_ROOT}/{SPEC_ROOT} 占位符。`)
-      process.exit(1)
+      process.exit(2) // 内部异常（SillySpec 自身 prompt 配置 bug）→ exit 2，与 machine-interface 三段契约一致
     }
   }
 
@@ -1072,28 +1074,35 @@ async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjec
   }
 
   console.log(promptText)
-  console.log(`\n### ⚠️ 铁律`)
-  console.log('- 文档优先：代码产出必须先有对应的设计/规范文档支撑。')
-  console.log('- 只做本步骤描述的操作，不得自行扩展或跳过')
-  console.log('- 不要回头修改已完成的步骤')
-  console.log('- 不要编造不存在的 CLI 子命令')
-  console.log('- 完成后立即执行 --done 命令，不得跳过')
-  console.log('- 不要用 mv/rename 重命名变更目录，必须用 `sillyspec change-rename <旧名> <新名>`')
-  console.log('- 文档类型文件（.md/.yaml/.json 等）头部必须包含 author（git 用户名）和 created_at（精确到秒）')
-  console.log('- 执行构建/测试前必须先读 local.yaml，优先使用其中配置的命令、路径和环境变量；未配置时才使用默认值')
-  // 平台模式额外铁律
-  if (platformOpts?.specRoot || platformOpts?.runtimeRoot) {
-    const specSillyspec = platformOpts.specRoot || join(cwd, '.sillyspec')
-    console.log(`- **平台模式：所有文件只能写入 \`${specSillyspec}/\` 下的对应子目录，严禁写入源码目录。**`)
-    console.log('- **平台模式：Write 工具失败时，不允许用 cat > / tee / heredoc 等方式绕过。先 Read 再 Write，仍失败则记录并停止。**')
-    console.log('- **平台模式：local.yaml 中的 commands 必须在 package.json scripts 中真实存在，不存在的标记 unavailable。**')
+  // 铁律拆分（W3 token 效率）：通用流程纪律（文档优先/不跳步/不编造命令）只在首步注入——
+  // 每步重复 ~800B 纯耗 context。但【平台写入规则 + 路径规则】是安全关键（防写错目录/绕过 Write），
+  // 且依赖 changeName/platformOpts，必须【每步注入】（context 压缩丢失会让 agent 越界写源码）。
+  if (stepIndex === 0) {
+    console.log(`\n### ⚠️ 铁律`)
+    console.log('- 文档优先：代码产出必须先有对应的设计/规范文档支撑。')
+    console.log('- 只做本步骤描述的操作，不得自行扩展或跳过')
+    console.log('- 不要回头修改已完成的步骤')
+    console.log('- 不要编造不存在的 CLI 子命令')
+    console.log('- 完成后立即执行 --done 命令，不得跳过')
+    console.log('- 不要用 mv/rename 重命名变更目录，必须用 `sillyspec change-rename <旧名> <新名>`')
+    console.log('- 文档类型文件（.md/.yaml/.json 等）头部必须包含 author（git 用户名）和 created_at（精确到秒）')
+    console.log('- 执行构建/测试前必须先读 local.yaml，优先使用其中配置的命令、路径和环境变量；未配置时才使用默认值')
   }
-  // 路径安全规则：防止 AI 拼错变更目录
-  if (changeName) {
-    const isPlatform = platformOpts?.specRoot || platformOpts?.runtimeRoot
-    const changeDirBase = isPlatform ? platformOpts.specRoot : '.sillyspec'
-    const changeDir = join(changeDirBase, 'changes', changeName)
-    console.log(`- **文件路径规则：所有变更文件必须写入 \`${changeDir}/\` 目录下。不要自己拼接路径，直接使用 changeDir 值。示例：\`${changeDir}/proposal.md\`**`)
+  // 平台模式 + 路径规则（安全关键，每步注入；step1+ 起带精简标题，不复述通用铁律）
+  if (platformOpts?.specRoot || platformOpts?.runtimeRoot || changeName) {
+    if (stepIndex !== 0) console.log(`\n### ⚠️ 路径与平台规则（每步提醒，通用铁律见首步）`)
+    if (platformOpts?.specRoot || platformOpts?.runtimeRoot) {
+      const specSillyspec = platformOpts.specRoot || join(cwd, '.sillyspec')
+      console.log(`- **平台模式：所有文件只能写入 \`${specSillyspec}/\` 下的对应子目录，严禁写入源码目录。**`)
+      console.log('- **平台模式：Write 工具失败时，不允许用 cat > / tee / heredoc 等方式绕过。先 Read 再 Write，仍失败则记录并停止。**')
+      console.log('- **平台模式：local.yaml 中的 commands 必须在 package.json scripts 中真实存在，不存在的标记 unavailable。**')
+    }
+    if (changeName) {
+      const isPlatform = platformOpts?.specRoot || platformOpts?.runtimeRoot
+      const changeDirBase = isPlatform ? platformOpts.specRoot : '.sillyspec'
+      const changeDir = join(changeDirBase, 'changes', changeName)
+      console.log(`- **文件路径规则：所有变更文件必须写入 \`${changeDir}/\` 目录下。不要自己拼接路径，直接使用 changeDir 值。示例：\`${changeDir}/proposal.md\`**`)
+    }
   }
   const changeFlag = changeName ? ` --change ${changeName}` : ''
   // 检测当前 step prompt 是否包含 WAIT 指令（即可能需要等待用户）
@@ -1384,7 +1393,15 @@ export function applyRootPlaceholders(text, roots) {
 /**
  * sillyspec run <stage> 主命令
  */
-export async function runCommand(args, cwd, specDir = null) {
+export async function runCommand(args, cwd, specDir = null, opts = {}) {
+  // W1-B: run <stage> 暂不支持 --json。之前 --json 进 knownFlags 白名单却从不读取（静默吞），
+  // agent 按 gate/derive 契约期望 envelope 实则拿到混合人类文本。显式 fail-fast 杜绝歧义；
+  // 完整 run envelope 待 outputStep 重构（W6）后支持（prompt + nextAction 结构化）。
+  if (opts.json) {
+    console.error('❌ run <stage> 暂不支持 --json（静默吞是 bug，故显式拒绝）。')
+    console.error('   查事实用 gate/derive（支持 --json envelope）；run 输出人类可读 prompt 供 agent 直接执行。')
+    process.exit(2) // 用法错 → exit 2
+  }
   // 解析参数
   const stageName = args[0]
   const flags = args.slice(1)
@@ -1392,13 +1409,13 @@ export async function runCommand(args, cwd, specDir = null) {
   if (!stageName) {
     console.error('❌ 请指定阶段，例如: sillyspec run brainstorm')
     console.error(`可选: ${Object.keys(stageRegistry).join(', ')}, auto`)
-    process.exit(1)
+    process.exit(2) // 用法错 → exit 2
   }
 
   if (!stageRegistry[stageName] && stageName !== 'auto') {
     console.error(`❌ 未知阶段: ${stageName}`)
     console.error(`可选: ${Object.keys(stageRegistry).join(', ')}, auto`)
-    process.exit(1)
+    process.exit(2) // 用法错 → exit 2
   }
 
   // ── cwd 纠正：向上查找真实项目根 ──
@@ -1473,7 +1490,7 @@ export async function runCommand(args, cwd, specDir = null) {
           console.error(`❌ 平台模式参数文件存在但缺少 specRoot/runtimeRoot: ${platformOptsFile}`)
           console.error('   可能原因：platform-scan.json 损坏或写入不完整')
           console.error('   解决：重新运行首次 scan 并传入 --spec-root')
-          process.exit(1)
+          process.exit(2) // 环境错（平台文件损坏）→ exit 2
         }
         // 恢复成功：更新 specRoot（初始值可能是 cwd/.sillyspec，恢复后应为真实 specDir）
         specRoot = platformOpts.specRoot || specRoot
@@ -1482,7 +1499,7 @@ export async function runCommand(args, cwd, specDir = null) {
         console.error(`   错误: ${e.message}`)
         console.error('   可能原因：文件损坏')
         console.error('   解决：删除该文件并重新运行首次 scan 传入 --spec-root')
-        process.exit(1)
+        process.exit(2) // 环境错（文件损坏）→ exit 2
       }
     }
   }
@@ -1669,7 +1686,7 @@ export async function runCommand(args, cwd, specDir = null) {
       if (!knownFlags.has(f)) {
         console.error(`❌ 未知参数: ${f}`)
         console.error(`已知参数: ${[...knownFlags].sort().join(', ')}`)
-        process.exit(1)
+        process.exit(2) // 用法错 → exit 2
       }
       // 跳过 value 参数
       i++
@@ -1714,7 +1731,7 @@ export async function runCommand(args, cwd, specDir = null) {
     console.error('❌ execute 阶段必须用 --change <变更名> 指定要操作的变更。')
     console.error('   agent 必须传参，不设默认值、不做自动检测。')
     console.error('   请加 --change <变更名> 重新执行。')
-    process.exit(1)
+    process.exit(2) // 用法错（execute 必须显式 --change）→ exit 2
   }
 
   // --change 变更名存在性校验（治 cwd 漂移误匹配，缺陷 execute-in-place-windows-pitfalls 坑5）：
@@ -1726,7 +1743,7 @@ export async function runCommand(args, cwd, specDir = null) {
     console.error(`❌ ${changeMissing.message}`)
     console.error(`   可能 cwd 漂移——当前 cwd=${cwd}，命中的 spec=${specBase}。`)
     console.error(`   若意图操作别的项目，请 cd 到对应项目根，或用 --spec-dir 指定正确的 spec 目录。`)
-    process.exit(1)
+    process.exit(2) // 环境错（cwd/spec 漂移）→ exit 2
   }
 
   let progress = await pm.read(cwd, changeName)
@@ -1770,7 +1787,7 @@ export async function runCommand(args, cwd, specDir = null) {
           console.error('❌ --done 找不到变更进度数据。')
           console.error('   请用 --change <变更名> 指定要完成的变更，')
           console.error('   或先运行 sillyspec run brainstorm --change <变更名> 初始化。')
-          process.exit(1)
+          process.exit(2) // 用法错（--done 找不到变更，未传 --change）→ exit 2
         }
         const date = new Date().toISOString().slice(0, 10)
         const autoName = `${date}-new-change-${randomBytes(4).toString('hex')}`
@@ -1781,7 +1798,7 @@ export async function runCommand(args, cwd, specDir = null) {
         changeName = autoName
       } else {
         console.error('❌ 未找到进度数据，请先运行 sillyspec init 或指定 --change <变更名>')
-        process.exit(1)
+        process.exit(2) // 环境错（未 init / 未传 --change）→ exit 2
       }
     }
   }
@@ -1891,8 +1908,11 @@ export async function runCommand(args, cwd, specDir = null) {
     try {
       const runtimeRoot = platformOpts.runtimeRoot || join(specRoot, '.runtime')
       mkdirSync(runtimeRoot, { recursive: true })
-      writeFileSync(join(runtimeRoot, 'current-quick-run-id'), quickSessionId + '\n')
-    } catch {}
+      writeAtomicSync(join(runtimeRoot, 'current-quick-run-id'), quickSessionId + '\n')
+    } catch (e) {
+      // 写失败不能静默：--done 不带 --change 时靠这个文件做跨进程 fallback，写不成就必须显式带 --change
+      console.warn(`⚠️ current-quick-run-id 写入失败（${e.message}），--done 必须显式带 --change ${quickSessionId}`)
+    }
     // 显式告知 agent 本会话 sessionId + --done 需带 --change（CLI 短进程，run/done 独立进程，
     // sessionId 靠 --change 跨进程传递；不带 --change 时 fallback 读 current-quick-run-id，多会话不可靠）
     console.log(`📌 本 quick 会话 sessionId: ${quickSessionId}`)
@@ -2574,7 +2594,7 @@ async function continueStep(pm, progress, stageName, cwd, answer, options = {}) 
 
   if (!answer) {
     console.error('❌ --continue 需要 --answer 参数')
-    process.exit(1)
+    process.exit(2) // 用法错 → exit 2
   }
 
   // 查找 waiting 的步骤
@@ -2865,7 +2885,7 @@ async function ensureDepsFreshness(cwd, changeName, specBase, worktreeMeta) {
     const { WorktreeManager } = await import('./worktree.js')
     const metaPath = join(new WorktreeManager({ cwd }).getWorktreePath(changeName), 'meta.json')
     const updated = { ...worktreeMeta, ...deps }
-    writeFileSync(metaPath, JSON.stringify(updated, null, 2) + '\n')
+    writeAtomicSync(metaPath, JSON.stringify(updated, null, 2) + '\n')
     console.log(`✅ deps 重新供给完成：depsStatus=${deps.depsStatus}`)
   } catch (e) {
     console.warn(`⚠️  deps meta 写回失败：${e.message}`)
@@ -4283,7 +4303,7 @@ async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts = 
 
   if (!outputText) {
     console.error('auto --done requires --output')
-    process.exit(1)
+    process.exit(2) // 用法错 → exit 2
   }
 
   const result = await completeStep(pm, progress, currentStage, cwd, outputText, inputText, { printNext: false, changeName, platformOpts })

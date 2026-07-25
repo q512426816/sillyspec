@@ -645,8 +645,12 @@ export class ProgressManager {
           db.transaction((sqlDb) => {
             sqlDb.run(`UPDATE changes SET name = ?, last_active = ? WHERE name = ?`, [oldName, now, newName]);
           });
-        } catch {}
-        console.error(`❌ 重命名失败：移动目录出错（${e.message}），已回滚数据库`);
+          console.error(`❌ 重命名失败：移动目录出错（${e.message}），已回滚数据库`);
+        } catch (rollbackErr) {
+          // 回滚本身也失败：DB 是 newName、目录是 oldName，两端分裂且无自动恢复。
+          // 不能再撒谎"已回滚"——必须显式报错让用户跑 doctor 修复。
+          console.error(`❌ 重命名失败且数据库回滚也失败（状态分裂，需手动修复）：原错=${e.message} 回滚错=${rollbackErr.message}。请跑 sillyspec doctor --json`);
+        }
       }
     } else {
       mkdirSync(newDir, { recursive: true });
@@ -1815,9 +1819,16 @@ export class ProgressManager {
     const gatePath = this._runtimePath(cwd, 'gate-status.json');
 
     if (!rows || rows.length === 0 || rows[0].values.length === 0) {
-      // 无 execute/quick 阶段的活跃变更，删除 gate-status
+      // 无 execute/quick 阶段的活跃变更：写墓碑而非 unlink。unlink 失败（Windows 杀毒/索引占用）
+      // 会被空 catch 吞掉，陈旧 gate-status 残留 → hook 把 brainstorm 误当 execute 放行（fail-open）。
+      // 墓碑 {stage:null} 让 readCurrentStage 的 `gateStatus.stage` 为假 → 自动 fallback DB，语义等价删除但原子。
       if (existsSync(gatePath)) {
-        try { unlinkSync(gatePath); } catch {}
+        try {
+          this._ensureRuntimeDir(cwd);
+          writeAtomicSync(gatePath, JSON.stringify({ stage: null, tombstone: true, updatedAt: new Date().toISOString() }) + '\n');
+        } catch (e) {
+          console.warn(`⚠️ gate-status 墓碑写入失败（hook 可能读到陈旧缓存）: ${e.message}`);
+        }
       }
       return;
     }
@@ -1837,9 +1848,14 @@ export class ProgressManager {
     }
 
     if (!gateStage) {
-      // current_stage 为 NULL 的边界情况，等同于无 execute/quick
+      // current_stage 为 NULL 的边界情况，等同于无 execute/quick：同样写墓碑（见上 rationale）
       if (existsSync(gatePath)) {
-        try { unlinkSync(gatePath); } catch {}
+        try {
+          this._ensureRuntimeDir(cwd);
+          writeAtomicSync(gatePath, JSON.stringify({ stage: null, tombstone: true, updatedAt: new Date().toISOString() }) + '\n');
+        } catch (e) {
+          console.warn(`⚠️ gate-status 墓碑写入失败（hook 可能读到陈旧缓存）: ${e.message}`);
+        }
       }
       return;
     }

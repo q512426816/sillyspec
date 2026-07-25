@@ -258,12 +258,19 @@ function queryDbFirstCell(cwd, sql) {
     "if(!fs.existsSync(dbPath))process.exit(0);" +
     "import(lib).then(async m=>{const SQL=await m.default();" +
     "const db=new SQL.Database(fs.readFileSync(dbPath));const r=db.exec(sql);" +
-    "if(r.length&&r[0].values.length)process.stdout.write(String(r[0].values[0][0]??''));db.close()}).catch(()=>{});"
+    "if(r.length&&r[0].values.length)process.stdout.write(String(r[0].values[0][0]??''));db.close()}).catch(e=>{process.stderr.write('hook db query failed: '+String(e&&e.message||e));process.exit(1)});"
   try {
     return execFileSync(process.execPath, ['-e', script], {
       encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'pipe'],
     }).trim() || null
-  } catch { return null }
+  } catch (e) {
+    // DB 查询失败（db 损坏 / sql.js resolve 失败 / 子进程超时）：降级返回 null，调用方
+    //（readCurrentStage 等）对 null 走 fail-closed。补 warn 让 doctor/agent 能看到根因，
+    // 而非完全静默（子进程把诊断写到了 stderr，execFileSync 抛错时挂在 e.stderr 上）。
+    const detail = (e && e.stderr ? String(e.stderr).trim() : '') || (e && e.message) || 'timeout/crash'
+    console.warn('⚠️ sillyspec.db 查询失败，hook 降级 fail-closed: ' + detail)
+    return null
+  }
 }
 
 export { queryDbFirstCell as _queryDbFirstCellForTest };

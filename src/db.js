@@ -2,6 +2,11 @@ import initSqlJs from 'sql.js';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'fs';
 import { basename, dirname, join } from 'path';
 
+// DB schema 版本（与 project.schema_version DEFAULT 对齐）。_createSchema 改动（加表/列/migration）时 bump，
+// 触发 .schema-version 戳失效 → 下次 init 重跑 _createSchema + _save（W4-H：高频读路径 gate/derive/status
+// 每次 new ProgressManager 都过 init，原无条件 _createSchema+_save 致每次整库 export+三段原子写）。
+const DB_SCHEMA_VERSION = 3;
+
 export class DB {
   constructor(dbPath) {
     this.dbPath = dbPath;
@@ -25,11 +30,21 @@ export class DB {
     this.db.run('PRAGMA foreign_keys = ON');
     this.db.run('PRAGMA synchronous = NORMAL');
 
-    // 5. 创建表结构
-    this._createSchema();
+    // 5. 创建表结构（仅当 schema 版本戳不匹配时——W4-H）：
+    //    schema 已最新则只 load 不写，省掉 _createSchema + _save 的整库 export + 三段原子写。
+    //    戳在但 db 缺表属"手动改 db"边角（SillySpec 不支持），_loadDatabase 的损坏检测兜底正常路径。
+    const versionPath = `${this.dbPath}.schema-version`;
+    let schemaCurrent = false;
+    try {
+      schemaCurrent = existsSync(versionPath)
+        && readFileSync(versionPath, 'utf8').trim() === String(DB_SCHEMA_VERSION);
+    } catch { /* 戳读取失败保守重跑 schema */ }
 
-    // 6. 保存到磁盘
-    this._save();
+    if (!schemaCurrent) {
+      this._createSchema();
+      this._save();
+      try { writeFileSync(versionPath, String(DB_SCHEMA_VERSION)); } catch { /* 戳写入失败不阻断，下次重跑 */ }
+    }
   }
 
   close() {
@@ -43,15 +58,20 @@ export class DB {
   transaction(fn) {
     if (!this.db) throw new Error('DB not initialized');
     this.db.run('BEGIN');
+    let result;
     try {
-      const result = fn(this.db);
+      result = fn(this.db);
       this.db.run('COMMIT');
-      this._save();
-      return result;
     } catch (err) {
-      this.db.run('ROLLBACK');
+      // fn 抛错或 COMMIT 失败：事务级回滚（此时事务确实活跃，ROLLBACK 有效）
+      try { this.db.run('ROLLBACK'); } catch { /* 事务可能已被 fn 内的错自动回滚 */ }
       throw err;
     }
+    // COMMIT 成功后才持久化。_save 失败时抛原生错（磁盘满/EPERM），不再被 catch 里
+    // 无效的 ROLLBACK 二级异常（"no transaction active"）掩盖——内存库已 commit，
+    // 下次 _save / close() 会落盘，调用方拿到的是准确的持久化错误而非被替换的误报。
+    this._save();
+    return result;
   }
 
   /** 获取底层 db 对象（供 progress.js 直接使用） */

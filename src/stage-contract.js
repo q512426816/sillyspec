@@ -661,7 +661,7 @@ export function checkExecuteCodeEvidence(cwd, changeName) {
  * 防止"勾选 checkbox = 完成 execute"的谎报路径。
  */
 function validateExecuteOutputs(cwd, changeName, context = {}) {
-  const { specRoot } = context
+  const { specRoot, evidence: passedEvidence } = context
   const errors = []
   const warnings = []
 
@@ -674,7 +674,9 @@ function validateExecuteOutputs(cwd, changeName, context = {}) {
   const hasTasks = /^\s*[-*]\s*\[[ xX]\]\s*task-\d+/m.test(planContent)
   if (!hasTasks) return { ok: true, errors, warnings }
 
-  const evidence = checkExecuteCodeEvidence(cwd, changeName)
+  // W4-G (D-008)：evidence 可由调用方（runGate）预先算好传入，避免与 execute-evidence check
+  // 重复 spawn git（gate execute 一次省 2 个 git 进程 ≈ 60-200ms on Windows）。未传则内部算（向后兼容）。
+  const evidence = passedEvidence || checkExecuteCodeEvidence(cwd, changeName)
   if (evidence.status === 'unchanged') {
     errors.push(`execute 代码变更核验失败：plan.md 声明了任务，但 ${evidence.detail} — 勾选 checkbox 不等于完成实现`)
   } else if (evidence.status === 'unknown') {

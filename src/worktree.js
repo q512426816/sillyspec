@@ -13,6 +13,11 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, readdirSync
 import { join, resolve, dirname } from 'path';
 import { createHash } from 'crypto';
 import { provisionDeps, lockfileHash } from './worktree-deps.js';
+import { writeAtomicSync } from './fs-atomic.js';
+
+// meta.json 会被 hook 进程与其它 CLI 进程并发读取（worktree-guard / getMeta / create 幽灵判定），
+// 必须原子写：半截 JSON 会让 getMeta 返回 null → 触发幽灵 worktree 强删（可能丢 gitignored 改动）。
+const writeMetaAtomic = (metaPath, meta) => writeAtomicSync(metaPath, JSON.stringify(meta, null, 2) + '\n');
 
 const WORKTREES_REL = '.sillyspec/.runtime/worktrees';
 const BRANCH_PREFIX = 'sillyspec/';
@@ -414,8 +419,12 @@ export class WorktreeManager {
         createdAt: new Date().toISOString(),
         provisioning: true,
       };
-      writeFileSync(join(worktreePath, META_FILE), JSON.stringify(placeholderMeta, null, 2) + '\n');
-    } catch {}
+      writeMetaAtomic(join(worktreePath, META_FILE), placeholderMeta);
+    } catch (e) {
+      // 占位 meta 是「防 create 中断 → 幽灵强删」的守卫。写失败不能静默：否则中断后
+      // getMeta 仍返回 null，下次 create 会把含 gitignored 改动的 worktree 当幽灵删掉。
+      console.warn(`⚠️  占位 meta 写入失败: ${e.message}（若 create 中断，下次可能误判幽灵 worktree）`);
+    }
 
     // 5.5 base 同步检测（只读：不 ff、不改 HEAD；best-effort fetch 失败降级用缓存）。
     // 旧逻辑 fetch + merge --ff-only：分叉时 ff 失败被静默吞（syncStatus=failed），成功时
@@ -468,7 +477,7 @@ export class WorktreeManager {
     };
 
     const metaPath = join(worktreePath, META_FILE);
-    writeFileSync(metaPath, JSON.stringify(meta, null, 2) + '\n');
+    writeMetaAtomic(metaPath, meta);
 
     return { branch, worktreePath, baseHash, mode: meta.mode, syncDiagnostic };
   }
@@ -499,7 +508,7 @@ export class WorktreeManager {
     if (!existsSync(this.worktreeBase)) mkdirSync(this.worktreeBase, { recursive: true })
     const metaDir = join(this.worktreeBase, name)
     if (!existsSync(metaDir)) mkdirSync(metaDir, { recursive: true })
-    writeFileSync(join(metaDir, META_FILE), JSON.stringify(meta, null, 2) + '\n')
+    writeMetaAtomic(join(metaDir, META_FILE), meta)
     console.log(`🔗 native-worktree meta 已恢复: ${metaDir}/meta.json`)
     return { branch: meta.branch, worktreePath, baseHash, mode: meta.mode }
   }
@@ -552,7 +561,7 @@ export class WorktreeManager {
       if (!existsSync(this.worktreeBase)) mkdirSync(this.worktreeBase, { recursive: true })
       const metaDir = join(this.worktreeBase, name)
       if (!existsSync(metaDir)) mkdirSync(metaDir, { recursive: true })
-      writeFileSync(join(metaDir, META_FILE), JSON.stringify(meta, null, 2) + '\n')
+      writeMetaAtomic(join(metaDir, META_FILE), meta)
       return { branch: meta.branch, worktreePath, baseHash, mode: meta.mode }
     }
 
@@ -596,7 +605,7 @@ export class WorktreeManager {
     if (!existsSync(metaDir)) {
       mkdirSync(metaDir, { recursive: true });
     }
-    writeFileSync(metaPath, JSON.stringify(meta, null, 2) + '\n');
+    writeMetaAtomic(metaPath, meta);
 
     return { branch: meta.branch, worktreePath, baseHash, mode: meta.mode };
   }
@@ -817,7 +826,7 @@ export class WorktreeManager {
       const deps = provisionDeps(wtPath, this.cwd, { specBase: join(this.cwd, '.sillyspec') }) || {};
       const metaPath = join(this.getWorktreePath(name), META_FILE);
       const meta = this.getMeta(name) || {};
-      writeFileSync(metaPath, JSON.stringify({ ...meta, ...deps }, null, 2) + '\n');
+      writeMetaAtomic(metaPath, { ...meta, ...deps });
       return { ok: true, msg: `re-provisioned ${name}: depsStatus=${deps.depsStatus}` };
     } catch (e) {
       return { ok: false, msg: `re-provision failed for ${name}: ${e.message}` };
@@ -1094,7 +1103,7 @@ export class WorktreeManager {
           const dst = join(worktreePath, f);
           if (existsSync(src)) {
             mkdirSync(dirname(dst), { recursive: true });
-            try { writeFileSync(dst, readFileSync(src)); files.push(f); } catch {}
+            try { writeFileSync(dst, readFileSync(src)); files.push(f); } catch (e) { errors.push(`untracked ${f}: ${e.message}`); }
           }
         }
       }
