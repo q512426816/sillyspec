@@ -267,7 +267,11 @@ function queryDbFirstCell(cwd, sql) {
 }
 
 export { queryDbFirstCell as _queryDbFirstCellForTest };
-
+export {
+  matchReadonlyWhitelist as _matchReadonlyWhitelistForTest,
+  matchDangerBlacklist as _matchDangerBlacklistForTest,
+  isSingleCommandReadonly as _isSingleCommandReadonlyForTest,
+};
 /**
  * 从 sillyspec.db 读取 currentStage
  * 优先级：gate-status.json > sillyspec.db
@@ -472,7 +476,11 @@ function isSingleCommandReadonly(cmd, extraReadonlyCommands = []) {
     // node/npm/npx 需要进一步检查子命令
     if (cmdName === 'node' || cmdName === 'npm' || cmdName === 'npx') {
       const rest = parts.slice(1).join(' ')
-      return rest.includes('--version') || rest.includes('-v') && parts.length <= 3 || rest === 'run test' || rest.startsWith('test')
+      // 仅纯版本查询（`npm --version` / `node -v`，恰好两段）放行。
+      // 不能用 rest.includes('--version')：`npx any-pkg --version` 会执行 any-pkg，
+      // 旧实现因 && 优先级高于 || 使 --version 分支无长度约束，可绕过只读白名单。
+      const isBareVersionQuery = parts.length === 2 && (parts[1] === '--version' || parts[1] === '-v')
+      return isBareVersionQuery || rest === 'run test' || rest.startsWith('test')
     }
     return true
   }
@@ -531,8 +539,12 @@ function isSingleCommandDangerous(cmd) {
  * @returns {string[]}
  */
 function splitCommandParts(command) {
-  // 按管道和链式操作符拆分
-  return command.split(/(?:\|\|&&|&&|\|)/g).map(s => s.trim()).filter(Boolean)
+  // 按管道、链式操作符、语句分隔、重定向拆分。
+  // 必须覆盖 `||`/`&&`/`;`/`&`/`|`/`>`/`<`：否则 `echo foo; rm -rf x`、
+  // `cat f > /etc/passwd` 会被当成单一片段，首命令命中只读白名单 → 整条放行，
+  // 后半段的危险/写入操作绕过只读白名单与危险黑名单两道门。
+  // （`$(...)`/反引号命令替换需 shell-token 化，与零依赖风格冲突，暂不覆盖。）
+  return command.split(/\|\||&&|;|&|\||>|</g).map(s => s.trim()).filter(Boolean)
 }
 
 /**

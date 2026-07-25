@@ -75,14 +75,96 @@ export function extractFastApiEndpoints(filePath) {
 }
 
 /**
- * 从目录递归扫描所有 Python router 文件的端点
+ * 从单个文件提取 Express（Node）路由端点。
+ * 支持 router/app.get|post|put|delete|patch("path") 与链式 router.route("path").<method>()。
+ * app.use("prefix", router) 的前缀只做同文件近似（跨文件追踪不在首版范围）。
+ *
+ * @param {string} filePath - 文件绝对路径
+ * @returns {Array<{ method: string, path: string, source: string, line: number }>}
+ */
+export function extractExpressEndpoints(filePath) {
+  const content = readFileSync(filePath, 'utf8')
+  const lines = content.split('\n')
+  const endpoints = []
+
+  // 同文件内最后一个 app.use("prefix", ...) 作为前缀近似
+  let routerPrefix = ''
+  for (const line of lines) {
+    const useMatch = line.match(/\bapp\.use\s*\(\s*["'`]([^"'`]+)["'`]/)
+    if (useMatch) routerPrefix = useMatch[1]
+  }
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    const m = line.match(/\b(?:app|router)\.(get|post|put|delete|patch)\s*\(\s*["'`]([^"'`]+)["'`]/i)
+    if (m) {
+      endpoints.push({ method: m[1].toUpperCase(), path: routerPrefix + m[2], source: filePath, line: i + 1 })
+      continue
+    }
+    const routeChain = line.match(/\.route\s*\(\s*["'`]([^"'`]+)["'`]/)
+    if (routeChain) {
+      // 链式 .route(path).get(h).put(h) —— 同行所有 method 配上 path
+      const chainPath = routerPrefix + routeChain[1]
+      for (const mm of line.matchAll(/\.(get|post|put|delete|patch)\s*\(/gi)) {
+        endpoints.push({ method: mm[1].toUpperCase(), path: chainPath, source: filePath, line: i + 1 })
+      }
+    }
+  }
+
+  return endpoints
+}
+
+/**
+ * 从单个文件提取 Spring（Java）端点。
+ * 支持 @GetMapping/@PostMapping/.../@PatchMapping 与旧式 @RequestMapping(value="path", method=RequestMethod.X)；
+ * 类级 @RequestMapping("api") 前缀合并（取文件内第一个作类前缀，近似）。
+ *
+ * @param {string} filePath - 文件绝对路径
+ * @returns {Array<{ method: string, path: string, source: string, line: number }>}
+ */
+export function extractSpringEndpoints(filePath) {
+  const content = readFileSync(filePath, 'utf8')
+  const lines = content.split('\n')
+  const endpoints = []
+
+  let classPrefix = ''
+  for (const line of lines) {
+    const cm = line.match(/@RequestMapping\s*\(\s*(?:value\s*=\s*)?["'`]([^"'`]+)["'`]/)
+    if (cm) { classPrefix = cm[1]; break }
+  }
+
+  const methodMap = { get: 'GET', post: 'POST', put: 'PUT', delete: 'DELETE', patch: 'PATCH' }
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    const shortMatch = line.match(/@(Get|Post|Put|Delete|Patch)Mapping\s*\(\s*(?:value\s*=\s*)?["'`]([^"'`]+)["'`]/i)
+    if (shortMatch) {
+      endpoints.push({ method: methodMap[shortMatch[1].toLowerCase()], path: classPrefix + shortMatch[2], source: filePath, line: i + 1 })
+      continue
+    }
+    const oldMatch = line.match(/@RequestMapping\s*\(\s*(?:value\s*=\s*)?["'`]([^"'`]+)["'`][^)]*?method\s*=\s*RequestMethod\.(\w+)/i)
+    if (oldMatch) {
+      endpoints.push({ method: oldMatch[2].toUpperCase(), path: classPrefix + oldMatch[1], source: filePath, line: i + 1 })
+    }
+  }
+
+  return endpoints
+}
+
+/**
+ * 从目录递归扫描后端端点（多框架）。
+ * 按扩展名分派：.py→FastAPI / .js,.ts→Express / .java→Spring。
+ * 保留 excludePatterns（向后兼容 opts）；filePattern 在多框架分派下不再适用。
  * @param {string} dir
- * @param {{ filePattern?: RegExp, excludePatterns?: RegExp[] }} opts
+ * @param {{ excludePatterns?: RegExp[] }} opts
  * @returns {Array<{ method: string, path: string, source: string, line: number }>}
  */
 export function scanBackendEndpoints(dir, opts = {}) {
-  const filePattern = opts.filePattern || /(?:router|routes|api|endpoint|controller)\.py$/i
-  const excludePatterns = opts.excludePatterns || [/__pycache__/, /node_modules/, /\.venv/, /test/i]
+  const excludePatterns = opts.excludePatterns || [
+    /^__pycache__$/, /^node_modules$/, /^\.venv$/, /^\.git$/, /^\.gradle$/,
+    /^(dist|build|target|out)$/i,
+    /test/i,
+  ]
 
   const results = []
   if (!existsSync(dir)) return results
@@ -93,9 +175,12 @@ export function scanBackendEndpoints(dir, opts = {}) {
       if (entry.isDirectory()) {
         if (excludePatterns.some(p => p.test(entry.name))) continue
         walk(full)
-      } else if (entry.isFile() && filePattern.test(entry.name)) {
+      } else if (entry.isFile()) {
+        const ext = extname(entry.name).toLowerCase()
         try {
-          results.push(...extractFastApiEndpoints(full))
+          if (ext === '.py') results.push(...extractFastApiEndpoints(full))
+          else if (ext === '.js' || ext === '.ts') results.push(...extractExpressEndpoints(full))
+          else if (ext === '.java') results.push(...extractSpringEndpoints(full))
         } catch {}
       }
     }
@@ -224,6 +309,7 @@ export function normalizePath(rawPath) {
     .replace(/\$\{[^}]+\}/g, '{param}')
     .replace(/:\w+/g, '{param}')
     .replace(/\$\w+/g, '{param}')
+    .replace(/\{[^}]+\}/g, '{param}')   // Spring {planId} / FastAPI {plan_id} → {param}
 }
 
 // ─── 对账 ───────────────────────────────────────────────────────────────

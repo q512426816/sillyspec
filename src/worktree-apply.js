@@ -49,14 +49,34 @@ export function filterDeliverableFiles(files) {
 }
 
 /**
- * 获取文件在 git 中的 blob hash（基于某个 commit/tree）
- * @param {string} cwd - git 工作区路径
- * @param {string} treeish - commit hash、分支等
- * @param {string} filePath - 相对路径
- * @returns {string|null} blob hash，文件不存在返回 null
+ * 批量获取多个文件在某个 treeish 中的 blob hash（一次 git ls-tree 替代 N 次 rev-parse）。
+ *
+ * 语义等价于对每个文件调 `git rev-parse <treeish>:<path>`：
+ *   - 文件在 tree 中 → Map<f, hash>（与 rev-parse 返回的同一 blob hash）
+ *   - 文件不在 tree 中 → 不在 Map 中（调用方 map.get(f) ?? null 得 null，等同 rev-parse 失败→null）
+ * ls-tree 输出 "<mode> <type> <hash>\t<path>"。path 恒为文件路径（来自 git diff/ls-files），
+ * 非目录，故不带 -r 也正确——文件在 tree 时 rev-parse treeish:path 与 ls-tree 都给同一 hash，
+ * 不在时都不给，等价。（沿用 git() 字符串拼接模式，不引入新的引号/空格破法。）
+ *
+ * @param {string} cwd
+ * @param {string} treeish
+ * @param {string[]} files
+ * @returns {Map<string, string>} path → blob hash（仅含存在于 tree 中的文件）
  */
-function getFileBlobHash(cwd, treeish, filePath) {
-  return gitQuiet(cwd, `rev-parse ${treeish}:${filePath}`);
+function getBlobHashMap(cwd, treeish, files) {
+  const map = new Map();
+  if (files.length === 0) return map; // 空 pathspec 会让 ls-tree 列出整棵树，必须拦截
+  const raw = gitQuiet(cwd, `ls-tree ${treeish} -- ${files.join(' ')}`);
+  if (!raw) return map;
+  for (const line of raw.split('\n')) {
+    if (!line) continue;
+    const tabIdx = line.indexOf('\t');
+    if (tabIdx === -1) continue;
+    const filePath = line.slice(tabIdx + 1);
+    const hash = line.slice(0, tabIdx).split(' ')[2]; // "<mode> <type> <hash>"
+    if (hash) map.set(filePath, hash);
+  }
+  return map;
 }
 
 /**
@@ -203,10 +223,14 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
   }
 
   // 5b. 对比 worktree 的 baseHash 和主工作区 HEAD 中每个清单文件的 blob hash
+  // 批量化：两次 ls-tree（worktree 的 baseHash + 主仓库 HEAD）各建一张 path→hash Map，
+  // 替代 per-file getFileBlobHash × 2（原 2N spawn → 固定 2）。语义等价见 getBlobHashMap。
   const targetFiles = hasAllowList ? [...allowSet] : changedFiles;
+  const wtHashMap = getBlobHashMap(worktreePath, baseHash, targetFiles);
+  const mainHashMap = getBlobHashMap(projectRoot, 'HEAD', targetFiles);
   for (const f of targetFiles) {
-    const wtBlob = getFileBlobHash(worktreePath, baseHash, f);
-    const mainBlob = getFileBlobHash(projectRoot, 'HEAD', f);
+    const wtBlob = wtHashMap.get(f) ?? null;
+    const mainBlob = mainHashMap.get(f) ?? null;
 
     // 两者都为 null（文件在 base 时不存在）→ OK
     if (wtBlob === null && mainBlob === null) continue;
@@ -234,7 +258,6 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
   const patchFiles = hasAllowList
     ? [...allowSet].filter(f => changedFiles.includes(f))
     : changedFiles;
-  const fileArgs = patchFiles.length > 0 ? `-- ${patchFiles.join(' ')}` : '';
 
   // 创建临时文件
   const tmpDir = mkdtempSync(join(tmpdir(), 'sillyspec-patch-'));
@@ -245,14 +268,18 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
     let patchContent = '';
 
     // 分 tracked 变更和 untracked 新文件生成 patch
-    const trackedFiles = patchFiles.filter(f => {
-      // 文件在 diffBase 的 tree 中存在 → tracked（包括 rename 目标可能的情况）
-      if (gitQuiet(worktreePath, `cat-file -e ${diffBase}:${f}`) !== null) return true;
-      // 文件在工作区 index 中已存在（比如被 git mv 处理过）→ 也视为 tracked
-      if (gitQuiet(worktreePath, `ls-files --error-unmatch ${f}`) !== null) return true;
-      return false;
-    });
-    const untrackedPatchFiles = patchFiles.filter(f => !trackedFiles.includes(f));
+    // 批量化：一次 ls-tree（diffBase tree 中存在的文件）+ 一次 ls-files（index 中存在的文件）
+    // 建集合，替代 per-file cat-file -e / ls-files --error-unmatch（原至多 2N spawn → 固定 2）。
+    // 语义等价：cat-file -e diffBase:f 成功 ⟺ f 在 ls-tree diffBase 输出（getBlobHashMap key）；
+    // ls-files --error-unmatch f 成功 ⟺ f 在 ls-files -- 输出。
+    const inTree = getBlobHashMap(worktreePath, diffBase, patchFiles);
+    const inIndexList = patchFiles.length > 0
+      ? (gitQuiet(worktreePath, `ls-files -- ${patchFiles.join(' ')}`) || '').split('\n').filter(Boolean)
+      : [];
+    const inIndex = new Set(inIndexList);
+    const trackedFiles = patchFiles.filter(f => inTree.has(f) || inIndex.has(f));
+    const trackedSet = new Set(trackedFiles);
+    const untrackedPatchFiles = patchFiles.filter(f => !trackedSet.has(f));
 
     // tracked 文件：git diff baseHash
     if (trackedFiles.length > 0) {

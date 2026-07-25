@@ -18,6 +18,11 @@ const WORKTREES_REL = '.sillyspec/.runtime/worktrees';
 const BRANCH_PREFIX = 'sillyspec/';
 const META_FILE = 'meta.json';
 
+// 进程级缓存：cwd → 主仓库根目录。避免每次 new WorktreeManager 都 spawn 一次
+// `git rev-parse --git-common-dir`（Windows 上每次 spawn 约 30-100ms，execute 一次命令
+// 会 new 多个 WorktreeManager）。git-common-dir 在进程内对同一 cwd 稳定，缓存安全。
+const _mainRepoRootByCwd = new Map();
+
 /**
  * 检测当前目录的隔离状态
  * 返回 { inWorktree: boolean, inSubmodule: boolean }
@@ -224,24 +229,27 @@ export class WorktreeManager {
    * @private
    */
   _resolveMainRepoRoot() {
+    const cached = _mainRepoRootByCwd.get(this.cwd);
+    if (cached !== undefined) return cached;
+
+    let root = this.cwd;
     try {
       // git-common-dir 在主仓库内 = <main>/.git
       // 在 linked worktree 内 = <main>/.git（git 共享 .git 目录）
       const commonDir = gitQuiet(this.cwd, 'rev-parse --git-common-dir');
-      if (!commonDir) return this.cwd;
-
       // commonDir 应该是 <main-repo>/.git
       // dirname(commonDir) = <main-repo>
-      if (existsSync(commonDir)) {
+      if (commonDir && existsSync(commonDir)) {
         const st = statSync(commonDir);
         if (st.isDirectory()) {
-          return dirname(commonDir);
+          root = dirname(commonDir);
         }
       }
     } catch (e) {
       // 静默 fallback：主仓库内执行或 git 异常
     }
-    return this.cwd;
+    _mainRepoRootByCwd.set(this.cwd, root);
+    return root;
   }
 
   /**

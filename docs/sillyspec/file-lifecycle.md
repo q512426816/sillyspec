@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-05-31 11:00:00
-updated_at: 2026-07-24T00:00:00+08:00
+updated_at: 2026-07-25T00:00:00+08:00
 ---
 
 # SillySpec 文件生命周期
@@ -185,7 +185,7 @@ sillyspec doctor --align-execute-progress [--confirm] [--change <name>]
 - `brainstorm` 步骤数从历史 11/13 演进到当前 8（optional 步——协作复用/原型分析/需求范围评估/需求澄清Grill/HTML原型——已内联进相邻必选步，减少 agent 往返）；`propose` 为 7。
 - `.sillyspec/local.yaml` 是当前主配置口径；scan prompt 写这里，sync 读写这里，hook 优先读这里并兼容根目录 fallback。
 - 平台模式的 `manifest.json` 已接入 scan 完成回调；`workflow-runs` 在平台模式下落盘到 `<runtimeRoot>/scan-runs/<scanRunId>/workflow-runs/`——`run.js` scan/archive 两处 post-check 已向 `saveWorkflowRun` 透传 `runtimeRoot` / `scanRunId`（本地模式仍落 `cwd/.sillyspec/.runtime/workflow-runs/`，详见 `platform-workflows-sync.md`）。
-- `execute-runs`（task review）同样支持平台模式：`run.js` 的 `runtimeRoot` 解析点（`current-execute-run-id` 写入、task review gate、done-like 校验）均已认 `platformOpts.runtimeRoot`，平台模式落 `<runtimeRoot>/execute-runs/<runId>/tasks/<taskId>/review.json`；本地模式仍落 `<specBase>/.runtime/execute-runs/`。`contract-matrix.js` 的 `extractProviderArtifact` / `buildConsumerInjection` / `verifyApiParity` 同步加了可选 `runtimeRoot` 参数（注：`extractProviderArtifact` 当前无调用方，`contract-artifacts/` 在主仓库暂不生成）。
+- `execute-runs`（task review）同样支持平台模式：`run.js` 的 `runtimeRoot` 解析点（`current-execute-run-id` 写入、task review gate、done-like 校验）均已认 `platformOpts.runtimeRoot`，平台模式落 `<runtimeRoot>/execute-runs/<runId>/tasks/<taskId>/review.json`；本地模式仍落 `<specBase>/.runtime/execute-runs/`。`contract-matrix.js` 的 `extractProviderArtifact` / `buildConsumerInjection` / `verifyApiParity` 同步加了可选 `runtimeRoot` 参数，artifact 路径加 `changeName` 维度（`contract-artifacts/<changeName>/<taskName>/endpoints.json`）实现跨变更隔离（旧路径无 changeName，不同变更同名 task 互相覆盖）。`contract-artifacts/` 生命周期：execute Wave 完成时 `extractArtifactsForChange`（`contract-matrix.js`）扫 worktree 提取后端端点（`scanBackendEndpoints` 多框架：FastAPI `.py` / Express `.js,.ts` / Spring `.java`）→ 落 artifact；verify 阶段 `runVerifyParityCheck`（`verify-postcheck.js`）读它做 advisory parity 对账（`missingBackend>0` 只 warning 不阻断 verify 完成；无 artifact → skipped，非全栈项目不打扰）；init cleanup 白名单（`RUNTIME_KEEP`）保留。注：`buildContractMatrix` 的 provider 识别 bug（只 classify consumers 不 classify providers）与 `parseTaskDependencies` 表格正则贪婪 bug（`[^|]*` 吃前导 0 → `task-1` 误解析）已修，端点级 contracts/注入方真正生效。
 - `archive` 的目录移动已经由 `run.js` 在第 4 步 `--confirm` 时执行；未带 `--confirm` 会回退该步骤并提示补参。
 - scan 第 10 步「Extract Project Knowledge」把长期有效的项目知识写入 `.sillyspec/knowledge/`（`conventions.md`/`patterns.md`/`known-issues.md` + 更新 `INDEX.md`）；`scan-postcheck.js` 校验产物（INDEX.md 存在、引用文件真实存在）。
 - execute 启动时由 `knowledge-match.js` 按 plan.md 的 task 关键词匹配知识库，命中报告注入 prompt 并写 `.runtime/knowledge-hit-report.json`。

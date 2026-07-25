@@ -9,7 +9,7 @@ import { existsSync, readdirSync, readFileSync } from 'fs'
 import { join, basename } from 'path'
 import { execFileSync } from 'child_process'
 import { detectChangeRisk, checkIntegrationEvidence } from './change-risk-profile.js'
-import { SCAN_REQUIRED_DOCS } from './constants.js'
+import { SCAN_REQUIRED_DOCS, AUXILIARY_STAGES } from './constants.js'
 
 /**
  * 校验结果
@@ -691,10 +691,8 @@ function validateExecuteOutputs(cwd, changeName, context = {}) {
  */
 const mainFlowStages = ['brainstorm', 'plan', 'execute', 'verify']
 
-/**
- * 辅助阶段（可独立运行，无严格转换顺序）
- */
-const auxiliaryStages = ['scan', 'quick', 'explore', 'archive', 'status', 'doctor']
+// 辅助阶段（可独立运行，无严格转换顺序）定义在 constants.js 的 AUXILIARY_STAGES，
+// 与 stages/index.js 共用单一真相源，避免两处逐字重复分叉。
 
 /**
  * @type {Object<string, StageContract>}
@@ -805,7 +803,7 @@ export function checkTransition(fromStage, toStage, options = {}) {
   }
 
   // 辅助阶段随时可执行（archive 除外：从主流程进入 archive 需要校验）
-  if (auxiliaryStages.includes(toStage) && toStage !== 'archive') {
+  if (AUXILIARY_STAGES.includes(toStage) && toStage !== 'archive') {
     return { allowed: true }
   }
 
@@ -831,14 +829,14 @@ export function checkTransition(fromStage, toStage, options = {}) {
       return { allowed: true }
     }
     // 独立运行 archive（无前置）也允许
-    if (!fromStage || auxiliaryStages.includes(fromStage)) {
+    if (!fromStage || AUXILIARY_STAGES.includes(fromStage)) {
       return { allowed: true }
     }
     return { allowed: false, reason: 'archive 的前置阶段是 verify，不能从 ' + fromStage + ' 跳转' }
   }
 
   // 从辅助阶段进入主流程：允许
-  if (auxiliaryStages.includes(fromStage)) {
+  if (AUXILIARY_STAGES.includes(fromStage)) {
     return { allowed: true }
   }
 
@@ -892,4 +890,4 @@ export function runValidators(stageName, cwd, changeName, context = {}) {
 /**
  * 获取所有主流程阶段
  */
-export { mainFlowStages, auxiliaryStages }
+export { mainFlowStages, AUXILIARY_STAGES as auxiliaryStages }

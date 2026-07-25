@@ -225,44 +225,6 @@ export class ProgressManager {
     };
   }
 
-  async writeGlobal(cwd, data) {
-    // SQL: UPDATE project + UPSERT changes status
-    const db = await this._ensureDB(cwd);
-    db.transaction((sqlDb) => {
-      const now = new Date().toISOString();
-
-      // UPSERT project 行
-      sqlDb.run(`
-        INSERT INTO project (id, name, schema_version, created_at, updated_at)
-        VALUES (1, ?, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET
-          name = excluded.name,
-          schema_version = excluded.schema_version,
-          updated_at = excluded.updated_at
-      `, [data.project || '', data._version || CURRENT_VERSION, now, now]);
-
-      // 同步 changes 表：确保 activeChanges 列表中的变更存在且为 active，
-      // 不在列表中的设为 archived
-      const activeChanges = data.activeChanges || [];
-      for (const cn of activeChanges) {
-        sqlDb.run(`
-          INSERT INTO changes (name, status, created_at, last_active)
-          VALUES (?, 'active', ?, ?)
-          ON CONFLICT(name) DO UPDATE SET status = 'active', last_active = excluded.last_active
-        `, [cn, now, now]);
-      }
-      if (activeChanges.length > 0) {
-        sqlDb.run(`
-          UPDATE changes SET status = 'archived'
-          WHERE status = 'active' AND name NOT IN (${activeChanges.map(() => '?').join(',')})
-        `, activeChanges);
-      } else {
-        // 没有活跃变更，将所有 active 归档
-        sqlDb.run("UPDATE changes SET status = 'archived' WHERE status = 'active'");
-      }
-    });
-  }
-
   // ── 变更级别状态 ──
 
   /**
@@ -658,20 +620,38 @@ export class ProgressManager {
       console.error(`❌ 变更 ${newName} 已存在`);
       return;
     }
-    // 重命名目录
+    // 先更新 DB，再重命名目录；FS 失败则回滚 DB，避免"目录已改名但 DB 旧名"的孤儿
+    // （旧实现 FS-first 无补偿：renameSync 成功后 DB transaction 抛 EPERM/EBUSY 会让
+    //  目录已是 newName、DB 仍是 oldName，read(两名) 都失联且无自动恢复）。
     const oldDir = this._changePath(cwd, oldName);
     const newDir = this._changePath(cwd, newName);
+    const now = new Date().toISOString();
+    try {
+      db.transaction((sqlDb) => {
+        sqlDb.run(`UPDATE changes SET name = ?, last_active = ? WHERE name = ?`, [newName, now, oldName]);
+      });
+    } catch (e) {
+      console.error(`❌ 重命名失败：更新数据库时出错（${e.message}）`);
+      return;
+    }
+    let renamed = true;
     if (existsSync(oldDir)) {
-      renameSync(oldDir, newDir);
+      try {
+        renameSync(oldDir, newDir);
+      } catch (e) {
+        renamed = false;
+        // FS 重命名失败：回滚 DB 恢复 oldName，保持 DB 与目录一致
+        try {
+          db.transaction((sqlDb) => {
+            sqlDb.run(`UPDATE changes SET name = ?, last_active = ? WHERE name = ?`, [oldName, now, newName]);
+          });
+        } catch {}
+        console.error(`❌ 重命名失败：移动目录出错（${e.message}），已回滚数据库`);
+      }
     } else {
       mkdirSync(newDir, { recursive: true });
     }
-    // 更新 DB
-    const now = new Date().toISOString();
-    db.transaction((sqlDb) => {
-      sqlDb.run(`UPDATE changes SET name = ?, last_active = ? WHERE name = ?`, [newName, now, oldName]);
-    });
-    console.log(`✅ 变更已重命名：${oldName} → ${newName}`);
+    if (renamed) console.log(`✅ 变更已重命名：${oldName} → ${newName}`);
   }
 
   /**

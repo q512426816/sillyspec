@@ -41,7 +41,6 @@ core-engine 是 SillySpec 的基础设施层，由三个层次组成：持久化
 | `ProgressManager.read(cwd, changeName?)` | 读取变更进度 | `cwd, changeName?` |
 | `ProgressManager._write(cwd, data, changeName?)` | 写入变更进度 | `cwd, data, changeName?` |
 | `ProgressManager.readGlobal(cwd)` | 读取全局数据 | `cwd` |
-| `ProgressManager.writeGlobal(cwd, data)` | 写入全局数据 | `cwd, data` |
 | `ProgressManager.listChanges(cwd)` | 列出所有活跃变更 | `cwd` |
 | `ProgressManager.registerChange(cwd, changeName)` | 注册新变更 | `cwd, changeName` |
 | `ProgressManager.unregisterChange(cwd, changeName)` | 注销变更 | `cwd, changeName` |

@@ -14,6 +14,7 @@ import {
   scanBackendEndpoints,
   scanFrontendApiCalls,
   normalizePath,
+  diffApiParity,
 } from './endpoint-extractor.js'
 import { parseTaskContracts } from './stages/plan-postcheck.js'
 
@@ -59,8 +60,12 @@ export function buildContractMatrix(planContent, changeDir) {
   const taskDeps = parseTaskDependencies(planContent)
 
   // 读取各 task 文档，分类 provider/consumer
+  // classify consumers（taskDeps keys）+ providers（deps 值）。
+  // 旧实现只 classify consumers → provider task 不在 keys 里 → providerClass 恒 undefined
+  // → contracts 恒空 → 端点契约管线（buildConsumerInjection / extractArtifactsForChange）全失效。
   const taskClasses = {}
-  for (const taskName of Object.keys(taskDeps)) {
+  const allTaskNames = new Set([...Object.keys(taskDeps), ...Object.values(taskDeps).flat()])
+  for (const taskName of allTaskNames) {
     const taskFile = join(changeDir, 'tasks', `${taskName}.md`)
     if (existsSync(taskFile)) {
       taskClasses[taskName] = classifyTask(readFileSync(taskFile, 'utf8'))
@@ -103,7 +108,9 @@ function parseTaskDependencies(planContent) {
   const deps = {}
 
   // 方式 1: 表格形式 | task-04 | ... | 01,02 |
-  const tableRows = planContent.matchAll(/\|[^|]*task-(\d+)[^|]*\|[^|]*\|[^|]*(?:task-)?(\d+(?:\s*[,，]\s*\d+)*)[^|]*\|/gi)
+  // 列前缀用 [^|\d]*（不吃数字）：旧 [^|]* 贪婪会吃掉 deps 列前导 0（" 01" → g2=1 → task-1），
+  // 导致 provider task-1.md 不存在 → contracts 恒空，端点契约管线失效。
+  const tableRows = planContent.matchAll(/\|[^|]*task-(\d+)[^|]*\|[^|]*\|[^|\d]*(?:task-)?(\d+(?:\s*[,，]\s*\d+)*)[^|]*\|/gi)
   for (const match of tableRows) {
     const task = `task-${match[1]}`
     const depList = match[2].split(/[,，\s]+/).map(d => `task-${d.trim()}`).filter(d => d.startsWith('task-'))
@@ -137,7 +144,9 @@ function parseTaskDependencies(planContent) {
 export function extractProviderArtifact(changeDir, worktreePath, specBase, taskName, runtimeRoot) {
   // 平台模式 contract-artifacts 落 runtimeRoot；否则落 specBase/.runtime
   const artifactRoot = runtimeRoot || join(specBase, '.runtime')
-  const artifactDir = join(artifactRoot, 'contract-artifacts', taskName)
+  // 跨变更隔离：contract-artifacts/<changeName>/<taskName>/，避免不同变更同名 task 互相覆盖污染对账
+  const changeName = changeDir ? basename(changeDir) : '_unknown'
+  const artifactDir = join(artifactRoot, 'contract-artifacts', changeName, taskName)
   const artifactPath = join(artifactDir, 'endpoints.json')
 
   if (!worktreePath || !existsSync(worktreePath)) {
@@ -171,6 +180,28 @@ export function extractProviderArtifact(changeDir, worktreePath, specBase, taskN
   }
 }
 
+/**
+ * 汇总提取一个变更内所有 provider task 的 endpoint artifact。
+ * run.js completeStep 在 execute Wave 完成时调用：扫 worktree → 按 buildContractMatrix 识别的
+ * provider task，各自落 contract-artifacts/<changeName>/<taskName>/endpoints.json。
+ * @param {{ changeDir: string, specBase: string, changeName: string, worktreePath: string|null }} args
+ * @returns {string|null} 日志摘要；无 provider/无 plan/worktree 缺失时返回 null（不打扰）
+ */
+export function extractArtifactsForChange({ changeDir, specBase, changeName, worktreePath }) {
+  if (!worktreePath || !changeDir || !existsSync(changeDir)) return null
+  const planFile = join(changeDir, 'plan.md')
+  if (!existsSync(planFile)) return null
+  const contracts = buildContractMatrix(readFileSync(planFile, 'utf8'), changeDir)
+  const providers = [...new Set(contracts.map(c => c.provider))]
+  if (providers.length === 0) return null
+  let withEndpoints = 0
+  for (const taskName of providers) {
+    const r = extractProviderArtifact(changeDir, worktreePath, specBase, taskName)
+    if (r.ok && r.endpoints.length > 0) withEndpoints++
+  }
+  return `📦 契约 artifact 提取: providers=${providers.join(',')}（${withEndpoints}/${providers.length} 含端点）`
+}
+
 // ─── Execute 阶段：前端 task 开始时注入契约 ─────────────────────────────
 
 /**
@@ -184,12 +215,13 @@ export function extractProviderArtifact(changeDir, worktreePath, specBase, taskN
 export function buildConsumerInjection(changeDir, specBase, taskName, contracts, runtimeRoot) {
   // 平台模式 contract-artifacts 落 runtimeRoot；否则落 specBase/.runtime
   const artifactRoot = runtimeRoot || join(specBase, '.runtime')
+  const changeName = changeDir ? basename(changeDir) : '_unknown'
   const myContracts = contracts.filter(c => c.consumer === taskName)
   if (myContracts.length === 0) return null
 
   const parts = []
   for (const contract of myContracts) {
-    const artifactDir = join(artifactRoot, 'contract-artifacts', contract.provider)
+    const artifactDir = join(artifactRoot, 'contract-artifacts', changeName, contract.provider)
     const artifactFile = join(artifactDir, 'endpoints.json')
 
     let endpoints = []
@@ -295,15 +327,16 @@ export function buildContractFieldInjection(changeDir, taskName) {
  * verify 阶段执行 API parity check
  * @param {string} specBase - .sillyspec 目录
  * @param {string} worktreePath - worktree 路径
- * @returns {{ ok: boolean, missingBackend: Array, unusedBackend: Array, summary: string }}
+ * @returns {{ ok: boolean, missingBackend: Array, unusedBackend: Array, summary: string, backendCount: number, frontendCount: number }}
  */
-export function verifyApiParity(specBase, worktreePath, runtimeRoot) {
-  const { diffApiParity } = require('./endpoint-extractor.js')
-
+export function verifyApiParity(specBase, scanRoot, runtimeRoot, changeName = null) {
   // 平台模式 contract-artifacts 落 runtimeRoot；否则落 specBase/.runtime
   const artifactRoot = runtimeRoot || join(specBase, '.runtime')
-  // 读取所有 provider artifacts
-  const artifactBase = join(artifactRoot, 'contract-artifacts')
+  // 读取该变更的所有 provider artifacts（contract-artifacts/<changeName>/*/endpoints.json）。
+  // changeName 缺失时回退扫顶层 contract-artifacts（CLI contractScan 跨变更场景兼容）。
+  const artifactBase = changeName
+    ? join(artifactRoot, 'contract-artifacts', changeName)
+    : join(artifactRoot, 'contract-artifacts')
   const allProviderEndpoints = []
 
   if (existsSync(artifactBase)) {
@@ -325,17 +358,12 @@ export function verifyApiParity(specBase, worktreePath, runtimeRoot) {
     }
   }
 
-  // 扫描前端调用
-  if (!worktreePath || !existsSync(worktreePath)) {
-    return {
-      ok: true,
-      missingBackend: [],
-      unusedBackend: [],
-      summary: 'No worktree to scan for parity check',
-    }
+  // 扫描前端调用（scanRoot 通常 = 主工作区 cwd：verify 时代码已 apply 到主工作区）
+  if (!scanRoot || !existsSync(scanRoot)) {
+    return { ok: true, missingBackend: [], unusedBackend: [], summary: 'No scan root for parity check', backendCount: allProviderEndpoints.length, frontendCount: 0 }
   }
 
-  const frontendCalls = scanFrontendApiCalls(worktreePath)
+  const frontendCalls = scanFrontendApiCalls(scanRoot)
   const { missingBackend, unusedBackend } = diffApiParity(frontendCalls, allProviderEndpoints)
 
   const ok = missingBackend.length === 0
@@ -347,5 +375,5 @@ export function verifyApiParity(specBase, worktreePath, runtimeRoot) {
     summary += ` | ${unusedBackend.length} backend endpoints unused by frontend`
   }
 
-  return { ok, missingBackend, unusedBackend, summary }
+  return { ok, missingBackend, unusedBackend, summary, backendCount: allProviderEndpoints.length, frontendCount: frontendCalls.length }
 }

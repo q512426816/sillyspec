@@ -18,6 +18,7 @@
 import { execSync } from 'child_process'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
+import { verifyApiParity } from './contract-matrix.js'
 
 // 测试命令最长执行时间；超时视为失败（防止 CLI 被挂起的测试卡死）
 const TEST_TIMEOUT_MS = Number(process.env.SILLYSPEC_TEST_TIMEOUT_MS) || 10 * 60 * 1000
@@ -503,4 +504,44 @@ export function printVerifyTestCheck(result) {
   if (result.resultPath) {
     console.log(`📄 实测结果已写入: ${result.resultPath}`)
   }
+}
+
+/**
+ * API parity 对账（advisory）：前端调用 vs execute 提取的后端 endpoint artifact。
+ * 三态：skipped（无 provider artifact → 非全栈项目不打扰）/ warning（missingBackend>0）/ passed。
+ * 启发式正则、多假阳源 → advisory 不阻断 verify 完成（与 SillySpec 确定性校验定位一致）。
+ *
+ * @param {object} opts
+ * @param {string} opts.cwd - 扫描前端调用的根（主工作区，verify 时代码在此）
+ * @param {string} opts.specBase
+ * @param {string|null} [opts.changeName]
+ * @param {string|null} [opts.runtimeRoot]
+ * @returns {{ status: 'skipped'|'warning'|'passed', missingBackend: Array, unusedBackend: Array, summary: string, reason: string|null }}
+ */
+export function runVerifyParityCheck({ cwd, specBase, changeName = null, runtimeRoot = null }) {
+  const r = verifyApiParity(specBase, cwd, runtimeRoot, changeName)
+  // 无 provider artifact（execute 未提取 / 非后端项目）→ 不打扰
+  if (r.backendCount === 0) {
+    return { status: 'skipped', missingBackend: [], unusedBackend: [], summary: r.summary, reason: '无后端契约 artifact（非全栈项目或 execute 未提取端点）' }
+  }
+  if (r.missingBackend.length > 0) {
+    return { status: 'warning', missingBackend: r.missingBackend, unusedBackend: r.unusedBackend, summary: r.summary, reason: null }
+  }
+  return { status: 'passed', missingBackend: [], unusedBackend: r.unusedBackend, summary: r.summary, reason: null }
+}
+
+/** 打印 parity 对账结果（advisory，不阻断） */
+export function printVerifyParityCheck(result) {
+  if (result.status === 'skipped') return  // 静默，不打扰非全栈项目
+  if (result.status === 'passed') {
+    console.log(`\n✅ API parity 对账通过：${result.summary}`)
+    return
+  }
+  // warning
+  console.warn(`\n⚠️  API parity 对账发现 ${result.missingBackend.length} 个前端调用无对应后端端点（advisory，不阻断归档）：`)
+  for (const m of result.missingBackend.slice(0, 20)) {
+    console.warn(`   - ${m.method} ${m.path}  ← ${m.consumerFile}:${m.consumerLine}`)
+  }
+  if (result.missingBackend.length > 20) console.warn(`   …还有 ${result.missingBackend.length - 20} 个`)
+  console.warn('   提示：检查是否后端漏实现，或前端调用了尚未实现的端点。确认无误可在 design.md 标注豁免。')
 }

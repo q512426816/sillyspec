@@ -9,6 +9,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'fs';
 import { writeAtomicSync } from './fs-atomic.js';
 import { join, resolve } from 'path';
+import { execSync } from 'child_process';
 import { cmdInit, getVersion } from './init.js';
 import { ProgressManager, resolvePlatformSpecDir } from './progress.js';
 import { detectLocalYaml } from './local-detect.js';
@@ -186,7 +187,6 @@ async function main() {
   function resolveEffectiveDir(baseDir) {
     if (existsSync(join(baseDir, '.sillyspec'))) return baseDir
     try {
-      const { execSync } = require('child_process')
       const gitRoot = execSync('git rev-parse --show-toplevel', {
         cwd: baseDir, encoding: 'utf8', timeout: 5000
       }).trim()

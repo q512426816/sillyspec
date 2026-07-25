@@ -144,7 +144,7 @@ expects_from:
 |------|---------|-------------|
 | plan 完成时（postcheck） | `validateCrossTaskContracts`：每个 `expects_from[provider].needs` 必须是 provider `provides.fields` 子集 | **阻断 plan，不进入 execute** |
 | execute 启动子代理前 | `buildContractFieldInjection`：把 needs↔provides 对比注入 consumer 子代理 | 注入 `CONTRACT_GAP`，铁律要求子代理 **stop and report，禁止 fallback 编造** |
-| verify | 既有 `verifyApiParity`（端点级 parity check） | 端点缺失报告 |
+| verify | `runVerifyParityCheck`（端点级 parity check，依赖 execute 提取的 `contract-artifacts`；后端提取多框架 FastAPI/Express/Spring） | missingBackend>0 → advisory warning（不阻断归档）；无 artifact → skipped |
 
 ### 向后兼容
 

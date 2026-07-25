@@ -9,6 +9,9 @@ import { join } from 'path'
 import { tmpdir } from 'os'
 import {
   extractFastApiEndpoints,
+  extractExpressEndpoints,
+  extractSpringEndpoints,
+  scanBackendEndpoints,
   extractFrontendApiCalls,
   normalizePath,
   diffApiParity,
@@ -315,6 +318,168 @@ describe('PPM 真实场景：跨 task 端点漏实现', () => {
     )
     assert.ok(planNodesGap.consumerFile.includes('plan.ts'), '应带前端文件路径')
     assert.equal(planNodesGap.consumerLine, 7, '应带行号')
+  })
+
+  it('cleanup', () => {
+    try { rmSync(tmpDir, { recursive: true, force: true }) } catch {}
+  })
+})
+
+// ─── Express（Node）端点提取 ─────────────────────────────────────────────
+
+describe('extractExpressEndpoints', () => {
+  const tmpDir = join(tmpdir(), 'sillyspec-test-express')
+  const routerFile = join(tmpDir, 'routes.js')
+
+  it('提取 router/app.<method> 端点', () => {
+    mkdirSync(tmpDir, { recursive: true })
+    writeFileSync(routerFile, [
+      'const router = express.Router();',
+      '',
+      'router.get("/api/users/:userId", getUser);',
+      'router.post("/api/users", createUser);',
+      'router.delete("/api/users/:userId", deleteUser);',
+    ].join('\n'), 'utf8')
+
+    const endpoints = extractExpressEndpoints(routerFile)
+    assert.equal(endpoints.length, 3)
+    assert.equal(endpoints[0].method, 'GET')
+    assert.equal(endpoints[0].path, '/api/users/:userId')
+    assert.equal(endpoints[1].method, 'POST')
+    assert.equal(endpoints[1].path, '/api/users')
+    assert.equal(endpoints[2].method, 'DELETE')
+  })
+
+  it('app.use 前缀近似合并（同文件）', () => {
+    mkdirSync(tmpDir, { recursive: true })
+    writeFileSync(routerFile, [
+      'app.use("/api/v1", router);',
+      'router.get("/users", listUsers);',
+    ].join('\n'), 'utf8')
+    const endpoints = extractExpressEndpoints(routerFile)
+    assert.equal(endpoints.length, 1)
+    assert.equal(endpoints[0].path, '/api/v1/users')
+  })
+
+  it('链式 router.route(path).<method>()', () => {
+    mkdirSync(tmpDir, { recursive: true })
+    writeFileSync(routerFile, [
+      'router.route("/api/items/:id").get(getItem).put(updateItem);',
+    ].join('\n'), 'utf8')
+    const endpoints = extractExpressEndpoints(routerFile)
+    assert.equal(endpoints.length, 2)
+    assert.equal(endpoints[0].method, 'GET')
+    assert.equal(endpoints[0].path, '/api/items/:id')
+    assert.equal(endpoints[1].method, 'PUT')
+  })
+
+  it('空文件返回空', () => {
+    mkdirSync(tmpDir, { recursive: true })
+    writeFileSync(routerFile, '', 'utf8')
+    assert.equal(extractExpressEndpoints(routerFile).length, 0)
+  })
+
+  it('cleanup', () => {
+    try { rmSync(tmpDir, { recursive: true, force: true }) } catch {}
+  })
+})
+
+// ─── Spring（Java）端点提取 ──────────────────────────────────────────────
+
+describe('extractSpringEndpoints', () => {
+  const tmpDir = join(tmpdir(), 'sillyspec-test-spring')
+  const controllerFile = join(tmpDir, 'UserController.java')
+
+  it('提取 @<Method>Mapping + 类级 @RequestMapping 前缀', () => {
+    mkdirSync(tmpDir, { recursive: true })
+    writeFileSync(controllerFile, [
+      '@RestController',
+      '@RequestMapping("/api/users")',
+      'public class UserController {',
+      '    @GetMapping("/{id}")',
+      '    public User get(@PathVariable Long id) { }',
+      '',
+      '    @PutMapping("/{id}")',
+      '    public User update(@PathVariable Long id) { }',
+      '}',
+    ].join('\n'), 'utf8')
+
+    const endpoints = extractSpringEndpoints(controllerFile)
+    assert.equal(endpoints.length, 2)
+    assert.equal(endpoints[0].method, 'GET')
+    assert.equal(endpoints[0].path, '/api/users/{id}')
+    assert.equal(endpoints[1].method, 'PUT')
+    assert.equal(endpoints[1].path, '/api/users/{id}')
+  })
+
+  it('旧式 @RequestMapping(value=path, method=RequestMethod.X)', () => {
+    mkdirSync(tmpDir, { recursive: true })
+    writeFileSync(controllerFile, [
+      '@RestController',
+      '@RequestMapping("/api")',
+      'public class OldController {',
+      '    @RequestMapping(value = "/items", method = RequestMethod.GET)',
+      '    public List<Item> list() { }',
+      '}',
+    ].join('\n'), 'utf8')
+    const endpoints = extractSpringEndpoints(controllerFile)
+    assert.equal(endpoints.length, 1)
+    assert.equal(endpoints[0].method, 'GET')
+    assert.equal(endpoints[0].path, '/api/items')
+  })
+
+  it('cleanup', () => {
+    try { rmSync(tmpDir, { recursive: true, force: true }) } catch {}
+  })
+})
+
+// ─── scanBackendEndpoints 多框架分派 ─────────────────────────────────────
+
+describe('scanBackendEndpoints 多框架分派', () => {
+  const tmpDir = join(tmpdir(), 'sillyspec-test-scan-multi')
+
+  it('按扩展名分派到 FastAPI/Express/Spring，忽略无关文件', () => {
+    mkdirSync(tmpDir, { recursive: true })
+    writeFileSync(join(tmpDir, 'router.py'), [
+      'router = APIRouter(prefix="/api")',
+      '@router.get("/fast")',
+      'async def f(): pass',
+    ].join('\n'), 'utf8')
+    writeFileSync(join(tmpDir, 'routes.js'), [
+      'router.get("/express", h);',
+    ].join('\n'), 'utf8')
+    writeFileSync(join(tmpDir, 'Ctrl.java'), [
+      '@RestController',
+      '@RequestMapping("/api")',
+      'public class Ctrl {',
+      '  @GetMapping("/spring")',
+      '  public void s() {}',
+      '}',
+    ].join('\n'), 'utf8')
+    // 无关扩展名不扫
+    writeFileSync(join(tmpDir, 'readme.md'), 'router.get("/ignored", h);', 'utf8')
+
+    const endpoints = scanBackendEndpoints(tmpDir)
+    const paths = endpoints.map(e => e.path).sort()
+    assert.deepEqual(paths, ['/api/fast', '/api/spring', '/express'])
+  })
+
+  it('Spring/FastAPI/Express 路径参数都归一化为 {param}（diffApiParity 对账）', () => {
+    // backend: Spring {id} / Express :id / FastAPI {id}
+    const backendEndpoints = [
+      { method: 'GET', path: normalizePath('/api/users/{id}'), source: 'Ctrl.java' },
+      { method: 'GET', path: normalizePath('/api/items/:id'), source: 'routes.js' },
+      { method: 'GET', path: normalizePath('/api/fast/{id}'), source: 'router.py' },
+    ]
+    // 前端调用同一归一化路径应全部命中
+    const frontendCalls = [
+      { method: 'GET', path: '/api/users/{param}', source: 'api.ts', line: 1 },
+      { method: 'GET', path: '/api/items/{param}', source: 'api.ts', line: 2 },
+      { method: 'GET', path: '/api/fast/{param}', source: 'api.ts', line: 3 },
+    ]
+    const { missingBackend, ok } = diffApiParity(frontendCalls, backendEndpoints)
+    assert.equal(missingBackend.length, 0)
+    assert.equal(ok, true)
   })
 
   it('cleanup', () => {

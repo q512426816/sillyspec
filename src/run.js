@@ -1364,6 +1364,24 @@ async function executePlanPostcheck(cwd, platformOpts, progress) {
 }
 
 /**
+ * 替换 prompt 文本中的路径根占位符 {SPEC_ROOT}/{DOCS_ROOT}/{PROJECTS_ROOT}/
+ * {WORKFLOWS_ROOT}/{KNOWLEDGE_ROOT}。平台模式与常规模式共用：仅传入的 roots 值不同。
+ * 占位符值都是绝对路径、互不包含其它占位符，故替换顺序不影响结果。
+ *
+ * 注：本函数由并行会话引入（outputStep 两处逐字重复逻辑的抽取），重构期间 run.js 一次
+ * git checkout 误覆盖其未提交版本，此处按 test/prompt-placeholders.test.mjs 的契约重建，
+ * 行为等价。
+ */
+export function applyRootPlaceholders(text, roots) {
+  return text
+    .replaceAll('{SPEC_ROOT}', roots.specRoot)
+    .replaceAll('{DOCS_ROOT}', roots.docsRoot)
+    .replaceAll('{PROJECTS_ROOT}', roots.projectsRoot)
+    .replaceAll('{WORKFLOWS_ROOT}', roots.workflowsRoot)
+    .replaceAll('{KNOWLEDGE_ROOT}', roots.knowledgeRoot)
+}
+
+/**
  * sillyspec run <stage> 主命令
  */
 export async function runCommand(args, cwd, specDir = null) {
@@ -2874,12 +2892,469 @@ function rollbackStageCompletion(stageData, steps, currentIdx) {
   }
 }
 
+/**
+ * 阶段完成校验失败后的统一收尾：回滚 stage/step 状态 + 落盘 + sync + 返回「未完成」。
+ *
+ * completeStep 的各 gate（runValidators / verify-test 对账 / plan→execute contract /
+ * Stage Review / Execute Task Review）失败时都走这套动作；原先每个失败分支手写重复
+ * ~7 次（含 lastActive 落盘 + triggerSync + return 结构），统一进来消坑，避免某分支
+ * 漏写 triggerSync / 写错 return 结构导致行为分裂。返回 nextPendingIdx=currentIdx，
+ * 让上层走「完成但不推进」分支，--done 被拒、agent 修复产物后重跑。
+ */
+async function rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts) {
+  rollbackStageCompletion(stageData, steps, currentIdx)
+  progress.lastActive = new Date().toLocaleString('zh-CN', { hour12: false })
+  await pm._write(cwd, progress, changeName)
+  triggerSync(cwd, changeName, platformOpts)
+  return { stageCompleted: false, currentIdx, nextPendingIdx: currentIdx }
+}
+
+/**
+ * archive 阶段「确认归档」步骤的收尾处理器（从 completeStep 抽出，行为保持）。
+ *
+ * 两件事：
+ *   1. --confirm 门控：缺 --confirm → 回退 step 状态、提示、返回 early-return 对象（completeStep 透传）
+ *   2. --confirm 通过 → archiveChangeDirectory 移动变更目录 + 推荐文档（design.md / module-impact.md）校验
+ *      （contracts.archive.validators 为空，两个 validator 生效窗口互斥；plan.md 已在移动前硬校验阻断）
+ *
+ * @returns {{stageCompleted:false,currentIdx,nextPendingIdx:number}|null}
+ */
+async function handleArchiveConfirmStep({ stageName, steps, currentIdx, confirm, outputText, pm, cwd, progress, changeName, specBase }) {
+  if (stageName !== 'archive' || steps[currentIdx]?.name !== '确认归档') return null
+  if (!confirm) {
+    steps[currentIdx].status = 'pending'
+    steps[currentIdx].completedAt = null
+    if (outputText) steps[currentIdx].output = null
+    await pm._write(cwd, progress, changeName)
+    console.log('⚠️  请添加 --confirm 确认归档，例如：sillyspec run archive --done --confirm --output "确认归档"')
+    return { stageCompleted: false, currentIdx, nextPendingIdx: currentIdx }
+  }
+  const archivedDir = await archiveChangeDirectory(pm, cwd, progress, specBase)
+  if (archivedDir && existsSync(archivedDir)) {
+    const recommendedDocs = ['design.md', 'module-impact.md']
+    const missingRecommended = recommendedDocs.filter(d => !existsSync(join(archivedDir, d)))
+    if (missingRecommended.length > 0) {
+      console.warn(`\n⚠️ 归档校验警告：归档目录缺少推荐文档`)
+      for (const d of missingRecommended) console.warn(`   - ${d}（${archivedDir}）`)
+    } else {
+      console.log(`\n✅ 归档校验通过：核心文档齐全`)
+    }
+  }
+  return null
+}
+
+/**
+ * plan 阶段「generate_plan」步骤完成后，动态插入任务蓝图（coordinator）+ postcheck 步骤
+ * （从 completeStep 抽出，行为保持）。使用稳定 id 匹配，不依赖中文标题。
+ *
+ * plan.md 已含任务时，buildPlanSteps 返回 [fixedPrefix(classify/generate_plan/review_plan),
+ * coordinator, postcheck]；本函数把 generate_plan 之后的 coordinator+postcheck 插到当前步后。
+ */
+async function handlePlanGeneratePlanStep({ stageName, steps, currentIdx, defStepsForCurrent, cwd, progress }) {
+  if (stageName !== 'plan') return
+  const currentStepDef = defStepsForCurrent?.[currentIdx]
+  const currentStepEntry = steps[currentIdx]
+  const stepId = currentStepDef?.id || currentStepEntry?.id || currentStepEntry?._stepId
+  if (stepId !== 'generate_plan') return
+  const changeDir = resolveChangeDir(cwd, progress)
+  if (!changeDir) return
+  const planFile = join(changeDir, 'plan.md')
+  if (!existsSync(planFile)) return
+  const planContent = readFileSync(planFile, 'utf8')
+  const { buildPlanSteps, fixedPrefix, fixedSuffix } = await import('./stages/plan.js')
+  const fullSteps = buildPlanSteps(changeDir, planContent)
+  const prefixLen = fixedPrefix.length
+  const suffixLen = fixedSuffix.length
+  // 新结构：[...fixedPrefix, coordinatorStep?, postcheckStep?]；fixedSuffix 为空，coordinator+postcheck 都在 prefix 之后
+  const coordinatorSteps = fullSteps.slice(prefixLen, suffixLen > 0 ? -suffixLen : undefined)
+  if (coordinatorSteps.length === 0) return
+  for (let i = 0; i < coordinatorSteps.length; i++) {
+    const stepDef = coordinatorSteps[i]
+    const stepEntry = {
+      id: stepDef.id,
+      name: stepDef.name,
+      status: 'pending',
+      prompt: stepDef.prompt || '',
+      outputHint: stepDef.outputHint,
+      optional: stepDef.optional
+    }
+    // 传递 noAI / _cliAction 属性
+    if (stepDef.noAI) stepEntry.noAI = true
+    if (stepDef._cliAction) stepEntry._cliAction = stepDef._cliAction
+    steps.splice(currentIdx + 1 + i, 0, stepEntry)
+  }
+  console.log(`  📝 已动态插入 ${coordinatorSteps.length} 个步骤（${coordinatorSteps.map(s => s.name).join(', ')}）`)
+}
+
+/**
+ * scan 阶段 step 2「构建扫描项目列表」完成后，按项目展开 perProject 步骤（从 completeStep 抽出，行为保持）。
+ *
+ * 只接受结构化输出（scan_projects YAML block 或 BEGIN_PROJECT_LIST 标记块），校验通过后
+ * 自动注册 projects/<id>.yaml + 写 scan-projects.json + 把 perProject 步骤按项目展开。
+ * 不展开 completeStep 提前 return（失败只记 validationError，由 completeStep 继续推进下一步）。
+ */
+async function handleScanProjectListStep({ stageName, steps, currentIdx, outputText, stageData, specBase, cwd, platformOpts }) {
+  if (stageName !== 'scan' || steps[currentIdx]?.name !== '构建扫描项目列表') return
+  // 解析项目列表：只接受结构化输出（YAML block 或 BEGIN_PROJECT_LIST 标记）
+  // 不再从自由文本猜测项目名——自由文本列表的误解析会导致垃圾项目落盘
+  let parsedProjects = [] // Array<{id, path?}>
+  let parsedFromStructuredOutput = false
+  if (outputText) {
+    // 格式 A: YAML block — 匹配 scan_projects: 下所有 - id: xxx 条目（含多行属性）
+    const yamlBlock = outputText.match(/scan_projects:\s*\n([\s\S]+?)(?=$|\n[^\s])/)
+    if (yamlBlock) {
+      const entries = [...yamlBlock[1].matchAll(/-\s+id:\s*(\S+)(?:[\s\S]*?)(?=\n\s+-\s+id:|$)/g)]
+      for (const m of entries) {
+        const id = sanitizeProjectName(m[1])
+        if (!id) continue
+        // 提取可选 path 字段
+        const pathMatch = m[0].match(/path:\s*(\S+)/)
+        const entry = pathMatch ? { id, path: pathMatch[1].trim() } : { id }
+        parsedProjects.push(entry)
+      }
+      parsedFromStructuredOutput = parsedProjects.length > 0
+    }
+    // 格式 B: BEGIN_PROJECT_LIST ... END_PROJECT_LIST 标记块
+    if (!parsedFromStructuredOutput) {
+      const blockMatch = outputText.match(/BEGIN_PROJECT_LIST\s*\n([\s\S]*?)\n*END_PROJECT_LIST/)
+      if (blockMatch) {
+        const raw = [...blockMatch[1].matchAll(/^-\s+(\S+)/gm)].map(m => m[1])
+        parsedProjects = raw.map(s => sanitizeProjectName(s)).filter(Boolean).map(id => ({ id }))
+        parsedFromStructuredOutput = parsedProjects.length > 0
+      }
+    }
+  }
+
+  const projectNames = parsedProjects.map(p => p.id)
+
+  if (parsedFromStructuredOutput) {
+    stageData.scanMeta = stageData.scanMeta || {}
+    stageData.scanMeta.projectListParsed = true
+  } else {
+    // 结构化输出未解析到 → 回退读取已有 projects/*.yaml
+    // 读取时也校验：path 不存在的 yaml 视为垃圾，直接跳过
+    console.warn('⚠️  step 2 未输出结构化项目列表，回退扫描已注册项目')
+    stageData.scanMeta = stageData.scanMeta || {}
+    stageData.scanMeta.projectListParsed = false
+    const projectsDir = join(specBase, 'projects')
+    if (existsSync(projectsDir)) {
+      const yamlFiles = readdirSync(projectsDir).filter(f => f.endsWith('.yaml'))
+      const fallbackProjects = []
+      const fallbackSkipped = []
+      for (const yf of yamlFiles) {
+        const pName = yf.replace(/\.yaml$/, '')
+        const yamlContent = readFileSync(join(projectsDir, yf), 'utf8')
+        const pathMatch = yamlContent.match(/^path:\s*(.+)/m)
+        const pPath = pathMatch ? pathMatch[1].trim() : pName
+        // 校验 path 是否存在且在 source_root 内
+        const absPath = resolve(cwd, pPath)
+        if (pPath.includes('..') || (!absPath.startsWith(resolve(cwd)) && absPath !== resolve(cwd))) {
+          fallbackSkipped.push(`${pName} (path 越界: ${pPath})`)
+          continue
+        }
+        if (!existsSync(absPath)) {
+          fallbackSkipped.push(`${pName} (path 不存在: ${pPath})`)
+          continue
+        }
+        fallbackProjects.push({ id: pName, path: pPath })
+      }
+      if (fallbackSkipped.length > 0) {
+        console.warn(`⚠️  跳过 ${fallbackSkipped.length} 个垃圾/过期项目配置：${fallbackSkipped.join(', ')}`)
+        console.warn('   建议清理 projects/ 下的无效 yaml 文件')
+      }
+      parsedProjects = fallbackProjects
+      projectNames.length = 0
+      projectNames.push(...fallbackProjects.map(p => p.id))
+    }
+    if (parsedProjects.length === 0) {
+      // 无结构化输出 + 无合法已有项目 → step 2 失败
+      console.error('❌ step 2 未输出结构化项目列表，且 projects/ 下无合法项目配置')
+      console.error('   请在 --output 中输出 scan_projects YAML block 或 BEGIN_PROJECT_LIST 标记块')
+      steps[currentIdx].validationError = '未输出结构化项目列表且无合法 fallback'
+      // 不展开 perProject 步骤，直接跳到下一步
+    }
+  }
+
+  // 校验解析出的项目列表（原子守卫：不通过就不落盘）
+  const validation = validateParsedProjects(parsedProjects, cwd)
+  if (!validation.ok) {
+    console.error(`❌ 项目列表校验失败: ${validation.errors.join('; ')}`)
+    console.error('   step 2 完成，但不展开 perProject 步骤。请检查 --output 中的项目列表。')
+    steps[currentIdx].validationError = validation.errors.join('; ')
+  }
+
+  // 自动注册 + 保存 runtime + 展开 perProject 步骤（仅在校验通过时）
+  const projectsDir = join(specBase, 'projects')
+  if (validation.ok) {
+    for (const proj of parsedProjects) {
+      const pName = proj.id
+      const projYaml = join(projectsDir, `${pName}.yaml`)
+      if (!existsSync(projYaml)) {
+        mkdirSync(projectsDir, { recursive: true })
+        const candidates = [
+          join(cwd, pName),
+          join(cwd, 'backend', pName),
+          join(cwd, 'packages', pName),
+          join(cwd, 'apps', pName),
+          join(cwd, 'services', pName),
+        ]
+        const detected = candidates.find(c => existsSync(c))
+        const regPath = detected || join(cwd, pName)
+        writeFileSync(projYaml, `name: ${pName}\npath: ${regPath}\nstatus: active\n`)
+        console.log(`  📝 自动注册子项目: ${pName} → ${regPath}`)
+      }
+    }
+
+    // 保存 runtime 状态
+    const scanStatePath = join(specBase, '.runtime', 'scan-projects.json')
+    mkdirSync(join(specBase, '.runtime'), { recursive: true })
+    let scanState = { projects: projectNames, expanded: false }
+    if (existsSync(scanStatePath)) {
+      try { scanState = JSON.parse(readFileSync(scanStatePath, 'utf8')) } catch {}
+    }
+
+    // 收集当前步骤之后所有 perProject 步骤
+    const stageDef = stageRegistry[stageName]
+    const allSteps = stageDef?.steps || []
+    const perProjectSteps = allSteps.filter(s => s.perProject)
+
+    // 防重复展开
+    const alreadyExpanded = scanState.expanded || steps.some(s => s.name?.match(/\[.+\]\s*$/))
+    if (!alreadyExpanded && perProjectSteps.length > 0) {
+    // 找到当前步骤（step 2）在动态 steps 中的位置
+    const insertBase = currentIdx + 1
+    let insertPos = insertBase
+    for (const pName of projectNames) {
+      // 读取项目配置获取 projectRoot
+      const projYaml = join(specBase, 'projects', `${pName}.yaml`)
+      let projectRoot = '.'
+      if (existsSync(projYaml)) {
+        const yamlContent = readFileSync(projYaml, 'utf8')
+        const pathMatch = yamlContent.match(/^path:\s*(.+)/m)
+        if (pathMatch) projectRoot = pathMatch[1].trim()
+      }
+      const docOutputDir = platformOpts.specRoot ? `${specBase}/docs/${pName}` : `.sillyspec/docs/${pName}`
+      const contextPrefix = `\n---\n## 当前项目\n- **项目名**: ${pName}\n- **项目路径**: ${projectRoot}\n- **文档输出**: ${docOutputDir}\n\n⚠️ 本步骤只处理上面这个项目，不要处理其他项目。\n---\n\n`
+
+      for (const ppStep of perProjectSteps) {
+        steps.splice(insertPos, 0, {
+          name: `${ppStep.name} [${pName}]`,
+          project: pName,
+          status: 'pending',
+          prompt: contextPrefix + ppStep.prompt,
+          outputHint: ppStep.outputHint,
+          optional: ppStep.optional
+        })
+        insertPos++
+      }
+    }
+    // 移除原始的 perProject 步骤（未展开的版本）
+    for (let i = steps.length - 1; i >= 0; i--) {
+      if (steps[i].perProject && !steps[i].name?.includes('[')) {
+        steps.splice(i, 1)
+      }
+    }
+    console.log(`  📝 已按项目展开 ${perProjectSteps.length} 个步骤 × ${projectNames.length} 个项目 = ${perProjectSteps.length * projectNames.length} 个项目步骤`)
+    console.log(`  📁 扫描项目：${projectNames.join(', ')}`)
+    // 标记已展开，防止 resume 重复插入
+    scanState.expanded = true
+    writeFileSync(scanStatePath, JSON.stringify(scanState))
+  } // end !alreadyExpanded
+  } // end validation.ok
+}
+
+/**
+ * 阶段完成校验 gate 级联（从 completeStep 抽出，行为保持）。仅当所有步骤确实标记为 completed 时
+ * 由 completeStep 调用。顺序：runValidators → verify-test 对账 → Plan→Execute contract →
+ * Stage Review Gate → Execute Task Review Gate。任一 gate 失败 → rollbackCompletionAndReturn
+ * （统一回滚 + 返回 early-return 对象）；全部通过 → 返回 null（completeStep 继续收尾）。
+ *
+ * @returns {{stageCompleted:false,currentIdx,nextPendingIdx:number}|null}
+ */
+async function runStageCompletionGates({ stageName, cwd, changeName, platformOpts, specBase, progress, pm, stageData, steps, currentIdx }) {
+  const projectName = progress.project || basename(cwd)
+  const contractResult = runValidators(stageName, cwd, changeName, { projectName, specRoot: platformOpts?.specRoot })
+  if (contractResult.errors.length > 0) {
+    console.error(`\n❌ 阶段 ${stageName} 校验失败：`)
+    for (const err of contractResult.errors) {
+      console.error(`   - ${err}`)
+    }
+    console.error(`\n   提示：修复缺失产物后重新完成此步骤（--skip-approval 只跳过阶段转换/审批检查，不能跳过产物校验）`)
+    // 产物校验失败必须阻断完成 —— 否则 validator 形同虚设，
+    // verify 会带着 FAIL/缺 verify-result.md 被 ✅ 标记完成（历史教训）。
+    // plan/execute 的专项契约校验（下方）在产物齐全后才需要继续跑，故此处先 return。
+    return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)
+  }
+  if (contractResult.warnings.length > 0) {
+    console.warn(`\n⚠️ 阶段 ${stageName} 校验警告：`)
+    for (const w of contractResult.warnings) {
+      console.warn(`   - ${w}`)
+    }
+  }
+
+  // verify 产物校验通过 + 结论非 FAIL（否则上面已阻断）。
+  // 再由 CLI 亲自执行 local.yaml 的测试命令，与 verify-result.md 的自报告对账：
+  // 自报告 PASS 但实测失败 → 阻断（防止"文案通过"绕过验证）。
+  if (stageName === 'verify') {
+    const { runVerifyTestCheck, printVerifyTestCheck } = await import('./verify-postcheck.js')
+    const testCheck = runVerifyTestCheck({ cwd, specBase, changeName })
+    printVerifyTestCheck(testCheck)
+    if (testCheck.status === 'failed') {
+      console.error('\n❌ verify 阶段被阻断：verify-result.md 自报告通过，但 CLI 实测测试失败。')
+      console.error('   请修复失败的测试并更新 verify-result.md 后重新完成此步骤。')
+      return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)
+    }
+    // 契约 parity 对账：扫前端 API 调用 vs execute 提取的 provider endpoint artifact。
+    // 接线自 contract-matrix pipeline（verifyApiParity 的 CLI 入口）。
+    const { runVerifyParityCheck, printVerifyParityCheck } = await import('./verify-postcheck.js')
+    const parityCheck = runVerifyParityCheck({ cwd, specBase, changeName, runtimeRoot: platformOpts?.runtimeRoot })
+    printVerifyParityCheck(parityCheck)
+    console.log('\n✅ 验证通过，下一步：sillyspec run archive')
+  }
+
+  // ── Plan postcheck contract：plan.md 必须满足 execute 契约 ──
+  if (stageName === 'plan') {
+    const planFile = resolveChangeDir(cwd, progress, platformOpts?.specRoot)
+    const planPath = planFile ? join(planFile, 'plan.md') : null
+    if (planPath && existsSync(planPath)) {
+      const { validatePlanForExecute } = await import('./stages/execute.js')
+      const planContent = readFileSync(planPath, 'utf8')
+      const planValidation = validatePlanForExecute(planContent)
+      if (!planValidation.ok) {
+        console.error(`\n❌ Plan → Execute Contract 校验失败：`)
+        for (const err of planValidation.errors) console.error(`   - ${err}`)
+        console.error(`\n   plan.md 不满足 execute 契约，请修复后重新完成此步骤。`)
+        // 阻断 completed
+        return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)
+      }
+      if (planValidation.warnings.length > 0) {
+        console.warn(`\n⚠️  Plan contract 警告（不阻断完成）：`)
+        for (const w of planValidation.warnings) console.warn(`   - ${w}`)
+      }
+      if (planValidation.ok) {
+        console.log(`\n✅ Plan → Execute Contract 校验通过（${planValidation.tasks.length} tasks, ${planValidation.waves.length} waves）`)
+      }
+    }
+  }
+
+  // ── Stage Review Gate：brainstorm/plan/propose/execute 独立审查（按 tier 分级）──
+  // tier=self 放行+审计打印；tier=independent 必须 review.json 且 verdict 非 fail，fail-closed
+  if (['brainstorm', 'plan', 'propose', 'execute'].includes(stageName)) {
+    try {
+      const { classifyReviewTier } = await import('./review-tier.js')
+      const { validateStageReview, getLatestStageReviewRunId, printStageReviewResult } = await import('./stage-review.js')
+      const effectiveSpecBase = platformOpts?.specRoot || specBase
+      const reviewChangeDir = resolveChangeDir(cwd, progress, platformOpts?.specRoot)
+      const designPath = reviewChangeDir ? join(reviewChangeDir, 'design.md') : null
+      let planLevel = null
+      if (reviewChangeDir) {
+        const planPath = join(reviewChangeDir, 'plan.md')
+        if (existsSync(planPath)) {
+          const fmLine = readFileSync(planPath, 'utf8').split('\n').find(l => l.trim().startsWith('plan_level:'))
+          if (fmLine) planLevel = fmLine.split(':')[1].trim()
+        }
+      }
+      const tier = classifyReviewTier({ planLevel, designPath })
+      const runtimeRoot = platformOpts?.runtimeRoot || join(effectiveSpecBase, '.runtime')
+
+      if (tier.tier === 'self') {
+        console.log('\nℹ️  Stage Review: ' + stageName + ' tier=self（' + tier.reason + '），已降级为当前 agent 自审，不强制独立子代理。')
+      } else {
+        const reviewRunId = getLatestStageReviewRunId(runtimeRoot, stageName)
+        const reviewType = stageName === 'brainstorm' ? 'design'
+          : stageName === 'plan' ? 'plan'
+          : stageName === 'propose' ? 'proposal'
+          : 'acceptance'
+        const searchDirs = [effectiveSpecBase, reviewChangeDir, cwd].filter(Boolean)
+        const reviewResult = validateStageReview({ stage: stageName, reviewType, runtimeRoot, reviewRunId, searchDirs })
+        printStageReviewResult(reviewResult, { stage: stageName })
+        if (!reviewResult.ok) {
+          return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)
+        }
+      }
+    } catch (e) {
+      // fail-closed：Gate 自身异常阻断完成，不静默放行（与 Task Review Gate 一致）
+      console.error('❌ Stage Review Gate 异常，阻断 ' + stageName + ' 完成: ' + e.message)
+      return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)
+    }
+  }
+
+  // ── Execute Task Review Gate：所有 task 必须有 review.json 且 verdict 通过 ──
+  if (stageName === 'execute') {
+    try {
+      const { validateTaskReviews, printReviewResult, writeVerifyRequiredEvidence } = await import('./task-review.js')
+      const effectiveSpecBase = platformOpts?.specRoot || specBase
+      const planFile = resolveChangeDir(cwd, progress, platformOpts?.specRoot)
+      const planPath = planFile ? join(planFile, 'plan.md') : null
+
+      if (planPath && existsSync(planPath)) {
+        const planContent = readFileSync(planPath, 'utf8')
+        const runtimeRoot = platformOpts?.runtimeRoot || join(effectiveSpecBase, '.runtime')
+
+        // execute run id：从变更专属标记文件读取
+        const runIdFile = join(runtimeRoot, `current-execute-run-id-${changeName}`)
+        let executeRunId = ''
+        try {
+          if (existsSync(runIdFile)) {
+            executeRunId = readFileSync(runIdFile, 'utf8').trim()
+          }
+        } catch {}
+        if (!executeRunId) {
+          const { generateExecuteRunId } = await import('./task-review.js')
+          executeRunId = generateExecuteRunId()
+          // 落盘（marker 缺失时 fallback 生成后写盘，保证后续 checkbox/gate 读到同一 ID）
+          try { mkdirSync(runtimeRoot, { recursive: true }); writeFileSync(runIdFile, executeRunId + '\n') } catch {}
+        }
+
+        // git 真实性校验目录：worktree 存在则用 worktree（base/head commit 在其中），否则主仓库
+        let reviewGitDir = cwd
+        try {
+          const { WorktreeManager } = await import('./worktree.js')
+          const wm = new WorktreeManager({ cwd })
+          const meta = wm.getMeta(changeName)
+          if (meta?.worktreePath && meta.mode !== 'in-place-fallback' && existsSync(meta.worktreePath)) {
+            reviewGitDir = meta.worktreePath
+          }
+        } catch {}
+
+        const reviewResult = validateTaskReviews({ planContent, runtimeRoot, executeRunId, changeDir: planFile, gitDir: reviewGitDir })
+        printReviewResult(reviewResult, { runtimeRoot, executeRunId })
+
+        if (!reviewResult.ok) {
+          // Task review 校验失败，阻断 execute 完成
+          // 检查是否存在 checkbox 已勾但 review 不通过的情况
+          const uncheckedTasks = reviewResult.errors.filter(e => e.includes('缺少 review.json'))
+          if (uncheckedTasks.length > 0) {
+            console.error('\n⚠️  部分任务已在 plan.md 中勾选，但 review.json 不存在。')
+            console.error(`   请取消勾选这些任务的 checkbox，或补充对应的 review.json（execute run ID: ${executeRunId}）。`)
+          }
+          return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)
+        }
+
+        // cannot_verify 的 requiredEvidence 写入 change 目录，供 verify 阶段消费
+        if (reviewResult.requiredEvidence.length > 0) {
+          const evidencePath = writeVerifyRequiredEvidence(join(effectiveSpecBase, 'changes', changeName), reviewResult.requiredEvidence)
+          if (evidencePath) {
+            console.log(`📄 verify-required-evidence.json 已写入: ${evidencePath}`)
+            console.log('   verify 阶段必须满足这些证据要求。')
+          }
+        }
+      }
+    } catch (e) {
+      // fail-closed：Gate 自身异常时不能默认放行，否则异常成了绕过评审的通道
+      console.error(`❌ Task Review Gate 异常，阻断 execute 完成: ${e.message}`)
+      console.error('   请检查 review.json / plan.md 是否可读，修复后重新完成此步骤。')
+      return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)
+    }
+  }
+  return null
+}
+
 async function completeStep(pm, progress, stageName, cwd, outputText, inputText = null, options = {}) {
   const { printNext = true, confirm = false, changeName, platformOpts = {}, nonInteractive = false, confirmMode = null, isForceBaseline = false, isAllowNew = false } = options
   const specBase = platformOpts.specRoot || join(cwd, '.sillyspec')
   const stageData = progress.stages[stageName]
   const scanProfile = stageData?.scanProfile || null
-  let archivedDir = null // archive step「确认归档」实际归档目录（archiveChangeDirectory 返回）
 
   // ── WAIT MARKER 硬校验 ──
   // 如果 output 包含等待标记，拒绝 --done 推进
@@ -2970,246 +3445,34 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
     }
   }
 
-  if (stageName === 'archive' && steps[currentIdx]?.name === '确认归档') {
-    if (!confirm) {
-      steps[currentIdx].status = 'pending'
-      steps[currentIdx].completedAt = null
-      if (outputText) steps[currentIdx].output = null
-      await pm._write(cwd, progress, changeName)
-      console.log('⚠️  请添加 --confirm 确认归档，例如：sillyspec run archive --done --confirm --output "确认归档"')
-      return { stageCompleted: false, currentIdx, nextPendingIdx: currentIdx }
-    }
-    archivedDir = await archiveChangeDirectory(pm, cwd, progress, specBase)
+  // archive「确认归档」收尾：--confirm 门控 + archiveChangeDirectory 移动 + 推荐文档校验
+  // （抽成 handleArchiveConfirmStep；缺 --confirm 时返回 early-return 对象，completeStep 透传）
+  {
+    const _archiveEarlyReturn = await handleArchiveConfirmStep({ stageName, steps, currentIdx, confirm, outputText, pm, cwd, progress, changeName, specBase })
+    if (_archiveEarlyReturn) return _archiveEarlyReturn
   }
 
-  // archive "确认归档" 步骤完成后，校验归档完整性
-  if (stageName === 'archive' && steps[currentIdx]?.name === '确认归档' && confirm) {
-    // contracts.archive.validators 为空数组（两个 validator 生效窗口互斥，注册为阶段级会误报），
-    // 故 runValidators('archive') 是空跑。这里直接对实际归档目录做内容完整性校验。
-    // plan.md 已在 archiveChangeDirectory 移动前硬校验阻断，此处只查推荐文档。
-    if (archivedDir && existsSync(archivedDir)) {
-      const recommendedDocs = ['design.md', 'module-impact.md']
-      const missingRecommended = recommendedDocs.filter(d => !existsSync(join(archivedDir, d)))
-      if (missingRecommended.length > 0) {
-        console.warn(`\n⚠️ 归档校验警告：归档目录缺少推荐文档`)
-        for (const d of missingRecommended) console.warn(`   - ${d}（${archivedDir}）`)
-      } else {
-        console.log(`\n✅ 归档校验通过：核心文档齐全`)
-      }
-    }
+  // plan 阶段 "generate_plan" 完成后，动态插入任务蓝图 + postcheck 步骤（抽成 handlePlanGeneratePlanStep）
+  await handlePlanGeneratePlanStep({ stageName, steps, currentIdx, defStepsForCurrent, cwd, progress })
+
+  // scan 阶段 step 2「构建扫描项目列表」完成后，按项目展开 perProject 步骤（抽成 handleScanProjectListStep）
+  await handleScanProjectListStep({ stageName, steps, currentIdx, outputText, stageData, specBase, cwd, platformOpts })
+
+  // execute「Wave N 执行」步骤完成 → 扫 worktree 提取 provider endpoint artifact
+  // （供 verify 阶段 parity 对账 + consumer task 上游契约注入）。接线自 contract-matrix pipeline。
+  if (stageName === 'execute' && /^Wave \d+ 执行$/.test(steps[currentIdx]?.name || '')) {
+    try {
+      const { extractArtifactsForChange } = await import('./contract-matrix.js')
+      let worktreePath = null
+      try {
+        const { WorktreeManager } = await import('./worktree.js')
+        const meta = new WorktreeManager({ cwd }).getMeta(changeName)
+        if (meta?.worktreePath && existsSync(meta.worktreePath)) worktreePath = meta.worktreePath
+      } catch {}
+      const msg = extractArtifactsForChange({ changeDir: join(specBase, 'changes', changeName), specBase, changeName, worktreePath })
+      if (msg) console.log(msg)
+    } catch (e) { console.warn(`⚠️ 契约 artifact 提取跳过: ${e?.message || e}`) }
   }
-
-  // plan 阶段 "generate_plan" 完成后，动态插入任务蓝图 + postcheck 步骤
-  // 使用稳定 id 匹配，不依赖中文标题
-  if (stageName === 'plan') {
-    const currentStepDef = defStepsForCurrent?.[currentIdx]
-    const currentStepEntry = steps[currentIdx]
-    const stepId = currentStepDef?.id || currentStepEntry?.id || currentStepEntry?._stepId
-    if (stepId === 'generate_plan') {
-      const changeDir = resolveChangeDir(cwd, progress)
-      if (changeDir) {
-        const planFile = join(changeDir, 'plan.md')
-        if (existsSync(planFile)) {
-          const planContent = readFileSync(planFile, 'utf8')
-          const { buildPlanSteps, fixedPrefix, fixedSuffix } = await import('./stages/plan.js')
-          const fullSteps = buildPlanSteps(changeDir, planContent)
-          const prefixLen = fixedPrefix.length
-          const suffixLen = fixedSuffix.length
-          // 新结构：[...fixedPrefix, coordinatorStep?, postcheckStep?]
-          // fixedSuffix 为空，所以 coordinator + postcheck 都在 prefix 之后
-          const coordinatorSteps = fullSteps.slice(prefixLen, suffixLen > 0 ? -suffixLen : undefined)
-          if (coordinatorSteps.length > 0) {
-            for (let i = 0; i < coordinatorSteps.length; i++) {
-              const stepDef = coordinatorSteps[i]
-              const stepEntry = {
-                id: stepDef.id,
-                name: stepDef.name,
-                status: 'pending',
-                prompt: stepDef.prompt || '',
-                outputHint: stepDef.outputHint,
-                optional: stepDef.optional
-              }
-              // 传递 noAI / _cliAction 属性
-              if (stepDef.noAI) stepEntry.noAI = true
-              if (stepDef._cliAction) stepEntry._cliAction = stepDef._cliAction
-              steps.splice(currentIdx + 1 + i, 0, stepEntry)
-            }
-            console.log(`  📝 已动态插入 ${coordinatorSteps.length} 个步骤（${coordinatorSteps.map(s => s.name).join(', ')}）`)
-          }
-        }
-      }
-    }
-  }
-
-  // scan 阶段 step 2 "构建扫描项目列表" 完成后，按项目展开 perProject 步骤
-  if (stageName === 'scan' && steps[currentIdx]?.name === '构建扫描项目列表') {
-    // 解析项目列表：只接受结构化输出（YAML block 或 BEGIN_PROJECT_LIST 标记）
-    // 不再从自由文本猜测项目名——自由文本列表的误解析会导致垃圾项目落盘
-    let parsedProjects = [] // Array<{id, path?}>
-    let parsedFromStructuredOutput = false
-    if (outputText) {
-      // 格式 A: YAML block — 匹配 scan_projects: 下所有 - id: xxx 条目（含多行属性）
-      const yamlBlock = outputText.match(/scan_projects:\s*\n([\s\S]+?)(?=$|\n[^\s])/)
-      if (yamlBlock) {
-        const entries = [...yamlBlock[1].matchAll(/-\s+id:\s*(\S+)(?:[\s\S]*?)(?=\n\s+-\s+id:|$)/g)]
-        for (const m of entries) {
-          const id = sanitizeProjectName(m[1])
-          if (!id) continue
-          // 提取可选 path 字段
-          const pathMatch = m[0].match(/path:\s*(\S+)/)
-          const entry = pathMatch ? { id, path: pathMatch[1].trim() } : { id }
-          parsedProjects.push(entry)
-        }
-        parsedFromStructuredOutput = parsedProjects.length > 0
-      }
-      // 格式 B: BEGIN_PROJECT_LIST ... END_PROJECT_LIST 标记块
-      if (!parsedFromStructuredOutput) {
-        const blockMatch = outputText.match(/BEGIN_PROJECT_LIST\s*\n([\s\S]*?)\n*END_PROJECT_LIST/)
-        if (blockMatch) {
-          const raw = [...blockMatch[1].matchAll(/^-\s+(\S+)/gm)].map(m => m[1])
-          parsedProjects = raw.map(s => sanitizeProjectName(s)).filter(Boolean).map(id => ({ id }))
-          parsedFromStructuredOutput = parsedProjects.length > 0
-        }
-      }
-    }
-
-    const projectNames = parsedProjects.map(p => p.id)
-
-    if (parsedFromStructuredOutput) {
-      stageData.scanMeta = stageData.scanMeta || {}
-      stageData.scanMeta.projectListParsed = true
-    } else {
-      // 结构化输出未解析到 → 回退读取已有 projects/*.yaml
-      // 读取时也校验：path 不存在的 yaml 视为垃圾，直接跳过
-      console.warn('⚠️  step 2 未输出结构化项目列表，回退扫描已注册项目')
-      stageData.scanMeta = stageData.scanMeta || {}
-      stageData.scanMeta.projectListParsed = false
-      const projectsDir = join(specBase, 'projects')
-      if (existsSync(projectsDir)) {
-        const yamlFiles = readdirSync(projectsDir).filter(f => f.endsWith('.yaml'))
-        const fallbackProjects = []
-        const fallbackSkipped = []
-        for (const yf of yamlFiles) {
-          const pName = yf.replace(/\.yaml$/, '')
-          const yamlContent = readFileSync(join(projectsDir, yf), 'utf8')
-          const pathMatch = yamlContent.match(/^path:\s*(.+)/m)
-          const pPath = pathMatch ? pathMatch[1].trim() : pName
-          // 校验 path 是否存在且在 source_root 内
-          const absPath = resolve(cwd, pPath)
-          if (pPath.includes('..') || (!absPath.startsWith(resolve(cwd)) && absPath !== resolve(cwd))) {
-            fallbackSkipped.push(`${pName} (path 越界: ${pPath})`)
-            continue
-          }
-          if (!existsSync(absPath)) {
-            fallbackSkipped.push(`${pName} (path 不存在: ${pPath})`)
-            continue
-          }
-          fallbackProjects.push({ id: pName, path: pPath })
-        }
-        if (fallbackSkipped.length > 0) {
-          console.warn(`⚠️  跳过 ${fallbackSkipped.length} 个垃圾/过期项目配置：${fallbackSkipped.join(', ')}`)
-          console.warn('   建议清理 projects/ 下的无效 yaml 文件')
-        }
-        parsedProjects = fallbackProjects
-        projectNames.length = 0
-        projectNames.push(...fallbackProjects.map(p => p.id))
-      }
-      if (parsedProjects.length === 0) {
-        // 无结构化输出 + 无合法已有项目 → step 2 失败
-        console.error('❌ step 2 未输出结构化项目列表，且 projects/ 下无合法项目配置')
-        console.error('   请在 --output 中输出 scan_projects YAML block 或 BEGIN_PROJECT_LIST 标记块')
-        steps[currentIdx].validationError = '未输出结构化项目列表且无合法 fallback'
-        // 不展开 perProject 步骤，直接跳到下一步
-      }
-    }
-
-    // 校验解析出的项目列表（原子守卫：不通过就不落盘）
-    const validation = validateParsedProjects(parsedProjects, cwd)
-    if (!validation.ok) {
-      console.error(`❌ 项目列表校验失败: ${validation.errors.join('; ')}`)
-      console.error('   step 2 完成，但不展开 perProject 步骤。请检查 --output 中的项目列表。')
-      steps[currentIdx].validationError = validation.errors.join('; ')
-    }
-
-    // 自动注册 + 保存 runtime + 展开 perProject 步骤（仅在校验通过时）
-    const projectsDir = join(specBase, 'projects')
-    if (validation.ok) {
-      for (const proj of parsedProjects) {
-        const pName = proj.id
-        const projYaml = join(projectsDir, `${pName}.yaml`)
-        if (!existsSync(projYaml)) {
-          mkdirSync(projectsDir, { recursive: true })
-          const candidates = [
-            join(cwd, pName),
-            join(cwd, 'backend', pName),
-            join(cwd, 'packages', pName),
-            join(cwd, 'apps', pName),
-            join(cwd, 'services', pName),
-          ]
-          const detected = candidates.find(c => existsSync(c))
-          const regPath = detected || join(cwd, pName)
-          writeFileSync(projYaml, `name: ${pName}\npath: ${regPath}\nstatus: active\n`)
-          console.log(`  📝 自动注册子项目: ${pName} → ${regPath}`)
-        }
-      }
-
-      // 保存 runtime 状态
-      const scanStatePath = join(specBase, '.runtime', 'scan-projects.json')
-      mkdirSync(join(specBase, '.runtime'), { recursive: true })
-      let scanState = { projects: projectNames, expanded: false }
-      if (existsSync(scanStatePath)) {
-        try { scanState = JSON.parse(readFileSync(scanStatePath, 'utf8')) } catch {}
-      }
-
-      // 收集当前步骤之后所有 perProject 步骤
-      const stageDef = stageRegistry[stageName]
-      const allSteps = stageDef?.steps || []
-      const perProjectSteps = allSteps.filter(s => s.perProject)
-
-      // 防重复展开
-      const alreadyExpanded = scanState.expanded || steps.some(s => s.name?.match(/\[.+\]\s*$/))
-      if (!alreadyExpanded && perProjectSteps.length > 0) {
-      // 找到当前步骤（step 2）在动态 steps 中的位置
-      const insertBase = currentIdx + 1
-      let insertPos = insertBase
-      for (const pName of projectNames) {
-        // 读取项目配置获取 projectRoot
-        const projYaml = join(specBase, 'projects', `${pName}.yaml`)
-        let projectRoot = '.'
-        if (existsSync(projYaml)) {
-          const yamlContent = readFileSync(projYaml, 'utf8')
-          const pathMatch = yamlContent.match(/^path:\s*(.+)/m)
-          if (pathMatch) projectRoot = pathMatch[1].trim()
-        }
-        const docOutputDir = platformOpts.specRoot ? `${specBase}/docs/${pName}` : `.sillyspec/docs/${pName}`
-        const contextPrefix = `\n---\n## 当前项目\n- **项目名**: ${pName}\n- **项目路径**: ${projectRoot}\n- **文档输出**: ${docOutputDir}\n\n⚠️ 本步骤只处理上面这个项目，不要处理其他项目。\n---\n\n`
-
-        for (const ppStep of perProjectSteps) {
-          steps.splice(insertPos, 0, {
-            name: `${ppStep.name} [${pName}]`,
-            project: pName,
-            status: 'pending',
-            prompt: contextPrefix + ppStep.prompt,
-            outputHint: ppStep.outputHint,
-            optional: ppStep.optional
-          })
-          insertPos++
-        }
-      }
-      // 移除原始的 perProject 步骤（未展开的版本）
-      for (let i = steps.length - 1; i >= 0; i--) {
-        if (steps[i].perProject && !steps[i].name?.includes('[')) {
-          steps.splice(i, 1)
-        }
-      }
-      console.log(`  📝 已按项目展开 ${perProjectSteps.length} 个步骤 × ${projectNames.length} 个项目 = ${perProjectSteps.length * projectNames.length} 个项目步骤`)
-      console.log(`  📁 扫描项目：${projectNames.join(', ')}`)
-      // 标记已展开，防止 resume 重复插入
-      scanState.expanded = true
-      writeFileSync(scanStatePath, JSON.stringify(scanState))
-    } // end !alreadyExpanded
-    } // end validation.ok
-  } // end step 2
 
   const nextPendingIdx = steps.findIndex(s => s.status === 'pending' || s.status === 'in-progress')
 
@@ -3551,204 +3814,8 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
 
     // 阶段完成校验 — 防御性守卫：仅当所有步骤确实标记为 completed 时才跑 validator
     if (actualCompleted === actualTotal && actualTotal > 0) {
-      const projectName = progress.project || basename(cwd)
-      const contractResult = runValidators(stageName, cwd, changeName, { projectName, specRoot: platformOpts?.specRoot })
-      if (contractResult.errors.length > 0) {
-        console.error(`\n❌ 阶段 ${stageName} 校验失败：`)
-        for (const err of contractResult.errors) {
-          console.error(`   - ${err}`)
-        }
-        console.error(`\n   提示：修复缺失产物后重新完成此步骤（--skip-approval 只跳过阶段转换/审批检查，不能跳过产物校验）`)
-        // 产物校验失败必须阻断完成 —— 否则 validator 形同虚设，
-        // verify 会带着 FAIL/缺 verify-result.md 被 ✅ 标记完成（历史教训）。
-        // plan/execute 的专项契约校验（下方）在产物齐全后才需要继续跑，故此处先 return。
-        rollbackStageCompletion(stageData, steps, currentIdx)
-        progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
-        await pm._write(cwd, progress, changeName)
-        triggerSync(cwd, changeName, platformOpts)
-        return { stageCompleted: false, currentIdx, nextPendingIdx: currentIdx }
-      }
-      if (contractResult.warnings.length > 0) {
-        console.warn(`\n⚠️ 阶段 ${stageName} 校验警告：`)
-        for (const w of contractResult.warnings) {
-          console.warn(`   - ${w}`)
-        }
-      }
-
-      // verify 产物校验通过 + 结论非 FAIL（否则上面已阻断）。
-      // 再由 CLI 亲自执行 local.yaml 的测试命令，与 verify-result.md 的自报告对账：
-      // 自报告 PASS 但实测失败 → 阻断（防止"文案通过"绕过验证）。
-      if (stageName === 'verify') {
-        const { runVerifyTestCheck, printVerifyTestCheck } = await import('./verify-postcheck.js')
-        const testCheck = runVerifyTestCheck({ cwd, specBase, changeName })
-        printVerifyTestCheck(testCheck)
-        if (testCheck.status === 'failed') {
-          console.error('\n❌ verify 阶段被阻断：verify-result.md 自报告通过，但 CLI 实测测试失败。')
-          console.error('   请修复失败的测试并更新 verify-result.md 后重新完成此步骤。')
-          rollbackStageCompletion(stageData, steps, currentIdx)
-          progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
-          await pm._write(cwd, progress, changeName)
-          triggerSync(cwd, changeName, platformOpts)
-          return { stageCompleted: false, currentIdx, nextPendingIdx: currentIdx }
-        }
-        console.log('\n✅ 验证通过，下一步：sillyspec run archive')
-      }
-
-      // ── Plan postcheck contract：plan.md 必须满足 execute 契约 ──
-      if (stageName === 'plan') {
-        const planFile = resolveChangeDir(cwd, progress, platformOpts?.specRoot)
-        const planPath = planFile ? join(planFile, 'plan.md') : null
-        if (planPath && existsSync(planPath)) {
-          const { validatePlanForExecute } = await import('./stages/execute.js')
-          const planContent = readFileSync(planPath, 'utf8')
-          const planValidation = validatePlanForExecute(planContent)
-          if (!planValidation.ok) {
-            console.error(`\n❌ Plan → Execute Contract 校验失败：`)
-            for (const err of planValidation.errors) console.error(`   - ${err}`)
-            console.error(`\n   plan.md 不满足 execute 契约，请修复后重新完成此步骤。`)
-            // 阻断 completed
-            rollbackStageCompletion(stageData, steps, currentIdx)
-            progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
-            await pm._write(cwd, progress, changeName)
-            triggerSync(cwd, changeName, platformOpts)
-            return { stageCompleted: false, currentIdx, nextPendingIdx: currentIdx }
-          }
-          if (planValidation.warnings.length > 0) {
-            console.warn(`\n⚠️  Plan contract 警告（不阻断完成）：`)
-            for (const w of planValidation.warnings) console.warn(`   - ${w}`)
-          }
-          if (planValidation.ok) {
-            console.log(`\n✅ Plan → Execute Contract 校验通过（${planValidation.tasks.length} tasks, ${planValidation.waves.length} waves）`)
-          }
-        }
-      }
-
-      // ── Stage Review Gate：brainstorm/plan/propose/execute 独立审查（按 tier 分级）──
-      // tier=self 放行+审计打印；tier=independent 必须 review.json 且 verdict 非 fail，fail-closed
-      if (['brainstorm', 'plan', 'propose', 'execute'].includes(stageName)) {
-        try {
-          const { classifyReviewTier } = await import('./review-tier.js')
-          const { validateStageReview, getLatestStageReviewRunId, printStageReviewResult } = await import('./stage-review.js')
-          const effectiveSpecBase = platformOpts?.specRoot || specBase
-          const reviewChangeDir = resolveChangeDir(cwd, progress, platformOpts?.specRoot)
-          const designPath = reviewChangeDir ? join(reviewChangeDir, 'design.md') : null
-          let planLevel = null
-          if (reviewChangeDir) {
-            const planPath = join(reviewChangeDir, 'plan.md')
-            if (existsSync(planPath)) {
-              const fmLine = readFileSync(planPath, 'utf8').split('\n').find(l => l.trim().startsWith('plan_level:'))
-              if (fmLine) planLevel = fmLine.split(':')[1].trim()
-            }
-          }
-          const tier = classifyReviewTier({ planLevel, designPath })
-          const runtimeRoot = platformOpts?.runtimeRoot || join(effectiveSpecBase, '.runtime')
-
-          if (tier.tier === 'self') {
-            console.log('\nℹ️  Stage Review: ' + stageName + ' tier=self（' + tier.reason + '），已降级为当前 agent 自审，不强制独立子代理。')
-          } else {
-            const reviewRunId = getLatestStageReviewRunId(runtimeRoot, stageName)
-            const reviewType = stageName === 'brainstorm' ? 'design'
-              : stageName === 'plan' ? 'plan'
-              : stageName === 'propose' ? 'proposal'
-              : 'acceptance'
-            const searchDirs = [effectiveSpecBase, reviewChangeDir, cwd].filter(Boolean)
-            const reviewResult = validateStageReview({ stage: stageName, reviewType, runtimeRoot, reviewRunId, searchDirs })
-            printStageReviewResult(reviewResult, { stage: stageName })
-            if (!reviewResult.ok) {
-              rollbackStageCompletion(stageData, steps, currentIdx)
-              progress.lastActive = new Date().toLocaleString('zh-CN', { hour12: false })
-              await pm._write(cwd, progress, changeName)
-              triggerSync(cwd, changeName, platformOpts)
-              return { stageCompleted: false, currentIdx, nextPendingIdx: currentIdx }
-            }
-          }
-        } catch (e) {
-          // fail-closed：Gate 自身异常阻断完成，不静默放行（与 Task Review Gate 一致）
-          console.error('❌ Stage Review Gate 异常，阻断 ' + stageName + ' 完成: ' + e.message)
-          rollbackStageCompletion(stageData, steps, currentIdx)
-          progress.lastActive = new Date().toLocaleString('zh-CN', { hour12: false })
-          await pm._write(cwd, progress, changeName)
-          triggerSync(cwd, changeName, platformOpts)
-          return { stageCompleted: false, currentIdx, nextPendingIdx: currentIdx }
-        }
-      }
-
-      // ── Execute Task Review Gate：所有 task 必须有 review.json 且 verdict 通过 ──
-      if (stageName === 'execute') {
-        try {
-          const { validateTaskReviews, printReviewResult, writeVerifyRequiredEvidence } = await import('./task-review.js')
-          const effectiveSpecBase = platformOpts?.specRoot || specBase
-          const planFile = resolveChangeDir(cwd, progress, platformOpts?.specRoot)
-          const planPath = planFile ? join(planFile, 'plan.md') : null
-
-          if (planPath && existsSync(planPath)) {
-            const planContent = readFileSync(planPath, 'utf8')
-            const runtimeRoot = platformOpts?.runtimeRoot || join(effectiveSpecBase, '.runtime')
-
-            // execute run id：从变更专属标记文件读取
-            const runIdFile = join(runtimeRoot, `current-execute-run-id-${changeName}`)
-            let executeRunId = ''
-            try {
-              if (existsSync(runIdFile)) {
-                executeRunId = readFileSync(runIdFile, 'utf8').trim()
-              }
-            } catch {}
-            if (!executeRunId) {
-              const { generateExecuteRunId } = await import('./task-review.js')
-              executeRunId = generateExecuteRunId()
-              // 落盘（marker 缺失时 fallback 生成后写盘，保证后续 checkbox/gate 读到同一 ID）
-              try { mkdirSync(runtimeRoot, { recursive: true }); writeFileSync(runIdFile, executeRunId + '\n') } catch {}
-            }
-
-            // git 真实性校验目录：worktree 存在则用 worktree（base/head commit 在其中），否则主仓库
-            let reviewGitDir = cwd
-            try {
-              const { WorktreeManager } = await import('./worktree.js')
-              const wm = new WorktreeManager({ cwd })
-              const meta = wm.getMeta(changeName)
-              if (meta?.worktreePath && meta.mode !== 'in-place-fallback' && existsSync(meta.worktreePath)) {
-                reviewGitDir = meta.worktreePath
-              }
-            } catch {}
-
-            const reviewResult = validateTaskReviews({ planContent, runtimeRoot, executeRunId, changeDir: planFile, gitDir: reviewGitDir })
-            printReviewResult(reviewResult, { runtimeRoot, executeRunId })
-
-            if (!reviewResult.ok) {
-              // Task review 校验失败，阻断 execute 完成
-              // 检查是否存在 checkbox 已勾但 review 不通过的情况
-              const uncheckedTasks = reviewResult.errors.filter(e => e.includes('缺少 review.json'))
-              if (uncheckedTasks.length > 0) {
-                console.error('\n⚠️  部分任务已在 plan.md 中勾选，但 review.json 不存在。')
-                console.error(`   请取消勾选这些任务的 checkbox，或补充对应的 review.json（execute run ID: ${executeRunId}）。`)
-              }
-              rollbackStageCompletion(stageData, steps, currentIdx)
-              progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
-              await pm._write(cwd, progress, changeName)
-              triggerSync(cwd, changeName, platformOpts)
-              return { stageCompleted: false, currentIdx, nextPendingIdx: currentIdx }
-            }
-
-            // cannot_verify 的 requiredEvidence 写入 change 目录，供 verify 阶段消费
-            if (reviewResult.requiredEvidence.length > 0) {
-              const evidencePath = writeVerifyRequiredEvidence(join(effectiveSpecBase, 'changes', changeName), reviewResult.requiredEvidence)
-              if (evidencePath) {
-                console.log(`📄 verify-required-evidence.json 已写入: ${evidencePath}`)
-                console.log('   verify 阶段必须满足这些证据要求。')
-              }
-            }
-          }
-        } catch (e) {
-          // fail-closed：Gate 自身异常时不能默认放行，否则异常成了绕过评审的通道
-          console.error(`❌ Task Review Gate 异常，阻断 execute 完成: ${e.message}`)
-          console.error('   请检查 review.json / plan.md 是否可读，修复后重新完成此步骤。')
-          rollbackStageCompletion(stageData, steps, currentIdx)
-          progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
-          await pm._write(cwd, progress, changeName)
-          triggerSync(cwd, changeName, platformOpts)
-          return { stageCompleted: false, currentIdx, nextPendingIdx: currentIdx }
-        }
-      }
+      const _gateEarlyReturn = await runStageCompletionGates({ stageName, cwd, changeName, platformOpts, specBase, progress, pm, stageData, steps, currentIdx })
+      if (_gateEarlyReturn) return _gateEarlyReturn
     } else if (actualCompleted < actualTotal) {
       // 实际步骤未全部完成，跳过 validator（状态可能不同步）
       console.log(`\n⚠️ 阶段校验跳过：${actualTotal} 步中仅 ${actualCompleted} 步标记为已完成，可能存在状态不同步。如确认阶段已完成，请运行 --status 确认。`)
@@ -3913,6 +3980,10 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
   }
   return { stageCompleted: false, currentIdx, nextPendingIdx }
 }
+
+// 测试专用导出：completeStep 是 step 完成处理核心（产物校验/gate 链/sync/auto 推进），
+// 行为保持重构需要 characterization 测试直接驱动它。有先例：worktree-guard.js 的 _queryDbFirstCellForTest。
+export { completeStep as _completeStepForTest }
 
 async function skipStep(pm, progress, stageName, cwd, changeName, platformOpts = {}) {
   const stageData = progress.stages[stageName]

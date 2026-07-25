@@ -26,4 +26,4 @@ export const stageRegistry = {
 }
 
 // 辅助命令（在无活跃变更时也可执行）
-export const auxiliaryStages = ['scan', 'quick', 'explore', 'archive', 'status', 'doctor']
+export { AUXILIARY_STAGES as auxiliaryStages } from '../constants.js'

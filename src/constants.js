@@ -80,3 +80,16 @@ export const SCAN_REQUIRED_DOCS = Object.freeze([
   'CONCERNS.md',
   'PROJECT.md',
 ])
+
+// ── 辅助 stage 清单（stage-contract 转移规则 与 stages/index 注册表 共用单一真相源）──
+// 曾在 stage-contract.js 与 stages/index.js 逐字重复定义，新增/调整辅助 stage 需同步改两处
+// 易分叉。现收敛一处。（注意：主流程序 STAGE_ORDER/mainFlowStages/flowStages 语义不同、
+// 各自用途正确，不在本清单范围。）
+export const AUXILIARY_STAGES = Object.freeze([
+  'scan',
+  'quick',
+  'explore',
+  'archive',
+  'status',
+  'doctor',
+])
