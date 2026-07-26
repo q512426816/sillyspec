@@ -16,7 +16,7 @@
  */
 import { join } from 'node:path'
 import { existsSync, readdirSync, readFileSync, mkdirSync, writeFileSync, appendFileSync, statSync } from 'node:fs'
-import { triggerSync, WAIT_MARKER_RE, getStageSteps } from './shared.js'
+import { triggerSync, WAIT_MARKER_RE, getStageSteps, formatWaitOptions } from './shared.js'
 import { outputStep } from './prompt.js'
 import { enforceDepsGate, runStageCompletionGates } from './gates.js'
 import { handleArchiveConfirmStep, handlePlanGeneratePlanStep, handleScanProjectListStep, handleWorkflowPostCheck, handleQuickStageCompletion, handleExecuteWaveArtifact, handleExecuteWorktreeCleanup, handleScanStageCompleted } from './complete-handlers.js'
@@ -337,5 +337,359 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
     await outputStep(stageName, nextPendingIdx, defSteps, cwd, changeName, progress.project || null, platformOpts)
   }
   return { stageCompleted: false, currentIdx, nextPendingIdx }
+}
+
+// ── Step 调度兄弟函数（W6 Step7b-2 从 run.js 搬入：skip/wait/continue + formatWaitHistory）──
+function formatWaitHistory(step) {
+  const answers = Array.isArray(step.waitAnswers) ? step.waitAnswers : []
+  if (answers.length === 0) return null
+  let text = `本步骤历史用户回答（共 ${answers.length} 轮）：\n`
+  for (const item of answers) {
+    text += `\n${item.round}. ${item.answer}`
+    if (item.question) {
+      text += `\n   对应问题/摘要：${item.question}`
+    }
+  }
+  const maxRounds = step.maxWaitRounds || null
+  if (maxRounds && answers.length >= maxRounds) {
+    text += `\n\n已达到 maxWaitRounds=${maxRounds}。请基于以上回答总结需求；除非仍有阻塞问题，否则完成本步骤并进入方案讨论。`
+  } else {
+    text += `\n\n请判断信息是否足够：如果足够，完成本步骤；如果仍缺关键约束，再提出一个问题并 --wait。`
+  }
+  return text
+}
+
+export async function waitStep(pm, progress, stageName, cwd, outputText, waitReason, waitOptions, options = {}) {
+  const { changeName, nonInteractive = false, platformOpts = {} } = options
+  const specBase = platformOpts.specRoot || join(cwd, '.sillyspec')
+  const stageData = progress.stages[stageName]
+
+  if (!stageData || !stageData.steps) {
+    console.error(`❌ 阶段 ${stageName} 未初始化`)
+    process.exit(1)
+  }
+
+  // 查找下一个 pending 或 in-progress 的步骤
+  const currentIdx = stageData.steps.findIndex(s => s.status === 'pending' || s.status === 'in-progress')
+  if (currentIdx === -1) {
+    console.error('没有可以等待的步骤')
+    process.exit(1)
+  }
+
+  // 前置检查：不允许已有 waiting 步骤时再 --wait
+  const existingWaitingIdx = stageData.steps.findIndex(s => s.status === 'waiting')
+  if (existingWaitingIdx !== -1) {
+    const ws = stageData.steps[existingWaitingIdx]
+    console.error(`❌ 已有步骤处于等待状态：Step ${existingWaitingIdx + 1} "${ws.name}"`)
+    console.error(`   请先 --continue 或 --reset 该步骤，再开始新的 --wait`)
+    process.exit(1)
+  }
+
+  // maxWaitRounds 硬上限：达到后拒绝继续 --wait
+  const currentStep = stageData.steps[currentIdx]
+  const defSteps = await getStageSteps(stageName, cwd, progress, platformOpts?.specRoot || null)
+  const stepDef = defSteps?.[currentIdx] || {}
+  const maxWaitRounds = currentStep.maxWaitRounds ?? stepDef.maxWaitRounds
+  const currentWaitRound = currentStep.waitRound || 0
+  if (maxWaitRounds && currentWaitRound >= maxWaitRounds) {
+    console.error(`❌ Step "${currentStep.name}" 已达到最大等待轮次（maxWaitRounds=${maxWaitRounds}）`) 
+    console.error(`   请基于已有回答完成本步骤：`)
+    console.error(`   sillyspec run ${stageName} --done${changeName ? ` --change ${changeName}` : ''} --output "需求理解摘要"`)
+    process.exit(1)
+  }
+
+  // 非交互模式下拒绝等待
+  if (nonInteractive) {
+    console.error(`❌ Human decision required in non-interactive mode.`)
+    console.error(`   Reason: ${waitReason || '(unknown)'}`)
+    if (waitOptions) console.error(`   Options: ${formatWaitOptions(waitOptions)}`)
+    console.error(`   Fix: rerun with --interactive or provide decision via sillyspec run ${stageName} --continue --answer "..."`)
+    process.exit(2)
+  }
+
+  const now = new Date().toLocaleString('zh-CN', { hour12: false })
+  stageData.steps[currentIdx].status = 'waiting'
+  stageData.steps[currentIdx].waitedAt = now
+  if (outputText) {
+    const MAX_OUTPUT = 200
+    stageData.steps[currentIdx].output = outputText.length > MAX_OUTPUT
+      ? outputText.slice(0, MAX_OUTPUT) + '…' : outputText
+  }
+  if (waitReason) stageData.steps[currentIdx].waitReason = waitReason
+  if (waitOptions) {
+    // 统一存为 JSON 数组
+    try {
+      const parsed = JSON.parse(waitOptions)
+      if (Array.isArray(parsed)) {
+        stageData.steps[currentIdx].waitOptions = JSON.stringify(parsed)
+      } else {
+        stageData.steps[currentIdx].waitOptions = JSON.stringify(waitOptions.split(',').map(o => o.trim()))
+      }
+    } catch {
+      stageData.steps[currentIdx].waitOptions = JSON.stringify(waitOptions.split(',').map(o => o.trim()))
+    }
+  }
+
+  progress.lastActive = now
+  await pm._write(cwd, progress, changeName)
+  triggerSync(cwd, changeName, platformOpts)
+
+  console.log(`⏸️  Step ${currentIdx + 1}/${stageData.steps.length} 已暂停等待：${stageData.steps[currentIdx].name}`)
+  if (waitReason) console.log(`   原因：${waitReason}`)
+  if (waitOptions) console.log(`   选项：${formatWaitOptions(waitOptions)}`)
+  console.log(`   继续时执行：sillyspec run ${stageName} --continue --answer "你的选择"${changeName ? ` --change ${changeName}` : ''}`)
+}
+
+export async function continueStep(pm, progress, stageName, cwd, answer, options = {}) {
+  const { changeName, platformOpts = {} } = options
+  const specBase = platformOpts.specRoot || join(cwd, '.sillyspec')
+  const stageData = progress.stages[stageName]
+
+  if (!stageData || !stageData.steps) {
+    console.error(`❌ 阶段 ${stageName} 未初始化`)
+    process.exit(1)
+  }
+
+  if (!answer) {
+    console.error('❌ --continue 需要 --answer 参数')
+    process.exit(2) // 用法错 → exit 2
+  }
+
+  // 查找 waiting 的步骤
+  const waitingSteps = stageData.steps.map((s, i) => ({ ...s, idx: i })).filter(s => s.status === 'waiting')
+  if (waitingSteps.length === 0) {
+    console.error('没有处于等待状态的步骤')
+    process.exit(1)
+  }
+  if (waitingSteps.length > 1) {
+    console.error(`❌ 检测到 ${waitingSteps.length} 个等待中的步骤，无法确定恢复目标：`)
+    for (const ws of waitingSteps) {
+      console.error(`   Step ${ws.idx + 1}: ${ws.name}${ws.waitReason ? `（${ws.waitReason}）` : ''}`)
+    }
+    console.error(`   请使用 --reset 重置，或手动修复 DB`)
+    process.exit(1)
+  }
+  const currentIdx = waitingSteps[0].idx
+  const defSteps = await getStageSteps(stageName, cwd, progress, platformOpts?.specRoot || null)
+  const currentStepDef = defSteps?.[currentIdx] || {}
+  const currentStep = stageData.steps[currentIdx]
+  const isRepeatableWait = currentStepDef.repeatableWait === true || currentStep.repeatableWait === true
+  const requiresWait = currentStepDef.requiresWait === true || currentStep.requiresWait === true
+  const shouldReturnToCurrentStep = isRepeatableWait || requiresWait
+
+  const now = new Date().toLocaleString('zh-CN', { hour12: false })
+  const prevOutput = currentStep.output || ''
+  const waitRound = (currentStep.waitRound || 0) + 1
+  currentStep.waitRound = waitRound
+  currentStep.waitAnswer = answer
+  currentStep.waitAnswers = Array.isArray(currentStep.waitAnswers) ? currentStep.waitAnswers : []
+  currentStep.waitAnswers.push({
+    round: waitRound,
+    answer,
+    question: prevOutput || null,
+    answeredAt: now,
+  })
+  currentStep.maxWaitRounds = currentStepDef.maxWaitRounds ?? currentStep.maxWaitRounds
+
+  // 合并 waiting 信息到 output
+  const waitInfo = currentStep.waitReason || ''
+  if (waitInfo) {
+    currentStep.output = prevOutput
+      ? `${prevOutput} | 用户回答#${waitRound}：${answer}`
+      : `用户回答#${waitRound}：${answer}`
+  }
+
+  // 清除等待状态
+  delete currentStep.waitReason
+  delete currentStep.waitOptions
+  delete currentStep.waitedAt
+
+  if (shouldReturnToCurrentStep) {
+    currentStep.status = 'pending'
+    currentStep.completedAt = null
+  } else {
+    currentStep.status = 'completed'
+    currentStep.completedAt = now
+  }
+
+  progress.lastActive = now
+  await pm._write(cwd, progress, changeName)
+  triggerSync(cwd, changeName, platformOpts)
+
+  console.log(`✅ Step ${currentIdx + 1}/${stageData.steps.length} 已继续：${currentStep.name}`)
+  console.log(`   回答：${answer}`)
+
+  // Append to user-inputs.md
+  const inputsPath = join(specBase, '.runtime', 'user-inputs.md')
+  const entry = `\n## ${now} | ${changeName || '?'} | ${stageName}: ${currentStep.name} [CONTINUED]\n- 回答：${answer}\n`
+ appendFileSync(inputsPath, entry)
+
+  // shouldReturnToCurrentStep: 回到当前步骤继续执行（repeatable=多轮探索，requiresWait=确认后执行动作）
+  if (shouldReturnToCurrentStep) {
+    console.log(`\n🔁 Step ${currentIdx + 1}/${stageData.steps.length} 已收到用户输入，回到当前步骤继续执行。`)
+    if (isRepeatableWait) {
+      console.log(`   已收集回答轮次：${waitRound}${currentStep.maxWaitRounds ? `/${currentStep.maxWaitRounds}` : ''}`)
+    }
+    if (defSteps && defSteps[currentIdx]) {
+      console.log('')
+      await outputStep(
+        stageName,
+        currentIdx,
+        defSteps,
+        cwd,
+        changeName,
+        progress.project || null,
+        platformOpts,
+        formatWaitHistory(currentStep)
+      )
+    }
+    return { stageCompleted: false, currentIdx, nextPendingIdx: currentIdx }
+  }
+
+  // 检查阶段是否全部完成
+  const nextPendingIdx = stageData.steps.findIndex(s => s.status === 'pending')
+  const nextWaitingIdx = stageData.steps.findIndex(s => s.status === 'waiting')
+  if (nextPendingIdx === -1 && nextWaitingIdx === -1) {
+    stageData.status = 'completed'
+    stageData.completedAt = now
+    await pm._write(cwd, progress, changeName)
+    console.log(`\n✅ ${stageName} 阶段已完成（${stageData.steps.length}/${stageData.steps.length} 步）`)
+    // ── execute 阶段完成时条件性清理 worktree ──
+    if (stageName === 'execute' && changeName) {
+      try {
+        const { WorktreeManager } = await import('../worktree.js');
+        const wm = new WorktreeManager({ cwd });
+        const meta = wm.getMeta(changeName);
+        if (!meta) {
+          console.log('🔗 Worktree: n/a (no meta)');
+        } else if (meta.mode === 'native-worktree') {
+          console.log('🔗 Worktree: kept (外部隔离环境)');
+        } else {
+          // in-place 模式不再短路：cleanup 现在能安全处理 in-place（只清 meta，不碰主工作区）
+          const check = wm.hasUnappliedChanges(changeName);
+          if (check.hasChanges) {
+            console.log(`🔗 Worktree: pending apply (${check.changedFiles.length} 个未应用变更)`);
+            console.log(`   下一步: sillyspec worktree apply ${changeName}`);
+          } else {
+            const cleanResult = wm.cleanup(changeName);
+            console.log(`🔗 Worktree: ${cleanResult.result}`);
+            if (cleanResult.residual?.length > 0) {
+              console.warn(`   ⚠️ 清理残留: ${cleanResult.residual.join('; ')}`);
+              console.warn(`   手动处理: sillyspec worktree cleanup ${changeName} --force`);
+            }
+          }
+        }
+      } catch (e) {
+        console.warn(`🔗 Worktree: check failed — ${e.message}`);
+      }
+    }
+    // 阶段完成后明确下一步（agent 常卡：stageData completed 但不知要 run <下一阶段> 推进 currentStage）
+    const nextStageHint = { brainstorm: 'plan', plan: 'execute', execute: 'verify', verify: 'archive' }[stageName]
+    if (nextStageHint) {
+      console.log(`\n👉 ${stageName} 已完成。下一步：sillyspec run ${nextStageHint}${changeName ? ` --change ${changeName}` : ''}`)
+      if (stageName === 'execute') {
+        console.log(`   ⚠️ 若 worktree 改动还没 apply 到主工作区，先：sillyspec worktree apply ${changeName}`)
+        console.log(`   （apply 不需要先 commit，支持 working tree 未提交改动）`)
+        // plan.md checkbox auto-check：execute 完成 + review.json pass → 自动勾选（治本，比警告可靠）
+        try {
+          const specBaseLc = platformOpts.specRoot || join(cwd, '.sillyspec')
+          const changeDir = join(specBaseLc, 'changes', changeName)
+          const planPath = join(changeDir, 'plan.md')
+          const runtimeRoot = platformOpts.runtimeRoot || join(specBaseLc, '.runtime')
+          const runIdFile = join(runtimeRoot, `current-execute-run-id-${changeName}`)
+          if (existsSync(planPath) && existsSync(runIdFile)) {
+            const executeRunId = readFileSync(runIdFile, 'utf8').trim()
+            const planContent = readFileSync(planPath, 'utf8')
+            const { readReview } = await import('../task-review.js')
+            let checkedCount = 0
+            let skippedCount = 0
+            const updated = planContent.replace(/^(\s*[-*]\s*\[)\s(\]\s*task-\d+)/gim, (match, p1, p2) => {
+              const taskNum = match.match(/task-(\d+)/)[1].padStart(2, '0')
+              const reviewPath = join(runtimeRoot, 'execute-runs', executeRunId, 'tasks', `task-${taskNum}`, 'review.json')
+              const r = readReview(reviewPath)
+              if (r.ok && r.review?.specVerdict !== 'fail' && r.review?.qualityVerdict !== 'fail') {
+                checkedCount++
+                return `${p1}x${p2}`   // 勾选
+              }
+              skippedCount++
+              return match              // 不勾
+            })
+            if (checkedCount > 0) {
+              writeFileSync(planPath, updated)
+              console.log(`   ✅ 自动勾选 ${checkedCount} 个 task checkbox（基于 review.json pass）`)
+            }
+            if (skippedCount > 0) {
+              console.warn(`   ⚠️ ${skippedCount} 个 task 未勾（review.json 缺失/fail）→ archive 会拦。补 review 后重跑 execute --done 触发自动勾`)
+            }
+          }
+        } catch {}
+      }
+    }
+    return { stageCompleted: true, currentIdx, nextPendingIdx: -1 }
+  }
+
+  // 输出下一步
+    if (nextPendingIdx !== -1 && defSteps) {
+      console.log('')
+    await outputStep(stageName, nextPendingIdx, defSteps, cwd, changeName, progress.project || null, platformOpts, answer)
+  } else if (nextWaitingIdx !== -1 && defSteps) {
+    // 下一个步骤也在等待状态
+    const ws = stageData.steps[nextWaitingIdx]
+    console.log(`\n⏸️  Step ${nextWaitingIdx + 1}/${stageData.steps.length} 仍在等待：${ws.name}`)
+    if (ws.waitReason) console.log(`   原因：${ws.waitReason}`)
+    console.log(`   继续：sillyspec run ${stageName} --continue --answer "..."${changeName ? ` --change ${changeName}` : ''}`)
+  }
+
+  return { stageCompleted: false, currentIdx, nextPendingIdx: nextPendingIdx }
+}
+
+export async function skipStep(pm, progress, stageName, cwd, changeName, platformOpts = {}) {
+  const stageData = progress.stages[stageName]
+  if (!stageData || !stageData.steps) {
+    console.error(`❌ 阶段 ${stageName} 未初始化`)
+    process.exit(1)
+  }
+
+  const steps = stageData.steps
+  const currentIdx = steps.findIndex(s => s.status === 'pending' || s.status === 'in-progress')
+
+  if (currentIdx === -1) {
+    const wsIdx = steps.findIndex(s => s.status === 'waiting')
+    if (wsIdx !== -1) {
+      console.error(`⏸️  Step ${wsIdx + 1} 正在等待用户输入，不能跳过。`)
+      console.error(`   请先使用 --continue --answer "..." 继续，或用 --reset 重置。`)
+    } else {
+      console.error('没有待跳过的步骤')
+    }
+    process.exit(1)
+  }
+
+  const defSteps = await getStageSteps(stageName, cwd, progress, platformOpts?.specRoot || null)
+  const stepDef = defSteps ? defSteps[currentIdx] : null
+  if (stepDef && !stepDef.optional) {
+    console.error(`❌ 步骤 "${steps[currentIdx].name}" 不可跳过`)
+    process.exit(1)
+  }
+
+  steps[currentIdx].status = 'skipped'
+  steps[currentIdx].skippedAt = new Date().toLocaleString('zh-CN',{hour12:false})
+  progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
+  await pm._write(cwd, progress, changeName)
+  triggerSync(cwd, changeName, platformOpts)
+
+  console.log(`⏭️ Step ${currentIdx + 1}/${steps.length} 已跳过：${steps[currentIdx].name}`)
+
+  const nextPendingIdx = steps.findIndex(s => s.status === 'pending' || s.status === 'in-progress')
+  if (nextPendingIdx !== -1 && defSteps) {
+    console.log('')
+    await outputStep(stageName, nextPendingIdx, defSteps, cwd, changeName, progress.project || null, platformOpts)
+  } else {
+    const wsIdx = steps.findIndex(s => s.status === 'waiting')
+    if (wsIdx !== -1) {
+      console.log(`\n⏸️  Step ${wsIdx + 1}/${steps.length} 正在等待：${steps[wsIdx].name}`)
+      if (steps[wsIdx].waitReason) console.log(`   原因：${steps[wsIdx].waitReason}`)
+      console.log(`   继续：sillyspec run ${stageName} --continue --answer "..."${changeName ? ` --change ${changeName}` : ''}`)
+    }
+  }
 }
 
