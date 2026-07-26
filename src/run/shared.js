@@ -100,6 +100,23 @@ export async function triggerSync(cwd, changeName, platformOpts = {}) {
 }
 
 /**
+ * 审批检查：execute 阶段启动前检查（W6 Step8a 从 run.js 搬入，runStage + runAutoMode 共用）。
+ * 平台模式走自己的链路，跳过；否则 await import sync.js。
+ * @returns {{ status: string, reason?: string } | null}
+ */
+export async function checkApproval(cwd, changeName, platformOpts = {}) {
+  // 平台模式不需要 CLI 内置审批检查
+  if (platformOpts?.specRoot || platformOpts?.runtimeRoot) return null
+  try {
+    // shared.js 在 src/run/，sync.js 在 src/ → 退一层
+    const syncMod = await import('../sync.js')
+    return await syncMod.checkApproval(changeName, cwd)
+  } catch (e) {
+    return null
+  }
+}
+
+/**
  * 安全执行 git：-c safe.directory per-command（不污染全局 config）+ -C cwd。
  * @returns {{ value: string|null, error: string|null }}
  */

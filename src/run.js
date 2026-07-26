@@ -14,7 +14,7 @@ import { fileURLToPath } from 'url'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
 // W6 Step1: 纯工具抽至 ./run/shared.js（run.js 始终 barrel，外部 import 零感知）
-import { resolveSpecDir, resolveChangeDir, resolvePromptIncludes, triggerSync, safeGit, parsePorcelainPath, auditQuickCompletion, WAIT_MARKER_RE, getStageSteps, formatWaitOptions } from './run/shared.js'
+import { resolveSpecDir, resolveChangeDir, resolvePromptIncludes, triggerSync, safeGit, parsePorcelainPath, auditQuickCompletion, WAIT_MARKER_RE, getStageSteps, formatWaitOptions, checkApproval } from './run/shared.js'
 // barrel re-export: parsePorcelainPath + auditQuickCompletion 被 test 直接 import（契约保留）
 export { parsePorcelainPath, auditQuickCompletion } from './run/shared.js'
 // W6 Step2: scan profile 数据生成 + quick scan CLI preflight/postcheck 抽至 ./run/scan-profile.js（自洽，无 test 直接 import）
@@ -90,21 +90,6 @@ import { definition as brainstormAutoDef } from './stages/brainstorm-auto.js'
  */
 
 // triggerSync → ./run/shared.js（W6 Step1）
-
-/**
- * 审批检查辅助函数：execute 阶段启动前检查
- * @returns {{ status: string, reason?: string } | null}
- */
-async function checkApproval(cwd, changeName, platformOpts = {}) {
-  // 平台模式不需要 CLI 内置审批检查
-  if (platformOpts?.specRoot || platformOpts?.runtimeRoot) return null
-  try {
-    const syncMod = await import('./sync.js')
-    return await syncMod.checkApproval(changeName, cwd)
-  } catch (e) {
-    return null
-  }
-}
 
 // resolveChangeDir → ./run/shared.js（W6 Step1）
 
