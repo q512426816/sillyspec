@@ -4003,7 +4003,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
 
 // 测试专用导出：completeStep 是 step 完成处理核心（产物校验/gate 链/sync/auto 推进），
 // 行为保持重构需要 characterization 测试直接驱动它。有先例：worktree-guard.js 的 _queryDbFirstCellForTest。
-export { completeStep as _completeStepForTest }
+export { completeStep as _completeStepForTest, outputStep as _outputStepForTest }
 
 async function skipStep(pm, progress, stageName, cwd, changeName, platformOpts = {}) {
   const stageData = progress.stages[stageName]
