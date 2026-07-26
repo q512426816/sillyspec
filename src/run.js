@@ -14,7 +14,7 @@ import { fileURLToPath } from 'url'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
 // W6 Step1: 纯工具抽至 ./run/shared.js（run.js 始终 barrel，外部 import 零感知）
-import { resolveSpecDir, resolveChangeDir, resolvePromptIncludes, triggerSync, safeGit, parsePorcelainPath, auditQuickCompletion, WAIT_MARKER_RE } from './run/shared.js'
+import { resolveSpecDir, resolveChangeDir, resolvePromptIncludes, triggerSync, safeGit, parsePorcelainPath, auditQuickCompletion, WAIT_MARKER_RE, getStageSteps, formatWaitOptions } from './run/shared.js'
 // barrel re-export: parsePorcelainPath + auditQuickCompletion 被 test 直接 import（契约保留）
 export { parsePorcelainPath, auditQuickCompletion } from './run/shared.js'
 // W6 Step2: scan profile 数据生成 + quick scan CLI preflight/postcheck 抽至 ./run/scan-profile.js（自洽，无 test 直接 import）
@@ -48,19 +48,6 @@ import { allocateQuicklogEntry, completeQuicklogEntry, findQuicklogEntry, valida
 // ── Wait State Constants ──
 const WAIT_MARKERS = ['[WAIT_FOR_USER]', '[NEEDS_CONFIRM]', '[NEEDS_DECISION]']
 
-/**
- * 格式化 waitOptions 为人类可读字符串
- */
-function formatWaitOptions(raw) {
-  if (!raw) return null
-  try {
-    const parsed = JSON.parse(raw)
-    if (Array.isArray(parsed)) return parsed.join(', ')
-    return raw
-  } catch {
-    return raw
-  }
-}
 
 /**
  * 格式化 repeatableWait 步骤的历史用户回答，注入到重新输出的 step prompt 前。
@@ -168,41 +155,6 @@ function resolveChangeName(cwd, progress, specDir = null) {
   return null
 }
 
-/**
- * 获取阶段的步骤定义（execute 需要动态构建）
- */
-async function getStageSteps(stageName, cwd, progress, specDir = null) {
-  if (stageName === 'execute') {
-    const changeDir = resolveChangeDir(cwd, progress, specDir)
-    let planFile = null
-    let worktreePath = null
-    if (changeDir) {
-      const p = join(changeDir, 'plan.md')
-      if (existsSync(p)) planFile = p
-      // 自动检测 worktree 路径，注入 Wave prompt 的 workdir 指令
-      // 修复：之前未传 worktreePath 给 buildExecuteSteps，导致 Wave prompt 缺失工作目录指令，
-      // 子代理可能把文件写到主工作区而非 worktree 内，破坏隔离。
-      try {
-        const changeName = basename(changeDir)
-        const { WorktreeManager } = await import('./worktree.js')
-        const wm = new WorktreeManager({ cwd })
-        const meta = wm.getMeta(changeName)
-        if (meta?.worktreePath && existsSync(meta.worktreePath)) {
-          worktreePath = meta.worktreePath
-        }
-      } catch {
-        // 无 worktree meta 不阻断——可能是首次启动或 in-place 模式
-      }
-    }
-    return buildExecuteSteps(planFile, { worktreePath })
-  }
-  if (stageName === 'plan') {
-    const changeDir = resolveChangeDir(cwd, progress, specDir)
-    return buildPlanSteps(changeDir)
-  }
-  const def = stageRegistry[stageName]
-  return def ? def.steps : null
-}
 
 /**
  * 确保阶段的 steps 已初始化到 progress
