@@ -127,6 +127,7 @@ function assert(label, condition, detail) {
 {
   const runSrc = (await readFile(join(__dirname, '..', 'src', 'run.js'), 'utf8'))
     + '\n' + (await readFile(join(__dirname, '..', 'src', 'run', 'shared.js'), 'utf8'))
+    + '\n' + (await readFile(join(__dirname, '..', 'src', 'run', 'prompt.js'), 'utf8'))
 
   // 平台模式块
   const platformMarker = 'promptText.replace(/\\{WORKFLOWS_ROOT\\}'
@@ -163,6 +164,7 @@ function assert(label, condition, detail) {
   const runSrc = (await readFile(join(__dirname, '..', 'src', 'run.js'), 'utf8'))
     + '\n' + (await readFile(join(__dirname, '..', 'src', 'run', 'shared.js'), 'utf8'))
     + '\n' + (await readFile(join(__dirname, '..', 'src', 'run', 'quick-audit.js'), 'utf8'))
+    + '\n' + (await readFile(join(__dirname, '..', 'src', 'run', 'prompt.js'), 'utf8'))
   assert('quick 审计检查 quicklog 目录存在', runSrc.includes('quicklog 目录不存在'))
   assert('quick 审计检查 quicklog 为空', runSrc.includes('quicklog 目录为空'))
 

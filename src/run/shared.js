@@ -16,6 +16,10 @@ import { fileURLToPath } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
+// ── Wait State Constants ──（W6 Step3 从 run.js 搬入：prompt.js outputStep 与 run.js wait-detection 共用）
+// 正则匹配：只识别独立一行的标记，避免误伤文档正文引用
+export const WAIT_MARKER_RE = /^\s*\[(WAIT_FOR_USER|NEEDS_CONFIRM|NEEDS_DECISION)\]\s*$/m
+
 /**
  * 解析 prompt 中的 {{include: <name>}} 占位符：读包内 templates/prompts/<name>.md 注入。
  * 把 stage step prompt 里 self-contained 的大块抽到外部模板，CLI 端组装时注入——
