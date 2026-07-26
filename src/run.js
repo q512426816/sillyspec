@@ -19,10 +19,11 @@ import { resolveSpecDir, resolveChangeDir, resolvePromptIncludes, triggerSync, s
 export { parsePorcelainPath, auditQuickCompletion } from './run/shared.js'
 // W6 Step2: scan profile 数据生成 + quick scan CLI preflight/postcheck 抽至 ./run/scan-profile.js（自洽，无 test 直接 import）
 import { computeScanProfile, applyScanProfileSteps, executeScanPreflight, executeScanPostcheck } from './run/scan-profile.js'
+// W6 Step2: quick 审计结论打印 + 多变更关联选择抽至 ./run/quick-audit.js（自洽，无 test 直接 import）
+import { printQuickAuditReview, resolveQuickLinkedChanges } from './run/quick-audit.js'
 import { ProgressManager } from './progress.js'
 import { SCAN_STATUS, POINTER_STATUS, isPointerCorrupted } from './constants.js'
 import { allocateQuicklogEntry, completeQuicklogEntry, findQuicklogEntry, validateQuickResult } from './quicklog.js'
-import { checkbox } from '@inquirer/prompts'
 
 /**
  * 清洗项目名：只保留 ASCII 字母/数字/横线/下划线/点，过滤中文和特殊字符。
@@ -312,23 +313,6 @@ function parseModuleMapSimple(content) {
  *   使 slice(3) 误吃首文件路径首字符（实测 ` M frontend/...` → "rontend/..."，见 guard.json baseline）。
  *   应直接 split('\n').filter(Boolean)，每行单独解析。
  */
-
-function printQuickAuditReview(review) {
-  if (review.status === 'blocked') {
-    console.error(`\n🚫 quick 变更边界审计 — BLOCKED：`)
-    for (const r of review.reasons) {
-      console.error(`   - ${r}`)
-    }
-    console.error(`\n   quick 已停止：请恢复/拆分这些变更，或重新运行 quick 并显式声明范围。`)
-  } else if (review.status === 'warning') {
-    console.warn(`\n⚠️ quick 变更边界审计 — WARNING：`)
-    for (const r of review.reasons) {
-      console.warn(`   - ${r}`)
-    }
-  } else {
-    console.log(`\n✅ quick 变更边界审计 — SAFE (变更 ${review.changedFiles.length} 个文件)`)
-  }
-}
 
 // triggerSync → ./run/shared.js（W6 Step1）
 
@@ -1493,74 +1477,6 @@ function resolveChangeNameAuto(cwd, specDir = null) {
     .filter(e => e.isDirectory() && e.name !== 'archive')
   if (entries.length === 1) return entries[0].name
   return null
-}
-
-/**
- * quick 阶段多变更交互式选择关联变更。
- * - 0 活跃变更 → []（仅记 QUICKLOG，不关联）
- * - 1 活跃变更 → 默认关联它（保持现状友好，不弹交互）
- * - ≥2 活跃变更 + 交互 → checkbox 多选（推荐项默认勾，空选 = 不关联）
- * - ≥2 活跃变更 + 非交互 → []（不关联）+ 提示用 --change a,b
- */
-async function resolveQuickLinkedChanges({ pm, cwd, specDir, quickFiles, taskDescription, nonInteractive }) {
-  let activeChanges = []
-  try {
-    activeChanges = await pm.listChanges(cwd)
-  } catch {
-    activeChanges = []
-  }
-  if (activeChanges.length === 0) return []
-  if (activeChanges.length === 1) return [activeChanges[0]]
-
-  if (nonInteractive || !process.stdin.isTTY) {
-    console.log('💡 非交互环境，已默认不关联变更；如需关联请用 --change a,b')
-    return []
-  }
-
-  // 脏文件（推荐信号之一）
-  let baselineFiles = []
-  try {
-    const { execSync } = await import('child_process')
-    const gs = execSync('git status --porcelain', { cwd, encoding: 'utf8', timeout: 10000 })
-    baselineFiles = gs.split('\n').filter(Boolean)
-      .map(l => parsePorcelainPath(l))
-      .filter(Boolean)
-      .filter(f => !f.startsWith('.sillyspec/'))
-  } catch {}
-
-  // 推荐打分（脏文件 + 任务描述双信号）
-  let recommendations = []
-  try {
-    const { recommendChanges } = await import('./quick-recommend.js')
-    recommendations = recommendChanges({ activeChanges, specDir, baselineFiles, quickFiles, taskDescription })
-  } catch {
-    recommendations = activeChanges.map(name => ({ name, score: 0, reasons: [] }))
-  }
-  const scoreMap = new Map(recommendations.map(r => [r.name, r.score]))
-  const reasonMap = new Map(recommendations.map(r => [r.name, r.reasons]))
-  const recommendedSet = new Set(recommendations.filter(r => r.score > 0).map(r => r.name))
-
-  // 按推荐分降序展示
-  const ordered = [...activeChanges].sort((a, b) =>
-    (scoreMap.get(b) || 0) - (scoreMap.get(a) || 0) || a.localeCompare(b))
-
-  const choices = ordered.map(name => {
-    const reasons = reasonMap.get(name) || []
-    const isRec = recommendedSet.has(name)
-    return {
-      name: `${isRec ? '⭐ ' : '   '}${name}`,
-      value: name,
-      description: reasons.length > 0 ? reasons.join('；') : '无推荐信号',
-      checked: isRec,
-    }
-  })
-
-  console.log('🔗 检测到多个活跃变更，选择本次 quick 关联哪些（可多选；不勾选任何项 = 仅记 QUICKLOG，不关联变更）')
-  if (recommendedSet.size > 0) {
-    console.log('   ⭐ = 基于脏文件/任务描述推荐，已默认勾选')
-  }
-  const selected = await checkbox({ message: '关联变更（空格切换，回车确认）', choices })
-  return selected
 }
 
 async function runStage(pm, progress, stageName, cwd, changeName, skipApproval = false, platformOpts = {}, quickOpts = {}) {
