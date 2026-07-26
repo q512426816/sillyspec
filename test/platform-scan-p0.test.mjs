@@ -88,7 +88,8 @@ function assert(label, condition, detail) {
 
 // ── 测试 3：safeGit 使用 -c safe.directory（不污染全局 config） ──
 {
-  const runSrc = await readFile(join(__dirname, '..', 'src', 'run.js'), 'utf8')
+  const runSrc = (await readFile(join(__dirname, '..', 'src', 'run.js'), 'utf8'))
+    + '\n' + (await readFile(join(__dirname, '..', 'src', 'run', 'shared.js'), 'utf8'))
 
   assert('safeGit 不含 --global', !runSrc.includes('git config --global'),
     '发现 --global，会污染容器 git config')
@@ -124,7 +125,8 @@ function assert(label, condition, detail) {
 
 // ── 测试 5：run.js 占位符替换补齐 ──
 {
-  const runSrc = await readFile(join(__dirname, '..', 'src', 'run.js'), 'utf8')
+  const runSrc = (await readFile(join(__dirname, '..', 'src', 'run.js'), 'utf8'))
+    + '\n' + (await readFile(join(__dirname, '..', 'src', 'run', 'shared.js'), 'utf8'))
 
   // 平台模式块
   const platformMarker = 'promptText.replace(/\\{WORKFLOWS_ROOT\\}'
@@ -158,7 +160,8 @@ function assert(label, condition, detail) {
   assert('quick step 3 变更索引引用 <quicklog-id>', step3Prompt.includes('- <quicklog-id> |'))
 
   // run.js 审计包含 quicklog 检查
-  const runSrc = await readFile(join(__dirname, '..', 'src', 'run.js'), 'utf8')
+  const runSrc = (await readFile(join(__dirname, '..', 'src', 'run.js'), 'utf8'))
+    + '\n' + (await readFile(join(__dirname, '..', 'src', 'run', 'shared.js'), 'utf8'))
   assert('quick 审计检查 quicklog 目录存在', runSrc.includes('quicklog 目录不存在'))
   assert('quick 审计检查 quicklog 为空', runSrc.includes('quicklog 目录为空'))
 
