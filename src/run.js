@@ -28,7 +28,7 @@ export { applyRootPlaceholders } from './run/prompt.js'
 // W6 Step4: gate 级联 + deps 门 + 完成回滚抽至 ./run/gates.js（自洽叶子模块，无 test 直接 import）
 import { enforceDepsGate, runStageCompletionGates } from './run/gates.js'
 // W6 Step5: completeStep 子 handler + archive 抽至 ./run/complete-handlers.js（自洽叶子，handler 无 test 直接 import）
-import { handleArchiveConfirmStep, handlePlanGeneratePlanStep, handleScanProjectListStep } from './run/complete-handlers.js'
+import { handleArchiveConfirmStep, handlePlanGeneratePlanStep, handleScanProjectListStep, handleWorkflowPostCheck } from './run/complete-handlers.js'
 // barrel re-export: sanitizeProjectName + validateParsedProjects 被 test 直接 import（随 handleScan 搬走，契约保留）
 export { sanitizeProjectName, validateParsedProjects } from './run/complete-handlers.js'
 import { ProgressManager } from './progress.js'
@@ -2082,108 +2082,9 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
   const defSteps = await getStageSteps(stageName, cwd, progress, platformOpts?.specRoot || null)
   console.log(`✅ Step ${currentIdx + 1}/${steps.length} 完成：${steps[currentIdx].name}\n`)
 
-  // Workflow post_check：scan 深度扫描完成后自动检查产物
-  if (stageName === 'scan' && steps[currentIdx]?.name?.includes('深度扫描')) {
-    try {
-      const { loadWorkflow, runPostCheck, formatCheckReport, saveWorkflowRun } = await import('./workflow.js')
-      const wf = loadWorkflow(cwd, 'scan-docs')
-      if (wf) {
-        // 确定当前项目（优先级链）：
-        //   progress.project (dbProjectName，平台模式真实项目名，与 outputStep 占位符渲染对齐)
-        //   > change?.project (变更对象的项目字段，平台模式 change 创建时传入)
-        //   > steps[idx].project (perProject 展开标记，兼容旧模式)
-        //   > steps[idx].name 正则提取 [xxx] 后缀
-        //   > null（回退检查所有项目）
-        // task-05 修复：日志显示项目名变 frontend 是 perProject 误展开 bug，
-        // 用 progress.project（与 outputStep 占位符渲染路径一致）修正 myaaa/frontend 分裂。
-        const currentProjectName = progress.project
-          || (typeof change !== 'undefined' && change ? change.project : null)
-          || steps[currentIdx].project
-          || (steps[currentIdx].name.match(/\[([^\]]+)\]\s*$/) || [])[1]
-          || null
-
-        // 确定要检查的项目列表
-        let projectsToCheck = []
-        if (currentProjectName) {
-          // 按项目展开模式：只检查当前项目
-          projectsToCheck = [currentProjectName]
-        } else {
-          // 兼容旧模式（未展开）：检查所有项目
-          const projectsDir = join(specBase, 'projects')
-          const projectFiles = existsSync(projectsDir)
-            ? readdirSync(projectsDir).filter(f => f.endsWith('.yaml'))
-            : []
-          projectsToCheck = projectFiles.map(f => f.replace(/\.yaml$/, ''))
-        }
-
-        let anyFailed = false
-        for (const pName of projectsToCheck) {
-          const result = runPostCheck(wf, cwd, pName, {}, specBase)
-          const report = formatCheckReport(result)
-          console.log(report)
-          if (result.status === 'fail') {
-            anyFailed = true
-            // retry_prompts 由 _checkWorkflow 自动生成
-            for (const rp of (result.retry_prompts || [])) {
-              console.log(`\n🔄 重试提示（项目 ${pName}）：\n`)
-              console.log(rp.prompt)
-            }
-          }
-          const saved = saveWorkflowRun(result, {
-            cwd,
-            source: 'run.js',
-            stage: 'scan',
-            step: steps[currentIdx]?.name,
-            ...(platformOpts.runtimeRoot ? { runtimeRoot: platformOpts.runtimeRoot } : {}),
-            ...(platformOpts.scanRunId ? { scanRunId: platformOpts.scanRunId } : {})
-          })
-          if (saved) console.log(`📁 结果已归档：${saved}`)
-        }
-        if (anyFailed) {
-          console.log(`\n⚠️ 存在检查失败项，请按上面的重试提示修复后再继续。`)
-          // task-07: 阻断推进（与 task-06 平台模式 scan-postcheck 失败分支 return 结构对齐）
-          // scan 深度扫描产物校验未通过时，不允许 clean success / 进入下一 step，
-          // 让上层走"完成但不推进"分支，--done 被拒。
-          return { stageCompleted: false, currentIdx, nextPendingIdx: currentIdx }
-        }
-      }
-    } catch (e) {
-      console.warn(`⚠️ workflow 检查跳过：${e.message}`)
-    }
-  }
-
-  // Workflow post_check：archive extract-module-impact 完成后检查产物
-  if (stageName === 'archive' && steps[currentIdx]?.name?.includes('extract-module-impact')) {
-    try {
-      const { loadWorkflow, runPostCheck, formatCheckReport, saveWorkflowRun } = await import('./workflow.js')
-      const wf = loadWorkflow(cwd, 'archive-impact')
-      if (wf && changeName) {
-        const raw = JSON.stringify(wf)
-        const resolved = JSON.parse(raw.replace(/<change-name>/g, changeName))
-        const result = runPostCheck(resolved, cwd, progress.project || basename(cwd), {}, specBase)
-        // 只报告 impact-analyzer 的结果（doc-syncer 是后续步骤）
-        const impactResult = (result.roles || []).find(r => r.id === 'impact-analyzer')
-        if (impactResult) {
-          const icon = impactResult.status === 'pass' ? '✅' : '❌'
-          console.log(`${icon} module-impact.md 检查${impactResult.status === 'pass' ? '通过' : '失败'}`)
-          for (const f of (result.failures || []).filter(f => f.role_id === 'impact-analyzer')) {
-            console.log(`   └─ ${f}`)
-          }
-        }
-        const saved = saveWorkflowRun(result, {
-          cwd,
-          source: 'run.js',
-          stage: 'archive',
-          step: steps[currentIdx]?.name,
-          ...(platformOpts.runtimeRoot ? { runtimeRoot: platformOpts.runtimeRoot } : {}),
-          ...(platformOpts.scanRunId ? { scanRunId: platformOpts.scanRunId } : {})
-        })
-        if (saved) console.log(`📁 结果已归档：${saved}`)
-      }
-    } catch (e) {
-      console.warn(`⚠️ workflow 检查跳过：${e.message}`)
-    }
-  }
+  // Workflow post_check（W6 Step6 抽至 complete-handlers.js handleWorkflowPostCheck）
+  const _wfResult = await handleWorkflowPostCheck({ stageName, steps, currentIdx, cwd, specBase, progress, platformOpts, changeName })
+  if (_wfResult) return _wfResult
 
   if (printNext) {
     await outputStep(stageName, nextPendingIdx, defSteps, cwd, changeName, progress.project || null, platformOpts)

@@ -159,8 +159,8 @@ console.log('\n=== Test 4: 平台指针 scan 完成后状态更新 ===')
 console.log('\n=== Test 5: run.js 调用 saveWorkflowRun 传入平台参数 ===')
 {
   const { readFile } = await import('fs/promises')
-  const runSrc = await readFile(join(__dirname, '..', 'src', 'run.js'), 'utf8')
-
+  const runSrc = (await readFile(join(__dirname, '..', 'src', 'run.js'), 'utf8'))
+    + '\n' + (await readFile(join(__dirname, '..', 'src', 'run', 'complete-handlers.js'), 'utf8'))
   // 找到 saveWorkflowRun 调用
   const calls = runSrc.match(/saveWorkflowRun\([^)]+\{[^}]+\}/gs)
   assert('至少有 2 处 saveWorkflowRun 调用', calls && calls.length >= 2, `实际: ${calls?.length}`)
