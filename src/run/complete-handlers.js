@@ -21,10 +21,12 @@
  * （非被外层吞）；process.exit 不可被 try 捕获 → 搬迁行为完全等价。
  */
 import { basename, join, resolve, relative, isAbsolute } from 'node:path'
-import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync, unlinkSync, rmSync } from 'node:fs'
 import { renameSyncRetry } from '../fs-atomic.js'
-import { resolveChangeDir } from './shared.js'
+import { resolveChangeDir, safeGit, auditQuickCompletion } from './shared.js'
 import { stageRegistry } from '../stages/index.js'
+import { printQuickAuditReview } from './quick-audit.js'
+import { validateQuickResult, allocateQuicklogEntry, findQuicklogEntry, completeQuicklogEntry } from '../quicklog.js'
 
 /**
  * 清洗项目名：只保留 ASCII 字母/数字/横线/下划线/点，过滤中文和特殊字符。
@@ -520,6 +522,131 @@ export async function handleWorkflowPostCheck({ stageName, steps, currentIdx, cw
     } catch (e) {
       console.warn(`⚠️ workflow 检查跳过：${e.message}`)
     }
+  }
+  return null
+}
+/**
+ * quick 阶段完成收尾（W6 Step6b 从 completeStep 内联块抽出）：
+ * 强校验 QUICKLOG 条目 + 审计（auditQuickCompletion）+ 结果摘要结构校验 + 翻状态/勾 tasks.md
+ * （CLI 接管 QUICKLOG 分配/写入/收尾）。blocked → process.exit(1)（无 early-return，调用点纯 await）。
+ *
+ * ctx：stageName/steps/currentIdx/cwd/progress/changeName/specBase/outputText/confirm/
+ * isForceBaseline/isAllowNew/platformOpts。辅助函数直接 import（safeGit/auditQuickCompletion ← shared，
+ * printQuickAuditReview ← quick-audit，4 个 quicklog fns ← quicklog，unlinkSync/rmSync ← fs 静态）。
+ */
+export async function handleQuickStageCompletion({ stageName, steps, currentIdx, cwd, progress, changeName, specBase, outputText, confirm, isForceBaseline, isAllowNew, platformOpts }) {
+  // quick 收尾：强校验 QUICKLOG 条目 + 翻状态 + 勾 tasks.md（CLI 接管）
+  if (stageName === 'quick') {
+    // §4.6 从 session guard.json 读 guard（不依赖 progress.quickGuard）。
+    // D-003@v1：progress._write 不持久化顶层 quickGuard，跨进程 --done 时读出的 progress 无 quickGuard，
+    // 若仍用 if (progress.quickGuard) 驱动收尾会整体跳过，导致 .runtime/quick-sessions/<sessionId>/ 残留僵尸。
+    // 改为从文件读 guard：优先 session 目录 guard.json，回退旧单文件 quick-guard.json（task-03 前兼容）。
+    // sessionId == changeName == quick-<uuid8>（completeStep 作用域内 changeName 已解构自 options）。
+    const runtimeBase = platformOpts.runtimeRoot || join(specBase, '.runtime')
+    const sessionGuardFile = join(runtimeBase, 'quick-sessions', changeName, 'guard.json')
+    const legacyGuardFile = join(specBase, '.runtime', 'quick-guard.json')
+    let guard = null
+    try {
+      guard = existsSync(sessionGuardFile)
+        ? JSON.parse(readFileSync(sessionGuardFile, 'utf8'))
+        : (existsSync(legacyGuardFile) ? JSON.parse(readFileSync(legacyGuardFile, 'utf8')) : null)
+    } catch {}
+
+    // 强校验 / 收尾：本会话必须有一条真实 QUICKLOG 条目（治「报 SAFE 但漏写」bug）。
+    // guard 缺失（brownfield：新代码前启动的会话）不阻断——兜底补写一条记录，保住「完成必有记录」不变量。
+    const gitUser = safeGit(cwd, ['config', 'user.name']).value || 'unknown'
+    let qlId = guard?.quicklogId || null
+    const linkedChanges = Array.isArray(guard?.linkedChanges) ? guard.linkedChanges : []
+
+    // 审计：仅在有 guard 时跑（brownfield 无 guard 跳过，兼容 D-003 brownfield 行为）。
+    if (guard) {
+      // --done 的 --force-baseline/--allow-new 并入 guard（与 step1 持久化值取或）。
+      // 修复 ql-20260713-002-7628：旧代码解析了这两个 flag 但只传 {isConfirm} 给审计，
+      // 致 --done --force-baseline 静默无效、用户被误导「重跑 --confirm」也无法解锁。
+      const mergedGuard = {
+        ...guard,
+        forceBaseline: guard.forceBaseline || isForceBaseline,
+        allowNew: guard.allowNew || isAllowNew,
+      }
+      const review = await auditQuickCompletion(cwd, mergedGuard, { isConfirm: confirm })
+      printQuickAuditReview(review)
+      if (review.status === 'blocked') {
+        steps[currentIdx].status = 'pending'
+        steps[currentIdx].completedAt = null
+        if (outputText) steps[currentIdx].output = null
+        process.exit(1)
+      }
+      progress.lastQuickReview = review
+    }
+
+    // 结果摘要结构校验（最后一步、isDone 且带了 --output 时）：--output 是 QUICKLOG「结果：」
+    // 归档的唯一来源，要求按 需求/根因/方案/结果 模板给全（见 stages/quick.js step3 prompt）。
+    // 确定性校验：只查必填字段是否齐全，不判内容质量。缺字段 → 本次不完成（回滚 step 状态 +
+    // exit 1），保留「进行中」条目，agent 补全 --output 后重跑 --done 即可，不丢进度。
+    // 仅 completeQuicklogEntry 会实际持久化时才校验；前两个 step 的 --done output 不入 QUICKLOG，不校验。
+    if (outputText) {
+      const resultCheck = validateQuickResult(outputText)
+      if (!resultCheck.ok) {
+        console.error(`\n❌ quick 结果摘要结构不完整：缺少字段 ${resultCheck.missing.join('、')}`)
+        console.error(`   --output 是 QUICKLOG「结果：」归档的唯一来源，四个标签必须放在 --output 里（不是 --input）。`)
+        console.error(`   补全后重跑 --done（不丢进度），直接照抄此模板：`)
+        console.error(`     sillyspec run quick --done --change <changeName> --output "需求：用户/任务要什么`)
+        console.error(`     根因：为什么这样改（纯新增/样式则写「无，纯新增/纯样式」）`)
+        console.error(`     方案：怎么改的`)
+        console.error(`     结果：验证情况（测试数 / lint / typecheck / 部署状态）"`)
+        steps[currentIdx].status = 'pending'
+        steps[currentIdx].completedAt = null
+        if (outputText) steps[currentIdx].output = null
+        process.exit(1)
+      }
+    }
+
+    if (!qlId) {
+      // 无 ql-ID（guard 缺失或 brownfield 无 quicklogId）：补分配后立即完成，不阻断。
+      try {
+        const alloc = await allocateQuicklogEntry(specBase, gitUser, {
+          description: guard?.taskDescription || '(补分配)',
+          linkedChanges,
+          allowedFiles: Array.isArray(guard?.allowedFiles) ? guard.allowedFiles : [],
+        })
+        qlId = alloc.qlId
+        console.log(`📝 QUICKLOG 兜底补写: ${qlId}（guard 缺失/brownfield 会话）`)
+      } catch (e) {
+        console.error(`\n❌ QUICKLOG 补分配失败: ${e.message}`)
+        steps[currentIdx].status = 'pending'
+        steps[currentIdx].completedAt = null
+        if (outputText) steps[currentIdx].output = null
+        process.exit(1)
+      }
+    }
+    if (!findQuicklogEntry(specBase, gitUser, qlId)) {
+      console.error(`\n❌ quick 阶段完成校验失败：QUICKLOG 条目 ${qlId} 不存在。`)
+      console.error(`   会话期间记录被删除或从未写入。请检查 .sillyspec/quicklog/ 后重跑 --done。`)
+      steps[currentIdx].status = 'pending'
+      steps[currentIdx].completedAt = null
+      if (outputText) steps[currentIdx].output = null
+      process.exit(1)
+    }
+    // 翻状态进行中→已完成 + 追加结果 + 勾选关联 tasks.md
+    // resultText 不再截断：结构化结果块（需求/根因/方案/结果）完整落盘，多行写成字段化块。
+    try {
+      await completeQuicklogEntry(specBase, gitUser, qlId, {
+        resultText: outputText || '',
+        linkedChanges,
+      })
+      console.log(`📝 QUICKLOG 条目 ${qlId} 已标记完成`)
+    } catch (e) {
+      console.warn(`⚠️ QUICKLOG 完成态写入失败: ${e.message}`)
+    }
+
+    // 清理 session 目录（rmSync/unlinkSync 容忍不存在）。
+    try {
+      if (changeName) {
+        const sessionDir = join(runtimeBase, 'quick-sessions', changeName)
+        rmSync(sessionDir, { recursive: true, force: true })
+      }
+      if (existsSync(legacyGuardFile)) unlinkSync(legacyGuardFile)
+    } catch {}
   }
   return null
 }
