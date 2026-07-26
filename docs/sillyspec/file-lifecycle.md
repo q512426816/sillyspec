@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-05-31 11:00:00
-updated_at: 2026-07-25T00:00:00+08:00
+updated_at: 2026-07-26T00:00:00+08:00
 ---
 
 # SillySpec 文件生命周期
@@ -27,7 +27,7 @@ updated_at: 2026-07-25T00:00:00+08:00
 - `src/scan-postcheck.js`
 - `src/knowledge-match.js`
 - `src/progress.js`
-- `src/run.js`
+- `src/run.js`（W6 后退化为 barrel；实际逻辑在 `src/run/*.js` 叶子模块：shared / prompt / quick-audit / scan-profile / gates / complete-handlers / complete / stage / command。run.js 仅 re-export 外部 import 契约，外部零感知）
 - `src/stages/*.js`
 - `src/worktree.js`
 - `src/worktree-apply.js`
@@ -49,8 +49,8 @@ updated_at: 2026-07-25T00:00:00+08:00
 | propose | 7 | 包含“生成规范文件”与“自检门控”，四件套是该阶段预期产物 |
 | plan | 动态 | 默认 9 步（含独立"审查计划"step，按规模分级 tier=self 自审 / tier=independent 独立子代理 + stage review.json）；`plan.md` 解析到任务后插入任务蓝图协调器；postcheck 含确定性校验（结构/可行性/跨任务契约/design 文件覆盖/产物） |
 | execute | 动态 | 默认 12 步；Wave 来自 `plan.md`，解析失败时默认 3 个 Wave；完成时 `validateExecuteOutputs` 客观核验存在真实代码变更（plan 有 task 但确证零变更则阻断），Task Review Gate 另做 review.json git 真实性交叉校验 |
-| verify | 7 | 只读校验 + 写 `verify-result.md`；完成时 `validateVerifyOutputs` 校验 `verify-result.md` 存在且结论非 FAIL，缺失或 FAIL 则阻断完成；随后 CLI 亲自执行 `local.yaml` 的 `commands.test` 与自报告对账（实测失败阻断，结果写 `.runtime/verify-runs/<ts>/test-result.json`）；「对照设计检查」step 的 5 探针由 run.js `resolvePromptIncludes` 从包内 `templates/prompts/verify-probes.md` 经 `{{include}}` 注入（prompt 组装时展开） |
-| archive | 5 | 辅助阶段；第 4 步必须带 `--confirm`，由 `run.js` 移动目录并注销 active change；移动前硬校验 `plan.md` 存在，移动后校验 `design.md`/`module-impact.md` |
+| verify | 7 | 只读校验 + 写 `verify-result.md`；完成时 `validateVerifyOutputs` 校验 `verify-result.md` 存在且结论非 FAIL，缺失或 FAIL 则阻断完成；随后 CLI 亲自执行 `local.yaml` 的 `commands.test` 与自报告对账（实测失败阻断，结果写 `.runtime/verify-runs/<ts>/test-result.json`）；「对照设计检查」step 的 5 探针由 run/shared.js `resolvePromptIncludes` 从包内 `templates/prompts/verify-probes.md` 经 `{{include}}` 注入（prompt 组装时展开） |
+| archive | 5 | 辅助阶段；第 4 步必须带 `--confirm`，由 `run/complete-handlers.js`（`archiveChangeDirectory`）移动目录并注销 active change；移动前硬校验 `plan.md` 存在，移动后校验 `design.md`/`module-impact.md` |
 | quick | 3 | 辅助阶段；直接在主工作区实现，不创建 worktree |
 | explore | 1 | 只读探索 |
 | status | 3 | 状态展示 |
@@ -76,9 +76,9 @@ updated_at: 2026-07-25T00:00:00+08:00
 
 `init.js` 会把 `.sillyspec/.runtime/`、`.sillyspec/local.yaml`、`.sillyspec/codebase/SCAN-RAW.md` 追加到 `.gitignore`。
 
-> **平台模式残留清理边界**（`init.js` `cleanupRuntimeResidue`，由 `run.js` 启动时首次执行一次）：
+> **平台模式残留清理边界**（`init.js` `cleanupRuntimeResidue`，由 `run/command.js`（`runCommand`）启动时首次执行一次）：
 > 当 `specRoot` 指向外部、源码目录的 `.sillyspec/` 含真实资产（`changes/`/`projects/`/`sillyspec.db`）时，只清理运行时残留，**不整删 `.runtime/`**。清理白名单保留权威状态：`worktrees/`、`sillyspec.db`、`global.json`、`gate-status.json`、`contract-artifacts/`、`execute-runs/`；其余子项（`artifacts/`、`scan-runs/`、`scan-projects.json`、`user-inputs.md`、`postcheck-result.json` 等可重建缓存）逐项删除，`local.yaml`、`codebase/` 整删。未知子项默认保留（安全侧倾斜）。
-> 该清理在 `run.js` 启动时**仅执行一次**：首次处理后写 cwd 根的 `.sillyspec-platform-cleaned` 标记文件，后续每次 `run` 直接跳过。旧版每次启动都打印 `❌ 拒绝删除` 红叉属误导性噪声（清理既不阻塞流程也不动真实资产），已降为 `ℹ️` 一次性提示。
+> 该清理在 `run/command.js`（`runCommand`）启动时**仅执行一次**：首次处理后写 cwd 根的 `.sillyspec-platform-cleaned` 标记文件，后续每次 `run` 直接跳过。旧版每次启动都打印 `❌ 拒绝删除` 红叉属误导性噪声（清理既不阻塞流程也不动真实资产），已降为 `ℹ️` 一次性提示。
 
 ## 主要文件流
 
@@ -184,14 +184,14 @@ sillyspec doctor --align-execute-progress [--confirm] [--change <name>]
 - `scan` 当前定义是 10 步，并且 step 2 后会动态展开项目级步骤，不是固定 12 步。
 - `brainstorm` 步骤数从历史 11/13 演进到当前 8（optional 步——协作复用/原型分析/需求范围评估/需求澄清Grill/HTML原型——已内联进相邻必选步，减少 agent 往返）；`propose` 为 7。
 - `.sillyspec/local.yaml` 是当前主配置口径；scan prompt 写这里，sync 读写这里，hook 优先读这里并兼容根目录 fallback。
-- 平台模式的 `manifest.json` 已接入 scan 完成回调；`workflow-runs` 在平台模式下落盘到 `<runtimeRoot>/scan-runs/<scanRunId>/workflow-runs/`——`run.js` scan/archive 两处 post-check 已向 `saveWorkflowRun` 透传 `runtimeRoot` / `scanRunId`（本地模式仍落 `cwd/.sillyspec/.runtime/workflow-runs/`，详见 `platform-workflows-sync.md`）。
-- `execute-runs`（task review）同样支持平台模式：`run.js` 的 `runtimeRoot` 解析点（`current-execute-run-id` 写入、task review gate、done-like 校验）均已认 `platformOpts.runtimeRoot`，平台模式落 `<runtimeRoot>/execute-runs/<runId>/tasks/<taskId>/review.json`；本地模式仍落 `<specBase>/.runtime/execute-runs/`。`contract-matrix.js` 的 `extractProviderArtifact` / `buildConsumerInjection` / `verifyApiParity` 同步加了可选 `runtimeRoot` 参数，artifact 路径加 `changeName` 维度（`contract-artifacts/<changeName>/<taskName>/endpoints.json`）实现跨变更隔离（旧路径无 changeName，不同变更同名 task 互相覆盖）。`contract-artifacts/` 生命周期：execute Wave 完成时 `extractArtifactsForChange`（`contract-matrix.js`）扫 worktree 提取后端端点（`scanBackendEndpoints` 多框架：FastAPI `.py` / Express `.js,.ts` / Spring `.java`）→ 落 artifact；verify 阶段 `runVerifyParityCheck`（`verify-postcheck.js`）读它做 advisory parity 对账（`missingBackend>0` 只 warning 不阻断 verify 完成；无 artifact → skipped，非全栈项目不打扰）；init cleanup 白名单（`RUNTIME_KEEP`）保留。注：`buildContractMatrix` 的 provider 识别 bug（只 classify consumers 不 classify providers）与 `parseTaskDependencies` 表格正则贪婪 bug（`[^|]*` 吃前导 0 → `task-1` 误解析）已修，端点级 contracts/注入方真正生效。
-- `archive` 的目录移动已经由 `run.js` 在第 4 步 `--confirm` 时执行；未带 `--confirm` 会回退该步骤并提示补参。
+- 平台模式的 `manifest.json` 已接入 scan 完成回调；`workflow-runs` 在平台模式下落盘到 `<runtimeRoot>/scan-runs/<scanRunId>/workflow-runs/`——`run/complete-handlers.js`（`handleScanStageCompleted`）的 scan/archive post-check 已向 `saveWorkflowRun` 透传 `runtimeRoot` / `scanRunId`（本地模式仍落 `cwd/.sillyspec/.runtime/workflow-runs/`，详见 `platform-workflows-sync.md`）。
+- `execute-runs`（task review）同样支持平台模式：`run/stage.js`（`runStage`）的 `runtimeRoot` 解析点（`current-execute-run-id` 写入、task review gate、done-like 校验）均已认 `platformOpts.runtimeRoot`，平台模式落 `<runtimeRoot>/execute-runs/<runId>/tasks/<taskId>/review.json`；本地模式仍落 `<specBase>/.runtime/execute-runs/`。`contract-matrix.js` 的 `extractProviderArtifact` / `buildConsumerInjection` / `verifyApiParity` 同步加了可选 `runtimeRoot` 参数，artifact 路径加 `changeName` 维度（`contract-artifacts/<changeName>/<taskName>/endpoints.json`）实现跨变更隔离（旧路径无 changeName，不同变更同名 task 互相覆盖）。`contract-artifacts/` 生命周期：execute Wave 完成时 `extractArtifactsForChange`（`contract-matrix.js`）扫 worktree 提取后端端点（`scanBackendEndpoints` 多框架：FastAPI `.py` / Express `.js,.ts` / Spring `.java`）→ 落 artifact；verify 阶段 `runVerifyParityCheck`（`verify-postcheck.js`）读它做 advisory parity 对账（`missingBackend>0` 只 warning 不阻断 verify 完成；无 artifact → skipped，非全栈项目不打扰）；init cleanup 白名单（`RUNTIME_KEEP`）保留。注：`buildContractMatrix` 的 provider 识别 bug（只 classify consumers 不 classify providers）与 `parseTaskDependencies` 表格正则贪婪 bug（`[^|]*` 吃前导 0 → `task-1` 误解析）已修，端点级 contracts/注入方真正生效。
+- `archive` 的目录移动已经由 `run/complete-handlers.js`（`archiveChangeDirectory`）在第 4 步 `--confirm` 时执行；未带 `--confirm` 会回退该步骤并提示补参。
 - scan 第 10 步「Extract Project Knowledge」把长期有效的项目知识写入 `.sillyspec/knowledge/`（`conventions.md`/`patterns.md`/`known-issues.md` + 更新 `INDEX.md`）；`scan-postcheck.js` 校验产物（INDEX.md 存在、引用文件真实存在）。
 - execute 启动时由 `knowledge-match.js` 按 plan.md 的 task 关键词匹配知识库，命中报告注入 prompt 并写 `.runtime/knowledge-hit-report.json`。
 - 平台模式残留清理只删缓存、保留权威状态（`worktrees/`、`sillyspec.db`、`global.json`、`gate-status.json`、`contract-artifacts/`、`execute-runs/`），不再整删 `.runtime/`——否则 worktree meta 被清掉会导致 `depsStatus` 恒为 unknown、`branch already exists` 死循环、`worktree doctor` orphan 误判。
 - plan→execute Contract 校验（`parseWavesFromPlan`）解析 `## Wave N` 段内的 `- [ ] task-XX:` 行；遇到非 Wave 标题行（`## 自检` 等）即退出当前 Wave 段，避免自检 `- [x]` checkbox 被误当 task 定义。light/none plan.md 用 `## Tasks`/`## 任务`（无 `## Wave N`）包任务时，识别为隐式任务区，对其中的 `- [ ] task-XX:` 惰性创建隐式 Wave 收容（非任务区 `## 验收`/`## 自检` 的 checkbox、任务区内无 `task-XX` 编号的 checkbox 仍忽略），隐式 Wave 标记 `implicit: true`。
-- `executePlanPostcheck` 的 `resolveChangeDir` 复用 `run.js` 模块内本地函数，不从 `./modules.js` 导入（该模块未导出此函数）。
+- `executePlanPostcheck`（`run/stage.js`）的 `resolveChangeDir` 从 `run/shared.js` 导入（W6 Step1 抽出的纯函数；历史上曾误从 `./modules.js` 导入，该模块未导出此函数）。
 - `executePlanPostcheck`（noAI，execute 前最后关口）顺序跑确定性校验：`validateBlueprintConsistency`（task 结构/路径冲突/拓扑无环）、`validatePlanFeasibility`（TaskCard 字段齐全/依赖存在/id 连续）、`validateCrossTaskContracts`（consumer `expects_from` ↔ provider `provides` 字段对账）、`validateDesignFileCoverage`（`design.md` 文件变更清单 → tasks `allowed_paths` 覆盖对账；未覆盖的源码文件阻断 execute，避免子代理被 allowed_paths 锁死而无权改 → 漏改）、`validatePlanArtifacts`（plan.md/tasks/ 产物存在）。`parseFileChangeList`（`change-list.js`）兼容表格与分类列表两种清单格式、表头列顺序自适应，跳过 `.sillyspec/` 与「不修改文件」子段，CRLF 容错；覆盖对账用双向前缀 + glob 容差匹配，与 `quick-recommend` 共用 `change-list.js` 的 `pathMatches`。
 - Revision v1：`stages` 表新增 `revision`/`reopened_from_step`/`reopened_at`/`stale_reason` 列；阶段新增 `revising`/`stale` 状态；`sillyspec run <stage> --reopen --from-step <n>` 重开已完成阶段、级联标记下游 stale；`.runtime/postcheck-result.json` 由 `scan-postcheck.js` 的 `writeStructuredResult` 落盘（本地写 `specDir/.runtime`，平台写 `runtimeRoot/scan-runs/<id>`）。
 - 平台指针 fail-closed（2026-07-03）：`resolvePlatformSpecDir`（`progress.js`）在 pointer 存在但失效（specRoot 不可达/损坏/缺字段）时抛 `PointerUnreachableError`，`index.js` 顶层 catch 打印修复引导 + exit 1，**不再静默回退本地孤儿 db**；无 pointer 的纯本地项目不受影响。`sync.js` 用 `safePlatformSpecDir` best-effort 包裹保持容错。逃生口：显式 `--spec-dir`。
@@ -205,4 +205,4 @@ sillyspec doctor --align-execute-progress [--confirm] [--change <name>]
   - **`alignExecuteToPlan` 事实核验**：对齐前调用 `checkExecuteCodeEvidence`，plan 全勾但确证代码零变更时拒绝对齐。
   - **verify 实测对账**（`verify-postcheck.js`）：verify 产物校验通过后，CLI 用 `execSync` 执行 `local.yaml` 的 `commands.test`（10 分钟超时），结果写 `.runtime/verify-runs/<ts>/test-result.json`；自报告 PASS 但实测失败 → 阻断 verify 完成并回滚。未配置 test（或 unavailable）降级 warning 不阻断。
   - **文案修正**：validator 失败提示不再声称 `--skip-approval` 可跳过产物校验（该 flag 只作用于阶段转换/审批检查）；quick 阶段 quicklog 缺失提示同步移除。
-- **Stage Review Gate**（2026-07-16）：brainstorm/plan/propose/execute 的"审查/自检"从当前 agent 自审改为按规模分级。`classifyReviewTier`（`review-tier.js`）按 plan_level=none 或变更文件数 ≤3 判定 tier=self（当前 agent 自审，放行+审计打印），否则 tier=independent（强制独立审查子代理，与执行子代理一样要求独立上下文）。tier=independent 时 done gate 要求 `.runtime/stage-reviews/<stage>-<runId>/review.json` 存在且 verdict 非 fail，由 `stage-review.js` 校验（schema + docHash 真实性重算防伪造 + cannot_verify 必须带 requiredEvidence 的反逃逸），异常 fail-closed 回滚（与 Task Review Gate 一致）。plan 的"审查计划"从生成 step 拆成独立 step（fixedPrefix 2→3 步），消除"生成+自检同一次输出"的 self-review。运行时占位符 `{REVIEW_TIER}`/`{REVIEW_TIER_REASON}`/`{STAGE_REVIEW_RUN_ID}` 由 run.js 注入 stage prompt。scanProfile（决定 maxAgentCalls）只在 scan 生效、change-risk-profile 的 P0/P1/P2 只管 apply/verify 证据，都不约束这些阶段的审查方式，故新选 plan_level/文件数维度。
+- **Stage Review Gate**（2026-07-16）：brainstorm/plan/propose/execute 的"审查/自检"从当前 agent 自审改为按规模分级。`classifyReviewTier`（`review-tier.js`）按 plan_level=none 或变更文件数 ≤3 判定 tier=self（当前 agent 自审，放行+审计打印），否则 tier=independent（强制独立审查子代理，与执行子代理一样要求独立上下文）。tier=independent 时 done gate 要求 `.runtime/stage-reviews/<stage>-<runId>/review.json` 存在且 verdict 非 fail，由 `stage-review.js` 校验（schema + docHash 真实性重算防伪造 + cannot_verify 必须带 requiredEvidence 的反逃逸），异常 fail-closed 回滚（与 Task Review Gate 一致）。plan 的"审查计划"从生成 step 拆成独立 step（fixedPrefix 2→3 步），消除"生成+自检同一次输出"的 self-review。运行时占位符 `{REVIEW_TIER}`/`{REVIEW_TIER_REASON}`/`{STAGE_REVIEW_RUN_ID}` 由 run/prompt.js（`outputStep`）注入 stage prompt。scanProfile（决定 maxAgentCalls）只在 scan 生效、change-risk-profile 的 P0/P1/P2 只管 apply/verify 证据，都不约束这些阶段的审查方式，故新选 plan_level/文件数维度。
