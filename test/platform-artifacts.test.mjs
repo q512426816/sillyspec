@@ -124,7 +124,8 @@ console.log('\n=== Test 2: saveWorkflowRun 本地模式写入路径 ===')
 console.log('\n=== Test 3: manifest.json 结构字段 ===')
 {
   const { readFile } = await import('fs/promises')
-  const runSrc = await readFile(join(__dirname, '..', 'src', 'run.js'), 'utf8')
+  const runSrc = (await readFile(join(__dirname, '..', 'src', 'run.js'), 'utf8'))
+    + '\n' + (await readFile(join(__dirname, '..', 'src', 'run', 'complete-handlers.js'), 'utf8'))
 
   // 平台模式 manifest 初始化
   assert('manifest 包含 workspace_id', runSrc.includes('workspace_id:'))
@@ -147,7 +148,8 @@ console.log('\n=== Test 3: manifest.json 结构字段 ===')
 console.log('\n=== Test 4: 平台指针 scan 完成后状态更新 ===')
 {
   const { readFile } = await import('fs/promises')
-  const runSrc = await readFile(join(__dirname, '..', 'src', 'run.js'), 'utf8')
+  const runSrc = (await readFile(join(__dirname, '..', 'src', 'run.js'), 'utf8'))
+    + '\n' + (await readFile(join(__dirname, '..', 'src', 'run', 'complete-handlers.js'), 'utf8'))
 
   assert('scan 完成后读取 pointer 文件', runSrc.includes('pointerPath'))
   assert('pointer status 使用 POINTER_STATUS 枚举', runSrc.includes('POINTER_STATUS'))

@@ -90,7 +90,7 @@ function assert(label, condition, detail) {
 {
   const runSrc = (await readFile(join(__dirname, '..', 'src', 'run.js'), 'utf8'))
     + '\n' + (await readFile(join(__dirname, '..', 'src', 'run', 'shared.js'), 'utf8'))
-
+    + '\n' + (await readFile(join(__dirname, '..', 'src', 'run', 'complete-handlers.js'), 'utf8'))
   assert('safeGit 不含 --global', !runSrc.includes('git config --global'),
     '发现 --global，会污染容器 git config')
 

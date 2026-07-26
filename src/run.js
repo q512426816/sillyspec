@@ -28,7 +28,7 @@ export { applyRootPlaceholders } from './run/prompt.js'
 // W6 Step4: gate 级联 + deps 门 + 完成回滚抽至 ./run/gates.js（自洽叶子模块，无 test 直接 import）
 import { enforceDepsGate, runStageCompletionGates } from './run/gates.js'
 // W6 Step5: completeStep 子 handler + archive 抽至 ./run/complete-handlers.js（自洽叶子，handler 无 test 直接 import）
-import { handleArchiveConfirmStep, handlePlanGeneratePlanStep, handleScanProjectListStep, handleWorkflowPostCheck, handleQuickStageCompletion, handleExecuteWaveArtifact, handleExecuteWorktreeCleanup } from './run/complete-handlers.js'
+import { handleArchiveConfirmStep, handlePlanGeneratePlanStep, handleScanProjectListStep, handleWorkflowPostCheck, handleQuickStageCompletion, handleExecuteWaveArtifact, handleExecuteWorktreeCleanup, handleScanStageCompleted } from './run/complete-handlers.js'
 // barrel re-export: sanitizeProjectName + validateParsedProjects 被 test 直接 import（随 handleScan 搬走，契约保留）
 export { sanitizeProjectName, validateParsedProjects } from './run/complete-handlers.js'
 import { ProgressManager } from './progress.js'
@@ -1701,146 +1701,9 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
       appendFileSync(inputsPath, entry)
     }
 
-    // 平台模式：scan 完成后生成 manifest.json + post-check
-    if (stageName === 'scan' && (platformOpts.specRoot || platformOpts.runtimeRoot)) {
-      try {
-        stageData.scanMeta = stageData.scanMeta || {}; stageData.scanMeta.manifestWritten = false; // 默认失败
-        const { mkdirSync, writeFileSync, readFileSync: _readFileSync } = await import('fs')
-        const { join } = await import('path')
-        const { execSync } = await import('child_process')
-        const manifestDir = platformOpts.specRoot
-        mkdirSync(manifestDir, { recursive: true })
-        let sourceCommit = null
-        let sourceCommitError = null
-        try {
-          const gitResult = safeGit(cwd, ['rev-parse', 'HEAD'])
-          sourceCommit = gitResult.value
-          sourceCommitError = gitResult.error
-        } catch (e) {
-          sourceCommitError = e.message
-        }
-        const manifest = {
-          workspace_id: platformOpts.workspaceId || null,
-          scan_run_id: platformOpts.scanRunId || null,
-          source_root: cwd,
-          spec_root: platformOpts.specRoot || null,
-          runtime_root: platformOpts.runtimeRoot || null,
-          source_commit: sourceCommit,
-          source_commit_error: sourceCommit === null ? (sourceCommitError || 'unknown') : undefined,
-          generated_at: new Date().toISOString(),
-          schema_version: 1,
-          postcheck_result_path: null,
-          workflow_runs_dir: platformOpts.runtimeRoot
-            ? join(platformOpts.runtimeRoot, 'scan-runs', platformOpts.scanRunId || 'unknown', 'workflow-runs')
-            : null,
-          platform_pointer_path: join(cwd, '.sillyspec-platform.json'),
-          platform_pointer_status: POINTER_STATUS.ACTIVE,
-        }
-        const manifestPath = join(manifestDir, 'manifest.json')
-        writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n')
-        console.log(`📄 manifest.json 已写入: ${manifestPath}`)
-        stageData.scanMeta = stageData.scanMeta || {}; stageData.scanMeta.manifestWritten = true;
-        if (!sourceCommit) {
-          console.log(`⚠️  source_commit 无法获取（可能非 git 目录），已设为 null`)
-        }
-        // 清理平台参数临时文件
-        const { unlinkSync } = await import('fs')
-        const platformOptsFile = join(manifestDir, '.runtime', 'platform-scan.json')
-        try { unlinkSync(platformOptsFile) } catch {}
-
-        // CLI 层 post-check（替代旧的简单检查）
-        const { runScanPostCheck, printScanPostCheckResult, formatStructuredResult, writeStructuredResult } = await import('./scan-postcheck.js')
-        const postResult = runScanPostCheck({
-          cwd,
-          specDir: platformOpts.specRoot,
-          outputText,
-          scanMeta: {
-            projectListParsed: stageData.scanMeta?.projectListParsed ?? null,
-            manifestWritten: stageData.scanMeta?.manifestWritten ?? null,
-          },
-        })
-        printScanPostCheckResult(postResult)
-
-        // 生成结构化 JSON 并写入 runtime（供 SillyHub 消费）
-        const structured = formatStructuredResult(postResult, {
-          workspace_id: platformOpts.workspaceId,
-          scan_run_id: platformOpts.scanRunId,
-          source_root: cwd,
-          spec_root: platformOpts.specRoot,
-          runtime_root: platformOpts.runtimeRoot,
-        })
-        const postcheckJsonPath = writeStructuredResult(structured, platformOpts.specRoot, {
-          runtimeRoot: platformOpts.runtimeRoot,
-          scanRunId: platformOpts.scanRunId,
-        })
-        if (postcheckJsonPath) {
-          console.log(`📄 postcheck-result.json 已写入: ${postcheckJsonPath}`)
-          manifest.postcheck_result_path = postcheckJsonPath
-        }
-
-        // 将 post-check 结果写入 manifest
-        manifest.scan_post_check = {
-          status: postResult.status,
-          checks: postResult.checks,
-        }
-        // 更新 manifest
-        writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n')
-        console.log(`📄 manifest.json 已更新（含 post-check 结果）`)
-
-        // 更新平台指针状态为 scan_completed
-        const pointerPath = join(cwd, '.sillyspec-platform.json')
-        try {
-          const pointer = JSON.parse(_readFileSync(pointerPath, 'utf8'))
-          pointer.status = POINTER_STATUS.SCAN_COMPLETED
-          pointer.completedAt = new Date().toISOString()
-          pointer.scanStatus = postResult.status
-          writeAtomicSync(pointerPath, JSON.stringify(pointer, null, 2) + '\n')
-        } catch (e) {
-          // 不阻断 scan 主流程，但暴露失败——pointer 写失败会让平台看不到 scan_completed，
-          // 与项目 fail-loud 原则一致：宁可可见地 warn，也不静默吞错。
-          console.warn(`⚠️ 更新平台指针状态失败（scan_completed 可能未落盘）: ${e.message}`)
-        }
-
-        // failed_post_check 时强制阻止 clean success
-        if (postResult.status === 'failed_post_check') {
-          stageData.status = SCAN_STATUS.FAILED_POST_CHECK
-          stageData.completedAt = new Date().toLocaleString('zh-CN',{hour12:false})
-          await pm._write(cwd, progress, changeName)
-          triggerSync(cwd, changeName, platformOpts)
-          console.error(`\n❌ scan post-check 失败，状态设为 failed_post_check。不允许 clean success。`)
-          console.error(`   请检查上方错误信息并修复后重新 scan。`)
-          // 平台模式：exit(1) 让 daemon/SillyHub 感知非 0 退出码（manifest.json 已落盘，不会被撤销）
-          if (platformOpts.specRoot || platformOpts.runtimeRoot) {
-            console.error('   平台模式：CLI 将以 exit code 1 退出，通知 SillyHub scan 失败。')
-            process.exit(1)
-          }
-          // 接口与 plan contract (run.js:2551 附近 plan 失败分支) 对齐：
-          // 返回 { stageCompleted:false, currentIdx, nextPendingIdx: currentIdx }
-          // 让上层 runStage 走"完成但不推进"分支，--done 被拒
-          return { stageCompleted: false, currentIdx, nextPendingIdx: currentIdx }
-        } else if (postResult.status === 'completed_with_warnings') {
-          // 警告不阻止完成，但记录
-          stageData.status = 'completed'
-          stageData.completedAt = new Date().toLocaleString('zh-CN',{hour12:false})
-          await pm._write(cwd, progress, changeName)
-        }
-      } catch (e) {
-        console.warn(`⚠️  manifest.json 写入失败: ${e.message}`)
-      }
-    }
-
-    // 非 platform 模式 scan 也做轻量 post-check + 结构化输出
-    if (stageName === 'scan' && !platformOpts.specRoot && !platformOpts.runtimeRoot) {
-      const { runScanPostCheck, printScanPostCheckResult, formatStructuredResult, writeStructuredResult } = await import('./scan-postcheck.js')
-      const postResult = runScanPostCheck({ cwd, specDir: null, outputText })
-      printScanPostCheckResult(postResult)
-      // 结构化结果写入 .sillyspec/.runtime/
-      const structured = formatStructuredResult(postResult, { source_root: cwd })
-      const postcheckJsonPath = writeStructuredResult(structured, join(cwd, '.sillyspec'))
-      if (postcheckJsonPath) {
-        console.log(`📄 postcheck-result.json 已写入: ${postcheckJsonPath}`)
-      }
-    }
+    // scan 平台 manifest + post-check（W6 Step6d 抽至 complete-handlers.js handleScanStageCompleted）
+    const _scanResult = await handleScanStageCompleted({ stageName, currentIdx, cwd, progress, pm, stageData, changeName, outputText, platformOpts })
+    if (_scanResult) return _scanResult
 
     // 防御性守卫变量：确认所有步骤确实标记为 completed
     const actualCompleted = steps.filter(s => s.status === 'completed').length

@@ -113,7 +113,8 @@ console.log('\n=== Test 2: --done 恢复平台参数 ===')
 console.log('\n=== Test 3: manifest 路径字段 ===')
 {
   const { readFile } = await import('fs/promises')
-  const runSrc = await readFile(join(__dirname, '..', 'src', 'run.js'), 'utf8')
+  const runSrc = (await readFile(join(__dirname, '..', 'src', 'run.js'), 'utf8'))
+    + '\n' + (await readFile(join(__dirname, '..', 'src', 'run', 'complete-handlers.js'), 'utf8'))
 
   // manifest 初始化中包含三路径
   assert('manifest 有 source_root: cwd', runSrc.includes('source_root: cwd'))

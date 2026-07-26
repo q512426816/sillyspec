@@ -13,7 +13,7 @@ import { fileURLToPath } from 'url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const runPath = join(__dirname, '..', 'src', 'run.js')
-const src = readFileSync(runPath, 'utf8')
+const src = readFileSync(runPath, 'utf8') + '\n' + readFileSync(join(__dirname, '..', 'src', 'run', 'complete-handlers.js'), 'utf8')
 
 let passed = 0
 let failed = 0
