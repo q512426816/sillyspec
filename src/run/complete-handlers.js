@@ -650,4 +650,71 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
   }
   return null
 }
+/**
+ * execute「Wave N 执行」步骤完成后扫 worktree 提取 provider endpoint artifact（W6 Step6c 从
+ * completeStep 内联块抽出）。供 verify 阶段 parity 对账 + consumer task 上游契约注入。
+ * 接线自 contract-matrix pipeline。step 级（每个 Wave 执行步骤后跑），无 early-return（try/catch warn）。
+ *
+ * ctx：stageName/steps/currentIdx/changeName/specBase/cwd。extractArtifactsForChange ← 动态 ../contract-matrix.js，
+ * WorktreeManager ← 动态 ../worktree.js（真环依赖保留动态）。
+ */
+export async function handleExecuteWaveArtifact({ stageName, steps, currentIdx, changeName, specBase, cwd }) {
+  if (stageName === 'execute' && /^Wave \d+ 执行$/.test(steps[currentIdx]?.name || '')) {
+    try {
+      const { extractArtifactsForChange } = await import('../contract-matrix.js')
+      let worktreePath = null
+      try {
+        const { WorktreeManager } = await import('../worktree.js')
+        const meta = new WorktreeManager({ cwd }).getMeta(changeName)
+        if (meta?.worktreePath && existsSync(meta.worktreePath)) worktreePath = meta.worktreePath
+      } catch {}
+      const msg = extractArtifactsForChange({ changeDir: join(specBase, 'changes', changeName), specBase, changeName, worktreePath })
+      if (msg) console.log(msg)
+    } catch (e) { console.warn(`⚠️ 契约 artifact 提取跳过: ${e?.message || e}`) }
+  }
+  return null
+}
+
+/**
+ * execute 阶段完成时条件性清理 worktree（W6 Step6c 从 completeStep 完成路径内联块抽出）。
+ * 不依赖 AI agent 的完成确认步骤：有未 apply 变更 → 保留 worktree；否则 cleanup（含 in-place 安全清理）。
+ * stage 级（execute 阶段全部完成时跑），无 early-return（try/catch warn）。
+ *
+ * ctx：stageName/changeName/cwd。WorktreeManager ← 动态 ../worktree.js。
+ */
+export async function handleExecuteWorktreeCleanup({ stageName, changeName, cwd }) {
+  if (stageName === 'execute' && changeName) {
+    try {
+      const { WorktreeManager } = await import('../worktree.js');
+      const wm = new WorktreeManager({ cwd });
+      const meta = wm.getMeta(changeName);
+      if (!meta) {
+        console.log('🔗 Worktree: n/a (no meta)');
+      } else if (meta.mode === 'native-worktree') {
+        console.log('🔗 Worktree: kept (外部隔离环境)');
+      } else {
+        // in-place 模式不再短路：cleanup 现在能安全处理 in-place（只清 meta，不碰主工作区）
+        const check = wm.hasUnappliedChanges(changeName);
+        if (check.hasChanges) {
+          console.log(`🔗 Worktree: pending apply (${check.changedFiles.length} 个未应用变更)`);
+          console.log(`   下一步: sillyspec worktree apply ${changeName}`);
+        } else {
+          const cleanResult = wm.cleanup(changeName);
+          console.log(`🔗 Worktree: ${cleanResult.result}`);
+          if (cleanResult.residual?.length > 0) {
+            console.warn(`   ⚠️ 清理残留: ${cleanResult.residual.join('; ')}`);
+            console.warn(`   手动处理: sillyspec worktree cleanup ${changeName} --force`);
+          } else if (cleanResult.details?.length > 0) {
+            for (const d of cleanResult.details) {
+              if (d.startsWith('⚠️')) console.log(`   ${d}`);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn(`🔗 Worktree: check failed — ${e.message}`);
+    }
+  }
+  return null
+}
 

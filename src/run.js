@@ -28,7 +28,7 @@ export { applyRootPlaceholders } from './run/prompt.js'
 // W6 Step4: gate 级联 + deps 门 + 完成回滚抽至 ./run/gates.js（自洽叶子模块，无 test 直接 import）
 import { enforceDepsGate, runStageCompletionGates } from './run/gates.js'
 // W6 Step5: completeStep 子 handler + archive 抽至 ./run/complete-handlers.js（自洽叶子，handler 无 test 直接 import）
-import { handleArchiveConfirmStep, handlePlanGeneratePlanStep, handleScanProjectListStep, handleWorkflowPostCheck, handleQuickStageCompletion } from './run/complete-handlers.js'
+import { handleArchiveConfirmStep, handlePlanGeneratePlanStep, handleScanProjectListStep, handleWorkflowPostCheck, handleQuickStageCompletion, handleExecuteWaveArtifact, handleExecuteWorktreeCleanup } from './run/complete-handlers.js'
 // barrel re-export: sanitizeProjectName + validateParsedProjects 被 test 直接 import（随 handleScan 搬走，契约保留）
 export { sanitizeProjectName, validateParsedProjects } from './run/complete-handlers.js'
 import { ProgressManager } from './progress.js'
@@ -1668,21 +1668,8 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
   // scan 阶段 step 2「构建扫描项目列表」完成后，按项目展开 perProject 步骤（抽成 handleScanProjectListStep）
   await handleScanProjectListStep({ stageName, steps, currentIdx, outputText, stageData, specBase, cwd, platformOpts })
 
-  // execute「Wave N 执行」步骤完成 → 扫 worktree 提取 provider endpoint artifact
-  // （供 verify 阶段 parity 对账 + consumer task 上游契约注入）。接线自 contract-matrix pipeline。
-  if (stageName === 'execute' && /^Wave \d+ 执行$/.test(steps[currentIdx]?.name || '')) {
-    try {
-      const { extractArtifactsForChange } = await import('./contract-matrix.js')
-      let worktreePath = null
-      try {
-        const { WorktreeManager } = await import('./worktree.js')
-        const meta = new WorktreeManager({ cwd }).getMeta(changeName)
-        if (meta?.worktreePath && existsSync(meta.worktreePath)) worktreePath = meta.worktreePath
-      } catch {}
-      const msg = extractArtifactsForChange({ changeDir: join(specBase, 'changes', changeName), specBase, changeName, worktreePath })
-      if (msg) console.log(msg)
-    } catch (e) { console.warn(`⚠️ 契约 artifact 提取跳过: ${e?.message || e}`) }
-  }
+  // execute Wave artifact（W6 Step6c 抽至 complete-handlers.js handleExecuteWaveArtifact）
+  await handleExecuteWaveArtifact({ stageName, steps, currentIdx, changeName, specBase, cwd })
 
   const nextPendingIdx = steps.findIndex(s => s.status === 'pending' || s.status === 'in-progress')
 
@@ -1919,39 +1906,8 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
       console.log(`\n⚠️ 阶段校验跳过：${actualTotal} 步中仅 ${actualCompleted} 步标记为已完成，可能存在状态不同步。如确认阶段已完成，请运行 --status 确认。`)
     }
 
-    // ── execute 阶段完成时条件性清理 worktree（不依赖 AI agent 的完成确认步骤）──
-    if (stageName === 'execute' && changeName) {
-      try {
-        const { WorktreeManager } = await import('./worktree.js');
-        const wm = new WorktreeManager({ cwd });
-        const meta = wm.getMeta(changeName);
-        if (!meta) {
-          console.log('🔗 Worktree: n/a (no meta)');
-        } else if (meta.mode === 'native-worktree') {
-          console.log('🔗 Worktree: kept (外部隔离环境)');
-        } else {
-          // in-place 模式不再短路：cleanup 现在能安全处理 in-place（只清 meta，不碰主工作区）
-          const check = wm.hasUnappliedChanges(changeName);
-          if (check.hasChanges) {
-            console.log(`🔗 Worktree: pending apply (${check.changedFiles.length} 个未应用变更)`);
-            console.log(`   下一步: sillyspec worktree apply ${changeName}`);
-          } else {
-            const cleanResult = wm.cleanup(changeName);
-            console.log(`🔗 Worktree: ${cleanResult.result}`);
-            if (cleanResult.residual?.length > 0) {
-              console.warn(`   ⚠️ 清理残留: ${cleanResult.residual.join('; ')}`);
-              console.warn(`   手动处理: sillyspec worktree cleanup ${changeName} --force`);
-            } else if (cleanResult.details?.length > 0) {
-              for (const d of cleanResult.details) {
-                if (d.startsWith('⚠️')) console.log(`   ${d}`);
-              }
-            }
-          }
-        }
-      } catch (e) {
-        console.warn(`🔗 Worktree: check failed — ${e.message}`);
-      }
-    }
+    // execute worktree cleanup（W6 Step6c 抽至 complete-handlers.js handleExecuteWorktreeCleanup）
+    await handleExecuteWorktreeCleanup({ stageName, changeName, cwd })
 
     return { stageCompleted: true, currentIdx, nextPendingIdx: -1 }
   }
