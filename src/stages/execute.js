@@ -217,7 +217,9 @@ const acceptanceSteps = [
 ### 执行方式（CLI 按变更规模判定，占位符由 run.js 注入）
 tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
 - tier=self：当前 agent 汇总执行（对照 design.md 逐项检查 + 偏差说明）
-- tier=independent：必须用 Agent tool 启动一个独立的 QA 子代理（独立上下文，不共享实现者的分析），子代理对照 design.md 逐项检查实现一致性并输出 review.json 到 {SPEC_ROOT}/.runtime/stage-reviews/execute-{STAGE_REVIEW_RUN_ID}/review.json。字段：reviewType=acceptance；reviewedFiles=[changes/<change>/design.md] + git diff 涉及的源码文件；docHash=design.md 的 sha256；specVerdict/qualityVerdict=pass|fail|cannot_verify；checklist 按每个设计要点给 pass|gap|fail。该 acceptance review 同时覆盖"代码审查"视角（风格/bug/安全/冗余），后续代码审查步骤仅需轻量复审。
+- tier=independent：必须用 Agent tool 启动一个独立的 QA 子代理（独立上下文，不共享实现者的分析），子代理对照 design.md 逐项检查实现一致性并输出 review.json。review.json 产物契约（CLI Stage Review Gate 将硬校验，schema + 完整示例 + docHash 算法如下，照抄改值；reviewedFiles 除主文档 design.md 外可追加 git diff 涉及的源码文件）:
+{REVIEW_JSON_CONTRACT}
+  该 acceptance review 同时覆盖"代码审查"视角（风格/bug/安全/冗余），后续代码审查步骤仅需轻量复审。
 
 ### 操作
 1. 读取 design.md（技术方案）

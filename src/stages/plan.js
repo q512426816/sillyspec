@@ -357,15 +357,8 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
 用 Agent tool 启动子代理（subagent_type: general），prompt 要点：
 1. 独立读取 {SPEC_ROOT}/changes/<change>/plan.md + design.md + tasks/*.md（不要让生成者喂结论给你，自己读原始文件）
 2. 执行上方审查清单，每条给 pass/gap/fail + 证据
-3. 输出 review.json 到 {SPEC_ROOT}/.runtime/stage-reviews/plan-{STAGE_REVIEW_RUN_ID}/review.json，字段：
-   - schemaVersion: 1
-   - reviewType: plan ; stage: plan
-   - specVerdict / qualityVerdict: pass | fail | cannot_verify
-   - reviewedFiles: [changes/<change>/plan.md]
-   - docHash: plan.md 内容的 sha256
-   - checklist: 每条 { item, result: pass|gap|fail, note }
-   - requiredEvidence: cannot_verify 时必填非空
-   - reviewerNotes: 说明
+3. 输出 review.json(CLI Stage Review Gate 将硬校验,契约如下 —— schema + 完整示例 + docHash 算法,照抄改值):
+{REVIEW_JSON_CONTRACT}
 4. verdict=fail 时在 reviewerNotes 写明阻断项
 
 ### 输出

@@ -349,7 +349,9 @@ design.md 文件路径 + 自审结果
 ### 审查执行方式（CLI 按变更规模判定，占位符由 run.js 注入）
 tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
 - tier=self：当前 agent 直接执行下方交叉审查（小变更）
-- tier=independent：必须用 Agent tool 启动一个独立的设计审查子代理（独立上下文，不共享你的分析与倾向），子代理按下方"交叉审查模型"审查 design.md 并输出 review.json 到 {SPEC_ROOT}/.runtime/stage-reviews/brainstorm-{STAGE_REVIEW_RUN_ID}/review.json。字段：reviewType=design；reviewedFiles=[changes/<change>/design.md]；docHash=design.md 的 sha256；specVerdict/qualityVerdict=pass|fail|cannot_verify；checklist 按"定义层/一致性层/可行性层"每条给 pass|gap|fail。子代理只产出 review + Unresolved Blockers，**是否调用 sillyspec run brainstorm --wait 仍由你（主 agent）根据其 verdict 决定**（子代理不直接操作 CLI 状态机）。
+- tier=independent：必须用 Agent tool 启动一个独立的设计审查子代理（独立上下文，不共享你的分析与倾向），子代理按下方"交叉审查模型"审查 design.md 并输出 review.json。review.json 产物契约（CLI Stage Review Gate 将硬校验，schema + 完整示例 + docHash 算法如下，照抄改值）:
+{REVIEW_JSON_CONTRACT}
+  子代理只产出 review + Unresolved Blockers，**是否调用 sillyspec run brainstorm --wait 仍由你（主 agent）根据其 verdict 决定**（子代理不直接操作 CLI 状态机）。
 
 ### 默认行为
 1. 默认必须执行一次交叉审查；不要让用户凭主观判断决定"要不要 Grill"。

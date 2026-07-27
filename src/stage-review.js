@@ -24,6 +24,69 @@ export const STAGE_REVIEW_TYPES = ['design', 'plan', 'proposal', 'code', 'accept
 // checklist 每项 result 的合法值
 const CHECKLIST_RESULTS = ['pass', 'gap', 'fail']
 
+// stage → 主审查文档(brainstorm/execute 审 design.md;plan 审 plan.md;propose 审 proposal.md)
+const STAGE_MAIN_DOC = { brainstorm: 'design.md', plan: 'plan.md', propose: 'proposal.md', execute: 'design.md' }
+// stage → reviewType(对齐 gates.js Stage Review Gate 的映射)
+const STAGE_REVIEW_TYPE = { brainstorm: 'design', plan: 'plan', propose: 'proposal', execute: 'acceptance' }
+
+/**
+ * 渲染 review.json 产物契约(markdown)给 review 子代理事前看 —— schema 表 + 完整 JSON 示例 +
+ * docHash 算法 + 重算提示 + 位置。复用 validateStageReviewSchema 的同源常量,事前给的 == 事后查的。
+ *
+ * 历史教训:review 子代理靠读 stage-review.js 源码 + 翻模板才搞清 schema,常错(漏 schemaVersion /
+ * checklist 按层嵌套对象 / docHash 用主文档改版前的旧 sha256)。本函数把契约前置进 prompt。
+ *
+ * @param {{ stage?: string, changeDir?: string, reviewRunId?: string, tier?: string }} opts
+ * @returns {string} markdown 段;tier=self 返回简短提示(无需 review.json)
+ */
+export function renderReviewJsonContract({ stage, changeDir, reviewRunId, tier } = {}) {
+  if (tier === 'self') {
+    return '> review.json 契约:tier=self(变更规模小),无需产出 review.json,当前 agent 自审即可。'
+  }
+  const reviewType = STAGE_REVIEW_TYPE[stage] || 'design'
+  const mainDoc = STAGE_MAIN_DOC[stage] || 'design.md'
+  const mainDocRel = changeDir ? 'changes/<change>/' + mainDoc : mainDoc
+  const stageLbl = stage || '<stage>'
+  const runIdLbl = reviewRunId || '<reviewRunId>'
+  const L = [
+    '## review.json 产物契约(CLI Stage Review Gate 将硬校验,以下为精确 schema —— 事前给的 == 事后查的)',
+    '',
+    '> 路径:`{SPEC_ROOT}/.runtime/stage-reviews/' + stageLbl + '-' + runIdLbl + '/review.json`(本次 reviewType=' + reviewType + ',主审查文档=' + mainDocRel + ')',
+    '',
+    '### 必填字段(validateStageReviewSchema 硬校验,缺任一即 schema 失败阻断)',
+    '- `schemaVersion`: ' + REVIEW_SCHEMA_VERSION,
+    '- `reviewType`: "' + reviewType + '"(必须与本 stage 一致;合法值 ' + STAGE_REVIEW_TYPES.join(' / ') + ')',
+    '- `specVerdict` / `qualityVerdict`: ∈ { ' + VALID_VERDICTS.join(' / ') + ' }',
+    '- `reviewedFiles`: 非空数组,[0] = 主审查文档 = `' + mainDocRel + '`',
+    '- `docHash`: reviewedFiles[0] 文件内容的 sha256(hex,见下方算法)',
+    '- `requiredEvidence`: 非空数组(specVerdict 或 qualityVerdict = cannot_verify 时必填,反逃逸)',
+    '- `checklist`(可选): 扁平数组 —— 每项 { item: string, result: ∈ { ' + CHECKLIST_RESULTS.join(' / ') + ' }, note?: string }。注意是**扁平数组**,不是按层(定义/一致/可行性)嵌套对象',
+    '- `reviewerNotes`: 说明(verdict=fail 时写明阻断项)',
+    '',
+    '### docHash 算法(必须等于 reviewedFiles[0] 的 sha256)',
+    "- node: `crypto.createHash('sha256').update(require('fs').readFileSync(reviewedFiles[0])).digest('hex')`(对原始字节)",
+    '- shell: `sha256sum <reviewedFiles[0]>` 取首列(hex)',
+    '- ⚠️ **review.json 写入后若 ' + mainDoc + ' 再被改,必须重算 docHash** —— gate 会重算 reviewedFiles[0] 的 sha256 比对,不符判伪造(历史翻车根因:design 改了 rev 后 docHash 仍是旧值)',
+    '',
+    '### 完整 JSON 示例(照抄改值)',
+    '```json',
+    '{',
+    '  "schemaVersion": ' + REVIEW_SCHEMA_VERSION + ',',
+    '  "reviewType": "' + reviewType + '",',
+    '  "specVerdict": "pass",',
+    '  "qualityVerdict": "pass",',
+    '  "reviewedFiles": ["' + mainDocRel + '"],',
+    '  "docHash": "<上面算出的 sha256 hex>",',
+    '  "checklist": [',
+    '    { "item": "<审查项>", "result": "pass", "note": "<证据/说明>" }',
+    '  ],',
+    '  "reviewerNotes": "<总结>"',
+    '}',
+    '```',
+  ]
+  return L.join('\n')
+}
+
 /**
  * 计算文件内容的 sha256（用于 docHash 真实性校验，防 agent 凭空伪造 review.json）
  * @param {string} filePath - 绝对路径

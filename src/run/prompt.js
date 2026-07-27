@@ -472,7 +472,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
   if (['brainstorm', 'plan', 'propose', 'execute'].includes(stageName) && promptText.includes('{REVIEW_TIER}')) {
     try {
       const { classifyReviewTier } = await import('../review-tier.js')
-      const { generateStageReviewRunId } = await import('../stage-review.js')
+      const { generateStageReviewRunId, renderReviewJsonContract } = await import('../stage-review.js')
       const tierSpecBase = platformOpts?.specRoot || join(cwd, '.sillyspec')
       const tierChangeDir = changeName ? join(tierSpecBase, 'changes', changeName) : null
       const designPath = tierChangeDir ? join(tierChangeDir, 'design.md') : null
@@ -486,16 +486,20 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
       }
       const tier = classifyReviewTier({ planLevel, designPath })
       const reviewRunId = generateStageReviewRunId()
+      // review.json 产物契约(schema + 示例 + docHash 算法 + 重算提示)事前注入,与 validateStageReviewSchema 同源
+      const reviewContractMd = renderReviewJsonContract({ stage: stageName, changeDir: tierChangeDir, reviewRunId, tier: tier.tier })
       promptText = promptText
         .split('{REVIEW_TIER}').join(tier.tier)
         .split('{REVIEW_TIER_REASON}').join(tier.reason)
         .split('{STAGE_REVIEW_RUN_ID}').join(reviewRunId)
+        .split('{REVIEW_JSON_CONTRACT}').join(reviewContractMd)
     } catch (e) {
       // 降级 self，避免 prompt 残留占位符
       promptText = promptText
         .split('{REVIEW_TIER}').join('self')
         .split('{REVIEW_TIER_REASON}').join('分级异常降级 self: ' + e.message)
         .split('{STAGE_REVIEW_RUN_ID}').join('review-unknown')
+        .split('{REVIEW_JSON_CONTRACT}').join('(review 契约注入失败,按 schemaVersion=1 + reviewType + verdicts∈pass/fail/cannot_verify + reviewedFiles + docHash=主文档 sha256 产出)')
     }
   }
 
