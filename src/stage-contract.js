@@ -330,20 +330,19 @@ function validatePlanOutputs(cwd, changeName, context = {}) {
     warnMissingIds(warnings, decisionIds, plan, 'plan.md', 'decisions.md')
   }
   // ── P0: 生产接线路径检查：design 提到入口但 task 的 allowed_paths 不含入口文件 ──
+  // entry-point-wiring(custom):trigger/file 抽取/exemption/failMessage 从 manifest 同源
+  // (stage-contract-spec.js),保留多源 allowed_paths 收集 + 逐文件对账 + 豁免算法。
   const designContent = readIfExists(join(changeDir, 'design.md'))
   if (designContent) {
-    const entryPointPatterns = [
-      /\b(cli\.ts|main\.ts|server\.(?:js|ts)|index\.(?:js|ts))\b.*\b(?:实例化|instantiate|构造|new\s)/gi,
-      /\bnew\s+(Daemon|SessionManager|App|Server|Application)\b/gi,
-      /\b(?:在|from)\s+['"]?(cli\.ts|main\.ts|server\.(?:js|ts)|index\.(?:js|ts))['"]?/gi,
-      /\b(?:注入|inject)\b.*\b(?:构造|constructor|初始化|init|实例化|instantiate)\b/gi,
-      /\b(?:启动路径|startup|entrypoint|bootstrap|daemon[._-]?start|main.*entry)\b/gi,
-    ]
+    const epRule = getRule('plan.entry-point-wiring')
+    const { entryPointPatterns, fileExtractionPattern, exemptionPattern } = epRule.data
+    const fileExtractRe = new RegExp(fileExtractionPattern.pattern, fileExtractionPattern.flags)
     const mentionedFiles = new Set()
-    for (const pattern of entryPointPatterns) {
+    for (const ep of entryPointPatterns) {
+      const pattern = new RegExp(ep.pattern, ep.flags)
       pattern.lastIndex = 0
       for (const match of designContent.matchAll(pattern)) {
-        const fileMatch = match[0].match(/\b(cli\.ts|main\.ts|server\.(?:js|ts)|index\.(?:js|ts))\b/i)
+        const fileMatch = match[0].match(fileExtractRe)
         if (fileMatch) mentionedFiles.add(fileMatch[1].toLowerCase())
       }
     }
@@ -373,16 +372,9 @@ function validatePlanOutputs(cwd, changeName, context = {}) {
       for (const mentionedFile of mentionedFiles) {
         const found = [...allAllowedPaths].some(p => p.includes(mentionedFile))
         if (!found) {
-          const noChangePattern = new RegExp(`不需要改.*${mentionedFile}|${mentionedFile}.*不需要|不修改.*${mentionedFile}|${mentionedFile}.*不变|${mentionedFile}.*no.?change`, 'i')
+          const noChangePattern = new RegExp(exemptionPattern.replaceAll('${file}', mentionedFile), 'i')
           if (!noChangePattern.test(designContent)) {
-            // 出路直接并进 error（不再只放 warning——阻断出口曾只打 error 导致出路不可见）。
-            errors.push(
-              `生产接线路径矛盾: design.md 提到了入口文件 "${mentionedFile}"，但没有任何 task 的 allowed_paths（或 plan.md 文件变更清单）包含它。\n` +
-              `   出路（二选一）：\n` +
-              `   ① 若该入口文件确实要改 → 在某个 task 的 allowed_paths 加上 "${mentionedFile}"；\n` +
-              `   ② 若确实不需要改 → 在 design.md 明确写明理由，且需包含 "${mentionedFile} 不需要/不变/无需修改" 这类紧邻表述才会被识别为豁免。\n` +
-              `   触发原因：design.md 命中入口实例化/启动路径模式（如 cli.ts|main.ts|server.(js|ts)|index.(js|ts) + new/实例化/注入，或 startup|entrypoint|bootstrap|daemon_start）。`
-            )
+            errors.push(epRule.failMessage.replaceAll('${file}', mentionedFile))
           }
         }
       }

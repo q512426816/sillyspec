@@ -11,6 +11,7 @@
  * 无新 npm 依赖（仅 fs/path/crypto）——匹配项目零 FS 工具依赖的风格。
  */
 import { join, dirname, basename } from 'path'
+import { getRule } from './stage-contract-spec.js'
 import {
   openSync, closeSync, unlinkSync, statSync, mkdirSync, existsSync,
   readFileSync, writeFileSync, readdirSync, renameSync, appendFileSync,
@@ -87,7 +88,8 @@ function sanitizeResult(resultText) {
 }
 
 // 结果块必填字段（quick step3 --done --output 的结构化结果模板，见 src/stages/quick.js）。
-const RESULT_REQUIRED_LABELS = ['需求：', '根因：', '方案：', '结果：']
+// 4 个必填字段标签从 manifest 同源(stage-contract-spec.js quick.result-labels),prompt 事前契约与本校验单源。
+const RESULT_REQUIRED_LABELS = getRule('quick.result-labels').data.literals
 
 /**
  * quick step3 结果摘要结构校验（确定性：只查「必填字段是否都在」，不判内容质量——

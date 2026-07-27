@@ -17,6 +17,7 @@ const readFileSync = (filePath, encoding) => _readFileSync(filePath, encoding).r
 import { join as pJoin } from 'path'
 import jsYaml from 'js-yaml'
 import { parseFileChangeList, pathMatches } from '../change-list.js'
+import { getRule } from '../stage-contract-spec.js'
 
 // ═══════════════════════════════════════════════════════════════
 // 解析工具（从 plan.js 迁移）
@@ -220,6 +221,8 @@ export function validateBlueprintConsistency(changeDir) {
     return { ok: false, errors: ['tasks/ 目录下没有 task-NN.md 文件'], warnings }
   }
 
+  // task 卡片基础字段文案从 manifest 同源(plan.task-card-structure);${id} 由下方 `${taskId} (${file})` 替换。
+  const bsRule = getRule('plan.task-card-structure')
   const taskInfo = new Map()
   const pathOwners = new Map()
 
@@ -240,13 +243,13 @@ export function validateBlueprintConsistency(changeDir) {
     taskInfo.set(taskId, { dependsOn, allowedPaths, hasAcceptance, hasTdd, file })
 
     if (allowedPaths.length === 0) {
-      errors.push(`${taskId} (${file}): frontmatter 缺少 allowed_paths（需非空数组，列出本 task 真实改动的源文件；回归类 task 无源码改动时填被验证的关键入口文件）`)
+      errors.push(bsRule.data.messageAllowedPaths.replaceAll('${id}', `${taskId} (${file})`))
     }
     if (!hasAcceptance) {
-      errors.push(`${taskId} (${file}): 缺少验收标准——frontmatter 需有 acceptance: 列表字段，或 body 需有「## 验收标准」/「## Acceptance」章节`)
+      errors.push(bsRule.data.messageAcceptance.replaceAll('${id}', `${taskId} (${file})`))
     }
     if (!hasTdd) {
-      warnings.push(`${taskId} (${file}): 缺少验证步骤——frontmatter 需有 verify: 字段，或 body 需有「## TDD」/「## 验证」/「## Verify」章节`)
+      warnings.push(bsRule.data.messageTdd.replaceAll('${id}', `${taskId} (${file})`))
     }
 
     for (const p of allowedPaths) {
@@ -314,7 +317,16 @@ export function validateCrossTaskContracts(changeDir) {
     providesByTask.set(taskId, contractMap)
   }
 
-  // 第二遍：校验每个 consumer 的 expects_from 是否被 provider.provides 覆盖
+  // 第二遍：校验每个 consumer 的 expects_from 是否被 provider.provides 覆盖。
+  // 3 种断裂文案(unknown-provider / undeclared / missing-fields)从 manifest 同源
+  // (plan.cross-task-contract.data),${consumer}/${provider}/${contract}/${needs}/${available} replaceAll。
+  const ctRule = getRule('plan.cross-task-contract')
+  const renderCtMsg = (tmpl, consumer, provider, contract, needs, available) => tmpl
+    .replaceAll('${consumer}', consumer)
+    .replaceAll('${provider}', provider)
+    .replaceAll('${contract}', contract)
+    .replaceAll('${needs}', needs)
+    .replaceAll('${available}', available)
   for (const file of taskFiles) {
     const content = readFileSync(pJoin(tasksDir, file), 'utf8')
     const consumerId = parseTaskId(content, file)
@@ -324,7 +336,7 @@ export function validateCrossTaskContracts(changeDir) {
     for (const [providerTask, contracts] of Object.entries(expectsFrom)) {
       if (!providesByTask.has(providerTask)) {
         for (const c of contracts) {
-          errors.push(`${consumerId}: expects_from 引用了不存在的 ${providerTask}（contract "${c.contract}", needs [${c.needs.join(', ')}]）`)
+          errors.push(renderCtMsg(ctRule.data.messageUnknownProvider, consumerId, providerTask, c.contract, c.needs.join(', '), ''))
         }
         continue
       }
@@ -333,12 +345,12 @@ export function validateCrossTaskContracts(changeDir) {
       for (const c of contracts) {
         const providerFields = providerContracts.get(c.contract)
         if (providerFields === undefined) {
-          errors.push(`${consumerId}: expects_from ${providerTask} contract "${c.contract}" needs [${c.needs.join(', ')}] — ${providerTask} 的 provides 未声明此契约`)
+          errors.push(renderCtMsg(ctRule.data.messageUndeclaredContract, consumerId, providerTask, c.contract, c.needs.join(', '), ''))
           continue
         }
         const missing = c.needs.filter(f => !providerFields.has(f))
         if (missing.length > 0) {
-          errors.push(`${consumerId}: expects_from ${providerTask} contract "${c.contract}" needs [${missing.join(', ')}] — ${providerTask}.provides 仅含 [${[...providerFields].join(', ')}]`)
+          errors.push(renderCtMsg(ctRule.data.messageMissingFields, consumerId, providerTask, c.contract, missing.join(', '), [...providerFields].join(', ')))
         }
       }
     }
@@ -388,13 +400,12 @@ export function validateDesignFileCoverage(changeDir) {
   }
 
   const designFiles = [...parseFileChangeList(designPath)]
+  // 两种断裂文案(缺清单章节 / 文件未覆盖)从 manifest 同源(plan.design-file-coverage.data)。
+  const dcRule = getRule('plan.design-file-coverage')
   if (designFiles.length === 0) {
     // 走到 plan-postcheck 说明已生成 task 卡片（light/full），brainstorm 模板规定清单必填。
     // 无清单 = design↔execute 偏差温床（覆盖对账无从对起），阻断，不让它静默放过。
-    errors.push(
-      'design.md 缺少「文件变更清单」章节（或清单解析为空），无法做文件覆盖对账。' +
-      '该章节在 brainstorm 模板中为必填；请在 design.md 补上完整的文件变更清单（列出本次新增/修改/删除的源码文件）后重试。'
-    )
+    errors.push(dcRule.data.messageMissingList)
     return { ok: false, errors, warnings, designFiles: [], uncovered: [] }
   }
   const allAllowed = []
@@ -409,11 +420,9 @@ export function validateDesignFileCoverage(changeDir) {
   const uncovered = designFiles.filter(df => !allAllowed.some(ap => pathMatches(df, ap)))
   if (uncovered.length > 0) {
     errors.push(
-      `design.md 文件变更清单中 ${uncovered.length} 个文件未被任何 task 的 allowed_paths 覆盖：\n` +
-      uncovered.map(f => `     • ${f}`).join('\n') +
-      `\n   这些文件在 execute 阶段将无 task 有权修改 → 必然漏改。` +
-      `\n   修复：为每个遗漏文件新建/补充 task 并在其 allowed_paths 声明，` +
-      `或在 design.md「不修改文件」章节说明不改原因。`
+      dcRule.data.messageUncovered
+        .replaceAll('${count}', uncovered.length)
+        .replaceAll('${files}', uncovered.map(f => `     • ${f}`).join('\n'))
     )
   }
 
@@ -441,6 +450,8 @@ export function validatePlanFeasibility(changeDir, projectRoot = null) {
     return { ok: true, errors, warnings }
   }
 
+  // task 卡片完整 schema 文案从 manifest 同源(plan.task-card-schema);${id} 随检查点取 ${file} / ${taskId || file} / ${taskId}。
+  const fsRule = getRule('plan.task-card-schema')
   const allTaskIds = []
   const depMap = new Map()
 
@@ -448,7 +459,7 @@ export function validatePlanFeasibility(changeDir, projectRoot = null) {
     const content = readFileSync(pJoin(tasksDir, file), 'utf8')
     const fmMatch = content.match(/^---\n([\s\S]*?)\n---/)
     if (!fmMatch) {
-      errors.push(`${file}: 缺少 YAML frontmatter`)
+      errors.push(fsRule.data.messageFrontmatter.replaceAll('${id}', file))
       continue
     }
     const fm = fmMatch[1]
@@ -460,13 +471,13 @@ export function validatePlanFeasibility(changeDir, projectRoot = null) {
     const allowedPathsRaw = fm.match(/allowed_paths:\s*\n((?:\s+-\s+.+\n?)+)/)?.[1] || ''
     const allowedPaths = allowedPathsRaw.match(/-\s+(.+)/g)?.map(s => s.replace(/^-\s+/, '').trim()) || []
 
-    if (!taskId) errors.push(`${file}: frontmatter 缺少 id`)
-    if (!title) errors.push(`${file}: frontmatter 缺少 title`)
+    if (!taskId) errors.push(fsRule.data.messageId.replaceAll('${id}', file))
+    if (!title) errors.push(fsRule.data.messageTitle.replaceAll('${id}', file))
     if (taskId) allTaskIds.push(taskId)
 
     // 2. allowed_paths 不为空
     if (allowedPaths.length === 0) {
-      errors.push(`${taskId || file}: allowed_paths 为空`)
+      errors.push(fsRule.data.messageAllowedPaths.replaceAll('${id}', taskId || file))
     }
 
     // 3. allowed_paths 文件存在或父目录存在（仅在 projectRoot 提供时检查）
@@ -491,18 +502,18 @@ export function validatePlanFeasibility(changeDir, projectRoot = null) {
     const hasVerify = /verify:/m.test(fm)
     const hasConstraints = /constraints:/m.test(fm)
 
-    if (!hasGoal) errors.push(`${taskId || file}: 缺少 goal 字段`)
-    if (!hasImplementation) errors.push(`${taskId || file}: 缺少 implementation 字段`)
-    if (!hasAcceptance) errors.push(`${taskId || file}: 缺少 acceptance 字段`)
-    if (!hasVerify) errors.push(`${taskId || file}: 缺少 verify 字段`)
-    if (!hasConstraints) errors.push(`${taskId || file}: 缺少 constraints 字段`)
+    if (!hasGoal) errors.push(fsRule.data.messageGoal.replaceAll('${id}', taskId || file))
+    if (!hasImplementation) errors.push(fsRule.data.messageImplementation.replaceAll('${id}', taskId || file))
+    if (!hasAcceptance) errors.push(fsRule.data.messageAcceptance.replaceAll('${id}', taskId || file))
+    if (!hasVerify) errors.push(fsRule.data.messageVerify.replaceAll('${id}', taskId || file))
+    if (!hasConstraints) errors.push(fsRule.data.messageConstraints.replaceAll('${id}', taskId || file))
   }
 
   // 4b. depends_on 引用存在性
   for (const [taskId, deps] of depMap) {
     for (const dep of deps) {
       if (!depMap.has(dep)) {
-        errors.push(`${taskId}: depends_on 引用了不存在的 ${dep}`)
+        errors.push(fsRule.data.messageDependsOnMissing.replaceAll('${id}', taskId).replaceAll('${dep}', dep))
       }
     }
   }
@@ -522,7 +533,7 @@ export function validatePlanFeasibility(changeDir, projectRoot = null) {
     if (nums.length > 0 && nums[0] === 1) {
       for (let i = 0; i < nums.length; i++) {
         if (nums[i] !== i + 1) {
-          errors.push(`task id 不连续: 期望 task-${String(i + 1).padStart(2, '0')}, 实际 task-${String(nums[i]).padStart(2, '0')}`)
+          errors.push(getRule('plan.task-id-continuity').failMessage.replaceAll('${expected}', String(i + 1).padStart(2, '0')).replaceAll('${actual}', String(nums[i]).padStart(2, '0')))
           break
         }
       }

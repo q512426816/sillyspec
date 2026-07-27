@@ -410,6 +410,58 @@ if (unknown === null) {
   failed++
 }
 
+// === plan.entry-point-wiring（生产接线路径矛盾）迁移守护（2026-07-27）===
+// 锁定 manifest 同源后:报错逐字可执行 + task allowed_paths 覆盖放行 + 紧邻豁免放行。
+// 夹具 requirements/decisions 不放结构化 ID,避免 FR/D trace 干扰 entry-point 判定。
+console.log('\n=== plan entry-point-wiring ===')
+
+const epRoot = mkdtempSync(join(tmpdir(), 'sillyspec-ep-'))
+const epDir = join(epRoot, '.sillyspec', 'changes', 'ep')
+mkdirSync(epDir, { recursive: true })
+writeFileSync(join(epDir, 'requirements.md'), '# R\n')
+writeFileSync(join(epDir, 'decisions.md'), '# Decisions\n')
+writeFileSync(join(epDir, 'plan.md'), '# Plan\n')
+
+// Case 1:design 提到 cli.ts + instantiate,无 task 覆盖 → 阻断,报错逐字可执行(含出路/触发原因)
+writeFileSync(join(epDir, 'design.md'), '# Design\n入口文件 cli.ts,instantiate 并注入构造。\n')
+const epBlock = runValidators('plan', epRoot, 'ep')
+const epErr = epBlock.errors.find(e => e.includes('生产接线路径矛盾'))
+if (!epBlock.ok
+  && epErr
+  && epErr.includes('"cli.ts"')
+  && epErr.includes('出路（二选一）')
+  && epErr.includes('allowed_paths')
+  && epErr.includes('触发原因')) {
+  console.log('✅ entry-point-wiring:design 提到 cli.ts 无覆盖 → 报错逐字可执行(含出路/触发原因)')
+} else {
+  console.log('❌ entry-point-wiring 报错异常', epBlock.errors)
+  failed++
+}
+
+// Case 2:task allowed_paths 覆盖 cli.ts → 放行
+mkdirSync(join(epDir, 'tasks'), { recursive: true })
+writeFileSync(join(epDir, 'tasks', 'task-01.md'), 'allowed_paths:\n  - src/cli.ts\n')
+const epCovered = runValidators('plan', epRoot, 'ep')
+if (epCovered.ok && !epCovered.errors.some(e => e.includes('生产接线路径矛盾'))) {
+  console.log('✅ entry-point-wiring:task allowed_paths 覆盖 cli.ts → 放行')
+} else {
+  console.log('❌ entry-point-wiring 覆盖后仍报错', epCovered.errors)
+  failed++
+}
+
+// Case 3:task 不覆盖,但 design 紧邻写明「cli.ts ... 不需要」豁免 → 放行
+writeFileSync(join(epDir, 'tasks', 'task-01.md'), 'allowed_paths:\n  - src/other.ts\n')
+writeFileSync(join(epDir, 'design.md'), '# Design\n入口文件 cli.ts,instantiate 并注入构造;但 cli.ts 本次不需要改。\n')
+const epExempt = runValidators('plan', epRoot, 'ep')
+if (epExempt.ok && !epExempt.errors.some(e => e.includes('生产接线路径矛盾'))) {
+  console.log('✅ entry-point-wiring:design 紧邻写明「cli.ts ... 不需要」豁免 → 放行')
+} else {
+  console.log('❌ entry-point-wiring 豁免未生效', epExempt.errors)
+  failed++
+}
+
+rmSync(epRoot, { recursive: true })
+
 // === 结果 ===
 console.log(`\n${failed === 0 ? '✅ 全部通过' : `❌ ${failed} 项失败`}`)
 if (failed > 0) throw new Error(`${failed} test(s) failed`)

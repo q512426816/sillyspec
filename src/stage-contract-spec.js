@@ -44,6 +44,8 @@ export const CUSTOM_KINDS = new Set([
   'cross-task-contract',     // task 卡片 provides/expects_from 对账(plan-postcheck)
   'design-file-coverage',    // design.md 文件清单 vs allowed_paths 覆盖(plan-postcheck)
   'task-id-continuity',      // task-NN id 连续性
+  'design-readiness',        // design.md 进入 plan 前的章节就绪检查(validateDesignForPlan)
+  'task-card-fields',        // task-NN.md 卡片字段存在性(validateBlueprintConsistency + validatePlanFeasibility)
   'verify-conclusion-gate',  // verify-result.md 结论 PASS/FAIL 门控
   'integration-evidence',    // verify-result.md 集成证据(change-risk-profile.checkIntegrationEvidence)
   'change-risk-gate',        // 变更风险分级门控(detectChangeRisk)
@@ -274,6 +276,104 @@ const PLAN_RULES = [
     spec: 'design.md 提到入口文件(cli.ts/main.ts/server.(js|ts)/index.(js|ts))并伴实例化/注入/启动路径关键词(如 new Daemon、startup/entrypoint/bootstrap/daemon_start、注入构造)时,每个被提到的入口文件必须出现在某个 task 的 allowed_paths 或 plan.md 文件变更清单中;若确实不改,需在 design.md 紧邻写明「<文件> 不需要/不变/无需修改」类表述才豁免。',
     failMessage: '生产接线路径矛盾: design.md 提到了入口文件 "${file}"，但没有任何 task 的 allowed_paths（或 plan.md 文件变更清单）包含它。\n   出路（二选一）：\n   ① 若该入口文件确实要改 → 在某个 task 的 allowed_paths 加上 "${file}"；\n   ② 若确实不需要改 → 在 design.md 明确写明理由，且需包含 "${file} 不需要/不变/无需修改" 这类紧邻表述才会被识别为豁免。\n   触发原因：design.md 命中入口实例化/启动路径模式（如 cli.ts|main.ts|server.(js|ts)|index.(js|ts) + new/实例化/注入，或 startup|entrypoint|bootstrap|daemon_start）。',
   },
+  // cross-task-contract(custom):consumer.expects_from ↔ provider.provides 对账。3 种断裂文案
+  // (unknown-provider / undeclared / missing-fields)进 data,算法(两遍扫描+字段集合对账)留
+  // validateCrossTaskContracts。${consumer}/${provider}/${contract}/${needs}/${available} replaceAll。
+  {
+    id: 'plan.cross-task-contract', stage: 'plan', source: 'validateCrossTaskContracts', severity: 'error', kind: 'cross-task-contract',
+    target: { root: 'change', path: 'tasks' },
+    data: {
+      messageUnknownProvider: '${consumer}: expects_from 引用了不存在的 ${provider}（contract "${contract}", needs [${needs}]）',
+      messageUndeclaredContract: '${consumer}: expects_from ${provider} contract "${contract}" needs [${needs}] — ${provider} 的 provides 未声明此契约',
+      messageMissingFields: '${consumer}: expects_from ${provider} contract "${contract}" needs [${needs}] — ${provider}.provides 仅含 [${available}]',
+    },
+    spec: 'task 卡片 frontmatter 的 expects_from 必须被对应 provider task 的 provides 覆盖:consumer 期望的每个契约及其字段,provider 的 provides 必须已声明且字段齐全。三种断裂均阻断——引用了不存在的 provider task、provider 未声明该契约、provider provides 字段不全(字段级对账避免到 execute/verify 才暴露成 403/500)。',
+    failMessage: '${consumer}: expects_from ${provider} contract "${contract}" needs [${needs}] — ${provider}.provides 仅含 [${available}]',
+  },
+  // design-file-coverage(custom):design.md 文件变更清单 vs tasks allowed_paths 覆盖对账。
+  // 算法(parseFileChangeList + pathMatches 容差匹配)留 validateDesignFileCoverage;两种断裂文案
+  // (缺清单章节 / 文件未覆盖)进 data。${count}/${files} replaceAll(${files} 为 • 逐行列表,validator 拼)。
+  {
+    id: 'plan.design-file-coverage', stage: 'plan', source: 'validateDesignFileCoverage', severity: 'error', kind: 'design-file-coverage',
+    target: { root: 'change', path: 'design.md', scope: 'full' },
+    data: {
+      messageMissingList: 'design.md 缺少「文件变更清单」章节（或清单解析为空），无法做文件覆盖对账。该章节在 brainstorm 模板中为必填；请在 design.md 补上完整的文件变更清单（列出本次新增/修改/删除的源码文件）后重试。',
+      messageUncovered: 'design.md 文件变更清单中 ${count} 个文件未被任何 task 的 allowed_paths 覆盖：\n${files}\n   这些文件在 execute 阶段将无 task 有权修改 → 必然漏改。\n   修复：为每个遗漏文件新建/补充 task 并在其 allowed_paths 声明，或在 design.md「不修改文件」章节说明不改原因。',
+    },
+    spec: 'design.md「文件变更清单」中的每个源码文件,必须被至少一个 task 的 allowed_paths 覆盖(前缀/glob 容差匹配),否则 execute 子代理无权改它→必然漏改。有 task 卡片但 design 缺「文件变更清单」章节也阻断(清单是覆盖对账的基准)。',
+    failMessage: 'design.md 文件变更清单中 ${count} 个文件未被任何 task 的 allowed_paths 覆盖：\n${files}\n   这些文件在 execute 阶段将无 task 有权修改 → 必然漏改。\n   修复：为每个遗漏文件新建/补充 task 并在其 allowed_paths 声明，或在 design.md「不修改文件」章节说明不改原因。',
+  },
+  // task-id-continuity(custom):task-NN id 从 task-01 起连续。算法留 validatePlanFeasibility。
+  // ${expected}/${actual} replaceAll(零填充 2 位)。
+  {
+    id: 'plan.task-id-continuity', stage: 'plan', source: 'validatePlanFeasibility', severity: 'error', kind: 'task-id-continuity',
+    target: { root: 'change', path: 'tasks' },
+    data: {},
+    spec: 'task 卡片 id 从 task-01 起连续递增(不跳号,如 task-01/task-02/task-03),否则阻断。',
+    failMessage: 'task id 不连续: 期望 task-${expected}, 实际 task-${actual}',
+  },
+  // design-readiness(custom):design.md 进入 plan 前的章节就绪检查(6 章节)。patterns 数组任一
+  // 命中即视为有该章节;severity 分 error/warning。算法(逐章节 test)留 validateDesignForPlan,
+  // checks/patterns/message 从本 manifest 同源。
+  {
+    id: 'plan.design-readiness', stage: 'plan', source: 'validateDesignForPlan', severity: 'error', kind: 'design-readiness',
+    target: { root: 'change', path: 'design.md', scope: 'full' },
+    data: {
+      emptyMessage: 'design.md 内容为空',
+      checks: [
+        { id: 'goal', severity: 'error', patterns: [{ pattern: '(^|\\n)#{2,}\\s*.*(目标|goal|objective|背景|background|问题|problem|purpose|目的)', flags: 'i' }], message: 'design.md 缺少「目标/背景/问题描述」章节 — plan 需要知道要达成什么' },
+        { id: 'scope', severity: 'error', patterns: [{ pattern: '(^|\\n)#{2,}\\s*.*(范围|scope|总体方案|方案|approach|solution|设计|design)', flags: 'i' }], message: 'design.md 缺少「范围/总体方案/设计」章节 — plan 需要知道做什么和怎么做' },
+        { id: 'decisions', severity: 'error', patterns: [
+          { pattern: '(^|\\n)#{2,}\\s*.*(决策|decision|选择|choice|方案选择)', flags: 'i' },
+          { pattern: 'd-\\d+@v\\d+', flags: 'i' },
+          { pattern: 'decisions?\\.md', flags: 'i' },
+        ], message: 'design.md 缺少「决策/方案选择」— plan 需要基于明确的技术决策来拆分任务' },
+        { id: 'non-goals', severity: 'warning', patterns: [{ pattern: '(^|\\n)#{2,}\\s*.*(非目标|non-goals?|不做|out of scope|不在范围)', flags: 'i' }], message: 'design.md 缺少「非目标/Non-goals」— 建议明确不做什么，防止 scope creep' },
+        { id: 'constraints', severity: 'warning', patterns: [{ pattern: '(^|\\n)#{2,}\\s*.*(约束|constraint|限制|limitation|风险|risk|trade-?off)', flags: 'i' }], message: 'design.md 缺少「约束/风险/Trade-off」— 建议记录已知约束和风险' },
+        { id: 'file-changes', severity: 'warning', patterns: [
+          { pattern: '文件变更|file change|变更清单|changed files', flags: 'i' },
+          { pattern: '^\\|\\s*(新增|修改|删除|new|modify|delete|update)\\s*\\|', flags: 'im' },
+        ], message: 'design.md 缺少「文件变更清单」— 建议列出预期改动的文件' },
+      ],
+    },
+    spec: 'design.md 进入 plan 前的章节就绪检查:必须含「目标/背景/问题描述」「范围/总体方案/设计」「决策/方案选择」(或引用 D-XX@vN / decisions.md)三章(error);建议含「非目标/Non-goals」「约束/风险/Trade-off」「文件变更清单」(warning)。章节用二级及以上标题匹配(关键字命中即可,不强求确切标题名)。',
+    failMessage: 'design.md 缺少 plan 执行所需的章节(目标/范围/决策)',
+  },
+  // task-card-structure(custom):蓝图一致性——task 卡片基础字段。validateBlueprintConsistency
+  // 认 frontmatter 字段 OR body 章节(flexible)。3 文案进 data(${id} = "${taskId} (${file})"),
+  // 算法(parseAllowedPaths/hasAcceptanceCriteria/hasTddOrVerify)留 validator。
+  {
+    id: 'plan.task-card-structure', stage: 'plan', source: 'validateBlueprintConsistency', severity: 'error', kind: 'task-card-fields',
+    target: { root: 'change', path: 'tasks' },
+    data: {
+      messageAllowedPaths: '${id}: frontmatter 缺少 allowed_paths（需非空数组，列出本 task 真实改动的源文件；回归类 task 无源码改动时填被验证的关键入口文件）',
+      messageAcceptance: '${id}: 缺少验收标准——frontmatter 需有 acceptance: 列表字段，或 body 需有「## 验收标准」/「## Acceptance」章节',
+      messageTdd: '${id}: 缺少验证步骤——frontmatter 需有 verify: 字段，或 body 需有「## TDD」/「## 验证」/「## Verify」章节',
+    },
+    spec: 'task 卡片基础字段(蓝图一致性,认 frontmatter 字段或 body 章节):allowed_paths 非空数组(error)、验收标准(frontmatter acceptance: 或 body ## 验收标准/## Acceptance,error)、验证步骤(frontmatter verify: 或 body ## TDD/## 验证/## Verify,缺失仅 warning)。',
+    failMessage: '${id}: task 卡片缺少基础字段(allowed_paths/验收标准/验证步骤)',
+  },
+  // task-card-schema(custom):完整 TaskCard schema——validatePlanFeasibility 只认 frontmatter 字段
+  // (strict,不认 body 章节,故与 blueprint 互补不重复)。10 文案进 data(${id} 随检查点取 ${file} /
+  // ${taskId || file} / ${taskId},${dep} 用于 depends_on),算法留 validator。
+  {
+    id: 'plan.task-card-schema', stage: 'plan', source: 'validatePlanFeasibility', severity: 'error', kind: 'task-card-fields',
+    target: { root: 'change', path: 'tasks' },
+    data: {
+      messageFrontmatter: '${id}: 缺少 YAML frontmatter',
+      messageId: '${id}: frontmatter 缺少 id',
+      messageTitle: '${id}: frontmatter 缺少 title',
+      messageAllowedPaths: '${id}: allowed_paths 为空',
+      messageGoal: '${id}: 缺少 goal 字段',
+      messageImplementation: '${id}: 缺少 implementation 字段',
+      messageAcceptance: '${id}: 缺少 acceptance 字段',
+      messageVerify: '${id}: 缺少 verify 字段',
+      messageConstraints: '${id}: 缺少 constraints 字段',
+      messageDependsOnMissing: '${id}: depends_on 引用了不存在的 ${dep}',
+    },
+    spec: 'task 卡片完整 TaskCard schema(可行性,只认 frontmatter 字段,均 error):YAML frontmatter 必备;frontmatter 需 id、title;allowed_paths 非空;frontmatter 需 goal、implementation、acceptance、verify、constraints 五字段;depends_on 引用的 task 必须存在。',
+    failMessage: '${id}: task 卡片 frontmatter 缺少必要字段(id/title/allowed_paths/goal/implementation/acceptance/verify/constraints)',
+  },
 ]
 
 // ── archive ──
@@ -313,6 +413,20 @@ const CHANGE_CLOSED_RULES = [
   },
 ]
 
+// ── quick ──
+// quick step3 --done --output 结果摘要结构校验:4 个必填字段标签(literal-all)。校验对象是
+// --output 原文(非文件),引擎不 dispatch;validateQuickResult 取 data.literals 同源,
+// complete-handlers 取 failMessage 同源,renderStageContract 注入 quick step0 让 agent 事前知道 4 标签模板。
+const QUICK_RULES = [
+  {
+    id: 'quick.result-labels', stage: 'quick', source: 'validateQuickResult', severity: 'error', kind: 'literal-all',
+    target: {},
+    data: { literals: ['需求：', '根因：', '方案：', '结果：'] },
+    spec: 'quick step3 --done --output 的结果摘要须含 4 个字段标签(字面命中,冒号须全角：):需求：/ 根因：/ 方案：/ 结果：。缺任一 → --done 被拦(回退 step pending),补全后重跑不丢进度。',
+    failMessage: '❌ quick 结果摘要结构不完整：缺少字段 ${missing}',
+  },
+]
+
 // 跨 stage 共用的 custom kind(brainstorm/plan/verify 都校验 decisions.md P0/P1 阻塞)。
 // stage='shared':getRulesFor(stage) 不返回(不污染各 stage prompt 契约),validator 用 getRule(id)
 // 取 failMessage 同源。${issue} 占位由 validator replace 为具体 decision issue 串。
@@ -339,6 +453,7 @@ const RULES = [
   ...PLAN_RULES,
   ...ARCHIVE_RULES,
   ...CHANGE_CLOSED_RULES,
+  ...QUICK_RULES,
   ...SHARED_RULES,
   // QUICK_RULES / 散落字面校验:Batch 2 后续 / Batch 3 迁入
 ]

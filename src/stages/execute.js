@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, readdirSync } from 'fs'
 import path from 'path'
 import { buildContractMatrix, buildConsumerInjection, buildContractFieldInjection } from '../contract-matrix.js'
+import { getRule } from '../stage-contract-spec.js'
 
 /**
  * 校验 plan.md 是否满足 execute 执行契约
@@ -56,7 +57,7 @@ export function validatePlanForExecute(planContent) {
     if (ids[0] === 1) {
       for (let i = 0; i < ids.length; i++) {
         if (ids[i] !== i + 1) {
-          errors.push(`task id 不连续: 期望 task-${String(i + 1).padStart(2, '0')}, 实际 task-${String(ids[i]).padStart(2, '0')}`)
+          errors.push(getRule('plan.task-id-continuity').failMessage.replaceAll('${expected}', String(i + 1).padStart(2, '0')).replaceAll('${actual}', String(ids[i]).padStart(2, '0')))
           break
         }
       }

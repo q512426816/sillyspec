@@ -28,6 +28,7 @@ import { stageRegistry } from '../stages/index.js'
 import { SCAN_STATUS, POINTER_STATUS } from '../constants.js'
 import { printQuickAuditReview } from './quick-audit.js'
 import { validateQuickResult, allocateQuicklogEntry, findQuicklogEntry, completeQuicklogEntry } from '../quicklog.js'
+import { getRule } from '../stage-contract-spec.js'
 
 /**
  * 清洗项目名：只保留 ASCII 字母/数字/横线/下划线/点，过滤中文和特殊字符。
@@ -588,7 +589,7 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
     if (outputText) {
       const resultCheck = validateQuickResult(outputText)
       if (!resultCheck.ok) {
-        console.error(`\n❌ quick 结果摘要结构不完整：缺少字段 ${resultCheck.missing.join('、')}`)
+        console.error('\n' + getRule('quick.result-labels').failMessage.replaceAll('${missing}', resultCheck.missing.join('、')))
         console.error(`   --output 是 QUICKLOG「结果：」归档的唯一来源，四个标签必须放在 --output 里（不是 --input）。`)
         console.error(`   补全后重跑 --done（不丢进度），直接照抄此模板：`)
         console.error(`     sillyspec run quick --done --change <changeName> --output "需求：用户/任务要什么`)

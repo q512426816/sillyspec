@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, readdirSync } from 'fs'
 import path from 'path'
+import { getRule } from '../stage-contract-spec.js'
 
 // 从 plan-postcheck.js 重导出（保持向后兼容）
 export {
@@ -22,48 +23,17 @@ export function validateDesignForPlan(designContent) {
   const warnings = []
 
   if (!designContent || !designContent.trim()) {
-    return { ok: false, errors: ['design.md 内容为空'], warnings }
+    return { ok: false, errors: [getRule('plan.design-readiness').data.emptyMessage], warnings }
   }
 
-  const lower = designContent.toLowerCase()
-
-  // 检查 1: 必须包含目标/问题描述（error）
-  const hasGoal = /(^|\n)#{2,}\s*.*(目标|goal|objective|背景|background|问题|problem|purpose|目的)/i.test(designContent)
-  if (!hasGoal) {
-    errors.push('design.md 缺少「目标/背景/问题描述」章节 — plan 需要知道要达成什么')
-  }
-
-  // 检查 2: 必须包含范围/scope（error）
-  const hasScope = /(^|\n)#{2,}\s*.*(范围|scope|总体方案|方案|approach|solution|设计|design)/i.test(designContent)
-  if (!hasScope) {
-    errors.push('design.md 缺少「范围/总体方案/设计」章节 — plan 需要知道做什么和怎么做')
-  }
-
-  // 检查 3: 必须包含决策/方案选择（error）
-  const hasDecisions = /(^|\n)#{2,}\s*.*(决策|decision|选择|choice|方案选择)/i.test(designContent)
-  || /d-\d+@v\d+/i.test(designContent) // decisions.md 引用 ID
-  || /decisions?\.md/i.test(designContent) // 引用 decisions.md
-  if (!hasDecisions) {
-    errors.push('design.md 缺少「决策/方案选择」— plan 需要基于明确的技术决策来拆分任务')
-  }
-
-  // 检查 4 (warning): 缺非目标/non-goals
-  const hasNonGoals = /(^|\n)#{2,}\s*.*(非目标|non-goals?|不做|out of scope|不在范围)/i.test(designContent)
-  if (!hasNonGoals) {
-    warnings.push('design.md 缺少「非目标/Non-goals」— 建议明确不做什么，防止 scope creep')
-  }
-
-  // 检查 5 (warning): 缺约束/风险
-  const hasConstraints = /(^|\n)#{2,}\s*.*(约束|constraint|限制|limitation|风险|risk|trade-?off)/i.test(designContent)
-  if (!hasConstraints) {
-    warnings.push('design.md 缺少「约束/风险/Trade-off」— 建议记录已知约束和风险')
-  }
-
-  // 检查 6 (warning): 缺文件变更清单
-  const hasFileChanges = /文件变更|file change|变更清单|changed files/i.test(designContent)
-  || /^\|\s*(新增|修改|删除|new|modify|delete|update)\s*\|/im.test(designContent)
-  if (!hasFileChanges) {
-    warnings.push('design.md 缺少「文件变更清单」— 建议列出预期改动的文件')
+  // 6 章节就绪检查(patterns + message)从 manifest 同源(stage-contract-spec.js plan.design-readiness);
+  // 逐章节 test,patterns 数组任一命中即视为有该章节。算法等价旧内联正则(原 lower 变量未使用,已弃)。
+  const rule = getRule('plan.design-readiness')
+  for (const check of rule.data.checks) {
+    const matched = check.patterns.some(p => new RegExp(p.pattern, p.flags).test(designContent))
+    if (!matched) {
+      (check.severity === 'error' ? errors : warnings).push(check.message)
+    }
   }
 
   return { ok: errors.length === 0, errors, warnings }
