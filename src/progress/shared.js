@@ -1,10 +1,7 @@
 // W6 Step9 共享常量：progress.js facade 与 src/progress/* 子模块共用，避免 facade↔子模块循环引用。
-// 按需增量抽取（9a: STAGE_ORDER/MAIN_FLOW_ORDER；9c: VALID_STAGES/STAGE_LABELS；9d 追加 emptyStage/SPEC_DIR_NAME 等）。
+// 9a: STAGE_ORDER/MAIN_FLOW_ORDER；9c: VALID_STAGES/STAGE_LABELS；9d: SPEC_DIR_NAME/CURRENT_VERSION/emptyStage。
 
-// 完整主流程顺序（含 scan），用于下游 cascade / 一致性检查
-export const STAGE_ORDER = ['scan', 'brainstorm', 'plan', 'execute', 'verify', 'archive'];
-// 主流程阶段（不含 scan/quick/explore 等辅助阶段）—— 当前与 STAGE_ORDER 同值
-export const MAIN_FLOW_ORDER = STAGE_ORDER;
+export const SPEC_DIR_NAME = '.sillyspec';
 
 // 合法阶段名（含辅助阶段 scan/quick/explore）
 export const VALID_STAGES = ['scan', 'brainstorm', 'plan', 'execute', 'verify', 'archive', 'quick', 'explore'];
@@ -20,4 +17,17 @@ export const STAGE_LABELS = {
   explore: '🧭 自由探索',
   archive: '📦 归档变更',
 };
+
+// 完整主流程顺序（含 scan），用于下游 cascade / 一致性检查
+export const STAGE_ORDER = ['scan', 'brainstorm', 'plan', 'execute', 'verify', 'archive'];
+// 主流程阶段（不含 scan/quick/explore 等辅助阶段）—— 当前与 STAGE_ORDER 同值
+export const MAIN_FLOW_ORDER = STAGE_ORDER;
+
+// progress 数据版本（v3 = SQLite）
+export const CURRENT_VERSION = 3;
+
+// 空阶段骨架
+export function emptyStage() {
+  return { status: 'pending', steps: [], startedAt: null, completedAt: null };
+}
 
