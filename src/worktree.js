@@ -167,9 +167,12 @@ function sleepMs(ms) {
   while (Date.now() < end) { /* spin */ }
 }
 
-function computeBaselineHash(cwd) {
-  // 排除 .sillyspec/ 元数据目录，避免 brainstorm/plan 阶段修改的蓝图文件污染 baseline
-  const exclude = '-- . ":(exclude).sillyspec/"';
+export function computeBaselineHash(cwd) {
+  // 排除 execute 流程自身会改的元数据，避免漂移误报（否则每个 execute 收尾都因自身改动 BLOCKED）：
+  //   - .sillyspec/：brainstorm/plan 蓝图 + runtime 产物
+  //   - docs/sillyspec/：工具坑文件（CLAUDE.md 规则要求 execute 期间记录）
+  // 必须和 applyWorktree step 4.5 (worktree-apply.js) 使用相同的排除规则。
+  const exclude = '-- . ":(exclude).sillyspec/" ":(exclude)docs/sillyspec/"';
   const staged = gitQuiet(cwd, `diff --cached ${exclude}`) || '';
   const unstaged = gitQuiet(cwd, `diff ${exclude}`) || '';
   const untracked = gitQuiet(cwd, `ls-files --others --exclude-standard ${exclude}`) || '';

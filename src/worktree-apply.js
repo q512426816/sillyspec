@@ -184,9 +184,12 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
   }
 
   // --- 4.5 校验：主工作区 baseline 是否变化（防 execute 期间主工作区被修改）---
-  // 注意：必须和 computeBaselineHash (worktree.js) 使用相同的排除规则
+  // 注意：必须和 computeBaselineHash (worktree.js) 使用相同的排除规则。
+  // 排除 execute 流程自身会改的元数据（否则每个 execute 收尾都因自身改动 baseline 漂移 BLOCKED）：
+  //   - .sillyspec/：plan/design 蓝图 + runtime 产物
+  //   - docs/sillyspec/：工具坑文件（CLAUDE.md 规则要求 execute 期间记录）
   if (meta.baselineHash) {
-    const exclude = '-- . ":(exclude).sillyspec/"';
+    const exclude = '-- . ":(exclude).sillyspec/" ":(exclude)docs/sillyspec/"';
     const staged = gitQuiet(projectRoot, `diff --cached ${exclude}`) || '';
     const unstaged = gitQuiet(projectRoot, `diff ${exclude}`) || '';
     const untracked = gitQuiet(projectRoot, `ls-files --others --exclude-standard ${exclude}`) || '';

@@ -139,6 +139,52 @@ console.log('\n--- provisionDeps: 非 nodejs 项目类型不崩 ---')
   assert(['installed', 'failed'].includes(r.depsStatus), `maven 项目返回 installed/failed（${r.depsStatus}，mvn 可能不可用）`)
 }
 
+// ── provisionDeps: generic monorepo（local.yaml modules 块 → 子模块 link，n/a 升级 linked）──
+// 坑 execute-worktree-pnpm-monorepo-no-node-modules：generic 项目 worktree 子模块无 node_modules。
+console.log('\n--- provisionDeps: generic + modules 块 → 子模块 link 升级 linked ---')
+{
+  const specBase = mkTmp('mono-spec')
+  const main = mkTmp('mono-main')
+  const wt = mkTmp('mono-wt')
+  // local.yaml：generic + modules 块（frontend 是 nodejs，backend 是 python）
+  writeFileSync(join(specBase, 'local.yaml'),
+    'project:\n  type: generic\n' +
+    'modules:\n' +
+    '  frontend: { path: "frontend/", test: "cd frontend && pnpm test" }\n' +
+    '  backend: { path: "backend/", test: "cd backend && uv run pytest" }\n')
+  // worktree 根无 package.json（generic）；frontend 子模块有 package.json + lockfile
+  const lockContent = 'lockversion: 6.0\npackages: []\n'
+  mkdirSync(join(wt, 'frontend'))
+  writeFileSync(join(wt, 'frontend', 'package.json'), '{"name":"frontend"}')
+  writeFileSync(join(wt, 'frontend', 'pnpm-lock.yaml'), lockContent)
+  // main/frontend 有 node_modules + 相同 lockfile
+  mkdirSync(join(main, 'frontend', 'node_modules'), { recursive: true })
+  writeFileSync(join(main, 'frontend', 'node_modules', '.placeholder'), 'x')
+  writeFileSync(join(main, 'frontend', 'package.json'), '{"name":"frontend"}')
+  writeFileSync(join(main, 'frontend', 'pnpm-lock.yaml'), lockContent)
+  // backend（python，无 package.json）→ hasNodeMarker 跳过
+  mkdirSync(join(wt, 'backend'))
+
+  const r = provisionDeps(wt, main, { specBase })
+  assert(r.depsStatus === 'linked', `generic+modules 子模块 link → linked（实际 ${r.depsStatus}）`)
+  assert(Array.isArray(r.depsModules) && r.depsModules.length === 1,
+    `depsModules 只含 frontend（backend python 应跳过，实际 ${JSON.stringify(r.depsModules)}）`)
+  const fe = r.depsModules[0]
+  assert(fe.path === 'frontend' && fe.status === 'linked', `frontend link 成功（${fe.path}:${fe.status}）`)
+  assert(existsSync(join(wt, 'frontend', 'node_modules')), 'worktree/frontend/node_modules 已创建')
+  assert(existsSync(join(wt, 'frontend', 'node_modules', '.placeholder')), 'link 指向 main/frontend/node_modules 内容')
+}
+
+// ── provisionDeps: generic 无 modules 块 → 仍 n/a（回归保护）──
+console.log('\n--- provisionDeps: generic 无 modules 块 → 仍 n/a ---')
+{
+  const wt = mkTmp('gen2-wt')
+  const main = mkTmp('gen2-main')
+  const r = provisionDeps(wt, main, {})
+  assert(r.depsStatus === 'n/a', `无 modules 块的 generic → n/a（实际 ${r.depsStatus}）`)
+  assert(!Array.isArray(r.depsModules), '无 modules 块时不输出 depsModules')
+}
+
 cleanup()
 
 console.log(`\n==================================================`)

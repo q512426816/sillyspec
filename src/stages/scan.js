@@ -143,6 +143,8 @@ export const definition = {
 - 生成每份 scan 文档时，frontmatter 必须包含：
   \`\`\`yaml
   ---
+  author: <git 用户名（git config user.name 的输出，如 qinyi）>
+  created_at: <精确到秒的时间，如 2026-07-27 10:30:00>
   source_commit: <git-head-short>
   updated_at: <now-iso-datetime>
   generator: sillyspec-scan
@@ -159,7 +161,7 @@ export const definition = {
 - 断点续扫步骤列出的缺失文档列表
 - 环境探测结果摘要（如有 _env-detect.md，直接贴入）
 - **⚠️ 必须强调：子代理必须用 write 工具将文件写入磁盘**
-- **文件标题用中文**（sillyhub 平台解析识别用）：每份 scan 文档第一行用 # 中文名（English）格式：
+- **文件标题用中文**（sillyhub 平台解析识别用）：frontmatter 必须在文件最前（第 1 行 --- 起），frontmatter 结束的 --- 之后空一行，再写 # 中文名（English）作为标题。严禁把 # 标题放到 frontmatter 之前（否则 frontmatter 不在头部、Step11 检查项9 会报缺 author/created_at）。各文档标准标题格式：
   - STRUCTURE.md = # 目录结构（Structure）
   - CONVENTIONS.md = # 代码约定（Conventions）
   - ARCHITECTURE.md = # 架构（Architecture）

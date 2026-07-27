@@ -131,55 +131,137 @@ function tryInstall(cmd, cwd, timeout) {
   }
 }
 
+/** 目录是否含 nodejs 标记（package.json 或任一 lockfile）——识别 monorepo 里的 nodejs 子模块 */
+function hasNodeMarker(dir) {
+  if (!dir || !existsSync(dir)) return false;
+  if (existsSync(join(dir, 'package.json'))) return true;
+  return LOCKFILES.some(lf => existsSync(join(dir, lf)));
+}
+
 /**
- * 供给依赖。返回 deps 状态对象（合并进 meta）。
+ * 从 local.yaml 提取 modules 块的 path 列表（generic monorepo 子模块路径）。
+ * 兼容 inline flow（`frontend: { path: "frontend/" }`）与 block（`frontend:\n    path: frontend/`）。
+ * 轻量正则，不引 yaml 依赖（与 extractUserInstall / scan-postcheck 风格一致）。
+ * 坑 execute-worktree-pnpm-monorepo-no-node-modules：generic 项目 worktree 子模块无 node_modules。
+ * @returns {string[]} 去重 + 去 trailing 斜杠的相对路径
+ */
+function extractModulePaths(yamlText) {
+  if (!yamlText) return [];
+  const idx = yamlText.search(/^modules:\s*$/m);
+  if (idx < 0) return [];
+  const nlIdx = yamlText.indexOf('\n', idx);
+  if (nlIdx < 0) return [];
+  let rest = yamlText.slice(nlIdx + 1);
+  const nextTop = rest.search(/^\S/m); // 下一个顶层 key（行首非空白）
+  const block = nextTop >= 0 ? rest.slice(0, nextTop) : rest;
+  const paths = [];
+  const re = /path:\s*["']?([^"'\s,}]+)/g;
+  let pm;
+  while ((pm = re.exec(block)) !== null) {
+    const p = pm[1].replace(/\/+$/, '').trim();
+    if (p && p !== '.') paths.push(p);
+  }
+  return [...new Set(paths)];
+}
+
+/**
+ * 对单个子模块目录 tryLink main 的 node_modules → wt 的 node_modules（modules 子模块专用）。
+ * 仅走 link 快路径（不 install——子模块 install 慢且易失败；lockfile 不一致时交给用户 pnpm install）。
+ * lockfile 一致才 link，避免误链不匹配的 deps。
+ */
+function linkOneDir(wtDir, mainDir) {
+  const mainNodeModules = join(mainDir, 'node_modules');
+  if (!existsSync(mainNodeModules)) return { status: 'skipped', reason: 'main 无 node_modules' };
+  const wtHash = lockfileHash(wtDir);
+  const mainHash = lockfileHash(mainDir);
+  if (wtHash && mainHash && wtHash !== mainHash) {
+    return { status: 'mismatch', reason: `lockfile 不一致 main=${mainHash} wt=${wtHash}` };
+  }
+  const r = tryLink(mainNodeModules, join(wtDir, 'node_modules'));
+  if (r.ok) return { status: 'linked', method: r.method };
+  return { status: 'failed', error: r.error };
+}
+
+/**
+ * 供给依赖。返回 deps 状态对象（合并进 meta）。两段：
+ *   1. 根目录供给（原有逻辑：lockfile 一致 link / 不一致 install / generic→根 n/a）
+ *   2. modules 块的 nodejs 子模块 link（generic monorepo：根无 deps 但 frontend/daemon 等子模块需要）
+ * generic + 子模块 link 成功时，整体 depsStatus 从 n/a 升级为 linked（deps gate 不再误判 unknown 阻断）。
+ *
  * @param {string} worktreePath - worktree 根目录
  * @param {string} mainCwd - 主 checkout 根目录（node_modules 来源）
  * @param {{ specBase?: string, timeout?: number }} opts
- * @returns {{ depsStatus, depsMethod, depsSource, depsLockHash, depsCheckedAt, depsError? }}
+ * @returns {{ depsStatus, depsMethod, depsSource, depsLockHash, depsCheckedAt, depsError?, depsModules? }}
  */
 export function provisionDeps(worktreePath, mainCwd, opts = {}) {
   const { specBase = null, timeout = DEFAULT_TIMEOUT_MS } = opts;
   const depsCheckedAt = new Date().toISOString();
+  const yamlText = readLocalYaml(specBase, worktreePath);
   const wtHash = lockfileHash(worktreePath);
 
+  // ── 1. 根目录供给 ──
   const projectType = detectProjectType(worktreePath, specBase);
-  const userInstall = extractUserInstall(readLocalYaml(specBase, worktreePath));
+  const userInstall = extractUserInstall(yamlText);
   const installCmd = inferInstallCommand(projectType, worktreePath, userInstall);
 
-  // generic / 无可执行 install → n/a
+  let result;
   if (!installCmd) {
-    return { depsStatus: 'n/a', depsMethod: null, depsSource: null, depsLockHash: wtHash, depsCheckedAt };
-  }
-
-  // 快路径：main 有 node_modules 且 lockfile hash 一致 → junction/symlink
-  const mainNodeModules = mainCwd ? join(mainCwd, 'node_modules') : null;
-  const mainHash = lockfileHash(mainCwd);
-  if (mainNodeModules && existsSync(mainNodeModules) && mainHash && wtHash && mainHash === wtHash) {
-    const linkResult = tryLink(mainNodeModules, join(worktreePath, 'node_modules'));
-    if (linkResult.ok) {
-      return {
-        depsStatus: 'linked',
-        depsMethod: linkResult.method,
-        depsSource: linkResult.preexisting ? 'install' : 'main-checkout',
-        depsLockHash: wtHash,
-        depsCheckedAt,
-      };
+    // generic / 无可执行 install → 根无 deps 动作（n/a）；但下方 modules 子模块仍可能 link 升级
+    result = { depsStatus: 'n/a', depsMethod: null, depsSource: null, depsLockHash: wtHash };
+  } else {
+    // 快路径：main 有 node_modules 且 lockfile hash 一致 → junction/symlink
+    const mainNodeModules = mainCwd ? join(mainCwd, 'node_modules') : null;
+    const mainHash = lockfileHash(mainCwd);
+    let linked = false;
+    if (mainNodeModules && existsSync(mainNodeModules) && mainHash && wtHash && mainHash === wtHash) {
+      const linkResult = tryLink(mainNodeModules, join(worktreePath, 'node_modules'));
+      if (linkResult.ok) {
+        result = {
+          depsStatus: 'linked',
+          depsMethod: linkResult.method,
+          depsSource: linkResult.preexisting ? 'install' : 'main-checkout',
+          depsLockHash: wtHash,
+        };
+        linked = true;
+      }
     }
-    // link 失败 → 回退 install
+    if (!linked) {
+      // 兜底：install
+      const installResult = tryInstall(installCmd, worktreePath, timeout);
+      result = installResult.ok
+        ? { depsStatus: 'installed', depsMethod: 'install', depsSource: 'install', depsLockHash: wtHash }
+        : { depsStatus: 'failed', depsMethod: null, depsSource: null, depsLockHash: wtHash, depsError: installResult.error };
+    }
+  }
+  result.depsCheckedAt = depsCheckedAt;
+
+  // ── 2. modules 块的 nodejs 子模块 link（坑 execute-worktree-pnpm-monorepo-no-node-modules）──
+  // generic monorepo（如 multi-agent-platform）worktree 子模块 frontend/sillyhub-daemon 无 node_modules，
+  // 跑 pnpm test 失败。读 local.yaml modules 块，对 nodejs 子模块 tryLink main 的 node_modules。
+  const modulePaths = extractModulePaths(yamlText);
+  const moduleResults = [];
+  for (const mp of modulePaths) {
+    const wtDir = join(worktreePath, mp);
+    const mainDir = mainCwd ? join(mainCwd, mp) : null;
+    if (!existsSync(wtDir) || !mainDir || !hasNodeMarker(wtDir)) continue;
+    moduleResults.push({ path: mp, ...linkOneDir(wtDir, mainDir) });
   }
 
-  // 兜底：install
-  const installResult = tryInstall(installCmd, worktreePath, timeout);
-  if (installResult.ok) {
-    return { depsStatus: 'installed', depsMethod: 'install', depsSource: 'install', depsLockHash: wtHash, depsCheckedAt };
+  if (moduleResults.length > 0) {
+    result.depsModules = moduleResults;
+    const linkedModules = moduleResults.filter(m => m.status === 'linked');
+    if (linkedModules.length > 0 && result.depsStatus === 'n/a') {
+      // 标 generic 但子模块 link 成功 → 升级为 linked（deps gate 不再误判 unknown 阻断 execute）
+      result.depsStatus = 'linked';
+      result.depsMethod = linkedModules[0].method;
+      result.depsSource = 'main-checkout';
+    }
+    const failedModules = moduleResults.filter(m => m.status === 'failed');
+    if (failedModules.length > 0) {
+      const fmsg = failedModules.map(m => `${m.path}: ${m.error}`).join('; ');
+      result.depsError = result.depsError ? `${result.depsError}; ${fmsg}` : fmsg;
+    }
   }
-  return {
-    depsStatus: 'failed',
-    depsMethod: null,
-    depsSource: null,
-    depsLockHash: wtHash,
-    depsCheckedAt,
-    depsError: installResult.error,
-  };
+
+  return result;
 }
