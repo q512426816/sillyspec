@@ -6,3 +6,4 @@ node_modules/
 .sillyspec/local.yaml
 .sillyspec/.runtime/
 .idea
+.playwright-mcp/

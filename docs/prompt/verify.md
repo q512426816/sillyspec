@@ -1,0 +1,325 @@
+# verify（验证确认）阶段提示词
+
+> **源文件**：`src/stages/verify.js`
+> **阶段定位**：对照规范检查 + 测试套件
+> **类型**：主流程阶段
+> **全局角色 persona**：QA 专家（吹毛求疵，假设所有代码都有 bug，用最坏情况测试，关注边界/异常/并发，用证据说话）— 逐字文案见 [README.md](./README.md) persona 表。
+> **全局护栏 _globalGuardrails**：**有（仅 verify 阶段独有）**。verify 首步（Step 1）会注入完整护栏全文（见下方「全局护栏全文」小节），后续每步注入一行精简提醒 `⛔ 本阶段护栏生效中（禁止破坏性操作，详见首步护栏）`。
+> **步骤总数**：7
+
+> 📌 本文档展示的是**每个 step 的 prompt 模板原文**。agent 实际收到的提示词 = `outputStep` 注入的 header + persona（仅首步）+ **全局护栏（首步全文 / 后续步精简提醒）** + prompt 正文（占位符已替换）+ 完成契约（仅首步）+ 铁律 + `--wait/--done` 命令模板。注入细节见 [README.md](./README.md)。
+
+---
+
+## 全局护栏全文（verify 阶段独有，首步逐字注入）
+
+> 源：`src/stages/verify.js` 的 `definition._globalGuardrails`。CLI 在 verify Step 1 完整注入下列全文；Step 2+ 仅注入一行精简提醒。
+
+````markdown
+## ⛔ verify 阶段绝对禁止的操作
+
+以下操作在 verify 阶段**绝对禁止**，无论出于任何原因（包括「恢复文件」「修复问题」「清理目录」）：
+
+### 禁止的 Git 操作
+- git checkout（覆盖文件）
+- git restore（覆盖文件）
+- git reset（回滚提交）
+- git revert（撤销提交）
+- git clean（删除未跟踪文件）
+- git stash drop（删除 stash）
+- git branch -D（强制删除分支）
+
+### 禁止的文件操作
+- 删除任何源码文件（rm、trash）
+- 覆盖任何源码文件（cp 覆盖、echo > 覆盖）
+- 修改任何源码文件（除了 .sillyspec/ 下的报告文件）
+
+### 只允许的操作
+- git status / git diff / git show / git log / git stash list（只读）
+- cat / head / grep / find / wc（只读检查）
+- 写入 .sillyspec/changes/ 下的报告文件（verify-result.md）
+- 运行测试命令（不修改源码）
+- 运行 lint 命令（不自动修复）
+
+如果发现文件缺失或异常，**只报告问题，不尝试修复**。
+````
+
+---
+
+## Step 1/7：状态检查
+
+**元数据**
+- optional：false
+- outputHint：状态摘要
+- 等待配置：无（可直接 `--done`）
+
+**提示词原文**
+
+````markdown
+检查当前状态，确认可以执行 verify。
+
+### 操作
+1. 运行 `sillyspec progress show`
+2. 确认 currentStage 为 "verify"
+
+### 输出
+当前状态摘要
+````
+
+---
+
+## Step 2/7：加载规范并锚定
+
+**元数据**
+- optional：false
+- outputHint：文件确认清单
+- 等待配置：无（可直接 `--done`）
+
+**本步出现的运行时占位符**
+- `<project>` → 当前项目名（`basename(cwd)` 或 db 项目名）
+
+**提示词原文**
+
+````markdown
+加载规范文件并确认。
+
+### 操作
+1. 读取 proposal.md、design.md、tasks.md、requirements.md、plan.md
+2. 如果存在 decisions.md，必须读取并提取所有当前版本 D-xxx@vN 决策 ID
+   - 如果存在 P0/P1 unresolved/blocking 决策，验证结论不能为 PASS
+   - 如果发现 superseded 决策被下游引用，标记为 ⚠️ stale decision reference
+3. 加载项目信息：`cat .sillyspec/projects/*.yaml 2>/dev/null`
+4. 加载本地配置：`cat .sillyspec/local.yaml 2>/dev/null`（构建命令、测试命令、lint 命令等）
+5. 加载代码规范：`cat .sillyspec/docs/<project>/scan/CONVENTIONS.md 2>/dev/null`
+   - 测试现状：`cat .sillyspec/docs/<project>/scan/TESTING.md 2>/dev/null`（了解既有测试约定与覆盖范围，验收时对照）
+   - 技术债清单：`cat .sillyspec/docs/<project>/scan/CONCERNS.md 2>/dev/null`（🔴/🟡 区域；本次变更若触碰须在 verify-result.md 标注）
+6. 标注每个文件的存在/不存在状态
+
+### Execute Evidence 传递检查
+7. 检查 verify-required-evidence.json 是否存在（由 execute 阶段 Task Review Gate 写入）
+   - 路径：变更目录下的 verify-required-evidence.json
+   - 如果存在 → 读取其中的 requiredEvidence 列表，逐条验证是否已满足
+   - 每条 evidence 必须在 verify-result.md 中给出明确结论（satisfied / missing / partial）
+   - 如果有任何 evidence 为 missing → verify 结论不能为 PASS
+   - 如果文件不存在 → 表示 execute 阶段无 cannot_verify 任务，正常继续
+
+### 模块文档加载
+7. 读取 `.sillyspec/docs/<project>/modules/_module-map.yaml`（不存在则跳过以下步骤）
+8. 根据 design.md 的文件变更清单匹配 _module-map.yaml 中的模块
+9. 读取匹配到的 `.sillyspec/docs/<project>/modules/<module>.md`
+10. **检查模块索引可信度**：如果相关模块的 needs_review 为 true，提示"该模块索引可能不可信，需要回看模块卡片或源码"
+
+### 输出
+文件加载确认清单（含 decisions.md 当前版本/未决项状态、模块文档 + 索引可信度）
+````
+
+---
+
+## Step 3/7：逐项检查任务
+
+**元数据**
+- optional：false
+- outputHint：任务完成度报告
+- 等待配置：无（可直接 `--done`）
+
+**提示词原文**
+
+````markdown
+对照 tasks.md 检查每个任务完成状态。
+
+### 操作
+对每个 checkbox：
+1. 检查相关文件是否存在
+2. 检查代码是否实现了描述的功能
+3. 标记：✅ 已完成 / ❌ 未完成 / ⚠️ 部分完成
+
+### 批量模式验证指引
+如果 tasks.md 中有批量特征（引擎/模板/配置/批量生成），采用分层验证：
+- **L1 自动化（100%）**：运行验证脚本（如有），检查所有实例的文件存在、格式正确、Schema 校验通过
+- **L2 AI 抽查（5-10 个）**：选择最复杂的 3 个 + 最简单的 2 个 + 有特殊逻辑的，检查业务逻辑正确性
+- **L3 模式性 bug 检测**：L2 发现 bug → 判断是否为系统性问题 → 系统性 bug 则回退修复引擎并重新生成所有实例
+
+### 输出
+任务完成度列表 + 完成率
+
+````
+
+---
+
+## Step 4/7：对照设计检查
+
+**元数据**
+- optional：false
+- outputHint：设计一致性报告
+- 等待配置：无（可直接 `--done`）
+
+**本步出现的运行时占位符与 include 指令**
+- `{{include: verify-probes}}` → include 指令：`resolvePromptIncludes` 在占位符替换前，把外部模板片段（`shared.js` 注册的 `verify-probes`）拉进 prompt 正文（四个自动探针的检查规则）
+
+**提示词原文**
+
+````markdown
+先运行自动探针，再对照 design.md 检查实现一致性。**design.md 是唯一 truth source，不符合 design.md 的实现 = Bug。**
+
+{{include: verify-probes}}
+
+### 探针结果处理
+- 将四个探针的结果汇总为「探针报告」
+- 如果探针发现问题（未实现标记、关键词缺失、测试缺失、决策未闭环），在最终验证报告中明确标注
+- 探针发现的问题不等同于验证失败，但必须在报告中列出
+
+### 设计一致性检查
+基于探针结果，继续检查：
+1. 架构决策是否遵循
+2. 文件变更清单是否一致
+3. 数据模型是否符合
+4. API 设计是否符合
+5. **Reverse Sync 检查**：如果发现实现合理但 design.md 未覆盖，先更新 design.md 补充遗漏
+6. **模块文档一致性检查**：如果在"加载规范并锚定"步骤中加载了模块文档，检查实现是否符合模块文档描述的当前设计（特别关注接口签名、数据流、依赖关系）。不符合时标记 ⚠️（不阻断，模块文档可能未及时更新）
+7. **决策链路检查**：如果存在 decisions.md，输出 D-xxx@vN → FR-xxx → task-xx → evidence 的追踪矩阵；缺失项必须列为风险
+
+### 输出
+探针报告 + 设计一致性检查结果 + 模块文档一致性检查结果 + 决策追踪矩阵（如有）
+````
+
+---
+
+## Step 5/7：任务蓝图验收
+
+**元数据**
+- optional：false
+- outputHint：验收结果
+- 等待配置：无（可直接 `--done`）
+
+**提示词原文**
+
+````markdown
+检查每个 task-N.md 的验收标准是否全部满足。
+
+### 操作
+1. 检查变更目录下 tasks/ 是否存在
+2. 如果存在：
+   - 逐个读取 tasks/task-NN.md
+   - 检查每个文件的「验收标准」checkbox 是否全部勾选
+   - 未勾选的项列为不通过
+3. 如果不存在：跳过此步骤
+
+### 输出
+验收结果：通过/不通过 + 未通过的项
+````
+
+---
+
+## Step 6/7：运行测试和质量扫描
+
+**元数据**
+- optional：false
+- outputHint：测试结果 + 技术债务
+- 等待配置：无（可直接 `--done`）
+
+**提示词原文**
+
+````markdown
+运行测试和代码质量扫描。
+
+### 操作
+1. 读取 `.sillyspec/local.yaml` 获取构建和测试命令
+2. 如果 local.yaml 有 test 命令，使用它（仅测试变更涉及的模块，非全量）
+3. 如果 local.yaml 无 test 命令，根据项目类型选择：
+   - Maven：`mvn test -pl <变更模块> -am`（仅编译变更模块及其依赖）
+   - Gradle：`./gradlew :<模块>:test`
+   - npm/pnpm：`pnpm test --filter=<包名>` 或 `npm test -- --testPathPattern=<相关文件>`
+   - Python：`pytest <变更模块路径>/`
+4. 记录通过/失败数量，分析失败原因
+5. 搜索技术债务：grep TODO/FIXME/HACK/XXX（仅限变更文件）
+6. 如果 local.yaml 有 lint 命令，运行 lint 检查
+
+### 注意
+- 不要全量编译/测试整个项目，只测变更涉及的模块
+- 如果变更模块不确定，优先使用 local.yaml 中的命令
+- **CLI 对账机制**：verify 阶段最终 --done 时，CLI 会亲自执行 local.yaml 的 commands.test 并与你的报告对账；实测失败会直接阻断 verify 完成，谎报测试结果没有意义
+
+### 输出
+测试结果 + 技术债务标记
+````
+
+---
+
+## Step 7/7：输出验证报告
+
+**元数据**
+- optional：false
+- outputHint：验证报告
+- 等待配置：无（可直接 `--done`）
+
+**本步出现的运行时占位符**
+- `<change-name>` → 当前变更名（如 `2026-05-13-user-auth`）
+
+**提示词原文**
+
+````markdown
+生成完整验证报告，并写入 verify-result.md。
+
+### 操作
+1. 汇总以上所有检查结果
+2. **变更风险等级（change_risk_profile）由 CLI 自动判定与门控**：你无需自己扫描关键词。本步骤 --done 时，CLI 会用 detectChangeRisk 扫描 design.md / plan.md 自动判定等级（doc-only / unit-sufficient / contract-required / integration-critical / deployment-critical）并强制门控：integration-critical / deployment-critical 变更若结论为 PASS / PASS WITH NOTES 但缺少真实集成证据，CLI 直接阻断 verify 完成——谎报结论无效。
+   你只需：在 verify-result.md 的「变更风险等级」section 如实记录变更性质；若变更涉及 daemon/backend 跨进程、session/lease/lifecycle 状态机、或部署启动路径，在「Runtime Evidence」section 提供真实集成证据（启动命令、daemon↔backend 调用与日志关键片段、终态断言）。
+
+3. 生成 verify-result.md 文件，保存到 `.sillyspec/changes/<change-name>/verify-result.md`
+4. 给出结论：PASS / PASS WITH NOTES / FAIL（受风险门控约束）
+
+### verify-result.md 格式
+```markdown
+# 验证报告（Verify Result）
+
+## 结论
+PASS / PASS WITH NOTES / FAIL
+
+## 任务完成度
+（逐项检查任务的结果）
+
+## 设计一致性
+（对照 design.md 的检查结果）
+
+## 探针结果
+- 未实现标记扫描：...
+- 关键词覆盖：...
+- 测试覆盖：...
+- 决策追踪覆盖：...
+
+## 决策追踪矩阵（如存在 decisions.md）
+| 决策 ID | FR | Task | Evidence | 状态 |
+|---|---|---|---|---|
+| D-001@v1 | FR-01 | task-01 | test/file/path | PASS/PARTIAL/MISSING |
+
+## 测试结果
+（测试套件执行结果）
+
+## 技术债务
+（TODO/FIXME/HACK 统计）
+
+## 变更风险等级
+（自动检测的 change_risk_profile: doc-only / unit-sufficient / contract-required / integration-critical / deployment-critical）
+
+## Runtime Evidence（integration-critical / deployment-critical 必填）
+- daemon 启动命令：
+- backend 地址：
+- 创建 session / 调用核心 API 的请求：
+- daemon 日志关键片段（不能出现 session_control_no_manager / fallback to task_runner / submitMessages agent_run_id empty / 422）：
+- backend 状态（AgentRun running -> completed/failed）：
+- session / lease end 状态：
+- 失败模式排除：
+
+## 代码审查
+（问题列表 + 总体评价）
+```
+
+### 输出
+verify-result.md 路径 + 验证报告摘要 + 下一步命令
+
+### 注意
+- PASS → 运行 `sillyspec run archive` 归档
+- FAIL → 修复后运行 `sillyspec run verify` 重新验证
+- verify-result.md 是变更包的正式验收记录，归档后保留
+- **CLI 对账机制**：本步骤 --done 时 CLI 会亲自执行 local.yaml 的 commands.test；结论写 PASS 但实测失败 → verify 完成被阻断
+````
