@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-05-31 11:00:00
-updated_at: 2026-07-26T00:00:00+08:00
+updated_at: 2026-07-27T00:00:00+08:00
 ---
 
 # SillySpec 文件生命周期
@@ -26,7 +26,7 @@ updated_at: 2026-07-26T00:00:00+08:00
 - `src/db.js`
 - `src/scan-postcheck.js`
 - `src/knowledge-match.js`
-- `src/progress.js`
+- `src/progress.js`（W6 Step9 后退化为 facade；实际逻辑在 `src/progress/*.js` 子模块：consistency-doctor / change-registry / step-store / stage-machine + shared.js 共享常量。ProgressManager 保留全部公共方法签名 + 4 个被外部直调的私有方法 `_write`/`_renderBatchProgress`/`_updatePlatformLastSync`/`_updateApprovalStatus` 做 delegate，persistence-core `read`/`_write`/`init`/`_ensureDB` 等留本体；外部零感知）
 - `src/run.js`（W6 后退化为 barrel；实际逻辑在 `src/run/*.js` 叶子模块：shared / prompt / quick-audit / scan-profile / gates / complete-handlers / complete / stage / command。run.js 仅 re-export 外部 import 契约，外部零感知）
 - `src/stages/*.js`
 - `src/worktree.js`
