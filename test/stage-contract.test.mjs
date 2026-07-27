@@ -326,6 +326,63 @@ if (lcCaseC.errors.some(e => e.includes('生命周期契约表'))) {
 
 rmSync(traceRoot, { recursive: true })
 
+// === A: verify 风险门控报错可执行化（2026-07-27）===
+// 历史教训：integration/deployment-critical 门控只报「缺少真实集成证据 / 需要真实启动验证证据」，
+// agent 看不出缺哪一项、要写/做什么才算过，只能改结论文案撞墙。此处锁：
+//   - 报错逐条列出缺失项 + 每项要提供什么（含字面期望）
+//   - 报出风险判级原因（design/plan 措辞命中，非改动文件）
+//   - 指明「真实启动」须是本变更实际改动的部署/启动入口，非无关进程
+console.log('\n=== verify 风险门控报错可执行化 ===')
+
+const gateRoot = mkdtempSync(join(tmpdir(), 'sillyspec-gate-'))
+const gateDir = join(gateRoot, '.sillyspec', 'changes', 'gate')
+mkdirSync(gateDir, { recursive: true })
+// design 命中 server.js（deployment 触发词）+ daemon → deployment-critical
+writeFileSync(join(gateDir, 'design.md'), [
+  '# Design', '## 文件变更清单', '## 风险登记', '## 自审', '',
+  '改 daemon 下发链路，server.js 入口，claude 读取 settings.json。',
+  'D-001@v1', ''
+].join('\n'))
+writeFileSync(join(gateDir, 'plan.md'), '# Plan\n\n- [ ] task-01: 实现下发\n')
+// verify 只有单测 + 无关子进程证据（有 端到端 / Runtime Evidence 字面，但无真实启动入口）
+writeFileSync(join(gateDir, 'verify-result.md'), [
+  '# 验证报告', '', '## 结论', '', 'PASS', '',
+  '单测全过。spike-02 端到端实测：真跑 claude --debug。', '',
+  '## Runtime Evidence', 'claude 实测读取 settings.json。', ''
+].join('\n'))
+
+const gateTrace = runValidators('verify', gateRoot, 'gate')
+const gateErr = gateTrace.errors.find(e => e.includes('缺少真实集成证据'))
+if (gateTrace.ok === false
+  && gateErr
+  && gateErr.includes('real_startup_once')
+  && gateErr.includes('部署/启动入口')
+  && gateErr.includes('无关进程')
+  && gateErr.includes('字面命中其一')
+  && gateErr.includes('风险判级原因')
+  && gateErr.includes('design.md / plan.md 命中启动入口关键词')) {
+  console.log('✅ deployment-critical 门控报错可执行：列出缺失项 real_startup_once + 字面期望 + 指明部署/启动入口（非无关进程）+ 判级原因')
+} else {
+  console.log('❌ deployment-critical 门控报错不可执行', gateTrace.errors)
+  failed++
+}
+
+// 补齐真实启动 daemon 证据后应放行
+writeFileSync(join(gateDir, 'verify-result.md'), [
+  '# 验证报告', '', '## 结论', '', 'PASS', '',
+  '真实集成：端到端跑通 daemon↔backend。', '',
+  '## Runtime Evidence', '实际启动 daemon/backend 一次（node server.js 起 backend），docker up 全栈，日志片段见附。', ''
+].join('\n'))
+const gateOk = runValidators('verify', gateRoot, 'gate')
+if (!gateOk.errors.some(e => e.includes('缺少真实集成证据'))) {
+  console.log('✅ 补齐真实启动 daemon/backend 证据后，门控放行')
+} else {
+  console.log('❌ 补齐证据后门控仍阻断', gateOk.errors)
+  failed++
+}
+
+rmSync(gateRoot, { recursive: true })
+
 // === StageContract 结构测试 ===
 console.log('\n=== Contract 结构测试 ===')
 

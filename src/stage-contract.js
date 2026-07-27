@@ -8,8 +8,10 @@
 import { existsSync, readdirSync, readFileSync } from 'fs'
 import { join, basename } from 'path'
 import { execFileSync } from 'child_process'
-import { detectChangeRisk, checkIntegrationEvidence } from './change-risk-profile.js'
+import { detectChangeRisk, checkIntegrationEvidence, VERIFICATION_NEEDS, RISK_LEVEL_CAUSES } from './change-risk-profile.js'
 import { SCAN_REQUIRED_DOCS, AUXILIARY_STAGES } from './constants.js'
+import { evaluateRules } from './stage-contract-engine.js'
+import { getRule } from './stage-contract-spec.js'
 
 /**
  * 校验结果
@@ -74,7 +76,10 @@ export function validateChangeExists(specBase, stageName, changeName) {
   return {
     changeName,
     specBase,
-    message: `变更 "${changeName}" 在当前 spec 下不存在：${join(specBase, 'changes', changeName)}`,
+    message: `变更 "${changeName}" 在当前 spec 下不存在：${join(specBase, 'changes', changeName)}\n` +
+      `   排查方向（三选一）：① 变更名是否打错（sillyspec status 或 progress show 查看活跃变更名）；` +
+      `② cwd 是否漂到了子项目目录（回到项目根再跑，或加 --spec-dir <根>/.sillyspec）；` +
+      `③ 是否该先跑 sillyspec run brainstorm 新建该变更。`,
   }
 }
 
@@ -198,7 +203,7 @@ function warnMissingIds(warnings, ids, targetContent, targetName, sourceName) {
     const base = id.replace(/@V\d+$/, '')
     const re = new RegExp(`\\b${base}\\b`)
     if (!re.test(targetUpper)) {
-      warnings.push(`${targetName} 未引用 ${sourceName} 中的 ${id}`)
+      warnings.push(getRule('shared.id-traceability').failMessage.replaceAll('${target}', targetName).replaceAll('${source}', sourceName).replaceAll('${id}', id))
     }
   }
 }
@@ -216,16 +221,10 @@ function validateScanOutputs(cwd, changeName, context = {}) {
     ? join(specBase, 'docs', projectName, 'scan')
     : join(specBase, 'docs', 'scan')
 
-  const requiredDocs = SCAN_REQUIRED_DOCS
-
-  const errors = []
-  const warnings = []
-
-  for (const doc of requiredDocs) {
-    if (!existsSync(join(docsRoot, doc))) {
-      errors.push(`scan 文档缺失: ${join(docsRoot, doc)}`)
-    }
-  }
+  // 7 份 scan 文档存在性由引擎消费 manifest(与 SCAN_REQUIRED_DOCS 单源,文案/事前契约同源)
+  const engineResult = evaluateRules('scan', { docsRoot })
+  const errors = [...engineResult.errors]
+  const warnings = [...engineResult.warnings]
 
   // 检查 modules 目录
   const modulesRoot = projectName
@@ -253,81 +252,30 @@ function validateBrainstormOutputs(cwd, changeName, context = {}) {
     return { ok: false, errors: [`平台模式 specRoot 缺少 changes 目录: ${changesRoot}`], warnings: [] }
   }
   const changeDir = resolveChangeDir(cwd, changeName, specRoot)
-  const errors = []
-  const warnings = []
-
-  const requiredFiles = ['design.md', 'proposal.md', 'requirements.md', 'tasks.md']
-
-  for (const file of requiredFiles) {
-    if (!existsSync(join(changeDir, file))) {
-      errors.push(`brainstorm 产物缺失: ${join(changeDir, file)}`)
-    }
-  }
-
-  // 内容校验（文件存在时检查关键章节）
-  if (existsSync(join(changeDir, 'proposal.md'))) {
-    const content = readFileSync(join(changeDir, 'proposal.md'), 'utf8')
-    if (!content.includes('不在范围内') && !content.includes('Non-Goals') && !content.includes('非目标')) {
-      warnings.push('proposal.md 缺少「不在范围内/Non-Goals」章节')
-    }
-  }
-
-  if (existsSync(join(changeDir, 'requirements.md'))) {
-    const content = readFileSync(join(changeDir, 'requirements.md'), 'utf8')
-    if (!/FR-\d+/i.test(content)) {
-      warnings.push('requirements.md 缺少 FR 编号的需求项')
-    }
-  }
+  // 纯 kind 规则(四件套存在性 + proposal/requirements/design 章节 + tasks 列表)由引擎消费
+  // stage-contract-spec.js manifest,与报错文案 + prompt 事前契约严格同源(事前给的 == 事后查的)。
+  // custom kind(lifecycle / decisions)保留下方旧逻辑,数据/文案在 Batch 3 迁入 manifest。
+  const engineResult = evaluateRules('brainstorm', { changeDir })
+  const errors = [...engineResult.errors]
+  const warnings = [...engineResult.warnings]
 
   if (existsSync(join(changeDir, 'design.md'))) {
     const content = readFileSync(join(changeDir, 'design.md'), 'utf8')
-    if (!content.includes('文件变更清单') && !content.includes('File Changes') && !content.includes('文件清单')) {
-      warnings.push('design.md 缺少「文件变更清单」章节')
-    }
-    if (!content.includes('风险登记') && !content.includes('Risk') && !content.includes('风险')) {
-      warnings.push('design.md 缺少「风险登记」章节')
-    }
-    if (!content.includes('自审') && !content.includes('Self-Review') && !content.includes('Self-review')) {
-      warnings.push('design.md 缺少「自审」章节')
-    }
 
-    // P1: 涉及生命周期关键词时，design.md 必须包含生命周期契约表（除非显式声明不涉及）
-    const hasLifecycleKeyword = /\b(session|lease|agent[._-]?run|daemon|lifecycle|state[._-]?transition|claim|heartbeat)\b/i.test(content)
-    if (hasLifecycleKeyword) {
-      // 显式声明本变更不涉及生命周期契约（覆盖字段名/错误码/否定声明场景）：
-      // 历史教训：design 提到 daemon_id 字段名或 daemon_not_owned 错误码就触发，被迫加空表（B3a）。
-      //
-      // 收紧原则（修：正常 design 不应被误判「已豁免」）：
-      //   - 否定词必须是明确多字短语（不涉及/不适用/未涉及/不包含/没有/n\/a/not applicable/none），
-      //     杜绝裸单字「无」与裸「na」在 40 字符宽窗口内任意命中——
-      //     「lifecycle 状态无变化」「本变更无需 lifecycle 事件」「lifecycle canal 不涉及」等不再误判；
-      //   - 否定词必须与「生命周期(契约)/lifecycle(contract)」紧邻（仅允许少量空白/分隔符/「任何」），
-      //     不再用 40 字符宽松窗口；工具错误信息本身就指引写「不涉及生命周期契约」这个规范短语。
-      const declaresNotApplicable =
-        // 否定在前：「不涉及生命周期(契约)」「不适用 lifecycle contract」
-        /(?:不涉及|不适用|未涉及|不包含|没有(?:任何)?)\s?(?:任何\s?)?(?:生命周期(?:契约)?|lifecycle(?:[ _=-]?contract)?)/i.test(content) ||
-        // 主题在前（表格/列表单元「生命周期契约：不涉及 / N/A / 无」——分隔符强制，杜绝宽窗口）
-        /(?:生命周期(?:契约)?|lifecycle(?:[ _=-]?contract)?)\s?[：:=]\s?(?:不涉及|不适用|未涉及|无|n\/?a\b|not[ _=-]?applicable|none\b)/i.test(content) ||
-        // 英文谓语句：「does not involve / not applicable ... lifecycle」
-        /(?:does[ _-]?not[ _-]?involve|not[ _-]?applicable)[^\n]{0,15}lifecycle/i.test(content)
+    // lifecycle-exemption(custom kind):判定算法保留(trigger/exemption/table 三段短路),
+    // data + failMessage/exemptionPassedMessage 从 stage-contract-spec.js manifest 同源。
+    const lcRule = getRule('brainstorm.design.lifecycle-table')
+    const { trigger: lcTrigger, exemptions: lcExempts, table: lcTable } = lcRule.data
+    if (new RegExp(lcTrigger.pattern, lcTrigger.flags).test(content)) {
+      const declaresNotApplicable = lcExempts.some(e => new RegExp(e.pattern, e.flags).test(content))
       if (declaresNotApplicable) {
-        warnings.push('design.md 显式声明不涉及生命周期契约 — 已豁免「生命周期契约表」要求')
+        warnings.push(lcRule.exemptionPassedMessage)
       } else {
-        const hasLifecycleTable =
-          /生命周期契约表|lifecycle[._-]?contract|lifecycle[._-]?matrix|Lifecycle Contract/i.test(content) ||
-          /事件.*发起方.*接收方.*必需字段.*状态变化/.test(content)
+        const hasLifecycleTable = lcTable.some(t => new RegExp(t.pattern, t.flags).test(content))
         if (!hasLifecycleTable) {
-          errors.push('design.md 涉及生命周期关键词（session/lease/agent_run/daemon/lifecycle）但缺少「生命周期契约表」— 必须列出完整的事件×状态转换矩阵；或显式声明「不涉及生命周期契约」并附理由豁免')
+          errors.push(lcRule.failMessage)
         }
       }
-    }
-  }
-
-  if (existsSync(join(changeDir, 'tasks.md'))) {
-    const content = readFileSync(join(changeDir, 'tasks.md'), 'utf8')
-    const lines = content.split('\n').filter(l => l.trim().startsWith('-') || l.trim().startsWith('*') || /^\d+\./.test(l.trim()))
-    if (lines.length === 0) {
-      warnings.push('tasks.md 没有任务列表项')
     }
   }
 
@@ -336,7 +284,7 @@ function validateBrainstormOutputs(cwd, changeName, context = {}) {
     const decisions = readFileSync(decisionsFile, 'utf8')
     const blockers = findBlockingDecisionIssues(decisions)
     for (const issue of blockers) {
-      errors.push(`decisions.md 存在 P0/P1 未决阻塞: ${issue}`)
+      errors.push(getRule('shared.decision-blocker').failMessage.replace('${issue}', issue))
     }
     const decisionIds = extractCurrentDecisionIds(decisions)
     if (decisionIds.length === 0) {
@@ -361,13 +309,12 @@ function validatePlanOutputs(cwd, changeName, context = {}) {
   const { specRoot } = context
   const changeDir = resolveChangeDir(cwd, changeName, specRoot)
   const planFile = join(changeDir, 'plan.md')
-  const errors = []
 
-  if (!existsSync(planFile)) {
-    errors.push(`plan.md 缺失: ${planFile}`)
-  }
+  // plan.md 存在性由引擎消费 manifest。entryPoint/id-trace/decisions 为 custom kind(下方保留)。
+  const engineResult = evaluateRules('plan', { changeDir })
+  const errors = [...engineResult.errors]
+  const warnings = [...engineResult.warnings]
 
-  const warnings = []
   if (existsSync(planFile)) {
     const plan = readFileSync(planFile, 'utf8')
     const requirements = readIfExists(join(changeDir, 'requirements.md'))
@@ -377,7 +324,7 @@ function validatePlanOutputs(cwd, changeName, context = {}) {
     const decisions = readIfExists(join(changeDir, 'decisions.md'))
     const blockers = findBlockingDecisionIssues(decisions)
     for (const issue of blockers) {
-      errors.push(`decisions.md 存在 P0/P1 未决阻塞: ${issue}`)
+      errors.push(getRule('shared.decision-blocker').failMessage.replace('${issue}', issue))
     }
     const decisionIds = extractCurrentDecisionIds(decisions)
     warnMissingIds(warnings, decisionIds, plan, 'plan.md', 'decisions.md')
@@ -428,8 +375,14 @@ function validatePlanOutputs(cwd, changeName, context = {}) {
         if (!found) {
           const noChangePattern = new RegExp(`不需要改.*${mentionedFile}|${mentionedFile}.*不需要|不修改.*${mentionedFile}|${mentionedFile}.*不变|${mentionedFile}.*no.?change`, 'i')
           if (!noChangePattern.test(designContent)) {
-            errors.push(`生产接线路径矛盾: design.md 提到了入口文件 "${mentionedFile}" 但所有 task 的 allowed_paths 中均不含该文件`)
-            warnings.push(`提示: 如果确实不需要修改 ${mentionedFile}，请在 design.md 中明确写明理由`)
+            // 出路直接并进 error（不再只放 warning——阻断出口曾只打 error 导致出路不可见）。
+            errors.push(
+              `生产接线路径矛盾: design.md 提到了入口文件 "${mentionedFile}"，但没有任何 task 的 allowed_paths（或 plan.md 文件变更清单）包含它。\n` +
+              `   出路（二选一）：\n` +
+              `   ① 若该入口文件确实要改 → 在某个 task 的 allowed_paths 加上 "${mentionedFile}"；\n` +
+              `   ② 若确实不需要改 → 在 design.md 明确写明理由，且需包含 "${mentionedFile} 不需要/不变/无需修改" 这类紧邻表述才会被识别为豁免。\n` +
+              `   触发原因：design.md 命中入口实例化/启动路径模式（如 cli.ts|main.ts|server.(js|ts)|index.(js|ts) + new/实例化/注入，或 startup|entrypoint|bootstrap|daemon_start）。`
+            )
           }
         }
       }
@@ -457,35 +410,24 @@ function extractVerifyConclusion(verify) {
 function validateVerifyOutputs(cwd, changeName, context = {}) {
   const { specRoot } = context
   const changeDir = resolveChangeDir(cwd, changeName, specRoot)
-  const errors = []
-  const warnings = []
 
   if (!existsSync(changeDir)) {
-    errors.push(`变更目录缺失: ${changeDir}`)
-    return { ok: false, errors, warnings }
+    return { ok: false, errors: [`变更目录缺失: ${changeDir}`], warnings: [] }
   }
 
-  // verify 阶段必须产出 verify-result.md —— 不存在则不能完成。
-  // 历史教训：AI 可能跳过报告直接 --done，导致"假完成"。此处提级为 error 强制阻断。
+  // 核心文档存在性(verify-result.md / design.md / plan.md)由引擎消费 manifest。
+  // verify-result.md 不存在则不能完成——历史教训:AI 可能跳过报告直接 --done 导致"假完成"。
+  const engineResult = evaluateRules('verify', { changeDir })
+  const errors = [...engineResult.errors]
+  const warnings = [...engineResult.warnings]
+
   const verifyResult = join(changeDir, 'verify-result.md')
-  if (!existsSync(verifyResult)) {
-    errors.push(`verify-result.md 不存在 — verify 阶段必须产出验证报告才能完成（${verifyResult}）`)
-  }
-
-  // 确保核心规范文件仍然存在
-  const requiredDocs = ['design.md', 'plan.md']
-  for (const doc of requiredDocs) {
-    if (!existsSync(join(changeDir, doc))) {
-      errors.push(`核心文档缺失: ${join(changeDir, doc)}`)
-    }
-  }
-
   if (existsSync(verifyResult)) {
     const verify = readFileSync(verifyResult, 'utf8')
     const decisions = readIfExists(join(changeDir, 'decisions.md'))
     const blockers = findBlockingDecisionIssues(decisions)
     for (const issue of blockers) {
-      errors.push(`decisions.md 存在 P0/P1 未决阻塞: ${issue}`)
+      errors.push(getRule('shared.decision-blocker').failMessage.replace('${issue}', issue))
     }
     const decisionIds = extractCurrentDecisionIds(decisions)
     warnMissingIds(warnings, decisionIds, verify, 'verify-result.md', 'decisions.md')
@@ -495,9 +437,9 @@ function validateVerifyOutputs(cwd, changeName, context = {}) {
     // 历史教训：CLI 曾不校验结论，AI 写 FAIL 后 verify 仍被标记完成并提示"验证通过可以归档"。
     const conclusionStr = extractVerifyConclusion(verify)
     if (conclusionStr === 'FAIL') {
-      errors.push('verify-result.md 结论为 FAIL — 验证未通过，不能标记 verify 完成；请修复后重新运行验证')
+      errors.push(getRule('verify.conclusion.fail-gate').failMessage)
     } else if (!conclusionStr) {
-      warnings.push('verify-result.md 未识别到结论章节（含 结论/Conclusion/Result/结果 的二级标题，后跟 PASS / PASS WITH NOTES / FAIL）')
+      warnings.push(getRule('verify.conclusion.fail-gate').noConclusionWarning)
     }
 
     // ── P0: Change Risk Gate — 核心功能缺少真实集成验证时 FAIL ──
@@ -510,8 +452,28 @@ function validateVerifyOutputs(cwd, changeName, context = {}) {
       if (conclusion === 'PASS WITH NOTES' || conclusion === 'PASS') {
         const evidenceCheck = checkIntegrationEvidence(verify, changeRiskProfile.requiredVerification)
         if (!evidenceCheck.ok) {
-          errors.push(`[${changeRiskProfile.level}] 验证结论为 ${conclusion}，但缺少真实集成证据：${evidenceCheck.errors.join('; ')}`)
-          errors.push(`触发词: ${changeRiskProfile.triggers.join(', ')} — PASS WITH NOTES 不被允许，必须 FAIL 或提供集成证据`)
+          // A: 报错说人话 —— 把「缺哪一项、要写/做什么、判级原因」逐条列出，
+          // 让 agent 不必靠改结论文案撞墙。detail 指明真实启动须是本变更实际改动的
+          // 部署/启动入口（非无关进程），以及每项的字面期望。
+          const needs = changeRiskProfile.requiredVerification
+            .filter(k => VERIFICATION_NEEDS[k] && VERIFICATION_NEEDS[k].desc)
+            .map(k => {
+              const vn = VERIFICATION_NEEDS[k]
+              const lit = vn.literals && vn.literals.length ? '字面命中其一：' + vn.literals.join(' / ') : ''
+              return `\n    〔${k}〕${vn.desc}${lit}`
+            })
+            .join('')
+          const cause = RISK_LEVEL_CAUSES[changeRiskProfile.level] || ''
+          errors.push(
+            `[${changeRiskProfile.level}] 验证结论为 ${conclusion}，但缺少真实集成证据。\n` +
+            `  缺失项（需在 verify-result.md 如实提供并满足）：${evidenceCheck.errors.join('; ')}\n` +
+            `  每项要提供什么：${needs}\n` +
+            `  风险判级原因：${cause}\n` +
+            `  命中触发词：${changeRiskProfile.triggers.join(', ')}\n` +
+            `  出路：① 补全上述缺失的真实集成证据（真实启动 daemon/backend、集成测试、运行日志）后保持 PASS；` +
+            `或 ② 如实改结论 FAIL（承认端到端未验，留待部署后补）。` +
+            `仅改结论文案/措辞蹭字面关键词会被对账，PASS WITH NOTES 在此等级下不被允许。`
+          )
         }
         warnings.push(...evidenceCheck.warnings)
       }
@@ -525,35 +487,18 @@ function validateVerifyOutputs(cwd, changeName, context = {}) {
  * archive 完成校验：检查归档目录完整性
  */
 function validateArchiveOutputs(cwd, changeName) {
-  const errors = []
-  const warnings = []
   const archiveDir = join(cwd, '.sillyspec', 'changes', 'archive')
   const date = new Date().toISOString().slice(0, 10)
   const destDir = join(archiveDir, `${date}-${changeName}`)
 
-  // 检查归档目录是否存在
+  // 归档目录不存在 early return(引擎在存在时才跑)
   if (!existsSync(destDir)) {
-    errors.push(`归档目录缺失: ${destDir}`)
-    return { ok: false, errors, warnings }
+    return { ok: false, errors: [`归档目录缺失: ${destDir}`], warnings: [] }
   }
 
-  // 检查核心文档
-  const requiredDocs = ['plan.md']
-  const recommendedDocs = ['design.md', 'module-impact.md']
-
-  for (const doc of requiredDocs) {
-    if (!existsSync(join(destDir, doc))) {
-      errors.push(`归档目录缺失核心文档: ${doc}`)
-    }
-  }
-
-  for (const doc of recommendedDocs) {
-    if (!existsSync(join(destDir, doc))) {
-      warnings.push(`归档目录缺少推荐文档: ${doc}`)
-    }
-  }
-
-  return { ok: errors.length === 0, errors, warnings }
+  // plan.md(必备)/design.md/module-impact.md(推荐)存在性由引擎消费 manifest
+  const engineResult = evaluateRules('archive', { archiveDir: destDir }, undefined, { source: 'validateArchiveOutputs' })
+  return { ok: engineResult.errors.length === 0, errors: engineResult.errors, warnings: engineResult.warnings }
 }
 
 /**
@@ -572,11 +517,9 @@ function validateChangeClosed(cwd, changeName) {
     return { ok: false, errors, warnings }
   }
 
-  if (!existsSync(join(changeDir, 'plan.md'))) {
-    errors.push(`plan.md 缺失 — 请确保 plan 阶段已完成`)
-  }
-
-  return { ok: errors.length === 0, errors, warnings }
+  // plan.md 存在性由引擎消费 manifest(source 区分 validateChangeClosed vs validateArchiveOutputs)
+  const engineResult = evaluateRules('archive', { changeDir }, undefined, { source: 'validateChangeClosed' })
+  return { ok: engineResult.errors.length === 0, errors: engineResult.errors, warnings: engineResult.warnings }
 }
 
 // ============ Execute 代码变更客观核验 ============

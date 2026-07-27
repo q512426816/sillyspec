@@ -16,6 +16,8 @@ import { detectLocalYaml } from './local-detect.js';
 
 // ── CLI 入口 ──
 
+// did-you-mean 从 ./run/shared.js 复用（命令级 + flag 级 typo 建议）。
+import { didYouMean } from './run/shared.js'
 function printUsage() {
   console.log(`
 SillySpec CLI — 规范驱动开发工具包
@@ -233,9 +235,19 @@ async function main() {
         case 'show':
           pm.show(progDir, progChangeName);
           break;
-        case 'check':
-          await pm.checkConsistency(progDir, progChangeName);
+        case 'check': {
+          const result = await pm.checkConsistency(progDir, progChangeName);
+          // checkConsistency 只返回 {ok, issues, warnings}，不打印——必须在此输出，
+          // 否则 agent 跑只读健康检查得到一片寂静，无法分辨「正常」还是「已损坏」。
+          if (!result || result.ok) {
+            console.log(`✅ 状态一致性检查通过${progChangeName ? `（变更 ${progChangeName}）` : '（所有变更）'}`);
+          } else {
+            console.error(`❌ 状态一致性检查发现问题（${result.issues?.length || 0} 项）：`);
+            for (const issue of (result.issues || [])) console.error(`   - ${issue}`);
+            console.error(`   修复：sillyspec progress repair${progChangeName ? ` --change ${progChangeName}` : ''}（先 dry-run 看可修项，加 --apply 执行）`);
+          }
           break;
+        }
         case 'repair': {
           const repairApply = filteredArgs.includes('--apply');
           await pm.repairConsistency(progDir, { apply: repairApply, changeName: progChangeName });
@@ -662,7 +674,14 @@ SillySpec worktree — git worktree 隔离管理
           } else if (result.merged) {
             console.log(`✅ 已通过 git merge 应用变更（baseline 漂移降级，引入合并提交）${result.mergeSummary ? '：' + result.mergeSummary : ''}`);
           } else {
-            console.log(`✅ 已应用 ${result.changedFiles.length} 个文件变更`);
+            console.log(`✅ 已应用 ${result.changedFiles.length} 个文件变更：`);
+            for (const f of result.changedFiles) {
+              console.log(`   ${f}`);
+            }
+            // filterDeliverableFiles 一刀切排除 .sillyspec/ + meta.json：
+            // 模块文档/变更文档等不会 auto-apply 到主工作区。须告知 agent，
+            // 否则它期望这些文件落地却找不到（memory: worktree-apply-excludes-module-docs）。
+            console.log(`   ℹ️  注：.sillyspec/ 下的文件（模块文档/变更文档等）按规则不自动 apply，如需请手动从 worktree 分支或 dangling commit 取（git show sillyspec/${wtName}:<path>）。`);
           }
           if (result.warnings && result.warnings.length > 0) {
             for (const w of result.warnings) {
@@ -708,7 +727,9 @@ SillySpec worktree — git worktree 隔离管理
             if (applyResult.errors.length > 0) {
               console.error('❌ apply 失败:', applyResult.errors.join('; '));
             } else {
-              console.log(`✅ 已自动应用 ${applyResult.changedFiles.length} 个文件变更`);
+              console.log(`✅ 已自动应用 ${applyResult.changedFiles.length} 个文件变更：`);
+              for (const f of applyResult.changedFiles) console.log(`   ${f}`);
+              console.log(`   ℹ️  注：.sillyspec/ 下的文件按规则不自动 apply，如需请手动从分支取（git show sillyspec/${wtName}:<path>）。`);
             }
           } else {
             console.log('Action: blocked');
@@ -1100,7 +1121,11 @@ SillySpec workflow — 工作流管理
         }
         process.exit(result.status === 'pass' ? 0 : 1);
       } else {
+        const wfSubs = ['check', 'list'];
+        const sug = didYouMean(wfSub, wfSubs);
         console.error(`❌ 未知子命令: workflow ${wfSub}`);
+        if (sug) console.error(`   你是想输入「workflow ${sug}」吗？`);
+        console.error(`   可用子命令：${wfSubs.join(' | ')}（运行 sillyspec workflow 查看用法）`);
         process.exit(1);
       }
       break;
@@ -1128,7 +1153,11 @@ SillySpec modules — 模块文档管理
         const { migrateModuleDocs } = await import('./modules.js');
         await migrateModuleDocs(dir);
       } else {
+        const modSubs = ['rebuild', 'status', 'migrate'];
+        const sug = didYouMean(modulesSub, modSubs);
         console.error(`❌ 未知子命令: modules ${modulesSub}`);
+        if (sug) console.error(`   你是想输入「modules ${sug}」吗？`);
+        console.error(`   可用子命令：${modSubs.join(' | ')}（运行 sillyspec modules 查看用法）`);
         process.exit(1);
       }
       break;
@@ -1180,10 +1209,14 @@ SillySpec modules — 模块文档管理
       console.log(`   路径: ${localYamlPath}`);
       break;
     }
-    default:
+    default: {
+      const topCommands = ['init', 'setup', 'run', 'progress', 'worktree', 'local', 'workflow', 'gate', 'derive', 'modules', 'change-rename', 'knowledge', 'platform', 'scan', 'brainstorm', 'plan', 'execute', 'verify', 'archive', 'quick', 'explore', 'status', 'doctor', 'auto'];
+      const suggestion = didYouMean(command, topCommands);
       console.error(`❌ 未知命令: ${command}`);
+      if (suggestion) console.error(`   你是想输入「${suggestion}」吗？`);
       printUsage();
       process.exit(1);
+    }
   }
 }
 

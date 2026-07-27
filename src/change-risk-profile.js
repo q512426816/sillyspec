@@ -251,6 +251,51 @@ export function detectRiskProfile({ designContent = '', planContent = '', change
  * 旧的 detectChangeRisk 接口保持向后兼容
  * @returns {{ level: string, triggers: string[], requiredVerification: string[] }}
  */
+// ============ 门控可执行化（A：报错说人话） ============
+//
+// 历史教训：integration-critical / deployment-critical 门控只报「缺少真实集成证据 / 需要真实
+// 启动验证证据」，agent 看不出具体缺哪一项、要写/做什么才算过，只能靠改结论文案撞墙。
+// 此处把每一项 requiredVerification 的需求（写什么 / 做什么）和判级原因显式导出，
+// 供 stage-contract 拼成可执行的报错信息。
+
+/** 每项 requiredVerification 的需求描述 + 字面期望 */
+export const VERIFICATION_NEEDS = {
+  unit_tests: {
+    desc: '单元测试（verify 必做；在 verify-result.md 写明测试套件与结果）',
+    literals: [],
+  },
+  contract_tests: {
+    desc: '契约测试（前后端/跨进程 API parity 对账，写明结论）',
+    literals: [],
+  },
+  real_daemon_backend_integration: {
+    desc: '真实 daemon↔backend 集成验证（非仅 mock 单测）。写「真实集成/端到端」的证据；',
+    literals: ['端到端', 'integration test', 'e2e test', 'daemon.*backend', '真实集成', 'runtime evidence', '运行时证据'],
+  },
+  runtime_log_evidence: {
+    desc: 'Runtime Evidence section + 指向真实日志/证据片段。',
+    literals: ['Runtime Evidence', '运行时证据', 'daemon log', '日志片段'],
+  },
+  real_startup_once: {
+    desc: '真实启动一次本变更触及的部署/启动入口（服务入口、CLI 主入口、守护进程等——须是本变更实际改动的那一类入口，不能拿无关进程的启动来凑数）。',
+    literals: ['启动.*一次', '实际.*启动', 'real startup', 'docker up', 'npm start', 'node server'],
+  },
+  terminal_state_assertion: {
+    desc: '终态断言（建议项，不阻断）：AgentRun running→completed/failed、session/lease end 状态同步。',
+    literals: ['terminal state', '终态', 'completed failed', 'session end', 'lease end'],
+  },
+}
+
+/** 风险分级的判定来源（命中关键词来源 = design.md / plan.md 内容，非改动文件本身） */
+export const RISK_LEVEL_CAUSES = {
+  'deployment-critical':
+    'design.md / plan.md 命中启动入口关键词（cli.ts / main.ts / server.(js|ts) / bootstrap / entrypoint）。' +
+    '注意：这是按 design/plan 里的措辞判定的，不一定代表你真改了启动入口；若属误判可在 design 中如实缩小范围，但不建议为绕门控而规避——危险链路该有真实启动证据。',
+  'integration-critical':
+    'design.md / plan.md 命中跨进程/状态机关键词（daemon / backend / session / lease / lifecycle / heartbeat 等）。',
+  'contract-required': 'design.md / plan.md 命中 API contract 关键词（api / client / contract / dto）。',
+}
+
 export function detectChangeRisk({ designContent = '', planContent = '', changedFiles = [] } = {}) {
   const triggers = []
   const combined = [designContent, planContent].join('\n')
@@ -308,6 +353,16 @@ export function checkIntegrationEvidence(verifyContent, requiredVerification) {
   const warnings = []
   const lower = verifyContent.toLowerCase()
 
+  // 字面证据正则从 VERIFICATION_NEEDS[k].literals 派生——与报错描述、prompt 事前契约严格同源,
+  // 杜绝历史上"描述说 A、正则查 B"的分叉(checkIntegrationEvidence 正则曾比 VERIFICATION_NEEDS
+  // 描述多匹配 集成测试/backend.*daemon/real.*integration 等)。literals 为空的 need
+  // (unit_tests/contract_tests)无字面校验,视为满足。
+  const hasEvidence = (k) => {
+    const n = VERIFICATION_NEEDS[k]
+    if (!n || !n.literals || n.literals.length === 0) return true
+    return new RegExp(n.literals.join('|'), 'i').test(lower)
+  }
+
   const needsIntegration = requiredVerification.includes('real_daemon_backend_integration')
   const needsLogEvidence = requiredVerification.includes('runtime_log_evidence')
   const needsTerminalState = requiredVerification.includes('terminal_state_assertion')
@@ -315,11 +370,7 @@ export function checkIntegrationEvidence(verifyContent, requiredVerification) {
 
   if (needsIntegration) {
     const hasMockOnly = /mock.*test.*passed|unit.*test.*passed/i.test(lower)
-    const hasIntegrationEvidence =
-      /集成测试|integration.*test|e2e.*test|端到端/i.test(lower) ||
-      /daemon.*backend|backend.*daemon|真实.*集成|real.*integration/i.test(lower) ||
-      /runtime.*evidence|运行时.*证据/i.test(lower)
-
+    const hasIntegrationEvidence = hasEvidence('real_daemon_backend_integration')
     if (!hasIntegrationEvidence && hasMockOnly) {
       errors.push('integration-critical 变更只提供了 mock 单测证据，缺少真实 daemon↔backend 集成验证')
     } else if (!hasIntegrationEvidence) {
@@ -328,22 +379,19 @@ export function checkIntegrationEvidence(verifyContent, requiredVerification) {
   }
 
   if (needsLogEvidence) {
-    const hasRuntimeSection = /runtime.*evidence|运行时.*证据|daemon.*log|日志.*片段/i.test(lower)
-    if (!hasRuntimeSection) {
+    if (!hasEvidence('runtime_log_evidence')) {
       errors.push('integration-critical 变更的 verify-result.md 缺少 Runtime Evidence section')
     }
   }
 
   if (needsTerminalState) {
-    const hasTerminalState = /terminal.*state|终态|running.*completed|completed.*failed|session.*end|lease.*end/i.test(lower)
-    if (!hasTerminalState) {
+    if (!hasEvidence('terminal_state_assertion')) {
       warnings.push('建议检查终态断言：AgentRun running→completed/failed、session end 状态同步')
     }
   }
 
   if (needsRealStartup) {
-    const hasStartupEvidence = /启动.*一次|real.*startup|实际.*启动|docker.*up|npm.*start|node.*server/i.test(lower)
-    if (!hasStartupEvidence) {
+    if (!hasEvidence('real_startup_once')) {
       errors.push('deployment-critical 变更需要真实启动验证证据')
     }
   }

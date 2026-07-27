@@ -148,6 +148,11 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
     for (const err of contractResult.errors) {
       console.error(`   - ${err}`)
     }
+    // 出路提示常放在 warnings（如「写明不改理由即可豁免」），此处即将阻断 return，
+    // 必须一并打出，否则 agent 只看到症状看不到怎么过。
+    for (const w of (contractResult.warnings || [])) {
+      console.error(`   · ${w}`)
+    }
     console.error(`\n   提示：修复缺失产物后重新完成此步骤（--skip-approval 只跳过阶段转换/审批检查，不能跳过产物校验）`)
     // 产物校验失败必须阻断完成 —— 否则 validator 形同虚设，
     // verify 会带着 FAIL/缺 verify-result.md 被 ✅ 标记完成（历史教训）。

@@ -21,6 +21,7 @@ import { basename, join } from 'node:path'
 import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs'
 import { stageRegistry } from '../stages/index.js'
 import { resolvePromptIncludes, safeGit, WAIT_MARKER_RE } from './shared.js'
+import { renderStageContract } from '../stage-contract-spec.js'
 
 /**
  * 从 _module-map.yaml 读取模块上下文索引
@@ -525,8 +526,18 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
   }
 
   if (prevStepAnswer) {
-    console.log(`\n### 📩 上一步用户回答`) 
+    console.log(`\n### 📩 上一步用户回答`)
     console.log(prevStepAnswer)
+  }
+
+  // 完成契约(事前预知):该 stage 的机械校验通过条件,从 stage-contract-spec.js manifest 渲染,
+  // 与 CLI 完成校验严格同源(事前给的 == 事后查的)。仅 step0 注入(与 persona/guardrails 同模式,
+  // 一次建立即可;后续步靠 context 保留)。
+  if (stepIndex === 0) {
+    const stageContract = renderStageContract(stageName)
+    if (stageContract) {
+      promptText = `${promptText}\n\n${stageContract}`
+    }
   }
 
   console.log(promptText)

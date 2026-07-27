@@ -23,6 +23,11 @@ export function printQuickAuditReview(review) {
       console.error(`   - ${r}`)
     }
     console.error(`\n   quick 已停止：请恢复/拆分这些变更，或重新运行 quick 并显式声明范围。`)
+    // 解锁咒语须在 BLOCKED 分支也给出 —— 原只在 confirm/review 分支打印，
+    // 普通 --done 走这里只看到「恢复/拆分」反方向指引，正确解法（带 flag 重跑）根本不出现。
+    console.error(`   如确认接受这些变更，重新运行 --done 时带上对应 flag 即可解锁：`)
+    console.error(`     sillyspec run quick --done --force-baseline --allow-new --change <id> --output "..."`)
+    console.error(`     （--force-baseline 覆盖受保护/危险文件如 src/run.js；--allow-new 允许新增文件）`)
   } else if (review.status === 'warning') {
     console.warn(`\n⚠️ quick 变更边界审计 — WARNING：`)
     for (const r of review.reasons) {

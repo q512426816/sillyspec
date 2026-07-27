@@ -29,11 +29,13 @@ export class StepStore {
       if (!cn) { console.log('❌ 无法确定当前变更，请指定 --change <name>'); return; }
     }
 
+    let changeFound = false;
     db.transaction((sqlDb) => {
       // 确保 change 存在
       const changeRow = sqlDb.exec('SELECT id, current_stage FROM changes WHERE name = ?', [cn]);
       if (!changeRow || changeRow.length === 0 || changeRow[0].values.length === 0) return;
 
+      changeFound = true;
       const changeId = changeRow[0].values[0][0];
 
       // UPDATE changes.current_stage + last_active
@@ -52,8 +54,15 @@ export class StepStore {
       );
     });
 
+    if (!changeFound) {
+      // 历史教训：变更名打错/cwd 漂移命中错误 spec 时，事务内静默 return，
+      // 但旧代码此处仍无条件打「✅ 已设为」→ 假成功（agent 以为生效，实际什么都没做）。
+      console.log(`❌ 变更「${cn}」不存在，未设置阶段。检查变更名拼写，或 sillyspec status 查看活跃变更；cwd 漂移时回项目根或加 --spec-dir。`);
+      return;
+    }
+
     // read() 已改为 SQL，直接通过 SQL 查询即可，无需 _write
-    console.log(`✅ 当前阶段已设为: ${STAGE_LABELS[stage] || stage}`);
+    console.log(`✅ 当前阶段已设为: ${STAGE_LABELS[stage] || stage}（变更 ${cn}）`);
   }
 
   async addStep(cwd, stage, stepName, changeName = null) {
@@ -171,6 +180,9 @@ export class StepStore {
       if (!validation.ok && !force) {
         console.error(`⚠️  阶段 ${stage} 所有步骤已完成，但产物校验未通过，阶段不标记为 completed：`);
         for (const err of validation.errors) console.error(`   - ${err}`);
+        // 出路提示常放在 warnings（如「写明不改理由即可豁免」），阻断时必须一并打出，
+        // 否则 agent 只看到症状看不到怎么过（驾驭问题根因：hint 在 warning、出口只打 error）。
+        for (const warn of (validation.warnings || [])) console.error(`   · ${warn}`);
         console.error(`   请修复产物后走正常流程 sillyspec run ${stage} --done，或使用 --force（将记录审计日志）。`);
       } else {
         if (!validation.ok && force) {

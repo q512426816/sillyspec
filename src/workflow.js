@@ -13,6 +13,7 @@ import { readFileSync, existsSync, readdirSync, writeFileSync, mkdirSync } from 
 import { join, resolve, basename } from 'path'
 import jsYaml from 'js-yaml'
 import { WORKFLOW_STATUS } from './constants.js'
+import { contentNonEmpty, lineCount, missingSections, placeholderLineMatches } from './check-primitives.js'
 
 // ─── Workflow 加载 ───
 
@@ -174,7 +175,7 @@ function checkOutput(outputDef, projectName, cwd, specBase) {
       case 'no_empty_files': {
         if (existsSync(fullPath)) {
           const content = readFileSync(fullPath, 'utf8')
-          const empty = content.trim().length === 0
+          const empty = !contentNonEmpty(content)
           results.push({ passed: !empty, check: 'no_empty_files', detail: empty ? `文件为空: ${rawPath}` : '' })
         } else {
           results.push({ passed: false, check: 'no_empty_files', detail: `文件不存在: ${rawPath}` })
@@ -184,7 +185,7 @@ function checkOutput(outputDef, projectName, cwd, specBase) {
       case 'min_lines': {
         if (existsSync(fullPath)) {
           const content = readFileSync(fullPath, 'utf8')
-          const lines = content.split('\n').length
+          const lines = lineCount(content)
           const min = check.min || 1
           results.push({ passed: lines >= min, check: `min_lines(${min})`, detail: lines >= min ? '' : `文件只有 ${lines} 行，要求至少 ${min} 行: ${rawPath}` })
         } else {
@@ -196,7 +197,7 @@ function checkOutput(outputDef, projectName, cwd, specBase) {
         if (existsSync(fullPath)) {
           const content = readFileSync(fullPath, 'utf8')
           const sections = check.sections || []
-          const missing = sections.filter(s => !content.includes(`## ${s}`))
+          const missing = missingSections(content, sections)
           results.push({ passed: missing.length === 0, check: 'contains_sections', detail: missing.length > 0 ? `缺少章节: ${missing.join(', ')} — ${rawPath}` : '' })
         } else {
           results.push({ passed: false, check: 'contains_sections', detail: `文件不存在: ${rawPath}` })
@@ -206,12 +207,7 @@ function checkOutput(outputDef, projectName, cwd, specBase) {
       case 'no_placeholder': {
         if (existsSync(fullPath)) {
           const content = readFileSync(fullPath, 'utf8')
-          const patterns = check.patterns || ['待补充', 'TODO', 'TBD', '未分析', '根据项目情况', '根据实际情况', '按需填写']
-          // 只匹配独立成行的占位文本，不匹配行内引用
-          const lineMatches = patterns.filter(p => {
-            const regex = new RegExp(`^\\s*[-*]?\\s*${p}\\s*$`, 'm')
-            return regex.test(content)
-          })
+          const lineMatches = placeholderLineMatches(content, check.patterns)
           results.push({ passed: lineMatches.length === 0, check: 'no_placeholder', detail: lineMatches.length > 0 ? `包含占位文本: ${lineMatches.map(m => `"${m}"`).join(', ')} — ${rawPath}` : '' })
         } else {
           results.push({ passed: false, check: 'no_placeholder', detail: `文件不存在: ${rawPath}` })
@@ -355,7 +351,7 @@ function _checkWorkflow(wf, cwd, projectName, specBase) {
           let anyEmpty = false
           for (const f of files) {
             const content = readFileSync(join(scanDir, f), 'utf8')
-            if (content.trim().length === 0) {
+            if (!contentNonEmpty(content)) {
               const detail = `空文件: ${join(scanDir, f)}`
               workflowCheckResults.push({ type: 'no_empty_files', status: 'fail', detail })
               failures.push({ level: 'workflow', check: 'no_empty_files', message: detail })
@@ -396,7 +392,7 @@ function _checkWorkflow(wf, cwd, projectName, specBase) {
         const fullPath = join(effectiveBase, checkPath)
         if (existsSync(fullPath)) {
           const content = readFileSync(fullPath, 'utf8')
-          const lines = content.split('\n').length
+          const lines = lineCount(content)
           const min = check.min || 1
           if (lines < min) {
             const detail = `文件只有 ${lines} 行，要求至少 ${min} 行: ${checkPath}`
@@ -420,7 +416,7 @@ function _checkWorkflow(wf, cwd, projectName, specBase) {
         if (existsSync(fullPath)) {
           const content = readFileSync(fullPath, 'utf8')
           const sections = check.sections || []
-          const missing = sections.filter(s => !content.includes(`## ${s}`))
+          const missing = missingSections(content, sections)
           if (missing.length > 0) {
             const detail = `缺少章节: ${missing.join(', ')} — ${checkPath}`
             workflowCheckResults.push({ type: 'contains_sections', status: 'fail', detail })
@@ -442,11 +438,7 @@ function _checkWorkflow(wf, cwd, projectName, specBase) {
         const fullPath = join(effectiveBase, checkPath)
         if (existsSync(fullPath)) {
           const content = readFileSync(fullPath, 'utf8')
-          const patterns = check.patterns || ['待补充', 'TODO', 'TBD', '未分析', '根据项目情况', '根据实际情况', '按需填写']
-          const lineMatches = patterns.filter(p => {
-            const regex = new RegExp(`^\\s*[-*]?\\s*${p}\\s*$`, 'm')
-            return regex.test(content)
-          })
+          const lineMatches = placeholderLineMatches(content, check.patterns)
           if (lineMatches.length > 0) {
             const detail = `包含占位文本: ${lineMatches.map(m => `"${m}"`).join(', ')} — ${checkPath}`
             workflowCheckResults.push({ type: 'no_placeholder', status: 'fail', detail })
