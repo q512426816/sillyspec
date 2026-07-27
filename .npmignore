@@ -9,6 +9,7 @@ docs/
 .idea/
 .DS_Store
 STATE.md
+.playwright-mcp/
 
 # 依赖
 node_modules/
