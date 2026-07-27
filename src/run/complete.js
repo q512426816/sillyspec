@@ -297,7 +297,16 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
       // verify 的"验证通过"提示延后到下方 validator 通过后才打印，
       // 避免校验失败（FAIL / 缺 verify-result.md）时仍声称"验证通过可以归档"。
     } else {
-      console.log(`\n下一步由你决定：sillyspec run <stage>（brainstorm/plan/execute/verify/archive 等）`)
+      // D1 暗衔接修：阶段刚完成，CLI 本就知道状态机下一步是哪个阶段（_getNextSuggestion），
+      // 却只丢一句「下一步由你决定」让 agent 自己猜命令。改为按 progress 实际状态给出精确命令。
+      let next = null
+      try { next = pm._getNextSuggestion(progress) } catch { /* 读建议失败不阻断完成 */ }
+      if (next && next.command) {
+        console.log(`\n👉 ${next.text}`)
+        console.log(`   下一步命令：${next.command}`)
+      } else {
+        console.log(`\n下一步由你决定：sillyspec run <stage>（brainstorm/plan/execute/verify/archive 等）`)
+      }
     }
 
     // 阶段完成校验 — 防御性守卫：仅当所有步骤确实标记为 completed 时才跑 validator
@@ -441,7 +450,7 @@ export async function waitStep(pm, progress, stageName, cwd, outputText, waitRea
 }
 
 export async function continueStep(pm, progress, stageName, cwd, answer, options = {}) {
-  const { changeName, platformOpts = {} } = options
+  const { changeName, platformOpts = {}, fromStep } = options
   const specBase = platformOpts.specRoot || join(cwd, '.sillyspec')
   const stageData = progress.stages[stageName]
 
@@ -461,15 +470,36 @@ export async function continueStep(pm, progress, stageName, cwd, answer, options
     console.error('没有处于等待状态的步骤')
     process.exit(1)
   }
-  if (waitingSteps.length > 1) {
+
+  // --from-step 支持在多个 waiting 时指定恢复哪一个（避免被迫 --reset 破坏性重置）。
+  let currentIdx
+  if (fromStep != null) {
+    let targetIdx
+    if (/^\d+$/.test(String(fromStep))) {
+      targetIdx = parseInt(String(fromStep), 10) - 1 // 1-based → 0-based
+    } else {
+      targetIdx = stageData.steps.findIndex(s => s.name === fromStep)
+    }
+    const target = targetIdx >= 0 ? stageData.steps[targetIdx] : null
+    if (!target || target.status !== 'waiting') {
+      console.error(`❌ --from-step 指定的步骤「${fromStep}」不处于等待状态。当前 waiting：`)
+      for (const ws of waitingSteps) console.error(`   Step ${ws.idx + 1}: ${ws.name}`)
+      process.exit(1)
+    }
+    currentIdx = targetIdx
+  } else if (waitingSteps.length > 1) {
+    // 多 waiting 且未指定 fromStep：给出渐进出路（逐个 continue），而非只建议破坏性 reset。
     console.error(`❌ 检测到 ${waitingSteps.length} 个等待中的步骤，无法确定恢复目标：`)
     for (const ws of waitingSteps) {
       console.error(`   Step ${ws.idx + 1}: ${ws.name}${ws.waitReason ? `（${ws.waitReason}）` : ''}`)
     }
-    console.error(`   请使用 --reset 重置，或手动修复 DB`)
+    console.error(`   出路（二选一）：`)
+    console.error(`   ① 逐个恢复（推荐，非破坏性）：sillyspec run ${stageName} --continue --from-step <序号|名称> --answer "..."${changeName ? ` --change ${changeName}` : ''}，每次解一个 waiting，降到 1 个后即可不带 --from-step 继续`)
+    console.error(`   ② 全部重来（破坏性、不可逆）：sillyspec run ${stageName} --reset${changeName ? ` --change ${changeName}` : ''}`)
     process.exit(1)
+  } else {
+    currentIdx = waitingSteps[0].idx
   }
-  const currentIdx = waitingSteps[0].idx
   const defSteps = await getStageSteps(stageName, cwd, progress, platformOpts?.specRoot || null)
   const currentStepDef = defSteps?.[currentIdx] || {}
   const currentStep = stageData.steps[currentIdx]

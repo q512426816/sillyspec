@@ -145,6 +145,17 @@ console.log('\n=== renderStageContract(prompt 事前契约)===')
   assert(renderStageContract('nonexistent') === '', '未知 stage → 空串')
 }
 
+console.log('\n=== verify 事前契约含集成证据门控提示(D10)===')
+{
+  // 历史:agent 闷头写完 verify-result.md 才被门控阻断缺「真实启动」证据,撞墙不知缺哪一项。
+  // D10 把门控触发条件 + 字面期望前置进 verify step0(renderStageContract),事前给 == 事后查。
+  const rendered = renderStageContract('verify')
+  assert(rendered.includes('[verify.integration-evidence]'), 'verify render 含集成证据规则 id')
+  assert(rendered.includes('部署级') && rendered.includes('启动…一次'), 'verify render 含部署级 real_startup 字面期望')
+  assert(rendered.includes('集成级') && rendered.includes('端到端'), 'verify render 含集成级字面期望')
+  assert(rendered.includes('出路'), 'verify render 含出路提示')
+}
+
 console.log('\n=== 全部规则 id 唯一(防 manifest 笔误重复)===')
 {
   const all = getAllRules()

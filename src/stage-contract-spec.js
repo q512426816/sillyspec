@@ -216,6 +216,31 @@ const VERIFY_RULES = [
     failMessage: 'verify-result.md 结论为 FAIL — 验证未通过，不能标记 verify 完成；请修复后重新运行验证',
     noConclusionWarning: 'verify-result.md 未识别到结论章节（含 结论/Conclusion/Result/结果 的二级标题，后跟 PASS / PASS WITH NOTES / FAIL）',
   },
+  // integration-evidence(custom,D10 事前契约):风险门控。判定算法 detectChangeRisk +
+  // checkIntegrationEvidence 留 change-risk-profile.js(需运行时读 design/plan 内容,引擎无法纯判定);
+  // 此处只作事前提示——renderStageContract 把 spec/hint 注入 verify step0,让 agent 写 verify-result.md
+  // 前就知道:若 design/plan 命中部署/启动或跨进程关键词,必须提供对应字面证据,否则完成时被门控阻断。
+  // (历史教训:agent 闷头写完 verify-result.md 才发现缺「真实启动」证据,撞墙不知缺哪一项。)
+  {
+    id: 'verify.integration-evidence',
+    stage: 'verify', source: 'validateVerifyOutputs', severity: 'error', kind: 'integration-evidence',
+    target: { root: 'change', path: 'verify-result.md', scope: 'full' },
+    data: {},
+    spec: [
+      '集成/部署证据门控(仅当 design.md / plan.md 命中以下关键词时触发;命中即阻断完成,直到 verify-result.md 含对应字面证据):',
+      '- 命中启动入口(cli.ts / main.ts / server.(js|ts) / bootstrap / entrypoint)→ 部署级:须「真实启动一次本变更触及的入口」,字面命中其一:启动…一次 / 实际…启动 / real startup / docker up / npm start / node server。',
+      '- 命中跨进程/状态机(daemon / backend / session / lease / lifecycle / heartbeat)→ 集成级:须「真实 daemon↔backend 集成(非 mock 单测)」,字面命中其一:端到端 / integration test / e2e test / 真实集成 / runtime evidence;并补 Runtime Evidence 章节 + 日志片段。',
+      '- 单元测试结论(verify 必做,无论风险级):写明测试套件与结果。',
+    ].join('\n'),
+    // 运行时门控按 changeRiskProfile 动态拼详细报错(见 stage-contract.js validateVerifyOutputs);
+    // 此 failMessage 为单行摘要,满足「每规则声明 failMessage」契约 + 概括阻断原因。
+    failMessage: '[integration/deployment-critical] 验证结论为 PASS 但缺少真实集成证据(真实启动本变更触及的入口 / 真实 daemon↔backend 集成 / Runtime Evidence)。需在 verify-result.md 如实补全对应字面证据,或如实改结论 FAIL。',
+    hint: [
+      '① 先看你的 design.md / plan.md 是否提到上述关键词——是就按对应级别补证据。',
+      '② 「真实启动」必须是本变更实际改动的那一类入口(服务入口/CLI 主入口/守护进程),不能拿无关进程的启动凑数。',
+      '③ 风险判级按 design/plan 措辞,若属误判可在 design 中如实缩小范围;但危险链路该有真实启动证据,不建议为绕门控而规避。',
+    ].join(' '),
+  },
 ]
 
 // ── plan ──
@@ -227,6 +252,27 @@ const PLAN_RULES = [
     data: {},
     spec: '产出 `plan.md`(任务拆解与规划,缺失即阻断)',
     failMessage: 'plan.md 缺失: ${path}',
+  },
+  // entry-point-wiring(custom):design.md 命中入口实例化/启动路径模式时,被提到的入口文件
+  // (cli.ts/main.ts/server.(js|ts)/index.(js|ts))必须出现在某 task allowed_paths 或 plan.md
+  // 文件变更清单中,否则需 design.md 紧邻写明豁免。判定算法(多源 allowed_paths 收集 + 逐文件对账 +
+  // 豁免)留 validatePlanOutputs;trigger/file 抽取/exemption/failMessage 从本 manifest 同源。
+  {
+    id: 'plan.entry-point-wiring', stage: 'plan', source: 'validatePlanOutputs', severity: 'error', kind: 'entry-point-wiring',
+    target: { root: 'change', path: 'design.md', scope: 'full' },
+    data: {
+      entryPointPatterns: [
+        { pattern: '\\b(cli\\.ts|main\\.ts|server\\.(?:js|ts)|index\\.(?:js|ts))\\b.*\\b(?:实例化|instantiate|构造|new\\s)', flags: 'gi' },
+        { pattern: '\\bnew\\s+(Daemon|SessionManager|App|Server|Application)\\b', flags: 'gi' },
+        { pattern: '\\b(?:在|from)\\s+[\'"]?(cli\\.ts|main\\.ts|server\\.(?:js|ts)|index\\.(?:js|ts))[\'"]?', flags: 'gi' },
+        { pattern: '\\b(?:注入|inject)\\b.*\\b(?:构造|constructor|初始化|init|实例化|instantiate)\\b', flags: 'gi' },
+        { pattern: '\\b(?:启动路径|startup|entrypoint|bootstrap|daemon[._-]?start|main.*entry)\\b', flags: 'gi' },
+      ],
+      fileExtractionPattern: { pattern: '\\b(cli\\.ts|main\\.ts|server\\.(?:js|ts)|index\\.(?:js|ts))\\b', flags: 'i' },
+      exemptionPattern: '不需要改.*${file}|${file}.*不需要|不修改.*${file}|${file}.*不变|${file}.*no.?change',
+    },
+    spec: 'design.md 提到入口文件(cli.ts/main.ts/server.(js|ts)/index.(js|ts))并伴实例化/注入/启动路径关键词(如 new Daemon、startup/entrypoint/bootstrap/daemon_start、注入构造)时,每个被提到的入口文件必须出现在某个 task 的 allowed_paths 或 plan.md 文件变更清单中;若确实不改,需在 design.md 紧邻写明「<文件> 不需要/不变/无需修改」类表述才豁免。',
+    failMessage: '生产接线路径矛盾: design.md 提到了入口文件 "${file}"，但没有任何 task 的 allowed_paths（或 plan.md 文件变更清单）包含它。\n   出路（二选一）：\n   ① 若该入口文件确实要改 → 在某个 task 的 allowed_paths 加上 "${file}"；\n   ② 若确实不需要改 → 在 design.md 明确写明理由，且需包含 "${file} 不需要/不变/无需修改" 这类紧邻表述才会被识别为豁免。\n   触发原因：design.md 命中入口实例化/启动路径模式（如 cli.ts|main.ts|server.(js|ts)|index.(js|ts) + new/实例化/注入，或 startup|entrypoint|bootstrap|daemon_start）。',
   },
 ]
 

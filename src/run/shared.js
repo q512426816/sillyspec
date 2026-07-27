@@ -19,6 +19,49 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 // ── Wait State Constants ──（W6 Step3 从 run.js 搬入：prompt.js outputStep 与 run.js wait-detection 共用）
 // 正则匹配：只识别独立一行的标记，避免误伤文档正文引用
 export const WAIT_MARKER_RE = /^\s*\[(WAIT_FOR_USER|NEEDS_CONFIRM|NEEDS_DECISION)\]\s*$/m
+
+// ── did-you-mean（命令级 + flag 级 typo 建议，零依赖）──
+// 历史：agent 打错命令名/flag 名只报「未知」+整屏列表，要自己捞正确拼写。
+export function levenshtein(a, b) {
+  const m = String(a).length, n = String(b).length
+  if (!m) return n; if (!n) return m
+  let prev = Array.from({ length: n + 1 }, (_, i) => i)
+  for (let i = 1; i <= m; i++) {
+    const cur = [i]
+    for (let j = 1; j <= n; j++) {
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1))
+    }
+    prev = cur
+  }
+  return prev[n]
+}
+export function didYouMean(input, candidates) {
+  if (!input) return null
+  let best = null, bestD = Infinity
+  for (const c of candidates) {
+    const d = levenshtein(String(input).toLowerCase(), String(c).toLowerCase())
+    if (d < bestD) { bestD = d; best = c }
+  }
+  return (best !== null && bestD <= Math.max(1, Math.floor(String(input).length / 2))) ? best : null
+}
+
+// ── 变更名路径穿越消毒（F6）──
+// change 名会被 join 进 .sillyspec/changes/<name>/ 当目录用。若含 ../ 或路径分隔符，
+// 会逃出 changes/ 写到任意位置（如 --change ../../etc/x 把 proposal.md 写到 changes 同级之外）。
+// 在 --change 解析边界统一消毒，比在每个 join 点守卫更集中。合法名：字母/数字/._-，禁分隔符与 ..
+export function assertSafeChangeName(name, label = '变更名') {
+  if (name == null) return
+  const s = String(name)
+  if (s === '') throw new Error(`${label}不能为空`)
+  // 含路径分隔符 或 父目录穿越段 → 拒绝（Windows 下 \\ 也算）
+  if (/[\\/]/.test(s) || /(^|[/\\])\.\.(?=$|[/\\])/.test(s) || s === '..' || s.includes('..')) {
+    throw new Error(`${label}「${s}」含路径分隔符或 ..，禁止路径穿越（变更名只能是 .sillyspec/changes/ 下的一个目录名，不能逃出）`)
+  }
+  if (!/^[\w.\-]+$/.test(s)) {
+    throw new Error(`${label}「${s}」含非法字符（仅允许字母、数字、._-）`)
+  }
+}
+
 import { buildExecuteSteps } from '../stages/execute.js'
 import { buildPlanSteps } from '../stages/plan.js'
 import { stageRegistry } from '../stages/index.js'

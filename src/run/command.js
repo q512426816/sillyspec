@@ -23,7 +23,7 @@ import { join, resolve, dirname } from 'node:path'
 import { existsSync, readdirSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
 import { randomBytes, randomUUID } from 'node:crypto'
 import { writeAtomicSync } from '../fs-atomic.js'
-import { resolveSpecDir, resolveChangeDir, triggerSync, getStageSteps, formatWaitOptions, checkApproval } from './shared.js'
+import { resolveSpecDir, resolveChangeDir, triggerSync, getStageSteps, formatWaitOptions, checkApproval, didYouMean, assertSafeChangeName } from './shared.js'
 import { resolveQuickLinkedChanges } from './quick-audit.js'
 import { outputStep } from './prompt.js'
 import { completeStep, skipStep, waitStep, continueStep } from './complete.js'
@@ -32,6 +32,16 @@ import { ProgressManager } from '../progress.js'
 import { validateChangeExists } from '../stage-contract.js'
 import { stageRegistry, auxiliaryStages } from '../stages/index.js'
 import { definition as brainstormAutoDef } from '../stages/brainstorm-auto.js'
+
+// F2/F4: 哪些 flag 吃下一个 token 作「值」（其余 --flag 都是布尔，不吞值）。
+// 校验循环只对 VALUE_FLAGS 跳下一个 token（否则 --done 后跟 typo 会被当 --done 的值吞掉）。
+// getFlagValue 也据此拒收「下一个 token 是另一个 flag 名」当值。
+const VALUE_FLAGS = new Set([
+  '--reason', '--options', '--answer', '--confirm-mode',
+  '--output', '--input', '--change', '--linked-changes',
+  '--spec-dir', '--spec-root', '--runtime-root', '--workspace-id', '--scan-run-id',
+  '--files', '--from-step', '--mode', '--dir', '--confirm-mode',
+])
 
 /**
  * 从 progress 或变更目录推导变更名
@@ -101,7 +111,19 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
   }
   // 解析参数
   const stageName = args[0]
-  const flags = args.slice(1)
+  let flags = args.slice(1) // let：下方规范化 --k=v 会改写
+
+  // F7: 规范化 --key=value → ['--key', 'value']。许多 CLI 通用等号语法此前被整 token 当未知参数拒绝。
+  // 只对值类 flag 展开（见 VALUE_FLAGS）；布尔 flag 不吃值，--skip-approval=x 这种无意义，原样进校验报错。
+  flags = flags.flatMap(tok => {
+    if (typeof tok === 'string' && tok.startsWith('--') && tok.includes('=')) {
+      const eq = tok.indexOf('=')
+      const key = tok.slice(0, eq)
+      const val = tok.slice(eq + 1)
+      if (VALUE_FLAGS.has(key)) return [key, val]
+    }
+    return [tok]
+  })
 
   if (!stageName) {
     console.error('❌ 请指定阶段，例如: sillyspec run brainstorm')
@@ -135,7 +157,12 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
   // --spec-dir 是统一参数名，--spec-root 保留为向后兼容别名
   const getFlagValue = (name) => {
     const idx = flags.indexOf(name)
-    return idx !== -1 && flags[idx + 1] ? flags[idx + 1] : null
+    if (idx === -1) return null
+    const next = flags[idx + 1]
+    // F4: 下一个 token 若是另一个 flag 名（--xxx），说明本 flag 漏值，
+    // 不能把 flag 名当值返回（否则 --change --done → changeName="--done" 一路污染）。
+    if (!next || (typeof next === 'string' && next.startsWith('--'))) return null
+    return next
   }
   const isDone = flags.includes('--done')
   const isSkip = flags.includes('--skip')
@@ -149,6 +176,27 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
   const isContinue = flags.includes('--continue')
   const isNonInteractive = flags.includes('--non-interactive')
   const isInteractive = flags.includes('--interactive')
+  // F3 冲突 flag 检测：步骤/阶段动作 flag 互斥——各自定义「对当前步骤做什么」，同时给 2+ 个
+  // 语义矛盾。旧实现按代码里 if 顺序静默取先命中的、其余被忽略，agent 以为生效的其实没生效
+  // （如 --done --reset 只 reset 不 done，agent 却以为完成了步骤）。显式报冲突让 agent 选一个。
+  const STEP_ACTIONS = [
+    ['--done', isDone, '完成当前步骤'],
+    ['--skip', isSkip, '跳过当前步骤'],
+    ['--reset', isReset, '重置整个阶段（从头开始）'],
+    ['--reopen', isReopen, '重新打开已完成阶段进入修订（配 --from-step）'],
+    ['--wait', isWait, '暂停等用户决策'],
+    ['--continue', isContinue, '恢复等待中的步骤'],
+    ['--status', isStatus, '查看进度（只读）'],
+  ]
+  const activeActions = STEP_ACTIONS.filter(([, v]) => v)
+  if (activeActions.length >= 2) {
+    console.error('❌ 步骤动作参数冲突（同时只能指定一个）：')
+    for (const [name, , desc] of activeActions) console.error(`   ${name} — ${desc}`)
+    console.error('   这些动作互斥，请只保留其中一个再重试。')
+    process.exit(2)
+  }
+  // 注：--non-interactive 与 --interactive 的冲突在 index.js 检测（--interactive 被 index.js
+  // 作为全局 flag 吞掉、不透传到此处，故 isInteractive 在此恒为 false）。
   const waitReason = getFlagValue('--reason')
   const waitOptions = getFlagValue('--options')
   const continueAnswer = getFlagValue('--answer')
@@ -307,6 +355,19 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
   if (explicitLinked !== null) {
     linkedChanges = explicitLinked
   }
+  // F6 路径穿越消毒：change 名会被 join 进 .sillyspec/changes/<name>/ 当目录名，
+  // 含 ../ 或路径分隔符会逃出 changes/ 写到任意位置。quick 的 --change 复用为 sessionId
+  // (quick-<8hex>，正则已约束) 或 linkedChanges，故 quick 的 changeName 不在此校验。
+  try {
+    if (stageName !== 'quick' && changeName) assertSafeChangeName(changeName)
+    for (const lc of linkedChanges) {
+      if (lc && lc !== 'none') assertSafeChangeName(lc, '关联变更名(--linked-changes)')
+    }
+  } catch (e) {
+    console.error(`❌ ${e.message}`)
+    console.error(`   合法变更名示例：2026-07-27-add-login（仅字母/数字/._-，不含 / \\ ..）`)
+    process.exit(2)
+  }
   // quick 会话隔离（D-001@v1 + D-003@v1 + §4.4 跨进程传递）：每会话用 sessionId 作 changeName，
   // DB 分行 progress.quick-<uuid8>，避免并行 quick 会话共享单行 progress.default.quick 互相覆盖。
   // sessionId = crypto.randomUUID 前 8 hex（摒弃旧 quick-YYYYMMDD-HHMMSS 时间戳，同秒并发撞）。
@@ -376,17 +437,22 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     '--files', '--allow-new', '--force-baseline', '--force-rescan',
     '--json', '--dir', '--help',
     '--reopen', '--from-step', '--mode',
+    '--deep', // F1: scan-profile.js 从 argv 读 --deep，文档化(index.js help)但此前 knownFlags 漏列→被拒
   ])
   for (let i = 0; i < flags.length; i++) {
     const f = flags[i]
     if (f.startsWith('--')) {
       if (!knownFlags.has(f)) {
+        // F10: flag 级 did-you-mean（此前只命令级有）
+        const suggestion = didYouMean(f, [...knownFlags])
         console.error(`❌ 未知参数: ${f}`)
-        console.error(`已知参数: ${[...knownFlags].sort().join(', ')}`)
+        if (suggestion) console.error(`   你是想输入「${suggestion}」吗？`)
+        else console.error(`已知参数: ${[...knownFlags].sort().join(', ')}`)
         process.exit(2) // 用法错 → exit 2
       }
-      // 跳过 value 参数
-      i++
+      // F2: 只有吃值的 flag 才跳下一个 token。布尔 flag（--done 等）不能 i++——
+      // 否则会把紧跟的 typo flag 当成 --done 的「值」吞掉，既不校验也不生效（静默忽略）。
+      if (VALUE_FLAGS.has(f)) i++
     }
   }
 
@@ -626,7 +692,11 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
 
   // --status
   if (isStatus) {
-    return showStatus(progress, stageName)
+    // D9：状态展示末尾附「下一步该跑什么」。pm 持有状态机，按 progress 实际进度算出精确命令；
+    // 不传则 agent 只看到一堆 step 进度条，却不知道完成后/卡住时下一条命令是什么。
+    let nextSuggestion = null
+    try { nextSuggestion = pm._getNextSuggestion(progress) } catch { /* 读建议失败不阻断状态展示 */ }
+    return showStatus(progress, stageName, nextSuggestion)
   }
 
   // --skip
@@ -641,7 +711,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
 
   // --continue: 从 waiting 恢复
   if (isContinue) {
-    return await continueStep(pm, progress, stageName, cwd, continueAnswer, { changeName: effectiveChange, nonInteractive: isNonInteractive && !isInteractive, platformOpts })
+    return await continueStep(pm, progress, stageName, cwd, continueAnswer, { changeName: effectiveChange, nonInteractive: isNonInteractive && !isInteractive, platformOpts, fromStep: fromStepValue })
   }
 
   // --done
@@ -666,7 +736,7 @@ function resolveChangeNameAuto(cwd, specDir = null) {
   return null
 }
 
-function showStatus(progress, stageName) {
+function showStatus(progress, stageName, nextSuggestion = null) {
   const stageData = progress.stages[stageName]
   const stageDef = stageRegistry[stageName]
 
@@ -733,6 +803,13 @@ function showStatus(progress, stageName) {
       if (step.waitedAt) console.log(`       等待时间：${step.waitedAt}`)
     }
   })
+
+  // D9：本阶段进度之后，给出全局「下一步该跑什么」——
+  // 否则 agent 看完进度条仍要自己推状态机（尤其阶段已完成 / 失效 / 修订中这类非线性状态）。
+  if (nextSuggestion && nextSuggestion.command) {
+    console.log(`\n👉 ${nextSuggestion.text}`)
+    console.log(`   下一步命令：${nextSuggestion.command}`)
+  }
 }
 
 async function resetStage(pm, progress, stageName, cwd, changeName, platformOpts = {}) {

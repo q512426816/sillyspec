@@ -11,7 +11,8 @@
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, unlinkSync, appendFileSync } from 'fs';
-import { join, basename, dirname, resolve } from 'path';
+import { join, basename, dirname, resolve, sep } from 'path';
+import { tmpdir } from 'os';
 import { DB } from './db.js';
 import { writeAtomicSync } from './fs-atomic.js';
 import { ConsistencyDoctor } from './progress/consistency-doctor.js';
@@ -103,6 +104,17 @@ export function resolvePlatformSpecDir(cwd, explicitSpecDir = null) {
       reason: 'pointer.specRoot 路径不存在（daemon 未起？已迁移？）',
       hint: `启动 SillyHub daemon；或 sillyspec doctor --json 诊断；或显式 --spec-dir <本地路径> 临时走本地`,
     });
+  }
+  // 驾驭：pointer 指向 OS temp 目录几乎肯定是陈旧测试/CI 残留（合法项目不会把 specRoot 放 temp）。
+  // 历史：npm test 等会写 pointer 到 Temp/spec-dir-test-*，不清理则污染真实环境，所有命令静默落错库。
+  // 非阻断警告：让 agent 知道当前解析到的 specDir 可疑，而非静默写到死库。
+  const resolvedTmp = resolve(tmpdir());
+  if (resolve(ptr.specRoot) === resolvedTmp || resolve(ptr.specRoot).startsWith(resolvedTmp + sep)) {
+    console.warn(
+      `⚠️  平台 pointer 的 specRoot 指向系统 temp 目录：${ptr.specRoot}\n` +
+      `   这通常是陈旧的测试/CI 残留，命令会写进这个可疑库而非你当前项目。\n` +
+      `   修复：sillyspec platform pointer --cleanup（删除 ${pointerPath}），或删除该 pointer 文件后回到项目目录重跑。`
+    );
   }
   return ptr.specRoot;
 }

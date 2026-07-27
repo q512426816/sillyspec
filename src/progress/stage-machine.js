@@ -468,6 +468,11 @@ export class StageMachine {
       const data = await this.pm.read(cwd, changeName);
       if (!data) { console.log('❌ 无法读取进度数据'); return; }
       if (!data.stages[stage]) { console.log(`❌ 未知阶段: ${stage}`); return; }
+      // 破坏性预览：reset 不可逆地清空该阶段所有步骤（含已完成），先告诉 agent 丢了什么。
+      const sd = data.stages[stage];
+      const steps = sd.steps || [];
+      const doneCount = steps.filter(s => s.status === 'completed').length;
+      console.warn(`⚠️  即将重置阶段「${stage}」：丢弃 ${steps.length} 个步骤（其中 ${doneCount} 个已完成，revision ${sd.revision || 0}）。此操作不可逆。`);
       data.stages[stage] = emptyStage();
       data.lastActive = new Date().toLocaleString('zh-CN',{hour12:false});
       await this.pm._write(cwd, data);
@@ -475,6 +480,7 @@ export class StageMachine {
     } else {
       // 重置所有变更或指定变更
       if (changeName) {
+        console.warn(`⚠️  即将重置变更「${changeName}」的全部进度（所有阶段的 steps + stage 状态，产物文件不动）。此操作不可逆。`);
         // SQL: 删除该变更的所有 stages 和 steps 数据
         const db = await this.pm._ensureDB(cwd);
         db.transaction((sqlDb) => {
@@ -492,6 +498,7 @@ export class StageMachine {
         console.log(`✅ 已重置变更 ${changeName} 的进度`);
       } else {
         const changes = await this.pm.listChanges(cwd);
+        console.warn(`⚠️  即将重置【所有 ${changes.length} 个变更】的进度（仅 stage 状态，产物文件不动）。此操作不可逆且范围最大。`);
         const db = await this.pm._ensureDB(cwd);
         db.transaction((sqlDb) => {
           for (const cn of changes) {

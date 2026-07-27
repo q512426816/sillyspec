@@ -17,7 +17,7 @@ import { detectLocalYaml } from './local-detect.js';
 // ── CLI 入口 ──
 
 // did-you-mean 从 ./run/shared.js 复用（命令级 + flag 级 typo 建议）。
-import { didYouMean } from './run/shared.js'
+import { didYouMean, assertSafeChangeName } from './run/shared.js'
 function printUsage() {
   console.log(`
 SillySpec CLI — 规范驱动开发工具包
@@ -75,11 +75,20 @@ SillySpec CLI — 规范驱动开发工具包
     doctor [--fix] [--stale-hours N]    健康检查 + 修复
 
   sillyspec local detect [--dir <path>]   生成本地配置 local.yaml（纯 fs 嗅探，零 token、不跑 scan）
+  sillyspec runtime list [--json]         枚举 .sillyspec/.runtime/ 运行时产物（只读，看手上有哪些证据/状态文件）
 
-  sillyspec workflow check <name> [--project <p>] [--change <c>] [--json]
+  sillyspec workflow check <name> [--project <p>] [--change <c>] [--json] [--save]
+                                      全局 workflow 校验（--save 归档到 .sillyspec/.runtime/workflow-runs/）
   sillyspec workflow list
   sillyspec gate <stage> --change <name> [--json]      机器门控：阶段能否标记完成（只读）
   sillyspec derive <facet> --change <name> [--json]    单项事实核验（facet: execute-evidence|verify-test|task-reviews|artifacts）
+
+  sillyspec doctor [子命令]            进度库健康检查 + 修复（顶层命令，非 worktree doctor）
+    （无子命令）                       跑诊断，列出问题
+    --align-execute-progress [--change <名>] [--confirm]   基于 plan.md 对齐 execute 派生戳（默认 dry-run）
+    --cleanup-remnant [--confirm]      删除 0 字节空占位 db（默认 dry-run，仅 --confirm 落盘）
+    --dump-db --path <db 路径>         dump 指定 db 内容到文件（取证用）
+    --json                             结构化诊断 + 落盘 .sillyspec/.runtime/doctor-diagnosis.json
   sillyspec modules <rebuild | status | migrate>
   sillyspec change-rename <旧变更名> <新变更名>
   sillyspec knowledge <search --query "..." --limit N
@@ -175,6 +184,13 @@ async function main() {
     } else {
       filteredArgs.push(args[i]);
     }
+  }
+
+  // F3：--interactive（全局 flag，被上面吞进 interactive 变量）与 --non-interactive（透传到 filteredArgs）
+  // 语义相反，同时给是矛盾。在此层检测（command.js 看不到 --interactive）。
+  if (interactive && filteredArgs.includes('--non-interactive')) {
+    console.error('❌ --non-interactive 与 --interactive 互斥（一个禁用交互、一个强制交互），请只保留一个。');
+    process.exit(2);
   }
 
   const command = filteredArgs[0];
@@ -622,6 +638,9 @@ SillySpec worktree — git worktree 隔离管理
             console.error('❌ 用法: sillyspec worktree create <change-name> [--base <branch>]');
             process.exit(1);
           }
+          // F6 路径穿越消毒：worktree 名用于分支名 + worktree 目录，含 ../ 会逃出 .sillyspec/worktrees/。
+          try { assertSafeChangeName(wtName, 'worktree 变更名'); }
+          catch (e) { console.error(`❌ ${e.message}`); process.exit(2); }
           const baseIdx = args.indexOf('--base');
           const base = baseIdx >= 0 && args[baseIdx + 1] ? args[baseIdx + 1] : undefined;
           try {
@@ -991,6 +1010,14 @@ SillySpec platform — SillyHub 平台同步
         console.error('❌ 用法: sillyspec change-rename <旧变更名> <新变更名>');
         process.exit(1);
       }
+      // F6 路径穿越消毒：renameChange 会 mv changes/<old> → changes/<new>，名含 ../ 会逃出 changes/。
+      try {
+        assertSafeChangeName(oldName, '旧变更名');
+        assertSafeChangeName(newName, '新变更名');
+      } catch (e) {
+        console.error(`❌ ${e.message}`);
+        process.exit(2);
+      }
       const pm = new ProgressManager({ specDir: resolvePlatformSpecDir(dir, specDir) });
       await pm.renameChange(dir, oldName, newName);
       break;
@@ -1209,8 +1236,77 @@ SillySpec modules — 模块文档管理
       console.log(`   路径: ${localYamlPath}`);
       break;
     }
+    case 'runtime': {
+      // D2：.runtime/ 产物索引。CLI 往 .runtime/ 写各种证据/状态文件（db、doctor-diagnosis、
+      // workflow-runs、gate-status、user-inputs…），却没有命令让 agent 一眼看到「我手上有哪些产物」。
+      // 多会话/压缩后尤其痛：上轮写的证据文件，下轮不知去哪找。纯只读枚举，不写盘。
+      const runtimeSubCmd = filteredArgs[1];
+      if (runtimeSubCmd && runtimeSubCmd !== 'list') {
+        const sug = didYouMean(runtimeSubCmd, ['list']);
+        console.error(`❌ 未知子命令: runtime ${runtimeSubCmd}`);
+        if (sug) console.error(`   你是想输入「runtime ${sug}」吗？`);
+        console.error('用法: sillyspec runtime list   枚举 .sillyspec/.runtime/ 产物（只读）');
+        process.exit(2);
+      }
+      const specRoot = resolvePlatformSpecDir(dir, specDir) || join(dir, '.sillyspec');
+      const runtimeDir = join(specRoot, '.runtime');
+      if (!existsSync(runtimeDir)) {
+        if (json) { console.log(JSON.stringify({ runtimeDir, exists: false, artifacts: [] }, null, 2)); break; }
+        console.log(`📭 无 .runtime/ 目录（${runtimeDir}）——尚未产生任何运行时产物。`);
+        break;
+      }
+      // 已知产物 → 用途说明。agent 据此判断每份产物能否作为证据/该读哪个。
+      const KNOWN = {
+        'sillyspec.db': '进度库 SQLite（stages/steps/changes 表）',
+        'sillyspec.db.bak': '进度库备份（写前快照）',
+        'sillyspec.db.schema-version': '进度库 schema 版本标记',
+        'doctor-diagnosis.json': 'doctor --json 结构化诊断快照',
+        'doctor-dumps': 'doctor --dump-db 取证输出目录',
+        'workflow-runs': 'workflow check --save 归档目录',
+        'gate-status.json': '门控结果缓存',
+        'scan-guard.json': 'scan 覆盖保护记录',
+        'quick-sessions': 'quick 会话记录目录',
+        'quick-guard.json': 'quick baseline 守卫（旧位置）',
+        'worktrees': 'worktree meta（hooks 侧）',
+        'user-inputs.md': '步骤输出/输入历史追加日志',
+        'current-quick-run-id': '当前 quick sessionId 指针（--done 无 --change 时 fallback）',
+        'scan-runs': '平台模式 scan/workflow 取证目录',
+        'artifacts': '派生产物目录（init 预建）',
+        'contract-artifacts': 'execute endpoint 契约产物（verify 阶段读取）',
+        'history': '历史记录目录（init 预建）',
+        'logs': '日志目录（init 预建）',
+        'templates': '工作流模板目录（init 预建）',
+      };
+      let entries;
+      try {
+        entries = readdirSync(runtimeDir, { withFileTypes: true });
+      } catch (e) {
+        console.error(`❌ 读取 .runtime/ 失败: ${e.message}`);
+        process.exit(1);
+      }
+      entries.sort((a, b) => a.name.localeCompare(b.name));
+      if (json) {
+        console.log(JSON.stringify({
+          runtimeDir, exists: true,
+          artifacts: entries.map(e => ({ name: e.name, type: e.isDirectory() ? 'dir' : 'file', desc: KNOWN[e.name] || null })),
+        }, null, 2));
+        break;
+      }
+      console.log(`📂 .runtime/ 产物（${runtimeDir}）`);
+      if (entries.length === 0) { console.log('   （空目录）'); break; }
+      for (const e of entries) {
+        const kind = e.isDirectory() ? '📁' : '📄';
+        const desc = KNOWN[e.name] ? `  — ${KNOWN[e.name]}` : '';
+        console.log(`   ${kind} ${e.name}${desc}`);
+      }
+      const unknown = entries.filter(e => !KNOWN[e.name]);
+      if (unknown.length > 0) {
+        console.log(`\n   （${unknown.length} 项未登记：${unknown.map(e => e.name).join(', ')}）`);
+      }
+      break;
+    }
     default: {
-      const topCommands = ['init', 'setup', 'run', 'progress', 'worktree', 'local', 'workflow', 'gate', 'derive', 'modules', 'change-rename', 'knowledge', 'platform', 'scan', 'brainstorm', 'plan', 'execute', 'verify', 'archive', 'quick', 'explore', 'status', 'doctor', 'auto'];
+      const topCommands = ['init', 'setup', 'run', 'progress', 'worktree', 'local', 'workflow', 'gate', 'derive', 'modules', 'change-rename', 'knowledge', 'platform', 'scan', 'brainstorm', 'plan', 'execute', 'verify', 'archive', 'quick', 'explore', 'status', 'doctor', 'auto', 'runtime'];
       const suggestion = didYouMean(command, topCommands);
       console.error(`❌ 未知命令: ${command}`);
       if (suggestion) console.error(`   你是想输入「${suggestion}」吗？`);
