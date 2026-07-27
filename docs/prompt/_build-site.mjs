@@ -60,8 +60,8 @@ const dataJson = JSON.stringify({ stages, stats })
 // ── CSS（无 ${} 插值，安全放在模板字面量里）──
 const CSS = `
 :root{
-  --bg:#14110d; --bg-elev:#1b1712; --bg-card:#211c15; --bg-code:#0e0c09;
-  --ink:#e9e2d0; --ink-dim:#a59a82; --ink-faint:#665e4d; --line:#322a1f; --line-soft:#241f17;
+  --bg:#1d1915; --bg-elev:#252019; --bg-card:#2b251c; --bg-code:#221d16;
+  --ink:#efe8d8; --ink-dim:#d0c3a6; --ink-faint:#9a8d72; --line:#3a3127; --line-soft:#2c261c;
   --accent:#d4a24c; --accent-deep:#a8732a; --accent-glow:rgba(212,162,76,.16);
   --ph-path:#6fb3b8; --ph-scalar:#b7c95e; --ph-include:#d06a9e;
   --danger:#c8553d; --ok:#7a9e7e;
@@ -71,7 +71,7 @@ const CSS = `
 }
 [data-theme="light"]{
   --bg:#f1ebdc; --bg-elev:#e8e0cc; --bg-card:#fbf5e6; --bg-code:#e4dcc6;
-  --ink:#241e15; --ink-dim:#6a6149; --ink-faint:#9a9078; --line:#d2c7a8; --line-soft:#ded3b6;
+  --ink:#241e15; --ink-dim:#5f5640; --ink-faint:#766c54; --line:#d2c7a8; --line-soft:#ded3b6;
   --accent:#9a6b1f; --accent-deep:#7a5210; --accent-glow:rgba(154,107,31,.14);
   --ph-path:#2f6f74; --ph-scalar:#5d7a1e; --ph-include:#a04a72;
   --danger:#a83a26; --ok:#3f6443;
@@ -182,7 +182,7 @@ button{font-family:var(--mono);cursor:pointer}
 .ph-summary .pp{color:var(--ph-path)}.ph-summary .ps{color:var(--ph-scalar)}.ph-summary .pi{color:var(--ph-include)}
 
 /* prompt body */
-.prompt-body{font-family:var(--mono);font-size:12.5px;line-height:1.7;color:var(--ink);
+.prompt-body{font-family:var(--mono);font-size:13px;line-height:1.75;color:var(--ink);
   background:var(--bg-code);border:1px solid var(--line-soft);border-radius:3px;padding:14px 16px;
   white-space:pre-wrap;word-break:break-word;overflow-x:auto}
 .prompt-body .md-h{display:block;font-weight:600;color:var(--ink);font-size:12.5px;margin-top:8px}
@@ -193,8 +193,8 @@ button{font-family:var(--mono);cursor:pointer}
 .prompt-body .ph-path{color:var(--ph-path);background:rgba(111,179,184,.1)}
 .prompt-body .ph-scalar{color:var(--ph-scalar);background:rgba(183,201,94,.1)}
 .prompt-body .ph-include{color:var(--ph-include);background:rgba(208,106,158,.12)}
-.code-block{background:var(--bg);border:1px solid var(--line);border-radius:2px;padding:12px 14px;margin:10px 0;
-  overflow-x:auto;font-size:12px;color:var(--ink-dim)}
+.code-block{background:var(--bg-elev);border:1px solid var(--line);border-radius:2px;padding:12px 14px;margin:10px 0;
+  overflow-x:auto;font-size:12.5px;color:var(--ink-dim)}
 .code-block code{white-space:pre;font-family:var(--mono)}
 
 /* search results */
