@@ -91,6 +91,39 @@ console.log('\n--- 场景 3：CRLF 且真缺字段（确保真错误仍报）---
   assert(!result.ok, '真缺字段时 ok=false')
 }
 
+// 场景 4：inline allowed_paths: [path]（transcript 卡 3 轮根因 —— feasibility 旧正则只认块式，
+// inline 写法被误报「allowed_paths 为空」；修复后复用 parseAllowedPaths，与 blueprint/coverage 统一）
+console.log('\n--- 场景 4：inline allowed_paths（feasibility 须认，与 blueprint/coverage 统一）---')
+{
+  const changeDir = mkdtempSync(join(tmpdir(), 'plan-inline-'))
+  mkdirSync(join(changeDir, 'tasks'), { recursive: true })
+  const inlineBody = [
+    '---',
+    'id: task-01',
+    'title: inline allowed_paths',
+    'allowed_paths: [src/app.js, src/utils.js]',
+    'goal: 实现 X',
+    'implementation: 修改 src/app.js',
+    'acceptance: 接口正确',
+    'verify: npm test',
+    'constraints: 不破坏旧接口',
+    'depends_on: ',
+    '---',
+    '',
+  ].join('\n')
+  writeFileSync(join(changeDir, 'tasks', 'task-01.md'), inlineBody)
+  const result = validatePlanFeasibility(changeDir)
+  assert(!result.errors.some(e => e.includes('allowed_paths 为空')), 'inline allowed_paths 不被误报为空（feasibility 认 inline 写法）')
+  assert(result.ok, 'inline allowed_paths 整体通过（ok=' + result.ok + ', errors: ' + JSON.stringify(result.errors) + ')')
+
+  // CRLF + inline 双重容差（归一化 + inline 两种都要认）
+  const changeDir2 = mkdtempSync(join(tmpdir(), 'plan-inline-crlf-'))
+  mkdirSync(join(changeDir2, 'tasks'), { recursive: true })
+  writeFileSync(join(changeDir2, 'tasks', 'task-01.md'), inlineBody.replace(/\n/g, '\r\n'))
+  const result2 = validatePlanFeasibility(changeDir2)
+  assert(!result2.errors.some(e => e.includes('allowed_paths 为空')), 'CRLF + inline allowed_paths 也不被误报为空')
+}
+
 console.log('\n==================================================')
 console.log(`✅ 通过: ${total - failed}  ❌ 失败: ${failed}`)
 console.log('==================================================')

@@ -526,8 +526,9 @@ export function validatePlanFeasibility(changeDir, projectRoot = null) {
     // 1. 必要字段检查
     const taskId = (fm.match(/^id:\s*(.+)/m)?.[1] || '').trim()
     const title = (fm.match(/^title:\s*(.+)/m)?.[1] || '').trim()
-    const allowedPathsRaw = fm.match(/allowed_paths:\s*\n((?:\s+-\s+.+\n?)+)/)?.[1] || ''
-    const allowedPaths = allowedPathsRaw.match(/-\s+(.+)/g)?.map(s => s.replace(/^-\s+/, '').trim()) || []
+    // 复用 parseAllowedPaths（认 inline [x] + 块式两种写法），与 blueprint consistency / design coverage
+    // 三处统一，消除「feasibility 只认块式 → inline 写法被误报 allowed_paths 为空」的漂移（transcript 卡 3 轮根因）。
+    const allowedPaths = parseAllowedPaths(content)
 
     if (!taskId) errors.push(fsRule.data.messageId.replaceAll('${id}', file))
     if (!title) errors.push(fsRule.data.messageTitle.replaceAll('${id}', file))
