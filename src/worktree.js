@@ -249,15 +249,16 @@ export class WorktreeManager {
 
     let root = this.cwd;
     try {
-      // git-common-dir 在主仓库内 = <main>/.git
-      // 在 linked worktree 内 = <main>/.git（git 共享 .git 目录）
+      // git-common-dir 在主仓库内 = <main>/.git，在 linked worktree 内 = <main>/.git（git 共享 .git 目录）。
+      // 但 git 可能返回**相对路径**（如 `.git`）。必须相对 this.cwd 绝对化，否则下面的
+      // existsSync/statSync 会相对 process.cwd() 解析——当 process.cwd 是另一个 git 仓库
+      // （未 chdir 的脚本、或 CLI 在别处跑）时，worktreeBase 会错解析到 process.cwd 仓库，
+      // getMeta 读错位置返回 null。resolve() 对绝对参数原样返回、对相对参数相对 this.cwd 解析，两者皆稳。
       const commonDir = gitQuiet(this.cwd, 'rev-parse --git-common-dir');
-      // commonDir 应该是 <main-repo>/.git
-      // dirname(commonDir) = <main-repo>
-      if (commonDir && existsSync(commonDir)) {
-        const st = statSync(commonDir);
-        if (st.isDirectory()) {
-          root = dirname(commonDir);
+      if (commonDir) {
+        const absCommonDir = resolve(this.cwd, commonDir);
+        if (existsSync(absCommonDir) && statSync(absCommonDir).isDirectory()) {
+          root = dirname(absCommonDir);
         }
       }
     } catch (e) {
@@ -991,7 +992,12 @@ export class WorktreeManager {
   }
 
   /**
-   * 检查 worktree 是否有未 apply 到主工作区的变更
+   * 检查 worktree 是否有尚未落到主工作区的交付变更。
+   *
+   * 语义：worktree 相对 baseline 的交付变更（tracked + untracked，排除 .sillyspec//meta.json）里，
+   * 哪些还没 byte-identical 出现在主工作区 HEAD。全部已在 main HEAD（含 cherry-pick/rebase/merge/apply
+   * 落地）→ hasChanges:false（调用方可安全 cleanup）；否则 hasChanges:true（保留 worktree）。
+   * 检测失败/拿不准 → 保守 hasChanges:true（防误删未落代码）。
    * @param {string} changeName
    * @returns {{ hasChanges: boolean, changedFiles: string[], reason?: string }}
    */
@@ -1009,36 +1015,102 @@ export class WorktreeManager {
     if (meta.mode === 'in-place-fallback') {
       return { hasChanges: false, changedFiles: [], reason: 'in-place mode' };
     }
+    // native-worktree 是用户外部隔离环境，不纳入"未应用"判定（与 execute 完成路径一致）
+    if (meta.mode === 'native-worktree') {
+      return { hasChanges: false, changedFiles: [], reason: 'native-worktree (external)' };
+    }
 
     const diffBase = meta.baselineCommit || meta.baseHash;
     if (!diffBase) {
       return { hasChanges: false, changedFiles: [], reason: 'no diff base' };
     }
 
+    const isDeliverable = f => f && !f.startsWith('.sillyspec/') && f !== 'meta.json';
     try {
-      // tracked 文件变更
-      const statusRaw = gitQuiet(worktreePath, `diff --name-status ${diffBase}`) || '';
-      const statusFiles = new Set();
-      if (statusRaw) {
-        for (const line of statusRaw.split('\n').filter(Boolean)) {
-          const parts = line.split('\t');
-          if (parts.length >= 2) statusFiles.add(parts[parts.length - 1]);
-          if (parts.length >= 3) statusFiles.add(parts[parts.length - 2]);
-        }
+      // 1) 候选交付变更（worktree 工作区相对 diffBase）。--no-renames：rename 退化成 D+A，两侧文件都进集
+      const tracked = (gitQuiet(worktreePath, `diff --no-renames --name-only ${diffBase}`) || '')
+        .split('\n').filter(Boolean).filter(isDeliverable);
+      const untracked = (gitQuiet(worktreePath, `ls-files --others --exclude-standard`) || '')
+        .split('\n').filter(Boolean).filter(isDeliverable);
+
+      if (tracked.length === 0 && untracked.length === 0) {
+        return { hasChanges: false, changedFiles: [], reason: 'no changes in worktree' };
       }
 
-      // untracked 文件
-      const untrackedRaw = gitQuiet(worktreePath, `ls-files --others --exclude-standard`) || '';
-      const untrackedFiles = untrackedRaw
-        ? untrackedRaw.split('\n').filter(Boolean).filter(f => !f.startsWith('.sillyspec/') && f !== 'meta.json')
-        : [];
-
-      const changedFiles = [...new Set([...statusFiles, ...untrackedFiles])];
-      return { hasChanges: changedFiles.length > 0, changedFiles };
+      // 2) 候选集中尚未落到主工作区 HEAD 的子集
+      const pending = this._changesAlreadyOnMain(worktreePath, tracked, untracked);
+      if (pending.length === 0) {
+        return { hasChanges: false, changedFiles: [], reason: 'all changes already on main HEAD' };
+      }
+      return { hasChanges: true, changedFiles: pending };
     } catch (e) {
-      // 检测失败时保守处理：视为有变更
-      return { hasChanges: true, changedFiles: [], reason: `diff failed: ${e.message}` };
+      // 检测失败时保守处理：视为有变更，保留 worktree
+      return { hasChanges: true, changedFiles: [], reason: `check failed: ${e.message}` };
     }
+  }
+
+  /**
+   * 判定候选变更里哪些还没到主工作区 HEAD。
+   * - tracked：`git -C worktree diff --no-renames --name-only <mainHead> -- <files>`，
+   *   比较 worktree 工作区（含未提交）vs main HEAD，限定到候选集；空 = 已在 main HEAD。
+   * - untracked：worktree `hash-object`（默认带 filter，与 tree blob 同口径）vs main `ls-tree HEAD` blob；
+   *   不等 = 该新文件未在 main HEAD。HEAD-only，不查 main 工作区未提交副本（防误删）。
+   * 三种 mode 共享主 repo 对象库，mainHead 可在 worktree cwd 解析。
+   * @private
+   * @param {string} worktreePath
+   * @param {string[]} trackedFiles
+   * @param {string[]} untrackedFiles
+   * @returns {string[]} 尚未落到 main HEAD 的文件
+   */
+  _changesAlreadyOnMain(worktreePath, trackedFiles, untrackedFiles) {
+    const mainHead = git(this.cwd, 'rev-parse HEAD'); // 失败即抛 → 外层 catch fail-safe
+    const pending = [];
+
+    if (trackedFiles.length > 0) {
+      const diverged = (gitQuiet(worktreePath,
+        `diff --no-renames --name-only ${mainHead} -- ${trackedFiles.join(' ')}`) || '')
+        .split('\n').filter(Boolean);
+      pending.push(...diverged);
+    }
+
+    if (untrackedFiles.length > 0) {
+      // hash-object 按 argv 顺序逐行输出 blob hash；某文件不存在则整命令失败 → gitQuiet 返回 null
+      const wtHashes = (gitQuiet(worktreePath, `hash-object -- ${untrackedFiles.join(' ')}`) || '')
+        .split('\n');
+      const mainBlobs = this._lsTreeBlobs(this.cwd, 'HEAD', untrackedFiles);
+      for (let i = 0; i < untrackedFiles.length; i++) {
+        // wtHashes[i] 缺失（命令失败/行数不齐）→ 视为未应用，保守保留
+        if (wtHashes[i] !== (mainBlobs.get(untrackedFiles[i]) ?? null)) {
+          pending.push(untrackedFiles[i]);
+        }
+      }
+    }
+
+    return [...new Set(pending)];
+  }
+
+  /**
+   * 一次 `git ls-tree <treeish> -- <files>` → Map<path, blobHash>（仅 tree 中存在者）。
+   * 与 worktree-apply.js 的 getBlobHashMap 同逻辑；此处内联私有，避免反向 import 循环依赖。
+   * @private
+   * @param {string} cwd
+   * @param {string} treeish
+   * @param {string[]} files
+   * @returns {Map<string, string>}
+   */
+  _lsTreeBlobs(cwd, treeish, files) {
+    const map = new Map();
+    if (!files || files.length === 0) return map; // 空 pathspec 会列整棵树，必须拦
+    const raw = gitQuiet(cwd, `ls-tree ${treeish} -- ${files.join(' ')}`);
+    if (!raw) return map;
+    for (const line of raw.split('\n')) {
+      if (!line) continue;
+      const tab = line.indexOf('\t');
+      if (tab === -1) continue;
+      const hash = line.slice(0, tab).split(' ')[2]; // "<mode> <type> <hash>"
+      if (hash) map.set(line.slice(tab + 1), hash);
+    }
+    return map;
   }
 
   /**

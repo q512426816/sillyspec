@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-05-31 11:00:00
-updated_at: 2026-07-28T17:07:40+08:00
+updated_at: 2026-07-28T21:25:26+08:00
 ---
 
 # SillySpec 文件生命周期
@@ -14,7 +14,7 @@ updated_at: 2026-07-28T17:07:40+08:00
 |---|---|
 | [storage-and-state.md](file-lifecycle/storage-and-state.md) | `.sillyspec/.runtime/`、SQLite、gate、artifact、history、local 配置口径 |
 | [stage-artifacts.md](file-lifecycle/stage-artifacts.md) | 各阶段的运行时步骤、变更目录产物、归档和 quicklog |
-| [worktree-and-guard.md](file-lifecycle/worktree-and-guard.md) | `sillyspec worktree`、`meta.json`、apply、cleanup、Claude hook 门禁 |
+| [worktree-and-guard.md](file-lifecycle/worktree-and-guard.md) | `sillyspec worktree`、`meta.json`、apply、cleanup、归档/完成时自动清理判定（`hasUnappliedChanges`）、Claude hook 门禁 |
 | [platform-workflows-sync.md](file-lifecycle/platform-workflows-sync.md) | 平台模式、workflow check、manifest、SillyHub sync |
 | [known-implementation-gaps.md](file-lifecycle/known-implementation-gaps.md) | 当前代码与提示文案/旧文档不一致的地方 |
 

@@ -76,6 +76,8 @@ AI 子代理在执行任务时会在 worktree 中修改源码，而非直接在�
 
 > ⚠️ cleanup 会丢弃所有未 apply 的变更，请确认后再执行。
 
+**归档 / execute 完成时的自动清理**：如果你用 `git cherry-pick` / `rebase` / `merge` 把 worktree 的提交直接落到了主分支（没走 `sillyspec worktree apply`），归档（`run archive`）和 execute 阶段完成时会识别这些变更"已应用"（已 byte-identical 落在主工作区 HEAD）并自动 cleanup，**不会误报"未 apply 变更"、无需手动 `cleanup --force`**。只有当主工作区还没拿到这些代码、或检测失败时才保留 worktree。详见 [file-lifecycle/worktree-and-guard.md](sillyspec/file-lifecycle/worktree-and-guard.md#归档完成时的自动清理判定hasunappliedchanges)。
+
 ## Hook 拦截机制
 
 SillySpec 通过 hook 在 AI 工具调用（Write/Edit/MultiEdit/Bash）前拦截非法写入。判断逻辑采用 **三重门禁**：

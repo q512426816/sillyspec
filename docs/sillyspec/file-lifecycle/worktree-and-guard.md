@@ -122,6 +122,26 @@ sillyspec/<change-name>
 
 如果 `git worktree remove` 失败但目录可删，结果是 `force-cleaned`。
 
+### 归档/完成时的自动清理判定（`hasUnappliedChanges`）
+
+归档（`run archive`）和 execute 阶段完成时，会调 `hasUnappliedChanges(changeName)` 判断是否还有"未 apply 变更"，决定**自动 cleanup 还是保留 worktree**。
+
+**短路（不判未应用，直接返回 hasChanges:false）**：
+
+- `in-place-fallback` / `native-worktree`（外部隔离环境，不纳入判定）
+- 无 meta / worktree 目录不存在 / 无 `baselineCommit||baseHash` diff base / worktree 无任何交付变更
+
+**"已应用"语义**（修复 2026-07-28：原逻辑只看"worktree 相对 baseline 有无 diff"，导致 cherry-pick/rebase 直接落 main 后归档误报"未 apply 变更"）：
+
+- worktree 相对 baseline 的**交付变更**（tracked + untracked，排除 `.sillyspec/`/`meta.json`）里，哪些还没 byte-identical 落到**主工作区 HEAD**。
+- **tracked**：`git -C worktree diff --no-renames --name-only <mainHead> -- <候选文件>`，比较 worktree 工作区（含未提交）vs main HEAD；空 = 已在 main HEAD。
+- **untracked**：worktree `hash-object` blob vs main `ls-tree HEAD` blob；不等 = 该新文件未在 main HEAD。**HEAD-only，不查 main 工作区未提交副本**（否则依据一份未提交文件，用户 `git clean`/`git reset` 后代码全仓消失 → 误删）。
+- 全部已在 main HEAD → `hasChanges:false` → 自动 cleanup。cherry-pick / rebase / merge / `worktree apply` 四种落地方式都能识别为"已应用"。
+
+**fail-safe**：检测失败 / 拿不准 → 保守 `hasChanges:true`（保留 worktree，防误删未落代码）。
+
+**保守倾向**（非 bug）：main 在落地后又对该文件有**额外已提交改动**（main 跑过头）→ worktree 工作区与 main HEAD 不再 byte-identical → 仍判 pending、保留 worktree，需手动 `sillyspec worktree cleanup <change> --force`。
+
 ## execute 阶段
 
 `execute.js` 的固定前缀第 3 步是“创建 worktree”，prompt 要求运行：
