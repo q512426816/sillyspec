@@ -234,7 +234,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
       if (tier.tier === 'self') {
         console.log('\nℹ️  Stage Review: ' + stageName + ' tier=self（' + tier.reason + '），已降级为当前 agent 自审，不强制独立子代理。')
       } else {
-        const reviewRunId = getLatestStageReviewRunId(runtimeRoot, stageName)
+        const reviewRunId = getLatestStageReviewRunId(runtimeRoot, stageName, changeName)
         const reviewType = stageName === 'brainstorm' ? 'design'
           : stageName === 'plan' ? 'plan'
           : stageName === 'propose' ? 'proposal'

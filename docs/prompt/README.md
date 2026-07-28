@@ -144,7 +144,7 @@ prompt 正文中出现的占位符，运行时由 `outputStep` 替换。下表�
 | `{EXECUTE_RUN_ID}` | 当前 execute run 的固定 ID（从 `.runtime/current-execute-run-id-<change>` 读，无则 `generateExecuteRunId()` 生成并落盘） | execute（每个 Wave 执行步，用于 task review.json 路径） |
 | `{REVIEW_TIER}` | 审查分级：`self`（当前 agent 自审）或 `independent`（强制独立子代理 + review.json）。由 `review-tier.js` 的 `classifyReviewTier({planLevel, designPath})` 按 plan_level / 变更文件数判定 | brainstorm / plan / propose / execute 的 review 步 |
 | `{REVIEW_TIER_REASON}` | 分级理由文案（如 `变更文件 3 ≤ 5` 或 `plan_level=none...`） | 同上 |
-| `{STAGE_REVIEW_RUN_ID}` | stage review 运行 ID（注入到 `{REVIEW_JSON_CONTRACT}` 的路径内） | 同上（经契约块内嵌） |
+| `{STAGE_REVIEW_RUN_ID}` | stage review 运行 ID（从 `.runtime/current-stage-review-run-id-<stage>(-<change>)` 读，无则 `generateStageReviewRunId()` 生成并落盘；注入到 `{REVIEW_JSON_CONTRACT}` 的路径内，保证 prompt 注入的 ID == Stage Review Gate 读取的 ID） | 同上（经契约块内嵌） |
 | `{REVIEW_JSON_CONTRACT}` | `stage-review.js` 的 `renderReviewJsonContract()` 产出的 review.json 产物契约 markdown：含 schema（schemaVersion=1、reviewType、verdicts∈pass/fail/cannot_verify、reviewedFiles、docHash）、完整示例、docHash 算法（主审查文档 sha256）。各阶段主审查文档：brainstorm/execute→design.md，plan→plan.md，propose→proposal.md | 同上 |
 
 > **降级**：当 review-tier / stage-review 注入抛异常时，`{REVIEW_TIER}`→`self`、`{REVIEW_TIER_REASON}`→`分级异常降级 self: <err>`、`{REVIEW_JSON_CONTRACT}`→精简契约提示，避免 prompt 残留裸占位符。

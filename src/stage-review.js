@@ -220,13 +220,45 @@ export function generateStageReviewRunId() {
 }
 
 /**
- * 获取最新的 stage review run id（扫描 stage-reviews/<stage>-review-* 目录取最新）
+ * stage review marker 文件路径（prompt 渲染时写 / getLatestStageReviewRunId 读，同源）。
+ *
+ * 对齐 execute 的 current-execute-run-id-<change> 语义：含 change 防多 change 串台
+ * （同一 stage 不同变更的 review 各自独立 marker）；changeName 缺失时退化为按 stage 分。
  *
  * @param {string} runtimeRoot - .runtime 绝对路径
  * @param {string} stage - brainstorm|plan|propose|execute
+ * @param {string} [changeName] - 变更名（防多 change 串台）
+ * @returns {string} marker 文件绝对路径
+ */
+export function stageReviewMarkerPath(runtimeRoot, stage, changeName) {
+  const suffix = changeName ? `${stage}-${changeName}` : stage
+  return join(runtimeRoot, `current-stage-review-run-id-${suffix}`)
+}
+
+/**
+ * 获取最新的 stage review run id
+ *
+ * 优先读 marker 文件（prompt 渲染 {REVIEW_TIER} 时写入，保证 gate 取的 ID == 注入给 agent
+ * 的 ID —— 修复「prompt 多次渲染 / 多次 review 时 gate 取错 ID 读错 review.json」），
+ * 对齐 getLatestExecuteRunId（task-review.js:420-428）。marker 缺失时 fallback 扫描
+ * stage-reviews/<stage>-review-* 目录取字典序最新（向后兼容无 marker 旧数据）。
+ *
+ * @param {string} runtimeRoot - .runtime 绝对路径
+ * @param {string} stage - brainstorm|plan|propose|execute
+ * @param {string} [changeName] - 变更名（读对应 marker，防多 change 串台）
  * @returns {string|null} run id（如 'review-2026-07-16-143000'），无则 null
  */
-export function getLatestStageReviewRunId(runtimeRoot, stage) {
+export function getLatestStageReviewRunId(runtimeRoot, stage, changeName) {
+  // 优先读 marker（prompt 写 / gate 读同源，对齐 execute current-execute-run-id 机制）
+  try {
+    const markerPath = stageReviewMarkerPath(runtimeRoot, stage, changeName)
+    if (existsSync(markerPath)) {
+      const content = readFileSync(markerPath, 'utf8').trim()
+      if (content) return content
+    }
+  } catch {}
+
+  // fallback：扫描 stage-reviews/<stage>-review-* 目录取字典序最新（向后兼容无 marker 旧数据）
   const dir = join(runtimeRoot, 'stage-reviews')
   if (!existsSync(dir)) return null
   try {

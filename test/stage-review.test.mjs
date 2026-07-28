@@ -19,6 +19,7 @@ import {
   validateStageReview,
   generateStageReviewRunId,
   getLatestStageReviewRunId,
+  stageReviewMarkerPath,
   computeDocHash,
 } from '../src/stage-review.js'
 import { validateReviewSchema, VALID_VERDICTS, REVIEW_SCHEMA_VERSION } from '../src/task-review.js'
@@ -250,6 +251,54 @@ console.log('\n=== 4. validateStageReview（总校验）===\n')
   }))
   const r6 = validateStageReview({ stage: 'plan', reviewType: 'plan', runtimeRoot, reviewRunId: runId, searchDirs: [changeDir] })
   assert(r6.ok && r6.warnings.length > 0, `cannot_verify + 非空证据 → ok + warning`)
+}
+
+// ────────────────────────────────────────────────────────────
+console.log('\n=== 4b. getLatestStageReviewRunId marker 优先 + cross-change 隔离（gap 6）===\n')
+
+{
+  // 1. stageReviewMarkerPath 命名契约（prompt 写 == gate 读，同源 helper）
+  assert(
+    stageReviewMarkerPath(join('rt', 'd'), 'plan', 'mychange') === join(join('rt', 'd'), 'current-stage-review-run-id-plan-mychange'),
+    `stageReviewMarkerPath 含 change: <rt>/current-stage-review-run-id-<stage>-<change>`,
+  )
+  assert(
+    stageReviewMarkerPath(join('rt', 'd'), 'plan') === join(join('rt', 'd'), 'current-stage-review-run-id-plan'),
+    `stageReviewMarkerPath 无 change（changeName 缺省）: <rt>/current-stage-review-run-id-<stage>`,
+  )
+
+  const runtimeRoot = makeTmpDir('srmarker-')
+
+  // 2. 无 marker → fallback 扫目录取字典序最新（向后兼容无 marker 旧数据）
+  mkdirSync(join(runtimeRoot, 'stage-reviews', 'plan-review-2026-01-01-100000'), { recursive: true })
+  mkdirSync(join(runtimeRoot, 'stage-reviews', 'plan-review-2026-01-02-100000'), { recursive: true })
+  const fallback = getLatestStageReviewRunId(runtimeRoot, 'plan')
+  assert(fallback === 'review-2026-01-02-100000', `无 marker → fallback 扫目录取字典序最新`)
+
+  // 3. 有 marker → 优先读 marker。即使 marker 的 ID 比目录旧，也以 marker 为准——
+  //    marker 是 prompt 注入给 agent 的 ID，gate 必须读它（不是目录最新），这才是 gap 6 的修复点
+  const markerFile = stageReviewMarkerPath(runtimeRoot, 'plan')
+  writeFileSync(markerFile, 'review-1999-01-01-000000\n')
+  const byMarker = getLatestStageReviewRunId(runtimeRoot, 'plan')
+  assert(byMarker === 'review-1999-01-01-000000', `有 marker → 优先读 marker（不取目录最新）`)
+
+  // 4. marker 一旦写入即稳定：多次调用返回同一 ID（对齐 execute current-execute-run-id 语义）
+  assert(getLatestStageReviewRunId(runtimeRoot, 'plan') === byMarker, `多次调用读同一 marker（ID 稳定）`)
+}
+
+{
+  // 5. cross-change 隔离：含 change 的 marker 不串台（防多 change 同 stage 互相覆盖）
+  const runtimeRoot = makeTmpDir('srcross-')
+  writeFileSync(stageReviewMarkerPath(runtimeRoot, 'plan', 'changeA'), 'review-aaaa-01-01-000000\n')
+  writeFileSync(stageReviewMarkerPath(runtimeRoot, 'plan', 'changeB'), 'review-bbbb-02-02-000000\n')
+  const a = getLatestStageReviewRunId(runtimeRoot, 'plan', 'changeA')
+  const b = getLatestStageReviewRunId(runtimeRoot, 'plan', 'changeB')
+  assert(a === 'review-aaaa-01-01-000000', `changeA 读自己的 marker（不被 changeB 串台）`)
+  assert(b === 'review-bbbb-02-02-000000', `changeB 读自己的 marker`)
+  assert(a !== b, `两 change marker 互相隔离`)
+
+  // changeName 缺省时退化到无 change marker（向后兼容旧调用方 / 旧测试）
+  assert(getLatestStageReviewRunId(runtimeRoot, 'plan') !== a, `无 changeName 走 stage-only marker / fallback，不误读 changeA`)
 }
 
 // ────────────────────────────────────────────────────────────

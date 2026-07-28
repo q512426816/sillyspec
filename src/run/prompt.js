@@ -472,7 +472,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
   if (['brainstorm', 'plan', 'propose', 'execute'].includes(stageName) && promptText.includes('{REVIEW_TIER}')) {
     try {
       const { classifyReviewTier } = await import('../review-tier.js')
-      const { generateStageReviewRunId, renderReviewJsonContract } = await import('../stage-review.js')
+      const { generateStageReviewRunId, renderReviewJsonContract, stageReviewMarkerPath } = await import('../stage-review.js')
       const tierSpecBase = platformOpts?.specRoot || join(cwd, '.sillyspec')
       const tierChangeDir = changeName ? join(tierSpecBase, 'changes', changeName) : null
       const designPath = tierChangeDir ? join(tierChangeDir, 'design.md') : null
@@ -485,7 +485,21 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
         }
       }
       const tier = classifyReviewTier({ planLevel, designPath })
-      const reviewRunId = generateStageReviewRunId()
+      // reviewRunId：优先读 marker 复用（保证多次渲染 prompt 注入同一 ID == gate 读取的 ID，
+      // 修复「prompt 多次渲染 / 多次 review 时 gate 取错 ID 读错 review.json」），marker 缺失才
+      // generate + 落盘。对齐 execute {EXECUTE_RUN_ID} 段（prompt.js:449-467）。
+      const tierRuntimeRoot = platformOpts?.runtimeRoot || join(tierSpecBase, '.runtime')
+      const reviewRunIdMarker = stageReviewMarkerPath(tierRuntimeRoot, stageName, changeName)
+      let reviewRunId = ''
+      try {
+        if (existsSync(reviewRunIdMarker)) {
+          reviewRunId = readFileSync(reviewRunIdMarker, 'utf8').trim()
+        }
+      } catch {}
+      if (!reviewRunId) {
+        reviewRunId = generateStageReviewRunId()
+        try { mkdirSync(tierRuntimeRoot, { recursive: true }); writeFileSync(reviewRunIdMarker, reviewRunId + '\n') } catch {}
+      }
       // review.json 产物契约(schema + 示例 + docHash 算法 + 重算提示)事前注入,与 validateStageReviewSchema 同源
       const reviewContractMd = renderReviewJsonContract({ stage: stageName, changeDir: tierChangeDir, reviewRunId, tier: tier.tier })
       promptText = promptText

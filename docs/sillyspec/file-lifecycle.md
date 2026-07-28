@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-05-31 11:00:00
-updated_at: 2026-07-27T00:00:00+08:00
+updated_at: 2026-07-28T00:00:00+08:00
 ---
 
 # SillySpec 文件生命周期
@@ -205,4 +205,4 @@ sillyspec doctor --align-execute-progress [--confirm] [--change <name>]
   - **`alignExecuteToPlan` 事实核验**：对齐前调用 `checkExecuteCodeEvidence`，plan 全勾但确证代码零变更时拒绝对齐。
   - **verify 实测对账**（`verify-postcheck.js`）：verify 产物校验通过后，CLI 用 `execSync` 执行 `local.yaml` 的 `commands.test`（10 分钟超时），结果写 `.runtime/verify-runs/<ts>/test-result.json`；自报告 PASS 但实测失败 → 阻断 verify 完成并回滚。未配置 test（或 unavailable）降级 warning 不阻断。
   - **文案修正**：validator 失败提示不再声称 `--skip-approval` 可跳过产物校验（该 flag 只作用于阶段转换/审批检查）；quick 阶段 quicklog 缺失提示同步移除。
-- **Stage Review Gate**（2026-07-16）：brainstorm/plan/propose/execute 的"审查/自检"从当前 agent 自审改为按规模分级。`classifyReviewTier`（`review-tier.js`）按 plan_level=none 或变更文件数 ≤3 判定 tier=self（当前 agent 自审，放行+审计打印），否则 tier=independent（强制独立审查子代理，与执行子代理一样要求独立上下文）。tier=independent 时 done gate 要求 `.runtime/stage-reviews/<stage>-<runId>/review.json` 存在且 verdict 非 fail，由 `stage-review.js` 校验（schema + docHash 真实性重算防伪造 + cannot_verify 必须带 requiredEvidence 的反逃逸），异常 fail-closed 回滚（与 Task Review Gate 一致）。plan 的"审查计划"从生成 step 拆成独立 step（fixedPrefix 2→3 步），消除"生成+自检同一次输出"的 self-review。运行时占位符 `{REVIEW_TIER}`/`{REVIEW_TIER_REASON}`/`{STAGE_REVIEW_RUN_ID}` 由 run/prompt.js（`outputStep`）注入 stage prompt。scanProfile（决定 maxAgentCalls）只在 scan 生效、change-risk-profile 的 P0/P1/P2 只管 apply/verify 证据，都不约束这些阶段的审查方式，故新选 plan_level/文件数维度。
+- **Stage Review Gate**（2026-07-16）：brainstorm/plan/propose/execute 的"审查/自检"从当前 agent 自审改为按规模分级。`classifyReviewTier`（`review-tier.js`）按 plan_level=none 或变更文件数 ≤3 判定 tier=self（当前 agent 自审，放行+审计打印），否则 tier=independent（强制独立审查子代理，与执行子代理一样要求独立上下文）。tier=independent 时 done gate 要求 `.runtime/stage-reviews/<stage>-<runId>/review.json` 存在且 verdict 非 fail，由 `stage-review.js` 校验（schema + docHash 真实性重算防伪造 + cannot_verify 必须带 requiredEvidence 的反逃逸），异常 fail-closed 回滚（与 Task Review Gate 一致）。plan 的"审查计划"从生成 step 拆成独立 step（fixedPrefix 2→3 步），消除"生成+自检同一次输出"的 self-review。运行时占位符 `{REVIEW_TIER}`/`{REVIEW_TIER_REASON}`/`{STAGE_REVIEW_RUN_ID}` 由 run/prompt.js（`outputStep`）注入 stage prompt。scanProfile（决定 maxAgentCalls）只在 scan 生效、change-risk-profile 的 P0/P1/P2 只管 apply/verify 证据，都不约束这些阶段的审查方式，故新选 plan_level/文件数维度。运行时 marker（2026-07-28，gap 6）：prompt 渲染 `{REVIEW_TIER}` 时（`run/prompt.js`）把本次 reviewRunId 落盘到 `.runtime/current-stage-review-run-id-<stage>(-<change>)`（含 change 防多 change 串台，对齐 execute `current-execute-run-id-<change>`，marker 缺失才 `generateStageReviewRunId()` 生成并落盘）；Stage Review Gate（`stage-review.js` `getLatestStageReviewRunId`）优先读该 marker、fallback 扫 `stage-reviews/<stage>-review-*` 目录（向后兼容无 marker 旧数据），保证 gate 取的 ID == prompt 注入给 agent 的 ID，修复「prompt 多次渲染 / 多次 review 时 gate 取错 ID 读错 review.json」。
