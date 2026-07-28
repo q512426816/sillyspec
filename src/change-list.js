@@ -91,6 +91,18 @@ function isPathHeaderCell(c) {
 }
 
 /**
+ * 路径合理性兜底：合法路径必含目录分隔 `/` 或扩展名点；
+ * 两者皆无时仅保留纯 ASCII 单词 token（Dockerfile / Makefile / LICENSE 这类无扩展名文件名），
+ * 丢弃含空格/中文的脏描述（如 design 表格第二列误写的「frontend 组件测试」「后端逻辑」）。
+ * 防止把自由文本当路径计入 fileCount，虚高 review-tier 分级（误推 independent）。
+ */
+function looksLikePath(p) {
+  if (!p) return false
+  if (p.includes('/') || p.includes('.')) return true
+  return /^[\w@-]+$/.test(p)
+}
+
+/**
  * 从 design.md 解析文件变更清单。兼容两种真实写法：
  *   ① 表格：`| 操作 | 文件路径 | 说明 |`（brainstorm 模板默认）
  *   ② 分类列表：`### 新增文件` / `### 修改文件` / `### 不修改文件` 下的 `- path`
@@ -147,6 +159,7 @@ export function parseFileChangeList(designMdPath) {
       // 列定位兜底：取到纯操作词（表头未命中且列顺序异常）→ 跳过，避免把「修改」当路径
       if (/^(新增|修改|删除|重命名|new|modify|update|delete|create|rename)$/i.test(filePath)) continue
       if (isPlaceholder(filePath) || filePath.startsWith('.sillyspec/')) continue
+      if (!looksLikePath(filePath)) continue // 脏描述兜底：丢弃非路径自由文本（防虚高 fileCount）
       result.add(filePath)
       continue
     }
@@ -156,6 +169,7 @@ export function parseFileChangeList(designMdPath) {
     if (listItem) {
       const filePath = normalizePath(listItem[1])
       if (isPlaceholder(filePath) || filePath.startsWith('.sillyspec/')) continue
+      if (!looksLikePath(filePath)) continue // 脏描述兜底
       if (listMode === 'exclude') result.delete(filePath)
       else result.add(filePath)
     }
