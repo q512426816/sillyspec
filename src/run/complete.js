@@ -211,6 +211,23 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
   // execute Wave artifact（W6 Step6c 抽至 complete-handlers.js handleExecuteWaveArtifact）
   await handleExecuteWaveArtifact({ stageName, steps, currentIdx, changeName, specBase, cwd })
 
+  // execute 批量完成检测：plan 全勾 + 代码客观核验通过 → 剩余 step 一次性标 completed，
+  // 使本次 --done 直接进入阶段完成分支（治"3 Wave 做完仍逐次 +1、需重走 7 次 --done"）。
+  // 先按 review.json pass 自动勾 plan checkbox（复用 continueStep 同源逻辑），再判批量条件。
+  if (stageName === 'execute' && changeName) {
+    const _ac = await autoCheckPlanFromReviews({ stageName, changeName, cwd, platformOpts })
+    if (_ac.autoChecked) {
+      console.log(`   ✅ 自动勾选 ${_ac.checkedCount} 个 task checkbox（基于 review.json pass）`)
+    }
+    if (_ac.skippedCount > 0) {
+      console.warn(`   ⚠️ ${_ac.skippedCount} 个 task 未勾（review.json 缺失/fail）→ 批量完成条件不满足，仍按单步推进`)
+    }
+    const _bf = await detectExecuteBatchFinish({ pm, stageName, changeName, cwd, specBase, steps })
+    if (_bf.batched && _bf.aligned > 0) {
+      console.log(`\n🚀 execute 批量完成：plan 全勾 + 代码核验通过，一次性补完 ${_bf.aligned} 个剩余 step → 进入阶段完成分支`)
+    }
+  }
+
   const nextPendingIdx = steps.findIndex(s => s.status === 'pending' || s.status === 'in-progress')
 
   if (nextPendingIdx === -1) {
@@ -349,6 +366,92 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
 }
 
 // ── Step 调度兄弟函数（W6 Step7b-2 从 run.js 搬入：skip/wait/continue + formatWaitHistory）──
+/**
+ * plan.md checkbox 自动勾选：execute 完成 + 各 task review.json 双 verdict 非 fail → 自动勾选。
+ * 治本于"plan 全靠手动勾、易遗漏"——以 review.json pass 为客观依据勾选。供 continueStep 完成段
+ * 与 completeStep 的 execute 批量完成检测复用（避免两处复制）。
+ *
+ * @returns {{autoChecked:boolean, checkedCount:number, skippedCount:number, planTotal:number, planChecked:number}}
+ *   planTotal/planChecked 在调用方于本函数之后用 readPlanCheckboxStatus 重读（勾选已落盘）。
+ */
+async function autoCheckPlanFromReviews({ stageName, changeName, cwd, platformOpts }) {
+  if (stageName !== 'execute' || !changeName) {
+    return { autoChecked: false, checkedCount: 0, skippedCount: 0 }
+  }
+  try {
+    const specBaseLc = platformOpts?.specRoot || join(cwd, '.sillyspec')
+    const changeDir = join(specBaseLc, 'changes', changeName)
+    const planPath = join(changeDir, 'plan.md')
+    const runtimeRoot = platformOpts?.runtimeRoot || join(specBaseLc, '.runtime')
+    const runIdFile = join(runtimeRoot, `current-execute-run-id-${changeName}`)
+    if (!existsSync(planPath) || !existsSync(runIdFile)) {
+      return { autoChecked: false, checkedCount: 0, skippedCount: 0 }
+    }
+    const executeRunId = readFileSync(runIdFile, 'utf8').trim()
+    const planContent = readFileSync(planPath, 'utf8')
+    const { readReview } = await import('../task-review.js')
+    let checkedCount = 0
+    let skippedCount = 0
+    const updated = planContent.replace(/^(\s*[-*]\s*\[)\s(\]\s*task-\d+)/gim, (match, p1, p2) => {
+      const taskNum = match.match(/task-(\d+)/)[1].padStart(2, '0')
+      const reviewPath = join(runtimeRoot, 'execute-runs', executeRunId, 'tasks', `task-${taskNum}`, 'review.json')
+      const r = readReview(reviewPath)
+      if (r.ok && r.review?.specVerdict !== 'fail' && r.review?.qualityVerdict !== 'fail') {
+        checkedCount++
+        return `${p1}x${p2}`   // 勾选
+      }
+      skippedCount++
+      return match              // 不勾
+    })
+    if (checkedCount > 0) {
+      writeFileSync(planPath, updated)
+    }
+    return { autoChecked: checkedCount > 0, checkedCount, skippedCount }
+  } catch {
+    return { autoChecked: false, checkedCount: 0, skippedCount: 0 }
+  }
+}
+
+/**
+ * execute 批量完成检测：plan.md 所有 task checkbox 已勾 + 代码客观核验非零变更 →
+ * 把剩余 pending/in-progress step 一次性标 completed，使 completeStep 本次 --done 即进入阶段完成
+ * 分支（而非逐次 +1）。治"3 Wave 全做完仍显示未开工、需重走 7 次 --done"。
+ * 复用现成能力：readPlanCheckboxStatus（plan 勾选状态）+ checkExecuteCodeEvidence（代码客观核验，
+ * 与 doctor --align-execute-progress 同源，D-002/D-004）。仅在 stageName==='execute' && changeName 触发。
+ *
+ * 安全门：plan 零 checkbox / 未全勾 / 代码零变更（unchanged）均不批量——信任 plan 声明但用代码核验兜底。
+ * @returns {Promise<{batched:boolean, aligned:number, reason?:string}>}
+ */
+async function detectExecuteBatchFinish({ pm, stageName, changeName, cwd, specBase, steps }) {
+  if (stageName !== 'execute' || !changeName) return { batched: false, aligned: 0 }
+  try {
+    const changeDir = join(specBase, 'changes', changeName)
+    const { total: planTotal, checked: planChecked } = pm.readPlanCheckboxStatus(changeDir)
+    if (planTotal === 0) return { batched: false, aligned: 0, reason: 'plan.md 无 task checkbox' }
+    if (planChecked < planTotal) {
+      return { batched: false, aligned: 0, reason: `plan 未全勾（${planChecked}/${planTotal}）` }
+    }
+    // plan 全勾 → 代码客观核验（防 plan 被手动勾伪造导致空完成）
+    const { checkExecuteCodeEvidence } = await import('../stage-contract.js')
+    const evidence = checkExecuteCodeEvidence(cwd, changeName)
+    if (evidence.status === 'unchanged') {
+      return { batched: false, aligned: 0, reason: `代码零变更（${evidence.detail}）` }
+    }
+    const now = new Date().toLocaleString('zh-CN', { hour12: false })
+    let aligned = 0
+    for (const step of steps) {
+      if (step.status === 'pending' || step.status === 'in-progress') {
+        step.status = 'completed'
+        step.completedAt = now
+        aligned++
+      }
+    }
+    return { batched: true, aligned }
+  } catch {
+    return { batched: false, aligned: 0 }
+  }
+}
+
 function formatWaitHistory(step) {
   const answers = Array.isArray(step.waitAnswers) ? step.waitAnswers : []
   if (answers.length === 0) return null
@@ -621,38 +724,13 @@ export async function continueStep(pm, progress, stageName, cwd, answer, options
         console.log(`   ⚠️ 若 worktree 改动还没 apply 到主工作区，先：sillyspec worktree apply ${changeName}`)
         console.log(`   （apply 不需要先 commit，支持 working tree 未提交改动）`)
         // plan.md checkbox auto-check：execute 完成 + review.json pass → 自动勾选（治本，比警告可靠）
-        try {
-          const specBaseLc = platformOpts.specRoot || join(cwd, '.sillyspec')
-          const changeDir = join(specBaseLc, 'changes', changeName)
-          const planPath = join(changeDir, 'plan.md')
-          const runtimeRoot = platformOpts.runtimeRoot || join(specBaseLc, '.runtime')
-          const runIdFile = join(runtimeRoot, `current-execute-run-id-${changeName}`)
-          if (existsSync(planPath) && existsSync(runIdFile)) {
-            const executeRunId = readFileSync(runIdFile, 'utf8').trim()
-            const planContent = readFileSync(planPath, 'utf8')
-            const { readReview } = await import('../task-review.js')
-            let checkedCount = 0
-            let skippedCount = 0
-            const updated = planContent.replace(/^(\s*[-*]\s*\[)\s(\]\s*task-\d+)/gim, (match, p1, p2) => {
-              const taskNum = match.match(/task-(\d+)/)[1].padStart(2, '0')
-              const reviewPath = join(runtimeRoot, 'execute-runs', executeRunId, 'tasks', `task-${taskNum}`, 'review.json')
-              const r = readReview(reviewPath)
-              if (r.ok && r.review?.specVerdict !== 'fail' && r.review?.qualityVerdict !== 'fail') {
-                checkedCount++
-                return `${p1}x${p2}`   // 勾选
-              }
-              skippedCount++
-              return match              // 不勾
-            })
-            if (checkedCount > 0) {
-              writeFileSync(planPath, updated)
-              console.log(`   ✅ 自动勾选 ${checkedCount} 个 task checkbox（基于 review.json pass）`)
-            }
-            if (skippedCount > 0) {
-              console.warn(`   ⚠️ ${skippedCount} 个 task 未勾（review.json 缺失/fail）→ archive 会拦。补 review 后重跑 execute --done 触发自动勾`)
-            }
-          }
-        } catch {}
+        const _ac = await autoCheckPlanFromReviews({ stageName, changeName, cwd, platformOpts })
+        if (_ac.autoChecked) {
+          console.log(`   ✅ 自动勾选 ${_ac.checkedCount} 个 task checkbox（基于 review.json pass）`)
+        }
+        if (_ac.skippedCount > 0) {
+          console.warn(`   ⚠️ ${_ac.skippedCount} 个 task 未勾（review.json 缺失/fail）→ archive 会拦。补 review 后重跑 execute --done 触发自动勾`)
+        }
       }
     }
     return { stageCompleted: true, currentIdx, nextPendingIdx: -1 }
