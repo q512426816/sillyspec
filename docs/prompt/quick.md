@@ -56,7 +56,9 @@
 - 在 `{SPEC_ROOT}/quicklog/QUICKLOG-<git-user>.md` 写入「进行中」条目（含关联变更与预估文件）
 - 对每个关联变更 `<c>`：在 `{SPEC_ROOT}/changes/<c>/tasks.md` 追加未勾选 task `- [ ] <quicklog-id> <任务描述>`
 
-**你不要创建或修改任何 QUICKLOG / tasks.md 记录**——完成本任务时 CLI 会自动将条目翻为「已完成」并勾选 task（含轮转）。`<quicklog-id>` 可用于 design.md / plan.md / archive / 模块变更索引引用。
+**你不要创建或修改任何 QUICKLOG 的条目骨架 / tasks.md 记录**——ql-ID 分配、「进行中」条目、状态翻转、task 勾选、轮转全由 CLI 接管，你无需手写。<quicklog-id> 可用于 design.md / plan.md / archive / 模块变更索引引用。
+
+> ⚠️ 例外：step 3 --done 之后，CLI 落盘的 QUICKLOG 只是简版骨架，**你必须手动精修正文成丰富格式**（标题语义化 + 文件多行带括注 + 四段充实），详见 step 3「QUICKLOG 正文精修」。这是 quick 交付质量的一部分，不可跳过。
 
 ### 输出
 任务理解 + 上下文摘要
@@ -133,7 +135,7 @@ Git 暂存并更新任务记录。
 2. 使用 `git add -- <file...>` 暂存本次 quick 实际修改的文件（不要 commit，由用户通过统一提交工具处理）
    - 禁止使用 `git add -A`
    - 不要暂存 quick 开始前就已存在的无关改动
-3. QUICKLOG / tasks.md 记录由 CLI 在本 step 完成时自动收尾（翻「已完成」+ 勾选 task + 轮转），你无需手动更新
+3. QUICKLOG / tasks.md 记录由 CLI 在本 step 完成时自动收尾（翻「已完成」+ 勾选 task + 轮转），你无需手动建/翻骨架——但**正文精修必做**（见下方「QUICKLOG 正文精修」）
 4. 如果发现项目特有的坑，追加到 `{SPEC_ROOT}/knowledge/uncategorized.md`
 5. 任务比预期复杂 → 建议用完整流程
 
@@ -150,4 +152,16 @@ Git 暂存并更新任务记录。
 
 ### 输出
 暂存确认 + 记录路径 + 模块文档同步结果（如有）
+
+### 📝 QUICKLOG 正文精修（--done 之后必做，不可跳过）
+sillyspec run quick --done 成功后，CLI 已在 {SPEC_ROOT}/quicklog/QUICKLOG-<git-user>.md 落盘本次 <quicklog-id> 条目的简版骨架：状态翻「已完成」、「文件：」是单行逗号路径、正文是 --output 的四字段。骨架是机械产物不达标，你必须立即编辑该条目手动精修成丰富格式，三项必改：
+
+1. 标题：把 ## <quicklog-id> | <时间> | <标题> 中的 <标题> 改为真实需求摘要（如「登录加 IP 限流（5 次/分）+ 失败 3 次滑块验证」）。禁止保留 CLI 兜底的 (quick 任务) 或一句话笼统描述。
+2. 文件：把 CLI 写的单行「文件：a.js, b.js」改写为多行 bullet，每个文件带关键改动括注；禁止「（见实际改动）」或无括注纯路径单行。示例：
+   文件：
+   - backend/app/modules/auth/router.py（登录端点串 check_rate_limit→assert_captcha_if_needed）
+   - backend/app/modules/auth/captcha_service.py（新建：限流 INCR + 失败计数 + Pillow 滑块生成/校验）
+3. 正文：核对 需求： 根因： 方案： 结果： 四段逐项充实（--output 已写、CLI 原样插入，按需扩写），不允许只留一段「结果：」。
+
+一条 quick = 一条独立 ql 条目；精修只动本次 <quicklog-id> 条目，不追加到旧条目。QUICKLOG 在 .sillyspec/（gitignore），精修不影响 --done 已通过的边界审计。
 ````
