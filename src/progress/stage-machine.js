@@ -287,22 +287,25 @@ export class StageMachine {
       }
     }
 
-    // 找到第一个 pending 主流程阶段
+    // 找主流程里第一个「未完成且上游已就绪」的阶段，推荐它作为下一步。
+    // 修两个缺陷（曾导致 brainstorm 完成后误推 archive）：
+    //   ① 原 steps.length>0 要求：plan/execute/verify 首次 run 前惰性未初始化(steps 空)被跳过；
+    //   ② 原 upstream 把 pending 当就绪：archive 的上游 plan/execute/verify 即便 pending 也算 ok。
+    //   叠加 → 循环跳过未初始化的中间阶段，漏到 archive(steps 非空)误推，违反流程顺序。
+    // 改为：不要求 steps(空=该开始了)；upstream 必须全 completed(pending 不算就绪)——
+    // archive 只在 scan/brainstorm/plan/execute/verify 全完成后才可能被推荐。
     for (const s of STAGE_ORDER) {
       const sd = data.stages[s];
-      if (sd && sd.status === 'pending' && sd.steps && sd.steps.length > 0) {
-        // 检查上游是否都 completed
-        const idx = STAGE_ORDER.indexOf(s);
-        const upstream = STAGE_ORDER.slice(0, idx);
-        const upstreamOk = upstream.every(us =>
-          data.stages[us]?.status === 'completed' || !data.stages[us] || data.stages[us].status === 'pending'
-        );
-        if (upstreamOk) {
-          return {
-            text: `可以开始 ${STAGE_LABELS[s] || s}。`,
-            command: `sillyspec run ${s}`,
-          };
-        }
+      if (!sd) continue;
+      if (sd.status === 'completed' || sd.status === 'skipped') continue;
+      const idx = STAGE_ORDER.indexOf(s);
+      const upstream = STAGE_ORDER.slice(0, idx);
+      const upstreamOk = upstream.every(us => data.stages[us]?.status === 'completed');
+      if (upstreamOk) {
+        return {
+          text: `可以开始 ${STAGE_LABELS[s] || s}。`,
+          command: `sillyspec run ${s}`,
+        };
       }
     }
 
