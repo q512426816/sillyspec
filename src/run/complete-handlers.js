@@ -23,7 +23,7 @@
 import { basename, join, resolve, relative, isAbsolute } from 'node:path'
 import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync, unlinkSync, rmSync } from 'node:fs'
 import { renameSyncRetry, writeAtomicSync } from '../fs-atomic.js'
-import { resolveChangeDir, safeGit, auditQuickCompletion, triggerSync } from './shared.js'
+import { resolveChangeDir, safeGit, auditQuickCompletion, triggerSync, isQuickMetadata } from './shared.js'
 import { stageRegistry } from '../stages/index.js'
 import { SCAN_STATUS, POINTER_STATUS } from '../constants.js'
 import { printQuickAuditReview } from './quick-audit.js'
@@ -559,6 +559,9 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
     const gitUser = safeGit(cwd, ['config', 'user.name']).value || 'unknown'
     let qlId = guard?.quicklogId || null
     const linkedChanges = Array.isArray(guard?.linkedChanges) ? guard.linkedChanges : []
+    // 审计结果（仅 guard 存在时填充）。提到 if(guard) 外声明，供下方回填 QUICKLOG 文件行复用
+    // review.changedFiles；brownfield 无 guard 时保持 null → 文件行不回填（降级，不报错）。
+    let review = null
 
     // 审计：仅在有 guard 时跑（brownfield 无 guard 跳过，兼容 D-003 brownfield 行为）。
     if (guard) {
@@ -570,7 +573,7 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
         forceBaseline: guard.forceBaseline || isForceBaseline,
         allowNew: guard.allowNew || isAllowNew,
       }
-      const review = await auditQuickCompletion(cwd, mergedGuard, { isConfirm: confirm })
+      review = await auditQuickCompletion(cwd, mergedGuard, { isConfirm: confirm })
       printQuickAuditReview(review)
       if (review.status === 'blocked') {
         steps[currentIdx].status = 'pending'
@@ -632,9 +635,15 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
     // 翻状态进行中→已完成 + 追加结果 + 勾选关联 tasks.md
     // resultText 不再截断：结构化结果块（需求/根因/方案/结果）完整落盘，多行写成字段化块。
     try {
+      // 回填实际改动文件：review.changedFiles 含 quick 自身元数据（quicklog/.runtime/modules 等），
+      // 用 isQuickMetadata 过滤掉，只留真实业务文件。brownfield 无 review → 空数组，文件行不动。
+      const realFiles = Array.isArray(review?.changedFiles)
+        ? review.changedFiles.filter(f => !isQuickMetadata(f, linkedChanges))
+        : []
       await completeQuicklogEntry(specBase, gitUser, qlId, {
         resultText: outputText || '',
         linkedChanges,
+        changedFiles: realFiles,
       })
       console.log(`📝 QUICKLOG 条目 ${qlId} 已标记完成`)
     } catch (e) {

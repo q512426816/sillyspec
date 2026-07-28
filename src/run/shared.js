@@ -189,6 +189,38 @@ export function parsePorcelainPath(line) {
 }
 
 /**
+ * quick 自身写入的 .sillyspec/ 元数据判定（auditQuickCompletion 审计 与 QUICKLOG「文件：」行回填
+ * 单源）。回填文件行时复用：review.changedFiles 含这些元数据时过滤掉，只留真实业务文件。
+ *
+ * 归类口径：
+ * - quicklog/.runtime/modules/_module-map/knowledge-uncategorized 等 quick 自身产物 → 元数据
+ * - .sillyspec/changes/：quick 自己没有该目录，其下文件要么是关联变更（reverse-sync），
+ *   要么是并发他者会话的工作。非关联变更目录整体视为元数据放行；关联变更文件不算（属本 quick 真实改动）
+ *
+ * 「并发工作 vs 偷建变更」的意图软判定留给 sillyhub，确定性校验只做路径归类。
+ *
+ * @param {string} p 文件路径（容错 \\ / 混用）
+ * @param {string[]} [linkedChanges] 关联变更名列表（影响 changes/ 归类）
+ * @returns {boolean} true=quick 元数据，应从业务文件列表过滤掉
+ */
+export function isQuickMetadata(p, linkedChanges = []) {
+  const normalizeGitPath = (x) => String(x).replace(/\\/g, '/')
+  const file = normalizeGitPath(p)
+  if (file.startsWith('.sillyspec/quicklog/')
+    || file.startsWith('.sillyspec/.runtime/')
+    || file === '.sillyspec/knowledge/uncategorized.md'
+    || (/^\.sillyspec\/docs\/[^/]+\/modules\/[^/]+\.md$/.test(file))
+    || (/^\.sillyspec\/docs\/[^/]+\/modules\/_module-map\.yaml$/.test(file))) return true
+  if (file.startsWith('.sillyspec/changes/')) {
+    const linkedChangeNames = new Set((Array.isArray(linkedChanges) ? linkedChanges : []).map(c => normalizeGitPath(c)))
+    const m = file.match(/^\.sillyspec\/changes\/([^/]+)(\/|$)/)
+    // bare 折叠 token（git 把全新未跟踪 changes/ 折叠成 `changes/`）或具体但非关联的变更 → 放行
+    if (!m || !linkedChangeNames.has(m[1])) return true
+  }
+  return false
+}
+
+/**
  * quick 完成审计：对比 baseline 与实际变更。
  * @returns {{ status: 'safe'|'warning'|'blocked', reasons: string[], changedFiles: string[], newFiles: string[], deletedFiles: string[], baselineHit: string[] }}
  */
@@ -214,26 +246,6 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
     const isBaselineFile = (p) => {
       const f = normalizeGitPath(p)
       return baselineExact.has(f) || baselineDirs.some(d => f.startsWith(d))
-    }
-    // quick 自己没有 .sillyspec/changes/ 目录——该路径下任何文件要么是关联变更（reverse-sync），
-    // 要么是并发其他会话的变更工作。多会话并行时别人的 changes/ 不应被本 quick 审计拦截
-    // （确定性校验无法区分「并发工作」与「本 quick 偷建变更」，后者这类意图软判定留给 sillyhub）。
-    // 故：非关联变更目录整体放行；关联变更的文件仍走正常审计（reverse-sync 可见，需 --force-baseline）。
-    const linkedChangeNames = new Set((Array.isArray(guard.linkedChanges) ? guard.linkedChanges : []).map(c => normalizeGitPath(c)))
-    const isQuickMetadata = (p) => {
-      const file = normalizeGitPath(p)
-      if (file.startsWith('.sillyspec/quicklog/')
-        || file.startsWith('.sillyspec/.runtime/')
-        || file === '.sillyspec/knowledge/uncategorized.md'
-        || (/^\.sillyspec\/docs\/[^/]+\/modules\/[^/]+\.md$/.test(file))
-        || (/^\.sillyspec\/docs\/[^/]+\/modules\/_module-map\.yaml$/.test(file))) return true
-      // .sillyspec/changes/ 下：bare 折叠 token（git 把全新未跟踪 changes/ 折叠成 `changes/`）
-      // 或具体但【非关联】的变更 → 都属并发其他会话工作，放行；关联变更文件仍走审计。
-      if (file.startsWith('.sillyspec/changes/')) {
-        const m = file.match(/^\.sillyspec\/changes\/([^/]+)(\/|$)/)
-        if (!m || !linkedChangeNames.has(m[1])) return true
-      }
-      return false
     }
     const DANGEROUS_PATTERNS = [
       'package.json',
@@ -269,7 +281,7 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
       }
 
       // 检查危险文件（除非 force-baseline）
-      if (file.startsWith('.sillyspec/') && !isQuickMetadata(file) && !forceBaseline) {
+      if (file.startsWith('.sillyspec/') && !isQuickMetadata(file, guard.linkedChanges) && !forceBaseline) {
         result.reasons.push(`危险文件变更: ${file}`)
       }
 
@@ -293,7 +305,7 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
     // 检查 new files（除非 allow-new）
     if (!allowNew) {
       for (const f of result.newFiles) {
-        if (!isQuickMetadata(f)) {
+        if (!isQuickMetadata(f, guard.linkedChanges)) {
           result.reasons.push(`新增文件（需 --allow-new）: ${f}`)
         }
       }
@@ -302,7 +314,7 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
     // 检查 allowedFiles 范围
     if (allowedFiles.length > 0) {
       for (const f of result.changedFiles) {
-        if (!allowedFiles.includes(f) && !isQuickMetadata(f)) {
+        if (!allowedFiles.includes(f) && !isQuickMetadata(f, guard.linkedChanges)) {
           result.reasons.push(`超出 allowedFiles: ${f}`)
         }
       }

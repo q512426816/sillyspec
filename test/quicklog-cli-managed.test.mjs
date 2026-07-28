@@ -28,6 +28,7 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 
 import { allocateQuicklogEntry, completeQuicklogEntry, findQuicklogEntry, withFileLock } from '../src/quicklog.js'
+import { isQuickMetadata } from '../src/run/shared.js'
 
 const execFileP = promisify(execFile)
 
@@ -118,6 +119,68 @@ console.log('\n--- 验收 2：completeQuicklogEntry 完成态 ---')
   await completeQuicklogEntry(specBase, 'bob', 'ql-99999999-999-zzzz', { resultText: 'x', linkedChanges: [] })
   const after = readFileSync(join(specBase, 'quicklog', 'QUICKLOG-bob.md'), 'utf8')
   assert(after === before, '完成不存在的 qlId 不修改文件、不抛错')
+}
+
+// ─────────────────────────────────────────
+// 验收 2b：completeQuicklogEntry 回填「文件：」行（实际改动文件）
+// 治「文件：（见实际改动）」默认偷懒坑：CLI 在 quick 收尾时把 audit 算出的实际文件回填进条目。
+// complete-handlers 用 isQuickMetadata 过滤元数据后传 changedFiles（本测模拟已过滤列表）。
+// ─────────────────────────────────────────
+console.log('\n--- 验收 2b：completeQuicklogEntry 回填文件行 ---')
+{
+  const specBase = makeTmpDir('qlm-files-')
+  // 启动不传预估文件 → 文件行默认「（见实际改动）」
+  const r = await allocateQuicklogEntry(specBase, 'dave', { description: '回填我', allowedFiles: [] })
+  let log = readFileSync(join(specBase, 'quicklog', 'QUICKLOG-dave.md'), 'utf8')
+  assert(log.includes('文件：（见实际改动）'), '启动时文件行为默认占位')
+
+  // 收尾传实际文件（已过滤元数据，模拟 complete-handlers 调用）→ 文件行回填
+  await completeQuicklogEntry(specBase, 'dave', r.qlId, {
+    resultText: '需求：x\n根因：y\n方案：z\n结果：w',
+    linkedChanges: [],
+    changedFiles: ['src/login.js', 'src/login.test.js'],
+  })
+  log = readFileSync(join(specBase, 'quicklog', 'QUICKLOG-dave.md'), 'utf8')
+  assert(log.includes('文件：src/login.js, src/login.test.js'), '文件行回填为实际改动文件')
+  assert(!log.includes('文件：（见实际改动）'), '默认占位被替换掉')
+  assert(log.includes('状态：已完成'), '状态仍正常翻转')
+  assert(log.includes('结果：w'), '结果块仍正常追加')
+
+  // 不传 changedFiles → 文件行不动（向后兼容：旧调用方 / brownfield / changedFiles 空）
+  const r2 = await allocateQuicklogEntry(specBase, 'dave', { description: '不改我', allowedFiles: [] })
+  await completeQuicklogEntry(specBase, 'dave', r2.qlId, { resultText: 'done', linkedChanges: [] })
+  log = readFileSync(join(specBase, 'quicklog', 'QUICKLOG-dave.md'), 'utf8')
+  assert(log.includes('文件：（见实际改动）'), '不传 changedFiles 时文件行保持默认（向后兼容）')
+}
+
+// ─────────────────────────────────────────
+// 验收 2c：isQuickMetadata 过滤口径（complete-handlers 回填前用它过滤 review.changedFiles）
+// 与 auditQuickCompletion 单源（shared.js export）。确认 quick 自身元数据被过滤、业务文件保留。
+// ─────────────────────────────────────────
+console.log('\n--- 验收 2c：isQuickMetadata 过滤口径 ---')
+{
+  const linked = ['my-change']
+  // quick 自身元数据 → true（回填时过滤掉）
+  assert(isQuickMetadata('.sillyspec/quicklog/QUICKLOG-x.md', linked), 'quicklog 元数据')
+  assert(isQuickMetadata('.sillyspec/.runtime/quick-sessions/x/guard.json', linked), 'runtime 元数据')
+  assert(isQuickMetadata('.sillyspec/docs/proj/modules/core.md', linked), '模块文档元数据')
+  assert(isQuickMetadata('.sillyspec/docs/proj/modules/_module-map.yaml', linked), 'module-map 元数据')
+  assert(isQuickMetadata('.sillyspec/knowledge/uncategorized.md', linked), 'knowledge-uncategorized 元数据')
+  // 非关联 changes/ → true（并发他者会话工作，放行）
+  assert(isQuickMetadata('.sillyspec/changes/other-change/design.md', linked), '非关联 changes/ 放行')
+  assert(isQuickMetadata('.sillyspec/changes/', linked), 'changes/ 折叠 token 放行')
+  // 关联 changes/ → false（本 quick 真实改动，reverse-sync 可见，不算元数据）
+  assert(!isQuickMetadata('.sillyspec/changes/my-change/design.md', linked), '关联 changes/ 不算元数据')
+  // 业务文件 → false（保留）
+  assert(!isQuickMetadata('src/login.js', linked), '业务文件保留')
+  assert(!isQuickMetadata('package.json', linked), '业务文件保留（危险文件判定另走 audit DANGEROUS_PATTERNS）')
+  // 路径分隔符容错（Windows \）
+  assert(isQuickMetadata('.sillyspec\\quicklog\\QUICKLOG-x.md', linked), '反斜杠路径同样识别为元数据')
+
+  // 模拟 complete-handlers 的过滤：review.changedFiles 混入元数据 → 只留业务文件
+  const reviewFiles = ['src/a.js', '.sillyspec/quicklog/QUICKLOG-x.md', 'src/b.js', '.sillyspec/.runtime/x.json']
+  const realFiles = reviewFiles.filter(f => !isQuickMetadata(f, []))
+  assert(JSON.stringify(realFiles) === JSON.stringify(['src/a.js', 'src/b.js']), '过滤后只留业务文件')
 }
 
 // ─────────────────────────────────────────

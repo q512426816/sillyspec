@@ -215,7 +215,7 @@ async function checkTaskCheckbox(specBase, change, qlId) {
 // 可能是 CRLF，split('\n') 后每行带 \r。原代码 `lines[i] === '状态：进行中'` 精确匹配
 // 恒失败 → 走 splice「兜底插入」→ 条目内同时出现「状态：已完成」+「状态：进行中」。
 // 状态行匹配与「已完成」判断统一用行首前缀匹配，容忍行尾 \r；写入保持 CRLF 不扩大改动。
-function flipEntryInContent(content, qlId, result) {
+function flipEntryInContent(content, qlId, result, changedFiles = []) {
   const lines = content.split('\n')
   const startIdx = lines.findIndex(l => l.startsWith(`## ${qlId} |`))
   if (startIdx === -1) return null
@@ -228,6 +228,12 @@ function flipEntryInContent(content, qlId, result) {
   for (let i = startIdx + 1; i < endIdx; i++) {
     if (/^状态：进行中\r?$/.test(lines[i])) { lines[i] = '状态：已完成'; flipped = true }
     if (lines[i].startsWith('结果：')) hasResult = true
+    // 回填实际改动文件（调用方已用 isQuickMetadata 过滤 quick 自身元数据，只留业务文件）。
+    // 原地替换 lines[i]，不改数组长度 → 与下方状态/结果 splice 的索引完全解耦。
+    // changedFiles 空（brownfield 无 guard / 调用方未传）→ 不动文件行，保持「（见实际改动）」。
+    if (changedFiles.length > 0 && lines[i].startsWith('文件：')) {
+      lines[i] = `文件：${changedFiles.join(', ')}`
+    }
   }
   if (!flipped && !lines.slice(startIdx, endIdx).some(l => /^状态：已完成\r?$/.test(l))) {
     // 无状态行（异常），插一条已完成
@@ -297,11 +303,13 @@ export async function allocateQuicklogEntry(specBase, gitUser, { description, li
 /**
  * 翻某 qlId 条目为「已完成」+ 追加结果 + 勾选关联 tasks.md。持锁。
  */
-export async function completeQuicklogEntry(specBase, gitUser, qlId, { resultText = '', linkedChanges = [] } = {}) {
+export async function completeQuicklogEntry(specBase, gitUser, qlId, { resultText = '', linkedChanges = [], changedFiles = [] } = {}) {
   const quicklogDir = join(specBase, 'quicklog')
   const lockPath = join(quicklogDir, `.QUICKLOG-${(gitUser || 'unknown')}.md.lock`)
   const result = sanitizeResult(resultText)
   const linked = Array.isArray(linkedChanges) ? linkedChanges : []
+  // 实际改动文件（调用方 complete-handlers 已用 isQuickMetadata 过滤 quick 自身元数据）。空 → 不动文件行。
+  const realFiles = Array.isArray(changedFiles) ? changedFiles.filter(Boolean) : []
 
   await withFileLock(lockPath, async () => {
     // 条目可能在主文件或轮转归档中
@@ -309,7 +317,7 @@ export async function completeQuicklogEntry(specBase, gitUser, qlId, { resultTex
       const filePath = join(quicklogDir, f)
       let content = ''
       try { content = readFileSync(filePath, 'utf8') } catch { continue }
-      const updated = flipEntryInContent(content, qlId, result)
+      const updated = flipEntryInContent(content, qlId, result, realFiles)
       if (updated !== null) {
         await writeAtomic(filePath, updated) // 命中处原子落盘（只改含目标条目的那一个文件）
         break
