@@ -183,16 +183,20 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
     }
   }
 
-  // --- 4.5 校验：主工作区 baseline 是否变化（防 execute 期间主工作区被修改）---
-  // 注意：必须和 computeBaselineHash (worktree.js) 使用相同的排除规则。
+  // --- 4.6 显式 --merge：用户显式选择 git merge 兜底（主干已提交推进重叠时的三方合并） ---
+  // 触发点从「4.5 baseline 漂移自动降级」改为「用户显式 --merge flag」（D-001 保留，触发方式变化）。
+  // 用 --merge 时跳过未提交 dirty 拦截——merge 同样要求工作区相对干净，此处仅提示风险，真正失败由 applyByMerge 报告。
+  if (merge && !checkOnly) {
+    return applyByMerge(result, changeName, projectRoot, wm);
+  }
+
+  // --- 4.5 校验：主工作区是否有「未提交」脏改动（未提交 dirty 是 git apply --3way 危险区，必须拦）---
+  // 分工：4.5（整树 baselineHash）+ 5a（脏∩changedFiles）挡「未提交」dirty；5b 管「已提交」HEAD 分叉（已放宽，见下）。
+  // 实测：主干未提交 dirty 时，git apply --3way 报 `does not match index` 且行为不一致（可能报错/可能半应用，
+  // 哪怕脏文件与 patch 不重叠）——这是 git 硬约束，故此处友好拦截，引导用户先 commit/stash。
   // 排除非交付物的元数据/文档 churn（execute 自身改的 + 多操作者常改的 agent 指引/文档），
   // 否则别人改 CLAUDE.md/docs/.claude → 整树 hash 变 → apply 误阻断（多操作者仓库高频踩坑）。
-  // 安全：放过它们不丢真冲突——下方 step5a(未提交∩changedFiles)+step5b(HEAD blob) 对交付文件
-  // 做精确 per-file 校验，不读这里的 exclude。
-  //   - .sillyspec/：plan/design 蓝图 + runtime 产物
-  //   - .claude/：agent 配置/skills/CLAUDE.md
-  //   - docs/：文档（deliverable 文档冲突由 step5a/5b 兜底）
-  //   - CLAUDE.md：根 agent 指引
+  // 注意：必须和 computeBaselineHash (worktree.js) 使用相同的排除规则。
   if (meta.baselineHash) {
     const exclude = '-- . ":(exclude).sillyspec/" ":(exclude).claude/" ":(exclude)docs/" ":(exclude)CLAUDE.md"';
     const staged = gitQuiet(projectRoot, `diff --cached ${exclude}`) || '';
@@ -201,13 +205,15 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
     const raw = `staged:${staged}\nunstaged:${unstaged}\nuntracked:${untracked}`;
     const currentHash = createHash('sha256').update(raw).digest('hex').slice(0, 16);
     if (currentHash !== meta.baselineHash) {
-      if (merge && !checkOnly) {
-        // baseline 漂移 + --merge 降级（D-001）：跳过步骤 5-7（patch 路径），走 git merge
-        return applyByMerge(result, changeName, projectRoot, wm);
-      }
+      // 未提交 dirty 拦截：列脏文件 + 指引先 commit/stash（git --3way 对 dirty 工作区不稳，merge 同理，故不再提 --merge）
+      const dirtyFiles = [...new Set(
+        ((gitQuiet(projectRoot, 'diff --name-only HEAD') || '').split('\n').filter(Boolean))
+          .concat((gitQuiet(projectRoot, 'ls-files --others --exclude-standard') || '').split('\n').filter(Boolean))
+      )].filter(f => !f.startsWith('.sillyspec/') && f !== 'meta.json');
       result.errors.push(
-        `主工作区 baseline 已变化（execute 前后不一致），不能直接 apply task.patch。\n` +
-        `建议：重新创建 worktree，或用 --merge 降级（git merge sillyspec/${changeName} 替代 patch，会引入合并提交）。\n` +
+        `主工作区有未提交的改动（execute 前后 baseline 不一致），git apply 无法安全应用。\n` +
+        (dirtyFiles.length > 0 ? `未提交文件：\n  ${dirtyFiles.join('\n  ')}\n` : '') +
+        `请先提交或暂存这些改动，再重新 apply：\n  git add -A && git commit -m "..."   或   git stash\n` +
         `execute 前 baseline: ${meta.baselineHash}\n` +
         `当前 baseline: ${currentHash}`
       );
@@ -233,6 +239,10 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
   // 5b. 对比 worktree 的 baseHash 和主工作区 HEAD 中每个清单文件的 blob hash
   // 批量化：两次 ls-tree（worktree 的 baseHash + 主仓库 HEAD）各建一张 path→hash Map，
   // 替代 per-file getFileBlobHash × 2（原 2N spawn → 固定 2）。语义等价见 getBlobHashMap。
+  // 放宽（2026-07）：blob 不一致不再 BLOCKED——它意味着主干「已提交」推进改了同文件，
+  // 而 git apply --3way 能自动三路合并这种场景（不同区域直接合，同区域留冲突标记）。
+  // 故仅记录为风险提示（hashMismatchFiles → assess WARNING / summary 展示），放行交 step7 --3way 实测。
+  // 真重叠时 --3way 冲突，由 step7 回滚并提示 --merge 兜底。
   const targetFiles = hasAllowList ? [...allowSet] : changedFiles;
   const wtHashMap = getBlobHashMap(worktreePath, baseHash, targetFiles);
   const mainHashMap = getBlobHashMap(projectRoot, 'HEAD', targetFiles);
@@ -244,15 +254,8 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
     if (wtBlob === null && mainBlob === null) continue;
     // 两者一致 → OK
     if (wtBlob === mainBlob) continue;
-    // 不一致 → 主工作区已被修改
+    // 不一致 → 主干已提交推进改了此文件，记风险提示（不拦截，交 --3way）
     result.hashMismatchFiles.push(f);
-  }
-
-  if (result.hashMismatchFiles.length > 0) {
-    result.errors.push(
-      `base hash 不一致：以下文件在主工作区已被修改：\n  ${result.hashMismatchFiles.join('\n  ')}`
-    );
-    return result;
   }
 
   // --- 6. checkOnly 模式：到此返回 ---
@@ -323,19 +326,33 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
 
     writeFileSync(patchPath, patchContent);
 
-    // apply --check 预检
-    try {
-      git(projectRoot, `apply --check ${patchPath}`);
-    } catch (e) {
-      result.errors.push(`patch 预检失败: ${e.message}`);
-      return result;
-    }
+    // apply --check 预检失败不再拦截（--check 只测 clean apply，--3way 能处理 clean apply 失败的
+    // 三路合并场景——主干已提交推进时 --check 恒失败但 --3way 可合）。故跳过 --check，直接试 --3way。
 
-    // apply --3way 正式应用
+    // 回滚准备：记录 patch 涉及的 tracked 文件（--3way 冲突后需恢复 HEAD 版，不留半成品冲突标记）。
+    // tracked 文件冲突 → git checkout -- <f> 还原；untracked 新建文件（--3way 不会对其冲突）不在回滚范围，
+    // 但若 --3way 部分成功后冲突，已创建的新文件需删，故记录 untracked 集合。
+    const trackedPatchFiles = patchFiles.filter(f => {
+      // 该文件在主仓库 HEAD 存在 → 是 tracked（--3way 冲突时留标记需 checkout 还原）
+      return gitQuiet(projectRoot, `cat-file -e HEAD:${f}`) === null ? false : true;
+    });
+    const newPatchFiles = patchFiles.filter(f => !trackedPatchFiles.includes(f));
+
+    // apply --3way 正式应用（主干已提交推进时自动三路合并）
     try {
       git(projectRoot, `apply --3way ${patchPath}`);
     } catch (e) {
-      result.errors.push(`patch apply 失败: ${e.message}`);
+      // --3way 冲突（exit 1，工作区已留冲突标记）：回滚到 apply 前干净状态，不留半成品
+      const rollback = rollbackApply(projectRoot, trackedPatchFiles, newPatchFiles);
+      result.errors.push(
+        `apply --3way 冲突：以下文件与主干「已提交」推进重叠，无法自动合并：\n` +
+        `  ${rollback.conflicts.length > 0 ? rollback.conflicts.join('\n  ') : '(未能获取冲突文件列表)'}\n` +
+        `已回滚工作区到 apply 前状态（无半成品冲突标记）。\n` +
+        `可选：用 --merge 自动三方合并兜底（git merge sillyspec/${changeName}，会引入合并提交）：\n` +
+        `  sillyspec worktree apply ${changeName} --merge\n` +
+        `或手动解决后重试。`
+      );
+      if (rollback.error) result.warnings = (result.warnings || []).concat([`回滚警告: ${rollback.error}`]);
       return result;
     }
 
@@ -358,6 +375,40 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
   }
 
   return result;
+}
+
+/**
+ * 回滚 --3way 冲突后的工作区到 apply 前状态（不留半成品冲突标记）。
+ * tracked 文件：git checkout -- <f> 还原 HEAD 版（清除冲突标记）。
+ * 新文件（apply 前不存在）：删除（--3way 可能部分创建）。
+ * @param {string} projectRoot
+ * @param {string[]} trackedFiles 主仓库 HEAD 已存在、patch 触及的文件
+ * @param {string[]} newFiles apply 前不存在、patch 可能新建的文件
+ * @returns {{ conflicts: string[], error: string|null }} conflicts=冲突文件列表
+ */
+function rollbackApply(projectRoot, trackedFiles, newFiles) {
+  let error = null;
+  // 冲突文件：git status 里带冲突标记（UU/AA 等）的文件
+  let conflicts = [];
+  try {
+    const unmerged = gitQuiet(projectRoot, 'diff --name-only --diff-filter=U') || '';
+    conflicts = unmerged.split('\n').filter(Boolean);
+  } catch {}
+  // 回滚 tracked 文件到 HEAD（强制从 HEAD 还原——--3way 冲突标记同时污染工作区和 index，
+  // `checkout -- f` 从 index 还原会拿到冲突版，必须 `checkout HEAD -- f` 才能还原干净）
+  for (const f of trackedFiles) {
+    try { gitQuiet(projectRoot, `checkout HEAD -- ${f}`); } catch (e) { error = (error ? error + '; ' : '') + `checkout ${f}: ${e.message}`; }
+  }
+  // 删除 --3way 可能新建的文件（apply 前不存在）
+  for (const f of newFiles) {
+    try {
+      const p = join(projectRoot, f);
+      if (existsSync(p)) unlinkSync(p);
+    } catch (e) { error = (error ? error + '; ' : '') + `delete ${f}: ${e.message}`; }
+  }
+  // 兜底：若 index 处于 unmerged 状态，重置 index（不影响工作区已还原的文件）
+  try { gitQuiet(projectRoot, 'reset --quiet'); } catch {}
+  return { conflicts, error };
 }
 
 /**

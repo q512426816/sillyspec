@@ -42,7 +42,7 @@ AI 子代理在执行任务时会在 worktree 中修改源码，而非直接在�
 - 在目录内生成 `meta.json` 记录元数据（分支名、base hash、创建时间等）
 - 如果 worktree 已存在则报错，提示先执行 cleanup
 
-### `sillyspec worktree apply <change-name> [--check-only]`
+### `sillyspec worktree apply <change-name> [--check-only] [--merge]`
 
 将 worktree 中的变更合入主工作区。
 
@@ -51,6 +51,12 @@ AI 子代理在执行任务时会在 worktree 中修改源码，而非直接在�
 - `--check-only` 只输出检查结果，不实际 apply
 - 校验通过后生成 patch 并 3-way apply 到主工作区
 - apply 成功后自动清理 worktree
+- `--merge`：显式用 `git merge sillyspec/<change>` 三方合并兜底（引合并提交），用于 `--3way` 冲突场景
+
+**主干推进时的行为（2026-07 放宽）**：
+
+- 主干**已提交**推进（如 quick 改完 commit）→ `--3way` 自动三路合并：不同文件/不同区域干净合，同区域重叠 → 回滚工作区干净 + 提示 `--merge` 兜底，不留半成品冲突标记。
+- 主干**未提交** dirty（如 quick 改了没 commit）→ apply 拒绝，列出脏文件并引导先 `commit`/`stash`（实测 git `--3way`/`merge` 对未提交 dirty 工作区均不稳，必须拦）。
 
 **文件变更清单解析：** 从 `.sillyspec/changes/<change-name>/design.md` 中的 `## 文件变更清单` 表格提取。
 
@@ -217,13 +223,20 @@ git worktree prune
 git branch -D sillyspec/<change-name>
 ```
 
-### apply 失败：base hash 不一致
+### apply 失败：主工作区有未提交的改动
 
-说明主工作区在 worktree 创建后又被修改过。处理方式：
+说明主工作区有未 commit 的脏改动（step 4.5/5a 拦截）。处理方式：
 
-1. 检查主工作区的变更：`git diff`
-2. 如果主工作区变更不重要 → `git stash` 后重试 apply
-3. 如果重要 → 手动解决冲突
+1. 检查主工作区的变更：`git diff`（报错会列出脏文件）
+2. 提交它们：`git add -A && git commit -m "..."`（推荐——已提交推进可被 `--3way` 自动合并）
+3. 或暂存：`git stash`，apply 后 `git stash pop`
+
+### apply 失败：--3way 冲突（已提交推进重叠）
+
+说明主干**已提交**推进与本变更改了同一文件的同一区域，`--3way` 无法自动合并。apply 已自动回滚工作区（无半成品冲突标记）。处理方式：
+
+1. 用 `--merge` 三方合并兜底：`sillyspec worktree apply <change-name> --merge`（引入合并提交）
+2. 或手动解决后重试
 
 ### apply 失败：文件清单校验不通过
 

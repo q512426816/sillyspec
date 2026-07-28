@@ -38,7 +38,8 @@ worktree 模块提供基于 git worktree 的分支隔离机制，让每个变更
 ### src/worktree-apply.js
 | 函数/常量 | 说明 | 参数 |
 |-----------|------|------|
-| `applyWorktree(changeName, { cwd, checkOnly?, merge? })` | 将 worktree 变更应用到主工作区；baseline 漂移且 `merge=true` 时走 git merge 降级（D-001） | `changeName, { cwd, checkOnly?, merge? }` |
+| `applyWorktree(changeName, { cwd, checkOnly?, merge? })` | 将 worktree 变更应用到主工作区；主干**已提交**推进交 `--3way` 自动三路合并，未提交 dirty 拦截引导 commit/stash；`merge=true` 显式走 git merge 兜底（D-001） | `changeName, { cwd, checkOnly?, merge? }` |
+| `rollbackApply(projectRoot, trackedFiles, newFiles)` | `--3way` 冲突后回滚工作区到 apply 前状态（checkout HEAD 还原 tracked + 删新建），不留半成品冲突标记 | `projectRoot, trackedFiles, newFiles` |
 
 ### src/worktree-deps.js
 | 函数/常量 | 说明 | 参数 |
@@ -82,7 +83,7 @@ execute 验证硬门（`run.js completeStep` execute 分支）读 `depsStatus`�
 | git worktree 而非 git stash/cherry-pick | 物理隔离，支持同时多变更并行 | git stash |
 | meta.json 存储元数据（含 depsStatus） | 独立于 git，便于快速查询 | git config |
 | sillyspec/ 前缀的分支命名 | 避免与功能分支冲突 | 无前缀 |
-| 补丁方式应用而非 merge（默认） | 保持线性历史，避免合并提交；baseline 漂移时可用 `apply --merge` 显式降级走 git merge（D-002，会引入合并提交，仅作 opt-in 不改默认） | git merge |
+| 补丁方式应用（`git apply --3way`）而非 merge（默认） | 保持线性历史，避免合并提交。主干**已提交**推进由 `--3way` 自动三路合并；未提交 dirty 拦截引导 commit/stash（git 危险区）；`--3way` 同区域重叠冲突时回滚干净 + 提示 `apply --merge` 显式兜底（D-002，引合并提交，opt-in） | git merge |
 | cleanup 支持 force 参数 | worktree 可能处于异常状态 | 仅允许正常清理 |
 | 依赖供给：junction 快路径 + install 兜底 | lockfile 一致时瞬时复用主 checkout 依赖，否则安装 | 每次全量 install / 只 warn |
 | 验证硬门（blocked + exit 1） | 依赖未就绪不得声称 verified，靠代码级门保证 | prompt 软约束（已证失效） |

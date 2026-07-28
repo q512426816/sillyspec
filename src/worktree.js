@@ -138,10 +138,11 @@ function printSyncReport(diag, baseHash, changeName) {
   const ch = changeName || '<change>';
   if (diag.status === 'behind') {
     console.log(`⚠️  base 同步检测：落后 origin/${b} ${diag.behind} 个 commit（base ${short}）`);
-    console.log(`    execute 期间若主仓库对齐 main，apply 回来可能冲突。建议先对齐：`);
+    console.log(`    apply 时 git --3way 会自动三路合并主干已提交推进；只有同文件同区域重叠才冲突。`);
+    console.log(`    建议先对齐以减小冲突面：`);
     console.log(`      git merge --ff-only origin/${b}`);
     console.log(`      sillyspec worktree cleanup ${ch} && sillyspec run execute --change ${ch}`);
-    console.log(`    或继续，apply 时用 --merge 降级（会引入合并提交）。`);
+    console.log(`    或继续，重叠冲突时用 --merge 兜底（会引入合并提交）。`);
   } else if (diag.status === 'diverged') {
     console.log(`⚠️  base 同步检测：与 origin/${b} 分叉（领先 ${diag.ahead} / 落后 ${diag.behind}，base ${short}）`);
     console.log(`    apply 回 main 大概率冲突。建议先在主仓库对齐（rebase 或 merge origin/${b}），`);
@@ -170,11 +171,12 @@ function sleepMs(ms) {
 export function computeBaselineHash(cwd) {
   // 排除非交付物的元数据/文档 churn，避免多操作者仓库里别人改这些 → 整树 hash 变 → apply 误阻断
   // （execute 自身也会改 .sillyspec/docs.sillyspec，否则每个 execute 收尾都因自身改动 BLOCKED）。
-  // 安全：coarse hash 放过这些不丢真冲突——applyWorktree step5a(未提交∩changedFiles)+step5b(HEAD blob)
-  // 对交付文件做精确 per-file 校验，不读这里的 exclude。
+  // 安全：coarse hash 只挡「未提交」dirty（git apply --3way 危险区，实测必拦）；真冲突由
+  // applyWorktree step5a(未提交∩changedFiles 精确点名)+step7(--3way 冲突回滚)兜底，
+  // 「已提交」推进不再拦（step5b 已放宽交 --3way 自动三路合并），不读这里的 exclude。
   //   - .sillyspec/：brainstorm/plan 蓝图 + runtime 产物
   //   - .claude/：agent 配置/skills/CLAUDE.md（多操作者 agent 指引 churn）
-  //   - docs/：文档（非代码交付物；deliverable 文档冲突由 step5a/5b 兜底）
+  //   - docs/：文档（非代码交付物）
   //   - CLAUDE.md：根 agent 指引（多操作者常改）
   // 必须和 applyWorktree step 4.5 (worktree-apply.js) 使用相同的排除规则。
   const exclude = '-- . ":(exclude).sillyspec/" ":(exclude).claude/" ":(exclude)docs/" ":(exclude)CLAUDE.md"';

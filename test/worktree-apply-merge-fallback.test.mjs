@@ -1,13 +1,14 @@
 /**
  * applyWorktree --merge 降级测试（坑 1，FR-1/2/5）
  *
- * 验证 baseline 漂移时：
- *  - merge=true → git merge sillyspec/<change> 降级，result.merged=true（FR-1）
- *  - merge=false（默认）→ 仍报 BLOCKED，文案含「--merge 降级」（FR-2）
+ * 【行为变化 2026-07】--merge 从「4.5 baseline 漂移自动降级」改为「用户显式 flag 兜底」：
+ * 验证显式 --merge 时：
+ *  - merge=true → git merge sillyspec/<change> 兜底，result.merged=true（FR-1）
+ *  - merge=false（默认）+ 主仓未提交 dirty → 被 4.5 拦，文案引导 commit/stash（不再指引 --merge，因 merge 对 dirty 工作区不稳）
  *  - merge 冲突 → 报冲突文件 + git merge --abort 回滚，主仓库无半成品（FR-5）
  *
  * 构造：临时 git 仓库 + git worktree add -b sillyspec/<change> + 手动写 meta.json
- * （baselineHash 设假值触发漂移）。绕过 WorktreeManager.create 的 fetch/overlay。
+ * （baselineHash 设假值模拟主仓有未提交改动 → 触发 4.5 dirty 拦截）。绕过 WorktreeManager.create 的 fetch/overlay。
  */
 import fs from 'fs'
 import path from 'path'
@@ -71,8 +72,8 @@ console.log('--- 场景 A: 漂移 + merge=true → git merge ---')
   process.chdir(os.tmpdir()); fs.rmSync(d, { recursive: true, force: true })
 }
 
-// ── 场景 B: baseline 漂移 + merge=false → BLOCKED + 文案含 --merge（FR-2）──
-console.log('--- 场景 B: 漂移 + merge=false → BLOCKED ---')
+// ── 场景 B: 主仓未提交 dirty + merge=false → 4.5 拦，引导 commit/stash（不再指引 --merge）──
+console.log('--- 场景 B: 未提交 dirty + merge=false → 4.5 友好拦截 ---')
 {
   const d = setupRepo()
   makeWorktree(d, 'tc', (wt) => fs.writeFileSync(path.join(wt, 'src-b.txt'), 'b\n'))
@@ -80,8 +81,8 @@ console.log('--- 场景 B: 漂移 + merge=false → BLOCKED ---')
   assertTrue(r.merged === false, 'B: result.merged === false（未走 merge）')
   assertTrue(r.errors.length > 0, 'B: 有 error（BLOCKED）')
   const errText = r.errors.join('\n')
-  assertTrue(errText.includes('baseline 已变化'), 'B: error 含「baseline 已变化」')
-  assertTrue(errText.includes('--merge'), 'B: error 文案含「--merge 降级」指引')
+  assertTrue(errText.includes('未提交的改动'), 'B: error 含「未提交的改动」（4.5 dirty 拦截）')
+  assertTrue(errText.includes('commit') && errText.includes('stash'), 'B: error 引导先 commit/stash')
   assertTrue(!fs.existsSync(path.join(d, 'src-b.txt')), 'B: 主仓库未应用变更（src-b.txt 不存在）')
   process.chdir(os.tmpdir()); fs.rmSync(d, { recursive: true, force: true })
 }

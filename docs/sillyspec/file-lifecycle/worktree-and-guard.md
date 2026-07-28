@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-06-04 16:25:42
-updated_at: 2026-07-20
+updated_at: 2026-07-28
 ---
 
 # Worktree 与 Hook 门禁
@@ -12,7 +12,7 @@ updated_at: 2026-07-20
 
 ```text
 sillyspec worktree create <change-name> [--base <branch>]
-sillyspec worktree apply <change-name> [--check-only]
+sillyspec worktree apply <change-name> [--check-only] [--merge]
 sillyspec worktree list
 sillyspec worktree cleanup <change-name>
 ```
@@ -89,23 +89,25 @@ sillyspec/<change-name>
 
 ## `apply`
 
-`applyWorktree(changeName, { checkOnly })` 的真实流程：
+`applyWorktree(changeName, { checkOnly, merge })` 的真实流程（2026-07 放宽：主干已提交推进交 `--3way` 自动合并）：
 
 1. 读取 `meta.json`。
 2. diff base 使用 `baselineCommit || baseHash`。
 3. 收集 tracked diff 和 untracked 新文件。
 4. 从 `.sillyspec/changes/<change>/design.md` 解析“文件变更清单”作为 allow list。
 5. 如果 allow list 非空，要求 changed files 都在清单内。
-6. 如果 meta 有 `baselineHash`，重新计算主工作区 dirty hash；不同则拒绝 apply。
-7. 检查主工作区和 apply 文件有无未提交冲突。
-8. 比较主工作区 `HEAD` 与 worktree `baseHash` 的目标文件 blob。
+6. **显式 `--merge`**（用户 flag）→ 直接走 `applyByMerge`（`git merge sillyspec/<change>`，三方合并兜底，引合并提交），跳过后续 patch 流程。
+7. **未提交 dirty 拦截**（step 4.5）：如果 meta 有 `baselineHash`，重新计算主工作区 dirty hash（排除 `.sillyspec/.claude/docs/CLAUDE.md`）；不同 → 拒绝 apply 并列出脏文件 + 引导先 `commit`/`stash`（实测 git `--3way`/`merge` 对未提交 dirty 工作区均不稳，必须拦）。step 5a 再做一次脏∩changedFiles 精确点名。
+8. **已提交推进**（step 5b）：比较主工作区 `HEAD` 与 worktree `baseHash` 的目标文件 blob。**放宽**：blob 不一致（主干已提交推进改了同文件）不再 BLOCKED，仅记入 `hashMismatchFiles` 作风险提示（assess WARNING），放行交 `--3way` 自动三路合并。
 9. `--check-only` 到这里返回。
 10. 生成临时 patch。
-11. 在主工作区执行 `git apply --check`。
-12. 执行 `git apply --3way`。
+11. ~~`git apply --check`~~（已移除——只测 clean apply，--3way 能处理 clean apply 失败的三路合并，预检恒拦会误伤）。
+12. 执行 `git apply --3way`：主干已提交推进时自动三路合并（不同文件/不同区域干净合，同区域重叠留冲突标记）。**冲突时回滚工作区到 apply 前状态**（`checkout HEAD -- <f>` 还原 tracked + 删新建文件），不留半成品冲突标记，报错列冲突文件 + 提示 `--merge` 兜底。
 13. 成功后自动调用 `WorktreeManager.cleanup()`。
 
 无变更时，如果不是 check-only，也会 cleanup。
+
+**设计正交**：step 4.5/5a 挡「未提交」dirty（git 危险区），step 5b 管「已提交」HEAD 分叉（交 `--3way`）。`--merge` 从「baseline 漂移自动降级」改为「用户显式 flag 兜底」。
 
 ## `cleanup`
 

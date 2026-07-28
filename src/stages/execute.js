@@ -311,7 +311,7 @@ node -e "import('./src/worktree.js').then(w => { const wm = new w.WorktreeManage
 2. 系统自动检查：
    - patch --check 是否通过
    - 变更是否在 allowed_paths 内
-   - 主工作区 baseline 是否变化
+   - 主工作区是否有未提交 dirty（拦截；已提交推进交 --3way 自动三路合并）
    - 是否有高风险文件（lockfile/migration/配置/入口）
    - diff 规模是否异常
 3. 输出 Apply Decision：
