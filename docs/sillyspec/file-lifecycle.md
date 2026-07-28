@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-05-31 11:00:00
-updated_at: 2026-07-28T00:00:00+08:00
+updated_at: 2026-07-28T12:00:00+08:00
 ---
 
 # SillySpec 文件生命周期
@@ -48,7 +48,7 @@ updated_at: 2026-07-28T00:00:00+08:00
 | brainstorm | 8 | 独立包含”写设计文档并自审”（第 6 步）、”Design Grill 交叉审查”（第 7 步）、”用户确认并生成规范文件”（第 8 步）；第 2 步加载上下文时含早期规模筛查（明显小变更建议走 quick）；完成时按 design.md frontmatter `scale` 分叉产物（large→四件套进 plan / small→仅 design.md 进 quick） |
 | propose | 7 | 包含“生成规范文件”与“自检门控”，四件套是该阶段预期产物 |
 | plan | 动态 | 默认 9 步（含独立"审查计划"step，按规模分级 tier=self 自审 / tier=independent 独立子代理 + stage review.json）；`plan.md` 解析到任务后插入任务蓝图协调器；postcheck 含确定性校验（结构/可行性/跨任务契约/design 文件覆盖/产物） |
-| execute | 动态 | 默认 12 步；Wave 来自 `plan.md`，解析失败时默认 3 个 Wave；完成时 `validateExecuteOutputs` 客观核验存在真实代码变更（plan 有 task 但确证零变更则阻断），Task Review Gate 另做 review.json git 真实性交叉校验 |
+| execute | 动态 | 默认 12 步；Wave 来自 `plan.md`，解析失败时默认 3 个 Wave；完成时 `validateExecuteOutputs` 客观核验存在真实代码变更（plan 有 task 但确证零变更则阻断），Task Review Gate 另做 review.json git 真实性交叉校验；`--done` 时若 plan 全勾 + 代码客观核验通过则一次性补完剩余 step 直达完成（见后「execute --done 批量完成」） |
 | verify | 7 | 只读校验 + 写 `verify-result.md`；完成时 `validateVerifyOutputs` 校验 `verify-result.md` 存在且结论非 FAIL，缺失或 FAIL 则阻断完成；随后 CLI 亲自执行 `local.yaml` 的 `commands.test` 与自报告对账（实测失败阻断，结果写 `.runtime/verify-runs/<ts>/test-result.json`）；「对照设计检查」step 的 5 探针由 run/shared.js `resolvePromptIncludes` 从包内 `templates/prompts/verify-probes.md` 经 `{{include}}` 注入（prompt 组装时展开） |
 | archive | 5 | 辅助阶段；第 4 步必须带 `--confirm`，由 `run/complete-handlers.js`（`archiveChangeDirectory`）移动目录并注销 active change；移动前硬校验 `plan.md` 存在，移动后校验 `design.md`/`module-impact.md` |
 | quick | 3 | 辅助阶段；直接在主工作区实现，不创建 worktree |
@@ -175,6 +175,16 @@ sillyspec doctor --align-execute-progress [--confirm] [--change <name>]
      全勾时才对齐（信任声明、verify 兜底，同 archive 真相源语义）；--change 缺省时按单活跃
      变更自动兜底。典型用于 worktree 已 cleanup（终态）但 execute 派生戳未盖上的死锁场景。
      只写 stages 表 step 状态（经 ProgressManager._write），不改 schema。
+
+execute --done 批量完成（2026-07-28，`run/complete.js`）
+  -> 任一 execute `--done` 完成当前 step 后，若满足① plan.md 所有 task checkbox 已勾
+     （人工勾，或基于各 task review.json 双 verdict 非 fail 由 `autoCheckPlanFromReviews` 自动勾）
+     ② `checkExecuteCodeEvidence` 非"零变更"（防手动勾选伪造空完成），则一次性把剩余
+     pending/in-progress step 标 completed，本次 --done 即进入阶段完成分支，后续收尾（Task Review
+     Gate、worktree cleanup、execute summary、下一阶段提示）照常走原路径——不绕过任何 gate。
+     条件不满足（plan 未全勾 / 代码零变更）时仍按单步推进。这是把"plan 全勾但 progress 戳
+     未盖 → 需逐次 --done 7 次"的补救从 `doctor --align-execute-progress` 前移到常规 `--done`。
+     不重算 worktree 文件内容、不识别"代码已在 main"，只在 plan 声明 + 代码客观核验双绿时对齐派生戳。
 
 ## 核心修正
 
