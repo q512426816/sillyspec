@@ -302,6 +302,83 @@ allowed_paths:
   rmSync(tmpDir, { recursive: true, force: true })
 }
 
+// 共享路径变更脚手架：两个 task 都改 src/service.py，可选写 plan.md
+function setupSharedPathChange(planMd) {
+  const tmpDir = mkdtempSync(join(tmpdir(), 'sillyspec-test-'))
+  const tasksDir = join(tmpDir, 'tasks')
+  mkdirSync(tasksDir, { recursive: true })
+  const taskMd = (id, title) => `---
+id: ${id}
+title: ${title}
+depends_on: []
+allowed_paths:
+  - src/service.py
+---
+
+# ${id}: ${title}
+
+## 验收标准
+| # | 验证步骤 | 通过标准 |
+|---|---|---|
+| AC-01 | 操作 | 结果 |
+
+## TDD 步骤
+1. 写测试
+`
+  writeFileSync(join(tasksDir, 'task-01.md'), taskMd('task-01', '改 service'))
+  writeFileSync(join(tasksDir, 'task-02.md'), taskMd('task-02', '也改 service'))
+  if (planMd !== undefined) writeFileSync(join(tmpDir, 'plan.md'), planMd)
+  return tmpDir
+}
+
+// ─────────────────────────────────────────
+// Test 5d: 同 Wave 同文件 → 阻断（execute 并行子代理会互相覆盖 service.py）
+// ─────────────────────────────────────────
+console.log('\n--- Test 5d: 同 Wave 同文件 → 失败 ---')
+{
+  const tmpDir = setupSharedPathChange(`# Plan
+
+## Wave 1
+- [ ] task-01: 改 service
+- [ ] task-02: 也改 service
+`)
+  const result = validateBlueprintConsistency(tmpDir)
+  assert(!result.ok, `同 Wave 同文件应失败，errors: ${JSON.stringify(result.errors)}`)
+  assert(result.errors.some(e => e.includes('Wave 1') && e.includes('src/service.py')), `error 应提到 Wave 1 + service.py`)
+  rmSync(tmpDir, { recursive: true, force: true })
+}
+
+// ─────────────────────────────────────────
+// Test 5e: 跨 Wave 同文件 → 警告不阻断（不同 Wave 串行执行，安全）
+// ─────────────────────────────────────────
+console.log('\n--- Test 5e: 跨 Wave 同文件 → 警告不阻断 ---')
+{
+  const tmpDir = setupSharedPathChange(`# Plan
+
+## Wave 1
+- [ ] task-01: 改 service
+
+## Wave 2
+- [ ] task-02: 也改 service
+`)
+  const result = validateBlueprintConsistency(tmpDir)
+  assert(result.ok, `跨 Wave 同文件应通过（串行安全），errors: ${JSON.stringify(result.errors)}`)
+  assert(result.warnings.some(w => w.includes('跨 Wave') && w.includes('src/service.py')), `warning 应提到跨 Wave + service.py`)
+  rmSync(tmpDir, { recursive: true, force: true })
+}
+
+// ─────────────────────────────────────────
+// Test 5f: 无 plan.md + 共享路径 → 阻断（execute 隐式单 Wave 全并行）
+// ─────────────────────────────────────────
+console.log('\n--- Test 5f: 无 plan.md 共享路径 → 失败（全并行口径）---')
+{
+  const tmpDir = setupSharedPathChange(undefined)
+  const result = validateBlueprintConsistency(tmpDir)
+  assert(!result.ok, `无 plan.md 共享路径应失败（全并行），errors: ${JSON.stringify(result.errors)}`)
+  assert(result.errors.some(e => e.includes('无显式 Wave') && e.includes('src/service.py')), `error 应提到无显式 Wave + service.py`)
+  rmSync(tmpDir, { recursive: true, force: true })
+}
+
 // ─────────────────────────────────────────
 // Test 6: execute 能正常解析新 plan.md
 // ─────────────────────────────────────────

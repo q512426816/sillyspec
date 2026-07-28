@@ -203,6 +203,34 @@ export function topoSortWaves(depMap) {
 }
 
 /**
+ * 解析 plan.md 显式 Wave 分组 → Map<taskId, waveIndex>。
+ *
+ * Wave 口径与 execute.js parseWavesFromPlan 一致（execute 的真实并行单元，非 topoSort 建议值）：
+ *   - `## Wave N` 标题下的 task-XX checkbox 归入 Wave N；
+ *   - 非 Wave 标题行（## 自检 等）退出当前 Wave 段，避免其 checkbox 混入。
+ * 返回 null = plan.md 不存在或无显式 Wave 标题 → execute 会把所有 task 放进单个隐式 Wave
+ * 全并行（execute.js:402-408），调用方据此判「同文件即冲突」。
+ *
+ * @param {string} planPath - plan.md 绝对路径
+ * @returns {Map<string, number>|null} taskId → waveIndex；null = 无显式 Wave
+ */
+function parseTaskWavesFromPlan(planPath) {
+  if (!existsSync(planPath)) return null
+  const content = readFileSync(planPath, 'utf8')
+  if (!/^#+\s*Wave\s+\d+/im.test(content)) return null
+  const map = new Map()
+  let currentWave = null
+  for (const line of content.split('\n')) {
+    const wm = line.match(/^#+\s*Wave\s+(\d+)/i)
+    if (wm) { currentWave = parseInt(wm[1], 10); continue }
+    if (/^#+\s/.test(line)) { currentWave = null; continue } // 非 Wave 标题退出当前 Wave 段
+    const tm = line.match(/^[-*]\s*\[[ x]\]\s*(task-\d+)/i)
+    if (tm && currentWave !== null) map.set(tm[1], currentWave)
+  }
+  return map
+}
+
+/**
  * 本地一致性校验器
  * @param {string} changeDir - 变更目录
  * @returns {{ ok: boolean, errors: string[], warnings: string[] }}
@@ -258,10 +286,40 @@ export function validateBlueprintConsistency(changeDir) {
     }
   }
 
-  // 路径冲突
+  // 路径冲突（Wave 感知）：同 Wave 内 >1 task 共享 allowed_path → execute 强制并行（execute.js:603）
+  // 子代理会互相覆盖该文件 → error。跨 Wave 同文件 → 串行执行安全 → warning。
+  // Wave 口径 = plan.md 显式 `## Wave N`（parseTaskWavesFromPlan，与 execute 同源，非 topoSort 建议值）；
+  // plan.md 无显式 Wave → execute 全并行（隐式单 Wave，execute.js:402-408）→ 同文件即冲突。
+  const waveOfTask = parseTaskWavesFromPlan(pJoin(changeDir, 'plan.md'))
   for (const [p, owners] of pathOwners) {
-    if (owners.length > 1) {
-      warnings.push(`路径 ${p} 被 ${owners.length} 个 task 修改: ${owners.join(', ')}（确认是否为有意共享）`)
+    if (owners.length < 2) continue
+    if (waveOfTask === null) {
+      errors.push(
+        `路径 ${p} 被 ${owners.length} 个 task 修改: ${owners.join(', ')} — plan.md 无显式 Wave 划分，` +
+        `execute 会把它们放进同一隐式 Wave 全并行（execute.js:402-408），子代理互相覆盖。` +
+        `解法：拆到不同 Wave（串行），或合并为单个 task。`
+      )
+      continue
+    }
+    // 显式 Wave：按 wave 分组 owners，找同 Wave 冲突
+    const byWave = new Map()
+    for (const t of owners) {
+      const w = waveOfTask.get(t)
+      if (w === undefined) continue // 未列入任何 Wave → execute 不执行，不参与冲突判定
+      if (!byWave.has(w)) byWave.set(w, [])
+      byWave.get(w).push(t)
+    }
+    for (const [w, ts] of byWave) {
+      if (ts.length > 1) {
+        errors.push(
+          `路径 ${p} 被 Wave ${w} 内 ${ts.length} 个 task 修改: ${ts.join(', ')} — 同 Wave 任务 execute 强制并行（execute.js:603），` +
+          `子代理会互相覆盖该文件。解法：把它们拆到不同 Wave（串行）。`
+        )
+      }
+    }
+    // 跨 Wave 共享：串行安全，仅提示
+    if (byWave.size > 1) {
+      warnings.push(`路径 ${p} 跨 Wave 被修改: ${owners.join(', ')}（不同 Wave 串行执行，安全；确认是否有意共享）`)
     }
   }
 

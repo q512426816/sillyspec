@@ -168,11 +168,16 @@ function sleepMs(ms) {
 }
 
 export function computeBaselineHash(cwd) {
-  // 排除 execute 流程自身会改的元数据，避免漂移误报（否则每个 execute 收尾都因自身改动 BLOCKED）：
+  // 排除非交付物的元数据/文档 churn，避免多操作者仓库里别人改这些 → 整树 hash 变 → apply 误阻断
+  // （execute 自身也会改 .sillyspec/docs.sillyspec，否则每个 execute 收尾都因自身改动 BLOCKED）。
+  // 安全：coarse hash 放过这些不丢真冲突——applyWorktree step5a(未提交∩changedFiles)+step5b(HEAD blob)
+  // 对交付文件做精确 per-file 校验，不读这里的 exclude。
   //   - .sillyspec/：brainstorm/plan 蓝图 + runtime 产物
-  //   - docs/sillyspec/：工具坑文件（CLAUDE.md 规则要求 execute 期间记录）
+  //   - .claude/：agent 配置/skills/CLAUDE.md（多操作者 agent 指引 churn）
+  //   - docs/：文档（非代码交付物；deliverable 文档冲突由 step5a/5b 兜底）
+  //   - CLAUDE.md：根 agent 指引（多操作者常改）
   // 必须和 applyWorktree step 4.5 (worktree-apply.js) 使用相同的排除规则。
-  const exclude = '-- . ":(exclude).sillyspec/" ":(exclude)docs/sillyspec/"';
+  const exclude = '-- . ":(exclude).sillyspec/" ":(exclude).claude/" ":(exclude)docs/" ":(exclude)CLAUDE.md"';
   const staged = gitQuiet(cwd, `diff --cached ${exclude}`) || '';
   const unstaged = gitQuiet(cwd, `diff ${exclude}`) || '';
   const untracked = gitQuiet(cwd, `ls-files --others --exclude-standard ${exclude}`) || '';

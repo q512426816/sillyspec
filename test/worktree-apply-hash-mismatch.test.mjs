@@ -3,7 +3,7 @@
  *
  * 精确区分两条主仓库修改检测：
  *   - step 4.5 baseline-drift：主工作区【未提交】漂移（staged/unstaged/untracked，
- *     排除 .sillyspec）。baselineHash 在 execute 开始时快照，独立于已提交内容
+ *     排除 .sillyspec/.claude/docs/CLAUDE.md 等非交付物，见 computeBaselineHash）。baselineHash 在 execute 开始时快照，独立于已提交内容
  *     （干净工作区恒为同一 H_clean）。
  *   - step 5b hash-mismatch：主仓库【已提交】HEAD 相对 baseHash 推进，某 target 文件
  *     的 baseHash blob ≠ HEAD blob。
@@ -23,8 +23,8 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 import { execSync } from 'child_process'
-import { createHash } from 'crypto'
 import { applyWorktree } from '../src/worktree-apply.js'
+import { computeBaselineHash } from '../src/worktree.js'
 
 let failed = 0
 const failures = []
@@ -34,20 +34,8 @@ function assertTrue(cond, msg) {
 }
 function sh(cmd, cwd) { execSync(cmd, { cwd, stdio: 'pipe' }) }
 
-// 忠实复刻 src/worktree.js computeBaselineHash（byte-for-byte），用于在测试里算出与
-// 生产 step 4.5 完全一致的 currentHash，让 4.5 通过、隔离到 5b。
-function gitQ(cwd, args) {
-  try { return execSync(`git ${args}`, { cwd, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim() }
-  catch { return null }
-}
-function computeBaselineHash(cwd) {
-  const exclude = '-- . ":(exclude).sillyspec/"'
-  const staged = gitQ(cwd, `diff --cached ${exclude}`) || ''
-  const unstaged = gitQ(cwd, `diff ${exclude}`) || ''
-  const untracked = gitQ(cwd, `ls-files --others --exclude-standard ${exclude}`) || ''
-  const raw = `staged:${staged}\nunstaged:${unstaged}\nuntracked:${untracked}`
-  return createHash('sha256').update(raw).digest('hex').slice(0, 16)
-}
+// 直接用生产 computeBaselineHash（src/worktree.js）算 currentHash，让 4.5 通过、隔离到 5b。
+// 不再本地复刻——复刻会和生产 exclude 漂移（曾漏 docs/sillyspec/、CLAUDE.md），用真函数零漂移。
 
 function setupRepo() {
   const d = fs.mkdtempSync(path.join(os.tmpdir(), 'wth-'))

@@ -185,11 +185,16 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
 
   // --- 4.5 校验：主工作区 baseline 是否变化（防 execute 期间主工作区被修改）---
   // 注意：必须和 computeBaselineHash (worktree.js) 使用相同的排除规则。
-  // 排除 execute 流程自身会改的元数据（否则每个 execute 收尾都因自身改动 baseline 漂移 BLOCKED）：
+  // 排除非交付物的元数据/文档 churn（execute 自身改的 + 多操作者常改的 agent 指引/文档），
+  // 否则别人改 CLAUDE.md/docs/.claude → 整树 hash 变 → apply 误阻断（多操作者仓库高频踩坑）。
+  // 安全：放过它们不丢真冲突——下方 step5a(未提交∩changedFiles)+step5b(HEAD blob) 对交付文件
+  // 做精确 per-file 校验，不读这里的 exclude。
   //   - .sillyspec/：plan/design 蓝图 + runtime 产物
-  //   - docs/sillyspec/：工具坑文件（CLAUDE.md 规则要求 execute 期间记录）
+  //   - .claude/：agent 配置/skills/CLAUDE.md
+  //   - docs/：文档（deliverable 文档冲突由 step5a/5b 兜底）
+  //   - CLAUDE.md：根 agent 指引
   if (meta.baselineHash) {
-    const exclude = '-- . ":(exclude).sillyspec/" ":(exclude)docs/sillyspec/"';
+    const exclude = '-- . ":(exclude).sillyspec/" ":(exclude).claude/" ":(exclude)docs/" ":(exclude)CLAUDE.md"';
     const staged = gitQuiet(projectRoot, `diff --cached ${exclude}`) || '';
     const unstaged = gitQuiet(projectRoot, `diff ${exclude}`) || '';
     const untracked = gitQuiet(projectRoot, `ls-files --others --exclude-standard ${exclude}`) || '';
