@@ -1226,6 +1226,9 @@ SillySpec modules — 模块文档管理
       lines.push('# module_paths:');
       lines.push('#   user-service: "user/"');
       lines.push('#   order-service: "order/"');
+      lines.push('# 已知预存失败（可选）：verify 实测时这些失败被豁免、不阻断归档；fail-safe 仅豁免能检测到的失败行');
+      lines.push('# known_failures:');
+      lines.push('#   - "tests/test_legacy.py::test_old"');
       const yamlText = lines.join('\n') + '\n';
 
       // 原子写（tmp + rename + Windows EPERM 重试），避免半截 local.yaml

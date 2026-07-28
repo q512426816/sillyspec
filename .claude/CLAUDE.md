@@ -8,6 +8,7 @@
 1. SillySpec 是给 Agent 调用的 CLI 工具，不是给人类直接使用的产品
 2. SillySpec 是管理 Agent 工作流的 CLI 工具，不是处理业务逻辑的工具
 3. 你是 Agent。SillySpec 是你的流程控制器。你通过 CLI 命令告诉它"我在哪"，它告诉你"下一步该做什么"。你执行步骤，它校验产出、推进状态。人类用户只在关键决策点介入审批
+4. 要考虑多agent同时操作代码，代码随时可能会变化
 
 ## 文件生命周期文档同步
 每次修改 `src/stages/` 下的阶段定义（prompt、步骤、输出文件名等）或 `src/run.js`、`src/progress.js` 等影响文件生命周期的代码后，**必须同步更新** `docs/sillyspec/file-lifecycle.md`，确保文档与代码一致。

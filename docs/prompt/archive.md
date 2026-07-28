@@ -19,23 +19,26 @@
 - 等待配置：无（可直接 --done）
 
 **本步出现的运行时占位符**
-- `<change-name>` → 当前变更名
+- `{TASK_COMPLETION_REPORT}` → CLI 从 review.json verdict 算出的客观完成度报告（src/task-review.js summarizeTaskCompletion，archive 阶段注入；真相源替代 plan.md checkbox）
 
 **提示词原文**
 
 ````markdown
-检查 plan.md 中所有任务 checkbox 是否已勾选（plan.md 是任务完成的唯一真相源）。
+检查任务完成度，决定是否可归档。
 
-### 操作
-1. 读取 `.sillyspec/changes/<change-name>/plan.md`
-2. 检查所有 `- [x]` checkbox 是否已勾选
-3. 如果 plan.md 不存在，回退读取 tasks.md 作为备选
-4. 如有遗漏 → **必须暂停等待用户决定**，不要自行判断"可以归档"
-   - 调用：`sillyspec run archive --wait --reason "存在未完成任务，是否继续归档" --options "继续归档,回到execute完成剩余任务" --output "未完成任务列表"`
+### 客观完成度报告（CLI 已注入，勿自行数 checkbox）
+{TASK_COMPLETION_REPORT}
+
+### 判定规则
+- **真相源 = review.json verdict**：上方报告由 CLI 从 .runtime/execute-runs/<runId>/tasks/task-NN/review.json 的 specVerdict + qualityVerdict 算出。
+- plan.md 的 - [x] checkbox **仅作显示态参考**：它依赖自动回填，runId marker / review 缺失时会停在未勾态，与客观 verdict 不一致时**以本报告为准**，不要被未勾 checkbox 误导。
+- 报告「未通过 / 缺失」= 0 且 source 为 review.json → 完成度合格，进入下一步。
+- 报告 source 为 plan-checkbox-fallback（客观源不可用）→ 完成度无法客观确认，**必须暂停**让用户交叉核对，不要直接放行。
+- 存在未完成任务 → **必须暂停等待用户决定**，不要自行判断"可以归档"。
+   - 调用：sillyspec run archive --wait --reason "存在未完成任务，是否继续归档" --options "继续归档,回到execute完成剩余任务" --output "未完成任务列表"
 
 ### 输出
-完成度报告（已勾选/总数 + 未完成任务列表）
-````
+完成度报告（已通过/总数 + 数据源 + 未完成任务列表）````
 
 ---
 
@@ -193,7 +196,7 @@ module_id: <module-id>
 2. 确保所有 checkbox 都已勾选
 3. 让用户确认后，用 `--confirm` 完成本步骤：
    `sillyspec run archive --done --confirm --output "确认归档"`
-4. CLI 会创建 `.sillyspec/changes/archive/`，并将变更目录移动到 `.sillyspec/changes/archive/YYYY-MM-DD-<change-name>/`
+4. CLI 会创建 `.sillyspec/changes/archive/`，并将变更目录移动到 `.sillyspec/changes/archive/<归档日期>-<纯描述>（源名前导日期去重，避免双日期）/`
 
 ### 输出
 归档完成 + archive 目录路径

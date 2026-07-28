@@ -225,7 +225,11 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot } 
       const vt = runVerifyTestCheck({ cwd, specBase: specRoot, changeName });
       const vtWarnings = [];
       if (vt.status === 'skipped') {
-        vtWarnings.push('⚠️ verify-test SKIPPED — gate 未核验测试（local.yaml 未配置 commands.test 或显式无测试）。本次 gate 结论不含测试客观核验，driver 不应据 exit 0 判定测试通过；integration-critical 变更应在 verify 阶段降级 FAIL');
+        vtWarnings.push(`⚠️ verify-test SKIPPED — gate 未核验测试（${vt.reason || 'local.yaml 未配置 commands.test 或显式无测试'}）。本次 gate 结论不含测试客观核验，driver 不应据 exit 0 判定测试通过；integration-critical 变更应在 verify 阶段降级 FAIL`);
+      }
+      // known_failures 豁免披露：本次 PASS 含豁免，driver 应提示人工复核清单是否过宽
+      if (vt.exemptedCount > 0) {
+        vtWarnings.push(`⚠️ verify-test PASS 含 ${vt.exemptedCount} 个 known_failures 豁免（${vt.reason || ''}）；driver 应提示人工复核豁免清单是否过宽（避免误豁免本变更引入的真实失败）`);
       }
       // 全量 fallback 明示：跑了全量 commands.test 但非变更范围子集，失败可能含未变更
       // 模块的预存错误——driver 不应据 exit 0 判定本次变更范围已客观测试（见 3.24 verify 坑1）。

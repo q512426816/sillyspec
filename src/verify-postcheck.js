@@ -212,10 +212,114 @@ export function aggregateStatus(results) {
 }
 
 /**
+ * 从 local.yaml 提取 known_failures 声明（预存失败豁免清单，坑 verify-worktree-... 修复方向 2）。
+ * 支持块式与流式两种写法：
+ *   known_failures:
+ *     - "tests/test_ppm.py::test_legacy"
+ *     - app/modules/plan/test_old
+ *   或  known_failures: [a, b]
+ * 每条作为子串（大小写不敏感）匹配测试输出中的失败行。
+ *
+ * @param {string} yamlText
+ * @returns {string[]} 模式列表；无声明返回 []
+ */
+export function extractKnownFailures(yamlText) {
+  if (!yamlText) return []
+  const inline = yamlText.match(/^known_failures:\s*\[([^\]]*)\]\s*(?:#.*)?$/m)
+  if (inline) {
+    return inline[1].split(',').map(s => s.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean)
+  }
+  const block = yamlText.match(/^known_failures:\s*\n((?:[ \t]+-[ \t].+\n?)+)/m)
+  if (block) {
+    return (block[1].match(/^[ \t]+-[ \t]+(.+)/gm) || [])
+      .map(s => s.replace(/^[ \t]+-[ \t]+/, '').trim().replace(/^['"]|['"]$/g, '').replace(/#.*$/, '').trim())
+      .filter(Boolean)
+  }
+  return []
+}
+
+// 单条失败行标记（跨 pytest/jest/vitest/go/generic）。大小写不敏感。
+// 刻意用 FAIL/FAILED + 配合 SUMMARY_LINE_RE 排除汇总行：否则 pytest/jest 的
+// "N failed" 汇总会被误判为「需豁免的失败行」→ 永远 remaining>0 → known_failures 失效。
+const PER_TEST_FAIL_RE = /(FAILED|\bFAIL\b|✕|✗|✘|panic\s*:|assertionerror|traceback|---\s*fail|error:|exception)/i
+// 汇总/计数行（非单条失败）：pytest === 框、jest "Tests:"、裸 "N failed/passed"、go "FAILED in Ns" 等。
+const SUMMARY_LINE_RE = /(={2,}.*={2,}|^\s*\d+\s+(failed|passed|skipped|pending)\b|tests?\s*:|test\s+suites?\s*:|failed\s+in\s+\d)/i
+
+/**
+ * 把测试输出按行筛出「失败行」，再按 known_failures 模式分为已豁免 / 未豁免。
+ * @param {string} output
+ * @param {string[]} knownFailures 子串模式列表（大小写不敏感）
+ * @returns {{ failureLines: string[], exempted: string[], remaining: string[] }}
+ */
+export function partitionFailures(output, knownFailures) {
+  const lines = String(output || '').split(/\r?\n/)
+  const failureLines = lines.filter(l => PER_TEST_FAIL_RE.test(l) && !SUMMARY_LINE_RE.test(l))
+  const pats = (knownFailures || []).map(p => String(p).toLowerCase()).filter(Boolean)
+  const exempted = []
+  const remaining = []
+  for (const l of failureLines) {
+    const ll = l.toLowerCase()
+    if (pats.some(p => ll.includes(p))) exempted.push(l)
+    else remaining.push(l)
+  }
+  return { failureLines, exempted, remaining }
+}
+
+/**
+ * 结合 known_failures 判定单次测试运行的状态（fail-safe）。
+ *   - exitCode 0 → passed
+ *   - exitCode≠0 且无 known_failures → failed（原行为）
+ *   - exitCode≠0 且有 known_failures：
+ *       检测到失败行且全部命中豁免 → passed（披露：请人工复核清单是否过宽）
+ *       有未豁免失败行 / 检测不到失败行（保守）→ failed
+ * fail-safe：检测不到失败行绝不自动 pass（避免解析盲区导致假 PASS）。
+ *
+ * @returns {{ status: 'passed'|'failed', reason: string|null, exemptedCount: number }}
+ */
+export function judgeWithKnownFailures(exitCode, output, baseReason, knownFailures) {
+  if (exitCode === 0) return { status: 'passed', reason: baseReason, exemptedCount: 0 }
+  if (!knownFailures || knownFailures.length === 0) {
+    return { status: 'failed', reason: baseReason, exemptedCount: 0 }
+  }
+  const { failureLines, exempted, remaining } = partitionFailures(output, knownFailures)
+  if (failureLines.length > 0 && remaining.length === 0) {
+    return {
+      status: 'passed',
+      reason: `全部 ${failureLines.length} 个失败行命中 known_failures 已豁免（${exempted.length} 条）— 请人工复核豁免清单是否过宽`,
+      exemptedCount: exempted.length,
+    }
+  }
+  const detail = remaining.length > 0
+    ? `${remaining.length} 个失败行未命中 known_failures`
+    : '失败输出未检测到可豁免的失败行（保守判 fail）'
+  return {
+    status: 'failed',
+    reason: baseReason ? `${baseReason}（${detail}）` : detail,
+    exemptedCount: exempted.length,
+  }
+}
+
+/**
+ * 决定 verify 实测的执行动作（纯函数，便于测试；坑 verify-worktree-... 修复方向 3）。
+ *   - module + 命中模块  → 'module-subset'
+ *   - module + 0 命中    → 'module-zero-hit-skip'（不静默回退注定超时/预存失败的全量）
+ *   - 其余（full / module 无块 / module git 不可用 hitCount=-1）→ 'full'
+ * @returns {'module-subset'|'module-zero-hit-skip'|'full'}
+ */
+export function decideVerifyTestAction({ strategy, modulesPresent, hitCount }) {
+  if (strategy === 'module' && modulesPresent) {
+    if (hitCount > 0) return 'module-subset'
+    if (hitCount === 0) return 'module-zero-hit-skip'
+    return 'full' // hitCount === -1（git 不可用）→ 落全量兜底
+  }
+  return 'full'
+}
+
+/**
  * 跑单个模块的 test 命令（串行调用方逐个调用）。
  * @returns {{name, status:'passed'|'failed', command, exitCode, durationMs, outputTail, reason}}
  */
-function runOneModule(name, testCommand, cwd) {
+function runOneModule(name, testCommand, cwd, knownFailures = []) {
   const startedAt = Date.now()
   let exitCode = 0
   let output = ''
@@ -237,26 +341,27 @@ function runOneModule(name, testCommand, cwd) {
   }
   const durationMs = Date.now() - startedAt
   const outputTail = output.length > OUTPUT_TAIL_CHARS ? '…' + output.slice(-OUTPUT_TAIL_CHARS) : output
+  const judged = judgeWithKnownFailures(exitCode, output, reason, knownFailures)
   return {
     name,
-    status: exitCode === 0 ? 'passed' : 'failed',
+    status: judged.status,
     command: testCommand,
     exitCode,
     durationMs,
     outputTail,
-    reason,
+    reason: judged.reason,
+    exemptedCount: judged.exemptedCount,
   }
 }
 
 /**
- * 取 git 变更文件列表（worktree unstaged + staged，相对仓库根）。
- * 务实策略：先取 unstaged working tree 改动（`git diff --name-only HEAD`），
- * 它同时覆盖已暂存与未暂存改动（相对 HEAD），最适合 worktree 内尚未 commit 的场景。
- * git 不可用 / 非仓库 → 返回 null（调用方 fallback）。
+ * 在指定 cwd 跑 `git diff --name-only <refSpec>`，返回相对仓库根的文件列表。
+ * git 不可用 / 非仓库 / ref 无效 → 返回 null（调用方 fallback）。
  */
-function gitChangedFiles(cwd) {
+function runGitDiffNameOnly(cwd, refSpec) {
   try {
-    const out = execSync('git diff --name-only HEAD', {
+    const cmd = refSpec ? `git diff --name-only ${refSpec}` : 'git diff --name-only'
+    const out = execSync(cmd, {
       cwd,
       encoding: 'utf8',
       timeout: 30 * 1000,
@@ -264,19 +369,60 @@ function gitChangedFiles(cwd) {
     })
     return out.split('\n').map(l => l.trim()).filter(Boolean)
   } catch {
-    // HEAD 不存在（空仓库）或 git 不可用 → 尝试纯 unstaged
-    try {
-      const out = execSync('git diff --name-only', {
-        cwd,
-        encoding: 'utf8',
-        timeout: 30 * 1000,
-        stdio: ['ignore', 'pipe', 'pipe'],
-      })
-      return out.split('\n').map(l => l.trim()).filter(Boolean)
-    } catch {
-      return null
+    return null
+  }
+}
+
+/**
+ * 取主工作区 git 变更文件列表（unstaged + staged，相对仓库根）。
+ * `git diff --name-only HEAD` 同时覆盖已暂存与未暂存改动（相对 HEAD），
+ * 最适合 brownfield（apply 后未 commit / in-place 改动）场景。
+ * git 不可用 / 非仓库 → 返回 null（调用方 fallback）。
+ *
+ * 注意：worktree 隔离模式下主仓只剩 .sillyspec/ 文档改动、代码在 worktree，
+ * 本函数看不到——runVerifyTestCheck 用 resolveVerifyChangedFiles 统一处理。
+ */
+function gitChangedFiles(cwd) {
+  const head = runGitDiffNameOnly(cwd, 'HEAD')
+  if (head !== null) return head
+  // HEAD 不存在（空仓库）或 git 不可用 → 尝试纯 unstaged
+  return runGitDiffNameOnly(cwd, '')
+}
+
+/**
+ * 解析 verify 对账用的变更文件集（worktree-aware）。
+ *
+ * worktree 隔离模式下 execute 的代码改动落在 worktree，主仓工作区只剩
+ * .sillyspec/ 文档改动。若仍用主仓 `git diff --name-only HEAD`，hitCount=0
+ * → 回退注定超时且含预存失败的全量 commands.test → verify 完成被阻断
+ * （坑 verify-worktree-mode-test-reconciliation-fallback-full）。
+ *
+ * 判定（与 checkExecuteCodeEvidence / task-review 同源，meta.json 为权威）：
+ *   1. change 有 worktree meta 且 baseHash 存在 → 在 worktree（或 in-place 的 cwd）
+ *      跑 `git diff --name-only <baseHash>..HEAD` 取真实代码改动集
+ *   2. 无 worktree meta / diff 异常 → 主仓 `git diff --name-only HEAD`（brownfield 原行为）
+ *
+ * @param {string} cwd - 项目根目录（主仓）
+ * @param {string|null} changeName
+ * @returns {string[]|null} 变更文件列表；git 不可用返回 null（调用方按 hitCount=-1 处理）
+ */
+export function resolveVerifyChangedFiles(cwd, changeName) {
+  if (changeName) {
+    const metaPath = join(cwd, '.sillyspec', '.runtime', 'worktrees', changeName, 'meta.json')
+    if (existsSync(metaPath)) {
+      let meta = null
+      try { meta = JSON.parse(readFileSync(metaPath, 'utf8')) } catch {}
+      if (meta?.baseHash) {
+        const gitDir = (meta.worktreePath && meta.mode !== 'in-place-fallback' && existsSync(meta.worktreePath))
+          ? meta.worktreePath
+          : cwd
+        const files = runGitDiffNameOnly(gitDir, `${meta.baseHash}..HEAD`)
+        if (files !== null) return files
+        // worktree diff 异常 → 落主仓兜底（保持与原 gitChangedFiles 相同的 null 语义）
+      }
     }
   }
+  return gitChangedFiles(cwd)
 }
 
 /**
@@ -301,41 +447,57 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null }) {
   const yamlText = existsSync(localYamlPath) ? readFileSync(localYamlPath, 'utf8') : null
 
   const strategy = extractTestStrategy(yamlText)
+  const knownFailures = extractKnownFailures(yamlText)
 
-  // —— 模块子集路径（test_strategy: module）——
-  // 算出 modulesPresent / hitCount 供 fallback hint 判定（computeFullFallbackReason）；
-  // 命中即走子集。gitChangedFiles 返回 null 表示 git 不可用 → hitCount=-1（与 0 命中区分）。
+  // —— 模块子集路径（test_strategy: module）：算 modulesPresent / hitCount / hits ——
+  // resolveVerifyChangedFiles 返回 null 表示 git 不可用 → hitCount=-1（与 0 命中区分）。
   let modulesPresent = false
   let hitCount = 0
+  let hits = []
   if (strategy === 'module') {
     const modules = extractModules(yamlText)
     if (modules) {
       modulesPresent = true
-      const changedFiles = gitChangedFiles(cwd)
+      const changedFiles = resolveVerifyChangedFiles(cwd, changeName)
       if (changedFiles === null) {
         hitCount = -1 // git 不可用 / 非仓库
       } else {
-        const hits = pickHitModules(changedFiles, modules)
+        hits = pickHitModules(changedFiles, modules)
         hitCount = hits.length
-        if (hitCount > 0) {
-          return runModuleSubset({ cwd, specBase, changeName, hits })
-        }
-        // 有 modules 配置但无命中 → fallback commands.test（D-002@v1 向后兼容）
       }
     }
-    // test_strategy:module 但无 modules 配置 → fallback commands.test（brownfield 友好）
   }
 
-  // —— 全量路径（默认 full / fallback）——
+  const action = decideVerifyTestAction({ strategy, modulesPresent, hitCount })
+  if (action === 'module-subset') {
+    return runModuleSubset({ cwd, specBase, changeName, hits, knownFailures })
+  }
+  if (action === 'module-zero-hit-skip') {
+    // module 模式 0 命中：不静默回退注定超时/含预存失败的全量（坑 verify-worktree-... 修复方向 3）。
+    // 据 verify-result.md 自报告判定；想跑全量请显式设 test_strategy: full。
+    return {
+      status: 'skipped',
+      command: null,
+      exitCode: null,
+      durationMs: null,
+      outputTail: null,
+      reason: 'test_strategy: module 但本次变更未命中任何已配置 modules（0 命中）。为避免回退到注定超时/含预存失败的全量 commands.test，CLI 未自动跑全量——据 verify-result.md 自报告判定测试。若需全量覆盖，显式设 test_strategy: full。',
+      resultPath: null,
+      mode: 'module-zero-hit',
+      fallbackReason: null,
+    }
+  }
+
+  // —— 全量路径（full / module 无块 / module git 不可用）——
   // fallbackReason 非 null 表示本次全量是"非显式"的（缺省/配置不全/未命中），需明示。
   const fallbackReason = computeFullFallbackReason({ strategy, modulesPresent, hitCount })
-  return runFullCommand({ yamlText, localYamlPath, cwd, specBase, changeName, fallbackReason })
+  return runFullCommand({ yamlText, localYamlPath, cwd, specBase, changeName, fallbackReason, knownFailures })
 }
 
 /**
  * 全量跑 commands.test（现有逻辑，brownfield 行为不变）。
  */
-function runFullCommand({ yamlText, localYamlPath, cwd, specBase, changeName, fallbackReason = null }) {
+function runFullCommand({ yamlText, localYamlPath, cwd, specBase, changeName, fallbackReason = null, knownFailures = [] }) {
   const command = extractTestCommand(yamlText)
 
   if (!command) {
@@ -376,16 +538,18 @@ function runFullCommand({ yamlText, localYamlPath, cwd, specBase, changeName, fa
   const durationMs = Date.now() - startedAt
   const outputTail = output.length > OUTPUT_TAIL_CHARS ? '…' + output.slice(-OUTPUT_TAIL_CHARS) : output
 
+  const judged = judgeWithKnownFailures(exitCode, output, reason, knownFailures)
   const result = {
-    status: exitCode === 0 ? 'passed' : 'failed',
+    status: judged.status,
     command,
     exitCode,
     durationMs,
     outputTail,
-    reason,
+    reason: judged.reason,
     resultPath: null,
     mode: 'full',
     fallbackReason,
+    exemptedCount: judged.exemptedCount,
   }
 
   writeRunResult({ specBase, changeName, result, extra: fallbackReason ? { fallback_reason: fallbackReason } : {} })
@@ -396,9 +560,9 @@ function runFullCommand({ yamlText, localYamlPath, cwd, specBase, changeName, fa
  * 串行跑命中的模块子集，聚合结果。
  * 返回 shape 与 runFullCommand 一致（status/command/exitCode/durationMs/outputTail/reason/resultPath）。
  */
-function runModuleSubset({ cwd, specBase, changeName, hits }) {
+function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures = [] }) {
   const subsetStartedAt = Date.now()
-  const perModule = hits.map(h => runOneModule(h.name, h.test, cwd))
+  const perModule = hits.map(h => runOneModule(h.name, h.test, cwd, knownFailures))
   const status = aggregateStatus(perModule)
 
   const command = `module[${hits.map(h => h.name).join(',')}]`
@@ -423,6 +587,7 @@ function runModuleSubset({ cwd, specBase, changeName, hits }) {
     resultPath: null,
     mode: 'module-subset',
     fallbackReason: null,
+    exemptedCount: perModule.reduce((n, r) => n + (r.exemptedCount || 0), 0),
   }
 
   writeRunResult({
@@ -479,7 +644,12 @@ export function printVerifyTestCheck(result) {
     return
   }
   if (result.status === 'passed') {
-    console.log(`\n✅ Verify 实测通过：\`${result.command}\` 退出码 0（${(result.durationMs / 1000).toFixed(1)}s）`)
+    if (result.exemptedCount > 0) {
+      console.log(`\n✅ Verify 实测通过（含 ${result.exemptedCount} 个 known_failures 豁免）：\`${result.command}\` — ${result.reason}`)
+      console.warn('   ⚠️  本次 PASS 依赖 known_failures 豁免清单——请人工复核清单是否过宽（避免误豁免本变更引入的真实失败）。')
+    } else {
+      console.log(`\n✅ Verify 实测通过：\`${result.command}\` 退出码 0（${(result.durationMs / 1000).toFixed(1)}s）`)
+    }
   } else {
     console.error(`\n❌ Verify 实测失败：\`${result.command}\` — ${result.reason}`)
     if (result.outputTail) {

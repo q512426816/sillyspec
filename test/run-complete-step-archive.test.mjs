@@ -5,7 +5,7 @@
  * 的 _queryDbFirstCellForTest），避免跑完整 5 步 archive，专注锁住 completeStep 内
  * archive 分支（run.js:2990-3017）的现有行为：
  *   - 确认归档 + --confirm → archiveChangeDirectory 把 changes/<cn>/ 移到
- *     changes/archive/<date>-<cn>/，返回 {stageCompleted:false, nextPendingIdx:4}（非末步）
+ *     changes/archive/<归档日期>-<纯描述>/（源名前导日期去重，避免双日期），返回 {stageCompleted:false, nextPendingIdx:4}（非末步）
  *   - 归档后推荐文档校验（design.md / module-impact.md）齐全 → ✅；缺失 → ⚠️ 但不阻断
  *   - 缺 --confirm → 不移动、step 回退 pending、警告、返回 nextPendingIdx=3
  *
@@ -14,6 +14,7 @@
 import { writeFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { _completeStepForTest } from '../src/run.js'
+import { archiveDestDirName } from '../src/stage-contract.js'
 import { runCapturing, makeRepo, initChange, seedStage, cleanup, report } from './_complete-step-harness.mjs'
 
 const count = { passed: 0, failed: 0, failures: [] }
@@ -46,9 +47,10 @@ console.log('--- Case 1: confirm + 推荐文档齐全 → 移动 + ✅ 通过 --
       { confirm: true, changeName: cn, printNext: false }))
 
   const date = new Date().toISOString().slice(0, 10)
-  const archivedDir = join(specBase, 'changes', 'archive', `${date}-${cn}`)
+  const destName = archiveDestDirName(date, cn)
+  const archivedDir = join(specBase, 'changes', 'archive', destName)
   assert(!r.error, 'confirm 归档不应 process.exit')
-  assert(existsSync(archivedDir), `变更目录已移到 archive/${date}-${cn}/`)
+  assert(existsSync(archivedDir), `变更目录已移到 archive/${destName}/（源名 ${cn} 去重日期后）`)
   assert(!existsSync(changeDir), '原 changes/<cn>/ 已移走')
   assert(existsSync(join(archivedDir, 'plan.md')), '归档目录保留 plan.md')
   assert(r.stdout.includes('已归档'), 'stdout 含「已归档」')
@@ -78,7 +80,7 @@ console.log('\n--- Case 2: confirm + 缺推荐文档 → ⚠️ 警告不阻断 
 
   const date = new Date().toISOString().slice(0, 10)
   assert(!r.error, '缺推荐文档不应 process.exit（非阻断）')
-  assert(existsSync(join(specBase, 'changes', 'archive', `${date}-${cn}`)), '缺推荐文档仍完成归档移动')
+  assert(existsSync(join(specBase, 'changes', 'archive', archiveDestDirName(date, cn))), '缺推荐文档仍完成归档移动')
   assert(r.stdout.includes('归档校验警告'), 'stdout 含归档校验警告')
   assert(r.stdout.includes('module-impact.md'), '警告点名缺失的 module-impact.md')
 }

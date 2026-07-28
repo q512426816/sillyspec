@@ -486,12 +486,28 @@ function validateVerifyOutputs(cwd, changeName, context = {}) {
 }
 
 /**
+ * 计算归档目标目录名：保证 archive/ 下目录有且仅有一个日期前缀。
+ *
+ * 变更名创建时常已带 YYYY-MM-DD- 前缀（brainstorm 强制约定 + CLI 自动占位名），
+ * 若归档时再无条件拼一次 date- 前缀，会产生 2026-07-28-2026-07-28-<desc> 双日期。
+ * 这里先剥离源名前导日期，再统一拼归档当天日期 → 归档目录名恒为 <归档日期>-<纯描述>。
+ * 不带日期的源名（如 quick-<hash>）strip 无效，正常补日期，行为不变。
+ *
+ * 写（archiveChangeDirectory）与校验（validateArchiveOutputs）共用此函数，
+ * 避免「写和校验各自硬编码同公式」的漂移（曾因此导致双日期 bug 写校验都自洽通过）。
+ */
+export function archiveDestDirName(date, changeName) {
+  const stripped = String(changeName).replace(/^\d{4}-\d{2}-\d{2}-/, '')
+  return `${date}-${stripped}`
+}
+
+/**
  * archive 完成校验：检查归档目录完整性
  */
 function validateArchiveOutputs(cwd, changeName) {
   const archiveDir = join(cwd, '.sillyspec', 'changes', 'archive')
   const date = new Date().toISOString().slice(0, 10)
-  const destDir = join(archiveDir, `${date}-${changeName}`)
+  const destDir = join(archiveDir, archiveDestDirName(date, changeName))
 
   // 归档目录不存在 early return(引擎在存在时才跑)
   if (!existsSync(destDir)) {

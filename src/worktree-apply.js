@@ -18,7 +18,7 @@ import { join, resolve } from 'path';
 import { tmpdir } from 'os';
 import { createHash } from 'crypto';
 import { WorktreeManager } from './worktree.js';
-import { parseFileChangeList } from './change-list.js';
+import { parseFileChangeList, pathMatches } from './change-list.js';
 
 const CHANGES_REL = '.sillyspec/changes';
 
@@ -46,6 +46,20 @@ function gitQuiet(cwd, args) {
  */
 export function filterDeliverableFiles(files) {
   return files.filter(f => !f.startsWith('.sillyspec/') && f !== 'meta.json');
+}
+
+/**
+ * 校验变更文件是否都在 design.md 清单内——容差匹配（与 plan-postcheck validateDesignFileCoverage
+ * 同语义）：design 清单写 glob（双星通配）或目录前缀（如 src/ 子树）也能覆盖 git diff 出的具体路径，
+ * 避免「plan 阶段放过、apply 阶段卡死」逼用户回去补字面文件名。
+ *
+ * @param {string[]} changedFiles  git diff 出的具体变更路径
+ * @param {Set<string>} allowSet   design.md 清单项（可能含 glob / 目录前缀）
+ * @returns {string[]} 不被任何清单项覆盖的文件（违规项，apply 将据此 BLOCK）
+ */
+export function classifyAllowListViolations(changedFiles, allowSet) {
+  const allow = [...allowSet];
+  return changedFiles.filter(f => !allow.some(ap => pathMatches(f, ap)));
 }
 
 /**
@@ -170,14 +184,11 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
 
   // --- 4. 校验：变更文件 ⊆ 清单（无清单则跳过）---
   if (hasAllowList) {
-    for (const f of changedFiles) {
-      if (!allowSet.has(f)) {
-        result.extraFiles.push(f);
-      }
-    }
-    if (result.extraFiles.length > 0) {
+    const violations = classifyAllowListViolations(changedFiles, allowSet);
+    if (violations.length > 0) {
+      result.extraFiles.push(...violations);
       result.errors.push(
-        `文件清单校验失败：以下变更文件不在 design.md 清单中：\n  ${result.extraFiles.join('\n  ')}`
+        `文件清单校验失败：以下变更文件不在 design.md 清单中：\n  ${violations.join('\n  ')}`
       );
       return result;
     }

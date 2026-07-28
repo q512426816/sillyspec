@@ -29,6 +29,7 @@ import { SCAN_STATUS, POINTER_STATUS } from '../constants.js'
 import { printQuickAuditReview } from './quick-audit.js'
 import { validateQuickResult, allocateQuicklogEntry, findQuicklogEntry, completeQuicklogEntry } from '../quicklog.js'
 import { getRule } from '../stage-contract-spec.js'
+import { archiveDestDirName } from '../stage-contract.js'
 
 /**
  * 清洗项目名：只保留 ASCII 字母/数字/横线/下划线/点，过滤中文和特殊字符。
@@ -101,7 +102,8 @@ async function archiveChangeDirectory(pm, cwd, progress, specBase) {
   const archiveDir = join(changesDir, 'archive')
   const srcDir = join(changesDir, archiveChangeName)
   const date = new Date().toISOString().slice(0, 10)
-  const destDir = join(archiveDir, `${date}-${archiveChangeName}`)
+  const destName = archiveDestDirName(date, archiveChangeName)
+  const destDir = join(archiveDir, destName)
 
   if (!existsSync(srcDir)) {
     console.error(`❌ 归档失败：源目录不存在 ${srcDir}`)
@@ -157,7 +159,7 @@ async function archiveChangeDirectory(pm, cwd, progress, specBase) {
     console.warn(`⚠️  归档 worktree 清理失败（不阻断归档）: ${e.message}`)
   }
 
-  console.log(`📦 已归档：${archiveChangeName} → archive/${date}-${archiveChangeName}/`)
+  console.log(`📦 已归档：${archiveChangeName} → archive/${destName}/`)
   return destDir
 }
 /**

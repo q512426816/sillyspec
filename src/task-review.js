@@ -8,7 +8,7 @@
  *   .sillyspec/.runtime/execute-runs/<runId>/tasks/<taskId>/review.json
  */
 
-import { existsSync, readFileSync, mkdirSync, writeFileSync, readdirSync } from 'fs'
+import { existsSync, readFileSync, mkdirSync, writeFileSync, readdirSync, statSync } from 'fs'
 import { join, resolve } from 'path'
 import { execFileSync } from 'child_process'
 
@@ -31,6 +31,122 @@ export function parseTaskIdsFromPlan(planContent) {
     ids.add(`task-${m[1].padStart(2, '0')}`)
   }
   return [...ids].sort()
+}
+
+/**
+ * 统计 plan.md/tasks.md 中 task-NN checkbox 的勾选情况（降级口径）。
+ * 与 progress.js readPlanCheckboxStatus 同语义，但纯函数、无类依赖，供 summarizeTaskCompletion 降级复用。
+ */
+function countPlanCheckboxes(planContent) {
+  const re = /^\s*[-*]\s+\[([ xX])\]\s+task-\d+/gm
+  let total = 0
+  let checked = 0
+  let m
+  while ((m = re.exec(planContent)) !== null) {
+    total++
+    if (m[1] === 'x' || m[1] === 'X') checked++
+  }
+  return { total, checked }
+}
+
+/**
+ * 汇总变更的任务完成度 —— archive Step1「任务完成度检查」的客观真相源。
+ *
+ * 以 execute 阶段产出的 review.json verdict 为准（task-NN 的 specVerdict + qualityVerdict 均 ≠ fail
+ * 视为完成），而非 plan.md checkbox。原因：plan.md checkbox 依赖 autoCheckPlanFromReviews 回填，
+ * 而 runId marker / review.json 缺失时回填静默 no-op，checkbox 会停在未勾态，导致完成度失真
+ * （archive 误判「全未完成」）。review.json 是 task 级客观 verdict，不受回填断裂影响。
+ *
+ * runId 解析：优先 current-execute-run-id-<changeName> marker（最新一次 execute run）；
+ * marker 缺失则扫描 execute-runs/ 下子目录、取 mtime 最新的，尽力定位。
+ *
+ * fail-safe：无 plan / 无 runId / review 全缺等任何异常，降级到 plan.md checkbox 统计 + 标注 source，
+ * 绝不抛错、绝不阻断 archive（最坏退回「数 checkbox」现状，不比修复前差）。
+ *
+ * @param {{ changeDir: string, runtimeRoot: string, changeName: string }} opts
+ * @returns {{ source: string, total: number, completed: number, pending: Array<{id:string,reason:string}>, report: string }}
+ *   source: 'review.json'（客观源可用）/ 'plan-checkbox-fallback'（降级）/ 'no-plan' / 'no-tasks'
+ *   report: 人类可读报告，供 prompt {TASK_COMPLETION_REPORT} 注入
+ */
+export function summarizeTaskCompletion({ changeDir, runtimeRoot, changeName }) {
+  const noPlan = {
+    source: 'no-plan', total: 0, completed: 0, pending: [],
+    report: '⚠️ 未找到 plan.md/tasks.md，无法计算任务完成度。请确认变更目录完整。'
+  }
+  if (!changeDir) return noPlan
+
+  const planPath = join(changeDir, 'plan.md')
+  const tasksPath = join(changeDir, 'tasks.md')
+  let planContent = null
+  if (existsSync(planPath)) planContent = readFileSync(planPath, 'utf8')
+  else if (existsSync(tasksPath)) planContent = readFileSync(tasksPath, 'utf8')
+  else return noPlan
+
+  const taskIds = parseTaskIdsFromPlan(planContent)
+  if (taskIds.length === 0) {
+    return { source: 'no-tasks', total: 0, completed: 0, pending: [],
+      report: '⚠️ plan.md 未解析出任何 task-NN 条目（plan 可能未按规范写 checkbox 列表）。' }
+  }
+
+  // runId 解析：marker → 扫描最新目录
+  let runId = null
+  const marker = join(runtimeRoot, `current-execute-run-id-${changeName}`)
+  try { if (existsSync(marker)) runId = readFileSync(marker, 'utf8').trim() } catch {}
+  if (!runId) {
+    try {
+      const runsDir = join(runtimeRoot, 'execute-runs')
+      if (existsSync(runsDir)) {
+        const entries = readdirSync(runsDir)
+          .map(e => ({ e, p: join(runsDir, e) }))
+          .filter(x => { try { return statSync(x.p).isDirectory() } catch { return false } })
+          .map(x => ({ e: x.e, mtime: statSync(x.p).mtimeMs }))
+          .sort((a, b) => b.mtime - a.mtime)
+        if (entries.length > 0) runId = entries[0].e
+      }
+    } catch {}
+  }
+
+  // 无 runId → 降级 plan.md checkbox 统计
+  if (!runId) {
+    const { total, checked } = countPlanCheckboxes(planContent)
+    return {
+      source: 'plan-checkbox-fallback', total, completed: checked,
+      pending: taskIds.slice(0, Math.max(0, total - checked)).map(id => ({ id, reason: 'checkbox 未勾（降级口径）' })),
+      report:
+        '⚠️ 客观源不可用（无 execute runId marker，review.json 无法定位）→ 降级用 plan.md checkbox。\n' +
+        `- 总任务：${total}\n- plan.md 已勾选：${checked}\n` +
+        '⚠️ checkbox 可能因 autoCheckPlanFromReviews 回填断裂而失真，务必交叉核对 .runtime/execute-runs/*/tasks/task-NN/review.json 的 verdict 再下结论。'
+    }
+  }
+
+  // 有 runId → 读 review.json verdict
+  const completed = []
+  const pending = []
+  for (const id of taskIds) {
+    const reviewPath = join(runtimeRoot, 'execute-runs', runId, 'tasks', id, 'review.json')
+    const r = readReview(reviewPath)
+    if (r.ok && r.review && r.review.specVerdict !== 'fail' && r.review.qualityVerdict !== 'fail') {
+      completed.push(id)
+    } else if (r.ok && r.review) {
+      pending.push({ id, reason: `verdict 未通过（spec=${r.review.specVerdict}, quality=${r.review.qualityVerdict}）` })
+    } else {
+      pending.push({ id, reason: 'review.json 缺失（task 未走完 execute 评审）' })
+    }
+  }
+
+  const pendingLines = pending.length > 0
+    ? pending.map(p => `  - ${p.id}: ${p.reason}`).join('\n')
+    : '  （无）'
+  return {
+    source: 'review.json', total: taskIds.length, completed: completed.length, pending,
+    report:
+      `客观任务完成度（真相源 = review.json verdict，runId=${runId}）:\n` +
+      `- 总任务：${taskIds.length}\n` +
+      `- 已通过（spec + quality verdict 均非 fail）：${completed.length}\n` +
+      `- 未通过 / 缺失：${pending.length}\n` +
+      `- 未完成列表:\n${pendingLines}\n` +
+      '注：以 review.json verdict 为准；plan.md checkbox 仅作显示态（回填断裂时会与客观 verdict 不一致，以下方客观点为准）。'
+  }
 }
 
 /**
@@ -80,6 +196,36 @@ export function validateReviewSchema(review) {
 }
 
 /**
+ * 增强 JSON.parse 失败的定位：从 V8 的 "at position N" 算出 line:col + 出错行上下文，
+ * 并对常见非法转义（正则的反斜杠序列误入 JSON 字符串）给针对性修复指引。
+ * @param {string} raw  原始文件内容
+ * @param {string} message  V8 抛出的错误消息
+ * @returns {string} 增强后的可读消息
+ */
+export function enrichJsonParseError(raw, message) {
+  const m = /at position (\d+)/.exec(message)
+  if (!m) return message
+  const pos = Math.min(Number(m[1]), raw.length)
+  let line = 1, col = 1
+  for (let i = 0; i < pos; i++) {
+    if (raw[i] === '\n') { line++; col = 1 } else { col++ }
+  }
+  const lineStart = raw.lastIndexOf('\n', pos - 1) + 1
+  const nlAfter = raw.indexOf('\n', pos)
+  const lineEnd = nlAfter === -1 ? raw.length : nlAfter
+  const snippet = raw.slice(lineStart, lineEnd)
+  const caret = ' '.repeat(Math.max(0, col - 1)) + '^'
+  // 单行注释内的反斜杠序列是纯文本，不触发块注释终止；正则字面量在函数体内正常解析。
+  let out = message + '\n  → 第 ' + line + ' 行第 ' + col + ' 列：\n    ' + snippet + '\n    ' + caret
+  // 先移除合法的成对反斜杠（JSON 中 \\ 表字面 \），否则 "\\z" 会被逐字符正则误判为 "\z" 非法转义
+  const hasBadEscape = message.includes('Bad escaped character') || /\\[^"\\/bfnrtu]/.test(snippet.replace(/\\\\/g, ''))
+  if (hasBadEscape) {
+    out += '\n  → 疑似正则转义（如 \\s \\d \\w）混入 JSON 字符串。修复：双写反斜杠（\\\\s），或用 JSON.stringify(obj) 重写 review.json。'
+  }
+  return out
+}
+
+/**
  * 读取单个 task 的 review.json
  * @param {string} reviewPath - review.json 文件路径
  * @returns {{ ok: boolean, review: object|null, errors: string[] }}
@@ -100,8 +246,8 @@ export function readReview(reviewPath) {
   try {
     parsed = JSON.parse(raw)
   } catch (e) {
-    // 文件存在但 JSON 非法：review 设为 null 但标记 parseError=true
-    return { ok: false, review: null, parseError: true, errors: [`review.json 解析失败: ${e.message}`] }
+    // 文件存在但 JSON 非法：review 设为 null 但标记 parseError=true，错误消息带行列定位 + 转义修复指引
+    return { ok: false, review: null, parseError: true, errors: [`review.json 解析失败: ${enrichJsonParseError(raw, e.message)}`] }
   }
 
   const schemaResult = validateReviewSchema(parsed)

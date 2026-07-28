@@ -517,6 +517,26 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
     }
   }
 
+  // archive Step1「任务完成度检查」客观真相源注入：以 review.json verdict 算完成度，
+  // 替代「机械数 plan.md checkbox」（checkbox 依赖 autoCheckPlanFromReviews 回填，runId marker /
+  // review 缺失时回填静默 no-op，会停在未勾态导致完成度失真 → archive 误判「全未完成」）。
+  // summarizeTaskCompletion 内部已 fail-safe 降级（无 plan / 无 runId → checkbox 统计 + 标注 source），
+  // 此处仅兜底注入异常，绝不阻断 archive。
+  if (stageName === 'archive' && promptText.includes('{TASK_COMPLETION_REPORT}')) {
+    try {
+      const { summarizeTaskCompletion } = await import('../task-review.js')
+      const tcrSpecBase = platformOpts?.specRoot || join(cwd, '.sillyspec')
+      const tcrRuntimeRoot = platformOpts?.runtimeRoot || join(tcrSpecBase, '.runtime')
+      const tcrChangeDir = changeName ? join(tcrSpecBase, 'changes', changeName) : null
+      const summary = tcrChangeDir
+        ? summarizeTaskCompletion({ changeDir: tcrChangeDir, runtimeRoot: tcrRuntimeRoot, changeName })
+        : null
+      promptText = promptText.split('{TASK_COMPLETION_REPORT}').join(summary ? summary.report : '（无法计算完成度：变更目录缺失）')
+    } catch (e) {
+      promptText = promptText.split('{TASK_COMPLETION_REPORT}').join('（完成度计算异常：' + e.message + '，请手动核对 plan.md 与 .runtime/execute-runs/*/tasks/task-NN/review.json）')
+    }
+  }
+
   // 注入模块上下文（brainstorm/plan/execute 阶段，基于 Module Context Index）
   if (['brainstorm', 'plan', 'execute'].includes(stageName) && projectName) {
     const effectiveSpecBase = platformOpts?.specRoot || join(cwd, '.sillyspec')

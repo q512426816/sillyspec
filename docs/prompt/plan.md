@@ -430,6 +430,13 @@ TaskCard 格式规则（必须严格遵守）：
 - verify: 列表，实际可执行的命令
 - constraints: 列表，明确边界（含 brownfield 兼容、异常处理）
 - 不需要：修改文件章节、覆盖来源章节、接口定义章节、TDD 步骤章节、参考章节
+- frontmatter 必须以三减号结尾闭合（开头和结尾各一行 ---）。缺结尾会让 postcheck 提取不到 frontmatter，误报「字段缺失 / allowed_paths 为空」
+- allowed_paths 用块式写法（键名换行后每项一行「  - 路径」），不要用流式方括号 [path]——块式与所有校验器一致最稳
+- implementation / acceptance / constraints / verify 的每条列表项是 YAML plain scalar，避免以下特殊字符触发 ScannerError：
+  - 冒号+空格（如代码签名 provider_id:str、queryUsage(id:string)）会被当映射键报 mapping values are not allowed here——去掉冒号后空格或改成中文描述
+  - 花括号且内部含冒号或引号（如 JS 对象、JS 模板字面量）会报 expected block end——改用不含这些字符的中文描述
+  - 引号不成对会报扫描错误
+  - 注：goal 用 > 折叠标量可容忍花括号，goal 里写占位符不炸；只有上述 plain scalar 列表项需注意
 - provides / expects_from 是可选字段：仅当跨 task 契约（一个 task 的接口/DTO/响应被另一个 task 消费）时才填，单 task 或无对外接口场景留空即可
 - 填写后 plan-postcheck 会做硬对账：consumer 的每个 expects_from[provider].needs 字段必须在对应 provider 的 provides.fields 里，否则 plan 阶段阻断（不进入 execute）
 - 不要把内部实现字段塞进 provides；只暴露给其他 task 的对外契约形状
@@ -499,6 +506,13 @@ TaskCard 格式规则（必须严格遵守）：
 - verify: 列表，实际可执行的命令
 - constraints: 列表，明确边界（含 brownfield 兼容、异常处理）
 - 不需要：修改文件章节、覆盖来源章节、接口定义章节、TDD 步骤章节、参考章节
+- frontmatter 必须以三减号结尾闭合（开头和结尾各一行 ---）。缺结尾会让 postcheck 提取不到 frontmatter，误报「字段缺失 / allowed_paths 为空」
+- allowed_paths 用块式写法（键名换行后每项一行「  - 路径」），不要用流式方括号 [path]——块式与所有校验器一致最稳
+- implementation / acceptance / constraints / verify 的每条列表项是 YAML plain scalar，避免以下特殊字符触发 ScannerError：
+  - 冒号+空格（如代码签名 provider_id:str、queryUsage(id:string)）会被当映射键报 mapping values are not allowed here——去掉冒号后空格或改成中文描述
+  - 花括号且内部含冒号或引号（如 JS 对象、JS 模板字面量）会报 expected block end——改用不含这些字符的中文描述
+  - 引号不成对会报扫描错误
+  - 注：goal 用 > 折叠标量可容忍花括号，goal 里写占位符不炸；只有上述 plain scalar 列表项需注意
 - provides / expects_from 是可选字段：仅当跨 task 契约（一个 task 的接口/DTO/响应被另一个 task 消费）时才填，单 task 或无对外接口场景留空即可
 - 填写后 plan-postcheck 会做硬对账：consumer 的每个 expects_from[provider].needs 字段必须在对应 provider 的 provides.fields 里，否则 plan 阶段阻断（不进入 execute）
 - 不要把内部实现字段塞进 provides；只暴露给其他 task 的对外契约形状
@@ -568,6 +582,13 @@ TaskCard 格式规则（必须严格遵守）：
 - verify: 列表，实际可执行的命令
 - constraints: 列表，明确边界（含 brownfield 兼容、异常处理）
 - 不需要：修改文件章节、覆盖来源章节、接口定义章节、TDD 步骤章节、参考章节
+- frontmatter 必须以三减号结尾闭合（开头和结尾各一行 ---）。缺结尾会让 postcheck 提取不到 frontmatter，误报「字段缺失 / allowed_paths 为空」
+- allowed_paths 用块式写法（键名换行后每项一行「  - 路径」），不要用流式方括号 [path]——块式与所有校验器一致最稳
+- implementation / acceptance / constraints / verify 的每条列表项是 YAML plain scalar，避免以下特殊字符触发 ScannerError：
+  - 冒号+空格（如代码签名 provider_id:str、queryUsage(id:string)）会被当映射键报 mapping values are not allowed here——去掉冒号后空格或改成中文描述
+  - 花括号且内部含冒号或引号（如 JS 对象、JS 模板字面量）会报 expected block end——改用不含这些字符的中文描述
+  - 引号不成对会报扫描错误
+  - 注：goal 用 > 折叠标量可容忍花括号，goal 里写占位符不炸；只有上述 plain scalar 列表项需注意
 - provides / expects_from 是可选字段：仅当跨 task 契约（一个 task 的接口/DTO/响应被另一个 task 消费）时才填，单 task 或无对外接口场景留空即可
 - 填写后 plan-postcheck 会做硬对账：consumer 的每个 expects_from[provider].needs 字段必须在对应 provider 的 provides.fields 里，否则 plan 阶段阻断（不进入 execute）
 - 不要把内部实现字段塞进 provides；只暴露给其他 task 的对外契约形状
