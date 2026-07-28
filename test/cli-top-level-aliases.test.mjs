@@ -106,11 +106,14 @@ try {
   console.log('\n=== Test 2: sillyspec doctor 与 sillyspec run doctor 等价 ===')
   {
     const cwd = join(tmpRoot, 'doctor-cmp')
-    mkdirSync(cwd, { recursive: true })
+    const specDir = join(cwd, 'spec') // 钉死本地 spec 目录：绕开 cwd 上溯 + home 碰撞
+    mkdirSync(specDir, { recursive: true })
     cleanSillySpec(cwd)
-    const top = runCLI(['doctor'], cwd)
-    cleanSillySpec(cwd)
-    const viaRun = runCLI(['run', 'doctor'], cwd)
+    // --spec-dir 钉死后两路读同一本地 spec 状态 → 字节一致（doctor/scan 均已实证）。
+    // 不在两路之间 cleanSillySpec：那是 Windows flaky 根因——.runtime/sillyspec.db
+    // 句柄未释放致清理失败 → 第二路读残留 → 输出差异。钉死后 between-run 清理非必需。
+    const top = runCLI(['doctor', '--spec-dir', specDir], cwd)
+    const viaRun = runCLI(['run', 'doctor', '--spec-dir', specDir], cwd)
     assert(
       top.status === viaRun.status,
       `exit code 一致: doctor=${top.status}, run doctor=${viaRun.status}`
@@ -129,11 +132,11 @@ try {
   console.log('\n=== Test 3: sillyspec scan 与 sillyspec run scan 等价 ===')
   {
     const cwd = join(tmpRoot, 'scan-cmp')
-    mkdirSync(cwd, { recursive: true })
+    const specDir = join(cwd, 'spec') // 钉死本地 spec 目录（同 Test 2，消除 between-run 清理竞争）
+    mkdirSync(specDir, { recursive: true })
     cleanSillySpec(cwd)
-    const top = runCLI(['scan'], cwd)
-    cleanSillySpec(cwd)
-    const viaRun = runCLI(['run', 'scan'], cwd)
+    const top = runCLI(['scan', '--spec-dir', specDir], cwd)
+    const viaRun = runCLI(['run', 'scan', '--spec-dir', specDir], cwd)
     assert(
       top.status === viaRun.status,
       `exit code 一致: scan=${top.status}, run scan=${viaRun.status}`
