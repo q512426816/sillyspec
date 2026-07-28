@@ -199,7 +199,12 @@ export function verifyStageReviewDocHash(review, searchDirs) {
     if (actual === null) continue
     // 找到主文档，比对 hash
     if (review.docHash.toLowerCase() !== actual.toLowerCase()) {
-      errors.push(`docHash 与主审查文档 ${primaryRel} 的实际内容不匹配 — review.json 疑似伪造（未真正读取文档）`)
+      errors.push(
+        `docHash 与主审查文档 ${primaryRel} 的实际内容不匹配。` +
+        `若刚改过该文档（如 design 修订后忘重算），重算并更新 review.json 的 docHash 字段：` +
+        `在基准目录 ${base} 下运行 sha256sum "${primaryRel}" 取首列 hex 填入；` +
+        `若未改文档，则 review.json 疑似伪造（未真正读取文档）。`
+      )
       return { ok: false, errors, warnings }
     }
     return { ok: true, errors, warnings }
