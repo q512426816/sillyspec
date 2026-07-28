@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-06-04 16:25:42
-updated_at: 2026-07-09T13:10:00+08:00
+updated_at: 2026-07-28T12:00:00+08:00
 ---
 
 # 平台模式、Workflow 与 Sync
@@ -228,4 +228,4 @@ sync(changeName, cwd)
 syncMod.checkApproval(changeName, cwd)
 ```
 
-自动 sync 和审批检查都是 best-effort：未连接平台、网络失败或本地更新失败时只 warning，不阻断本地阶段推进。
+自动 sync 和审批检查都是 best-effort：未连接平台是本地独立用户的合法默认状态，默认静默跳过（不输出噪音；设环境变量 SILLYSPEC_DEBUG_SYNC=1 可查看）；网络失败或本地更新失败时只 warning，不阻断本地阶段推进。

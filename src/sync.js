@@ -26,6 +26,13 @@ const LOCAL_YAML = '.sillyspec/local.yaml';
 const CHANGES_DIR = '.sillyspec/changes';
 const REQUEST_TIMEOUT_MS = 10_000;
 
+// 未连接平台是本地独立用户的合法默认状态。sync / syncDocuments / checkApproval 由 run 流程
+// 在后台 best-effort 触发（每步完成、execute 阶段启动），未连接时默认静默跳过——不每步催连
+// 平台制造噪音（本地用户根本不需要平台）。需要排查同步行为时设 SILLYSPEC_DEBUG_SYNC=1。
+function debugLog(msg) {
+  if (process.env.SILLYSPEC_DEBUG_SYNC) console.warn(msg)
+}
+
 /** 四件套文档文件名 */
 const DOCUMENT_FILES = ['proposal.md', 'design.md', 'requirements.md', 'tasks.md'];
 
@@ -193,7 +200,7 @@ export class SyncManager {
   async sync(changeName) {
     const platform = this._getPlatform();
     if (!platform) {
-      console.warn('[sync] 未连接平台，请先 sillyspec platform connect');
+      debugLog('[sync] 未连接平台（本地合法状态）；如需平台同步：sillyspec platform connect');
       return { synced: 0, errors: ['未连接平台'] };
     }
 
@@ -255,7 +262,7 @@ export class SyncManager {
   async syncDocuments(changeName) {
     const platform = this._getPlatform();
     if (!platform) {
-      console.warn('[sync] 未连接平台，请先 sillyspec platform connect');
+      debugLog('[sync] 未连接平台（本地合法状态）；如需平台同步：sillyspec platform connect');
       return { synced: 0, errors: ['未连接平台'] };
     }
 
@@ -317,7 +324,7 @@ export class SyncManager {
   async checkApproval(changeName) {
     const platform = this._getPlatform();
     if (!platform) {
-      console.warn('[sync] 未连接平台，请先 sillyspec platform connect');
+      debugLog('[sync] 未连接平台（本地合法状态）；如需平台同步：sillyspec platform connect');
       return { status: 'pending', reason: '未连接平台' };
     }
 

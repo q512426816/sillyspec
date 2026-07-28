@@ -175,8 +175,9 @@ export function validateStageReviewSchema(review) {
  * 对应 task-review.verifyReviewGitEvidence 的"防伪造"职责——agent 不能凭空编一份
  * review.json 贴个假 hash。约定 docHash 对应 reviewedFiles[0]（主审查对象）。
  *
- * searchDirs 依次尝试解析 reviewedFiles 的相对路径（specBase / changeDir / cwd 都可能）。
- * 主文档在所有基准下都找不到时降级 warning，不阻断（不因路径基准差异误杀）。
+ * searchDirs 依次尝试解析 reviewedFiles[0] 的相对路径（effectiveSpecBase / changeDir / cwd）。
+ * 主文档在所有基准下都找不到时 fail-closed 阻断——连主审查文档都定位不到，要么 reviewedFiles[0]
+ * 是伪造路径（防 agent 填假路径跳过校验），要么路径基准严重错位，两者都不该静默放行。
  *
  * @param {object} review - 已通过 schema 校验
  * @param {string[]} searchDirs - 解析相对路径的候选基准目录（绝对路径）
@@ -204,9 +205,13 @@ export function verifyStageReviewDocHash(review, searchDirs) {
     return { ok: true, errors, warnings }
   }
 
-  // 所有基准都找不到主文档：路径基准差异，降级 warning
-  warnings.push(`主审查文档 ${primaryRel} 在候选目录下均不存在，跳过 docHash 校验（可能路径基准不同）`)
-  return { ok: true, errors, warnings }
+  // 所有基准都找不到主文档 → fail-closed。连主审查文档都定位不到，说明 reviewedFiles[0] 要么
+  // 是伪造路径（恶意 agent 填假路径跳过 docHash 校验），要么路径基准严重错位——两者都该阻断
+  // 而非静默放行（历史降级 warning 是可被利用的伪造通道）。searchDirs =
+  // [effectiveSpecBase(.sillyspec), reviewChangeDir(changes/<change>), cwd]，契约规定的
+  // reviewedFiles[0]（changes/<change>/<mainDoc> 或 <mainDoc>）在这三个基准下必命中其一。
+  errors.push('主审查文档 ' + primaryRel + ' 在 ' + (searchDirs || []).length + ' 个候选基准目录下均不存在 — 无法做 docHash 校验（reviewedFiles[0] 路径伪造或基准错位）')
+  return { ok: false, errors, warnings }
 }
 
 /**

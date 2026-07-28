@@ -175,12 +175,15 @@ console.log('\n=== 3. verifyStageReviewDocHash（docHash 防伪造）===\n')
   )
   assert(!r2.ok && r2.errors.length > 0, `docHash 不匹配 → fail（疑似伪造）`)
 
-  // 文件不存在 → 降级 warning，不阻断
+  // 文件不存在 → fail-closed：reviewedFiles[0] 在所有候选基准下都找不到，要么路径伪造要么
+  // 基准错位。gates.js 的 searchDirs=[effectiveSpecBase(.sillyspec), reviewChangeDir, cwd]
+  // 必命中契约 reviewedFiles[0]（changes/<change>/<mainDoc> 或 <mainDoc>）其一，故合法 review
+  // 不会误杀；找不到即判异常，阻断而非降级 warning（历史降级放行可被填假路径+假 hash 绕过）
   const r3 = verifyStageReviewDocHash(
     { reviewedFiles: ['missing.md'], docHash: 'whatever' },
     [dir],
   )
-  assert(r3.ok && r3.warnings.length > 0, `主文档不存在 → warning 放行（不误杀）`)
+  assert(!r3.ok && r3.errors.length > 0, '主文档不存在 → fail-closed 阻断（堵伪造路径绕过）')
 
   // 多候选基准目录：第一个找不到、第二个找到
   const dir2 = makeTmpDir('dh2-')

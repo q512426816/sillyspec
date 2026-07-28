@@ -96,5 +96,36 @@ console.log('\n=== 契约 schema 与 CLI 校验同源(合规通过 / 缺字段�
   rmSync(specBase, { recursive: true, force: true })
 }
 
+console.log('\n=== docHash 路径找不到 → fail-closed（防 reviewedFiles[0] 伪造绕过）===')
+{
+  // searchDirs 都不含 reviewedFiles[0] 指向的文件：恶意 agent 填假路径 + 假 hash，
+  // 旧逻辑降级 warning 放行(ok:true);fail-closed 后必须 ok:false 阻断。
+  const specBase = mkdtempSync(join(tmpdir(), 'review-failclosed-'))
+  const changeDir = join(specBase, 'changes', 'c')
+  mkdirSync(changeDir, { recursive: true })
+  // 故意不写 design.md — reviewedFiles[0] 在所有候选基准下都找不到
+  const fakeReview = {
+    schemaVersion: REVIEW_SCHEMA_VERSION,
+    reviewType: 'design',
+    specVerdict: 'pass', qualityVerdict: 'pass',
+    reviewedFiles: ['changes/c/design.md'],
+    docHash: 'deadbeef',
+    reviewerNotes: '通过',
+  }
+  assert(validateStageReviewSchema(fakeReview).ok, 'schema 单独看合规(字段齐全) — 漏洞在 docHash 无法交叉验证')
+  const dh = verifyStageReviewDocHash(fakeReview, [specBase, changeDir])
+  assert(!dh.ok, '主文档在所有候选基准下均不存在 → fail-closed ok:false(堵伪造路径绕过)')
+  assert(dh.errors.length > 0, 'fail-closed 产出 error(非 warning 静默放行)')
+  assert(dh.errors[0].includes('无法做 docHash'), 'error 文案指向路径伪造/基准错位')
+
+  // 对照:写回真实 design.md + 正确 hash → 通过(确保 fail-closed 没误伤合法路径)
+  writeFileSync(join(changeDir, 'design.md'), 'real content')
+  const realHash = computeDocHash(join(changeDir, 'design.md'))
+  const dhOk = verifyStageReviewDocHash({ ...fakeReview, docHash: realHash }, [specBase, changeDir])
+  assert(dhOk.ok, '对照:文件存在且 hash 正确 → 通过(fail-closed 不误伤合法 review)')
+
+  rmSync(specBase, { recursive: true, force: true })
+}
+
 console.log(`\n${failed === 0 ? '✅ 全部通过' : `❌ ${failed} 项失败`}`)
 if (failed > 0) throw new Error(`${failed} test(s) failed`)
