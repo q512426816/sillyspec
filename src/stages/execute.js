@@ -93,8 +93,9 @@ export const definition = {
 // 固定前缀步骤定义
 const fixedPrefix = [
   {
-    name: '状态检查',
-    prompt: `检查当前状态，确认可以执行 execute。
+    name: '进度确认',
+    migratedFrom: ['状态检查'],
+    prompt: `检查当前进度，确认可以执行 execute。用 \`sillyspec progress show\` 查流程进度，不要用 \`sillyspec status\`（项目级快照，不推进流程）。
 
 ### 操作
 1. 运行 \`sillyspec progress show\`

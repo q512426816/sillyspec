@@ -1,7 +1,7 @@
-# status（状态查看）阶段提示词
+# status（项目快照）阶段提示词
 
 > **源文件**：`src/stages/status.js`
-> **阶段定位**：查看项目进度和状态
+> **阶段定位**：项目级只读快照（非流程推进）。查「下一步该做什么/当前阶段进度」请用 sillyspec progress show，勿混淆。
 > **类型**：辅助阶段（auxiliary，无活跃变更时也可执行）
 > **全局角色 persona**：无
 > **全局护栏 _globalGuardrails**：无（仅有 CLI 统一铁律，见 [README.md](./README.md)）

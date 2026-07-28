@@ -11,7 +11,7 @@
 
 ---
 
-## Step 1/8：状态检查
+## Step 1/8：进度确认
 
 **元数据**
 - optional：false
@@ -21,7 +21,7 @@
 **提示词原文**
 
 ````markdown
-检查当前变更的进度状态（sillyspec.db）。
+检查当前变更的进度状态（sillyspec.db）。用 `sillyspec progress show` 查流程进度，不要用 `sillyspec status`（项目级快照，不推进流程）。
 
 ### 操作
 1. 运行 `sillyspec progress show`

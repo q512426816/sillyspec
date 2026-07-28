@@ -2,6 +2,7 @@
  * StageContract 状态转换 + validator 测试
  */
 import { checkTransition, runValidators, getContract } from '../src/stage-contract.js'
+import { detectChangeRisk, extractExplicitRiskLevel } from '../src/change-risk-profile.js'
 
 let failed = 0
 
@@ -382,6 +383,106 @@ if (!gateOk.errors.some(e => e.includes('缺少真实集成证据'))) {
 }
 
 rmSync(gateRoot, { recursive: true })
+
+// === risk_level 显式豁免（2026-07-28，反馈②）===
+// detectChangeRisk 是机械字面匹配，不认否定语境——design 写「不改动 daemon/session」仍误判高危级。
+// design.md frontmatter 加 risk_level 显式声明 → 以声明为准覆盖关键词判级；显式等级下 PASS WITH NOTES
+// 不被强制拦（豁免本就来自 design 的明确判断），PASS 仍要求对应证据。
+console.log('\n=== risk_level 显式豁免 ===')
+
+// 单测 1：extractExplicitRiskLevel 只认 frontmatter，不扫正文
+{
+  const withFm = '---\nauthor: qinyi\nrisk_level: unit-sufficient\n---\n# Design\n改 daemon。\n'
+  const inBody = '# Design\n\nrisk_level: unit-sufficient\n\n改 daemon。\n'
+  const illegal = '---\nrisk_level: not-a-level\n---\n# Design\n'
+  if (extractExplicitRiskLevel(withFm) === 'unit-sufficient'
+    && extractExplicitRiskLevel(inBody) === null
+    && extractExplicitRiskLevel(illegal) === null
+    && extractExplicitRiskLevel('') === null) {
+    console.log('✅ extractExplicitRiskLevel：认 frontmatter 合法值，拒正文/非法值/空')
+  } else {
+    console.log('❌ extractExplicitRiskLevel 解析异常', { withFm: extractExplicitRiskLevel(withFm), inBody: extractExplicitRiskLevel(inBody), illegal: extractExplicitRiskLevel(illegal) })
+    failed++
+  }
+}
+
+// 单测 2：detectChangeRisk 显式声明覆盖关键词误判（design 命中 daemon/session 但声明 unit-sufficient）
+{
+  const design = '---\nrisk_level: unit-sufficient\n---\n# Design\n本次不改动 daemon / session / lifecycle，仅调 service 文案。\n'
+  const r = detectChangeRisk({ designContent: design })
+  if (r.level === 'unit-sufficient' && r.explicit === true && !r.requiredVerification.includes('real_daemon_backend_integration')) {
+    console.log('✅ detectChangeRisk：risk_level 显式声明覆盖关键词误判 → unit-sufficient，免集成证据')
+  } else {
+    console.log('❌ detectChangeRisk 显式豁免未生效', r)
+    failed++
+  }
+  // 对照：无声明时同样措辞应被误判 integration-critical（证明关键词确实命中）
+  const rAuto = detectChangeRisk({ designContent: '# Design\n本次不改动 daemon / session / lifecycle。\n' })
+  if (rAuto.level === 'integration-critical' && !rAuto.explicit) {
+    console.log('✅ 对照：无显式声明时同措辞仍按关键词判 integration-critical（证明豁免生效于声明而非措辞）')
+  } else {
+    console.log('❌ 对照判级异常', rAuto)
+    failed++
+  }
+}
+
+// 集成 3：门控端到端 —— design 声明 unit-sufficient（虽命中 daemon）+ 结论 PASS + 仅单测 → 放行
+{
+  const exRoot = mkdtempSync(join(tmpdir(), 'sillyspec-risktag-'))
+  const exDir = join(exRoot, '.sillyspec', 'changes', 'risktag')
+  mkdirSync(exDir, { recursive: true })
+  writeFileSync(join(exDir, 'design.md'), [
+    '---', 'author: qinyi', 'risk_level: unit-sufficient', '---',
+    '# Design', '## 文件变更清单', '## 风险登记', '## 自审', '',
+    '本次不改动 daemon / session，仅改 service 文案。', 'D-001@v1', ''
+  ].join('\n'))
+  writeFileSync(join(exDir, 'plan.md'), '# Plan\n\n- [ ] task-01: 改文案\n')
+  writeFileSync(join(exDir, 'verify-result.md'), [
+    '# 验证报告', '', '## 结论', '', 'PASS', '',
+    '## 变更风险等级', 'risk_level 由 design frontmatter 显式声明 = unit-sufficient（覆盖关键词判级）：本次仅改 service 文案，未触 daemon/session。', '',
+    '单测全过。', ''
+  ].join('\n'))
+  const exPass = runValidators('verify', exRoot, 'risktag')
+  if (!exPass.errors.some(e => e.includes('缺少真实集成证据'))) {
+    console.log('✅ 门控：design 声明 unit-sufficient + PASS + 仅单测 → 不强制集成证据，放行')
+  } else {
+    console.log('❌ 显式豁免后门控仍强制集成证据', exPass.errors)
+    failed++
+  }
+
+  // 集成 4：显式声明 integration-critical + 结论 PASS WITH NOTES（无集成证据）→ 放行（显式等级放宽 PWN）
+  writeFileSync(join(exDir, 'design.md'), [
+    '---', 'author: qinyi', 'risk_level: integration-critical', '---',
+    '# Design', '## 文件变更清单', '## 风险登记', '## 自审', '',
+    '改 daemon 下发链路。', 'D-001@v1', ''
+  ].join('\n'))
+  writeFileSync(join(exDir, 'verify-result.md'), [
+    '# 验证报告', '', '## 结论', '', 'PASS WITH NOTES', '',
+    '## 变更风险等级', 'risk_level 由 design frontmatter 显式声明 = integration-critical。残留：端到端集成证据留待部署后补。', '',
+    '单测全过。', ''
+  ].join('\n'))
+  const exPwn = runValidators('verify', exRoot, 'risktag')
+  if (!exPwn.errors.some(e => e.includes('缺少真实集成证据'))) {
+    console.log('✅ 门控：显式 integration-critical + PASS WITH NOTES → 放宽，不强制集成证据')
+  } else {
+    console.log('❌ 显式等级下 PASS WITH NOTES 仍被拦', exPwn.errors)
+    failed++
+  }
+
+  // 集成 5：对照 —— 无显式声明、关键词判 integration-critical + PASS WITH NOTES（无证据）→ 仍拦
+  writeFileSync(join(exDir, 'design.md'), [
+    '# Design', '## 文件变更清单', '## 风险登记', '## 自审', '',
+    '改 daemon 下发链路。', 'D-001@v1', ''
+  ].join('\n'))
+  const exAutoPwn = runValidators('verify', exRoot, 'risktag')
+  if (exAutoPwn.errors.some(e => e.includes('缺少真实集成证据'))) {
+    console.log('✅ 对照：无显式声明 + 关键词判级 + PASS WITH NOTES → 仍强制集成证据（严格模式不变）')
+  } else {
+    console.log('❌ 无声明时 PASS WITH NOTES 竟被放行', exAutoPwn.errors)
+    failed++
+  }
+  rmSync(exRoot, { recursive: true })
+}
 
 // === StageContract 结构测试 ===
 console.log('\n=== Contract 结构测试 ===')

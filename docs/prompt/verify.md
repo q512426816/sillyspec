@@ -46,24 +46,28 @@
 
 ---
 
-## Step 1/7：状态检查
+## Step 1/7：进度确认
 
 **元数据**
 - optional：false
-- outputHint：状态摘要
+- outputHint：进度摘要
 - 等待配置：无（可直接 `--done`）
 
 **提示词原文**
 
 ````markdown
-检查当前状态，确认可以执行 verify。
+> 💡 先说清楚：`sillyspec run verify`（不带 --done）**只下发执行指令，不会替你跑测试/构建**——真正的测试由你（Agent）在「运行测试和质量扫描」那步自己执行；CLI 只在最后 --done 时亲自跑 local.yaml 的 test 对账。别以为敲了 run verify 就自动验证了。
+
+检查当前进度，确认可以执行 verify。
+
+> ⚠️ 本步用 `sillyspec progress show` 查**流程进度**（推进工作流用），不要用 `sillyspec status`（那是**项目级快照**，只读、不推进流程，是另一条命令）。
 
 ### 操作
 1. 运行 `sillyspec progress show`
 2. 确认 currentStage 为 "verify"
 
 ### 输出
-当前状态摘要
+当前进度摘要
 ````
 
 ---
@@ -263,6 +267,9 @@
 ### 操作
 1. 汇总以上所有检查结果
 2. **变更风险等级（change_risk_profile）由 CLI 自动判定与门控**：你无需自己扫描关键词。本步骤 --done 时，CLI 会用 detectChangeRisk 扫描 design.md / plan.md 自动判定等级（doc-only / unit-sufficient / contract-required / integration-critical / deployment-critical）并强制门控：integration-critical / deployment-critical 变更若结论为 PASS / PASS WITH NOTES 但缺少真实集成证据，CLI 直接阻断 verify 完成——谎报结论无效。
+   - **判级是机械字面匹配、不认否定语境**：design 里写「本次不改动 daemon/session」仍命中关键词被误判高危级。
+   - **误判时的诚实出路（豁免级）**：在 design.md 顶部 frontmatter 加一行 `risk_level: <真实等级>`（doc-only / unit-sufficient / contract-required / integration-critical / deployment-critical），CLI 会以声明为准覆盖关键词判级。声明后若是 unit-sufficient 等豁免级，PASS WITH NOTES 不再被强制拦；但结论为 PASS 仍需对应证据。
+   - **留痕要求（防逃逸）**：用了显式声明，必须在本报告「变更风险等级」section 写明「risk_level 由 design frontmatter 显式声明 = <等级>（覆盖关键词判级）」+ 一句话理由，让豁免可审计。
    你只需：在 verify-result.md 的「变更风险等级」section 如实记录变更性质；若变更涉及 daemon/backend 跨进程、session/lease/lifecycle 状态机、或部署启动路径，在「Runtime Evidence」section 提供真实集成证据（启动命令、daemon↔backend 调用与日志关键片段、终态断言）。
 
 3. 生成 verify-result.md 文件，保存到 `.sillyspec/changes/<change-name>/verify-result.md`
@@ -299,7 +306,7 @@ PASS / PASS WITH NOTES / FAIL
 （TODO/FIXME/HACK 统计）
 
 ## 变更风险等级
-（自动检测的 change_risk_profile: doc-only / unit-sufficient / contract-required / integration-critical / deployment-critical）
+（自动检测的 change_risk_profile: doc-only / unit-sufficient / contract-required / integration-critical / deployment-critical；若 design.md frontmatter 有 risk_level 显式声明，以声明为准并在此注明「显式声明 = <等级>」+ 理由）
 
 ## Runtime Evidence（integration-critical / deployment-critical 必填）
 - daemon 启动命令：

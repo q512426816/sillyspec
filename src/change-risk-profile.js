@@ -290,14 +290,49 @@ export const VERIFICATION_NEEDS = {
 export const RISK_LEVEL_CAUSES = {
   'deployment-critical':
     'design.md / plan.md 命中启动入口关键词（cli.ts / main.ts / server.(js|ts) / bootstrap / entrypoint）。' +
-    '注意：这是按 design/plan 里的措辞判定的，不一定代表你真改了启动入口；若属误判可在 design 中如实缩小范围，但不建议为绕门控而规避——危险链路该有真实启动证据。',
+    '注意：这是按 design/plan 里的措辞判定的，不一定代表你真改了启动入口；若属误判可在 design.md frontmatter 用 risk_level 显式声明真实等级（如 unit-sufficient）覆盖——不要靠删措辞绕门控，危险链路该有真实启动证据。',
   'integration-critical':
     'design.md / plan.md 命中跨进程/状态机关键词（daemon / backend / session / lease / lifecycle / heartbeat 等）。',
   'contract-required': 'design.md / plan.md 命中 API contract 关键词（api / client / contract / dto）。',
+  'explicit': 'design.md frontmatter 的 risk_level 显式声明（覆盖关键词判级）。',
+}
+
+/** design.md frontmatter 可显式声明的合法 risk_level 值（与 detectChangeRisk 判级结果同集合） */
+export const RISK_LEVELS = ['doc-only', 'unit-sufficient', 'contract-required', 'integration-critical', 'deployment-critical']
+
+/**
+ * 从 design.md 顶部 frontmatter 提取显式 risk_level 声明。
+ * 只认文档最开头 `---\n...\n---` 块内的 `risk_level: <level>` 单行（与 plan.md 的 plan_level 同款解析），
+ * 不扫正文——避免正文里讨论 risk_level 措辞时被误当声明。返回合法 level 或 null。
+ */
+export function extractExplicitRiskLevel(designContent = '') {
+  const fm = designContent.match(/^---\r?\n([\s\S]*?)\r?\n---/)
+  if (!fm) return null
+  const line = fm[1].split('\n').map(l => l.trim()).find(l => l.startsWith('risk_level:'))
+  if (!line) return null
+  const value = line.slice('risk_level:'.length).trim().replace(/^["']|["']$/g, '').toLowerCase()
+  return RISK_LEVELS.includes(value) ? value : null
 }
 
 export function detectChangeRisk({ designContent = '', planContent = '', changedFiles = [] } = {}) {
   const triggers = []
+
+  // ── 显式豁免优先：design.md frontmatter 声明 risk_level → 以声明为准，跳过关键词判级 ──
+  // 历史教训：detectChangeRisk 是机械字面匹配，不认否定语境——design 写「本次不改动 daemon/session」
+  // 仍命中关键词被误判 integration/deployment-critical，强制要全套集成证据，对无状态后端变更误伤。
+  // 与其在正则层做脆弱的否定识别，不如给一条显式、诚实、可审计（落在 design frontmatter + verify-result）
+  // 的覆盖通道。声明仍走门控（结论 FAIL 仍拦），但豁免级（unit-sufficient 等）不再强制集成证据。
+  const explicit = extractExplicitRiskLevel(designContent)
+  if (explicit) {
+    const requiredVerification =
+      explicit === 'deployment-critical' ? ['unit_tests', 'contract_tests', 'real_daemon_backend_integration', 'runtime_log_evidence', 'real_startup_once'] :
+      explicit === 'integration-critical' ? ['unit_tests', 'contract_tests', 'real_daemon_backend_integration', 'runtime_log_evidence', 'terminal_state_assertion'] :
+      explicit === 'contract-required' ? ['unit_tests', 'contract_tests'] :
+      explicit === 'doc-only' ? ['static_check'] :
+      ['unit_tests']
+    return { level: explicit, triggers: ['risk_level (explicit)'], requiredVerification, explicit: true }
+  }
+
   const combined = [designContent, planContent].join('\n')
 
   for (const pattern of INTEGRATION_CRITICAL_PATTERNS) {

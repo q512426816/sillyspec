@@ -884,7 +884,7 @@ async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts = 
     // Auto 模式下 brainstorm 使用 artifact-first 步骤
     if (stage === 'brainstorm') {
       const existingSteps = progress.stages?.brainstorm?.steps
-      const isAutoModeSteps = existingSteps?.length === 4 && existingSteps?.[0]?.name === '状态检查与上下文加载'
+      const isAutoModeSteps = existingSteps?.length === 4 && existingSteps?.[0]?.name === '进度确认与上下文加载'
       if (!isAutoModeSteps) {
         if (!progress.stages) progress.stages = {}
         progress.stages.brainstorm = {

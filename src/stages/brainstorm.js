@@ -4,8 +4,10 @@ export const definition = {
   description: '探索需求、分析技术方案、识别风险',
   steps: [
     {
-      name: '状态检查',
-      prompt: `检查当前变更的进度状态（sillyspec.db）。
+      name: '进度确认',
+      // 重命名自「状态检查」（③ status 消歧）：老进度里的「状态检查」completed 由迁移逻辑承接，防 currentIdx 回跳
+      migratedFrom: ['状态检查'],
+      prompt: `检查当前变更的进度状态（sillyspec.db）。用 \`sillyspec progress show\` 查流程进度，不要用 \`sillyspec status\`（项目级快照，不推进流程）。
 
 ### 操作
 1. 运行 \`sillyspec progress show\`

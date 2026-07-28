@@ -11,7 +11,7 @@
 
 ---
 
-## Step 1/12：状态检查
+## Step 1/12：进度确认
 
 **元数据**
 - optional：false
@@ -21,7 +21,7 @@
 **提示词原文**
 
 ````markdown
-检查当前状态，确认可以执行 execute。
+检查当前进度，确认可以执行 execute。用 `sillyspec progress show` 查流程进度，不要用 `sillyspec status`（项目级快照，不推进流程）。
 
 ### 操作
 1. 运行 `sillyspec progress show`
@@ -534,7 +534,7 @@ execute 是**动态阶段**，steps 由 `buildExecuteSteps(planFilePath, options
 
 | 段 | 步数 | 来源 | 说明 |
 |---|---|---|---|
-| 固定前缀 | 4 | `fixedPrefix` | 状态检查 → 加载上下文 → 确认 worktree 路径 → 确认执行范围（含知识库命中报告） |
+| 固定前缀 | 4 | `fixedPrefix` | 进度确认 → 加载上下文 → 确认 worktree 路径 → 确认执行范围（含知识库命中报告） |
 | Wave 执行 | N | `buildWavePrompt(wave, waveIndex, changeDir, worktreePath)` | N = `parseWavesFromPlan(plan.md)` 解析出的 Wave 数；**无 plan 或解析不到 task 时默认 3 Wave**（向后兼容） |
 | 全局验收 | 3 | `acceptanceSteps` | 对照设计检查（`mode: acceptance`，含 review.json 契约）→ 运行测试 → 代码审查 |
 | 固定后缀 | 2 | `fixedSuffix` | 知识库审阅 → 完成确认（worktree apply/cleanup） |

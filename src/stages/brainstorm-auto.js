@@ -16,8 +16,9 @@ export const definition = {
 
   steps: [
     {
-      name: '状态检查与上下文加载',
-      prompt: `检查状态、加载项目上下文、匹配模块。
+      name: '进度确认与上下文加载',
+      migratedFrom: ['状态检查与上下文加载'],
+      prompt: `检查进度、加载项目上下文、匹配模块。用 \`sillyspec progress show\` 查流程进度，不要用 \`sillyspec status\`（项目级快照，不推进流程）。
 
 ### 操作
 1. 运行 \`sillyspec progress show\`，确认 currentStage 为 "brainstorm"

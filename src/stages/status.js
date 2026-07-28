@@ -1,7 +1,7 @@
 export const definition = {
   name: 'status',
-  title: '状态查看',
-  description: '查看项目进度和状态',
+  title: '项目快照',
+  description: '项目级只读快照（非流程推进）。查「下一步该做什么/当前阶段进度」请用 sillyspec progress show，勿混淆。',
   auxiliary: true,
   steps: [
     {

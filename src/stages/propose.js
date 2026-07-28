@@ -9,8 +9,9 @@ export const definition = {
   description: '生成结构化规范 — proposal + design + tasks',
   steps: [
     {
-      name: '状态检查',
-      prompt: `检查当前状态，确认可以执行 propose。
+      name: '进度确认',
+      migratedFrom: ['状态检查'],
+      prompt: `检查当前进度，确认可以执行 propose。用 \`sillyspec progress show\` 查流程进度，不要用 \`sillyspec status\`（项目级快照，不推进流程）。
 
 ### 操作
 1. 运行 \`sillyspec progress show\`

@@ -9,10 +9,13 @@
     "steps": [
       {
         "index": 0,
-        "name": "状态检查",
-        "prompt": "检查当前变更的进度状态（sillyspec.db）。\n\n### 操作\n1. 运行 `sillyspec progress show`\n2. 确认 currentStage 为 \"brainstorm\"\n3. 如果有进行中的 brainstorm，提示选择继续或重新开始\n4. 如果未初始化，提示先运行 sillyspec init\n5. **检查变更名称是否有意义**：如果当前变更名是自动生成的（如 `2026-06-02-new-change-a3f2b7c1`），询问用户确认实际变更名，然后运行 `sillyspec change-rename <旧名> <新名>` 重命名\n\n### 输出\n当前状态摘要（1-2 句话）\n\n### 注意\n- 以 CLI 返回为准，不要自行推断阶段\n- 如果阶段不对，输出正确提示并停止\n- **不要用 mv 命令重命名变更目录**，必须使用 `sillyspec change-rename`，否则 DB 和目录会脱节",
+        "name": "进度确认",
+        "prompt": "检查当前变更的进度状态（sillyspec.db）。用 `sillyspec progress show` 查流程进度，不要用 `sillyspec status`（项目级快照，不推进流程）。\n\n### 操作\n1. 运行 `sillyspec progress show`\n2. 确认 currentStage 为 \"brainstorm\"\n3. 如果有进行中的 brainstorm，提示选择继续或重新开始\n4. 如果未初始化，提示先运行 sillyspec init\n5. **检查变更名称是否有意义**：如果当前变更名是自动生成的（如 `2026-06-02-new-change-a3f2b7c1`），询问用户确认实际变更名，然后运行 `sillyspec change-rename <旧名> <新名>` 重命名\n\n### 输出\n当前状态摘要（1-2 句话）\n\n### 注意\n- 以 CLI 返回为准，不要自行推断阶段\n- 如果阶段不对，输出正确提示并停止\n- **不要用 mv 命令重命名变更目录**，必须使用 `sillyspec change-rename`，否则 DB 和目录会脱节",
         "outputHint": "状态摘要",
-        "optional": false
+        "optional": false,
+        "migratedFrom": [
+          "状态检查"
+        ]
       },
       {
         "index": 1,
@@ -121,10 +124,13 @@
     "steps": [
       {
         "index": 0,
-        "name": "状态检查",
-        "prompt": "检查当前状态，确认可以执行 propose。\n\n### 操作\n1. 运行 `sillyspec progress show`\n2. 确认 currentStage 为 \"propose\"\n3. 如果没有设计文档 → 提示先运行 brainstorm\n\n### 输出\n当前状态摘要",
+        "name": "进度确认",
+        "prompt": "检查当前进度，确认可以执行 propose。用 `sillyspec progress show` 查流程进度，不要用 `sillyspec status`（项目级快照，不推进流程）。\n\n### 操作\n1. 运行 `sillyspec progress show`\n2. 确认 currentStage 为 \"propose\"\n3. 如果没有设计文档 → 提示先运行 brainstorm\n\n### 输出\n当前状态摘要",
         "outputHint": "状态摘要",
-        "optional": false
+        "optional": false,
+        "migratedFrom": [
+          "状态检查"
+        ]
       },
       {
         "index": 1,
@@ -180,10 +186,13 @@
     "steps": [
       {
         "index": 0,
-        "name": "状态检查",
-        "prompt": "检查当前状态，确认可以执行 verify。\n\n### 操作\n1. 运行 `sillyspec progress show`\n2. 确认 currentStage 为 \"verify\"\n\n### 输出\n当前状态摘要",
-        "outputHint": "状态摘要",
-        "optional": false
+        "name": "进度确认",
+        "prompt": "> 💡 先说清楚：`sillyspec run verify`（不带 --done）**只下发执行指令，不会替你跑测试/构建**——真正的测试由你（Agent）在「运行测试和质量扫描」那步自己执行；CLI 只在最后 --done 时亲自跑 local.yaml 的 test 对账。别以为敲了 run verify 就自动验证了。\n\n检查当前进度，确认可以执行 verify。\n\n> ⚠️ 本步用 `sillyspec progress show` 查**流程进度**（推进工作流用），不要用 `sillyspec status`（那是**项目级快照**，只读、不推进流程，是另一条命令）。\n\n### 操作\n1. 运行 `sillyspec progress show`\n2. 确认 currentStage 为 \"verify\"\n\n### 输出\n当前进度摘要",
+        "outputHint": "进度摘要",
+        "optional": false,
+        "migratedFrom": [
+          "状态检查"
+        ]
       },
       {
         "index": 1,
@@ -223,7 +232,7 @@
       {
         "index": 6,
         "name": "输出验证报告",
-        "prompt": "生成完整验证报告，并写入 verify-result.md。\n\n### 操作\n1. 汇总以上所有检查结果\n2. **变更风险等级（change_risk_profile）由 CLI 自动判定与门控**：你无需自己扫描关键词。本步骤 --done 时，CLI 会用 detectChangeRisk 扫描 design.md / plan.md 自动判定等级（doc-only / unit-sufficient / contract-required / integration-critical / deployment-critical）并强制门控：integration-critical / deployment-critical 变更若结论为 PASS / PASS WITH NOTES 但缺少真实集成证据，CLI 直接阻断 verify 完成——谎报结论无效。\n   你只需：在 verify-result.md 的「变更风险等级」section 如实记录变更性质；若变更涉及 daemon/backend 跨进程、session/lease/lifecycle 状态机、或部署启动路径，在「Runtime Evidence」section 提供真实集成证据（启动命令、daemon↔backend 调用与日志关键片段、终态断言）。\n\n3. 生成 verify-result.md 文件，保存到 `.sillyspec/changes/<change-name>/verify-result.md`\n4. 给出结论：PASS / PASS WITH NOTES / FAIL（受风险门控约束）\n\n### verify-result.md 格式\n```markdown\n# 验证报告（Verify Result）\n\n## 结论\nPASS / PASS WITH NOTES / FAIL\n\n## 任务完成度\n（逐项检查任务的结果）\n\n## 设计一致性\n（对照 design.md 的检查结果）\n\n## 探针结果\n- 未实现标记扫描：...\n- 关键词覆盖：...\n- 测试覆盖：...\n- 决策追踪覆盖：...\n\n## 决策追踪矩阵（如存在 decisions.md）\n| 决策 ID | FR | Task | Evidence | 状态 |\n|---|---|---|---|---|\n| D-001@v1 | FR-01 | task-01 | test/file/path | PASS/PARTIAL/MISSING |\n\n## 测试结果\n（测试套件执行结果）\n\n## 技术债务\n（TODO/FIXME/HACK 统计）\n\n## 变更风险等级\n（自动检测的 change_risk_profile: doc-only / unit-sufficient / contract-required / integration-critical / deployment-critical）\n\n## Runtime Evidence（integration-critical / deployment-critical 必填）\n- daemon 启动命令：\n- backend 地址：\n- 创建 session / 调用核心 API 的请求：\n- daemon 日志关键片段（不能出现 session_control_no_manager / fallback to task_runner / submitMessages agent_run_id empty / 422）：\n- backend 状态（AgentRun running -> completed/failed）：\n- session / lease end 状态：\n- 失败模式排除：\n\n## 代码审查\n（问题列表 + 总体评价）\n```\n\n### 输出\nverify-result.md 路径 + 验证报告摘要 + 下一步命令\n\n### 注意\n- PASS → 运行 `sillyspec run archive` 归档\n- FAIL → 修复后运行 `sillyspec run verify` 重新验证\n- verify-result.md 是变更包的正式验收记录，归档后保留\n- **CLI 对账机制**：本步骤 --done 时 CLI 会亲自执行 local.yaml 的 commands.test；结论写 PASS 但实测失败 → verify 完成被阻断",
+        "prompt": "生成完整验证报告，并写入 verify-result.md。\n\n### 操作\n1. 汇总以上所有检查结果\n2. **变更风险等级（change_risk_profile）由 CLI 自动判定与门控**：你无需自己扫描关键词。本步骤 --done 时，CLI 会用 detectChangeRisk 扫描 design.md / plan.md 自动判定等级（doc-only / unit-sufficient / contract-required / integration-critical / deployment-critical）并强制门控：integration-critical / deployment-critical 变更若结论为 PASS / PASS WITH NOTES 但缺少真实集成证据，CLI 直接阻断 verify 完成——谎报结论无效。\n   - **判级是机械字面匹配、不认否定语境**：design 里写「本次不改动 daemon/session」仍命中关键词被误判高危级。\n   - **误判时的诚实出路（豁免级）**：在 design.md 顶部 frontmatter 加一行 `risk_level: <真实等级>`（doc-only / unit-sufficient / contract-required / integration-critical / deployment-critical），CLI 会以声明为准覆盖关键词判级。声明后若是 unit-sufficient 等豁免级，PASS WITH NOTES 不再被强制拦；但结论为 PASS 仍需对应证据。\n   - **留痕要求（防逃逸）**：用了显式声明，必须在本报告「变更风险等级」section 写明「risk_level 由 design frontmatter 显式声明 = <等级>（覆盖关键词判级）」+ 一句话理由，让豁免可审计。\n   你只需：在 verify-result.md 的「变更风险等级」section 如实记录变更性质；若变更涉及 daemon/backend 跨进程、session/lease/lifecycle 状态机、或部署启动路径，在「Runtime Evidence」section 提供真实集成证据（启动命令、daemon↔backend 调用与日志关键片段、终态断言）。\n\n3. 生成 verify-result.md 文件，保存到 `.sillyspec/changes/<change-name>/verify-result.md`\n4. 给出结论：PASS / PASS WITH NOTES / FAIL（受风险门控约束）\n\n### verify-result.md 格式\n```markdown\n# 验证报告（Verify Result）\n\n## 结论\nPASS / PASS WITH NOTES / FAIL\n\n## 任务完成度\n（逐项检查任务的结果）\n\n## 设计一致性\n（对照 design.md 的检查结果）\n\n## 探针结果\n- 未实现标记扫描：...\n- 关键词覆盖：...\n- 测试覆盖：...\n- 决策追踪覆盖：...\n\n## 决策追踪矩阵（如存在 decisions.md）\n| 决策 ID | FR | Task | Evidence | 状态 |\n|---|---|---|---|---|\n| D-001@v1 | FR-01 | task-01 | test/file/path | PASS/PARTIAL/MISSING |\n\n## 测试结果\n（测试套件执行结果）\n\n## 技术债务\n（TODO/FIXME/HACK 统计）\n\n## 变更风险等级\n（自动检测的 change_risk_profile: doc-only / unit-sufficient / contract-required / integration-critical / deployment-critical；若 design.md frontmatter 有 risk_level 显式声明，以声明为准并在此注明「显式声明 = <等级>」+ 理由）\n\n## Runtime Evidence（integration-critical / deployment-critical 必填）\n- daemon 启动命令：\n- backend 地址：\n- 创建 session / 调用核心 API 的请求：\n- daemon 日志关键片段（不能出现 session_control_no_manager / fallback to task_runner / submitMessages agent_run_id empty / 422）：\n- backend 状态（AgentRun running -> completed/failed）：\n- session / lease end 状态：\n- 失败模式排除：\n\n## 代码审查\n（问题列表 + 总体评价）\n```\n\n### 输出\nverify-result.md 路径 + 验证报告摘要 + 下一步命令\n\n### 注意\n- PASS → 运行 `sillyspec run archive` 归档\n- FAIL → 修复后运行 `sillyspec run verify` 重新验证\n- verify-result.md 是变更包的正式验收记录，归档后保留\n- **CLI 对账机制**：本步骤 --done 时 CLI 会亲自执行 local.yaml 的 commands.test；结论写 PASS 但实测失败 → verify 完成被阻断",
         "outputHint": "验证报告",
         "optional": false
       }
@@ -421,8 +430,8 @@
   },
   "status": {
     "name": "status",
-    "title": "状态查看",
-    "description": "查看项目进度和状态",
+    "title": "项目快照",
+    "description": "项目级只读快照（非流程推进）。查「下一步该做什么/当前阶段进度」请用 sillyspec progress show，勿混淆。",
     "auxiliary": true,
     "globalGuardrails": null,
     "stepsCount": 3,
@@ -565,10 +574,13 @@
     "steps": [
       {
         "index": 0,
-        "name": "状态检查",
-        "prompt": "检查当前状态，确认可以执行 execute。\n\n### 操作\n1. 运行 `sillyspec progress show`\n2. 确认 currentStage 为 execute\n3. 如果不是 → 检查是否有未完成的 tasks.md\n4. 确认执行范围（$ARGUMENTS 指定 wave/task 或全部）\n\n### 输出\n当前状态 + 执行范围确认",
+        "name": "进度确认",
+        "prompt": "检查当前进度，确认可以执行 execute。用 `sillyspec progress show` 查流程进度，不要用 `sillyspec status`（项目级快照，不推进流程）。\n\n### 操作\n1. 运行 `sillyspec progress show`\n2. 确认 currentStage 为 execute\n3. 如果不是 → 检查是否有未完成的 tasks.md\n4. 确认执行范围（$ARGUMENTS 指定 wave/task 或全部）\n\n### 输出\n当前状态 + 执行范围确认",
         "outputHint": "当前状态 + 执行范围",
-        "optional": false
+        "optional": false,
+        "migratedFrom": [
+          "状态检查"
+        ]
       },
       {
         "index": 1,
@@ -669,10 +681,13 @@
     "steps": [
       {
         "index": 0,
-        "name": "状态检查与上下文加载",
-        "prompt": "检查状态、加载项目上下文、匹配模块。\n\n### 操作\n1. 运行 `sillyspec progress show`，确认 currentStage 为 \"brainstorm\"\n2. 如果未初始化，提示先运行 sillyspec init\n3. **检查变更名称**：如果当前变更名是自动生成的（如 `2026-06-02-new-change-a3f2b7c1`），直接重命名为有意义名称，然后运行 `sillyspec change-rename <旧名> <新名>`\n\n### 加载上下文\n4. 读取项目总览 `.sillyspec/docs/<project>/scan/PROJECT.md`（如存在）+ 共享规范 + 子项目上下文\n5. 加载项目信息：`cat .sillyspec/projects/*.yaml 2>/dev/null`\n6. 加载本地配置：`cat .sillyspec/local.yaml 2>/dev/null`\n7. 棕地项目：读取 scan 下的 STRUCTURE.md、CONVENTIONS.md、ARCHITECTURE.md\n8. 加载模块索引：读取 `.sillyspec/docs/<project>/modules/_module-map.yaml`（如存在）\n9. 查看进行中的变更：`ls .sillyspec/changes/ | grep -v archive`\n10. 检查同名变更或可复用模板\n\n### 模块匹配\n根据用户描述的需求关键词，匹配相关模块（用 _module-map.yaml 的 tags/aliases/paths）。\n\n### 子项目判定\n- 单项目：直接确认\n- 多项目且用户已指定：直接确认\n- 多项目且用户未指定：列出项目列表，需要用户确认\n\n### 如果有用户提供的原型/截图\n分析提取：页面结构、表单字段、交互流程、业务规则。\n\n### 输出\n状态摘要 + 项目现状理解（3-5 句）+ 涉及模块列表 + 子项目 + 原型分析（如有）\n\n### 注意\n- 以 CLI 返回为准，不要自行推断阶段\n- 不要用 mv 命令重命名变更目录，必须用 `sillyspec change-rename`",
+        "name": "进度确认与上下文加载",
+        "prompt": "检查进度、加载项目上下文、匹配模块。用 `sillyspec progress show` 查流程进度，不要用 `sillyspec status`（项目级快照，不推进流程）。\n\n### 操作\n1. 运行 `sillyspec progress show`，确认 currentStage 为 \"brainstorm\"\n2. 如果未初始化，提示先运行 sillyspec init\n3. **检查变更名称**：如果当前变更名是自动生成的（如 `2026-06-02-new-change-a3f2b7c1`），直接重命名为有意义名称，然后运行 `sillyspec change-rename <旧名> <新名>`\n\n### 加载上下文\n4. 读取项目总览 `.sillyspec/docs/<project>/scan/PROJECT.md`（如存在）+ 共享规范 + 子项目上下文\n5. 加载项目信息：`cat .sillyspec/projects/*.yaml 2>/dev/null`\n6. 加载本地配置：`cat .sillyspec/local.yaml 2>/dev/null`\n7. 棕地项目：读取 scan 下的 STRUCTURE.md、CONVENTIONS.md、ARCHITECTURE.md\n8. 加载模块索引：读取 `.sillyspec/docs/<project>/modules/_module-map.yaml`（如存在）\n9. 查看进行中的变更：`ls .sillyspec/changes/ | grep -v archive`\n10. 检查同名变更或可复用模板\n\n### 模块匹配\n根据用户描述的需求关键词，匹配相关模块（用 _module-map.yaml 的 tags/aliases/paths）。\n\n### 子项目判定\n- 单项目：直接确认\n- 多项目且用户已指定：直接确认\n- 多项目且用户未指定：列出项目列表，需要用户确认\n\n### 如果有用户提供的原型/截图\n分析提取：页面结构、表单字段、交互流程、业务规则。\n\n### 输出\n状态摘要 + 项目现状理解（3-5 句）+ 涉及模块列表 + 子项目 + 原型分析（如有）\n\n### 注意\n- 以 CLI 返回为准，不要自行推断阶段\n- 不要用 mv 命令重命名变更目录，必须用 `sillyspec change-rename`",
         "outputHint": "状态摘要 + 上下文 + 模块匹配",
-        "optional": false
+        "optional": false,
+        "migratedFrom": [
+          "状态检查与上下文加载"
+        ]
       },
       {
         "index": 1,

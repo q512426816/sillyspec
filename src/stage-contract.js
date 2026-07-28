@@ -439,9 +439,16 @@ function validateVerifyOutputs(cwd, changeName, context = {}) {
       designContent: readIfExists(join(changeDir, 'design.md')),
       planContent: readIfExists(join(changeDir, 'plan.md')),
     })
+    const conclusion = extractVerifyConclusion(verify)
     if (['integration-critical', 'deployment-critical'].includes(changeRiskProfile.level)) {
-      const conclusion = extractVerifyConclusion(verify)
-      if (conclusion === 'PASS WITH NOTES' || conclusion === 'PASS') {
+      // 显式 risk_level 声明（design frontmatter，非关键词误判）下，PASS WITH NOTES 视为对残留项的
+      // 诚实声明，不强求全量集成证据——豁免本就来自 design 的明确判断。自动关键词判级维持严格：
+      // PASS WITH NOTES 仍要求证据齐全，防 agent 用 PASS WITH NOTES 绕证据门控。
+      const requiresEvidence = conclusion === 'PASS' || (conclusion === 'PASS WITH NOTES' && !changeRiskProfile.explicit)
+      if (conclusion === 'PASS WITH NOTES' && changeRiskProfile.explicit) {
+        warnings.push(`[${changeRiskProfile.level}] 结论 PASS WITH NOTES：design frontmatter 显式声明 risk_level=${changeRiskProfile.level}，残留项须为真实集成证据缺口，并在 verify-result.md 如实说明`)
+      }
+      if (requiresEvidence) {
         const evidenceCheck = checkIntegrationEvidence(verify, changeRiskProfile.requiredVerification)
         if (!evidenceCheck.ok) {
           // A: 报错说人话 —— 把「缺哪一项、要写/做什么、判级原因」逐条列出，
@@ -455,7 +462,9 @@ function validateVerifyOutputs(cwd, changeName, context = {}) {
               return `\n    〔${k}〕${vn.desc}${lit}`
             })
             .join('')
-          const cause = RISK_LEVEL_CAUSES[changeRiskProfile.level] || ''
+          const cause = changeRiskProfile.explicit
+            ? RISK_LEVEL_CAUSES.explicit
+            : (RISK_LEVEL_CAUSES[changeRiskProfile.level] || '')
           errors.push(
             `[${changeRiskProfile.level}] 验证结论为 ${conclusion}，但缺少真实集成证据。\n` +
             `  缺失项（需在 verify-result.md 如实提供并满足）：${evidenceCheck.errors.join('; ')}\n` +
@@ -463,8 +472,9 @@ function validateVerifyOutputs(cwd, changeName, context = {}) {
             `  风险判级原因：${cause}\n` +
             `  命中触发词：${changeRiskProfile.triggers.join(', ')}\n` +
             `  出路：① 补全上述缺失的真实集成证据（真实启动 daemon/backend、集成测试、运行日志）后保持 PASS；` +
-            `或 ② 如实改结论 FAIL（承认端到端未验，留待部署后补）。` +
-            `仅改结论文案/措辞蹭字面关键词会被对账，PASS WITH NOTES 在此等级下不被允许。`
+            `或 ② 如实改结论 FAIL（承认端到端未验，留待部署后补）；` +
+            `或 ③ 若判级是关键词误伤（实际并未触碰 daemon/session/启动入口），在 design.md frontmatter 加 risk_level: <真实等级>（如 unit-sufficient）显式覆盖后重跑。` +
+            `仅改结论文案/措辞蹭字面关键词会被对账。`
           )
         }
         warnings.push(...evidenceCheck.warnings)
@@ -702,7 +712,7 @@ const contracts = {
   },
   status: {
     stage: 'status',
-    description: '状态查看',
+    description: '项目快照',
     allowedFrom: [],
     allowedTo: [],
     validators: [],

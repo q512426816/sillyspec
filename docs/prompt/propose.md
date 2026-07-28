@@ -13,7 +13,7 @@
 
 ---
 
-## Step 1/7：状态检查
+## Step 1/7：进度确认
 
 **元数据**
 - optional：false
@@ -23,7 +23,7 @@
 **提示词原文**
 
 ````markdown
-检查当前状态，确认可以执行 propose。
+检查当前进度，确认可以执行 propose。用 `sillyspec progress show` 查流程进度，不要用 `sillyspec status`（项目级快照，不推进流程）。
 
 ### 操作
 1. 运行 `sillyspec progress show`
