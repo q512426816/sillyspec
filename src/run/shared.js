@@ -222,12 +222,15 @@ export function isQuickMetadata(p, linkedChanges = []) {
 
 /**
  * quick 完成审计：对比 baseline 与实际变更。
- * @returns {{ status: 'safe'|'warning'|'blocked', reasons: string[], changedFiles: string[], newFiles: string[], deletedFiles: string[], baselineHit: string[] }}
+ * @returns {{ status: 'safe'|'warning'|'blocked', reasons: string[], changedFiles: string[], newFiles: string[], deletedFiles: string[], baselineHit: string[], stagedTotal: number }}
  */
 export async function auditQuickCompletion(cwd, guard, options = {}) {
   const { baselineFiles, allowedFiles = [], allowNew = false, forceBaseline = false } = guard
   const { isConfirm } = options
-  const result = { status: 'safe', reasons: [], changedFiles: [], newFiles: [], deletedFiles: [], baselineHit: [] }
+  // stagedTotal：当前所有非 quick 元数据的未提交条目（含前序 baseline 残留）。
+  // 与 changedFiles（扣 baseline 后的本轮新增）区分，供审计文案同时展示「本轮新增 vs 累计暂存」，
+  // 避免叠加 quick 会话时把前序会话未提交文件误读为「本会话只动了 N 个」。
+  const result = { status: 'safe', reasons: [], changedFiles: [], newFiles: [], deletedFiles: [], baselineHit: [], stagedTotal: 0 }
 
   try {
     const gitStatus = execSync('git status --porcelain', { cwd, encoding: 'utf8', timeout: 10000 })
@@ -267,6 +270,10 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
       const status = entry.slice(0, 2).trim()
       const file = parsePorcelainPath(entry)   // 已去引号/处理 rename/归一化，修正首行丢首字符
       if (!file) continue
+
+      // 累计暂存计数：所有非 quick 元数据的未提交条目（含下方将被 baseline 跳过的前序残留）。
+      // 放在 isBaselineFile 跳过之前，确保 baseline 内文件也计入「累计暂存」。
+      if (!isQuickMetadata(file, guard.linkedChanges)) result.stagedTotal++
 
       // 预存脏文件：step1 baseline 已记录，非本次 quick 产生，跳过审计（含折叠目录前缀匹配）
       if (isBaselineFile(file)) continue

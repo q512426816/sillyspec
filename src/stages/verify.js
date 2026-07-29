@@ -118,8 +118,8 @@ export const definition = {
 {{include: verify-probes}}
 
 ### 探针结果处理
-- 将四个探针的结果汇总为「探针报告」
-- 如果探针发现问题（未实现标记、关键词缺失、测试缺失、决策未闭环），在最终验证报告中明确标注
+- 将五个探针的结果汇总为「探针报告」
+- 如果探针发现问题（未实现标记、关键词缺失、测试缺失、决策未闭环、API 契约缺口），在最终验证报告中明确标注
 - 探针发现的问题不等同于验证失败，但必须在报告中列出
 
 ### 设计一致性检查
@@ -191,6 +191,7 @@ export const definition = {
    - **误判时的诚实出路（豁免级）**：在 design.md 顶部 frontmatter 加一行 \`risk_level: <真实等级>\`（doc-only / unit-sufficient / contract-required / integration-critical / deployment-critical），CLI 会以声明为准覆盖关键词判级。声明后若是 unit-sufficient 等豁免级，PASS WITH NOTES 不再被强制拦；但结论为 PASS 仍需对应证据。
    - **留痕要求（防逃逸）**：用了显式声明，必须在本报告「变更风险等级」section 写明「risk_level 由 design frontmatter 显式声明 = <等级>（覆盖关键词判级）」+ 一句话理由，让豁免可审计。
    你只需：在 verify-result.md 的「变更风险等级」section 如实记录变更性质；若变更涉及 daemon/backend 跨进程、session/lease/lifecycle 状态机、或部署启动路径，在「Runtime Evidence」section 提供真实集成证据（启动命令、daemon↔backend 调用与日志关键片段、终态断言）。
+   - **集成证据是自报告、CLI 不独立运行时核验**：「Runtime Evidence」由你如实填写，CLI 只校验其**字面存在**（是否含关键词），**不会替你启动 daemon、打真实请求或跑迁移**——它是否名副其实取决于你是否实跑过。务必实跑后据实填写，不得凭堆关键词通过门控。（测试套件对账另算：commands.test 由 CLI 真实执行，那块谎报无效。）
 
 3. 生成 verify-result.md 文件，保存到 \`.sillyspec/changes/<change-name>/verify-result.md\`
 4. 给出结论：PASS / PASS WITH NOTES / FAIL（受风险门控约束）
@@ -213,6 +214,7 @@ PASS / PASS WITH NOTES / FAIL
 - 关键词覆盖：...
 - 测试覆盖：...
 - 决策追踪覆盖：...
+- API 契约对账：...
 
 ## 决策追踪矩阵（如存在 decisions.md）
 | 决策 ID | FR | Task | Evidence | 状态 |
@@ -228,7 +230,7 @@ PASS / PASS WITH NOTES / FAIL
 ## 变更风险等级
 （自动检测的 change_risk_profile: doc-only / unit-sufficient / contract-required / integration-critical / deployment-critical；若 design.md frontmatter 有 risk_level 显式声明，以声明为准并在此注明「显式声明 = <等级>」+ 理由）
 
-## Runtime Evidence（integration-critical / deployment-critical 必填）
+## Runtime Evidence（integration-critical / deployment-critical 必填；自报告，CLI 仅校验字面存在、不独立核验，须真实执行过）
 - daemon 启动命令：
 - backend 地址：
 - 创建 session / 调用核心 API 的请求：
