@@ -105,6 +105,31 @@ export function resolveSpecDir(cwd, opts = {}) {
 }
 
 /**
+ * 统计 cwd 祖先链（含自身，一路到文件系统根）上有多少个 .sillyspec 目录。
+ *
+ * ≥2 个 = monorepo 多实例（子项目独立 .sillyspec + 根 .sillyspec 并存），
+ * 此时 resolveSpecDir 命中的「最近」实例未必是用户意图的项目（如 cd 进被独立 scan 的
+ * 子项目跑测试后忘回根）→ 漂移风险。单实例项目在任意子目录工作恒返回 1，不误报。
+ */
+export function countAncestorSpecDirs(cwd) {
+  // 上界 = git root（monorepo 天然边界）。必须有限上界:一路数到文件系统根会撞 home 等
+  // 无关祖先的孤立 .sillyspec，导致 home 下任何项目都被误报为多实例漂移。
+  // 非 git 仓库（sillyspec 强依赖 git，罕见）:不向上数，只看 cwd 自身（≤1，永不误报）。
+  const resolved = resolve(cwd)
+  const ceiling = safeGit(resolved, ['rev-parse', '--show-toplevel']).value
+  let count = 0
+  let dir = resolved
+  while (true) {
+    if (existsSync(join(dir, '.sillyspec'))) count++
+    if (!ceiling || resolve(dir) === resolve(ceiling)) break
+    const parent = dirname(dir)
+    if (parent === dir) break
+    dir = parent
+  }
+  return count
+}
+
+/**
  * 统一查找变更目录（与 progress.js 的变更检测逻辑一致）。
  */
 export function resolveChangeDir(cwd, progress, specDir = null) {

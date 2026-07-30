@@ -23,7 +23,7 @@ import { join, resolve, dirname } from 'node:path'
 import { existsSync, readdirSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
 import { randomBytes, randomUUID } from 'node:crypto'
 import { writeAtomicSync } from '../fs-atomic.js'
-import { resolveSpecDir, resolveChangeDir, triggerSync, getStageSteps, formatWaitOptions, checkApproval, didYouMean, assertSafeChangeName } from './shared.js'
+import { resolveSpecDir, countAncestorSpecDirs, resolveChangeDir, triggerSync, getStageSteps, formatWaitOptions, checkApproval, didYouMean, assertSafeChangeName } from './shared.js'
 import { resolveQuickLinkedChanges } from './quick-audit.js'
 import { outputStep } from './prompt.js'
 import { completeStep, skipStep, waitStep, continueStep } from './complete.js'
@@ -278,6 +278,17 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
   // 统一规范基路径：平台模式用 specRoot，本地模式用 cwd/.sillyspec
   // runCommand 后续所有 .sillyspec/ 操作必须用 specBase
   const specBase = platformOpts.specRoot || join(cwd, '.sillyspec')
+
+  // 漂移提醒:cwd 祖先链 ≥2 个 .sillyspec = monorepo 多实例,当前命中的「最近」实例
+  // 可能不是用户意图的项目(如 cd 进被独立 scan 的子项目跑测试后忘回根)。
+  // 平台模式 / 显式 --spec-dir 跳过(已明确指定,无歧义)。仅提醒不阻断。
+  if (!platformOpts.specRoot && !specDir) {
+    const ancestorCount = countAncestorSpecDirs(cwd)
+    if (ancestorCount >= 2) {
+      console.warn(`⚠️  检测到祖先链有 ${ancestorCount} 个 .sillyspec 实例(monorepo 多实例),当前使用: ${specBase}`)
+      console.warn(`    若意图是另一个项目:cd 回该项目根,或用 --spec-dir <根>/.sillyspec 显式指定。`)
+    }
+  }
 
   // 平台模式：首次接入时清理旧版本残留的 cwd/.sillyspec/（防止源码污染）。
   // ⚠️ 同 init.js：必须保护真实资产（changes/、projects/、sillyspec.db）。
