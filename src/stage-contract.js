@@ -66,9 +66,14 @@ export function validateChangeExists(specBase, stageName, changeName) {
   if (stageName === 'archive') {
     const archiveRoot = join(specBase, 'changes', 'archive')
     if (existsSync(archiveRoot)) {
+      // 归档目录名恒为 <归档日>-<纯描述>（archiveDestDirName 写入时已 strip 源名前导日期）。
+      // 校验侧同样 strip changeName 前导日期再比 —— 否则「写 strip、读拿完整源名」语义不一致，
+      // 会让带日期前缀的源名（brainstorm 约定，如 2026-07-29-sidebar-menu-restructure）在 step5
+      // 被前置校验误拦（坑 archive-step5-leading-date-change-name）。
+      const stripped = String(changeName).replace(/^\d{4}-\d{2}-\d{2}-/, '')
       const archived = readdirSync(archiveRoot).find(d => {
         const m = d.match(/^\d{4}-\d{2}-\d{2}-(.+)$/)
-        return m && m[1] === changeName
+        return m && m[1] === stripped
       })
       if (archived) return null
     }

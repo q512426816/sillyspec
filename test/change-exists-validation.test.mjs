@@ -67,6 +67,16 @@ assert(validateChangeExists(specBase, 'execute', 'real-change') === null, 'execu
   // 其他阶段不享受 archive 特例
   assert(validateChangeExists(specBase, 'plan', 'archived-change') !== null, 'plan 阶段不享受 archive 已归档放行 → 失败')
 }
+// 9. archive 特例回归：变更名本身带日期前缀（brainstorm 源名约定），归档目录已 strip 前缀重拼为
+//    <归档日>-<纯描述>。校验侧同样 strip 再比 → 放行。
+//    （修复 archive-step5-leading-date-change-name：原实现 m[1]===changeName 对带前缀源名恒 false，
+//     step4 已移走、step5 --change <源名> 被前置校验误拦。归档日 07-30 ≠ 源名日期 07-29 更能体现写读对齐）
+{
+  mkdirSync(join(specBase, 'changes', 'archive', '2026-07-30-sidebar-menu-restructure'), { recursive: true })
+  assert(validateChangeExists(specBase, 'archive', '2026-07-29-sidebar-menu-restructure') === null, 'archive + 带日期前缀源名（归档目录已去前缀重拼）→ 放行')
+  // 纯描述 changeName（无前缀）仍兼容，strip 无效原值不变
+  assert(validateChangeExists(specBase, 'archive', 'sidebar-menu-restructure') === null, 'archive + 纯描述源名 → 放行（向后兼容）')
+}
 // 清理
 try { rmSync(specBase, { recursive: true, force: true }) } catch {}
 
