@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-05-31 11:00:00
-updated_at: 2026-07-28T21:25:26+08:00
+updated_at: 2026-07-30T23:50:00+08:00
 ---
 
 # SillySpec 文件生命周期
@@ -45,7 +45,7 @@ updated_at: 2026-07-28T21:25:26+08:00
 | 阶段 | 当前步骤数 | 备注 |
 |---|---:|---|
 | scan | 11 | 辅助阶段；step 2 后会按项目动态展开 `perProject` 步骤；第 10 步「Extract Project Knowledge」写入 `knowledge/` |
-| brainstorm | 8 | 独立包含”写设计文档并自审”（第 6 步）、”Design Grill 交叉审查”（第 7 步）、”用户确认并生成规范文件”（第 8 步）；第 2 步加载上下文时含早期规模筛查（明显小变更建议走 quick）；完成时按 design.md frontmatter `scale` 分叉产物（large→四件套进 plan / small→仅 design.md 进 quick） |
+| brainstorm | 8 | 独立包含”写设计文档并自审”（第 6 步）、”Design Grill 交叉审查”（第 7 步）、”生成规范文件”（第 8 步，原名”用户确认并生成规范文件”，已去确认门控——设计在第 5 步「分段展示设计」确认过，末步直接生成后展示摘要）；第 2 步加载上下文时含早期规模筛查（明显小变更建议走 quick）；完成时按 design.md frontmatter `scale` 分叉产物（large→四件套进 plan / small→仅 design.md 进 quick） |
 | propose | 7 | 包含“生成规范文件”与“自检门控”，四件套是该阶段预期产物 |
 | plan | 动态 | 默认 9 步（含独立"审查计划"step，按规模分级 tier=self 自审 / tier=independent 独立子代理 + stage review.json）；`plan.md` 解析到任务后插入任务蓝图协调器；postcheck 含确定性校验（结构/可行性/跨任务契约/design 文件覆盖/产物） |
 | execute | 动态 | 默认 12 步；Wave 来自 `plan.md`，解析失败时默认 3 个 Wave；完成时 `validateExecuteOutputs` 客观核验存在真实代码变更（plan 有 task 但确证零变更则阻断），Task Review Gate 另做 review.json git 真实性交叉校验；`--done` 时若 plan 全勾 + 代码客观核验通过则一次性补完剩余 step 直达完成（见后「execute --done 批量完成」） |
@@ -113,6 +113,7 @@ execute
 
 quick
   -> .sillyspec/quicklog/QUICKLOG-<git-user>.md              (CLI 写入：启动分配 ql-ID 写「进行中」，完成翻「已完成」+ 追加结构化结果块 需求/根因/方案/结果，缺字段则 step3 --done 被拒)
+  -> .sillyspec/.runtime/quick-sessions/<sessionId>/guard.json  (CLI 启动建：sessionId=quick-<uuid8>，含 baselineFiles/allowedFiles/linkedChanges/quicklogId + specDir 锚定创建时的 specBase。run/command.js 在 quick --done/--status 时调 detectQuickSessionDrift：当前 specBase 无本 session guard、但祖先链别处 specBase 有 → 判跨 specDir 漂移，fail-fast exit 2，治 monorepo cd 子项目后的无声分裂)
   -> CLI appends/checks checkbox in .sillyspec/changes/<change>/tasks.md
   -> code changes are made in the main workspace
 ```
@@ -215,4 +216,7 @@ execute --done 批量完成（2026-07-28，`run/complete.js`）
   - **`alignExecuteToPlan` 事实核验**：对齐前调用 `checkExecuteCodeEvidence`，plan 全勾但确证代码零变更时拒绝对齐。
   - **verify 实测对账**（`verify-postcheck.js`）：verify 产物校验通过后，CLI 用 `execSync` 执行 `local.yaml` 的 `commands.test`（10 分钟超时），结果写 `.runtime/verify-runs/<ts>/test-result.json`；自报告 PASS 但实测失败 → 阻断 verify 完成并回滚。未配置 test（或 unavailable）降级 warning 不阻断。
   - **文案修正**：validator 失败提示不再声称 `--skip-approval` 可跳过产物校验（该 flag 只作用于阶段转换/审批检查）；quick 阶段 quicklog 缺失提示同步移除。
+- worktree execute 收尾 per-task review 草稿 + assess 顺带修复豁免（2026-07-30，坑 worktree-execute-apply-friction 1/2/4）：
+  - **per-task review.json 草稿自动落盘**（坑2，`task-review.js generateTaskReviewDrafts`）：execute 每次 `--done`（`complete.js` execute 块，`detectExecuteBatchFinish` 之后）自动补写缺失的 `.runtime/execute-runs/<exec-id>/tasks/task-XX/review.json`。worktree execute「主 agent 直接实现」模式不走子代理 review 落盘 → review.json 全缺 → Task Review Gate 报「task-XX 缺少 review.json」阻断；现据 `resolveVerifyChangedFiles`（worktree-aware base..head diff）按各 task `allowed_paths`（`parseAllowedPaths` + `pathMatches`）归属，生成 `verdict=cannot_verify` + 非空 `requiredEvidence` 草稿（过 schema，流转 verify 兑现）。幂等：已存在的 review.json（人工/子代理已填 verdict）一律跳过不覆盖；空 changedFiles 的 task 不生成（verifyReviewGitEvidence 判空 diff 伪造）。exec-id 与 Task Review Gate（`gates.js`）/ `autoCheckPlanFromReviews` 同源：`current-execute-run-id-<change>` marker，缺失则 `generateExecuteRunId` + 落盘。
+  - **assess 顺带修复豁免 + 一次报全**（坑1/4，`worktree-apply.js assessApplyRisk`）：design §6 文件清单标注「顺带修复」（表格「说明」列，正则 `/顺带修复|附带修复|顺带|drive-?by|incidental/i`，`change-list.js parseFileChangeListDetailed`）的预存债文件，assess 豁免 allowed_paths 严格校验（降 warning 不 BLOCKED）——顺带修预存债是 CLAUDE.md 规则20 鼓励的合规操作，不应被 task 边界卡死。同时 `applyWorktree(checkOnly)` 的 Gate1（文件清单）/Gate3（主区 dirty）不再短路，`assessApplyRisk` 聚合各道 reasons 一次报全（治原逐道挤牙膏）；Gate2 allowed_paths 解析复用 `parseAllowedPaths` + `pathMatches`（与 plan-postcheck/Gate1 同语义容差），消除原内联字面前缀弱匹配漂移。真实 apply（checkOnly=false）仍短路保安全。
 - **Stage Review Gate**（2026-07-16）：brainstorm/plan/propose/execute 的"审查/自检"从当前 agent 自审改为按规模分级。`classifyReviewTier`（`review-tier.js`）按 plan_level=none 或变更文件数 ≤3 判定 tier=self（当前 agent 自审，放行+审计打印），否则 tier=independent（强制独立审查子代理，与执行子代理一样要求独立上下文）。tier=independent 时 done gate 要求 `.runtime/stage-reviews/<stage>-<runId>/review.json` 存在且 verdict 非 fail，由 `stage-review.js` 校验（schema + docHash 真实性重算防伪造 + cannot_verify 必须带 requiredEvidence 的反逃逸），异常 fail-closed 回滚（与 Task Review Gate 一致）。plan 的"审查计划"从生成 step 拆成独立 step（fixedPrefix 2→3 步），消除"生成+自检同一次输出"的 self-review。运行时占位符 `{REVIEW_TIER}`/`{REVIEW_TIER_REASON}`/`{STAGE_REVIEW_RUN_ID}` 由 run/prompt.js（`outputStep`）注入 stage prompt。scanProfile（决定 maxAgentCalls）只在 scan 生效、change-risk-profile 的 P0/P1/P2 只管 apply/verify 证据，都不约束这些阶段的审查方式，故新选 plan_level/文件数维度。运行时 marker（2026-07-28，gap 6）：prompt 渲染 `{REVIEW_TIER}` 时（`run/prompt.js`）把本次 reviewRunId 落盘到 `.runtime/current-stage-review-run-id-<stage>(-<change>)`（含 change 防多 change 串台，对齐 execute `current-execute-run-id-<change>`，marker 缺失才 `generateStageReviewRunId()` 生成并落盘）；Stage Review Gate（`stage-review.js` `getLatestStageReviewRunId`）优先读该 marker、fallback 扫 `stage-reviews/<stage>-review-*` 目录（向后兼容无 marker 旧数据），保证 gate 取的 ID == prompt 注入给 agent 的 ID，修复「prompt 多次渲染 / 多次 review 时 gate 取错 ID 读错 review.json」。

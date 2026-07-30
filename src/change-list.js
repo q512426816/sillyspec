@@ -103,23 +103,33 @@ function looksLikePath(p) {
 }
 
 /**
- * 从 design.md 解析文件变更清单。兼容两种真实写法：
+ * 「顺带修复」标记：design §6 清单里标注的、不属本次变更 task 边界但合规修的预存债文件
+ * （CLAUDE.md 规则20 鼓励）。assess 的 allowed_paths 校验对 incidental 文件豁免（坑
+ * worktree-execute-apply-friction 坑1/4）。标记载体：表格「说明」列写「顺带修复：xxx」，
+ * 或路径 cell / 列表项的括号注释「（顺带修复）」。
+ */
+const INCIDENTAL_RE = /顺带修复|附带修复|顺带|drive-?by|incidental/i
+
+/**
+ * 从 design.md 解析文件变更清单（含 incidental 标记）。兼容两种真实写法：
  *   ① 表格：`| 操作 | 文件路径 | 说明 |`（brainstorm 模板默认）
  *   ② 分类列表：`### 新增文件` / `### 修改文件` / `### 不修改文件` 下的 `- path`
  * 表头列顺序自适应（定位「文件/路径/file/path」列，列顺序写反时不会把操作名当路径）；
  * 忽略 `.sillyspec/` 与占位符（`—`/`-`/`N/A`/`无`）；「不修改/暂缓」子段下的路径会被排除；
- * CRLF 容错。
+ * CRLF 容错。incidental 嗅探：表格非路径列（说明列）+ 路径 cell 原始值（剥注释前的括号内容）+ 列表项原文。
+ *
+ * 内核函数：parseFileChangeList（Set 包装，向后兼容）与 parseFileChangeListDetailed 共用，
+ * 单一真相源，避免两处各自重写清单解析漂移。
  * @param {string} designMdPath - design.md 文件路径
- * @returns {Set<string>} 文件路径集合（相对路径，如 "src/worktree.js"）
+ * @returns {Array<{ path: string, incidental: boolean }>}（顺序按首次出现，exclude 子段移除）
  */
-export function parseFileChangeList(designMdPath) {
-  const result = new Set()
-  if (!designMdPath || !existsSync(designMdPath)) return result
+function _parseFileListDetailed(designMdPath) {
+  if (!designMdPath || !existsSync(designMdPath)) return []
 
   const content = readFileSync(designMdPath, 'utf8').replace(/\r\n/g, '\n')
 
   const sectionMatch = content.match(FILE_LIST_SECTION_RE)
-  if (!sectionMatch) return result
+  if (!sectionMatch) return []
 
   // 从标题后开始，截取到下一个 ## 标题或文件末尾
   const afterSection = content.slice(sectionMatch.index + sectionMatch[0].length)
@@ -132,6 +142,7 @@ export function parseFileChangeList(designMdPath) {
   let headerSkipped = false
   let pathColIdx = 1            // 默认第 2 列；解析表头后可重定位
   let listMode = 'include'      // include | exclude（分类列表子段）
+  const entries = new Map()     // path -> { path, incidental }（exclude 子段 delete）
 
   for (const line of lines) {
     // 分类列表子标题：### 新增文件 / ### 修改文件 / ### 不修改文件
@@ -160,7 +171,11 @@ export function parseFileChangeList(designMdPath) {
       if (/^(新增|修改|删除|重命名|new|modify|update|delete|create|rename)$/i.test(filePath)) continue
       if (isPlaceholder(filePath) || filePath.startsWith('.sillyspec/')) continue
       if (!looksLikePath(filePath)) continue // 脏描述兜底：丢弃非路径自由文本（防虚高 fileCount）
-      result.add(filePath)
+      // incidental：说明列（非路径列的所有 cell）+ 路径 cell 原始值（剥注释前的括号内容）
+      const incidental = cells.some((c, i) => i !== pathColIdx && INCIDENTAL_RE.test(c))
+        || INCIDENTAL_RE.test(cells[pathColIdx] || '')
+      if (listMode === 'exclude') { entries.delete(filePath); continue }
+      entries.set(filePath, { path: filePath, incidental })
       continue
     }
 
@@ -170,10 +185,29 @@ export function parseFileChangeList(designMdPath) {
       const filePath = normalizePath(listItem[1])
       if (isPlaceholder(filePath) || filePath.startsWith('.sillyspec/')) continue
       if (!looksLikePath(filePath)) continue // 脏描述兜底
-      if (listMode === 'exclude') result.delete(filePath)
-      else result.add(filePath)
+      const incidental = INCIDENTAL_RE.test(listItem[1])
+      if (listMode === 'exclude') { entries.delete(filePath); continue }
+      entries.set(filePath, { path: filePath, incidental })
     }
   }
 
-  return result
+  return [...entries.values()]
+}
+
+/**
+ * 从 design.md 解析文件变更清单（路径集合，向后兼容）。
+ * @param {string} designMdPath - design.md 文件路径
+ * @returns {Set<string>} 文件路径集合（相对路径，如 "src/worktree.js"）
+ */
+export function parseFileChangeList(designMdPath) {
+  return new Set(_parseFileListDetailed(designMdPath).map(e => e.path))
+}
+
+/**
+ * 从 design.md 解析文件变更清单（含 incidental 标记，供 assess allowed_paths 豁免用）。
+ * @param {string} designMdPath - design.md 文件路径
+ * @returns {Array<{ path: string, incidental: boolean }>}
+ */
+export function parseFileChangeListDetailed(designMdPath) {
+  return _parseFileListDetailed(designMdPath)
 }

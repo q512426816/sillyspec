@@ -226,6 +226,22 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
     if (_bf.batched && _bf.aligned > 0) {
       console.log(`\n🚀 execute 批量完成：plan 全勾 + 代码核验通过，一次性补完 ${_bf.aligned} 个剩余 step → 进入阶段完成分支`)
     }
+
+    // per-task review 草稿兜底（坑 worktree-execute-apply-friction 坑2）：主 agent 直接实现模式
+    // 无子代理 review 落盘 → Task Review Gate 报缺 review.json 阻断。每次 execute --done 跑（幂等，
+    // 已存在跳过），据 git diff base..head 按 allowed_paths 归属生成 cannot_verify 草稿，进 gate 前就位。
+    try {
+      const { generateTaskReviewDrafts } = await import('../task-review.js')
+      const _drafts = await generateTaskReviewDrafts({ changeName, cwd, platformOpts })
+      if (_drafts.generated > 0) {
+        console.log('   📄 自动补写 ' + _drafts.generated + ' 个 per-task review.json 草稿（cannot_verify，主 agent 实现模式兜底，需 agent 复核后升级为 pass/fail）')
+        if (_drafts.unattributed && _drafts.unattributed.length > 0) {
+          console.warn('   ⚠️ ' + _drafts.unattributed.length + ' 个变更文件未归属任何 task（顺带修复/非源码），草稿未覆盖：' + _drafts.unattributed.join(', '))
+        }
+      }
+    } catch (e) {
+      console.warn('   ⚠️ per-task review 草稿生成失败（不阻断 execute 完成）：' + (e && e.message ? e.message : e))
+    }
   }
 
   const nextPendingIdx = steps.findIndex(s => s.status === 'pending' || s.status === 'in-progress')

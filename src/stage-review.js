@@ -195,10 +195,16 @@ export function verifyStageReviewDocHash(review, searchDirs) {
 
   for (const base of searchDirs || []) {
     const abs = join(base, primaryRel)
-    const actual = computeDocHash(abs)
-    if (actual === null) continue
-    // 找到主文档，比对 hash
-    if (review.docHash.toLowerCase() !== actual.toLowerCase()) {
+    if (!existsSync(abs)) continue
+    // 找到主文档，比对 hash。容忍「原始字节」与「LF 规范化」两种口径：Windows 下 CRLF/LF 在
+    // git add / eol 规范化前后字节会漂移，同一文件 sha256 偶发不一致（坑 worktree-execute-apply-friction
+    // 坑3）——agent 写的 docHash（原始 sha256sum）与 gate 重算只要任一口径匹配即认可，消除 CRLF
+    // 漂移导致的反复「疑似伪造」误报。两口径都对不上仍判不匹配（防伪造能力不降级）。
+    const content = readFileSync(abs, 'utf8')
+    const actualRaw = createHash('sha256').update(content).digest('hex')
+    const actualLf = createHash('sha256').update(content.replace(/\r\n/g, '\n')).digest('hex')
+    const claimed = String(review.docHash).toLowerCase()
+    if (claimed !== actualRaw.toLowerCase() && claimed !== actualLf.toLowerCase()) {
       errors.push(
         `docHash 与主审查文档 ${primaryRel} 的实际内容不匹配。` +
         `若刚改过该文档（如 design 修订后忘重算），重算并更新 review.json 的 docHash 字段：` +

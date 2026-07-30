@@ -23,7 +23,7 @@ import { join, resolve, dirname } from 'node:path'
 import { existsSync, readdirSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
 import { randomBytes, randomUUID } from 'node:crypto'
 import { writeAtomicSync } from '../fs-atomic.js'
-import { resolveSpecDir, countAncestorSpecDirs, resolveChangeDir, triggerSync, getStageSteps, formatWaitOptions, checkApproval, didYouMean, assertSafeChangeName } from './shared.js'
+import { resolveSpecDir, countAncestorSpecDirs, resolveChangeDir, triggerSync, getStageSteps, formatWaitOptions, checkApproval, didYouMean, assertSafeChangeName, detectQuickSessionDrift } from './shared.js'
 import { resolveQuickLinkedChanges } from './quick-audit.js'
 import { outputStep } from './prompt.js'
 import { completeStep, skipStep, waitStep, continueStep } from './complete.js'
@@ -518,6 +518,21 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     console.error(`   可能 cwd 漂移——当前 cwd=${cwd}，命中的 spec=${specBase}。`)
     console.error(`   若意图操作别的项目，请 cd 到对应项目根，或用 --spec-dir 指定正确的 spec 目录。`)
     process.exit(2) // 环境错（cwd/spec 漂移）→ exit 2
+  }
+
+  // quick 专用 cwd 漂移 fail-fast 守卫（坑 quick-cwd-drift-splits-specdir）：
+  // quick 被 validateChangeExists 的 sessionId 豁免（quick-<8hex> 不在 changes/ 下），漂移时除上方
+  // countAncestorSpecDirs 的 warn 外无硬守卫 → 无声分裂（progress/artifact/QUICKLOG 落子项目、根
+  // 会话停滞）。这里补：当前 specBase 无本 session guard、但祖先链别处有 = 跨 specDir 漂移 → fail-fast。
+  // 平台模式/显式 --spec-dir 跳过（specBase 已明确，与 line~285 warn 条件对齐）。
+  if (stageName === 'quick' && changeName && /^quick-[0-9a-f]{8}$/.test(changeName)
+      && !platformOpts.specRoot && !specDir) {
+    const drift = detectQuickSessionDrift(cwd, specBase, changeName)
+    if (drift) {
+      console.error(`❌ ${drift.message}`)
+      console.error(`   当前 cwd=${cwd}，命中的 spec=${specBase}。`)
+      process.exit(2) // 环境错（cwd/spec 漂移）→ exit 2
+    }
   }
 
   let progress = await pm.read(cwd, changeName)

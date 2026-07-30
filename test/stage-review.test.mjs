@@ -8,9 +8,10 @@
  *   4. validateStageReview —— 总校验（缺失/fail/通过）
  *   5. task-review 回归 —— 复用常量不破坏现有 v1 code-task 校验
  */
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { createHash } from 'node:crypto'
 
 import { classifyReviewTier, SELF_REVIEW_FILE_THRESHOLD } from '../src/review-tier.js'
 import {
@@ -194,6 +195,23 @@ console.log('\n=== 3. verifyStageReviewDocHash（docHash 防伪造）===\n')
     [dir, dir2],
   )
   assert(r4.ok, `多候选基准：第二目录命中 → ok`)
+
+  // CRLF 双口径容忍（坑 worktree-execute-apply-friction 坑3）：Windows 下 CRLF/LF 在 git add /
+  // eol 规范化前后字节漂移，同文件 sha256 偶发不一致 → gate 反复误报「疑似伪造」。现 gate 对
+  // 「原始字节」与「LF 规范化」两种 hash 任一匹配即过，agent 用任一口径写的 docHash 都被接受。
+  const hashOf = (p, lf) => {
+    const c = readFileSync(p, 'utf8')
+    return createHash('sha256').update(lf ? c.replace(/\r\n/g, '\n') : c).digest('hex')
+  }
+  const crlfDir = makeTmpDir('dh-crlf-')
+  const crlfDoc = join(crlfDir, 'plan.md')
+  writeFileSync(crlfDoc, '# Plan\r\n真实内容\r\n') // CRLF 版
+  assert(verifyStageReviewDocHash({ reviewedFiles: ['plan.md'], docHash: hashOf(crlfDoc, false) }, [crlfDir]).ok,
+    'CRLF 文件 + docHash=原始字节 hash → ok（actualRaw 口径）')
+  assert(verifyStageReviewDocHash({ reviewedFiles: ['plan.md'], docHash: hashOf(crlfDoc, true) }, [crlfDir]).ok,
+    'CRLF 文件 + docHash=LF 规范化 hash → ok（actualLf 口径，坑3 漂移容忍）')
+  assert(!verifyStageReviewDocHash({ reviewedFiles: ['plan.md'], docHash: 'deadbeef' }, [crlfDir]).ok,
+    'CRLF 文件 + docHash 两口径都不匹配 → fail（防伪造不降级）')
 }
 
 // ────────────────────────────────────────────────────────────

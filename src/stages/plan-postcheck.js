@@ -64,7 +64,7 @@ function parseTaskId(content, filename) {
  * @param {string} content
  * @returns {string[]}
  */
-function parseAllowedPaths(content) {
+export function parseAllowedPaths(content) {
   const fmMatch = content.match(/^---\n([\s\S]*?)\n---/)
   if (!fmMatch) return []
   const fm = fmMatch[1]

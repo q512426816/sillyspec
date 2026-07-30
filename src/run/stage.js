@@ -246,6 +246,10 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
         })
         progress.quickGuard = {
           sessionId: changeName,
+          // 锚定创建时的 specBase（坑 quick-cwd-drift-splits-specdir）：sessionId 全局复用但
+          // guard 按 specDir 落盘，记下归属让漂移可自证（detectQuickSessionDrift 靠目录定位即可，
+          // 此字段供诊断/未来一致性校验）。
+          specDir: specBase,
           name_zh: '快速任务守卫',
           baselineCommit: safeGit(cwd, ['rev-parse', 'HEAD']).value,
           baselineFiles,

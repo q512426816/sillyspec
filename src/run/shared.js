@@ -105,28 +105,104 @@ export function resolveSpecDir(cwd, opts = {}) {
 }
 
 /**
- * 统计 cwd 祖先链（含自身，一路到文件系统根）上有多少个 .sillyspec 目录。
+ * 枚举 cwd 祖先链（含自身）上所有 .sillyspec 目录的绝对路径，上界 = git root。
  *
- * ≥2 个 = monorepo 多实例（子项目独立 .sillyspec + 根 .sillyspec 并存），
- * 此时 resolveSpecDir 命中的「最近」实例未必是用户意图的项目（如 cd 进被独立 scan 的
- * 子项目跑测试后忘回根）→ 漂移风险。单实例项目在任意子目录工作恒返回 1，不误报。
+ * 返回顺序：从 cwd 最近开始向上到 git root（含两端命中项）。单实例项目任意子目录恒返回 [自身]。
+ *
+ * 上界 = git root（monorepo 天然边界）。必须有限上界：一路数到文件系统根会撞 home 等
+ * 无关祖先的孤立 .sillyspec（home 下任何项目都被误报多实例）。非 git 仓库：不向上数，
+ * 只看 cwd 自身（≤1，永不误报）。
+ *
+ * 被 countAncestorSpecDirs（漂移提醒 warn）与 locateQuickSessionGuard（quick 漂移 fail-fast
+ * 守卫，坑 quick-cwd-drift-splits-specdir）共用 —— 单一真相源，避免两处各自重写祖先枚举漂移。
  */
-export function countAncestorSpecDirs(cwd) {
-  // 上界 = git root（monorepo 天然边界）。必须有限上界:一路数到文件系统根会撞 home 等
-  // 无关祖先的孤立 .sillyspec，导致 home 下任何项目都被误报为多实例漂移。
-  // 非 git 仓库（sillyspec 强依赖 git，罕见）:不向上数，只看 cwd 自身（≤1，永不误报）。
+export function ancestorSpecDirs(cwd) {
   const resolved = resolve(cwd)
   const ceiling = safeGit(resolved, ['rev-parse', '--show-toplevel']).value
-  let count = 0
+  const dirs = []
   let dir = resolved
   while (true) {
-    if (existsSync(join(dir, '.sillyspec'))) count++
+    if (existsSync(join(dir, '.sillyspec'))) dirs.push(join(dir, '.sillyspec'))
     if (!ceiling || resolve(dir) === resolve(ceiling)) break
     const parent = dirname(dir)
     if (parent === dir) break
     dir = parent
   }
-  return count
+  return dirs
+}
+
+/**
+ * 统计 cwd 祖先链上有多少个 .sillyspec 目录（= ancestorSpecDirs(cwd).length）。
+ *
+ * ≥2 个 = monorepo 多实例（子项目独立 .sillyspec + 根 .sillyspec 并存），resolveSpecDir 命中的
+ * 「最近」实例未必是用户意图的项目（如 cd 进被独立 scan 的子项目跑测试后忘回根）→ 漂移风险。
+ * 单实例项目在任意子目录工作恒返回 1，不误报。
+ */
+export function countAncestorSpecDirs(cwd) {
+  return ancestorSpecDirs(cwd).length
+}
+
+/**
+ * 在 cwd 祖先链的各 specBase 中查找 quick 会话 guard.json（坑 quick-cwd-drift-splits-specdir）。
+ *
+ * sessionId（quick-<uuid8>）全局唯一，但 guard.json 按 specBase 分散落盘
+ * （<specBase>/.runtime/quick-sessions/<sessionId>/guard.json）。cd 漂移到子项目后，当前 specBase
+ * 下读不到本 session 的 guard，但祖先链别处的 specBase（创建 session 的根）仍有它 → 据此定位
+ * session 真正归属，供 detectQuickSessionDrift 的 fail-fast 守卫判断。
+ *
+ * 遍历顺序 = ancestorSpecDirs（cwd 最近 → git root），返回第一个命中。
+ *
+ * @param {string} cwd
+ * @param {string} sessionId - quick-<uuid8>
+ * @returns {{ specBase: string, guard: object } | null}
+ */
+export function locateQuickSessionGuard(cwd, sessionId) {
+  if (!sessionId) return null
+  for (const specBase of ancestorSpecDirs(cwd)) {
+    const guardFile = join(specBase, '.runtime', 'quick-sessions', sessionId, 'guard.json')
+    if (existsSync(guardFile)) {
+      try {
+        const guard = JSON.parse(readFileSync(guardFile, 'utf8'))
+        return { specBase, guard }
+      } catch {
+        // guard.json 损坏：当作不存在，继续找下一个（不阻断主流程）
+      }
+    }
+  }
+  return null
+}
+
+/**
+ * 检测 quick 会话是否跨 specDir 漂移（坑 quick-cwd-drift-splits-specdir）。
+ *
+ * quick 被 validateChangeExists 的 sessionId 豁免（quick-<8hex> 不在 changes/ 下），故 quick
+ * 漂移除 countAncestorSpecDirs 的 warn 外无硬守卫 → 无声分裂（progress/artifact/QUICKLOG 落
+ * 子项目、根 session 停滞）。本函数补这个口：
+ *   - 当前 specBase 已有本 session guard → null（同一 specDir，无漂移）
+ *   - 当前 specBase 没有，但祖先链别处有同 sessionId guard → 判漂移，返回引导信息供调用方 fail-fast
+ *   - 别处也没有 → null（真·新会话首次启动，guard 尚未建，放行 —— 不误伤子项目主动启新 quick）
+ *
+ * 风格仿 validateChangeExists：null = 通过，对象 = 失败（含 message）。
+ *
+ * @param {string} cwd
+ * @param {string} currentSpecBase - 当前命中的 specBase
+ * @param {string} sessionId - quick-<uuid8>
+ * @returns {{ realSpecBase: string, message: string } | null}
+ */
+export function detectQuickSessionDrift(cwd, currentSpecBase, sessionId) {
+  if (!sessionId || !currentSpecBase) return null
+  // 当前 specBase 已有本 session guard → 同一 specDir，无漂移
+  const currentGuard = join(currentSpecBase, '.runtime', 'quick-sessions', sessionId, 'guard.json')
+  if (existsSync(currentGuard)) return null
+  // 当前没有 → 看祖先链别处有没有同 sessionId 的 guard
+  const located = locateQuickSessionGuard(cwd, sessionId)
+  if (!located) return null // 别处也没有 = 真·新会话首次启动，放行
+  return {
+    realSpecBase: located.specBase,
+    message: `quick 会话 "${sessionId}" 创建于 ${located.specBase}，当前 cwd 解析到 ${currentSpecBase}（跨 specDir 漂移）。` +
+      `继续会把 progress/artifact/QUICKLOG 写到错误的 spec，与原会话分裂。` +
+      `排查：① cd 回 ${dirname(located.specBase)}（原 spec 所属项目根）再跑；② 或显式 --spec-dir ${located.specBase} 指定原 spec。`,
+  }
 }
 
 /**

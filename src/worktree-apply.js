@@ -18,7 +18,8 @@ import { join, resolve } from 'path';
 import { tmpdir } from 'os';
 import { createHash } from 'crypto';
 import { WorktreeManager } from './worktree.js';
-import { parseFileChangeList, pathMatches } from './change-list.js';
+import { parseFileChangeList, parseFileChangeListDetailed, pathMatches } from './change-list.js';
+import { parseAllowedPaths } from './stages/plan-postcheck.js';
 
 const CHANGES_REL = '.sillyspec/changes';
 
@@ -190,7 +191,9 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
       result.errors.push(
         `文件清单校验失败：以下变更文件不在 design.md 清单中：\n  ${violations.join('\n  ')}`
       );
-      return result;
+      // checkOnly（assess）模式不短路：继续跑 Gate3，收集所有道供一次报全（坑 worktree-execute-apply-friction 坑4）。
+      // 真实 apply（checkOnly=false）仍短路，保安全。
+      if (!checkOnly) return result;
     }
   }
 
@@ -228,7 +231,7 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
         `execute 前 baseline: ${meta.baselineHash}\n` +
         `当前 baseline: ${currentHash}`
       );
-      return result;
+      if (!checkOnly) return result; // checkOnly 收集不短路（一次报全）；真实 apply 短路
     }
   }
 
@@ -243,7 +246,7 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
       result.errors.push(
         `主工作区有以下未 commit 的变更，会影响 apply：\n  ${conflictDirty.join('\n  ')}\n请先 commit 或 stash 这些变更。`
       );
-      return result;
+      if (!checkOnly) return result; // checkOnly 收集不短路（一次报全）；真实 apply 短路
     }
   }
 
@@ -518,19 +521,18 @@ export function assessApplyRisk(changeName, { cwd } = {}) {
   // 先跑 --check-only 模式的 applyWorktree 获取变更文件列表
   const checkResult = applyWorktree(changeName, { cwd: projectRoot, checkOnly: true });
 
-  if (checkResult.errors.length > 0) {
-    return {
-      decision: 'BLOCKED',
-      changedFiles: checkResult.changedFiles,
-      reasons: checkResult.errors,
-      warnings: [],
-      stats: { additions: 0, deletions: 0 }
-    };
-  }
+  // applyWorktree(checkOnly) 已收集所有道（Gate1/3 不短路）——其 errors 纳入 reasons，
+  // 继续跑 Gate2/4/6 一次报全（坑 worktree-execute-apply-friction 坑4：原此处提前 return 致逐道挤牙膏）。
+  reasons.push(...checkResult.errors);
+  if (checkResult.warnings?.length) warnings.push(...checkResult.warnings);
 
   const changedFiles = checkResult.changedFiles;
 
   if (changedFiles.length === 0) {
+    // 无变更：若仍有 Gate 错误（如主区 dirty）则 BLOCKED，否则 SAFE
+    if (reasons.length > 0) {
+      return { decision: 'BLOCKED', changedFiles: [], reasons, warnings, stats: { additions: 0, deletions: 0 } };
+    }
     return {
       decision: 'SAFE',
       changedFiles: [],
@@ -540,35 +542,38 @@ export function assessApplyRisk(changeName, { cwd } = {}) {
     };
   }
 
-  // 解析 TaskCard allowed_paths
+  // 解析 TaskCard allowed_paths（复用 plan-postcheck.parseAllowedPaths，消除内联重复实现漂移）
   const wm = new WorktreeManager({ cwd: projectRoot });
   const meta = wm.getMeta(changeName);
   const tasksDir = join(projectRoot, CHANGES_REL, changeName, 'tasks');
   const allowedPaths = new Set();
   if (existsSync(tasksDir)) {
     for (const tf of readdirSync(tasksDir).filter(f => /^task-\d+\.md$/.test(f))) {
-      const content = readFileSync(join(tasksDir, tf), 'utf8');
-      const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
-      if (!fmMatch) continue;
-      const fm = fmMatch[1];
-      const inline = fm.match(/allowed_paths:\s*\[([^\]]*)\]/);
-      if (inline) {
-        inline[1].split(',').forEach(s => { const v = s.trim().replace(/['"]/g, ''); if (v) allowedPaths.add(v); });
-      }
-      const block = fm.match(/allowed_paths:\s*\n((?:\s+-\s+.+\n?)+)/);
-      if (block) {
-        block[1].match(/-\s+(.+)/g)?.forEach(s => { const v = s.replace(/^-\s+/, '').trim().replace(/['"]/g, ''); if (v) allowedPaths.add(v); });
+      for (const p of parseAllowedPaths(readFileSync(join(tasksDir, tf), 'utf8'))) {
+        if (p) allowedPaths.add(p);
       }
     }
   }
 
-  // 检查 2: 变更在 allowed_paths 内（仅在 TaskCard 存在时）
+  // design §6 标记为「顺带修复」的文件（坑 worktree-execute-apply-friction 坑1）：合规修预存债，
+  // 不属任何 task 边界，assess 豁免 allowed_paths 严格校验（降级 warning），避免被迫 cherry-pick 绕过。
+  const designPath = join(projectRoot, CHANGES_REL, changeName, 'design.md');
+  const incidentalSet = new Set(
+    parseFileChangeListDetailed(designPath).filter(e => e.incidental).map(e => e.path)
+  );
+
+  // 检查 2: 变更在 allowed_paths 内（仅在 TaskCard 存在时）；顺带修复文件豁免。
+  // 匹配换 pathMatches（与 Gate1/plan-postcheck 同语义容差），消除原字面前缀弱匹配漂移。
   if (allowedPaths.size > 0) {
-    const outsidePaths = changedFiles.filter(f => !
-      [...allowedPaths].some(allowed => f === allowed || f.startsWith(allowed.replace(/\*$/, '')))
-    );
+    const isIncidental = f => [...incidentalSet].some(ap => pathMatches(f, ap));
+    const outsideAll = changedFiles.filter(f => ![...allowedPaths].some(allowed => pathMatches(f, allowed)));
+    const outsidePaths = outsideAll.filter(f => !isIncidental(f));
+    const exempted = outsideAll.filter(f => isIncidental(f));
     if (outsidePaths.length > 0) {
       reasons.push(`变更文件超出 allowed_paths：\n  ${outsidePaths.join('\n  ')}`);
+    }
+    if (exempted.length > 0) {
+      warnings.push(`顺带修复文件（已豁免 allowed_paths，来源 design §6 标记）：${exempted.join(', ')}`);
     }
   }
 

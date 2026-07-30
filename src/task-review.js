@@ -11,6 +11,10 @@
 import { existsSync, readFileSync, mkdirSync, writeFileSync, readdirSync, statSync } from 'fs'
 import { join, resolve } from 'path'
 import { execFileSync } from 'child_process'
+import { pathMatches } from './change-list.js'
+import { parseAllowedPaths } from './stages/plan-postcheck.js'
+import { resolveVerifyChangedFiles } from './verify-postcheck.js'
+import { WorktreeManager } from './worktree.js'
 
 // ── review.json schema version ──
 export const REVIEW_SCHEMA_VERSION = 1
@@ -546,6 +550,133 @@ export function generateExecuteRunId() {
   const now = new Date()
   const pad = (n) => String(n).padStart(2, '0')
   return `exec-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`
+}
+
+/**
+ * worktree execute「主 agent 直接实现」模式收尾兜底：per-task review.json 缺失时，
+ * 据 git diff base..head 按 task allowed_paths 归属，自动落盘 cannot_verify 草稿。
+ *
+ * 根因（坑 worktree-execute-apply-friction 坑2）：per-task review.json 无程序化 writer，
+ * 全靠子代理手写；主 agent 统一实现强依赖链/机械 task 时不走子代理 review 流程 →
+ * review.json 全缺，execute --done 的 Task Review Gate 报「task-XX 缺少 review.json」阻断。
+ *
+ * 复用（与 Task Review Gate / verify 同源，单一真相）：
+ *   - resolveVerifyChangedFiles（worktree-aware，meta.json 为权威）→ base..head diff 文件集
+ *   - WorktreeManager.getMeta → baseHash（base）+ worktreePath（决定 head/gitDir，同 gates.js reviewGitDir）
+ *   - parseAllowedPaths + pathMatches（同 worktree-apply Gate2 口径）→ task 文件归属
+ *   - exec-id 解析同 gates.js:269 / autoCheckPlanFromReviews：current-execute-run-id-<change> marker，
+ *     缺失则 generateExecuteRunId + 落盘（保证草稿与后续 gate 读同一 run 目录）
+ *
+ * 行为：
+ *   - 仅 review.json 不存在时写（幂等，已有人工/子代理 verdict 一律跳过，绝不覆盖）
+ *   - changedFiles 为空的 task 不生成（verifyReviewGitEvidence 判空 diff 伪造，留给 agent）
+ *   - 草稿 verdict=cannot_verify + 非空 requiredEvidence（过 schema，流转 verify 阶段兑现）
+ *   - 不属任何 task 的文件累计 unattributed（顺带修复/非源码），不强塞某 task
+ *
+ * fail-open：任何异常 → 返回统计，仅 console.warn，不阻断 execute 完成（草稿是兜底，
+ * 缺了也只是退回原状——gate 报缺 review.json，agent 手补，不比修复前差）。
+ *
+ * @param {{ changeName: string, cwd: string, platformOpts?: object }} opts
+ * @returns {Promise<{ generated: number, skipped: number, unattributed: string[], reason?: string, executeRunId?: string }>}
+ */
+export async function generateTaskReviewDrafts({ changeName, cwd, platformOpts = {} }) {
+  const specBase = platformOpts.specRoot || join(cwd, '.sillyspec')
+  const runtimeRoot = platformOpts.runtimeRoot || join(specBase, '.runtime')
+  const changeDir = join(specBase, 'changes', changeName)
+  const tasksDir = join(changeDir, 'tasks')
+
+  if (!changeName) {
+    return { generated: 0, skipped: 0, unattributed: [], reason: '无 changeName' }
+  }
+  // 无 task 卡片目录 → 非多 task 变更，无需补草稿
+  if (!existsSync(tasksDir)) {
+    return { generated: 0, skipped: 0, unattributed: [], reason: '无 tasks/ 目录' }
+  }
+
+  // exec-id：与 Task Review Gate（gates.js:269）/ autoCheckPlanFromReviews 同源
+  const runIdFile = join(runtimeRoot, 'current-execute-run-id-' + changeName)
+  let executeRunId = ''
+  try { if (existsSync(runIdFile)) executeRunId = readFileSync(runIdFile, 'utf8').trim() } catch {}
+  if (!executeRunId) {
+    executeRunId = generateExecuteRunId()
+    try { mkdirSync(runtimeRoot, { recursive: true }); writeFileSync(runIdFile, executeRunId + '\n') } catch {}
+  }
+
+  // base..head diff 文件集（worktree-aware；null=git 不可用，[]=无 commit diff）
+  const diffFiles = resolveVerifyChangedFiles(cwd, changeName)
+  if (!diffFiles || diffFiles.length === 0) {
+    return { generated: 0, skipped: 0, unattributed: [], executeRunId, reason: 'base..head 无代码 diff（改动未 commit？）' }
+  }
+
+  // base/head + gitDir：与 gates.js reviewGitDir 同源（worktree 优先，in-place 回退 cwd）
+  let base = null
+  let head = null
+  let reviewGitDir = cwd
+  try {
+    const wm = new WorktreeManager({ cwd })
+    const meta = wm.getMeta(changeName)
+    base = (meta && (meta.baselineCommit || meta.baseHash)) || null
+    if (meta && meta.worktreePath && meta.mode !== 'in-place-fallback' && existsSync(meta.worktreePath)) {
+      reviewGitDir = meta.worktreePath
+    }
+  } catch {}
+  if (!base) {
+    return { generated: 0, skipped: 0, unattributed: diffFiles, executeRunId, reason: '无 worktree meta.baseHash（无法定 base/head）' }
+  }
+  try {
+    head = runGit(reviewGitDir, ['rev-parse', 'HEAD'])
+  } catch {
+    return { generated: 0, skipped: 0, unattributed: diffFiles, executeRunId, reason: 'git rev-parse HEAD 失败（' + reviewGitDir + '）' }
+  }
+
+  const taskFiles = readdirSync(tasksDir).filter(f => /^task-\d+\.md$/.test(f)).sort()
+  let generated = 0
+  let skipped = 0
+  const attributed = new Set()
+
+  for (const tf of taskFiles) {
+    const taskId = tf.replace(/\.md$/, '')
+    const reviewDir = join(runtimeRoot, 'execute-runs', executeRunId, 'tasks', taskId)
+    const reviewPath = join(reviewDir, 'review.json')
+
+    // 幂等：review.json 已存在（无论合法/解析错/schema 错）一律跳过，绝不覆盖人工/子代理 verdict
+    const existing = readReview(reviewPath)
+    if (existing.ok || existing.parseError || existing.schemaError) {
+      skipped++
+      continue
+    }
+
+    const content = readFileSync(join(tasksDir, tf), 'utf8')
+    const allowedPaths = parseAllowedPaths(content)
+    const changedFiles = allowedPaths.length > 0
+      ? diffFiles.filter(f => allowedPaths.some(p => pathMatches(f, p)))
+      : []
+
+    // 空 changedFiles 的 task 不生成（verifyReviewGitEvidence 判空 diff 伪造，留给 agent 手补）
+    if (changedFiles.length === 0) {
+      skipped++
+      continue
+    }
+    changedFiles.forEach(f => attributed.add(f))
+
+    const draft = {
+      schemaVersion: REVIEW_SCHEMA_VERSION,
+      task: taskId,
+      base,
+      head,
+      changedFiles,
+      specVerdict: 'cannot_verify',
+      qualityVerdict: 'cannot_verify',
+      requiredEvidence: ['auto-generated draft: 待 agent 对照 ' + taskId + ' brief + diff 复核后升级为 pass/fail'],
+      reviewerNotes: 'auto-generated draft from git diff ' + base.slice(0, 8) + '..' + head.slice(0, 8) + ';verdict=未评审（worktree execute 主 agent 实现模式兜底，坑2）',
+    }
+    mkdirSync(reviewDir, { recursive: true })
+    writeFileSync(reviewPath, JSON.stringify(draft, null, 2) + '\n')
+    generated++
+  }
+
+  const unattributed = diffFiles.filter(f => !attributed.has(f))
+  return { generated, skipped, unattributed, executeRunId }
 }
 
 /**
