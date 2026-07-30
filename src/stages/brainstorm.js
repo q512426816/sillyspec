@@ -60,7 +60,7 @@ export const definition = {
 加载上下文后，用需求描述 + 模块上下文**粗判**本次变更规模：
 - **明显 small**（满足：预计改动 ≤ 2 个文件、单模块、无 schema/API/状态机/权限变更；或属于改文案/修 bug/样式调整/配置微调等纯执行类）→ 输出：「此变更规模较小，建议直接走 quick 流程」+ 一句依据，给出建议命令 \`sillyspec run quick "<需求>"\`。用户同意则本阶段可在此收尾（\`--done\` 并提示转 quick），不必继续走完整设计流程。
 - **拿不准或明显 large**（涉及多模块、schema、状态流转、新架构等）→ 不要提示 quick，继续进入下一步「对话式探索与需求澄清」。
-- 这是**粗判**，只为让明显的小变更免走完整设计流程；不确定就继续，后续「用户确认并生成规范文件」步骤会基于 design.md 文件清单做精判兜底。
+- 这是**粗判**，只为让明显的小变更免走完整设计流程；不确定就继续，后续「生成规范文件」步骤会基于 design.md 文件清单做精判兜底。
 
 ### 输出
 项目现状理解摘要（3-5 句话，关键约定和架构决策）+ 可能涉及的模块列表 + 本次需求所属子项目 + （如命中）quick 建议
@@ -442,11 +442,10 @@ status: passed | needs-user-input | blocked | skipped
       optional: false
     },
     {
-      name: '用户确认并生成规范文件',
-      requiresWait: true,
-      waitReason: '等待用户最终确认设计方案',
-      waitOptions: ['确认', '需要修改', '推翻重来'],
-      prompt: `用户确认设计方案，按变更规模生成规范文件并给出实现路径建议。
+      name: '生成规范文件',
+      // 重命名自「用户确认并生成规范文件」（去确认门控：设计已在「分段展示设计」步确认过，末步再问纯冗余），老进度 completed 由迁移逻辑承接
+      migratedFrom: ['用户确认并生成规范文件'],
+      prompt: `按变更规模生成规范文件并给出实现路径建议（设计已在前置步骤确认过，本步不再暂停等确认，生成后展示摘要即可）。
 
 ### 规模评估（展示前先做）
 读取 design.md 的「文件变更清单」，判断本次变更规模：
@@ -456,12 +455,12 @@ status: passed | needs-user-input | blocked | skipped
 （注：早期「加载项目上下文」步骤已做过一次粗判并可能建议过走 quick；此处基于 design.md 文件清单做精判兜底。）
 
 ### 操作
-1. 展示 design.md 摘要 + **规模评估结果（small/large + 一句依据）** 给用户
-2. 暂停等待用户选择：✅ 确认 / ✏️ 修改 / ❌ 推翻重来
-3. 确认后，**按规模生成规范文件**：
+1. **按规模生成规范文件**：
    - **scale=large**：在 \`{SPEC_ROOT}/changes/<change-name>/\` 下生成完整四件套（design.md / decisions.md 可选 / proposal.md / requirements.md / tasks.md），实现路径 → \`sillyspec run plan --change <变更名>\`
    - **scale=small**：只生成/补全 design.md（proposal/requirements/tasks 对 quick 无用，不生成），实现路径 → \`sillyspec run quick --linked-changes <变更名>\`
    - 两种规模都执行 \`git add .sillyspec/\` — 暂存规范文件（不要 commit，由用户通过统一提交工具处理）。**平台模式跳过 git add**（specRoot 不在 sourceRoot 的 git repo 内）
+
+2. 生成完成后展示 design.md 摘要 + **规模评估结果（small/large + 一句依据）** + 实现路径建议，告知用户“如有异议直接说，可修改文件、改 scale 或 --reopen 回退”（不暂停，展示完直接 --done）
 
 所有规范文件头部必须包含 YAML frontmatter：
 \`\`\`yaml
@@ -553,15 +552,11 @@ Then 期望结果
 4. \`git add .sillyspec/\` — 暂存所有新增文件（不要 commit，由用户通过统一提交工具处理）。**平台模式跳过 git add**（specRoot 不在 sourceRoot 的 git repo 内）
 5. 后续变更包的骨架文件同样必须包含 \`author: <git-user>\` 和 \`created_at: <now-datetime>\`
 
-### 铁律 — 必须等待用户最终确认
-- 展示 design.md 摘要后暂停等用户确认，**不要自己说"用户已确认"然后生成文件**（命令由 CLI 在下方注入）
-- 只有用户明确确认（--answer "确认"）后才生成规范文件**
-
 ### 输出
 所有规范文件路径（含后续变更包目录列表）
 
 ### 注意
-- 禁止在确认前推进到后续阶段
+- 本步不再等待用户确认，生成完成后直接 --done；用户事后提出修改/推翻时，修改对应文件或用 --reopen 回退重做
 - 禁止自动 commit
 - 推翻重来回到「对话式探索与需求澄清」步骤
 - 表名/字段名/类名必须来自真实代码或标注"新增"

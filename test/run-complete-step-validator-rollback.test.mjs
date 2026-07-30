@@ -5,7 +5,7 @@
  *   rollbackStageCompletion + lastActive + pm._write + triggerSync + return {stageCompleted:false}
  * 统一进共享骨架。本测试锁住「runValidators 失败 → 回滚」的现有行为，确保统一后不变。
  *
- * 场景：brainstorm 末步（用户确认并生成规范文件，requiresWait）完成时 design.md 缺失 →
+ * 场景：brainstorm 末步（生成规范文件）完成时 design.md 缺失 →
  *   validateBrainstormOutputs 报错 → runValidators 失败 → rollbackStageCompletion 把
  *   stageData.status 从 completed 回滚为 in-progress、末步回退 pending，返回 nextPendingIdx=7。
  *
@@ -19,7 +19,7 @@ import { runCapturing, makeRepo, initChange, seedStage, cleanup, report } from '
 const count = { passed: 0, failed: 0, failures: [] }
 const assert = (cond, msg) => { cond ? (count.passed++, console.log(`  ✅ PASS: ${msg}`)) : (count.failed++, count.failures.push(msg), console.log(`  ❌ FAIL: ${msg}`)) }
 
-// brainstorm 8 步定义名（与 src/stages/brainstorm.js 一致）
+// brainstorm 8 步种子名（刻意用老名，走 migratedFrom 迁移路径映射到当前定义）
 const BRAINSTORM_STEPS = [
   '状态检查', '加载项目上下文', '对话式探索与需求澄清', '提出 2-3 种方案',
   '分段展示设计', '写设计文档并自审', 'Design Grill 交叉审查', '用户确认并生成规范文件',
