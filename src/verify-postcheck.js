@@ -19,6 +19,7 @@ import { execSync } from 'child_process'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { verifyApiParity } from './contract-matrix.js'
+import { parseFileChangeListDetailed, pathMatches } from './change-list.js'
 
 // 测试命令最长执行时间；超时视为失败（防止 CLI 被挂起的测试卡死）
 const TEST_TIMEOUT_MS = Number(process.env.SILLYSPEC_TEST_TIMEOUT_MS) || 10 * 60 * 1000
@@ -374,6 +375,24 @@ function runGitDiffNameOnly(cwd, refSpec) {
 }
 
 /**
+ * 在指定 cwd 跑 `git diff --name-status <refSpec>`，返回原始文本（调用方按行解析，
+ * 保留状态字母 D/R/C 供删除探针识别删除/重命名）。git 不可用 / 非仓库 / ref 无效 → 返回 null。
+ */
+function runGitDiffNameStatus(cwd, refSpec) {
+  try {
+    const cmd = refSpec ? `git diff --name-status ${refSpec}` : 'git diff --name-status'
+    return execSync(cmd, {
+      cwd,
+      encoding: 'utf8',
+      timeout: 30 * 1000,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+  } catch {
+    return null
+  }
+}
+
+/**
  * 取主工作区 git 变更文件列表（unstaged + staged，相对仓库根）。
  * `git diff --name-only HEAD` 同时覆盖已暂存与未暂存改动（相对 HEAD），
  * 最适合 brownfield（apply 后未 commit / in-place 改动）场景。
@@ -714,4 +733,119 @@ export function printVerifyParityCheck(result) {
   }
   if (result.missingBackend.length > 20) console.warn(`   …还有 ${result.missingBackend.length - 20} 个`)
   console.warn('   提示：检查是否后端漏实现，或前端调用了尚未实现的端点。确认无误可在 design.md 标注豁免。')
+}
+
+/**
+ * 删除探针（advisory）：用 git 事实客观对账本次变更删除的文件 vs design.md 声明的操作。
+ *
+ * 切斯特顿栅栏护栏——verify 对「agent 静默删除代码」本是盲区：agent 删一段它看不懂的
+ * 旧代码，只要路径合规、不碰风险关键词，5 探针 + 风险分级 + 测试对账全都不会响。本探针
+ * 不信任 agent 自报告，用 `git diff --name-status HEAD` 客观提取删除文件，对账 design
+ * 清单声明的操作（声明「新增/修改」却整文件删除 = 高风险）。warning 不阻断 verify 完成
+ * （advisory 起步）——「检测到删除」是确定性事实（做），「该不该删」是意图（只报不拦）。
+ *
+ * 信号源：apply（git apply --3way）不 commit，verify 时主仓 HEAD 仍是变更前 commit，
+ * 删除的文件在工作树消失但仍在 HEAD → `git diff --name-status HEAD` 显示 D。
+ *
+ * @param {object} opts
+ * @param {string} opts.cwd - 项目根（主仓，代码在此）
+ * @param {string} opts.specBase - .sillyspec（或平台 specRoot）
+ * @param {string|null} [opts.changeName]
+ * @returns {{
+ *   status: 'skipped'|'warning'|'passed',
+ *   highRisk: Array<{path:string, declaredOp:string, reason:string}>,
+ *   mediumRisk: Array<{path:string, reason:string}>,
+ *   compliant: Array<{path:string, declaredOp:string}>,
+ *   summary: string,
+ *   reason: string|null,
+ * }}
+ */
+export function runVerifyDeletionCheck({ cwd, specBase, changeName = null }) {
+  const statusRaw = runGitDiffNameStatus(cwd, 'HEAD')
+  if (statusRaw === null) {
+    return { status: 'skipped', highRisk: [], mediumRisk: [], compliant: [],
+      summary: '', reason: 'git 不可用或非仓库，删除对账跳过' }
+  }
+
+  // 解析 D（删除）；R/C 的旧路径等价删除（防御 committed rename；标准 apply 流程
+  // rename 表现为纯 D，故本探针不加 -M，D 统一处理）。
+  const deletions = []
+  for (const line of statusRaw.split('\n').filter(Boolean)) {
+    const parts = line.split('\t')
+    const st = parts[0]
+    if (!st) continue
+    if (st.startsWith('D')) {
+      deletions.push({ path: parts[1], kind: 'D' })
+    } else if ((st.startsWith('R') || st.startsWith('C')) && parts.length >= 3) {
+      // rename/copy 旧路径（parts[1]）等价删除，新路径 parts[2]
+      deletions.push({ path: parts[1], kind: 'R-old', renamedTo: parts[2] })
+    }
+  }
+
+  // 排除交付物外文件（.sillyspec/ 文档 churn + meta.json），避免污染删除信号。
+  // 内联 filterDeliverableFiles 逻辑（一行，不跨模块耦合）。
+  const deliverable = deletions.filter(d =>
+    !d.path.startsWith('.sillyspec/') && d.path !== 'meta.json')
+
+  if (deliverable.length === 0) {
+    return { status: 'skipped', highRisk: [], mediumRisk: [], compliant: [],
+      summary: '', reason: '本次变更无文件删除（或改动已被 commit，主仓 HEAD 已推进，删除对账无锚点）' }
+  }
+
+  // 读 design 声明（operation）。无清单章节 → []，所有删除归「未声明」。
+  const designPath = changeName
+    ? join(specBase, 'changes', changeName, 'design.md') : null
+  const designEntries = designPath && existsSync(designPath)
+    ? parseFileChangeListDetailed(designPath) : []
+
+  const highRisk = []
+  const mediumRisk = []
+  const compliant = []
+  for (const d of deliverable) {
+    const hit = designEntries.find(e => pathMatches(d.path, e.path))
+    if (!hit) {
+      mediumRisk.push({ path: d.path, reason: d.kind === 'R-old'
+        ? `重命名源文件未在 design 清单（→ ${d.renamedTo}）`
+        : 'design 清单未列出该删除文件' })
+      continue
+    }
+    if (hit.operation === '新增' || hit.operation === '修改') {
+      highRisk.push({ path: d.path, declaredOp: hit.operation,
+        reason: `design 声明「${hit.operation}」但 git 显示整文件删除` })
+    } else if (hit.operation === '删除') {
+      compliant.push({ path: d.path, declaredOp: '删除' })
+    } else {
+      // operation=null（未声明操作）或 重命名：删除发生但声明不明确
+      mediumRisk.push({ path: d.path,
+        reason: `design 列出但操作为「${hit.operation || '未声明'}」，与删除不一致` })
+    }
+  }
+
+  if (highRisk.length > 0 || mediumRisk.length > 0) {
+    return { status: 'warning', highRisk, mediumRisk, compliant,
+      summary: `${highRisk.length} 个高风险删除 + ${mediumRisk.length} 个未声明删除`, reason: null }
+  }
+  return { status: 'passed', highRisk: [], mediumRisk: [], compliant,
+    summary: `所有 ${compliant.length} 个删除均在 design 声明为「删除」`, reason: null }
+}
+
+/** 打印删除对账结果（advisory，不阻断 verify 完成） */
+export function printVerifyDeletionCheck(result) {
+  if (result.status === 'skipped') return  // 静默：无删除 / git 不可用 / 改动已 commit
+  if (result.status === 'passed') {
+    console.log(`\n✅ 删除对账通过：${result.summary}`)
+    return
+  }
+  // warning
+  if (result.highRisk.length > 0) {
+    console.warn(`\n⚠️  删除对账发现 ${result.highRisk.length} 个高风险删除（design 声明新增/修改却被整文件删除，advisory 不阻断）：`)
+    for (const m of result.highRisk.slice(0, 20)) console.warn(`   - ${m.path}  (${m.reason})`)
+    if (result.highRisk.length > 20) console.warn(`   …还有 ${result.highRisk.length - 20} 个`)
+  }
+  if (result.mediumRisk.length > 0) {
+    console.warn(`⚠️  ${result.mediumRisk.length} 个未声明删除（design 清单未列出 / 操作不一致）：`)
+    for (const m of result.mediumRisk.slice(0, 20)) console.warn(`   - ${m.path}  (${m.reason})`)
+    if (result.mediumRisk.length > 20) console.warn(`   …还有 ${result.mediumRisk.length - 20} 个`)
+  }
+  console.warn('   提示：确认删除是否预期。预期删除请在 design.md 清单用「删除」操作显式声明；误删请恢复。')
 }

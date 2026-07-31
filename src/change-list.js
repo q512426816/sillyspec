@@ -81,6 +81,43 @@ const FILE_LIST_SECTION_RE = /^#{2,3}\s*(?:\d+[.)]\s*)?(文件变更清单|变�
  */
 const EXCLUDE_SUBSECTION_RE = /不修改|不变|保留|无变更|未变更|不改动|暂不|暂缓|暂定|待定|后续|未改|无需|不涉及/
 
+/**
+ * operation 词→归一化标签。design 清单「操作」列 cell 与分类列表子标题共用。
+ * 用途：verify 删除探针对账——声明「新增/修改」却整文件删除 = 高风险信号。
+ */
+const OP_KEYWORDS = [
+  { re: /^(新增|新建|创建|添加|add|new|create)$/i, op: '新增' },
+  { re: /^(修改|更新|调整|改动|变更|重写|modify|update|change)$/i, op: '修改' },
+  { re: /^(删除|移除|去掉|remove|delete|drop)$/i, op: '删除' },
+  { re: /^(重命名|改名|rename|move)$/i, op: '重命名' },
+]
+function classifyOperation(raw) {
+  if (!raw) return null
+  const hit = OP_KEYWORDS.find(k => k.re.test(raw.trim()))
+  return hit ? hit.op : null
+}
+
+/**
+ * 分类列表子标题 → operation（`### 删除文件` → '删除'）。不命中返回 null。
+ * ⚠️ 调用方必须先判 EXCLUDE_SUBSECTION_RE：「### 不修改文件」含「修改」二字，
+ *    会被此处误匹配为「修改」——exclude 永远优先，命中 exclude 不跑 OP 映射。
+ */
+const OP_SUBSECTION_RE = [
+  { re: /新增|新建|创建/, op: '新增' },
+  { re: /修改|更新|改动|重写/, op: '修改' },
+  { re: /删除|移除|去掉/, op: '删除' },
+  { re: /重命名|改名/, op: '重命名' },
+]
+function classifySubsectionOp(title) {
+  const hit = OP_SUBSECTION_RE.find(k => k.re.test(title))
+  return hit ? hit.op : null
+}
+
+/** 表头列定位：cell 整体匹配操作类列名（与 isPathHeaderCell 对偶，用于定位 operation 列） */
+function isOperationHeaderCell(c) {
+  return /^(操作|类型|变更类型|改动类型|变更|operation|type|action|op)$/i.test(c)
+}
+
 function isPlaceholder(p) {
   return !p || p === '—' || p === '-' || /^(n\/?a|无|none|-+)$/i.test(p)
 }
@@ -121,7 +158,7 @@ const INCIDENTAL_RE = /顺带修复|附带修复|顺带|drive-?by|incidental/i
  * 内核函数：parseFileChangeList（Set 包装，向后兼容）与 parseFileChangeListDetailed 共用，
  * 单一真相源，避免两处各自重写清单解析漂移。
  * @param {string} designMdPath - design.md 文件路径
- * @returns {Array<{ path: string, incidental: boolean }>}（顺序按首次出现，exclude 子段移除）
+ * @returns {Array<{ path: string, operation: string|null, incidental: boolean }>}（顺序按首次出现，exclude 子段移除）
  */
 function _parseFileListDetailed(designMdPath) {
   if (!designMdPath || !existsSync(designMdPath)) return []
@@ -141,14 +178,24 @@ function _parseFileListDetailed(designMdPath) {
   const lines = relevantContent.split('\n')
   let headerSkipped = false
   let pathColIdx = 1            // 默认第 2 列；解析表头后可重定位
+  let opColIdx = -1             // 操作列下标（表头扫描后定位；-1 = 无操作列 → operation=null）
   let listMode = 'include'      // include | exclude（分类列表子段）
-  const entries = new Map()     // path -> { path, incidental }（exclude 子段 delete）
+  let currentOp = null          // 分类列表子标题推导的 operation（表格模式不用）
+  const entries = new Map()     // path -> { path, operation, incidental }（exclude 子段 delete）
 
   for (const line of lines) {
     // 分类列表子标题：### 新增文件 / ### 修改文件 / ### 不修改文件
     const subHeader = line.match(/^###\s+(.+?)\s*$/)
     if (subHeader) {
-      listMode = EXCLUDE_SUBSECTION_RE.test(subHeader[1]) ? 'exclude' : 'include'
+      // ⚠️ EXCLUDE 优先：「### 不修改文件」含「修改」二字，会被 classifySubsectionOp 误匹配。
+      //    先判 exclude 词集，命中则 exclude 且 currentOp=null，绝不跑 OP 映射。
+      if (EXCLUDE_SUBSECTION_RE.test(subHeader[1])) {
+        listMode = 'exclude'
+        currentOp = null
+      } else {
+        listMode = 'include'
+        currentOp = classifySubsectionOp(subHeader[1])
+      }
       continue
     }
 
@@ -163,6 +210,9 @@ function _parseFileListDetailed(designMdPath) {
         // 表头列定位：找「文件/路径/file/path」列，找不到保持默认第 2 列
         const idx = cells.findIndex(isPathHeaderCell)
         if (idx >= 0) pathColIdx = idx
+        // 操作列定位：非路径列里找操作类列名（「操作/类型/operation」），找不到 opColIdx 保持 -1
+        const opIdx = cells.findIndex((c, i) => i !== pathColIdx && isOperationHeaderCell(c))
+        if (opIdx >= 0) opColIdx = opIdx
         continue
       }
 
@@ -171,11 +221,13 @@ function _parseFileListDetailed(designMdPath) {
       if (/^(新增|修改|删除|重命名|new|modify|update|delete|create|rename)$/i.test(filePath)) continue
       if (isPlaceholder(filePath) || filePath.startsWith('.sillyspec/')) continue
       if (!looksLikePath(filePath)) continue // 脏描述兜底：丢弃非路径自由文本（防虚高 fileCount）
+      // operation：操作列 cell 分类（无操作列 → null）
+      const operation = opColIdx >= 0 ? classifyOperation(cells[opColIdx] || '') : null
       // incidental：说明列（非路径列的所有 cell）+ 路径 cell 原始值（剥注释前的括号内容）
       const incidental = cells.some((c, i) => i !== pathColIdx && INCIDENTAL_RE.test(c))
         || INCIDENTAL_RE.test(cells[pathColIdx] || '')
       if (listMode === 'exclude') { entries.delete(filePath); continue }
-      entries.set(filePath, { path: filePath, incidental })
+      entries.set(filePath, { path: filePath, operation, incidental })
       continue
     }
 
@@ -187,7 +239,7 @@ function _parseFileListDetailed(designMdPath) {
       if (!looksLikePath(filePath)) continue // 脏描述兜底
       const incidental = INCIDENTAL_RE.test(listItem[1])
       if (listMode === 'exclude') { entries.delete(filePath); continue }
-      entries.set(filePath, { path: filePath, incidental })
+      entries.set(filePath, { path: filePath, operation: currentOp, incidental })
     }
   }
 
@@ -204,9 +256,11 @@ export function parseFileChangeList(designMdPath) {
 }
 
 /**
- * 从 design.md 解析文件变更清单（含 incidental 标记，供 assess allowed_paths 豁免用）。
+ * 从 design.md 解析文件变更清单（含 operation + incidental 标记）。
+ * operation 供 verify 删除探针对账（声明「新增/修改」却整文件删除 = 高风险）；
+ * incidental 供 assess allowed_paths 豁免。
  * @param {string} designMdPath - design.md 文件路径
- * @returns {Array<{ path: string, incidental: boolean }>}
+ * @returns {Array<{ path: string, operation: string|null, incidental: boolean }>}
  */
 export function parseFileChangeListDetailed(designMdPath) {
   return _parseFileListDetailed(designMdPath)

@@ -158,7 +158,7 @@
 - 等待配置：无（可直接 `--done`）
 
 **本步出现的运行时占位符与 include 指令**
-- `{{include: verify-probes}}` → include 指令：`resolvePromptIncludes` 在占位符替换前，把外部模板片段（`shared.js` 注册的 `verify-probes`）拉进 prompt 正文（五个自动探针的检查规则）
+- `{{include: verify-probes}}` → include 指令：`resolvePromptIncludes` 在占位符替换前，把外部模板片段（`shared.js` 注册的 `verify-probes`）拉进 prompt 正文（六个自动探针的检查规则）
 
 **提示词原文**
 
@@ -168,8 +168,8 @@
 {{include: verify-probes}}
 
 ### 探针结果处理
-- 将五个探针的结果汇总为「探针报告」
-- 如果探针发现问题（未实现标记、关键词缺失、测试缺失、决策未闭环、API 契约缺口），在最终验证报告中明确标注
+- 将六个探针的结果汇总为「探针报告」
+- 如果探针发现问题（未实现标记、关键词缺失、测试缺失、决策未闭环、API 契约缺口、代码删除对账），在最终验证报告中明确标注
 - 探针发现的问题不等同于验证失败，但必须在报告中列出
 
 ### 设计一致性检查
@@ -295,6 +295,7 @@ PASS / PASS WITH NOTES / FAIL
 - 测试覆盖：...
 - 决策追踪覆盖：...
 - API 契约对账：...
+- 代码删除对账：声明修改/新增却被整文件删除 = 高风险；清单未列出的删除 = 未声明（CLI 会用 git diff --name-status HEAD 独立复核）
 
 ## 决策追踪矩阵（如存在 decisions.md）
 | 决策 ID | FR | Task | Evidence | 状态 |

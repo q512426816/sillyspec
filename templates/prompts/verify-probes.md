@@ -1,5 +1,5 @@
 ### 自动探针（必须先执行）
-在检查前，依次运行以下五个探针，将结果作为验证输入：
+在检查前，依次运行以下六个探针，将结果作为验证输入：
 
 **探针 1：未实现标记扫描（仅变更文件）**
 只扫描本次变更涉及的文件，不要全项目扫描——历史 TODO 与本次变更无关，徒增噪音与 token。变更文件 = design.md「文件变更清单」列出的源码文件（你已在「加载规范」步骤读取 design.md，glob 路径需展开为具体文件）：
@@ -51,3 +51,14 @@ grep -rl "<关键词>" <源码目录>/ --include="*.java" --include="*.js" --inc
    | ❌ missing | GET /api/ppm/project-plan/{param}/plan-nodes | — | frontend/src/lib/ppm/plan.ts |
 
 如果发现 Missing backend endpoint，必须在验证报告中标记为 ❌ contract gap。
+
+**探针 6：代码删除对账（切斯特顿栅栏护栏）**
+静默删除代码是 verify 的盲区——agent 删一段它看不懂的旧代码，只要路径合规、不碰风险关键词，其他探针都不会响。用 git 事实客观对账，不要凭记忆：
+1. 运行 `git diff --name-status HEAD`（本次变更已 apply 到主仓、未 commit，删除的文件在工作树消失但仍在 HEAD，显示 `D`）
+2. 筛出状态以 `D` 开头的行（删除）；`R`/`C` 开头的旧路径等价删除
+3. 对每个删除文件，核对 design.md「文件变更清单」声明的操作：
+   - design 声明「删除」→ ✅ 合规（预期删除）
+   - design 声明「新增/修改」却整文件删除 → ❌ 高风险（声明与事实矛盾）
+   - design 清单未列出 → ⚠️ 未声明删除
+4. 排除 `.sillyspec/` 与 `meta.json`（文档 churn 不算删除信号）
+5. verify --done 时 CLI 会用同一 git 事实独立复核，谎报无效——务必如实记录

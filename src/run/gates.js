@@ -183,6 +183,10 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
     const { runVerifyParityCheck, printVerifyParityCheck } = await import('../verify-postcheck.js')
     const parityCheck = runVerifyParityCheck({ cwd, specBase, changeName, runtimeRoot: platformOpts?.runtimeRoot })
     printVerifyParityCheck(parityCheck)
+    // ── 删除探针（advisory，不阻断）：切斯特顿栅栏护栏，用 git 事实对账静默删除代码 ──
+    const { runVerifyDeletionCheck, printVerifyDeletionCheck } = await import('../verify-postcheck.js')
+    const deletionCheck = runVerifyDeletionCheck({ cwd, specBase, changeName })
+    printVerifyDeletionCheck(deletionCheck)
     console.log('\n✅ 验证通过，下一步：sillyspec run archive')
   }
 

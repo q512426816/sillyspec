@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-05-31 11:00:00
-updated_at: 2026-07-30T23:50:00+08:00
+updated_at: 2026-07-31T00:00:00+08:00
 ---
 
 # SillySpec 文件生命周期
@@ -49,7 +49,7 @@ updated_at: 2026-07-30T23:50:00+08:00
 | propose | 7 | 包含“生成规范文件”与“自检门控”，四件套是该阶段预期产物 |
 | plan | 动态 | 默认 9 步（含独立"审查计划"step，按规模分级 tier=self 自审 / tier=independent 独立子代理 + stage review.json）；`plan.md` 解析到任务后插入任务蓝图协调器；postcheck 含确定性校验（结构/可行性/跨任务契约/design 文件覆盖/产物） |
 | execute | 动态 | 默认 12 步；Wave 来自 `plan.md`，解析失败时默认 3 个 Wave；完成时 `validateExecuteOutputs` 客观核验存在真实代码变更（plan 有 task 但确证零变更则阻断），Task Review Gate 另做 review.json git 真实性交叉校验；`--done` 时若 plan 全勾 + 代码客观核验通过则一次性补完剩余 step 直达完成（见后「execute --done 批量完成」） |
-| verify | 7 | 只读校验 + 写 `verify-result.md`；完成时 `validateVerifyOutputs` 校验 `verify-result.md` 存在且结论非 FAIL，缺失或 FAIL 则阻断完成；随后 CLI 亲自执行 `local.yaml` 的 `commands.test` 与自报告对账（实测失败阻断，结果写 `.runtime/verify-runs/<ts>/test-result.json`）；「对照设计检查」step 的 5 探针由 run/shared.js `resolvePromptIncludes` 从包内 `templates/prompts/verify-probes.md` 经 `{{include}}` 注入（prompt 组装时展开）；风险门控 `detectChangeRisk` 按 design/plan 关键词判级（integration/deployment-critical 缺真实集成证据则拦 PASS/PASS WITH NOTES），design.md frontmatter 可写 `risk_level:` 显式声明覆盖关键词判级（防「不改动 daemon」类否定语境被误判），显式等级下 PASS WITH NOTES 放宽不强制集成证据 |
+| verify | 7 | 只读校验 + 写 `verify-result.md`；完成时 `validateVerifyOutputs` 校验 `verify-result.md` 存在且结论非 FAIL，缺失或 FAIL 则阻断完成；随后 CLI 亲自执行 `local.yaml` 的 `commands.test` 与自报告对账（实测失败阻断，结果写 `.runtime/verify-runs/<ts>/test-result.json`）；「对照设计检查」step 的 6 探针由 run/shared.js `resolvePromptIncludes` 从包内 `templates/prompts/verify-probes.md` 经 `{{include}}` 注入（prompt 组装时展开）；风险门控 `detectChangeRisk` 按 design/plan 关键词判级（integration/deployment-critical 缺真实集成证据则拦 PASS/PASS WITH NOTES），design.md frontmatter 可写 `risk_level:` 显式声明覆盖关键词判级（防「不改动 daemon」类否定语境被误判），显式等级下 PASS WITH NOTES 放宽不强制集成证据；verify --done 时另跑 runVerifyDeletionCheck（advisory）：git diff --name-status HEAD 提取本次删除文件，对账 design 声明操作（声明「新增/修改」却整文件删除 = 高风险；清单未列出 = 未声明），warning 不阻断完成（base 不可得→skipped） |
 | archive | 5 | 辅助阶段；第 4 步必须带 `--confirm`，由 `run/complete-handlers.js`（`archiveChangeDirectory`）移动目录并注销 active change；移动前硬校验 `plan.md` 存在，移动后校验 `design.md`/`module-impact.md` |
 | quick | 3 | 辅助阶段；直接在主工作区实现，不创建 worktree |
 | explore | 1 | 只读探索 |

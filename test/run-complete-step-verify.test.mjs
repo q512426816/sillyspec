@@ -9,10 +9,15 @@
  *
  * 断言三件套：DB（status）+ stdout（验证通过 / 校验失败）+ 返回值。
  */
-import { writeFileSync, existsSync } from 'node:fs'
+import { writeFileSync, existsSync, mkdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
+import { execFileSync } from 'node:child_process'
 import { _completeStepForTest } from '../src/run.js'
 import { runCapturing, makeRepo, initChange, seedStage, cleanup, report } from './_complete-step-harness.mjs'
+
+function git(dir, args) {
+  return execFileSync('git', args, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
+}
 
 const count = { passed: 0, failed: 0, failures: [] }
 const assert = (cond, msg) => { cond ? (count.passed++, console.log(`  ✅ PASS: ${msg}`)) : (count.failed++, count.failures.push(msg), console.log(`  ❌ FAIL: ${msg}`)) }
@@ -80,6 +85,34 @@ console.log('\n--- 结论 FAIL → 校验失败回滚 ---')
   const after = await pm.read(cwd, cn)
   assert(after.stages.verify.status !== 'completed', 'DB: stage.status 已回滚（非 completed）')
   assert(after.stages.verify.steps[6].status === 'pending', 'DB: 末步回退 pending')
+}
+
+// ── Case 3: 删除探针 advisory——声明修改却整文件删除 → warning 但不阻断 ──
+console.log('\n--- 删除探针 advisory：声明修改却删除 → warning 不阻断 ---')
+{
+  const { cwd, specBase } = makeRepo('cs-verify-del-')
+  const cn = '2026-07-31-verify-del'
+  const pm = await initChange(cwd, specBase, cn)
+  // commit src/list.js（基线含它），再工作树删除 → git diff --name-status HEAD 显示 D src/list.js
+  // （apply 不 commit，删除文件在工作树消失但仍在 HEAD；design.md 在 .sillyspec/ 被 gitignore，不污染 diff）
+  mkdirSync(join(cwd, 'src'), { recursive: true })
+  writeFileSync(join(cwd, 'src', 'list.js'), 'export const sort = () => {}\n')
+  git(cwd, ['add', '.']); git(cwd, ['commit', '-q', '-m', 'add list.js'])
+  rmSync(join(cwd, 'src', 'list.js'))
+  writeCoreDocs(join(specBase, 'changes', cn), 'PASS') // design 声明「修改 src/list.js」
+  const progress = await seedStage(pm, cwd, cn, 'verify', verifyStepsWithLastPending())
+
+  const r = await runCapturing(() =>
+    _completeStepForTest(pm, progress, 'verify', cwd, '报告已输出', null,
+      { changeName: cn, printNext: false }))
+
+  assert(!r.error, '删除 warning 不应 process.exit')
+  assert(r.result && r.result.stageCompleted === true, '删除 warning 不阻断：stageCompleted:true')
+  assert(r.stdout.includes('删除对账发现') && r.stdout.includes('高风险'), 'stdout 含删除对账高风险 warning')
+  assert(r.stdout.includes('验证通过，下一步：sillyspec run archive'), 'stdout 仍含「验证通过」（advisory 不阻断归档）')
+
+  const after = await pm.read(cwd, cn)
+  assert(after.stages.verify.status === 'completed', 'DB: stage.status=completed（删除 warning 不回滚）')
 }
 
 cleanup()
