@@ -278,6 +278,11 @@ export function resolveChangeDir(cwd, progress, specDir = null) {
 /**
  * 触发 sync（平台模式走自己的链路，跳过；否则 await import sync.js）。
  */
+// sync 总超时熔断：sync.js 是 best-effort 后台回传（每请求已有 10s 超时），但 sync() 可能串行多次
+// fetchJson 累积等待、阻塞 --done。给 8s 总超时，超时放弃（best-effort，失败不影响正确性，下次 --done 重试）。
+// 历史痛点：--done 在 sync 慢时体感 hang，用户被迫用外部 timeout 兜底。
+const SYNC_TOTAL_TIMEOUT_MS = 8_000
+
 export async function triggerSync(cwd, changeName, platformOpts = {}) {
   // 平台模式（SillyHub）走自己的回传链路，不走 CLI 内置 sync
   if (platformOpts?.specRoot || platformOpts?.runtimeRoot) return
@@ -285,7 +290,15 @@ export async function triggerSync(cwd, changeName, platformOpts = {}) {
     if (changeName && !existsSync(join(cwd, '.sillyspec', 'changes', changeName))) return
     // shared.js 在 src/run/，sync.js 在 src/ → 退一层
     const syncMod = await import('../sync.js')
-    await syncMod.sync(changeName, cwd)
+    let timer
+    try {
+      await Promise.race([
+        syncMod.sync(changeName, cwd),
+        new Promise((resolve) => { timer = setTimeout(resolve, SYNC_TOTAL_TIMEOUT_MS) }),
+      ])
+    } finally {
+      clearTimeout(timer) // sync 先完成则清掉未触发的 timer，避免泄漏
+    }
   } catch (e) {
     // sync.js 不存在或同步失败，静默跳过
     console.warn('⚠️ 同步失败:', e.message)
