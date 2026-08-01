@@ -290,9 +290,20 @@ export function judgeWithKnownFailures(exitCode, output, baseReason, knownFailur
       exemptedCount: exempted.length,
     }
   }
-  const detail = remaining.length > 0
-    ? `${remaining.length} 个失败行未命中 known_failures`
-    : '失败输出未检测到可豁免的失败行（保守判 fail）'
+  // 剩余未豁免失败行：列出具体行 + 预存债指引（坑 verify-known-failures-stale-list）。
+  // known_failures 清单常滞后于新预存测试 → 同源预存债漏入清单,agent 跑完才发现要手动补。
+  // 这里点出具体未命中行,让 agent 一眼分辨"补清单 vs 修代码",不替它判断（确定性:列已算出的 remaining）。
+  let detail
+  if (remaining.length > 0) {
+    const sample = remaining.slice(0, 5).map(l => {
+      const t = String(l).trim()
+      return t.length > 120 ? t.slice(0, 120) + '…' : t
+    })
+    const more = remaining.length > 5 ? `\n     …（其余 ${remaining.length - 5} 行见上方测试输出）` : ''
+    detail = `${remaining.length} 个失败行未命中 known_failures 清单：\n     - ${sample.join('\n     - ')}${more}\n   → 若是预存债（变更前就失败），加入 local.yaml 的 known_failures 清单；若是本次变更引入的真实失败，请修复`
+  } else {
+    detail = '失败输出未检测到可豁免的失败行（保守判 fail）'
+  }
   return {
     status: 'failed',
     reason: baseReason ? `${baseReason}（${detail}）` : detail,

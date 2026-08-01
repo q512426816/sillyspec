@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-06-04 16:25:42
-updated_at: 2026-07-28
+updated_at: 2026-07-31
 ---
 
 # Worktree 与 Hook 门禁
@@ -168,6 +168,15 @@ sillyspec worktree create <change-name>
 3. 不达标 → step 置 `blocked` + `process.exit(1)` 拒绝 `--done`，提示 `sillyspec worktree doctor --fix` 或手动 install。
 
 execute **入口自检**：已存在 worktree（`create()` short-circuit 不供给）时，入口校验 `depsStatus` 缺失 / `node_modules` 丢失（missing）/ `lockfileHash` 变化（stale）→ 触发 `provisionDeps` 重供给并更新 meta，再交门判定。
+
+## worktree 内跑 CLI 的 spec 漂移守卫
+
+worktree 是主仓完整 checkout，若 `.sillyspec/changes/` 被跟踪，worktree 内会 checkout 出一份 `.sillyspec` **副本**（`<mainRepo>/.sillyspec/.runtime/worktrees/<change>/.sillyspec`）。在 worktree 内 cwd 跑 `sillyspec run execute/verify/plan/archive` 时，`specBase = cwd/.sillyspec` 会命中**副本**而非主仓 spec → 进度/产出写进副本，与主仓 `.sillyspec` 分裂（副本随 `worktree cleanup` 丢失）。两层守卫（`src/run/shared.js` + `src/run/command.js`）：
+
+1. **漂移 warn**（`countAncestorSpecDirs`，runCommand 入口）：cwd 祖先链 `.sillyspec` ≥2 个时提醒。祖先链上界用 `git rev-parse --git-common-dir` 的 dirname（主仓根），而非 `--show-toplevel`——后者在 linked worktree 内返回 **worktree 根**，会截断祖先链使其数不到主仓 `.sillyspec`（恒 ≤1，warn 永不响）。复刻自 `WorktreeManager._resolveMainRepoRoot`。平台模式 / 显式 `--spec-dir` 跳过。
+2. **worktree 副本硬守卫**（`detectWorktreeSpecDrift`）：`specBase` 路径形如 `<mainRepo>/.sillyspec/.runtime/worktrees/<change>/.sillyspec`（尾段须为 `.sillyspec`）→ 命中即 `exit 2`，提示 `cd` 回主仓根或 `--spec-dir <mainRepo>/.sillyspec`。覆盖 `plan/execute/verify/archive`（= `validateChangeExists` 的需要变更阶段），在 change 存在性校验**之前**触发——副本里 change 目录真实存在，存在性校验会被骗放行。平台模式 / 显式 `--spec-dir` 跳过。
+
+不变准则：**CLI 状态推进只在主仓根 cwd 跑**；worktree 仅作代码隔离区，文件读写用绝对路径或 `git -C <worktree>`。
 
 ## quick 阶段
 

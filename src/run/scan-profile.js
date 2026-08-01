@@ -15,23 +15,36 @@ import { safeGit } from './shared.js'
 /**
  * 估算源码规模（文件数 + 字节数）—— 跨平台 Node 遍历，替代 Unix `find`（原生 Windows 无 find，
  * 原 find 失效会让所有 Windows 项目永远 fallback 到 standard profile）。
- * 扩展名与排除目录与原 find 命令逐字一致；maxFiles 封顶避免超大仓库遍历过久
- * （超限时 fileCount 已远超 quick/standard 阈值，不影响 profile 判定）。
+ * 扩展名限定源码后缀；skipDirs 排除依赖/构建产物/覆盖率等非源码目录；maxFiles 封顶避免超大仓库遍历过久
+ * （超限时 fileCount 已远超 quick/standard 阈值，不影响 profile 判定）；maxDepth 兜底防极深嵌套产物。
  */
-export function estimateSourceSize(cwd, maxFiles = 5000) {
+export function estimateSourceSize(cwd, maxFiles = 5000, maxDepth = 6) {
   const sourceExts = new Set(['.js','.ts','.tsx','.py','.java','.go','.rs','.rb','.php','.c','.cpp','.h','.jsx','.vue','.svelte'])
-  const skipDirs = new Set(['node_modules','.git','dist','build','__pycache__','.sillyspec','.claude'])
+  // skipDirs：排除依赖、版本控制、构建产物、覆盖率、临时目录等非源码目录。
+  // 原清单只排了 node_modules/.git/dist/build 等，漏了 .next/.nuxt/coverage/.svelte-kit 等构建产物，
+  // 导致带构建产物的小项目被产物里的海量 .js 拉高 fileCount/sourceBytes → 误判 deep。
+  const skipDirs = new Set([
+    'node_modules', '.git', 'dist', 'build', 'out', 'target',
+    '__pycache__', '.venv', 'venv',
+    '.next', '.nuxt', '.output', '.svelte-kit', '.astro', '.turbo', '.parcel-cache',
+    'coverage', '.nyc_output', '.vitest', '.cache',
+    'vendor', 'bower_components',
+    'dist-types',
+    '.sillyspec', '.claude',
+    'tmp', 'temp', '.tmp', 'logs',
+  ])
   let fileCount = 0
   let sourceBytes = 0
-  const stack = [cwd]
+  // stack 存 [dir, depth]：maxDepth 兜底，防极深嵌套的产物/生成目录在 skipDirs 漏网时被全遍历。
+  const stack = [[cwd, 0]]
   while (stack.length) {
-    const dir = stack.pop()
+    const [dir, depth] = stack.pop()
     let entries
     try { entries = readdirSync(dir, { withFileTypes: true }) }
     catch { continue }
     for (const e of entries) {
       if (e.isDirectory()) {
-        if (!skipDirs.has(e.name)) stack.push(join(dir, e.name))
+        if (!skipDirs.has(e.name) && depth < maxDepth) stack.push([join(dir, e.name), depth + 1])
       } else if (e.isFile() && sourceExts.has(extname(e.name))) {
         fileCount++
         try { sourceBytes += statSync(join(dir, e.name)).size } catch {}
@@ -49,8 +62,14 @@ export function estimateSourceSize(cwd, maxFiles = 5000) {
  * deep:    大项目或 --deep → 完整流程
  */
 export function computeScanProfile(cwd, platformOpts) {
-  // --deep 标志强制 deep
+  // 显式 profile flag 优先于自动判定（三档互斥由 command.js 检测；此处取首个命中即可）
   const flags = process.argv.slice(2)
+  if (flags.includes('--quick')) {
+    return { mode: 'quick', reason: '用户指定 --quick', maxAgentCalls: 0, maxDocs: 5 }
+  }
+  if (flags.includes('--standard')) {
+    return { mode: 'standard', reason: '用户指定 --standard', maxAgentCalls: 1, maxDocs: 8 }
+  }
   if (flags.includes('--deep')) {
     return { mode: 'deep', reason: '用户指定 --deep', maxAgentCalls: 4, maxDocs: 99 }
   }
@@ -115,7 +134,7 @@ export function applyScanProfileSteps(stageData, profile, cwd, platformOpts) {
       status: 'pending',
       prompt: `## Quick Scan — 核心文档生成
 
-项目规模较小（quick profile），请一次性生成所有核心文档。
+当前为 quick profile（小项目自动判定 或 用户显式 --quick），一次性生成核心文档用于快速接入。
 
 ### 操作
 1. 读取项目结构和关键文件（package.json / pyproject.toml / README / 入口文件）
@@ -126,7 +145,7 @@ export function applyScanProfileSteps(stageData, profile, cwd, platformOpts) {
    - **STRUCTURE.md** — 目录树 + 模块说明
 3. 如发现子项目，注册到 \`{PROJECTS_ROOT}/\` 下
 
-每份文档头必须包含 frontmatter：\`author\` 和 \`created_at\`。
+每份文档 frontmatter 必须包含：\`author\`、\`created_at\`、\`scan_depth: quick\`（标记快速接入的浅层版本；后续深度扫描 --deep 会识别此标记并覆盖升级为完整文档）。
 
 ### ⛔ 硬约束
 - **严禁使用子代理（Agent/Task 工具）。** 所有文档在一个 turn 内完成。

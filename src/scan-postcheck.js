@@ -7,7 +7,7 @@
 
 import { existsSync, readdirSync, readFileSync, mkdirSync, writeFileSync } from 'fs'
 import { join, basename } from 'path'
-import { SCAN_STATUS, CHECK_SEVERITY, SCAN_REQUIRED_DOCS } from './constants.js'
+import { SCAN_STATUS, CHECK_SEVERITY, SCAN_REQUIRED_DOCS, SCAN_REQUIRED_DOCS_QUICK } from './constants.js'
 
 const REQUIRED_SCAN_DOCS = SCAN_REQUIRED_DOCS
 
@@ -22,8 +22,12 @@ const REQUIRED_SCAN_DOCS = SCAN_REQUIRED_DOCS
  * @param {number} [opts.scanMeta.projectCount] - 实际展开的项目数量
  * @returns {{ status: 'success'|'completed_with_warnings'|'failed_post_check', checks: Array<{name, severity, detail}> }}
  */
-export function runScanPostCheck({ cwd, specDir, outputText = '', scanMeta = {} } ) {
+export function runScanPostCheck({ cwd, specDir, outputText = '', scanMeta = {}, scanProfile = null } ) {
   const isPlatform = !!specDir
+  // profile 感知：quick 档只要求 4 份核心文档，否则要求完整 7 份。
+  // 否则 quick 扫描（--quick 显式 或 小项目自动判定）在平台模式会因缺 INTEGRATIONS/TESTING/CONCERNS 直接判 failed。
+  const mode = scanProfile?.mode || null
+  const requiredDocs = mode === 'quick' ? SCAN_REQUIRED_DOCS_QUICK : SCAN_REQUIRED_DOCS
   const checks = []
 
   if (!isPlatform) {
@@ -31,10 +35,13 @@ export function runScanPostCheck({ cwd, specDir, outputText = '', scanMeta = {} 
     const localSpec = join(cwd, '.sillyspec')
     const scanDir = join(localSpec, 'docs', basename(cwd), 'scan')
 
-    // 检查 7 份文档是否存在
-    const missing = REQUIRED_SCAN_DOCS.filter(f => !existsSync(join(scanDir, f)))
+    // 检查必需文档是否存在（quick profile 按 4 份清单，否则 7 份）
+    const missing = requiredDocs.filter(f => !existsSync(join(scanDir, f)))
     if (missing.length > 0) {
-      checks.push({ name: 'missing_docs', severity: CHECK_SEVERITY.WARNING, detail: `缺少 ${missing.length} 份 scan 文档: ${missing.join(', ')}` })
+      checks.push({ name: 'missing_docs', severity: CHECK_SEVERITY.WARNING, detail: `缺少 ${missing.length} 份 scan 文档（${mode || 'full'} profile）: ${missing.join(', ')}` })
+    }
+    if (mode === 'quick') {
+      checks.push({ name: 'quick_profile_notice', severity: CHECK_SEVERITY.WARNING, detail: 'quick scan：仅生成 4 份核心文档（PROJECT/ARCHITECTURE/CONVENTIONS/STRUCTURE），深度扫描待补齐' })
     }
 
     const hasWarning = checks.some(c => c.severity === 'warning')
@@ -74,21 +81,24 @@ export function runScanPostCheck({ cwd, specDir, outputText = '', scanMeta = {} 
     }
   }
 
-  // 2. spec_root 检查 7 份必需文档
+  // 2. spec_root 检查必需文档（quick profile 按 4 份清单，否则 7 份）
   const specScanDir = join(specDir, 'docs', projectName, 'scan')
-  const missingDocs = REQUIRED_SCAN_DOCS.filter(f => !existsSync(join(specScanDir, f)))
+  const missingDocs = requiredDocs.filter(f => !existsSync(join(specScanDir, f)))
   if (missingDocs.length > 0) {
     checks.push({
-      name: missingDocs.length === REQUIRED_SCAN_DOCS.length ? 'all_docs_missing' : 'partial_docs_missing',
+      name: missingDocs.length === requiredDocs.length ? 'all_docs_missing' : 'partial_docs_missing',
       severity: CHECK_SEVERITY.FAILED,
-      detail: missingDocs.length === REQUIRED_SCAN_DOCS.length
+      detail: missingDocs.length === requiredDocs.length
         ? `spec_root 下无任何 scan 文档（${specScanDir}/），扫描可能未执行`
-        : `spec_root 缺少必需文档: ${missingDocs.join(', ')}（7 份 scan 文档均为 required）`
+        : `spec_root 缺少必需文档: ${missingDocs.join(', ')}（${mode === 'quick' ? 'quick profile 要求 4 份核心文档' : '7 份 scan 文档均为 required'}）`
     })
+  }
+  if (mode === 'quick') {
+    checks.push({ name: 'quick_profile_notice', severity: CHECK_SEVERITY.WARNING, detail: 'quick scan：仅生成 4 份核心文档（PROJECT/ARCHITECTURE/CONVENTIONS/STRUCTURE），深度扫描待补齐' })
   }
 
   // 3. 检查文档 header（author / created_at）— 只看文件头部，避免正文出现同名词被误判
-  const existingDocs = REQUIRED_SCAN_DOCS.filter(f => existsSync(join(specScanDir, f)))
+  const existingDocs = requiredDocs.filter(f => existsSync(join(specScanDir, f)))
   const docsMissingHeader = []
   for (const doc of existingDocs) {
     const content = readFileSync(join(specScanDir, doc), 'utf8')
@@ -308,6 +318,10 @@ export function formatStructuredResult(result, meta = {}) {
     }
     // 文档缺少 header
     else if (check.name === 'docs_missing_header') {
+      structured.failure_categories.quality_warnings.push(entry)
+    }
+    // quick profile 说明（informational warning，非缺陷）
+    else if (check.name === 'quick_profile_notice') {
       structured.failure_categories.quality_warnings.push(entry)
     }
     // 兜底：归入 violations

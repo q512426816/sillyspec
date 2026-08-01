@@ -96,6 +96,39 @@ export async function enforceDepsGate(stageName, cwd, changeName, step, steps, c
   }
   process.exit(1)
 }
+
+/**
+ * execute --done 硬门：已勾 [x] task 的 review.json 必须 schema 完整（坑 review-json-field-gap）。
+ *
+ * Task Review Gate（validateTaskReviews）只在 execute 整阶段完成时跑（complete.js 阶段完成分支的
+ * actualCompleted===actualTotal 守卫），单 task --done 不校验 → 子代理勾 checkbox 却漏写/漏字段
+ * review.json，要到收尾才暴露，用户被迫事后批量补。本门提前到每次 --done：校验 plan 里所有已勾
+ * task 的 review.json，缺字段/不存在/JSON 坏 → 置 step=blocked + exit(1)，与 enforceDepsGate 同范式。
+ * 未勾 task 不校验（还没做）。平台模式/无 marker/无 plan 时放行（下游 Task Review Gate 兜底）。
+ */
+export async function enforceReviewJsonGate(stageName, cwd, changeName, step, steps, currentIdx, specBase, platformOpts) {
+  if (stageName !== 'execute' || !changeName) return true
+  const runtimeRoot = platformOpts?.runtimeRoot || join(specBase, '.runtime')
+  const runIdFile = join(runtimeRoot, `current-execute-run-id-${changeName}`)
+  const planPath = join(specBase, 'changes', changeName, 'plan.md')
+  if (!existsSync(runIdFile) || !existsSync(planPath)) return true
+  const executeRunId = readFileSync(runIdFile, 'utf8').trim()
+  const planContent = readFileSync(planPath, 'utf8')
+  const { validateCheckedTaskReviews } = await import('../task-review.js')
+  const result = validateCheckedTaskReviews({ planContent, runtimeRoot, executeRunId })
+  if (result.ok) return true
+  if (steps && steps[currentIdx]) steps[currentIdx].status = 'blocked'
+  console.error('❌ ── review.json 字段校验阻断（本次 --done 未完成，进度未推进）──')
+  console.error('   已勾选 [x] 的 task review.json 不完整（铁律：勾 checkbox 前必须先写完整 review.json）:')
+  for (const f of result.failures) {
+    const kindLabel = f.kind === 'missing' ? 'review.json 不存在' : (f.kind === 'parseError' ? 'JSON 解析失败' : '字段缺失')
+    console.error(`   • ${f.taskId}（${kindLabel}）: ${f.reviewPath}`)
+    for (const e of f.errors) console.error(`       - ${e}`)
+  }
+  console.error('   修复：补全上述 review.json 字段后重跑 execute --done。')
+  process.exit(1)
+}
+
 /**
  * 阶段完成校验失败时回滚状态。
  *

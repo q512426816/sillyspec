@@ -23,7 +23,7 @@ import { join, resolve, dirname } from 'node:path'
 import { existsSync, readdirSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
 import { randomBytes, randomUUID } from 'node:crypto'
 import { writeAtomicSync } from '../fs-atomic.js'
-import { resolveSpecDir, countAncestorSpecDirs, resolveChangeDir, triggerSync, getStageSteps, formatWaitOptions, checkApproval, didYouMean, assertSafeChangeName, detectQuickSessionDrift } from './shared.js'
+import { resolveSpecDir, countAncestorSpecDirs, resolveChangeDir, triggerSync, getStageSteps, formatWaitOptions, checkApproval, didYouMean, assertSafeChangeName, detectQuickSessionDrift, detectWorktreeSpecDrift } from './shared.js'
 import { resolveQuickLinkedChanges } from './quick-audit.js'
 import { outputStep } from './prompt.js'
 import { completeStep, skipStep, waitStep, continueStep } from './complete.js'
@@ -193,6 +193,20 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     console.error('❌ 步骤动作参数冲突（同时只能指定一个）：')
     for (const [name, , desc] of activeActions) console.error(`   ${name} — ${desc}`)
     console.error('   这些动作互斥，请只保留其中一个再重试。')
+    process.exit(2)
+  }
+  // scan profile flag 互斥：--quick/--standard/--deep 同时给≥2 个语义矛盾（computeScanProfile
+  // 只取首个命中、其余静默忽略 → agent 以为生效的其实没生效，与 STEP_ACTIONS 同类风险）。
+  const PROFILE_FLAGS = [
+    ['--quick', flags.includes('--quick'), 'quick profile（快速接入，4 份核心文档）'],
+    ['--standard', flags.includes('--standard'), 'standard profile（压缩步骤）'],
+    ['--deep', flags.includes('--deep'), 'deep profile（完整扫描）'],
+  ]
+  const activeProfiles = PROFILE_FLAGS.filter(([, v]) => v)
+  if (activeProfiles.length >= 2) {
+    console.error('❌ scan profile 参数冲突（同时只能指定一个）：')
+    for (const [name, , desc] of activeProfiles) console.error(`   ${name} — ${desc}`)
+    console.error('   这三档互斥，请只保留其中一个再重试。')
     process.exit(2)
   }
   // 注：--non-interactive 与 --interactive 的冲突在 index.js 检测（--interactive 被 index.js
@@ -448,7 +462,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     '--files', '--allow-new', '--force-baseline', '--force-rescan',
     '--json', '--dir', '--help',
     '--reopen', '--from-step', '--mode',
-    '--deep', // F1: scan-profile.js 从 argv 读 --deep，文档化(index.js help)但此前 knownFlags 漏列→被拒
+    '--deep', '--quick', '--standard', // scan profile 三档显式选择（scan-profile.js 从 argv 读；互斥见下方 PROFILE_FLAGS 检测）
   ])
   for (let i = 0; i < flags.length; i++) {
     const f = flags[i]
@@ -506,6 +520,21 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     console.error('   agent 必须传参，不设默认值、不做自动检测。')
     console.error('   请加 --change <变更名> 重新执行。')
     process.exit(2) // 用法错（execute 必须显式 --change）→ exit 2
+  }
+
+  // worktree 副本漂移硬守卫(坑 worktree-execute-spec-drift):specBase 命中 worktree 内 .sillyspec
+  // checkout 副本 → 进度/产出会写分裂库。必须在 validateChangeExists 之前——副本里 change 目录真实
+  // 存在,存在性校验会被骗放行。覆盖 plan/execute/verify/archive(validateChangeExists 同 Set):
+  // 都要求 change 已存在、都被副本骗、都写 .sillyspec 资产(archive 尤甚:在副本里移动 change+commit)。
+  // 平台模式/显式 --spec-dir 跳过(已明确指定,与 line~285 warn / ~529 quick 守卫条件对齐)。
+  if (!platformOpts.specRoot && !specDir
+      && ['plan', 'execute', 'verify', 'archive'].includes(stageName)) {
+    const wt = detectWorktreeSpecDrift(specBase)
+    if (wt) {
+      console.error(`❌ ${wt.message}`)
+      console.error(`   当前 cwd=${cwd}，命中的 spec=${specBase}。`)
+      process.exit(2) // 环境错（cwd/spec 漂移）→ exit 2
+    }
   }
 
   // --change 变更名存在性校验（治 cwd 漂移误匹配，缺陷 execute-in-place-windows-pitfalls 坑5）：

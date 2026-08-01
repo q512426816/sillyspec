@@ -9,8 +9,8 @@
  *   - triggerSync 的动态 import './sync.js' → '../sync.js'（src/sync.js）
  *   - safeGit 原用顶层 require('child_process')，改静态 import execSync（更 ESM-native）
  */
-import { basename, join, resolve, dirname } from 'node:path'
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { basename, join, resolve, dirname, sep } from 'node:path'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { execSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
@@ -118,7 +118,21 @@ export function resolveSpecDir(cwd, opts = {}) {
  */
 export function ancestorSpecDirs(cwd) {
   const resolved = resolve(cwd)
-  const ceiling = safeGit(resolved, ['rev-parse', '--show-toplevel']).value
+  // 上界 = git root。但 linked worktree 内 --show-toplevel 返回 worktree 根(非主仓根),
+  // 祖先链到不了主仓 .sillyspec → 漂移提醒/quick 守卫全哑(坑 worktree-execute-spec-drift)。
+  // 复刻 worktree.js _resolveMainRepoRoot:--git-common-dir 的 dirname 才是主仓根,取更靠上者作 ceiling。
+  // (git 可能返回相对路径,须 resolve(cwd, commonDir) 绝对化,否则相对 process.cwd 误解析。)
+  const topLevel = safeGit(resolved, ['rev-parse', '--show-toplevel']).value
+  let ceiling = topLevel ? resolve(topLevel) : null
+  const commonDir = safeGit(resolved, ['rev-parse', '--git-common-dir']).value
+  if (commonDir) {
+    const absCommonDir = resolve(resolved, commonDir)
+    if (existsSync(absCommonDir) && statSync(absCommonDir).isDirectory()) {
+      const mainRoot = dirname(absCommonDir)
+      // 主仓根是 worktree 根的祖先时取它(更靠上);monorepo/单仓两者相等不替换,行为不变
+      if (!ceiling || resolve(ceiling).startsWith(resolve(mainRoot) + sep)) ceiling = mainRoot
+    }
+  }
   const dirs = []
   let dir = resolved
   while (true) {
@@ -203,6 +217,41 @@ export function detectQuickSessionDrift(cwd, currentSpecBase, sessionId) {
       `继续会把 progress/artifact/QUICKLOG 写到错误的 spec，与原会话分裂。` +
       `排查：① cd 回 ${dirname(located.specBase)}（原 spec 所属项目根）再跑；② 或显式 --spec-dir ${located.specBase} 指定原 spec。`,
   }
+}
+
+/**
+ * 检测 specBase 是否命中 worktree 内 checkout 出来的 .sillyspec 副本（坑 worktree-execute-spec-drift）。
+ *
+ * worktree 根 = <mainRepo>/.sillyspec/.runtime/worktrees/<changeName>/（worktree.js WORKTREES_REL）。
+ * worktree 是主仓完整 checkout,若 .sillyspec/changes/ 被跟踪 → 副本里 change 目录真实存在,
+ * validateChangeExists 被骗放行 → 进度/产出写进副本,与主仓 .sillyspec 分裂(副本随工作树清理丢失)。
+ *
+ * 判据:specBase 路径含 `.sillyspec/.runtime/worktrees/<seg>/.sillyspec`。主仓 specBase=<mainRepo>/.sillyspec
+ * 无此段 → null,零误伤。返回 null=通过;对象=漂移(含 mainSpecBase/changeName/message),风格仿
+ * validateChangeExists。覆盖 plan/execute/verify/archive(同 Set)——都要求 change 已存在、都会被副本骗过。
+ * 平台模式/--spec-dir 已明确指定,由调用方跳过。
+ */
+export function detectWorktreeSpecDrift(specBase) {
+  if (!specBase) return null
+  const seg = resolve(specBase).split(sep)
+  // specBase 恒以 .sillyspec 结尾(command.js specBase=join(cwd,'.sillyspec'))。worktree 副本形如
+  // <mainRepo>/.sillyspec/.runtime/worktrees/<change>/.sillyspec —— 尾段也须是 .sillyspec,
+  // 否则 worktree 根目录本身(<.../worktrees/<change>)会被误判(它不是 spec,不会作 specBase 传入)。
+  if (seg[seg.length - 1] !== '.sillyspec') return null
+  for (let i = 0; i + 3 < seg.length; i++) {
+    if (seg[i] === '.sillyspec' && seg[i + 1] === '.runtime' && seg[i + 2] === 'worktrees') {
+      const changeName = seg[i + 3]
+      const mainSpec = seg.slice(0, i + 1).join(sep) // <mainRepo>/.sillyspec
+      return {
+        changeName,
+        mainSpecBase: mainSpec,
+        message: `当前 spec 命中 worktree 副本(${specBase})——这是 ${changeName} 隔离工作树内 checkout 出来的 .sillyspec,不是主仓 spec。\n` +
+          `   在此跑 plan/execute/verify/archive 会把进度与产出写到副本,与主仓 .sillyspec 分裂(副本随工作树清理而丢失)。\n` +
+          `   排查:① cd 回 ${dirname(mainSpec)}(主仓根)再跑;② 或 --spec-dir ${mainSpec} 显式指定主仓 spec。`,
+      }
+    }
+  }
+  return null
 }
 
 /**

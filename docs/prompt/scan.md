@@ -205,6 +205,7 @@
 4. 如果检查报告有失败项，按报告中的角色和文件重试失败的部分
 
 ### 覆盖保护
+- **scan_depth: quick 的浅层文档允许覆盖升级**：读取旧 frontmatter 时，若旧文档含 scan_depth: quick（由 --quick 快速接入生成的浅层版本），即使其 source_commit 与当前 HEAD 一致、updated_at 未变，也允许覆盖重写——深度扫描的目的就是把它升级为完整文档。
 - 生成每份 scan 文档时，frontmatter 必须包含：
   ```yaml
   ---
@@ -688,3 +689,10 @@ INDEX.md 维护索引，格式（每行：关键词1|关键词2 → [条目名](
 ### 注意
 - ❌ 修改代码 / 编造路径 / 读源码全文
 ````
+
+
+---
+
+## profile 运行时裁剪（不在上方 11 步中）
+
+上方 11 步是 `src/stages/scan.js` 的 `definition.steps` 原文。`--quick` / `--standard` / `--deep` profile 的**运行时步骤裁剪**（如 quick 档压缩为 preflight / AI 生成 4 份核心文档 / postcheck 三步、step2 prompt 要求 frontmatter 写 `scan_depth: quick`）由 `src/run/scan-profile.js` 的 `applyScanProfileSteps` 动态生成，不在 `definition.steps` 中，故 `_extract.mjs` 不提取、本文件不展示。要查看 profile 裁剪后的实际 prompt，读 `src/run/scan-profile.js`。

@@ -81,6 +81,17 @@ export const SCAN_REQUIRED_DOCS = Object.freeze([
   'PROJECT.md',
 ])
 
+// ── scan quick profile 必需文档子集（4 份核心文档）──
+// quick 档（--quick 显式 或 小项目自动判定）只生成这 4 份；scan-postcheck 按 profile 取清单：
+// mode==='quick' → SCAN_REQUIRED_DOCS_QUICK，否则 → SCAN_REQUIRED_DOCS（7 份）。
+// 由 scan-postcheck.js + complete-handlers.js 透传的 scanProfile.mode 决定取哪份。
+export const SCAN_REQUIRED_DOCS_QUICK = Object.freeze([
+  'PROJECT.md',
+  'ARCHITECTURE.md',
+  'CONVENTIONS.md',
+  'STRUCTURE.md',
+])
+
 // ── 辅助 stage 清单（stage-contract 转移规则 与 stages/index 注册表 共用单一真相源）──
 // 曾在 stage-contract.js 与 stages/index.js 逐字重复定义，新增/调整辅助 stage 需同步改两处
 // 易分叉。现收敛一处。（注意：主流程序 STAGE_ORDER/mainFlowStages/flowStages 语义不同、

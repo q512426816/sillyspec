@@ -18,7 +18,7 @@ import { join } from 'node:path'
 import { existsSync, readdirSync, readFileSync, mkdirSync, writeFileSync, appendFileSync, statSync } from 'node:fs'
 import { triggerSync, WAIT_MARKER_RE, getStageSteps, formatWaitOptions } from './shared.js'
 import { outputStep } from './prompt.js'
-import { enforceDepsGate, runStageCompletionGates } from './gates.js'
+import { enforceDepsGate, enforceReviewJsonGate, runStageCompletionGates } from './gates.js'
 import { handleArchiveConfirmStep, handlePlanGeneratePlanStep, handleScanProjectListStep, handleWorkflowPostCheck, handleQuickStageCompletion, handleExecuteWaveArtifact, handleExecuteWorktreeCleanup, handleScanStageCompleted } from './complete-handlers.js'
 import { stageRegistry } from '../stages/index.js'
 import { formatExecuteSummary } from '../worktree-apply.js'
@@ -174,6 +174,9 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
 
   // ── execute deps 验证硬门（change 2026-06-28-worktree-deps-provision）──
   await enforceDepsGate(stageName, cwd, changeName, steps[currentIdx], steps, currentIdx, specBase, platformOpts)
+  // review.json 字段硬门（坑 review-json-field-gap）：已勾 [x] task 的 review.json 必须 schema 完整，
+  // 提前到每次 --done 校验（而非等 Task Review Gate 在整阶段收尾才暴露，迫使用户事后批量补）。
+  await enforceReviewJsonGate(stageName, cwd, changeName, steps[currentIdx], steps, currentIdx, specBase, platformOpts)
 
   steps[currentIdx].status = 'completed'
   steps[currentIdx].completedAt = new Date().toLocaleString('zh-CN',{hour12:false})

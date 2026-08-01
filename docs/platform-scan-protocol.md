@@ -77,6 +77,7 @@ scan 完成后写入 `<spec_root>/manifest.json`，是 SillyHub 判断 scan 结�
   "source_commit_error": null,
   "generated_at": "2026-06-14T01:50:00.000Z",
   "schema_version": 1,
+  "scan_profile": { "mode": "quick | standard | deep", "reason": "..." },
   "postcheck_result_path": "<spec_root>/.runtime/postcheck-result.json",
   "workflow_runs_dir": "<runtime_root>/scan-runs/<scan_run_id>/workflow-runs",
   "platform_pointer_path": "<source_root>/.sillyspec-platform.json",
@@ -101,6 +102,7 @@ scan 完成后写入 `<spec_root>/manifest.json`，是 SillyHub 判断 scan 结�
 | `source_commit_error` | string \| undefined | commit 获取失败原因 |
 | `generated_at` | string (ISO 8601) | manifest 生成时间 |
 | `schema_version` | number | 产物协议版本，当前为 1 |
+| `scan_profile` | object \| null | scan profile：`{mode, reason}`，`mode` ∈ `quick`/`standard`/`deep`。`quick` 表示快速接入（仅 4 份核心文档，待 `--deep` 深度扫描覆盖补齐）；平台据此区分接入态 scan 与完整 scan |
 | `postcheck_result_path` | string \| null | post-check 结构化结果路径 |
 | `workflow_runs_dir` | string \| null | workflow 检查结果目录 |
 | `platform_pointer_path` | string | 平台指针文件路径 |

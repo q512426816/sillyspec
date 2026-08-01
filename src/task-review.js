@@ -263,6 +263,34 @@ export function readReview(reviewPath) {
 }
 
 /**
+ * 校验 plan.md 里所有「已勾选 [x]」task 的 review.json 是否 schema 完整（坑 review-json-field-gap）。
+ *
+ * Task Review Gate（validateTaskReviews）只在 execute 整阶段完成时跑，单 task --done 不校验 →
+ * 子代理勾了 checkbox 却漏写/漏字段 review.json，要到收尾才暴露，用户被迫事后批量补。本函数供
+ * enforceReviewJsonGate 在每次 execute --done 调用：已勾 [x] = 声称完成 = 必有完整 review.json；
+ * 未勾 task 不校验（还没做）。readReview 已区分 missing/parseError/schemaError，这里只聚合。
+ *
+ * @param {{ planContent: string, runtimeRoot: string, executeRunId: string }} opts
+ * @returns {{ ok: boolean, failures: Array<{ taskId:string, reviewPath:string, kind:string, errors:string[] }> }}
+ *   kind ∈ missing（review.json 不存在）/ parseError（JSON 坏）/ schemaError（字段缺）
+ */
+export function validateCheckedTaskReviews({ planContent, runtimeRoot, executeRunId }) {
+  const failures = []
+  const re = /^\s*[-*]\s*\[x\]\s*task-(\d+)/gim
+  let m
+  while ((m = re.exec(planContent)) !== null) {
+    const taskId = `task-${m[1].padStart(2, '0')}`
+    const reviewPath = join(runtimeRoot, 'execute-runs', executeRunId, 'tasks', taskId, 'review.json')
+    const r = readReview(reviewPath)
+    if (!r.ok) {
+      const kind = r.parseError ? 'parseError' : (r.schemaError ? 'schemaError' : 'missing')
+      failures.push({ taskId, reviewPath, kind, errors: r.errors })
+    }
+  }
+  return { ok: failures.length === 0, failures }
+}
+
+/**
  * execute --done 时的 task review 总校验
  *
  * 规则：

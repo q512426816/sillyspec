@@ -769,6 +769,9 @@ export async function handleScanStageCompleted({ stageName, currentIdx, cwd, pro
         source_commit_error: sourceCommit === null ? (sourceCommitError || 'unknown') : undefined,
         generated_at: new Date().toISOString(),
         schema_version: 1,
+        scan_profile: stageData.scanProfile
+          ? { mode: stageData.scanProfile.mode, reason: stageData.scanProfile.reason }
+          : null,
         postcheck_result_path: null,
         workflow_runs_dir: platformOpts.runtimeRoot
           ? join(platformOpts.runtimeRoot, 'scan-runs', platformOpts.scanRunId || 'unknown', 'workflow-runs')
@@ -797,6 +800,7 @@ export async function handleScanStageCompleted({ stageName, currentIdx, cwd, pro
           projectListParsed: stageData.scanMeta?.projectListParsed ?? null,
           manifestWritten: stageData.scanMeta?.manifestWritten ?? null,
         },
+        scanProfile: stageData.scanProfile || null,
       })
       printScanPostCheckResult(postResult)
 
@@ -871,7 +875,7 @@ export async function handleScanStageCompleted({ stageName, currentIdx, cwd, pro
   // 非 platform 模式 scan 也做轻量 post-check + 结构化输出
   if (stageName === 'scan' && !platformOpts.specRoot && !platformOpts.runtimeRoot) {
     const { runScanPostCheck, printScanPostCheckResult, formatStructuredResult, writeStructuredResult } = await import('../scan-postcheck.js')
-    const postResult = runScanPostCheck({ cwd, specDir: null, outputText })
+    const postResult = runScanPostCheck({ cwd, specDir: null, outputText, scanProfile: stageData.scanProfile || null })
     printScanPostCheckResult(postResult)
     // 结构化结果写入 .sillyspec/.runtime/
     const structured = formatStructuredResult(postResult, { source_root: cwd })

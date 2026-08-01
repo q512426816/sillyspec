@@ -4,11 +4,11 @@
  * 祖先链 .sillyspec ≥2 才提醒;单实例项目任意子目录恒为 1,不误报。
  * 计数上界 = git root,排除 home 等无关祖先的孤立 .sillyspec(否则 home 下任何项目都误报)。
  */
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync, existsSync } from 'node:fs'
 import { execSync } from 'node:child_process'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { countAncestorSpecDirs } from '../src/run/shared.js'
+import { countAncestorSpecDirs, ancestorSpecDirs } from '../src/run/shared.js'
 
 let total = 0, failed = 0
 function assert(cond, msg) {
@@ -40,6 +40,39 @@ const noGit = mkdtempSync(join(tmpdir(), 'asd-ng-'))
 mkdirSync(join(noGit, '.sillyspec'), { recursive: true })
 assert(countAncestorSpecDirs(noGit) === 1, '非 git 目录自身有 .sillyspec → 1 个(不向上数,不撞 home)')
 rmSync(noGit, { recursive: true, force: true })
+
+// ── linked worktree(坑 worktree-execute-spec-drift)──
+// --show-toplevel 在 linked worktree 内返回 worktree 根(非主仓根)→ 旧 ceiling 截断,count≤1 漏报。
+// 修复后 ceiling 抬到主仓根(--git-common-dir 的 dirname)→ count=2(worktree 副本 + 主仓)。
+console.log('\n--- linked worktree ---')
+const wtRoot = mkdtempSync(join(tmpdir(), 'asd-wt-'))
+execSync('git init', { cwd: wtRoot, stdio: 'ignore' })
+execSync('git config user.email t@t.com', { cwd: wtRoot, stdio: 'ignore' })
+execSync('git config user.name t', { cwd: wtRoot, stdio: 'ignore' })
+// 主仓 .sillyspec/changes/<change>/ 被跟踪 → worktree add 会 checkout 出副本(漂移的根源)
+mkdirSync(join(wtRoot, '.sillyspec', 'changes', 'demo'), { recursive: true })
+writeFileSync(join(wtRoot, '.sillyspec', 'changes', 'demo', 'plan.md'), 'x')
+writeFileSync(join(wtRoot, '.gitignore'), '.sillyspec/.runtime/\n')
+execSync('git add -A', { cwd: wtRoot, stdio: 'ignore' })
+execSync('git commit -m init', { cwd: wtRoot, stdio: 'ignore' })
+// worktree 落在 sillyspec 真实位置 <mainRepo>/.sillyspec/.runtime/worktrees/<change>/
+const wtDir = join(wtRoot, '.sillyspec', '.runtime', 'worktrees', 'demo')
+execSync(`git worktree add "${wtDir}" -b sillyspec/demo`, { cwd: wtRoot, stdio: 'pipe' })
+
+assert(existsSync(join(wtDir, '.sillyspec')), 'worktree checkout 出 .sillyspec 副本(漂移源)')
+const wtAncestors = ancestorSpecDirs(wtDir)
+assert(wtAncestors.length === 2, `worktree 根祖先链 2 个(副本+主仓),actual=${wtAncestors.length}`)
+assert(wtAncestors[0] === join(wtDir, '.sillyspec'), '最近 = worktree 副本 .sillyspec')
+assert(wtAncestors[1] === join(wtRoot, '.sillyspec'), '其次 = 主仓 .sillyspec(ceiling 已抬到主仓根)')
+// worktree 内深层子目录(模拟 cd worktree/backend 测 .venv)也 =2
+mkdirSync(join(wtDir, 'backend'), { recursive: true })
+assert(ancestorSpecDirs(join(wtDir, 'backend')).length === 2, 'worktree 内 backend/ 深层 → 2 个')
+// countAncestorSpecDirs 同步受益
+assert(countAncestorSpecDirs(wtDir) === 2, 'countAncestorSpecDirs(worktree 根) === 2 → warn 会触发')
+
+try { rmSync(wtDir, { recursive: true, force: true }) } catch {}
+try { execSync('git worktree prune', { cwd: wtRoot, stdio: 'ignore' }) } catch {}
+try { rmSync(wtRoot, { recursive: true, force: true }) } catch {}
 
 try { rmSync(root, { recursive: true, force: true }) } catch {}
 

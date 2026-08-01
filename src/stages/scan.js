@@ -140,6 +140,7 @@ export const definition = {
 4. 如果检查报告有失败项，按报告中的角色和文件重试失败的部分
 
 ### 覆盖保护
+- **scan_depth: quick 的浅层文档允许覆盖升级**：读取旧 frontmatter 时，若旧文档含 scan_depth: quick（由 --quick 快速接入生成的浅层版本），即使其 source_commit 与当前 HEAD 一致、updated_at 未变，也允许覆盖重写——深度扫描的目的就是把它升级为完整文档。
 - 生成每份 scan 文档时，frontmatter 必须包含：
   \`\`\`yaml
   ---

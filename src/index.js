@@ -54,7 +54,7 @@ SillySpec CLI — 规范驱动开发工具包
              --allow-new                 允许新增文件（默认禁止）
              --force-baseline            允许覆盖 baseline 受保护文件
              --confirm                   完成时确认接受变更审计
-    scan:    --deep                      强制 deep 扫描 profile
+    scan:    --quick | --standard | --deep   显式选择 profile（优先于规模自动判定；三档互斥）
              --force-rescan              覆盖已有 scan 文档保护
     archive: --confirm                   归档确认（必须）
     auto:    --mode <模式>               显式指定流程模式
