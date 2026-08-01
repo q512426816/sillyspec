@@ -65,5 +65,31 @@ console.log('--- 末步 + 四件套齐全 + design≤3 文件 → 阶段完成 -
   assert(inputs.includes('用户拍板'), 'user-inputs.md 含本次 input')
 }
 
+console.log('--- design.md scale=small → 下一步 quick --linked-changes（修历史 bug：曾硬编码 plan） ---')
+{
+  const { cwd, specBase } = makeRepo('cs-brainstorm-scale-')
+  const cn = '2026-07-25-brainstorm-small'
+  const pm = await initChange(cwd, specBase, cn)
+  const changeDir = join(specBase, 'changes', cn)
+  writeFileSync(join(changeDir, 'proposal.md'), '# Proposal\n\n## 不在范围内\n无\n')
+  writeFileSync(join(changeDir, 'requirements.md'), '# Requirements\n\n- FR-001: x\n')
+  writeFileSync(join(changeDir, 'tasks.md'), '# Tasks\n\n- [ ] task-01: 改 a\n')
+  // design.md 头部带 frontmatter scale: small（brainstorm 末步写入），文件清单 1 文件
+  writeFileSync(join(changeDir, 'design.md'),
+    '---\nauthor: test\ncreated_at: 2026-07-25\nscale: small\n---\n# Design: 小改\n\n## 文件变更清单\n| 操作 | 文件路径 | 说明 |\n|------|---------|------|\n| 修改 | src/a.js | x |\n\n## 自审\n已核对。\n')
+  const progress = await seedStage(pm, cwd, cn, 'brainstorm', brainstormStepsWithLastPending())
+
+  const r = await runCapturing(() =>
+    _completeStepForTest(pm, progress, 'brainstorm', cwd, '生成规范完成', '用户拍板',
+      { changeName: cn, printNext: false, doneAnswer: '确认' }))
+
+  assert(!r.error, 'scale=small happy path 不应 process.exit')
+  assert(r.result && r.result.stageCompleted === true, 'scale=small stageCompleted:true')
+  assert(r.stdout.includes('下一步：sillyspec run quick'), 'scale=small → 下一步提示 quick')
+  assert(r.stdout.includes(`--linked-changes ${cn}`), 'quick 用 --linked-changes 而非 --change')
+  assert(!r.stdout.includes('run plan'), 'scale=small 不应再提示 plan（历史 bug 已修）')
+  assert(!r.stdout.includes('run scan'), 'brainstorm 完成不再误推 scan（修 _getNextSuggestion 回头路 bug）')
+}
+
 cleanup()
 report(count.passed, count.failed, count.failures)

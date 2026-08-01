@@ -55,6 +55,22 @@ function validateMetadata(cwd, stageName, specBase) {
 }
 
 /**
+ * 读取 design.md frontmatter 的 scale 字段（brainstorm 末步写入 'small'|'large'）。
+ * completeStep 的下一步提示据此分叉：small→quick，large/读不到→plan（fail-safe 走重流程）。
+ * 只解析首个 YAML frontmatter 块，避免误读正文里的 "scale:"。
+ */
+function readDesignScale(specBase, changeName) {
+  if (!changeName) return null
+  const designPath = join(specBase, 'changes', changeName, 'design.md')
+  if (!existsSync(designPath)) return null
+  const text = readFileSync(designPath, 'utf8')
+  const fm = text.match(/^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*\r?\n/)
+  if (!fm) return null
+  const m = fm[1].match(/^scale:[ \t]*['"]?(\w+)/m)
+  return m ? m[1] : null
+}
+
+/**
  * 验证关键文件是否存在于正确的变更目录下
  * 防止 AI 将文件写到错误的路径
  */
@@ -332,6 +348,17 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
     } else if (stageName === 'verify') {
       // verify 的"验证通过"提示延后到下方 validator 通过后才打印，
       // 避免校验失败（FAIL / 缺 verify-result.md）时仍声称"验证通过可以归档"。
+    } else if (stageName === 'brainstorm') {
+      // brainstorm 下一步按 design.md 的 scale 分叉（与末步 prompt 的 large→plan / small→quick 对齐），
+      // 不走下方 _getNextSuggestion —— 后者按全局状态机「第一个未完成且上游就绪的阶段」推荐，
+      // 当 scan 未完成时会误推 scan（回头路），与 brainstorm 已完成、应进入 plan/quick 矛盾。
+      // 历史教训：曾因此让 agent 在 brainstorm 完成后被误导去跑 scan。
+      const _bscale = readDesignScale(specBase, changeName)
+      if (_bscale === 'small') {
+        console.log(`\n👉 brainstorm 已完成（small）。下一步：sillyspec run quick --linked-changes ${changeName}`)
+      } else {
+        console.log(`\n👉 brainstorm 已完成。下一步：sillyspec run plan${changeName ? ` --change ${changeName}` : ''}（scale=large 或未标 small 走完整 plan）`)
+      }
     } else {
       // D1 暗衔接修：阶段刚完成，CLI 本就知道状态机下一步是哪个阶段（_getNextSuggestion），
       // 却只丢一句「下一步由你决定」让 agent 自己猜命令。改为按 progress 实际状态给出精确命令。
@@ -738,7 +765,16 @@ export async function continueStep(pm, progress, stageName, cwd, answer, options
     // 阶段完成后明确下一步（agent 常卡：stageData completed 但不知要 run <下一阶段> 推进 currentStage）
     const nextStageHint = { brainstorm: 'plan', plan: 'execute', execute: 'verify', verify: 'archive' }[stageName]
     if (nextStageHint) {
-      console.log(`\n👉 ${stageName} 已完成。下一步：sillyspec run ${nextStageHint}${changeName ? ` --change ${changeName}` : ''}`)
+      // brainstorm 按 design.md frontmatter 的 scale 分叉（与末步 prompt 对齐）：
+      //   small → quick --linked-changes（小变更免走完整 plan）；large / 读不到 scale → plan（保守默认）。
+      // 修历史 bug：此处曾硬编码 brainstorm→plan 不读 scale，small 档与末步 prompt（quick）矛盾、误导小变更进 plan。
+      let hintStage = nextStageHint
+      let hintChangeFlag = changeName ? ` --change ${changeName}` : ''
+      if (stageName === 'brainstorm' && changeName && readDesignScale(specBase, changeName) === 'small') {
+        hintStage = 'quick'
+        hintChangeFlag = ` --linked-changes ${changeName}`
+      }
+      console.log(`\n👉 ${stageName} 已完成。下一步：sillyspec run ${hintStage}${hintChangeFlag}`)
       if (stageName === 'execute') {
         console.log(`   ⚠️ 若 worktree 改动还没 apply 到主工作区，先：sillyspec worktree apply ${changeName}`)
         console.log(`   （apply 不需要先 commit，支持 working tree 未提交改动）`)
