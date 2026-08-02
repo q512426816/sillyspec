@@ -104,3 +104,16 @@
 - test/quicklog-cli-managed.test.mjs（加验收 2c：deriveTitle 三场景 proposal/design/无文档 + flipEntry 刷新标题，7 断言）
 
 结果：需求：quick 启动不带 --input 时 QUICKLOG 条目与关联 tasks.md 标题落 (quick 任务) 占位符，必须 --done 后手动精修。根因：stage.js:243 description=taskDescription(=inputText)，空则 quicklog.js sanitizeDesc 回退 (quick 任务)，CLI 启动时拿不到语义标题。方案：①quicklog.js 新增 deriveTitleFromLinkedChange(读关联变更 proposal/design 标题去前缀)+extractTitleFromResult(从--output提需求摘要)；②flipEntryInContent 翻完成按需求摘要刷新标题；③stage.js 启动 desc 空&&有 linkedChanges 时回退 deriveTitle。结果：优先级 --output需求>proposal标题>占位；quicklog-cli-managed 验收2c 7断言全过(deriveTitle三场景+刷新标题)；单跑67/67；lint过；全量106/106无回归。改3文件。
+## ql-20260802-005-5240 | 2026-08-02 22:13:29 | 修 brainstorm-wait-and-review-path-pitfalls.md 两个真 bug
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/complete.js（坑1：新增导出 resolveWaitingStepWithAnswer(steps,doneAnswer,nowStr)——把首个 status==='waiting' 步骤拉回 pending+补 waitAnswer+记一轮 waitAnswers+清 waiting 字段；completeStep currentIdx 选择后接入：doneAnswer 且存在 waiting 时调用、currentIdx 指向被解步骤、主流程 requiresWait 门控见 waitAnswer 已置→不阻断→正常 completed；对齐 continueStep requiresWait 回 pending 语义；仅 --answer 触发，普通 --done 零行为变化）
+- src/stage-review.js（坑3：renderReviewJsonContract tier=self 分支提示改非承诺式——保留 tier=self 标记，注明基于此刻 design.md 快照、gate 以 --done 时刻 design.md 重判、design 扩大到>3 文件升级 independent 硬要求 review.json、以 gate 实际校验为准；不再硬承诺「无需产出」）
+- test/wait-done-answer-resolves-waiting.test.mjs（新建：28 断言——resolveWaitingStepWithAnswer 4 场景单元[waiting 解掉/无 waiting/无 answer/多 waiting 仅解首个] + completeStep 端到端解 brainstorm 已 waiting 的 requiresWait 步骤[step5 waiting→completed、不报等待用户输入、不越权推进后续] + 坑3 文案含 TOCTOU 警告校验）
+- test/stage-review-contract.test.mjs（line46 断言更新：旧 md.includes('无需产出') 锁的是坑3 bug 本身，改为校验新契约「tier=self + 提 gate 以 --done 重判 + 可能升级 independent」）
+
+需求：修 brainstorm-wait-and-review-path-pitfalls.md 两个真 bug。坑1：--done --answer 落到已 --wait 暂停的 requiresWait 步骤时，completeStep currentIdx=findIndex(pending||in-progress) 排除 waiting，跳过该步骤、--answer 静默丢失、步骤永久卡 WAITING、末步报'Step N 等待用户输入'无法 finish。坑3：stage-review.js renderReviewJsonContract tier=self 分支硬承诺'无需产出 review.json'，但 gate 以 --done 时刻 design.md 重判可升级 independent 硬要 review.json（TOCTOU）。坑2 已被 d20fc63 修，跳过。
+根因：坑1=状态机 currentIdx 选择谓词遗漏 waiting；坑3=tier 在 prompt 早算（design.md 未补全→fileCount=0→self）/gate 晚算（design.md 完整→>3→independent）快照不一致。
+方案：坑1 新增导出 resolveWaitingStepWithAnswer(steps,doneAnswer,nowStr)——把首个 waiting 步骤拉回 pending+补 waitAnswer+记一轮 waitAnswers+清 waiting 字段；completeStep currentIdx 后接入，主流程 requiresWait 门控见 waitAnswer 已置→不阻断→completed（对齐 continueStep 回 pending 语义；仅 --answer 触发，普通 --done 零变化）。坑3 软化 tier=self 提示为非承诺式（保留 tier=self 标记+注明基于此刻 design.md 快照+gate 以 --done 重判+design 扩大升级 independent+以 gate 实际校验为准）。
+结果：新增 test/wait-done-answer-resolves-waiting.test.mjs 28 断言全过（helper 4 场景+completeStep 端到端+坑3 文案）；更新 test/stage-review-contract.test.mjs line46 锁新契约；全量 node test/run-tests.mjs REAL_EXIT=0 通过 107 失败 0；npm run lint 66 文件过。改 2 源+2 测试，docs/prompt/file-lifecycle 均无需同步。

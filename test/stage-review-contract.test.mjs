@@ -43,8 +43,10 @@ console.log('=== renderReviewJsonContract independent 输出契约要素 ===')
 console.log('\n=== tier=self 简短提示 ===')
 {
   const md = renderReviewJsonContract({ stage: 'plan', tier: 'self' })
-  assert(md.includes('tier=self') && md.includes('无需产出'), 'self 返回简短提示')
-  assert(!md.includes('schemaVersion'), 'self 不含 schema(无需 review.json)')
+  // 坑3：self 提示不再硬承诺「无需产出 review.json」——Stage Review Gate 会以 --done 时刻 design.md
+  // 重判，design 扩大会升级 independent 仍需独立审查产出 review.json。改为非承诺式 + TOCTOU 警告。
+  assert(md.includes('tier=self') && md.includes('--done') && md.includes('independent'), 'self 非承诺式提示：标 tier=self + 提 gate 以 --done 重判 + 可能升级 independent')
+  assert(!md.includes('schemaVersion'), 'self 不含 schema（仍为简短提示）')
 }
 
 console.log('\n=== 各 stage 映射(reviewType + 主文档)===')

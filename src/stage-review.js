@@ -41,7 +41,7 @@ const STAGE_REVIEW_TYPE = { brainstorm: 'design', plan: 'plan', propose: 'propos
  */
 export function renderReviewJsonContract({ stage, changeDir, reviewRunId, tier } = {}) {
   if (tier === 'self') {
-    return '> review.json 契约:tier=self(变更规模小),无需产出 review.json,当前 agent 自审即可。'
+    return '> review.json 契约:tier=self(此刻 design.md 变更文件数 ≤3,当前 agent 自审即可)。⚠️ 注意:本判定基于此刻 design.md 快照——Stage Review Gate 会以 --done 时刻的 design.md 重新判定,若 design 后续扩大到 >3 文件,tier 将升级为 independent 并硬要求独立审查子代理产出 review.json。以 gate 实际校验结果为准(FAILED 即 independent 需补 review.json),勿据本提示提前断言无需 review.json。'
   }
   const reviewType = STAGE_REVIEW_TYPE[stage] || 'design'
   const mainDoc = STAGE_MAIN_DOC[stage] || 'design.md'

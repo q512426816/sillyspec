@@ -116,6 +116,36 @@ function validateFileLocations(cwd, stageName, progress, changeName, specBase) {
   }
 }
 
+/**
+ * 坑1：用 --done --answer 解掉「已 waiting 的步骤」。
+ *
+ * completeStep 的 currentIdx 选择（findIndex pending||in-progress）排除 waiting，导致
+ * --done --answer 落到已 --wait 暂停的 requiresWait 步骤时跳过它、--answer 静默丢失、步骤永久
+ * 卡 WAITING、末步报「Step N 等待用户输入」无法 finish。本函数把首个 waiting 步骤拉回 pending
+ * + 补 waitAnswer（对齐 continueStep 对 requiresWait 的 shouldReturnToCurrentStep=回 pending 语义），
+ * 让主流程 requiresWait 门控见 waitAnswer 已置→不阻断→正常 completed。
+ *
+ * @param {object[]} steps - stageData.steps（原地修改）
+ * @param {string|null|undefined} doneAnswer - --answer 值；空则不触发（返回 -1）
+ * @param {string} nowStr - 时间戳字符串（用于 waitAnswers[].answeredAt）
+ * @returns {number} 被解的 waiting 步骤 idx；无 waiting 或无 answer 返回 -1
+ */
+export function resolveWaitingStepWithAnswer(steps, doneAnswer, nowStr) {
+  if (!doneAnswer) return -1
+  const waitIdx = steps.findIndex(s => s && s.status === 'waiting')
+  if (waitIdx === -1) return -1
+  const ws = steps[waitIdx]
+  ws.waitAnswer = doneAnswer
+  ws.waitAnswers = Array.isArray(ws.waitAnswers) ? ws.waitAnswers : []
+  ws.waitAnswers.push({ round: (ws.waitRound || 0) + 1, answer: doneAnswer, answeredAt: nowStr })
+  delete ws.waitReason
+  delete ws.waitOptions
+  delete ws.waitedAt
+  ws.status = 'pending'
+  ws.completedAt = null
+  return waitIdx
+}
+
 export async function completeStep(pm, progress, stageName, cwd, outputText, inputText = null, options = {}) {
   const { printNext = true, confirm = false, changeName, platformOpts = {}, nonInteractive = false, confirmMode = null, isForceBaseline = false, isAllowNew = false } = options
   const specBase = platformOpts.specRoot || join(cwd, '.sillyspec')
@@ -145,7 +175,17 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
   }
 
   const steps = stageData.steps
-  const currentIdx = steps.findIndex(s => s.status === 'pending' || s.status === 'in-progress')
+  let currentIdx = steps.findIndex(s => s.status === 'pending' || s.status === 'in-progress')
+  // ── 坑1：--done --answer 解「已 waiting 的步骤」──
+  // findIndex 仅查 pending/in-progress，排除 waiting；故 --done --answer 落到已 --wait 暂停的
+  // requiresWait 步骤时会跳过它、把 --answer 静默丢弃，步骤永久卡 WAITING、末步报「等待用户输入」。
+  // 修复：带 doneAnswer 且存在 waiting 步骤时，把首个 waiting 拉回 pending + 补 waitAnswer，主流程
+  // requiresWait 门控见 waitAnswer 已置→不阻断→正常 completed。仅 --answer 触发，普通 --done 零变化。
+  const _resolvedWaitIdx = resolveWaitingStepWithAnswer(steps, options && options.doneAnswer, new Date().toLocaleString('zh-CN', { hour12: false }))
+  if (_resolvedWaitIdx !== -1) {
+    currentIdx = _resolvedWaitIdx
+    console.log(`⚠️  Step "${steps[_resolvedWaitIdx].name}" 此前处于 waiting，--done --answer 已补回答并拉回待完成。`)
+  }
   if (currentIdx === -1) {
     console.error('没有待完成的步骤')
     process.exit(1)
