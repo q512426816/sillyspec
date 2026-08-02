@@ -123,6 +123,70 @@ function injectInstructions(tool, projectDir) {
   writeFileSync(filePath, content.trimEnd() + '\n\n' + INJECTION_CONTENT);
 }
 
+// ── 注入 CLAUDE.md（claude，版本感知幂等）──
+// 与 codex/gemini/opencode 不同：claude 需要完整 CLAUDE.md 模板 + 版本感知三态。
+// 故 claude 不进 INSTRUCTION_TOOLS，单独走此函数（design: 2026-08-02-init-claude-md）。
+const CLAUDE_TEMPLATE_PATH = join(__dirname, '..', 'templates', 'claude-instruction.md');
+
+/**
+ * 为 Claude Code 注入 CLAUDE.md（版本感知幂等）。
+ * - 不存在：写完整模板（templates/claude-instruction.md）+ 顶部版本注释
+ * - 存在无标记：追加受管段（INJECTION_CONTENT）+ 版本块标记
+ * - 存在同版本标记：跳过
+ * - 存在异版本标记：追加态刷新块 / 完整态仅 stderr 提示
+ * @param {string} projectDir - 源码项目根
+ */
+export function injectClaudeInstructions(projectDir) {
+  const filePath = join(projectDir, 'CLAUDE.md');
+  const version = getVersion();
+  // 完整态顶部注释（新文件首行，轻量、不限制后续编辑）
+  const fullHeader = `<!-- SillySpec v${version} — 由 sillyspec init 生成，可自由编辑；重跑 init 同版本不更新 -->`;
+  // 追加态受管段（包版本块标记，明确"勿手动编辑此段"）
+  const appendBlock =
+    `<!-- SillySpec v${version} START — 由 sillyspec init 注入，勿手动编辑此段 -->\n` +
+    INJECTION_CONTENT.trimEnd() +
+    `\n<!-- SillySpec END -->`;
+
+  // 状态 1：文件不存在 → 写完整模板 + 顶部版本注释
+  if (!existsSync(filePath)) {
+    let template = '';
+    try {
+      template = readFileSync(CLAUDE_TEMPLATE_PATH, 'utf8');
+    } catch {
+      console.error(`❌ [sillyspec] 未找到 Claude 模板：${CLAUDE_TEMPLATE_PATH}`);
+      return;
+    }
+    writeFileSync(filePath, fullHeader + '\n' + template);
+    console.log(chalk.green(`    ✓ Claude Code CLAUDE.md 已生成（SillySpec v${version}）`));
+    return;
+  }
+
+  const content = readFileSync(filePath, 'utf8');
+
+  // 无任何 `<!-- SillySpec v` 标记 → 状态 2：追加受管段（原文字节保留）
+  const markMatch = content.match(/<!-- SillySpec v(\S+)/);
+  if (!markMatch) {
+    writeFileSync(filePath, content.trimEnd() + '\n\n' + appendBlock + '\n');
+    console.log(chalk.green(`    ✓ Claude Code CLAUDE.md 已追加 SillySpec 受管段（v${version}）`));
+    return;
+  }
+
+  const existingVersion = markMatch[1];
+  // 状态 3：同版本 → 跳过（幂等，不写）
+  if (existingVersion === version) return;
+
+  // 状态 4：异版本（升级）。区分追加态（有 START...END 块）/ 完整态（仅顶部注释）。
+  const startBlockRe = /<!-- SillySpec v\S+\s+START[\s\S]*?<!-- SillySpec END -->/;
+  if (startBlockRe.test(content)) {
+    // 4a：追加态 → 用当前版本受管段替换该块（块外用户内容字节保留）
+    writeFileSync(filePath, content.replace(startBlockRe, appendBlock));
+    console.log(chalk.green(`    ✓ Claude Code CLAUDE.md 受管段已升级（v${existingVersion} → v${version}）`));
+  } else {
+    // 4b：完整态 → 不覆盖（保留用户改动），仅 stderr 打印升级提示
+    console.error(`⚠️ [sillyspec] SillySpec 升级 v${existingVersion}→v${version}，CLAUDE.md 未自动更新（保留你的改动）。如需采用新模板：备份后删除 CLAUDE.md 再跑 sillyspec init。`);
+  }
+}
+
 // ── 检测工具 ──
 
 function detectTools(projectDir) {
@@ -271,6 +335,11 @@ async function doInstall(projectDir, tools, subprojects = [], specDir = null) {
     if (INSTRUCTION_TOOLS.includes(toolName)) {
       injectInstructions(toolName, projectDir);
     }
+  }
+
+  // 注入 CLAUDE.md（claude，版本感知幂等三态四分支；claude 不进 INSTRUCTION_TOOLS）
+  if (tools.includes('claude')) {
+    injectClaudeInstructions(projectDir);
   }
 
   // 复制 skills 到各工具目录
