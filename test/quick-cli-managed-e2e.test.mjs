@@ -79,13 +79,14 @@ assert(readFileSync(join(specBase, 'changes', '2026-07-06-kanban-better-board', 
 await captureStdout(() => runCommand(['quick', '--done', '--change', sid, '--output', '理解完成', '--confirm'], repo))
 await captureStdout(() => runCommand(['quick', '--done', '--change', sid, '--output', '实现完成', '--confirm'], repo))
 const structured = '需求：列表默认最新在前\n根因：apply_sort 遇空 order_by 跳过\n方案：service 兜底 order_by=created_at\n结果：52 passed + ruff 过'
-await captureStdout(() => runCommand(['quick', '--done', '--change', sid, '--output', structured, '--confirm'], repo))
+const doneOut = await captureStdout(() => runCommand(['quick', '--done', '--change', sid, '--output', structured, '--confirm'], repo))
 assert(qlog().includes('状态：已完成'), 'step3 done 后条目翻为「已完成」')
 assert(qlog().includes('结果：52 passed'), 'step3 done 后结构化结果落盘（结果：字段）')
 assert(qlog().includes('需求：列表默认最新在前'), '结构化结果含「需求：」字段')
 assert(qlog().includes('根因：apply_sort'), '结构化结果含「根因：」字段')
 assert(qlog().includes('方案：service 兜底'), '结构化结果含「方案：」字段')
 assert(readFileSync(join(specBase, 'changes', '2026-07-06-kanban-better-board', 'tasks.md'), 'utf8').includes(`- [x] ${guard.quicklogId}`), 'tasks.md 已勾选 - [x]')
+assert(doneOut.includes('提交') && !doneOut.includes('run scan'), 'quick 完成推荐推「提交」不推 scan（不盲推回头路）')
 
 // 验收 3b：step3 --output 缺结构字段 → 阻断（exit 1），补全后可重跑完成
 {

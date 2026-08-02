@@ -359,6 +359,11 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
       } else {
         console.log(`\n👉 brainstorm 已完成。下一步：sillyspec run plan${changeName ? ` --change ${changeName}` : ''}（scale=large 或未标 small 走完整 plan）`)
       }
+    } else if (stageName === 'quick') {
+      // quick 是收尾阶段（辅助流程，不走主链 scan→archive），完成后该提交，而非推 scan。
+      // 走下方 _getNextSuggestion 会因 scan 是 STAGE_ORDER 首位、永未完成而误推 scan（回头路），
+      // 与 brainstorm 同类问题（见上注释），故给 quick 专属分支。
+      console.log('\n👉 quick 已完成。下一步：提交本次改动（git commit / sillyspec-commit），或 sillyspec run <stage> 继续其他阶段。')
     } else {
       // D1 暗衔接修：阶段刚完成，CLI 本就知道状态机下一步是哪个阶段（_getNextSuggestion），
       // 却只丢一句「下一步由你决定」让 agent 自己猜命令。改为按 progress 实际状态给出精确命令。

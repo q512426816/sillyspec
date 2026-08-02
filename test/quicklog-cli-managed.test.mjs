@@ -27,7 +27,7 @@ import { tmpdir } from 'node:os'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 
-import { allocateQuicklogEntry, completeQuicklogEntry, findQuicklogEntry, withFileLock } from '../src/quicklog.js'
+import { allocateQuicklogEntry, completeQuicklogEntry, findQuicklogEntry, withFileLock, deriveTitleFromLinkedChange } from '../src/quicklog.js'
 import { isQuickMetadata } from '../src/run/shared.js'
 
 const execFileP = promisify(execFile)
@@ -119,6 +119,45 @@ console.log('\n--- 验收 2：completeQuicklogEntry 完成态 ---')
   await completeQuicklogEntry(specBase, 'bob', 'ql-99999999-999-zzzz', { resultText: 'x', linkedChanges: [] })
   const after = readFileSync(join(specBase, 'quicklog', 'QUICKLOG-bob.md'), 'utf8')
   assert(after === before, '完成不存在的 qlId 不修改文件、不抛错')
+}
+
+// ─────────────────────────────────────────
+// 验收 2c：标题语义化 — deriveTitleFromLinkedChange（启动回退）+ 翻完成刷新标题
+// 治 QUICKLOG/tasks.md 标题落 (quick 任务) 占位坑（启动不带 --input 时从关联变更回退 + 完成按需求刷新）。
+// ─────────────────────────────────────────
+console.log('\n--- 验收 2c：标题语义化（deriveTitle + flipEntry 刷新）---')
+{
+  const specBase = makeTmpDir('qlm-title-')
+  // deriveTitleFromLinkedChange：proposal 标题提取 + 去「提案书（Proposal）—」前缀
+  mkdirSync(join(specBase, 'changes', 'change-p'), { recursive: true })
+  writeFileSync(join(specBase, 'changes', 'change-p', 'proposal.md'),
+    '---\nauthor: t\n---\n\n# 提案书（Proposal）— 登录加 IP 限流\n\n正文\n')
+  assert(deriveTitleFromLinkedChange(specBase, 'change-p') === '登录加 IP 限流',
+    'deriveTitle 从 proposal 提取并去前缀')
+
+  // design.md 回退（无 proposal 时）
+  mkdirSync(join(specBase, 'changes', 'change-d'), { recursive: true })
+  writeFileSync(join(specBase, 'changes', 'change-d', 'design.md'), '# 设计文档（Design）— 滑块验证\n')
+  assert(deriveTitleFromLinkedChange(specBase, 'change-d') === '滑块验证',
+    'deriveTitle 无 proposal 时回退 design.md 并去前缀')
+
+  // 无任何文档 → 空串（调用方再回退占位，保持向后兼容）
+  mkdirSync(join(specBase, 'changes', 'change-empty'), { recursive: true })
+  assert(deriveTitleFromLinkedChange(specBase, 'change-empty') === '',
+    'deriveTitle 无文档返回空串')
+
+  // flipEntry 翻完成刷新标题：启动占位标题 + result 含「需求：」→ 标题刷新为需求摘要
+  // （直接调 allocateQuicklogEntry 模拟"不经 stage.js 回退"的空描述 → 占位标题）
+  const r = await allocateQuicklogEntry(specBase, 'eve', { description: '' })
+  let log = readFileSync(join(specBase, 'quicklog', 'QUICKLOG-eve.md'), 'utf8')
+  assert(log.includes('(quick 任务)'), '空描述落占位标题 (quick 任务)')
+  await completeQuicklogEntry(specBase, 'eve', r.qlId, {
+    resultText: '需求：登录接口加 IP 限流（5 次/分）\n根因：无 rate limit\n方案：INCR 计数\n结果：通过',
+    linkedChanges: [],
+  })
+  log = readFileSync(join(specBase, 'quicklog', 'QUICKLOG-eve.md'), 'utf8')
+  assert(!log.includes('(quick 任务)'), '翻完成后标题被刷新，不再含占位')
+  assert(log.includes('登录接口加 IP 限流'), '翻完成标题含「需求：」摘要')
 }
 
 // ─────────────────────────────────────────

@@ -81,6 +81,36 @@ function sanitizeDesc(description) {
   return s.length > 120 ? s.slice(0, 120) + '…' : s
 }
 
+// 从关联变更的 proposal/design 提取首个 # 标题（去「提案书（Proposal）— / 设计文档（Design）—」固定前缀）。
+// 让 quick --linked-changes 启动时（用户常不带 --input）也能拿到语义标题，而非 (quick 任务) 占位。
+// 读不到任何标题返回 ''（调用方再回退占位符，保持向后兼容）。
+export function deriveTitleFromLinkedChange(specBase, change) {
+  if (!change) return ''
+  for (const f of ['proposal.md', 'design.md']) {
+    let content
+    try { content = readFileSync(join(specBase, 'changes', change, f), 'utf8') } catch { continue }
+    const m = content.match(/^#\s+(.+?)\s*$/m)
+    if (!m) continue
+    const raw = m[1].trim()
+    // 标题惯例「# 提案书（Proposal）— <desc>」「# 设计文档（Design）— <desc>」→ 取破折号后的 desc
+    const dash = raw.match(/[—-]\s*(.+)$/)
+    return dash ? dash[1].trim() : raw
+  }
+  return ''
+}
+
+// 从 quick step3 --output 四字段提取「需求：」摘要，用于翻完成时刷新标题行
+// （覆盖启动时的占位/弱标题）。提取失败返回 ''（不刷新）。
+function extractTitleFromResult(result) {
+  if (!result) return ''
+  const m = String(result).match(/需求：([^\n\r]*?)(?:\s+根因：|$)/)
+  if (!m) return ''
+  let t = m[1].replace(/[，。；,;].*$/, '').trim() // 截到首个标点，取核心句
+  if (!t) return ''
+  if (t.length > 80) t = t.slice(0, 80) + '…'
+  return t
+}
+
 function sanitizeResult(resultText) {
   // 保留换行：结果块支持字段化结构（需求：/根因：/方案：/结果：...）。多行时 flipEntryInContent
   // 写成字段块（追加在「状态：」行下方），不是单条「结果：<长行>」。仅去首尾空白。
@@ -219,6 +249,12 @@ function flipEntryInContent(content, qlId, result, changedFiles = []) {
   const lines = content.split('\n')
   const startIdx = lines.findIndex(l => l.startsWith(`## ${qlId} |`))
   if (startIdx === -1) return null
+  // 翻完成时若能从结果提取「需求：」摘要，刷新标题行（覆盖启动时的占位/弱标题）
+  const newTitle = extractTitleFromResult(result)
+  if (newTitle) {
+    const headerCore = lines[startIdx].match(/^(## \S+ \| [^|]+ \| )/)
+    if (headerCore) lines[startIdx] = headerCore[1] + newTitle
+  }
   let endIdx = lines.length
   for (let i = startIdx + 1; i < lines.length; i++) {
     if (lines[i].startsWith('## ')) { endIdx = i; break }

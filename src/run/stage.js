@@ -22,7 +22,7 @@ import { writeAtomicSync } from '../fs-atomic.js'
 import { resolveSpecDir, resolveChangeDir, triggerSync, safeGit, parsePorcelainPath, formatWaitOptions, checkApproval, getStageSteps } from './shared.js'
 import { computeScanProfile, applyScanProfileSteps, executeScanPreflight, executeScanPostcheck } from './scan-profile.js'
 import { outputStep } from './prompt.js'
-import { allocateQuicklogEntry } from '../quicklog.js'
+import { allocateQuicklogEntry, deriveTitleFromLinkedChange } from '../quicklog.js'
 import { checkTransition } from '../stage-contract.js'
 
 export async function runStage(pm, progress, stageName, cwd, changeName, skipApproval = false, platformOpts = {}, quickOpts = {}) {
@@ -239,8 +239,14 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
         const linkedChanges = Array.isArray(quickOpts?.linkedChanges) ? quickOpts.linkedChanges : []
         // CLI 接管：分配 ql-ID + 写 QUICKLOG「进行中」条目 + 关联 tasks.md（持锁、当天唯一）
         const gitUser = safeGit(cwd, ['config', 'user.name']).value || 'unknown'
+        // 标题回退：启动 quick 不带 --input 时，从关联变更的 proposal/design 提取语义标题，
+        // 避免 QUICKLOG/tasks.md 落 (quick 任务) 占位（deriveTitleFromLinkedChange 读不到则空→sanitizeDesc 回退占位）。
+        let quickDesc = quickOpts?.taskDescription || ''
+        if (!quickDesc && linkedChanges.length > 0) {
+          quickDesc = deriveTitleFromLinkedChange(specBase, linkedChanges[0])
+        }
         const { qlId } = await allocateQuicklogEntry(specBase, gitUser, {
-          description: quickOpts?.taskDescription || '',
+          description: quickDesc,
           linkedChanges,
           allowedFiles,
         })

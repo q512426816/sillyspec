@@ -49,8 +49,24 @@ function cleanup(dir) {
   try { rmSync(dir, { recursive: true, force: true }) } catch {}
 }
 
+// 全量套件下 spec-dir 偶发进程级崩溃（run-tests 报 exited、无内部断言汇总），
+// 根因疑似 CLI 子进程罕见非0退出（sillyspec.db 锁 / home 指针竞态，flaky 罕见难稳定复现，
+// 见记忆 sillyspec-test-specdir-isolation）。处置：失败时打印 cmd+stderr 诊断再重试一次——
+// 吸收偶发崩溃降 flaky 率，重试仍失败才抛清晰错误（保留确定性失败的定位能力）。
+// timeout 10s→30s 留余量（子进程常态 <1s，但全量负载下保险）。
 function run(cmd) {
-  return execSync(cmd, { encoding: 'utf8', timeout: 10000, stdio: ['pipe', 'pipe', 'pipe'] })
+  const opts = { encoding: 'utf8', timeout: 30000, stdio: ['pipe', 'pipe', 'pipe'] }
+  try {
+    return execSync(cmd, opts)
+  } catch (e) {
+    const stderr1 = (e.stderr || '').toString().slice(0, 800)
+    console.log(`  ⚠️ [spec-dir] CLI 偶发失败重试中: ${cmd.slice(0, 80)} (exit ${e.status}, stderr: ${stderr1})`)
+    try {
+      return execSync(cmd, opts)
+    } catch (e2) {
+      throw new Error(`[spec-dir] cmd 重试仍失败: ${cmd}\nexit ${e2.status}\nstderr: ${(e2.stderr || '').toString().slice(0, 800)}`)
+    }
+  }
 }
 
 // ── Test 1: ProgressManager 外部 specDir ──
