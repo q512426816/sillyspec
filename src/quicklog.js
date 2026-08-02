@@ -219,10 +219,13 @@ function tasksPath(specBase, change) {
   return join(specBase, 'changes', change, 'tasks.md')
 }
 
-// 追加未勾选 task；幂等（已含同 qlId 则跳过）
+// 追加未勾选 task；幂等（已含同 qlId 则跳过）。
+// 关联变更目录不存在（笔误 / 未建 / 仅作标签关联）→ 不 fabricate stub 目录（历史坑 quick-change-phantom：
+// mkdirSync 硬造 changes/<名>/tasks.md，致 quick --done 边界审计自造自拦 BLOCK）。关联仍记入
+// QUICKLOG「关联变更」行（allocateQuicklogEntry 独立写入，不依赖本函数）。
 function appendTaskCheckbox(specBase, change, qlId, desc) {
   const dir = join(specBase, 'changes', change)
-  mkdirSync(dir, { recursive: true })
+  if (!existsSync(dir)) return
   const p = tasksPath(specBase, change)
   let content = existsSync(p) ? readFileSync(p, 'utf8') : ''
   if (content.includes(qlId)) return

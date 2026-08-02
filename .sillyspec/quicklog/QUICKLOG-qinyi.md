@@ -117,3 +117,15 @@
 根因：坑1=状态机 currentIdx 选择谓词遗漏 waiting；坑3=tier 在 prompt 早算（design.md 未补全→fileCount=0→self）/gate 晚算（design.md 完整→>3→independent）快照不一致。
 方案：坑1 新增导出 resolveWaitingStepWithAnswer(steps,doneAnswer,nowStr)——把首个 waiting 步骤拉回 pending+补 waitAnswer+记一轮 waitAnswers+清 waiting 字段；completeStep currentIdx 后接入，主流程 requiresWait 门控见 waitAnswer 已置→不阻断→completed（对齐 continueStep 回 pending 语义；仅 --answer 触发，普通 --done 零变化）。坑3 软化 tier=self 提示为非承诺式（保留 tier=self 标记+注明基于此刻 design.md 快照+gate 以 --done 重判+design 扩大升级 independent+以 gate 实际校验为准）。
 结果：新增 test/wait-done-answer-resolves-waiting.test.mjs 28 断言全过（helper 4 场景+completeStep 端到端+坑3 文案）；更新 test/stage-review-contract.test.mjs line46 锁新契约；全量 node test/run-tests.mjs REAL_EXIT=0 通过 107 失败 0；npm run lint 66 文件过。改 2 源+2 测试，docs/prompt/file-lifecycle 均无需同步。
+## ql-20260802-006-4af1 | 2026-08-02 22:41:50 | quicklog appendTaskCheckbox 不再 fabricate 幻影 change 目录
+状态：已完成
+关联变更：（无）
+文件：
+- src/quicklog.js（appendTaskCheckbox：删 mkdirSync 硬造目录，加 existsSync(dir) 守卫，关联目录不存在直接 return 不写 tasks.md）
+- test/quicklog-cli-managed.test.mjs（验收1/验收2 预建真实 change-a/change-b 目录；新增验收1b 验证笔误变更名不 fabricate 目录、关联仍记 QUICKLOG）
+- test/quick-cli-managed-e2e.test.mjs（端到端预建 2026-07-06-kanban-better-board 目录，对齐 linkedChanges 须预存契约）
+
+需求：quick --linked-changes 指向笔误/未建变更时不应凭空 fabricate 出幻影 change 目录（历史坑 quick-change-phantom：误传 --change <名> 致 step3 边界审计 BLOCK「危险文件变更 .sillyspec/changes/<名>/」，得手动 rm 幻影目录）。
+根因：appendTaskCheckbox（src/quicklog.js:226）对不存在的关联变更目录硬调 mkdirSync，把 linkedChanges「关联标签」当成「真变更目录」造 tasks.md 桩；而关联标签本应由 allocateQuicklogEntry 独立记入 QUICKLOG「关联变更：」行，与目录是否存在无关。越界 fabricate 污染 .sillyspec/changes/ → 边界审计自造自拦。
+方案：appendTaskCheckbox 加 existsSync(dir) 守卫——目录不存在直接 return，不写 tasks.md、不建目录；关联标签的 QUICKLOG 行写入路径（allocateQuicklogEntry line 330）独立于本函数，不受影响。测试侧：原断言依赖 mkdirSync 造目录，故改为在 setup 阶段预建真实 change 目录（反映「linkedChanges 须预存」的正确契约），并新增验收1b 显式验证 fabricate 不再发生。
+结果：全量测试 107 通过 / 失败 0，lint 干净，零回归；审计 SAFE（本轮新增 3 业务文件）。

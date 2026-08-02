@@ -57,6 +57,9 @@ await new ProgressManager({ specDir: specBase }).init(repo)
 const qlog = () => readdirSync(join(specBase, 'quicklog'))
   .filter(f => f.startsWith('QUICKLOG') && f.endsWith('.md'))
   .map(f => readFileSync(join(specBase, 'quicklog', f), 'utf8')).join('\n')
+// 契约：linkedChanges 指向已存在的变更；appendTaskCheckbox 不再 fabricate 目录（坑 quick-change-phantom）。
+// 验收 1 关联到 2026-07-06-kanban-better-board，预建其 change 目录。
+mkdirSync(join(specBase, 'changes', '2026-07-06-kanban-better-board'), { recursive: true })
 
 // 验收 1：启动分配 ql-ID + 写条目 + tasks.md
 const out = await captureStdout(() => runCommand(['quick', '修手机校验', '--linked-changes', '2026-07-06-kanban-better-board', '--non-interactive'], repo))

@@ -61,6 +61,8 @@ console.log('=== quicklog CLI 接管层回归测试 ===\n')
 console.log('--- 验收 1：allocateQuicklogEntry 分配 + tasks.md ---')
 {
   const specBase = makeTmpDir('qlm-alloc-')
+  // 契约：linkedChanges 指向已存在的变更；appendTaskCheckbox 不再 fabricate 目录（坑 quick-change-phantom）
+  mkdirSync(join(specBase, 'changes', 'change-a'), { recursive: true })
   const r1 = await allocateQuicklogEntry(specBase, 'alice', {
     description: '修复登录校验',
     linkedChanges: ['change-a'],
@@ -96,11 +98,31 @@ console.log('--- 验收 1：allocateQuicklogEntry 分配 + tasks.md ---')
 }
 
 // ─────────────────────────────────────────
+// 验收 1b：linkedChanges 指向不存在的变更 → 不 fabricate 幻影目录（quick-change-phantom 回归）
+// 历史 bug：appendTaskCheckbox 用 mkdirSync 硬造 changes/<名>/tasks.md，致 quick --done 边界审计
+// 把 CLI 自建的 stub 判为「新增/危险文件」BLOCK。修复：目录不存在则跳过，关联仅作 QUICKLOG 标签。
+// ─────────────────────────────────────────
+console.log('\n--- 验收 1b：关联变更不存在时不造幻影目录 ---')
+{
+  const specBase = makeTmpDir('qlm-phantom-')
+  const r = await allocateQuicklogEntry(specBase, 'alice', {
+    description: '关联到不存在的变更',
+    linkedChanges: ['made-up-change'],
+  })
+  const log = readFileSync(join(specBase, 'quicklog', 'QUICKLOG-alice.md'), 'utf8')
+  assert(log.includes('关联变更：made-up-change'), 'QUICKLOG 仍记录关联标签')
+  let entries = []
+  try { entries = readdirSync(join(specBase, 'changes')) } catch {}
+  assert(!entries.includes('made-up-change'), '不 fabricate 幻影 changes/made-up-change/（历史 mkdirSync 硬造 → --done 审计自造自拦）')
+}
+
+// ─────────────────────────────────────────
 // 验收 2：completeQuicklogEntry — 翻状态 + 结果 + 勾选
 // ─────────────────────────────────────────
 console.log('\n--- 验收 2：completeQuicklogEntry 完成态 ---')
 {
   const specBase = makeTmpDir('qlm-complete-')
+  mkdirSync(join(specBase, 'changes', 'change-b'), { recursive: true })
   const r = await allocateQuicklogEntry(specBase, 'bob', {
     description: '完成我', linkedChanges: ['change-b'], allowedFiles: [],
   })
