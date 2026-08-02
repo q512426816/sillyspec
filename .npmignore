@@ -25,3 +25,8 @@ packages/dashboard/node_modules/
 # .claude/CLAUDE.md 是项目级 Claude 指引（含开发者本地路径），不是工具运行时依赖，不进 npm 包。
 # .claude/skills/ 仍保留（见上，init.js 复制 skill 模板用）。
 .claude/CLAUDE.md
+
+# 根 CLAUDE.md 同理：项目级 Claude 指引（含开发者本地绝对路径 C:\Users\...），非工具运行时依赖
+# （sillyspec init 写「用户项目」的 CLAUDE.md，模板读包内 templates/claude-instruction.md，不读本文件），不进 npm 包。
+# 锚定仓库根（/CLAUDE.md）避免误排子目录同名文件。
+/CLAUDE.md
