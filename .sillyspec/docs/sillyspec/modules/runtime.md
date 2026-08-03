@@ -65,4 +65,5 @@ ProgressManager.alignExecuteToPlan(cwd, changeName, specBase, {confirm})
 ## 人工备注
 <!-- MANUAL_NOTES_START -->
 - ql-20260604-001-7a4c | 补齐平台 sync 时间与审批状态的本地写入方法，并记录 quick/archive gate 清理行为。
+- ql-20260803-001-9c4e | 修 reopen --done 步骤状态不同步：complete.js 阶段完成分支回填 stale→completed，completeStage SQL 扩到 IN('pending','stale')。
 <!-- MANUAL_NOTES_END -->

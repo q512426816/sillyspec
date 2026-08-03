@@ -94,7 +94,7 @@ module-impact.md 第一行标题必须用中文：# 模块影响分析（Module 
 **元数据**
 - optional：false
 - outputHint：模块文档更新结果
-- 等待配置：无（可直接 --done）
+- 等待配置：requiresWait（必须 --wait 等待用户确认，确认后回到本步由 agent 写入模块文档）
 
 **本步出现的运行时占位符**
 - `<change-name>` → 当前变更名

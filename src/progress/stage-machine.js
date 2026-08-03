@@ -97,7 +97,7 @@ export class StageMachine {
       if (stageRow && stageRow.length > 0 && stageRow[0].values.length > 0) {
         const stageId = stageRow[0].values[0][0];
         sqlDb.run(
-          'UPDATE steps SET status = "completed", completed_at = ? WHERE stage_id = ? AND status = "pending"',
+          'UPDATE steps SET status = "completed", completed_at = ? WHERE stage_id = ? AND status IN ("pending", "stale")', // stale 一并回填（reopen --done 场景，坑 brainstorm-reopen-step-state-desync）
           [now, stageId]
         );
       }

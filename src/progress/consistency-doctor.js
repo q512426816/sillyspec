@@ -2,6 +2,7 @@
 // 从 src/progress.js 单体 ProgressManager 抽出。持有 pm 引用（构造注入），调 pm.read / pm._write /
 // pm._ensureRuntimeDir / pm._runtimePath（persistence-core 留 facade 本体）。
 import { appendFileSync } from 'fs';
+import { existsSync } from 'fs';
 import { STAGE_ORDER } from './shared.js';
 
 export class ConsistencyDoctor {
@@ -193,8 +194,46 @@ export class ConsistencyDoctor {
         });
       }
 
-      // Manual a: completed stage 里有 pending/stale/in-progress steps
-      if (sd.status === 'completed' && sd.steps) {
+      // Fix e: execute 阶段 completed stage 有 pending/stale/in-progress step，但 review.json 客观产出已全通过 → 状态脱钩自动修
+      // （坑 verify-archive-flow-pitfalls 坑1+坑5：plan 加 Wave / execute Wave step 未走 --done，但 task 实际有 review.json verdict 且非 fail）
+      // 安全边界：仅当 changeName 有效、source=review.json（客观源可用）且 pending=0（所有 task verdict 通过）才自动修，
+      // 否则回落到 Manual a（保守不动）。不碰非 execute 阶段。
+      let executeAutoFixed = false;
+      if (stageName === 'execute' && changeName && sd.status === 'completed' && sd.steps) {
+        const badSteps = sd.steps.filter(st => ['pending', 'stale', 'in-progress'].includes(st.status));
+        if (badSteps.length > 0) {
+          try {
+            const changeDir = this.pm._changePath(cwd, changeName);
+            if (changeDir && existsSync(changeDir)) {
+              const runtimeRoot = this.pm._runtimePath(cwd);
+              const { summarizeTaskCompletion } = await import('../task-review.js');
+              const summary = summarizeTaskCompletion({ changeDir, runtimeRoot, changeName });
+              if (summary.source === 'review.json' && summary.total > 0 && summary.pending.length === 0) {
+                const desc = `execute: ${badSteps.length} 个 step 状态脱钩（${badSteps.map(st => st.name).join(', ')}）——review.json 客观产出全通过（${summary.completed}/${summary.total}），自动标 completed`;
+                fixable.push({
+                  stage: stageName,
+                  action: 'align_execute_steps_to_reviews',
+                  description: desc,
+                  apply: (d) => {
+                    for (const st of d.stages[stageName].steps) {
+                      if (['pending', 'stale', 'in-progress'].includes(st.status)) {
+                        st.status = 'completed';
+                        st.completedAt = st.completedAt || now;
+                      }
+                    }
+                  },
+                });
+                executeAutoFixed = true;
+              }
+            }
+          } catch (e) {
+            console.warn(`⚠️  execute 产出核验异常（回落 manual）: ${e.message}`);
+          }
+        }
+      }
+
+      // Manual a: completed stage 里有 pending/stale/in-progress steps（execute 已由 Fix e 自动修则跳过）
+      if (!executeAutoFixed && sd.status === 'completed' && sd.steps) {
         const badSteps = sd.steps.filter(s => ['pending', 'stale', 'in-progress'].includes(s.status));
         for (const step of badSteps) {
           manual.push(`${stageName}/${step.name}: step 状态为 ${step.status}，但 stage 状态为 completed（需手动确认）`);

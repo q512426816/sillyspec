@@ -320,6 +320,23 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
     // quick 收尾（W6 Step6b 抽至 complete-handlers.js handleQuickStageCompletion）
     await handleQuickStageCompletion({ stageName, steps, currentIdx, cwd, progress, changeName, specBase, outputText, confirm, isForceBaseline, isAllowNew, platformOpts })
 
+    // ── reopen --done 回填（坑 brainstorm-reopen-step-state-desync）──
+    // nextPendingIdx === -1 且无 waiting，说明要进阶段完成分支。此时若存在 stale 步骤
+    // （reopen --from-step N 把 N+1..end 置 stale，但方案未变、无需重跑），需同步回填为
+    // completed，否则进度数字与实际步骤明细矛盾（阶段已完成 + 6/8）。
+    // 安全边界：仅进入阶段完成分支时才回填（stale 本就被跳过、不回填也照常标 completed），
+    // 不改变单步推进行为；stale 若确需重跑，运行流（stage.js:141-148）会先于本分支转 pending 执行。
+    const staleSteps = steps.filter(s => s.status === 'stale')
+    if (staleSteps.length > 0) {
+      const nowStr = new Date().toLocaleString('zh-CN',{hour12:false})
+      for (const st of staleSteps) {
+        st.status = 'completed'
+        st.completedAt = st.completedAt || nowStr
+      }
+      await pm._write(cwd, progress, changeName)
+      console.log(`  ⚠️ 同步回填 ${staleSteps.length} 个 stale 步骤为 completed（reopen --from-step N 后 --done，方案未变）`)
+    }
+
     stageData.status = 'completed'
     stageData.completedAt = new Date().toLocaleString('zh-CN',{hour12:false})
     progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})

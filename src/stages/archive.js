@@ -59,6 +59,9 @@ module-impact.md 第一行标题必须用中文：# 模块影响分析（Module 
     },
     {
       name: 'sync-module-docs',
+      // 坑 verify-archive-flow-pitfalls 坑4：缺 requiresWait 时 --continue --answer 会直接标 completed、
+      // agent 无机会按 module-impact.md 写入模块卡片。加 requiresWait 使 --continue 确认后回到本步执行写入
+      requiresWait: true,
       prompt: `根据 module-impact.md 同步更新模块索引和卡片文档。
 
 ### ⚠️ 核心原则：结构化事实改 _module-map.yaml，语义解释改模块卡片

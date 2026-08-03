@@ -129,3 +129,43 @@
 根因：appendTaskCheckbox（src/quicklog.js:226）对不存在的关联变更目录硬调 mkdirSync，把 linkedChanges「关联标签」当成「真变更目录」造 tasks.md 桩；而关联标签本应由 allocateQuicklogEntry 独立记入 QUICKLOG「关联变更：」行，与目录是否存在无关。越界 fabricate 污染 .sillyspec/changes/ → 边界审计自造自拦。
 方案：appendTaskCheckbox 加 existsSync(dir) 守卫——目录不存在直接 return，不写 tasks.md、不建目录；关联标签的 QUICKLOG 行写入路径（allocateQuicklogEntry line 330）独立于本函数，不受影响。测试侧：原断言依赖 mkdirSync 造目录，故改为在 setup 阶段预建真实 change 目录（反映「linkedChanges 须预存」的正确契约），并新增验收1b 显式验证 fabricate 不再发生。
 结果：全量测试 107 通过 / 失败 0，lint 干净，零回归；审计 SAFE（本轮新增 3 业务文件）。
+## ql-20260803-001-9c4e | 2026-08-03 14:24:57 | 修 reopen --done 步骤状态不同步（回填 stale→completed）
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/complete.js（阶段完成分支新增 stale 回填：nextPendingIdx===-1 且无 waiting 时把剩余 stale 置 completed 并落盘，消除 6/8 与阶段已完成矛盾）
+- src/progress/stage-machine.js（completeStage SQL 扩为 status IN ('pending', 'stale')，stale 一并回填）
+- test/revision-v1.test.mjs（新增 Case 11：reopen from-step 3 → completeStage --force → 含 stale 全部 completed）
+- test/run-complete-step-brainstorm.test.mjs（新增集成测试：reopen from-step 6 → --done 末步 → stale 7/8 回填、无"状态不同步"警告）
+
+需求：--reopen --from-step N 后 --done 致步骤状态不同步（6/8 与阶段已完成矛盾、误报"状态不同步"警告）。
+根因：completeStep 阶段完成分支只找 pending/in-progress，遗漏 stale；stage.js:141-148 已把 stale 视为可执行，但 complete.js 的 currentIdx/nextPendingIdx 排除 stale，导致 --done 完成后剩余 stale 被跳过、阶段被误标 completed。
+方案：complete.js 阶段完成分支把剩余 stale 同步置 completed 并落盘；stage-machine.js completeStage SQL 扩为 status IN ('pending', 'stale')；补两个回归测试（ProgressManager 层 + completeStep 集成层）。
+结果：npm test 全过（107 基础 + 新增 12 + 26 相关测试零失败）、lint 过（66 文件）、git 已暂存 4 文件 + 模块文档已同步、quick 边界审计 SAFE。
+
+## ql-20260803-002-eff0 | 2026-08-03 14:54:44 | 修 archive step3 sync-module-docs 不写模块文档（加 requiresWait）
+状态：已完成
+关联变更：（无）
+文件：
+- src/stages/archive.js（sync-module-docs 步骤加 requiresWait:true，--continue 确认后回到本步由 agent 写模块卡片，修 verify-archive-flow-pitfalls 坑4）
+- docs/prompt/archive.md（Step 3 等待配置行从「无（可直接 --done）」改为 requiresWait）
+- docs/prompt/_extracted.json（重新提取，sync-module-docs 元数据含 requiresWait:true）
+- test/archive-sync-module-docs-wait.test.mjs（新建：requiresWait 定义 + --continue 回 pending + --done 被拒/--answer 推进）
+- .sillyspec/docs/sillyspec/modules/stages.md（变更索引追加 ql-ID）
+
+需求：archive step3 sync-module-docs 用 --continue --answer "确认写入" 后 CLI 直接标 completed 推进，agent 无机会按 module-impact.md 写模块卡片（verify-archive-flow-pitfalls 坑4）。
+根因：该步骤缺 requiresWait，continueStep 的 shouldReturnToCurrentStep=false（complete.js:719），确认后不回到步骤、写入完全依赖 agent 自觉。
+方案：给 sync-module-docs 加 requiresWait:true，使 --continue 确认后回到本步（pending）由 agent 写卡片，--done --answer 可一步完成；同步 docs/prompt/archive.md 等待配置 + _extracted.json + stages 模块文档。
+结果：新测试 archive-sync-module-docs-wait.test.mjs 9/9 过（requiresWait 定义 + --continue 回 pending + --done 被拒/--answer 推进），npm test 108 全过，lint 过（66 文件），quick 边界审计 SAFE。
+
+## ql-20260803-003-8dd5 | 2026-08-03 15:20:54 | progress repair 按 review.json 客观产出自动修 execute pending step（不再一律 manual）
+状态：已完成
+关联变更：（无）
+文件：
+- src/progress/consistency-doctor.js（新增 Fix e：execute completed stage 有 pending/stale/in-progress step，且 summarizeTaskCompletion 客观源可用（source=review.json、pending=0）时把脱钩 step 自动标 completed——action=align_execute_steps_to_reviews；否则回落 Manual a 保守不动，不碰非 execute 阶段）
+- test/revision-v1.test.mjs（新增 Case 12：review.json 全 pass → 自动修、2 pending→completed、不归 manual；Case 13：review.json 缺失 → 仍归 manual 保守）
+
+需求：progress repair 对「execute completed stage 有 pending step，但 task 实际 review.json 客观产出已全通过」仍保守归 manual，不按实际产出自动修（verify-archive-flow-pitfalls 坑1+坑5）。
+根因：repairConsistency 的 Manual a 对 completed stage 内 pending/stale/in-progress step 一律报 manual，无「按 review.json 客观产出判定」分支，execute 状态脱钩（plan 加 Wave / execute Wave step 未走 --done）无自动收敛路径。
+方案：consistency-doctor.js 新增 Fix e——仅当 stageName=execute、changeName 有效、summary.source=review.json 且 pending=0（所有 task verdict 通过）时，把脱钩 step 自动标 completed（align_execute_steps_to_reviews），否则回落 Manual a 保守不动；Manual a 对已自动修的 execute 不重复 push；执行异常 catch 回落 manual。
+结果：Case 12（review 全 pass → 自动修）/Case 13（review 缺失 → 仍 manual）通过；npm test 108/108 无回归；lint 66 文件过；quick 边界审计 SAFE。

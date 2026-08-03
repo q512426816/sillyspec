@@ -91,5 +91,44 @@ console.log('--- design.md scale=small → 下一步 quick --linked-changes（�
   assert(!r.stdout.includes('run scan'), 'brainstorm 完成不再误推 scan（修 _getNextSuggestion 回头路 bug）')
 }
 
+console.log('\n--- reopen --from-step N 后 --done 末步收尾：stale 步骤同步回填 completed（坑 brainstorm-reopen-step-state-desync） ---')
+{
+  const { cwd, specBase } = makeRepo('cs-brainstorm-reopen-')
+  const cn = '2026-07-25-brainstorm-reopen'
+  const pm = await initChange(cwd, specBase, cn)
+  const changeDir = join(specBase, 'changes', cn)
+  writeFileSync(join(changeDir, 'proposal.md'), '# Proposal\n\n## 不在范围内\n无\n')
+  writeFileSync(join(changeDir, 'requirements.md'), '# Requirements\n\n- FR-001: 列表默认最新在前\n')
+  writeFileSync(join(changeDir, 'tasks.md'), '# Tasks\n\n- [ ] task-01: 改 a\n')
+  // design.md 文件变更清单 ≤3 文件 → tier=self；无生命周期关键词
+  writeFileSync(join(changeDir, 'design.md'),
+    `# Design: 列表排序\n\n## 背景\n列表需默认最新在前。\n\n## 总体方案\nservice 兜底 order_by。\n\n## 决策\nD-001@v1: 直接改。\n\n## 文件变更清单\n| 操作 | 文件路径 | 说明 |\n|------|---------|------|\n| 修改 | src/list.js | 排序兜底 |\n\n## 风险登记\n低风险。\n\n## 自审\n已核对。\n`)
+  const progress = await seedStage(pm, cwd, cn, 'brainstorm', brainstormStepsWithLastPending())
+
+  // 模拟 reopen --from-step 6（补决策章节）：step 1..5 保持 completed，step 6 变 pending，step 7/8 变 stale
+  await pm.reopenStage(cwd, 'brainstorm', { fromStep: 6, changeName: cn })
+  const reopened = await pm.read(cwd, cn)
+  const rsteps = reopened.stages.brainstorm.steps
+  assert(rsteps[5].status === 'pending', 'reopen 后 step 6 应为 pending（待重做）')
+  assert(rsteps[6].status === 'stale' && rsteps[7].status === 'stale', 'reopen 后 step 7/8 应为 stale')
+
+  // --done 完成 step 6（末步 pending），应触发阶段完成分支并回填 step 7/8
+  const r = await runCapturing(() =>
+    _completeStepForTest(pm, progress, 'brainstorm', cwd, '修订决策章节完成', '用户拍板',
+      { changeName: cn, printNext: false, doneAnswer: '确认' }))
+
+  assert(!r.error, 'reopen --done 不应 process.exit')
+  assert(r.result && r.result.stageCompleted === true, 'stageCompleted:true')
+  assert(r.result && r.result.nextPendingIdx === -1, 'nextPendingIdx:-1')
+  assert(!r.stdout.includes('阶段校验跳过'), '不应再有「状态不同步」警告')
+
+  const after = await pm.read(cwd, cn)
+  assert(after.stages.brainstorm.status === 'completed', 'stage.status=completed')
+  const asteps = after.stages.brainstorm.steps
+  assert(asteps[6].status === 'completed', 'stale step 7 已回填 completed')
+  assert(asteps[7].status === 'completed', 'stale step 8 已回填 completed')
+  assert(asteps.every(s => s.status === 'completed'), '全部 8 步 completed，无 stale 残留、无状态矛盾')
+}
+
 cleanup()
 report(count.passed, count.failed, count.failures)

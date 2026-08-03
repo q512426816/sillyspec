@@ -1133,6 +1133,107 @@ console.log('\n--- Verify/Archive Safety: repair cascade verify → archive ---'
   assert(after.stages['archive'].status === 'stale', 'archive 应为 stale')
 }
 
+// ─────────────────────────────────────────
+// Case 11: reopen --from-step 后 completeStage 回填 stale 步骤
+// （坑 brainstorm-reopen-step-state-desync：completeStage SQL 只回填 pending，漏 stale）
+// ─────────────────────────────────────────
+console.log('\n--- Case 11: reopen --from-step 后 completeStage 回填 stale ---')
+{
+  const { cwd } = createTempProject()
+  const changeName = 'rev-test-11'
+  const pm = await setupProgress(cwd, changeName)
+  await markStageCompleted(pm, cwd, changeName, 'brainstorm', ['需求澄清', '方案发散', '方案选择', '设计整理'])
+
+  // reopen from step 3 → step3 pending, step4 stale
+  const reopen = await pm.reopenStage(cwd, 'brainstorm', { fromStep: 3, changeName })
+  assert(reopen.ok, 'reopen fromStep=3 应成功')
+
+  // completeStage 标记阶段完成（--force 绕过产物校验，专注测 SQL 回填）
+  await pm.completeStage(cwd, 'brainstorm', changeName, { force: true })
+
+  const after = await pm.read(cwd, changeName)
+  assert(after.stages['brainstorm'].status === 'completed', 'completeStage 后 stage 应为 completed')
+  const steps = after.stages['brainstorm'].steps
+  assert(steps[0].status === 'completed' && steps[1].status === 'completed', '前置步骤保持 completed')
+  assert(steps[2].status === 'completed', 'from-step（step 3）回填 completed')
+  assert(steps[3].status === 'completed', 'stale step 4 回填 completed')
+  assert(steps.every(s => s.status === 'completed'), '所有步骤（含 stale）均 completed，无 stale 残留')
+}
+
+// ─────────────────────────────────────────
+// Case 12: execute completed + pending step + review.json 全 pass → Fix e 自动修
+// （坑 verify-archive-flow-pitfalls 坑1+坑5：execute step 状态脱钩但实际产出已完成）
+// ─────────────────────────────────────────
+console.log('\n--- Case 12: execute review.json 全 pass → 自动修 pending step ---')
+{
+  const { cwd } = createTempProject()
+  const changeName = 'rev-test-12'
+  const pm = await setupProgress(cwd, changeName)
+  const now4 = new Date().toLocaleString('zh-CN', { hour12: false })
+
+  // 构造 execute completed + step pending（状态脱钩）
+  const data = await pm.read(cwd, changeName)
+  data.stages['execute'] = {
+    status: 'completed', startedAt: now4, completedAt: now4,
+    steps: [
+      { name: 'Wave 1 执行', status: 'completed', completedAt: now4 },
+      { name: 'Wave 2 执行', status: 'pending' }, // 异常：实际有产出但 step pending
+      { name: 'Wave 3 执行', status: 'pending' },
+    ],
+  }
+  await pm._write(cwd, data, changeName)
+
+  // plan.md 声明 task-01/02（全勾），review.json 全 pass
+  const changeDir = join(cwd, '.sillyspec', 'changes', changeName)
+  writeFileSync(join(changeDir, 'plan.md'), '# Plan\n\n## Wave 1\n- [x] task-01: a\n- [x] task-02: b\n')
+  const runtimeRoot = join(cwd, '.sillyspec', '.runtime')
+  const runId = 'run-case12'
+  mkdirSync(join(runtimeRoot, 'execute-runs', runId, 'tasks', 'task-01'), { recursive: true })
+  mkdirSync(join(runtimeRoot, 'execute-runs', runId, 'tasks', 'task-02'), { recursive: true })
+  const review = (taskId) => JSON.stringify({
+    schemaVersion: 1, task: taskId, base: 'abc1234', head: 'def5678',
+    specVerdict: 'pass', qualityVerdict: 'pass', reviewerNotes: 'test', requiredEvidence: ['src/a.js'],
+  })
+  writeFileSync(join(runtimeRoot, 'execute-runs', runId, 'tasks', 'task-01', 'review.json'), review('task-01'))
+  writeFileSync(join(runtimeRoot, 'execute-runs', runId, 'tasks', 'task-02', 'review.json'), review('task-02'))
+  // runId marker
+  writeFileSync(join(runtimeRoot, 'current-execute-run-id-' + changeName), runId)
+
+  const result = await pm.repairConsistency(cwd, { apply: true, changeName })
+  assert(result.applied.some(a => a.action === 'align_execute_steps_to_reviews'), '应有 align_execute_steps_to_reviews 自动修复')
+  assert(!result.manual.some(m => m.includes('Wave 2 执行') && m.includes('completed')), 'execute pending step 不再归 manual')
+
+  const after = await pm.read(cwd, changeName)
+  const asteps = after.stages['execute'].steps
+  assert(asteps.every(s => s.status === 'completed'), '所有 execute step（含原 pending）已自动标 completed')
+}
+
+// ─────────────────────────────────────────
+// Case 13: execute completed + pending step + review.json 缺失 → 仍 manual（保守）
+// ─────────────────────────────────────────
+console.log('\n--- Case 13: review.json 缺失 → execute pending 仍 manual ---')
+{
+  const { cwd } = createTempProject()
+  const changeName = 'rev-test-13'
+  const pm = await setupProgress(cwd, changeName)
+  const now5 = new Date().toLocaleString('zh-CN', { hour12: false })
+
+  const data = await pm.read(cwd, changeName)
+  data.stages['execute'] = {
+    status: 'completed', startedAt: now5, completedAt: now5,
+    steps: [{ name: 'Wave 1 执行', status: 'pending' }],
+  }
+  await pm._write(cwd, data, changeName)
+
+  // plan.md 有 task-01 但无 review.json（runId marker 也无 → summarizeTaskCompletion 降级）
+  const changeDir = join(cwd, '.sillyspec', 'changes', changeName)
+  writeFileSync(join(changeDir, 'plan.md'), '# Plan\n\n## Wave 1\n- [ ] task-01: a\n')
+
+  const result = await pm.repairConsistency(cwd, { apply: true, changeName })
+  assert(!result.applied.some(a => a.action === 'align_execute_steps_to_reviews'), 'review 缺失时不自动修')
+  assert(result.manual.some(m => m.includes('Wave 1 执行') && m.includes('completed')), 'review 缺失时 execute pending 仍归 manual（保守）')
+}
+
 // ── 结果 ──
 console.log(`\n${'='.repeat(50)}`)
 console.log(`✅ 通过: ${12 - failed}  ❌ 失败: ${failed}`)
