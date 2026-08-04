@@ -92,13 +92,16 @@ updated_at: 2026-08-04T13:31:04+08:00
 - ✅ **Q-C** quick 边界声明：step2 加"边界声明（quick 不校验 design.md）"——design.md 仅供理解意图，不作为验收基准，需 design 一致性走完整流程。治 memory 坑 3 的语义漏洞：诚实标注边界而非加 enforce（quick 定位是轻量逃生通道，加 verify 就不是 quick）。
 
 ### 2026-08-04 复盘增补（plan + quick 阶段使用复盘）
-状态：`登记`（4 新债 + 3 裁决；均 doc-only 登记，未动源码）
+状态：`已解决`（4 新债已修复 + 回归测试通过；3 裁决维持）
+
+> ✅ **已解决（2026-08-04 follow-up，commit 待提）**：plan-b / plan-c / quick-① / quick-② 全部修并补回归测试，npm test 108/0、lint 66/0。修法——plan-b: `plan-postcheck.js` 加 title_zh 完整性校验（enforcement，Test13 + crlf fixture 补 title_zh）；plan-c: `stage-machine.js` `_getNextSuggestion` 跳过 scan 且 upstream 排除 scan（**根因修**，非 complete.js 补丁；next-suggestion 加 plan-c 回归用例）；quick-①: `quicklog.js` `flipEntryInContent` 单行四字段归一多行（quicklog 2d 用例）；quick-②: `CLAUDE.md` + `templates/claude-instruction.md` 规则 8 精细化（触及 src/test 才跑 lint/test）。下述各 item 的 ⏭/🐛 标记已实际升级为 ✅。
 
 来源：一次 plan 阶段 + quick 阶段使用复盘的 7 条改进点，逐条对源码核实后裁决（先查本债单 + 实证，不重复提议已决策项）。
 
 - ⏭ **plan-b TaskCard 行数逼字段丢失**：plan.js prompt 要求「总长度 20~40 行」（plan.js:348/368/411/467），但 plan-postcheck.js **无 max-line 校验**（grep 无 `>40`/maxLine）→ 20-40 是纯 persuasion；且 postcheck **不校验 `title_zh` 等字段完整性**（grep 无 title_zh）→ 子代理为压行数丢字段是**静默丢失**（实证：task-05 合并 title/title_zh 只留中文 title）。**裁决 defer**：修法二选一——① 放宽 prompt 行数上限（如 20~50，复杂 task 可到 60，frontmatter 字段不可缺）；② plan-postcheck 加 frontmatter 字段完整性硬校验（title_zh 等）。均改源码超 doc-only，留 follow-up；倾向②（enforcement 优于放宽劝说，符合债单原则）。
 - 🐛 **plan-c plan→scan 回头路（已知半修 bug）**：`run/complete.js:421-422` 注释明说——scan 是 STAGE_ORDER 首位且「永未完成」，通用 `_getNextSuggestion` 会「误推 scan（回头路）」；**仅 brainstorm/quick 加了专属分支**（complete.js:415/419），plan/execute/verify 仍走通用 else（complete.js:424）→ 用户 plan 完成后被提示「下一步 scan」（语义错，plan 后应 execute）。**裁决**：Bug，修法 = 给 plan/execute/verify 加专属分支（或 _getNextSuggestion 排除 auxiliary/永未完成阶段），改 complete.js，留 follow-up。
 - ⏭ **quick-① QUICKLOG 四段 `--output` 落盘格式粗糙**：quick step3 `--done --output` 的四段（需求/根因/方案/结果）被 CLI 原样塞进单行 `结果：需求：…结果：…`（双层「结果：」前缀），强制 agent 手工精修拆行。属 P6「仪式负担下沉 CLI」主题——CLI 应解析四段分行落盘，不该让 agent 补排版。**裁决 defer**：改 quicklog.js 落盘逻辑（按「需求：/根因：/方案：/结果：」split 成 4 行），留 follow-up。
+  - **2026-08-04 follow-up 已修 + 再补一坑**：首修用 `split(/(?=需求：|根因：|方案：|结果：)/)` 任意位置切，实证发现**正文引用字段标签字样会被误切**（根因里写「双层「结果：」前缀」→ 根因行被断成两行）——正是本次登记 quick 的 QUICKLOG 精修现场踩到。**二修改双级扫描 `splitSingleLineFields`**：先按字段边界严格扫描（真实标签=串首/前导空白/句末标点。；！？，引用字样因前导「/|( 非边界字符而跳过），严格失败退回顺序扫描兜底，缺标签落单行兜底。补回归 test 2e/2f（改前红改后绿），quicklog 82/0。残余边界：正文引用标签且**前导恰为空白/句末标点**时仍可能错位（如「按 方案： 处理」），属无标记文本固有歧义，写正文避免给标签字样加空白前缀。
 - ⏭ **quick-② lint 对 doc-only 改动空转**：CLAUDE.md 规则 8 要求 `--done` 前 npm test + lint，但 lint 只扫 JS 不碰 docs/（实证「Checked 66 JavaScript files」对 doc 改动零信息）。**裁决 defer**：修法二选一——① quick 按 `--files` 文件类型跳过 lint（全非 .js 时跳过）；② CLAUDE.md 规则 8 细化为「仅当触及 src/test 时必跑 lint/test」。倾向①（CLI 自动判定优于改人类指令）。
 - ⊘ **plan-a TaskCard 格式不一（裁决：非缺陷，源码已有逐字示例）**：建议「skill 模板给逐字示例（含 needs 中括号）」，但**源码 plan.js:370-408 已有完整 TaskCard 逐字示例**（含 provides/expects_from/`needs: [field_a]`），plan.js:426 明说「无跨 task 契约则留空」。子代理对**可选字段** provides/expects_from 的格式分化（散文 vs 映射）是 postcheck 故意不 style-check（其职责=契约一致性对账 plan.js:427，非风格统一）。**评估否决**：非债务；唯一残留=SKILL.md 镜像可能缺示例，但子代理读注入 prompt 不读 SKILL.md，补 SKILL.md 不解决运行时分化。
 - ⊘ **plan-d 独立审查单次（裁决：= P4.3a，已登记）**：plan 审查初审 fail、修正后自判 pass 无二次独立复审——**正是上条 P4.3a**（审查 fail 后复审边界未定义），证实该 gap 为 stage 通用（brainstorm + plan 均命中），非新债。
@@ -125,6 +128,7 @@ updated_at: 2026-08-04T13:31:04+08:00
 | 2026-07-22 | P4.1 | verify risk tier 重复段删除（23→2 行诚实标注；实证 defer 理由失效：detectChangeRisk 已存在并在 stage-contract.js:496-511 enforce），test(58/0) |
 | 2026-08-04 | P4.3a / P6.1b | 复盘登记（doc-only，不动源码）：Grill fail 后复审边界未定义（新观察，随 P4.3 维持 defer + 诚实标注缓解留 follow-up）；docHash 手算摩擦复发旁注（不推翻 defer） |
 | 2026-08-04 | 复盘增补（plan+quick） | 登记 4 新债（plan-b TaskCard 行数丢字段 / plan-c plan→scan 回头路半修 bug / quick-① QUICKLOG 四段落盘 / quick-② lint doc 空转）+ 3 裁决否决（plan-a 已有逐字示例 / plan-d=P4.3a / quick-③=troubleshooting 同根），doc-only 不动源码 |
+| 2026-08-04 | plan-b/c/quick-①/② follow-up | 4 新债全部修复：plan-postcheck 加 title_zh 校验 / stage-machine _getNextSuggestion 跳过 scan（根因修）/ quicklog 单行四字段归一 / CLAUDE.md+template 规则8 精细化；补 4 处回归测试，npm test 108/0、lint 66/0 |
 
 ## 总结
 

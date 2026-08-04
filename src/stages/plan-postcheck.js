@@ -532,6 +532,11 @@ export function validatePlanFeasibility(changeDir, projectRoot = null) {
 
     if (!taskId) errors.push(fsRule.data.messageId.replaceAll('${id}', file))
     if (!title) errors.push(fsRule.data.messageTitle.replaceAll('${id}', file))
+    // title_zh（中文标题）完整性：子代理常为压 plan.js 的 20~40 行硬上限合并 title/title_zh（静默丢失），
+    // postcheck 不校验行数（那是 prompt 劝说）但强制 frontmatter 字段齐全（enforcement 优于放宽劝说）。
+    // 无对应 manifest 文案，内联（其余字段文案走 fsRule.data.messageXxx）。prompt-control-debt plan-b。
+    const titleZh = (fm.match(/^title_zh:\s*(.+)/m)?.[1] || '').trim()
+    if (!titleZh) errors.push(`${taskId || file}: frontmatter 缺少 title_zh（中文标题）——不得为压行数合并/删除字段`)
     if (taskId) allTaskIds.push(taskId)
 
     // 2. allowed_paths 不为空

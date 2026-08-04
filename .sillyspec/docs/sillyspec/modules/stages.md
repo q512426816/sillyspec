@@ -56,4 +56,5 @@ updated_at: 2026-07-11T21:05:00+08:00
 - ql-20260617-003-c3d9 | 收紧 Grill 流程语义，合并需求澄清 pass，并增强决策 ID/record 解析。
 - ql-20260617-004-a91f | 缺 priority 的 unresolved/blocking decision 按 P1 阻断，并补充 parser 回归测试。
 - ql-20260803-002-eff0 | archive step3 sync-module-docs 加 requiresWait，--continue 确认后回到本步由 agent 写模块卡片（修 verify-archive-flow-pitfalls 坑4）。
+- ql-20260804-003-e439 | plan-postcheck 加 title_zh 完整性硬校验（prompt-control-debt plan-b：防子代理为压 20~40 行静默丢 frontmatter 字段）。
 <!-- MANUAL_NOTES_END -->

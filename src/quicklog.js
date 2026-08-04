@@ -248,6 +248,42 @@ async function checkTaskCheckbox(specBase, change, qlId) {
 // 可能是 CRLF，split('\n') 后每行带 \r。原代码 `lines[i] === '状态：进行中'` 精确匹配
 // 恒失败 → 走 splice「兜底插入」→ 条目内同时出现「状态：已完成」+「状态：进行中」。
 // 状态行匹配与「已完成」判断统一用行首前缀匹配，容忍行尾 \r；写入保持 CRLF 不扩大改动。
+// 单行四字段（需求：/根因：/方案：/结果：）切段。先按「字段边界」严格扫描：真实标签 = 上一标签之后首次
+// 出现的、前导是串首/空白/句末标点（。；！？）的对应标签——字段正文引用标签字样（根因写「双层「结果：」
+// 前缀」或正则 split(/(?=需求：|根因：|方案：|结果：)/)）因前导是「/|( 等非边界字符而跳过。严格失败
+// （如真实标签前导是「，」这类弱标点）退回宽松顺序扫描（上一标签之后首次出现）。缺标签返回 null → 落单行
+// 兜底（--done 契约校验仍会拦缺字段）。残余边界：正文引用标签且前导恰好是空白/句末标点时仍可能错位。
+function isFieldBoundary(body, idx) {
+  if (idx <= 0) return true
+  const prev = body[idx - 1]
+  return /\s/.test(prev) || '。；！？'.includes(prev)
+}
+function findBoundaryLabel(body, label, from) {
+  let idx = body.indexOf(label, from)
+  while (idx !== -1 && !isFieldBoundary(body, idx)) {
+    idx = body.indexOf(label, idx + label.length)
+  }
+  return idx
+}
+function scanFields(body, findLabel) {
+  const labels = ['需求：', '根因：', '方案：', '结果：']
+  const positions = []
+  let cursor = 0
+  for (const label of labels) {
+    const idx = findLabel(body, label, cursor)
+    if (idx === -1) return null
+    positions.push(idx)
+    cursor = idx + label.length
+  }
+  return positions.map((start, i) => {
+    const end = i + 1 < positions.length ? positions[i + 1] : body.length
+    return body.slice(start, end).trim()
+  })
+}
+function splitSingleLineFields(body) {
+  return scanFields(body, findBoundaryLabel) ?? scanFields(body, (b, l, f) => b.indexOf(l, f))
+}
+
 function flipEntryInContent(content, qlId, result, changedFiles = []) {
   const lines = content.split('\n')
   const startIdx = lines.findIndex(l => l.startsWith(`## ${qlId} |`))
@@ -280,13 +316,25 @@ function flipEntryInContent(content, qlId, result, changedFiles = []) {
     endIdx += 1
   }
   if (result && !hasResult) {
+    // quick step3 --output 常被压成单行「需求：…根因：…方案：…结果：…」（agent 未加换行），
+    // 直接落盘会得到双层前缀「结果：需求：…结果：…」。把单行四字段归一为多行字段块，省 agent 手工
+    // 拆行精修（prompt-control-debt quick-①）。多行 / 单句结果不受影响。
+    let body = result
+    if (!/\r?\n/.test(body) && /^需求：/.test(body)) {
+      // 单行四字段归一为多行。不能 split(/(?=需求：|根因：|方案：|结果：)/)——正文引用字段标签字样
+      // （如根因里写「双层「结果：」前缀」）会被任意位置误切。改按序扫描：真实标签 = 上一标签之后
+      // 首次出现，字段正文引用更靠后的标签不误断（quick-① 2026-08-04 实证补丁）。缺标签返回 null
+      // → 落单行兜底（--done 契约校验仍会拦缺字段）。
+      const segs = splitSingleLineFields(body)
+      if (segs) body = segs.join('\n')
+    }
     // 多行结果（结构化 需求/根因/方案/结果 字段块）：逐行插入为独立字段行。
     // 单行结果：保持「结果：<一句话>」一行，向后兼容简单用例。
-    if (/\r?\n/.test(result)) {
-      const resultLines = result.split(/\r?\n/).filter(l => l.trim() !== '')
+    if (/\r?\n/.test(body)) {
+      const resultLines = body.split(/\r?\n/).filter(l => l.trim() !== '')
       lines.splice(endIdx, 0, ...resultLines)
     } else {
-      lines.splice(endIdx, 0, `结果：${result}`)
+      lines.splice(endIdx, 0, `结果：${body}`)
     }
   }
   return lines.join('\n')

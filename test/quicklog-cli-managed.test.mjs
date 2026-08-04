@@ -215,6 +215,70 @@ console.log('\n--- 验收 2b：completeQuicklogEntry 回填文件行 ---')
 }
 
 // ─────────────────────────────────────────
+// 验收 2d：单行四字段 --output 归一为多行字段块（prompt-control-debt quick-①）
+// quick step3 --output 常被压成单行「需求：…根因：…方案：…结果：…」（agent 未加换行）；
+// flipEntryInContent 应 split 成 4 个独立字段行，而非双层前缀「结果：需求：…结果：…」。
+// ─────────────────────────────────────────
+console.log('\n--- 验收 2d：单行四字段 --output 归一为多行 ---')
+{
+  const specBase = makeTmpDir('qlm-singleline-')
+  const r = await allocateQuicklogEntry(specBase, 'frank', { description: '单行四字段', allowedFiles: [] })
+  await completeQuicklogEntry(specBase, 'frank', r.qlId, {
+    resultText: '需求：登录加 IP 限流 根因：无 rate limit 方案：INCR 计数 结果：通过',
+    linkedChanges: [],
+  })
+  const log = readFileSync(join(specBase, 'quicklog', 'QUICKLOG-frank.md'), 'utf8')
+  assert(log.includes('需求：登录加 IP 限流'), '单行四字段被拆出「需求：」独立行')
+  assert(log.includes('根因：无 rate limit'), '拆出「根因：」独立行')
+  assert(log.includes('方案：INCR 计数'), '拆出「方案：」独立行')
+  assert(log.includes('结果：通过'), '拆出「结果：」独立行')
+  assert(!log.includes('结果：需求：'), '不产生双层「结果：需求：」前缀（quick-① 修复）')
+}
+
+// ─────────────────────────────────────────
+// 验收 2e：字段正文引用字段标签字样不误拆（quick-① 残留补丁，2026-08-04 复盘实证）
+// 原 split(/(?=需求：|根因：|方案：|结果：)/) 在正文任意位置切——根因里写「双层「结果：」前缀」会把根因
+// 行误断成「…双层「」+「结果：」前缀；…」。改为按序扫描：真实标签 = 上一标签之后首次出现，字段正文引用
+// 更靠后的标签（根因引「结果：」）不再误断。
+// ─────────────────────────────────────────
+console.log('\n--- 验收 2e：字段正文引用字段标签字样不误拆 ---')
+{
+  const specBase = makeTmpDir('qlm-labelref-')
+  const r = await allocateQuicklogEntry(specBase, 'grace', { description: '字段标签引用', allowedFiles: [] })
+  await completeQuicklogEntry(specBase, 'grace', r.qlId, {
+    resultText: '需求：登记 4 项复盘债 根因：quick step3 --done 四字段被 CLI 原样塞单行双层「结果：」前缀 方案：按序扫描 split 结果：npm test 108/0',
+    linkedChanges: [],
+  })
+  const log = readFileSync(join(specBase, 'quicklog', 'QUICKLOG-grace.md'), 'utf8')
+  assert(log.includes('根因：quick step3 --done 四字段被 CLI 原样塞单行双层「结果：」前缀'), '根因行含引用字段标签字样保持完整不被误断')
+  assert(log.includes('方案：按序扫描 split'), '方案仍被正确拆为独立行')
+  assert(log.includes('结果：npm test 108/0'), '真实「结果：」行仍在')
+  assert(!log.includes('\n结果：」'), '引用的「结果：」不产生以 结果： 开头的伪行')
+}
+
+// ─────────────────────────────────────────
+// 验收 2f：根因正文内嵌正则（含全部四标签字样）仍正确分段（边界启发，2026-08-04 实证）
+// 顺序扫描只挡「引用更靠后标签」；根因里嵌正则 split(/(?=需求：|根因：|方案：|结果：)/) 时，引用的
+// 「方案：」出现在真实方案标签之前、且紧跟根因标签，顺序扫描会先命中引用字样→错位（本次登记 quick 的
+// QUICKLOG 精修现场踩到）。加字段边界判定：真实标签 = 串首 / 前导空白 / 前导句末标点（。；！？），
+// 括号/管道/引号内引用字样因前导非边界字符而跳过；严格失败退回顺序扫描兜底。
+// ─────────────────────────────────────────
+console.log('\n--- 验收 2f：根因正文内嵌正则（含全部四标签）仍正确分段 ---')
+{
+  const specBase = makeTmpDir('qlm-regexref-')
+  const r = await allocateQuicklogEntry(specBase, 'heidi', { description: '正则引用标签', allowedFiles: [] })
+  await completeQuicklogEntry(specBase, 'heidi', r.qlId, {
+    resultText: '需求：修四字段落盘误拆。根因：quick-① 首修用 split(/(?=需求：|根因：|方案：|结果：)/) 在正文任意位置切。方案：加字段边界判定，真实标签需串首或前导空白/句末标点。结果：quicklog 82/0',
+    linkedChanges: [],
+  })
+  const log = readFileSync(join(specBase, 'quicklog', 'QUICKLOG-heidi.md'), 'utf8')
+  assert(log.includes('根因：quick-① 首修用 split(/(?=需求：|根因：|方案：|结果：)/) 在正文任意位置切。'), '根因行内嵌正则保持完整（含引用的 方案：/结果： 字样）')
+  assert(log.includes('\n方案：加字段边界判定，真实标签需串首或前导空白/句末标点。'), '真实「方案：」被正确拆为独立行')
+  assert(log.includes('\n结果：quicklog 82/0'), '真实「结果：」以独立行存在')
+  assert(!log.includes('\n结果：)/) 在正文任意位置切'), '正则里的「结果：)/」不产生以 结果： 开头的伪行')
+}
+
+// ─────────────────────────────────────────
 // 验收 2c：isQuickMetadata 过滤口径（complete-handlers 回填前用它过滤 review.changedFiles）
 // 与 auditQuickCompletion 单源（shared.js export）。确认 quick 自身元数据被过滤、业务文件保留。
 // ─────────────────────────────────────────

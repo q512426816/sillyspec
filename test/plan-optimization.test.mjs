@@ -516,6 +516,7 @@ console.log('\n--- Test 10: validatePlanFeasibility 完整 TaskCard 通过 ---')
   writeFileSync(join(tasksDir, 'task-01.md'), `---
 id: task-01
 title: 做 A
+title_zh: 做 A 中文标题
 priority: P0
 depends_on: []
 blocks: []
@@ -638,9 +639,47 @@ constraints:
   rmSync(tmpDir, { recursive: true, force: true })
 }
 
+// ───────────────────────────────────────
+// Test 13: validatePlanFeasibility 缺 title_zh 失败（prompt-control-debt plan-b）
+// 子代理为压 20~40 行合并 title/title_zh → 静默丢失；postcheck 强制 frontmatter 字段齐全。
+// ───────────────────────────────────────
+console.log('\n--- Test 13: 缺 title_zh 失败 ---')
+{
+  const tmpDir = mkdtempSync(join(tmpdir(), 'sillyspec-feas-titlezh-'))
+  const tasksDir = join(tmpDir, 'tasks')
+  mkdirSync(tasksDir, { recursive: true })
+
+  writeFileSync(join(tasksDir, 'task-01.md'), `---
+id: task-01
+title: 做 A
+priority: P0
+depends_on: []
+blocks: []
+allowed_paths:
+  - src/a.js
+goal: >
+  做事 A。
+implementation:
+  - 步骤 1
+acceptance:
+  - 验收 1
+verify:
+  - npm test
+constraints:
+  - 不加测试
+---
+`)
+
+  const result = validatePlanFeasibility(tmpDir)
+  assert(!result.ok, '缺 title_zh 应失败')
+  assert(result.errors.some(e => e.includes('title_zh')), '应有 title_zh 错误')
+
+  rmSync(tmpDir, { recursive: true, force: true })
+}
+
 // ── 结果 ──
 console.log(`\n${'='.repeat(50)}`)
-const total = 12
+const total = 13
 console.log(`✅ 通过: ${total - failed}  ❌ 失败: ${failed}`)
 if (failures.length > 0) {
   console.log(`失败项:`)

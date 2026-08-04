@@ -52,6 +52,14 @@ console.log('=== _getNextSuggestion：brainstorm 完推 plan，不误推 archive
   check('Case4 verify 完 → 推 archive', sm._getNextSuggestion(d)?.command, 'sillyspec run archive')
 }
 
+// Case plan-c（回归）: scan 未完成（auxiliary 常态）+ brainstorm 完 → 必须推 plan，不推 scan（回头路）
+// 历史根因：scan 是 STAGE_ORDER 首位、auxiliary 常未 completed → 恒 upstream 空→就绪→误推 scan。
+// 修：_getNextSuggestion 建议循环跳过 scan（prompt-control-debt plan-c）。
+{
+  const d = mk({ brainstorm: { status: 'completed' } })  // scan 取默认 pending（未 completed）
+  check('plan-c: scan 未完成 + brainstorm 完 → 推 plan 不推 scan', sm._getNextSuggestion(d)?.command, 'sillyspec run plan')
+}
+
 // Case 5: 全完成（含 archive）→ null（流程结束）
 {
   const d = mk({ scan: { status: 'completed' }, brainstorm: { status: 'completed' }, plan: { status: 'completed' }, execute: { status: 'completed' }, verify: { status: 'completed' }, archive: { status: 'completed' } })

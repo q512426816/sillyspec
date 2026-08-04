@@ -190,3 +190,42 @@
 根因：7 条逐条核实——plan-a（TaskCard 格式不一）源码 plan.js:370-408 已有完整逐字示例，非债务；plan-d（独立审查单次）= 上条 P4.3a 且 stage 通用；quick-③（autocrlf 噪音）= troubleshooting CRLF 条目方向 A 同根轻度症状——3 条已决/已覆盖。余 4 条真新债：plan-b（20-40 行纯 persuasion + postcheck 不校验 title_zh → 静默丢字段）、plan-c（complete.js:421-422 plan→scan 回头路仅修 brainstorm/quick，plan/execute/verify 漏）、quick-①（QUICKLOG 四段 --output 落盘成单行双层「结果：」前缀）、quick-②（lint 对 doc-only 空转）。
 方案：doc-only 改两文件。prompt-control-debt.md 新增整节（每条带源码实证 + 裁决：4 新债 ⏭/🐛 留 follow-up、3 裁决 ⊘ 否决）+ P4.3a 追加 plan 证据 + 推进记录表行 + 总结 bullet + updated_at；troubleshooting.md CRLF 条目加 autocrlf 交叉引用。
 结果：npm run lint 66 文件 0 错；doc-only 不触及 src/test 故未跑 npm test；git diff 确认仅 2 声明文件改动；quick 边界审计 SAFE（注：prompt-control-debt.md 因属前序 baseline 被算作累计暂存，CLI 骨架漏列该文件，本精修已补）。
+## ql-20260804-003-e439 | 2026-08-04 14:27:59 | 解决复盘 4 新债：plan-postcheck title_zh 硬校验 + scan 回头路根因修 + quicklog 四字段归一 + lint doc 空转精细化
+状态：已完成
+关联变更：（无）
+文件：
+- CLAUDE.md（quick-②：规则 8 精细化——触及 src/test 才必跑 lint/test，纯 doc/配置改动可跳过）
+- templates/claude-instruction.md（quick-②：同规则 8 镜像同步）
+- docs/sillyspec/prompt-control-debt.md（4 新债标已解决 + 推进记录 + 总结更新）
+- src/stages/plan-postcheck.js（plan-b：frontmatter 加 title_zh 完整性硬校验，缺则 error）
+- src/progress/stage-machine.js（plan-c：_getNextSuggestion 跳过 scan + upstream 排除 scan，根因修 plan→scan 回头路）
+- src/quicklog.js（quick-①：flipEntryInContent 单行四字段归一为多行，消除双层「结果：」前缀）
+- test/next-suggestion.test.mjs（plan-c 回归用例：brainstorm completed → 应推 plan 而非 scan）
+- test/plan-optimization.test.mjs（Test13 缺 title_zh 失败 + Test10 fixture 补 title_zh + total 12→13）
+- test/plan-postcheck-crlf.test.mjs（LF_BODY / inlineBody 补 title_zh，真缺字段场景仍报错）
+- test/quicklog-cli-managed.test.mjs（验收 2d：单行四字段 → 4 行、无「结果：需求：」双层前缀）
+- .sillyspec/docs/sillyspec/modules/stages.md（变更索引追加 plan-b 条目）
+- .sillyspec/docs/sillyspec/modules/runtime.md（变更索引追加 plan-c/quick-① 条目）
+
+需求：把 prompt-control-debt 2026-08-04 复盘 4 项新债（plan-b TaskCard 行数逼丢字段 / plan-c plan→scan 回头路 / quick-① QUICKLOG 四段落盘粗糙 / quick-② lint 对 doc 空转）从登记升级为已解决并登记进进度库。
+
+根因：4 项均为复盘实证的真实摩擦——plan 子代理压行数静默丢 title_zh；scan 永未完成且居 STAGE_ORDER 首位、upstream 空恒就绪导致误推回头路；quick step3 --done 四字段被 CLI 原样塞单行、产生双层「结果：」前缀；lint 只扫 JS 对 doc 改动零信息。
+
+方案：plan-postcheck.js 加 title_zh 完整性硬校验（enforcement）；stage-machine.js _getNextSuggestion 跳过 scan 且 upstream 排除 scan（根因修）；quicklog.js flipEntryInContent 单行四字段归一为多行；CLAUDE.md+claude-instruction.md 规则 8 精细化（触及 src/test 才必跑 lint/test）；补 4 处回归测试 + 债单状态与模块变更索引标已解决。
+
+结果：npm test 108/0、npm run lint 66 文件 0 错；4 处回归全过——next-suggestion 9/9（含 plan-c 用例）、quicklog-cli-managed 74/0（含 2d 单行四字段）、plan-optimization 13/0（含 Test13 缺 title_zh）、plan-postcheck-crlf 10/10（fixture 补 title_zh）。
+## ql-20260804-004-3a24 | 2026-08-04 15:02:33 | 修 quicklog 单行四字段落盘字段误拆：按序+字段边界双级扫描，正文引用标签字样不再误断行
+状态：已完成
+关联变更：（无）
+文件：
+- src/quicklog.js（splitSingleLineFields 双级扫描：字段边界严格扫描 isFieldBoundary/findBoundaryLabel + 顺序扫描兜底 scanFields；flipEntryInContent 单行归一分支改调它）
+- test/quicklog-cli-managed.test.mjs（新增验收 2e 字段标签引用不误拆 + 2f 根因内嵌正则含四标签仍正确分段）
+- docs/sillyspec/prompt-control-debt.md（quick-① 条目加 follow-up 备注）
+
+需求：修 quicklog 单行四字段落盘的字段标签误拆边界——字段正文引用标签字样不再被误断行。
+
+根因：quick-① 首修用 split(/(?=需求：|根因：|方案：|结果：)/) 在正文任意位置切，QUICKLOG 精修时实证根因里写「双层「结果：」前缀」被误切产生伪行；本次登记本 quick 又实证根因内嵌正则（含四标签）时，引用的「方案：」先于真实方案标签、被顺序扫描误当真实标签→分段错乱（CLI 落盘即现场）。
+
+方案：quicklog.js 单行四字段归一改为 splitSingleLineFields 双级扫描——先按字段边界严格扫描（真实标签=串首/前导空白/句末标点。；！？，引用字样因前导「/|( 非边界字符而跳过）；严格失败退回顺序扫描兜底；缺标签返回 null 落单行兜底（--done 契约仍拦缺字段）。补回归 2e/2f（改前红改后绿）。
+
+结果：quicklog-cli-managed 82/0（含 2e/2f 8 断言）、全量 npm test 108 文件 0 失败、npm run lint 66 文件 0 错。

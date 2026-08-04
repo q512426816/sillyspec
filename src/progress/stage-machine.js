@@ -295,11 +295,12 @@ export class StageMachine {
     // 改为：不要求 steps(空=该开始了)；upstream 必须全 completed(pending 不算就绪)——
     // archive 只在 scan/brainstorm/plan/execute/verify 全完成后才可能被推荐。
     for (const s of STAGE_ORDER) {
+      if (s === 'scan') continue  // scan 是 auxiliary（按需显式跑），不作"下一步"推荐——否则未 completed 时恒处 STAGE_ORDER 首位且 upstream 空→恒就绪→误推 scan（回头路，与 complete.js brainstorm/quick 专属分支同类根因）。prompt-control-debt plan-c。
       const sd = data.stages[s];
       if (!sd) continue;
       if (sd.status === 'completed' || sd.status === 'skipped') continue;
       const idx = STAGE_ORDER.indexOf(s);
-      const upstream = STAGE_ORDER.slice(0, idx);
+      const upstream = STAGE_ORDER.slice(0, idx).filter(us => us !== 'scan');  // scan(auxiliary)不算上游——否则 scan 未 completed 会阻塞所有主流程阶段，与上面跳过 scan 的迭代矛盾
       const upstreamOk = upstream.every(us => data.stages[us]?.status === 'completed');
       if (upstreamOk) {
         return {
