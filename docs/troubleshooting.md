@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-07-24
-updated_at: 2026-07-24
+updated_at: 2026-08-04
 ---
 
 # 故障排查（Troubleshooting）
@@ -65,3 +65,38 @@ sillyspec --version      # 应正常打印版本号
 ### 预防
 - nvm 切换 Node 版本后，`sillyspec --version` 若报错，先按上面诊断是否多份安装冲突。
 - 偏好 `npm uninstall -g sillyspec && npm install -g sillyspec` 在当前 Node 版本下重装，比手动 `rm` 更干净（前提是 npm 能识别到那份安装；空壳残留时 npm 可能识别不到，才需手动 `rm`）。
+
+## 给 sillyspec 写测试 / 改 CRLF 文件时 Edit 工具失配
+
+### 症状
+用 Edit 工具改 CRLF 换行的文件（如 `test/revision-v1.test.mjs`、`src/run/complete.js`、`src/progress/stage-machine.js`、`src/stages/archive.js`）时，`old_string` 明明看起来对却报找不到匹配——因为 Edit 工具按 LF 匹配，文件却是 CRLF。临时 node patch 脚本若 anchor 写成 `"\n"` 同样失配。
+
+### 根因
+两层叠加：
+1. **sillyspec 仓库源码 / 测试文件混用 CRLF / LF**（部分 CRLF、部分 LF），Edit 工具不感知。
+2. **Edit 工具自身按 LF 匹配 `old_string`**，对 CRLF 文件失配——这是 agent 工具链行为，sillyspec 控不了。
+
+### 诊断
+```bash
+# 看某文件是 CRLF 还是 LF（git bash 下）
+file test/revision-v1.test.mjs                       # "with CRLF line terminators" = CRLF
+grep -c $'\r' test/revision-v1.test.mjs              # >0 = 含 CR（即 CRLF）
+```
+
+### 当前绕过（已验证有效）
+不改 Edit 行为，用 node 行级脚本绕开换行假设——按文件实际换行符 `split` / `join`，锚点按行内容匹配（不依赖换行符）：
+```js
+const lines = readFileSync(f, "utf8").split("\r\n")   // CRLF 文件按 \r\n 切
+const idx = lines.findIndex(l => l.includes("<锚点文本>"))
+lines.splice(idx + 1, 0, ...newBlockLines)            // 行级插入
+writeFileSync(f, lines.join("\r\n"))                  // 按原换行写回
+```
+插入块本身也用 `"\r\n"` 拼接，保证写回后行尾一致、不混入 LF。
+
+### 处置（2026-08-04，暂不立即做）
+两个治本方向，**收益面窄**（仅 dogfood 维护场景，不影响 sillyspec 产品功能 / 传播），根因部分在 Edit 工具（sillyspec 控不了），暂记证据、不投入；撞到下次再评估升级：
+
+- **方向 A（治本 / 侵入）**：加 `.gitattributes`（`* text=auto eol=lf`）+ `.editorconfig`，把现有 CRLF 文件一次性规范化为 LF。代价：大面积行尾 diff 噪声、Windows `git autocrlf` 需全员评估、需走 quick / 完整流程防回归。
+- **方向 B（治标 / 窄）**：给 agent 一个 CRLF 感知的 `applyEdit` 助手 / 测试 helper。代价：只服务 dogfood 维护、非产品功能、本质绕过 Edit 工具（上面的行级 `split("\r\n")` 已够用）。
+
+> 关联：[[memory: prompt-edit-crlf-quote-trap]]（改 prompt 的引号 / CRLF / 反引号坑）。
