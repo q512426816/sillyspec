@@ -169,3 +169,24 @@
 根因：repairConsistency 的 Manual a 对 completed stage 内 pending/stale/in-progress step 一律报 manual，无「按 review.json 客观产出判定」分支，execute 状态脱钩（plan 加 Wave / execute Wave step 未走 --done）无自动收敛路径。
 方案：consistency-doctor.js 新增 Fix e——仅当 stageName=execute、changeName 有效、summary.source=review.json 且 pending=0（所有 task verdict 通过）时，把脱钩 step 自动标 completed（align_execute_steps_to_reviews），否则回落 Manual a 保守不动；Manual a 对已自动修的 execute 不重复 push；执行异常 catch 回落 manual。
 结果：Case 12（review 全 pass → 自动修）/Case 13（review 缺失 → 仍 manual）通过；npm test 108/108 无回归；lint 66 文件过；quick 边界审计 SAFE。
+## ql-20260804-001-64e5 | 2026-08-04 13:11:22 | 登记复盘新观察：Grill fail 后复审边界未定义（P4.3a）+ docHash 手算摩擦复发旁注（P6.1b）
+状态：已完成
+关联变更：（无）
+文件：
+- docs/sillyspec/prompt-control-debt.md（P4.3 下加 P4.3a 子项 / P6.1b 下加复发记录子项 / 推进记录表加 2026-08-04 行 / frontmatter updated_at 刷新；doc-only 不动源码）
+
+需求：把一次 SillySpec 使用复盘里 4 条改进点中真正需登记的两条固化进控制层债务清单——c 的新角度（Grill fail 后复审边界未定义）+ b 的 docHash 手算摩擦复发。
+根因：复盘 a/b/c/d 四条——a（自审不卡真实性）= P3.1 done-by-design（自审故意只做机械格式检查，语义交 Grill；这次 Grill 正好抓到假核实，机制按设计工作，非缺陷）；d（过时注释）属目标项目非本仓；剩下 c 的新角度与 b 的复发债单未记，需固化为可追溯条目供后续复评，避免重复造轮子。
+方案：仅改 docs/sillyspec/prompt-control-debt.md（doc-only）——① P4.3 下新增子项 P4.3a（Grill fail 后复审回路未定义，grep brainstorm.js 实证 fail/cannot_verify 后回路为空；裁决随 P4.3 维持 defer，因「修正后够不够好」是语义软判定推 sillyhub，附诚实标注缓解留 follow-up）；② P6.1b 下加复发记录子项（2026-08-04 手算 sha256 易错，不推翻 defer，记 2 次摩擦供复评）；③ 推进记录表加 2026-08-04 行；④ frontmatter updated_at 刷新。
+结果：npm run lint 66 文件 0 错通过；doc-only 不触及 src/test 故未跑 npm test（套件不受影响）；git diff 确认仅目标文件改动 + CLI 接管的 QUICKLOG 骨架；quick 边界审计 SAFE。
+## ql-20260804-002-28c6 | 2026-08-04 13:29:19 | 登记 plan+quick 复盘 7 条：4 新债（TaskCard 行数 / plan→scan 回头路 / QUICKLOG 落盘 / lint doc 空转）+ 3 裁决否决
+状态：已完成
+关联变更：（无）
+文件：
+- docs/sillyspec/prompt-control-debt.md（新增「2026-08-04 复盘增补」整节：4 新债 plan-b/plan-c/quick-①/quick-② + 3 裁决 plan-a⊘/plan-d=P4.3a/quick-③，每条带源码实证；P4.3a 追加 plan 命中证据；推进记录表加行；总结加 batch bullet；updated_at 刷新）
+- docs/troubleshooting.md（CRLF 条目处置段加一行 autocrlf 轻度症状交叉引用；quick-③ 同根不另立条目）
+
+需求：把 plan+quick 阶段使用复盘的 7 条改进点核实后批量登记进债务清单/troubleshooting（先查债单 + 源码实证，不重复提议已决策项）。
+根因：7 条逐条核实——plan-a（TaskCard 格式不一）源码 plan.js:370-408 已有完整逐字示例，非债务；plan-d（独立审查单次）= 上条 P4.3a 且 stage 通用；quick-③（autocrlf 噪音）= troubleshooting CRLF 条目方向 A 同根轻度症状——3 条已决/已覆盖。余 4 条真新债：plan-b（20-40 行纯 persuasion + postcheck 不校验 title_zh → 静默丢字段）、plan-c（complete.js:421-422 plan→scan 回头路仅修 brainstorm/quick，plan/execute/verify 漏）、quick-①（QUICKLOG 四段 --output 落盘成单行双层「结果：」前缀）、quick-②（lint 对 doc-only 空转）。
+方案：doc-only 改两文件。prompt-control-debt.md 新增整节（每条带源码实证 + 裁决：4 新债 ⏭/🐛 留 follow-up、3 裁决 ⊘ 否决）+ P4.3a 追加 plan 证据 + 推进记录表行 + 总结 bullet + updated_at；troubleshooting.md CRLF 条目加 autocrlf 交叉引用。
+结果：npm run lint 66 文件 0 错；doc-only 不触及 src/test 故未跑 npm test；git diff 确认仅 2 声明文件改动；quick 边界审计 SAFE（注：prompt-control-debt.md 因属前序 baseline 被算作累计暂存，CLI 骨架漏列该文件，本精修已补）。

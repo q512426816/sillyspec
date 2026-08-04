@@ -96,6 +96,8 @@ writeFileSync(f, lines.join("\r\n"))                  // 按原换行写回
 ### 处置（2026-08-04，暂不立即做）
 两个治本方向，**收益面窄**（仅 dogfood 维护场景，不影响 sillyspec 产品功能 / 传播），根因部分在 Edit 工具（sillyspec 控不了），暂记证据、不投入；撞到下次再评估升级：
 
+> 轻度症状（2026-08-04 复盘 quick-③ 命中）：git 对 `.sillyspec/quicklog/`、`docs/` 提交时报「LF will be replaced by CRLF」刷屏噪音——同根（仓库 CRLF/LF 混用 + git autocrlf），下方方向 A 的 `.gitattributes` 一并治；无害，当前容忍。
+
 - **方向 A（治本 / 侵入）**：加 `.gitattributes`（`* text=auto eol=lf`）+ `.editorconfig`，把现有 CRLF 文件一次性规范化为 LF。代价：大面积行尾 diff 噪声、Windows `git autocrlf` 需全员评估、需走 quick / 完整流程防回归。
 - **方向 B（治标 / 窄）**：给 agent 一个 CRLF 感知的 `applyEdit` 助手 / 测试 helper。代价：只服务 dogfood 维护、非产品功能、本质绕过 Edit 工具（上面的行级 `split("\r\n")` 已够用）。
 
