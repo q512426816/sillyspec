@@ -278,3 +278,13 @@
 根因：(a)verify 探针 3 只查测试文件存在不查集成覆盖，组件单测全绿但 layout 守卫重定向只有部署+浏览器暴露；(b)子代理不 commit 时 base..head diff 空被判伪造（= 已修的 exec-a 复述）；(c)execute checkpoint 是 Wave 级 step + plan.md checkbox 隐式 task 级，429 中断后机制可续跑但 prompt 无引导，agent 误以为只能重置
 方案：(a)persuasion 补强——探针 3 加集成盲区提示 + plan 全局验收标准加集成冒烟条（CLI 无法替 agent 判断集成层是否测到位，推 agent/人类）；(b)评估=exec-a 已修复，登记确认；(c)prompt 引导续跑——execute Wave prompt 加中断续跑段（已勾选 task 跳过、status+run execute 续跑、不重置）；否决 task 级 checkpoint 机制（checkbox 已隐式持久化，工程大收益边际）
 结果：stage-definitions/plan-postcheck-crlf(10/0)/plan-execute-contract(56/0)/verify-postcheck-module(33/0)/execute-batch(18/0) 全过、全量 npm test 108 文件 0 失败、npm run lint 66 文件 0 错
+## ql-20260805-001-fa67 | 2026-08-05 11:48:24 | 根治 spec-dir.test.mjs 全量套件下偶发进程级崩溃（Windows flaky）
+状态：已完成
+关联变更：（无）
+文件：
+- test/spec-dir.test.mjs（根治代 retry 缓解：新增 ISO_HOME 隔离目录 + run() 给所有 CLI 子进程注入 HOME/USERPROFILE env 指向独立 tmp，不读写真实 home 指针；retry 兜底保留；注释更新为根因=home 指针污染非 db 锁）
+
+需求：根治 spec-dir.test.mjs 全量套件下偶发进程级崩溃（Windows flaky）。
+根因：CLI 子进程 resolveSpecDir 上溯定位，偶发读到被其他测试污染的 ~/.sillyspec-platform.json 指针 → drift/崩溃（home 指针跨测试污染竞态）。
+方案：所有 CLI 子进程注入隔离 HOME/USERPROFILE（独立 tmp），不读写真实 home 指针；retry 保留为兜底。
+结果：spec-dir 38/0、全量 npm test 3 轮 0 失败、retry 警告不再触发、lint 66 文件 0 错。

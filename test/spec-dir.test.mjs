@@ -49,13 +49,23 @@ function cleanup(dir) {
   try { rmSync(dir, { recursive: true, force: true }) } catch {}
 }
 
-// 全量套件下 spec-dir 偶发进程级崩溃（run-tests 报 exited、无内部断言汇总），
-// 根因疑似 CLI 子进程罕见非0退出（sillyspec.db 锁 / home 指针竞态，flaky 罕见难稳定复现，
-// 见记忆 sillyspec-test-specdir-isolation）。处置：失败时打印 cmd+stderr 诊断再重试一次——
-// 吸收偶发崩溃降 flaky 率，重试仍失败才抛清晰错误（保留确定性失败的定位能力）。
-// timeout 10s→30s 留余量（子进程常态 <1s，但全量负载下保险）。
+// 根治（代 retry 缓解）：全量套件下 spec-dir 偶发进程级崩溃，根因是 home 的
+// ~/.sillyspec-platform.json 指针被其他测试污染（全量 npm test 末尾 [teardown] 清理 HOME
+// 指针污染即此源）——本测试默认模式（Test 5）的 CLI 子进程靠 resolveSpecDir 上溯定位，
+// 偶发读到污染指针 → drift/崩溃。修法：给所有 CLI 子进程注入隔离 HOME/USERPROFILE
+// （指向独立 tmp），不读写真实 home 指针，从根上消除跨测试 home 污染竞态。
+// （[[sillyspec-cwd-correction-home-collision]] 同根；Test 5 测默认模式不能 --spec-dir 钉死，
+// 故用 HOME 隔离而非 spec-dir 钉死——见记忆 sillyspec-test-specdir-isolation 适用边界。）
+const ISO_HOME = join(tmpdir(), `spec-dir-iso-home-${Date.now()}`)
+mkdirSync(ISO_HOME, { recursive: true })
+
+// 全量套件下 CLI 子进程罕见非0退出时，失败打印 cmd+stderr 诊断再重试一次——
+// HOME 隔离根治后 retry 应不再触发，仅保留为最后兜底（保留确定性失败定位）。
 function run(cmd) {
-  const opts = { encoding: 'utf8', timeout: 30000, stdio: ['pipe', 'pipe', 'pipe'] }
+  const opts = {
+    encoding: 'utf8', timeout: 30000, stdio: ['pipe', 'pipe', 'pipe'],
+    env: { ...process.env, HOME: ISO_HOME, USERPROFILE: ISO_HOME },
+  }
   try {
     return execSync(cmd, opts)
   } catch (e) {
