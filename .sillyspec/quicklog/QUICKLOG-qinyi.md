@@ -288,3 +288,14 @@
 根因：CLI 子进程 resolveSpecDir 上溯定位，偶发读到被其他测试污染的 ~/.sillyspec-platform.json 指针 → drift/崩溃（home 指针跨测试污染竞态）。
 方案：所有 CLI 子进程注入隔离 HOME/USERPROFILE（独立 tmp），不读写真实 home 指针；retry 保留为兜底。
 结果：spec-dir 38/0、全量 npm test 3 轮 0 失败、retry 警告不再触发、lint 66 文件 0 错。
+## ql-20260805-002-1ee8 | 2026-08-05 11:59:17 | execute 完成后手动补的 task（reopen/直接实现）缺 review.json
+状态：已完成
+关联变更：（无）
+文件：
+- src/index.js（新增 case 'backfill-reviews'：复用 generateTaskReviewDrafts 薄包装；--change 解析缺失 exit2、--spec-dir 透传 platformOpts.specRoot、--json 结构化输出、非 json 分级打印 generated/skipped/unattributed/reason/executeRunId；printUsage 加帮助行 + topCommands 注册）
+- test/backfill-reviews.test.mjs（新建：5 组 22 断言——无 --change exit2 路由 / 补写 cannot_verify 草稿 changedFiles 命中 / 幂等不覆盖 agent 升级的 pass / --json 可解析 command=backfill-reviews / 无 tasks 目录 reason 容错）
+
+需求：execute 完成后手动补的 task（reopen/直接实现）缺 review.json，archive step1 客观完成度（真相源=review.json verdict）判缺阻断归档，手工拼 JSON 是唯一路径。
+根因：generateTaskReviewDrafts 草稿兜底机制已存在但只在 execute --done 触发，完成后手动补 task 无独立触发点。
+方案：薄包装暴露为顶层命令 sillyspec backfill-reviews --change <name>，复用 generateTaskReviewDrafts（幂等、fail-open），据 git diff base..head+working-tree 按 task allowed_paths 归属生成 cannot_verify 草稿，agent 复核升级 pass/fail；--spec-dir 透传、--json 结构化、缺数据如实打印 reason 不报错。
+结果：backfill-reviews 22/0（路由/补写/幂等/--json/容错）、全量 npm test 109 文件 0 失败、lint 66 文件 0 错。

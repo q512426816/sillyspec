@@ -82,6 +82,7 @@ SillySpec CLI — 规范驱动开发工具包
   sillyspec workflow list
   sillyspec gate <stage> --change <name> [--json]      机器门控：阶段能否标记完成（只读）
   sillyspec derive <facet> --change <name> [--json]    单项事实核验（facet: execute-evidence|verify-test|task-reviews|artifacts）
+  sillyspec backfill-reviews --change <name> [--json]  为手动补的 task 生成 review.json 草稿（cannot_verify，解 archive 客观完成度阻断）
 
   sillyspec doctor [子命令]            进度库健康检查 + 修复（顶层命令，非 worktree doctor）
     （无子命令）                       跑诊断，列出问题
@@ -400,6 +401,44 @@ async function main() {
         for (const w of (envelope.warnings || [])) console.log(`  ⚠ ${w}`);
       }
       process.exitCode = exitCode;
+      break;
+    }
+    case 'backfill-reviews': {
+      // 手动补 task（reopen execute / 直接实现）缺 review.json 的官方入口（坑 verify-archive-flow-pitfalls 坑2）。
+      // 复用 generateTaskReviewDrafts（execute --done 同源兜底，幂等、fail-open）：据 git diff base..head + working-tree
+      // 按 task allowed_paths 归属生成 cannot_verify 草稿，agent 复核后升级 pass/fail。execute 完成后手动补的 task
+      // 无子代理 review 落盘 → archive step1 客观完成度（真相源=review.json verdict）判缺 → 阻断归档；本命令补齐
+      // 缺失草稿，独立可随时跑（不必再 execute --done）。缺数据（无 tasks/ 目录 / 改动未 commit / 无 worktree meta）
+      // 时 generateTaskReviewDrafts 提前返回 reason，如实打印不报错。
+      const brChangeIdx = args.indexOf('--change');
+      const brChange = brChangeIdx >= 0 && args[brChangeIdx + 1] ? args[brChangeIdx + 1] : null;
+      if (!brChange) {
+        console.error('用法: sillyspec backfill-reviews --change <name> [--json] [--spec-dir <path>]\n  为手动补的 task 生成 review.json 草稿（cannot_verify），解 archive 客观完成度阻断');
+        process.exit(2);
+      }
+      const { generateTaskReviewDrafts } = await import('./task-review.js');
+      // --spec-dir 透传 platformOpts.specRoot（与 gate/derive 对称）；不传走默认 join(cwd,'.sillyspec')。
+      const brPlatformOpts = {};
+      if (specDir) brPlatformOpts.specRoot = specDir;
+      const result = await generateTaskReviewDrafts({ changeName: brChange, cwd: dir, platformOpts: brPlatformOpts });
+      if (json) {
+        process.stdout.write(JSON.stringify({ ok: true, command: 'backfill-reviews', change: brChange, ...result }));
+      } else {
+        if (result.generated > 0) {
+          console.log('📄 已补写 ' + result.generated + ' 个 per-task review.json 草稿（cannot_verify，需 agent 复核后升级 pass/fail） [' + brChange + ']');
+        } else {
+          console.log('ℹ️ 无草稿可补 [' + brChange + ']' + (result.reason ? '：' + result.reason : ''));
+        }
+        if (result.skipped > 0) {
+          console.log('   跳过 ' + result.skipped + ' 个 task（review.json 已存在 / 空 diff 无从归属）');
+        }
+        if (result.unattributed && result.unattributed.length > 0) {
+          console.warn('   ⚠️ ' + result.unattributed.length + ' 个变更文件未归属任何 task（顺带修复/非源码），草稿未覆盖：' + result.unattributed.join(', '));
+        }
+        if (result.executeRunId) {
+          console.log('   execute run id: ' + result.executeRunId);
+        }
+      }
       break;
     }
     case 'docs': {
@@ -1309,7 +1348,7 @@ SillySpec modules — 模块文档管理
       break;
     }
     default: {
-      const topCommands = ['init', 'setup', 'run', 'progress', 'worktree', 'local', 'workflow', 'gate', 'derive', 'modules', 'change-rename', 'knowledge', 'platform', 'scan', 'brainstorm', 'plan', 'execute', 'verify', 'archive', 'quick', 'explore', 'status', 'doctor', 'auto', 'runtime'];
+      const topCommands = ['init', 'setup', 'run', 'progress', 'worktree', 'local', 'workflow', 'gate', 'derive', 'backfill-reviews', 'modules', 'change-rename', 'knowledge', 'platform', 'scan', 'brainstorm', 'plan', 'execute', 'verify', 'archive', 'quick', 'explore', 'status', 'doctor', 'auto', 'runtime'];
       const suggestion = didYouMean(command, topCommands);
       console.error(`❌ 未知命令: ${command}`);
       if (suggestion) console.error(`   你是想输入「${suggestion}」吗？`);
