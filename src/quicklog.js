@@ -330,11 +330,19 @@ function flipEntryInContent(content, qlId, result, changedFiles = []) {
     }
     // 多行结果（结构化 需求/根因/方案/结果 字段块）：逐行插入为独立字段行。
     // 单行结果：保持「结果：<一句话>」一行，向后兼容简单用例。
-    if (/\r?\n/.test(body)) {
-      const resultLines = body.split(/\r?\n/).filter(l => l.trim() !== '')
-      lines.splice(endIdx, 0, ...resultLines)
-    } else {
-      lines.splice(endIdx, 0, `结果：${body}`)
+    const resultLines = /\r?\n/.test(body)
+      ? body.split(/\r?\n/).filter(l => l.trim() !== '')
+      : [`结果：${body}`]
+    // 结果块属本条目：从 endIdx 往前跳过本条目尾部空行，在最后一个非空行之后插入。
+    // 否则结果块会落在尾空行「之后」，与下一条目标题紧贴（缺空行分隔），且被空行从本条目
+    // 「文件：」行隔开——视觉上像属于下一条目（用户实证多条目 QUICKLOG 间距 bug）。
+    let insertAt = endIdx
+    while (insertAt - 1 > startIdx && lines[insertAt - 1].trim() === '') insertAt--
+    lines.splice(insertAt, 0, ...resultLines)
+    // 兜底：结果块之后、下一个 ## 标题之间若无空行（条目原本无尾空行 / 轮转归档手改等），补一个。
+    const after = insertAt + resultLines.length
+    if (after < lines.length && lines[after].startsWith('## ')) {
+      lines.splice(after, 0, '')
     }
   }
   return lines.join('\n')

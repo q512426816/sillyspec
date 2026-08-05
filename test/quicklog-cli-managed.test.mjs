@@ -279,6 +279,34 @@ console.log('\n--- 验收 2f：根因正文内嵌正则（含全部四标签）�
 }
 
 // ─────────────────────────────────────────
+// 验收 2g：多条目间距——完成中间条目时结果块与下一条目标题间须有空行
+// 缺陷（用户实证）：多条目 QUICKLOG 里完成中间一条（后面还跟着更新的条目）时，
+// flipEntryInContent 在 endIdx（下一个 ## 标题）前 splice 插入结果行，但本条目自带尾空行 →
+// 结果块落到尾空行「之后」、紧贴下一条目标题；且结果块被空行从本条目「文件：」行隔开，
+// 视觉上像属于下一条目。修复：结果块插在本条目最后一个非空行之后（尾空行之前），并兜底
+// 保证与下一条目标题间有空行。
+// ─────────────────────────────────────────
+console.log('\n--- 验收 2g：多条目间距（结果块与下一条目标题间有空行）---')
+{
+  const specBase = makeTmpDir('qlm-gap-')
+  const a = await allocateQuicklogEntry(specBase, 'ivan', { description: '任务A', allowedFiles: [] })
+  const b = await allocateQuicklogEntry(specBase, 'ivan', { description: '任务B', allowedFiles: [] })
+  // 完成 A（A 后紧跟 B）：结果块应落在 A 条目内（紧贴 A 的「文件：」行），与 B 标题间有空行
+  await completeQuicklogEntry(specBase, 'ivan', a.qlId, {
+    resultText: '需求：修间距\n根因：flip 在尾空行后插入\n方案：插在最后一个非空行后\n结果：通过',
+    linkedChanges: [],
+  })
+  const log = readFileSync(join(specBase, 'quicklog', 'QUICKLOG-ivan.md'), 'utf8')
+  // bug 现象：结果块末行后直接接下一条目标题（无空行）
+  assert(!/\n结果：[^\n]*\n## /.test(log), '结果块末行与下一条目标题间有空行（不紧贴）')
+  // 结果块属 A：A 段内「文件：」行后紧跟「需求：」（同条目内不被空行隔开）
+  const aIdx = log.indexOf(`## ${a.qlId} |`)
+  const bIdx = log.indexOf(`## ${b.qlId} |`)
+  const aSection = log.slice(aIdx, bIdx)
+  assert(/文件：[^\n]*\n需求：/.test(aSection), '结果块紧贴 A 的「文件：」行（同属 A 条目）')
+}
+
+// ─────────────────────────────────────────
 // 验收 2c：isQuickMetadata 过滤口径（complete-handlers 回填前用它过滤 review.changedFiles）
 // 与 auditQuickCompletion 单源（shared.js export）。确认 quick 自身元数据被过滤、业务文件保留。
 // ─────────────────────────────────────────

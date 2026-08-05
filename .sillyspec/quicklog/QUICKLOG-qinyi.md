@@ -40,6 +40,7 @@
 状态：已完成
 文件：src/stages/brainstorm.js, src/stages/plan.js, src/stages/verify.js, src/stage-contract.js, test/stage-contract.test.mjs, test/stage-definitions.test.mjs
 结果：新增 Grill 触发判断和深度追问步骤；规范链路支持 decisions.md/D-xxx；plan/task/verify 引入 FR/D 覆盖追踪；stage-contract 在 decisions.md 存在时校验 D/FR ID 传播；npm run lint 与 npm test 通过。
+
 ## ql-20260604-001-7a4c | 2026-06-04 16:47:41 | 对齐文件生命周期文档与工具实现
 状态：已完成
 文件：src/stages/brainstorm.js, src/stages/propose.js, src/stages/scan.js, src/run.js, src/progress.js, src/hooks/worktree-guard.js, test/*.mjs, docs/sillyspec/file-lifecycle*.md, .sillyspec/docs/sillyspec/modules/{stages,runtime}.md
@@ -71,6 +72,7 @@
 文件：src/run.js
 
 结果：validateChangeExists 新增于 stage-contract.js（plan/execute/verify/archive 阶段强制 changes/<name> 存在，quick sessionId/brainstorm 等豁免）；runCommand 在 pm.read/initChange 之前调用校验（关键：initChange 会先建 changes/ 目录）；test/change-exists-validation.test.mjs 16/16 通过；端到端验证 plan --change ghost 报错且不建目录。模块文档跳过（无 _module-map）。
+
 ## ql-20260802-001-b6d8 | 2026-08-02 01:36:46 | init 为 Claude Code 生成 CLAUDE.md（版本感知三态四分支注入）
 状态：已完成
 关联变更：2026-08-02-init-claude-md
@@ -80,6 +82,7 @@
 - test/init-claude-injection.test.mjs（新建：5 组 27 断言——无文件写全文 / 追加受管段 / 同版本跳过 mtime 不变 / 异版本追加态块刷新块外保留 / 异版本完整态不覆盖+stderr / CRLF 兼容）
 
 结果：需求：sillyspec init 对 claude 只检测+复制 skills，不生成 CLAUDE.md（codex/gemini/opencode 都有指引文件），需补齐。根因：claude 不在 INSTRUCTION_TOOLS，缺独立 FULL 模板注入函数。方案：①新增 templates/claude-instruction.md（17 条通用核心规则，去 dogfood/npm/multi-agent/规则14·18·19/文件生命周期段/提示词同步段/汇报格式段/爸爸~爸爸~，正文无版本注释）；②src/init.js 加 export function injectClaudeInstructions(projectDir)，版本取 getVersion()，三态四分支（不存在→写完整模板+顶部版本注释；存在无 <!-- SillySpec v 标记→追加受管段；同版本→跳过；异版本→追加态 replace START..END 块/完整态仅 stderr 提示），doInstall 加 if(tools.includes('claude')) 调用，claude 不进 INSTRUCTION_TOOLS；③新增 test/init-claude-injection.test.mjs 5 组 27 断言含 CRLF。结果：npm run lint 全过(66 文件)；npm test 全量 106/106（首次 spec-dir Windows 已知 flaky 隔离跑+重跑全过，非回归）；新测试 27/27；改动 templates/claude-instruction.md(新)+src/init.js(改)+test/init-claude-injection.test.mjs(新)，不动 stages/run.js/progress.js 故 file-lifecycle.md/docs/prompt 无需同步。
+
 ## ql-20260802-002-36ae | 2026-08-02 13:00:43 | spec-dir.test.mjs 全量套件 Windows flaky 防御（run 加 retry+诊断+timeout）
 状态：已完成
 关联变更：（无）
@@ -87,6 +90,7 @@
 - test/spec-dir.test.mjs（run() 加偶发崩溃防御：execSync 失败打印 cmd+stderr 诊断 + 1 次重试吸收罕见偶发非0退出 + timeout 10s→30s 留余量；重试仍失败抛清晰错误保留确定性失败定位）
 
 结果：需求：spec-dir.test.mjs 全量套件下罕见进程级崩溃（run-tests 报 exited 无内部断言汇总），隔离单跑恒过，flaky 偶发误判回归。根因：实证复现率~13%（15次2次），进程级崩溃=未捕获异常；timeout 假设排除（子进程<1s），home 碰撞排除（Test5 projectDir 自带.sillyspec）；疑似 CLI 子进程罕见非0退出（db锁/指针竞态），flaky 罕见无法稳定抓 stderr 证实。方案：test/spec-dir.test.mjs 的 run() 加偶发崩溃防御——execSync 失败打印 cmd+stderr 诊断再重试一次（吸收偶发降flaky率，重试仍失败抛清晰错误保留定位），timeout 10s→30s。坦诚：非根因治愈，是 retry吸收+诊断增强；根因待未来重试仍失败时按 stderr 定位。结果：spec-dir 单跑38/38；lint过(66文件)；连跑全量4次 spec-dir 全过(retry未触发兜底就位)；flaky坑已记 knowledge/uncategorized.md。改1文件 test/spec-dir.test.mjs。
+
 ## ql-20260802-003-752e | 2026-08-02 13:38:20 | quick --done 完成推荐改推「提交」，不再盲推 scan 回头路
 状态：已完成
 关联变更：（无）
@@ -95,6 +99,7 @@
 - test/quick-cli-managed-e2e.test.mjs（step3 --done 保存 captureStdout 返回值，加断言「含提交、不含 run scan」守护）
 
 结果：需求：quick --done 完成后 CLI 盲推 sillyspec run scan（scan 是 STAGE_ORDER 首位辅助阶段永未完成），但 quick 是收尾阶段该提交，推 scan 是回头路/无关，误导 agent。根因：complete.js 阶段完成推荐里 brainstorm/archive/verify/execute/plan 有专属分支，quick 走 else 分支调 _getNextSuggestion → 命中首位 scan。方案：对齐 brainstorm 先例（line351-361 同为避推 scan 而设专属分支），给 quick 加 else-if 分支，完成后推「提交本次改动/继续 run <stage>」不推 scan，不动全局 _getNextSuggestion 零回归。结果：src/run/complete.js 加 quick 专属分支 + 注释；test/quick-cli-managed-e2e.test.mjs step3 --done 加断言「含提交、不含 run scan」；e2e 单跑 15/15 新断言 PASS；lint 过；全量 npm test 106/106 无回归。改 2 文件 complete.js+quick-cli-managed-e2e.test.mjs。
+
 ## ql-20260802-004-456b | 2026-08-02 13:44:04 | QUICKLOG/tasks.md 标题占位符修复（启动从关联变更回退 + 翻完成按需求刷新）
 状态：已完成
 关联变更：（无）
@@ -104,6 +109,7 @@
 - test/quicklog-cli-managed.test.mjs（加验收 2c：deriveTitle 三场景 proposal/design/无文档 + flipEntry 刷新标题，7 断言）
 
 结果：需求：quick 启动不带 --input 时 QUICKLOG 条目与关联 tasks.md 标题落 (quick 任务) 占位符，必须 --done 后手动精修。根因：stage.js:243 description=taskDescription(=inputText)，空则 quicklog.js sanitizeDesc 回退 (quick 任务)，CLI 启动时拿不到语义标题。方案：①quicklog.js 新增 deriveTitleFromLinkedChange(读关联变更 proposal/design 标题去前缀)+extractTitleFromResult(从--output提需求摘要)；②flipEntryInContent 翻完成按需求摘要刷新标题；③stage.js 启动 desc 空&&有 linkedChanges 时回退 deriveTitle。结果：优先级 --output需求>proposal标题>占位；quicklog-cli-managed 验收2c 7断言全过(deriveTitle三场景+刷新标题)；单跑67/67；lint过；全量106/106无回归。改3文件。
+
 ## ql-20260802-005-5240 | 2026-08-02 22:13:29 | 修 brainstorm-wait-and-review-path-pitfalls.md 两个真 bug
 状态：已完成
 关联变更：（无）
@@ -117,6 +123,7 @@
 根因：坑1=状态机 currentIdx 选择谓词遗漏 waiting；坑3=tier 在 prompt 早算（design.md 未补全→fileCount=0→self）/gate 晚算（design.md 完整→>3→independent）快照不一致。
 方案：坑1 新增导出 resolveWaitingStepWithAnswer(steps,doneAnswer,nowStr)——把首个 waiting 步骤拉回 pending+补 waitAnswer+记一轮 waitAnswers+清 waiting 字段；completeStep currentIdx 后接入，主流程 requiresWait 门控见 waitAnswer 已置→不阻断→completed（对齐 continueStep 回 pending 语义；仅 --answer 触发，普通 --done 零变化）。坑3 软化 tier=self 提示为非承诺式（保留 tier=self 标记+注明基于此刻 design.md 快照+gate 以 --done 重判+design 扩大升级 independent+以 gate 实际校验为准）。
 结果：新增 test/wait-done-answer-resolves-waiting.test.mjs 28 断言全过（helper 4 场景+completeStep 端到端+坑3 文案）；更新 test/stage-review-contract.test.mjs line46 锁新契约；全量 node test/run-tests.mjs REAL_EXIT=0 通过 107 失败 0；npm run lint 66 文件过。改 2 源+2 测试，docs/prompt/file-lifecycle 均无需同步。
+
 ## ql-20260802-006-4af1 | 2026-08-02 22:41:50 | quicklog appendTaskCheckbox 不再 fabricate 幻影 change 目录
 状态：已完成
 关联变更：（无）
@@ -129,6 +136,7 @@
 根因：appendTaskCheckbox（src/quicklog.js:226）对不存在的关联变更目录硬调 mkdirSync，把 linkedChanges「关联标签」当成「真变更目录」造 tasks.md 桩；而关联标签本应由 allocateQuicklogEntry 独立记入 QUICKLOG「关联变更：」行，与目录是否存在无关。越界 fabricate 污染 .sillyspec/changes/ → 边界审计自造自拦。
 方案：appendTaskCheckbox 加 existsSync(dir) 守卫——目录不存在直接 return，不写 tasks.md、不建目录；关联标签的 QUICKLOG 行写入路径（allocateQuicklogEntry line 330）独立于本函数，不受影响。测试侧：原断言依赖 mkdirSync 造目录，故改为在 setup 阶段预建真实 change 目录（反映「linkedChanges 须预存」的正确契约），并新增验收1b 显式验证 fabricate 不再发生。
 结果：全量测试 107 通过 / 失败 0，lint 干净，零回归；审计 SAFE（本轮新增 3 业务文件）。
+
 ## ql-20260803-001-9c4e | 2026-08-03 14:24:57 | 修 reopen --done 步骤状态不同步（回填 stale→completed）
 状态：已完成
 关联变更：（无）
@@ -169,6 +177,7 @@
 根因：repairConsistency 的 Manual a 对 completed stage 内 pending/stale/in-progress step 一律报 manual，无「按 review.json 客观产出判定」分支，execute 状态脱钩（plan 加 Wave / execute Wave step 未走 --done）无自动收敛路径。
 方案：consistency-doctor.js 新增 Fix e——仅当 stageName=execute、changeName 有效、summary.source=review.json 且 pending=0（所有 task verdict 通过）时，把脱钩 step 自动标 completed（align_execute_steps_to_reviews），否则回落 Manual a 保守不动；Manual a 对已自动修的 execute 不重复 push；执行异常 catch 回落 manual。
 结果：Case 12（review 全 pass → 自动修）/Case 13（review 缺失 → 仍 manual）通过；npm test 108/108 无回归；lint 66 文件过；quick 边界审计 SAFE。
+
 ## ql-20260804-001-64e5 | 2026-08-04 13:11:22 | 登记复盘新观察：Grill fail 后复审边界未定义（P4.3a）+ docHash 手算摩擦复发旁注（P6.1b）
 状态：已完成
 关联变更：（无）
@@ -179,6 +188,7 @@
 根因：复盘 a/b/c/d 四条——a（自审不卡真实性）= P3.1 done-by-design（自审故意只做机械格式检查，语义交 Grill；这次 Grill 正好抓到假核实，机制按设计工作，非缺陷）；d（过时注释）属目标项目非本仓；剩下 c 的新角度与 b 的复发债单未记，需固化为可追溯条目供后续复评，避免重复造轮子。
 方案：仅改 docs/sillyspec/prompt-control-debt.md（doc-only）——① P4.3 下新增子项 P4.3a（Grill fail 后复审回路未定义，grep brainstorm.js 实证 fail/cannot_verify 后回路为空；裁决随 P4.3 维持 defer，因「修正后够不够好」是语义软判定推 sillyhub，附诚实标注缓解留 follow-up）；② P6.1b 下加复发记录子项（2026-08-04 手算 sha256 易错，不推翻 defer，记 2 次摩擦供复评）；③ 推进记录表加 2026-08-04 行；④ frontmatter updated_at 刷新。
 结果：npm run lint 66 文件 0 错通过；doc-only 不触及 src/test 故未跑 npm test（套件不受影响）；git diff 确认仅目标文件改动 + CLI 接管的 QUICKLOG 骨架；quick 边界审计 SAFE。
+
 ## ql-20260804-002-28c6 | 2026-08-04 13:29:19 | 登记 plan+quick 复盘 7 条：4 新债（TaskCard 行数 / plan→scan 回头路 / QUICKLOG 落盘 / lint doc 空转）+ 3 裁决否决
 状态：已完成
 关联变更：（无）
@@ -190,6 +200,7 @@
 根因：7 条逐条核实——plan-a（TaskCard 格式不一）源码 plan.js:370-408 已有完整逐字示例，非债务；plan-d（独立审查单次）= 上条 P4.3a 且 stage 通用；quick-③（autocrlf 噪音）= troubleshooting CRLF 条目方向 A 同根轻度症状——3 条已决/已覆盖。余 4 条真新债：plan-b（20-40 行纯 persuasion + postcheck 不校验 title_zh → 静默丢字段）、plan-c（complete.js:421-422 plan→scan 回头路仅修 brainstorm/quick，plan/execute/verify 漏）、quick-①（QUICKLOG 四段 --output 落盘成单行双层「结果：」前缀）、quick-②（lint 对 doc-only 空转）。
 方案：doc-only 改两文件。prompt-control-debt.md 新增整节（每条带源码实证 + 裁决：4 新债 ⏭/🐛 留 follow-up、3 裁决 ⊘ 否决）+ P4.3a 追加 plan 证据 + 推进记录表行 + 总结 bullet + updated_at；troubleshooting.md CRLF 条目加 autocrlf 交叉引用。
 结果：npm run lint 66 文件 0 错；doc-only 不触及 src/test 故未跑 npm test；git diff 确认仅 2 声明文件改动；quick 边界审计 SAFE（注：prompt-control-debt.md 因属前序 baseline 被算作累计暂存，CLI 骨架漏列该文件，本精修已补）。
+
 ## ql-20260804-003-e439 | 2026-08-04 14:27:59 | 解决复盘 4 新债：plan-postcheck title_zh 硬校验 + scan 回头路根因修 + quicklog 四字段归一 + lint doc 空转精细化
 状态：已完成
 关联变更：（无）
@@ -214,6 +225,7 @@
 方案：plan-postcheck.js 加 title_zh 完整性硬校验（enforcement）；stage-machine.js _getNextSuggestion 跳过 scan 且 upstream 排除 scan（根因修）；quicklog.js flipEntryInContent 单行四字段归一为多行；CLAUDE.md+claude-instruction.md 规则 8 精细化（触及 src/test 才必跑 lint/test）；补 4 处回归测试 + 债单状态与模块变更索引标已解决。
 
 结果：npm test 108/0、npm run lint 66 文件 0 错；4 处回归全过——next-suggestion 9/9（含 plan-c 用例）、quicklog-cli-managed 74/0（含 2d 单行四字段）、plan-optimization 13/0（含 Test13 缺 title_zh）、plan-postcheck-crlf 10/10（fixture 补 title_zh）。
+
 ## ql-20260804-004-3a24 | 2026-08-04 15:02:33 | 修 quicklog 单行四字段落盘字段误拆：按序+字段边界双级扫描，正文引用标签字样不再误断行
 状态：已完成
 关联变更：（无）
@@ -229,6 +241,7 @@
 方案：quicklog.js 单行四字段归一改为 splitSingleLineFields 双级扫描——先按字段边界严格扫描（真实标签=串首/前导空白/句末标点。；！？，引用字样因前导「/|( 非边界字符而跳过）；严格失败退回顺序扫描兜底；缺标签返回 null 落单行兜底（--done 契约仍拦缺字段）。补回归 2e/2f（改前红改后绿）。
 
 结果：quicklog-cli-managed 82/0（含 2e/2f 8 断言）、全量 npm test 108 文件 0 失败、npm run lint 66 文件 0 错。
+
 ## ql-20260804-005-83d8 | 2026-08-04 16:04:26 | execute 复盘 3 债（Task Review 对账 / Stage Review marker / apply 口径）修复登记
 状态：已完成
 关联变更：（无）
@@ -261,6 +274,7 @@
 根因：(a)detectChangeRisk 是机械字面匹配不认否定语境（design 写不改 daemon 仍判 critical），但 frontmatter risk_level 显式豁免已实现且 prompt 已告知，非缺陷；(b)verify step6 要求 agent 手动跑测试 + CLI --done 又对账跑一遍（按变更命中模块），同一命令耗时翻倍；(c)CLI 对账 execSync 同步阻塞 198s 期间 stdout 全静默，agent 以为卡死
 方案：(a)评估保留——已实现显式豁免，不改；(b)verify.js「运行测试和质量扫描」step prompt 减法：不重复手动跑全量测试（统一交 CLI 对账执行一次），step 只做 lint/静态 + 可选冒烟；同步首段说明 + docs/prompt 重提取 + file-lifecycle 补句；(c)gates.js verify 对账前加 ⏳ 进度预告（放调用点，machine-interface --json 不被污染）
 结果：run-complete-step-verify 17/0、stage-definitions 全过、verify-postcheck-module 33/0、全量 npm test 108 文件 0 失败、npm run lint 66 文件 0 错
+
 ## ql-20260804-007-617f | 2026-08-04 16:52:46 | 全流程复盘 3 重点处置——集成层测试盲区 / Task Review base..head 对账坑 / 429 中断无 checkpoint 续跑
 状态：已完成
 关联变更：（无）
@@ -278,6 +292,7 @@
 根因：(a)verify 探针 3 只查测试文件存在不查集成覆盖，组件单测全绿但 layout 守卫重定向只有部署+浏览器暴露；(b)子代理不 commit 时 base..head diff 空被判伪造（= 已修的 exec-a 复述）；(c)execute checkpoint 是 Wave 级 step + plan.md checkbox 隐式 task 级，429 中断后机制可续跑但 prompt 无引导，agent 误以为只能重置
 方案：(a)persuasion 补强——探针 3 加集成盲区提示 + plan 全局验收标准加集成冒烟条（CLI 无法替 agent 判断集成层是否测到位，推 agent/人类）；(b)评估=exec-a 已修复，登记确认；(c)prompt 引导续跑——execute Wave prompt 加中断续跑段（已勾选 task 跳过、status+run execute 续跑、不重置）；否决 task 级 checkpoint 机制（checkbox 已隐式持久化，工程大收益边际）
 结果：stage-definitions/plan-postcheck-crlf(10/0)/plan-execute-contract(56/0)/verify-postcheck-module(33/0)/execute-batch(18/0) 全过、全量 npm test 108 文件 0 失败、npm run lint 66 文件 0 错
+
 ## ql-20260805-001-fa67 | 2026-08-05 11:48:24 | 根治 spec-dir.test.mjs 全量套件下偶发进程级崩溃（Windows flaky）
 状态：已完成
 关联变更：（无）
@@ -288,6 +303,7 @@
 根因：CLI 子进程 resolveSpecDir 上溯定位，偶发读到被其他测试污染的 ~/.sillyspec-platform.json 指针 → drift/崩溃（home 指针跨测试污染竞态）。
 方案：所有 CLI 子进程注入隔离 HOME/USERPROFILE（独立 tmp），不读写真实 home 指针；retry 保留为兜底。
 结果：spec-dir 38/0、全量 npm test 3 轮 0 失败、retry 警告不再触发、lint 66 文件 0 错。
+
 ## ql-20260805-002-1ee8 | 2026-08-05 11:59:17 | execute 完成后手动补的 task（reopen/直接实现）缺 review.json
 状态：已完成
 关联变更：（无）
@@ -299,3 +315,15 @@
 根因：generateTaskReviewDrafts 草稿兜底机制已存在但只在 execute --done 触发，完成后手动补 task 无独立触发点。
 方案：薄包装暴露为顶层命令 sillyspec backfill-reviews --change <name>，复用 generateTaskReviewDrafts（幂等、fail-open），据 git diff base..head+working-tree 按 task allowed_paths 归属生成 cannot_verify 草稿，agent 复核升级 pass/fail；--spec-dir 透传、--json 结构化、缺数据如实打印 reason 不报错。
 结果：backfill-reviews 22/0（路由/补写/幂等/--json/容错）、全量 npm test 109 文件 0 失败、lint 66 文件 0 错。
+
+## ql-20260805-003-c420 | 2026-08-05 14:10:18 | QUICKLOG 多条目间距——完成中间条目时结果块与下一条目标题间补空行
+状态：已完成
+关联变更：（无）
+文件：
+- src/quicklog.js（flipEntryInContent 结果块插入位置：从 endIdx 往前跳过本条目尾部空行、在最后一个非空行之后插入；并兜底在结果块与下一个 ## 标题间无空行时补一个空行）
+- test/quicklog-cli-managed.test.mjs（新增验收 2g：allocate A/B 后 complete A，断言结果块末行与 B 标题间有空行 + 结果块紧贴 A 的「文件：」行）
+- .sillyspec/quicklog/QUICKLOG-qinyi.md（批量补全历史条目间粘连的空行分隔，仅加空行不改内容）
+需求：多条目 QUICKLOG 里完成中间条目（其后还跟着更新的条目）时，结果块紧贴下一条目标题（无空行分隔），用户要求条目间有空行。
+根因：flipEntryInContent 在 endIdx（下一个 ## 标题行）前 splice 插入结果行，但本条目自带尾空行 → 结果块落到尾空行之后、紧贴下一条目标题，且被空行从本条目「文件：」行隔开，视觉上像属于下一条目。
+方案：结果块改为从 endIdx 往前跳过本条目尾部空行、在最后一个非空行之后插入（归本条目、紧贴文件行），并兜底在结果块与下一个 ## 标题间无空行时补一个空行；历史 QUICKLOG 主文件批量补全条目间空行（只插入空行，不改任何条目内容）。
+结果：npm test 全量 109/0 通过、npm run lint 66 文件通过；新增验收 2g（多条目间距）由红转绿（单跑 84/0）。
