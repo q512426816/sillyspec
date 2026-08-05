@@ -20,6 +20,7 @@ grep -rl "<关键词>" <源码目录>/ --include="*.java" --include="*.js" --inc
 1. 读取变更目录下的 tasks.md，提取所有 checkbox 任务
 2. 对每个 task，**递归**检查对应模块目录及其**所有子目录**下是否存在测试文件（*test*、*spec*、*Test*、*Spec*）——包括模块内 co-located 的 tests/ 目录（如 `backend/app/modules/*/tests/`），**不要只看顶层 `tests/`**，否则会把测试就在模块内部的项目误判为“无测试”
 3. 没有测试文件的 task 标记为 ⚠️ 缺少测试
+4. **集成盲区提示**：测试文件存在 ≠ 集成正确——路由/layout 守卫重定向、跨模块装配这类集成 bug 组件单测覆盖不到，只有集成/冒烟/E2E 才暴露。对路由/layout/跨进程装配敏感的 task，额外检查是否有集成冒烟覆盖；无则标 ⚠️ 集成层未验证（需人工或部署确认）
 
 **探针 4：决策追踪覆盖探针（如存在 decisions.md）**
 1. 从 decisions.md 提取所有当前版本 D-xxx@vN

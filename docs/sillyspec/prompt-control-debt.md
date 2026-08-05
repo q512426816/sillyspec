@@ -91,6 +91,8 @@ updated_at: 2026-08-04T13:31:04+08:00
 - ✅ **Q-B** guard flag 可在 --done 覆盖。**确认已实现**：run.js:3088-3096 mergedGuard（forceBaseline: guard.forceBaseline || isForceBaseline），把 --done 的 --force-baseline/--allow-new 与 step1 持久化值取或传给 auditQuickCompletion；审计 status 判定（run.js:417）已修正为 !forceBaseline && baselineHit.length。memory [[sillyspec-quick-guard-flags-at-step1]] 已是"已修复"状态。本次无需写代码。
 - ✅ **Q-C** quick 边界声明：step2 加"边界声明（quick 不校验 design.md）"——design.md 仅供理解意图，不作为验收基准，需 design 一致性走完整流程。治 memory 坑 3 的语义漏洞：诚实标注边界而非加 enforce（quick 定位是轻量逃生通道，加 verify 就不是 quick）。
 
+- ⏭ **Q-④ 重跑 `run` 误建空会话**（2026-08-04 登记，doc-only 不动源码）：step 中途再跑一次 `sillyspec run quick`（不带 `--change`，只为重读 prompt）会**新建**一个空会话并覆盖 `current-quick-run-id`（实证：首 run 建 quick-394fd295 + ql-005，第二次 run 误建 quick-107193d2 + 空 ql-006 条目，allowedFiles 空、baseline 仅快照当前脏文件），污染 QUICKLOG 产生幽灵「进行中」条目，需手动清理会话目录 + 删条目。**根因方向**：`run` 无 `--change` 时 fallback 读 current-quick-run-id，但本次 `--linked-changes none` 等参数使 CLI 判定为新会话而非复用（具体分支待查 run.js quick 入口）。**裁决 defer**：轻量摩擦，清理成本低；修法候选（① `run` 检测 current-quick-run-id 已存在则复用而非新建；② 已存在会话时仅提示不清扫），待再踩一次或纳入 quick 会话生命周期重构时做。
+
 ### 2026-08-04 复盘增补（plan + quick 阶段使用复盘）
 状态：`已解决`（4 新债已修复 + 回归测试通过；3 裁决维持）
 
@@ -106,6 +108,33 @@ updated_at: 2026-08-04T13:31:04+08:00
 - ⊘ **plan-a TaskCard 格式不一（裁决：非缺陷，源码已有逐字示例）**：建议「skill 模板给逐字示例（含 needs 中括号）」，但**源码 plan.js:370-408 已有完整 TaskCard 逐字示例**（含 provides/expects_from/`needs: [field_a]`），plan.js:426 明说「无跨 task 契约则留空」。子代理对**可选字段** provides/expects_from 的格式分化（散文 vs 映射）是 postcheck 故意不 style-check（其职责=契约一致性对账 plan.js:427，非风格统一）。**评估否决**：非债务；唯一残留=SKILL.md 镜像可能缺示例，但子代理读注入 prompt 不读 SKILL.md，补 SKILL.md 不解决运行时分化。
 - ⊘ **plan-d 独立审查单次（裁决：= P4.3a，已登记）**：plan 审查初审 fail、修正后自判 pass 无二次独立复审——**正是上条 P4.3a**（审查 fail 后复审边界未定义），证实该 gap 为 stage 通用（brainstorm + plan 均命中），非新债。
 - ⊘ **quick-③ git autocrlf 噪音（裁决：troubleshooting 已覆盖）**：git 对 `.sillyspec/quicklog/`、`docs/` 报「LF will be replaced by CRLF」——**正是 `docs/troubleshooting.md`「Edit CRLF 失配」条目 方向 A**（`.gitattributes` `* text=auto eol=lf` 规范化）的同根轻度症状（Edit 失配=重度、autocrlf 警告=轻度，根因同为仓库 CRLF/LF 混用 + git autocrlf）。不另立条目；该方向 A 一并治。
+
+### 2026-08-04 execute 复盘增补（Task Review / Stage Review / apply 口径）
+状态：`已解决`（3 项已修复 + 回归测试通过；commit 待提）
+
+来源：execute 阶段使用复盘的 3 个负面点，逐条对源码核实后裁决，均确认真新债（债单此前无相关条目）。
+
+- ✅ **exec-a Task Review base..head 对账坑**：子代理不 commit 时 `git diff base..head` 为空，`verifyReviewGitEvidence`（task-review.js:510）的 changedFiles 交叉比对拿**空 diffFiles** 对非空 changedFiles 必判「完全不相交」伪造，逼 agent 强制 commit + 改 7 个 review head。此前已有 working-tree 回退（避开「零改动伪造」假阳性），但 diffFiles 只算 commit diff、**未并入 working-tree 文件**。**修法**：新增 `parsePorcelainFiles` 解析 `git status --porcelain`，working-tree 改动并入 diffFiles 后再做交叉比对（对齐 `checkExecuteCodeEvidence` 同时查 working-tree 语义）；回归 agent-gate-hardening 加未 commit 对账用例。
+- ✅ **exec-b Stage Review run-id/marker 易错**：① marker 缺失时 `getLatestStageReviewRunId`（stage-review.js:277）fallback 扫描 `stage-reviews/<stage>-review-*` **全目录无 change 过滤** → 读到 proxy 等其他变更的 acceptance review 报错误导；② marker 内容若误写 execute 的 `exec-` 前缀 runId，按 `stage-reviews/<stage>-<runId>` 拼目录必找不到。**修法**：① fallback 按 review.json `reviewedFiles[0]`（契约=`changes/<change>/<mainDoc>`，renderReviewJsonContract）归属变更过滤，无归属 → null fail-closed + 显式 warn（不再跨变更取最新）；② marker 读取校验 `^review-` 前缀，非格式内容忽略 + warn + 退回扫描；回归 stage-review 加 marker 格式 + cross-change fallback 用例。
+- ✅ **exec-c apply 校验 vs design §6 清单**：apply（worktree-apply.js:186）只认 design §6 清单硬卡「变更文件 ⊆ 清单」，而 assess（:565）用 task allowed_paths——**两 gate 口径不一致**——design §6 漏测试/产物文件时（task allowed_paths 已含）apply 卡住。**修法**：抽出 `resolveApplyAllowSet` = design 清单 ∪ 所有 task allowed_paths，applyWorktree 改用它；plan 已过 validateDesignFileCoverage 单向校验（design ⊆ plan），union 不放开 design/plan 之外的越界文件（仍拦）；回归 worktree-allow-list 加 union 用例（越界仍违规）。
+
+### 2026-08-04 verify 复盘增补（关键词判级 / 测试重复跑 / 后台无进度）
+状态：`a 评估保留；b/c 已修复`
+
+来源：verify 阶段使用复盘的 3 个负面点，逐条对源码核实后裁决。
+
+- ⊘ **vrf-a 关键词判级不认否定语境**。**评估保留（已实现 + prompt 已充分告知）**：`detectChangeRisk`（change-risk-profile.js:317）**显式豁免优先**——design.md frontmatter `risk_level:` 声明覆盖关键词判级，源码注释明确记载历史教训「与其在正则层做脆弱的否定识别，不如给一条显式、诚实、可审计（落在 design frontmatter + verify-result）的覆盖通道」；verify「输出验证报告」step prompt 已写「判级是机械字面匹配、不认否定语境」+「误判时的诚实出路（豁免级）：frontmatter risk_level 声明」+「留痕要求防逃逸」。用户实测用 `risk_level: contract-required` 豁免成功——机制正是设计意图，非缺陷。
+- ✅ **vrf-b 测试重复跑（step6 手动跑 + CLI 对账又跑，198s×2）**。**修法（纯减法）**：CLI 对账是防谎报 enforcement（verify.js:176 明说「谎报测试结果没有意义」）不可删；复用 step6 结果 = 信任 agent 报告，破坏核心信任边界不可做。改为 verify.js「运行测试和质量扫描」step prompt **不重复手动跑全量测试**（测试实测统一由 CLI --done 对账执行一次，按变更命中模块子集），step 只做 lint/静态检查 + 可选针对性冒烟（非必需）；同步首段「进度确认」💡 说明 + docs/prompt 重提取（verify.md 两处）+ file-lifecycle.md 补一句。
+- ✅ **vrf-c 后台命令无进度提示（CLI 对账 execSync 同步静默 198s）**。**修法（轻量）**：`runVerifyTestCheck` 是同步 execSync，期间 stdout 全静默，`printVerifyTestCheck` 只在结束后打印耗时。gates.js verify 对账调用前加「⏳ Verify 测试对账：CLI 亲自执行 local.yaml 的 commands.test（同步，耗时可能较长，请等待…）」预告。**放 gates.js 调用点而非 verify-postcheck.js 内部**——`runVerifyTestCheck` 也被 `machine-interface.js:225/369`（derive verify-test facet，--json）调用，内部裸 console.log 会污染 JSON 输出。
+
+### 2026-08-04 全流程复盘（集成层盲区 / Task Review 对账 / 中断续跑）
+状态：`①③ persuasion 补强已修复；②已修复（= exec-a）`
+
+来源：全流程使用总结提炼的「最值得改进 3 个点」，逐条对源码核实后裁决。
+
+- ✅ **full-a 集成层测试盲区（组件单测 1324 全绿但 layout 守卫重定向只有部署+浏览器暴露）**。**修法（persuasion 补强，非加门）**：CLI 无法替 agent 判断「集成层是否测到位」（选哪几个路由实例冒烟是语义判断，推 agent）；改两处引导——① verify 探针 3（templates/prompts/verify-probes.md）加第 4 条集成盲区提示「测试文件存在 ≠ 集成正确，路由/layout 守卫重定向、跨模块装配这类集成 bug 组件单测覆盖不到，只有集成/冒烟/E2E 才暴露；对路由/layout/跨进程装配敏感 task 额外检查集成冒烟覆盖，无则标 ⚠️ 集成层未验证」；② plan.js 全局验收标准模板加一条「集成敏感 task（路由/layout/跨进程装配）建议加集成冒烟验收——组件单测全绿 ≠ 集成正确」。
+- ⊘ **full-b Task Review base..head 对账坑（子代理不 commit 则 diff 空判伪造，被迫 commit + 改 7 个 review head）**。**评估：= exec-a，本次会话已修复**（task-review.js:465 `parsePorcelainFiles` 解析 `git status --porcelain`，working-tree 改动并入 diffFiles 后再交叉比对，未 commit 不再误判伪造 + 回归测试）。用户总结基于修复前会话，登记确认，无需重复修。
+- ✅ **full-c 5 小时 API 配额无 checkpoint 续跑（task-07 429 中断只能干等重置）**。**修法（prompt 引导续跑，非加 task 级 checkpoint 机制）**：核实发现 checkpoint 机制已存在——execute 按 Wave step 持久化（CLI 每 Wave 完成落盘 progress）+ task 级进度靠 plan.md checkbox 隐式持久化（buildWavePrompt 明说「勾选 plan.md 中的 checkbox」，429 中断后勾选状态保留）；429 是 LLM API 配额非 CLI 失败，CLI 无法防中断本身。缺的是**传播**（agent 不知道能续跑）：execute buildWavePrompt 加「### 中断续跑」段——plan.md 已勾选 `- [x]` task 跳过不重跑（先确认产出完整）、`sillyspec status` + `sillyspec run execute` 回当前 Wave step 续跑、不重置已完成 Wave、产出缺文件 task 补做。**否决 task 级 CLI checkpoint**（改 progress 存储 + execute 推进逻辑 + Wave 并行语义，工程大，收益边际——checkbox 已隐式持久化）。
 
 ---
 
@@ -129,6 +158,9 @@ updated_at: 2026-08-04T13:31:04+08:00
 | 2026-08-04 | P4.3a / P6.1b | 复盘登记（doc-only，不动源码）：Grill fail 后复审边界未定义（新观察，随 P4.3 维持 defer + 诚实标注缓解留 follow-up）；docHash 手算摩擦复发旁注（不推翻 defer） |
 | 2026-08-04 | 复盘增补（plan+quick） | 登记 4 新债（plan-b TaskCard 行数丢字段 / plan-c plan→scan 回头路半修 bug / quick-① QUICKLOG 四段落盘 / quick-② lint doc 空转）+ 3 裁决否决（plan-a 已有逐字示例 / plan-d=P4.3a / quick-③=troubleshooting 同根），doc-only 不动源码 |
 | 2026-08-04 | plan-b/c/quick-①/② follow-up | 4 新债全部修复：plan-postcheck 加 title_zh 校验 / stage-machine _getNextSuggestion 跳过 scan（根因修）/ quicklog 单行四字段归一 / CLAUDE.md+template 规则8 精细化；补 4 处回归测试，npm test 108/0、lint 66/0 |
+| 2026-08-04 | execute 复盘（a/b/c） | 3 项新债全修：verifyReviewGitEvidence working-tree 并入 diffFiles（exec-a）/ getLatestStageReviewRunId marker 格式校验 + fallback 按变更过滤 fail-closed（exec-b）/ resolveApplyAllowSet = design ∪ plan allowed_paths（exec-c）；补 3 处回归测试 |
+| 2026-08-04 | verify 复盘（a/b/c） | a 评估保留（detectChangeRisk 显式豁免已实现 + verify prompt 已告知，非新债）；b 修 verify step6 不重复手动跑全量测试（统一交 CLI 对账）+ docs/prompt 重提取 + file-lifecycle 同步；c 修 gates.js verify 对账前加进度预告（放调用点不污染 machine-interface --json） |
+| 2026-08-04 | 全流程复盘（a/b/c） | a persuasion 补强：verify 探针 3 加集成盲区提示 + plan 全局验收标准加集成冒烟条；b 已修复（= exec-a，本次会话已落地）；c prompt 引导续跑：execute Wave prompt 加中断续跑段（checkpoint 机制已存在，补传播）；否决 task 级 checkpoint 机制 |
 
 ## 总结
 

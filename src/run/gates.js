@@ -204,6 +204,8 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
   // 自报告 PASS 但实测失败 → 阻断（防止"文案通过"绕过验证）。
   if (stageName === 'verify') {
     const { runVerifyTestCheck, printVerifyTestCheck } = await import('../verify-postcheck.js')
+    // 测试实测是同步 execSync，长套件可跑 2~10min 且中途无输出——先预告避免 agent 误判卡死
+    console.log(`\n⏳ Verify 测试对账：CLI 亲自执行 local.yaml 的 commands.test（同步，耗时可能较长，请等待…）`)
     const testCheck = runVerifyTestCheck({ cwd, specBase, changeName })
     printVerifyTestCheck(testCheck)
     if (testCheck.status === 'failed') {

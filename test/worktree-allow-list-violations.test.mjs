@@ -5,7 +5,10 @@
  * 用 pathMatches 双向容差。导致「design 写 glob/目录简写 → plan 放过 → apply 卡死 → 逼用户补字面文件名」。
  * 抽出 classifyAllowListViolations 固化「apply 与 plan 同语义」契约：design 写 glob/目录也能覆盖 git diff 具体路径。
  */
-import { classifyAllowListViolations } from '../src/worktree-apply.js'
+import { classifyAllowListViolations, resolveApplyAllowSet } from '../src/worktree-apply.js'
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs'
+import { join } from 'path'
+import { tmpdir } from 'os'
 
 let failed = 0
 const failures = []
@@ -85,9 +88,37 @@ console.log('--- ⑥ 边界 ---')
   // 纯函数本身按字面返回全部违规，不在本契约覆盖范围，故不测空 Set。
 }
 
+// ── ⑦ resolveApplyAllowSet：design §6 清单 ∪ plan TaskCard allowed_paths（execute 复盘 c）──
+// apply 原只认 design 清单，测试/产物文件 design §6 常漏列而 task allowed_paths 已含 → apply 误拦
+//（assess 用 task allowed_paths 放行、apply 用 design 清单又拦，口径不一致）。union 后两源并集为准。
+console.log('\n--- ⑦ resolveApplyAllowSet：design 清单 ∪ plan allowed_paths ---')
+{
+  const tmpDir = mkdtempSync(join(tmpdir(), 'apply-union-'))
+  const cn = 'mychange'
+  const changesDir = join(tmpDir, '.sillyspec', 'changes', cn)
+  mkdirSync(join(changesDir, 'tasks'), { recursive: true })
+  writeFileSync(join(changesDir, 'design.md'), '# Design\n\n## 6. 文件变更清单\n- src/app.js\n- src/util.js\n')
+  writeFileSync(join(changesDir, 'tasks', 'task-01.md'), `---
+id: task-01
+allowed_paths:
+  - src/app.js
+  - test/app.test.mjs
+  - dist/types.d.ts
+---
+`)
+  const allowSet = resolveApplyAllowSet(tmpDir, cn)
+  assertDeep([...allowSet].sort(), ['dist/types.d.ts', 'src/app.js', 'src/util.js', 'test/app.test.mjs'], '并集 = design 清单 ∪ task allowed_paths（含测试/产物）')
+  const viol = classifyAllowListViolations(['src/app.js', 'src/util.js', 'test/app.test.mjs', 'dist/types.d.ts'], allowSet)
+  assertDeep(viol, [], 'test/产物文件不再被判「不在清单」（原 apply 只认 design §6 会拦）')
+  // 完全越界文件仍拦（union 不放开水面）
+  const viol2 = classifyAllowListViolations(['src/run.js', 'test/app.test.mjs'], allowSet)
+  assertDeep(viol2, ['src/run.js'], 'design 与 task 都未声明的越界文件仍违规')
+  rmSync(tmpDir, { recursive: true, force: true })
+}
+
 // ── 结果 ──
 console.log(`\n${'='.repeat(50)}`)
-console.log(`✅ 通过: ${6 - failed}  ❌ 失败: ${failed}`)
+console.log(`✅ 通过: ${7 - failed}  ❌ 失败: ${failed}`)
 if (failures.length > 0) { console.log('失败项:'); failures.forEach(f => console.log(`  - ${f}`)) }
 console.log('='.repeat(50))
 if (failed > 0) process.exit(1)

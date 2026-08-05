@@ -136,6 +136,24 @@ console.log('\n--- verifyReviewGitEvidence ---')
   const notRepo = makeTmpDir('tre-nogit-')
   r = verifyReviewGitEvidence({ base, head }, notRepo)
   assert(r.ok && r.unavailable && r.warnings.length > 0, '非 git 环境 → unavailable 降级 warning')
+
+  // 子代理未 commit：working-tree 有改动、base..head 无 commit diff → 交叉比对并入 working-tree 文件
+  //（execute 复盘 a：原实现拿空 diffFiles 对非空 changedFiles 必判「完全不相交」伪造，逼 agent 强制 commit）
+  {
+    const repoWt = makeTmpDir('tre-wt-')
+    initGitRepo(repoWt)
+    writeFileSync(join(repoWt, 'a.txt'), 'v1\n')
+    git(repoWt, ['add', '.'])
+    git(repoWt, ['commit', '-q', '-m', 'c1'])
+    const baseWt = git(repoWt, ['rev-parse', 'HEAD'])
+    // 不 commit：改已有文件 + 新增未跟踪文件（execute 子代理真实形态）
+    writeFileSync(join(repoWt, 'a.txt'), 'v2\n')
+    mkdirSync(join(repoWt, 'test'), { recursive: true })
+    writeFileSync(join(repoWt, 'test', 'x.test.mjs'), 'x\n')
+    const rWt = verifyReviewGitEvidence({ base: baseWt, head: baseWt, changedFiles: ['a.txt', 'test/x.test.mjs'] }, repoWt)
+    assert(rWt.ok && !rWt.errors.some(e => e.includes('不相交')), `未 commit 时 changedFiles 与 working-tree 有交集 → ok（不判不相交伪造）`)
+    assert(rWt.warnings.some(w => w.includes('working-tree')), `未 commit 时 warning 说明并入 working-tree 改动`)
+  }
 }
 
 // ─────────────────────────────────────────

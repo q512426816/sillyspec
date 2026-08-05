@@ -38,7 +38,7 @@ export const definition = {
     {
       name: '进度确认',
       migratedFrom: ['状态检查'],
-      prompt: `> 💡 先说清楚：\`sillyspec run verify\`（不带 --done）**只下发执行指令，不会替你跑测试/构建**——真正的测试由你（Agent）在「运行测试和质量扫描」那步自己执行；CLI 只在最后 --done 时亲自跑 local.yaml 的 test 对账。别以为敲了 run verify 就自动验证了。
+      prompt: `> 💡 先说清楚：\`sillyspec run verify\`（不带 --done）**只下发执行指令，不会替你跑测试/构建**——真正的测试由 CLI 在最后 --done 时统一执行（local.yaml 的 commands.test，同步对账可能耗时较长）；「运行测试和质量扫描」那步**不需要你重复手动跑全量**（避免与 CLI 对账重复耗时），只做 lint/静态检查 + 可选快速冒烟。别以为敲了 run verify 就自动验证了。
 
 检查当前进度，确认可以执行 verify。
 
@@ -156,28 +156,25 @@ export const definition = {
     },
     {
       name: '运行测试和质量扫描',
-      prompt: `运行测试和代码质量扫描。
+      prompt: `运行代码质量扫描（测试实测统一由 CLI 对账执行，本步不重复手动跑全量）。
 
 ### 操作
-1. 读取 \`.sillyspec/local.yaml\` 获取构建和测试命令
-2. 如果 local.yaml 有 test 命令，使用它（仅测试变更涉及的模块，非全量）
-3. 如果 local.yaml 无 test 命令，根据项目类型选择：
+1. 读取 \`.sillyspec/local.yaml\` 获取构建、测试和 lint 命令
+2. **不要手动重复跑 commands.test**——CLI 会在最终 --done 时统一执行一次（按变更命中模块子集），本步再跑 = 与 CLI 对账重复耗时（实测 198s×2）。如为提前发现实现问题，可对变更模块做**针对性快速冒烟**（可选，非必需）：
    - Maven：\`mvn test -pl <变更模块> -am\`（仅编译变更模块及其依赖）
    - Gradle：\`./gradlew :<模块>:test\`
    - npm/pnpm：\`pnpm test --filter=<包名>\` 或 \`npm test -- --testPathPattern=<相关文件>\`
    - Python：\`pytest <变更模块路径>/\`
-4. 记录通过/失败数量，分析失败原因
-5. 搜索技术债务：grep TODO/FIXME/HACK/XXX（仅限变更文件）
-6. 如果 local.yaml 有 lint 命令，运行 lint 检查
+3. 如果 local.yaml 有 lint 命令，运行 lint 检查
+4. 搜索技术债务：grep TODO/FIXME/HACK/XXX（仅限变更文件）
 
 ### 注意
-- 不要全量编译/测试整个项目，只测变更涉及的模块
-- 如果变更模块不确定，优先使用 local.yaml 中的命令
-- **CLI 对账机制**：verify 阶段最终 --done 时，CLI 会亲自执行 local.yaml 的 commands.test 并与你的报告对账；实测失败会直接阻断 verify 完成，谎报测试结果没有意义
+- **CLI 对账机制**：verify 阶段最终 --done 时，CLI 会亲自执行 local.yaml 的 commands.test（同步，耗时可能较长）；实测失败会直接阻断 verify 完成，谎报测试结果没有意义
+- 冒烟测试非必需：全量/模块实测结果以 CLI 对账为准，本步跑的结果仅供你提前发现问题并写入验证报告
 
 ### 输出
-测试结果 + 技术债务标记`,
-      outputHint: '测试结果 + 技术债务',
+质量扫描结果 + 技术债务标记`,
+      outputHint: '质量扫描结果 + 技术债务',
       optional: false
     },
     {

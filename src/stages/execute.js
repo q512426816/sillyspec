@@ -596,6 +596,13 @@ ${taskSummary}
    - 🔥 热上下文：design.md 非目标/兼容策略 + 当前 Wave 任务（必须加载）
    - 🌡️ 温上下文：CONVENTIONS.md + ARCHITECTURE.md（需要时加载）
    - ❄️ 冷上下文：其他变更的 design.md、历史 plan.md（不要主动加载，除非明确需要）
+
+### 中断续跑（如曾中断恢复）
+execute 按 Wave 持久化进度，task 级进度靠 plan.md checkbox 勾选。若本 Wave 曾因 429/API 配额/崩溃中断：
+- plan.md 中**已勾选 \`- [x]\` 的 task 已完成，跳过不重跑**（子代理也可能在完成前中断，重跑前先确认该 task 产出文件是否完整）
+- 用 \`sillyspec status\` 查当前进度，重新 \`sillyspec run execute\` 会回到当前 Wave step 继续，**不要从零重置或重跑已完成 Wave**
+- 本 Wave 已完成但不完整（产出缺文件）的 task 补做，不牵连其他 task
+
 ${contractInjection}${prototypeInjection}
 ### 本 Wave 任务
 ${taskList}

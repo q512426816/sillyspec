@@ -270,7 +270,13 @@ export function getLatestStageReviewRunId(runtimeRoot, stage, changeName) {
     const markerPath = stageReviewMarkerPath(runtimeRoot, stage, changeName)
     if (existsSync(markerPath)) {
       const content = readFileSync(markerPath, 'utf8').trim()
-      if (content) return content
+      // marker 内容格式校验（execute 复盘 b2）：必须 review- 前缀（generateStageReviewRunId 格式）。
+      // agent 手写 marker 可能误填 execute 的 exec- 前缀 → 按 stage-reviews/<stage>-<runId> 拼目录必找不到，
+      // 与其读坏 ID 报误导错误，不如显式 warn 并退回目录扫描。
+      if (content) {
+        if (/^review-/.test(content)) return content
+        console.warn(`⚠️ stage-review marker ${markerPath} 内容 "${content.slice(0, 40)}" 不是 review- 前缀（应为 generateStageReviewRunId 格式，勿填 execute 的 exec- ID），忽略并退回目录扫描`)
+      }
     }
   } catch {}
 
@@ -284,6 +290,21 @@ export function getLatestStageReviewRunId(runtimeRoot, stage, changeName) {
       .sort()
       .reverse()
     if (!entries[0]) return null
+    // cross-change 防护（execute 复盘 b1）：changeName 提供时按 review.json 的 reviewedFiles[0] 归属过滤。
+    // 契约 reviewedFiles[0] = `changes/<change>/<mainDoc>`（renderReviewJsonContract），据此排除他变更的 review，
+    // 否则批量完成 marker 缺失时可能读到 proxy 等其他变更的 acceptance review 报错误导。
+    if (changeName) {
+      const matching = entries.find(e => {
+        try {
+          const rj = JSON.parse(readFileSync(join(dir, e, 'review.json'), 'utf8'))
+          const r0 = Array.isArray(rj.reviewedFiles) ? String(rj.reviewedFiles[0]) : ''
+          return r0.includes(`changes/${changeName}/`)
+        } catch { return false }
+      })
+      if (matching) return matching.slice(stage.length + 1)
+      console.warn(`⚠️ 无 ${stage} 的 review marker，且 stage-reviews/ 下无归属变更 ${changeName} 的 review（reviewedFiles 应含 changes/${changeName}/）；为避免跨变更串台不再取最新，返回 null（fail-closed，由调用方报缺 review.json）`)
+      return null
+    }
     // entries[0] = "plan-review-2026-..."，剥掉 `${stage}-` 前缀得到 runId "review-2026-..."
     return entries[0].slice(stage.length + 1)
   } catch {

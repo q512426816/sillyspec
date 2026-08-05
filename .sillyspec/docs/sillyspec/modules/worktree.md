@@ -38,7 +38,8 @@ worktree 模块提供基于 git worktree 的分支隔离机制，让每个变更
 ### src/worktree-apply.js
 | 函数/常量 | 说明 | 参数 |
 |-----------|------|------|
-| `applyWorktree(changeName, { cwd, checkOnly?, merge? })` | 将 worktree 变更应用到主工作区；主干**已提交**推进交 `--3way` 自动三路合并，未提交 dirty 拦截引导 commit/stash；`merge=true` 显式走 git merge 兜底（D-001） | `changeName, { cwd, checkOnly?, merge? }` |
+| `applyWorktree(changeName, { cwd, checkOnly?, merge? })` | 将 worktree 变更应用到主工作区；允许集 = `resolveApplyAllowSet`（design §6 ∪ plan task allowed_paths）；主干**已提交**推进交 `--3way` 自动三路合并，未提交 dirty 拦截引导 commit/stash；`merge=true` 显式走 git merge 兜底（D-001） | `changeName, { cwd, checkOnly?, merge? }` |
+| `resolveApplyAllowSet(projectRoot, changeName)` | 解析 apply 允许文件集 = design.md §6 文件变更清单 ∪ 所有 task-*.md 的 allowed_paths（测试/产物文件设计常漏列但 task 已含，union 后不误拦；越界文件仍拦） | `projectRoot, changeName` |
 | `rollbackApply(projectRoot, trackedFiles, newFiles)` | `--3way` 冲突后回滚工作区到 apply 前状态（checkout HEAD 还原 tracked + 删新建），不留半成品冲突标记 | `projectRoot, trackedFiles, newFiles` |
 
 ### src/worktree-deps.js
@@ -104,3 +105,4 @@ execute 验证硬门（`run.js completeStep` execute 分支）读 `depsStatus`�
 | 日期 | 变更名 | 摘要 |
 |------|--------|------|
 | 2026-06-28 | 2026-06-28-worktree-deps-provision | 依赖供给 provisionDeps + execute 验证硬门 + doctor deps 检查；修路径/分支前缀脱节 |
+| 2026-08-04 | ql-20260804-005-83d8 | execute 复盘 c：apply 允许集改为 resolveApplyAllowSet（design §6 ∪ plan task allowed_paths），测试/产物文件不再误拦，越界文件仍拦 |

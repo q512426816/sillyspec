@@ -322,6 +322,32 @@ console.log('\n=== 4b. getLatestStageReviewRunId marker 优先 + cross-change �
   assert(getLatestStageReviewRunId(runtimeRoot, 'plan') !== a, `无 changeName 走 stage-only marker / fallback，不误读 changeA`)
 }
 
+{
+  // 6. marker 内容格式校验（execute 复盘 b2）：exec- 前缀（execute runId）误写进 stage-review marker →
+  //    忽略 + 退回目录扫描，不按坏 ID 拼 stage-reviews/<stage>-<runId> 目录报误导错误
+  const runtimeRoot = makeTmpDir('srfmt-')
+  writeFileSync(stageReviewMarkerPath(runtimeRoot, 'plan', 'mychange'), 'exec-2026-08-04-120000\n')
+  const r = getLatestStageReviewRunId(runtimeRoot, 'plan', 'mychange')
+  assert(r === null, `marker 内容 exec- 前缀被忽略（退回扫描，无目录 → null）`)
+}
+
+{
+  // 7. cross-change fallback 过滤（execute 复盘 b1）：无 marker 时按 review.json reviewedFiles[0] 归属变更，
+  //    不读他变更（proxy）的 acceptance review；全部不归属 → null fail-closed
+  const runtimeRoot = makeTmpDir('srcross-fb-')
+  const mkReview = (ch, runId) => {
+    mkdirSync(join(runtimeRoot, 'stage-reviews', `plan-${runId}`), { recursive: true })
+    writeFileSync(join(runtimeRoot, 'stage-reviews', `plan-${runId}`, 'review.json'),
+      JSON.stringify({ schemaVersion: 1, reviewType: 'plan', reviewedFiles: [`changes/${ch}/plan.md`], docHash: 'x', specVerdict: 'pass', qualityVerdict: 'pass' }))
+  }
+  // changeB(proxy) 的 runId 字典序更大 → 旧实现（无归属过滤）会误取 B
+  mkReview('changeA', 'review-2026-01-01-100000')
+  mkReview('changeB', 'review-2026-01-02-100000')
+  assert(getLatestStageReviewRunId(runtimeRoot, 'plan', 'changeA') === 'review-2026-01-01-100000', `fallback 按 reviewedFiles 归属 changeA，不读 changeB(proxy) 的最新`)
+  assert(getLatestStageReviewRunId(runtimeRoot, 'plan', 'changeB') === 'review-2026-01-02-100000', `changeB 读自己的 review`)
+  assert(getLatestStageReviewRunId(runtimeRoot, 'plan', 'changeC') === null, `无归属 changeC 的 review → null（fail-closed，不取最新串台）`)
+}
+
 // ────────────────────────────────────────────────────────────
 console.log('\n=== 5. task-review 回归（复用常量不破坏现有 v1 校验）===\n')
 

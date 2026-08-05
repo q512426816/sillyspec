@@ -95,6 +95,29 @@ function getBlobHashMap(cwd, treeish, files) {
 }
 
 /**
+ * apply 的文件清单 = design §6 清单 ∪ plan TaskCard allowed_paths（execute 复盘 c）。
+ *
+ * design §6 常只列源码、漏测试/产物文件，而 task allowed_paths（plan 阶段产出）已含——apply 若只认
+ * design 清单会在测试/产物文件上误拦（assess 用 task allowed_paths 已放行、apply 用 design 清单又拦，
+ * 两 gate 口径不一致）。union 后两源并集为准；plan 已过 validateDesignFileCoverage 单向校验（design ⊆
+ * plan），union 不会放开 design/plan 之外的任意文件（仍拦完全越界文件）。
+ *
+ * @param {string} projectRoot - 主仓库根
+ * @param {string} changeName - 变更名
+ * @returns {Set<string>} 并集清单（无 design 清单且无 task 卡片时为空集）
+ */
+export function resolveApplyAllowSet(projectRoot, changeName) {
+  const allowSet = parseFileChangeList(join(projectRoot, CHANGES_REL, changeName, 'design.md'));
+  const tasksDir = join(projectRoot, CHANGES_REL, changeName, 'tasks');
+  if (existsSync(tasksDir)) {
+    for (const tf of readdirSync(tasksDir).filter(f => /^task-\d+\.md$/.test(f))) {
+      for (const p of parseAllowedPaths(readFileSync(join(tasksDir, tf), 'utf8'))) allowSet.add(p);
+    }
+  }
+  return allowSet;
+}
+
+/**
  * apply worktree 变更到主工作区
  *
  * @param {string} changeName - 变更名
@@ -178,9 +201,8 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
     return result;
   }
 
-  // --- 3. 解析 design.md 文件变更清单 ---
-  const designPath = join(projectRoot, CHANGES_REL, changeName, 'design.md');
-  const allowSet = parseFileChangeList(designPath);
+  // --- 3. 解析 apply 文件清单（design §6 清单 ∪ plan TaskCard allowed_paths，execute 复盘 c） ---
+  const allowSet = resolveApplyAllowSet(projectRoot, changeName);
   const hasAllowList = allowSet.size > 0;
 
   // --- 4. 校验：变更文件 ⊆ 清单（无清单则跳过）---

@@ -229,3 +229,52 @@
 方案：quicklog.js 单行四字段归一改为 splitSingleLineFields 双级扫描——先按字段边界严格扫描（真实标签=串首/前导空白/句末标点。；！？，引用字样因前导「/|( 非边界字符而跳过）；严格失败退回顺序扫描兜底；缺标签返回 null 落单行兜底（--done 契约仍拦缺字段）。补回归 2e/2f（改前红改后绿）。
 
 结果：quicklog-cli-managed 82/0（含 2e/2f 8 断言）、全量 npm test 108 文件 0 失败、npm run lint 66 文件 0 错。
+## ql-20260804-005-83d8 | 2026-08-04 16:04:26 | execute 复盘 3 债（Task Review 对账 / Stage Review marker / apply 口径）修复登记
+状态：已完成
+关联变更：（无）
+文件：
+- src/task-review.js（verifyReviewGitEvidence 新增 parsePorcelainFiles 解析 git status --porcelain，working-tree 未提交改动并入 diffFiles 后再交叉比对）
+- src/stage-review.js（getLatestStageReviewRunId marker ^review- 前缀校验 + fallback 按 review.json reviewedFiles[0] 归属变更过滤 fail-closed）
+- src/worktree-apply.js（新增 resolveApplyAllowSet = design §6 ∪ 全部 task allowed_paths，applyWorktree 改用它）
+- test/agent-gate-hardening.test.mjs（新增未 commit 时 changedFiles 与 working-tree 有交集 → ok 回归用例）
+- test/stage-review.test.mjs（新增 marker exec- 前缀忽略 + cross-change fallback 过滤回归用例）
+- test/worktree-allow-list-violations.test.mjs（新增 resolveApplyAllowSet union 回归用例 ⑦）
+- docs/sillyspec/prompt-control-debt.md（2026-08-04 execute 复盘增补 3 债登记 + 推进记录行 + Q-④ 重跑 run 误建空会话观察）
+
+需求：execute 复盘 3 债（Task Review 对账 / Stage Review marker / apply 口径）修复登记
+根因：(a)子代理未 commit 时 base..head diff 为空、changedFiles 交叉比对必判不相交伪造；(b)marker 缺格式校验+fallback 扫描跨变更串台；(c)apply 只认 design §6、plan allowed_paths 已含测试/产物文件却过不去
+方案：(a)verifyReviewGitEvidence 新增 parsePorcelainFiles 解析 git status --porcelain，working-tree 改动并入 diffFiles 后再交叉比对，未 commit 不再误判伪造；(b)getLatestStageReviewRunId 校验 marker ^review- 前缀（exec- 忽略+warn+退回扫描）、fallback 按 review.json reviewedFiles[0] 归属变更过滤、无归属 fail-closed null；(c)新增 resolveApplyAllowSet = design §6 ∪ 全部 task allowed_paths，applyWorktree 改用它，越界文件仍拦
+结果：agent-gate-hardening 30/0、stage-review 56/0、worktree-allow-list 7/0、全量 npm test 108 文件 0 失败、npm run lint 66 文件 0 错
+
+## ql-20260804-006-2582 | 2026-08-04 16:22:48 | verify 复盘 3 负面点处置——关键词判级误判 / 测试重复跑 198s×2 / CLI 对账静默无进度
+状态：已完成
+关联变更：（无）
+文件：
+- src/stages/verify.js（b：step6「运行测试和质量扫描」prompt 减法——不重复手动跑全量测试统一交 CLI 对账 + 首段💡说明同步）
+- src/run/gates.js（c：verify 对账调用前加「⏳ 同步对账请等待」预告，放调用点不污染 machine-interface --json）
+- docs/prompt/verify.md（b：按 _extracted.json 同步 step6 + 进度确认首段两处 prompt 原文）
+- docs/prompt/_extracted.json（b：重提取产物）
+- docs/sillyspec/file-lifecycle.md（b：verify 阶段行补「step 不重复手动跑全量测试」）
+- docs/sillyspec/prompt-control-debt.md（verify 复盘增补 section：a 评估保留 / b、c 修复 + 推进记录行）
+
+需求：verify 复盘 3 负面点处置——关键词判级误判 / 测试重复跑 198s×2 / CLI 对账静默无进度
+根因：(a)detectChangeRisk 是机械字面匹配不认否定语境（design 写不改 daemon 仍判 critical），但 frontmatter risk_level 显式豁免已实现且 prompt 已告知，非缺陷；(b)verify step6 要求 agent 手动跑测试 + CLI --done 又对账跑一遍（按变更命中模块），同一命令耗时翻倍；(c)CLI 对账 execSync 同步阻塞 198s 期间 stdout 全静默，agent 以为卡死
+方案：(a)评估保留——已实现显式豁免，不改；(b)verify.js「运行测试和质量扫描」step prompt 减法：不重复手动跑全量测试（统一交 CLI 对账执行一次），step 只做 lint/静态 + 可选冒烟；同步首段说明 + docs/prompt 重提取 + file-lifecycle 补句；(c)gates.js verify 对账前加 ⏳ 进度预告（放调用点，machine-interface --json 不被污染）
+结果：run-complete-step-verify 17/0、stage-definitions 全过、verify-postcheck-module 33/0、全量 npm test 108 文件 0 失败、npm run lint 66 文件 0 错
+## ql-20260804-007-617f | 2026-08-04 16:52:46 | 全流程复盘 3 重点处置——集成层测试盲区 / Task Review base..head 对账坑 / 429 中断无 checkpoint 续跑
+状态：已完成
+关联变更：（无）
+文件：
+- src/stages/plan.js（①b：全局验收标准模板加「集成敏感 task 建议加集成冒烟验收——组件单测全绿 ≠ 集成正确」条）
+- src/stages/execute.js（③：buildWavePrompt 加「### 中断续跑」段——已勾选 - [x] task 跳过不重跑、status+run execute 回 Wave step 续跑、不重置）
+- templates/prompts/verify-probes.md（①a：探针 3 加第 4 条集成盲区提示——测试文件存在 ≠ 集成正确，路由/layout 敏感 task 检查集成冒烟覆盖）
+- docs/prompt/plan.md（同步：全局验收标准加集成冒烟条）
+- docs/prompt/execute.md（同步：Wave 1 完整 prompt 加中断续跑段）
+- docs/prompt/_extracted.json（重提取产物）
+- docs/sillyspec/file-lifecycle.md（plan/execute 阶段行补句：集成冒烟引导 + 中断续跑引导）
+- docs/sillyspec/prompt-control-debt.md（全流程复盘 section：a persuasion 补强 / b=exec-a 已修复 / c prompt 引导续跑 + 推进记录行）
+
+需求：全流程复盘 3 重点处置——集成层测试盲区 / Task Review base..head 对账坑 / 429 中断无 checkpoint 续跑
+根因：(a)verify 探针 3 只查测试文件存在不查集成覆盖，组件单测全绿但 layout 守卫重定向只有部署+浏览器暴露；(b)子代理不 commit 时 base..head diff 空被判伪造（= 已修的 exec-a 复述）；(c)execute checkpoint 是 Wave 级 step + plan.md checkbox 隐式 task 级，429 中断后机制可续跑但 prompt 无引导，agent 误以为只能重置
+方案：(a)persuasion 补强——探针 3 加集成盲区提示 + plan 全局验收标准加集成冒烟条（CLI 无法替 agent 判断集成层是否测到位，推 agent/人类）；(b)评估=exec-a 已修复，登记确认；(c)prompt 引导续跑——execute Wave prompt 加中断续跑段（已勾选 task 跳过、status+run execute 续跑、不重置）；否决 task 级 checkpoint 机制（checkbox 已隐式持久化，工程大收益边际）
+结果：stage-definitions/plan-postcheck-crlf(10/0)/plan-execute-contract(56/0)/verify-postcheck-module(33/0)/execute-batch(18/0) 全过、全量 npm test 108 文件 0 失败、npm run lint 66 文件 0 错

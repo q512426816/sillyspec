@@ -460,6 +460,21 @@ function runGit(gitDir, args) {
   }).trim()
 }
 
+// porcelain 状态行 → 变更文件路径（对齐 shared.js:343 parsePorcelainPath：`XY path`、引号包裹、
+// rename `R old -> new` 取箭头后）。未 commit 的 working-tree 改动对账用。
+function parsePorcelainFiles(statusOut) {
+  const files = []
+  for (const line of String(statusOut).split('\n')) {
+    if (line.trim() === '') continue
+    let p = line.slice(3).trim()
+    if (p.length >= 2 && p.startsWith('"') && p.endsWith('"')) p = p.slice(1, -1).replace(/\\(.)/g, (_, c) => c)
+    const arrow = p.indexOf(' -> ')
+    if (arrow !== -1) p = p.slice(arrow + 4)
+    if (p) files.push(p.replace(/\\/g, '/'))
+  }
+  return files
+}
+
 /**
  * 校验 review.json 的 base/head 是否指向真实 git 提交，且 diff 非空。
  *
@@ -514,23 +529,27 @@ export function verifyReviewGitEvidence(review, gitDir) {
     return { ok: true, emptyDiff: false, errors, warnings, unavailable: false }
   }
 
-  const emptyDiff = diffFiles.length === 0
-  // emptyDiff 回退：子代理可能未 commit，base..head 无 commit diff 但 working-tree 有改动。
-  // 对齐 checkExecuteCodeEvidence（stage-contract.js 同时查 working-tree）语义，避免误判零改动伪造。
-  let workingTreeChanged = false
-  if (emptyDiff) {
-    try {
-      const wtStatus = runGit(gitDir, ['status', '--porcelain'])
-      workingTreeChanged = !!wtStatus && wtStatus.trim().length > 0
-    } catch {}
-    if (workingTreeChanged) {
-      warnings.push(`base..head 无 commit diff（${review.base.slice(0, 8)}..${review.head.slice(0, 8)}），但 working-tree 有未提交改动 —— 按有效改动处理，不判零改动伪造`)
+  // 并入 working-tree 未提交改动（execute 复盘 a）：子代理默认不 commit，base..head 无 commit diff 时
+  // diffFiles 留空 → 下方交叉比对拿空集对非空 changedFiles 必判「完全不相交」伪造，逼 agent 强制 commit
+  // + 改 7 个 review head。对齐 checkExecuteCodeEvidence（stage-contract.js 同时查 working-tree）语义，
+  // 未提交改动也算有效对账源。working-tree 有改动时无条件并入（覆盖「部分 commit + 未提交」）。
+  const commitDiffFiles = diffFiles.slice()
+  try {
+    const wtStatus = runGit(gitDir, ['status', '--porcelain'])
+    if (wtStatus && wtStatus.trim().length > 0) {
+      const wtFiles = parsePorcelainFiles(wtStatus)
+      if (wtFiles.length > 0) diffFiles = diffFiles.concat(wtFiles)
+      if (commitDiffFiles.length === 0) {
+        warnings.push(`base..head 无 commit diff（${review.base.slice(0, 8)}..${review.head.slice(0, 8)}），交叉对账并入 working-tree 未提交改动 ${wtFiles.length} 个文件 —— 按有效改动处理，不判零改动伪造`)
+      }
     }
-  }
-  const effectiveEmptyDiff = emptyDiff && !workingTreeChanged
+  } catch {}
+  diffFiles = [...new Set(diffFiles)].filter(Boolean)
 
-  // changedFiles 交叉比对：完全不相交 = review 描述的改动与实际 diff 无关
-  if (!effectiveEmptyDiff && Array.isArray(review.changedFiles) && review.changedFiles.length > 0) {
+  const emptyDiff = diffFiles.length === 0
+
+  // changedFiles 交叉比对：完全不相交 = review 描述的改动与实际 diff 无关（diffFiles 已含 working-tree）
+  if (!emptyDiff && Array.isArray(review.changedFiles) && review.changedFiles.length > 0) {
     const normalize = (p) => String(p).replace(/^\.\//, '')
     const diffSet = new Set(diffFiles.map(normalize))
     const hasOverlap = review.changedFiles.some(f => {
@@ -543,7 +562,7 @@ export function verifyReviewGitEvidence(review, gitDir) {
     }
   }
 
-  return { ok: errors.length === 0, emptyDiff: effectiveEmptyDiff, errors, warnings, unavailable: false }
+  return { ok: errors.length === 0, emptyDiff, errors, warnings, unavailable: false }
 }
 
 /**
