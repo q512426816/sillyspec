@@ -4,7 +4,7 @@ doc_type: module-card
 module_id: stages
 author: qinyi
 created_at: 2026-06-04T16:55:00+08:00
-updated_at: 2026-07-11T21:05:00+08:00
+updated_at: 2026-08-05T22:30:00+08:00
 ---
 
 # stages
@@ -30,6 +30,8 @@ updated_at: 2026-07-11T21:05:00+08:00
 **辅助阶段**：scan、quick、explore、status、doctor
 
 **execute prompt 路径约定**（2026-07-11 占位符化，坑 2）：execute stage prompt 中 review.json / endpoints.json 路径用 `{SPEC_ROOT}/.runtime/` 占位符（非裸 `.sillyspec/.runtime/` 硬编码）。`{SPEC_ROOT}` 由 `run.js` 平台路径重写消费——仓库内模式→`.sillyspec`，平台模式（specDir 指向外部目录）→specDir。修复平台模式下 review.json 落盘路径错位（`execute.js:623/644`）。
+
+**plan 完成校验**（2026-08-05，`plan-postcheck.js`）：`validateTaskCommands` 扫每个 TaskCard 的 `verify`/`implementation` 字段里 `npm/pnpm/yarn run <脚本>` 命令，按 `cd <subdir> &&` 前缀或 local.yaml `modules` 块定位子包 package.json 查脚本是否存在（monorepo 感知），不存在 → error 硬阻断 plan 完成（共享 helper `validateScriptCommands` 在 `src/stages/cmd-existence.js`，scan-postcheck 复用时维持 warning）。`validatePlanFeasibility` 另加 acceptance best-effort 字段 grep——从 acceptance 文本提 snake_case/camelCase 标识符 grep `allowed_paths` 源文件，未命中 → warning（不阻断，给 LLM 审查提线索）；`plan.js` `stepReviewPlan` 审查清单加「acceptance 对照实际 schema/类型源核验存在性与形态」条。
 
 当前固定阶段步骤数：
 

@@ -390,20 +390,20 @@ async function executePlanPostcheck(cwd, platformOpts, progress) {
 
 /**
  * execute 入口 deps 自检（D-002，change 2026-06-28-worktree-deps-provision）。
- * 已存在 worktree（create short-circuit 不供给）时，校验 depsStatus 缺失 / node_modules
- * 丢失(missing) / lockfile 变化(stale) → 触发 provisionDeps 重供给并写回 meta。
+ * 已存在 worktree（create short-circuit 不供给）时，校验 deps 状态缺失/漂移 → 触发 provisionDeps 重供给并写回 meta。
+ *
+ * 判定改调共享 checkDepsFreshness（H1，change 2026-08-05-tooling-feedback-fixes task-04）：
+ *   - status ∈ {missing, stale, main-drift, failed} → 触发重供给（main-drift 为新增主仓 lockfile 漂移触发）
+ *   - status === fresh → 跳过
+ *   行为与原内联 noStatus/missing/stale 三判定等价（provisionDeps 调用 / meta 写回不变），新增 main-drift 触发。
  */
 async function ensureDepsFreshness(cwd, changeName, specBase, worktreeMeta) {
   if (!worktreeMeta || !worktreeMeta.worktreePath) return
-  const { provisionDeps, lockfileHash } = await import('../worktree-deps.js')
+  const { provisionDeps, checkDepsFreshness } = await import('../worktree-deps.js')
   const wtPath = worktreeMeta.worktreePath
-  const nodeModulesExists = existsSync(join(wtPath, 'node_modules'))
-  const currentHash = lockfileHash(wtPath)
-  const noStatus = !worktreeMeta.depsStatus
-  const missing = ['linked', 'installed'].includes(worktreeMeta.depsStatus) && !nodeModulesExists
-  const stale = !!(worktreeMeta.depsLockHash && currentHash && currentHash !== worktreeMeta.depsLockHash)
-  if (!noStatus && !missing && !stale) return
-  const reason = noStatus ? 'depsStatus 缺失' : (missing ? 'node_modules 丢失' : 'lockfile 变化')
+  const fresh = checkDepsFreshness(worktreeMeta, wtPath, cwd)
+  if (fresh.status === 'fresh') return
+  const reason = fresh.detail || fresh.status
   console.log(`🔄 worktree deps 自检：${reason}（depsStatus=${worktreeMeta.depsStatus || 'unknown'}），重新供给...`)
   let deps = {}
   try {

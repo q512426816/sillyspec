@@ -12,7 +12,7 @@ import { execSync } from 'child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, readdirSync, statSync, lstatSync, readlinkSync, unlinkSync } from 'fs';
 import { join, resolve, dirname } from 'path';
 import { createHash } from 'crypto';
-import { provisionDeps, lockfileHash } from './worktree-deps.js';
+import { provisionDeps, checkDepsFreshness } from './worktree-deps.js';
 import { writeAtomicSync } from './fs-atomic.js';
 
 // meta.json 会被 hook 进程与其它 CLI 进程并发读取（worktree-guard / getMeta / create 幽灵判定），
@@ -832,19 +832,71 @@ export class WorktreeManager {
    * @param {{ fix?: boolean, staleHours?: number }} opts
    * @returns {{ issues: Array<{ type: string, name: string, detail: string, fixable: boolean }>, fixed: string[], unfixable: string[] }}
    */
+  /**
+   * doctor --fix 的依赖重供给：先解 worktree/node_modules junction（保护主仓 node_modules），
+   * 再 provisionDeps(force:true) 强制走 install 分支重装。
+   *
+   * Windows 保护（与 cleanup 722-743 同源坑）：不解链直接 install 会经 junction 误改主仓
+   * node_modules 内容。in-place-fallback 无独立 node_modules（worktreePath 即主仓），跳过解链，
+   * 仅 install。force=true 绕过 provisionDeps 的 lockfile 一致快路径，确保真重装而非幂等 linked。
+   *
+   * @param {string} name - changeName
+   * @param {string} wtPath - worktree 根目录（meta.worktreePath）
+   * @returns {{ ok: boolean, msg: string }}
+   */
   _doctorReprovision(name, wtPath) {
     try {
-      const deps = provisionDeps(wtPath, this.cwd, { specBase: join(this.cwd, '.sillyspec') }) || {};
-      const metaPath = join(this.getWorktreePath(name), META_FILE);
       const meta = this.getMeta(name) || {};
-      writeMetaAtomic(metaPath, { ...meta, ...deps });
+      const isInPlace = meta.mode === 'in-place-fallback';
+      // 先解 junction（非 in-place）：lstatSync 判 link → Windows rmdir junction / Unix unlinkSync
+      if (!isInPlace && existsSync(wtPath)) {
+        const wtNodeModules = join(wtPath, 'node_modules');
+        if (existsSync(wtNodeModules)) {
+          let isLink = false;
+          try { isLink = lstatSync(wtNodeModules).isSymbolicLink(); } catch {}
+          if (isLink) {
+            try {
+              if (process.platform === 'win32') {
+                execSync(`rmdir "${wtNodeModules}"`, { shell: 'cmd.exe' });
+              } else {
+                unlinkSync(wtNodeModules);
+              }
+            } catch {} // 解链失败不阻断：交由 provisionDeps install 分支处理
+          }
+        }
+      }
+      const deps = provisionDeps(wtPath, this.cwd, {
+        specBase: join(this.cwd, '.sillyspec'),
+        force: true,
+      }) || {};
+      const metaPath = join(this.getWorktreePath(name), META_FILE);
+      // 成功重供时清掉旧 depsError（provisionDeps 成功结果不含该键，{...meta,...deps} 会残留旧值）
+      const merged = { ...meta, ...deps };
+      if (deps.depsStatus !== 'failed') delete merged.depsError;
+      writeMetaAtomic(metaPath, merged);
       return { ok: true, msg: `re-provisioned ${name}: depsStatus=${deps.depsStatus}` };
     } catch (e) {
       return { ok: false, msg: `re-provision failed for ${name}: ${e.message}` };
     }
   }
 
-  doctor({ fix = false, staleHours = 24 } = {}) {
+  /**
+   * worktree 健康检查 + 可选修复
+   * 检查项：
+   * - git worktree list 中的孤儿条目（目录不存在）
+   * - worktree 目录存在但 git 不认识
+   * - meta 存在但 worktree 目录不存在
+   * - worktree 目录存在但 meta 不存在（幽灵目录）
+   * - SillySpec 分支残留（sillyspec/* 但无对应 meta）
+   * - 超过指定小时的过期 worktree
+   * - deps 依赖状态（failed/missing/stale/main-drift，复用 checkDepsFreshness 统一判定）
+   *
+   * @param {{ fix?: boolean, staleHours?: number, changeName?: string|null }} opts
+   *   - changeName：非 null 时仅扫描该 change（deps/ghost/stale/orphan-git/orphan-branch 全部按 changeName 过滤）；
+   *     不传则全量扫（兼容现有行为）。
+   * @returns {{ issues: Array<{ type: string, name: string, detail: string, fixable: boolean }>, fixed: string[], unfixable: string[] }}
+   */
+  doctor({ fix = false, staleHours = 24, changeName = null } = {}) {
     const issues = [];
     const fixed = [];
     const unfixable = [];
@@ -880,6 +932,7 @@ export class WorktreeManager {
     for (const wt of gitWorktreeList) {
       if (!existsSync(wt.path)) {
         const name = this._pathToChangeName(wt.path);
+        if (changeName && name !== changeName) continue; // --change 过滤：仅扫指定 change
         if (wt.missing === true) {
           // git 明确标记目录缺失（git 2.20+）→ 真 orphan，prune 安全
           issues.push({ type: 'orphan-git-entry', name: name || wt.path, detail: `git worktree 标记 missing: ${wt.path}`, fixable: true });
@@ -901,25 +954,28 @@ export class WorktreeManager {
       for (const entry of entries) {
         if (!entry.isDirectory()) continue;
         const name = entry.name;
+        if (changeName && name !== changeName) continue; // --change 过滤：仅扫指定 change
         const dirPath = join(this.worktreeBase, name);
         const hasMeta = existsSync(join(dirPath, META_FILE));
         const meta = hasMeta ? this.getMeta(name) : null;
 
-        // deps 依赖状态检查（change 2026-06-28-worktree-deps-provision）
-        if (meta && meta.worktreePath && existsSync(meta.worktreePath) && meta.mode !== 'in-place-fallback') {
+        // deps 依赖状态检查（change 2026-06-28-worktree-deps-provision / 2026-08-05-tooling-feedback-fixes）
+        // 复用 checkDepsFreshness（H1，worktree-deps.js），优先级 failed→missing→stale→main-drift→fresh。
+        // 放宽原 909 in-place-fallback 守卫：in-place 也跑（main-drift/stale/failed 对它同样有意义，
+        // 真 in-place 的 wtPath===主仓→wtHash===mainHash→不会误报 main-drift，仅 failed/stale 有意义）。
+        // fix 时 _doctorReprovision 自行判断是否解链（in-place 不解链，仅 install）。
+        if (meta && meta.worktreePath && existsSync(meta.worktreePath)) {
           const wtPath = meta.worktreePath;
-          const nmExists = existsSync(join(wtPath, 'node_modules'));
-          const curHash = lockfileHash(wtPath);
-          let depsIssue = null;
-          if (['linked', 'installed'].includes(meta.depsStatus) && !nmExists) {
-            depsIssue = { type: 'deps-missing', detail: 'meta.depsStatus=' + meta.depsStatus + ' 但 node_modules 缺失' };
-          } else if (meta.depsLockHash && curHash && curHash !== meta.depsLockHash) {
-            depsIssue = { type: 'deps-stale', detail: 'lockfile 变化 (' + meta.depsLockHash + ' -> ' + curHash + ')' };
-          } else if (meta.depsStatus === 'failed') {
-            depsIssue = { type: 'deps-failed', detail: '上次依赖供给失败' + (meta.depsError ? ': ' + meta.depsError : '') };
-          }
-          if (depsIssue) {
-            issues.push({ type: depsIssue.type, name, detail: depsIssue.detail, fixable: true });
+          const fresh = checkDepsFreshness(meta, wtPath, this.cwd);
+          const issueTypeByStatus = {
+            failed: 'deps-failed',
+            missing: 'deps-missing',
+            stale: 'deps-stale',
+            'main-drift': 'deps-main-drift',
+          };
+          const issueType = issueTypeByStatus[fresh.status] || null;
+          if (issueType) {
+            issues.push({ type: issueType, name, detail: fresh.detail, fixable: true });
             if (fix) {
               const r = this._doctorReprovision(name, wtPath);
               (r.ok ? fixed : unfixable).push(r.msg);
@@ -978,6 +1034,7 @@ export class WorktreeManager {
         for (const line of branches.split('\n').filter(Boolean)) {
           const branch = line.replace(/^\*?\s+/, '').trim();
           const name = branch.replace(BRANCH_PREFIX, '');
+          if (changeName && name !== changeName) continue; // --change 过滤：仅扫指定 change
           if (!metaNames.has(name)) {
             issues.push({ type: 'orphan-branch', name, detail: `分支残留（无对应 meta）: ${branch}`, fixable: true });
             if (fix) {

@@ -18,6 +18,7 @@ import { join as pJoin } from 'path'
 import jsYaml from 'js-yaml'
 import { parseFileChangeList, pathMatches } from '../change-list.js'
 import { getRule } from '../stage-contract-spec.js'
+import { validateScriptCommands } from './cmd-existence.js'
 
 // ═══════════════════════════════════════════════════════════════
 // 解析工具（从 plan.js 迁移）
@@ -417,6 +418,100 @@ export function validateCrossTaskContracts(changeDir) {
   return { ok: errors.length === 0, errors, warnings }
 }
 
+/**
+ * 从 local.yaml 文本解析 modules 块（monorepo 子包定位）。
+ *
+ * 与 verify-postcheck.extractModules 同风格（轻量行扫描，不引 yaml 依赖），不复用是为避免
+ * plan-postcheck → verify-postcheck → contract-matrix → plan-postcheck 的循环导入。
+ * 只取 path 字段（test 字段此处用不到），结构 { name: { path } }。
+ *
+ *   modules:
+ *     backend: { path: "backend/", test: "cd backend && uv run pytest" }
+ *
+ * @param {string} yamlText
+ * @returns {Record<string, {path:string}>|null} 无 modules 块或无有效条目 → null
+ */
+export function parseLocalYamlModules(yamlText) {
+  if (!yamlText) return null
+  const lines = yamlText.split('\n')
+  let startIdx = -1
+  for (let i = 0; i < lines.length; i++) {
+    if (/^modules:\s*(?:#.*)?$/.test(lines[i])) { startIdx = i; break }
+  }
+  if (startIdx === -1) return null
+  const modules = {}
+  for (let i = startIdx + 1; i < lines.length; i++) {
+    const line = lines[i]
+    const entry = line.match(/^  ([A-Za-z0-9_.\-]+):\s*(.*)$/)
+    if (!entry) {
+      // 遇到新的顶层 key（行首非空格且非注释）→ modules 块结束
+      if (line.length > 0 && !line.startsWith(' ') && !line.startsWith('#') && line.trim() !== '') break
+      continue
+    }
+    const rest = entry[2] || ''
+    // path 值：带引号或不带引号（flow mapping），取第一个匹配
+    const pathMatch = rest.match(/path:\s*"([^"]+)"/) || rest.match(/path:\s*([^,\s}]+)/)
+    if (pathMatch) modules[entry[1]] = { path: pathMatch[1] }
+  }
+  return Object.keys(modules).length > 0 ? modules : null
+}
+
+/**
+ * TaskCard 命令存在性校验器（调共享 validateScriptCommands，硬阻断）。
+ *
+ * 修复场景（design D-04 / 问题 3）：TaskCard verify/implementation 写 `pnpm gen:types`
+ * 但根 package.json 无此 script（实际在 monorepo 子包 packages 目录下），plan 阶段零校验
+ * → execute 子代理跑死命令。scan-postcheck 的命令校验只看 local.yaml 且维持 warning；
+ * 本函数对 TaskCard 升 error（同 helper、严重度由调用方定）。
+ *
+ * modules 从 local.yaml 提取（monorepo 子包感知）：无 modules 块时仅查根 package.json
+ * （与 scan-postcheck 历史行为一致）；有 modules 块时多候选子包 package.json 任一命中即通过。
+ *
+ * @param {string} changeDir - 变更目录
+ * @param {string} projectRoot - 项目根目录（package.json 查找基准）
+ * @param {object|null} modules - local.yaml modules 块（{ name: { path } }），可选
+ * @returns {{ ok: boolean, errors: string[], warnings: string[] }}
+ */
+export function validateTaskCommands(changeDir, projectRoot, modules = null) {
+  const errors = []
+  const warnings = []
+
+  const tasksDir = pJoin(changeDir, 'tasks')
+  if (!existsSync(tasksDir)) {
+    return { ok: true, errors, warnings }
+  }
+  const taskFiles = readdirSync(tasksDir).filter(f => /^task-\d+\.md$/.test(f))
+  if (taskFiles.length === 0) {
+    return { ok: true, errors, warnings }
+  }
+
+  for (const file of taskFiles) {
+    const content = readFileSync(pJoin(tasksDir, file), 'utf8')
+    const taskId = parseTaskId(content, file) || file
+    const fmMatch = content.match(/^---\n([\s\S]*?)\n---/)
+    if (!fmMatch) continue // feasibility 已报 frontmatter 缺失，不重复
+    let fm
+    try {
+      fm = jsYaml.load(fmMatch[1]) || {}
+    } catch {
+      continue // 非法 YAML 由 feasibility 处理，不重复
+    }
+
+    // 合并 verify + implementation 文本（命令可能出现在任一字段）
+    const verifyText = typeof fm.verify === 'string' ? fm.verify : ''
+    const implText = typeof fm.implementation === 'string' ? fm.implementation : ''
+    const text = `${verifyText}\n${implText}`
+    if (!text.trim()) continue
+
+    const { invalid } = validateScriptCommands(text, { projectRoot, modules })
+    for (const inv of invalid) {
+      errors.push(`${taskId}: ${inv.cmd} 命令不存在（${inv.reason}）`)
+    }
+  }
+
+  return { ok: errors.length === 0, errors, warnings }
+}
+
 // 路径容差匹配（normalizePath / globMatch / pathMatches）复用自 change-list.js，
 // design 清单解析与 allowed_paths 对账共用同一套匹配语义，避免两处逻辑漂移。
 
@@ -571,6 +666,44 @@ export function validatePlanFeasibility(changeDir, projectRoot = null) {
     if (!hasAcceptance) errors.push(fsRule.data.messageAcceptance.replaceAll('${id}', taskId || file))
     if (!hasVerify) errors.push(fsRule.data.messageVerify.replaceAll('${id}', taskId || file))
     if (!hasConstraints) errors.push(fsRule.data.messageConstraints.replaceAll('${id}', taskId || file))
+
+    // 6. acceptance best-effort 字段 grep（D-05 软约束，warning 不阻断）
+    // 从 acceptance 文本提取 snake_case/camelCase 标识符，grep allowed_paths 指向的源文件；
+    // 找不到 → warning（给 LLM 审查提线索，不阻断 execute）。宁漏不噪：只取 snake/camel，
+    // 正则天然避开命令（无 _ 或大写）/路径（无 /）/中文；glob allowed_path / 目录 / 不存在文件一律跳过。
+    if (projectRoot && hasAcceptance && allowedPaths.length > 0) {
+      let acceptanceText = ''
+      try {
+        const fmObj = jsYaml.load(fm) || {}
+        if (typeof fmObj.acceptance === 'string') acceptanceText = fmObj.acceptance
+        else if (Array.isArray(fmObj.acceptance)) acceptanceText = fmObj.acceptance.join('\n')
+      } catch {
+        // frontmatter 非法 YAML（feasibility 未对 fm 做 YAML 解析，可能字面合法但语义复杂）→ 跳过 best-effort
+      }
+      if (acceptanceText) {
+        const IDENT_RE = /(?<![A-Za-z])[a-z]+(?:_[a-z]+)+|(?<![A-Za-z])[a-z]+(?:[A-Z][a-z]+)+/g
+        const idents = [...new Set(acceptanceText.match(IDENT_RE) || [])]
+        if (idents.length > 0) {
+          const readableFiles = []
+          for (const ap of allowedPaths) {
+            if (ap.includes('*')) continue // glob，跳过（best-effort，不展开）
+            try {
+              readableFiles.push(readFileSync(pJoin(projectRoot, ap), 'utf8'))
+            } catch {
+              // 目录 / 不存在 / 不可读 → 跳过（feasibility 3 已对不存在文件提示 warning）
+            }
+          }
+          // 至少读到一个源文件才比对，避免「全没读到 → 全部标识符误报」噪声
+          if (readableFiles.length > 0) {
+            for (const ident of idents) {
+              if (!readableFiles.some(c => c.includes(ident))) {
+                warnings.push(`${taskId}: acceptance 提到 ${ident} 但 allowed_paths 源文件未命中`)
+              }
+            }
+          }
+        }
+      }
+    }
   }
 
   // 4b. depends_on 引用存在性
@@ -709,6 +842,25 @@ export async function executePlanPostcheck(context) {
     console.error('\n   修复方式：要么在 provider task 的 provides.fields 补上缺失字段，')
     console.error('   要么修正 consumer task 的 expects_from.needs（确认依赖是否真实）。')
     throw new Error('planPostcheck: cross-task contract check failed')
+  }
+
+  // ── 1c-b. TaskCard 命令存在性校验 ──
+  // TaskCard verify/implementation 的 `npm|pnpm|yarn run <script>` 必须在 package.json
+  // scripts 中存在（monorepo 子包感知——读 local.yaml modules 块定位）。
+  // invalid → error 硬阻断，避免 execute 子代理跑死命令（design D-04 / 问题 3）。
+  // modules 块可选：无块时仅查根 package.json（与 scan-postcheck 历史行为一致）。
+  const localYamlPath = pJoin(specDir, 'local.yaml')
+  let taskModules = null
+  if (existsSync(localYamlPath)) {
+    taskModules = parseLocalYamlModules(readFileSync(localYamlPath, 'utf8'))
+  }
+  const taskCmds = validateTaskCommands(changeDir, context.cwd, taskModules)
+  if (taskCmds.errors.length > 0) {
+    console.error('\n❌ TaskCard 命令存在性校验失败（verify/implementation 的 npm/pnpm/yarn run <script> 不存在）：')
+    for (const err of taskCmds.errors) console.error(`   - ${err}`)
+    console.error('\n   修复方式：要么在 package.json scripts 补上缺失命令（monorepo 注意子包路径），')
+    console.error('   要么修正 TaskCard 的 verify/implementation（确认命令是否真实、是否需 cd 子包）。')
+    throw new Error('planPostcheck: task command existence check failed')
   }
 
   // ── 1d. design 文件覆盖对账 ──

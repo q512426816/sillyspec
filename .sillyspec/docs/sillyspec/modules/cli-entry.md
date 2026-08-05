@@ -38,6 +38,10 @@ runStage(pm, progress, stageName, cwd, changeName)
   → 可选: skipApproval 模式跳过人工审批门禁
 ```
 
+**worktree 副本漂移自动锚定**（2026-08-05，`run/command.js`，D-03@v1）：`runCommand` 入口算 `specBase` 后调 `detectWorktreeSpecDrift`；命中（cwd 落在 `.sillyspec/.runtime/worktrees/<change>/` 内的副本 spec，100% 误操作）时**不 exit(2)**，把 `specBase`/`specRoot`/`specDir` 重写为 `wt.mainSpecBase` + warn 提示已锚定主仓，流程继续——进度/产出落主仓、不再写分裂副本（pm 按锚定后的 specBase 重建）。其他 cwd 漂移（changeMissing、quick session drift）仍 `exit(2)`；显式 `--spec-dir` / 平台 `specRoot` 跳过自动锚定。
+
+**--done 底部推进锚定行**（2026-08-05，`run/complete.js`，问题 5）：`outputStep` 渲染的长 prompt 易被 tail 视窗截断，`completeStep` 在 `outputStep` 之后再打一行 `🚀 advanced to step <i+1>/<total>: <name>`，让 agent 不必二次 `grep step:` 确认是否真推进。
+
 ## 注意事项
 
 - `sillyspec init /path/to/project` 语法：第二个参数如果是路径会被当作 targetDir，而非子命令

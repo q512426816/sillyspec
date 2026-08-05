@@ -662,7 +662,7 @@ SillySpec worktree — git worktree 隔离管理
   sillyspec worktree list                                      列出所有活跃 worktree
   sillyspec worktree meta <change-name>                        读取 worktree meta.json
   sillyspec worktree cleanup <change-name> [--force]           强制清理 worktree
-  sillyspec worktree doctor [--fix] [--stale-hours N]          健康检查 + 修复
+  sillyspec worktree doctor [--fix] [--stale-hours N] [--change <name>]   健康检查 + 修复（--change 仅扫指定 change）
 
 选项:
   --base <branch>       create: 指定基础分支（默认当前 HEAD）
@@ -868,7 +868,9 @@ SillySpec worktree — git worktree 隔离管理
           const fixFlag = args.includes('--fix');
           const staleIdx = args.indexOf('--stale-hours');
           const staleHours = staleIdx !== -1 && args[staleIdx + 1] ? parseInt(args[staleIdx + 1], 10) : 24;
-          const diag = wm.doctor({ fix: fixFlag, staleHours });
+          const changeIdx = args.indexOf('--change');
+          const changeName = changeIdx !== -1 && args[changeIdx + 1] ? args[changeIdx + 1] : null;
+          const diag = wm.doctor({ fix: fixFlag, staleHours, changeName });
           if (diag.issues.length === 0) {
             console.log('✅ worktree 健康检查通过，无异常');
           } else {

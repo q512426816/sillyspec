@@ -4,8 +4,8 @@ created_at: 2026-06-01T09:05:00
 ---
 
 # worktree
-> 最后更新：2026-07-07
-> 最近变更：2026-07-06-execute-deps-gate-deadlock（enforceDepsGate 诊断分支：cleanup 终态指向 doctor 对齐 + fail-loud；门放行标准不变）
+> 最后更新：2026-08-05
+> 最近变更：2026-08-05-tooling-feedback-fixes（doctor 加 `deps-main-drift` issue 探主仓 lockfile 漂移 + `--change` 过滤 + `--fix` force 重装；provisionDeps 加 `force` 选项；抽 H1 `checkDepsFreshness` 统一 doctor 与 execute 的 deps 判定）
 > 模块路径：src/worktree.js, src/worktree-apply.js, src/worktree-deps.js
 
 ## 职责
@@ -19,7 +19,7 @@ worktree 模块提供基于 git worktree 的分支隔离机制，让每个变更
 
 **worktree-apply.js** 提供 `applyWorktree()` 函数，负责将 worktree 中的变更安全地应用回主工作区。它执行冲突检测（检查主工作区和 worktree 是否修改了相同文件），支持仅检查模式（checkOnly）和实际应用模式。应用时使用 `git diff` 生成补丁并通过 `git apply` 应用。
 
-**worktree-deps.js** 提供 `provisionDeps()` 依赖供给引擎。在 `create()` 的 baseline overlay 之后调用，让 worktree 立即可构建/测试：lockfile 一致时 junction/symlink 主 checkout 的 node_modules（瞬时零网络），否则按 `local.yaml` 的 `project.type` + lockfile 推断并执行 install。供给结果（depsStatus 等）写入 meta.json，供 execute 阶段的验证硬门读取。供给可失败，但失败状态可观测、可由 doctor 重试。
+**worktree-deps.js** 提供 `provisionDeps()` 依赖供给引擎。在 `create()` 的 baseline overlay 之后调用，让 worktree 立即可构建/测试：lockfile 一致时 junction/symlink 主 checkout 的 node_modules（瞬时零网络），否则按 `local.yaml` 的 `project.type` + lockfile 推断并执行 install。供给结果（depsStatus 等）写入 meta.json，供 execute 阶段的验证硬门读取。供给可失败，但失败状态可观测、可由 doctor 重试（doctor --fix 走 `_doctorReprovision`：先解 node_modules junction 再 `provisionDeps(force=true)` 强制重供，绕过 tryLink 幂等短路，修 deps-main-drift 等主仓 lockfile 漂移场景）。另导出 H1 `checkDepsFreshness(meta, wtPath, mainCwd)`，统一 doctor 与 execute 入口的 deps 新鲜度判定（status 含新增 `main-drift`）。
 
 ## 对外接口（表格）
 
@@ -33,7 +33,7 @@ worktree 模块提供基于 git worktree 的分支隔离机制，让每个变更
 | `WorktreeManager.create(changeName, { base? })` | 创建 worktree — 建分支、checkout、fetch+merge、baseline overlay、**依赖供给**、写 meta.json | `changeName, { base? }` |
 | `WorktreeManager.list()` | 列出所有 worktree 及其状态 | — |
 | `WorktreeManager.cleanup(changeName)` | 清理 worktree — 删除分支和工作目录 | `changeName` |
-| `WorktreeManager.doctor({ fix?, staleHours? })` | 健康检查（含 deps-missing/stale/failed）+ 可选修复 | `{ fix?, staleHours? }` |
+| `WorktreeManager.doctor({ fix?, staleHours?, changeName? })` | 健康检查（含 deps-missing/stale/failed/**deps-main-drift**）+ 可选修复；`changeName` 非空时仅扫该变更（对齐 `enforceDepsGate` 的 `--change` 提示） | `{ fix?, staleHours?, changeName? }` |
 
 ### src/worktree-apply.js
 | 函数/常量 | 说明 | 参数 |
@@ -45,7 +45,8 @@ worktree 模块提供基于 git worktree 的分支隔离机制，让每个变更
 ### src/worktree-deps.js
 | 函数/常量 | 说明 | 参数 |
 |-----------|------|------|
-| `provisionDeps(worktreePath, mainCwd, opts?)` | 依赖供给：junction/symlink 快路径 + install 兜底，返回 deps 状态对象 | `worktreePath, mainCwd, { specBase?, timeout? }` |
+| `provisionDeps(worktreePath, mainCwd, opts?)` | 依赖供给：junction/symlink 快路径 + install 兜底，返回 deps 状态对象；`force:true` 绕过 lockfile 一致快路径（及 tryLink 幂等短路）强制走 install 分支重装，供 doctor --fix 修主仓 lockfile 漂移 | `worktreePath, mainCwd, { specBase?, timeout?, force? }` |
+| `checkDepsFreshness(meta, wtPath, mainCwd)` | H1 统一 deps 判定（doctor 与 execute 入口自检共用）。返回 `{ status, detail, wtHash?, mainHash?, metaLockHash? }`，status ∈ `fresh` / `missing` / `stale` / `main-drift` / `failed`；`main-drift` = worktree 与主仓 lockfile 不一致（主仓更新过、worktree 未跟） | `meta, wtPath, mainCwd` |
 | `lockfileHash(dir)` | 取首个命中 lockfile 的 sha256 前 16 位（无则 hash package.json） | `dir` |
 
 ## meta.json 依赖字段（provisionDeps 写入）
@@ -75,7 +76,7 @@ execute 验证硬门（`run.js completeStep` execute 分支）读 `depsStatus`�
 2. **重入自检流**: execute 入口 → 读 meta → depsStatus 缺失/node_modules 丢失/lockfile 变化 → 触发 provisionDeps 重供给 → 更新 meta
 3. **应用流**: applyWorktree → 检查 worktree 存在 → git diff 生成文件列表 → 冲突检测 → 生成补丁 → git apply → 处理未跟踪文件
 4. **清理流**: WorktreeManager.cleanup → git worktree remove --force → git branch -D → rmSync 工作目录
-5. **健康检查流**: WorktreeManager.doctor → 扫描 meta + 文件系统 → 检出 deps-missing/stale/failed（+ 孤儿/过期）→ --fix 时 provisionDeps 重供给
+5. **健康检查流**: WorktreeManager.doctor → 扫描 meta + 文件系统 → 检出 deps-missing/stale/failed/**deps-main-drift**（+ 孤儿/过期；deps-main-drift 探主仓 lockfile 与 worktree 不一致，靠 H1 `checkDepsFreshness` 统一判定；`--change <名>` 仅扫指定变更）→ --fix 时 `_doctorReprovision` 解链 + `provisionDeps(force=true)` 重供给
 
 ## 设计决策（表格）
 
@@ -106,3 +107,4 @@ execute 验证硬门（`run.js completeStep` execute 分支）读 `depsStatus`�
 |------|--------|------|
 | 2026-06-28 | 2026-06-28-worktree-deps-provision | 依赖供给 provisionDeps + execute 验证硬门 + doctor deps 检查；修路径/分支前缀脱节 |
 | 2026-08-04 | ql-20260804-005-83d8 | execute 复盘 c：apply 允许集改为 resolveApplyAllowSet（design §6 ∪ plan task allowed_paths），测试/产物文件不再误拦，越界文件仍拦 |
+| 2026-08-05 | 2026-08-05-tooling-feedback-fixes | doctor 加 `deps-main-drift` issue（探主仓 lockfile 漂移，靠 H1 `checkDepsFreshness`）+ `--change` 过滤 flag + `--fix` force 重装（`_doctorReprovision` 解链 + `provisionDeps(force=true)`）；`provisionDeps` 加 `force` 选项；抽 H1 `checkDepsFreshness` 统一 doctor 与 execute 入口 deps 判定 |

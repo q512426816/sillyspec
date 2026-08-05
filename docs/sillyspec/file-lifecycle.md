@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-05-31 11:00:00
-updated_at: 2026-08-04T16:20:00+08:00
+updated_at: 2026-08-05T22:30:00+08:00
 ---
 
 # SillySpec 文件生命周期

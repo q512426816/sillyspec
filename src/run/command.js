@@ -291,7 +291,8 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
 
   // 统一规范基路径：平台模式用 specRoot，本地模式用 cwd/.sillyspec
   // runCommand 后续所有 .sillyspec/ 操作必须用 specBase
-  const specBase = platformOpts.specRoot || join(cwd, '.sillyspec')
+  // let：下方 worktree 副本漂移守卫命中时锚回 wt.mainSpecBase（task-05/D-03）
+  let specBase = platformOpts.specRoot || join(cwd, '.sillyspec')
 
   // 漂移提醒:cwd 祖先链 ≥2 个 .sillyspec = monorepo 多实例,当前命中的「最近」实例
   // 可能不是用户意图的项目(如 cd 进被独立 scan 的子项目跑测试后忘回根)。
@@ -484,7 +485,8 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
   const isAuxiliary = auxiliaryStages.includes(stageName)
   // scan 元数据追踪（存储在 stageData.scanMeta 中，completeStep 通过 progress 访问）
 
-  const pm = new ProgressManager({ specDir: specRoot })
+  // let：下方 worktree 副本漂移守卫命中时用主仓 specRoot 重建 pm（task-05/D-03）
+  let pm = new ProgressManager({ specDir: specRoot })
 
   // quick 阶段：确定关联变更
   // 优先级：--linked-changes / --change 显式 > 已持久化 quick-guard.json（--done 复用）> 交互式 > 非交互 fallback
@@ -522,18 +524,24 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     process.exit(2) // 用法错（execute 必须显式 --change）→ exit 2
   }
 
-  // worktree 副本漂移硬守卫(坑 worktree-execute-spec-drift):specBase 命中 worktree 内 .sillyspec
-  // checkout 副本 → 进度/产出会写分裂库。必须在 validateChangeExists 之前——副本里 change 目录真实
-  // 存在,存在性校验会被骗放行。覆盖 plan/execute/verify/archive(validateChangeExists 同 Set):
-  // 都要求 change 已存在、都被副本骗、都写 .sillyspec 资产(archive 尤甚:在副本里移动 change+commit)。
-  // 平台模式/显式 --spec-dir 跳过(已明确指定,与 line~285 warn / ~529 quick 守卫条件对齐)。
+  // worktree 副本漂移自动锚定守卫(坑 worktree-execute-spec-drift,D-03@v1):specBase 命中 worktree 内
+  // .sillyspec checkout 副本 = agent 误 cd 进 worktree 跑 plan/execute/verify/archive(100% 误操作场景)。
+  // 不 exit:自动把 specBase 锚回主仓 wt.mainSpecBase 后继续——进度/产出落主仓,不再写分裂副本(副本随
+  // 工作树清理丢失)。必须在 validateChangeExists 之前:副本里 change 目录真实存在,存在性校验会被骗
+  // 放行;锚定后用主仓 specBase 复查。覆盖 plan/execute/verify/archive(validateChangeExists 同 Set)。
+  // 关键坑:连带重写 specBase/specRoot/specDir + 重建 pm——四者同源派生(pm._customSpecDir 持旧 specRoot),
+  // 只改 specBase 会让下游 validateChangeExists(specBase) 与 pm.read(走 pm._customSpecDir) 仍指副本。
+  // 平台模式/显式 --spec-dir 跳过(已明确指定,与 line~285 warn / quick 守卫条件对齐)。
+  // 其他漂移(下方 changeMissing 守卫 / quick session drift 守卫)非副本场景,仍 exit(2) 不自动纠正。
   if (!platformOpts.specRoot && !specDir
       && ['plan', 'execute', 'verify', 'archive'].includes(stageName)) {
     const wt = detectWorktreeSpecDrift(specBase)
     if (wt) {
-      console.error(`❌ ${wt.message}`)
-      console.error(`   当前 cwd=${cwd}，命中的 spec=${specBase}。`)
-      process.exit(2) // 环境错（cwd/spec 漂移）→ exit 2
+      specBase = wt.mainSpecBase
+      specRoot = wt.mainSpecBase
+      specDir = wt.mainSpecBase
+      pm = new ProgressManager({ specDir: specRoot })
+      console.warn(`⚠️ 已自动锚定主仓 spec：${wt.mainSpecBase}（原 cwd 命中 worktree 副本 ${wt.changeName}，已纠正，流程继续）`)
     }
   }
 

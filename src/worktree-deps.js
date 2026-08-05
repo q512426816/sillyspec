@@ -190,11 +190,16 @@ function linkOneDir(wtDir, mainDir) {
  *
  * @param {string} worktreePath - worktree 根目录
  * @param {string} mainCwd - 主 checkout 根目录（node_modules 来源）
- * @param {{ specBase?: string, timeout?: number }} opts
+ * @param {{ specBase?: string, timeout?: number, force?: boolean }} opts
+ *   - force=true（doctor --fix 强制重装）：绕过根目录 lockfile 一致快路径（下方 line 216 区块），
+ *     强制走 install 分支重装。该快路径是 tryLink 的唯一根调用点，绕过它即同时绕过 tryLink
+ *     的 preexisting 幂等短路（101-110），实现"强制重装"语义。配合调用方先解 junction
+ *     （worktree.js _doctorReprovision），避免 install 经 junction 误改主仓 node_modules。
+ *     modules 子模块 link 不受 force 影响（仅根 install）。
  * @returns {{ depsStatus, depsMethod, depsSource, depsLockHash, depsCheckedAt, depsError?, depsModules? }}
  */
 export function provisionDeps(worktreePath, mainCwd, opts = {}) {
-  const { specBase = null, timeout = DEFAULT_TIMEOUT_MS } = opts;
+  const { specBase = null, timeout = DEFAULT_TIMEOUT_MS, force = false } = opts;
   const depsCheckedAt = new Date().toISOString();
   const yamlText = readLocalYaml(specBase, worktreePath);
   const wtHash = lockfileHash(worktreePath);
@@ -210,10 +215,11 @@ export function provisionDeps(worktreePath, mainCwd, opts = {}) {
     result = { depsStatus: 'n/a', depsMethod: null, depsSource: null, depsLockHash: wtHash };
   } else {
     // 快路径：main 有 node_modules 且 lockfile hash 一致 → junction/symlink
+    // force=true 时绕过（doctor --fix 强制重装；绕过此块即同时绕过 tryLink 101-110 幂等短路）
     const mainNodeModules = mainCwd ? join(mainCwd, 'node_modules') : null;
     const mainHash = lockfileHash(mainCwd);
     let linked = false;
-    if (mainNodeModules && existsSync(mainNodeModules) && mainHash && wtHash && mainHash === wtHash) {
+    if (!force && mainNodeModules && existsSync(mainNodeModules) && mainHash && wtHash && mainHash === wtHash) {
       const linkResult = tryLink(mainNodeModules, join(worktreePath, 'node_modules'));
       if (linkResult.ok) {
         result = {
@@ -264,4 +270,74 @@ export function provisionDeps(worktreePath, mainCwd, opts = {}) {
   }
 
   return result;
+}
+
+/**
+ * 统一的 worktree deps 新鲜度判定（H1，change 2026-08-05-tooling-feedback-fixes）。
+ * 供 doctor（worktree.js）与 ensureDepsFreshness（run/stage.js）共用，消除两处双写漂移。
+ *
+ * 判定优先级：failed → missing → stale → main-drift → fresh
+ *   - failed: meta.depsStatus==='failed'（上次供给失败，占最高优先级）
+ *   - missing: depsStatus ∈ {linked, installed} 且 node_modules 不存在
+ *   - stale: wtHash 与 meta.depsLockHash 不一致（worktree 自身 lockfile 在上次供给后变化）
+ *   - main-drift: wtHash 与主仓 mainHash 不一致（主仓 lockfile 漂移；复用 linkOneDir 177-178 的 mismatch 判据）
+ *   - fresh: 其余情况
+ *
+ * lockfileHash 返回 null（无 lockfile/package.json）时相关比较优雅降级——不报 stale / main-drift，
+ * 避免无 lockfile 项目（如纯 generic / 非 nodejs）误判漂移。
+ *
+ * @param {object} [meta] - worktree meta（读 depsStatus / depsLockHash / depsError）
+ * @param {string} wtPath - worktree 根目录
+ * @param {string} mainCwd - 主 checkout 根目录
+ * @returns {{ status: 'fresh'|'missing'|'stale'|'main-drift'|'failed', detail: string, wtHash: (string|null), mainHash: (string|null), metaLockHash: (string|null) }}
+ */
+export function checkDepsFreshness(meta, wtPath, mainCwd) {
+  const depsStatus = meta && meta.depsStatus ? meta.depsStatus : null;
+  const metaLockHash = meta && meta.depsLockHash ? meta.depsLockHash : null;
+  const wtHash = lockfileHash(wtPath);
+  const mainHash = lockfileHash(mainCwd);
+
+  // 1. failed 最高优先级（对齐 task-01 蓝图：failed → missing → stale → main-drift → fresh）
+  if (depsStatus === 'failed') {
+    return {
+      status: 'failed',
+      detail: '上次依赖供给失败' + (meta && meta.depsError ? ': ' + meta.depsError : ''),
+      wtHash, mainHash, metaLockHash,
+    };
+  }
+
+  // 2. missing：曾 link/install 但 node_modules 已丢失（对齐 doctor 914-915 / ensure 403）
+  const nmExists = wtPath ? existsSync(join(wtPath, 'node_modules')) : false;
+  if (['linked', 'installed'].includes(depsStatus) && !nmExists) {
+    return {
+      status: 'missing',
+      detail: `meta.depsStatus=${depsStatus} 但 node_modules 缺失`,
+      wtHash, mainHash, metaLockHash,
+    };
+  }
+
+  // 3. stale：worktree 自身 lockfile 与 meta 快照不一致（对齐 doctor 916-917 / ensure 404）
+  if (metaLockHash && wtHash && wtHash !== metaLockHash) {
+    return {
+      status: 'stale',
+      detail: `lockfile 变化 (${metaLockHash} -> ${wtHash})`,
+      wtHash, mainHash, metaLockHash,
+    };
+  }
+
+  // 4. main-drift（新增）：wtHash 与主仓 mainHash 不一致——主仓 lockfile 更新过、worktree 未跟
+  if (wtHash && mainHash && wtHash !== mainHash) {
+    return {
+      status: 'main-drift',
+      detail: `worktree lockfile 与主仓不一致 (wt=${wtHash} main=${mainHash})`,
+      wtHash, mainHash, metaLockHash,
+    };
+  }
+
+  // 5. fresh
+  return {
+    status: 'fresh',
+    detail: '依赖新鲜',
+    wtHash, mainHash, metaLockHash,
+  };
 }

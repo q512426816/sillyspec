@@ -324,6 +324,7 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
 - [ ] 没有实现细节泄漏到 plan.md（接口签名/代码示例应在 tasks/task-NN.md）
 - [ ] 关键路径与 Wave 依赖合理（无循环依赖、无遗漏前置）
 - [ ] 连带测试归属：改共享/被多 task 依赖源文件的 task 是否在 related_tests 声明了会失效的既有测试、且路径在 allowed_paths 内（或由独立测试 task 覆盖）？（漏声明 = execute 阶段测试债、主代理事后兜底）
+- [ ] acceptance 字段对照实际 schema/类型源文件核验存在性与形态，不凭 design.md 文字臆断（plan-postcheck best-effort grep 会给 allowed_paths 源文件未命中的 snake_case/camelCase 标识符提 warning，此处是语义层复查；臆断 = execute 阶段返工）
 
 ### tier=independent 时：启动 plan-review 子代理
 用 Agent tool 启动子代理（subagent_type: general），prompt 要点：

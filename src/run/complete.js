@@ -469,6 +469,13 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
 
   if (printNext) {
     await outputStep(stageName, nextPendingIdx, defSteps, cwd, changeName, progress.project || null, platformOpts)
+    // task-08：底部锚定行——outputStep 渲染的长 prompt 易被 tail 截断，末尾再打一行推进位置，
+    // 让 agent 只看末几行也能知道「推进到第几步」。仅单步推进分支（阶段完成分支已有 ✅ 阶段已完成）。
+    // defSteps 越界防御：平台模式 buildPlanSteps 长度漂移时 nextPendingIdx 可能越界
+    // （参照 prompt.js:174-179 越界降级先例），越界时静默跳过，不崩。
+    if (defSteps && defSteps[nextPendingIdx]) {
+      console.log(`\n🚀 advanced to step ${nextPendingIdx + 1}/${steps.length}: ${defSteps[nextPendingIdx].name}`)
+    }
   }
   return { stageCompleted: false, currentIdx, nextPendingIdx }
 }
