@@ -107,4 +107,5 @@ execute 验证硬门（`run.js completeStep` execute 分支）读 `depsStatus`�
 |------|--------|------|
 | 2026-06-28 | 2026-06-28-worktree-deps-provision | 依赖供给 provisionDeps + execute 验证硬门 + doctor deps 检查；修路径/分支前缀脱节 |
 | 2026-08-04 | ql-20260804-005-83d8 | execute 复盘 c：apply 允许集改为 resolveApplyAllowSet（design §6 ∪ plan task allowed_paths），测试/产物文件不再误拦，越界文件仍拦 |
+| 2026-08-06 | ql-20260806-002-c4dd | exec-f：worktree-deps detectProjectType/inferInstallCommand 加 python 分支（pyproject.toml/uv.lock→uv sync，纯 requirements.txt→pip install -r），治 worktree 内 ruff/pre-commit 等二进制不供给（原无 python 分支→误判 generic→n/a）；两函数导出做纯单元测 7 断言（不真跑 uv） |
 | 2026-08-05 | 2026-08-05-tooling-feedback-fixes | doctor 加 `deps-main-drift` issue（探主仓 lockfile 漂移，靠 H1 `checkDepsFreshness`）+ `--change` 过滤 flag + `--fix` force 重装（`_doctorReprovision` 解链 + `provisionDeps(force=true)`）；`provisionDeps` 加 `force` 选项；抽 H1 `checkDepsFreshness` 统一 doctor 与 execute 入口 deps 判定 |

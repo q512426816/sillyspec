@@ -113,6 +113,7 @@
 1. 运行 `sillyspec worktree meta <change-name>` 读取 meta.json
 2. 从输出中提取 worktreePath、branch、mode 字段
 3. 确认 worktree 目录存在（如果是 worktree/native-worktree 模式）
+4. **确认工具链可用**：worktree 内项目工具链（lint/format/test 二进制，如 ruff / prettier / uv）可能不全——对本次会用到的工具先跑一次 `--version` 确认；缺失则按项目方式安装（Python 项目 `uv tool install ruff` / `uv sync`，Node 项目 node_modules 已由 CLI 链接主仓）。不要等到 commit 才发现二进制不在 PATH 被 hook 拦
 
 ### 铁律
 - **worktree 已由 CLI 在 execute 阶段启动时自动创建，不要自行创建或跳过**
@@ -256,6 +257,7 @@ execute 按 Wave 持久化进度，task 级进度靠 plan.md checkbox 勾选。�
    - 用户明确要求编译时
 4. 每个任务完成后：
    - **先写 review.json 再勾选 checkbox**（见下方 Task Review Gate）
+   - **既跑 lint check 也跑 formatter**：凡变更涉及的源码跑项目的 lint 检查 **和** 格式化（如 `ruff format` / `prettier --write`），不要只跑 check——只 check 不 format 会把格式问题留到 commit 时被 pre-commit hook 拦截（worktree 内二进制可能缺失，先 `which <bin>` 确认，缺则 `uv tool install` / `uv sync`）
    - 记录改动文件和测试结果
 5. 遇到 BLOCKED → 记录原因，选择：重试/跳过/停止
 
@@ -395,7 +397,7 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
 ### 操作
 1. 读取 local.yaml 获取构建和测试命令
 2. 运行测试套件（单元测试、集成测试）
-3. 运行 lint 检查
+3. 运行 lint 检查 **+ 格式化**：凡变更涉及的源码，既跑 lint check 也跑 formatter（如 `ruff format` / `prettier --write` / `black`），不要只跑 check——只 check 不 format 会把格式问题留到 commit 时被 pre-commit hook 拦截
 4. 如果有测试失败 → 分析原因，标注是代码问题还是测试本身的问题
 5. 汇总测试结果
 

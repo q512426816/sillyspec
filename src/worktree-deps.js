@@ -66,7 +66,7 @@ function extractUserInstall(yamlText) {
 }
 
 /** 从 local.yaml 提取 project.type；缺失时按文件特征推断 */
-function detectProjectType(worktreePath, specBase) {
+export function detectProjectType(worktreePath, specBase) {
   const yamlText = readLocalYaml(specBase, worktreePath);
   if (yamlText) {
     const m = yamlText.match(/type:\s*(\S+)/);
@@ -75,11 +75,14 @@ function detectProjectType(worktreePath, specBase) {
   if (existsSync(join(worktreePath, 'pom.xml'))) return 'maven';
   if (existsSync(join(worktreePath, 'build.gradle')) || existsSync(join(worktreePath, 'build.gradle.kts'))) return 'gradle';
   if (existsSync(join(worktreePath, 'package.json'))) return 'nodejs';
+  // Python：pyproject.toml（uv/poetry/pdm）或 requirements.txt（pip）——治 worktree 内 ruff/pre-commit 等
+  // 二进制不供给（exec 复盘 3-②：detectProjectType 原无 python 分支，python 项目根被误判 generic → n/a）
+  if (existsSync(join(worktreePath, 'pyproject.toml')) || existsSync(join(worktreePath, 'requirements.txt'))) return 'python';
   return 'generic';
 }
 
 /** 按 project.type + lockfile 推断 install 命令（无 commands.install 时）*/
-function inferInstallCommand(projectType, worktreePath, userInstall) {
+export function inferInstallCommand(projectType, worktreePath, userInstall) {
   if (userInstall) return userInstall;
   switch (projectType) {
     case 'nodejs':
@@ -91,6 +94,11 @@ function inferInstallCommand(projectType, worktreePath, userInstall) {
       return 'mvn -o test';
     case 'gradle':
       return './gradlew test';
+    case 'python':
+      // uv 优先（现代 Python 工具链，pyproject.toml/uv.lock 项目走 uv sync 建 .venv + 装依赖，
+      // 与 execute worktree 环境预告一致）；纯 requirements.txt（无 pyproject）回退 pip
+      if (existsSync(join(worktreePath, 'uv.lock')) || existsSync(join(worktreePath, 'pyproject.toml'))) return 'uv sync';
+      return 'pip install -r requirements.txt';
     default:
       return null; // generic → n/a
   }

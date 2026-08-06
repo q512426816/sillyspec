@@ -344,3 +344,21 @@
 根因：A——brainstorm §6 文件变更清单仅三列表，对「新增字段如何流到消费端」零引导，到 execute 才发现 dormant（RS-3/RS-4 类，design 阶段就该画清）；B——plan related_tests 判据写死「改共享/被多 task 依赖源文件」，漏按钮文案等单文件场景（task-13 改文案必改测试断言却没进 allowed_paths，子代理被锁死）；C——review.json missing 时无拼错线索，用户手误 .sillyspec→.silyspec 靠 mv+rm 修复。
 方案：A——brainstorm.js §267 补「字段数据流标注」引导段（producer→consumer + 每跳归一化点）；B——plan.js 4 处判据由「源文件共享」改「既有测试断言失效」（覆盖 UI 文案/常量/枚举/签名）；C——新建 src/spec-dir-typo.js（detectSpecDirTypo: levenshtein ≤2）+ stage-review.js missing 分支调用，放中立模块避循环依赖。
 结果：9 文件已 git add 暂存（待用户统一 commit）；npm test 全量 115/0、lint 68 files 0 错、spec-dir-typo 单测 5/5（少 l/漏 e/距离>2/空入参覆盖）；文档同步——重跑 _extract.mjs + docs/prompt/brainstorm.md+plan.md 逐字替换 + stages.md ql 备注。
+
+## ql-20260806-002-c4dd | 2026-08-06 08:54:23 | 工具驾驭复盘第二批：execute 加 format 引导 + worktree-deps python 分支（exec-e/f 修复，exec-d 让出并行全流程）
+状态：已完成
+关联变更：（无）
+文件：
+- src/stages/execute.js（exec-e：buildWavePrompt 调度要求 item4 + acceptanceSteps「运行测试」步 operation3 加"既跑 lint check 也跑 formatter"引导；exec-f：「确认 worktree 路径」步加工具链预告）
+- src/worktree-deps.js（exec-f：detectProjectType 加 python 识别 pyproject.toml/requirements.txt；inferInstallCommand 加 uv sync/pip install -r 分支；两函数 export 供单测）
+- test/worktree-deps-python.test.mjs（新建：python 分支纯单元测 7 断言——pyproject/uv.lock/requirements/nodejs优先/空目录/userInstall/local.yaml type）
+- docs/prompt/execute.md（exec-e/f：3 处 prompt 逐字同步源码——运行测试步 format、调度要求 format、确认 worktree 步工具链预告）
+- docs/prompt/_extracted.json（重跑 _extract.mjs 刷新 execute 提取镜像）
+- docs/sillyspec/file-lifecycle.md（execute 阶段行补 format 引导 + 工具链预告两句）
+- docs/sillyspec/prompt-control-debt.md（2026-08-06 第二批复盘 section：exec-e/f 修复 + exec-d 让出 + exec-g/h defer + exec-i 否决 + 推进记录 + 总结）
+- .sillyspec/docs/sillyspec/modules/stages.md（变更索引追加 exec-e/f 条目）
+- .sillyspec/docs/sillyspec/modules/worktree.md（变更索引追加 exec-f python 分支条目）
+需求：修工具驾驭复盘第二批 5 个负面点中 2 个不重叠缺口——exec-e Wave 子代理只跑 lint check 没 format（到 commit 被 consumer pre-commit hook 拦）；exec-f worktree 内 python 工具链不供给（worktree-deps 无 python 分支→python 项目根误判 generic→n/a→ruff/pre-commit 二进制不供给）。exec-d（stage-review marker 死锁，用户#1痛点）已实现 register-stage-review 命令但因与并行全流程 2026-08-06-sillyspec-self-tooling-fixes 坑1 撞车让出。
+根因：exec-e src/stages/execute.js buildWavePrompt 调度要求 + acceptanceSteps「运行测试」步通篇无 format 引导（只"不要频繁编译"），子代理必然只 check 不 format；exec-f src/worktree-deps.js detectProjectType/inferInstallCommand 只识别 maven/gradle/nodejs/generic，python 项目根落 generic→installCmd=null→depsStatus=n/a→二进制不供给。
+方案：exec-e execute.js 两处加"既跑 lint check 也跑 formatter（ruff format/prettier --write/black），不要只 check"引导（buildWavePrompt 调度要求 item4 + acceptanceSteps 运行测试步）；exec-f worktree-deps detectProjectType 加 python（pyproject.toml/requirements.txt）+ inferInstallCommand 加 uv sync（pyproject/uv.lock）/pip install -r requirements.txt（纯 requirements），execute 确认 worktree 路径步加工具链预告（先 --version 确认，缺则 uv tool install/uv sync）；导出 detectProjectType/inferInstallCommand 加纯单元测（不真跑 uv，避 flaky）。
+结果：npm test 116/0（去掉 exec-d revert 的 register 测试后；worktree-deps-python 7 断言新增）、lint 68 文件 0 错；同步 docs/prompt（execute.md 3 处 + _extracted.json 重提取）+ file-lifecycle execute 行 + debt doc（exec-e/f ✅、exec-d ⏭ 让出存设计、exec-g/h ⏭ defer、exec-i ⊘ consumer 否决）+ stages/worktree 模块文档变更索引；exec-d 实现（register-stage-review 命令 + 34 测试 + gate 报错指向 + skill/file-lifecycle 注记）完整备份仓外 C:/Users/qinyi/AppData/Local/Temp/sillyspec-exec-d-backup-20260806/ 供并行全流程坑1 采纳或参考。

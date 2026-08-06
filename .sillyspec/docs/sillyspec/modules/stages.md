@@ -60,4 +60,5 @@ updated_at: 2026-08-06T06:34:27+08:00
 - ql-20260803-002-eff0 | archive step3 sync-module-docs 加 requiresWait，--continue 确认后回到本步由 agent 写模块卡片（修 verify-archive-flow-pitfalls 坑4）。
 - ql-20260804-003-e439 | plan-postcheck 加 title_zh 完整性硬校验（prompt-control-debt plan-b：防子代理为压 20~40 行静默丢 frontmatter 字段）。
 - ql-20260806-001-3e12 | 工具驾驭复盘 3 条反馈：brainstorm §6 文件变更清单加「字段数据流标注」引导（新增字段须交代 producer→consumer + 每跳归一化点）；plan related_tests 判据由「源文件是否共享」改为「既有测试断言是否失效」（覆盖 UI 文案/常量/签名等单文件场景）；stage-review review.json missing 加 .sillyspec 拼写变体检测提示（新增 src/spec-dir-typo.js）。
+- ql-20260806-002-c4dd | 工具驾驭复盘第二批 exec-e/f：execute.js buildWavePrompt 调度要求 item4 + acceptanceSteps「运行测试」步加「既跑 lint check 也跑 formatter（ruff format/prettier --write）」引导（只 check 不 format 会留到 commit 被 pre-commit hook 拦）；「确认 worktree 路径」步加工具链预告（先 --version 确认，缺则 uv tool install/uv sync）。
 <!-- MANUAL_NOTES_END -->

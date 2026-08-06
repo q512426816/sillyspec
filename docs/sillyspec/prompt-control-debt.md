@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-07-22 12:00:00
-updated_at: 2026-08-04T13:31:04+08:00
+updated_at: 2026-08-06T09:28:31+08:00
 ---
 
 # SillySpec 提示词与控制层债务清单
@@ -138,6 +138,20 @@ updated_at: 2026-08-04T13:31:04+08:00
 
 ---
 
+### 2026-08-06 复盘增补（第二批工具驾驭反馈：stage-review 注册命令 / execute format / worktree python）
+状态：`2 项已修复（exec-e/f）+ 1 项让出并行全流程（exec-d）+ 2 项登记 defer + 1 项裁决 consumer 侧`
+
+来源：sillyhub 项目工具驾驭复盘第二批 5 个负面点，逐条对源码核实后裁决（先查本债单 + 源码实证，不重复提议已决策项）。
+
+- ⏭ **exec-d Stage Review marker 死锁无注册入口（让出给并行全流程 2026-08-06-sillyspec-self-tooling-fixes 坑1）**：marker（`current-stage-review-run-id-<stage>-<change>`）只在 prompt 渲染 `{REVIEW_TIER}` 时写（`prompt.js:501`），调度者手动派独立子代理写 review.json 不走该渲染 → `getLatestStageReviewRunId` fallback 扫描，目录名/reviewedFiles 稍不符即 null → Stage Review Gate 报缺 review.json 硬阻断（`gates.js:284-286`），**`--skip-approval` 不绕产物 gate**（三段链证实：command.js:783 不传 → complete.js:439 不传 → gates.js:176 签名不收；仓内 `gates.js:189` 自证）。本 quick 已实现并测过一个修法（备份在仓外 `temp/sillyspec-exec-d-backup-20260806/`）：新增 `sillyspec register-stage-review --change <名> --stage <brainstorm|plan|propose|execute> [--from <已有review.json>]`——生成 `review-<ts>` runId + 建 `stage-reviews/<stage>-<runId>/`（--from 校验 schema 后落入 / 无则 cannot_verify 草稿填对 reviewType/reviewedFiles[0]=changes/<change>/<mainDoc>/docHash）+ 写 marker + `validateStageReview` 自检，gate 缺 review.json 报错指向该命令（34 测试过）。**因与并行全流程坑1 撞车（都动 stage-review.js/index.js），按用户裁决让出**；坑1 可采纳此设计（CLI 注册入口 + gate 报错指向，否决给 gate 加 --skip-approval 旁路保 fail-closed 语义）或自行修 fallback。
+- ✅ **exec-e Wave 子代理只跑 lint check 没 format**：`execute.js` buildWavePrompt + acceptanceSteps 通篇无 format 引导（只"不要频繁编译"），子代理只跑 check 到 commit 才被 consumer pre-commit hook 拦（ruff format/prettier）。**修法（prompt 引导）**：buildWavePrompt 调度要求 item 4 + acceptanceSteps「运行测试」step operation 3 加"既跑 lint check 也跑 formatter（ruff format/prettier --write/black），不要只 check"。
+- ✅ **exec-f worktree 内 python 工具链不供给**：`worktree-deps.js` detectProjectType/inferInstallCommand 原无 python 分支（只 maven/gradle/nodejs/generic），python 项目根误判 generic → n/a → ruff/pre-commit 二进制不供给。**修法（源码）**：detectProjectType 加 python（pyproject.toml/requirements.txt）+ inferInstallCommand 加 `uv sync`（pyproject/uv.lock）/`pip install -r requirements.txt`（纯 requirements）；execute「确认 worktree 路径」步加工具链预告（先 --version 确认，缺则 uv tool install/uv sync）。detectProjectType/inferInstallCommand 导出做纯单元测（7 断言，不真跑 uv）。注：modules 块的 python 子模块供给未做（类比 nodejs modules link 是更大工程），env 预告覆盖发现侧。
+- ⏭ **exec-g worktree 与主仓 .sillyspec 文档分叉（登记 defer，超 quick 范围）**：`worktree-apply.js:48-50` filterDeliverableFiles 一刀切排除 `.sillyspec/`，无 worktree→main 反向同步；Reverse Sync 触发的 design.md/模块文档改动留在 worktree 分支，apply 时被挡，只能手动 `git show` 捞（历史已踩）。**裁决 defer**：修法需设计决策（apply 分级放开 `.sillyspec/changes/<change>/` 保留 `.sillyspec/docs/<project>/modules/` 排除 / 或 apply 完给文件级分叉清单警告 / 或 prompt 硬要求手动 git show 恢复），有越界风险，留单独完整流程排。
+- ⏭ **exec-h gen:types 自报不准（登记 defer，超 quick 范围）**：证据校验只覆盖 git diff + docHash，**无生成产物校验**；唯一硬对账 `runVerifyTestCheck` 只覆盖 test 命令，gen:types/build/codegen 全靠子代理自觉（声称"无漂移"未必真跑）。**裁决 defer**：修法需设计决策（verify-postcheck 加 runVerifyArtifactCheck 亲自跑 codegen 对账产物 / review.json 加 artifactEvidence 字段 + prompt 硬要求贴 stdout / verify-probes 加探针 7 / 诚实标注底线），是中等工程，留单独完整流程排。
+- ⊘ **exec-i frontend hook 在 hook 子进程假失败（裁决：consumer 侧，非本仓）**：consumer 项目（multi-agent-platform）pre-commit/ci-check hook 自身实现问题（全树跑 vs 子进程环境），SillySpec 源码不掌管这些 hook；verify 阶段 `runVerifyTestCheck` 亲自在主仓 cwd 跑（execute 已 apply 回主仓），不在 worktree 子进程环境假失败。不另立条目。
+
+---
+
 ## 推进记录
 
 | 日期 | 改进项 | 结果 |
@@ -161,6 +175,7 @@ updated_at: 2026-08-04T13:31:04+08:00
 | 2026-08-04 | execute 复盘（a/b/c） | 3 项新债全修：verifyReviewGitEvidence working-tree 并入 diffFiles（exec-a）/ getLatestStageReviewRunId marker 格式校验 + fallback 按变更过滤 fail-closed（exec-b）/ resolveApplyAllowSet = design ∪ plan allowed_paths（exec-c）；补 3 处回归测试 |
 | 2026-08-04 | verify 复盘（a/b/c） | a 评估保留（detectChangeRisk 显式豁免已实现 + verify prompt 已告知，非新债）；b 修 verify step6 不重复手动跑全量测试（统一交 CLI 对账）+ docs/prompt 重提取 + file-lifecycle 同步；c 修 gates.js verify 对账前加进度预告（放调用点不污染 machine-interface --json） |
 | 2026-08-04 | 全流程复盘（a/b/c） | a persuasion 补强：verify 探针 3 加集成盲区提示 + plan 全局验收标准加集成冒烟条；b 已修复（= exec-a，本次会话已落地）；c prompt 引导续跑：execute Wave prompt 加中断续跑段（checkpoint 机制已存在，补传播）；否决 task 级 checkpoint 机制 |
+| 2026-08-06 | 第二批复盘（exec-e/f 修复 + exec-d 让出 + exec-g/h defer + exec-i 否决） | exec-d 已实现 register-stage-review 命令（34 测试过，备份仓外 temp/sillyspec-exec-d-backup-20260806/）但因与并行全流程 2026-08-06-sillyspec-self-tooling-fixes 坑1 撞车让出（设计存债单 exec-d 条目供采纳）；exec-e execute prompt 加"既跑 check 也跑 format"引导（buildWavePrompt 调度要求 + acceptance 运行测试步）；exec-f worktree-deps 加 python 分支（uv sync/pip）+ execute 确认 worktree 路径步加工具链预告；exec-g/h defer（worktree .sillyspec 文档分叉 / gen:types 自报无产物校验，需设计单独完整流程排）；exec-i consumer 侧否决（frontend hook 假失败）；本批 commit exec-e/f，全量 test 116/0、lint 68 |
 
 ## 总结
 
@@ -169,3 +184,4 @@ updated_at: 2026-08-04T13:31:04+08:00
 - **defer 6 项**（P2.1/2.2 单处模板、P4.2 batch、P4.3 Grill verdict、P6.1b docHash 全交 CLI、P6.2 wait 三态）——均有技术理由（复用价值小、语义工作 CLI 无法替代、推 sillyhub、独立工程、进度兼容），非「不做」而是「需单独排期/跨仓」。
 - 核心收益：brainstorm/execute/quick/verify 的 prompt 显著瘦身，命令模板和复读铁律清除，控制力零损失（run.js 注入 + 硬门 + globalGuardrails 兜底）；P2.2.3 引入 prompt include 机制（`{{include}}` → 包内 templates/prompts/ 注入），verify 探针抽包内模板，为后续 self-contained 大块复用铺路。
 - **2026-08-04 复盘增补（plan+quick）**：7 条改进点核实后，登记 4 项新 defer 债（plan-b 行数丢字段 / plan-c plan→scan 回头路半修 bug / quick-① QUICKLOG 落盘 / quick-② lint doc 空转，均需改源码留 follow-up）+ 3 项裁决否决（plan-a 源码已有逐字示例 / plan-d=P4.3a stage 通用 / quick-③=troubleshooting CRLF 条目同根）。
+- **2026-08-06 第二批复盘**：5 个负面点核实后，2 项修复提交（exec-e execute prompt 加"既跑 check 也跑 format"引导；exec-f worktree-deps 加 python 分支 uv sync/pip + execute 工具链预告）+ 1 项让出（exec-d stage-review marker 死锁，已实现 `register-stage-review` 命令 34 测试过，因与并行全流程 `2026-08-06-sillyspec-self-tooling-fixes` 坑1 撞车让出，设计存债单 + 仓外备份 `temp/sillyspec-exec-d-backup-20260806/` 供采纳）+ 2 项 defer（exec-g worktree `.sillyspec` 文档分叉 / exec-h gen:types 自报无产物校验，均需设计决策留单独完整流程）+ 1 项 consumer 侧否决（exec-i frontend hook 假失败）。本批 commit 新增 test worktree-deps-python 7 断言，全量 116/0、lint 68。
