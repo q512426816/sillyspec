@@ -49,6 +49,7 @@ runStage(pm, progress, stageName, cwd, changeName)
 - `runAutoMode` 会连续推进多个阶段，中间若某步骤失败会中断并提示
 - 审批门禁（approval）通过 `approvals` 表控制，`--skip-approval` 可绕过（仅限特定场景）
 - `triggerSync` 在每步执行前触发，可能与外部平台（如飞书/GitHub）同步
+- **apply / assess 自动 apply 消息同步**（坑3，`index.js`）：apply 与 assess 自动 apply 的用户面消息改为「`.sillyspec/changes/`、`.sillyspec/.runtime/`、`.sillyspec/quicklog/` 不自动 apply（worktree 进度/产物非交付物），模块文档 `.sillyspec/docs/` 会自动 apply 回主仓」——对齐 `worktree-apply.js#filterDeliverableFiles` 精细化过滤（保留 docs/、排除 changes/+.runtime/+quicklog/+meta.json）
 
 ## 人工备注
 <!-- MANUAL_NOTES_START -->

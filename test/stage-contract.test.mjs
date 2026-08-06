@@ -563,6 +563,48 @@ if (epExempt.ok && !epExempt.errors.some(e => e.includes('生产接线路径矛�
 
 rmSync(epRoot, { recursive: true })
 
+// === Change Risk Gate 早期 warning 引导（坑2，FR-02）===
+// detectChangeRisk 机械匹配：design 命中 daemon 关键词且无 frontmatter risk_level → 判
+// integration-critical。validateVerifyResults 此时应在 warnings 早期透出 frontmatter 覆盖指引
+// （不依赖 conclusion / evidence），让 agent 不必撞到 evidence gate 末尾出路③才知道可覆盖。
+console.log('\n=== Change Risk Gate 早期 frontmatter 覆盖 warning ===')
+
+const warnRoot = mkdtempSync(join(tmpdir(), 'sillyspec-riskwarn-'))
+const warnDir = join(warnRoot, '.sillyspec', 'changes', 'riskwarn')
+mkdirSync(warnDir, { recursive: true })
+// design 命中 daemon（无 frontmatter risk_level）→ 自动判 integration-critical
+writeFileSync(join(warnDir, 'design.md'), [
+  '# Design', '## 文件变更清单', '## 风险登记', '## 自审', '',
+  '改 daemon 下发链路。', 'D-001@v1', ''
+].join('\n'))
+writeFileSync(join(warnDir, 'plan.md'), '# Plan\n\n- [ ] task-01: 改 daemon\n')
+writeFileSync(join(warnDir, 'verify-result.md'), '# 验证报告\n\n## 结论\n\nPASS\n\n单测全过。\n')
+const warnAuto = runValidators('verify', warnRoot, 'riskwarn')
+const warnHit = warnAuto.warnings.find(w =>
+  w.includes('integration-critical') && w.includes('关键词判级') && w.includes('命中：daemon')
+  && w.includes('frontmatter 加 risk_level') && w.includes('显式覆盖'))
+if (warnHit) {
+  console.log('✅ 命中 daemon 无 frontmatter → 早期 warning 透出 frontmatter 覆盖指引（含等级/触发词）')
+} else {
+  console.log('❌ 命中关键词无 frontmatter 未透出早期覆盖 warning', warnAuto.warnings)
+  failed++
+}
+
+// 加 frontmatter risk_level: unit-sufficient（explicit）后 → 不发该 warning（已显式声明无需引导）
+writeFileSync(join(warnDir, 'design.md'), [
+  '---', 'author: qinyi', 'risk_level: unit-sufficient', '---',
+  '# Design', '## 文件变更清单', '## 风险登记', '## 自审', '',
+  '改 daemon 下发链路（实际仅文案）。', 'D-001@v1', ''
+].join('\n'))
+const warnExplicit = runValidators('verify', warnRoot, 'riskwarn')
+if (!warnExplicit.warnings.some(w => w.includes('关键词判级') && w.includes('显式覆盖'))) {
+  console.log('✅ 加 frontmatter risk_level（explicit）后不再发关键词误伤 warning')
+} else {
+  console.log('❌ explicit 后仍发关键词误伤 warning', warnExplicit.warnings)
+  failed++
+}
+rmSync(warnRoot, { recursive: true })
+
 // === 结果 ===
 console.log(`\n${failed === 0 ? '✅ 全部通过' : `❌ ${failed} 项失败`}`)
 if (failed > 0) throw new Error(`${failed} test(s) failed`)

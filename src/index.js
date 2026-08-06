@@ -736,10 +736,10 @@ SillySpec worktree — git worktree 隔离管理
             for (const f of result.changedFiles) {
               console.log(`   ${f}`);
             }
-            // filterDeliverableFiles 一刀切排除 .sillyspec/ + meta.json：
-            // 模块文档/变更文档等不会 auto-apply 到主工作区。须告知 agent，
-            // 否则它期望这些文件落地却找不到（memory: worktree-apply-excludes-module-docs）。
-            console.log(`   ℹ️  注：.sillyspec/ 下的文件（模块文档/变更文档等）按规则不自动 apply，如需请手动从 worktree 分支或 dangling commit 取（git show sillyspec/${wtName}:<path>）。`);
+            // filterDeliverableFiles 精细化排除（保留 .sillyspec/docs/，排 changes/+.runtime/+quicklog/ + meta.json）：
+            // 模块文档（.sillyspec/docs/）= 交付物，会 auto-apply 到主工作区；变更文档/运行时/quicklog 不 apply。
+            // 须告知 agent 哪些未落地，否则它期望这些文件落地却找不到（memory: worktree-apply-excludes-module-docs）。
+            console.log(`   ℹ️  注：.sillyspec/changes、.sillyspec/.runtime、.sillyspec/quicklog 下的文件按规则不自动 apply（模块文档 .sillyspec/docs/ 会自动 apply），如需请手动从 worktree 分支或 dangling commit 取（git show sillyspec/${wtName}:<path>）。`);
           }
           if (result.warnings && result.warnings.length > 0) {
             for (const w of result.warnings) {
@@ -787,7 +787,7 @@ SillySpec worktree — git worktree 隔离管理
             } else {
               console.log(`✅ 已自动应用 ${applyResult.changedFiles.length} 个文件变更：`);
               for (const f of applyResult.changedFiles) console.log(`   ${f}`);
-              console.log(`   ℹ️  注：.sillyspec/ 下的文件按规则不自动 apply，如需请手动从分支取（git show sillyspec/${wtName}:<path>）。`);
+              console.log(`   ℹ️  注：.sillyspec/changes、.sillyspec/.runtime、.sillyspec/quicklog 下的文件按规则不自动 apply（模块文档 .sillyspec/docs/ 会自动 apply），如需请手动从分支取（git show sillyspec/${wtName}:<path>）。`);
             }
           } else {
             console.log('Action: blocked');

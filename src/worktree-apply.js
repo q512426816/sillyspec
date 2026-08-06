@@ -42,11 +42,19 @@ function gitQuiet(cwd, args) {
  *     的锚点，保证 baseline overlay 文件不被误判为变更）。若不排除，modified-tracked 的
  *     meta.json 会落入 changedFiles，触发「不在 design.md 清单」误判，导致每个 execute 的
  *     assess 恒 BLOCKED。
- *   - .sillyspec/：变更文档 / 运行时产物，不属于源码交付。
+ *   - .sillyspec/changes/：变更文档（worktree 专属，apply 回主仓污染进度库）。
+ *   - .sillyspec/.runtime/：运行时产物（进度库/锁/review 产物，非源码）。
+ *   - .sillyspec/quicklog/：quicklog 条目（worktree 进度，非交付物）。
+ *   保留 .sillyspec/docs/（dogfood 模块规范文档 = 交付物，apply 回主仓）。
  * 对 modified-tracked（git diff）与 untracked（ls-files --others）一视同仁。
  */
 export function filterDeliverableFiles(files) {
-  return files.filter(f => !f.startsWith('.sillyspec/') && f !== 'meta.json');
+  return files.filter(f =>
+    !f.startsWith('.sillyspec/changes/') &&
+    !f.startsWith('.sillyspec/.runtime/') &&
+    !f.startsWith('.sillyspec/quicklog/') &&
+    f !== 'meta.json'
+  );
 }
 
 /**

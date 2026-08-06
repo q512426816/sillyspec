@@ -136,6 +136,15 @@ async function archiveChangeDirectory(pm, cwd, progress, specBase) {
 
   await pm.unregisterChange(cwd, archiveChangeName)
 
+  // CLI 下沉 git add（坑4，FR-04）：确定性暂存归档目录 + 模块文档，不靠 step5 prompt 驱动。
+  // step5 prompt 的 git add 保留作幂等兜底；POSIX 路径跨平台（git 接受正斜杠）。
+  // safeGit 内部已 try-catch（返回 {value,error} 不抛），外层 try 兜底防御；失败不阻断归档
+  // （目录已移动 + change 已注销），由 step5 prompt git add + agent git status 核对兜底。
+  try {
+    safeGit(cwd, ['add', '--', '.sillyspec/changes/archive/'])
+    safeGit(cwd, ['add', '--', '.sillyspec/docs/'])
+  } catch {}
+
   // 归档时清理可能残留的 worktree（execute 自动清理未走到 / 有未 apply 变更被遗弃）。
   // 安全策略：有未 apply 变更时保留 worktree 并警告，避免误删用户未应用的代码。
   try {

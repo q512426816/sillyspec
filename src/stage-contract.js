@@ -446,6 +446,16 @@ function validateVerifyOutputs(cwd, changeName, context = {}) {
     })
     const conclusion = extractVerifyConclusion(verify)
     if (['integration-critical', 'deployment-critical'].includes(changeRiskProfile.level)) {
+      // 关键词误伤早期引导（坑2，FR-02）：命中高危关键词且无 frontmatter risk_level 时，
+      // 无条件透出 frontmatter 覆盖指引（不依赖 conclusion / evidence），让 agent 早期即可
+      // 判断是否属误判并显式覆盖，而非撞到 evidence gate 末尾才发现出路③。遵 6417a27：不做
+      // body 否定语境扫描，只走 frontmatter 显式覆盖通道。
+      if (!changeRiskProfile.explicit) {
+        warnings.push(
+          `[${changeRiskProfile.level}] 本次变更被关键词判级（命中：${changeRiskProfile.triggers.join(', ')}）。` +
+          `若属关键词误伤（实际未触碰 daemon/session/启动入口/跨进程），可在 design.md frontmatter 加 risk_level: <真实等级>（如 unit-sufficient）显式覆盖后重跑。`
+        )
+      }
       // 显式 risk_level 声明（design frontmatter，非关键词误判）下，PASS WITH NOTES 视为对残留项的
       // 诚实声明，不强求全量集成证据——豁免本就来自 design 的明确判断。自动关键词判级维持严格：
       // PASS WITH NOTES 仍要求证据齐全，防 agent 用 PASS WITH NOTES 绕证据门控。

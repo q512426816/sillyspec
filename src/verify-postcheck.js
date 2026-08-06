@@ -20,6 +20,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { verifyApiParity } from './contract-matrix.js'
 import { parseFileChangeListDetailed, pathMatches } from './change-list.js'
+import { filterDeliverableFiles } from './worktree-apply.js'
 
 // 测试命令最长执行时间；超时视为失败（防止 CLI 被挂起的测试卡死）
 const TEST_TIMEOUT_MS = Number(process.env.SILLYSPEC_TEST_TIMEOUT_MS) || 10 * 60 * 1000
@@ -793,10 +794,10 @@ export function runVerifyDeletionCheck({ cwd, specBase, changeName = null }) {
     }
   }
 
-  // 排除交付物外文件（.sillyspec/ 文档 churn + meta.json），避免污染删除信号。
-  // 内联 filterDeliverableFiles 逻辑（一行，不跨模块耦合）。
-  const deliverable = deletions.filter(d =>
-    !d.path.startsWith('.sillyspec/') && d.path !== 'meta.json')
+  // 排除交付物外文件（.sillyspec/ 变更包/运行时/quicklog + meta.json），避免污染删除信号。
+  // 复用 worktree-apply.js 的 filterDeliverableFiles 去双写（坑3：保留 .sillyspec/docs/）。
+  const deliverable = filterDeliverableFiles(deletions.map(d => d.path))
+    .map(p => deletions.find(d => d.path === p))
 
   if (deliverable.length === 0) {
     return { status: 'skipped', highRisk: [], mediumRisk: [], compliant: [],

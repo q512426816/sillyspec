@@ -5,7 +5,7 @@
  * 删除的文件在工作树消失但仍在 HEAD → `git diff --name-status HEAD` 显示 D。
  *
  * 覆盖：高风险（声明修改却删）/ 合规（声明删除）/ 未声明 / 无删除→skipped /
- *       design 无清单 / filterDeliverableFiles（.sillyspec/ 不计）/ base 已 commit→skipped / glob 容差
+ *       design 无清单 / filterDeliverableFiles（.sillyspec/changes+.runtime+quicklog 不计）/ base 已 commit→skipped / glob 容差
  */
 import { execSync } from 'child_process'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
@@ -107,15 +107,17 @@ const run = (dir, change) =>
   } finally { rmSync(dir, { recursive: true, force: true }) }
 }
 
-// case F: filterDeliverableFiles（.sillyspec/ 删除不计入 → skipped）
+// case F: filterDeliverableFiles（.sillyspec/.runtime/ 等基础设施删除不计入 → skipped）
+//   坑3 精细化：filterDeliverableFiles 不再一刀切排 .sillyspec/，仅排 changes/+.runtime/+quicklog/。
+//   故用 .sillyspec/.runtime/ 真基础设施路径验证仍被过滤（docs/ 等交付物路径不计入此 case）。
 {
-  const dir = mkRepoWithFiles({ 'src/a.js': 'old\n', '.sillyspec/notes/doc.md': 'n\n' })
+  const dir = mkRepoWithFiles({ 'src/a.js': 'old\n', '.sillyspec/.runtime/notes/doc.json': 'n\n' })
   try {
-    rmSync(join(dir, '.sillyspec', 'notes', 'doc.md')) // 只删 .sillyspec/ 文件
+    rmSync(join(dir, '.sillyspec', '.runtime', 'notes', 'doc.json')) // 只删 .sillyspec/.runtime/ 文件
     writeDesign(dir, 'c-f', SECTION('| 操作 | 文件路径 | 说明 |\n|---|---|---|\n| 修改 | src/a.js | x |\n'))
     const r = run(dir, 'c-f')
-    assert('F 过滤：.sillyspec/ 删除被过滤 → skipped', r.status === 'skipped',
-      `status=${r.status}（若 warning 说明 .sillyspec/ 未被过滤）`)
+    assert('F 过滤：.sillyspec/.runtime/ 删除被过滤 → skipped', r.status === 'skipped',
+      `status=${r.status}（若 warning 说明 .runtime/ 未被过滤）`)
   } finally { rmSync(dir, { recursive: true, force: true }) }
 }
 

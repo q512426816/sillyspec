@@ -61,6 +61,8 @@ ProgressManager.alignExecuteToPlan(cwd, changeName, specBase, {confirm})
 - 历史迁移：v1/v2 使用 `progress.json` 文件，v3 全部迁移至 SQLite（`CURRENT_VERSION = 3`）
 - `db.js` DDL 默认 schema_version 仍是 4，但 `progress.js` 当前写入版本是 3；文档不要把 runtime 称为稳定 v4 schema
 - `migrateDocs` 是一次性脚本，不会幂等运行；已存在的文件会被跳过
+- **stage review gate marker 缺失自生**（坑1，`run/gates.js:276`）：tier=independent 且 `getLatestStageReviewRunId` 返回空时（execute 批量完成跳过 prompt 渲染等），gate 自身调 `generateStageReviewRunId()` + `stageReviewMarkerPath()` 写盘 + `mkdirSync`——错误路径从 `execute-null`（不可执行）变为 `execute-review-<id>`（可执行）。补充 prompt 渲染时落 marker（gap 6）的兜底：prompt 路径未走到时 gate 路径自生，marker 文件名/位置不变
+- **archive CLI 下沉 git add**（坑4，`run/complete-handlers.js:137`）：`unregisterChange` 后 CLI 确定性 `safeGit add -- .sillyspec/changes/archive/ + .sillyspec/docs/`，不靠 archive step5 prompt 驱动（step5 prompt 的 git add 保留作幂等兜底）；safeGit 失败不阻断归档（目录已移动 + change 已注销）
 
 ## 人工备注
 <!-- MANUAL_NOTES_START -->

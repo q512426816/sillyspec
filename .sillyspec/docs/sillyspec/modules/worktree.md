@@ -38,8 +38,9 @@ worktree 模块提供基于 git worktree 的分支隔离机制，让每个变更
 ### src/worktree-apply.js
 | 函数/常量 | 说明 | 参数 |
 |-----------|------|------|
-| `applyWorktree(changeName, { cwd, checkOnly?, merge? })` | 将 worktree 变更应用到主工作区；允许集 = `resolveApplyAllowSet`（design §6 ∪ plan task allowed_paths）；主干**已提交**推进交 `--3way` 自动三路合并，未提交 dirty 拦截引导 commit/stash；`merge=true` 显式走 git merge 兜底（D-001） | `changeName, { cwd, checkOnly?, merge? }` |
+| `applyWorktree(changeName, { cwd, checkOnly?, merge? })` | 将 worktree 变更应用到主工作区；允许集 = `resolveApplyAllowSet`（design §6 ∪ plan task allowed_paths）；主干**已提交**推进交 `--3way` 自动三路合并，未提交 dirty 拦截引导 commit/stash；`merge=true` 显式走 git merge 兜底（D-001）；apply 文件经 `filterDeliverableFiles` 精细化过滤 | `changeName, { cwd, checkOnly?, merge? }` |
 | `resolveApplyAllowSet(projectRoot, changeName)` | 解析 apply 允许文件集 = design.md §6 文件变更清单 ∪ 所有 task-*.md 的 allowed_paths（测试/产物文件设计常漏列但 task 已含，union 后不误拦；越界文件仍拦） | `projectRoot, changeName` |
+| `filterDeliverableFiles(files)` | apply 交付物过滤：排除 `.sillyspec/changes/` + `.sillyspec/.runtime/` + `.sillyspec/quicklog/` + `meta.json`，**保留 `.sillyspec/docs/`（dogfood 模块规范文档视为交付物，随变更 apply 回主仓）**。原一刀切排除整个 `.sillyspec/` 导致模块文档滞留 worktree（坑3，exec-g defer 项落地） | `files: string[]` |
 | `rollbackApply(projectRoot, trackedFiles, newFiles)` | `--3way` 冲突后回滚工作区到 apply 前状态（checkout HEAD 还原 tracked + 删新建），不留半成品冲突标记 | `projectRoot, trackedFiles, newFiles` |
 
 ### src/worktree-deps.js

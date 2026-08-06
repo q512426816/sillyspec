@@ -255,7 +255,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
   if (['brainstorm', 'plan', 'propose', 'execute'].includes(stageName)) {
     try {
       const { classifyReviewTier } = await import('../review-tier.js')
-      const { validateStageReview, getLatestStageReviewRunId, printStageReviewResult } = await import('../stage-review.js')
+      const { validateStageReview, getLatestStageReviewRunId, printStageReviewResult, generateStageReviewRunId, stageReviewMarkerPath } = await import('../stage-review.js')
       const effectiveSpecBase = platformOpts?.specRoot || specBase
       const reviewChangeDir = resolveChangeDir(cwd, progress, platformOpts?.specRoot)
       const designPath = reviewChangeDir ? join(reviewChangeDir, 'design.md') : null
@@ -273,7 +273,16 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
       if (tier.tier === 'self') {
         console.log('\nℹ️  Stage Review: ' + stageName + ' tier=self（' + tier.reason + '），已降级为当前 agent 自审，不强制独立子代理。')
       } else {
-        const reviewRunId = getLatestStageReviewRunId(runtimeRoot, stageName, changeName)
+        let reviewRunId = getLatestStageReviewRunId(runtimeRoot, stageName, changeName)
+        if (!reviewRunId) {
+          // marker 缺失（execute 批量完成跳过 prompt 渲染等场景）→ 自生 + 写盘
+          // 让 gate 读到确定 ID，错误从 execute-null 变 execute-review-<id>（可执行）
+          reviewRunId = generateStageReviewRunId()
+          try {
+            mkdirSync(runtimeRoot, { recursive: true })
+            writeFileSync(stageReviewMarkerPath(runtimeRoot, stageName, changeName), reviewRunId + '\n')
+          } catch {}
+        }
         const reviewType = stageName === 'brainstorm' ? 'design'
           : stageName === 'plan' ? 'plan'
           : stageName === 'propose' ? 'proposal'
