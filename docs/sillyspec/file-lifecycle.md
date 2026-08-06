@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-05-31 11:00:00
-updated_at: 2026-08-06T11:00:00+08:00
+updated_at: 2026-08-06T14:48:57+08:00
 ---
 
 # SillySpec 文件生命周期
@@ -72,13 +72,16 @@ updated_at: 2026-08-06T11:00:00+08:00
 | `.sillyspec/quicklog/` | 是 | `src/quicklog.js`（CLI 接管，O_EXCL 锁 + writeAtomic 原子写） | 每次 quick 任务记录（CLI 启动时写「进行中」条目 + 分配 ql-ID，完成时翻「已完成」+ 追加结构化结果块 需求/根因/方案/结果，step3 --output 缺字段则 --done 被拒；关联变更另由 CLI 在各 change tasks.md 追加/勾选。读-改-写经 writeAtomic 原子覆盖，reader 不读半截） |
 | `.sillyspec/shared/` | 是 | `init.js` | 共享目录，当前无核心生命周期逻辑 |
 | `.sillyspec/workspace/` | 是 | `init.js` | 工作区目录，当前无核心生命周期逻辑 |
-| `.sillyspec/.runtime/` | 否 | `init.js`、`ProgressManager`、运行时命令 | DB、gate、artifacts、history、workflow-runs、worktrees、knowledge-hit-report.json、postcheck-result.json、stage-reviews（brainstorm/plan/propose/execute 独立审查 review.json） |
+| `.sillyspec/.runtime/` | 否 | `init.js`、`ProgressManager`、运行时命令 | DB、gate、artifacts、history、workflow-runs、worktrees、knowledge-hit-report.json、postcheck-result.json、execute-runs（execute task review.json）、stage-reviews（brainstorm/plan/propose/execute 独立审查 review.json） |
 
 `init.js` 会把 `.sillyspec/.runtime/`、`.sillyspec/local.yaml`、`.sillyspec/codebase/SCAN-RAW.md` 追加到 `.gitignore`。
 
 > **平台模式残留清理边界**（`init.js` `cleanupRuntimeResidue`，由 `run/command.js`（`runCommand`）启动时首次执行一次）：
 > 当 `specRoot` 指向外部、源码目录的 `.sillyspec/` 含真实资产（`changes/`/`projects/`/`sillyspec.db`）时，只清理运行时残留，**不整删 `.runtime/`**。清理白名单保留权威状态：`worktrees/`、`sillyspec.db`、`global.json`、`gate-status.json`、`contract-artifacts/`、`execute-runs/`；其余子项（`artifacts/`、`scan-runs/`、`scan-projects.json`、`user-inputs.md`、`postcheck-result.json` 等可重建缓存）逐项删除，`local.yaml`、`codebase/` 整删。未知子项默认保留（安全侧倾斜）。
 > 该清理在 `run/command.js`（`runCommand`）启动时**仅执行一次**：首次处理后写 cwd 根的 `.sillyspec-platform-cleaned` 标记文件，后续每次 `run` 直接跳过。旧版每次启动都打印 `❌ 拒绝删除` 红叉属误导性噪声（清理既不阻塞流程也不动真实资产），已降为 `ℹ️` 一次性提示。
+
+> **drift 场景 `.runtime` 落点（`specDriftAnchor`，坑 execute-runs-isolation）**：
+> agent cd 进 worktree 隔离目录跑 plan/execute/verify/archive 时，cwd 命中 worktree 内 checkout 出来的 `.sillyspec` 副本 → `detectWorktreeSpecDrift`（`run/shared.js`）命中 → drift 守卫（`run/command.js`）把 `specBase`/`specRoot`/`specDir`/`pm` 锚回主仓，并在 `platformOpts` 追加 `specDriftAnchor = 主仓 specBase`（**不**设 `specRoot`/`runtimeRoot`——否则触发平台 sentinel，误跳 `triggerSync`/`checkApproval`、误进平台渲染分支）。下游 15 处 `.runtime` 根解析统一调 `resolveRuntimeRoot(platformOpts, localSpecBase)`（`run/shared.js`；优先级：`platformOpts.runtimeRoot` > `platformOpts.specDriftAnchor` > `localSpecBase/.runtime`）→ **execute-runs / stage-reviews / quick-sessions guard 从落盘起即在主仓 `.sillyspec/.runtime/`**，worktree cleanup（整目录删 worktree 物理目录）物理上碰不到 → archive step1 完成度 gate（真相源=磁盘主仓 `review.json`）不再因 cleanup 丢文件阻断。多 change 并行各自落 `<主仓>/.runtime/execute-runs/<各自 runId>/...`（marker 含 `changeName` + `runId` 时间戳全局唯一），无路径冲突。drift 守卫条件 `stageName ∈ [plan,execute,verify,archive]`，不含 quick（quick drift 走 `detectQuickSessionDrift` fail-fast）。
 
 ## 主要文件流
 

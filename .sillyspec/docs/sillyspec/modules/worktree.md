@@ -4,8 +4,8 @@ created_at: 2026-06-01T09:05:00
 ---
 
 # worktree
-> 最后更新：2026-08-05
-> 最近变更：2026-08-05-tooling-feedback-fixes（doctor 加 `deps-main-drift` issue 探主仓 lockfile 漂移 + `--change` 过滤 + `--fix` force 重装；provisionDeps 加 `force` 选项；抽 H1 `checkDepsFreshness` 统一 doctor 与 execute 的 deps 判定）
+> 最后更新：2026-08-06
+> 最近变更：2026-08-06-execute-runs-isolation（drift 守卫补设 `platformOpts.specDriftAnchor` + 抽 `resolveRuntimeRoot` 统一 `.runtime` 根解析 15 站点；drift 场景 execute-runs/stage-reviews 落主仓 `.runtime`，cleanup 整目录删 worktree 碰不到，archive step1 完成度 gate 不再因丢 review.json 阻断）/ 2026-08-05-tooling-feedback-fixes（doctor 加 `deps-main-drift` issue 探主仓 lockfile 漂移 + `--change` 过滤 + `--fix` force 重装；provisionDeps 加 `force` 选项；抽 H1 `checkDepsFreshness` 统一 doctor 与 execute 的 deps 判定）
 > 模块路径：src/worktree.js, src/worktree-apply.js, src/worktree-deps.js
 
 ## 职责
@@ -101,6 +101,7 @@ execute 验证硬门（`run.js completeStep` execute 分支）读 `depsStatus`�
 - applyWorktree 在冲突时会报告冲突文件列表但不自动解决
 - worktree 目录位于 `.sillyspec/.runtime/worktrees/`，需在 .gitignore 中配置
 - cleanup 会强制删除 worktree 和对应分支，操作不可逆
+- **cleanup 不威胁 execute-runs / stage-reviews**（坑 execute-runs-isolation，方案 A）：drift 场景（agent cd worktree 跑 plan/execute/verify/archive）下，`.runtime` 根经 `resolveRuntimeRoot` + `platformOpts.specDriftAnchor` 锚定主仓，execute-runs / stage-reviews 从落盘起即在主仓 `.sillyspec/.runtime/`；cleanup（`rmSync(worktreePath, {recursive:true, force:true})` 整目录删 worktree 物理目录）物理上碰不到 → archive step1 完成度 gate 真相源（磁盘主仓 review.json）不再丢。`src/worktree.js` 的 9 处 cleanup 调用点 + `rmSync` 全无需改（方案 A 堵源头 runtimeRoot 解析，非下游 salvage）
 - 依赖供给失败不阻断 create（只记 meta.depsStatus=failed），但 execute 验证硬门会阻断 --done
 
 ## 变更索引
@@ -110,3 +111,4 @@ execute 验证硬门（`run.js completeStep` execute 分支）读 `depsStatus`�
 | 2026-08-04 | ql-20260804-005-83d8 | execute 复盘 c：apply 允许集改为 resolveApplyAllowSet（design §6 ∪ plan task allowed_paths），测试/产物文件不再误拦，越界文件仍拦 |
 | 2026-08-06 | ql-20260806-002-c4dd | exec-f：worktree-deps detectProjectType/inferInstallCommand 加 python 分支（pyproject.toml/uv.lock→uv sync，纯 requirements.txt→pip install -r），治 worktree 内 ruff/pre-commit 等二进制不供给（原无 python 分支→误判 generic→n/a）；两函数导出做纯单元测 7 断言（不真跑 uv） |
 | 2026-08-05 | 2026-08-05-tooling-feedback-fixes | doctor 加 `deps-main-drift` issue（探主仓 lockfile 漂移，靠 H1 `checkDepsFreshness`）+ `--change` 过滤 flag + `--fix` force 重装（`_doctorReprovision` 解链 + `provisionDeps(force=true)`）；`provisionDeps` 加 `force` 选项；抽 H1 `checkDepsFreshness` 统一 doctor 与 execute 入口 deps 判定 |
+| 2026-08-06 | 2026-08-06-execute-runs-isolation | execute-runs/stage-reviews 与 worktree 生命周期解耦：drift 守卫补设 `platformOpts.specDriftAnchor` + 抽 `resolveRuntimeRoot`（`run/shared.js`）统一 `.runtime` 根解析（15 站点三级优先级 runtimeRoot > specDriftAnchor > 本地）；drift 场景落主仓 `.runtime`，cleanup 整目录删 worktree 不再吃 review.json，archive step1 完成度 gate 不阻断。9 处 cleanup 调用点 + rmSync 全不改（方案 A 堵源头） |

@@ -19,7 +19,7 @@
 import { join, dirname } from 'node:path'
 import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { writeAtomicSync } from '../fs-atomic.js'
-import { resolveSpecDir, resolveChangeDir, triggerSync, safeGit, parsePorcelainPath, formatWaitOptions, checkApproval, getStageSteps } from './shared.js'
+import { resolveSpecDir, resolveChangeDir, resolveRuntimeRoot, triggerSync, safeGit, parsePorcelainPath, formatWaitOptions, checkApproval, getStageSteps } from './shared.js'
 import { computeScanProfile, applyScanProfileSteps, executeScanPreflight, executeScanPostcheck } from './scan-profile.js'
 import { outputStep } from './prompt.js'
 import { allocateQuicklogEntry, deriveTitleFromLinkedChange } from '../quicklog.js'
@@ -89,7 +89,7 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
   if (stageName === 'execute') {
     const { generateExecuteRunId } = await import('../task-review.js')
     const execSpecBase = platformOpts?.specRoot || join(cwd, '.sillyspec')
-    const runtimeRoot = platformOpts?.runtimeRoot || join(execSpecBase, '.runtime')
+    const runtimeRoot = resolveRuntimeRoot(platformOpts, execSpecBase)
     const runIdFile = join(runtimeRoot, `current-execute-run-id-${changeName}`)
     mkdirSync(runtimeRoot, { recursive: true })
     // 优先读取已有的变更专属标记文件

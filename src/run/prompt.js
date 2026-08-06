@@ -20,7 +20,7 @@
 import { basename, join } from 'node:path'
 import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs'
 import { stageRegistry } from '../stages/index.js'
-import { resolvePromptIncludes, safeGit, WAIT_MARKER_RE } from './shared.js'
+import { resolvePromptIncludes, resolveRuntimeRoot, safeGit, WAIT_MARKER_RE } from './shared.js'
 import { renderStageContract } from '../stage-contract-spec.js'
 
 /**
@@ -450,7 +450,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
   if (stageName === 'execute' && promptText.includes('{EXECUTE_RUN_ID}')) {
     let runId = ''
     const execSpecBase = platformOpts?.specRoot || join(cwd, '.sillyspec')
-    const runtimeRoot = platformOpts?.runtimeRoot || join(execSpecBase, '.runtime')
+    const runtimeRoot = resolveRuntimeRoot(platformOpts, execSpecBase)
     const runIdFile = join(runtimeRoot, `current-execute-run-id-${changeName}`)
     try {
       if (existsSync(runIdFile)) {
@@ -488,7 +488,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
       // reviewRunId：优先读 marker 复用（保证多次渲染 prompt 注入同一 ID == gate 读取的 ID，
       // 修复「prompt 多次渲染 / 多次 review 时 gate 取错 ID 读错 review.json」），marker 缺失才
       // generate + 落盘。对齐 execute {EXECUTE_RUN_ID} 段（prompt.js:449-467）。
-      const tierRuntimeRoot = platformOpts?.runtimeRoot || join(tierSpecBase, '.runtime')
+      const tierRuntimeRoot = resolveRuntimeRoot(platformOpts, tierSpecBase)
       const reviewRunIdMarker = stageReviewMarkerPath(tierRuntimeRoot, stageName, changeName)
       let reviewRunId = ''
       try {
@@ -526,7 +526,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
     try {
       const { summarizeTaskCompletion } = await import('../task-review.js')
       const tcrSpecBase = platformOpts?.specRoot || join(cwd, '.sillyspec')
-      const tcrRuntimeRoot = platformOpts?.runtimeRoot || join(tcrSpecBase, '.runtime')
+      const tcrRuntimeRoot = resolveRuntimeRoot(platformOpts, tcrSpecBase)
       const tcrChangeDir = changeName ? join(tcrSpecBase, 'changes', changeName) : null
       const summary = tcrChangeDir
         ? summarizeTaskCompletion({ changeDir: tcrChangeDir, runtimeRoot: tcrRuntimeRoot, changeName })

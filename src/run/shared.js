@@ -255,6 +255,27 @@ export function detectWorktreeSpecDrift(specBase) {
 }
 
 /**
+ * 统一解析 .runtime 根目录（坑 execute-runs-isolation）。
+ *
+ * 优先级：平台模式 runtimeRoot > drift 锚点 specDriftAnchor > 本地 specBase/.runtime。
+ * specDriftAnchor 仅在此处消费，不参与平台 sentinel（specRoot||runtimeRoot）判定，
+ * 避免误跳 triggerSync（:286）/ checkApproval（:313）/ 平台渲染分支（D-02）。
+ *
+ * 历史：drift 守卫（command.js）命中时只重写本地 specBase/specRoot/specDir/pm（progress 落主仓），
+ * 但漏设 platformOpts 字段——下游 15 处 runtimeRoot 解析从 cwd（仍 worktree）重算 → execute-runs /
+ * stage-reviews 落 worktree，被 cleanup 整目录删。本函数 + specDriftAnchor 锚点堵此源头。
+ *
+ * @param {object} [platformOpts] - { runtimeRoot?, specDriftAnchor?, ... }（可 null/undefined）
+ * @param {string} localSpecBase - 本地 specBase（cwd/.sillyspec），兜底落点
+ * @returns {string} .runtime 根目录绝对路径
+ */
+export function resolveRuntimeRoot(platformOpts, localSpecBase) {
+  if (platformOpts?.runtimeRoot) return platformOpts.runtimeRoot
+  if (platformOpts?.specDriftAnchor) return join(platformOpts.specDriftAnchor, '.runtime')
+  return join(localSpecBase, '.runtime')
+}
+
+/**
  * 统一查找变更目录（与 progress.js 的变更检测逻辑一致）。
  */
 export function resolveChangeDir(cwd, progress, specDir = null) {

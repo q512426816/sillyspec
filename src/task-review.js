@@ -15,6 +15,7 @@ import { pathMatches } from './change-list.js'
 import { parseAllowedPaths } from './stages/plan-postcheck.js'
 import { resolveVerifyChangedFiles } from './verify-postcheck.js'
 import { WorktreeManager } from './worktree.js'
+import { resolveRuntimeRoot } from './run/shared.js'
 
 // ── review.json schema version ──
 export const REVIEW_SCHEMA_VERSION = 1
@@ -628,7 +629,7 @@ export function generateExecuteRunId() {
  */
 export async function generateTaskReviewDrafts({ changeName, cwd, platformOpts = {} }) {
   const specBase = platformOpts.specRoot || join(cwd, '.sillyspec')
-  const runtimeRoot = platformOpts.runtimeRoot || join(specBase, '.runtime')
+  const runtimeRoot = resolveRuntimeRoot(platformOpts, specBase)
   const changeDir = join(specBase, 'changes', changeName)
   const tasksDir = join(changeDir, 'tasks')
 

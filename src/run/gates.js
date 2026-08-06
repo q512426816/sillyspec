@@ -21,7 +21,7 @@
  */
 import { basename, join } from 'node:path'
 import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs'
-import { triggerSync, resolveChangeDir } from './shared.js'
+import { triggerSync, resolveChangeDir, resolveRuntimeRoot } from './shared.js'
 import { runValidators } from '../stage-contract.js'
 
 /**
@@ -108,7 +108,7 @@ export async function enforceDepsGate(stageName, cwd, changeName, step, steps, c
  */
 export async function enforceReviewJsonGate(stageName, cwd, changeName, step, steps, currentIdx, specBase, platformOpts) {
   if (stageName !== 'execute' || !changeName) return true
-  const runtimeRoot = platformOpts?.runtimeRoot || join(specBase, '.runtime')
+  const runtimeRoot = resolveRuntimeRoot(platformOpts, specBase)
   const runIdFile = join(runtimeRoot, `current-execute-run-id-${changeName}`)
   const planPath = join(specBase, 'changes', changeName, 'plan.md')
   if (!existsSync(runIdFile) || !existsSync(planPath)) return true
@@ -216,7 +216,8 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
     // 契约 parity 对账：扫前端 API 调用 vs execute 提取的 provider endpoint artifact。
     // 接线自 contract-matrix pipeline（verifyApiParity 的 CLI 入口）。
     const { runVerifyParityCheck, printVerifyParityCheck } = await import('../verify-postcheck.js')
-    const parityCheck = runVerifyParityCheck({ cwd, specBase, changeName, runtimeRoot: platformOpts?.runtimeRoot })
+    const parityRuntimeRoot = resolveRuntimeRoot(platformOpts, specBase)
+    const parityCheck = runVerifyParityCheck({ cwd, specBase, changeName, runtimeRoot: parityRuntimeRoot })
     printVerifyParityCheck(parityCheck)
     // ── 删除探针（advisory，不阻断）：切斯特顿栅栏护栏，用 git 事实对账静默删除代码 ──
     const { runVerifyDeletionCheck, printVerifyDeletionCheck } = await import('../verify-postcheck.js')
@@ -268,7 +269,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
         }
       }
       const tier = classifyReviewTier({ planLevel, designPath })
-      const runtimeRoot = platformOpts?.runtimeRoot || join(effectiveSpecBase, '.runtime')
+      const runtimeRoot = resolveRuntimeRoot(platformOpts, effectiveSpecBase)
 
       if (tier.tier === 'self') {
         console.log('\nℹ️  Stage Review: ' + stageName + ' tier=self（' + tier.reason + '），已降级为当前 agent 自审，不强制独立子代理。')
@@ -311,7 +312,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
 
       if (planPath && existsSync(planPath)) {
         const planContent = readFileSync(planPath, 'utf8')
-        const runtimeRoot = platformOpts?.runtimeRoot || join(effectiveSpecBase, '.runtime')
+        const runtimeRoot = resolveRuntimeRoot(platformOpts, effectiveSpecBase)
 
         // execute run id：从变更专属标记文件读取
         const runIdFile = join(runtimeRoot, `current-execute-run-id-${changeName}`)

@@ -16,7 +16,7 @@
  */
 import { join } from 'node:path'
 import { existsSync, readdirSync, readFileSync, mkdirSync, writeFileSync, appendFileSync, statSync } from 'node:fs'
-import { triggerSync, WAIT_MARKER_RE, getStageSteps, formatWaitOptions } from './shared.js'
+import { triggerSync, WAIT_MARKER_RE, getStageSteps, formatWaitOptions, resolveRuntimeRoot } from './shared.js'
 import { outputStep } from './prompt.js'
 import { enforceDepsGate, enforceReviewJsonGate, runStageCompletionGates } from './gates.js'
 import { handleArchiveConfirmStep, handlePlanGeneratePlanStep, handleScanProjectListStep, handleWorkflowPostCheck, handleQuickStageCompletion, handleExecuteWaveArtifact, handleExecuteWorktreeCleanup, handleScanStageCompleted } from './complete-handlers.js'
@@ -497,7 +497,7 @@ async function autoCheckPlanFromReviews({ stageName, changeName, cwd, platformOp
     const specBaseLc = platformOpts?.specRoot || join(cwd, '.sillyspec')
     const changeDir = join(specBaseLc, 'changes', changeName)
     const planPath = join(changeDir, 'plan.md')
-    const runtimeRoot = platformOpts?.runtimeRoot || join(specBaseLc, '.runtime')
+    const runtimeRoot = resolveRuntimeRoot(platformOpts, specBaseLc)
     const runIdFile = join(runtimeRoot, `current-execute-run-id-${changeName}`)
     if (!existsSync(planPath) || !existsSync(runIdFile)) {
       return { autoChecked: false, checkedCount: 0, skippedCount: 0 }

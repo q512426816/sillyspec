@@ -23,7 +23,7 @@
 import { basename, join, resolve, relative, isAbsolute } from 'node:path'
 import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync, unlinkSync, rmSync } from 'node:fs'
 import { renameSyncRetry, writeAtomicSync } from '../fs-atomic.js'
-import { resolveChangeDir, safeGit, auditQuickCompletion, triggerSync, isQuickMetadata } from './shared.js'
+import { resolveChangeDir, resolveRuntimeRoot, safeGit, auditQuickCompletion, triggerSync, isQuickMetadata } from './shared.js'
 import { stageRegistry } from '../stages/index.js'
 import { SCAN_STATUS, POINTER_STATUS } from '../constants.js'
 import { printQuickAuditReview } from './quick-audit.js'
@@ -555,7 +555,7 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
     // 若仍用 if (progress.quickGuard) 驱动收尾会整体跳过，导致 .runtime/quick-sessions/<sessionId>/ 残留僵尸。
     // 改为从文件读 guard：优先 session 目录 guard.json，回退旧单文件 quick-guard.json（task-03 前兼容）。
     // sessionId == changeName == quick-<uuid8>（completeStep 作用域内 changeName 已解构自 options）。
-    const runtimeBase = platformOpts.runtimeRoot || join(specBase, '.runtime')
+    const runtimeBase = resolveRuntimeRoot(platformOpts, specBase)
     const sessionGuardFile = join(runtimeBase, 'quick-sessions', changeName, 'guard.json')
     const legacyGuardFile = join(specBase, '.runtime', 'quick-guard.json')
     let guard = null

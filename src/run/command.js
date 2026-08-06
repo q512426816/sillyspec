@@ -23,7 +23,7 @@ import { join, resolve, dirname } from 'node:path'
 import { existsSync, readdirSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
 import { randomBytes, randomUUID } from 'node:crypto'
 import { writeAtomicSync } from '../fs-atomic.js'
-import { resolveSpecDir, countAncestorSpecDirs, resolveChangeDir, triggerSync, getStageSteps, formatWaitOptions, checkApproval, didYouMean, assertSafeChangeName, detectQuickSessionDrift, detectWorktreeSpecDrift } from './shared.js'
+import { resolveSpecDir, countAncestorSpecDirs, resolveChangeDir, triggerSync, getStageSteps, formatWaitOptions, checkApproval, didYouMean, assertSafeChangeName, detectQuickSessionDrift, detectWorktreeSpecDrift, resolveRuntimeRoot } from './shared.js'
 import { resolveQuickLinkedChanges } from './quick-audit.js'
 import { outputStep } from './prompt.js'
 import { completeStep, skipStep, waitStep, continueStep } from './complete.js'
@@ -424,7 +424,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
       const isDoneLike = isDone || isStatus || isSkip || isReset || isReopen
       if (isDoneLike) {
         try {
-          const runtimeRoot = platformOpts.runtimeRoot || join(specRoot, '.runtime')
+          const runtimeRoot = resolveRuntimeRoot(platformOpts, specRoot)
           const idFile = join(runtimeRoot, 'current-quick-run-id')
           if (existsSync(idFile)) {
             const v = readFileSync(idFile, 'utf8').trim()
@@ -541,6 +541,11 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
       specRoot = wt.mainSpecBase
       specDir = wt.mainSpecBase
       pm = new ProgressManager({ specDir: specRoot })
+      // 【坑 execute-runs-isolation】下游 runtimeRoot 解析（execute-runs/stage-reviews 落点）经
+      // platformOpts 透传读此锚点，落主仓 .runtime，不随 worktree cleanup 整目录删消失。
+      // D-02：只参与 runtimeRoot 解析（resolveRuntimeRoot），绝不设 specRoot/runtimeRoot——
+      // 否则触发平台 sentinel 副作用（triggerSync/checkApproval 跳过 + prompt 误进平台渲染分支）。
+      platformOpts.specDriftAnchor = wt.mainSpecBase
       console.warn(`⚠️ 已自动锚定主仓 spec：${wt.mainSpecBase}（原 cwd 命中 worktree 副本 ${wt.changeName}，已纠正，流程继续）`)
     }
   }
@@ -732,7 +737,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     // currentIdx === -1 自动重置（~1944 行）；in-progress 输出当前 step；全新由
     // ensureStageSteps 初始化；显式从头用 --reset（已由 !isReset 排除出本分支）。
     try {
-      const runtimeRoot = platformOpts.runtimeRoot || join(specRoot, '.runtime')
+      const runtimeRoot = resolveRuntimeRoot(platformOpts, specRoot)
       mkdirSync(runtimeRoot, { recursive: true })
       writeAtomicSync(join(runtimeRoot, 'current-quick-run-id'), quickSessionId + '\n')
     } catch (e) {
