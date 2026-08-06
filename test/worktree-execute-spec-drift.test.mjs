@@ -17,7 +17,8 @@
  * change 2026-08-05-tooling-feedback-fixes（task-05）
  */
 import { ProgressManager } from '../src/progress.js'
-import { mkdtempSync, writeFileSync, mkdirSync, existsSync, rmSync } from 'fs'
+import { getStageSteps } from '../src/run/shared.js'
+import { mkdtempSync, writeFileSync, mkdirSync, existsSync, readFileSync, rmSync } from 'fs'
 import { join, dirname, resolve } from 'path'
 import { tmpdir } from 'os'
 import { spawnSync } from 'child_process'
@@ -125,6 +126,79 @@ console.log('--- 场景 A：cwd 命中 worktree 副本 → 自动锚定，不 ex
   // 副本未被写入：pm 重建指向主仓，任何 pm._write 都不会落到 copySpec/.runtime/
   assert(!existsSync(join(copySpec, '.runtime')),
     `AC-A6: 副本 spec 未被写入（copySpec/.runtime 不存在）`)
+
+  // ════════════════════════════════════════════════════════════
+  // producer 侧 e2e 硬证（execute-runs-isolation 遗留 gap 2）：
+  // 场景 A 现有断言用 --status 只读路径（AC-A1..A6），grep specDriftAnchor 0 命中——
+  // drift 守卫虽设了 specDriftAnchor，但 marker 落盘从未真实触发。这里追加**非 --status 的真实
+  // execute step**（renderPrompt 真实渲染 acceptance step），断言 execute-runs/stage-reviews
+  // marker 经 resolveRuntimeRoot(specDriftAnchor) 落**主仓 .runtime**而非副本。
+  // ════════════════════════════════════════════════════════════
+
+  // 预置 worktree meta（in-place-fallback，depsStatus='n/a'）：真实 execute 的 runStage
+  // 会 wm.getMeta 命中跳过 wm.create（临时 fixture 非 git 仓库，wm.create 必败 → exit 1）。
+  // worktreeBase = resolve(_resolveMainRepoRoot(wtRoot), '.sillyspec/.runtime/worktrees')；
+  // wtRoot 非 git 仓库 → _resolveMainRepoRoot fallback cwd → meta 落在 copySpec/.runtime/worktrees/ 下。
+  const wmMetaDir = join(copySpec, '.runtime', 'worktrees', changeName)
+  mkdirSync(wmMetaDir, { recursive: true })
+  writeFileSync(join(wmMetaDir, 'meta.json'), JSON.stringify({
+    name_zh: 'worktree 元数据',
+    changeName,
+    branch: 'sillyspec/' + changeName,
+    baseBranch: 'main',
+    baseHash: 'deadbeef',
+    actualBaseHash: 'deadbeef',
+    createdAt: new Date().toISOString(),
+    worktreePath: wtRoot,
+    mode: 'in-place-fallback',
+    baselineFiles: [],
+    baselineCommit: null,
+    baselineHash: null,
+    depsStatus: 'n/a',
+  }, null, 2) + '\n', 'utf8')
+
+  // 推进 progress 到「对照设计检查」acceptance step（defSteps 里含 {REVIEW_TIER}，唯一触发
+  // stage review marker 落盘的步骤）。用 getStageSteps(specBase=null) 探测 index——与 runStage
+  // 真实渲染的 defSteps 同参同构（drift 场景 platformOpts.specRoot=null），不硬编码魔法数字，
+  // 幻影 wave step 数变化时仍准确。progress.stages.execute.steps 与 defSteps 同长，index 对齐。
+  const progPre = await pmAfter.read(wtRoot, changeName)
+  const defSteps = await getStageSteps('execute', wtRoot, progPre, null)
+  const acceptanceIdx = defSteps.findIndex(s => (s.prompt || '').includes('{REVIEW_TIER}'))
+  assert(acceptanceIdx >= 0,
+    `AC-A7: defSteps 含 acceptance step（{REVIEW_TIER}，index=${acceptanceIdx}）`)
+  for (let i = 0; i < acceptanceIdx; i++) progPre.stages.execute.steps[i].status = 'completed'
+  await pmAfter._write(wtRoot, progPre, changeName)
+
+  // 跑真实 execute step（非 --status）：runStage → renderPrompt 注入 {EXECUTE_RUN_ID} +
+  // {REVIEW_TIER}/{STAGE_REVIEW_RUN_ID}，两处 marker 经 resolveRuntimeRoot(specDriftAnchor) 落盘。
+  const resReal = runInSubprocess(wtRoot, ['execute', '--change', changeName])
+  const combReal = (resReal.stdout || '') + (resReal.stderr || '')
+  assert(resReal.status === 0,
+    `AC-A8: 真实 execute step exit=0（实际 exit=${resReal.status}，尾=${combReal.slice(-150)})`)
+  assert(combReal.includes('自动锚定'),
+    `AC-A9: 真实 execute 仍自动锚定主仓（含「自动锚定」warn）`)
+
+  const mainRuntime = join(mainSpec, '.runtime')
+  const copyRuntime = join(copySpec, '.runtime')
+  const mainExecMarker = join(mainRuntime, `current-execute-run-id-${changeName}`)
+  const mainStageMarker = join(mainRuntime, `current-stage-review-run-id-execute-${changeName}`)
+  const copyExecMarker = join(copyRuntime, `current-execute-run-id-${changeName}`)
+  const copyStageMarker = join(copyRuntime, `current-stage-review-run-id-execute-${changeName}`)
+
+  // 硬证 1：execute-runs marker（stage.js 固定 runId + prompt.js {EXECUTE_RUN_ID} 注入落盘点）落主仓
+  assert(existsSync(mainExecMarker),
+    `AC-A10: execute marker 落主仓 .runtime（current-execute-run-id-${changeName}）`)
+  assert(existsSync(mainExecMarker) && readFileSync(mainExecMarker, 'utf8').trim().startsWith('exec-'),
+    `AC-A11: execute marker 内容为 exec- runId（stage.js 固定 runId 落盘）`)
+
+  // 硬证 2：stage-reviews marker（prompt.js {STAGE_REVIEW_RUN_ID} 注入落盘点）落主仓
+  assert(existsSync(mainStageMarker),
+    `AC-A12: stage review marker 落主仓 .runtime（current-stage-review-run-id-execute-${changeName}）`)
+
+  // 硬证 3：副本 .runtime 无任何 execute/stage marker（未随 drift 写分裂副本；worktree meta 除外——
+  // 那是本测试为跳过 wm.create 预置的，非本变更产物）
+  assert(!existsSync(copyExecMarker) && !existsSync(copyStageMarker),
+    `AC-A13: 副本 .runtime 无 execute/stage marker（specDriftAnchor 锚定生效，不落 worktree 副本）`)
 }
 
 // ════════════════════════════════════════════════════════════

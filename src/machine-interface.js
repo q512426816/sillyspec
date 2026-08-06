@@ -18,6 +18,7 @@
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { ProgressManager, resolveSpecDir } from './progress.js';
+import { resolveRuntimeRoot } from './run/shared.js';
 import { runValidators, checkTransition, checkExecuteCodeEvidence } from './stage-contract.js';
 import { validateTaskReviews } from './task-review.js';
 import { runVerifyTestCheck } from './verify-postcheck.js';
@@ -101,10 +102,13 @@ export function buildEnvelope({
  * @param {object} opts
  * @param {string} opts.cwd - 项目根目录
  * @param {string} [opts.specBase] - .sillyspec（或平台 specRoot）目录；默认 resolveSpecDir(cwd)
- * @param {string} [opts.runtimeRoot] - .runtime 目录；默认 join(specBase, '.runtime')
+ * @param {string} [opts.runtimeRoot] - .runtime 目录；默认 resolveRuntimeRoot 三级优先级解析
+ * @param {string} [opts.specDriftAnchor] - drift 场景主仓 specBase 锚点（坑 execute-runs-isolation）。
+ *   drift 守卫命中时由调用方传入，task-reviews 的 execute-run-id marker 落点经
+ *   resolveRuntimeRoot 锚主仓 .runtime，不读 worktree 副本（与 contract-matrix 调用方同语义）。
  * @returns {Promise<{ envelope: object, exitCode: number }>}
  */
-export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot } = {}) {
+export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, specDriftAnchor } = {}) {
   const specRoot = specBase || resolveSpecDir(cwd);
   const pm = new ProgressManager();
 
@@ -181,7 +185,9 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot } 
         }
       }
 
-      const rtRoot = runtimeRoot || join(specRoot, '.runtime');
+      // drift 场景经 resolveRuntimeRoot 三级优先级解析（runtimeRoot > specDriftAnchor > 本地兜底），
+      // 锚主仓 .runtime，不读 worktree 副本（坑 execute-runs-isolation，与 contract-matrix 调用方同语义）
+      const rtRoot = resolveRuntimeRoot({ runtimeRoot, specDriftAnchor }, specRoot);
       const runIdFile = join(rtRoot, `current-execute-run-id-${changeName}`);
       let executeRunId = '';
       try {
@@ -310,10 +316,12 @@ export const FACETS = ['execute-evidence', 'verify-test', 'task-reviews', 'artif
  * @param {object} opts
  * @param {string} opts.cwd - 项目根目录
  * @param {string} [opts.specBase] - .sillyspec（或平台 specRoot）目录；默认 resolveSpecDir(cwd)
- * @param {string} [opts.runtimeRoot] - .runtime 目录；默认 join(specBase, '.runtime')
+ * @param {string} [opts.runtimeRoot] - .runtime 目录；默认 resolveRuntimeRoot 三级优先级解析
+ * @param {string} [opts.specDriftAnchor] - drift 场景主仓 specBase 锚点（坑 execute-runs-isolation），
+ *   task-reviews facet 的 execute-run-id marker 落点经 resolveRuntimeRoot 锚主仓 .runtime，不读副本。
  * @returns {Promise<{ envelope: object, exitCode: number }>}
  */
-export async function runDerive(facet, changeName, { cwd, specBase, runtimeRoot } = {}) {
+export async function runDerive(facet, changeName, { cwd, specBase, runtimeRoot, specDriftAnchor } = {}) {
   // ── 非法 facet：用法错 → exit 2（D-004@v1）──
   if (!FACETS.includes(facet)) {
     const envelope = buildEnvelope({
@@ -399,7 +407,8 @@ export async function runDerive(facet, changeName, { cwd, specBase, runtimeRoot 
           }
         }
 
-        const rtRoot = runtimeRoot || join(specRoot, '.runtime');
+        // drift 场景经 resolveRuntimeRoot 三级优先级解析（同 runGate execute 段），锚主仓 .runtime 不读副本
+        const rtRoot = resolveRuntimeRoot({ runtimeRoot, specDriftAnchor }, specRoot);
         const runIdFile = join(rtRoot, `current-execute-run-id-${changeName}`);
         let executeRunId = '';
         try {
