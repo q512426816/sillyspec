@@ -327,3 +327,20 @@
 根因：flipEntryInContent 在 endIdx（下一个 ## 标题行）前 splice 插入结果行，但本条目自带尾空行 → 结果块落到尾空行之后、紧贴下一条目标题，且被空行从本条目「文件：」行隔开，视觉上像属于下一条目。
 方案：结果块改为从 endIdx 往前跳过本条目尾部空行、在最后一个非空行之后插入（归本条目、紧贴文件行），并兜底在结果块与下一个 ## 标题间无空行时补一个空行；历史 QUICKLOG 主文件批量补全条目间空行（只插入空行，不改任何条目内容）。
 结果：npm test 全量 109/0 通过、npm run lint 66 文件通过；新增验收 2g（多条目间距）由红转绿（单跑 84/0）。
+
+## ql-20260806-001-3e12 | 2026-08-06 06:24:24 | 工具驾驭复盘3条反馈修复（design 字段数据流引导 / related_tests 测试断言判据 / review.json 拼错提示）
+状态：已完成
+关联变更：（无）
+文件：
+- src/stages/brainstorm.js（A：§267 文件变更清单补「字段数据流标注」引导段——producer→consumer + 每跳归一化点，参照 §7.5 生命周期契约表写法）
+- src/stages/plan.js（B：§326 审查清单 / §407 TaskCard 模板示例 / §431 字段说明 / §474 一致性自查——related_tests 触发判据由「源文件是否共享」改为「既有测试断言是否失效」）
+- src/spec-dir-typo.js（C 新建：detectSpecDirTypo + levenshtein，编辑距离 ≤2 检测 .sillyspec 拼写变体如 .silyspec/.sillyspc）
+- src/stage-review.js（C：validateStageReview missing 分支调 detectSpecDirTypo 给「路径疑似拼错」提示；import 中立模块避开 stage-review↔task-review 循环依赖）
+- test/spec-dir-typo.test.mjs（C 新建：5 用例——少 l / 漏 e 变体命中、无变体返回 null、距离 >2 不误报、空入参 fail-safe）
+- docs/prompt/_extracted.json（重跑 _extract.mjs 刷新 brainstorm/plan 提取镜像）
+- docs/prompt/brainstorm.md、docs/prompt/plan.md（A/B 文案逐字替换与源码一致）
+- .sillyspec/docs/sillyspec/modules/stages.md（人工备注 ql-20260806-001-3e12 + updated_at 2026-08-06）
+需求：修复 sillyhub 项目工具驾驭复盘 3 条新反馈（A design §6 字段数据流引导 / B related_tests 触发判据 / C review.json 拼错提示），与已归档的 5 问题（db5d160）不重叠，债单此前无登记。
+根因：A——brainstorm §6 文件变更清单仅三列表，对「新增字段如何流到消费端」零引导，到 execute 才发现 dormant（RS-3/RS-4 类，design 阶段就该画清）；B——plan related_tests 判据写死「改共享/被多 task 依赖源文件」，漏按钮文案等单文件场景（task-13 改文案必改测试断言却没进 allowed_paths，子代理被锁死）；C——review.json missing 时无拼错线索，用户手误 .sillyspec→.silyspec 靠 mv+rm 修复。
+方案：A——brainstorm.js §267 补「字段数据流标注」引导段（producer→consumer + 每跳归一化点）；B——plan.js 4 处判据由「源文件共享」改「既有测试断言失效」（覆盖 UI 文案/常量/枚举/签名）；C——新建 src/spec-dir-typo.js（detectSpecDirTypo: levenshtein ≤2）+ stage-review.js missing 分支调用，放中立模块避循环依赖。
+结果：9 文件已 git add 暂存（待用户统一 commit）；npm test 全量 115/0、lint 68 files 0 错、spec-dir-typo 单测 5/5（少 l/漏 e/距离>2/空入参覆盖）；文档同步——重跑 _extract.mjs + docs/prompt/brainstorm.md+plan.md 逐字替换 + stages.md ql 备注。

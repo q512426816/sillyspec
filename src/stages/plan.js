@@ -323,7 +323,7 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
 - [ ] 不存在 P0/P1 unresolved blocker 残留
 - [ ] 没有实现细节泄漏到 plan.md（接口签名/代码示例应在 tasks/task-NN.md）
 - [ ] 关键路径与 Wave 依赖合理（无循环依赖、无遗漏前置）
-- [ ] 连带测试归属：改共享/被多 task 依赖源文件的 task 是否在 related_tests 声明了会失效的既有测试、且路径在 allowed_paths 内（或由独立测试 task 覆盖）？（漏声明 = execute 阶段测试债、主代理事后兜底）
+- [ ] 连带测试归属：本批改动是否会导致既有测试断言失效（改共享/被多 task 依赖源文件、改被测试精确匹配的值如 UI 文案/按钮文本/错误信息/常量/枚举字面量、改函数签名或返回结构等单文件场景）？此类 task 是否在 related_tests 声明了失效测试、且路径在 allowed_paths 内（或由独立测试 task 覆盖）？（漏声明 = execute 阶段测试债、主代理事后兜底）
 - [ ] acceptance 字段对照实际 schema/类型源文件核验存在性与形态，不凭 design.md 文字臆断（plan-postcheck best-effort grep 会给 allowed_paths 源文件未命中的 snake_case/camelCase 标识符提 warning，此处是语义层复查；臆断 = execute 阶段返工）
 
 ### tier=independent 时：启动 plan-review 子代理
@@ -404,7 +404,7 @@ verify:
 constraints:
   - 边界约束 1（如：不加测试）
   - 边界约束 2（如：不修改传入参数）
-related_tests:                           # 可选。仅当本 task 改共享/被多 task 依赖的源文件时填
+related_tests:                           # 可选。当本 task 改动会导致既有测试断言失效时填（共享源文件/UI文案/常量/签名变更等，判据=测试是否失败非文件是否共享）
   - path: frontend/src/lib/errors.test.ts # 因本次改动断言失效的既有测试文件
     reason: 旧断言假设单例，改归属键后需同步
 ---
@@ -428,7 +428,7 @@ TaskCard 格式规则（必须严格遵守）：
 - provides / expects_from 是可选字段：仅当跨 task 契约（一个 task 的接口/DTO/响应被另一个 task 消费）时才填，单 task 或无对外接口场景留空即可
 - 填写后 plan-postcheck 会做硬对账：consumer 的每个 expects_from[provider].needs 字段必须在对应 provider 的 provides.fields 里，否则 plan 阶段阻断（不进入 execute）
 - 不要把内部实现字段塞进 provides；只暴露给其他 task 的对外契约形状
-- related_tests 是可选字段：仅当本 task 改共享源文件（被既有测试引用、或被多 task 依赖）时填，列出会因本次改动断言失效的既有测试文件 + 为何失效。关键：这些测试路径必须同时写进本 task 的 allowed_paths（否则子代理被 allowed_paths 铁律锁死、改不了测试 → 退化成主代理事后兜底）；若测试由独立的测试 task 负责，则在该测试 task 的 allowed_paths 覆盖、本字段留空
+- related_tests 是可选字段：当本 task 改动会导致既有测试断言失效时填（判据 = 是否有既有测试因本次改动而失败，而非源文件是否共享——覆盖改共享/被多 task 依赖源文件、改被测试精确匹配的值如 UI 文案/按钮文本/错误信息/常量/枚举字面量、改函数签名或返回结构等单文件场景），列出失效测试文件 + 为何失效。关键：这些测试路径必须同时写进本 task 的 allowed_paths（否则子代理被 allowed_paths 铁律锁死、改不了测试 → 退化成主代理事后兜底）；若测试由独立的测试 task 负责，则在该测试 task 的 allowed_paths 覆盖、本字段留空
 - 如果存在 decisions.md，无法覆盖的 D-xxx@vN 在 constraints 中标注
 - **保存前格式自检**（plan-postcheck 会硬校验，不通过到 Step 4 会批量报错，先在这里逐条自查）：
   - frontmatter 字段齐全：id、title、title_zh、author、created_at、priority、depends_on、blocks、allowed_paths、goal、implementation、acceptance、verify、constraints
@@ -471,7 +471,7 @@ ${subagentPrompts}
   - allowed_paths 有无冲突
   - depends_on 与 plan.md Wave 分组是否一致
   - provides/expects_from 契约自洽：每个 expects_from[provider].needs 字段都在该 provider task 的 provides.fields 里（plan-postcheck 会硬校验，这里提前自查）
-  - related_tests（若填）的测试路径是否都在本 task 或某 task 的 allowed_paths 内（否则子代理无权改 → execute 测试债、主代理事后兜底）
+  - related_tests 判据 = 是否有既有测试因本次改动而失败（非「源文件是否共享」；UI 文案/常量/签名变更等单文件场景也算）；若填，测试路径必须都在本 task 或某 task 的 allowed_paths 内（否则子代理无权改 → execute 测试债、主代理事后兜底）
   - 如发现矛盾，列出问题清单，不要自动修复`
 
   return {

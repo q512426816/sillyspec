@@ -17,6 +17,7 @@ import { existsSync, readFileSync, mkdirSync, readdirSync } from 'fs'
 import { join } from 'path'
 import { createHash } from 'crypto'
 import { VALID_VERDICTS, REVIEW_SCHEMA_VERSION } from './task-review.js'
+import { detectSpecDirTypo } from './spec-dir-typo.js'
 
 // 文档型 stage review 的合法 reviewType
 export const STAGE_REVIEW_TYPES = ['design', 'plan', 'proposal', 'code', 'acceptance']
@@ -345,9 +346,12 @@ export function validateStageReview(opts) {
   const reviewPath = join(reviewDir, 'review.json')
 
   if (!reviewRunId || !existsSync(reviewPath)) {
+    const errs = [`缺少 ${stage} 阶段的 stage review.json — tier=independent 要求独立审查子代理产出（期望路径：${reviewPath}）`]
+    const typo = detectSpecDirTypo(runtimeRoot)
+    if (typo) errs.push(`💡 路径疑似拼错：发现 ${typo.typoDir} 目录（应为 ${typo.canonical}），review.json 可能误存于此——检查是否把 .sillyspec 拼成了变体`)
     return {
       ok: false,
-      errors: [`缺少 ${stage} 阶段的 stage review.json — tier=independent 要求独立审查子代理产出（期望路径：${reviewPath}）`],
+      errors: errs,
       warnings,
       review: null,
     }

@@ -4,7 +4,7 @@ doc_type: module-card
 module_id: stages
 author: qinyi
 created_at: 2026-06-04T16:55:00+08:00
-updated_at: 2026-08-05T22:30:00+08:00
+updated_at: 2026-08-06T06:34:27+08:00
 ---
 
 # stages
@@ -59,4 +59,5 @@ updated_at: 2026-08-05T22:30:00+08:00
 - ql-20260617-004-a91f | 缺 priority 的 unresolved/blocking decision 按 P1 阻断，并补充 parser 回归测试。
 - ql-20260803-002-eff0 | archive step3 sync-module-docs 加 requiresWait，--continue 确认后回到本步由 agent 写模块卡片（修 verify-archive-flow-pitfalls 坑4）。
 - ql-20260804-003-e439 | plan-postcheck 加 title_zh 完整性硬校验（prompt-control-debt plan-b：防子代理为压 20~40 行静默丢 frontmatter 字段）。
+- ql-20260806-001-3e12 | 工具驾驭复盘 3 条反馈：brainstorm §6 文件变更清单加「字段数据流标注」引导（新增字段须交代 producer→consumer + 每跳归一化点）；plan related_tests 判据由「源文件是否共享」改为「既有测试断言是否失效」（覆盖 UI 文案/常量/签名等单文件场景）；stage-review review.json missing 加 .sillyspec 拼写变体检测提示（新增 src/spec-dir-typo.js）。
 <!-- MANUAL_NOTES_END -->
