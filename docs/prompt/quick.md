@@ -35,7 +35,7 @@
 
 ### 📌 本 quick 会话 sessionId: <quick-session-id>
 - CLI 是短进程，run 与 done 是独立进程，sessionId 靠 --change 跨进程传递
-- **完成每个 step 必须带 --change <quick-session-id>**（命令由 CLI 在下方注入）；多会话并发时不带会命中他者会话状态（不带时 fallback 读 current-quick-run-id，单会话兼容；多会话不可靠）
+- **完成每个 step 必须带 --change <quick-session-id>**（命令由 CLI 在下方注入）；多会话并发时不带会命中他者会话状态
 
 ### 操作
 1. 检查关联变更（`<linked-changes>`，逗号分隔的变更名列表；显示「（无）」= 不关联变更），确定记录方式

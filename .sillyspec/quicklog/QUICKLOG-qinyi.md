@@ -461,3 +461,20 @@
 根因：modules.js 版未 export 故 prompt.js 无法 import 只能复制；两份字段集随后续演进分叉（prompt.js 加了 core_files 等，modules.js 没跟）；modules.js 仅 import fs/path/db.js（db.js 是叶子），prompt.js→modules.js 单向无循环依赖，合并安全。
 方案：modules.js 版升级为超集字段（取并集）+ export 成 canonical；prompt.js 删副本改 import（node 加载验证无循环依赖）；loadModuleContextIndex 加 schema_version 校验 warn（正常生成的文件写 v2 不触发，仅 malformed/旧格式告警）；新建测试锁超集字段。
 结果：node test/module-map-parser.test.mjs 15/15 全过；node 加载 prompt.js 确认无循环依赖；npm test 122/0 无回归（+1 新测试文件）；npm run lint 68 文件通过。无 stage prompt 改动故 _extract.mjs 无变化、无文件生命周期变更故 file-lifecycle.md 不动；无文档断言"两份解析器"故无他处需同步。触及 src/modules.js + src/run/prompt.js，--force-baseline 显式确认。
+
+## ql-20260807-007-6281 | 2026-08-07 11:20:57 | 修复 sss.md A组 6 处 prompt/源码一致性缺陷
+状态：已完成
+关联变更：（无）
+文件：
+- src/stages/execute.js（确认执行范围步删"为每个Task建议模型"空指令映射改诚实模型档位条目对齐[model:xxx]标签并重编号；确认worktree路径步删末尾孤立双引号；知识库审阅步补uncategorized路径起始反引号；buildWavePrompt删末尾孤立双引号）
+- src/stages/quick.js（step1 删"单会话兼容"退路括号，对齐铁律15"必须带--change"，确认--change<session-id>确为session传递正确机制）
+- src/stages/scan.js（Step8 子代理prompt"启动前必须拼入"补中文右括号）
+- docs/prompt/_extracted.json（_extract.mjs 重提取，反映上述源码改动）
+- docs/prompt/execute.md（镜像同步：建议模型块重写+重编号、删两处孤立双引号、补uncategorized反引号、删3条过时"逐字保留"注释）
+- docs/prompt/quick.md（镜像同步：删单会话兼容退路）
+- docs/prompt/scan.md（镜像同步：补右括号）
+
+需求：修复 sss.md A组 6 处 prompt/源码一致性缺陷。
+根因：execute 建议模型空指令无 model id 映射且确认worktree路径步与 buildWavePrompt 两处末尾各一孤立双引号、quick 单会话兼容退路违背铁律15、scan 子代理 prompt 中文括号未闭合、execute 知识库审阅 uncategorized 路径缺起始反引号。
+方案：纯减法——execute 删建议模型映射改诚实模型档位条目对齐 [model:xxx] 标签并重编号、删两处末尾孤立双引号、补 uncategorized 起始反引号；quick 删退路括号；scan 补右括号；docs/prompt 重提取并逐字同步 execute/quick/scan 镜像含删 3 条过时逐字保留注释。
+结果：npm test 122/0 全绿、npm run lint 68 文件通过；6 处源码加 execute/quick/scan/_extracted.json 镜像已改；模块文档 stages.md 变更索引因活跃并发 session 占用共享文件暂 defer。

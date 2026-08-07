@@ -124,10 +124,7 @@
 ### 输出
 worktree 路径 + 分支名 + 模式
 
-"
 ````
-
-> ⚠️ 上面 prompt 末尾保留的字面 `"` 字符来自源码 `src/stages/execute.js` 模板字符串（`...模式\n\n"`），`_extracted.json` 同源落地。逐字保留，勿删。
 
 ---
 
@@ -148,17 +145,12 @@ worktree 路径 + 分支名 + 模式
 
 ### 操作
 1. 从 plan 中解析 Wave 分组和任务列表
-2. 根据任务描述关键词为每个 Task 建议模型：
-   - 架构/复杂推理 → 最强模型
-   - 常规实现 → 中等模型
-   - 简单修改 → 快速模型
-   - 文档/写作 → 写作模型
-3. 用户在 tasks.md 中的 [model:xxx] 标签优先
-4. 读取 `--confirm-mode` 参数（由 CLI 传入，不需要询问用户）：
+2. 模型档位：若 tasks.md 中某 task 标注了 [model:xxx]，启动该 task 子代理时按标签选模型（档位由 plan 阶段或用户在 tasks.md 显式标注，execute 不在此自动建议——关键词→档位无统一映射，自动建议反而易误导）
+3. 读取 `--confirm-mode` 参数（由 CLI 传入，不需要询问用户）：
    - wave — 每个 Wave 完成后展示结果（默认）
    - task — 每个 Task 完成后展示结果
    - auto — 全部自动执行
-5. 查询知识库：读取 `.sillyspec/knowledge/INDEX.md`，根据 Task 关键词匹配
+4. 查询知识库：读取 `.sillyspec/knowledge/INDEX.md`，根据 Task 关键词匹配
 
 ### 知识命中报告
 {KNOWLEDGE_HIT_REPORT}
@@ -296,10 +288,7 @@ task-XX 对应：{SPEC_ROOT}/.runtime/execute-runs/{EXECUTE_RUN_ID}/tasks/task-X
    - 在变更文件中搜索所有 router 注册路径（@router.get/post/put/delete）
    - 将端点清单写入 {SPEC_ROOT}/.runtime/contract-artifacts/<task-name>/endpoints.json
    - 格式: { "task": "task-XX", "type": "backend_endpoints", "endpoints": [{ "method": "GET", "path": "/api/ppm/xxx" }] }
-"
 ````
-
-> ⚠️ 上面 prompt 末尾保留的字面 `"` 字符（`}] }` 后单独一行）来自源码 `src/stages/execute.js` 的 `buildWavePrompt` 函数模板字符串末尾（`...}] }\n"`），`_extracted.json` 同源落地。Wave 2 / Wave 3 prompt 末尾同此。逐字保留，勿删。
 
 ---
 
@@ -452,15 +441,13 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
 检查本轮执行产生的新知识。
 
 ### 操作
-1. 检查 .sillyspec/knowledge/uncategorized.md` 中待确认条目
+1. 检查 `.sillyspec/knowledge/uncategorized.md` 中待确认条目
 2. 如有 → 提示用户审阅
 3. 用户确认后改为 [已确认]，可归类到专题文件
 
 ### 输出
 新知识条目数量 + 审阅提示（或"无新知识"）
 ````
-
-> ⚠️ 上面 prompt 第 1 步 `检查 .sillyspec/knowledge/uncategorized.md\`` 中前置的反引号缺失（开引号在 `检查` 之后、路径之前）是源码 `src/stages/execute.js` 模板字符串原文（`检查 \.sillyspec/knowledge/uncategorized.md\``），`_extracted.json` 同源落地。逐字保留，勿补。
 
 ---
 
