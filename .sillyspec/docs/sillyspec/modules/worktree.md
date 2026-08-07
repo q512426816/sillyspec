@@ -4,7 +4,7 @@ created_at: 2026-06-01T09:05:00
 ---
 
 # worktree
-> 最后更新：2026-08-06
+> 最后更新：2026-08-07
 > 最近变更：2026-08-06-execute-runs-isolation（drift 守卫补设 `platformOpts.specDriftAnchor` + 抽 `resolveRuntimeRoot` 统一 `.runtime` 根解析 15 站点；drift 场景 execute-runs/stage-reviews 落主仓 `.runtime`，cleanup 整目录删 worktree 碰不到，archive step1 完成度 gate 不再因丢 review.json 阻断）/ 2026-08-05-tooling-feedback-fixes（doctor 加 `deps-main-drift` issue 探主仓 lockfile 漂移 + `--change` 过滤 + `--fix` force 重装；provisionDeps 加 `force` 选项；抽 H1 `checkDepsFreshness` 统一 doctor 与 execute 的 deps 判定）
 > 模块路径：src/worktree.js, src/worktree-apply.js, src/worktree-deps.js
 
@@ -41,6 +41,8 @@ worktree 模块提供基于 git worktree 的分支隔离机制，让每个变更
 | `applyWorktree(changeName, { cwd, checkOnly?, merge? })` | 将 worktree 变更应用到主工作区；允许集 = `resolveApplyAllowSet`（design §6 ∪ plan task allowed_paths）；主干**已提交**推进交 `--3way` 自动三路合并，未提交 dirty 拦截引导 commit/stash；`merge=true` 显式走 git merge 兜底（D-001）；apply 文件经 `filterDeliverableFiles` 精细化过滤 | `changeName, { cwd, checkOnly?, merge? }` |
 | `resolveApplyAllowSet(projectRoot, changeName)` | 解析 apply 允许文件集 = design.md §6 文件变更清单 ∪ 所有 task-*.md 的 allowed_paths（测试/产物文件设计常漏列但 task 已含，union 后不误拦；越界文件仍拦） | `projectRoot, changeName` |
 | `filterDeliverableFiles(files)` | apply 交付物过滤：排除 `.sillyspec/changes/` + `.sillyspec/.runtime/` + `.sillyspec/quicklog/` + `meta.json`，**保留 `.sillyspec/docs/`（dogfood 模块规范文档视为交付物，随变更 apply 回主仓）**。原一刀切排除整个 `.sillyspec/` 导致模块文档滞留 worktree（坑3，exec-g defer 项落地） | `files: string[]` |
+| `resolvePatchFiles(changedFiles, allowSet, hasAllowList)` | 确定进 patch 的文件：有清单取「实际变更 ∩ 清单（pathMatches 容差）」，无清单取全部变更——与 classifyAllowListViolations 同口径（glob/多路径 cell 覆盖的具体文件也能进 patch）。原字面 includes 导致 glob 清单覆盖的文件过 manifest 校验却静默丢失（坑 apply-glob-manifest-passes-check-but-not-patch） | `changedFiles, allowSet, hasAllowList` |
+| `copyUntrackedEntry(src, dst)` | baseline overlay 复制单个 untracked 条目：目录返回 `skipped-dir` 跳过（不 readFileSync 撞目录 EISDIR），文件复制到 dst（mkdirSync recursive），不存在返回 `missing`（坑 execute-worktree-overlay-untracked-dir-eisdir） | `src, dst` |
 | `rollbackApply(projectRoot, trackedFiles, newFiles)` | `--3way` 冲突后回滚工作区到 apply 前状态（checkout HEAD 还原 tracked + 删新建），不留半成品冲突标记 | `projectRoot, trackedFiles, newFiles` |
 
 ### src/worktree-deps.js
