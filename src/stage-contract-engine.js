@@ -112,13 +112,33 @@ function formatFail(failMessage, absPath) {
     : failMessage
 }
 
+/**
+ * 规则条件判定：condition 不满足时规则跳过(同 enabled=false)。
+ * 用于「某规则仅在特定上下文生效」——如 brainstorm 的 proposal/requirements/tasks 仅在 scale≠small 时必需
+ * (小变更 scale=small 只产 design.md，见 BRAINSTORM_RULES)。
+ *
+ * condition schema: { ctxField: '<ctx 键名>', ne|eq: <值> }
+ *   - ne: ctx[ctxField] !== ne 时条件成立(规则适用);相等则跳过
+ *   - eq: ctx[ctxField] === eq 时条件成立;否则跳过
+ * fail-safe：ctx 或 ctxField 缺失 → ne 判定为「undefined !== ne 值」成立(eq 不成立)，
+ *   即 scale 读不到时四件套仍全要求(保守默认，走重流程)，不会因 condition 误放开必填项。
+ */
+function conditionHolds(condition, ctx) {
+  if (!condition) return true
+  const actual = ctx ? ctx[condition.ctxField] : undefined
+  if ('ne' in condition) return actual !== condition.ne
+  if ('eq' in condition) return actual === condition.eq
+  return true  // 未知操作符,放过(不阻断),避免新操作符上线时误杀
+}
+
 // ============ 主入口 ============
 
 /**
  * 对某 stage 的全部纯 kind 规则跑判定。custom kind / target 基缺失 / enabled=false 的规则计入 skipped。
  *
  * @param {string} stage
- * @param {{ changeDir?: string, docsRoot?: string, archiveDir?: string, specBase?: string }} ctx
+ * @param {{ changeDir?: string, docsRoot?: string, archiveDir?: string, specBase?: string, scale?: string }} ctx
+ *        规则 target.root 解析基目录;额外字段(如 scale)供 rule.condition 按 ctxField 判定(见 conditionHolds)
  * @param {{ readFile?: Function, readDir?: Function }} [io]  默认原生 fs;plan-postcheck 可注入 CRLF-normalizing reader
  * @returns {{ ok: boolean, errors: string[], warnings: string[], applied: string[], skipped: string[] }}
  */
@@ -132,6 +152,7 @@ export function evaluateRules(stage, ctx, io, opts = {}) {
 
   for (const rule of getRulesFor(stage, { source: opts.source })) {
     if (rule.enabled === false) { skipped.push(rule.id); continue }
+    if (rule.condition && !conditionHolds(rule.condition, ctx)) { skipped.push(rule.id); continue }
     if (isCustomKind(rule.kind)) { skipped.push(rule.id); continue }
     const absPath = resolveTargetPath(rule.target, ctx)
     if (absPath == null) { skipped.push(rule.id); continue }

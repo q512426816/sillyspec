@@ -257,15 +257,28 @@ function validateBrainstormOutputs(cwd, changeName, context = {}) {
     return { ok: false, errors: [`平台模式 specRoot 缺少 changes 目录: ${changesRoot}`], warnings: [] }
   }
   const changeDir = resolveChangeDir(cwd, changeName, specRoot)
+  // 读 design.md frontmatter scale(若有)传入引擎 ctx,供 BRAINSTORM_RULES 的 condition 判定:
+  // scale=small → proposal/requirements/tasks 三规则跳过(小变更只产 design.md,与末步 prompt 一致,
+  // 避免"照 Step8 small 指引只写 design.md 后 --done 必撞四件套 error墙")。
+  // fail-safe:design.md 不存在或无 scale → null → condition(ne 'small')成立 → 四件套全要求(保守走重流程)。
+  const designPath = join(changeDir, 'design.md')
+  let scale = null
+  let designContent = null
+  if (existsSync(designPath)) {
+    designContent = readFileSync(designPath, 'utf8')
+    const fm = designContent.match(/^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*\r?\n/)
+    const sm = fm && fm[1].match(/^scale:[ \t]*['"]?(\w+)/m)
+    if (sm) scale = sm[1]
+  }
   // 纯 kind 规则(四件套存在性 + proposal/requirements/design 章节 + tasks 列表)由引擎消费
   // stage-contract-spec.js manifest,与报错文案 + prompt 事前契约严格同源(事前给的 == 事后查的)。
   // custom kind(lifecycle / decisions)保留下方旧逻辑,数据/文案在 Batch 3 迁入 manifest。
-  const engineResult = evaluateRules('brainstorm', { changeDir })
+  const engineResult = evaluateRules('brainstorm', { changeDir, scale })
   const errors = [...engineResult.errors]
   const warnings = [...engineResult.warnings]
 
-  if (existsSync(join(changeDir, 'design.md'))) {
-    const content = readFileSync(join(changeDir, 'design.md'), 'utf8')
+  if (designContent) {
+    const content = designContent
 
     // lifecycle-exemption(custom kind):判定算法保留(trigger/exemption/table 三段短路),
     // data + failMessage/exemptionPassedMessage 从 stage-contract-spec.js manifest 同源。

@@ -82,8 +82,14 @@ function validateFileLocations(cwd, stageName, progress, changeName, specBase) {
   if (!existsSync(changeDir)) return
 
   // 每个阶段完成后预期存在的文件
+  // brainstorm:scale=small(小变更)只必产 design.md;large/未标 scale → 四件套全。
+  // 与 validateBrainstormOutputs 的 BRAINSTORM_RULES condition(scale≠small)同源,避免对合法 small 变更
+  // 误报"⬜ proposal/requirements/tasks 未找到"(本检查仅 advisory 打印不 gate,但误导输出仍要消除)。
+  const brainstormExpected = readDesignScale(specBase, effectiveChange) === 'small'
+    ? ['design.md']
+    : ['design.md', 'proposal.md', 'requirements.md', 'tasks.md']
   const expectedFiles = {
-    brainstorm: ['design.md', 'proposal.md', 'requirements.md', 'tasks.md'],
+    brainstorm: brainstormExpected,
     plan: ['plan.md'],
     archive: ['module-impact.md'],
   }

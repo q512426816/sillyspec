@@ -605,6 +605,80 @@ if (!warnExplicit.warnings.some(w => w.includes('关键词判级') && w.includes
 }
 rmSync(warnRoot, { recursive: true })
 
+// === brainstorm scale=small 四件套豁免（矛盾1，2026-08-07）===
+// 历史矛盾：brainstorm 末步指引 scale=small 只产 design.md 后转 quick，但 validator 四件套全 error
+// → agent 照 Step8 small 指引只写 design.md 后 --done 必撞墙（3 error → rollbackCompletionAndReturn）。
+// 修法：contract 引擎加 condition（ctxField=scale, ne=small），BRAINSTORM_RULES 的 proposal/requirements/tasks
+// 三规则挂 condition，validator 读 design.md frontmatter scale 传入 evaluateRules ctx。
+// fail-safe：scale=large/读不到 → condition(ne small)成立 → 四件套全要求（保守走重流程）。
+console.log('\n=== brainstorm scale=small 四件套豁免 ===')
+
+const scaleRoot = mkdtempSync(join(tmpdir(), 'sillyspec-scale-'))
+const scaleDir = join(scaleRoot, '.sillyspec', 'changes', 'scale')
+mkdirSync(scaleDir, { recursive: true })
+
+// Case 1：scale=small + 只产 design.md → 通过（proposal/requirements/tasks 三规则被 condition 跳过）
+writeFileSync(join(scaleDir, 'design.md'), [
+  '---', 'scale: small', '---',
+  '# Design', '## 文件变更清单', '## 风险登记', '## 自审', '',
+  '小变更：只改一处文案。', ''
+].join('\n'))
+const smallOnly = runValidators('brainstorm', scaleRoot, 'scale')
+if (smallOnly.ok === true && smallOnly.errors.length === 0) {
+  console.log('✅ scale=small 只产 design.md → 通过（proposal/requirements/tasks 被 condition 豁免）')
+} else {
+  console.log('❌ scale=small 只产 design.md 仍被拦', smallOnly.errors)
+  failed++
+}
+
+// Case 2：scale=large + 只产 design.md（缺 proposal/requirements/tasks）→ 仍阻断（fail-safe）
+writeFileSync(join(scaleDir, 'design.md'), [
+  '---', 'scale: large', '---',
+  '# Design', '## 文件变更清单', '## 风险登记', '## 自审', '',
+  '大变更。', ''
+].join('\n'))
+const largeOnly = runValidators('brainstorm', scaleRoot, 'scale')
+if (largeOnly.ok === false
+  && largeOnly.errors.some(e => e.includes('proposal.md'))
+  && largeOnly.errors.some(e => e.includes('requirements.md'))
+  && largeOnly.errors.some(e => e.includes('tasks.md'))) {
+  console.log('✅ scale=large 缺四件套 → 仍阻断 proposal/requirements/tasks（fail-safe）')
+} else {
+  console.log('❌ scale=large 未正确阻断四件套', largeOnly.errors)
+  failed++
+}
+
+// Case 3：无 scale frontmatter + 只产 design.md → 仍阻断（fail-safe：读不到 scale 走重流程）
+writeFileSync(join(scaleDir, 'design.md'), [
+  '# Design', '## 文件变更清单', '## 风险登记', '## 自审', '',
+  '无 scale 声明。', ''
+].join('\n'))
+const noScale = runValidators('brainstorm', scaleRoot, 'scale')
+if (noScale.ok === false && noScale.errors.some(e => e.includes('proposal.md'))) {
+  console.log('✅ 无 scale frontmatter → 仍要求四件套（fail-safe，保守走重流程）')
+} else {
+  console.log('❌ 无 scale frontmatter 竟豁免四件套', noScale.errors)
+  failed++
+}
+
+// Case 4：scale=small 但四件套齐全 → 仍通过（豁免=不强制，齐全不报错）
+writeFileSync(join(scaleDir, 'design.md'), [
+  '---', 'scale: small', '---',
+  '# Design', '## 文件变更清单', '## 风险登记', '## 自审', '', '小变更。', ''
+].join('\n'))
+writeFileSync(join(scaleDir, 'proposal.md'), '# Proposal\n\n## 不在范围内\n- none\n')
+writeFileSync(join(scaleDir, 'requirements.md'), '# Requirements\n\n### FR-01: x\n')
+writeFileSync(join(scaleDir, 'tasks.md'), '- [ ] task-01: do\n')
+const smallFull = runValidators('brainstorm', scaleRoot, 'scale')
+if (smallFull.ok === true) {
+  console.log('✅ scale=small 四件套齐全 → 通过（豁免是不强制，齐全不报错）')
+} else {
+  console.log('❌ scale=small 四件套齐全仍被拦', smallFull.errors)
+  failed++
+}
+
+rmSync(scaleRoot, { recursive: true })
+
 // === 结果 ===
 console.log(`\n${failed === 0 ? '✅ 全部通过' : `❌ ${failed} 项失败`}`)
 if (failed > 0) throw new Error(`${failed} test(s) failed`)

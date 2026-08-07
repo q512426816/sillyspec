@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-05-31 11:00:00
-updated_at: 2026-08-06T14:48:57+08:00
+updated_at: 2026-08-07T09:50:00+08:00
 ---
 
 # SillySpec 文件生命周期
@@ -45,7 +45,7 @@ updated_at: 2026-08-06T14:48:57+08:00
 | 阶段 | 当前步骤数 | 备注 |
 |---|---:|---|
 | scan | 11 | 辅助阶段；step 2 后会按项目动态展开 `perProject` 步骤；第 10 步「Extract Project Knowledge」写入 `knowledge/` |
-| brainstorm | 8 | 独立包含”写设计文档并自审”（第 6 步）、”Design Grill 交叉审查”（第 7 步）、”生成规范文件”（第 8 步，原名”用户确认并生成规范文件”，已去确认门控——设计在第 5 步「分段展示设计」确认过，末步直接生成后展示摘要）；第 2 步加载上下文时含早期规模筛查（明显小变更建议走 quick）；完成时按 design.md frontmatter `scale` 分叉产物（large→四件套进 plan / small→仅 design.md 进 quick） |
+| brainstorm | 8 | 独立包含”写设计文档并自审”（第 6 步）、”Design Grill 交叉审查”（第 7 步）、”生成规范文件”（第 8 步，原名”用户确认并生成规范文件”，已去确认门控——设计在第 5 步「分段展示设计」确认过，末步直接生成后展示摘要）；第 2 步加载上下文时含早期规模筛查（明显小变更建议走 quick）；完成时按 design.md frontmatter `scale` 分叉产物（large→四件套进 plan / small→仅 design.md 进 quick）；**`validateBrainstormOutputs` 经 contract `condition(scale≠small)` 豁免 proposal/requirements/tasks 三规则**（2026-08-07 修复：末步 small 指引只写 design.md 后 validator 四件套全 error 撞墙的矛盾；fail-safe：读不到 scale → 四件套全要求，保守走重流程） |
 | propose | 7 | 包含“生成规范文件”与“自检门控”，四件套是该阶段预期产物 |
 | plan | 动态 | 默认 9 步（含独立"审查计划"step，按规模分级 tier=self 自审 / tier=independent 独立子代理 + stage review.json）；`plan.md` 解析到任务后插入任务蓝图协调器；全局验收标准模板含集成冒烟引导（集成敏感 task 建议加集成冒烟验收，组件单测全绿 ≠ 集成正确）；postcheck 含确定性校验（结构/可行性/跨任务契约/design 文件覆盖/产物） |
 | execute | 动态 | 默认 12 步；Wave 来自 `plan.md`，解析失败时默认 3 个 Wave；完成时 `validateExecuteOutputs` 客观核验存在真实代码变更（plan 有 task 但确证零变更则阻断），Task Review Gate 另做 review.json git 真实性交叉校验；`--done` 时若 plan 全勾 + 代码客观核验通过则一次性补完剩余 step 直达完成（见后「execute --done 批量完成」）；Wave prompt 含中断续跑引导（429/API 配额/崩溃中断后，plan.md 已勾选 task 跳过不重跑，`sillyspec status` + `run execute` 回当前 Wave step 续跑）；Wave 调度要求 + acceptance「运行测试」步要求子代理**既跑 lint check 也跑 formatter**（只 check 不 format 会把格式问题留到 commit 被 pre-commit hook 拦）；「确认 worktree 路径」步预告 worktree 内工具链可能缺失（先 `--version` 确认，缺则 `uv tool install`/`uv sync`） |

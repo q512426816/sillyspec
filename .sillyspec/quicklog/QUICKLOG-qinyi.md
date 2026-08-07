@@ -403,3 +403,18 @@
 根因：4 项断言经源码亲验全部属实——①verify 探针5/6：源码 verify-postcheck.js:711/734/742/844/853 与 run/gates.js:222 注释明确 advisory 不阻断，但 verify-probes.md 模板写成 FAIL blocker/谎报无效；②review-tier：源码 SELF_REVIEW_FILE_THRESHOLD=3，但 docs/prompt 5 处占位符说明示例写 ≤5；③archive step2：node -e 命令体只有注释无代码；④doctor step0：gate-status.json 的 if 头缺失只剩悬空 else/fi。
 方案：P0-1 措辞降级为 advisory（不动源码——advisory 是设计意图，硬阻断会误伤已commit无锚点场景；改 verify-probes.md 探针5/6 + verify.js:218）；P0-2 docs/prompt 5 处 ≤5→≤3（源码不动）；P0-3 删 archive step10 伪命令；P0-4 删 doctor 悬空 else/fi；同步 docs/prompt/{verify,archive,doctor}.md 镜像 + 重跑 _extract.mjs + stages.md 变更索引。
 结果：npm run lint ✅ 68 files 通过；npm test ✅ EXIT=0 所有测试文件 失败:0；改 15 文件（src/stages×3 + verify-probes.md + docs/prompt×9 + quicklog + stages.md）。
+
+## ql-20260807-003-6737 | 2026-08-07 09:39:48 | 矛盾1：brainstorm scale=small 四件套 validator 豁免（contract condition 机制）
+状态：已完成
+关联变更：（无）
+文件：
+- src/stage-contract-engine.js（新增 conditionHolds：ne/eq 语义 + fail-safe ctx 缺字段时 ne 成立；evaluateRules 循环在 enabled 检查后加 condition 跳过；JSDoc 注明 ctx 可带 scale）
+- src/stage-contract-spec.js（BRAINSTORM_RULES 的 proposal/requirements/tasks 三规则挂 condition {ctxField:'scale',ne:'small'}；design + 三规则 spec 文案标注 scale=small 豁免；顶部 schema 文档新增 condition 字段）
+- src/stage-contract.js（validateBrainstormOutputs 读 design.md frontmatter scale 传入 evaluateRules ctx；design.md 读一次复用于 scale 解析 + lifecycle 检查避免双读）
+- src/run/complete.js（validateFileLocations 复用 readDesignScale：brainstorm small 只期望 design.md，消除合法 small 变更的 ⬜ proposal/requirements/tasks 误报）
+- test/stage-contract.test.mjs（+4 Case：small 只产 design.md 通过 / large 缺四件套仍阻断 / 无 scale frontmatter fail-safe 阻断 / small 四件套齐全也通过）
+- docs/sillyspec/file-lifecycle.md（brainstorm 行补 condition 溯源注记 + updated_at）
+需求：消除 sss1.md 矛盾1——brainstorm 末步指引 scale=small 只产 design.md 后转 quick，但 validator 四件套全 error，agent 照做 --done 必撞 3 error → rollbackCompletionAndReturn 卡 in-progress。
+根因：两道门——①validateBrainstormOutputs→evaluateRules('brainstorm',{changeDir}) 的 ctx 无 scale，BRAINSTORM_RULES proposal/requirements/tasks 无条件 file-exists error（gate，会 rollback）；②validateFileLocations:86 硬编码四件套（advisory 不 gate 但对合法 small 变更误报 ⬜）。readDesignScale(complete.js:62) 只用于下一步提示分叉未回流 validator。测试盲区 run-complete-step-brainstorm.test.mjs small 用例仍写全四件套故从未暴露。
+方案：contract 引擎加 condition 字段（conditionHolds：ne/eq 操作符，fail-safe ctx 字段缺失时 ne 成立→四件套全要求保守走重流程）；三规则挂 condition(scale≠small)；validator 读 design.md frontmatter scale 传入 ctx；validateFileLocations 复用 readDesignScale 同步豁免；补 4 Case 测试覆盖 small/large/无 scale/齐全。
+结果：node test/stage-contract.test.mjs 全过（4 新 Case + 既有全过）；npm test 120/0 无回归；npm run lint 68 文件通过；node docs/prompt/_extract.mjs 重跑无语义变化（契约块由 renderStageContract 运行时 live 注入，静态镜像不捕获，brainstorm Step8 small prompt 本就正确无需改）；file-lifecycle.md:48 补溯源注记。本改动触及 src/stage-contract.js 核心 validator，--done 经 --force-baseline 显式确认。

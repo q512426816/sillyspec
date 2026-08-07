@@ -20,6 +20,9 @@
  *   failMessage 失败报错(逐字 == 现有报错文案;支持 ${path} 占位 → 引擎替换为解析后的绝对路径)
  *   hint?       可选出路提示(renderStageContract 附在 spec 后)
  *   enabled?    默认 true,置 false 灰度停用
+ *   condition?  可选条件对象 { ctxField, ne|eq };不满足时规则跳过(同 enabled=false)。
+ *               供「仅在特定上下文生效」的规则,如 brainstorm proposal/requirements/tasks 仅 scale≠small 时必需
+ *               (小变更只产 design.md)。判定见 stage-contract-engine.js conditionHolds(fail-safe:ctx 字段缺失时 ne 成立)。
  *
  * 纯 kind(stage-contract-engine.dispatchPure 直接判定):
  *   file-exists / dir-exists / literal-any / literal-all / regex / contains-section /
@@ -67,7 +70,7 @@ const BRAINSTORM_RULES = [
     stage: 'brainstorm', source: 'validateBrainstormOutputs', severity: 'error', kind: 'file-exists',
     target: { root: 'change', path: 'design.md' },
     data: {},
-    spec: '产出 `design.md`(四件套之一;brainstorm 四件套齐全才能完成)',
+    spec: '产出 `design.md`(brainstorm 必产;scale=small 时这是唯一必需产物,proposal/requirements/tasks 豁免)',
     failMessage: 'brainstorm 产物缺失: ${path}',
   },
   {
@@ -75,7 +78,9 @@ const BRAINSTORM_RULES = [
     stage: 'brainstorm', source: 'validateBrainstormOutputs', severity: 'error', kind: 'file-exists',
     target: { root: 'change', path: 'proposal.md' },
     data: {},
-    spec: '产出 `proposal.md`(四件套之一)',
+    // scale=small(小变更)豁免:brainstorm 末步指引 small 只产 design.md 后转 quick,四件套不全不应阻断
+    condition: { ctxField: 'scale', ne: 'small' },
+    spec: '产出 `proposal.md`(四件套之一;scale=small 时豁免——小变更只需 design.md)',
     failMessage: 'brainstorm 产物缺失: ${path}',
   },
   {
@@ -83,7 +88,8 @@ const BRAINSTORM_RULES = [
     stage: 'brainstorm', source: 'validateBrainstormOutputs', severity: 'error', kind: 'file-exists',
     target: { root: 'change', path: 'requirements.md' },
     data: {},
-    spec: '产出 `requirements.md`(四件套之一)',
+    condition: { ctxField: 'scale', ne: 'small' },
+    spec: '产出 `requirements.md`(四件套之一;scale=small 时豁免——小变更只需 design.md)',
     failMessage: 'brainstorm 产物缺失: ${path}',
   },
   {
@@ -91,7 +97,8 @@ const BRAINSTORM_RULES = [
     stage: 'brainstorm', source: 'validateBrainstormOutputs', severity: 'error', kind: 'file-exists',
     target: { root: 'change', path: 'tasks.md' },
     data: {},
-    spec: '产出 `tasks.md`(四件套之一)',
+    condition: { ctxField: 'scale', ne: 'small' },
+    spec: '产出 `tasks.md`(四件套之一;scale=small 时豁免——小变更只需 design.md)',
     failMessage: 'brainstorm 产物缺失: ${path}',
   },
   // 内容章节(warning)—— 逐字对齐 validateBrainstormOutputs 内容校验段
