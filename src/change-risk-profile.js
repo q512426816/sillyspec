@@ -92,6 +92,28 @@ export const INTEGRATION_FILE_PATTERNS = [
   /startup/i,
 ]
 
+/**
+ * task 级「端到端/deployment-critical」文本判定（execute 批量完成 autoCheckPlanFromReviews 用）。
+ *
+ * 聚焦需要真实集成/启动验证的 task，区别于 change 级 INTEGRATION_CRITICAL_PATTERNS（含 backend/session
+ * 等泛词——task 级用会误伤普通后端 task）。命中端到端集成语义（端到端/真实集成/daemon↔backend/
+ * integration test/e2e）或部署启动入口（cli.ts/main.ts/entrypoint/server/bootstrap/startup/docker）。
+ * 坑 execute-batch-complete-endtoend-checkbox：这类 task 的 review cannot_verify 不算 checked，
+ * 阻断 execute 批量完成（必须 pass），防端到端未真验就被批量放行（verify integration-evidence 兜底外的
+ * execute 侧前置门）。
+ * @param {string} text task 描述文本（plan.md task 行 + tasks/task-XX.md 内容）
+ * @returns {boolean}
+ */
+const END_TO_END_TASK_KEYWORDS = [
+  /端到端/, /真实集成/, /daemon.*backend/i, /integration\s*test/i, /e2e\s*test/i,
+  /runtime\s*evidence/i, /运行时证据/,
+  /\bcli\.ts\b/i, /\bmain\.ts\b/i, /\bentrypoint\b/i, /\bserver\.(js|ts)\b/i,
+  /\bbootstrap\b/i, /\bstartup\b/i, /启动/, /\bdockerfile\b/i, /\bdocker.?compose\b/i,
+]
+export function isEndToEndTaskText(text = '') {
+  return END_TO_END_TASK_KEYWORDS.some(re => re.test(text))
+}
+
 // ============ 核心检测函数 ============
 
 /**

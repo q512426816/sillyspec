@@ -72,6 +72,23 @@ export function classifyAllowListViolations(changedFiles, allowSet) {
 }
 
 /**
+ * 确定进 patch 的文件：有清单取「实际变更 ∩ 清单（pathMatches 容差）」，无清单取全部变更。
+ *
+ * 口径须与 classifyAllowListViolations 一致——否则 design §6 用 glob（如 test_*.py）或多路径
+ * 单 cell 覆盖的文件过 manifest 校验（Gate1 用 pathMatches 放行），却因字面 includes 不在
+ * changedFiles → 被滤出 patchFiles → patch 不含 → 主工作区静默丢失（坑 apply-glob-manifest）。
+ * 以 changedFiles 为基按容差圈定，glob/前缀覆盖的具体文件都能进 patch。
+ *
+ * @param {string[]} changedFiles  filterDeliverableFiles 已过滤的实际变更路径
+ * @param {Set<string>} allowSet   design §6 清单 ∪ task allowed_paths（可含 glob / 目录前缀）
+ * @param {boolean} hasAllowList   是否有清单
+ * @returns {string[]} 进 patch 的文件
+ */
+export function resolvePatchFiles(changedFiles, allowSet, hasAllowList) {
+  if (!hasAllowList) return changedFiles;
+  return changedFiles.filter(f => [...allowSet].some(ap => pathMatches(f, ap)));
+}
+/**
  * 批量获取多个文件在某个 treeish 中的 blob hash（一次 git ls-tree 替代 N 次 rev-parse）。
  *
  * 语义等价于对每个文件调 `git rev-parse <treeish>:<path>`：
@@ -309,10 +326,9 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
   }
 
   // --- 7. 生成 patch 并 apply ---
-  // 确定要包含在 patch 中的文件：有清单用清单交集，无清单用全部变更
-  const patchFiles = hasAllowList
-    ? [...allowSet].filter(f => changedFiles.includes(f))
-    : changedFiles;
+  // 确定要包含在 patch 中的文件：有清单用「实际变更 ∩ 清单（pathMatches 容差）」，无清单用全部变更。
+  // 口径与 classifyAllowListViolations 一致（坑 apply-glob-manifest-passes-check-but-not-patch）。
+  const patchFiles = resolvePatchFiles(changedFiles, allowSet, hasAllowList);
 
   // 创建临时文件
   const tmpDir = mkdtempSync(join(tmpdir(), 'sillyspec-patch-'));

@@ -222,6 +222,31 @@ export function isGitWorktreeSupported(cwd = process.cwd()) {
   }
 }
 
+/**
+ * 复制单个 untracked 条目到 worktree（baseline overlay 用）。
+ *
+ * 防御目录：untracked 项若是目录（如 Claude Code agent worktree 隔离目录 .worktrees/<hash>/），
+ * readFileSync 会 EISDIR → 整个 overlay fail-fast。目录跳过（overlay 只同步文件层未提交改动，
+ * 目录结构由后续文件写入的 mkdirSync 重建）。坑 execute-worktree-overlay-untracked-dir-eisdir。
+ *
+ * @param {string} src 主仓库源路径
+ * @param {string} dst worktree 目标路径
+ * @returns {{status:'copied'|'skipped-dir'|'missing'|'error', error?:string}}
+ */
+export function copyUntrackedEntry(src, dst) {
+  if (!existsSync(src)) return { status: 'missing' };
+  let st;
+  try { st = statSync(src); } catch { return { status: 'missing' }; }
+  if (st.isDirectory()) return { status: 'skipped-dir' };
+  try {
+    mkdirSync(dirname(dst), { recursive: true });
+    writeFileSync(dst, readFileSync(src));
+    return { status: 'copied' };
+  } catch (e) {
+    return { status: 'error', error: e.message };
+  }
+}
+
 export class WorktreeManager {
   constructor({ cwd, worktreeDir } = {}) {
     this.cwd = cwd || process.cwd();
@@ -1234,17 +1259,19 @@ export class WorktreeManager {
         files.push(...unstaged.split('\n').filter(Boolean));
       }
 
-      // untracked 文件（排除 .sillyspec/.runtime 等）
+      // untracked 文件（排除 .sillyspec/.runtime 等）；目录跳过避免 readFileSync EISDIR
       const untracked = gitQuiet(mainCwd, 'ls-files --others --exclude-standard') || '';
+      const skippedDirs = [];
       if (untracked) {
         for (const f of untracked.split('\n').filter(Boolean)) {
-          const src = join(mainCwd, f);
-          const dst = join(worktreePath, f);
-          if (existsSync(src)) {
-            mkdirSync(dirname(dst), { recursive: true });
-            try { writeFileSync(dst, readFileSync(src)); files.push(f); } catch (e) { errors.push(`untracked ${f}: ${e.message}`); }
-          }
+          const r = copyUntrackedEntry(join(mainCwd, f), join(worktreePath, f));
+          if (r.status === 'copied') files.push(f);
+          else if (r.status === 'skipped-dir') skippedDirs.push(f);
+          else if (r.status === 'error') errors.push(`untracked ${f}: ${r.error}`);
         }
+      }
+      if (skippedDirs.length > 0) {
+        console.log(`ℹ️  baseline overlay 跳过 ${skippedDirs.length} 个 untracked 目录（不读目录避免 EISDIR，坑 execute-worktree-overlay-untracked-dir-eisdir）`);
       }
 
       if (files.length > 0) {

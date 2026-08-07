@@ -22,6 +22,7 @@ import { enforceDepsGate, enforceReviewJsonGate, runStageCompletionGates } from 
 import { handleArchiveConfirmStep, handlePlanGeneratePlanStep, handleScanProjectListStep, handleWorkflowPostCheck, handleQuickStageCompletion, handleExecuteWaveArtifact, handleExecuteWorktreeCleanup, handleScanStageCompleted } from './complete-handlers.js'
 import { stageRegistry } from '../stages/index.js'
 import { formatExecuteSummary } from '../worktree-apply.js'
+import { isEndToEndTaskText } from '../change-risk-profile.js'
 
 function validateMetadata(cwd, stageName, specBase) {
   const changesDir = join(specBase, 'changes')
@@ -495,6 +496,31 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
  * @returns {{autoChecked:boolean, checkedCount:number, skippedCount:number, planTotal:number, planChecked:number}}
  *   planTotal/planChecked 在调用方于本函数之后用 readPlanCheckboxStatus 重读（勾选已落盘）。
  */
+/**
+ * 读 task 卡片文本（plan.md task 行外的详细描述/allowed_paths），用于端到端 task 判定。
+ * 卡片缺失返回空串（仅靠 plan.md task 行文本判）。
+ */
+function readTaskCardText(changeDir, taskNum) {
+  try { return readFileSync(join(changeDir, 'tasks', `task-${taskNum}.md`), 'utf8') } catch { return '' }
+}
+
+/**
+ * 判定 task 是否该被 autoCheckPlanFromReviews 自动勾选。
+ * 端到端/deployment-critical task 要求 review spec+quality 双 pass（cannot_verify 不算，防批量完成
+ * 放行未真验的端到端 task）；普通 task 非 fail 即可（保主 agent 直接实现模式体验，其 cannot_verify
+ * 草稿仍可批量收尾）。坑 execute-batch-complete-endtoend-checkbox。
+ * @param {{ok?:boolean, review?:{specVerdict?:string, qualityVerdict?:string}}} r readReview 结果
+ * @param {boolean} endToEnd 是否端到端/deployment-critical task
+ * @returns {boolean}
+ */
+export function shouldAutoCheckTask(r, endToEnd) {
+  if (!r?.ok) return false
+  const spec = r.review?.specVerdict
+  const quality = r.review?.qualityVerdict
+  if (spec === 'fail' || quality === 'fail') return false
+  if (endToEnd) return spec === 'pass' && quality === 'pass'
+  return true
+}
 async function autoCheckPlanFromReviews({ stageName, changeName, cwd, platformOpts }) {
   if (stageName !== 'execute' || !changeName) {
     return { autoChecked: false, checkedCount: 0, skippedCount: 0 }
@@ -517,7 +543,9 @@ async function autoCheckPlanFromReviews({ stageName, changeName, cwd, platformOp
       const taskNum = match.match(/task-(\d+)/)[1].padStart(2, '0')
       const reviewPath = join(runtimeRoot, 'execute-runs', executeRunId, 'tasks', `task-${taskNum}`, 'review.json')
       const r = readReview(reviewPath)
-      if (r.ok && r.review?.specVerdict !== 'fail' && r.review?.qualityVerdict !== 'fail') {
+      // 端到端 task：必须 pass（cannot_verify 不算）；普通 task：非 fail 即可（坑 execute-batch-complete-endtoend-checkbox）
+      const endToEnd = isEndToEndTaskText(match + ' ' + readTaskCardText(changeDir, taskNum))
+      if (shouldAutoCheckTask(r, endToEnd)) {
         checkedCount++
         return `${p1}x${p2}`   // 勾选
       }
