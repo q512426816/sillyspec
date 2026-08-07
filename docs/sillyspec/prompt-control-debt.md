@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-07-22 12:00:00
-updated_at: 2026-08-07T13:12:58+08:00
+updated_at: 2026-08-07T19:30:07+08:00
 ---
 
 # SillySpec 提示词与控制层债务清单
@@ -167,8 +167,8 @@ updated_at: 2026-08-07T13:12:58+08:00
 - ✅ **B1 decisions 决策追踪矩阵诚实降级**（= sss1 P1-3）：plan.js:201/259 + verify.js:138 已加"CLI 只校验 D-xxx@vN ID 字面出现，warning 不阻断；D→FR→task 映射完整性供人类追溯，CLI 不校验"。**由并发 session commit b904442 修完**，非本会话。
 - ✅ **B2 _module-map 双 parseModuleMapSimple 合并 + schema_version 校验**（= sss1 P1-4）：modules.js 升级为超集字段集 canonical 单源 export，prompt.js 改 import 复用，loadModuleContextIndex 加 schema_version advisory warn。**由并发 session commit e2b3422 修完 + 15 断言测试**，非本会话。
 - ⏭ **B3 scan 死文档 INTEGRATIONS.md / flows/*.md 无下游消费者**（= sss1 P1-5）：scan 产但 file-lifecycle.md 自承无消费者。**defer**：修法需设计决策（接 verify/execute 消费 / 或明确标"仅供 knowledge 提取+人类查阅"降 optional），超纯减法，留单独流程。
-- ⏭ **B4 plan Step4 TaskCard 格式规则 per-task 重复（token 冗余）**（= sss P2-9）：buildCoordinatorStep 每个 task 子代理模板重复 ~40 行格式规则，真实 10-task plan 单步浪费 ~4KB。**defer**：可借 P2.2.3 的 `{{include}}` 机制抽公共片段（已有 verify-probes 先例），与 P2.1/2.2 同批抽文件时一并做。
-- ⊘ **B5 plan"保存前格式自检"清单 vs postcheck 字段对齐**（= sss P1-7）：plan-b 已补 title_zh 硬校验（2026-08-04）。**部分 defer**：自检清单是否仍与 validatePlanFeasibility 漂移需逐项核；理想是像 renderStageContract 那样机械生成自检清单（自检==postcheck 同源），待下次触及 plan-postcheck 时顺带做。当前 postcheck 硬阻断项（design 覆盖/命令存在性/id 连续性/title_zh）已有效，自检清单漂移只影响"自检通过仍被拦"体验，非正确性。
+- ✅ **B4 plan Step4 TaskCard 格式规则 per-task 重复（token 冗余）**（= sss P2-9）：buildCoordinatorStep 每个 task 子代理模板重复 ~60 行格式规则。**已修（ql-20260807-011-d831）**：抽 `templates/prompts/taskcard-rules.md` + buildCoordinatorStep 内联段改 `{{include: taskcard-rules}}`（复用 P2.2.3 include 机制，resolvePromptIncludes 运行时全注入）。收益=维护性 + 可单独校验；token 不省是 include 全替换机制固有（P2.2.3 已确认）。同步 docs/prompt 镜像 + 回归测试 8 断言。
+- ✅ **B5 plan"保存前格式自检"清单 vs postcheck 字段对齐**（= sss P1-7）：**已核验 + 已修（随 B4，ql-20260807-011-d831）**：validatePlanFeasibility 只硬校验 9 字段（id/title/title_zh/allowed_paths/goal/implementation/acceptance/verify/constraints），原自检清单 14 字段全覆盖无「自检通过仍被拦」；随 B4 把清单拆分「硬校验 9 字段（缺失报错阻断）」vs「规范约定 5 字段（author/created_at/priority/depends_on/blocks，缺失不阻断）」，消除 agent 白检误导。机械生成自检清单（renderStageContract 同源）仍留未来待触及 plan-postcheck 时做。
 
 **处置**：两份原始审计 docs/sss.md / docs/sss1.md 的可执行结论已归并本段；raw 文件保留作历史参考（被 46ff4f9 / 245a03b / 3ae51c8 等 commit 引用为 P0 修复依据），如需清理可手动删除（决策以本债单为准）。
 
@@ -199,6 +199,7 @@ updated_at: 2026-08-07T13:12:58+08:00
 | 2026-08-04 | 全流程复盘（a/b/c） | a persuasion 补强：verify 探针 3 加集成盲区提示 + plan 全局验收标准加集成冒烟条；b 已修复（= exec-a，本次会话已落地）；c prompt 引导续跑：execute Wave prompt 加中断续跑段（checkpoint 机制已存在，补传播）；否决 task 级 checkpoint 机制 |
 | 2026-08-06 | 第二批复盘（exec-e/f 修复 + exec-d 让出 + exec-g/h defer + exec-i 否决） | exec-d 已实现 register-stage-review 命令（34 测试过，备份仓外 temp/sillyspec-exec-d-backup-20260806/）但因与并行全流程 2026-08-06-sillyspec-self-tooling-fixes 坑1 撞车让出（设计存债单 exec-d 条目供采纳）；exec-e execute prompt 加"既跑 check 也跑 format"引导（buildWavePrompt 调度要求 + acceptance 运行测试步）；exec-f worktree-deps 加 python 分支（uv sync/pip）+ execute 确认 worktree 路径步加工具链预告；exec-g/h defer（worktree .sillyspec 文档分叉 / gen:types 自报无产物校验，需设计单独完整流程排）；exec-i consumer 侧否决（frontend hook 假失败）；本批 commit exec-e/f，全量 test 116/0、lint 68 |
 | 2026-08-07 | sss/sss1 审计复盘（A1-5 修 commit 1efc7c8 + A6 直接 commit / B1-B2 并发已修 + B3-B5 defer） | A组纯减法 5 项修并提交 1efc7c8（execute 建议模型空指令→诚实模型档位条目 / quick 单会话兼容退路 / execute 两处末尾孤立引号 / uncategorized 起始反引号 / scan 括号，+ docs/prompt 镜像同步删 3 条过时"逐字保留"注释，test 122/0 lint 68）；A6 propose 死代码已删——直接 commit（quick 审计 shared.js:516 对删除恒 blocked 无 flag 解锁；scope 纠正排除 stage-contract-spec proposal.md 文件规则/index.js knowledge 子命令两个 LIVE）；B1 decisions 矩阵降级 / B2 module-map 合并 均由并发 session b904442 / e2b3422 修完（非本会话）；B3 scan 死文档 / B4 plan Step4 token / B5 plan 自检对齐 defer；raw 文件 sss.md/sss1.md 保留作历史参考 |
+| 2026-08-07 | sss/sss1 审计 B4+B5 落地（ql-20260807-011-d831） | B4 plan TaskCard 规则抽 templates/prompts/taskcard-rules.md + buildCoordinatorStep 改 {{include: taskcard-rules}}（复用 P2.2.3 include 机制，收益=维护性+可单独校验，token 不省是机制固有）；B5 核验自检清单 14 字段全覆盖 validatePlanFeasibility 硬校验 9 字段，随 B4 拆分硬校验/规范约定两组消 agent 白检误导；同步 docs/prompt 镜像 + 回归测试 8 断言，npm test 全量 0 失败、lint 72 |
 
 ## 总结
 

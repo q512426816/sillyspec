@@ -409,32 +409,7 @@ related_tests:                           # 可选。当本 task 改动会导致�
     reason: 旧断言假设单例，改归属键后需同步
 ---
 
-TaskCard 格式规则（必须严格遵守）：
-- 总长度 20~40 行，不要写成长文档
-- frontmatter 只含必要字段，不加 estimated_hours
-- goal: 一句话，用 > 多行字符串
-- implementation: 列表，每条一个具体步骤
-- acceptance: 列表，每条可独立验证（不是表格）
-- verify: 列表，实际可执行的命令
-- constraints: 列表，明确边界（含 brownfield 兼容、异常处理）
-- 不需要：修改文件章节、覆盖来源章节、接口定义章节、TDD 步骤章节、参考章节
-- frontmatter 必须以三减号结尾闭合（开头和结尾各一行 ---）。缺结尾会让 postcheck 提取不到 frontmatter，误报「字段缺失 / allowed_paths 为空」
-- allowed_paths 用块式写法（键名换行后每项一行「  - 路径」），不要用流式方括号 [path]——块式与所有校验器一致最稳
-- implementation / acceptance / constraints / verify 的每条列表项是 YAML plain scalar，避免以下特殊字符触发 ScannerError：
-  - 冒号+空格（如代码签名 provider_id:str、queryUsage(id:string)）会被当映射键报 mapping values are not allowed here——去掉冒号后空格或改成中文描述
-  - 花括号且内部含冒号或引号（如 JS 对象、JS 模板字面量）会报 expected block end——改用不含这些字符的中文描述
-  - 引号不成对会报扫描错误
-  - 注：goal 用 > 折叠标量可容忍花括号，goal 里写占位符不炸；只有上述 plain scalar 列表项需注意
-- provides / expects_from 是可选字段：仅当跨 task 契约（一个 task 的接口/DTO/响应被另一个 task 消费）时才填，单 task 或无对外接口场景留空即可
-- 填写后 plan-postcheck 会做硬对账：consumer 的每个 expects_from[provider].needs 字段必须在对应 provider 的 provides.fields 里，否则 plan 阶段阻断（不进入 execute）
-- 不要把内部实现字段塞进 provides；只暴露给其他 task 的对外契约形状
-- related_tests 是可选字段：当本 task 改动会导致既有测试断言失效时填（判据 = 是否有既有测试因本次改动而失败，而非源文件是否共享——覆盖改共享/被多 task 依赖源文件、改被测试精确匹配的值如 UI 文案/按钮文本/错误信息/常量/枚举字面量、改函数签名或返回结构等单文件场景），列出失效测试文件 + 为何失效。关键：这些测试路径必须同时写进本 task 的 allowed_paths（否则子代理被 allowed_paths 铁律锁死、改不了测试 → 退化成主代理事后兜底）；若测试由独立的测试 task 负责，则在该测试 task 的 allowed_paths 覆盖、本字段留空
-- 如果存在 decisions.md，无法覆盖的 D-xxx@vN 在 constraints 中标注
-- **保存前格式自检**（plan-postcheck 会硬校验，不通过到 Step 4 会批量报错，先在这里逐条自查）：
-  - frontmatter 字段齐全：id、title、title_zh、author、created_at、priority、depends_on、blocks、allowed_paths、goal、implementation、acceptance、verify、constraints
-  - allowed_paths 非空（至少一个真实源文件路径；回归类 task 无源码改动时填被验证的关键入口文件）
-  - acceptance 与 verify 都在 frontmatter 内（漏写会被 plan-postcheck 报「缺少验收标准」/「缺少验证步骤」）
-- 写完后用 Write tool 保存到文件
+{{include: taskcard-rules}}
 \`\`\``
   }).join('\n\n')
 
