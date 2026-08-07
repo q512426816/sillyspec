@@ -278,7 +278,10 @@ export async function generateDependenciesMd(cwd) {
   console.log(`✅ dependencies.md 已生成`);
 }
 
-function parseModuleMapSimple(content) {
+// _module-map.yaml 简单 YAML 解析（模块上下文索引）。canonical 单一真相源——run/prompt.js
+// 的 loadModuleContextIndex 与本文件 generateDependenciesMd 共用此函数（合并历史两份分叉副本，
+// 2026-08-07；字段集取并集：core_files/test_files/related_docs/verify_commands + role/risk_level）。
+export function parseModuleMapSimple(content) {
   const modules = {};
   let currentModule = null;
   let currentKey = null;
@@ -299,7 +302,7 @@ function parseModuleMapSimple(content) {
     if (!currentModule) continue;
 
     // Array field like depends_on:\n  - xxx
-    const arrayFieldMatch = line.match(/^    (depends_on|used_by|paths|tags|aliases|entrypoints|main_symbols|review_reasons):$/);
+    const arrayFieldMatch = line.match(/^    (depends_on|used_by|paths|tags|aliases|entrypoints|main_symbols|review_reasons|core_files|test_files|related_docs|verify_commands):$/);
     if (arrayFieldMatch) {
       if (currentArray && currentKey) modules[currentModule][currentKey] = currentArray;
       currentKey = arrayFieldMatch[1];
@@ -308,7 +311,7 @@ function parseModuleMapSimple(content) {
     }
 
     // Inline array like tags: [a, b]
-    const inlineArrayMatch = line.match(/^    (depends_on|used_by|paths|tags|aliases|entrypoints|main_symbols|review_reasons): \[(.*)\]$/);
+    const inlineArrayMatch = line.match(/^    (depends_on|used_by|paths|tags|aliases|entrypoints|main_symbols|review_reasons|core_files|test_files|related_docs|verify_commands): \[(.*)\]$/);
     if (inlineArrayMatch) {
       if (currentArray && currentKey) modules[currentModule][currentKey] = currentArray;
       const vals = inlineArrayMatch[2].split(',').map(v => v.trim()).filter(Boolean);
@@ -319,7 +322,7 @@ function parseModuleMapSimple(content) {
     }
 
     // Scalar field
-    const scalarMatch = line.match(/^    (status|doc|needs_review): (.+)$/);
+    const scalarMatch = line.match(/^    (status|doc|needs_review|role|risk_level): (.+)$/);
     if (scalarMatch) {
       if (currentArray && currentKey) { modules[currentModule][currentKey] = currentArray; currentArray = null; currentKey = null; }
       modules[currentModule][scalarMatch[1]] = scalarMatch[2];

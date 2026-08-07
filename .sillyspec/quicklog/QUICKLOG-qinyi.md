@@ -449,3 +449,15 @@
 根因：warnMissingIds（stage-contract.js:202）是字面存在性检查（design/plan/verify 各 warnMissingIds 一次），不解析矩阵表格结构；prompt 的"覆盖矩阵/追踪矩阵"框架让 agent 误以为矩阵结构会被 CLI 校验。
 方案：诚实降级（对齐批次 B verify 探针 + 矛盾2 evidence reader 的同一哲学——CLI 做不到的不假装）——plan.js 两处 + verify.js 一处矩阵 prompt 加注：CLI 只校验 ID 字面出现（warning 不阻断），矩阵结构供人类追溯、CLI 不校验 D→FR→task→evidence 映射完整性；plan.js:259"必须含"改"建议含"。不动 warnMissingIds 逻辑（ID 存在性检查本就正确）。
 结果：npm test 121/0 无回归；npm run lint 68 文件通过；plan.md（184+242）+ verify.md（185）镜像同步 + _extracted.json 刷新。纯 prompt 改动，warnMissingIds 逻辑不变故无新测试（既有 stage-contract.test 覆盖 ID 存在性行为）。触及 src/stages/plan.js + verify.js，--force-baseline 显式确认。
+
+## ql-20260807-006-b919 | 2026-08-07 10:23:23 | P1②：_module-map.yaml 两份分叉 parseModuleMapSimple 合并 + schema_version 校验
+状态：已完成
+关联变更：（无）
+文件：
+- src/modules.js（parseModuleMapSimple 升级为超集字段集：数组加 core_files/test_files/related_docs/verify_commands，标量加 role/risk_level；function→export function 成 canonical 单一真相源）
+- src/run/prompt.js（删 copy-paste 副本 107-163，改 `import { parseModuleMapSimple } from '../modules.js'`；loadModuleContextIndex 加 schema_version 缺失/非2 的 advisory warn）
+- test/module-map-parser.test.mjs（新建 15 断言：超集标量 role/risk_level + 超集数组 4 字段 + 原数组 + inline 数组写法 + depends_on/used_by 回归 + 空 modules 块）
+需求：修 sss1.md P1②——_module-map.yaml 有两份分叉的 parseModuleMapSimple（modules.js:281 字段少 + prompt.js:108 复制版是超集），注释称"复用 modules.js"实为 copy-paste（理由"避免循环依赖"是 stale）；schema_version:2 由 writer 写但解析器不校验，v1/v2 格式混用静默错位无告警。
+根因：modules.js 版未 export 故 prompt.js 无法 import 只能复制；两份字段集随后续演进分叉（prompt.js 加了 core_files 等，modules.js 没跟）；modules.js 仅 import fs/path/db.js（db.js 是叶子），prompt.js→modules.js 单向无循环依赖，合并安全。
+方案：modules.js 版升级为超集字段（取并集）+ export 成 canonical；prompt.js 删副本改 import（node 加载验证无循环依赖）；loadModuleContextIndex 加 schema_version 校验 warn（正常生成的文件写 v2 不触发，仅 malformed/旧格式告警）；新建测试锁超集字段。
+结果：node test/module-map-parser.test.mjs 15/15 全过；node 加载 prompt.js 确认无循环依赖；npm test 122/0 无回归（+1 新测试文件）；npm run lint 68 文件通过。无 stage prompt 改动故 _extract.mjs 无变化、无文件生命周期变更故 file-lifecycle.md 不动；无文档断言"两份解析器"故无他处需同步。触及 src/modules.js + src/run/prompt.js，--force-baseline 显式确认。

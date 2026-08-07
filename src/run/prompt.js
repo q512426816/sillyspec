@@ -22,6 +22,7 @@ import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs'
 import { stageRegistry } from '../stages/index.js'
 import { resolvePromptIncludes, resolveRuntimeRoot, safeGit, WAIT_MARKER_RE } from './shared.js'
 import { renderStageContract } from '../stage-contract-spec.js'
+import { parseModuleMapSimple } from '../modules.js'
 
 /**
  * 从 _module-map.yaml 读取模块上下文索引
@@ -36,6 +37,14 @@ function loadModuleContextIndex(specBase, projectName) {
     const mapPath = join(specBase, 'docs', projectName, 'modules', '_module-map.yaml')
     if (!existsSync(mapPath)) return null
     const content = readFileSync(mapPath, 'utf8')
+    // schema_version 校验（advisory）：modules.js 写 schema_version: 2；缺失或非 2 → warn，
+    // 提示 v1/v2 格式混用风险（旧格式字段解析会静默错位）。正常生成的文件不触发。
+    const sv = content.match(/^schema_version:\s*(\d+)/m)
+    if (!sv) {
+      console.warn(`⚠️  _module-map.yaml 缺少 schema_version 声明（期望 2），模块解析可能错位：${mapPath}`)
+    } else if (sv[1] !== '2') {
+      console.warn(`⚠️  _module-map.yaml schema_version=${sv[1]}（期望 2），可能为旧格式，模块解析可能错位：${mapPath}`)
+    }
     return parseModuleMapSimple(content)
   } catch {
     return null
@@ -104,63 +113,8 @@ function buildModuleContextInjection(taskDescription, moduleIndex, specBase, pro
   return injection
 }
 
-// 复用 modules.js 的简单 YAML 解析（避免循环依赖）
-function parseModuleMapSimple(content) {
-  const modules = {}
-  let currentModule = null
-  let currentKey = null
-  let currentArray = null
-
-  for (const line of content.split('\n')) {
-    const moduleMatch = line.match(/^  ([a-zA-Z0-9_-]+):$/)
-    if (moduleMatch) {
-      if (currentArray && currentModule && currentKey) {
-        modules[currentModule][currentKey] = currentArray
-      }
-      currentModule = moduleMatch[1]
-      modules[currentModule] = {}
-      currentKey = null
-      currentArray = null
-      continue
-    }
-    if (!currentModule) continue
-
-    const arrayFieldMatch = line.match(/^    (depends_on|used_by|paths|tags|aliases|entrypoints|main_symbols|review_reasons|core_files|test_files|related_docs|verify_commands):$/)
-    if (arrayFieldMatch) {
-      if (currentArray && currentKey) modules[currentModule][currentKey] = currentArray
-      currentKey = arrayFieldMatch[1]
-      currentArray = []
-      continue
-    }
-
-    const inlineArrayMatch = line.match(/^    (depends_on|used_by|paths|tags|aliases|entrypoints|main_symbols|review_reasons|core_files|test_files|related_docs|verify_commands): \[(.*)\]$/)
-    if (inlineArrayMatch) {
-      if (currentArray && currentKey) modules[currentModule][currentKey] = currentArray
-      const vals = inlineArrayMatch[2].split(',').map(v => v.trim()).filter(Boolean)
-      modules[currentModule][inlineArrayMatch[1]] = vals
-      currentKey = null
-      currentArray = null
-      continue
-    }
-
-    const scalarMatch = line.match(/^    (status|doc|needs_review|role|risk_level): (.+)$/)
-    if (scalarMatch) {
-      if (currentArray && currentKey) { modules[currentModule][currentKey] = currentArray; currentArray = null; currentKey = null }
-      modules[currentModule][scalarMatch[1]] = scalarMatch[2]
-      continue
-    }
-
-    const itemMatch = line.match(/^      - (.+)$/)
-    if (itemMatch && currentArray !== null) {
-      currentArray.push(itemMatch[1].trim())
-      continue
-    }
-  }
-  if (currentArray && currentModule && currentKey) {
-    modules[currentModule][currentKey] = currentArray
-  }
-  return modules
-}
+// parseModuleMapSimple 复用 modules.js 的 canonical 实现（合并历史 copy-paste 副本，2026-08-07；
+// 无循环依赖：modules.js 仅 import fs/path/db.js，prompt.js → modules.js 单向）。
 /**
  * 输出当前步骤的 prompt
  */
