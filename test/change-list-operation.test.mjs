@@ -119,6 +119,25 @@ const SECTION = (table) => `# x\n\n## 文件变更清单\n\n${table}\n`
   } finally { cleanup() }
 }
 
+// 测试 9：keepSillyspecDocs —— apply gate 需识别 .sillyspec/docs/（dogfood 模块文档=交付物），
+// 但默认仍跳过全部 .sillyspec/（review-tier fileCount 判档不变）
+{
+  const { specDir, cleanup } = setupTmp()
+  try {
+    const p = writeDesign(specDir, 'c9', SECTION(
+      `| 操作 | 文件路径 | 说明 |\n|------|----------|------|\n| 新增 | src/dispatch/probe.js | 探测 |\n| 新增 | .sillyspec/docs/sillyspec/modules/dispatch.md | 模块文档 |\n| 新增 | .sillyspec/changes/c9/design.md | 蓝图（非交付物） |`
+    ))
+    const setDefault = parseFileChangeList(p)
+    assert('keepSillyspecDocs 默认 false：跳过全部 .sillyspec/（含 docs/）', !setDefault.has('.sillyspec/docs/sillyspec/modules/dispatch.md'))
+    assert('keepSillyspecDocs 默认 false：src 正常保留', setDefault.has('src/dispatch/probe.js'))
+    const setKeep = parseFileChangeList(p, { keepSillyspecDocs: true })
+    assert('keepSillyspecDocs=true：.sillyspec/docs/ 保留（模块文档交付物）', setKeep.has('.sillyspec/docs/sillyspec/modules/dispatch.md'))
+    assert('keepSillyspecDocs=true：.sillyspec/changes/ 仍跳过（蓝图非交付物）', !setKeep.has('.sillyspec/changes/c9/design.md'))
+    const detailKeep = parseFileChangeListDetailed(p, { keepSillyspecDocs: true })
+    assert('keepSillyspecDocs=true：Detailed 同保留（operation 正确）', detailKeep.some(x => x.path === '.sillyspec/docs/sillyspec/modules/dispatch.md' && x.operation === '新增'))
+  } finally { cleanup() }
+}
+
 console.log(`\n${'='.repeat(50)}`)
 console.log(`✅ 通过: ${passed.length}`)
 console.log(`❌ 失败: ${failed.length}`)

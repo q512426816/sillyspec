@@ -4,8 +4,8 @@ created_at: 2026-06-01T09:05:00
 ---
 
 # change-management
-> 最后更新：2026-07-13
-> 最近变更：ql-20260713-001-3e46（文件清单标题编号前缀容忍）
+> 最后更新：2026-08-07
+> 最近变更：ql-20260807-010-9897（keepSillyspecDocs option：模块文档 .sillyspec/docs/ 可进清单）/ ql-20260713-001-3e46（文件清单标题编号前缀容忍）
 > 模块路径：src/change-list.js
 
 ## 职责
@@ -50,3 +50,4 @@ created_at: 2026-06-01T09:05:00
 | 日期 | 变更名 | 摘要 |
 |------|--------|------|
 | 2026-07-13 | ql-20260713-001-3e46 | `FILE_LIST_SECTION_RE` 加可选编号前缀 `(?:\d+[.)]\s*)?`，`## 6. 文件变更清单` 不再让解析返回空、plan Step4 postcheck 不再硬阻断 |
+| 2026-08-07 | ql-20260807-010-9897 | `_parseFileListDetailed` 加 `keepSillyspecDocs` option（默认 false 跳过全部 `.sillyspec/` 保持 review-tier fileCount 判档，true 时保留 `.sillyspec/docs/` 模块文档=交付物），`parseFileChangeList`/`Detailed` 透传 opts；供 `resolveApplyAllowSet` 识别模块文档清单（原 change-list 跳过 `.sillyspec/` 与 `filterDeliverableFiles` 保留 `.sillyspec/docs/` 语义打架） |

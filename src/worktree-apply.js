@@ -16,7 +16,6 @@ import { execSync } from 'child_process';
 import { existsSync, unlinkSync, writeFileSync, mkdtempSync, rmSync, readdirSync, readFileSync } from 'fs';
 import { join, resolve } from 'path';
 import { tmpdir } from 'os';
-import { createHash } from 'crypto';
 import { WorktreeManager } from './worktree.js';
 import { parseFileChangeList, parseFileChangeListDetailed, pathMatches } from './change-list.js';
 import { parseAllowedPaths } from './stages/plan-postcheck.js';
@@ -132,7 +131,7 @@ function getBlobHashMap(cwd, treeish, files) {
  * @returns {Set<string>} 并集清单（无 design 清单且无 task 卡片时为空集）
  */
 export function resolveApplyAllowSet(projectRoot, changeName) {
-  const allowSet = parseFileChangeList(join(projectRoot, CHANGES_REL, changeName, 'design.md'));
+  const allowSet = parseFileChangeList(join(projectRoot, CHANGES_REL, changeName, 'design.md'), { keepSillyspecDocs: true });
   const tasksDir = join(projectRoot, CHANGES_REL, changeName, 'tasks');
   if (existsSync(tasksDir)) {
     for (const tf of readdirSync(tasksDir).filter(f => /^task-\d+\.md$/.test(f))) {
@@ -252,31 +251,31 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
   }
 
   // --- 4.5 校验：主工作区是否有「未提交」脏改动（未提交 dirty 是 git apply --3way 危险区，必须拦）---
-  // 分工：4.5（整树 baselineHash）+ 5a（脏∩changedFiles）挡「未提交」dirty；5b 管「已提交」HEAD 分叉（已放宽，见下）。
+  // 分工：4.5（排除规则下当前 dirty）+ 5a（脏∩changedFiles）挡「未提交」dirty；5b 管「已提交」HEAD 分叉（已放宽，见下）。
   // 实测：主干未提交 dirty 时，git apply --3way 报 `does not match index` 且行为不一致（可能报错/可能半应用，
   // 哪怕脏文件与 patch 不重叠）——这是 git 硬约束，故此处友好拦截，引导用户先 commit/stash。
   // 排除非交付物的元数据/文档 churn（execute 自身改的 + 多操作者常改的 agent 指引/文档），
-  // 否则别人改 CLAUDE.md/docs/.claude → 整树 hash 变 → apply 误阻断（多操作者仓库高频踩坑）。
-  // 注意：必须和 computeBaselineHash (worktree.js) 使用相同的排除规则。
+  // 否则别人改 CLAUDE.md/docs/.claude → 判定 dirty → apply 误阻断（多操作者仓库高频踩坑）。
+  // 注意：排除规则必须和 computeBaselineHash (worktree.js) 一致（虽已不比对 hash，仍用同一口径判当前 dirty）。
   if (meta.baselineHash) {
     const exclude = '-- . ":(exclude).sillyspec/" ":(exclude).claude/" ":(exclude)docs/" ":(exclude)CLAUDE.md"';
     const staged = gitQuiet(projectRoot, `diff --cached ${exclude}`) || '';
     const unstaged = gitQuiet(projectRoot, `diff ${exclude}`) || '';
     const untracked = gitQuiet(projectRoot, `ls-files --others --exclude-standard ${exclude}`) || '';
-    const raw = `staged:${staged}\nunstaged:${unstaged}\nuntracked:${untracked}`;
-    const currentHash = createHash('sha256').update(raw).digest('hex').slice(0, 16);
-    if (currentHash !== meta.baselineHash) {
+    // 意图（与 computeBaselineHash 注释一致）：只挡「未提交 dirty」——git apply --3way 对 dirty 工作区不稳。
+    // 不比对 hash 是否等于 execute 启动时 baselineHash：主仓 dirty→clean（execute 期间 commit 无关文件）后
+    // hash 必变，若仍比对会永久死锁（须手改 meta.baselineHash）。改判「排除规则下当前是否有未提交 dirty」。
+    const hasUncommittedDirty = staged !== '' || unstaged !== '' || untracked !== '';
+    if (hasUncommittedDirty) {
       // 未提交 dirty 拦截：列脏文件 + 指引先 commit/stash（git --3way 对 dirty 工作区不稳，merge 同理，故不再提 --merge）
       const dirtyFiles = [...new Set(
         ((gitQuiet(projectRoot, 'diff --name-only HEAD') || '').split('\n').filter(Boolean))
           .concat((gitQuiet(projectRoot, 'ls-files --others --exclude-standard') || '').split('\n').filter(Boolean))
       )].filter(f => !f.startsWith('.sillyspec/') && f !== 'meta.json');
       result.errors.push(
-        `主工作区有未提交的改动（execute 前后 baseline 不一致），git apply 无法安全应用。\n` +
+        `主工作区有未提交的改动，git apply 无法安全应用。\n` +
         (dirtyFiles.length > 0 ? `未提交文件：\n  ${dirtyFiles.join('\n  ')}\n` : '') +
-        `请先提交或暂存这些改动，再重新 apply：\n  git add -A && git commit -m "..."   或   git stash\n` +
-        `execute 前 baseline: ${meta.baselineHash}\n` +
-        `当前 baseline: ${currentHash}`
+        `请先提交或暂存这些改动，再重新 apply：\n  git add -A && git commit -m "..."   或   git stash\n`
       );
       if (!checkOnly) return result; // checkOnly 收集不短路（一次报全）；真实 apply 短路
     }

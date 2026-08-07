@@ -77,6 +77,8 @@ console.log('--- 场景 B: 未提交 dirty + merge=false → 4.5 友好拦截 --
 {
   const d = setupRepo()
   makeWorktree(d, 'tc', (wt) => fs.writeFileSync(path.join(wt, 'src-b.txt'), 'b\n'))
+  // 主仓真实 dirty：未提交文件触发 4.5（修复后语义=真实 dirty 才拦，不再靠 baselineHash='fake' 模拟漂移）
+  fs.writeFileSync(path.join(d, 'main-dirty.txt'), 'dirty\n')
   const r = applyWorktree('tc', { cwd: d, merge: false })
   assertTrue(r.merged === false, 'B: result.merged === false（未走 merge）')
   assertTrue(r.errors.length > 0, 'B: 有 error（BLOCKED）')

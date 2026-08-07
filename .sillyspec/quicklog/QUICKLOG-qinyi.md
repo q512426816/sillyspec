@@ -498,3 +498,27 @@
 根因：propose 阶段入口 2026-06-14 已废、不在 STAGE_ORDER、propose.js 无任何 import 是真孤儿，但 stage-review/gates/prompt/_extract 仍残留 propose 引用增加认知负担。
 方案：纯减法删 propose.js+propose.md，清 4 处源码引用+死测试，重提取 _extracted.json，清 README+stages.md 镜像。
 结果：npm test 122/0 lint 67 文件；stage-contract-spec.js 与 index.js 的 propose 是 LIVE（proposal.md 文件规则/knowledge 子命令）未动；因 quick 审计禁删除，A6 经直接 git commit（显式 pathspec 隔离 sillyhub 并发暂存文件）。
+
+## ql-20260807-009-edf9 | 2026-08-07 16:47:12 | 清除 sillyspec-execute SKILL.md 里指向维护者内部文档/决策编号/源码符号的黑话
+状态：已完成
+关联变更：（无）
+文件：
+- .claude/skills/sillyspec-execute/SKILL.md（113行删源码锚点 src/stage-review.js: renderReviewJsonContract() 括注，保留"运行时注入权威契约"语义；dispatch 段原 115-123 行整段重写为对外纯净版「## 派发模式（SillyHub MCP，可选）」——删 D-005/D-007/D-002/D-004 决策编号、src/dispatch 与 probe.js/strategy.js/backends 源码符号、getDispatchMode/buildWavePrompt/isPathASupported 内部函数名、.sillyspec/docs/sillyspec/modules/dispatch.md 与 docs/sillyspec/sillyhub-path-a-contract.md 断链路径、路径A/stub/converge 术语；压成对外操作语义：默认本机 Agent tool、配 SillyHub MCP 照注入指令、未配置零回归 + 可选 dispatch probe）
+需求：清除 sillyspec-execute SKILL.md 里指向维护者内部文档/决策编号/源码符号的黑话，使其符合对外发布物身份（进 npm 包且 sillyspec init 复制到用户项目）
+根因：dispatch 功能同步 SKILL 时把内部实现笔记整段照搬未做对外纯净化，.sillyspec/docs/sillyspec/modules/dispatch.md 与 docs/sillyspec/sillyhub-path-a-contract.md 在消费方项目断链、D-005 等编号无上下文
+方案：113行删源码锚点 renderReviewJsonContract 括注，dispatch 段整段重写为对外操作语义（默认本机 Agent tool；配 SillyHub MCP 照注入指令；未配置零回归）加可选 dispatch probe，删全部 D-编号与 src 源码符号与内部函数名与断链路径与路径A/stub/converge 术语
+结果：grep 内部黑话模式零匹配，改后 113-119 行通顺且与下节衔接正常，纯 doc 不碰 src 不触发规则19，跳过 npm test/lint（lint 不扫 docs）
+
+## ql-20260807-010-9897 | 2026-08-07 16:53:16 | 修 worktree-apply gate 两 bug：baseline 死锁改判当前 dirty + 模块文档清单 keepSillyspecDocs
+状态：已完成
+关联变更：（无）
+文件：
+- src/worktree-apply.js（baseline gate step4.5 改判「排除规则下 staged/unstaged/untracked 任一非空=当前未提交 dirty」——原比对 meta.baselineHash，主仓 dirty→clean 后 hash 必变永久死锁须手改 meta；删 unused createHash import；resolveApplyAllowSet 传 keepSillyspecDocs:true 识别模块文档清单）
+- src/change-list.js（_parseFileListDetailed 加 keepSillyspecDocs option 默认 false，两处 .sillyspec/ 跳过逻辑保留 .sillyspec/docs/ 交付物；parseFileChangeList/Detailed 透传 opts）
+- test/worktree-apply-baseline-clean.test.mjs（新增：dirty→clean 后 apply 放行，真实 computeBaselineHash 保证区分度，3 断言）
+- test/change-list-operation.test.mjs（+测试9 keepSillyspecDocs：默认跳过 docs/、true 保留、changes/ 仍跳过，5 断言）
+- test/worktree-apply-merge-fallback.test.mjs（场景 B 改真实主仓 dirty——原 baselineHash='fake' 模拟漂移，修复后语义=真实 dirty 才拦）
+需求：修 worktree-apply gate 两真 bug（dispatch 变更 apply 踩中）：① baseline gate 主仓 dirty→clean 后永久死锁；② 模块文档 .sillyspec/docs/ apply 永远缺清单。
+根因：① step4.5 比对 currentHash 与 meta.baselineHash，execute 期间 commit 无关文件 hash 必变导致死锁，注释写挡 dirty 实现却比 hash；② change-list 跳过全部 .sillyspec/（蓝图基础设施）与 filterDeliverableFiles 保留 .sillyspec/docs/（交付物）语义打架。
+方案：① baseline gate 改判排除规则下 staged/unstaged/untracked 任一非空=当前未提交 dirty 才拦；② _parseFileListDetailed 加 keepSillyspecDocs option（默认 false 保持 fileCount 判档），resolveApplyAllowSet 传 true。
+结果：npm test 128/0 ALL PASS + lint 72 过；worktree 系列 8 测试全过；新增 keepSillyspecDocs 5 断言 + baseline-clean 3 断言；merge-fallback 场景 B 改真实 dirty 构造（原假 baselineHash 模拟漂移，修复后语义=真实 dirty 才拦）。模块文档 worktree/change-management 已同步变更索引。坑① docHash 分叉（stage-review 锚 worktree 副本，主仓 reverse-sync 会分叉）设计模糊已绕过，defer 未修。
