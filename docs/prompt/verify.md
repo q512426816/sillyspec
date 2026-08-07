@@ -102,16 +102,18 @@
 ### Execute Evidence 传递检查
 7. 检查 verify-required-evidence.json 是否存在（由 execute 阶段 Task Review Gate 写入）
    - 路径：变更目录下的 verify-required-evidence.json
-   - 如果存在 → 读取其中的 requiredEvidence 列表，逐条验证是否已满足
+   - 文件 schema：`{ items: [{ task, verdict, evidence: string[] }] }`——顶层是 `items`，每项的 `evidence` 是字符串数组（**不是** `requiredEvidence` 键；旧 prompt 写 requiredEvidence 是字段名错配，照读必落空）
+   - 如果存在 → 逐项读取 `items`，对每个 cannot_verify 任务逐条核对其 `evidence` 数组是否已满足
    - 每条 evidence 必须在 verify-result.md 中给出明确结论（satisfied / missing / partial）
    - 如果有任何 evidence 为 missing → verify 结论不能为 PASS
    - 如果文件不存在 → 表示 execute 阶段无 cannot_verify 任务，正常继续
+   - CLI 会 advisory 复核每个 cannot_verify 任务是否在 verify-result.md 体现（未体现仅 warn 不阻断归档；evidence 是否真满足由你诚实判定，CLI 不替你语义判定）
 
 ### 模块文档加载
-7. 读取 `.sillyspec/docs/<project>/modules/_module-map.yaml`（不存在则跳过以下步骤）
-8. 根据 design.md 的文件变更清单匹配 _module-map.yaml 中的模块
-9. 读取匹配到的 `.sillyspec/docs/<project>/modules/<module>.md`
-10. **检查模块索引可信度**：如果相关模块的 needs_review 为 true，提示"该模块索引可能不可信，需要回看模块卡片或源码"
+8. 读取 `.sillyspec/docs/<project>/modules/_module-map.yaml`（不存在则跳过以下步骤）
+9. 根据 design.md 的文件变更清单匹配 _module-map.yaml 中的模块
+10. 读取匹配到的 `.sillyspec/docs/<project>/modules/<module>.md`
+11. **检查模块索引可信度**：如果相关模块的 needs_review 为 true，提示"该模块索引可能不可信，需要回看模块卡片或源码"
 
 ### 输出
 文件加载确认清单（含 decisions.md 当前版本/未决项状态、模块文档 + 索引可信度）

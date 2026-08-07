@@ -861,3 +861,73 @@ export function printVerifyDeletionCheck(result) {
   }
   console.warn('   提示：确认删除是否预期。预期删除请在 design.md 清单用「删除」操作显式声明；误删请恢复。')
 }
+
+/**
+ * required-evidence 对账（advisory，不阻断 verify 完成）。
+ *
+ * execute 阶段 Task Review Gate 把 cannot_verify 任务的 requiredEvidence 写入
+ * changes/<change>/verify-required-evidence.json（schema: {generatedAt, schemaVersion, items:[{task, verdict, evidence:string[]}]}）。
+ * 历史"死链"（sss1.md 矛盾2）：只写不读——verify agent 不在 verify-result.md 体现也不会被发现，
+ * 且 verify.js prompt 让 agent 读 `requiredEvidence` 键（字段名错配，实际是 items[].evidence），照做必落空。
+ * 本探针闭合该链：读 evidence 文件，对每个 cannot_verify 任务检查 verify-result.md 是否提及该任务 id；
+ * 未提及 → warning（advisory）。CLI 只做"任务被提及"的机械存在性检查，evidence 是否真正满足
+ * （satisfied/missing/partial）由 agent 在 verify-result.md 诚实自报告——不假装语义判定（与删除探针同 altitude）。
+ *
+ * @param {{cwd:string, specBase:string, changeName?:string}} args
+ * @returns {{status:'skipped'|'passed'|'warning', items:Array, unacknowledged:Array, summary:string, reason:string|null}}
+ */
+export function runVerifyRequiredEvidenceCheck({ cwd, specBase, changeName = null }) {
+  if (!changeName) {
+    return { status: 'skipped', items: [], unacknowledged: [], summary: '', reason: '无 changeName（quick 等无关联变更场景），evidence 对账跳过' }
+  }
+  const evidencePath = join(specBase, 'changes', changeName, 'verify-required-evidence.json')
+  if (!existsSync(evidencePath)) {
+    return { status: 'skipped', items: [], unacknowledged: [], summary: '', reason: '无 verify-required-evidence.json（execute 无 cannot_verify 任务），evidence 对账跳过' }
+  }
+
+  let data
+  try {
+    data = JSON.parse(readFileSync(evidencePath, 'utf8'))
+  } catch (e) {
+    return { status: 'skipped', items: [], unacknowledged: [], summary: '', reason: `verify-required-evidence.json 解析失败（${e.message}），evidence 对账跳过` }
+  }
+  const items = Array.isArray(data.items) ? data.items : []
+
+  // 读 verify-result.md（不存在则所有 evidence 任务都"未体现"）
+  const verifyResultPath = join(specBase, 'changes', changeName, 'verify-result.md')
+  const report = existsSync(verifyResultPath) ? readFileSync(verifyResultPath, 'utf8') : ''
+
+  const unacknowledged = []
+  for (const item of items) {
+    const task = item && item.task
+    if (!task) continue
+    // 机械存在性检查：verify-result.md 是否提及该 cannot_verify 任务 id。
+    // evidence 数组的具体满足度（satisfied/missing/partial）由 agent 自报告，CLI 不判定。
+    if (!report.includes(task)) {
+      const evidenceCount = Array.isArray(item.evidence) ? item.evidence.length : 0
+      unacknowledged.push({ task, verdict: item.verdict || 'cannot_verify', evidenceCount,
+        reason: `cannot_verify 任务 ${task} 未在 verify-result.md 中体现（需逐条 evidence 给结论 satisfied/missing/partial）` })
+    }
+  }
+
+  if (unacknowledged.length > 0) {
+    return { status: 'warning', items, unacknowledged,
+      summary: `${items.length} 个 cannot_verify evidence 任务中 ${unacknowledged.length} 个未在 verify-result.md 体现`, reason: null }
+  }
+  return { status: 'passed', items, unacknowledged: [],
+    summary: `${items.length} 个 cannot_verify evidence 任务均在 verify-result.md 体现（满足度由 agent 自报告）`, reason: null }
+}
+
+/** 打印 required-evidence 对账结果（advisory，不阻断 verify 完成） */
+export function printVerifyRequiredEvidenceCheck(result) {
+  if (result.status === 'skipped') return  // 静默：无 evidence 文件 / 无 changeName / 解析失败
+  if (result.status === 'passed') {
+    console.log(`\n✅ required-evidence 对账通过：${result.summary}`)
+    return
+  }
+  // warning
+  console.warn(`\n⚠️  required-evidence 对账发现 ${result.unacknowledged.length} 个 cannot_verify 任务未在 verify-result.md 体现（advisory 不阻断）：`)
+  for (const u of result.unacknowledged.slice(0, 20)) console.warn(`   - ${u.task}  (${u.reason})`)
+  if (result.unacknowledged.length > 20) console.warn(`   …还有 ${result.unacknowledged.length - 20} 个`)
+  console.warn('   提示：execute 标记的 cannot_verify 任务需在 verify-result.md 逐条给 evidence 结论（satisfied/missing/partial）。CLI 仅查任务被提及，是否真满足由你诚实判定。')
+}

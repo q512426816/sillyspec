@@ -418,3 +418,20 @@
 根因：两道门——①validateBrainstormOutputs→evaluateRules('brainstorm',{changeDir}) 的 ctx 无 scale，BRAINSTORM_RULES proposal/requirements/tasks 无条件 file-exists error（gate，会 rollback）；②validateFileLocations:86 硬编码四件套（advisory 不 gate 但对合法 small 变更误报 ⬜）。readDesignScale(complete.js:62) 只用于下一步提示分叉未回流 validator。测试盲区 run-complete-step-brainstorm.test.mjs small 用例仍写全四件套故从未暴露。
 方案：contract 引擎加 condition 字段（conditionHolds：ne/eq 操作符，fail-safe ctx 字段缺失时 ne 成立→四件套全要求保守走重流程）；三规则挂 condition(scale≠small)；validator 读 design.md frontmatter scale 传入 ctx；validateFileLocations 复用 readDesignScale 同步豁免；补 4 Case 测试覆盖 small/large/无 scale/齐全。
 结果：node test/stage-contract.test.mjs 全过（4 新 Case + 既有全过）；npm test 120/0 无回归；npm run lint 68 文件通过；node docs/prompt/_extract.mjs 重跑无语义变化（契约块由 renderStageContract 运行时 live 注入，静态镜像不捕获，brainstorm Step8 small prompt 本就正确无需改）；file-lifecycle.md:48 补溯源注记。本改动触及 src/stage-contract.js 核心 validator，--done 经 --force-baseline 显式确认。
+
+## ql-20260807-004-e480 | 2026-08-07 09:54:28 | 矛盾2：verify-required-evidence 死链闭合（advisory reader + 字段名/SKILL 诚实修复）
+状态：已完成
+关联变更：（无）
+文件：
+- src/verify-postcheck.js（新增 runVerifyRequiredEvidenceCheck + printVerifyRequiredEvidenceCheck：读 verify-required-evidence.json，对每个 cannot_verify 任务检查 verify-result.md 是否提及，未体现 → advisory warn 不阻断；照 deletion 探针范式，不假装语义判定 satisfaction）
+- src/run/gates.js（verify 分支在 deletion 探针后、"验证通过"前接入 evidence 对账）
+- src/stages/verify.js（Step1 evidence 检查段：字段名 requiredEvidence → items[].evidence + 文件 schema 说明；补 CLI advisory 复核注；修 step7 重复编号——模块文档加载 7→8/8→9/9→10/10→11）
+- .claude/skills/sillyspec-verify/SKILL.md（line47 谎报"missing evidence → 阻断"改诚实：advisory warn 不阻断 + evidence 满足度 agent 自报告 + CLI 不语义判定）
+- test/verify-required-evidence-check.test.mjs（新建 7 Case：无 changeName→skipped / 无 evidence 文件→skipped / 全体现→passed / 部分未体现→warning / 损坏 JSON→skipped / 空 items→passed / verify-result.md 缺失→warning）
+- docs/prompt/verify.md（镜像同步 verify.js Step1 evidence 段改动）
+- docs/prompt/_extracted.json（重跑 _extract.mjs 刷新）
+- docs/sillyspec/file-lifecycle.md（verify 行补 verify-required-evidence.json 读侧消费者注记）
+需求：闭合 sss1.md 矛盾2——execute Task Review Gate 把 cannot_verify 任务的 requiredEvidence 落盘 verify-required-evidence.json，但 verify 阶段从不读它（死链）；verify.js:78 还让 agent 读 requiredEvidence 键（文件实际 schema 顶层是 items，每项 evidence 是数组，字段名错配照读必落空）；SKILL.md:47 谎称"missing evidence → 阻断"但无任何 gate 阻断。
+根因：写侧完整（gates.js:359 writeVerifyRequiredEvidence 落盘 {generatedAt,schemaVersion,items:[{task,verdict,evidence:[]}]}），读侧为零（verify-postcheck 全仓无读取点）；prompt 字段名与文件 schema 错配；SKILL 把 agent 自报告规则谎报成 CLI 硬阻断。整条 evidence 流转未闭合 + SKILL 撒谎。
+方案：综合 reader + bug 修复——verify-postcheck 加 advisory reader（查 cannot_verify 任务是否在 verify-result.md 体现，warn 不阻断，evidence 满足度由 agent 诚实自报告，CLI 不语义判定，与 deletion 探针同 altitude）；gates.js 接入；verify.js 修字段名 items[].evidence + schema 说明 + 修 step7 重复编号；SKILL.md 改诚实；新建 7 Case 测试。保留写侧不变（execute 仍落盘，现为 verify 提供上下文）。
+结果：node test/verify-required-evidence-check.test.mjs 7/7 全过；npm test 121/0 无回归（+1 新测试文件）；npm run lint 68 文件通过；verify.md 镜像 + _extracted.json 同步；file-lifecycle.md verify 行补读侧注。触及 src/run/gates.js + src/verify-postcheck.js 核心 verify 流程，--done 经 --force-baseline 显式确认。注：step3 --output 首次被拦，根因是方案段"（综合 reader+bug 修复）："嵌套全角冒号干扰 4 字段解析，去掉嵌套冒号后通过。
