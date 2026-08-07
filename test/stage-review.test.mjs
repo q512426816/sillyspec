@@ -75,7 +75,7 @@ console.log('=== 1. classifyReviewTier（规模分级）===\n')
   const t3 = classifyReviewTier({ planLevel: 'light', designPath: writeDesign(makeTmpDir('rt-'), ['a.js', 'b.js']) })
   assert(t3.tier === 'self', `plan_level=light + 2 文件 → self`)
 
-  // 无 planLevel + 文件 ≤ 阈值 → self（brainstorm/propose 场景）
+  // 无 planLevel + 文件 ≤ 阈值 → self（brainstorm 场景）
   const t4 = classifyReviewTier({ designPath: writeDesign(makeTmpDir('rt-'), ['a.js']) })
   assert(t4.tier === 'self', `无 planLevel + 1 文件 → self`)
 

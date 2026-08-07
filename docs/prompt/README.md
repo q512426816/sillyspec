@@ -21,11 +21,10 @@
 | [status](./status.md) | 项目快照 | 辅助 | 3 | — | `src/stages/status.js` |
 | [doctor](./doctor.md) | 自检 | 辅助 | 5 | — | `src/stages/doctor.js` |
 | [brainstorm-auto](./brainstorm-auto.md) | 自动模式头脑风暴 | 变体 | 4 | — | `src/stages/brainstorm-auto.js` |
-| [propose](./propose.md) | ⚠️ 已废弃 | — | 7 | — | `src/stages/propose.js` |
 
 > 主流程阶段（brainstorm → plan → execute → verify）通过 `sillyspec run <stage>` 推进，有进度状态机。
 > 辅助阶段（scan/quick/explore/archive/status/doctor）在 `stages/index.js` 标记 `auxiliary: true`，无活跃变更时也可执行。
-> `propose` 入口已移除（2026-06-14 deprecated），仅保留 prompt 历史参考；`brainstorm-auto` 是 auto/full 模式的 brainstorm 变体，二者均不在 `stages/index.js` 的 `stageRegistry` 中。
+> `brainstorm-auto` 是 auto/full 模式的 brainstorm 变体，不在 `stages/index.js` 的 `stageRegistry` 中。
 
 ---
 
@@ -116,12 +115,12 @@ prompt 正文中出现的占位符，运行时由 `outputStep` 替换。下表�
 
 | 占位符 | 替换为 | 出现阶段 |
 |---|---|---|
-| `<project>` | 当前项目名（`basename(cwd)` 或 db 项目名） | brainstorm / plan / execute / scan / quick / archive / status / doctor / explore / propose |
+| `<project>` | 当前项目名（`basename(cwd)` 或 db 项目名） | brainstorm / plan / execute / scan / quick / archive / status / doctor / explore |
 | `<git-user>` | `git config user.name`（失败为 `unknown`） | brainstorm / quick / plan(TaskCard) |
 | `<now-datetime>` | `YYYY-MM-DD HH:MM:SS`（执行时刻） | brainstorm / scan / plan(TaskCard) |
 | `<now-timestamp>` | `YYYYMMDD-HHMMSS` | （预留，prompt 未直接引用） |
 | `<now-date>` | `YYYY-MM-DD` | （预留） |
-| `<change-name>` | 当前变更名（如 `2026-05-13-user-auth`） | brainstorm / execute / archive / explore / propose |
+| `<change-name>` | 当前变更名（如 `2026-05-13-user-auth`） | brainstorm / execute / archive / explore |
 | `<quick-session-id>` | quick 会话 ID（= changeName = `quick-<uuid8>`） | quick |
 | `<quicklog-id>` | 从 `.runtime/quick-sessions/<sessionId>/guard.json` 读 `quicklogId`（未分配则 `(未分配)`） | quick |
 | `<linked-changes>` | 从 guard.json 读关联变更列表（无则 `（无）`） | quick |
@@ -142,7 +141,7 @@ prompt 正文中出现的占位符，运行时由 `outputStep` 替换。下表�
 |---|---|---|
 | `{KNOWLEDGE_HIT_REPORT}` | `knowledge-match.js` 的 `matchKnowledge()` 命中报告（基于 changeName + plan.md 任务名匹配 `knowledge/` 目录条目）；同时落盘 `.runtime/knowledge-hit-report.json` | execute（确认执行范围步） |
 | `{EXECUTE_RUN_ID}` | 当前 execute run 的固定 ID（从 `.runtime/current-execute-run-id-<change>` 读，无则 `generateExecuteRunId()` 生成并落盘） | execute（每个 Wave 执行步，用于 task review.json 路径） |
-| `{REVIEW_TIER}` | 审查分级：`self`（当前 agent 自审）或 `independent`（强制独立子代理 + review.json）。由 `review-tier.js` 的 `classifyReviewTier({planLevel, designPath})` 按 plan_level / 变更文件数判定 | brainstorm / plan / propose / execute 的 review 步 |
+| `{REVIEW_TIER}` | 审查分级：`self`（当前 agent 自审）或 `independent`（强制独立子代理 + review.json）。由 `review-tier.js` 的 `classifyReviewTier({planLevel, designPath})` 按 plan_level / 变更文件数判定 | brainstorm / plan / execute 的 review 步 |
 | `{REVIEW_TIER_REASON}` | 分级理由文案（如 `变更文件 3 ≤ 3` 或 `plan_level=none...`） | 同上 |
 | `{STAGE_REVIEW_RUN_ID}` | stage review 运行 ID（从 `.runtime/current-stage-review-run-id-<stage>(-<change>)` 读，无则 `generateStageReviewRunId()` 生成并落盘；注入到 `{REVIEW_JSON_CONTRACT}` 的路径内，保证 prompt 注入的 ID == Stage Review Gate 读取的 ID） | 同上（经契约块内嵌） |
 | `{REVIEW_JSON_CONTRACT}` | `stage-review.js` 的 `renderReviewJsonContract()` 产出的 review.json 产物契约 markdown：含 schema（schemaVersion=1、reviewType、verdicts∈pass/fail/cannot_verify、reviewedFiles、docHash）、完整示例、docHash 算法（主审查文档 sha256）。各阶段主审查文档：brainstorm/execute→design.md，plan→plan.md，propose→proposal.md | 同上 |

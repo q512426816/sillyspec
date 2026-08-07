@@ -151,7 +151,7 @@ updated_at: 2026-08-07T13:12:58+08:00
 - ⊘ **exec-i frontend hook 在 hook 子进程假失败（裁决：consumer 侧，非本仓）**：consumer 项目（multi-agent-platform）pre-commit/ci-check hook 自身实现问题（全树跑 vs 子进程环境），SillySpec 源码不掌管这些 hook；verify 阶段 `runVerifyTestCheck` 亲自在主仓 cwd 跑（execute 已 apply 回主仓），不在 worktree 子进程环境假失败。不另立条目。
 
 ### 2026-08-07 复盘增补（sss.md / sss1.md 两份 prompt 一致性审计）
-状态：`A组 5 项已修并提交（1efc7c8）；A6 propose 死代码 defer；B组 2 项并发 session 已修、3 项 defer`
+状态：`A组 6 项全修（A1-5 commit 1efc7c8 / A6 直接 commit 因 quick 审计 shared.js:516 禁删除）；B组 2 项并发 session 已修、3 项 defer`
 
 来源：两份只读审计报告 docs/sss.md（逐阶段提示词"承诺 vs 源码"对照）+ docs/sss1.md（文件流转/契约闭合性）。P0 项（verify 探针 advisory、review-tier ≤3、archive 伪命令、doctor 悬空 else/fi、brainstorm small validator、verify-required-evidence 死链）已由近期 commit 46ff4f9 / 245a03b / 3ae51c8 修完，本段只登记剩余 P1/P2 归宿。
 
@@ -161,7 +161,7 @@ updated_at: 2026-08-07T13:12:58+08:00
 - ✅ **A3 execute 两处末尾孤立双引号**（确认 worktree 路径步 execute.js:177 + buildWavePrompt execute.js:662）：模板末尾 `"\\`` 渲染成 prompt 尾部裸 `"`。删之。commit 1efc7c8。
 - ✅ **A4 execute 知识库审阅 uncategorized 路径缺起始反引号**（execute.js:293）：`\\.sillyspec` 应为 `` \`.sillyspec ``，补起始反引号。commit 1efc7c8。（execute.md 镜像曾以"逐字保留勿补"注释记录此源码 bug，bug 修后该注释一并删。）
 - ✅ **A5 scan Step8 子代理 prompt 中文括号未闭合**（scan.js:353）：`（**主 agent 启动前必须拼入**：` 缺 `）`，补 `）：`。commit 1efc7c8。
-- ⏭ **A6 propose 死代码移除**（src/stages/propose.js 整文件 + stage-review.js STAGE_MAIN_DOC/REVIEW_TYPE.propose + stage-contract-spec.js propose 规则 + index.js:98 help 文本）：入口 2026-06-14 已废，stage 文件 + 残留死代码待清。**defer**：sillyhub-mcp-dispatch 并发 session 活跃、其 execute 阶段大概率触 contract 引擎（stage-review/stage-contract，参 sillyhub-mcp-capabilities 记忆"verify 只读 QA 首发"），quick-2 撞车风险高，等并发收工后单独 quick 收尾。
+- ✅ **A6 propose 死代码移除**（删 src/stages/propose.js 整文件 + docs/prompt/propose.md 镜像；清 stage-review.js STAGE_MAIN_DOC/REVIEW_TYPE.propose + gates.js Stage Review Gate 列表/三元 + prompt.js REVIEW_TIER 列表 + _extract.mjs staticStages/特例 + 死测试 case + README/stages.md 镜像引用）：入口 2026-06-14 已废、propose.js 无任何 import 是真孤儿。**scope 纠正**：初判误把 stage-contract-spec.js 的 brainstorm.proposal.*（proposal.md 文件规则，brainstorm 产物 LIVE）和 index.js:98（sillyspec knowledge propose 子命令，LIVE）当死代码，实证后排除。**经直接 git commit（非 quick）**：quick 审计 shared.js:516 对 deletedFiles.length>0 恒 blocked、无 flag 解锁（--force-baseline 只降级 baselineHit），A6 必删 propose.js/propose.md 故走 quick --done 不通；改为直接 git commit（显式 pathspec 隔离 sillyhub 并发暂存）。npm test 122/0、lint 67。
 
 **B组（判断项，多数 defer；B1/B2 并发 session 已修）**
 - ✅ **B1 decisions 决策追踪矩阵诚实降级**（= sss1 P1-3）：plan.js:201/259 + verify.js:138 已加"CLI 只校验 D-xxx@vN ID 字面出现，warning 不阻断；D→FR→task 映射完整性供人类追溯，CLI 不校验"。**由并发 session commit b904442 修完**，非本会话。
@@ -198,7 +198,7 @@ updated_at: 2026-08-07T13:12:58+08:00
 | 2026-08-04 | verify 复盘（a/b/c） | a 评估保留（detectChangeRisk 显式豁免已实现 + verify prompt 已告知，非新债）；b 修 verify step6 不重复手动跑全量测试（统一交 CLI 对账）+ docs/prompt 重提取 + file-lifecycle 同步；c 修 gates.js verify 对账前加进度预告（放调用点不污染 machine-interface --json） |
 | 2026-08-04 | 全流程复盘（a/b/c） | a persuasion 补强：verify 探针 3 加集成盲区提示 + plan 全局验收标准加集成冒烟条；b 已修复（= exec-a，本次会话已落地）；c prompt 引导续跑：execute Wave prompt 加中断续跑段（checkpoint 机制已存在，补传播）；否决 task 级 checkpoint 机制 |
 | 2026-08-06 | 第二批复盘（exec-e/f 修复 + exec-d 让出 + exec-g/h defer + exec-i 否决） | exec-d 已实现 register-stage-review 命令（34 测试过，备份仓外 temp/sillyspec-exec-d-backup-20260806/）但因与并行全流程 2026-08-06-sillyspec-self-tooling-fixes 坑1 撞车让出（设计存债单 exec-d 条目供采纳）；exec-e execute prompt 加"既跑 check 也跑 format"引导（buildWavePrompt 调度要求 + acceptance 运行测试步）；exec-f worktree-deps 加 python 分支（uv sync/pip）+ execute 确认 worktree 路径步加工具链预告；exec-g/h defer（worktree .sillyspec 文档分叉 / gen:types 自报无产物校验，需设计单独完整流程排）；exec-i consumer 侧否决（frontend hook 假失败）；本批 commit exec-e/f，全量 test 116/0、lint 68 |
-| 2026-08-07 | sss/sss1 审计复盘（A1-5 修 + A6 defer / B1-B2 并发已修 + B3-B5 defer） | A组纯减法 5 项修并提交 1efc7c8（execute 建议模型空指令→诚实模型档位条目 / quick 单会话兼容退路 / execute 两处末尾孤立引号 / uncategorized 起始反引号 / scan 括号，+ docs/prompt 镜像同步删 3 条过时"逐字保留"注释，test 122/0 lint 68）；A6 propose 死代码 defer（sillyhub 并发撞 contract 引擎）；B1 decisions 矩阵降级 / B2 module-map 合并 均由并发 session b904442 / e2b3422 修完（非本会话）；B3 scan 死文档 / B4 plan Step4 token / B5 plan 自检对齐 defer；raw 文件 sss.md/sss1.md 保留作历史参考 |
+| 2026-08-07 | sss/sss1 审计复盘（A1-5 修 commit 1efc7c8 + A6 直接 commit / B1-B2 并发已修 + B3-B5 defer） | A组纯减法 5 项修并提交 1efc7c8（execute 建议模型空指令→诚实模型档位条目 / quick 单会话兼容退路 / execute 两处末尾孤立引号 / uncategorized 起始反引号 / scan 括号，+ docs/prompt 镜像同步删 3 条过时"逐字保留"注释，test 122/0 lint 68）；A6 propose 死代码已删——直接 commit（quick 审计 shared.js:516 对删除恒 blocked 无 flag 解锁；scope 纠正排除 stage-contract-spec proposal.md 文件规则/index.js knowledge 子命令两个 LIVE）；B1 decisions 矩阵降级 / B2 module-map 合并 均由并发 session b904442 / e2b3422 修完（非本会话）；B3 scan 死文档 / B4 plan Step4 token / B5 plan 自检对齐 defer；raw 文件 sss.md/sss1.md 保留作历史参考 |
 
 ## 总结
 

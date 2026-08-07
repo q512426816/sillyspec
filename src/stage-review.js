@@ -3,7 +3,7 @@
  *
  * 与 task-review.js 的关系：
  *   task-review 校验 execute 每个 task 的 review.json（git 代码 diff 证据：base/head）。
- *   stage-review 校验 brainstorm/plan/propose/execute-acceptance 的阶段级 review.json
+ *   stage-review 校验 brainstorm/plan/execute-acceptance 的阶段级 review.json
  *   （文档证据：reviewedFiles + docHash）。两者 verdict 语义一致（pass/fail/cannot_verify
  *   三态 + cannot_verify 必须带 requiredEvidence 的反逃逸规则），复用 task-review 导出的
  *   VALID_VERDICTS / REVIEW_SCHEMA_VERSION 常量；task-review.js 本身不改、execute 路径零风险。
@@ -25,10 +25,10 @@ export const STAGE_REVIEW_TYPES = ['design', 'plan', 'proposal', 'code', 'accept
 // checklist 每项 result 的合法值
 const CHECKLIST_RESULTS = ['pass', 'gap', 'fail']
 
-// stage → 主审查文档(brainstorm/execute 审 design.md;plan 审 plan.md;propose 审 proposal.md)
-const STAGE_MAIN_DOC = { brainstorm: 'design.md', plan: 'plan.md', propose: 'proposal.md', execute: 'design.md' }
+// stage → 主审查文档(brainstorm/execute 审 design.md;plan 审 plan.md)
+const STAGE_MAIN_DOC = { brainstorm: 'design.md', plan: 'plan.md', execute: 'design.md' }
 // stage → reviewType(对齐 gates.js Stage Review Gate 的映射)
-const STAGE_REVIEW_TYPE = { brainstorm: 'design', plan: 'plan', propose: 'proposal', execute: 'acceptance' }
+const STAGE_REVIEW_TYPE = { brainstorm: 'design', plan: 'plan', execute: 'acceptance' }
 
 /**
  * 渲染 review.json 产物契约(markdown)给 review 子代理事前看 —— schema 表 + 完整 JSON 示例 +
@@ -243,7 +243,7 @@ export function generateStageReviewRunId() {
  * （同一 stage 不同变更的 review 各自独立 marker）；changeName 缺失时退化为按 stage 分。
  *
  * @param {string} runtimeRoot - .runtime 绝对路径
- * @param {string} stage - brainstorm|plan|propose|execute
+ * @param {string} stage - brainstorm|plan|execute
  * @param {string} [changeName] - 变更名（防多 change 串台）
  * @returns {string} marker 文件绝对路径
  */
@@ -261,7 +261,7 @@ export function stageReviewMarkerPath(runtimeRoot, stage, changeName) {
  * stage-reviews/<stage>-review-* 目录取字典序最新（向后兼容无 marker 旧数据）。
  *
  * @param {string} runtimeRoot - .runtime 绝对路径
- * @param {string} stage - brainstorm|plan|propose|execute
+ * @param {string} stage - brainstorm|plan|execute
  * @param {string} [changeName] - 变更名（读对应 marker，防多 change 串台）
  * @returns {string|null} run id（如 'review-2026-07-16-143000'），无则 null
  */
@@ -314,7 +314,7 @@ export function getLatestStageReviewRunId(runtimeRoot, stage, changeName) {
 }
 
 /**
- * stage-level review 总校验（brainstorm/plan/propose/execute-acceptance 的 done gate）
+ * stage-level review 总校验（brainstorm/plan/execute-acceptance 的 done gate）
  *
  * 规则（与 task-review.validateTaskReviews 对称）：
  *   - review.json 缺失 → error 阻断
@@ -329,7 +329,7 @@ export function getLatestStageReviewRunId(runtimeRoot, stage, changeName) {
  * tier=independent 才调用。
  *
  * @param {object} opts
- * @param {string} opts.stage - brainstorm|plan|propose|execute
+ * @param {string} opts.stage - brainstorm|plan|execute
  * @param {string} opts.reviewType - design|plan|proposal|code|acceptance
  * @param {string} opts.runtimeRoot - .runtime 绝对路径（平台模式为 runtimeRoot）
  * @param {string} opts.reviewRunId - stage review run id（review-<ts>）

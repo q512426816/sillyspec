@@ -53,8 +53,6 @@ console.log('\n=== 各 stage 映射(reviewType + 主文档)===')
 {
   const plan = renderReviewJsonContract({ stage: 'plan', reviewRunId: 'r', tier: 'independent' })
   assert(plan.includes('reviewType=plan') && plan.includes('主审查文档=plan.md'), 'plan: reviewType=plan, mainDoc=plan.md')
-  const propose = renderReviewJsonContract({ stage: 'propose', reviewRunId: 'r', tier: 'independent' })
-  assert(propose.includes('reviewType=proposal') && propose.includes('proposal.md'), 'propose: reviewType=proposal, mainDoc=proposal.md')
   const execute = renderReviewJsonContract({ stage: 'execute', reviewRunId: 'r', tier: 'independent' })
   assert(execute.includes('reviewType=acceptance') && execute.includes('design.md'), 'execute: reviewType=acceptance, mainDoc=design.md')
 }

@@ -257,9 +257,9 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
     }
   }
 
-  // ── Stage Review Gate：brainstorm/plan/propose/execute 独立审查（按 tier 分级）──
+  // ── Stage Review Gate：brainstorm/plan/execute 独立审查（按 tier 分级）──
   // tier=self 放行+审计打印；tier=independent 必须 review.json 且 verdict 非 fail，fail-closed
-  if (['brainstorm', 'plan', 'propose', 'execute'].includes(stageName)) {
+  if (['brainstorm', 'plan', 'execute'].includes(stageName)) {
     try {
       const { classifyReviewTier } = await import('../review-tier.js')
       const { validateStageReview, getLatestStageReviewRunId, printStageReviewResult, generateStageReviewRunId, stageReviewMarkerPath } = await import('../stage-review.js')
@@ -292,7 +292,6 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
         }
         const reviewType = stageName === 'brainstorm' ? 'design'
           : stageName === 'plan' ? 'plan'
-          : stageName === 'propose' ? 'proposal'
           : 'acceptance'
         const searchDirs = [effectiveSpecBase, reviewChangeDir, cwd].filter(Boolean)
         const reviewResult = validateStageReview({ stage: stageName, reviewType, runtimeRoot, reviewRunId, searchDirs })

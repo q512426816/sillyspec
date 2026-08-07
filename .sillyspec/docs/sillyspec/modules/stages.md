@@ -26,7 +26,7 @@ updated_at: 2026-08-06T06:34:27+08:00
 
 每个阶段由 `export const definition = { name, title, description, steps: [...] }` 导出。steps 数组中每个 step 包含 name、prompt、outputHint、optional 字段。CLI 通过 `ProgressManager` 写入 SQLite，并以兼容旧 progress JSON 的对象跟踪每个 step 的执行状态。
 
-**核心阶段**（按流程顺序）：brainstorm → propose → plan → execute → verify → archive
+**核心阶段**（按流程顺序）：brainstorm → plan → execute → verify → archive
 **辅助阶段**：scan、quick、explore、status、doctor
 
 **execute prompt 路径约定**（2026-07-11 占位符化，坑 2）：execute stage prompt 中 review.json / endpoints.json 路径用 `{SPEC_ROOT}/.runtime/` 占位符（非裸 `.sillyspec/.runtime/` 硬编码）。`{SPEC_ROOT}` 由 `run.js` 平台路径重写消费——仓库内模式→`.sillyspec`，平台模式（specDir 指向外部目录）→specDir。修复平台模式下 review.json 落盘路径错位（`execute.js:623/644`）。
@@ -41,7 +41,6 @@ updated_at: 2026-08-06T06:34:27+08:00
 |---|---:|---|
 | scan | 10 | step 2 后按项目动态展开 perProject 步骤 |
 | brainstorm | 13 | 含可选的需求澄清 Grill 和默认执行的 Design Grill 交叉审查 |
-| propose | 7 | `生成规范文件` 与 `自检门控` 是独立步骤 |
 | verify | 7 | 只读验证并写 `verify-result.md` |
 | archive | 5 | 第 4 步必须带 `--confirm` 才移动归档目录 |
 | quick | 3 | 直接在主工作区实现，完成后重置辅助阶段 gate |

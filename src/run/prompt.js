@@ -420,10 +420,10 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
     promptText = promptText.replace(/\{EXECUTE_RUN_ID\}/g, runId)
   }
 
-  // Stage Review Tier：brainstorm/plan/propose/execute 阶段注入审查分级占位符
+  // Stage Review Tier：brainstorm/plan/execute 阶段注入审查分级占位符
   // （scanProfile 只在 scan 生效、change-risk-profile 只管 apply/verify，都不约束这些阶段的审查方式，
   //  故按 plan_level / 变更文件数分级：self 当前 agent 自审，independent 强制独立子代理 + review.json）
-  if (['brainstorm', 'plan', 'propose', 'execute'].includes(stageName) && promptText.includes('{REVIEW_TIER}')) {
+  if (['brainstorm', 'plan', 'execute'].includes(stageName) && promptText.includes('{REVIEW_TIER}')) {
     try {
       const { classifyReviewTier } = await import('../review-tier.js')
       const { generateStageReviewRunId, renderReviewJsonContract, stageReviewMarkerPath } = await import('../stage-review.js')

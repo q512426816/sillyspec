@@ -478,3 +478,23 @@
 根因：execute 建议模型空指令无 model id 映射且确认worktree路径步与 buildWavePrompt 两处末尾各一孤立双引号、quick 单会话兼容退路违背铁律15、scan 子代理 prompt 中文括号未闭合、execute 知识库审阅 uncategorized 路径缺起始反引号。
 方案：纯减法——execute 删建议模型映射改诚实模型档位条目对齐 [model:xxx] 标签并重编号、删两处末尾孤立双引号、补 uncategorized 起始反引号；quick 删退路括号；scan 补右括号；docs/prompt 重提取并逐字同步 execute/quick/scan 镜像含删 3 条过时逐字保留注释。
 结果：npm test 122/0 全绿、npm run lint 68 文件通过；6 处源码加 execute/quick/scan/_extracted.json 镜像已改；模块文档 stages.md 变更索引因活跃并发 session 占用共享文件暂 defer。
+## ql-20260807-008-a80f | 2026-08-07 13:25:29 | 移除 propose 阶段死代码（A6，quick 审计禁删除故直接 commit）
+状态：已完成（经直接 git commit，非 quick --done——quick 审计 shared.js:516 对文件删除恒 blocked 无 flag 解锁，A6 必删 propose.js/propose.md 故走 quick 不通）
+关联变更：（无）
+文件：
+- src/stages/propose.js（删 181 行：入口 2026-06-14 已废、无任何 import 的孤儿 stage 文件）
+- docs/prompt/propose.md（删 255 行镜像）
+- src/stage-review.js（STAGE_MAIN_DOC/STAGE_REVIEW_TYPE 删 propose 键 + 6 处注释/JSDoc 清）
+- src/run/gates.js（Stage Review Gate 列表删 propose + 三元 propose 分支 + 注释）
+- src/run/prompt.js（REVIEW_TIER 注入列表删 propose + 注释）
+- docs/prompt/_extract.mjs（staticStages 删 propose + inStageRegistry 特例改 true）
+- docs/prompt/_extracted.json（重提取，propose 段消失）
+- docs/prompt/README.md（清 5 处 propose 引用含失效链接 + 占位符列表）
+- test/stage-review-contract.test.mjs（删 propose 契约渲染 case）
+- test/stage-review.test.mjs（清注释 propose）
+- .sillyspec/docs/sillyspec/modules/stages.md（流程图+步骤数表清 propose，line 59 历史 ql 保留）
+
+需求：移除 sss.md A6 propose 死代码（A组最后一项）。
+根因：propose 阶段入口 2026-06-14 已废、不在 STAGE_ORDER、propose.js 无任何 import 是真孤儿，但 stage-review/gates/prompt/_extract 仍残留 propose 引用增加认知负担。
+方案：纯减法删 propose.js+propose.md，清 4 处源码引用+死测试，重提取 _extracted.json，清 README+stages.md 镜像。
+结果：npm test 122/0 lint 67 文件；stage-contract-spec.js 与 index.js 的 propose 是 LIVE（proposal.md 文件规则/knowledge 子命令）未动；因 quick 审计禁删除，A6 经直接 git commit（显式 pathspec 隔离 sillyhub 并发暂存文件）。

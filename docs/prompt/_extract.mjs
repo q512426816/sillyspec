@@ -48,12 +48,12 @@ function extractDef(def, auxiliary, extra = {}) {
 const out = {}
 
 // ── 静态阶段（definition.steps 直接定义）──
-const staticStages = ['brainstorm', 'propose', 'verify', 'scan', 'quick', 'explore', 'archive', 'status', 'doctor']
+const staticStages = ['brainstorm', 'verify', 'scan', 'quick', 'explore', 'archive', 'status', 'doctor']
 for (const name of staticStages) {
   const mod = await import(stageUrl(name))
   out[name] = extractDef(mod.definition, AUX.includes(name), {
     sourceFile: `src/stages/${name}.js`,
-    inStageRegistry: name !== 'propose' // propose 不在 stages/index.js 的 registry
+    inStageRegistry: true
   })
 }
 
