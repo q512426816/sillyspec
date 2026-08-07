@@ -462,7 +462,7 @@ status: passed | needs-user-input | blocked | skipped
 1. **按规模生成规范文件**：
    - **scale=large**：在 \`{SPEC_ROOT}/changes/<change-name>/\` 下生成完整四件套（design.md / decisions.md 可选 / proposal.md / requirements.md / tasks.md），实现路径 → \`sillyspec run plan --change <变更名>\`
    - **scale=small**：只生成/补全 design.md（proposal/requirements/tasks 对 quick 无用，不生成），实现路径 → \`sillyspec run quick --linked-changes <变更名>\`
-   - 两种规模都执行 \`git add .sillyspec/\` — 暂存规范文件（不要 commit，由用户通过统一提交工具处理）。**平台模式跳过 git add**（specRoot 不在 sourceRoot 的 git repo 内）
+   - 两种规模都执行 \`git add {SPEC_ROOT}/changes/<change-name>/\` — 暂存本变更的规范文件（精确到变更目录，勿用 .sillyspec/ 整目录——会裹挟其他活跃变更；不要 commit，由用户通过统一提交工具处理）。**平台模式跳过 git add**（specRoot 不在 sourceRoot 的 git repo 内）
 
 2. 生成完成后展示 design.md 摘要 + **规模评估结果（small/large + 一句依据）** + 实现路径建议，告知用户“如有异议直接说，可修改文件、改 scale 或 --reopen 回退”（不暂停，展示完直接 --done）
 
@@ -553,7 +553,7 @@ Then 期望结果
    - \`design.md\`：从 MASTER.md 中提取该包的职责描述（标记为「待设计 - 本包 design 在该包进入 brainstorm 时完善」）
    - \`requirements.md\`：从 MASTER.md 中提取该包的需求范围（标记为「待完善」）
    - \`tasks.md\`：创建空任务列表，标记为「待 plan 阶段展开」
-4. \`git add .sillyspec/\` — 暂存所有新增文件（不要 commit，由用户通过统一提交工具处理）。**平台模式跳过 git add**（specRoot 不在 sourceRoot 的 git repo 内）
+4. \`git add {SPEC_ROOT}/changes/<本步骤创建的各变更包名>/\` — 逐个暂存本步骤新建的变更包（勿用 .sillyspec/ 整目录——会裹挟其他活跃变更；不要 commit，由用户通过统一提交工具处理）。**平台模式跳过 git add**（specRoot 不在 sourceRoot 的 git repo 内）
 5. 后续变更包的骨架文件同样必须包含 \`author: <git-user>\` 和 \`created_at: <now-datetime>\`
 
 ### 输出

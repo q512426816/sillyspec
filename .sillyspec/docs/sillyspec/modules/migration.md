@@ -22,7 +22,7 @@ SillySpec 的文档结构迁移与模块索引管理模块。负责：
 ## 契约摘要
 
 - `migrateDocs(projectDir)` — 迁移旧目录结构：`codebase/` → `scan/`、`changes/archive/` → `archive/`、`knowledge/` → `archive/knowledge-*`、`quicklog/` → `quicklog/`
-- `rebuildModuleMap(cwd)` — 从模块卡片 + 源码重建 `_module-map.yaml`
+- `rebuildModuleMap(cwd, { force })` — 从模块卡片 + 源码重建 `_module-map.yaml`；默认 dry-run 只预览不写 + 打印覆盖预警，`--force` 才真正覆盖（防误跑清空手动维护字段）
 - `showModuleStatus(cwd)` — 展示模块索引状态表（tags/entrypoints/deps/review）
 - `generateDependenciesMd(cwd)` — 从 `_module-map.yaml` 聚合生成 `dependencies.md`
 - `migrateModuleDocs(cwd)` — 旧格式模块卡片 → 新格式（`schema_version` + `doc_type: module-card` frontmatter）
@@ -51,7 +51,7 @@ parseFileChangeList(designMdPath)
 ## 注意事项
 
 - 迁移采用 copy 而非 move，旧文件保留在原位，需手动确认后删除
-- `rebuildModuleMap` 只生成骨架字段（status/doc/needs_review），`tags/entrypoints/main_symbols/depends_on/used_by` 需要重新运行 scan 或手动补充
+- `rebuildModuleMap` 只生成骨架字段（status/doc/needs_review），`tags/entrypoints/main_symbols/depends_on/used_by` 需要重新运行 scan 或手动补充；**默认 dry-run 不覆盖（破坏性保护），`--force` 才写入**
 - `_module-map.yaml` 使用手写 YAML 解析器（非库），格式依赖固定缩进（2 空格模块名、4 空格字段、6 空格数组项）
 - `parseFileChangeList` 返回相对路径，不含 `.sillyspec/` 内路径
 

@@ -526,7 +526,7 @@ INDEX.md 维护索引，格式（每行：关键词1|关键词2 → [条目名](
 3. 自检门控：ARCHITECTURE（技术栈+Schema摘要）、CONVENTIONS（隐形规则+代码风格）、STRUCTURE（目录结构）、INTEGRATIONS（外部依赖）、TESTING（测试现状）、CONCERNS（技术债务）、PROJECT（项目概览）
 4. 检查 flows/ 和 glossary.md 是否已生成（如有）
 5. 清理：\`rm -f {DOCS_ROOT}/scan/_env-detect.md\`
-6. 如果非平台模式：\`git add .sillyspec/\` — 暂存扫描结果（不要 commit，由用户通过统一提交工具处理）。如果平台模式：跳过 git add（specRoot 不在 sourceRoot 的 git repo 内）。
+6. 如果非平台模式：\`git add {DOCS_ROOT}/ {KNOWLEDGE_ROOT}/\` — 暂存本次扫描产物（scan 文档 / 模块文档 / flows / glossary / knowledge；勿用 .sillyspec/ 整目录——会裹挟 changes/ 下其他活跃变更；不要 commit，由用户通过统一提交工具处理）。如果平台模式：跳过 git add（specRoot 不在 sourceRoot 的 git repo 内）。
 
 ### ⛔ 路径合规检查（平台模式下必须执行）
 7. 确认所有文档都写入 \`{DOCS_ROOT}/\`（spec-root 下），**而非源码目录下的 .sillyspec/**

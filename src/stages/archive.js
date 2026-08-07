@@ -126,7 +126,7 @@ module_id: <module-id>
 6. 用户拒绝时，不写入，但提示"module-impact.md 已保留，可稍后手动同步"
 7. 回填 module-impact.md 的"更新结果"表格，区分目标：
    - 目标列写 "\`_module-map.yaml: <module-id>\`" 或 "\`modules/<module-id>.md\`"
-8. **同步完成后**，运行 \`sillyspec modules rebuild\` 刷新索引（如果需要），或手动更新 dependencies.md
+8. **同步完成后**，如需刷新 \`_module-map.yaml\` 索引：\`sillyspec modules rebuild --force\`（默认 dry-run 只预览不写；\`--force\` 才覆盖，但会清空 tags/entrypoints/main_symbols/depends_on/used_by 等手动维护字段——与 archive-impact 的「人工备注保护」约束冲突，仅当手动字段已并入骨架或可接受覆盖时用；优先手动更新 dependencies.md / 模块卡片）
 
 ### 输出
 已更新的文件路径列表 + 用户确认状态`,
@@ -155,8 +155,8 @@ module_id: <module-id>
 
 ### 操作
 1. 如果 \`.sillyspec/ROADMAP.md\` 存在，标记对应 Phase 为已完成
-2. \`git add .sillyspec/changes/\` — 暂存归档结果（不要 commit，由用户通过统一提交工具处理）
-3. \`git add .sillyspec/docs/\` — 暂存模块文档更新（如有）
+2. \`git add .sillyspec/changes/archive/\` — 暂存归档结果（archive/ 下仅本次归档新增，不会裹挟 changes/ 下其他活跃变更；不要 commit，由用户通过统一提交工具处理）
+3. \`git add .sillyspec/docs/<project>/modules/\` — 暂存模块文档更新（如有；精确到本次同步的模块文档，勿 add 整个 .sillyspec/docs/）
 4. 确认 sillyspec.db 中该变更已不再 active（确认归档步骤由 CLI 调用 unregisterChange）
 
 ### 输出

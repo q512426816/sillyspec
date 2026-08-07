@@ -60,7 +60,7 @@ function parseModuleCardFrontmatter(content) {
  *   - verify_commands: 验证命令（build/test/lint）
  *   - related_docs: 关联文档路径
  */
-export async function rebuildModuleMap(cwd) {
+export async function rebuildModuleMap(cwd, { force = false } = {}) {
   const mapPath = findModuleMapPath(cwd);
   if (!mapPath) {
     console.error('❌ 未找到 .sillyspec/docs/<project>/modules/ 目录');
@@ -162,6 +162,13 @@ export async function rebuildModuleMap(cwd) {
     yaml += `\n`;
   }
 
+  // 破坏性保护（multi-agent-platform 坑 modules-rebuild-destructive）：默认 dry-run 只预览不写，--force 才覆盖。
+  if (!force && existingMap) {
+    console.log('⚠️  rebuild 默认不写入（破坏性保护）：该命令会覆盖 _module-map.yaml，清空 tags/entrypoints/main_symbols/depends_on/used_by 等手动维护字段');
+    console.log('    本次为预览，未写入磁盘。确认覆盖请运行：sillyspec modules rebuild --force');
+    return { dryRun: true, path: mapPath }
+  }
+
   writeFileSync(mapPath, yaml, 'utf8');
   console.log(`✅ _module-map.yaml 已重建：${mapPath}`);
   console.log(`   模块数量：${allModuleIds.size}`);
@@ -170,6 +177,7 @@ export async function rebuildModuleMap(cwd) {
   }
   console.log(`\n⚠️  注意：rebuild 只重建骨架。tags/entrypoints/main_symbols/depends_on/used_by 需要重新运行 scan 或手动补充。`);
   console.log(`ℹ️  schema 已升级到 v2，支持 role/core_files/test_files/entrypoints/depends_on/risk_level/verify_commands 等字段。`);
+  return { dryRun: false, path: mapPath, modules: allModuleIds.size }
 }
 
 /**

@@ -52,7 +52,7 @@ function assert(label, condition, detail) {
 
   // 平台模式下 git add 应该是条件判断
   assert('scan 模板平台模式跳过 git add', prompts.includes('如果平台模式：跳过 git add'))
-  assert('scan 模板非平台模式 git add .sillyspec/', prompts.includes('git add .sillyspec/'))
+  assert('scan 模板非平台模式 git add 精确 pathspec', prompts.includes('git add {DOCS_ROOT}/ {KNOWLEDGE_ROOT}/'))
 }
 
 // ── 测试 2：prompt 自检不误杀安全说明 ──

@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-05-31 11:00:00
-updated_at: 2026-08-07T09:50:00+08:00
+updated_at: 2026-08-07T20:35:00+08:00
 ---
 
 # SillySpec 文件生命周期
@@ -227,5 +227,5 @@ execute --done 批量完成（2026-07-28，`run/complete.js`）
 - **工具驾驭复盘 4 坑确定性修复**（2026-08-06，change `2026-08-06-sillyspec-self-tooling-fixes`）：
   - **stage review gate marker 缺失自生**（坑1，`run/gates.js:276`）：tier=independent 且 `getLatestStageReviewRunId` 返回空（execute 批量完成跳过 prompt 渲染、prompt 未落 marker 等场景）时，gate 自身调 `generateStageReviewRunId()` + `stageReviewMarkerPath()` 写盘 + `mkdirSync`，让 gate 读到确定 ID——错误路径从 `execute-null`（不可执行）变为 `execute-review-<review-前缀 id>`（可执行）。补充 gap 6（prompt 渲染时落 marker）的兜底：prompt 路径未走到时 gate 路径自生，两条落 marker 路径互不依赖。marker 文件名 / 位置不变（`current-stage-review-run-id-<stage>(-<change>)`）。
   - **worktree apply 交付物过滤精细化**（坑3，`worktree-apply.js#filterDeliverableFiles`）：apply 时排除 `.sillyspec/changes/` + `.sillyspec/.runtime/` + `.sillyspec/quicklog/` + `meta.json`，**保留 `.sillyspec/docs/`（dogfood 模块规范文档视为交付物，随变更 apply 回主仓）**。原一刀切排除整个 `.sillyspec/` 导致模块文档改动滞留 worktree 分支（exec-g defer 项落地）。`verify-postcheck.js` 改 import `filterDeliverableFiles` 去双写；`index.js` apply / assess 自动 apply 的用户面消息同步为「changes/.runtime/quicklog 不自动 apply，模块文档 docs/ 会自动 apply」。
-  - **archive CLI 下沉 git add**（坑4，`run/complete-handlers.js:137`）：`unregisterChange` 后 CLI 确定性 `safeGit add -- .sillyspec/changes/archive/ + .sillyspec/docs/`，不靠 archive step5 prompt 驱动（step5 prompt 的 `git add .sillyspec/changes/` 保留作幂等兜底）。safeGit 失败不阻断归档（目录已移动 + change 已注销），由 step5 prompt + agent `git status` 核对兜底。
+  - **archive CLI 下沉 git add**（坑4，`run/complete-handlers.js:137`）：`unregisterChange` 后 CLI 确定性 `safeGit add -- .sillyspec/changes/archive/ + .sillyspec/docs/`，不靠 archive step5 prompt 驱动。step5 prompt 的 git add 已精确化（`git add .sillyspec/changes/archive/` + `git add .sillyspec/docs/<project>/modules/`，勿用 changes/ 或 docs/ 整目录——会裹挟其他活跃变更；坑 index-staged-cross-change-contamination），保留作幂等兜底。safeGit 失败不阻断归档（目录已移动 + change 已注销），由 step5 prompt + agent `git status` 核对兜底。
   - 坑5（多代理中间态 import 链污染，D-05）架构级延后入 [ROADMAP.md](../../ROADMAP.md)。

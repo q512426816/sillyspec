@@ -1299,7 +1299,7 @@ SillySpec workflow — 工作流管理
 SillySpec modules — 模块文档管理
 
 用法:
-  sillyspec modules rebuild        从模块卡片 + 源码重建 _module-map.yaml
+  sillyspec modules rebuild [--force]  从模块卡片 + 源码重建 _module-map.yaml（默认 dry-run 预览，--force 才覆盖）
   sillyspec modules status         显示模块索引状态
   sillyspec modules migrate        旧格式模块文档迁移到新格式
 `);
@@ -1307,7 +1307,8 @@ SillySpec modules — 模块文档管理
       }
       if (modulesSub === 'rebuild') {
         const { rebuildModuleMap } = await import('./modules.js');
-        await rebuildModuleMap(dir);
+        const isForce = filteredArgs.includes('--force');
+        await rebuildModuleMap(dir, { force: isForce });
       } else if (modulesSub === 'status') {
         const { showModuleStatus } = await import('./modules.js');
         await showModuleStatus(dir);

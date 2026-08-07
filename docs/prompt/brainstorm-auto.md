@@ -241,7 +241,7 @@ AC-010: 单模块范围内可完成
    - **tasks.md**：任务列表（只列名称，细节在 plan 阶段展开）
 2. 如果 brainstorm/decisions.md 有 AUTO_DECIDED 决策，在变更根目录也写一份 decisions.md
 3. 所有规范文件头部包含 YAML frontmatter
-4. `git add .sillyspec/` — 暂存规范文件（不要 commit）
+4. `git add {SPEC_ROOT}/changes/<change-name>/` — 暂存本变更的规范文件（勿用 .sillyspec/ 整目录——会裹挟其他活跃变更；不要 commit）
 
 ### 输出（摘要）
 规范文件路径列表（各一句话说明）
