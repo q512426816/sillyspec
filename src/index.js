@@ -17,7 +17,7 @@ import { detectLocalYaml } from './local-detect.js';
 // ── CLI 入口 ──
 
 // did-you-mean 从 ./run/shared.js 复用（命令级 + flag 级 typo 建议）。
-import { didYouMean, assertSafeChangeName } from './run/shared.js'
+import { didYouMean, assertSafeChangeName, resolveSpecDir, detectWorktreeSpecDrift } from './run/shared.js'
 function printUsage() {
   console.log(`
 SillySpec CLI — 规范驱动开发工具包
@@ -356,6 +356,15 @@ async function main() {
       // resolveSpecDir(cwd)，向后兼容。
       const gateOpts = { cwd: dir };
       if (specDir) gateOpts.specBase = specDir;
+      // drift 锚定（坑 execute-runs-isolation，对齐 command.js execute drift 守卫 + machine-interface
+      // runGate 已扩展的 specDriftAnchor 入参）：gate 是顶层命令不走 runCommand/drift 守卫，worktree cwd
+      // 下 execute 段 marker 读取会落副本 .runtime。仅在未显式 --spec-dir 时算（对齐守卫条件 !specDir），
+      // 命中则 specDriftAnchor 锚主仓——runGate execute 段的 resolveRuntimeRoot 读主仓
+      // current-execute-run-id marker，不读 worktree 副本（副本随 cleanup 整目录删消失）。
+      if (!specDir) {
+        const wt = detectWorktreeSpecDrift(resolveSpecDir(dir));
+        if (wt) gateOpts.specDriftAnchor = wt.mainSpecBase;
+      }
       const { envelope, exitCode } = await withJsonOutput(json, () => runGate(gateStage, gateChange, gateOpts));
       if (json) {
         process.stdout.write(JSON.stringify(envelope));
@@ -390,6 +399,13 @@ async function main() {
       // 下需透传；不传 --spec-dir 时走默认 resolveSpecDir(cwd)，向后兼容。
       const deriveOpts = { cwd: dir };
       if (specDir) deriveOpts.specBase = specDir;
+      // drift 锚定（同 gate case，对齐 command.js drift 守卫 + machine-interface runDerive 的 specDriftAnchor
+      // 入参）：derive 顶层命令不走 drift 守卫，worktree cwd 下 task-reviews facet 的 execute-run-id marker
+      // 读取会落副本。未显式 --spec-dir 时算 anchor，runDerive task-reviews 的 resolveRuntimeRoot 读主仓 marker。
+      if (!specDir) {
+        const wt = detectWorktreeSpecDrift(resolveSpecDir(dir));
+        if (wt) deriveOpts.specDriftAnchor = wt.mainSpecBase;
+      }
       const { envelope, exitCode } = await withJsonOutput(json, () => runDerive(facet, deriveChange, deriveOpts));
       if (json) {
         process.stdout.write(JSON.stringify(envelope));

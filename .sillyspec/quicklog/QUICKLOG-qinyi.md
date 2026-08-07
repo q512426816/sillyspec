@@ -374,3 +374,15 @@
 根因：bcdbd6d 只统一了 run/* 模块 13 处 runtimeRoot 解析站点，machine-interface 的两处 task-reviews 段（runGate/runDerive）漏改仍用旧公式；producer 侧 e2e 用 --status 只读路径（renderPrompt 未触发 marker 落盘），grep specDriftAnchor 0 命中，specDriftAnchor 真实锚定落点无硬证。
 方案：① machine-interface.js 加 import resolveRuntimeRoot；runGate/runDerive 各扩 specDriftAnchor 入参（向后兼容，未传则 resolveRuntimeRoot 第三级本地兜底，行为同旧公式），两处旧公式统一改调 resolveRuntimeRoot({runtimeRoot,specDriftAnchor},specRoot)，调用方职责是 drift 场景传 anchor。② worktree-execute-spec-drift 场景 A 追加真实 execute step：预置 in-place-fallback worktree meta（depsStatus='n/a'，跳过 wm.create——临时 fixture 非 git 仓库 wm.create 必败）；用 getStageSteps('execute', wtRoot, progress, null) 探测 acceptance step（{REVIEW_TIER}）真实 index（与 runStage 真实渲染 defSteps 同参同构，避开幻影 wave step 偏移，不硬编码魔法数字）；推进 progress 到 acceptance 后跑真实 execute step（renderPrompt 触发 {EXECUTE_RUN_ID}+{STAGE_REVIEW_RUN_ID} 两处 marker 落盘），断言 execute marker + stage review marker 均落主仓 .runtime、副本 .runtime 无任何 marker。
 结果：machine-interface 102/102、worktree-execute-spec-drift 16/16（新增 AC-A7..A13 全过）、全量 npm test exit 0、lint 68 文件 0 错；同步 machine-interface.md 模块文档（签名扩 specDriftAnchor + 注意事项补 resolveRuntimeRoot 三级解析语义）。producer 侧 e2e 硬证补齐，specDriftAnchor 锚定落点（execute marker + stage review marker 落主仓）有真实断言覆盖。
+
+## ql-20260807-001-a260 | 2026-08-07 08:36:49 | gate/derive 顶层命令在 worktree cwd 下补 spec drift 锚定
+状态：已完成
+关联变更：（无）
+文件：
+- src/index.js（gate/derive case 未显式 --spec-dir 时 detectWorktreeSpecDrift(resolveSpecDir(dir)) 命中即向 runGate/runDerive 传 specDriftAnchor=wt.mainSpecBase；顶部 import 补 resolveSpecDir/detectWorktreeSpecDrift；对齐 command.js drift 守卫条件 !specDir + machine-interface 已扩展入参）
+- test/gate-derive-spec-drift.test.mjs（新建 e2e，3 场景 13 断言：derive task-reviews drift+anchor 读主仓 marker / --spec-dir 副本负对照读副本 marker / gate execute task-reviews check 读主仓；抓手=validateTaskReviews 缺 review error 文本含 executeRunId，暴露所读 marker 的 runId）
+- .sillyspec/docs/sillyspec/modules/cli-entry.md（关键逻辑增补「gate/derive 顶层命令 drift 锚定」段 + 底部新建变更索引追加 ql-20260807-001-a260）
+需求：gate/derive 顶层命令在 worktree cwd 下补 spec drift 锚定，使 execute/task-reviews marker 读主仓 .runtime，不读随 cleanup 消失的副本。
+根因：gate/derive 是顶层命令不经 runCommand，command.js 的 drift 守卫（detectWorktreeSpecDrift 设 specDriftAnchor，只覆盖 plan/execute/verify/archive）不触发，worktree cwd 下 runGate/runDerive 的 resolveRuntimeRoot 走本地兜底读副本 marker。
+方案：src/index.js gate/derive case 在未显式 --spec-dir 时调 detectWorktreeSpecDrift(resolveSpecDir(dir))，命中即向 runGate/runDerive 传 specDriftAnchor=wt.mainSpecBase（对齐 machine-interface 已扩展入参 + command.js 守卫条件 !specDir）；新增 test/gate-derive-spec-drift.test.mjs 3 场景 e2e（derive drift+anchor 读主仓 / --spec-dir 副本负对照读副本 / gate execute task-reviews 读主仓，抓手=validateTaskReviews 缺 review error 文本含 executeRunId）。
+结果：新测试 13/13 通过；npm test exit 0 无回归（runner 自动发现新测试）；npm run lint 通过；同步 cli-entry.md 关键逻辑增补段 + 变更索引。
