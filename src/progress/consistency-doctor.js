@@ -3,7 +3,7 @@
 // pm._ensureRuntimeDir / pm._runtimePath（persistence-core 留 facade 本体）。
 import { appendFileSync } from 'fs';
 import { existsSync } from 'fs';
-import { STAGE_ORDER } from './shared.js';
+import { STAGE_ORDER, MAIN_FLOW_ORDER } from './shared.js';
 
 export class ConsistencyDoctor {
   constructor(pm) {
@@ -71,9 +71,11 @@ export class ConsistencyDoctor {
       }
 
       // d. 下游 completed 不能出现在上游 stale/revising 之后
-      const stageIdx = STAGE_ORDER.indexOf(stageName);
+      // 用 MAIN_FLOW_ORDER（不含 scan）算上下游：scan 是 auxiliary 永不要求 completed，
+      // 把 scan 当上游会让「scan stale/revising」误报 brainstorm 不该 completed（plan-c 同根因）。
+      const stageIdx = MAIN_FLOW_ORDER.indexOf(stageName);
       for (let i = 0; i < stageIdx; i++) {
-        const upstream = STAGE_ORDER[i];
+        const upstream = MAIN_FLOW_ORDER[i];
         const upData = data.stages[upstream];
         if (upData && (upData.status === 'stale' || upData.status === 'revising')) {
           if (sd.status === 'completed') {
@@ -156,10 +158,10 @@ export class ConsistencyDoctor {
         });
       }
 
-      // Fix b: 上游 stale/revising，下游仍 completed → cascade stale
-      const stageIdx = STAGE_ORDER.indexOf(stageName);
+      // Fix b: 上游 stale/revising，下游仍 completed → cascade stale（同 d，用 MAIN_FLOW_ORDER 排除 scan）
+      const stageIdx = MAIN_FLOW_ORDER.indexOf(stageName);
       for (let i = 0; i < stageIdx; i++) {
-        const upstream = STAGE_ORDER[i];
+        const upstream = MAIN_FLOW_ORDER[i];
         const upData = data.stages[upstream];
         if (upData && (upData.status === 'stale' || upData.status === 'revising')) {
           if (sd.status === 'completed') {

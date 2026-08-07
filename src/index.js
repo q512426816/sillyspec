@@ -676,6 +676,7 @@ SillySpec worktree — git worktree 隔离管理
   sillyspec worktree create <change-name> [--base <branch>]   创建隔离 worktree
   sillyspec worktree apply <change-name> [--check-only]        校验并应用变更到主工作区
   sillyspec worktree assess <change-name>                     风险审计 + 自动 apply
+  sillyspec worktree diff <change-name> [--base <commit>]      查看 worktree 相对 base 的变更
   sillyspec worktree list                                      列出所有活跃 worktree
   sillyspec worktree meta <change-name>                        读取 worktree meta.json
   sillyspec worktree cleanup <change-name> [--force]           强制清理 worktree
@@ -833,6 +834,39 @@ SillySpec worktree — git worktree 隔离管理
           console.log('');
           console.log('JSON:');
           console.log(JSON.stringify(meta, null, 2));
+          break;
+        }
+        case 'diff': {
+          if (!wtName) {
+            console.error('❌ 用法: sillyspec worktree diff <change-name> [--base <commit>]');
+            process.exit(1);
+          }
+          const meta = wm.getMeta(wtName);
+          if (!meta) {
+            console.error(`❌ 未找到 worktree meta: ${wtName}（可能未创建或已被清理）`);
+            process.exit(1);
+          }
+          if (!meta.worktreePath || !existsSync(meta.worktreePath)) {
+            console.error(`❌ worktree 目录不存在: ${meta.worktreePath || '(未设置)'}（可能已被清理，可跑 sillyspec worktree doctor）`);
+            process.exit(1);
+          }
+          // base 优先级：显式 --base > meta.baseHash（create 时锚的主仓 HEAD）> 当前 HEAD。
+          // diff 比较 worktree 工作区（含未提交）vs base，与 _changesAlreadyOnMain 同口径。
+          const baseIdx = filteredArgs.indexOf('--base');
+          const explicitBase = baseIdx >= 0 ? filteredArgs[baseIdx + 1] : null;
+          const base = explicitBase || meta.baseHash || 'HEAD';
+          let out = '';
+          try {
+            out = execSync(`git -C "${meta.worktreePath}" --no-pager diff --no-renames ${base}`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
+          } catch (e) {
+            console.error(`❌ git diff 失败（base=${String(base).slice(0, 8)}）: ${e.message}`);
+            process.exit(1);
+          }
+          if (!out.trim()) {
+            console.log(`（无变更：worktree 工作区与 base ${String(base).slice(0, 8)} 一致）`);
+          } else {
+            process.stdout.write(out);
+          }
           break;
         }
         case 'list': {

@@ -18,10 +18,13 @@ export const STAGE_LABELS = {
   archive: '📦 归档变更',
 };
 
-// 完整主流程顺序（含 scan），用于下游 cascade / 一致性检查
+// 完整阶段顺序（含 scan），仅用于展示/迭代顺序
 export const STAGE_ORDER = ['scan', 'brainstorm', 'plan', 'execute', 'verify', 'archive'];
-// 主流程阶段（不含 scan/quick/explore 等辅助阶段）—— 当前与 STAGE_ORDER 同值
-export const MAIN_FLOW_ORDER = STAGE_ORDER;
+// 主流程阶段（不含 scan/quick/explore 等辅助阶段）—— 用于下游 cascade / 一致性上下游判定。
+// scan 是 auxiliary（AUXILIARY_STAGES，按需显式跑、可 failed_post_check、永不要求 completed），
+// 把它算进主流程上下游会让「scan stale/revising」误报 brainstorm/plan/execute 不该 completed
+// （consistency-doctor 坑 + prompt-control-debt plan-c 同根因）。
+export const MAIN_FLOW_ORDER = ['brainstorm', 'plan', 'execute', 'verify', 'archive'];
 
 // progress 数据版本（v3 = SQLite）
 export const CURRENT_VERSION = 3;

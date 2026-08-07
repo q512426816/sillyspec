@@ -136,15 +136,16 @@ AC-010: 单模块范围内可完成
       prompt: `将设计方案写入文件（artifact-first），不回显正文。
 
 ### 操作
-1. 确保变更目录存在：\`mkdir -p .sillyspec/changes/<change-name>/brainstorm\`
+1. 确保变更目录存在：\`mkdir -p .sillyspec/changes/<change-name>\`
 2. **直接将设计方案写入文件，不要先在对话中输出完整内容再写文件。**
+3. 产物写入**变更根目录**（\`.sillyspec/changes/<change-name>/\`），不要建 \`brainstorm/\` 子目录——stage validator 只认根目录，写进子目录会在 \`--done\` 校验时被判产物缺失。
 
 ### 产物文件
 
-#### design.md（必填，写入 \`brainstorm/design.md\`）
+#### design.md（必填，写入变更根目录 \`design.md\`）
 包含：背景、设计目标、非目标、总体方案、文件变更清单、接口定义、数据模型（如涉及）、兼容策略（brownfield）、风险登记、决策追踪。
 
-#### decisions.md（必填，写入 \`brainstorm/decisions.md\`）
+#### decisions.md（必填，写入变更根目录 \`decisions.md\`）
 记录所有决策：
 \`\`\`markdown
 ## D-001@v1: 决策短标题
@@ -160,13 +161,13 @@ AC-010: 单模块范围内可完成
 - evidence: 代码/文档路径或用户回答轮次
 \`\`\`
 
-#### gaps.md（必填，写入 \`brainstorm/gaps.md\`）
+#### gaps.md（必填，写入变更根目录 \`gaps.md\`）
 记录已识别的缺口。status=BLOCKER 的缺口会在 plan-postcheck 中触发回退。
 
-#### assumptions.md（必填，写入 \`brainstorm/assumptions.md\`）
+#### assumptions.md（必填，写入变更根目录 \`assumptions.md\`）
 记录隐含假设和验证方法。
 
-#### next-action.json（必填，写入 \`brainstorm/next-action.json\`）
+#### next-action.json（必填，写入变更根目录 \`next-action.json\`）
 \`\`\`json
 {
   "status": "ready_for_plan" | "waiting_for_user",
@@ -189,12 +190,12 @@ AC-010: 单模块范围内可完成
 ### 输出（artifact-first）
 只输出摘要：
 \`\`\`
-已生成设计产物（5 个文件）：
-- brainstorm/design.md — 采用 xxx 方案，涉及 N 个文件变更
-- brainstorm/decisions.md — M 个决策，K 个 AUTO_DECIDED
-- brainstorm/gaps.md — J 个缺口，0 个 BLOCKER
-- brainstorm/assumptions.md — L 个假设
-- brainstorm/next-action.json — ready_for_plan / waiting_for_user
+已生成设计产物（5 个文件，均在变更根目录）：
+- design.md — 采用 xxx 方案，涉及 N 个文件变更
+- decisions.md — M 个决策，K 个 AUTO_DECIDED
+- gaps.md — J 个缺口，0 个 BLOCKER
+- assumptions.md — L 个假设
+- next-action.json — ready_for_plan / waiting_for_user
 \`\`\``,
       outputHint: '产物摘要',
       optional: false
@@ -207,13 +208,12 @@ AC-010: 单模块范围内可完成
       prompt: `生成 proposal.md / requirements.md / tasks.md，让用户确认。
 
 ### 操作
-1. 基于 brainstorm/ 下的设计产物，生成规范文件（直接写文件）：
+1. 基于变更根目录下的设计产物（design.md / decisions.md / gaps.md / assumptions.md / next-action.json），生成规范文件（直接写入变更根目录）：
    - **proposal.md**：动机、关键问题、变更范围、不在范围内、成功标准
    - **requirements.md**：角色表 + FR 编号需求 + Given/When/Then + 非功能需求
    - **tasks.md**：任务列表（只列名称，细节在 plan 阶段展开）
-2. 如果 brainstorm/decisions.md 有 AUTO_DECIDED 决策，在变更根目录也写一份 decisions.md
-3. 所有规范文件头部包含 YAML frontmatter
-4. \`git add {SPEC_ROOT}/changes/<change-name>/\` — 暂存本变更的规范文件（勿用 .sillyspec/ 整目录——会裹挟其他活跃变更；不要 commit）
+2. 所有规范文件头部包含 YAML frontmatter
+3. \`git add {SPEC_ROOT}/changes/<change-name>/\` — 暂存本变更的规范文件（勿用 .sillyspec/ 整目录——会裹挟其他活跃变更；不要 commit）
 
 ### 输出（摘要）
 规范文件路径列表（各一句话说明）

@@ -214,7 +214,6 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
   const waitReason = getFlagValue('--reason')
   const waitOptions = getFlagValue('--options')
   const continueAnswer = getFlagValue('--answer')
-  const confirmMode = getFlagValue('--confirm-mode')
   const resolvedSpecDir = specDir || getFlagValue('--spec-dir') || getFlagValue('--spec-root')
   const platformOpts = {
     specRoot: resolvedSpecDir ? resolve(resolvedSpecDir) : null,
@@ -785,7 +784,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
   // --done
   if (isDone) {
     const doneAnswer = getFlagValue('--answer')
-    return await completeStep(pm, progress, stageName, cwd, outputText, inputText, { confirm: isConfirm, changeName: effectiveChange, nonInteractive: isNonInteractive && !isInteractive, platformOpts, confirmMode, doneAnswer, isForceBaseline, isAllowNew })
+    return await completeStep(pm, progress, stageName, cwd, outputText, inputText, { confirm: isConfirm, changeName: effectiveChange, nonInteractive: isNonInteractive && !isInteractive, platformOpts, doneAnswer, isForceBaseline, isAllowNew })
   }
 
   // 默认：输出当前步骤

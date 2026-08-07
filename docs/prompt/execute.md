@@ -146,10 +146,7 @@ worktree 路径 + 分支名 + 模式
 ### 操作
 1. 从 plan 中解析 Wave 分组和任务列表
 2. 模型档位：若 tasks.md 中某 task 标注了 [model:xxx]，启动该 task 子代理时按标签选模型（档位由 plan 阶段或用户在 tasks.md 显式标注，execute 不在此自动建议——关键词→档位无统一映射，自动建议反而易误导）
-3. 读取 `--confirm-mode` 参数（由 CLI 传入，不需要询问用户）：
-   - wave — 每个 Wave 完成后展示结果（默认）
-   - task — 每个 Task 完成后展示结果
-   - auto — 全部自动执行
+3. 确认频率：默认每个 Wave 完成后展示结果（wave 模式）；用户口头指定按 Task 展示或全自动时遵从
 4. 查询知识库：读取 `.sillyspec/knowledge/INDEX.md`，根据 Task 关键词匹配
 
 ### 知识命中报告
@@ -159,8 +156,7 @@ worktree 路径 + 分支名 + 模式
 如无命中条目（Status: no matches），跳过本节。
 
 ### 铁律
-- **不要询问用户确认频率**，确认模式由 CLI `--confirm-mode` 参数决定
-- 如果未检测到 `--confirm-mode`，默认使用 wave 模式
+- **不要询问用户确认频率**，默认 wave 模式；用户已明确口头指定时遵从其指定
 ````
 
 ---
@@ -389,6 +385,9 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
 3. 运行 lint 检查 **+ 格式化**：凡变更涉及的源码，既跑 lint check 也跑 formatter（如 `ruff format` / `prettier --write` / `black`），不要只跑 check——只 check 不 format 会把格式问题留到 commit 时被 pre-commit hook 拦截
 4. 如果有测试失败 → 分析原因，标注是代码问题还是测试本身的问题
 5. 汇总测试结果
+
+### 铁律
+- 长测试/构建/lint 命令必须**前台同步执行**，禁止 run_in_background:true / & / nohup / disown——后台任务易被会话生命周期回收导致中断无果
 
 ### 输出
 测试结果摘要：通过/失败/跳过数量 + 失败项分析

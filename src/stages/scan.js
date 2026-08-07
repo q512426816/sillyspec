@@ -38,6 +38,9 @@ export const definition = {
     },
     {
       name: '构建扫描项目列表',
+      conditionalWait: true,
+      waitReason: '等待用户确认扫描项目列表',
+      waitOptions: ['全部重新扫描', '只补缺失', '跳过'],
       prompt: `确定本次要扫描的项目列表。
 
 ### 操作
@@ -330,6 +333,9 @@ _module-map.yaml 生成结果（已存在/已生成/模块列表）`,
     {
       name: '生成模块卡片文档',
       perProject: true,
+      conditionalWait: true,
+      waitReason: '检测到已有模块文档覆盖风险',
+      waitOptions: ['只生成缺失', '全部重新生成', '跳过'],
       prompt: `根据当前项目的 \`_module-map.yaml\` 生成模块卡片文档。
 
 ### ⚠️ 重要：模块卡片只负责人类语义说明

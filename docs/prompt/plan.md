@@ -285,7 +285,10 @@ plan_level + 计划内容（审查在下一步独立进行）
 - id：`review_plan`
 - optional：false
 - outputHint：plan 审查结果（self=清单 / independent=review.json 路径+verdict）
-- 等待配置：无（可直接 --done）
+- 等待配置：
+  - conditionalWait：true
+  - waitReason：等待用户确认计划后进入执行
+  - waitOptions：`确认，进入执行` / `需要调整`
 
 **本步出现的运行时占位符**
 - `{SPEC_ROOT}` → 常规模式 `cwd/.sillyspec`；平台模式 `specRoot`
@@ -299,6 +302,12 @@ plan_level + 计划内容（审查在下一步独立进行）
 
 ````markdown
 对上一步生成的 plan.md 做审查。生成与审查分离——不在生成 plan 的同一上下文里自审，避免确认偏差。
+
+### 执行前确认门（plan_level=full 时）
+plan.md 审查通过后、进入 execute 前，若 plan_level=full（跨模块/大变更），必须先向用户展示计划摘要并等待确认，不要让 AI 默认共识擅自开工：
+- 展示：Wave 分组 + task 总数 + 关键 allowed_paths 边界 + 依赖说明（一两屏内，不贴全文）
+- 调用：`sillyspec run plan --wait --reason "等待用户确认计划" --options "确认，进入执行,需要调整" --output "计划摘要"`
+- 用户确认后再 --done；plan_level=none/light（小变更）无需等待，正常完成即可
 
 ### 当前审查分级（CLI 按变更规模判定，占位符由 run.js 注入）
 tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
@@ -314,6 +323,7 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
 - [ ] 没有实现细节泄漏到 plan.md（接口签名/代码示例应在 tasks/task-NN.md）
 - [ ] 关键路径与 Wave 依赖合理（无循环依赖、无遗漏前置）
 - [ ] 连带测试归属：本批改动是否会导致既有测试断言失效（改共享/被多 task 依赖源文件、改被测试精确匹配的值如 UI 文案/按钮文本/错误信息/常量/枚举字面量、改函数签名或返回结构等单文件场景）？此类 task 是否在 related_tests 声明了失效测试、且路径在 allowed_paths 内（或由独立测试 task 覆盖）？（漏声明 = execute 阶段测试债、主代理事后兜底）
+- [ ] acceptance 字段对照实际 schema/类型源文件核验存在性与形态，不凭 design.md 文字臆断（plan-postcheck best-effort grep 会给 allowed_paths 源文件未命中的 snake_case/camelCase 标识符提 warning，此处是语义层复查；臆断 = execute 阶段返工）
 
 ### tier=independent 时：启动 plan-review 子代理
 用 Agent tool 启动子代理（subagent_type: general），prompt 要点：

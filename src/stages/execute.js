@@ -187,10 +187,7 @@ worktree 路径 + 分支名 + 模式
 ### 操作
 1. 从 plan 中解析 Wave 分组和任务列表
 2. 模型档位：若 tasks.md 中某 task 标注了 [model:xxx]，启动该 task 子代理时按标签选模型（档位由 plan 阶段或用户在 tasks.md 显式标注，execute 不在此自动建议——关键词→档位无统一映射，自动建议反而易误导）
-3. 读取 \`--confirm-mode\` 参数（由 CLI 传入，不需要询问用户）：
-   - wave — 每个 Wave 完成后展示结果（默认）
-   - task — 每个 Task 完成后展示结果
-   - auto — 全部自动执行
+3. 确认频率：默认每个 Wave 完成后展示结果（wave 模式）；用户口头指定按 Task 展示或全自动时遵从
 4. 查询知识库：读取 \`.sillyspec/knowledge/INDEX.md\`，根据 Task 关键词匹配
 
 ### 知识命中报告
@@ -200,8 +197,7 @@ worktree 路径 + 分支名 + 模式
 如无命中条目（Status: no matches），跳过本节。
 
 ### 铁律
-- **不要询问用户确认频率**，确认模式由 CLI \`--confirm-mode\` 参数决定
-- 如果未检测到 \`--confirm-mode\`，默认使用 wave 模式`,
+- **不要询问用户确认频率**，默认 wave 模式；用户已明确口头指定时遵从其指定`,
     outputHint: 'Wave 分组 + 模型分配',
     optional: false
   }

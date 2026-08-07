@@ -328,10 +328,16 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
           }
         } catch {}
         if (!executeRunId) {
-          const { generateExecuteRunId } = await import('../task-review.js')
-          executeRunId = generateExecuteRunId()
-          // 落盘（marker 缺失时 fallback 生成后写盘，保证后续 checkbox/gate 读到同一 ID）
-          try { mkdirSync(runtimeRoot, { recursive: true }); writeFileSync(runIdFile, executeRunId + '\n') } catch {}
+          // marker 缺失：先扫描 execute-runs/ 既有目录找回真实 runId（与 getLatestStageReviewRunId
+          // 目录扫描兜底同语义），避免 marker 丢失而 agent 已用旧 runId 落盘时，直接 generate 新 ID
+          // 找不到旧 review、误判缺 review.json。仅当确实无既有 run 才 generate 新 ID 并落盘。
+          const { generateExecuteRunId, resolveLatestExecuteRunId } = await import('../task-review.js')
+          executeRunId = resolveLatestExecuteRunId({ runtimeRoot, changeName }) || ''
+          if (!executeRunId) {
+            executeRunId = generateExecuteRunId()
+            // 落盘（marker 缺失时 fallback 生成后写盘，保证后续 checkbox/gate 读到同一 ID）
+            try { mkdirSync(runtimeRoot, { recursive: true }); writeFileSync(runIdFile, executeRunId + '\n') } catch {}
+          }
         }
 
         // git 真实性校验目录：worktree 存在则用 worktree（base/head commit 在其中），否则主仓库

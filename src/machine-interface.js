@@ -20,7 +20,7 @@ import { join } from 'path';
 import { ProgressManager, resolveSpecDir } from './progress.js';
 import { resolveRuntimeRoot } from './run/shared.js';
 import { runValidators, checkTransition, checkExecuteCodeEvidence } from './stage-contract.js';
-import { validateTaskReviews } from './task-review.js';
+import { validateTaskReviews, resolveLatestExecuteRunId } from './task-review.js';
 import { runVerifyTestCheck } from './verify-postcheck.js';
 
 // ============ 退出码常量（D-004@v1）============
@@ -113,6 +113,22 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
   const pm = new ProgressManager();
 
   try {
+    // ── 只读契约守卫（D-002@v1）：db 不存在时 fail-closed 返回 exit 2，不触发建库落盘 ──
+    // pm.read → _ensureDB → db.init() 在 db 不存在/schema 戳落后时会 _createSchema + _save 落盘
+    // （db.js:init），这会让一个声明只读的查询命令在 spec 目录凭空建 sillyspec.db，违反只读契约。
+    // db 还没建 = 该变更从未跑过流程，无从核验 → 显式返回「无法核验」而非建库。
+    const dbPath = join(resolveSpecDir(cwd), '.runtime', 'sillyspec.db');
+    if (!existsSync(dbPath)) {
+      const envelope = buildEnvelope({
+        command: 'gate',
+        stage,
+        change: changeName,
+        ok: false,
+        errors: [`无法核验：进度库不存在（${dbPath}）——变更 ${changeName} 尚未运行过任何阶段，只读 gate 不会为其建库`],
+      });
+      return { envelope, exitCode: EXIT_UNKNOWN };
+    }
+
     // ── 读进度：变更不存在 → exit 2（D-004@v1）──
     const progress = await pm.read(cwd, changeName);
     if (!progress) {
@@ -188,12 +204,11 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
       // drift 场景经 resolveRuntimeRoot 三级优先级解析（runtimeRoot > specDriftAnchor > 本地兜底），
       // 锚主仓 .runtime，不读 worktree 副本（坑 execute-runs-isolation，与 contract-matrix 调用方同语义）
       const rtRoot = resolveRuntimeRoot({ runtimeRoot, specDriftAnchor }, specRoot);
-      const runIdFile = join(rtRoot, `current-execute-run-id-${changeName}`);
+      // marker 缺失/为空时先扫描 execute-runs/ 找回真实 runId（与 gates.js #6 同源），
+      // 避免拿 '' 进 validateTaskReviews 拼出 execute-runs//tasks/... 产出全量误导 errors。
       let executeRunId = '';
       try {
-        if (existsSync(runIdFile)) {
-          executeRunId = readFileSync(runIdFile, 'utf8').trim();
-        }
+        executeRunId = resolveLatestExecuteRunId({ runtimeRoot: rtRoot, changeName }) || '';
       } catch {
         executeRunId = '';
       }
@@ -338,6 +353,19 @@ export async function runDerive(facet, changeName, { cwd, specBase, runtimeRoot,
   const pm = new ProgressManager();
 
   try {
+    // ── 只读契约守卫（D-002@v1，同 runGate）：db 不存在时 fail-closed 返回 exit 2，不建库落盘 ──
+    const dbPath = join(resolveSpecDir(cwd), '.runtime', 'sillyspec.db');
+    if (!existsSync(dbPath)) {
+      const envelope = buildEnvelope({
+        command: 'derive',
+        facet,
+        change: changeName,
+        ok: false,
+        errors: [`无法核验：进度库不存在（${dbPath}）——变更 ${changeName} 尚未运行过任何阶段，只读 derive 不会为其建库`],
+      });
+      return { envelope, exitCode: EXIT_UNKNOWN };
+    }
+
     // ── 读进度：变更不存在 → exit 2 ──
     const progress = await pm.read(cwd, changeName);
     if (!progress) {
@@ -409,12 +437,10 @@ export async function runDerive(facet, changeName, { cwd, specBase, runtimeRoot,
 
         // drift 场景经 resolveRuntimeRoot 三级优先级解析（同 runGate execute 段），锚主仓 .runtime 不读副本
         const rtRoot = resolveRuntimeRoot({ runtimeRoot, specDriftAnchor }, specRoot);
-        const runIdFile = join(rtRoot, `current-execute-run-id-${changeName}`);
+        // marker 缺失/为空时先扫描 execute-runs/ 找回真实 runId（同 runGate execute 段），避免拿 '' 误导校验
         let executeRunId = '';
         try {
-          if (existsSync(runIdFile)) {
-            executeRunId = readFileSync(runIdFile, 'utf8').trim();
-          }
+          executeRunId = resolveLatestExecuteRunId({ runtimeRoot: rtRoot, changeName }) || '';
         } catch {
           executeRunId = '';
         }

@@ -601,6 +601,34 @@ export function generateExecuteRunId() {
 }
 
 /**
+ * 解析最新 execute run id：优先 current-execute-run-id-<changeName> marker；
+ * marker 缺失/为空则扫描 execute-runs/ 下子目录、取 mtime 最新的（尽力定位已有 run）。
+ *
+ * 与 getLatestStageReviewRunId 的目录扫描兜底同语义——避免 marker 丢失（cleanup/并行/手删）
+ * 而 agent 已用旧 runId 落了 execute-runs/<旧ID>/ 时，调用方直接 generate 新 ID 找不到旧 review、
+ * 误判缺 review.json（gates.js execute 完成门坑）。返回 null 表示既无 marker 也无既有 run 目录。
+ *
+ * @param {{ runtimeRoot: string, changeName: string }} opts
+ * @returns {string|null} runId（exec- 前缀），无则 null
+ */
+export function resolveLatestExecuteRunId({ runtimeRoot, changeName }) {
+  const marker = join(runtimeRoot, `current-execute-run-id-${changeName}`)
+  try { if (existsSync(marker)) { const c = readFileSync(marker, 'utf8').trim(); if (c) return c } } catch {}
+  try {
+    const runsDir = join(runtimeRoot, 'execute-runs')
+    if (existsSync(runsDir)) {
+      const entries = readdirSync(runsDir)
+        .map(e => ({ e, p: join(runsDir, e) }))
+        .filter(x => { try { return statSync(x.p).isDirectory() } catch { return false } })
+        .map(x => ({ e: x.e, mtime: statSync(x.p).mtimeMs }))
+        .sort((a, b) => b.mtime - a.mtime)
+      if (entries.length > 0) return entries[0].e
+    }
+  } catch {}
+  return null
+}
+
+/**
  * worktree execute「主 agent 直接实现」模式收尾兜底：per-task review.json 缺失时，
  * 据 git diff base..head 按 task allowed_paths 归属，自动落盘 cannot_verify 草稿。
  *

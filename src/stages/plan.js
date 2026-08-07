@@ -308,7 +308,16 @@ plan_level + 计划内容（审查在下一步独立进行）`,
 const stepReviewPlan = {
   id: 'review_plan',
   name: '审查计划',
+  conditionalWait: true,
+  waitReason: '等待用户确认计划后进入执行',
+  waitOptions: ['确认，进入执行', '需要调整'],
   prompt: `对上一步生成的 plan.md 做审查。生成与审查分离——不在生成 plan 的同一上下文里自审，避免确认偏差。
+
+### 执行前确认门（plan_level=full 时）
+plan.md 审查通过后、进入 execute 前，若 plan_level=full（跨模块/大变更），必须先向用户展示计划摘要并等待确认，不要让 AI 默认共识擅自开工：
+- 展示：Wave 分组 + task 总数 + 关键 allowed_paths 边界 + 依赖说明（一两屏内，不贴全文）
+- 调用：\`sillyspec run plan --wait --reason "等待用户确认计划" --options "确认，进入执行,需要调整" --output "计划摘要"\`
+- 用户确认后再 --done；plan_level=none/light（小变更）无需等待，正常完成即可
 
 ### 当前审查分级（CLI 按变更规模判定，占位符由 run.js 注入）
 tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）

@@ -350,9 +350,9 @@ console.log('\n--- Bonus: 多次 reopen revision 递增 ---')
 }
 
 // ─────────────────────────────────────────
-// Bonus: scan reopen → brainstorm cascade
+// Bonus: scan reopen 不 cascade（scan 是 auxiliary，不在 MAIN_FLOW_ORDER 上下游）
 // ─────────────────────────────────────────
-console.log('\n--- Bonus: scan reopen 应 cascade 到 brainstorm ---')
+console.log('\n--- Bonus: scan reopen 不应 cascade 到 brainstorm ---')
 {
   const { cwd } = createTempProject()
   const changeName = 'rev-test-scan'
@@ -365,7 +365,10 @@ console.log('\n--- Bonus: scan reopen 应 cascade 到 brainstorm ---')
 
   const data = await pm.read(cwd, changeName)
   assert(data.stages['scan'].status === 'revising', 'scan 应为 revising')
-  assert(data.stages['brainstorm'].status === 'stale', 'brainstorm 应被 cascade 为 stale')
+  // scan 是 auxiliary（AUXILIARY_STAGES），不在 MAIN_FLOW_ORDER 主流程上下游——
+  // reopen scan 不 cascade brainstorm（否则「重扫代码」会误伤所有下游主流程阶段，
+  // 且与 consistency-doctor 不把 scan 当上游的判定同源）。prompt-control-debt plan-c。
+  assert(data.stages['brainstorm'].status === 'completed', 'brainstorm 不应被 scan cascade（scan 是 auxiliary 非主流程上游）')
 }
 
 // ─────────────────────────────────────────

@@ -60,7 +60,10 @@
 **元数据**
 - optional：false
 - outputHint：结构化项目列表（YAML block 或 BEGIN_PROJECT_LIST）
-- 等待配置：无（可直接 --done）
+- 等待配置：
+  - conditionalWait：true
+  - waitReason：等待用户确认扫描项目列表
+  - waitOptions：`全部重新扫描` / `只补缺失` / `跳过`
 
 **本步出现的运行时占位符**
 - `{PROJECTS_ROOT}` → 常规模式 `cwd/.sillyspec/projects`；平台模式 `specRoot/projects`
@@ -422,7 +425,10 @@ _module-map.yaml 生成结果（已存在/已生成/模块列表）
 **元数据**
 - optional：true
 - outputHint：模块文档生成状态
-- 等待配置：无（可直接 --done）
+- 等待配置：
+  - conditionalWait：true
+  - waitReason：检测到已有模块文档覆盖风险
+  - waitOptions：`只生成缺失` / `全部重新生成` / `跳过`
 
 **本步出现的运行时占位符**
 - `{DOCS_ROOT}` → 常规模式 `cwd/.sillyspec/docs/<project>`；平台模式 `specRoot/docs/<project>`

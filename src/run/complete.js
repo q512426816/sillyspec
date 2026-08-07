@@ -16,6 +16,8 @@
  */
 import { join } from 'node:path'
 import { existsSync, readdirSync, readFileSync, mkdirSync, writeFileSync, appendFileSync, statSync } from 'node:fs'
+import { writeAtomicSync } from '../fs-atomic.js'
+import { withFileLock } from '../quicklog.js'
 import { triggerSync, WAIT_MARKER_RE, getStageSteps, formatWaitOptions, resolveRuntimeRoot } from './shared.js'
 import { outputStep } from './prompt.js'
 import { enforceDepsGate, enforceReviewJsonGate, runStageCompletionGates } from './gates.js'
@@ -154,7 +156,7 @@ export function resolveWaitingStepWithAnswer(steps, doneAnswer, nowStr) {
 }
 
 export async function completeStep(pm, progress, stageName, cwd, outputText, inputText = null, options = {}) {
-  const { printNext = true, confirm = false, changeName, platformOpts = {}, nonInteractive = false, confirmMode = null, isForceBaseline = false, isAllowNew = false } = options
+  const { printNext = true, confirm = false, changeName, platformOpts = {}, nonInteractive = false, isForceBaseline = false, isAllowNew = false } = options
   const specBase = platformOpts.specRoot || join(cwd, '.sillyspec')
   const stageData = progress.stages[stageName]
   const scanProfile = stageData?.scanProfile || null
@@ -188,7 +190,23 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
   // requiresWait 步骤时会跳过它、把 --answer 静默丢弃，步骤永久卡 WAITING、末步报「等待用户输入」。
   // 修复：带 doneAnswer 且存在 waiting 步骤时，把首个 waiting 拉回 pending + 补 waitAnswer，主流程
   // requiresWait 门控见 waitAnswer 已置→不阻断→正常 completed。仅 --answer 触发，普通 --done 零变化。
-  const _resolvedWaitIdx = resolveWaitingStepWithAnswer(steps, options && options.doneAnswer, new Date().toLocaleString('zh-CN', { hour12: false }))
+  const _doneAnswer = options && options.doneAnswer
+  // ── 多 waiting 歧义守卫（对齐 continueStep 742-751 的同名保护）──
+  // resolveWaitingStepWithAnswer 只 findIndex 解「第一个」waiting；阶段内 ≥2 个 waiting 时
+  // --done --answer 会静默把 answer 填给第一个，可能答错对象。与 --continue 对齐：多 waiting 时报错列出。
+  if (_doneAnswer) {
+    const waitingIdxs = steps.map((s, i) => (s && s.status === 'waiting') ? i : -1).filter(i => i !== -1)
+    if (waitingIdxs.length > 1) {
+      console.error(`❌ 检测到 ${waitingIdxs.length} 个等待中的步骤，--done --answer 无法确定解哪一个：`)
+      for (const i of waitingIdxs) {
+        console.error(`   Step ${i + 1}: ${steps[i].name}${steps[i].waitReason ? `（${steps[i].waitReason}）` : ''}`)
+      }
+      console.error(`   出路：用 --continue 逐个指定恢复（每次解一个 waiting，降到 1 个后即可 --done --answer）：`)
+      console.error(`   sillyspec run ${stageName} --continue --from-step <序号|名称> --answer "..."${changeName ? ` --change ${changeName}` : ''}`)
+      process.exit(1)
+    }
+  }
+  const _resolvedWaitIdx = resolveWaitingStepWithAnswer(steps, _doneAnswer, new Date().toLocaleString('zh-CN', { hour12: false }))
   if (_resolvedWaitIdx !== -1) {
     currentIdx = _resolvedWaitIdx
     console.log(`⚠️  Step "${steps[_resolvedWaitIdx].name}" 此前处于 waiting，--done --answer 已补回答并拉回待完成。`)
@@ -535,27 +553,34 @@ async function autoCheckPlanFromReviews({ stageName, changeName, cwd, platformOp
       return { autoChecked: false, checkedCount: 0, skippedCount: 0 }
     }
     const executeRunId = readFileSync(runIdFile, 'utf8').trim()
-    const planContent = readFileSync(planPath, 'utf8')
     const { readReview } = await import('../task-review.js')
-    let checkedCount = 0
-    let skippedCount = 0
-    const updated = planContent.replace(/^(\s*[-*]\s*\[)\s(\]\s*task-\d+)/gim, (match, p1, p2) => {
-      const taskNum = match.match(/task-(\d+)/)[1].padStart(2, '0')
-      const reviewPath = join(runtimeRoot, 'execute-runs', executeRunId, 'tasks', `task-${taskNum}`, 'review.json')
-      const r = readReview(reviewPath)
-      // 端到端 task：必须 pass（cannot_verify 不算）；普通 task：非 fail 即可（坑 execute-batch-complete-endtoend-checkbox）
-      const endToEnd = isEndToEndTaskText(match + ' ' + readTaskCardText(changeDir, taskNum))
-      if (shouldAutoCheckTask(r, endToEnd)) {
-        checkedCount++
-        return `${p1}x${p2}`   // 勾选
+    // plan.md 是 agent 与 CLI 都会写的共享文件（agent 勾 checkbox、此处 autoCheck 也勾选）。
+    // 读-改-写必须整体持锁（withFileLock 串行化多进程），否则并发 execute --done / 手动勾选互相覆盖
+    // （后到者覆盖先到者）；写入用 writeAtomicSync（tmp+rename 原子），防 Windows 整文件覆盖被读半截
+    // （fs-atomic.js 头注明的 reader-writer 竞态坑）。锁文件放 changeDir，与 QUICKLOG 同机制。
+    const lockPath = join(changeDir, '.plan.md.lock')
+    return await withFileLock(lockPath, async () => {
+      const planContent = readFileSync(planPath, 'utf8')
+      let checkedCount = 0
+      let skippedCount = 0
+      const updated = planContent.replace(/^(\s*[-*]\s*\[)\s(\]\s*task-\d+)/gim, (match, p1, p2) => {
+        const taskNum = match.match(/task-(\d+)/)[1].padStart(2, '0')
+        const reviewPath = join(runtimeRoot, 'execute-runs', executeRunId, 'tasks', `task-${taskNum}`, 'review.json')
+        const r = readReview(reviewPath)
+        // 端到端 task：必须 pass（cannot_verify 不算）；普通 task：非 fail 即可（坑 execute-batch-complete-endtoend-checkbox）
+        const endToEnd = isEndToEndTaskText(match + ' ' + readTaskCardText(changeDir, taskNum))
+        if (shouldAutoCheckTask(r, endToEnd)) {
+          checkedCount++
+          return `${p1}x${p2}`   // 勾选
+        }
+        skippedCount++
+        return match              // 不勾
+      })
+      if (checkedCount > 0) {
+        writeAtomicSync(planPath, updated)
       }
-      skippedCount++
-      return match              // 不勾
+      return { autoChecked: checkedCount > 0, checkedCount, skippedCount }
     })
-    if (checkedCount > 0) {
-      writeFileSync(planPath, updated)
-    }
-    return { autoChecked: checkedCount > 0, checkedCount, skippedCount }
   } catch {
     return { autoChecked: false, checkedCount: 0, skippedCount: 0 }
   }
