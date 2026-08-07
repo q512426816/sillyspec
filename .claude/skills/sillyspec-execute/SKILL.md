@@ -110,17 +110,13 @@ execute 还有**第二道**独立的 stage 级审查：除逐 task review.json �
 - `tier=independent` 时必须由独立 QA 子代理产出该 review.json（独立上下文，不共享实现者分析）；`tier=self`（变更 ≤3 文件）降级为当前 agent 自审。
 - 该 acceptance review 同时覆盖"代码审查"视角，后续代码审查步骤仅需轻量复审。
 
-> 运行时 CLI 会把精确 schema 表 + 完整 JSON 示例 + docHash 算法通过 `{REVIEW_JSON_CONTRACT}` 占位符注入到该步 prompt（源码 `src/stage-review.js: renderReviewJsonContract()`）。本段为常驻摘要；以运行时注入的契约为权威逐字模板。
+> 运行时 CLI 会把精确 schema 表 + 完整 JSON 示例 + docHash 算法通过 `{REVIEW_JSON_CONTRACT}` 占位符注入到该步 prompt。本段为常驻摘要；以运行时注入的契约为权威逐字模板。
 
-## execute 派发抽象层（dispatch / SillyHub MCP）
+## 派发模式（SillyHub MCP，可选）
 
-execute 子代理派发经 `src/dispatch/` 抽象层（详见模块文档 `.sillyspec/docs/sillyspec/modules/dispatch.md`）：
+`execute` Wave 内的子代理默认用本机 Agent tool 执行。若消费方配置了 SillyHub MCP（`SILLYHUB_MCP_URL` / `SILLYHUB_MCP_TOKEN`），Wave 步骤 prompt 运行时可能注入一段 SillyHub 派发指令——**出现就照其中的指令执行**（创建 mission / dispatch_worker / 轮询结果 / 本机兜底），**没出现就用本机 Agent tool**。未配置 MCP 时完全不注入，行为与无此机制一致。
 
-- **双后端 + 能力探测（D-005）**：默认/降级 = 本机 Agent tool（**现状零回归**）；探测到 SillyHub MCP 可用且路径A 落地时用 SillyHub worker。
-- **零回归硬约束**：无 `SILLYHUB_MCP_URL`/`SILLYHUB_MCP_TOKEN` 时 `getDispatchMode()='local'`，buildWavePrompt 不注入派发段，输出与改前字节一致——现有 execute 行为 100% 不变。
-- **dispatcher 非执行体（D-007）**：`probe.js`（探测）+ `strategy.js`（生成派发指令）+ `backends/`（指令模板）只生成注入 prompt 的指令文本，实际 Agent tool / MCP tool 调用由 agent 执行。
-- **CLI 桥**：`sillyspec dispatch probe` → ProbeResult（`{available, reason}`）；`sillyspec dispatch hint --contract <json>` → `{instruction, backend}`。agent 据此执行派发。
-- **SillyHub 后端当前为 stub**（路径A 跨仓未落地，详见 `docs/sillyspec/sillyhub-path-a-contract.md`）：`isPathASupported()=false` → 即便配置了 MCP，派发也走 Local + 降级提示，不阻断。worker 须在 SillySpec 自建 worktree 执行（D-002），SillySpec 自己 apply 不用 converge（D-004）。
+可选：`sillyspec dispatch probe` 查看 SillyHub 是否可用。
 
 ## worktree 子命令（execute 相关）
 
