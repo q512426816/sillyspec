@@ -43,7 +43,7 @@ grep -rl "<关键词>" <源码目录>/ --include="*.java" --include="*.js" --inc
    - 在 frontend/ 目录中搜索 apiFetch/request/axios/fetch 调用
    - 提取所有 API 路径（归一化动态参数为 {param}）
 3. Diff 对账：
-   - 前端调用路径在 backend 端点清单中找不到 → **❌ Missing backend endpoint**（FAIL blocker）
+   - 前端调用路径在 backend 端点清单中找不到 → **❌ Missing backend endpoint**（advisory：CLI 复核后仅 warn，不硬阻断归档；但 contract gap 是真实集成缺陷，应诚实标 FAIL 并回 execute 补端点）
    - backend 端点在前端无调用 → ⚠️ Unused backend endpoint（warning，不阻断）
 4. 输出对账结果表格：
 
@@ -51,7 +51,7 @@ grep -rl "<关键词>" <源码目录>/ --include="*.java" --include="*.js" --inc
    |---|---|---|---|
    | ❌ missing | GET /api/ppm/project-plan/{param}/plan-nodes | — | frontend/src/lib/ppm/plan.ts |
 
-如果发现 Missing backend endpoint，必须在验证报告中标记为 ❌ contract gap。
+如果发现 Missing backend endpoint，在验证报告中标记为 ❌ contract gap（CLI 仅 advisory 提示、不硬阻断归档；但缺口真实存在——诚实判 FAIL 并回 execute 补齐端点，勿因 CLI 不拦而放行）。
 
 **探针 6：代码删除对账（切斯特顿栅栏护栏）**
 静默删除代码是 verify 的盲区——agent 删一段它看不懂的旧代码，只要路径合规、不碰风险关键词，其他探针都不会响。用 git 事实客观对账，不要凭记忆：
@@ -62,4 +62,4 @@ grep -rl "<关键词>" <源码目录>/ --include="*.java" --include="*.js" --inc
    - design 声明「新增/修改」却整文件删除 → ❌ 高风险（声明与事实矛盾）
    - design 清单未列出 → ⚠️ 未声明删除
 4. 排除 `.sillyspec/` 与 `meta.json`（文档 churn 不算删除信号）
-5. verify --done 时 CLI 会用同一 git 事实独立复核，谎报无效——务必如实记录
+5. verify --done 时 CLI 会用同一 git 事实 advisory 复核（打印警告，不硬阻断归档）——是否 FAIL blocker 由你诚实判定，务必如实记录

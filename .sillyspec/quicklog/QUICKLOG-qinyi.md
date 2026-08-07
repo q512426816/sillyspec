@@ -386,3 +386,20 @@
 根因：gate/derive 是顶层命令不经 runCommand，command.js 的 drift 守卫（detectWorktreeSpecDrift 设 specDriftAnchor，只覆盖 plan/execute/verify/archive）不触发，worktree cwd 下 runGate/runDerive 的 resolveRuntimeRoot 走本地兜底读副本 marker。
 方案：src/index.js gate/derive case 在未显式 --spec-dir 时调 detectWorktreeSpecDrift(resolveSpecDir(dir))，命中即向 runGate/runDerive 传 specDriftAnchor=wt.mainSpecBase（对齐 machine-interface 已扩展入参 + command.js 守卫条件 !specDir）；新增 test/gate-derive-spec-drift.test.mjs 3 场景 e2e（derive drift+anchor 读主仓 / --spec-dir 副本负对照读副本 / gate execute task-reviews 读主仓，抓手=validateTaskReviews 缺 review error 文本含 executeRunId）。
 结果：新测试 13/13 通过；npm test exit 0 无回归（runner 自动发现新测试）；npm run lint 通过；同步 cli-entry.md 关键逻辑增补段 + 变更索引。
+
+## ql-20260807-002-cc15 | 2026-08-07 09:00:42 | 修复 sss.md 报告的 4 个 P0 提示词/源码一致性缺陷（verify探针advisory降级 / review-tier≤5→≤3 / archive伪命令 / doctor悬空else-fi）
+状态：已完成
+关联变更：（无）
+文件：
+- src/stages/verify.js（P0-1：verify-result.md 格式"代码删除对账"由"CLI 独立复核"改 advisory 措辞）
+- templates/prompts/verify-probes.md（P0-1：探针5 API parity / 探针6 代码删除 由"FAIL blocker/谎报无效"降级为 advisory——CLI 仅 warn 不阻断，是否 FAIL 由 agent 诚实判定）
+- src/stages/archive.js（P0-3：删 extract-module-impact step10 跑不通的伪 workflow 命令 node -e ".../* 注释 */..."）
+- src/stages/doctor.js（P0-4：删 Worktree 隔离检查段末尾悬空 else/fi——gate-status.json 的 if 头缺失只剩 else/echo/fi）
+- docs/prompt/{README,plan,execute,brainstorm,propose}.md（P0-2：{REVIEW_TIER_REASON} 占位符说明示例 ≤5→≤3，源码阈值 SELF_REVIEW_FILE_THRESHOLD=3）
+- docs/prompt/{verify,archive,doctor}.md（镜像同步源码 prompt 改动）
+- docs/prompt/_extracted.json（重跑 node docs/prompt/_extract.mjs 刷新）
+- .sillyspec/docs/sillyspec/modules/stages.md（变更索引追加本 ql-ID）
+需求：根据 docs/sss.md 提示词驾驭力分析报告，修复其识别的 4 个 P0 级提示词/源码一致性缺陷（会误导 agent 产生错误行为）。
+根因：4 项断言经源码亲验全部属实——①verify 探针5/6：源码 verify-postcheck.js:711/734/742/844/853 与 run/gates.js:222 注释明确 advisory 不阻断，但 verify-probes.md 模板写成 FAIL blocker/谎报无效；②review-tier：源码 SELF_REVIEW_FILE_THRESHOLD=3，但 docs/prompt 5 处占位符说明示例写 ≤5；③archive step2：node -e 命令体只有注释无代码；④doctor step0：gate-status.json 的 if 头缺失只剩悬空 else/fi。
+方案：P0-1 措辞降级为 advisory（不动源码——advisory 是设计意图，硬阻断会误伤已commit无锚点场景；改 verify-probes.md 探针5/6 + verify.js:218）；P0-2 docs/prompt 5 处 ≤5→≤3（源码不动）；P0-3 删 archive step10 伪命令；P0-4 删 doctor 悬空 else/fi；同步 docs/prompt/{verify,archive,doctor}.md 镜像 + 重跑 _extract.mjs + stages.md 变更索引。
+结果：npm run lint ✅ 68 files 通过；npm test ✅ EXIT=0 所有测试文件 失败:0；改 15 文件（src/stages×3 + verify-probes.md + docs/prompt×9 + quicklog + stages.md）。

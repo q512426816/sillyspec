@@ -83,8 +83,6 @@ module-impact.md 第一行标题必须用中文：# 模块影响分析（Module 
 
 8. 未匹配到任何模块的文件归入"未匹配文件"表格
 9. 生成 `.sillyspec/changes/<change-name>/module-impact.md`
-10. 完成后运行 workflow 检查：
-    `node -e "import('./src/workflow.js').then(w => { /* 用 loadWorkflow 加载 archive-impact，用 runPostCheck 检查 */ })`
 ````
 
 ---

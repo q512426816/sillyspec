@@ -351,7 +351,7 @@ Wave 3 的 prompt 结构与 Step 5（Wave 1）**完全相同**，由同一个 `b
 
 **本步出现的运行时占位符**
 - `{REVIEW_TIER}` → 审查分级：`self`（当前 agent 自审）或 `independent`（强制独立子代理 + review.json）。由 `review-tier.js` 的 `classifyReviewTier({planLevel, designPath})` 按 plan_level / 变更文件数判定
-- `{REVIEW_TIER_REASON}` → 分级理由文案（如 `变更文件 3 ≤ 5` 或 `plan_level=none...`）
+- `{REVIEW_TIER_REASON}` → 分级理由文案（如 `变更文件 3 ≤ 3` 或 `plan_level=none...`）
 - `{REVIEW_JSON_CONTRACT}` → `stage-review.js` 的 `renderReviewJsonContract()` 产出的 review.json 产物契约 markdown（schema + 完整示例 + docHash 算法）；execute 阶段主审查文档为 `design.md`
 
 **提示词原文**

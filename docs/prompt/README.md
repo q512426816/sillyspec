@@ -143,7 +143,7 @@ prompt 正文中出现的占位符，运行时由 `outputStep` 替换。下表�
 | `{KNOWLEDGE_HIT_REPORT}` | `knowledge-match.js` 的 `matchKnowledge()` 命中报告（基于 changeName + plan.md 任务名匹配 `knowledge/` 目录条目）；同时落盘 `.runtime/knowledge-hit-report.json` | execute（确认执行范围步） |
 | `{EXECUTE_RUN_ID}` | 当前 execute run 的固定 ID（从 `.runtime/current-execute-run-id-<change>` 读，无则 `generateExecuteRunId()` 生成并落盘） | execute（每个 Wave 执行步，用于 task review.json 路径） |
 | `{REVIEW_TIER}` | 审查分级：`self`（当前 agent 自审）或 `independent`（强制独立子代理 + review.json）。由 `review-tier.js` 的 `classifyReviewTier({planLevel, designPath})` 按 plan_level / 变更文件数判定 | brainstorm / plan / propose / execute 的 review 步 |
-| `{REVIEW_TIER_REASON}` | 分级理由文案（如 `变更文件 3 ≤ 5` 或 `plan_level=none...`） | 同上 |
+| `{REVIEW_TIER_REASON}` | 分级理由文案（如 `变更文件 3 ≤ 3` 或 `plan_level=none...`） | 同上 |
 | `{STAGE_REVIEW_RUN_ID}` | stage review 运行 ID（从 `.runtime/current-stage-review-run-id-<stage>(-<change>)` 读，无则 `generateStageReviewRunId()` 生成并落盘；注入到 `{REVIEW_JSON_CONTRACT}` 的路径内，保证 prompt 注入的 ID == Stage Review Gate 读取的 ID） | 同上（经契约块内嵌） |
 | `{REVIEW_JSON_CONTRACT}` | `stage-review.js` 的 `renderReviewJsonContract()` 产出的 review.json 产物契约 markdown：含 schema（schemaVersion=1、reviewType、verdicts∈pass/fail/cannot_verify、reviewedFiles、docHash）、完整示例、docHash 算法（主审查文档 sha256）。各阶段主审查文档：brainstorm/execute→design.md，plan→plan.md，propose→proposal.md | 同上 |
 | `{TASK_COMPLETION_REPORT}` | `task-review.js` 的 `summarizeTaskCompletion({changeDir, runtimeRoot, changeName})` 产出的客观完成度报告：以 execute run 的 review.json verdict（specVerdict+qualityVerdict 均≠fail 视为完成）为准，替代 plan.md checkbox（依赖 autoCheckPlanFromReviews 回填，断裂时失真）；无 runId marker 时降级 checkbox 统计 + 标注 source | archive（Step 1 任务完成度检查） |

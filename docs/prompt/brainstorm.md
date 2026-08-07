@@ -433,7 +433,7 @@ design.md 文件路径 + 自审结果
 - `<change-name>` → 当前变更名
 - `<project>` → 当前项目名
 - `{REVIEW_TIER}` → 审查分级：`self`（当前 agent 自审）或 `independent`（强制独立子代理 + review.json），由 `review-tier.js` 按 plan_level / 变更文件数判定。映射见 README「占位符总表 — 动态块占位符」
-- `{REVIEW_TIER_REASON}` → 分级理由文案（如「变更文件 3 ≤ 5」或「plan_level=none...」）。映射见 README
+- `{REVIEW_TIER_REASON}` → 分级理由文案（如「变更文件 3 ≤ 3」或「plan_level=none...」）。映射见 README
 - `{REVIEW_JSON_CONTRACT}` → `stage-review.js` 的 `renderReviewJsonContract()` 产出的 review.json 产物契约 markdown（schema + 完整示例 + docHash 算法；brainstorm 主审查文档为 design.md）。映射见 README
 
 > **降级**：当 review-tier / stage-review 注入抛异常时，`{REVIEW_TIER}`→`self`、`{REVIEW_TIER_REASON}`→`分级异常降级 self: <err>`、`{REVIEW_JSON_CONTRACT}`→精简契约提示，避免 prompt 残留裸占位符（详见 README）。

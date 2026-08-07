@@ -63,4 +63,5 @@ updated_at: 2026-08-06T06:34:27+08:00
 - ql-20260804-003-e439 | plan-postcheck 加 title_zh 完整性硬校验（prompt-control-debt plan-b：防子代理为压 20~40 行静默丢 frontmatter 字段）。
 - ql-20260806-001-3e12 | 工具驾驭复盘 3 条反馈：brainstorm §6 文件变更清单加「字段数据流标注」引导（新增字段须交代 producer→consumer + 每跳归一化点）；plan related_tests 判据由「源文件是否共享」改为「既有测试断言是否失效」（覆盖 UI 文案/常量/签名等单文件场景）；stage-review review.json missing 加 .sillyspec 拼写变体检测提示（新增 src/spec-dir-typo.js）。
 - ql-20260806-002-c4dd | 工具驾驭复盘第二批 exec-e/f：execute.js buildWavePrompt 调度要求 item4 + acceptanceSteps「运行测试」步加「既跑 lint check 也跑 formatter（ruff format/prettier --write）」引导（只 check 不 format 会留到 commit 被 pre-commit hook 拦）；「确认 worktree 路径」步加工具链预告（先 --version 确认，缺则 uv tool install/uv sync）。
+- ql-20260807-002-cc15 | 修复 sss.md 报告的 4 个 P0 提示词/源码一致性缺陷：verify 探针5/6 把 advisory 误写成硬门控→措辞降级为 advisory（verify-probes.md+verify.js，源码本就 advisory 不硬阻断）；review-tier 示例 ≤5→≤3（docs/prompt 5 处说明段，源码阈值=3）；archive step2 删跑不通的伪 workflow 命令；doctor step0 删悬空 else/fi；同步 docs/prompt 镜像 + 重跑 _extract。
 <!-- MANUAL_NOTES_END -->

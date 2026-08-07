@@ -131,9 +131,6 @@ else
   echo ""
   echo "ℹ️ sillyspec.db 不存在（尚未初始化）"
 fi
-else
-  echo "ℹ️ gate-status.json 不存在（尚未进入 execute 阶段）"
-fi
 \`\`\`\n
 ### 输出
 汇总所有检查结果，按以下格式：
