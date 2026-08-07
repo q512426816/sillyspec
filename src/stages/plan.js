@@ -198,7 +198,7 @@ light 计划的约束：
 - **禁止**泛泛风险分析（如"需要充分测试"）
 - **禁止**放实现细节（函数签名、代码示例）
 - 来源/目标直接引用已有文档，不重新生成
-- 如果存在 decisions.md，所有当前版本 D-xxx@vN 必须在 Tasks 或覆盖矩阵中出现
+- 如果存在 decisions.md，所有当前版本 D-xxx@vN 必须在 Tasks 或覆盖矩阵中出现（CLI 只校验 D-xxx@vN ID 字面出现在 plan.md，warning 不阻断；矩阵结构供人类追溯，CLI 不校验 D→FR→task 映射完整性）
 - 如果存在 P0/P1 unresolved blocker，不生成 plan.md
 - 任务列表控制在 10 条以内
 - **任务必须使用 checkbox 格式**（\`- [ ] task-XX:\`），不要用纯编号列表（\`1. 2.\`），execute 阶段依赖此格式解析任务
@@ -256,7 +256,7 @@ full 计划的约束：
 - Mermaid 依赖关系图**仅当依赖关系非平凡时生成**（线性依赖或全并行时不生成）
 - **Wave 下的 checkbox 行必须保留**（execute 阶段解析依赖 \`- [ ] task-XX:\` 格式）
 - plan.md 包含 Wave 分组 + 任务总表 + 关键路径 + 全局验收标准，**不放实现细节**
-- 如果存在 decisions.md，plan.md 必须包含当前版本 D-xxx@vN/FR-xxx 覆盖矩阵
+- 如果存在 decisions.md，plan.md 建议包含当前版本 D-xxx@vN/FR-xxx 覆盖矩阵（CLI 只校验 D-xxx@vN/FR-xxx ID 字面出现在 plan.md，warning 不阻断；矩阵的 D→FR→task 映射完整性供人类追溯，CLI 不校验——勿以为画了矩阵就被结构校验）
 - 如果存在 P0/P1 unresolved blocker，不生成 plan.md，输出阻塞清单
 - 实现细节写到后续的 tasks/task-NN.md 中
 - 每个任务编号格式：task-01、task-02 ...

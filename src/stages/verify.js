@@ -135,7 +135,7 @@ export const definition = {
 4. API 设计是否符合
 5. **Reverse Sync 检查**：如果发现实现合理但 design.md 未覆盖，先更新 design.md 补充遗漏
 6. **模块文档一致性检查**：如果在"加载规范并锚定"步骤中加载了模块文档，检查实现是否符合模块文档描述的当前设计（特别关注接口签名、数据流、依赖关系）。不符合时标记 ⚠️（不阻断，模块文档可能未及时更新）
-7. **决策链路检查**：如果存在 decisions.md，输出 D-xxx@vN → FR-xxx → task-xx → evidence 的追踪矩阵；缺失项必须列为风险
+7. **决策链路检查**：如果存在 decisions.md，输出 D-xxx@vN → FR-xxx → task-xx → evidence 的追踪矩阵；缺失项必须列为风险（CLI 只校验每个 D-xxx@vN ID 字面出现在 verify-result.md，warning 不阻断；矩阵的 D→FR→task→evidence 映射完整性供人类追溯，CLI 不校验——是否真覆盖由你诚实判定）
 
 ### 输出
 探针报告 + 设计一致性检查结果 + 模块文档一致性检查结果 + 决策追踪矩阵（如有）`,
