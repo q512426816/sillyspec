@@ -76,6 +76,7 @@ SillySpec CLI — 规范驱动开发工具包
 
   sillyspec local detect [--dir <path>]   生成本地配置 local.yaml（纯 fs 嗅探，零 token、不跑 scan）
   sillyspec runtime list [--json]         枚举 .sillyspec/.runtime/ 运行时产物（只读，看手上有哪些证据/状态文件）
+  sillyspec dispatch <probe | hint>       SillyHub 派发能力探测 + 策略生成（agent 调用桥，仅渲染不执行 tool）
 
   sillyspec workflow check <name> [--project <p>] [--change <c>] [--json] [--save]
                                       全局 workflow 校验（--save 归档到 .sillyspec/.runtime/workflow-runs/）
@@ -917,6 +918,83 @@ SillySpec worktree — git worktree 隔离管理
       }
       break;
     }
+    case 'dispatch': {
+      // SillyHub 派发抽象层的 agent 调用桥（design.md §Phase2 / D-007@v1）：
+      // 仅做能力探测（probe）与派发策略生成（hint），**不执行任何 tool 调用**——
+      // 实际 tool 调用（本机 Agent tool / SillyHub MCP tool）由 agent 据指令执行。
+      // 仿 worktree 子命令的参数解析（filteredArgs[1] 取子命令）与错误处理模式。
+      const dispatchSubCmd = filteredArgs[1];
+      const dispatchSubs = ['probe', 'hint'];
+
+      if (!dispatchSubCmd || dispatchSubCmd === 'help' || dispatchSubCmd === '--help' || dispatchSubCmd === '-h') {
+        console.log(`
+SillySpec dispatch — SillyHub 派发能力探测与策略生成（agent 调用桥，仅渲染与探测）
+
+用法:
+  sillyspec dispatch probe [--json]                   能力探测，输出 ProbeResult
+  sillyspec dispatch hint --contract <json> [--json]  派发策略，输出 {instruction, backend}
+
+子命令:
+  probe   探测 SillyHub MCP 是否可用（无配置返回 available=false，正常降级不报错）
+  hint    据 contract + probe 结果生成派发指令文本（agent 拿指令后执行实际 tool 调用）
+
+选项:
+  --contract <json>   hint 必填：DispatchContract（brief/worktreePath/branch/allowedPaths/readOnly/...）
+  --json              程序化输出（probe → ProbeResult；hint → {backend, instruction}）
+`);
+        break;
+      }
+
+      if (dispatchSubCmd === 'probe') {
+        const { probeSillyHub } = await import('./dispatch/probe.js');
+        const result = await probeSillyHub();
+        // result = { available, reason? }；无配置时 {available:false,reason:'no-config'} 不报错（正常降级）
+        if (json) {
+          process.stdout.write(JSON.stringify(result));
+        } else if (result.available) {
+          console.log('✅ SillyHub 可用');
+        } else {
+          console.log(`⚠️ SillyHub 不可用：${result.reason || 'unknown'}`);
+        }
+        break;
+      }
+
+      if (dispatchSubCmd === 'hint') {
+        // 解析 --contract <json>（仿 worktree 用 args.indexOf 取 flag 后一个值）
+        const contractIdx = args.indexOf('--contract');
+        const contractRaw = contractIdx >= 0 && args[contractIdx + 1] ? args[contractIdx + 1] : null;
+        if (!contractRaw) {
+          console.error('用法: sillyspec dispatch hint --contract <json> [--json]\n  生成派发指令（DispatchContract：brief/worktreePath/branch/allowedPaths/readOnly/...）');
+          process.exit(2);
+        }
+        let contract;
+        try {
+          contract = JSON.parse(contractRaw);
+        } catch (e) {
+          console.error(`❌ --contract JSON 解析失败: ${e.message}`);
+          process.exit(2);
+        }
+        const { probeSillyHub } = await import('./dispatch/probe.js');
+        const { renderDispatchInstruction } = await import('./dispatch/strategy.js');
+        const probe = await probeSillyHub();
+        const { instruction, backend } = renderDispatchInstruction(contract, probe);
+        if (json) {
+          process.stdout.write(JSON.stringify({ backend, instruction }));
+        } else {
+          console.log(`Backend: ${backend}`);
+          console.log(instruction);
+        }
+        break;
+      }
+
+      // 未知子命令 → did-you-mean 建议 + 退出 1（仿 worktree default）
+      const sug = didYouMean(dispatchSubCmd, dispatchSubs);
+      console.error(`❌ 未知子命令: dispatch ${dispatchSubCmd}`);
+      if (sug) console.error(`   你是想输入「dispatch ${sug}」吗？`);
+      console.error(`   可用子命令：${dispatchSubs.join(' | ')}（运行 sillyspec dispatch 查看用法）`);
+      process.exit(1);
+      break;
+    }
     case 'platform': {
       const platformSub = filteredArgs[1];
       const platformArgs = filteredArgs.slice(2);
@@ -1366,7 +1444,7 @@ SillySpec modules — 模块文档管理
       break;
     }
     default: {
-      const topCommands = ['init', 'setup', 'run', 'progress', 'worktree', 'local', 'workflow', 'gate', 'derive', 'backfill-reviews', 'modules', 'change-rename', 'knowledge', 'platform', 'scan', 'brainstorm', 'plan', 'execute', 'verify', 'archive', 'quick', 'explore', 'status', 'doctor', 'auto', 'runtime'];
+      const topCommands = ['init', 'setup', 'run', 'progress', 'worktree', 'dispatch', 'local', 'workflow', 'gate', 'derive', 'backfill-reviews', 'modules', 'change-rename', 'knowledge', 'platform', 'scan', 'brainstorm', 'plan', 'execute', 'verify', 'archive', 'quick', 'explore', 'status', 'doctor', 'auto', 'runtime'];
       const suggestion = didYouMean(command, topCommands);
       console.error(`❌ 未知命令: ${command}`);
       if (suggestion) console.error(`   你是想输入「${suggestion}」吗？`);

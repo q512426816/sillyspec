@@ -1,5 +1,5 @@
 import { readdirSync, existsSync, rmSync, readFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
 import { homedir } from 'node:os'
@@ -20,9 +20,19 @@ function cleanHomePointer() {
 }
 cleanHomePointer()
 
-const files = readdirSync(testDir)
-  .filter(file => file.endsWith('.test.mjs'))
-  .sort()
+// 递归收集所有 .test.mjs（含子目录如 test/dispatch/），便于按模块组织测试
+function collectTestFiles(dir) {
+  const out = []
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (entry.isDirectory()) {
+      out.push(...collectTestFiles(join(dir, entry.name)))
+    } else if (entry.name.endsWith('.test.mjs')) {
+      out.push(join(dir, entry.name))
+    }
+  }
+  return out
+}
+const files = collectTestFiles(testDir).sort()
 
 if (files.length === 0) {
   console.log('No test files found')
@@ -33,8 +43,8 @@ let passed = 0
 let failed = 0
 const failures = []
 
-for (const file of files) {
-  const fullPath = join(testDir, file)
+for (const fullPath of files) {
+  const file = relative(testDir, fullPath)
   console.log(`\nRunning ${file}`)
   try {
     const output = execFileSync(process.execPath, [fullPath], {

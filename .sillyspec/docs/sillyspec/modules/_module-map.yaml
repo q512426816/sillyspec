@@ -46,3 +46,15 @@ modules:
     needs_review: false
     review_reasons: []
 
+  dispatch:
+    status: active
+    doc: modules/dispatch.md
+    needs_review: false
+    review_reasons: []
+
+  sillyhub-mcp:
+    status: active
+    doc: modules/sillyhub-mcp.md
+    needs_review: false
+    review_reasons: []
+

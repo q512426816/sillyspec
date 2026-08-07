@@ -173,3 +173,18 @@ updated_at: 2026-07-23
 | `local.yaml` / `local.yml`（项目根） | `worktree-guard.js loadLocalConfig()` | hook fallback 兼容旧配置 |
 
 因此，文档可以把 `.sillyspec/local.yaml` 写成当前稳定主入口，但不能删除根目录 `local.yaml` / `local.yml` 的兼容说明。
+
+## 派发抽象层（dispatch）的运行时产物
+
+`src/dispatch/`（变更 2026-08-07-sillyhub-mcp-dispatch）**不新增 `.runtime/` 文件**：派发走内存（探测结果 + 指令文本注入 execute prompt），回收复用既有 `.runtime/execute-runs/<run-id>/tasks/task-XX/review.json`（屏蔽 Local / SillyHub 后端差异，R-07）。
+
+仅 `.sillyspec/local.yaml` 增可选 `dispatch:` 段（`src/dispatch/probe.js` 与 `backends/sillyhub-mcp.js` best-effort 读，缺省用默认值，绝不抛）：
+
+```yaml
+dispatch:
+  probe_ttl_ms: 60000       # 探测负面缓存 TTL（默认 60000），daemon 抖动免反复探测（R-06）
+  poll_interval_ms: 15000   # SillyHub 后端轮询 list_workers 间隔（默认 15000）
+  worker_timeout_ms: ...    # per-worker 超时（超时 → kill lease 防双写 + fallback Local，UB-6）
+```
+
+无 `SILLYHUB_MCP_URL`/`SILLYHUB_MCP_TOKEN` 环境变量时派发全程走 Local（本机 Agent tool），`dispatch:` 段不读，现有 execute 行为零回归（D-005）。详见模块文档 `.sillyspec/docs/sillyspec/modules/dispatch.md`。

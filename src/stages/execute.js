@@ -2,6 +2,8 @@ import { existsSync, readFileSync, readdirSync } from 'fs'
 import path from 'path'
 import { buildContractMatrix, buildConsumerInjection, buildContractFieldInjection } from '../contract-matrix.js'
 import { getRule } from '../stage-contract-spec.js'
+import { renderDispatchInstruction } from '../dispatch/strategy.js'
+import { isPathASupported } from '../dispatch/backends/sillyhub-mcp.js'
 
 /**
  * 校验 plan.md 是否满足 execute 执行契约
@@ -445,9 +447,26 @@ function parseWavesFromPlan(planContent) {
 }
 
 /**
+ * 同步判定派发后端模式（不发网络，零回归关键）— task-07
+ *
+ * stub 下 isPathASupported()=false → 有配置也只 local-fallback（加提示），不注入完整 SillyHub 指令。
+ * 现有测试套件都不设 SILLYHUB_MCP_URL/TOKEN → 默认返回 'local' → buildWavePrompt 不注入派发段，
+ * 输出与改前字节一致（零回归，D-005）。
+ *
+ * @returns {'local' | 'local-fallback' | 'sillyhub'}
+ *   - local：无 MCP 配置（零回归，与现状一致）
+ *   - local-fallback：有配置但路径A 未落地（isPathASupported()=false），派发仍走 Local + 短提示
+ *   - sillyhub：有配置且路径A 落地（isPathASupported()=true），注入完整 SillyHub 派发指令
+ */
+export function getDispatchMode() {
+  const hasConfig = !!(process.env.SILLYHUB_MCP_URL && process.env.SILLYHUB_MCP_TOKEN)
+  if (!hasConfig) return 'local'
+  return isPathASupported() ? 'sillyhub' : 'local-fallback'
+}
+/**
  * 为 Wave 生成 prompt（强制子代理执行）
  */
-function buildWavePrompt(wave, waveIndex, changeDir, worktreePath) {
+export function buildWavePrompt(wave, waveIndex, changeDir, worktreePath, options = {}) {
   // ── Contract Matrix：检查是否有 provider/consumer 契约需要注入 ──
   let contractInjection = ''
   let prototypeInjection = ''
@@ -562,6 +581,32 @@ ${prototypes.map(p => `- \`${path.join(protoRelDir, p)}\``).join('\n')}
 `
     : ''
 
+  // ── 派发后端段注入（task-07，D-006 / D-007 / D-008 接入）──
+  // 同步判定（不发网络，零回归关键）：local（无 MCP 配置）→ dispatchSection='' → 本 prompt 与改前
+  // 字节一致；sillyhub（配置 + 路径A 落地）→ 注入完整 SillyHub 派发指令（一 Wave 一 mission /
+  // dispatch_worker / 轮询 list_workers / 超时 kill lease 防双写 / 回收 + Local 兜底）；local-fallback
+  // （配置但路径A 未落地）→ 短提示，派发仍走 Local（与默认行为一致）。worktreePath 为空时不注入
+  // （无 worktree 无谓派发指令）。测试/调用方可经 options.dispatchMode 覆盖，避免 env 污染。
+  const dispatchMode = options.dispatchMode || getDispatchMode()
+  let dispatchSection = ''
+  if (worktreePath && dispatchMode === 'sillyhub') {
+    // 路径A 落地后：注入完整 SillyHub 派发指令（renderDispatchInstruction 已含 Local 兜底全文）
+    const contract = {
+      brief: '本 Wave 任务（见上方任务摘要与 tasks/task-XX.md）',
+      worktreePath,
+      branch: options.branch || '<未提供 branch>',
+      allowedPaths: [],
+      readOnly: false,
+      runId: '{EXECUTE_RUN_ID}',   // 占位符，prompt.js 注入阶段替换为真实 run id
+    }
+    const { instruction } = renderDispatchInstruction(contract, { available: true })
+    dispatchSection = `\n### 派发后端：SillyHub MCP（探测可用，一 Wave 一 mission）\n\n本次 Wave 派发经 SillyHub MCP。按以下派发指令执行（含 create_mission / dispatch_worker / 轮询 list_workers / 超时 kill lease 防双写 / 回收 + Local 兜底）：\n\n${instruction}\n`
+  } else if (worktreePath && dispatchMode === 'local-fallback') {
+    // 有 MCP 配置但路径A 未落地：加短提示，派发仍走 Local（与默认行为一致）
+    dispatchSection = `\n### 派发后端提示：SillyHub MCP 已配置但路径A 未落地\n\n检测到 \`SILLYHUB_MCP_URL\`/\`SILLYHUB_MCP_TOKEN\`，但 SillyHub \`dispatch_worker\` 尚不支持 \`worktree_path\`（路径A 跨仓未落地）。本次派发走 Local（本机 Agent tool），与默认行为一致——上方「执行方式」与「工作目录」段适用。\n`
+  }
+  // dispatchMode === 'local'（无配置）或 worktreePath 为空 → dispatchSection = '' → 输出与改前字节一致（零回归）
+
   return `## Wave ${waveIndex}: 执行以下任务
 
 ## 执行方式（必须严格遵守）
@@ -574,7 +619,7 @@ ${prototypes.map(p => `- \`${path.join(protoRelDir, p)}\``).join('\n')}
 3. 勾选 plan.md 中的 checkbox
 4. 记录改动文件和测试结果
 
-${worktreeSection}
+${worktreeSection}${dispatchSection}
 ### 任务摘要（按需读取完整蓝图）
 为每个任务启动子代理时，**只需告知任务目标和蓝图文件路径，让子代理按需读取**：
 
@@ -690,7 +735,7 @@ export function buildExecuteSteps(planFilePath = null, options = {}) {
   const waveSteps = waves.map((wave, i) => ({
     name: `Wave ${i + 1} 执行`,
     mode: 'implementation',
-    prompt: buildWavePrompt(wave, i + 1, changeDir, worktreePath),
+    prompt: buildWavePrompt(wave, i + 1, changeDir, worktreePath, { dispatchMode: options.dispatchMode, branch: options.branch }),
     outputHint: `Wave ${i + 1} 执行结果`,
     optional: false
   }))
