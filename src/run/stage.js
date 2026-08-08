@@ -19,11 +19,12 @@
 import { join, dirname } from 'node:path'
 import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { writeAtomicSync } from '../fs-atomic.js'
-import { resolveSpecDir, resolveChangeDir, resolveRuntimeRoot, triggerSync, safeGit, parsePorcelainPath, formatWaitOptions, checkApproval, getStageSteps } from './shared.js'
+import { resolveSpecDir, resolveChangeDir, resolveRuntimeRoot, resolveQuickSessionsDir, triggerSync, safeGit, parsePorcelainPath, formatWaitOptions, checkApproval, getStageSteps } from './shared.js'
 import { computeScanProfile, applyScanProfileSteps, executeScanPreflight, executeScanPostcheck } from './scan-profile.js'
 import { outputStep } from './prompt.js'
 import { allocateQuicklogEntry, deriveTitleFromLinkedChange } from '../quicklog.js'
 import { checkTransition } from '../stage-contract.js'
+import { completeStageGates } from './gates.js'
 
 export async function runStage(pm, progress, stageName, cwd, changeName, skipApproval = false, platformOpts = {}, quickOpts = {}) {
   const specBase = platformOpts.specRoot || join(cwd, '.sillyspec')
@@ -212,7 +213,9 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
   // （D-003@v1：顶层 quickGuard 不跨进程持久化；agent 在 step 间用 `run quick` 取下一步
   // prompt 时每个新进程都进此块，按文件判幂等才不会重复分配 ql-ID / 重复写条目）。
   if (stageName === 'quick') {
-    const sessionGuardDir = join(specBase, '.runtime', 'quick-sessions', changeName)
+    // quick-sessions 目录经 resolveQuickSessionsDir 单一解析（multi-agent-review Q4）：
+    // 平台模式 runtimeRoot 与 specBase/.runtime 不同时，写/读须对齐，否则 guard 写一处、收尾读另一处。
+    const sessionGuardDir = join(resolveQuickSessionsDir(platformOpts, specBase), changeName)
     const guardFile = join(sessionGuardDir, 'guard.json')
     let existingGuard = null
     try {
@@ -222,9 +225,19 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
       // 跨进程重入：复用已分配的 ql-ID，跳过 baseline 重捕与分配（幂等）
       progress.quickGuard = existingGuard
     } else {
+      // baseline 采集用 safeGit（带 -c safe.directory，避免 linked worktree/容器异 uid/Windows 挂载点
+      // 下裸 `git status` 抛错）。safeGit 已消除 safe.directory 类失败；若仍失败（真非 git 目录等），
+      // 不硬阻断 quick 启动（平台模式/非 git 目录仍需渲染 step prompt），但 fail-visible：大声 warn +
+      // baseline 置空。--done 时 auditQuickCompletion 的 safeGit 同样失败 → blocked，故不存在「静默
+      // 完成」路径（multi-agent-review Q3）。
+      const statusResult = safeGit(cwd, ['status', '--porcelain'], { trim: false })
+      if (statusResult.error) {
+        console.warn(`⚠️ quick baseline 采集失败（git status）: ${statusResult.error}`)
+        console.warn(`   baseline 置空；--done 审计将因 git 不可用而阻断（无静默完成路径）。`)
+        console.warn(`   排查：仓库 safe.directory 配置 / 非 git 目录。`)
+      }
       try {
-        const { execSync } = await import('child_process')
-        const gitStatus = execSync('git status --porcelain', { cwd, encoding: 'utf8', timeout: 10000 })
+        const gitStatus = statusResult.value || ''
         // 记录全部预存脏文件（含 untracked + .sillyspec/ 路径）。quick 会话期间自身写入的元数据
         // （quicklog/.runtime/modules/_module-map 等）由 auditQuickCompletion 的 isQuickMetadata 精确豁免，
         // 不需要这里粗放过滤 .sillyspec/——旧过滤致预存 untracked .sillyspec/changes/ 不进 baseline，
@@ -339,6 +352,10 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
         stageData.status = 'completed'
         stageData.completedAt = new Date().toLocaleString('zh-CN', { hour12: false })
         await pm._write(cwd, progress, changeName)
+        // 阶段完成收尾共享管线（noAI 末步核心修复 S1：plan postcheck independent-tier review verdict=fail /
+        // 平台 scan manifest 此前被绕过）。gate 失败已 rollback 为 in-progress，early-return（不 fall through 到末尾 return）。
+        const _stageGatesResult = await completeStageGates({ stageName, cwd, changeName, platformOpts, specBase, progress, pm, stageData, steps, currentIdx, outputText: null })
+        if (_stageGatesResult) return _stageGatesResult
         console.log(`\n✅ ${stageName} 阶段全部完成。`)
       }
       return

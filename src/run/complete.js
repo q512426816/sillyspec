@@ -15,115 +15,19 @@
  *   - node: join(path) + existsSync/readdirSync/readFileSync/mkdirSync/writeFileSync/appendFileSync/statSync(fs)
  */
 import { join } from 'node:path'
-import { existsSync, readdirSync, readFileSync, mkdirSync, writeFileSync, appendFileSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, mkdirSync, writeFileSync, appendFileSync } from 'node:fs'
 import { writeAtomicSync } from '../fs-atomic.js'
 import { withFileLock } from '../quicklog.js'
 import { triggerSync, WAIT_MARKER_RE, getStageSteps, formatWaitOptions, resolveRuntimeRoot } from './shared.js'
 import { outputStep } from './prompt.js'
-import { enforceDepsGate, enforceReviewJsonGate, runStageCompletionGates } from './gates.js'
-import { handleArchiveConfirmStep, handlePlanGeneratePlanStep, handleScanProjectListStep, handleWorkflowPostCheck, handleQuickStageCompletion, handleExecuteWaveArtifact, handleExecuteWorktreeCleanup, handleScanStageCompleted } from './complete-handlers.js'
-import { stageRegistry } from '../stages/index.js'
+import { enforceDepsGate, enforceReviewJsonGate, completeStageGates, readDesignScale } from './gates.js'
+import { handleArchiveConfirmStep, handlePlanGeneratePlanStep, handleScanProjectListStep, handleWorkflowPostCheck, handleQuickStageCompletion, handleExecuteWaveArtifact } from './complete-handlers.js'
 import { formatExecuteSummary } from '../worktree-apply.js'
 import { isEndToEndTaskText } from '../change-risk-profile.js'
 
-function validateMetadata(cwd, stageName, specBase) {
-  const changesDir = join(specBase, 'changes')
-  if (!existsSync(changesDir)) return
-
-  const cutoff = Date.now() - 10 * 60 * 1000
-  const missing = []
-
-  function walk(dir) {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      const full = join(dir, entry.name)
-      try {
-        if (entry.isDirectory()) { walk(full); continue }
-        if (!/\.(md|yaml|yml)$/.test(entry.name)) continue
-        const mtime = statSync(full).mtimeMs
-        if (mtime < cutoff) continue
-        const content = readFileSync(full, 'utf-8')
-        if (!content.includes('author:') && !content.includes('author：')) missing.push(full)
-        if (!content.includes('created_at:') && !content.includes('created_at：')) missing.push(full)
-      } catch (e) { /* skip unreadable files */ }
-    }
-  }
-
-  walk(changesDir)
-  const unique = [...new Set(missing)]
-  if (unique.length > 0) {
-    console.log(`\n⚠️  以下文件缺少 author 或 created_at 元数据：`)
-    unique.forEach(f => console.log(`  - ${f.replace(cwd + '/', '')}`))
-    console.log('请在文件头部添加 author（git 用户名）和 created_at（精确到秒）')
-  }
-}
-
-/**
- * 读取 design.md frontmatter 的 scale 字段（brainstorm 末步写入 'small'|'large'）。
- * completeStep 的下一步提示据此分叉：small→quick，large/读不到→plan（fail-safe 走重流程）。
- * 只解析首个 YAML frontmatter 块，避免误读正文里的 "scale:"。
- */
-function readDesignScale(specBase, changeName) {
-  if (!changeName) return null
-  const designPath = join(specBase, 'changes', changeName, 'design.md')
-  if (!existsSync(designPath)) return null
-  const text = readFileSync(designPath, 'utf8')
-  const fm = text.match(/^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*\r?\n/)
-  if (!fm) return null
-  const m = fm[1].match(/^scale:[ \t]*['"]?(\w+)/m)
-  return m ? m[1] : null
-}
-
-/**
- * 验证关键文件是否存在于正确的变更目录下
- * 防止 AI 将文件写到错误的路径
- */
-function validateFileLocations(cwd, stageName, progress, changeName, specBase) {
-  const effectiveChange = changeName || progress.currentChange
-  if (!effectiveChange) return
-
-  const changeDir = join(specBase, 'changes', effectiveChange)
-  if (!existsSync(changeDir)) return
-
-  // 每个阶段完成后预期存在的文件
-  // brainstorm:scale=small(小变更)只必产 design.md;large/未标 scale → 四件套全。
-  // 与 validateBrainstormOutputs 的 BRAINSTORM_RULES condition(scale≠small)同源,避免对合法 small 变更
-  // 误报"⬜ proposal/requirements/tasks 未找到"(本检查仅 advisory 打印不 gate,但误导输出仍要消除)。
-  const brainstormExpected = readDesignScale(specBase, effectiveChange) === 'small'
-    ? ['design.md']
-    : ['design.md', 'proposal.md', 'requirements.md', 'tasks.md']
-  const expectedFiles = {
-    brainstorm: brainstormExpected,
-    plan: ['plan.md'],
-    archive: ['module-impact.md'],
-  }
-
-  const expected = expectedFiles[stageName]
-  if (!expected) return
-
-  const missing = []
-  for (const file of expected) {
-    if (!existsSync(join(changeDir, file))) {
-      missing.push(file)
-    }
-  }
-
-  if (missing.length > 0) {
-    console.log(`\n⚠️  文件位置验证：以下文件未在变更目录中找到`)
-    console.log(`  变更目录：${changeDir.replace(cwd + '/', '')}/`)
-    for (const f of missing) {
-      // 检查是否写到了错误的位置
-      const wrongPath = join(specBase, 'changes', 'change', effectiveChange, f)
-      if (existsSync(wrongPath)) {
-        console.log(`  ❌ ${f} — 不存在，但发现了错误路径：${wrongPath.replace(cwd + '/', '')}`)
-        console.log(`     提示：应该写入 ${changeDir.replace(cwd + '/', '')}/${f}`)
-      } else {
-        console.log(`  ⬜ ${f} — 未找到（该阶段可能未产出此文件）`)
-      }
-    }
-  } else {
-    console.log(`\n✅ 文件位置验证：所有 ${expected.length} 个预期文件均在变更目录中`)
-  }
-}
+// validateMetadata / readDesignScale / validateFileLocations 已迁至 ./gates.js（completeStageGates
+// 共享收尾管线，消除 noAI 末步 / continueStep 完成分支绕过 gate 的 S1/S2/S3 不对称）。
+// completeStep 阶段完成分支（task-02 接入 completeStageGates）+ brainstorm 下一步提示改 import 自 gates.js。
 
 /**
  * 坑1：用 --done --answer 解掉「已 waiting 的步骤」。
@@ -343,7 +247,7 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
       return { stageCompleted: false, currentIdx, nextPendingIdx: -1 }
     }
     // quick 收尾（W6 Step6b 抽至 complete-handlers.js handleQuickStageCompletion）
-    await handleQuickStageCompletion({ stageName, steps, currentIdx, cwd, progress, changeName, specBase, outputText, confirm, isForceBaseline, isAllowNew, platformOpts })
+    await handleQuickStageCompletion({ stageName, steps, currentIdx, cwd, progress, changeName, specBase, outputText, confirm, isForceBaseline, isAllowNew, platformOpts, pm })
 
     // ── reopen --done 回填（坑 brainstorm-reopen-step-state-desync）──
     // nextPendingIdx === -1 且无 waiting，说明要进阶段完成分支。此时若存在 stale 步骤
@@ -375,36 +279,11 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
       appendFileSync(inputsPath, entry)
     }
 
-    // scan 平台 manifest + post-check（W6 Step6d 抽至 complete-handlers.js handleScanStageCompleted）
-    const _scanResult = await handleScanStageCompleted({ stageName, currentIdx, cwd, progress, pm, stageData, changeName, outputText, platformOpts })
-    if (_scanResult) return _scanResult
-
-    // 防御性守卫变量：确认所有步骤确实标记为 completed
-    const actualCompleted = steps.filter(s => s.status === 'completed').length
-    const actualTotal = steps.length
-
-    validateMetadata(cwd, stageName, specBase)
-
-    // 验证关键文件是否在正确的变更目录下（仅当所有步骤确实完成时才校验）
-    if (actualCompleted === actualTotal && actualTotal > 0) {
-      validateFileLocations(cwd, stageName, progress, changeName, specBase)
-    }
-
-    // 辅助阶段完成后重置步骤
-    const stageDef = stageRegistry[stageName]
-    if (stageDef?.auxiliary) {
-      const freshSteps = (stageDef.steps || []).map(s => ({
-        name: s.name,
-        status: 'pending',
-        output: null,
-        completedAt: null
-      }))
-      stageData.steps = freshSteps
-      stageData.status = 'pending'
-      stageData.completedAt = null
-      if (progress.currentStage === stageName) progress.currentStage = ''
-      await pm._write(cwd, progress, changeName)
-    }
+    // 阶段完成收尾共享管线（handleScan manifest + validateMetadata/FileLocations + auxiliary 重置 +
+    // runStageCompletionGates + execute worktree cleanup），消除 S1/S2/S3 三处收尾不对称（task-01 抽出）。
+    // gate 失败已 rollback，early-return 跳过下方"阶段已完成/下一步"提示（合理收紧：回滚不该打完成提示）。
+    const _stageGatesResult = await completeStageGates({ stageName, cwd, changeName, platformOpts, specBase, progress, pm, stageData, steps, currentIdx, outputText })
+    if (_stageGatesResult) return _stageGatesResult
 
     const total = steps.length
     console.log(`✅ ${stageName} 阶段已完成（${total}/${total} 步）`)
@@ -458,18 +337,6 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
         console.log(`\n下一步由你决定：sillyspec run <stage>（brainstorm/plan/execute/verify/archive 等）`)
       }
     }
-
-    // 阶段完成校验 — 防御性守卫：仅当所有步骤确实标记为 completed 时才跑 validator
-    if (actualCompleted === actualTotal && actualTotal > 0) {
-      const _gateEarlyReturn = await runStageCompletionGates({ stageName, cwd, changeName, platformOpts, specBase, progress, pm, stageData, steps, currentIdx })
-      if (_gateEarlyReturn) return _gateEarlyReturn
-    } else if (actualCompleted < actualTotal) {
-      // 实际步骤未全部完成，跳过 validator（状态可能不同步）
-      console.log(`\n⚠️ 阶段校验跳过：${actualTotal} 步中仅 ${actualCompleted} 步标记为已完成，可能存在状态不同步。如确认阶段已完成，请运行 --status 确认。`)
-    }
-
-    // execute worktree cleanup（W6 Step6c 抽至 complete-handlers.js handleExecuteWorktreeCleanup）
-    await handleExecuteWorktreeCleanup({ stageName, changeName, cwd })
 
     return { stageCompleted: true, currentIdx, nextPendingIdx: -1 }
   }
@@ -860,36 +727,11 @@ export async function continueStep(pm, progress, stageName, cwd, answer, options
     stageData.status = 'completed'
     stageData.completedAt = now
     await pm._write(cwd, progress, changeName)
+    // 阶段完成收尾共享管线（含 execute worktree cleanup），消除 continueStep 完成分支绕过 gate 的 S2（task-01 抽出）。
+    // gate 失败已 rollback，early-return 跳过下方"阶段已完成/下一步"提示（与 completeStep 同语义）。
+    const _stageGatesResult = await completeStageGates({ stageName, cwd, changeName, platformOpts, specBase, progress, pm, stageData, steps: stageData.steps, currentIdx, outputText: null })
+    if (_stageGatesResult) return _stageGatesResult
     console.log(`\n✅ ${stageName} 阶段已完成（${stageData.steps.length}/${stageData.steps.length} 步）`)
-    // ── execute 阶段完成时条件性清理 worktree ──
-    if (stageName === 'execute' && changeName) {
-      try {
-        const { WorktreeManager } = await import('../worktree.js');
-        const wm = new WorktreeManager({ cwd });
-        const meta = wm.getMeta(changeName);
-        if (!meta) {
-          console.log('🔗 Worktree: n/a (no meta)');
-        } else if (meta.mode === 'native-worktree') {
-          console.log('🔗 Worktree: kept (外部隔离环境)');
-        } else {
-          // in-place 模式不再短路：cleanup 现在能安全处理 in-place（只清 meta，不碰主工作区）
-          const check = wm.hasUnappliedChanges(changeName);
-          if (check.hasChanges) {
-            console.log(`🔗 Worktree: pending apply (${check.changedFiles.length} 个未应用变更)`);
-            console.log(`   下一步: sillyspec worktree apply ${changeName}`);
-          } else {
-            const cleanResult = wm.cleanup(changeName);
-            console.log(`🔗 Worktree: ${cleanResult.result}`);
-            if (cleanResult.residual?.length > 0) {
-              console.warn(`   ⚠️ 清理残留: ${cleanResult.residual.join('; ')}`);
-              console.warn(`   手动处理: sillyspec worktree cleanup ${changeName} --force`);
-            }
-          }
-        }
-      } catch (e) {
-        console.warn(`🔗 Worktree: check failed — ${e.message}`);
-      }
-    }
     // 阶段完成后明确下一步（agent 常卡：stageData completed 但不知要 run <下一阶段> 推进 currentStage）
     const nextStageHint = { brainstorm: 'plan', plan: 'execute', execute: 'verify', verify: 'archive' }[stageName]
     if (nextStageHint) {

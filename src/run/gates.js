@@ -20,9 +20,11 @@
  * 不搬：ensureDepsFreshness（execute 入口 deps 自检，调用方 runStage 非 completeStep，归属未来 execute-handler）
  */
 import { basename, join } from 'node:path'
-import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, statSync, mkdirSync, writeFileSync } from 'node:fs'
 import { triggerSync, resolveChangeDir, resolveRuntimeRoot } from './shared.js'
 import { runValidators } from '../stage-contract.js'
+import { handleScanStageCompleted, handleExecuteWorktreeCleanup } from './complete-handlers.js'
+import { stageRegistry } from '../stages/index.js'
 
 /**
  * 判断当前 execute step 所在 wave 是否全部 task 都声明 no_deps_verify: true（D-006@v2）。
@@ -381,6 +383,171 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
       return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)
     }
   }
+  return null
+}
+
+/**
+ * 读取 design.md frontmatter 的 scale 字段（brainstorm 末步写入 'small'|'large'）。
+ * completeStep 的下一步提示据此分叉：small→quick，large/读不到→plan（fail-safe 走重流程）。
+ * 只解析首个 YAML frontmatter 块，避免误读正文里的 "scale:"。
+ * 从 complete.js 迁入（completeStageGates 共享收尾管线 + completeStep brainstorm 提示消费）。
+ */
+export function readDesignScale(specBase, changeName) {
+  if (!changeName) return null
+  const designPath = join(specBase, 'changes', changeName, 'design.md')
+  if (!existsSync(designPath)) return null
+  const text = readFileSync(designPath, 'utf8')
+  const fm = text.match(/^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*\r?\n/)
+  if (!fm) return null
+  const m = fm[1].match(/^scale:[ \t]*['"]?(\w+)/m)
+  return m ? m[1] : null
+}
+
+/**
+ * 校验变更目录下近 10 分钟新增的 .md/.yaml/.yml 文件含 author/created_at 元数据（advisory 打印）。
+ * 从 complete.js 迁入（completeStageGates 共享收尾管线消费）。
+ */
+export function validateMetadata(cwd, stageName, specBase) {
+  const changesDir = join(specBase, 'changes')
+  if (!existsSync(changesDir)) return
+
+  const cutoff = Date.now() - 10 * 60 * 1000
+  const missing = []
+
+  function walk(dir) {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name)
+      try {
+        if (entry.isDirectory()) { walk(full); continue }
+        if (!/\.(md|yaml|yml)$/.test(entry.name)) continue
+        const mtime = statSync(full).mtimeMs
+        if (mtime < cutoff) continue
+        const content = readFileSync(full, 'utf-8')
+        if (!content.includes('author:') && !content.includes('author：')) missing.push(full)
+        if (!content.includes('created_at:') && !content.includes('created_at：')) missing.push(full)
+      } catch (e) { /* skip unreadable files */ }
+    }
+  }
+
+  walk(changesDir)
+  const unique = [...new Set(missing)]
+  if (unique.length > 0) {
+    console.log(`\n⚠️  以下文件缺少 author 或 created_at 元数据：`)
+    unique.forEach(f => console.log(`  - ${f.replace(cwd + '/', '')}`))
+    console.log('请在文件头部添加 author（git 用户名）和 created_at（精确到秒）')
+  }
+}
+
+/**
+ * 验证关键文件是否存在于正确的变更目录下（advisory 打印，防 AI 写错路径）。
+ * 从 complete.js 迁入（completeStageGates 共享收尾管线消费）。
+ */
+export function validateFileLocations(cwd, stageName, progress, changeName, specBase) {
+  const effectiveChange = changeName || progress.currentChange
+  if (!effectiveChange) return
+
+  const changeDir = join(specBase, 'changes', effectiveChange)
+  if (!existsSync(changeDir)) return
+
+  // 每个阶段完成后预期存在的文件
+  // brainstorm:scale=small(小变更)只必产 design.md;large/未标 scale → 四件套全。
+  // 与 validateBrainstormOutputs 的 BRAINSTORM_RULES condition(scale≠small)同源,避免对合法 small 变更
+  // 误报"⬜ proposal/requirements/tasks 未找到"(本检查仅 advisory 打印不 gate,但误导输出仍要消除)。
+  const brainstormExpected = readDesignScale(specBase, effectiveChange) === 'small'
+    ? ['design.md']
+    : ['design.md', 'proposal.md', 'requirements.md', 'tasks.md']
+  const expectedFiles = {
+    brainstorm: brainstormExpected,
+    plan: ['plan.md'],
+    archive: ['module-impact.md'],
+  }
+
+  const expected = expectedFiles[stageName]
+  if (!expected) return
+
+  const missing = []
+  for (const file of expected) {
+    if (!existsSync(join(changeDir, file))) {
+      missing.push(file)
+    }
+  }
+
+  if (missing.length > 0) {
+    console.log(`\n⚠️  文件位置验证：以下文件未在变更目录中找到`)
+    console.log(`  变更目录：${changeDir.replace(cwd + '/', '')}/`)
+    for (const f of missing) {
+      // 检查是否写到了错误的位置
+      const wrongPath = join(specBase, 'changes', 'change', effectiveChange, f)
+      if (existsSync(wrongPath)) {
+        console.log(`  ❌ ${f} — 不存在，但发现了错误路径：${wrongPath.replace(cwd + '/', '')}`)
+        console.log(`     提示：应该写入 ${changeDir.replace(cwd + '/', '')}/${f}`)
+      } else {
+        console.log(`  ⬜ ${f} — 未找到（该阶段可能未产出此文件）`)
+      }
+    }
+  } else {
+    console.log(`\n✅ 文件位置验证：所有 ${expected.length} 个预期文件均在变更目录中`)
+  }
+}
+
+/**
+ * 阶段完成收尾共享管线（从 completeStep 抽出，消除 noAI 末步 / continueStep 完成分支绕过 gate 的
+ * S1/S2/S3 三处不对称）。调用方已自行标记 stageData.status='completed' 并 pm._write 落盘后调用本函数。
+ *
+ * 序列：handleScanStageCompleted → validateMetadata → validateFileLocations[completed‖skipped 守卫] →
+ * auxiliary 重置 → runStageCompletionGates[同守卫] → handleExecuteWorktreeCleanup。
+ *
+ * 关键陷阱（design §5.4）：auxiliary 重置把 stageData.steps 换成 freshSteps（全 pending）；下方
+ * runStageCompletionGates 守卫与 rollbackStageCompletion 必须用入参 steps（pre-reset 原数组），
+ * 不得重读 stageData.steps（否则计数恒 0 → gate 永跳过）。本函数全程用入参 steps，未重读。
+ *
+ * @returns {Promise<{stageCompleted:false,currentIdx,nextPendingIdx:number}|null>}
+ *          null = 全部通过，调用方继续自管收尾（如下一步提示）；
+ *          非 null = gate/handler 失败已 rollback，调用方直接 return。
+ */
+export async function completeStageGates({ stageName, cwd, changeName, platformOpts, specBase, progress, pm, stageData, steps, currentIdx, outputText }) {
+  // scan 平台 manifest + post-check（S1 平台受害者：noAI scanPostcheck 末步 / continueStep 现也走这里）
+  const _scanResult = await handleScanStageCompleted({ stageName, currentIdx, cwd, progress, pm, stageData, changeName, outputText, platformOpts })
+  if (_scanResult) return _scanResult
+
+  // 守卫计数：completed‖skipped === total（修 S3）；用入参 steps（pre-reset 原数组，design §5.4）
+  const settledCount = steps.filter(s => s.status === 'completed' || s.status === 'skipped').length
+  const total = steps.length
+
+  validateMetadata(cwd, stageName, specBase)
+
+  // 验证关键文件位置（仅当所有步骤已结案 completed‖skipped 时才校验）
+  if (settledCount === total && total > 0) {
+    validateFileLocations(cwd, stageName, progress, changeName, specBase)
+  }
+
+  // 辅助阶段完成后重置步骤（scan 等 auxiliary 阶段重置回 pending 可重跑）
+  const stageDef = stageRegistry[stageName]
+  if (stageDef?.auxiliary) {
+    const freshSteps = (stageDef.steps || []).map(s => ({
+      name: s.name,
+      status: 'pending',
+      output: null,
+      completedAt: null
+    }))
+    stageData.steps = freshSteps
+    stageData.status = 'pending'
+    stageData.completedAt = null
+    if (progress.currentStage === stageName) progress.currentStage = ''
+    await pm._write(cwd, progress, changeName)
+  }
+
+  // 阶段完成校验 gate 级联（runValidators → verify-test → Plan→Execute → Stage Review → Task Review）
+  if (settledCount === total && total > 0) {
+    const _gateEarlyReturn = await runStageCompletionGates({ stageName, cwd, changeName, platformOpts, specBase, progress, pm, stageData, steps, currentIdx })
+    if (_gateEarlyReturn) return _gateEarlyReturn
+  } else if (settledCount < total) {
+    console.log(`\n⚠️ 阶段校验跳过：${total} 步中仅 ${settledCount} 步标记为已结案（completed‖skipped），可能存在状态不同步。如确认阶段已完成，请运行 --status 确认。`)
+  }
+
+  // execute worktree cleanup（completeStep / continueStep 完成分支统一调用，避免双清理）
+  await handleExecuteWorktreeCleanup({ stageName, changeName, cwd })
+
   return null
 }
 
