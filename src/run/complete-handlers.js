@@ -601,6 +601,18 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
     // 确定性校验：只查必填字段是否齐全，不判内容质量。缺字段 → 本次不完成（回滚 step 状态 +
     // exit 1），保留「进行中」条目，agent 补全 --output 后重跑 --done 即可，不丢进度。
     // 仅 completeQuicklogEntry 会实际持久化时才校验；前两个 step 的 --done output 不入 QUICKLOG，不校验。
+    // Q6：quick 末步 --done 必须带 --output（四字段结果是 QUICKLOG「结果：」唯一来源）。缺则回退 pending +
+    // exit(1)，不静默落空结果条目（原 if(outputText) 守卫致 outputText 为空时跳过校验，completeQuicklogEntry
+    // 又用 outputText||'' 兜底 → 结果块为空却翻「已完成」）。handleQuickStageCompletion 仅在阶段完成（=末步）时触发。
+    const isLastStep = currentIdx === steps.length - 1
+    if (isLastStep && !outputText) {
+      console.error('\n❌ quick 最后一步 --done 必须带 --output（四字段结果模板）。')
+      console.error('   --output 是 QUICKLOG「结果：」归档的唯一来源。补全后重跑 --done（不丢进度），照抄模板：')
+      console.error('     sillyspec run quick --done --change <changeName> --output "需求：… 根因：… 方案：… 结果：…"')
+      steps[currentIdx].status = 'pending'
+      steps[currentIdx].completedAt = null
+      process.exit(1)
+    }
     if (outputText) {
       const resultCheck = validateQuickResult(outputText)
       if (!resultCheck.ok) {
