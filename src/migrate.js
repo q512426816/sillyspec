@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync, renameSync, copyFileSync } from 'fs';
+import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync, renameSync, copyFileSync, statSync, cpSync } from 'fs';
 import { basename, join, resolve } from 'path';
 import chalk from 'chalk';
 
@@ -60,9 +60,19 @@ export function migrateDocs(projectDir) {
       const src = join(archiveDir, entry);
       const dest = join(targetDir, entry);
       if (!existsSync(dest)) {
-        copyFileSync(src, dest);
-        console.log(chalk.green('  ✅') + ` archive/${entry}`);
-        migrated++;
+        // 归档变更本身是目录（含 design.md 等），copyFileSync 对目录源抛 EISDIR；
+        // 按类型分发：目录用 cpSync 递归、文件用 copyFileSync，单条失败 try/catch 不中断整体迁移
+        try {
+          if (statSync(src).isDirectory()) {
+            cpSync(src, dest, { recursive: true });
+          } else {
+            copyFileSync(src, dest);
+          }
+          console.log(chalk.green('  ✅') + ` archive/${entry}`);
+          migrated++;
+        } catch (err) {
+          console.log(chalk.yellow('  ⚠️') + ` archive/${entry} 迁移失败: ${err.message}`);
+        }
       } else {
         console.log(chalk.yellow('  ⏭️') + ` archive/${entry} (已存在)`);
       }

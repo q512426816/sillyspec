@@ -33,7 +33,7 @@ SillySpec 的文档结构迁移与模块索引管理模块。负责：
 ```
 migrateDocs(projectDir)
   → 检测 .sillyspec/ 下各旧目录
-  → copyFileSync 到 docs/<project>/ 对应子目录（不删除源文件）
+  → 按类型复制到 docs/<project>/ 对应子目录（文件 copyFileSync、归档变更目录 cpSync 递归；不删除源文件，单条失败 try/catch 跳过不中断）
   → 已存在目标文件跳过，输出统计
 
 rebuildModuleMap(cwd)

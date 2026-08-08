@@ -66,3 +66,4 @@ Claude Code 工具拦截守卫，在 worktree 隔离模式下根据阶段门控�
 ## 变更索引（表格，初始为空）
 | 日期 | 变更名 | 摘要 |
 |------|--------|------|
+| 2026-08-08 | ql-20260808-005-b3ff | worktree-guard quick baseline 比对路径归一 forward-slash（split(path.sep).join），修 Windows 下 path.relative 产 backslash 与 baseline（forward-slash）不匹配致实时防护被静默绕过 |

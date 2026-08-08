@@ -694,9 +694,11 @@ export function shouldBlockWrite(filePath, cwd) {
   // quick 阶段：检查 baselineFiles（合并所有活跃 session guard 并集，D-002@v1）
   if (stage === 'quick') {
     const { baselineFiles } = readAllQuickGuards(projectRoot)
-    const relTarget = path.relative(projectRoot, absPath)
+    // 归一为 forward-slash：baselineFiles 取自 guard.json（经 parsePorcelainPath 已是 /），
+    // Windows 下 path.relative 产 backslash 会与 baseline 不匹配，导致实时防护被静默绕过
+    const relTarget = path.relative(projectRoot, absPath).split(path.sep).join('/')
     // 如果目标是 baseline protected file，阻止写入（并集 = 保护所有 session 的 baseline）
-    if (baselineFiles.some(f => relTarget === f || relTarget.startsWith(f + path.sep))) {
+    if (baselineFiles.some(f => relTarget === f || relTarget.startsWith(f + '/'))) {
       return {
         blocked: true,
         reason: [

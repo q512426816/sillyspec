@@ -85,3 +85,18 @@
 根因：#14 技术 checklist（AC-001~010）全✅ 仍含业务取舍会被 AUTO_DECIDED 吞掉（边界画错，低技术风险≠无需用户决策）；#10 末步 --done 缺 --output 时原 if(outputText) 跳过校验 + completeQuicklogEntry 用 outputText||'' 兜底，致结果块为空却翻已完成
 方案：#14 补 AC-011「不涉及业务规则/产品范围/默认行为/用户可见行为变更」+ line6/100 引用 + line119 影响列表加「/业务」+ brainstorm-auto.md 镜像 + _extracted.json；#10 complete-handlers.js 加 isLastStep 守卫缺 --output 则回退 pending+exit1
 结果：Q6 新测试 4/4（缺--output→exit1+回退pending）、quick-cli-managed-e2e 15/15（--output 正常流不误伤）、agent2 B1 测试通过（AC-011 未破坏 conditionalWait）、prompt-placeholders 11/11、lint 72 文件 exit0；agent2 已 commit P0 清场，文件无 entangle，正常编辑无需 isolation
+
+## ql-20260808-005-b3ff | 2026-08-08 17:26:00 | 四维审查 3 处低风险缺陷：CLAUDE.md 幽灵命令 resume + worktree-guard Win 分隔符绕过 + migrate EISDIR
+状态：已完成
+关联变更：（无）
+文件：
+- CLAUDE.md（规则9 删幽灵命令 sillyspec resume、纠正 status 误述为存进度，改为进度由 --done 自动落盘 + 恢复用 progress show 查看、run stage 续跑）
+- .claude/CLAUDE.md（同上镜像；两份 CLAUDE.md 并存且 init 会复制给所有用户项目，同步改）
+- src/hooks/worktree-guard.js（shouldBlockWrite 第697行 relTarget 改 split(path.sep).join() 归一正斜杠、前缀比对 f + path.sep 改显式斜杠，修 Windows 下 path.relative 产反斜杠与 baseline 正斜杠不匹配致 quick 实时防护被静默绕过；src/hooks 在 DANGEROUS_PATTERNS，--done 审计 --force-baseline 显式解锁）
+- src/migrate.js（import 补 statSync 与 cpSync；archive 段按 statSync(src).isDirectory() 分发——目录 cpSync recursive、文件 copyFileSync，外层 try/catch 单条失败不中断整体迁移，修对归档变更目录 copyFileSync 抛 EISDIR）
+- .sillyspec/docs/sillyspec/modules/hooks.md（变更索引表追加 ql-005 行：worktree-guard 路径归一修 Win 防护绕过）
+- .sillyspec/docs/sillyspec/modules/migration.md（关键逻辑 copyFileSync 描述更新为按目录或文件类型分发）
+需求：修四维代码审查（逻辑/健壮/性能/驾驭）发现的三处低风险缺陷（驾驭 F1 CLAUDE.md 幽灵命令 + 健壮 P2-1 worktree-guard Windows 分隔符 + 健壮 P2-2 migrate EISDIR），均低风险、范围明确、不涉核心流程，走 quick
+根因：① CLAUDE.md 规则9 引用幽灵命令 sillyspec resume（实测 unknown command）并误述 status 为存进度 ② worktree-guard baseline 比对在 Windows 产反斜杠与 baseline 正斜杠不匹配致 quick 实时防护被绕过 ③ migrate archive 段 copyFileSync 对归档变更目录抛 EISDIR 中断迁移
+方案：① CLAUDE.md 两份规则9 改为准确表述，进度由 --done 自动落盘、恢复用 progress show 查看再 run stage 续跑 ② worktree-guard 把比对路径归一为正斜杠、分隔符改显式斜杠 ③ migrate import 补 statSync 与 cpSync，archive 段按目录或文件类型分发（目录 cpSync 递归）加 try/catch
+结果：5 处源码或文档 Edit 落盘（含 2 个模块文档同步）；node --check worktree-guard/migrate 通过；lint 73 文件 exit0；npm test 全量 exit0 无失败文件无回归；--done 边界审计 src/hooks/worktree-guard.js 命中 DANGEROUS_PATTERNS，git diff --cached 确认系本次修复非并发误判，--force-baseline 显式解锁
