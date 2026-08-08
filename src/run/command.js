@@ -407,6 +407,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
   //   3. 仍读不到 → 生成新 UUID（兼容旧行为；进度可能命中空行，由后续 pm.read 兜底）
   const QUICK_SID_RE = /^quick-[0-9a-f]{8}$/
   let quickSessionId = null
+  let quickFallbackUsed = false  // Q7: --done 未带 --change 时 fallback 读 current-quick-run-id 命中（区别于显式 --change quick-<hex>）
   if (stageName === 'quick') {
     // 1373-1376 已把 quick 的 --change 值清进 linkedChanges、changeName 置 null。
     // 此处回看 --change 原始值：若恰好是单个 quick-<8hex> → 识别为本会话 sessionId（精确恢复），
@@ -427,7 +428,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
           const idFile = join(runtimeRoot, 'current-quick-run-id')
           if (existsSync(idFile)) {
             const v = readFileSync(idFile, 'utf8').trim()
-            if (QUICK_SID_RE.test(v)) quickSessionId = v
+            if (QUICK_SID_RE.test(v)) { quickSessionId = v; quickFallbackUsed = true }
           }
         } catch {}
       }
@@ -635,6 +636,21 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
 
   // 确保 progress 有 currentChange
   const effectiveChange = changeName || progress.currentChange || resolveChangeName(cwd, progress, specRoot)
+
+  // ── Q7：quick --done 不带 --change 时 fallback 读 current-quick-run-id 可能命中他者会话 ──
+  // 并发两 quick 会话：B 后启动覆盖 A 的 id（last-writer-wins），A 的 --done 不带 --change → 读到 B 的 sessionId
+  // → 误操作 B 的 progress/QUICKLOG。fallback 命中的会话若已完成或无可推进步骤（id stale / 他者已收尾），
+  // 拒绝推进并要求显式 --change。（live A/B race 需 per-session 锚 commit，见 review Q2/D2，本守卫只兜 stale/completed。）
+  if (stageName === 'quick' && isDone && quickFallbackUsed) {
+    const qs = progress.stages.quick
+    const hasActionable = qs?.steps && qs.steps.some(s => s.status === 'pending' || s.status === 'waiting' || s.status === 'in-progress')
+    if (!qs || qs.status === 'completed' || !hasActionable) {
+      console.error(`\n❌ --done 未带 --change，回退读到的 quick 会话 ${changeName} 已不可推进（已完成或无待办步骤）。`)
+      console.error(`   并发多 quick 会话时 .runtime/current-quick-run-id 可能指向他者会话（last-writer-wins）。`)
+      console.error(`   请显式带 --change <quick-session-id> 指定要完成的会话（sillyspec run quick --status 查各会话进度）。`)
+      process.exit(2) // 用法错（fallback 命中 stale/他者会话）→ exit 2
+    }
+  }
 
   // -- auto 模式：自动推进所有流程阶段
   if (stageName === 'auto') {
