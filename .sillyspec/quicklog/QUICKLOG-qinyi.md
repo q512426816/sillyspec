@@ -48,7 +48,40 @@
 方案：prompt.js 5 条否定式铁律改正向+理由并同步 README 镜像；execute SKILL 删 propose、限定 git 话术；B3 评估后保留登记；L1/L4/L8 并发撞 stage.js/shared.js/complete.js 让出
 结果：output-step-render 44/0、lint 72 文件通过；全量仅 spec-dir 1 失败属并发 P0/P1 Q3 fail-loud WIP 回归非本次引入；审计 --force-baseline/--allow-new 解锁（他人 Q5 改 DANGEROUS_PATTERNS 为 src/run 前缀致 prompt.js 误判危险+他人新测试误判新增），CLI 文件清单含他人 9 个并发脏文件属归属噪音，实际 commit 用精确 pathspec 仅落上述 4 文件
 
-## ql-20260808-002-a2ff | 2026-08-08 08:15:58 | 修复 multi-agent-review P1 批 #8(P3)+#9(P2)：删 3 个 SKILL 泄露的 {REVIEW_JSON_CONTRACT} 内部占位符；重写 auto SKILL 门控段对齐 AC checklist+t…
-状态：进行中
+## ql-20260808-002-a2ff | 2026-08-08 08:15:58 | 修审查 P1 批 #8(P3) 对外 SKILL 泄露内部占位符 + #9(P2) auto SKILL 门控描述与实际机制不符
+状态：已完成
 关联变更：（无）
-文件：.claude/skills/sillyspec-brainstorm/SKILL.md, .claude/skills/sillyspec-plan/SKILL.md, .claude/skills/sillyspec-execute/SKILL.md, .claude/skills/sillyspec-auto/SKILL.md
+文件：
+- .claude/skills/sillyspec-brainstorm/SKILL.md（#8 P3：删 {REVIEW_JSON_CONTRACT} 占位符字面，改述「运行时注入 schema 表+JSON 示例+docHash 算法，以注入版契约为权威」）
+- .claude/skills/sillyspec-plan/SKILL.md（#8 P3：同上，删占位符改述运行时注入行为）
+- .claude/skills/sillyspec-auto/SKILL.md（#9 P2：「阶段审核门控」段整段重写为 Stage Review Gate，删「简单/中等/复杂→0/1/2-3 子代理」启发式表，对齐真实 tier=self/independent + AC checklist 注入机制）
+需求：修审查 P1 批 #8(P3) 对外 SKILL 泄露内部占位符 + #9(P2) auto SKILL 门控描述与实际机制不符
+根因：#8 {REVIEW_JSON_CONTRACT} 是 prompt.js 内部占位符、运行时已替换，写进对外 SKILL 违反外部纯净性，弱模型可能误以为要在产出里写这串字面；#9 auto SKILL 教弱模型「复杂度→审核子代理数」启发式，与实际 brainstorm-auto.js 的 AC checklist + tier=self/independent 机制完全脱节
+方案：#8 brainstorm/plan SKILL 删占位符字面，改述为「运行时 CLI 会把精确 schema 表+完整 JSON 示例+docHash 算法注入到该步 prompt，以实际收到的注入版契约为权威逐字模板」；#9 auto SKILL 整段重写「阶段审核门控」为 Stage Review Gate（tier=self 当前 agent 自审 / tier=independent 派独立 QA 子代理，AC checklist 由 CLI 注入、以注入版为准），删「简单/中等/复杂→0/1/2-3 子代理」表
+结果：brainstorm/plan/auto 三个 SKILL.md 改完、占位符已清零；execute SKILL 两处（line109/113）因并发 agent 占用暂缓避 lost-update；纯文档无逻辑变更，lint 不扫 .claude/skills 故未跑
+
+## ql-20260808-003-76e0 | 2026-08-08 11:23:45 | review P1 收尾 #8(P3) execute SKILL 删剩 2 处占位符 + #13(Q7) quick --done 不带 --change 时…
+状态：已完成
+关联变更：（无）
+文件：
+- .claude/skills/sillyspec-execute/SKILL.md（#8 P3：删 line109/113 剩 2 处 {REVIEW_JSON_CONTRACT} 占位符，改述运行时注入 schema 表+JSON 示例+docHash 算法行为）
+- src/run/command.js（#13 Q7：加 quickFallbackUsed 标记 + 守卫置于 rule 655 前——fallback 命中 completed/无可推进会话则 exit 2 拒绝、文案提示并发污染+要求显式 --change）
+- test/quick-done-fallback-guard.test.mjs（新建：Q7 守卫 8 断言回归，正向 fallback→completed→exit2 + 负向 fallback→pending→不拦截）
+需求：review P1 收尾 #8(P3) execute SKILL 删剩 2 处占位符 + #13(Q7) quick --done 不带 --change 时 fallback 读 current-quick-run-id 命中他者/已完成会话的并发污染守卫
+根因：#8 execute SKILL 仍泄露内部占位符 {REVIEW_JSON_CONTRACT}（与 brainstorm/plan 同病，运行时已替换、对外 SKILL 提它违反纯净性）；#13 current-quick-run-id 单文件 last-writer-wins，并发两 quick 会话 B 后启动覆盖 A 的 id，A 的 --done 不带 --change 会 fallback 读到他者/已完成的 sessionId 误操作 progress/QUICKLOG
+方案：#8 execute SKILL 两处删占位符改述运行时注入行为（brainstorm/plan/execute 3 SKILL 占位符全清零）；#13 command.js 加 quickFallbackUsed 标记（仅 fallback 路径置位）+ 守卫置于 rule 655 前——fallback 命中会话若 status=completed 或无 pending/waiting/in-progress 步则 exit 2 拒绝、文案提示并发污染+要求显式 --change，替代 rule 655 在此场景误推 --reopen
+结果：新增 test/quick-done-fallback-guard.test.mjs 8 断言全过（正向 fallback→completed→exit2、负向 fallback→pending→不拦截 step1 正常完成）；quick-cli-managed-e2e 15/15（显式 --change 流不被守卫误伤）、quick-session-isolation 23/23、lint 72 文件 exit0、node --check command.js OK
+
+## ql-20260808-004-d72d | 2026-08-08 12:31:00 | review P1 收尾 #14(B2) brainstorm-auto AC checklist 补业务维度 + #10(Q6) quick 末步 --don…
+状态：已完成
+关联变更：（无）
+文件：
+- src/stages/brainstorm-auto.js（#14 B2：AC checklist 补 AC-011「业务规则/产品范围/默认行为/用户可见行为」+ line6/100 引用 AC-001~AC-011 + line119 影响列表加「/业务」）
+- src/run/complete-handlers.js（#10 Q6：handleQuickStageCompletion 加 isLastStep 守卫，末步 --done 缺 --output 则回退 pending+exit1+提示）
+- docs/prompt/brainstorm-auto.md（#14 B2：AC 段镜像同步——AC-011 + 引用 + 影响列表）
+- docs/prompt/_extracted.json（#14 B2：跑 _extract.mjs 刷新 brainstorm-auto 步）
+- test/quick-laststep-output-required.test.mjs（新建：#10 Q6 守卫 4 断言，缺 --output→exit1 + 末步回退 pending）
+需求：review P1 收尾 #14(B2) brainstorm-auto AC checklist 补业务维度 + #10(Q6) quick 末步 --done 强制带 --output
+根因：#14 技术 checklist（AC-001~010）全✅ 仍含业务取舍会被 AUTO_DECIDED 吞掉（边界画错，低技术风险≠无需用户决策）；#10 末步 --done 缺 --output 时原 if(outputText) 跳过校验 + completeQuicklogEntry 用 outputText||'' 兜底，致结果块为空却翻已完成
+方案：#14 补 AC-011「不涉及业务规则/产品范围/默认行为/用户可见行为变更」+ line6/100 引用 + line119 影响列表加「/业务」+ brainstorm-auto.md 镜像 + _extracted.json；#10 complete-handlers.js 加 isLastStep 守卫缺 --output 则回退 pending+exit1
+结果：Q6 新测试 4/4（缺--output→exit1+回退pending）、quick-cli-managed-e2e 15/15（--output 正常流不误伤）、agent2 B1 测试通过（AC-011 未破坏 conditionalWait）、prompt-placeholders 11/11、lint 72 文件 exit0；agent2 已 commit P0 清场，文件无 entangle，正常编辑无需 isolation
