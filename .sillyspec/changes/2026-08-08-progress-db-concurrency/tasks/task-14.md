@@ -18,6 +18,10 @@ allowed_paths:
   - test/runtime-cleanup-keeps-worktree.test.mjs
   - test/_complete-step-harness.mjs
   - test/doctor-align-execute-progress.test.mjs
+  - src/worktree.js
+  - src/index.js
+  - src/init.js
+  - src/progress.js
 goal: >
   把 db/progress 相关测试从 sql.js 异步/门禁缓存断言重写为 better-sqlite3 同步行为，
   承接 task-10 声明的 6 个依赖测试（db-atomic-write / worktree-guard / worktree-guard-db-fallback /

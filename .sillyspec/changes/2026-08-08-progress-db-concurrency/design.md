@@ -2,7 +2,7 @@
 author: qinyi
 created_at: 2026-08-08 23:39:18
 scale: large
-risk_level: high
+risk_level: contract-required
 ---
 
 # 设计文档（Design）— 进度库并发安全（better-sqlite3 替换 sql.js）

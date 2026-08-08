@@ -59,7 +59,7 @@ scale: large
 ## Wave 7 — 文档同步
 依赖 Wave 6。目的：文档与代码一致。
 
-- [ ] task-17: 文档同步——docs/sillyspec/file-lifecycle.md（引擎+删 gate-status）+ `.claude/skills/` 进度库描述 + `node docs/prompt/_extract.mjs` 再生（如涉及 stages prompt）。完成标准：文档与代码一致。
+- [x] task-17: 文档同步——docs/sillyspec/file-lifecycle.md（引擎+删 gate-status）+ `.claude/skills/` 进度库描述 + `node docs/prompt/_extract.mjs` 再生（如涉及 stages prompt）。完成标准：文档与代码一致。（实测 2cd295a：file-lifecycle 全家+interface-contract+doctor SKILL 5 文件同步 better-sqlite3 WAL 口径+删 gate-status 全部条目；storage-and-state 删 ## gate-status.json 章节；worktree-and-guard hook 读序改直读 DB；grep docs/sillyspec+.claude/skills gate-status 仅留排除的历史评审 review-2026-08-08.md，file-lifecycle 全家零命中；sql.js/整库零命中；_extract 未重跑——_extracted.json grep gate-status/sql.js 零命中证 stages prompt 不涉及；resume SKILL+prompt/README 核对无需改）
 
 ## 验收
 - 全量 `npm test` + `npm run lint` 绿；src/ `await (pm\.|this\.pm\.|this\._ensureDB|progressManager\.)` 归零（R-02）。
