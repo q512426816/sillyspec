@@ -23,7 +23,7 @@
 import { basename, join, resolve, relative, isAbsolute } from 'node:path'
 import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync, unlinkSync, rmSync } from 'node:fs'
 import { renameSyncRetry, writeAtomicSync } from '../fs-atomic.js'
-import { resolveChangeDir, resolveRuntimeRoot, safeGit, auditQuickCompletion, triggerSync, isQuickMetadata } from './shared.js'
+import { resolveChangeDir, resolveQuickSessionsDir, safeGit, auditQuickCompletion, triggerSync, isQuickMetadata } from './shared.js'
 import { stageRegistry } from '../stages/index.js'
 import { SCAN_STATUS, POINTER_STATUS } from '../constants.js'
 import { printQuickAuditReview } from './quick-audit.js'
@@ -547,7 +547,7 @@ export async function handleWorkflowPostCheck({ stageName, steps, currentIdx, cw
  * isForceBaseline/isAllowNew/platformOpts。辅助函数直接 import（safeGit/auditQuickCompletion ← shared，
  * printQuickAuditReview ← quick-audit，4 个 quicklog fns ← quicklog，unlinkSync/rmSync ← fs 静态）。
  */
-export async function handleQuickStageCompletion({ stageName, steps, currentIdx, cwd, progress, changeName, specBase, outputText, confirm, isForceBaseline, isAllowNew, platformOpts }) {
+export async function handleQuickStageCompletion({ stageName, steps, currentIdx, cwd, progress, changeName, specBase, outputText, confirm, isForceBaseline, isAllowNew, platformOpts, pm }) {
   // quick 收尾：强校验 QUICKLOG 条目 + 翻状态 + 勾 tasks.md（CLI 接管）
   if (stageName === 'quick') {
     // §4.6 从 session guard.json 读 guard（不依赖 progress.quickGuard）。
@@ -555,8 +555,9 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
     // 若仍用 if (progress.quickGuard) 驱动收尾会整体跳过，导致 .runtime/quick-sessions/<sessionId>/ 残留僵尸。
     // 改为从文件读 guard：优先 session 目录 guard.json，回退旧单文件 quick-guard.json（task-03 前兼容）。
     // sessionId == changeName == quick-<uuid8>（completeStep 作用域内 changeName 已解构自 options）。
-    const runtimeBase = resolveRuntimeRoot(platformOpts, specBase)
-    const sessionGuardFile = join(runtimeBase, 'quick-sessions', changeName, 'guard.json')
+    // session 目录经 resolveQuickSessionsDir 单一解析（multi-agent-review Q4）：与 stage.js 写入路径对齐，
+    // 平台模式 runtimeRoot 与 specBase/.runtime 不同时不再读不到 guard。
+    const sessionGuardFile = join(resolveQuickSessionsDir(platformOpts, specBase), changeName, 'guard.json')
     const legacyGuardFile = join(specBase, '.runtime', 'quick-guard.json')
     let guard = null
     try {
@@ -661,14 +662,27 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
       console.warn(`⚠️ QUICKLOG 完成态写入失败: ${e.message}`)
     }
 
-    // 清理 session 目录（rmSync/unlinkSync 容忍不存在）。
+    // 清理 session 目录（rmSync/unlinkSync 容忍不存在）。路径与写入对齐（Q4 resolveQuickSessionsDir）。
     try {
       if (changeName) {
-        const sessionDir = join(runtimeBase, 'quick-sessions', changeName)
+        const sessionDir = join(resolveQuickSessionsDir(platformOpts, specBase), changeName)
         rmSync(sessionDir, { recursive: true, force: true })
       }
       if (existsSync(legacyGuardFile)) unlinkSync(legacyGuardFile)
     } catch {}
+
+    // 注销 quick 会话注册的 changes 行（quick-<uuid8>），避免 active 行随每次 quick 单调累积污染
+    // listChanges / doctor / resolveQuickLinkedChanges（multi-agent-review Q1）。quick 是收尾型会话，
+    // 不走 archive，旧代码从不调 unregisterChange → DB 里 active 的 quick-<hex> 行只增不减。
+    // 仅对 quick-<8hex> sessionId 注销——非 sessionId 形态的变更名是旧兼容路径/真实关联变更，
+    // 误注销会把用户真实变更标 archived（与 command.js:569 sessionId 守卫同形正则）。
+    if (changeName && /^quick-[0-9a-f]{8}$/.test(changeName)) {
+      try {
+        await pm.unregisterChange(cwd, changeName)
+      } catch (e) {
+        console.warn(`⚠️ 注销 quick 会话 changes 行失败（不阻断完成）: ${e.message}`)
+      }
+    }
   }
   return null
 }

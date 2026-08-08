@@ -276,6 +276,24 @@ export function resolveRuntimeRoot(platformOpts, localSpecBase) {
 }
 
 /**
+ * quick 会话目录（.runtime/quick-sessions）的单一解析入口（multi-agent-review Q4）。
+ *
+ * 历史 bug：stage.js 写 guard 用 `specBase/.runtime/quick-sessions/`，收尾 handleQuickStageCompletion
+ * 读/清理用 `resolveRuntimeRoot`（runtimeRoot 被设时返回 runtimeRoot）。两者在平台模式（runtimeRoot 与
+ * specBase/.runtime 不同）下分裂——guard 写到 specBase/.runtime、收尾从 runtimeRoot 读不到 → guard=null
+ * brownfield 分支整体跳过边界审计 + 兜底重分配 qlId + session 目录清错位置。
+ *
+ * 收敛到此函数后，写/读/清理三处共用同一解析（基于 resolveRuntimeRoot），任何平台/漂移模式都对齐。
+ *
+ * @param {object} [platformOpts] - { runtimeRoot?, specDriftAnchor?, ... }（可 null/undefined）
+ * @param {string} localSpecBase - 本地 specBase（cwd/.sillyspec），兜底落点
+ * @returns {string} quick-sessions 目录绝对路径
+ */
+export function resolveQuickSessionsDir(platformOpts, localSpecBase) {
+  return join(resolveRuntimeRoot(platformOpts, localSpecBase), 'quick-sessions')
+}
+
+/**
  * 统一查找变更目录（与 progress.js 的变更检测逻辑一致）。
  */
 export function resolveChangeDir(cwd, progress, specDir = null) {
@@ -345,12 +363,18 @@ export async function checkApproval(cwd, changeName, platformOpts = {}) {
 
 /**
  * 安全执行 git：-c safe.directory per-command（不污染全局 config）+ -C cwd。
+ * @param {string} cwd
+ * @param {string[]} args
+ * @param {{ trim?: boolean }} [opts] - trim:false 保留原样输出（git status --porcelain 首行前导空格
+ *   是状态码的一部分，trim 会削掉致 parsePorcelainPath 丢首字符，坑见 auditQuickCompletion 注释）
  * @returns {{ value: string|null, error: string|null }}
  */
-export function safeGit(cwd, args) {
+export function safeGit(cwd, args, opts = {}) {
+  const { trim = true } = opts
   const fullArgs = ['-c', `safe.directory=${cwd}`, '-C', cwd, ...args]
   try {
-    const value = execSync(['git', ...fullArgs].join(' '), { encoding: 'utf8', timeout: 5000 }).trim()
+    let value = execSync(['git', ...fullArgs].join(' '), { encoding: 'utf8', timeout: 5000 })
+    if (trim) value = value.trim()
     return { value, error: null }
   } catch (e) {
     return { value: null, error: e.message.split('\n')[0] }
@@ -417,7 +441,17 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
   const result = { status: 'safe', reasons: [], changedFiles: [], newFiles: [], deletedFiles: [], baselineHit: [], stagedTotal: 0 }
 
   try {
-    const gitStatus = execSync('git status --porcelain', { cwd, encoding: 'utf8', timeout: 10000 })
+    // safeGit 带 -c safe.directory，避免 linked worktree/容器异 uid/挂载点下裸 `git status` 抛错被
+    // 外层 catch 吞成 warning（multi-agent-review Q3）。safeGit 返回 {value,error} 不抛；若仍有 error
+    // 说明真读不到 git 状态，保守阻断（审计无锚点不能放行），不静默降级。
+    // trim:false 必传：porcelain 首行前导空格是状态码一部分，trim 会削掉致 parsePorcelainPath 丢首字符。
+    const statusResult = safeGit(cwd, ['status', '--porcelain'], { trim: false })
+    if (statusResult.error) {
+      result.reasons.push(`审计失败（git status）: ${statusResult.error}`)
+      result.status = 'blocked'
+      return result
+    }
+    const gitStatus = statusResult.value || ''
     // 不对整段 .trim()：会削首行前导空格致首文件路径丢首字符（见 parsePorcelainPath 注释）。
     const currentEntries = gitStatus.split('\n').filter(Boolean)
 
@@ -441,10 +475,18 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
       'pnpm-lock.yaml',
       '.eslintrc',
       'tsconfig.json',
-      'src/db.js',
-      'src/progress.js',
+      // SillySpec 核心流程代码。W6 重构后 src/run.js（23 行 barrel）/ src/progress.js（facade）
+      // 把真正逻辑下沉到 src/run/、src/progress/ 子目录——旧的精确文件名匹配
+      // （file === 'src/run.js'）命中不到 src/run/command.js（. 与 / 不可混同），致危险文件门
+      // 静默失效。改用「目录前缀（带尾斜杠，startsWith 不会误伤 src/runtime-* 等同名前缀）+
+      // barrel/facade 本体精确名」双重覆盖。重构 src/ 模块时须同步本清单（multi-agent-review Q5）。
       'src/run.js',
+      'src/run/',
+      'src/progress.js',
+      'src/progress/',
+      'src/db.js',
       'src/stage-contract.js',
+      'src/stage-contract-spec.js',
       'src/worktree.js',
       'src/worktree-apply.js',
       'src/hooks/',

@@ -74,18 +74,23 @@ if [ ! -f "$DB_FILE" ]; then echo "⚠️ sillyspec.db 不存在"; exit 0; fi
 node -e "
 const fs = require('fs');
 const dir = '.sillyspec/changes';
-if (!fs.existsSync(dir)) { console.log('ℹ️ changes/ 目录不存在'); process.exit(0); }
-const subs = fs.readdirSync(dir).filter(f => fs.statSync(dir+'/'+f).isDirectory());
-if (subs.length === 0) { console.log('ℹ️ 无变更目录'); process.exit(0); }
+const subs = fs.existsSync(dir) ? fs.readdirSync(dir).filter(f => { try { return fs.statSync(dir+'/'+f).isDirectory(); } catch { return false; } }) : [];
 const { execSync } = require('child_process');
 let known;
 try { const rows = execSync('sqlite3 -json ".sillyspec/.runtime/sillyspec.db" "SELECT name FROM changes WHERE status=\"active\""', {encoding:'utf8'}).trim(); known = new Set(JSON.parse(rows).map(r => r.name)); } catch { known = new Set(); }
 subs.forEach(s => {
   console.log(known.has(s) ? '✅ ' + s + ' — 已关联' : '⚠️ ' + s + ' — 孤儿目录（可清理）');
 });
+// 反向检查（multi-agent-review Q1）：DB active 且匹配 quick-<hex> 但无目录 → 僵尸 quick 会话
+// （quick 收尾未注销，active 行累积污染 listChanges/doctor）。新代码已修收尾，此项清理历史残留。
+const QUICK_RE = /^quick-[0-9a-f]{8}$/;
+const zombieQuick = [...known].filter(n => QUICK_RE.test(n) && !subs.includes(n));
+if (zombieQuick.length > 0) {
+  console.log('⚠️ 检测到 ' + zombieQuick.length + ' 个僵尸 quick 会话（DB active 但无目录）:');
+  zombieQuick.forEach(n => console.log('   - ' + n));
+}
 "
 ```
-
 ### 5. 配置文件检查
 ```bash
 # 检查 local.yaml 和 scan 总览文档

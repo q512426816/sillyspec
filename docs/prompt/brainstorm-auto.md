@@ -66,7 +66,7 @@
 **元数据**
 - optional：false
 - outputHint：需求理解 + 方案决策
-- 等待配置：requiresWait / repeatableWait / maxWaitRounds：5 / waitReason：等待用户回答需求问题 / waitOptions：回答见--answer、信息够了，进入设计
+- 等待配置：conditionalWait / repeatableWait / maxWaitRounds：5 / waitReason：等待用户回答需求问题 / waitOptions：回答见--answer、信息够了，进入设计
 
 **提示词原文**
 

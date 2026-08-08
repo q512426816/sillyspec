@@ -6,12 +6,11 @@
  *
  * 路径修正（相对 src/run/）：
  *   - resolveQuickLinkedChanges 的 quick-recommend.js 动态 import './quick-recommend.js' → '../quick-recommend.js'
- *   - 原动态 import('child_process') 删除，改顶部静态 execSync
+ *   - 脏文件信号改用 safeGit（带 safe.directory，Q3）；不再 import execSync
  *   - parsePorcelainPath 从 ./shared.js 重 import；checkbox 顶部 import
  */
-import { execSync } from 'node:child_process'
 import { checkbox } from '@inquirer/prompts'
-import { parsePorcelainPath } from './shared.js'
+import { parsePorcelainPath, safeGit } from './shared.js'
 
 /**
  * 打印 quick 完成审计结论（按 review.status 输出 SAFE/WARNING/BLOCKED）。
@@ -67,15 +66,17 @@ export async function resolveQuickLinkedChanges({ pm, cwd, specDir, quickFiles, 
     return []
   }
 
-  // 脏文件（推荐信号之一）
+  // 脏文件（推荐信号之一）。safeGit 带 safe.directory，避免 linked worktree/容器/挂载点下裸
+  // `git status` 抛错致推荐信号静默丢失（multi-agent-review Q3 同类）。推荐非关键路径，失败回退 []。
+  // trim:false：porcelain 首行前导空格是状态码，trim 会削掉致 parsePorcelainPath 丢首字符。
   let baselineFiles = []
-  try {
-    const gs = execSync('git status --porcelain', { cwd, encoding: 'utf8', timeout: 10000 })
-    baselineFiles = gs.split('\n').filter(Boolean)
+  const statusResult = safeGit(cwd, ['status', '--porcelain'], { trim: false })
+  if (!statusResult.error) {
+    baselineFiles = (statusResult.value || '').split('\n').filter(Boolean)
       .map(l => parsePorcelainPath(l))
       .filter(Boolean)
       .filter(f => !f.startsWith('.sillyspec/'))
-  } catch {}
+  }
 
   // 推荐打分（脏文件 + 任务描述双信号）
   let recommendations = []

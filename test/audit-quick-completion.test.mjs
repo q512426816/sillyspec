@@ -86,6 +86,57 @@ console.log('--- auditQuickCompletion characterization ---')
   assert(r.status !== 'blocked', `forceBaseline 放行 dangerous → 非 blocked（实际 ${r.status}）`)
 }
 
+// case 6 (Q5): 改 src/run/ 子目录文件（W6 后的真正逻辑所在）→ blocked
+// 旧 DANGEROUS_PATTERNS 只列 'src/run.js'，file==='src/run.js' 命中不到 'src/run/command.js'，
+// 致危险门静默失效。目录前缀化后须重新捕获。
+{
+  const d = makeRepo()
+  mkdirSync(join(d, 'src', 'run'), { recursive: true })
+  writeFileSync(join(d, 'src', 'run', 'command.js'), 'export const x = 1\n')
+  execSync('git add .', { cwd: d, stdio: 'pipe' })
+  execSync('git commit -q -m add-run', { cwd: d, stdio: 'pipe' })
+  writeFileSync(join(d, 'src', 'run', 'command.js'), 'export const x = 2\n') // 改 tracked 危险文件
+  const r = await auditQuickCompletion(d, baseGuard, {})
+  assert(r.status === 'blocked', `改 src/run/command.js → blocked（W6 子目录危险文件，实际 ${r.status}）`)
+  assert(r.reasons.some(rr => rr.includes('危险')), `reasons 含「危险文件变更: src/run/command.js」`)
+}
+
+// case 7 (Q5): 改 src/progress/ 子目录文件 → blocked
+{
+  const d = makeRepo()
+  mkdirSync(join(d, 'src', 'progress'), { recursive: true })
+  writeFileSync(join(d, 'src', 'progress', 'stage-machine.js'), 'export const x = 1\n')
+  execSync('git add .', { cwd: d, stdio: 'pipe' })
+  execSync('git commit -q -m add-progress', { cwd: d, stdio: 'pipe' })
+  writeFileSync(join(d, 'src', 'progress', 'stage-machine.js'), 'export const x = 2\n')
+  const r = await auditQuickCompletion(d, baseGuard, {})
+  assert(r.status === 'blocked', `改 src/progress/stage-machine.js → blocked（实际 ${r.status}）`)
+}
+
+// case 8 (Q5): 同前缀但非 src/run/ 目录的文件（src/runtime-helpers.js）→ 不被误判危险
+// 验证尾斜杠边界：'src/run/' 不会 startsWith 命中 'src/runtime-helpers.js'。
+{
+  const d = makeRepo()
+  mkdirSync(join(d, 'src'), { recursive: true })
+  writeFileSync(join(d, 'src', 'runtime-helpers.js'), 'export const x = 1\n')
+  execSync('git add .', { cwd: d, stdio: 'pipe' })
+  execSync('git commit -q -m add-runtime', { cwd: d, stdio: 'pipe' })
+  writeFileSync(join(d, 'src', 'runtime-helpers.js'), 'export const x = 2\n')
+  const r = await auditQuickCompletion(d, baseGuard, {})
+  assert(r.status === 'safe', `改 src/runtime-helpers.js → safe（非危险，尾斜杠边界，实际 ${r.status}）`)
+  assert(!r.reasons.some(rr => rr.includes('危险')), `src/runtime-helpers.js 不进 dangerous reasons`)
+}
+
+// case 9 (Q3): 非 git 目录上跑审计 → blocked（fail-loud，不再静默降级 warning）
+// 旧实现裸 execSync 抛错被 catch 吞成 warning；safeGit 改造后读不到 git 状态须保守阻断。
+{
+  const nonGit = mkdtempSync(join(tmpdir(), 'qa-nongit-'))
+  tmpRoots.push(nonGit)
+  const r = await auditQuickCompletion(nonGit, baseGuard, {})
+  assert(r.status === 'blocked', `非 git 目录审计 → blocked（fail-loud，实际 ${r.status}）`)
+  assert(r.reasons.some(rr => rr.includes('审计失败')), `reasons 含「审计失败」（实际 ${JSON.stringify(r.reasons)}）`)
+}
+
 for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} }
 console.log(`\n${'='.repeat(50)}`)
 console.log(`✅ 通过: ${total - failed}  ❌ 失败: ${failed}`)

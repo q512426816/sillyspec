@@ -56,7 +56,12 @@ export const definition = {
     },
     {
       name: '需求分析与方案设计',
-      requiresWait: true,
+      // conditionalWait（非 requiresWait）：与主模式 Step3 对齐。prompt 明确「目标明确→跳过追问，
+      // 直接进入方案设计」「checklist 全 ✅ → AUTO_DECIDED」——这两种场景 AI 无需追问，必须能直接 --done。
+      // 若用 requiresWait，CLI 硬门强制要 --answer（complete.js:223），AI 只能伪造 --answer「无需追问」
+      // （正是 Grill 第三病）或 --wait 一个不存在的问题。conditionalWait 让「无需追问」路径直接 --done，
+      // 只在真正需要用户决策（方案选择/拆分确认）时才走 --wait（multi-agent-review B1）。
+      conditionalWait: true,
       repeatableWait: true,
       maxWaitRounds: 5,
       waitReason: '等待用户回答需求问题',
