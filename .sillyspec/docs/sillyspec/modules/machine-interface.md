@@ -4,6 +4,7 @@ doc_type: module-card
 module_id: machine-interface
 author: qinyi
 created_at: 2026-07-09T14:20:00+08:00
+updated_at: 2026-08-09T00:00:00+08:00
 ---
 
 # machine-interface
@@ -18,7 +19,7 @@ SillyHub driver 模式的机器接口层。把 SillySpec 门控与事实核验�
 - `sillyspec derive <facet> --change <name> [--json]`：单项事实核验，facet ∈ {execute-evidence, verify-test, task-reviews, artifacts}
 - envelope：`schema_version=1` + 固定字段（command/change/ok/errors/warnings/generated_at）+ 按需（stage/facet/checks/data）
 - 退出码：0 通过（可含 warnings）/ 1 事实阻断（JSON 含 errors）/ 2 无法核验（用法/环境/变更不存在/内部异常）
-- 只读语义（D-002）：不写 sillyspec.db、不写 gate-status.json、不 triggerSync、不推进 step/stage；唯一例外是 verify-test 落盘 `.runtime/verify-runs/` 取证
+- 只读语义（D-002）：不写 sillyspec.db、不 triggerSync、不推进 step/stage（原阶段状态缓存文件双源已废，不再列入只读边界；只读性为语义级断言——本模块自身不发 write 语句，WAL 引擎层 close/checkpoint 对主库的合并属 better-sqlite3 行为非本模块写入）；唯一例外是 verify-test 落盘 `.runtime/verify-runs/` 取证
 - 契约基准：`docs/sillyspec/interface-contract.md`（SillySpec↔SillyHub 对账）
 
 ## 关键逻辑

@@ -4,8 +4,8 @@ created_at: 2026-06-01T09:05:00
 ---
 
 # hooks
-> 最后更新：2026-06-01
-> 最近变更：scan（初始生成）
+> 最后更新：2026-08-09
+> 最近变更：2026-08-08-progress-db-concurrency（hook 阶段检测废阶段状态缓存双源，改 queryDbFirstCell 直读 better-sqlite3 readonly 子进程 fail-closed）
 > 模块路径：src/hooks/**
 
 ## 职责
@@ -19,7 +19,7 @@ Claude Code 工具拦截守卫，在 worktree 隔离模式下根据阶段门控�
 2. **locationGate**：判断操作目标是否在 worktree 目录内（`.sillyspec/.runtime/worktrees/`）
 3. **fileGate**：文件白名单（`.md` 扩展名 + 特定配置文件名）和 Bash 命令分类（只读/危险）
 
-阶段检测采用 fallback 策略：先读 `.sillyspec/.runtime/gate-status.json`，失败则查 `sillyspec.db` 的 `currentStage`。每个阶段有专属提示（`STAGE_HINTS`），给出具体修复建议。
+阶段检测直读 `sillyspec.db` 的 `current_stage`：`queryDbFirstCell` 经 `execFileSync` 起真实 node 子进程 `require` better-sqlite3（`readonly:true + fileMustExist:true` 打开只读连接），`pluck().get()` 取第一行第一列。原阶段状态缓存文件（execute/quick 写出）已在 task-10 彻底废除（全 src 无写点），DB 为唯一权威源；db 缺失/损坏/查询异常时 `queryDbFirstCell` 返回 null，调用方（`readCurrentStage`/`isNoWorktreeMode`）走 fail-closed（warn+null，不 fail-open）。每个阶段有专属提示（`STAGE_HINTS`），给出具体修复建议。
 
 **`claude-pre-tool-use.cjs`（CommonJS）**：Claude Code `PreToolUse` hook 入口。从 stdin 读取 JSON 输入，映射工具名（Write/Edit/MultiEdit/Bash），构造 `opts` 对象后调用 `worktree-guard.js` 的 `shouldBlock`。拦截失败（exit code 2）时 Claude Code 会阻止工具执行并显示原因。整体采用"安全放行"策略：stdin 读取失败、JSON 解析失败、模块加载失败时均放行（exit 0），避免 hook 自身故障阻断工作流。
 
@@ -45,14 +45,14 @@ Claude Code 工具拦截守卫，在 worktree 隔离模式下根据阶段门控�
 | 双文件分离（.cjs 入口 + .js 逻辑） | Claude Code hook 要求 CommonJS 入口，逻辑模块保持 ESM | 全部 CommonJS / 全部 ESM |
 | 三重门禁架构 | 分层拦截，阶段优先，避免低层判断浪费 | 单一复杂判断函数 |
 | "安全放行"容错策略 | hook 自身故障不应阻断开发流程 | 严格拦截（任何异常都阻止） |
-| 阶段检测 fallback（gate-status.json -> db） | 提高检测可靠性，兼容不同运行时状态 | 仅依赖单一数据源 |
+| 阶段检测直读 sillyspec.db（better-sqlite3 readonly 子进程） | DB 为唯一权威源（原阶段状态缓存文件双源已废，消除 stale 缓存绕过）；WAL 只读连接不阻塞主进程写，且可见已 commit 的过渡态 | 阶段状态缓存文件双源（stale 风险） |
 | 3 秒 stdin 读取超时 | 防止 hook 挂起阻塞 Claude Code | 无超时 / 更长超时 |
 | 命令拆分（`\|\|`、`&&`、`\|`） | 复合命令需逐段检查危险性 | 只检查整体命令 |
 
 ## 依赖关系
 - 内部依赖：无（worktree-guard.js 独立；claude-pre-tool-use.cjs 动态 import worktree-guard.js）
 - 外部依赖：
-  - worktree-guard.js：`fs`（`existsSync`, `readFileSync`）、`path`、`child_process`（`execSync`，用于 git rev-parse 和 db 查询）
+  - worktree-guard.js：`fs`（`existsSync`, `readFileSync`, `readdirSync`）、`path`、`child_process`（`execFileSync`，用于 `queryDbFirstCell` 起 node 子进程直读 sillyspec.db）、`module`（`createRequire` 解析 better-sqlite3 绝对路径注入子进程）
   - claude-pre-tool-use.cjs：`path`、`fs`
 
 ## 注意事项
@@ -67,3 +67,4 @@ Claude Code 工具拦截守卫，在 worktree 隔离模式下根据阶段门控�
 | 日期 | 变更名 | 摘要 |
 |------|--------|------|
 | 2026-08-08 | ql-20260808-005-b3ff | worktree-guard quick baseline 比对路径归一 forward-slash（split(path.sep).join），修 Windows 下 path.relative 产 backslash 与 baseline（forward-slash）不匹配致实时防护被静默绕过 |
+| 2026-08-09 | 2026-08-08-progress-db-concurrency | hook 阶段检测废阶段状态缓存文件 fallback 双源，改 queryDbFirstCell 直读 sillyspec.db（better-sqlite3 readonly+fileMustExist 子进程）；db 缺失/损坏 fail-closed warn+null 不 fail-open |

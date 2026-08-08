@@ -4,6 +4,7 @@ doc_type: module-card
 module_id: runtime
 author: qinyi
 created_at: 2026-06-03T07:42:00+08:00
+updated_at: 2026-08-09T00:00:00+08:00
 ---
 # runtime
 
@@ -13,8 +14,8 @@ SQLite 数据库层 + 进度管理 + 迁移。提供 `.sillyspec/.runtime/sillys
 
 ## 契约摘要
 
-- **DB** (`src/db.js`) — 基于 sql.js 的内存 SQLite 封装，提供 `init()` / `transaction()` / `query()` / `getDb()` / `_save()`，自动 WAL 模式 + PRAGMA 管理，每次写操作后序列化到磁盘
-- **ProgressManager** (`src/progress.js`) — 进度读写入口，通过 DB 实例操作 `project / changes / stages / steps / batch_progress / approvals` 六张表；支持 `read()` / `init()` / `initChange()` / `show()` / `validate()` / `reset()` / `_updatePlatformLastSync()` / `_updateApprovalStatus()` / `alignExecuteToPlan()` 等方法
+- **DB** (`src/db.js`) — 基于 better-sqlite3 的原生 SQLite 绑定（同步 API），提供 `init()` / `transaction()` / `getDb()` / `close()`；`init()` 设 PRAGMA（journal_mode=WAL + busy_timeout=5000 + foreign_keys=ON + synchronous=NORMAL），主库→`.bak`→全新 逐级回退（`_openWithFallback`）；打开即持久化，事务提交直接落盘主库（WAL 侧车 `.db-wal`/`.db-shm`），无旧 WASM 引擎的「全库 load 到内存 → 序列化写回」模型，接口无 `query()` / `_save()`（progress.js 经 `getDb()` 拿原生实例直接 `prepare/run`）
+- **ProgressManager** (`src/progress.js`) — 进度读写入口，通过 DB 实例操作 `project / changes / stages / steps / batch_progress / approvals` 六张表；核心读写方法已同步化（`read`/`_write` 等不再 async），`read()` 每次经 `getDb()` 直查 DB 取最新不缓存快照；支持 `read()` / `init()` / `initChange()` / `show()` / `validate()` / `reset()` / `_updatePlatformLastSync()` / `_updateApprovalStatus()` / `alignExecuteToPlan()` 等方法
 
 ### ProgressManager 对齐相关方法
 
@@ -28,22 +29,23 @@ SQLite 数据库层 + 进度管理 + 迁移。提供 `.sillyspec/.runtime/sillys
 
 ```
 DB.init()
-  → 检查 .db 文件存在 → 加载到 sql.js 内存 / 否则创建新库
-  → _createSchema(): CREATE TABLE IF NOT EXISTS (project, changes, stages, steps, batch_progress, approvals)
-  → 设置 PRAGMA (WAL, busy_timeout=5000, foreign_keys=ON, synchronous=NORMAL)
+  → better-sqlite3 同步打开/创建库（主库 → .bak → 全新 逐级回退，_openWithFallback）
+  → 设 PRAGMA (journal_mode=WAL, busy_timeout=5000, foreign_keys=ON, synchronous=NORMAL)
+  → schema 版本戳（.db.schema-version）匹配则跳过建表，否则 _createSchema 落盘 DDL（project/changes/stages/steps/batch_progress/approvals + 索引 + 幂等 ALTER 加列）
 
 DB.transaction(fn)
-  → BEGIN → fn(db) → COMMIT / ROLLBACK → _save()
-  → _save(): db.export() → Buffer → writeFileSync → 重新设置 PRAGMA（export 会重置）
+  → better-sqlite3 db.transaction(fn) 包装：调用即 BEGIN/COMMIT，fn 抛错自动 ROLLBACK 不吞错
+  → 提交即持久化（写主库 + WAL 侧车），无旧 WASM 引擎的全库 export / _save
+  → SQLITE_BUSY 应用层有限重试（MAX_BUSY_RETRIES=3，退避 50/100/200ms），达上限 fail-loud
 
 ProgressManager.read(cwd, changeName?)
-  → 从 SQLite 加载指定变更的 stages + steps 状态
-  → 从 SQL 合并 activeChanges 列表
+  → 经 getDb() 拿原生 better-sqlite3 实例 prepare/get 直查最新（不缓存快照）
+  → 合并指定变更的 stages + steps 状态 + activeChanges 列表
 
 ProgressManager._write(cwd, progress, changeName)
-  → 写入 stages / steps / changes.current_stage
-  → 更新 gate-status.json（execute / quick）
-  → 辅助阶段完成后由 run.js 清空 currentStage，gate 随之删除
+  → 写入 stages / steps / changes.current_stage（经 DB.transaction 批量提交）
+  → 阶段状态缓存文件双源已废（task-10）：execute/quick 阶段判定由 hook 直读 DB current_stage 完成
+  → 辅助阶段完成后由 run.js 清空 currentStage
 
 ProgressManager.alignExecuteToPlan(cwd, changeName, specBase, {confirm})
   → read(cwd, changeName) 取 execute stage + steps；无数据则拒绝
@@ -55,8 +57,8 @@ ProgressManager.alignExecuteToPlan(cwd, changeName, specBase, {confirm})
 
 ## 注意事项
 
-- sql.js 是纯内存数据库，每次 `_save()` 都全量序列化；高频写入场景需注意性能
-- `_save()` 后必须重新执行 `PRAGMA journal_mode = WAL`（sql.js export 会重置状态）
+- better-sqlite3 是原生绑定，事务提交即持久化（WAL），无旧 WASM 引擎的全库 export 开销；旧「纯内存 + 每次 _save 全量序列化」模型已废
+- PRAGMA（WAL/busy_timeout/foreign_keys）在 `init()` 设一次持续生效，无旧 WASM 引擎 export 重置问题；`close()` 自动 WAL checkpoint 合并 -wal/-shm 回主库
 - `batch_progress` 和 `approvals` 表按 `change_id` UNIQUE，每个变更只能有一条记录
 - 历史迁移：v1/v2 使用 `progress.json` 文件，v3 全部迁移至 SQLite（`CURRENT_VERSION = 3`）
 - `db.js` DDL 默认 schema_version 仍是 4，但 `progress.js` 当前写入版本是 3；文档不要把 runtime 称为稳定 v4 schema

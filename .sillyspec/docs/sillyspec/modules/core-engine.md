@@ -4,8 +4,8 @@ created_at: 2026-06-01T09:05:00
 ---
 
 # core-engine
-> 最后更新：2026-07-13
-> 最近变更：ql-20260713-002-7628（quick 守卫：baseline 不再过滤 .sillyspec/ + --done 荣获 force/allow flag）
+> 最后更新：2026-08-09
+> 最近变更：2026-08-08-progress-db-concurrency（进度库引擎换 better-sqlite3 原生 WAL + 废阶段状态缓存双源）
 > 模块路径：src/run.js, src/index.js, src/progress.js, src/db.js
 
 ## 职责
@@ -15,7 +15,7 @@ SillySpec 的核心运行引擎 — 负责数据库存储、进度管理、阶�
 
 core-engine 是 SillySpec 的基础设施层，由三个层次组成：持久化层（DB）、进度管理层（ProgressManager）、调度层（runCommand/index）。
 
-**DB 类**（src/db.js）封装了 sql.js（SQLite 的 WASM 版本），提供同步的文件级 SQLite 存储。数据库文件位于 `.sillyspec/.runtime/sillyspec.db`，通过 PRAGMA 配置了 WAL 模式、5 秒忙等待和外键约束。DB 类提供事务支持（transaction 方法），所有写操作通过事务批量提交。
+**DB 类**（src/db.js）封装了 better-sqlite3（SQLite 的原生绑定，同步 API）。数据库文件位于 `.sillyspec/.runtime/sillyspec.db`，通过 PRAGMA 配置 journal_mode=WAL（伴随 `.db-wal`/`.db-shm` 侧车）、busy_timeout=5000、foreign_keys=ON、synchronous=NORMAL。better-sqlite3 打开即持久化，DDL/事务提交直接落盘主库，不再有旧 WASM 内存引擎的「全库 load 到内存 → 序列化写回」模型（旧模型是 last-writer-wins lost update 根因，现 WAL 单写者串行 + 应用层 SQLITE_BUSY 有限重试根治）。DB 类提供事务支持（`transaction` 方法，含 BUSY 退避重试），所有写操作通过事务批量提交；`close()` 时 better-sqlite3 自动做 WAL checkpoint 合并 `-wal`/`-shm` 回主库，无需显式 `_save`。`.bak` 损坏回退保留（主库→`.bak`→全新/报错 逐级回退）。
 
 **ProgressManager 类**（src/progress.js）是核心状态管理器，管理项目全局数据和变更级进度。每个变更的进度由 stages 对象表示，每个 stage 包含 steps 数组。VALID_STAGES 定义了 9 个合法阶段：scan, brainstorm, propose, plan, execute, verify, archive, quick, explore。ProgressManager 通过 DB 类的 SQLite 后端存储所有状态。
 
@@ -27,10 +27,10 @@ core-engine 是 SillySpec 的基础设施层，由三个层次组成：持久化
 | 函数/常量 | 说明 | 参数 |
 |-----------|------|------|
 | `DB` (class) | SQLite 数据库封装 | `constructor(dbPath)` |
-| `DB.init()` | 初始化数据库（加载 sql.js、创建/读取数据库文件、建表） | async |
-| `DB.close()` | 保存并关闭数据库连接 | — |
-| `DB.transaction(fn)` | 执行事务，自动 BEGIN/COMMIT/ROLLBACK | `fn(sqlDb)` |
-| `DB.getDb()` | 返回底层 sql.js 数据库实例 | — |
+| `DB.init()` | 同步初始化（better-sqlite3 同步打开/创建库、设 PRAGMA、按 schema 版本戳建表；主库→.bak→全新 逐级回退） | — |
+| `DB.close()` | 关闭连接（better-sqlite3 close 自动 WAL checkpoint 合并 -wal/-shm 回主库，无需显式 _save） | — |
+| `DB.transaction(fn)` | 原生事务（自动 BEGIN/COMMIT/ROLLBACK，fn 抛错自动回滚不吞错）+ SQLITE_BUSY 应用层有限重试（3 次退避） | `fn(sqlDb)` |
+| `DB.getDb()` | 返回底层 better-sqlite3 Database 实例（供 progress.js 直接 prepare/run） | — |
 
 ### src/progress.js — ProgressManager 类
 | 函数/常量 | 说明 | 参数 |
@@ -76,18 +76,18 @@ core-engine 是 SillySpec 的基础设施层，由三个层次组成：持久化
 
 | 决策 | 原因 | 替代方案 |
 |------|------|----------|
-| 使用 sql.js（WASM SQLite）而非原生 SQLite 绑定 | 零原生依赖，跨平台安装无需编译 | better-sqlite3（需编译） |
-| 同步 API（非 async）用于数据库操作 | sql.js 是内存数据库，同步调用简单 | 异步 ORM |
+| 使用 better-sqlite3（原生 SQLite 绑定）而非旧 WASM 内存引擎 | 原生绑定直连 SQLite，WAL 真生效（WASM 纯内存库 WAL 无意义）；事务提交即持久化，消除全库 export/load 的 last-writer-wins lost update 根因 | WASM 内存库（零原生依赖但纯内存，需全库 export 落盘） |
+| 同步 API（非 async）用于数据库操作 | better-sqlite3 是同步原生绑定；PM 核心读写方法已同步化，read 每次查最新不缓存快照 | 异步 ORM |
 | VALID_STAGES 硬编码为常量 | 阶段固定且与 stageRegistry 一一对应 | 配置文件驱动 |
 | 进度快照写入 history 目录 | 便于回溯和调试 | 仅保留当前状态 |
 | 双层目录结构 (.runtime + changes) | 运行时数据与变更数据隔离 | 扁平结构 |
 
 ## 依赖关系
 - 内部依赖：src/stages/index.js（stageRegistry, auxiliaryStages）、src/stages/execute.js（buildExecuteSteps）、src/stages/plan.js（buildPlanSteps）、src/init.js（cmdInit, getVersion）
-- 外部依赖：sql.js、fs、path
+- 外部依赖：better-sqlite3、fs、path
 
 ## 注意事项
-- DB 类使用同步 API，close() 必须显式调用以保存数据到磁盘
+- DB 类使用同步 API；better-sqlite3 事务提交即落盘主库（WAL），close() 负责 WAL checkpoint 合并 -wal/-shm 回主库并释放连接（不再需要旧 WASM 引擎时代的显式 _save）
 - ProgressManager 的方法大多接受 `changeName = null`，null 表示使用 currentChange
 - VALID_STAGES 必须与 stageRegistry 的 key 保持一致
 - runCommand 中的 resolveChangeName 有多级回退：显式指定 > progress.currentChange > 自动检测
@@ -98,3 +98,4 @@ core-engine 是 SillySpec 的基础设施层，由三个层次组成：持久化
 | 日期 | 变更名 | 摘要 |
 |------|--------|------|
 | 2026-07-13 | ql-20260713-002-7628 | quick 守卫两修复：(1) baseline 录入去掉 `.sillyspec/` 粗过滤，预存 untracked `.sillyspec/changes/` 不再被误判危险/新增；(2) `--done` 的 `--force-baseline`/`--allow-new` 并入 guard（原只传 `{isConfirm}` 致 flag 静默无效），并修正审计复审误导文案 |
+| 2026-08-09 | 2026-08-08-progress-db-concurrency | DB 引擎换 better-sqlite3 原生 WAL 绑定（删全库 export/load 到内存模型，PM 核心读写同步化、read 取最新不缓存）；废阶段状态缓存文件双源，hook 改 queryDbFirstCell 直读 DB readonly 子进程 fail-closed |
