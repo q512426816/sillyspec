@@ -100,3 +100,14 @@
 根因：① CLAUDE.md 规则9 引用幽灵命令 sillyspec resume（实测 unknown command）并误述 status 为存进度 ② worktree-guard baseline 比对在 Windows 产反斜杠与 baseline 正斜杠不匹配致 quick 实时防护被绕过 ③ migrate archive 段 copyFileSync 对归档变更目录抛 EISDIR 中断迁移
 方案：① CLAUDE.md 两份规则9 改为准确表述，进度由 --done 自动落盘、恢复用 progress show 查看再 run stage 续跑 ② worktree-guard 把比对路径归一为正斜杠、分隔符改显式斜杠 ③ migrate import 补 statSync 与 cpSync，archive 段按目录或文件类型分发（目录 cpSync 递归）加 try/catch
 结果：5 处源码或文档 Edit 落盘（含 2 个模块文档同步）；node --check worktree-guard/migrate 通过；lint 73 文件 exit0；npm test 全量 exit0 无失败文件无回归；--done 边界审计 src/hooks/worktree-guard.js 命中 DANGEROUS_PATTERNS，git diff --cached 确认系本次修复非并发误判，--force-baseline 显式解锁
+
+## ql-20260808-006-43c6 | 2026-08-08 17:42:47 | 登记四维审查待决策项到 review-2026-08-08.md（P0 DB 并发写 + _write 重 + F2 status 语义 + F3 exit 127）
+状态：已完成
+关联变更：（无）
+文件：
+- docs/sillyspec/review-2026-08-08.md（新建：四维审查待决策项登记文档，5 节——已修 A 组一览 ql-005、待决策项 P0 DB 并发写 + _write 重 + F2 status 语义 + F3 exit 127、B 组 quick 候选 6 项、全维度发现索引、后续建议）
+- .sillyspec/quicklog/QUICKLOG-qinyi.md（ql-20260808-006-43c6 条目，本次登记的 quicklog 记录）
+需求：把四维审查的待决策项登记到 docs 供后续完整流程决策
+根因：本次 4 子代理排查产出大量发现，A 组 3 处已 quick 修复，剩余 P0 与架构级与 F2 等不适合裸 quick，需有据可查的登记文档承接避免散落会话丢失
+方案：新建 docs/sillyspec/review-2026-08-08.md 分五节登记——已修 A 组一览、待决策项（P0 DB 并发写、_write 重、F2 status 语义、F3 exit 127）、B 组可走 quick 候选 6 项、全维度发现索引、后续建议
+结果：文档落盘约 70 行头部 author 与 created_at 齐全；纯文档无逻辑变更故未跑 lint 与 test；--done 边界审计新增文件 --allow-new 解锁；待 commit
