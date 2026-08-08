@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-07-22 12:00:00
-updated_at: 2026-08-07T19:30:07+08:00
+updated_at: 2026-08-08T00:00:00+08:00
 ---
 
 # SillySpec 提示词与控制层债务清单
@@ -171,6 +171,24 @@ updated_at: 2026-08-07T19:30:07+08:00
 - ✅ **B5 plan"保存前格式自检"清单 vs postcheck 字段对齐**（= sss P1-7）：**已核验 + 已修（随 B4，ql-20260807-011-d831）**：validatePlanFeasibility 只硬校验 9 字段（id/title/title_zh/allowed_paths/goal/implementation/acceptance/verify/constraints），原自检清单 14 字段全覆盖无「自检通过仍被拦」；随 B4 把清单拆分「硬校验 9 字段（缺失报错阻断）」vs「规范约定 5 字段（author/created_at/priority/depends_on/blocks，缺失不阻断）」，消除 agent 白检误导。机械生成自检清单（renderStageContract 同源）仍留未来待触及 plan-postcheck 时做。
 
 **处置**：两份原始审计 docs/sss.md / docs/sss1.md 的可执行结论已归并本段；raw 文件保留作历史参考（被 46ff4f9 / 245a03b / 3ae51c8 等 commit 引用为 P0 修复依据），如需清理可手动删除（决策以本债单为准）。
+
+### 2026-08-08 候选增补（多 agent 并发写预检，待立项）
+状态：`🆕 候选（未立项，仅登记；实现文件被并行 session 占用）`
+
+来源：2026-08-08 自审收尾 + multi-agent-review 同步推进中，主会话与并行会话在同一仓库实打实撞车（俩 session 都要动 `quick-audit.js` / `shared.js` / `complete.js`）。复盘暴露**真实功能缺口**：CLAUDE.md 第一段立身之本就是「多 agent 同时操作代码」，但 SillySpec 无任何命令让 agent 感知「工作树里有他者未提交改动 / 存在其他活跃 change 目录」——`src/run/shared.js:406` 已在 quick-audit 内部识别出「并发他者会话的工作」，却作为元数据噪音整体放行（「非关联变更目录整体视为元数据放行」），agent 完全无从知情。对应记忆坑：git commit 扫入预暂存并行工作、并发 session 撞重叠 change。
+
+**钩子点（用户指定设计约束）**：并发检测应在 **quick / execute 写操作前**预检（`quick --done` 前、`execute --done` 前），而非仅作独立诊断命令——写操作是撞车高发点，预检才有拦截价值。
+
+**设计草案**：
+- **信号**：① `git status --porcelain` 脏文件分类——在当前 change 关联范围（allowed_paths / change 目录）内 vs 他者；② `.sillyspec/changes/` 下其他活跃 change 目录（他者会话）；③（可选）quick session marker。
+- **复用**：`shared.js:406` 的「关联 vs 他者」分类逻辑（已存在，仅需从静默放行改为对外报告）。
+- **行为（关键决策）**：**非阻塞 advisory（WARN）**，不放硬门——打印「⚠️ 检测到 N 个非本变更关联的他者未提交改动，可能并发撞车：[files]；提交请用显式 pathspec 隔离」。**否决硬阻断**：项目立身前提就是合法并发多 agent 协作，阻断会破坏正常工作流；且「是否撞车」属软 / 意图判定，按 P4.3 / sillyhub 语义边界归 advisory，不归 SillySpec 确定性 gate。
+
+**待决策项**：① 覆盖哪些命令（仅 `--done` 写入点，还是连 `quick` / `execute` 启动也检？）；② 检测范围（仅他者脏文件 vs 含活跃 change 目录，或两者）；③ 是否同时实现只读 `sillyspec doctor`/`runtime list` 子命令供 agent 主动查询（预检 + 主动查询两条路）。
+
+**规模 / 流程**：跨 quick 与 execute 多写路径的行为语义变更，判 **large，应走完整流程**（brainstorm → plan → execute），不走 quick。
+
+**实现归属 / 让出**：实现触及 `quick-audit.js` / `shared.js` / `complete.js` / `gates.js`——**当前全部由并行 session（multi-agent-review-2026-08-08.md §6 行动列表）活跃占用**。本会话仅登记候选 + 设计草案，不动源码不撞车；待并行 session 完成，或另起 `YYYY-MM-DD-concurrent-write-preflight` 变更实现。
 
 ---
 
