@@ -122,3 +122,16 @@
 根因：db.js _atomicWriteSync tmp 名固定 sillyspec.db.tmp 无 PID，两进程并发 _save 时 tmp 互覆盖（一进程把他者 tmp 当自己内容落盘的静默错存、或 rename 撞 ENOENT 崩）
 方案：tmp 名改 .basename.pid.tmp 对齐 fs-atomic.js writeAtomicSync，附注释说明仅防 tmp 碰撞、last-writer-wins 仍存、治本待完整流程
 结果：db.js 单行改加 PID 加注释说明兜底边界，node --check 通过，lint 73 文件 exit0，npm test 全量 exit0 无回归，db.js 在 DANGEROUS_PATTERNS 故 --force-baseline 解锁，治本套锁或换引擎仍登记 review-2026-08-08.md 待完整流程
+
+## ql-20260808-008-6db2 | 2026-08-08 18:28:24 | B 组 P1-1 启动税优化：getVersion 抽 version.js + cmdInit/detectLocalYaml 动态 import（--version 140→91ms）
+状态：已完成
+关联变更：（无）
+文件：
+- src/version.js（新建：getVersion 抽出为轻量模块，只依赖 fs/path/url 读 package.json，供 index.js 静态 import 不拖 inquirer）
+- src/index.js（顶部 import getVersion 改从 version.js；cmdInit 改 await import init.js 对齐 setup.js 模式；detectLocalYaml 改 await import local-detect.js 仅 local detect 子命令用——消除每次 CLI 进程加载 init.js 的 inquirer prompts 145ms + local-detect 78ms）
+- src/init.js（删 getVersion 定义改 import version.js；加 export { getVersion } re-export 保持 API 兼容，让 init-claude-injection 测试仍从 init.js import 不破坏）
+- .sillyspec/quicklog/QUICKLOG-qinyi.md（ql-20260808-008-6db2 条目）
+需求：B 组 P1-1 启动税优化，省每次 CLI 调用加载 init.js 的 inquirer 重型交互库开销
+根因：index.js 顶部静态 import init.js 仅为 getVersion 7 行函数，却每次 CLI 进程都加载 init.js 的 inquirer prompts 加 chalk 加 progress.js 实测 import init.js 单独 145ms，detectLocalYaml 静态 import 同理 78ms 仅 local detect 用
+方案：新建 version.js 抽 getVersion 只依赖 fs 加 path 加 url，index.js 从 version.js 取 getVersion、cmdInit 改动态 import init.js 对齐 setup.js 模式、detectLocalYaml 改动态 import，init.js 删 getVersion 定义改 import 加 re-export 保持 API 兼容
+结果：--version 实测 91ms（改前 140ms 省 49ms/次，全命令受益）；node --check 三文件通过；lint 74 文件 exit0；npm test 全量 exit0 无回归；重构致 init-claude-injection.test.mjs 从 init.js import getVersion 报错，加 re-export 后该测试 27 断言全过；version.js 新增故 --allow-new 解锁；模块文档同步跳过（启动 import 优化为内部性能改动）

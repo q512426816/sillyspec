@@ -10,9 +10,8 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync,
 import { writeAtomicSync } from './fs-atomic.js';
 import { join, resolve } from 'path';
 import { execSync } from 'child_process';
-import { cmdInit, getVersion } from './init.js';
+import { getVersion } from './version.js';
 import { ProgressManager, resolvePlatformSpecDir } from './progress.js';
-import { detectLocalYaml } from './local-detect.js';
 
 // ── CLI 入口 ──
 
@@ -229,7 +228,7 @@ async function main() {
 
   switch (command) {
     case 'init':
-      await cmdInit(dir, { tool, interactive, specDir });
+      await (await import('./init.js')).cmdInit(dir, { tool, interactive, specDir });
       break;
     case 'setup':
       const setupList = filteredArgs.includes('--list') || filteredArgs.includes('-l');
@@ -1368,7 +1367,7 @@ SillySpec modules — 模块文档管理
         process.exit(2);
       }
 
-      const detected = detectLocalYaml(dir);
+      const detected = (await import('./local-detect.js')).detectLocalYaml(dir);
       const specRoot = resolvePlatformSpecDir(dir, specDir) || join(dir, '.sillyspec');
       const localYamlPath = join(specRoot, 'local.yaml');
 

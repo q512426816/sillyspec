@@ -4,6 +4,10 @@ import { fileURLToPath } from 'url';
 import { checkbox, confirm, input } from '@inquirer/prompts';
 import { ProgressManager } from './progress.js';
 import chalk from 'chalk';
+import { getVersion } from './version.js';
+// 向后兼容：getVersion 已抽到轻量 version.js（避免 index.js 为 --version 静态加载 init.js 的 inquirer 税），
+// 此处 re-export 保持 init.js 既有导出 API 不破坏（如 test/init-claude-injection.test.mjs）。
+export { getVersion };
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -389,16 +393,6 @@ function showSummary(version, tools, specDir) {
   console.log('');
 }
 
-// ── 读取版本号 ──
-
-export function getVersion() {
-  try {
-    const pkg = JSON.parse(readFileSync(resolve(__dirname, '..', 'package.json'), 'utf8'));
-    return pkg.version;
-  } catch {
-    return '?.?.?';
-  }
-}
 
 // ── 主命令 ──
 
