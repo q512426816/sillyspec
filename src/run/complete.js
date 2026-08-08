@@ -233,7 +233,7 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
     if (hasWaiting) {
       // 有等待中的步骤，阶段未完成
       progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
-      await pm._write(cwd, progress, changeName)
+      pm._write(cwd, progress, changeName)
       const wsIdx = steps.findIndex(s => s.status === 'waiting')
       console.log(`\n⏸️  阶段暂停：Step ${wsIdx + 1} 等待用户输入`)
       if (steps[wsIdx].waitReason) console.log(`   原因：${steps[wsIdx].waitReason}`)
@@ -255,14 +255,14 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
         st.status = 'completed'
         st.completedAt = st.completedAt || nowStr
       }
-      await pm._write(cwd, progress, changeName)
+      pm._write(cwd, progress, changeName)
       console.log(`  ⚠️ 同步回填 ${staleSteps.length} 个 stale 步骤为 completed（reopen --from-step N 后 --done，方案未变）`)
     }
 
     stageData.status = 'completed'
     stageData.completedAt = new Date().toLocaleString('zh-CN',{hour12:false})
     progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
-    await pm._write(cwd, progress, changeName)
+    pm._write(cwd, progress, changeName)
     triggerSync(cwd, changeName, platformOpts)
 
     // Append to user-inputs.md
@@ -335,7 +335,7 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
   }
 
   progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
-  await pm._write(cwd, progress, changeName)
+  pm._write(cwd, progress, changeName)
   triggerSync(cwd, changeName, platformOpts)
 
   // Append to user-inputs.md
@@ -577,7 +577,7 @@ export async function waitStep(pm, progress, stageName, cwd, outputText, waitRea
   }
 
   progress.lastActive = now
-  await pm._write(cwd, progress, changeName)
+  pm._write(cwd, progress, changeName)
   triggerSync(cwd, changeName, platformOpts)
 
   console.log(`⏸️  Step ${currentIdx + 1}/${stageData.steps.length} 已暂停等待：${stageData.steps[currentIdx].name}`)
@@ -680,7 +680,7 @@ export async function continueStep(pm, progress, stageName, cwd, answer, options
   }
 
   progress.lastActive = now
-  await pm._write(cwd, progress, changeName)
+  pm._write(cwd, progress, changeName)
   triggerSync(cwd, changeName, platformOpts)
 
   console.log(`✅ Step ${currentIdx + 1}/${stageData.steps.length} 已继续：${currentStep.name}`)
@@ -719,7 +719,7 @@ export async function continueStep(pm, progress, stageName, cwd, answer, options
   if (nextPendingIdx === -1 && nextWaitingIdx === -1) {
     stageData.status = 'completed'
     stageData.completedAt = now
-    await pm._write(cwd, progress, changeName)
+    pm._write(cwd, progress, changeName)
     // 阶段完成收尾共享管线（含 execute worktree cleanup），消除 continueStep 完成分支绕过 gate 的 S2（task-01 抽出）。
     // gate 失败已 rollback，early-return 跳过下方"阶段已完成/下一步"提示（与 completeStep 同语义）。
     const _stageGatesResult = await completeStageGates({ stageName, cwd, changeName, platformOpts, specBase, progress, pm, stageData, steps: stageData.steps, currentIdx, outputText: null })
@@ -800,7 +800,7 @@ export async function skipStep(pm, progress, stageName, cwd, changeName, platfor
   steps[currentIdx].status = 'skipped'
   steps[currentIdx].skippedAt = new Date().toLocaleString('zh-CN',{hour12:false})
   progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
-  await pm._write(cwd, progress, changeName)
+  pm._write(cwd, progress, changeName)
   triggerSync(cwd, changeName, platformOpts)
 
   console.log(`⏭️ Step ${currentIdx + 1}/${steps.length} 已跳过：${steps[currentIdx].name}`)

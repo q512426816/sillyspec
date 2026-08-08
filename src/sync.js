@@ -221,7 +221,7 @@ export class SyncManager {
     try {
       const { ProgressManager } = await import('./progress.js');
       const pm = new ProgressManager({ specDir: safePlatformSpecDir(this.cwd) });
-      progressData = await pm.read(this.cwd, changeName);
+      progressData = pm.read(this.cwd, changeName);
     } catch (err) {
       console.warn(`[sync] 读取 progress 失败 (${changeName}): ${err.message}`);
       return { synced: 0, errors: [`读取 progress 失败: ${err.message}`] };
@@ -246,7 +246,7 @@ export class SyncManager {
     try {
       const { ProgressManager } = await import('./progress.js');
       const pm = new ProgressManager({ specDir: safePlatformSpecDir(this.cwd) });
-      await pm._updatePlatformLastSync(this.cwd, changeName);
+      pm._updatePlatformLastSync(this.cwd, changeName);
     } catch (err) {
       console.warn(`[sync] 更新 platform_last_sync 失败: ${err.message}`);
     }
@@ -347,7 +347,7 @@ export class SyncManager {
     try {
       const { ProgressManager } = await import('./progress.js');
       const pm = new ProgressManager({ specDir: safePlatformSpecDir(this.cwd) });
-      await pm._updateApprovalStatus(this.cwd, changeName, result.status, result.reason);
+      pm._updateApprovalStatus(this.cwd, changeName, result.status, result.reason);
     } catch (err) {
       console.warn(`[sync] 更新本地审批状态失败: ${err.message}`);
     }
@@ -477,7 +477,7 @@ async function _submitApproval(cwd, changeName, decision, reason = null) {
   try {
     const { ProgressManager } = await import('./progress.js');
     const pm = new ProgressManager({ specDir: safePlatformSpecDir(cwd) });
-    await pm._updateApprovalStatus(cwd, changeName, decision, reason);
+    pm._updateApprovalStatus(cwd, changeName, decision, reason);
   } catch (err) {
     console.warn(`[sync] 更新本地审批状态失败 (${changeName}): ${err.message}`);
   }

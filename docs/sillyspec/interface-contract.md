@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-07-09T13:05:00+08:00
-updated_at: 2026-07-09T13:05:00+08:00
+updated_at: 2026-08-09T00:40:00+08:00
 schema_version: 1
 ---
 
@@ -274,7 +274,6 @@ schema_version: 1
 | 行为 | gate / derive | 说明 |
 |---|---|---|
 | 写 `sillyspec.db` | ❌ 不写 | 调用前后 db 文件 byte-identical（验收 design §9.3） |
-| 写 `gate-status.json` | ❌ 不产生/不变化 | — |
 | `triggerSync` | ❌ 不触发 | 无自动同步副作用 |
 | 推进 step / stage | ❌ 不推进 | 状态推进仍走 `run <stage> --done`（agent）或平台显式调用（driver） |
 
@@ -284,7 +283,7 @@ schema_version: 1
 
 `derive verify-test` 与 `gate verify` 会**真实执行测试**（`runVerifyTestCheck`），并把结果落盘到 `.runtime/verify-runs/<ts>/test-result.json`。这是**产物取证**，不是状态写入，与只读语义不冲突：
 - 取证文件记录测试结果事实，供 daemon / 人工追溯；
-- 它不进入 `sillyspec.db`、不进 `gate-status.json`、不推进进度。
+- 它不进入 `sillyspec.db`、不推进进度。
 - daemon 消费 `verify-test` 的 `data.resultPath` 即可定位该取证文件。
 
 ---

@@ -130,7 +130,7 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
     }
 
     // ── 读进度：变更不存在 → exit 2（D-004@v1）──
-    const progress = await pm.read(cwd, changeName);
+    const progress = pm.read(cwd, changeName);
     if (!progress) {
       const envelope = buildEnvelope({
         command: 'gate',
@@ -367,7 +367,7 @@ export async function runDerive(facet, changeName, { cwd, specBase, runtimeRoot,
     }
 
     // ── 读进度：变更不存在 → exit 2 ──
-    const progress = await pm.read(cwd, changeName);
+    const progress = pm.read(cwd, changeName);
     if (!progress) {
       const envelope = buildEnvelope({
         command: 'derive',

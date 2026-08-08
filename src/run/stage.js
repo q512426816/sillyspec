@@ -108,7 +108,7 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
   // 自动探测 currentChange
   if (autoDetectChange(progress, cwd)) {
     progress.lastActive = new Date().toLocaleString('zh-CN', { hour12: false })
-    await pm._write(cwd, progress, changeName)
+    pm._write(cwd, progress, changeName)
     triggerSync(cwd, changeName, platformOpts)
   }
 
@@ -122,7 +122,7 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
   if (progress.currentStage !== stageName) {
     progress.currentStage = stageName
     progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
-    await pm._write(cwd, progress, changeName)
+    pm._write(cwd, progress, changeName)
     triggerSync(cwd, changeName, platformOpts)
   }
 
@@ -144,7 +144,7 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
   // stale 步骤视为可执行（等同于 pending）
   if (currentIdx !== -1 && steps[currentIdx].status === 'stale') {
     steps[currentIdx].status = 'pending'
-    await pm._write(cwd, progress, changeName)
+    pm._write(cwd, progress, changeName)
     triggerSync(cwd, changeName, platformOpts)
   }
 
@@ -160,7 +160,7 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
     }
     // 保存 profile 供后续 postcheck 使用
     stageData.scanProfile = scanProfile
-    await pm._write(cwd, progress, changeName)
+    pm._write(cwd, progress, changeName)
   } else if (stageName === 'scan' && stageData.scanProfile) {
     scanProfile = stageData.scanProfile
   }
@@ -195,8 +195,8 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
     // 旧逻辑无条件清空 steps 为 pending 会丢掉已完成的进度且不可恢复。改为走正式
     // completeStage：产物齐则补盖完成戳，不齐则给出 actionable 提示，永不静默清空步骤。
     console.log(`\nℹ️  ${stageName} 所有步骤已完成，但阶段未标记完成（上次可能中断）。尝试补盖完成戳…`)
-    await pm.completeStage(cwd, stageName, changeName)
-    const after = await pm.read(cwd, changeName)
+    pm.completeStage(cwd, stageName, changeName)
+    const after = pm.read(cwd, changeName)
     if (after?.stages?.[stageName]?.status === 'completed') {
       console.log(`   ✅ 已补盖完成戳。下一步: sillyspec run <下一阶段>，或 sillyspec run ${stageName} --status 查看。`)
       process.exit(0)
@@ -288,7 +288,7 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
         if (allowNew) parts.push('允许新增文件')
         console.log(`🛡️ quick 变更边界已记录: ${parts.join(', ')}`)
         console.log(`📝 QUICKLOG 条目已创建: ${qlId}`)
-        await pm._write(cwd, progress, changeName)
+        pm._write(cwd, progress, changeName)
       } catch (e) {
         console.warn(`⚠️ baseline 记录失败: ${e.message}`)
       }
@@ -341,7 +341,7 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
       }
       stageData.steps[currentIdx].status = 'completed'
       stageData.steps[currentIdx].completedAt = new Date().toLocaleString('zh-CN', { hour12: false })
-      await pm._write(cwd, progress, changeName)
+      pm._write(cwd, progress, changeName)
       // 自动前进到下一步
       const nextIdx = stageData.steps.findIndex(s => s.status === 'pending' || s.status === 'in-progress')
       if (nextIdx !== -1 && defSteps[nextIdx]) {
@@ -351,7 +351,7 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
         // 所有步骤完成
         stageData.status = 'completed'
         stageData.completedAt = new Date().toLocaleString('zh-CN', { hour12: false })
-        await pm._write(cwd, progress, changeName)
+        pm._write(cwd, progress, changeName)
         // 阶段完成收尾共享管线（noAI 末步核心修复 S1：plan postcheck independent-tier review verdict=fail /
         // 平台 scan manifest 此前被绕过）。gate 失败已 rollback 为 in-progress，early-return（不 fall through 到末尾 return）。
         const _stageGatesResult = await completeStageGates({ stageName, cwd, changeName, platformOpts, specBase, progress, pm, stageData, steps, currentIdx, outputText: null })

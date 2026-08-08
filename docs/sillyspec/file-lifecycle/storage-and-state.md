@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-06-04 16:25:42
-updated_at: 2026-07-23
+updated_at: 2026-08-09
 ---
 
 # 存储与状态
@@ -14,7 +14,6 @@ updated_at: 2026-07-23
 .sillyspec/.runtime/
 ├── sillyspec.db
 ├── user-inputs.md
-├── gate-status.json              (按阶段动态生成/删除)
 ├── platform-scan.json            (平台 scan 参数暂存)
 ├── scan-projects.json            (scan step 2 后的项目展开状态)
 ├── audit.log                     (--force 绕过校验的审计记录，JSONL)
@@ -33,7 +32,7 @@ updated_at: 2026-07-23
 
 位置：`.sillyspec/.runtime/sillyspec.db`
 
-创建方：`ProgressManager._ensureDB()` 使用 `src/db.js` 的 `DB.init()`。底层是 `sql.js`，每次事务后通过 `db.export()` 写回磁盘。
+创建方：`ProgressManager._ensureDB()` 使用 `src/db.js` 的 `DB.init()`。底层是 **better-sqlite3 原生绑定**（同步 API），打开即持久化——`init()` 一次性设置 PRAGMA：`journal_mode=WAL` + `busy_timeout=5000` + `foreign_keys=ON` + `synchronous=NORMAL`。事务经 `DB.transaction(fn)` 包装，提交直接写主库文件 `sillyspec.db` + WAL 侧车 `.db-wal`/`.db-shm`。写前自动备份为 `sillyspec.db.bak`，主库损坏/为空时从 `.bak` 回退，两者均坏则 fail-loud。WAL 单写者串行 + SQLITE_BUSY 应用层有限重试（3 次递增退避 50→100→200ms，达上限 fail-loud），并发安全不丢更新。
 
 当前 DDL 包含：
 
@@ -55,33 +54,6 @@ updated_at: 2026-07-23
 `progress.js` 仍保留 `GLOBAL_FILE = 'global.json'` 常量和注释，但 `readGlobal()` / `writeGlobal()` 已经改为 SQL 查询/写入 `project` 与 `changes` 表。
 
 当前代码没有创建或维护 `.sillyspec/.runtime/global.json` 的实际生命周期。
-
-## `gate-status.json`
-
-位置：`.sillyspec/.runtime/gate-status.json`
-
-写入/删除方：`ProgressManager._updateGateStatus()`。每次 `ProgressManager._write()` 后调用。
-
-生成条件：
-
-- 查询 `changes` 表中 `status = 'active'`
-- 且 `current_stage IN ('execute', 'quick')`
-- 有匹配行时写入，没有匹配行时删除
-
-结构：
-
-```json
-{
-  "stage": "execute",
-  "changes": ["change-name"],
-  "updatedAt": "2026-06-04T08:00:00.000Z",
-  "noWorktree": true
-}
-```
-
-`stage` 优先取 `execute`；同时存在 execute/quick 时，execute 会覆盖 quick。`noWorktree` 只要任一匹配 change 的 `no_worktree = 1` 就出现。
-
-消费者：`src/hooks/worktree-guard.js`。hook 会先读 gate 文件，再 fallback 到 sqlite3 CLI 查询 `sillyspec.db`。
 
 ## `user-inputs.md`
 

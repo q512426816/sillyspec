@@ -16,7 +16,7 @@ const __dirname = dirname(__filename);
 // 平台模式（specRoot 指向外部）下，源码目录的 .sillyspec/.runtime/ 是旧残留，
 // 应让 specRoot 成为唯一运行时根。但若源码目录的 .sillyspec/ 本身就是该项目
 // 的 specDir（含真实资产），其 .runtime/ 里的 worktrees/、sillyspec.db、
-// global.json、gate-status.json 是真实工作状态，整删会摧毁 worktree meta、
+// global.json 是真实工作状态，整删会摧毁 worktree meta、
 // 导致 depsStatus 恒为 unknown、branch already exists 死循环。
 // 详见 docs/sillyspec/runtime-cleanup-destroys-worktree-meta.md
 //
@@ -25,7 +25,6 @@ const RUNTIME_KEEP = new Set([
   'worktrees',          // worktree 目录 + meta.json（worktree.js:17）
   'sillyspec.db',       // SQLite 进度库（权威状态源，progress.js:7）
   'global.json',        // 项目名/活跃变更缓存（progress.js:8）
-  'gate-status.json',   // worktree-guard 门禁状态（progress.js:9）
   'contract-artifacts', // execute endpoint 契约（verify 阶段读取）
   'execute-runs',       // task review 结果（task-review.js）
 ]);
@@ -213,7 +212,7 @@ function isTTY() {
 
 // ── 核心安装逻辑 ──
 
-async function doInstall(projectDir, tools, subprojects = [], specDir = null) {
+function doInstall(projectDir, tools, subprojects = [], specDir = null) {
   // specDir: 规范目录（默认 projectDir/.sillyspec）
   // projectDir: 源码项目根目录（用于工具检测、指令注入、.gitignore）
   const spec = specDir || join(projectDir, '.sillyspec');
@@ -312,7 +311,7 @@ async function doInstall(projectDir, tools, subprojects = [], specDir = null) {
 
   // 初始化 SQLite 数据库
   const pm = new ProgressManager({ specDir: spec });
-  await pm.init(projectDir);
+  pm.init(projectDir);
 
   // .gitignore 只在 specDir 在项目内时才修改
   const isExternalSpec = specDir && resolve(spec) !== resolve(projectDir, '.sillyspec');

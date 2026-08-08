@@ -135,7 +135,7 @@ async function archiveChangeDirectory(pm, cwd, progress, specBase) {
     process.exit(1)
   }
 
-  await pm.unregisterChange(cwd, archiveChangeName)
+  pm.unregisterChange(cwd, archiveChangeName)
 
   // CLI 下沉 git add（坑4，FR-04）：确定性暂存归档目录 + 模块文档，不靠 step5 prompt 驱动。
   // step5 prompt 的 git add 保留作幂等兜底；POSIX 路径跨平台（git 接受正斜杠）。
@@ -188,7 +188,7 @@ export async function handleArchiveConfirmStep({ stageName, steps, currentIdx, c
     steps[currentIdx].status = 'pending'
     steps[currentIdx].completedAt = null
     if (outputText) steps[currentIdx].output = null
-    await pm._write(cwd, progress, changeName)
+    pm._write(cwd, progress, changeName)
     console.log('⚠️  请添加 --confirm 确认归档，例如：sillyspec run archive --done --confirm --output "确认归档"')
     return { stageCompleted: false, currentIdx, nextPendingIdx: currentIdx }
   }
@@ -717,7 +717,7 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
     // 误注销会把用户真实变更标 archived（与 command.js:569 sessionId 守卫同形正则）。
     if (changeName && /^quick-[0-9a-f]{8}$/.test(changeName)) {
       try {
-        await pm.unregisterChange(cwd, changeName)
+        pm.unregisterChange(cwd, changeName)
       } catch (e) {
         console.warn(`⚠️ 注销 quick 会话 changes 行失败（不阻断完成）: ${e.message}`)
       }
@@ -910,7 +910,7 @@ export async function handleScanStageCompleted({ stageName, currentIdx, cwd, pro
       if (postResult.status === 'failed_post_check') {
         stageData.status = SCAN_STATUS.FAILED_POST_CHECK
         stageData.completedAt = new Date().toLocaleString('zh-CN',{hour12:false})
-        await pm._write(cwd, progress, changeName)
+        pm._write(cwd, progress, changeName)
         triggerSync(cwd, changeName, platformOpts)
         console.error(`\n❌ scan post-check 失败，状态设为 failed_post_check。不允许 clean success。`)
         console.error(`   请检查上方错误信息并修复后重新 scan。`)
@@ -927,7 +927,7 @@ export async function handleScanStageCompleted({ stageName, currentIdx, cwd, pro
         // 警告不阻止完成，但记录
         stageData.status = 'completed'
         stageData.completedAt = new Date().toLocaleString('zh-CN',{hour12:false})
-        await pm._write(cwd, progress, changeName)
+        pm._write(cwd, progress, changeName)
       }
     } catch (e) {
       console.warn(`⚠️  manifest.json 写入失败: ${e.message}`)

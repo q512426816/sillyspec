@@ -1,7 +1,9 @@
 /**
- * worktree-guard db fallback（node + sql.js）回归：
- * gate-status.json 缺失时，readCurrentStage / isNoWorktreeMode 经 queryDbFirstCell
- * 从 sillyspec.db 读取——不依赖外部 sqlite3 CLI（Windows 默认没有），全平台用 node。
+ * worktree-guard db 主路径回归（better-sqlite3 同步只读子进程）：
+ * task-10 废 gate-status.json 后，readCurrentStage / isNoWorktreeMode 唯一来源是
+ * queryDbFirstCell 直读 sillyspec.db（node + better-sqlite3 只读子进程，不依赖外部
+ * sqlite3 CLI——Windows 默认没有，全平台用 node）。本测试直接调 _queryDbFirstCellForTest
+ * 验证同步只读查询语义。
  */
 import { _queryDbFirstCellForTest as queryDbFirstCell } from '../src/hooks/worktree-guard.js'
 import { DB } from '../src/db.js'
@@ -20,22 +22,23 @@ const cwd = mkdtempSync(join(tmpdir(), 'wgdb-'))
 try {
   mkdirSync(join(cwd, '.sillyspec', '.runtime'), { recursive: true })
   const db = new DB(join(cwd, '.sillyspec', '.runtime', 'sillyspec.db'))
-  await db.init()
+  db.init() // better-sqlite3 同步 API，无 await
   const sq = db.getDb()
-  sq.run("INSERT INTO project (id,name,created_at,updated_at) VALUES (1,'p','t','t')")
-  sq.run("INSERT INTO changes (name,current_stage,status,no_worktree,created_at,last_active) VALUES ('c1','execute','active',1,'t','t')")
+  // better-sqlite3：prepare(sql).run(...) 绑定参数（原 sql.js 的 sq.run(sql) 不存在）
+  sq.prepare("INSERT INTO project (id,name,created_at,updated_at) VALUES (1,'p','t','t')").run()
+  sq.prepare("INSERT INTO changes (name,current_stage,status,no_worktree,created_at,last_active) VALUES ('c1','execute','active',1,'t','t')").run()
   db.close()
 
-  // 无 gate-status.json → 走 db fallback（queryDbFirstCell）
+  // 直读 sillyspec.db（queryDbFirstCell 同步返回，better-sqlite3 readonly 子进程）
   const stage = queryDbFirstCell(cwd, "SELECT current_stage FROM changes WHERE status='active' AND current_stage IN ('execute','quick') ORDER BY last_active DESC LIMIT 1")
-  assert(stage === 'execute', `db fallback 读出 current_stage=execute（实际 ${stage}）`)
+  assert(stage === 'execute', `直读 DB 读出 current_stage=execute（实际 ${stage}）`)
 
   const noWt = queryDbFirstCell(cwd, "SELECT no_worktree FROM changes WHERE status='active' AND current_stage IN ('execute','quick') LIMIT 1")
-  assert(noWt === '1', `db fallback 读出 no_worktree=1（实际 ${noWt}）`)
+  assert(noWt === '1', `直读 DB 读出 no_worktree=1（实际 ${noWt}）`)
 
-  // db 不存在 → null（不抛错）
+  // db 不存在 → null（fail-closed，不抛错）
   const empty = queryDbFirstCell(join(tmpdir(), `no-such-${process.pid}`), 'SELECT 1')
-  assert(empty === null, 'db 不存在时返回 null（不抛错）')
+  assert(empty === null, 'db 不存在时返回 null（fail-closed，不抛错）')
 } finally {
   try { rmSync(cwd, { recursive: true, force: true }) } catch {}
 }

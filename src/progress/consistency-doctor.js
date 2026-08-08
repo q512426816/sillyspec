@@ -1,8 +1,9 @@
 // W6 Step9a: Revision v1 状态一致性检查 + 修复 + --force 审计日志。
 // 从 src/progress.js 单体 ProgressManager 抽出。持有 pm 引用（构造注入），调 pm.read / pm._write /
 // pm._ensureRuntimeDir / pm._runtimePath（persistence-core 留 facade 本体）。
-import { appendFileSync } from 'fs';
-import { existsSync } from 'fs';
+import { appendFileSync, existsSync, readdirSync } from 'fs';
+import { join } from 'path';
+import { summarizeTaskCompletion } from '../task-review.js';
 import { STAGE_ORDER, MAIN_FLOW_ORDER } from './shared.js';
 
 export class ConsistencyDoctor {
@@ -32,8 +33,8 @@ export class ConsistencyDoctor {
    * @param {string|null} changeName
    * @returns {{ ok: boolean, issues: string[], warnings: string[] }}
    */
-  async checkConsistency(cwd, changeName = null) {
-    const data = await this.pm.read(cwd, changeName);
+  checkConsistency(cwd, changeName = null) {
+    const data = this.pm.read(cwd, changeName);
     if (!data) {
       return { ok: false, issues: ['无法读取进度数据'], warnings: [] };
     }
@@ -93,6 +94,12 @@ export class ConsistencyDoctor {
       }
     }
 
+    // FR-07 / AC-03 / design §7 / D-02：lost-update 间接信号
+    // （.runtime/worktrees/<change> 目录残留 vs DB current_stage≠execute）。
+    // 只读诊断并入 issues 报告，不写 DB / 不删 worktree / 不自动修复。
+    const lostUpdateSignals = this.detectLostUpdateSignals(cwd);
+    issues.push(...lostUpdateSignals);
+
     // 输出报告
     console.log('');
     console.log('  ═══════════════════════════════════════');
@@ -117,6 +124,55 @@ export class ConsistencyDoctor {
   }
 
   /**
+   * 检测 lost-update 间接信号（FR-07 / AC-03 / design §7 / D-02）。
+   *
+   * 判据：.runtime/worktrees/<change> 目录存在但 DB current_stage ≠ 'execute'
+   * → worktree 残留但进度被回退，是并发场景下 lost-update 的间接痕迹。
+   *
+   * 信号定义严格遵循 design §7 / FR-07：仅 current_stage !== 'execute' 判信号，
+   * 不扩展到 quick 等其它 stage；DB 无对应行（data=null）的 worktree 目录不算信号。
+   *
+   * 只读诊断：不写 DB、不删 worktree 目录、不自动修复
+   * （修复仍走 doctor --align / repairConsistency 既有逻辑）。
+   *
+   * @param {string} cwd
+   * @returns {string[]} issue 描述数组（每条含 change 名、实际 current_stage、worktree 目录路径）
+   */
+  detectLostUpdateSignals(cwd) {
+    const worktreesRoot = this.pm._runtimePath(cwd, 'worktrees');
+    // 零信号兼容既有 fixture：worktrees 目录不存在或读取失败时直接返回空数组
+    if (!existsSync(worktreesRoot)) return [];
+
+    let entries;
+    try {
+      entries = readdirSync(worktreesRoot, { withFileTypes: true });
+    } catch {
+      return [];
+    }
+
+    const issues = [];
+    for (const entry of entries) {
+      // Dirent.isDirectory 在 Windows / Linux / macOS 上一致判定目录项
+      if (!entry.isDirectory()) continue;
+      const changeName = entry.name;
+      const worktreeDir = join(worktreesRoot, changeName);
+
+      // 复用 pm.read（task-08 已同步化，直接拿返回值，无 await），不新开 DB 连接
+      const data = this.pm.read(cwd, changeName);
+      // DB 无对应行（data=null）不算信号，跳过
+      if (!data) continue;
+      // 仅 current_stage !== 'execute' 判信号
+      if (data.currentStage !== 'execute') {
+        issues.push(
+          `lost-update 信号: change "${changeName}" 的 worktree 目录仍存在（${worktreeDir}），` +
+          `但 current_stage 为 "${data.currentStage}"（非 execute，疑进度被回退）`
+        );
+      }
+    }
+    return issues;
+  }
+
+  /**
    * Revision v1.2 状态修复
    * 默认 dry-run，--apply 才真正修改 DB。
    * 只修安全项，不碰产物文件、不 reset/reopen stage。
@@ -127,10 +183,10 @@ export class ConsistencyDoctor {
    * @param {string|null} [opts.changeName]
    * @returns {{ fixable: object[], manual: string[], applied: object[] }}
    */
-  async repairConsistency(cwd, opts = {}) {
+  repairConsistency(cwd, opts = {}) {
     const { apply = false, changeName = null } = opts;
 
-    const data = await this.pm.read(cwd, changeName);
+    const data = this.pm.read(cwd, changeName);
     if (!data) {
       console.log('❌ 无法读取进度数据');
       return { fixable: [], manual: ['无法读取进度数据'], applied: [] };
@@ -208,7 +264,6 @@ export class ConsistencyDoctor {
             const changeDir = this.pm._changePath(cwd, changeName);
             if (changeDir && existsSync(changeDir)) {
               const runtimeRoot = this.pm._runtimePath(cwd);
-              const { summarizeTaskCompletion } = await import('../task-review.js');
               const summary = summarizeTaskCompletion({ changeDir, runtimeRoot, changeName });
               if (summary.source === 'review.json' && summary.total > 0 && summary.pending.length === 0) {
                 const desc = `execute: ${badSteps.length} 个 step 状态脱钩（${badSteps.map(st => st.name).join(', ')}）——review.json 客观产出全通过（${summary.completed}/${summary.total}），自动标 completed`;
@@ -288,7 +343,7 @@ export class ConsistencyDoctor {
 
     if (apply && applied.length > 0) {
       data.lastActive = now;
-      await this.pm._write(cwd, data, changeName);
+      this.pm._write(cwd, data, changeName);
       console.log(`\n  ✅ 已修复 ${applied.length} 项`);
     }
 

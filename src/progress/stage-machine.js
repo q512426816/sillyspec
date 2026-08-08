@@ -6,6 +6,7 @@
 import { mkdirSync } from 'fs';
 import { join, resolve, basename } from 'path';
 import { writeAtomicSync } from '../fs-atomic.js';
+import { runValidators } from '../stage-contract.js';
 import { VALID_STAGES, STAGE_LABELS, STAGE_ORDER, MAIN_FLOW_ORDER, SPEC_DIR_NAME, CURRENT_VERSION, emptyStage } from './shared.js';
 
 export class StageMachine {
@@ -17,14 +18,13 @@ export class StageMachine {
    * 阶段产物校验门：progress complete-stage / update-step 自动完成时复用
    * stage-contract 的 validator，防止零产物阶段被直接标 completed。
    */
-  async _validateStageArtifacts(cwd, stage, changeName) {
-    const { runValidators } = await import('../stage-contract.js');
+  _validateStageArtifacts(cwd, stage, changeName) {
     const specDir = this.pm._getSpecDir(cwd);
     const defaultSpec = join(resolve(cwd), SPEC_DIR_NAME);
     const specRoot = resolve(specDir) === defaultSpec ? null : specDir;
     let projectName = null;
     try {
-      const g = await this.pm.readGlobal(cwd);
+      const g = this.pm.readGlobal(cwd);
       projectName = g?.project || null;
     } catch {}
     return runValidators(stage, cwd, changeName, {
@@ -33,27 +33,27 @@ export class StageMachine {
     });
   }
 
-  async completeStage(cwd, stage, changeName = null, opts = {}) {
+  completeStage(cwd, stage, changeName = null, opts = {}) {
     const { force = false } = opts;
     if (!VALID_STAGES.includes(stage)) {
       console.log(`❌ 未知阶段: ${stage}`);
       return;
     }
 
-    const db = await this.pm._ensureDB(cwd);
+    const db = this.pm._ensureDB(cwd);
     const now = new Date().toISOString();
 
     // 获取变更名
     let cn = changeName;
     if (!cn) {
-      const changes = await this.pm.listChanges(cwd);
+      const changes = this.pm.listChanges(cwd);
       if (changes.length === 1) cn = changes[0];
       if (!cn) { console.log('❌ 无法确定当前变更，请指定 --change <name>'); return; }
     }
 
     // ── 产物校验门：complete-stage 不再是零校验后门 ──
     // 与 run.js completeStep 的 validator 同源；--force 为显式逃生口（留审计）。
-    const validation = await this._validateStageArtifacts(cwd, stage, cn);
+    const validation = this._validateStageArtifacts(cwd, stage, cn);
     if (!validation.ok) {
       if (!force) {
         console.error(`❌ complete-stage 被拒绝：阶段 ${stage} 产物校验未通过`);
@@ -75,39 +75,33 @@ export class StageMachine {
       this.pm._appendAuditLog(cwd, { action: 'complete-stage --force', stage, change: cn, validationErrors: [] });
     }
 
-    db.transaction((sqlDb) => {
-      const changeRow = sqlDb.exec('SELECT id FROM changes WHERE name = ?', [cn]);
-      if (!changeRow || changeRow.length === 0 || changeRow[0].values.length === 0) return;
-      const changeId = changeRow[0].values[0][0];
+    db.transaction(() => {
+      const sqlDb = db.getDb();
+      const changeRow = sqlDb.prepare('SELECT id FROM changes WHERE name = ?').get(cn);
+      if (changeRow === undefined) return;
+      const changeId = changeRow.id;
 
       // 确保 stages 行存在（阶段不存在时自动创建）
-      sqlDb.run(
-        'INSERT OR IGNORE INTO stages (change_id, stage, status) VALUES (?, ?, "pending")',
-        [changeId, stage]
-      );
+      sqlDb.prepare(`INSERT OR IGNORE INTO stages (change_id, stage, status) VALUES (?, ?, 'pending')`).run(changeId, stage);
 
       // UPDATE stages.status=completed + completed_at
-      sqlDb.run(
-        'UPDATE stages SET status = "completed", completed_at = ? WHERE change_id = ? AND stage = ?',
-        [now, changeId, stage]
-      );
+      sqlDb.prepare(`UPDATE stages SET status = 'completed', completed_at = ? WHERE change_id = ? AND stage = ?`).run(now, changeId, stage);
 
       // 将该阶段所有 pending 步骤标记为 completed
-      const stageRow = sqlDb.exec('SELECT id FROM stages WHERE change_id = ? AND stage = ?', [changeId, stage]);
-      if (stageRow && stageRow.length > 0 && stageRow[0].values.length > 0) {
-        const stageId = stageRow[0].values[0][0];
-        sqlDb.run(
-          'UPDATE steps SET status = "completed", completed_at = ? WHERE stage_id = ? AND status IN ("pending", "stale")', // stale 一并回填（reopen --done 场景，坑 brainstorm-reopen-step-state-desync）
-          [now, stageId]
-        );
+      const stageRow = sqlDb.prepare('SELECT id FROM stages WHERE change_id = ? AND stage = ?').get(changeId, stage);
+      if (stageRow !== undefined) {
+        const stageId = stageRow.id;
+        sqlDb.prepare(
+          `UPDATE steps SET status = 'completed', completed_at = ? WHERE stage_id = ? AND status IN ('pending', 'stale')` // stale 一并回填（reopen --done 场景，坑 brainstorm-reopen-step-state-desync）
+        ).run(now, stageId);
       }
 
       // UPDATE changes.last_active
-      sqlDb.run('UPDATE changes SET last_active = ? WHERE name = ?', [now, cn]);
+      sqlDb.prepare('UPDATE changes SET last_active = ? WHERE name = ?').run(now, cn);
     });
 
     // 写 history 文件（保持文件系统，不变）
-    const data = await this.pm.read(cwd, cn);
+    const data = this.pm.read(cwd, cn);
     if (data && data.stages && data.stages[stage]) {
       const historyDir = this.pm._runtimePath(cwd, 'history');
       mkdirSync(historyDir, { recursive: true });
@@ -122,25 +116,25 @@ export class StageMachine {
     console.log(`✅ 阶段 ${stage} 已标记为完成（不自动推进，下一步由你决定）`);
   }
 
-  async show(cwd, changeName = null) {
+  show(cwd, changeName = null) {
     // 如果指定了变更名，只显示该变更
     if (changeName) {
-      return await this._showChange(cwd, changeName);
+      return this._showChange(cwd, changeName);
     }
 
     // 否则显示所有变更
-    const changes = await this.pm.listChanges(cwd);
+    const changes = this.pm.listChanges(cwd);
     if (changes.length === 0) {
       console.log('ℹ️  没有活跃的变更');
       return;
     }
 
     if (changes.length === 1) {
-      return await this._showChange(cwd, changes[0]);
+      return this._showChange(cwd, changes[0]);
     }
 
     // 多个变更：汇总显示
-    const global = await this.pm.readGlobal(cwd);
+    const global = this.pm.readGlobal(cwd);
     console.log('');
     console.log('  ═══════════════════════════════════════');
     console.log(`  项目: ${(global?.project) || basename(cwd) || '(未命名)'}`);
@@ -149,7 +143,7 @@ export class StageMachine {
     console.log('');
 
     for (const cn of changes) {
-      const data = await this.pm.read(cwd, cn);
+      const data = this.pm.read(cwd, cn);
       if (!data) {
         console.log(`  📂 ${cn} — (无法读取)`);
         continue;
@@ -167,8 +161,8 @@ export class StageMachine {
     console.log('');
   }
 
-  async _showChange(cwd, changeName) {
-    const data = await this.pm.read(cwd, changeName);
+  _showChange(cwd, changeName) {
+    const data = this.pm.read(cwd, changeName);
     if (!data) {
       console.log(`❌ 未找到变更 ${changeName}`);
       return;
@@ -313,12 +307,12 @@ export class StageMachine {
     return null;
   }
 
-  async status(cwd, changeName = null) {
-    await this.show(cwd, changeName);
+  status(cwd, changeName = null) {
+    this.show(cwd, changeName);
   }
 
-  async validate(cwd, changeName = null) {
-    const data = await this.pm.read(cwd, changeName);
+  validate(cwd, changeName = null) {
+    const data = this.pm.read(cwd, changeName);
     if (!data) { console.log('❌ 无法读取进度数据'); return false; }
 
     const errors = [];
@@ -345,7 +339,7 @@ export class StageMachine {
       if (!fixed.stages[s]) { fixed.stages[s] = emptyStage(); changed = true; }
     }
     if (changed) {
-      await this.pm._write(cwd, fixed);
+      this.pm._write(cwd, fixed);
       console.log('✅ 已修复');
     }
 
@@ -365,10 +359,10 @@ export class StageMachine {
    * @param {string} [opts.changeName]
    * @returns {{ ok: boolean, error?: string }}
    */
-  async reopenStage(cwd, stage, opts = {}) {
+  reopenStage(cwd, stage, opts = {}) {
     const { fromStep, changeName = null } = opts;
 
-    const data = await this.pm.read(cwd, changeName);
+    const data = this.pm.read(cwd, changeName);
     if (!data) return { ok: false, error: '无法读取进度数据' };
 
     const stageData = data.stages[stage];
@@ -435,12 +429,12 @@ export class StageMachine {
     data.lastActive = now;
     data.currentStage = stage;
 
-    await this.pm._write(cwd, data, changeName);
+    this.pm._write(cwd, data, changeName);
 
     // 级联标记下游阶段为 stale
     const downstreamStages = this._getDownstreamStages(stage);
     if (downstreamStages.length > 0) {
-      const data2 = await this.pm.read(cwd, changeName); // 重新读取以获取最新状态
+      const data2 = this.pm.read(cwd, changeName); // 重新读取以获取最新状态
       if (data2) {
         for (const ds of downstreamStages) {
           if (data2.stages[ds] && data2.stages[ds].status === 'completed') {
@@ -449,7 +443,7 @@ export class StageMachine {
             data2.stages[ds].completedAt = null;
           }
         }
-        await this.pm._write(cwd, data2, changeName);
+        this.pm._write(cwd, data2, changeName);
       }
     }
 
@@ -467,9 +461,9 @@ export class StageMachine {
     return MAIN_FLOW_ORDER.slice(idx + 1);
   }
 
-  async reset(cwd, stage, changeName = null) {
+  reset(cwd, stage, changeName = null) {
     if (stage) {
-      const data = await this.pm.read(cwd, changeName);
+      const data = this.pm.read(cwd, changeName);
       if (!data) { console.log('❌ 无法读取进度数据'); return; }
       if (!data.stages[stage]) { console.log(`❌ 未知阶段: ${stage}`); return; }
       // 破坏性预览：reset 不可逆地清空该阶段所有步骤（含已完成），先告诉 agent 丢了什么。
@@ -479,38 +473,40 @@ export class StageMachine {
       console.warn(`⚠️  即将重置阶段「${stage}」：丢弃 ${steps.length} 个步骤（其中 ${doneCount} 个已完成，revision ${sd.revision || 0}）。此操作不可逆。`);
       data.stages[stage] = emptyStage();
       data.lastActive = new Date().toLocaleString('zh-CN',{hour12:false});
-      await this.pm._write(cwd, data);
+      this.pm._write(cwd, data);
       console.log(`✅ 已重置阶段: ${stage}`);
     } else {
       // 重置所有变更或指定变更
       if (changeName) {
         console.warn(`⚠️  即将重置变更「${changeName}」的全部进度（所有阶段的 steps + stage 状态，产物文件不动）。此操作不可逆。`);
         // SQL: 删除该变更的所有 stages 和 steps 数据
-        const db = await this.pm._ensureDB(cwd);
-        db.transaction((sqlDb) => {
-          const changeRow = sqlDb.exec('SELECT id FROM changes WHERE name = ?', [changeName]);
-          if (changeRow && changeRow.length > 0 && changeRow[0].values.length > 0) {
-            const changeId = changeRow[0].values[0][0];
-            sqlDb.run('DELETE FROM steps WHERE stage_id IN (SELECT id FROM stages WHERE change_id = ?)', [changeId]);
-            sqlDb.run('DELETE FROM stages WHERE change_id = ?', [changeId]);
+        const db = this.pm._ensureDB(cwd);
+        db.transaction(() => {
+          const sqlDb = db.getDb();
+          const changeRow = sqlDb.prepare('SELECT id FROM changes WHERE name = ?').get(changeName);
+          if (changeRow !== undefined) {
+            const changeId = changeRow.id;
+            sqlDb.prepare('DELETE FROM steps WHERE stage_id IN (SELECT id FROM stages WHERE change_id = ?)').run(changeId);
+            sqlDb.prepare('DELETE FROM stages WHERE change_id = ?').run(changeId);
             // 重新插入所有阶段（注意：上方已 DELETE stages，无需再 UPDATE）
             for (const s of VALID_STAGES) {
-              sqlDb.run('INSERT OR IGNORE INTO stages (change_id, stage, status) VALUES (?, ?, "pending")', [changeId, s]);
+              sqlDb.prepare(`INSERT OR IGNORE INTO stages (change_id, stage, status) VALUES (?, ?, 'pending')`).run(changeId, s);
             }
           }
         });
         console.log(`✅ 已重置变更 ${changeName} 的进度`);
       } else {
-        const changes = await this.pm.listChanges(cwd);
+        const changes = this.pm.listChanges(cwd);
         console.warn(`⚠️  即将重置【所有 ${changes.length} 个变更】的进度（仅 stage 状态，产物文件不动）。此操作不可逆且范围最大。`);
-        const db = await this.pm._ensureDB(cwd);
-        db.transaction((sqlDb) => {
+        const db = this.pm._ensureDB(cwd);
+        db.transaction(() => {
+          const sqlDb = db.getDb();
           for (const cn of changes) {
-            const changeRow = sqlDb.exec('SELECT id FROM changes WHERE name = ?', [cn]);
-            if (changeRow && changeRow.length > 0 && changeRow[0].values.length > 0) {
-              const changeId = changeRow[0].values[0][0];
-              sqlDb.run('DELETE FROM steps WHERE stage_id IN (SELECT id FROM stages WHERE change_id = ?)', [changeId]);
-              sqlDb.run('UPDATE stages SET status = "pending", started_at = NULL, completed_at = NULL WHERE change_id = ?', [changeId]);
+            const changeRow = sqlDb.prepare('SELECT id FROM changes WHERE name = ?').get(cn);
+            if (changeRow !== undefined) {
+              const changeId = changeRow.id;
+              sqlDb.prepare('DELETE FROM steps WHERE stage_id IN (SELECT id FROM stages WHERE change_id = ?)').run(changeId);
+              sqlDb.prepare(`UPDATE stages SET status = 'pending', started_at = NULL, completed_at = NULL WHERE change_id = ?`).run(changeId);
             }
           }
         });

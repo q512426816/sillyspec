@@ -253,7 +253,7 @@ async function main() {
           pm.show(progDir, progChangeName);
           break;
         case 'check': {
-          const result = await pm.checkConsistency(progDir, progChangeName);
+          const result = pm.checkConsistency(progDir, progChangeName);
           // checkConsistency 只返回 {ok, issues, warnings}，不打印——必须在此输出，
           // 否则 agent 跑只读健康检查得到一片寂静，无法分辨「正常」还是「已损坏」。
           if (!result || result.ok) {
@@ -267,11 +267,11 @@ async function main() {
         }
         case 'repair': {
           const repairApply = filteredArgs.includes('--apply');
-          await pm.repairConsistency(progDir, { apply: repairApply, changeName: progChangeName });
+          pm.repairConsistency(progDir, { apply: repairApply, changeName: progChangeName });
           break;
         }
         case 'validate':
-          await pm.validate(dir, progChangeName);
+          pm.validate(dir, progChangeName);
           break;
         case 'reset':
           pm.reset(dir, stage, progChangeName);
@@ -299,18 +299,18 @@ async function main() {
             if (args[ai] === '--output' && args[ai + 1]) { updOutput = args[ai + 1]; ai++; }
           }
           const updForce = args.includes('--force');
-          await pm.updateStep(dir, updStepStage, updStepName, { status: updStatus, output: updOutput, force: updForce }, progChangeName);
+          pm.updateStep(dir, updStepStage, updStepName, { status: updStatus, output: updOutput, force: updForce }, progChangeName);
           break;
         }
         case 'complete-stage': {
           const compStageName = filteredArgs[2];
           if (!compStageName) { console.log('❌ 用法: sillyspec progress complete-stage <stage> [--force]'); break; }
-          await pm.completeStage(dir, compStageName, progChangeName, { force: args.includes('--force') });
+          pm.completeStage(dir, compStageName, progChangeName, { force: args.includes('--force') });
           break;
         }
         case 'batch': {
           if (filteredArgs.includes('--status')) {
-            const bp = await pm.readBatchProgress(dir, progChangeName);
+            const bp = pm.readBatchProgress(dir, progChangeName);
             if (!bp) { console.log('📭 无批量进度数据'); break; }
             const line = pm._renderBatchProgress(bp);
             console.log(line || '📭 无批量进度数据');
@@ -329,7 +329,7 @@ async function main() {
               console.log('     sillyspec progress batch --status');
               break;
             }
-            await pm.updateBatchProgress(dir, batchData, progChangeName);
+            pm.updateBatchProgress(dir, batchData, progChangeName);
             console.log('✅ 批量进度已更新');
           }
           break;
@@ -529,7 +529,7 @@ async function main() {
         const specBase = resolvePlatformSpecDir(doctorEffectiveDir, specDir) || join(doctorEffectiveDir, '.sillyspec');
         let r;
         try {
-          r = await pm.alignExecuteToPlan(doctorEffectiveDir, alignChange, specBase, { confirm: doctorConfirm });
+          r = pm.alignExecuteToPlan(doctorEffectiveDir, alignChange, specBase, { confirm: doctorConfirm });
         } catch (e) {
           console.error(`❌ 对齐失败：${e.message}`);
           process.exitCode = 1;
@@ -650,9 +650,9 @@ async function main() {
       const pm = new ProgressManager({ specDir: resolvePlatformSpecDir(dir, specDir) });
 
       // isolation 写入 DB 的辅助函数
-      async function _writeIsolationToDB(cwd, changeName, info) {
+      function _writeIsolationToDB(cwd, changeName, info) {
         if (info.blocked) {
-          await pm.updateChangeIsolation(cwd, changeName, {
+          pm.updateChangeIsolation(cwd, changeName, {
             status: 'blocked',
             mode: null,
             reason: info.reason,
@@ -660,7 +660,7 @@ async function main() {
         } else {
           const mode = info.mode || 'worktree';
           const statusMap = { 'worktree': 'verified', 'native-worktree': 'verified', 'in-place-fallback': 'degraded' };
-          await pm.updateChangeIsolation(cwd, changeName, {
+          pm.updateChangeIsolation(cwd, changeName, {
             status: statusMap[mode] || 'verified',
             mode,
           });
@@ -708,11 +708,11 @@ SillySpec worktree — git worktree 隔离管理
             if (info.mode) {
               console.log(`   模式: ${info.mode}`);
             }
-            // 写入 isolation 信息到 gate-status.json
+            // 写入 isolation 信息到 sillyspec.db（_writeIsolationToDB）
             await _writeIsolationToDB(dir, wtName, info);
           } catch (e) {
             console.error(`❌ ${e.message}`);
-            // 写入 blocked 状态到 gate-status.json
+            // 写入 blocked 状态到 sillyspec.db（_writeIsolationToDB）
             await _writeIsolationToDB(dir, wtName, { blocked: true, reason: e.message });
             process.exit(1);
           }
@@ -1187,7 +1187,7 @@ SillySpec platform — SillyHub 平台同步
         process.exit(2);
       }
       const pm = new ProgressManager({ specDir: resolvePlatformSpecDir(dir, specDir) });
-      await pm.renameChange(dir, oldName, newName);
+      pm.renameChange(dir, oldName, newName);
       break;
     }
     case 'workflow': {
@@ -1435,7 +1435,6 @@ SillySpec modules — 模块文档管理
         'doctor-diagnosis.json': 'doctor --json 结构化诊断快照',
         'doctor-dumps': 'doctor --dump-db 取证输出目录',
         'workflow-runs': 'workflow check --save 归档目录',
-        'gate-status.json': '门控结果缓存',
         'scan-guard.json': 'scan 覆盖保护记录',
         'quick-sessions': 'quick 会话记录目录',
         'quick-guard.json': 'quick baseline 守卫（旧位置）',

@@ -1,8 +1,16 @@
-// 验证 DB 原子写 + .bak 回滚（src/db.js）。
+// 验证 DB 持久化 + .bak 回退（src/db.js，better-sqlite3 同步原生引擎）。
 // run-tests.mjs 自动收集 *.test.mjs；退出码 0 = 通过。
+//
+// 引擎替换（task-03/04）后语义变化：
+// - better-sqlite3 是原生同步 SQLite，打开即持久化（commit 落盘），不再有 sql.js 时代的
+//   _save/_atomicWriteSync 整库 export。故不再测「整库 export 原子写」。
+// - .bak 不再随每次写自动生成（无 _atomicWriteSync）；.bak 现为「外部恢复源」，仅在
+//   _openWithFallback 中被读取（主库损坏/空/缺失时 copy 回主库）。生产环境 .bak 由版本控制
+//   等外部备份提供；测试中手动构造 .bak（对齐 task-04 verify 的 inline 构造方式）。
+// - DB.init() 同步，getDb() 返回 better-sqlite3 Database；SELECT 用 prepare().get()。
 import { DB } from '../src/db.js';
-import initSqlJs from 'sql.js';
-import { existsSync, readFileSync, mkdirSync, rmSync, writeFileSync } from 'fs';
+import Database from 'better-sqlite3';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync, statSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
@@ -18,42 +26,56 @@ const fresh = () => {
   rmSync(tmpRoot, { recursive: true, force: true });
   mkdirSync(tmpRoot, { recursive: true });
 };
-const open = async () => { const db = new DB(path()); await db.init(); return db; };
-const readName = async (file) => {
-  const SQL = await initSqlJs();
-  const d = new SQL.Database(readFileSync(file));
-  const r = d.exec('SELECT name FROM project WHERE id=1');
-  d.close();
-  return r.length ? r[0].values[0][0] : null;
+// 同步打开（better-sqlite3 是同步 API，无 await init）
+const open = () => { const db = new DB(path()); db.init(); return db; };
+// 只读读取 project.name（用完即关；better-sqlite3 prepare().get() 返回行对象，无行返回 undefined）
+const readName = (file) => {
+  const db = new Database(file, { readonly: true });
+  try {
+    const row = db.prepare('SELECT name FROM project WHERE id=1').get();
+    return row ? row.name : null;
+  } finally {
+    db.close();
+  }
+};
+// 写一行 project（better-sqlite3 prepare().run() 绑定参数）
+const writeName = (db, name) => {
+  db.getDb().prepare("INSERT OR REPLACE INTO project (id,name,created_at,updated_at) VALUES (1,?,'t','t')").run(name);
 };
 
-console.log('\n[db-atomic-write] DB 原子写 + .bak 回滚');
+console.log('\n[db-atomic-write] better-sqlite3 持久化 + .bak 回退');
 
-// Case 1: 连续两次写后，.bak 保留上一版、主库为最新
+// Case 1: better-sqlite3 commit 即持久化——写后 close，新实例读得到最新值
 fresh();
 {
-  let db = await open();
-  db.getDb().run("INSERT INTO project (id,name,created_at,updated_at) VALUES (1,'v1','t','t')");
+  let db = open();
+  writeName(db, 'v1');
   db.close();
-  db = await open();
-  db.getDb().run("UPDATE project SET name='v2' WHERE id=1");
+  db = open();
+  writeName(db, 'v2');
   db.close();
-  assert(existsSync(path() + '.bak'), '连续写后生成 .bak');
-  assert(await readName(path() + '.bak') === 'v1', '.bak 内容是上一版 v1');
-  assert(await readName(path()) === 'v2', '主库内容是最新 v2');
+  assert(existsSync(path()), '写后主库文件存在');
+  assert(readName(path()) === 'v2', 'better-sqlite3 commit 持久化：新实例读出最新 v2');
 }
 
-// Case 2: 主库被截断/损坏 → 从 .bak 恢复，不抛错
+// Case 2: 主库被截断/损坏 → 从 .bak 恢复，不抛错（.bak 需外部预先准备）
 fresh();
 {
-  let db = await open();
-  db.getDb().run("INSERT INTO project (id,name,created_at,updated_at) VALUES (1,'keep','t','t')");
+  let db = open();
+  writeName(db, 'keep');
   db.close();
-  db = await open(); db.close(); // 再写一次以产生 .bak（内容=keep）
+  // .bak 不再自动生成：手动把上一完整主库复制为 .bak（模拟外部备份）
+  copyFileSync(path(), path() + '.bak');
+  // 再写一版主库（让主库内容与 .bak 不同，验证恢复后读到的是 .bak 的内容）
+  db = open();
+  writeName(db, 'newer');
+  db.close();
+  assert(readName(path() + '.bak') === 'keep', '.bak 内容是 keep');
+  // 截断主库 → _openWithFallback 走 .bak 回退
   writeFileSync(path(), Buffer.from('not-a-sqlite-db-corrupted-payload-xxxxxxxx'));
-  db = await open(); // 应回滚到 .bak
-  const r = db.getDb().exec('SELECT name FROM project WHERE id=1');
-  assert(r.length && r[0].values[0][0] === 'keep', '主库损坏后从 .bak 恢复（keep）');
+  db = open(); // 应回滚到 .bak
+  const name = readName(path());
+  assert(name === 'keep', '主库损坏后从 .bak 恢复（keep，实际 ' + name + '）');
   db.close();
 }
 
@@ -62,14 +84,14 @@ fresh();
 {
   writeFileSync(path(), Buffer.from('corrupted-and-no-backup-payload'));
   let threw = false;
-  try { await open(); } catch { threw = true; }
+  try { open(); } catch { threw = true; }
   assert(threw, '主库损坏且无 .bak 时 fail-loud 抛错');
 }
 
 // Case 4: 全新项目（主库与 .bak 都不存在）→ 正常建空库
 fresh();
 {
-  const db = await open();
+  const db = open();
   assert(existsSync(path()), '全新项目创建空库');
   db.close();
 }
@@ -77,14 +99,29 @@ fresh();
 // Case 5: 主库被误删但 .bak 在 → 从 .bak 恢复
 fresh();
 {
-  let db = await open();
-  db.getDb().run("INSERT INTO project (id,name,created_at,updated_at) VALUES (1,'rescued','t','t')");
+  let db = open();
+  writeName(db, 'rescued');
   db.close();
-  db = await open(); db.close(); // 产生 .bak
+  copyFileSync(path(), path() + '.bak'); // 手动准备 .bak
   rmSync(path(), { force: true }); // 模拟主库被外部误删
-  db = await open();
-  const r = db.getDb().exec('SELECT name FROM project WHERE id=1');
-  assert(r.length && r[0].values[0][0] === 'rescued', '主库误删后从 .bak 恢复（rescued）');
+  db = open();
+  const name = readName(path());
+  assert(name === 'rescued', '主库误删后从 .bak 恢复（rescued，实际 ' + name + '）');
+  db.close();
+}
+
+// Case 6: 主库 0 字节（截断信号）且 .bak 在 → warn「为空」后从 .bak 恢复
+fresh();
+{
+  let db = open();
+  writeName(db, 'zero-recover');
+  db.close();
+  copyFileSync(path(), path() + '.bak');
+  writeFileSync(path(), Buffer.alloc(0)); // 0 字节
+  assert(statSync(path()).size === 0, '构造主库 0 字节');
+  db = open();
+  const name = readName(path());
+  assert(name === 'zero-recover', '主库 0 字节后从 .bak 恢复（zero-recover，实际 ' + name + '）');
   db.close();
 }
 

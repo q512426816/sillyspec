@@ -4,7 +4,7 @@
  * 覆盖 plan.md 全局验收标准 1-7：
  *   1. gate execute 退出码语义（0/1/2）
  *   2. derive 四 facet 结构 + 非法 facet
- *   3. 只读性：sillyspec.db hash 不变，gate-status.json 不产生/不变
+ *   3. 只读性：gate/derive 不改 DB 语义内容（project + changes 行不变，D-002）
  *   4. --json stdout 可被 JSON.parse（含异常兜底）
  *   5. platform approve/reject（mock HTTP + approvals 表落库）
  *   6. saveWorkflowRun 平台/本地两分支落盘路径
@@ -17,7 +17,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync
 import { join, dirname } from 'path'
 import { tmpdir } from 'os'
 import { execFileSync } from 'child_process'
-import { createHash } from 'crypto'
+import Database from 'better-sqlite3'
 import http from 'node:http'
 import { fileURLToPath } from 'url'
 
@@ -64,11 +64,6 @@ function makeTmpDir(prefix) {
   const dir = mkdtempSync(join(tmpdir(), prefix))
   tmpRoots.push(dir)
   return dir
-}
-
-// 文件 sha256 hash（用于只读性断言）
-function fileHash(p) {
-  return createHash('sha256').update(readFileSync(p)).digest('hex')
 }
 
 // worktree 根目录（用于 binPath）
@@ -322,17 +317,25 @@ console.log('\n--- 4. derive（四 facet 结构）---')
 }
 
 // ─────────────────────────────────────────
-// 5. 只读性：db hash 不变 + gate-status.json 不产生/不变
+// 5. 只读性：gate/derive 不改 DB 语义内容（D-002 只读边界）
 // ─────────────────────────────────────────
-console.log('\n--- 5. 只读性（db hash 不变 + gate-status.json）---')
+console.log('\n--- 5. 只读性（gate/derive 不改 DB 语义内容，D-002）---')
 {
   const { cwd, specBase, changeName, dbPath } = await makeProjectFixture({ withGit: true, codeChange: true, lowRiskTask: true })
   writeTaskPlan(specBase, changeName)
-  const gateStatusPath = join(specBase, '.runtime', 'gate-status.json')
 
-  const dbBefore = fileHash(dbPath)
-  const gsBeforeExists = existsSync(gateStatusPath)
-  const gsBeforeHash = gsBeforeExists ? fileHash(gateStatusPath) : null
+  // 语义级快照：读 project + changes 行（D-002 只读边界：gate/derive 调用前后内容应不变）。
+  // 不再用文件 hash——better-sqlite3 WAL 下 close 可能 checkpoint 改写主库字节（语义不变但 hash 变），
+  // 文件 hash 断言在此引擎下不稳。gate-status.json 已由 task-10 废除（D-02），不再断言其产生/不变。
+  const snapshot = () => {
+    const db = new Database(dbPath, { readonly: true })
+    try {
+      const project = db.prepare('SELECT id, name, schema_version FROM project ORDER BY id').all()
+      const changes = db.prepare('SELECT name, current_stage, status, no_worktree FROM changes ORDER BY name').all()
+      return JSON.stringify({ project, changes })
+    } finally { db.close() }
+  }
+  const before = snapshot()
 
   // gate 调用
   await runGate('execute', changeName, { cwd, specBase })
@@ -340,17 +343,8 @@ console.log('\n--- 5. 只读性（db hash 不变 + gate-status.json）---')
   await runDerive('execute-evidence', changeName, { cwd, specBase })
   await runDerive('artifacts', changeName, { cwd, specBase })
 
-  const dbAfter = fileHash(dbPath)
-  assert(dbBefore === dbAfter, `gate/derive 调用后 sillyspec.db hash 不变（前 ${dbBefore.slice(0, 8)} / 后 ${dbAfter.slice(0, 8)}）`)
-
-  // gate-status.json：原本不产生则调用后仍不产生；原本存在则内容不变
-  const gsAfterExists = existsSync(gateStatusPath)
-  if (!gsBeforeExists) {
-    assert(!gsAfterExists, 'gate/derive 不产生 gate-status.json')
-  } else {
-    const gsAfterHash = fileHash(gateStatusPath)
-    assert(gsBeforeHash === gsAfterHash, 'gate/derive 不修改 gate-status.json')
-  }
+  const after = snapshot()
+  assert(before === after, `gate/derive 调用前后 DB 语义内容不变（project + changes 行不变，D-002 只读）`)
 }
 
 // ─────────────────────────────────────────
@@ -477,10 +471,10 @@ console.log('\n--- 7. approve/reject（mock HTTP + approvals 表）---')
 
       // approvals 表落库：status=approved
       const pm = new ProgressManager({ specDir: f.specBase })
-      const db = await pm._ensureDB(f.cwd)
+      const db = pm._ensureDB(f.cwd)
       const sqlDb = db.getDb()
-      const rows = sqlDb.exec('SELECT a.status FROM approvals a JOIN changes c ON a.change_id = c.id WHERE c.name = ?', [f.changeName])
-      const status = rows && rows[0] && rows[0].values[0] && rows[0].values[0][0]
+      const row = sqlDb.prepare('SELECT a.status FROM approvals a JOIN changes c ON a.change_id = c.id WHERE c.name = ?').get(f.changeName)
+      const status = row && row.status
       assert(status === 'approved', `approve 后 approvals.status=approved（实际 ${status}）`)
     }
 
@@ -498,12 +492,11 @@ console.log('\n--- 7. approve/reject（mock HTTP + approvals 表）---')
 
       // approvals 表：status=rejected + rejection_reason
       const pm = new ProgressManager({ specDir: f.specBase })
-      const db = await pm._ensureDB(f.cwd)
+      const db = pm._ensureDB(f.cwd)
       const sqlDb = db.getDb()
-      const rows = sqlDb.exec('SELECT a.status, a.rejection_reason FROM approvals a JOIN changes c ON a.change_id = c.id WHERE c.name = ?', [f.changeName])
-      const vals = rows && rows[0] && rows[0].values[0]
-      assert(vals && vals[0] === 'rejected', `reject 后 approvals.status=rejected（实际 ${vals && vals[0]}）`)
-      assert(vals && vals[1] === '原因 A', `reject 后 rejection_reason 落库（实际 ${vals && vals[1]}）`)
+      const row = sqlDb.prepare('SELECT a.status, a.rejection_reason FROM approvals a JOIN changes c ON a.change_id = c.id WHERE c.name = ?').get(f.changeName)
+      assert(row && row.status === 'rejected', `reject 后 approvals.status=rejected（实际 ${row && row.status}）`)
+      assert(row && row.rejection_reason === '原因 A', `reject 后 rejection_reason 落库（实际 ${row && row.rejection_reason}）`)
     }
 
     // 7c. 失败场景：HTTP 500 → exitCode=1 且表不变
@@ -524,11 +517,10 @@ console.log('\n--- 7. approve/reject（mock HTTP + approvals 表）---')
       assert(process.exitCode === 1, `HTTP 500 → process.exitCode=1（实际 ${process.exitCode}）`)
       // 表不变：无 approvals 行（落库前 HTTP 已失败）
       const pm = new ProgressManager({ specDir: f2.specBase })
-      const db = await pm._ensureDB(f2.cwd)
+      const db = pm._ensureDB(f2.cwd)
       const sqlDb = db.getDb()
-      const rows = sqlDb.exec('SELECT a.status FROM approvals a JOIN changes c ON a.change_id = c.id WHERE c.name = ?', [f2.changeName])
-      const hasRow = rows && rows[0] && rows[0].values.length > 0
-      assert(!hasRow, 'HTTP 500 失败 → approvals 表无新行（落库前置失败）')
+      const row = sqlDb.prepare('SELECT a.status FROM approvals a JOIN changes c ON a.change_id = c.id WHERE c.name = ?').get(f2.changeName)
+      assert(!row, 'HTTP 500 失败 → approvals 表无新行（落库前置失败）')
 
       process.exitCode = 0 // 复位，避免污染后续
       server500.close()

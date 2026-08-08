@@ -647,7 +647,7 @@ export class WorktreeManager {
   }
 
   /**
-   * 构建 isolation 信息对象，用于写入 gate-status.json
+   * 构建 isolation 信息对象，用于写入 sillyspec.db（_writeIsolationToDB，isolation_status 列）
    * @param {string} changeName
    * @returns {{ status: string, mode: string, path: string } | null}
    */

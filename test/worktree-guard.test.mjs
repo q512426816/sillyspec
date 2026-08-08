@@ -3,6 +3,7 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { shouldBlock } from '../src/hooks/worktree-guard.js'
+import { DB } from '../src/db.js'
 
 const root = join(tmpdir(), `sillyspec-guard-test-${Date.now()}`)
 const changeName = '2026-06-04-guard-test'
@@ -12,11 +13,24 @@ const unregisteredWorktree = join(runtimeDir, 'worktrees', 'other-change')
 
 mkdirSync(registeredWorktree, { recursive: true })
 mkdirSync(unregisteredWorktree, { recursive: true })
-writeFileSync(join(runtimeDir, 'gate-status.json'), JSON.stringify({
-  stage: 'execute',
-  changes: [changeName],
-  updatedAt: new Date().toISOString(),
-}, null, 2))
+
+// task-10 废 gate-status.json 后，readCurrentStage/isNoWorktreeMode 直读 sillyspec.db。
+// 用 DB 类在 temp repo 内建 sillyspec.db 并种一条 active change 行：
+//  1) 让 findProjectRoot 命中 temp repo（.sillyspec/.runtime/sillyspec.db 标记）而非用户 home 的 .sillyspec；
+//  2) readCurrentStage 经 queryDbFirstCell（readonly 子进程）读出 current_stage。
+function setStage(stage, { name = changeName, noWorktree = 0 } = {}) {
+  const db = new DB(join(runtimeDir, 'sillyspec.db'))
+  db.init()
+  const sq = db.getDb()
+  sq.prepare("INSERT OR IGNORE INTO project (id,name,created_at,updated_at) VALUES (1,'p','t','t')").run()
+  sq.prepare('DELETE FROM changes WHERE name = ?').run(name)
+  sq.prepare("INSERT INTO changes (name,current_stage,status,no_worktree,created_at,last_active) VALUES (?,?,?,?,'t','t')")
+    .run(name, stage, 'active', noWorktree ? 1 : 0)
+  db.close()
+}
+
+// 初始阶段 = execute（对齐原 gate-status.json {stage:'execute'}）
+setStage('execute')
 writeFileSync(join(registeredWorktree, 'meta.json'), JSON.stringify({
   changeName,
   worktreePath: registeredWorktree,
@@ -48,11 +62,9 @@ try {
     'ordinary .sillyspec docs should remain writable'
   )
 
-  writeFileSync(join(runtimeDir, 'gate-status.json'), JSON.stringify({
-    stage: 'scan',
-    changes: [changeName],
-    updatedAt: new Date().toISOString(),
-  }, null, 2))
+  // scan 阶段：readCurrentStage SQL 过滤 current_stage IN ('execute','quick')，scan 不在其中 →
+  // 等价 '(none)'。scan 文档覆盖保护由 shouldBlockScanDocOverwrite 独立判定（阶段无关）。
+  setStage('scan')
   writeFileSync(join(runtimeDir, 'scan-guard.json'), JSON.stringify({
     sourceCommit: 'new-head',
     startedAt: '2026-06-16T10:00:00.000Z',
@@ -106,7 +118,6 @@ try {
     'external specRoot scan overwrite should read specRoot/.runtime/scan-guard.json'
   )
 
-  rmSync(join(runtimeDir, 'gate-status.json'), { force: true })
   writeFileSync(join(root, '.sillyspec', 'local.yaml'), [
     'worktreeHook:',
     '  readonlyCommands:',
@@ -119,11 +130,8 @@ try {
     '.sillyspec/local.yaml readonlyCommands should extend the bash whitelist'
   )
 
-  writeFileSync(join(runtimeDir, 'gate-status.json'), JSON.stringify({
-    stage: 'quick',
-    changes: [changeName],
-    updatedAt: new Date().toISOString(),
-  }, null, 2))
+  // 切到 quick 阶段（直读 DB）
+  setStage('quick')
   assert.equal(
     shouldBlock({ tool: 'Write', filePath: join(root, 'src', 'quick.js'), cwd: root }).blocked,
     false,

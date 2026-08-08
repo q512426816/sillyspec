@@ -26,6 +26,22 @@ import { execFileSync } from 'node:child_process'
 import { runCommand } from '../src/run.js'
 import { ProgressManager } from '../src/progress.js'
 import { shouldBlock } from '../src/hooks/worktree-guard.js'
+import { DB } from '../src/db.js'
+
+// task-10 废 gate-status.json 后，readCurrentStage 直读 sillyspec.db。验收 4/5/5補 的 hook
+// 场景无 runCommand（不自带建库），需手动建 sillyspec.db 并种 active change 行，既让
+// findProjectRoot 命中 temp repo（否则会向上撞到用户 home 的 .sillyspec），又让
+// readCurrentStage 读出 current_stage='quick' 以触发 baseline 并集保护路径。
+function seedStageDb(repo, stage, { name = 'test-active', noWorktree = 0 } = {}) {
+  const db = new DB(join(repo, '.sillyspec', '.runtime', 'sillyspec.db'))
+  db.init()
+  const sq = db.getDb()
+  sq.prepare("INSERT OR IGNORE INTO project (id,name,created_at,updated_at) VALUES (1,'p','t','t')").run()
+  sq.prepare('DELETE FROM changes WHERE name = ?').run(name)
+  sq.prepare("INSERT INTO changes (name,current_stage,status,no_worktree,created_at,last_active) VALUES (?,?,?,?,'t','t')")
+    .run(name, stage, 'active', noWorktree ? 1 : 0)
+  db.close()
+}
 
 let total = 0
 let failed = 0
@@ -182,8 +198,8 @@ console.log('\n--- 验收 4：worktree-guard hook 合并多 session guard ---')
   const specBase = join(repo, '.sillyspec')
   const runtimeDir = join(specBase, '.runtime')
   mkdirSync(runtimeDir, { recursive: true })
-  // 设当前阶段为 quick（gate-status.json 是 readCurrentStage 的权威来源）
-  writeFileSync(join(runtimeDir, 'gate-status.json'), JSON.stringify({ stage: 'quick' }))
+  // 设当前阶段为 quick（readCurrentStage 直读 sillyspec.db current_stage）
+  seedStageDb(repo, 'quick')
 
   // 两 session，各自 baselineFiles 不同
   const sidA = 'quick-aaaa1111'
@@ -225,7 +241,7 @@ console.log('\n--- 验收 5：向后兼容（旧单文件 quick-guard.json 并�
   const specBase = join(repo, '.sillyspec')
   const runtimeDir = join(specBase, '.runtime')
   mkdirSync(runtimeDir, { recursive: true })
-  writeFileSync(join(runtimeDir, 'gate-status.json'), JSON.stringify({ stage: 'quick' }))
+  seedStageDb(repo, 'quick')
 
   // 旧格式：单文件 quick-guard.json（task-03 前，无 session 目录）
   writeFileSync(join(runtimeDir, 'quick-guard.json'), JSON.stringify({
@@ -257,7 +273,7 @@ console.log('\n--- 验收 5 补充：无 guard 目录时 hook 不崩 ---')
   const specBase = join(repo, '.sillyspec')
   const runtimeDir = join(specBase, '.runtime')
   mkdirSync(runtimeDir, { recursive: true })
-  writeFileSync(join(runtimeDir, 'gate-status.json'), JSON.stringify({ stage: 'quick' }))
+  seedStageDb(repo, 'quick')
 
   // 无 quick-sessions/ 目录、无 quick-guard.json → hook 不崩，放行非危险命令
   let threw = false

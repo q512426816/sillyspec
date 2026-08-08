@@ -12,32 +12,31 @@ export class ChangeRegistry {
    * 列出所有活跃变更名
    * SQL: SELECT name FROM changes WHERE status = 'active'
    */
-  async listChanges(cwd) {
-    const db = await this.pm._ensureDB(cwd);
+  listChanges(cwd) {
+    const db = this.pm._ensureDB(cwd);
     const sqlDb = db.getDb();
-    const rows = sqlDb.exec("SELECT name FROM changes WHERE status = 'active' ORDER BY name");
-    if (!rows || rows.length === 0) return [];
-    return rows[0].values.map(r => r[0]);
+    const rows = sqlDb.prepare("SELECT name FROM changes WHERE status = 'active' ORDER BY name").all();
+    return rows.map(r => r.name);
   }
 
   /**
    * 注册变更到活跃列表
    * SQL: INSERT OR IGNORE → 若已 archived 则 UPDATE status='active'
    */
-  async registerChange(cwd, changeName) {
+  registerChange(cwd, changeName) {
     if (!changeName) {
       console.warn('⚠️  registerChange: changeName 为空，跳过');
       return;
     }
-    const db = await this.pm._ensureDB(cwd);
-    db.transaction((sqlDb) => {
+    const db = this.pm._ensureDB(cwd);
+    db.transaction(() => {
+      const sqlDb = db.getDb();
       const now = new Date().toISOString();
       // 尝试插入新行
-      sqlDb.run(
+      sqlDb.prepare(
         `INSERT OR IGNORE INTO changes (name, created_at, last_active)
-         VALUES (?, ?, ?)`,
-        [changeName, now, now]
-      );
+         VALUES (?, ?, ?)`
+      ).run(changeName, now, now);
       // 注意：不复活已归档的变更——归档是不可逆操作
       // 如果变更已存在且为 archived，保持 archived 状态不变
     });
@@ -49,14 +48,14 @@ export class ChangeRegistry {
    * @param {string} changeName - 变更名
    * @param {{ status: string, mode?: string, reason?: string }} isolation
    */
-  async updateChangeIsolation(cwd, changeName, isolation) {
-    const db = await this.pm._ensureDB(cwd);
+  updateChangeIsolation(cwd, changeName, isolation) {
+    const db = this.pm._ensureDB(cwd);
     try {
-      db.transaction((sqlDb) => {
-        sqlDb.run(
-          `UPDATE changes SET isolation_status = ?, isolation_mode = ?, isolation_reason = ?, last_active = ? WHERE name = ?`,
-          [isolation.status, isolation.mode || null, isolation.reason || null, new Date().toISOString(), changeName]
-        );
+      db.transaction(() => {
+        const sqlDb = db.getDb();
+        sqlDb.prepare(
+          `UPDATE changes SET isolation_status = ?, isolation_mode = ?, isolation_reason = ?, last_active = ? WHERE name = ?`
+        ).run(isolation.status, isolation.mode || null, isolation.reason || null, new Date().toISOString(), changeName);
       });
     } catch (err) {
       console.warn('⚠️  更新 isolation 状态失败:', err.message);
@@ -69,55 +68,54 @@ export class ChangeRegistry {
    * @param {string} changeName - 变更名
    * @returns {{ status: string|null, mode: string|null, reason: string|null }|null}
    */
-  async readChangeIsolation(cwd, changeName) {
-    const db = await this.pm._ensureDB(cwd);
+  readChangeIsolation(cwd, changeName) {
+    const db = this.pm._ensureDB(cwd);
     const sqlDb = db.getDb();
     try {
-      const rows = sqlDb.exec(
-        `SELECT isolation_status, isolation_mode, isolation_reason FROM changes WHERE name = ?`,
-        [changeName]
-      );
-      if (!rows || rows.length === 0 || rows[0].values.length === 0) return null;
-      const [status, mode, reason] = rows[0].values[0];
+      const row = sqlDb.prepare(
+        `SELECT isolation_status, isolation_mode, isolation_reason FROM changes WHERE name = ?`
+      ).get(changeName);
+      if (row === undefined) return null;
+      const { isolation_status: status, isolation_mode: mode, isolation_reason: reason } = row;
       return { status: status || null, mode: mode || null, reason: reason || null };
     } catch {
       return null;
     }
   }
 
-  async _updatePlatformLastSync(cwd, changeName) {
+  _updatePlatformLastSync(cwd, changeName) {
     if (!changeName) return;
-    const db = await this.pm._ensureDB(cwd);
-    db.transaction((sqlDb) => {
-      sqlDb.run(
-        'UPDATE changes SET platform_last_sync = ?, platform_sync_enabled = 1 WHERE name = ?',
-        [new Date().toISOString(), changeName]
-      );
+    const db = this.pm._ensureDB(cwd);
+    db.transaction(() => {
+      const sqlDb = db.getDb();
+      sqlDb.prepare(
+        'UPDATE changes SET platform_last_sync = ?, platform_sync_enabled = 1 WHERE name = ?'
+      ).run(new Date().toISOString(), changeName);
     });
   }
 
-  async _updateApprovalStatus(cwd, changeName, status, reason = null) {
+  _updateApprovalStatus(cwd, changeName, status, reason = null) {
     if (!changeName || !status) return;
-    const db = await this.pm._ensureDB(cwd);
-    db.transaction((sqlDb) => {
-      const rows = sqlDb.exec('SELECT id FROM changes WHERE name = ?', [changeName]);
-      if (!rows || rows.length === 0 || rows[0].values.length === 0) return;
-      const changeId = rows[0].values[0][0];
+    const db = this.pm._ensureDB(cwd);
+    db.transaction(() => {
+      const sqlDb = db.getDb();
+      const row = sqlDb.prepare('SELECT id FROM changes WHERE name = ?').get(changeName);
+      if (row === undefined) return;
+      const changeId = row.id;
       const now = new Date().toISOString();
-      sqlDb.run(
+      sqlDb.prepare(
         `INSERT INTO approvals (change_id, status, requested_at, approved_at, rejection_reason)
          VALUES (?, ?, ?, ?, ?)
          ON CONFLICT(change_id) DO UPDATE SET
            status = excluded.status,
            approved_at = excluded.approved_at,
-           rejection_reason = excluded.rejection_reason`,
-        [
-          changeId,
-          status,
-          now,
-          status === 'approved' ? now : null,
-          status === 'rejected' ? reason : null,
-        ]
+           rejection_reason = excluded.rejection_reason`
+      ).run(
+        changeId,
+        status,
+        now,
+        status === 'approved' ? now : null,
+        status === 'rejected' ? reason : null,
       );
     });
   }
@@ -128,7 +126,7 @@ export class ChangeRegistry {
    * @param {string} oldName - 旧变更名
    * @param {string} newName - 新变更名
    */
-  async renameChange(cwd, oldName, newName) {
+  renameChange(cwd, oldName, newName) {
     if (!oldName || !newName) {
       console.warn('⚠️  renameChange: 旧名或新名为空，跳过');
       return;
@@ -137,21 +135,23 @@ export class ChangeRegistry {
       console.warn('⚠️  renameChange: 新旧名称相同，跳过');
       return;
     }
-    const db = await this.pm._ensureDB(cwd);
+    const db = this.pm._ensureDB(cwd);
     // 检查旧名是否存在
-    const existing = db.transaction((sqlDb) => {
-      const row = sqlDb.exec(`SELECT name, status FROM changes WHERE name = ?`, [oldName]);
-      if (!row || !row[0] || row[0].values.length === 0) return null;
-      return { name: row[0].values[0][0], status: row[0].values[0][1] };
+    const existing = db.transaction(() => {
+      const sqlDb = db.getDb();
+      const row = sqlDb.prepare(`SELECT name, status FROM changes WHERE name = ?`).get(oldName);
+      if (row === undefined) return null;
+      return { name: row.name, status: row.status };
     });
     if (!existing) {
       console.error(`❌ 变更 ${oldName} 不存在`);
       return;
     }
     // 检查新名是否已存在
-    const conflict = db.transaction((sqlDb) => {
-      const row = sqlDb.exec(`SELECT name FROM changes WHERE name = ?`, [newName]);
-      return row && row[0] && row[0].values.length > 0;
+    const conflict = db.transaction(() => {
+      const sqlDb = db.getDb();
+      const row = sqlDb.prepare(`SELECT name FROM changes WHERE name = ?`).get(newName);
+      return row !== undefined;
     });
     if (conflict) {
       console.error(`❌ 变更 ${newName} 已存在`);
@@ -164,8 +164,9 @@ export class ChangeRegistry {
     const newDir = this.pm._changePath(cwd, newName);
     const now = new Date().toISOString();
     try {
-      db.transaction((sqlDb) => {
-        sqlDb.run(`UPDATE changes SET name = ?, last_active = ? WHERE name = ?`, [newName, now, oldName]);
+      db.transaction(() => {
+        const sqlDb = db.getDb();
+        sqlDb.prepare(`UPDATE changes SET name = ?, last_active = ? WHERE name = ?`).run(newName, now, oldName);
       });
     } catch (e) {
       console.error(`❌ 重命名失败：更新数据库时出错（${e.message}）`);
@@ -179,8 +180,9 @@ export class ChangeRegistry {
         renamed = false;
         // FS 重命名失败：回滚 DB 恢复 oldName，保持 DB 与目录一致
         try {
-          db.transaction((sqlDb) => {
-            sqlDb.run(`UPDATE changes SET name = ?, last_active = ? WHERE name = ?`, [oldName, now, newName]);
+          db.transaction(() => {
+            const sqlDb = db.getDb();
+            sqlDb.prepare(`UPDATE changes SET name = ?, last_active = ? WHERE name = ?`).run(oldName, now, newName);
           });
           console.error(`❌ 重命名失败：移动目录出错（${e.message}），已回滚数据库`);
         } catch (rollbackErr) {
@@ -199,18 +201,18 @@ export class ChangeRegistry {
    * 从活跃列表移除变更（归档时调用，不物理删除）
    * SQL: UPDATE changes SET status = 'archived'
    */
-  async unregisterChange(cwd, changeName) {
+  unregisterChange(cwd, changeName) {
     if (!changeName) {
       console.warn('⚠️  unregisterChange: changeName 为空，跳过');
       return;
     }
-    const db = await this.pm._ensureDB(cwd);
-    db.transaction((sqlDb) => {
+    const db = this.pm._ensureDB(cwd);
+    db.transaction(() => {
+      const sqlDb = db.getDb();
       const now = new Date().toISOString();
-      sqlDb.run(
-        `UPDATE changes SET status = 'archived', last_active = ? WHERE name = ?`,
-        [now, changeName]
-      );
+      sqlDb.prepare(
+        `UPDATE changes SET status = 'archived', last_active = ? WHERE name = ?`
+      ).run(now, changeName);
     });
   }
 }

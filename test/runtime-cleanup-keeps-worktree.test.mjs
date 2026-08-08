@@ -3,7 +3,7 @@
  *
  * 平台模式（specRoot 指向外部）下，源码目录 .sillyspec/ 含真实资产时，
  * cleanupRuntimeResidue 应只清缓存，保留 worktrees/、sillyspec.db、
- * global.json、gate-status.json、contract-artifacts/、execute-runs/。
+ * global.json、contract-artifacts/、execute-runs/。
  * 详见 docs/sillyspec/runtime-cleanup-destroys-worktree-meta.md
  */
 import { cleanupRuntimeResidue } from '../src/init.js'
@@ -28,7 +28,7 @@ function makeTempLegacy() {
 console.log('=== Bug A 回归: cleanupRuntimeResidue 保留权威状态 ===\n')
 
 // ── Case 1: 权威状态全部保留 ──
-console.log('--- Case 1: worktrees / db / global.json / gate-status 保留 ---')
+console.log('--- Case 1: worktrees / db / global.json 保留 ---')
 {
   const { root, legacyDir } = makeTempLegacy()
   const runtime = join(legacyDir, '.runtime')
@@ -37,7 +37,6 @@ console.log('--- Case 1: worktrees / db / global.json / gate-status 保留 ---')
   writeFileSync(join(runtime, 'worktrees', 'my-change', 'meta.json'), '{"depsStatus":"installed"}')
   writeFileSync(join(runtime, 'sillyspec.db'), 'sqlite-bytes')
   writeFileSync(join(runtime, 'global.json'), '{"projectName":"x"}')
-  writeFileSync(join(runtime, 'gate-status.json'), '{}')
   mkdirSync(join(runtime, 'contract-artifacts'), { recursive: true })
   writeFileSync(join(runtime, 'contract-artifacts', 'foo.json'), '{}')
   mkdirSync(join(runtime, 'execute-runs'), { recursive: true })
@@ -56,7 +55,6 @@ console.log('--- Case 1: worktrees / db / global.json / gate-status 保留 ---')
   assert(existsSync(join(runtime, 'worktrees', 'my-change', 'meta.json')), 'worktrees/meta.json 应保留')
   assert(existsSync(join(runtime, 'sillyspec.db')), 'sillyspec.db 应保留')
   assert(existsSync(join(runtime, 'global.json')), 'global.json 应保留')
-  assert(existsSync(join(runtime, 'gate-status.json')), 'gate-status.json 应保留')
   assert(existsSync(join(runtime, 'contract-artifacts', 'foo.json')), 'contract-artifacts/ 应保留')
   assert(existsSync(join(runtime, 'execute-runs')), 'execute-runs/ 应保留')
   assert(!existsSync(join(runtime, 'artifacts')), 'artifacts/ 缓存应删除')

@@ -161,10 +161,10 @@ function rollbackStageCompletion(stageData, steps, currentIdx) {
  * 漏写 triggerSync / 写错 return 结构导致行为分裂。返回 nextPendingIdx=currentIdx，
  * 让上层走「完成但不推进」分支，--done 被拒、agent 修复产物后重跑。
  */
-async function rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts) {
+function rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts) {
   rollbackStageCompletion(stageData, steps, currentIdx)
   progress.lastActive = new Date().toLocaleString('zh-CN', { hour12: false })
-  await pm._write(cwd, progress, changeName)
+  pm._write(cwd, progress, changeName)
   triggerSync(cwd, changeName, platformOpts)
   return { stageCompleted: false, currentIdx, nextPendingIdx: currentIdx }
 }
@@ -609,7 +609,7 @@ export async function completeStageGates({ stageName, cwd, changeName, platformO
     stageData.status = 'pending'
     stageData.completedAt = null
     if (progress.currentStage === stageName) progress.currentStage = ''
-    await pm._write(cwd, progress, changeName)
+    pm._write(cwd, progress, changeName)
   }
 
   // 阶段完成校验 gate 级联（runValidators → verify-test → Plan→Execute → Stage Review → Task Review）

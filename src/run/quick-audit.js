@@ -54,7 +54,7 @@ export function printQuickAuditReview(review) {
 export async function resolveQuickLinkedChanges({ pm, cwd, specDir, quickFiles, taskDescription, nonInteractive }) {
   let activeChanges = []
   try {
-    activeChanges = await pm.listChanges(cwd)
+    activeChanges = pm.listChanges(cwd)
   } catch {
     activeChanges = []
   }

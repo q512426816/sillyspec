@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-05-31 11:00:00
-updated_at: 2026-08-08T09:40:00+08:00
+updated_at: 2026-08-09T00:40:00+08:00
 ---
 
 # SillySpec 文件生命周期
@@ -12,7 +12,7 @@ updated_at: 2026-08-08T09:40:00+08:00
 
 | 文件 | 说明 |
 |---|---|
-| [storage-and-state.md](file-lifecycle/storage-and-state.md) | `.sillyspec/.runtime/`、SQLite、gate、artifact、history、local 配置口径 |
+| [storage-and-state.md](file-lifecycle/storage-and-state.md) | `.sillyspec/.runtime/`、SQLite、artifact、history、local 配置口径 |
 | [stage-artifacts.md](file-lifecycle/stage-artifacts.md) | 各阶段的运行时步骤、变更目录产物、归档和 quicklog |
 | [worktree-and-guard.md](file-lifecycle/worktree-and-guard.md) | `sillyspec worktree`、`meta.json`、apply、cleanup、归档/完成时自动清理判定（`hasUnappliedChanges`）、Claude hook 门禁 |
 | [platform-workflows-sync.md](file-lifecycle/platform-workflows-sync.md) | 平台模式、workflow check、manifest、SillyHub sync |
@@ -72,12 +72,12 @@ updated_at: 2026-08-08T09:40:00+08:00
 | `.sillyspec/quicklog/` | 是 | `src/quicklog.js`（CLI 接管，O_EXCL 锁 + writeAtomic 原子写） | 每次 quick 任务记录（CLI 启动时写「进行中」条目 + 分配 ql-ID，完成时翻「已完成」+ 追加结构化结果块 需求/根因/方案/结果，step3 --output 缺字段则 --done 被拒；关联变更另由 CLI 在各 change tasks.md 追加/勾选。读-改-写经 writeAtomic 原子覆盖，reader 不读半截） |
 | `.sillyspec/shared/` | 是 | `init.js` | 共享目录，当前无核心生命周期逻辑 |
 | `.sillyspec/workspace/` | 是 | `init.js` | 工作区目录，当前无核心生命周期逻辑 |
-| `.sillyspec/.runtime/` | 否 | `init.js`、`ProgressManager`、运行时命令 | DB、gate、artifacts、history、workflow-runs、worktrees、knowledge-hit-report.json、postcheck-result.json、execute-runs（execute task review.json）、stage-reviews（brainstorm/plan/propose/execute 独立审查 review.json） |
+| `.sillyspec/.runtime/` | 否 | `init.js`、`ProgressManager`、运行时命令 | DB、artifacts、history、workflow-runs、worktrees、knowledge-hit-report.json、postcheck-result.json、execute-runs（execute task review.json）、stage-reviews（brainstorm/plan/propose/execute 独立审查 review.json） |
 
 `init.js` 会把 `.sillyspec/.runtime/`、`.sillyspec/local.yaml`、`.sillyspec/codebase/SCAN-RAW.md` 追加到 `.gitignore`。
 
 > **平台模式残留清理边界**（`init.js` `cleanupRuntimeResidue`，由 `run/command.js`（`runCommand`）启动时首次执行一次）：
-> 当 `specRoot` 指向外部、源码目录的 `.sillyspec/` 含真实资产（`changes/`/`projects/`/`sillyspec.db`）时，只清理运行时残留，**不整删 `.runtime/`**。清理白名单保留权威状态：`worktrees/`、`sillyspec.db`、`global.json`、`gate-status.json`、`contract-artifacts/`、`execute-runs/`；其余子项（`artifacts/`、`scan-runs/`、`scan-projects.json`、`user-inputs.md`、`postcheck-result.json` 等可重建缓存）逐项删除，`local.yaml`、`codebase/` 整删。未知子项默认保留（安全侧倾斜）。
+> 当 `specRoot` 指向外部、源码目录的 `.sillyspec/` 含真实资产（`changes/`/`projects/`/`sillyspec.db`）时，只清理运行时残留，**不整删 `.runtime/`**。清理白名单保留权威状态：`worktrees/`、`sillyspec.db`、`global.json`、`contract-artifacts/`、`execute-runs/`；其余子项（`artifacts/`、`scan-runs/`、`scan-projects.json`、`user-inputs.md`、`postcheck-result.json` 等可重建缓存）逐项删除，`local.yaml`、`codebase/` 整删。未知子项默认保留（安全侧倾斜）。
 > 该清理在 `run/command.js`（`runCommand`）启动时**仅执行一次**：首次处理后写 cwd 根的 `.sillyspec-platform-cleaned` 标记文件，后续每次 `run` 直接跳过。旧版每次启动都打印 `❌ 拒绝删除` 红叉属误导性噪声（清理既不阻塞流程也不动真实资产），已降为 `ℹ️` 一次性提示。
 
 > **drift 场景 `.runtime` 落点（`specDriftAnchor`，坑 execute-runs-isolation）**：
@@ -104,7 +104,7 @@ sillyspec run scan
 
 brainstorm / propose / plan / execute / verify / archive
   -> .sillyspec/changes/<change>/...
-  -> .sillyspec/.runtime/sillyspec.db                    (原子写：tmp+rename 覆盖，旧版自动保留为 sillyspec.db.bak；读取时主库损坏/为空从 .bak 回滚，两者均坏则 fail-loud；sillyspec.db.tmp 仅写入中瞬时存在)
+  -> .sillyspec/.runtime/sillyspec.db                    (better-sqlite3 原生绑定 + WAL 模式：journal_mode=WAL + busy_timeout=5000 + foreign_keys=ON，事务提交直接持久化主库文件 + .db-wal/.db-shm 侧车；写前自动备份为 sillyspec.db.bak，读取时主库损坏/为空从 .bak 回退，两者均坏则 fail-loud；WAL 单写者串行 + SQLITE_BUSY 应用层有限重试，并发安全不丢更新)
   -> .sillyspec/.runtime/user-inputs.md
   -> .sillyspec/.runtime/artifacts/*.txt                     (long step output)
 
@@ -154,11 +154,10 @@ quick
 | 行为 | gate / derive | 说明 |
 |---|---|---|
 | 写 `sillyspec.db` | ❌ 不写 | 仅调 `ProgressManager.read`，调用前后 db 文件 byte-identical |
-| 写 `gate-status.json` | ❌ 不产生/不变化 | — |
 | `triggerSync` | ❌ 不触发 | 无自动同步副作用 |
 | 推进 step / stage | ❌ 不推进 | 状态推进仍走 `run <stage> --done` 或平台显式调用 |
 
-**唯一例外（取证落盘，非状态写入）**：`derive verify-test` 与 `gate verify`（verify stage）会真实执行 `local.yaml` 的 `commands.test`，并把结果落盘到 `.runtime/verify-runs/<ts>/test-result.json`。这是产物取证——记录测试结果事实，不进 `sillyspec.db`、不进 `gate-status.json`、不推进进度。daemon 消费 `verify-test` 的 `data.resultPath` 即可定位该取证文件。
+**唯一例外（取证落盘，非状态写入）**：`derive verify-test` 与 `gate verify`（verify stage）会真实执行 `local.yaml` 的 `commands.test`，并把结果落盘到 `.runtime/verify-runs/<ts>/test-result.json`。这是产物取证——记录测试结果事实，不进 `sillyspec.db`、不推进进度。daemon 消费 `verify-test` 的 `data.resultPath` 即可定位该取证文件。
 
 命令面与退出码语义（0=通过 / 1=事实阻断 / 2=无法核验）、envelope schema、facet 白名单（`execute-evidence` / `verify-test` / `task-reviews` / `artifacts`）、TBD-hub-api 待对账清单，以 **[interface-contract.md](interface-contract.md)** 为两仓库对账基准。本组文档不重复这些契约细节；当 envelope schema 或副作用声明变更时，须同步修订契约文档与本节。
 
@@ -203,7 +202,7 @@ execute --done 批量完成（2026-07-28，`run/complete.js`）
 - `archive` 的目录移动已经由 `run/complete-handlers.js`（`archiveChangeDirectory`）在第 4 步 `--confirm` 时执行；未带 `--confirm` 会回退该步骤并提示补参。
 - scan 第 10 步「Extract Project Knowledge」把长期有效的项目知识写入 `.sillyspec/knowledge/`（`conventions.md`/`patterns.md`/`known-issues.md` + 更新 `INDEX.md`）；`scan-postcheck.js` 校验产物（INDEX.md 存在、引用文件真实存在）。
 - execute 启动时由 `knowledge-match.js` 按 plan.md 的 task 关键词匹配知识库，命中报告注入 prompt 并写 `.runtime/knowledge-hit-report.json`。
-- 平台模式残留清理只删缓存、保留权威状态（`worktrees/`、`sillyspec.db`、`global.json`、`gate-status.json`、`contract-artifacts/`、`execute-runs/`），不再整删 `.runtime/`——否则 worktree meta 被清掉会导致 `depsStatus` 恒为 unknown、`branch already exists` 死循环、`worktree doctor` orphan 误判。
+- 平台模式残留清理只删缓存、保留权威状态（`worktrees/`、`sillyspec.db`、`global.json`、`contract-artifacts/`、`execute-runs/`），不再整删 `.runtime/`——否则 worktree meta 被清掉会导致 `depsStatus` 恒为 unknown、`branch already exists` 死循环、`worktree doctor` orphan 误判。
 - plan→execute Contract 校验（`parseWavesFromPlan`）解析 `## Wave N` 段内的 `- [ ] task-XX:` 行；遇到非 Wave 标题行（`## 自检` 等）即退出当前 Wave 段，避免自检 `- [x]` checkbox 被误当 task 定义。light/none plan.md 用 `## Tasks`/`## 任务`（无 `## Wave N`）包任务时，识别为隐式任务区，对其中的 `- [ ] task-XX:` 惰性创建隐式 Wave 收容（非任务区 `## 验收`/`## 自检` 的 checkbox、任务区内无 `task-XX` 编号的 checkbox 仍忽略），隐式 Wave 标记 `implicit: true`。
 - `executePlanPostcheck`（`run/stage.js`）的 `resolveChangeDir` 从 `run/shared.js` 导入（W6 Step1 抽出的纯函数；历史上曾误从 `./modules.js` 导入，该模块未导出此函数）。
 - `executePlanPostcheck`（noAI，execute 前最后关口）顺序跑确定性校验：`validateBlueprintConsistency`（task 结构/路径冲突/拓扑无环）、`validatePlanFeasibility`（TaskCard 字段齐全/依赖存在/id 连续）、`validateCrossTaskContracts`（consumer `expects_from` ↔ provider `provides` 字段对账）、`validateDesignFileCoverage`（`design.md` 文件变更清单 → tasks `allowed_paths` 覆盖对账；未覆盖的源码文件阻断 execute，避免子代理被 allowed_paths 锁死而无权改 → 漏改）、`validatePlanArtifacts`（plan.md/tasks/ 产物存在）。`parseFileChangeList`（`change-list.js`）兼容表格与分类列表两种清单格式、表头列顺序自适应，跳过 `.sillyspec/` 与「不修改文件」子段，CRLF 容错；覆盖对账用双向前缀 + glob 容差匹配，与 `quick-recommend` 共用 `change-list.js` 的 `pathMatches`。

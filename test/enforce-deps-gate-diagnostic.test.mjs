@@ -189,12 +189,12 @@ console.log('\n--- (B) e2e：depsStatus=failed → 拒绝 exit 1 + fail-loud + �
   const changeName = 'e2e-change'
   const changeDir = join(specDir, 'changes', changeName)
 
-  // 1. 初始化项目 + 变更 + execute step
+  // 1. 初始化项目 + 变更 + execute 阶段（execute --done 会经 ensureStageSteps 从 plan.md
+  //    重建 10 个框架步骤，手动 addStep 的假步骤会被替换；此处只设阶段，步骤由 execute 重建）
   const pm = new ProgressManager({ specDir })
-  await pm.init(cwd)
-  await pm.initChange(cwd, changeName)
-  await pm.setStage(cwd, 'execute', changeName)
-  await pm.addStep(cwd, 'execute', 'step-1', changeName)
+  pm.init(cwd)
+  pm.initChange(cwd, changeName)
+  pm.setStage(cwd, 'execute', changeName)
 
   // 2. 写 plan.md（全勾，排除 plan 缺失干扰；execute 步骤可解析）
   writeFileSync(join(changeDir, 'plan.md'),
@@ -256,11 +256,15 @@ console.log('\n--- (B) e2e：depsStatus=failed → 拒绝 exit 1 + fail-loud + �
   assert(hasAlignOrCreate || hasDepsFix,
     `诊断分支提示存在（align/create 或 doctor --fix/依赖未就绪）`)
 
-  // 进度未推进：execute step 不应被标 completed（仍是 pending/blocked）
-  const after = await pm.read(cwd, changeName)
-  const step1 = after.stages.execute.steps.find(s => s.name === 'step-1')
-  assert(step1 && step1.status !== 'completed',
-    `门控拒绝时 step-1 未被标 completed（实际 status=${step1?.status}，进度未推进）`)
+  // 进度未推进：门控拒绝（enforceDepsGate 在 completeStep 标 completed 前 process.exit(1)），
+  // 故 execute 所有步骤应仍为 pending（无一被标 completed）。execute --done 经 ensureStageSteps
+  // 从 plan.md 重建框架步骤（10 个，如「进度确认」「Wave 1 执行」等），手动加的假 step-1 会被替换，
+  // 故此处断言「无 step 被 completed」而非查特定假步骤（对齐真实 execute 流程）。
+  const after = pm.read(cwd, changeName)
+  const execSteps = (after.stages.execute && after.stages.execute.steps) || []
+  const anyCompleted = execSteps.some(s => s.status === 'completed')
+  assert(execSteps.length > 0 && !anyCompleted,
+    `门控拒绝时 execute 无 step 被标 completed（${execSteps.length} 步均 pending，进度未推进）`)
 }
 
 cleanup()

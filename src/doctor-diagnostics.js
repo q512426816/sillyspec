@@ -11,8 +11,8 @@
  *     - safe_actions：只描述建议动作与风险等级，绝不自动执行
  *
  * 安全约束（硬性）：
- *   - 所有检测只读。DB 以内存副本打开，不调用 export/writeFileSync，不跑建表/迁移，
- *     close 后丢弃——绝不写回原 db 文件。
+ *   - 所有检测只读。DB 以 better-sqlite3 只读连接打开（readonly + fileMustExist），不调用
+ *     export/writeFileSync，不跑建表/迁移，close 后丢弃——绝不写回原 db 文件。
  *   - 不删除/移动任何文件；orphan db 仅报告，处理交给后续 --dump-db / --confirm 流程。
  *   - execute-progress-plan-mismatch 维度同样只读：仅读 plan.md checkbox + 只读查 stages 表，
  *     绝不调用 ProgressManager 写方法（写操作是 progress.alignExecuteToPlan 的职责，D-001@v2 诊断/写分离）。
@@ -20,7 +20,7 @@
  * 风格对齐 scan-postcheck.js：checks 用 CHECK_SEVERITY，formatter 产出 schema_version JSON，
  * writer 落盘到 <authoritySpecDir>/.runtime/。
  */
-import initSqlJs from 'sql.js';
+import Database from 'better-sqlite3';
 import { existsSync, statSync, readFileSync, readdirSync, mkdirSync, writeFileSync, unlinkSync } from 'fs';
 import { join } from 'path';
 import { CHECK_SEVERITY } from './constants.js';
@@ -59,7 +59,7 @@ function resolvePointer(cwd) {
  * 只读打开一个 db 文件，提取诊断信号。绝不写回。
  * 返回 null 表示文件不存在。
  */
-async function probeDb(dbPath, SQL) {
+function probeDb(dbPath) {
   if (!existsSync(dbPath)) return null;
   const st = statSync(dbPath);
   const base = { path: dbPath, exists: true, size: st.size, mtime: st.mtime.toISOString() };
@@ -68,18 +68,16 @@ async function probeDb(dbPath, SQL) {
   }
   let db = null;
   try {
-    const buf = readFileSync(dbPath);
-    db = new SQL.Database(buf); // 内存副本
+    db = new Database(dbPath, { readonly: true, fileMustExist: true });
     const pick = (sql, fallback = null) => {
       try {
-        const r = db.exec(sql);
-        return r.length ? r[0].values[0][0] : fallback;
+        const r = db.prepare(sql).pluck().get();
+        return r === undefined ? fallback : r;
       } catch { return fallback; }
     };
     const pickCol = (sql) => {
       try {
-        const r = db.exec(sql);
-        return r.length ? r[0].values.map((row) => row[0]) : [];
+        return db.prepare(sql).pluck().all();
       } catch { return []; }
     };
     // 每个 active change 的 execute stage status（只读查询；stages 表的 status 列）。
@@ -87,14 +85,12 @@ async function probeDb(dbPath, SQL) {
     // change_name → execute stage status（无 execute 行则 absent）。
     const pickExecuteStatusByChange = () => {
       try {
-        const r = db.exec(
+        const rows = db.prepare(
           `SELECT c.name, s.status FROM changes c
            LEFT JOIN stages s ON s.change_id = c.id AND s.stage = 'execute'`
-        );
+        ).all();
         const out = {};
-        if (r.length) {
-          for (const [name, status] of r[0].values) out[name] = status || null;
-        }
+        for (const row of rows) out[row.name] = row.status || null;
         return out;
       } catch { return {}; }
     };
@@ -123,7 +119,7 @@ function summarizeActive(changes) {
 
 // ── D1 多 db 探测与权威判定 ────────────────────────────────────────────
 
-async function detectMultiDb(cwd, pointer, SQL) {
+function detectMultiDb(cwd, pointer) {
   const localSpec = join(cwd, '.sillyspec');
   const candidates = [
     { path: join(localSpec, 'sillyspec.db'), kind: 'local_root' },
@@ -136,7 +132,7 @@ async function detectMultiDb(cwd, pointer, SQL) {
 
   const dbs = [];
   for (const c of candidates) {
-    const probed = await probeDb(c.path, SQL);
+    const probed = probeDb(c.path);
     if (!probed) continue;
     dbs.push({ kind: c.kind, ...probed });
   }
@@ -492,8 +488,7 @@ function detectExecuteProgressPlanMismatch(authoritySpecRoot, authDb) {
 
 export async function runDoctorDiagnostics({ cwd }) {
   const pointer = resolvePointer(cwd);
-  const SQL = await initSqlJs(); // 复用单个 WASM 实例，避免每个 db 重新初始化遗留 handle
-  const multiDb = await detectMultiDb(cwd, pointer, SQL);
+  const multiDb = detectMultiDb(cwd, pointer);
   const pointerHealth = detectPointerHealth(pointer);
   const changesSplit = detectChangesSplit(cwd, pointer);
   const changeDb = detectChangeDbConsistency(cwd, pointer, multiDb);
@@ -662,17 +657,16 @@ export async function dumpDb({ dbPath, cwd }) {
   }
   let db = null;
   try {
-    const SQL = await initSqlJs();
-    db = new SQL.Database(readFileSync(dbPath));
+    db = new Database(dbPath, { readonly: true, fileMustExist: true });
     const rows = (sql) => {
-      try { const r = db.exec(sql); return r.length ? r[0].values : []; } catch { return []; }
+      try { return db.prepare(sql).all(); } catch { return []; }
     };
     const sv = rows('SELECT schema_version FROM project LIMIT 1');
-    const schemaVersion = sv.length ? sv[0][0] : null;
+    const schemaVersion = sv.length ? sv[0].schema_version : null;
     const changes = rows('SELECT name, current_stage, status, created_at, last_active FROM changes ORDER BY last_active DESC')
-      .map((r) => ({ name: r[0], current_stage: r[1], status: r[2], created_at: r[3], last_active: r[4] }));
+      .map((r) => ({ name: r.name, current_stage: r.current_stage, status: r.status, created_at: r.created_at, last_active: r.last_active }));
     const stages = rows('SELECT c.name, s.stage, s.status, s.started_at, s.completed_at FROM stages s JOIN changes c ON s.change_id = c.id ORDER BY c.name, s.stage')
-      .map((r) => ({ change: r[0], stage: r[1], status: r[2], started_at: r[3], completed_at: r[4] }));
+      .map((r) => ({ change: r.name, stage: r.stage, status: r.status, started_at: r.started_at, completed_at: r.completed_at }));
     return writeDump({ ok: true, meta, schema_version: schemaVersion, changes, stages }, authoritySpecDir);
   } catch (e) {
     return writeDump({ ok: false, meta, error: `读取失败: ${e.message}` }, authoritySpecDir);

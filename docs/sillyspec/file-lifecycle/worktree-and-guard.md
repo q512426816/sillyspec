@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-06-04 16:25:42
-updated_at: 2026-07-31
+updated_at: 2026-08-09
 ---
 
 # Worktree 与 Hook 门禁
@@ -182,7 +182,7 @@ worktree 是主仓完整 checkout，若 `.sillyspec/changes/` 被跟踪，worktr
 
 quick 当前不创建 worktree。
 
-`quick.js` 第 2 步明确写的是“直接在主工作区实现任务”。`worktree-guard.js` 在 stage 为 `quick` 时，对 Write/Edit/MultiEdit 直接放行；Bash 仅拦截危险命令。quick 作为辅助阶段完成后，`run.js` 会重置 quick 步骤并清空 `currentStage`，从而删除 gate 状态。
+`quick.js` 第 2 步明确写的是“直接在主工作区实现任务”。`worktree-guard.js` 在 stage 为 `quick` 时，对 Write/Edit/MultiEdit 直接放行；Bash 仅拦截危险命令。quick 作为辅助阶段完成后，`run.js` 会重置 quick 步骤并清空 `currentStage`（DB 中），hook 下次直读 DB 时不再看到 `quick` 阶段，从而不再对源码写放行。
 
 因此旧文档中“quick 创建 worktree/meta.json”的描述不符合当前代码。
 
@@ -212,10 +212,7 @@ quick 当前不创建 worktree。
 
 ### 阶段门禁
 
-阶段读取顺序：
-
-1. `.sillyspec/.runtime/gate-status.json`
-2. `sqlite3` CLI 查询 `.sillyspec/.runtime/sillyspec.db`
+阶段读取顺序：hook 直读 `.sillyspec/.runtime/sillyspec.db`（`worktree-guard.js` 的 `queryDbFirstCell` 起真实 node 子进程，用 `require(better-sqlite3)` 的 **readonly + fileMustExist** 连接查 `changes.current_stage`；WAL 并发安全，**不依赖外部 `sqlite3` CLI**——Windows 默认没有）。db 缺失/损坏/`better-sqlite3` 解析失败时 hook **fail-closed**（warn + null，源码写一律拦截，不 fail-open）。进度库是唯一权威状态源，hook 不再依赖任何缓存侧文件。
 
 只有 `execute` 和 `quick` 被视为允许源码写入的阶段。
 
@@ -223,7 +220,7 @@ quick 当前不创建 worktree。
 
 execute 阶段的源码写入必须位于已登记 worktree 内：
 
-1. hook 读取 `.sillyspec/.runtime/gate-status.json` 或 SQLite，得到当前 active changes。
+1. hook 直读 `.sillyspec/.runtime/sillyspec.db`（`queryDbFirstCell` readonly 连接），得到当前 active changes。
 2. 对每个 active change 读取 `.sillyspec/.runtime/worktrees/<change>/meta.json`。
 3. 只有目标路径位于 `meta.json.worktreePath` 内时才允许写入。
 

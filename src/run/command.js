@@ -577,13 +577,13 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     }
   }
 
-  let progress = await pm.read(cwd, changeName)
+  let progress = pm.read(cwd, changeName)
 
   if (!progress) {
     // 如果指定了变更名或有变更目录，自动初始化变更的 progress
     const autoChange = changeName || resolveChangeNameAuto(cwd, specRoot)
     if (autoChange) {
-      progress = await pm.initChange(cwd, autoChange)
+      progress = pm.initChange(cwd, autoChange)
     } else if (isAuxiliary) {
       let autoName = changeName || resolveChangeNameAuto(cwd, specRoot) || 'default'
       // archive 特例：归档后变更从活跃列表排除（listChanges WHERE status='active'），
@@ -598,14 +598,14 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
               .pop()
             if (latest) {
               autoName = latest.replace(/^\d{4}-\d{2}-\d{2}-/, '')
-              progress = await pm.read(cwd, autoName)
+              progress = pm.read(cwd, autoName)
             }
           }
         } catch {}
       }
       changeName = autoName
       if (!progress) {
-        progress = await pm.initChange(cwd, autoName)
+        progress = pm.initChange(cwd, autoName)
         // initChange 可能因 project 表为空返回 null
         if (!progress) {
           progress = { currentStage: stageName, stages: {}, lastActive: new Date().toLocaleString('zh-CN', { hour12: false }), project: '' }
@@ -625,7 +625,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
         console.log(`🔄 自动创建变更：${autoName}`)
         console.log(`  提示：可以用 --change <名称> 指定自定义变更名`)
         console.log(`  或事后重命名：sillyspec change-rename ${autoName} <新名称>`)
-        progress = await pm.initChange(cwd, autoName)
+        progress = pm.initChange(cwd, autoName)
         changeName = autoName
       } else {
         console.error('❌ 未找到进度数据，请先运行 sillyspec init 或指定 --change <变更名>')
@@ -660,7 +660,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
   // --change 只作为变更名标识，不再拦截流程
   // 注册变更到全局活跃列表（如果尚未注册）
   if (effectiveChange) {
-    await pm.registerChange(cwd, effectiveChange)
+    pm.registerChange(cwd, effectiveChange)
   }
 
   // --reset
@@ -697,12 +697,12 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
       if (freshSteps && freshSteps.length > 0) {
         if (!progress.stages[stageName]) progress.stages[stageName] = { status: 'stale', steps: [] }
         progress.stages[stageName].steps = freshSteps.map(s => ({ name: s.name, status: 'pending' }))
-        await pm._write(cwd, progress, effectiveChange)
-        progress = await pm.read(cwd, effectiveChange) || progress
+        pm._write(cwd, progress, effectiveChange)
+        progress = pm.read(cwd, effectiveChange) || progress
       }
     }
 
-    const result = await pm.reopenStage(cwd, stageName, {
+    const result = pm.reopenStage(cwd, stageName, {
       fromStep: fromStepValue,
       changeName: effectiveChange,
     })
@@ -720,7 +720,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     console.log('')
 
     // 重新读取 progress
-    progress = await pm.read(cwd, effectiveChange) || progress
+    progress = pm.read(cwd, effectiveChange) || progress
 
     // 注入 revision context 到 platformOpts，供 outputStep 使用
     const stageData = progress.stages[stageName]
@@ -768,9 +768,9 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
   // 确保步骤已初始化
   const changed = await ensureStageSteps(progress, stageName, cwd, specRoot)
   if (changed && effectiveChange) {
-    await pm._write(cwd, progress, effectiveChange)
+    pm._write(cwd, progress, effectiveChange)
     triggerSync(cwd, effectiveChange, platformOpts)
-    progress = await pm.read(cwd, effectiveChange) || progress
+    progress = pm.read(cwd, effectiveChange) || progress
   }
 
   // --status
@@ -926,7 +926,7 @@ async function resetStage(pm, progress, stageName, cwd, changeName, platformOpts
     steps: defSteps ? defSteps.map(s => ({ name: s.name, status: 'pending' })) : []
   }
   progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
-  await pm._write(cwd, progress, changeName)
+  pm._write(cwd, progress, changeName)
   triggerSync(cwd, changeName, platformOpts)
   console.log(`🔄 ${stageName} 阶段已重置`)
 }
@@ -976,18 +976,18 @@ async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts = 
           completedAt: null,
           steps: brainstormAutoDef.steps.map(s => ({ name: s.name, status: 'pending' }))
         }
-        await pm._write(cwd, progress, changeName)
+        pm._write(cwd, progress, changeName)
         triggerSync(cwd, changeName, platformOpts)
-        progress = await pm.read(cwd, changeName)
+        progress = pm.read(cwd, changeName)
         return progress
       }
     }
     const changed = await ensureStageSteps(progress, stage, cwd)
     if (stageChanged || changed) {
-      await pm._write(cwd, progress, changeName)
+      pm._write(cwd, progress, changeName)
       triggerSync(cwd, changeName, platformOpts)
     }
-    progress = await pm.read(cwd, changeName)
+    progress = pm.read(cwd, changeName)
     return progress
   }
 
@@ -1079,7 +1079,7 @@ async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts = 
 
   const result = await completeStep(pm, progress, currentStage, cwd, outputText, inputText, { printNext: false, changeName, platformOpts })
   if (!result) return
-  progress = await pm.read(cwd, changeName)
+  progress = pm.read(cwd, changeName)
 
   const nextPendingIdx = progress.stages[currentStage]?.steps?.findIndex(step => step.status === 'pending' || step.status === 'in-progress') ?? -1
   if (nextPendingIdx !== -1) {
@@ -1143,9 +1143,9 @@ async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts = 
   }
   progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
   await ensureStageSteps(progress, next, cwd)
-  await pm._write(cwd, progress, changeName)
+  pm._write(cwd, progress, changeName)
   triggerSync(cwd, changeName, platformOpts)
-  progress = await pm.read(cwd, changeName)
+  progress = pm.read(cwd, changeName)
 
   console.log(`\n${currentStage} complete. Auto advanced to ${next}.`)
   const nextSteps = await getAutoSteps(next)

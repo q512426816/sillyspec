@@ -5,16 +5,16 @@
  *
  * 存储结构：
  *   .sillyspec/.runtime/sillyspec.db          — SQLite 数据库（权威状态源，含全局状态/项目名/活跃变更）
- *   .sillyspec/.runtime/gate-status.json      — worktree-guard 门禁状态缓存
  *
  * 历史迁移：v1/v2 使用 progress.json 文件，v3 已全部迁移至 SQLite。
+ * worktree-guard hook 直读 sillyspec.db，不再有 gate-status.json 缓存双源（task-10 废除）。
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, unlinkSync, appendFileSync } from 'fs';
 import { join, basename, dirname, resolve, sep } from 'path';
 import { tmpdir } from 'os';
 import { DB } from './db.js';
-import { writeAtomicSync } from './fs-atomic.js';
+import { checkExecuteCodeEvidence } from './stage-contract.js';
 import { ConsistencyDoctor } from './progress/consistency-doctor.js';
 import { ChangeRegistry } from './progress/change-registry.js';
 import { StepStore } from './progress/step-store.js';
@@ -191,11 +191,11 @@ export class ProgressManager {
     }
   }
 
-  /** 懒初始化 DB 连接，缓存在实例上 */
-  async _ensureDB(cwd) {
+  /** 懒初始化 DB 连接，缓存在实例上（better-sqlite3 同步 API，init 无 async） */
+  _ensureDB(cwd) {
     if (!this._db) {
       this._db = new DB(this._runtimePath(cwd, 'sillyspec.db'));
-      await this._db.init();
+      this._db.init();
     }
     return this._db;
   }
@@ -208,21 +208,19 @@ export class ProgressManager {
 
   // ── 全局状态 ──
 
-  async readGlobal(cwd) {
+  readGlobal(cwd) {
     // SQL: SELECT FROM project + changes
-    const db = await this._ensureDB(cwd);
+    const db = this._ensureDB(cwd);
     const sqlDb = db.getDb();
 
     // 读取 project 行（id=1）
-    const rows = sqlDb.exec('SELECT name, schema_version FROM project WHERE id = 1');
-    if (!rows || rows.length === 0 || rows[0].values.length === 0) return null;
-    const [name, schemaVersion] = rows[0].values[0];
+    const row = sqlDb.prepare('SELECT name, schema_version FROM project WHERE id = 1').get();
+    if (row === undefined) return null;
+    const { name, schema_version: schemaVersion } = row;
 
     // 读取 active 变更列表
-    const changeRows = sqlDb.exec("SELECT name FROM changes WHERE status = 'active' ORDER BY name");
-    const activeChanges = changeRows && changeRows.length > 0
-      ? changeRows[0].values.map(r => r[0])
-      : [];
+    const changeRows = sqlDb.prepare("SELECT name FROM changes WHERE status = 'active' ORDER BY name").all();
+    const activeChanges = changeRows.map(r => r.name);
 
     return {
       _version: schemaVersion,
@@ -237,12 +235,12 @@ export class ProgressManager {
    * 读取指定变更的 progress（SQL 版）
    * @param {string} cwd
    * @param {string|null} changeName - 变更名，null 时尝试自动检测
-   * @returns {Promise<object|null>} 与 SQLite 查询结果一致的 JS 对象
+   * @returns {object|null} 与 SQLite 查询结果一致的 JS 对象
    */
-  async read(cwd, changeName = null) {
-    // 自动检测变更名
+  read(cwd, changeName = null) {
+    // 自动检测变更名（listChanges 已在 task-08 同步化，此处直接拿到活跃变更数组）
     if (!changeName) {
-      const changes = await this.listChanges(cwd);
+      const changes = this.listChanges(cwd);
       if (changes.length === 1) {
         changeName = changes[0];
       } else {
@@ -251,44 +249,39 @@ export class ProgressManager {
       }
     }
 
-    const db = await this._ensureDB(cwd);
+    const db = this._ensureDB(cwd);
     const sqlDb = db.getDb();
 
     // 1. 从 changes 表获取基本信息
-    const changeRows = sqlDb.exec('SELECT id, name, current_stage, no_worktree, last_active FROM changes WHERE name = ?', [changeName]);
-    if (!changeRows || changeRows.length === 0 || changeRows[0].values.length === 0) return null;
-    const [changeId, cName, currentStage, noWorktree, lastActive] = changeRows[0].values[0];
+    const changeRow = sqlDb.prepare('SELECT id, name, current_stage, no_worktree, last_active FROM changes WHERE name = ?').get(changeName);
+    if (changeRow === undefined) return null;
+    const { id: changeId, name: cName, current_stage: currentStage, no_worktree: noWorktree, last_active: lastActive } = changeRow;
 
     // 2. 从 stages 表获取所有阶段（含 revision 列）
-    const stageRows = sqlDb.exec('SELECT id, stage, status, started_at, completed_at, revision, reopened_from_step, reopened_at, stale_reason FROM stages WHERE change_id = ? ORDER BY id', [changeId]);
+    const stageRows = sqlDb.prepare('SELECT id, stage, status, started_at, completed_at, revision, reopened_from_step, reopened_at, stale_reason FROM stages WHERE change_id = ? ORDER BY id').all(changeId);
     const stageMap = {};
     const stageIds = [];
-    if (stageRows && stageRows.length > 0) {
-      for (const [sId, stage, status, startedAt, completedAt, revision, reopenedFromStep, reopenedAt, staleReason] of stageRows[0].values) {
-        stageMap[stage] = { _dbId: sId, status, startedAt, completedAt,
-          ...(revision ? { revision } : {}),
-          ...(reopenedFromStep ? { reopenedFromStep } : {}),
-          ...(reopenedAt ? { reopenedAt } : {}),
-          ...(staleReason ? { staleReason } : {}),
-        };
-        stageIds.push(sId);
-      }
+    for (const row of stageRows) {
+      const { id: sId, stage, status, started_at: startedAt, completed_at: completedAt, revision, reopened_from_step: reopenedFromStep, reopened_at: reopenedAt, stale_reason: staleReason } = row;
+      stageMap[stage] = { _dbId: sId, status, startedAt, completedAt,
+        ...(revision ? { revision } : {}),
+        ...(reopenedFromStep ? { reopenedFromStep } : {}),
+        ...(reopenedAt ? { reopenedAt } : {}),
+        ...(staleReason ? { staleReason } : {}),
+      };
+      stageIds.push(sId);
     }
 
     // 3. 从 steps 表获取所有步骤
-    let stepRows = null;
+    const stepsByStage = {};
     if (stageIds.length > 0) {
       const placeholders = stageIds.map(() => '?').join(',');
-      stepRows = sqlDb.exec(
-        `SELECT stage_id, name, status, output, completed_at, ordering, wait_reason, wait_options, wait_answer, waited_at, wait_answers, wait_round, max_wait_rounds FROM steps WHERE stage_id IN (${placeholders}) ORDER BY stage_id, ordering`,
-        stageIds
-      );
-    }
-    // 按阶段分组步骤
-    const stepsByStage = {};
-    if (stepRows && stepRows.length > 0) {
-      for (const row of stepRows[0].values) {
-        const [stageId, name, status, output, completedAt, ordering, waitReason, waitOptions, waitAnswer, waitedAt, waitAnswersJson, waitRound, maxWaitRounds] = row;
+      const stepRows = sqlDb.prepare(
+        `SELECT stage_id, name, status, output, completed_at, ordering, wait_reason, wait_options, wait_answer, waited_at, wait_answers, wait_round, max_wait_rounds FROM steps WHERE stage_id IN (${placeholders}) ORDER BY stage_id, ordering`
+      ).all(...stageIds);
+      // 按阶段分组步骤
+      for (const row of stepRows) {
+        const { stage_id: stageId, name, status, output, completed_at: completedAt, wait_reason: waitReason, wait_options: waitOptions, wait_answer: waitAnswer, waited_at: waitedAt, wait_answers: waitAnswersJson, wait_round: waitRound, max_wait_rounds: maxWaitRounds } = row;
         if (!stepsByStage[stageId]) stepsByStage[stageId] = [];
         let waitAnswers = null;
         if (waitAnswersJson) {
@@ -308,18 +301,16 @@ export class ProgressManager {
     }
 
     // 4. 从 batch_progress 表获取批量进度
-    const batchRows = sqlDb.exec('SELECT total, completed, failed, skipped FROM batch_progress WHERE change_id = ?', [changeId]);
+    const batchRow = sqlDb.prepare('SELECT total, completed, failed, skipped FROM batch_progress WHERE change_id = ?').get(changeId);
     let batchProgress = undefined;
-    if (batchRows && batchRows.length > 0 && batchRows[0].values.length > 0) {
-      const [total, completed, failed, skipped] = batchRows[0].values[0];
+    if (batchRow !== undefined) {
+      const { total, completed, failed, skipped } = batchRow;
       batchProgress = { total, completed, failed, skipped };
     }
 
     // 5. 获取项目名
-    const projectRows = sqlDb.exec('SELECT name FROM project WHERE id = 1');
-    const projectName = (projectRows && projectRows.length > 0 && projectRows[0].values.length > 0)
-      ? projectRows[0].values[0][0]
-      : '';
+    const projectRow = sqlDb.prepare('SELECT name FROM project WHERE id = 1').get();
+    const projectName = projectRow !== undefined ? projectRow.name : '';
 
     // 6. 组装为兼容对象
     const stages = {};
@@ -378,34 +369,46 @@ export class ProgressManager {
    * @param {string} cwd
    * @param {object} data
    * @param {string|null} changeName - 从 data.currentChange 推导，或显式传入
+   *
+   * 持锁窗口评估（task-05 / R-08）：本方法采用全量 UPSERT——无条件 UPDATE changes 行 +
+   * 遍历所有 stages（每 stage UPSERT stages 行 + 每 step 先 DELETE 再 INSERT 全量 + 末尾
+   * DELETE data 中不存在的多余 step）。评估过改"只写 diff（仅写变更过的 change/stage/step 行）"
+   * 以缩小事务持锁窗口、降低 BUSY 概率，结论：保持现状（全量 UPSERT）。
+   * 理由：
+   *   1. steps 表无 UNIQUE 约束（见循环内 DELETE-then-INSERT 注释），diff 写需先读现状再逐条
+   *      比较，复杂度高易错，易引入孤儿/缺失步骤破坏 FK 级联语义（design §3/§8）；
+   *   2. busy_timeout=5000 + DB 层 SQLITE_BUSY 应用层有限重试（见 db.js transaction）已兜底
+   *      并发冲突，全量 UPSERT 的持锁窗口在此兜底下不是瓶颈；
+   *   3. 单进程内调用串行（design §9），事务窗口短（毫秒级），全量写正确性远高于 diff 的边际收益。
+   * 结论：全量 UPSERT 的简单正确性 > 持锁窗口优化的边际收益，不强行改 diff。
    */
-  async _write(cwd, data, changeName = null) {
+  _write(cwd, data, changeName = null) {
     const cn = changeName || data.currentChange;
     if (!cn) {
       console.warn('⚠️  _write: 无变更名，跳过写入');
       return;
     }
 
-    const db = await this._ensureDB(cwd);
-    db.transaction((sqlDb) => {
+    const db = this._ensureDB(cwd);
+    db.transaction(() => {
+      const sqlDb = db.getDb();
       // 1. 更新 changes 表
       const now = new Date().toISOString();
       const noWorktree = data.noWorktree ? 1 : 0;
-      sqlDb.run(
-        'UPDATE changes SET current_stage = ?, last_active = ?, no_worktree = ? WHERE name = ?',
-        [data.currentStage || '', now, noWorktree, cn]
-      );
+      sqlDb.prepare(
+        'UPDATE changes SET current_stage = ?, last_active = ?, no_worktree = ? WHERE name = ?'
+      ).run(data.currentStage || '', now, noWorktree, cn);
 
       // 2. 获取 change_id
-      const changeRow = sqlDb.exec('SELECT id FROM changes WHERE name = ?', [cn]);
-      if (!changeRow || changeRow.length === 0 || changeRow[0].values.length === 0) return;
-      const changeId = changeRow[0].values[0][0];
+      const changeRow = sqlDb.prepare('SELECT id FROM changes WHERE name = ?').get(cn);
+      if (changeRow === undefined) return;
+      const changeId = changeRow.id;
 
       // 3. 遍历 stages，UPSERT stages 表和 steps 表
       if (data.stages && typeof data.stages === 'object') {
         for (const [stageName, stageData] of Object.entries(data.stages)) {
           // UPSERT stages 行（含 revision 列）
-          sqlDb.run(
+          sqlDb.prepare(
             `INSERT INTO stages (change_id, stage, status, started_at, completed_at, revision, reopened_from_step, reopened_at, stale_reason)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT(change_id, stage) DO UPDATE SET
@@ -415,15 +418,14 @@ export class ProgressManager {
                revision = COALESCE(excluded.revision, stages.revision),
                reopened_from_step = excluded.reopened_from_step,
                reopened_at = excluded.reopened_at,
-               stale_reason = excluded.stale_reason`,
-            [changeId, stageName, stageData.status || 'pending', stageData.startedAt || null, stageData.completedAt || null,
-             stageData.revision || 0, stageData.reopenedFromStep || null, stageData.reopenedAt || null, stageData.staleReason || null]
-          );
+               stale_reason = excluded.stale_reason`
+          ).run(changeId, stageName, stageData.status || 'pending', stageData.startedAt || null, stageData.completedAt || null,
+             stageData.revision || 0, stageData.reopenedFromStep || null, stageData.reopenedAt || null, stageData.staleReason || null);
 
           // 获取 stage_id
-          const stageRow = sqlDb.exec('SELECT id FROM stages WHERE change_id = ? AND stage = ?', [changeId, stageName]);
-          if (!stageRow || stageRow.length === 0 || stageRow[0].values.length === 0) continue;
-          const stageId = stageRow[0].values[0][0];
+          const stageRow = sqlDb.prepare('SELECT id FROM stages WHERE change_id = ? AND stage = ?').get(changeId, stageName);
+          if (stageRow === undefined) continue;
+          const stageId = stageRow.id;
 
           // 收集 data 中的步骤名
           const stepNames = new Set();
@@ -432,86 +434,81 @@ export class ProgressManager {
               const step = stageData.steps[i];
               stepNames.add(step.name);
               // UPSERT 步骤（先删再插，steps 表无 UNIQUE 约束）
-              sqlDb.run('DELETE FROM steps WHERE stage_id = ? AND name = ?', [stageId, step.name]);
-              sqlDb.run(
-                'INSERT INTO steps (stage_id, name, status, output, completed_at, ordering, wait_reason, wait_options, wait_answer, waited_at, wait_answers, wait_round, max_wait_rounds) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                [stageId, step.name, step.status || 'pending', step.output || null, step.completedAt || null, i,
-                  step.waitReason ?? null, step.waitOptions ?? null, step.waitAnswer ?? null, step.waitedAt ?? null,
+              sqlDb.prepare('DELETE FROM steps WHERE stage_id = ? AND name = ?').run(stageId, step.name);
+              sqlDb.prepare(
+                'INSERT INTO steps (stage_id, name, status, output, completed_at, ordering, wait_reason, wait_options, wait_answer, waited_at, wait_answers, wait_round, max_wait_rounds) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+              ).run(stageId, step.name, step.status || 'pending', step.output || null, step.completedAt || null, i,
+                  step.waitReason ?? null, Array.isArray(step.waitOptions) ? JSON.stringify(step.waitOptions) : (step.waitOptions ?? null), step.waitAnswer ?? null, step.waitedAt ?? null,
                   Array.isArray(step.waitAnswers) ? JSON.stringify(step.waitAnswers) : null,
-                  step.waitRound ?? null, step.maxWaitRounds ?? null]
-              );
+                  step.waitRound ?? null, step.maxWaitRounds ?? null);
             }
           }
 
           // 删除 data 中不存在的多余步骤
           if (stepNames.size > 0) {
             const namePlaceholders = [...stepNames].map(() => '?').join(',');
-            sqlDb.run(
-              `DELETE FROM steps WHERE stage_id = ? AND name NOT IN (${namePlaceholders})`,
-              [stageId, ...stepNames]
-            );
+            sqlDb.prepare(
+              `DELETE FROM steps WHERE stage_id = ? AND name NOT IN (${namePlaceholders})`
+            ).run(stageId, ...stepNames);
           } else {
             // data 中没有步骤，清空该阶段所有步骤
-            sqlDb.run('DELETE FROM steps WHERE stage_id = ?', [stageId]);
+            sqlDb.prepare('DELETE FROM steps WHERE stage_id = ?').run(stageId);
           }
         }
       }
 
       // 4. UPSERT batch_progress
       if (data.batchProgress && typeof data.batchProgress === 'object') {
-        sqlDb.run(
+        sqlDb.prepare(
           `INSERT INTO batch_progress (change_id, total, completed, failed, skipped)
            VALUES (?, ?, ?, ?, ?)
            ON CONFLICT(change_id) DO UPDATE SET
              total = excluded.total,
              completed = excluded.completed,
              failed = excluded.failed,
-             skipped = excluded.skipped`,
-          [changeId, data.batchProgress.total || 0, data.batchProgress.completed || 0, data.batchProgress.failed || 0, data.batchProgress.skipped || 0]
-        );
+             skipped = excluded.skipped`
+        ).run(changeId, data.batchProgress.total || 0, data.batchProgress.completed || 0, data.batchProgress.failed || 0, data.batchProgress.skipped || 0);
       }
     });
-
-    await this._updateGateStatus(cwd);
   }
 
   // ── 变更管理 ──
 
-  async listChanges(cwd) { return this._changeRegistry.listChanges(cwd); }
+  listChanges(cwd) { return this._changeRegistry.listChanges(cwd); }
 
-  async registerChange(cwd, changeName) { return this._changeRegistry.registerChange(cwd, changeName); }
+  registerChange(cwd, changeName) { return this._changeRegistry.registerChange(cwd, changeName); }
 
-  async updateChangeIsolation(cwd, changeName, isolation) { return this._changeRegistry.updateChangeIsolation(cwd, changeName, isolation); }
+  updateChangeIsolation(cwd, changeName, isolation) { return this._changeRegistry.updateChangeIsolation(cwd, changeName, isolation); }
 
-  async readChangeIsolation(cwd, changeName) { return this._changeRegistry.readChangeIsolation(cwd, changeName); }
+  readChangeIsolation(cwd, changeName) { return this._changeRegistry.readChangeIsolation(cwd, changeName); }
 
-  async _updatePlatformLastSync(cwd, changeName) { return this._changeRegistry._updatePlatformLastSync(cwd, changeName); }
+  _updatePlatformLastSync(cwd, changeName) { return this._changeRegistry._updatePlatformLastSync(cwd, changeName); }
 
-  async _updateApprovalStatus(cwd, changeName, status, reason = null) { return this._changeRegistry._updateApprovalStatus(cwd, changeName, status, reason); }
+  _updateApprovalStatus(cwd, changeName, status, reason = null) { return this._changeRegistry._updateApprovalStatus(cwd, changeName, status, reason); }
 
-  async renameChange(cwd, oldName, newName) { return this._changeRegistry.renameChange(cwd, oldName, newName); }
+  renameChange(cwd, oldName, newName) { return this._changeRegistry.renameChange(cwd, oldName, newName); }
 
-  async unregisterChange(cwd, changeName) { return this._changeRegistry.unregisterChange(cwd, changeName); }
+  unregisterChange(cwd, changeName) { return this._changeRegistry.unregisterChange(cwd, changeName); }
 
   // ── CLI 命令 ──
 
-  async init(cwd) {
+  init(cwd) {
     this._ensureRuntimeDir(cwd);
 
     // 初始化 DB（如不存在则创建文件 + 建表）
-    const db = await this._ensureDB(cwd);
-    db.transaction((sqlDb) => {
+    const db = this._ensureDB(cwd);
+    db.transaction(() => {
+      const sqlDb = db.getDb();
       const now = new Date().toISOString();
       const projectName = basename(cwd) || 'project';
 
       // 检查 project id=1 是否已存在
-      const existing = sqlDb.exec('SELECT id FROM project WHERE id = 1');
-      if (!existing || existing.length === 0 || existing[0].values.length === 0) {
-        sqlDb.run(
+      const existing = sqlDb.prepare('SELECT id FROM project WHERE id = 1').get();
+      if (existing === undefined) {
+        sqlDb.prepare(
           `INSERT INTO project (id, name, schema_version, created_at, updated_at)
-           VALUES (1, ?, ?, ?, ?)`,
-          [projectName, CURRENT_VERSION, now, now]
-        );
+           VALUES (1, ?, ?, ?, ?)`
+        ).run(projectName, CURRENT_VERSION, now, now);
         console.log(`✅ 已创建全局状态文件（SQLite）`);
       } else {
         console.log(`ℹ️  全局状态文件已存在，跳过`);
@@ -525,14 +522,14 @@ export class ProgressManager {
     }
 
     this._ensureGitignore(cwd);
-    return await this.readGlobal(cwd);
+    return this.readGlobal(cwd);
   }
 
   /**
    * 初始化指定变更的 progress
    * SQL: INSERT changes + 批量 INSERT stages
    */
-  async initChange(cwd, changeName) {
+  initChange(cwd, changeName) {
     if (!changeName) {
       console.warn('⚠️  initChange: changeName 为空，跳过');
       return null;
@@ -543,103 +540,102 @@ export class ProgressManager {
       this._ensureChangeDir(cwd, changeName);
     }
 
-    const db = await this._ensureDB(cwd);
-    db.transaction((sqlDb) => {
+    const db = this._ensureDB(cwd);
+    db.transaction(() => {
+      const sqlDb = db.getDb();
       const now = new Date().toISOString();
 
       // 检查变更是否已存在
-      const existing = sqlDb.exec('SELECT id FROM changes WHERE name = ?', [changeName]);
-      if (!existing || existing.length === 0 || existing[0].values.length === 0) {
+      const existing = sqlDb.prepare('SELECT id FROM changes WHERE name = ?').get(changeName);
+      if (existing === undefined) {
         // 插入 changes 行
-        sqlDb.run(
+        sqlDb.prepare(
           `INSERT INTO changes (name, current_stage, status, created_at, last_active)
-           VALUES (?, 'scan', 'active', ?, ?)`,
-          [changeName, now, now]
-        );
+           VALUES (?, 'scan', 'active', ?, ?)`
+        ).run(changeName, now, now);
       }
 
       // 获取 change_id
-      const changeRow = sqlDb.exec('SELECT id FROM changes WHERE name = ?', [changeName]);
-      const changeId = changeRow[0].values[0][0];
+      const changeRow = sqlDb.prepare('SELECT id FROM changes WHERE name = ?').get(changeName);
+      const changeId = changeRow.id;
 
       // 批量插入 9 个阶段（INSERT OR IGNORE 跳过已存在的）
       const allStages = ['scan', 'brainstorm', 'plan', 'execute', 'verify', 'archive', 'quick', 'explore'];
       for (const stage of allStages) {
-        sqlDb.run(
+        sqlDb.prepare(
           `INSERT OR IGNORE INTO stages (change_id, stage, status)
-           VALUES (?, ?, 'pending')`,
-          [changeId, stage]
-        );
+           VALUES (?, ?, 'pending')`
+        ).run(changeId, stage);
       }
     });
 
     // 不再需要写文件：read() 已改为 SQL
-    return await this.read(cwd, changeName);
+    return this.read(cwd, changeName);
   }
 
-  async setStage(cwd, stage, changeName = null) { return this._stepStore.setStage(cwd, stage, changeName); }
+  setStage(cwd, stage, changeName = null) { return this._stepStore.setStage(cwd, stage, changeName); }
 
-  async addStep(cwd, stage, stepName, changeName = null) { return this._stepStore.addStep(cwd, stage, stepName, changeName); }
+  addStep(cwd, stage, stepName, changeName = null) { return this._stepStore.addStep(cwd, stage, stepName, changeName); }
 
-  async updateStep(cwd, stage, stepName, options = {}, changeName = null) { return this._stepStore.updateStep(cwd, stage, stepName, options, changeName); }
+  updateStep(cwd, stage, stepName, options = {}, changeName = null) { return this._stepStore.updateStep(cwd, stage, stepName, options, changeName); }
 
   _appendAuditLog(cwd, entry) { return this._consistency._appendAuditLog(cwd, entry); }
 
-  async _validateStageArtifacts(cwd, stage, changeName) { return this._stageMachine._validateStageArtifacts(cwd, stage, changeName); }
+  _validateStageArtifacts(cwd, stage, changeName) { return this._stageMachine._validateStageArtifacts(cwd, stage, changeName); }
 
-  async completeStage(cwd, stage, changeName = null, opts = {}) { return this._stageMachine.completeStage(cwd, stage, changeName, opts); }
+  completeStage(cwd, stage, changeName = null, opts = {}) { return this._stageMachine.completeStage(cwd, stage, changeName, opts); }
 
-  async show(cwd, changeName = null) { return this._stageMachine.show(cwd, changeName); }
+  show(cwd, changeName = null) { return this._stageMachine.show(cwd, changeName); }
 
-  async _showChange(cwd, changeName) { return this._stageMachine._showChange(cwd, changeName); }
+  _showChange(cwd, changeName) { return this._stageMachine._showChange(cwd, changeName); }
 
   _getNextSuggestion(data) { return this._stageMachine._getNextSuggestion(data); }
 
-  async status(cwd, changeName = null) { return this._stageMachine.status(cwd, changeName); }
+  status(cwd, changeName = null) { return this._stageMachine.status(cwd, changeName); }
 
-  async checkConsistency(cwd, changeName = null) { return this._consistency.checkConsistency(cwd, changeName); }
+  checkConsistency(cwd, changeName = null) { return this._consistency.checkConsistency(cwd, changeName); }
 
-  async repairConsistency(cwd, opts = {}) { return this._consistency.repairConsistency(cwd, opts); }
+  repairConsistency(cwd, opts = {}) { return this._consistency.repairConsistency(cwd, opts); }
 
-  async validate(cwd, changeName = null) { return this._stageMachine.validate(cwd, changeName); }
+  validate(cwd, changeName = null) { return this._stageMachine.validate(cwd, changeName); }
 
-  async reopenStage(cwd, stage, opts = {}) { return this._stageMachine.reopenStage(cwd, stage, opts); }
+  reopenStage(cwd, stage, opts = {}) { return this._stageMachine.reopenStage(cwd, stage, opts); }
 
   _getDownstreamStages(stage) { return this._stageMachine._getDownstreamStages(stage); }
 
-  async reset(cwd, stage, changeName = null) { return this._stageMachine.reset(cwd, stage, changeName); }
+  reset(cwd, stage, changeName = null) { return this._stageMachine.reset(cwd, stage, changeName); }
 
   // ── 内部辅助 ──
 
-  async _readOrInit(cwd, changeName = null) {
-    let data = await this.read(cwd, changeName);
+  _readOrInit(cwd, changeName = null) {
+    let data = this.read(cwd, changeName);
     if (!data) {
       // 尝试自动检测变更名
       if (!changeName) {
-        const changes = await this.listChanges(cwd);
+        const changes = this.listChanges(cwd);
         if (changes.length === 1) changeName = changes[0];
       }
       if (changeName) {
         // 确保变更在 DB 中已初始化
-        const db = await this._ensureDB(cwd);
-        db.transaction((sqlDb) => {
+        const db = this._ensureDB(cwd);
+        db.transaction(() => {
+          const sqlDb = db.getDb();
           const now = new Date().toISOString();
-          sqlDb.run(
-            'INSERT OR IGNORE INTO changes (name, current_stage, status, created_at, last_active) VALUES (?, "scan", "active", ?, ?)',
-            [changeName, now, now]
-          );
-          const changeRow = sqlDb.exec('SELECT id FROM changes WHERE name = ?', [changeName]);
-          if (changeRow && changeRow.length > 0 && changeRow[0].values.length > 0) {
-            const changeId = changeRow[0].values[0][0];
+          sqlDb.prepare(
+            `INSERT OR IGNORE INTO changes (name, current_stage, status, created_at, last_active) VALUES (?, 'scan', 'active', ?, ?)`
+          ).run(changeName, now, now);
+          const changeRow = sqlDb.prepare('SELECT id FROM changes WHERE name = ?').get(changeName);
+          if (changeRow !== undefined) {
+            const changeId = changeRow.id;
             for (const s of VALID_STAGES) {
-              sqlDb.run('INSERT OR IGNORE INTO stages (change_id, stage, status) VALUES (?, ?, "pending")', [changeId, s]);
+              sqlDb.prepare(`INSERT OR IGNORE INTO stages (change_id, stage, status) VALUES (?, ?, 'pending')`).run(changeId, s);
             }
           }
         });
-        await this.registerChange(cwd, changeName);
+        this.registerChange(cwd, changeName);
       }
       if (!data) {
-        data = await this.read(cwd, changeName);
+        data = this.read(cwd, changeName);
       }
       if (!data) {
         console.log('❌ 无法确定当前变更，请指定 --change <name>');
@@ -649,12 +645,12 @@ export class ProgressManager {
     return data;
   }
 
-  async _requireStage(cwd, stage, changeName = null) {
+  _requireStage(cwd, stage, changeName = null) {
     if (!VALID_STAGES.includes(stage)) {
       console.log(`❌ 未知阶段: ${stage}，可选: ${VALID_STAGES.join(', ')}`);
       return null;
     }
-    const data = await this._readOrInit(cwd, changeName);
+    const data = this._readOrInit(cwd, changeName);
     if (!data) return null;
     if (!data.stages[stage]) data.stages[stage] = emptyStage();
     return data;
@@ -664,83 +660,11 @@ export class ProgressManager {
 
   // ── 批量进度 ──
 
-  async updateBatchProgress(cwd, batchData, changeName = null) { return this._stepStore.updateBatchProgress(cwd, batchData, changeName); }
+  updateBatchProgress(cwd, batchData, changeName = null) { return this._stepStore.updateBatchProgress(cwd, batchData, changeName); }
 
-  async readBatchProgress(cwd, changeName = null) { return this._stepStore.readBatchProgress(cwd, changeName); }
+  readBatchProgress(cwd, changeName = null) { return this._stepStore.readBatchProgress(cwd, changeName); }
 
   _renderBatchProgress(batchProgress) { return this._stepStore._renderBatchProgress(batchProgress); }
-
-  /**
-   * 更新 gate-status.json，供 worktree-guard hook 读取
-   * 从 SQLite 查询所有处于 execute/quick 阶段的活跃变更，生成或删除 gate-status.json
-   */
-  async _updateGateStatus(cwd) {
-    const db = await this._ensureDB(cwd);
-    const sqlDb = db.getDb();
-
-    // SQL 查询：所有处于 execute/quick 阶段的活跃变更
-    const rows = sqlDb.exec(
-      `SELECT name, current_stage, no_worktree FROM changes
-       WHERE status = 'active' AND current_stage IN ('execute', 'quick')`
-    );
-
-    const gatePath = this._runtimePath(cwd, 'gate-status.json');
-
-    if (!rows || rows.length === 0 || rows[0].values.length === 0) {
-      // 无 execute/quick 阶段的活跃变更：写墓碑而非 unlink。unlink 失败（Windows 杀毒/索引占用）
-      // 会被空 catch 吞掉，陈旧 gate-status 残留 → hook 把 brainstorm 误当 execute 放行（fail-open）。
-      // 墓碑 {stage:null} 让 readCurrentStage 的 `gateStatus.stage` 为假 → 自动 fallback DB，语义等价删除但原子。
-      if (existsSync(gatePath)) {
-        try {
-          this._ensureRuntimeDir(cwd);
-          writeAtomicSync(gatePath, JSON.stringify({ stage: null, tombstone: true, updatedAt: new Date().toISOString() }) + '\n');
-        } catch (e) {
-          console.warn(`⚠️ gate-status 墓碑写入失败（hook 可能读到陈旧缓存）: ${e.message}`);
-        }
-      }
-      return;
-    }
-
-    let gateStage = null;
-    let hasNoWorktree = false;
-    const activeChanges = [];
-
-    for (const [name, stage, noWorktree] of rows[0].values) {
-      if (!stage) continue;
-      // 优先取 execute，其次 quick
-      if (gateStage !== 'execute' || stage === 'execute') {
-        gateStage = stage;
-      }
-      activeChanges.push(name);
-      if (noWorktree === 1) hasNoWorktree = true;
-    }
-
-    if (!gateStage) {
-      // current_stage 为 NULL 的边界情况，等同于无 execute/quick：同样写墓碑（见上 rationale）
-      if (existsSync(gatePath)) {
-        try {
-          this._ensureRuntimeDir(cwd);
-          writeAtomicSync(gatePath, JSON.stringify({ stage: null, tombstone: true, updatedAt: new Date().toISOString() }) + '\n');
-        } catch (e) {
-          console.warn(`⚠️ gate-status 墓碑写入失败（hook 可能读到陈旧缓存）: ${e.message}`);
-        }
-      }
-      return;
-    }
-
-    try {
-      this._ensureRuntimeDir(cwd);
-      const gateData = {
-        stage: gateStage,
-        changes: activeChanges,
-        updatedAt: new Date().toISOString(),
-        ...(hasNoWorktree ? { noWorktree: true } : {}),
-      };
-      writeAtomicSync(gatePath, JSON.stringify(gateData, null, 2) + '\n');
-    } catch (err) {
-      console.warn('⚠️  写入 gate-status.json 失败:', err.message);
-    }
-  }
 
   _ensureGitignore(cwd) {
     // 外部 specDir 不需要修改项目 .gitignore
@@ -840,7 +764,6 @@ export class ProgressManager {
     // 对齐前用 git 客观核验是否存在真实代码变更（能确证零变更时才拒绝，
     // unknown 不阻断——worktree 已清理且变更已提交的正常场景无法对账）。
     try {
-      const { checkExecuteCodeEvidence } = await import('./stage-contract.js');
       const evidence = checkExecuteCodeEvidence(cwd, changeName);
       if (evidence.status === 'unchanged') {
         return {

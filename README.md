@@ -57,6 +57,15 @@ npx sillyspec init --interactive      # 完整引导
 
 > 💡 启动 AI 时推荐使用跳过权限模式（如 `claude --dangerously-skip-permissions`）。SillySpec 会频繁执行 git、文件读写、校验脚本等操作，逐个批准会打断节奏——这也是 GSD / OpenSpec 的预期使用方式。
 
+## 平台支持
+
+SillySpec 进度库使用 SQLite 持久化（基于 better-sqlite3 原生绑定）。安装支持情况如下：
+
+- **主流平台（prebuilt 零编译安装）**：Node.js >= 18 的 Linux x64、macOS x64 / macOS arm64、Windows x64。安装时直接下载预编译二进制，无需本地 C++ 工具链。
+- **边缘平台不保证**：Alpine（musl libc）、Windows arm64、BSD 等平台可能没有对应的 prebuilt 二进制，安装时可能触发 node-gyp 从源码编译（此时需要本机具备 C++ 编译工具链）。
+
+如遇边缘平台编译失败，建议在受支持的平台或容器（如 Debian/Ubuntu 基镜像）中运行。
+
 ## 从哪里开始
 
 | 场景 | 命令 |

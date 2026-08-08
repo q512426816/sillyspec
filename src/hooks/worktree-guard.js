@@ -5,7 +5,7 @@
  * 纯判断模块，不做实际的 hook 注入。
  *
  * P0 优化：
- * - 阶段检测 fallback：gate-status.json → sillyspec.db currentStage
+ * - 阶段检测：直读 sillyspec.db currentStage（task-10 废 gate-status.json 缓存双源）
  * - 拦截提示针对每个阶段给出具体修复建议
  */
 
@@ -13,7 +13,6 @@ import { existsSync, readFileSync, readdirSync } from 'fs'
 import path from 'path'
 import { execFileSync } from 'child_process'
 import { createRequire } from 'module'
-import { pathToFileURL } from 'url'
 
 // ── 常量 ──
 
@@ -89,7 +88,6 @@ function findProjectRoot(cwd) {
   let dir = path.resolve(cwd || process.cwd())
   while (true) {
     if (
-      existsSync(path.join(dir, '.sillyspec', '.runtime', 'gate-status.json')) ||
       existsSync(path.join(dir, '.sillyspec', '.runtime', 'sillyspec.db')) ||
       existsSync(path.join(dir, '.sillyspec', 'local.yaml')) ||
       existsSync(path.join(dir, '.sillyspec', 'local.yml')) ||
@@ -225,46 +223,54 @@ function isInsideWorktreeStorage(filePath, cwd) {
 }
 
 /**
- * 读取 gate-status.json
- * @param {string} cwd
- * @returns {{ stage: string, changes?: string[], updatedAt?: string } | null}
- */
-function readGateStatus(cwd) {
-  const p = path.join(cwd, '.sillyspec', '.runtime', 'gate-status.json')
-  if (!existsSync(p)) return null
-  try {
-    return JSON.parse(readFileSync(p, 'utf8'))
-  } catch {
-    return null
-  }
-}
-
-/**
  * 同步只读查询 sillyspec.db 第一行第一列（不依赖外部 sqlite3 CLI）。
- * sql.js 的 init 是 async，故用子进程跑（execFileSync 等待）；sql.js 模块经 hook 进程的
- * require.resolve 解析出绝对路径传入，避免子进程 cwd（项目目录）找不到 sql.js。
- * 全平台一致（node 是 SillySpec 自身运行时）。返回字符串值或 null。
+ *
+ * 用子进程跑 better-sqlite3 同步原生绑定（execFileSync 等待）：
+ * - 原生绑定经 hook 进程的 createRequire(import.meta.url).resolve('better-sqlite3') 解析出绝对路径，
+ *   JSON.stringify 嵌入子进程脚本——子进程 cwd 是项目目录，裸 require('better-sqlite3') 找不到包
+ *   （用户项目未必直接装了它）；绝对路径 Windows/Linux/macOS 均 require 直接可用，无需 file:// URL。
+ * - readonly + fileMustExist 双 true 打开只读连接：绝不写库；WAL 并发读不阻塞主进程写，
+ *   且原生绑定可看到已 commit 但未 checkpoint 的过渡态（修复旧 WASM 内存库裸读 .db
+ *   看不见 WAL 的过渡态可见性窗口）。
+ *
+ * 环境假设（R-09）：WAL 模式下只读连接仍需在 .runtime/ 目录建/更新 -shm 索引文件，故 .runtime
+ * 必须可写（与主进程一致）——“只读”指不改 DB 数据，不等于不对 -shm 加索引。
+ *
+ * fail-closed：better-sqlite3 resolve 失败 / db 文件不存在 / fileMustExist 打开失败 / 查询异常 /
+ * 子进程超时或崩溃——一律 console.warn（含 e.stderr 详情）并返回 null，调用方
+ *（readCurrentStage/isNoWorktreeMode）对 null 走 fail-closed，禁止 fail-open。
  */
 function queryDbFirstCell(cwd, sql) {
   const dbPath = path.join(cwd, '.sillyspec', '.runtime', 'sillyspec.db')
-  if (!existsSync(dbPath)) return null
-  let sqlJsPath
-  try { sqlJsPath = createRequire(import.meta.url).resolve('sql.js') } catch { return null }
-  // Windows 上 dynamic import 不接受裸 "C:\..." 路径，必须转 file:// URL（全平台合法）
-  const libUrl = pathToFileURL(sqlJsPath).href
+  if (!existsSync(dbPath)) {
+    // db 文件不存在（findProjectRoot 命中 local.yaml/projects 但无 DB，或 DB 被删）：fail-closed。
+    // warn 让异常（如 DB 误删）可见；正常空态在 findProjectRoot 未命中时根本不会进到这里。
+    console.warn('⚠️ sillyspec.db 不存在，hook 降级 fail-closed: ' + dbPath)
+    return null
+  }
+  let libPath
+  try {
+    libPath = createRequire(import.meta.url).resolve('better-sqlite3')
+  } catch (e) {
+    console.warn('⚠️ sillyspec.db 查询失败（better-sqlite3 未解析），hook 降级 fail-closed: ' + ((e && e.message) || e))
+    return null
+  }
+  // 子进程同步 require 绝对路径（better-sqlite3 是同步原生 API，无 async/import().then 包装）。
+  // pluck().get() 取第一行第一列原值，无行返回 undefined（写空 stdout → 父侧 trim 后 null）。
   const script =
-    "const fs=require('fs');" +
-    "const dbPath=" + JSON.stringify(dbPath) + ",sql=" + JSON.stringify(sql) + ",lib=" + JSON.stringify(libUrl) + ";" +
-    "if(!fs.existsSync(dbPath))process.exit(0);" +
-    "import(lib).then(async m=>{const SQL=await m.default();" +
-    "const db=new SQL.Database(fs.readFileSync(dbPath));const r=db.exec(sql);" +
-    "if(r.length&&r[0].values.length)process.stdout.write(String(r[0].values[0][0]??''));db.close()}).catch(e=>{process.stderr.write('hook db query failed: '+String(e&&e.message||e));process.exit(1)});"
+    "const D=require(" + JSON.stringify(libPath) + ")," +
+    "dbPath=" + JSON.stringify(dbPath) + ",sql=" + JSON.stringify(sql) + ";" +
+    "let db;" +
+    "try{db=new D(dbPath,{readonly:true,fileMustExist:true});" +
+    "const v=db.prepare(sql).pluck().get();" +
+    "if(v!==undefined)process.stdout.write(String(v??''));db.close()}" +
+    "catch(e){process.stderr.write('hook db query failed: '+String(e&&e.message||e));process.exit(1)};"
   try {
     return execFileSync(process.execPath, ['-e', script], {
       encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'pipe'],
     }).trim() || null
   } catch (e) {
-    // DB 查询失败（db 损坏 / sql.js resolve 失败 / 子进程超时）：降级返回 null，调用方
+    // DB 查询失败（db 损坏 / fileMustExist 打开失败 / 子进程超时或崩溃）：降级返回 null，调用方
     //（readCurrentStage 等）对 null 走 fail-closed。补 warn 让 doctor/agent 能看到根因，
     // 而非完全静默（子进程把诊断写到了 stderr，execFileSync 抛错时挂在 e.stderr 上）。
     const detail = (e && e.stderr ? String(e.stderr).trim() : '') || (e && e.message) || 'timeout/crash'
@@ -280,47 +286,48 @@ export {
   isSingleCommandReadonly as _isSingleCommandReadonlyForTest,
 };
 /**
- * 从 sillyspec.db 读取 currentStage
- * 优先级：gate-status.json > sillyspec.db
+ * 从 sillyspec.db 读取 currentStage（直读 DB，task-10 废 gate-status.json 后为唯一来源）
  * @param {string} cwd
  * @returns {string|null} 阶段名，null 表示无法确定
  */
 function readCurrentStage(cwd) {
-  // 1. gate-status.json（高速缓存，权威来源）
-  const gateStatus = readGateStatus(cwd)
-  if (gateStatus && gateStatus.stage) return gateStatus.stage
-
-  // 2. 从 sillyspec.db 读取（node + sql.js 子进程，不依赖外部 sqlite3 CLI——Windows 默认没有）
+  // 直读 sillyspec.db（node + better-sqlite3 只读子进程，不依赖外部 sqlite3 CLI——Windows 默认没有）
   const v = queryDbFirstCell(cwd, "SELECT current_stage FROM changes WHERE status='active' AND current_stage IN ('execute','quick') ORDER BY last_active DESC LIMIT 1")
   return v || null
 }
 
 /**
- * 检查当前变更是否处于 noWorktree 模式
+ * 检查当前变更是否处于 noWorktree 模式（直读 sillyspec.db）
  * @param {string} cwd
  * @returns {boolean}
  */
 function isNoWorktreeMode(cwd) {
-  // 1. 检查 gate-status.json
-  const gateStatus = readGateStatus(cwd)
-  if (gateStatus && gateStatus.noWorktree) return true
-
-  // 2. 从 sillyspec.db 读取（node + sql.js，同 readCurrentStage）
+  // 直读 sillyspec.db（node + better-sqlite3，同 readCurrentStage）
   return queryDbFirstCell(cwd, "SELECT no_worktree FROM changes WHERE status='active' AND current_stage IN ('execute','quick') LIMIT 1") === '1'
 }
 
 /**
- * 判断路径是否在 worktree 内
+ * 判断路径是否在某已注册 worktree 内
  * @param {string} filePath - 绝对路径
  * @returns {boolean}
  */
 function isInsideRegisteredWorktree(filePath, cwd) {
   const absPath = path.isAbsolute(filePath) ? filePath : path.resolve(cwd || process.cwd(), filePath)
   const effectiveCwd = cwd || process.cwd()
-  const gateStatus = readGateStatus(effectiveCwd)
-  const changes = Array.isArray(gateStatus?.changes) ? gateStatus.changes : []
 
-  for (const changeName of changes) {
+  // 已注册 worktree 名单来源：扫描 .runtime/worktrees/ 子目录（task-10 废 gate-status.json 后的权威来源）。
+  // queryDbFirstCell 是单行单列，读不了多行 change 名单；目录扫描天然支持多 change 并发，
+  // 且 worktree 目录存在性 == 注册态，比 DB changes 表更贴合“已注册 worktree”语义
+  // （changes 表可能含 no_worktree 变更，它们没有 worktree 目录）。
+  // 跨平台：isPathInside 用 path.sep 判定包含关系，Windows backslash / POSIX slash 均正确。
+  const worktreeDir = resolveWorktreeDir(effectiveCwd)
+  let changeNames = []
+  try {
+    const entries = readdirSync(worktreeDir, { withFileTypes: true })
+    changeNames = entries.filter(e => e.isDirectory()).map(e => e.name)
+  } catch { /* 目录不存在或不可读 → 无注册 worktree */ }
+
+  for (const changeName of changeNames) {
     const meta = readWorktreeMeta(effectiveCwd, changeName)
     if (meta?.worktreePath && isPathInside(absPath, meta.worktreePath)) return true
   }
@@ -661,7 +668,7 @@ function readAllQuickGuards(projectRoot) {
  * - 除非同时设置 SILLYSPEC_DISABLE_HOOKS=1
  *
  * P0 优化：
- * - 使用 readCurrentStage() fallback 读取阶段（gate-status → progress）
+ * - 使用 readCurrentStage() 直读 sillyspec.db 获取阶段
  * - 拦截提示按阶段给出具体修复建议
  *
  * @param {string} filePath - 目标文件绝对路径
@@ -675,7 +682,7 @@ export function shouldBlockWrite(filePath, cwd) {
   const projectRoot = findProjectRoot(callerCwd)
   const absPath = path.isAbsolute(filePath) ? filePath : path.resolve(callerCwd, filePath)
 
-  // 1. 阶段门禁（使用 fallback 读取）
+  // 1. 阶段门禁（直读 sillyspec.db）
   const stage = readCurrentStage(projectRoot) || '(none)'
 
   const scanGuardResult = shouldBlockScanDocOverwrite(absPath, projectRoot)
@@ -757,7 +764,7 @@ export function shouldBlockBash(command, cwd) {
   // cwd 在 worktree 内 → 全部放行
   if (isInsideRegisteredWorktree(callerCwd, projectRoot)) return { blocked: false }
 
-  // 阶段门禁（使用 fallback 读取）
+  // 阶段门禁（直读 sillyspec.db）
   const stage = readCurrentStage(projectRoot) || '(none)'
 
   if (!['execute', 'quick'].includes(stage)) {
