@@ -539,11 +539,11 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
   if (stepIndex === 0) {
     console.log(`\n### ⚠️ 铁律`)
     console.log('- 文档优先：代码产出必须先有对应的设计/规范文档支撑。')
-    console.log('- 只做本步骤描述的操作，不得自行扩展或跳过')
-    console.log('- 不要回头修改已完成的步骤')
-    console.log('- 不要编造不存在的 CLI 子命令')
-    console.log('- 完成后立即执行 --done 命令，不得跳过')
-    console.log('- 不要用 mv/rename 重命名变更目录，必须用 `sillyspec change-rename <旧名> <新名>`')
+    console.log('- 聚焦本步骤：只执行本步骤描述的操作并完整做完；自行扩展或跳步会破坏状态机推进，后续步骤再做后续事。')
+    console.log('- 已完成步骤视为只读：需修订用 `sillyspec run <stage> --reopen --from-step N` 回退重做，直接回头改会让进度记录与产物脱节。')
+    console.log('- CLI 子命令以本 prompt 或上一条 --done 输出的字面为准；不确定时停下问用户，猜测命令会让状态机推进到错误位置。')
+    console.log('- 本步骤产物落盘后立即执行 prompt 末尾的 --done：CLI 据此校验产出并推进状态机；不跑则进度永远停在本步。')
+    console.log('- 变更目录改名用 `sillyspec change-rename <旧名> <新名>`：mv/rename 会漏改进度库引用，导致变更失联。')
     console.log('- 文档类型文件（.md/.yaml/.json 等）头部必须包含 author（git 用户名）和 created_at（精确到秒）')
     console.log('- 执行构建/测试前必须先读 local.yaml，优先使用其中配置的命令、路径和环境变量；未配置时才使用默认值')
   }

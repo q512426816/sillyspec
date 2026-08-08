@@ -34,3 +34,21 @@
 根因：rebuildModuleMap 直接 writeFileSync 覆盖 _module-map.yaml 清空 tags/entrypoints/main_symbols/depends_on/used_by 手动字段且跑前无预警；brainstorm/scan/archive/brainstorm-auto 的 prompt 引导 git add .sillyspec/ 或 .sillyspec/changes/ 整目录，会把相邻活跃变更一并 stage 造成跨变更串台
 方案：坑1 rebuild 改默认 dry-run 不写盘 + 打印覆盖预警，--force 显式覆盖（index.js 路由解析 --force 传 options + help 更新），archive.js 步骤8 rebuild 提示加 --force 慎用说明；坑2 四处 prompt 的 git add 改精确 pathspec，brainstorm 改 SPEC_ROOT/changes/<change>/、scan 改 DOCS_ROOT+KNOWLEDGE_ROOT、archive 改 changes/archive/ + docs/<project>/modules/
 结果：npm test 全量 0 失败、lint 72 文件通过、新增 modules-rebuild-dryrun 测试 6 断言全过、rebuild dry-run/force 两分支实测正确
+
+## ql-20260808-001-fd63 | 2026-08-08 08:13:03 | multi-agent-review P2 批安全子集：P4 铁律正向化 + L14/L15 execute SKILL 清理 + B3 评估登记
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/prompt.js（通用铁律 5 条否定式改正向+理由附着：聚焦本步骤/已完成步骤只读/CLI 命令字面为准/落盘即 --done/改名用 change-rename；保留文档优先+文档头+构建前读 local 三条已正向）
+- docs/prompt/README.md（铁律镜像逐字同步 prompt.js + 修正过期行号引用 L552-560→约 L540-548）
+- .claude/skills/sillyspec-execute/SKILL.md（L14 删 reviewType 的 propose 残留对照 brainstorm/plan/propose→brainstorm/plan；L15 把「不要自行检查 git 状态」限定为 worktree 创建/进入不依赖 git 状态、apply 步以命令输出为准）
+- docs/sillyspec/multi-agent-review-2026-08-08.md（新增「处置状态」表：#15 P4/#21 L14/#22 L15 已修，#16 B3 评估后保留⊘，#18-20 L1/L4/L8 并发让出，#17 P5 完整流程）
+需求：修复 multi-agent-review P2 批次话术正向化与一致性低危项的安全子集（P4 铁律正向化、L14 删 propose、L15 限定 git 话术、B3 评估登记）
+根因：通用铁律 8 条全反向禁止无理由附着，弱模型对否定指令遵从度系统性偏低；execute SKILL 残留已删除的 propose 对照，且「不要自行检查 git 状态」在 apply 阶段过度绝对
+方案：prompt.js 5 条否定式铁律改正向+理由并同步 README 镜像；execute SKILL 删 propose、限定 git 话术；B3 评估后保留登记；L1/L4/L8 并发撞 stage.js/shared.js/complete.js 让出
+结果：output-step-render 44/0、lint 72 文件通过；全量仅 spec-dir 1 失败属并发 P0/P1 Q3 fail-loud WIP 回归非本次引入；审计 --force-baseline/--allow-new 解锁（他人 Q5 改 DANGEROUS_PATTERNS 为 src/run 前缀致 prompt.js 误判危险+他人新测试误判新增），CLI 文件清单含他人 9 个并发脏文件属归属噪音，实际 commit 用精确 pathspec 仅落上述 4 文件
+
+## ql-20260808-002-a2ff | 2026-08-08 08:15:58 | 修复 multi-agent-review P1 批 #8(P3)+#9(P2)：删 3 个 SKILL 泄露的 {REVIEW_JSON_CONTRACT} 内部占位符；重写 auto SKILL 门控段对齐 AC checklist+t…
+状态：进行中
+关联变更：（无）
+文件：.claude/skills/sillyspec-brainstorm/SKILL.md, .claude/skills/sillyspec-plan/SKILL.md, .claude/skills/sillyspec-execute/SKILL.md, .claude/skills/sillyspec-auto/SKILL.md
