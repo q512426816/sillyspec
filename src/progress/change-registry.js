@@ -51,13 +51,13 @@ export class ChangeRegistry {
    */
   async updateChangeIsolation(cwd, changeName, isolation) {
     const db = await this.pm._ensureDB(cwd);
-    const sqlDb = db.getDb();
     try {
-      sqlDb.run(
-        `UPDATE changes SET isolation_status = ?, isolation_mode = ?, isolation_reason = ?, last_active = ? WHERE name = ?`,
-        [isolation.status, isolation.mode || null, isolation.reason || null, new Date().toISOString(), changeName]
-      );
-      db._save();
+      db.transaction((sqlDb) => {
+        sqlDb.run(
+          `UPDATE changes SET isolation_status = ?, isolation_mode = ?, isolation_reason = ?, last_active = ? WHERE name = ?`,
+          [isolation.status, isolation.mode || null, isolation.reason || null, new Date().toISOString(), changeName]
+        );
+      });
     } catch (err) {
       console.warn('⚠️  更新 isolation 状态失败:', err.message);
     }

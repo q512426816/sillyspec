@@ -1,7 +1,7 @@
 /**
  * run/complete.js（W6 Step7b 从 run.js 抽出）。
  *
- * step 完成处理核心：completeStep（调度主干——WAIT/scanProfile/requiresWait 门控 + 各 handler 调用 +
+ * step 完成处理核心：completeStep（调度主干——WAIT/requiresWait 门控 + 各 handler 调用 +
  * completion path 收尾 + single-step path）+ skipStep/waitStep/continueStep（W6 Step7b-2 续搬）。
  * 本 commit（7b-1）先搬 completeStep + 2 独占 helper（validateMetadata/validateFileLocations）。
  *
@@ -63,7 +63,6 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
   const { printNext = true, confirm = false, changeName, platformOpts = {}, nonInteractive = false, isForceBaseline = false, isAllowNew = false } = options
   const specBase = platformOpts.specRoot || join(cwd, '.sillyspec')
   const stageData = progress.stages[stageName]
-  const scanProfile = stageData?.scanProfile || null
 
   // ── WAIT MARKER 硬校验 ──
   // 如果 output 包含等待标记，拒绝 --done 推进
@@ -75,12 +74,6 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
       console.error(`   sillyspec run ${stageName} --wait --reason "等待用户决策" --output "你的摘要"${changeName ? ` --change ${changeName}` : ''}`)
       process.exit(1)
     }
-  }
-
-  // scanProfile 非 deep 模式：截断 outputText 减少 token 传递
-  let effectiveOutput = outputText
-  if (scanProfile && scanProfile.mode !== 'deep' && outputText && outputText.length > 1000) {
-    effectiveOutput = outputText.slice(0, 1000) + '\n\n…[输出已截断，完整内容见 artifact]'
   }
   if (!stageData || !stageData.steps) {
     console.error(`❌ 阶段 ${stageName} 未初始化`)
@@ -116,7 +109,7 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
     console.log(`⚠️  Step "${steps[_resolvedWaitIdx].name}" 此前处于 waiting，--done --answer 已补回答并拉回待完成。`)
   }
   if (currentIdx === -1) {
-    console.error('没有待完成的步骤')
+    console.error(`没有待完成的步骤（阶段 ${stageName} 已无 pending/in-progress 步骤）。当前阶段状态：${stageData?.status ?? '未知'}。用 \`sillyspec run ${stageName} --status\` 查看进度，或 \`sillyspec progress show\` 看全局下一步。`)
     process.exit(1)
   }
 
@@ -525,7 +518,7 @@ export async function waitStep(pm, progress, stageName, cwd, outputText, waitRea
   // 查找下一个 pending 或 in-progress 的步骤
   const currentIdx = stageData.steps.findIndex(s => s.status === 'pending' || s.status === 'in-progress')
   if (currentIdx === -1) {
-    console.error('没有可以等待的步骤')
+    console.error(`没有可以等待的步骤（阶段 ${stageName} 已无 pending/in-progress 步骤）。当前阶段状态：${stageData?.status ?? '未知'}。用 \`sillyspec run ${stageName} --status\` 查看进度，或 \`sillyspec progress show\` 看全局下一步。`)
     process.exit(1)
   }
 
@@ -611,7 +604,7 @@ export async function continueStep(pm, progress, stageName, cwd, answer, options
   // 查找 waiting 的步骤
   const waitingSteps = stageData.steps.map((s, i) => ({ ...s, idx: i })).filter(s => s.status === 'waiting')
   if (waitingSteps.length === 0) {
-    console.error('没有处于等待状态的步骤')
+    console.error(`没有处于等待状态的步骤（阶段 ${stageName} 当前无 waiting 步骤，--continue 无目标）。当前阶段状态：${stageData?.status ?? '未知'}。用 \`sillyspec run ${stageName} --status\` 查看进度，或 \`sillyspec progress show\` 看全局下一步。`)
     process.exit(1)
   }
 
@@ -792,7 +785,7 @@ export async function skipStep(pm, progress, stageName, cwd, changeName, platfor
       console.error(`⏸️  Step ${wsIdx + 1} 正在等待用户输入，不能跳过。`)
       console.error(`   请先使用 --continue --answer "..." 继续，或用 --reset 重置。`)
     } else {
-      console.error('没有待跳过的步骤')
+      console.error(`没有待跳过的步骤（阶段 ${stageName} 已无 pending/in-progress 步骤）。当前阶段状态：${stageData?.status ?? '未知'}。用 \`sillyspec run ${stageName} --status\` 查看进度，或 \`sillyspec progress show\` 看全局下一步。`)
     }
     process.exit(1)
   }

@@ -395,7 +395,7 @@
       {
         "index": 1,
         "name": "变更状态",
-        "prompt": "检查进行中的变更和归档历史。\n\n### 操作\n1. `ls .sillyspec/changes/ 2>/dev/null | grep -v archive`\n2. 对每个进行中的变更：检查 proposal.md ✅/❌、design.md ✅/❌、requirements.md ✅/❌、tasks.md — X/Y 完成\n3. `ls .sillyspec/changes/archive/ 2>/dev/null | wc -l`\n4. `cat .sillyspec/HANDOFF.json 2>/dev/null`\n\n### 输出\n变更状态列表",
+        "prompt": "检查进行中的变更和归档历史。\n\n### 操作\n1. `ls .sillyspec/changes/ 2>/dev/null | grep -v archive`\n2. 对每个进行中的变更：检查 proposal.md ✅/❌、design.md ✅/❌、requirements.md ✅/❌、tasks.md — X/Y 完成\n3. `ls .sillyspec/changes/archive/ 2>/dev/null | wc -l`\n\n### 输出\n变更状态列表",
         "outputHint": "变更状态",
         "optional": false
       },

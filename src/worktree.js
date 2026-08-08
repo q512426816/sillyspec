@@ -8,9 +8,9 @@
  * 分支命名：sillyspec/<change-name>
  */
 
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, readdirSync, statSync, lstatSync, readlinkSync, unlinkSync } from 'fs';
-import { join, resolve, dirname } from 'path';
+import { join, resolve, dirname, relative, isAbsolute } from 'path';
 import { createHash } from 'crypto';
 import { provisionDeps, checkDepsFreshness } from './worktree-deps.js';
 import { writeAtomicSync } from './fs-atomic.js';
@@ -1054,7 +1054,7 @@ export class WorktreeManager {
 
     // 5. 检查 SillySpec 分支残留
     try {
-      const branches = execSync(`git branch --list '${BRANCH_PREFIX}*'`, { cwd: this.cwd, encoding: 'utf8', stdio: ['pipe','pipe','pipe'] }).trim();
+      const branches = execFileSync('git', ['branch', '--list', `${BRANCH_PREFIX}*`], { cwd: this.cwd, encoding: 'utf8', stdio: ['pipe','pipe','pipe'] }).trim();
       if (branches) {
         for (const line of branches.split('\n').filter(Boolean)) {
           const branch = line.replace(/^\*?\s+/, '').trim();
@@ -1203,8 +1203,13 @@ export class WorktreeManager {
     try {
       const resolved = resolve(wtPath);
       const baseResolved = resolve(this.worktreeBase);
-      if (resolved.startsWith(baseResolved + '/')) {
-        return resolved.slice(baseResolved.length + 1);
+      // 用 path.relative 比 startsWith(base + sep) 更稳：
+      // - 自动用当前平台分隔符比较（Windows 上 resolve 返回反斜杠，硬编码 '/' 恒 false）
+      // - 跨盘符（C: vs D:）时返回绝对路径 → isAbsolute 守卫放行失败兜底 null
+      // - 同路径返回 '' → 视作非 changeName
+      const rel = relative(baseResolved, resolved);
+      if (rel && !rel.startsWith('..') && !isAbsolute(rel)) {
+        return rel;
       }
     } catch {}
     return null;
@@ -1231,9 +1236,14 @@ export class WorktreeManager {
           const patchBuf = execSync(`git diff --cached --binary`, { cwd: mainCwd, stdio: ['pipe','pipe','pipe'] });
           if (patchBuf && patchBuf.length > 0) {
             const patchFile = join(worktreePath, '.sillyspec-baseline-staged.patch');
-            writeFileSync(patchFile, patchBuf);
-            git(worktreePath, `apply --binary ${patchFile}`);
-            rmSync(patchFile, { force: true });
+            try {
+              writeFileSync(patchFile, patchBuf);
+              git(worktreePath, `apply --binary ${patchFile}`);
+            } finally {
+              // git apply 抛错时也要清掉 patch 临时文件，避免泄漏到 worktree/主仓根
+              // （filterDeliverableFiles 不排除 .sillyspec-baseline-*，泄漏会级联 BLOCKED 下游 apply）
+              try { rmSync(patchFile, { force: true }); } catch {}
+            }
           }
         } catch (e) {
           errors.push(`staged: ${e.message}`);
@@ -1249,9 +1259,13 @@ export class WorktreeManager {
           const patchBuf = execSync(`git diff --binary`, { cwd: mainCwd, stdio: ['pipe','pipe','pipe'] });
           if (patchBuf && patchBuf.length > 0) {
             const patchFile = join(worktreePath, '.sillyspec-baseline-unstaged.patch');
-            writeFileSync(patchFile, patchBuf);
-            git(worktreePath, `apply --binary ${patchFile}`);
-            rmSync(patchFile, { force: true });
+            try {
+              writeFileSync(patchFile, patchBuf);
+              git(worktreePath, `apply --binary ${patchFile}`);
+            } finally {
+              // git apply 抛错时也要清掉 patch 临时文件，避免泄漏到 worktree/主仓根
+              try { rmSync(patchFile, { force: true }); } catch {}
+            }
           }
         } catch (e) {
           errors.push(`unstaged: ${e.message}`);

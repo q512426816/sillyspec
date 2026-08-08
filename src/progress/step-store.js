@@ -164,7 +164,7 @@ export class StepStore {
         const stRow = tDb.exec('SELECT stage_id FROM steps WHERE id = ?', [stepId]);
         if (stRow && stRow.length > 0 && stRow[0].values.length > 0) {
           const stId = stRow[0].values[0][0];
-          const pendingRows = tDb.exec('SELECT COUNT(*) FROM steps WHERE stage_id = ? AND status != "completed"', [stId]);
+          const pendingRows = tDb.exec("SELECT COUNT(*) FROM steps WHERE stage_id = ? AND status NOT IN ('completed','skipped')", [stId]);
           if (pendingRows && pendingRows.length > 0 && pendingRows[0].values[0][0] === 0) {
             stageCompletionCandidateId = stId;
           }

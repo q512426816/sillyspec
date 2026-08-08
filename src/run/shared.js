@@ -7,11 +7,12 @@
  * 路径修正（相对 src/run/）：
  *   - resolvePromptIncludes 的 templates/prompts 在仓库根 → __dirname 上两层
  *   - triggerSync 的动态 import './sync.js' → '../sync.js'（src/sync.js）
- *   - safeGit 原用顶层 require('child_process')，改静态 import execSync（更 ESM-native）
+ *   - safeGit 原用顶层 require('child_process')，改静态 import execFileSync（更 ESM-native，
+ *     数组形式不经 shell：避免路径含空格被 shell 拆词，且少起一层 shell 进程）
  */
 import { basename, join, resolve, dirname, sep } from 'node:path'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
-import { execSync } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -373,7 +374,7 @@ export function safeGit(cwd, args, opts = {}) {
   const { trim = true } = opts
   const fullArgs = ['-c', `safe.directory=${cwd}`, '-C', cwd, ...args]
   try {
-    let value = execSync(['git', ...fullArgs].join(' '), { encoding: 'utf8', timeout: 5000 })
+    let value = execFileSync('git', fullArgs, { encoding: 'utf8', timeout: 5000 })
     if (trim) value = value.trim()
     return { value, error: null }
   } catch (e) {

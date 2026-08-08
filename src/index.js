@@ -1481,7 +1481,12 @@ SillySpec modules — 模块文档管理
       const topCommands = ['init', 'setup', 'run', 'progress', 'worktree', 'dispatch', 'local', 'workflow', 'gate', 'derive', 'backfill-reviews', 'modules', 'change-rename', 'knowledge', 'platform', 'scan', 'brainstorm', 'plan', 'execute', 'verify', 'archive', 'quick', 'explore', 'status', 'doctor', 'auto', 'runtime'];
       const suggestion = didYouMean(command, topCommands);
       console.error(`❌ 未知命令: ${command}`);
-      if (suggestion) console.error(`   你是想输入「${suggestion}」吗？`);
+      if (command === '--status') {
+        // --status 是阶段内 flag（sillyspec run <stage> --status），裸用会落到 default
+        console.error('   --status 是阶段内 flag。查看进度请用：sillyspec status 或 sillyspec progress show');
+      } else if (suggestion) {
+        console.error(`   你是想输入「${suggestion}」吗？`);
+      }
       printUsage();
       process.exit(1);
     }
@@ -1494,6 +1499,10 @@ main().catch((err) => {
     console.error(`❌ ${err.message}`);
     process.exit(1);
   }
-  console.error(err);
-  process.exit(1);
+  // message 提首行（Agent 可直接解析 stderr 首行判断成败），堆栈降级为附件；
+  // 用 exitCode 而非 exit(1) 让事件循环自然 drain，缓解 Windows libuv teardown
+  // 把退出码污染成 127（与 shell "command not found" 撞码）的问题。
+  console.error(`❌ SillySpec 发生错误：${err?.message || err}`);
+  if (err?.stack) console.error(err.stack);
+  process.exitCode = 1;
 });
