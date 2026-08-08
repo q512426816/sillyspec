@@ -7,20 +7,18 @@
  * agent 如何经 SillyHub MCP tool 创建 mission / 派 worker / 轮询终态 / kill lease / 回收；
  * 实际 MCP tool 调用由 agent 执行，本模块不调任何 tool，也不直接 import client.js。
  *
- * 路径 A stub 现实（D-003@v2 + R-01）：SillyHub 侧路径 A 三处改动（dispatch_worker 加
- * worktree_path/branch + worker_prompt 覆写；execution.py 检测 caller worktree 跳自建；
- * render_worker_prompt 路径A 下 worker 不 git commit）**尚未落地**——属跨仓
- * multi-agent-platform 独立变更。故 `isPathASupported()` 当前恒返回 false → strategy.js
- * 不会调 renderSillyHubInstruction，而是拼 PATH_A_DOWNGRADE_REASON 降级提示 + 回退 Local
- * （renderLocalInstruction）。本变更不实现 SillyHub 侧代码，只声明契约期望（task-13 文档）。
- *
- * 路径 A 落地后：把 isPathASupported 改为探测 daemon tool schema（dispatch_worker 是否
- * 声明 worktree_path / worker_prompt 入参）返回 true，strategy 即切到本模板。
+ * 路径 A 探测翻真（task-11，D-005 + R-04）：`isPathASupported()` 读 probe.js 预热的
+ * tools/list 探测缓存——`dispatch_worker.inputSchema.properties` 含 `worktree_path` 与
+ * `worker_prompt` → true；任一缺失 / 未预热 / 探测失败 → false（保守回退 Local，**绝不硬试路径A**）。
+ * env 备选（spike-01 不通过时）：`process.env.SILLYHUB_PATH_A==='1'` → true（手动标记 daemon 侧
+ * 已落地）。探测预热住 probe.js `probeSillyHub`（daemon 可达后 best-effort 调 `client.listTools()`），
+ * 本模块只缓存探测结果 + 同步读——保持 `isPathASupported()` sync 签名不改 strategy.js /
+ * execute.js `getDispatchMode` 调用点（探测 = async，读缓存 = sync，解耦）。
  *
  * 铁律：
  * - converge_mission 不出现在任何指令文本（D-004，SillySpec 自己 apply）；JSDoc 仅作开发者锚点。
  * - worker 不 git commit，改动留 worktree 工作区（D-003@v2 第三处 UB-1，worker_prompt 覆写）。
- * - 不直接调 client，只生成指令由 agent 执行 MCP tool 调用。
+ * - 不直接调 client，只生成指令由 agent 执行 MCP tool 调用（探测由 probe.js 调 client，本模块仅读缓存）。
  * - 路径 A 检测保守：不支持即回退，不硬试。
  * - 兼容 Win/Linux/macOS：本文件无路径拼接 / 无平台分支，纯模板生成。
  */
@@ -64,26 +62,50 @@ changedFiles / specVerdict / qualityVerdict / reviewerNotes / requiredEvidence�
 工作区写 review.json，再自己 apply（D-004）。`
 
 /**
- * 路径 A 是否已落地（D-003@v2 三处 SillyHub 侧改动是否就绪）。
+ * 路径A 探测结果缓存（task-11）：probe.js `probeSillyHub` 预热 → `isPathASupported` 同步读。
  *
- * 当前 stub：恒返回 false。门控的三处路径 A 期望（任一未落地即视为不支持，保守不硬试）：
- * 1. **dispatch_worker 加可选 worktree_path + branch**（向后兼容，不传走原自建逻辑）
- *    **+ worker_prompt 覆写参数**（让 caller 控制 worker commit 行为）
- * 2. **execution.py:184-236 检测 caller 提供 worktree → 跳过自建 worktree/分支**，
- *    root_path = caller worktree，分支 = caller branch（daemon workspace.ts 分支0 复用）
- * 3. **render_worker_prompt:105-129 路径A 下 worker 不 git commit**（或经 worker_prompt
- *    覆写不 commit），改动留工作区交 SillySpec git diff（UB-1）
+ * 保持 `isPathASupported` sync 签名（strategy.js / execute.js `getDispatchMode` 同步调，不改
+ * 调用点）：探测是 async（probe.js 调 client.listTools），读缓存是 sync。未预热（probe 未跑 /
+ * 探测失败）→ 默认 false（保守 R-04，不硬试路径A）。模块级单例，进程内有效；测试用
+ * `clearPathAProbeCache` 隔离。
+ */
+let _pathAProbe = { probed: false, supported: false };
+
+/**
+ * 写路径A 探测结果（probe.js `probeSillyHub` 在 daemon 可达后预热调用）。
+ * @param {boolean} supported - dispatch_worker schema 含 worktree_path + worker_prompt
+ */
+export function setPathAProbeResult(supported) {
+  _pathAProbe = { probed: true, supported: !!supported };
+}
+
+/**
+ * 清空路径A 探测缓存（测试隔离用；生产中进程重启 / 不需要 TTL，probe 每次可达都重预热带新值）。
+ */
+export function clearPathAProbeCache() {
+  _pathAProbe = { probed: false, supported: false };
+}
+
+/**
+ * 路径 A 是否已落地（dispatch_worker 支持 caller worktree + worker_prompt 覆写）。
  *
- * 未来路径 A 落地后改为探测 daemon schema：调 list_agent_profiles / 读 dispatch_worker tool
- * schema，检测入参声明含 worktree_path 与 worker_prompt；探测保守，任一未声明即返回 false。
- * 探测实现住在 probe.js（JS 可测），本函数仅返回探测结果的常量门控位。
+ * task-11 翻真（D-005 + R-04）：读 probe.js 预热的探测结果（probeSillyHub 经 `tools/list` 查
+ * `dispatch_worker.inputSchema.properties` 含 `worktree_path` 与 `worker_prompt`）。保持 sync
+ * 签名（strategy.js / execute.js `getDispatchMode` 同步调），探测预热在 probe 流程。
  *
- * @returns {boolean} 当前恒 false（stub，路径A 三处跨仓未落地）
+ * 判定顺序（保守，**绝不硬试路径A**）：
+ * 1. **env 强制开启**：`process.env.SILLYHUB_PATH_A==='1'` → true（spike-01 不通过 / tools/list
+ *    不可达时的备选，手动标记 daemon 侧路径A 已落地；优先级最高，让探测不可信时也能启用）
+ * 2. 否则读探测缓存：probe 预热且 dispatch_worker schema 全命中（worktree_path + worker_prompt）→ true
+ * 3. 未预热 / 探测失败 / schema 缺字段 → false（保守回退 Local，R-04）
+ *
+ * @returns {boolean} 路径A 可用 → true；否则 false（保守不硬试，R-04）
  */
 export function isPathASupported() {
-  // 路径A 三处改动跨仓未落地（multi-agent-platform 独立变更），保守 stub 不硬试。
-  // 落地后：改为读 probe 结果（probe.js 探测 dispatch_worker tool schema 含 worktree_path/worker_prompt）。
-  return false
+  // 1. env 强制开启（spike-01 备选）：优先级最高，探测不可信 / 不可达时手动启用
+  if (process.env.SILLYHUB_PATH_A === '1') return true;
+  // 2. 读 probe 预热的 schema 探测缓存（未预热 → supported=false，保守 R-04 不硬试）
+  return _pathAProbe.supported;
 }
 
 /**

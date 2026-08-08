@@ -16,6 +16,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join, relative, isAbsolute, sep } from 'node:path';
 import jsYaml from 'js-yaml';
 import { SillyHubMcpClient } from '../sillyhub-mcp/client.js';
+import { setPathAProbeResult } from './backends/sillyhub-mcp.js';
 
 /** 默认负面缓存 TTL（毫秒）。可被 local.yaml dispatch.probe_ttl_ms 或 ttlMs 参数覆盖。 */
 export const DEFAULT_PROBE_TTL_MS = 60_000;
@@ -77,19 +78,65 @@ function isWithinRoot(rootPath, worktreePath) {
 }
 
 /**
+ * 从 tools/list 返回的 tools 数组探测路径A 是否支持（task-11，D-005）。
+ *
+ * 命中条件（全中才 true，任一缺失 → false，保守 R-04）：
+ * - 找到 `name === 'dispatch_worker'` 的 tool
+ * - 其 `inputSchema.properties` 同时声明 `worktree_path` 与 `worker_prompt`（caller-worktree +
+ *   prompt 覆写两处 daemon 侧落地标志，design §7.3）
+ *
+ * 纯函数（不调网络），独立可测（task-11 三分支：含字段→true / 缺字段→false / 异常输入→false）。
+ * @param {Array<{name:string, inputSchema?:object}>|null} tools - client.listTools() 返回的 tools 数组
+ * @returns {boolean} 路径A schema 全命中 → true；否则 false
+ */
+export function detectPathAFromTools(tools) {
+  if (!Array.isArray(tools)) return false;
+  const dw = tools.find((t) => t && t.name === 'dispatch_worker');
+  if (!dw) return false;
+  const props = dw.inputSchema && dw.inputSchema.properties;
+  if (!props || typeof props !== 'object') return false;
+  return Boolean(props.worktree_path) && Boolean(props.worker_prompt);
+}
+
+/**
+ * 预热路径A 探测缓存（task-11）：probe.js daemon 可达后 best-effort 调 client.listTools，
+ * 把 detectPathAFromTools 结果写回 sillyhub-mcp.js 缓存供 isPathASupported 同步读。
+ *
+ * best-effort：client 无 listTools 方法（旧 mock）/ listTools 异常 / 返回非数组 → 保守写 false
+ * （R-04，绝不硬试路径A），**不抛穿 probe**（探测失败不影响 availability 判定）。
+ * @param {object} cli - SillyHubMcpClient 实例（或含 listTools 的 mock）
+ */
+async function preheatPathAProbe(cli) {
+  try {
+    if (!cli || typeof cli.listTools !== 'function') return; // 旧 mock 无 listTools → 不预热（留默认 false）
+    const tools = await cli.listTools();
+    setPathAProbeResult(detectPathAFromTools(tools));
+  } catch (err) {
+    // 探测异常 → 保守 false（R-04）；best-effort 不阻断 probe 主流程
+    const msg = err && err.message ? err.message : String(err);
+    console.warn(`[dispatch/probe] 路径A schema 探测异常（保守判 false）: ${msg}`);
+    setPathAProbeResult(false);
+  }
+}
+
+/**
  * 能力探测：决定 dispatch 是否可用 SillyHub 后端。
  *
  * 决策顺序（design.md §Phase4 / task-01 implementation）：
  *   1. env 快速路径（无网络）：缺 URL/TOKEN → no-config
  *   2. 负面缓存命中且未过 TTL → 直接返回缓存（无网络，R-06）
  *   3. 连通性探测 client.probeDaemon()：false → 缓存 daemon-unreachable 并返回
- *   4. root_path 校验（R-08 best-effort，仅 rootPath 传入时）：越界 → worktree-outside-root
+ *   3.5 路径A schema 预热（task-11）：daemon 可达 → best-effort client.listTools() 写
+ *       isPathASupported 缓存（dispatch_worker schema 含 worktree_path + worker_prompt）
+ *   4. root_path 校验（R-08 best-effort）：rootPath 显式传则用；未传则 best-effort 从 daemon
+ *       拿（client.getRootPath，复用 tools/list）；worktreePath 同传且越界 → worktree-outside-root
  *   5. 全通过 → available=true（不缓存正面结果）
  *
  * @param {object} [opts]
  * @param {object} [opts.client]       - SillyHubMcpClient 实例；缺省 new SillyHubMcpClient()（读 env）
  * @param {string} [opts.worktreePath] - SillySpec worktree 绝对路径（root_path 校验用）
- * @param {string} [opts.rootPath]     - daemon ws.root_path（仅传时校验 worktree 在内，R-08）
+ * @param {string} [opts.rootPath]     - daemon ws.root_path；未传（undefined）时 best-effort 从 daemon
+ *                                       拿（task-12 #5），拿不到则跳过越界校验（不判 unavailable）
  * @param {number} [opts.ttlMs]        - 负面缓存 TTL 覆盖（优先于 local.yaml）
  * @returns {Promise<{ available: boolean, reason?: string }>}
  */
@@ -124,10 +171,27 @@ export async function probeSillyHub({ client, worktreePath, rootPath, ttlMs } = 
     return result;
   }
 
-  // 4. root_path 校验（R-08，best-effort）：仅当调用方传 rootPath（路径A 落地后 daemon 暴露）。
-  //    worktreePath 同传时校验是否在 rootPath 内；任一缺失则跳过（不因此判 unavailable）。
-  if (rootPath && worktreePath) {
-    if (!isWithinRoot(rootPath, worktreePath)) {
+  // 3.5 路径A schema 探测预热（task-11，D-005）：daemon 可达后 best-effort 调 client.listTools，
+  //     把 dispatch_worker schema 含 worktree_path + worker_prompt 的结果写缓存供
+  //     isPathASupported 同步读。best-effort：失败保守 false（R-04），不影响 availability。
+  await preheatPathAProbe(cli);
+
+  // 4. root_path 校验（R-08，best-effort）：rootPath 显式传入则直接用；未传入时 best-effort 从
+  //    daemon 拿（task-12 #5，复用 listTools RPC：daemon 若在 tools/list 顶层暴露 root_path 则
+  //    自动适配；当前 gateway 不暴露 → null → 跳过越界校验，不判 unavailable）。
+  //    仅 worktreePath 也传时才校验（无 worktree 无谓越界判定）；任一缺失则跳过。
+  if (worktreePath) {
+    let effectiveRoot = rootPath;
+    if (effectiveRoot === undefined && cli && typeof cli.getRootPath === 'function') {
+      try {
+        effectiveRoot = await cli.getRootPath();
+      } catch (err) {
+        const msg = err && err.message ? err.message : String(err);
+        console.warn(`[dispatch/probe] rootPath best-effort 拿取异常（跳过越界校验）: ${msg}`);
+        effectiveRoot = null;
+      }
+    }
+    if (effectiveRoot && !isWithinRoot(effectiveRoot, worktreePath)) {
       return { available: false, reason: 'worktree-outside-root' };
     }
   }

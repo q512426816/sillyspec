@@ -9,9 +9,9 @@
  *           构造函数可传 { url, token, timeoutMs } 覆盖，缺省读 env。
  *
  * 端点：POST ${url}/mcp/（尾斜杠必需，MCP streamable HTTP 协议要求），Bearer token 鉴权。
- * 请求体：JSON-RPC 2.0 tools/call。
+ * 请求体：JSON-RPC 2.0（tools/call 调 tool；tools/list 列 tool schema，task-11 路径A 探测用）。
  * 响应：application/json（直接 JSON-RPC）或 text/event-stream（SSE，取 data: 行拼装后 JSON.parse）。
- * tool 返回值惯例：从 result.content[0].text 再 JSON.parse 得到。
+ * tool 返回值惯例：从 result.content[0].text 再 JSON.parse 得到（tools/list 例外：result 直接是 {tools:[...]}）。
  *
  * 铁律：
  * - converge_mission 不封装不调用（D-004 SillySpec 自己 apply）。
@@ -50,6 +50,9 @@ export class SillyHubMcpClient {
 
   /**
    * 调用 MCP tool（JSON-RPC tools/call）。best-effort：任何失败返回 null 不抛。
+   *
+   * task-11 抽出共享骨架：本方法现为薄封装 `_sendRpc('tools/call', {name,arguments})`，
+   * warn 文案经 label=toolName 与改前逐字一致（零回归现有调用方）。
    * @param {string} toolName
    * @param {object} args - tool 参数（snake_case 对齐 SillyHub schema）
    * @param {object} [opts]
@@ -57,8 +60,26 @@ export class SillyHubMcpClient {
    * @returns {Promise<object|null>} MCP tool result（{content:[{type,text}]}），失败返回 null
    */
   async _callTool(toolName, args = {}, { quiet = false } = {}) {
+    return this._sendRpc('tools/call', { name: toolName, arguments: args }, { quiet, label: toolName });
+  }
+
+  /**
+   * 发 JSON-RPC 请求（fetch/SSE/鉴权骨架，tools/call 与 tools/list 共用）。best-effort 不抛。
+   *
+   * task-11 抽出：原 _callTool 的网络骨架；method/params 泛化——tools/call 带 {name,arguments}，
+   * tools/list 带空 params。warn 文案用 label 作 tag（tools/call 传 toolName 保文案不变，
+   * tools/list 传 'tools/list'）。
+   * @param {string} method - JSON-RPC method（'tools/call' | 'tools/list'）
+   * @param {object} params - JSON-RPC params（tools/call: {name,arguments}; tools/list: {}）
+   * @param {object} [opts]
+   * @param {boolean} [opts.quiet=false] - 静默失败警告
+   * @param {string} [opts.label] - warn 文案标签（默认 method；tools/call 传 toolName 保文案）
+   * @returns {Promise<object|null>} JSON-RPC result（tools/call: {content}; tools/list: {tools}），失败 null
+   */
+  async _sendRpc(method, params, { quiet = false, label } = {}) {
+    const tag = label || method;
     if (!this._configured) {
-      if (!quiet) console.warn(`[sillyhub-mcp] 未配置（缺 SILLYHUB_MCP_URL/TOKEN），${toolName} 跳过`);
+      if (!quiet) console.warn(`[sillyhub-mcp] 未配置（缺 SILLYHUB_MCP_URL/TOKEN），${tag} 跳过`);
       return null;
     }
 
@@ -67,8 +88,8 @@ export class SillyHubMcpClient {
     const body = {
       jsonrpc: '2.0',
       id,
-      method: 'tools/call',
-      params: { name: toolName, arguments: args },
+      method,
+      params,
     };
 
     const controller = new AbortController();
@@ -89,10 +110,10 @@ export class SillyHubMcpClient {
     } catch (err) {
       if (!quiet) {
         if (err && err.name === 'AbortError') {
-          console.warn(`[sillyhub-mcp] ${toolName} 请求超时 (${this._timeoutMs}ms)`);
+          console.warn(`[sillyhub-mcp] ${tag} 请求超时 (${this._timeoutMs}ms)`);
         } else {
           const msg = err && err.message ? err.message : String(err);
-          console.warn(`[sillyhub-mcp] ${toolName} 请求失败: ${msg}`);
+          console.warn(`[sillyhub-mcp] ${tag} 请求失败: ${msg}`);
         }
       }
       return null;
@@ -104,7 +125,7 @@ export class SillyHubMcpClient {
       if (!quiet) {
         let detail = '';
         try { detail = await res.text(); } catch { /* best effort */ }
-        console.warn(`[sillyhub-mcp] ${toolName} → HTTP ${res.status} ${String(detail).slice(0, 200)}`);
+        console.warn(`[sillyhub-mcp] ${tag} → HTTP ${res.status} ${String(detail).slice(0, 200)}`);
       }
       return null;
     }
@@ -123,18 +144,18 @@ export class SillyHubMcpClient {
     } catch (err) {
       if (!quiet) {
         const msg = err && err.message ? err.message : String(err);
-        console.warn(`[sillyhub-mcp] ${toolName} 响应解析失败: ${msg}`);
+        console.warn(`[sillyhub-mcp] ${tag} 响应解析失败: ${msg}`);
       }
       return null;
     }
 
     if (!rpc) {
-      if (!quiet) console.warn(`[sillyhub-mcp] ${toolName} 响应无 JSON-RPC 内容`);
+      if (!quiet) console.warn(`[sillyhub-mcp] ${tag} 响应无 JSON-RPC 内容`);
       return null;
     }
 
     if (rpc.error) {
-      if (!quiet) console.warn(`[sillyhub-mcp] ${toolName} JSON-RPC error: ${JSON.stringify(rpc.error)}`);
+      if (!quiet) console.warn(`[sillyhub-mcp] ${tag} JSON-RPC error: ${JSON.stringify(rpc.error)}`);
       return null;
     }
 
@@ -203,20 +224,74 @@ export class SillyHubMcpClient {
   }
 
   /**
+   * 列出 daemon 暴露的 MCP tools（JSON-RPC `tools/list`，task-11 路径A 探测用）。
+   *
+   * 与 tools/call 的差异：method='tools/list'，无 name/arguments；响应 result 是
+   * `{tools: [{name, description, inputSchema}, ...]}`（MCP 标准）。本方法返回 tools 数组
+   * （优先 result.tools，兼容 daemon 直接返回数组），调用方（probe.js 路径A 探测）据此查
+   * dispatch_worker.inputSchema.properties 是否含 worktree_path + worker_prompt。
+   *
+   * best-effort：未配置 / HTTP 异常 / 非 2xx / JSON-RPC error / 解析失败 → 返回 null 不抛
+   * （R-04 保守，探测失败由调用方降级 false）。默认 quiet=true（探测路径不刷失败噪音，
+   * 区别于业务 tool 调用默认 quiet=false）。
+   * @param {object} [opts]
+   * @param {boolean} [opts.quiet=true] - 静默失败警告（探测路径默认静默）
+   * @returns {Promise<Array<{name:string, inputSchema?:object}>|null>} tools 数组；失败/未配置 null
+   */
+  async listTools({ quiet = true } = {}) {
+    if (!this._configured) return null;
+    const result = await this._sendRpc('tools/list', {}, { quiet, label: 'tools/list' });
+    if (!result) return null;
+    if (Array.isArray(result)) return result;            // daemon 直接返回数组（兼容）
+    if (Array.isArray(result.tools)) return result.tools; // 标准 MCP {tools:[...]}
+    return null;
+  }
+
+  /**
+   * best-effort 从 daemon 拿 workspace root_path（task-12 路径A 越界校验用）。
+   *
+   * 复用 tools/list RPC 机制（与 listTools 同 method，复用 _sendRpc 骨架，task-12 "复用 task-11
+   * listTools"）：defensively 读 result.root_path（若 daemon 在 tools/list 响应顶层暴露）。
+   * 当前 SillyHub gateway 的 tools/list 仅返 `{tools:[...]}` 不含 root_path → 实际返回 null
+   * （probe 跳过越界校验，best-effort 语义）。**不臆造 daemon 接口**（无专用 get_workspace_root
+   * tool，见 task-12 constraints / spike-01 结论）；后续 daemon 若在 tools/list 顶层暴露 root_path，
+   * 本方法自动适配，probe 无需改。
+   *
+   * best-effort：未配置 / 异常 / 无 root_path 字段 → 返回 null 不抛。
+   * @param {object} [opts]
+   * @param {boolean} [opts.quiet=true] - 静默失败警告
+   * @returns {Promise<string|null>} root_path 绝对路径；拿不到 null
+   */
+  async getRootPath({ quiet = true } = {}) {
+    if (!this._configured) return null;
+    const result = await this._sendRpc('tools/list', {}, { quiet, label: 'tools/list' });
+    if (!result || typeof result !== 'object') return null;
+    const rp = result.root_path;
+    return typeof rp === 'string' && rp.length > 0 ? rp : null;
+  }
+
+  /**
    * 创建 mission（调 create_mission tool）。
    * @param {object} p
    * @param {string} p.objective
    * @param {string} p.changeId
    * @param {number} [p.budgetUsd]
+   * @param {string} [p.orchestrationMode] - 'team'(默认,不传走原逻辑零回归,FR-05) |
+   *   'external'(路径A,SillySpec 外部调度:跳 orchestrator spawn + converge 跳 merge,FR-08/D-007)。
+   *   传入时 args.orchestration_mode = mode；不传/Null 不加字段（team 默认，零回归）。
    * @returns {Promise<{missionId: string|null}>} 未配置/失败 → { missionId: null }
    */
-  async createMission({ objective, changeId, budgetUsd } = {}) {
+  async createMission({ objective, changeId, budgetUsd, orchestrationMode } = {}) {
     if (!this._configured) return { missionId: null };
     const args = {
       objective,
       change_id: changeId,
     };
     if (budgetUsd !== undefined && budgetUsd !== null) args.budget_usd = budgetUsd;
+    // task-12：路径A 传 'external'（跳 orchestrator spawn，FR-08）；不传 → 不加字段，daemon 默认 team 零回归
+    if (orchestrationMode !== undefined && orchestrationMode !== null) {
+      args.orchestration_mode = orchestrationMode;
+    }
     const result = await this._callTool('create_mission', args);
     if (result === null) return { missionId: null };
     const value = this._parseToolReturnValue(result);
@@ -250,6 +325,7 @@ export class SillyHubMcpClient {
     };
     if (readOnly !== undefined) args.read_only = readOnly;
     if (worktreePath !== undefined && worktreePath !== null) args.worktree_path = worktreePath;
+    // task-12 / D-009：branch 字段名对齐跨仓契约（design §7.3，round-1 worktree_branch 已统一为 branch）
     if (branch !== undefined && branch !== null) args.branch = branch;
     if (model !== undefined && model !== null) args.model = model;
     if (agentProfileId !== undefined && agentProfileId !== null) args.agent_profile_id = agentProfileId;
