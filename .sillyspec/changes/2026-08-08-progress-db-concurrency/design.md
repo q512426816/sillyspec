@@ -75,13 +75,23 @@ better-sqlite3 是**同步 API**，原生 `.transaction(fn)`（自动 BEGIN/COMM
 |---|---|---|
 | 修改 | src/db.js | 全量重写 sql.js→better-sqlite3。删 `_save`/`_loadDatabase`/`_atomicWriteSync`/`_renameSyncRetry`/`_sleepSync`；`transaction` 改原生 `db.transaction(fn)`；构造同步 `new Database`+WAL/busy_timeout/foreign_keys；保留 `_createSchema`/`_migrateAddColumn`/`DB_SCHEMA_VERSION` 戳；`.bak` 回退改 better-sqlite3 API。数据流：`sillyspec.db` 持久化 producer=`db.transaction`（WAL 原生原子写）→ consumer=`ProgressManager` 各读方法 + hook `queryDbFirstCell`（同一 better-sqlite3 引擎，WAL 并发读写不互斥）。 |
 | 修改 | src/progress.js | PM 方法同步化（`read`/`_write`/`readGlobal`/`_ensureDB` 去 async）；删 `_updateGateStatus` 及 `_write` 末尾调用；不再实例缓存快照。 |
-| 修改 | src/progress/step-store.js / change-registry.js / stage-machine.js / consistency-doctor.js / shared.js | 跟随 PM 同步化（去 await db 调用）；consistency-doctor 新增 `detectLostUpdateSignals` 对账逻辑（Phase 5）。 |
+| 修改 | src/progress/step-store.js | 跟随 PM 同步化（去 await db 调用）。 |
+| 修改 | src/progress/change-registry.js | 跟随 PM 同步化（去 await db 调用）。 |
+| 修改 | src/progress/stage-machine.js | 跟随 PM 同步化（去 await db 调用）。 |
+| 修改 | src/progress/consistency-doctor.js | 跟随 PM 同步化（去 await db 调用）；新增 `detectLostUpdateSignals` 对账逻辑（Phase 5）。 |
+| 修改 | src/progress/shared.js | 跟随 PM 同步化（去 await db 调用）。 |
 | 修改 | src/sync.js | `await pm.read`/`_updatePlatformLastSync`/`_updateApprovalStatus` 去 await（WAL 多连接自动并发安全，覆盖 H2）。 |
 | 修改 | src/doctor-diagnostics.js | 引擎替换：`import initSqlJs from 'sql.js'`（:23，被 index.js 引用）改 better-sqlite3 只读连接（D1 多 db 检测只读探测），sql.js 删除后避免 doctor --json import 崩溃（plan 审查 B1）。 |
-| 修改 | src/run/command.js / stage.js / complete.js / complete-handlers.js / gates.js | `await pm.*` 去 await（better-sqlite3 同步 API，覆盖主流程所有写者 H1）。 |
+| 修改 | src/run/command.js | 主流程写者 `await pm.*` 去 await（better-sqlite3 同步 API，覆盖 H1）。 |
+| 修改 | src/run/stage.js | 主流程写者 `await pm.*` 去 await（better-sqlite3 同步 API，覆盖 H1）。 |
+| 修改 | src/run/gates.js | 主流程写者 `await pm.*` 去 await（better-sqlite3 同步 API，覆盖 H1）。 |
+| 修改 | src/run/complete.js | 主流程写者 `await pm.*` 去 await（better-sqlite3 同步 API，覆盖 H1）。 |
+| 修改 | src/run/complete-handlers.js | 主流程写者 `await pm.*` 去 await（better-sqlite3 同步 API，覆盖 H1）。 |
+| 修改 | src/run/quick-audit.js | 调用方 `await pm.*` 去 await。 |
+| 修改 | src/index.js | PM 调用同步化（`progress`/`doctor --align`/`change-rename`/`worktree` 等 case）+ `await pm.*` 去 await。 |
+| 修改 | src/init.js | 调用方 `await pm.*`/`await this.pm.*`/`await this._ensureDB` 同步化（grep 实证 init.js:315）。 |
+| 修改 | src/machine-interface.js | 调用方 `await pm.*` 同步化（grep 实证 machine-interface.js:133/370）。 |
 | 修改 | src/hooks/worktree-guard.js | `readCurrentStage`/`isNoWorktreeMode` 改直读 DB（删 `readGateStatus` 优先 + 墓碑）；`queryDbFirstCell` 子进程脚本 `import('sql.js')`→`require('better-sqlite3')` 只读连接。数据流：producer=`db.transaction`（WAL 写）→ consumer=hook 只读连接（并发读不阻塞写，根除 H3 stale）。 |
-| 修改 | src/index.js | PM 调用同步化（`progress`/`doctor --align`/`change-rename`/`worktree` 等 case）。 |
-| 修改 | src/run/command.js、run/stage.js、run/gates.js、run/complete.js、run/complete-handlers.js、run/quick-audit.js、sync.js、index.js、init.js、machine-interface.js | 调用方 `await pm.*`/`await this.pm.*`/`await this._ensureDB` 同步化（grep 实证 109 处分布 15 文件，含 init.js:315、machine-interface.js:133/370、quick-audit.js:57；stages/*.js、run/concurrent-detect.js、prompt.js、shared.js 实证零 pm 调用不在此列）。 |
 | 修改 | package.json | 加 `better-sqlite3 ^11.x`，删 `sql.js`，`engines.node>=18`。 |
 | 修改 | .gitignore | 加 `*.db-wal`/`*.db-shm`（WAL 侧车文件）。 |
 | 修改 | README.md | 声明主流平台支持（prebuilt），musl/Win-arm64 不保证。 |
