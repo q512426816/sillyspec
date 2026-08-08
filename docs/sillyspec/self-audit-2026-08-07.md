@@ -118,3 +118,5 @@ cli-logic 报的 critical「machine-interface 声明只读却会建库落盘写 
 **同步**：`docs/prompt/_extract.mjs` 重跑刷新 `_extracted.json`，brainstorm/plan/execute/scan/brainstorm-auto 五个 `docs/prompt/<stage>.md` 镜像同步。
 
 **遗留**：guidance #6/#7/#8 为「保守版」——只加 conditionalWait 通道/话术警示，未加硬门、未改 requiresWait 校验机制。若要更强的「防伪造回答」机制（如高危 requiresWait 强制真实交互、AI 中继帧单独计数），属中等工程，建议另起 change 评估。
+
+> **EVALUATED-NO（2026-08-08 专题评估，勿重提）**：上述「强机制」经评估**否决，不开 brainstorm**。依据链：①伪造是已知且被接受的既定设计（债单 P1.3a，保留硬门+行为约束）；②代码库对伪造的原则性答案是 **enforcement-of-facts**（P6.1a：docHash 重算校验），非加固确认门；③「用户是否真答过」非客观事实、属软/意图判定，按 P4.3/sillyhub 语义边界归 sillyhub，不归 SillySpec 确定性 gate；④B1（brainstorm-auto `requiresWait`→`conditionalWait`）证明代码库轨迹是「更少更软的门」而非更强；⑤**根限制**：SillySpec 是无头 CLI，`--continue --answer` 与 `--done --answer` 都经 agent 进程到达，**CLI 根本无法区分 agent 中继 vs 人类输入**，所谓「机械可判定中继帧」与"有无人类参与"零相关。三处独立评审（债单 P1.3a、本报告 #7、并发 multi-agent-review-2026-08-08 §3 D1）已收敛。唯一可能 follow-up（非现在、sillyhub 驱动）：machine-interface 将来若需要可暴露非阻塞 `confirmationSource` 字段，仅在 sillyhub 真消费时加。
