@@ -149,3 +149,14 @@
 根因：子代理只读分析修正了审查表述——read(240)/_write(385) 迁移后已同步化（非 async），两处 await 非 Promise 是恒等 unwrap，且 :735 返回值实际被下游消费（非「未使用」），故两处均非删整行而是去 await 留调用；更深一层，函数 730 行仍带 async 致总返回 Promise，而调用方 index.js:532 未 await，r.ok/r.reason 恒 undefined，doctor align 分支无论成败都走 else 误打印「已对齐」、--json 打印 {}——只去 await 留 async 毫无意义，须连 async 一起去才彻底同步化（规则11 修逻辑，从装饰性升级为逻辑修复）。5 处 gate-status 注释是把已废除的 gate-status.json 当活目标举例的旧引用残留（task-10 废除变更说明注释另 4 处合理保留）。
 方案：委派 2 只读子代理并行（progress.js 死 await 安全论证 / 5 处注释定位 + 全仓 gate-status·sql.js 残留扫描），主代理统一 Edit 避免并行写撞 quick 全量 git status audit；progress.js 4 处（async+2 await+JSDoc）+ 5 处注释共 5 文件 9 处；runtime.md 变更索引追加 ql-ID 记 align 同步化核心修复（machine-interface/cli-entry/worktree 仅注释清理无行为变化不堆砌冗余条目）。
 结果：npm run lint 74 文件通过；npm test 全量 143 通过 0 失败（去 async 改变 index.js:532 调用方行为、r.ok 从恒 undefined 变真实值，无回归）；src/ gate-status 仅剩 4 处 task-10 废除变更说明注释（progress.js:10 + worktree-guard×3）；progress.js/run/gates.js 属核心 DANGEROUS_PATTERNS 守卫拦截，--force-baseline 经 lint+test 实证合法解锁；QUICKLOG 本条手动精修。
+
+## ql-20260809-002-38ea | 2026-08-09 06:54:54 | 本地版本号 3.25.9→3.25.10 区分 link 开发版（sillyspec --version 辨识本地 vs 发布）
+状态：已完成
+关联变更：（无）
+文件：
+- package.json（version 3.25.9→3.25.10；npm version patch --no-git-tag-version 写入）
+- package-lock.json（version 字段同步 3.25.10；npm version 自动连带）
+需求：全局 sillyspec 已 npm link 到本地仓库 main（ba13079，未发布），但 sillyspec --version 显示 3.25.9 与 npm 发布版同号，测试时无法区分当前跑的是本地开发版还是发布版，需升版本号辨识。
+根因：仓库 package.json version 长期保持与 npm 发布版同步（3.25.9），link 后 --version 仍读该号，缺开发版标识。version 来源 src/version.js getVersion() 读 package.json（P1-1 启动税优化 fcc8c36 抽出），故改 package.json 即生效，无需改 version.js。
+方案：npm version patch --no-git-tag-version（避免 npm 默认自动 git commit/tag 污染历史），3.25.9→3.25.10；package-lock.json 由 npm version 自动同步；src/version.js 无需改（动态读 package.json）；link 链路 sillyspec --version 立即反映。
+结果：sillyspec --version=3.25.10 实证通过（link 链路 getVersion 读 package.json 立即生效）；2 文件改动（package.json/package-lock.json version 元数据，未触 src/test 不影响逻辑，跳过 lint/test 全量）；不命中运行时模块无需同步模块文档；package.json/package-lock.json 属核心配置 DANGEROUS_PATTERNS 守卫拦截，--force-baseline 经 --version 实证合法解锁；QUICKLOG 本条手动精修。
