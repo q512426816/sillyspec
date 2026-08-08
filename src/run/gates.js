@@ -24,6 +24,7 @@ import { existsSync, readFileSync, readdirSync, statSync, mkdirSync, writeFileSy
 import { triggerSync, resolveChangeDir, resolveRuntimeRoot } from './shared.js'
 import { runValidators } from '../stage-contract.js'
 import { handleScanStageCompleted, handleExecuteWorktreeCleanup } from './complete-handlers.js'
+import { detectConcurrentChanges, formatConcurrentWarning } from './concurrent-detect.js'
 import { stageRegistry } from '../stages/index.js'
 
 /**
@@ -491,6 +492,46 @@ export function validateFileLocations(cwd, stageName, progress, changeName, spec
 }
 
 /**
+ * 读本变更 design.md §6「文件变更清单」表格，提取声明交付的文件路径（concurrent 预检 ownFiles 源，D-002）。
+ *
+ * 用途：execute --done 并发预检在 in-place-fallback 模式下，需把本变更交付文件从 foreignFiles 排除
+ * （否则自己产出的脏文件会被当他者）。worktree 模式下交付文件不在主仓 git status，ownFiles 用空数组即可。
+ *
+ * 解析：定位 `## 6.` 段（到下一个 `## N.` 前），逐行扫表格行第 2 列的反引号文件路径，跳过表头/分隔行。
+ * 设计容错（design §9 / R-02）：design.md 缺失 / 无 §6 / 解析空 → 返回 []，foreignFiles 退化为保守噪音，
+ * otherActiveChanges 仍可靠。
+ *
+ * @param {string} specBase 规范根（.sillyspec/ 所在）
+ * @param {string} changeName 当前变更名
+ * @returns {string[]} 本变更声明交付的文件路径（git 路径，正斜杠）
+ */
+function readDesignOwnFiles(specBase, changeName) {
+  if (!specBase || !changeName) return []
+  let content
+  try {
+    content = readFileSync(join(specBase, 'changes', changeName, 'design.md'), 'utf8')
+  } catch {
+    return []
+  }
+  const files = []
+  let inSection6 = false
+  for (const line of content.split('\n')) {
+    const heading = line.match(/^##\s+(\d+)\./)
+    if (heading) {
+      inSection6 = heading[1] === '6'
+      continue
+    }
+    if (!inSection6 || !line.startsWith('|')) continue
+    // 跳过表头分隔行（|---|---|）
+    if (/^\|[\s:|-]+\|?$/.test(line.trim())) continue
+    // 表格第 2 列反引号文件路径：`| 新增 | \`src/.../x.js\` | 说明 |`
+    const m = line.match(/^\|[^|]+\|\s*`([^`]+)`/)
+    if (m) files.push(m[1].trim())
+  }
+  return files
+}
+
+/**
  * 阶段完成收尾共享管线（从 completeStep 抽出，消除 noAI 末步 / continueStep 完成分支绕过 gate 的
  * S1/S2/S3 三处不对称）。调用方已自行标记 stageData.status='completed' 并 pm._write 落盘后调用本函数。
  *
@@ -506,6 +547,40 @@ export function validateFileLocations(cwd, stageName, progress, changeName, spec
  *          非 null = gate/handler 失败已 rollback，调用方直接 return。
  */
 export async function completeStageGates({ stageName, cwd, changeName, platformOpts, specBase, progress, pm, stageData, steps, currentIdx, outputText }) {
+  // ── execute --done 并发他者改动预检（FR-06/FR-07，非阻断 advisory）──
+  // 仅 execute 触发，不影响 scan/plan/verify/archive 等 stage 的 completeStageGates。
+  // 纯副作用：console.warn 后照常推进，不改 gate-status.json / stageData / 不阻断级联（FR-07）。
+  // 整个钩子 try/catch 兜底——任何异常吞掉，绝不影响 gate 级联（FR-07 不阻断铁律）。
+  if (stageName === 'execute') {
+    try {
+      // ownFiles 源（D-002 + B-002，钉死）：动态 import WorktreeManager 取 meta.mode（复用上方
+      // Task Review Gate 的 ../worktree.js 动态 import 先例）。WorktreeManager 无 appliedFiles
+      // 字段（B-002 已证），不用模糊的「worktree applied 文件」。
+      //   - worktree 模式（meta.mode 非 in-place-fallback）：主仓 git status 看不见本变更交付文件
+      //     → ownFiles=[]（无害，dogfood 当前实际模式）
+      //   - in-place-fallback 模式：交付文件就在主仓 dirty → ownFiles 读 design.md §6 文件清单排除
+      let ownFiles = []
+      // linkedChanges：execute 通常无（quick 管线概念，存 quick guard 文件）；stageData 取不到则 []。
+      const linkedChanges = Array.isArray(stageData?.linkedChanges) ? stageData.linkedChanges : []
+      try {
+        const { WorktreeManager } = await import('../worktree.js')
+        const wm = new WorktreeManager({ cwd })
+        const meta = wm.getMeta(changeName)
+        if (meta?.mode === 'in-place-fallback') {
+          ownFiles = readDesignOwnFiles(specBase, changeName)
+        }
+      } catch {
+        // getMeta 抛（meta.json 缺 / worktree 损坏）→ ownFiles=[] 兜底，不崩（FR-07）。
+        ownFiles = []
+      }
+      const detected = detectConcurrentChanges(cwd, { changeName, linkedChanges, ownFiles })
+      const warn = formatConcurrentWarning(detected)
+      if (warn) console.warn(warn)
+    } catch {
+      // FR-07 不阻断：钩子任何意外异常静默吞掉，gate 级联照常推进。
+    }
+  }
+
   // scan 平台 manifest + post-check（S1 平台受害者：noAI scanPostcheck 末步 / continueStep 现也走这里）
   const _scanResult = await handleScanStageCompleted({ stageName, currentIdx, cwd, progress, pm, stageData, changeName, outputText, platformOpts })
   if (_scanResult) return _scanResult

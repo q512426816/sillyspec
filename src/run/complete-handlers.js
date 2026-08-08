@@ -24,6 +24,7 @@ import { basename, join, resolve, relative, isAbsolute } from 'node:path'
 import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync, unlinkSync, rmSync } from 'node:fs'
 import { renameSyncRetry, writeAtomicSync } from '../fs-atomic.js'
 import { resolveChangeDir, resolveQuickSessionsDir, safeGit, auditQuickCompletion, triggerSync, isQuickMetadata } from './shared.js'
+import { detectConcurrentChanges, formatConcurrentWarning } from './concurrent-detect.js'
 import { stageRegistry } from '../stages/index.js'
 import { SCAN_STATUS, POINTER_STATUS } from '../constants.js'
 import { printQuickAuditReview } from './quick-audit.js'
@@ -576,11 +577,15 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
     let review = null
 
     // 审计：仅在有 guard 时跑（brownfield 无 guard 跳过，兼容 D-003 brownfield 行为）。
+    // task-02：mergedGuard 提升到 if 外声明，供下方并发预检钩子复用与 auditQuickCompletion
+    // 同源的 guard 字段（baselineFiles/linkedChanges）。brownfield 无 guard 时保持 null，
+    // 钩子 ownFiles/linkedChanges 走 ?? [] 兜底（D-003 不抛 TypeError）。
+    let mergedGuard = null
     if (guard) {
       // --done 的 --force-baseline/--allow-new 并入 guard（与 step1 持久化值取或）。
       // 修复 ql-20260713-002-7628：旧代码解析了这两个 flag 但只传 {isConfirm} 给审计，
       // 致 --done --force-baseline 静默无效、用户被误导「重跑 --confirm」也无法解锁。
-      const mergedGuard = {
+      mergedGuard = {
         ...guard,
         forceBaseline: guard.forceBaseline || isForceBaseline,
         allowNew: guard.allowNew || isAllowNew,
@@ -594,6 +599,28 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
         process.exit(1)
       }
       progress.lastQuickReview = review
+    }
+
+    // task-02 并发预检（FR-05/FR-07，纯副作用 advisory）：auditQuickCompletion 返回后、推进前
+    // 扫工作树，识别他者未提交改动 / 他者脏变更目录，有则 console.warn。不改 status/gate、
+    // 不 exit、不 return early（FR-07 铁律）。ownFiles 必含 baselineFiles（D-001：脏工作树 quick
+    // 完成时本会话 baseline 不被他者误报）；review/mergedGuard 均可能为 null（brownfield 无 guard，
+    // D-003），用 ?. + ?? [] 兜底防 spread undefined 抛 TypeError（B-005）。整钩子 try/catch 隔离
+    // ——detect 本就 fail-open，保守再包一层，任何异常只吞不 bubble，主完成流程不受影响。
+    try {
+      const ownFiles = [
+        ...(review?.changedFiles ?? []),
+        ...(mergedGuard?.baselineFiles ?? []),
+      ]
+      const detected = detectConcurrentChanges(cwd, {
+        changeName,
+        linkedChanges: mergedGuard?.linkedChanges ?? [],
+        ownFiles,
+      })
+      const warn = formatConcurrentWarning(detected)
+      if (warn) console.warn(warn)
+    } catch (e) {
+      // fail-open：并发预检异常绝不阻断主完成流程（FR-07）。
     }
 
     // 结果摘要结构校验（最后一步、isDone 且带了 --output 时）：--output 是 QUICKLOG「结果：」

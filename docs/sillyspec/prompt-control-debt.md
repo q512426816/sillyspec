@@ -172,8 +172,8 @@ updated_at: 2026-08-08T00:00:00+08:00
 
 **处置**：两份原始审计 docs/sss.md / docs/sss1.md 的可执行结论已归并本段；raw 文件保留作历史参考（被 46ff4f9 / 245a03b / 3ae51c8 等 commit 引用为 P0 修复依据），如需清理可手动删除（决策以本债单为准）。
 
-### 2026-08-08 候选增补（多 agent 并发写预检，待立项）
-状态：`🆕 候选（未立项，仅登记；实现文件被并行 session 占用）`
+### 2026-08-08 候选增补（多 agent 并发写预检）→ 已实现
+状态：`✅ 已实现（2026-08-08 主会话 in-place execute，task-01..05 全完成，npm test 全量 EXIT=0 + lint 73 文件；详见下方「实现落地」）`
 
 来源：2026-08-08 自审收尾 + multi-agent-review 同步推进中，主会话与并行会话在同一仓库实打实撞车（俩 session 都要动 `quick-audit.js` / `shared.js` / `complete.js`）。复盘暴露**真实功能缺口**：CLAUDE.md 第一段立身之本就是「多 agent 同时操作代码」，但 SillySpec 无任何命令让 agent 感知「工作树里有他者未提交改动 / 存在其他活跃 change 目录」——`src/run/shared.js:406` 已在 quick-audit 内部识别出「并发他者会话的工作」，却作为元数据噪音整体放行（「非关联变更目录整体视为元数据放行」），agent 完全无从知情。对应记忆坑：git commit 扫入预暂存并行工作、并发 session 撞重叠 change。
 
@@ -189,6 +189,17 @@ updated_at: 2026-08-08T00:00:00+08:00
 **规模 / 流程**：跨 quick 与 execute 多写路径的行为语义变更，判 **large，应走完整流程**（brainstorm → plan → execute），不走 quick。
 
 **实现归属 / 让出**：实现触及 `quick-audit.js` / `shared.js` / `complete.js` / `gates.js`——**当前全部由并行 session（multi-agent-review-2026-08-08.md §6 行动列表）活跃占用**。本会话仅登记候选 + 设计草案，不动源码不撞车；待并行 session 完成，或另起 `YYYY-MM-DD-concurrent-write-preflight` 变更实现。
+
+**实现落地（2026-08-08，in-place execute，change `2026-08-08-concurrent-write-preflight`）**：并行 session 完成后，本变更走完整 brainstorm→plan（四件套 + Design Grill D-001..D-008 全 accepted），execute 阶段主仓 in-place 实现。worktree 半截 execute 的 baseline checkpoint + task-01..03 草稿被采纳复用（避免重写）——采纳时发现并修正 task-03 钩子位置（见下）。
+- **task-01** `src/run/concurrent-detect.js`：detectConcurrentChanges + formatConcurrentWarning 纯函数（复用 isQuickMetadata 分类，D-004 trim:false / D-005「脏变更目录」文案 / D-008 内联 extractChangeDir）+ 单测 30 断言。
+- **task-02** `src/run/complete-handlers.js`：quick --done 钩子（auditQuickCompletion 后，ownFiles = review.changedFiles ∪ mergedGuard.baselineFiles，D-001 并入 baseline / D-003 null 兜底）。
+- **task-03** `src/run/gates.js`：execute --done 钩子——**关键修正：挂在 completeStageGates 入口（design §5/plan task-03 原文），非 runStageCompletionGates**（后者在 runValidators/Stage Review 之后，前置 gate 失败时钩子不触发，削弱「完成时报告」价值）。采纳 worktree 实现的 completeStageGates 入口位置（覆盖所有 completeStageGates 调用路径含 continueStep/completeStep）+ readDesignOwnFiles 状态机解析 design §6 清单（D-002 in-place ownFiles）。
+- **task-04** `test/concurrent-preflight-hooks.test.mjs`：25 断言（钩子真实行为 + 挂载契约，B-004 诚实降级标注——完整 E2E 驱动需造 runValidators 全套 execute 产物 + Stage Review tier fixture，偏离钩子焦点）。
+- **task-05**：npm test 全量 EXIT=0（含 2 新测试文件 30+25 断言）+ lint 73 文件；文档同步评估=**无需**（无 stages/prompt/SKILL 改动，advisory warn 不落盘、不引入新运行时文件类型，AC-10）。
+
+非阻塞 advisory + fail-open 落实：两钩子均 try/catch 兜底，console.warn 后照常推进，不改 audit status / gate 通过性 / isQuickMetadata 语义（FR-07 回归守护）。dogfood 天然 E2E：本变更 quick --done 收尾时若工作树有他者文件即触发 warn（当前主仓工作树仅本 change 文件，干净仓零输出，验证 AC-08）。
+
+**worktree cleanup 踩坑复发（更新 memory）**：execute 收尾 `git worktree remove --force` 删孤儿 worktree 时，递归删了 junction 目标——**主仓整个 node_modules 被删空**（memory `sillyspec-worktree-cleanup-deletes-node-modules` 记录的坑，本次比记录更严重：全删而非部分误删）。恢复遇 npm 12 EALLOWREMOTE（package-lock 里 yoctocolors-cjs 的 resolved 指向 npmmirror 镜像，但项目 registry=npmjs.org，npm 12 视 remote tarball 拒绝；`allowed-hosts`/`fetch-allowed` 均非 npm 12 有效配置）→ 解法 `npm install --registry=https://registry.npmmirror.com`（registry 匹配 lock URL，remote 包降级为正常 registry 解析）。已更新 memory `sillyspec-worktree-cleanup-deletes-node-modules`。
 
 ---
 
@@ -218,6 +229,7 @@ updated_at: 2026-08-08T00:00:00+08:00
 | 2026-08-06 | 第二批复盘（exec-e/f 修复 + exec-d 让出 + exec-g/h defer + exec-i 否决） | exec-d 已实现 register-stage-review 命令（34 测试过，备份仓外 temp/sillyspec-exec-d-backup-20260806/）但因与并行全流程 2026-08-06-sillyspec-self-tooling-fixes 坑1 撞车让出（设计存债单 exec-d 条目供采纳）；exec-e execute prompt 加"既跑 check 也跑 format"引导（buildWavePrompt 调度要求 + acceptance 运行测试步）；exec-f worktree-deps 加 python 分支（uv sync/pip）+ execute 确认 worktree 路径步加工具链预告；exec-g/h defer（worktree .sillyspec 文档分叉 / gen:types 自报无产物校验，需设计单独完整流程排）；exec-i consumer 侧否决（frontend hook 假失败）；本批 commit exec-e/f，全量 test 116/0、lint 68 |
 | 2026-08-07 | sss/sss1 审计复盘（A1-5 修 commit 1efc7c8 + A6 直接 commit / B1-B2 并发已修 + B3-B5 defer） | A组纯减法 5 项修并提交 1efc7c8（execute 建议模型空指令→诚实模型档位条目 / quick 单会话兼容退路 / execute 两处末尾孤立引号 / uncategorized 起始反引号 / scan 括号，+ docs/prompt 镜像同步删 3 条过时"逐字保留"注释，test 122/0 lint 68）；A6 propose 死代码已删——直接 commit（quick 审计 shared.js:516 对删除恒 blocked 无 flag 解锁；scope 纠正排除 stage-contract-spec proposal.md 文件规则/index.js knowledge 子命令两个 LIVE）；B1 decisions 矩阵降级 / B2 module-map 合并 均由并发 session b904442 / e2b3422 修完（非本会话）；B3 scan 死文档 / B4 plan Step4 token / B5 plan 自检对齐 defer；raw 文件 sss.md/sss1.md 保留作历史参考 |
 | 2026-08-07 | sss/sss1 审计 B4+B5 落地（ql-20260807-011-d831） | B4 plan TaskCard 规则抽 templates/prompts/taskcard-rules.md + buildCoordinatorStep 改 {{include: taskcard-rules}}（复用 P2.2.3 include 机制，收益=维护性+可单独校验，token 不省是机制固有）；B5 核验自检清单 14 字段全覆盖 validatePlanFeasibility 硬校验 9 字段，随 B4 拆分硬校验/规范约定两组消 agent 白检误导；同步 docs/prompt 镜像 + 回归测试 8 断言，npm test 全量 0 失败、lint 72 |
+| 2026-08-08 | concurrent-write-preflight 落地（债单末尾候选→实现） | 多 agent 并发写预检 in-place execute（change 2026-08-08-concurrent-write-preflight）：task-01 src/run/concurrent-detect.js 检测核心（detectConcurrentChanges+formatConcurrentWarning 纯函数，复用 isQuickMetadata「关联 vs 他者」分类，D-004 trim:false/D-005 脏变更目录文案/D-008 内联 extractChangeDir，fail-open）+ 单测 30；task-02 complete-handlers.js quick --done 钩子（D-001 ownFiles 并入 baselineFiles/D-003 null 兜底）；task-03 gates.js execute --done 钩子——采纳 worktree 实现修正位置（completeStageGates 入口=design 原文，非初版误挂的 runStageCompletionGates）+ readDesignOwnFiles 状态机解析 design §6（D-002）；task-04 集成测 25 断言（B-004 诚实降级标注）；task-05 npm test 全量 EXIT=0（+2 文件 55 断言）+ lint 73，文档评估无需同步；worktree cleanup 坑复发（node_modules 全删）→ npmmirror registry 恢复 + memory 更新 |
 
 ## 总结
 
@@ -227,3 +239,4 @@ updated_at: 2026-08-08T00:00:00+08:00
 - 核心收益：brainstorm/execute/quick/verify 的 prompt 显著瘦身，命令模板和复读铁律清除，控制力零损失（run.js 注入 + 硬门 + globalGuardrails 兜底）；P2.2.3 引入 prompt include 机制（`{{include}}` → 包内 templates/prompts/ 注入），verify 探针抽包内模板，为后续 self-contained 大块复用铺路。
 - **2026-08-04 复盘增补（plan+quick）**：7 条改进点核实后，登记 4 项新 defer 债（plan-b 行数丢字段 / plan-c plan→scan 回头路半修 bug / quick-① QUICKLOG 落盘 / quick-② lint doc 空转，均需改源码留 follow-up）+ 3 项裁决否决（plan-a 源码已有逐字示例 / plan-d=P4.3a stage 通用 / quick-③=troubleshooting CRLF 条目同根）。
 - **2026-08-06 第二批复盘**：5 个负面点核实后，2 项修复提交（exec-e execute prompt 加"既跑 check 也跑 format"引导；exec-f worktree-deps 加 python 分支 uv sync/pip + execute 工具链预告）+ 1 项让出（exec-d stage-review marker 死锁，已实现 `register-stage-review` 命令 34 测试过，因与并行全流程 `2026-08-06-sillyspec-self-tooling-fixes` 坑1 撞车让出，设计存债单 + 仓外备份 `temp/sillyspec-exec-d-backup-20260806/` 供采纳）+ 2 项 defer（exec-g worktree `.sillyspec` 文档分叉 / exec-h gen:types 自报无产物校验，均需设计决策留单独完整流程）+ 1 项 consumer 侧否决（exec-i frontend hook 假失败）。本批 commit 新增 test worktree-deps-python 7 断言，全量 116/0、lint 68。
+- **2026-08-08 多 agent 并发写预检落地（债单末尾候选→实现）**：in-place execute 落实最后候选。新增 `src/run/concurrent-detect.js`（非阻塞 advisory 检测核心，复用 isQuickMetadata 分类产出 foreignFiles + otherActiveChanges 两信号，fail-open）+ quick/execute --done 两处 warn 钩子（try/catch 兜底，不改 audit status/gate 通过性/isQuickMetadata 语义，FR-07）。落实 Design Grill D-001..D-008 全决策。采纳 worktree 半截 execute 的 task-01..03 草稿（避免重写），采纳时修正 task-03 钩子位置（completeStageGates 入口=design 原文，初版误挂 runStageCompletionGates 会因前置 gate 失败漏触发）。npm test 全量 EXIT=0（+2 测试文件 55 断言）+ lint 73。worktree cleanup 坑复发（node_modules 全删，比 memory 记录更严重）→ memory 更新 + `npm install --registry=npmmirror` 恢复（npm 12 EALLOWREMOTE + lock 指向 npmmirror 镜像）。
