@@ -111,3 +111,14 @@
 根因：本次 4 子代理排查产出大量发现，A 组 3 处已 quick 修复，剩余 P0 与架构级与 F2 等不适合裸 quick，需有据可查的登记文档承接避免散落会话丢失
 方案：新建 docs/sillyspec/review-2026-08-08.md 分五节登记——已修 A 组一览、待决策项（P0 DB 并发写、_write 重、F2 status 语义、F3 exit 127）、B 组可走 quick 候选 6 项、全维度发现索引、后续建议
 结果：文档落盘约 70 行头部 author 与 created_at 齐全；纯文档无逻辑变更故未跑 lint 与 test；--done 边界审计新增文件 --allow-new 解锁；待 commit
+
+## ql-20260808-007-1930 | 2026-08-08 18:13:46 | P0 DB 并发写兜底：db.js _atomicWriteSync tmp 名加 process.pid（对齐 fs-atomic.js，仅防 tmp 碰撞非治本）
+状态：已完成
+关联变更：（无）
+文件：
+- src/db.js（_atomicWriteSync 第107行 tmp 名从固定 sillyspec.db.tmp 改为 .basename.pid.tmp，对齐 fs-atomic.js writeAtomicSync 的同名模式；附 3 行注释说明仅防多进程 tmp 碰撞、DB 整体 last-writer-wins 进度丢失仍存、治本待套 withFileLock 或换引擎）
+- .sillyspec/quicklog/QUICKLOG-qinyi.md（ql-20260808-007-1930 条目，本次兜底的 quicklog 记录）
+需求：P0 DB 并发写兜底，消除多 agent 并发 --done 时 tmp 碰撞
+根因：db.js _atomicWriteSync tmp 名固定 sillyspec.db.tmp 无 PID，两进程并发 _save 时 tmp 互覆盖（一进程把他者 tmp 当自己内容落盘的静默错存、或 rename 撞 ENOENT 崩）
+方案：tmp 名改 .basename.pid.tmp 对齐 fs-atomic.js writeAtomicSync，附注释说明仅防 tmp 碰撞、last-writer-wins 仍存、治本待完整流程
+结果：db.js 单行改加 PID 加注释说明兜底边界，node --check 通过，lint 73 文件 exit0，npm test 全量 exit0 无回归，db.js 在 DANGEROUS_PATTERNS 故 --force-baseline 解锁，治本套锁或换引擎仍登记 review-2026-08-08.md 待完整流程

@@ -104,7 +104,10 @@ export class DB {
    */
   _atomicWriteSync(filePath, buffer) {
     const dir = dirname(filePath);
-    const tmpPath = join(dir, `${basename(filePath)}.tmp`);
+    // tmp 名含 pid（对齐 fs-atomic.js writeAtomicSync）：多进程并发 _save 时各自 tmp 不互覆盖，
+    // 消除「一进程把他者 tmp 当自己内容落盘」的静默错存 / rename 撞 ENOENT。注：仅防 tmp 碰撞，
+    // DB 整体 last-writer-wins 进度丢失仍存（治本需套 withFileLock 或换引擎，登记 review-2026-08-08.md）
+    const tmpPath = join(dir, `.${basename(filePath)}.${process.pid}.tmp`);
     const bakPath = `${filePath}.bak`;
     // 1. 完整内容先落 tmp（同目录，保证 rename 不跨卷）
     writeFileSync(tmpPath, buffer);
