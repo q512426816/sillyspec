@@ -135,3 +135,17 @@
 根因：index.js 顶部静态 import init.js 仅为 getVersion 7 行函数，却每次 CLI 进程都加载 init.js 的 inquirer prompts 加 chalk 加 progress.js 实测 import init.js 单独 145ms，detectLocalYaml 静态 import 同理 78ms 仅 local detect 用
 方案：新建 version.js 抽 getVersion 只依赖 fs 加 path 加 url，index.js 从 version.js 取 getVersion、cmdInit 改动态 import init.js 对齐 setup.js 模式、detectLocalYaml 改动态 import，init.js 删 getVersion 定义改 import 加 re-export 保持 API 兼容
 结果：--version 实测 91ms（改前 140ms 省 49ms/次，全命令受益）；node --check 三文件通过；lint 74 文件 exit0；npm test 全量 exit0 无回归；重构致 init-claude-injection.test.mjs 从 init.js import getVersion 报错，加 re-export 后该测试 27 断言全过；version.js 新增故 --allow-new 解锁；模块文档同步跳过（启动 import 优化为内部性能改动）
+
+## ql-20260809-001-4846 | 2026-08-09 06:34:03 | progress.js alignExecuteToPlan 去 async 残留同步化（修 doctor align r.ok 逻辑 bug）+ 清 src/ 5 处 gate-status 注释
+状态：已完成
+关联变更：2026-08-08-progress-db-concurrency（已归档；本条收尾其独立 review 遗留项）
+文件：
+- src/progress.js（alignExecuteToPlan 去 async 残留彻底同步化：730 去 async + 735/808 去 2 处冗余 await + JSDoc @returns 去 Promise 包装；修复调用方 index.js:532 未 await 致 r.ok 恒 undefined 的逻辑 bug）
+- src/fs-atomic.js（writeAtomicSync JSDoc 例子 gate-status.json → local.yaml，保留 tmp 名含 pid 的实例信息量）
+- src/machine-interface.js（2 处只读语义边界注释去「/ gate-status.json」：模块顶部设计原则 :10 + deriveFact JSDoc :324）
+- src/run/gates.js（completeStageGates execute 并发预检注释 :552 去「gate-status.json /」）
+- src/index.js（runtime list 的 D2 注释 :1413 枚举去 gate-status）
+需求：收尾 2026-08-08-progress-db-concurrency（sql.js→better-sqlite3 + 废 gate-status 双源）独立 review 指出的装饰性问题——progress.js 两处「死 await」+ src/ 5 处 gate-status 注释残留。
+根因：子代理只读分析修正了审查表述——read(240)/_write(385) 迁移后已同步化（非 async），两处 await 非 Promise 是恒等 unwrap，且 :735 返回值实际被下游消费（非「未使用」），故两处均非删整行而是去 await 留调用；更深一层，函数 730 行仍带 async 致总返回 Promise，而调用方 index.js:532 未 await，r.ok/r.reason 恒 undefined，doctor align 分支无论成败都走 else 误打印「已对齐」、--json 打印 {}——只去 await 留 async 毫无意义，须连 async 一起去才彻底同步化（规则11 修逻辑，从装饰性升级为逻辑修复）。5 处 gate-status 注释是把已废除的 gate-status.json 当活目标举例的旧引用残留（task-10 废除变更说明注释另 4 处合理保留）。
+方案：委派 2 只读子代理并行（progress.js 死 await 安全论证 / 5 处注释定位 + 全仓 gate-status·sql.js 残留扫描），主代理统一 Edit 避免并行写撞 quick 全量 git status audit；progress.js 4 处（async+2 await+JSDoc）+ 5 处注释共 5 文件 9 处；runtime.md 变更索引追加 ql-ID 记 align 同步化核心修复（machine-interface/cli-entry/worktree 仅注释清理无行为变化不堆砌冗余条目）。
+结果：npm run lint 74 文件通过；npm test 全量 143 通过 0 失败（去 async 改变 index.js:532 调用方行为、r.ok 从恒 undefined 变真实值，无回归）；src/ gate-status 仅剩 4 处 task-10 废除变更说明注释（progress.js:10 + worktree-guard×3）；progress.js/run/gates.js 属核心 DANGEROUS_PATTERNS 守卫拦截，--force-baseline 经 lint+test 实证合法解锁；QUICKLOG 本条手动精修。

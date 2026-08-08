@@ -75,4 +75,5 @@ ProgressManager.alignExecuteToPlan(cwd, changeName, specBase, {confirm})
 - ql-20260803-001-9c4e | 修 reopen --done 步骤状态不同步：complete.js 阶段完成分支回填 stale→completed，completeStage SQL 扩到 IN('pending','stale')。
 - ql-20260804-003-e439 | _getNextSuggestion 遍历跳过 scan 且 upstream 排除 scan（根因修 plan→scan 回头路，prompt-control-debt plan-c）+ quicklog flipEntryInContent 单行四字段归一为多行（quick-①）。
 - ql-20260804-004-3a24 | quicklog 单行四字段归一改 splitSingleLineFields 双级扫描（字段边界严格扫描 + 顺序扫描兜底）：字段正文引用标签字样（「结果：」/正则内嵌四标签）不再被 split 任意位置误断行（quick-① 残留补丁）。
+- ql-20260809-001-4846 | alignExecuteToPlan 去 async 残留彻底同步化（修复 doctor align 调用方 index.js:532 未 await 致 r.ok 恒 undefined、失败也误打印「已对齐」的逻辑 bug）+ 清 src/ 5 处 gate-status 活引用注释（fs-atomic/machine-interface×2/run/gates/index）。
 <!-- MANUAL_NOTES_END -->

@@ -549,7 +549,7 @@ function readDesignOwnFiles(specBase, changeName) {
 export async function completeStageGates({ stageName, cwd, changeName, platformOpts, specBase, progress, pm, stageData, steps, currentIdx, outputText }) {
   // ── execute --done 并发他者改动预检（FR-06/FR-07，非阻断 advisory）──
   // 仅 execute 触发，不影响 scan/plan/verify/archive 等 stage 的 completeStageGates。
-  // 纯副作用：console.warn 后照常推进，不改 gate-status.json / stageData / 不阻断级联（FR-07）。
+  // 纯副作用：console.warn 后照常推进，不改 stageData / 不阻断级联（FR-07）。
   // 整个钩子 try/catch 兜底——任何异常吞掉，绝不影响 gate 级联（FR-07 不阻断铁律）。
   if (stageName === 'execute') {
     try {

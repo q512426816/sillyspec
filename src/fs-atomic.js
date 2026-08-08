@@ -49,7 +49,7 @@ export function renameSyncRetry(from, to, retries = 5) {
 
 /**
  * 原子写文本文件：同目录 tmp 写入 → rename 覆盖目标（带 Windows 退避重试）。
- * - tmp 名含 pid，避免多进程并发写同一目标时 tmp 名碰撞（如多会话写 gate-status.json）。
+ * - tmp 名含 pid，避免多进程并发写同一目标时 tmp 名碰撞（如多会话写 local.yaml）。
  * - rename 失败时清理 tmp，避免留下孤儿 .tmp 文件。
  * - Node 的 rename 在 Windows 上用 MoveFileEx(REPLACE_EXISTING)，可覆盖已存在目标；
  *   EPERM 仅在文件被其他进程锁定时出现，由 renameSyncRetry 退避重试。

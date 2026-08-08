@@ -725,14 +725,14 @@ export class ProgressManager {
    * @param {string} specBase - platformOpts.specRoot || join(cwd, '.sillyspec')，用于定位 changes 目录
    * @param {object} [opts]
    * @param {boolean} [opts.confirm=false] - 默认 dry-run，仅当 confirm=true 才落盘
-   * @returns {Promise<{ ok: boolean, aligned: number, skipped: number, planTotal: number, planChecked: number, reason?: string, dryRun?: boolean }>}
+   * @returns {{ ok: boolean, aligned: number, skipped: number, planTotal: number, planChecked: number, reason?: string, dryRun?: boolean }}
    */
-  async alignExecuteToPlan(cwd, changeName, specBase, opts = {}) {
+  alignExecuteToPlan(cwd, changeName, specBase, opts = {}) {
     if (!changeName) throw new Error('changeName 不能为空');
     const { confirm = false } = opts;
 
     // 1. 读 progress；无 progress / 无 execute 阶段 → 拒绝
-    const progress = await this.read(cwd, changeName);
+    const progress = this.read(cwd, changeName);
     if (!progress || !progress.stages || !progress.stages.execute) {
       return { ok: false, aligned: 0, skipped: 0, planTotal: 0, planChecked: 0, reason: 'execute 阶段无进度数据' };
     }
@@ -805,7 +805,7 @@ export class ProgressManager {
     executeStage.completedAt = now;
     progress.currentStage = progress.currentStage || 'execute';
     progress.lastActive = now;
-    await this._write(cwd, progress, changeName);
+    this._write(cwd, progress, changeName);
 
     return { ok: true, aligned, skipped, planTotal, planChecked };
   }

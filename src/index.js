@@ -1410,7 +1410,7 @@ SillySpec modules — 模块文档管理
     }
     case 'runtime': {
       // D2：.runtime/ 产物索引。CLI 往 .runtime/ 写各种证据/状态文件（db、doctor-diagnosis、
-      // workflow-runs、gate-status、user-inputs…），却没有命令让 agent 一眼看到「我手上有哪些产物」。
+      // workflow-runs、user-inputs…），却没有命令让 agent 一眼看到「我手上有哪些产物」。
       // 多会话/压缩后尤其痛：上轮写的证据文件，下轮不知去哪找。纯只读枚举，不写盘。
       const runtimeSubCmd = filteredArgs[1];
       if (runtimeSubCmd && runtimeSubCmd !== 'list') {

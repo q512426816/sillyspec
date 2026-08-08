@@ -7,7 +7,7 @@
  * 设计原则（见 change 2026-07-09-machine-interface-v1 design.md §2/§3）：
  *   - 方案 B：独立模块单点封装，不污染既有 run/progress 输出
  *   - 只聚合不新增校验：复用 stage-contract / task-review / verify-postcheck 既有策略引擎
- *   - 只读语义边界（D-002@v1）：只调 ProgressManager 读路径，不写 sillyspec.db / gate-status.json
+ *   - 只读语义边界（D-002@v1）：只调 ProgressManager 读路径，不写 sillyspec.db
  *   - stdout 纯 JSON（D-005@v1）：--json 模式下由 CLI 层（src/index.js 的 withJsonOutput）
  *     在调用 runGate/runDerive 期间劫持 console.log 到 stderr，防被调模块污染机器输出
  *   - 退出码 0/1/2 三段语义（D-004@v1）：0=通过，1=事实阻断，2=无法核验
@@ -321,7 +321,7 @@ export const FACETS = ['execute-evidence', 'verify-test', 'task-reviews', 'artif
  * 与 gate 的差异：gate 聚合某阶段所有 check 的综合结论；derive 只返回单一 facet 的结构化 data，
  * daemon 用来做细粒度事实采集（如轮询 execute-evidence 判断代码是否变更）。
  *
- * 只读语义边界同 gate（D-002@v1）：仅调 ProgressManager.read，不写 sillyspec.db / gate-status.json。
+ * 只读语义边界同 gate（D-002@v1）：仅调 ProgressManager.read，不写 sillyspec.db。
  * 唯一例外是 verify-test 会真实执行测试并落盘 test-result.json（产物取证，非状态写入，design §3.3）。
  *
  * 退出码语义（D-004@v1）：0=事实通过，1=事实性阻断，2=无法核验（用法错/变更不存在/内部异常）。
