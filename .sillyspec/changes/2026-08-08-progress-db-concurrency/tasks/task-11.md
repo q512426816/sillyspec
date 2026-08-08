@@ -11,6 +11,7 @@ requirement_ids: [FR-06, NFR-04]
 decision_ids: [D-01, D-02]
 allowed_paths:
   - src/hooks/worktree-guard.js
+  - package.json
 goal: >
   hook queryDbFirstCell 子进程从 sql.js 换 better-sqlite3 只读连接（WAL 并发读不阻塞主进程写），
   原生绑定经 createRequire.resolve 解析绝对路径传入子进程，resolve 或打开失败时 fail-closed

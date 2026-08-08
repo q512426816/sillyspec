@@ -10,6 +10,7 @@ blocks: [task-12, task-13]
 requirement_ids: [FR-04]
 decision_ids: [D-01@v1]
 allowed_paths:
+  - src/progress.js
   - src/progress/step-store.js
   - src/progress/change-registry.js
   - src/progress/stage-machine.js
@@ -26,6 +27,7 @@ implementation:
   - consistency-doctor.js：checkConsistency/repairConsistency 去 async；await import(../task-review.js) 改顶部静态 import；_appendAuditLog 已是同步不动
   - shared.js：无 async/await，仅确认 lint 不回归，不改内容
   - db.transaction 回调内 sql.js 风格 exec/run 调用形态随 task-03 DB wrapper 契约（getDb 与 transaction 入参）适配，不改变 SQL 语义
+  - 【plan gap 修正】src/progress.js facade 的 init(:505)/initChange(:549)/recordStageStep(:627) 仍是 db.transaction((sqlDb)=>{sqlDb.exec/run}) sql.js 风格（task-03 原生 transaction 回调不传参致 sqlDb undefined 崩）——task-07 注明归 task-08 但原 allowed_paths 漏 progress.js，现补入：transaction 回调改 ()=>{const sqlDb=db.getDb()}、exec(sql,[p])→prepare(sql).get/all(...p)、run(sql,[p])→prepare(sql).run(...p)，去 async + 去 await pm
 acceptance:
   - 五文件所有方法签名由 async 改同步，方法名与返回结构不变
   - src/progress/ 下无 await this.pm / await pm / await import 残留
