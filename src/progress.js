@@ -559,9 +559,8 @@ export class ProgressManager {
       const changeRow = sqlDb.prepare('SELECT id FROM changes WHERE name = ?').get(changeName);
       const changeId = changeRow.id;
 
-      // 批量插入 9 个阶段（INSERT OR IGNORE 跳过已存在的）
-      const allStages = ['scan', 'brainstorm', 'plan', 'execute', 'verify', 'archive', 'quick', 'explore'];
-      for (const stage of allStages) {
+      // 批量插入所有合法阶段（INSERT OR IGNORE 跳过已存在的）；沿用顶部 import 的 VALID_STAGES 单一源
+      for (const stage of VALID_STAGES) {
         sqlDb.prepare(
           `INSERT OR IGNORE INTO stages (change_id, stage, status)
            VALUES (?, ?, 'pending')`

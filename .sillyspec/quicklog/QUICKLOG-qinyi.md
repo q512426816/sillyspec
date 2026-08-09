@@ -160,3 +160,15 @@
 根因：仓库 package.json version 长期保持与 npm 发布版同步（3.25.9），link 后 --version 仍读该号，缺开发版标识。version 来源 src/version.js getVersion() 读 package.json（P1-1 启动税优化 fcc8c36 抽出），故改 package.json 即生效，无需改 version.js。
 方案：npm version patch --no-git-tag-version（避免 npm 默认自动 git commit/tag 污染历史），3.25.9→3.25.10；package-lock.json 由 npm version 自动同步；src/version.js 无需改（动态读 package.json）；link 链路 sillyspec --version 立即反映。
 结果：sillyspec --version=3.25.10 实证通过（link 链路 getVersion 读 package.json 立即生效）；2 文件改动（package.json/package-lock.json version 元数据，未触 src/test 不影响逻辑，跳过 lint/test 全量）；不命中运行时模块无需同步模块文档；package.json/package-lock.json 属核心配置 DANGEROUS_PATTERNS 守卫拦截，--force-baseline 经 --version 实证合法解锁；QUICKLOG 本条手动精修。
+
+## ql-20260809-003-c88a | 2026-08-09 08:03:29 | 修复审查 #5 command.js next-action 读路径与 #6 progress.js allStages 常量化两处 bug
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/command.js（#5：第1115行 next-action.json 读路径由 brainstorm/ 子目录改为变更根目录，对齐 self-audit#3 的产物位置，还回 has_blocking_questions 门控）
+- src/progress.js（#6：第563行 initChange 删 allStages 硬编码副本，改用顶部已 import 的 VALID_STAGES 单一源，避免新增 stage 漏建行）
+- .sillyspec/docs/sillyspec/modules/core-engine.md（模块文档同步：VALID_STAGES「9个含propose」误述修正为8个无propose、两处 auto 流程去 propose、变更索引追加 ql-20260809-003-c88a）
+需求：修复审查 #5 command.js next-action 读路径与 #6 progress.js allStages 常量化两处 bug。
+根因：#5 为 self-audit#3 统一 auto 产物到变更根目录时漏改读端致 has_blocking_questions 门控失效；#6 为 initChange 硬编码与已 import 的 VALID_STAGES 重复。
+方案：command.js 第1115行读路径由 brainstorm 子目录改为变更根目录；progress.js 第563行删 allStages 改用 VALID_STAGES；顺带修正 core-engine.md propose 阶段残留误述。
+结果：npm run lint 通过 74 文件，npm test 全绿 143 通过 0 失败；quick 变更边界审计因两文件命中 DANGEROUS_PATTERNS（src/run/ 前缀与 progress barrel 本体）需 --force-baseline 显式确认解锁（git status 确认无他人夹带，非并发误判）。

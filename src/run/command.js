@@ -1112,7 +1112,7 @@ async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts = 
   if (currentStage === 'brainstorm' && next === 'plan') {
     const changeDir = resolveChangeDir(cwd, progress, platformOpts?.specRoot || null)
     if (changeDir) {
-      const nextActionFile = join(changeDir, 'brainstorm', 'next-action.json')
+      const nextActionFile = join(changeDir, 'next-action.json')
       try {
         const nextAction = JSON.parse(readFileSync(nextActionFile, 'utf8'))
         if (nextAction.has_blocking_questions === true) {
