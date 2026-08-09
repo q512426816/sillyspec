@@ -6,11 +6,13 @@
  *   - handlePlanGeneratePlanStep：plan「generate_plan」完成后动态插入 coordinator + postcheck 步骤
  *   - handleScanProjectListStep：scan step 2 完成后按项目展开 perProject 步骤（用 sanitizeProjectName/validateParsedProjects）
  *   - archiveChangeDirectory：归档移动变更目录（6 处 process.exit(1) + worktree 清理；handleArchiveConfirmStep 内部调用）
+ *     srcDir 缺失时走 findAlreadyArchivedDir 幂等自愈（issue archive-stage-physical-tracking-desync）；
+ *     archiveChangeDirectory + findAlreadyArchivedDir 已 export 供 test 直接 import
  *   - sanitizeProjectName / validateParsedProjects：项目名清洗 + 列表校验纯函数（handleScanProjectListStep 专用）
  *
  * 安全锚：run.js 始终 barrel。3 handler 由 run.js import 回来；sanitizeProjectName + validateParsedProjects
  * 被 test 直接 import（run-sanitize-project-name / run-scan-project-parse），run.js barrel re-export 契约保留。
- * 4 目标 handler + archive 无 test 直接 import，无需 re-export。completeStep（Step7 搬）将把 import 行带走。
+ * 4 目标 handler 无 test 直接 import；archiveChangeDirectory + findAlreadyArchivedDir 供自愈 test 直接 import，无需 barrel re-export。completeStep（Step7 搬）将把 import 行带走。
  *
  * 路径修正（相对 src/run/）：
  *   - resolveChangeDir 从 './shared.js'；renameSyncRetry 从 '../fs-atomic.js'；stageRegistry 从 '../stages/index.js'
@@ -93,7 +95,66 @@ export function validateParsedProjects(projects, sourceRoot) {
   if (errors.length > 0) return { ok: false, errors }
   return { ok: true, errors: [] }
 }
-async function archiveChangeDirectory(pm, cwd, progress, specBase) {
+/**
+ * 在 changes/archive/ 下查找变更 <changeName> 是否已被归档（archive 脱钩自愈用）。
+ *
+ * 归档目录名 = archiveDestDirName(date, changeName) = `<归档日期>-<剥前导日期的描述>`；
+ * 但手动 / 部分流程归档可能保留原 changeName（含前导日期）或用别的日期前缀。
+ * 按「描述部分」（剥前导 YYYY-MM-DD-）匹配，并要求目录含 plan.md（归档必备产物，
+ * 防止同名巧合误判）。issue: archive-stage-physical-tracking-desync。
+ *
+ * @param {string} archiveDir - changes/archive 绝对路径
+ * @param {string} changeName - 变更名（currentChange）
+ * @returns {string|null} 命中的归档目录绝对路径，无则 null
+ */
+export function findAlreadyArchivedDir(archiveDir, changeName) {
+  if (!existsSync(archiveDir)) return null
+  let entries
+  try {
+    entries = readdirSync(archiveDir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name)
+  } catch {
+    return null
+  }
+  const descOf = (n) => String(n).replace(/^\d{4}-\d{2}-\d{2}-/, '')
+  const targetDesc = descOf(changeName)
+  if (!targetDesc) return null
+  // 1. 精确原名命中（手动 mv 保留原 changeName）
+  const exact = entries.find((e) => e === changeName && existsSync(join(archiveDir, e, 'plan.md')))
+  if (exact) return join(archiveDir, exact)
+  // 2. 描述部分命中（archiveDestDirName 产出的 <date>-<desc>，或手动剥前导日期的目录）
+  const descMatch = entries.find((e) => descOf(e) === targetDesc && existsSync(join(archiveDir, e, 'plan.md')))
+  if (descMatch) return join(archiveDir, descMatch)
+  return null
+}
+
+/**
+ * 归档时清理可能残留的 worktree（execute 自动清理未走到 / 有未 apply 变更被遗弃）。
+ * 安全策略：有未 apply 变更时保留 worktree 并警告，避免误删用户未应用的代码。
+ * 从 archiveChangeDirectory 抽出，供正常归档 + 自愈归档复用。
+ */
+async function archiveWorktreeCleanup(cwd, archiveChangeName) {
+  try {
+    const { WorktreeManager } = await import('../worktree.js')
+    const wm = new WorktreeManager({ cwd })
+    const meta = wm.getMeta(archiveChangeName)
+    if (!meta) return
+    const check = meta.mode !== 'in-place-fallback' ? wm.hasUnappliedChanges(archiveChangeName) : { hasChanges: false }
+    if (check.hasChanges) {
+      console.warn(`⚠️  归档时 worktree 仍有 ${check.changedFiles.length} 个未 apply 变更，保留 worktree`)
+      console.warn(`   确认不需要后手动清理: sillyspec worktree cleanup ${archiveChangeName} --force`)
+      return
+    }
+    const cleanResult = wm.cleanup(archiveChangeName)
+    if (cleanResult.residual?.length > 0) {
+      console.warn(`⚠️  归档 worktree 清理残留: ${cleanResult.residual.join('; ')}`)
+      console.warn(`   手动处理: sillyspec worktree cleanup ${archiveChangeName} --force`)
+    }
+  } catch (e) {
+    console.warn(`⚠️  归档 worktree 清理失败（不阻断归档）: ${e.message}`)
+  }
+}
+
+export async function archiveChangeDirectory(pm, cwd, progress, specBase) {
   const archiveChangeName = progress.currentChange
   if (!archiveChangeName) {
     console.error('❌ 归档失败：未找到当前变更名（currentChange）')
@@ -107,7 +168,20 @@ async function archiveChangeDirectory(pm, cwd, progress, specBase) {
   const destDir = join(archiveDir, destName)
 
   if (!existsSync(srcDir)) {
+    // 幂等自愈（issue archive-stage-physical-tracking-desync）：源目录已不存在，但变更可能已被
+    // 手动 / 部分流程移到 changes/archive/ 并 commit，而 --done --confirm 从未正式跑完 → 进度 DB
+    // 卡 archive 阶段、active 列表仍列此 change。检测到已归档则回填进度（unregisterChange）并
+    // 成功返回，让收尾流程把 archive 阶段标完成，而非 exit(1) 死路（source 已移走无法重跑 move）。
+    const alreadyArchivedDir = findAlreadyArchivedDir(archiveDir, archiveChangeName)
+    if (alreadyArchivedDir) {
+      console.log(`ℹ️  源目录不存在但变更已在 archive/（${basename(alreadyArchivedDir)}），判定已归档，自愈进度 DB`)
+      pm.unregisterChange(cwd, archiveChangeName)
+      await archiveWorktreeCleanup(cwd, archiveChangeName)
+      console.log(`📦 已自愈归档：${archiveChangeName} → archive/${basename(alreadyArchivedDir)}/`)
+      return alreadyArchivedDir
+    }
     console.error(`❌ 归档失败：源目录不存在 ${srcDir}`)
+    console.error(`   且 changes/archive/ 下未找到该变更的归档目录。若已手动归档请核对目录名；否则先补全变更产物。`)
     process.exit(1)
   }
   // 移动前硬校验：变更包必须含 plan.md，否则不该归档。
@@ -146,28 +220,8 @@ async function archiveChangeDirectory(pm, cwd, progress, specBase) {
     safeGit(cwd, ['add', '--', '.sillyspec/docs/'])
   } catch {}
 
-  // 归档时清理可能残留的 worktree（execute 自动清理未走到 / 有未 apply 变更被遗弃）。
-  // 安全策略：有未 apply 变更时保留 worktree 并警告，避免误删用户未应用的代码。
-  try {
-    const { WorktreeManager } = await import('../worktree.js')
-    const wm = new WorktreeManager({ cwd })
-    const meta = wm.getMeta(archiveChangeName)
-    if (meta) {
-      const check = meta.mode !== 'in-place-fallback' ? wm.hasUnappliedChanges(archiveChangeName) : { hasChanges: false }
-      if (check.hasChanges) {
-        console.warn(`⚠️  归档时 worktree 仍有 ${check.changedFiles.length} 个未 apply 变更，保留 worktree`)
-        console.warn(`   确认不需要后手动清理: sillyspec worktree cleanup ${archiveChangeName} --force`)
-      } else {
-        const cleanResult = wm.cleanup(archiveChangeName)
-        if (cleanResult.residual?.length > 0) {
-          console.warn(`⚠️  归档 worktree 清理残留: ${cleanResult.residual.join('; ')}`)
-          console.warn(`   手动处理: sillyspec worktree cleanup ${archiveChangeName} --force`)
-        }
-      }
-    }
-  } catch (e) {
-    console.warn(`⚠️  归档 worktree 清理失败（不阻断归档）: ${e.message}`)
-  }
+  // 归档时清理可能残留的 worktree（自愈路径也复用，见上方 srcDir 缺失分支）。
+  await archiveWorktreeCleanup(cwd, archiveChangeName)
 
   console.log(`📦 已归档：${archiveChangeName} → archive/${destName}/`)
   return destDir
