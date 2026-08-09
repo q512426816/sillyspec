@@ -89,6 +89,7 @@ function assert(label, condition, detail) {
 // ── 测试 3：safeGit 使用 -c safe.directory（不污染全局 config） ──
 {
   const runSrc = (await readFile(join(__dirname, '..', 'src', 'run.js'), 'utf8'))
+    + '\n' + (await readFile(join(__dirname, '..', 'src', 'git-helper.js'), 'utf8'))
     + '\n' + (await readFile(join(__dirname, '..', 'src', 'run', 'shared.js'), 'utf8'))
     + '\n' + (await readFile(join(__dirname, '..', 'src', 'run', 'complete-handlers.js'), 'utf8'))
   assert('safeGit 不含 --global', !runSrc.includes('git config --global'),

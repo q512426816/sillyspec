@@ -14,6 +14,7 @@ import { join, resolve, dirname, relative, isAbsolute } from 'path';
 import { createHash } from 'crypto';
 import { provisionDeps, checkDepsFreshness } from './worktree-deps.js';
 import { writeAtomicSync } from './fs-atomic.js';
+import { git, gitQuiet } from './git-helper.js';
 
 // meta.json 会被 hook 进程与其它 CLI 进程并发读取（worktree-guard / getMeta / create 幽灵判定），
 // 必须原子写：半截 JSON 会让 getMeta 返回 null → 触发幽灵 worktree 强删（可能丢 gitignored 改动）。
@@ -39,9 +40,9 @@ const _mainRepoRootByCwd = new Map();
  */
 export function detectIsolation(cwd = process.cwd()) {
   try {
-    const gitDir = execSync('git rev-parse --git-dir', { cwd, encoding: 'utf8', stdio: ['pipe','pipe','pipe'] }).trim();
-    const gitCommonDir = execSync('git rev-parse --git-common-dir', { cwd, encoding: 'utf8', stdio: ['pipe','pipe','pipe'] }).trim();
-    const superProject = gitQuiet(cwd, 'rev-parse --show-superproject-working-tree');
+    const gitDir = git(cwd, ['rev-parse', '--git-dir']);
+    const gitCommonDir = git(cwd, ['rev-parse', '--git-common-dir']);
+    const superProject = gitQuiet(cwd, ['rev-parse', '--show-superproject-working-tree']);
 
     const inWorktree = gitDir !== gitCommonDir && !superProject;
     const inSubmodule = !!superProject;
@@ -60,22 +61,10 @@ export function detectIsolation(cwd = process.cwd()) {
 export function checkWorktreeDirIgnored(cwd = process.cwd()) {
   const relPath = WORKTREES_REL;
   try {
-    execSync(`git check-ignore -q ${relPath}`, { cwd, encoding: 'utf8', stdio: ['pipe','pipe','pipe'] });
+    git(cwd, ['check-ignore', '-q', relPath]);
     return { ignored: true, path: relPath };
   } catch {
     return { ignored: false, path: relPath };
-  }
-}
-
-function git(cwd, args) {
-  return execSync(`git ${args}`, { cwd, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
-}
-
-function gitQuiet(cwd, args) {
-  try {
-    return execSync(`git ${args}`, { cwd, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
-  } catch {
-    return null;
   }
 }
 
@@ -93,12 +82,12 @@ export function computeBaseSync(cwd, baseHash) {
   const diag = { status: 'unknown', defaultBranch: null, behind: 0, ahead: 0 };
   // 推断默认分支：优先 origin/HEAD 指向的真实分支名（修复旧 339-342 的运算符优先级 bug
   // ——旧代码在 origin/HEAD 存在时恒返回 'main'，丢弃 symbolic-ref 的真实结果）。
-  const headRef = gitQuiet(cwd, 'symbolic-ref refs/remotes/origin/HEAD --short');
+  const headRef = gitQuiet(cwd, ['symbolic-ref', 'refs/remotes/origin/HEAD', '--short']);
   let defaultBranch = headRef ? headRef.replace('origin/', '') : null;
   if (!defaultBranch) {
     // fallback：origin/HEAD 未设置时，探测常见默认分支是否存在
     for (const cand of ['main', 'master']) {
-      if (gitQuiet(cwd, `rev-parse --verify --quiet refs/remotes/origin/${cand}`)) {
+      if (gitQuiet(cwd, ['rev-parse', '--verify', '--quiet', `refs/remotes/origin/${cand}`])) {
         defaultBranch = cand;
         break;
       }
@@ -108,15 +97,15 @@ export function computeBaseSync(cwd, baseHash) {
   diag.defaultBranch = defaultBranch;
 
   // best-effort fetch（只更新 remote-tracking，不改工作区/HEAD/分支；失败静默降级用缓存）
-  gitQuiet(cwd, 'fetch origin --quiet');
-  const remoteHead = gitQuiet(cwd, `rev-parse --verify --quiet refs/remotes/origin/${defaultBranch}`);
+  gitQuiet(cwd, ['fetch', 'origin', '--quiet'], { timeout: 60000 });
+  const remoteHead = gitQuiet(cwd, ['rev-parse', '--verify', '--quiet', `refs/remotes/origin/${defaultBranch}`]);
   if (!baseHash || !remoteHead) return diag;
   if (baseHash === remoteHead) {
     diag.status = 'up-to-date';
     return diag;
   }
-  const behind = Number(gitQuiet(cwd, `rev-list --count ${baseHash}..${remoteHead}`) || 0);
-  const ahead = Number(gitQuiet(cwd, `rev-list --count ${remoteHead}..${baseHash}`) || 0);
+  const behind = Number(gitQuiet(cwd, ['rev-list', '--count', `${baseHash}..${remoteHead}`]) || 0);
+  const ahead = Number(gitQuiet(cwd, ['rev-list', '--count', `${remoteHead}..${baseHash}`]) || 0);
   diag.behind = behind;
   diag.ahead = ahead;
   diag.status = (behind > 0 && ahead > 0) ? 'diverged' : (behind > 0 ? 'behind' : 'ahead');
@@ -179,10 +168,10 @@ export function computeBaselineHash(cwd) {
   //   - docs/：文档（非代码交付物）
   //   - CLAUDE.md：根 agent 指引（多操作者常改）
   // 必须和 applyWorktree step 4.5 (worktree-apply.js) 使用相同的排除规则。
-  const exclude = '-- . ":(exclude).sillyspec/" ":(exclude).claude/" ":(exclude)docs/" ":(exclude)CLAUDE.md"';
-  const staged = gitQuiet(cwd, `diff --cached ${exclude}`) || '';
-  const unstaged = gitQuiet(cwd, `diff ${exclude}`) || '';
-  const untracked = gitQuiet(cwd, `ls-files --others --exclude-standard ${exclude}`) || '';
+  const exclude = ['--', '.', ':(exclude).sillyspec/', ':(exclude).claude/', ':(exclude)docs/', ':(exclude)CLAUDE.md'];
+  const staged = gitQuiet(cwd, ['diff', '--cached', ...exclude], { timeout: 30000 }) || '';
+  const unstaged = gitQuiet(cwd, ['diff', ...exclude], { timeout: 30000 }) || '';
+  const untracked = gitQuiet(cwd, ['ls-files', '--others', '--exclude-standard', ...exclude], { timeout: 30000 }) || '';
   const raw = `staged:${staged}
 unstaged:${unstaged}
 untracked:${untracked}`;
@@ -208,7 +197,7 @@ function validateChangeName(changeName) {
  */
 export function isGitWorktreeSupported(cwd = process.cwd()) {
   try {
-    const raw = execSync('git --version', { cwd, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+    const raw = git(cwd, ['--version']);
     const match = raw.match(/git version (\d+)\.(\d+)/);
     if (!match) return { supported: false, version: raw, reason: 'cannot parse version' };
     const major = parseInt(match[1], 10);
@@ -279,7 +268,7 @@ export class WorktreeManager {
       // existsSync/statSync 会相对 process.cwd() 解析——当 process.cwd 是另一个 git 仓库
       // （未 chdir 的脚本、或 CLI 在别处跑）时，worktreeBase 会错解析到 process.cwd 仓库，
       // getMeta 读错位置返回 null。resolve() 对绝对参数原样返回、对相对参数相对 this.cwd 解析，两者皆稳。
-      const commonDir = gitQuiet(this.cwd, 'rev-parse --git-common-dir');
+      const commonDir = gitQuiet(this.cwd, ['rev-parse', '--git-common-dir']);
       if (commonDir) {
         const absCommonDir = resolve(this.cwd, commonDir);
         if (existsSync(absCommonDir) && statSync(absCommonDir).isDirectory()) {
@@ -349,7 +338,7 @@ export class WorktreeManager {
       // 只恢复 meta 引用，不触碰文件系统。
       return this._recoverNativeWorktreeMeta(name, {
         worktreePath: this.cwd,
-        branch: gitQuiet(this.cwd, 'symbolic-ref --short HEAD') || 'detached',
+        branch: gitQuiet(this.cwd, ['symbolic-ref', '--short', 'HEAD']) || 'detached',
       });
     }
 
@@ -370,7 +359,7 @@ export class WorktreeManager {
       // 否则会丢失 execute 期间未 commit 的代码（不可恢复，3.22.4 修复）。
       if (!this.getMeta(name)) {
         let uncommitted = '';
-        try { uncommitted = git(worktreePath, 'status --porcelain') } catch {}
+        try { uncommitted = git(worktreePath, ['status', '--porcelain'], { timeout: 30000 }) } catch {}
         if (uncommitted.trim()) {
           throw new Error(
             `检测到幽灵 worktree（无 meta.json）但含未提交改动，拒绝自动清理（防丢代码）。\n` +
@@ -383,15 +372,15 @@ export class WorktreeManager {
         try { rmSync(worktreePath, { recursive: true, force: true }); } catch {}
         // 同步清理 git worktree 注册 + 残留分支，否则目录虽删但 git 内部状态未清，
         // 后续 git worktree add 会因「worktree 已注册」或「分支已存在」失败
-        try { gitQuiet(this.cwd, 'worktree prune'); } catch {}
-        try { gitQuiet(this.cwd, `branch -D ${branch}`); } catch {}
+        try { gitQuiet(this.cwd, ['worktree', 'prune'], { timeout: 30000 }); } catch {}
+        try { gitQuiet(this.cwd, ['branch', '-D', branch]); } catch {}
       } else {
         throw new Error(`worktree already exists: ${name}. Run cleanup first.`);
       }
     }
 
     // 2. 检查分支是否已存在
-    if (gitQuiet(this.cwd, `rev-parse --verify refs/heads/${branch}`)) {
+    if (gitQuiet(this.cwd, ['rev-parse', '--verify', `refs/heads/${branch}`])) {
       throw new Error(`branch already exists: ${branch}. Run cleanup first.`);
     }
 
@@ -399,11 +388,11 @@ export class WorktreeManager {
     let baseBranch = base;
     let baseHash;
     if (baseBranch) {
-      baseHash = git(this.cwd, `rev-parse ${baseBranch}`);
+      baseHash = git(this.cwd, ['rev-parse', baseBranch]);
     } else {
       // 默认用当前 HEAD
-      baseBranch = gitQuiet(this.cwd, `symbolic-ref --short HEAD`) || git(this.cwd, `rev-parse HEAD`);
-      baseHash = git(this.cwd, `rev-parse HEAD`);
+      baseBranch = gitQuiet(this.cwd, ['symbolic-ref', '--short', 'HEAD']) || git(this.cwd, ['rev-parse', 'HEAD']);
+      baseHash = git(this.cwd, ['rev-parse', 'HEAD']);
     }
 
     // 4. 创建 worktree 根目录
@@ -416,12 +405,12 @@ export class WorktreeManager {
     // 未切分支，直接写代码污染 main（见缺陷 execute-in-place-windows-pitfalls 坑1）。
     // core.longpaths=true 让 git 用 \\?\ 前缀绕过 MAX_PATH，幂等、Windows 推荐、低风险，失败不阻断。
     if (process.platform === 'win32') {
-      try { gitQuiet(this.cwd, 'config core.longpaths true'); } catch {}
+      try { gitQuiet(this.cwd, ['config', 'core.longpaths', 'true']); } catch {}
     }
 
     // 5. 创建 worktree（含版本检测 + sandbox fallback）
     try {
-      git(this.cwd, `worktree add ${worktreePath} -b ${branch} ${baseHash}`);
+      git(this.cwd, ['worktree', 'add', worktreePath, '-b', branch, baseHash], { timeout: 120000 });
     } catch (e) {
       const check = isGitWorktreeSupported(this.cwd);
       if (!check.supported) {
@@ -496,7 +485,7 @@ export class WorktreeManager {
       branch,
       baseBranch,
       baseHash,
-      actualBaseHash: gitQuiet(worktreePath, 'rev-parse HEAD') || baseHash,
+      actualBaseHash: gitQuiet(worktreePath, ['rev-parse', 'HEAD']) || baseHash,
       createdAt: new Date().toISOString(),
       worktreePath,
       mode: 'worktree',
@@ -524,7 +513,7 @@ export class WorktreeManager {
    * @private
    */
   _recoverNativeWorktreeMeta(name, { worktreePath, branch }) {
-    const baseHash = gitQuiet(worktreePath, 'rev-parse HEAD') || null
+    const baseHash = gitQuiet(worktreePath, ['rev-parse', 'HEAD']) || null
     const meta = {
       name_zh: 'worktree 元数据',
       changeName: name,
@@ -577,15 +566,15 @@ export class WorktreeManager {
     if (resolvedSource === resolvedTarget) {
       console.warn('⚠️  跳过 baseline overlay：当前目录与目标目录相同（native-worktree 或 in-place 模式）')
       // 写 meta 但不 overlay
-      baseBranch = baseBranch || gitQuiet(this.cwd, 'symbolic-ref --short HEAD') || gitQuiet(this.cwd, 'rev-parse HEAD')
-      baseHash = baseHash || git(this.cwd, 'rev-parse HEAD')
+      baseBranch = baseBranch || gitQuiet(this.cwd, ['symbolic-ref', '--short', 'HEAD']) || gitQuiet(this.cwd, ['rev-parse', 'HEAD'])
+      baseHash = baseHash || git(this.cwd, ['rev-parse', 'HEAD'])
       const meta = {
         name_zh: 'worktree 元数据',
       changeName: name,
         branch: branch || BRANCH_PREFIX + name,
         baseBranch,
         baseHash,
-        actualBaseHash: gitQuiet(worktreePath, 'rev-parse HEAD') || baseHash,
+        actualBaseHash: gitQuiet(worktreePath, ['rev-parse', 'HEAD']) || baseHash,
         createdAt: new Date().toISOString(),
         worktreePath,
         mode: mode || 'in-place-fallback',
@@ -603,8 +592,8 @@ export class WorktreeManager {
 
     // 解析 base
     if (!baseHash) {
-      baseBranch = baseBranch || gitQuiet(this.cwd, 'symbolic-ref --short HEAD') || gitQuiet(this.cwd, 'rev-parse HEAD');
-      baseHash = git(this.cwd, 'rev-parse HEAD');
+      baseBranch = baseBranch || gitQuiet(this.cwd, ['symbolic-ref', '--short', 'HEAD']) || gitQuiet(this.cwd, ['rev-parse', 'HEAD']);
+      baseHash = git(this.cwd, ['rev-parse', 'HEAD']);
     }
 
     const baselineResult = this._overlayBaseline(this.cwd, this.cwd);
@@ -622,7 +611,7 @@ export class WorktreeManager {
       branch: branch || BRANCH_PREFIX + name,
       baseBranch,
       baseHash,
-      actualBaseHash: gitQuiet(worktreePath, 'rev-parse HEAD') || baseHash,
+      actualBaseHash: gitQuiet(worktreePath, ['rev-parse', 'HEAD']) || baseHash,
       createdAt: new Date().toISOString(),
       worktreePath,
       mode: mode || 'in-place-fallback',
@@ -772,7 +761,7 @@ export class WorktreeManager {
     if (!isInPlace && existsSync(worktreePath)) {
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
-          git(this.cwd, `worktree remove ${worktreePath} --force`);
+          git(this.cwd, ['worktree', 'remove', worktreePath, '--force'], { timeout: 60000 });
           gitRemoveOk = true;
           details.push(`git worktree remove succeeded (attempt ${attempt})`);
           break;
@@ -798,14 +787,14 @@ export class WorktreeManager {
 
     // 3. git worktree prune（清理 git 内部注册信息）
     try {
-      gitQuiet(this.cwd, 'worktree prune');
+      gitQuiet(this.cwd, ['worktree', 'prune'], { timeout: 30000 });
     } catch {
       // prune 失败不阻断
     }
 
     // 4. 删除分支（忽略分支不存在的错误）
     try {
-      gitQuiet(this.cwd, `branch -D ${branch}`);
+      gitQuiet(this.cwd, ['branch', '-D', branch]);
       details.push('branch deleted');
     } catch {
       // 分支可能已被删除，幂等跳过
@@ -825,7 +814,7 @@ export class WorktreeManager {
     const residual = [];
     if (!isInPlace && existsSync(worktreePath)) residual.push(`worktree dir: ${worktreePath}`);
     if (existsSync(metaDir)) residual.push(`meta dir: ${metaDir}`);
-    if (!isInPlace && gitQuiet(this.cwd, `worktree list`)?.includes(worktreePath)) {
+    if (!isInPlace && gitQuiet(this.cwd, ['worktree', 'list'], { timeout: 30000 })?.includes(worktreePath)) {
       residual.push('git worktree list still references this worktree');
     }
     if (residual.length > 0) {
@@ -929,7 +918,7 @@ export class WorktreeManager {
     // 1. 列出 git worktree list 中的条目
     let gitWorktreeList = [];
     try {
-      const raw = execSync(`git worktree list --porcelain`, { cwd: this.cwd, encoding: 'utf8', stdio: ['pipe','pipe','pipe'] });
+      const raw = git(this.cwd, ['worktree', 'list', '--porcelain'], { timeout: 30000 });
       const entries = raw.split(/\n\n/).filter(Boolean);
       for (const entry of entries) {
         const lines = entry.split('\n');
@@ -962,7 +951,7 @@ export class WorktreeManager {
           // git 明确标记目录缺失（git 2.20+）→ 真 orphan，prune 安全
           issues.push({ type: 'orphan-git-entry', name: name || wt.path, detail: `git worktree 标记 missing: ${wt.path}`, fixable: true });
           if (fix) {
-            try { gitQuiet(this.cwd, 'worktree prune'); fixed.push(`pruned orphan: ${wt.path}`); } catch { unfixable.push(`prune failed for: ${wt.path}`); }
+            try { gitQuiet(this.cwd, ['worktree', 'prune'], { timeout: 30000 }); fixed.push(`pruned orphan: ${wt.path}`); } catch { unfixable.push(`prune failed for: ${wt.path}`); }
           }
         } else {
           // 目录不可见但 git 未标记 missing → 可能 existsSync 误判，保守不自动 prune
@@ -1063,7 +1052,7 @@ export class WorktreeManager {
           if (!metaNames.has(name)) {
             issues.push({ type: 'orphan-branch', name, detail: `分支残留（无对应 meta）: ${branch}`, fixable: true });
             if (fix) {
-              try { gitQuiet(this.cwd, `branch -D ${branch}`); fixed.push(`deleted orphan branch: ${branch}`); } catch { unfixable.push(`branch delete failed: ${branch}`); }
+              try { gitQuiet(this.cwd, ['branch', '-D', branch]); fixed.push(`deleted orphan branch: ${branch}`); } catch { unfixable.push(`branch delete failed: ${branch}`); }
             }
           }
         }
@@ -1110,9 +1099,9 @@ export class WorktreeManager {
     const isDeliverable = f => f && !f.startsWith('.sillyspec/') && f !== 'meta.json';
     try {
       // 1) 候选交付变更（worktree 工作区相对 diffBase）。--no-renames：rename 退化成 D+A，两侧文件都进集
-      const tracked = (gitQuiet(worktreePath, `diff --no-renames --name-only ${diffBase}`) || '')
+      const tracked = (gitQuiet(worktreePath, ['diff', '--no-renames', '--name-only', diffBase], { timeout: 30000 }) || '')
         .split('\n').filter(Boolean).filter(isDeliverable);
-      const untracked = (gitQuiet(worktreePath, `ls-files --others --exclude-standard`) || '')
+      const untracked = (gitQuiet(worktreePath, ['ls-files', '--others', '--exclude-standard'], { timeout: 30000 }) || '')
         .split('\n').filter(Boolean).filter(isDeliverable);
 
       if (tracked.length === 0 && untracked.length === 0) {
@@ -1145,19 +1134,19 @@ export class WorktreeManager {
    * @returns {string[]} 尚未落到 main HEAD 的文件
    */
   _changesAlreadyOnMain(worktreePath, trackedFiles, untrackedFiles) {
-    const mainHead = git(this.cwd, 'rev-parse HEAD'); // 失败即抛 → 外层 catch fail-safe
+    const mainHead = git(this.cwd, ['rev-parse', 'HEAD']); // 失败即抛 → 外层 catch fail-safe
     const pending = [];
 
     if (trackedFiles.length > 0) {
       const diverged = (gitQuiet(worktreePath,
-        `diff --no-renames --name-only ${mainHead} -- ${trackedFiles.join(' ')}`) || '')
+        ['diff', '--no-renames', '--name-only', mainHead, '--', ...trackedFiles], { timeout: 30000 }) || '')
         .split('\n').filter(Boolean);
       pending.push(...diverged);
     }
 
     if (untrackedFiles.length > 0) {
       // hash-object 按 argv 顺序逐行输出 blob hash；某文件不存在则整命令失败 → gitQuiet 返回 null
-      const wtHashes = (gitQuiet(worktreePath, `hash-object -- ${untrackedFiles.join(' ')}`) || '')
+      const wtHashes = (gitQuiet(worktreePath, ['hash-object', '--', ...untrackedFiles], { timeout: 30000 }) || '')
         .split('\n');
       const mainBlobs = this._lsTreeBlobs(this.cwd, 'HEAD', untrackedFiles);
       for (let i = 0; i < untrackedFiles.length; i++) {
@@ -1183,7 +1172,7 @@ export class WorktreeManager {
   _lsTreeBlobs(cwd, treeish, files) {
     const map = new Map();
     if (!files || files.length === 0) return map; // 空 pathspec 会列整棵树，必须拦
-    const raw = gitQuiet(cwd, `ls-tree ${treeish} -- ${files.join(' ')}`);
+    const raw = gitQuiet(cwd, ['ls-tree', treeish, '--', ...files]);
     if (!raw) return map;
     for (const line of raw.split('\n')) {
       if (!line) continue;
@@ -1229,16 +1218,16 @@ export class WorktreeManager {
 
     try {
       // staged 变更
-      const staged = gitQuiet(mainCwd, 'diff --cached --name-only') || '';
+      const staged = gitQuiet(mainCwd, ['diff', '--cached', '--name-only'], { timeout: 30000 }) || '';
       if (staged) {
         try {
           // 用 Buffer 模式读取，避免二进制 patch 被 UTF-8 解码损坏
-          const patchBuf = execSync(`git diff --cached --binary`, { cwd: mainCwd, stdio: ['pipe','pipe','pipe'] });
+          const patchBuf = execFileSync('git', ['diff', '--cached', '--binary'], { cwd: mainCwd, stdio: ['pipe','pipe','pipe'] });
           if (patchBuf && patchBuf.length > 0) {
             const patchFile = join(worktreePath, '.sillyspec-baseline-staged.patch');
             try {
               writeFileSync(patchFile, patchBuf);
-              git(worktreePath, `apply --binary ${patchFile}`);
+              git(worktreePath, ['apply', '--binary', patchFile], { timeout: 30000 });
             } finally {
               // git apply 抛错时也要清掉 patch 临时文件，避免泄漏到 worktree/主仓根
               // （filterDeliverableFiles 不排除 .sillyspec-baseline-*，泄漏会级联 BLOCKED 下游 apply）
@@ -1252,16 +1241,16 @@ export class WorktreeManager {
       }
 
       // unstaged 变更
-      const unstaged = gitQuiet(mainCwd, 'diff --name-only') || '';
+      const unstaged = gitQuiet(mainCwd, ['diff', '--name-only'], { timeout: 30000 }) || '';
       if (unstaged) {
         try {
           // 用 Buffer 模式读取，避免二进制 patch 被 UTF-8 解码损坏
-          const patchBuf = execSync(`git diff --binary`, { cwd: mainCwd, stdio: ['pipe','pipe','pipe'] });
+          const patchBuf = execFileSync('git', ['diff', '--binary'], { cwd: mainCwd, stdio: ['pipe','pipe','pipe'] });
           if (patchBuf && patchBuf.length > 0) {
             const patchFile = join(worktreePath, '.sillyspec-baseline-unstaged.patch');
             try {
               writeFileSync(patchFile, patchBuf);
-              git(worktreePath, `apply --binary ${patchFile}`);
+              git(worktreePath, ['apply', '--binary', patchFile], { timeout: 30000 });
             } finally {
               // git apply 抛错时也要清掉 patch 临时文件，避免泄漏到 worktree/主仓根
               try { rmSync(patchFile, { force: true }); } catch {}
@@ -1274,7 +1263,7 @@ export class WorktreeManager {
       }
 
       // untracked 文件（排除 .sillyspec/.runtime 等）；目录跳过避免 readFileSync EISDIR
-      const untracked = gitQuiet(mainCwd, 'ls-files --others --exclude-standard') || '';
+      const untracked = gitQuiet(mainCwd, ['ls-files', '--others', '--exclude-standard'], { timeout: 30000 }) || '';
       const skippedDirs = [];
       if (untracked) {
         for (const f of untracked.split('\n').filter(Boolean)) {
@@ -1332,21 +1321,22 @@ export class WorktreeManager {
       GIT_COMMITTER_EMAIL: 'sillyspec@baseline',
     };
     try {
-      execSync('git add -A', { cwd: worktreePath, encoding: 'utf8', stdio: ['pipe','pipe','pipe'], env });
+      git(worktreePath, ['add', '-A'], { timeout: 30000 });
       // 检查是否有实际变更（可能 overlay 后和 HEAD 完全一致）
-      const status = gitQuiet(worktreePath, 'status --porcelain');
+      const status = gitQuiet(worktreePath, ['status', '--porcelain'], { timeout: 30000 });
       if (!status) {
-        return gitQuiet(worktreePath, 'rev-parse HEAD');
+        return gitQuiet(worktreePath, ['rev-parse', 'HEAD']);
       }
       // --no-verify：baseline 是锚点不是交付物，只是把主仓库 dirty 文件快照到 worktree
       // 分支上以便区分「前置 baseline」与「子代理新增改动」。它不该触发项目 pre-commit
       // hook（如 ruff format），否则主仓库 dirty 文件中任一不达标的会被 hook reformat
       // 致 commit 失败 → worktree 创建失败 → execute 无法启动。
-      execSync(
-        `git commit --no-verify -m "sillyspec: baseline checkpoint for ${changeName}"`,
+      execFileSync(
+        'git',
+        ['commit', '--no-verify', '-m', `sillyspec: baseline checkpoint for ${changeName}`],
         { cwd: worktreePath, encoding: 'utf8', stdio: ['pipe','pipe','pipe'], env }
       );
-      const hash = git(worktreePath, 'rev-parse HEAD');
+      const hash = git(worktreePath, ['rev-parse', 'HEAD']);
       console.log(`📌 baseline checkpoint: ${hash}`);
       return hash;
     } catch (e) {

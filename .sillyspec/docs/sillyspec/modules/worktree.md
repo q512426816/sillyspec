@@ -4,8 +4,8 @@ created_at: 2026-06-01T09:05:00
 ---
 
 # worktree
-> 最后更新：2026-08-07
-> 最近变更：2026-08-06-execute-runs-isolation（drift 守卫补设 `platformOpts.specDriftAnchor` + 抽 `resolveRuntimeRoot` 统一 `.runtime` 根解析 15 站点；drift 场景 execute-runs/stage-reviews 落主仓 `.runtime`，cleanup 整目录删 worktree 碰不到，archive step1 完成度 gate 不再因丢 review.json 阻断）/ 2026-08-05-tooling-feedback-fixes（doctor 加 `deps-main-drift` issue 探主仓 lockfile 漂移 + `--change` 过滤 + `--fix` force 重装；provisionDeps 加 `force` 选项；抽 H1 `checkDepsFreshness` 统一 doctor 与 execute 的 deps 判定）
+> 最后更新：2026-08-09
+> 最近变更：2026-08-09-worktree-git-injection（git 调用收口 src/git-helper.js：worktree.js/worktree-apply.js 删本地 git()/gitQuiet() helper、77 调用点 + 2 裸 execSync 注入核心全 execFileSync 数组化不经 shell，消除命令注入 + 空格拆词，与 run/shared.js safeGit 合一单一真相源）/ 2026-08-06-execute-runs-isolation（drift 守卫补设 `platformOpts.specDriftAnchor` + 抽 `resolveRuntimeRoot` 统一 `.runtime` 根解析 15 站点；drift 场景 execute-runs/stage-reviews 落主仓 `.runtime`，cleanup 整目录删 worktree 碰不到，archive step1 完成度 gate 不再因丢 review.json 阻断）/ 2026-08-05-tooling-feedback-fixes（doctor 加 `deps-main-drift` issue 探主仓 lockfile 漂移 + `--change` 过滤 + `--fix` force 重装；provisionDeps 加 `force` 选项；抽 H1 `checkDepsFreshness` 统一 doctor 与 execute 的 deps 判定）
 > 模块路径：src/worktree.js, src/worktree-apply.js, src/worktree-deps.js
 
 ## 职责
@@ -94,8 +94,8 @@ execute 验证硬门（`run.js completeStep` execute 分支）读 `depsStatus`�
 | 验证硬门（blocked + exit 1） | 依赖未就绪不得声称 verified，靠代码级门保证 | prompt 软约束（已证失效） |
 
 ## 依赖关系
-- 内部依赖：src/worktree.js（worktree-apply.js 导入 WorktreeManager；create/doctor 导入 worktree-deps.js 的 provisionDeps）、src/change-list.js（worktree-apply.js 导入 parseFileChangeList）
-- 外部依赖：child_process（execSync）、fs、path、os（tmpdir）、crypto（createHash）
+- 内部依赖：src/worktree.js（worktree-apply.js 导入 WorktreeManager；create/doctor 导入 worktree-deps.js 的 provisionDeps）、src/change-list.js（worktree-apply.js 导入 parseFileChangeList）、src/git-helper.js（git/gitQuiet 公共入口，worktree.js/worktree-apply.js 全部 git 调用收口于此）
+- 外部依赖：child_process（execFileSync，经 src/git-helper.js 公共入口数组形式不经 shell）、fs、path、os（tmpdir）、crypto（createHash）
 
 ## 注意事项
 - isGitWorktreeSupported 通过 `git worktree list` 检测支持性，需要在 git 仓库中调用
@@ -105,6 +105,7 @@ execute 验证硬门（`run.js completeStep` execute 分支）读 `depsStatus`�
 - cleanup 会强制删除 worktree 和对应分支，操作不可逆
 - **cleanup 不威胁 execute-runs / stage-reviews**（坑 execute-runs-isolation，方案 A）：drift 场景（agent cd worktree 跑 plan/execute/verify/archive）下，`.runtime` 根经 `resolveRuntimeRoot` + `platformOpts.specDriftAnchor` 锚定主仓，execute-runs / stage-reviews 从落盘起即在主仓 `.sillyspec/.runtime/`；cleanup（`rmSync(worktreePath, {recursive:true, force:true})` 整目录删 worktree 物理目录）物理上碰不到 → archive step1 完成度 gate 真相源（磁盘主仓 review.json）不再丢。`src/worktree.js` 的 9 处 cleanup 调用点 + `rmSync` 全无需改（方案 A 堵源头 runtimeRoot 解析，非下游 salvage）
 - 依赖供给失败不阻断 create（只记 meta.depsStatus=failed），但 execute 验证硬门会阻断 --done
+- **git 调用收口 src/git-helper.js**（2026-08-09-worktree-git-injection）：worktree.js（原 51 处本地 git()/gitQuiet() helper，`execSync(\`git ${args}\`)` 字符串拼接经 shell）+ worktree-apply.js（原 26 处）的 git 调用全部删本地实现、import 公共入口 src/git-helper.js（safeGit+git+gitQuiet，execFileSync 数组形式不经 shell）；调用点字符串拼接改数组（文件列表 `files.join(' ')` → `...files` 展开为独立 argv 元素），消除命令注入（文件名含 `;`/`$()` 经 shell 在用户机 RCE）+ 空格拆词（文件名含空格被 shell 切词致 apply 漏文件，Windows 用户目录常见）；二进制 diff/commit 保留 Buffer/env 语义用裸 execFileSync 数组形式（合理例外，注入面已消除）
 
 ## 变更索引
 | 日期 | 变更名 | 摘要 |
@@ -115,3 +116,4 @@ execute 验证硬门（`run.js completeStep` execute 分支）读 `depsStatus`�
 | 2026-08-05 | 2026-08-05-tooling-feedback-fixes | doctor 加 `deps-main-drift` issue（探主仓 lockfile 漂移，靠 H1 `checkDepsFreshness`）+ `--change` 过滤 flag + `--fix` force 重装（`_doctorReprovision` 解链 + `provisionDeps(force=true)`）；`provisionDeps` 加 `force` 选项；抽 H1 `checkDepsFreshness` 统一 doctor 与 execute 入口 deps 判定 |
 | 2026-08-06 | 2026-08-06-execute-runs-isolation | execute-runs/stage-reviews 与 worktree 生命周期解耦：drift 守卫补设 `platformOpts.specDriftAnchor` + 抽 `resolveRuntimeRoot`（`run/shared.js`）统一 `.runtime` 根解析（15 站点三级优先级 runtimeRoot > specDriftAnchor > 本地）；drift 场景落主仓 `.runtime`，cleanup 整目录删 worktree 不再吃 review.json，archive step1 完成度 gate 不阻断。9 处 cleanup 调用点 + rmSync 全不改（方案 A 堵源头） |
 | 2026-08-07 | ql-20260807-010-9897 | apply gate 两 bug 修复：① baseline gate 改判「排除规则下当前未提交 dirty」——原比对 meta.baselineHash，execute 启动时主仓 dirty、期间 commit 变 clean 后 hash 必变 → 永久死锁须手改 meta；② `resolveApplyAllowSet` 传 `keepSillyspecDocs=true`，模块文档 `.sillyspec/docs/` 经 design §6 清单即可覆盖——原 change-list 跳过全部 `.sillyspec/`（蓝图基础设施），与 `filterDeliverableFiles` 保留 `.sillyspec/docs/`（交付物）语义打架致模块文档永远缺清单 |
+| 2026-08-09 | 2026-08-09-worktree-git-injection | git 调用收口 src/git-helper.js：worktree.js（51 处）/worktree-apply.js（26 处）删本地 git/gitQuiet helper、import 公共入口、77 调用点 + 2 裸 execSync 注入核心全 execFileSync 数组化不经 shell，消除命令注入（`;`/`$()` RCE）+ 空格拆词（apply 漏文件）；与 run/shared.js safeGit 合一单一真相源 |

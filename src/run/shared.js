@@ -7,13 +7,17 @@
  * 路径修正（相对 src/run/）：
  *   - resolvePromptIncludes 的 templates/prompts 在仓库根 → __dirname 上两层
  *   - triggerSync 的动态 import './sync.js' → '../sync.js'（src/sync.js）
- *   - safeGit 原用顶层 require('child_process')，改静态 import execFileSync（更 ESM-native，
- *     数组形式不经 shell：避免路径含空格被 shell 拆词，且少起一层 shell 进程）
+ *   - safeGit 已收口到 src/git-helper.js（单一公共 git 调用入口，数组形式不经 shell），
+ *     本模块仅 re-export，run/ 层现有调用方路径与行为不变。
  */
 import { basename, join, resolve, dirname, sep } from 'node:path'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
-import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+
+// safeGit 收口至 src/git-helper.js：import 建本地词法绑定（本模块内部 L128/130/431 调用）+
+// re-export 供 run/ 层现有调用方继续从 shared.js 引用（pure re-export 不建本地绑定，会致内部 ReferenceError）。
+import { safeGit } from '../git-helper.js'
+export { safeGit }
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -359,26 +363,6 @@ export async function checkApproval(cwd, changeName, platformOpts = {}) {
     return await syncMod.checkApproval(changeName, cwd)
   } catch (e) {
     return null
-  }
-}
-
-/**
- * 安全执行 git：-c safe.directory per-command（不污染全局 config）+ -C cwd。
- * @param {string} cwd
- * @param {string[]} args
- * @param {{ trim?: boolean }} [opts] - trim:false 保留原样输出（git status --porcelain 首行前导空格
- *   是状态码的一部分，trim 会削掉致 parsePorcelainPath 丢首字符，坑见 auditQuickCompletion 注释）
- * @returns {{ value: string|null, error: string|null }}
- */
-export function safeGit(cwd, args, opts = {}) {
-  const { trim = true } = opts
-  const fullArgs = ['-c', `safe.directory=${cwd}`, '-C', cwd, ...args]
-  try {
-    let value = execFileSync('git', fullArgs, { encoding: 'utf8', timeout: 5000 })
-    if (trim) value = value.trim()
-    return { value, error: null }
-  } catch (e) {
-    return { value: null, error: e.message.split('\n')[0] }
   }
 }
 

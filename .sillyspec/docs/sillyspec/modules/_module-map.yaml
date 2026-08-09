@@ -37,8 +37,9 @@ modules:
   worktree:
     status: active
     doc: modules/worktree.md
-    needs_review: false
-    review_reasons: []
+    needs_review: true
+    review_reasons:
+      - src/git-helper.js 新公共 git 调用入口（safeGit+git+gitQuiet，execFileSync 数组形式不经 shell），跨 worktree/runtime 共用收口；schema_version=1 无 paths 字段无法收录此根级新文件，待升级 schema_version=2 时补录归属（建议归 worktree 模块或新建 git 模块）；worktree.js/worktree-apply.js 本身改动影响明确不需复核（见 module-impact.md），此 needs_review=true 仅表 git-helper.js 文件待补录
 
   machine-interface:
     status: active

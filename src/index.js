@@ -10,6 +10,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync,
 import { writeAtomicSync } from './fs-atomic.js';
 import { join, resolve } from 'path';
 import { execSync } from 'child_process';
+import { git } from './git-helper.js';
 import { getVersion } from './version.js';
 import { ProgressManager, resolvePlatformSpecDir } from './progress.js';
 
@@ -856,7 +857,10 @@ SillySpec worktree — git worktree 隔离管理
           const base = explicitBase || meta.baseHash || 'HEAD';
           let out = '';
           try {
-            out = execSync(`git -C "${meta.worktreePath}" --no-pager diff --no-renames ${base}`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
+            // base 作为独立 argv 元素传入，不经 shell 拆词/注入；worktreePath 经 cwd，不插值。
+            // trim:false 保留 git diff 原始输出（含尾换行）供 stdout.write；空检查靠临时 .trim()。
+            // timeout 30s：diff 属潜在长操作（对齐 design R3 与 verify-postcheck 口径）。
+            out = git(meta.worktreePath, ['--no-pager', 'diff', '--no-renames', base], { trim: false, timeout: 30000 });
           } catch (e) {
             console.error(`❌ git diff 失败（base=${String(base).slice(0, 8)}）: ${e.message}`);
             process.exit(1);

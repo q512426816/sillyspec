@@ -12,27 +12,16 @@
  * 8. 成功后自动 cleanup
  */
 
-import { execSync, execFileSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import { existsSync, unlinkSync, writeFileSync, mkdtempSync, rmSync, readdirSync, readFileSync } from 'fs';
 import { join, resolve } from 'path';
 import { tmpdir } from 'os';
 import { WorktreeManager } from './worktree.js';
 import { parseFileChangeList, parseFileChangeListDetailed, pathMatches } from './change-list.js';
 import { parseAllowedPaths } from './stages/plan-postcheck.js';
+import { git, gitQuiet } from './git-helper.js';
 
 const CHANGES_REL = '.sillyspec/changes';
-
-function git(cwd, args) {
-  return execSync(`git ${args}`, { cwd, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
-}
-
-function gitQuiet(cwd, args) {
-  try {
-    return execSync(`git ${args}`, { cwd, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
-  } catch {
-    return null;
-  }
-}
 
 /**
  * 过滤掉 worktree 基础设施文件（非交付物），让 apply 只关心真正的变更产出：
@@ -95,7 +84,7 @@ export function resolvePatchFiles(changedFiles, allowSet, hasAllowList) {
  *   - 文件不在 tree 中 → 不在 Map 中（调用方 map.get(f) ?? null 得 null，等同 rev-parse 失败→null）
  * ls-tree 输出 "<mode> <type> <hash>\t<path>"。path 恒为文件路径（来自 git diff/ls-files），
  * 非目录，故不带 -r 也正确——文件在 tree 时 rev-parse treeish:path 与 ls-tree 都给同一 hash，
- * 不在时都不给，等价。（沿用 git() 字符串拼接模式，不引入新的引号/空格破法。）
+ * 不在时都不给，等价。（沿用公共 git() 数组形式，不经 shell、不引入引号/空格破法。）
  *
  * @param {string} cwd
  * @param {string} treeish
@@ -105,7 +94,7 @@ export function resolvePatchFiles(changedFiles, allowSet, hasAllowList) {
 function getBlobHashMap(cwd, treeish, files) {
   const map = new Map();
   if (files.length === 0) return map; // 空 pathspec 会让 ls-tree 列出整棵树，必须拦截
-  const raw = gitQuiet(cwd, `ls-tree ${treeish} -- ${files.join(' ')}`);
+  const raw = gitQuiet(cwd, ['ls-tree', treeish, '--', ...files]);
   if (!raw) return map;
   for (const line of raw.split('\n')) {
     if (!line) continue;
@@ -190,7 +179,7 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
   let changedFiles;
   try {
     // 用 --name-status 捕获 rename/delete（--name-only 会丢失 rename 源文件）
-    const statusRaw = git(worktreePath, `diff --name-status ${diffBase}`);
+    const statusRaw = git(worktreePath, ['diff', '--name-status', diffBase]);
     const statusFiles = new Set();
     if (statusRaw) {
       for (const line of statusRaw.split('\n').filter(Boolean)) {
@@ -202,7 +191,7 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
     }
 
     // untracked 新文件（diffBase 中不存在的文件）
-    const untrackedRaw = gitQuiet(worktreePath, `ls-files --others --exclude-standard`);
+    const untrackedRaw = gitQuiet(worktreePath, ['ls-files', '--others', '--exclude-standard']);
     const untrackedFiles = untrackedRaw ? untrackedRaw.split('\n').filter(Boolean) : [];
 
     // 排除 worktree 基础设施文件（meta.json / .sillyspec/，见 filterDeliverableFiles）。
@@ -258,10 +247,12 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
   // 否则别人改 CLAUDE.md/docs/.claude → 判定 dirty → apply 误阻断（多操作者仓库高频踩坑）。
   // 注意：排除规则必须和 computeBaselineHash (worktree.js) 一致（虽已不比对 hash，仍用同一口径判当前 dirty）。
   if (meta.baselineHash) {
-    const exclude = '-- . ":(exclude).sillyspec/" ":(exclude).claude/" ":(exclude)docs/" ":(exclude)CLAUDE.md"';
-    const staged = gitQuiet(projectRoot, `diff --cached ${exclude}`) || '';
-    const unstaged = gitQuiet(projectRoot, `diff ${exclude}`) || '';
-    const untracked = gitQuiet(projectRoot, `ls-files --others --exclude-standard ${exclude}`) || '';
+    // pathspec：`--` 结束选项，`.` 包含全部，后续 :(exclude) 排除非交付物元数据/文档 churn
+    // （与 computeBaselineHash 同口径）。数组形式逐元素传递，:(exclude) magic 字面直传不经 shell。
+    const exclude = ['--', '.', ':(exclude).sillyspec/', ':(exclude).claude/', ':(exclude)docs/', ':(exclude)CLAUDE.md'];
+    const staged = gitQuiet(projectRoot, ['diff', '--cached', ...exclude]) || '';
+    const unstaged = gitQuiet(projectRoot, ['diff', ...exclude]) || '';
+    const untracked = gitQuiet(projectRoot, ['ls-files', '--others', '--exclude-standard', ...exclude]) || '';
     // 意图（与 computeBaselineHash 注释一致）：只挡「未提交 dirty」——git apply --3way 对 dirty 工作区不稳。
     // 不比对 hash 是否等于 execute 启动时 baselineHash：主仓 dirty→clean（execute 期间 commit 无关文件）后
     // hash 必变，若仍比对会永久死锁（须手改 meta.baselineHash）。改判「排除规则下当前是否有未提交 dirty」。
@@ -269,8 +260,8 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
     if (hasUncommittedDirty) {
       // 未提交 dirty 拦截：列脏文件 + 指引先 commit/stash（git --3way 对 dirty 工作区不稳，merge 同理，故不再提 --merge）
       const dirtyFiles = [...new Set(
-        ((gitQuiet(projectRoot, 'diff --name-only HEAD') || '').split('\n').filter(Boolean))
-          .concat((gitQuiet(projectRoot, 'ls-files --others --exclude-standard') || '').split('\n').filter(Boolean))
+        ((gitQuiet(projectRoot, ['diff', '--name-only', 'HEAD']) || '').split('\n').filter(Boolean))
+          .concat((gitQuiet(projectRoot, ['ls-files', '--others', '--exclude-standard']) || '').split('\n').filter(Boolean))
       )].filter(f => !f.startsWith('.sillyspec/') && f !== 'meta.json');
       result.errors.push(
         `主工作区有未提交的改动，git apply 无法安全应用。\n` +
@@ -283,7 +274,7 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
 
   // --- 5. 校验：主工作区文件 base hash 一致 ---
   // 5a. 检查主工作区是否有未 commit 的脏文件（会影响 apply）
-  const mainDirtyRaw = gitQuiet(projectRoot, 'diff --name-only HEAD');
+  const mainDirtyRaw = gitQuiet(projectRoot, ['diff', '--name-only', 'HEAD']);
   const mainDirtyFiles = mainDirtyRaw ? mainDirtyRaw.split('\n').filter(Boolean) : [];
   if (mainDirtyFiles.length > 0) {
     // 如果脏文件和本次 apply 的文件有交集 → 报错
@@ -344,35 +335,36 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
     // ls-files --error-unmatch f 成功 ⟺ f 在 ls-files -- 输出。
     const inTree = getBlobHashMap(worktreePath, diffBase, patchFiles);
     const inIndexList = patchFiles.length > 0
-      ? (gitQuiet(worktreePath, `ls-files -- ${patchFiles.join(' ')}`) || '').split('\n').filter(Boolean)
+      ? (gitQuiet(worktreePath, ['ls-files', '--', ...patchFiles]) || '').split('\n').filter(Boolean)
       : [];
     const inIndex = new Set(inIndexList);
     const trackedFiles = patchFiles.filter(f => inTree.has(f) || inIndex.has(f));
     const trackedSet = new Set(trackedFiles);
     const untrackedPatchFiles = patchFiles.filter(f => !trackedSet.has(f));
 
-    // tracked 文件：git diff baseHash
+    // tracked 文件：git diff baseHash（数组形式，文件名逐个展开为独立 argv，不经 shell；
+    // trim:false 保留二进制补丁原样，timeout 放大到 60s 防大 diff 超时——原裸 execSync 无 timeout）
     if (trackedFiles.length > 0) {
-      const trackedArgs = trackedFiles.length > 0 ? `-- ${trackedFiles.join(' ')}` : '';
-      patchContent += execSync(
-        `git diff --binary ${diffBase} ${trackedArgs}`,
-        { cwd: worktreePath, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }
+      patchContent += git(
+        worktreePath,
+        ['diff', '--binary', diffBase, '--', ...trackedFiles],
+        { trim: false, timeout: 60000 }
       );
     }
 
-    // untracked 新文件：git add 到 index，git diff --cached，然后 reset
+    // untracked 新文件：git add 到 index，git diff --cached，然后 reset（均数组形式，文件名逐个展开）
     if (untrackedPatchFiles.length > 0) {
-      const addArgs = untrackedPatchFiles.length > 0 ? `-- ${untrackedPatchFiles.join(' ')}` : '';
-      git(worktreePath, `add ${addArgs}`);
+      git(worktreePath, ['add', '--', ...untrackedPatchFiles]);
       try {
-        const diffCachedArgs = untrackedPatchFiles.length > 0 ? `-- ${untrackedPatchFiles.join(' ')}` : '';
-        patchContent += execSync(
-          `git diff --binary --cached ${diffCachedArgs}`,
-          { cwd: worktreePath, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }
+        // trim:false 保留二进制补丁原样，timeout 放大到 60s 防大 diff 超时
+        patchContent += git(
+          worktreePath,
+          ['diff', '--binary', '--cached', '--', ...untrackedPatchFiles],
+          { trim: false, timeout: 60000 }
         );
       } finally {
         // 重置 index（不保留 staged 状态）
-        gitQuiet(worktreePath, `reset HEAD -- ${addArgs}`);
+        gitQuiet(worktreePath, ['reset', 'HEAD', '--', ...untrackedPatchFiles]);
       }
     }
 
@@ -393,13 +385,13 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
     // 但若 --3way 部分成功后冲突，已创建的新文件需删，故记录 untracked 集合。
     const trackedPatchFiles = patchFiles.filter(f => {
       // 该文件在主仓库 HEAD 存在 → 是 tracked（--3way 冲突时留标记需 checkout 还原）
-      return gitQuiet(projectRoot, `cat-file -e HEAD:${f}`) === null ? false : true;
+      return gitQuiet(projectRoot, ['cat-file', '-e', `HEAD:${f}`]) === null ? false : true;
     });
     const newPatchFiles = patchFiles.filter(f => !trackedPatchFiles.includes(f));
 
     // apply --3way 正式应用（主干已提交推进时自动三路合并）
     try {
-      git(projectRoot, `apply --3way ${patchPath}`);
+      git(projectRoot, ['apply', '--3way', patchPath], { timeout: 30000 });
     } catch (e) {
       // --3way 冲突（exit 1，工作区已留冲突标记）：回滚到 apply 前干净状态，不留半成品
       const rollback = rollbackApply(projectRoot, trackedPatchFiles, newPatchFiles);
@@ -450,13 +442,13 @@ function rollbackApply(projectRoot, trackedFiles, newFiles) {
   // 冲突文件：git status 里带冲突标记（UU/AA 等）的文件
   let conflicts = [];
   try {
-    const unmerged = gitQuiet(projectRoot, 'diff --name-only --diff-filter=U') || '';
+    const unmerged = gitQuiet(projectRoot, ['diff', '--name-only', '--diff-filter=U']) || '';
     conflicts = unmerged.split('\n').filter(Boolean);
   } catch {}
   // 回滚 tracked 文件到 HEAD（强制从 HEAD 还原——--3way 冲突标记同时污染工作区和 index，
   // `checkout -- f` 从 index 还原会拿到冲突版，必须 `checkout HEAD -- f` 才能还原干净）
   for (const f of trackedFiles) {
-    try { gitQuiet(projectRoot, `checkout HEAD -- ${f}`); } catch (e) { error = (error ? error + '; ' : '') + `checkout ${f}: ${e.message}`; }
+    try { gitQuiet(projectRoot, ['checkout', 'HEAD', '--', f]); } catch (e) { error = (error ? error + '; ' : '') + `checkout ${f}: ${e.message}`; }
   }
   // 删除 --3way 可能新建的文件（apply 前不存在）
   for (const f of newFiles) {
@@ -466,7 +458,7 @@ function rollbackApply(projectRoot, trackedFiles, newFiles) {
     } catch (e) { error = (error ? error + '; ' : '') + `delete ${f}: ${e.message}`; }
   }
   // 兜底：若 index 处于 unmerged 状态，重置 index（不影响工作区已还原的文件）
-  try { gitQuiet(projectRoot, 'reset --quiet'); } catch {}
+  try { gitQuiet(projectRoot, ['reset', '--quiet']); } catch {}
   return { conflicts, error };
 }
 
@@ -494,15 +486,15 @@ function applyByMerge(result, changeName, projectRoot, wm) {
   const branch = meta.branch || `sillyspec/${changeName}`;
 
   try {
-    git(projectRoot, `merge --no-ff ${branch}`);
+    git(projectRoot, ['merge', '--no-ff', branch], { timeout: 30000 });
   } catch (e) {
     // merge 冲突：取冲突文件列表 + abort 回滚（不 cleanup，保留 worktree）
     let conflictFiles = [];
     try {
-      const cf = gitQuiet(projectRoot, `diff --name-only --diff-filter=U`);
+      const cf = gitQuiet(projectRoot, ['diff', '--name-only', '--diff-filter=U']);
       conflictFiles = cf ? cf.split('\n').filter(Boolean) : [];
     } catch {}
-    try { gitQuiet(projectRoot, `merge --abort`); } catch {}
+    try { gitQuiet(projectRoot, ['merge', '--abort']); } catch {}
     result.errors.push(
       `git merge ${branch} 冲突，请手动解决。冲突文件：\n` +
       (conflictFiles.length ? `  ${conflictFiles.join('\n  ')}\n` : `  (未能获取冲突文件列表)\n`) +
@@ -515,7 +507,7 @@ function applyByMerge(result, changeName, projectRoot, wm) {
   // 分支可能只含 baseline checkpoint（子代理改动未 commit），merge 产生空内容合并，文件零落地。
   // 逐个确认 changedFiles 在 main HEAD 存在。任一缺失 → 不 cleanup（fail-open：保留 worktree 唯一副本）。
   result.merged = true;
-  const notLanded = changedFiles.filter(f => gitQuiet(projectRoot, `cat-file -e HEAD:${f}`) === null);
+  const notLanded = changedFiles.filter(f => gitQuiet(projectRoot, ['cat-file', '-e', `HEAD:${f}`]) === null);
   if (notLanded.length > 0) {
     result.ok = false;
     result.errors.push(
@@ -527,7 +519,7 @@ function applyByMerge(result, changeName, projectRoot, wm) {
   }
 
   result.ok = true;
-  try { result.mergeSummary = git(projectRoot, `log --oneline -1`); } catch {}
+  try { result.mergeSummary = git(projectRoot, ['log', '--oneline', '-1']); } catch {}
   try {
     wm.cleanup(changeName);
   } catch (cleanupErr) {
@@ -655,7 +647,7 @@ export function assessApplyRisk(changeName, { cwd } = {}) {
   let additions = 0, deletions = 0;
   if (wtPath && diffBase) {
     try {
-      const shortstat = gitQuiet(wtPath, `diff --shortstat ${diffBase}`);
+      const shortstat = gitQuiet(wtPath, ['diff', '--shortstat', diffBase]);
       const insMatch = shortstat?.match(/(\d+) insertion/);
       const delMatch = shortstat?.match(/(\d+) deletion/);
       additions = insMatch ? parseInt(insMatch[1]) : 0;
