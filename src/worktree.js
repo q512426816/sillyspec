@@ -738,8 +738,14 @@ export class WorktreeManager {
     if (!isInPlace && existsSync(worktreePath)) {
       const wtNodeModules = join(worktreePath, 'node_modules');
       if (existsSync(wtNodeModules)) {
-        let isLink = false;
-        try { isLink = lstatSync(wtNodeModules).isSymbolicLink(); } catch {}
+        // lstat 失败 fail-loud（D-001@v1 / review-2026-08-09 #4）：EPERM（杀毒/索引锁 junction）若静默跳过解链，
+        // 后续 git worktree remove / rmSync recursive 会跟随 junction 误删主仓 node_modules
+        let isLink;
+        try {
+          isLink = lstatSync(wtNodeModules).isSymbolicLink();
+        } catch (e) {
+          throw new Error(`worktree node_modules junction 检测失败（疑似 EPERM：杀毒/索引占用），阻断 cleanup 保护主仓 node_modules：${e.message}。请关闭占用进程或手动 rmdir "${wtNodeModules}" 后重试 sillyspec worktree cleanup`);
+        }
         if (isLink) {
           try {
             if (process.platform === 'win32') {
@@ -750,7 +756,7 @@ export class WorktreeManager {
             }
             details.push('worktree node_modules junction/symlink removed (protect main checkout)');
           } catch (e) {
-            details.push(`node_modules link remove failed: ${e.message}`);
+            throw new Error(`worktree node_modules junction 解链失败，阻断 cleanup 保护主仓 node_modules：${e.message}。请手动 rmdir "${wtNodeModules}" 后重试`);
           }
         }
       }
@@ -866,8 +872,14 @@ export class WorktreeManager {
       if (!isInPlace && existsSync(wtPath)) {
         const wtNodeModules = join(wtPath, 'node_modules');
         if (existsSync(wtNodeModules)) {
-          let isLink = false;
-          try { isLink = lstatSync(wtNodeModules).isSymbolicLink(); } catch {}
+          // lstat 失败 fail-loud（D-001@v1）+ 解链失败 fail-loud（D-002@v1 / review-2026-08-09 #4）：
+          // 原 best-effort「交 provisionDeps install」会经 junction 误改主仓 node_modules，正是 #4 坑
+          let isLink;
+          try {
+            isLink = lstatSync(wtNodeModules).isSymbolicLink();
+          } catch (e) {
+            throw new Error(`worktree node_modules junction 检测失败（疑似 EPERM：杀毒/索引占用），阻断 doctor reprovision 保护主仓 node_modules：${e.message}。请关闭占用进程或手动 rmdir "${wtNodeModules}" 后重试`);
+          }
           if (isLink) {
             try {
               if (process.platform === 'win32') {
@@ -875,7 +887,9 @@ export class WorktreeManager {
               } else {
                 unlinkSync(wtNodeModules);
               }
-            } catch {} // 解链失败不阻断：交由 provisionDeps install 分支处理
+            } catch (e) {
+              throw new Error(`worktree node_modules junction 解链失败，阻断 doctor reprovision（不调 provisionDeps 避免经 junction 误改主仓）：${e.message}。请手动 rmdir "${wtNodeModules}" 后重试`);
+            }
           }
         }
       }

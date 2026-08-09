@@ -19,7 +19,7 @@ worktree 模块提供基于 git worktree 的分支隔离机制，让每个变更
 
 **worktree-apply.js** 提供 `applyWorktree()` 函数，负责将 worktree 中的变更安全地应用回主工作区。它执行冲突检测（检查主工作区和 worktree 是否修改了相同文件），支持仅检查模式（checkOnly）和实际应用模式。应用时使用 `git diff` 生成补丁并通过 `git apply` 应用。
 
-**worktree-deps.js** 提供 `provisionDeps()` 依赖供给引擎。在 `create()` 的 baseline overlay 之后调用，让 worktree 立即可构建/测试：lockfile 一致时 junction/symlink 主 checkout 的 node_modules（瞬时零网络），否则按 `local.yaml` 的 `project.type` + lockfile 推断并执行 install。供给结果（depsStatus 等）写入 meta.json，供 execute 阶段的验证硬门读取。供给可失败，但失败状态可观测、可由 doctor 重试（doctor --fix 走 `_doctorReprovision`：先解 node_modules junction 再 `provisionDeps(force=true)` 强制重供，绕过 tryLink 幂等短路，修 deps-main-drift 等主仓 lockfile 漂移场景）。另导出 H1 `checkDepsFreshness(meta, wtPath, mainCwd)`，统一 doctor 与 execute 入口的 deps 新鲜度判定（status 含新增 `main-drift`）。
+**worktree-deps.js** 提供 `provisionDeps()` 依赖供给引擎。在 `create()` 的 baseline overlay 之后调用，让 worktree 立即可构建/测试：lockfile 一致时 junction/symlink 主 checkout 的 node_modules（瞬时零网络），否则按 `local.yaml` 的 `project.type` + lockfile 推断并执行 install。供给结果（depsStatus 等）写入 meta.json，供 execute 阶段的验证硬门读取。供给可失败，但失败状态可观测、可由 doctor 重试（doctor --fix 走 `_doctorReprovision`：先解 node_modules junction（**解链失败 fail-loud 阻断，不调 provisionDeps，D-002@v1**）再 `provisionDeps(force=true)` 强制重供，绕过 tryLink 幂等短路，修 deps-main-drift 等主仓 lockfile 漂移场景）。另导出 H1 `checkDepsFreshness(meta, wtPath, mainCwd)`，统一 doctor 与 execute 入口的 deps 新鲜度判定（status 含新增 `main-drift`）。
 
 ## 对外接口（表格）
 
@@ -79,7 +79,7 @@ execute 验证硬门（`run.js completeStep` execute 分支）读 `depsStatus`�
 2. **重入自检流**: execute 入口 → 读 meta → depsStatus 缺失/node_modules 丢失/lockfile 变化 → 触发 provisionDeps 重供给 → 更新 meta
 3. **应用流**: applyWorktree → 检查 worktree 存在 → git diff 生成文件列表 → 冲突检测 → 生成补丁 → git apply → 处理未跟踪文件
 4. **清理流**: WorktreeManager.cleanup → git worktree remove --force → git branch -D → rmSync 工作目录
-5. **健康检查流**: WorktreeManager.doctor → 扫描 meta + 文件系统 → 检出 deps-missing/stale/failed/**deps-main-drift**（+ 孤儿/过期；deps-main-drift 探主仓 lockfile 与 worktree 不一致，靠 H1 `checkDepsFreshness` 统一判定；`--change <名>` 仅扫指定变更）→ --fix 时 `_doctorReprovision` 解链 + `provisionDeps(force=true)` 重供给
+5. **健康检查流**: WorktreeManager.doctor → 扫描 meta + 文件系统 → 检出 deps-missing/stale/failed/**deps-main-drift**（+ 孤儿/过期；deps-main-drift 探主仓 lockfile 与 worktree 不一致，靠 H1 `checkDepsFreshness` 统一判定；`--change <名>` 仅扫指定变更）→ --fix 时 `_doctorReprovision` 解链（**失败 fail-loud 阻断，不调 provisionDeps，D-002@v1**）+ `provisionDeps(force=true)` 重供给
 
 ## 设计决策（表格）
 
