@@ -12,6 +12,7 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 import { execSync } from 'child_process'
+import { strict as assert } from 'node:assert'
 
 // ── Test 1: _resolveMainRepoRoot 在主仓库内返回 cwd ──
 
@@ -29,7 +30,7 @@ async function test1_mainRepoRoot() {
   const { WorktreeManager } = await import('../src/worktree.js')
   const wm = new WorktreeManager({ cwd: d })
   const root = wm._resolveMainRepoRoot()
-  console.assert(root === d, `Test 1 FAIL: expected ${d}, got ${root}`)
+  assert(root === d, `Test 1 FAIL: expected ${d}, got ${root}`)
   console.log('✅ Test 1: main repo root resolves to cwd')
 
   fs.rmSync(d, { recursive: true })
@@ -58,7 +59,7 @@ async function test2_nativeWorktreeIdempotent() {
 
   // Verify worktreeBase points to main repo
   const expectedBase = path.join(d, '.sillyspec', '.runtime', 'worktrees')
-  console.assert(wm1.worktreeBase === expectedBase, `Test 2 FAIL: worktreeBase=${wm1.worktreeBase}, expected=${expectedBase}`)
+  assert(wm1.worktreeBase === expectedBase, `Test 2 FAIL: worktreeBase=${wm1.worktreeBase}, expected=${expectedBase}`)
   console.log('✅ Test 2: worktreeBase fixed to main repo path')
 
   fs.rmSync(d, { recursive: true })
@@ -85,10 +86,10 @@ async function test3_selfOverlayBlocked() {
     mode: 'in-place-fallback',
   })
 
-  console.assert(result.mode === 'in-place-fallback', `Test 3 FAIL: mode=${result.mode}`)
+  assert(result.mode === 'in-place-fallback', `Test 3 FAIL: mode=${result.mode}`)
   // 返回值不包含 baselineFiles（是简化的返回结构），验证 meta 文件本身
   const meta3 = wm.getMeta('test-change')
-  console.assert(meta3 && meta3.baselineFiles.length === 0, `Test 3 FAIL: meta baselineFiles should be empty`)
+  assert(meta3 && meta3.baselineFiles.length === 0, `Test 3 FAIL: meta baselineFiles should be empty`)
   console.log('✅ Test 3: self-overlay blocked, baselineFiles empty')
 
   fs.rmSync(d, { recursive: true })
@@ -122,7 +123,7 @@ async function test4_metaIdempotent() {
     mode: 'in-place-fallback',
   })
 
-  console.assert(r1.baseHash === r2.baseHash, `Test 4 FAIL: hashes differ`)
+  assert(r1.baseHash === r2.baseHash, `Test 4 FAIL: hashes differ`)
   console.log('✅ Test 4: _createInPlaceMeta idempotent')
 
   fs.rmSync(d, { recursive: true })
@@ -149,15 +150,15 @@ async function test5_nativeRecovery() {
     branch: 'test-branch',
   })
 
-  console.assert(result.mode === 'native-worktree', `Test 5 FAIL: mode=${result.mode}`)
+  assert(result.mode === 'native-worktree', `Test 5 FAIL: mode=${result.mode}`)
   // 返回值不包含 baselineFiles，验证 meta 文件本身
   const meta5 = wm.getMeta('test-change')
-  console.assert(meta5 && meta5.baselineFiles.length === 0, `Test 5 FAIL: meta baselineFiles should be empty`)
+  assert(meta5 && meta5.baselineFiles.length === 0, `Test 5 FAIL: meta baselineFiles should be empty`)
 
   // Verify meta is readable now
   const meta = wm.getMeta('test-change')
-  console.assert(meta !== null, `Test 5 FAIL: meta should exist after recovery`)
-  console.assert(meta.mode === 'native-worktree', `Test 5 FAIL: meta.mode=${meta.mode}`)
+  assert(meta !== null, `Test 5 FAIL: meta should exist after recovery`)
+  assert(meta.mode === 'native-worktree', `Test 5 FAIL: meta.mode=${meta.mode}`)
   console.log('✅ Test 5: native-worktree meta recovery without overlay')
 
   fs.rmSync(d, { recursive: true })

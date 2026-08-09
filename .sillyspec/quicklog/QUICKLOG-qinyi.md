@@ -172,3 +172,15 @@
 根因：#5 为 self-audit#3 统一 auto 产物到变更根目录时漏改读端致 has_blocking_questions 门控失效；#6 为 initChange 硬编码与已 import 的 VALID_STAGES 重复。
 方案：command.js 第1115行读路径由 brainstorm 子目录改为变更根目录；progress.js 第563行删 allStages 改用 VALID_STAGES；顺带修正 core-engine.md propose 阶段残留误述。
 结果：npm run lint 通过 74 文件，npm test 全绿 143 通过 0 失败；quick 变更边界审计因两文件命中 DANGEROUS_PATTERNS（src/run/ 前缀与 progress barrel 本体）需 --force-baseline 显式确认解锁（git status 确认无他人夹带，非并发误判）。
+
+## ql-20260809-004-cf65 | 2026-08-09 08:12:58 | 补 #9 assertSafeChangeName 路径穿越守卫对抗性测试 + #8 禁 console.assert lint 规则
+状态：已完成
+关联变更：（无）
+文件：
+- test/assert-safe-change-name.test.mjs（新建 #9：18 用例覆盖 null 不校验/空串/合法名/路径分隔符含 Windows \\../..穿越/非ASCII/命令注入字符各分支，锁定路径穿越硬门行为防重构回归）
+- test/check-syntax.mjs（重写 #8：扩展 collect 扫描 src 74 + test 148 共 222 文件做语法检查，新增禁 console.assert 内容规则，BAD='console'+'.assert' 拆字定义避本文件自匹配）
+- test/worktree-native-overlay.test.mjs（#8：import node:assert strict + 9 处 console.assert→assert，让该 flaky 测试的失败从静默绿变抛错可见）
+需求：补 #9 assertSafeChangeName 路径穿越守卫对抗性测试 + #8 禁 console.assert lint 规则。
+根因：#9 路径穿越唯一硬门零测试，重构回归 CI 发现不了；#8 console.assert 失败只打印不抛致 runner 误判静默绿，且原 lint 只扫 src 不扫 test。
+方案：新增 assert-safe-change-name 18 用例测试覆盖各分支；重写 check-syntax.mjs 扫 test/ 加禁 console.assert 内容规则（BAD 拆字定义避自指）；worktree-native-overlay 9 处 console.assert 改 node:assert 让 flaky 失败可见。
+结果：npm run lint 通过 222 文件（src 74 + test 148），npm test 144 全绿 0 失败。
