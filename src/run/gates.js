@@ -547,6 +547,11 @@ function readDesignOwnFiles(specBase, changeName) {
  *          非 null = gate/handler 失败已 rollback，调用方直接 return。
  */
 export async function completeStageGates({ stageName, cwd, changeName, platformOpts, specBase, progress, pm, stageData, steps, currentIdx, outputText }) {
+  // 整体 try/catch（task-04 / review-2026-08-09 #2）：收尾段（execute 预检 + scan handler + validate* +
+  // auxiliary 重置 + runStageCompletionGates）任一段抛非结构化异常 → rollbackCompletionAndReturn
+  // （回滚 in-progress + 落盘 + 返回未完成对象），不冒顶 exit 1。正常的 _scanResult/_gateEarlyReturn
+  // early-return 是 return 非 throw，不被 catch 拦；下方 handleExecuteWorktreeCleanup 在 try 外（副作用独立，失败不 rollback stage 状态）。
+  try {
   // ── execute --done 并发他者改动预检（FR-06/FR-07，非阻断 advisory）──
   // 仅 execute 触发，不影响 scan/plan/verify/archive 等 stage 的 completeStageGates。
   // 纯副作用：console.warn 后照常推进，不改 stageData / 不阻断级联（FR-07）。
@@ -618,6 +623,10 @@ export async function completeStageGates({ stageName, cwd, changeName, platformO
     if (_gateEarlyReturn) return _gateEarlyReturn
   } else if (settledCount < total) {
     console.log(`\n⚠️ 阶段校验跳过：${total} 步中仅 ${settledCount} 步标记为已结案（completed‖skipped），可能存在状态不同步。如确认阶段已完成，请运行 --status 确认。`)
+  }
+  } catch (e) {
+    console.error(`\n❌ ${stageName} 阶段完成收尾异常（已 rollback 为 in-progress，请修复后重新 --done）：${e?.message || e}`)
+    return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)
   }
 
   // execute worktree cleanup（completeStep / continueStep 完成分支统一调用，避免双清理）

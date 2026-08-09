@@ -351,11 +351,13 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
         // 所有步骤完成
         stageData.status = 'completed'
         stageData.completedAt = new Date().toLocaleString('zh-CN', { hour12: false })
-        pm._write(cwd, progress, changeName)
+        // persist _write 移到 completeStageGates 成功之后（task-02 / review-2026-08-09 #2）：gate 异常/失败 → rollback 回 in-progress 落盘，此处未到 _write，DB 不留假 completed。
         // 阶段完成收尾共享管线（noAI 末步核心修复 S1：plan postcheck independent-tier review verdict=fail /
         // 平台 scan manifest 此前被绕过）。gate 失败已 rollback 为 in-progress，early-return（不 fall through 到末尾 return）。
         const _stageGatesResult = await completeStageGates({ stageName, cwd, changeName, platformOpts, specBase, progress, pm, stageData, steps, currentIdx, outputText: null })
         if (_stageGatesResult) return _stageGatesResult
+        // gate 全过：persist completed（task-02 移后；此处无 triggerSync，与同文件 noAI 末步语义一致）。
+        pm._write(cwd, progress, changeName)
         console.log(`\n✅ ${stageName} 阶段全部完成。`)
       }
       return

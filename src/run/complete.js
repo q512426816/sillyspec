@@ -262,8 +262,8 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
     stageData.status = 'completed'
     stageData.completedAt = new Date().toLocaleString('zh-CN',{hour12:false})
     progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
-    pm._write(cwd, progress, changeName)
-    triggerSync(cwd, changeName, platformOpts)
+    // persist（_write + triggerSync）移到 completeStageGates 成功之后（task-01 / review-2026-08-09 #2）：
+    // gate 任一段异常/失败 → rollbackCompletionAndReturn 回 in-progress 并落盘；此处未到 _write，DB 不留假 completed。
 
     // Append to user-inputs.md
     if (outputText) {
@@ -277,6 +277,10 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
     // gate 失败已 rollback，early-return 跳过下方"阶段已完成/下一步"提示（合理收紧：回滚不该打完成提示）。
     const _stageGatesResult = await completeStageGates({ stageName, cwd, changeName, platformOpts, specBase, progress, pm, stageData, steps, currentIdx, outputText })
     if (_stageGatesResult) return _stageGatesResult
+
+    // gate 全过：persist completed（task-01 移后）。此处到 _write 之间若崩，DB 仍 in-progress（内存已 completed 但未落盘），下次进 CLI 读 DB 即 in-progress，不产生"假 completed"。
+    pm._write(cwd, progress, changeName)
+    triggerSync(cwd, changeName, platformOpts)
 
     const total = steps.length
     console.log(`✅ ${stageName} 阶段已完成（${total}/${total} 步）`)
@@ -719,11 +723,13 @@ export async function continueStep(pm, progress, stageName, cwd, answer, options
   if (nextPendingIdx === -1 && nextWaitingIdx === -1) {
     stageData.status = 'completed'
     stageData.completedAt = now
-    pm._write(cwd, progress, changeName)
+    // persist _write 移到 completeStageGates 成功之后（task-03 / review-2026-08-09 #2）：gate 异常/失败 → rollback 回 in-progress 落盘，此处未到 _write，DB 不留假 completed。
     // 阶段完成收尾共享管线（含 execute worktree cleanup），消除 continueStep 完成分支绕过 gate 的 S2（task-01 抽出）。
     // gate 失败已 rollback，early-return 跳过下方"阶段已完成/下一步"提示（与 completeStep 同语义）。
     const _stageGatesResult = await completeStageGates({ stageName, cwd, changeName, platformOpts, specBase, progress, pm, stageData, steps: stageData.steps, currentIdx, outputText: null })
     if (_stageGatesResult) return _stageGatesResult
+    // gate 全过：persist completed（task-03 移后；此处无 triggerSync）。
+    pm._write(cwd, progress, changeName)
     console.log(`\n✅ ${stageName} 阶段已完成（${stageData.steps.length}/${stageData.steps.length} 步）`)
     // 阶段完成后明确下一步（agent 常卡：stageData completed 但不知要 run <下一阶段> 推进 currentStage）
     const nextStageHint = { brainstorm: 'plan', plan: 'execute', execute: 'verify', verify: 'archive' }[stageName]

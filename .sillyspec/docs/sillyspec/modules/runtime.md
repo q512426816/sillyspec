@@ -4,7 +4,7 @@ doc_type: module-card
 module_id: runtime
 author: qinyi
 created_at: 2026-06-03T07:42:00+08:00
-updated_at: 2026-08-09T00:00:00+08:00
+updated_at: 2026-08-09T15:10:00+08:00
 ---
 # runtime
 
@@ -57,6 +57,7 @@ ProgressManager.alignExecuteToPlan(cwd, changeName, specBase, {confirm})
 
 ## 注意事项
 
+- 阶段完成原子性（2026-08-09-complete-gate-atomicity）：阶段完成 persist（`pm._write`+`triggerSync`）从 `completeStageGates` 调用前移到成功返回后（`complete.js` completeStep/continueStep + `stage.js` noAI 末步三处），消除"persist completed → 跑 gate 崩溃"窗口（DB 不留假 completed，gate 异常/失败 → `rollbackCompletionAndReturn` 回 in-progress 落盘）；`completeStageGates`(`gates.js:549`) 收尾段整体 try/catch，任一段抛非结构化异常 → catch → `rollbackCompletionAndReturn` 不冒顶 exit 1，`handleExecuteWorktreeCleanup` 在 try 外（副作用独立）。接口签名不变，仅收紧阶段完成状态机原子性。
 - better-sqlite3 是原生绑定，事务提交即持久化（WAL），无旧 WASM 引擎的全库 export 开销；旧「纯内存 + 每次 _save 全量序列化」模型已废
 - PRAGMA（WAL/busy_timeout/foreign_keys）在 `init()` 设一次持续生效，无旧 WASM 引擎 export 重置问题；`close()` 自动 WAL checkpoint 合并 -wal/-shm 回主库
 - `batch_progress` 和 `approvals` 表按 `change_id` UNIQUE，每个变更只能有一条记录
