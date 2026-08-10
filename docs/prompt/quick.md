@@ -58,7 +58,7 @@
 
 **你不要创建或修改任何 QUICKLOG 的条目骨架 / tasks.md 记录**——ql-ID 分配、「进行中」条目、状态翻转、task 勾选、轮转全由 CLI 接管，你无需手写。<quicklog-id> 可用于 design.md / plan.md / archive / 模块变更索引引用。
 
-> ⚠️ 例外：step 3 --done 之后，CLI 落盘的 QUICKLOG 只是简版骨架，**你必须手动精修正文成丰富格式**（标题语义化 + 文件多行带括注 + 四段充实），详见 step 3「QUICKLOG 正文精修」。这是 quick 交付质量的一部分，不可跳过。
+> ℹ️ step 3 --done 时，CLI 已落盘结构化 QUICKLOG 条目（标题从「需求：」提取、正文四字段分行、文件行可用 --file-notes 写多行括注）。事后只需按需核对，详见 step 3「QUICKLOG 正文核对」。
 
 ### 输出
 任务理解 + 上下文摘要
@@ -130,12 +130,26 @@ Git 暂存并更新任务记录。
 
 缺任一项，`--done` 会被拒并提示缺失字段，补全后重跑即可（不丢进度）。
 
+### 📎 文件括注 --file-notes（可选，省事后手改文件行）
+若希望 QUICKLOG「文件：」行直接落盘为多行带括注（而非单行逗号路径），`--done` 时加 `--file-notes`，CLI 落盘为多行 `- path（括注）`，免去事后手改：
+
+```
+sillyspec run quick --done --change <id> --output "需求：… 根因：… 方案：… 结果：…" --file-notes "src/a.js::登录端点串限流 || src/b.js::新建 INCR 计数"
+```
+
+格式：`path::括注` 一条，`||` 分隔多条（括注可省略只留 `path`）。不传则「文件：」行回填审计到的实际改动文件单行（仍可事后手改）。
+
+### 收尾推荐顺序（模块文档在 --done 前，QUICKLOG 在 --done 后，别记混）
+1. 【--done 前】命中模块 → 改模块文档 → `git add -- <模块文档>`（见下方「模块文档同步」）
+2. 【--done】`sillyspec run quick --done --change <id> --output "四字段" [--file-notes "..."]`（CLI 自动翻完成 + 勾 task + 落盘 QUICKLOG 标题/文件/正文）
+3. 【--done 后】核对 QUICKLOG 标题（CLI 已从「需求：」自动提取，仅弱标题才手改）→ 若改了再 `git add`
+
 ### 操作
 1. 查看 `git status --porcelain`，确认只包含本次 quick 相关文件
 2. 使用 `git add -- <file...>` 暂存本次 quick 实际修改的文件（不要 commit，由用户通过统一提交工具处理）
    - 禁止使用 `git add -A`
    - 不要暂存 quick 开始前就已存在的无关改动
-3. QUICKLOG / tasks.md 记录由 CLI 在本 step 完成时自动收尾（翻「已完成」+ 勾选 task + 轮转），你无需手动建/翻骨架——但**正文精修必做**（见下方「QUICKLOG 正文精修」）
+3. QUICKLOG / tasks.md 记录由 CLI 在本 step 完成时自动收尾（翻「已完成」+ 勾选 task + 轮转），你无需手动建/翻骨架——**QUICKLOG 核对按需**（见下方「QUICKLOG 正文核对」；文件行可用 --file-notes 免手改）
 4. 如果发现项目特有的坑，追加到 `{SPEC_ROOT}/knowledge/uncategorized.md`
 5. 任务比预期复杂 → 建议用完整流程
 
@@ -153,15 +167,17 @@ Git 暂存并更新任务记录。
 ### 输出
 暂存确认 + 记录路径 + 模块文档同步结果（如有）
 
-### 📝 QUICKLOG 正文精修（--done 之后必做，不可跳过）
-sillyspec run quick --done 成功后，CLI 已在 {SPEC_ROOT}/quicklog/QUICKLOG-<git-user>.md 落盘本次 <quicklog-id> 条目的简版骨架：状态翻「已完成」、「文件：」是单行逗号路径、正文是 --output 的四字段。骨架是机械产物不达标，你必须立即编辑该条目手动精修成丰富格式，三项必改：
+### 📝 QUICKLOG 正文核对（--done 之后，按需；多数无需手改）
+CLI 落盘的条目已是结构化产物（非简版骨架）：标题从「需求：」自动提取、正文四字段自动分行、文件行用 --file-notes 时为多行括注。--done 后只需核对，多数情况无需手改：
 
-1. 标题：把 ## <quicklog-id> | <时间> | <标题> 中的 <标题> 改为真实需求摘要（如「登录加 IP 限流（5 次/分）+ 失败 3 次滑块验证」）。禁止保留 CLI 兜底的 (quick 任务) 或一句话笼统描述。
-2. 文件：把 CLI 写的单行「文件：a.js, b.js」改写为多行 bullet，每个文件带关键改动括注；禁止「（见实际改动）」或无括注纯路径单行。示例：
+1. 标题：CLI 已从「需求：」提取摘要刷新标题；仅当需求写得太弱（占位/笼统）才手改为真实需求摘要。
+2. 文件：用了 --file-notes 已是多行括注；没传则回填审计到的实际文件单行，可事后补括注（示例见下）。
+3. 正文：四字段已分行落盘，按需扩写充实（不允许只留一段「结果：」）。
+
+补括注示例（仅当没用 --file-notes、想事后补时）：
    文件：
    - backend/app/modules/auth/router.py（登录端点串 check_rate_limit→assert_captcha_if_needed）
    - backend/app/modules/auth/captcha_service.py（新建：限流 INCR + 失败计数 + Pillow 滑块生成/校验）
-3. 正文：核对 需求： 根因： 方案： 结果： 四段逐项充实（--output 已写、CLI 原样插入，按需扩写），不允许只留一段「结果：」。
 
-一条 quick = 一条独立 ql 条目；精修只动本次 <quicklog-id> 条目，不追加到旧条目。QUICKLOG 在 .sillyspec/（gitignore），精修不影响 --done 已通过的边界审计。
+一条 quick = 一条独立 ql 条目；核对只动本次 <quicklog-id> 条目，不追加到旧条目。QUICKLOG 在 .sillyspec/（gitignore），核对不影响 --done 已通过的边界审计。
 ````

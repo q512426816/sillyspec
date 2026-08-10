@@ -117,6 +117,36 @@ function sanitizeResult(resultText) {
   return String(resultText || '').trim()
 }
 
+// ── quick step3 --file-notes 旁路通道 ──
+// flag 在 command.js 解析（--file-notes），completeQuicklogEntry 在 quick 收尾时消费。
+// 不经 completeStep → handleQuickStageCompletion → completeQuicklogEntry 三层透传（会扩 3 处签名，
+// 且 quick 收尾路径是多 agent 并发改热点）；用 per-process setter，CLI 单进程生命周期内有效，
+// completeQuicklogEntry 读后即清。无 --file-notes 时为 '' → 回退 changedFiles 单行（向后兼容）。
+let _pendingFileNotes = ''
+export function setQuickFileNotes(raw) { _pendingFileNotes = raw == null ? '' : String(raw) }
+export function getQuickFileNotes() { return _pendingFileNotes }
+
+/**
+ * 解析 --file-notes 原文 → [{path, note}]。
+ * 格式：「path1::括注1 || path2::括注2」——`||` 分隔条目，`::` 分隔路径与括注（首个 `::` 为界，
+ * 括注内含 `::` 不误切）；路径反斜杠归一正斜杠（匹配 git 路径风格）。无 `::` 的段 → note=''。
+ * 空 / 全空段 → []（调用方回退 changedFiles 单行）。导出供测试 + 未来直接调用。
+ */
+export function parseFileNotes(raw) {
+  if (!raw) return []
+  return String(raw)
+    .split('||')
+    .map((seg) => {
+      const s = seg.trim()
+      if (!s) return null
+      const idx = s.indexOf('::')
+      const path = (idx === -1 ? s : s.slice(0, idx)).replace(/\\/g, '/').trim()
+      const note = idx === -1 ? '' : s.slice(idx + 2).trim()
+      return path ? { path, note } : null
+    })
+    .filter(Boolean)
+}
+
 // 结果块必填字段（quick step3 --done --output 的结构化结果模板，见 src/stages/quick.js）。
 // 4 个必填字段标签从 manifest 同源(stage-contract-spec.js quick.result-labels),prompt 事前契约与本校验单源。
 const RESULT_REQUIRED_LABELS = getRule('quick.result-labels').data.literals
@@ -284,7 +314,7 @@ function splitSingleLineFields(body) {
   return scanFields(body, findBoundaryLabel) ?? scanFields(body, (b, l, f) => b.indexOf(l, f))
 }
 
-function flipEntryInContent(content, qlId, result, changedFiles = []) {
+function flipEntryInContent(content, qlId, result, changedFiles = [], fileNotes = []) {
   const lines = content.split('\n')
   const startIdx = lines.findIndex(l => l.startsWith(`## ${qlId} |`))
   if (startIdx === -1) return null
@@ -303,11 +333,16 @@ function flipEntryInContent(content, qlId, result, changedFiles = []) {
   for (let i = startIdx + 1; i < endIdx; i++) {
     if (/^状态：进行中\r?$/.test(lines[i])) { lines[i] = '状态：已完成'; flipped = true }
     if (lines[i].startsWith('结果：')) hasResult = true
-    // 回填实际改动文件（调用方已用 isQuickMetadata 过滤 quick 自身元数据，只留业务文件）。
-    // 原地替换 lines[i]，不改数组长度 → 与下方状态/结果 splice 的索引完全解耦。
-    // changedFiles 空（brownfield 无 guard / 调用方未传）→ 不动文件行，保持「（见实际改动）」。
-    if (changedFiles.length > 0 && lines[i].startsWith('文件：')) {
-      lines[i] = `文件：${changedFiles.join(', ')}`
+    // 文件行落盘：--file-notes 优先（多行 bullet 带括注），否则回填审计到的实际改动文件单行，
+    // 都空则不动（保持「（见实际改动）」）。bullet 用「数组元素内嵌 \n」写——lines.join('\n') 展平为
+    // 多行，数组长度不变 → 与下方状态/结果 splice 的索引完全解耦（changedFiles 单行同理原地替换）。
+    if (lines[i].startsWith('文件：')) {
+      if (fileNotes.length > 0) {
+        const bullets = fileNotes.map((n) => `- ${n.path}${n.note ? `（${n.note}）` : ''}`)
+        lines[i] = `文件：\n${bullets.join('\n')}`
+      } else if (changedFiles.length > 0) {
+        lines[i] = `文件：${changedFiles.join(', ')}`
+      }
     }
   }
   if (!flipped && !lines.slice(startIdx, endIdx).some(l => /^状态：已完成\r?$/.test(l))) {
@@ -405,6 +440,10 @@ export async function completeQuicklogEntry(specBase, gitUser, qlId, { resultTex
   const linked = Array.isArray(linkedChanges) ? linkedChanges : []
   // 实际改动文件（调用方 complete-handlers 已用 isQuickMetadata 过滤 quick 自身元数据）。空 → 不动文件行。
   const realFiles = Array.isArray(changedFiles) ? changedFiles.filter(Boolean) : []
+  // --file-notes（command.js 经 setQuickFileNotes 注入）：有则文件行写多行 bullet 带括注。
+  // 读后即清（per-process，防残留跨调用）。flipEntryInContent 优先用 fileNotes，空则回退 realFiles。
+  const fileNotes = parseFileNotes(_pendingFileNotes)
+  _pendingFileNotes = ''
 
   await withFileLock(lockPath, async () => {
     // 条目可能在主文件或轮转归档中
@@ -412,7 +451,7 @@ export async function completeQuicklogEntry(specBase, gitUser, qlId, { resultTex
       const filePath = join(quicklogDir, f)
       let content = ''
       try { content = readFileSync(filePath, 'utf8') } catch { continue }
-      const updated = flipEntryInContent(content, qlId, result, realFiles)
+      const updated = flipEntryInContent(content, qlId, result, realFiles, fileNotes)
       if (updated !== null) {
         await writeAtomic(filePath, updated) // 命中处原子落盘（只改含目标条目的那一个文件）
         break

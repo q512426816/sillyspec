@@ -27,7 +27,7 @@ import { tmpdir } from 'node:os'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 
-import { allocateQuicklogEntry, completeQuicklogEntry, findQuicklogEntry, withFileLock, deriveTitleFromLinkedChange } from '../src/quicklog.js'
+import { allocateQuicklogEntry, completeQuicklogEntry, findQuicklogEntry, withFileLock, deriveTitleFromLinkedChange, setQuickFileNotes, getQuickFileNotes, parseFileNotes } from '../src/quicklog.js'
 import { isQuickMetadata } from '../src/run/shared.js'
 
 const execFileP = promisify(execFile)
@@ -304,6 +304,48 @@ console.log('\n--- 验收 2g：多条目间距（结果块与下一条目标题�
   const bIdx = log.indexOf(`## ${b.qlId} |`)
   const aSection = log.slice(aIdx, bIdx)
   assert(/文件：[^\n]*\n需求：/.test(aSection), '结果块紧贴 A 的「文件：」行（同属 A 条目）')
+}
+
+// ─────────────────────────────────────────
+// 验收 2h：--file-notes → 文件行多行括注（setQuickFileNotes 旁路通道）
+// quick step3 --file-notes "path::括注 || path::括注" 让 CLI 直接落盘多行 bullet 带括注，
+// 省 agent 事后手改单行文件列表（point1）。command.js 调 setQuickFileNotes 注入 per-process 状态，
+// completeQuicklogEntry 读后即清；flipEntryInContent 用「数组元素内嵌 \n」写 bullet（数组长度稳定）。
+// ─────────────────────────────────────────
+console.log('\n--- 验收 2h：--file-notes 文件行多行括注 ---')
+{
+  // parseFileNotes 纯函数：格式 / 反斜杠归一 / 无括注 / 括注含 :: / 空
+  assert(JSON.stringify(parseFileNotes('a.js::登录端点 || b.js::新建服务')) === JSON.stringify([{ path: 'a.js', note: '登录端点' }, { path: 'b.js', note: '新建服务' }]), 'parseFileNotes：:: 分路径/括注，|| 分条目')
+  assert(JSON.stringify(parseFileNotes('src\\auth\\x.js::限流')) === JSON.stringify([{ path: 'src/auth/x.js', note: '限流' }]), 'parseFileNotes：反斜杠归一正斜杠')
+  assert(JSON.stringify(parseFileNotes('a.js || b.js')) === JSON.stringify([{ path: 'a.js', note: '' }, { path: 'b.js', note: '' }]), 'parseFileNotes：无 :: → note 空')
+  assert(JSON.stringify(parseFileNotes('a.js::括注含 :: 双冒号')) === JSON.stringify([{ path: 'a.js', note: '括注含 :: 双冒号' }]), 'parseFileNotes：首个 :: 为界，括注含 :: 不误切')
+  assert(JSON.stringify(parseFileNotes('') === '[]' && JSON.stringify(parseFileNotes(null)) === '[]'), 'parseFileNotes：空/null → []')
+
+  // completeQuicklogEntry 消费 setQuickFileNotes → 文件行多行 bullet
+  const specBase = makeTmpDir('qlm-filenotes-')
+  const r = await allocateQuicklogEntry(specBase, 'zoe', { description: '文件括注', allowedFiles: [] })
+  setQuickFileNotes('src/auth/router.js::登录端点串 check_rate_limit || src/auth/captcha.js::新建 INCR 计数')
+  assert(getQuickFileNotes() !== '', 'setQuickFileNotes 注入 per-process 状态')
+  await completeQuicklogEntry(specBase, 'zoe', r.qlId, {
+    resultText: '需求：登录限流\n根因：无 rate limit\n方案：INCR 计数\n结果：通过',
+    linkedChanges: [],
+    changedFiles: ['src/auth/router.js', 'src/auth/captcha.js'],
+  })
+  assert(getQuickFileNotes() === '', 'completeQuicklogEntry 读后即清 _pendingFileNotes（防跨调用残留）')
+  const log = readFileSync(join(specBase, 'quicklog', 'QUICKLOG-zoe.md'), 'utf8')
+  assert(log.includes('- src/auth/router.js（登录端点串 check_rate_limit）'), '文件行落盘 bullet 1（path+括注）')
+  assert(log.includes('- src/auth/captcha.js（新建 INCR 计数）'), '文件行落盘 bullet 2（path+括注）')
+  assert(!log.includes('文件：src/auth/router.js, src/auth/captcha.js'), '--file-notes 覆盖 changedFiles 单行（不残留）')
+  assert(log.includes('状态：已完成'), '状态翻转不受影响')
+  assert(log.includes('结果：通过'), '结果块仍正常追加')
+
+  // 不传 --file-notes（_pendingFileNotes 空）→ 回退 changedFiles 单行（向后兼容）
+  const r2 = await allocateQuicklogEntry(specBase, 'zoe', { description: '回退单行', allowedFiles: [] })
+  await completeQuicklogEntry(specBase, 'zoe', r2.qlId, {
+    resultText: 'done', linkedChanges: [], changedFiles: ['src/x.js', 'src/y.js'],
+  })
+  const log2 = readFileSync(join(specBase, 'quicklog', 'QUICKLOG-zoe.md'), 'utf8')
+  assert(log2.includes('文件：src/x.js, src/y.js'), '无 --file-notes → 回退 changedFiles 单行（向后兼容）')
 }
 
 // ─────────────────────────────────────────

@@ -32,6 +32,7 @@ import { ProgressManager } from '../progress.js'
 import { validateChangeExists } from '../stage-contract.js'
 import { stageRegistry, auxiliaryStages } from '../stages/index.js'
 import { definition as brainstormAutoDef } from '../stages/brainstorm-auto.js'
+import { setQuickFileNotes } from '../quicklog.js'
 
 // F2/F4: 哪些 flag 吃下一个 token 作「值」（其余 --flag 都是布尔，不吞值）。
 // 校验循环只对 VALUE_FLAGS 跳下一个 token（否则 --done 后跟 typo 会被当 --done 的值吞掉）。
@@ -40,7 +41,7 @@ const VALUE_FLAGS = new Set([
   '--reason', '--options', '--answer', '--confirm-mode',
   '--output', '--input', '--change', '--linked-changes',
   '--spec-dir', '--spec-root', '--runtime-root', '--workspace-id', '--scan-run-id',
-  '--files', '--from-step', '--mode', '--dir', '--confirm-mode',
+  '--files', '--file-notes', '--from-step', '--mode', '--dir', '--confirm-mode',
 ])
 
 /**
@@ -449,6 +450,16 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     quickFiles = flags[filesIdx + 1].split(',').map(f => f.trim()).filter(Boolean)
   }
 
+  // 解析 --file-notes "path::括注 || path::括注"（quick 专用：QUICKLOG「文件：」行落盘多行括注）。
+  // 旁路注入 quicklog.js（per-process setter），不经 complete 收尾路径透传（避碰多 agent 并发改的收尾热点）。
+  // completeQuicklogEntry 读后即清；不传 → '' → 回填审计到的实际文件单行（向后兼容）。
+  let quickFileNotes = ''
+  const fileNotesIdx = flags.indexOf('--file-notes')
+  if (fileNotesIdx !== -1 && flags[fileNotesIdx + 1]) {
+    quickFileNotes = flags[fileNotesIdx + 1]
+  }
+  setQuickFileNotes(quickFileNotes)
+
   const isAllowNew = flags.includes('--allow-new')
   const isForceBaseline = flags.includes('--force-baseline')
   const isForceRescan = flags.includes('--force-rescan')
@@ -460,7 +471,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     '--reason', '--options', '--answer', '--confirm-mode',
     '--output', '--input', '--change', '--linked-changes',
     '--spec-dir', '--spec-root', '--runtime-root', '--workspace-id', '--scan-run-id',
-    '--files', '--allow-new', '--force-baseline', '--force-rescan',
+    '--files', '--file-notes', '--allow-new', '--force-baseline', '--force-rescan',
     '--json', '--dir', '--help',
     '--reopen', '--from-step', '--mode',
     '--deep', '--quick', '--standard', // scan profile 三档显式选择（scan-profile.js 从 argv 读；互斥见下方 PROFILE_FLAGS 检测）
