@@ -269,7 +269,12 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
     if (outputText) {
       const inputsPath = join(specBase, '.runtime', 'user-inputs.md')
       const entry = `\n## ${new Date().toLocaleString('zh-CN',{hour12:false})} | ${changeName || '?'} | ${stageName}: ${steps[currentIdx].name}\n${inputText ? "- 输入：" + inputText + "\n" : ""}- 输出：${outputText}\n`
-      appendFileSync(inputsPath, entry)
+      try {
+        appendFileSync(inputsPath, entry)
+      } catch (e) {
+        // best-effort：Windows AV/索引占用偶发 EPERM，历史日志写失败不阻断主流程（review-2026-08-09 #7，对齐 shared.js triggerSync）
+        console.warn('⚠️ user-inputs.md 追加失败（不阻断）:', e.message)
+      }
     }
 
     // 阶段完成收尾共享管线（handleScan manifest + validateMetadata/FileLocations + auxiliary 重置 +
@@ -346,7 +351,11 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
   if (outputText) {
     const inputsPath = join(specBase, '.runtime', 'user-inputs.md')
     const entry = `\n## ${new Date().toLocaleString('zh-CN',{hour12:false})} | ${changeName || '?'} | ${stageName}: ${steps[currentIdx].name}\n${inputText ? "- 输入：" + inputText + "\n" : ""}- 输出：${outputText}\n`
-    appendFileSync(inputsPath, entry)
+    try {
+      appendFileSync(inputsPath, entry)
+    } catch (e) {
+      console.warn('⚠️ user-inputs.md 追加失败（不阻断）:', e.message)
+    }
   }
 
   const defSteps = await getStageSteps(stageName, cwd, progress, platformOpts?.specRoot || null)
@@ -693,7 +702,11 @@ export async function continueStep(pm, progress, stageName, cwd, answer, options
   // Append to user-inputs.md
   const inputsPath = join(specBase, '.runtime', 'user-inputs.md')
   const entry = `\n## ${now} | ${changeName || '?'} | ${stageName}: ${currentStep.name} [CONTINUED]\n- 回答：${answer}\n`
- appendFileSync(inputsPath, entry)
+  try {
+    appendFileSync(inputsPath, entry)
+  } catch (e) {
+    console.warn('⚠️ user-inputs.md 追加失败（不阻断）:', e.message)
+  }
 
   // shouldReturnToCurrentStep: 回到当前步骤继续执行（repeatable=多轮探索，requiresWait=确认后执行动作）
   if (shouldReturnToCurrentStep) {
