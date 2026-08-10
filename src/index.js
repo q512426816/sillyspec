@@ -771,6 +771,12 @@ SillySpec worktree — git worktree 隔离管理
             for (const err of result.errors) {
               console.error(`   ${err}`);
             }
+            if (result.rescueCommands) {
+              console.error('');
+              console.error(`🆘 Rescue commands (${result.rescueCommands.cpFileCount} safe / ${result.rescueCommands.excludedCount} excluded，旁路 git apply，cp 后需手动 sillyspec worktree cleanup ${wtName}):`);
+              for (const c of result.rescueCommands.commands) console.error(`   ${c}`);
+              for (const w of result.rescueCommands.warnings) console.error(`   ⚠️  ${w}`);
+            }
             process.exit(1);
           }
 
@@ -832,6 +838,12 @@ SillySpec worktree — git worktree 隔离管理
             for (const w of assessment.warnings) console.log(`   ⚠️  ${w}`);
           }
 
+          if (assessment.rescueCommands) {
+            console.log('');
+            console.log(`🆘 Rescue commands (${assessment.rescueCommands.cpFileCount} safe / ${assessment.rescueCommands.excludedCount} excluded，旁路 git apply，cp 后需手动 sillyspec worktree cleanup ${wtName}):`);
+            for (const c of assessment.rescueCommands.commands) console.log(`   ${c}`);
+            for (const w of assessment.rescueCommands.warnings) console.log(`   ⚠️  ${w}`);
+          }
           console.log('');
           if (assessment.decision === 'SAFE' || assessment.decision === 'WARNING') {
             console.log('Action: auto-applying...');

@@ -46,6 +46,82 @@ export function filterDeliverableFiles(files) {
 }
 
 /**
+ * dirty 拦截触发时生成「逐文件 rescue 指令」——旁路 git apply 的安全逃生通道（design §接口定义 generateRescueCommands）。
+ *
+ * 逐文件四分类（按优先级判定，命中即 continue）：
+ *   1. DELETE           ∈ deletedFiles      → rm "<projectRoot>/<f>"（不计 cpFileCount 也不计 excludedCount）
+ *   2. EXCLUDE-DIRTY    ∈ dirtyFiles        → warning（cp 会覆盖 main 工作区未提交改动），excludedCount++
+ *   3. EXCLUDE-MISMATCH ∈ hashMismatchFiles → warning（cp 会回退主干已提交推进改动），excludedCount++
+ *   4. SAFE-CP          其余（main 该文件干净）→ cp "<worktreePath>/<f>" "<projectRoot>/<f>"，cpFileCount++
+ *
+ * 路径用 path.join 拼接后 replace 反斜杠为正斜杠（Git Bash 兼容，规则 13）。
+ *
+ * 纯函数：无 git/fs 调用无副作用，不读 meta/worktree 状态，不 mutate 入参；
+ *        所有 dirtyFiles/hashMismatchFiles/deletedFiles 集合均由调用方（step4.5/5a/assess）算好传入。
+ *
+ * @param {object} args
+ * @param {string[]} args.changedFiles        filterDeliverableFiles 后的实际变更路径
+ * @param {Set<string>|string[]} args.dirtyFiles   main 工作区未提交文件集（统一口径：tracked-modified ∪ untracked，排 .sillyspec/+meta.json）
+ * @param {string[]} args.hashMismatchFiles   主干已提交推进文件（step3.5 前移算，依赖 baseHash/HEAD blob 对比）
+ * @param {string[]} [args.deletedFiles=[]]   worktree 删除文件（git diff name-status D）
+ * @param {string} args.worktreePath
+ * @param {string} args.projectRoot
+ * @returns {{
+ *   commands: string[],      // 可复制粘贴 shell 命令（cp/rm），正斜杠路径
+ *   warnings: string[],      // 被排除文件（dirty/mismatch）的风险标注
+ *   cpFileCount: number,     // SAFE-CP 文件数
+ *   excludedCount: number    // EXCLUDE-DIRTY + EXCLUDE-MISMATCH 数
+ * }}
+ */
+export function generateRescueCommands({ changedFiles, dirtyFiles, hashMismatchFiles, deletedFiles = [], worktreePath, projectRoot }) {
+  // 集合归一：dirtyFiles 接受 Set 或数组（调用方 step4.5/5a 可能传任一形态），其余统一数组→Set
+  const dirtySet = dirtyFiles instanceof Set ? dirtyFiles : new Set(dirtyFiles || []);
+  const mismatchSet = new Set(hashMismatchFiles || []);
+  const deletedSet = new Set(deletedFiles || []);
+
+  const commands = [];
+  const warnings = [];
+  let cpFileCount = 0;
+  let excludedCount = 0;
+
+  for (const f of changedFiles) {
+    // 优先级 1→2→3→4，命中即 continue（DELETE 最先判）
+    if (deletedSet.has(f)) {
+      commands.push(`rm "${join(projectRoot, f).replace(/\\/g, '/')}"`);
+      continue;
+    }
+    if (dirtySet.has(f)) {
+      warnings.push(`跳过 ${f}：EXCLUDE-DIRTY（main 工作区该文件有未提交改动，cp 会覆盖）`);
+      excludedCount++;
+      continue;
+    }
+    if (mismatchSet.has(f)) {
+      warnings.push(`跳过 ${f}：EXCLUDE-MISMATCH（主干已提交推进该文件，cp 会回退他人改动；请先 commit main 未提交改动再正常 apply 走 --3way 合并）`);
+      excludedCount++;
+      continue;
+    }
+    commands.push(`cp "${join(worktreePath, f).replace(/\\/g, '/')}" "${join(projectRoot, f).replace(/\\/g, '/')}"`);
+    cpFileCount++;
+  }
+
+  return { commands, warnings, cpFileCount, excludedCount };
+}
+
+/**
+ * 算 rescue 用的统一 dirtyFiles 口径：main 工作区所有未提交文件 = tracked-modified（git diff HEAD）
+ * ∪ untracked（git ls-files others），再用 filterDeliverableFiles 过滤（排 .sillyspec/changes/.runtime/quicklog
+ * + meta.json，保留 .sillyspec/docs/——对齐 changedFiles 同宇宙，闭合 design Grill 的 .sillyspec/docs/ 残留 gap）。
+ * 注意：此口径与 step4.5「是否触发拦截」的判定口径（排除 .claude/docs/CLAUDE.md）不同，二者不混用（design §dirtyFiles 口径统一）。
+ * @param {string} projectRoot
+ * @returns {string[]} 未提交文件（filterDeliverableFiles 过滤后）
+ */
+export function computeRescueDirtyFiles(projectRoot) {
+  const tracked = (gitQuiet(projectRoot, ['diff', '--name-only', 'HEAD']) || '').split('\n').filter(Boolean);
+  const untracked = (gitQuiet(projectRoot, ['ls-files', '--others', '--exclude-standard']) || '').split('\n').filter(Boolean);
+  return filterDeliverableFiles([...new Set([...tracked, ...untracked])]);
+}
+
+/**
  * 校验变更文件是否都在 design.md 清单内——容差匹配（与 plan-postcheck validateDesignFileCoverage
  * 同语义）：design 清单写 glob（双星通配）或目录前缀（如 src/ 子树）也能覆盖 git diff 出的具体路径，
  * 避免「plan 阶段放过、apply 阶段卡死」逼用户回去补字面文件名。
@@ -153,6 +229,8 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
     changedFiles: [],
     extraFiles: [],
     hashMismatchFiles: [],
+    deletedFiles: [],
+    rescueCommands: null,
     patchPath: null,
     errors: [],
     merged: false,
@@ -177,6 +255,7 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
   // worktree 内修改可能没有 commit，用 git diff <baseHash>（比较 baseHash 到工作区内容）
   // 同时检测 untracked 新文件（git diff 不包含 untracked）
   let changedFiles;
+  const deletedFiles = [];
   try {
     // 用 --name-status 捕获 rename/delete（--name-only 会丢失 rename 源文件）
     const statusRaw = git(worktreePath, ['diff', '--name-status', diffBase]);
@@ -187,6 +266,8 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
         // R100 old.txt new.txt → 提取两个文件
         if (parts.length >= 2) statusFiles.add(parts[parts.length - 1]);
         if (parts.length >= 3) statusFiles.add(parts[parts.length - 2]);
+        // 删除文件（status D / D100）→ 收集到 deletedFiles（rescue DELETE 分类用，design §逐文件分类）
+        if (parts[0].startsWith('D')) deletedFiles.push(parts[parts.length - 1]);
       }
     }
 
@@ -204,6 +285,7 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
   }
 
   result.changedFiles = changedFiles;
+  result.deletedFiles = deletedFiles;
 
   if (changedFiles.length === 0) {
     // 没有变更
@@ -217,6 +299,22 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
   // --- 3. 解析 apply 文件清单（design §6 清单 ∪ plan TaskCard allowed_paths，execute 复盘 c） ---
   const allowSet = resolveApplyAllowSet(projectRoot, changeName);
   const hasAllowList = allowSet.size > 0;
+
+  // --- 3.5 主干已提交推进检测：hashMismatch 前移（Grill P0 修复，design §step 顺序修正）---
+  // 原在 step5b，但 step4.5/5a dirty 拦截短路在 step5b 之前，致 rescue 拿不到 hashMismatchFiles
+  // → EXCLUDE-MISMATCH 失效 → cp 覆盖主干已提交推进。前移到 step4.5 之前（仅依赖 baseHash/HEAD blob
+  // 对比，无 dirty 依赖；allowSet/changedFiles/baseHash 均在本步之前可得，前移安全）。
+  // 仅记录不拦截（交 step7 --3way 实测，真重叠回滚提示 --merge）。
+  const targetFiles = hasAllowList ? [...allowSet] : changedFiles;
+  const wtHashMap = getBlobHashMap(worktreePath, baseHash, targetFiles);
+  const mainHashMap = getBlobHashMap(projectRoot, 'HEAD', targetFiles);
+  for (const f of targetFiles) {
+    const wtBlob = wtHashMap.get(f) ?? null;
+    const mainBlob = mainHashMap.get(f) ?? null;
+    if (wtBlob === null && mainBlob === null) continue;
+    if (wtBlob === mainBlob) continue;
+    result.hashMismatchFiles.push(f);
+  }
 
   // --- 4. 校验：变更文件 ⊆ 清单（无清单则跳过）---
   if (hasAllowList) {
@@ -242,7 +340,9 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
   // --- 4.5 校验：主工作区是否有「未提交」脏改动（未提交 dirty 是 git apply --3way 危险区，必须拦）---
   // 分工：4.5（排除规则下当前 dirty）+ 5a（脏∩changedFiles）挡「未提交」dirty；5b 管「已提交」HEAD 分叉（已放宽，见下）。
   // 实测：主干未提交 dirty 时，git apply --3way 报 `does not match index` 且行为不一致（可能报错/可能半应用，
-  // 哪怕脏文件与 patch 不重叠）——这是 git 硬约束，故此处友好拦截，引导用户先 commit/stash。
+  // 哪怕脏文件与 patch 不重叠）——这是 Windows/autocrlf 的 CRLF 副作用（非 git 本质限制：
+  // autocrlf off 时 --3way 在不重叠 dirty 树能 Applied cleanly，on 时才报 does not match index）。
+  // 但仓库 CRLF 混用 + 规则13 要求 Windows 兼容，fail-loud 在 Windows 仍有据，故此处友好拦截，引导用户先 commit/stash。
   // 排除非交付物的元数据/文档 churn（execute 自身改的 + 多操作者常改的 agent 指引/文档），
   // 否则别人改 CLAUDE.md/docs/.claude → 判定 dirty → apply 误阻断（多操作者仓库高频踩坑）。
   // 注意：排除规则必须和 computeBaselineHash (worktree.js) 一致（虽已不比对 hash，仍用同一口径判当前 dirty）。
@@ -263,10 +363,26 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
         ((gitQuiet(projectRoot, ['diff', '--name-only', 'HEAD']) || '').split('\n').filter(Boolean))
           .concat((gitQuiet(projectRoot, ['ls-files', '--others', '--exclude-standard']) || '').split('\n').filter(Boolean))
       )].filter(f => !f.startsWith('.sillyspec/') && f !== 'meta.json');
+      // rescue：dirty 拦截触发时生成逐文件 cp 安全子集（旁路 git apply），写 result.rescueCommands 供 assess/打印器消费
+      const rescueDirty = computeRescueDirtyFiles(projectRoot);
+      result.rescueCommands = generateRescueCommands({
+        changedFiles,
+        dirtyFiles: rescueDirty,
+        hashMismatchFiles: result.hashMismatchFiles,
+        deletedFiles: result.deletedFiles,
+        worktreePath,
+        projectRoot,
+      });
       result.errors.push(
         `主工作区有未提交的改动，git apply 无法安全应用。\n` +
         (dirtyFiles.length > 0 ? `未提交文件：\n  ${dirtyFiles.join('\n  ')}\n` : '') +
-        `请先提交或暂存这些改动，再重新 apply：\n  git add -A && git commit -m "..."   或   git stash\n`
+        `请先提交或暂存这些改动，再重新 apply：\n  git add -A && git commit -m "..."   或   git stash\n` +
+        (result.rescueCommands.commands.length > 0 || result.rescueCommands.warnings.length > 0
+          ? `或手动 rescue（旁路 git apply，逐文件 cp 安全子集；cp 后需手动 sillyspec worktree cleanup ${changeName}）：\n` +
+            result.rescueCommands.commands.map(c => `  ${c}`).join('\n') +
+            (result.rescueCommands.warnings.length > 0 ? '\n' + result.rescueCommands.warnings.map(w => `  ${w}`).join('\n') : '') +
+            `\n  （共 ${result.rescueCommands.cpFileCount} 个可安全 cp，${result.rescueCommands.excludedCount} 个被排除）\n`
+          : '')
       );
       if (!checkOnly) return result; // checkOnly 收集不短路（一次报全）；真实 apply 短路
     }
@@ -280,34 +396,25 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
     // 如果脏文件和本次 apply 的文件有交集 → 报错
     const conflictDirty = mainDirtyFiles.filter(f => changedFiles.includes(f));
     if (conflictDirty.length > 0) {
+      const rescueDirty5a = computeRescueDirtyFiles(projectRoot);
+      result.rescueCommands = generateRescueCommands({
+        changedFiles, dirtyFiles: rescueDirty5a, hashMismatchFiles: result.hashMismatchFiles,
+        deletedFiles: result.deletedFiles, worktreePath, projectRoot,
+      });
       result.errors.push(
-        `主工作区有以下未 commit 的变更，会影响 apply：\n  ${conflictDirty.join('\n  ')}\n请先 commit 或 stash 这些变更。`
+        `主工作区有以下未 commit 的变更，会影响 apply：\n  ${conflictDirty.join('\n  ')}\n请先 commit 或 stash 这些变更。` +
+        (result.rescueCommands.commands.length > 0 || result.rescueCommands.warnings.length > 0
+          ? `或手动 rescue（旁路 git apply，逐文件 cp 安全子集；cp 后需手动 sillyspec worktree cleanup ${changeName}）：\n` +
+            result.rescueCommands.commands.map(c => `  ${c}`).join('\n') +
+            (result.rescueCommands.warnings.length > 0 ? '\n' + result.rescueCommands.warnings.map(w => `  ${w}`).join('\n') : '') +
+            `\n  （共 ${result.rescueCommands.cpFileCount} 个可安全 cp，${result.rescueCommands.excludedCount} 个被排除）\n`
+          : '')
       );
       if (!checkOnly) return result; // checkOnly 收集不短路（一次报全）；真实 apply 短路
     }
   }
 
-  // 5b. 对比 worktree 的 baseHash 和主工作区 HEAD 中每个清单文件的 blob hash
-  // 批量化：两次 ls-tree（worktree 的 baseHash + 主仓库 HEAD）各建一张 path→hash Map，
-  // 替代 per-file getFileBlobHash × 2（原 2N spawn → 固定 2）。语义等价见 getBlobHashMap。
-  // 放宽（2026-07）：blob 不一致不再 BLOCKED——它意味着主干「已提交」推进改了同文件，
-  // 而 git apply --3way 能自动三路合并这种场景（不同区域直接合，同区域留冲突标记）。
-  // 故仅记录为风险提示（hashMismatchFiles → assess WARNING / summary 展示），放行交 step7 --3way 实测。
-  // 真重叠时 --3way 冲突，由 step7 回滚并提示 --merge 兜底。
-  const targetFiles = hasAllowList ? [...allowSet] : changedFiles;
-  const wtHashMap = getBlobHashMap(worktreePath, baseHash, targetFiles);
-  const mainHashMap = getBlobHashMap(projectRoot, 'HEAD', targetFiles);
-  for (const f of targetFiles) {
-    const wtBlob = wtHashMap.get(f) ?? null;
-    const mainBlob = mainHashMap.get(f) ?? null;
-
-    // 两者都为 null（文件在 base 时不存在）→ OK
-    if (wtBlob === null && mainBlob === null) continue;
-    // 两者一致 → OK
-    if (wtBlob === mainBlob) continue;
-    // 不一致 → 主干已提交推进改了此文件，记风险提示（不拦截，交 --3way）
-    result.hashMismatchFiles.push(f);
-  }
+  // 5b hashMismatch 计算已前移到 step3.5（Grill P0），见上
 
   // --- 6. checkOnly 模式：到此返回 ---
   if (checkOnly) {
@@ -568,14 +675,15 @@ export function assessApplyRisk(changeName, { cwd } = {}) {
   if (changedFiles.length === 0) {
     // 无变更：若仍有 Gate 错误（如主区 dirty）则 BLOCKED，否则 SAFE
     if (reasons.length > 0) {
-      return { decision: 'BLOCKED', changedFiles: [], reasons, warnings, stats: { additions: 0, deletions: 0 } };
+      return { decision: 'BLOCKED', changedFiles: [], reasons, warnings, stats: { additions: 0, deletions: 0 }, rescueCommands: checkResult.rescueCommands || null };
     }
     return {
       decision: 'SAFE',
       changedFiles: [],
       reasons: ['无变更需要应用'],
       warnings: [],
-      stats: { additions: 0, deletions: 0 }
+      stats: { additions: 0, deletions: 0 },
+      rescueCommands: checkResult.rescueCommands || null
     };
   }
 
@@ -668,7 +776,7 @@ export function assessApplyRisk(changeName, { cwd } = {}) {
     decision = 'SAFE';
   }
 
-  return { decision, changedFiles, reasons, warnings, stats: { additions, deletions } };
+  return { decision, changedFiles, reasons, warnings, stats: { additions, deletions }, rescueCommands: checkResult.rescueCommands || null };
 }
 
 /**

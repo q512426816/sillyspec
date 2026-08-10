@@ -52,10 +52,12 @@ runStage(pm, progress, stageName, cwd, changeName)
 - 审批门禁（approval）通过 `approvals` 表控制，`--skip-approval` 可绕过（仅限特定场景）
 - `triggerSync` 在每步执行前触发，可能与外部平台（如飞书/GitHub）同步
 - **apply / assess 自动 apply 消息同步**（坑3，`index.js`）：apply 与 assess 自动 apply 的用户面消息改为「`.sillyspec/changes/`、`.sillyspec/.runtime/`、`.sillyspec/quicklog/` 不自动 apply（worktree 进度/产物非交付物），模块文档 `.sillyspec/docs/` 会自动 apply 回主仓」——对齐 `worktree-apply.js#filterDeliverableFiles` 精细化过滤（保留 docs/、排除 changes/+.runtime/+quicklog/+meta.json）
+- **apply / assess dirty 拦截 rescue 段**（2026-08-10-worktree-apply-dirty-resilient，`index.js`）：apply/assess 命中 step4.5/5a dirty fail-loud 拦截时，在 errors/reasons 主通道文本之后补结构化 rescue 段 `🆘 Rescue commands (N safe / M excluded，旁路 git apply，cp 后需手动 sillyspec worktree cleanup <wtName>):` + 逐行 cp 指令 + warnings（gated on `result.rescueCommands` / `assessment.rescueCommands` 非空，===null 时零影响）；rescue 指令由 `worktree-apply.js#generateRescueCommands` 逐文件四分类生成（SAFE-CP 给 cp、EXCLUDE-DIRTY/MISMATCH 进 warnings、DELETE 给 rm）
 
 ## 变更索引
 
 - ql-20260807-001-a260 | gate/derive 顶层命令补 worktree drift 锚定：未显式 --spec-dir 时 detectWorktreeSpecDrift(resolveSpecDir(dir)) 命中即向 runGate/runDerive 传 specDriftAnchor（对齐 machine-interface 已扩展入参），execute/task-reviews marker 读主仓 .runtime（补 test/gate-derive-spec-drift.test.mjs 3 场景 e2e）。
+- 2026-08-10-worktree-apply-dirty-resilient | apply/assess dirty 拦截补结构化 rescue 打印段（gated on rescueCommands 非空）：`🆘 Rescue commands (N safe / M excluded)` + 逐行 cp 指令（`generateRescueCommands` 逐文件四分类），旁路 git apply，cp 后提示手动 worktree cleanup；纯 additive，`rescueCommands===null` 零影响。
 
 ## 人工备注
 <!-- MANUAL_NOTES_START -->
