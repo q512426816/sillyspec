@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-07-22 12:00:00
-updated_at: 2026-08-08T00:00:00+08:00
+updated_at: 2026-08-09T00:00:00+08:00
 ---
 
 # SillySpec 提示词与控制层债务清单
@@ -201,6 +201,13 @@ updated_at: 2026-08-08T00:00:00+08:00
 
 **worktree cleanup 踩坑复发（更新 memory）**：execute 收尾 `git worktree remove --force` 删孤儿 worktree 时，递归删了 junction 目标——**主仓整个 node_modules 被删空**（memory `sillyspec-worktree-cleanup-deletes-node-modules` 记录的坑，本次比记录更严重：全删而非部分误删）。恢复遇 npm 12 EALLOWREMOTE（package-lock 里 yoctocolors-cjs 的 resolved 指向 npmmirror 镜像，但项目 registry=npmjs.org，npm 12 视 remote tarball 拒绝；`allowed-hosts`/`fetch-allowed` 均非 npm 12 有效配置）→ 解法 `npm install --registry=https://registry.npmmirror.com`（registry 匹配 lock URL，remote 包降级为正常 registry 解析）。已更新 memory `sillyspec-worktree-cleanup-deletes-node-modules`。
 
+### 2026-08-09 增补（execute run marker 漂移致 enforceReviewJsonGate 误报，对称缺口）
+状态：`⏭ defer（方案 A 已定，待 complete-gate-atomicity 归档 + 主仓工作区干净后独立 quick 落）`
+
+来源：complete-gate-atomicity 变更 execute --done 卡「review.json 字段校验阻断」，诊断发现是 marker 漂移（非 review.json 真缺）。
+
+- ⏭ **gate-atom-a enforceReviewJsonGate 漏 resolveLatestExecuteRunId fallback**：`current-execute-run-id-<change>` marker 与 run 目录可脱节——`generateExecuteRunId`（task-review.js:597）只生成时间戳字符串写 marker，run 目录由 `ensureTaskReviewDir`（task-review.js:806）在写 review.json 时才建。marker 在 stage.js:103 / prompt.js:416 / gates.js:340 / task-review.js:677 任一处被判「缺失」即 generate 新 ID 写盘（旧 marker 被删 / 格式迁移 / 并行 cleanup 时触发），新 run 目录隔离不继承旧 review.json → marker 漂移 = 旧 review 全部失联。**enforceReviewJsonGate（gates.js:112-133，每次 execute --done 早跑）直接 `readFileSync(marker)` 拿值就用，不校验目录存在、不 fallback**；而同文件阶段级 Task Review Gate（gates.js:333-343）marker 为空时已 fallback `resolveLatestExecuteRunId`（task-review.js:614，扫 mtime 最新真实目录）。**self-audit-2026-08-07.md:103/107 当年修了后者漏了前者——同一兜底两处口径不一致**。实证：marker=`exec-2026-08-09-141248`（14:12:48 写），141248 目录 14:21:22 才建出，--done 落在中间 → 去 141248 找 task-01 review.json 报「不存在」，而真实齐备的 review.json 在 `exec-2026-08-09-112734`（task-01~06 全有）。**修法（方案 A，最小正确）**：enforceReviewJsonGate 读 marker 后，若 `execute-runs/<executeRunId>/tasks/` 不存在，fallback `resolveLatestExecuteRunId({ runtimeRoot, changeName })`（对齐 gates.js:333-343）；补测试（marker 指向不存在目录 + 旧 run 含完整 review.json 时 --done 不误报）。**否决方案 B**（generateExecuteRunId 写 marker 时同步 mkdir 空目录）：只保证目录存在不保证 review.json 存在，marker 漂到新 run 后空目录照样报「review.json 不存在」，治标不治本。当前 complete-gate-atomicity 因 141248 事后补齐 task-01~04 review.json 不再被阻塞；待该 change 归档 + 主仓工作区干净（现有无关 staged brainstorm 改动需先厘清归属）后开独立 quick 落 A。
+
 ---
 
 ## 推进记录
@@ -230,6 +237,8 @@ updated_at: 2026-08-08T00:00:00+08:00
 | 2026-08-07 | sss/sss1 审计复盘（A1-5 修 commit 1efc7c8 + A6 直接 commit / B1-B2 并发已修 + B3-B5 defer） | A组纯减法 5 项修并提交 1efc7c8（execute 建议模型空指令→诚实模型档位条目 / quick 单会话兼容退路 / execute 两处末尾孤立引号 / uncategorized 起始反引号 / scan 括号，+ docs/prompt 镜像同步删 3 条过时"逐字保留"注释，test 122/0 lint 68）；A6 propose 死代码已删——直接 commit（quick 审计 shared.js:516 对删除恒 blocked 无 flag 解锁；scope 纠正排除 stage-contract-spec proposal.md 文件规则/index.js knowledge 子命令两个 LIVE）；B1 decisions 矩阵降级 / B2 module-map 合并 均由并发 session b904442 / e2b3422 修完（非本会话）；B3 scan 死文档 / B4 plan Step4 token / B5 plan 自检对齐 defer；raw 文件 sss.md/sss1.md 保留作历史参考 |
 | 2026-08-07 | sss/sss1 审计 B4+B5 落地（ql-20260807-011-d831） | B4 plan TaskCard 规则抽 templates/prompts/taskcard-rules.md + buildCoordinatorStep 改 {{include: taskcard-rules}}（复用 P2.2.3 include 机制，收益=维护性+可单独校验，token 不省是机制固有）；B5 核验自检清单 14 字段全覆盖 validatePlanFeasibility 硬校验 9 字段，随 B4 拆分硬校验/规范约定两组消 agent 白检误导；同步 docs/prompt 镜像 + 回归测试 8 断言，npm test 全量 0 失败、lint 72 |
 | 2026-08-08 | concurrent-write-preflight 落地（债单末尾候选→实现） | 多 agent 并发写预检 in-place execute（change 2026-08-08-concurrent-write-preflight）：task-01 src/run/concurrent-detect.js 检测核心（detectConcurrentChanges+formatConcurrentWarning 纯函数，复用 isQuickMetadata「关联 vs 他者」分类，D-004 trim:false/D-005 脏变更目录文案/D-008 内联 extractChangeDir，fail-open）+ 单测 30；task-02 complete-handlers.js quick --done 钩子（D-001 ownFiles 并入 baselineFiles/D-003 null 兜底）；task-03 gates.js execute --done 钩子——采纳 worktree 实现修正位置（completeStageGates 入口=design 原文，非初版误挂的 runStageCompletionGates）+ readDesignOwnFiles 状态机解析 design §6（D-002）；task-04 集成测 25 断言（B-004 诚实降级标注）；task-05 npm test 全量 EXIT=0（+2 文件 55 断言）+ lint 73，文档评估无需同步；worktree cleanup 坑复发（node_modules 全删）→ npmmirror registry 恢复 + memory 更新 |
+
+| 2026-08-09 | execute run marker 漂移（enforceReviewJsonGate 漏 resolveLatestExecuteRunId fallback 对称缺口） | 登记 defer（方案 A 已定：gates.js:112-133 加 fallback 对齐 :333-343；否决 B 空目录）；self-audit-2026-08-07 修了 Task Review Gate 漏了 enforceReviewJsonGate；complete-gate-atomicity 因 141248 事后补齐 task-01~04 review.json 不再阻塞；doc-only 不动源码 |
 
 ## 总结
 

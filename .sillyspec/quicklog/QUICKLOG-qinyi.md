@@ -184,3 +184,37 @@
 根因：#9 路径穿越唯一硬门零测试，重构回归 CI 发现不了；#8 console.assert 失败只打印不抛致 runner 误判静默绿，且原 lint 只扫 src 不扫 test。
 方案：新增 assert-safe-change-name 18 用例测试覆盖各分支；重写 check-syntax.mjs 扫 test/ 加禁 console.assert 内容规则（BAD 拆字定义避自指）；worktree-native-overlay 9 处 console.assert 改 node:assert 让 flaky 失败可见。
 结果：npm run lint 通过 222 文件（src 74 + test 148），npm test 144 全绿 0 失败。
+
+## ql-20260809-005-491b | 2026-08-09 14:11:29 | brainstorm 规范文件模板内联 frontmatter（治 agent 照抄 H1 漏写 author/created_at）
+状态：已完成
+关联变更：（无）
+文件：
+- src/stages/brainstorm.js（「生成规范文件」step：proposal/requirements/tasks 三模板顶部各内联 author/created_at frontmatter 块；tasks 新增骨架模板插到 decisions 前；末尾注把「规范 md 第一行标题用中文」改为「标题用中文（frontmatter 在标题之前）」且文件列表补 tasks）
+- docs/prompt/brainstorm.md（step8「提示词原文」块用正则从 _extracted.json 逐字同步，现含三模板 frontmatter + tasks 骨架 + 修正后末尾注）
+- docs/prompt/_extracted.json（node docs/prompt/_extract.mjs 重跑刷新的机械镜像）
+- .sillyspec/docs/sillyspec/modules/stages.md（MANUAL_NOTES 追加本 ql 变更索引）
+需求：brainstorm 生成规范文件时 proposal.md/requirements.md（tasks.md 骨架同理）缺 author/created_at 元数据，要等 --done 的 validateMetadata 才打印警告，要求生成时即带上、不要事后补救
+根因：通用 frontmatter 声明（brainstorm.js 末步「所有规范文件头部必须包含 YAML frontmatter」）与逐文件模板脱节——proposal/requirements 模板顶部直接是 H1 中文标题、tasks 无完整模板，agent 照抄模板就漏写；唯独 design.md 因被「frontmatter 不存在则补 author/created_at/scale」单独点名而未缺；叠加 validateMetadata 只在 --done 跑且仅 advisory console.log 不阻断，故事后才暴露
+方案：治本——把 frontmatter 内联进每个可照抄的具体模板，agent 照抄即带。brainstorm.js 三模板顶部各嵌 author/created_at frontmatter 块，tasks 补骨架模板（# 任务清单 + task 示例）插 decisions 前；末尾注第一行标题改为标题（frontmatter 在前）避免误导；重跑 _extract.mjs 刷新 json，再用正则（header→首个 4+反引号围栏→非贪婪→结束围栏）从 json 逐字替换 brainstorm.md 的 step8 块；stages 模块文档 MANUAL_NOTES 追加变更索引。brainstorm-auto 仅为列表式描述无完整模板，不在本次范围
+结果：npm test EXIT=0（全套件统计均失败0，含 worktree/CLI 等历史 flaky 套件本次全过）；npm run lint 通过 224 文件；改动 4 文件已 git add 暂存（显式 pathspec 隔离），他人 brainstorm 变更目录 2026-08-09-complete-gate-atomicity 未夹带（审计 advisory 确认）。可选后续增强：把 frontmatter 缺失从 --done 的 advisory 提升为「生成规范文件」step 的 postcheck 硬阻断（本次未做）
+
+## ql-20260810-001-fba5 | 2026-08-10 08:35:43 | 修 review-2026-08-09 #7
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/complete.js（三处 appendFileSync 包 try/catch+console.warn best-effort：:273 completeStep / :355 noAI末步 / :706 continueStep；:696 顺手修既有 1 空格缩进→2）
+需求：修 review-2026-08-09 #7，complete.js 三处 appendFileSync 裸跑 EPERM 致卡死。
+根因：:272/:349/:696 三处 appendFileSync 在 pm._write+triggerSync 后无 try/catch，Windows AV/索引 EPERM 冒顶（与 #2 叠加）。
+方案：对齐 shared.js:330 triggerSync best-effort，三处包 try/catch+console.warn，历史日志写失败不阻断主流程。
+结果：src/run/complete.js 三处 wrap（:273/355/706 在 try 内+3 处 warn）；npm test 148/0 零回归；npm run lint 227 文件绿；commit 10fba18（pathspec 隔离他者 src/ + test/）。EPERM 不再冒顶卡死，历史日志写失败降级 warn 不阻断主流程。
+
+## ql-20260810-002-7b3a | 2026-08-10 08:56:44 | verify baseline checkpoint diff base 用 baselineCommit（治误测无关模块阻断归档）
+状态：已完成
+关联变更：（无）
+文件：
+- src/verify-postcheck.js（resolveVerifyChangedFiles：diff base 由 meta.baseHash 改为 meta?.baselineCommit || meta?.actualBaseHash || meta?.baseHash，与 task-review.js:694 / worktree.js:1108 / worktree-apply.js:169 同源；补注释说明 baseline checkpoint 修复防回归）
+- test/verify-postcheck-worktree.test.mjs（新增用例 5：baseline checkpoint fixture——meta 含 baseHash+baselineCommit+actualBaseHash，daemon/frontend overlay + ppm 真实改动，期望只返回 ppm；旧 baseHash..HEAD 实现必返回 3 文件，锁死修复）
+需求：worktree+baseline checkpoint 模式下 verify 测试对账把 baseline 同步的跨模块 overlay 文件误算进 verify diff，命中无关模块（PPM-only 变更误测 daemon/frontend/llm_provider/sillyhub-daemon），daemon 大套件撞 SILLYSPEC_TEST_TIMEOUT_MS 10min，verify 永远过不去、无法归档。
+根因：resolveVerifyChangedFiles 用 meta.baseHash（=baseline checkpoint 父提交，pre-baseline 分支点）做 git diff base，diff 含 baseline checkpoint 那笔（52 个跨模块 overlay 文件）+ 本 change 改动；同源 task-review.js:694 早用 baselineCommit||baseHash，唯独 verify-postcheck 漏。
+方案：diff base 改 baselineCommit || actualBaseHash || baseHash（对齐 task-review/worktree/worktree-apply 四处同源）；补用例 5 回归锁死（baselineCommit 是 baseHash 之后的 commit、含 overlay，用它做 base 排除 overlay）。审查 stage-contract.js:613 checkExecuteCodeEvidence 同读裸 baseHash，但语义不同（只判 changed/unchanged/unknown 存在性、不挑模块不跑测试，overlay 算进来结论仍 changed 无危害）→ 不同病不改。
+结果：verify-postcheck-worktree 5/5 绿（新用例 5 锁死）；npm test 全量 EXIT=0；npm run lint 227 文件绿；commit adf69d3（git commit -F - -- <pathspec> 隔离，未夹带并行 session 的 complete.js 10fba18 / brainstorm.js / QUICKLOG / prompt / debt.md）。issue 文件 verify-worktree-baseline-basehash-wrong-module-detect.md 改 status=done + 移 multi-agent-platform finished/。
