@@ -476,6 +476,10 @@ created_at: <now-datetime>
 
 ### proposal.md 格式要求
 \`\`\`markdown
+---
+author: <git-user>
+created_at: <now-datetime>
+---
 # 提案书（Proposal）
 
 ## 动机
@@ -499,6 +503,10 @@ created_at: <now-datetime>
 
 ### requirements.md 格式要求
 \`\`\`markdown
+---
+author: <git-user>
+created_at: <now-datetime>
+---
 # 需求规格（Requirements）
 
 ## 角色
@@ -525,6 +533,18 @@ Then 期望结果
 | 决策 ID | 覆盖的 FR | 说明 |
 |---|---|---|
 | D-001@v1 | FR-01 | ... |
+\`\`\`
+
+### tasks.md 格式要求（scale=large 时生成骨架，plan 阶段展开）
+\`\`\`markdown
+---
+author: <git-user>
+created_at: <now-datetime>
+---
+# 任务清单（Tasks）
+
+- [ ] task-01: <任务名>
+- [ ] task-02: <任务名>
 \`\`\`
 
 ### decisions.md 格式要求（仅在有 Grill/重大决策时生成）
@@ -567,7 +587,7 @@ Then 期望结果
 - 如果存在 decisions.md，requirements.md 必须引用全部当前版本 D-xxx@vN；没有覆盖的 D-xxx@vN 必须标注为剩余风险
 - 如果 Design Grill 产生 P0/P1 unresolved blocker，必须回到 design 修正，不能进入 plan/quick
 - tasks.md 只列任务名，细节在 plan 阶段展开
-- **规范 md 文件第一行标题用中文**（sillyhub 平台解析识别用）：tasks.md 第一行用 # 任务清单（Tasks）（proposal/design/requirements/decisions 见各自模板，均已含中文标题）`,
+- **规范 md 文件标题用中文**（sillyhub 平台解析识别用，frontmatter 在标题之前）：tasks.md 标题用 # 任务清单（Tasks）（proposal/requirements/tasks/decisions 见各自模板 + design 见「写设计文档并自审」步；均含 frontmatter + 中文标题）`,
 
     }
   ]
