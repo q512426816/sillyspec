@@ -16,6 +16,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join, relative, isAbsolute, sep } from 'node:path';
 import jsYaml from 'js-yaml';
 import { SillyHubMcpClient } from '../sillyhub-mcp/client.js';
+import { readMcpConfig } from '../sillyhub-mcp/config.js';
 import { setPathAProbeResult } from './backends/sillyhub-mcp.js';
 
 /** 默认负面缓存 TTL（毫秒）。可被 local.yaml dispatch.probe_ttl_ms 或 ttlMs 参数覆盖。 */
@@ -57,11 +58,11 @@ function resolveTtl(ttlMs, cwd) {
 }
 
 /**
- * 配置指纹（负面缓存 key）。用 env URL 标识 daemon 身份；token 不入 key（避免敏感信息驻留缓存）。
- * token 轮换后最迟 TTL 内自动失效重探。
+ * 配置指纹（负面缓存 key）。用 local.yaml mcp 段或 env 的 URL 标识 daemon 身份；
+ * token 不入 key（避免敏感信息驻留缓存，保密语义不变）。token 轮换后最迟 TTL 内自动失效重探。
  */
-function configFingerprint() {
-  return process.env.SILLYHUB_MCP_URL || '';
+function configFingerprint(cwd) {
+  return readMcpConfig(cwd)?.url || '';
 }
 
 /**
@@ -133,7 +134,7 @@ async function preheatPathAProbe(cli) {
  *   5. 全通过 → available=true（不缓存正面结果）
  *
  * @param {object} [opts]
- * @param {object} [opts.client]       - SillyHubMcpClient 实例；缺省 new SillyHubMcpClient()（读 env）
+ * @param {object} [opts.client]       - SillyHubMcpClient 实例；缺省 new SillyHubMcpClient()（经 readMcpConfig 读 local.yaml mcp 段 + env）
  * @param {string} [opts.worktreePath] - SillySpec worktree 绝对路径（root_path 校验用）
  * @param {string} [opts.rootPath]     - daemon ws.root_path；未传（undefined）时 best-effort 从 daemon
  *                                       拿（task-12 #5），拿不到则跳过越界校验（不判 unavailable）
@@ -141,13 +142,14 @@ async function preheatPathAProbe(cli) {
  * @returns {Promise<{ available: boolean, reason?: string }>}
  */
 export async function probeSillyHub({ client, worktreePath, rootPath, ttlMs } = {}) {
-  // 1. 同步快速路径：env 缺任一即 unavailable（不发网络，零回归关键）
-  if (!process.env.SILLYHUB_MCP_URL || !process.env.SILLYHUB_MCP_TOKEN) {
+  // 1. 同步快速路径：无 local.yaml mcp 段且 env 缺凭据即 unavailable（不发网络，零回归关键）。
+  //    readMcpConfig 纯 fs + env 读（best-effort 不抛不发网络），返回 null = 两源都缺 → no-config。
+  if (!readMcpConfig(process.cwd())) {
     return { available: false, reason: 'no-config' };
   }
 
   // 2. 负面缓存命中（未过 TTL）→ 直接返回，不发网络（R-06 抖动期免反复探测）
-  const fp = configFingerprint();
+  const fp = configFingerprint(process.cwd());
   const cached = negativeCache.get(fp);
   if (cached && cached.expiresAt > Date.now()) {
     return cached.result;
@@ -155,7 +157,7 @@ export async function probeSillyHub({ client, worktreePath, rootPath, ttlMs } = 
 
   // 3. 连通性探测：client.probeDaemon 自身 best-effort 不抛；再兜一层 try/catch，
   //    即便 client 契约异常抛出也保守判 unavailable（铁律：绝不抛穿 execute）
-  const cli = client || new SillyHubMcpClient();
+  const cli = client || new SillyHubMcpClient({ cwd: process.cwd() });
   let reachable;
   try {
     reachable = await cli.probeDaemon();

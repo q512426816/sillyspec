@@ -23,7 +23,7 @@ SillyHub 平台同步模块，负责与远程 SillyHub 服务建立连接、同�
 |-----------|------|------|
 | `SyncManager` | 同步管理类，封装所有平台交互 | `constructor(cwd)` |
 | `SyncManager.testConnection(url)` | 测试远程连接（静态方法） | `url: string` |
-| `SyncManager.connect(url, token)` | 保存平台配置到 local.yaml | `url, token` |
+| `SyncManager.connect(url, token)` | 保存平台 + mcp 配置到 local.yaml（同源假设，mcp 段已存在则保留） | `url, token` |
 | `SyncManager.disconnect()` | 清除平台配置 | — |
 | `SyncManager.sync(changeName)` | 同步单个变更的进度到平台 | `changeName: string` |
 | `SyncManager.syncDocuments(changeName)` | 同步四件套文档（proposal/design/requirements/tasks）到平台 | `changeName: string` |
@@ -50,7 +50,7 @@ SillyHub 平台同步模块，负责与远程 SillyHub 服务建立连接、同�
 | `syncModule(args, cwd)` | CLI 入口：解析 args 并分发子命令 | `args: string[], cwd` |
 
 ## 关键数据流
-1. **连接流程**：`connect(url, token)` -> `fetchJson(/api/health)` 验证 -> 写入 `.sillyspec/local.yaml` 的 `platform` 段
+1. **连接流程**：`connect(url, token)` -> `fetchJson(/api/health)` 验证 -> 写入 `.sillyspec/local.yaml` 的 `platform` 段 + `mcp` 段（2026-08-10-local-yaml-generation，同源假设：`mcp.url`/`mcp.token` 复用 platform；`if(!config.mcp)` 守卫保留用户已手填 mcp 段不覆盖，R-09。不同源时 agent 手填 mcp 段或设 env）
 2. **进度同步**：`sync(changeName)` -> 读取 `sillyspec.db`（动态 import `ProgressManager`） -> `POST /api/changes/{name}/progress`
 3. **文档同步**：`syncDocuments(changeName)` -> 读取 `.sillyspec/changes/{name}/` 下四件套文档 -> `POST /api/changes/{name}/documents`
 4. **审批查询**：`checkApproval(changeName)` -> `GET /api/changes/{name}/approval` -> 若已批准则更新本地 progress

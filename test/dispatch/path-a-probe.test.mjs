@@ -422,6 +422,31 @@ try {
       `无 worktreePath → 不调 getRootPath（实际 ${c.getCalls().getRootPathCalls}）`
     )
   }
+
+  // ===== 用例 7：probe no-config 零回归（task-05 改读源 + R-07 不发网络）=====
+  // task-05 把 probeSillyHub no-config 快速路径从直读 env 改为 readMcpConfig(process.cwd())。
+  // readMcpConfig 纯 fs+env 读（不发网络），返回 null = local.yaml 无 mcp 段且 env 缺 → no-config。
+  // 本用例核验：清 env + worktree 无 local.yaml mcp 段 → {available:false, reason:'no-config'}，
+  // 且 mock client 的 probeDaemon/listTools/getRootPath 全 0 次调用（R-07 同步快速路径不发网络）。
+  console.log('\n=== 7. probe no-config 零回归（task-05，无 local.yaml mcp 段 + env 缺 → 不发网络）===\n')
+
+  // 7a 清 env + 无 local.yaml mcp 段（worktree 本身无）→ no-config，同步快速路径不发网络
+  console.log('--- 7a. 清 env + 无 local.yaml mcp 段 → no-config 不发网络（R-07 关键保留）---')
+  clearProbeCache()
+  clearPathAProbeCache()
+  setEnv(undefined, undefined, undefined) // 清 env（readMcpConfig env fallback 也落空）
+  {
+    const c = makeMockClient({ reachable: true, tools: [], rootPath: 'C:/repo' })
+    const r = await probeSillyHub({ client: c })
+    assertTrue(r.available === false, `无配置 available=false（实际 ${r.available}）`)
+    assertTrue(r.reason === 'no-config', `reason=no-config（实际 ${r.reason}）`)
+    assertTrue(
+      c.getCalls().probeCalls === 0,
+      `no-config 快速路径不发网络（probeDaemon 0 次，实际 ${c.getCalls().probeCalls}，R-07）`
+    )
+    assertTrue(c.getCalls().listToolsCalls === 0, 'no-config 不调 listTools（同步返回前）')
+    assertTrue(c.getCalls().getRootPathCalls === 0, 'no-config 不调 getRootPath（同步返回前）')
+  }
 } finally {
   restoreEnv()
 }

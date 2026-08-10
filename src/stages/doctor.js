@@ -350,7 +350,7 @@ timeout 5 which docker 2>/dev/null && echo "✅ Docker 可用" || echo "ℹ️ D
 
 **常见问题及修复：**
 - CLI 未安装 → \`npm install -g sillyspec\`
-- 缺少 local.yaml → \`sillyspec init\` 重新生成，或手动创建
+- 缺少 local.yaml → \`sillyspec local detect\` 重新生成，或手动创建
 - local.yaml 缺少 test 命令 → 补充对应命令
 - 缺少 scan 文档（ARCHITECTURE.md 等）→ \`sillyspec run scan\` 重新扫描
 - sillyspec.db 状态不一致 → \`sillyspec run <阶段> --reset\` 重置对应阶段

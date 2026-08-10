@@ -5,8 +5,8 @@
  * - 网络失败 / 非 2xx / 异常一律 console.warn 不抛错，绝不抛穿到 execute（约束：HTTP 错误保守返回 unavailable/空/false）
  * - 未配置（缺 SILLYHUB_MCP_URL 或 SILLYHUB_MCP_TOKEN）→ 所有方法降级，不发网络
  *
- * 配置来源：环境变量 SILLYHUB_MCP_URL / SILLYHUB_MCP_TOKEN；
- *           构造函数可传 { url, token, timeoutMs } 覆盖，缺省读 env。
+ * 配置来源（优先级）：显式参数 > local.yaml mcp 段（via readMcpConfig）> 环境变量 SILLYHUB_MCP_URL/TOKEN（fallback）；
+ *           构造函数可传 { cwd, url, token, timeoutMs }，缺省经 readMcpConfig(cwd) 读 local.yaml mcp 段 + env fallback。
  *
  * 端点：POST ${url}/mcp/（尾斜杠必需，MCP streamable HTTP 协议要求），Bearer token 鉴权。
  * 请求体：JSON-RPC 2.0（tools/call 调 tool；tools/list 列 tool schema，task-11 路径A 探测用）。
@@ -19,6 +19,8 @@
  * - 仅用 Node 原生 fetch（engine>=18），不引入新依赖。
  */
 
+import { readMcpConfig } from './config.js';
+
 const DEFAULT_TIMEOUT_MS = 10_000;
 // MCP streamable HTTP 协议版本（task 指定 2025-11-25）
 const MCP_PROTOCOL_VERSION = '2025-11-25';
@@ -26,13 +28,16 @@ const MCP_PROTOCOL_VERSION = '2025-11-25';
 export class SillyHubMcpClient {
   /**
    * @param {object} [opts]
-   * @param {string} [opts.url]       - 覆盖 SILLYHUB_MCP_URL；显式传空串视为未配置
-   * @param {string} [opts.token]     - 覆盖 SILLYHUB_MCP_TOKEN
+   * @param {string} [opts.cwd]       - local.yaml 所在主仓库根，默认 process.cwd()（design §7.3）
+   * @param {string} [opts.url]       - 显式覆盖（优先级最高 > readMcpConfig > env）；显式传空串视为未配置
+   * @param {string} [opts.token]     - 显式覆盖（优先级最高 > readMcpConfig > env）
    * @param {number} [opts.timeoutMs] - 请求超时毫秒，默认 10000
    */
-  constructor({ url, token, timeoutMs } = {}) {
-    const u = url !== undefined ? url : process.env.SILLYHUB_MCP_URL;
-    const t = token !== undefined ? token : process.env.SILLYHUB_MCP_TOKEN;
+  constructor({ cwd, url, token, timeoutMs } = {}) {
+    const workCwd = cwd || process.cwd();
+    const cfg = readMcpConfig(workCwd);
+    const u = url !== undefined ? url : (cfg?.url ?? '');
+    const t = token !== undefined ? token : (cfg?.token ?? '');
     // 去掉 url 尾部斜杠，便于后续稳定拼 /mcp/（跨平台：URL 一律用正斜杠，不用 path.join）
     this._url = typeof u === 'string' ? u.replace(/\/+$/, '') : '';
     this._token = typeof t === 'string' ? t : '';

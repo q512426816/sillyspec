@@ -4,6 +4,7 @@ import { buildContractMatrix, buildConsumerInjection, buildContractFieldInjectio
 import { getRule } from '../stage-contract-spec.js'
 import { renderDispatchInstruction } from '../dispatch/strategy.js'
 import { isPathASupported } from '../dispatch/backends/sillyhub-mcp.js'
+import { readMcpConfig } from '../sillyhub-mcp/config.js'
 
 /**
  * 校验 plan.md 是否满足 execute 执行契约
@@ -118,7 +119,7 @@ const fixedPrefix = [
 1. 读取 tasks.md（执行计划）
 2. 读取 design.md（技术方案）
 3. 读取 CONVENTIONS.md、ARCHITECTURE.md
-4. 读取 local.yaml（构建命令）
+4. 读取 local.yaml（构建命令）；若 local.yaml 不存在，先 \`sillyspec local detect\` 生成骨架再读取
 5. 加载项目总览 \`.sillyspec/docs/<project>/scan/PROJECT.md\`（如存在）
 
 ### 模块文档加载
@@ -237,7 +238,7 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
 本步骤由当前 agent 执行，不需要启动独立子代理。
 
 ### 操作
-1. 读取 local.yaml 获取构建和测试命令
+1. 读取 local.yaml 获取构建和测试命令；若 local.yaml 不存在，先 \`sillyspec local detect\` 生成骨架再读取
 2. 运行测试套件（单元测试、集成测试）
 3. 运行 lint 检查 **+ 格式化**：凡变更涉及的源码，既跑 lint check 也跑 formatter（如 \`ruff format\` / \`prettier --write\` / \`black\`），不要只跑 check——只 check 不 format 会把格式问题留到 commit 时被 pre-commit hook 拦截
 4. 如果有测试失败 → 分析原因，标注是代码问题还是测试本身的问题
@@ -446,7 +447,7 @@ function parseWavesFromPlan(planContent) {
  * 同步判定派发后端模式（不发网络，零回归关键）— task-07
  *
  * stub 下 isPathASupported()=false → 有配置也只 local-fallback（加提示），不注入完整 SillyHub 指令。
- * 现有测试套件都不设 SILLYHUB_MCP_URL/TOKEN → 默认返回 'local' → buildWavePrompt 不注入派发段，
+ * 现有测试套件不设 SILLYHUB_MCP_URL/TOKEN 且无 local.yaml mcp 段 → readMcpConfig 返回 null → 默认 'local' → buildWavePrompt 不注入派发段，
  * 输出与改前字节一致（零回归，D-005）。
  *
  * @returns {'local' | 'local-fallback' | 'sillyhub'}
@@ -455,7 +456,7 @@ function parseWavesFromPlan(planContent) {
  *   - sillyhub：有配置且路径A 落地（isPathASupported()=true），注入完整 SillyHub 派发指令
  */
 export function getDispatchMode() {
-  const hasConfig = !!(process.env.SILLYHUB_MCP_URL && process.env.SILLYHUB_MCP_TOKEN)
+  const hasConfig = !!readMcpConfig(process.cwd())
   if (!hasConfig) return 'local'
   return isPathASupported() ? 'sillyhub' : 'local-fallback'
 }
@@ -599,7 +600,7 @@ ${prototypes.map(p => `- \`${path.join(protoRelDir, p)}\``).join('\n')}
     dispatchSection = `\n### 派发后端：SillyHub MCP（探测可用，一 Wave 一 mission）\n\n本次 Wave 派发经 SillyHub MCP。按以下派发指令执行（含 create_mission / dispatch_worker / 轮询 list_workers / 超时 kill lease 防双写 / 回收 + Local 兜底）：\n\n${instruction}\n`
   } else if (worktreePath && dispatchMode === 'local-fallback') {
     // 有 MCP 配置但路径A 未落地：加短提示，派发仍走 Local（与默认行为一致）
-    dispatchSection = `\n### 派发后端提示：SillyHub MCP 已配置但路径A 未落地\n\n检测到 \`SILLYHUB_MCP_URL\`/\`SILLYHUB_MCP_TOKEN\`，但 SillyHub \`dispatch_worker\` 尚不支持 \`worktree_path\`（路径A 跨仓未落地）。本次派发走 Local（本机 Agent tool），与默认行为一致——上方「执行方式」与「工作目录」段适用。\n`
+    dispatchSection = `\n### 派发后端提示：SillyHub MCP 已配置但路径A 未落地\n\n检测到 local.yaml mcp 段或 env 配置，但 SillyHub \`dispatch_worker\` 尚不支持 \`worktree_path\`（路径A 跨仓未落地）。本次派发走 Local（本机 Agent tool），与默认行为一致——上方「执行方式」与「工作目录」段适用。\n`
   }
   // dispatchMode === 'local'（无配置）或 worktreePath 为空 → dispatchSection = '' → 输出与改前字节一致（零回归）
 

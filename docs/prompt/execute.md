@@ -54,7 +54,7 @@
 1. 读取 tasks.md（执行计划）
 2. 读取 design.md（技术方案）
 3. 读取 CONVENTIONS.md、ARCHITECTURE.md
-4. 读取 local.yaml（构建命令）
+4. 读取 local.yaml（构建命令）；若 local.yaml 不存在，先 `sillyspec local detect` 生成骨架再读取
 5. 加载项目总览 `.sillyspec/docs/<project>/scan/PROJECT.md`（如存在）
 
 ### 模块文档加载
@@ -123,6 +123,7 @@
 
 ### 输出
 worktree 路径 + 分支名 + 模式
+
 
 ````
 
@@ -233,6 +234,7 @@ execute 按 Wave 持久化进度，task 级进度靠 plan.md checkbox 勾选。�
 - 用 `sillyspec status` 查当前进度，重新 `sillyspec run execute` 会回到当前 Wave step 继续，**不要从零重置或重跑已完成 Wave**
 - 本 Wave 已完成但不完整（产出缺文件）的 task 补做，不牵连其他 task
 
+
 ### 本 Wave 任务
 - [ ] 默认任务 1 (TBD)
 
@@ -284,6 +286,7 @@ task-XX 对应：{SPEC_ROOT}/.runtime/execute-runs/{EXECUTE_RUN_ID}/tasks/task-X
    - 在变更文件中搜索所有 router 注册路径（@router.get/post/put/delete）
    - 将端点清单写入 {SPEC_ROOT}/.runtime/contract-artifacts/<task-name>/endpoints.json
    - 格式: { "task": "task-XX", "type": "backend_endpoints", "endpoints": [{ "method": "GET", "path": "/api/ppm/xxx" }] }
+
 ````
 
 ---
@@ -380,7 +383,7 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
 本步骤由当前 agent 执行，不需要启动独立子代理。
 
 ### 操作
-1. 读取 local.yaml 获取构建和测试命令
+1. 读取 local.yaml 获取构建和测试命令；若 local.yaml 不存在，先 `sillyspec local detect` 生成骨架再读取
 2. 运行测试套件（单元测试、集成测试）
 3. 运行 lint 检查 **+ 格式化**：凡变更涉及的源码，既跑 lint check 也跑 formatter（如 `ruff format` / `prettier --write` / `black`），不要只跑 check——只 check 不 format 会把格式问题留到 commit 时被 pre-commit hook 拦截
 4. 如果有测试失败 → 分析原因，标注是代码问题还是测试本身的问题

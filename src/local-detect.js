@@ -42,9 +42,9 @@ function parseMakefileTestCommand(makefileText) {
  * 嗅探 workdir 的项目类型与默认 commands（纯 fs，零 AI / 零 token）。
  *
  * 嗅探规则（按顺序，命中即返回）：
- *   - package.json → nodejs（npm run build / npm test / npm run lint）
+ *   - package.json → nodejs（核验 scripts.{build,test,lint} 存在才写对应键；缺失不写）
  *   - pom.xml → maven（mvn compile / mvn test / mvn checkstyle:check）
- *   - build.gradle → gradle（./gradlew build / test / check）
+ *   - build.gradle → gradle（gradlew 存在用 ./gradlew 否则 gradle；build / test / check）
  *   - Makefile → make（test 命令从 test: 目标解析；build/lint 无则不写）
  *   - 都没有 → generic（commands 为空对象）
  *
@@ -57,13 +57,22 @@ function parseMakefileTestCommand(makefileText) {
 export function detectLocalYaml(workdir) {
   // 1. nodejs
   if (existsSync(join(workdir, 'package.json'))) {
+    const pkgPath = join(workdir, 'package.json')
+    const raw = readFileSync(pkgPath, 'utf8')
+    let pkg
+    try {
+      pkg = JSON.parse(raw)
+    } catch (e) {
+      throw new Error('package.json 解析失败：' + pkgPath)
+    }
+    const scripts = (pkg && pkg.scripts) || {}
+    const commands = {}
+    if (scripts.build) commands.build = 'npm run build'
+    if (scripts.test) commands.test = 'npm test'
+    if (scripts.lint) commands.lint = 'npm run lint'
     return {
       project: { type: 'nodejs' },
-      commands: {
-        build: 'npm run build',
-        test: 'npm test',
-        lint: 'npm run lint',
-      },
+      commands,
     }
   }
 
@@ -81,12 +90,13 @@ export function detectLocalYaml(workdir) {
 
   // 3. gradle
   if (existsSync(join(workdir, 'build.gradle'))) {
+    const gradlePrefix = existsSync(join(workdir, 'gradlew')) ? './gradlew' : 'gradle'
     return {
       project: { type: 'gradle' },
       commands: {
-        build: './gradlew build',
-        test: './gradlew test',
-        lint: './gradlew check',
+        build: `${gradlePrefix} build`,
+        test: `${gradlePrefix} test`,
+        lint: `${gradlePrefix} check`,
       },
     }
   }

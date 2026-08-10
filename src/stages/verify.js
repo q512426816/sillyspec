@@ -66,7 +66,7 @@ export const definition = {
    - 如果存在 P0/P1 unresolved/blocking 决策，验证结论不能为 PASS
    - 如果发现 superseded 决策被下游引用，标记为 ⚠️ stale decision reference
 3. 加载项目信息：\`cat .sillyspec/projects/*.yaml 2>/dev/null\`
-4. 加载本地配置：\`cat .sillyspec/local.yaml 2>/dev/null\`（构建命令、测试命令、lint 命令等）
+4. 加载本地配置：\`cat .sillyspec/local.yaml 2>/dev/null\`（构建命令、测试命令、lint 命令等）若 local.yaml 不存在，先 \`sillyspec local detect\` 生成骨架再读取
 5. 加载代码规范：\`cat .sillyspec/docs/<project>/scan/CONVENTIONS.md 2>/dev/null\`
    - 测试现状：\`cat .sillyspec/docs/<project>/scan/TESTING.md 2>/dev/null\`（了解既有测试约定与覆盖范围，验收时对照）
    - 技术债清单：\`cat .sillyspec/docs/<project>/scan/CONCERNS.md 2>/dev/null\`（🔴/🟡 区域；本次变更若触碰须在 verify-result.md 标注）
@@ -164,7 +164,7 @@ export const definition = {
       prompt: `运行代码质量扫描（测试实测统一由 CLI 对账执行，本步不重复手动跑全量）。
 
 ### 操作
-1. 读取 \`.sillyspec/local.yaml\` 获取构建、测试和 lint 命令
+1. 读取 \`.sillyspec/local.yaml\` 获取构建、测试和 lint 命令若 local.yaml 不存在，先 \`sillyspec local detect\` 生成骨架再读取
 2. **不要手动重复跑 commands.test**——CLI 会在最终 --done 时统一执行一次（按变更命中模块子集），本步再跑 = 与 CLI 对账重复耗时（实测 198s×2）。如为提前发现实现问题，可对变更模块做**针对性快速冒烟**（可选，非必需）：
    - Maven：\`mvn test -pl <变更模块> -am\`（仅编译变更模块及其依赖）
    - Gradle：\`./gradlew :<模块>:test\`

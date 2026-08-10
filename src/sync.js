@@ -222,6 +222,10 @@ export class SyncManager {
     if (resolvedUser) {
       config.platform.user = resolvedUser;
     }
+    // mcp 段同源假设（design §7.4）：复用 platform 的 url/token；用户已手填 mcp 段则保留不覆盖（R-09）
+    if (!config.mcp) {
+      config.mcp = { url: url.replace(/\/+$/, ''), token };
+    }
     writeLocalYaml(this.cwd, config);
   }
 

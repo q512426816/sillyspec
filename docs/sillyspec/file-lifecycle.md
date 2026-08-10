@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-05-31 11:00:00
-updated_at: 2026-08-10T22:40:00+08:00
+updated_at: 2026-08-11T00:47:05+08:00
 ---
 
 # SillySpec 文件生命周期
@@ -124,6 +124,20 @@ quick
   -> code changes are made in the main workspace
 ```
 
+## local.yaml 配置口径
+
+`.sillyspec/local.yaml` 是项目主配置；各段 producer/consumer 与写入时机相互独立（scan step6 调 `sillyspec local detect` 生成骨架 + agent 补策略字段；scan step11 自检核对 local.yaml 与 detect 产出一致——commands 键已由 detect 核验存在性，agent 不再重复核验或标 unavailable；verify/execute step 读 local.yaml 时缺文件先 `sillyspec local detect` 生成骨架再读）：
+
+- **project.type / commands / test_strategy**（detect 生成段）：producer = `sillyspec local detect`（`src/local-detect.js` `detectLocalYaml`，纯 fs 嗅探、零 AI/零 token、不 spawn 子进程）。**核验版生成逻辑（非闭眼写三件套）**：nodejs 核验 `package.json` 的 `scripts.{build,test,lint}` 存在才写对应键，缺失不写（仅 test/lint 无 build 的项目 build 键不写；`JSON.parse` 失败 throw 中文错误）；maven 写 `mvn compile/test/checkstyle:check`；gradle 核验 `gradlew` 存在用 `./gradlew` 否则 `gradle`；make 的 test 命令从 `Makefile` `test:` 目标解析、build/lint 无则不写；全无 → `generic`（commands 为空对象）。detect 只写这三段骨架，`commands.install`/`env`/`modules`/`known_failures` 等策略字段由 scan agent 按项目实际补充（R-04 防编造：只写能从 package.json/lockfile/构建文件/CI/README 确证的事实）。
+- **platform 段**（平台 HTTP API 凭据）：producer = `sillyspec platform connect <url> <token>`（`src/sync.js` `SyncManager.connect`）——ping `/api/health` 验证后写 `{ url（尾斜杠归一）, token, last_connected, user? }`（user 显式 > git user.name > env，见 `resolvePlatformUser`）；consumer = `SyncManager` push/pull（`_getPlatform` 读此段走 HTTP API 同步平台进度）。`platform disconnect` 删 platform 段。
+- **mcp 段**（dispatch worker MCP 协议凭据）：
+  - producer = 同 `platform connect`（**同源假设** design §7.4：`if (!config.mcp)` 守卫下复用 platform 的 url/token 写 `{ url, token }`；用户已手填 mcp 段则保留不覆盖，R-09）。不同源时 agent 手填 `mcp.url`/`mcp.token`，或设环境变量 `SILLYHUB_MCP_URL`/`SILLYHUB_MCP_TOKEN`（不入盘）。
+  - consumer = `readMcpConfig`（`src/sillyhub-mcp/config.js`）：优先级 local.yaml mcp 段（`mcp.url`+`mcp.token` 两键齐全）> env fallback > null；best-effort（文件缺/js-yaml 解析失败全 try/catch 回退 env）、不抛不发网络。三处消费：`client.js` 构造（`_url`/`_token`/`_configured`/`_endpoint`）、`dispatch/probe.js`（`configFingerprint` 缓存 key + no-config 快速路径）、`execute.js` `getDispatchMode`（派发三态 hasConfig 判定）。
+  - **platform 与 mcp 段并列、语义独立**：platform 段供 sync 的 HTTP API（平台进度双向同步），mcp 段供 dispatch worker 的 MCP 协议（连 sillyhub 派发任务）；同源假设下 `connect` 一并写两者，不同源则各填各的。
+- **dispatch 段**（可选调参）：detect/connect 均不写，agent 按需手填 `probe_ttl_ms`/`poll_interval_ms`/`worker_timeout_ms`（确知调优值才填）；`dispatch/probe.js` `readProbeTtlFromLocalYaml` best-effort 读 `probe_ttl_ms`。
+
+doctor 自检报告的修复建议已把 `sillyspec init` 更正为 `sillyspec local detect`（detect 才是 local.yaml 的生成命令）。
+
 ## scan 产出的下游消费
 
 > 本表对照 scan 各产物在下游阶段的实际消费（"读" = 阶段 prompt 里含读取/cat 指令；"运行时注入" = 由 CLI 程序化注入，非 agent 自行 cat）。历史上此表缺失，导致 `CODEBASE-OVERVIEW.md`、`STACK.md` 等幽灵引用（scan 不产出但下游仍 cat）长期未被发现，已于 2026-07-24 修复。
@@ -199,7 +213,7 @@ execute --done 批量完成（2026-07-28，`run/complete.js`）
 - `quick` 不走 worktree 生命周期。hook 在 quick 阶段对写文件放行，只拦截危险 Bash 命令。
 - `scan` 当前定义是 10 步，并且 step 2 后会动态展开项目级步骤，不是固定 12 步。
 - `brainstorm` 步骤数从历史 11/13 演进到当前 8（optional 步——协作复用/原型分析/需求范围评估/需求澄清Grill/HTML原型——已内联进相邻必选步，减少 agent 往返）；`propose` 为 7。
-- `.sillyspec/local.yaml` 是当前主配置口径；scan prompt 写这里，sync 读写这里，hook 优先读这里并兼容根目录 fallback。
+- `.sillyspec/local.yaml` 是当前主配置口径；scan prompt 写这里，sync 读写这里，hook 优先读这里并兼容根目录 fallback。各段（project/commands/test_strategy/platform/mcp/dispatch）的 producer/consumer 与生成核验逻辑见上方「local.yaml 配置口径」段（detect 核验 scripts/gradlew 存在性、命令缺失不写键——非闭眼写三件套；mcp 段由 `platform connect` 同源写入或手填/env，readMcpConfig 消费）。
 - 平台模式的 `manifest.json` 已接入 scan 完成回调；`workflow-runs` 在平台模式下落盘到 `<runtimeRoot>/scan-runs/<scanRunId>/workflow-runs/`——`run/complete-handlers.js`（`handleScanStageCompleted`）的 scan/archive post-check 已向 `saveWorkflowRun` 透传 `runtimeRoot` / `scanRunId`（本地模式仍落 `cwd/.sillyspec/.runtime/workflow-runs/`，详见 `platform-workflows-sync.md`）。
 - `execute-runs`（task review）同样支持平台模式：`run/stage.js`（`runStage`）的 `runtimeRoot` 解析点（`current-execute-run-id` 写入、task review gate、done-like 校验）均已认 `platformOpts.runtimeRoot`，平台模式落 `<runtimeRoot>/execute-runs/<runId>/tasks/<taskId>/review.json`；本地模式仍落 `<specBase>/.runtime/execute-runs/`。`contract-matrix.js` 的 `extractProviderArtifact` / `buildConsumerInjection` / `verifyApiParity` 同步加了可选 `runtimeRoot` 参数，artifact 路径加 `changeName` 维度（`contract-artifacts/<changeName>/<taskName>/endpoints.json`）实现跨变更隔离（旧路径无 changeName，不同变更同名 task 互相覆盖）。`contract-artifacts/` 生命周期：execute Wave 完成时 `extractArtifactsForChange`（`contract-matrix.js`）扫 worktree 提取后端端点（`scanBackendEndpoints` 多框架：FastAPI `.py` / Express `.js,.ts` / Spring `.java`）→ 落 artifact；verify 阶段 `runVerifyParityCheck`（`verify-postcheck.js`）读它做 advisory parity 对账（`missingBackend>0` 只 warning 不阻断 verify 完成；无 artifact → skipped，非全栈项目不打扰）；init cleanup 白名单（`RUNTIME_KEEP`）保留。注：`buildContractMatrix` 的 provider 识别 bug（只 classify consumers 不 classify providers）与 `parseTaskDependencies` 表格正则贪婪 bug（`[^|]*` 吃前导 0 → `task-1` 误解析）已修，端点级 contracts/注入方真正生效。
 - `archive` 的目录移动已经由 `run/complete-handlers.js`（`archiveChangeDirectory`）在第 4 步 `--confirm` 时执行；未带 `--confirm` 会回退该步骤并提示补参。

@@ -268,24 +268,63 @@
 2. 调用 `sillyspec local detect` 命令生成 local.yaml（该命令封装了纯 fs 项目类型嗅探：package.json→nodejs / pom.xml→maven / build.gradle→gradle / Makefile→make / 否则 generic，对应默认 commands）。**不要自行嗅探 package.json/pom.xml/build.gradle 等文件**——探测逻辑唯一归属 local-detect.js，本步骤只负责调用命令并报告结果。
 3. 该命令内部已处理：确保目录存在（mkdir -p）、已存在则跳过、原子写入（先写 tmp 再 rename）。
 4. 报告生成的 project.type 与 local.yaml 路径。
+5. **detect 只生成 `project.type` / `commands.{build,test,lint}`（存在性核验驱动）/ `test_strategy` 骨架**，以下策略字段由你（agent）按项目实际情况补充——能在 package.json / lockfile / 构建文件 / CI 配置 / README 中找到依据就填，不确定留空或注释：
+   - `commands.install`：依赖安装命令（如 `npm install` / `pnpm install` / `yarn`）
+   - `env`：构建/测试所需环境变量键值（仅从 README / CI 配置 / .env.example 能确证的）
+   - `test_strategy`：detect 未注入时按项目实际补（full=全量 / module=只测变更模块 / skip=跳过测试）
+   - `modules`：模块路径根（module_paths，如 `src/` / `packages/`）
+   - `known_failures`：已知失败/不稳定测试清单（仅从 CI 历史 / 测试注释能确证的）
 
-### 输出格式参考（由 `sillyspec local detect` 自动产出）
+### platform / dispatch / mcp 段检查（FR-08，可选补充）
+detect 不写这三段，由你按项目是否接入 sillyhub 平台决定是否补：
+- **platform 段缺失**（要接入 sillyhub 平台）→ 运行 `sillyspec platform connect <url> <token>` 自动写入（推荐）
+- **dispatch 段调参缺失**（启用 sillyhub 派发且需调优）→ 手填示例 `probe_ttl_ms` / `poll_interval_ms` / `worker_timeout_ms`（仅在你确知调优值时填，否则留默认）
+- **mcp 段缺失**（dispatch worker 走 MCP 协议连 sillyhub）→ 优先 `sillyspec platform connect`（同源假设，platform+mcp 同写）；不同源则手填 `mcp.url` / `mcp.token`，或设环境变量 `SILLYHUB_MCP_URL` / `SILLYHUB_MCP_TOKEN`（不入盘）
+
+### ⛔ 铁律（R-04，防编造）
+只写能从 package.json / lockfile / 构建文件 / CI 配置 / README 中确证的事实。不确定的字段一律留空或写注释占位，**绝不编造命令、路径或凭据**。commands 键的存在性已由 detect 核验，不要重复核验。
+
+### 输出格式参考（detect 自动产出骨架 + agent 补充策略字段）
 ```yaml
 # SillySpec 本地配置（自动生成，可手动修改）
 project:
   type: nodejs  # nodejs/maven/gradle/make/generic
 
+# commands 键存在性由 detect 核验 package.json scripts 驱动：
+# 有 scripts.build 才写 build，有 scripts.test 才写 test，有 scripts.lint 才写 lint
+# （仅 test/lint 无 build 的项目，build 键不写）
 commands:
-  build: "npm run build"
+  build: "npm run build"   # 仅 scripts.build 存在时由 detect 写入
   test: "npm test"
   lint: "npm run lint"
+  # install: "npm install"   # ← agent 补：依赖安装命令
 
 # 测试策略：full=全量测试, module=只测变更模块, skip=跳过测试
 test_strategy: module
+
+# ↓ 以下为 agent 按项目实际补充的策略字段（不确定留空或注释）
+# env:                       # ← agent 补：构建/测试所需环境变量
+#   NODE_ENV: test
+# modules:                    # ← agent 补：模块路径根（module_paths）
+#   - src/
+# known_failures:             # ← agent 补：已知失败/不稳定测试
+#   - "test/flaky.test.mjs"
+
+# ↓ 外部连接段（接入 sillyhub 平台时补，detect 不写）
+# platform:                   # ← sillyspec platform connect <url> <token> 写入
+#   url: ...
+#   token: ...
+# mcp:                        # ← platform connect 同源写入 或 手填 或 env(SILLYHUB_MCP_URL/TOKEN)
+#   url: ...
+#   token: ...
+# dispatch:                   # ← agent 按需调参（确知调优值才填）
+#   probe_ttl_ms: 30000
+#   poll_interval_ms: 2000
+#   worker_timeout_ms: 60000
 ```
 
 ### 输出
-local.yaml 生成结果（已存在/已生成 + project.type）
+local.yaml 生成结果（已存在/已生成 + project.type + agent 补充的策略字段摘要）
 ````
 
 ---
@@ -672,7 +711,7 @@ INDEX.md 维护索引，格式（每行：关键词1|关键词2 → [条目名](
 7. 确认所有文档都写入 `{DOCS_ROOT}/`（spec-root 下），**而非源码目录下的 .sillyspec/**
 8. 检查是否出现 tool_use_error 或 API Error 未恢复
 9. 检查 7 份文档 header 是否包含 author 和 created_at
-10. 检查 local.yaml 中 commands 是否在 package.json scripts 中真实存在，不存在的必须标记 unavailable
+10. 复查 detect 核验结果——commands 键已由 detect 核验 scripts 存在性，agent 无需重复核验或标 unavailable，仅确认 local.yaml 与 detect 产出一致
 
 ### ⛔ API 错误处理
 - 遇到 API Error 529（服务过载）或 rate_limit 时，**停止当前操作并报告**，不要自动重试

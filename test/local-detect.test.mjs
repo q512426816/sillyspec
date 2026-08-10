@@ -24,15 +24,52 @@ function assert(cond, msg) {
 
 console.log('=== task-02: detectLocalYaml 纯 fs 嗅探 ===\n')
 
-// Case 1: nodejs（写 package.json {}）
+// Case 1: nodejs（写 package.json {}）— 无 scripts 字段 → commands 应为空对象（缺键 undefined）
 {
   const dir = mkdtempSync(join(tmpdir(), 'ld-nodejs-'))
   writeFileSync(join(dir, 'package.json'), '{}')
   const r = detectLocalYaml(dir)
   assert(r.project.type === 'nodejs', `nodejs: type=nodejs（=${r.project.type}）`)
-  assert(r.commands.build === 'npm run build', `nodejs: commands.build='npm run build'（=${r.commands.build}）`)
-  assert(r.commands.test === 'npm test', `nodejs: commands.test='npm test'（=${r.commands.test}）`)
-  assert(r.commands.lint === 'npm run lint', `nodejs: commands.lint='npm run lint'（=${r.commands.lint}）`)
+  assert(r.commands.build === undefined, `nodejs 空 scripts: commands.build=undefined（=${r.commands.build}）`)
+  assert(r.commands.test === undefined, `nodejs 空 scripts: commands.test=undefined（=${r.commands.test}）`)
+  assert(r.commands.lint === undefined, `nodejs 空 scripts: commands.lint=undefined（=${r.commands.lint}）`)
+  assert(r.commands && typeof r.commands === 'object' && Object.keys(r.commands).length === 0,
+    `nodejs 空 scripts: commands 为空对象（=${JSON.stringify(r.commands)}）`)
+  rmSync(dir, { recursive: true, force: true })
+}
+
+// Case 1b: nodejs（package.json scripts 仅含 build+test 子集，无 lint）→ 仅生成 build/test 键，lint undefined
+{
+  const dir = mkdtempSync(join(tmpdir(), 'ld-nodejs-scripts-'))
+  writeFileSync(join(dir, 'package.json'), JSON.stringify({
+    name: 'sub',
+    scripts: { build: 'node build.js', test: 'node test.js' },
+  }))
+  const r = detectLocalYaml(dir)
+  assert(r.project.type === 'nodejs', `nodejs-scripts: type=nodejs（=${r.project.type}）`)
+  assert(r.commands.build === 'npm run build', `nodejs-scripts: commands.build='npm run build'（=${r.commands.build}）`)
+  assert(r.commands.test === 'npm test', `nodejs-scripts: commands.test='npm test'（=${r.commands.test}）`)
+  assert(r.commands.lint === undefined, `nodejs-scripts: commands.lint=undefined（无 lint script）（=${r.commands.lint}）`)
+  rmSync(dir, { recursive: true, force: true })
+}
+
+// Case 1c: nodejs（package.json 非法 JSON → throw 'package.json 解析失败：<path>'，CONVENTIONS #4）
+{
+  const dir = mkdtempSync(join(tmpdir(), 'ld-nodejs-bad-'))
+  const pkgPath = join(dir, 'package.json')
+  writeFileSync(pkgPath, '{ not valid json')
+  let threw = false
+  let errMsg = ''
+  try {
+    detectLocalYaml(dir)
+  } catch (e) {
+    threw = true
+    errMsg = e.message
+  }
+  assert(threw, `nodejs-bad: 非法 JSON 必须抛错（未抛）`)
+  assert(errMsg.startsWith('package.json 解析失败：'),
+    `nodejs-bad: 错误信息前缀='package.json 解析失败：'（=${errMsg}）`)
+  assert(errMsg.endsWith(pkgPath), `nodejs-bad: 错误信息含完整路径（=${errMsg}）`)
   rmSync(dir, { recursive: true, force: true })
 }
 
@@ -48,15 +85,28 @@ console.log('=== task-02: detectLocalYaml 纯 fs 嗅探 ===\n')
   rmSync(dir, { recursive: true, force: true })
 }
 
-// Case 3: gradle（写 build.gradle）
+// Case 3: gradle（写 build.gradle + gradlew → 前缀 ./gradlew）
 {
   const dir = mkdtempSync(join(tmpdir(), 'ld-gradle-'))
   writeFileSync(join(dir, 'build.gradle'), "plugins { id 'java' }")
+  writeFileSync(join(dir, 'gradlew'), '') // 补 gradlew 空文件使 existsSync 成立
   const r = detectLocalYaml(dir)
   assert(r.project.type === 'gradle', `gradle: type=gradle（=${r.project.type}）`)
   assert(r.commands.build === './gradlew build', `gradle: commands.build='./gradlew build'（=${r.commands.build}）`)
   assert(r.commands.test === './gradlew test', `gradle: commands.test='./gradlew test'（=${r.commands.test}）`)
   assert(r.commands.lint === './gradlew check', `gradle: commands.lint='./gradlew check'（=${r.commands.lint}）`)
+  rmSync(dir, { recursive: true, force: true })
+}
+
+// Case 3b: gradle（仅 build.gradle 无 gradlew → 前缀 gradle）
+{
+  const dir = mkdtempSync(join(tmpdir(), 'ld-gradle-nogw-'))
+  writeFileSync(join(dir, 'build.gradle'), "plugins { id 'java' }")
+  const r = detectLocalYaml(dir)
+  assert(r.project.type === 'gradle', `gradle-nogw: type=gradle（=${r.project.type}）`)
+  assert(r.commands.build === 'gradle build', `gradle-nogw: commands.build='gradle build'（=${r.commands.build}）`)
+  assert(r.commands.test === 'gradle test', `gradle-nogw: commands.test='gradle test'（=${r.commands.test}）`)
+  assert(r.commands.lint === 'gradle check', `gradle-nogw: commands.lint='gradle check'（=${r.commands.lint}）`)
   rmSync(dir, { recursive: true, force: true })
 }
 

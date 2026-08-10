@@ -114,7 +114,7 @@ execute 还有**第二道**独立的 stage 级审查：除逐 task review.json �
 
 ## 派发模式（SillyHub MCP，可选）
 
-`execute` Wave 内的子代理默认用本机 Agent tool 执行。若消费方配置了 SillyHub MCP（`SILLYHUB_MCP_URL` / `SILLYHUB_MCP_TOKEN`），Wave 步骤 prompt 运行时可能注入一段 SillyHub 派发指令——**出现就照其中的指令执行**（创建 mission / dispatch_worker / 轮询结果 / 本机兜底），**没出现就用本机 Agent tool**。未配置 MCP 时完全不注入，行为与无此机制一致。
+`execute` Wave 内的子代理默认用本机 Agent tool 执行。若消费方配置了 SillyHub MCP（`local.yaml` 的 `mcp` 段写 `mcp.url` / `mcp.token`——可由 `sillyspec platform connect` 同源写入或手填；或环境变量 `SILLYHUB_MCP_URL` / `SILLYHUB_MCP_TOKEN` 作回退），Wave 步骤 prompt 运行时可能注入一段 SillyHub 派发指令——**出现就照其中的指令执行**（创建 mission / dispatch_worker / 轮询结果 / 本机兜底），**没出现就用本机 Agent tool**。未配置 MCP 时完全不注入，行为与无此机制一致。
 
 可选：`sillyspec dispatch probe` 查看 SillyHub 是否可用。
 
