@@ -115,9 +115,20 @@ export async function enforceReviewJsonGate(stageName, cwd, changeName, step, st
   const runIdFile = join(runtimeRoot, `current-execute-run-id-${changeName}`)
   const planPath = join(specBase, 'changes', changeName, 'plan.md')
   if (!existsSync(runIdFile) || !existsSync(planPath)) return true
-  const executeRunId = readFileSync(runIdFile, 'utf8').trim()
+  let executeRunId = readFileSync(runIdFile, 'utf8').trim()
   const planContent = readFileSync(planPath, 'utf8')
-  const { validateCheckedTaskReviews } = await import('../task-review.js')
+  const { validateCheckedTaskReviews, resolveLatestExecuteRunIdWithTasks } = await import('../task-review.js')
+  // marker 漂移兜底（gate-atom-a 正确修法）：marker 指向的 run 缺 tasks/（generateExecuteRunId 只写
+  // marker 不建目录，漂移后新 run 不继承旧 review）时，无视 marker 改扫 execute-runs/ 取 mtime 最新
+  // 且真正含 tasks/ 的 run，用其齐备的 review.json 校验，避免误报「review.json 不存在」。注意不能用
+  // resolveLatestExecuteRunId——它见 marker 非空即原样返回（不校验目录），恰是本场景要绕开的值。
+  if (executeRunId && !existsSync(join(runtimeRoot, 'execute-runs', executeRunId, 'tasks'))) {
+    const relocated = resolveLatestExecuteRunIdWithTasks({ runtimeRoot })
+    if (relocated && relocated !== executeRunId) {
+      console.warn(`⚠️ execute run marker 漂移：${executeRunId} 无 tasks/，改用真实含 review 的 run ${relocated}`)
+      executeRunId = relocated
+    }
+  }
   const result = validateCheckedTaskReviews({ planContent, runtimeRoot, executeRunId })
   if (result.ok) return true
   if (steps && steps[currentIdx]) steps[currentIdx].status = 'blocked'

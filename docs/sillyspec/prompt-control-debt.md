@@ -202,7 +202,7 @@ updated_at: 2026-08-09T00:00:00+08:00
 **worktree cleanup 踩坑复发（更新 memory）**：execute 收尾 `git worktree remove --force` 删孤儿 worktree 时，递归删了 junction 目标——**主仓整个 node_modules 被删空**（memory `sillyspec-worktree-cleanup-deletes-node-modules` 记录的坑，本次比记录更严重：全删而非部分误删）。恢复遇 npm 12 EALLOWREMOTE（package-lock 里 yoctocolors-cjs 的 resolved 指向 npmmirror 镜像，但项目 registry=npmjs.org，npm 12 视 remote tarball 拒绝；`allowed-hosts`/`fetch-allowed` 均非 npm 12 有效配置）→ 解法 `npm install --registry=https://registry.npmmirror.com`（registry 匹配 lock URL，remote 包降级为正常 registry 解析）。已更新 memory `sillyspec-worktree-cleanup-deletes-node-modules`。
 
 ### 2026-08-09 增补（execute run marker 漂移致 enforceReviewJsonGate 误报，对称缺口）
-状态：`⏭ defer（方案 A 已定，待 complete-gate-atomicity 归档 + 主仓工作区干净后独立 quick 落）`
+状态：`✅ 已落地（2026-08-10，quick ql-20260810-003-866c）`——按原 defer 前提（complete-gate-atomicity 已归档 + 主仓干净）落。**注意：实现用的是「无视 marker 扫 execute-runs 取含 tasks/ 真实 run」（新 helper `resolveLatestExecuteRunIdWithTasks`），非下文方案 A 的 `resolveLatestExecuteRunId` fallback**——后者见 marker 非空即原样返回（不校验目录）、且 :333-343 只在 marker 为空时兜底，都接不住「marker 非空指向坏目录」场景；方案 A 经核实不成立，落地时改用扫描修法。
 
 来源：complete-gate-atomicity 变更 execute --done 卡「review.json 字段校验阻断」，诊断发现是 marker 漂移（非 review.json 真缺）。
 

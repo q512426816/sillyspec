@@ -218,3 +218,15 @@
 根因：resolveVerifyChangedFiles 用 meta.baseHash（=baseline checkpoint 父提交，pre-baseline 分支点）做 git diff base，diff 含 baseline checkpoint 那笔（52 个跨模块 overlay 文件）+ 本 change 改动；同源 task-review.js:694 早用 baselineCommit||baseHash，唯独 verify-postcheck 漏。
 方案：diff base 改 baselineCommit || actualBaseHash || baseHash（对齐 task-review/worktree/worktree-apply 四处同源）；补用例 5 回归锁死（baselineCommit 是 baseHash 之后的 commit、含 overlay，用它做 base 排除 overlay）。审查 stage-contract.js:613 checkExecuteCodeEvidence 同读裸 baseHash，但语义不同（只判 changed/unchanged/unknown 存在性、不挑模块不跑测试，overlay 算进来结论仍 changed 无危害）→ 不同病不改。
 结果：verify-postcheck-worktree 5/5 绿（新用例 5 锁死）；npm test 全量 EXIT=0；npm run lint 227 文件绿；commit adf69d3（git commit -F - -- <pathspec> 隔离，未夹带并行 session 的 complete.js 10fba18 / brainstorm.js / QUICKLOG / prompt / debt.md）。issue 文件 verify-worktree-baseline-basehash-wrong-module-detect.md 改 status=done + 移 multi-agent-platform finished/。
+
+## ql-20260810-003-866c | 2026-08-10 15:46:18 | execute run marker 漂移致 enforceReviewJsonGate 误报——正确修法（无视 marker 扫含 tasks/ 真实 run）
+状态：已完成
+关联变更：2026-08-10-enforce-review-gate-fallback
+文件：
+- src/task-review.js（新增 resolveLatestExecuteRunIdWithTasks：无视 marker，扫 execute-runs/ 取 mtime 最新且真正含 tasks/ 子目录的 runId；全无则 null）
+- src/run/gates.js（enforceReviewJsonGate 集成兜底：读 marker 后若其 run 缺 tasks/ → 用上述 helper 重定位再校验，并打「marker 漂移」warn；无候选则维持原 marker 校验）
+- test/execute-run-marker-drift.test.mjs（新增 9 用例：helper 空/跳过无 tasks/ 目录/多候选选合法 + 端到端「漂移 marker 不误报、真缺 review 仍阻断」）
+需求：enforceReviewJsonGate（gates.js，每次 execute --done 早跑）在 execute run marker 漂移（marker 指向无 tasks/ 的新 run、真实齐备的 review.json 在旧 run）时误报「review.json 不存在」，阻断 --done。
+根因：generateExecuteRunId 只写 marker 字符串、run 目录由 ensureTaskReviewDir 在写 review.json 时才建，marker 漂到新空 run 后旧 run 的 review 全部失联；enforceReviewJsonGate 直接 readFileSync(marker) 拿值就用、不校验目录不兜底。defer 债（prompt-control-debt gate-atom-a）提的方案 A「fallback resolveLatestExecuteRunId 对齐 gates.js:333-343」不成立——该函数见 marker 非空即原样返回（不校验目录），而 :333-343 只在 marker 为空时才 fallback，恰都接不住「marker 非空指向坏目录」这一漂移场景。
+方案：新增 resolveLatestExecuteRunIdWithTasks，无视 marker、只认 execute-runs/ 下真实含 tasks/ 的最新目录；enforceReviewJsonGate 在 marker 指向的 run 缺 tasks/ 时用它重定位到真实 run 再校验；全部 run 都无 tasks/（真没写 review）返回 null，gate 维持原 marker 校验、不误放行。
+结果：npm test 全量 151 绿（含新增 9 用例 execute-run-marker-drift）+ lint 230 文件绿；marker 漂移场景不再误报、真缺 review 仍阻断。模块文档：gates.js/task-review.js 未被任何模块卡收录（module-map schema v1 无 paths、收录不全），无归属命中故跳过同步。注：defer 债条目已按其原 defer 前提（complete-gate-atomicity 已归档 + 主仓干净）落地，但实现用的是「无视 marker 扫描」而非债条原文的「resolveLatestExecuteRunId fallback」，债务描述与正确修法有出入。

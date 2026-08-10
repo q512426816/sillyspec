@@ -611,6 +611,35 @@ export function generateExecuteRunId() {
  * @param {{ runtimeRoot: string, changeName: string }} opts
  * @returns {string|null} runId（exec- 前缀），无则 null
  */
+/**
+ * 扫描 execute-runs/，返回 mtime 最新且真正含 tasks/ 子目录的 runId。
+ *
+ * 专治 execute run marker 漂移（prompt-control-debt.md gate-atom-a）：generateExecuteRunId 只写
+ * marker 字符串、run 目录由 ensureTaskReviewDir 在写 review.json 时才建，marker 漂到「尚未建目录 /
+ * 未写任何 task review」的新 run 后，旧 run 里齐备的 review.json 全部失联。resolveLatestExecuteRunId
+ * 见 marker 非空即原样返回（不校验目录），接不住这种漂移；本函数无视 marker、只看真实目录内容，
+ * 供 enforceReviewJsonGate 在 marker 指向的 run 缺 tasks/ 时兜底重定位，避免误报「review.json 不存在」。
+ * 全部 run 都无 tasks/（真没写 review）返回 null——调用方维持原阻断，不误放行。
+ *
+ * @param {{ runtimeRoot: string }} opts
+ * @returns {string|null} 含 tasks/ 的最新 runId，无则 null
+ */
+export function resolveLatestExecuteRunIdWithTasks({ runtimeRoot }) {
+  try {
+    const runsDir = join(runtimeRoot, 'execute-runs')
+    if (!existsSync(runsDir)) return null
+    const entries = readdirSync(runsDir)
+      .map(e => ({ e, p: join(runsDir, e) }))
+      .filter(x => { try { return statSync(x.p).isDirectory() } catch { return false } })
+      .filter(x => { try { return statSync(join(x.p, 'tasks')).isDirectory() } catch { return false } })
+      .map(x => ({ e: x.e, mtime: statSync(x.p).mtimeMs }))
+      .sort((a, b) => b.mtime - a.mtime)
+    return entries.length > 0 ? entries[0].e : null
+  } catch {
+    return null
+  }
+}
+
 export function resolveLatestExecuteRunId({ runtimeRoot, changeName }) {
   const marker = join(runtimeRoot, `current-execute-run-id-${changeName}`)
   try { if (existsSync(marker)) { const c = readFileSync(marker, 'utf8').trim(); if (c) return c } } catch {}
