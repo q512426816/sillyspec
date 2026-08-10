@@ -13,11 +13,12 @@
  *   （平台模式落 <runtimeRoot>/stage-reviews/...，与 execute-runs 同构）
  */
 
-import { existsSync, readFileSync, mkdirSync, readdirSync } from 'fs'
+import { existsSync, readFileSync, mkdirSync, readdirSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { createHash } from 'crypto'
 import { VALID_VERDICTS, REVIEW_SCHEMA_VERSION } from './task-review.js'
 import { detectSpecDirTypo } from './spec-dir-typo.js'
+import { resolveRuntimeRoot } from './run/shared.js'
 
 // 文档型 stage review 的合法 reviewType
 export const STAGE_REVIEW_TYPES = ['design', 'plan', 'proposal', 'code', 'acceptance']
@@ -433,4 +434,107 @@ export function printStageReviewResult(result, context = {}) {
       console.warn(`   - ${w}`)
     }
   }
+}
+
+/**
+ * 注册一个 stage 级 review（确定性 writer）—— 生成 run 目录 + review.json 骨架（或 adopt
+ * agent 草稿）+ 写 marker，治 tier=independent 时「调度者手动派独立子代理 → marker 不写 →
+ * gate 取错 run」的死锁。与 task 级 generateTaskReviewDrafts（task-review.js）对称。
+ *
+ * docHash 由 CLI 直接 computeDocHash 算（命令有文件访问权），消除 agent 手算 hash 易错
+ * （部分实现 P6.1b defer：仅本 scaffold 路径确定性，不改 agent 自写 review.json 的 hash 链路）。
+ *
+ * 纯新增，不改 validateStageReview / getLatestStageReviewRunId / renderReviewJsonContract 等
+ * 现有函数；self-check 只验 mechanics（schema + docHash），verdict 留给 Stage Review Gate 判。
+ *
+ * @param {object} opts
+ * @param {string} opts.changeName - 变更名
+ * @param {string} opts.stage - brainstorm|plan|execute
+ * @param {string} [opts.fromFile] - adopt 模式：agent 已写的 review.json（保留 verdict/checklist，重算 docHash + 规范化 reviewedFiles[0]）
+ * @param {string} opts.cwd - 主仓 cwd（解析 specBase）
+ * @param {object} [opts.platformOpts] - 平台选项（specRoot 等）
+ * @returns {{ ok: boolean, reviewRunId: string, reviewPath: string, markerPath: string, mode: 'skeleton'|'adopted', mainDoc: string, review: object }}
+ * @throws {Error} changeName 空 / stage 非法 / 主文档缺失 / --from 不存在或 schema 不过
+ */
+export function registerStageReview({ changeName, stage, fromFile, cwd, platformOpts = {} }) {
+  if (!changeName) throw new Error('register-stage-review: changeName 不能为空')
+  if (!stage || !STAGE_MAIN_DOC[stage]) {
+    throw new Error(`register-stage-review: stage 无效 "${stage}"（应为 brainstorm|plan|execute）`)
+  }
+
+  const specBase = platformOpts.specRoot || join(cwd, '.sillyspec')
+  const runtimeRoot = resolveRuntimeRoot(platformOpts, specBase)
+  const changeDir = join(specBase, 'changes', changeName)
+  const reviewType = STAGE_REVIEW_TYPE[stage]
+  const mainDoc = STAGE_MAIN_DOC[stage]
+  const mainDocPath = join(changeDir, mainDoc)
+  if (!existsSync(mainDocPath)) {
+    throw new Error(`register-stage-review: 主审查文档不存在 ${mainDocPath}（${stage} 审 ${mainDoc}），无法算 docHash`)
+  }
+  const docHash = computeDocHash(mainDocPath)
+  if (!docHash) {
+    throw new Error(`register-stage-review: 计算 docHash 失败（computeDocHash 返回 null）：${mainDocPath}`)
+  }
+  const reviewedFiles = [`changes/${changeName}/${mainDoc}`]
+
+  let review
+  let mode
+  if (fromFile) {
+    // adopt 模式：保留 agent 的 verdict/checklist/reviewerNotes/requiredEvidence，仅修 mechanics
+    const fromAbs = existsSync(fromFile) ? fromFile : join(cwd, fromFile)
+    if (!existsSync(fromAbs)) {
+      throw new Error(`register-stage-review: --from 文件不存在 ${fromFile}（相对 cwd ${fromAbs} 也未命中）`)
+    }
+    let parsed
+    try {
+      parsed = JSON.parse(readFileSync(fromAbs, 'utf8'))
+    } catch (e) {
+      throw new Error(`register-stage-review: --from 文件 JSON 解析失败 ${fromAbs}: ${e.message}`)
+    }
+    const schemaResult = validateStageReviewSchema(parsed)
+    if (!schemaResult.ok) {
+      throw new Error(`register-stage-review: --from 文件 schema 校验失败 — ${schemaResult.errors.join('; ')}`)
+    }
+    review = { ...parsed, docHash, reviewedFiles }
+    mode = 'adopted'
+  } else {
+    // 骨架模式：cannot_verify 待审占位（schema 反逃逸：cannot_verify 必须带非空 requiredEvidence）
+    review = {
+      schemaVersion: REVIEW_SCHEMA_VERSION,
+      reviewType,
+      specVerdict: 'cannot_verify',
+      qualityVerdict: 'cannot_verify',
+      reviewedFiles,
+      docHash,
+      requiredEvidence: [`待独立审查子代理对照 ${mainDoc} 逐节核验（骨架由 register-stage-review 生成）`],
+      reviewerNotes: '骨架由 register-stage-review 生成，verdict 待独立审查子代理填写',
+    }
+    mode = 'skeleton'
+  }
+
+  const reviewRunId = generateStageReviewRunId()
+  const reviewDir = join(runtimeRoot, 'stage-reviews', `${stage}-${reviewRunId}`)
+  const reviewPath = join(reviewDir, 'review.json')
+  mkdirSync(reviewDir, { recursive: true })
+  writeFileSync(reviewPath, JSON.stringify(review, null, 2) + '\n')
+
+  const markerPath = stageReviewMarkerPath(runtimeRoot, stage, changeName)
+  if (existsSync(markerPath)) {
+    console.warn(`⚠️ register-stage-review: marker 已存在 ${markerPath}，将被覆盖为 ${reviewRunId}`)
+  }
+  mkdirSync(runtimeRoot, { recursive: true })
+  writeFileSync(markerPath, reviewRunId + '\n')
+
+  // self-check（fail-closed）：刚写的 review 必过 schema + docHash 真实性。只验 mechanics，
+  // 不判 verdict（verdict 是 agent/子代理的审查结论，even fail 也如实落盘，由 Stage Review Gate 裁决）。
+  const schemaRecheck = validateStageReviewSchema(review)
+  if (!schemaRecheck.ok) {
+    throw new Error(`register-stage-review: 写入后 schema 自检失败（不应发生）— ${schemaRecheck.errors.join('; ')}`)
+  }
+  const hashRecheck = verifyStageReviewDocHash(review, [specBase, changeDir, cwd])
+  if (!hashRecheck.ok) {
+    throw new Error(`register-stage-review: 写入后 docHash 自检失败（不应发生）— ${hashRecheck.errors.join('; ')}`)
+  }
+
+  return { ok: true, reviewRunId, reviewPath, markerPath, mode, mainDoc, review }
 }

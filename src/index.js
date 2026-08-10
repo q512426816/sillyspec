@@ -84,6 +84,8 @@ SillySpec CLI — 规范驱动开发工具包
   sillyspec gate <stage> --change <name> [--json]      机器门控：阶段能否标记完成（只读）
   sillyspec derive <facet> --change <name> [--json]    单项事实核验（facet: execute-evidence|verify-test|task-reviews|artifacts）
   sillyspec backfill-reviews --change <name> [--json]  为手动补的 task 生成 review.json 草稿（cannot_verify，解 archive 客观完成度阻断）
+  sillyspec register-stage-review --change <name> --stage <brainstorm|plan|execute> [--from <review.json>] [--json]
+                                      生成/adopt stage 级 review.json（docHash 自动算 + 写 marker，治 tier=independent marker 死锁）
 
   sillyspec doctor [子命令]            进度库健康检查 + 修复（顶层命令，非 worktree doctor）
     （无子命令）                       跑诊断，列出问题
@@ -455,6 +457,41 @@ async function main() {
         if (result.executeRunId) {
           console.log('   execute run id: ' + result.executeRunId);
         }
+      }
+      break;
+    }
+    case 'register-stage-review': {
+      // 手动注册 stage 级 review（brainstorm/plan/execute-acceptance）的确定性 writer ——
+      // 生成 run 目录 + review.json 骨架（cannot_verify，待独立审查子代理填 verdict）或 adopt
+      // agent 草稿（--from，保留 verdict/checklist 重算 docHash）+ 写 marker。治 tier=independent 时
+      // 调度者手动派独立子代理不写 marker 的死锁。docHash 由 CLI computeDocHash 算（部分实现 P6.1b defer）。
+      // 纯新增，不改 gate 语义。与 task 级 backfill-reviews 对称（stage 级等价物）。
+      const rsrChangeIdx = args.indexOf('--change');
+      const rsrChange = rsrChangeIdx >= 0 && args[rsrChangeIdx + 1] ? args[rsrChangeIdx + 1] : null;
+      const rsrStageIdx = args.indexOf('--stage');
+      const rsrStage = rsrStageIdx >= 0 && args[rsrStageIdx + 1] ? args[rsrStageIdx + 1] : null;
+      const rsrFromIdx = args.indexOf('--from');
+      const rsrFrom = rsrFromIdx >= 0 && args[rsrFromIdx + 1] ? args[rsrFromIdx + 1] : null;
+      if (!rsrChange || !rsrStage) {
+        console.error('用法: sillyspec register-stage-review --change <名> --stage <brainstorm|plan|execute> [--from <review.json>] [--spec-dir <path>] [--json]\n  生成/adopt stage 级 review.json（docHash 自动算 + 写 marker），治 tier=independent marker 死锁');
+        process.exit(2);
+      }
+      const { registerStageReview } = await import('./stage-review.js');
+      const rsrPlatformOpts = {};
+      if (specDir) rsrPlatformOpts.specRoot = specDir;
+      try {
+        const result = registerStageReview({ changeName: rsrChange, stage: rsrStage, fromFile: rsrFrom, cwd: dir, platformOpts: rsrPlatformOpts });
+        if (json) {
+          process.stdout.write(JSON.stringify({ ok: true, command: 'register-stage-review', change: rsrChange, stage: rsrStage, ...result }));
+        } else {
+          console.log(`✅ 已注册 ${rsrStage} stage review [${result.reviewRunId}] → ${result.reviewPath}（mode: ${result.mode}）`);
+          console.log(`   marker → ${result.markerPath}`);
+          console.log(`   下一步：独立审查子代理对照 ${result.mainDoc} 填 verdict/checklist 后重跑 --done`);
+        }
+      } catch (e) {
+        if (json) process.stdout.write(JSON.stringify({ ok: false, command: 'register-stage-review', error: e.message }));
+        else console.error('❌ ' + e.message);
+        process.exitCode = 1;
       }
       break;
     }
@@ -1481,7 +1518,7 @@ SillySpec modules — 模块文档管理
       break;
     }
     default: {
-      const topCommands = ['init', 'setup', 'run', 'progress', 'worktree', 'dispatch', 'local', 'workflow', 'gate', 'derive', 'backfill-reviews', 'modules', 'change-rename', 'knowledge', 'platform', 'scan', 'brainstorm', 'plan', 'execute', 'verify', 'archive', 'quick', 'explore', 'status', 'doctor', 'auto', 'runtime'];
+      const topCommands = ['init', 'setup', 'run', 'progress', 'worktree', 'dispatch', 'local', 'workflow', 'gate', 'derive', 'backfill-reviews', 'register-stage-review', 'modules', 'change-rename', 'knowledge', 'platform', 'scan', 'brainstorm', 'plan', 'execute', 'verify', 'archive', 'quick', 'explore', 'status', 'doctor', 'auto', 'runtime'];
       const suggestion = didYouMean(command, topCommands);
       console.error(`❌ 未知命令: ${command}`);
       if (command === '--status') {
