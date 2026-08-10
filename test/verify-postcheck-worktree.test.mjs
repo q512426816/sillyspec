@@ -141,6 +141,53 @@ function writeMeta(cwd, change, meta) {
   }
 }
 
+// ── 5. baseline checkpoint：meta 有 baselineCommit → 用它做 base，排除 baseline overlay 文件 ──
+// 坑 verify-worktree-baseline-basehash-wrong-module-detect：worktree + baseline checkpoint 模式下
+// baseHash = pre-baseline（分支点），baselineCommit/actualBaseHash = post-baseline（含 baseline 同步
+// 进来的他人跨模块 overlay 文件）。旧实现用 baseHash..HEAD 会把 overlay 文件全算进 verify diff
+// → pickHitModules 命中无关模块（如 ppm-only 变更误测 daemon/frontend）→ 跑无关测试 → 撞 timeout
+// 阻断 verify。修复：diff base 优先 baselineCommit || actualBaseHash || baseHash（与 task-review.js
+// :694 / worktree.js:1108 / worktree-apply.js:169 同源）。
+{
+  const dir = mkRepo()
+  try {
+    const baseHash = git(dir, 'rev-parse HEAD').trim() // pre-baseline 分支点
+
+    // 模拟 baseline checkpoint：同步他人/历史跨模块 overlay 文件（baseline 那一笔）
+    mkdirSync(join(dir, 'daemon'), { recursive: true })
+    writeFileSync(join(dir, 'daemon', 'svc.py'), 'overlay')
+    mkdirSync(join(dir, 'frontend'), { recursive: true })
+    writeFileSync(join(dir, 'frontend', 'page.tsx'), 'overlay')
+    git(dir, 'add -A')
+    git(dir, 'commit -q -m baseline-checkpoint')
+    const baselineCommit = git(dir, 'rev-parse HEAD').trim() // post-baseline
+
+    // 本 change 真实改动（ppm-only）
+    mkdirSync(join(dir, 'backend', 'app', 'modules', 'ppm'), { recursive: true })
+    writeFileSync(join(dir, 'backend', 'app', 'modules', 'ppm', 'owner.py'), 'real')
+    git(dir, 'add -A')
+    git(dir, 'commit -q -m real-change')
+
+    const change = 'c5-baseline'
+    writeMeta(dir, change, {
+      baseHash,                       // pre-baseline（旧实现误用 → 会返回 3 文件）
+      baselineCommit,                 // post-baseline（修复后优先用）
+      actualBaseHash: baselineCommit, // 同义兜底（worktree.js 设值时两者同指 post-baseline）
+      worktreePath: dir,
+      mode: 'worktree',
+    })
+
+    const files = resolveVerifyChangedFiles(dir, change)
+    assertEqualUnsorted(
+      'baseline checkpoint: 用 baselineCommit 做 base，排除 overlay（只 ppm 真实改动，不含 daemon/frontend）',
+      files,
+      ['backend/app/modules/ppm/owner.py'],
+    )
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+}
+
 // ── 汇总 ─────────────────────────────────────────────────────────
 
 console.log(`\n${'='.repeat(50)}`)

@@ -431,6 +431,9 @@ function gitChangedFiles(cwd) {
  * 判定（与 checkExecuteCodeEvidence / task-review 同源，meta.json 为权威）：
  *   1. change 有 worktree meta 且 baseHash 存在 → 在 worktree（或 in-place 的 cwd）
  *      跑 `git diff --name-only <baseHash>..HEAD` 取真实代码改动集
+ *      ⚠️ baseline checkpoint 修复：优先用 baselineCommit/actualBaseHash（baseline overlay
+ *      之后），否则 baseHash（pre-baseline）会把 baseline 同步的跨模块文件算进 verify diff
+ *      → 命中无关模块（如 ppm 变更误测 daemon/frontend）。与 task-review.js 同源。
  *   2. 无 worktree meta / diff 异常 → 主仓 `git diff --name-only HEAD`（brownfield 原行为）
  *
  * @param {string} cwd - 项目根目录（主仓）
@@ -443,11 +446,13 @@ export function resolveVerifyChangedFiles(cwd, changeName) {
     if (existsSync(metaPath)) {
       let meta = null
       try { meta = JSON.parse(readFileSync(metaPath, 'utf8')) } catch {}
-      if (meta?.baseHash) {
+      // 优先 baselineCommit/actualBaseHash（baseline checkpoint 之后），回退 baseHash
+      const diffBase = meta?.baselineCommit || meta?.actualBaseHash || meta?.baseHash
+      if (diffBase) {
         const gitDir = (meta.worktreePath && meta.mode !== 'in-place-fallback' && existsSync(meta.worktreePath))
           ? meta.worktreePath
           : cwd
-        const files = runGitDiffNameOnly(gitDir, `${meta.baseHash}..HEAD`)
+        const files = runGitDiffNameOnly(gitDir, `${diffBase}..HEAD`)
         if (files !== null) return files
         // worktree diff 异常 → 落主仓兜底（保持与原 gitChangedFiles 相同的 null 语义）
       }
