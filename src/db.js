@@ -7,7 +7,7 @@ import { dirname } from 'path';
 // 每次 new ProgressManager 都过 init，靠版本戳跳过建表省开销）。
 // better-sqlite3 是原生 SQLite 引擎，打开即持久化（不像 sql.js 纯内存需整库 export 落盘），
 // _createSchema 内 DDL 直接落盘，无需额外 _save。
-const DB_SCHEMA_VERSION = 3;
+const DB_SCHEMA_VERSION = 4;
 
 // SQLITE_BUSY 应用层有限重试（R-08 / NFR-03）：WAL 单写者模型，并发写第二者在
 // busy_timeout=5000（init PRAGMA）后抛 SQLITE_BUSY。busy_timeout 已在引擎层处理大部分等待；
@@ -200,7 +200,7 @@ export class DB {
       CREATE TABLE IF NOT EXISTS project (
         id INTEGER PRIMARY KEY DEFAULT 1,
         name TEXT NOT NULL,
-        schema_version INTEGER DEFAULT 3,
+        schema_version INTEGER DEFAULT 4,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       )
@@ -302,6 +302,14 @@ export class DB {
     this._migrateAddColumn('stages', 'reopened_from_step', 'TEXT');
     this._migrateAddColumn('stages', 'reopened_at', 'TEXT');
     this._migrateAddColumn('stages', 'stale_reason', 'TEXT');
+
+    // Platform sync support（2026-08-10-platform-progress-sync §8 / D-012）：
+    // changes 表加 base_ts（last_synced_platform_ts）与本地脏度（last_local_modified_ts）两列，
+    // 为 serializeForSync()/import() 序列化与 base_ts 乐观锁冲突检测提供数据载体。
+    // NULL 语义（gap8）：last_local_modified_ts NULL=本地无脏度（pull 不判冲突直接 import）；
+    // last_synced_platform_ts NULL=首次同步（base_ts NULL 平台接受首次 push）。
+    this._migrateAddColumn('changes', 'last_synced_platform_ts', 'TEXT');
+    this._migrateAddColumn('changes', 'last_local_modified_ts', 'TEXT');
   }
 
   /**

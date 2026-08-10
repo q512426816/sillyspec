@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-05-31 11:00:00
-updated_at: 2026-08-09T00:40:00+08:00
+updated_at: 2026-08-10T22:40:00+08:00
 ---
 
 # SillySpec 文件生命周期
@@ -72,7 +72,7 @@ updated_at: 2026-08-09T00:40:00+08:00
 | `.sillyspec/quicklog/` | 是 | `src/quicklog.js`（CLI 接管，O_EXCL 锁 + writeAtomic 原子写） | 每次 quick 任务记录（CLI 启动时写「进行中」条目 + 分配 ql-ID，完成时翻「已完成」+ 追加结构化结果块 需求/根因/方案/结果，step3 --output 缺字段则 --done 被拒；关联变更另由 CLI 在各 change tasks.md 追加/勾选。读-改-写经 writeAtomic 原子覆盖，reader 不读半截） |
 | `.sillyspec/shared/` | 是 | `init.js` | 共享目录，当前无核心生命周期逻辑 |
 | `.sillyspec/workspace/` | 是 | `init.js` | 工作区目录，当前无核心生命周期逻辑 |
-| `.sillyspec/.runtime/` | 否 | `init.js`、`ProgressManager`、运行时命令 | DB、artifacts、history、workflow-runs、worktrees、knowledge-hit-report.json、postcheck-result.json、execute-runs（execute task review.json）、stage-reviews（brainstorm/plan/propose/execute 独立审查 review.json） |
+| `.sillyspec/.runtime/` | 否 | `init.js`、`ProgressManager`、运行时命令 | DB、artifacts、history、workflow-runs、worktrees、knowledge-hit-report.json、postcheck-result.json、execute-runs（execute task review.json）、stage-reviews（brainstorm/plan/propose/execute 独立审查 review.json）、sync-conflict-<change>.json（平台同步双向冲突持久化，resolve 三选一后清理）、sillyspec.db.pre-import-<ts>.bak（pull/resolve --take-platform 的 import 前 snapshot） |
 
 `init.js` 会把 `.sillyspec/.runtime/`、`.sillyspec/local.yaml`、`.sillyspec/codebase/SCAN-RAW.md` 追加到 `.gitignore`。
 
@@ -104,7 +104,7 @@ sillyspec run scan
 
 brainstorm / propose / plan / execute / verify / archive
   -> .sillyspec/changes/<change>/...
-  -> .sillyspec/.runtime/sillyspec.db                    (better-sqlite3 原生绑定 + WAL 模式：journal_mode=WAL + busy_timeout=5000 + foreign_keys=ON，事务提交直接持久化主库文件 + .db-wal/.db-shm 侧车；写前自动备份为 sillyspec.db.bak，读取时主库损坏/为空从 .bak 回退，两者均坏则 fail-loud；WAL 单写者串行 + SQLITE_BUSY 应用层有限重试，并发安全不丢更新)
+  -> .sillyspec/.runtime/sillyspec.db                    (better-sqlite3 原生绑定 + WAL 模式：journal_mode=WAL + busy_timeout=5000 + foreign_keys=ON，事务提交直接持久化主库文件 + .db-wal/.db-shm 侧车；写前自动备份为 sillyspec.db.bak，读取时主库损坏/为空从 .bak 回退，两者均坏则 fail-loud；WAL 单写者串行 + SQLITE_BUSY 应用层有限重试，并发安全不丢更新；schema v4：changes 表加 last_synced_platform_ts=base_ts 乐观锁（push 带头标 X-SillySpec-Base-Ts，平台比对 current_pushed_at > base_ts 则 409）+ last_local_modified_ts=本地脏度（全写入路径 _touchLocalModified 触发，读路径 run().changes>0 guard 不标脏）；pull/resolve --take-platform 的 import 事务前另存 sillyspec.db.pre-import-<ts>.bak（独立 .bak 路径，不抢主 sillyspec.db.bak 回退链；import 后 last_local_modified_ts 重置为 pushed_at，D-013 例外）)
   -> .sillyspec/.runtime/user-inputs.md
   -> .sillyspec/.runtime/artifacts/*.txt                     (long step output)
 
@@ -113,6 +113,9 @@ execute
   -> .sillyspec/.runtime/knowledge-hit-report.json           (启动时按 taskContext 匹配 knowledge)
   -> worktree branch sillyspec/<change>
   -> apply patch back to main workspace, then cleanup
+
+platform sync / pull（双向冲突命中时）
+  -> .sillyspec/.runtime/sync-conflict-<change>.json         (push 409 base_ts 过期 / pull 本地脏度+平台更新 命中写，payload 含 change/base_ts/local_modified_ts/platform_last_pushed_at/platform_progress/created_at；platform resolve --keep-local|--take-platform|--abort 后必清防累积，禁止字段级 auto-merge)
 
 quick
   -> .sillyspec/quicklog/QUICKLOG-<git-user>.md              (CLI 写入：启动分配 ql-ID 写「进行中」，完成翻「已完成」+ 追加结构化结果块 需求/根因/方案/结果，缺字段则 step3 --done 被拒)
@@ -227,4 +230,5 @@ execute --done 批量完成（2026-07-28，`run/complete.js`）
   - **stage review gate marker 缺失自生**（坑1，`run/gates.js:276`）：tier=independent 且 `getLatestStageReviewRunId` 返回空（execute 批量完成跳过 prompt 渲染、prompt 未落 marker 等场景）时，gate 自身调 `generateStageReviewRunId()` + `stageReviewMarkerPath()` 写盘 + `mkdirSync`，让 gate 读到确定 ID——错误路径从 `execute-null`（不可执行）变为 `execute-review-<review-前缀 id>`（可执行）。补充 gap 6（prompt 渲染时落 marker）的兜底：prompt 路径未走到时 gate 路径自生，两条落 marker 路径互不依赖。marker 文件名 / 位置不变（`current-stage-review-run-id-<stage>(-<change>)`）。
   - **worktree apply 交付物过滤精细化**（坑3，`worktree-apply.js#filterDeliverableFiles`）：apply 时排除 `.sillyspec/changes/` + `.sillyspec/.runtime/` + `.sillyspec/quicklog/` + `meta.json`，**保留 `.sillyspec/docs/`（dogfood 模块规范文档视为交付物，随变更 apply 回主仓）**。原一刀切排除整个 `.sillyspec/` 导致模块文档改动滞留 worktree 分支（exec-g defer 项落地）。`verify-postcheck.js` 改 import `filterDeliverableFiles` 去双写；`index.js` apply / assess 自动 apply 的用户面消息同步为「changes/.runtime/quicklog 不自动 apply，模块文档 docs/ 会自动 apply」。
   - **archive CLI 下沉 git add**（坑4，`run/complete-handlers.js:137`）：`unregisterChange` 后 CLI 确定性 `safeGit add -- .sillyspec/changes/archive/ + .sillyspec/docs/`，不靠 archive step5 prompt 驱动。step5 prompt 的 git add 已精确化（`git add .sillyspec/changes/archive/` + `git add .sillyspec/docs/<project>/modules/`，勿用 changes/ 或 docs/ 整目录——会裹挟其他活跃变更；坑 index-staged-cross-change-contamination），保留作幂等兜底。safeGit 失败不阻断归档（目录已移动 + change 已注销），由 step5 prompt + agent `git status` 核对兜底。
+  - **归档清理 runId marker**（2026-08-10，`run/complete-handlers.js#archiveWorktreeCleanup`）：归档时除 worktree cleanup 外，顺带清理该 change 的 execute / stage-review runId marker（`current-execute-run-id-<change>` + `current-stage-review-run-id-<stage>-<change>`，normal + 自愈分支共用）。marker 只服务 execute→verify→archive 期间，归档后无读者；只写不删会让 `.runtime/` 随变更数无限累积（单仓库几十个）。runtimeRoot 解析同写入侧 `resolveRuntimeRoot(platformOpts, specBase)`（锚主仓，平台模式不误清理）。失败仅 warn 不阻断归档。
   - 坑5（多代理中间态 import 链污染，D-05）架构级延后入 [ROADMAP.md](../../ROADMAP.md)。

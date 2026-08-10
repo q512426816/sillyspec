@@ -47,6 +47,9 @@ export class StepStore {
 
       // UPDATE stages.status 为 in-progress（仅当仍为 pending 时）
       sqlDb.prepare("UPDATE stages SET status = 'in-progress', started_at = ? WHERE change_id = ? AND stage = ? AND status = 'pending'").run(now, changeId, stage);
+
+      // 本地脏度（D-013 / task-04）：切换阶段是本地推进
+      this.pm._touchLocalModified(cwd, cn, now);
     });
 
     if (!changeFound) {
@@ -100,6 +103,8 @@ export class StepStore {
          VALUES (?, ?, (SELECT COALESCE(MAX(ordering), 0) + 1 FROM steps WHERE stage_id = ?), 'pending')`
       ).run(stageId, stepName, stageId);
       tDb.prepare('UPDATE changes SET last_active = ? WHERE name = ?').run(new Date().toISOString(), cn);
+      // 本地脏度（D-013 / task-04）：添加步骤是本地推进
+      this.pm._touchLocalModified(cwd, cn);
     });
 
     console.log(`✅ 已添加步骤: ${stage}/${stepName}`);
@@ -166,6 +171,8 @@ export class StepStore {
       }
 
       tDb.prepare('UPDATE changes SET last_active = ? WHERE name = ?').run(now, cn);
+      // 本地脏度（D-013 / task-04）：更新步骤是本地推进
+      this.pm._touchLocalModified(cwd, cn, now);
     });
 
     if (stageCompletionCandidateId !== null) {
@@ -227,6 +234,9 @@ export class StepStore {
            failed = excluded.failed,
            skipped = excluded.skipped`
       ).run(changeId, batchData.total || 0, batchData.completed || 0, batchData.failed || 0, batchData.skipped || 0);
+      // 本地脏度（D-013 / task-04）：批量进度更新是本地推进
+      const nameRow = sqlDb.prepare('SELECT name FROM changes WHERE id = ?').get(changeId);
+      if (nameRow) this.pm._touchLocalModified(cwd, nameRow.name);
     });
   }
 

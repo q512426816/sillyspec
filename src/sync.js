@@ -8,9 +8,10 @@
  * HTTP 请求：Node.js 原生 fetch（Node 22+）
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, unlinkSync } from 'fs';
 import { join } from 'path';
 import { resolvePlatformSpecDir } from './progress.js';
+import { safeGit } from './git-helper.js';
 
 // sync 是 best-effort（网络失败只 warn）：平台指针失效时不抛，跳过平台、回退本地。
 function safePlatformSpecDir(cwd) {
@@ -107,6 +108,23 @@ function parseSimpleYaml(content) {
   return result;
 }
 
+/**
+ * 解析推送者身份（user）：区分多用户，供 push 时 X-SillySpec-User 标识（design D-004）。
+ * 优先级：显式参数 > git user.name（与 quicklog / prompt <git-user> 同口径）> process.env.USER
+ * （Unix）/ USERNAME（Windows）。Best effort：全失败返回 null，调用方据此决定是否写 user 字段
+ * （缺字段等价于「未知推送者」，平台侧自行兜底，不报错）。
+ */
+function resolvePlatformUser(cwd, explicitUser) {
+  if (typeof explicitUser === 'string' && explicitUser.trim()) {
+    return explicitUser.trim();
+  }
+  // 回退 1：git user.name（safeGit 失败返回 null，不抛）
+  const gitUser = safeGit(cwd, ['config', 'user.name']).value;
+  if (gitUser) return gitUser;
+  // 回退 2：环境变量（USER=Unix / USERNAME=Windows；跨平台兼容 CLAUDE.md #13）
+  return process.env.USER || process.env.USERNAME || null;
+}
+
 // ── HTTP 辅助 ──
 
 async function fetchJson(url, options = {}) {
@@ -136,6 +154,37 @@ async function fetchJson(url, options = {}) {
   }
 }
 
+/**
+ * 带状态码的 fetch：不吞非 2xx（fetchJson 在 !res.ok 时返回 null 丢状态，无法区分 409 冲突）。
+ * 返回 { ok, status, body }：body 尽力 JSON.parse（平台冲突响应带 progress JSON，读回给调用方）。
+ * 仅 sync() 的 progress POST 使用（识别 base_ts 乐观锁冲突，D-015 / task-09）；其余调用仍走 fetchJson。
+ */
+async function fetchJsonWithStatus(url, options = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, { ...options, signal: controller.signal });
+    const text = await res.text().catch(() => '');
+    let body = null;
+    if (text) {
+      try { body = JSON.parse(text); } catch { body = null; }
+    }
+    if (!res.ok) {
+      console.warn(`[sync] ${options.method || 'GET'} ${url} → ${res.status} ${text.slice(0, 200)}`);
+    }
+    return { ok: res.ok, status: res.status, body };
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      console.warn(`[sync] ${url} 请求超时 (${REQUEST_TIMEOUT_MS}ms)`);
+    } else {
+      console.warn(`[sync] ${url} 请求失败: ${err.message}`);
+    }
+    return { ok: false, status: 0, body: null };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // ── SyncManager ──
 
 export class SyncManager {
@@ -146,8 +195,11 @@ export class SyncManager {
   /**
    * 连接 SillyHub 平台。
    * 保存配置到 .sillyspec/local.yaml，发送 ping 验证连接。
+   * @param {string} url - 平台地址
+   * @param {string} token - 认证 token
+   * @param {string} [user] - 推送者身份（可空，回退 git user.name / env，见 resolvePlatformUser）
    */
-  async connect(url, token) {
+  async connect(url, token, user) {
     // 验证连接
     const healthUrl = `${url.replace(/\/+$/, '')}/api/health`;
     const result = await fetchJson(healthUrl);
@@ -157,6 +209,9 @@ export class SyncManager {
     }
     console.log(`[sync] 平台连接成功: ${url}`);
 
+    // 解析推送者身份（D-004）：显式 > git user.name > env；全失败留空不写 user 字段
+    const resolvedUser = resolvePlatformUser(this.cwd, user);
+
     // 写入 local.yaml
     const config = readLocalYaml(this.cwd);
     config.platform = {
@@ -164,6 +219,9 @@ export class SyncManager {
       token,
       last_connected: new Date().toISOString(),
     };
+    if (resolvedUser) {
+      config.platform.user = resolvedUser;
+    }
     writeLocalYaml(this.cwd, config);
   }
 
@@ -194,8 +252,9 @@ export class SyncManager {
 
   /**
    * 增量同步变更的 progress 状态到平台。
-   * 读取 ProgressManager.read() 的数据，POST 到平台。
-   * 同步完成后更新 changes 表的 platform_last_sync 字段。
+   * 读取 ProgressManager.serializeForSync() 的六表 JSON，POST 到平台。
+   * 元字段（user/base_ts/pushed_at）走 HTTP header，body 保持裸 JSON（D-015，sillyhub 老版零回归）。
+   * 同步完成后更新 changes 表的 platform_last_sync 字段；409 冲突读回平台最新 JSON（task-12 完整冲突处理）。
    */
   async sync(changeName) {
     const platform = this._getPlatform();
@@ -216,29 +275,58 @@ export class SyncManager {
       return { synced: 0, errors: [`变更不存在: ${changeName}`] };
     }
 
-    // 读取 progress 数据（通过导入 ProgressManager 动态调用）
+    // 读取 progress 数据（serializeForSync 六表裸 JSON，task-02 / D-005@v2，替代 read() 聚合视图）
     let progressData;
     try {
       const { ProgressManager } = await import('./progress.js');
       const pm = new ProgressManager({ specDir: safePlatformSpecDir(this.cwd) });
-      progressData = pm.read(this.cwd, changeName);
+      progressData = pm.serializeForSync(this.cwd, changeName);
     } catch (err) {
       console.warn(`[sync] 读取 progress 失败 (${changeName}): ${err.message}`);
       return { synced: 0, errors: [`读取 progress 失败: ${err.message}`] };
     }
+    if (progressData === null) {
+      console.warn(`[sync] 变更无进度数据 (无活跃进度): ${changeName}`);
+      return { synced: 0, errors: [`变更无进度数据: ${changeName}`] };
+    }
 
-    // POST 到平台
+    // 元字段走 HTTP header（D-015 / task-09）：body 保持裸六表 JSON，sillyhub 老版忽略 header 零回归
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${platform.token}`,
+    };
+    const pushedAt = new Date().toISOString();
+    if (platform.user) headers['X-SillySpec-User'] = platform.user; // 推送者身份（task-08 local.yaml platform.user）
+    const baseTs = progressData.changes && progressData.changes[0] && progressData.changes[0].last_synced_platform_ts;
+    if (baseTs) headers['X-SillySpec-Base-Ts'] = baseTs; // base_ts 乐观锁（NULL=首次同步不设，平台接受首次 push）
+    headers['X-SillySpec-Pushed-At'] = pushedAt; // 平台存 last_pushed_at，作下次其他用户 push 的 base_ts 比对基准
+
+    // POST 到平台（带状态码版本：识别 409 冲突，读回平台最新 JSON）
     const syncUrl = `${platform.url}/api/changes/${changeName}/progress`;
-    const result = await fetchJson(syncUrl, {
+    const res = await fetchJsonWithStatus(syncUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${platform.token}`,
-      },
+      headers,
       body: JSON.stringify(progressData),
     });
 
-    if (!result) {
+    if (!res.ok) {
+      // 409 = base_ts 乐观锁冲突（平台已有更新）；读回平台最新 JSON 供 task-12 完整冲突处理
+      if (res.status === 409) {
+        console.warn(`[sync] 冲突: ${changeName} 平台已有更新（base_ts 过期），请 platform status / resolve 处理`);
+        // 平台 409 响应 { conflict:true, platform_progress, last_pushed_at }，platform_progress 即平台最新 progress JSON
+        const platformProgress = res.body && res.body.platform_progress ? res.body.platform_progress : res.body;
+        const platformLastPushedAt = (res.body && res.body.last_pushed_at) || null;
+        // 本地脏度（progressData 是 serializeForSync 输出，changes[0] 含 last_local_modified_ts）
+        const localModified = (progressData.changes && progressData.changes[0] && progressData.changes[0].last_local_modified_ts) || null;
+        // 写冲突文件（task-12 / D-002）：base_ts=本次 push 的 base，强制提示走 resolve
+        const conflictPath = this._writeConflictFile(changeName, {
+          base_ts: baseTs || null,
+          local_modified_ts: localModified,
+          platform_last_pushed_at: platformLastPushedAt,
+          platform_progress: platformProgress,
+        });
+        return { synced: 0, errors: [`冲突: ${changeName}`], conflict: true, platform_progress: platformProgress, conflictPath };
+      }
       return { synced: 0, errors: [`同步请求失败: ${changeName}`] };
     }
 
@@ -381,6 +469,310 @@ export class SyncManager {
     const config = readLocalYaml(this.cwd);
     return config.platform || null;
   }
+
+  /**
+   * 写冲突文件 .runtime/sync-conflict-<change>.json（task-12 / D-002 / D-008 / D-010 / FR-05）。
+   * push 409 与 pull 本地脏度双向冲突命中时调用，强制提示用户走 platform resolve 三选一。
+   * 绝不字段级 auto-merge；文件在 .runtime 下不入版本控制（gitignore）。
+   * @param {string} changeName
+   * @param {{base_ts?: string|null, local_modified_ts?: string|null, platform_last_pushed_at?: string|null, platform_progress?: object|null}} info
+   * @returns {string|null} 冲突文件路径（specDir 不可达返回 null）
+   */
+  _writeConflictFile(changeName, info = {}) {
+    const specDir = safePlatformSpecDir(this.cwd);
+    if (!specDir) return null;
+    const runtimeDir = join(specDir, '.runtime');
+    if (!existsSync(runtimeDir)) mkdirSync(runtimeDir, { recursive: true });
+    const conflictPath = join(runtimeDir, `sync-conflict-${changeName}.json`);
+    const payload = {
+      change: changeName,
+      base_ts: info.base_ts ?? null,
+      local_modified_ts: info.local_modified_ts ?? null,
+      platform_last_pushed_at: info.platform_last_pushed_at ?? null,
+      created_at: new Date().toISOString(),
+      // 额外存平台最新 progress JSON，供 resolve --take-platform 直接 import（无需再 pull）
+      platform_progress: info.platform_progress ?? null,
+    };
+    writeFileSync(conflictPath, JSON.stringify(payload, null, 2) + '\n', 'utf8');
+    return conflictPath;
+  }
+
+  /**
+   * 读取冲突文件（task-13 resolve / task-14 status 用）。
+   * @returns {object|null} 冲突文件内容；无文件返回 null
+   */
+  readConflictFile(changeName) {
+    const specDir = safePlatformSpecDir(this.cwd);
+    if (!specDir) return null;
+    const conflictPath = join(specDir, '.runtime', `sync-conflict-${changeName}.json`);
+    if (!existsSync(conflictPath)) return null;
+    try {
+      return JSON.parse(readFileSync(conflictPath, 'utf8'));
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * 删除冲突文件（resolve 完成后清理，task-13 用）。
+   * @returns {boolean} 是否删除（文件不存在返回 false）
+   */
+  clearConflictFile(changeName) {
+    const specDir = safePlatformSpecDir(this.cwd);
+    if (!specDir) return false;
+    const conflictPath = join(specDir, '.runtime', `sync-conflict-${changeName}.json`);
+    if (!existsSync(conflictPath)) return false;
+    try { unlinkSync(conflictPath); return true; }
+    catch { return false; }
+  }
+
+  /**
+   * 两级 pull 第一级：轻量 change 列表（design §7 / D-001 / D-006 / task-06 / FR-01 / FR-03）。
+   * GET {url}/api/changes → [{ name, current_stage, last_pushed_at, last_pusher }]（兼容 { changes: [...] } 包裹）。
+   * CLI 比对本地决定哪些 change 需更新，控制 pull 性能（不每次全量拉单 change JSON）。
+   * Best Effort：未连接 / 网络失败 console.warn 不抛，返回 PullListResult { ok, changes, reason? }。
+   * @returns {Promise<{ok: boolean, changes: Array<object>, reason?: string}>}
+   */
+  async pullList() {
+    const platform = this._getPlatform();
+    if (!platform) {
+      debugLog('[sync] 未连接平台（本地合法状态）；pullList 跳过');
+      return { ok: false, changes: [], reason: '未连接平台' };
+    }
+
+    const listUrl = `${platform.url}/api/changes`;
+    const result = await fetchJson(listUrl, {
+      headers: { Authorization: `Bearer ${platform.token}` },
+    });
+
+    if (result === null) {
+      console.warn(`[sync] 拉取变更列表失败: ${listUrl}`);
+      return { ok: false, changes: [], reason: '拉取变更列表失败' };
+    }
+
+    // 兼容两种响应形态：裸数组 / { changes: [...] } 包裹（sillyhub 后端实际 API 而定）
+    const changes = Array.isArray(result) ? result : (Array.isArray(result.changes) ? result.changes : []);
+    return { ok: true, changes, reason: undefined };
+  }
+
+  /**
+   * 两级 pull 第二级：按需拉平台单 change 完整 JSON 并 import 重建本地 DB 行（design §7 / D-001 / D-006 / D-014 / task-07 / FR-01 / FR-03 / FR-09）。
+   * GET {url}/api/changes/{name}/progress → 平台权威 JSON（serializeForSync 六表 + 顶层 last_pushed_at）。
+   * 本地脏度比对：last_local_modified_ts > last_synced_platform_ts（本地有未同步改动）且 平台 last_pushed_at 更新 → 冲突，不 import 返回 conflict:true（task-12 负责写 sync-conflict 文件）。
+   * 无冲突 → import() 重建 DB 行；import 后本地 base_ts/脏度重置为 pushed_at（D-013）。
+   * Best Effort：未连接 / 网络失败 / 404 console.warn 不抛，返回 PullResult { ok, imported, conflict, reason? }。
+   * @param {string} changeName
+   * @param {{force?: boolean}} [opts] - force 跳过本地脏度冲突检测直接 import（task-12 resolve --take-platform 用）
+   * @returns {Promise<{ok: boolean, imported: boolean, conflict: boolean, reason?: string}>}
+   */
+  async pull(changeName, opts = {}) {
+    const { force = false } = opts;
+    const platform = this._getPlatform();
+    if (!platform) {
+      debugLog('[sync] 未连接平台（本地合法状态）；pull 跳过');
+      return { ok: false, imported: false, conflict: false, reason: '未连接平台' };
+    }
+    if (!changeName) {
+      console.warn('[sync] pull 需要指定变更名称 (changeName)');
+      return { ok: false, imported: false, conflict: false, reason: '未指定变更名称' };
+    }
+
+    // 1. GET 平台完整 progress JSON
+    const progressUrl = `${platform.url}/api/changes/${encodeURIComponent(changeName)}/progress`;
+    const result = await fetchJson(progressUrl, {
+      headers: { Authorization: `Bearer ${platform.token}` },
+    });
+    if (result === null) {
+      // sillyhub 未就绪 / 404 / 网络失败均 fetchJson 返回 null → Best Effort 降级
+      console.warn(`[sync] 拉取变更进度失败: ${changeName}（sillyhub 未就绪或变更不存在）`);
+      return { ok: false, imported: false, conflict: false, reason: '拉取变更进度失败' };
+    }
+
+    // 平台响应：serializeForSync 六表 + 顶层 last_pushed_at（兼容 { progress: {...} } 包裹）
+    const platformProgress = (result && result.project && result.changes) ? result : (result.progress || result);
+    const platformPushedAt = (result && result.last_pushed_at) || null;
+
+    // 2. 本地脏度比对（非 force 时）：本地脏 AND 平台更新 → 冲突
+    if (!force) {
+      let localLastModified = null;
+      let localLastSynced = null;
+      try {
+        const { ProgressManager } = await import('./progress.js');
+        const pm = new ProgressManager({ specDir: safePlatformSpecDir(this.cwd) });
+        const row = pm._ensureDB(this.cwd).getDb().prepare(
+          'SELECT last_local_modified_ts, last_synced_platform_ts FROM changes WHERE name = ?'
+        ).get(changeName);
+        if (row) {
+          localLastModified = row.last_local_modified_ts;
+          localLastSynced = row.last_synced_platform_ts;
+        }
+      } catch (err) {
+        console.warn(`[sync] 读取本地脏度失败 (${changeName}): ${err.message}`);
+      }
+      const localDirty = localLastModified && localLastSynced && localLastModified > localLastSynced;
+      const platformNewer = platformPushedAt && (!localLastSynced || platformPushedAt > localLastSynced);
+      if (localDirty && platformNewer) {
+        console.warn(`[sync] pull 冲突: ${changeName} 本地有未同步改动且平台已更新（base_ts 过期），请 platform resolve 处理`);
+        // 写冲突文件（task-12 / D-002）：强制提示，绝不 auto-merge
+        const conflictPath = this._writeConflictFile(changeName, {
+          base_ts: localLastSynced,
+          local_modified_ts: localLastModified,
+          platform_last_pushed_at: platformPushedAt,
+          platform_progress: platformProgress,
+        });
+        return { ok: false, imported: false, conflict: true, reason: `冲突: ${changeName} 本地脏且平台更新`, conflictPath };
+      }
+    }
+
+    // 3. 无冲突（或 force）→ import 平台 JSON 重建本地 DB 行
+    try {
+      const { ProgressManager } = await import('./progress.js');
+      const pm = new ProgressManager({ specDir: safePlatformSpecDir(this.cwd) });
+      const importInput = { ...platformProgress, pushed_at: platformPushedAt || new Date().toISOString() };
+      pm.import(this.cwd, importInput, changeName);
+      console.log(`[sync] 已拉取变更进度: ${changeName}`);
+      return { ok: true, imported: true, conflict: false, reason: undefined };
+    } catch (err) {
+      console.warn(`[sync] import 失败 (${changeName}): ${err.message}`);
+      return { ok: false, imported: false, conflict: false, reason: `import 失败: ${err.message}` };
+    }
+  }
+
+  /**
+   * 冲突解决三选一（task-13 / D-002 / D-010 / D-013 / FR-05）。
+   * 读 task-12 写的 sync-conflict-<change>.json，按 mode 处理后必清冲突文件防累积（R-04 / constraints）。
+   *
+   * 三种语义（design 生命周期契约表）：
+   * - keep-local：本地 DB 不变，仅把 last_synced_platform_ts（base_ts）推进到平台 last_pushed_at
+   *   （表示「已知平台最新，本地为准」），用户后续手动 platform sync push 本地。
+   * - take-platform：用冲突文件存的 platform_progress 调 import() 覆盖本地（保隔离状态，D-013 重置脏度）。
+   * - abort：本地 DB 与 base_ts 均不变，仅清冲突文件（放弃本次同步）。
+   *
+   * 无冲突文件 → ok:false resolved:false（index.js 据此提示「无可解决冲突」）。
+   * 绝不字段级 auto-merge（D-002）。
+   * @param {string} changeName
+   * @param {'keep-local'|'take-platform'|'abort'} mode
+   * @returns {Promise<{ok: boolean, resolved: boolean, mode?: string, reason: string}>}
+   */
+  async resolve(changeName, mode) {
+    const cf = this.readConflictFile(changeName);
+    if (!cf) {
+      return { ok: false, resolved: false, reason: `无可解决冲突: ${changeName}（无 sync-conflict 文件）` };
+    }
+    const platformPushedAt = cf.platform_last_pushed_at || null;
+
+    if (mode === 'keep-local') {
+      // base_ts 推进到平台最新 last_pushed_at；本地 DB 不 import（用户本地为准，后续手动 push）
+      try {
+        const { ProgressManager } = await import('./progress.js');
+        const pm = new ProgressManager({ specDir: safePlatformSpecDir(this.cwd) });
+        const db = pm._ensureDB(this.cwd).getDb();
+        db.prepare('UPDATE changes SET last_synced_platform_ts = ? WHERE name = ?')
+          .run(platformPushedAt, changeName);
+      } catch (err) {
+        return { ok: false, resolved: false, reason: `keep-local 更新 base_ts 失败: ${err.message}` };
+      }
+      this.clearConflictFile(changeName);
+      return { ok: true, resolved: true, mode: 'keep-local', reason: '保留本地，base_ts 已推进到平台最新（后续请 platform sync push 本地）' };
+    }
+
+    if (mode === 'take-platform') {
+      // 用冲突文件的 platform_progress 调 import 覆盖本地（保隔离：import 不覆盖 isolation_*）
+      if (!cf.platform_progress) {
+        return { ok: false, resolved: false, reason: '冲突文件缺 platform_progress，无法 take-platform（建议先 platform pull）' };
+      }
+      try {
+        const { ProgressManager } = await import('./progress.js');
+        const pm = new ProgressManager({ specDir: safePlatformSpecDir(this.cwd) });
+        pm.import(this.cwd, { ...cf.platform_progress, pushed_at: platformPushedAt || new Date().toISOString() }, changeName);
+      } catch (err) {
+        return { ok: false, resolved: false, reason: `take-platform import 失败: ${err.message}` };
+      }
+      this.clearConflictFile(changeName);
+      return { ok: true, resolved: true, mode: 'take-platform', reason: '已用平台进度覆盖本地' };
+    }
+
+    if (mode === 'abort') {
+      // 本地 DB 与 base_ts 均不变，仅清冲突文件（放弃本次同步，下次 push/pull 会重新检测）
+      this.clearConflictFile(changeName);
+      return { ok: true, resolved: true, mode: 'abort', reason: '放弃本次同步，本地不变' };
+    }
+
+    return { ok: false, resolved: false, reason: `未知 resolve 模式: ${mode}（--keep-local / --take-platform / --abort）` };
+  }
+
+  /**
+   * 扫描 .runtime/sync-conflict-*.json 列出未决冲突（task-14 / D-002 / D-010 / FR-05）。
+   * 只读 + 容错：损坏文件跳过不崩（constraints）。供 collectStatus / platform status 展示。
+   * @returns {Array<{change: string, created_at: string|null, path: string}>}
+   */
+  listConflictFiles() {
+    const specDir = safePlatformSpecDir(this.cwd);
+    if (!specDir) return [];
+    const runtimeDir = join(specDir, '.runtime');
+    if (!existsSync(runtimeDir)) return [];
+    let files = [];
+    try { files = readdirSync(runtimeDir); }
+    catch { return []; }
+    const conflicts = [];
+    for (const f of files) {
+      if (!f.startsWith('sync-conflict-') || !f.endsWith('.json')) continue;
+      const filePath = join(runtimeDir, f);
+      try {
+        const cf = JSON.parse(readFileSync(filePath, 'utf8'));
+        conflicts.push({
+          change: cf.change || f.replace(/^sync-conflict-/, '').replace(/\.json$/, ''),
+          created_at: cf.created_at || null,
+          path: filePath,
+        });
+      } catch {
+        // 损坏文件跳过不崩（constraints：容错）
+      }
+    }
+    return conflicts;
+  }
+
+  /**
+   * 扩展 status（task-14 / FR-05）：连接信息 + 落后标记 + 未决冲突列表。
+   * 只读展示，不修改任何进度（constraints）。未连接返回 base.status（connected:false，behind/conflicts 空）。
+   * 连接时调 pullList（轻量 GET）拿平台各 change last_pushed_at，比对本地 last_synced_platform_ts
+   * 标记本地可能落后；扫描 sync-conflict-*.json 列未决冲突。网络失败 listFailed=true 不崩。
+   * @returns {Promise<{connected: boolean, url?: string, lastSync?: string|null, behind: Array<object>, conflicts: Array<object>, listFailed: boolean}>}
+   */
+  async collectStatus() {
+    const base = this.status();
+    if (!base.connected) {
+      return { ...base, behind: [], conflicts: [], listFailed: false };
+    }
+    const behind = [];
+    let listFailed = false;
+    const list = await this.pullList();
+    if (list.ok) {
+      for (const ch of list.changes) {
+        const name = typeof ch === 'string' ? ch : ch.name;
+        if (!name) continue;
+        const platformPushedAt = (typeof ch === 'object' && (ch.last_pushed_at || ch.last_active)) || null;
+        if (!platformPushedAt) continue;
+        let localSynced = null;
+        try {
+          const { ProgressManager } = await import('./progress.js');
+          const pm = new ProgressManager({ specDir: safePlatformSpecDir(this.cwd) });
+          const row = pm._ensureDB(this.cwd).getDb().prepare('SELECT last_synced_platform_ts FROM changes WHERE name = ?').get(name);
+          if (row) localSynced = row.last_synced_platform_ts;
+        } catch {
+          // 本地无该 change 记录 / DB 不可达 → 不算落后，跳过
+        }
+        // 仅本地有同步基准（last_synced_platform_ts）且平台更新晚于本地 → 落后
+        if (localSynced && platformPushedAt > localSynced) {
+          behind.push({ name, local_synced: localSynced, platform_pushed_at: platformPushedAt });
+        }
+      }
+    } else {
+      listFailed = true;
+    }
+    const conflicts = this.listConflictFiles();
+    return { ...base, behind, conflicts, listFailed };
+  }
 }
 
 // ── CLI 入口函数 ──
@@ -420,6 +812,27 @@ export async function syncDocuments(changeName, cwd) {
 
 export async function checkApproval(changeName, cwd) {
   return new SyncManager(cwd).checkApproval(changeName);
+}
+
+// task-11 / D-006 / D-009 / FR-03：手动 pull 便捷导出（index.js platform pull 子命令用，
+// 与自动 triggerPull 共用 SyncManager.pull 实例方法，行为一致）
+export async function pull(changeName, opts, cwd) {
+  return new SyncManager(cwd).pull(changeName, opts);
+}
+
+// 两级 pull 第一级（轻量 change 列表），platform pull 无 --change 时先拉列表再按需 pull
+export async function pullList(cwd) {
+  return new SyncManager(cwd).pullList();
+}
+
+// task-13 / D-002 / D-010 / D-013 / FR-05：冲突解决三选一（index.js platform resolve 子命令用）
+export async function resolve(changeName, mode, cwd) {
+  return new SyncManager(cwd).resolve(changeName, mode);
+}
+
+// task-14 / FR-05：扩展 status（连接信息 + 落后标记 + 未决冲突列表），index.js platform status 用
+export async function collectStatus(cwd) {
+  return new SyncManager(cwd).collectStatus();
 }
 
 // TBD-hub-api: approve/reject 端点路径与请求体以 SillyHub 仓库实际 API 为准；

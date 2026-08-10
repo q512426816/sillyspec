@@ -98,6 +98,8 @@ export class StageMachine {
 
       // UPDATE changes.last_active
       sqlDb.prepare('UPDATE changes SET last_active = ? WHERE name = ?').run(now, cn);
+      // 本地脏度（D-013 / task-04）：阶段完成是本地推进
+      this.pm._touchLocalModified(cwd, cn, now);
     });
 
     // 写 history 文件（保持文件系统，不变）
@@ -492,6 +494,8 @@ export class StageMachine {
             for (const s of VALID_STAGES) {
               sqlDb.prepare(`INSERT OR IGNORE INTO stages (change_id, stage, status) VALUES (?, ?, 'pending')`).run(changeId, s);
             }
+            // 本地脏度（D-013 / task-04）：重置该变更全部进度是本地推进
+            this.pm._touchLocalModified(cwd, changeName);
           }
         });
         console.log(`✅ 已重置变更 ${changeName} 的进度`);
@@ -507,6 +511,8 @@ export class StageMachine {
               const changeId = changeRow.id;
               sqlDb.prepare('DELETE FROM steps WHERE stage_id IN (SELECT id FROM stages WHERE change_id = ?)').run(changeId);
               sqlDb.prepare(`UPDATE stages SET status = 'pending', started_at = NULL, completed_at = NULL WHERE change_id = ?`).run(changeId);
+              // 本地脏度（D-013 / task-04）：重置进度是本地推进
+              this.pm._touchLocalModified(cwd, cn);
             }
           }
         });

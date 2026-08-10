@@ -649,6 +649,10 @@ async function main() {
       const { runCommand } = await import('./run.js')
       const stageArgs = [command, ...filteredArgs.slice(1)]
       const effectiveDir = specDir ? dir : resolveEffectiveDir(dir)
+      // 下行 pull：stage 命令（run/--done，含 archive）启动时拉一次（task-10 / D-009 / FR-04）
+      // 不在每步 pull，仅低频边界点；未连接平台静默跳过
+      const { triggerPullActiveChange } = await import('./run/shared.js')
+      await triggerPullActiveChange(effectiveDir)
       await runCommand(stageArgs, effectiveDir, specDir, { json })
       break
     }
@@ -1094,6 +1098,8 @@ SillySpec platform — SillyHub 平台同步
   sillyspec platform disconnect
   sillyspec platform sync [--change <name>]
   sillyspec platform sync-docs [--change <name>]
+  sillyspec platform pull [--change <name>]
+  sillyspec platform resolve <change-name> <--keep-local|--take-platform|--abort>
   sillyspec platform status
   sillyspec platform pointer [--cleanup]
   sillyspec platform approve <change-name>
@@ -1194,15 +1200,108 @@ SillySpec platform — SillyHub 平台同步
           await syncModule.syncDocuments(syncDocsChangeName, dir);
           break;
         }
-        case 'status':
-          await syncModule.status(dir);
+        case 'status': {
+          // task-14 / FR-05：扩展 status（落后标记 + 未决冲突列表）；未连接输出与现状一致
+          const st = await syncModule.collectStatus(dir);
+          if (!st.connected) {
+            console.log('平台: 未连接');
+            break;
+          }
+          console.log(`平台: ${st.url}`);
+          console.log(`上次连接: ${st.lastSync || '未知'}`);
+          if (st.listFailed) {
+            console.log('ℹ️  无法连接平台获取落后状态');
+          } else if (st.behind.length > 0) {
+            console.log(`⚠️ 本地可能落后（${st.behind.length} 个变更平台有更新）:`);
+            for (const b of st.behind) {
+              console.log(`   - ${b.name}: 平台 ${b.platform_pushed_at} > 本地 ${b.local_synced}`);
+            }
+          } else {
+            console.log('✅ 本地与平台进度同步');
+          }
+          if (st.conflicts.length > 0) {
+            console.log(`⚠️ 未决冲突（${st.conflicts.length} 个，请 platform resolve 处理）:`);
+            for (const c of st.conflicts) {
+              console.log(`   - ${c.change}${c.created_at ? ` (创建于 ${c.created_at})` : ''}`);
+            }
+          }
           break;
+        }
+        case 'pull': {
+          // task-11 / D-006 / D-009 / FR-03：手动下行拉取平台进度到本地。
+          // 与自动 triggerPull 共用 syncModule.pull（SyncManager.pull 实例方法），行为一致。
+          const pullChangeIdx = args.indexOf('--change');
+          const pullChangeName = pullChangeIdx >= 0 && args[pullChangeIdx + 1] ? args[pullChangeIdx + 1] : null;
+          // 未连接明确提示不崩（acceptance：未连接平台输出明确提示）
+          const smForCheck = new syncModule.SyncManager(dir);
+          if (!smForCheck._getPlatform()) {
+            console.error('❌ 未连接平台，请先 sillyspec platform connect');
+            process.exit(1);
+          }
+          if (pullChangeName) {
+            // 单变更完整 pull（两级 pull 第二级）
+            const r = await syncModule.pull(pullChangeName, {}, dir);
+            if (r.conflict) {
+              console.log(`⚠️ ${pullChangeName}: 冲突（已写 sync-conflict 文件），请 sillyspec platform resolve 处理`);
+            } else if (r.imported) {
+              console.log(`✅ ${pullChangeName}: 已拉取并 import`);
+            } else {
+              console.log(`⏭️ ${pullChangeName}: 未 import（${r.reason || '无变更'}）`);
+            }
+          } else {
+            // 无 --change：先拉轻量列表（两级 pull 第一级），再对每个 change 按需完整 pull
+            const list = await syncModule.pullList(dir);
+            if (!list.ok) {
+              console.error(`❌ 拉取变更列表失败: ${list.reason || '未知'}`);
+              process.exit(1);
+            }
+            console.log(`平台变更 ${list.changes.length} 个：`);
+            let importedCount = 0, conflictCount = 0;
+            for (const ch of list.changes) {
+              const name = typeof ch === 'string' ? ch : ch.name;
+              if (!name) continue;
+              const r = await syncModule.pull(name, {}, dir);
+              if (r.imported) { importedCount++; console.log(`  ✅ ${name}: 已 import`); }
+              else if (r.conflict) { conflictCount++; console.log(`  ⚠️ ${name}: 冲突，请 platform resolve`); }
+              else { console.log(`  ⏭️ ${name}: ${r.reason || '未 import'}`); }
+            }
+            console.log(`拉取完成：imported ${importedCount}，冲突 ${conflictCount}`);
+          }
+          break;
+        }
+        case 'resolve': {
+          // task-13 / D-002 / D-010 / D-013 / FR-05：冲突解决三选一（绝不字段级 auto-merge）
+          const resolveName = platformArgs[0];
+          if (!resolveName) {
+            console.error('❌ 用法: sillyspec platform resolve <change-name> <--keep-local|--take-platform|--abort>');
+            process.exit(1);
+          }
+          // 解析 mode flag（三选一互斥，多传/不传均报错）
+          const resolveFlags = ['--keep-local', '--take-platform', '--abort'].filter((f) => args.includes(f));
+          if (resolveFlags.length !== 1) {
+            console.error('❌ 必须恰好指定 --keep-local / --take-platform / --abort 之一');
+            process.exit(1);
+          }
+          const modeMap = { '--keep-local': 'keep-local', '--take-platform': 'take-platform', '--abort': 'abort' };
+          const resolveMode = modeMap[resolveFlags[0]];
+          const r = await syncModule.resolve(resolveName, resolveMode, dir);
+          if (r.ok && r.resolved) {
+            console.log(`✅ ${resolveName} [${resolveMode}]: ${r.reason}`);
+          } else {
+            console.error(`❌ ${resolveName}: ${r.reason}`);
+            process.exit(1);
+          }
+          break;
+        }
         case 'approve': {
           const approveName = platformArgs[0];
           if (!approveName) {
             console.error('❌ 用法: sillyspec platform approve <change-name>');
             process.exit(1);
           }
+          // 审批前下行 pull（task-10 / D-009 / FR-06）：拉最新进度避免基于过期状态审批；未连接跳过
+          const { triggerPull } = await import('./run/shared.js');
+          await triggerPull(dir, approveName);
           await syncModule.approve(approveName, dir);
           break;
         }

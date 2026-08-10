@@ -350,6 +350,80 @@ export async function triggerSync(cwd, changeName, platformOpts = {}) {
 }
 
 /**
+ * 触发 pull（下行同步，task-10 / D-009 / FR-04 / FR-06）。
+ * 复用 triggerSync 的 8s 熔断与 Best Effort 语义；未连接平台静默跳过（与现状一致）。
+ * 注入时机：CLI 启动（run/--done）+ 关键决策点（approve/archive 前）+ 手动 platform pull。
+ * 不在每步 pull（避免高频写入与网络压力），仅低频边界点。
+ * @param {string} cwd
+ * @param {string} changeName - 当前活跃变更（多变更时传 null 跳过，避免误拉）
+ * @param {object} [platformOpts] - 平台模式 opts（specRoot/runtimeRoot 存在则跳过，走平台自有链路）
+ */
+export async function triggerPull(cwd, changeName, platformOpts = {}) {
+  // 平台模式（SillyHub）走自己的链路，跳过
+  if (platformOpts?.specRoot || platformOpts?.runtimeRoot) return
+  try {
+    const syncMod = await import('../sync.js')
+    const sm = new syncMod.SyncManager(cwd)
+    // 未连接平台静默跳过（本地独立用户合法状态，不噪音）
+    if (!sm._getPlatform()) return
+    let timer
+    try {
+      await Promise.race([
+        sm.pull(changeName),
+        new Promise((resolve) => { timer = setTimeout(resolve, SYNC_TOTAL_TIMEOUT_MS) }),
+      ])
+    } finally {
+      clearTimeout(timer)
+    }
+  } catch (e) {
+    // pull 失败静默跳过（Best Effort，失败不影响正确性）
+    console.warn('⚠️ 拉取失败:', e.message)
+  }
+}
+
+/**
+ * triggerPull 的便捷封装：未显式传 changeName 时自动推导单活跃变更（task-10）。
+ * 多活跃 / 无活跃变更时跳过（无法确定目标，避免误拉）；其余语义同 triggerPull。
+ * 供 index.js 在 stage 命令（run/--done/archive）与 approve 决策点注入一行调用。
+ */
+export async function triggerPullActiveChange(cwd, platformOpts = {}) {
+  if (platformOpts?.specRoot || platformOpts?.runtimeRoot) return
+  // 先检查是否连接平台：未连接直接 return，避免 _ensureDB 在无 local.yaml 的 cwd 创建空 DB 污染
+  let sm = null
+  try {
+    const syncMod = await import('../sync.js')
+    sm = new syncMod.SyncManager(cwd)
+    if (!sm._getPlatform()) return
+  } catch {
+    return
+  }
+  let cn = null
+  try {
+    const { ProgressManager } = await import('../progress.js')
+    const pm = new ProgressManager({})
+    const changes = pm.listChanges(cwd)
+    if (changes.length === 1) cn = changes[0]
+  } catch {
+    // progress 不可达则跳过（Best Effort）
+  }
+  if (!cn) return
+  // 已确认连接 + 单活跃变更，调 pull（复用 triggerPull 的 8s 熔断）
+  try {
+    let timer
+    try {
+      await Promise.race([
+        sm.pull(cn),
+        new Promise((resolve) => { timer = setTimeout(resolve, SYNC_TOTAL_TIMEOUT_MS) }),
+      ])
+    } finally {
+      clearTimeout(timer)
+    }
+  } catch (e) {
+    console.warn('⚠️ 拉取失败:', e.message)
+  }
+}
+
+/**
  * 审批检查：execute 阶段启动前检查（W6 Step8a 从 run.js 搬入，runStage + runAutoMode 共用）。
  * 平台模式走自己的链路，跳过；否则 await import sync.js。
  * @returns {{ status: string, reason?: string } | null}

@@ -33,10 +33,12 @@ export class ChangeRegistry {
       const sqlDb = db.getDb();
       const now = new Date().toISOString();
       // 尝试插入新行
-      sqlDb.prepare(
+      const ins = sqlDb.prepare(
         `INSERT OR IGNORE INTO changes (name, created_at, last_active)
          VALUES (?, ?, ?)`
       ).run(changeName, now, now);
+      // 只在真正创建 change 时标脏（D-013/task-04）；已存在行不标（读路径/重复调用不误判脏）
+      if (ins.changes > 0) this.pm._touchLocalModified(cwd, changeName, now);
       // 注意：不复活已归档的变更——归档是不可逆操作
       // 如果变更已存在且为 archived，保持 archived 状态不变
     });
@@ -53,9 +55,12 @@ export class ChangeRegistry {
     try {
       db.transaction(() => {
         const sqlDb = db.getDb();
+        const now = new Date().toISOString();
         sqlDb.prepare(
           `UPDATE changes SET isolation_status = ?, isolation_mode = ?, isolation_reason = ?, last_active = ? WHERE name = ?`
-        ).run(isolation.status, isolation.mode || null, isolation.reason || null, new Date().toISOString(), changeName);
+        ).run(isolation.status, isolation.mode || null, isolation.reason || null, now, changeName);
+        // 本地脏度（D-013 / task-04）：隔离状态变更也是本地推进
+        this.pm._touchLocalModified(cwd, changeName, now);
       });
     } catch (err) {
       console.warn('⚠️  更新 isolation 状态失败:', err.message);
@@ -117,6 +122,8 @@ export class ChangeRegistry {
         status === 'approved' ? now : null,
         status === 'rejected' ? reason : null,
       );
+      // 本地脏度（D-013 / task-04）：审批状态变更也是本地推进
+      this.pm._touchLocalModified(cwd, changeName, now);
     });
   }
 
@@ -167,6 +174,8 @@ export class ChangeRegistry {
       db.transaction(() => {
         const sqlDb = db.getDb();
         sqlDb.prepare(`UPDATE changes SET name = ?, last_active = ? WHERE name = ?`).run(newName, now, oldName);
+        // 本地脏度（D-013 / task-04）：重命名也是本地推进（标新名）
+        this.pm._touchLocalModified(cwd, newName, now);
       });
     } catch (e) {
       console.error(`❌ 重命名失败：更新数据库时出错（${e.message}）`);
@@ -183,6 +192,8 @@ export class ChangeRegistry {
           db.transaction(() => {
             const sqlDb = db.getDb();
             sqlDb.prepare(`UPDATE changes SET name = ?, last_active = ? WHERE name = ?`).run(oldName, now, newName);
+            // 回滚也是写（恢复 oldName），对称标脏旧名
+            this.pm._touchLocalModified(cwd, oldName, now);
           });
           console.error(`❌ 重命名失败：移动目录出错（${e.message}），已回滚数据库`);
         } catch (rollbackErr) {
@@ -213,6 +224,8 @@ export class ChangeRegistry {
       sqlDb.prepare(
         `UPDATE changes SET status = 'archived', last_active = ? WHERE name = ?`
       ).run(now, changeName);
+      // 本地脏度（D-013 / task-04）：归档也是本地状态推进
+      this.pm._touchLocalModified(cwd, changeName, now);
     });
   }
 }
