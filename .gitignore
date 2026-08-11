@@ -11,3 +11,7 @@ node_modules/
 # SQLite WAL 模式侧车文件（node:sqlite 运行时产物，勿提交）
 *.db-wal
 *.db-shm
+
+# 平台模式运行时指针/时间戳（每次运行重写，勿提交）
+.sillyspec-platform.json
+.sillyspec-platform-cleaned
