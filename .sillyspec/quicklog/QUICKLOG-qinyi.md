@@ -340,3 +340,13 @@
 根因：blueprint 共享文件与 id 连续校验全堆 postcheck 末步 agent 先写卡后被拦返工；stage review run-id 裸值传给子代理易漏连字符拼错路径
 方案：plan.js buildCoordinatorStep prompt 加前置约束段（共享文件须分 Wave 与 id 从 1 连续）prompt.js 写 marker 时 echo 完整 review 目录路径供直接复制
 结果：node --check 过 lint 250 文件过 npm test 全绿 EXIT 0，含 try 块缩进修正
+
+## ql-20260811-008-58e2 | 2026-08-11 17:10:06 | npm 打包全量扫描时发现平台模式调试残留 .sillyspec-platform.json（含本地绝对路径 specRoot 指针）被打进 npm 包
+状态：已完成
+关联变更：（无）
+文件：
+- .npmignore（补 .sillyspec-platform* 排除（防平台模式调试残留入包））
+需求：npm 打包全量扫描时发现平台模式调试残留 .sillyspec-platform.json（含本地绝对路径 specRoot 指针）被打进 npm 包。
+根因：.npmignore 只排除 .npm-publish-token，漏排 .sillyspec-platform*，平台模式调试会现生成此类未跟踪指针文件。
+方案：.npmignore 敏感凭证区补 .sillyspec-platform* 排除并注说明，删除工作区两个未跟踪残留。
+结果：npm pack --dry-run 复核 tarball 154→152 files、platform 关键字零命中；纯配置改动不触 src/test，跳过 npm test/lint。3.26.2 已发布且 npm view 确认 latest=3.26.2。
