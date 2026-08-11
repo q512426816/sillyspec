@@ -48,8 +48,8 @@ change: 2026-08-11-node-sqlite-migration
 - **status**: decided
 - **source**: API 实证探测 + R-02 风险登记
 - **question**: engines.node floor 定哪个版本（node:sqlite 首现 22.5 / 实证干净 24）？
-- **answer**: execute task-0 实证 `import('node:sqlite')` 在 22.x/24.x 是否需 --experimental-sqlite flag，floor 定在「无 flag 可用」最低版本。node 24.15.0 已实证无 flag。
-- **normalized_requirement**: task-0 跑 `node -e "import('node:sqlite').then(m=>console.log(typeof m.DatabaseSync))"` 在目标 node；若 22.x 需 flag 则 floor>=24，若 22.5+ 无 flag 则 floor>=22.5。定论后写 engines。
+- **answer**: floor 定 **>=22.11.0**（node:sqlite 的 --experimental-sqlite flag 要求自 v22.11.0 起移除，v22.11+ / 23 / 24 无需 flag 即可 import，仍发 ExperimentalWarning）。node 24.15.0 本地实证无 flag 可用。
+- **normalized_requirement**: engines.node >= 22.11.0。worktree-guard 子进程用同 process.execPath，floor 覆盖主进程 + 子进程两路（子进程 `-e` 脚本同样无需 flag）。
 - **impacts**: design §5 Phase 5 / R-02 / package.json engines
-- **evidence**: 设计阶段无法确定 22.x flag 行为（本地仅 node 24.15.0）；不猜，实证驱动。
-- **priority**: P1
+- **evidence**: (task-01 实证) node v24.15.0 本地 `import('node:sqlite')` 返回 DatabaseSync function 无 flag；node:sqlite 自 v22.5.0 引入但 v22.5.0-22.10 需 `--experimental-sqlite` flag（nodejs/node#53906），v22.11.0+ 移除 flag 要求（仍 experimental）；`/api/sqlite` Node 文档确认「SQLite is no longer behind --experimental-sqlite but still experimental」。故无 flag 最低版本 = 22.11.0。
+- **priority**: P1（已解决）

@@ -4,7 +4,7 @@ doc_type: module-card
 module_id: runtime
 author: qinyi
 created_at: 2026-06-03T07:42:00+08:00
-updated_at: 2026-08-09T15:10:00+08:00
+updated_at: 2026-08-11T16:25:00+08:00
 ---
 # runtime
 
@@ -14,7 +14,7 @@ SQLite 数据库层 + 进度管理 + 迁移。提供 `.sillyspec/.runtime/sillys
 
 ## 契约摘要
 
-- **DB** (`src/db.js`) — 基于 better-sqlite3 的原生 SQLite 绑定（同步 API），提供 `init()` / `transaction()` / `getDb()` / `close()`；`init()` 设 PRAGMA（journal_mode=WAL + busy_timeout=5000 + foreign_keys=ON + synchronous=NORMAL），主库→`.bak`→全新 逐级回退（`_openWithFallback`）；打开即持久化，事务提交直接落盘主库（WAL 侧车 `.db-wal`/`.db-shm`），无旧 WASM 引擎的「全库 load 到内存 → 序列化写回」模型，接口无 `query()` / `_save()`（progress.js 经 `getDb()` 拿原生实例直接 `prepare/run`）
+- **DB** (`src/db.js`) — 基于 Node.js 内置 `node:sqlite`（`DatabaseSync`，同步 API）经 `src/db-engine.js` 抽象层（方案 B，封装 DatabaseSync + 3 缺口 shim：pragma→exec / transaction→手写 SAVEPOINT / pluck→helper）绑定，提供 `init()` / `transaction()` / `getDb()` / `close()`；`init()` 经 `applyPragmas` 设 PRAGMA（journal_mode=WAL + busy_timeout=5000 + foreign_keys=ON + synchronous=NORMAL），主库→`.bak`→全新 逐级回退（`_openWithFallback`）；打开即持久化，事务提交直接落盘主库（WAL 侧车 `.db-wal`/`.db-shm`），无旧 WASM 引擎的「全库 load 到内存 → 序列化写回」模型，接口无 `query()` / `_save()`（progress.js 经 `getDb()` 拿原生 DatabaseSync 实例直接 `prepare/run`）
 - **ProgressManager** (`src/progress.js`) — 进度读写入口，通过 DB 实例操作 `project / changes / stages / steps / batch_progress / approvals` 六张表；核心读写方法已同步化（`read`/`_write` 等不再 async），`read()` 每次经 `getDb()` 直查 DB 取最新不缓存快照；支持 `read()` / `init()` / `initChange()` / `show()` / `validate()` / `reset()` / `_updatePlatformLastSync()` / `_updateApprovalStatus()` / `alignExecuteToPlan()` 等方法
 
 ### ProgressManager 对齐相关方法
@@ -29,17 +29,17 @@ SQLite 数据库层 + 进度管理 + 迁移。提供 `.sillyspec/.runtime/sillys
 
 ```
 DB.init()
-  → better-sqlite3 同步打开/创建库（主库 → .bak → 全新 逐级回退，_openWithFallback）
-  → 设 PRAGMA (journal_mode=WAL, busy_timeout=5000, foreign_keys=ON, synchronous=NORMAL)
+  → node:sqlite DatabaseSync 同步打开/创建库（经 db-engine.openDatabase，主库 → .bak → 全新 逐级回退，_openWithFallback）
+  → 经 applyPragmas 设 PRAGMA (journal_mode=WAL, busy_timeout=5000, foreign_keys=ON, synchronous=NORMAL)
   → schema 版本戳（.db.schema-version）匹配则跳过建表，否则 _createSchema 落盘 DDL（project/changes/stages/steps/batch_progress/approvals + 索引 + 幂等 ALTER 加列）
 
 DB.transaction(fn)
-  → better-sqlite3 db.transaction(fn) 包装：调用即 BEGIN/COMMIT，fn 抛错自动 ROLLBACK 不吞错
+  → runTransaction(fn)（db-engine）手写 SAVEPOINT/RELEASE/ROLLBACK TO：fn 抛错自动回滚不吞错，嵌套调用自动形成 savepoint 栈
   → 提交即持久化（写主库 + WAL 侧车），无旧 WASM 引擎的全库 export / _save
-  → SQLITE_BUSY 应用层有限重试（MAX_BUSY_RETRIES=3，退避 50/100/200ms），达上限 fail-loud
+  → SQLITE_BUSY 应用层有限重试（MAX_BUSY_RETRIES=3，退避 50/100/200ms；node:sqlite 错误码字段为 errcode=5 / code='ERR_SQLITE_ERROR' / message 含 'database is locked'），达上限 fail-loud
 
 ProgressManager.read(cwd, changeName?)
-  → 经 getDb() 拿原生 better-sqlite3 实例 prepare/get 直查最新（不缓存快照）
+  → 经 getDb() 拿原生 node:sqlite DatabaseSync 实例 prepare/get 直查最新（不缓存快照）
   → 合并指定变更的 stages + steps 状态 + activeChanges 列表
 
 ProgressManager._write(cwd, progress, changeName)
@@ -58,11 +58,11 @@ ProgressManager.alignExecuteToPlan(cwd, changeName, specBase, {confirm})
 ## 注意事项
 
 - 阶段完成原子性（2026-08-09-complete-gate-atomicity）：阶段完成 persist（`pm._write`+`triggerSync`）从 `completeStageGates` 调用前移到成功返回后（`complete.js` completeStep/continueStep + `stage.js` noAI 末步三处），消除"persist completed → 跑 gate 崩溃"窗口（DB 不留假 completed，gate 异常/失败 → `rollbackCompletionAndReturn` 回 in-progress 落盘）；`completeStageGates`(`gates.js:549`) 收尾段整体 try/catch，任一段抛非结构化异常 → catch → `rollbackCompletionAndReturn` 不冒顶 exit 1，`handleExecuteWorktreeCleanup` 在 try 外（副作用独立）。接口签名不变，仅收紧阶段完成状态机原子性。
-- better-sqlite3 是原生绑定，事务提交即持久化（WAL），无旧 WASM 引擎的全库 export 开销；旧「纯内存 + 每次 _save 全量序列化」模型已废
+- node:sqlite（DatabaseSync，经 db-engine 抽象）是 Node.js 内置原生绑定，事务提交即持久化（WAL），无旧 WASM 引擎的全库 export 开销；旧「纯内存 + 每次 _save 全量序列化」模型已废；node:sqlite 仍发 ExperimentalWarning（v22.11+ 无需 --experimental-sqlite flag），engines.node >=22.11.0
 - PRAGMA（WAL/busy_timeout/foreign_keys）在 `init()` 设一次持续生效，无旧 WASM 引擎 export 重置问题；`close()` 自动 WAL checkpoint 合并 -wal/-shm 回主库
 - `batch_progress` 和 `approvals` 表按 `change_id` UNIQUE，每个变更只能有一条记录
 - 历史迁移：v1/v2 使用 `progress.json` 文件，v3 全部迁移至 SQLite（`CURRENT_VERSION = 3`）
-- `db.js` DDL 默认 schema_version 仍是 4，但 `progress.js` 当前写入版本是 3；文档不要把 runtime 称为稳定 v4 schema
+- `db.js` DDL `project.schema_version DEFAULT`、`DB_SCHEMA_VERSION`、`shared.js CURRENT_VERSION`、`progress._version` 四处 schema 版本应一致（当前 v5，title/quicklog_id 列）；改动加表/列/migration 时同步 bump 四处 + 测试断言
 - `migrateDocs` 是一次性脚本，不会幂等运行；已存在的文件会被跳过
 - **stage review gate marker 缺失自生**（坑1，`run/gates.js:276`）：tier=independent 且 `getLatestStageReviewRunId` 返回空时（execute 批量完成跳过 prompt 渲染等），gate 自身调 `generateStageReviewRunId()` + `stageReviewMarkerPath()` 写盘 + `mkdirSync`——错误路径从 `execute-null`（不可执行）变为 `execute-review-<id>`（可执行）。补充 prompt 渲染时落 marker（gap 6）的兜底：prompt 路径未走到时 gate 路径自生，marker 文件名/位置不变
 - **archive CLI 下沉 git add**（坑4，`run/complete-handlers.js:137`）：`unregisterChange` 后 CLI 确定性 `safeGit add -- .sillyspec/changes/archive/ + .sillyspec/docs/`，不靠 archive step5 prompt 驱动（step5 prompt 的 git add 保留作幂等兜底）；safeGit 失败不阻断归档（目录已移动 + change 已注销）
