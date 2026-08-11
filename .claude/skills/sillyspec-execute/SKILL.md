@@ -118,6 +118,44 @@ execute 还有**第二道**独立的 stage 级审查：除逐 task review.json �
 
 可选：`sillyspec dispatch probe` 查看 SillyHub 是否可用。
 
+## 跨仓 task（一个 change 改多个仓库）
+
+单个 change 的 task 可以分散到主仓 + 多个跨仓仓实现（典型场景：dogfood 自指、monorepo 多包仓、共享库 + 调用方联合改造）。**单仓 change 不需要任何跨仓配置**（所有 task 不写 `repo:` 即走原流程，零回归）。
+
+### 跨仓 task 配置（plan 阶段产出，execute 阶段消费）
+
+- **task 卡片 `repo:` 字段**：跨仓 task 在 `tasks/task-NN.md` frontmatter 写 `repo: <key>`（缺省='main'=主仓 task，不写即主仓）。
+- **local.yaml `repos:` 段**：在 `.sillyspec/local.yaml` 注册跨仓仓路径（`main` 不用注册，隐式=当前项目）：
+  ```yaml
+  repos:
+    sillyspec: C:/Users/qinyi/IdeaProjects/sillyspec
+    shared-lib: ../shared-lib
+  ```
+  task 卡 `repo:` 引用的 key 必须在此注册，否则 execute 启动 fail-closed 阻断（跨仓 apply 走错仓=数据所有权事故，配置错误不降级）。
+- **跨仓 task 的 `allowed_paths`**：指**相对跨仓仓根**的路径（非主仓根）。
+
+### workdir 切换（execute 派发子代理时）
+
+- **主仓 task**：子代理 workdir = 主仓 worktree 路径（CLI 自动创建的隔离 worktree）。
+- **跨仓 task**：子代理 workdir = 跨仓仓根目录（**直接在跨仓仓主干工作区改+commit，不经主仓 worktree、不建分支**）。commit 到跨仓仓主干即落盘。
+- 同一个 Wave 内允许混合主仓 + 跨仓 task（每个 task 独立子代理，各传各的 workdir）。Wave prompt 会注入 per-task workdir 表，按表选。
+
+### 跨仓 task 的双锡点（CLI 写入，子代理不改）
+
+- `base_commit`：CLI 派发跨仓 task 前实时 `git -C <跨仓仓根> rev-parse HEAD` 落盘到 task 卡 frontmatter（锁 base，防同 Wave 多 task 改同跨仓仓时 HEAD 推进致 diff 漂移）。
+- `head_commit`：跨仓 task 子代理 commit 完成后、写 review.json / 勾选 checkbox **之前**，由你（主 agent）运行 `git -C <跨仓仓根> rev-parse HEAD` 把结果写入该 task 卡 frontmatter `head_commit:` 字段。
+- review.json 的 `base`/`head` 取这两个锡点（非瞬时 HEAD）。
+
+### 跨仓 task 的 review.json
+
+- 路径仍写主仓 `.sillyspec/.runtime/execute-runs/<run-id>/tasks/task-XX/review.json`（review 统一存主仓）。
+- 加 `repo: <key>` 字段标该 task 所属仓（缺省='main'）。
+- `base`/`head` 是**跨仓仓的 commit**（取 task 卡锡点），CLI 据此在跨仓仓根跑 git 校验。
+
+### 跨仓 task apply = no-op
+
+跨仓 task 的代码由子代理直接 commit 到跨仓仓主干（commit 即落地），主仓 `worktree apply` 对跨仓 task **不打 patch、不 cleanup**——只校验 `review.head` 是跨仓仓真实 commit。主仓 task 走原 apply 路径不变。
+
 ## worktree 子命令（execute 相关）
 
 ```bash

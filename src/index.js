@@ -369,6 +369,16 @@ async function main() {
         const wt = detectWorktreeSpecDrift(resolveSpecDir(dir));
         if (wt) gateOpts.specDriftAnchor = wt.mainSpecBase;
       }
+      // W3 task-09：gate 是只读查询命令，best-effort 构造 ctx（D-013）。失败降级 null（不阻断只读命令）——
+      // ctx 让 validateTaskReviews/runVerifyTestCheck 正确切跨仓 gitDir；配置错时单仓降级会让两函数
+      // 自然报「跨仓 commit 找不到」等错误进入 check.errors，gate 结论仍如实反映问题（D-002@v1 只读契约不破）。
+      try {
+        const { getOrCreateMultiRepoContext } = await import('./run/shared.js');
+        const _ctx = await getOrCreateMultiRepoContext({ cwd: dir, changeName: gateChange, platformOpts: specDir ? { specRoot: specDir } : {} });
+        if (_ctx) gateOpts.ctx = _ctx;
+      } catch (e) {
+        console.warn(`⚠️ gate ctx 构造失败，降级单仓核验（${e.message}）`);
+      }
       const { envelope, exitCode } = await withJsonOutput(json, () => runGate(gateStage, gateChange, gateOpts));
       if (json) {
         process.stdout.write(JSON.stringify(envelope));
@@ -410,6 +420,14 @@ async function main() {
         const wt = detectWorktreeSpecDrift(resolveSpecDir(dir));
         if (wt) deriveOpts.specDriftAnchor = wt.mainSpecBase;
       }
+      // W3 task-09：derive 同 gate，best-effort 构造 ctx 透传给 verify-test/task-reviews facet（D-013）。
+      try {
+        const { getOrCreateMultiRepoContext } = await import('./run/shared.js');
+        const _ctx = await getOrCreateMultiRepoContext({ cwd: dir, changeName: deriveChange, platformOpts: specDir ? { specRoot: specDir } : {} });
+        if (_ctx) deriveOpts.ctx = _ctx;
+      } catch (e) {
+        console.warn(`⚠️ derive ctx 构造失败，降级单仓核验（${e.message}）`);
+      }
       const { envelope, exitCode } = await withJsonOutput(json, () => runDerive(facet, deriveChange, deriveOpts));
       if (json) {
         process.stdout.write(JSON.stringify(envelope));
@@ -440,7 +458,16 @@ async function main() {
       // --spec-dir 透传 platformOpts.specRoot（与 gate/derive 对称）；不传走默认 join(cwd,'.sillyspec')。
       const brPlatformOpts = {};
       if (specDir) brPlatformOpts.specRoot = specDir;
-      const result = await generateTaskReviewDrafts({ changeName: brChange, cwd: dir, platformOpts: brPlatformOpts });
+      // W3 task-09：best-effort 构造 ctx 透传（D-013），让 task-04 generateTaskReviewDrafts 跨仓 task
+      // 用跨仓 gitDir 取 base..head diff。失败降级 null（与 gate/derive 同语义，辅助修复命令不阻断）。
+      let _brCtx = null;
+      try {
+        const { getOrCreateMultiRepoContext } = await import('./run/shared.js');
+        _brCtx = await getOrCreateMultiRepoContext({ cwd: dir, changeName: brChange, platformOpts: brPlatformOpts });
+      } catch (e) {
+        console.warn(`⚠️ backfill-reviews ctx 构造失败，降级单仓草稿（${e.message}）`);
+      }
+      const result = await generateTaskReviewDrafts({ changeName: brChange, cwd: dir, platformOpts: brPlatformOpts, ctx: _brCtx });
       if (json) {
         process.stdout.write(JSON.stringify({ ok: true, command: 'backfill-reviews', change: brChange, ...result }));
       } else {
@@ -769,7 +796,18 @@ SillySpec worktree — git worktree 隔离管理
           const checkOnly = args.includes('--check-only');
           const merge = args.includes('--merge');
           const { applyWorktree } = await import('./worktree-apply.js');
-          const result = applyWorktree(wtName, { cwd: dir, checkOnly, merge });
+          // W3 task-09：apply 链路构造 ctx（D-013），让 task-05 applyWorktree 按 ctx 区分主仓 A5 / 跨仓 no-op。
+          // 跨仓 apply=no-op（G1 D-009）：校验 review.head 是跨仓真实 commit + 跳过 wm.cleanup。
+          // ctx 构造 fail-closed（约束②）——跨仓配置错时 apply 必须阻断（走错仓=数据所有权事故），不降级。
+          let _applyCtx = null;
+          try {
+            const { getOrCreateMultiRepoContext } = await import('./run/shared.js');
+            _applyCtx = await getOrCreateMultiRepoContext({ cwd: dir, changeName: wtName, platformOpts: specDir ? { specRoot: specDir } : {} });
+          } catch (e) {
+            console.error(`❌ apply 失败：跨仓 MultiRepoContext 构造失败（${e.message}）`);
+            process.exit(1);
+          }
+          const result = applyWorktree(wtName, { cwd: dir, checkOnly, merge, ctx: _applyCtx });
 
           if (result.errors.length > 0) {
             console.error(`❌ 校验失败:`);
@@ -822,6 +860,20 @@ SillySpec worktree — git worktree 隔离管理
           const { assessApplyRisk } = await import('./worktree-apply.js');
           const assessment = assessApplyRisk(wtName, { cwd: dir });
 
+          // W3 task-09：assess 自动 apply 路径构造 ctx（D-013），SAFE/WARNING 时透传给 applyWorktree。
+          // 构造 fail-closed（跨仓配置错阻断，与显式 apply case 同语义）。
+          let _assessCtx = null;
+          try {
+            const { getOrCreateMultiRepoContext } = await import('./run/shared.js');
+            _assessCtx = await getOrCreateMultiRepoContext({ cwd: dir, changeName: wtName, platformOpts: specDir ? { specRoot: specDir } : {} });
+          } catch (e) {
+            if (assessment.decision === 'SAFE' || assessment.decision === 'WARNING') {
+              console.error(`❌ assess 自动 apply 失败：跨仓 MultiRepoContext 构造失败（${e.message}）`);
+              process.exit(1);
+            }
+            // blocked 决策不触发 apply，ctx 失败仅记 warn（不阻断只读 assess 展示）
+            console.warn(`⚠️ ctx 构造失败（${e.message}）`);
+          }
           const SEPARATOR = '─'.repeat(32);
           console.log('Worktree Apply Decision');
           console.log(SEPARATOR);
@@ -853,7 +905,7 @@ SillySpec worktree — git worktree 隔离管理
           if (assessment.decision === 'SAFE' || assessment.decision === 'WARNING') {
             console.log('Action: auto-applying...');
             const { applyWorktree } = await import('./worktree-apply.js');
-            const applyResult = applyWorktree(wtName, { cwd: dir });
+            const applyResult = applyWorktree(wtName, { cwd: dir, ctx: _assessCtx });
             if (applyResult.errors.length > 0) {
               console.error('❌ apply 失败:', applyResult.errors.join('; '));
             } else {

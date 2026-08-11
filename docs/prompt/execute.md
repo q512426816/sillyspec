@@ -548,7 +548,7 @@ execute 是**动态阶段**，steps 由 `buildExecuteSteps(planFilePath, options
 
 - **contractInjection（跨 task 契约）**：由 `buildContractMatrix(planContent, changeDir)` / `buildConsumerInjection` / `buildContractFieldInjection` 生成，包含 `### API Contract Matrix`、`### 子代理 task-XX 的端点契约注入`（`<contract-injection>`）、`### 子代理 task-XX 的字段契约注入`（`<contract-field-injection>`）。命中「provider 漏字段、consumer fallback 编造 → 运行时 403/500」这类 bug 时强制注入。本文档示例 plan.md 无 provider/consumer 契约，故 contractInjection 为空字符串。
 - **prototypeInjection（HTML 原型引用）**：扫描 changeDir 下 `prototype-*.html`，命中则生成 `### 📐 原型参考（brainstorm 可视化确认）`，提示前端/UI task 照原型实现而非凭文字重新发明。本文档示例无原型文件，故 prototypeInjection 为空字符串。
-- **worktreeSection**：`options.worktreePath` 非空时生成 `### 工作目录（必须严格遵守）`，含 `"workdir": "${worktreePath}"` 的子代理调用模板。
+- **worktreeSection**：`options.worktreePath` 非空时生成 `### 工作目录（必须严格遵守）`，含 `"workdir": "${worktreePath}"` 的子代理调用模板。跨仓 task 支持下（`options.ctx` 传入 MultiRepoContext 且本 Wave 含跨仓 task 时），worktreeSection 切换为 **per-task 多值表**（主仓 task workdir=主仓 worktreePath，跨仓 task workdir=跨仓仓根）+ 跨仓 task commit 指引（直接改跨仓仓主干+commit，不经主仓 worktree）+ 双锡点（base_commit/head_commit）说明；无 ctx 或单仓 Wave 时沿用单值 worktreePath（零回归）。本文档示例由 `_extract.mjs` 不传 ctx 跑出，故展示单值版（零回归分支）。
 
 ### Task Review Gate 机制
 

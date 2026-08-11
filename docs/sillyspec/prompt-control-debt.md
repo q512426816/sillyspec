@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-07-22 12:00:00
-updated_at: 2026-08-09T00:00:00+08:00
+updated_at: 2026-08-11T22:00:00+08:00
 ---
 
 # SillySpec 提示词与控制层债务清单
@@ -256,6 +256,18 @@ updated_at: 2026-08-09T00:00:00+08:00
 | 2026-08-08 | concurrent-write-preflight 落地（债单末尾候选→实现） | 多 agent 并发写预检 in-place execute（change 2026-08-08-concurrent-write-preflight）：task-01 src/run/concurrent-detect.js 检测核心（detectConcurrentChanges+formatConcurrentWarning 纯函数，复用 isQuickMetadata「关联 vs 他者」分类，D-004 trim:false/D-005 脏变更目录文案/D-008 内联 extractChangeDir，fail-open）+ 单测 30；task-02 complete-handlers.js quick --done 钩子（D-001 ownFiles 并入 baselineFiles/D-003 null 兜底）；task-03 gates.js execute --done 钩子——采纳 worktree 实现修正位置（completeStageGates 入口=design 原文，非初版误挂的 runStageCompletionGates）+ readDesignOwnFiles 状态机解析 design §6（D-002）；task-04 集成测 25 断言（B-004 诚实降级标注）；task-05 npm test 全量 EXIT=0（+2 文件 55 断言）+ lint 73，文档评估无需同步；worktree cleanup 坑复发（node_modules 全删）→ npmmirror registry 恢复 + memory 更新 |
 
 | 2026-08-09 | execute run marker 漂移（enforceReviewJsonGate 漏 resolveLatestExecuteRunId fallback 对称缺口） | 登记 defer（方案 A 已定：gates.js:112-133 加 fallback 对齐 :333-343；否决 B 空目录）；self-audit-2026-08-07 修了 Task Review Gate 漏了 enforceReviewJsonGate；complete-gate-atomicity 因 141248 事后补齐 task-01~04 review.json 不再阻塞；doc-only 不动源码 |
+
+---
+
+### 2026-08-11 复盘增补（sillyhub 进度同步项目工具驾驭反馈：4 负面点归宿裁决 + 1 真新债立项）
+状态：`3 项已有归宿/已有缓解 + 1 项真新债（跨仓 task）→ 用户拍板走完整流程`
+
+来源：sillyhub 项目（multi-agent-platform 仓）平台进度同步 change（13 task execute）的驾驭复盘 4 个负面点。逐条对照本债单 + 源码实证后裁决，先查已决策项避免重复提议。
+
+- 🔴 **cc-① 跨仓 task：CLI 查不到跨仓 commit 判伪造（真新债，用户拍板立项 → 完整流程 brainstorm）**：task-09/10 改 sillyspec 仓代码，CLI 在主仓（multi-agent-platform）`git` 查不到 sillyspec 仓的 commit → `verifyReviewGitEvidence`（`src/task-review.js:512-562`）判 base/head 非真实 commit 或 changedFiles 与主仓 git diff 完全不相交 → 判 review.json 疑似伪造 → Task Review Gate 阻断；changedFiles 非空时强要主仓 working-tree 对账相交。workaround：base=head 主仓空 commit + changedFiles=[] 空数组走 WARNING。**用户范围拍板：task 级 + apply/verify 全链路**（非仅 task 级校验）。涉及面：① task 声明 `repo:` 字段（plan TaskCard 协议 + plan.js 解析）；② CLI 跨仓 git 探测（worktree.js/progress 已有 `--git-common-dir` 祖先链探测可复用，注意 `[[sillyspec-worktree-spec-drift-blindspot]]` worktree 副本漂移硬阻断边界）；③ `verifyReviewGitEvidence` 支持多仓（每仓独立 base/head/changedFiles/diff 对账，非合并 diff）；④ `worktree-apply.js:48-50` filterDeliverableFiles 一刀切排除 `.sillyspec/` 需分级放开跨仓交付（exec-g defer 同源，合并立项）；⑤ `runVerifyTestCheck`（gates.js:208）跨仓 cwd 对账。留 brainstorm 细化「跨仓 task 声明协议 / 仓库解析锚点 / apply 分级 / verify 跨仓对账」四象限。
+- ⏭ **cc-② Design Grill 漏掉 PK NOT NULL vs None 可写矛盾（= P4.3 已 defer 复述，不重复登记）**：design §8.2 PK NOT NULL 与 §9 兼容策略 None 可写矛盾到 execute 跑测试才暴露，浪费 W1 commit + 回退。**归宿**：Design Grill 的语义一致性/可行性判定 = P4.3 已 defer 推 sillyhub（本债单 :59/:264），本仓 Grill 仅机械格式检查（P3.1 done）。若未来本地 Grill 保留，可加「model 约束 vs 兼容策略」一致性子项作为 P4.3 的旁注 follow-up，**不另立条目**（语义工作 CLI 无法替代是 defer 既定理由）。
+- 🔶 **cc-③ gen:types worktree 模式 dump 主仓 backend（部分已登记 + consumer 侧剥离）**：`gen-api-types.mjs` 内部 dump 主仓 backend 覆盖 worktree openapi，需手动绕过。**归属核实**：`gen-api-types.mjs` 在 multi-agent-platform 仓 `frontend/scripts/` + `sillyhub-daemon/scripts/`（consumer 侧，非 sillyspec 仓）。sillyspec 侧相关债 = exec-h（verify 不验生成产物，defer，:150/:267）。**裁决**：gen:types 的 worktree 友好性（`--backend <path>` / worktree 自动检测）属 consumer 侧脚本改进，SillySpec 仓做不完；若 cc-① 全链路落地触及 verify codegen 对账，可在 exec-h 范畴内一并设计，否则 consumer 侧另起。
+- ✅ **cc-④ stage review + task review 双手写负担重（已有缓解，记录改进空间）**：13 个 review.json 手写负担重，implementer 自审难达 tier=independent 本意。**归宿**：exec-d `sillyspec register-stage-review`（`src/index.js:464`，生成 stage 级 review.json + docHash + marker，治 tier=independent marker 死锁）+ `sillyspec backfill-reviews`（`src/index.js:426`，为 task 补 cannot_verify 草稿）**已落地**，缓解了 stage review marker 死锁 + task 草稿自动补。**改进空间**（非硬阻断，留 follow-up）：① tier=independent 的 task review 仍需独立子代理手写（草稿是 cannot_verify 不是 pass/fail）；② 13 个 review 的协调器/批量生成命令（类 register-stage-review 的 task 级等价物，exec-d 让出时已设计过 task 级 register-task-review 思路）可评估是否值得做。
 
 ## 总结
 

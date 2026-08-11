@@ -341,3 +341,140 @@ describe('validateDesignFileCoverage', () => {
     assert.ok(!r.designFiles.some(f => f.startsWith('.sillyspec/')))
   })
 })
+
+// ─── 跨仓分段（task-03 / 约束③ / D-014）─────────────────────────────────
+// design §6 支持 `## <repo> 仓变更` 段头按仓分段，task allowed_paths 按 (repo, path) 二元组归属，
+// 跨仓 task 只覆盖对应 repo 段——避免跨仓文件永远报「未覆盖」阻断 plan。
+
+// 带 repo 字段的 task 卡（跨仓 task）
+function taskFileRepo(id, repo, allowedPaths) {
+  const lines = ['---', `id: ${id}`, `title: ${id}`, `repo: ${repo}`, 'allowed_paths:']
+  for (const p of allowedPaths) lines.push(`  - ${p}`)
+  lines.push('---', 'goal: >', '  test', 'acceptance:', '  - test')
+  return lines.join('\n') + '\n'
+}
+const writeTaskRepo = (d, id, repo, allowedPaths) =>
+  writeFileSync(join(d, 'tasks', `${id}.md`), taskFileRepo(id, repo, allowedPaths))
+
+describe('validateDesignFileCoverage 跨仓分段（D-014）', () => {
+  let dir
+  beforeEach(() => { dir = join(tmpdir(), `sillyspec-cov-x-${Math.random().toString(36).slice(2)}`); mkdirSync(join(dir, 'tasks'), { recursive: true }) })
+  afterEach(() => { try { rmSync(dir, { recursive: true, force: true }) } catch {} })
+
+  it('§6 含 ## sillyspec 仓变更 段：跨仓文件由 sillyspec task 覆盖 → 通过', () => {
+    // 主段（无段头前）归 main：src/main.js 由主仓 task 覆盖
+    // 段头 ## sillyspec 仓变更 下的 src/task-review.js 由 repo:sillyspec task 覆盖
+    writeDesign(dir, designMd({ raw: [
+      '| 操作 | 文件路径 | 说明 |',
+      '|---|---|---|',
+      '| 修改 | src/main.js | 主仓 |',
+      '',
+      '## sillyspec 仓变更',
+      '',
+      '| 操作 | 文件路径 | 说明 |',
+      '|---|---|---|',
+      '| 修改 | src/task-review.js | 跨仓 sillyspec |',
+    ].join('\n') }))
+    writeTask(dir, 'task-01', ['src/main.js'])
+    writeTaskRepo(dir, 'task-02', 'sillyspec', ['src/task-review.js'])
+    const r = validateDesignFileCoverage(dir)
+    assert.equal(r.ok, true, JSON.stringify(r.errors))
+    assert.equal(r.uncovered.length, 0)
+  })
+
+  it('跨仓文件未被对应 repo task 覆盖 → 报未覆盖（含 [repo] 前缀）', () => {
+    writeDesign(dir, designMd({ raw: [
+      '## sillyspec 仓变更',
+      '',
+      '| 操作 | 文件路径 | 说明 |',
+      '|---|---|---|',
+      '| 修改 | src/task-review.js | 跨仓 |',
+    ].join('\n') }))
+    // 只有主仓 task（无 repo），跨仓段无 sillyspec task 覆盖
+    writeTask(dir, 'task-01', ['src/task-review.js'])
+    const r = validateDesignFileCoverage(dir)
+    assert.equal(r.ok, false)
+    assert.ok(r.errors.some(e => e.includes('sillyspec') && e.includes('task-review.js')), r.errors.join('; '))
+  })
+
+  it('跨仓 task 的 allowed_paths 不覆盖主仓段同名文件（二元组隔离）', () => {
+    // 主仓段 src/shared.js + sillyspec 段 src/shared.js 同名，但分属不同 repo
+    // 主仓 task 覆盖主仓段、sillyspec task 覆盖 sillyspec 段 → 都通过
+    writeDesign(dir, designMd({ raw: [
+      '| 操作 | 文件路径 | 说明 |',
+      '|---|---|---|',
+      '| 修改 | src/shared.js | 主仓 |',
+      '',
+      '## sillyspec 仓变更',
+      '',
+      '| 操作 | 文件路径 | 说明 |',
+      '|---|---|---|',
+      '| 修改 | src/shared.js | 跨仓 |',
+    ].join('\n') }))
+    writeTask(dir, 'task-01', ['src/shared.js'])
+    writeTaskRepo(dir, 'task-02', 'sillyspec', ['src/shared.js'])
+    const r = validateDesignFileCoverage(dir)
+    assert.equal(r.ok, true, JSON.stringify(r.errors))
+  })
+
+  it('段头带编号前缀（## 2. sillyspec 仓变更）→ 仍识别', () => {
+    writeDesign(dir, designMd({ raw: [
+      '## 2. sillyspec 仓变更',
+      '',
+      '| 操作 | 文件路径 | 说明 |',
+      '|---|---|---|',
+      '| 修改 | src/foo.js | 跨仓 |',
+    ].join('\n') }))
+    writeTaskRepo(dir, 'task-01', 'sillyspec', ['src/foo.js'])
+    const r = validateDesignFileCoverage(dir)
+    assert.equal(r.ok, true, JSON.stringify(r.errors))
+    assert.equal(r.uncovered.length, 0)
+  })
+
+  it('段头 h3（### sillyspec 仓变更）→ 识别（容忍层级）', () => {
+    writeDesign(dir, designMd({ raw: [
+      '### sillyspec 仓变更',
+      '',
+      '| 操作 | 文件路径 | 说明 |',
+      '|---|---|---|',
+      '| 修改 | src/bar.js | 跨仓 |',
+    ].join('\n') }))
+    writeTaskRepo(dir, 'task-01', 'sillyspec', ['src/bar.js'])
+    const r = validateDesignFileCoverage(dir)
+    assert.equal(r.ok, true, JSON.stringify(r.errors))
+  })
+
+  it('多仓分段（main + sillyspec + multi-agent-platform）→ 各段各 task 覆盖', () => {
+    writeDesign(dir, designMd({ raw: [
+      '| 操作 | 文件路径 | 说明 |',
+      '|---|---|---|',
+      '| 修改 | src/a.js | main |',
+      '',
+      '## sillyspec 仓变更',
+      '',
+      '| 修改 | src/b.js | sillyspec |',
+      '',
+      '## multi-agent-platform 仓变更',
+      '',
+      '| 修改 | src/c.js | map |',
+    ].join('\n') }))
+    writeTask(dir, 'task-01', ['src/a.js'])
+    writeTaskRepo(dir, 'task-02', 'sillyspec', ['src/b.js'])
+    writeTaskRepo(dir, 'task-03', 'multi-agent-platform', ['src/c.js'])
+    const r = validateDesignFileCoverage(dir)
+    assert.equal(r.ok, true, JSON.stringify(r.errors))
+  })
+
+  it('无段头（单仓 design）→ 退化为 main 全覆盖对账（零回归）', () => {
+    // 与既有「通过」用例同款，确认分段逻辑不破坏单仓退化
+    writeDesign(dir, designMd({ table: [
+      { op: '新增', path: 'src/worktree.js' },
+      { op: '修改', path: 'src/stages/execute.js' },
+    ] }))
+    writeTask(dir, 'task-01', ['src/worktree.js (新增)'])
+    writeTask(dir, 'task-02', ['src/stages/execute.js'])
+    const r = validateDesignFileCoverage(dir)
+    assert.equal(r.ok, true, JSON.stringify(r.errors))
+    assert.equal(r.uncovered.length, 0)
+  })
+})

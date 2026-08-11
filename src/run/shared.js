@@ -70,6 +70,8 @@ export function assertSafeChangeName(name, label = '变更名') {
 import { buildExecuteSteps } from '../stages/execute.js'
 import { buildPlanSteps } from '../stages/plan.js'
 import { stageRegistry } from '../stages/index.js'
+import { parseRepo, parseRepoRegistry } from '../stages/plan-postcheck.js'
+import { MultiRepoContext } from './multi-repo-context.js'
 
 /**
  * 解析 prompt 中的 {{include: <name>}} 占位符：读包内 templates/prompts/<name>.md 注入。
@@ -690,6 +692,158 @@ export function formatWaitOptions(raw) {
 
 
 /**
+ * 进程级 MultiRepoContext 缓存（D-013 G2：execute 启动构造一次，贯穿 execute/apply/verify 不重建）。
+ *
+ * key = `${cwd} ${changeName}`（cwd 隔离防多仓并发串扰；changeName 隔离防同进程多 change 切换串扰）。
+ * 跨 CLI 命令（execute vs apply vs verify 各是独立进程）各自构造——design §7.2 G2 明确 apply/verify
+ * 「复用 execute 实例，**或**从 review.json.repo + local.yaml repos 反推」，进程级缓存指同一 CLI 命令内复用。
+ *
+ * 失效语义：ctx 是纯内存对象（task-01 不持久化），进程结束自动释放。无需手动清理。
+ * 缓存命中场景：execute 单次 --done 内 getStageSteps（派发）+ completeStageGates（gate）+ 阶段完成
+ * 收尾多次取同一 ctx；apply/verify 同理。fail-closed 抛错不缓存（下次重试重新构造）。
+ */
+const _multiRepoCtxCache = new Map()
+
+/**
+ * 读 local.yaml 原始文本（best-effort，不存在/读失败返 ''）。
+ * 与 sync.js readLocalYamlRaw 同风格，但本模块不引 sync.js（避免循环依赖 + sync.js 非 export）。
+ * local.yaml 路径 = `<cwd>/.sillyspec/local.yaml`（与 sync.js/config-schema.js 一致）。
+ * @param {string} cwd
+ * @returns {string}
+ */
+function readLocalYamlRaw(cwd) {
+  const p = join(cwd, '.sillyspec', 'local.yaml')
+  if (!existsSync(p)) return ''
+  try {
+    return readFileSync(p, 'utf8')
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * 从 plan.md 内容聚合所有 task 卡片声明的 repo:（去重，含 'main' 隐式）。
+ *
+ * design §5.4 execute 启动段 + §7.2：扫 plan.md 所有 task 卡片 frontmatter，用 parseRepo 解析
+ * repo: 字段（缺省='main'），去重后返回数组。'main' 永远隐式在列（主仓 task 不写 repo: 也算主仓）。
+ *
+ * 聚合策略：plan.md 由 plan 阶段生成，task 卡片 frontmatter 形如 `---\nrepo: sillyspec\n...\n---`
+ * （与 task-NN.md 同源）。本函数全局匹配所有 frontmatter 块（`/^---\n([\s\S]*?)\n---/mg`），
+ * 每块重新拼成完整 frontmatter 喂 parseRepo（parseRepo 内部 `^---\n...\n---` 锚开头）。
+ *
+ * @param {string} planContent
+ * @returns {string[]} 去重后的 repo 数组（至少含 'main'）
+ */
+export function aggregateDeclaredRepos(planContent) {
+  const seen = new Set(['main']) // main 永远隐式
+  if (!planContent) return ['main']
+  // 全局匹配所有 frontmatter 块（m 标志让 ^ 匹配每行行首，但此处 ^--- 要求行首 ---，
+  // 配合 [\s\S]*? 非贪婪到下一个 ---）。每块重新拼完整 frontmatter 喂 parseRepo。
+  const fmRegex = /^---\r?\n([\s\S]*?)\r?\n---/gm
+  let match
+  while ((match = fmRegex.exec(planContent)) !== null) {
+    const fmBody = match[1]
+    // 重新拼成 parseRepo 期望的完整 frontmatter（---\n<body>\n---）
+    const repo = parseRepo(`---\n${fmBody}\n---`)
+    if (repo && !seen.has(repo)) seen.add(repo)
+  }
+  return Array.from(seen)
+}
+
+/**
+ * 构造或取进程级 MultiRepoContext 单例（D-013 G2）。
+ *
+ * design §5.4 execute 启动段 + §7.2 G2 + 决策 D-001/D-013：
+ *   - 读 local.yaml repos: 段（parseRepoRegistry）→ repoRegistry Map（main 隐式不注册）
+ *   - 扫 plan.md 所有 task 卡片 repo:（aggregateDeclaredRepos）→ declaredRepos（含 'main'）
+ *   - 构造 MultiRepoContext（约束② fail-closed：未注册 repo / 跨仓 git 不可用抛错阻断）
+ *   - 按 `${cwd} ${changeName}` 缓存，同进程同 change 复用
+ *
+ * **单仓退化**（design §7.2 「main 隐式为 cwd 不用注册」）：local.yaml 无 repos: 段 + 单仓 change
+ * （declaredRepos=['main']）→ repoRegistry=空 Map，MultiRepoContext 退化为 {main:{...}} 单值 map，
+ * hasCrossRepo()=false，所有 ctx 透传点缺省行为零回归（task-01/04/05/06/07/08 各模块 ctx=null 等价）。
+ *
+ * **跨仓 fail-closed**（约束② D-007）：declaredRepos 含 local.yaml 未注册的 repo key，或跨仓仓
+ * git rev-parse 失败 → MultiRepoContext 构造抛错，本函数**不缓存**该错误，原样上抛阻断 execute 启动。
+ *
+ * 缓存语义：命中返回已构造实例；未命中且构造成功则缓存后返回；构造失败不缓存（下次重试重新构造）。
+ *
+ * @param {Object} opts
+ * @param {string} opts.cwd - 主仓 cwd
+ * @param {string} opts.changeName - 当前 change 名
+ * @param {Object} [opts.platformOpts] - 平台选项（specRoot 等，透传给 MultiRepoContext 预留）
+ * @param {boolean} [opts.noCache=false] - 跳过缓存（测试 / 显式重建场景）
+ * @returns {MultiRepoContext|null} changeName/cwd 缺失或无 plan.md 时返回 null（单仓退化，调用方按 ctx=null 处理）
+ * @throws {Error} MultiRepoContext 构造 fail-closed（约束②未注册/跨仓git不可用）
+ */
+export async function getOrCreateMultiRepoContext({ cwd, changeName, platformOpts = {}, noCache = false } = {}) {
+  if (!cwd || !changeName) return null
+  const cacheKey = `${cwd} ${changeName}`
+  if (!noCache && _multiRepoCtxCache.has(cacheKey)) {
+    return _multiRepoCtxCache.get(cacheKey)
+  }
+
+  // 读 plan.md（execute 启动入口的 change 目录），无 plan.md → 无法聚合 declaredRepos → 退化 null
+  const specDir = platformOpts?.specRoot || resolveSpecDir(cwd)
+  const planFile = join(specDir, 'changes', changeName, 'plan.md')
+  let planContent = ''
+  if (existsSync(planFile)) {
+    try {
+      planContent = readFileSync(planFile, 'utf8')
+    } catch {
+      planContent = ''
+    }
+  }
+  if (!planContent) {
+    // 无 plan.md（plan 未完成 / brainstorm 阶段 / quick 等场景）→ 无 task 卡片可扫，
+    // 不构造 ctx（返 null 退化单仓）。跨仓 task 必须 plan.md 落地后才进 execute，此处安全。
+    return null
+  }
+
+  // 聚合 declaredRepos（扫 plan.md task 卡片 repo:）+ 读 local.yaml repos: 段
+  const declaredRepos = aggregateDeclaredRepos(planContent)
+  const repoRegistry = parseRepoRegistry(readLocalYamlRaw(cwd))
+
+  // 构造 WorktreeManager（主仓 meta 读取；与 getStageSteps 同源范式）
+  let worktreeManager
+  try {
+    const { WorktreeManager } = await import('../worktree.js')
+    worktreeManager = new WorktreeManager({ cwd })
+  } catch {
+    // WorktreeManager 不可用 → 退化为最小桩（in-place-fallback 兜底 cwd）
+    worktreeManager = { getMeta: () => null }
+  }
+
+  const ctx = new MultiRepoContext({
+    cwd,
+    changeName,
+    platformOpts,
+    declaredRepos,
+    repoRegistry,
+    worktreeManager,
+  })
+
+  if (!noCache) {
+    _multiRepoCtxCache.set(cacheKey, ctx)
+  }
+  return ctx
+}
+
+/**
+ * 清除进程级 MultiRepoContext 缓存（测试隔离用）。生产代码不需手动清。
+ * @param {string} [cwd]
+ * @param {string} [changeName]
+ */
+export function _clearMultiRepoCtxCache(cwd, changeName) {
+  if (cwd && changeName) {
+    _multiRepoCtxCache.delete(`${cwd} ${changeName}`)
+  } else {
+    _multiRepoCtxCache.clear()
+  }
+}
+
+
+/**
  * 获取阶段的步骤定义（execute 需要动态构建）
  */
 export async function getStageSteps(stageName, cwd, progress, specDir = null) {
@@ -697,14 +851,15 @@ export async function getStageSteps(stageName, cwd, progress, specDir = null) {
     const changeDir = resolveChangeDir(cwd, progress, specDir)
     let planFile = null
     let worktreePath = null
+    let changeName = null
     if (changeDir) {
       const p = join(changeDir, 'plan.md')
       if (existsSync(p)) planFile = p
+      changeName = basename(changeDir)
       // 自动检测 worktree 路径，注入 Wave prompt 的 workdir 指令
       // 修复：之前未传 worktreePath 给 buildExecuteSteps，导致 Wave prompt 缺失工作目录指令，
       // 子代理可能把文件写到主工作区而非 worktree 内，破坏隔离。
       try {
-        const changeName = basename(changeDir)
         const { WorktreeManager } = await import('../worktree.js')
         const wm = new WorktreeManager({ cwd })
         const meta = wm.getMeta(changeName)
@@ -715,7 +870,20 @@ export async function getStageSteps(stageName, cwd, progress, specDir = null) {
         // 无 worktree meta 不阻断——可能是首次启动或 in-place 模式
       }
     }
-    return buildExecuteSteps(planFile, { worktreePath })
+    // W3 task-09：execute 启动入口构造 MultiRepoContext 单例（D-013 G2），贯穿 execute/apply/verify。
+    // 单仓 change（无 repo: / 无 local.yaml repos 段）→ ctx=null 退化单仓零回归（task-08 buildExecuteSteps 缺省 null）。
+    // 跨仓 change 缺注册 / 跨仓 git 不可用 → getOrCreateMultiRepoContext 抛错阻断 execute 启动（约束②）。
+    let ctx = null
+    if (changeName) {
+      try {
+        ctx = await getOrCreateMultiRepoContext({ cwd, changeName, platformOpts: specDir ? { specRoot: specDir } : {} })
+      } catch (e) {
+        // fail-closed 阻断：execute 启动期 ctx 构造失败（未注册 repo / 跨仓 git 不可用），
+        // 抛错让上层 runCommand 把错误返回给 Agent（不降级单仓跑——跨仓 apply 走错仓=数据所有权事故）。
+        throw new Error(`execute 启动失败：跨仓 MultiRepoContext 构造失败（${e.message}）`)
+      }
+    }
+    return buildExecuteSteps(planFile, { worktreePath, ctx })
   }
   if (stageName === 'plan') {
     const changeDir = resolveChangeDir(cwd, progress, specDir)

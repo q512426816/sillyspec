@@ -147,6 +147,163 @@ console.log('\n--- 5. 不依赖真实 daemon / 网络 ---')
   restore()
 }
 
+// ───────────────────────────────────────────────────────────────────────────
+// W3 task-08（D-012 per-task workdir + D-010 双锡点）—— buildWavePrompt 跨仓改造
+// ───────────────────────────────────────────────────────────────────────────
+// 复用 multi-repo-context.test.mjs 的真实 git fixture 模式（mkdtemp + git init）。
+// 隔离：每条用例独立 tmp repo，无 frontmatter 串味。结尾清理。
+import { MultiRepoContext } from '../../src/run/multi-repo-context.js'
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync as _readFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { execSync } from 'node:child_process'
+
+const task08TempDirs = []
+function makeRepo08() {
+  const d = mkdtempSync(join(tmpdir(), 'exec08-'))
+  task08TempDirs.push(d)
+  execSync('git init -q', { cwd: d, stdio: 'pipe' })
+  execSync('git config user.email t@t.com', { cwd: d, stdio: 'pipe' })
+  execSync('git config user.name t', { cwd: d, stdio: 'pipe' })
+  execSync('git config commit.gpgsign false', { cwd: d, stdio: 'pipe' })
+  writeFileSync(join(d, 'README.md'), 'init\n')
+  execSync('git add .', { cwd: d, stdio: 'pipe' })
+  execSync('git commit -q -m init', { cwd: d, stdio: 'pipe' })
+  return d
+}
+function makeWm08(metaMap) {
+  return { getMeta: (name) => metaMap.get(name) || null }
+}
+// 写 task 卡 frontmatter（含 repo 字段可选）。num 必须为已零填充字符串（与 resolveTaskRepo 同源 task-NN.md）
+function writeTaskCard(changeDir, num, repo) {
+  const tasksDir = join(changeDir, 'tasks')
+  try { mkdirSync(tasksDir, { recursive: true }) } catch {}
+  const fm = repo
+    ? `---\nid: task-${num}\nrepo: ${repo}\nallowed_paths:\n  - src/x.js\n---\n\n# task-${num}\n`
+    : `---\nid: task-${num}\nallowed_paths:\n  - src/x.js\n---\n\n# task-${num}\n`
+  writeFileSync(join(tasksDir, `task-${num}.md`), fm)
+}
+function readTaskCard(changeDir, num) {
+  return _readFileSync(join(changeDir, 'tasks', `task-${num}.md`), 'utf8')
+}
+
+// ── 6. 无 ctx 单仓退化零回归（D-012 缺省路径）──
+// buildWavePrompt 不传 ctx → 全 task workdir=主仓 worktreePath，worktreeSection 单值（与改前一致）
+console.log('\n--- 6. 无 ctx 单仓退化（D-012 零回归）---')
+{
+  const restore = withoutSillyHubEnv()
+  const w = { index: 1, tasks: [{ index: 1, name: 'task-01: 主仓', file: 'src/x.js' }] }
+  const out = buildWavePrompt(w, 1, null, worktreePath)
+  // 旧单值 worktreeSection 关键字（workdir 强制必传 + JSON 单值示例）
+  assertContains(out, '### 工作目录（必须严格遵守）', '无 ctx：worktreeSection 为旧单值标题（非 per-task）')
+  assertContains(out, `"workdir": "${worktreePath}"`, '无 ctx：worktreeSection JSON 示例注入单 worktreePath')
+  assertNotContains(out, 'per-task workdir 表', '无 ctx：不注入 per-task 多值表')
+  assertNotContains(out, '跨仓 task 派发与双锡点', '无 ctx：不注入跨仓 commit 指引段')
+  restore()
+}
+
+// ── 7. ctx 含跨仓 task：per-task workdir 多值表 + 跨仓 commit 指引（D-012 核心）──
+console.log('\n--- 7. per-task workdir 多值表（D-012 混合 Wave 主仓+跨仓）---')
+{
+  const restore = withoutSillyHubEnv()
+  const mainRepo = makeRepo08()
+  const crossRepo = makeRepo08()
+  const baseHash = execSync('git rev-parse HEAD', { cwd: mainRepo, encoding: 'utf8' }).trim()
+  // changeDir：真实 change 目录结构（含 tasks/）
+  const changeDir = mkdtempSync(join(tmpdir(), 'chg08-'))
+  task08TempDirs.push(changeDir)
+  writeTaskCard(changeDir, '01', null)        // task-01 主仓
+  writeTaskCard(changeDir, '02', 'sillyspec') // task-02 跨仓
+  const wm = makeWm08(new Map([['c1', { mode: 'worktree', worktreePath: mainRepo, baseHash }]]))
+  const ctx = new MultiRepoContext({
+    cwd: mainRepo, changeName: 'c1', declaredRepos: ['main', 'sillyspec'],
+    repoRegistry: new Map([['sillyspec', crossRepo]]), worktreeManager: wm,
+  })
+  const w = {
+    index: 1,
+    tasks: [
+      { index: 1, name: 'task-01: 主仓改', file: 'src/a.js' },
+      { index: 2, name: 'task-02: 跨仓改', file: 'src/b.js' },
+    ],
+  }
+  const out = buildWavePrompt(w, 1, changeDir, mainRepo, { ctx })
+  // per-task worktreeSection
+  assertContains(out, '### 工作目录（必须严格遵守，per-task）', 'ctx 跨仓：worktreeSection 切 per-task 标题')
+  assertContains(out, 'task-01 (repo: main) → workdir', 'ctx 跨仓：per-task 表含 task-01 主仓行')
+  assertContains(out, 'task-02 (repo: sillyspec) → workdir', 'ctx 跨仓：per-task 表含 task-02 跨仓行')
+  assertContains(out, mainRepo, 'ctx 跨仓：主仓 task workdir=主仓 worktreePath')
+  assertContains(out, crossRepo, 'ctx 跨仓：跨仓 task workdir=跨仓仓根')
+  // 跨仓 commit 指引段
+  assertContains(out, '### 跨仓 task 派发与双锡点', 'ctx 跨仓：注入「跨仓派发与双锡点」段')
+  assertContains(out, '不经主仓 worktree', 'ctx 跨仓：注入「不经主仓 worktree」commit 指引')
+  assertContains(out, '直接在该仓主干工作区改+commit', 'ctx 跨仓：注入直接 commit 到主干指引')
+  assertContains(out, 'base 锡点', 'ctx 跨仓：base 锡点指引存在')
+  assertContains(out, 'head 锡点', 'ctx 跨仓：head 锡点指引存在')
+  restore()
+}
+
+// ── 8. D-010 base 锡点落盘：跨仓 task 派发前 CLI 写 task 卡 base_commit ──
+console.log('\n--- 8. base 锡点落盘（D-010 派发前写 task 卡 base_commit）---')
+{
+  const restore = withoutSillyHubEnv()
+  const mainRepo = makeRepo08()
+  const crossRepo = makeRepo08()
+  const crossHeadBefore = execSync('git rev-parse HEAD', { cwd: crossRepo, encoding: 'utf8' }).trim()
+  const baseHash = execSync('git rev-parse HEAD', { cwd: mainRepo, encoding: 'utf8' }).trim()
+  const changeDir = mkdtempSync(join(tmpdir(), 'chg08b-'))
+  task08TempDirs.push(changeDir)
+  writeTaskCard(changeDir, '01', 'sillyspec') // 仅跨仓 task
+  const wm = makeWm08(new Map([['c1', { mode: 'worktree', worktreePath: mainRepo, baseHash }]]))
+  const ctx = new MultiRepoContext({
+    cwd: mainRepo, changeName: 'c1', declaredRepos: ['main', 'sillyspec'],
+    repoRegistry: new Map([['sillyspec', crossRepo]]), worktreeManager: wm,
+  })
+  const w = { index: 1, tasks: [{ index: 1, name: 'task-01: 跨仓', file: 'src/x.js' }] }
+  // 派发前（buildWavePrompt 构造时）base_commit 应已落 task 卡
+  assertTrue(!/base_commit:/.test(readTaskCard(changeDir, '01')), '派发前 task 卡 base_commit 字段不存在（前置态）')
+  const out = buildWavePrompt(w, 1, changeDir, mainRepo, { ctx })
+  const cardAfter = readTaskCard(changeDir, '01')
+  assertContains(cardAfter, `base_commit: ${crossHeadBefore}`, '派发后 task 卡 base_commit 已写入跨仓 HEAD（base 锡点）')
+  // 幂等：再调一次 buildWavePrompt，HEAD 未推进，值不变不重复写
+  buildWavePrompt(w, 1, changeDir, mainRepo, { ctx })
+  const cardTwice = readTaskCard(changeDir, '01')
+  const occurrences = (cardTwice.match(/base_commit:/g) || []).length
+  assertTrue(occurrences === 1, `幂等：base_commit 仅 1 行（实际 ${occurrences}，HEAD 未推进不重复写）`)
+  // task-01 是主仓时不写 base_commit（主仓走 meta.baseHash）
+  assertTrue(out.length > 0, 'buildWavePrompt 返回非空 prompt')
+  restore()
+}
+
+// ── 9. ctx 单仓（无跨仓 task）：退化为单值 worktreeSection（零回归）──
+console.log('\n--- 9. ctx 单仓（无跨仓 task）退化为单值 worktreeSection（零回归）---')
+{
+  const restore = withoutSillyHubEnv()
+  const mainRepo = makeRepo08()
+  const baseHash = execSync('git rev-parse HEAD', { cwd: mainRepo, encoding: 'utf8' }).trim()
+  const changeDir = mkdtempSync(join(tmpdir(), 'chg08c-'))
+  task08TempDirs.push(changeDir)
+  writeTaskCard(changeDir, '01', null) // 主仓 task
+  const wm = makeWm08(new Map([['c1', { mode: 'worktree', worktreePath: mainRepo, baseHash }]]))
+  const ctx = new MultiRepoContext({
+    cwd: mainRepo, changeName: 'c1', declaredRepos: ['main'],
+    repoRegistry: new Map(), worktreeManager: wm,
+  })
+  const w = { index: 1, tasks: [{ index: 1, name: 'task-01: 主仓', file: 'src/x.js' }] }
+  const out = buildWavePrompt(w, 1, changeDir, mainRepo, { ctx })
+  // ctx 存在但无跨仓 task → 退回旧单值 worktreeSection（不注入 per-task 表 / 跨仓段）
+  assertContains(out, '### 工作目录（必须严格遵守）', 'ctx 单仓：worktreeSection 旧单值标题（无 per-task）')
+  assertContains(out, `"workdir": "${mainRepo}"`, 'ctx 单仓：单值 JSON 注入主仓 worktreePath')
+  assertNotContains(out, 'per-task workdir 表', 'ctx 单仓：不注入 per-task 多值表')
+  assertNotContains(out, '跨仓 task 派发与双锡点', 'ctx 单仓：不注入跨仓 commit 指引段')
+  // 主仓 task 不写 base_commit（meta.baseHash 管 base，不污染 task 卡）
+  assertTrue(!/base_commit:/.test(readTaskCard(changeDir, '01')), '主仓 task 不写 base_commit（meta.baseHash 管 base）')
+  restore()
+}
+
+// 清理 task-08 tmp 仓（最后用例后）
+for (const d of task08TempDirs) {
+  try { rmSync(d, { recursive: true, force: true }) } catch { /* Windows EPERM best-effort */ }
+}
+
 console.log(`\n${'='.repeat(50)}`)
 console.log(`✅ 通过: ${passed}  ❌ 失败: ${failed}`)
 if (failures.length > 0) { console.log('失败项:'); failures.forEach(f => console.log(`  - ${f}`)) }

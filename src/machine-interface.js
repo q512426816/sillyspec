@@ -106,9 +106,12 @@ export function buildEnvelope({
  * @param {string} [opts.specDriftAnchor] - drift 场景主仓 specBase 锚点（坑 execute-runs-isolation）。
  *   drift 守卫命中时由调用方传入，task-reviews 的 execute-run-id marker 落点经
  *   resolveRuntimeRoot 锚主仓 .runtime，不读 worktree 副本（与 contract-matrix 调用方同语义）。
+ * @param {object} [opts.ctx] - MultiRepoContext 单例（W3 task-09，D-013）。缺省=null 退化单仓。
+ *   透传给 validateTaskReviews（execute task-reviews check）+ runVerifyTestCheck（verify-test check），
+ *   让两函数按 ctx 切跨仓 gitDir / per-repo cwd。null 时两函数按既有单仓行为零回归。
  * @returns {Promise<{ envelope: object, exitCode: number }>}
  */
-export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, specDriftAnchor } = {}) {
+export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, specDriftAnchor, ctx = null } = {}) {
   const specRoot = specBase || resolveSpecDir(cwd);
   const pm = new ProgressManager();
 
@@ -232,6 +235,7 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
         executeRunId,
         changeDir: planDir,
         gitDir,
+        ctx,
       });
       checks.push({
         id: 'task-reviews',
@@ -243,7 +247,7 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
 
     // ── d. verify 阶段追加 verify-test（CLI 实测 local.yaml commands.test）──
     if (stage === 'verify') {
-      const vt = runVerifyTestCheck({ cwd, specBase: specRoot, changeName });
+      const vt = runVerifyTestCheck({ cwd, specBase: specRoot, changeName, ctx });
       const vtWarnings = [];
       if (vt.status === 'skipped') {
         vtWarnings.push(`⚠️ verify-test SKIPPED — gate 未核验测试（${vt.reason || 'local.yaml 未配置 commands.test 或显式无测试'}）。本次 gate 结论不含测试客观核验，driver 不应据 exit 0 判定测试通过；integration-critical 变更应在 verify 阶段降级 FAIL`);
@@ -334,9 +338,11 @@ export const FACETS = ['execute-evidence', 'verify-test', 'task-reviews', 'artif
  * @param {string} [opts.runtimeRoot] - .runtime 目录；默认 resolveRuntimeRoot 三级优先级解析
  * @param {string} [opts.specDriftAnchor] - drift 场景主仓 specBase 锚点（坑 execute-runs-isolation），
  *   task-reviews facet 的 execute-run-id marker 落点经 resolveRuntimeRoot 锚主仓 .runtime，不读副本。
+ * @param {object} [opts.ctx] - MultiRepoContext 单例（W3 task-09，D-013）。缺省=null 退化单仓。
+ *   透传给 verify-test / task-reviews facet（runVerifyTestCheck + validateTaskReviews）。
  * @returns {Promise<{ envelope: object, exitCode: number }>}
  */
-export async function runDerive(facet, changeName, { cwd, specBase, runtimeRoot, specDriftAnchor } = {}) {
+export async function runDerive(facet, changeName, { cwd, specBase, runtimeRoot, specDriftAnchor, ctx = null } = {}) {
   // ── 非法 facet：用法错 → exit 2（D-004@v1）──
   if (!FACETS.includes(facet)) {
     const envelope = buildEnvelope({
@@ -402,7 +408,7 @@ export async function runDerive(facet, changeName, { cwd, specBase, runtimeRoot,
 
       // ── b. verify-test：真实执行测试命令并取证 ──
       case 'verify-test': {
-        const vt = runVerifyTestCheck({ cwd, specBase: specRoot, changeName });
+        const vt = runVerifyTestCheck({ cwd, specBase: specRoot, changeName, ctx });
         data = {
           status: vt.status,
           exitCode: vt.exitCode,
@@ -464,6 +470,7 @@ export async function runDerive(facet, changeName, { cwd, specBase, runtimeRoot,
           executeRunId,
           changeDir,
           gitDir,
+          ctx,
         });
         data = {
           ok: tr.ok,

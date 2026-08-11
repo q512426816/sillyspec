@@ -18,8 +18,9 @@ import { join, resolve } from 'path';
 import { tmpdir } from 'os';
 import { WorktreeManager } from './worktree.js';
 import { parseFileChangeList, parseFileChangeListDetailed, pathMatches } from './change-list.js';
-import { parseAllowedPaths } from './stages/plan-postcheck.js';
+import { parseAllowedPaths, parseRepo } from './stages/plan-postcheck.js';
 import { git, gitQuiet } from './git-helper.js';
+import { resolveLatestExecuteRunId, readReview } from './task-review.js';
 
 const CHANGES_REL = '.sillyspec/changes';
 
@@ -191,36 +192,145 @@ function getBlobHashMap(cwd, treeish, files) {
  * 两 gate 口径不一致）。union 后两源并集为准；plan 已过 validateDesignFileCoverage 单向校验（design ⊆
  * plan），union 不会放开 design/plan 之外的任意文件（仍拦完全越界文件）。
  *
+ * **跨仓切片（task-05 / D-009 / design §6 A4）**：返回 `Map<repoKey, Set<path>>`，按 task 卡片
+ * `repo:` 字段把 allowed_paths 归属到对应 repo；design §6 清单归属 'main'（清单文件相对主仓根）。
+ * 单仓 change（task 卡无 repo:）→ 所有 allowed_paths 归 'main' → `{main: Set}` 退化零回归
+ * （GOAL-2）。allowed_paths 基准=各 repo 自身根（跨仓 task 卡片 allowed_paths 相对跨仓仓根，design §7.2）。
+ *
+ * 主流程（applyWorktree A5 主仓 apply）只消费 main 仓的 Set（主仓 worktree diff 只含主仓文件，
+ * 跨仓文件不在主仓 worktree 故永不进 diff）；跨仓 task 走 no-op（D-009），其 allowed_paths 仅
+ * 作 Map 切片返回，供上游（assess / 跨仓 review 校验）按 repo 取用。
+ *
  * @param {string} projectRoot - 主仓库根
  * @param {string} changeName - 变更名
- * @returns {Set<string>} 并集清单（无 design 清单且无 task 卡片时为空集）
+ * @returns {Map<string, Set<string>>} repoKey → 并集清单 Set（无 design 清单且无 task 卡片时为空 Map）
  */
 export function resolveApplyAllowSet(projectRoot, changeName) {
-  const allowSet = parseFileChangeList(join(projectRoot, CHANGES_REL, changeName, 'design.md'), { keepSillyspecDocs: true });
+  const repoMap = new Map();
+  const getOrCreate = (key) => {
+    if (!repoMap.has(key)) repoMap.set(key, new Set());
+    return repoMap.get(key);
+  };
+  // design §6 清单归属 main（清单路径相对主仓根；跨仓 task 的 allowed_paths 由 task 卡片 repo 切片）
+  const mainSet = getOrCreate('main');
+  parseFileChangeList(
+    join(projectRoot, CHANGES_REL, changeName, 'design.md'),
+    { keepSillyspecDocs: true }
+  ).forEach(p => mainSet.add(p));
   const tasksDir = join(projectRoot, CHANGES_REL, changeName, 'tasks');
   if (existsSync(tasksDir)) {
     for (const tf of readdirSync(tasksDir).filter(f => /^task-\d+\.md$/.test(f))) {
-      for (const p of parseAllowedPaths(readFileSync(join(tasksDir, tf), 'utf8'))) allowSet.add(p);
+      const content = readFileSync(join(tasksDir, tf), 'utf8');
+      // task 卡 repo: 字段切片（缺省='main'，design §7.2）；跨仓 task 的 allowed_paths 相对跨仓仓根。
+      const repoKey = parseRepo(content) || 'main';
+      const repoSet = getOrCreate(repoKey);
+      for (const p of parseAllowedPaths(content)) repoSet.add(p);
     }
   }
-  return allowSet;
+  return repoMap;
+}
+
+/**
+ * 跨仓 task apply = no-op 校验（task-05 / D-009 / design §6 A3 G1）。
+ *
+ * 跨仓 task 的 commit 已由子代理直接落跨仓仓主干（NG-3），apply 阶段无 patch 可打（跨仓仓无
+ * worktree/meta/分支——A5 patch 路径不可复用）。本函数对每个跨仓 repo 的 task review.head
+ * 校验是否为该跨仓仓真实 commit（约束①+② 保险，R-05：子代理漏 commit / head 伪造 → 这里拦）。
+ *
+ * 不调 wm.cleanup（跨仓仓无主仓 worktree 可清——wm.cleanup 只作用主仓 worktree，跨仓仓主干工作区
+ * 永不进主仓 worktree 生命周期，无需也无法 cleanup）。这是 D-009 no-op 的关键：跨仓 commit 已落主干，
+ * apply 只校验不复用 patch、不 cleanup。
+ *
+ * review.json 物理在主仓 execute-runs（D-003），含 repo + head 字段（design §7.4）。本函数读主仓
+ * execute-runs 取最新 runId 的 reviews，按 review.repo 切片到对应跨仓 entry 校验 head。
+ *
+ * 无 review.json（execute 未走完 / 单 task --done 中途）→ 记 warning 不阻断（apply 可在 review 落盘前
+ * 被调用，如 worktree apply --check-only 预检；真阻断由 Task Review Gate 负责，这里不重复）。
+ *
+ * @param {object} ctx - MultiRepoContext（design §7.1）
+ * @param {string} projectRoot - 主仓根（读 .sillyspec/.runtime/execute-runs）
+ * @param {string} changeName
+ * @returns {{ errors: string[], warnings: string[], validated: Array<{repo:string, task:string, head:string}> }}
+ */
+function validateCrossRepoNoOp(ctx, projectRoot, changeName) {
+  const errors = [];
+  const warnings = [];
+  const validated = [];
+  if (!ctx || typeof ctx.hasCrossRepo !== 'function' || !ctx.hasCrossRepo()) {
+    return { errors, warnings, validated }; // 单仓退化：无跨仓，no-op 无事可做（零回归）
+  }
+  // review.json 物理在主仓 .runtime/execute-runs（D-003）。runtimeRoot = <projectRoot>/.sillyspec/.runtime
+  const runtimeRoot = join(projectRoot, '.sillyspec', '.runtime');
+  const runId = resolveLatestExecuteRunId({ runtimeRoot, changeName });
+  if (!runId) {
+    // 无 execute run → 无 review 可校验。不阻断（Task Review Gate 负责拦截 review 缺失），
+    // 仅 warn 提示跨仓 head 校验被跳过（约束①保险在此场景未触发，但功能不崩）。
+    warnings.push(`跨仓 task no-op 校验跳过：未找到 execute runId（${runtimeRoot}），无法读取跨仓 review.head。跨仓 commit 校验交由 Task Review Gate 负责。`);
+    return { errors, warnings, validated };
+  }
+  const tasksDir = join(runtimeRoot, 'execute-runs', runId, 'tasks');
+  if (!existsSync(tasksDir)) {
+    warnings.push(`跨仓 task no-op 校验跳过：execute run ${runId} 无 tasks/ 目录。`);
+    return { errors, warnings, validated };
+  }
+  // 遍历 ctx.repos，只对跨仓 entry（isMain=false）校验。每 entry 读所有 review.json 取 repo 匹配的 head。
+  for (const [repoKey, entry] of ctx.repos) {
+    if (entry.isMain) continue; // 主仓走 A5，不在此 no-op
+    // 扫 tasks/ 下 review.json，取 repo === repoKey 的 head 校验
+    let taskEntries = [];
+    try { taskEntries = readdirSync(tasksDir).filter(f => /^task-\d+$/.test(f)); } catch { taskEntries = []; }
+    for (const taskId of taskEntries) {
+      const reviewPath = join(tasksDir, taskId, 'review.json');
+      if (!existsSync(reviewPath)) continue;
+      const r = readReview(reviewPath);
+      // readReview 走 validateReviewSchema（task-03 扩展 repo 字段后兼容）；review 不完整则跳过（不在此拦）
+      if (!r.ok || !r.review) continue;
+      const reviewRepo = r.review.repo || 'main'; // schemaVersion=1 无 repo 视 main（design §9 兼容）
+      if (reviewRepo !== repoKey) continue;
+      const head = r.review.head;
+      if (!head) continue; // schema 校验已挡缺 head，防御性跳过
+      // 校验 head 是该跨仓仓真实 commit：git cat-file -e HEAD~0 / rev-parse 校验存在
+      // 用 cat-file -e <head> 校验 commit 存在（rev-parse 对缩写/不存在都非零退出）
+      const exists = gitQuiet(entry.gitDir, ['cat-file', '-e', head]);
+      if (exists === null) {
+        errors.push(
+          `跨仓 task no-op 校验失败：task ${taskId}（repo: ${repoKey}）的 review.head ${head} ` +
+          `不是跨仓仓 ${entry.gitDir} 的真实 commit（git cat-file -e 失败）。` +
+          `跨仓 task 的 commit 必须由子代理直接落跨仓仓主干（D-009），apply 为 no-op 不复用 patch，` +
+          `故 head 真实性是跨仓改动落地的唯一保险（约束①+②，R-05）。请检查子代理是否漏 commit 或 head 锡点漂移。`
+        );
+      } else {
+        validated.push({ repo: repoKey, task: taskId, head });
+      }
+    }
+  }
+  return { errors, warnings, validated };
 }
 
 /**
  * apply worktree 变更到主工作区
  *
+ * **跨仓 task no-op（task-05 / D-009 / design §6 A3/A5）**：当传 ctx 且 ctx.hasCrossRepo() 时，
+ * 跨仓 task 的 commit 已由子代理直接落跨仓仓主干（NG-3 跨仓不经主仓 worktree），apply 阶段对跨仓
+ * task = no-op（无 patch 可打，跨仓仓无 worktree/meta/分支——A5 patch 路径不可复用）。只校验跨仓
+ * task review.head 是跨仓仓真实 commit（约束①+② 保险，R-05）+ 不调 wm.cleanup（跨仓仓无主仓 worktree
+ * 可清，wm.cleanup 只作用于主仓 worktree）。主仓 task 走原 A5 完整 apply 不动（GOAL-2 单仓零回归）。
+ *
  * @param {string} changeName - 变更名
- * @param {{ cwd?: string, checkOnly?: boolean }} opts
+ * @param {{ cwd?: string, checkOnly?: boolean, merge?: boolean, ctx?: object }} opts
+ *   - ctx：可选 MultiRepoContext（design §7.1）。缺省=单仓退化（仅主仓 apply，零行为变化，GOAL-2）。
+ *     提供 ctx 且含跨仓 entry 时，触发跨仓 no-op 校验（校验 review.head 真实 + 不 cleanup 跨仓）。
  * @returns {{
  *   ok: boolean,
  *   changedFiles: string[],
  *   extraFiles: string[],
  *   hashMismatchFiles: string[],
  *   patchPath: string|null,
- *   errors: string[]
+ *   errors: string[],
+ *   crossRepoValidated?: Array<{ repo: string, head: string }>
  * }}
  */
-export function applyWorktree(changeName, { cwd, checkOnly = false, merge = false } = {}) {
+export function applyWorktree(changeName, { cwd, checkOnly = false, merge = false, ctx = null } = {}) {
   const projectRoot = cwd || process.cwd();
   const wm = new WorktreeManager({ cwd: projectRoot });
   const meta = wm.getMeta(changeName);
@@ -234,7 +344,21 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
     patchPath: null,
     errors: [],
     merged: false,
+    crossRepoValidated: [],
   };
+
+  // --- 0. 跨仓 task no-op 校验（task-05 / D-009） ---
+  // 跨仓 task 的 commit 已落跨仓仓主干，apply = no-op（无 patch）。仅校验 review.head 是跨仓仓真实
+  // commit + 不 cleanup（wm.cleanup 只作用主仓 worktree）。校验失败 → 推 errors 阻断 apply（R-05）。
+  // 单仓 ctx 缺省 / 无跨仓 entry → validateCrossRepoNoOp 直接返回空（零回归）。
+  if (ctx) {
+    const cross = validateCrossRepoNoOp(ctx, projectRoot, changeName);
+    for (const e of cross.errors) result.errors.push(e);
+    if (cross.warnings.length > 0) result.warnings = (result.warnings || []).concat(cross.warnings);
+    result.crossRepoValidated = cross.validated;
+    // 跨仓 head 校验失败 = 跨仓改动未真落地，apply 不可继续（即使主仓 patch 能跑，跨仓 task 实际未完成）
+    if (cross.errors.length > 0) return result;
+  }
 
   // --- 1. 校验 worktree 存在 + meta.json 有效 ---
   if (!meta) {
@@ -297,7 +421,11 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
   }
 
   // --- 3. 解析 apply 文件清单（design §6 清单 ∪ plan TaskCard allowed_paths，execute 复盘 c） ---
-  const allowSet = resolveApplyAllowSet(projectRoot, changeName);
+  // resolveApplyAllowSet 返回 Map<repo, Set>（task-05 跨仓切片）；主仓 apply 只消费 main 仓 Set
+  // （主仓 worktree diff 只含主仓文件，跨仓文件在跨仓仓不进主仓 worktree diff）。跨仓 allowed_paths
+  // 仅作 Map 切片返回供上游用，主流程不消费（跨仓 apply=no-op，D-009）。
+  const allowMap = resolveApplyAllowSet(projectRoot, changeName);
+  const allowSet = allowMap.get('main') || new Set();
   const hasAllowList = allowSet.size > 0;
 
   // --- 3.5 主干已提交推进检测：hashMismatch 前移（Grill P0 修复，design §step 顺序修正）---

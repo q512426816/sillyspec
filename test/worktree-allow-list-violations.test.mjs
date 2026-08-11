@@ -91,7 +91,8 @@ console.log('--- ⑥ 边界 ---')
 // ── ⑦ resolveApplyAllowSet：design §6 清单 ∪ plan TaskCard allowed_paths（execute 复盘 c）──
 // apply 原只认 design 清单，测试/产物文件 design §6 常漏列而 task allowed_paths 已含 → apply 误拦
 //（assess 用 task allowed_paths 放行、apply 用 design 清单又拦，口径不一致）。union 后两源并集为准。
-console.log('\n--- ⑦ resolveApplyAllowSet：design 清单 ∪ plan allowed_paths ---')
+// task-05：返回值改为 Map<repo, Set>（跨仓切片），单仓 change 退化为 {main: Set}（零回归）。
+console.log('\n--- ⑦ resolveApplyAllowSet：design 清单 ∪ plan allowed_paths（Map<repo,Set>，单仓退化 main）---')
 {
   const tmpDir = mkdtempSync(join(tmpdir(), 'apply-union-'))
   const cn = 'mychange'
@@ -106,8 +107,11 @@ allowed_paths:
   - dist/types.d.ts
 ---
 `)
-  const allowSet = resolveApplyAllowSet(tmpDir, cn)
-  assertDeep([...allowSet].sort(), ['dist/types.d.ts', 'src/app.js', 'src/util.js', 'test/app.test.mjs'], '并集 = design 清单 ∪ task allowed_paths（含测试/产物）')
+  const allowMap = resolveApplyAllowSet(tmpDir, cn)
+  // 单仓 change（task-01 无 repo:）→ Map 仅含 main 键，allowed_paths ∪ design 全归 main
+  assertDeep([...allowMap.keys()], ['main'], '单仓 change → Map 仅 main 键（task-05 跨仓切片，零回归）')
+  const allowSet = allowMap.get('main')
+  assertDeep([...allowSet].sort(), ['dist/types.d.ts', 'src/app.js', 'src/util.js', 'test/app.test.mjs'], 'main Set 并集 = design 清单 ∪ task allowed_paths（含测试/产物）')
   const viol = classifyAllowListViolations(['src/app.js', 'src/util.js', 'test/app.test.mjs', 'dist/types.d.ts'], allowSet)
   assertDeep(viol, [], 'test/产物文件不再被判「不在清单」（原 apply 只认 design §6 会拦）')
   // 完全越界文件仍拦（union 不放开水面）
@@ -116,9 +120,43 @@ allowed_paths:
   rmSync(tmpDir, { recursive: true, force: true })
 }
 
+// ── ⑧ resolveApplyAllowSet 跨仓切片：task 卡 repo: 字段切到对应 repo 键（task-05 新增）──
+console.log('\n--- ⑧ resolveApplyAllowSet 跨仓切片：task 卡 repo: → Map 按 repo 键分组 ---')
+{
+  const tmpDir = mkdtempSync(join(tmpdir(), 'apply-cross-'))
+  const cn = 'crosschange'
+  const changesDir = join(tmpDir, '.sillyspec', 'changes', cn)
+  mkdirSync(join(changesDir, 'tasks'), { recursive: true })
+  writeFileSync(join(changesDir, 'design.md'), '# Design\n\n## 6. 文件变更清单\n- src/main-only.js\n')
+  // 主仓 task
+  writeFileSync(join(changesDir, 'tasks', 'task-01.md'), `---
+id: task-01
+allowed_paths:
+  - src/main-only.js
+  - test/main.test.mjs
+---
+`)
+  // 跨仓 task（repo: sillyspec）
+  writeFileSync(join(changesDir, 'tasks', 'task-02.md'), `---
+id: task-02
+repo: sillyspec
+allowed_paths:
+  - src/task-review.js
+  - src/worktree-apply.js
+---
+`)
+  const allowMap = resolveApplyAllowSet(tmpDir, cn)
+  assertDeep([...allowMap.keys()].sort(), ['main', 'sillyspec'], '跨仓 change → Map 含 main + sillyspec 两键')
+  const mainSet = allowMap.get('main')
+  const sillyspecSet = allowMap.get('sillyspec')
+  assertDeep([...mainSet].sort(), ['src/main-only.js', 'test/main.test.mjs'], 'main Set = design §6 ∪ 主仓 task allowed_paths')
+  assertDeep([...sillyspecSet].sort(), ['src/task-review.js', 'src/worktree-apply.js'], 'sillyspec Set = 跨仓 task allowed_paths（相对跨仓仓根，design §6 清单不进跨仓）')
+  rmSync(tmpDir, { recursive: true, force: true })
+}
+
 // ── 结果 ──
 console.log(`\n${'='.repeat(50)}`)
-console.log(`✅ 通过: ${7 - failed}  ❌ 失败: ${failed}`)
+console.log(`✅ 通过: ${8 - failed}  ❌ 失败: ${failed}`)
 if (failures.length > 0) { console.log('失败项:'); failures.forEach(f => console.log(`  - ${f}`)) }
 console.log('='.repeat(50))
 if (failed > 0) process.exit(1)

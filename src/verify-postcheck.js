@@ -436,11 +436,62 @@ function gitChangedFiles(cwd) {
  *      → 命中无关模块（如 ppm 变更误测 daemon/frontend）。与 task-review.js 同源。
  *   2. 无 worktree meta / diff 异常 → 主仓 `git diff --name-only HEAD`（brownfield 原行为）
  *
+ * 跨仓支持（task-06 / D-004 / design §6 A6）：ctx 参数可选，缺省走单仓原逻辑（零回归，
+ * GOAL-2）。ctx 非空且含跨仓 entry 时，主仓 diff 走原逻辑，再 per-repo 在各跨仓仓
+ * gitDir 跑 `git diff --name-only HEAD` 合并入结果（design §6 行 136 「per-repo 取 diff
+ * 合并」字面契约）。跨仓仓 diff 路径相对各自仓根。
+ *
+ * 注：runVerifyTestCheck 的 module 子集策略只消费主仓 diff（跨仓仓不参与 module 子集，
+ * 跨仓仓无 module 映射，design §6 + §5.4），故本函数的跨仓合并 diff 在 module 子集
+ * 路径无副作用——本函数仅供「per-repo diff 合并」语义契约 + 未来 consumer 复用。
+ *
  * @param {string} cwd - 项目根目录（主仓）
  * @param {string|null} changeName
+ * @param {object|null} [ctx] - MultiRepoContext 实例（可选，缺省/null 走单仓原逻辑）
  * @returns {string[]|null} 变更文件列表；git 不可用返回 null（调用方按 hitCount=-1 处理）
  */
-export function resolveVerifyChangedFiles(cwd, changeName) {
+export function resolveVerifyChangedFiles(cwd, changeName, ctx = null) {
+  // 主仓 diff（原逻辑不动，单仓零回归）
+  const mainFiles = resolveMainChangedFiles(cwd, changeName)
+
+  // 无 ctx / ctx 无跨仓 entry → 主仓 diff 即结果（零回归）
+  if (!ctx || typeof ctx.repos !== 'object' || ctx.repos === null) return mainFiles
+  const crossEntries = []
+  for (const entry of ctx.repos.values()) {
+    if (entry && entry.isMain === false) crossEntries.push(entry)
+  }
+  if (crossEntries.length === 0) return mainFiles
+
+  // 主仓 git 不可用（null）→ 不强制兜底，保留 null 语义让调用方按 hitCount=-1 处理。
+  // 跨仓仓 diff 各自取，任一可用即合并；全不可用且主仓 null → 返 null。
+  // 跨仓仓 diff 锚点：HEAD~1..HEAD（跨仓 task 子代理 commit 到主干，verify 时最近一笔 commit
+  // 即本次 task 改动；多 task 同仓时仅反映最近一笔，精确范围由 task 卡 base/head 锡点锚定，
+  // 那是 task-04 的 scope，本函数不消费锡点——跨仓合并 diff 在 verify-postcheck 内仅供
+  // 「per-repo diff 合并」语义契约 + 未来 consumer，module 子集只用主仓 diff）。
+  const merged = mainFiles ? mainFiles.slice() : []
+  let anyAvailable = mainFiles !== null
+  for (const entry of crossEntries) {
+    // 跨仓仓 gitDir = 跨仓仓根（MultiRepoContext._buildCrossRepoEntry 已 fail-closed 保证可达）
+    const files = runGitDiffNameOnly(entry.gitDir, 'HEAD~1..HEAD')
+    if (files !== null) {
+      anyAvailable = true
+      for (const f of files) {
+        if (!merged.includes(f)) merged.push(f)
+      }
+    }
+  }
+  return anyAvailable ? merged : null
+}
+
+/**
+ * 主仓变更文件解析（原 resolveVerifyChangedFiles 逻辑，单仓零回归基线）。
+ * 抽出供 resolveVerifyChangedFiles 复用，跨仓合并时主仓部分走此函数（不动）。
+ *
+ * @param {string} cwd - 主仓根
+ * @param {string|null} changeName
+ * @returns {string[]|null}
+ */
+function resolveMainChangedFiles(cwd, changeName) {
   if (changeName) {
     const metaPath = join(cwd, '.sillyspec', '.runtime', 'worktrees', changeName, 'meta.json')
     if (existsSync(metaPath)) {
@@ -464,10 +515,18 @@ export function resolveVerifyChangedFiles(cwd, changeName) {
 /**
  * 执行 verify 实测：读取 local.yaml 配置，按 test_strategy 决定全量或模块子集。
  *
+ * 跨仓支持（task-06 / D-004 / design §5.4 + §6 A6 + §9）：opts.ctx 可选，缺省走单仓
+ * 原逻辑（零回归，GOAL-2）。ctx 非空且含跨仓 entry 时，主仓跑原 module 子集 / full npm
+ * test（行为不变），再 per-repo cwd 在各跨仓仓根跑 full npm test（跨仓仓不参与 module
+ * 子集策略——跨仓仓无主仓的 module 映射，design §6 + §5.4）；跨仓仓无 package.json 则
+ * 跳过 + warn 不阻断 verify（design §9 兼容策略「跨仓仓无 package.json 跳过 warn」）。
+ * 任一仓 fail → 整体 fail（fail-fast 语义，跨仓仓的真实失败不能被主仓 PASS 掩盖）。
+ *
  * @param {object} opts
- * @param {string} opts.cwd - 项目根目录（测试执行目录）
+ * @param {string} opts.cwd - 项目根目录（主仓，测试执行目录）
  * @param {string} opts.specBase - .sillyspec（或平台 specRoot）目录
  * @param {string|null} [opts.changeName]
+ * @param {object|null} [opts.ctx] - MultiRepoContext 实例（可选，缺省/null 走单仓原逻辑）
  * @returns {{
  *   status: 'passed'|'failed'|'skipped',
  *   command: string|null,
@@ -478,7 +537,7 @@ export function resolveVerifyChangedFiles(cwd, changeName) {
  *   resultPath: string|null,
  * }}
  */
-export function runVerifyTestCheck({ cwd, specBase, changeName = null }) {
+export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = null }) {
   const localYamlPath = join(specBase, 'local.yaml')
   const yamlText = existsSync(localYamlPath) ? readFileSync(localYamlPath, 'utf8') : null
 
@@ -487,6 +546,8 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null }) {
 
   // —— 模块子集路径（test_strategy: module）：算 modulesPresent / hitCount / hits ——
   // resolveVerifyChangedFiles 返回 null 表示 git 不可用 → hitCount=-1（与 0 命中区分）。
+  // 注：module 子集策略只用主仓 diff（跨仓仓不参与 module 子集，design §6 + §5.4），
+  //     故此处不传 ctx（避免跨仓路径误命中主仓 module 映射）。
   let modulesPresent = false
   let hitCount = 0
   let hits = []
@@ -505,13 +566,13 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null }) {
   }
 
   const action = decideVerifyTestAction({ strategy, modulesPresent, hitCount })
+  let mainResult
   if (action === 'module-subset') {
-    return runModuleSubset({ cwd, specBase, changeName, hits, knownFailures })
-  }
-  if (action === 'module-zero-hit-skip') {
+    mainResult = runModuleSubset({ cwd, specBase, changeName, hits, knownFailures })
+  } else if (action === 'module-zero-hit-skip') {
     // module 模式 0 命中：不静默回退注定超时/含预存失败的全量（坑 verify-worktree-... 修复方向 3）。
     // 据 verify-result.md 自报告判定；想跑全量请显式设 test_strategy: full。
-    return {
+    mainResult = {
       status: 'skipped',
       command: null,
       exitCode: null,
@@ -522,12 +583,182 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null }) {
       mode: 'module-zero-hit',
       fallbackReason: null,
     }
+  } else {
+    // —— 全量路径（full / module 无块 / module git 不可用）——
+    // fallbackReason 非 null 表示本次全量是"非显式"的（缺省/配置不全/未命中），需明示。
+    const fallbackReason = computeFullFallbackReason({ strategy, modulesPresent, hitCount })
+    mainResult = runFullCommand({ yamlText, localYamlPath, cwd, specBase, changeName, fallbackReason, knownFailures })
   }
 
-  // —— 全量路径（full / module 无块 / module git 不可用）——
-  // fallbackReason 非 null 表示本次全量是"非显式"的（缺省/配置不全/未命中），需明示。
-  const fallbackReason = computeFullFallbackReason({ strategy, modulesPresent, hitCount })
-  return runFullCommand({ yamlText, localYamlPath, cwd, specBase, changeName, fallbackReason, knownFailures })
+  // —— 跨仓仓 per-repo cwd 跑 full npm test（task-06 / D-004 / design §5.4 + §6 A6）——
+  // ctx 为空或无跨仓 entry → 直接返主仓结果（单仓零回归，GOAL-2）。
+  // 跨仓仓不参与 module 子集策略，只跑 full npm test（design §6 + §5.4）；
+  // 跨仓仓无 package.json → 跳过 + warn 不阻断（design §9 兼容策略）。
+  // 任一跨仓仓 fail → 整体 fail（合并语义）。
+  return mergeCrossRepoResults(mainResult, ctx)
+}
+
+/**
+ * per-repo cwd 跑跨仓仓 full npm test，合并进主仓结果。
+ *
+ * design §6 A6 + §5.4 + §9 兼容策略：
+ *   - 跨仓仓有 package.json → 在该仓 projectRoot cwd 跑 full npm test（跨仓仓 own local.yaml
+ *     若有 commands.test 用之，否则 fallback `npm test`）
+ *   - 跨仓仓无 package.json → 跳过 + console.warn（不阻断 verify）
+ *   - 跨仓仓只跑 full npm test，不参与 module 子集策略（module 映射主仓强相关）
+ *   - 任一仓 fail → 整体 fail；主仓 skipped + 跨仓仓 passed → 整体 passed（跨仓仓有测试即有效）
+ *
+ * 单仓 ctx（无跨仓 entry）→ 直接返主仓结果，零行为变化（GOAL-2）。
+ *
+ * @param {object} mainResult - 主仓 runVerifyTestCheck 结果
+ * @param {object|null} ctx - MultiRepoContext 实例
+ * @returns {object} 合并后结果（shape 同 mainResult）
+ */
+function mergeCrossRepoResults(mainResult, ctx) {
+  if (!ctx || typeof ctx.repos !== 'object' || ctx.repos === null) return mainResult
+  const crossEntries = []
+  for (const entry of ctx.repos.values()) {
+    if (entry && entry.isMain === false) crossEntries.push(entry)
+  }
+  if (crossEntries.length === 0) return mainResult
+
+  const crossResults = []
+  for (const entry of crossEntries) {
+    const crossResult = runCrossRepoFullTest(entry)
+    crossResults.push({ repoKey: entry.repoKey, projectRoot: entry.projectRoot, result: crossResult })
+  }
+
+  // 合并：任一 fail → fail；否则取主仓 status（passed/skipped 与跨仓 passed 合并）
+  const failedRepos = crossResults.filter(r => r.result.status === 'failed')
+  if (failedRepos.length > 0) {
+    return mergeResultStatus({
+      status: 'failed',
+      mainResult,
+      crossResults,
+      reason: `跨仓仓测试失败：${failedRepos.map(r => r.repoKey).join(', ')}`,
+    })
+  }
+  // 跨仓仓全 passed 或 skipped（无 package.json）→ 主仓 status 不变（合并跨仓信息到 outputTail）
+  return mergeResultInfo(mainResult, crossResults)
+}
+
+/**
+ * 在单个跨仓仓根跑 full npm test（跨仓仓不参与 module 子集，只跑 full）。
+ * 跨仓仓 own local.yaml 若存在且配 commands.test → 用之；否则 fallback `npm test`。
+ * 跨仓仓无 package.json → 跳过 + warn。
+ *
+ * @param {object} entry - RepoEntry（isMain=false）
+ * @returns {object} 结果 shape 对齐 runFullCommand 返回
+ */
+function runCrossRepoFullTest(entry) {
+  const projectRoot = entry.projectRoot
+  // 跨仓仓无 package.json → 跳过 + warn（design §9 兼容策略，不阻断 verify）
+  if (!existsSync(join(projectRoot, 'package.json'))) {
+    console.warn(`⚠️  跨仓 repo "${entry.repoKey}"（${projectRoot}）无 package.json，跳过该仓 npm test（design §9 兼容策略，不阻断 verify）。`)
+    return {
+      status: 'skipped',
+      command: null,
+      exitCode: null,
+      durationMs: null,
+      outputTail: null,
+      reason: `跨仓 repo "${entry.repoKey}" 无 package.json，跳过 npm test`,
+      resultPath: null,
+      mode: 'cross-repo-skip',
+      repoKey: entry.repoKey,
+    }
+  }
+
+  // 跨仓仓 own local.yaml（在跨仓仓 .sillyspec/ 下，若存在）配 commands.test → 用之；否则 `npm test`
+  // 注：跨仓仓按 NG-1 不建 .sillyspec/，但容错读取（用户可手动放 local.yaml 配跨仓仓特定测试命令）
+  const crossLocalYaml = join(projectRoot, '.sillyspec', 'local.yaml')
+  let command = 'npm test'
+  let crossKnownFailures = []
+  if (existsSync(crossLocalYaml)) {
+    try {
+      const crossYaml = readFileSync(crossLocalYaml, 'utf8')
+      const extracted = extractTestCommand(crossYaml)
+      if (extracted) command = extracted
+      crossKnownFailures = extractKnownFailures(crossYaml)
+    } catch { /* 读取失败 fallback npm test */ }
+  }
+
+  const startedAt = Date.now()
+  let exitCode = 0
+  let output = ''
+  let reason = null
+  try {
+    output = execSync(command, {
+      cwd: projectRoot,
+      encoding: 'utf8',
+      timeout: TEST_TIMEOUT_MS,
+      maxBuffer: 32 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+  } catch (e) {
+    exitCode = typeof e.status === 'number' ? e.status : 1
+    output = [e.stdout, e.stderr].filter(Boolean).join('\n') || e.message
+    reason = e.signal === 'SIGTERM' && Date.now() - startedAt >= TEST_TIMEOUT_MS
+      ? `跨仓 repo "${entry.repoKey}" 测试超时（>${TEST_TIMEOUT_MS / 1000}s）`
+      : `跨仓 repo "${entry.repoKey}" 测试退出码 ${exitCode}`
+  }
+  const durationMs = Date.now() - startedAt
+  const outputTail = output.length > OUTPUT_TAIL_CHARS ? '…' + output.slice(-OUTPUT_TAIL_CHARS) : output
+  const judged = judgeWithKnownFailures(exitCode, output, reason, crossKnownFailures)
+
+  return {
+    status: judged.status,
+    command,
+    exitCode,
+    durationMs,
+    outputTail,
+    reason: judged.reason,
+    resultPath: null,
+    mode: 'cross-repo-full',
+    repoKey: entry.repoKey,
+    exemptedCount: judged.exemptedCount,
+  }
+}
+
+/**
+ * 合并失败状态：整体 failed，保留主仓 + 各跨仓仓明细到 outputTail / reason。
+ */
+function mergeResultStatus({ status, mainResult, crossResults, reason }) {
+  const parts = []
+  parts.push(`── main (${mainResult.status}) ──\n${mainResult.outputTail || mainResult.reason || ''}`)
+  for (const cr of crossResults) {
+    parts.push(`── cross-repo ${cr.repoKey} (${cr.result.status}) ──\n${cr.result.outputTail || cr.result.reason || ''}`)
+  }
+  const mergedTail = parts.join('\n')
+  return {
+    status,
+    command: mainResult.command ? `${mainResult.command} + cross-repo[${crossResults.map(r => r.repoKey).join(',')}]` : `cross-repo[${crossResults.map(r => r.repoKey).join(',')}]`,
+    exitCode: 1,
+    durationMs: (mainResult.durationMs || 0) + crossResults.reduce((n, r) => n + (r.result.durationMs || 0), 0),
+    outputTail: mergedTail.length > OUTPUT_TAIL_CHARS ? '…' + mergedTail.slice(-OUTPUT_TAIL_CHARS) : mergedTail,
+    reason,
+    resultPath: mainResult.resultPath,
+    mode: 'cross-repo-merged',
+    fallbackReason: mainResult.fallbackReason || null,
+  }
+}
+
+/**
+ * 合并信息（跨仓仓全 passed/skipped）：主仓 status 保留，跨仓仓 PASSED 信息附入 outputTail。
+ */
+function mergeResultInfo(mainResult, crossResults) {
+  const crossPassed = crossResults.filter(r => r.result.status === 'passed')
+  const crossSkipped = crossResults.filter(r => r.result.status === 'skipped')
+  if (crossPassed.length === 0 && crossSkipped.length === 0) return mainResult
+  const crossSummary = []
+  for (const cr of crossPassed) crossSummary.push(`cross-repo ${cr.repoKey}: PASS`)
+  for (const cr of crossSkipped) crossSummary.push(`cross-repo ${cr.repoKey}: SKIP(${cr.result.reason || 'no package.json'})`)
+  const crossLine = `\n── 跨仓仓 npm test ──\n${crossSummary.join('\n')}`
+  const mergedTail = (mainResult.outputTail || '') + crossLine
+  return {
+    ...mainResult,
+    outputTail: mergedTail.length > OUTPUT_TAIL_CHARS ? '…' + mergedTail.slice(-OUTPUT_TAIL_CHARS) : mergedTail,
+    mode: mainResult.mode ? `${mainResult.mode}+cross-repo` : 'cross-repo-merged',
+  }
 }
 
 /**

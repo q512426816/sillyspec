@@ -187,7 +187,7 @@ function rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx,
  *
  * @returns {{stageCompleted:false,currentIdx,nextPendingIdx:number}|null}
  */
-export async function runStageCompletionGates({ stageName, cwd, changeName, platformOpts, specBase, progress, pm, stageData, steps, currentIdx }) {
+export async function runStageCompletionGates({ stageName, cwd, changeName, platformOpts, specBase, progress, pm, stageData, steps, currentIdx, ctx = null }) {
   const projectName = progress.project || basename(cwd)
   const contractResult = runValidators(stageName, cwd, changeName, { projectName, specRoot: platformOpts?.specRoot })
   if (contractResult.errors.length > 0) {
@@ -220,7 +220,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
     const { runVerifyTestCheck, printVerifyTestCheck } = await import('../verify-postcheck.js')
     // 测试实测是同步 execSync，长套件可跑 2~10min 且中途无输出——先预告避免 agent 误判卡死
     console.log(`\n⏳ Verify 测试对账：CLI 亲自执行 local.yaml 的 commands.test（同步，耗时可能较长，请等待…）`)
-    const testCheck = runVerifyTestCheck({ cwd, specBase, changeName })
+    const testCheck = runVerifyTestCheck({ cwd, specBase, changeName, ctx })
     printVerifyTestCheck(testCheck)
     if (testCheck.status === 'failed') {
       console.error('\n❌ verify 阶段被阻断：verify-result.md 自报告通过，但 CLI 实测测试失败。')
@@ -354,18 +354,30 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
           }
         }
 
-        // git 真实性校验目录：worktree 存在则用 worktree（base/head commit 在其中），否则主仓库
+        // git 真实性校验目录：worktree 存在则用 worktree（base/head commit 在其中），否则主仓库。
+        // 跨仓支持（task-07 / design §6 gates 行 + D-013）：
+        //   - 有 ctx（execute 启动入口 task-09 构造的 MultiRepoContext 实例）→ 用
+        //     ctx.resolve('main').gitDir 作为主仓 task 的校验 cwd。ctx 的 main entry 已在
+        //     _buildMainEntry 内统一编码 worktreePath/cwd + in-place-fallback 兜底（与 task-review.js:724
+        //     generateTaskReviewDrafts 的 in-place 逻辑同源），避免两处漂移。Task Review Gate 内部循环
+        //     再按 review.repo ?? 'main' 从 ctx.resolve(repo).gitDir 切跨仓 task 的 gitDir（task-04 实现）。
+        //   - 无 ctx（ctx=null 缺省，单仓 / 旧调用链）→ 走原逻辑（meta.worktreePath 或 cwd），零回归。
         let reviewGitDir = cwd
-        try {
-          const { WorktreeManager } = await import('../worktree.js')
-          const wm = new WorktreeManager({ cwd })
-          const meta = wm.getMeta(changeName)
-          if (meta?.worktreePath && meta.mode !== 'in-place-fallback' && existsSync(meta.worktreePath)) {
-            reviewGitDir = meta.worktreePath
-          }
-        } catch {}
+        if (ctx) {
+          const mainEntry = ctx.resolve('main')
+          if (mainEntry?.gitDir) reviewGitDir = mainEntry.gitDir
+        } else {
+          try {
+            const { WorktreeManager } = await import('../worktree.js')
+            const wm = new WorktreeManager({ cwd })
+            const meta = wm.getMeta(changeName)
+            if (meta?.worktreePath && meta.mode !== 'in-place-fallback' && existsSync(meta.worktreePath)) {
+              reviewGitDir = meta.worktreePath
+            }
+          } catch {}
+        }
 
-        const reviewResult = validateTaskReviews({ planContent, runtimeRoot, executeRunId, changeDir: planFile, gitDir: reviewGitDir })
+        const reviewResult = validateTaskReviews({ planContent, runtimeRoot, executeRunId, changeDir: planFile, gitDir: reviewGitDir, ctx })
         printReviewResult(reviewResult, { runtimeRoot, executeRunId })
 
         if (!reviewResult.ok) {
@@ -557,7 +569,7 @@ function readDesignOwnFiles(specBase, changeName) {
  *          null = 全部通过，调用方继续自管收尾（如下一步提示）；
  *          非 null = gate/handler 失败已 rollback，调用方直接 return。
  */
-export async function completeStageGates({ stageName, cwd, changeName, platformOpts, specBase, progress, pm, stageData, steps, currentIdx, outputText }) {
+export async function completeStageGates({ stageName, cwd, changeName, platformOpts, specBase, progress, pm, stageData, steps, currentIdx, outputText, ctx = null }) {
   // 整体 try/catch（task-04 / review-2026-08-09 #2）：收尾段（execute 预检 + scan handler + validate* +
   // auxiliary 重置 + runStageCompletionGates）任一段抛非结构化异常 → rollbackCompletionAndReturn
   // （回滚 in-progress + 落盘 + 返回未完成对象），不冒顶 exit 1。正常的 _scanResult/_gateEarlyReturn
@@ -630,7 +642,7 @@ export async function completeStageGates({ stageName, cwd, changeName, platformO
 
   // 阶段完成校验 gate 级联（runValidators → verify-test → Plan→Execute → Stage Review → Task Review）
   if (settledCount === total && total > 0) {
-    const _gateEarlyReturn = await runStageCompletionGates({ stageName, cwd, changeName, platformOpts, specBase, progress, pm, stageData, steps, currentIdx })
+    const _gateEarlyReturn = await runStageCompletionGates({ stageName, cwd, changeName, platformOpts, specBase, progress, pm, stageData, steps, currentIdx, ctx })
     if (_gateEarlyReturn) return _gateEarlyReturn
   } else if (settledCount < total) {
     console.log(`\n⚠️ 阶段校验跳过：${total} 步中仅 ${settledCount} 步标记为已结案（completed‖skipped），可能存在状态不同步。如确认阶段已完成，请运行 --status 确认。`)

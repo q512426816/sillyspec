@@ -9,12 +9,13 @@
  *
  * 这些都是 noAI 步骤，不需要 LLM 参与。
  */
-import { existsSync, readFileSync as _readFileSync, readdirSync } from 'fs'
+import { existsSync, readFileSync as _readFileSync, readdirSync, mkdtempSync, writeFileSync, rmSync } from 'fs'
 // 归一化行尾为 LF：Windows 下 python/编辑器文本模式写 .md 会产生 CRLF，致本模块多处
 // frontmatter/字段正则（`^---\n`、`allowed_paths:\s*\n…`、`^goal:` 等）失配，报「缺 frontmatter
 // /缺字段」假错误（见缺陷 windows-python-crlf-taskcard）。读取时统一转 LF，一处覆盖全部正则。
 const readFileSync = (filePath, encoding) => _readFileSync(filePath, encoding).replace(/\r\n/g, '\n')
 import { join as pJoin } from 'path'
+import { tmpdir } from 'os'
 import jsYaml from 'js-yaml'
 import { parseFileChangeList, pathMatches } from '../change-list.js'
 import { getRule } from '../stage-contract-spec.js'
@@ -78,6 +79,111 @@ export function parseAllowedPaths(content) {
     return blockMatch[1].match(/-\s+(.+)/g)?.map(s => s.replace(/^-\s+/, '').trim().replace(/['"]/g, '')) || []
   }
   return []
+}
+
+/**
+ * 从 task-NN.md frontmatter 解析标量字段（repo / base_commit / head_commit）。
+ * 复用 parseTaskContracts 的 frontmatter 提取 + js-yaml load 模式（标量可选字段，正则对引号/空值脆弱）。
+ *
+ * design §7.2 跨仓 task 卡 frontmatter 协议：
+ *   repo: sillyspec          # 可选，缺省='main'（调用方视 null 为 main）
+ *   base_commit: <sha>       # 可选，CLI 锡点写入（派发前落盘 base）
+ *   head_commit: <sha>       # 可选，CLI 锡点写入（回收 review 前落盘 head）
+ *
+ * 缺省 / 空值 / 无 frontmatter → null（向后兼容旧 task 卡）。
+ * @param {string} content - task 文件内容
+ * @param {string} field - frontmatter 字段名
+ * @returns {string|null}
+ */
+function parseFrontmatterScalar(content, field) {
+  const fmMatch = content.match(/^---\n([\s\S]*?)\n---/)
+  if (!fmMatch) return null
+  let fm
+  try {
+    fm = jsYaml.load(fmMatch[1]) || {}
+  } catch {
+    return null
+  }
+  const v = fm[field]
+  if (v == null) return null
+  const s = String(v).trim()
+  return s === '' ? null : s
+}
+
+/**
+ * 解析 task-NN.md frontmatter 的 repo 字段（跨仓 task 声明）。
+ * 缺省=null（=main，调用方按主仓处理）。design §7.2 / D-001。
+ * @param {string} content
+ * @returns {string|null}
+ */
+export function parseRepo(content) {
+  return parseFrontmatterScalar(content, 'repo')
+}
+
+/**
+ * 解析 task-NN.md frontmatter 的 base_commit 字段（CLI 派发跨仓 task 前落盘的 base 锡点）。
+ * 缺省=null（未锡点 / 单仓 task）。design §7.2 / D-010。
+ * @param {string} content
+ * @returns {string|null}
+ */
+export function parseBaseCommit(content) {
+  return parseFrontmatterScalar(content, 'base_commit')
+}
+
+/**
+ * 解析 task-NN.md frontmatter 的 head_commit 字段（CLI 回收 review 前落盘的 head 锡点）。
+ * 缺省=null（未锡点 / 单仓 task）。design §7.2 / D-010。
+ * @param {string} content
+ * @returns {string|null}
+ */
+export function parseHeadCommit(content) {
+  return parseFrontmatterScalar(content, 'head_commit')
+}
+
+/**
+ * 从 local.yaml 文本解析 repos: 段（跨仓 workspace 注册表）。
+ * 与 parseLocalYamlModules 同风格（轻量行扫描，不引 yaml 依赖），结构 Map<repoKey, absolutePath>。
+ *
+ * design §7.3 local.yaml repos schema：
+ *   repos:
+ *     sillyspec: C:/Users/qinyi/IdeaProjects/sillyspec
+ *     # main 不用注册（隐式 = cwd / specRoot 父目录）
+ *
+ * 无 repos 段 / 空段 / 入参空 → 空 Map（单仓 change 不读，向后兼容）。
+ *
+ * **职责边界**：本函数只 parse local.yaml 文本，不读 local.yaml 文件（文件读取入口归
+ * execute 启动 / task-09）。本函数不校验 declaredRepos ⊆ registry（D-007 fail-closed
+ * 校验在 MultiRepoContext 构造时做）。
+ * @param {string} yamlText
+ * @returns {Map<string, string>} repoKey → absolutePath
+ */
+export function parseRepoRegistry(yamlText) {
+  const reg = new Map()
+  if (!yamlText) return reg
+  const lines = yamlText.split('\n')
+  let startIdx = -1
+  for (let i = 0; i < lines.length; i++) {
+    if (/^repos:\s*(?:#.*)?$/.test(lines[i])) { startIdx = i; break }
+  }
+  if (startIdx === -1) return reg
+  for (let i = startIdx + 1; i < lines.length; i++) {
+    const line = lines[i]
+    // 遇到新的顶层 key（行首非空格且非注释）→ repos 段结束
+    if (line.length > 0 && !line.startsWith(' ') && !line.startsWith('\t') && !line.startsWith('#') && line.trim() !== '') break
+    // 条目格式：  <key>: <value>（key 限 [A-Za-z0-9_.\-]，与 parseLocalYamlModules 对齐）
+    const entry = line.match(/^\s+([A-Za-z0-9_.\-]+):\s*(.*)$/)
+    if (!entry) continue
+    const value = (entry[2] || '').trim()
+    if (value === '' || value.startsWith('#')) continue
+    // 去可选行内注释（`value # comment`）—— 注意路径不含 ` #`，注释前必带空格
+    const cleaned = value.replace(/\s+#.*$/, '').trim()
+    if (cleaned === '') continue
+    // 去首尾可选引号（YAML 字符串引用），保留路径内反斜杠原样
+    const path = cleaned.replace(/^['"]|['"]$/g, '')
+    if (path === '') continue
+    reg.set(entry[1], path)
+  }
+  return reg
 }
 
 /**
@@ -253,6 +359,11 @@ export function validateBlueprintConsistency(changeDir) {
   // task 卡片基础字段文案从 manifest 同源(plan.task-card-structure);${id} 由下方 `${taskId} (${file})` 替换。
   const bsRule = getRule('plan.task-card-structure')
   const taskInfo = new Map()
+  // pathOwners 按 (repo, path) 二元组聚合（design §5.3 约束③ / D-008）：键 = `${repo}|${path}`，
+  // repo 缺省='main'（parseRepo 返 null → main）。跨仓 task 与主仓 task 同名物理路径分属不同 repo
+  // → 二元组键不同 → 不误判同 Wave 冲突（如主仓 src/task-review.js vs sillyspec src/task-review.js）。
+  // ⚠️ 键分隔符 `|` 假设 repo 名与 path 均不含 `|`（repo 名约束 [A-Za-z0-9_.\-]、path 含 / \，极低概率含 |）。
+  // value 结构 { repo, path, owners }：冲突文案对外仍显示纯 path（用户体验），内部按二元组判冲突。
   const pathOwners = new Map()
 
   for (const file of taskFiles) {
@@ -268,6 +379,8 @@ export function validateBlueprintConsistency(changeDir) {
     const allowedPaths = parseAllowedPaths(content)
     const hasAcceptance = hasAcceptanceCriteria(content)
     const hasTdd = hasTddOrVerify(content)
+    // repo 缺省='main'（parseRepo 返 null → 单仓 task，与既有行为零回归）
+    const repo = parseRepo(content) || 'main'
 
     taskInfo.set(taskId, { dependsOn, allowedPaths, hasAcceptance, hasTdd, file })
 
@@ -282,17 +395,19 @@ export function validateBlueprintConsistency(changeDir) {
     }
 
     for (const p of allowedPaths) {
-      if (!pathOwners.has(p)) pathOwners.set(p, [])
-      pathOwners.get(p).push(taskId)
+      const key = `${repo}|${p}`
+      if (!pathOwners.has(key)) pathOwners.set(key, { repo, path: p, owners: [] })
+      pathOwners.get(key).owners.push(taskId)
     }
   }
 
-  // 路径冲突（Wave 感知）：同 Wave 内 >1 task 共享 allowed_path → execute 强制并行（execute.js:603）
+  // 路径冲突（Wave 感知）：同 repo 同 Wave 内 >1 task 共享 allowed_path → execute 强制并行（execute.js:603）
   // 子代理会互相覆盖该文件 → error。跨 Wave 同文件 → 串行执行安全 → warning。
+  // 按 (repo, path) 二元组判冲突（约束③）：跨仓 task 与主仓 task 同名路径不误判（不同 repo → 不同键）。
   // Wave 口径 = plan.md 显式 `## Wave N`（parseTaskWavesFromPlan，与 execute 同源，非 topoSort 建议值）；
-  // plan.md 无显式 Wave → execute 全并行（隐式单 Wave，execute.js:402-408）→ 同文件即冲突。
+  // plan.md 无显式 Wave → execute 全并行（隐式单 Wave，execute.js:402-408）→ 同 repo 同文件即冲突。
   const waveOfTask = parseTaskWavesFromPlan(pJoin(changeDir, 'plan.md'))
-  for (const [p, owners] of pathOwners) {
+  for (const [, { repo, path: p, owners }] of pathOwners) {
     if (owners.length < 2) continue
     if (waveOfTask === null) {
       errors.push(
@@ -516,6 +631,120 @@ export function validateTaskCommands(changeDir, projectRoot, modules = null) {
 // design 清单解析与 allowed_paths 对账共用同一套匹配语义，避免两处逻辑漂移。
 
 /**
+ * design §6 按仓分段段头识别（D-014）：`## <repo> 仓变更`（如 `## sillyspec 仓变更`）。
+ * 段头为 h2，repo 名取段头首 token（去空白/编号前缀）。容忍可选编号前缀与尾随空白/冒号。
+ * 不命中（非仓变更段头）→ null。
+ */
+const REPO_SECTION_HEADER_RE = /^#{2,3}\s+(?:\d+[.)]\s*)?([A-Za-z0-9_.\-]+)\s*仓变更\s*[:：]?\s*$/
+
+/**
+ * design §6 文件清单章节标题（与 change-list.js FILE_LIST_SECTION_RE 同源，避免 import 私有常量）。
+ * 容忍可选编号前缀（`## 6. 文件变更清单`），与 change-list 解析口径一致。
+ */
+const FILE_LIST_SECTION_RE = /^#{2,3}\s*(?:\d+[.)]\s*)?(文件变更清单|变更文件清单|文件清单|File Changes|Files to Change)/im
+
+/**
+ * 按 repo 解析 design §6 文件清单（约束③ / D-014）。
+ *
+ * 支持 design §6 按仓分段：`## <repo> 仓变更` 段头下的路径归该 repo；无段头时整章节归 'main'
+ * （向后兼容单仓 design，与原 parseFileChangeList 行为等价）。段内路径解析复用 parseFileChangeList
+ * （表格列定位 / exclude 子段 / 占位符过滤 / CRLF 容错全部继承，零漂移）——方法是：把每段内容包成
+ * 临时 design 文件（前置标准 `## 文件变更清单` 标题），写 OS tmp 调 parseFileChangeList，立即清理。
+ *
+ * 为什么不复用单次 parseFileChangeList：change-list.js 的通用 parser 把段头 `## <repo> 仓变更`
+ * 当成「下一个 ## 章节」截断主章节（line 173 `^##\s`），跨仓段路径会丢——这正是 task-03 要修的。
+ *
+ * 返回值结构（与 pathOwners 二元组对齐）：
+ *   Map<repo, Set<path>> —— 每个 repo 的 design 清单路径集
+ *   外加 _hasSegmentHeader 标记（调用方据此决定是否走分段对账路径）
+ *
+ * @param {string} designPath - design.md 绝对路径
+ * @returns {{ byRepo: Map<string, Set<string>>, hasSegmentHeader: boolean, allFiles: string[] }}
+ */
+function parseDesignCoverageByRepo(designPath) {
+  const byRepo = new Map()
+  const allFiles = []
+  if (!designPath || !existsSync(designPath)) {
+    return { byRepo, hasSegmentHeader: false, allFiles }
+  }
+  const content = readFileSync(designPath, 'utf8')
+
+  const sectionMatch = content.match(FILE_LIST_SECTION_RE)
+  if (!sectionMatch) {
+    return { byRepo, hasSegmentHeader: false, allFiles }
+  }
+
+  // 主章节起点（match index）→ 扫描到下一个非段头的 `## ` 标题或文件末尾。
+  // 段头 `## <repo> 仓变更` 是 h2 但属本章节的子分段，不应触发章节结束。
+  const lines = content.slice(sectionMatch.index).split('\n')
+  // 先扫一遍：本章节内是否含至少一个段头（决定 hasSegmentHeader / 走分段路径 vs 退化路径）
+  let hasSegmentHeader = false
+  const sectionLines = []
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    if (i > 0 && /^##\s/.test(line) && !REPO_SECTION_HEADER_RE.test(line)) {
+      // 遇到非段头的 h2 标题（如 `## 7. 接口定义`）→ 主章节结束
+      break
+    }
+    if (REPO_SECTION_HEADER_RE.test(line)) hasSegmentHeader = true
+    sectionLines.push(line)
+  }
+
+  if (!hasSegmentHeader) {
+    // 无段头 → 整章节归 main（等价原 parseFileChangeList 行为）
+    const main = new Set(parseFileChangeList(designPath))
+    if (main.size > 0) byRepo.set('main', main)
+    for (const p of main) allFiles.push(p)
+    return { byRepo, hasSegmentHeader: false, allFiles }
+  }
+
+  // 有段头 → 按 repo 切片，每段构造临时 design 调 parseFileChangeList
+  // 当前 repo：段头之前的内容（主章节标题到第一个段头之间）归 'main'
+  let currentRepo = 'main'
+  const segments = new Map() // repo -> 行数组（含表格/列表，不含段头本身）
+  let beforeFirstHeader = [] // 段头之前的 main 段内容
+  let seenHeader = false
+  for (const line of sectionLines.slice(1)) { // 跳过主章节标题行（sectionLines[0]）
+    const hdr = line.match(REPO_SECTION_HEADER_RE)
+    if (hdr) {
+      currentRepo = hdr[1]
+      seenHeader = true
+      if (!segments.has(currentRepo)) segments.set(currentRepo, [])
+      continue
+    }
+    if (!seenHeader) {
+      beforeFirstHeader.push(line)
+    } else {
+      segments.get(currentRepo).push(line)
+    }
+  }
+
+  // 段头之前的 main 段（若有内容）也要对账
+  if (beforeFirstHeader.filter(l => l.trim()).length > 0) {
+    segments.set('main', beforeFirstHeader)
+  }
+
+  const tmpDir = mkdtempSync(pJoin(tmpdir(), 'design-cov-seg-'))
+  try {
+    for (const [repo, segLines] of segments) {
+      // 把段内容包成完整 design md（前置主章节标题，让 parseFileChangeList 识别章节起点）
+      const virtualDesign = ['## 文件变更清单', '', ...segLines, ''].join('\n')
+      const tmpPath = pJoin(tmpDir, `${repo}.md`)
+      writeFileSync(tmpPath, virtualDesign)
+      const segFiles = [...parseFileChangeList(tmpPath)]
+      if (segFiles.length === 0) continue
+      const set = byRepo.get(repo) || new Set()
+      for (const p of segFiles) { set.add(p); allFiles.push(p) }
+      byRepo.set(repo, set)
+    }
+  } finally {
+    rmSync(tmpDir, { recursive: true, force: true })
+  }
+
+  return { byRepo, hasSegmentHeader: true, allFiles }
+}
+
+/**
  * design.md 文件变更清单 → tasks allowed_paths 覆盖对账
  *
  * 修复场景：design.md 声明要改某源码文件（如 access-guide UI），但没有任何 task 的
@@ -524,6 +753,10 @@ export function validateTaskCommands(changeDir, projectRoot, modules = null) {
  *
  * 在 plan-postcheck（execute 前）确定性拦截：design 清单中每个源码文件必须被
  * 至少一个 task 的 allowed_paths 覆盖（前缀 / glob 容差匹配）。
+ *
+ * 跨仓分段对账（约束③ / D-014）：design §6 支持 `## <repo> 仓变更` 段头按仓分段，
+ * task allowed_paths 按 (repo, path) 二元组归属——跨仓 task 的 allowed_paths 只覆盖
+ * 对应 repo 段的 design 清单，不与主仓段交叉误判。无段头时整章节归 main（零回归）。
  *
  * fail-open 边界（不阻断）：design.md 不存在、无 task 卡片（none 级别）、
  * task 卡片均无 allowed_paths（由 validatePlanFeasibility 把关）。
@@ -552,7 +785,8 @@ export function validateDesignFileCoverage(changeDir) {
     return { ok: true, errors, warnings, designFiles: [], uncovered: [] }
   }
 
-  const designFiles = [...parseFileChangeList(designPath)]
+  // 按仓分段解析 design §6（约束③）：段头 `## <repo> 仓变更` → 段内路径归该 repo；无段头 → 全 main
+  const { byRepo: designByRepo, hasSegmentHeader, allFiles: designFiles } = parseDesignCoverageByRepo(designPath)
   // 两种断裂文案(缺清单章节 / 文件未覆盖)从 manifest 同源(plan.design-file-coverage.data)。
   const dcRule = getRule('plan.design-file-coverage')
   if (designFiles.length === 0) {
@@ -561,16 +795,37 @@ export function validateDesignFileCoverage(changeDir) {
     errors.push(dcRule.data.messageMissingList)
     return { ok: false, errors, warnings, designFiles: [], uncovered: [] }
   }
-  const allAllowed = []
+
+  // task allowed_paths 也按 (repo, path) 二元组收集（与 pathOwners 同口径，约束③）：
+  // 跨仓 task 的 allowed_paths 只覆盖对应 repo 的 design 段，不与主仓段交叉误判。
+  const taskAllowedByRepo = new Map() // repo -> string[]
+  let totalAllowed = 0
   for (const file of taskFiles) {
     const content = readFileSync(pJoin(tasksDir, file), 'utf8')
-    allAllowed.push(...parseAllowedPaths(content))
+    const repo = parseRepo(content) || 'main'
+    const allowed = parseAllowedPaths(content)
+    if (allowed.length === 0) continue
+    totalAllowed += allowed.length
+    const arr = taskAllowedByRepo.get(repo) || []
+    arr.push(...allowed)
+    taskAllowedByRepo.set(repo, arr)
   }
-  if (allAllowed.length === 0) {
+  if (totalAllowed === 0) {
     return { ok: true, errors, warnings, designFiles, uncovered: [] }
   }
 
-  const uncovered = designFiles.filter(df => !allAllowed.some(ap => pathMatches(df, ap)))
+  // 对账：design 的每条 (repo, path) 必须被同 repo 的 task allowed_paths 覆盖。
+  // 无分段（单仓）时 byRepo 只含 main，taskAllowedByRepo 也只含 main → 退化原扁平对账（零回归）。
+  const uncovered = []
+  for (const [repo, paths] of designByRepo) {
+    const allowed = taskAllowedByRepo.get(repo) || []
+    for (const df of paths) {
+      // 同 repo 无 task 声明 → 整段无覆盖；或有 task 但无 pathMatches → 未覆盖
+      if (!allowed.some(ap => pathMatches(df, ap))) {
+        uncovered.push(hasSegmentHeader ? `[${repo}] ${df}` : df)
+      }
+    }
+  }
   if (uncovered.length > 0) {
     errors.push(
       dcRule.data.messageUncovered

@@ -12,13 +12,38 @@ import { existsSync, readFileSync, mkdirSync, writeFileSync, readdirSync, statSy
 import { join, resolve } from 'path'
 import { execFileSync } from 'child_process'
 import { pathMatches } from './change-list.js'
-import { parseAllowedPaths } from './stages/plan-postcheck.js'
+import { parseAllowedPaths, parseRepo, parseBaseCommit, parseHeadCommit } from './stages/plan-postcheck.js'
 import { resolveVerifyChangedFiles } from './verify-postcheck.js'
 import { WorktreeManager } from './worktree.js'
 import { resolveRuntimeRoot } from './run/shared.js'
 
 // ── review.json schema version ──
+//
+// design §7.4 / R-07：task-review 的 review.json schemaVersion 1→2（新增可选 repo 字段），
+// 旧 v1（无 repo）向后兼容视 'main'，不阻断既有 change archive。
+//
+// 关于常量与"1→2"：REVIEW_SCHEMA_VERSION 常量被 stage-review.js（文档型阶段评审）共享——
+// stage-review.test.mjs:358 + register.test.mjs:40 断言其值 === 1，且 stage-review.js 不在本次
+// 变更的 allowed_paths 内。两个 schema（task code-review / stage doc-review）逻辑独立，但历史共享
+// 同一常量。本期保持 REVIEW_SCHEMA_VERSION=1 作 stage-review 写侧默认值（不破坏 stage-review），
+// 同时用 REVIEW_SCHEMA_VERSIONS_ACCEPTED=[1,2] 表达"读侧接受两版"——validateReviewSchema 兼容 v1/v2，
+// 跨仓 task 写 review.json 可用 v2 带 repo 字段，单仓/旧 change 仍用 v1。后续可拆分 stage-review 专用
+// 常量，本期遵循 allowed_paths 约束不扩散到 stage-review.js。
 export const REVIEW_SCHEMA_VERSION = 1
+export const REVIEW_SCHEMA_VERSIONS_ACCEPTED = [1, 2]
+// repo 缺省值（review.repo / task 卡 repo 缺省时统一按 'main' 处理）。design §7.2 / §7.4。
+export const DEFAULT_REPO_KEY = 'main'
+
+/**
+ * 规范化 review.repo / task 卡 repo 字段为有效 repoKey。
+ * 缺省 / 非字符串 / 空串 → 'main'（向后兼容旧 v1 review + 无 repo 声明的单仓 task）。
+ * @param {any} repo
+ * @returns {string}
+ */
+export function normalizeRepoKey(repo) {
+  if (typeof repo !== 'string' || repo.trim() === '') return DEFAULT_REPO_KEY
+  return repo.trim()
+}
 
 // ── 合法 verdict 枚举 ──
 export const VALID_VERDICTS = ['pass', 'fail', 'cannot_verify']
@@ -156,6 +181,12 @@ export function summarizeTaskCompletion({ changeDir, runtimeRoot, changeName }) 
 
 /**
  * 校验单个 review.json 文件
+ *
+ * schema 版本（design §7.4 / R-07）：接受 v1（无 repo，单仓向后兼容）+ v2（新增可选 repo 字段，
+ * 跨仓 task 标记 repo: <key>）。repo 缺省 / 非字符串 → 视 'main'（normalizeRepoKey），不阻断。
+ * repo 的真实存在性（local.yaml repos 注册）由 MultiRepoContext 约束② fail-closed 兜底，schema 层
+ * 只做"非字符串时不阻断"的宽松类型校验（review.json 是 agent 手写产物，宽松避免误杀）。
+ *
  * @param {object} review - 解析后的 JSON 对象
  * @returns {{ ok: boolean, errors: string[] }}
  */
@@ -166,12 +197,18 @@ export function validateReviewSchema(review) {
     return { ok: false, errors }
   }
 
-  if (review.schemaVersion !== REVIEW_SCHEMA_VERSION) {
-    errors.push(`schemaVersion 应为 ${REVIEW_SCHEMA_VERSION}，实际为 ${review.schemaVersion}`)
+  if (!REVIEW_SCHEMA_VERSIONS_ACCEPTED.includes(review.schemaVersion)) {
+    errors.push(`schemaVersion 应为 ${REVIEW_SCHEMA_VERSIONS_ACCEPTED.join(' 或 ')}，实际为 ${review.schemaVersion}`)
   }
 
   if (!review.task || typeof review.task !== 'string') {
     errors.push('缺少 task 字段（应为 "task-XX" 格式）')
+  }
+
+  // repo（可选，v2 新增）：类型宽松校验。非字符串 / 空串 → 视 'main'，不阻断 schema。
+  // 跨仓 repo 的注册存在性由 MultiRepoContext 构造时 fail-closed 校验（约束②）。
+  if (review.repo !== undefined && typeof review.repo !== 'string') {
+    errors.push(`repo 字段（若提供）应为字符串，实际类型为 ${typeof review.repo}`)
   }
 
   if (!VALID_VERDICTS.includes(review.specVerdict)) {
@@ -306,6 +343,11 @@ export function validateCheckedTaskReviews({ planContent, runtimeRoot, executeRu
  * @param {string} opts.runtimeRoot - .sillyspec/.runtime 的绝对路径
  * @param {string} opts.executeRunId - execute run id（如 'exec-2026-06-23-131400'）
  * @param {boolean} [opts.allowCannotVerify=true] - 是否允许 cannot_verify（默认允许，给 warning）
+ * @param {string} [opts.changeDir] - change 目录（读 task-NN.md frontmatter 判 low_risk）
+ * @param {string} [opts.gitDir] - 主仓 git 工作目录（单仓 review 真实性校验 cwd；无 ctx 时用此）
+ * @param {object} [opts.ctx] - MultiRepoContext 实例（D-013：缺省/null → 走 opts.gitDir 单仓零回归；
+ *   有 ctx 时按 review.repo（缺省 'main'）从 ctx.resolve(repo).gitDir 取每条 review 的校验 cwd，
+ *   跨仓 gitDir=跨仓仓根，使 base..head diff 在正确仓跑——design §6 task-review A1 行）
  * @returns {{ ok: boolean, errors: string[], warnings: string[], requiredEvidence: Array<{task: string, verdict: string, evidence: string[]}> }}
  */
 /**
@@ -327,7 +369,7 @@ function isTaskLowRisk(changeDir, taskId) {
 }
 
 export function validateTaskReviews(opts) {
-  const { planContent, runtimeRoot, executeRunId, allowCannotVerify = true, changeDir = null, gitDir = null } = opts
+  const { planContent, runtimeRoot, executeRunId, allowCannotVerify = true, changeDir = null, gitDir = null, ctx = null } = opts
 
   const taskIds = parseTaskIdsFromPlan(planContent)
 
@@ -382,8 +424,23 @@ export function validateTaskReviews(opts) {
     }
 
     // ── git 真实性交叉校验：base/head 必须是真实 commit，diff 不能为空 ──
-    if (gitDir) {
-      const evidence = verifyReviewGitEvidence(review, gitDir)
+    // D-013 + design §6 A1：有 ctx 时按 review.repo（缺省 'main'）切 gitDir——跨仓 review 的
+    // base/head 是跨仓仓 commit，必须在跨仓仓根跑 rev-parse/diff，否则判伪造误杀。无 ctx 时退回
+    // opts.gitDir（单仓零回归）。reviewGitDir 为 null 则跳过证据校验（与原逻辑一致）。
+    let reviewGitDir = gitDir
+    if (ctx) {
+      const repoKey = normalizeRepoKey(review.repo)
+      const entry = ctx.resolve(repoKey)
+      if (entry && entry.gitDir) {
+        reviewGitDir = entry.gitDir
+      } else if (repoKey !== 'main') {
+        // 跨仓 repo 在 ctx 中未注册 → 不应发生（MultiRepoContext 构造已 fail-closed 拦截未注册），
+        // 防御性降级为 warning 提示，不阻断（review.json schema 已过，仓库解析交给 ctx 上游负责）。
+        warnings.push(`${taskId}: review.repo="${repoKey}" 在 MultiRepoContext 未解析到 entry，退回主仓 gitDir 校验`)
+      }
+    }
+    if (reviewGitDir) {
+      const evidence = verifyReviewGitEvidence(review, reviewGitDir)
       for (const w of evidence.warnings) warnings.push(`${taskId}: ${w}`)
       if (!evidence.ok) {
         for (const err of evidence.errors) errors.push(`${taskId}: ${err}`)
@@ -681,10 +738,10 @@ export function resolveLatestExecuteRunId({ runtimeRoot, changeName }) {
  * fail-open：任何异常 → 返回统计，仅 console.warn，不阻断 execute 完成（草稿是兜底，
  * 缺了也只是退回原状——gate 报缺 review.json，agent 手补，不比修复前差）。
  *
- * @param {{ changeName: string, cwd: string, platformOpts?: object }} opts
+ * @param {{ changeName: string, cwd: string, platformOpts?: object, ctx?: object|null }} opts
  * @returns {Promise<{ generated: number, skipped: number, unattributed: string[], reason?: string, executeRunId?: string }>}
  */
-export async function generateTaskReviewDrafts({ changeName, cwd, platformOpts = {} }) {
+export async function generateTaskReviewDrafts({ changeName, cwd, platformOpts = {}, ctx = null }) {
   const specBase = platformOpts.specRoot || join(cwd, '.sillyspec')
   const runtimeRoot = resolveRuntimeRoot(platformOpts, specBase)
   const changeDir = join(specBase, 'changes', changeName)
@@ -709,11 +766,15 @@ export async function generateTaskReviewDrafts({ changeName, cwd, platformOpts =
 
   // base..head diff 文件集（worktree-aware；null=git 不可用，[]=无 commit diff）
   const diffFiles = resolveVerifyChangedFiles(cwd, changeName)
-  if (!diffFiles || diffFiles.length === 0) {
+  // 单仓模式（无 ctx）：主仓无 diff 即无任何 task 可生成 → 提前返回（原逻辑零回归）。
+  // 有 ctx：主仓无 diff 不阻断——跨仓 task 的 diff 在跨仓仓根独立取（per-task），主仓 task 自然跳过（空 changedFiles）。
+  if (!ctx && (!diffFiles || diffFiles.length === 0)) {
     return { generated: 0, skipped: 0, unattributed: [], executeRunId, reason: 'base..head 无代码 diff（改动未 commit？）' }
   }
 
   // base/head + gitDir：与 gates.js reviewGitDir 同源（worktree 优先，in-place 回退 cwd）
+  // 有 ctx 时主仓 base/head 仅供主仓 task 用；ctx 主仓 entry 也可提供 base（meta.baseHash 同源）。
+  // 主仓 base/head 解析失败 + 无 ctx → 提前返回（原逻辑）；有 ctx → 仅记 null，主仓 task 后续跳过（不阻断跨仓 task）。
   let base = null
   let head = null
   let reviewGitDir = cwd
@@ -726,12 +787,19 @@ export async function generateTaskReviewDrafts({ changeName, cwd, platformOpts =
     }
   } catch {}
   if (!base) {
-    return { generated: 0, skipped: 0, unattributed: diffFiles, executeRunId, reason: '无 worktree meta.baseHash（无法定 base/head）' }
-  }
-  try {
-    head = runGit(reviewGitDir, ['rev-parse', 'HEAD'])
-  } catch {
-    return { generated: 0, skipped: 0, unattributed: diffFiles, executeRunId, reason: 'git rev-parse HEAD 失败（' + reviewGitDir + '）' }
+    if (!ctx) {
+      return { generated: 0, skipped: 0, unattributed: diffFiles, executeRunId, reason: '无 worktree meta.baseHash（无法定 base/head）' }
+    }
+    // 有 ctx：主仓 base 缺失（主仓无 worktree / 单纯跨仓 change）→ 主仓 task 后续跳过，跨仓 task 照常
+  } else {
+    try {
+      head = runGit(reviewGitDir, ['rev-parse', 'HEAD'])
+    } catch {
+      if (!ctx) {
+        return { generated: 0, skipped: 0, unattributed: diffFiles, executeRunId, reason: 'git rev-parse HEAD 失败（' + reviewGitDir + '）' }
+      }
+      // 有 ctx：主仓 HEAD 失败不阻断跨仓 task；head 留 null，主仓 task 后续按空 changedFiles 跳过
+    }
   }
 
   const taskFiles = readdirSync(tasksDir).filter(f => /^task-\d+\.md$/.test(f)).sort()
@@ -753,34 +821,76 @@ export async function generateTaskReviewDrafts({ changeName, cwd, platformOpts =
 
     const content = readFileSync(join(tasksDir, tf), 'utf8')
     const allowedPaths = parseAllowedPaths(content)
-    const changedFiles = allowedPaths.length > 0
-      ? diffFiles.filter(f => allowedPaths.some(p => pathMatches(f, p)))
-      : []
+
+    // ── 多仓分支（design §6 A2 / D-006 / D-010）：跨仓 task 用 task 卡双锡点 + 跨仓仓 diff ──
+    const taskRepo = normalizeRepoKey(parseRepo(content))
+    const crossEntry = (ctx && taskRepo !== DEFAULT_REPO_KEY) ? ctx.resolve(taskRepo) : null
+    let taskBase = base
+    let taskHead = head
+    let taskChangedFiles
+    let draftRepo
+
+    if (crossEntry) {
+      // 跨仓 task：base/head 必须读 task 卡锡点（跨仓仓无 meta.json）。缺任一 → 跳过留给 agent。
+      const baseCommit = parseBaseCommit(content)
+      const headCommit = parseHeadCommit(content)
+      if (!baseCommit || !headCommit) {
+        skipped++
+        continue
+      }
+      taskBase = baseCommit
+      taskHead = headCommit
+      draftRepo = taskRepo
+      // 跨仓 diff 在跨仓仓根跑（base..head 锡点锚定，非瞬时 HEAD——D-010 head 精度）
+      let crossDiffFiles = []
+      try {
+        const out = runGit(crossEntry.gitDir, ['diff', '--name-only', `${baseCommit}..${headCommit}`])
+        crossDiffFiles = out ? out.split('\n').filter(Boolean).map(p => p.replace(/\\/g, '/')) : []
+      } catch {
+        // git diff 失败（锡点非真实 commit 等）→ 不生成伪造草稿，留给 agent 手补
+        skipped++
+        continue
+      }
+      taskChangedFiles = allowedPaths.length > 0
+        ? crossDiffFiles.filter(f => allowedPaths.some(p => pathMatches(f, p)))
+        : crossDiffFiles
+    } else {
+      // 主仓 task（taskRepo='main' 或无 ctx 跨仓解析失败 → 退单仓口径）
+      // diffFiles 可能为 null（git 不可用）——有 ctx 时主仓 git 异常不阻断跨仓 task，主仓 task 自然跳过。
+      const mainDiff = Array.isArray(diffFiles) ? diffFiles : []
+      taskChangedFiles = allowedPaths.length > 0
+        ? mainDiff.filter(f => allowedPaths.some(p => pathMatches(f, p)))
+        : []
+    }
 
     // 空 changedFiles 的 task 不生成（verifyReviewGitEvidence 判空 diff 伪造，留给 agent 手补）
-    if (changedFiles.length === 0) {
+    if (taskChangedFiles.length === 0) {
       skipped++
       continue
     }
-    changedFiles.forEach(f => attributed.add(f))
+    // unattributed 只统计主仓 diff（跨仓 diff 路径相对跨仓仓根，与主仓 unattributed 语义无关）
+    if (!crossEntry) {
+      taskChangedFiles.forEach(f => attributed.add(f))
+    }
 
     const draft = {
       schemaVersion: REVIEW_SCHEMA_VERSION,
       task: taskId,
-      base,
-      head,
-      changedFiles,
+      base: taskBase,
+      head: taskHead,
+      changedFiles: taskChangedFiles,
       specVerdict: 'cannot_verify',
       qualityVerdict: 'cannot_verify',
       requiredEvidence: ['auto-generated draft: 待 agent 对照 ' + taskId + ' brief + diff 复核后升级为 pass/fail'],
-      reviewerNotes: 'auto-generated draft from git diff ' + base.slice(0, 8) + '..' + head.slice(0, 8) + ';verdict=未评审（worktree execute 主 agent 实现模式兜底，坑2）',
+      reviewerNotes: 'auto-generated draft from git diff ' + taskBase.slice(0, 8) + '..' + taskHead.slice(0, 8) + ';verdict=未评审（worktree execute 主 agent 实现模式兜底，坑2）',
     }
+    if (draftRepo) draft.repo = draftRepo
     mkdirSync(reviewDir, { recursive: true })
     writeFileSync(reviewPath, JSON.stringify(draft, null, 2) + '\n')
     generated++
   }
 
-  const unattributed = diffFiles.filter(f => !attributed.has(f))
+  const unattributed = (Array.isArray(diffFiles) ? diffFiles : []).filter(f => !attributed.has(f))
   return { generated, skipped, unattributed, executeRunId }
 }
 

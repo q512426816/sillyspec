@@ -53,18 +53,26 @@ if (typeof mock.module !== 'function') {
   process.exit(r.status ?? 0)
 }
 
-import { writeFileSync, rmSync } from 'node:fs'
+import { writeFileSync, rmSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 
 // ── 1. 捕获真实命名空间（先缓存 real，供 mock factory spread + 默认委托）──
 const realStageContract = await import('../src/stage-contract.js')
 const realCompleteHandlers = await import('../src/run/complete-handlers.js')
 const realVerifyPostcheck = await import('../src/verify-postcheck.js')
+const realTaskReview = await import('../src/task-review.js')
 
-// ── 2. 模块级可变 impl（默认委托真实函数；每用例切换为 throw / pass）──
+// ── 2. 模块级可变 impl（默认委托真实函数；每用例切换为 throw / pass / 记录入参）──
 let runValidatorsImpl = (...a) => realStageContract.runValidators(...a)
 let handleScanImpl = async (...a) => realCompleteHandlers.handleScanStageCompleted(...a)
 let runVerifyTestCheckImpl = (...a) => realVerifyPostcheck.runVerifyTestCheck(...a)
+// task-07：记录 validateTaskReviews 入参（gitDir / ctx），证明 runStageCompletionGates 透传 ctx
+// + reviewGitDir 兜底。默认委托真实函数；每用例切换为「记录 + 通过」。
+let validateTaskReviewsCalls = []
+let validateTaskReviewsImpl = (opts) => {
+  validateTaskReviewsCalls.push(opts)
+  return { ok: true, errors: [], warnings: [], requiredEvidence: [] }
+}
 
 // ── 3. 注册 mock（exports：spread real 命名导出 + 覆盖目标为 wrapper）──
 //  Node v24 mock.module 签名 mock.module(specifier, { exports, cache? })，导出在 options.exports
@@ -78,6 +86,9 @@ await mock.module('../src/run/complete-handlers.js', {
 })
 await mock.module('../src/verify-postcheck.js', {
   exports: { ...realVerifyPostcheck, runVerifyTestCheck: (...a) => runVerifyTestCheckImpl(...a) },
+})
+await mock.module('../src/task-review.js', {
+  exports: { ...realTaskReview, validateTaskReviews: (opts) => validateTaskReviewsImpl(opts) },
 })
 
 // ── 4. mock 注册后再 import gates + harness（解析到 mock，gates.js 绑定 wrapper）──
@@ -95,6 +106,11 @@ function resetImpls() {
   runValidatorsImpl = (...a) => realStageContract.runValidators(...a)
   handleScanImpl = async (...a) => realCompleteHandlers.handleScanStageCompleted(...a)
   runVerifyTestCheckImpl = (...a) => realVerifyPostcheck.runVerifyTestCheck(...a)
+  validateTaskReviewsCalls = []
+  validateTaskReviewsImpl = (opts) => {
+    validateTaskReviewsCalls.push(opts)
+    return { ok: true, errors: [], warnings: [], requiredEvidence: [] }
+  }
 }
 
 // 每用例返回全新 steps 数组：rollback 会 mutate steps[i].status（completed→pending），
@@ -252,6 +268,113 @@ console.log('\n--- (e) verify + runVerifyTestCheck throw Error("boom-verify") �
 
   const after = await pm.read(cwd, cn)
   assert(after.stages.verify.status === 'in-progress', `(e) DB: verify status 回滚 in-progress（实际 ${after.stages.verify.status}）`)
+}
+
+// ============================================================================
+// task-07：gates.js ctx 透传（design §6 gates 行 + D-013）
+// 验证 runStageCompletionGates 把 ctx 透传到两个调用点：
+//   - runVerifyTestCheck（verify 分支）：opts.ctx === 传入的 ctx（或缺省 null）
+//   - validateTaskReviews（execute Task Review Gate）：opts.ctx === 传入的 ctx +
+//     opts.gitDir === ctx.resolve('main').gitDir（reviewGitDir ctx 兜底）
+// 单仓零回归：ctx=null 缺省时 runVerifyTestCheck 收 ctx=null、validateTaskReviews 收 gitDir 走原逻辑。
+// ============================================================================
+
+// 轻量 stub ctx（无需构造真实 MultiRepoContext——只测 gates 透传契约，不测 ctx 内部）。
+// resolve('main').gitDir 用区别于 cwd 的哨兵路径，断言 reviewGitDir 取自 ctx 而非 cwd。
+const STUB_MAIN_GIT_DIR = 'STUB-MAIN-GIT-DIR-SENTINEL'
+const stubCtx = { resolve: (key) => key === 'main' ? { gitDir: STUB_MAIN_GIT_DIR } : null }
+
+// ── (f) execute Task Review Gate：reviewGitDir 兜底 ctx.resolve('main').gitDir + 透传 ctx ──
+console.log('\n--- (f) execute + ctx → validateTaskReviews 收 gitDir=ctx.resolve(main).gitDir + ctx 透传 ---')
+{
+  resetImpls()
+  runValidatorsImpl = () => ({ ok: true, errors: [], warnings: [] }) // execute validator 通过，进 Task Review Gate
+  const EXEC_STEPS = [{ name: 'Wave 1 执行', status: 'completed' }]
+  const { cwd, specBase } = makeRepo('sca-f-')
+  const cn = 'sca-f-ctx-forward'
+  const pm = await initChange(cwd, specBase, cn)
+  // plan 含已勾 task 触发 Task Review Gate（marker + plan.md 存在守卫过）
+  writeFileSync(join(specBase, 'changes', cn, 'plan.md'),
+    '# Plan\n\n## Wave 1\n\n- [x] task-01: a\n')
+  const runtimeRoot = join(specBase, '.runtime')
+  mkdirSync(join(runtimeRoot, 'execute-runs', 'exec-stub', 'tasks', 'task-01'), { recursive: true })
+  writeFileSync(join(runtimeRoot, `current-execute-run-id-${cn}`), 'exec-stub\n')
+  const progress = await seedStage(pm, cwd, cn, 'execute', EXEC_STEPS, 'completed')
+
+  const r = await runCapturing(() =>
+    completeStageGates({ stageName: 'execute', cwd, changeName: cn, platformOpts: {}, specBase, progress, pm, stageData: progress.stages.execute, steps: EXEC_STEPS, currentIdx: 0, outputText: null, ctx: stubCtx }))
+
+  assert(!r.error, '(f) Task Review Gate 不抛（mock validateTaskReviews 返回 ok）')
+  assert(validateTaskReviewsCalls.length === 1, `(f) validateTaskReviews 被调一次（实际 ${validateTaskReviewsCalls.length}）`)
+  if (validateTaskReviewsCalls.length === 1) {
+    const call = validateTaskReviewsCalls[0]
+    assert(call.ctx === stubCtx, '(f) ctx 透传到 validateTaskReviews（opts.ctx === stubCtx）')
+    assert(call.gitDir === STUB_MAIN_GIT_DIR, `(f) reviewGitDir 取自 ctx.resolve('main').gitDir（实际 ${call.gitDir}，零回归应不等 cwd）`)
+  }
+}
+
+// ── (g) execute Task Review Gate：ctx=null 缺省 → reviewGitDir 走原逻辑（worktree/cwd）+ ctx 透传 null ──
+console.log('\n--- (g) execute + 无 ctx（单仓零回归）→ validateTaskReviews 收 ctx=null + gitDir=原逻辑 ---')
+{
+  resetImpls()
+  runValidatorsImpl = () => ({ ok: true, errors: [], warnings: [] })
+  const EXEC_STEPS = [{ name: 'Wave 1 执行', status: 'completed' }]
+  const { cwd, specBase } = makeRepo('sca-g-')
+  const cn = 'sca-g-no-ctx'
+  const pm = await initChange(cwd, specBase, cn)
+  writeFileSync(join(specBase, 'changes', cn, 'plan.md'),
+    '# Plan\n\n## Wave 1\n\n- [x] task-01: a\n')
+  const runtimeRoot = join(specBase, '.runtime')
+  mkdirSync(join(runtimeRoot, 'execute-runs', 'exec-stub2', 'tasks', 'task-01'), { recursive: true })
+  writeFileSync(join(runtimeRoot, `current-execute-run-id-${cn}`), 'exec-stub2\n')
+  const progress = await seedStage(pm, cwd, cn, 'execute', EXEC_STEPS, 'completed')
+
+  const r = await runCapturing(() =>
+    completeStageGates({ stageName: 'execute', cwd, changeName: cn, platformOpts: {}, specBase, progress, pm, stageData: progress.stages.execute, steps: EXEC_STEPS, currentIdx: 0, outputText: null }))
+
+  assert(!r.error, '(g) Task Review Gate 不抛（mock validateTaskReviews 返回 ok）')
+  assert(validateTaskReviewsCalls.length === 1, `(g) validateTaskReviews 被调一次（实际 ${validateTaskReviewsCalls.length}）`)
+  if (validateTaskReviewsCalls.length === 1) {
+    const call = validateTaskReviewsCalls[0]
+    assert(call.ctx === null, '(g) ctx=null 时透传 null 到 validateTaskReviews（单仓零回归）')
+    // 无 ctx 走原逻辑：in-place-fallback（无 worktree meta）→ gitDir 退回 cwd
+    assert(call.gitDir === cwd, `(g) reviewGitDir 原逻辑退 cwd（实际 ${call.gitDir}，期望 ${cwd}）`)
+  }
+}
+
+// ── (h) verify：runVerifyTestCheck 透传 ctx（有 ctx / ctx=null 两种）──
+console.log('\n--- (h) verify + ctx → runVerifyTestCheck 收 ctx 透传（有 ctx / null 两态）---')
+{
+  resetImpls()
+  runValidatorsImpl = () => ({ ok: true, errors: [], warnings: [] })
+  // 记录 opts（含 ctx）+ 返回 passed 让 verify 分支走完不阻断
+  let verifyCalls = []
+  runVerifyTestCheckImpl = (opts) => { verifyCalls.push(opts); return { status: 'passed', command: null, exitCode: 0, durationMs: 1, outputTail: '', reason: null, resultPath: null } }
+  const VERIFY_STEPS = [{ name: '验证实现并跑测试', status: 'completed' }]
+  const { cwd, specBase } = makeRepo('sca-h-')
+  const cn = 'sca-h-verify-ctx'
+  const pm = await initChange(cwd, specBase, cn)
+  const progress = await seedStage(pm, cwd, cn, 'verify', VERIFY_STEPS, 'completed')
+
+  // (h1) 有 ctx → runVerifyTestCheck 收 ctx === stubCtx
+  await runCapturing(() =>
+    completeStageGates({ stageName: 'verify', cwd, changeName: cn, platformOpts: {}, specBase, progress, pm, stageData: progress.stages.verify, steps: VERIFY_STEPS, currentIdx: 0, outputText: null, ctx: stubCtx }))
+  assert(verifyCalls.length === 1, `(h1) 有 ctx 时 runVerifyTestCheck 被调一次（实际 ${verifyCalls.length}）`)
+  if (verifyCalls.length === 1) {
+    assert(verifyCalls[0].ctx === stubCtx, '(h1) runVerifyTestCheck 收 ctx === stubCtx（透传成功）')
+    assert(verifyCalls[0].cwd === cwd && verifyCalls[0].changeName === cn, '(h1) runVerifyTestCheck 收 cwd/changeName 不变')
+  }
+
+  // (h2) ctx=null 缺省 → runVerifyTestCheck 收 ctx === null（单仓零回归）
+  verifyCalls = []
+  // 重置 progress 到 completed（前一次调用可能被 runValidators 通过推进；重新 seed）
+  const progress2 = await seedStage(pm, cwd, cn, 'verify', VERIFY_STEPS, 'completed')
+  await runCapturing(() =>
+    completeStageGates({ stageName: 'verify', cwd, changeName: cn, platformOpts: {}, specBase, progress: progress2, pm, stageData: progress2.stages.verify, steps: VERIFY_STEPS, currentIdx: 0, outputText: null }))
+  assert(verifyCalls.length === 1, `(h2) ctx=null 时 runVerifyTestCheck 仍被调一次（实际 ${verifyCalls.length}）`)
+  if (verifyCalls.length === 1) {
+    assert(verifyCalls[0].ctx === null || verifyCalls[0].ctx === undefined, '(h2) runVerifyTestCheck 收 ctx=null/undefined（单仓零回归，缺省透传）')
+  }
 }
 
 cleanup()

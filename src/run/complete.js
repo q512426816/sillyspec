@@ -18,7 +18,7 @@ import { join } from 'node:path'
 import { existsSync, readFileSync, mkdirSync, writeFileSync, appendFileSync } from 'node:fs'
 import { writeAtomicSync } from '../fs-atomic.js'
 import { withFileLock } from '../quicklog.js'
-import { triggerSync, WAIT_MARKER_RE, getStageSteps, formatWaitOptions, resolveRuntimeRoot } from './shared.js'
+import { triggerSync, WAIT_MARKER_RE, getStageSteps, formatWaitOptions, resolveRuntimeRoot, getOrCreateMultiRepoContext } from './shared.js'
 import { outputStep } from './prompt.js'
 import { enforceDepsGate, enforceReviewJsonGate, completeStageGates, readDesignScale } from './gates.js'
 import { handleArchiveConfirmStep, handlePlanGeneratePlanStep, handleScanProjectListStep, handleWorkflowPostCheck, handleQuickStageCompletion, handleExecuteWaveArtifact } from './complete-handlers.js'
@@ -213,7 +213,15 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
     // 已存在跳过），据 git diff base..head 按 allowed_paths 归属生成 cannot_verify 草稿，进 gate 前就位。
     try {
       const { generateTaskReviewDrafts } = await import('../task-review.js')
-      const _drafts = await generateTaskReviewDrafts({ changeName, cwd, platformOpts })
+      // W3 task-09：best-effort 构造 ctx 透传（D-013），跨仓 task 草稿用跨仓 gitDir 取 diff。
+      // 失败降级 null（不阻断 execute 完成——草稿兜底本就是 best-effort，gate 会复校验）。
+      let _draftCtx = null
+      try {
+        _draftCtx = await getOrCreateMultiRepoContext({ cwd, changeName, platformOpts })
+      } catch (e) {
+        console.warn('   ⚠️ 草稿 ctx 构造失败，降级单仓草稿（' + (e && e.message ? e.message : e) + '）')
+      }
+      const _drafts = await generateTaskReviewDrafts({ changeName, cwd, platformOpts, ctx: _draftCtx })
       if (_drafts.generated > 0) {
         console.log('   📄 自动补写 ' + _drafts.generated + ' 个 per-task review.json 草稿（cannot_verify，主 agent 实现模式兜底，需 agent 复核后升级为 pass/fail）')
         if (_drafts.unattributed && _drafts.unattributed.length > 0) {
@@ -280,7 +288,15 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
     // 阶段完成收尾共享管线（handleScan manifest + validateMetadata/FileLocations + auxiliary 重置 +
     // runStageCompletionGates + execute worktree cleanup），消除 S1/S2/S3 三处收尾不对称（task-01 抽出）。
     // gate 失败已 rollback，early-return 跳过下方"阶段已完成/下一步"提示（合理收紧：回滚不该打完成提示）。
-    const _stageGatesResult = await completeStageGates({ stageName, cwd, changeName, platformOpts, specBase, progress, pm, stageData, steps, currentIdx, outputText })
+    // W3 task-09：best-effort 构造 ctx 透传给 completeStageGates（D-013），让 task-07 gate 跨仓 task
+    // 切 gitDir + per-repo verify。execute 启动期已 fail-closed 过一次，此处命中缓存或单仓退化。
+    let _completeCtx = null
+    try {
+      _completeCtx = await getOrCreateMultiRepoContext({ cwd, changeName, platformOpts })
+    } catch (e) {
+      console.warn('⚠️ 阶段完成 ctx 构造失败，降级单仓 gate（' + (e && e.message ? e.message : e) + '）')
+    }
+    const _stageGatesResult = await completeStageGates({ stageName, cwd, changeName, platformOpts, specBase, progress, pm, stageData, steps, currentIdx, outputText, ctx: _completeCtx })
     if (_stageGatesResult) return _stageGatesResult
 
     // gate 全过：persist completed（task-01 移后）。此处到 _write 之间若崩，DB 仍 in-progress（内存已 completed 但未落盘），下次进 CLI 读 DB 即 in-progress，不产生"假 completed"。
@@ -739,7 +755,14 @@ export async function continueStep(pm, progress, stageName, cwd, answer, options
     // persist _write 移到 completeStageGates 成功之后（task-03 / review-2026-08-09 #2）：gate 异常/失败 → rollback 回 in-progress 落盘，此处未到 _write，DB 不留假 completed。
     // 阶段完成收尾共享管线（含 execute worktree cleanup），消除 continueStep 完成分支绕过 gate 的 S2（task-01 抽出）。
     // gate 失败已 rollback，early-return 跳过下方"阶段已完成/下一步"提示（与 completeStep 同语义）。
-    const _stageGatesResult = await completeStageGates({ stageName, cwd, changeName, platformOpts, specBase, progress, pm, stageData, steps: stageData.steps, currentIdx, outputText: null })
+    // W3 task-09：best-effort 构造 ctx 透传（D-013），与 completeStep 完成分支同语义。
+    let _contCtx = null
+    try {
+      _contCtx = await getOrCreateMultiRepoContext({ cwd, changeName, platformOpts })
+    } catch (e) {
+      console.warn('⚠️ 阶段完成 ctx 构造失败，降级单仓 gate（' + (e && e.message ? e.message : e) + '）')
+    }
+    const _stageGatesResult = await completeStageGates({ stageName, cwd, changeName, platformOpts, specBase, progress, pm, stageData, steps: stageData.steps, currentIdx, outputText: null, ctx: _contCtx })
     if (_stageGatesResult) return _stageGatesResult
     // gate 全过：persist completed（task-03 移后；此处无 triggerSync）。
     pm._write(cwd, progress, changeName)

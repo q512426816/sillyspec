@@ -1,10 +1,12 @@
-import { existsSync, readFileSync, readdirSync } from 'fs'
+import { existsSync, readFileSync, readdirSync, writeFileSync } from 'fs'
 import path from 'path'
 import { buildContractMatrix, buildConsumerInjection, buildContractFieldInjection } from '../contract-matrix.js'
 import { getRule } from '../stage-contract-spec.js'
 import { renderDispatchInstruction } from '../dispatch/strategy.js'
 import { isPathASupported } from '../dispatch/backends/sillyhub-mcp.js'
 import { readMcpConfig } from '../sillyhub-mcp/config.js'
+import { gitQuiet } from '../git-helper.js'
+import { parseRepo } from './plan-postcheck.js'
 
 /**
  * 校验 plan.md 是否满足 execute 执行契约
@@ -460,10 +462,92 @@ export function getDispatchMode() {
   if (!hasConfig) return 'local'
   return isPathASupported() ? 'sillyhub' : 'local-fallback'
 }
+
+/**
+ * 解析 task 卡的 repo 归属（W3 task-08，D-012）。
+ * 读 changeDir/tasks/task-<num>.md 的 frontmatter `repo:` 字段；缺省/无卡/'main' → 'main'。
+ * 单仓 change（无 repo: 字段）恒返 'main'，零回归。
+ *
+ * @param {{ index?: number, name?: string }} task - wave.tasks 元素
+ * @param {string|null} changeDir - change 目录绝对路径
+ * @returns {string} repoKey，'main' 或 parseRepo 返回值
+ */
+function resolveTaskRepo(task, changeDir) {
+  if (!changeDir || !task || task.index == null) return 'main'
+  const num = String(task.index).padStart(2, '0')
+  const taskFile = path.join(changeDir, 'tasks', `task-${num}.md`)
+  if (!existsSync(taskFile)) return 'main'
+  try {
+    const content = readFileSync(taskFile, 'utf8')
+    const repo = parseRepo(content)
+    return repo || 'main'
+  } catch {
+    return 'main'
+  }
+}
+
+/**
+ * 把 base_commit 锡点写入 task 卡 frontmatter（W3 task-08，D-010）。
+ * 派发跨仓 task 前 CLI 实时 git rev-parse HEAD 落盘——锁定子代理起改的 base 锚点，
+ * 防止同 Wave 多 task 改同一跨仓仓时 HEAD 推进致 diff 范围漂移（design §5.3 约束① / R-01）。
+ *
+ * 策略：幂等写——frontmatter 有 base_commit 行则就地替换，无则紧跟 repo 行后插入（
+ * 无 frontmatter 时整段创建）。仅改 frontmatter 不动正文。已存在相同值不重复写。
+ *
+ * @param {string} taskFilePath - task-NN.md 绝对路径
+ * @param {string} baseCommit - 跨仓仓 HEAD sha
+ * @returns {boolean} 是否实际写入（false = 文件不存在 / 写失败 / 值未变）
+ */
+function writeBaseCommitToTaskCard(taskFilePath, baseCommit) {
+  if (!taskFilePath || !baseCommit) return false
+  if (!existsSync(taskFilePath)) return false
+  let content
+  try {
+    content = readFileSync(taskFilePath, 'utf8')
+  } catch {
+    return false
+  }
+  const fmMatch = content.match(/^---\n([\s\S]*?)\n---/)
+  if (!fmMatch) return false
+  const fm = fmMatch[1]
+  const baseLineRe = /^base_commit:\s*.*$/m
+  let newFm
+  if (baseLineRe.test(fm)) {
+    const existing = (fm.match(baseLineRe) || [''])[0]
+    if (existing === `base_commit: ${baseCommit}`) return false // 值未变，幂等跳过
+    newFm = fm.replace(baseLineRe, `base_commit: ${baseCommit}`)
+  } else {
+    // 紧跟 repo 行后插入（与 D-010 协议同源顺序 repo→base_commit→head_commit）
+    const repoLineRe = /^repo:\s*.*$/m
+    const anchor = `base_commit: ${baseCommit}\n`
+    if (repoLineRe.test(fm)) {
+      newFm = fm.replace(repoLineRe, m => m + '\n' + anchor.trimEnd())
+    } else {
+      // 无 repo 行：插到 frontmatter 首部（frontmatter 首字段）
+      newFm = anchor.trimEnd() + '\n' + fm
+    }
+  }
+  const newContent = content.replace(/^---\n[\s\S]*?\n---/, `---\n${newFm}\n---`)
+  if (newContent === content) return false
+  try {
+    writeFileSync(taskFilePath, newContent)
+    return true
+  } catch {
+    return false
+  }
+}
+
 /**
  * 为 Wave 生成 prompt（强制子代理执行）
+ *
+ * W3 task-08（D-012 per-task workdir）：签名加可选 `ctx`（MultiRepoContext）参数。
+ * - 无 ctx（单仓 change / 旧调用方）→ 退化为单 worktreePath 单值 worktreeSection（零回归）
+ * - 有 ctx → 按 task 逐个解析 repo 归属，构造 per-task workdir 多值表，跨仓 task 派发前
+ *   落 base_commit 锡点（D-010），注入跨仓 task commit 指引 + head_commit 落盘指引。
+ * 同 Wave 允许主仓+跨仓 task 混合（各独立 Task 调用各传 workdir，不强制同 Wave 同 repo）。
  */
 export function buildWavePrompt(wave, waveIndex, changeDir, worktreePath, options = {}) {
+  const ctx = options.ctx || null
   // ── Contract Matrix：检查是否有 provider/consumer 契约需要注入 ──
   let contractInjection = ''
   let prototypeInjection = ''
@@ -558,8 +642,97 @@ ${prototypes.map(p => `- \`${path.join(protoRelDir, p)}\``).join('\n')}
     return s
   }).join('\n')
 
-  const worktreeSection = (worktreePath)
-    ? `
+  // ── per-task workdir 解析（W3 task-08，D-012）──
+  // 无 ctx（单仓 change）→ 全 task workdir=主仓 worktreePath，沿用旧单值逻辑（零回归）。
+  // 有 ctx → 按 task 卡 repo: 字段逐个解析：主仓 task workdir=主仓 worktreePath，跨仓 task
+  // workdir=ctx.resolve(repo).worktreePath（跨仓仓根）。同 Wave 允许主仓+跨仓混合。
+  const taskRepos = wave.tasks.map(t => ctx ? resolveTaskRepo(t, changeDir) : 'main')
+  const hasCrossRepoWave = ctx ? taskRepos.some(r => r !== 'main') : false
+
+  // per-task workdir 映射（用于多值 worktreeSection + 跨仓 commit 指引）
+  // 无 ctx 或无跨仓 task → 不构造（沿用旧单值 worktreePath 注入）
+  let perTaskWorkdirs = null
+  let crossRepoCommitSection = ''
+  let baseCommitWrites = [] // [{ taskNum, repo, taskFile, written }] 跨仓 task base 锡点落盘记录
+  if (ctx && hasCrossRepoWave) {
+    perTaskWorkdirs = wave.tasks.map((t, ti) => {
+      const taskNum = String(t.index || (ti + 1)).padStart(2, '0')
+      const repo = taskRepos[ti]
+      const entry = ctx.resolve(repo)
+      const workdir = entry ? entry.worktreePath : (worktreePath || '')
+      return { taskNum, repo, workdir }
+    })
+
+    // D-010 跨仓 task base 锡点：派发前实时 git rev-parse HEAD 落 task 卡 base_commit
+    // 仅对跨仓 task（repo≠'main'）落盘，主仓 task 锚 meta.baseHash（MultiRepoContext 已处理）
+    for (const item of perTaskWorkdirs) {
+      if (item.repo === 'main') continue
+      const entry = ctx.resolve(item.repo)
+      if (!entry) continue
+      const baseCommit = gitQuiet(entry.gitDir, ['rev-parse', 'HEAD'])
+      if (!baseCommit) continue // git 不可达已由 MultiRepoContext 构造时 fail-closed 拦截，此处置防御
+      const taskFile = changeDir
+        ? path.join(changeDir, 'tasks', `task-${item.taskNum}.md`)
+        : null
+      const written = taskFile ? writeBaseCommitToTaskCard(taskFile, baseCommit) : false
+      baseCommitWrites.push({ taskNum: item.taskNum, repo: item.repo, taskFile, written, baseCommit })
+    }
+
+    // 跨仓 task commit 指引 + head_commit 落盘指引（D-010 回收时机）
+    const crossLines = perTaskWorkdirs
+      .filter(i => i.repo !== 'main')
+      .map(i => `- task-${i.taskNum} → repo \`${i.repo}\`，workdir=\`${i.workdir}\``)
+      .join('\n')
+    crossRepoCommitSection = `
+### 跨仓 task 派发与双锡点（必须严格遵守）
+
+本 Wave 含跨仓 task（直接改跨仓仓主干，**不经主仓 worktree**）：
+
+${crossLines}
+
+**派发跨仓 task 前（base 锡点，CLI 已在 prompt 构造时落盘）：**
+- 跨仓 task 卡 frontmatter 的 \`base_commit\` 已由 CLI 实时 \`git -C <跨仓仓根> rev-parse HEAD\` 锁定（base 锡点，约束①）。子代理在此 HEAD 上改+commit，不受同 Wave 其他 task 推进 HEAD 影响。
+
+**回收跨仓 task review 前（head 锡点，你必须在子代理完成后落盘）：**
+- 跨仓 task 子代理完成 commit 后、写 review.json / 勾选 checkbox **之前**，你必须运行 \`git -C <跨仓仓根> rev-parse HEAD\` 把结果写入该 task 卡 frontmatter \`head_commit:\` 字段（与 \`base_commit:\` 同源 frontmatter 锡点写入）。
+- review.json 的 \`base\` 取 task 卡 \`base_commit\`、\`head\` 取 task 卡 \`head_commit\`（**非瞬时 HEAD**），锁 diff 范围不漂移。
+
+**跨仓 task 子代理 prompt 必须注入：**
+> 该 task 改的是 \`<repo>\` 仓，workdir=\`<跨仓仓根>\`。**直接在该仓主干工作区改+commit（git add + git commit 到该仓主干），不经主仓 worktree、不建分支。** commit 到该仓主干即落盘，apply 阶段对跨仓 task 为 no-op（design §5.4 G1）。
+`
+  }
+
+  // worktreeSection：无 ctx / 无跨仓 task → 旧单值（零回归）；有 ctx 含跨仓 task → per-task 多值表
+  let worktreeSection
+  if (ctx && hasCrossRepoWave && perTaskWorkdirs) {
+    const workdirLines = perTaskWorkdirs.map(i =>
+      `  - task-${i.taskNum} (repo: ${i.repo}) → workdir: "${i.workdir}"`
+    ).join('\n')
+    worktreeSection = `
+### 工作目录（必须严格遵守，per-task）
+
+调用 Task 工具启动子代理时，**workdir 参数是强制必传的**，且本 Wave 内不同 task 的 workdir 不同（主仓 task vs 跨仓 task）。
+
+**per-task workdir 表（每个子代理按其 task 对应的 workdir 启动）：**
+
+${workdirLines}
+
+不传 workdir 或传错 workdir 会导致：主仓 task 写到跨仓仓 / 跨仓 task 写到主仓 worktree，破坏隔离与 apply 归属。
+
+\`\`\`json
+{
+  "subagent_type": "general",
+  "workdir": "<按上方 per-task 表选>",
+  "prompt": "在此编写任务描述..."
+}
+\`\`\`
+
+### 注意
+蓝图文件（tasks.md / design.md / proposal.md / requirements.md / tasks/task-XX.md）在主工作区 .sillyspec/changes/<change>/ 下，它们不在跨仓仓也不在 worktree 中。读取蓝图时使用主工作区路径，不要拼接到 worktree / 跨仓仓路径下。
+`
+  } else {
+    worktreeSection = (worktreePath)
+      ? `
 ### 工作目录（必须严格遵守）
 
 调用 Task 工具启动子代理时，**workdir 参数是强制必传的**。
@@ -576,7 +749,8 @@ ${prototypes.map(p => `- \`${path.join(protoRelDir, p)}\``).join('\n')}
 ### 注意
 蓝图文件（tasks.md / design.md / proposal.md / requirements.md）在主工作区 .sillyspec/changes/<change>/ 下，它们可能不在 worktree 中。读取蓝图时使用主工作区路径，不要拼接到 worktree 路径下。
 `
-    : ''
+      : ''
+  }
 
   // ── 派发后端段注入（task-07，D-006 / D-007 / D-008 接入）──
   // 同步判定（不发网络，零回归关键）：local（无 MCP 配置）→ dispatchSection='' → 本 prompt 与改前
@@ -616,7 +790,7 @@ ${prototypes.map(p => `- \`${path.join(protoRelDir, p)}\``).join('\n')}
 3. 勾选 plan.md 中的 checkbox
 4. 记录改动文件和测试结果
 
-${worktreeSection}${dispatchSection}
+${worktreeSection}${crossRepoCommitSection}${dispatchSection}
 ### 任务摘要（按需读取完整蓝图）
 为每个任务启动子代理时，**只需告知任务目标和蓝图文件路径，让子代理按需读取**：
 
@@ -729,10 +903,14 @@ export function buildExecuteSteps(planFilePath = null, options = {}) {
   // 尝试获取 worktree 路径（可能由前缀步骤创建）
   const worktreePath = options.worktreePath || null
 
+  // W3 task-08：ctx 由 execute 启动入口（task-09）透传，进程级单例贯穿 execute/apply/verify
+  // （D-013）。缺省=null → buildWavePrompt 退化为单仓单 worktreePath（零回归）。
+  const ctx = options.ctx || null
+
   const waveSteps = waves.map((wave, i) => ({
     name: `Wave ${i + 1} 执行`,
     mode: 'implementation',
-    prompt: buildWavePrompt(wave, i + 1, changeDir, worktreePath, { dispatchMode: options.dispatchMode, branch: options.branch }),
+    prompt: buildWavePrompt(wave, i + 1, changeDir, worktreePath, { dispatchMode: options.dispatchMode, branch: options.branch, ctx }),
     outputHint: `Wave ${i + 1} 执行结果`,
     optional: false
   }))

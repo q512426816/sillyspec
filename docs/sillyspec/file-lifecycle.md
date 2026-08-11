@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-05-31 11:00:00
-updated_at: 2026-08-11T14:35:00+08:00
+updated_at: 2026-08-12T00:30:00+08:00
 ---
 
 # SillySpec 文件生命周期
@@ -39,6 +39,7 @@ updated_at: 2026-08-11T14:35:00+08:00
 - `src/index.js`
 - `src/review-tier.js`
 - `src/stage-review.js`
+- `src/run/multi-repo-context.js`（跨仓 task 支持：MultiRepoContext 运行时，进程级内存对象，execute 启动构造贯穿 apply/verify）
 
 运行时阶段列表以导入 `src/stages/index.js` 后得到的对象为准。当前导入结果：
 
@@ -138,6 +139,7 @@ quick
   - **platform 与 mcp 段并列、语义独立**：platform 段供 sync 的 HTTP API（平台进度双向同步），mcp 段供 dispatch worker 的 MCP 协议（连 sillyhub 派发任务）；同源假设下 `connect` 一并写两者，不同源则各填各的。
 - **dispatch 段**（可选调参）：detect/connect 均不写。仅 `probe_ttl_ms` 生效（agent 确知调优值才填；`dispatch/probe.js` `readProbeTtlFromLocalYaml` best-effort 读）。`poll_interval_ms`/`worker_timeout_ms` 为**路径A 预留·未落地**键（consumer `renderSillyHubInstruction` 注入的轮询/超时文本提及，但 `isPathASupported()=false` 时该指令整段不注入；路径A 落地后接线，配了暂不生效，见 `src/config-schema.js` status=declared）。
 - **auto_mode 段**（变更规模自动分类，2026-08-11 接线）：`sillyspec run auto` 时 `runCommand`（`src/run/command.js`）调 `readAutoModeFromLocalYaml`（`src/classify-change.js`）读本段传 `classifyChange` 的 `localConfig`——`force_full_patterns`/`force_quick_patterns`（正则数组，i 大小写无关）匹配需求描述则强制对应模式；非法正则 try/catch 跳过不崩（review-2026-08-09 #30）。detect/connect 不写本段，agent 按需手填。
+- **repos 段**（workspace 多仓注册表，2026-08-12 跨仓 task 支持）：producer = agent 手填（detect 不嗅探跨仓路径——跨仓归属是设计决策，非环境探测）；consumer = `parseRepoRegistry`（`src/stages/plan-postcheck.js`，`getOrCreateMultiRepoContext` 调用）解析为 `Map<key, path>`，供 `MultiRepoContext` 构造时按 task 卡 `repo:` 字段查表取跨仓仓根。键名 = task 卡 `repo:` 字段引用的 repoKey，值 = 跨仓仓绝对路径（如 `sillyspec: C:/Users/qinyi/IdeaProjects/sillyspec`）。`main` **不用注册**（隐式 = cwd / specRoot 父目录，design §7.3）。跨仓 change 缺 `repos:` 段或 task 卡 `repo:` 引用的 key 未注册 → `MultiRepoContext` 构造 fail-closed 抛错阻断 execute（约束②：跨仓 apply 走错仓=数据所有权事故，配置错误不降级）。单仓 change（所有 task 无 `repo:`）不读本段，零回归。
 
 doctor 自检报告的修复建议已把 `sillyspec init` 更正为 `sillyspec local detect`（detect 才是 local.yaml 的生成命令）。
 
@@ -249,3 +251,13 @@ execute --done 批量完成（2026-07-28，`run/complete.js`）
   - **archive CLI 下沉 git add**（坑4，`run/complete-handlers.js:137`）：`unregisterChange` 后 CLI 确定性 `safeGit add -- .sillyspec/changes/archive/ + .sillyspec/docs/`，不靠 archive step5 prompt 驱动。step5 prompt 的 git add 已精确化（`git add .sillyspec/changes/archive/` + `git add .sillyspec/docs/<project>/modules/`，勿用 changes/ 或 docs/ 整目录——会裹挟其他活跃变更；坑 index-staged-cross-change-contamination），保留作幂等兜底。safeGit 失败不阻断归档（目录已移动 + change 已注销），由 step5 prompt + agent `git status` 核对兜底。
   - **归档清理 runId marker**（2026-08-10，`run/complete-handlers.js#archiveWorktreeCleanup`）：归档时除 worktree cleanup 外，顺带清理该 change 的 execute / stage-review runId marker（`current-execute-run-id-<change>` + `current-stage-review-run-id-<stage>-<change>`，normal + 自愈分支共用）。marker 只服务 execute→verify→archive 期间，归档后无读者；只写不删会让 `.runtime/` 随变更数无限累积（单仓库几十个）。runtimeRoot 解析同写入侧 `resolveRuntimeRoot(platformOpts, specBase)`（锚主仓，平台模式不误清理）。失败仅 warn 不阻断归档。
   - 坑5（多代理中间态 import 链污染，D-05）架构级延后入 [ROADMAP.md](../../ROADMAP.md)。
+- **跨仓 task 支持**（2026-08-12，change `2026-08-11-cross-repo-task-support`）：单个 change 的 task 可分散到主仓 + 多个跨仓仓实现（dogfood 自指、monorepo 多包仓等场景）。**单仓 change 零回归**（所有 task 无 `repo:` → MultiRepoContext 退化为 `{main:{...}}` 单值 map，7 个调用点全走原路径）。跨仓机制要点：
+  - **task 卡 frontmatter 扩展**：`tasks/task-NN.md` 新增可选 `repo:`（缺省='main'，不写=主仓 task）、`base_commit:` / `head_commit:`（CLI 双锡点，跨仓 task 专用）。`base_commit` 由 CLI 派发前实时 `git -C <跨仓仓根> rev-parse HEAD` 落盘锁 base（防同 Wave 多 task 改同跨仓仓时 HEAD 推进致 diff 漂移，约束①）；`head_commit` 由 agent 在跨仓 task 子代理 commit 后、写 review.json 前落盘。`parseRepo`/`parseBaseCommit`/`parseHeadCommit`（`plan-postcheck.js`）解析。跨仓 task 的 `allowed_paths` 指**相对跨仓仓根**的路径（非主仓根）。
+  - **local.yaml `repos:` 段**（见上方「local.yaml 配置口径」）：跨仓仓注册表 `Map<key, path>`，`main` 隐式不注册。跨仓 change 缺注册 → fail-closed 抛错（约束②）。
+  - **MultiRepoContext 运行时**（`src/run/multi-repo-context.js`，进程级内存对象，不入库不持久化，随 CLI 进程生死）：execute 启动时由 `getOrCreateMultiRepoContext`（`run/shared.js`）构造一次，贯穿 execute/apply/verify 不重建（G2）。`resolve(repoKey)` 返回 `RepoEntry`（含 `gitDir`/`worktreePath`/`projectRoot`/`isMain`/`resolveHead`/`resolveBase`）；主仓 `isMain=true` 读 meta，跨仓 `isMain=false` 实时 git 验证可达（fail-closed）。`hasCrossRepo()` 判是否含跨仓 task（execute prompt 分叉用）。
+  - **pathOwners 按仓分段**（`plan-postcheck.js`）：`pathOwners` 改按 `(repo, path)` 二元组聚合（键=`${repo}|${path}`），跨仓 task 与主仓 task 同名物理路径分属不同 repo 不判冲突。`validateDesignFileCoverage` 支持 design §6 按仓分段（段头 `## <repo> 仓变更`），跨仓仓路径相对跨仓仓根对账。
+  - **execute prompt per-task workdir**（`execute.js buildWavePrompt`）：签名加 `ctx`（MultiRepoContext）。有 ctx 且本 Wave 含跨仓 task 时，注入 per-task workdir 多值表（主仓 task workdir=主仓 worktreePath，跨仓 task workdir=跨仓仓根）+ 跨仓 task commit 指引（直接改跨仓仓主干+commit，不经主仓 worktree、不建分支）+ 双锡点说明；无 ctx 或单仓 Wave → 沿用旧单值 worktreePath（零回归）。同 Wave 允许主仓+跨仓 task 混合。
+  - **跨仓 task review.json**：路径仍主仓 `.runtime/execute-runs/<runId>/tasks/task-XX/review.json`，但 `base`/`head` 是**跨仓仓的 commit**（取 task 卡 `base_commit`/`head_commit` 锡点，非瞬时 HEAD）。`review.repo` 字段（缺省='main'）标该 task 所属仓，`verifyReviewGitEvidence`/`validateTaskReviews` 按 `review.repo` 切 gitDir（跨仓 gitDir=跨仓仓根）。schemaVersion 读侧接受 `[1,2]`（`REVIEW_SCHEMA_VERSIONS_ACCEPTED`，向后兼容旧 v1 review）；写侧常量 `REVIEW_SCHEMA_VERSION=1`（与 stage-review 共享，跨仓 task 草稿追加 `repo` 字段而非升 v2）。
+  - **跨仓 apply = no-op**（`worktree-apply.js` G1）：跨仓 task 的代码由子代理直接 commit 到跨仓仓主干（落盘即落地），主仓 apply 对跨仓 task 不打 patch、不 cleanup——只校验 `review.head` 是跨仓真实 commit。`resolveApplyAllowSet` 返回 `Map<repo, Set<path>>` 按 repo 切片。主仓 task 走原 apply 路径不变。
+  - **跨仓 verify per-repo cwd**（`verify-postcheck.js` A6）：`runVerifyTestCheck` per-repo cwd，跨仓仓有 `package.json` 则在该仓根跑 `npm test`（决策④），无则跳过+warn；跨仓仓只跑 full npm test，不参与 module 子集策略（module 配置主仓强相关）。`resolveVerifyChangedFiles` per-repo 取 diff 合并。
+  - **不涉及生命周期/DB schema**（design §7.5/§8）：MultiRepoContext 是运行期内存对象，不跨进程、不持久化、无状态机；进度库（sillyspec.db）仍是主仓单库；review.json 多一个可选 `repo` 字段（JSON 文件，非 DB 列）；`db.js DB_SCHEMA_VERSION` 不变。跨仓仓的 git commit 由 task 子代理负责，SillySpec 不管理跨仓仓生命周期。
