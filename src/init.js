@@ -5,6 +5,7 @@ import { checkbox, confirm, input } from '@inquirer/prompts';
 import { ProgressManager } from './progress.js';
 import chalk from 'chalk';
 import { getVersion } from './version.js';
+import { renderExample } from './config-schema.js';
 // 向后兼容：getVersion 已抽到轻量 version.js（避免 index.js 为 --version 静态加载 init.js 的 inquirer 税），
 // 此处 re-export 保持 init.js 既有导出 API 不破坏（如 test/init-claude-injection.test.mjs）。
 export { getVersion };
@@ -312,6 +313,18 @@ function doInstall(projectDir, tools, subprojects = [], specDir = null) {
   // 初始化 SQLite 数据库
   const pm = new ProgressManager({ specDir: spec });
   pm.init(projectDir);
+
+  // 落盘脱敏 local.yaml.example（config-schema.js 单一数据源；不存在才写，仿 local detect skip-if-exists）
+  // 真实 local.yaml 是 gitignored 含凭据；example 可提交，是给人/外部 agent 看的配置发现物。
+  const examplePath = join(spec, 'local.yaml.example');
+  if (!existsSync(examplePath)) {
+    try {
+      writeFileSync(examplePath, renderExample());
+      console.log(chalk.green('    ✓ local.yaml.example 已生成（脱敏配置示例，可提交；真实 local.yaml 由 sillyspec local detect / platform connect 写入）'));
+    } catch (e) {
+      console.warn(chalk.yellow(`    ⚠ 生成 local.yaml.example 失败: ${e.message}`));
+    }
+  }
 
   // .gitignore 只在 specDir 在项目内时才修改
   const isExternalSpec = specDir && resolve(spec) !== resolve(projectDir, '.sillyspec');

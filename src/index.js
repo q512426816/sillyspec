@@ -75,6 +75,7 @@ SillySpec CLI — 规范驱动开发工具包
     doctor [--fix] [--stale-hours N]    健康检查 + 修复
 
   sillyspec local detect [--dir <path>]   生成本地配置 local.yaml（纯 fs 嗅探，零 token、不跑 scan）
+  sillyspec config [schema] [--json]      打印 local.yaml 全部已知键 + 生效状态 + 读取点（堵外部 agent 配置发现缺口）
   sillyspec runtime list [--json]         枚举 .sillyspec/.runtime/ 运行时产物（只读，看手上有哪些证据/状态文件）
   sillyspec dispatch <probe | hint>       SillyHub 派发能力探测 + 策略生成（agent 调用桥，仅渲染不执行 tool）
 
@@ -1558,6 +1559,42 @@ SillySpec modules — 模块文档管理
 
       console.log(`✅ 已生成 local.yaml (type: ${detected.project.type})`);
       console.log(`   路径: ${localYamlPath}`);
+      break;
+    }
+    case 'config': {
+      // local.yaml 键发现缺口（2026-08-11）：键散落 ~10 个 reader，外部项目 agent 无从得知。
+      // config schema 把全部已知键 + 生效状态 + 读取点打印出来，堵住发现缺口。
+      // 数据源唯一 = src/config-schema.js（与 init 落盘的 local.yaml.example 同源）。
+      const configSub = filteredArgs[1];
+      const wantHelp = configSub === 'help' || configSub === '--help' || configSub === '-h';
+      const isSchema = !configSub || configSub === 'schema';
+      if (wantHelp) {
+        console.log(`
+SillySpec config — local.yaml 配置键速查
+
+用法:
+  sillyspec config                打印 local.yaml 全部已知键（人类可读树，默认）
+  sillyspec config schema         同上（显式子命令）
+  sillyspec config --json         机读 JSON（程序化消费）
+  sillyspec config schema --json  同上
+
+说明:
+  - 数据源：src/config-schema.js（唯一真相；reader 见各键「读取点」）
+  - 键分两类：【生效】配了即生效；【声明但未接线】代码/JSDoc 提及但无 reader，配了不生效
+  - 脱敏示例文件：sillyspec init 生成 local.yaml.example（可提交；真实 local.yaml 是 gitignored）
+`);
+        break;
+      }
+      if (!isSchema) {
+        const sug = didYouMean(configSub, ['schema']);
+        console.error(`❌ 未知子命令: config ${configSub}`);
+        if (sug) console.error(`   你是想输入「config ${sug}」吗？`);
+        console.error('用法: sillyspec config [schema] [--json]   打印 local.yaml 配置键');
+        process.exit(2);
+      }
+      const { renderSchemaHuman, renderSchemaJson } = await import('./config-schema.js');
+      if (json) console.log(renderSchemaJson());
+      else console.log(renderSchemaHuman());
       break;
     }
     case 'runtime': {

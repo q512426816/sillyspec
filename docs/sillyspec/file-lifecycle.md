@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-05-31 11:00:00
-updated_at: 2026-08-11T11:29:38+08:00
+updated_at: 2026-08-11T13:59:23+08:00
 ---
 
 # SillySpec 文件生命周期
@@ -74,7 +74,7 @@ updated_at: 2026-08-11T11:29:38+08:00
 | `.sillyspec/workspace/` | 是 | `init.js` | 工作区目录，当前无核心生命周期逻辑 |
 | `.sillyspec/.runtime/` | 否 | `init.js`、`ProgressManager`、运行时命令 | DB、artifacts、history、workflow-runs、worktrees、knowledge-hit-report.json、postcheck-result.json、execute-runs（execute task review.json）、stage-reviews（brainstorm/plan/propose/execute 独立审查 review.json）、sync-conflict-<change>.json（平台同步双向冲突持久化，resolve 三选一后清理）、sillyspec.db.pre-import-<ts>.bak（pull/resolve --take-platform 的 import 前 snapshot） |
 
-`init.js` 会把 `.sillyspec/.runtime/`、`.sillyspec/local.yaml`、`.sillyspec/codebase/SCAN-RAW.md` 追加到 `.gitignore`。
+`init.js` 会把 `.sillyspec/.runtime/`、`.sillyspec/local.yaml`、`.sillyspec/codebase/SCAN-RAW.md` 追加到 `.gitignore`。注意 `.sillyspec/local.yaml.example`（脱敏配置示例，2026-08-11 起 `init.js` `doInstall` 调 `config-schema.js` `renderExample()` 落盘）**不在** gitignore——它是给人/外部 agent 看的可提交配置发现物；真实 `local.yaml`（含凭据）才 gitignored。
 
 > **平台模式残留清理边界**（`init.js` `cleanupRuntimeResidue`，由 `run/command.js`（`runCommand`）启动时首次执行一次）：
 > 当 `specRoot` 指向外部、源码目录的 `.sillyspec/` 含真实资产（`changes/`/`projects/`/`sillyspec.db`）时，只清理运行时残留，**不整删 `.runtime/`**。清理白名单保留权威状态：`worktrees/`、`sillyspec.db`、`global.json`、`contract-artifacts/`、`execute-runs/`；其余子项（`artifacts/`、`scan-runs/`、`scan-projects.json`、`user-inputs.md`、`postcheck-result.json` 等可重建缓存）逐项删除，`local.yaml`、`codebase/` 整删。未知子项默认保留（安全侧倾斜）。
@@ -128,13 +128,15 @@ quick
 
 `.sillyspec/local.yaml` 是项目主配置；各段 producer/consumer 与写入时机相互独立（scan step6 调 `sillyspec local detect` 生成骨架 + agent 补策略字段；scan step11 自检核对 local.yaml 与 detect 产出一致——commands 键已由 detect 核验存在性，agent 不再重复核验或标 unavailable；verify/execute step 读 local.yaml 时缺文件先 `sillyspec local detect` 生成骨架再读）：
 
+> **配置键速查（2026-08-11）**：全部已知键 + 生效状态 + 读取点的单一数据源 = `src/config-schema.js`（`LOCAL_YAML_SCHEMA`）。`sillyspec config schema` 打印人类可读树（`--json` 机读）；键分两类——【生效】配了即生效、【声明但未接线】代码/JSDoc 提及但无 reader（如 `dispatch.poll_interval_ms`/`worker_timeout_ms`、`auto_mode.force_*_patterns`、`worktree-hook.fileWhitelist`），配了不生效，表中诚实标出。`sillyspec init` 调 `renderExample()` 落盘脱敏 `.sillyspec/local.yaml.example`（**可提交**，区别于 gitignored 的真实 `local.yaml`），给人/外部 agent 作配置发现物。
+
 - **project.type / commands / test_strategy**（detect 生成段）：producer = `sillyspec local detect`（`src/local-detect.js` `detectLocalYaml`，纯 fs 嗅探、零 AI/零 token、不 spawn 子进程）。**核验版生成逻辑（非闭眼写三件套）**：nodejs 核验 `package.json` 的 `scripts.{build,test,lint}` 存在才写对应键，缺失不写（仅 test/lint 无 build 的项目 build 键不写；`JSON.parse` 失败 throw 中文错误）；maven 写 `mvn compile/test/checkstyle:check`；gradle 核验 `gradlew` 存在用 `./gradlew` 否则 `gradle`；make 的 test 命令从 `Makefile` `test:` 目标解析、build/lint 无则不写；全无 → `generic`（commands 为空对象）。detect 只写这三段骨架，`commands.install`/`env`/`modules`/`known_failures` 等策略字段由 scan agent 按项目实际补充（R-04 防编造：只写能从 package.json/lockfile/构建文件/CI/README 确证的事实）。
 - **platform 段**（平台 HTTP API 凭据）：producer = `sillyspec platform connect <url> <token>`（`src/sync.js` `SyncManager.connect`）——ping `/api/health` 验证后写 `{ url（尾斜杠归一）, token, last_connected, user? }`（user 显式 > git user.name > env，见 `resolvePlatformUser`）；consumer = `SyncManager` push/pull（`_getPlatform` 读此段走 HTTP API 同步平台进度）。`platform disconnect` 删 platform 段。
 - **mcp 段**（dispatch worker MCP 协议凭据）：
   - producer = 同 `platform connect`（**同源假设** design §7.4：`if (!config.mcp)` 守卫下复用 platform 的 url/token 写 `{ url, token }`；用户已手填 mcp 段则保留不覆盖，R-09）。不同源时 agent 手填 `mcp.url`/`mcp.token`，或设环境变量 `SILLYHUB_MCP_URL`/`SILLYHUB_MCP_TOKEN`（不入盘）。
   - consumer = `readMcpConfig`（`src/sillyhub-mcp/config.js`）：优先级 local.yaml mcp 段（`mcp.url`+`mcp.token` 两键齐全）> env fallback > null；best-effort（文件缺/js-yaml 解析失败全 try/catch 回退 env）、不抛不发网络。三处消费：`client.js` 构造（`_url`/`_token`/`_configured`/`_endpoint`）、`dispatch/probe.js`（`configFingerprint` 缓存 key + no-config 快速路径）、`execute.js` `getDispatchMode`（派发三态 hasConfig 判定）。
   - **platform 与 mcp 段并列、语义独立**：platform 段供 sync 的 HTTP API（平台进度双向同步），mcp 段供 dispatch worker 的 MCP 协议（连 sillyhub 派发任务）；同源假设下 `connect` 一并写两者，不同源则各填各的。
-- **dispatch 段**（可选调参）：detect/connect 均不写，agent 按需手填 `probe_ttl_ms`/`poll_interval_ms`/`worker_timeout_ms`（确知调优值才填）；`dispatch/probe.js` `readProbeTtlFromLocalYaml` best-effort 读 `probe_ttl_ms`。
+- **dispatch 段**（可选调参）：detect/connect 均不写。仅 `probe_ttl_ms` 生效（agent 确知调优值才填；`dispatch/probe.js` `readProbeTtlFromLocalYaml` best-effort 读）。`poll_interval_ms`/`worker_timeout_ms` 为**声明但未接线**键（JSDoc/scan prompt 提及，无 reader 真读 local.yaml，配了不生效，见 `src/config-schema.js` status=declared）。
 
 doctor 自检报告的修复建议已把 `sillyspec init` 更正为 `sillyspec local detect`（detect 才是 local.yaml 的生成命令）。
 

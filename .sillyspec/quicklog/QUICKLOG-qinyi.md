@@ -270,3 +270,22 @@
 根因：3.26.1 发布后 better-sqlite3 已从依赖与 node_modules 删除，但 test/change-title-quicklog-id.test.mjs 与 test/platform-sync-schema.test.mjs 仍 import better-sqlite3 致 ERR_MODULE_NOT_FOUND；且 src/db.js project.schema_version DEFAULT 4 与 DB_SCHEMA_VERSION/CURRENT_VERSION=5 及测试断言不一致。
 方案：两个测试迁 node:sqlite DatabaseSync 加 readOnly 驼峰取首列；db.js DEFAULT 4 改 5 对齐四处版本号。
 结果：npm test 165 通过 0 失败全绿，lint check-syntax 246 文件过，platform-sync-schema 四断言含 project.schema_version DEFAULT 5 实测通过。
+
+## ql-20260811-002-b167 | 2026-08-11 13:42:07 | 外部项目的 agent 无从得知 .sillyspec/local.yaml 有哪些键、哪些真生效——补一条配置键速查命令 + init 脱敏示例文件
+状态：已完成
+关联变更：（无）
+文件：
+- src/config-schema.js（新建 local.yaml 键单一数据源 LOCAL_YAML_SCHEMA + 三渲染器（human/json/example），reader 用符号名）
+- src/index.js（加 case 'config'（config/schema/--json/help/bogus）+ 顶层 --help 列出 config 行）
+- src/init.js（doInstall DB init 后落盘 local.yaml.example（renderExample，不存在才写））
+- test/config-schema.test.mjs（新建 183 断言含防漂耦合+CLI 集成+init 落盘）
+- docs/sillyspec/file-lifecycle.md（updated_at + 配置键速查 callout + dispatch 段订正 + gitignore 行补 example 可提交）
+需求：外部项目的 agent 无从得知 .sillyspec/local.yaml 有哪些键、哪些真生效——补一条配置键速查命令 + init 脱敏示例文件，堵发现缺口。
+根因：local.yaml 键散落 ~10 个 reader（local-detect/verify-postcheck/sync/sillyhub-mcp/dispatch/worktree-guard/classify-change），无单一数据源；文件 gitignored 且机器生成，外部 agent 既看不到样本也猜不到 schema，唯一线索是源码。
+方案：新建 src/config-schema.js 作单一数据源（LOCAL_YAML_SCHEMA + renderSchemaHuman/renderSchemaJson/renderExample 三渲染器，reader 引用一律符号名不用行号防漂）；sillyspec config [schema] [--json] 打印全部键 + 生效状态，live/declared-unwired 分组诚实标出未接线键（auto_mode.force_patterns / dispatch.poll_interval_ms / worker_timeout_ms / worktree-hook.fileWhitelist——配了不生效，暴露待接线债）；sillyspec init doInstall 调 renderExample 落盘脱敏 local.yaml.example（可提交，区别于 gitignored 真实 local.yaml）；防漂耦合测试断言每个 live 键首段+末段 token 必现于 example。
+结果：test/config-schema.test.mjs 183 断言全过（结构/人类输出/JSON/防漂耦合/CLI 集成/init 落盘）；npm test 全量重跑 0 失败（db-concurrency 首跑瞬态失败，单独跑+重跑均过，改动隔离不碰 DB，非本次回归）；npm run lint 过（248 文件）；同步 docs/sillyspec/file-lifecycle.md（updated_at + 配置键速查 callout + dispatch 段订正 poll/worker 未接线 + gitignore 行补 example 可提交）。
+
+## ql-20260811-003-b023 | 2026-08-11 14:01:24 | (quick 任务)
+状态：进行中
+关联变更：（无）
+文件：（见实际改动）
