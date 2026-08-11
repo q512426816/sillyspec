@@ -1,10 +1,11 @@
 ---
 author: qinyi
 created_at: 2026-08-10T23:10:00+08:00
-updated_at: 2026-08-10T23:10:00+08:00
+updated_at: 2026-08-11T21:30:00+08:00
 related_change:
   - 2026-08-10-platform-progress-sync (sillyspec 仓：客户端侧 push/pull/冲突已落地)
   - sillyhub 后端独立 change（待排期：GET 端点 + 聚合存储 + base_ts 冲突检测）
+  - 2026-08-11-change-progress-projection (sillyhub 仓：§14 workspace 隔离——token 派生 + 签发端点 + connect 换发)
 status: client-landed-backend-pending
 ---
 
@@ -220,3 +221,72 @@ Authorization: Bearer <token>
 - [ ] 时间戳比对用 ISO 8601 UTC 字符串字典序（§7）
 - [ ] 老 body（裸 JSON 无 header）继续可解析（零回归）
 - [ ] 不实现字段级 auto-merge（§9）
+
+## 14. workspace 隔离（2026-08-11-change-progress-projection）
+
+> 本章为后续追加，编号接续 §13。**§3 serializeForSync 六表 body 结构不变**（workspace
+> 不进 body），隔离走 workspace-scoped token 派生。§1–§13 内容零删改。
+
+### 14.1 workspace 归属 = workspace-scoped token 派生（D-001@v1）
+
+收件箱按 workspace 隔离同名 change，归属**只**由 workspace-scoped 同步 token 派生
+（前缀 `shpsync_`，参照 McpToken `shmcp_` 模式）：工具上行 `Authorization: Bearer shpsync_...`
+→ 后端按 `token_hash`（sha256）查 `platform_sync_tokens` 表 → 派生
+`(user=created_by, workspace_id=token 绑定工作区)`。workspace_id **不进** serializeForSync
+body（§3 六表保持），也不从 body/header 取（唯一通道是 token 派生）。
+
+`platform_change_progress` 加 `workspace_id` 列 + 复合唯一约束
+`(workspace_id, change_name)`：同一 workspace 内 change_name 唯一，不同 workspace 各占
+一行，多 workspace 同名 change 不串值。`workspace_id` nullable——`shk_live_` 过渡期
+（connect 换发铺开前）上行的行 workspace_id=NULL，投影 join 不命中走 fallback（§14.4）。
+
+### 14.2 两新签发端点（sillyhub 侧）
+
+```
+# workspace 成员签发同步 token（明文仅 201 一次返回）
+POST /api/workspaces/{workspace_id}/platform-sync-tokens
+  鉴权: require_permission(WORKSPACE_WRITE)（owner/developer 可签，viewer → 403）
+  body: { name: str }
+  → 201 { id, workspace_id, key_prefix, token: "shpsync_...", name, created_at }
+  # 库存 sha256(token)，明文不入库不入日志（R-06）；created_by=调用者
+
+# connect 换发（带 workspace 权限校验，D-006@v1 安全闭环）
+POST /api/workspaces/resolve-by-root-path
+  鉴权: Bearer shk_live_ (ApiKeyService) 或 JWT（不接受 shpsync_——换发是 user 级操作）
+  body: { root_path: str }   # connect 的 cwd，与平台 Workspace.root_path 绑定值等值匹配
+  流程: ① _find_active_by_root_path 反查活跃 workspace → 反查不到 404
+        ② 手动 has_permission(WORKSPACE_WRITE)（非 require_permission——workspace_id 是
+          body 反查出来的，不在路径）→ 无权限 403
+        ③ 签发 shpsync_ token（created_by=调用者, workspace_id=反查到的 wid）
+  → 200 { workspace_id, token: "shpsync_..." }
+```
+
+### 14.3 connect 换发（sillyspec 客户端侧，task-09）
+
+`sillyspec platform connect <url> <user级 token>` 扩展：健康检查通过后，用传入 token
+作 Bearer + 本地 `root_path`（= connect 的 cwd）调 `resolve-by-root-path` 换发
+`shpsync_` token，成功则用 `replaceTopLevelSection` 文本级写入 local.yaml `platform` 段
+（覆盖原 user 级 token，保留注释/其他段/CRLF 字节级）。换发失败（404 root_path 未绑 /
+403 无 WORKSPACE_WRITE / 断网）**降级沿用原 token 继续**，不阻断 connect（best-effort）。
+
+mcp 段同源假设坑（connect 把 `shk_live_` 复用进 mcp 段，但真 McpToken 是 `shmcp_` 前缀）
+不在本章范围，留单独 change（NG-4）。
+
+### 14.4 收件箱 3 端点鉴权升级（§4/§5/§6 端点，签名不变）
+
+`require_platform_sync` 返回 `(User, workspace_id|None)` 三路分流：
+- `shpsync_` → PlatformSyncTokenService.authenticate 派生 `(created_by 用户, 绑定 workspace_id)`
+- `shk_live_` → ApiKeyService 返 `(user, None)`（过渡期 R-02，workspace_id=None）
+- JWT → `get_current_user` 返 `(user, None)`
+
+3 端点（POST/GET progress、GET changes）从鉴权取 workspace_id 透传 service，service 按
+workspace_id 过滤（`None` 用 `is_(None)`，等价旧版全局聚合）。端点 URL / 请求 / 响应形态
+**不变**，仅作用域按 workspace 收窄。
+
+### 14.5 变更中心实时投影（read-only，仅 current_stage）
+
+变更中心 `GET /api/workspaces/{wid}/changes` 的 `ChangeService.enrich_summaries` /
+`enrich_with_workspace_ids` 实时 read-only join `platform_change_progress`，取工具上行
+权威 `current_stage` 覆盖 `changes` 表的文件扫描猜值（join 不命中 fallback 现有值，D-003）。
+**不投 status**（sillyspec status 仅 active/archived，archived 由 current_stage==archive 派生，
+D-004@v2）。不写 changes 表（D-002 read-only）。list 用批量 IN join（禁 N+1，R-03）。

@@ -268,6 +268,29 @@ export class SyncManager {
     }
     console.log(`[sync] 平台连接成功: ${url}`);
 
+    // 换发 workspace-scoped 同步 token（task-09 / D-005@v1）：用传入 user 级 token
+    // （shk_live_ / JWT）作 Bearer + 本地 root_path（connect 的 cwd，与平台
+    // Workspace.root_path 绑定值等值匹配）调 resolve-by-root-path。成功取 shpsync_
+    // 覆盖 token 写入 platform 段；404（root_path 未绑）/403（无 WORKSPACE_WRITE）/断网
+    // 均降级沿用原 token 继续（best-effort 不阻断 connect）。
+    let effectiveToken = token;
+    const resolveUrl = `${normalizedUrl}/api/workspaces/resolve-by-root-path`;
+    const resolved = await fetchJson(resolveUrl, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ root_path: this.cwd }),
+    });
+    if (resolved && resolved.token && resolved.token.startsWith('shpsync_')) {
+      effectiveToken = resolved.token;
+      console.log(
+        `[sync] 已换发 workspace-scoped 同步 token (workspace: ${resolved.workspace_id})`
+      );
+    } else {
+      console.warn(
+        '[sync] 换发 workspace-scoped token 失败（404/403/断网），沿用原 token 继续'
+      );
+    }
+
     // 解析推送者身份（D-004）：显式 > git user.name > env；全失败留空不写 user 字段
     const resolvedUser = resolvePlatformUser(this.cwd, user);
 
@@ -275,7 +298,7 @@ export class SyncManager {
     // （旧 read-modify-write 经 parseSimpleYaml 丢注释+丢非扁平结构，round-trip 清空用户手填内容）。
     const platformEntries = [
       `  url: ${normalizedUrl}`,
-      `  token: ${token}`,
+      `  token: ${effectiveToken}`,
       `  last_connected: ${new Date().toISOString()}`,
     ];
     if (resolvedUser) {
