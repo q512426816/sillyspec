@@ -356,9 +356,10 @@ function matchFileWhitelist(filePath) {
 }
 
 /**
- * 读取 local.yaml 中的扩展白名单配置（如果存在）
+ * 读取并解析 local.yaml（轻量手写解析，返回顶层对象）。
+ * 消费方读嵌套段 worktree-hook.readonlyCommands（见 isSingleCommandReadonly 的 extraReadonlyCommands）。
  * @param {string} cwd
- * @returns {{ fileWhitelist?: string[], readonlyCommands?: string[] }}
+ * @returns {Record<string, any>} 解析后的 local.yaml 顶层对象（文件缺/解析失败 → {}）
  */
 function loadLocalConfig(cwd) {
   const candidates = [

@@ -285,7 +285,28 @@
 方案：新建 src/config-schema.js 作单一数据源（LOCAL_YAML_SCHEMA + renderSchemaHuman/renderSchemaJson/renderExample 三渲染器，reader 引用一律符号名不用行号防漂）；sillyspec config [schema] [--json] 打印全部键 + 生效状态，live/declared-unwired 分组诚实标出未接线键（auto_mode.force_patterns / dispatch.poll_interval_ms / worker_timeout_ms / worktree-hook.fileWhitelist——配了不生效，暴露待接线债）；sillyspec init doInstall 调 renderExample 落盘脱敏 local.yaml.example（可提交，区别于 gitignored 真实 local.yaml）；防漂耦合测试断言每个 live 键首段+末段 token 必现于 example。
 结果：test/config-schema.test.mjs 183 断言全过（结构/人类输出/JSON/防漂耦合/CLI 集成/init 落盘）；npm test 全量重跑 0 失败（db-concurrency 首跑瞬态失败，单独跑+重跑均过，改动隔离不碰 DB，非本次回归）；npm run lint 过（248 文件）；同步 docs/sillyspec/file-lifecycle.md（updated_at + 配置键速查 callout + dispatch 段订正 poll/worker 未接线 + gitignore 行补 example 可提交）。
 
-## ql-20260811-003-b023 | 2026-08-11 14:01:24 | (quick 任务)
-状态：进行中
+## ql-20260811-003-b023 | 2026-08-11 14:01:24 | platform connect/disconnect 写 local.yaml 时丢注释/其他段/数组/深嵌套（用户几个月踩坑经验被一次 connect 清空…
+状态：已完成
 关联变更：（无）
-文件：（见实际改动）
+文件：src/classify-change.js, src/hooks/worktree-guard.js, src/run/command.js, src/sync.js, test/local-yaml-preserve.test.mjs, test/classify-change.test.mjs
+需求：platform connect/disconnect 写 local.yaml 时丢注释/其他段/数组/深嵌套（用户几个月踩坑经验被一次 connect 清空）。
+根因：sync.js writeLocalYaml 扁平 writer 全量 writeFileSync 覆写整个文件 + parseSimpleYaml 第85行跳注释行，connect/disconnect 的 read-modify-write 经 parse 往返丢注释+丢非扁平结构。
+方案：connect/disconnect 改文本级定向替换 platform 段（新增 readLocalYamlRaw + findTopLevelSectionRange + replaceTopLevelSection + writeLocalYamlRaw 四辅助，删除死代码 writeLocalYaml(cwd,obj)，不动 parseSimpleYaml 读取语义避免破坏 machine-interface 与 config-schema 等依赖）；mcp 段文本级检测守卫保留用户手填不覆盖；disconnect 删段后纯空白才 unlink 注释算内容保留。
+结果：新增 test/local-yaml-preserve.test.mjs 7 用例全过（注释与其他段与数组与深嵌套保留 + mcp 守卫 + disconnect 删段 + 纯空白 unlink + 空文件追加 + CRLF 已有行保留）；npm run lint 过 249 文件；npm test 166 通过 1 失败 db-concurrency 是 node 内置 sqlite 多进程并发 flaky（不 import sync.js 与本变更无关，3 次重跑 run2 与 run3 均 800 通过）；同步 modules/sync.md 5 处。
+
+## ql-20260811-004-68a8 | 2026-08-11 14:18:06 | 收尾 local.yaml 配置发现——修 detect 模板错误注释 module_paths + 判定 4 组 declared 键去留
+状态：已完成
+关联变更：（无）
+文件：
+- src/index.js（detect 模板 module_paths 错误注释 → modules inline flow 示例）
+- src/run/command.js（auto_mode 接线调 readAutoModeFromLocalYaml(cwd) 传 localConfig（向后兼容））
+- src/classify-change.js（加 readAutoModeFromLocalYaml helper + 正则 try/catch 加固（review #30））
+- src/hooks/worktree-guard.js（loadLocalConfig 仅改 JSDoc 删 fileWhitelist 假承诺（无逻辑变动））
+- src/config-schema.js（auto_mode→live+readers / dispatch.poll,worker 路径A gate / fileWhitelist 删 / renderExample 同步）
+- test/config-schema.test.mjs（+auto_mode live / fileWhitelist 移除断言）
+- test/classify-change.test.mjs（新建 readAutoModeFromLocalYaml+接线+正则加固 20 断言）
+- docs/sillyspec/file-lifecycle.md（auto_mode 段 live + dispatch 路径A预留 + 配置速查 callout 更新）
+需求：收尾 local.yaml 配置发现——修 detect 模板错误注释 module_paths + 判定 4 组 declared 键去留，让 schema 与代码一致。
+根因：detect 模板注释 module_paths 与真实键 modules（inline flow，verify-postcheck extractModules 只认 inline flow）不符误导；4 组 declared 键各需判定——auto_mode 调用方没传 localConfig（死但可救）、dispatch.poll/worker 在路径A 未落地指令里（预留非死）、fileWhitelist 无消费方（纯假承诺）。
+方案：① index.js detect 模板 module_paths→modules inline flow 示例。② auto_mode 接线（classify-change.js 加 readAutoModeFromLocalYaml best-effort 读 auto_mode 段 + 正则 try/catch 加固 review-2026-08-09 #30；command.js:1008 读 cwd 传 localConfig；localConfig=null 时 classifyChange if 守卫行为不变，向后兼容）。② dispatch.poll/worker 判定留+sharpen（路径A 预留键，isPathASupported()=false 整段派发指令不注入，schema desc 点名路径A gate）。② fileWhitelist 删（worktree-guard loadLocalConfig 仅改 JSDoc 注释无逻辑变动，schema 删键，renderExample 删注释行）。config-schema.js 同步；file-lifecycle.md 同步。--force-baseline 因触及守卫文件 hooks/worktree-guard.js（仅 JSDoc）+ run/command.js（向后兼容接线）。
+结果：test/classify-change.test.mjs 新建 20 断言全过；test/config-schema.test.mjs 189 断言全过；npm test 全量 exit 0（并发 sync.js+local-yaml-preserve 亦过，非本次回归）；npm run lint 过（250 文件）；无 prompt 级联（scan.js 未动）。

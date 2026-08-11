@@ -57,6 +57,10 @@ console.log('\n--- 1. LOCAL_YAML_SCHEMA 结构健全 ---')
     assert(k.readers.length > 0, `live 键至少一个 reader：${k.path}`)
   }
   console.log(`    （live=${live.length}, declared=${declared.length}）`)
+  // auto_mode 接线后 live（2026-08-11）；fileWhitelist 已删（无消费方，不像路径A 预留）
+  const amKeys = keys.filter((k) => k.section === 'auto_mode')
+  for (const k of amKeys) assert(k.status === 'live', `auto_mode 已接线 live：${k.path}`)
+  assert(!keys.some((k) => k.path === 'worktree-hook.fileWhitelist'), 'fileWhitelist 已从 schema 移除（无消费方）')
 }
 
 // ── 2. renderSchemaHuman ──
@@ -110,9 +114,12 @@ console.log('\n--- 4. renderExample 防漂耦合（每个 live 键首段+末段�
   // 脱敏：token 占位符，不能泄露真实凭据
   assert(ex.includes('<your-mcp-token>'), 'example mcp.token 用占位符脱敏')
   assert(ex.includes('<your-platform-token>'), 'example platform.token 用占位符脱敏')
-  // declared 键（poll_interval_ms / worker_timeout_ms / auto_mode）应在 example 里被标注/注释
-  assert(ex.includes('poll_interval_ms'), 'example 含 declared 键 poll_interval_ms（注释提醒）')
-  assert(ex.includes('auto_mode'), 'example 含 declared 段 auto_mode（注释提醒）')
+  // poll_interval_ms/worker_timeout_ms（路径A 预留·未落地）仍在 example 注释提醒；auto_mode 已 live 取消注释；fileWhitelist 已移除
+  assert(ex.includes('poll_interval_ms'), 'example 含路径A 预留键 poll_interval_ms（注释提醒）')
+  assert(ex.includes('路径A 预留'), 'example dispatch 注释点名路径A gate')
+  assert(ex.includes('auto_mode'), 'example 含 auto_mode 段（已 live，取消注释）')
+  assert(/^auto_mode:/m.test(ex), 'auto_mode 段在 example 为非注释行（live）')
+  assert(!ex.includes('fileWhitelist'), 'example 已移除无消费方的 fileWhitelist')
 }
 function escapeRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') }
 

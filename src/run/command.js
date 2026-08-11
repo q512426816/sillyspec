@@ -1004,8 +1004,10 @@ async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts = 
 
   // ── Classify change on first entry ──
   if (!progress.stages?.brainstorm?.status && !progress.stages?.plan?.status) {
-    const { classifyChange } = await import('../classify-change.js')
-    const classification = classifyChange({ description: inputText || '', explicitMode })
+    const { classifyChange, readAutoModeFromLocalYaml } = await import('../classify-change.js')
+    // auto_mode 接线（2026-08-11）：从 local.yaml 读 auto_mode 段传 localConfig，让 force_*_patterns 真生效。
+    const localConfig = readAutoModeFromLocalYaml(cwd)
+    const classification = classifyChange({ description: inputText || '', explicitMode, localConfig })
     if (classification.mode === 'quick') {
       console.log(`📊 auto 模式分类：${classification.mode}（${classification.reason}）`)
       console.log(`   此变更建议使用 quick 模式，运行：sillyspec run quick "${inputText || '需求'}"`)

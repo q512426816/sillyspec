@@ -1544,10 +1544,10 @@ SillySpec modules — 模块文档管理
       lines.push('# 测试策略：full=全量测试, module=只测变更模块, skip=跳过测试');
       lines.push('test_strategy: module');
       lines.push('');
-      lines.push('# 模块测试路径映射（可选）');
-      lines.push('# module_paths:');
-      lines.push('#   user-service: "user/"');
-      lines.push('#   order-service: "order/"');
+      lines.push('# monorepo 子模块映射（test_strategy: module 时按 git diff 命中模块收窄测试；inline flow 形态）');
+      lines.push('# modules:');
+      lines.push('#   user-service: { path: "user/", test: "cd user && npm test" }');
+      lines.push('#   order-service: { path: "order/", test: "cd order && npm test" }');
       lines.push('# 已知预存失败（可选）：verify 实测时这些失败被豁免、不阻断归档；fail-safe 仅豁免能检测到的失败行');
       lines.push('# known_failures:');
       lines.push('#   - "tests/test_legacy.py::test_old"');

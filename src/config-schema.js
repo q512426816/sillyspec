@@ -99,8 +99,8 @@ export const LOCAL_YAML_SCHEMA = {
       note: '仅在确知调优值时填，否则留默认。',
       keys: [
         { path: 'dispatch.probe_ttl_ms', type: 'integer', optional: true, status: 'live', readers: ['readProbeTtlFromLocalYaml (src/dispatch/probe.js)'], desc: '派发探测负面缓存 TTL（毫秒，默认 60000）。daemon 抖动期避免反复探测。', example: '60000' },
-        { path: 'dispatch.poll_interval_ms', type: 'integer', optional: true, status: 'declared', readers: [], desc: '【声明但未接线】JSDoc/scan prompt 提及，无 reader 真读 local.yaml，配了不生效。', example: '15000' },
-        { path: 'dispatch.worker_timeout_ms', type: 'integer', optional: true, status: 'declared', readers: [], desc: '【声明但未接线】同上，无 reader，配了不生效。', example: '60000' },
+        { path: 'dispatch.poll_interval_ms', type: 'integer', optional: true, status: 'declared', readers: [], desc: '【路径A 预留·未落地】renderSillyHubInstruction 注入的轮询文本提及，但 isPathASupported()=false 该指令当前不注入；路径A 落地后接线，配了暂不生效。', example: '15000' },
+        { path: 'dispatch.worker_timeout_ms', type: 'integer', optional: true, status: 'declared', readers: [], desc: '【路径A 预留·未落地】同 poll_interval_ms，路径A 落地后接线，配了暂不生效。', example: '60000' },
       ],
     },
     {
@@ -134,16 +134,15 @@ export const LOCAL_YAML_SCHEMA = {
       note: 'execute worktree 隔离期内放行的额外只读命令。键名用 camelCase（parseSimpleYaml 原样保留）。',
       keys: [
         { path: 'worktree-hook.readonlyCommands', type: 'array', optional: true, status: 'live', readers: ['loadLocalConfig (src/hooks/worktree-guard.js)'], desc: '额外放行的只读命令名列表（如 rg/fd），绕过 worktree-guard 写操作拦截。', example: 'rg' },
-        { path: 'worktree-hook.fileWhitelist', type: 'array', optional: true, status: 'declared', readers: [], desc: '【声明但未接线】JSDoc 提及，无消费方读此键，配了不生效。', example: '' },
       ],
     },
     {
       id: 'auto_mode',
       title: '变更规模自动分类',
-      note: '【整段声明但未接线】classifyChange 接受 localConfig 形参，但唯一调用方 src/run/command.js 未从 local.yaml 提取并传入，配了不生效。',
+      note: 'sillyspec run auto 时，readAutoModeFromLocalYaml 读本段传 classifyChange 的 localConfig，force_*_patterns 匹配需求描述则强制对应模式。',
       keys: [
-        { path: 'auto_mode.force_full_patterns', type: 'array', optional: true, status: 'declared', readers: [], desc: '【未接线】需求描述匹配则强制 full 流程（正则数组）。', example: '数据库|migration' },
-        { path: 'auto_mode.force_quick_patterns', type: 'array', optional: true, status: 'declared', readers: [], desc: '【未接线】需求描述匹配则强制 quick（正则数组）。', example: 'fix typo' },
+        { path: 'auto_mode.force_full_patterns', type: 'array', optional: true, status: 'live', readers: ['readAutoModeFromLocalYaml + classifyChange (src/classify-change.js)', 'runCommand (src/run/command.js)'], desc: '需求描述匹配任一正则（i 大小写无关）→ 强制 full 流程。非法正则跳过不崩。', example: '数据库|migration' },
+        { path: 'auto_mode.force_quick_patterns', type: 'array', optional: true, status: 'live', readers: ['readAutoModeFromLocalYaml + classifyChange (src/classify-change.js)', 'runCommand (src/run/command.js)'], desc: '需求描述匹配任一正则 → 强制 quick。非法正则跳过不崩。', example: 'fix typo' },
       ],
     },
   ],
@@ -256,8 +255,8 @@ platform:
 # ── 派发调参（仅确知调优值时填，否则留默认）──
 dispatch:
   probe_ttl_ms: 60000         # 派发探测负面缓存 TTL（默认 60000）
-  # poll_interval_ms: 15000   # ⚠ 声明但未接线，配了不生效
-  # worker_timeout_ms: 60000  # ⚠ 声明但未接线，配了不生效
+  # poll_interval_ms: 15000   # ⚠ 路径A 预留·未落地，配了暂不生效
+  # worker_timeout_ms: 60000  # ⚠ 路径A 预留·未落地，配了暂不生效
 
 # ── monorepo 子模块映射（test_strategy: module 时按 git diff 命中模块收窄测试）──
 # 只支持 inline flow 形态（嵌套展开式解析不出）：
@@ -277,13 +276,12 @@ worktree-hook:
   readonlyCommands:
     - rg
     - fd
-  # fileWhitelist: []         # ⚠ 声明但未接线，配了不生效
 
-# ── 变更规模自动分类（⚠ 整段声明但未接线，classifyChange 调用方未传 localConfig，配了不生效）──
-# auto_mode:
-#   force_full_patterns:
-#     - 数据库|migration
-#   force_quick_patterns:
-#     - fix typo
+# ── 变更规模自动分类（sillyspec run auto 时按需求描述强制 quick/full；正则数组，i 大小写无关）──
+auto_mode:
+  force_full_patterns:
+    - 数据库|migration
+  force_quick_patterns:
+    - fix typo
 `;
 }
