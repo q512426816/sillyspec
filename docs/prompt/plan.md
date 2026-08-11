@@ -363,6 +363,11 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
 ````markdown
 为 plan.md 中的每个任务生成紧凑 TaskCard。
 
+⚠️ 生成卡片前先确认 plan.md 已满足（否则下一步 postcheck 会硬拦，导致返工重编号/重分 Wave）：
+- **共享文件须分 Wave**：若多个 task 的 allowed_path 含同一文件，plan.md 必须把它们分到不同「## Wave N」（同 Wave 共享文件会被 execute 强制并行，子代理互相覆盖；postcheck 拦同 Wave 共享）
+- **task id 从 1 连续**：task-01、task-02、task-03… 不能跳号或重号（postcheck 校验 id 连续性，gap 会拦）
+这两条是跨 task 全局约束，子代理只写单卡看不到全局——你（主 agent）分派子代理前必须先在 plan.md 里确认 Wave 划分与编号正确。
+
 ## 任务清单
 - task-01: 添加用户创建接口（覆盖：FR-01, D-001@v1）
 - task-02: 添加角色创建接口（覆盖：FR-02）
