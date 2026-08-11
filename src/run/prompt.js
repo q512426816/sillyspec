@@ -452,7 +452,13 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
       } catch {}
       if (!reviewRunId) {
         reviewRunId = generateStageReviewRunId()
-        try { mkdirSync(tierRuntimeRoot, { recursive: true }); writeFileSync(reviewRunIdMarker, reviewRunId + '\n') } catch {}
+        try {
+          mkdirSync(tierRuntimeRoot, { recursive: true })
+          writeFileSync(reviewRunIdMarker, reviewRunId + '\n')
+          // plan-c: echo 完整 review 目录路径，避免 agent 拿裸 runId 给子代理时漏连字符拼错路径
+          const reviewDir = `${tierRuntimeRoot}/stage-reviews/${stageName}-${reviewRunId}`
+          console.log(`  📁 Stage Review 写入目录（直接复制给 review 子代理，勿手拼 runId）：${reviewDir}/`)
+        } catch {}
       }
       // review.json 产物契约(schema + 示例 + docHash 算法 + 重算提示)事前注入,与 validateStageReviewSchema 同源
       const reviewContractMd = renderReviewJsonContract({ stage: stageName, changeDir: tierChangeDir, reviewRunId, tier: tier.tier })

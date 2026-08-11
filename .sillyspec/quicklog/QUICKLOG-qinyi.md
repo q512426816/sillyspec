@@ -331,3 +331,12 @@
 根因：warn 只报问题不指引出路，预存漂移文件每次刷屏用户无解
 方案：prompt.js 行44/46 两行 warn 各追加跑 sillyspec modules rebuild 升级到 schema_version 2 的提示
 结果：node --check 过 + lint 250 文件过 + npm test 除 pre-existing db-concurrency（只 import db.js 与 prompt.js 零依赖）外全绿
+
+## ql-20260811-007-8435 | 2026-08-11 15:48:12 | plan 复盘两修——门控时机前置提示与 run-id 路径防拼错
+状态：已完成
+关联变更：（无）
+文件：src/run/prompt.js, src/stages/plan.js
+需求：plan 复盘两修——门控时机前置提示与 run-id 路径防拼错
+根因：blueprint 共享文件与 id 连续校验全堆 postcheck 末步 agent 先写卡后被拦返工；stage review run-id 裸值传给子代理易漏连字符拼错路径
+方案：plan.js buildCoordinatorStep prompt 加前置约束段（共享文件须分 Wave 与 id 从 1 连续）prompt.js 写 marker 时 echo 完整 review 目录路径供直接复制
+结果：node --check 过 lint 250 文件过 npm test 全绿 EXIT 0，含 try 块缩进修正
