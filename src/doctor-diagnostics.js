@@ -11,7 +11,7 @@
  *     - safe_actions：只描述建议动作与风险等级，绝不自动执行
  *
  * 安全约束（硬性）：
- *   - 所有检测只读。DB 以 better-sqlite3 只读连接打开（readonly + fileMustExist），不调用
+ *   - 所有检测只读。DB 以 node:sqlite 只读连接打开（readOnly + existsSync 前置门），不调用
  *     export/writeFileSync，不跑建表/迁移，close 后丢弃——绝不写回原 db 文件。
  *   - 不删除/移动任何文件；orphan db 仅报告，处理交给后续 --dump-db / --confirm 流程。
  *   - execute-progress-plan-mismatch 维度同样只读：仅读 plan.md checkbox + 只读查 stages 表，
@@ -20,7 +20,7 @@
  * 风格对齐 scan-postcheck.js：checks 用 CHECK_SEVERITY，formatter 产出 schema_version JSON，
  * writer 落盘到 <authoritySpecDir>/.runtime/。
  */
-import Database from 'better-sqlite3';
+import { openDatabase, pluckGet, pluckAll } from './db-engine.js';
 import { existsSync, statSync, readFileSync, readdirSync, mkdirSync, writeFileSync, unlinkSync } from 'fs';
 import { join } from 'path';
 import { CHECK_SEVERITY } from './constants.js';
@@ -68,16 +68,16 @@ function probeDb(dbPath) {
   }
   let db = null;
   try {
-    db = new Database(dbPath, { readonly: true, fileMustExist: true });
+    db = openDatabase(dbPath, { readOnly: true });
     const pick = (sql, fallback = null) => {
       try {
-        const r = db.prepare(sql).pluck().get();
+        const r = pluckGet(db, sql);
         return r === undefined ? fallback : r;
       } catch { return fallback; }
     };
     const pickCol = (sql) => {
       try {
-        return db.prepare(sql).pluck().all();
+        return pluckAll(db, sql);
       } catch { return []; }
     };
     // 每个 active change 的 execute stage status（只读查询；stages 表的 status 列）。
@@ -657,7 +657,7 @@ export async function dumpDb({ dbPath, cwd }) {
   }
   let db = null;
   try {
-    db = new Database(dbPath, { readonly: true, fileMustExist: true });
+    db = openDatabase(dbPath, { readOnly: true });
     const rows = (sql) => {
       try { return db.prepare(sql).all(); } catch { return []; }
     };

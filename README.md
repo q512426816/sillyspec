@@ -59,12 +59,10 @@ npx sillyspec init --interactive      # 完整引导
 
 ## 平台支持
 
-SillySpec 进度库使用 SQLite 持久化（基于 better-sqlite3 原生绑定）。安装支持情况如下：
+SillySpec 进度库使用 SQLite 持久化（基于 Node.js 内置的 `node:sqlite` 模块，纯 JS 无原生编译依赖）。
 
-- **主流平台（prebuilt 零编译安装）**：Node.js >= 18 的 Linux x64、macOS x64 / macOS arm64、Windows x64。安装时直接下载预编译二进制，无需本地 C++ 工具链。
-- **边缘平台不保证**：Alpine（musl libc）、Windows arm64、BSD 等平台可能没有对应的 prebuilt 二进制，安装时可能触发 node-gyp 从源码编译（此时需要本机具备 C++ 编译工具链）。
-
-如遇边缘平台编译失败，建议在受支持的平台或容器（如 Debian/Ubuntu 基镜像）中运行。
+- **Node.js 版本要求 >= 22.11.0**：`node:sqlite` 自 v22.11.0 起免 `--experimental-sqlite` flag 直接可用。支持 Linux x64、macOS x64 / arm64、Windows x64 等所有 Node.js 官方支持平台。
+- **零编译安装**：不依赖任何原生绑定 / node-gyp / C++ 工具链，npm install 即装即用，无平台编译失败风险。
 
 ## 从哪里开始
 

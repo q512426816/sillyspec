@@ -1,8 +1,8 @@
 /**
  * execute 期 worktree-guard 守卫边界用例（task-16, AC-02 / G2）
  *
- * task-10 废 gate-status.json、task-11 hook 子进程改 better-sqlite3 只读连接后，hook 唯一权威源
- * 是 sillyspec.db（queryDbFirstCell：execFileSync 起真实 node 子进程 require better-sqlite3 只读）。
+ * task-10 废 gate-status.json、task-11 hook 子进程改 node:sqlite 只读连接后，hook 唯一权威源
+ * 是 sillyspec.db（queryDbFirstCell：execFileSync 起真实 node 子进程 require node:sqlite 只读）。
  * 本测试实证 execute 期守卫边界不 fail-open：
  *   1. hook 子进程实测：_queryDbFirstCellForTest 内部 execFileSync 真实子进程直读
  *      current_stage='execute' 与 active changes 命中（非单元级同步 mock）
@@ -11,7 +11,7 @@
  *   3. fail-closed：db 缺失或损坏时 queryDbFirstCell 返回 null、源码写被拦截而非放行
  *
  * fixture 刻意不写 gate-status.json——验证 DB 为唯一权威源（AC-02/G2，无 stale 缓存）。
- * 跨平台：mkdtemp 临时目录 + better-sqlite3 同步原生绑定（无外部 sqlite3 CLI 依赖），
+ * 跨平台：mkdtemp 临时目录 + node:sqlite DatabaseSync 同步原生绑定（无外部 sqlite3 CLI 依赖），
  * Windows/Linux/macOS 均跑通；路径全用 path.join（path.sep），不硬编码分隔符。
  */
 import {
@@ -47,7 +47,7 @@ function mkProject(prefix) {
 
 /**
  * 在 temp 项目里建 sillyspec.db 并种一条 change 行（刻意不写 gate-status.json）。
- * 用 DB 类（better-sqlite3 同步 API）建库：
+ * 用 DB 类（node:sqlite DatabaseSync 同步 API）建库：
  *  - 让 findProjectRoot 命中 temp 项目（.sillyspec/.runtime/sillyspec.db 标记），不误爬到用户 home；
  *  - readCurrentStage / isNoWorktreeMode 经 queryDbFirstCell readonly 子进程读出阶段/no_worktree。
  * 每次 DELETE FROM changes 后插单行，保证 isNoWorktreeMode LIMIT 1 的确定性（无多行竞态）。
@@ -56,7 +56,7 @@ function seedDb(cwd, { name = 'c-exec', stage = 'execute', status = 'active', no
   const runtimeDir = join(cwd, '.sillyspec', '.runtime')
   mkdirSync(runtimeDir, { recursive: true })
   const db = new DB(join(runtimeDir, 'sillyspec.db'))
-  db.init() // better-sqlite3 同步 API，无 await
+  db.init() // node:sqlite DatabaseSync 同步 API，无 await
   const sq = db.getDb()
   sq.prepare("INSERT OR IGNORE INTO project (id,name,created_at,updated_at) VALUES (1,'p','t','t')").run()
   sq.prepare('DELETE FROM changes').run()
@@ -70,7 +70,7 @@ const unregisteredChange = '2026-08-09-unregistered'
 
 try {
   // ── 1. hook 子进程实测：_queryDbFirstCellForTest 真实子进程直读 DB ──
-  console.log('\n[1] hook 子进程实测（execFileSync 起真实 node 子进程 require better-sqlite3 readonly）')
+  console.log('\n[1] hook 子进程实测（execFileSync 起真实 node 子进程 require node:sqlite readonly）')
   {
     const cwd = mkProject('wg-exec-subproc')
     seedDb(cwd, { name: registeredChange, stage: 'execute', status: 'active', noWorktree: 0 })
@@ -146,7 +146,7 @@ try {
     const missingVal = queryDbFirstCell(missingCwd, 'SELECT 1')
     assert(missingVal === null, '3a db 缺失时 queryDbFirstCell 返回 null（fail-closed，不抛错）')
 
-    // 3b. db 损坏：覆盖主库为非 SQLite 内容 + 清 WAL 侧车 → readonly 子进程 fileMustExist 打开失败
+    // 3b. db 损坏：覆盖主库为非 SQLite 内容 + 清 WAL 侧车 → readonly 子进程打开失败
     //     → execFileSync 抛错 → catch warn + 返回 null（fail-closed）
     const cwd = mkProject('wg-exec-corrupt')
     seedDb(cwd, { name: 'c-corrupt', stage: 'execute', status: 'active', noWorktree: 0 })

@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-05-31 11:00:00
-updated_at: 2026-08-11T00:47:05+08:00
+updated_at: 2026-08-11T11:29:38+08:00
 ---
 
 # SillySpec 文件生命周期
@@ -104,7 +104,7 @@ sillyspec run scan
 
 brainstorm / propose / plan / execute / verify / archive
   -> .sillyspec/changes/<change>/...
-  -> .sillyspec/.runtime/sillyspec.db                    (better-sqlite3 原生绑定 + WAL 模式：journal_mode=WAL + busy_timeout=5000 + foreign_keys=ON，事务提交直接持久化主库文件 + .db-wal/.db-shm 侧车；写前自动备份为 sillyspec.db.bak，读取时主库损坏/为空从 .bak 回退，两者均坏则 fail-loud；WAL 单写者串行 + SQLITE_BUSY 应用层有限重试，并发安全不丢更新；schema v4：changes 表加 last_synced_platform_ts=base_ts 乐观锁（push 带头标 X-SillySpec-Base-Ts，平台比对 current_pushed_at > base_ts 则 409）+ last_local_modified_ts=本地脏度（全写入路径 _touchLocalModified 触发，读路径 run().changes>0 guard 不标脏）；pull/resolve --take-platform 的 import 事务前另存 sillyspec.db.pre-import-<ts>.bak（独立 .bak 路径，不抢主 sillyspec.db.bak 回退链；import 后 last_local_modified_ts 重置为 pushed_at，D-013 例外）)
+  -> .sillyspec/.runtime/sillyspec.db                    (node:sqlite 内置模块 + WAL 模式：journal_mode=WAL + busy_timeout=5000 + foreign_keys=ON，事务提交直接持久化主库文件 + .db-wal/.db-shm 侧车；写前自动备份为 sillyspec.db.bak，读取时主库损坏/为空从 .bak 回退，两者均坏则 fail-loud；WAL 单写者串行 + SQLITE_BUSY 应用层有限重试，并发安全不丢更新；schema v4：changes 表加 last_synced_platform_ts=base_ts 乐观锁（push 带头标 X-SillySpec-Base-Ts，平台比对 current_pushed_at > base_ts 则 409）+ last_local_modified_ts=本地脏度（全写入路径 _touchLocalModified 触发，读路径 run().changes>0 guard 不标脏）；pull/resolve --take-platform 的 import 事务前另存 sillyspec.db.pre-import-<ts>.bak（独立 .bak 路径，不抢主 sillyspec.db.bak 回退链；import 后 last_local_modified_ts 重置为 pushed_at，D-013 例外）)
   -> .sillyspec/.runtime/user-inputs.md
   -> .sillyspec/.runtime/artifacts/*.txt                     (long step output)
 

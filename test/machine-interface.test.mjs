@@ -17,7 +17,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync
 import { join, dirname } from 'path'
 import { tmpdir } from 'os'
 import { execFileSync } from 'child_process'
-import Database from 'better-sqlite3'
+import { DatabaseSync } from 'node:sqlite'
 import http from 'node:http'
 import { fileURLToPath } from 'url'
 
@@ -325,10 +325,10 @@ console.log('\n--- 5. 只读性（gate/derive 不改 DB 语义内容，D-002）-
   writeTaskPlan(specBase, changeName)
 
   // 语义级快照：读 project + changes 行（D-002 只读边界：gate/derive 调用前后内容应不变）。
-  // 不再用文件 hash——better-sqlite3 WAL 下 close 可能 checkpoint 改写主库字节（语义不变但 hash 变），
+  // 不再用文件 hash——node:sqlite WAL 下 close 可能 checkpoint 改写主库字节（语义不变但 hash 变），
   // 文件 hash 断言在此引擎下不稳。gate-status.json 已由 task-10 废除（D-02），不再断言其产生/不变。
   const snapshot = () => {
-    const db = new Database(dbPath, { readonly: true })
+    const db = new DatabaseSync(dbPath, { readOnly: true })
     try {
       const project = db.prepare('SELECT id, name, schema_version FROM project ORDER BY id').all()
       const changes = db.prepare('SELECT name, current_stage, status, no_worktree FROM changes ORDER BY name').all()

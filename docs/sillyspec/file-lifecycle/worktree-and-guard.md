@@ -212,7 +212,7 @@ quick 当前不创建 worktree。
 
 ### 阶段门禁
 
-阶段读取顺序：hook 直读 `.sillyspec/.runtime/sillyspec.db`（`worktree-guard.js` 的 `queryDbFirstCell` 起真实 node 子进程，用 `require(better-sqlite3)` 的 **readonly + fileMustExist** 连接查 `changes.current_stage`；WAL 并发安全，**不依赖外部 `sqlite3` CLI**——Windows 默认没有）。db 缺失/损坏/`better-sqlite3` 解析失败时 hook **fail-closed**（warn + null，源码写一律拦截，不 fail-open）。进度库是唯一权威状态源，hook 不再依赖任何缓存侧文件。
+阶段读取顺序：hook 直读 `.sillyspec/.runtime/sillyspec.db`（`worktree-guard.js` 的 `queryDbFirstCell` 起真实 node 子进程，用 `node:sqlite` 的 **readonly + fileMustExist** 连接查 `changes.current_stage`；WAL 并发安全，**不依赖外部 `sqlite3` CLI**——Windows 默认没有）。db 缺失/损坏/`node:sqlite` 解析失败时 hook **fail-closed**（warn + null，源码写一律拦截，不 fail-open）。进度库是唯一权威状态源，hook 不再依赖任何缓存侧文件。
 
 只有 `execute` 和 `quick` 被视为允许源码写入的阶段。
 

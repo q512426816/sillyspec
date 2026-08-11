@@ -2,10 +2,10 @@
 // run-tests.mjs 自动收集 *.test.mjs；退出码 0 = 通过。
 //
 // 验证目标（design §G1 / AC-01 / NFR-01 / R-07 / R-08）：
-//   - better-sqlite3 WAL 下，N 个进程各持独立连接、各自循环多次小事务
+//   - node:sqlite WAL 下，N 个进程各持独立连接、各自循环多次小事务
 //     `UPDATE counters SET v = v + 1`，最终计数 === N * 次数（无 lost update）。
 //     对比旧 sql.js 「整库 load→内存→export 写回」会 last-writer-wins 抹掉他者进度，
-//     better-sqlite3 原生 WAL 单写者串行 + 每条 UPDATE 在事务内原子读-改-写，
+//     node:sqlite 原生 WAL 单写者串行 + 每条 UPDATE 在事务内原子读-改-写，
 //     根本消除整库覆盖。
 //   - 子进程并发写期间不抛 SQLITE_BUSY 崩溃（R-08）：busy_timeout=5000 在引擎层消化
 //     大部分写锁等待，DB.transaction 的应用层有限重试（task-05）兜底超时尖刺；
@@ -13,8 +13,8 @@
 //
 // 设计要点：
 //   - 用 src/db.js 的 DB 类（生产路径）：init() 配 WAL + busy_timeout + foreign_keys，
-//     transaction() 套 better-sqlite3 原生事务 + SQLITE_BUSY 有限重试（MAX_BUSY_RETRIES=3）。
-//     子进程经此路径自增，让 BUSY 重试真正生效（非裸 better-sqlite3）。
+//     transaction() 套 node:sqlite 原生事务 + SQLITE_BUSY 有限重试（MAX_BUSY_RETRIES=3）。
+//     子进程经此路径自增，让 BUSY 重试真正生效（非裸 node:sqlite）。
 //   - 主进程先 init + 建_counters 表 + 插 v=0 后关闭，子进程只并发 UPDATE，
 //     避免子进程间的 schema 创建竞争（确定性构造，R-07）。
 //   - 子进程脚本写 tmp 目录用绝对路径 + node spawn（不 shell:true，Windows 兼容）；
@@ -56,7 +56,7 @@ const increments = parseInt(process.argv[4], 10);
 const { DB } = await import(dbUrl);
 const db = new DB(dbPath);
 db.init();
-// better-sqlite3 prepare 一次复用；每轮 transaction 是独立小事务（BEGIN/UPDATE/COMMIT），
+// node:sqlite prepare 一次复用；每轮 transaction 是独立小事务（BEGIN/UPDATE/COMMIT），
 // 8 进程并发时写锁竞争由 busy_timeout + DB.transaction 的 BUSY 重试收敛。
 const stmt = db.getDb().prepare('UPDATE counters SET v = v + 1 WHERE id = 1');
 for (let i = 0; i < increments; i++) db.transaction(() => stmt.run());

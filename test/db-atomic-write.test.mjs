@@ -1,15 +1,15 @@
-// 验证 DB 持久化 + .bak 回退（src/db.js，better-sqlite3 同步原生引擎）。
+// 验证 DB 持久化 + .bak 回退（src/db.js，node:sqlite DatabaseSync 同步原生引擎）。
 // run-tests.mjs 自动收集 *.test.mjs；退出码 0 = 通过。
 //
 // 引擎替换（task-03/04）后语义变化：
-// - better-sqlite3 是原生同步 SQLite，打开即持久化（commit 落盘），不再有 sql.js 时代的
+// - node:sqlite DatabaseSync 是原生同步 SQLite，打开即持久化（commit 落盘），不再有 sql.js 时代的
 //   _save/_atomicWriteSync 整库 export。故不再测「整库 export 原子写」。
 // - .bak 不再随每次写自动生成（无 _atomicWriteSync）；.bak 现为「外部恢复源」，仅在
 //   _openWithFallback 中被读取（主库损坏/空/缺失时 copy 回主库）。生产环境 .bak 由版本控制
 //   等外部备份提供；测试中手动构造 .bak（对齐 task-04 verify 的 inline 构造方式）。
-// - DB.init() 同步，getDb() 返回 better-sqlite3 Database；SELECT 用 prepare().get()。
+// - DB.init() 同步，getDb() 返回 node:sqlite DatabaseSync；SELECT 用 prepare().get()。
 import { DB } from '../src/db.js';
-import Database from 'better-sqlite3';
+import { DatabaseSync } from 'node:sqlite';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync, statSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
@@ -26,11 +26,11 @@ const fresh = () => {
   rmSync(tmpRoot, { recursive: true, force: true });
   mkdirSync(tmpRoot, { recursive: true });
 };
-// 同步打开（better-sqlite3 是同步 API，无 await init）
+// 同步打开（node:sqlite DatabaseSync 是同步 API，无 await init）
 const open = () => { const db = new DB(path()); db.init(); return db; };
-// 只读读取 project.name（用完即关；better-sqlite3 prepare().get() 返回行对象，无行返回 undefined）
+// 只读读取 project.name（用完即关；node:sqlite prepare().get() 返回行对象，无行返回 undefined）
 const readName = (file) => {
-  const db = new Database(file, { readonly: true });
+  const db = new DatabaseSync(file, { readOnly: true });
   try {
     const row = db.prepare('SELECT name FROM project WHERE id=1').get();
     return row ? row.name : null;
@@ -38,14 +38,14 @@ const readName = (file) => {
     db.close();
   }
 };
-// 写一行 project（better-sqlite3 prepare().run() 绑定参数）
+// 写一行 project（node:sqlite prepare().run() 绑定参数）
 const writeName = (db, name) => {
   db.getDb().prepare("INSERT OR REPLACE INTO project (id,name,created_at,updated_at) VALUES (1,?,'t','t')").run(name);
 };
 
-console.log('\n[db-atomic-write] better-sqlite3 持久化 + .bak 回退');
+console.log('\n[db-atomic-write] node:sqlite 持久化 + .bak 回退');
 
-// Case 1: better-sqlite3 commit 即持久化——写后 close，新实例读得到最新值
+// Case 1: node:sqlite commit 即持久化——写后 close，新实例读得到最新值
 fresh();
 {
   let db = open();
@@ -55,7 +55,7 @@ fresh();
   writeName(db, 'v2');
   db.close();
   assert(existsSync(path()), '写后主库文件存在');
-  assert(readName(path()) === 'v2', 'better-sqlite3 commit 持久化：新实例读出最新 v2');
+  assert(readName(path()) === 'v2', 'node:sqlite commit 持久化：新实例读出最新 v2');
 }
 
 // Case 2: 主库被截断/损坏 → 从 .bak 恢复，不抛错（.bak 需外部预先准备）

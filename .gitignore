@@ -8,6 +8,6 @@ node_modules/
 .idea
 .playwright-mcp/
 
-# SQLite WAL 模式侧车文件（better-sqlite3 运行时产物，勿提交）
+# SQLite WAL 模式侧车文件（node:sqlite 运行时产物，勿提交）
 *.db-wal
 *.db-shm

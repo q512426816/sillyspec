@@ -12,7 +12,6 @@
 import { existsSync, readFileSync, readdirSync } from 'fs'
 import path from 'path'
 import { execFileSync } from 'child_process'
-import { createRequire } from 'module'
 
 // ── 常量 ──
 
@@ -225,20 +224,19 @@ function isInsideWorktreeStorage(filePath, cwd) {
 /**
  * 同步只读查询 sillyspec.db 第一行第一列（不依赖外部 sqlite3 CLI）。
  *
- * 用子进程跑 better-sqlite3 同步原生绑定（execFileSync 等待）：
- * - 原生绑定经 hook 进程的 createRequire(import.meta.url).resolve('better-sqlite3') 解析出绝对路径，
- *   JSON.stringify 嵌入子进程脚本——子进程 cwd 是项目目录，裸 require('better-sqlite3') 找不到包
- *   （用户项目未必直接装了它）；绝对路径 Windows/Linux/macOS 均 require 直接可用，无需 file:// URL。
- * - readonly + fileMustExist 双 true 打开只读连接：绝不写库；WAL 并发读不阻塞主进程写，
- *   且原生绑定可看到已 commit 但未 checkpoint 的过渡态（修复旧 WASM 内存库裸读 .db
- *   看不见 WAL 的过渡态可见性窗口）。
+ * 用子进程跑 node:sqlite 的 DatabaseSync（execFileSync 等待）：
+ * - node:sqlite 是 Node 内置模块，子进程 require('node:sqlite') 直接可用，无需先 resolve 出
+ *   绝对路径再注入（旧方案需手动解析原生绑定路径，node:sqlite 无此步骤）。
+ * - readOnly 打开只读连接（替代旧方案 readonly/fileMustExist 语义）：绝不写库；WAL 并发读不阻塞主进程写，
+ *   且只读连接可看到已 commit 但未 checkpoint 的过渡态（修复旧 WASM 内存库裸读 .db
+ *   看不见 WAL 的过渡态可见性窗口）。db 缺失/损坏由 open 异常自然触发 fail-closed（外层 catch）。
  *
  * 环境假设（R-09）：WAL 模式下只读连接仍需在 .runtime/ 目录建/更新 -shm 索引文件，故 .runtime
  * 必须可写（与主进程一致）——“只读”指不改 DB 数据，不等于不对 -shm 加索引。
  *
- * fail-closed：better-sqlite3 resolve 失败 / db 文件不存在 / fileMustExist 打开失败 / 查询异常 /
- * 子进程超时或崩溃——一律 console.warn（含 e.stderr 详情）并返回 null，调用方
- *（readCurrentStage/isNoWorktreeMode）对 null 走 fail-closed，禁止 fail-open。
+ * fail-closed：db 文件不存在 / 子进程打开、查询异常 / 子进程超时或崩溃——一律 console.warn
+ * （含 e.stderr 详情）并返回 null，调用方（readCurrentStage/isNoWorktreeMode）对 null 走
+ * fail-closed，禁止 fail-open。
  */
 function queryDbFirstCell(cwd, sql) {
   const dbPath = path.join(cwd, '.sillyspec', '.runtime', 'sillyspec.db')
@@ -248,21 +246,15 @@ function queryDbFirstCell(cwd, sql) {
     console.warn('⚠️ sillyspec.db 不存在，hook 降级 fail-closed: ' + dbPath)
     return null
   }
-  let libPath
-  try {
-    libPath = createRequire(import.meta.url).resolve('better-sqlite3')
-  } catch (e) {
-    console.warn('⚠️ sillyspec.db 查询失败（better-sqlite3 未解析），hook 降级 fail-closed: ' + ((e && e.message) || e))
-    return null
-  }
-  // 子进程同步 require 绝对路径（better-sqlite3 是同步原生 API，无 async/import().then 包装）。
-  // pluck().get() 取第一行第一列原值，无行返回 undefined（写空 stdout → 父侧 trim 后 null）。
+  // 子进程同步内置 require('node:sqlite')（DatabaseSync 是同步 API，无 async/import().then 包装）。
+  // prepare(sql).get() 取第一行整行后取首列值，无行返回 undefined（写空 stdout → 父侧 trim 后 null）。
   const script =
-    "const D=require(" + JSON.stringify(libPath) + ")," +
+    "const {DatabaseSync}=require('node:sqlite')," +
     "dbPath=" + JSON.stringify(dbPath) + ",sql=" + JSON.stringify(sql) + ";" +
     "let db;" +
-    "try{db=new D(dbPath,{readonly:true,fileMustExist:true});" +
-    "const v=db.prepare(sql).pluck().get();" +
+    "try{db=new DatabaseSync(dbPath,{readOnly:true});" +
+    "const row=db.prepare(sql).get();" +
+    "const v=row===undefined?undefined:Object.values(row)[0];" +
     "if(v!==undefined)process.stdout.write(String(v??''));db.close()}" +
     "catch(e){process.stderr.write('hook db query failed: '+String(e&&e.message||e));process.exit(1)};"
   try {
@@ -270,7 +262,7 @@ function queryDbFirstCell(cwd, sql) {
       encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'pipe'],
     }).trim() || null
   } catch (e) {
-    // DB 查询失败（db 损坏 / fileMustExist 打开失败 / 子进程超时或崩溃）：降级返回 null，调用方
+    // DB 查询失败（db 损坏 / readOnly 打开失败 / 子进程超时或崩溃）：降级返回 null，调用方
     //（readCurrentStage 等）对 null 走 fail-closed。补 warn 让 doctor/agent 能看到根因，
     // 而非完全静默（子进程把诊断写到了 stderr，execFileSync 抛错时挂在 e.stderr 上）。
     const detail = (e && e.stderr ? String(e.stderr).trim() : '') || (e && e.message) || 'timeout/crash'
@@ -291,7 +283,7 @@ export {
  * @returns {string|null} 阶段名，null 表示无法确定
  */
 function readCurrentStage(cwd) {
-  // 直读 sillyspec.db（node + better-sqlite3 只读子进程，不依赖外部 sqlite3 CLI——Windows 默认没有）
+  // 直读 sillyspec.db（node + node:sqlite 只读子进程，不依赖外部 sqlite3 CLI——Windows 默认没有）
   const v = queryDbFirstCell(cwd, "SELECT current_stage FROM changes WHERE status='active' AND current_stage IN ('execute','quick') ORDER BY last_active DESC LIMIT 1")
   return v || null
 }
@@ -302,7 +294,7 @@ function readCurrentStage(cwd) {
  * @returns {boolean}
  */
 function isNoWorktreeMode(cwd) {
-  // 直读 sillyspec.db（node + better-sqlite3，同 readCurrentStage）
+  // 直读 sillyspec.db（node + node:sqlite，同 readCurrentStage）
   return queryDbFirstCell(cwd, "SELECT no_worktree FROM changes WHERE status='active' AND current_stage IN ('execute','quick') LIMIT 1") === '1'
 }
 
