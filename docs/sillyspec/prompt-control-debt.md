@@ -210,6 +210,23 @@ updated_at: 2026-08-09T00:00:00+08:00
 
 ---
 
+### 2026-08-11 复盘增补（brainstorm + plan 工具驾驭：6 条裁决）
+状态：`1 项已修（bs-c）+ 2 项可低成本修待 quick（plan-a/plan-c）+ 2 项登记 defer（bs-b/plan-b）+ 1 项搁置待复现（bs-a）`
+
+来源：两轮工具驾驭复盘（brainstorm 跑通 + plan 跑通），6 条逐条对源码核实裁决（先查本债单 + 实证，不重复已决策项）。
+
+**brainstorm 复盘**
+- ⊘ **bs-a step7 四件套门时机错配（裁决：用户误判，代码无此 gate）**。`validateFileLocations`（gates.js:457-503）= advisory 打印不阻断（gates.js:454 注释 + stage-artifacts.md:57），守卫 `settledCount===total && total>0`（gates.js:610-612）仅阶段全部步骤完成时跑，step7（Design Grill）--done 时 step8 还 pending 不触发。「step7 被拦补三件」与代码不符，疑似把 step8（生成规范文件）--done 的 advisory `⬜ 未找到` 误读为硬拦 / 混淆 Stage Review Gate（查 design.md docHash 不查四件套）。**搁置**：待用户贴现场 CLI 输出（⚠️/❌/⬜ 标记 + exit code）再定 advisory 可读性优化（⬜→ℹ️ 提示不阻断）。
+- ⏭ **bs-b platform sync 10s 超时反复 warn（登记 defer）**。`sync.js:28` REQUEST_TIMEOUT_MS=10_000 + `:204-208` 超时 console.warn。契约 sillyhub-progress-sync-contract.md §10 明确「超时 → warn 不阻断」intentional（网络失败可见性，否决静默）。根因 sillyhub 后端 POST progress 端点未就绪（契约 §11 P0 待排期）→ 每步完成触发 sync 干等 10s + warn。**真新建议（债单+契约均无）**：客户端连续失败 N 次后该 session 退避降频（首失败仍 warn 保可见性）。defer——根治在 sillyhub 后端落地，客户端降频是缓解候选单独排。
+- ✅ **bs-c _module-map.yaml schema_version warn 缺升级路径（已修 ql-20260811-006-a73f）**。`prompt.js:44-46` 两行 warn（B2 advisory）只报问题不给 CLI 出路，预存 v1 漂移文件每个读 map 的 step（brainstorm step2/3/7）都刷屏。修法（纯文案）：两行各追加「跑 sillyspec modules rebuild 升级到 schema_version: 2 可消除此警告」。node --check + lint 250 文件 + npm test（除 pre-existing db-concurrency 无关失败）全绿。
+
+**plan 复盘**
+- ⏭ **plan-a 门控时机错配（blueprint 共享文件 + 连续 id 全堆 postcheck，可低成本修 persuasion）**。`validateBlueprintConsistency`（plan-postcheck.js:295-325，同 Wave 共享 allowed_path → error）+ `validatePlanFeasibility`（:724-738，task id 不连续 → error）均在 `executePlanPostcheck`（末步）跑。用户先写 8 张 TaskCard（step4）才在 postcheck（step5）被拦，两轮返工（合并 + 重编号）。**真新**（债单 plan-b 行数丢字段 / plan-c plan→scan 回头路 均不同维度）。修法（persuasion 前置，非加门）：plan.js step4「生成 TaskCard」prompt 加前置提示「多 task 共享 allowed_path → plan.md 须分 Wave（否则 postcheck 拦同 Wave 并行覆盖）；task id 从 1 连续（否则 postcheck 拦重编号）」+ light plan 模板（plan-light-needs-wave-heading.md 关联）同步。注：「step2 生成 plan 后预检」不可行——blueprint 校验需 tasks/ 卡片 + plan.md Wave 划分，step4 才齐；前置点只能在 step4 prompt。留 quick 修。
+- ⏭ **plan-b docHash 失效连踩两次（= P6.1b 第 3-4 次复发，不推翻 defer）**。`stage-review.js:71` prompt 已警告「review.json 写入后若 mainDoc 再被改必须重算 docHash，gate 重算 sha256 比对不符判伪造」。用户 plan v2（改 plan）+ v3（重编号）各重算一次。**= P6.1b 复发**（债单 defer：独立中等工程，agent 算 hash + CLI 重算对比 enforcement 已有效；2026-08-04 记第 2 次摩擦 stage-review.js:69）。本次第 3-4 次，**更新 P6.1b 复发频度，暂不推翻 defer**。候选缓解：① 落地 exec-d 的 `register-stage-review --from <已有review.json>` 命令（重算 docHash 落入，给 agent 一条改文档后重算命令，非手算 sha256）；② 长期 P6.1b（review.json 写入链路 CLI 算 hash）。
+- ⏭ **plan-c review.json run-id 路径易拼错（部分新，exec-b 相关，可低成本修）**。用户「plan-review-YYYY-MM-DD-HHMMSS 漏连字符给子代理」。`stage-review.js:56` 路径 = `{SPEC_ROOT}/.runtime/stage-reviews/<stage>-<runId>/review.json`，agent 自拼易漏连字符。exec-b 已修 marker 格式校验（^review- 前缀）+ fallback 按变更过滤，但**未解决 agent 拼路径错**。**真新建议**：prompt.js 注入时除 `{STAGE_REVIEW_RUN_ID}` 外加完整目录路径占位符（如 `{STAGE_REVIEW_DIR}`），agent 直接用不拼。留 quick 修（先确认 prompt.js runId 注入点）。
+
+---
+
 ## 推进记录
 
 | 日期 | 改进项 | 结果 |

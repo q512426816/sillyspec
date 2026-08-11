@@ -41,9 +41,9 @@ function loadModuleContextIndex(specBase, projectName) {
     // 提示 v1/v2 格式混用风险（旧格式字段解析会静默错位）。正常生成的文件不触发。
     const sv = content.match(/^schema_version:\s*(\d+)/m)
     if (!sv) {
-      console.warn(`⚠️  _module-map.yaml 缺少 schema_version 声明（期望 2），模块解析可能错位：${mapPath}`)
+      console.warn(`⚠️  _module-map.yaml 缺少 schema_version 声明（期望 2），模块解析可能错位：${mapPath}（跑 \`sillyspec modules rebuild\` 升级到 schema_version: 2 可消除此警告）`)
     } else if (sv[1] !== '2') {
-      console.warn(`⚠️  _module-map.yaml schema_version=${sv[1]}（期望 2），可能为旧格式，模块解析可能错位：${mapPath}`)
+      console.warn(`⚠️  _module-map.yaml schema_version=${sv[1]}（期望 2），可能为旧格式，模块解析可能错位：${mapPath}（跑 \`sillyspec modules rebuild\` 升级到 schema_version: 2 可消除此警告）`)
     }
     return parseModuleMapSimple(content)
   } catch {

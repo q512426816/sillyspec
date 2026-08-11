@@ -322,3 +322,12 @@
 根因：src/run/shared.js auditQuickCompletion 的 status 判定 deletedFiles.length>0 不受任何 flag 门控（对比 baselineHit 受 !forceBaseline、newFiles 受 !allowNew，唯独删除无出口），但 shared.js 的 --confirm 提示块与 quick-audit.js 的 BLOCKED 分支都无脑打印「--force-baseline --allow-new」解锁咒语，没区分删除场景。
 方案：两处提示进 flag 建议前加 deletedFiles.length>0 分支——是则明确提示「quick 不支持删除（有意设计），改走 sillyspec run execute（task allowed_paths 内可删）或先 git restore 撤回」，绝不甩对删除无效的 flag；否则原 flag 建议一字不改。安全模型不动（删除仍硬拦），只修误导提示。
 结果：test/audit-quick-completion.test.mjs 19 断言全过（原 16 断言 + 新 case 10/11/12 共 5 断言）；npm test 全量 167 通过唯一失败 db-concurrency 单独重跑 2 轮全过证 flaky 与本变更无关（改动只碰提示文案不碰 DB）；npm run lint 过 250 文件；无 prompt 级联（未动 src/stages/* 与 src/run/prompt.js）；安全模型未动（删除仍 BLOCKED）。
+
+## ql-20260811-006-a73f | 2026-08-11 15:11:12 | 补 _module-map.yaml schema_version advisory warn 的升级出路
+状态：已完成
+关联变更：（无）
+文件：src/run/prompt.js
+需求：补 _module-map.yaml schema_version advisory warn 的升级出路
+根因：warn 只报问题不指引出路，预存漂移文件每次刷屏用户无解
+方案：prompt.js 行44/46 两行 warn 各追加跑 sillyspec modules rebuild 升级到 schema_version 2 的提示
+结果：node --check 过 + lint 250 文件过 + npm test 除 pre-existing db-concurrency（只 import db.js 与 prompt.js 零依赖）外全绿
