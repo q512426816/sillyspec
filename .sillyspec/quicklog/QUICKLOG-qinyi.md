@@ -258,3 +258,15 @@
 根因：无 --file-notes 入口，文件括注只能事后手改；step3 prompt 两件事分两段未给统一推荐顺序。
 方案：command.js 解析 --file-notes 经 setQuickFileNotes 旁路注入 quicklog.js 避碰 complete 收尾并发热点，flipEntry 内嵌换行写 bullet；quick.js step3 加收尾推荐顺序加 --file-notes 加精修降级为按需核对；SKILL.md 与 docs-prompt 同步。
 结果：npm test 全绿 EXIT0、lint 242 文件通过；quicklog 验收 2h 共 12 条覆盖 parseFileNotes 与 completeQuicklogEntry 消费回退。
+
+## ql-20260811-001-c7e6 | 2026-08-11 13:14:19 | 让 npm test 全绿
+状态：已完成
+关联变更：change-title-quicklog-id
+文件：
+- src/db.js（project.schema_version DEFAULT 4→5 对齐 v5）
+- test/change-title-quicklog-id.test.mjs（better-sqlite3 迁 node:sqlite DatabaseSync+readOnly）
+- test/platform-sync-schema.test.mjs（补 task-08 漏迁的 better-sqlite3 import 迁 node:sqlite）
+需求：让 npm test 全绿，收尾 change-title-quicklog-id 遗留的两处 broken。
+根因：3.26.1 发布后 better-sqlite3 已从依赖与 node_modules 删除，但 test/change-title-quicklog-id.test.mjs 与 test/platform-sync-schema.test.mjs 仍 import better-sqlite3 致 ERR_MODULE_NOT_FOUND；且 src/db.js project.schema_version DEFAULT 4 与 DB_SCHEMA_VERSION/CURRENT_VERSION=5 及测试断言不一致。
+方案：两个测试迁 node:sqlite DatabaseSync 加 readOnly 驼峰取首列；db.js DEFAULT 4 改 5 对齐四处版本号。
+结果：npm test 165 通过 0 失败全绿，lint check-syntax 246 文件过，platform-sync-schema 四断言含 project.schema_version DEFAULT 5 实测通过。

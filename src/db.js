@@ -202,7 +202,7 @@ export class DB {
       CREATE TABLE IF NOT EXISTS project (
         id INTEGER PRIMARY KEY DEFAULT 1,
         name TEXT NOT NULL,
-        schema_version INTEGER DEFAULT 4,
+        schema_version INTEGER DEFAULT 5,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       )

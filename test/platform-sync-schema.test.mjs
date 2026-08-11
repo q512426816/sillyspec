@@ -10,7 +10,7 @@
 import { DB } from '../src/db.js';
 import { CURRENT_VERSION } from '../src/progress/shared.js';
 import { ProgressManager } from '../src/progress.js';
-import Database from 'better-sqlite3';
+import { DatabaseSync } from 'node:sqlite';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
@@ -35,7 +35,7 @@ const readStamp = () => {
 
 // 读 changes 表列信息（PRAGMA table_info：返回 [{ name, type, dflt_value, notnull, cid, pk }]）
 const columnsOf = (file) => {
-  const db = new Database(file, { readonly: true });
+  const db = new DatabaseSync(file, { readOnly: true });
   try {
     return db.prepare('PRAGMA table_info(changes)').all();
   } finally {
@@ -88,7 +88,7 @@ console.log('\n--- 2. 全新 DB init：changes 含两列且默认 NULL ---');
   assert(modCol && modCol.dflt_value === null, `last_local_modified_ts DEFAULT NULL（dflt_value=${modCol && modCol.dflt_value}）`);
 
   // 行级验证：未赋值的新列读出为 null
-  const probe = new Database(dbPath(), { readonly: true });
+  const probe = new DatabaseSync(dbPath(), { readOnly: true });
   try {
     const row = probe.prepare('SELECT last_synced_platform_ts, last_local_modified_ts FROM changes WHERE name=?').get('c1');
     assert(row && row.last_synced_platform_ts === null, '插入行 last_synced_platform_ts 实测为 null');
@@ -107,7 +107,7 @@ console.log('\n--- 3. 幂等迁移：schema 3 旧库（无新列+有数据）→
   // 模拟旧 schema 3 库：手工建一个 v3 形态的 changes 表（含索引引用列 current_stage/status，
   // 不含本次新增的两列），插一行数据。isolation_* 列省略——_createSchema 重跑时 _migrateAddColumn
   // 会幂等补上（与本测关注的两列同路径，不影响断言）。
-  const oldDb = new Database(dbPath());
+  const oldDb = new DatabaseSync(dbPath());
   oldDb.exec(`
     CREATE TABLE changes (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -141,7 +141,7 @@ console.log('\n--- 3. 幂等迁移：schema 3 旧库（无新列+有数据）→
   assert(cols.includes('last_local_modified_ts'), '迁移后含 last_local_modified_ts 列');
 
   // 既有数据保留 + 新列 NULL
-  const probe = new Database(dbPath(), { readonly: true });
+  const probe = new DatabaseSync(dbPath(), { readOnly: true });
   try {
     const row = probe.prepare('SELECT name, current_stage, last_synced_platform_ts, last_local_modified_ts FROM changes WHERE name=?').get('legacy');
     assert(row && row.name === 'legacy' && row.current_stage === 'plan', '迁移后既有数据保留（name=legacy, current_stage=plan）');
@@ -168,7 +168,7 @@ console.log('\n--- 4. project.schema_version DEFAULT 5（D-012 连带）---');
   ).run();
   db.close();
 
-  const probe = new Database(dbPath(), { readonly: true });
+  const probe = new DatabaseSync(dbPath(), { readOnly: true });
   try {
     const row = probe.prepare('SELECT schema_version FROM project WHERE id=1').get();
     assert(row && row.schema_version === 5, `project.schema_version DEFAULT 5（实际 ${row && row.schema_version}）`);
@@ -190,8 +190,8 @@ console.log('\n--- 5. progress.js read()._version === 5（D-012 连带第四处�
   await pm.initChange('demo', 'c1');
   const data = await pm.read('demo', 'c1');
   assert(data && data._version === 5, `pm.read()._version === 5（实际 ${data && data._version}）`);
-  // ProgressManager 无 close()：手动释放底层 better-sqlite3 句柄（Windows 下 WAL 句柄占开会导致
-  // 末尾 rmSync EPERM；better-sqlite3 close() 自动 checkpoint 合并 -wal/-shm）。
+  // ProgressManager 无 close()：手动释放底层 node:sqlite 句柄（Windows 下 WAL 句柄占开会导致
+  // 末尾 rmSync EPERM；node:sqlite close() 自动 checkpoint 合并 -wal/-shm）。
   try { if (pm._db) pm._db.close(); } catch { /* 已关忽略 */ }
 }
 

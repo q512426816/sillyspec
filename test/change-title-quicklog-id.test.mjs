@@ -12,7 +12,7 @@
 import { mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import Database from 'better-sqlite3'
+import { DatabaseSync } from 'node:sqlite'
 import { ProgressManager } from '../src/progress.js'
 
 let total = 0, failed = 0
@@ -29,7 +29,7 @@ pm.init(tmp)
 const dbPath = join(specBase, '.runtime', 'sillyspec.db')
 
 function query(sql, ...params) {
-  const db = new Database(dbPath, { readonly: true })
+  const db = new DatabaseSync(dbPath, { readOnly: true })
   try { return db.prepare(sql).get(...params) } finally { db.close() }
 }
 
@@ -37,7 +37,7 @@ console.log('=== changes 表 title + quicklog_id 列 ===\n')
 
 // 1. schema 列存在
 {
-  const db = new Database(dbPath, { readonly: true })
+  const db = new DatabaseSync(dbPath, { readOnly: true })
   const names = db.prepare("SELECT name FROM pragma_table_info('changes')").all().map(r => r.name)
   db.close()
   assert(names.includes('title'), 'changes 表有 title 列')
