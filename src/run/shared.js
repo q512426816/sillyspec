@@ -655,10 +655,15 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
           console.log(`     - ${r}`)
         }
       }
-      console.log(`\n   如确认接受这些变更，重新运行 --done 时带上对应 flag 即可解锁：`)
-      console.log(`     sillyspec run quick --done --force-baseline --allow-new --change <id> --output "..."`)
-      console.log(`     （--force-baseline 覆盖受保护/危险文件如 src/run.js；--allow-new 允许新增文件）`)
-      console.log(`   或在首个 sillyspec run quick 启动（step 1）时就声明这些 flag，持久化进 guard。`)
+      if (result.deletedFiles.length > 0) {
+        console.log(`\n   ⛔ 本次含删除文件 ${result.deletedFiles.length} 个——quick 不支持删除，--force-baseline / --allow-new 均无法解锁（有意设计，高危操作须走 review 把关）。`)
+        console.log(`     请改走完整流程：sillyspec run execute（在 plan 的 task allowed_paths 内删除），或先 git restore 撤回删除后再 --done。`)
+      } else {
+        console.log(`\n   如确认接受这些变更，重新运行 --done 时带上对应 flag 即可解锁：`)
+        console.log(`     sillyspec run quick --done --force-baseline --allow-new --change <id> --output "..."`)
+        console.log(`     （--force-baseline 覆盖受保护/危险文件如 src/run.js；--allow-new 允许新增文件）`)
+        console.log(`   或在首个 sillyspec run quick 启动（step 1）时就声明这些 flag，持久化进 guard。`)
+      }
     }
   } catch (e) {
     result.reasons.push(`审计失败: ${e.message}`)

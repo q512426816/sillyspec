@@ -310,3 +310,15 @@
 根因：detect 模板注释 module_paths 与真实键 modules（inline flow，verify-postcheck extractModules 只认 inline flow）不符误导；4 组 declared 键各需判定——auto_mode 调用方没传 localConfig（死但可救）、dispatch.poll/worker 在路径A 未落地指令里（预留非死）、fileWhitelist 无消费方（纯假承诺）。
 方案：① index.js detect 模板 module_paths→modules inline flow 示例。② auto_mode 接线（classify-change.js 加 readAutoModeFromLocalYaml best-effort 读 auto_mode 段 + 正则 try/catch 加固 review-2026-08-09 #30；command.js:1008 读 cwd 传 localConfig；localConfig=null 时 classifyChange if 守卫行为不变，向后兼容）。② dispatch.poll/worker 判定留+sharpen（路径A 预留键，isPathASupported()=false 整段派发指令不注入，schema desc 点名路径A gate）。② fileWhitelist 删（worktree-guard loadLocalConfig 仅改 JSDoc 注释无逻辑变动，schema 删键，renderExample 删注释行）。config-schema.js 同步；file-lifecycle.md 同步。--force-baseline 因触及守卫文件 hooks/worktree-guard.js（仅 JSDoc）+ run/command.js（向后兼容接线）。
 结果：test/classify-change.test.mjs 新建 20 断言全过；test/config-schema.test.mjs 189 断言全过；npm test 全量 exit 0（并发 sync.js+local-yaml-preserve 亦过，非本次回归）；npm run lint 过（250 文件）；无 prompt 级联（scan.js 未动）。
+
+## ql-20260811-005-7d2a | 2026-08-11 14:47:53 | quick 删除文件被 BLOCKED 时 CLI 不再甩无效 flag、改指引走 execute
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/quick-audit.js（printQuickAuditReview 的 BLOCKED 分支：进 flag 建议前判断 review.deletedFiles，有删除时提示「quick 不支持删除——--force-baseline/--allow-new 均无法解锁（有意设计），改走 execute 或先 git restore」，不再误导加 flag；无删除则保留原 flag 建议）
+- src/run/shared.js（auditQuickCompletion 的 --confirm 提示块同源改：result.deletedFiles.length>0 时提示走 execute 不甩无效 flag，否则原样）
+- test/audit-quick-completion.test.mjs（+import printQuickAuditReview；加 case 10 删除+--confirm 提示含「不支持删除」且不含无效 flag 串、case 11 printQuickAuditReview 删除 blocked 同验、case 12 非删除 blocked 仍保留 flag 建议回归保护）
+需求：quick 审计对删除文件硬拦是有意设计（高危操作须 review 把关），但 CLI 两处解锁提示在删除场景仍甩 --force-baseline --allow-new——这俩对删除根本无效（auditQuickCompletion 判定行 deletedFiles.length>0 是裸条件，不受 forceBaseline/allowNew 门控），误导调用者照加后继续被拦。
+根因：src/run/shared.js auditQuickCompletion 的 status 判定 deletedFiles.length>0 不受任何 flag 门控（对比 baselineHit 受 !forceBaseline、newFiles 受 !allowNew，唯独删除无出口），但 shared.js 的 --confirm 提示块与 quick-audit.js 的 BLOCKED 分支都无脑打印「--force-baseline --allow-new」解锁咒语，没区分删除场景。
+方案：两处提示进 flag 建议前加 deletedFiles.length>0 分支——是则明确提示「quick 不支持删除（有意设计），改走 sillyspec run execute（task allowed_paths 内可删）或先 git restore 撤回」，绝不甩对删除无效的 flag；否则原 flag 建议一字不改。安全模型不动（删除仍硬拦），只修误导提示。
+结果：test/audit-quick-completion.test.mjs 19 断言全过（原 16 断言 + 新 case 10/11/12 共 5 断言）；npm test 全量 167 通过唯一失败 db-concurrency 单独重跑 2 轮全过证 flaky 与本变更无关（改动只碰提示文案不碰 DB）；npm run lint 过 250 文件；无 prompt 级联（未动 src/stages/* 与 src/run/prompt.js）；安全模型未动（删除仍 BLOCKED）。

@@ -15,6 +15,7 @@ import { join } from 'path'
 import { tmpdir } from 'os'
 import { execSync } from 'child_process'
 import { auditQuickCompletion } from '../src/run.js'
+import { printQuickAuditReview } from '../src/run/quick-audit.js'
 
 let failed = 0, total = 0
 function assert(cond, msg) {
@@ -135,6 +136,53 @@ console.log('--- auditQuickCompletion characterization ---')
   const r = await auditQuickCompletion(nonGit, baseGuard, {})
   assert(r.status === 'blocked', `非 git 目录审计 → blocked（fail-loud，实际 ${r.status}）`)
   assert(r.reasons.some(rr => rr.includes('审计失败')), `reasons 含「审计失败」（实际 ${JSON.stringify(r.reasons)}）`)
+}
+
+// case 10: 删除文件 + --confirm → 提示指向「不支持删除/execute」，不再甩 --force-baseline --allow-new 误导
+// 修 auditQuickCompletion 的 --confirm 提示块：deletedFiles>0 时单独提示走 execute（flag 对删除无效）。
+{
+  const d = makeRepo()
+  rmSync(join(d, 'README.md'))
+  const logs = []
+  const origLog = console.log
+  console.log = (...args) => logs.push(args.join(' '))
+  try {
+    await auditQuickCompletion(d, baseGuard, { isConfirm: true })
+  } finally {
+    console.log = origLog
+  }
+  const out = logs.join('\n')
+  assert(out.includes('不支持删除'), `删除 + --confirm 提示含「不支持删除」`)
+  assert(!out.includes('--force-baseline --allow-new'), `删除 + --confirm 不再甩无效 flag 组合`)
+}
+
+// case 11: printQuickAuditReview 删除 blocked → 提示「不支持删除」，不甩 flag 误导
+{
+  const errs = []
+  const origErr = console.error
+  console.error = (...args) => errs.push(args.join(' '))
+  try {
+    printQuickAuditReview({ status: 'blocked', reasons: ['删除文件: README.md'], deletedFiles: ['README.md'], changedFiles: ['README.md'], newFiles: [], baselineHit: [], stagedTotal: 1 })
+  } finally {
+    console.error = origErr
+  }
+  const out = errs.join('\n')
+  assert(out.includes('不支持删除'), `printQuickAuditReview 删除 blocked 提示「不支持删除」`)
+  assert(!out.includes('--force-baseline --allow-new'), `printQuickAuditReview 删除 blocked 不甩无效 flag`)
+}
+
+// case 12 (回归): printQuickAuditReview 非删除 blocked（危险文件）→ 仍保留 flag 建议
+{
+  const errs = []
+  const origErr = console.error
+  console.error = (...args) => errs.push(args.join(' '))
+  try {
+    printQuickAuditReview({ status: 'blocked', reasons: ['危险文件变更: package.json'], deletedFiles: [], changedFiles: ['package.json'], newFiles: [], baselineHit: [], stagedTotal: 1 })
+  } finally {
+    console.error = origErr
+  }
+  const out = errs.join('\n')
+  assert(out.includes('--force-baseline --allow-new'), `非删除 blocked 仍保留 flag 建议（回归保护）`)
 }
 
 for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} }
