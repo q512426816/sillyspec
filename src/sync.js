@@ -40,8 +40,13 @@ const DOCUMENT_FILES = ['proposal.md', 'design.md', 'requirements.md', 'tasks.md
 // ── YAML 辅助 ──
 
 /**
- * 简易 YAML 读写，只处理 project 段的扁平结构。
+ * 简易 YAML 读取（解析为扁平 obj），供 _getPlatform / status 只读用。
  * 与 worktree-guard.js 的 parseSimpleYaml 保持一致的轻量风格。
+ *
+ * 写入侧（connect/disconnect）**不再**走 parse→modify→write 有损往返——
+ * readLocalYaml/parseSimpleYaml 丢注释（:85 跳 # 行）、丢数组/深嵌套（只认一层 key:value），
+ * round-trip 会清空用户手填的注释与其他段。改为 readLocalYamlRaw + replaceTopLevelSection
+ * 文本级定向替换 platform 段，原文件注释/空行/其他段/数组/深嵌套/CRLF 字节级保留。
  */
 function readLocalYaml(cwd) {
   const p = join(cwd, LOCAL_YAML);
@@ -53,28 +58,81 @@ function readLocalYaml(cwd) {
   }
 }
 
-function writeLocalYaml(cwd, obj) {
-  const dir = join(cwd, '.sillyspec');
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  const lines = [];
-  const rootKeys = Object.keys(obj);
-  for (const key of rootKeys) {
-    const val = obj[key];
-    if (val === null || val === undefined) continue;
-    if (typeof val === 'object' && !Array.isArray(val)) {
-      lines.push(`${key}:`);
-      for (const [k, v] of Object.entries(val)) {
-        if (typeof v === 'string') {
-          lines.push(`  ${k}: ${v}`);
-        } else {
-          lines.push(`  ${k}: ${JSON.stringify(v)}`);
-        }
-      }
-    } else {
-      lines.push(`${key}: ${typeof val === 'string' ? val : JSON.stringify(val)}`);
+/** 读 local.yaml 原始文本（保留注释/换行/结构），不存在返回 ''。供 connect/disconnect 文本级改写。 */
+function readLocalYamlRaw(cwd) {
+  const p = join(cwd, LOCAL_YAML);
+  if (!existsSync(p)) return '';
+  try {
+    return readFileSync(p, 'utf8');
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * 定位顶层 YAML 段（如 platform:/mcp:）的行范围 [start, end)。
+ * 段 = key 行（行首非空白 + 以 'name:' 开头）+ 后续连续缩进行（以空格/tab 开头）。
+ * 遇空行/注释/下一个顶层 key 即段结束——这些行不属于本段，保留不动。
+ * split('\n')/join('\n') 操作：CRLF 下 '\r' 留在行尾，重组原样还原（Windows 兼容，CLAUDE.md #13）。
+ * @param {string} text
+ * @param {string} name - 段名（不含冒号，如 'platform'）
+ * @returns {{start: number, end: number} | null} 不存在返回 null
+ */
+function findTopLevelSectionRange(text, name) {
+  const lines = text.split('\n');
+  const prefix = `${name}:`;
+  let start = -1;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    // 顶层 key 行：行首非空白（排除缩进子段）+ 以 'name:' 开头
+    if (/^\S/.test(line) && line.startsWith(prefix)) {
+      start = i;
+      break;
     }
   }
-  writeFileSync(join(cwd, LOCAL_YAML), lines.join('\n') + '\n', 'utf8');
+  if (start === -1) return null;
+  let end = start + 1;
+  while (end < lines.length && /^[ \t]/.test(lines[end])) {
+    end++;
+  }
+  return { start, end };
+}
+
+/**
+ * 文本级定向替换/删除/追加一个顶层 YAML 段，保留文件其余所有字节
+ * （注释/空行/其他段/数组/深嵌套/CRLF 全保留）。
+ * @param {string} text - 原始文件文本
+ * @param {string} name - 段名（不含冒号）
+ * @param {string|null} body - 段体（不含 key 行）；null=删除该段；string=替换或追加
+ * @returns {string} 新文本
+ */
+function replaceTopLevelSection(text, name, body) {
+  const lines = text.split('\n');
+  const range = findTopLevelSectionRange(text, name);
+  if (range) {
+    const before = lines.slice(0, range.start);
+    const after = lines.slice(range.end);
+    if (body === null) {
+      return [...before, ...after].join('\n');
+    }
+    const sectionLines = [`${name}:`, ...body.split('\n')];
+    return [...before, ...sectionLines, ...after].join('\n');
+  }
+  // 段不存在
+  if (body === null) return text; // 删不存在的段，原样返回
+  // 追加：去尾换行后加空行分隔 + 新段；空文件直接起段
+  const stripped = text.replace(/(\r?\n)+$/, '');
+  if (stripped === '') {
+    return `${name}:\n${body}\n`;
+  }
+  return `${stripped}\n\n${name}:\n${body}\n`;
+}
+
+/** 文本级写 local.yaml（保留传入 text 的注释/结构）；确保 .sillyspec 目录存在。 */
+function writeLocalYamlRaw(cwd, text) {
+  const dir = join(cwd, '.sillyspec');
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  writeFileSync(join(cwd, LOCAL_YAML), text, 'utf8');
 }
 
 function parseSimpleYaml(content) {
@@ -201,7 +259,8 @@ export class SyncManager {
    */
   async connect(url, token, user) {
     // 验证连接
-    const healthUrl = `${url.replace(/\/+$/, '')}/api/health`;
+    const normalizedUrl = url.replace(/\/+$/, '');
+    const healthUrl = `${normalizedUrl}/api/health`;
     const result = await fetchJson(healthUrl);
     if (result === null) {
       console.warn(`[sync] 平台连接验证失败: ${url}`);
@@ -212,21 +271,23 @@ export class SyncManager {
     // 解析推送者身份（D-004）：显式 > git user.name > env；全失败留空不写 user 字段
     const resolvedUser = resolvePlatformUser(this.cwd, user);
 
-    // 写入 local.yaml
-    const config = readLocalYaml(this.cwd);
-    config.platform = {
-      url: url.replace(/\/+$/, ''),
-      token,
-      last_connected: new Date().toISOString(),
-    };
+    // 文本级改写 local.yaml：定向替换 platform 段，原文件注释/其他段/数组/深嵌套/CRLF 字节级保留
+    // （旧 read-modify-write 经 parseSimpleYaml 丢注释+丢非扁平结构，round-trip 清空用户手填内容）。
+    const platformEntries = [
+      `  url: ${normalizedUrl}`,
+      `  token: ${token}`,
+      `  last_connected: ${new Date().toISOString()}`,
+    ];
     if (resolvedUser) {
-      config.platform.user = resolvedUser;
+      platformEntries.push(`  user: ${resolvedUser}`);
     }
-    // mcp 段同源假设（design §7.4）：复用 platform 的 url/token；用户已手填 mcp 段则保留不覆盖（R-09）
-    if (!config.mcp) {
-      config.mcp = { url: url.replace(/\/+$/, ''), token };
+    let text = readLocalYamlRaw(this.cwd);
+    text = replaceTopLevelSection(text, 'platform', platformEntries.join('\n'));
+    // mcp 段同源假设（design §7.4）：复用 platform 的 url/token；用户已手填 mcp 段则保留不覆盖（R-09，文本级检测）
+    if (findTopLevelSectionRange(text, 'mcp') === null) {
+      text = replaceTopLevelSection(text, 'mcp', `  url: ${normalizedUrl}\n  token: ${token}`);
     }
-    writeLocalYaml(this.cwd, config);
+    writeLocalYamlRaw(this.cwd, text);
   }
 
   /**
@@ -239,17 +300,18 @@ export class SyncManager {
       console.log('[sync] 已断开连接（无配置文件）');
       return;
     }
-    const config = readLocalYaml(this.cwd);
-    if (!config.platform) {
+    const text = readFileSync(p, 'utf8');
+    if (findTopLevelSectionRange(text, 'platform') === null) {
       console.log('[sync] 已断开连接（未连接）');
       return;
     }
-    delete config.platform;
-    if (Object.keys(config).length === 0) {
-      // 配置为空，删除整个文件
+    // 文本级删除 platform 段，保留注释/其他段/数组/深嵌套/CRLF
+    const newText = replaceTopLevelSection(text, 'platform', null);
+    if (newText.trim() === '') {
+      // 删段后纯空白（无任何段也无注释）→ 删除整个文件；注释算内容，有注释则保留
       try { unlinkSync(p); } catch { /* best effort */ }
     } else {
-      writeLocalYaml(this.cwd, config);
+      writeFileSync(p, newText, 'utf8');
     }
     console.log('[sync] 已断开连接');
   }

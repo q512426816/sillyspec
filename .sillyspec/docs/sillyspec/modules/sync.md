@@ -4,8 +4,8 @@ created_at: 2026-06-01T09:05:00
 ---
 
 # sync
-> 最后更新：2026-08-10
-> 最近变更：2026-08-10-platform-progress-sync（下行 pull + 多用户双向冲突 + platform resolve/status 扩展）
+> 最后更新：2026-08-11
+> 最近变更：ql-20260811-003-b023（connect/disconnect 文本级定向替换，保留 local.yaml 注释/其他段/数组/深嵌套）
 > 模块路径：src/sync.js
 
 ## 职责
@@ -14,7 +14,7 @@ SillyHub 平台同步模块，负责与远程 SillyHub 服务建立连接、同�
 ## 当前设计
 `SyncManager` 是独立于 `ProgressManager` 的同步管理类，由 `run.js` 和 `index.js` 调用。设计遵循 "Best Effort" 原则：所有网络失败仅 `console.warn`，不抛错、不阻塞主流程。
 
-配置来源为 `.sillyspec/local.yaml` 中的 `platform` 段（url + token）。模块内置简易 YAML 读写（`parseSimpleYaml`），只处理 project 段的扁平结构，不依赖第三方 YAML 库。HTTP 请求使用 Node.js 原生 `fetch`（需要 Node 22+），统一设置 10 秒超时。
+配置来源为 `.sillyspec/local.yaml` 中的 `platform` 段（url + token）。**读取侧**（`_getPlatform`/`status`）用简易 `parseSimpleYaml`（只处理扁平结构，不依赖第三方 YAML 库）；**写入侧**（`connect`/`disconnect`）改文本级定向替换（`readLocalYamlRaw` + `findTopLevelSectionRange` + `replaceTopLevelSection`），原文件注释/空行/其他段/数组/深嵌套/CRLF 字节级保留——旧 `writeLocalYaml` 扁平全量覆写经 parse 往返丢注释+丢非扁平结构，已废弃删除。HTTP 请求使用 Node.js 原生 `fetch`（需要 Node 22+），统一设置 10 秒超时。
 
 对外同时暴露 `SyncManager` 类（面向程序化调用）和一组顶层 `async function`（面向 CLI `sync` 子命令）。顶层函数通过 `syncModule(args, cwd)` 进行子命令分发（connect / disconnect / sync / docs / approval / status）。
 
@@ -50,7 +50,7 @@ SillyHub 平台同步模块，负责与远程 SillyHub 服务建立连接、同�
 | `syncModule(args, cwd)` | CLI 入口：解析 args 并分发子命令 | `args: string[], cwd` |
 
 ## 关键数据流
-1. **连接流程**：`connect(url, token)` -> `fetchJson(/api/health)` 验证 -> 写入 `.sillyspec/local.yaml` 的 `platform` 段 + `mcp` 段（2026-08-10-local-yaml-generation，同源假设：`mcp.url`/`mcp.token` 复用 platform；`if(!config.mcp)` 守卫保留用户已手填 mcp 段不覆盖，R-09。不同源时 agent 手填 mcp 段或设 env）
+1. **连接流程**：`connect(url, token)` -> `fetchJson(/api/health)` 验证 -> 文本级定向写入 `.sillyspec/local.yaml` 的 `platform` 段（`replaceTopLevelSection` 原位替换，保留注释/其他段/数组/深嵌套）+ `mcp` 段（不存在时追加同源 url/token；文本级 `findTopLevelSectionRange('mcp')` 守卫保留用户已手填 mcp 段不覆盖，R-09。不同源时 agent 手填 mcp 段或设 env）
 2. **进度同步**：`sync(changeName)` -> 读取 `sillyspec.db`（动态 import `ProgressManager`） -> `POST /api/changes/{name}/progress`
 3. **文档同步**：`syncDocuments(changeName)` -> 读取 `.sillyspec/changes/{name}/` 下四件套文档 -> `POST /api/changes/{name}/documents`
 4. **审批查询**：`checkApproval(changeName)` -> `GET /api/changes/{name}/approval` -> 若已批准则更新本地 progress
@@ -63,7 +63,7 @@ SillyHub 平台同步模块，负责与远程 SillyHub 服务建立连接、同�
 | 决策 | 原因 | 替代方案 |
 |------|------|----------|
 | Best Effort 网络容错 | 同步是辅助功能，不应阻塞主流程 | 严格错误传播，失败即中断 |
-| 内置简易 YAML 读写 | 只需扁平结构，避免引入 yaml 依赖 | 使用 js-yaml 库 |
+| 内置简易 YAML 读写（读）+ 文本级定向替换（写） | 读取只需扁平结构避免 yaml 依赖；写入要保留注释/其他段/数组/深嵌套必须文本级操作（parse 往返丢注释） | 使用 js-yaml / yaml 库 |
 | 动态 import ProgressManager | 避免循环依赖（progress.js 可能依赖 sync.js） | 静态 import |
 | 原生 fetch（Node 22+） | 零外部依赖 | axios / node-fetch |
 | 10 秒请求超时 | 平衡响应速度与用户体验 | 更长超时 / 无超时 |
@@ -83,3 +83,4 @@ SillyHub 平台同步模块，负责与远程 SillyHub 服务建立连接、同�
 | 日期 | 变更名 | 摘要 |
 |------|--------|------|
 | 2026-08-10 | 2026-08-10-platform-progress-sync | 下行 pull（pullList/pull 两级 + 本地脏度冲突检测）+ 双向冲突持久化（push 409/pull 脏度写 sync-conflict-<change>.json）+ resolve 三选一（keep-local/take-platform/abort）+ collectStatus（落后标记+未决冲突列表）+ POST 元字段走 HTTP header（D-015 body 裸 JSON 零回归）+ resolvePlatformUser（local.yaml user→X-SillySpec-User）。配套 db.js schema v4 加 last_synced_platform_ts/last_local_modified_ts，progress.js serializeForSync/import。 |
+| 2026-08-11 | ql-20260811-003-b023（quick） | connect/disconnect 改文本级定向替换 platform 段（readLocalYamlRaw + findTopLevelSectionRange + replaceTopLevelSection），保留 local.yaml 注释/其他段/数组/深嵌套/CRLF；废弃删除扁平全量覆写的 writeLocalYaml（round-trip 经 parseSimpleYaml 丢注释+丢非扁平结构）。新增 test/local-yaml-preserve.test.mjs。 |
