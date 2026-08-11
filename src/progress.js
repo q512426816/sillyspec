@@ -347,7 +347,7 @@ export class ProgressManager {
     }
 
     const result = {
-      _version: 4,
+      _version: 5,
       project: projectName,
       currentChange: cName,
       currentStage: currentStage || '',
@@ -776,6 +776,8 @@ export class ProgressManager {
 
   unregisterChange(cwd, changeName) { return this._changeRegistry.unregisterChange(cwd, changeName); }
 
+  updateChangeMeta(cwd, changeName, meta) { return this._changeRegistry.updateChangeMeta(cwd, changeName, meta); }
+
   // ── CLI 命令 ──
 
   init(cwd) {
@@ -815,7 +817,7 @@ export class ProgressManager {
    * 初始化指定变更的 progress
    * SQL: INSERT changes + 批量 INSERT stages
    */
-  initChange(cwd, changeName) {
+  initChange(cwd, changeName, meta = {}) {
     if (!changeName) {
       console.warn('⚠️  initChange: changeName 为空，跳过');
       return null;
@@ -836,9 +838,9 @@ export class ProgressManager {
       if (existing === undefined) {
         // 插入 changes 行
         sqlDb.prepare(
-          `INSERT INTO changes (name, current_stage, status, created_at, last_active)
-           VALUES (?, 'scan', 'active', ?, ?)`
-        ).run(changeName, now, now);
+          `INSERT INTO changes (name, current_stage, status, created_at, last_active, title, quicklog_id)
+           VALUES (?, 'scan', 'active', ?, ?, ?, ?)`
+        ).run(changeName, now, now, meta.title || null, meta.quicklogId || null);
       }
 
       // 获取 change_id

@@ -68,6 +68,34 @@ export class ChangeRegistry {
   }
 
   /**
+   * 更新变更的人类可读元信息（title / quicklog_id），让 quick-<hex> 行可读、DB↔QUICKLOG 可对账。
+   * quick 启动时回填（title 从任务描述、quicklog_id 用分配的 qlId）；--done 时从 step3「需求：」刷新 title。
+   * 部分更新（只传 title 不动 quicklog_id，反之亦然）。不调 _touchLocalModified：title/quicklog_id 是
+   * 本地展示用元信息，纳入脏度会扰动平台同步（平台 changes 表无此列）。
+   * @param {string} cwd
+   * @param {string} changeName
+   * @param {{ title?: string, quicklogId?: string }} meta
+   */
+  updateChangeMeta(cwd, changeName, meta) {
+    if (!changeName || !meta) return;
+    const db = this.pm._ensureDB(cwd);
+    try {
+      db.transaction(() => {
+        const sqlDb = db.getDb();
+        const sets = [];
+        const params = [];
+        if (meta.title !== undefined) { sets.push('title = ?'); params.push(meta.title); }
+        if (meta.quicklogId !== undefined) { sets.push('quicklog_id = ?'); params.push(meta.quicklogId); }
+        if (sets.length === 0) return;
+        params.push(changeName);
+        sqlDb.prepare(`UPDATE changes SET ${sets.join(', ')} WHERE name = ?`).run(...params);
+      });
+    } catch (err) {
+      console.warn('⚠️  更新 change 元信息失败:', err.message);
+    }
+  }
+
+  /**
    * 读取变更的隔离状态
    * @param {string} cwd - 项目根目录
    * @param {string} changeName - 变更名

@@ -27,7 +27,7 @@ export const STAGE_ORDER = ['scan', 'brainstorm', 'plan', 'execute', 'verify', '
 export const MAIN_FLOW_ORDER = ['brainstorm', 'plan', 'execute', 'verify', 'archive'];
 
 // progress 数据版本（v3 = SQLite；v4 = changes 加 base_ts / 本地脏度两列，platform-sync §8）
-export const CURRENT_VERSION = 4;
+export const CURRENT_VERSION = 5;
 
 // 空阶段骨架
 export function emptyStage() {

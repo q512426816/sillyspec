@@ -80,7 +80,7 @@ if (json) {
 
   // project 全局行
   assert(json.project && json.project.name === basename(cwd), `project.name === basename(cwd)（实际 ${json.project && json.project.name}）`);
-  assert(json.project && json.project.schema_version === 4, `project.schema_version === 4（实际 ${json.project && json.project.schema_version}）`);
+  assert(json.project && json.project.schema_version === 5, `project.schema_version === 5（实际 ${json.project && json.project.schema_version}）`);
 
   // stages：initChange 插入全部 VALID_STAGES，每行 change_name+stage
   assert(Array.isArray(json.stages) && json.stages.length >= 5, `stages 数组非空（实际 ${json.stages.length} 行）`);

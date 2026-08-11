@@ -11,7 +11,7 @@
  *
  * 断言三件套：DB 状态（pm.read）+ 关键 stdout + 产物文件存在性。
  */
-import { writeFileSync, existsSync } from 'node:fs'
+import { writeFileSync, existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { _completeStepForTest } from '../src/run.js'
 import { archiveDestDirName } from '../src/stage-contract.js'
@@ -107,6 +107,37 @@ console.log('\n--- Case 3: 缺 --confirm → 不移动 + step 回退 ---')
 
   const after = await pm.read(cwd, cn)
   assert(after.stages.archive.steps[3].status === 'pending', 'DB: 缺 confirm 时确认归档 step 回退为 pending')
+}
+
+// ── Case 4: 归档时清理该 change 的 runId marker（execute / stage-review）──
+console.log('\n--- Case 4: 归档清理 execute/stage-review runId marker ---')
+{
+  const { cwd, specBase } = makeRepo('cs-archive-4-')
+  const cn = '2026-07-25-archive-marker'
+  const pm = await initChange(cwd, specBase, cn)
+  const changeDir = join(specBase, 'changes', cn)
+  writeFileSync(join(changeDir, 'plan.md'), '# Plan\n')
+  writeFileSync(join(changeDir, 'design.md'), '# Design\n')
+  // 预置该 change 的 execute + stage-review marker（归档后应被清理）
+  const runtimeRoot = join(specBase, '.runtime')
+  mkdirSync(runtimeRoot, { recursive: true })
+  const execMarker = join(runtimeRoot, `current-execute-run-id-${cn}`)
+  const stageMarker = join(runtimeRoot, `current-stage-review-run-id-execute-${cn}`)
+  // 其他 change 的 marker（不应被误删）
+  const otherExecMarker = join(runtimeRoot, 'current-execute-run-id-other-change')
+  writeFileSync(execMarker, 'exec-1\n')
+  writeFileSync(stageMarker, 'review-1\n')
+  writeFileSync(otherExecMarker, 'exec-2\n')
+  const progress = await seedStage(pm, cwd, cn, 'archive', ARCHIVE_STEPS('pending'))
+
+  const r = await runCapturing(() =>
+    _completeStepForTest(pm, progress, 'archive', cwd, '确认归档', null,
+      { confirm: true, changeName: cn, printNext: false }))
+
+  assert(!r.error, 'confirm 归档不应 process.exit')
+  assert(!existsSync(execMarker), `execute marker 已清理（current-execute-run-id-${cn}）`)
+  assert(!existsSync(stageMarker), `stage-review marker 已清理（current-stage-review-run-id-execute-${cn}）`)
+  assert(existsSync(otherExecMarker), '其他 change 的 marker 不受影响')
 }
 
 cleanup()

@@ -230,3 +230,31 @@
 根因：generateExecuteRunId 只写 marker 字符串、run 目录由 ensureTaskReviewDir 在写 review.json 时才建，marker 漂到新空 run 后旧 run 的 review 全部失联；enforceReviewJsonGate 直接 readFileSync(marker) 拿值就用、不校验目录不兜底。defer 债（prompt-control-debt gate-atom-a）提的方案 A「fallback resolveLatestExecuteRunId 对齐 gates.js:333-343」不成立——该函数见 marker 非空即原样返回（不校验目录），而 :333-343 只在 marker 为空时才 fallback，恰都接不住「marker 非空指向坏目录」这一漂移场景。
 方案：新增 resolveLatestExecuteRunIdWithTasks，无视 marker、只认 execute-runs/ 下真实含 tasks/ 的最新目录；enforceReviewJsonGate 在 marker 指向的 run 缺 tasks/ 时用它重定位到真实 run 再校验；全部 run 都无 tasks/（真没写 review）返回 null，gate 维持原 marker 校验、不误放行。
 结果：npm test 全量 151 绿（含新增 9 用例 execute-run-marker-drift）+ lint 230 文件绿；marker 漂移场景不再误报、真缺 review 仍阻断。模块文档：gates.js/task-review.js 未被任何模块卡收录（module-map schema v1 无 paths、收录不全），无归属命中故跳过同步。注：defer 债条目已按其原 defer 前提（complete-gate-atomicity 已归档 + 主仓干净）落地，但实现用的是「无视 marker 扫描」而非债条原文的「resolveLatestExecuteRunId fallback」，债务描述与正确修法有出入。
+
+## ql-20260810-004-444d | 2026-08-10 16:59:54 | 归档时清理 execute/stage-review runId marker（治 .runtime 无限累积）
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/complete-handlers.js（archiveWorktreeCleanup 新增 runId marker 清理：按 change 删 current-execute-run-id-<change> + current-stage-review-run-id-<stage>-<change>，normal+自愈分支共用；签名补 specBase/platformOpts 同源解析 runtimeRoot）
+- src/run/complete.js（:182 handleArchiveConfirmStep 调用补传 platformOpts）
+- docs/sillyspec/file-lifecycle.md（归档清理 runId marker 段落 + updated_at）
+- test/run-complete-step-archive.test.mjs（Case 4：归档后 execute/stage-review marker 清理 + 他 change marker 不误删）
+需求：归档时清理 execute/stage-review runId marker，消除 .runtime 无限累积（单仓已 50+ 个）。
+根因：stage.js execute 启动 / stage-review.js 各写 marker 只写不删；archiveWorktreeCleanup 只清 worktree 不删 marker，change 归档后 marker 无读者仍残留。
+方案：archiveWorktreeCleanup 归档时按 change 删除 current-execute-run-id-<change> 与 current-stage-review-run-id-<stage>-<change>，透传 platformOpts 同源解析 runtimeRoot（平台模式锚主仓不误清理），失败仅 warn 不阻断归档。
+结果：Case 4 验证 marker 清理且不误删他 change；npm test 151/0 零回归；npm run lint 230 文件绿。quick 审计 src/run/ 判危险 → --force-baseline 显式解锁（合法任务非夹带）。
+
+## ql-20260810-005-8023 | 2026-08-10 23:20:45 | quick --done 后 QUICKLOG 文件行是单行无括注、skill 把模块文档同步与 QUICKLOG 精修分置 --done 前后易记混
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/command.js（解析 --file-notes 进 VALUE_FLAGS/knownFlags 并 setQuickFileNotes 注入）
+- src/quicklog.js（parseFileNotes + per-process setter + flipEntry 内嵌换行写多行 bullet（旁路避碰 complete*.js 并发热点））
+- src/stages/quick.js（step3 加收尾推荐顺序 + --file-notes 段 + 精修降级为按需核对；step1 引用同步）
+- .claude/skills/sillyspec-quick/SKILL.md（镜像 --file-notes 参数表 + 核对铁律 + 收尾顺序）
+- docs/prompt/quick.md（_extracted 同步 step1/3 prompt 正文）
+- test/quicklog-cli-managed.test.mjs（验收 2h（parseFileNotes 格式 + complete 消费/清空/bullet/回退））
+需求：quick --done 后 QUICKLOG 文件行是单行无括注、skill 把模块文档同步与 QUICKLOG 精修分置 --done 前后易记混，要让 CLI 自动写多行括注并写明顺序。
+根因：无 --file-notes 入口，文件括注只能事后手改；step3 prompt 两件事分两段未给统一推荐顺序。
+方案：command.js 解析 --file-notes 经 setQuickFileNotes 旁路注入 quicklog.js 避碰 complete 收尾并发热点，flipEntry 内嵌换行写 bullet；quick.js step3 加收尾推荐顺序加 --file-notes 加精修降级为按需核对；SKILL.md 与 docs-prompt 同步。
+结果：npm test 全绿 EXIT0、lint 242 文件通过；quicklog 验收 2h 共 12 条覆盖 parseFileNotes 与 completeQuicklogEntry 消费回退。

@@ -1,10 +1,10 @@
 // task-01 验收：changes 表新增 last_synced_platform_ts / last_local_modified_ts 两列
-// + DB schema 版本四处一致 bump 3→4（design 2026-08-10-platform-progress-sync §8 / D-012）。
+// + DB schema 版本四处一致 bump 4→5（2026-08-11 changes 表加 title/quicklog_id 列；D-012 原始 3→4）。
 //
 // 验收点（task-01.md acceptance）：
 // 1. 全新 DB init 后 changes 表含两列且默认 NULL
 // 2. 已有 schema 3 DB 经 _migrateAddColumn 幂等加列且新列 NULL，不丢既有数据
-// 3. DB_SCHEMA_VERSION / schema_version DEFAULT / CURRENT_VERSION / progress.js _version 四处全为 4
+// 3. DB_SCHEMA_VERSION / schema_version DEFAULT / CURRENT_VERSION / progress.js _version 四处全为 5
 //
 // 用 DB 原语直接构造（对齐 db-atomic-write.test.mjs 风格），避免 ProgressManager 副作用干扰 DDL 断言。
 import { DB } from '../src/db.js';
@@ -46,19 +46,19 @@ const columnsOf = (file) => {
 console.log('\n[platform-sync-schema] task-01：changes 加列 + 版本号四处一致');
 
 // ─────────────────────────────────────────
-// 1. 版本号四处一致（3→4 bump，D-012）
+// 1. 版本号四处一致（4→5 bump，D-012 原始 3→4）
 // ─────────────────────────────────────────
-console.log('\n--- 1. 版本号四处一致（3→4 bump，D-012）---');
+console.log('\n--- 1. 版本号四处一致（4→5 bump，D-012 原始 3→4）---');
 {
   // (1) src/progress/shared.js CURRENT_VERSION（静态导出）
-  assert(CURRENT_VERSION === 4, `src/progress/shared.js CURRENT_VERSION === 4（实际 ${CURRENT_VERSION}）`);
+  assert(CURRENT_VERSION === 5, `src/progress/shared.js CURRENT_VERSION === 5（实际 ${CURRENT_VERSION}）`);
 
   // (2) src/db.js DB_SCHEMA_VERSION：经 init 后 .schema-version 戳内容间接验证（戳内容 == DB_SCHEMA_VERSION）
   fresh();
   let db = open();
   db.close();
   const stamp = readStamp();
-  assert(stamp === '4', `DB_SCHEMA_VERSION === 4（init 后 .schema-version 戳=${stamp}）`);
+  assert(stamp === '5', `DB_SCHEMA_VERSION === 5（init 后 .schema-version 戳=${stamp}）`);
 }
 
 // ─────────────────────────────────────────
@@ -131,7 +131,7 @@ console.log('\n--- 3. 幂等迁移：schema 3 旧库（无新列+有数据）→
   // 写一个过期（schema 3）戳，使新版 init 判定 schemaCurrent=false → 重跑 _createSchema
   writeFileSync(stampPath(), '3');
 
-  // 用新版代码 init（DB_SCHEMA_VERSION=4，戳失配 → _createSchema → _migrateAddColumn 幂等加列）
+  // 用新版代码 init（DB_SCHEMA_VERSION=5，戳失配 → _createSchema → _migrateAddColumn 幂等加列）
   const db = open();
   db.close();
 
@@ -151,14 +151,14 @@ console.log('\n--- 3. 幂等迁移：schema 3 旧库（无新列+有数据）→
     probe.close();
   }
 
-  // 戳已更新为 4
-  assert(readStamp() === '4', `迁移后 .schema-version 戳更新为 4（实际 ${readStamp()}）`);
+  // 戳已更新为 5
+  assert(readStamp() === '5', `迁移后 .schema-version 戳更新为 5（实际 ${readStamp()}）`);
 }
 
 // ─────────────────────────────────────────
-// 4. project.schema_version DEFAULT 4（D-012 连带第二处）
+// 4. project.schema_version DEFAULT 5（D-012 连带第二处）
 // ─────────────────────────────────────────
-console.log('\n--- 4. project.schema_version DEFAULT 4（D-012 连带）---');
+console.log('\n--- 4. project.schema_version DEFAULT 5（D-012 连带）---');
 {
   fresh();
   // 手动 INSERT project（不带 schema_version 列 → 取 DEFAULT）
@@ -171,16 +171,16 @@ console.log('\n--- 4. project.schema_version DEFAULT 4（D-012 连带）---');
   const probe = new Database(dbPath(), { readonly: true });
   try {
     const row = probe.prepare('SELECT schema_version FROM project WHERE id=1').get();
-    assert(row && row.schema_version === 4, `project.schema_version DEFAULT 4（实际 ${row && row.schema_version}）`);
+    assert(row && row.schema_version === 5, `project.schema_version DEFAULT 5（实际 ${row && row.schema_version}）`);
   } finally {
     probe.close();
   }
 }
 
 // ─────────────────────────────────────────
-// 5. progress.js read() 输出 _version: 4（D-012 连带第四处）
+// 5. progress.js read() 输出 _version: 5（D-012 连带第四处）
 // ─────────────────────────────────────────
-console.log('\n--- 5. progress.js read()._version === 4（D-012 连带第四处）---');
+console.log('\n--- 5. progress.js read()._version === 5（D-012 连带第四处）---');
 {
   fresh();
   const specDir = join(tmpRoot, 'spec');
@@ -189,7 +189,7 @@ console.log('\n--- 5. progress.js read()._version === 4（D-012 连带第四处�
   await pm.init('demo');
   await pm.initChange('demo', 'c1');
   const data = await pm.read('demo', 'c1');
-  assert(data && data._version === 4, `pm.read()._version === 4（实际 ${data && data._version}）`);
+  assert(data && data._version === 5, `pm.read()._version === 5（实际 ${data && data._version}）`);
   // ProgressManager 无 close()：手动释放底层 better-sqlite3 句柄（Windows 下 WAL 句柄占开会导致
   // 末尾 rmSync EPERM；better-sqlite3 close() 自动 checkpoint 合并 -wal/-shm）。
   try { if (pm._db) pm._db.close(); } catch { /* 已关忽略 */ }

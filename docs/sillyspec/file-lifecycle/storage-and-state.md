@@ -39,7 +39,7 @@ updated_at: 2026-08-09
 | 表 | 用途 |
 |---|---|
 | `project` | 项目名、schema version、创建/更新时间 |
-| `changes` | 变更名、当前阶段、活跃/归档状态、`no_worktree`、平台同步字段、隔离状态字段 |
+| `changes` | 变更名、当前阶段、活跃/归档状态、`no_worktree`、平台同步字段、隔离状态字段、`title`/`quicklog_id`（quick-<hex> 的中文标题 + QUICKLOG ql-ID 关联，2026-08-11 加） |
 | `stages` | 每个 change 的阶段状态 |
 | `steps` | 每个 stage 的步骤状态和输出摘要 |
 | `batch_progress` | 批量任务统计 |
@@ -47,7 +47,7 @@ updated_at: 2026-08-09
 
 `progress.js`（W6 Step9 后为 facade，逻辑在 `src/progress/*.js` 子模块；persistence-core `read`/`_write` 留 facade 本体）通过 SQL 读写这些表，并组装成兼容旧 progress 格式的 JS 对象。进度数据仅存储在 SQLite 数据库中，不再使用 progress.json 文件。
 
-注意：`db.js` 的 `project.schema_version` DDL 默认值是 `4`，但 `CURRENT_VERSION`（W6 Step9d 从 `progress.js` 抽到 `src/progress/shared.js`）是 `3`，并在初始化/写入时使用 `3`。文档不要把这里写成稳定的 v4 schema 事实。
+注意：DB schema 版本号四处一致 = `5`（`db.js` 的 `DB_SCHEMA_VERSION` / `project.schema_version` DDL DEFAULT / `CURRENT_VERSION`（W6 Step9d 抽到 `src/progress/shared.js`）/ `progress.js read()._version`）。D-012（platform-progress-sync）原始对齐至 `4`；2026-08-11 changes 表加 `title`/`quicklog_id` 列 bump 至 `5`。bump 时四处须同步更新（`platform-sync-schema.test.mjs` 守卫锁死一致）。
 
 ## `global.json`
 

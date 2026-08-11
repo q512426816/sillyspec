@@ -22,7 +22,7 @@ import { writeAtomicSync } from '../fs-atomic.js'
 import { resolveSpecDir, resolveChangeDir, resolveRuntimeRoot, resolveQuickSessionsDir, triggerSync, safeGit, parsePorcelainPath, formatWaitOptions, checkApproval, getStageSteps } from './shared.js'
 import { computeScanProfile, applyScanProfileSteps, executeScanPreflight, executeScanPostcheck } from './scan-profile.js'
 import { outputStep } from './prompt.js'
-import { allocateQuicklogEntry, deriveTitleFromLinkedChange } from '../quicklog.js'
+import { allocateQuicklogEntry, deriveTitleFromLinkedChange, sanitizeDesc } from '../quicklog.js'
 import { checkTransition } from '../stage-contract.js'
 import { completeStageGates } from './gates.js'
 
@@ -288,6 +288,11 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
         if (allowNew) parts.push('允许新增文件')
         console.log(`🛡️ quick 变更边界已记录: ${parts.join(', ')}`)
         console.log(`📝 QUICKLOG 条目已创建: ${qlId}`)
+        // 回填 DB changes 行的 title + quicklog_id，让 quick-<hex> 可读、DB↔QUICKLOG 可对账。
+        // title 用 quickDesc（任务描述或关联变更标题）经 sanitizeDesc 压一行限长，与 QUICKLOG 条目标题同源。
+        try {
+          pm.updateChangeMeta(cwd, changeName, { title: sanitizeDesc(quickDesc), quicklogId: qlId });
+        } catch { /* 回填失败不阻断 quick 启动 */ }
         pm._write(cwd, progress, changeName)
       } catch (e) {
         console.warn(`⚠️ baseline 记录失败: ${e.message}`)

@@ -75,7 +75,7 @@ function nowDatetime(d = new Date()) {
 }
 
 // 描述压成一行、限长，避免破坏 QUICKLOG 条目结构
-function sanitizeDesc(description) {
+export function sanitizeDesc(description) {
   const s = String(description || '').replace(/[\r\n]+/g, ' ').trim()
   if (!s) return '(quick 任务)'
   return s.length > 120 ? s.slice(0, 120) + '…' : s
@@ -101,7 +101,7 @@ export function deriveTitleFromLinkedChange(specBase, change) {
 
 // 从 quick step3 --output 四字段提取「需求：」摘要，用于翻完成时刷新标题行
 // （覆盖启动时的占位/弱标题）。提取失败返回 ''（不刷新）。
-function extractTitleFromResult(result) {
+export function extractTitleFromResult(result) {
   if (!result) return ''
   const m = String(result).match(/需求：([^\n\r]*?)(?:\s+根因：|$)/)
   if (!m) return ''

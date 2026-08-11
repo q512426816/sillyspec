@@ -25,12 +25,12 @@
 import { basename, join, resolve, relative, isAbsolute } from 'node:path'
 import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync, unlinkSync, rmSync } from 'node:fs'
 import { renameSyncRetry, writeAtomicSync } from '../fs-atomic.js'
-import { resolveChangeDir, resolveQuickSessionsDir, safeGit, auditQuickCompletion, triggerSync, isQuickMetadata } from './shared.js'
+import { resolveChangeDir, resolveQuickSessionsDir, safeGit, auditQuickCompletion, triggerSync, isQuickMetadata, resolveRuntimeRoot } from './shared.js'
 import { detectConcurrentChanges, formatConcurrentWarning } from './concurrent-detect.js'
 import { stageRegistry } from '../stages/index.js'
 import { SCAN_STATUS, POINTER_STATUS } from '../constants.js'
 import { printQuickAuditReview } from './quick-audit.js'
-import { validateQuickResult, allocateQuicklogEntry, findQuicklogEntry, completeQuicklogEntry } from '../quicklog.js'
+import { validateQuickResult, allocateQuicklogEntry, findQuicklogEntry, completeQuicklogEntry, extractTitleFromResult } from '../quicklog.js'
 import { getRule } from '../stage-contract-spec.js'
 import { archiveDestDirName } from '../stage-contract.js'
 
@@ -130,9 +130,32 @@ export function findAlreadyArchivedDir(archiveDir, changeName) {
 /**
  * 归档时清理可能残留的 worktree（execute 自动清理未走到 / 有未 apply 变更被遗弃）。
  * 安全策略：有未 apply 变更时保留 worktree 并警告，避免误删用户未应用的代码。
+ * 同时清理该变更的 execute / stage-review runId marker（只写不删的累积物，
+ * 见 stage.js execute 启动固定 executeRunId / stage-review.js stageReviewMarkerPath）。
  * 从 archiveChangeDirectory 抽出，供正常归档 + 自愈归档复用。
  */
-async function archiveWorktreeCleanup(cwd, archiveChangeName) {
+async function archiveWorktreeCleanup(cwd, archiveChangeName, specBase, platformOpts = {}) {
+  // ── 清理 runId marker：execute（current-execute-run-id-<change>）与 stage-review
+  //    （current-stage-review-run-id-<stage>-<change>）。marker 只服务 execute→verify→archive
+  //    期间，归档后无读者；不删则 .runtime 随变更数无限累积。runtimeRoot 解析同写入侧
+  //    （resolveRuntimeRoot 锚主仓），避免平台模式清理错位置。
+  try {
+    const runtimeRoot = resolveRuntimeRoot(platformOpts, specBase)
+    if (existsSync(runtimeRoot)) {
+      const markers = readdirSync(runtimeRoot).filter((f) =>
+        f === `current-execute-run-id-${archiveChangeName}` ||
+        (f.startsWith('current-stage-review-run-id-') && f.endsWith(`-${archiveChangeName}`)),
+      )
+      for (const m of markers) {
+        try { unlinkSync(join(runtimeRoot, m)) } catch {}
+      }
+      if (markers.length > 0) {
+        console.log(`🧹 归档清理 ${markers.length} 个 runId marker（execute/stage-review）`)
+      }
+    }
+  } catch (e) {
+    console.warn(`⚠️  归档 runId marker 清理失败（不阻断归档）: ${e.message}`)
+  }
   try {
     const { WorktreeManager } = await import('../worktree.js')
     const wm = new WorktreeManager({ cwd })
@@ -154,7 +177,7 @@ async function archiveWorktreeCleanup(cwd, archiveChangeName) {
   }
 }
 
-export async function archiveChangeDirectory(pm, cwd, progress, specBase) {
+export async function archiveChangeDirectory(pm, cwd, progress, specBase, platformOpts = {}) {
   const archiveChangeName = progress.currentChange
   if (!archiveChangeName) {
     console.error('❌ 归档失败：未找到当前变更名（currentChange）')
@@ -176,7 +199,7 @@ export async function archiveChangeDirectory(pm, cwd, progress, specBase) {
     if (alreadyArchivedDir) {
       console.log(`ℹ️  源目录不存在但变更已在 archive/（${basename(alreadyArchivedDir)}），判定已归档，自愈进度 DB`)
       pm.unregisterChange(cwd, archiveChangeName)
-      await archiveWorktreeCleanup(cwd, archiveChangeName)
+      await archiveWorktreeCleanup(cwd, archiveChangeName, specBase, platformOpts)
       console.log(`📦 已自愈归档：${archiveChangeName} → archive/${basename(alreadyArchivedDir)}/`)
       return alreadyArchivedDir
     }
@@ -221,7 +244,7 @@ export async function archiveChangeDirectory(pm, cwd, progress, specBase) {
   } catch {}
 
   // 归档时清理可能残留的 worktree（自愈路径也复用，见上方 srcDir 缺失分支）。
-  await archiveWorktreeCleanup(cwd, archiveChangeName)
+  await archiveWorktreeCleanup(cwd, archiveChangeName, specBase, platformOpts)
 
   console.log(`📦 已归档：${archiveChangeName} → archive/${destName}/`)
   return destDir
@@ -236,7 +259,7 @@ export async function archiveChangeDirectory(pm, cwd, progress, specBase) {
  *
  * @returns {{stageCompleted:false,currentIdx,nextPendingIdx:number}|null}
  */
-export async function handleArchiveConfirmStep({ stageName, steps, currentIdx, confirm, outputText, pm, cwd, progress, changeName, specBase }) {
+export async function handleArchiveConfirmStep({ stageName, steps, currentIdx, confirm, outputText, pm, cwd, progress, changeName, specBase, platformOpts = {} }) {
   if (stageName !== 'archive' || steps[currentIdx]?.name !== '确认归档') return null
   if (!confirm) {
     steps[currentIdx].status = 'pending'
@@ -246,7 +269,7 @@ export async function handleArchiveConfirmStep({ stageName, steps, currentIdx, c
     console.log('⚠️  请添加 --confirm 确认归档，例如：sillyspec run archive --done --confirm --output "确认归档"')
     return { stageCompleted: false, currentIdx, nextPendingIdx: currentIdx }
   }
-  const archivedDir = await archiveChangeDirectory(pm, cwd, progress, specBase)
+  const archivedDir = await archiveChangeDirectory(pm, cwd, progress, specBase, platformOpts)
   if (archivedDir && existsSync(archivedDir)) {
     const recommendedDocs = ['design.md', 'module-impact.md']
     const missingRecommended = recommendedDocs.filter(d => !existsSync(join(archivedDir, d)))
@@ -751,6 +774,12 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
         changedFiles: realFiles,
       })
       console.log(`📝 QUICKLOG 条目 ${qlId} 已标记完成`)
+      // 刷新 DB title：从 step3「需求：」提取（agent 可改 title 的途径），覆盖启动时的兜底快照。
+      // 与 QUICKLOG 标题刷新（flipEntryInContent 内 extractTitleFromResult）同源，保持 DB↔QUICKLOG 一致。
+      try {
+        const refinedTitle = extractTitleFromResult(outputText || '');
+        if (refinedTitle) pm.updateChangeMeta(cwd, changeName, { title: refinedTitle });
+      } catch { /* title 刷新失败不阻断完成 */ }
     } catch (e) {
       console.warn(`⚠️ QUICKLOG 完成态写入失败: ${e.message}`)
     }
