@@ -382,3 +382,12 @@
 根因：step7 自检清单与 step8 完成契约脱钩，契约硬要求 frontmatter+自审但 step7 没预检，审查时不知要补到 step8/Grill 才暴露，design 已定再补就漂移。
 方案：step7 自检清单补2条 frontmatter 字段齐全+自审字面命中，各标注对应契约项，审查前补齐 docHash 一次定。同步 docs/prompt 镜像。债单 P6.1b 追加第5-6次复发缓解登记。
 结果：brainstorm 测试 2/2；全量 npm test 175/0（db-concurrency flaky 单跑全 PASS 重跑过）；npm run lint 258 过。P6.1b 中等工程 defer 维持，本 quick 治审查后补漂移路径不治 Grill 改实质设计漂移。
+
+## ql-20260812-004-dfd3 | 2026-08-12 14:22:22 | checkApproval fail-open 粒度过粗把请求失败误报审批中pending
+状态：已完成
+关联变更：（无）
+文件：docs/sillyspec/prompt-control-debt.md, src/run/command.js, src/sync.js, test/check-approval-status.test.mjs
+需求：checkApproval fail-open 粒度过粗把请求失败误报审批中pending，agent误以为要等审批，别的项目端点缺失还会踩。
+根因：sync.js:518 fetchJson 返回null(请求失败)时套status=pending，与真pending+未连接平台三者混谈，command.js 3处调用点只识rejected/pending，请求失败走pending分支误报⏳审批待处理。
+方案：sync.js请求失败返回status=unknown，command.js 3处加unknown分支warn审批状态未知按本地模式放行非审批中。approved/rejected/pending语义不变fail-open本地优先零回归。新增check-approval-status测试5断言。sync.md补status取值含unknown。债单登记cc-⑤已修+cc-⑥活跃坑。
+结果：check-approval-status 5/5；全量npm test 175通过(db-concurrency flaky无关)；npm run lint 259文件过。sync.js/command.js判危险文件需force-baseline解锁(改动经实证safety-critical审批门控5测试+175全量+lint过边界0脏文件无并发)。

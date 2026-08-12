@@ -1079,6 +1079,9 @@ async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts = 
           console.log(`⏳ 变更 ${changeName} 的执行审批待处理中...`)
           console.log('  提示：使用 --skip-approval 跳过审批检查')
         }
+        if (approval.status === 'unknown') {
+          console.warn(`⚠️ 变更 ${changeName} 的审批状态未知（${approval.reason || '请求失败'}），按本地模式放行（非审批中，无需等待）`)
+        }
       }
     }
     await outputStep(currentStage, pendingIdx, defSteps, cwd, changeName, progress.project || null, platformOpts)
@@ -1108,6 +1111,9 @@ async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts = 
         if (approval.status === 'pending') {
           console.log(`⏳ 变更 ${changeName} 的执行审批待处理中...`)
           console.log('  提示：使用 --skip-approval 跳过审批检查')
+        }
+        if (approval.status === 'unknown') {
+          console.warn(`⚠️ 变更 ${changeName} 的审批状态未知（${approval.reason || '请求失败'}），按本地模式放行（非审批中，无需等待）`)
         }
       }
     }
@@ -1175,6 +1181,9 @@ async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts = 
         if (approval.status === 'pending') {
           console.log(`⏳ 变更 ${changeName} 的执行审批待处理中...`)
           console.log('  提示：使用 --skip-approval 跳过审批检查')
+        }
+        if (approval.status === 'unknown') {
+          console.warn(`⚠️ 变更 ${changeName} 的审批状态未知（${approval.reason || '请求失败'}），按本地模式放行（非审批中，无需等待）`)
         }
       }
     }

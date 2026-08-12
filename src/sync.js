@@ -517,7 +517,7 @@ export class SyncManager {
 
     if (!result) {
       console.warn(`[sync] 检查审批状态失败: ${changeName}`);
-      return { status: 'pending', reason: '请求失败' };
+      return { status: 'unknown', reason: '请求失败（404/断网/超时），无法核实审批状态' };
     }
 
     // 更新本地 approvals 表

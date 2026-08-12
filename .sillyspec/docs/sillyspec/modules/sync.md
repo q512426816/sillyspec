@@ -53,7 +53,7 @@ SillyHub 平台同步模块，负责与远程 SillyHub 服务建立连接、同�
 1. **连接流程**：`connect(url, token)` -> `fetchJson(/api/health)` 验证 -> 文本级定向写入 `.sillyspec/local.yaml` 的 `platform` 段（`replaceTopLevelSection` 原位替换，保留注释/其他段/数组/深嵌套）+ `mcp` 段（不存在时追加同源 url/token；文本级 `findTopLevelSectionRange('mcp')` 守卫保留用户已手填 mcp 段不覆盖，R-09。不同源时 agent 手填 mcp 段或设 env）
 2. **进度同步**：`sync(changeName)` -> 读取 `sillyspec.db`（动态 import `ProgressManager`） -> `POST /api/changes/{name}/progress`
 3. **文档同步**：`syncDocuments(changeName)` -> 读取 `.sillyspec/changes/{name}/` 下四件套文档 -> `POST /api/changes/{name}/documents`
-4. **审批查询**：`checkApproval(changeName)` -> `GET /api/changes/{name}/approval` -> 若已批准则更新本地 progress
+4. **审批查询**：`checkApproval(changeName)` -> `GET /api/changes/{name}/approval` -> 若已批准则更新本地 progress。返回 `{status, reason?}`，status 分层：`approved`/`rejected`（平台真实 verdict，透传）/`pending`（审批中 OR 未连接平台/未指定 changeName 的合法本地降级，静默）/`unknown`（已连接平台但请求失败 404/断网/超时，command.js 单独 warn 明确「审批状态未知按本地模式放行」，非审批中——2026-08-12 拆出，治请求失败误报 pending）
 5. **CLI 分发**：`syncModule(args, cwd)` 解析 `args[0]` 子命令名，调用对应 `SyncManager` 方法
 6. **下行 pull**（2026-08-10-platform-progress-sync）：`pull(name)` → GET /api/changes/{name}/progress → 本地脏度比对（last_local_modified_ts > last_synced_platform_ts AND 平台 last_pushed_at > last_synced → 冲突）→ 无冲突 `pm.import` 重建 DB 行；`pullList()` 先拉轻量列表控制 pull 性能
 7. **双向冲突持久化**：push 409（base_ts 过期）或 pull 脏度命中 → `_writeConflictFile` 写 `.runtime/sync-conflict-<change>.json`（含 base_ts/local_modified_ts/platform_last_pushed_at/platform_progress，禁止字段级 auto-merge）→ `resolve` 三选一后 `clearConflictFile`
