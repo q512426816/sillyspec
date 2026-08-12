@@ -465,3 +465,14 @@
 根因：execute/verify 已闭环（execute 按 6 条写、verify 探针3 抽查），quick step2 只写'建议写单元测试验证'，小改动照样可能写出只符合业务正例的测试
 方案：quick.js step2「实现并验证」操作3加'写测试时按下方「测试用例设计」检查'+ 注入 {{include: testcase-design}}（复用单一源模板自带标题，quick 静态 stage 无子代理派发直接在 step prompt 解析）；同步 docs/prompt 重提取 + quick.md 镜像 + include 注记 + stages 模块文档
 结果：npm test 179 文件全过 + lint 262 文件通过；新测试 8 断言验证 step2 注入 + 解析 + 作用域干净（另：并发 session 对 test/run-tests.mjs 的并行改造非本 quick 范围，未纳入）
+
+## ql-20260812-011-38aa | 2026-08-12 16:55:25 | npm 包瘦身：dashboard 排除开发期文件保留运行时（dist+server）
+状态：已完成
+关联变更：（无）
+文件：
+- .npmignore（排除 dashboard 开发期文件（src/public/配置/package-lock，保留 dist+server））
+- .sillyspec/docs/sillyspec/modules/dashboard.md（变更索引登记（npm 包瘦身））
+需求：验证 dashboard 是否运行时依赖，决定 npm 包是否排除瘦身
+根因：npm 包 3.26.4 含 packages/dashboard 2.0M，其中 dist 1.6M 为运行时要、src/public/配置为构建期冗余
+方案：实证 dashboard 为运行时依赖（index.js:707 import server 且 server 服务 dist/），dist+server 保留；.npmignore 排除纯开发期文件（src/ public/ 根 index.html vite.config.js package-lock.json）
+结果：npm pack 155→123 文件、unpacked 3.7M→3.4M、tarball 1.1M→1.0M；解开 tarball 实测 src 已排除 + server 语法正常 + testcase-design 模板仍在；lint 262 通过

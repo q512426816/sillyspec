@@ -19,6 +19,15 @@ packages/dashboard/node_modules/
 *.tgz
 .npm-publish-token
 
+# dashboard 纯开发期文件（运行时只依赖 dist/ + server/；src/ 是 Vite 构建源、public/ 与 dist/ 重复、
+# 根 index.html/vite.config.js/package-lock.json 仅本地构建用 —— 排除瘦身，保留 dist + server 供
+# `sillyspec dashboard` 运行时 import 与服务。实证：index.js:707 import server，server 服务 dist/）
+packages/dashboard/src/
+packages/dashboard/public/
+packages/dashboard/index.html
+packages/dashboard/vite.config.js
+packages/dashboard/package-lock.json
+
 # 平台模式本地调试残留（specRoot 指针，含本地绝对路径；git 不跟踪，若不排除就会进 npm 包）
 .sillyspec-platform*
 

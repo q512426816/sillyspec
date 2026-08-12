@@ -55,4 +55,5 @@ useWebSocket() → Vue composable，connect/disconnect/send/onMessage
 
 ## 人工备注
 <!-- MANUAL_NOTES_START -->
+- ql-20260812-011-38aa | npm 包瘦身：dashboard 是运行时依赖（index.js:707 import server，server 服务 dist/），dist + server 保留；.npmignore 排除纯开发期文件（src/ Vite 构建源 / public/ 与 dist 重复 / 根 index.html + vite.config.js + package-lock.json），npm 包 155→123 文件、unpacked 3.7MB→3.4MB，tarball 实测 src 已排除且 server 语法正常。
 <!-- MANUAL_NOTES_END -->
