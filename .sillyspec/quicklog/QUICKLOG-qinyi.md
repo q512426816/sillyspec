@@ -403,10 +403,21 @@
 方案：主库分支 tryOpen 失败后补有限重试，复用 MAX_BUSY_RETRIES=3 递增退避50/100/200ms，真损坏重试不过仍走.bak回退/fail-loud，防吞进度语义零回归。
 结果：db-concurrency 连跑4轮x2round全exit0计数严格800；db-atomic-write通过；全量npm test 176/0；lint 259文件过；runtime模块文档同步DB小节+人工备注。
 
-## ql-20260812-006-d70c | 2026-08-12 15:14:18 | (quick 任务)
-状态：进行中
+## ql-20260812-006-d70c | 2026-08-12 15:14:18 | execute TDD 引导补测试用例设计
+状态：已完成
 关联变更：（无）
-文件：（见实际改动）
+文件：
+- src/stages/execute.js（子代理 prompt 要点加第5项复制引导 + include）
+- src/dispatch/backends/local-agent.js（Local 派发指令同加测试设计引导）
+- src/dispatch/backends/sillyhub-mcp.js（worker_prompt 自包含注入（SillyHub worker 不见 wave prompt））
+- templates/prompts/testcase-design.md（新增测试用例设计单一源（6 条检查 + FIRST/金字塔/AAA））
+- test/execute-testcase-design-include.test.mjs（新增回归测试 19 断言）
+- docs/prompt/execute.md + README.md + _extracted.json（prompt 镜像与 include 表同步）
+- .sillyspec/docs/sillyspec/modules/stages.md + dispatch.md（变更索引登记）
+需求：execute TDD 引导补测试用例设计，治 agent 写测试只符合业务正例、整体把控不行
+根因：三条派发路径只传 TDD 关键字无设计引导，worker 不测边界异常、断言弱、不护契约、不测时间敏感分支
+方案：新增 templates/prompts/testcase-design.md 单一源（6 条检查 + FIRST/金字塔/AAA 一行带过防偷懒），经 include 机制注入 execute 三条派发路径；同步 docs/prompt 重提取 + README include 表 + 模块文档；加回归测试
+结果：npm test 177 文件全过 + lint 260 文件通过；新测试 19 断言验证三路径注入与解析
 
 ## ql-20260812-007-14af | 2026-08-12 15:16:16 | 把『不带 sessionId 误启动新 session』『查进行中 session 必须先 --change』『--output 四字段嵌套冒号』三个操作摩擦点…
 状态：已完成

@@ -51,6 +51,7 @@ CLI 桥（agent 调用）：`sillyspec dispatch probe` → ProbeResult；`sillys
 ## 变更索引
 
 - 2026-08-07-sillyhub-mcp-dispatch | 新建派发抽象层（probe/strategy/backends×2）+ dispatch CLI 子命令 + execute buildWavePrompt 接入。双后端 fallback，无 MCP 配置零回归。SillyHub 后端为路径A stub。
+- ql-20260812-006-d70c | execute 测试用例设计引导注入：新增 `templates/prompts/testcase-design.md` 单一源（6 条检查 + FIRST/金字塔/AAA 一行带过），经 `{{include: testcase-design}}` 注入 renderLocalInstruction「子代理 prompt 要点」+ renderSillyHubInstruction worker_prompt 覆写（SillyHub worker 不见 wave prompt，必须自包含）。复用 P2.2.3 include 机制（resolvePromptIncludes 运行时解析）防双写漂移。
 
 ## 人工备注
 <!-- MANUAL_NOTES_START -->

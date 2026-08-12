@@ -154,9 +154,9 @@ prompt 正文中出现的占位符，运行时由 `outputStep` 替换。下表�
 
 | 形式 | 行为 |
 |---|---|
-| `{{include: <name>}}` | `resolvePromptIncludes`（`src/run/shared.js`）在所有占位符替换**之前**，把仓库根 `templates/prompts/<name>.md` 文件内容拉进 prompt 正文（代码自动补 `.md` 后缀）。**verify 阶段「对照设计检查」step 使用了 `{{include: verify-probes}}`**（自动探针片段）；**plan 阶段「生成 TaskCard」step 使用了 `{{include: taskcard-rules}}`**（TaskCard 公共格式规则 + 保存前自检，每个子代理 prompt 展开后相同）。 |
+| `{{include: <name>}}` | `resolvePromptIncludes`（`src/run/shared.js`）在所有占位符替换**之前**，把仓库根 `templates/prompts/<name>.md` 文件内容拉进 prompt 正文（代码自动补 `.md` 后缀）。**verify 阶段「对照设计检查」step 使用了 `{{include: verify-probes}}`**（自动探针片段）；**plan 阶段「生成 TaskCard」step 使用了 `{{include: taskcard-rules}}`**（TaskCard 公共格式规则 + 保存前自检，每个子代理 prompt 展开后相同）；**execute 阶段「Wave 执行」step 使用了 `{{include: testcase-design}}`**（测试用例设计 6 条检查，任务含测试代码时调度者整段复制进子代理 prompt）。 |
 
-> ⚠️ **重要**：本目录各 `<stage>.md` 与 `_extracted.json` 展示的是 `resolvePromptIncludes` **替换前**的 prompt 原文，即保留 `{{include: verify-probes}}` / `{{include: taskcard-rules}}` 字面。agent 实际收到的是替换后的片段内容（运行时从 `templates/prompts/` 读取注入）。要查看展开后的片段全文，读 `templates/prompts/verify-probes.md` 或 `templates/prompts/taskcard-rules.md` 文件。
+> ⚠️ **重要**：本目录各 `<stage>.md` 与 `_extracted.json` 展示的是 `resolvePromptIncludes` **替换前**的 prompt 原文，即保留 `{{include: verify-probes}}` / `{{include: taskcard-rules}}` / `{{include: testcase-design}}` 字面。agent 实际收到的是替换后的片段内容（运行时从 `templates/prompts/` 读取注入）。要查看展开后的片段全文，读 `templates/prompts/verify-probes.md`、`templates/prompts/taskcard-rules.md` 或 `templates/prompts/testcase-design.md` 文件。
 
 ---
 

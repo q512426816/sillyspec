@@ -223,6 +223,9 @@ dispatch_worker 的 \`worker_prompt\` 参数必须传以下覆写文本（路径
    交 SillySpec 主体 git diff 回收（D-004）
 3. 不超出 allowedPaths，不碰其他 task 的文件
 4. 完成后输出简短自报（改了哪些文件 / 跑了哪些测试 / 是否存疑），不自报 review.json（SillySpec 自己写）
+5. 写测试时遵循下方「测试用例设计」规则：
+
+{{include: testcase-design}}
 \`\`\`
 
 ### 终态轮询 + 超时 kill lease（UB-6）

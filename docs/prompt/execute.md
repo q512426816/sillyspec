@@ -175,6 +175,9 @@ worktree 路径 + 分支名 + 模式
 - `{EXECUTE_RUN_ID}` → 当前 execute run 的固定 ID（从 `.runtime/current-execute-run-id-<change>` 读，无则 `generateExecuteRunId()` 生成并落盘），用于 `review.json` 路径
 - `<change>`、`<module>` → 字面文案（路径/模块名模板，非标量占位符）
 
+**本步出现的 include 指令**
+- `{{include: testcase-design}}` → include 指令：`resolvePromptIncludes` 在占位符替换前，把仓库根 `templates/prompts/testcase-design.md` 的「测试用例设计」6 条检查（边界/异常、断言有效、测行为不测实现、契约与回归、时间敏感分支、隔离确定性）拉进「子代理 prompt 要点」第 5 项后，供调度者整段复制进子代理 prompt（任务含测试代码时）
+
 **提示词原文**
 
 ````markdown
@@ -217,6 +220,9 @@ task-01: 默认任务 1 (TBD) → task-01.md
 2. 蓝图文件路径（让子代理自行读取详情）
 3. 编码铁律：先读后写、TDD、不编造方法、只做蓝图里写的事、遵守边界处理规则、不超出 allowed_paths
 4. 如存在模块文档（.sillyspec/docs/*/modules/），按需读取涉及模块的 <module>.md 参考接口约定和数据流
+5. 任务含测试代码时，把下方「测试用例设计」整段复制进子代理 prompt，要求子代理按此设计测试用例
+
+{{include: testcase-design}}
 
 ### Wave 开始前
 1. 读取 design.md 的「非目标」与「兼容策略」章节（如存在），确保子代理不超范围、不破坏旧逻辑

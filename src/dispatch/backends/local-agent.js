@@ -137,6 +137,9 @@ ${branchLine}
 2. 蓝图文件路径（让子代理按需读取详情，不要内联整份蓝图污染上下文）
 3. 编码铁律：先读后写、TDD、不编造方法、只做蓝图里写的事、遵守边界处理规则、不超出 allowedPaths
 4. 如存在模块文档（\`.sillyspec/docs/*/modules/\`），按需读取涉及模块的 <module>.md 参考接口约定与数据流
+5. 任务含测试代码时，把下方「测试用例设计」整段复制进子代理 prompt，要求子代理按此设计测试用例
+
+{{include: testcase-design}}
 ${modeLine}
 ${allowedLine}
 
