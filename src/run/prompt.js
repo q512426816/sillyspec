@@ -23,6 +23,7 @@ import { stageRegistry } from '../stages/index.js'
 import { resolvePromptIncludes, resolveRuntimeRoot, safeGit, WAIT_MARKER_RE } from './shared.js'
 import { renderStageContract } from '../stage-contract-spec.js'
 import { parseModuleMapSimple } from '../modules.js'
+import { REVIEW_SCHEMA_VERSION } from '../task-review.js'
 
 /**
  * 从 _module-map.yaml 读取模块上下文索引
@@ -218,6 +219,11 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
   promptText = promptText.replace(/<now-datetime>/g, nowDatetime)
   promptText = promptText.replace(/<now-timestamp>/g, nowTimestamp)
   promptText = promptText.replace(/<now-date>/g, nowDate)
+  // 替换 {REVIEW_SCHEMA_VERSION} 占位符（task review 示例模板用，值=CLI 当前 REVIEW_SCHEMA_VERSION 常量，
+  // 避免 agent 照抄 design 目标版本与 CLI 写侧常量漂移；与 stage review 契约 renderReviewJsonContract 动态注入同源）
+  if (promptText.includes('{REVIEW_SCHEMA_VERSION}')) {
+    promptText = promptText.replace(/\{REVIEW_SCHEMA_VERSION\}/g, String(REVIEW_SCHEMA_VERSION))
+  }
   // 替换 <change-name> 占位符
   if (changeName && promptText.includes('<change-name>')) {
     promptText = promptText.replace(/<change-name>/g, changeName)

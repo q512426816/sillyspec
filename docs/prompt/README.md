@@ -145,6 +145,7 @@ prompt 正文中出现的占位符，运行时由 `outputStep` 替换。下表�
 | `{REVIEW_TIER_REASON}` | 分级理由文案（如 `变更文件 3 ≤ 3` 或 `plan_level=none...`） | 同上 |
 | `{STAGE_REVIEW_RUN_ID}` | stage review 运行 ID（从 `.runtime/current-stage-review-run-id-<stage>(-<change>)` 读，无则 `generateStageReviewRunId()` 生成并落盘；注入到 `{REVIEW_JSON_CONTRACT}` 的路径内，保证 prompt 注入的 ID == Stage Review Gate 读取的 ID） | 同上（经契约块内嵌） |
 | `{REVIEW_JSON_CONTRACT}` | `stage-review.js` 的 `renderReviewJsonContract()` 产出的 review.json 产物契约 markdown：含 schema（schemaVersion=1、reviewType、verdicts∈pass/fail/cannot_verify、reviewedFiles、docHash）、完整示例、docHash 算法（主审查文档 sha256）。各阶段主审查文档：brainstorm/execute→design.md，plan→plan.md，propose→proposal.md | 同上 |
+| `{REVIEW_SCHEMA_VERSION}` | task review.json 示例模板用，替换为 CLI 当前 `REVIEW_SCHEMA_VERSION` 常量值（`src/task-review.js`，现=1）。避免 agent 照抄 design 目标版本（1→2）与 CLI 写侧常量漂移；升 v2 时随常量走，prompt 自动跟。与 `{REVIEW_JSON_CONTRACT}` 内 schemaVersion 同源（均取自该常量） | execute（task review 示例模板） |
 | `{TASK_COMPLETION_REPORT}` | `task-review.js` 的 `summarizeTaskCompletion({changeDir, runtimeRoot, changeName})` 产出的客观完成度报告：以 execute run 的 review.json verdict（specVerdict+qualityVerdict 均≠fail 视为完成）为准，替代 plan.md checkbox（依赖 autoCheckPlanFromReviews 回填，断裂时失真）；无 runId marker 时降级 checkbox 统计 + 标注 source | archive（Step 1 任务完成度检查） |
 
 > **降级**：当 review-tier / stage-review 注入抛异常时，`{REVIEW_TIER}`→`self`、`{REVIEW_TIER_REASON}`→`分级异常降级 self: <err>`、`{REVIEW_JSON_CONTRACT}`→精简契约提示，避免 prompt 残留裸占位符。

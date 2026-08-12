@@ -153,5 +153,18 @@ console.log('\n--- verify 护栏：step0 全文注入 vs step1 精简提醒 ---'
   assert(!r1.stdout.includes('verify 阶段绝对禁止的操作'), 'step1 不重复注入护栏全文（token 效率）')
 }
 
+// ── Case 7: {REVIEW_SCHEMA_VERSION} 占位符替换（task review 示例模板用 CLI 当前常量值）──
+console.log('\n--- {REVIEW_SCHEMA_VERSION} 替换：prompt 含占位符 → 渲染为 CLI 当前常量值 ---')
+{
+  const { cwd } = makeRepo('os-schema-ver-')
+  const steps = [{ name: '写 review', prompt: '{ "schemaVersion": {REVIEW_SCHEMA_VERSION}, "task": "task-01" }', requiresWait: false }]
+  const r = await runCapturing(() =>
+    _outputStepForTest('execute', 0, steps, cwd, null, null, {}, null))
+
+  assert(!r.stdout.includes('{REVIEW_SCHEMA_VERSION}'), '占位符 {REVIEW_SCHEMA_VERSION} 已被替换（不残留字面量）')
+  // 当前 REVIEW_SCHEMA_VERSION 常量值=1（src/task-review.js:32）；升 v2 时此断言随常量走
+  assert(r.stdout.includes('"schemaVersion": 1'), '渲染为 CLI 当前 REVIEW_SCHEMA_VERSION 常量值（=1）')
+}
+
 cleanup()
 report(count.passed, count.failed, count.failures)
