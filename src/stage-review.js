@@ -426,6 +426,7 @@ export function printStageReviewResult(result, context = {}) {
       console.error(`   - ${err}`)
     }
     console.error(`\n   提示：tier=independent 要求独立审查子代理产出 review.json，补全后重新 --done`)
+    console.error(`   可用 sillyspec register-stage-review --change <名> --stage ${stage} [--from <已有review.json>] 一步生成 run 目录 + review.json 骨架（docHash 自动算）+ 写 marker + 自检，省掉手动建目录/写 marker`)
   }
 
   if (result.warnings.length > 0) {

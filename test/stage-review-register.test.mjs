@@ -8,6 +8,7 @@ import {
   computeDocHash,
   getLatestStageReviewRunId,
   validateStageReview,
+  printStageReviewResult,
 } from '../src/stage-review.js'
 import { resolveRuntimeRoot } from '../src/run/shared.js'
 
@@ -191,4 +192,22 @@ test('11. plan / execute 映射（reviewType + 主文档）', () => {
     assert.equal(rj.reviewType, 'acceptance')
     assert.deepEqual(rj.reviewedFiles, ['changes/c-exec/design.md'])
   } finally { cleanup(fe.specBase) }
+})
+
+test('12. Gate 报错文案指向 register-stage-review 命令（闭环 exec-d）', () => {
+  // 模拟 Stage Review Gate 校验失败（errors 非空）→ printStageReviewResult 应打印命令指引
+  const failedResult = { ok: false, errors: ['review.json 不存在', 'docHash 不匹配'], warnings: [] }
+  const errs = []
+  const origErr = console.error
+  console.error = (...args) => errs.push(args.join(' '))
+  try {
+    printStageReviewResult(failedResult, { stage: 'execute' })
+  } finally {
+    console.error = origErr
+  }
+  const out = errs.join('\n')
+  assert.match(out, /Stage Review Gate — execute FAILED/, '报错标题含阶段名')
+  assert.match(out, /register-stage-review/, '报错指向 register-stage-review 命令')
+  assert.match(out, /--stage execute/, '指引含当前阶段参数（非硬编码 brainstorm/plan）')
+  assert.match(out, /--from/, '指引含 --from adopt 选项')
 })
