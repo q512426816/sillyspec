@@ -417,3 +417,13 @@
 根因：quick 的 run/--done 不带 --change 会新启动会话（分配新 ql-ID 污染 QUICKLOG），恢复进行中会话须 --change quick-<hash>；step3 --output 四字段校验对正文嵌套全角冒号敏感——全是操作引导盲区非 CLI 缺陷。
 方案：.claude/skills/sillyspec-quick/SKILL.md 补两处——新增『已有进行中会话的恢复(sessionId)』小节（不带 --change 即新启动、恢复必须带 --change quick-<hash>、误建空壳 --reset+手动删骨架条目）；铁律四字段模板补嵌套全角冒号提示。
 结果：sed/grep 验证两处插入正确 markdown 结构完整锚点未破坏；纯文档改动（.claude/skills/ 不触 src/test）按规则8跳过 npm test/lint；SKILL 不在模块映射无模块文档命中。
+
+## ql-20260812-008-4f01 | 2026-08-12 15:34:57 | 给未安装 sillyspec 的全新项目做一个引导接入 skill——引导安装 CLI + 让后续 agent 识别工具价值、愿意用
+状态：已完成
+关联变更：（无）
+文件：
+- templates/skills/sillyspec-onboard/SKILL.md（新增引导接入 skill（Step0判定→装CLI→init→scan→价值锚验证），独立分发手动放）
+需求：给未安装 sillyspec 的全新项目做一个引导接入 skill——引导安装 CLI + 让后续 agent 识别工具价值、愿意用。
+根因：新项目接入 SillySpec 缺『从零引导』层（npm 装 CLI 的前置步骤无覆盖）；价值认知的真正载体是 init 已注入的 CLAUDE.md（agent 每会话读），skill 只在调用时读，不另造文案避免双份漂移。
+方案：产出 templates/skills/sillyspec-onboard/SKILL.md 独立分发引导 skill——Step0 判定接入态→Step1 引导 npm install -g sillyspec→Step2 init 接入+验证 CLAUDE.md 受管段/进度库→Step3 run scan 建项目库→Step4 价值锚验证（复用 init 注入陈述，确认 CLAUDE.md+持续 skill+进度库三载体就位）+『开工首查』示例。分发：手动复制到目标项目 .claude/skills/（一次性）或全局，不随 npm 自动进项目。
+结果：5 个命令全为公开 CLI（--version/init/run scan/progress show/run <stage>）；零内部符号引用（无 src 路径/D-编号/源码符号）；markdown 结构完整。纯新增模板文件（templates/skills/）不触 src/test，按规则8跳过 npm test/lint。
