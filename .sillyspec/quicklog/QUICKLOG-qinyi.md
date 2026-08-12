@@ -350,3 +350,35 @@
 根因：.npmignore 只排除 .npm-publish-token，漏排 .sillyspec-platform*，平台模式调试会现生成此类未跟踪指针文件。
 方案：.npmignore 敏感凭证区补 .sillyspec-platform* 排除并注说明，删除工作区两个未跟踪残留。
 结果：npm pack --dry-run 复核 tarball 154→152 files、platform 关键字零命中；纯配置改动不触 src/test，跳过 npm test/lint。3.26.2 已发布且 npm view 确认 latest=3.26.2。
+
+## ql-20260812-001-88f8 | 2026-08-12 08:43:38 | execute.js task review 示例模板硬编码 schemaVersion:1 与 CLI REVIEW_SCHEMA_VERSION 常量脱钩
+状态：已完成
+关联变更：（无）
+文件：docs/prompt/README.md, docs/prompt/_extracted.json, docs/prompt/execute.md, src/run/prompt.js, src/stages/execute.js, test/output-step-render.test.mjs
+- src/stages/execute.js（task review 示例模板 `schemaVersion: 1` → `schemaVersion: {REVIEW_SCHEMA_VERSION}` 占位符化，:857）
+- src/run/prompt.js（静态 import REVIEW_SCHEMA_VERSION 常量 + 通用替换段注入 `{REVIEW_SCHEMA_VERSION}` → String(REVIEW_SCHEMA_VERSION)，与 stage review 契约 renderReviewJsonContract 动态注入同源）
+- test/output-step-render.test.mjs（加 Case 7：断言占位符替换为 CLI 当前常量值=1，不残留字面量）
+- docs/prompt/execute.md（镜像同步：示例行 schemaVersion: 1 → {REVIEW_SCHEMA_VERSION}，以 _extracted.json 为准）
+- docs/prompt/README.md（占位符总表补 {REVIEW_SCHEMA_VERSION} 行，归动态块表，标注与 {REVIEW_JSON_CONTRACT} schemaVersion 同源）
+需求：execute.js task review 示例模板硬编码 schemaVersion:1 与 CLI REVIEW_SCHEMA_VERSION 常量脱钩，design 写「1→2」目标版本时 agent 照抄示例会与 CLI 写侧常量漂移（task review schemaVersion 必须=CLI 当前常量，非 design 目标）。
+方案：改提示文案不如让 CLI 直接告诉 agent——示例模板占位符化 + prompt.js 渲染时用常量值替换，agent 看到的示例值即 CLI 当前真实值，零 grep 零认知偏差。升 v2 时只动常量，prompt 自动跟上，不再有目标 vs 当前漂移。
+结果：针对性测试 46/0（含新 Case 7 占位符替换断言）；全量 npm test 175/0（db-concurrency 是 memory 记录的 node:sqlite 并发 flaky，单跑重测 exit=0 两轮 800/800 PASS，与本次改动无关）；npm run lint 258 文件过。docs/prompt/ 镜像已重跑 _extract.mjs 刷新 _extracted.json + 手动同步 execute.md/README.md。
+后续：痛点 4（execute stage review 需手动补派独立子代理）的 exec-d `register-stage-review` 命令已在仓外备份实现 34 测试过，可单独立项合入（P2）。
+
+## ql-20260812-002-de66 | 2026-08-12 09:02:11 | Stage Review Gate 缺 review.json 报错文案没指向已落地的 register-stage-review 命令
+状态：已完成
+关联变更：（无）
+文件：docs/sillyspec/prompt-control-debt.md, src/stage-review.js, test/stage-review-register.test.mjs
+需求：Stage Review Gate 缺 review.json 报错文案没指向已落地的 register-stage-review 命令，controller 阻断后不知有此命令只能手动建目录/写 marker。
+根因：printStageReviewResult 报错提示只写补全后重新 --done，未提命令；该命令 b5844c9 已合入 main（函数+CLI+11测试）但报错没引导用它，exec-d 设计最后一环缺。
+方案：errors 分支补一行指引可用 sillyspec register-stage-review --change 名 --stage 当前stage --from 已有review.json 一步生成 run目录+review.json骨架+写marker+自检，stage 参数 context 动态注入。加 Case 12 测报错文案含命令名+--stage+--from。同步债单 line 146 让出态改已落地+本次补闭环。
+结果：stage-review-register 12/12（含新 Case 12）；全量 npm test 175/0；npm run lint 258 过。模块文档/docs prompt 不触达（报错文案是 gate 运行时细节非 prompt 模板）。
+
+## ql-20260812-003-2ef9 | 2026-08-12 10:33:33 | brainstorm step7 自检清单缺 frontmatter+自审预检致审查后补 docHash 漂移复审多轮
+状态：已完成
+关联变更：（无）
+文件：docs/prompt/_extracted.json, docs/prompt/brainstorm.md, docs/sillyspec/prompt-control-debt.md, src/stages/brainstorm.js
+需求：brainstorm step7 自检清单缺 frontmatter+自审预检致审查后补 docHash 漂移复审多轮。
+根因：step7 自检清单与 step8 完成契约脱钩，契约硬要求 frontmatter+自审但 step7 没预检，审查时不知要补到 step8/Grill 才暴露，design 已定再补就漂移。
+方案：step7 自检清单补2条 frontmatter 字段齐全+自审字面命中，各标注对应契约项，审查前补齐 docHash 一次定。同步 docs/prompt 镜像。债单 P6.1b 追加第5-6次复发缓解登记。
+结果：brainstorm 测试 2/2；全量 npm test 175/0（db-concurrency flaky 单跑全 PASS 重跑过）；npm run lint 258 过。P6.1b 中等工程 defer 维持，本 quick 治审查后补漂移路径不治 Grill 改实质设计漂移。
