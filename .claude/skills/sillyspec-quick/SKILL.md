@@ -33,6 +33,18 @@ sillyspec run quick --reset                    # 重置阶段（从头开始）
 sillyspec run quick --reopen --from-step N     # 重新打开已完成阶段修订（N=序号或名称）
 ```
 
+### 已有进行中会话的恢复（sessionId）
+
+`sillyspec run quick` / `run quick --done` / `--status` **不带 `--change` 时，是启动一个新 quick 会话**（CLI 分配新 `quick-<hash>` + 新 ql-ID，QUICKLOG 追加「进行中」条目），不是恢复正在进行的旧会话。多会话并发或中断恢复时，必须带上启动时 CLI 打印的 sessionId：
+
+```bash
+sillyspec run quick --change quick-<hash>        # 恢复查看该会话当前 step prompt
+sillyspec run quick --done --change quick-<hash> --output "…"  # 完成该会话步骤
+```
+
+- 这里的 `--change quick-<hash>` 是「恢复到该 CLI 生成的 session」，与下方 `--linked-changes` 的关联业务变更语义不同：想关联真实业务变更才用 `--linked-changes`。
+- 误启动的空壳会话：`sillyspec run quick --reset --change quick-<hash>` 重置其进度；QUICKLOG 里残留的「(quick 任务)」骨架条目需手动删除，不留占位条目。
+
 ## 通用参数（所有阶段适用）
 
 | 参数 | 说明 |
@@ -91,7 +103,7 @@ sillyspec run quick --files src/phone.ts,src/phone.test.ts
 - QUICKLOG 记录的**骨架由 CLI 接管**：启动时 CLI 自动分配 ql-ID 并在 `.sillyspec/quicklog/QUICKLOG-<user>.md` 写「进行中」条目（含关联变更 tasks.md），`--done` 时 CLI 自动翻「已完成」+ 勾选 task + 回填文件路径。ql-ID 分配/状态/task 你无需手写，只需用注入的 `<quicklog-id>` 在模块文档变更索引引用
 - **QUICKLOG 落盘已结构化（`--done` 后按需核对，多数无需手改）**：CLI 已落盘结构化条目——标题从 `--output` 的「需求：」自动提取、正文四字段自动分行、文件行用 `--file-notes` 时为多行带括注。`--done` 后只需核对：标题弱才改（禁留 `(quick 任务)` 占位）；没用 `--file-notes` 时文件行是单行、可事后补括注（参照同文件早期丰富条目）；正文 `需求：`/`根因：`/`方案：`/`结果：` 四段按需充实（禁只留一段「结果：」）。一条 quick = 一条独立 ql，不追加到旧条目
 - **收尾顺序（模块文档在 `--done` 前，QUICKLOG 在 `--done` 后，别记混）**：① 命中模块→改模块文档→`git add`；② `sillyspec run quick --done --change <id> --output "四字段" [--file-notes "..."]`（CLI 自动翻完成 + 勾 task + 落盘 QUICKLOG 标题/文件/正文）；③ 核对 QUICKLOG 标题（CLI 已从「需求：」提取，仅弱标题才改）→若改了再 `git add`
-- **最后一步 `--done --output` 必须按结构化结果模板给全四字段**（逐项一句话）：`需求：… 根因：… 方案：… 结果：…`。这是 QUICKLOG「结果：」归档的唯一来源；CLI 校验缺字段会拒绝 `--done`（exit 1），补全后重跑即可。前两个 step 的 `--output` 是中间摘要，不用此模板
+- **最后一步 `--done --output` 必须按结构化结果模板给全四字段**（逐项一句话）：`需求：… 根因：… 方案：… 结果：…`。这是 QUICKLOG「结果：」归档的唯一来源；CLI 校验缺字段会拒绝 `--done`（exit 1），补全后重跑即可。正文内避免嵌套全角冒号（如「方案：（说明 xxx）：」这样标签后紧接嵌套冒号会被拆分判定缺字段），直接让标签接正文。前两个 step 的 `--output` 是中间摘要，不用此模板
 - **禁止**在没有运行 CLI 的情况下自行决定流程
 
 ## 用户指令

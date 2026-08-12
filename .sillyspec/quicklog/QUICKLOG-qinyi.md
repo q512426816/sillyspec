@@ -402,3 +402,18 @@
 根因：_openWithFallback 主库分支并发首开竞争——多进程近乎同时 new DB().init() 打开同一新建库，tryOpen 的 prepare(SELECT count(*)) 撞他者进程 CHECKPOINT 改写主库瞬时失败返null，误判损坏触发 fail-loud throw。真bug非flaky。
 方案：主库分支 tryOpen 失败后补有限重试，复用 MAX_BUSY_RETRIES=3 递增退避50/100/200ms，真损坏重试不过仍走.bak回退/fail-loud，防吞进度语义零回归。
 结果：db-concurrency 连跑4轮x2round全exit0计数严格800；db-atomic-write通过；全量npm test 176/0；lint 259文件过；runtime模块文档同步DB小节+人工备注。
+
+## ql-20260812-006-d70c | 2026-08-12 15:14:18 | (quick 任务)
+状态：进行中
+关联变更：（无）
+文件：（见实际改动）
+
+## ql-20260812-007-14af | 2026-08-12 15:16:16 | 把『不带 sessionId 误启动新 session』『查进行中 session 必须先 --change』『--output 四字段嵌套冒号』三个操作摩擦点…
+状态：已完成
+关联变更：（无）
+文件：
+- .claude/skills/sillyspec-quick/SKILL.md（补『已有进行中会话的恢复(sessionId)』小节 + 铁律四字段嵌套冒号提示）
+需求：把『不带 sessionId 误启动新 session』『查进行中 session 必须先 --change』『--output 四字段嵌套冒号』三个操作摩擦点在 SKILL 里引导描述清楚，不改 CLI。
+根因：quick 的 run/--done 不带 --change 会新启动会话（分配新 ql-ID 污染 QUICKLOG），恢复进行中会话须 --change quick-<hash>；step3 --output 四字段校验对正文嵌套全角冒号敏感——全是操作引导盲区非 CLI 缺陷。
+方案：.claude/skills/sillyspec-quick/SKILL.md 补两处——新增『已有进行中会话的恢复(sessionId)』小节（不带 --change 即新启动、恢复必须带 --change quick-<hash>、误建空壳 --reset+手动删骨架条目）；铁律四字段模板补嵌套全角冒号提示。
+结果：sed/grep 验证两处插入正确 markdown 结构完整锚点未破坏；纯文档改动（.claude/skills/ 不触 src/test）按规则8跳过 npm test/lint；SKILL 不在模块映射无模块文档命中。
