@@ -452,3 +452,16 @@
 根因：探针3只递归找测试文件存在性不查断言质量，agent 可交只不抛错/只测 getter setter/只覆盖业务正例的测试蒙混
 方案：verify-probes.md 探针3加第5点断言有效性抽查（advisory persuasion 非硬门，同 full-a 集成盲区提示先例）；verify.js verify-result.md「测试覆盖」行改「测试覆盖（含断言有效性抽查）」；同步 docs/prompt 重提取 + stages 模块文档
 结果：npm test 178 文件全过 + lint 261 文件通过；新测试 8 断言验证探针3五要素 + 原集成盲区提示未损
+
+## ql-20260812-010-a950 | 2026-08-12 16:06:32 | quick 档位补测试用例设计引导，execute/verify/quick 三档闭环
+状态：已完成
+关联变更：（无）
+文件：
+- src/stages/quick.js（step2 操作3加'写测试按测试用例设计检查'+ include）
+- test/quick-testcase-design-include.test.mjs（新增回归 8 断言（注入/解析/作用域））
+- docs/prompt/quick.md + _extracted.json（prompt 镜像 + include 注记）
+- .sillyspec/docs/sillyspec/modules/stages.md（变更索引登记）
+需求：quick 档位写测试无测试设计引导，补 testcase-design include 与 execute/verify 三档闭环
+根因：execute/verify 已闭环（execute 按 6 条写、verify 探针3 抽查），quick step2 只写'建议写单元测试验证'，小改动照样可能写出只符合业务正例的测试
+方案：quick.js step2「实现并验证」操作3加'写测试时按下方「测试用例设计」检查'+ 注入 {{include: testcase-design}}（复用单一源模板自带标题，quick 静态 stage 无子代理派发直接在 step prompt 解析）；同步 docs/prompt 重提取 + quick.md 镜像 + include 注记 + stages 模块文档
+结果：npm test 179 文件全过 + lint 262 文件通过；新测试 8 断言验证 step2 注入 + 解析 + 作用域干净（另：并发 session 对 test/run-tests.mjs 的并行改造非本 quick 范围，未纳入）
