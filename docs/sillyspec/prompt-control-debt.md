@@ -70,7 +70,7 @@ updated_at: 2026-08-11T22:00:00+08:00
 状态：`部分完成`
 
 - ✅ **P6.1a** 删 prompt 里 docHash「禁止编造」警告（plan/execute/brainstorm/propose 共 4 处）。**理由**：enforcement 已有效（stage-review.js 重算 sha256 对比 + stage-review.test.mjs 防伪造用例），prompt 警告纯 persuasion 复述，按 enforced→删复述 原则清零，控制力零损失。注：原 backlog 计 3 处，实测 4 处（plan.js 独立行易漏数）。
-- ⏭ **P6.1b** docHash 完全交 CLI 算（改 review.json 写入链路 run.js / machine-interface / stage-review）。**理由**：属独立中等工程；当前 agent 算 hash + CLI 重算对比 的 enforcement 已有效，主工程收益（省 agent 算 hash 步骤）小于成本+风险。
+- ⏭ **P6.1b** docHash 完全交 CLI 算（改 review.json 写入链路 run.js / machine-interface / stage-review）。**理由**：属独立中等工程；当前 agent 算 hash + CLI 重算对比 的 enforcement 已有效，主工程收益（省 agent 算 hash 步骤）小于成本+风险。**第 5-6 次复发缓解**（2026-08-12 quick ql-20260812-003）：用户报「审查通过后补 frontmatter/自审章节 → docHash 漂移 → review.json 失效 → design 改4次子代理跑4趟」。根因是 brainstorm step7 自检清单（brainstorm.js:330）只查必填章节/decisions引用/生命周期契约表 3 条，**缺 frontmatter 字段齐全 + 「自审」字面命中**——这两条 step8 完成契约硬要求（brainstorm.design.self-review + frontmatter 模板）但 step7 没预检，agent 审查时不知要补，到 step8/Grill 才暴露，design 已定 docHash 再补就漂移。**低成本缓解**（P6.1b 中等工程 defer 维持）：step7 自检清单补 2 条（frontmatter 字段齐全 + 「自审」字面命中），审查前就补齐，docHash 一次定。治「审查后补→漂移」这一复发路径，但不治「Grill 改实质设计→漂移」（后者只能靠 P6.1b 完全 CLI 算或 register-stage-review --from 重算）。同步 docs/prompt/brainstorm.md 镜像。
   - **复发记录**（2026-08-04）：复盘再次命中——用户改 design.md 后手算 sha256 填 review.json 易错（正是 defer 接受的代价）。暂不推翻 defer，记复发频度（含 `stage-review.js:69` 记的原始翻车 + 本次，共 2 次摩擦）供后续复评。
 - ⏭ **P6.2** wait 三态收敛 must_wait/may_wait。**理由**：requiresWait/conditionalWait/repeatableWait 已工作且**写进进度库**（progress.js:315 waitAnswer/waitAnswers/waitRound 列），重命名/合并破坏现有进度兼容 + 大量测试，收益（语义直观）小于兼容性风险。
 - ✅ **P6.3** personas 只 stage 首步注入（run.js `&& stepIndex === 0`）。
