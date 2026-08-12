@@ -116,6 +116,17 @@ export class DB {
     if (readValid(this.dbPath) === 'ok') {
       const primaryDb = tryOpen(this.dbPath);
       if (primaryDb) return primaryDb;
+      // 并发首开竞争（2026-08-12 db-concurrency flaky 根因实证）：多进程近乎同时
+      // new DB().init() 打开同一新建库时，tryOpen 的 prepare(SELECT count(*)) 可能撞上
+      // 他者进程的 CHECKPOINT 改写主库 → 瞬时失败返 null。此时主库存在且有内容，
+      // 非真损坏——有限重试消化锁竞争（复用 MAX_BUSY_RETRIES 退避，与 transaction 的
+      // SQLITE_BUSY 重试同基建）。真损坏重试也不会过，最终仍走 .bak 回退 / fail-loud，
+      // 防吞进度语义零回归。
+      for (let attempt = 0; attempt < MAX_BUSY_RETRIES; attempt++) {
+        _sleepSync(BUSY_BACKOFF_MS[attempt]);
+        const retryDb = tryOpen(this.dbPath);
+        if (retryDb) return retryDb;
+      }
     }
 
     // 2. .bak 回退（.bak 是恢复源：存在且能打开即用，含 0 字节空库；门禁只挡"不存在"，

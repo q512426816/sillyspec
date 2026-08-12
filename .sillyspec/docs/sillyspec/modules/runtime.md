@@ -4,7 +4,7 @@ doc_type: module-card
 module_id: runtime
 author: qinyi
 created_at: 2026-06-03T07:42:00+08:00
-updated_at: 2026-08-11T16:25:00+08:00
+updated_at: 2026-08-12T15:10:00+08:00
 ---
 # runtime
 
@@ -14,7 +14,7 @@ SQLite 数据库层 + 进度管理 + 迁移。提供 `.sillyspec/.runtime/sillys
 
 ## 契约摘要
 
-- **DB** (`src/db.js`) — 基于 Node.js 内置 `node:sqlite`（`DatabaseSync`，同步 API）经 `src/db-engine.js` 抽象层（方案 B，封装 DatabaseSync + 3 缺口 shim：pragma→exec / transaction→手写 SAVEPOINT / pluck→helper）绑定，提供 `init()` / `transaction()` / `getDb()` / `close()`；`init()` 经 `applyPragmas` 设 PRAGMA（journal_mode=WAL + busy_timeout=5000 + foreign_keys=ON + synchronous=NORMAL），主库→`.bak`→全新 逐级回退（`_openWithFallback`）；打开即持久化，事务提交直接落盘主库（WAL 侧车 `.db-wal`/`.db-shm`），无旧 WASM 引擎的「全库 load 到内存 → 序列化写回」模型，接口无 `query()` / `_save()`（progress.js 经 `getDb()` 拿原生 DatabaseSync 实例直接 `prepare/run`）
+- **DB** (`src/db.js`) — 基于 Node.js 内置 `node:sqlite`（`DatabaseSync`，同步 API）经 `src/db-engine.js` 抽象层（方案 B，封装 DatabaseSync + 3 缺口 shim：pragma→exec / transaction→手写 SAVEPOINT / pluck→helper）绑定，提供 `init()` / `transaction()` / `getDb()` / `close()`；`init()` 经 `applyPragmas` 设 PRAGMA（journal_mode=WAL + busy_timeout=5000 + foreign_keys=ON + synchronous=NORMAL），主库→`.bak`→全新 逐级回退（`_openWithFallback`）；主库分支 tryOpen 撞并发 CHECKPOINT 瞬时失败时有限重试（复用 MAX_BUSY_RETRIES 递增退避，真损坏重试不过仍回落退/fail-loud，防吞进度语义零回归）；打开即持久化，事务提交直接落盘主库（WAL 侧车 `.db-wal`/`.db-shm`），无旧 WASM 引擎的「全库 load 到内存 → 序列化写回」模型，接口无 `query()` / `_save()`（progress.js 经 `getDb()` 拿原生 DatabaseSync 实例直接 `prepare/run`）
 - **ProgressManager** (`src/progress.js`) — 进度读写入口，通过 DB 实例操作 `project / changes / stages / steps / batch_progress / approvals` 六张表；核心读写方法已同步化（`read`/`_write` 等不再 async），`read()` 每次经 `getDb()` 直查 DB 取最新不缓存快照；支持 `read()` / `init()` / `initChange()` / `show()` / `validate()` / `reset()` / `_updatePlatformLastSync()` / `_updateApprovalStatus()` / `alignExecuteToPlan()` 等方法
 - **MultiRepoContext** (`src/run/multi-repo-context.js`) — 跨仓 task 支持的运行时多仓执行上下文（2026-08-12 新增）。进程级内存对象（随 CLI 进程生死，不入库不持久化，无状态机），`Map<repoKey, RepoEntry{repoKey,gitDir,worktreePath,projectRoot,isMain,resolveHead(),resolveBase(taskBaseCommit?)}>`。execute 启动由 `shared.js:getOrCreateMultiRepoContext` 构造一次贯穿 execute/apply/verify（D-013 G2），收口 7 单仓假设点（task-review/worktree-apply/verify-postcheck/gates/execute/index/machine-interface/complete 经 `ctx.resolve(repo)` 取 gitDir/base/head/projectRoot）。约束② fail-closed（未注册 repo / 跨仓 git 不可用抛错阻断 execute，不降级）。单仓 change 退化为 `{main:{...}}` 单值 map 零回归。head 经 resolveHead 实时 git rev-parse（不缓存）；task review 的 base/head 用 task 卡 base_commit/head_commit 双锡点（非 resolveHead）
 
@@ -30,7 +30,7 @@ SQLite 数据库层 + 进度管理 + 迁移。提供 `.sillyspec/.runtime/sillys
 
 ```
 DB.init()
-  → node:sqlite DatabaseSync 同步打开/创建库（经 db-engine.openDatabase，主库 → .bak → 全新 逐级回退，_openWithFallback）
+  → node:sqlite DatabaseSync 同步打开/创建库（经 db-engine.openDatabase，主库 → .bak → 全新 逐级回退，_openWithFallback；主库 tryOpen 失败先有限重试消化并发 CHECKPOINT 竞争，再走 .bak）
   → 经 applyPragmas 设 PRAGMA (journal_mode=WAL, busy_timeout=5000, foreign_keys=ON, synchronous=NORMAL)
   → schema 版本戳（.db.schema-version）匹配则跳过建表，否则 _createSchema 落盘 DDL（project/changes/stages/steps/batch_progress/approvals + 索引 + 幂等 ALTER 加列）
 
@@ -79,4 +79,5 @@ ProgressManager.alignExecuteToPlan(cwd, changeName, specBase, {confirm})
 - ql-20260804-003-e439 | _getNextSuggestion 遍历跳过 scan 且 upstream 排除 scan（根因修 plan→scan 回头路，prompt-control-debt plan-c）+ quicklog flipEntryInContent 单行四字段归一为多行（quick-①）。
 - ql-20260804-004-3a24 | quicklog 单行四字段归一改 splitSingleLineFields 双级扫描（字段边界严格扫描 + 顺序扫描兜底）：字段正文引用标签字样（「结果：」/正则内嵌四标签）不再被 split 任意位置误断行（quick-① 残留补丁）。
 - ql-20260809-001-4846 | alignExecuteToPlan 去 async 残留彻底同步化（修复 doctor align 调用方 index.js:532 未 await 致 r.ok 恒 undefined、失败也误打印「已对齐」的逻辑 bug）+ 清 src/ 5 处 gate-status 活引用注释（fs-atomic/machine-interface×2/run/gates/index）。
+- ql-20260812-005-51cc | _openWithFallback 主库分支并发首开重试（2026-08-12 db-concurrency flaky 根因实证）：多进程近乎同时 new DB().init() 打开同一新建库，tryOpen 的 prepare(SELECT count(*)) 撞他者 CHECKPOINT 改写瞬时失败返 null 误判损坏 fail-loud throw；主库分支补 MAX_BUSY_RETRIES 递增退避重试，真损坏重试不过仍回落退/fail-loud。
 <!-- MANUAL_NOTES_END -->

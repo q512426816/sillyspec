@@ -391,3 +391,14 @@
 根因：sync.js:518 fetchJson 返回null(请求失败)时套status=pending，与真pending+未连接平台三者混谈，command.js 3处调用点只识rejected/pending，请求失败走pending分支误报⏳审批待处理。
 方案：sync.js请求失败返回status=unknown，command.js 3处加unknown分支warn审批状态未知按本地模式放行非审批中。approved/rejected/pending语义不变fail-open本地优先零回归。新增check-approval-status测试5断言。sync.md补status取值含unknown。债单登记cc-⑤已修+cc-⑥活跃坑。
 结果：check-approval-status 5/5；全量npm test 175通过(db-concurrency flaky无关)；npm run lint 259文件过。sync.js/command.js判危险文件需force-baseline解锁(改动经实证safety-critical审批门控5测试+175全量+lint过边界0脏文件无并发)。
+
+## ql-20260812-005-51cc | 2026-08-12 14:49:41 | db-concurrency 并发测试偶发 exit1（8进程x100次x2轮期望800）——用户选方案B修 db.js 而非测试
+状态：已完成
+关联变更：（无）
+文件：
+- src/db.js（_openWithFallback 主库分支并发首开重试（tryOpen 撞 CHECKPOINT 竞争加 MAX_BUSY_RETRIES 退避））
+- .sillyspec/docs/sillyspec/modules/runtime.md（同步 DB 契约摘要+关键逻辑+人工备注）
+需求：db-concurrency 并发测试偶发 exit1（8进程x100次x2轮期望800）——用户选方案B修 db.js 而非测试。
+根因：_openWithFallback 主库分支并发首开竞争——多进程近乎同时 new DB().init() 打开同一新建库，tryOpen 的 prepare(SELECT count(*)) 撞他者进程 CHECKPOINT 改写主库瞬时失败返null，误判损坏触发 fail-loud throw。真bug非flaky。
+方案：主库分支 tryOpen 失败后补有限重试，复用 MAX_BUSY_RETRIES=3 递增退避50/100/200ms，真损坏重试不过仍走.bak回退/fail-loud，防吞进度语义零回归。
+结果：db-concurrency 连跑4轮x2round全exit0计数严格800；db-atomic-write通过；全量npm test 176/0；lint 259文件过；runtime模块文档同步DB小节+人工备注。
