@@ -532,8 +532,12 @@ console.log('\n--- 验收 7b：CRLF 文件 flip 无重复状态行 ---')
 // writeAtomic 保证 reader 永远看到完整旧版或完整新版，绝不读半截/空。
 // reader 用独立 spawn 进程（贴近真实：dashboard / 另一 agent 是独立进程，也避免同进程 event-loop 串扰）。
 // ─────────────────────────────────────────
+// 时长通过 env 可注入：QUICKLOG_RW_READER_MS / QUICKLOG_RW_WRITER_MS（默认 1000/1200，快速模式）
 console.log('\n--- 验收 8：reader-writer 并发（独立 reader 进程）---')
-{
+
+  {
+    const readerMs = Number(process.env.QUICKLOG_RW_READER_MS) || 1000
+    const writerMs = Number(process.env.QUICKLOG_RW_WRITER_MS) || 1200
   const specBase = makeTmpDir('qlm-rw-')
   const quicklogUrl = new URL('../src/quicklog.js', import.meta.url).href
   // 预置多个条目，让 complete 循环逐条翻状态（多轮读改写）
@@ -565,12 +569,12 @@ console.log('\n--- 验收 8：reader-writer 并发（独立 reader 进程）---'
     'writeFileSync(resultFile, JSON.stringify({ reads, corrupt }))',
   ].join('\n'))
 
-  const readerPromise = execFileP(process.execPath, [readerPath, userFile, resultFile, '3000'])
+  const readerPromise = execFileP(process.execPath, [readerPath, userFile, resultFile, String(readerMs)])
 
   // writer（主进程）：循环 complete 所有条目多轮，持续触发读改写（翻转在 atomic 内完成）
   const writerStart = Date.now()
   let rounds = 0
-  while (Date.now() - writerStart < 3200) {
+  while (Date.now() - writerStart < writerMs) {
     for (const id of ids) {
       await completeQuicklogEntry(specBase, 'rw', id, { resultText: `round-${rounds}`, linkedChanges: [] })
     }

@@ -1,8 +1,11 @@
 import { readdirSync, existsSync, rmSync, readFileSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { execFileSync } from 'node:child_process'
+import { execFile } from 'node:child_process'
 import { homedir } from 'node:os'
+import { promisify } from 'node:util'
+
+const execFileP = promisify(execFile)
 
 const testDir = dirname(fileURLToPath(import.meta.url))
 
@@ -39,30 +42,87 @@ if (files.length === 0) {
   process.exit(0)
 }
 
+// 并发度：CPU 核数，最少 4，最多 12
+const CONCURRENCY = Math.max(4, Math.min(12, (await import('node:os')).cpus().length))
+
 let passed = 0
 let failed = 0
 const failures = []
+const timings = []
 
-for (const fullPath of files) {
+// 进度输出锁 —— 并行打印不交错
+let printLock = Promise.resolve()
+function lockedPrint(fn) {
+  const p = printLock.then(() => {
+    fn()
+    return new Promise(r => setImmediate(r))
+  })
+  printLock = p
+  return p
+}
+
+async function runOne(fullPath) {
   const file = relative(testDir, fullPath)
-  console.log(`\nRunning ${file}`)
+  const t0 = performance.now()
   try {
-    const output = execFileSync(process.execPath, [fullPath], {
+    const { stdout, stderr } = await execFileP(process.execPath, [fullPath], {
       cwd: testDir,
-      stdio: ['pipe', 'pipe', 'pipe'],
+      timeout: 120_000,
       encoding: 'utf8',
-      timeout: 120_000
+      maxBuffer: 10 * 1024 * 1024
     })
-    if (output) process.stdout.write(output)
+    const ms = Math.round(performance.now() - t0)
+    timings.push({ file, ms })
+    await lockedPrint(() => {
+      console.log(`\nRunning ${file}`)
+      if (stdout) process.stdout.write(stdout)
+      if (stderr) process.stderr.write(stderr)
+      console.log(`  ⏱️ ${ms}ms`)
+    })
     passed++
   } catch (err) {
-    if (err.stdout) process.stdout.write(err.stdout)
-    if (err.stderr) process.stderr.write(err.stderr)
+    const ms = Math.round(performance.now() - t0)
+    timings.push({ file, ms, failed: true })
+    await lockedPrint(() => {
+      console.log(`\nRunning ${file}`)
+      if (err.stdout) process.stdout.write(err.stdout)
+      if (err.stderr) process.stderr.write(err.stderr)
+      console.log(`  ❌ ${file} exited with code ${err.code || err.status || 1} (${ms}ms)`)
+    })
     failed++
     failures.push(file)
-    console.log(`  ❌ ${file} exited with code ${err.status || 1}`)
   }
 }
+
+// 并发池：一次跑 CONCURRENCY 个，完成一个补一个
+async function runAll() {
+  const queue = [...files]
+  const running = new Set()
+
+  async function worker() {
+    while (queue.length > 0) {
+      const file = queue.shift()
+      const p = runOne(file)
+      running.add(p)
+      p.finally(() => running.delete(p))
+      await p
+    }
+  }
+
+  // 启动 CONCURRENCY 个 worker
+  const workers = Array.from({ length: Math.min(CONCURRENCY, queue.length) }, () => worker())
+  await Promise.all(workers)
+
+  // 兜底：等待所有仍在跑的完成（理论上 worker 返回时已全部完成）
+  if (running.size > 0) await Promise.all(Array.from(running))
+}
+
+const totalT0 = performance.now()
+await runAll()
+const totalMs = Math.round(performance.now() - totalT0)
+
+// 按原始顺序排序 timings 后再打印汇总
+timings.sort((a, b) => files.indexOf(join(testDir, a.file)) - files.indexOf(join(testDir, b.file)))
 
 console.log(`\n${'='.repeat(50)}`)
 console.log(`✅ 通过: ${passed}  ❌ 失败: ${failed}`)
@@ -70,6 +130,15 @@ if (failures.length > 0) {
   console.log(`失败文件: ${failures.join(', ')}`)
 }
 console.log(`${'='.repeat(50)}`)
+
+// 慢测试排行（Top 20）
+console.log(`\n⏱️  总耗时: ${(totalMs / 1000).toFixed(1)}s (${timings.length} 个文件，并发 ${CONCURRENCY})`)
+console.log(`\n🐌 最慢 20 个测试:`)
+const sorted = [...timings].sort((a, b) => b.ms - a.ms)
+sorted.slice(0, 20).forEach((t, i) => {
+  const flag = t.failed ? ' ❌' : ''
+  console.log(`  ${String(i + 1).padStart(2)}. ${(t.ms / 1000).toFixed(1)}s  ${t.file}${flag}`)
+})
 
 cleanHomePointer()
 

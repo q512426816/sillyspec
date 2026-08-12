@@ -10,9 +10,9 @@
  *
  * 用 Express（Node）后端 + apiFetch 前端，验证多框架提取（Wave 1）+ 管线接线（Wave 2/3 核心）。
  */
-import { describe, it } from 'node:test'
+import { describe, it, beforeEach, afterEach, after } from 'node:test'
 import assert from 'node:assert/strict'
-import { writeFileSync, mkdirSync, rmSync, readFileSync, existsSync } from 'fs'
+import { writeFileSync, mkdirSync, rmSync, readFileSync, existsSync, mkdtempSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import { extractArtifactsForChange, verifyApiParity } from '../src/contract-matrix.js'
@@ -46,10 +46,21 @@ function setupChange(specBase, changeName, worktreePath, providerCode) {
 }
 
 describe('端点契约管线', () => {
-  const tmp = join(tmpdir(), 'sillyspec-test-pipeline')
+  let tmp, tmpDirs = []
+
+  // 每个测试独立临时目录，消除跨用例执行顺序依赖
+  beforeEach(() => {
+    tmp = mkdtempSync(join(tmpdir(), 'sillyspec-pipeline-'))
+    tmpDirs.push(tmp)
+  })
+  afterEach(() => {
+    // cleanup 在最后的 it 统一做；也可每轮清理（此处延迟到套件结束以减少 Windows 文件锁竞争）
+  })
+  after(() => {
+    for (const d of tmpDirs) { try { rmSync(d, { recursive: true, force: true }) } catch {} }
+  })
 
   it('extractArtifactsForChange：Express provider 端点落盘到 contract-artifacts/<change>/<task>/', () => {
-    rmSync(tmp, { recursive: true, force: true })
     const specBase = join(tmp, '.sillyspec')
     const worktree = join(tmp, 'worktree')
     const changeDir = setupChange(specBase, 'change-a', worktree, [
@@ -72,6 +83,15 @@ describe('端点契约管线', () => {
 
   it('verifyApiParity：有 artifact + 前端调用 missing → missingBackend>0、backendCount>0', () => {
     const specBase = join(tmp, '.sillyspec')
+    // 自给自足：先提取 artifact（本测试独立于其他测试）
+    const worktree = join(tmp, 'worktree')
+    const changeDir = setupChange(specBase, 'change-a', worktree, [
+      'const router = require("express").Router();',
+      'router.get("/api/users/:id", getUser);',
+      'router.post("/api/users", createUser);',
+    ].join('\n'))
+    extractArtifactsForChange({ changeDir, specBase, changeName: 'change-a', worktreePath: worktree })
+
     const frontendDir = join(tmp, 'frontend')
     mkdirSync(frontendDir, { recursive: true })
     writeFileSync(join(frontendDir, 'api.ts'), [
@@ -96,13 +116,21 @@ describe('端点契约管线', () => {
 
   it('跨变更隔离：change-a 与 change-b 同名 task-01 的 artifact 独立、不互相覆盖', () => {
     const specBase = join(tmp, '.sillyspec')
+    // 自给自足：在同一临时目录内先后创建两个 change 的 artifact
+    const worktreeA = join(tmp, 'worktree-a')
+    const changeDirA = setupChange(specBase, 'change-a', worktreeA, [
+      'const router = require("express").Router();',
+      'router.get("/api/users/:id", getUser);',
+      'router.post("/api/users", createUser);',
+    ].join('\n'))
+    extractArtifactsForChange({ changeDir: changeDirA, specBase, changeName: 'change-a', worktreePath: worktreeA })
+
     const worktreeB = join(tmp, 'worktree-b')
     const changeDirB = setupChange(specBase, 'change-b', worktreeB, [
       'const router = require("express").Router();',
       'router.delete("/api/items/:itemId", deleteItem);',
     ].join('\n'))
-    const msgB = extractArtifactsForChange({ changeDir: changeDirB, specBase, changeName: 'change-b', worktreePath: worktreeB })
-    assert.ok(msgB)
+    extractArtifactsForChange({ changeDir: changeDirB, specBase, changeName: 'change-b', worktreePath: worktreeB })
 
     const artifactA = join(specBase, '.runtime', 'contract-artifacts', 'change-a', 'task-01', 'endpoints.json')
     const artifactB = join(specBase, '.runtime', 'contract-artifacts', 'change-b', 'task-01', 'endpoints.json')
@@ -130,9 +158,5 @@ describe('端点契约管线', () => {
     mkdirSync(worktree, { recursive: true })
     const msg = extractArtifactsForChange({ changeDir, specBase, changeName: 'change-doc', worktreePath: worktree })
     assert.equal(msg, null, '无 provider 应返回 null（不打扰）')
-  })
-
-  it('cleanup', () => {
-    try { rmSync(tmp, { recursive: true, force: true }) } catch {}
   })
 })

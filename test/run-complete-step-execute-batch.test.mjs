@@ -78,10 +78,12 @@ console.log('=== completeStep characterization: execute 批量完成 ===\n')
 console.log('--- plan 全勾 + 代码未提交改动 → 批量完成剩余 step ---')
 {
   const { cwd, specBase } = makeRepo('cs-exec-batch-ok-')
+  const prevCwd = process.cwd()
   // WorktreeManager._resolveMainRepoRoot 对裸 init repo 的 `git-common-dir`(=.git) 取 dirname 得 '.',
   // 解析相对进程 cwd。只有 chdir 到临时仓库，enforceDepsGate 内 new WorktreeManager({cwd}) 的
   // worktreeBase 才落到临时仓库的 .sillyspec/.runtime/worktrees（而非真实仓库）。
   process.chdir(cwd)
+  try {
   const cn = '2026-07-25-exec-batch-ok'
   const pm = await initChange(cwd, specBase, cn)
   const changeDir = join(specBase, 'changes', cn)
@@ -111,13 +113,16 @@ console.log('--- plan 全勾 + 代码未提交改动 → 批量完成剩余 step
   assert(after.stages.execute.status === 'completed', 'DB: execute stage status=completed')
   assert(after.stages.execute.steps.every(s => s.status === 'completed'),
     'DB: 所有 execute step status=completed（含原本 pending 的后续 5 步）')
+  } finally { process.chdir(prevCwd) }
 }
 
 // ── Case 2: plan 未全勾 → 不批量，仅当前 step completed，nextPendingIdx 指向下一 pending ──
 console.log('\n--- plan 未全勾 → 不批量，单步推进 ---')
 {
   const { cwd, specBase } = makeRepo('cs-exec-batch-partial-')
+  const prevCwd = process.cwd()
   process.chdir(cwd)
+  try {
   const cn = '2026-07-25-exec-batch-partial'
   const pm = await initChange(cwd, specBase, cn)
   const changeDir = join(specBase, 'changes', cn)
@@ -142,13 +147,16 @@ console.log('\n--- plan 未全勾 → 不批量，单步推进 ---')
   assert(after.stages.execute.status !== 'completed', 'DB: execute 未完成')
   assert(after.stages.execute.steps[currentIdx].status === 'completed', 'DB: 当前 step 已 completed')
   assert(after.stages.execute.steps.some(s => s.status === 'pending'), 'DB: 仍有 pending step（未批量）')
+  } finally { process.chdir(prevCwd) }
 }
 
 // ── Case 3: plan 全勾但代码零变更（unchanged）→ 不批量（防伪造）──
 console.log('\n--- plan 全勾 + 代码零变更（baseHash 对账无 diff）→ 不批量 ---')
 {
   const { cwd, specBase } = makeRepo('cs-exec-batch-unchanged-')
+  const prevCwd = process.cwd()
   process.chdir(cwd)
+  try {
   const cn = '2026-07-25-exec-batch-unchanged'
   const pm = await initChange(cwd, specBase, cn)
   const changeDir = join(specBase, 'changes', cn)
@@ -174,6 +182,7 @@ console.log('\n--- plan 全勾 + 代码零变更（baseHash 对账无 diff）→
   const after = await pm.read(cwd, cn)
   assert(after.stages.execute.status !== 'completed', 'DB: execute 未完成（拒绝空完成）')
   assert(after.stages.execute.steps.some(s => s.status === 'pending'), 'DB: 仍有 pending step')
+  } finally { process.chdir(prevCwd) }
 }
 
 cleanup()

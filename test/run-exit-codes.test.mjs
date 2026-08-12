@@ -53,24 +53,36 @@ function makeRepo() {
 
 console.log('--- run <stage> 退出码三段契约（W1-A 用法/环境错 → exit 2）---')
 
-// 用法错 → exit 2
+// 用法错 → exit 2（每个用例同时断言 stderr/sdout 内容，不只查退出码）
 {
   const r = runSilly(['run'])
   assert(r.status === 2, `run 无阶段 → exit 2（实际 ${r.status}）`)
+  const msg = r.stderr + r.stdout
+  assert(msg.includes('阶段') || msg.includes('stage') || msg.includes('用法'),
+    `run 无阶段 stderr 含提示（实际 ${msg.slice(0, 80)}）`)
 }
 {
   const r = runSilly(['run', 'bogus-stage'])
   assert(r.status === 2, `run 未知阶段 → exit 2（实际 ${r.status}）`)
+  const msg = r.stderr + r.stdout
+  assert(msg.includes('未知') || msg.includes('unknown') || msg.includes('bogus-stage'),
+    `run 未知阶段 stderr 含阶段名（实际 ${msg.slice(0, 80)}）`)
 }
 {
   const d = makeRepo()
   const r = runSilly(['run', 'brainstorm', '--bogus-flag'], { cwd: d })
   assert(r.status === 2, `未知参数 → exit 2（实际 ${r.status}）`)
+  const msg = r.stderr + r.stdout
+  assert(msg.includes('bogus') || msg.includes('未知') || msg.includes('unknown') || msg.includes('参数'),
+    `未知参数 stderr 含提示（实际 ${msg.slice(0, 80)}）`)
 }
 {
   const d = makeRepo()
   const r = runSilly(['run', 'execute'], { cwd: d })
   assert(r.status === 2, `execute 无 --change → exit 2（实际 ${r.status}）`)
+  const msg = r.stderr + r.stdout
+  assert(msg.includes('change') || msg.includes('变更'),
+    `execute 无 --change stderr 含提示（实际 ${msg.slice(0, 80)}）`)
 }
 
 // W1-B: run --json → exit 2（fail-fast，杜绝之前的静默吞）
@@ -86,6 +98,8 @@ console.log('--- run <stage> 退出码三段契约（W1-A 用法/环境错 → e
 {
   const r = runSilly(['--version'])
   assert(r.status === 0, `--version → exit 0（实际 ${r.status}）`)
+  assert(r.stdout.length > 0 && /\d+\.\d+\.\d+/.test(r.stdout),
+    `--version stdout 含版本号（实际 ${r.stdout.slice(0, 40)}）`)
 }
 
 for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} }

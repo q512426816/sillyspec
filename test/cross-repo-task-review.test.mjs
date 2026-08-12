@@ -296,6 +296,8 @@ console.log('\n=== A2: generateTaskReviewDrafts 跨仓 base/head 读双锡点 ==
 
 console.log('--- 跨仓 task（repo + base_commit + head_commit 锡点）：draft base/head 读锡点，过 schema ---')
 {
+  const prevCwd = process.cwd()
+  try {
   const mainRepo = makeRepo('crr-gd-main-')
   const crossRepo = makeRepo('crr-gd-cross-')
   fs.mkdirSync(path.join(crossRepo, 'src'), { recursive: true })
@@ -342,10 +344,13 @@ console.log('--- 跨仓 task（repo + base_commit + head_commit 锡点）：draf
   process.chdir(os.tmpdir())
   fs.rmSync(mainRepo, { recursive: true, force: true })
   fs.rmSync(crossRepo, { recursive: true, force: true })
+  } finally { process.chdir(prevCwd) }
 }
 
 console.log('--- generateTaskReviewDrafts 无 ctx → 主仓原逻辑零回归（task-review-draft 契约不变）---')
 {
+  const prevCwd = process.cwd()
+  try {
   // 复用 task-review-draft.test.mjs 同款 fixture（主仓 worktree + meta + allowed_paths）
   const changeName = 'crr-gd-nctx'
   const { d, base, wtDir } = (function () {
@@ -375,11 +380,14 @@ console.log('--- generateTaskReviewDrafts 无 ctx → 主仓原逻辑零回归�
 
   process.chdir(os.tmpdir())
   fs.rmSync(d, { recursive: true, force: true })
+  } finally { process.chdir(prevCwd) }
 }
 
 // ─────────────────────────────────────────────────────────────────────────
 console.log('\n=== A2 边界：跨仓 task 缺锡点 → draft 不生成（无法定 base/head，留给 agent 手补）===\n')
 {
+  const prevCwd = process.cwd()
+  try {
   const mainRepo = makeRepo('crr-gd-nopoint-')
   const crossRepo = makeRepo('crr-gd-nopoint-cross-')
   fs.mkdirSync(path.join(crossRepo, 'src'), { recursive: true })
@@ -413,6 +421,7 @@ console.log('\n=== A2 边界：跨仓 task 缺锡点 → draft 不生成（无�
   process.chdir(os.tmpdir())
   fs.rmSync(mainRepo, { recursive: true, force: true })
   fs.rmSync(crossRepo, { recursive: true, force: true })
+  } finally { process.chdir(prevCwd) }
 }
 
 console.log(`\n${'='.repeat(50)}`)

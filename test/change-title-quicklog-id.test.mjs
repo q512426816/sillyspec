@@ -68,10 +68,12 @@ row = query("SELECT title, quicklog_id FROM changes WHERE name='quick-22222222'"
 assert(row.title === null, 'initChange 不传 meta → title NULL（向后兼容）')
 assert(row.quicklog_id === null, 'initChange 不传 meta → quicklog_id NULL')
 
-// 6. updateChangeMeta 对不存在的 change 静默（UPDATE 0 行不抛错）
+// 6. updateChangeMeta 对不存在的 change 静默（UPDATE 0 行不抛错，也不创建行）
 try {
   pm.updateChangeMeta(tmp, 'quick-ffffffff', { title: 'x' })
-  assert(true, 'updateChangeMeta 对不存在 change 不抛错')
+  // 不抛错是基本要求；更关键的是不写脏数据——不存在的 change 不应被创建
+  const noRow = query("SELECT name FROM changes WHERE name='quick-ffffffff'")
+  assert(noRow === undefined, 'updateChangeMeta 对不存在 change 不创建行（UPDATE 0 rows）')
 } catch (e) {
   assert(false, `updateChangeMeta 对不存在 change 不应抛错: ${e.message}`)
 }

@@ -4,7 +4,7 @@
 
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { writeFileSync, mkdirSync, rmSync } from 'fs'
+import { writeFileSync, mkdirSync, rmSync, mkdtempSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import {
@@ -39,7 +39,7 @@ describe('normalizePath', () => {
 // ─── FastAPI 端点提取 ──────────────────────────────────────────────────
 
 describe('extractFastApiEndpoints', () => {
-  const tmpDir = join(tmpdir(), 'sillyspec-test-fastapi')
+  const tmpDir = mkdtempSync(join(tmpdir(), 'sillyspec-fastapi-'))
   const routerFile = join(tmpDir, 'router.py')
 
   it('提取单行装饰器端点', () => {
@@ -101,7 +101,7 @@ describe('extractFastApiEndpoints', () => {
 // ─── 前端 API 调用提取 ─────────────────────────────────────────────────
 
 describe('extractFrontendApiCalls', () => {
-  const tmpDir = join(tmpdir(), 'sillyspec-test-frontend')
+  const tmpDir = mkdtempSync(join(tmpdir(), 'sillyspec-frontend-'))
   const apiFile = join(tmpDir, 'plan.ts')
 
   it('提取 apiFetch 调用', () => {
@@ -240,7 +240,7 @@ describe('classifyTask', () => {
 // ─── 集成测试：复现 PPM 真实场景 ───────────────────────────────────────
 
 describe('PPM 真实场景：跨 task 端点漏实现', () => {
-  const tmpDir = join(tmpdir(), 'sillyspec-test-ppm')
+  const tmpDir = mkdtempSync(join(tmpdir(), 'sillyspec-ppm-'))
   const routerFile = join(tmpDir, 'router.py')
   const apiClientFile = join(tmpDir, 'plan.ts')
 
@@ -328,7 +328,7 @@ describe('PPM 真实场景：跨 task 端点漏实现', () => {
 // ─── Express（Node）端点提取 ─────────────────────────────────────────────
 
 describe('extractExpressEndpoints', () => {
-  const tmpDir = join(tmpdir(), 'sillyspec-test-express')
+  const tmpDir = mkdtempSync(join(tmpdir(), 'sillyspec-express-'))
   const routerFile = join(tmpDir, 'routes.js')
 
   it('提取 router/app.<method> 端点', () => {
@@ -387,7 +387,7 @@ describe('extractExpressEndpoints', () => {
 // ─── Spring（Java）端点提取 ──────────────────────────────────────────────
 
 describe('extractSpringEndpoints', () => {
-  const tmpDir = join(tmpdir(), 'sillyspec-test-spring')
+  const tmpDir = mkdtempSync(join(tmpdir(), 'sillyspec-spring-'))
   const controllerFile = join(tmpDir, 'UserController.java')
 
   it('提取 @<Method>Mapping + 类级 @RequestMapping 前缀', () => {
@@ -436,7 +436,7 @@ describe('extractSpringEndpoints', () => {
 // ─── scanBackendEndpoints 多框架分派 ─────────────────────────────────────
 
 describe('scanBackendEndpoints 多框架分派', () => {
-  const tmpDir = join(tmpdir(), 'sillyspec-test-scan-multi')
+  const tmpDir = mkdtempSync(join(tmpdir(), 'sillyspec-scan-multi-'))
 
   it('按扩展名分派到 FastAPI/Express/Spring，忽略无关文件', () => {
     mkdirSync(tmpDir, { recursive: true })
