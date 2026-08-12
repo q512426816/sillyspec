@@ -438,3 +438,17 @@
 根因：新项目接入 SillySpec 缺『从零引导』层（npm 装 CLI 的前置步骤无覆盖）；价值认知的真正载体是 init 已注入的 CLAUDE.md（agent 每会话读），skill 只在调用时读，不另造文案避免双份漂移。
 方案：产出 templates/skills/sillyspec-onboard/SKILL.md 独立分发引导 skill——Step0 判定接入态→Step1 引导 npm install -g sillyspec→Step2 init 接入+验证 CLAUDE.md 受管段/进度库→Step3 run scan 建项目库→Step4 价值锚验证（复用 init 注入陈述，确认 CLAUDE.md+持续 skill+进度库三载体就位）+『开工首查』示例。分发：手动复制到目标项目 .claude/skills/（一次性）或全局，不随 npm 自动进项目。
 结果：5 个命令全为公开 CLI（--version/init/run scan/progress show/run <stage>）；零内部符号引用（无 src 路径/D-编号/源码符号）；markdown 结构完整。纯新增模板文件（templates/skills/）不触 src/test，按规则8跳过 npm test/lint。
+
+## ql-20260812-009-dcb9 | 2026-08-12 15:55:38 | verify 探针3补断言有效性抽查，与 execute 测试用例设计闭环
+状态：已完成
+关联变更：（无）
+文件：
+- templates/prompts/verify-probes.md（探针3加第5点断言有效性抽查（advisory，非硬门））
+- src/stages/verify.js（verify-result.md 模板测试覆盖行补（含断言有效性抽查））
+- test/verify-probes-assertion-quality.test.mjs（新增回归 8 断言）
+- docs/prompt/verify.md + _extracted.json（prompt 镜像重提取）
+- .sillyspec/docs/sillyspec/modules/stages.md（变更索引登记）
+需求：verify 探针3只查'有没有测试文件'，补断言有效性抽查，与 execute 测试用例设计 6 条闭环
+根因：探针3只递归找测试文件存在性不查断言质量，agent 可交只不抛错/只测 getter setter/只覆盖业务正例的测试蒙混
+方案：verify-probes.md 探针3加第5点断言有效性抽查（advisory persuasion 非硬门，同 full-a 集成盲区提示先例）；verify.js verify-result.md「测试覆盖」行改「测试覆盖（含断言有效性抽查）」；同步 docs/prompt 重提取 + stages 模块文档
+结果：npm test 178 文件全过 + lint 261 文件通过；新测试 8 断言验证探针3五要素 + 原集成盲区提示未损
