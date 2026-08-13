@@ -309,7 +309,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
           : 'acceptance'
         const searchDirs = [effectiveSpecBase, reviewChangeDir, cwd].filter(Boolean)
         const reviewResult = validateStageReview({ stage: stageName, reviewType, runtimeRoot, reviewRunId, searchDirs })
-        printStageReviewResult(reviewResult, { stage: stageName })
+        printStageReviewResult(reviewResult, { stage: stageName, reviewRunId, runtimeRoot })
         if (!reviewResult.ok) {
           return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)
         }

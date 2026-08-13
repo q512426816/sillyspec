@@ -414,7 +414,7 @@ export function validateStageReview(opts) {
  * @param {object} context - { stage, reviewRunId } 用于错误提示路径
  */
 export function printStageReviewResult(result, context = {}) {
-  const { stage } = context
+  const { stage, reviewRunId, runtimeRoot } = context
   if (result.ok && result.warnings.length === 0) {
     console.log(`\n✅ Stage Review Gate — ${stage} 阶段独立审查通过`)
     return
@@ -424,6 +424,14 @@ export function printStageReviewResult(result, context = {}) {
     console.error(`\n🚫 Stage Review Gate — ${stage} FAILED`)
     for (const err of result.errors) {
       console.error(`   - ${err}`)
+    }
+    // echo 完整 review.json 路径：runId + marker 已由 CLI 自动生成写入（prompt.js review step
+    // 渲染 / gate 触发），agent 直接派独立子代理把 review.json 写到此路径，勿手算 runId、勿手写
+    // marker（历史坑：agent 撞 gate 后自己算 runId 猜错 review- 前缀，填 exec-/裸 ts 被 CLI 忽略）。
+    if (reviewRunId) {
+      const reviewDir = runtimeRoot ? `${runtimeRoot}/stage-reviews/${stage}-${reviewRunId}` : `.sillyspec/.runtime/stage-reviews/${stage}-${reviewRunId}`
+      console.error(`\n   📁 review.json 直接写此路径（runId/marker CLI 已生成写入，勿手算 runId、勿手写 marker）：`)
+      console.error(`      ${reviewDir}/review.json`)
     }
     console.error(`\n   提示：tier=independent 要求独立审查子代理产出 review.json，补全后重新 --done`)
     console.error(`   可用 sillyspec register-stage-review --change <名> --stage ${stage} [--from <已有review.json>] 一步生成 run 目录 + review.json 骨架（docHash 自动算）+ 写 marker + 自检，省掉手动建目录/写 marker`)
