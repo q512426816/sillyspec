@@ -33,7 +33,11 @@ export function validatePlanForExecute(planContent) {
 
   // 检查 1: 至少有一个 checkbox task
   if (allTasks.length === 0) {
+    // 诊断根因（坑 plan-md-format-contract-hidden）：笼统报"没有找到 checkbox task"逼 agent 试错。
+    // 区分：无 Wave/Tasks 段 / Wave 标题格式不对 / task 用 ### 标题 / checkbox 被非 Wave 标题打断。
+    const diags = diagnoseNoTaskRootCause(planContent)
     errors.push('plan.md 中没有找到 checkbox task（格式: "- [ ] task-XX: 任务名"）')
+    for (const d of diags) errors.push(`  诊断：${d}`)
     return { ok: false, errors, warnings, tasks: allTasks, waves }
   }
 
@@ -356,6 +360,39 @@ Apply Decision + 下一步建议
     optional: false
   }
 ]
+
+/**
+ * 诊断 plan.md 无 checkbox task 的根因（坑 plan-md-format-contract-hidden）。
+ * 纯函数：读 planContent 文本，返回诊断提示数组。validatePlanForExecute 无 task 时追加到报错，
+ * 帮 agent 区分 4 条隐性格式契约（Wave 标题字面 / task checkbox / task-XX 编号 / ### 打断 Wave 段）。
+ * @param {string} planContent
+ * @returns {string[]}
+ */
+function diagnoseNoTaskRootCause(planContent) {
+  const diags = []
+  const hasWaveHeading = /^#+\s*Wave\s+\d+/im.test(planContent)         // "## Wave N"（字面）
+  const hasWaveWord = /^#+\s*(wave\s*\d+|w\d+|波次\s*\d+)/im.test(planContent) // 疑似 Wave 标题（含 W1/Wave1/波次1）
+  const hasCheckboxTask = /^[-*]\s*\[[ x]\]\s*task-\d+/im.test(planContent) // "- [ ] task-XX:" checkbox
+  const hasTaskHeading = /^#+\s*task-\d+/im.test(planContent)            // "### task-XX:" 标题（非 checkbox）
+  const hasTasksSection = /^#+\s*(tasks?|任务)\s*$/im.test(planContent)  // "## Tasks" / "## 任务"
+
+  if (!hasWaveHeading && !hasTasksSection) {
+    if (hasWaveWord) {
+      diags.push('Wave 标题格式不对：必须字面 "## Wave N"（Wave + 空格 + 数字），"## W1" / "## Wave1" / "## 波次1" 都不被识别')
+    } else if (hasCheckboxTask) {
+      diags.push('有 task checkbox 但不在 "## Wave N"（full）或 "## Tasks"（light/none）段内——非任务区的 checkbox 不收')
+    } else {
+      diags.push('plan.md 缺任务区：full 需 "## Wave 1" 标题，light/none 需 "## Tasks" 标题')
+    }
+  }
+  if (hasTaskHeading) {
+    diags.push('task 用了 "### task-XX:" 标题（非 checkbox）：标题会打断 Wave 段导致后续 checkbox 全被跳过，请改用 "- [ ] task-XX: 名称"（英文冒号）')
+  }
+  if (hasWaveHeading && hasCheckboxTask && !hasTaskHeading) {
+    diags.push('有 Wave 段也有 checkbox task 但未收容：checkbox 可能落在非任务区（如 "## 自检" 段）或被 "###" 标题打断，请检查 task 是否紧跟在 "## Wave N" 下')
+  }
+  return diags
+}
 
 /**
  * 从 plan 文件解析 Wave 分组

@@ -495,7 +495,7 @@ export function isQuickMetadata(p, linkedChanges = []) {
  * @returns {{ status: 'safe'|'warning'|'blocked', reasons: string[], changedFiles: string[], newFiles: string[], deletedFiles: string[], baselineHit: string[], stagedTotal: number }}
  */
 export async function auditQuickCompletion(cwd, guard, options = {}) {
-  const { baselineFiles, allowedFiles = [], allowNew = false, forceBaseline = false } = guard
+  const { baselineFiles, allowedFiles = [], allowNew = false, forceBaseline = false, allowDelete = false } = guard
   const { isConfirm } = options
   // stagedTotal：当前所有非 quick 元数据的未提交条目（含前序 baseline 残留）。
   // 与 changedFiles（扣 baseline 后的本轮新增）区分，供审计文案同时展示「本轮新增 vs 累计暂存」，
@@ -588,9 +588,11 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
       }
     }
 
-    // 检查 deleted files
-    for (const f of result.deletedFiles) {
-      result.reasons.push(`删除文件: ${f}`)
+    // 检查 deleted files（--allow-delete 显式放行：删除是破坏性操作，默认 fail-closed，flag 即知情 opt-in）
+    if (!allowDelete) {
+      for (const f of result.deletedFiles) {
+        result.reasons.push(`删除文件: ${f}`)
+      }
     }
 
     // 检查 baseline hit（除非 force-baseline）
@@ -618,9 +620,10 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
       }
     }
 
-    // 判定结果（force-baseline 降级 baselineHit → 非 blocked；allow-new 降级新增文件 → 非 warning。
-    // reasons 文案本就受这两个 flag 控制，但原判定直接看数组长度，致 flag 对 status 失效。）
-    if ((!forceBaseline && result.baselineHit.length > 0) || result.deletedFiles.length > 0 || result.reasons.some(r => r.startsWith('危险') || r.startsWith('删除'))) {
+    // 判定结果（force-baseline 降级 baselineHit → 非 blocked；allow-new 降级新增文件 → 非 warning；
+    // allow-delete 降级删除文件 → 非 blocked。reasons 文案本就受 flag 控制，但原判定直接看数组长度，
+    // 致 flag 对 status 失效。）
+    if ((!forceBaseline && result.baselineHit.length > 0) || (!allowDelete && result.deletedFiles.length > 0) || result.reasons.some(r => r.startsWith('危险') || r.startsWith('删除'))) {
       result.status = 'blocked'
     } else if ((!allowNew && result.newFiles.length > 0) || (allowedFiles.length > 0 && result.reasons.some(r => r.startsWith('超出')))) {
       result.status = 'warning'
@@ -684,12 +687,17 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
         }
       }
       if (result.deletedFiles.length > 0) {
-        console.log(`\n   ⛔ 本次含删除文件 ${result.deletedFiles.length} 个——quick 不支持删除，--force-baseline / --allow-new 均无法解锁（有意设计，高危操作须走 review 把关）。`)
-        console.log(`     请改走完整流程：sillyspec run execute（在 plan 的 task allowed_paths 内删除），或先 git restore 撤回删除后再 --done。`)
+        if (guard.allowDelete) {
+          console.log(`\n   ℹ️ 已确认删除文件 ${result.deletedFiles.length} 个（--allow-delete 显式解锁）：${result.deletedFiles.join(', ')}`)
+        } else {
+          console.log(`\n   ⛔ 本次含删除文件 ${result.deletedFiles.length} 个——删除是破坏性操作默认 fail-closed，确认删除请带 --allow-delete 显式解锁：`)
+          console.log(`     sillyspec run quick --done --allow-delete --change <id> --output "..."`)
+          console.log(`     （--force-baseline / --allow-new 不能解锁删除；不确认请 git restore 撤回删除后再 --done，或走完整流程 execute 由 review 把关）`)
+        }
       } else {
         console.log(`\n   如确认接受这些变更，重新运行 --done 时带上对应 flag 即可解锁：`)
         console.log(`     sillyspec run quick --done --force-baseline --allow-new --change <id> --output "..."`)
-        console.log(`     （--force-baseline 覆盖受保护/危险文件如 src/run.js；--allow-new 允许新增文件）`)
+        console.log(`     （--force-baseline 覆盖受保护/危险文件如 src/run.js；--allow-new 允许新增文件；--allow-delete 允许删除文件）`)
         console.log(`   或在首个 sillyspec run quick 启动（step 1）时就声明这些 flag，持久化进 guard。`)
       }
     }

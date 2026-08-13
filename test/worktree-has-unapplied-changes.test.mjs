@@ -178,18 +178,18 @@ console.log('--- ⑩ 短路合集：no meta / dir 缺失 / 无 diffBase / 空 wo
   assertTrue(r1.hasChanges === false && r1.reason === 'no meta', 'no meta → false/no meta')
   cleanup(d1)
 
-  // worktree dir 缺失
+  // worktree dir 缺失 → 保守 true（execute 批量完成 cleanup 删分支盲区修复，memory execute-batch-cleanup-deletes-branch-recovery）
   const d2 = setupRepo(); const base2 = rev('git rev-parse HEAD', d2); const wtDir2 = makeWorktree(d2)
   writeMeta(wtDir2, base2, { worktreePath: path.join(d2, 'does-not-exist') })
   const r2 = hasUnapplied(d2)
-  assertTrue(r2.hasChanges === false && r2.reason === 'worktree dir not found', 'dir 缺失 → false/worktree dir not found')
+  assertTrue(r2.hasChanges === true && (r2.reason || '').includes('conservative keep'), `dir 缺失 → 保守 true（实际: ${r2.reason}）`)
   cleanup(d2)
 
-  // 无 diffBase
+  // 无 diffBase → 保守 true（有 meta 但缺 diff 起点，无法判定未落代码）
   const d3 = setupRepo(); const base3 = rev('git rev-parse HEAD', d3); const wtDir3 = makeWorktree(d3)
   writeMeta(wtDir3, base3, { baseHash: null, baselineCommit: null })
   const r3 = hasUnapplied(d3)
-  assertTrue(r3.hasChanges === false && r3.reason === 'no diff base', '无 diffBase → false/no diff base')
+  assertTrue(r3.hasChanges === true && (r3.reason || '').includes('conservative keep'), `无 diffBase → 保守 true（实际: ${r3.reason}）`)
   cleanup(d3)
 
   // 空 worktree（无任何改动）

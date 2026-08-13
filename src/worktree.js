@@ -1159,7 +1159,10 @@ export class WorktreeManager {
 
     const worktreePath = meta.worktreePath;
     if (!worktreePath || !existsSync(worktreePath)) {
-      return { hasChanges: false, changedFiles: [], reason: 'worktree dir not found' };
+      // 目录不存在：无法判定是否有未落代码——分支可能有已 commit 但未 apply 的交付（execute 批量完成
+      // cleanup 删分支 ref 盲区，memory execute-batch-cleanup-deletes-branch-recovery）。保守保留
+      // （hasChanges:true），防 cleanup 误删分支让 commit 变 dangling。目录真丢时用户 --force 强清。
+      return { hasChanges: true, changedFiles: [], reason: 'worktree dir not found (conservative keep)' };
     }
 
     // in-place 模式没有隔离目录，不算有未 apply 的变更
@@ -1173,16 +1176,22 @@ export class WorktreeManager {
 
     const diffBase = meta.baselineCommit || meta.baseHash;
     if (!diffBase) {
-      return { hasChanges: false, changedFiles: [], reason: 'no diff base' };
+      // 有 meta 但缺 diff 起点：无法判定是否有未落代码，保守保留（防 cleanup 删分支）
+      return { hasChanges: true, changedFiles: [], reason: 'no diff base (conservative keep)' };
     }
 
     const isDeliverable = f => f && !f.startsWith('.sillyspec/') && f !== 'meta.json';
     try {
       // 1) 候选交付变更（worktree 工作区相对 diffBase）。--no-renames：rename 退化成 D+A，两侧文件都进集
-      const tracked = (gitQuiet(worktreePath, ['diff', '--no-renames', '--name-only', diffBase], { timeout: 30000 }) || '')
-        .split('\n').filter(Boolean).filter(isDeliverable);
-      const untracked = (gitQuiet(worktreePath, ['ls-files', '--others', '--exclude-standard'], { timeout: 30000 }) || '')
-        .split('\n').filter(Boolean).filter(isDeliverable);
+      const trackedRaw = gitQuiet(worktreePath, ['diff', '--no-renames', '--name-only', diffBase], { timeout: 30000 });
+      const untrackedRaw = gitQuiet(worktreePath, ['ls-files', '--others', '--exclude-standard'], { timeout: 30000 });
+      // git 检测失败（返回 null，如 worktree .git 半坏/目录部分删除）→ 不能当"无改动"，保守保留。
+      // 只有 git 成功返回空才判"真无改动"（可安全清理）。
+      if (trackedRaw === null || untrackedRaw === null) {
+        return { hasChanges: true, changedFiles: [], reason: `git detection failed (conservative keep): tracked=${trackedRaw === null ? 'null' : 'ok'} untracked=${untrackedRaw === null ? 'null' : 'ok'}` };
+      }
+      const tracked = trackedRaw.split('\n').filter(Boolean).filter(isDeliverable);
+      const untracked = untrackedRaw.split('\n').filter(Boolean).filter(isDeliverable);
 
       if (tracked.length === 0 && untracked.length === 0) {
         return { hasChanges: false, changedFiles: [], reason: 'no changes in worktree' };

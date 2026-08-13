@@ -61,7 +61,7 @@ export function resolveWaitingStepWithAnswer(steps, doneAnswer, nowStr) {
 }
 
 export async function completeStep(pm, progress, stageName, cwd, outputText, inputText = null, options = {}) {
-  const { printNext = true, confirm = false, changeName, platformOpts = {}, nonInteractive = false, isForceBaseline = false, isAllowNew = false } = options
+  const { printNext = true, confirm = false, changeName, platformOpts = {}, nonInteractive = false, isForceBaseline = false, isAllowNew = false, isAllowDelete = false } = options
   const specBase = platformOpts.specRoot || join(cwd, '.sillyspec')
   const stageData = progress.stages[stageName]
 
@@ -249,7 +249,7 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
       return { stageCompleted: false, currentIdx, nextPendingIdx: -1 }
     }
     // quick 收尾（W6 Step6b 抽至 complete-handlers.js handleQuickStageCompletion）
-    await handleQuickStageCompletion({ stageName, steps, currentIdx, cwd, progress, changeName, specBase, outputText, confirm, isForceBaseline, isAllowNew, platformOpts, pm })
+    await handleQuickStageCompletion({ stageName, steps, currentIdx, cwd, progress, changeName, specBase, outputText, confirm, isForceBaseline, isAllowNew, isAllowDelete, platformOpts, pm })
 
     // ── reopen --done 回填（坑 brainstorm-reopen-step-state-desync）──
     // nextPendingIdx === -1 且无 waiting，说明要进阶段完成分支。此时若存在 stale 步骤

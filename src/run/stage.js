@@ -249,6 +249,7 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
           .filter(Boolean)
         const allowedFiles = quickOpts?.quickFiles || []
         const allowNew = quickOpts?.isAllowNew || false
+        const allowDelete = quickOpts?.isAllowDelete || false
         const forceBaseline = quickOpts?.isForceBaseline || false
         const linkedChanges = Array.isArray(quickOpts?.linkedChanges) ? quickOpts.linkedChanges : []
         // CLI 接管：分配 ql-ID + 写 QUICKLOG「进行中」条目 + 关联 tasks.md（持锁、当天唯一）
@@ -281,6 +282,7 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
             catch { return [] }
           })),
           allowNew,
+          allowDelete,
           forceBaseline,
           linkedChanges,
           quicklogId: qlId,
@@ -293,6 +295,7 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
         const parts = [`${baselineFiles.length} 个已有脏文件`]
         if (allowedFiles.length > 0) parts.push(`${allowedFiles.length} 个 allowedFiles`)
         if (allowNew) parts.push('允许新增文件')
+        if (allowDelete) parts.push('允许删除文件')
         console.log(`🛡️ quick 变更边界已记录: ${parts.join(', ')}`)
         console.log(`📝 QUICKLOG 条目已创建: ${qlId}`)
         // 回填 DB changes 行的 title + quicklog_id，让 quick-<hex> 可读、DB↔QUICKLOG 可对账。

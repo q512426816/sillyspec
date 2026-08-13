@@ -69,3 +69,19 @@
 根因：prompt.js outputStep 用 cwd 拼 SPEC_ROOT 忽略 specDriftAnchor
 方案：resolvePromptSpecBase helper 统一 12 处路径根 + 补 specDrift 断言测试
 结果：新测试 8/8 绿 + 回归 88 断言绿 + lint 269 过
+
+## ql-20260813-009-2ab8 | 2026-08-13 16:32:41 | ①execute 批量完成路径 cleanup 删分支 ref 盲区（worktree 目录被提前删时 hasUnappliesChanges 判 false …
+状态：已完成
+关联变更：（无）
+文件：
+- src/worktree.js（hasUnappliesChanges 三处 fail-closed 保守化：目录不存在/无 diffBase/git 失败 → 保守 true 防 cleanup 删分支）
+- src/run/command.js + complete.js + complete-handlers.js（--allow-delete flag 解析 + mergedGuard + 传递链）
+- src/run/shared.js + quick-audit.js + stage.js（删除审计 allowDelete 放行 + 提示更新 + guard 持久化）
+- src/stages/execute.js（diagnoseNoTaskRootCause 报错精度：4 种根因诊断）
+- test/audit-quick-completion.test.mjs（allowDelete 放行 + 文案断言 22/22）
+- test/worktree-has-unapplied-changes.test.mjs（保守 true 断言 37/37）
+- .claude/skills/sillyspec-quick/SKILL.md（flag 表补 --allow-delete）
+需求：①execute 批量完成路径 cleanup 删分支 ref 盲区（worktree 目录被提前删时 hasUnappliesChanges 判 false 致 cleanup 删分支丢 commit）；②quick 删除死代码被硬拦无解锁路径；③plan.md 格式隐性契约报错笼统靠试错。
+根因：①hasUnappliesChanges 对目录不存在/无 diffBase/git 失败都返回 false（可安全清理），实际可能有未 apply commit；②删除审计裸判定不受任何 flag 门控；③validatePlanForExecute 只报'没有找到 checkbox task'不分 4 条隐性契约。
+方案：①hasUnappliesChanges 三处改 fail-closed 保守 true（拿不准就保留）；②新增 --allow-delete 显式 opt-in 解锁删除（对称 --allow-new，默认仍 fail-closed）；③diagnoseNoTaskRootCause 诊断 4 种根因（Wave 标题格式/task checkbox/### 打断/缺任务区）；同步 SKILL.md flag 表。
+结果：audit 22/22 + has-unapplied-changes 37/37 + cleanup-guard 23/23 + 全量 npm test 0 失败 + lint 271 通过。

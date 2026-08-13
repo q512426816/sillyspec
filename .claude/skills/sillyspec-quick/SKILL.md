@@ -63,8 +63,9 @@ sillyspec run quick --done --change quick-<hash> --output "…"  # 完成该会�
 | `--files a.js,b.js` | 显式声明本次允许修改的文件（边界保护） |
 | `--file-notes "p::注 \|\| p::注"` | quick `--done` 用：QUICKLOG「文件：」行落盘为多行带括注 bullet（省事后手改文件行）。格式 `path::括注`，`\|\|` 分隔多条；**只随 step3 --done 同命令传**（CLI 短进程，step1/step2 传无效，不带到 step3） |
 | `--allow-new` | 允许新增文件（默认禁止，防意外创建） |
+| `--allow-delete` | 允许删除文件（默认 fail-closed，删除是破坏性操作；确认删除带此 flag 显式解锁） |
 | `--force-baseline` | 允许覆盖 baseline 受保护文件 / 压制 `.sillyspec/` 危险判定（危险，慎用） |
-| `--confirm` | ⚠️ 仅打印变更概览，**不解锁 blocked**（blocked 仍 exit 1）。真正解锁用 `--force-baseline`/`--allow-new` |
+| `--confirm` | ⚠️ 仅打印变更概览，**不解锁 blocked**（blocked 仍 exit 1）。真正解锁用 `--force-baseline`/`--allow-new`/`--allow-delete` |
 
 ## 审计与并发变更（`--done` 边界审计）
 
@@ -74,7 +75,7 @@ sillyspec run quick --done --change quick-<hash> --output "…"  # 完成该会�
 - **关联变更的文件仍走审计**：reverse-sync 改自己关联变更的 `design.md` 会被拦，需 `--force-baseline` 显式确认。
 - **baseline 折叠目录前缀匹配**：step1 启动时整片 `changes/` 未跟踪会被 git 折叠成 `?? .sillyspec/changes/`（带尾斜杠 token）；审计时若该目录下文件被并发会话跟踪而展开成文件级路径，按尾斜杠 token 前缀放行其下所有文件，不误判。
 - **同文件并发 warn（advisory，不阻断）**：step1 启动时若你的某个 `allowedFile` 已在他者脏文件列表里（他者也改了这文件），--done 时 CLI 会比对当前内容 hash 与启动时录入的 hash——不一致（你也改了它）即判「同文件并发」并 warn：整文件 pathspec 提交会夹带他者 hunk。warn 给出分离指引（`git add -p <file>` 交互选你自己的 hunk，或 `git diff <file> > mine.patch` 编辑后 `git apply --cached mine.patch` 再 commit）。这**不阻断** --done（你可能有意整文件提交），看 warn 后自行决定是否分离。
-- **`--confirm` ≠ 解锁**：它只打印概览。blocked 时真正解锁的是 `--force-baseline`（压制 `.sillyspec/` 危险判定 + baseline 覆盖）/`--allow-new`（放行新增），两者在 step1 或 `--done` 传都生效。
+- **`--confirm` ≠ 解锁**：它只打印概览。blocked 时真正解锁的是 `--force-baseline`（压制 `.sillyspec/` 危险判定 + baseline 覆盖）/`--allow-new`（放行新增）/`--allow-delete`（放行删除，删除是破坏性操作默认 fail-closed，须显式 opt-in），三者可在 step1 或 `--done` 传，都生效。
 
 ## 典型用法
 

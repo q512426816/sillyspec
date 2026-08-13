@@ -498,6 +498,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
   setQuickFileNotes(quickFileNotes)
 
   const isAllowNew = flags.includes('--allow-new')
+  const isAllowDelete = flags.includes('--allow-delete')
   const isForceBaseline = flags.includes('--force-baseline')
   const isForceRescan = flags.includes('--force-rescan')
 
@@ -508,7 +509,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     '--reason', '--options', '--answer', '--confirm-mode',
     '--output', '--input', '--change', '--linked-changes',
     '--spec-dir', '--spec-root', '--runtime-root', '--workspace-id', '--scan-run-id',
-    '--files', '--file-notes', '--allow-new', '--force-baseline', '--force-rescan',
+    '--files', '--file-notes', '--allow-new', '--allow-delete', '--force-baseline', '--force-rescan',
     '--json', '--dir', '--help',
     '--reopen', '--from-step', '--mode',
     '--deep', '--quick', '--standard', // scan profile 三档显式选择（scan-profile.js 从 argv 读；互斥见下方 PROFILE_FLAGS 检测）
@@ -853,11 +854,11 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
   // --done
   if (isDone) {
     const doneAnswer = getFlagValue('--answer')
-    return await completeStep(pm, progress, stageName, cwd, outputText, inputText, { confirm: isConfirm, changeName: effectiveChange, nonInteractive: isNonInteractive && !isInteractive, platformOpts, doneAnswer, isForceBaseline, isAllowNew })
+    return await completeStep(pm, progress, stageName, cwd, outputText, inputText, { confirm: isConfirm, changeName: effectiveChange, nonInteractive: isNonInteractive && !isInteractive, platformOpts, doneAnswer, isForceBaseline, isAllowNew, isAllowDelete })
   }
 
   // 默认：输出当前步骤
-  return await runStage(pm, progress, stageName, cwd, effectiveChange, isSkipApproval, platformOpts, { quickFiles, isAllowNew, isForceBaseline, isForceRescan, linkedChanges, taskDescription: inputText })
+  return await runStage(pm, progress, stageName, cwd, effectiveChange, isSkipApproval, platformOpts, { quickFiles, isAllowNew, isAllowDelete, isForceBaseline, isForceRescan, linkedChanges, taskDescription: inputText })
 }
 
 /**

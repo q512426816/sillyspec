@@ -625,7 +625,7 @@ export async function handleWorkflowPostCheck({ stageName, steps, currentIdx, cw
  * isForceBaseline/isAllowNew/platformOpts。辅助函数直接 import（safeGit/auditQuickCompletion ← shared，
  * printQuickAuditReview ← quick-audit，4 个 quicklog fns ← quicklog，unlinkSync/rmSync ← fs 静态）。
  */
-export async function handleQuickStageCompletion({ stageName, steps, currentIdx, cwd, progress, changeName, specBase, outputText, confirm, isForceBaseline, isAllowNew, platformOpts, pm }) {
+export async function handleQuickStageCompletion({ stageName, steps, currentIdx, cwd, progress, changeName, specBase, outputText, confirm, isForceBaseline, isAllowNew, isAllowDelete, platformOpts, pm }) {
   // quick 收尾：强校验 QUICKLOG 条目 + 翻状态 + 勾 tasks.md（CLI 接管）
   if (stageName === 'quick') {
     // §4.6 从 session guard.json 读 guard（不依赖 progress.quickGuard）。
@@ -666,6 +666,7 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
         ...guard,
         forceBaseline: guard.forceBaseline || isForceBaseline,
         allowNew: guard.allowNew || isAllowNew,
+        allowDelete: guard.allowDelete || isAllowDelete,
       }
       review = await auditQuickCompletion(cwd, mergedGuard, { isConfirm: confirm })
       printQuickAuditReview(review)

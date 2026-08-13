@@ -71,6 +71,16 @@ console.log('--- auditQuickCompletion characterization ---')
   assert(r.deletedFiles.includes('README.md'), `deletedFiles 含删除文件`)
 }
 
+// case 3b: --allow-delete 显式解锁删除 → 非 blocked（默认 fail-closed，flag 即知情 opt-in）
+{
+  const d = makeRepo()
+  rmSync(join(d, 'README.md'))
+  const r = await auditQuickCompletion(d, { ...baseGuard, allowDelete: true }, {})
+  assert(r.status !== 'blocked', `allowDelete 放行删除 → 非 blocked（实际 ${r.status}）`)
+  assert(r.deletedFiles.includes('README.md'), `deletedFiles 仍记录删除文件供追溯`)
+  assert(!r.reasons.some(x => x.startsWith('删除')), `allowDelete 时不报删除原因`)
+}
+
 // case 4: 改 dangerous 文件（package.json，非 force）→ blocked
 {
   const d = makeRepo()
@@ -138,8 +148,8 @@ console.log('--- auditQuickCompletion characterization ---')
   assert(r.reasons.some(rr => rr.includes('审计失败')), `reasons 含「审计失败」（实际 ${JSON.stringify(r.reasons)}）`)
 }
 
-// case 10: 删除文件 + --confirm → 提示指向「不支持删除/execute」，不再甩 --force-baseline --allow-new 误导
-// 修 auditQuickCompletion 的 --confirm 提示块：deletedFiles>0 时单独提示走 execute（flag 对删除无效）。
+// case 10: 删除文件 + --confirm → 提示指向 --allow-delete（显式 opt-in），不再甩 --force-baseline --allow-new 误导
+// 修 auditQuickCompletion 的 --confirm 提示块：deletedFiles>0 时单独提示 --allow-delete（默认 fail-closed）。
 {
   const d = makeRepo()
   rmSync(join(d, 'README.md'))
@@ -152,11 +162,11 @@ console.log('--- auditQuickCompletion characterization ---')
     console.log = origLog
   }
   const out = logs.join('\n')
-  assert(out.includes('不支持删除'), `删除 + --confirm 提示含「不支持删除」`)
+  assert(out.includes('--allow-delete'), `删除 + --confirm 提示含「--allow-delete」`)
   assert(!out.includes('--force-baseline --allow-new'), `删除 + --confirm 不再甩无效 flag 组合`)
 }
 
-// case 11: printQuickAuditReview 删除 blocked → 提示「不支持删除」，不甩 flag 误导
+// case 11: printQuickAuditReview 删除 blocked → 提示 --allow-delete，不甩 flag 误导
 {
   const errs = []
   const origErr = console.error
@@ -167,7 +177,7 @@ console.log('--- auditQuickCompletion characterization ---')
     console.error = origErr
   }
   const out = errs.join('\n')
-  assert(out.includes('不支持删除'), `printQuickAuditReview 删除 blocked 提示「不支持删除」`)
+  assert(out.includes('--allow-delete'), `printQuickAuditReview 删除 blocked 提示「--allow-delete」`)
   assert(!out.includes('--force-baseline --allow-new'), `printQuickAuditReview 删除 blocked 不甩无效 flag`)
 }
 
