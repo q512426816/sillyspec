@@ -492,3 +492,15 @@
 根因：①--file-notes 用 per-process setter，CLI 短进程 step2 传了 step3 新进程读不到致无效；②safeGit 默认 5s 超时，审计 git status 失败即 blocked，机器忙时误拦。
 方案：git-helper safeGit 加 retryOnTimeout（ETIMEDOUT 用 2x timeout 重试一次，默认 false 向后兼容）+ shared.js auditQuickCompletion git status 启用 timeout 15000+retryOnTimeout + quick.js step3 prompt 加警告澄清 --file-notes 只随 --done 同命令传 + 同步 docs/prompt 与 SKILL 与模块文档 + 补 git-helper 测试用例5。
 结果：针对性测试 git-helper 14/quicklog 97/laststep 4/baseline 31/stage-def 8 全绿 + lint 263 文件过
+
+## ql-20260813-002-f83b | 2026-08-13 09:35:06 | 完整流程 change 创建时 db 存 title(与 name 同时写)
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/command.js（initChange 3处传 title（--input/name 兜底））
+- src/run/complete.js（completeStep+continueStep 刷新 title）
+- test/change-title-backfill.test.mjs（5用例创建写+刷新+rename）
+需求：完整流程 change 创建时 db 存 title(与 name 同时写),proposal 落盘后刷新为首个#标题,rename 时保留。
+根因：changes.title 列已存在但原设计完整流程留空(只有 quick 回填),且创建时 proposal 还没写无权威来源。
+方案：command.js initChange 传 title(--input sanitizeDesc 优先无则 name 兜底)+ complete.js 通用完成路径 deriveTitleFromLinkedChange 刷新(proposal 首个#标题)+ rename 保留(现状满足)+ 测试。
+结果：change-title-backfill 8/8 + progress-complete-stage 27/27 + cmd-existence 32 + stage-def 过 + lint 264 过

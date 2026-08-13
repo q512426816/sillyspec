@@ -5,9 +5,9 @@
  * completion path 收尾 + single-step path）+ skipStep/waitStep/continueStep（W6 Step7b-2 续搬）。
  * 本 commit（7b-1）先搬 completeStep + 2 独占 helper（validateMetadata/validateFileLocations）。
  *
- * 安全锚：run.js 始终 barrel。completeStep 由 run.js import 回来；_completeStepForTest 被 9 个
- * run-complete-step-* characterization 测试直接 import，run.js barrel re-export（export { completeStep as
- * _completeStepForTest } 沿用 imported-binding re-export）契约保留。
+ * 安全锚：run.js 始终 barrel。completeStep 由 run/command.js 在 --done 路径调用，无测试专用导出
+ * （曾以 `_completeStepForTest` 别名 re-export 供 characterization 测试直驱动，2026-08-13 这些测试
+ * 全部迁到 CLI 子进程 `sillyspec run <stage> --done`，导出已移除——见 run.js barrel 注释）。
  *
  * 依赖（completeStep 仅用已抽叶子 + 随搬 helper，零 run.js 闭包，零动态 import）：
  *   - shared.js: triggerSync/WAIT_MARKER_RE/getStageSteps；prompt.js: outputStep；gates.js: enforceDepsGate/runStageCompletionGates
@@ -24,6 +24,7 @@ import { enforceDepsGate, enforceReviewJsonGate, completeStageGates, readDesignS
 import { handleArchiveConfirmStep, handlePlanGeneratePlanStep, handleScanProjectListStep, handleWorkflowPostCheck, handleQuickStageCompletion, handleExecuteWaveArtifact } from './complete-handlers.js'
 import { formatExecuteSummary } from '../worktree-apply.js'
 import { isEndToEndTaskText } from '../change-risk-profile.js'
+import { deriveTitleFromLinkedChange } from '../quicklog.js'
 
 // validateMetadata / readDesignScale / validateFileLocations 已迁至 ./gates.js（completeStageGates
 // 共享收尾管线，消除 noAI 末步 / continueStep 完成分支绕过 gate 的 S1/S2/S3 不对称）。
@@ -298,6 +299,16 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
     }
     const _stageGatesResult = await completeStageGates({ stageName, cwd, changeName, platformOpts, specBase, progress, pm, stageData, steps, currentIdx, outputText, ctx: _completeCtx })
     if (_stageGatesResult) return _stageGatesResult
+
+    // 完整流程 change title 刷新：proposal/design 落盘后（brainstorm/plan 完成），从 proposal 首个 #
+    // 标题刷新 changes.title（人类可读中文标题，用户可随时刷新）。quick-<hex> 无 proposal 目录 →
+    // deriveTitleFromLinkedChange 返回 '' 不刷新（quick 走 handleQuickStageCompletion 的 extractTitleFromResult）。
+    if (changeName && !/^quick-[0-9a-f]{8}$/.test(changeName)) {
+      try {
+        const refinedTitle = deriveTitleFromLinkedChange(specBase, changeName)
+        if (refinedTitle) pm.updateChangeMeta(cwd, changeName, { title: refinedTitle })
+      } catch { /* title 刷新失败不阻断完成 */ }
+    }
 
     // gate 全过：persist completed（task-01 移后）。此处到 _write 之间若崩，DB 仍 in-progress（内存已 completed 但未落盘），下次进 CLI 读 DB 即 in-progress，不产生"假 completed"。
     pm._write(cwd, progress, changeName)
@@ -764,6 +775,13 @@ export async function continueStep(pm, progress, stageName, cwd, answer, options
     }
     const _stageGatesResult = await completeStageGates({ stageName, cwd, changeName, platformOpts, specBase, progress, pm, stageData, steps: stageData.steps, currentIdx, outputText: null, ctx: _contCtx })
     if (_stageGatesResult) return _stageGatesResult
+    // 完整流程 change title 刷新（同 completeStep 完成分支，wait 解除后阶段完成也刷新）。
+    if (changeName && !/^quick-[0-9a-f]{8}$/.test(changeName)) {
+      try {
+        const refinedTitle = deriveTitleFromLinkedChange(specBase, changeName)
+        if (refinedTitle) pm.updateChangeMeta(cwd, changeName, { title: refinedTitle })
+      } catch { /* title 刷新失败不阻断完成 */ }
+    }
     // gate 全过：persist completed（task-03 移后；此处无 triggerSync）。
     pm._write(cwd, progress, changeName)
     console.log(`\n✅ ${stageName} 阶段已完成（${stageData.steps.length}/${stageData.steps.length} 步）`)

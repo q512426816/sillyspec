@@ -28,6 +28,7 @@ import { resolveQuickLinkedChanges } from './quick-audit.js'
 import { outputStep } from './prompt.js'
 import { completeStep, skipStep, waitStep, continueStep } from './complete.js'
 import { runStage } from './stage.js'
+import { sanitizeDesc } from '../quicklog.js'
 import { ProgressManager } from '../progress.js'
 import { validateChangeExists } from '../stage-contract.js'
 import { stageRegistry, auxiliaryStages } from '../stages/index.js'
@@ -594,7 +595,10 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     // 如果指定了变更名或有变更目录，自动初始化变更的 progress
     const autoChange = changeName || resolveChangeNameAuto(cwd, specRoot)
     if (autoChange) {
-      progress = pm.initChange(cwd, autoChange)
+      // 创建时即写 title（与 name/KEY 同时落 db）：--input 需求描述 sanitizeDesc 优先，无则用 name 兜底。
+      // proposal 还没写、无权威标题来源，这是临时值；brainstorm/plan 完成 proposal/design 落盘后由
+      // complete.js 通用完成路径 deriveTitleFromLinkedChange 刷新为真实 # 标题（与 quick 启动 title 同源）。
+      progress = pm.initChange(cwd, autoChange, { title: inputText ? sanitizeDesc(inputText) : autoChange })
     } else if (isAuxiliary) {
       let autoName = changeName || resolveChangeNameAuto(cwd, specRoot) || 'default'
       // archive 特例：归档后变更从活跃列表排除（listChanges WHERE status='active'），
@@ -616,7 +620,8 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
       }
       changeName = autoName
       if (!progress) {
-        progress = pm.initChange(cwd, autoName)
+        // auxiliary 创建也写 title（--input 优先 / name 兜底），同上完整流程语义。
+        progress = pm.initChange(cwd, autoName, { title: inputText ? sanitizeDesc(inputText) : autoName })
         // initChange 可能因 project 表为空返回 null
         if (!progress) {
           progress = { currentStage: stageName, stages: {}, lastActive: new Date().toLocaleString('zh-CN', { hour12: false }), project: '' }
@@ -636,7 +641,8 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
         console.log(`🔄 自动创建变更：${autoName}`)
         console.log(`  提示：可以用 --change <名称> 指定自定义变更名`)
         console.log(`  或事后重命名：sillyspec change-rename ${autoName} <新名称>`)
-        progress = pm.initChange(cwd, autoName)
+        // brainstorm 自动创建变更也写 title（--input 需求描述优先 / 自动名兜底），proposal 落盘后刷新。
+        progress = pm.initChange(cwd, autoName, { title: inputText ? sanitizeDesc(inputText) : autoName })
         changeName = autoName
       } else {
         console.error('❌ 未找到进度数据，请先运行 sillyspec init 或指定 --change <变更名>')
