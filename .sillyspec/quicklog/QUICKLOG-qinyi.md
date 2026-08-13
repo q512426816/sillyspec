@@ -38,3 +38,14 @@
 根因：scan.js prompt 模板仍写 _module-map schema_version:1(rebuild modules.js 已 v2),新 scan 永远产 v1,读端 loadModuleContextIndex 曾对 v1 每步 warn 刷屏(上轮已止血 v1 静默)。
 方案：scan.js _module-map schema_version 1→2(line284/316 map,line413 模块卡片不改),字段不变(读端 v1/v2 双兼容 paths||core_files,scan v2 保留 v1 丰富字段 paths/tags/entrypoints/main_symbols/depends_on/used_by 有价值),extract 同步 docs/prompt/scan.md+_extracted.json。
 结果：stage-definitions + scan-postcheck 19 + lint 266 过
+
+## ql-20260813-006-9f1e | 2026-08-13 13:34:51 | 修复 scale/plan_level 缝隙
+状态：已完成
+关联变更：（无）
+文件：
+- src/stages/plan.js（review_plan prompt 生成条件对齐 validator）
+- docs/prompt/plan.md（同步 review_plan prompt 镜像）
+需求：修复 scale/plan_level 缝隙
+根因：plan.js review_plan prompt 生成条件 plan_level=full 且 scale≠small 与 validator condition scale≠small 不一致，plan_level=light+scale=large 时 validator 要求 module-impact 但 prompt 不指引
+方案：prompt 条件去掉 plan_level=full 改 scale≠small 对齐 validator，同步 docs/prompt/plan.md
+结果：npm test 182 绿，缝隙消除

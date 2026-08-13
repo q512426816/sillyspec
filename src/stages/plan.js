@@ -343,7 +343,7 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
 {REVIEW_JSON_CONTRACT}
 4. verdict=fail 时在 reviewerNotes 写明阻断项
 
-### 生成 module-impact.md 首版（plan_level=full 且 scale≠small 时）
+### 生成 module-impact.md 首版（scale≠small 时）
 计划审查通过后，顺带生成 module-impact.md 首版（本次变更的模块影响分析，供 execute/verify 阶段更新、archive 阶段终审）。scale=small 不生成（small 走 quick，module-impact 对 quick 无用）。
 
 输入（此时 TaskCard/allowed_paths 尚未生成——在下一步 generate_blueprints，故用以下两项作输入，粒度与 archive 现状一致）：
@@ -361,7 +361,7 @@ execute/verify 阶段会按实际代码变更更新此文档；archive 阶段会
 ### 输出
 - tier=self：审查清单结果（每条状态 + 偏差说明）
 - tier=independent：子代理产出的 review.json 路径 + verdict 摘要
-- plan_level=full 且 scale≠small：附 module-impact.md 路径 + 影响摘要`,
+- scale≠small：附 module-impact.md 路径 + 影响摘要`,
   outputHint: 'plan 审查结果（self=清单 / independent=review.json 路径+verdict）',
   optional: false
 }
