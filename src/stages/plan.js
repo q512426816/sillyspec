@@ -343,9 +343,25 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
 {REVIEW_JSON_CONTRACT}
 4. verdict=fail 时在 reviewerNotes 写明阻断项
 
+### 生成 module-impact.md 首版（plan_level=full 且 scale≠small 时）
+计划审查通过后，顺带生成 module-impact.md 首版（本次变更的模块影响分析，供 execute/verify 阶段更新、archive 阶段终审）。scale=small 不生成（small 走 quick，module-impact 对 quick 无用）。
+
+输入（此时 TaskCard/allowed_paths 尚未生成——在下一步 generate_blueprints，故用以下两项作输入，粒度与 archive 现状一致）：
+- design.md 的「文件变更清单」（本次计划改哪些源码文件）
+- plan.md 的任务列表（每个 task 改的范围）
+
+步骤（复用 archive extract-module-impact 的核心指引，同源——改 archive step2 prompt 时保持一致）：
+1. 读 {SPEC_ROOT}/docs/<project>/modules/_module-map.yaml（模块→文件路径映射）。**不存在 → 降级**：生成只含 unmapped 部分的 module-impact.md + 提示「建议运行 scan 生成模块映射」，不阻断
+2. 对照 design 文件变更清单 + plan 任务列表，逐文件匹配所属模块（命中的归 mapped，未命中的归 unmapped）
+3. 生成模块影响矩阵（模块 × 影响类型[新增/修改/删除/依赖变更] × 说明），落盘 {SPEC_ROOT}/changes/<change>/module-impact.md
+4. 首行标题必须用中文：# 模块影响分析（Module Impact）— <变更简述>
+
+execute/verify 阶段会按实际代码变更更新此文档；archive 阶段会最终确认它。
+
 ### 输出
 - tier=self：审查清单结果（每条状态 + 偏差说明）
-- tier=independent：子代理产出的 review.json 路径 + verdict 摘要`,
+- tier=independent：子代理产出的 review.json 路径 + verdict 摘要
+- plan_level=full 且 scale≠small：附 module-impact.md 路径 + 影响摘要`,
   outputHint: 'plan 审查结果（self=清单 / independent=review.json 路径+verdict）',
   optional: false
 }

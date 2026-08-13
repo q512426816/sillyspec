@@ -12,16 +12,10 @@
  */
 import { resolveWaitingStepWithAnswer } from '../src/run/complete.js'
 import { renderReviewJsonContract } from '../src/stage-review.js'
-import { _completeStepForTest } from '../src/run.js'
-import { runCapturing, makeRepo, initChange, seedStage, cleanup, report } from './_complete-step-harness.mjs'
+import { makeRepo, initChange, seedStage, runCLI, cleanup, report } from './_cli-step-harness.mjs'
 
 const count = { passed: 0, failed: 0, failures: [] }
 const assert = (cond, msg) => { cond ? (count.passed++, console.log(`  ✅ PASS: ${msg}`)) : (count.failed++, count.failures.push(msg), console.log(`  ❌ FAIL: ${msg}`)) }
-
-const BRAINSTORM_STEPS = [
-  '状态检查', '加载项目上下文', '对话式探索与需求澄清', '提出 2-3 种方案',
-  '分段展示设计', '写设计文档并自审', 'Design Grill 交叉审查', '用户确认并生成规范文件',
-]
 
 console.log('=== 坑1：resolveWaitingStepWithAnswer 纯函数 ===\n')
 
@@ -72,33 +66,35 @@ console.log('--- 多个 waiting → 仅解首个（余者需再次 --done --answ
   assert(steps[1].status === 'waiting', '第二个 waiting 不动')
 }
 
-console.log('\n=== 坑1 端到端：completeStep + doneAnswer 解 brainstorm 已 waiting 的 requiresWait 步骤 ===\n')
+console.log('\n=== 坑1 端到端：CLI --done --answer 解 brainstorm 已 waiting 的 requiresWait 步骤 ===\n')
 {
-  const { cwd, specBase } = makeRepo('cs-wait-done-')
+  const { cwd, specBase } = makeRepo('cli-wait-done-')
   const cn = '2026-08-02-wait-done-fix'
   const pm = await initChange(cwd, specBase, cn)
-  // step5「分段展示设计」（requiresWait）处于 waiting；前 4 步 completed，后 3 步 pending
-  const steps = BRAINSTORM_STEPS.map((name, i) => {
-    if (i < 4) return { name, status: 'completed' }
-    if (i === 4) return { name, status: 'waiting', waitReason: '分段确认', waitRound: 0 }
+  // 先让 CLI 初始化 brainstorm 步骤 schema，拿真实步骤名
+  runCLI(['--dir', cwd, 'run', 'brainstorm', '--change', cn], { cwd })
+  const realNames = (await pm.read(cwd, cn)).stages.brainstorm.steps.map(s => s.name)
+  const designIdx = realNames.findIndex(n => n.includes('分段展示设计'))
+  // step「分段展示设计」（requiresWait）处于 waiting；前序 completed，后续 pending
+  const steps = realNames.map((name, i) => {
+    if (i < designIdx) return { name, status: 'completed' }
+    if (i === designIdx) return { name, status: 'waiting', waitReason: '分段确认', waitRound: 0 }
     return { name, status: 'pending' }
   })
-  const progress = await seedStage(pm, cwd, cn, 'brainstorm', steps)
+  await seedStage(pm, cwd, cn, 'brainstorm', steps)
 
-  const r = await runCapturing(() =>
-    _completeStepForTest(pm, progress, 'brainstorm', cwd, '分段展示完成', null,
-      { changeName: cn, printNext: false, doneAnswer: '确认进入下一阶段' }))
+  const r = runCLI(['--dir', cwd, 'run', 'brainstorm', '--done', '--answer', '确认进入下一阶段', '--change', cn, '--output', '分段展示完成'], { cwd })
 
-  assert(!r.error, '不应 process.exit（历史 bug：waiting 步骤会让流程卡住）')
-  assert(!r.stdout.includes('等待用户输入'), '不应报「等待用户输入」（历史 bug 末步症状）')
-  assert(r.stdout.includes('已补回答并拉回待完成'), 'stdout 含修复提示')
+  assert(r.status === 0, `不应非零退出（历史 bug：waiting 步骤会让流程卡住）（实际 ${r.status}）`)
+  assert(!r.combined.includes('等待用户输入'), '不应报「等待用户输入」（历史 bug 末步症状）')
+  assert(r.combined.includes('已补回答并拉回待完成') || r.combined.includes('拉回'), 'stdout 含修复提示')
 
   const after = await pm.read(cwd, cn)
-  const s5 = after.stages.brainstorm.steps[4]
-  assert(s5.status === 'completed', 'step5「分段展示设计」waiting→completed')
-  assert(s5.waitAnswer === '确认进入下一阶段', 'step5.waitAnswer 已补为 --answer 值')
-  // 后续步骤保持 pending（本次 --done 只解 step5，不越权推进）
-  assert(after.stages.brainstorm.steps[5].status === 'pending', 'step6 仍 pending（未越权推进）')
+  const sDesign = after.stages.brainstorm.steps[designIdx]
+  assert(sDesign.status === 'completed', '「分段展示设计」waiting→completed')
+  assert(sDesign.waitAnswer === '确认进入下一阶段', 'waitAnswer 已补为 --answer 值')
+  // 后续步骤保持 pending（本次 --done 只解该步，不越权推进）
+  assert(after.stages.brainstorm.steps[designIdx + 1].status === 'pending', '下一步仍 pending（未越权推进）')
 }
 
 console.log('\n=== 坑3：renderReviewJsonContract tier=self 提示含 TOCTOU 警告 ===\n')

@@ -15,7 +15,7 @@
 
 **元数据**
 - optional：false
-- outputHint：完成度报告
+- outputHint：module-impact.md 终审结果 + 修正摘要
 - 等待配置：无（可直接 --done）
 
 **本步出现的运行时占位符**
@@ -56,33 +56,19 @@
 **提示词原文**
 
 ````markdown
-按照 `.sillyspec/workflows/archive-impact.yaml` 中定义的 `impact-analyzer` 角色规则，分析本次变更影响的模块。
-
-### 文件标题规则（sillyhub 平台解析识别用）
-module-impact.md 第一行标题必须用中文：# 模块影响分析（Module Impact）— <变更简述>
+最终确认 changes/<change>/module-impact.md（本次变更的模块影响分析）。该文档由 plan review_plan 步生成首版、execute 各 Wave 更新、verify 核对——本步是归档前最后一次确认（module-impact 已非 archive 生成，改活文档终审）。
 
 ### 操作
-1. 读取 `.sillyspec/workflows/archive-impact.yaml`，了解角色定义和检查规则
-2. 读取变更目录下的 proposal.md、design.md、tasks.md
-3. 运行 `git diff --name-only HEAD~1`（或 `git diff --name-only --cached`）获取真实修改文件列表
-4. 读取 `.sillyspec/docs/<project>/modules/_module-map.yaml`
-   - **如果不存在**：提示"建议运行 scan 生成模块映射"，但继续执行。跳到步骤 7 生成只有 unmapped 部分的 module-impact.md
-5. 三重交叉验证：
-   - 声明范围：proposal.md / design.md 中的"变更范围"/"文件变更清单"
-   - 任务范围：tasks.md / plan.md 中的任务文件路径
-   - 真实变更：git diff 文件列表
-   - **以 git diff 为准**（真实 > 声明）
-6. 将 git diff 文件按 `_module-map.yaml` 的 paths glob 匹配到模块
-7. 生成模块影响矩阵：
+1. 读取 changes/<change>/module-impact.md（应已存在；large 变更 plan 阶段产出首版）
+2. 运行 git diff --name-only HEAD~1（或 git diff --name-only --cached）获取真实修改文件列表
+3. 三重核对：module-impact.md 记录的受影响模块/文件 vs 真实 git diff 文件列表 vs .sillyspec/docs/<project>/modules/_module-map.yaml 模块映射（不存在则仅核 unmapped 部分）。以 git diff 为准（真实 > 记录）
+4. 发现不一致（漏标受影响模块 / 影响类型错误 / 实际未触碰的模块被误标）→ 直接修正 module-impact.md，使其与实际变更一致
+5. module-impact.md 第一行标题必须用中文：# 模块影响分析（Module Impact）— <变更简述>
 
-| 模块 | 影响类型 | 相关文件 | 更新内容摘要 | needs_review |
-|------|----------|----------|-------------|-------------|
+### 降级（module-impact.md 不存在）
+若缺失（如旧变更未经新 plan 流程，或 small 变更从未生成），按原生成逻辑补一份：读 .sillyspec/workflows/archive-impact.yaml 的 impact-analyzer 角色规则 + git diff + _module-map.yaml，生成模块影响矩阵（模块 × 影响类型 × 相关文件 × 更新摘要 × needs_review，未匹配文件归入 unmapped 表）落盘 module-impact.md。
 
-   影响类型：逻辑变更 / 数据结构变更 / 接口变更 / 调用关系变更 / 配置变更 / 新增
-   needs_review：如果影响无法完全确定，标记为 true
-
-8. 未匹配到任何模块的文件归入"未匹配文件"表格
-9. 生成 `.sillyspec/changes/<change-name>/module-impact.md`
+确认完成后，下一步 sync-module-docs 会读 module-impact.md 更新模块卡片文档。
 ````
 
 ---

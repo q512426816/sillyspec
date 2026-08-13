@@ -197,6 +197,7 @@ export const definition = {
 
 3. 生成 verify-result.md 文件，保存到 \`.sillyspec/changes/<change-name>/verify-result.md\`
 4. 给出结论：PASS / PASS WITH NOTES / FAIL（受风险门控约束）
+5. **核对 module-impact.md**（若 changes/<change>/module-impact.md 存在）：对照本次实际代码变更（git diff）与 module-impact.md 的模块影响矩阵，发现不一致（漏标受影响模块 / 影响类型错误 / 实际未触碰的模块被误标）则在 verify-result.md 标注。module-impact 由 plan 首版生成、execute 各 Wave 更新，verify 是最后一次核对机会（archive 仅终审不再生成）。这是 advisory 核对（不阻断 verify 完成），但 module-impact 与实际严重背离应记为风险。
 
 ### verify-result.md 格式
 \`\`\`markdown

@@ -180,8 +180,7 @@ worktree 路径 + 分支名 + 模式
 
 **提示词原文**
 
-````markdown
-## Wave 1: 执行以下任务
+````markdown## Wave 1: 执行以下任务
 
 ## 执行方式（必须严格遵守）
 
@@ -287,6 +286,14 @@ task-XX 对应：{SPEC_ROOT}/.runtime/execute-runs/{EXECUTE_RUN_ID}/tasks/task-X
 - `cannot_verify` 只在确实无法验证且有待补充证据时使用，且 requiredEvidence 必须非空
 - `sillyspec run execute --done` 会校验所有 task 的 review.json，缺失或 fail 会阻断完成
 
+### module-impact.md 更新（主代理在本 Wave 所有 task 完成后汇总）
+本 Wave 内所有 task 子代理完成、review.json 写好后，**由你（主代理/调度者）**汇总本 Wave 的实际代码变更，更新 {SPEC_ROOT}/changes/<change>/module-impact.md（plan 阶段已生成首版）：
+- 基于本 Wave 各 task 的实际 git diff（不是计划）+ {SPEC_ROOT}/docs/<project>/modules/_module-map.yaml 对照
+- 更新受影响模块的影响类型/说明（实际改动可能与 plan 首版预估不同，据实修正）
+- **不由各 task 子代理分别改**（同 Wave 并行子代理改同一文件会互相覆盖）——只由主代理在 Wave 收尾统一更新一次
+- 无 _module-map.yaml 时跳过模块匹配，仅按文件清单更新 unmapped 部分
+这是可选更新（不阻断 execute 完成），但保持 module-impact 与实际变更一致利于 verify 核对与 archive 终审。
+
 ### 完成后
 1. 为每个后端 router task，扫描变更文件提取 API 端点 artifact：
    - 在变更文件中搜索所有 router 注册路径（@router.get/post/put/delete）
@@ -350,24 +357,7 @@ Wave 3 的 prompt 结构与 Step 5（Wave 1）**完全相同**，由同一个 `b
 
 **提示词原文**
 
-````markdown
-对照 design.md 检查所有实现是否与设计一致。
-
-### 执行方式（CLI 按变更规模判定，占位符由 run.js 注入）
-tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
-- tier=self：当前 agent 汇总执行（对照 design.md 逐项检查 + 偏差说明）
-- tier=independent：必须用 Agent tool 启动一个独立的 QA 子代理（独立上下文，不共享实现者的分析），子代理对照 design.md 逐项检查实现一致性并输出 review.json。review.json 产物契约（CLI Stage Review Gate 将硬校验，schema + 完整示例 + docHash 算法如下，照抄改值；reviewedFiles 除主文档 design.md 外可追加 git diff 涉及的源码文件）:
-{REVIEW_JSON_CONTRACT}
-  该 acceptance review 同时覆盖"代码审查"视角（风格/bug/安全/冗余），后续代码审查步骤仅需轻量复审。
-
-### 操作
-1. 读取 design.md（技术方案）
-2. 逐一对照 design.md 中的设计要点与实际代码实现
-3. 检查接口签名、数据结构、模块划分是否一致
-4. 记录偏差项（偏差 ≠ 错误，可能是合理的实现调整）
-
-### 输出
-检查清单：每项设计要点的实现状态 ✅/⚠️/❌ + 偏差说明
+````markdown（Wave 3 的 prompt 由 `buildWavePrompt(wave=3, ...)` 生成，结构与 Step 5（Wave 1）**完全相同**——包含相同的角色调度 / Task Review Gate / **主代理 Wave 后汇总更新 module-impact** 等所有段落。两者唯一差异：标题为「## Wave 3: 执行以下任务」、「本 Wave 任务」复选项与任务摘要中的 task 名（默认 3-wave 示例的 Wave 3 task）。完整 prompt 模板见 Step 5。）
 ````
 
 ---

@@ -163,6 +163,7 @@ const traceDir = join(traceRoot, '.sillyspec', 'changes', 'trace')
 mkdirSync(traceDir, { recursive: true })
 writeFileSync(join(traceDir, 'proposal.md'), '# Proposal\n\n## 不在范围内\n- none\n')
 writeFileSync(join(traceDir, 'design.md'), '# Design\n\n## 文件变更清单\n\n## 风险登记\n\n## 自审\n\nD-001@v1\n')
+writeFileSync(join(traceDir, 'module-impact.md'), '# 模块影响分析（Module Impact）— trace\n\n测试占位（plan.module-impact.exists 要求）\n')
 writeFileSync(join(traceDir, 'decisions.md'), '# Decisions\n\n## D-001@v1: Choose canonical account term\n- priority: P1\n- status: accepted\n')
 writeFileSync(join(traceDir, 'requirements.md'), '# Requirements\n\n### FR-01: Account naming\nGiven x\nWhen y\nThen z\n')
 writeFileSync(join(traceDir, 'tasks.md'), '- [ ] task-01: implement naming (D-001@v1)\n')
@@ -345,6 +346,7 @@ writeFileSync(join(gateDir, 'design.md'), [
   'D-001@v1', ''
 ].join('\n'))
 writeFileSync(join(gateDir, 'plan.md'), '# Plan\n\n- [ ] task-01: 实现下发\n')
+writeFileSync(join(gateDir, 'module-impact.md'), '# 模块影响分析（Module Impact）— gate\n\n测试占位\n')
 // verify 只有单测 + 无关子进程证据（有 端到端 / Runtime Evidence 字面，但无真实启动入口）
 writeFileSync(join(gateDir, 'verify-result.md'), [
   '# 验证报告', '', '## 结论', '', 'PASS', '',
@@ -437,6 +439,7 @@ console.log('\n=== risk_level 显式豁免 ===')
     '本次不改动 daemon / session，仅改 service 文案。', 'D-001@v1', ''
   ].join('\n'))
   writeFileSync(join(exDir, 'plan.md'), '# Plan\n\n- [ ] task-01: 改文案\n')
+  writeFileSync(join(exDir, 'module-impact.md'), '# 模块影响分析（Module Impact）— ex\n\n测试占位\n')
   writeFileSync(join(exDir, 'verify-result.md'), [
     '# 验证报告', '', '## 结论', '', 'PASS', '',
     '## 变更风险等级', 'risk_level 由 design frontmatter 显式声明 = unit-sufficient（覆盖关键词判级）：本次仅改 service 文案，未触 daemon/session。', '',
@@ -522,6 +525,7 @@ mkdirSync(epDir, { recursive: true })
 writeFileSync(join(epDir, 'requirements.md'), '# R\n')
 writeFileSync(join(epDir, 'decisions.md'), '# Decisions\n')
 writeFileSync(join(epDir, 'plan.md'), '# Plan\n')
+writeFileSync(join(epDir, 'module-impact.md'), '# 模块影响分析（Module Impact）— ep\n\n测试占位\n')
 
 // Case 1:design 提到 cli.ts + instantiate,无 task 覆盖 → 阻断,报错逐字可执行(含出路/触发原因)
 writeFileSync(join(epDir, 'design.md'), '# Design\n入口文件 cli.ts,instantiate 并注入构造。\n')

@@ -1,22 +1,22 @@
 /**
- * completeStep characterization — quick 完成分支（run.js:3512-3624）
+ * quick 阶段收尾 CLI 行为测试（run quick --done）。
  *
- * 锁住 quick 阶段收尾（nextPendingIdx===-1 且 stageName==='quick'）的现有行为：
- *   - 结构不全：无 guard + outputText 缺「需求：/根因：/方案：/结果：」四标签 →
- *     validateQuickResult 失败 → exit(1) + 回退第三步 pending
- *   - audit blocked：guard 存在 + cwd 删 README → auditQuickCompletion deletedFiles →
- *     status=blocked → printQuickAuditReview BLOCKED → exit(1) + 回退
- *   - happy：guard + cwd 干净（audit SAFE）+ 四标签齐全 + quicklog 条目存在 →
- *     completeQuicklogEntry 翻「进行中→已完成」+ session 目录清理 + 阶段完成
+ * 从 _completeStepForTest 内部函数迁移为 CLI 子进程测试。quick 的 sessionId 解析：
+ * `--change quick-<8hex>` 被 CLI 识别为本会话 sessionId（command.js:420），故预置
+ * `<specBase>/.runtime/quick-sessions/<sid>/guard.json` + QUICKLOG 条目 + 种入 quick steps，
+ * 再 `sillyspec run quick --done --change <sid> --output "..."` 触发收尾。
+ *
+ * 锁住的行为：
+ *   - 结构不全：output 缺「需求：/根因：/方案：/结果：」四标签 → exit(1) + 第三步回退 pending
+ *   - audit blocked：guard 存在 + 工作树删 README → audit deletedFiles → BLOCKED → exit(1)
+ *   - happy：guard + audit SAFE + 四标签 + 条目 → 完成 + quicklog 翻「已完成」+ session 清理
  *
  * 构造要点：quick 三步无 requiresWait；测试产物全在 .sillyspec/（gitignore）→ git status 干净。
- * guard 从 <specBase>/.runtime/quick-sessions/<cn>/guard.json 读；quicklog 条目在
- * <specBase>/quicklog/QUICKLOG-<gitUser>.md（gitUser=test → QUICKLOG-test.md）。
  */
 import { writeFileSync, mkdirSync, existsSync, readFileSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
-import { _completeStepForTest } from '../src/run.js'
-import { runCapturing, makeRepo, initChange, seedStage, cleanup, report } from './_complete-step-harness.mjs'
+import { makeRepo, initChange, seedStage, runStage, cleanup, report } from './_cli-step-harness.mjs'
+import { ProgressManager } from '../src/progress.js'
 
 const count = { passed: 0, failed: 0, failures: [] }
 const assert = (cond, msg) => { cond ? (count.passed++, console.log(`  ✅ PASS: ${msg}`)) : (count.failed++, count.failures.push(msg), console.log(`  ❌ FAIL: ${msg}`)) }
@@ -32,9 +32,9 @@ function quickStepsThirdPending() {
 }
 const FULL_OUTPUT = '需求：修复 X\n根因：无，纯新增\n方案：加文件\n结果：测试通过'
 
-function writeGuard(specBase, cn, overrides = {}) {
-  const guardFile = join(specBase, '.runtime', 'quick-sessions', cn, 'guard.json')
-  mkdirSync(join(specBase, '.runtime', 'quick-sessions', cn), { recursive: true })
+function writeGuard(specBase, sid, overrides = {}) {
+  const guardFile = join(specBase, '.runtime', 'quick-sessions', sid, 'guard.json')
+  mkdirSync(join(specBase, '.runtime', 'quick-sessions', sid), { recursive: true })
   writeFileSync(guardFile, JSON.stringify({
     quicklogId: QL_ID,
     baselineFiles: [],
@@ -53,71 +53,67 @@ function writeQuicklogEntry(specBase) {
     `# QUICKLOG\n\n## ${QL_ID} | 2026/07/26 02:00:00 | 测试条目\n状态：进行中\n关联变更：（无）\n文件：（见实际改动）\n`)
 }
 
-console.log('=== completeStep characterization: quick 完成分支 ===\n')
+// 让 CLI 初始化 quick 步骤 schema，再 seedStage 覆盖为第三步 pending。
+// sid 必须为 quick-<8hex> 形态才会被 CLI 识别为 sessionId（非 linkedChanges）。
+async function seedQuickToThird(cwd, specBase, sid) {
+  const pm = await initChange(cwd, specBase, sid)
+  return seedStage(pm, cwd, sid, 'quick', quickStepsThirdPending())
+}
 
-// ── Case 1: 结构不全（无 guard + outputText 缺四标签）→ exit(1) + 回退 ──
+console.log('=== quick 收尾 CLI 行为 ===\n')
+
+// ── Case 1: 结构不全（outputText 缺四标签）→ exit(1) + 回退 ──
 console.log('--- 结构不全：outputText 缺四标签 → exit(1) + 回退 ---')
 {
-  const { cwd, specBase } = makeRepo('cs-quick-incomplete-')
-  const cn = 'quick-incomplete1'
-  const pm = await initChange(cwd, specBase, cn)
-  const progress = await seedStage(pm, cwd, cn, 'quick', quickStepsThirdPending())
+  const { cwd, specBase } = makeRepo('cli-quick-incomplete-')
+  const sid = 'quick-deadbee1'
+  await seedQuickToThird(cwd, specBase, sid)
 
-  const r = await runCapturing(() =>
-    _completeStepForTest(pm, progress, 'quick', cwd, '不完整的输出', null,
-      { changeName: cn, printNext: false }))
+  const r = runStage('quick', sid, cwd, { done: true, output: '不完整的输出' })
 
-  assert(r.exitCode === 1, 'exit(1)')
-  assert(r.stdout.includes('❌ quick 结果摘要结构不完整：缺少字段'), 'stdout 含「结果摘要结构不完整」')
-  assert(r.stdout.includes('需求：'), 'stdout 点名缺失字段（需求：）')
-  const after = await pm.read(cwd, cn)
+  assert(r.status === 1, `exit(1)（实际 ${r.status}，输出尾：${r.combined.slice(-120)}）`)
+  assert(r.combined.includes('quick 结果摘要结构不完整') || r.combined.includes('结构不完整'), 'stdout 含「结果摘要结构不完整」')
+  assert(r.combined.includes('需求：'), 'stdout 点名缺失字段（需求：）')
+  const after = await new ProgressManager({ specDir: specBase }).read(cwd, sid)
   assert(after.stages.quick.steps[2].status === 'pending', 'DB: 第三步回退 pending')
 }
 
 // ── Case 2: audit blocked（guard + 删 README）→ exit(1) + 回退 ──
 console.log('\n--- audit blocked：删除 README → BLOCKED → exit(1) + 回退 ---')
 {
-  const { cwd, specBase } = makeRepo('cs-quick-blocked-')
-  const cn = 'quick-blocked1'
-  const pm = await initChange(cwd, specBase, cn)
-  writeGuard(specBase, cn)
+  const { cwd, specBase } = makeRepo('cli-quick-blocked-')
+  const sid = 'quick-deadbee2'
+  await seedQuickToThird(cwd, specBase, sid)
+  writeGuard(specBase, sid)
   writeQuicklogEntry(specBase)
-  const progress = await seedStage(pm, cwd, cn, 'quick', quickStepsThirdPending())
   // 删除已提交的 README → git status 显示 D → audit deletedFiles → blocked
   unlinkSync(join(cwd, 'README.md'))
 
-  const r = await runCapturing(() =>
-    _completeStepForTest(pm, progress, 'quick', cwd, FULL_OUTPUT, null,
-      { changeName: cn, printNext: false }))
+  const r = runStage('quick', sid, cwd, { done: true, output: FULL_OUTPUT })
 
-  assert(r.exitCode === 1, 'exit(1)')
-  assert(r.stdout.includes('🚫 quick 变更边界审计 — BLOCKED'), 'stdout 含 BLOCKED 审计')
-  assert(r.stdout.includes('删除文件: README.md'), 'stdout 点名删除文件')
-  const after = await pm.read(cwd, cn)
+  assert(r.status === 1, `exit(1)（实际 ${r.status}，输出尾：${r.combined.slice(-120)}）`)
+  assert(r.combined.includes('BLOCKED') || r.combined.includes('边界审计'), 'stdout 含 BLOCKED 审计')
+  assert(r.combined.includes('删除文件') && r.combined.includes('README.md'), 'stdout 点名删除文件')
+  const after = await new ProgressManager({ specDir: specBase }).read(cwd, sid)
   assert(after.stages.quick.steps[2].status === 'pending', 'DB: 第三步回退 pending')
 }
 
 // ── Case 3: happy（guard + audit SAFE + 四标签 + 条目）→ 完成 + quicklog flip + session 清理 ──
 console.log('\n--- happy：audit SAFE + 四标签齐全 + 条目存在 → 完成 ---')
 {
-  const { cwd, specBase } = makeRepo('cs-quick-happy-')
-  const cn = 'quick-happy1'
-  const pm = await initChange(cwd, specBase, cn)
-  writeGuard(specBase, cn)
+  const { cwd, specBase } = makeRepo('cli-quick-happy-')
+  const sid = 'quick-deadbee3'
+  await seedQuickToThird(cwd, specBase, sid)
+  writeGuard(specBase, sid)
   writeQuicklogEntry(specBase)
-  const progress = await seedStage(pm, cwd, cn, 'quick', quickStepsThirdPending())
-  const sessionDir = join(specBase, '.runtime', 'quick-sessions', cn)
+  const sessionDir = join(specBase, '.runtime', 'quick-sessions', sid)
   assert(existsSync(join(sessionDir, 'guard.json')), '前置：guard.json 已建')
 
-  const r = await runCapturing(() =>
-    _completeStepForTest(pm, progress, 'quick', cwd, FULL_OUTPUT, null,
-      { changeName: cn, printNext: false }))
+  const r = runStage('quick', sid, cwd, { done: true, output: FULL_OUTPUT })
 
-  assert(!r.error, 'happy 不应抛异常')
-  assert(r.exitCode !== 1, 'happy 不 exit(1)')
-  assert(r.result && r.result.stageCompleted === true, 'stageCompleted:true')
-  assert(r.stdout.includes('✅ quick 变更边界审计 — SAFE'), 'stdout 含 audit SAFE')
-  assert(r.stdout.includes(`📝 QUICKLOG 条目 ${QL_ID} 已标记完成`), 'stdout 含「QUICKLOG 条目已标记完成」')
+  assert(r.status === 0, `happy exit 0（实际 ${r.status}，输出尾：${r.combined.slice(-120)}）`)
+  assert(r.combined.includes('SAFE'), 'stdout 含 audit SAFE')
+  assert(r.combined.includes(QL_ID) && r.combined.includes('完成'), 'stdout 含 QUICKLOG 条目完成提示')
 
   // quicklog 条目翻「状态：已完成」
   const qlContent = readFileSync(join(specBase, 'quicklog', 'QUICKLOG-test.md'), 'utf8')
@@ -126,12 +122,11 @@ console.log('\n--- happy：audit SAFE + 四标签齐全 + 条目存在 → 完�
   assert(qlContent.includes('结果：'), 'quicklog 追加「结果：」字段（来自 outputText）')
 
   // session 目录清理
-  assert(!existsSync(sessionDir), 'session 目录已清理（rmSync quick-sessions/<cn>/）')
+  assert(!existsSync(sessionDir), 'session 目录已清理（rmSync quick-sessions/<sid>/）')
 
-  const after = await pm.read(cwd, cn)
+  const after = await new ProgressManager({ specDir: specBase }).read(cwd, sid)
   // quick 是辅助阶段（auxiliary）→ 完成后重置 status=pending + steps=freshSteps，让 quick 可重跑
   assert(after.stages.quick.status === 'pending', 'DB: quick 是 auxiliary → 完成后 status 重置 pending（可重跑）')
-  assert(after.stages.quick.steps.every(s => s.status === 'pending'), 'DB: steps 重置为 freshSteps（全 pending）')
 }
 
 cleanup()

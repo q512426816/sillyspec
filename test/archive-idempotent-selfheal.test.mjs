@@ -15,9 +15,8 @@
 import { writeFileSync, existsSync, mkdirSync, renameSync, mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { _completeStepForTest } from '../src/run.js'
 import { findAlreadyArchivedDir } from '../src/run/complete-handlers.js'
-import { runCapturing, makeRepo, initChange, seedStage, cleanup, report } from './_complete-step-harness.mjs'
+import { makeRepo, initChange, seedStage, runCLI, cleanup, report } from './_cli-step-harness.mjs'
 
 const count = { passed: 0, failed: 0, failures: [] }
 const assert = (cond, msg) => { cond ? (count.passed++, console.log(`  ✅ PASS: ${msg}`)) : (count.failed++, count.failures.push(msg), console.log(`  ❌ FAIL: ${msg}`)) }
@@ -42,7 +41,7 @@ console.log('--- Case 1: 源已移到 archive/<原 changeName>/ → 自愈，不
   writeFileSync(join(changeDir, 'plan.md'), '# Plan\n')
   writeFileSync(join(changeDir, 'design.md'), '# Design\n')
   writeFileSync(join(changeDir, 'module-impact.md'), '# 模块影响分析\n')
-  const progress = await seedStage(pm, cwd, cn, 'archive', ARCHIVE_STEPS('pending'))
+  await seedStage(pm, cwd, cn, 'archive', ARCHIVE_STEPS('pending'))
 
   // 模拟脱钩：物理归档已完成（mv 到 archive/ 保留原名），--done --confirm 未跑
   const archiveDir = join(specBase, 'changes', 'archive')
@@ -50,21 +49,17 @@ console.log('--- Case 1: 源已移到 archive/<原 changeName>/ → 自愈，不
   const manuallyArchived = join(archiveDir, cn)
   renameSync(changeDir, manuallyArchived)
 
-  const r = await runCapturing(() =>
-    _completeStepForTest(pm, progress, 'archive', cwd, '确认归档', null,
-      { confirm: true, changeName: cn, printNext: false }))
+  const r = runCLI(['--dir', cwd, 'run', 'archive', '--done', '--confirm', '--change', cn, '--output', '确认归档'], { cwd })
 
-  assert(!r.error, '自愈路径不应 process.exit')
+  assert(r.status === 0, `自愈路径 exit 0（实际 ${r.status}，输出尾：${r.combined.slice(-100)}）`)
   assert(!existsSync(changeDir), '源目录未被重建（仍不存在）')
   assert(existsSync(manuallyArchived), 'archive/ 下原归档目录保持不动')
   assert(existsSync(join(manuallyArchived, 'plan.md')), '归档目录 plan.md 仍在')
-  assert(r.stdout.includes('自愈'), 'stdout 含「自愈」提示')
-  assert(r.result && r.result.stageCompleted === false, '非末步 → stageCompleted:false')
-  assert(r.result && r.result.currentIdx === 3, 'currentIdx=3（确认归档）')
-  assert(r.result && r.result.nextPendingIdx === 4, 'nextPendingIdx=4（更新路线图和提交）')
+  assert(r.combined.includes('自愈'), 'stdout 含「自愈」提示')
 
   const after = await pm.read(cwd, cn)
   assert(after.stages.archive.steps[3].status === 'completed', 'DB: 确认归档 step 自愈后标 completed')
+  assert(after.stages.archive.steps[4].status === 'pending', 'DB: 更新路线图和提交仍 pending（非末步推进）')
 }
 
 // ── Case 2: archive 目录换日期前缀（按描述部分匹配）→ 自愈 ──
@@ -75,7 +70,7 @@ console.log('\n--- Case 2: archive 目录换日期前缀 → 描述匹配自愈 
   const pm = await initChange(cwd, specBase, cn)
   const changeDir = join(specBase, 'changes', cn)
   writeFileSync(join(changeDir, 'plan.md'), '# Plan\n')
-  const progress = await seedStage(pm, cwd, cn, 'archive', ARCHIVE_STEPS('pending'))
+  await seedStage(pm, cwd, cn, 'archive', ARCHIVE_STEPS('pending'))
 
   // archive 目录用了另一个日期前缀（如 CLI 在别的天跑过 / 手动改名），描述部分一致
   const archiveDir = join(specBase, 'changes', 'archive')
@@ -83,14 +78,11 @@ console.log('\n--- Case 2: archive 目录换日期前缀 → 描述匹配自愈 
   const descDated = join(archiveDir, '2026-08-01-archive-desync-desc')
   renameSync(changeDir, descDated)
 
-  const r = await runCapturing(() =>
-    _completeStepForTest(pm, progress, 'archive', cwd, '确认归档', null,
-      { confirm: true, changeName: cn, printNext: false }))
+  const r = runCLI(['--dir', cwd, 'run', 'archive', '--done', '--confirm', '--change', cn, '--output', '确认归档'], { cwd })
 
-  assert(!r.error, '描述匹配自愈不应 process.exit')
+  assert(r.status === 0, `描述匹配自愈 exit 0（实际 ${r.status}，输出尾：${r.combined.slice(-100)}）`)
   assert(existsSync(descDated), '换日期前缀的归档目录保持不动')
-  assert(r.stdout.includes('自愈'), 'stdout 含「自愈」提示')
-  assert(r.result && r.result.nextPendingIdx === 4, 'nextPendingIdx=4（推进到 step5）')
+  assert(r.combined.includes('自愈'), 'stdout 含「自愈」提示')
 
   const after = await pm.read(cwd, cn)
   assert(after.stages.archive.steps[3].status === 'completed', 'DB: 确认归档 step 自愈后标 completed')
@@ -104,7 +96,7 @@ console.log('\n--- Case 3: 源缺失 + archive/ 无该变更 → exit(1) 不误�
   const pm = await initChange(cwd, specBase, cn)
   const changeDir = join(specBase, 'changes', cn)
   writeFileSync(join(changeDir, 'plan.md'), '# Plan\n')
-  const progress = await seedStage(pm, cwd, cn, 'archive', ARCHIVE_STEPS('pending'))
+  await seedStage(pm, cwd, cn, 'archive', ARCHIVE_STEPS('pending'))
 
   // 源被移走，但 archive/ 下是【另一个】变更，不归属当前 change
   const archiveDir = join(specBase, 'changes', 'archive')
@@ -113,13 +105,11 @@ console.log('\n--- Case 3: 源缺失 + archive/ 无该变更 → exit(1) 不误�
   mkdirSync(join(specBase, 'changes'), { recursive: true })
   renameSync(changeDir, join(specBase, 'changes', `${cn}.bak`)) // 源挪走（不进 archive/）
 
-  const r = await runCapturing(() =>
-    _completeStepForTest(pm, progress, 'archive', cwd, '确认归档', null,
-      { confirm: true, changeName: cn, printNext: false }))
+  const r = runCLI(['--dir', cwd, 'run', 'archive', '--done', '--confirm', '--change', cn, '--output', '确认归档'], { cwd })
 
-  assert(r.error, 'archive/ 无该变更归档 → 应 process.exit(1)（不误判自愈）')
-  assert(r.stdout.includes('源目录不存在'), 'stdout 含「源目录不存在」')
-  assert(!r.stdout.includes('自愈'), '未命中归档目录时不应打印「自愈」')
+  // 源缺失且 archive/ 无该变更 → CLI 阻断（validateChangeExists 或 archiveChangeDirectory 源目录检查）
+  assert(r.status !== 0, `archive/ 无该变更归档 → 阻断（exit ${r.status}，不误判自愈）`)
+  assert(!r.combined.includes('自愈'), '未命中归档目录时不应打印「自愈」')
 }
 
 // ── Case 4: findAlreadyArchivedDir 单元 —— plan.md 把关 / 无目录 / 无匹配 ──

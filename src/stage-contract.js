@@ -328,8 +328,18 @@ function validatePlanOutputs(cwd, changeName, context = {}) {
   const changeDir = resolveChangeDir(cwd, changeName, specRoot)
   const planFile = join(changeDir, 'plan.md')
 
+  // 读 design.md frontmatter scale(若有)传入引擎 ctx,供 plan.module-impact.exists 的 condition
+  // (scale≠small)判定——large 要求 module-impact 首版,small 豁免(走 quick)。fail-safe:无 scale→null→
+  // condition(ne 'small')成立→保守要求 module-impact(同 brainstorm scale 读取模式,line 264-272)。
+  const designPathForScale = join(changeDir, 'design.md')
+  let scale = null
+  if (existsSync(designPathForScale)) {
+    const fm = readFileSync(designPathForScale, 'utf8').match(/^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*\r?\n/)
+    const sm = fm && fm[1].match(/^scale:[ \t]*['"]?(\w+)/m)
+    if (sm) scale = sm[1]
+  }
   // plan.md 存在性由引擎消费 manifest。entryPoint/id-trace/decisions 为 custom kind(下方保留)。
-  const engineResult = evaluateRules('plan', { changeDir })
+  const engineResult = evaluateRules('plan', { changeDir, scale })
   const errors = [...engineResult.errors]
   const warnings = [...engineResult.warnings]
 

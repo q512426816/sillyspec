@@ -262,6 +262,17 @@ const PLAN_RULES = [
     spec: '产出 `plan.md`(任务拆解与规划,缺失即阻断)',
     failMessage: 'plan.md 缺失: ${path}',
   },
+  // module-impact 首版(D-001@v2):large 变更(scale≠small)在 plan review_plan 步生成 module-impact.md
+  // 首版(活文档全程演化——execute/verify 更新、archive 终审)。small 豁免(走 quick,module-impact 无用)。
+  // condition 生效依赖 validatePlanOutputs 把 design.md scale 传入 ctx(stage-contract.js D-009)。
+  {
+    id: 'plan.module-impact.exists', stage: 'plan', source: 'validatePlanOutputs', severity: 'error', kind: 'file-exists',
+    target: { root: 'change', path: 'module-impact.md' },
+    data: {},
+    condition: { ctxField: 'scale', ne: 'small' },
+    spec: 'large 变更产出 `module-impact.md` 首版(plan review_plan 步生成;scale=small 豁免)',
+    failMessage: 'module-impact.md 缺失: ${path}（large 变更应在 plan 审查计划步生成模块影响分析首版）',
+  },
   // entry-point-wiring(custom):design.md 命中入口实例化/启动路径模式时,被提到的入口文件
   // (cli.ts/main.ts/server.(js|ts)/index.(js|ts))必须出现在某 task allowed_paths 或 plan.md
   // 文件变更清单中,否则需 design.md 紧邻写明豁免。判定算法(多源 allowed_paths 收集 + 逐文件对账 +

@@ -57,6 +57,8 @@ console.log('--- T2: plan + task id 不连续 → Plan→Execute Contract 阻断
   const changeDir = join(specBase, 'changes', cn)
   // task-01 → task-03（缺 task-02）→ validatePlanForExecute 报 task id 不连续
   writeFileSync(join(changeDir, 'plan.md'), '# Plan\n\n## Wave 1\n\n- [ ] task-01: a\n- [ ] task-03: c\n')
+  // plan.module-impact.exists(large) 要求——补上让校验过，聚焦 Contract 不连续
+  writeFileSync(join(changeDir, 'module-impact.md'), '# 模块影响分析（Module Impact）— ncg\n\n测试占位\n')
   const steps = [
     { name: '复杂度分类与上下文加载', status: 'completed' },
     { name: '生成分级计划', status: 'completed' },
@@ -128,6 +130,7 @@ console.log('\n--- T5+T8: plan skip optional 步骤 → S3 守卫满足 gate 仍
   const changeDir = join(specBase, 'changes', cn)
   // task-01 + task-02 连续 → contract 通过（隔离 S3 守卫，不让 contract fail 干扰）
   writeFileSync(join(changeDir, 'plan.md'), '# Plan\n\n## Wave 1\n\n- [ ] task-01: a\n- [ ] task-02: b\n')
+  writeFileSync(join(changeDir, 'module-impact.md'), '# 模块影响分析（Module Impact）— ncg-s3\n\n测试占位\n')
   const steps = [
     { name: '复杂度分类与上下文加载', status: 'completed' },
     { name: '生成分级计划', status: 'skipped' },   // optional 被跳过（S3 关键：skipped 不算 completed）

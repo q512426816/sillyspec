@@ -4,7 +4,7 @@
  * archiveChangeDirectory 移动变更目录 + 注销 change 后，CLI 下沉 safeGit add 确定性暂存
  * .sillyspec/changes/archive/ + .sillyspec/docs/，不靠 step5 prompt 驱动（prompt 保留兜底）。
  *
- * 通过 _completeStepForTest 驱动 archive「确认归档」步骤（与 run-complete-step-archive 同入口），
+ * 通过 CLI（sillyspec run archive --done --confirm）驱动 archive「确认归档」步骤，
  * 在 .sillyspec/ 未被 gitignore 的临时仓里跑，验证 git index 含归档目录 + 模块文档（staged）。
  *
  * 注：共享 harness 的 makeRepo 会 gitignore .sillyspec/（保护其他测试的 git status），
@@ -14,10 +14,9 @@ import { writeFileSync, mkdirSync, mkdtempSync, rmSync, existsSync } from 'node:
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { execFileSync } from 'node:child_process'
-import { _completeStepForTest } from '../src/run.js'
 import { archiveDestDirName } from '../src/stage-contract.js'
 import { ProgressManager } from '../src/progress.js'
-import { runCapturing } from './_complete-step-harness.mjs'
+import { runCLI } from './_cli-step-harness.mjs'
 
 const count = { passed: 0, failed: 0, failures: [] }
 const assert = (cond, msg) => {
@@ -86,15 +85,14 @@ console.log('--- Case 1: 确认归档后 archive/ + docs/ 已 staged ---')
   git(cwd, ['commit', '-q', '-m', 'seed change'])
   // newmod.md 保持 untracked（未 commit），让 archive 的 git add docs/ 有东西可暂存
 
-  const progress = await seedStage(pm, cwd, cn, 'archive', ARCHIVE_STEPS('pending'))
+  await seedStage(pm, cwd, cn, 'archive', ARCHIVE_STEPS('pending'))
 
-  const r = await runCapturing(() =>
-    _completeStepForTest(pm, progress, 'archive', cwd, '确认归档', null,
-      { confirm: true, changeName: cn, printNext: false }))
+  // CLI 驱动 archive 确认归档（--done --confirm）
+  const r = runCLI(['--dir', cwd, 'run', 'archive', '--done', '--confirm', '--change', cn, '--output', '确认归档'], { cwd })
 
   const date = new Date().toISOString().slice(0, 10)
   const destName = archiveDestDirName(date, cn)
-  assert(!r.error, '归档不应 process.exit')
+  assert(r.status === 0, `归档 exit 0（实际 ${r.status}）`)
 
   const status = git(cwd, ['status', '--porcelain'])
   // porcelain v1：前 2 字符 XY 状态码，index 列为 A 即 staged add
@@ -123,16 +121,14 @@ console.log('--- Case 2: 归档移动 + 注销正常（git add 不阻断）---')
   writeFileSync(join(changeDir, 'design.md'), '# Design\n')
   writeFileSync(join(changeDir, 'module-impact.md'), '# 模块影响分析\n')
   git(cwd, ['add', '.sillyspec/changes/']); git(cwd, ['commit', '-q', '-m', 'seed'])
-  const progress = await seedStage(pm, cwd, cn, 'archive', ARCHIVE_STEPS('pending'))
+  await seedStage(pm, cwd, cn, 'archive', ARCHIVE_STEPS('pending'))
 
-  const r = await runCapturing(() =>
-    _completeStepForTest(pm, progress, 'archive', cwd, '确认归档', null,
-      { confirm: true, changeName: cn, printNext: false }))
+  const r = runCLI(['--dir', cwd, 'run', 'archive', '--done', '--confirm', '--change', cn, '--output', '确认归档'], { cwd })
 
   const date = new Date().toISOString().slice(0, 10)
   const destName = archiveDestDirName(date, cn)
   const archivedDir = join(specBase, 'changes', 'archive', destName)
-  assert(!r.error, '归档流程未因 safeGit add 抛错/阻断')
+  assert(r.status === 0, `归档 exit 0（实际 ${r.status}）`)
   assert(existsSync(archivedDir), '归档目录 archive/<dest>/ 已落盘')
   assert(!existsSync(changeDir), '原 changes/<cn>/ 已移走（归档移动正常）')
 }

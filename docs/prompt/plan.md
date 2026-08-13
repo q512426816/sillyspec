@@ -18,7 +18,7 @@
 **元数据**
 - id：`classify`
 - optional：false
-- outputHint：复杂度分类结果 + 文件清单
+- outputHint：plan 审查结果（self=清单 / independent=review.json 路径+verdict）
 - 等待配置：无（可直接 --done）
 
 **本步出现的运行时占位符**
@@ -28,67 +28,57 @@
 **提示词原文**
 
 ````markdown
-在生成计划之前，先加载上下文并判定本次需求的复杂度等级（plan_level）。
+对上一步生成的 plan.md 做审查。生成与审查分离——不在生成 plan 的同一上下文里自审，避免确认偏差。
 
-### 操作
-1. 运行 `sillyspec progress show`，确认 currentStage 为 "plan"
-2. 读取项目总览 `{SPEC_ROOT}/docs/<project>/scan/PROJECT.md` + 各子项目上下文
-3. 读取 proposal.md、design.md、requirements.md、tasks.md
-4. 如果存在 decisions.md，必须读取并提取所有当前版本 D-xxx@vN 决策 ID
-   - 如果发现 priority=P0/P1 且 status=unresolved/blocking 的决策，停止生成计划，要求先回到 brainstorm 的 Design Grill 修正
-   - 如果发现 superseded 决策，只引用最新版本，不引用旧版本
-5. 读取 CONVENTIONS.md、ARCHITECTURE.md（技术栈含在 ARCHITECTURE.md）
-6. 读取 local.yaml 获取构建/测试命令
-7. 读取 `{SPEC_ROOT}/docs/<project>/modules/_module-map.yaml`（不存在则跳过）
-   - 根据 design.md 的文件变更清单匹配模块
-   - 读取匹配到的模块文档
-   - 利用模块依赖关系辅助分析（depends_on / used_by）
+### 执行前确认门（plan_level=full 时）
+plan.md 审查通过后、进入 execute 前，若 plan_level=full（跨模块/大变更），必须先向用户展示计划摘要并等待确认，不要让 AI 默认共识擅自开工：
+- 展示：Wave 分组 + task 总数 + 关键 allowed_paths 边界 + 依赖说明（一两屏内，不贴全文）
+- 调用：`sillyspec run plan --wait --reason "等待用户确认计划" --options "确认，进入执行,需要调整" --output "计划摘要"`
+- 用户确认后再 --done；plan_level=none/light（小变更）无需等待，正常完成即可
 
-### 分级规则
-判定 plan_level 为 none 时，需**同时满足**以下所有条件：
-- 涉及文件 ≤ 2 个
-- 不跨模块（改动集中在单个模块内）
-- 无 schema / DB / manifest / local.yaml 变更
-- 无状态机 / workflow 状态流转变更
-- 无 source_root / spec_root / runtime_root 路径隔离规则变更
-- 无 validator / postcheck / agent 调度行为变更
-- 需求明确，无设计歧义
+### 当前审查分级（CLI 按变更规模判定，占位符由 run.js 注入）
+tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
+- tier=self：当前 agent 直接执行下方审查清单（小变更，独立审查仪式成本 > 收益）
+- tier=independent：必须用 Agent tool 启动一个独立的计划审查子代理（独立上下文，不共享你生成 plan 时的分析与倾向），由子代理执行下方审查清单并输出 review.json
 
-判定为 light（满足任一即升为 light）：
-- 涉及 3-5 个文件
-- 涉及 prompt 行为变更
-- 涉及 validator / postcheck 逻辑
-- 涉及路径规则变更（但范围可控）
-- 涉及 schema/DB/状态机变更，但影响面可控
-- 需要明确验收标准来防止范围漂移
+### 审查清单（读取 plan.md 的 plan_level，逐条核对）
+- [ ] task 编号与 Wave checkbox 格式正确，execute 依赖此格式解析任务
+- [ ] plan_level 档位与实际复杂度匹配（none/light/full 没选错）
+- [ ] 跨任务契约：task-A 的产出（接口/DTO/响应）被 task-B 消费时，consumer 是否在 TaskCard expects_from 声明所需字段、provider 是否在 provides 承诺、两边字段一致？（plan-postcheck 会硬校验，此处是独立视角复查）
+- [ ] 文件覆盖：design.md 文件变更清单中的每个源码文件，是否都被至少一个 task 的 allowed_paths 覆盖？（漏覆盖 = execute 必然漏改）
+- [ ] 不存在 P0/P1 unresolved blocker 残留
+- [ ] 没有实现细节泄漏到 plan.md（接口签名/代码示例应在 tasks/task-NN.md）
+- [ ] 关键路径与 Wave 依赖合理（无循环依赖、无遗漏前置）
+- [ ] 连带测试归属：本批改动是否会导致既有测试断言失效（改共享/被多 task 依赖源文件、改被测试精确匹配的值如 UI 文案/按钮文本/错误信息/常量/枚举字面量、改函数签名或返回结构等单文件场景）？此类 task 是否在 related_tests 声明了失效测试、且路径在 allowed_paths 内（或由独立测试 task 覆盖）？（漏声明 = execute 阶段测试债、主代理事后兜底）
+- [ ] acceptance 字段对照实际 schema/类型源文件核验存在性与形态，不凭 design.md 文字臆断（plan-postcheck best-effort grep 会给 allowed_paths 源文件未命中的 snake_case/camelCase 标识符提 warning，此处是语义层复查；臆断 = execute 阶段返工）
 
-判定为 full（满足任一即升为 full）：
-- 预计 8 个以上 task
-- 跨 3 个以上模块
-- 涉及 CLI + 平台 + DB 联动
-- 涉及 agent 调度 / worktree / isolation 逻辑
-- 涉及复杂状态恢复（checkpoint / resume）
-- 需要并行 sub-agent 执行
-- 需要人工审查设计方向
-- 涉及 worktree / baseline / sandbox 等基础设施
+### tier=independent 时：启动 plan-review 子代理
+用 Agent tool 启动子代理（subagent_type: general），prompt 要点：
+1. 独立读取 {SPEC_ROOT}/changes/<change>/plan.md + design.md + tasks/*.md（不要让生成者喂结论给你，自己读原始文件）
+2. 执行上方审查清单，每条给 pass/gap/fail + 证据
+3. 输出 review.json(CLI Stage Review Gate 将硬校验,契约如下 —— schema + 完整示例 + docHash 算法,照抄改值):
+{REVIEW_JSON_CONTRACT}
+4. verdict=fail 时在 reviewerNotes 写明阻断项
 
-### 输出格式
-在输出开头，以如下格式输出分类结果：
+### 生成 module-impact.md 首版（plan_level=full 且 scale≠small 时）
+计划审查通过后，顺带生成 module-impact.md 首版（本次变更的模块影响分析，供 execute/verify 阶段更新、archive 阶段终审）。scale=small 不生成（small 走 quick，module-impact 对 quick 无用）。
 
-```
-plan_level: none | light | full
-reason: <一句话说明判定理由>
-estimated_files: <N>
-cross_module: true | false
-has_schema_change: true | false
-has_state_machine_change: true | false
-needs_parallel_execution: true | false
-needs_human_review: true | false
-```
+输入（此时 TaskCard/allowed_paths 尚未生成——在下一步 generate_blueprints，故用以下两项作输入，粒度与 archive 现状一致）：
+- design.md 的「文件变更清单」（本次计划改哪些源码文件）
+- plan.md 的任务列表（每个 task 改的范围）
 
-然后列出已加载的文件清单（含 decisions.md 当前版本/未决项状态、模块文档 + 模块依赖关系摘要）。
+步骤（复用 archive extract-module-impact 的核心指引，同源——改 archive step2 prompt 时保持一致）：
+1. 读 {SPEC_ROOT}/docs/<project>/modules/_module-map.yaml（模块→文件路径映射）。**不存在 → 降级**：生成只含 unmapped 部分的 module-impact.md + 提示「建议运行 scan 生成模块映射」，不阻断
+2. 对照 design 文件变更清单 + plan 任务列表，逐文件匹配所属模块（命中的归 mapped，未命中的归 unmapped）
+3. 生成模块影响矩阵（模块 × 影响类型[新增/修改/删除/依赖变更] × 说明），落盘 {SPEC_ROOT}/changes/<change>/module-impact.md
+4. 首行标题必须用中文：# 模块影响分析（Module Impact）— <变更简述>
 
-分类完成后，继续进入下一步。
+execute/verify 阶段会按实际代码变更更新此文档；archive 阶段会最终确认它。
+
+### 输出
+- tier=self：审查清单结果（每条状态 + 偏差说明）
+- tier=independent：子代理产出的 review.json 路径 + verdict 摘要
+- plan_level=full 且 scale≠small：附 module-impact.md 路径 + 影响摘要
 ````
 
 ---

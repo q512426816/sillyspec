@@ -868,6 +868,14 @@ task-XX 对应：{SPEC_ROOT}/.runtime/execute-runs/{EXECUTE_RUN_ID}/tasks/task-X
 - \`cannot_verify\` 只在确实无法验证且有待补充证据时使用，且 requiredEvidence 必须非空
 - \`sillyspec run execute --done\` 会校验所有 task 的 review.json，缺失或 fail 会阻断完成
 
+### module-impact.md 更新（主代理在本 Wave 所有 task 完成后汇总）
+本 Wave 内所有 task 子代理完成、review.json 写好后，**由你（主代理/调度者）**汇总本 Wave 的实际代码变更，更新 {SPEC_ROOT}/changes/<change>/module-impact.md（plan 阶段已生成首版）：
+- 基于本 Wave 各 task 的实际 git diff（不是计划）+ {SPEC_ROOT}/docs/<project>/modules/_module-map.yaml 对照
+- 更新受影响模块的影响类型/说明（实际改动可能与 plan 首版预估不同，据实修正）
+- **不由各 task 子代理分别改**（同 Wave 并行子代理改同一文件会互相覆盖）——只由主代理在 Wave 收尾统一更新一次
+- 无 _module-map.yaml 时跳过模块匹配，仅按文件清单更新 unmapped 部分
+这是可选更新（不阻断 execute 完成），但保持 module-impact 与实际变更一致利于 verify 核对与 archive 终审。
+
 ### 完成后
 1. 为每个后端 router task，扫描变更文件提取 API 端点 artifact：
    - 在变更文件中搜索所有 router 注册路径（@router.get/post/put/delete）

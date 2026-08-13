@@ -19,7 +19,7 @@
 import { mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { _outputStepForTest } from '../src/run.js'
+import { outputStep } from '../src/run/prompt.js'
 import { runCapturing, makeRepo, cleanup, report } from './_complete-step-harness.mjs'
 
 const count = { passed: 0, failed: 0, failures: [] }
@@ -33,7 +33,7 @@ console.log('--- brainstorm step0（无 change）：persona + 铁律 + 默认完
   const { cwd } = makeRepo('os-brainstorm-')
   const steps = [{ name: '理解需求', prompt: '分析需求并产出方案', requiresWait: false }]
   const r = await runCapturing(() =>
-    _outputStepForTest('brainstorm', 0, steps, cwd, null, null, {}, null))
+    outputStep('brainstorm', 0, steps, cwd, null, null, {}, null))
 
   assert(!r.error, 'brainstorm step0 不应 process.exit')
   assert(r.result === undefined, '正常渲染返回 undefined（非 false）')
@@ -60,7 +60,7 @@ console.log('\n--- plan step1 + changeName（非平台）：changeDir 相对路�
     { name: '生成分级计划', prompt: '生成 plan', requiresWait: false },
   ]
   const r = await runCapturing(() =>
-    _outputStepForTest('plan', 1, steps, cwd, cn, null, {}, null))
+    outputStep('plan', 1, steps, cwd, cn, null, {}, null))
 
   assert(!r.error, 'plan step1 不应 process.exit')
   assert(r.stdout.includes('stage: plan'), 'header: stage: plan')
@@ -85,7 +85,7 @@ console.log('\n--- 平台 scan step0 + scanProfile：平台路径约束 + 严禁
     scanProfile: { mode: 'quick', reason: '小项目', maxAgentCalls: 0, maxDocs: 3 },
   }
   const r = await runCapturing(() =>
-    _outputStepForTest('scan', 0, steps, cwd, null, null, platformOpts, null))
+    outputStep('scan', 0, steps, cwd, null, null, platformOpts, null))
 
   assert(!r.error, '平台 scan step0 不应 process.exit（prompt 无裸 .sillyspec/ 写入）')
   assert(r.stdout.includes('## ⚠️ 平台模式 — 写入路径约束'), '平台 directives 块')
@@ -107,7 +107,7 @@ console.log('\n--- quick requiresWait：完成后执行 --wait/--continue/--done
     waitReason: '等待用户确认', waitOptions: ['确认', '取消'],
   }]
   const r = await runCapturing(() =>
-    _outputStepForTest('quick', 0, steps, cwd, cn, null, {}, null))
+    outputStep('quick', 0, steps, cwd, cn, null, {}, null))
 
   assert(!r.error, 'quick requiresWait 不应 process.exit')
   assert(r.stdout.includes('### 💻 你的角色：全栈老兵'), 'persona quick step0（全栈老兵）')
@@ -123,7 +123,7 @@ console.log('\n--- 越界防御：steps 为空 → console.error + return false 
 {
   const { cwd } = makeRepo('os-oob-')
   const r = await runCapturing(() =>
-    _outputStepForTest('brainstorm', 0, [], cwd, null, null, {}, null))
+    outputStep('brainstorm', 0, [], cwd, null, null, {}, null))
 
   assert(r.result === false, '越界返回 false')
   assert(r.stdout.includes('无法输出步骤'), 'console.error 提示步骤缺失')
@@ -140,10 +140,10 @@ console.log('\n--- verify 护栏：step0 全文注入 vs step1 精简提醒 ---'
   ]
   // step0：护栏全文
   const r0 = await runCapturing(() =>
-    _outputStepForTest('verify', 0, steps, cwd, null, null, {}, null))
+    outputStep('verify', 0, steps, cwd, null, null, {}, null))
   // step1：护栏精简提醒
   const r1 = await runCapturing(() =>
-    _outputStepForTest('verify', 1, steps, cwd, null, null, {}, null))
+    outputStep('verify', 1, steps, cwd, null, null, {}, null))
 
   // verify 有 _globalGuardrails（全文「verify 阶段绝对禁止的操作」）：
   //   step0 注入全文；step1 只一行精简提醒「⛔ 本阶段护栏生效中」
@@ -159,7 +159,7 @@ console.log('\n--- {REVIEW_SCHEMA_VERSION} 替换：prompt 含占位符 → 渲�
   const { cwd } = makeRepo('os-schema-ver-')
   const steps = [{ name: '写 review', prompt: '{ "schemaVersion": {REVIEW_SCHEMA_VERSION}, "task": "task-01" }', requiresWait: false }]
   const r = await runCapturing(() =>
-    _outputStepForTest('execute', 0, steps, cwd, null, null, {}, null))
+    outputStep('execute', 0, steps, cwd, null, null, {}, null))
 
   assert(!r.stdout.includes('{REVIEW_SCHEMA_VERSION}'), '占位符 {REVIEW_SCHEMA_VERSION} 已被替换（不残留字面量）')
   // 当前 REVIEW_SCHEMA_VERSION 常量值=1（src/task-review.js:32）；升 v2 时此断言随常量走
