@@ -196,6 +196,48 @@ console.log('git-helper 注入与空格回归测试')
 }
 
 // ---------------------------------------------------------------------------
+// 用例 5：safeGit retryOnTimeout（ETIMEDOUT 重试一次，治审计 git 超时偏紧）
+// 思路：超时分支用极小 timeout（1ms）触发 ETIMEDOUT（git 子进程 fork/exec git.exe 远 >1ms），
+// 遵循测试用例设计第5条（超时参数可注入、毫秒级极小值、不真等）。
+// 契约覆盖（"重试成功"场景因 git 启动耗时不稳无法确定性构造，不测）：
+//   - retryOnTimeout=false + 极小 timeout → 超时被捕获，{value:null,error:非空}，不抛
+//   - retryOnTimeout=true  + 极小 timeout → 重试也超时，仍 {value:null,error:非空}，不抛（重试路径不破坏 safeGit 语义）
+//   - retryOnTimeout=true  + 默认 timeout + 正常命令 → 成功（重试逻辑不影响正常路径，只对 ETIMEDOUT 触发）
+// ---------------------------------------------------------------------------
+{
+  const dir = makeTempRepo('gh-retry-')
+  try {
+    // retryOnTimeout=false + 极小 timeout：ETIMEDOUT 被捕获不抛，返回 error 结构
+    const sgTimeout = safeGit(dir, ['status', '--porcelain'], { trim: false, timeout: 1 })
+    assert.strictEqual(sgTimeout.value, null, '极小 timeout 下 safeGit value=null')
+    assert.ok(
+      typeof sgTimeout.error === 'string' && sgTimeout.error.length > 0,
+      '极小 timeout 下 safeGit error 为非空字符串（ETIMEDOUT 被捕获不抛）'
+    )
+    passed++
+
+    // retryOnTimeout=true + 极小 timeout：重试一次（2ms 仍超时，git 启动 >2ms），仍 error 不抛
+    const sgRetry = safeGit(dir, ['status', '--porcelain'], { trim: false, timeout: 1, retryOnTimeout: true })
+    assert.strictEqual(sgRetry.value, null, 'retryOnTimeout=true 极小 timeout 下重试也超时 value=null')
+    assert.ok(
+      typeof sgRetry.error === 'string' && sgRetry.error.length > 0,
+      'retryOnTimeout=true 重试后仍返回非空 error（不抛）'
+    )
+    passed++
+
+    // retryOnTimeout=true + 默认 timeout + 正常命令：成功（重试逻辑不影响正常路径）
+    const sgOk = safeGit(dir, ['rev-parse', '--is-inside-work-tree'], { retryOnTimeout: true })
+    assert.strictEqual(sgOk.value, 'true', 'retryOnTimeout=true 正常命令仍成功')
+    assert.strictEqual(sgOk.error, null, 'retryOnTimeout=true 正常命令 error=null')
+    passed++
+
+    console.log('  ✓ 用例5 safeGit retryOnTimeout（ETIMEDOUT 重试，超时捕获不抛 + 正常路径不受影响）')
+  } finally {
+    cleanup(dir)
+  }
+}
+
+// ---------------------------------------------------------------------------
 // 用例 4：grep 反向断言（src/ 不残留字符串拼接 git 调用模板串 —— design R1）
 // 思路：递归读 src/ 下所有 .js 源码文本，断言不含以下注入范式（反引号模板串 git 调用）：
 //   - `git ${            反引号模板 + git + 变量插值（注入核心，原 worktree helper 范式）

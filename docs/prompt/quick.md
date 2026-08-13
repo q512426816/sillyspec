@@ -144,6 +144,8 @@ sillyspec run quick --done --change <id> --output "需求：… 根因：… 方
 
 格式：`path::括注` 一条，`||` 分隔多条（括注可省略只留 `path`）。不传则「文件：」行回填审计到的实际改动文件单行（仍可事后手改）。
 
+> ⚠️ --file-notes 只随 step3 --done 同一命令传才生效。CLI 是短进程，run 与 done 是独立进程——step1/step2 的 sillyspec run quick（仅拿提示词）即使带了 --file-notes，也只写进那个短进程的内存、进程结束即丢，不会带到 step3 --done。请在 step3 收尾时连同 --output 一起传。
+
 ### 收尾推荐顺序（模块文档在 --done 前，QUICKLOG 在 --done 后，别记混）
 1. 【--done 前】命中模块 → 改模块文档 → `git add -- <模块文档>`（见下方「模块文档同步」）
 2. 【--done】`sillyspec run quick --done --change <id> --output "四字段" [--file-notes "..."]`（CLI 自动翻完成 + 勾 task + 落盘 QUICKLOG 标题/文件/正文）

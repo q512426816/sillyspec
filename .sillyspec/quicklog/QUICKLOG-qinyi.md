@@ -476,3 +476,19 @@
 根因：npm 包 3.26.4 含 packages/dashboard 2.0M，其中 dist 1.6M 为运行时要、src/public/配置为构建期冗余
 方案：实证 dashboard 为运行时依赖（index.js:707 import server 且 server 服务 dist/），dist+server 保留；.npmignore 排除纯开发期文件（src/ public/ 根 index.html vite.config.js package-lock.json）
 结果：npm pack 155→123 文件、unpacked 3.7M→3.4M、tarball 1.1M→1.0M；解开 tarball 实测 src 已排除 + server 语法正常 + testcase-design 模板仍在；lint 262 通过
+
+## ql-20260813-001-e83f | 2026-08-13 08:52:45 | 改进 quick 三处体验反馈
+状态：已完成
+关联变更：（无）
+文件：
+- src/git-helper.js（safeGit 加 retryOnTimeout（ETIMEDOUT 重试））
+- src/run/shared.js（审计 git status 启用 timeout+retry）
+- src/stages/quick.js（step3 prompt 澄清 file-notes 跨step）
+- docs/prompt/quick.md（同步警告段）
+- docs/prompt/_extracted.json（extract 刷新）
+- .claude/skills/sillyspec-quick/SKILL.md（file-notes 说明同步）
+- test/git-helper-injection.test.mjs（加用例5 retryOnTimeout）
+需求：改进 quick 三处体验反馈。
+根因：①--file-notes 用 per-process setter，CLI 短进程 step2 传了 step3 新进程读不到致无效；②safeGit 默认 5s 超时，审计 git status 失败即 blocked，机器忙时误拦。
+方案：git-helper safeGit 加 retryOnTimeout（ETIMEDOUT 用 2x timeout 重试一次，默认 false 向后兼容）+ shared.js auditQuickCompletion git status 启用 timeout 15000+retryOnTimeout + quick.js step3 prompt 加警告澄清 --file-notes 只随 --done 同命令传 + 同步 docs/prompt 与 SKILL 与模块文档 + 补 git-helper 测试用例5。
+结果：针对性测试 git-helper 14/quicklog 97/laststep 4/baseline 31/stage-def 8 全绿 + lint 263 文件过

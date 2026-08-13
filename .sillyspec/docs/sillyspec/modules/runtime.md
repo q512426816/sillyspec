@@ -80,4 +80,5 @@ ProgressManager.alignExecuteToPlan(cwd, changeName, specBase, {confirm})
 - ql-20260804-004-3a24 | quicklog 单行四字段归一改 splitSingleLineFields 双级扫描（字段边界严格扫描 + 顺序扫描兜底）：字段正文引用标签字样（「结果：」/正则内嵌四标签）不再被 split 任意位置误断行（quick-① 残留补丁）。
 - ql-20260809-001-4846 | alignExecuteToPlan 去 async 残留彻底同步化（修复 doctor align 调用方 index.js:532 未 await 致 r.ok 恒 undefined、失败也误打印「已对齐」的逻辑 bug）+ 清 src/ 5 处 gate-status 活引用注释（fs-atomic/machine-interface×2/run/gates/index）。
 - ql-20260812-005-51cc | _openWithFallback 主库分支并发首开重试（2026-08-12 db-concurrency flaky 根因实证）：多进程近乎同时 new DB().init() 打开同一新建库，tryOpen 的 prepare(SELECT count(*)) 撞他者 CHECKPOINT 改写瞬时失败返 null 误判损坏 fail-loud throw；主库分支补 MAX_BUSY_RETRIES 递增退避重试，真损坏重试不过仍回落退/fail-loud。
+- ql-20260813-001-e83f | auditQuickCompletion 的 git status 调用启用 retryOnTimeout + timeout 15000（safeGit 新增 retryOnTimeout 选项，ETIMEDOUT 用 2× timeout 重试一次），治机器忙时审计 git 超时误拦 blocked。
 <!-- MANUAL_NOTES_END -->

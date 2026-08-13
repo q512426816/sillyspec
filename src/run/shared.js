@@ -506,7 +506,10 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
     // 外层 catch 吞成 warning（multi-agent-review Q3）。safeGit 返回 {value,error} 不抛；若仍有 error
     // 说明真读不到 git 状态，保守阻断（审计无锚点不能放行），不静默降级。
     // trim:false 必传：porcelain 首行前导空格是状态码一部分，trim 会削掉致 parsePorcelainPath 丢首字符。
-    const statusResult = safeGit(cwd, ['status', '--porcelain'], { trim: false })
+    // timeout 15000 + retryOnTimeout：机器忙时 git 子进程启动慢，默认 5s 偏紧易瞬时超时（ETIMEDOUT），
+    // 审计锚点失败即 blocked 中断 quick。加大到 15s 并对 ETIMEDOUT 重试一次（重试 30s），消化绝大多数
+    // 瞬时抖动，免去用户手工重跑（实测反馈：审计 git 偶发 ETIMEDOUT，重试即过）。
+    const statusResult = safeGit(cwd, ['status', '--porcelain'], { trim: false, timeout: 15000, retryOnTimeout: true })
     if (statusResult.error) {
       result.reasons.push(`审计失败（git status）: ${statusResult.error}`)
       result.status = 'blocked'
