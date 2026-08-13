@@ -281,7 +281,7 @@ local.yaml 生成结果（已存在/已生成 + project.type + agent 补充的�
 
 ### YAML 格式
 \`\`\`yaml
-schema_version: 1
+schema_version: 2
 project: <project-name>
 source_commit: <git-head-short>
 generated_at: <now-datetime>
@@ -313,7 +313,7 @@ modules:
 
 ### 示例
 \`\`\`yaml
-schema_version: 1
+schema_version: 2
 project: multi-agent-platform
 source_commit: abc1234
 generated_at: 2026-06-02 22:00:00

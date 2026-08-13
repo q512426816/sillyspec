@@ -26,3 +26,15 @@
 根因：#4 刷屏是 prompt.js 对 schema_version=1 每步 warn(读端 buildModuleContextInjection 已 v1/v2 双兼容,warn 过激);#5 轮转是 rotateIfNeeded 静默(提交流漏);#1/#2/#3 是机制/外部不可 CLI 改。
 方案：#4 prompt.js loadModuleContextIndex v1 warn 降级(仅缺 schema_version warn)+export 测试;#5 quicklog.js rotateIfNeeded echo 归档;新建 troubleshooting.md 记 6 经验;补 prompt-module-map-warn 测试。
 结果：prompt-module-map-warn 4/4 + prompt-placeholders 11/11 + lint 266 过
+
+## ql-20260813-005-fa32 | 2026-08-13 11:17:44 | #4 根治 L1(scan 产 v2 version 一致
+状态：已完成
+关联变更：（无）
+文件：
+- src/stages/scan.js（_module-map schema_version 1→2）
+- docs/prompt/scan.md（同步 schema_version 1→2）
+- docs/prompt/_extracted.json（extract 刷新）
+需求：#4 根治 L1(scan 产 v2 version 一致,治根因)。
+根因：scan.js prompt 模板仍写 _module-map schema_version:1(rebuild modules.js 已 v2),新 scan 永远产 v1,读端 loadModuleContextIndex 曾对 v1 每步 warn 刷屏(上轮已止血 v1 静默)。
+方案：scan.js _module-map schema_version 1→2(line284/316 map,line413 模块卡片不改),字段不变(读端 v1/v2 双兼容 paths||core_files,scan v2 保留 v1 丰富字段 paths/tags/entrypoints/main_symbols/depends_on/used_by 有价值),extract 同步 docs/prompt/scan.md+_extracted.json。
+结果：stage-definitions + scan-postcheck 19 + lint 266 过
