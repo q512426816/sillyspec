@@ -7,9 +7,10 @@
  * loadModuleContextIndex/buildModuleContextInjection/parseModuleMapSimple
  * （_module-map.yaml 模块上下文匹配注入，仅 outputStep 用）。
  *
- * 安全锚：run.js 始终 barrel。outputStep + applyRootPlaceholders 由 run.js import 回来；
- * _outputStepForTest（output-step-render 测试）+ applyRootPlaceholders（prompt-placeholders
- * 测试）被 test 直接 import，run.js barrel re-export 契约保留。
+ * 安全锚：run.js 始终 barrel。applyRootPlaceholders 由 run.js import 回来；
+ * outputStep（output-step-render / archive-task-completion-injection 测试）+ applyRootPlaceholders
+ * （prompt-placeholders 测试）被 test 直接 import 本模块（outputStep 不经 barrel，2026-08-13 起 test
+ * 直 import 源模块，`_outputStepForTest` 别名已移除）。
  *
  * 路径修正（相对 src/run/）：
  *   - stageRegistry 从 '../stages/index.js'；resolvePromptIncludes/safeGit/WAIT_MARKER_RE 从 './shared.js'
@@ -33,18 +34,18 @@ import { REVIEW_SCHEMA_VERSION } from '../task-review.js'
  * @param {string} projectName - 项目名
  * @returns {object|null} 解析后的模块索引，null 表示无索引
  */
-function loadModuleContextIndex(specBase, projectName) {
+export function loadModuleContextIndex(specBase, projectName) {
   try {
     const mapPath = join(specBase, 'docs', projectName, 'modules', '_module-map.yaml')
     if (!existsSync(mapPath)) return null
     const content = readFileSync(mapPath, 'utf8')
-    // schema_version 校验（advisory）：modules.js 写 schema_version: 2；缺失或非 2 → warn，
-    // 提示 v1/v2 格式混用风险（旧格式字段解析会静默错位）。正常生成的文件不触发。
+    // schema_version 校验：仅缺失 schema_version（真 malformed，parseModuleMapSimple 必错位）时 warn；
+    // schema_version=1（旧格式）静默——读端 buildModuleContextInjection 已 v1/v2 双兼容
+    // （data.paths || data.core_files），v1 解析正常。原 v1 warn 是过激噪声（每步渲染 prompt 刷屏）。
+    // v1→v2 根因在 scan prompt 模板仍写 schema_version:1，升级 scan.js 是单独改动（见 troubleshooting）。
     const sv = content.match(/^schema_version:\s*(\d+)/m)
     if (!sv) {
       console.warn(`⚠️  _module-map.yaml 缺少 schema_version 声明（期望 2），模块解析可能错位：${mapPath}（跑 \`sillyspec modules rebuild\` 升级到 schema_version: 2 可消除此警告）`)
-    } else if (sv[1] !== '2') {
-      console.warn(`⚠️  _module-map.yaml schema_version=${sv[1]}（期望 2），可能为旧格式，模块解析可能错位：${mapPath}（跑 \`sillyspec modules rebuild\` 升级到 schema_version: 2 可消除此警告）`)
     }
     return parseModuleMapSimple(content)
   } catch {

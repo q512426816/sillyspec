@@ -243,6 +243,8 @@ async function rotateIfNeeded(userFile, gitUser) {
   } else {
     renameSync(userFile, archiveFile)
   }
+  // echo 轮转：归档文件是 git 跟踪的新文件，提交时带上（勿漏，否则旧 ql 条目只在本地）
+  console.log(`🔄 QUICKLOG 已轮转（>500 行）：${basename(userFile)} → ${basename(archiveFile)}（提交时带上归档文件，勿漏）`)
 }
 
 function tasksPath(specBase, change) {
