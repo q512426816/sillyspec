@@ -129,7 +129,7 @@ prompt 正文中出现的占位符，运行时由 `outputStep` 替换。下表�
 
 | 占位符 | 常规模式替换为 | 平台模式替换为 | 出现阶段 |
 |---|---|---|---|
-| `{SPEC_ROOT}` | `cwd/.sillyspec` | `platformOpts.specRoot` | 多阶段 |
+| `{SPEC_ROOT}` | `platformOpts.specDriftAnchor \|\| cwd/.sillyspec`（worktree 漂移时锚定主仓 specBase，2026-08-13 修 execute review.json 提示路径分裂；`resolvePromptSpecBase` 统一解析） | `platformOpts.specRoot` | 多阶段 |
 | `{DOCS_ROOT}` | `cwd/.sillyspec/docs/<project>` | `specRoot/docs/<project>` | scan |
 | `{PROJECTS_ROOT}` | `cwd/.sillyspec/projects` | `specRoot/projects` | scan |
 | `{WORKFLOWS_ROOT}` | `cwd/.sillyspec/workflows` | `specRoot/workflows` | scan |

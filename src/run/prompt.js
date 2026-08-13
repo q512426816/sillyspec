@@ -118,6 +118,19 @@ function buildModuleContextInjection(taskDescription, moduleIndex, specBase, pro
 // parseModuleMapSimple 复用 modules.js 的 canonical 实现（合并历史 copy-paste 副本，2026-08-07；
 // 无循环依赖：modules.js 仅 import fs/path/db.js，prompt.js → modules.js 单向）。
 /**
+ * 提示词路径根的单一解析：specRoot(平台) > specDriftAnchor(worktree 漂移锚定主仓) > cwd/.sillyspec(本地)。
+ * 治 execute review.json 提示路径写 worktree 副本、--done 校验读主仓的分裂（坑 execute-prompt-spec-drift）：
+ * CLI 自动锚定主仓 spec（command.js detectWorktreeSpecDrift → platformOpts.specDriftAnchor）只修正了
+ * resolveRuntimeRoot 的 runtime 落点，outputStep 拼 {SPEC_ROOT}/.runtime/execute-runs/… 若仍用 cwd
+ * （worktree）→ 提示的 review.json 路径落到 worktree 副本 .sillyspec，而 gate/checkbox 从主仓
+ * resolveRuntimeRoot 读 → agent 落盘错位，marker 漂移改用他 run / task 未勾。specDriftAnchor 非空即主仓
+ * specBase，优先于 cwd。平台模式 specRoot 优先语义不变。
+ */
+export function resolvePromptSpecBase(platformOpts, cwd) {
+  return platformOpts?.specRoot || platformOpts?.specDriftAnchor || join(cwd, '.sillyspec')
+}
+
+/**
  * 输出当前步骤的 prompt
  */
 export async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjectName, platformOpts = {}, prevStepAnswer = null) {
@@ -237,7 +250,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
   // 替换 <quicklog-id> 占位符（quick 阶段：从 session guard.json 读 CLI 分配的 ql-ID，
   // 供 agent 在模块文档变更索引等处引用）
   if (promptText.includes('<quicklog-id>')) {
-    const specBaseQl = platformOpts?.specRoot || join(cwd, '.sillyspec')
+    const specBaseQl = resolvePromptSpecBase(platformOpts, cwd)
     let qlIdVal = ''
     try {
       const sessionGuardFile = join(specBaseQl, '.runtime', 'quick-sessions', changeName, 'guard.json')
@@ -249,7 +262,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
   }
   // 替换 <linked-changes> 占位符（quick 阶段：从 .runtime/quick-sessions/<sessionId>/guard.json 读关联变更）
   if (promptText.includes('<linked-changes>')) {
-    const specBaseLc = platformOpts?.specRoot || join(cwd, '.sillyspec')
+    const specBaseLc = resolvePromptSpecBase(platformOpts, cwd)
     let linkedChanges = []
     try {
       // D-002：guard 按 session 存。changeName == quick-<uuid8>（见 runStage 参数解析）。回退读旧单文件（兼容 task-03 前）
@@ -267,7 +280,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
   if (platformOpts?.specRoot || platformOpts?.runtimeRoot) {
     const projectName = dbProjectName || basename(cwd)
     // platformOpts.specRoot 现在指向 specDir 本身（可能是 cwd/.sillyspec 或外部路径）
-    const specSillyspec = platformOpts.specRoot || join(cwd, '.sillyspec')
+    const specSillyspec = resolvePromptSpecBase(platformOpts, cwd)
     const docsRoot = join(specSillyspec, 'docs', projectName)
     const projectsRoot = join(specSillyspec, 'projects')
     const changesRoot = join(specSillyspec, 'changes')
@@ -329,7 +342,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
     // 常规模式（无平台 specRoot）：占位符替换为 cwd/.sillyspec 下对应路径
     // 让用 {SPEC_ROOT}/{DOCS_ROOT} 等占位符的 prompt（如 quick/scan）在常规模式也写到正确位置
     const projectName = dbProjectName || basename(cwd)
-    const specSillyspec = join(cwd, '.sillyspec')
+    const specSillyspec = resolvePromptSpecBase(platformOpts, cwd)
     promptText = applyRootPlaceholders(promptText, {
       specRoot: specSillyspec,
       docsRoot: join(specSillyspec, 'docs', projectName),
@@ -357,7 +370,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
 
     // scanProfile 分支也要替换占位符（非 platform 模式也会走到这里）
     const _pName = dbProjectName || basename(cwd)
-    const _specSS = platformOpts?.specRoot || join(cwd, '.sillyspec')
+    const _specSS = resolvePromptSpecBase(platformOpts, cwd)
     const _docsRoot = join(_specSS, 'docs', _pName)
     promptText = applyRootPlaceholders(promptText, {
       specRoot: _specSS,
@@ -369,7 +382,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
   } else {
     // 非 platform 模式也要替换占位符
     const projectName = dbProjectName || basename(cwd)
-    const specSillyspec = join(cwd, '.sillyspec')
+    const specSillyspec = resolvePromptSpecBase(platformOpts, cwd)
     const docsRoot = join(specSillyspec, 'docs', projectName)
     const projectsRoot = join(specSillyspec, 'projects')
     const workflowsRoot = join(specSillyspec, 'workflows')
@@ -381,7 +394,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
   if (stageName === 'execute' && promptText.includes('{KNOWLEDGE_HIT_REPORT}')) {
     try {
       const { matchKnowledge } = await import('../knowledge-match.js')
-      const effectiveSpecBase = platformOpts?.specRoot || join(cwd, '.sillyspec')
+      const effectiveSpecBase = resolvePromptSpecBase(platformOpts, cwd)
       const knowledgeDir = join(effectiveSpecBase, 'knowledge')
       // taskContext: changeName + plan.md task names for better matching
       let taskContext = changeName || ''
@@ -410,7 +423,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
   // Execute: 注入 currentExecuteRunId（从变更专属标记文件读取）
   if (stageName === 'execute' && promptText.includes('{EXECUTE_RUN_ID}')) {
     let runId = ''
-    const execSpecBase = platformOpts?.specRoot || join(cwd, '.sillyspec')
+    const execSpecBase = resolvePromptSpecBase(platformOpts, cwd)
     const runtimeRoot = resolveRuntimeRoot(platformOpts, execSpecBase)
     const runIdFile = join(runtimeRoot, `current-execute-run-id-${changeName}`)
     try {
@@ -434,7 +447,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
     try {
       const { classifyReviewTier } = await import('../review-tier.js')
       const { generateStageReviewRunId, renderReviewJsonContract, stageReviewMarkerPath } = await import('../stage-review.js')
-      const tierSpecBase = platformOpts?.specRoot || join(cwd, '.sillyspec')
+      const tierSpecBase = resolvePromptSpecBase(platformOpts, cwd)
       const tierChangeDir = changeName ? join(tierSpecBase, 'changes', changeName) : null
       const designPath = tierChangeDir ? join(tierChangeDir, 'design.md') : null
       let planLevel = null
@@ -492,7 +505,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
   if (stageName === 'archive' && promptText.includes('{TASK_COMPLETION_REPORT}')) {
     try {
       const { summarizeTaskCompletion } = await import('../task-review.js')
-      const tcrSpecBase = platformOpts?.specRoot || join(cwd, '.sillyspec')
+      const tcrSpecBase = resolvePromptSpecBase(platformOpts, cwd)
       const tcrRuntimeRoot = resolveRuntimeRoot(platformOpts, tcrSpecBase)
       const tcrChangeDir = changeName ? join(tcrSpecBase, 'changes', changeName) : null
       const summary = tcrChangeDir
@@ -506,7 +519,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
 
   // 注入模块上下文（brainstorm/plan/execute 阶段，基于 Module Context Index）
   if (['brainstorm', 'plan', 'execute'].includes(stageName) && projectName) {
-    const effectiveSpecBase = platformOpts?.specRoot || join(cwd, '.sillyspec')
+    const effectiveSpecBase = resolvePromptSpecBase(platformOpts, cwd)
     const moduleIndex = loadModuleContextIndex(effectiveSpecBase, projectName)
     if (moduleIndex && Object.keys(moduleIndex).length > 0) {
       // 尝试从 step prompt / changeName 匹配模块
@@ -564,7 +577,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
   if (platformOpts?.specRoot || platformOpts?.runtimeRoot || changeName) {
     if (stepIndex !== 0) console.log(`\n### ⚠️ 路径与平台规则（每步提醒，通用铁律见首步）`)
     if (platformOpts?.specRoot || platformOpts?.runtimeRoot) {
-      const specSillyspec = platformOpts.specRoot || join(cwd, '.sillyspec')
+      const specSillyspec = resolvePromptSpecBase(platformOpts, cwd)
       console.log(`- **平台模式：所有文件只能写入 \`${specSillyspec}/\` 下的对应子目录，严禁写入源码目录。**`)
       console.log('- **平台模式：Write 工具失败时，不允许用 cat > / tee / heredoc 等方式绕过。先 Read 再 Write，仍失败则记录并停止。**')
       console.log('- **平台模式：local.yaml 中的 commands 必须在 package.json scripts 中真实存在，不存在的标记 unavailable。**')

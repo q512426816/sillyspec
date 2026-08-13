@@ -60,3 +60,12 @@
 根因：--files 是单值 flag（VALUE_FLAGS 校验循环只跳一个 token），空格分隔的多文件首个之后沦为位置参数，被双横线前缀校验静默忽略。
 方案：src/run/command.js 抽 detectSpaceSeparatedFiles 纯函数检测空格分隔误用，fail-loud 退码 2 加 stderr 给出逗号修正建议，沿用 run --json 显式拒绝静默吞风格，不改单值框架。
 结果：新增 test/quick-files-space-separator.test.mjs 共 17 断言（纯函数 11 场景加 CLI 子进程 E2E 退码 2），npm test 全量 183 文件零失败，lint 267 文件通过。
+
+## ql-20260813-008-8fd5 | 2026-08-13 14:53:42 | execute review.json 提示路径与校验分裂
+状态：已完成
+关联变更：（无）
+文件：src/run/prompt.js, test/prompt-spec-drift-anchor.test.mjs
+需求：execute review.json 提示路径与校验分裂
+根因：prompt.js outputStep 用 cwd 拼 SPEC_ROOT 忽略 specDriftAnchor
+方案：resolvePromptSpecBase helper 统一 12 处路径根 + 补 specDrift 断言测试
+结果：新测试 8/8 绿 + 回归 88 断言绿 + lint 269 过
