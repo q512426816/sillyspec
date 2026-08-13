@@ -834,6 +834,96 @@ export async function handleExecuteWaveArtifact({ stageName, steps, currentIdx, 
 }
 
 /**
+ * 聚合最新 execute run 各 task review.json 的 changedFiles（主仓 repo 过滤）。
+ *
+ * 复用 resolveLatestExecuteRunIdWithTasks（task-review.js:684，规避 marker 漂移）+ readReview。
+ * 仅主仓 repo（review.repo 缺省或 'main'）的 changedFiles 参与主仓核验；跨仓 repo 的 task 文件
+ * 由跨仓仓独立落地，不在主仓 worktree/分支，混入会误报 missing（Grill M11）。
+ *
+ * @param {{ runtimeRoot: string, changeName: string }} opts
+ * @returns {Promise<string[]>} 主仓 changedFiles 聚合（去重保序）；无 run / 无 tasks / 读取失败 → []
+ */
+export async function collectExecuteChangedFiles({ runtimeRoot, changeName }) {
+  if (!runtimeRoot || !changeName) return []
+  const { resolveLatestExecuteRunIdWithTasks, readReview, normalizeRepoKey } = await import('../task-review.js')
+  const runId = resolveLatestExecuteRunIdWithTasks({ runtimeRoot })
+  if (!runId) return []
+  const tasksDir = join(runtimeRoot, 'execute-runs', runId, 'tasks')
+  if (!existsSync(tasksDir)) return []
+  let taskIds
+  try {
+    taskIds = readdirSync(tasksDir)
+  } catch {
+    return []
+  }
+  const files = []
+  for (const taskId of taskIds) {
+    const r = readReview(join(tasksDir, taskId, 'review.json'))
+    if (!r.ok || !r.review) continue
+    // 跨仓 repo 过滤：仅主仓（repo 缺省视 'main'）参与主仓核验，避免误报
+    if (normalizeRepoKey(r.review.repo) !== 'main') continue
+    if (Array.isArray(r.review.changedFiles)) {
+      for (const f of r.review.changedFiles) {
+        // 交付物过滤（与 worktree.js hasUnappliedChanges isDeliverable 同口径）：.sillyspec/ 蓝图/
+        // runtime 产物与 meta.json 不参与落盘核验——它们随主仓/并行 session 维护，不在 worktree 分支，
+        // 混入会误报 missing
+        if (typeof f !== 'string' || f.trim() === '') continue
+        if (f.startsWith('.sillyspec/') || f === 'meta.json') continue
+        files.push(f)
+      }
+    }
+  }
+  return [...new Set(files)]
+}
+
+/**
+ * execute 阶段级核验（防空跑谎报，D-002@v1 / FR-04/05/06）：聚合最新 execute run 各 task review 声称的
+ * 交付文件，用 findMissingDeliverables 核验其存在于 worktree 分支 tree 或 worktree 工作区。
+ *
+ * - missing 文件 → console.warn 列清单，提示"apply 将无源可复制"（宽松非阻断，不 exit 不 throw）。
+ * - checked:false（worktree 目录 / 分支不存在）→ 保守提示"无法核验，请人工确认"。
+ * - 与 Task Review Gate 既有校验（零改动伪造 / 不相交伪造，task-review.js:590-623）互补不重复拦截：
+ *   本核验的真实增量窗口是「review 通过后文件被删且未 commit」+「无法核验时给人工确认提示」。
+ *
+ * 由 handleExecuteWorktreeCleanup 开头调用：核验发生在 worktree cleanup 之前，目录被清前先判定
+ * 交付文件是否落盘。整个钩子 try/catch 兜底——任何异常只 warn，绝不影响 execute 完成（FR-07）。
+ *
+ * ctx：stageName/changeName/cwd。WorktreeManager + findMissingDeliverables ← 动态 ../worktree.js；
+ * task-review 读取 ← 动态 ../task-review.js。runtimeRoot 用本地 specBase 解析（无 platformOpts 传入
+ * 时平台 runtimeRoot 不在本函数作用域，降级为本仓 .runtime，读不到 review 则跳过，零误报）。
+ */
+export async function handleExecuteDeliverableCheck({ stageName, changeName, cwd }) {
+  if (stageName !== 'execute' || !changeName) return null
+  try {
+    const { WorktreeManager, findMissingDeliverables } = await import('../worktree.js')
+    const wm = new WorktreeManager({ cwd })
+    const meta = wm.getMeta(changeName)
+    if (!meta) return null // 无 worktree meta（非 worktree execute / 已清），无需核验
+    const specBase = join(cwd, '.sillyspec')
+    const runtimeRoot = resolveRuntimeRoot({}, specBase)
+    const changedFiles = await collectExecuteChangedFiles({ runtimeRoot, changeName })
+    if (changedFiles.length === 0) return null
+    const { missing, checked } = findMissingDeliverables({
+      worktreePath: meta.worktreePath,
+      branch: meta.branch,
+      changedFiles,
+    })
+    if (!checked) {
+      console.warn('⚠️ execute 阶段级核验：无法核验（worktree 目录或分支不存在），请人工确认交付文件已落盘。')
+      return null
+    }
+    if (missing.length > 0) {
+      console.warn(`⚠️ execute 阶段级核验：以下 ${missing.length} 个声称实现的交付文件既不在分支也不在工作区，疑似空跑/从未落盘：`)
+      for (const f of missing) console.warn(`   ${f}`)
+      console.warn('   请检查子代理是否真实实现，或先 commit 到分支；apply 将无源可复制。')
+    }
+  } catch (e) {
+    console.warn(`⚠️ execute 阶段级核验跳过: ${e?.message || e}`)
+  }
+  return null
+}
+
+/**
  * execute 阶段完成时条件性清理 worktree（W6 Step6c 从 completeStep 完成路径内联块抽出）。
  * 不依赖 AI agent 的完成确认步骤：有未 apply 变更 → 保留 worktree；否则 cleanup（含 in-place 安全清理）。
  * stage 级（execute 阶段全部完成时跑），无 early-return（try/catch warn）。
@@ -841,6 +931,9 @@ export async function handleExecuteWaveArtifact({ stageName, steps, currentIdx, 
  * ctx：stageName/changeName/cwd。WorktreeManager ← 动态 ../worktree.js。
  */
 export async function handleExecuteWorktreeCleanup({ stageName, changeName, cwd }) {
+  // 阶段级核验（D-002@v1，防空跑谎报）：cleanup 之前判定 review 声称实现的交付文件是否落盘。
+  // 宽松非阻断：缺失 warn / 无法核验保守提示 / 异常只 warn，均不影响下方 cleanup 与 execute 完成。
+  await handleExecuteDeliverableCheck({ stageName, changeName, cwd })
   if (stageName === 'execute' && changeName) {
     try {
       const { WorktreeManager } = await import('../worktree.js');

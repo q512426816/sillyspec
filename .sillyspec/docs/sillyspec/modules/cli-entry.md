@@ -44,6 +44,8 @@ runStage(pm, progress, stageName, cwd, changeName)
 
 **--done 底部推进锚定行**（2026-08-05，`run/complete.js`，问题 5）：`outputStep` 渲染的长 prompt 易被 tail 视窗截断，`completeStep` 在 `outputStep` 之后再打一行 `🚀 advanced to step <i+1>/<total>: <name>`，让 agent 不必二次 `grep step:` 确认是否真推进。
 
+**execute 完成路径阶段级核验 warn**（2026-08-13-worktree-execute-loss-guard，D-002@v1，防空跑谎报）：`handleExecuteWorktreeCleanup`（`run/complete-handlers.js`）在 cleanup 之前调 `handleExecuteDeliverableCheck` —— 聚合最新 execute run 各 task review.json 的 `changedFiles`（主仓 repo 过滤 + `.sillyspec/`/meta.json 过滤），经 `findMissingDeliverables`（`src/worktree.js`）核验存在于 worktree 分支 tree 或 worktree 工作区；missing 列清单 warn（apply 将无源可复制）、`checked:false`（worktree 目录/分支不存在）保守提示人工确认、任何异常只 warn，均不影响 execute 完成（宽松非阻断）。
+
 ## 注意事项
 
 - `sillyspec init /path/to/project` 语法：第二个参数如果是路径会被当作 targetDir，而非子命令
@@ -53,9 +55,11 @@ runStage(pm, progress, stageName, cwd, changeName)
 - `triggerSync` 在每步执行前触发，可能与外部平台（如飞书/GitHub）同步
 - **apply / assess 自动 apply 消息同步**（坑3，`index.js`）：apply 与 assess 自动 apply 的用户面消息改为「`.sillyspec/changes/`、`.sillyspec/.runtime/`、`.sillyspec/quicklog/` 不自动 apply（worktree 进度/产物非交付物），模块文档 `.sillyspec/docs/` 会自动 apply 回主仓」——对齐 `worktree-apply.js#filterDeliverableFiles` 精细化过滤（保留 docs/、排除 changes/+.runtime/+quicklog/+meta.json）
 - **apply / assess dirty 拦截 rescue 段**（2026-08-10-worktree-apply-dirty-resilient，`index.js`）：apply/assess 命中 step4.5/5a dirty fail-loud 拦截时，在 errors/reasons 主通道文本之后补结构化 rescue 段 `🆘 Rescue commands (N safe / M excluded，旁路 git apply，cp 后需手动 sillyspec worktree cleanup <wtName>):` + 逐行 cp 指令 + warnings（gated on `result.rescueCommands` / `assessment.rescueCommands` 非空，===null 时零影响）；rescue 指令由 `worktree-apply.js#generateRescueCommands` 逐文件四分类生成（SAFE-CP 给 cp、EXCLUDE-DIRTY/MISMATCH 进 warnings、DELETE 给 rm）
+- **worktree cleanup 显式命令 blocked 提示 + reset force**（2026-08-13-worktree-execute-loss-guard，`index.js` + `run/command.js`）：显式 `sillyspec worktree cleanup <name>` 命中 fail-closed 保护（有未落主仓交付变更，D-001@v1）时输出 `🚫 拒绝清理：有未落主仓交付变更，请先 sillyspec worktree apply <name> 或 --force`；execute reset（`resetStage`）清理 worktree 显式传 `force:true`（D-006@v1，reset 语义即放弃 worktree 中未 apply 变更，交 apply 负责落地）
 
 ## 变更索引
 
+- 2026-08-13-worktree-execute-loss-guard | execute 完成路径阶段级核验 warn（`handleExecuteDeliverableCheck` + `findMissingDeliverables`，聚合最新 execute run 各 task review.changedFiles 核验落盘，防空跑谎报 D-002@v1）+ 显式 worktree cleanup 命令 blocked 分支（D-001@v1）+ execute reset 清理 worktree 显式 `force:true`（D-006@v1）。
 - ql-20260807-001-a260 | gate/derive 顶层命令补 worktree drift 锚定：未显式 --spec-dir 时 detectWorktreeSpecDrift(resolveSpecDir(dir)) 命中即向 runGate/runDerive 传 specDriftAnchor（对齐 machine-interface 已扩展入参），execute/task-reviews marker 读主仓 .runtime（补 test/gate-derive-spec-drift.test.mjs 3 场景 e2e）。
 - 2026-08-10-worktree-apply-dirty-resilient | apply/assess dirty 拦截补结构化 rescue 打印段（gated on rescueCommands 非空）：`🆘 Rescue commands (N safe / M excluded)` + 逐行 cp 指令（`generateRescueCommands` 逐文件四分类），旁路 git apply，cp 后提示手动 worktree cleanup；纯 additive，`rescueCommands===null` 零影响。
 - 2026-08-10-platform-progress-sync | platform case 新增 `pull` 子命令（--change 单变更 / 无参先 pullList 再逐个 pull）+ `resolve` 子命令（三 flag --keep-local/--take-platform/--abort 互斥校验，多/缺均报错）+ `status` 扩展（collectStatus：落后标记 + 未决冲突列表）；stage case block（brainstorm/plan/execute/verify/archive）runCommand 前 + platform approve 前注入 `triggerPullActiveChange`/`triggerPull`（下行拉最新避免过期状态审批）；help 文本同步加 pull/resolve 行。

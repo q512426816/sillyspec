@@ -414,7 +414,7 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
   if (changedFiles.length === 0) {
     // 没有变更
     if (!checkOnly) {
-      wm.cleanup(changeName);
+      wm.cleanup(changeName, { force: true });
     }
     result.ok = true;
     return result;
@@ -646,7 +646,7 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
 
     // --- 8. 成功后自动 cleanup（失败不影响整体结果） ---
     try {
-      wm.cleanup(changeName);
+      wm.cleanup(changeName, { force: true });
     } catch (cleanupErr) {
       result.warnings = result.warnings || [];
       result.warnings.push(`cleanup 失败（不影响应用结果）: ${cleanupErr.message}`);
@@ -756,7 +756,7 @@ function applyByMerge(result, changeName, projectRoot, wm) {
   result.ok = true;
   try { result.mergeSummary = git(projectRoot, ['log', '--oneline', '-1']); } catch {}
   try {
-    wm.cleanup(changeName);
+    wm.cleanup(changeName, { force: true });
   } catch (cleanupErr) {
     result.warnings = result.warnings || [];
     result.warnings.push(`cleanup 失败（不影响 merge 结果）: ${cleanupErr.message}`);

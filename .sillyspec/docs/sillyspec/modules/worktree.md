@@ -4,8 +4,8 @@ created_at: 2026-06-01T09:05:00
 ---
 
 # worktree
-> 最后更新：2026-08-10
-> 最近变更：2026-08-10-worktree-apply-dirty-resilient（dirty 拦截时输出逐文件 rescue cp 指令方案A：新增 export `generateRescueCommands`/`computeRescueDirtyFiles` + applyWorktree 返回值 additive `rescueCommands`/`deletedFiles` + step3.5 前移 hashMismatch 计算 + index.js apply/assess 结构化 rescue 打印段；step4.5/5a fail-loud 拦截决策零改动保留）/ 2026-08-09-worktree-git-injection（git 调用收口 src/git-helper.js：worktree.js/worktree-apply.js 删本地 git()/gitQuiet() helper、77 调用点 + 2 裸 execSync 注入核心全 execFileSync 数组化不经 shell，消除命令注入 + 空格拆词，与 run/shared.js safeGit 合一单一真相源）/ 2026-08-06-execute-runs-isolation（drift 守卫补设 `platformOpts.specDriftAnchor` + 抽 `resolveRuntimeRoot` 统一 `.runtime` 根解析 15 站点；drift 场景 execute-runs/stage-reviews 落主仓 `.runtime`，cleanup 整目录删 worktree 碰不到，archive step1 完成度 gate 不再因丢 review.json 阻断）/ 2026-08-05-tooling-feedback-fixes（doctor 加 `deps-main-drift` issue 探主仓 lockfile 漂移 + `--change` 过滤 + `--fix` force 重装；provisionDeps 加 `force` 选项；抽 H1 `checkDepsFreshness` 统一 doctor 与 execute 的 deps 判定）
+> 最后更新：2026-08-13
+> 最近变更：2026-08-13-worktree-execute-loss-guard（cleanup 加 fail-closed 保护：未落主仓交付变更拒绝清理、新增返回 `result:'blocked'`，需显式 force 绕过（D-001@v1）；新增 findMissingDeliverables 纯函数导出 + execute 完成路径阶段级核验（D-002@v1）；apply 后自动 cleanup 与 execute reset 显式 force:true 绕过保护（D-006@v1））/ 2026-08-10-worktree-apply-dirty-resilient（dirty 拦截时输出逐文件 rescue cp 指令方案A：新增 export `generateRescueCommands`/`computeRescueDirtyFiles` + applyWorktree 返回值 additive `rescueCommands`/`deletedFiles` + step3.5 前移 hashMismatch 计算 + index.js apply/assess 结构化 rescue 打印段；step4.5/5a fail-loud 拦截决策零改动保留）/ 2026-08-09-worktree-git-injection（git 调用收口 src/git-helper.js：worktree.js/worktree-apply.js 删本地 git()/gitQuiet() helper、77 调用点 + 2 裸 execSync 注入核心全 execFileSync 数组化不经 shell，消除命令注入 + 空格拆词，与 run/shared.js safeGit 合一单一真相源）/ 2026-08-06-execute-runs-isolation（drift 守卫补设 `platformOpts.specDriftAnchor` + 抽 `resolveRuntimeRoot` 统一 `.runtime` 根解析 15 站点；drift 场景 execute-runs/stage-reviews 落主仓 `.runtime`，cleanup 整目录删 worktree 碰不到，archive step1 完成度 gate 不再因丢 review.json 阻断）/ 2026-08-05-tooling-feedback-fixes（doctor 加 `deps-main-drift` issue 探主仓 lockfile 漂移 + `--change` 过滤 + `--fix` force 重装；provisionDeps 加 `force` 选项；抽 H1 `checkDepsFreshness` 统一 doctor 与 execute 的 deps 判定）
 > 模块路径：src/worktree.js, src/worktree-apply.js, src/worktree-deps.js
 
 ## 职责
@@ -32,8 +32,9 @@ worktree 模块提供基于 git worktree 的分支隔离机制，让每个变更
 | `WorktreeManager.getMeta(changeName)` | 读取 worktree 元数据（meta.json） | `changeName` |
 | `WorktreeManager.create(changeName, { base? })` | 创建 worktree — 建分支、checkout、fetch+merge、baseline overlay、**依赖供给**、写 meta.json | `changeName, { base? }` |
 | `WorktreeManager.list()` | 列出所有 worktree 及其状态 | — |
-| `WorktreeManager.cleanup(changeName)` | 清理 worktree — 删除分支和工作目录 | `changeName` |
+| `WorktreeManager.cleanup(changeName, { force? })` | 清理 worktree — 删除分支和工作目录；**fail-closed 保护（D-001@v1）：有未落主仓交付变更时返回 `result:'blocked'` 拒绝清理，需显式 `force:true` 绕过**（apply 后自动 cleanup 与 execute reset 内部自动传 force；用户显式清理遇 blocked 按提示先 apply 或 `--force`） | `changeName, { force? }` |
 | `WorktreeManager.doctor({ fix?, staleHours?, changeName? })` | 健康检查（含 deps-missing/stale/failed/**deps-main-drift**）+ 可选修复；`changeName` 非空时仅扫该变更（对齐 `enforceDepsGate` 的 `--change` 提示） | `{ fix?, staleHours?, changeName? }` |
+| `findMissingDeliverables({ worktreePath, branch, changedFiles })` | execute 阶段级核验（防空跑谎报，D-002@v1）：逐个核验交付文件存在于 worktree 分支 tree（`rev-parse --verify --quiet <branch>:<file>`）或 worktree 工作区，两处皆无 → `missing`；worktree 目录/分支不存在 → `checked:false`（调用方保守提示人工确认）；宽松非阻断，只返回结果由调用方决策 | `{ worktreePath, branch, changedFiles }` |
 
 ### src/worktree-apply.js
 | 函数/常量 | 说明 | 参数 |
@@ -80,7 +81,7 @@ execute 验证硬门（`run.js completeStep` execute 分支）读 `depsStatus`�
 1. **创建流**: WorktreeManager.create → 验证 changeName → 创建分支 → git worktree add → fetch origin → merge default branch → **baseline overlay** → **provisionDeps（依赖供给）** → 写 meta.json
 2. **重入自检流**: execute 入口 → 读 meta → depsStatus 缺失/node_modules 丢失/lockfile 变化 → 触发 provisionDeps 重供给 → 更新 meta
 3. **应用流**: applyWorktree → 检查 worktree 存在 → git diff 生成文件列表 → 冲突检测 → 生成补丁 → git apply → 处理未跟踪文件
-4. **清理流**: WorktreeManager.cleanup → git worktree remove --force → git branch -D → rmSync 工作目录
+4. **清理流**: WorktreeManager.cleanup → **fail-closed 保护检查（D-001@v1：有未落主仓交付变更 → 返回 `result:'blocked'` 拒绝清理，需显式 `force:true` 绕过；apply 后自动 cleanup 与 execute reset 内部自动传 force 跳过）** → git worktree remove --force → git branch -D → rmSync 工作目录
 5. **健康检查流**: WorktreeManager.doctor → 扫描 meta + 文件系统 → 检出 deps-missing/stale/failed/**deps-main-drift**（+ 孤儿/过期；deps-main-drift 探主仓 lockfile 与 worktree 不一致，靠 H1 `checkDepsFreshness` 统一判定；`--change <名>` 仅扫指定变更）→ --fix 时 `_doctorReprovision` 解链（**失败 fail-loud 阻断，不调 provisionDeps，D-002@v1**）+ `provisionDeps(force=true)` 重供给
 
 ## 设计决策（表格）
@@ -91,7 +92,7 @@ execute 验证硬门（`run.js completeStep` execute 分支）读 `depsStatus`�
 | meta.json 存储元数据（含 depsStatus） | 独立于 git，便于快速查询 | git config |
 | sillyspec/ 前缀的分支命名 | 避免与功能分支冲突 | 无前缀 |
 | 补丁方式应用（`git apply --3way`）而非 merge（默认） | 保持线性历史，避免合并提交。主干**已提交**推进由 `--3way` 自动三路合并；未提交 dirty 拦截引导 commit/stash（git 危险区）；`--3way` 同区域重叠冲突时回滚干净 + 提示 `apply --merge` 显式兜底（D-002，引合并提交，opt-in） | git merge |
-| cleanup 支持 force 参数 | worktree 可能处于异常状态 | 仅允许正常清理 |
+| cleanup 支持 force 参数（`force:true` 绕过 fail-closed 未落主仓保护，D-001@v1） | worktree 可能处于异常状态；有未落主仓交付变更时默认拒绝清理（防清理静默蒸发实现代码），force 显式确认 | 仅允许正常清理 |
 | 依赖供给：junction 快路径 + install 兜底 | lockfile 一致时瞬时复用主 checkout 依赖，否则安装 | 每次全量 install / 只 warn |
 | 验证硬门（blocked + exit 1） | 依赖未就绪不得声称 verified，靠代码级门保证 | prompt 软约束（已证失效） |
 
@@ -105,6 +106,7 @@ execute 验证硬门（`run.js completeStep` execute 分支）读 `depsStatus`�
 - applyWorktree 在冲突时会报告冲突文件列表但不自动解决
 - worktree 目录位于 `.sillyspec/.runtime/worktrees/`，需在 .gitignore 中配置
 - cleanup 会强制删除 worktree 和对应分支，操作不可逆
+- **cleanup fail-closed 与 force 调用点契约（D-001/D-006@v1）**：清理（junction 解链 + `git worktree remove --force`）前经 `hasUnappliedChanges` 检查未落主仓交付变更（判定 main HEAD byte-identical；`git apply --3way` 不 commit → apply 后仍判 true），命中即返回 `result:'blocked'` 拒绝清理并打印未落地文件清单与指引。**force 调用点契约**：apply 后自动 cleanup（worktree-apply.js 三处）与 execute reset（run/command.js resetStage）显式传 `force:true` 绕过（apply 已把代码落主仓、reset 语义即放弃 worktree）；用户显式 `sillyspec worktree cleanup <name>` 与 doctor --fix 清理过期 worktree 遇 blocked 时打印指引（先 `sillyspec worktree apply <name>` 或 commit 到分支，或显式 `--force`）。in-place / native-worktree 由 hasUnappliedChanges 内部返回 hasChanges:false 自然跳过保护，零回归
 - **cleanup 不威胁 execute-runs / stage-reviews**（坑 execute-runs-isolation，方案 A）：drift 场景（agent cd worktree 跑 plan/execute/verify/archive）下，`.runtime` 根经 `resolveRuntimeRoot` + `platformOpts.specDriftAnchor` 锚定主仓，execute-runs / stage-reviews 从落盘起即在主仓 `.sillyspec/.runtime/`；cleanup（`rmSync(worktreePath, {recursive:true, force:true})` 整目录删 worktree 物理目录）物理上碰不到 → archive step1 完成度 gate 真相源（磁盘主仓 review.json）不再丢。`src/worktree.js` 的 9 处 cleanup 调用点 + `rmSync` 全无需改（方案 A 堵源头 runtimeRoot 解析，非下游 salvage）
 - 依赖供给失败不阻断 create（只记 meta.depsStatus=failed），但 execute 验证硬门会阻断 --done
 - **git 调用收口 src/git-helper.js**（2026-08-09-worktree-git-injection）：worktree.js（原 51 处本地 git()/gitQuiet() helper，`execSync(\`git ${args}\`)` 字符串拼接经 shell）+ worktree-apply.js（原 26 处）的 git 调用全部删本地实现、import 公共入口 src/git-helper.js（safeGit+git+gitQuiet，execFileSync 数组形式不经 shell）；调用点字符串拼接改数组（文件列表 `files.join(' ')` → `...files` 展开为独立 argv 元素），消除命令注入（文件名含 `;`/`$()` 经 shell 在用户机 RCE）+ 空格拆词（文件名含空格被 shell 切词致 apply 漏文件，Windows 用户目录常见）；二进制 diff/commit 保留 Buffer/env 语义用裸 execFileSync 数组形式（合理例外，注入面已消除）
@@ -112,6 +114,7 @@ execute 验证硬门（`run.js completeStep` execute 分支）读 `depsStatus`�
 ## 变更索引
 | 日期 | 变更名 | 摘要 |
 |------|--------|------|
+| 2026-08-13 | 2026-08-13-worktree-execute-loss-guard | cleanup fail-closed 保护（D-001@v1）：清理前经 hasUnappliedChanges 检查未落主仓交付变更，命中返回新增 `result:'blocked'` 拒绝清理，需显式 force 绕过；新增 findMissingDeliverables 纯函数导出（execute 阶段级核验，D-002@v1）；apply 后自动 cleanup 三处 + execute reset（run/command.js resetStage）显式 `force:true`（D-006@v1）；doctor --fix 与显式 worktree cleanup 命令 blocked 提示分支 |
 | 2026-06-28 | 2026-06-28-worktree-deps-provision | 依赖供给 provisionDeps + execute 验证硬门 + doctor deps 检查；修路径/分支前缀脱节 |
 | 2026-08-04 | ql-20260804-005-83d8 | execute 复盘 c：apply 允许集改为 resolveApplyAllowSet（design §6 ∪ plan task allowed_paths），测试/产物文件不再误拦，越界文件仍拦 |
 | 2026-08-06 | ql-20260806-002-c4dd | exec-f：worktree-deps detectProjectType/inferInstallCommand 加 python 分支（pyproject.toml/uv.lock→uv sync，纯 requirements.txt→pip install -r），治 worktree 内 ruff/pre-commit 等二进制不供给（原无 python 分支→误判 generic→n/a）；两函数导出做纯单元测 7 断言（不真跑 uv） |

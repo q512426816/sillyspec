@@ -1015,6 +1015,8 @@ SillySpec worktree — git worktree 隔离管理
             } else if (result.result === 'skipped') {
               console.log(`⏭️  worktree 跳过清理: ${wtName} (mode: ${result.mode})`);
               console.log(`   原因: in-place 模式没有隔离目录需要清理`);
+            } else if (result.result === 'blocked') {
+              console.error(`🚫 拒绝清理：有未落主仓交付变更，请先 sillyspec worktree apply ${wtName} 或 --force`);
             } else {
               console.log(`ℹ️  worktree 未找到: ${wtName}`);
             }

@@ -236,6 +236,53 @@ export function copyUntrackedEntry(src, dst) {
   }
 }
 
+/**
+ * execute 阶段级核验（防空跑谎报，D-002@v1 / FR-04/05/06）：聚合 review.changedFiles 的交付文件，
+ * 逐个核验存在于 worktree 分支 tree 或 worktree 工作区。两处皆无 = 声称实现但从未落盘。
+ *
+ * - checked:false：worktreePath 不存在或 branch 不存在（git rev-parse --verify <branch> 失败）
+ *   → 无法核验（worktree 已丢 / 分支已删），调用方保守提示人工确认。
+ * - 逐文件：`git rev-parse --verify --quiet <branch>:<file>` 成功（在分支 tree）或
+ *   existsSync(worktreePath/<file>)（在工作区）→ verified；两处皆无 → missing。
+ *   tree 探测用 rev-parse --verify --quiet 而非 `git cat-file -e`：语义等价（按 branch tree 解析
+ *   blob），但 cat-file 对不存在路径会往 stderr 打 `fatal: path ... does not exist` 噪音
+ *   （git-helper gitQuiet 只吞退出码不吞 stderr），--quiet 完全静默。
+ *
+ * git 调用走项目统一入口 gitQuiet（git-helper.js，数组形式 execFileSync 不经 shell，Windows 安全）。
+ * 宽松非阻断：本函数只返回结果不 warn/exit，由调用方决定（design 为 warn 不 exit）。
+ *
+ * @param {object} p
+ * @param {string} p.worktreePath - worktree 根目录（绝对路径，meta.worktreePath）
+ * @param {string} p.branch - sillyspec/<change> 分支名（核验 tree）
+ * @param {string[]} p.changedFiles - review 声称的交付文件（调用方已过滤主仓 repo、非 .sillyspec）
+ * @returns {{ missing: string[], verified: string[], checked: boolean }}
+ *   checked=false 表示无法核验（worktree/分支不存在），调用方保守提示人工确认。
+ */
+export function findMissingDeliverables({ worktreePath, branch, changedFiles }) {
+  const files = Array.isArray(changedFiles)
+    ? changedFiles.filter(f => typeof f === 'string' && f.trim() !== '')
+    : []
+  // worktree 目录不存在 → 无法核验（目录已丢，如 apply 后 cleanup / 并行 session 清过）
+  if (!worktreePath || !existsSync(worktreePath)) {
+    return { missing: [], verified: [], checked: false }
+  }
+  // branch 不存在（rev-parse --verify 失败）→ 无法核验分支 tree
+  if (!branch || !gitQuiet(worktreePath, ['rev-parse', '--verify', '--quiet', branch])) {
+    return { missing: [], verified: [], checked: false }
+  }
+  const missing = []
+  const verified = []
+  for (const raw of files) {
+    // 统一正斜杠：review.json 可能落 Windows 反斜杠路径，rev-parse tree 路径一律 /
+    const f = raw.replace(/\\/g, '/')
+    const inBranch = gitQuiet(worktreePath, ['rev-parse', '--verify', '--quiet', `${branch}:${f}`]) !== null
+    const inWorktree = existsSync(join(worktreePath, f))
+    if (inBranch || inWorktree) verified.push(raw)
+    else missing.push(raw)
+  }
+  return { missing, verified, checked: true }
+}
+
 export class WorktreeManager {
   constructor({ cwd, worktreeDir } = {}) {
     this.cwd = cwd || process.cwd();
@@ -704,8 +751,9 @@ export class WorktreeManager {
    * 三重清理：git worktree 注册 + worktree 目录 + meta 目录。
    * @param {string} changeName
    * @param {{ force?: boolean, maxRetries?: number }} opts
-   * @returns {{ result: 'cleaned'|'force-cleaned'|'skipped'|'kept'|'partial', mode: string|null, details: string[], residual: string[] }}
-   *   result 取值：cleaned=git remove 成功；force-cleaned=git remove 失败但 fallback 清理完成；
+   * @returns {{ result: 'blocked'|'cleaned'|'force-cleaned'|'skipped'|'kept'|'partial', mode: string|null, details: string[], residual: string[] }}
+   *   result 取值：blocked=有未落主仓交付变更，fail-closed 拒绝清理（需 force 绕过，D-001@v1）；
+   *   cleaned=git remove 成功；force-cleaned=git remove 失败但 fallback 清理完成；
    *   partial=有残留（目录/meta/git 注册未清）；skipped=无需清理；kept=native-worktree 保留。
    *   residual：未清干净的路径/引用列表（空数组表示干净）。
    */
@@ -729,6 +777,21 @@ export class WorktreeManager {
     // 安全检查：native-worktree 是外部隔离环境，非 force 不碰
     if (!force && mode === 'native-worktree') {
       return { result: 'kept', mode, details: ['native-worktree: 外部隔离环境，跳过清理'], residual: [] };
+    }
+
+    // fail-closed 保护（D-001@v1）：junction 解链与 git worktree remove --force 之前，检查未落主仓交付变更。
+    // 清理即蒸发：worktree 有未 commit / 未 apply 到主仓 HEAD 的交付文件，拒绝清理，需显式 --force 绕过。
+    // hasUnappliedChanges 判定 main HEAD（byte-identical），git apply --3way 不 commit → apply 后仍判 true，
+    // 故 apply 后自动 cleanup 与 execute reset 显式传 force:true 绕过（D-006）。in-place / native-worktree
+    // 由 hasUnappliedChanges 内部返回 hasChanges:false，自然跳过保护，零回归。
+    if (!force) {
+      const check = this.hasUnappliedChanges(name);
+      if (check.hasChanges) {
+        console.error(`🚫 worktree cleanup 拒绝：${check.changedFiles.length} 个交付变更未落地主工作区 HEAD，清理会丢失代码。`);
+        for (const f of check.changedFiles) console.error(`   ${f}`);
+        console.error('   请先落地（sillyspec worktree apply <name>）或 commit 到分支，或显式 --force 强制清理。');
+        return { result: 'blocked', mode, details: [...details, 'blocked: uncommitted deliverable changes'], residual: [] };
+      }
     }
 
     const branch = (meta && meta.branch) || BRANCH_PREFIX + name;
@@ -1045,6 +1108,9 @@ export class WorktreeManager {
                 const result = this.cleanup(name);
                 if (result.result === 'cleaned' || result.result === 'force-cleaned') {
                   fixed.push(`cleaned stale: ${name}`);
+                } else if (result.result === 'blocked') {
+                  console.error(`🚫 拒绝清理过期 worktree ${name}: 有未落主仓交付变更，请先 sillyspec worktree apply ${name} 或 commit 到分支，再重试 doctor --fix`);
+                  unfixable.push(`cleanup blocked: ${name}（有未落主仓交付变更）`);
                 } else {
                   unfixable.push(`cleanup skipped: ${name}`);
                 }

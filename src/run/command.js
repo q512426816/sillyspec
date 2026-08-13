@@ -957,7 +957,7 @@ async function resetStage(pm, progress, stageName, cwd, changeName, platformOpts
       const wm = new WorktreeManager({ cwd })
       const meta = wm.getMeta(changeName)
       if (meta) {
-        const cleanResult = wm.cleanup(changeName)
+        const cleanResult = wm.cleanup(changeName, { force: true })
         if (cleanResult.residual?.length > 0) {
           console.warn(`⚠️  reset 清理 worktree 残留: ${cleanResult.residual.join('; ')}`)
           console.warn(`   手动处理: sillyspec worktree cleanup ${changeName} --force`)
