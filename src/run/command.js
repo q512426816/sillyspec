@@ -46,6 +46,32 @@ const VALUE_FLAGS = new Set([
 ])
 
 /**
+ * 检测 `--files` 是否被空格分隔误用（坑 quick-files-space-separated-silently-drops）。
+ *
+ * --files 是单值 flag（VALUE_FLAGS：校验循环只跳一个 token、--k=v 只展开一个值），空格分隔的
+ * 多文件只有首个被当值，其余沦为位置参数被 `:482` 的 `startsWith('--')` 校验静默忽略 →
+ * guard.allowedFiles 只剩首个 → --done 边界审计误拦，边界保护形同虚设。
+ *
+ * 返回 --files 值及其后所有连续非 flag token（疑似被丢的多文件）；length > 1 即误用，调用方
+ * fail-loud（process.exit 2，同 run --json :109 显式拒绝静默吞风格）。贪婪收集多值会破坏
+ * VALUE_FLAGS 单值框架（校验循环/等号展开/getFlagValue 都假设单值），故仅检测不改语义。
+ *
+ * 纯函数：无副作用、不读 process、不 mutate 入参，供 command.js 解析 + 单测复用。
+ * @param {string[]} flags runCommand 规范化后的 flags 数组（--k=v 已展开）
+ * @returns {string[]} --files 值 + 其后连续非 flag token；无 --files / 值是 flag 名 / 含逗号 → []
+ */
+export function detectSpaceSeparatedFiles(flags) {
+  const idx = flags.indexOf('--files')
+  if (idx === -1) return []
+  const val = flags[idx + 1]
+  // 值缺失 / 值本身是 flag 名（--files --done 漏值）/ 逗号分隔（正确用法）→ 不检测
+  if (!val || val.startsWith('--') || val.includes(',')) return []
+  const suspects = [val]
+  for (let j = idx + 2; j < flags.length && !flags[j].startsWith('--'); j++) suspects.push(flags[j])
+  return suspects
+}
+
+/**
  * 从 progress 或变更目录推导变更名
  */
 function resolveChangeName(cwd, progress, specDir = null) {
@@ -445,6 +471,16 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
   }
 
   // 解析 --files a.js,b.js（quick 专用：显式声明 allowedFiles）
+  // --files 是单值 flag，空格分隔的多文件只取首个致其余静默丢失（坑 quick-files-space-separated-silently-drops）。
+  // detectSpaceSeparatedFiles 检测误用 → fail-loud 报错指明逗号用法（同 run --json :109 风格）。
+  const spaceSuspects = detectSpaceSeparatedFiles(flags)
+  if (spaceSuspects.length > 1) {
+    console.error('❌ --files 检测到空格分隔的多文件：CLI 只识别首个，其余会被静默丢弃（边界保护失效）。')
+    console.error(`   疑似多文件：${spaceSuspects.join(' ')}`)
+    console.error('   --files 是单值参数，多文件请用逗号分隔（无空格）：')
+    console.error(`     --files ${spaceSuspects.join(',')}`)
+    process.exit(2) // 用法错 → exit 2
+  }
   let quickFiles = []
   const filesIdx = flags.indexOf('--files')
   if (filesIdx !== -1 && flags[filesIdx + 1]) {
