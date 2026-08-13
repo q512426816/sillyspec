@@ -4,7 +4,7 @@ doc_type: module-card
 module_id: runtime
 author: qinyi
 created_at: 2026-06-03T07:42:00+08:00
-updated_at: 2026-08-12T15:10:00+08:00
+updated_at: 2026-08-13T14:50:00+08:00
 ---
 # runtime
 
@@ -70,6 +70,7 @@ ProgressManager.alignExecuteToPlan(cwd, changeName, specBase, {confirm})
 - **`.runtime` 根解析统一 `resolveRuntimeRoot`**（坑 execute-runs-isolation，`run/shared.js`）：`.runtime` 根（含 `sillyspec.db` / execute-runs / stage-reviews / quick-sessions）由 `resolveRuntimeRoot(platformOpts, localSpecBase)` 统一解析，三级优先级 `platformOpts.runtimeRoot`（平台）> `platformOpts.specDriftAnchor`（drift 锚点）> `localSpecBase/.runtime`（本地兜底）。drift 守卫（`run/command.js`）命中时设 `specDriftAnchor = 主仓 specBase`（**不**设 `specRoot`/`runtimeRoot`——否则触发平台 sentinel，误跳 `triggerSync`/`checkApproval`、误进平台渲染分支）→ 下游 15 处站点解析落主仓 `.runtime`，execute-runs / stage-reviews 不随 worktree cleanup 整目录删消失，archive step1 完成度 gate 真相源（磁盘主仓 review.json）不再丢
 
 - **--done 前非阻断并发预检 advisory**（`run/complete-handlers.js` quick 钩子 + `run/gates.js` execute 钩子 + `run/concurrent-detect.js`）：quick --done（`auditQuickCompletion` 后）与 execute --done（`completeStageGates` 入口 guard `stageName==='execute'`）完成前调 `detectConcurrentChanges()`（复用 `isQuickMetadata` 分类）扫工作树他者脏文件 + 他者活跃 change 目录，命中则 `console.warn` 多行 ⚠️（foreignFiles + otherActiveChanges + pathspec 提示），**绝不阻断**——不改 audit `result.status` / gate 通过性 / `isQuickMetadata` 语义（fail-open：`git status` 不可读时 `hasForeign=false` 不崩）。ownFiles 排除自身：quick=`review.changedFiles∪baselineFiles`，execute=design §6 交付文件（in-place 模式）或 `[]`（worktree 模式）
+- **quick --done 同文件并发检测 advisory**（2026-08-13-quick-hunk-separation，`run/stage.js` + `run/shared.js`）：step1 启动将每个 allowedFile 内容 sha256 录 `guard.allowedFilesHash`（容错读，文件不存在/读失败跳过）；`auditQuickCompletion` 末尾检测——allowedFile 在 baseline（他者改过）且当前 hash ≠ 录入值（我也改了）→ 同文件并发，push reason + `console.warn` 给 `git add -p`/patch 分离指引（防 commit 整文件 pathspec 夹带他者 hunk），**advisory 不改 result.status**（与 detectConcurrentChanges 同族互补：后者检测他者脏文件，本检测 baseline 文件 hunk 混）。旧 guard 无该字段 → 可选链跳过，向后兼容。
 - **safeGit 收口 src/git-helper.js**（2026-08-09-worktree-git-injection）：`run/shared.js` 原 safeGit 实现已移入根级 src/git-helper.js 作统一公共 git 调用入口（safeGit+git+gitQuiet，execFileSync 数组形式不经 shell），与 worktree 链共用消除口径分裂（原 safeGit vs worktree 本地 git/gitQuiet 双源）；run/shared.js 改 `import { safeGit } from '../git-helper.js'` + `export { safeGit }` 两段式（注：纯 `export { safeGit } from '...'` 不建本地词法绑定，内部 ancestorSpecDirs/auditQuickCompletion 等调用会 ReferenceError，故用 import+export 而非纯 re-export）；run/ 层调用方路径与行为不变
 
 ## 人工备注

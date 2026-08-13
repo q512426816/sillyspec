@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url'
 // safeGit 收口至 src/git-helper.js：import 建本地词法绑定（本模块内部 L128/130/431 调用）+
 // re-export 供 run/ 层现有调用方继续从 shared.js 引用（pure re-export 不建本地绑定，会致内部 ReferenceError）。
 import { safeGit } from '../git-helper.js'
+import { createHash } from 'node:crypto'
 export { safeGit }
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -639,6 +640,28 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
         if (result.status === 'safe') result.status = 'warning'
       }
     } catch {}
+
+    // task-02: 同文件并发检测——allowedFile 在 baseline（他者改过）且当前 hash ≠ step1 hash（我也改了）
+    // → commit 整文件 pathspec 会夹带他者 hunk，warn 给分离指引（advisory，不阻断，D-002）
+    if (allowedFiles.length > 0 && guard.allowedFilesHash) {
+      const sameFileHits = []
+      for (const f of allowedFiles) {
+        if (isBaselineFile(f) && guard.allowedFilesHash[f] !== undefined) {
+          try {
+            const cur = createHash('sha256').update(readFileSync(join(cwd, f))).digest('hex')
+            if (cur !== guard.allowedFilesHash[f]) sameFileHits.push(f)
+          } catch {} // 文件读失败（删除等）跳过
+        }
+      }
+      if (sameFileHits.length > 0) {
+        result.reasons.push(`同文件并发: ${sameFileHits.length} 个 allowedFile 含他者+你的改动（${sameFileHits.join(', ')}）`)
+        console.warn(`\n⚠️ 同文件并发（${sameFileHits.length} 个 allowedFile 含他者改动+你的改动，commit 整文件会夹带他者 hunk）：`)
+        for (const f of sameFileHits) {
+          console.warn(`   - ${f}`)
+          console.warn(`     分离：git add -p ${f}（交互选你的 hunk）或 git diff ${f} > mine.patch（编辑留你的）+ git apply --cached mine.patch`)
+        }
+      }
+    }
 
     // --confirm 模式：展示 diff 并等待确认
     if (isConfirm && (result.status === 'warning' || result.status === 'blocked')) {

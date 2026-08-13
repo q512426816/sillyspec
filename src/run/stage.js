@@ -23,6 +23,7 @@ import { resolveSpecDir, resolveChangeDir, resolveRuntimeRoot, resolveQuickSessi
 import { computeScanProfile, applyScanProfileSteps, executeScanPreflight, executeScanPostcheck } from './scan-profile.js'
 import { outputStep } from './prompt.js'
 import { allocateQuicklogEntry, deriveTitleFromLinkedChange, sanitizeDesc } from '../quicklog.js'
+import { createHash } from 'node:crypto'
 import { checkTransition } from '../stage-contract.js'
 import { completeStageGates } from './gates.js'
 
@@ -273,6 +274,12 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
           baselineCommit: safeGit(cwd, ['rev-parse', 'HEAD']).value,
           baselineFiles,
           allowedFiles,
+          // task-01: 录每个 allowedFile 内容 sha256，供 --done auditQuickCompletion 检测同文件并发
+          // （allowedFile 在 baseline 且当前 hash ≠ 此值 = 我也改了 → 同文件并发 warn）。文件不存在/读失败跳过。
+          allowedFilesHash: Object.fromEntries(allowedFiles.flatMap(f => {
+            try { return [[f, createHash('sha256').update(readFileSync(join(cwd, f))).digest('hex')]] }
+            catch { return [] }
+          })),
           allowNew,
           forceBaseline,
           linkedChanges,
