@@ -63,9 +63,10 @@ console.log('\n--- 1. connect 显式 user 写入 local.yaml + _getPlatform ---')
   const yaml = readYaml(cwd);
   assert(yaml !== null, 'connect 写出 .sillyspec/local.yaml');
   assert(/platform:/.test(yaml), 'local.yaml 含 platform 段');
-  assert(/^\s{2}user:\s*alice\s*$/m.test(yaml), `local.yaml platform 段含 user: alice（实际片段：\n${yaml}）`);
-  assert(/^\s{2}url:\s*http:\/\/hub\.example\.com\s*$/m.test(yaml), 'url 尾斜杠被规范化');
-  assert(/^\s{2}token:\s*tok-1\s*$/m.test(yaml), 'platform 段含 token');
+  // connect 写侧 yamlStr 双引号包裹（防 # : 注入），读侧 parseSimpleYaml 剥引号（下方 _getPlatform 断言）
+  assert(/^\s{2}user:\s*"alice"\s*$/m.test(yaml), `local.yaml platform 段含 user: alice（实际片段：\n${yaml}）`);
+  assert(/^\s{2}url:\s*"http:\/\/hub\.example\.com"\s*$/m.test(yaml), 'url 尾斜杠被规范化（引号包裹）');
+  assert(/^\s{2}token:\s*"tok-1"\s*$/m.test(yaml), 'platform 段含 token（引号包裹）');
   assert(/^\s{2}last_connected:\s*.+$/m.test(yaml), 'platform 段含 last_connected');
 
   // _getPlatform 返回含 user 的对象（同时验证 parseSimpleYaml 往返解析 platform.user）

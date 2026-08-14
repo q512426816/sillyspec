@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
 import chalk from 'chalk';
 import ora from 'ora';
 import { checkbox, input } from '@inquirer/prompts';
@@ -13,7 +13,9 @@ const MCP_TOOLS = [
     name: 'Context7',
     description: '查询最新库文档和 API 参考',
     command: 'npx',
-    args: ['-y', '@upstash/context7-mcp@latest'],
+    // 版本锁定（sec-c）：MCP server 常驻且有系统访问能力，@latest = trust-on-future-publish，
+    // 上游被攻破会直接进用户 AI 工具执行环境。升级走 setup 重跑。
+    args: ['-y', '@upstash/context7-mcp@4.0.2'],
     url: 'https://github.com/upstash/context7-mcp',
   },
   {
@@ -21,7 +23,7 @@ const MCP_TOOLS = [
     name: 'Chrome DevTools MCP',
     description: '浏览器自动化，支持 E2E 测试（需 Chrome 已运行）',
     command: 'npx',
-    args: ['chrome-devtools-mcp@latest'],
+    args: ['chrome-devtools-mcp@1.7.0'],
     url: 'https://github.com/ChromeDevTools/chrome-devtools-mcp',
   },
   {
@@ -29,7 +31,7 @@ const MCP_TOOLS = [
     name: 'Agent Browser (Vercel)',
     description: 'Rust 原生浏览器 CLI，token 消耗极低，50+ 命令覆盖导航/表单/截图/网络',
     command: 'npx',
-    args: ['@anthropic-ai/agent-browser@latest'],
+    args: ['agent-browser@0.34.0'],
     url: 'https://github.com/vercel-labs/agent-browser',
   },
   {
@@ -37,7 +39,7 @@ const MCP_TOOLS = [
     name: 'PinchTab',
     description: '12MB Go 二进制，零依赖，accessibility tree 极省 token，有 MCP 支持',
     command: 'npx',
-    args: ['pinchtab-mcp@latest'],
+    args: ['pinchtab-mcp@1.4.1'],
     url: 'https://github.com/pinchtab/pinchtab',
   },
 ];
@@ -50,7 +52,7 @@ const DB_MCP_TOOLS = [
     name: 'PostgreSQL',
     description: '只读访问 PostgreSQL 数据库',
     command: 'npx',
-    args: ['-y', '@modelcontextprotocol/server-postgres'],
+    args: ['-y', '@modelcontextprotocol/server-postgres@0.6.2'],
     envTemplate: { POSTGRES_CONNECTION_STRING: 'postgresql://user:password@localhost:5432/dbname' },
     url: 'https://github.com/modelcontextprotocol/servers/tree/main/src/postgres',
   },
@@ -59,7 +61,7 @@ const DB_MCP_TOOLS = [
     name: 'SQLite',
     description: '访问 SQLite 数据库文件',
     command: 'npx',
-    args: ['-y', '@modelcontextprotocol/server-sqlite'],
+    args: ['-y', 'mcp-server-sqlite@0.0.2'],
     envTemplate: { SQLITE_DB_PATH: './data.db' },
     url: 'https://github.com/modelcontextprotocol/servers/tree/main/src/sqlite',
   },
@@ -68,7 +70,8 @@ const DB_MCP_TOOLS = [
     name: 'MySQL / MariaDB',
     description: '访问 MySQL / MariaDB 数据库',
     command: 'npx',
-    args: ['-y', '@nicobailon/mysql-mcp-server'],
+    // 原 @nicobailon/mysql-mcp-server 已 404（包下架），换存在的 mysql-mcp-server（dpflucas，read-only）
+    args: ['-y', 'mysql-mcp-server@0.1.3'],
     envTemplate: { MYSQL_HOST: 'localhost', MYSQL_PORT: '3306', MYSQL_USER: 'root', MYSQL_PASSWORD: '', MYSQL_DATABASE: '' },
     url: 'https://github.com/modelcontextprotocol/servers',
   },
@@ -77,7 +80,7 @@ const DB_MCP_TOOLS = [
     name: 'Redis',
     description: '访问 Redis 数据库，查看缓存和键值数据',
     command: 'npx',
-    args: ['-y', '@modelcontextprotocol/server-redis'],
+    args: ['-y', '@modelcontextprotocol/server-redis@2025.4.25'],
     envTemplate: { REDIS_URL: 'redis://localhost:6379' },
     url: 'https://github.com/modelcontextprotocol/servers/tree/main/src/redis',
   },
@@ -353,6 +356,21 @@ export async function cmdSetup(dir, options = {}) {
       }
       writeMcpConfig(dir, path, config);
       spinner.succeed(`${tool} MCP 完成 (${allMcp.length} 个工具)`);
+      // 凭据提交风险提示（sec-c）：.claude/mcp.json / .cursor/mcp.json 是项目共享文件、通常随 git
+      // 提交，而 DB MCP 的 env 含明文连接串/密码。检测 git 跟踪状态，已跟踪/未忽略时显式警告。
+      if (selectedDb.length > 0) {
+        try {
+          execFileSync('git', ['-C', dir, 'ls-files', '--error-unmatch', path], { stdio: 'pipe' });
+          console.warn(chalk.yellow(`  ⚠️ ${path} 已被 git 跟踪——其中数据库连接串/密码会随提交进入仓库，建议加入 .gitignore 或改用环境变量`));
+        } catch {
+          // 未被跟踪：再查是否被 ignore；都不满足（未忽略未跟踪）时提示防止将来误提交
+          try {
+            execFileSync('git', ['-C', dir, 'check-ignore', '-q', path], { stdio: 'pipe' });
+          } catch {
+            console.warn(chalk.yellow(`  ⚠️ ${path} 含数据库连接串/密码且未被 .gitignore 忽略——提交前请先加入 .gitignore 或改用环境变量`));
+          }
+        }
+      }
     }
   }
 

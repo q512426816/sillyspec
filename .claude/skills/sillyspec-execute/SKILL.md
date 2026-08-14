@@ -129,8 +129,8 @@ execute 还有**第二道**独立的 stage 级审查：除逐 task review.json �
 - **local.yaml `repos:` 段**：在 `.sillyspec/local.yaml` 注册跨仓仓路径（`main` 不用注册，隐式=当前项目）：
   ```yaml
   repos:
-    sillyspec: C:/Users/qinyi/IdeaProjects/sillyspec
     shared-lib: ../shared-lib
+    tool-repo: C:/path/to/your/tool-repo
   ```
   task 卡 `repo:` 引用的 key 必须在此注册，否则 execute 启动 fail-closed 阻断（跨仓 apply 走错仓=数据所有权事故，配置错误不降级）。
 - **跨仓 task 的 `allowed_paths`**：指**相对跨仓仓根**的路径（非主仓根）。

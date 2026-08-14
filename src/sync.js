@@ -137,6 +137,13 @@ function writeLocalYamlRaw(cwd, text) {
 }
 
 function parseSimpleYaml(content) {
+  // 剥 YAML 双/单引号包裹（connect 写侧 yamlStr 加引号防 # : 注入，读侧对称剥；无引号值零影响）
+  const unquote = (v) => {
+    if (v.length >= 2 && ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'")))) {
+      return v.slice(1, -1);
+    }
+    return v;
+  };
   const result = {};
   let currentSection = null;
   for (const line of content.split('\n')) {
@@ -148,7 +155,7 @@ function parseSimpleYaml(content) {
       const m = trimmed.match(/^(\S+)\s*:\s*(.*)$/);
       if (m) {
         const key = m[1];
-        const val = m[2].trim();
+        const val = unquote(m[2].trim());
         if (val) {
           result[key] = val;
           currentSection = null;
@@ -160,7 +167,7 @@ function parseSimpleYaml(content) {
     } else if (currentSection) {
       const m = trimmed.match(/^(\S+)\s*:\s*(.*)$/);
       if (m && result[currentSection] && typeof result[currentSection] === 'object') {
-        result[currentSection][m[1]] = m[2].trim();
+        result[currentSection][m[1]] = unquote(m[2].trim());
       }
     }
   }
@@ -297,13 +304,16 @@ export class SyncManager {
 
     // 文本级改写 local.yaml：定向替换 platform 段，原文件注释/其他段/数组/深嵌套/CRLF 字节级保留
     // （旧 read-modify-write 经 parseSimpleYaml 丢注释+丢非扁平结构，round-trip 清空用户手填内容）。
+    // YAML 值加引号：token/url 含 # : 或首尾空白时裸写会破坏段结构或注入额外键（shpsync_ token
+    // 当前不含这些字符，防御性包裹零成本；parseSimpleYaml 读侧剥引号兼容）
+    const yamlStr = (v) => JSON.stringify(String(v));
     const platformEntries = [
-      `  url: ${normalizedUrl}`,
-      `  token: ${effectiveToken}`,
-      `  last_connected: ${new Date().toISOString()}`,
+      `  url: ${yamlStr(normalizedUrl)}`,
+      `  token: ${yamlStr(effectiveToken)}`,
+      `  last_connected: ${yamlStr(new Date().toISOString())}`,
     ];
     if (resolvedUser) {
-      platformEntries.push(`  user: ${resolvedUser}`);
+      platformEntries.push(`  user: ${yamlStr(resolvedUser)}`);
     }
     let text = readLocalYamlRaw(this.cwd);
     text = replaceTopLevelSection(text, 'platform', platformEntries.join('\n'));
@@ -311,7 +321,7 @@ export class SyncManager {
     // （非换发的 effectiveToken——MCP 派发需 user 级权限，platform 段才是最小权限的 shpsync_）。
     // 用户已手填 mcp 段则保留不覆盖（R-09，文本级检测）
     if (findTopLevelSectionRange(text, 'mcp') === null) {
-      text = replaceTopLevelSection(text, 'mcp', `  url: ${normalizedUrl}\n  token: ${token}`);
+      text = replaceTopLevelSection(text, 'mcp', `  url: ${yamlStr(normalizedUrl)}\n  token: ${yamlStr(token)}`);
     }
     writeLocalYamlRaw(this.cwd, text);
   }
@@ -393,8 +403,8 @@ export class SyncManager {
     if (baseTs) headers['X-SillySpec-Base-Ts'] = baseTs; // base_ts 乐观锁（NULL=首次同步不设，平台接受首次 push）
     headers['X-SillySpec-Pushed-At'] = pushedAt; // 平台存 last_pushed_at，作下次其他用户 push 的 base_ts 比对基准
 
-    // POST 到平台（带状态码版本：识别 409 冲突，读回平台最新 JSON）
-    const syncUrl = `${platform.url}/api/changes/${changeName}/progress`;
+    // POST 到平台（带状态码版本：识别 409 冲突，读回平台最新 JSON）。changeName encode 对齐 pull（:673）
+    const syncUrl = `${platform.url}/api/changes/${encodeURIComponent(changeName)}/progress`;
     const res = await fetchJsonWithStatus(syncUrl, {
       method: 'POST',
       headers,
@@ -478,7 +488,7 @@ export class SyncManager {
       return { synced: 0, errors: [...errors, '无可用文档'] };
     }
 
-    const docUrl = `${platform.url}/api/changes/${changeName}/documents`;
+    const docUrl = `${platform.url}/api/changes/${encodeURIComponent(changeName)}/documents`;
     const result = await fetchJson(docUrl, {
       method: 'POST',
       headers: {
@@ -513,7 +523,7 @@ export class SyncManager {
       return { status: 'pending', reason: '未指定变更名称' };
     }
 
-    const approvalUrl = `${platform.url}/api/changes/${changeName}/approval`;
+    const approvalUrl = `${platform.url}/api/changes/${encodeURIComponent(changeName)}/approval`;
     const result = await fetchJson(approvalUrl, {
       headers: { Authorization: `Bearer ${platform.token}` },
     });

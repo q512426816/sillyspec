@@ -20,10 +20,13 @@
  */
 
 import { readMcpConfig } from './config.js';
+import { getVersion } from '../version.js';
 
 const DEFAULT_TIMEOUT_MS = 10_000;
 // MCP streamable HTTP 协议版本（task 指定 2025-11-25）
 const MCP_PROTOCOL_VERSION = '2025-11-25';
+// 单次 RPC 返回哨兵：server 回 400 Missing session（session 未建立/过期）→ _sendRpc 重连重试
+const SESSION_EXPIRED = Symbol('SESSION_EXPIRED');
 
 export class SillyHubMcpClient {
   /**
@@ -38,8 +41,14 @@ export class SillyHubMcpClient {
     const cfg = readMcpConfig(workCwd);
     const u = url !== undefined ? url : (cfg?.url ?? '');
     const t = token !== undefined ? token : (cfg?.token ?? '');
-    // 去掉 url 尾部斜杠，便于后续稳定拼 /mcp/（跨平台：URL 一律用正斜杠，不用 path.join）
+    // 去 url 尾部斜杠，便于后续稳定拼 /mcp/（跨平台：URL 一律用正斜杠，不用 path.join）
     this._url = typeof u === 'string' ? u.replace(/\/+$/, '') : '';
+    this._token = typeof t === 'string' ? t : '';
+    // 安全提示（sec-e 缓解）：url 来自 local.yaml（agent 可写），非 https 时 Bearer token 明文上线。
+    // 一次性 warn（构造时）不刷屏；本机 http://localhost 调试场景 warn 可接受。
+    if (this._url && !/^https:\/\//i.test(this._url) && !/^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/i.test(this._url)) {
+      console.warn(`[sillyhub-mcp] mcp.url 非 https（${this._url.slice(0, 60)}），Bearer token 将明文传输——请确认为受控环境`);
+    }
     this._token = typeof t === 'string' ? t : '';
     this._timeoutMs = typeof timeoutMs === 'number' && timeoutMs > 0
       ? timeoutMs
@@ -49,6 +58,9 @@ export class SillyHubMcpClient {
     // 端点必须带尾斜杠
     this._endpoint = this._url ? `${this._url}/mcp/` : '';
     this._rpcId = 0;
+    // MCP streamable HTTP session 状态：惰性 initialize 后才有（见 _ensureSession）
+    this._sessionId = null;
+    this._sessionPromise = null;
   }
 
   // ── 内部辅助 ──
@@ -69,7 +81,15 @@ export class SillyHubMcpClient {
   }
 
   /**
-   * 发 JSON-RPC 请求（fetch/SSE/鉴权骨架，tools/call 与 tools/list 共用）。best-effort 不抛。
+   * 发 JSON-RPC 请求（fetch/SSE/鉴权/session 骨架，tools/call 与 tools/list 共用）。best-effort 不抛。
+   *
+   * MCP streamable HTTP（2025-11-25）要求先 initialize 拿 session，后续请求带
+   * Mcp-Session-Id header，否则 server 回 -32600 Missing session ID（2026-08-14 实测：
+   * SillyHub FastMCP v1.29 streamable_http_app 强制 session；此前本 client 直接发
+   * tools/call 无 session → 一律 400，probe 误判 daemon-unreachable）。本方法：
+   *   1. 惰性 _ensureSession（并发安全，仅 initialize 一次）；
+   *   2. _rpcOnce 发单次请求；
+   *   3. 遇 session 过期（400 Missing session）→ 重置重连重试一次。
    *
    * task-11 抽出：原 _callTool 的网络骨架；method/params 泛化——tools/call 带 {name,arguments}，
    * tools/list 带空 params。warn 文案用 label 作 tag（tools/call 传 toolName 保文案不变，
@@ -88,14 +108,43 @@ export class SillyHubMcpClient {
       return null;
     }
 
-    this._rpcId += 1;
-    const id = this._rpcId;
+    // 惰性 initialize + 过期重连（最多 2 次：首次 + 重试）
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await this._ensureSession(quiet);
+      if (!this._sessionId) {
+        // initialize 失败（网络/非 2xx/无 session）→ best-effort 降级，不再发业务请求
+        if (!quiet) console.warn(`[sillyhub-mcp] ${tag} initialize 失败，跳过`);
+        return null;
+      }
+      this._rpcId += 1;
+      const result = await this._rpcOnce(method, params, { quiet, tag, id: this._rpcId });
+      if (result !== SESSION_EXPIRED) return result;
+      // session 过期（400 Missing session）→ 重置重连重试一次
+      if (!quiet) console.warn(`[sillyhub-mcp] ${tag} session 过期，重连重试`);
+      this._sessionId = null;
+      this._sessionPromise = null;
+    }
+    return null;
+  }
+
+  /**
+   * 发单次 JSON-RPC 请求（不管理 session）。返回 rpc.result；失败返回 null；
+   * 400 Missing session ID → 返回 SESSION_EXPIRED 哨兵（调用方 _sendRpc 据此重连重试）。
+   */
+  async _rpcOnce(method, params, { quiet, tag, id }) {
     const body = {
       jsonrpc: '2.0',
       id,
       method,
       params,
     };
+    const headers = {
+      Authorization: `Bearer ${this._token}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/json, text/event-stream',
+      'MCP-Protocol-Version': MCP_PROTOCOL_VERSION,
+    };
+    if (this._sessionId) headers['Mcp-Session-Id'] = this._sessionId;
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this._timeoutMs);
@@ -103,12 +152,7 @@ export class SillyHubMcpClient {
     try {
       res = await fetch(this._endpoint, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${this._token}`,
-          'Content-Type': 'application/json',
-          Accept: 'application/json, text/event-stream',
-          'MCP-Protocol-Version': MCP_PROTOCOL_VERSION,
-        },
+        headers,
         body: JSON.stringify(body),
         signal: controller.signal,
       });
@@ -127,11 +171,13 @@ export class SillyHubMcpClient {
     }
 
     if (!res.ok) {
-      if (!quiet) {
-        let detail = '';
-        try { detail = await res.text(); } catch { /* best effort */ }
-        console.warn(`[sillyhub-mcp] ${tag} → HTTP ${res.status} ${String(detail).slice(0, 200)}`);
+      let detail = '';
+      try { detail = await res.text(); } catch { /* best effort */ }
+      // session 未建立/过期：FastMCP 回 HTTP 400 + body 含 "Missing session ID"
+      if (res.status === 400 && detail.includes('Missing session')) {
+        return SESSION_EXPIRED;
       }
+      if (!quiet) console.warn(`[sillyhub-mcp] ${tag} → HTTP ${res.status} ${String(detail).slice(0, 200)}`);
       return null;
     }
 
@@ -165,6 +211,95 @@ export class SillyHubMcpClient {
     }
 
     return rpc.result || null;
+  }
+
+  /**
+   * 确保已建立 MCP session（惰性 initialize，并发安全）。已初始化直接返回 true；
+   * 初始化进行中则复用同一 promise。失败返回 false 且不留半成品状态。
+   * @param {boolean} [quiet] - 静默初始化失败警告（探测路径默认用）
+   * @returns {Promise<boolean>}
+   */
+  async _ensureSession(quiet = false) {
+    if (this._sessionId) return true;
+    if (this._sessionPromise) return this._sessionPromise;
+    this._sessionPromise = this._initialize(quiet).finally(() => { this._sessionPromise = null; });
+    return this._sessionPromise;
+  }
+
+  /**
+   * MCP initialize 握手：POST initialize → 从响应 header（或 body _meta）读 mcp-session-id。
+   * 成功存 this._sessionId；失败返回 false（best-effort，warn 不抛）。
+   *
+   * 注：协议要求 initialize 后发 notifications/initialized，本客户端只做探测
+   * （tools/list / 只读 tool），实测 FastMCP 不强制该通知即可用（2026-08-14 验证），
+   * 为省一次 RPC 不发；若未来 server 强校验再补。
+   * @returns {Promise<boolean>}
+   */
+  async _initialize(quiet = false) {
+    this._rpcId += 1;
+    const id = this._rpcId;
+    const body = {
+      jsonrpc: '2.0',
+      id,
+      method: 'initialize',
+      params: {
+        protocolVersion: MCP_PROTOCOL_VERSION,
+        capabilities: {},
+        // MCP 2025-11-25 协议要求 clientInfo 必含 name + version，缺 version FastMCP
+        // 回 -32602 Invalid request parameters（2026-08-14 实测锁定）
+        clientInfo: { name: 'sillyspec-cli', version: getVersion() },
+      },
+    };
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this._timeoutMs);
+    let res;
+    try {
+      res = await fetch(this._endpoint, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this._token}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json, text/event-stream',
+          'MCP-Protocol-Version': MCP_PROTOCOL_VERSION,
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+    } catch (err) {
+      if (!quiet) {
+        const msg = err && err.message ? err.message : String(err);
+        console.warn(`[sillyhub-mcp] initialize 请求失败: ${msg}`);
+      }
+      return false;
+    } finally {
+      clearTimeout(timer);
+    }
+
+    if (!res.ok) {
+      if (!quiet) console.warn(`[sillyhub-mcp] initialize → HTTP ${res.status}`);
+      return false;
+    }
+
+    // 优先取 header mcp-session-id（FastMCP 实测返回）；缺失再查 body _meta.sessionId。
+    // ⚠️ 无论 header 是否有 session，都必须读完 body（消费 SSE 流）——FastMCP 在
+    // initialize 响应流未消费完时 session 未就绪，后续 tools/call 回 -32602
+    // "Invalid request parameters"（2026-08-14 实测：node 只读 header 不读 body 必现，
+    // python 读完 body 则过）。
+    let sid = res.headers.get('mcp-session-id');
+    let text = '';
+    try { text = await res.text(); } catch { /* best effort */ }
+    if (!sid && text) {
+      const rpc = this._parseSseResponse(text, id);
+      if (rpc && rpc.result && rpc.result._meta && typeof rpc.result._meta.sessionId === 'string') {
+        sid = rpc.result._meta.sessionId;
+      }
+    }
+    if (!sid) {
+      if (!quiet) console.warn('[sillyhub-mcp] initialize 响应无 mcp-session-id');
+      return false;
+    }
+    this._sessionId = sid;
+    return true;
   }
 
   /**

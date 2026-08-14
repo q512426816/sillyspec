@@ -103,6 +103,13 @@ function isSillyspecPath(filePath) {
   return parts.includes('.sillyspec')
 }
 
+// 凭据/敏感运行时文件：local.yaml 含 SillyHub token（connect 明文写入），.plan.md.lock 等锁文件
+// 是并发原语非文档。/api/docs/content 无鉴权（仅 Origin 检查），这些文件绝不经 HTTP 暴露。
+function isCredentialPath(filePath) {
+  const base = basename(resolve(filePath)).toLowerCase()
+  return base === 'local.yaml' || base === 'local.yml' || base.endsWith('.lock') || base === 'sillyspec-platform.json'
+}
+
 function isViewableDocPath(filePath) {
   return /\.(md|markdown|mdx|html?|txt|log|json|ya?ml|toml|xml|csv)$/i.test(filePath)
 }
@@ -377,7 +384,7 @@ function startServer({ port = 3456, open: openBrowser = true } = {}) {
       }
       // Security: only allow reading viewable text documents under a .sillyspec tree.
       const normalizedPath = resolve(filePath)
-      if (!isSillyspecPath(normalizedPath) || !isViewableDocPath(normalizedPath)) {
+      if (!isSillyspecPath(normalizedPath) || !isViewableDocPath(normalizedPath) || isCredentialPath(normalizedPath)) {
         res.writeHead(403)
         res.end(JSON.stringify({ error: 'Access denied' }))
         return

@@ -232,3 +232,21 @@
 根因：审查产出只有会话内报告，不落债单会被下次『新发现』重复提议（memory：改进建议先查债单）。
 方案：按债单惯例追加增补小节；显式 pathspec 提交隔离他者 doc-ref-check 暂存。
 结果：npm test 190/0 + lint 274 过 + 提交后他者暂存文件完好（git status 核验）。
+
+## ql-20260814-012-109e | 2026-08-14 22:01:05 | 债单 P2 第一批：URL encode/YAML 引号/note 单行化/SKILL 路径/https warn/dashboard 拒凭据/setup 锁版本
+状态：已完成
+关联变更：（无）
+文件：
+- src/sync.js（三处 changeName 拼 URL 补 encodeURIComponent 对齐 pull 范式；connect 写侧 yamlStr 双引号包裹 url/token/user；parseSimpleYaml 对称剥引号）
+- src/quicklog.js（parseFileNotes note 单行化+限长 200，防 
+## ql- 伪造条目结构）
+- .claude/skills/sillyspec-execute/SKILL.md + sillyspec-plan/SKILL.md（repos 示例去 C:/Users/qinyi 本机路径改通用示例，sec-f）
+- .claude/skills/sillyspec-knowledge/SKILL.md（author 示例 qinyi 改 <git-user>）
+- src/sillyhub-mcp/client.js（构造器一次性 warn 非 https 且非 localhost url——sec-e 缓解）
+- packages/dashboard/server/index.js（isCredentialPath 拒 local.yaml/.lock/平台指针经 /api/docs/content 暴露——sec-d 最小修；前端 bundle 零引用实证无破坏）
+- src/setup.js（六个 MCP 版本锁定消 @latest trust-on-future-publish——sec-c；@anthropic-ai/agent-browser 404 改 agent-browser@0.34.0、@nicobailon/mysql-mcp-server 404 改 mysql-mcp-server@0.1.3；DB MCP 写 mcp.json 后 git 跟踪检测警告）
+- test/local-yaml-preserve.test.mjs + test/platform-sync-user-config.test.mjs（yaml 断言改引号包裹格式，语义断言 _getPlatform 读回不变）
+需求：债单 P2 第一批小改动合集（sec-c/d/e/f + 低优先杂项），均无需单独设计。
+根因：URL 拼接未编码可路径注入；YAML 裸写 token 含 # : 时破坏段结构；note 带换行可伪造条目；SKILL 随包发布含开发者本机路径；非 https url 下 Bearer token 明文上线；dashboard 无鉴权可读 local.yaml 凭据；@latest 浮动版本是 trust-on-future-publish 供应链面。
+方案：见文件括注。
+结果：npm test 190/0 + lint 274 过；隔离环境验证 path-a-probe 59/0（主仓该用例失败系本机 local.yaml 有 mcp 段的环境依赖，非回归，与 memory spec-dir 隔离同款问题）。

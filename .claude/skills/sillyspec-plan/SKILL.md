@@ -100,8 +100,8 @@ plan 完成校验会检查：design 提到入口文件（cli.ts/main.ts/server.t
 
 ```yaml
 repos:
-  sillyspec: C:/Users/qinyi/IdeaProjects/sillyspec
   shared-lib: ../shared-lib
+  tool-repo: C:/path/to/your/tool-repo
 ```
 
 key = task 卡 `repo:` 引用名，value = 跨仓仓绝对路径（或相对主仓根的路径）。`main` 不用注册。

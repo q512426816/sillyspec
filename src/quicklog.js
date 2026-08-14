@@ -142,6 +142,9 @@ export function getQuickFileNotes() { return _pendingFileNotes }
  */
 export function parseFileNotes(raw) {
   if (!raw) return []
+  // note 单行化 + 限长：bullet 是「数组元素内嵌 \n」落盘（flipEntryInContent），note 带换行会伪造
+  // QUICKLOG 条目结构（\n## ql-… 可伪造后续条目头）。与 sanitizeDesc 同风格。
+  const sanitizeNote = (n) => n.replace(/[\r\n]+/g, ' ').trim().slice(0, 200)
   return String(raw)
     .split('||')
     .map((seg) => {
@@ -149,7 +152,7 @@ export function parseFileNotes(raw) {
       if (!s) return null
       const idx = s.indexOf('::')
       const path = (idx === -1 ? s : s.slice(0, idx)).replace(/\\/g, '/').trim()
-      const note = idx === -1 ? '' : s.slice(idx + 2).trim()
+      const note = idx === -1 ? '' : sanitizeNote(s.slice(idx + 2))
       return path ? { path, note } : null
     })
     .filter(Boolean)

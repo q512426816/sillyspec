@@ -96,11 +96,11 @@ console.log('\n--- 1. connect 保留注释/其他段/数组/深嵌套，platform
   assert(/^\s+- alpha$/m.test(yaml) && /^\s+- beta$/m.test(yaml), '数组 modules: [alpha, beta] 保留');
   // 深嵌套保留
   assert(/^\s{4}key: value$/m.test(yaml), '深嵌套 nested.deep.key 保留');
-  // platform 段被替换为新值
+  // platform 段被替换为新值（connect 写侧 yamlStr 双引号包裹，防 # : 注入；读侧 parseSimpleYaml 剥引号）
   assert(!/old\.example\.com/.test(yaml), '旧 platform url 已被替换');
-  assert(/^\s{2}url:\s*http:\/\/new\.example\.com\s*$/m.test(yaml), '新 platform url 写入（尾斜杠规范化）');
-  assert(/^\s{2}token:\s*new-tok\s*$/m.test(yaml), '新 platform token 写入');
-  assert(/^\s{2}user:\s*alice\s*$/m.test(yaml), 'platform user 写入');
+  assert(/^\s{2}url:\s*"http:\/\/new\.example\.com"\s*$/m.test(yaml), '新 platform url 写入（尾斜杠规范化+引号包裹）');
+  assert(/^\s{2}token:\s*"new-tok"\s*$/m.test(yaml), '新 platform token 写入（引号包裹）');
+  assert(/^\s{2}user:\s*"alice"\s*$/m.test(yaml), 'platform user 写入（引号包裹）');
   // mcp 段保留不覆盖（R-09 守卫，文本级检测）
   assert(/^\s{2}url:\s*http:\/\/mcp\.example\.com\s*$/m.test(yaml), 'mcp.url 保留不被同源覆盖');
   assert(/^\s{2}token:\s*mcp-tok\s*$/m.test(yaml), 'mcp.token 保留');
@@ -140,8 +140,8 @@ console.log('\n--- 2. connect 无 mcp 段 → 追加同源 mcp，注释保留 --
   assert(/^platform:$/m.test(yaml), 'platform 段写入');
   assert(/^mcp:$/m.test(yaml), '无 mcp 段时追加 mcp（同源）');
   const mcpMatch = yaml.match(/^mcp:\n  url: (\S+)\n  token: (\S+)/m);
-  assert(mcpMatch && mcpMatch[1] === 'http://hub.example.com', 'mcp.url 同源 platform');
-  assert(mcpMatch && mcpMatch[2] === 'tok-1', 'mcp.token 同源 platform');
+  assert(mcpMatch && mcpMatch[1] === '"http://hub.example.com"', 'mcp.url 同源 platform（引号包裹）');
+  assert(mcpMatch && mcpMatch[2] === '"tok-1"', 'mcp.token 同源 platform（引号包裹）');
 }
 
 // ─────────────────────────────────────────
@@ -239,7 +239,7 @@ console.log('\n--- 6. 空文件 connect → 追加 platform + mcp ---');
   assert(yaml !== null, '空文件 connect 写出 local.yaml');
   assert(/^platform:$/m.test(yaml), 'platform 段存在');
   assert(/^mcp:$/m.test(yaml), 'mcp 段存在');
-  assert(/^\s{2}user:\s*alice\s*$/m.test(yaml), 'user 写入');
+  assert(/^\s{2}user:\s*"alice"\s*$/m.test(yaml), 'user 写入（引号包裹）');
   const sm2 = new SyncManager(cwd);
   const platform = sm2._getPlatform();
   assert(platform && platform.url === 'http://hub.example.com', '_getPlatform 读回正确');
@@ -281,7 +281,7 @@ console.log('\n--- 7. CRLF 文件 connect 保留注释/其他段已存在的 \\r
   assert(yaml.includes('# 其他段\r'), 'CRLF 其他段注释 \\r 保留');
   assert(yaml.includes('  url: http://mcp.example.com\r'), 'mcp 段行 \\r 保留');
   // platform 段被替换为新值（段体本身换行不强制 CRLF，只测内容）
-  assert(/^\s{2}url:\s*http:\/\/new\.example\.com/m.test(yaml), '新 platform url 写入');
+  assert(/^\s{2}url:\s*"http:\/\/new\.example\.com/m.test(yaml), '新 platform url 写入');
   assert(!/old\.example\.com/.test(yaml), '旧 url 已替换');
   const sm2 = new SyncManager(cwd);
   const platform = sm2._getPlatform();
