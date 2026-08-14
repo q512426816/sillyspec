@@ -59,6 +59,7 @@ ProgressManager.alignExecuteToPlan(cwd, changeName, specBase, {confirm})
 ## 注意事项
 
 - 阶段完成原子性（2026-08-09-complete-gate-atomicity）：阶段完成 persist（`pm._write`+`triggerSync`）从 `completeStageGates` 调用前移到成功返回后（`complete.js` completeStep/continueStep + `stage.js` noAI 末步三处），消除"persist completed → 跑 gate 崩溃"窗口（DB 不留假 completed，gate 异常/失败 → `rollbackCompletionAndReturn` 回 in-progress 落盘）；`completeStageGates`(`gates.js:549`) 收尾段整体 try/catch，任一段抛非结构化异常 → catch → `rollbackCompletionAndReturn` 不冒顶 exit 1，`handleExecuteWorktreeCleanup` 在 try 外（副作用独立）。接口签名不变，仅收紧阶段完成状态机原子性。
+- noAI 步骤 --done 硬门（2026-08-14 noai-done-bypass，ql-20260814-005-9fdd）：`completeStep`（`complete.js`）标记步骤 completed 前检测 `currentStepDef.noAI`——--done 落到 noAI step（planPostcheck/scanPreflight/scanPostcheck）时同样执行对应 `_cliAction` 的 CLI 确定性校验（分支对齐 `stage.js` 的 noAI 自动执行），校验 throw 则步骤保持 pending 不推进。此前 noAI 校验只在 `run <stage>` 推进路径自动执行，agent 对 noAI step 直接 `--done` 会静默标 completed 绕过校验（实证：multi-agent-platform `2026-08-13-spec-sync-visibility` tasks/ 从未生成但 plan 阶段 completed）。
 - node:sqlite（DatabaseSync，经 db-engine 抽象）是 Node.js 内置原生绑定，事务提交即持久化（WAL），无旧 WASM 引擎的全库 export 开销；旧「纯内存 + 每次 _save 全量序列化」模型已废；node:sqlite 仍发 ExperimentalWarning（v22.11+ 无需 --experimental-sqlite flag），engines.node >=22.11.0
 - PRAGMA（WAL/busy_timeout/foreign_keys）在 `init()` 设一次持续生效，无旧 WASM 引擎 export 重置问题；`close()` 自动 WAL checkpoint 合并 -wal/-shm 回主库
 - `batch_progress` 和 `approvals` 表按 `change_id` UNIQUE，每个变更只能有一条记录
@@ -82,4 +83,5 @@ ProgressManager.alignExecuteToPlan(cwd, changeName, specBase, {confirm})
 - ql-20260809-001-4846 | alignExecuteToPlan 去 async 残留彻底同步化（修复 doctor align 调用方 index.js:532 未 await 致 r.ok 恒 undefined、失败也误打印「已对齐」的逻辑 bug）+ 清 src/ 5 处 gate-status 活引用注释（fs-atomic/machine-interface×2/run/gates/index）。
 - ql-20260812-005-51cc | _openWithFallback 主库分支并发首开重试（2026-08-12 db-concurrency flaky 根因实证）：多进程近乎同时 new DB().init() 打开同一新建库，tryOpen 的 prepare(SELECT count(*)) 撞他者 CHECKPOINT 改写瞬时失败返 null 误判损坏 fail-loud throw；主库分支补 MAX_BUSY_RETRIES 递增退避重试，真损坏重试不过仍回落退/fail-loud。
 - ql-20260813-001-e83f | auditQuickCompletion 的 git status 调用启用 retryOnTimeout + timeout 15000（safeGit 新增 retryOnTimeout 选项，ETIMEDOUT 用 2× timeout 重试一次），治机器忙时审计 git 超时误拦 blocked。
+- ql-20260814-005-9fdd | completeStep 新增 noAI 步骤 --done 硬门：--done 落到 planPostcheck/scanPreflight/scanPostcheck 等 noAI step 时执行 _cliAction CLI 确定性校验（对齐 stage.js 自动执行路径），堵 agent 直 --done 绕过 executePlanPostcheck 校验的漏洞。
 <!-- MANUAL_NOTES_END -->

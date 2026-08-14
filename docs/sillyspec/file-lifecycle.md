@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-05-31 11:00:00
-updated_at: 2026-08-13T14:05:53+08:00
+updated_at: 2026-08-14T13:59:50+08:00
 ---
 
 # SillySpec 文件生命周期
@@ -232,6 +232,7 @@ execute --done 批量完成（2026-07-28，`run/complete.js`）
 - doctor 结构化诊断新增 `execute-progress-plan-mismatch` 维度（2026-07-07，`doctor-diagnostics.js` D5）：检测某 change 的 execute stage status≠completed 但其 `plan.md` 所有 task checkbox 全勾（只读 `plan.md`/`tasks.md` + 只读查 stages 表，**绝不写 db**）。命中即输出 `safe_action` 建议 `sillyspec doctor --align-execute-progress --change <name>`（advisory/WARNING，不阻断任何流程）。写操作由独立的 `ProgressManager.alignExecuteToPlan` 承担（诊断/写分离，D-001@v2）。
 - Agent 门控强化（2026-07-09）：
   - **validator 失败回滚**：`completeStep()` 在 validator 之前就把 stage 写成 `completed`，历史上失败分支不回滚导致 DB 与真实产物不一致。现在阶段完成校验（`runValidators`、plan postcheck、Task Review Gate、verify 实测）任一失败时，`rollbackStageCompletion()` 把 stage 回滚为 `in-progress`、最后一步重置为 `pending` 并落盘。noAI 末步（`run/stage.js`）与 `continueStep` 完成分支（`run/complete.js`）现已与 `completeStep()` 走同一套 `completeStageGates`（`run/gates.js`，三处接入的共享收尾管线：`handleScanStageCompleted` → `validateMetadata` → `validateFileLocations` → auxiliary 重置 → `runStageCompletionGates` → `handleExecuteWorktreeCleanup`），同样受上述 rollback 保护——修 multi-agent-review §2.1 S1/S2（此前 noAI 末步 / continueStep 完成分支标 completed 后绕过 gate 不回滚）；另 S3：旧 `actualCompleted===actualTotal` 守卫用 completed-only 计数，skip 任一 optional 步骤后 < total 致整条 gate 被跳过，现统一用 `completed‖skipped` 计数。
+  - **noAI 步骤 --done 硬门（noai-done-bypass）**：`completeStep()`（`run/complete.js`）在标记步骤 completed 前检测 `currentStepDef.noAI`——--done 落到 noAI step（planPostcheck / scanPreflight / scanPostcheck）时同样执行对应 `_cliAction` 的 CLI 确定性校验（分支对齐 `run/stage.js` 的 noAI 自动执行），校验 throw 则步骤保持 pending 不推进。此前 noAI 校验只在 `run <stage>` 推进路径（runStage）自动执行，agent 对 noAI step 直接 `--done` 会静默标 completed 绕过校验（实证：multi-agent-platform `2026-08-13-spec-sync-visibility` tasks/ 从未生成但 plan 阶段 completed）。
   - **`progress complete-stage` / `update-step` 校验门**：两者曾是零校验后门（`progress.js completeStage/updateStep`）。现在标记 stage completed 前必跑 `runValidators`（经 `_validateStageArtifacts`），失败拒绝；`--force` 为显式逃生口，使用即向 `.runtime/audit.log` 追加审计记录。
   - **Task Review Gate fail-closed**：Gate 自身异常时不再 warning 放行，改为阻断 execute 完成并回滚。
   - **review.json git 真实性交叉校验**（`task-review.js verifyReviewGitEvidence`）：base/head 必须是仓库真实 commit（`git rev-parse --verify`）；base..head 空 diff 的非 low_risk task 报 error；`changedFiles` 与实际 diff 完全不相交报 error；git 环境不可用降级 warning 不误杀。校验目录优先 worktree（`meta.worktreePath`，排除 in-place），回退主仓库。

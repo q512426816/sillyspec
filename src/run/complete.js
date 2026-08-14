@@ -12,13 +12,17 @@
  * 依赖（completeStep 仅用已抽叶子 + 随搬 helper，零 run.js 闭包，零动态 import）：
  *   - shared.js: triggerSync/WAIT_MARKER_RE/getStageSteps；prompt.js: outputStep；gates.js: enforceDepsGate/runStageCompletionGates
  *   - complete-handlers.js: 8 handler；stages/index.js: stageRegistry；worktree-apply.js: formatExecuteSummary
+ *   - scan-profile.js: executeScanPreflight/executeScanPostcheck/computeScanProfile（noAI 硬门）
+ *   - stages/plan-postcheck.js: executePlanPostcheck（noAI 硬门）
  *   - node: join(path) + existsSync/readdirSync/readFileSync/mkdirSync/writeFileSync/appendFileSync/statSync(fs)
  */
 import { join } from 'node:path'
 import { existsSync, readFileSync, mkdirSync, writeFileSync, appendFileSync } from 'node:fs'
 import { writeAtomicSync } from '../fs-atomic.js'
 import { withFileLock } from '../quicklog.js'
-import { triggerSync, WAIT_MARKER_RE, getStageSteps, formatWaitOptions, resolveRuntimeRoot, getOrCreateMultiRepoContext } from './shared.js'
+import { triggerSync, WAIT_MARKER_RE, getStageSteps, formatWaitOptions, resolveRuntimeRoot, getOrCreateMultiRepoContext, resolveChangeDir } from './shared.js'
+import { executeScanPreflight, executeScanPostcheck, computeScanProfile } from './scan-profile.js'
+import { executePlanPostcheck as runPlanPostcheckLib } from '../stages/plan-postcheck.js'
 import { outputStep } from './prompt.js'
 import { enforceDepsGate, enforceReviewJsonGate, completeStageGates, readDesignScale } from './gates.js'
 import { handleArchiveConfirmStep, handlePlanGeneratePlanStep, handleScanProjectListStep, handleWorkflowPostCheck, handleQuickStageCompletion, handleExecuteWaveArtifact } from './complete-handlers.js'
@@ -156,6 +160,27 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
   // review.json 字段硬门（坑 review-json-field-gap）：已勾 [x] task 的 review.json 必须 schema 完整，
   // 提前到每次 --done 校验（而非等 Task Review Gate 在整阶段收尾才暴露，迫使用户事后批量补）。
   await enforceReviewJsonGate(stageName, cwd, changeName, steps[currentIdx], steps, currentIdx, specBase, platformOpts)
+
+  // ── noAI 步骤硬门（坑 noai-done-bypass）：noAI 步骤的确定性校验不可被 --done 绕过 ──
+  // 正常路径 agent 跑 `run <stage>` 推进到 noAI step 时，runStage 自动执行 _cliAction
+  // （stage.js noAI 分支，不写 step output）；若 agent 对 noAI step 直接 --done，此前
+  // completeStep 无 noAI 检测直接标 completed，executePlanPostcheck 等 CLI 确定性校验被
+  // 静默跳过（实证：multi-agent-platform 2026-08-13-spec-sync-visibility tasks/ 从未
+  // 生成但 plan 阶段 completed——step4 output 为 agent 口吻 178 字符而非 CLI 自动路径的
+  // 空 output）。修复：--done 落到 noAI step 时同样执行 _cliAction，校验 throw →
+  // completeStep 不推进（step 保持 pending）。分支对齐 stage.js 的 noAI 自动执行。
+  const _isNoAIStep = currentStepDef.noAI === true || currentStep?.noAI === true
+  if (_isNoAIStep) {
+    const _cliAction = currentStepDef._cliAction || currentStep?._cliAction
+    console.log(`⚙️ Step ${currentIdx + 1}/${steps.length}: ${steps[currentIdx].name}（noAI，--done 路径执行 CLI 校验）`)
+    if (_cliAction === 'scanPreflight') {
+      await executeScanPreflight(cwd, platformOpts, stageData.scanProfile || computeScanProfile(cwd, platformOpts))
+    } else if (_cliAction === 'scanPostcheck') {
+      await executeScanPostcheck(cwd, platformOpts, stageData.scanProfile || computeScanProfile(cwd, platformOpts))
+    } else if (_cliAction === 'planPostcheck') {
+      await runPlanPostcheckLib({ cwd, specRoot: platformOpts?.specRoot, resolveChangeDir, progress })
+    }
+  }
 
   steps[currentIdx].status = 'completed'
   steps[currentIdx].completedAt = new Date().toLocaleString('zh-CN',{hour12:false})

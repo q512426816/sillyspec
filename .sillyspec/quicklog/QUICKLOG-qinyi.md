@@ -130,3 +130,17 @@
 根因：无，纯文档闭合。.bak 写时机已于 ql-20260814-003 定论，但 §8 表格仍标待澄清
 方案：改 §8 表格 .bak 行最后一列，由需进一步澄清改为已订正见 ql-20260814-003
 结果：纯 doc 改动 lint 不扫 docs 故跳过，无 src 与测试影响，§8 四行全部已订正或已校正闭合
+
+## ql-20260814-005-9fdd | 2026-08-14 13:49:49 | completeStep --done 路径不识别 noAI 步骤
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/complete.js（completeStep 标 completed 前新增 noAI 硬门：检测 currentStepDef.noAI，--done 落 noAI step 执行 _cliAction 三分支 CLI 校验，throw 则保持 pending；imports 补 resolveChangeDir/scan-profile 三函数/plan-postcheck）
+- test/run-complete-noai-done-gate.test.mjs（新建回归测试：拦截用例 tasks/ 缺失 → exit 1 + step pending；放行用例合法卡片 → postcheck 完成）
+- test/run-complete-step-validator-rollback.test.mjs（fixture 补三张连续卡片 + mkdirSync import：noAI 门后 Contract gate 仍可达，原断言全保留）
+- docs/sillyspec/file-lifecycle.md（validator 回滚段补 noai-done-bypass 硬门说明 + updated_at）
+- .sillyspec/docs/sillyspec/modules/runtime.md（正文补硬门条目 + 变更索引 ql-20260814-005-9fdd）
+需求：completeStep --done 路径不识别 noAI 步骤，agent 对 planPostcheck 等 noAI step 直接 --done 可绕过 executePlanPostcheck 确定性校验。
+根因：noAI 校验只在 runStage 推进路径自动执行，completeStep 无 noAI 检测直接标 completed，multi-agent-platform 2026-08-13-spec-sync-visibility tasks/ 从未生成但 plan 阶段 completed 即此漏洞实证。
+方案：completeStep 在标记 completed 前检测 currentStepDef.noAI，--done 落到 noAI step 时执行对应 _cliAction 三分支（planPostcheck/scanPreflight/scanPostcheck）CLI 校验，校验 throw 则步骤保持 pending。
+结果：新增 test/run-complete-noai-done-gate.test.mjs 两用例 6/6 过，修复受影响既有测试 fixture 一处，npm test 全量 188/0 绿，lint 过，file-lifecycle.md 与 runtime.md 模块文档已同步。

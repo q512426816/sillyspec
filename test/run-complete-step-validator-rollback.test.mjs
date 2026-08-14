@@ -9,7 +9,7 @@
  *   - plan 末步 + plan.md task id 不连续 → Plan→Execute Contract 失败 → 回滚
  *   - execute --done 无 worktree meta → enforceDepsGate 阻断 exit(1)
  */
-import { writeFileSync } from 'node:fs'
+import { writeFileSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { makeRepo, initChange, seedStage, runStage, runCLI, cleanup, report } from './_cli-step-harness.mjs'
 import { ProgressManager } from '../src/progress.js'
@@ -73,6 +73,38 @@ console.log('\n--- plan 末步 + plan.md task id 不连续 → Plan→Execute Co
     '# Plan\n\n## Wave 1\n\n- [ ] task-01: a\n- [ ] task-03: c\n')
   // plan.module-impact.exists(large) 要求——补上让校验过，聚焦 Contract 不连续
   writeFileSync(join(changeDir, 'module-impact.md'), '# 模块影响分析（Module Impact）— plan-rollback\n\n测试占位\n')
+  // noAI 硬门（ql-20260814-005 noai-done-bypass）：--done 落到 postcheck step 时 completeStep
+  // 先执行 executePlanPostcheck（校验 tasks/ 卡片），须卡片连续齐全通过后才能到达
+  // Plan→Execute Contract（校验 plan.md checkbox）。卡片故意连续（01/02/03）而 plan.md
+  // checkbox 不连续（缺 task-02）→ 两层校验对象不同，聚焦 Contract 的不连续拦截。
+  mkdirSync(join(changeDir, 'tasks'))
+  for (const n of ['01', '02', '03']) {
+    writeFileSync(join(changeDir, 'tasks', `task-${n}.md`), [
+      '---',
+      `id: task-${n}`,
+      `title: t${n}`,
+      `title_zh: t${n}`,
+      'author: test',
+      'created_at: 2026-08-14 00:00:00',
+      'priority: P0',
+      'depends_on: []',
+      'blocks: []',
+      'allowed_paths:',
+      `  - file${n}.md`,
+      'goal: >',
+      '  测试占位卡。',
+      'implementation:',
+      '  - 占位',
+      'acceptance:',
+      '  - 占位',
+      'verify:',
+      '  - echo ok',
+      'constraints:',
+      '  - 无',
+      '---',
+      ''
+    ].join('\n'))
+  }
   runCLI(['--dir', cwd, 'run', 'plan', '--change', cn], { cwd })
   // 读真实 plan 步骤（动态生成），seed 为「除末步外 completed」
   const seeded = (await pm.read(cwd, cn)).stages.plan.steps
