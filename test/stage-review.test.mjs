@@ -66,18 +66,26 @@ console.log('=== 1. classifyReviewTier（规模分级）===\n')
   const t = classifyReviewTier({ planLevel: 'none', designPath: writeDesign(makeTmpDir('rt-'), ['a.js', 'b.js', 'c.js', 'd.js', 'e.js']) })
   assert(t.tier === 'self', `plan_level=none → self（即使 5 文件）`)
 
-  // plan_level=full + 文件 > 阈值 → independent
-  const t2 = classifyReviewTier({ planLevel: 'full', designPath: writeDesign(makeTmpDir('rt-'), ['a.js', 'b.js', 'c.js', 'd.js']) })
-  assert(t2.tier === 'independent', `plan_level=full + 4 文件 → independent`)
-  assert(t2.fileCount === 4, `fileCount 正确返回 4`)
+  // plan_level=light + 文件 > 阈值 → self（tier-plan-level 改造核心：agent 判定优先，文件数不推翻）
+  const t2 = classifyReviewTier({ planLevel: 'light', designPath: writeDesign(makeTmpDir('rt-'), ['a.js', 'b.js', 'c.js', 'd.js', 'e.js', 'f.js', 'g.js']) })
+  assert(t2.tier === 'self', `plan_level=light + 7 文件 → self（agent 自主判定，文件数不推翻）`)
 
   // plan_level=light + 文件 ≤ 阈值 → self
   const t3 = classifyReviewTier({ planLevel: 'light', designPath: writeDesign(makeTmpDir('rt-'), ['a.js', 'b.js']) })
   assert(t3.tier === 'self', `plan_level=light + 2 文件 → self`)
 
-  // 无 planLevel + 文件 ≤ 阈值 → self（brainstorm 场景）
+  // plan_level=full → independent（无论文件数——full 语义即大变更，CLI 确定性映射）
+  const tFull = classifyReviewTier({ planLevel: 'full', designPath: writeDesign(makeTmpDir('rt-'), ['a.js', 'b.js']) })
+  assert(tFull.tier === 'independent', `plan_level=full + 2 文件 → independent（文件数不推翻）`)
+
+  // 无 planLevel + 文件 ≤ 阈值 → self（brainstorm 场景，启发式）
   const t4 = classifyReviewTier({ designPath: writeDesign(makeTmpDir('rt-'), ['a.js']) })
   assert(t4.tier === 'self', `无 planLevel + 1 文件 → self`)
+
+  // 无 planLevel + 文件 > 阈值 → independent（启发式保留）
+  const t4b = classifyReviewTier({ designPath: writeDesign(makeTmpDir('rt-'), ['a.js', 'b.js', 'c.js', 'd.js']) })
+  assert(t4b.tier === 'independent', `无 planLevel + 4 文件 → independent（启发式）`)
+  assert(t4b.fileCount === 4, `fileCount 正确返回 4`)
 
   // 阈值边界：恰好 = 阈值 → self
   const boundary = classifyReviewTier({ designPath: writeDesign(makeTmpDir('rt-'), Array(SELF_REVIEW_FILE_THRESHOLD).fill(0).map((_, i) => `f${i}.js`)) })

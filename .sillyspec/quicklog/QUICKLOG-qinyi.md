@@ -144,3 +144,16 @@
 根因：noAI 校验只在 runStage 推进路径自动执行，completeStep 无 noAI 检测直接标 completed，multi-agent-platform 2026-08-13-spec-sync-visibility tasks/ 从未生成但 plan 阶段 completed 即此漏洞实证。
 方案：completeStep 在标记 completed 前检测 currentStepDef.noAI，--done 落到 noAI step 时执行对应 _cliAction 三分支（planPostcheck/scanPreflight/scanPostcheck）CLI 校验，校验 throw 则步骤保持 pending。
 结果：新增 test/run-complete-noai-done-gate.test.mjs 两用例 6/6 过，修复受影响既有测试 fixture 一处，npm test 全量 188/0 绿，lint 过，file-lifecycle.md 与 runtime.md 模块文档已同步。
+
+## ql-20260814-006-9a30 | 2026-08-14 14:21:36 | tier 判定不透明——agent 在 plan step1 判 plan_level=light 并按 prompt 自审通过
+状态：已完成
+关联变更：（无）
+文件：
+- src/review-tier.js（classifyReviewTier 判定顺序改 plan_level 确定性映射：none/light→self、full→independent；无 plan_level 才退文件数启发式；reason 文案标注判定来源；头注释同步）
+- test/stage-review.test.mjs（tier 用例更新：新增 light+7文件→self 与 full+2文件→independent；fileCount 断言移到启发式分支）
+- docs/sillyspec/file-lifecycle.md（Stage Review Gate 段判定描述更新 + updated_at）
+- .sillyspec/docs/sillyspec/modules/stages.md（变更索引追加 ql-20260814-006-9a30）
+需求：tier 判定不透明——agent 在 plan step1 判 plan_level=light 并按 prompt 自审通过，完成时 CLI 却按变更文件数 7>3 强制 tier=independent 要求独立 review.json，agent 自主判断被推翻。
+根因：classifyReviewTier 判定顺序只认 plan_level=none，light 完全被忽略，文件数启发式成为第二套标准，与 agent 的 plan_level 分级规则（light 定义即 3-5 文件范围可控）直接冲突。
+方案：tier 判定权归 plan_level——classifyReviewTier 改为确定性映射 none/light→self（agent 自主判定自审）、full→independent（full 语义即大变更需独立审查），无 plan_level 阶段（brainstorm 等 plan.md 未生成）才退变更文件数启发式（≤3 self）；reason 文案标注判定来源保证透明。
+结果：test/stage-review.test.mjs 更新 tier 用例含 light+7文件→self 与 full+2文件→independent 新断言全过，npm test 全量 188/0 绿，lint 过，file-lifecycle.md 与 stages.md 模块文档同步。
