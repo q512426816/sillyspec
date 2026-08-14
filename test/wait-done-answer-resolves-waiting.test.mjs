@@ -83,7 +83,9 @@ console.log('\n=== 坑1 端到端：CLI --done --answer 解 brainstorm 已 waiti
   })
   await seedStage(pm, cwd, cn, 'brainstorm', steps)
 
-  const r = runCLI(['--dir', cwd, 'run', 'brainstorm', '--done', '--answer', '确认进入下一阶段', '--change', cn, '--output', '分段展示完成'], { cwd })
+  // --answer 用该 step 的合法预设选项「确认」（wait-choice-enforcement 起封闭单选强制；
+  // 本用例聚焦 --done --answer 解 waiting 机制本身，answer 取合法选项不改变被测行为）
+  const r = runCLI(['--dir', cwd, 'run', 'brainstorm', '--done', '--answer', '确认', '--change', cn, '--output', '分段展示完成'], { cwd })
 
   assert(r.status === 0, `不应非零退出（历史 bug：waiting 步骤会让流程卡住）（实际 ${r.status}）`)
   assert(!r.combined.includes('等待用户输入'), '不应报「等待用户输入」（历史 bug 末步症状）')
@@ -92,7 +94,7 @@ console.log('\n=== 坑1 端到端：CLI --done --answer 解 brainstorm 已 waiti
   const after = await pm.read(cwd, cn)
   const sDesign = after.stages.brainstorm.steps[designIdx]
   assert(sDesign.status === 'completed', '「分段展示设计」waiting→completed')
-  assert(sDesign.waitAnswer === '确认进入下一阶段', 'waitAnswer 已补为 --answer 值')
+  assert(sDesign.waitAnswer === '确认', 'waitAnswer 已补为 --answer 值')
   // 后续步骤保持 pending（本次 --done 只解该步，不越权推进）
   assert(after.stages.brainstorm.steps[designIdx + 1].status === 'pending', '下一步仍 pending（未越权推进）')
 }

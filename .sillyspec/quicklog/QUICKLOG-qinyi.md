@@ -157,3 +157,20 @@
 根因：classifyReviewTier 判定顺序只认 plan_level=none，light 完全被忽略，文件数启发式成为第二套标准，与 agent 的 plan_level 分级规则（light 定义即 3-5 文件范围可控）直接冲突。
 方案：tier 判定权归 plan_level——classifyReviewTier 改为确定性映射 none/light→self（agent 自主判定自审）、full→independent（full 语义即大变更需独立审查），无 plan_level 阶段（brainstorm 等 plan.md 未生成）才退变更文件数启发式（≤3 self）；reason 文案标注判定来源保证透明。
 结果：test/stage-review.test.mjs 更新 tier 用例含 light+7文件→self 与 full+2文件→independent 新断言全过，npm test 全量 188/0 绿，lint 过，file-lifecycle.md 与 stages.md 模块文档同步。
+
+## ql-20260814-007-b94b | 2026-08-14 15:33:34 | ①status 输出区分『当前操作目标 change』与『已存在活跃 change 列表』+ 标注空壳 default
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/complete.js（enforceWaitChoice helper：requiresWait 门 --done --answer / 解 waiting / --continue 三条路径校验 --answer 命中 waitOptions，失败列选项 exit 1）
+- src/progress/stage-machine.js（show() 多变更汇总新增「当前操作目标」行 + 目录缺失空壳 change 标注 ⚠️ 残留记录）
+- src/stages/brainstorm.js + brainstorm-auto.js（开放回答型澄清追问步骤声明 waitFreeAnswer: true 豁免单选强制）
+- test/wait-choice-enforcement.test.mjs（新建：封闭型非选项拦截/命中放行/开放型自由文本豁免 7/7）
+- test/wait-done-answer-resolves-waiting.test.mjs（fixture --answer 改合法选项「确认」，原意保留）
+- docs/prompt/_extracted.json + docs/prompt/execute.md（重跑 _extract.mjs 修复 4 处 pre-existing 提取漂移：plan review_plan module-impact 条件 scale≠small、execute Wave 补 MCP 派发提示段）
+- docs/sillyspec/file-lifecycle.md（核心修正补 wait 单选强制 + status 输出区分两条 + updated_at）
+- .sillyspec/docs/sillyspec/modules/runtime.md + stages.md（变更索引 ql-20260814-007-b94b）
+需求：①status 输出区分『当前操作目标 change』与『已存在活跃 change 列表』+ 标注空壳 default；②方案选择类 wait 强制 --answer 命中 waitOptions 单选，防 AI 一句话代答。
+根因：①StageMachine.show 多变更汇总无操作目标概念、不标目录缺失空壳；②completeStep/continueStep 的 --answer 只校验非空不校验命中选项。
+方案：①stage-machine.js 新增『当前操作目标』行 + 空壳 ⚠️ 标注；②complete.js 新增 enforceWaitChoice helper 覆盖三条 answer 路径（requiresWait 门/解 waiting/--continue），开放回答型 waitFreeAnswer 豁免（brainstorm 澄清追问声明）；stage 定义改动触发 docs/prompt 重提取，顺带修复 4 处 pre-existing 提取漂移（plan review_plan/execute Wave MCP 段），同步 execute.md。
+结果：wait-choice-enforcement.test.mjs 7/7 + wait-done-answer fixture 适配（--answer 改合法选项，原意保留）+ 全量 189/0 绿 + lint 过 + docs/prompt 与 file-lifecycle.md/模块文档同步。

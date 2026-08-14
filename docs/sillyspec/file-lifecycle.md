@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-05-31 11:00:00
-updated_at: 2026-08-14T14:25:20+08:00
+updated_at: 2026-08-14T15:37:09+08:00
 ---
 
 # SillySpec 文件生命周期
@@ -240,6 +240,8 @@ execute --done 批量完成（2026-07-28，`run/complete.js`）
   - **`alignExecuteToPlan` 事实核验**：对齐前调用 `checkExecuteCodeEvidence`，plan 全勾但确证代码零变更时拒绝对齐。
   - **verify 实测对账**（`verify-postcheck.js`）：verify 产物校验通过后，CLI 用 `execSync` 执行 `local.yaml` 的 `commands.test`（10 分钟超时），结果写 `.runtime/verify-runs/<ts>/test-result.json`；自报告 PASS 但实测失败 → 阻断 verify 完成并回滚。未配置 test（或 unavailable）降级 warning 不阻断。
   - **文案修正**：validator 失败提示不再声称 `--skip-approval` 可跳过产物校验（该 flag 只作用于阶段转换/审批检查）；quick 阶段 quicklog 缺失提示同步移除。
+  - **wait 选项单选强制（wait-choice-enforcement，2026-08-14）**：定义了 `waitOptions` 的 requiresWait/repeatableWait 步骤，`--answer` 必须命中预设选项之一——防止 agent 一句话代答绕过人工选择（方案选择类 wait 的 answer 本就该是选项本身，而非自由文本）。开放回答型步骤（澄清追问，answer 为自由文本）在 step 定义显式声明 `waitFreeAnswer: true` 豁免（brainstorm 的「对话式探索与需求澄清」/ brainstorm-auto 澄清步已声明）。校验覆盖三条用户答案路径：requiresWait 门 `--done --answer`（`completeStep`）、`--done --answer` 解 waiting（`resolveWaitingStepWithAnswer`）、`--continue --answer`（`continueStep`）；校验失败打印选项清单 + exit 1（fail-loud，与 requiresWait 门同风格）。实现为 `complete.js` 的 `enforceWaitChoice` helper。
+  - **status 输出区分操作目标与活跃列表（status-change-pointer-ambiguous，2026-08-14）**：`progress show`/`status` 多变更汇总不再只列「活跃变更 N 个」，新增两行明确语义——「当前操作目标」（多活跃时不带 `--change` 的 run/progress 不隐式选定任一，须显式 `--change`）与「活跃变更记录」（下列为 DB 中存在的活跃记录，非操作目标）；DB 有记录但目录缺失的空壳 change（default/quick-xxx 残留）逐项标注 `⚠️ 目录缺失（残留记录，可用 doctor 清理）`，防止把残留空壳误当操作目标跑错 change。
 - worktree execute 收尾 per-task review 草稿 + assess 顺带修复豁免（2026-07-30，坑 worktree-execute-apply-friction 1/2/4）：
   - **per-task review.json 草稿自动落盘**（坑2，`task-review.js generateTaskReviewDrafts`）：execute 每次 `--done`（`complete.js` execute 块，`detectExecuteBatchFinish` 之后）自动补写缺失的 `.runtime/execute-runs/<exec-id>/tasks/task-XX/review.json`。worktree execute「主 agent 直接实现」模式不走子代理 review 落盘 → review.json 全缺 → Task Review Gate 报「task-XX 缺少 review.json」阻断；现据 `resolveVerifyChangedFiles`（worktree-aware base..head diff）按各 task `allowed_paths`（`parseAllowedPaths` + `pathMatches`）归属，生成 `verdict=cannot_verify` + 非空 `requiredEvidence` 草稿（过 schema，流转 verify 兑现）。幂等：已存在的 review.json（人工/子代理已填 verdict）一律跳过不覆盖；空 changedFiles 的 task 不生成（verifyReviewGitEvidence 判空 diff 伪造）。exec-id 与 Task Review Gate（`gates.js`）/ `autoCheckPlanFromReviews` 同源：`current-execute-run-id-<change>` marker，缺失则 `generateExecuteRunId` + 落盘。
   - **assess 顺带修复豁免 + 一次报全**（坑1/4，`worktree-apply.js assessApplyRisk`）：design §6 文件清单标注「顺带修复」（表格「说明」列，正则 `/顺带修复|附带修复|顺带|drive-?by|incidental/i`，`change-list.js parseFileChangeListDetailed`）的预存债文件，assess 豁免 allowed_paths 严格校验（降 warning 不 BLOCKED）——顺带修预存债是 CLAUDE.md 规则20 鼓励的合规操作，不应被 task 边界卡死。同时 `applyWorktree(checkOnly)` 的 Gate1（文件清单）/Gate3（主区 dirty）不再短路，`assessApplyRisk` 聚合各道 reasons 一次报全（治原逐道挤牙膏）；Gate2 allowed_paths 解析复用 `parseAllowedPaths` + `pathMatches`（与 plan-postcheck/Gate1 同语义容差），消除原内联字面前缀弱匹配漂移。真实 apply（checkOnly=false）仍短路保安全。**apply 文件清单 = `resolveApplyAllowSet`（design §6 清单 ∪ 全部 task allowed_paths，execute 复盘 c）**：design §6 常只列源码、漏测试/产物文件，而 task allowed_paths（plan 阶段产出）已含——apply 若只认 design 清单会在测试/产物文件上误拦（assess 用 task allowed_paths 已放行、apply 用 design 清单又拦，两 gate 口径不一致）；union 后两源并集为准，design/plan 之外完全越界的文件仍拦。

@@ -3,7 +3,7 @@
 // 调 pm.read/_write/_ensureDB/_getSpecDir/readGlobal/_runtimePath/listChanges/_appendAuditLog/
 // _renderBatchProgress（persistence-core + 其他组 delegate）。组内方法互调保持 this.X（同 class）。
 // completeStage 五层（resolve/validate/force/tx/history/print）整体搬迁，不拆流水线（保行为、最低风险）。
-import { mkdirSync } from 'fs';
+import { mkdirSync, existsSync } from 'fs';
 import { join, resolve, basename } from 'path';
 import { writeAtomicSync } from '../fs-atomic.js';
 import { runValidators } from '../stage-contract.js';
@@ -140,21 +140,27 @@ export class StageMachine {
     console.log('');
     console.log('  ═══════════════════════════════════════');
     console.log(`  项目: ${(global?.project) || basename(cwd) || '(未命名)'}`);
-    console.log(`  活跃变更: ${changes.length} 个`);
+    // 当前操作目标与活跃列表区分（坑 status-change-pointer-ambiguous）：多活跃时不带
+    // --change 的 run/progress 不隐式选任何一个（index.js --change 解析多活跃报错），明确
+    // 说出来，防止把残留空壳（default/quick-xxx/目录缺失记录）误当操作目标跑错 change。
+    console.log(`  当前操作目标: （多活跃——不带 --change 时不隐式选定，run 须显式 --change <name>）`);
+    console.log(`  活跃变更记录: ${changes.length} 个（下列为 DB 中存在的活跃记录，非操作目标）`);
     console.log('  ═══════════════════════════════════════');
     console.log('');
 
+    const changesRoot = join(this.pm._getSpecDir(cwd), 'changes');
     for (const cn of changes) {
       const data = this.pm.read(cwd, cn);
+      const dirMissing = !existsSync(join(changesRoot, cn));
       if (!data) {
-        console.log(`  📂 ${cn} — (无法读取)`);
+        console.log(`  📂 ${cn} — (无法读取)${dirMissing ? ' ⚠️ 目录缺失（残留记录，可用 doctor 清理）' : ''}`);
         continue;
       }
       const currentStage = data.currentStage || '(无)';
       const stageLabel = STAGE_LABELS[data.currentStage] || currentStage;
       const lastActive = data.lastActive ? this._timeAgo(data.lastActive) : '未知';
 
-      console.log(`  📂 ${cn}`);
+      console.log(`  📂 ${cn}${dirMissing ? ' ⚠️ 目录缺失（残留记录，可用 doctor 清理）' : ''}`);
       console.log(`     当前阶段: ${stageLabel}  最近活跃: ${lastActive}`);
       console.log('');
     }

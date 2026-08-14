@@ -209,6 +209,10 @@ worktree 路径 + 分支名 + 模式
 ### 注意
 蓝图文件（tasks.md / design.md / proposal.md / requirements.md）在主工作区 .sillyspec/changes/<change>/ 下，它们可能不在 worktree 中。读取蓝图时使用主工作区路径，不要拼接到 worktree 路径下。
 
+### 派发后端提示：SillyHub MCP 已配置但路径A 未落地
+
+检测到 local.yaml mcp 段或 env 配置，但 SillyHub `dispatch_worker` 尚不支持 `worktree_path`（路径A 跨仓未落地）。本次派发走 Local（本机 Agent tool），与默认行为一致——上方「执行方式」与「工作目录」段适用。
+
 ### 任务摘要（按需读取完整蓝图）
 为每个任务启动子代理时，**只需告知任务目标和蓝图文件路径，让子代理按需读取**：
 
