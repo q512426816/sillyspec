@@ -120,3 +120,13 @@
 根因：sql.js 时代 _save/_atomicWriteSync 写前备份主 .bak，迁 node:sqlite 后机制移除但 4 处描述未同步
 方案：实证 _write 与 transaction 与 _openWithFallback 全路径确认无写入，订正 storage-and-state.md 与 db.js 与 fs-atomic.js 与 index.js 四处
 结果：npm test EXIT=0 全量通过，npm run lint 271 files 通过，触及 src 实证核验无回归
+
+## ql-20260814-004-db89 | 2026-08-14 13:38:26 | 闭合 architecture-4a.md §8 自洽
+状态：已完成
+关联变更：（无）
+文件：
+- docs/sillyspec/architecture-4a.md（§8 .bak 行待澄清改为已订正）
+需求：闭合 architecture-4a.md §8 自洽，.bak 漂移行状态更新
+根因：无，纯文档闭合。.bak 写时机已于 ql-20260814-003 定论，但 §8 表格仍标待澄清
+方案：改 §8 表格 .bak 行最后一列，由需进一步澄清改为已订正见 ql-20260814-003
+结果：纯 doc 改动 lint 不扫 docs 故跳过，无 src 与测试影响，§8 四行全部已订正或已校正闭合
