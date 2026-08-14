@@ -27,9 +27,10 @@ const LOCAL_YAML = '.sillyspec/local.yaml';
 const CHANGES_DIR = '.sillyspec/changes';
 const REQUEST_TIMEOUT_MS = 10_000;
 
-// 未连接平台是本地独立用户的合法默认状态。sync / syncDocuments / checkApproval 由 run 流程
-// 在后台 best-effort 触发（每步完成、execute 阶段启动），未连接时默认静默跳过——不每步催连
-// 平台制造噪音（本地用户根本不需要平台）。需要排查同步行为时设 SILLYSPEC_DEBUG_SYNC=1。
+// 未连接平台是本地独立用户的合法默认状态。sync / checkApproval 由 run 流程在后台 best-effort
+// 触发（每步完成、execute 阶段启动）；syncDocuments 仅由手动 `sillyspec platform sync-docs`
+// 命令触发（index.js sync-docs 分支），run 流程不自动推文档。未连接时默认静默跳过——不每步
+// 催连平台制造噪音（本地用户根本不需要平台）。需要排查同步行为时设 SILLYSPEC_DEBUG_SYNC=1。
 function debugLog(msg) {
   if (process.env.SILLYSPEC_DEBUG_SYNC) console.warn(msg)
 }
@@ -306,7 +307,9 @@ export class SyncManager {
     }
     let text = readLocalYamlRaw(this.cwd);
     text = replaceTopLevelSection(text, 'platform', platformEntries.join('\n'));
-    // mcp 段同源假设（design §7.4）：复用 platform 的 url/token；用户已手填 mcp 段则保留不覆盖（R-09，文本级检测）
+    // mcp 段同源假设（design §7.4）：url 复用 platform 的 url；token 用原始 user 级 token
+    // （非换发的 effectiveToken——MCP 派发需 user 级权限，platform 段才是最小权限的 shpsync_）。
+    // 用户已手填 mcp 段则保留不覆盖（R-09，文本级检测）
     if (findTopLevelSectionRange(text, 'mcp') === null) {
       text = replaceTopLevelSection(text, 'mcp', `  url: ${normalizedUrl}\n  token: ${token}`);
     }
