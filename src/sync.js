@@ -937,6 +937,11 @@ export async function collectStatus(cwd) {
   return new SyncManager(cwd).collectStatus();
 }
 
+// 未决冲突文件列表便捷导出（index.js platform resolve 参数解析/报错兜底用，只读）
+export function listConflictFiles(cwd) {
+  return new SyncManager(cwd).listConflictFiles();
+}
+
 // TBD-hub-api: approve/reject 端点路径与请求体以 SillyHub 仓库实际 API 为准；
 // 对齐时只改本函数（_submitApproval），无需动 approve/reject 入口。
 /**

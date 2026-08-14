@@ -1336,10 +1336,31 @@ SillySpec platform — SillyHub 平台同步
         }
         case 'resolve': {
           // task-13 / D-002 / D-010 / D-013 / FR-05：冲突解决三选一（绝不字段级 auto-merge）
-          const resolveName = platformArgs[0];
+          // 变更名解析（顺序）：--change <name>（与 pull/sync 兄弟命令写法一致）→ platformArgs 中
+          // 第一个非 flag 位置参数 → 唯一未决冲突自动选中。修复：旧实现盲取 platformArgs[0]，
+          // flag 放前面时（resolve --keep-local --change x）把 '--keep-local' 当变更名去读冲突文件。
+          const changeIdx = args.indexOf('--change');
+          let resolveName = changeIdx >= 0 && args[changeIdx + 1] ? args[changeIdx + 1] : null;
           if (!resolveName) {
-            console.error('❌ 用法: sillyspec platform resolve <change-name> <--keep-local|--take-platform|--abort>');
-            process.exit(1);
+            resolveName = platformArgs.find((a) => a && !a.startsWith('--')) || null;
+          }
+          if (!resolveName) {
+            // 无变更名：恰有一个未决冲突时自动选中，多个/零个则列出候选
+            const pendingConflicts = syncModule.listConflictFiles(dir);
+            if (pendingConflicts.length === 1) {
+              resolveName = pendingConflicts[0].change;
+              console.log(`ℹ️ 自动选中唯一未决冲突: ${resolveName}`);
+            } else {
+              console.error('❌ 用法: sillyspec platform resolve <change-name> <--keep-local|--take-platform|--abort>');
+              console.error('   或: sillyspec platform resolve --change <name> <--keep-local|--take-platform|--abort>');
+              if (pendingConflicts.length > 1) {
+                console.error(`   现有 ${pendingConflicts.length} 个未决冲突，请指定变更名:`);
+                for (const c of pendingConflicts) console.error(`   - ${c.change}`);
+              } else {
+                console.error('   当前无 sync-conflict 文件（可先运行 sillyspec platform status 查看）');
+              }
+              process.exit(1);
+            }
           }
           // 解析 mode flag（三选一互斥，多传/不传均报错）
           const resolveFlags = ['--keep-local', '--take-platform', '--abort'].filter((f) => args.includes(f));
@@ -1354,6 +1375,12 @@ SillySpec platform — SillyHub 平台同步
             console.log(`✅ ${resolveName} [${resolveMode}]: ${r.reason}`);
           } else {
             console.error(`❌ ${resolveName}: ${r.reason}`);
+            // 报错兜底：指定变更名无冲突文件时，列出 .runtime 下实际存在的冲突文件（防 flag 误当变更名再次误导）
+            const pendingConflicts = syncModule.listConflictFiles(dir);
+            if (pendingConflicts.length > 0 && !pendingConflicts.some((c) => c.change === resolveName)) {
+              console.error('   当前未决冲突:');
+              for (const c of pendingConflicts) console.error(`   - ${c.change}`);
+            }
             process.exit(1);
           }
           break;

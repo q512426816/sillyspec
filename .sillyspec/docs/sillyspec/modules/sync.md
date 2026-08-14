@@ -47,6 +47,7 @@ SillyHub 平台同步模块，负责与远程 SillyHub 服务建立连接、同�
 | `pullList(cwd)` | 顶层便捷函数（轻量列表） | `cwd` |
 | `resolve(changeName, mode, cwd)` | 顶层便捷函数（platform resolve 子命令用） | `changeName, mode, cwd` |
 | `collectStatus(cwd)` | 顶层便捷函数（platform status 扩展用） | `cwd` |
+| `listConflictFiles(cwd)` | 顶层便捷函数（platform resolve 参数解析/报错兜底用，只读列 .runtime 未决冲突） | `cwd` |
 | `syncModule(args, cwd)` | CLI 入口：解析 args 并分发子命令 | `args: string[], cwd` |
 
 ## 关键数据流
@@ -85,3 +86,4 @@ SillyHub 平台同步模块，负责与远程 SillyHub 服务建立连接、同�
 | 2026-08-10 | 2026-08-10-platform-progress-sync | 下行 pull（pullList/pull 两级 + 本地脏度冲突检测）+ 双向冲突持久化（push 409/pull 脏度写 sync-conflict-<change>.json）+ resolve 三选一（keep-local/take-platform/abort）+ collectStatus（落后标记+未决冲突列表）+ POST 元字段走 HTTP header（D-015 body 裸 JSON 零回归）+ resolvePlatformUser（local.yaml user→X-SillySpec-User）。配套 db.js schema v4 加 last_synced_platform_ts/last_local_modified_ts，progress.js serializeForSync/import。 |
 | 2026-08-11 | ql-20260811-003-b023（quick） | connect/disconnect 改文本级定向替换 platform 段（readLocalYamlRaw + findTopLevelSectionRange + replaceTopLevelSection），保留 local.yaml 注释/其他段/数组/深嵌套/CRLF；废弃删除扁平全量覆写的 writeLocalYaml（round-trip 经 parseSimpleYaml 丢注释+丢非扁平结构）。新增 test/local-yaml-preserve.test.mjs。 |
 | 2026-08-14 | ql-20260814-008-fd62（quick） | 修正两处与实现不符的漂移注释：① 头注释移除 syncDocuments（实为手动 platform sync-docs 唯一触发，run 流程不自动推文档），保留 sync/checkApproval 的 run 流程触发描述；② mcp 段同源假设注释改为准确描述（url 复用 platform，token 用原始 user 级 token 而非换发的 effectiveToken）。纯注释改动。 |
+| 2026-08-14 | ql-20260814-013-ef64（quick） | index.js platform resolve 参数解析重写：变更名解析顺序 --change 值 → 非 flag 位置参数 → 唯一未决冲突自动选中（listConflictFiles）；无变更名多冲突/指定名无冲突文件时报错列出候选。修复旧实现盲取 platformArgs[0] 把 flag 名（如 --keep-local）当变更名报「无可解决冲突」。新增顶层导出 listConflictFiles(cwd)。 |
