@@ -85,3 +85,13 @@
 根因：①hasUnappliesChanges 对目录不存在/无 diffBase/git 失败都返回 false（可安全清理），实际可能有未 apply commit；②删除审计裸判定不受任何 flag 门控；③validatePlanForExecute 只报'没有找到 checkbox task'不分 4 条隐性契约。
 方案：①hasUnappliesChanges 三处改 fail-closed 保守 true（拿不准就保留）；②新增 --allow-delete 显式 opt-in 解锁删除（对称 --allow-new，默认仍 fail-closed）；③diagnoseNoTaskRootCause 诊断 4 种根因（Wave 标题格式/task checkbox/### 打断/缺任务区）；同步 SKILL.md flag 表。
 结果：audit 22/22 + has-unapplied-changes 37/37 + cleanup-guard 23/23 + 全量 npm test 0 失败 + lint 271 通过。
+
+## ql-20260814-001-4be0 | 2026-08-14 12:18:59 | 把 SillySpec 用企业4A框架映射成架构总纲文档
+状态：已完成
+关联变更：（无）
+文件：
+- docs/sillyspec/architecture-4a.md（新增4A架构总纲（8节，源码为准校正3处漂移））
+需求：把 SillySpec 用企业4A框架映射成架构总纲文档，供对外讲清平台定位
+根因：无，纯新增文档，平台此前缺少架构总纲
+方案：4个子代理并行深析BA/DA/AA/TA四层并交叉印证，整合成 docs/sillyspec/architecture-4a.md 共8节，以源码为准校正引擎和阶段和步骤数三处旧文档漂移
+结果：纯doc改动，lint不扫docs故跳过，无源码与测试影响，文档结构完整
