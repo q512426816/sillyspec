@@ -247,6 +247,8 @@ async function main() {
       // 解析 --change 参数
       const progChangeIdx = args.indexOf('--change');
       const progChangeName = progChangeIdx >= 0 && args[progChangeIdx + 1] ? args[progChangeIdx + 1] : null;
+      // 与 run 入口同源消毒（防路径穿越；progress 下游 completeStage 写 history 文件名拼 change 名）
+      if (progChangeName) assertSafeChangeName(progChangeName, '--change 变更名');
 
       switch (subCommand) {
         case 'init':
@@ -353,6 +355,8 @@ async function main() {
         console.error('用法: sillyspec gate <stage> --change <name> [--json]\n  stage: brainstorm | plan | execute | verify | archive | ...');
         process.exit(2);
       }
+      // 与 run 入口同源消毒（防路径穿越；gate 下游拼 marker/changes 路径）
+      assertSafeChangeName(gateChange, '--change 变更名');
       const { runGate } = await import('./machine-interface.js');
       // --spec-dir 透传 runGate.specBase（gate CLI 接线修复，P3 坑 3 sillyspec 侧）。
       // runGate 已分离 cwd(跑测试) + specBase(读 local.yaml/spec)，但 gate case 之前
@@ -407,6 +411,8 @@ async function main() {
         console.error('用法: sillyspec derive <facet> --change <name> [--json]\n  facet: execute-evidence | verify-test | task-reviews | artifacts');
         process.exit(2);
       }
+      // 与 run 入口同源消毒（防路径穿越；derive 下游拼 marker/changes 路径）
+      assertSafeChangeName(deriveChange, '--change 变更名');
       const { runDerive } = await import('./machine-interface.js');
       // --spec-dir 透传 runDerive.specBase（与 gate case 对称，P3 坑 3 sillyspec 侧）。
       // derive verify-test facet 内部同样调 runVerifyTestCheck 依赖 specBase，平台模式
@@ -454,6 +460,8 @@ async function main() {
         console.error('用法: sillyspec backfill-reviews --change <name> [--json] [--spec-dir <path>]\n  为手动补的 task 生成 review.json 草稿（cannot_verify），解 archive 客观完成度阻断');
         process.exit(2);
       }
+      // 与 run 入口同源消毒（防路径穿越；backfill 下游拼 marker/changes/review 路径）
+      assertSafeChangeName(brChange, '--change 变更名');
       const { generateTaskReviewDrafts } = await import('./task-review.js');
       // --spec-dir 透传 platformOpts.specRoot（与 gate/derive 对称）；不传走默认 join(cwd,'.sillyspec')。
       const brPlatformOpts = {};
@@ -504,6 +512,8 @@ async function main() {
         console.error('用法: sillyspec register-stage-review --change <名> --stage <brainstorm|plan|execute> [--from <review.json>] [--spec-dir <path>] [--json]\n  生成/adopt stage 级 review.json（docHash 自动算 + 写 marker），治 tier=independent marker 死锁');
         process.exit(2);
       }
+      // 与 run 入口同源消毒（防路径穿越；register 下游写 marker、拼 changes/review 路径）
+      assertSafeChangeName(rsrChange, '--change 变更名');
       const { registerStageReview } = await import('./stage-review.js');
       const rsrPlatformOpts = {};
       if (specDir) rsrPlatformOpts.specRoot = specDir;

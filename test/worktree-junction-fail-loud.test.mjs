@@ -78,8 +78,18 @@ await mock.module('fs', {
   exports: { ...realFs, lstatSync: (...a) => lstatImpl(...a) },
 })
 await mock.module('child_process', {
-  // wrapper 先计数再委托 impl（即便 impl 抛错，计数也已 +1，证明 junction rmdir 被尝试过）
-  exports: { ...realCp, execSync: (...a) => { execSyncCalls++; return execSyncImpl(...a) } },
+  // wrapper 先计数再委托 impl（即便 impl 抛错，计数也已 +1，证明 junction rmdir 被尝试过）。
+  // 安全收敛后 worktree.js 的 junction 解链走 execFileSync('cmd.exe', ['/c','rmdir',...])，
+  // 但 mock 'child_process' 同时命中 git-helper 的 'node:child_process'（同 builtin），
+  // 故计数仅统计 cmd.exe rmdir 调用，git 调用原样委托真实实现（不计数、不 no-op）。
+  exports: {
+    ...realCp,
+    execSync: (...a) => { execSyncCalls++; return execSyncImpl(...a) },
+    execFileSync: (cmd, args, ...rest) => {
+      if (cmd === 'cmd.exe') { execSyncCalls++; return execSyncImpl(cmd, args, ...rest) }
+      return realCp.execFileSync(cmd, args, ...rest)
+    },
+  },
 })
 await mock.module('../src/worktree-deps.js', {
   exports: { ...realDeps, provisionDeps: (...a) => provisionImpl(...a) },

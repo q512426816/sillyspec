@@ -10,7 +10,7 @@
 
 import { existsSync, readFileSync, realpathSync } from 'fs';
 import { join } from 'path';
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
 import { createHash } from 'crypto';
 
 const LOCKFILES = ['pnpm-lock.yaml', 'package-lock.json', 'yarn.lock'];
@@ -118,10 +118,12 @@ function tryLink(mainNodeModules, linkPath) {
   }
   try {
     if (process.platform === 'win32') {
-      execSync(`mklink /J "${linkPath}" "${mainNodeModules}"`, { shell: 'cmd.exe', stdio: ['pipe', 'pipe', 'pipe'] });
+      // execFileSync 数组形式不经 shell：POSIX 双引号内 `/$() 会执行、cmd.exe 双引号内 %VAR% 仍展开，
+      // linkPath 含 local.yaml 模块 path，属项目内可配置值（安全收敛，与 git-helper 同范式）
+      execFileSync('cmd.exe', ['/c', 'mklink', '/J', linkPath, mainNodeModules], { stdio: ['pipe', 'pipe', 'pipe'] });
       return { ok: true, method: 'junction' };
     }
-    execSync(`ln -s "${mainNodeModules}" "${linkPath}"`, { stdio: ['pipe', 'pipe', 'pipe'] });
+    execFileSync('ln', ['-s', mainNodeModules, linkPath], { stdio: ['pipe', 'pipe', 'pipe'] });
     return { ok: true, method: 'symlink' };
   } catch (e) {
     return { ok: false, error: e.message };

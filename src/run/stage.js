@@ -89,15 +89,20 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
   // ── execute 阶段启动时固定 executeRunId（绑定变更名，避免跨变更复用） ──
   let currentExecuteRunId = null
   if (stageName === 'execute') {
-    const { generateExecuteRunId } = await import('../task-review.js')
+    const { generateExecuteRunId, isValidExecuteRunId } = await import('../task-review.js')
     const execSpecBase = platformOpts?.specRoot || join(cwd, '.sillyspec')
     const runtimeRoot = resolveRuntimeRoot(platformOpts, execSpecBase)
     const runIdFile = join(runtimeRoot, `current-execute-run-id-${changeName}`)
     mkdirSync(runtimeRoot, { recursive: true })
-    // 优先读取已有的变更专属标记文件
+    // 优先读取已有的变更专属标记文件（agent 可写内容，格式校验防注入/穿越，非法视为缺失重生成）
     try {
       if (existsSync(runIdFile)) {
-        currentExecuteRunId = readFileSync(runIdFile, 'utf8').trim()
+        const c = readFileSync(runIdFile, 'utf8').trim()
+        if (c && !isValidExecuteRunId(c)) {
+          console.warn(`⚠️ execute run marker 内容非法（期望 exec-YYYY-MM-DD-HHMMSS，实得 ${JSON.stringify(c.slice(0, 60))}），重新生成`)
+        } else {
+          currentExecuteRunId = c
+        }
       }
     } catch {}
     if (!currentExecuteRunId) {

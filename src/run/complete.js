@@ -508,8 +508,14 @@ async function autoCheckPlanFromReviews({ stageName, changeName, cwd, platformOp
     if (!existsSync(planPath) || !existsSync(runIdFile)) {
       return { autoChecked: false, checkedCount: 0, skippedCount: 0 }
     }
-    const executeRunId = readFileSync(runIdFile, 'utf8').trim()
-    const { readReview } = await import('../task-review.js')
+    const c = readFileSync(runIdFile, 'utf8').trim()
+    const { readReview, isValidExecuteRunId } = await import('../task-review.js')
+    // marker 是 agent 可写内容：格式校验防注入/穿越，非法视为缺失（跳过 autoCheck，不误勾）
+    if (c && !isValidExecuteRunId(c)) {
+      console.warn(`⚠️ execute run marker 内容非法（期望 exec-YYYY-MM-DD-HHMMSS，实得 ${JSON.stringify(c.slice(0, 60))}），跳过 review 自动勾选`)
+      return { autoChecked: false, checkedCount: 0, skippedCount: 0 }
+    }
+    const executeRunId = c
     // plan.md 是 agent 与 CLI 都会写的共享文件（agent 勾 checkbox、此处 autoCheck 也勾选）。
     // 读-改-写必须整体持锁（withFileLock 串行化多进程），否则并发 execute --done / 手动勾选互相覆盖
     // （后到者覆盖先到者）；写入用 writeAtomicSync（tmp+rename 原子），防 Windows 整文件覆盖被读半截

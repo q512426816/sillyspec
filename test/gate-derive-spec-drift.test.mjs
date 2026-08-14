@@ -12,14 +12,14 @@
  * 读取锚主仓 .runtime。
  *
  * 抓手：validateTaskReviews（src/task-review.js）review.json 缺失时 error 文本含 executeRunId
- * （"execute run ID: <runId>"）。marker 读主仓（exec-MAIN-001）→ 主仓 pass review → 无 error；
- * 读副本（exec-COPY-999）→ 副本缺对应 review → error 含 exec-COPY-999 + "缺少 review.json"。
+ * （"execute run ID: <runId>"）。marker 读主仓（exec-2026-01-01-111111）→ 主仓 pass review → 无 error；
+ * 读副本（exec-2026-01-02-999999）→ 副本缺对应 review → error 含 exec-2026-01-02-999999 + "缺少 review.json"。
  *
  * 场景：
- *   A. derive task-reviews 副本 cwd → 自动 anchor 读主仓 marker（ok=true，不含 exec-COPY-999）
+ *   A. derive task-reviews 副本 cwd → 自动 anchor 读主仓 marker（ok=true，不含 exec-2026-01-02-999999）
  *   B. derive task-reviews 显式 --spec-dir 副本（index 层 if(!specDir) 跳过 anchor）→ 读副本 marker
- *      （负对照：error 含 exec-COPY-999，证明 anchor 未生效时确实读副本）
- *   C. gate execute 副本 cwd → 自动 anchor，task-reviews check 读主仓（ok=true，不含 exec-COPY-999）
+ *      （负对照：error 含 exec-2026-01-02-999999，证明 anchor 未生效时确实读副本）
+ *   C. gate execute 副本 cwd → 自动 anchor，task-reviews check 读主仓（ok=true，不含 exec-2026-01-02-999999）
  *
  * 互补：execute-runs-isolation.test.mjs 测 consumer 侧（resolveRuntimeRoot 单元）；
  *      worktree-execute-spec-drift.test.mjs 测 command.js 守卫 producer 侧（execute 路径）；
@@ -96,7 +96,7 @@ const copySpec = join(wtRoot, '.sillyspec')
 const mainRuntime = join(mainSpec, '.runtime')
 const copyRuntime = join(copySpec, '.runtime')
 
-// ── 主仓：progress + plan + marker(exec-MAIN-001) + 主仓 pass review ──
+// ── 主仓：progress + plan + marker(exec-2026-01-01-111111) + 主仓 pass review ──
 mkdirSync(mainSpec, { recursive: true })
 const pmMain = new ProgressManager({ specDir: mainSpec })
 await pmMain.init(mainRepo)
@@ -104,14 +104,14 @@ await pmMain.initChange(mainRepo, changeName)
 await pmMain.setStage(mainRepo, 'execute', changeName)
 writeFileSync(join(mainSpec, 'changes', changeName, 'plan.md'), PLAN_MD, 'utf8')
 mkdirSync(mainRuntime, { recursive: true })
-// 主仓 marker = exec-MAIN-001（drift+anchor 应读这个 → 主仓 pass review）
-writeFileSync(join(mainRuntime, `current-execute-run-id-${changeName}`), 'exec-MAIN-001\n', 'utf8')
-mkdirSync(join(mainRuntime, 'execute-runs', 'exec-MAIN-001', 'tasks', 'task-01'), { recursive: true })
-writeFileSync(join(mainRuntime, 'execute-runs', 'exec-MAIN-001', 'tasks', 'task-01', 'review.json'),
+// 主仓 marker = exec-2026-01-01-111111（drift+anchor 应读这个 → 主仓 pass review）
+writeFileSync(join(mainRuntime, `current-execute-run-id-${changeName}`), 'exec-2026-01-01-111111\n', 'utf8')
+mkdirSync(join(mainRuntime, 'execute-runs', 'exec-2026-01-01-111111', 'tasks', 'task-01'), { recursive: true })
+writeFileSync(join(mainRuntime, 'execute-runs', 'exec-2026-01-01-111111', 'tasks', 'task-01', 'review.json'),
   passReview('task-01'), 'utf8')
 
-// ── 副本：progress + plan + marker(exec-COPY-999) ──
-// 故意不建副本 execute-runs/exec-COPY-999/...：若读副本 marker，review 缺失 → error 含 exec-COPY-999。
+// ── 副本：progress + plan + marker(exec-2026-01-02-999999) ──
+// 故意不建副本 execute-runs/exec-2026-01-02-999999/...：若读副本 marker，review 缺失 → error 含 exec-2026-01-02-999999。
 // runGate/runDerive 内部 pm=new ProgressManager()（无 specDir）→ pm.read(cwd=wtRoot) 走 resolveSpecDir
 // (wtRoot)=copySpec → 读副本 db，故副本必须 init progress，否则 "变更不存在" exit 2。
 mkdirSync(copySpec, { recursive: true })
@@ -121,7 +121,7 @@ await pmCopy.initChange(wtRoot, changeName)
 await pmCopy.setStage(wtRoot, 'execute', changeName)
 writeFileSync(join(copySpec, 'changes', changeName, 'plan.md'), PLAN_MD, 'utf8')
 mkdirSync(copyRuntime, { recursive: true })
-writeFileSync(join(copyRuntime, `current-execute-run-id-${changeName}`), 'exec-COPY-999\n', 'utf8')
+writeFileSync(join(copyRuntime, `current-execute-run-id-${changeName}`), 'exec-2026-01-02-999999\n', 'utf8')
 
 // ════════════════════════════════════════════════════════════
 // 场景 A：derive task-reviews 副本 cwd → 自动 anchor 读主仓 marker
@@ -137,8 +137,8 @@ console.log('--- 场景 A：derive task-reviews 副本 cwd → 自动 anchor 读
   if (env) {
     assert(env.ok === true, `AC-A3: derive task-reviews ok=true（读主仓 pass review，实际 ok=${env.ok}）`)
     const blob = JSON.stringify(env)
-    assert(!blob.includes('exec-COPY-999'), `AC-A4: 未读副本 marker（envelope 不含 exec-COPY-999）`)
-    assert(!blob.includes('缺少 review.json'), `AC-A5: 未报缺 review.json（读到了主仓 exec-MAIN-001 的 pass review）`)
+    assert(!blob.includes('exec-2026-01-02-999999'), `AC-A4: 未读副本 marker（envelope 不含 exec-2026-01-02-999999）`)
+    assert(!blob.includes('缺少 review.json'), `AC-A5: 未报缺 review.json（读到了主仓 exec-2026-01-01-111111 的 pass review）`)
     assert(env.data?.ok === true, `AC-A6: data.ok=true（task-01 主仓 review pass）`)
   }
 }
@@ -156,8 +156,8 @@ console.log('\n--- 场景 B：derive task-reviews --spec-dir 副本 → 读副�
   try { env = JSON.parse(res.stdout || '') } catch (e) { assert(false, `AC-B2: stdout 合法 JSON（${e.message}）`) }
   if (env) {
     const blob = JSON.stringify(env)
-    assert(blob.includes('exec-COPY-999'), `AC-B3: 读副本 marker（envelope 含 exec-COPY-999，证明 anchor 未生效时读副本）`)
-    assert(blob.includes('缺少 review.json'), `AC-B4: 报缺 review.json（副本 exec-COPY-999 review 不存在）`)
+    assert(blob.includes('exec-2026-01-02-999999'), `AC-B3: 读副本 marker（envelope 含 exec-2026-01-02-999999，证明 anchor 未生效时读副本）`)
+    assert(blob.includes('缺少 review.json'), `AC-B4: 报缺 review.json（副本 exec-2026-01-02-999999 review 不存在）`)
     assert(env.ok === false, `AC-B5: ok=false（副本 marker 指向不存在的 review）`)
   }
 }
@@ -177,8 +177,8 @@ console.log('\n--- 场景 C：gate execute 副本 cwd → 自动 anchor，task-r
     if (trCheck) {
       assert(trCheck.ok === true, `AC-C3: task-reviews check ok=true（读主仓 pass review，实际 ok=${trCheck.ok}）`)
       const blob = JSON.stringify(trCheck)
-      assert(!blob.includes('exec-COPY-999'), `AC-C4: task-reviews 未读副本 marker（不含 exec-COPY-999）`)
-      assert(!blob.includes('缺少 review.json'), `AC-C5: task-reviews 未报缺 review（读主仓 exec-MAIN-001）`)
+      assert(!blob.includes('exec-2026-01-02-999999'), `AC-C4: task-reviews 未读副本 marker（不含 exec-2026-01-02-999999）`)
+      assert(!blob.includes('缺少 review.json'), `AC-C5: task-reviews 未报缺 review（读主仓 exec-2026-01-01-111111）`)
     }
   }
 }

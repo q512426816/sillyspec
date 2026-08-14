@@ -81,6 +81,14 @@ export function sanitizeDesc(description) {
   return s.length > 120 ? s.slice(0, 120) + '…' : s
 }
 
+// git user.name → 文件名安全形式：白名单保留字母数字._- 与中文等 Unicode 字，
+// 剥路径元字符（/ \ ..）与控制字符。防 QUICKLOG-<user>.md / 锁文件 / 轮转归档穿越写。
+export function sanitizeQuicklogUser(user) {
+  const s = String(user || '').replace(/[\\/\r\n\0]/g, '').replace(/\.{2,}/g, '.').trim()
+  if (!s) return ''
+  return s.length > 64 ? s.slice(0, 64) : s
+}
+
 // 从关联变更的 proposal/design 提取首个 # 标题（去「提案书（Proposal）— / 设计文档（Design）—」固定前缀）。
 // 让 quick --linked-changes 启动时（用户常不带 --input）也能拿到语义标题，而非 (quick 任务) 占位。
 // 读不到任何标题返回 ''（调用方再回退占位符，保持向后兼容）。
@@ -234,7 +242,7 @@ async function rotateIfNeeded(userFile, gitUser) {
   const dateStr = lastDate
     ? `${lastDate.slice(0, 4)}-${lastDate.slice(4, 6)}-${lastDate.slice(6, 8)}`
     : nowDatetime().slice(0, 10)
-  const archiveFile = join(dirname(userFile), `QUICKLOG-${gitUser}-${dateStr}.md`)
+  const archiveFile = join(dirname(userFile), `QUICKLOG-${sanitizeQuicklogUser(gitUser) || 'unknown'}-${dateStr}.md`)
   // 同日已轮转过：两步各自原子化（append+clear 无法单原子，reader 容忍中间态——见 writeAtomic 注释）
   if (existsSync(archiveFile)) {
     const existing = readFileSync(archiveFile, 'utf8')
@@ -394,7 +402,9 @@ function flipEntryInContent(content, qlId, result, changedFiles = [], fileNotes 
 export async function allocateQuicklogEntry(specBase, gitUser, { description, linkedChanges = [], allowedFiles = [] } = {}) {
   const quicklogDir = join(specBase, 'quicklog')
   mkdirSync(quicklogDir, { recursive: true })
-  const user = gitUser || 'unknown'
+  // git user.name 无字符限制，可含 / \ .. 等路径元字符（git config 或 .git/config 可控）——
+  // 白名单消毒防穿越写（QUICKLOG-<user>.md / 锁文件 / 轮转归档三处拼接），与 assertSafeChangeName 同风格
+  const user = sanitizeQuicklogUser(gitUser) || 'unknown'
   const userFile = join(quicklogDir, `QUICKLOG-${user}.md`)
   const lockPath = join(quicklogDir, `.QUICKLOG-${user}.md.lock`)
   const desc = sanitizeDesc(description)
@@ -437,7 +447,9 @@ export async function allocateQuicklogEntry(specBase, gitUser, { description, li
  */
 export async function completeQuicklogEntry(specBase, gitUser, qlId, { resultText = '', linkedChanges = [], changedFiles = [] } = {}) {
   const quicklogDir = join(specBase, 'quicklog')
-  const lockPath = join(quicklogDir, `.QUICKLOG-${(gitUser || 'unknown')}.md.lock`)
+  // 与 allocateQuicklogEntry 同源消毒：锁文件路径含 user（防穿越写，两入口必须一致否则锁不上同一文件）
+  const user = sanitizeQuicklogUser(gitUser) || 'unknown'
+  const lockPath = join(quicklogDir, `.QUICKLOG-${user}.md.lock`)
   const result = sanitizeResult(resultText)
   const linked = Array.isArray(linkedChanges) ? linkedChanges : []
   // 实际改动文件（调用方 complete-handlers 已用 isQuickMetadata 过滤 quick 自身元数据）。空 → 不动文件行。

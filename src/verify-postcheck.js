@@ -15,7 +15,7 @@
  *           测试，避免 monorepo 全量测试超 gate timeout。
  */
 
-import { execSync } from 'child_process'
+import { execSync, execFileSync } from 'child_process'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { verifyApiParity } from './contract-matrix.js'
@@ -367,14 +367,28 @@ function runOneModule(name, testCommand, cwd, knownFailures = []) {
   }
 }
 
+// refSpec 来源 meta.json（agent 可写），仅放行 git ref/range 安全字符（含 HEAD~1..HEAD 类区间），
+// 防经 shell 的命令/参数注入。剥空白与引号/分号/反引号/$ 等 shell 元字符。
+// 注：允许 ".."/"../.."（相对路径 ref 语法上合法）不影响安全——execFileSync 数组形式下它只是
+// 一个 git rev 参数，git 自会报 not a valid ref，无 shell 解释面。
+function assertSafeRefSpec(refSpec) {
+  if (typeof refSpec !== 'string') return null
+  if (!/^[A-Za-z0-9._~/^-]+$/.test(refSpec)) return null
+  if (/~~/.test(refSpec)) return null // 连续 ~（垃圾串）
+  return refSpec
+}
+
 /**
  * 在指定 cwd 跑 `git diff --name-only <refSpec>`，返回相对仓库根的文件列表。
  * git 不可用 / 非仓库 / ref 无效 → 返回 null（调用方 fallback）。
  */
 function runGitDiffNameOnly(cwd, refSpec) {
   try {
-    const cmd = refSpec ? `git diff --name-only ${refSpec}` : 'git diff --name-only'
-    const out = execSync(cmd, {
+    const ref = refSpec ? assertSafeRefSpec(refSpec) : null
+    if (refSpec && !ref) return null
+    const args = ['diff', '--name-only']
+    if (ref) args.push(ref)
+    const out = execFileSync('git', args, {
       cwd,
       encoding: 'utf8',
       timeout: 30 * 1000,
@@ -392,8 +406,11 @@ function runGitDiffNameOnly(cwd, refSpec) {
  */
 function runGitDiffNameStatus(cwd, refSpec) {
   try {
-    const cmd = refSpec ? `git diff --name-status ${refSpec}` : 'git diff --name-status'
-    return execSync(cmd, {
+    const ref = refSpec ? assertSafeRefSpec(refSpec) : null
+    if (refSpec && !ref) return null
+    const args = ['diff', '--name-status']
+    if (ref) args.push(ref)
+    return execFileSync('git', args, {
       cwd,
       encoding: 'utf8',
       timeout: 30 * 1000,

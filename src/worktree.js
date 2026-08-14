@@ -813,7 +813,8 @@ export class WorktreeManager {
           try {
             if (process.platform === 'win32') {
               // Windows rmdir 删 junction（reparse point）不跟随目标，保护主 checkout
-              execSync(`rmdir "${wtNodeModules}"`, { shell: 'cmd.exe' });
+              // execFileSync 数组形式：路径含引号/特殊字符时不会经 shell 解析（安全收敛，与 git-helper 同范式）
+              execFileSync('cmd.exe', ['/c', 'rmdir', wtNodeModules]);
             } else {
               unlinkSync(wtNodeModules);
             }
@@ -946,7 +947,8 @@ export class WorktreeManager {
           if (isLink) {
             try {
               if (process.platform === 'win32') {
-                execSync(`rmdir "${wtNodeModules}"`, { shell: 'cmd.exe' });
+                // execFileSync 数组形式：不经 shell，防 meta.worktreePath 注入（安全收敛）
+                execFileSync('cmd.exe', ['/c', 'rmdir', wtNodeModules]);
               } else {
                 unlinkSync(wtNodeModules);
               }

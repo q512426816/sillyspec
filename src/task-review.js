@@ -118,10 +118,16 @@ export function summarizeTaskCompletion({ changeDir, runtimeRoot, changeName }) 
       report: '⚠️ plan.md 未解析出任何 task-NN 条目（plan 可能未按规范写 checkbox 列表）。' }
   }
 
-  // runId 解析：marker → 扫描最新目录
+  // runId 解析：marker → 扫描最新目录（marker 是 agent 可写内容，格式校验防注入/穿越）
   let runId = null
   const marker = join(runtimeRoot, `current-execute-run-id-${changeName}`)
-  try { if (existsSync(marker)) runId = readFileSync(marker, 'utf8').trim() } catch {}
+  try {
+    if (existsSync(marker)) {
+      const c = readFileSync(marker, 'utf8').trim()
+      if (c && !isValidExecuteRunId(c)) console.warn(`[sillyspec] execute run marker 内容非法（期望 exec-YYYY-MM-DD-HHMMSS，实得 ${JSON.stringify(c.slice(0, 60))}），忽略并回退目录扫描`)
+      if (isValidExecuteRunId(c)) runId = c
+    }
+  } catch {}
   if (!runId) {
     try {
       const runsDir = join(runtimeRoot, 'execute-runs')
@@ -658,6 +664,18 @@ export function generateExecuteRunId() {
 }
 
 /**
+ * execute run id 格式校验：exec-YYYY-MM-DD-HHMMSS。
+ * marker 文件是 agent 可写内容，读回后既注入 prompt（{EXECUTE_RUN_ID}）又拼进
+ * join(runtimeRoot, 'execute-runs', runId) 路径——格式校验同时防提示词注入与路径穿越
+ * （对齐 stage-review marker 的 review- 前缀校验范式）。
+ * @param {string} runId
+ * @returns {boolean}
+ */
+export function isValidExecuteRunId(runId) {
+  return typeof runId === 'string' && /^exec-\d{4}-\d{2}-\d{2}-\d{6}$/.test(runId)
+}
+
+/**
  * 解析最新 execute run id：优先 current-execute-run-id-<changeName> marker；
  * marker 缺失/为空则扫描 execute-runs/ 下子目录、取 mtime 最新的（尽力定位已有 run）。
  *
@@ -699,7 +717,13 @@ export function resolveLatestExecuteRunIdWithTasks({ runtimeRoot }) {
 
 export function resolveLatestExecuteRunId({ runtimeRoot, changeName }) {
   const marker = join(runtimeRoot, `current-execute-run-id-${changeName}`)
-  try { if (existsSync(marker)) { const c = readFileSync(marker, 'utf8').trim(); if (c) return c } } catch {}
+  try {
+    if (existsSync(marker)) {
+      const c = readFileSync(marker, 'utf8').trim()
+      if (c && !isValidExecuteRunId(c)) console.warn(`[sillyspec] execute run marker 内容非法（期望 exec-YYYY-MM-DD-HHMMSS，实得 ${JSON.stringify(c.slice(0, 60))}），忽略并回退目录扫描`)
+      if (isValidExecuteRunId(c)) return c
+    }
+  } catch {}
   try {
     const runsDir = join(runtimeRoot, 'execute-runs')
     if (existsSync(runsDir)) {
@@ -758,7 +782,13 @@ export async function generateTaskReviewDrafts({ changeName, cwd, platformOpts =
   // exec-id：与 Task Review Gate（gates.js:269）/ autoCheckPlanFromReviews 同源
   const runIdFile = join(runtimeRoot, 'current-execute-run-id-' + changeName)
   let executeRunId = ''
-  try { if (existsSync(runIdFile)) executeRunId = readFileSync(runIdFile, 'utf8').trim() } catch {}
+  try {
+    if (existsSync(runIdFile)) {
+      const c = readFileSync(runIdFile, 'utf8').trim()
+      if (c && !isValidExecuteRunId(c)) console.warn(`[sillyspec] execute run marker 内容非法（期望 exec-YYYY-MM-DD-HHMMSS，实得 ${JSON.stringify(c.slice(0, 60))}），视为缺失重新生成`)
+      if (isValidExecuteRunId(c)) executeRunId = c
+    }
+  } catch {}
   if (!executeRunId) {
     executeRunId = generateExecuteRunId()
     try { mkdirSync(runtimeRoot, { recursive: true }); writeFileSync(runIdFile, executeRunId + '\n') } catch {}
@@ -915,7 +945,8 @@ export function getLatestExecuteRunId(runtimeRoot) {
   try {
     if (existsSync(markerPath)) {
       const content = readFileSync(markerPath, 'utf8').trim()
-      if (content) return content
+      if (content && !isValidExecuteRunId(content)) console.warn(`[sillyspec] execute run marker 内容非法（期望 exec-YYYY-MM-DD-HHMMSS，实得 ${JSON.stringify(content.slice(0, 60))}），忽略并回退目录扫描`)
+      if (isValidExecuteRunId(content)) return content
     }
   } catch {}
 

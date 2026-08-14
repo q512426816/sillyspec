@@ -24,7 +24,7 @@ import { stageRegistry } from '../stages/index.js'
 import { resolvePromptIncludes, resolveRuntimeRoot, safeGit, WAIT_MARKER_RE } from './shared.js'
 import { renderStageContract } from '../stage-contract-spec.js'
 import { parseModuleMapSimple } from '../modules.js'
-import { REVIEW_SCHEMA_VERSION } from '../task-review.js'
+import { REVIEW_SCHEMA_VERSION, isValidExecuteRunId } from '../task-review.js'
 
 /**
  * 从 _module-map.yaml 读取模块上下文索引
@@ -428,7 +428,14 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
     const runIdFile = join(runtimeRoot, `current-execute-run-id-${changeName}`)
     try {
       if (existsSync(runIdFile)) {
-        runId = readFileSync(runIdFile, 'utf8').trim()
+        const c = readFileSync(runIdFile, 'utf8').trim()
+        // marker 是 agent 可写内容，直接注入 prompt + 拼进 gate 读 review.json 的路径——
+        // 格式校验同时防提示词注入与路径穿越（对齐 stage-review marker 的前缀校验范式）
+        if (c && !isValidExecuteRunId(c)) {
+          console.warn(`[sillyspec] execute run marker 内容非法（期望 exec-YYYY-MM-DD-HHMMSS，实得 ${JSON.stringify(c.slice(0, 60))}），视为缺失重新生成`)
+        } else {
+          runId = c
+        }
       }
     } catch {}
     if (!runId) {

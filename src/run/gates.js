@@ -115,9 +115,14 @@ export async function enforceReviewJsonGate(stageName, cwd, changeName, step, st
   const runIdFile = join(runtimeRoot, `current-execute-run-id-${changeName}`)
   const planPath = join(specBase, 'changes', changeName, 'plan.md')
   if (!existsSync(runIdFile) || !existsSync(planPath)) return true
+  const { validateCheckedTaskReviews, resolveLatestExecuteRunIdWithTasks, isValidExecuteRunId } = await import('../task-review.js')
   let executeRunId = readFileSync(runIdFile, 'utf8').trim()
+  // marker 是 agent 可写内容：格式校验防注入/穿越，非法视为缺失走漂移兜底重定位
+  if (executeRunId && !isValidExecuteRunId(executeRunId)) {
+    console.warn(`⚠️ execute run marker 内容非法（期望 exec-YYYY-MM-DD-HHMMSS，实得 ${JSON.stringify(executeRunId.slice(0, 60))}），改扫真实 run 目录`)
+    executeRunId = ''
+  }
   const planContent = readFileSync(planPath, 'utf8')
-  const { validateCheckedTaskReviews, resolveLatestExecuteRunIdWithTasks } = await import('../task-review.js')
   // marker 漂移兜底（gate-atom-a 正确修法）：marker 指向的 run 缺 tasks/（generateExecuteRunId 只写
   // marker 不建目录，漂移后新 run 不继承旧 review）时，无视 marker 改扫 execute-runs/ 取 mtime 最新
   // 且真正含 tasks/ 的 run，用其齐备的 review.json 校验，避免误报「review.json 不存在」。注意不能用
@@ -333,12 +338,18 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
         const planContent = readFileSync(planPath, 'utf8')
         const runtimeRoot = resolveRuntimeRoot(platformOpts, effectiveSpecBase)
 
-        // execute run id：从变更专属标记文件读取
+        // execute run id：从变更专属标记文件读取（agent 可写内容，格式校验防注入/穿越）
         const runIdFile = join(runtimeRoot, `current-execute-run-id-${changeName}`)
         let executeRunId = ''
         try {
           if (existsSync(runIdFile)) {
-            executeRunId = readFileSync(runIdFile, 'utf8').trim()
+            const c = readFileSync(runIdFile, 'utf8').trim()
+            const { isValidExecuteRunId } = await import('../task-review.js')
+            if (c && !isValidExecuteRunId(c)) {
+              console.warn(`⚠️ execute run marker 内容非法（期望 exec-YYYY-MM-DD-HHMMSS，实得 ${JSON.stringify(c.slice(0, 60))}），视为缺失回退扫描`)
+            } else {
+              executeRunId = c
+            }
           }
         } catch {}
         if (!executeRunId) {

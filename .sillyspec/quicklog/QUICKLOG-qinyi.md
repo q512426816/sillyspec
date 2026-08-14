@@ -174,3 +174,55 @@
 根因：①StageMachine.show 多变更汇总无操作目标概念、不标目录缺失空壳；②completeStep/continueStep 的 --answer 只校验非空不校验命中选项。
 方案：①stage-machine.js 新增『当前操作目标』行 + 空壳 ⚠️ 标注；②complete.js 新增 enforceWaitChoice helper 覆盖三条 answer 路径（requiresWait 门/解 waiting/--continue），开放回答型 waitFreeAnswer 豁免（brainstorm 澄清追问声明）；stage 定义改动触发 docs/prompt 重提取，顺带修复 4 处 pre-existing 提取漂移（plan review_plan/execute Wave MCP 段），同步 execute.md。
 结果：wait-choice-enforcement.test.mjs 7/7 + wait-done-answer fixture 适配（--answer 改合法选项，原意保留）+ 全量 189/0 绿 + lint 过 + docs/prompt 与 file-lifecycle.md/模块文档同步。
+
+## ql-20260814-008-fd62 | 2026-08-14 16:05:48 | 修正 src/sync.js 两处与实现不符的漂移注释
+状态：已完成
+关联变更：（无）
+文件：
+- src/sync.js（两处漂移注释修正（syncDocuments 触发源 + mcp 段 token 双写语义））
+- .sillyspec/docs/sillyspec/modules/sync.md（变更索引追加 ql-20260814-008-fd62）
+需求：修正 src/sync.js 两处与实现不符的漂移注释，消除文档/注释对同步行为的错误描述。
+根因：① 头注释称 syncDocuments 由 run 流程触发，实际唯一调用点是手动 platform sync-docs（index.js:1255），run 流程不自动推文档；② mcp 段同源假设注释称复用 platform 的 url/token，实际 token 双写不同（platform 段写换发的 shpsync_ effectiveToken，mcp 段写原始 user token）。两处注释误导后续维护。
+方案：① 头注释移除 syncDocuments，保留 sync/checkApproval 的 run 流程触发描述，注明 syncDocuments 仅手动触发；② mcp 段注释改为准确描述 url 复用 + token 用原始 user 级 token。同步 sync 模块文档 sync.md 变更索引。
+结果：npm run lint（273 文件通过）+ npm test（189 文件 0 失败）+ platform-recovery-chain.test.mjs（15/15）全绿。
+
+## ql-20260814-009-1887 | 2026-08-14 21:26:37 | 三维度安全审查后修复 P1 高危项（两 CVE + shell 注入面 + marker 注入链 + 入口消毒）
+状态：已完成
+关联变更：（无）
+文件：
+- package.json + package-lock.json（npm 升级 js-yaml 4.2.0→4.3.1 修 CVE-2026-59870 二次方 CPU DoS、ws 8.18→8.21.3 修内存披露+分片耗尽两个 CVE）
+- src/verify-postcheck.js（git diff refSpec 由 execSync 字符串拼接迁 execFileSync 数组 + assertSafeRefSpec 白名单，堵 meta.json refSpec 注入 shell；正则放行 HEAD~1..HEAD 区间）
+- src/worktree.js（junction 解链 rmdir 两处迁 execFileSync 数组，堵 meta.worktreePath 引号截断注入）
+- src/worktree-deps.js（mklink /J 与 ln -s 迁 execFileSync 数组，堵 local.yaml 模块 path 反引号/$() 命令替换）
+- src/task-review.js（新增 isValidExecuteRunId 格式校验；summarizeTaskCompletion/resolveLatestExecuteRunId/generateTaskReviewDrafts/getLatestExecuteRunId 四处 marker 读取点全覆盖，非法 warn+回退目录扫描）
+- src/run/prompt.js（{EXECUTE_RUN_ID} 注入点接格式校验，非法视为缺失重生成）
+- src/run/gates.js（enforceReviewJsonGate 与 task-reviews gate 两处 marker 读取接格式校验）
+- src/run/complete.js（autoCheckPlanFromReviews marker 读取接格式校验，非法跳过不误勾）
+- src/run/stage.js（execute 启动 marker 读取接格式校验）
+- src/quicklog.js（新增 sanitizeQuicklogUser 白名单消毒 git user.name，QUICKLOG 文件/锁/轮转归档三处拼接防穿越写）
+- src/index.js（gate/derive/backfill-reviews/register-stage-review/progress 五入口补 assertSafeChangeName，与 run 入口防护对齐）
+- test/worktree-junction-fail-loud.test.mjs（mock 计数目标从 execSync 迁 execFileSync，仅计数 cmd.exe rmdir 调用避开 git-helper 干扰）
+- test/execute-run-marker-drift.test.mjs（新增 isValidExecuteRunId 8 用例：合法/穿越/多行注入/非补零/null 等）
+- test/gate-derive-spec-drift.test.mjs（fixture marker 改格式合法 ID，保负对照语义）
+- docs/sillyspec/platform-interface-map.md（修 3 处行号漂移 command.js:245→247、index.js:1369→1368-1369）
+需求：三维度安全审查后修复 P1 高危项。
+根因：js-yaml/ws 两 CVE；三处 execSync 字符串拼接经 agent 可写的 meta.json/local.yaml 可注入 shell 命令；EXECUTE_RUN_ID marker 无格式校验直接注入 prompt + 拼 review 路径（提示词注入+路径穿越）；git user.name 与 5 个 CLI 顶层入口未消毒。
+方案：npm 升级两依赖；全部迁 execFileSync 数组形式 + 白名单校验；isValidExecuteRunId 覆盖全部 8 个 marker 读取点；sanitizeQuicklogUser 消毒；5 入口补 assertSafeChangeName。
+结果：npm audit 0 漏洞；全量 npm test 190 文件 0 失败；lint 274 文件过；doc-ref-check 78 处引用全绿。
+
+## ql-20260814-010-5741 | 2026-08-14 21:34:50 | 把文档行号引用一致性变成 npm test 硬门——platform-interface-map.md 的 file:line 漂移自动红灯
+状态：已完成
+关联变更：2026-08-14-doc-ref-check
+文件：
+- test/doc-ref-check.test.mjs（新增文档行号引用校验（两层断言+多候选+token归一，进 npm test））
+- docs/sillyspec/platform-interface-map.md（修 16 处行号漂移+token 错位（并行 agent 改动+方向1注释推动））
+- .sillyspec/changes/2026-08-14-doc-ref-check/（brainstorm 四件套（proposal/design/requirements/tasks））
+需求：把文档行号引用一致性变成 npm test 硬门——platform-interface-map.md 的 file:line 漂移自动红灯，治『每轮人工核对都能查出问题』。
+根因：文档是源码二级抽象，行号随源码增删漂移且无自动检测；四轮人工核对查出 5 个实质错误证明纯人工不可靠。
+方案：新增 test/doc-ref-check.test.mjs 单文件两层断言（存在性+代码符号关键词窗口）+多候选宽容+token 归一；首跑抓 16 处失效，修工具 4 缺陷后修文档 16 处真漂移；FR-07 双篡改自测过。
+结果：doc-ref-check 77 处引用全绿（56 带关键词断言）；篡改自测红灯定位准确；全量 npm test 190 文件 0 失败；lint 274 文件过。
+
+## ql-20260814-011-4ffb | 2026-08-14 21:55:20 | (quick 任务)
+状态：进行中
+关联变更：（无）
+文件：（见实际改动）

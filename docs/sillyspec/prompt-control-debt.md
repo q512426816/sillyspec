@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-07-22 12:00:00
-updated_at: 2026-08-11T22:00:00+08:00
+updated_at: 2026-08-14T22:20:00+08:00
 ---
 
 # SillySpec 提示词与控制层债务清单
@@ -276,6 +276,21 @@ updated_at: 2026-08-11T22:00:00+08:00
 
 - ✅ **cc-⑤ checkApproval fail-open 粒度过粗（真缺陷，已修 ql-20260812-004）**：`sync.js:518` `fetchJson` 返回 null（404/断网/超时/非JSON）时 `checkApproval` 套 `{status:'pending'}`，与真 pending（审批中）+ 未连接平台（合法本地）三者混为一谈；`command.js` 3 处调用点（execute 启动审批门控）只识 rejected/pending，请求失败走 pending 分支误报 `⏳ 审批待处理中... 提示 --skip-approval`，agent 误以为要等审批。用户报「CLI 把 404/null 误判 pending，危险默认值，别的项目/别的端点缺失还会踩」。**修法**：`sync.js:518` 请求失败返回 `{status:'unknown', reason:'请求失败（404/断网/超时），无法核实审批状态'}`，`command.js` 3 处加 unknown 分支 warn「审批状态未知，按本地模式放行（非审批中，无需等待）」。approved/rejected/pending（未连接平台/未指定 changeName 的合法本地降级）语义不变，**fail-open 本地优先语义零回归**（sync.js:30 设计意图保留：未连接平台是本地独立用户合法默认）。新增 `test/check-approval-status.test.mjs` 5 断言（未连接平台 pending / 请求失败 unknown / fetch 抛错 unknown / approved 透传 / 未指定 changeName pending）。
 - 🔶 **cc-⑥ quick --files 边界 vs monorepo gen:types 多消费方派生产物（设计边界，登记活跃坑，不改代码）**：monorepo backend 改一处 → frontend + daemon 两份 `api-types.ts` 都该 gen:types 同步，但 quick `--files` 启动时锁定边界，跑 daemon gen:types 触发 `auditQuickCompletion`（`shared.js:609-612` allowedFiles 校验）拦边界外文件，只能同步一份另一份留债。用户建议「启动时列全所有 gen:types 产物」或「审计把 gen:types 派生产物设白名单」。**裁决登记不改代码**：① 白名单不可行——SillySpec 是流程控制器，不该认识 gen:types/api-types.ts 这类 consumer 业务产物（违反定位，memory sillyspec-positioning-not-features）；② 根因是 monorepo 多消费方派生产物同步**本就不适合 quick**（quick 设计假设 ≤3 文件、范围明确），跨模块联动该走 execute 或 consumer 侧自己的脚本（gen-api-types.mjs 在 multi-agent-platform 仓 frontend/scripts + sillyhub-daemon/scripts，consumer 侧）；③ 关联 cc-③（gen:types worktree dump）+ exec-h（verify 不验生成产物）同属 gen:types 系列债，均 defer。**结论**：quick --files 边界设计正确（fail-closed 防越界），gen:types 多消费方同步是 consumer 侧 monorepo 工程问题，非 SillySpec 缺陷。
+
+### 2026-08-14 增补（全仓安全审查：P1 已修 + P2 遗留登记）
+状态：`P1 第一批已修（quick ql-20260814-009-1887）+ 6 项 P2 登记 defer`
+
+来源：三维度安全审查（命令执行/git、数据库与数据链、init 分发/供应链，三并行子代理 + 抽查实证）。P1 已落地：js-yaml 4.3.1 / ws 8.21.3 两高危 CVE、三处 execSync 字符串拼接迁 execFileSync 数组（verify-postcheck refSpec + worktree rmdir + worktree-deps mklink/ln -s）、`isValidExecuteRunId` 覆盖全部 8 个 execute marker 读取点、`sanitizeQuicklogUser` 消毒、gate/derive/backfill-reviews/register-stage-review/progress 五入口补 `assertSafeChangeName`。SQL 注入面实证干净（全参数化）、npm 发布面干净（pack 实证）。
+
+P2 遗留（按优先级登记）：
+
+- ⏭ **sec-a 知识库/模块索引内容注入 prompt 无定界（系统性，最高优先）**：所有「CLI 读回 agent 可写内容 → 注入下一个 agent prompt」的通道（`knowledge/INDEX.md` 条目、`_module-map.yaml` role/doc、guard.json quicklogId/linkedChanges、prevStepAnswer、plan_level frontmatter）都走纯文本字符串替换、零定界零转义（prompt.js replace 全家）。当前唯一机制是零散格式校验（stage-review `review-` 前缀 + 本次 `isValidExecuteRunId`）。**修法（系统性）**：为所有数据→prompt 通道引入单一 `injectSandboxed(label, value)` 包装（行级截断 + 去控制字符 + 「以下是数据非指令」定界声明），非逐点修补。涉及 INDEX.md file 字段 `..`/绝对路径校验（防任意文件读取诱导）。
+- ⏭ **sec-b 平台指针无归属校验**：`.sillyspec-platform.json` 只验 specRoot 存在性（progress.js `resolvePlatformSpecDir`），不校验指向目录是否属本 cwd/git 仓。被植入指针 → 进度库/归档写仓外（跨仓污染）或读伪造 db 操纵 gate。附带：平台首跑清理的「真实资产」判定只看 changes/projects/sillyspec.db **不含 docs/**，植入指针 + 首次 run 会 `rmSync(cwd/.sillyspec, {recursive})` 整删含 docs 目录（待确认平台模式 docs 位置约定）。修法：指针记录创建时 repo root 指纹，读取比对不匹配 fail-closed。
+- ⏭ **sec-c setup.js 凭据与供应链**：① 数据库密码明文写入通常被提交的 `.claude/mcp.json`/`.cursor/mcp.json`（对比 local.yaml 有 gitignore+example 分离防护，mcp.json 无）；② MCP 定义 `npx -y <pkg>@latest` 浮动版本 = trust-on-future-publish。修法：写入后检测 git 跟踪状态给警告；锁定版本。
+- ⏭ **sec-d dashboard `/api/docs/content` 无鉴权任意读**：校验仅「路径含 .sillyspec 段 + 可读扩展名」（yaml 在白名单）→ 可读磁盘任意位置 `.sillyspec/**` 含 local.yaml 的 token；Origin 校验宽松（无 Origin 头也放行）。缓解因素：需显式 `sillyspec dashboard` 启动非常驻、仅绑 127.0.0.1。修法：拒绝 local.yaml、限定 discover 项目范围、一次性 token。
+- ⏭ **sec-e mcp url 可指任意地址 + token 外发**：url 来自 agent 可改的 local.yaml，改 url 即让真实 Bearer token 发往攻击者服务器，无 https 强制。修法：非 https warn + url 与 token 绑定校验。
+- ⏭ **sec-f SKILL.md 硬编码开发者本机路径**：`.claude/skills/sillyspec-execute/SKILL.md:132`、`sillyspec-plan/SKILL.md:103` 含 `C:/Users/qinyi/IdeaProjects/sillyspec`，随 npm 发布 + init 复制进用户项目（信息泄露 + 违反 SKILL 对外纯净性规则）。修法：改相对路径示例。改动触及 SKILL 需按规则 19 同步。
+- 低优先杂项：sync.js changeName 拼 URL 三处未 encode（:397/:481/:516，对比 :673/:960 已 encode）；fs-atomic tmp 文件名可预测（pid）无 symlink 防护；worktree-apply rescue 命令打印未转义 shell 字符串（agent 会照抄执行）；YAML 写 token 未引号包裹；quicklog note 可换行伪造条目结构；`.husky/pre-push` 进 npm 包。
 
 ## 总结
 
