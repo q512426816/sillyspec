@@ -3,7 +3,7 @@
 > updated_at: 2026-08-14（doc-ref-check 校验版：78 处 file:line 引用经 test/doc-ref-check.test.mjs 自动校验）
 > 范围：SillySpec CLI 在使用过程中**操作 SillyHub 平台接口**的全部触发点 —— 哪个步骤会发请求、打哪个端点、做什么事。
 > 数据源：本文由源码（`src/sync.js` / `src/sillyhub-mcp/` / `src/dispatch/` / `src/run/`）实证归纳。改源码后同步本文。
-> 配套文档：`sillyhub-progress-sync-contract.md`（同步协议契约）、`sillyhub-path-a-contract.md`（派发路径A）、`file-lifecycle.md`（运行时文件）、`interface-contract.md`。
+> 配套文档：`sillyhub-progress-sync-contract.md`（同步协议契约）、`sillyhub-path-a-contract.md`（派发路径A）、`file-lifecycle.md`（运行时文件）、`interface-contract.md`、`sillyhub-api-reference.md`（接口参考——REST 8 端点 + MCP 12 tool 完整调用规范）、`api-verification-2026-08-14.md`（全接口实测报告——含 12 MCP tool + REST 8 端点验证快照与当日修复记录）。
 
 ---
 
