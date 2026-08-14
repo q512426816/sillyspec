@@ -4,8 +4,8 @@
  * 用于 .runtime/*.json、pointer、guard.json 等「会被其他进程 / hook 读取」的配置文件。
  * 保证读者要么看到旧完整内容、要么看到新完整内容，不会读到半截 JSON。
  *
- * 注意：db.js 有自己的 _atomicWriteSync（含 .bak 备份），那是 DB 专属持久化逻辑，
- * 已经过稳定性验证，此处不复用、不替换——保持 db.js 零改动。
+ * 注意：DB 持久化由 node:sqlite 引擎承担（提交即落盘 sillyspec.db + WAL 侧车），
+ * 不经此处的 writeAtomicSync；sillyspec.db 不走原子写改名。
  */
 import { writeFileSync, renameSync, unlinkSync } from 'fs';
 import { dirname, basename, join } from 'path';

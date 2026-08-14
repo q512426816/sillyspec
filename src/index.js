@@ -1673,7 +1673,7 @@ SillySpec config — local.yaml 配置键速查
       // 已知产物 → 用途说明。agent 据此判断每份产物能否作为证据/该读哪个。
       const KNOWN = {
         'sillyspec.db': '进度库 SQLite（stages/steps/changes 表）',
-        'sillyspec.db.bak': '进度库备份（写前快照）',
+        'sillyspec.db.bak': '进度库备份（sql.js 时代写前快照遗留，node:sqlite 不再写入，仅 _openWithFallback 向后兼容恢复用）',
         'sillyspec.db.schema-version': '进度库 schema 版本标记',
         'doctor-diagnosis.json': 'doctor --json 结构化诊断快照',
         'doctor-dumps': 'doctor --dump-db 取证输出目录',

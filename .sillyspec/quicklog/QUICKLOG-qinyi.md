@@ -107,3 +107,16 @@
 根因：无，纯文档订正。引擎迁 node:sqlite 后旧文档未同步、propose 阶段已并入 brainstorm 但阶段表残留行未删
 方案：三处 Edit 改 storage-and-state.md 与 sillyhub-progress-sync-contract.md 的引擎名为 node:sqlite、删 file-lifecycle.md 的 propose 残留行
 结果：纯 doc 改动 lint 不扫 docs 故跳过，无源码与测试影响，三处文档与源码对齐
+
+## ql-20260814-003-2ba8 | 2026-08-14 13:23:58 | 订正 .bak 写时机的迁移遗留描述
+状态：已完成
+关联变更：（无）
+文件：
+- docs/sillyspec/file-lifecycle/storage-and-state.md（.bak 写前备份句改向后兼容兜底说明）
+- src/db.js（_openWithFallback 注释订正 .bak 来源）
+- src/fs-atomic.js（删 _atomicWriteSync 过时引用）
+- src/index.js（文件清单 .bak 描述订正）
+需求：订正 .bak 写时机的迁移遗留描述，让注释与文档和 node:sqlite 真相一致
+根因：sql.js 时代 _save/_atomicWriteSync 写前备份主 .bak，迁 node:sqlite 后机制移除但 4 处描述未同步
+方案：实证 _write 与 transaction 与 _openWithFallback 全路径确认无写入，订正 storage-and-state.md 与 db.js 与 fs-atomic.js 与 index.js 四处
+结果：npm test EXIT=0 全量通过，npm run lint 271 files 通过，触及 src 实证核验无回归

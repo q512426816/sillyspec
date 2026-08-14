@@ -93,8 +93,10 @@ export class DB {
    *  - 主库缺失/为空/损坏：尝试 .bak；成功则 warn 原因后 copy 回主库使用。
    *  - 都不可用：主库不存在→建全新空库；主库曾存在(空/损坏)→fail-loud 抛错(不静默建空库吞进度)。
    * node:sqlite 打开 0 字节文件不抛错：主库须 statSync 显式判空（截断信号→走回退，防静默吞进度）；
-   * .bak 作为恢复源只要存在且能打开即用（含 0 字节空库——node:sqlite 视其为合法空库，
-   * 生产环境 .bak 由原子写改名上一完整主库得来，永不为 0 字节，0 字节态仅出现在测试构造）。
+   * .bak 作为恢复源只要存在且能打开即用（含 0 字节空库——node:sqlite 视其为合法空库）。
+   * 注：node:sqlite 提交即持久化，不再写前备份主 .bak（sql.js 时代 _save/_atomicWriteSync 已随
+   * 2026-08-11 迁移移除）；此恢复分支是向后兼容兜底，仅对 sql.js 时代遗留的 .bak 生效，
+   * 全新 node:sqlite 项目不产生主 .bak）。
    */
   _openWithFallback() {
     const bakPath = `${this.dbPath}.bak`;
