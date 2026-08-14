@@ -95,3 +95,15 @@
 根因：无，纯新增文档，平台此前缺少架构总纲
 方案：4个子代理并行深析BA/DA/AA/TA四层并交叉印证，整合成 docs/sillyspec/architecture-4a.md 共8节，以源码为准校正引擎和阶段和步骤数三处旧文档漂移
 结果：纯doc改动，lint不扫docs故跳过，无源码与测试影响，文档结构完整
+
+## ql-20260814-002-ff45 | 2026-08-14 12:28:06 | 修 docs/sillyspec 三处文档漂移
+状态：已完成
+关联变更：（无）
+文件：
+- docs/sillyspec/file-lifecycle/storage-and-state.md（引擎名 better-sqlite3 改 node:sqlite）
+- docs/sillyspec/sillyhub-progress-sync-contract.md（引擎名 better-sqlite3 WAL 改 node:sqlite WAL）
+- docs/sillyspec/file-lifecycle.md（删 propose 残留行）
+需求：修 docs/sillyspec 三处文档漂移，让文档引擎名与阶段表和源码一致
+根因：无，纯文档订正。引擎迁 node:sqlite 后旧文档未同步、propose 阶段已并入 brainstorm 但阶段表残留行未删
+方案：三处 Edit 改 storage-and-state.md 与 sillyhub-progress-sync-contract.md 的引擎名为 node:sqlite、删 file-lifecycle.md 的 propose 残留行
+结果：纯 doc 改动 lint 不扫 docs 故跳过，无源码与测试影响，三处文档与源码对齐

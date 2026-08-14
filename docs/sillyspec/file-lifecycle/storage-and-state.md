@@ -32,7 +32,7 @@ updated_at: 2026-08-09
 
 位置：`.sillyspec/.runtime/sillyspec.db`
 
-创建方：`ProgressManager._ensureDB()` 使用 `src/db.js` 的 `DB.init()`。底层是 **better-sqlite3 原生绑定**（同步 API），打开即持久化——`init()` 一次性设置 PRAGMA：`journal_mode=WAL` + `busy_timeout=5000` + `foreign_keys=ON` + `synchronous=NORMAL`。事务经 `DB.transaction(fn)` 包装，提交直接写主库文件 `sillyspec.db` + WAL 侧车 `.db-wal`/`.db-shm`。写前自动备份为 `sillyspec.db.bak`，主库损坏/为空时从 `.bak` 回退，两者均坏则 fail-loud。WAL 单写者串行 + SQLITE_BUSY 应用层有限重试（3 次递增退避 50→100→200ms，达上限 fail-loud），并发安全不丢更新。
+创建方：`ProgressManager._ensureDB()` 使用 `src/db.js` 的 `DB.init()`。底层是 **`node:sqlite`（`DatabaseSync` 原生绑定）**（同步 API），打开即持久化——`init()` 一次性设置 PRAGMA：`journal_mode=WAL` + `busy_timeout=5000` + `foreign_keys=ON` + `synchronous=NORMAL`。事务经 `DB.transaction(fn)` 包装，提交直接写主库文件 `sillyspec.db` + WAL 侧车 `.db-wal`/`.db-shm`。写前自动备份为 `sillyspec.db.bak`，主库损坏/为空时从 `.bak` 回退，两者均坏则 fail-loud。WAL 单写者串行 + SQLITE_BUSY 应用层有限重试（3 次递增退避 50→100→200ms，达上限 fail-loud），并发安全不丢更新。
 
 当前 DDL 包含：
 

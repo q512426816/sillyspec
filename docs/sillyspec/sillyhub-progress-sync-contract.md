@@ -18,7 +18,7 @@ status: client-landed-backend-pending
 
 ## 0. 背景（一句话）
 
-SillySpec 各用户本地各有进度库 `sillyspec.db`（better-sqlite3 WAL，gitignored，互不可见），通过 HTTP 把进度序列化成 JSON 投影上行到 sillyhub 聚合、下行 import 重建。**同步对象是进度状态 JSON，不是代码、不是 .db 文件**。sillyhub 是权威聚合点。sillyhub 后端未就绪时客户端 Best Effort 降级保本地可用（不阻断 CLI）。
+SillySpec 各用户本地各有进度库 `sillyspec.db`（node:sqlite WAL，gitignored，互不可见），通过 HTTP 把进度序列化成 JSON 投影上行到 sillyhub 聚合、下行 import 重建。**同步对象是进度状态 JSON，不是代码、不是 .db 文件**。sillyhub 是权威聚合点。sillyhub 后端未就绪时客户端 Best Effort 降级保本地可用（不阻断 CLI）。
 
 ## 1. 端点总览
 
