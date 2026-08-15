@@ -166,6 +166,8 @@ async function main() {
   let specDir = null;
   let tool = null;
   let interactive = false;
+  // init 专属：--no-skills 跳过 skills 复制段（platform init 勿污染项目内工具目录）
+  let noSkills = false;
   // 平台模式 flag（init 落平台指针用；非 init 命令时忽略——runCommand 自行解析 filteredArgs）
   let platformWorkspaceId = null;
   let platformRuntimeRoot = null;
@@ -185,6 +187,9 @@ async function main() {
     } else if (args[i] === '--tool' && args[i + 1]) {
       tool = args[i + 1];
       i++;
+    } else if (args[i] === '--no-skills') {
+      // init 专属：跳过 skills 复制段（吞进变量，不透传 filteredArgs）
+      noSkills = true;
     } else if (args[i] === '--workspace-id' && args[i + 1]) {
       // 平台模式专属 flag（init 落平台指针用；--runtime-root/--scan-run-id 保持在
       // filteredArgs 由 runCommand 解析，init 侧只需要 workspaceId 作为平台信号 + runtimeRoot）
@@ -245,7 +250,7 @@ async function main() {
 
   switch (command) {
     case 'init':
-      await (await import('./init.js')).cmdInit(dir, { tool, interactive, specDir, platformOpts: (platformWorkspaceId || platformRuntimeRoot) ? { workspaceId: platformWorkspaceId, runtimeRoot: platformRuntimeRoot } : null });
+      await (await import('./init.js')).cmdInit(dir, { tool, interactive, specDir, noSkills, platformOpts: (platformWorkspaceId || platformRuntimeRoot) ? { workspaceId: platformWorkspaceId, runtimeRoot: platformRuntimeRoot } : null });
       break;
     case 'setup':
       const setupList = filteredArgs.includes('--list') || filteredArgs.includes('-l');

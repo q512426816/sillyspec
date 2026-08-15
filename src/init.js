@@ -213,9 +213,11 @@ function isTTY() {
 
 // ── 核心安装逻辑 ──
 
-function doInstall(projectDir, tools, subprojects = [], specDir = null) {
+function doInstall(projectDir, tools, subprojects = [], specDir = null, options = {}) {
   // specDir: 规范目录（默认 projectDir/.sillyspec）
   // projectDir: 源码项目根目录（用于工具检测、指令注入、.gitignore）
+  // options.noSkills: 跳过 skills 复制段（--no-skills；指令注入不受影响）
+  const { noSkills = false } = options;
   const spec = specDir || join(projectDir, '.sillyspec');
 
   // 外部 specDir 时清理旧版本残留的 cwd/.sillyspec/（防止源码污染）。
@@ -330,7 +332,12 @@ function doInstall(projectDir, tools, subprojects = [], specDir = null) {
   const isExternalSpec = specDir && resolve(spec) !== resolve(projectDir, '.sillyspec');
  if (!isExternalSpec) {
     const gitignorePath = join(projectDir, '.gitignore');
-    const ignoreRules = ['.sillyspec/codebase/SCAN-RAW.md', '.sillyspec/local.yaml', '.sillyspec/.runtime/'];
+    // 平台模式项目根落盘物（指针/声明/cleaned 标记）为本地运行时状态，不入库。
+    // 注意平台模式（外部 specDir）不进此分支——那两个文件照样不提交，由用户项目自己 ignore。
+    const ignoreRules = [
+      '.sillyspec/codebase/SCAN-RAW.md', '.sillyspec/local.yaml', '.sillyspec/.runtime/',
+      '.sillyspec-platform.json', '.sillyspec-platform-managed', '.sillyspec-platform-cleaned',
+    ];
     if (existsSync(gitignorePath)) {
       const content = readFileSync(gitignorePath, 'utf8');
       let updated = content.trimEnd();
@@ -358,7 +365,11 @@ function doInstall(projectDir, tools, subprojects = [], specDir = null) {
     injectClaudeInstructions(projectDir);
   }
 
-  // 复制 skills 到各工具目录
+  // 复制 skills 到各工具目录（--no-skills 可跳过：platform init 等场景勿污染项目内工具目录）
+  if (noSkills) {
+    console.log(chalk.dim('    ⏭️ 已跳过 skills 复制（--no-skills）'));
+    return;
+  }
   const skillToolDirs = {
     claude: '.claude/skills',
     codex: '.codex/skills',
@@ -447,7 +458,7 @@ function showSummary(version, tools, specDir) {
 // ── 主命令 ──
 
 export async function cmdInit(projectDir, options = {}) {
-  const { tool, interactive, specDir, platformOpts = null } = options;
+  const { tool, interactive, specDir, noSkills = false, platformOpts = null } = options;
   const version = getVersion();
   const resolvedSpecDir = specDir ? resolve(specDir) : null;
 
@@ -547,7 +558,7 @@ export async function cmdInit(projectDir, options = {}) {
     }
 
     console.log('');
-    await doInstall(projectDir, selectedTools, subprojects, resolvedSpecDir);
+    await doInstall(projectDir, selectedTools, subprojects, resolvedSpecDir, { noSkills });
     writeInitPlatformPointer(projectDir, resolvedSpecDir, platformOpts);
     showSummary(version, selectedTools, resolvedSpecDir);
     return;
@@ -567,7 +578,7 @@ export async function cmdInit(projectDir, options = {}) {
     tools = detectTools(projectDir);
   }
 
-  await doInstall(projectDir, tools, [], resolvedSpecDir);
+  await doInstall(projectDir, tools, [], resolvedSpecDir, { noSkills });
   writeInitPlatformPointer(projectDir, resolvedSpecDir, platformOpts);
 
   console.log('');
