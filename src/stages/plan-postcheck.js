@@ -31,6 +31,7 @@ import { validateScriptCommands } from './cmd-existence.js'
  * @returns {string[]}
  */
 function parseDependsOn(content) {
+  content = content.replace(/\r\n/g, '\n') // 外部调用方（worktree-apply 等）原生 readFileSync 喂 CRLF 时 ^---\n 锚点失配
   const fmMatch = content.match(/^---\n([\s\S]*?)\n---/)
   if (!fmMatch) return []
   const fm = fmMatch[1]
@@ -38,9 +39,11 @@ function parseDependsOn(content) {
   if (inlineMatch) {
     return inlineMatch[1].split(',').map(s => s.trim().replace(/['"]/g, '')).filter(Boolean)
   }
-  const blockMatch = fm.match(/depends_on:\s*\n((?:\s+-\s+.+\n?)+)/)
+  // 块列表：列表项允许顶格或缩进（[ \t]*，坑6——原 \s* 贪婪吃掉换行与前导空白，
+  // 顶格 `depends_on:\n- task-01` 标准 YAML 写法永远失配，静默判「无依赖」）
+  const blockMatch = fm.match(/depends_on:[ \t]*\n((?:[ \t]*-[ \t]+.+\n?)+)/)
   if (blockMatch) {
-    return blockMatch[1].match(/-\s+(.+)/g)?.map(s => s.replace(/^-\s+/, '').trim().replace(/['"]/g, '')) || []
+    return blockMatch[1].match(/[ \t]*-[ \t]+(.+)/g)?.map(s => s.replace(/^[ \t]*-[ \t]+/, '').trim().replace(/['"]/g, '')) || []
   }
   return []
 }
@@ -67,16 +70,25 @@ function parseTaskId(content, filename) {
  * @returns {string[]}
  */
 export function parseAllowedPaths(content) {
+  content = content.replace(/\r\n/g, '\n') // 同 parseDependsOn：入口归一，保护喂原始 CRLF 内容的外部调用方
   const fmMatch = content.match(/^---\n([\s\S]*?)\n---/)
   if (!fmMatch) return []
   const fm = fmMatch[1]
   const inlineMatch = fm.match(/allowed_paths:\s*\[([^\]]*)\]/)
   if (inlineMatch) {
-    return inlineMatch[1].split(',').map(s => s.trim().replace(/['"]/g, '')).filter(Boolean)
+    return inlineMatch[1].split(',').map(s => s.trim().replace(/['"`]/g, '')).filter(Boolean)
   }
-  const blockMatch = fm.match(/allowed_paths:\s*\n((?:\s+-\s+.+\n?)+)/)
+  // 块列表：列表项允许顶格或缩进（坑6①——原 `\s*\n` 的 \s 贪婪匹配换行+前导空白，
+  // 标准 YAML 块列表 `allowed_paths:\n- src/a.js`（顶格）永远失配，静默判「缺 allowed_paths」；
+  // 缩进式 \s+- 恰可命中是巧合幸存。改 [ \t]*（不吃换行）+ 行内 [ \t]*-[ \t]+ 顶格缩进通吃）
+  const blockMatch = fm.match(/allowed_paths:[ \t]*\n((?:[ \t]*-[ \t]+.+\n?)+)/)
   if (blockMatch) {
-    return blockMatch[1].match(/-\s+(.+)/g)?.map(s => s.replace(/^-\s+/, '').trim().replace(/['"]/g, '')) || []
+    // 剥首尾成对反引号（坑7 家族：`src/a.js` 整项以反引号开头时 js-yaml/正则路径带 ` 匹配失败报未覆盖；
+    // 与 change-list.js 的 cell 归一化同语义——剥两端包裹引号，不动路径内部字符）
+    return blockMatch[1].match(/[ \t]*-[ \t]+(.+)/g)?.map(s => {
+      const raw = s.replace(/^[ \t]*-[ \t]+/, '').trim()
+      return raw.replace(/^`([^`]*)`$/, '$1').replace(/^['"]|['"]$/g, '').trim()
+    }).filter(Boolean) || []
   }
   return []
 }
@@ -96,6 +108,7 @@ export function parseAllowedPaths(content) {
  * @returns {string|null}
  */
 function parseFrontmatterScalar(content, field) {
+  content = content.replace(/\r\n/g, '\n') // 同 parseAllowedPaths：入口归一 CRLF
   const fmMatch = content.match(/^---\n([\s\S]*?)\n---/)
   if (!fmMatch) return null
   let fm
@@ -1097,41 +1110,41 @@ export async function executePlanPostcheck(context) {
 
   console.log(`  📂 变更目录: ${changeDir}`)
 
+  // ── 报错聚合（坑6③）：六个检查全部跑完后统一输出全部失败项，一轮 --done 暴露全部问题，
+  // 不再「失败一个抛一个、修一个冒一个」的迭代盲盒。各检查相互独立（都只读 changeDir 产物），
+  // 前置检查失败不使后续检查失真——唯一例外是 tasks/ 目录缺失时后续检查都无意义，仍提前短路。
+  const failures = [] // { name, errors, hint }
+  const printSectionWarnings = (label, warnings) => {
+    if (warnings.length > 0) {
+      console.warn(`\n⚠️  ${label}警告（不阻断）：`)
+      for (const w of warnings) console.warn(`   - ${w}`)
+    }
+  }
+
   // ── 1. 一致性校验 ──
   const consistency = validateBlueprintConsistency(changeDir)
   if (consistency.errors.length > 0) {
-    console.error('\n❌ 蓝图一致性校验失败：')
-    for (const err of consistency.errors) console.error(`   - ${err}`)
-    console.error('\n   请修复上述问题后重新完成此步骤。')
-    throw new Error('planPostcheck: blueprint consistency check failed')
+    failures.push({ name: '蓝图一致性校验', errors: consistency.errors, hint: '请修复上述问题后重新完成此步骤。' })
   }
-  if (consistency.warnings.length > 0) {
-    console.warn('\n⚠️  蓝图一致性警告（不阻断）：')
-    for (const w of consistency.warnings) console.warn(`   - ${w}`)
-  }
+  printSectionWarnings('蓝图一致性', consistency.warnings)
 
   // ── 1b. 可行性校验 ──
   const feasibility = validatePlanFeasibility(changeDir, context.cwd)
   if (feasibility.errors.length > 0) {
-    console.error('\n❌ Plan 可行性校验失败：')
-    for (const err of feasibility.errors) console.error(`   - ${err}`)
-    throw new Error('planPostcheck: feasibility check failed')
+    failures.push({ name: 'Plan 可行性校验', errors: feasibility.errors, hint: null })
   }
-  if (feasibility.warnings.length > 0) {
-    console.warn('\n⚠️  Plan 可行性警告（不阻断）：')
-    for (const w of feasibility.warnings) console.warn(`   - ${w}`)
-  }
+  printSectionWarnings('Plan 可行性', feasibility.warnings)
 
   // ── 1c. 跨任务契约校验 ──
   // 对账 consumer.expects_from ↔ provider.provides，拦截「consumer 期望字段
   // 但 provider 未承诺」的契约断裂（避免到 execute/verify 才暴露成 403/500）
   const crossTask = validateCrossTaskContracts(changeDir)
   if (crossTask.errors.length > 0) {
-    console.error('\n❌ 跨任务契约校验失败（consumer 期望的字段未被 provider 承诺）：')
-    for (const err of crossTask.errors) console.error(`   - ${err}`)
-    console.error('\n   修复方式：要么在 provider task 的 provides.fields 补上缺失字段，')
-    console.error('   要么修正 consumer task 的 expects_from.needs（确认依赖是否真实）。')
-    throw new Error('planPostcheck: cross-task contract check failed')
+    failures.push({
+      name: '跨任务契约校验（consumer 期望的字段未被 provider 承诺）',
+      errors: crossTask.errors,
+      hint: '修复方式：要么在 provider task 的 provides.fields 补上缺失字段，要么修正 consumer task 的 expects_from.needs（确认依赖是否真实）。',
+    })
   }
 
   // ── 1c-b. TaskCard 命令存在性校验 ──
@@ -1146,11 +1159,11 @@ export async function executePlanPostcheck(context) {
   }
   const taskCmds = validateTaskCommands(changeDir, context.cwd, taskModules)
   if (taskCmds.errors.length > 0) {
-    console.error('\n❌ TaskCard 命令存在性校验失败（verify/implementation 的 npm/pnpm/yarn run <script> 不存在）：')
-    for (const err of taskCmds.errors) console.error(`   - ${err}`)
-    console.error('\n   修复方式：要么在 package.json scripts 补上缺失命令（monorepo 注意子包路径），')
-    console.error('   要么修正 TaskCard 的 verify/implementation（确认命令是否真实、是否需 cd 子包）。')
-    throw new Error('planPostcheck: task command existence check failed')
+    failures.push({
+      name: 'TaskCard 命令存在性校验（verify/implementation 的 npm/pnpm/yarn run <script> 不存在）',
+      errors: taskCmds.errors,
+      hint: '修复方式：要么在 package.json scripts 补上缺失命令（monorepo 注意子包路径），要么修正 TaskCard 的 verify/implementation（确认命令是否真实、是否需 cd 子包）。',
+    })
   }
 
   // ── 1d. design 文件覆盖对账 ──
@@ -1159,12 +1172,21 @@ export async function executePlanPostcheck(context) {
   const coverage = validateDesignFileCoverage(changeDir)
   for (const w of coverage.warnings) console.warn(`\n  ⚠️  ${w}`)
   if (coverage.errors.length > 0) {
-    console.error('\n❌ design.md 文件覆盖对账失败（清单中的文件未被任何 task 覆盖）：')
-    for (const err of coverage.errors) console.error(`   - ${err}`)
-    throw new Error('planPostcheck: design file coverage check failed')
+    failures.push({ name: 'design.md 文件覆盖对账（清单中的文件未被任何 task 覆盖）', errors: coverage.errors, hint: null })
   }
   if (coverage.designFiles.length > 0 && coverage.uncovered.length === 0) {
     console.log(`  ✅ design.md ${coverage.designFiles.length} 个文件全部被 task allowed_paths 覆盖`)
+  }
+
+  // ── 聚合输出：一轮 --done 暴露全部失败项（坑6③）──
+  if (failures.length > 0) {
+    console.error(`\n❌ plan postcheck 失败（${failures.length} 类问题，已全部列出——一次修复后重跑，无需逐个迭代）：`)
+    for (const f of failures) {
+      console.error(`\n   【${f.name}】`)
+      for (const err of f.errors) console.error(`   - ${err}`)
+      if (f.hint) console.error(`   ${f.hint}`)
+    }
+    throw new Error(`planPostcheck: ${failures.length} 组校验失败（${failures.map(f => f.name).join('；')}）`)
   }
 
   // ── 2. Wave 重排 ──

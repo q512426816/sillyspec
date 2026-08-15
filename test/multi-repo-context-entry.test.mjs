@@ -147,6 +147,56 @@ test('getOrCreateMultiRepoContext：无 plan.md → 返回 null（plan 未完成
   assert.equal(ctx, null);
 });
 
+// ── 坑7：plan.md 只留 checkbox、跨仓 repo 声明全在 tasks/task-NN.md ──
+// 修复前 aggregateDeclaredRepos 只扫 plan.md 内联 frontmatter → declaredRepos 缺跨仓仓
+// → MultiRepoContext 构造 fail-closed「未在 local.yaml repos: 段注册」误阻断（或 review
+// 退回主仓校验误报伪造）。修复后 getOrCreateMultiRepoContext 兼扫 tasks/ 独立卡片。
+test('getOrCreateMultiRepoContext：坑7 兼扫 tasks/task-NN.md 的 repo 声明（plan.md 无内联块）', async () => {
+  const cwd = makeRepo();
+  const crossRepo = makeRepo();
+  const specDir = join(cwd, '.sillyspec');
+  const changeDir = join(specDir, 'changes', 'c-pit7');
+  mkdirSync(changeDir, { recursive: true });
+  mkdirSync(join(changeDir, 'tasks'), { recursive: true });
+  // plan.md 只有 Wave + checkbox 行（无任何 frontmatter 块）——坑7 复现条件
+  writeFileSync(join(changeDir, 'plan.md'), '# Plan\n\n## Wave 1\n\n- [ ] task-01: 做 foo\n');
+  // 跨仓声明在独立 task 卡
+  writeFileSync(
+    join(changeDir, 'tasks', 'task-01.md'),
+    '---\nid: task-01\nrepo: sillyspec\ngoal: x\n---\n'
+  );
+  writeLocalYaml(cwd, new Map([['sillyspec', crossRepo]]));
+  const ctx = await getOrCreateMultiRepoContext({ cwd, changeName: 'c-pit7' });
+  assert.ok(ctx, '坑7 场景应构造出 ctx（不再退化单仓）');
+  assert.equal(ctx.hasCrossRepo(), true);
+  const cross = ctx.resolve('sillyspec');
+  assert.ok(cross, 'sillyspec entry 从 tasks/ 卡片解析注册');
+  assert.equal(cross.gitDir, crossRepo);
+});
+
+// 坑7 回归保护：plan.md 有内联块时原行为不变（双源并存不重复不冲突）
+test('getOrCreateMultiRepoContext：plan.md 内联块 + tasks/ 卡片双源并存 → 去重正常', async () => {
+  const cwd = makeRepo();
+  const crossRepo = makeRepo();
+  const specDir = join(cwd, '.sillyspec');
+  const changeDir = join(specDir, 'changes', 'c-pit7-dual');
+  mkdirSync(changeDir, { recursive: true });
+  mkdirSync(join(changeDir, 'tasks'), { recursive: true });
+  // plan.md 内联声明 sillyspec；task 卡也写 repo: sillyspec（双源同 repo）
+  writeFileSync(
+    join(changeDir, 'plan.md'),
+    '# Plan\n\n## Wave 1\n\n---\nrepo: sillyspec\ngoal: x\n---\n'
+  );
+  writeFileSync(
+    join(changeDir, 'tasks', 'task-01.md'),
+    '---\nid: task-01\nrepo: sillyspec\ngoal: x\n---\n'
+  );
+  writeLocalYaml(cwd, new Map([['sillyspec', crossRepo]]));
+  const ctx = await getOrCreateMultiRepoContext({ cwd, changeName: 'c-pit7-dual' });
+  assert.ok(ctx);
+  assert.equal(ctx.map.size, 2, 'main + sillyspec 恰两项（双源同 repo 去重）');
+});
+
 test('getOrCreateMultiRepoContext：cwd/changeName 缺失 → 返回 null', async () => {
   assert.equal(await getOrCreateMultiRepoContext({ changeName: 'x' }), null);
   assert.equal(await getOrCreateMultiRepoContext({ cwd: '/tmp' }), null);

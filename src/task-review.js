@@ -442,7 +442,8 @@ export function validateTaskReviews(opts) {
       } else if (repoKey !== 'main') {
         // 跨仓 repo 在 ctx 中未注册 → 不应发生（MultiRepoContext 构造已 fail-closed 拦截未注册），
         // 防御性降级为 warning 提示，不阻断（review.json schema 已过，仓库解析交给 ctx 上游负责）。
-        warnings.push(`${taskId}: review.repo="${repoKey}" 在 MultiRepoContext 未解析到 entry，退回主仓 gitDir 校验`)
+        // 坑7 教训：此分支发生时后续主仓校验必报「疑似伪造」，文案须直接指向真实排查方向。
+        warnings.push(`${taskId}: review.repo="${repoKey}" 在 MultiRepoContext 未解析到 entry，退回主仓 gitDir 校验——下方若报 commit 不真实/疑似伪造，先查 repo 声明（plan.md 内联块或 tasks/task-NN.md 的 repo:）与 local.yaml repos: 注册，非 review 伪造`)
       }
     }
     if (reviewGitDir) {

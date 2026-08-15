@@ -12,6 +12,7 @@ import { detectChangeRisk, checkIntegrationEvidence, VERIFICATION_NEEDS, RISK_LE
 import { SCAN_REQUIRED_DOCS, AUXILIARY_STAGES } from './constants.js'
 import { evaluateRules } from './stage-contract-engine.js'
 import { getRule } from './stage-contract-spec.js'
+import { parseAllowedPaths } from './stages/plan-postcheck.js'
 
 /**
  * 校验结果
@@ -381,11 +382,13 @@ function validatePlanOutputs(cwd, changeName, context = {}) {
         const taskFiles = readdirSync(tasksDir).filter(f => /^task-\d+\.md$/i.test(f))
         for (const taskFile of taskFiles) {
           const taskContent = readFileSync(join(tasksDir, taskFile), 'utf8')
-          const allowedSection = taskContent.match(/allowed_paths:\s*\n((?:\s+-\s+.+\n?)+)/)
-          if (allowedSection) {
-            const paths = allowedSection[1].match(/-\s+(.+)/g) || []
-            for (const p of paths) allAllowedPaths.add(p.replace(/^-\s+/, '').trim().toLowerCase())
-          }
+          // 复用 parseAllowedPaths（坑6①：认 inline 数组/缩进块/顶格块 + 剥反引号 + CRLF 归一，
+          // 消除此处内联正则与 plan-postcheck 的解析漂移）。卡片无 frontmatter 时退全文扫描
+          // （包裹伪 frontmatter 复用同一解析器）——原内联正则是全文匹配语义，entry-point-wiring
+          // 只关心路径覆盖，卡片格式合法性归 plan-postcheck 把关，此处不收紧。
+          const paths = parseAllowedPaths(taskContent)
+          const effective = paths.length > 0 ? paths : parseAllowedPaths(`---\n${taskContent}\n---`)
+          for (const p of effective) allAllowedPaths.add(p.toLowerCase())
         }
       }
       // 也从 plan.md 文件变更清单中收集

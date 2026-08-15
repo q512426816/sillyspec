@@ -930,6 +930,35 @@ export function aggregateDeclaredRepos(planContent) {
 }
 
 /**
+ * 坑7 补扫：读 tasks/task-NN.md 独立卡片，拼成可被 aggregateDeclaredRepos 的 frontmatter
+ * 正则识别的文本（每张卡内容原样拼接，卡内容自带的 ---\n…\n--- frontmatter 会被同一正则命中）。
+ *
+ * plan 阶段标准产出形态是 plan.md 内联卡片块 + tasks/ 独立卡片双写，但实际执行中 plan.md
+ * 可能只留 checkbox 行（卡片全在 tasks/）——此时 plan.md 聚合不到跨仓 repo，跨仓 review
+ * 误报伪造。本函数读 tasks/ 目录兜底，任一文件读失败跳过（fail-open，兜底源不引入新阻断）。
+ *
+ * @param {string} specDir - spec 根（change 目录的父级）
+ * @param {string} changeName
+ * @returns {string} 拼接文本（无 tasks/ 或全空 → ''，plan.md 原行为零回归）
+ */
+function collectTaskCardReposFallback(specDir, changeName) {
+  const tasksDir = join(specDir, 'changes', changeName, 'tasks')
+  if (!existsSync(tasksDir)) return ''
+  let merged = ''
+  for (const f of readdirSync(tasksDir)) {
+    if (!/^task-\d+\.md$/i.test(f)) continue
+    const p = join(tasksDir, f)
+    // CRLF 卡片：\r?\n 容差在 aggregateDeclaredRepos 正则里，这里只管拼接不归一
+    try {
+      merged += '\n' + readFileSync(p, 'utf8') + '\n'
+    } catch {
+      // 单文件读失败跳过——兜底源缺失不该阻断主聚合
+    }
+  }
+  return merged
+}
+
+/**
  * 构造或取进程级 MultiRepoContext 单例（D-013 G2）。
  *
  * design §5.4 execute 启动段 + §7.2 G2 + 决策 D-001/D-013：
@@ -980,7 +1009,13 @@ export async function getOrCreateMultiRepoContext({ cwd, changeName, platformOpt
   }
 
   // 聚合 declaredRepos（扫 plan.md task 卡片 repo:）+ 读 local.yaml repos: 段
-  const declaredRepos = aggregateDeclaredRepos(planContent)
+  // 坑7 兼扫 tasks/task-NN.md：plan 阶段把卡片写到 tasks/、plan.md 只留 checkbox 行时，
+  // plan.md 内联 frontmatter 聚合不到跨仓 repo → ctx 不含跨仓 entry → 跨仓 review 退回主仓
+  // gitDir 校验，误报「base 不是真实 commit — 疑似伪造」（真实 commit 在跨仓仓可达）。
+  // 两源并入同一聚合：plan.md 内联块（原行为，零回归）+ tasks/ 独立卡片（坑7 补扫）。
+  const declaredRepos = aggregateDeclaredRepos(
+    planContent + collectTaskCardReposFallback(specDir, changeName)
+  )
   const repoRegistry = parseRepoRegistry(readLocalYamlRaw(cwd))
 
   // 构造 WorktreeManager（主仓 meta 读取；与 getStageSteps 同源范式）

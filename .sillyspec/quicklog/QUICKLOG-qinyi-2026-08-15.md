@@ -1,0 +1,504 @@
+
+## ql-20260813-003-37c5 | 2026-08-13 10:25:19 | stage review marker 格式 agent 猜错(应为 review- 前缀)
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/gates.js（传 reviewRunId+runtimeRoot）
+- src/stage-review.js（printStageReviewResult echo 完整路径）
+- .claude/skills/sillyspec-execute/SKILL.md（补 run-id CLI 自动勿手算）
+- .claude/skills/sillyspec-brainstorm/SKILL.md（同）
+- .claude/skills/sillyspec-plan/SKILL.md（同）
+- test/stage-review-gate-echo.test.mjs（5用例 echo 路径）
+需求：stage review marker 格式 agent 猜错(应为 review- 前缀),改进让 CLI 自动填 runId agent 不算。
+根因：CLI 已自动生成 runId+写 marker(prompt.js:460-467 review step 渲染+gates.js:301-304 gate 触发),但撞 gate 报缺 review.json 时没 echo 路径(printStageReviewResult 没用 context.reviewRunId,gates.js:312 没传),agent 不知 runId 手算猜错格式。
+方案：gates.js 传 reviewRunId+runtimeRoot + stage-review.js printStageReviewResult FAILED echo 完整路径+勿手算 + 3 skill 补 CLI 自动勿手算 + 测试。
+结果：gate-echo 10/10 + stage-review-contract + review-gate-block-message 6/6 + lint 265 过
+
+## ql-20260813-004-1d03 | 2026-08-13 10:50:01 | 处理 sillyspec 工具反馈负面(#1-6)
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/prompt.js（loadModuleContextIndex v1 warn 降级+export）
+- src/quicklog.js（rotateIfNeeded echo 归档）
+- docs/sillyspec/troubleshooting.md（新建 6 节踩坑参考）
+- test/prompt-module-map-warn.test.mjs（4 用例 v1 静默）
+需求：处理 sillyspec 工具反馈负面(#1-6),可改的 CLI 改(#4 刷屏止血/#5 轮转 echo),不可改的记 troubleshooting(#1/#2/#3/#6)。
+根因：#4 刷屏是 prompt.js 对 schema_version=1 每步 warn(读端 buildModuleContextInjection 已 v1/v2 双兼容,warn 过激);#5 轮转是 rotateIfNeeded 静默(提交流漏);#1/#2/#3 是机制/外部不可 CLI 改。
+方案：#4 prompt.js loadModuleContextIndex v1 warn 降级(仅缺 schema_version warn)+export 测试;#5 quicklog.js rotateIfNeeded echo 归档;新建 troubleshooting.md 记 6 经验;补 prompt-module-map-warn 测试。
+结果：prompt-module-map-warn 4/4 + prompt-placeholders 11/11 + lint 266 过
+
+## ql-20260813-005-fa32 | 2026-08-13 11:17:44 | #4 根治 L1(scan 产 v2 version 一致
+状态：已完成
+关联变更：（无）
+文件：
+- src/stages/scan.js（_module-map schema_version 1→2）
+- docs/prompt/scan.md（同步 schema_version 1→2）
+- docs/prompt/_extracted.json（extract 刷新）
+需求：#4 根治 L1(scan 产 v2 version 一致,治根因)。
+根因：scan.js prompt 模板仍写 _module-map schema_version:1(rebuild modules.js 已 v2),新 scan 永远产 v1,读端 loadModuleContextIndex 曾对 v1 每步 warn 刷屏(上轮已止血 v1 静默)。
+方案：scan.js _module-map schema_version 1→2(line284/316 map,line413 模块卡片不改),字段不变(读端 v1/v2 双兼容 paths||core_files,scan v2 保留 v1 丰富字段 paths/tags/entrypoints/main_symbols/depends_on/used_by 有价值),extract 同步 docs/prompt/scan.md+_extracted.json。
+结果：stage-definitions + scan-postcheck 19 + lint 266 过
+
+## ql-20260813-006-9f1e | 2026-08-13 13:34:51 | 修复 scale/plan_level 缝隙
+状态：已完成
+关联变更：（无）
+文件：
+- src/stages/plan.js（review_plan prompt 生成条件对齐 validator）
+- docs/prompt/plan.md（同步 review_plan prompt 镜像）
+需求：修复 scale/plan_level 缝隙
+根因：plan.js review_plan prompt 生成条件 plan_level=full 且 scale≠small 与 validator condition scale≠small 不一致，plan_level=light+scale=large 时 validator 要求 module-impact 但 prompt 不指引
+方案：prompt 条件去掉 plan_level=full 改 scale≠small 对齐 validator，同步 docs/prompt/plan.md
+结果：npm test 182 绿，缝隙消除
+
+## ql-20260813-007-b923 | 2026-08-13 14:04:48 | quick --files 空格分隔多文件时 CLI 只取首个
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/command.js（抽 detectSpaceSeparatedFiles 纯函数检测空格分隔误用加 fail-loud 退码 2）
+- test/quick-files-space-separator.test.mjs（纯函数 11 场景加 CLI 子进程 E2E 退码 2 共 17 断言）
+需求：quick --files 空格分隔多文件时 CLI 只取首个，其余静默丢失致 allowedFiles 边界失效、step3 --done 审计误拦。
+根因：--files 是单值 flag（VALUE_FLAGS 校验循环只跳一个 token），空格分隔的多文件首个之后沦为位置参数，被双横线前缀校验静默忽略。
+方案：src/run/command.js 抽 detectSpaceSeparatedFiles 纯函数检测空格分隔误用，fail-loud 退码 2 加 stderr 给出逗号修正建议，沿用 run --json 显式拒绝静默吞风格，不改单值框架。
+结果：新增 test/quick-files-space-separator.test.mjs 共 17 断言（纯函数 11 场景加 CLI 子进程 E2E 退码 2），npm test 全量 183 文件零失败，lint 267 文件通过。
+
+## ql-20260813-008-8fd5 | 2026-08-13 14:53:42 | execute review.json 提示路径与校验分裂
+状态：已完成
+关联变更：（无）
+文件：src/run/prompt.js, test/prompt-spec-drift-anchor.test.mjs
+需求：execute review.json 提示路径与校验分裂
+根因：prompt.js outputStep 用 cwd 拼 SPEC_ROOT 忽略 specDriftAnchor
+方案：resolvePromptSpecBase helper 统一 12 处路径根 + 补 specDrift 断言测试
+结果：新测试 8/8 绿 + 回归 88 断言绿 + lint 269 过
+
+## ql-20260813-009-2ab8 | 2026-08-13 16:32:41 | ①execute 批量完成路径 cleanup 删分支 ref 盲区（worktree 目录被提前删时 hasUnappliesChanges 判 false …
+状态：已完成
+关联变更：（无）
+文件：
+- src/worktree.js（hasUnappliesChanges 三处 fail-closed 保守化：目录不存在/无 diffBase/git 失败 → 保守 true 防 cleanup 删分支）
+- src/run/command.js + complete.js + complete-handlers.js（--allow-delete flag 解析 + mergedGuard + 传递链）
+- src/run/shared.js + quick-audit.js + stage.js（删除审计 allowDelete 放行 + 提示更新 + guard 持久化）
+- src/stages/execute.js（diagnoseNoTaskRootCause 报错精度：4 种根因诊断）
+- test/audit-quick-completion.test.mjs（allowDelete 放行 + 文案断言 22/22）
+- test/worktree-has-unapplied-changes.test.mjs（保守 true 断言 37/37）
+- .claude/skills/sillyspec-quick/SKILL.md（flag 表补 --allow-delete）
+需求：①execute 批量完成路径 cleanup 删分支 ref 盲区（worktree 目录被提前删时 hasUnappliesChanges 判 false 致 cleanup 删分支丢 commit）；②quick 删除死代码被硬拦无解锁路径；③plan.md 格式隐性契约报错笼统靠试错。
+根因：①hasUnappliesChanges 对目录不存在/无 diffBase/git 失败都返回 false（可安全清理），实际可能有未 apply commit；②删除审计裸判定不受任何 flag 门控；③validatePlanForExecute 只报'没有找到 checkbox task'不分 4 条隐性契约。
+方案：①hasUnappliesChanges 三处改 fail-closed 保守 true（拿不准就保留）；②新增 --allow-delete 显式 opt-in 解锁删除（对称 --allow-new，默认仍 fail-closed）；③diagnoseNoTaskRootCause 诊断 4 种根因（Wave 标题格式/task checkbox/### 打断/缺任务区）；同步 SKILL.md flag 表。
+结果：audit 22/22 + has-unapplied-changes 37/37 + cleanup-guard 23/23 + 全量 npm test 0 失败 + lint 271 通过。
+
+## ql-20260814-001-4be0 | 2026-08-14 12:18:59 | 把 SillySpec 用企业4A框架映射成架构总纲文档
+状态：已完成
+关联变更：（无）
+文件：
+- docs/sillyspec/architecture-4a.md（新增4A架构总纲（8节，源码为准校正3处漂移））
+需求：把 SillySpec 用企业4A框架映射成架构总纲文档，供对外讲清平台定位
+根因：无，纯新增文档，平台此前缺少架构总纲
+方案：4个子代理并行深析BA/DA/AA/TA四层并交叉印证，整合成 docs/sillyspec/architecture-4a.md 共8节，以源码为准校正引擎和阶段和步骤数三处旧文档漂移
+结果：纯doc改动，lint不扫docs故跳过，无源码与测试影响，文档结构完整
+
+## ql-20260814-002-ff45 | 2026-08-14 12:28:06 | 修 docs/sillyspec 三处文档漂移
+状态：已完成
+关联变更：（无）
+文件：
+- docs/sillyspec/file-lifecycle/storage-and-state.md（引擎名 better-sqlite3 改 node:sqlite）
+- docs/sillyspec/sillyhub-progress-sync-contract.md（引擎名 better-sqlite3 WAL 改 node:sqlite WAL）
+- docs/sillyspec/file-lifecycle.md（删 propose 残留行）
+需求：修 docs/sillyspec 三处文档漂移，让文档引擎名与阶段表和源码一致
+根因：无，纯文档订正。引擎迁 node:sqlite 后旧文档未同步、propose 阶段已并入 brainstorm 但阶段表残留行未删
+方案：三处 Edit 改 storage-and-state.md 与 sillyhub-progress-sync-contract.md 的引擎名为 node:sqlite、删 file-lifecycle.md 的 propose 残留行
+结果：纯 doc 改动 lint 不扫 docs 故跳过，无源码与测试影响，三处文档与源码对齐
+
+## ql-20260814-003-2ba8 | 2026-08-14 13:23:58 | 订正 .bak 写时机的迁移遗留描述
+状态：已完成
+关联变更：（无）
+文件：
+- docs/sillyspec/file-lifecycle/storage-and-state.md（.bak 写前备份句改向后兼容兜底说明）
+- src/db.js（_openWithFallback 注释订正 .bak 来源）
+- src/fs-atomic.js（删 _atomicWriteSync 过时引用）
+- src/index.js（文件清单 .bak 描述订正）
+需求：订正 .bak 写时机的迁移遗留描述，让注释与文档和 node:sqlite 真相一致
+根因：sql.js 时代 _save/_atomicWriteSync 写前备份主 .bak，迁 node:sqlite 后机制移除但 4 处描述未同步
+方案：实证 _write 与 transaction 与 _openWithFallback 全路径确认无写入，订正 storage-and-state.md 与 db.js 与 fs-atomic.js 与 index.js 四处
+结果：npm test EXIT=0 全量通过，npm run lint 271 files 通过，触及 src 实证核验无回归
+
+## ql-20260814-004-db89 | 2026-08-14 13:38:26 | 闭合 architecture-4a.md §8 自洽
+状态：已完成
+关联变更：（无）
+文件：
+- docs/sillyspec/architecture-4a.md（§8 .bak 行待澄清改为已订正）
+需求：闭合 architecture-4a.md §8 自洽，.bak 漂移行状态更新
+根因：无，纯文档闭合。.bak 写时机已于 ql-20260814-003 定论，但 §8 表格仍标待澄清
+方案：改 §8 表格 .bak 行最后一列，由需进一步澄清改为已订正见 ql-20260814-003
+结果：纯 doc 改动 lint 不扫 docs 故跳过，无 src 与测试影响，§8 四行全部已订正或已校正闭合
+
+## ql-20260814-005-9fdd | 2026-08-14 13:49:49 | completeStep --done 路径不识别 noAI 步骤
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/complete.js（completeStep 标 completed 前新增 noAI 硬门：检测 currentStepDef.noAI，--done 落 noAI step 执行 _cliAction 三分支 CLI 校验，throw 则保持 pending；imports 补 resolveChangeDir/scan-profile 三函数/plan-postcheck）
+- test/run-complete-noai-done-gate.test.mjs（新建回归测试：拦截用例 tasks/ 缺失 → exit 1 + step pending；放行用例合法卡片 → postcheck 完成）
+- test/run-complete-step-validator-rollback.test.mjs（fixture 补三张连续卡片 + mkdirSync import：noAI 门后 Contract gate 仍可达，原断言全保留）
+- docs/sillyspec/file-lifecycle.md（validator 回滚段补 noai-done-bypass 硬门说明 + updated_at）
+- .sillyspec/docs/sillyspec/modules/runtime.md（正文补硬门条目 + 变更索引 ql-20260814-005-9fdd）
+需求：completeStep --done 路径不识别 noAI 步骤，agent 对 planPostcheck 等 noAI step 直接 --done 可绕过 executePlanPostcheck 确定性校验。
+根因：noAI 校验只在 runStage 推进路径自动执行，completeStep 无 noAI 检测直接标 completed，multi-agent-platform 2026-08-13-spec-sync-visibility tasks/ 从未生成但 plan 阶段 completed 即此漏洞实证。
+方案：completeStep 在标记 completed 前检测 currentStepDef.noAI，--done 落到 noAI step 时执行对应 _cliAction 三分支（planPostcheck/scanPreflight/scanPostcheck）CLI 校验，校验 throw 则步骤保持 pending。
+结果：新增 test/run-complete-noai-done-gate.test.mjs 两用例 6/6 过，修复受影响既有测试 fixture 一处，npm test 全量 188/0 绿，lint 过，file-lifecycle.md 与 runtime.md 模块文档已同步。
+
+## ql-20260814-006-9a30 | 2026-08-14 14:21:36 | tier 判定不透明——agent 在 plan step1 判 plan_level=light 并按 prompt 自审通过
+状态：已完成
+关联变更：（无）
+文件：
+- src/review-tier.js（classifyReviewTier 判定顺序改 plan_level 确定性映射：none/light→self、full→independent；无 plan_level 才退文件数启发式；reason 文案标注判定来源；头注释同步）
+- test/stage-review.test.mjs（tier 用例更新：新增 light+7文件→self 与 full+2文件→independent；fileCount 断言移到启发式分支）
+- docs/sillyspec/file-lifecycle.md（Stage Review Gate 段判定描述更新 + updated_at）
+- .sillyspec/docs/sillyspec/modules/stages.md（变更索引追加 ql-20260814-006-9a30）
+需求：tier 判定不透明——agent 在 plan step1 判 plan_level=light 并按 prompt 自审通过，完成时 CLI 却按变更文件数 7>3 强制 tier=independent 要求独立 review.json，agent 自主判断被推翻。
+根因：classifyReviewTier 判定顺序只认 plan_level=none，light 完全被忽略，文件数启发式成为第二套标准，与 agent 的 plan_level 分级规则（light 定义即 3-5 文件范围可控）直接冲突。
+方案：tier 判定权归 plan_level——classifyReviewTier 改为确定性映射 none/light→self（agent 自主判定自审）、full→independent（full 语义即大变更需独立审查），无 plan_level 阶段（brainstorm 等 plan.md 未生成）才退变更文件数启发式（≤3 self）；reason 文案标注判定来源保证透明。
+结果：test/stage-review.test.mjs 更新 tier 用例含 light+7文件→self 与 full+2文件→independent 新断言全过，npm test 全量 188/0 绿，lint 过，file-lifecycle.md 与 stages.md 模块文档同步。
+
+## ql-20260814-007-b94b | 2026-08-14 15:33:34 | ①status 输出区分『当前操作目标 change』与『已存在活跃 change 列表』+ 标注空壳 default
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/complete.js（enforceWaitChoice helper：requiresWait 门 --done --answer / 解 waiting / --continue 三条路径校验 --answer 命中 waitOptions，失败列选项 exit 1）
+- src/progress/stage-machine.js（show() 多变更汇总新增「当前操作目标」行 + 目录缺失空壳 change 标注 ⚠️ 残留记录）
+- src/stages/brainstorm.js + brainstorm-auto.js（开放回答型澄清追问步骤声明 waitFreeAnswer: true 豁免单选强制）
+- test/wait-choice-enforcement.test.mjs（新建：封闭型非选项拦截/命中放行/开放型自由文本豁免 7/7）
+- test/wait-done-answer-resolves-waiting.test.mjs（fixture --answer 改合法选项「确认」，原意保留）
+- docs/prompt/_extracted.json + docs/prompt/execute.md（重跑 _extract.mjs 修复 4 处 pre-existing 提取漂移：plan review_plan module-impact 条件 scale≠small、execute Wave 补 MCP 派发提示段）
+- docs/sillyspec/file-lifecycle.md（核心修正补 wait 单选强制 + status 输出区分两条 + updated_at）
+- .sillyspec/docs/sillyspec/modules/runtime.md + stages.md（变更索引 ql-20260814-007-b94b）
+需求：①status 输出区分『当前操作目标 change』与『已存在活跃 change 列表』+ 标注空壳 default；②方案选择类 wait 强制 --answer 命中 waitOptions 单选，防 AI 一句话代答。
+根因：①StageMachine.show 多变更汇总无操作目标概念、不标目录缺失空壳；②completeStep/continueStep 的 --answer 只校验非空不校验命中选项。
+方案：①stage-machine.js 新增『当前操作目标』行 + 空壳 ⚠️ 标注；②complete.js 新增 enforceWaitChoice helper 覆盖三条 answer 路径（requiresWait 门/解 waiting/--continue），开放回答型 waitFreeAnswer 豁免（brainstorm 澄清追问声明）；stage 定义改动触发 docs/prompt 重提取，顺带修复 4 处 pre-existing 提取漂移（plan review_plan/execute Wave MCP 段），同步 execute.md。
+结果：wait-choice-enforcement.test.mjs 7/7 + wait-done-answer fixture 适配（--answer 改合法选项，原意保留）+ 全量 189/0 绿 + lint 过 + docs/prompt 与 file-lifecycle.md/模块文档同步。
+
+## ql-20260814-008-fd62 | 2026-08-14 16:05:48 | 修正 src/sync.js 两处与实现不符的漂移注释
+状态：已完成
+关联变更：（无）
+文件：
+- src/sync.js（两处漂移注释修正（syncDocuments 触发源 + mcp 段 token 双写语义））
+- .sillyspec/docs/sillyspec/modules/sync.md（变更索引追加 ql-20260814-008-fd62）
+需求：修正 src/sync.js 两处与实现不符的漂移注释，消除文档/注释对同步行为的错误描述。
+根因：① 头注释称 syncDocuments 由 run 流程触发，实际唯一调用点是手动 platform sync-docs（index.js:1255），run 流程不自动推文档；② mcp 段同源假设注释称复用 platform 的 url/token，实际 token 双写不同（platform 段写换发的 shpsync_ effectiveToken，mcp 段写原始 user token）。两处注释误导后续维护。
+方案：① 头注释移除 syncDocuments，保留 sync/checkApproval 的 run 流程触发描述，注明 syncDocuments 仅手动触发；② mcp 段注释改为准确描述 url 复用 + token 用原始 user 级 token。同步 sync 模块文档 sync.md 变更索引。
+结果：npm run lint（273 文件通过）+ npm test（189 文件 0 失败）+ platform-recovery-chain.test.mjs（15/15）全绿。
+
+## ql-20260814-009-1887 | 2026-08-14 21:26:37 | 三维度安全审查后修复 P1 高危项（两 CVE + shell 注入面 + marker 注入链 + 入口消毒）
+状态：已完成
+关联变更：（无）
+文件：
+- package.json + package-lock.json（npm 升级 js-yaml 4.2.0→4.3.1 修 CVE-2026-59870 二次方 CPU DoS、ws 8.18→8.21.3 修内存披露+分片耗尽两个 CVE）
+- src/verify-postcheck.js（git diff refSpec 由 execSync 字符串拼接迁 execFileSync 数组 + assertSafeRefSpec 白名单，堵 meta.json refSpec 注入 shell；正则放行 HEAD~1..HEAD 区间）
+- src/worktree.js（junction 解链 rmdir 两处迁 execFileSync 数组，堵 meta.worktreePath 引号截断注入）
+- src/worktree-deps.js（mklink /J 与 ln -s 迁 execFileSync 数组，堵 local.yaml 模块 path 反引号/$() 命令替换）
+- src/task-review.js（新增 isValidExecuteRunId 格式校验；summarizeTaskCompletion/resolveLatestExecuteRunId/generateTaskReviewDrafts/getLatestExecuteRunId 四处 marker 读取点全覆盖，非法 warn+回退目录扫描）
+- src/run/prompt.js（{EXECUTE_RUN_ID} 注入点接格式校验，非法视为缺失重生成）
+- src/run/gates.js（enforceReviewJsonGate 与 task-reviews gate 两处 marker 读取接格式校验）
+- src/run/complete.js（autoCheckPlanFromReviews marker 读取接格式校验，非法跳过不误勾）
+- src/run/stage.js（execute 启动 marker 读取接格式校验）
+- src/quicklog.js（新增 sanitizeQuicklogUser 白名单消毒 git user.name，QUICKLOG 文件/锁/轮转归档三处拼接防穿越写）
+- src/index.js（gate/derive/backfill-reviews/register-stage-review/progress 五入口补 assertSafeChangeName，与 run 入口防护对齐）
+- test/worktree-junction-fail-loud.test.mjs（mock 计数目标从 execSync 迁 execFileSync，仅计数 cmd.exe rmdir 调用避开 git-helper 干扰）
+- test/execute-run-marker-drift.test.mjs（新增 isValidExecuteRunId 8 用例：合法/穿越/多行注入/非补零/null 等）
+- test/gate-derive-spec-drift.test.mjs（fixture marker 改格式合法 ID，保负对照语义）
+- docs/sillyspec/platform-interface-map.md（修 3 处行号漂移 command.js:245→247、index.js:1369→1368-1369）
+需求：三维度安全审查后修复 P1 高危项。
+根因：js-yaml/ws 两 CVE；三处 execSync 字符串拼接经 agent 可写的 meta.json/local.yaml 可注入 shell 命令；EXECUTE_RUN_ID marker 无格式校验直接注入 prompt + 拼 review 路径（提示词注入+路径穿越）；git user.name 与 5 个 CLI 顶层入口未消毒。
+方案：npm 升级两依赖；全部迁 execFileSync 数组形式 + 白名单校验；isValidExecuteRunId 覆盖全部 8 个 marker 读取点；sanitizeQuicklogUser 消毒；5 入口补 assertSafeChangeName。
+结果：npm audit 0 漏洞；全量 npm test 190 文件 0 失败；lint 274 文件过；doc-ref-check 78 处引用全绿。
+
+## ql-20260814-010-5741 | 2026-08-14 21:34:50 | 把文档行号引用一致性变成 npm test 硬门——platform-interface-map.md 的 file:line 漂移自动红灯
+状态：已完成
+关联变更：2026-08-14-doc-ref-check
+文件：
+- test/doc-ref-check.test.mjs（新增文档行号引用校验（两层断言+多候选+token归一，进 npm test））
+- docs/sillyspec/platform-interface-map.md（修 16 处行号漂移+token 错位（并行 agent 改动+方向1注释推动））
+- .sillyspec/changes/2026-08-14-doc-ref-check/（brainstorm 四件套（proposal/design/requirements/tasks））
+需求：把文档行号引用一致性变成 npm test 硬门——platform-interface-map.md 的 file:line 漂移自动红灯，治『每轮人工核对都能查出问题』。
+根因：文档是源码二级抽象，行号随源码增删漂移且无自动检测；四轮人工核对查出 5 个实质错误证明纯人工不可靠。
+方案：新增 test/doc-ref-check.test.mjs 单文件两层断言（存在性+代码符号关键词窗口）+多候选宽容+token 归一；首跑抓 16 处失效，修工具 4 缺陷后修文档 16 处真漂移；FR-07 双篡改自测过。
+结果：doc-ref-check 77 处引用全绿（56 带关键词断言）；篡改自测红灯定位准确；全量 npm test 190 文件 0 失败；lint 274 文件过。
+
+## ql-20260814-011-4ffb | 2026-08-14 21:55:20 | 安全审查 P2 遗留 6 项登记债单 + P1 修复显式 pathspec 提交（27d5f59）
+状态：已完成
+关联变更：（无）
+文件：
+- docs/sillyspec/prompt-control-debt.md（追加 2026-08-14 增补小节：P1 已修记录 + sec-a~f 六项 defer + 低优先杂项清单；updated_at 戳）
+- （P1 提交 27d5f59 的 18 文件已随 ql-20260814-009 记录，此处含提交动作本身）
+需求：安全审查 P1 修复提交后，把 6 项 P2 遗留登记 prompt-control-debt.md，防止丢失。
+根因：审查产出只有会话内报告，不落债单会被下次『新发现』重复提议（memory：改进建议先查债单）。
+方案：按债单惯例追加增补小节；显式 pathspec 提交隔离他者 doc-ref-check 暂存。
+结果：npm test 190/0 + lint 274 过 + 提交后他者暂存文件完好（git status 核验）。
+
+## ql-20260814-012-109e | 2026-08-14 22:01:05 | 债单 P2 第一批：URL encode/YAML 引号/note 单行化/SKILL 路径/https warn/dashboard 拒凭据/setup 锁版本
+状态：已完成
+关联变更：（无）
+文件：
+- src/sync.js（三处 changeName 拼 URL 补 encodeURIComponent 对齐 pull 范式；connect 写侧 yamlStr 双引号包裹 url/token/user；parseSimpleYaml 对称剥引号）
+- src/quicklog.js（parseFileNotes note 单行化+限长 200，防 
+## ql- 伪造条目结构）
+- .claude/skills/sillyspec-execute/SKILL.md + sillyspec-plan/SKILL.md（repos 示例去 C:/Users/qinyi 本机路径改通用示例，sec-f）
+- .claude/skills/sillyspec-knowledge/SKILL.md（author 示例 qinyi 改 <git-user>）
+- src/sillyhub-mcp/client.js（构造器一次性 warn 非 https 且非 localhost url——sec-e 缓解）
+- packages/dashboard/server/index.js（isCredentialPath 拒 local.yaml/.lock/平台指针经 /api/docs/content 暴露——sec-d 最小修；前端 bundle 零引用实证无破坏）
+- src/setup.js（六个 MCP 版本锁定消 @latest trust-on-future-publish——sec-c；@anthropic-ai/agent-browser 404 改 agent-browser@0.34.0、@nicobailon/mysql-mcp-server 404 改 mysql-mcp-server@0.1.3；DB MCP 写 mcp.json 后 git 跟踪检测警告）
+- test/local-yaml-preserve.test.mjs + test/platform-sync-user-config.test.mjs（yaml 断言改引号包裹格式，语义断言 _getPlatform 读回不变）
+需求：债单 P2 第一批小改动合集（sec-c/d/e/f + 低优先杂项），均无需单独设计。
+根因：URL 拼接未编码可路径注入；YAML 裸写 token 含 # : 时破坏段结构；note 带换行可伪造条目；SKILL 随包发布含开发者本机路径；非 https url 下 Bearer token 明文上线；dashboard 无鉴权可读 local.yaml 凭据；@latest 浮动版本是 trust-on-future-publish 供应链面。
+方案：见文件括注。
+结果：npm test 190/0 + lint 274 过；隔离环境验证 path-a-probe 59/0（主仓该用例失败系本机 local.yaml 有 mcp 段的环境依赖，非回归，与 memory spec-dir 隔离同款问题）。
+
+## ql-20260814-013-ef64 | 2026-08-14 23:06:52 | 修复 platform resolve 参数解析 bug
+状态：已完成
+关联变更：（无）
+文件：
+- src/index.js（platform resolve 变更名解析：--change 优先→非 flag 位置参数→唯一冲突自动选中+报错列候选）
+- src/sync.js（新增顶层 listConflictFiles(cwd) 便捷导出）
+- test/platform-resolve-args.test.mjs（新建 6 场景回归测试（flag-first/--change/自动选中/报错列候选））
+- docs/sillyspec/platform-interface-map.md（approve triggerPull 行号漂移同步 1368→1395）
+需求：修复 platform resolve 参数解析 bug，flag 放前面时被误当变更名。
+根因：case resolve 盲取 platformArgs[0] 当变更名，不剥离 flag，--change 写法被静默忽略，报错文案指向假变更名误导排查。
+方案：变更名解析顺序改为 --change 值→非 flag 位置参数→唯一未决冲突自动选中；无变更名多冲突/指定名无冲突时报错列出 .runtime 现有候选；sync.js 新增 listConflictFiles 顶层导出。
+结果：新增 test/platform-resolve-args.test.mjs 六场景全过，npm test 191 文件全绿，lint 通过，platform-interface-map.md 行号引用同步，sync.md 模块文档已更新。
+
+## ql-20260814-014-1d5f | 2026-08-14 23:35:00 | 登记两份 SillyHub API 文档产出并入库
+状态：已完成
+关联变更：（无）
+文件：
+- docs/sillyspec/sillyhub-api-reference.md（新建 SillyHub 接口参考（REST 8 端点 + MCP 12 tool 完整调用规范））
+- docs/sillyspec/api-verification-2026-08-14.md（新建全接口实测报告（12 MCP tool + REST 8 端点验证快照与当日修复记录））
+- docs/sillyspec/platform-interface-map.md（配套文档行补两份新文档引用）
+需求：登记两份 SillyHub API 文档产出并入库。
+根因：无代码缺陷，纯文档新增（用户实测产出）。
+方案：docs/sillyspec/ 下入库 api 参考与实测报告两份新文档，platform-interface-map.md 配套文档行同步引用。
+结果：纯 doc 改动，lint 不扫 docs 跳过，无源码影响，文档齐备可随本次发布一起推送。
+
+## ql-20260815-001-046c | 2026-08-15 13:19:24 | 处理三条负面反馈：①Wave 2b 标题解析报错不提示根因 ②worktree apply diff 规模 2000 行阈值误伤正常 change ③gen:t…
+状态：已完成
+关联变更：（无）
+文件：
+- src/stages/execute.js（validatePlanForExecute 新增检查0：Wave 编号字母后缀（2b）显式报错（治静默截断合并））
+- src/worktree-apply.js（检查6 diff 规模改两档：2000-5000 WARNING / >5000 BLOCKED）
+- test/plan-diagnose-wave.test.mjs（新建 11 断言（字母后缀报错+4 诊断分支回归））
+- test/worktree-apply-diff-size.test.mjs（新建 3 场景真实 git worktree（2368 警/5500 拦/1500 放））
+- docs/sillyspec/platform-interface-map.md（execute.js 行号漂移 497→509）
+- docs/sillyspec/prompt-control-debt.md（exec-h 补 2026-08-15 复盘观察（gen:types worktree 收尾预跑→commands.build 通用化 gate 思路））
+需求：处理三条负面反馈：①Wave 2b 标题解析报错不提示根因 ②worktree apply diff 规模 2000 行阈值误伤正常 change ③gen:types 与 worktree 配合缺收尾预跑。
+根因：①解析正则不锚定结尾，2b 被 parseInt 截断成 2 与显式 Wave 2 静默合并强制并行，串行意图失效无提示；②单档 >2000 即 BLOCKED，+2368 行正常变更被逼进 rescue cp 手动路径；③gen:types 是 consumer 命令，SillySpec 不该认识（定位约束），且 exec-h 债单已裁决 defer。
+方案：①validatePlanForExecute 加字母后缀显式报错（说明截断风险+解法）；②两档阈值 2000 警/5000 拦；③债单 exec-h 补通用化思路（commands.build 收尾 gate）。
+结果：新增两测试文件 14 断言全过，npm test 193 全绿，lint 277 过，platform-interface-map 行号同步，债单 exec-h 补观察。
+
+## ql-20260815-002-d025 | 2026-08-15 13:56:15 | resolveSpecDir 加 home 拒绝守卫，根治 ~/.sillyspec 平行进度库污染
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/shared.js（resolveSpecDir 加 home 拒绝守卫：向上遍历跳过 os.homedir() 层，home 下 .sillyspec 恒不命中，回退 cwd/.sillyspec）
+- src/progress.js（同名 resolveSpecDir 拷贝删除，改 re-export run/shared.js 单一真相源，防双写漂移）
+- test/spec-dir-home-guard.test.mjs（新建 8 断言：单元 5（子目录/home 自身/多层/真项目不受影响/正常链）+ e2e（home 存在 .sillyspec 时子目录跑 CLI 不写 home 库））
+- docs/sillyspec/troubleshooting.md（补第 7 条：home 平行进度库两层根因与根治记录）
+- docs/sillyspec/platform-interface-map.md（shared.js 函数行号漂移同步）
+需求：resolveSpecDir 加 home 拒绝守卫并补测试，根治 ~/.sillyspec 平行进度库污染自我延续。
+根因：resolveSpecDir 向上查找 .sillyspec 无 home 守卫，smoke 测试在 home 下临时目录种下 ~/.sillyspec 后，任何 home 子目录跑命令都向上撞它；且 ProgressManager._ensureDB 读路径即建库，读到哪建到哪。另发现 progress.js 存在同函数双源拷贝（无守卫），progress 命令实际走的是它。
+方案：resolveSpecDir（src/run/shared.js）向上遍历跳过 os.homedir() 一层，home 下 .sillyspec 恒不命中回退 cwd/.sillyspec；progress.js 同名拷贝删除改 re-export run/shared.js（单一真相源防双写漂移）；存量 ~/.sillyspec 备份后整目录删除（备份 ~/.sillyspec-backup-20260815/）。
+结果：新增 test/spec-dir-home-guard.test.mjs 8 断言全过（单元 5 + e2e：home 存在 .sillyspec 时子目录跑 CLI progress show 不写 home 库）；npm test 全量绿 + lint 278 过（本会话范围；另有 3 个失败文件系并行 session 未完成改动，stash 验证非本改动引入）；troubleshooting.md 补第 7 条；platform-interface-map.md 行号同步。
+
+## ql-20260815-003-5a03 | 2026-08-15 13:56:33 | （废弃：--help 误开的空壳会话，无实际改动）
+状态：已废弃
+关联变更：（无）
+文件：（无）
+
+## ql-20260815-004-64fc | 2026-08-15 14:23:58 | 平台操作 init 时直接生成平台指针文件
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/shared.js（新增 writePlatformPointer：平台指针双写单一数据源，scan 与 init 共用）
+- src/run/command.js（runCommand 指针双写改用 helper，消重复）
+- src/index.js（顶层解析 --workspace-id/--runtime-root 传 cmdInit）
+- src/init.js（writeInitPlatformPointer：外部 specDir+平台 flag 时落双指针 status:active）
+- test/platform-init-pointer.test.mjs（新增：init 落指针/本地不落/裸调恢复/scan 覆盖 4 场景）
+- docs/sillyspec/platform-interface-map.md（8 处行号漂移修复 + init 落指针描述 + updated_at）
+需求：平台操作 init 时直接生成平台指针文件，复用 scan 的文件生成逻辑，消除 init→scan 窗口期 agent 裸调静默落本地模式的进度库分裂断点
+根因：指针双写逻辑只活在 runCommand（command.js）里，init 明明拿到 specDir 却不落指针；平台若先 init 后 scan，窗口期内 agent 裸调 run 命令找不到指针会静默回退本地模式
+方案：抽公共 helper writePlatformPointer（src/run/shared.js）收敛双写（主文件 specRoot/.runtime/platform-scan.json + 恢复指针 cwd/.sillyspec-platform.json）；index.js 顶层解析 --workspace-id/--runtime-root 传 cmdInit（仅平台专属 flag 触发，本地 --spec-dir 用法不受影响）；init.js writeInitPlatformPointer 在外部 specDir+平台 flag 时落双指针，status: active（不冒领 scan 身份，scanRunId=null，24h STALE 清理不误删）
+结果：新增 test/platform-init-pointer.test.mjs 15 断言全绿（init 落指针/本地模式不落/裸调不落本地库/scan 覆盖不丢字段）；npm test 全量 196 文件 exit=0；lint 280 文件过；platform-interface-map.md 同步（8 处行号漂移修复+新行为描述）
+
+## ql-20260815-005-c1b1 | 2026-08-15 14:41:42 | 修 `run quick --help` 误开会话写 QUICKLOG（--help 静默吞）
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/command.js（新增 printStageUsage helper + runCommand flag 校验后 --help/-h 短路退出 0（副作用前拦截）；knownFlags 补 -h）
+- test/run-help-shortcircuit.test.mjs（新建 15 断言：三入口短路（exit 0+帮助文案）+ 副作用零容忍（不增 quick-sessions/不增 ql）+ 未知 flag 仍拦）
+- docs/sillyspec/troubleshooting.md（补第 8 条：--help 静默吞根因与修复记录）
+需求：run <stage> --help/-h 应在任何 stage 流程前短路返回帮助，不建会话不写库（run quick --help 此前误开 quick 会话+写 QUICKLOG 骨架）。
+根因：--help 在 runCommand knownFlags 白名单里被静默吞掉，无任何短路逻辑，流程继续走 cwd 纠正→quick 会话创建→QUICKLOG 落盘；-h 不在白名单被当未知参数 exit 2。
+方案：runCommand 在 flag 校验通过后、任何副作用之前检测 --help/-h 短路，新增 printStageUsage 打印 stage 用法帮助退出 0；-h 补进 knownFlags；未知 flag 校验不变。troubleshooting.md 补第 8 条。
+结果：新增 test/run-help-shortcircuit.test.mjs 15 断言全过（run quick --help/-h 退出 0+输出帮助+不增 quick-sessions 目录+不增 ql 条目；brainstorm/scan/顶层别名同测；--halp 仍 exit 2）；npm test 全量绿；lint 280 过。
+
+## ql-20260815-006-a51d | 2026-08-15 14:54:56 | D-2 修复 plan 覆盖对账跳过模块文档路径
+状态：已完成
+关联变更：（无）
+文件：
+- src/stages/plan-postcheck.js（两处 parseFileChangeList 补传 keepSillyspecDocs:true）
+- test/design-coverage.test.mjs（新增 D-2 四测试，删固化旧豁免契约一测试）
+- docs/sillyspec/file-lifecycle.md（同步覆盖对账口径说明+时间戳）
+- docs/sillyspec/doc-consistency-debt.md（D-2 销账）
+需求：D-2 修复 plan 覆盖对账跳过模块文档路径。
+根因：plan-postcheck.js parseDesignCoverageByRepo 两处 parseFileChangeList 未传 keepSillyspecDocs，change-list.js 默认过滤 .sillyspec/，与 apply 阶段口径不一致，design 声明的模块文档更新无 task 认领。
+方案：两处调用补传 keepSillyspecDocs: true（.sillyspec/docs/ 视为交付物参与覆盖对账，非 docs 子路径仍排除），先写 4 个新测试再改实现，删除 1 个固化旧豁免契约的测试。
+结果：design-coverage 44/44 绿，npm test 全量 0 失败，lint 280 文件通过；file-lifecycle.md 已同步说明，债单 D-2 已销账。
+
+## ql-20260815-007-9ced | 2026-08-15 15:03:27 | (quick 任务)
+状态：进行中
+关联变更：（无）
+文件：src/stages/plan-postcheck.js, test/design-coverage.test.mjs, docs/sillyspec/doc-consistency-debt.md, docs/sillyspec/file-lifecycle.md
+
+## ql-20260815-008-1fe8 | 2026-08-15 15:16:14 | D-2b 修复尾部任务漏卡零失败信号
+状态：已完成
+关联变更：（无）
+文件：
+- src/stages/plan-postcheck.js（validateBlueprintConsistency 加 plan 声明与卡片双向对账）
+- src/stage-contract-spec.js（新增 rule plan.task-plan-reconciliation + CUSTOM_KINDS 登记）
+- test/plan-postcheck-cross-repo.test.mjs（新增场景 8-11（缺卡/孤儿/对账通过/无 plan.md））
+- test/run-complete-step-validator-rollback.test.mjs（fixture 迁移为重复 id 触发 Contract）
+- docs/sillyspec/file-lifecycle.md（postcheck 描述同步）
+- docs/sillyspec/doc-consistency-debt.md（D-2b 销账）
+需求：D-2b 修复尾部任务漏卡零失败信号。
+根因：postcheck 的 task-id-continuity 只校验已有卡片内部连续，plan 列 17 任务只生成 12 卡时漏卡任务不进 Wave 不受 execute 审计（sillyhub T-13~T-17 实证）。
+方案：validateBlueprintConsistency 加 plan.md 声明任务与 tasks/ 卡片双向对账，新增 rule plan.task-plan-reconciliation（缺卡/孤儿卡均阻断）。
+结果：plan-postcheck-cross-repo 场景 8-11 四测试通过，rollback 测试 fixture 迁移为重复 id 触发（15/15），npm test 全量 0 失败，lint 280 文件通过，file-lifecycle.md 已同步，债单 D-2b 销账。
+
+## ql-20260815-009-b2de | 2026-08-15 15:19:43 | D-5 修复 module-impact pending 死信箱
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/complete-handlers.js（extractPendingDocSyncRows + 归档移动前死信校验）
+- test/archive-pending-deadletter.test.mjs（新建 10 单测）
+- docs/sillyspec/file-lifecycle.md（archive 行同步死信校验）
+- docs/sillyspec/doc-consistency-debt.md（D-5 销账）
+需求：D-5 修复 module-impact pending 死信箱。
+根因：更新结果表 pending 项无人回填即可归档且 verify 全 PASS（perf-remediation 实证）。
+方案：archiveChangeDirectory 移动前加 extractPendingDocSyncRows 死信校验，只查更新结果段表格末列精确 pending/待办/未同步/todo，非零阻断。
+结果：10 单测全绿，npm test 全量 0 失败，lint 281 文件通过；file-lifecycle 已同步，D-5 销账。
+
+## ql-20260815-010-7466 | 2026-08-15 15:24:16 | D-4 窄口径修复 sync-module-docs 假申报无校验
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/complete-handlers.js（extractDoneDocTargets + 归档后存在性对账）
+- test/archive-pending-deadletter.test.mjs（补 5 个 D-4 测试）
+- docs/sillyspec/doc-consistency-debt.md（D-4 销账）
+需求：D-4 窄口径修复 sync-module-docs 假申报无校验。
+根因：归档后 git add 无条件、声明 done 但目标文档不存在无信号。
+方案：extractDoneDocTargets 提取更新结果 done 行目标文档路径，归档后全路径存在性对账 warning。
+结果：15 单测全绿，npm test 全量 0 失败，lint 281 文件通过，D-4 销账（窄口径）。
+
+## ql-20260815-011-66ac | 2026-08-15 15:27:43 | D-1 修复 verify 阶段文档滞后零信号
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/gates.js（verify --done 死信探针）
+- src/stages/verify.js（措辞改硬门指向）
+- test/noai-completion-gate.test.mjs（T9/T10）
+- docs/prompt/_extracted.json（镜像重跑）
+- docs/sillyspec/file-lifecycle.md（verify 行同步）
+- docs/sillyspec/doc-consistency-debt.md（D-1 销账）
+需求：D-1 修复 verify 阶段文档滞后零信号。
+根因：verify.js 措辞把文档滞后合法化为不阻断，死信到 archive 才被拦。
+方案：verify --done 加死信探针（blocking 回滚）+ 措辞改为当场同步+指向硬门。
+结果：noai-completion-gate 30/30，npm test 全量 0 失败，lint 281 文件通过，D-1 销账。
+
+## ql-20260815-012-f521 | 2026-08-15 15:34:45 | D-8 quick 通道文档欠账显性化
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/shared.js（docSyncHint 检测）
+- src/run/quick-audit.js（欠账标记 warn）
+- test/audit-quick-completion.test.mjs（D-8 四场景）
+- docs/sillyspec/doc-consistency-debt.md（D-8 销账）
+需求：D-8 quick 通道文档欠账显性化。
+根因：quick 72% 流量 86% 不动文档零提示。
+方案：auditQuickCompletion docSyncHint 标记 + printQuickAuditReview warn。
+结果：audit 29/29，全量 0 失败，lint 通过，D-8 销账。
+
+## ql-20260815-013-623a | 2026-08-15 20:30:12 | D-7 方案 A scan 漂移检测落地
+状态：已完成
+关联变更：（无）
+文件：
+- src/scan-staleness.js（漂移检测新模块）
+- src/run/prompt.js（注入分支）
+- src/stages/brainstorm.js（占位符）
+- test/scan-staleness.test.mjs（9 单测）
+- docs/prompt/_extracted.json（镜像）
+- docs/sillyspec/file-lifecycle.md（brainstorm 行）
+- docs/sillyspec/doc-consistency-debt.md（D-7 销账）
+需求：D-7 方案 A scan 漂移检测落地。
+根因：scan 无刷新机制，agent 读过期架构零信号。
+方案：scan-staleness.js + brainstorm {SCAN_STALENESS} 事实注入。
+结果：9 单测绿，e2e 与主仓冒烟过，npm test 0 失败，lint 过，D-7 销账（部分）。
+
+## ql-20260815-014-3f34 | 2026-08-15 20:42:40 | 补 .sillyspec-platform-managed 声明文件的 gitignore 规则
+状态：已完成
+关联变更：（无）
+文件：.gitignore
+需求：补 .sillyspec-platform-managed 声明文件的 gitignore 规则
+根因：无，纯遗漏——接管声明机制新增项目根落盘物时漏更新 ignore 模板
+方案：init.js ignoreRules 补三规则（指针/声明/cleaned）+ 主仓 .gitignore 同步 + 清主仓自指残留根治重点亮
+结果：E2E tmpdir init 三规则齐；裸调不再重点亮；npm test exit=0 + lint 288 过 + doc-ref-check 80/80（并行会话行号漂移 7 处一并修）。模块文档无需更新（gitignore 模板属 init 行为非模块语义）。
+
+## ql-20260815-015-d4af | 2026-08-15 21:01:43 | 复核 D-1~D-8 处置真实性时发现 sillyspec docs check 无 local.yaml 裸跑必崩（null.flatMap TypeErro…
+状态：已完成
+关联变更：（无）
+文件：（见实际改动）
+需求：复核 D-1~D-8 处置真实性时发现 sillyspec docs check 无 local.yaml 裸跑必崩（null.flatMap TypeError，docs-check.js:253）
+根因：runDocsCheck 解构默认值 paths=['docs/**/*.md'] 只挡 undefined 不挡 null；readDocsCheckConfig 无 local.yaml 或无 docs-check 段时回退 {paths:null}，index.js:591 传 paths: cliPaths||cfg.paths 得 null 直入 flatMap
+方案：null/空数组统一落回缺省 glob（Array.isArray&&length>0 判断，解构默认值改防 undefined 层）；回归测试覆盖 null/[]/undefined 三态
+结果：node --test docs-check 套件 28/28 全过（新增 1 测试）；修后 CLI 实跑不再崩，全量暴露 110/416 处历史引用欠账（债单登记 51 后新增 59，含并行 D 系列修复未同步行号漂移）；npm test 全量 237/237 绿 + npm run lint 通过
+
+## ql-20260815-016-dc33 | 2026-08-15 21:37:55 | docs check 首扫 110/416 处引用失效且只涨不跌——修活文档欠账并让检测接入 quick --done 形成闭环
+状态：已完成
+关联变更：（无）
+文件：（见实际改动）
+需求：docs check 首扫 110/416 处引用失效且只涨不跌——修活文档欠账并让检测接入 quick --done 形成闭环
+根因：①D 系列修复与 W6 run.js 拆分产生行号漂移未同步文档；②docs check 只是命令，无环节自动消费，欠账无收敛动力
+方案：①批量修正 7 份活文档 71 处失效引用（行号校准/符号迁移改路径/脆弱多引用行去锚改叙述）；②历史评审快照 39 处冻结进 local.yaml docs-check.skip；③quick --done 审计接入 docs check advisory：本次 changedFiles 的 .md 跑 runDocsCheck，失效即 docsCheckHint+reasons+升 warning（复用 D-8 模式，只归因本次改动不扫全仓存量），quick-audit.js 打印修复指引
+结果：docs check 全仓绿（273 引用全过/155 带关键词断言，110→0）；新增 4 测试（DC-1~4），quick-audit 36/36；npm test 全量 237+/exit 0；lint 过。附带事故：bash 内联脚本反引号被命令替换吃掉致 architecture-4a.md 短暂损坏，已 git checkout 恢复并用脚本文件重做（教训入 memory）
+
+## ql-20260815-017-8497 | 2026-08-15 22:23:52 | docs check 失效报告只有报错没有定位
+状态：已完成
+关联变更：（无）
+文件：（见实际改动）
+需求：docs check 失效报告只有报错没有定位，修 110 处欠账时人工六轮循环找候选行号——D-6 待办落产品化
+根因：invalid 项只含 reason（超界/关键词缺失），不含 token 在目标文件的实际命中行，定位靠人工 grep
+方案：docs-check.js 失效项加 suggest 字段（suggestLines：token 在首个候选文件全量命中行，取前 8；无 token/符号不在候选文件 → 空数组不硬猜）；index.js CLI 失效报告下打「💡 候选行号」行；测试 +2（合格 token 建议含真实行 / 符号不在候选文件空数组）
+结果：docs-check 套件 31/31；临时项目端到端冒烟验证「💡 候选行号: 4」正确指向 alphaSym 行；npm test 全量 exit 0（一次 worktree 套件 flaky 单跑通过，属 memory 已知 git/temp-dir flaky 非回归）；lint 过
+
+## ql-20260815-018-c9fc | 2026-08-15 22:26:59 | 整合评估设计稿
+状态：已完成
+关联变更：（无）
+文件：
+- docs/sillyspec/design-docs-signals-integration.md（设计稿）
+需求：整合评估设计稿。
+根因：四源互不引用。
+方案：O-1/O-2 推荐。
+结果：已落盘并提交，待裁决。
+
+## ql-20260815-019-fe6d | 2026-08-15 22:36:28 | 复核 docs-debt-inject 落地质量时发现归属二级匹配失配——卡片裸文件名引用普遍存在时 [docs-debt] 事实沉默漏报
+状态：已完成
+关联变更：（无）
+文件：src/docs-debt.js, test/docs-debt.test.mjs
+需求：复核 docs-debt-inject 落地质量时发现归属二级匹配失配——卡片裸文件名引用普遍存在时 [docs-debt] 事实沉默漏报
+根因：matchFilesToModules 二级用 content.includes(全路径) 精确子串，但本仓卡片契约表引用习惯是裸名（stages.md 写 execute.js 非 src/stages/execute.js）→ 改动文件归属 unmapped，模块欠账零输出（实测 src/stages/execute.js 修复前 unmapped、修复后正确归 stages 且算出 behind=38）
+方案：二级b 裸文件名兜底匹配——基名在卡内存在独立出现（两侧均非路径/标识符字符，防 a.js 误配 xa.js.txt），全路径命中优先裸名仅兜底
+结果：docs-debt 套件 14/14（+3 测试：裸名命中/边界字符防误配/全路径优先）；本仓实测 src/stages/execute.js 归属 stages+behind=38 事实正确；npm test 全量 exit 0；lint 过。并行会话 docs-signals-o12 的 O-1 归属升级共用本函数，本修复是其地基，正交无冲突
+
+## ql-20260815-020-9870 | 2026-08-15 23:31:21 | 文档一致性债第七节裁决落地 docs gate——唯一实测回本的机制做成完整产品（用户裁决直接做完整的
+状态：已完成
+关联变更：（无）
+文件：（见实际改动）
+需求：文档一致性债第七节裁决落地 docs gate——唯一实测回本的机制做成完整产品（用户裁决直接做完整的，不发版）
+根因：docs check 检测力已证（110→0 半小时清偿）但「想起才跑」无收敛动力，需要一个挂进 pre-push/CI 的门；阈值设计上 behind 计数是代理信号不可用（源码活跃≠卡错，误报致报警被忽略），docs check 失效数是直接信号
+方案：src/docs-gate.js（evaluateRatchet 纯判定 + runDocsGate IO 面，ratchet=失效数≤基线放行/超基线拦/清偿提示下调）；sillyspec docs gate 子命令（--init-baseline 显式立基线 fail-closed 不悄悄合法化存量、幂等覆盖、未知 flag exit 2 白名单）；本仓 .husky/pre-push 接线（lint+test 后第三道）；基线 .sillyspec/docs-check-baseline 团队共享进 git（本仓初始化 0=全绿）
+结果：test/docs-gate.test.mjs 10/10（判定语义 3+基线 IO 1+集成 6）；CLI 冒烟全链路（无基线 exit2→init→放行→未知 flag 拦截）；顺手修 platform-interface-map.md 6 处 index.js 行号漂移（并行改动+本 case 插入所致，建议行号首次实战）；npm test 全量 exit 0 + doc-ref-check 过 + lint 过；interface-contract §1.3b + 债单第七节（收手线+冻结清单+警讯）同步
