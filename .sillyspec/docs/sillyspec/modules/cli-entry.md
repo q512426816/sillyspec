@@ -48,6 +48,8 @@ runStage(pm, progress, stageName, cwd, changeName)
 
 **平台接管声明 fail-closed 双入口**（2026-08-15 platform-takeover-declaration，D-B@v2，堵状态分裂）：`runCommand` 独立指针恢复链（不经 `resolvePlatformSpecDir`）在「无显式平台参数 + 指针与 platform-scan.json 皆缺失 + 项目根存在接管声明 `.sillyspec-platform-managed`」时 `exit(1)` + 三选项引导（重跑 scan 重建指针 / `platform disconnect` 解除托管 / 显式 `--spec-dir`）——堵指针被 cleanup/STALE 清理后 run/quick/scan 全 stage 命令静默落本地库的旁路（与 `resolvePlatformSpecDir` 抛 `PlatformManagedError` 的入口一行为一致）。声明由 `writePlatformPointer`（`run/shared.js`）三写落盘，无过期，唯一删除路径 = `platform disconnect` 三清。
 
+**quick 关联变更存在性守卫**（2026-08-16，坑 quick-change-phantom-linked，`run/command.js`）：quick 的 `--change`/`--linked-changes` 解析为关联变更后，逐一 `existsSync(specRoot/changes/<name>)` 校验，缺失即 `exit(2)` 列幻影名 + 三条出路（起名不传 `--change`（sessionId 自动生成）/ 关联须预存且显式写法 `--linked-changes` / 建变更走 brainstorm）——quick 不建变更，链接幻影名必是笔误/语义误用（想给会话起名却传了 `--change`），f70c9c3 只修了「建幻影目录」后果，本守卫把误用拦在 flag 装载层。只检 CLI 显式装载值；持久化 guard.json 复用（run↔--done 之间变更可能被归档）与交互式选择不检；sessionId 形态（`--done --change quick-<8hex>`）在守卫之前已被特例放行。
+
 ## 注意事项
 
 - `sillyspec init /path/to/project` 语法：第二个参数如果是路径会被当作 targetDir，而非子命令
@@ -62,6 +64,7 @@ runStage(pm, progress, stageName, cwd, changeName)
 ## 变更索引
 
 - 2026-08-13-worktree-execute-loss-guard | execute 完成路径阶段级核验 warn（`handleExecuteDeliverableCheck` + `findMissingDeliverables`，聚合最新 execute run 各 task review.changedFiles 核验落盘，防空跑谎报 D-002@v1）+ 显式 worktree cleanup 命令 blocked 分支（D-001@v1）+ execute reset 清理 worktree 显式 `force:true`（D-006@v1）。
+- ql-20260816-003-8a14 | quick 关联变更存在性守卫：--change/--linked-changes 装载的 linkedChanges 逐一 existsSync 校验，幻影名 exit(2) + 三条出路文案（坑 quick-change-phantom-linked，f70c9c3 后误用仍被静默接受的剩余面）。
 - ql-20260807-001-a260 | gate/derive 顶层命令补 worktree drift 锚定：未显式 --spec-dir 时 detectWorktreeSpecDrift(resolveSpecDir(dir)) 命中即向 runGate/runDerive 传 specDriftAnchor（对齐 machine-interface 已扩展入参），execute/task-reviews marker 读主仓 .runtime（补 test/gate-derive-spec-drift.test.mjs 3 场景 e2e）。
 - 2026-08-10-worktree-apply-dirty-resilient | apply/assess dirty 拦截补结构化 rescue 打印段（gated on rescueCommands 非空）：`🆘 Rescue commands (N safe / M excluded)` + 逐行 cp 指令（`generateRescueCommands` 逐文件四分类），旁路 git apply，cp 后提示手动 worktree cleanup；纯 additive，`rescueCommands===null` 零影响。
 - 2026-08-10-platform-progress-sync | platform case 新增 `pull` 子命令（--change 单变更 / 无参先 pullList 再逐个 pull）+ `resolve` 子命令（三 flag --keep-local/--take-platform/--abort 互斥校验，多/缺均报错）+ `status` 扩展（collectStatus：落后标记 + 未决冲突列表）；stage case block（brainstorm/plan/execute/verify/archive）runCommand 前 + platform approve 前注入 `triggerPullActiveChange`/`triggerPull`（下行拉最新避免过期状态审批）；help 文本同步加 pull/resolve 行。

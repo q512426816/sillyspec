@@ -32,3 +32,12 @@ test/multi-repo-context-entry.test.mjs（坑7 两场景：tasks/ 卡片补扫 + 
 根因：execute「确认 worktree 路径」步工具链预告只讲工具二进制安装，没讲 python venv 场景的 worktree 内补装优先原则
 方案：src/stages/execute.js 该步第 4 条补 python venv 场景提示（uv sync --group dev / uv pip install pytest，明示不要回退主仓 venv）；重跑 _extract.mjs 刷新 _extracted.json + docs/prompt/execute.md 镜像逐字同步
 结果：npm test 全量 EXIT=0（818 断言通过）+ npm run lint 295 文件通过；改动已 git add 暂存（execute.js/_extracted.json/execute.md 三文件）
+
+## ql-20260816-003-8a14 | 2026-08-16 07:20:00 | quick 的 --change 传不存在变更名当关联变更被静默接受
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/command.js（quick sessionId 特例后加关联变更存在性守卫：幻影名 exit 2 + 三条出路）
+test/quick-linked-change-existence-guard.test.mjs（新增 5 用例 14 断言）
+docs/sillyspec/platform-interface-map.md（守卫插入致行号漂移，doc-ref-check 抓到后校正 8 处落点）
+结果：暂存确认：cli-entry 模块卡已同步并暂存（正文守卫段 + 变更索引 ql-20260816-003-8a14 条目）。命中模块：cli-entry（run/command.js）。需求：quick 的 --change 传不存在变更名当关联变更被静默接受，挂悬空关联污染图谱，--done 时 sessionId fallback 可能命中他者会话；2026-08-02 踩过 f70c9c3 只修建幻影目录后果，误用本身仍复发。根因：linkedChanges 装载后无存在性校验，「关联不存在的变更」无任何合法场景。方案：flag 装载层 fail-loud 守卫（existsSync 逐一校验 + exit 2 + 三条出路文案），只检 CLI 显式装载值（持久化复用/交互式/sessionId 特例不检）。结果：新增 5 用例 14 断言全绿；npm test 全量 208 文件 exit=0；lint 过；doc-ref-check 80 处全过（行号漂移已连带校正）。注：ql-20260816-003-8a14 条目被并发会话 cf9a8df 误判孤儿删除，已按 CLI 骨架格式手工重建后重跑本 --done。--force-baseline 解锁 command.js；--allow-new 解锁新测试文件。

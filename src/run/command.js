@@ -491,6 +491,24 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     }
   }
 
+  // quick 关联变更存在性守卫（坑 quick-change-phantom-linked）：quick 的 --change/--linked-changes
+  // 被解析为关联变更后静默接受不存在的名字（quick 不建变更，链接幻影名必是笔误/语义误用——想给
+  // 会话起名却传了 --change），后果是 QUICKLOG 挂悬空关联污染 change 关联图谱 + --done 时 sessionId
+  // 走 fallback 可能命中他者会话。f70c9c3 只修了「建幻影目录」后果（appendTaskCheckbox 加
+  // existsSync 守卫），本守卫把误用拦在 flag 装载层。只校验 CLI 显式装载的 linkedChanges；
+  // 持久化 guard.json 复用（下方 run↔--done 之间变更可能被归档）与交互式选择（列表只列存在项）不检。
+  if (stageName === 'quick' && linkedChanges.length > 0) {
+    const missing = linkedChanges.filter(lc => lc !== 'none' && !existsSync(join(specRoot, 'changes', lc)))
+    if (missing.length > 0) {
+      console.error(`❌ quick 的 --change/--linked-changes 被当作「关联变更」处理，但以下变更不存在：${missing.join('、')}`)
+      console.error('   （quick 不创建变更，关联的变更必须预先存在）')
+      console.error('   - 想给会话起名：不要传 --change，sessionId 由 CLI 自动生成（后续 --done 用它）')
+      console.error('   - 想关联变更：修正拼写（.sillyspec/changes/ 下已存在的目录名），显式写法 --linked-changes <名>')
+      console.error('   - 想新建变更：quick 不建变更，走 brainstorm 完整流程')
+      process.exit(2)
+    }
+  }
+
   // 解析 --files a.js,b.js（quick 专用：显式声明 allowedFiles）
   // --files 是单值 flag，空格分隔的多文件只取首个致其余静默丢失（坑 quick-files-space-separated-silently-drops）。
   // detectSpaceSeparatedFiles 检测误用 → fail-loud 报错指明逗号用法（同 run --json :109 风格）。
