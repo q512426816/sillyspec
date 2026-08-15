@@ -12,7 +12,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import {
   collectDocRefs, looksLikeCodeSymbol, validateRefLines, extractExpectedTokensFromLine,
-  resolveCandidates, walkGlob, runDocsCheck, DocsCheckConfigError,
+  resolveCandidates, walkGlob, runDocsCheck, readDocsCheckConfig, DocsCheckConfigError,
 } from '../src/docs-check.js'
 
 let root
@@ -194,5 +194,28 @@ describe('runDocsCheck（集成）', () => {
 
   it('glob 形态错误 → throw DocsCheckConfigError（CLI 转 exit 2）', () => {
     assert.throws(() => runDocsCheck({ projectRoot: root, paths: ['docs/**/*.{md,txt}'] }), DocsCheckConfigError)
+  })
+})
+
+describe('readDocsCheckConfig（local.yaml 读取，execute 审查修复 #3）', () => {
+  it('无 local.yaml → 全缺省', () => {
+    const c = readDocsCheckConfig(root)
+    assert.equal(c.paths, null)
+    assert.deepEqual(c.skip, [])
+    assert.equal(c.keywordAssert, true)
+  })
+  it('有 docs-check 段 → 读出 paths/skip/keywordAssert', () => {
+    mkdirSync(join(root, '.sillyspec'), { recursive: true })
+    writeFileSync(join(root, '.sillyspec', 'local.yaml'), 'docs-check:\n  paths:\n    - docs/api/*.md\n  skip:\n    - docs/old\n  keywordAssert: false\n')
+    const c = readDocsCheckConfig(root)
+    assert.deepEqual(c.paths, ['docs/api/*.md'])
+    assert.deepEqual(c.skip, ['docs/old'])
+    assert.equal(c.keywordAssert, false)
+  })
+  it('坏 YAML / 无段 → 降级缺省不抛', () => {
+    mkdirSync(join(root, '.sillyspec'), { recursive: true })
+    writeFileSync(join(root, '.sillyspec', 'local.yaml'), '{{{broken\n')
+    const c = readDocsCheckConfig(root)
+    assert.equal(c.paths, null)
   })
 })

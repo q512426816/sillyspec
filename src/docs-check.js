@@ -14,9 +14,34 @@
  */
 import { readFileSync, existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
+import jsYaml from 'js-yaml'
 
 /** 提取 file.js:line / file.js:start-end 引用（.js/.mjs，反引号包裹与裸文本均命中，全文扫描 D-006） */
 export const REF_RE = /([A-Za-z0-9_.\-\/]+\.(?:js|mjs)):(\d+)(?:-(\d+))?/g
+
+/**
+ * 读 local.yaml 的 docs-check 段（best-effort，绝不抛；缺文件/无段 → 全缺省）。
+ * @param {string} projectRoot 源码仓根（local.yaml 在 <root>/.sillyspec/local.yaml）
+ * @returns {{ paths?: string[], skip: string[], keywordAssert: boolean }}
+ */
+export function readDocsCheckConfig(projectRoot) {
+  const fallback = { paths: null, skip: [], keywordAssert: true }
+  try {
+    const p = join(projectRoot, '.sillyspec', 'local.yaml')
+    if (!existsSync(p)) return fallback
+    const doc = jsYaml.load(readFileSync(p, 'utf8'))
+    if (!doc || typeof doc !== 'object') return fallback
+    const dc = doc['docs-check']
+    if (!dc || typeof dc !== 'object') return fallback
+    return {
+      paths: Array.isArray(dc.paths) ? dc.paths.filter(s => typeof s === 'string') : null,
+      skip: Array.isArray(dc.skip) ? dc.skip.filter(s => typeof s === 'string') : [],
+      keywordAssert: typeof dc.keywordAssert === 'boolean' ? dc.keywordAssert : true,
+    }
+  } catch {
+    return fallback
+  }
+}
 
 /** 配置错误（glob 形态不支持等）→ CLI exit 2 */
 export class DocsCheckConfigError extends Error {}

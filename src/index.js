@@ -554,20 +554,35 @@ async function main() {
       } else if (docsSubCmd === 'check') {
         // docs check（2026-08-15 docs-check-productize D-6）：文档 file:line 引用校验。
         // exit code 三档（D-003）：0 全绿 / 1 存在无效引用 / 2 配置/IO 错误（DocsCheckConfigError）。
-        const docsCheckFlags = filteredArgs.slice(2).filter(a => !a.startsWith('--'));
-        const wantsJson = filteredArgs.includes('--json');
-        const pathsFlagIdx = filteredArgs.indexOf('--paths');
-        const cliPaths = pathsFlagIdx !== -1
-          ? (filteredArgs[pathsFlagIdx + 1] || '').split(',').map(s => s.trim()).filter(Boolean)
-          : null;
-        const { runDocsCheck, DocsCheckConfigError } = await import('./docs-check.js');
+        // ⚠ flag 解析（execute 审查修复）：--json 由全局解析器吞进 json 变量（filteredArgs 不含），
+        // 必须用全局 json 判定；--paths 全局解析器不认识（flag+值都掉进 filteredArgs），须在分支内
+        // 成对识别并剔除，值才不会污染 docsCheckFlags 位置参数。
+        const rawDocsArgs = filteredArgs.slice(2);
+        const docsCheckFlags = [];
+        let cliPaths = null;
+        for (let i = 0; i < rawDocsArgs.length; i++) {
+          if (rawDocsArgs[i] === '--paths' && rawDocsArgs[i + 1] !== undefined) {
+            cliPaths = rawDocsArgs[i + 1].split(',').map(s => s.trim()).filter(Boolean);
+            i++; // 跳过值
+          } else if (rawDocsArgs[i] === '--paths') {
+            console.error('❌ docs check: --paths 缺值（逗号分隔 glob，如 --paths "docs/**/*.md"）');
+            process.exit(2);
+          } else {
+            docsCheckFlags.push(rawDocsArgs[i]);
+          }
+        }
+        const { runDocsCheck, readDocsCheckConfig, DocsCheckConfigError } = await import('./docs-check.js');
         try {
+          // 配置优先级：--paths > local.yaml docs-check.paths > 缺省 docs/**/*.md
+          const cfg = readDocsCheckConfig(dir);
           const result = runDocsCheck({
             projectRoot: dir,
             docs: docsCheckFlags.length > 0 ? docsCheckFlags : null,
-            paths: cliPaths || undefined,
+            paths: cliPaths || cfg.paths,
+            skip: cfg.skip,
+            keywordAssert: cfg.keywordAssert,
           });
-          if (wantsJson) {
+          if (json) {
             console.log(JSON.stringify(result, null, 2));
           } else {
             for (const w of result.warnings) console.warn(`⚠️  ${w}`);
