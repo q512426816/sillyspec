@@ -314,3 +314,15 @@
 状态：进行中
 关联变更：（无）
 文件：（见实际改动）
+
+## ql-20260815-005-c1b1 | 2026-08-15 14:41:42 | 修 `run quick --help` 误开会话写 QUICKLOG（--help 静默吞）
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/command.js（新增 printStageUsage helper + runCommand flag 校验后 --help/-h 短路退出 0（副作用前拦截）；knownFlags 补 -h）
+- test/run-help-shortcircuit.test.mjs（新建 15 断言：三入口短路（exit 0+帮助文案）+ 副作用零容忍（不增 quick-sessions/不增 ql）+ 未知 flag 仍拦）
+- docs/sillyspec/troubleshooting.md（补第 8 条：--help 静默吞根因与修复记录）
+需求：run <stage> --help/-h 应在任何 stage 流程前短路返回帮助，不建会话不写库（run quick --help 此前误开 quick 会话+写 QUICKLOG 骨架）。
+根因：--help 在 runCommand knownFlags 白名单里被静默吞掉，无任何短路逻辑，流程继续走 cwd 纠正→quick 会话创建→QUICKLOG 落盘；-h 不在白名单被当未知参数 exit 2。
+方案：runCommand 在 flag 校验通过后、任何副作用之前检测 --help/-h 短路，新增 printStageUsage 打印 stage 用法帮助退出 0；-h 补进 knownFlags；未知 flag 校验不变。troubleshooting.md 补第 8 条。
+结果：新增 test/run-help-shortcircuit.test.mjs 15 断言全过（run quick --help/-h 退出 0+输出帮助+不增 quick-sessions 目录+不增 ql 条目；brainstorm/scan/顶层别名同测；--halp 仍 exit 2）；npm test 全量绿；lint 280 过。

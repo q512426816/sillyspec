@@ -94,3 +94,13 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 - 存量清理：`~/.sillyspec` 整目录备份后删除（备份在 `~/.sillyspec-backup-20260815/`）。
 - 测试：`test/spec-dir-home-guard.test.mjs`（8 断言，含 e2e：home 存在 .sillyspec 时子目录跑 CLI 不写 home 库）。
 - 关联记忆：`[[sillyspec-cwd-correction-home-collision]]`
+
+---
+
+## 8. `run quick --help` 误开会话（--help 被静默吞，已修）
+
+**症状**：`sillyspec run quick --help` 查询帮助却误开 quick 会话：新增 quick-sessions 目录 + QUICKLOG 骨架条目；`-h` 更是被当未知参数 exit 2。
+
+**根因**：`--help` 在 runCommand 的 knownFlags 白名单里但**没有任何短路逻辑**，被静默吞掉后继续走 cwd 纠正 → 会话创建 → QUICKLOG 落盘。查询意图产生了写副作用。
+
+**解法（已修 2026-08-15）**：runCommand 在 flag 校验通过后、任何副作用之前检测 `--help/-h` 短路，打印 stage 用法帮助（printStageUsage）退出 0；`-h` 补进 knownFlags。未知 flag 校验不变（`--halp` 仍 exit 2）。测试：`test/run-help-shortcircuit.test.mjs`（15 断言，含副作用零容忍：不增会话/不增 ql 条目）。

@@ -23,7 +23,7 @@ import { join, resolve, dirname } from 'node:path'
 import { existsSync, readdirSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
 import { randomBytes, randomUUID } from 'node:crypto'
 import { writeAtomicSync } from '../fs-atomic.js'
-import { resolveSpecDir, countAncestorSpecDirs, resolveChangeDir, triggerSync, getStageSteps, formatWaitOptions, checkApproval, didYouMean, assertSafeChangeName, detectQuickSessionDrift, detectWorktreeSpecDrift, resolveRuntimeRoot } from './shared.js'
+import { resolveSpecDir, countAncestorSpecDirs, resolveChangeDir, triggerSync, getStageSteps, formatWaitOptions, checkApproval, didYouMean, assertSafeChangeName, detectQuickSessionDrift, detectWorktreeSpecDrift, resolveRuntimeRoot, writePlatformPointer } from './shared.js'
 import { resolveQuickLinkedChanges } from './quick-audit.js'
 import { outputStep } from './prompt.js'
 import { completeStep, skipStep, waitStep, continueStep } from './complete.js'
@@ -123,6 +123,31 @@ export async function ensureStageSteps(progress, stageName, cwd, specDir = null)
   }
 
   return false
+}
+
+/**
+ * run <stage> --help/-h 的用法帮助（runCommand 内 --help 短路调用）。
+ * 只打印不落盘：帮助查询不该有副作用（建会话/写 QUICKLOG）。
+ */
+function printStageUsage(stageName) {
+  const stage = stageRegistry[stageName]
+  console.log(`
+sillyspec run ${stageName}${stage && stage.title ? ` — ${stage.title}` : ''}${stage && stage.description ? `\n  ${stage.description}` : ''}
+
+用法:
+  sillyspec run ${stageName}                    开始/继续该阶段（输出下一步 prompt）
+  sillyspec run ${stageName} --status           查看阶段进度
+  sillyspec run ${stageName} --done --output "摘要" [--input "用户原话"]   完成当前步骤
+  sillyspec run ${stageName} --change <名>      指定变更（多活跃变更必填）
+
+  通用参数: --done --output --input --status --skip --reset --reopen --from-step
+            --wait --continue --answer --change --spec-dir --non-interactive
+            --interactive --skip-approval --json(不支持)
+  quick 专属: --linked-changes none|a,b --files a.js,b.js --allow-new
+             --allow-delete --force-baseline --confirm --file-notes
+  scan  专属: --quick --standard --deep --force-rescan
+  archive专属: --confirm
+`)
 }
 
 /**
@@ -290,30 +315,10 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     }
   }
   // 持久化 platformOpts
-  // 在 specRoot/.runtime/ 写主文件，同时在 cwd/.sillyspec/.runtime/ 写恢复指针
+  // 在 specRoot/.runtime/ 写主文件，同时在 cwd 下写恢复指针
+  // （writePlatformPointer 收敛双写逻辑，cmdInit 平台模式共用，防两处字段漂移）
   if (platformOpts.specRoot || platformOpts.runtimeRoot) {
-    try {
-      const { mkdirSync, writeFileSync } = await import('fs')
-      mkdirSync(join(specRoot, '.runtime'), { recursive: true })
-      writeFileSync(platformOptsFile, JSON.stringify({
-        specRoot: platformOpts.specRoot,
-        runtimeRoot: platformOpts.runtimeRoot,
-        workspaceId: platformOpts.workspaceId,
-        scanRunId: platformOpts.scanRunId,
-        savedAt: new Date().toISOString(),
-      }, null, 2) + '\n')
-      // 恢复指针：在 cwd 下写 .sillyspec-platform.json（不在 .sillyspec 内，不污染源码结构）
-      // 供后续 --done（不带 --spec-root）找到 specDir
-      writeFileSync(join(cwd, '.sillyspec-platform.json'), JSON.stringify({
-        specRoot: platformOpts.specRoot,
-        runtimeRoot: platformOpts.runtimeRoot,
-        workspaceId: platformOpts.workspaceId,
-        scanRunId: platformOpts.scanRunId,
-        savedAt: new Date().toISOString(),
-      }, null, 2) + '\n')
-    } catch {
-      // 静默失败，不影响主流程
-    }
+    writePlatformPointer(cwd, platformOpts)
   }
 
   // 统一规范基路径：平台模式用 specRoot，本地模式用 cwd/.sillyspec
@@ -513,6 +518,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     '--json', '--dir', '--help',
     '--reopen', '--from-step', '--mode',
     '--deep', '--quick', '--standard', // scan profile 三档显式选择（scan-profile.js 从 argv 读；互斥见下方 PROFILE_FLAGS 检测）
+    '-h',
   ])
   for (let i = 0; i < flags.length; i++) {
     const f = flags[i]
@@ -529,6 +535,14 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
       // 否则会把紧跟的 typo flag 当成 --done 的「值」吞掉，既不校验也不生效（静默忽略）。
       if (VALUE_FLAGS.has(f)) i++
     }
+  }
+
+  // ── --help/-h 短路：flag 校验通过后、任何副作用（cwd 纠正/会话创建/QUICKLOG 落盘）之前 ──
+  // --help 此前在 knownFlags 白名单里被静默吞掉，run quick --help 会误开 quick 会话+写骨架
+  // 条目（查询意图不该有副作用）；-h 更是被当未知参数 exit 2。帮助查询 = 用法展示 = 退出 0。
+  if (flags.includes('--help') || flags.includes('-h')) {
+    printStageUsage(stageName)
+    process.exit(0)
   }
 
   const isAuxiliary = auxiliaryStages.includes(stageName)
