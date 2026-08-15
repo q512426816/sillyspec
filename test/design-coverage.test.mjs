@@ -330,10 +330,47 @@ describe('validateDesignFileCoverage', () => {
     assert.equal(validateDesignFileCoverage(dir).ok, true)
   })
 
-  it('.sillyspec/ 文件不计入 design 清单（不强制 task 覆盖）', () => {
+  it('.sillyspec/docs/ 模块文档计入 design 清单，未被 task 认领 → 报未覆盖（D-2）', () => {
+    // 修复 2026-08-15 债单 D-2：plan 覆盖对账跳过 .sillyspec/ 导致 design 声明的
+    // 模块文档更新无 task 认领（与 apply 阶段 keepSillyspecDocs 口径不一致）。
     writeDesign(dir, designMd({ table: [
       { op: '修改', path: 'src/a.js' },
-      { op: '新增', path: '.sillyspec/docs/sillyspec/modules/x.md' },
+      { op: '修改', path: '.sillyspec/docs/sillyspec/modules/x.md' },
+    ] }))
+    writeTask(dir, 'task-01', ['src/a.js'])
+    const r = validateDesignFileCoverage(dir)
+    assert.equal(r.ok, false)
+    assert.ok(r.uncovered.includes('.sillyspec/docs/sillyspec/modules/x.md'), JSON.stringify(r.uncovered))
+    assert.ok(r.designFiles.includes('.sillyspec/docs/sillyspec/modules/x.md'))
+  })
+
+  it('.sillyspec/docs/ 模块文档被 task 认领 → 通过（D-2）', () => {
+    writeDesign(dir, designMd({ table: [
+      { op: '修改', path: 'src/a.js' },
+      { op: '修改', path: '.sillyspec/docs/sillyspec/modules/x.md' },
+    ] }))
+    writeTask(dir, 'task-01', ['src/a.js'])
+    writeTask(dir, 'task-02', ['.sillyspec/docs/sillyspec/modules/x.md'])
+    const r = validateDesignFileCoverage(dir)
+    assert.equal(r.ok, true, JSON.stringify(r.errors))
+  })
+
+  it('.sillyspec/docs/ 目录前缀认领（task 写目录、design 写具体文件）→ 通过（D-2）', () => {
+    writeDesign(dir, designMd({ table: [
+      { op: '修改', path: '.sillyspec/docs/sillyspec/modules/x.md' },
+      { op: '修改', path: '.sillyspec/docs/sillyspec/modules/y.md' },
+    ] }))
+    writeTask(dir, 'task-01', ['.sillyspec/docs/sillyspec/modules/'])
+    const r = validateDesignFileCoverage(dir)
+    assert.equal(r.ok, true, JSON.stringify(r.errors))
+  })
+
+  it('.sillyspec/ 非 docs 子路径仍不计入清单（进度库等非交付物，D-2）', () => {
+    // 只有 .sillyspec/docs/ 视为交付物（与 apply 阶段 filterDeliverableFiles 口径一致）；
+    // .sillyspec/changes/ 等进度库路径仍排除，不强制 task 覆盖。
+    writeDesign(dir, designMd({ table: [
+      { op: '修改', path: 'src/a.js' },
+      { op: '修改', path: '.sillyspec/changes/2026-08-15-x/design.md' },
     ] }))
     writeTask(dir, 'task-01', ['src/a.js'])
     const r = validateDesignFileCoverage(dir)

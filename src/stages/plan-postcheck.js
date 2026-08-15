@@ -691,8 +691,10 @@ function parseDesignCoverageByRepo(designPath) {
   }
 
   if (!hasSegmentHeader) {
-    // 无段头 → 整章节归 main（等价原 parseFileChangeList 行为）
-    const main = new Set(parseFileChangeList(designPath))
+    // 无段头 → 整章节归 main（等价原 parseFileChangeList 行为）。
+    // keepSillyspecDocs=true：.sillyspec/docs/ 模块文档 = 交付物，与 apply 阶段
+    // resolveApplyAllowSet 口径一致（债单 D-2）——design 声明的模块文档更新必须被 task 认领。
+    const main = new Set(parseFileChangeList(designPath, { keepSillyspecDocs: true }))
     if (main.size > 0) byRepo.set('main', main)
     for (const p of main) allFiles.push(p)
     return { byRepo, hasSegmentHeader: false, allFiles }
@@ -731,7 +733,7 @@ function parseDesignCoverageByRepo(designPath) {
       const virtualDesign = ['## 文件变更清单', '', ...segLines, ''].join('\n')
       const tmpPath = pJoin(tmpDir, `${repo}.md`)
       writeFileSync(tmpPath, virtualDesign)
-      const segFiles = [...parseFileChangeList(tmpPath)]
+      const segFiles = [...parseFileChangeList(tmpPath, { keepSillyspecDocs: true })]
       if (segFiles.length === 0) continue
       const set = byRepo.get(repo) || new Set()
       for (const p of segFiles) { set.add(p); allFiles.push(p) }
