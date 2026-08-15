@@ -209,6 +209,44 @@ console.log('\n--- D-8 文档欠账标记 ---')
   assert(r.status !== 'blocked', `D-8 标记不阻断（status=${r.status}）`)
 }
 
+// case D-8e（O-1 docs-signals-o12）: specBase/projectName 透传 + map 命中 → modules 含归属
+{
+  const d = makeRepo()
+  // map: runtime 模块登记 src-index.js
+  mkdirSync(join(d, '.sillyspec', 'docs', 'demo', 'modules'), { recursive: true })
+  writeFileSync(join(d, '.sillyspec', 'docs', 'demo', 'modules', '_module-map.yaml'),
+    'modules:\n  runtime:\n    status: active\n    doc: modules/runtime.md\n    paths:\n      - src-index.js\n')
+  writeFileSync(join(d, '.sillyspec', 'docs', 'demo', 'modules', 'runtime.md'), 'card\n')
+  writeFileSync(join(d, 'src-index.js'), 'export const x = 3\n')
+  const r = await auditQuickCompletion(d, { ...baseGuard, specBase: join(d, '.sillyspec'), projectName: 'demo' }, {})
+  assert(r.docSyncHint && Array.isArray(r.docSyncHint.modules) && r.docSyncHint.modules.some(m => m.id === 'runtime'),
+    `O-1 modules 归属（实际 ${JSON.stringify(r.docSyncHint?.modules)}）`)
+}
+
+// case D-8f（FR-002）: map 缺失 / specBase 不传 → modules 空数组降级（现文案不变零回归）
+{
+  const d = makeRepo()
+  writeFileSync(join(d, 'src-index.js'), 'export const x = 4\n')
+  const r1 = await auditQuickCompletion(d, { ...baseGuard }, {}) // 不传 specBase
+  assert(r1.docSyncHint && (!r1.docSyncHint.modules || r1.docSyncHint.modules.length === 0),
+    `不传 specBase → modules 降级空（实际 ${JSON.stringify(r1.docSyncHint?.modules)}）`)
+  const r2 = await auditQuickCompletion(d, { ...baseGuard, specBase: join(d, '.sillyspec'), projectName: 'demo' }, {}) // 无 map 文件
+  assert(r2.docSyncHint && (!r2.docSyncHint.modules || r2.docSyncHint.modules.length === 0),
+    `map 缺失 → modules 降级空（实际 ${JSON.stringify(r2.docSyncHint?.modules)}）`)
+  assert(r2.reasons.some(x => x.includes('未同步模块文档')), `降级不丢基础欠账 reason`)
+}
+
+// case D-8g（O-1 渲染）: printQuickAuditReview 输出"涉及模块"行
+{
+  const origWarn = console.warn
+  const warns = []
+  console.warn = (...a) => { warns.push(a.join(' ')) }
+  try {
+    printQuickAuditReview({ status: 'safe', changedFiles: ['src-index.js'], newFiles: [], reasons: [], docSyncHint: { touchedSource: 1, docFiles: [], modules: [{ id: 'runtime', doc: 'modules/runtime.md' }] } })
+  } finally { console.warn = origWarn }
+  assert(warns.some(w => w.includes('涉及模块：runtime')), `O-1 渲染含模块行（实际 ${JSON.stringify(warns)}）`)
+}
+
 // case D-8b: 源码 + 文档都改 → docSyncHint 记录但无欠账 reason
 {
   const d = makeRepo()

@@ -174,3 +174,30 @@ describe('注入接线契约', () => {
     // 替换为空串语义：无债时占位符消失（facts === '' → replace('') 即删除占位符文本）
   })
 })
+
+describe('O-2 内联卡片失效引用（docs-signals-o12）', () => {
+  it('欠账模块卡内含失效引用 → facts 内联"卡内失效引用"行 + 建议行号', () => {
+    // 源码 c1；卡片提交（引用 src/core/a.js:99 失效行号）
+    commitFile('src/core/a.js', 'x\n', 'c1')
+    writeFileSync(join(cardsDir, '_module-map.yaml'), mkMap())
+    writeFileSync(join(cardsDir, 'core.md'), '见 `src/core/a.js:99`（\`alphaSymbol\` 处）\n')
+    execSync('git add .sillyspec && git commit -q -m doc1', { cwd: root, stdio: 'pipe' })
+    // 源码再推进 2 → 欠账
+    commitFile('src/core/b.js', 'y\n', 'c2')
+    commit('c3')
+    const r = computeDocsDebt({ projectRoot: root, specBase, projectName: 'demo', changedFiles: ['src/core/b.js'] })
+    assert.ok(r.facts.includes('卡内失效引用'), `O-2 内联行（facts=${r.facts}）`)
+    assert.ok(r.facts.includes('src/core/a.js:99'), `内联含失效引用 ref`)
+  })
+
+  it('卡内引用全绿 → 无内联行（不膨胀）', () => {
+    commitFile('src/core/a.js', 'export const alphaSymbol = 1\n', 'c1')
+    writeFileSync(join(cardsDir, '_module-map.yaml'), mkMap())
+    writeFileSync(join(cardsDir, 'core.md'), '见 `src/core/a.js:1`（\`alphaSymbol\` 处）\n')
+    execSync('git add .sillyspec && git commit -q -m doc1', { cwd: root, stdio: 'pipe' })
+    commitFile('src/core/b.js', 'y\n', 'c2')
+    const r = computeDocsDebt({ projectRoot: root, specBase, projectName: 'demo', changedFiles: ['src/core/b.js'] })
+    assert.ok(!r.facts.includes('卡内失效引用'), `全绿不内联（facts=${r.facts}）`)
+    assert.ok(r.facts.includes('未同步卡'), `欠账行仍输出`)
+  })
+})

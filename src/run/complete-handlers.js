@@ -789,6 +789,10 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
         forceBaseline: guard.forceBaseline || isForceBaseline,
         allowNew: guard.allowNew || isAllowNew,
         allowDelete: guard.allowDelete || isAllowDelete,
+        // O-1（docs-signals-o12）：specBase/projectName 透传给审计——docSyncHint 模块归属用
+        // （平台模式 resolveSpecDir(cwd) 会 miss specRoot 静默丢信号，plan 审查 gap-5）
+        specBase,
+        projectName: progress?.project || null,
       }
       review = await auditQuickCompletion(cwd, mergedGuard, { isConfirm: confirm })
       printQuickAuditReview(review)

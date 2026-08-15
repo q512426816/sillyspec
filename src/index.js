@@ -565,21 +565,31 @@ async function main() {
       } else if (docsSubCmd === 'check') {
         // docs check（2026-08-15 docs-check-productize D-6）：文档 file:line 引用校验。
         // exit code 三档（D-003）：0 全绿 / 1 存在无效引用 / 2 配置/IO 错误（DocsCheckConfigError）。
-        // ⚠ flag 解析（execute 审查修复）：--json 由全局解析器吞进 json 变量（filteredArgs 不含），
-        // 必须用全局 json 判定；--paths 全局解析器不认识（flag+值都掉进 filteredArgs），须在分支内
-        // 成对识别并剔除，值才不会污染 docsCheckFlags 位置参数。
+        // ⚠ flag 解析（F-1 白名单化，docs-signals-o12 D-003 治模式）：--json 由全局解析器吞进
+        // json 变量（filteredArgs 不含）；分支内 BARE_FLAGS（无值）置位剔除、PAIRED_FLAGS（带值）
+        // 成对剔除；未知 --xxx 显式 exit 2——不再静默落入文档路径误报"不存在"
+        // （历史两次踩坑：--json 恒失效、--suggest 被当文档路径）。
+        const BARE_FLAGS = ['--suggest'];
+        const PAIRED_FLAGS = ['--paths'];
         const rawDocsArgs = filteredArgs.slice(2);
         const docsCheckFlags = [];
         let cliPaths = null;
+        let suggest = false;
         for (let i = 0; i < rawDocsArgs.length; i++) {
-          if (rawDocsArgs[i] === '--paths' && rawDocsArgs[i + 1] !== undefined) {
+          const a = rawDocsArgs[i];
+          if (a === '--paths' && rawDocsArgs[i + 1] !== undefined) {
             cliPaths = rawDocsArgs[i + 1].split(',').map(s => s.trim()).filter(Boolean);
             i++; // 跳过值
-          } else if (rawDocsArgs[i] === '--paths') {
+          } else if (a === '--paths') {
             console.error('❌ docs check: --paths 缺值（逗号分隔 glob，如 --paths "docs/**/*.md"）');
             process.exit(2);
+          } else if (BARE_FLAGS.includes(a)) {
+            if (a === '--suggest') suggest = true;
+          } else if (a.startsWith('--')) {
+            console.error(`❌ docs check: 未知 flag「${a}」。已知 flag：${[...BARE_FLAGS, ...PAIRED_FLAGS].join(' ')}（--json 为全局 flag）`);
+            process.exit(2);
           } else {
-            docsCheckFlags.push(rawDocsArgs[i]);
+            docsCheckFlags.push(a);
           }
         }
         const { runDocsCheck, readDocsCheckConfig, DocsCheckConfigError } = await import('./docs-check.js');
@@ -603,7 +613,7 @@ async function main() {
               console.error(`\n❌ docs check: ${result.invalid.length}/${result.total} 处引用失效：`);
               for (const inv of result.invalid) {
                 console.error(`  ❌ [${inv.doc}:L${inv.docLine}] ${inv.ref} → ${inv.reason}`);
-                if (inv.suggest && inv.suggest.length > 0) {
+                if (suggest && inv.suggest && inv.suggest.length > 0) {
                   console.error(`     💡 候选行号: ${inv.suggest.join(', ')}（token 命中行，人工确认后更新文档锚）`);
                 }
               }
@@ -619,44 +629,8 @@ async function main() {
           }
           throw e;
         }
-      } else if (docsSubCmd === 'gate') {
-        // docs gate（2026-08-15 doc-consistency-debt 第七节）：docs check 的 ratchet 门。
-        // 失效数 ≤ 基线放行、超基线拦（exit 1）；无基线/配置错 exit 2。--init-baseline
-        // 以当前实测数立基线（幂等，重跑覆盖）。基线文件 .sillyspec/docs-check-baseline。
-        // ⚠ flag 解析同 docs check 的教训：--json 全局解析器吞掉、--init-baseline 掉进
-        // filteredArgs，分支内识别后剔除，余下位置参数按 --paths 值处理前须成对校验。
-        const rawGateArgs = filteredArgs.slice(2);
-        let gateInitBaseline = false;
-        let gateCliPaths = null;
-        for (let i = 0; i < rawGateArgs.length; i++) {
-          if (rawGateArgs[i] === '--init-baseline') {
-            gateInitBaseline = true;
-          } else if (rawGateArgs[i] === '--paths' && rawGateArgs[i + 1] !== undefined) {
-            gateCliPaths = rawGateArgs[i + 1].split(',').map(s => s.trim()).filter(Boolean);
-            i++;
-          } else if (rawGateArgs[i] === '--paths') {
-            console.error('❌ docs gate: --paths 缺值（逗号分隔 glob，如 --paths "docs/**/*.md"）');
-            process.exit(2);
-          } else {
-            console.error(`❌ docs gate: 未知参数「${rawGateArgs[i]}」（支持 --init-baseline / --paths <glob,...>）`);
-            process.exit(2);
-          }
-        }
-        const { runDocsGate } = await import('./docs-gate.js');
-        // specBase：--spec-dir 优先，缺省 resolveSpecDir(cwd)（与其他 case 同口径）
-        const gateSpecBase = specDir || resolveSpecDir(dir);
-        const gateResult = await runDocsGate(
-          { projectRoot: dir, specBase: gateSpecBase, initBaseline: gateInitBaseline },
-          gateCliPaths ? { paths: gateCliPaths } : {},
-        );
-        if (json) {
-          console.log(JSON.stringify(gateResult, null, 2));
-        } else {
-          console.log(gateResult.message);
-        }
-        process.exit(gateResult.exitCode);
       } else {
-        console.log('用法: sillyspec docs migrate | sillyspec docs check [--paths <glob,...>] [--json] | sillyspec docs gate [--init-baseline] [--paths <glob,...>] [--json]');
+        console.log('用法: sillyspec docs migrate | sillyspec docs check [--paths <glob,...>] [--json] [--suggest] [--suggest]');
       }
       break;
     }

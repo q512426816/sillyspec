@@ -54,6 +54,10 @@ export function printQuickAuditReview(review) {
   // 不阻断、不解锁、纯显性化——累积欠账可事后审计 QUICKLOG reasons 追溯。
   if (review.docSyncHint && review.docSyncHint.touchedSource > 0 && review.docSyncHint.docFiles.length === 0) {
     console.warn(`\n📝 文档欠账标记（D-8）：本次 ${review.docSyncHint.touchedSource} 个源码文件改动未同步任何模块文档。`)
+    // O-1（docs-signals-o12）：模块归属——从"改了 N 文件"到"欠在哪"（matchFilesToModules 纯函数，map 缺失时空数组降级）
+    if (Array.isArray(review.docSyncHint.modules) && review.docSyncHint.modules.length > 0) {
+      console.warn(`   涉及模块：${review.docSyncHint.modules.map(m => m.id).join(' · ')}（模块卡待同步，execute 场景详见 [docs-debt] 块）`)
+    }
     console.warn(`   quick 不强制文档同步，但欠账已记录（QUICKLOG reasons）。若改动触及接口/契约，建议顺手同步模块文档。`)
   }
   if (review.docsCheckHint && review.docsCheckHint.invalid > 0) {

@@ -14,6 +14,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { safeGit } from './git-helper.js'
 import { parseModuleMapSimple } from './modules.js'
+import { runDocsCheck } from './docs-check.js'
 
 /** safeGit 超时（大仓 git log 慢时降级该模块，不挂起 Wave 渲染） */
 const GIT_TIMEOUT_MS = 5000
@@ -196,7 +197,30 @@ export function computeDocsDebt(opts) {
     } else {
       lines.push(`  - ${e.module}：源码 ${e.behind} commit 未同步卡（卡停 ${e.docCommit}，源码到 ${e.srcCommit}）`)
     }
+    // O-2（docs-signals-o12）：内联卡片失效引用 + 建议行号——agent 从"知道欠账"到"知道改哪行"。
+    // 守卫 docGitPath && docGitRoot（D-004 同锚；平台模式仓外跳过）；每模块上限 3 条（D-002）；
+    // 异常整块降级跳过（advisory 链不因增强而脆）。
+    const inline = inlineCardInvalidRefs(e, docGitRoot, docPathPrefix)
+    if (inline) lines.push(inline)
     lines.push(`    涉及文件：${e.files.join(', ')}`)
   }
   return { ok: true, facts: lines.join('\n'), entries, unmapped }
+}
+
+/** O-2：欠账模块卡片的失效引用内联行（docs check 层1 单文档）。无失效/不可跑 → null。 */
+function inlineCardInvalidRefs(entry, docGitRoot, docPathPrefix) {
+  if (!docGitRoot || !docPathPrefix || !entry.doc) return null
+  try {
+    const docGitPath = `${docPathPrefix}/${entry.doc.replace(/^modules\//, '')}`
+    const check = runDocsCheck({ projectRoot: docGitRoot, docs: [docGitPath] })
+    if (check.ok || !Array.isArray(check.invalid) || check.invalid.length === 0) return null
+    const parts = check.invalid.slice(0, 3).map((inv) => {
+      const sug = Array.isArray(inv.suggest) && inv.suggest.length > 0 ? `→建议 L${inv.suggest.join('/L')}` : ''
+      return `${inv.ref || inv.doc}${sug}`
+    })
+    const more = check.invalid.length > 3 ? ` · 等 ${check.invalid.length} 处` : ''
+    return `    卡内失效引用 ${check.invalid.length} 处：${parts.join(' · ')}${more}`
+  } catch {
+    return null
+  }
 }

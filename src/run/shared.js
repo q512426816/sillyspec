@@ -581,8 +581,34 @@ export function isQuickMetadata(p, linkedChanges = []) {
  * quick 完成审计：对比 baseline 与实际变更。
  * @returns {{ status: 'safe'|'warning'|'blocked', reasons: string[], changedFiles: string[], newFiles: string[], deletedFiles: string[], baselineHit: string[], stagedTotal: number }}
  */
+/**
+ * D-8 O-1 模块归属（2026-08-15 docs-signals-o12）：quick 欠账 hint 从"改了 N 文件"升级为
+ * "涉及哪些模块卡"。只做归属（matchFilesToModules 纯函数零 git），不算 behind——对账是
+ * execute Wave [docs-debt] 的职责（design D-001 轻量边界）。map 缺失/解析空/异常 → 空数组
+ * 降级（hint 仍打，modules 省略），不报错不阻断。
+ * 动态 import docs-debt.js/modules.js：prompt.js 已静态 import shared（本模块），静态互引成 ESM 环。
+ */
+async function matchQuickModules(srcChanged, specBase, projectName) {
+  if (!specBase || !projectName || srcChanged.length === 0) return []
+  try {
+    const { join } = await import('node:path')
+    const { existsSync: ex, readFileSync: rf } = await import('node:fs')
+    const mapPath = join(specBase, 'docs', projectName, 'modules', '_module-map.yaml')
+    if (!ex(mapPath)) return []
+    const { parseModuleMapSimple } = await import('../modules.js')
+    const idx = parseModuleMapSimple(rf(mapPath, 'utf8'))
+    if (!idx || Object.keys(idx).length === 0) return []
+    const { matchFilesToModules } = await import('../docs-debt.js')
+    const cardsDir = join(specBase, 'docs', projectName, 'modules')
+    const { byModule } = matchFilesToModules(srcChanged, idx, { cardsDir })
+    return [...byModule.entries()].map(([id, e]) => ({ id, doc: e.doc }))
+  } catch {
+    return []
+  }
+}
+
 export async function auditQuickCompletion(cwd, guard, options = {}) {
-  const { baselineFiles, allowedFiles = [], allowNew = false, forceBaseline = false, allowDelete = false } = guard
+  const { baselineFiles, allowedFiles = [], allowNew = false, forceBaseline = false, allowDelete = false, specBase = null, projectName = null } = guard
   const { isConfirm } = options
   // stagedTotal：当前所有非 quick 元数据的未提交条目（含前序 baseline 残留）。
   // 与 changedFiles（扣 baseline 后的本轮新增）区分，供审计文案同时展示「本轮新增 vs 累计暂存」，
@@ -741,7 +767,7 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
     const docChanged = result.changedFiles.filter(isDocFile)
     if (srcChanged.length > 0 && docChanged.length === 0) {
       result.reasons.push(`本次未同步模块文档（${srcChanged.length} 个源码文件改动，无文档文件）`)
-      result.docSyncHint = { touchedSource: srcChanged.length, docFiles: [] }
+      result.docSyncHint = { touchedSource: srcChanged.length, docFiles: [], modules: await matchQuickModules(srcChanged, specBase, projectName) }
     } else if (srcChanged.length > 0 && docChanged.length > 0) {
       result.docSyncHint = { touchedSource: srcChanged.length, docFiles: docChanged }
     }
