@@ -20,3 +20,15 @@ test/multi-repo-context-entry.test.mjs（坑7 两场景：tasks/ 卡片补扫 + 
 根因：字符串全等匹配区分不了人工/AI——AskUserQuestion 标签转述/人工 Other 自由填值被误拦，故意代答读报错抄选项即过，防不了对手只伤真人。
 方案：删 enforceWaitChoice 函数与三条 --answer 路径调用点，删 brainstorm/brainstorm-auto waitFreeAnswer 标记；重写 wait-choice-enforcement.test.mjs 锁新契约（自由文本放行、requiresWait 门保留）3 用例；同步 file-lifecycle.md 移除记录、platform-interface-map.md 行号锚点校准、模块文档移除注记、_extract.mjs 重提取。
 结果：npm test 全量 EXIT=0（含 11 断言新契约测试），npm run lint 295 文件通过，doc-ref-check 80 处引用全通过；用户在卡的 change（2026-08-15-change-step-visibility）waiting 步骤重试命令不再受单选拦截。
+
+## ql-20260816-002-1506 | 2026-08-16 06:57:49 | 修 2026-08-16 复盘增补 neg-②——worktree 自建 .venv 缺 pytest 等 dev 工具时，回归子代理被迫回退主仓 venv 跑测试，环境不一致掩真 bug
+状态：已完成
+关联变更：debt-neg2-venv-toolchain
+文件：
+- src/stages/execute.js（「确认 worktree 路径」步第 4 条工具链预告补 python venv 场景：worktree .venv 缺 dev 工具时 worktree 内补装，明示勿回退主仓 venv）
+- docs/prompt/_extracted.json（重提取产物）
+- docs/prompt/execute.md（镜像逐字同步）
+需求：修 2026-08-16 复盘增补 neg-②——worktree 自建 .venv 缺 pytest 等 dev 工具时，回归子代理被迫回退主仓 venv 跑测试，环境不一致掩真 bug
+根因：execute「确认 worktree 路径」步工具链预告只讲工具二进制安装，没讲 python venv 场景的 worktree 内补装优先原则
+方案：src/stages/execute.js 该步第 4 条补 python venv 场景提示（uv sync --group dev / uv pip install pytest，明示不要回退主仓 venv）；重跑 _extract.mjs 刷新 _extracted.json + docs/prompt/execute.md 镜像逐字同步
+结果：npm test 全量 EXIT=0（818 断言通过）+ npm run lint 295 文件通过；改动已 git add 暂存（execute.js/_extracted.json/execute.md 三文件）
