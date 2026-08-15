@@ -195,6 +195,53 @@ console.log('--- auditQuickCompletion characterization ---')
   assert(out.includes('--force-baseline --allow-new'), `非删除 blocked 仍保留 flag 建议（回归保护）`)
 }
 
+// ── D-8 文档欠账显性化：改源码没动文档 → docSyncHint 打标记（advisory 不改 status）──
+console.log('\n--- D-8 文档欠账标记 ---')
+
+// case D-8a: 修改 tracked 源码、无文档改动 → docSyncHint 标记 + reasons 记欠账 + status 不变
+{
+  const d = makeRepo()
+  writeFileSync(join(d, 'src-index.js'), 'export const x = 2\n') // 已 commit 的 tracked 文件 → modified 非 new
+  const r = await auditQuickCompletion(d, { ...baseGuard }, {})
+  assert(r.docSyncHint && r.docSyncHint.touchedSource === 1 && r.docSyncHint.docFiles.length === 0,
+    `改源码无文档 → docSyncHint 标记（实际 ${JSON.stringify(r.docSyncHint)}）`)
+  assert(r.reasons.some(x => x.includes('未同步模块文档')), `reasons 记录欠账标记`)
+  assert(r.status !== 'blocked', `D-8 标记不阻断（status=${r.status}）`)
+}
+
+// case D-8b: 源码 + 文档都改 → docSyncHint 记录但无欠账 reason
+{
+  const d = makeRepo()
+  mkdirSync(join(d, 'docs'), { recursive: true }) // 根 docs/（fixture gitignore 只忽略 .sillyspec/）
+  writeFileSync(join(d, 'docs', 'x.md'), '---\nauthor: t\ncreated_at: 2026-08-15 00:00:00\n---\n# x\n')
+  writeFileSync(join(d, 'src-index.js'), 'export const x = 2\n')
+  const r = await auditQuickCompletion(d, { ...baseGuard }, {})
+  assert(r.docSyncHint && r.docSyncHint.touchedSource === 1 && r.docSyncHint.docFiles.length === 1,
+    `源码+文档 → docSyncHint 记录两向（实际 ${JSON.stringify(r.docSyncHint)}）`)
+  assert(!r.reasons.some(x => x.includes('未同步模块文档')), `已同步文档不打欠账 reason`)
+}
+
+// case D-8c: 纯文档改动（无源码）→ 无 docSyncHint（不误报）
+{
+  const d = makeRepo()
+  writeFileSync(join(d, 'README.md'), 'updated\n')
+  const r = await auditQuickCompletion(d, baseGuard, {})
+  assert(!r.docSyncHint, `纯文档改动无 docSyncHint（实际 ${JSON.stringify(r.docSyncHint)}）`)
+}
+
+// case D-8d: printQuickAuditReview 打印欠账标记（SAFE 分支也打）
+{
+  const d = makeRepo()
+  writeFileSync(join(d, 'src-index.js'), 'x\n')
+  const r = await auditQuickCompletion(d, { ...baseGuard }, {})
+  const origWarn = console.warn, origErr = console.error
+  const warns = []
+  console.warn = (...a) => { warns.push(a.join(' ')) }
+  console.error = (...a) => { warns.push(a.join(' ')) } // blocked 分支走 error，一并抓
+  try { printQuickAuditReview(r) } finally { console.warn = origWarn; console.error = origErr }
+  assert(warns.some(w => w.includes('文档欠账标记')), `打印欠账标记 warn（实际 ${JSON.stringify(warns)}）`)
+}
+
 for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} }
 console.log(`\n${'='.repeat(50)}`)
 console.log(`✅ 通过: ${total - failed}  ❌ 失败: ${failed}`)

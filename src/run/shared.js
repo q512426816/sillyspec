@@ -692,6 +692,21 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
       }
     } catch {}
 
+    // D-8 文档欠账显性化（advisory）：本次改动含源码文件但不含任何文档文件 → 打标记 warn。
+    // quick 是低摩擦通道（不强制文档同步），但欠账要显性化——72% 流量 86% 不动文档是系统性欠账
+    // 主通道（doc-consistency-debt D-8）。不阻断不改 status，只 warn + 记 reasons 供 QUICKLOG 追溯。
+    const isDocFile = (f) =>
+      f.endsWith('.md') || f.endsWith('.yaml') || f.endsWith('.yml') ||
+      f.startsWith('docs/') || f.startsWith('.sillyspec/docs/')
+    const srcChanged = result.changedFiles.filter(f => !isDocFile(f) && !isQuickMetadata(f, guard.linkedChanges))
+    const docChanged = result.changedFiles.filter(isDocFile)
+    if (srcChanged.length > 0 && docChanged.length === 0) {
+      result.reasons.push(`本次未同步模块文档（${srcChanged.length} 个源码文件改动，无文档文件）`)
+      result.docSyncHint = { touchedSource: srcChanged.length, docFiles: [] }
+    } else if (srcChanged.length > 0 && docChanged.length > 0) {
+      result.docSyncHint = { touchedSource: srcChanged.length, docFiles: docChanged }
+    }
+
     // task-02: 同文件并发检测——allowedFile 在 baseline（他者改过）且当前 hash ≠ step1 hash（我也改了）
     // → commit 整文件 pathspec 会夹带他者 hunk，warn 给分离指引（advisory，不阻断，D-002）
     if (allowedFiles.length > 0 && guard.allowedFilesHash) {

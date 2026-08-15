@@ -66,7 +66,7 @@ sillyhub 的文档烂不是执行失误，是机制性的。
 | D-5 | module-impact pending 死信箱（5+ change 带未清 pending 归档且 verify PASS） | ✅ 已修（2026-08-15 ql-20260815-009-b2de）：`archiveChangeDirectory` 移动前加死信校验（`extractPendingDocSyncRows`，只查「更新结果」段表格末列精确 pending/待办/未同步/todo，非零即 exit(1) 阻断归档）。**实况修正**：全量 archive 扫描死信形态仅一种（更新结果表 pending 行）；债单初版说的"change-center-rework 11 处 false"实为矩阵 needs_review 合法字段值非欠账信号。10 单测（test/archive-pending-deadletter.test.mjs） | 中（已完成） |
 | D-6 | doc-ref-check 能力未产品化（唯一硬一致性校验只覆盖 dogfood 仓一份文档） | 产品化为 `sillyspec docs check` 类命令：校验文档内 file:line 引用有效性，进各阶段探针 | 中大（新功能） |
 | D-7 | scan 文档无刷新生命周期，与手工模块卡双轨 | archive 阶段提示刷新 scan 增量（prompt 级）或合并双轨（需设计） | 大（需设计） |
-| D-8 | quick 通道零文档要求（72% 流量、14% 同步率） | 定位取舍题：quick 本来就是"低摩擦通道"，强制文档会毁掉它的价值；可做的是 quick --done 审计对触及模块文档的行为**打标记**（如"本次未同步模块文档"），把欠账显性化而非阻断 | 需用户裁决 |
+| D-8 | quick 通道零文档要求（72% 流量、14% 同步率） | ✅ 已修（2026-08-15 ql-20260815-012-f521，用户裁决：打标记显性化）：`auditQuickCompletion` 加 advisory 检测——changedFiles 含源码但无任何文档文件（.md/.yaml/.yml 或 docs/、.sillyspec/docs/ 路径）→ `docSyncHint` + reasons 记「本次未同步模块文档」+ printQuickAuditReview 打一行欠账标记 warn。零阻断零摩擦，欠账可事后审计 QUICKLOG reasons 追溯 | 小（已完成，用户裁决方案） |
 
 ## 四、行动裁决（2026-08-15）
 

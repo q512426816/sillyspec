@@ -50,6 +50,12 @@ export function printQuickAuditReview(review) {
       console.log(`\n✅ quick 变更边界审计 — SAFE (本轮新增变更 ${review.changedFiles.length} 个文件)`)
     }
   }
+  // D-8 文档欠账显性化（advisory，独立于 status 三态都打）：改了源码没动文档 → 一行欠账标记。
+  // 不阻断、不解锁、纯显性化——累积欠账可事后审计 QUICKLOG reasons 追溯。
+  if (review.docSyncHint && review.docSyncHint.touchedSource > 0 && review.docSyncHint.docFiles.length === 0) {
+    console.warn(`\n📝 文档欠账标记（D-8）：本次 ${review.docSyncHint.touchedSource} 个源码文件改动未同步任何模块文档。`)
+    console.warn(`   quick 不强制文档同步，但欠账已记录（QUICKLOG reasons）。若改动触及接口/契约，建议顺手同步模块文档。`)
+  }
 }
 
 /**
