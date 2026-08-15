@@ -130,10 +130,10 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
 | **每个进度落盘点**（step `--done` 完成、阶段启动/切换、stale 步骤重置、gate 拦截回滚等 `_write` 后） | A | `triggerSync` → POST `…/progress` 推六表进度（8s 熔断） | complete.js:340/400/646/749/889（--done）；stage.js:113/127/149（启动/切换/stale 重置）；gates.js:179；command.js:856/1014/1064/1072/1239 |
 | **execute 阶段启动前**（runStage / auto 流程，非平台模式，`--skip-approval` 可跳过） | A | `checkApproval` → GET `…/approval`：**rejected → `exit(1)` 硬阻断**；pending → 提示待审批；unknown → 放行 | stage.js:47-58；command.js:1145/1178/1248 |
 | `platform sync-docs`（手动命令，**唯一触发点**） | A | POST `…/documents` 推四件套全量；run 流程**不**自动推文档（sync.js:30 头注释称由 run 流程触发，已过时） | sync.js:439；index.js:1275 |
-| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:1447-1459；shared.js:413 |
-| **stage 命令启动时**（scan/status/quick/explore/brainstorm/plan/execute/verify/archive） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；低频边界点，**不每步 pull**） | index.js:759-760；shared.js:441 |
-| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:1368-1386；sync.js:638/663 |
-| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:1337-1345；sync.js:844 |
+| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:1448-1460；shared.js:451 |
+| **stage 命令启动时**（scan/status/quick/explore/brainstorm/plan/execute/verify/archive） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；低频边界点，**不每步 pull**） | index.js:759-760；shared.js:479 |
+| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:1368-1386；sync.js:648/663 |
+| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:1337-1345；sync.js:854 |
 | `platform resolve --keep-local/--take-platform/--abort` | 本地 | 读 sync-conflict 三选一，不网络 | sync.js:746 |
 | `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:1156-1196；probe.js:144 |
 | **execute Wave prompt 注入** | B | `getDispatchMode()` **同步三态判定**（读 MCP 配置 + 路径A 探测缓存，不发网络）：`sillyhub` → 注入完整派发指令（`{available:true}`）；`local-fallback`（配置但路径A 未落地）→ 短提示走 Local；`local` → 不注入 | execute.js:509/798-816 |
