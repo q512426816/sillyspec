@@ -245,7 +245,10 @@ function relDisplay(absPath, projectRoot) {
  * @throws {DocsCheckConfigError} glob 形态不支持
  */
 export function runDocsCheck(opts) {
-  const { projectRoot, docs = null, paths = ['docs/**/*.md'], skip = [], keywordAssert = true } = opts || {}
+  // paths/docs 显式传 null（readDocsCheckConfig 无 local.yaml 段时的回退值）须落回缺省 glob，
+  // 解构默认值只挡 undefined 不挡 null——docs-check 无配置裸跑曾因此 null.flatMap 崩溃。
+  const { projectRoot, docs = null, paths: rawPaths = ['docs/**/*.md'], skip = [], keywordAssert = true } = opts || {}
+  const paths = Array.isArray(rawPaths) && rawPaths.length > 0 ? rawPaths : ['docs/**/*.md']
   const warnings = []
   if (keywordAssert === false) warnings.push('关键词断言已关闭（keywordAssert=false），仅做存在性校验')
   const docFiles = docs && docs.length > 0

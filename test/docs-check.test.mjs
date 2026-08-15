@@ -153,6 +153,17 @@ describe('runDocsCheck（集成）', () => {
     assert.equal(r.kwChecked, 1)
   })
 
+  it('paths 传 null（无 local.yaml 的 CLI 回退路径）→ 落回缺省 glob 不崩', () => {
+    // 回归：readDocsCheckConfig 无配置回退 { paths: null }，index.js 传 null 曾致
+    // null.flatMap TypeError（CLI 裸跑必崩）——null/空数组都必须落回 ['docs/**/*.md']。
+    writeFileSync(join(root, 'docs', 'ok.md'), '见 `src/a.js:1`（`alphaSymbol` 定义处）\n')
+    for (const paths of [null, [], undefined]) {
+      const r = runDocsCheck({ projectRoot: root, paths })
+      assert.equal(r.ok, true, `paths=${JSON.stringify(paths)}: ${JSON.stringify(r.invalid)}`)
+      assert.equal(r.total, 1)
+    }
+  })
+
   it('文件不存在 → invalid（exit 1 语义）', () => {
     writeFileSync(join(root, 'docs', 'bad.md'), '见 src/ghost.js:1\n')
     const r = runDocsCheck({ projectRoot: root, docs: ['docs/bad.md'] })
