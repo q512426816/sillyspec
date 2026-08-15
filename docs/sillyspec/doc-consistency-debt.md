@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-08-15 14:48:00
-updated_at: 2026-08-15 15:05:00 +08:00
+updated_at: 2026-08-15 15:20:00 +08:00
 ---
 
 # 文档一致性债：为什么"文档为本"在 sillyhub 落地失效（双代理实证）
@@ -61,9 +61,9 @@ sillyhub 的文档烂不是执行失误，是机制性的。
 | D-1 | verify.js:137 明示"文档不一致不阻断"——制度根源 | 改为 advisory→blocking 可配置，或至少 verify 探针对账 module-impact 声明 vs 实际 diff | 中 |
 | D-2 | plan 覆盖对账跳过 `.sillyspec/` 文档路径（plan-postcheck.js:695 不传 keepSillyspecDocs，与 apply 阶段口径不一致） | ✅ 已修（2026-08-15 ql-20260815-006-a51d）：`parseDesignCoverageByRepo` 两处 `parseFileChangeList` 补传 `keepSillyspecDocs: true`，`.sillyspec/docs/` 模块文档须被 task `allowed_paths` 认领；`.sillyspec/` 非 docs 子路径仍排除（与 apply 口径一致）；新增 4 测试（test/design-coverage.test.mjs），删 1 个固化旧豁免契约的测试 | 小（quick 已完成） |
 | D-2b | 后置 task（T-13~T-17 类"文档同步"任务）无 task 卡即不受审计 | ✅ 已修（2026-08-15 ql-20260815-007-9ced）：`validateBlueprintConsistency` 加 plan.md 声明任务 ↔ tasks/ 卡片双向对账（rule `plan.task-plan-reconciliation`，缺卡/孤儿卡均阻断）；plan-postcheck-cross-repo 场景 8-11 四测试 + rollback 测试 fixture 迁移（不连续→重复 id 触发 Contract） | 中（已完成） |
-| D-3 | 仓库根 `docs/` 在 worktree 排除清单（worktree.js:171、worktree-apply.js:480），文档改动对流程不可见 | 从排除清单放开或改为可配置 | 小但需评估多 agent 噪声 |
+| D-3 | 仓库根 `docs/` 在 worktree 排除清单（worktree.js:171、worktree-apply.js:480） | ⊘ 2026-08-15 逐行复核后**评估保留，不改码**：排除清单只影响 coarse dirty 判定（防多 agent 下别人改文档误阻断 apply，高频踩坑的合理权衡）；worktree 里改 `docs/` 实际会进 changedFiles（`filterDeliverableFiles` 不排 docs/，worktree-apply.js:405），apply 能带回主仓；重叠场景由 step5a「未提交∩changedFiles 精确点名」兜底（该口径保留 docs/）。初版"文档改动对流程完全不可见"表述过重，据此修正 | 不修（合理权衡） |
 | D-4 | archive sync-module-docs 无结果校验（git add 无条件、空集静默通过） | 归档前对账 module-impact 声明的文档更新 vs 实际 diff，缺则 warning/阻断 | 中 |
-| D-5 | module-impact pending 死信箱（5+ change 带未清 pending 归档且 verify PASS） | verify/archive 对账 module-impact 内 pending/false 项，非零即阻断或强制清零 | 中 |
+| D-5 | module-impact pending 死信箱（5+ change 带未清 pending 归档且 verify PASS） | ✅ 已修（2026-08-15 ql-20260815-009-b2de）：`archiveChangeDirectory` 移动前加死信校验（`extractPendingDocSyncRows`，只查「更新结果」段表格末列精确 pending/待办/未同步/todo，非零即 exit(1) 阻断归档）。**实况修正**：全量 archive 扫描死信形态仅一种（更新结果表 pending 行）；债单初版说的"change-center-rework 11 处 false"实为矩阵 needs_review 合法字段值非欠账信号。10 单测（test/archive-pending-deadletter.test.mjs） | 中（已完成） |
 | D-6 | doc-ref-check 能力未产品化（唯一硬一致性校验只覆盖 dogfood 仓一份文档） | 产品化为 `sillyspec docs check` 类命令：校验文档内 file:line 引用有效性，进各阶段探针 | 中大（新功能） |
 | D-7 | scan 文档无刷新生命周期，与手工模块卡双轨 | archive 阶段提示刷新 scan 增量（prompt 级）或合并双轨（需设计） | 大（需设计） |
 | D-8 | quick 通道零文档要求（72% 流量、14% 同步率） | 定位取舍题：quick 本来就是"低摩擦通道"，强制文档会毁掉它的价值；可做的是 quick --done 审计对触及模块文档的行为**打标记**（如"本次未同步模块文档"），把欠账显性化而非阻断 | 需用户裁决 |

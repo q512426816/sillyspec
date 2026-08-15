@@ -177,6 +177,45 @@ async function archiveWorktreeCleanup(cwd, archiveChangeName, specBase, platform
   }
 }
 
+/**
+ * 提取 module-impact.md「更新结果」表中的未清文档同步死信行（债单 D-5）。
+ *
+ * 只在「## 更新结果」段内扫描表格行（| 分隔），状态判定取**末列** trim 后精确匹配
+ * pending / 待办 / 未同步 / not-done（大小写不敏感）。不做全文 grep——
+ * sync_manual_get_pending / pending_review / pending-leases 等代码标识符出现在
+ * 矩阵摘要列是合法内容，不能误报（实证：archive 全量扫描唯一死信形态是末列 pending）。
+ *
+ * 纯函数：无 fs/git 调用，export 供 test 直接 import。
+ * @param {string} content module-impact.md 全文（CRLF/LF 均容）
+ * @returns {string[]} 死信行原文（去首尾空白），空数组 = 无死信
+ */
+export function extractPendingDocSyncRows(content) {
+  if (!content || typeof content !== 'string') return []
+  const normalized = content.replace(/\r\n/g, '\n')
+  const sectionStart = normalized.search(/^#{2,3}\s*更新结果\s*$/m)
+  if (sectionStart === -1) return []
+  // 跳过标题行本身（matchFirstLine 吃掉标题），再找下一个章节边界
+  const titleMatch = normalized.slice(sectionStart).match(/^#{2,3}\s*更新结果\s*$/m)
+  const bodyStart = sectionStart + titleMatch[0].length
+  const afterTitle = normalized.slice(bodyStart)
+  const nextSection = afterTitle.search(/^#{1,3}\s/m)
+  const section = nextSection === -1 ? afterTitle : afterTitle.slice(0, nextSection)
+  const PENDING_STATUSES = new Set(['pending', '待办', '未同步', 'not-done', 'todo'])
+  const rows = []
+  for (const line of section.split('\n')) {
+    const trimmed = line.trim()
+    if (!trimmed.startsWith('|')) continue
+    const cells = trimmed.split('|').map(c => c.trim())
+    // split 首尾产生空串（行首行尾的 |），真实单元格在中间；末列 = 最后一个非空单元格之后
+    // 表格行结构 | 模块文档 | 操作 | 状态 | → cells = ['', '模块文档', '操作', '状态', '']
+    const lastCell = cells[cells.length - 1]
+    if (lastCell === '' && cells.length >= 2) cells.pop()
+    const statusCell = cells[cells.length - 1]
+    if (statusCell && PENDING_STATUSES.has(statusCell.toLowerCase())) rows.push(trimmed)
+  }
+  return rows
+}
+
 export async function archiveChangeDirectory(pm, cwd, progress, specBase, platformOpts = {}) {
   const archiveChangeName = progress.currentChange
   if (!archiveChangeName) {
@@ -213,6 +252,21 @@ export async function archiveChangeDirectory(pm, cwd, progress, specBase, platfo
     console.error(`❌ 归档失败：变更目录缺少 plan.md（${srcDir}）`)
     console.error(`   plan.md 是归档的必需产物。请先补全 plan 阶段产出再归档。`)
     process.exit(1)
+  }
+  // 移动前硬校验（债单 D-5）：module-impact.md「更新结果」表存在 pending 死信 → 阻断。
+  // 修复场景：perf-remediation 类变更把文档同步显式推给 archive（「（execute 完成后由 archive
+  // 阶段同步）| 待办 | pending」），archive 又没做 → 带 pending 归档且 verify 全 PASS，死信无人回填。
+  // 只查「## 更新结果」段内表格行的状态列（末列）精确匹配 pending/待办/未同步——不做全文 grep，
+  // 防 sync_manual_get_pending / pending_review 等代码标识符误报。
+  const impactPath = join(srcDir, 'module-impact.md')
+  if (existsSync(impactPath)) {
+    const pendingRows = extractPendingDocSyncRows(readFileSync(impactPath, 'utf8'))
+    if (pendingRows.length > 0) {
+      console.error(`❌ 归档失败：module-impact.md「更新结果」表存在 ${pendingRows.length} 个未清 pending/待办项（死信）`)
+      for (const row of pendingRows) console.error(`   - ${row}`)
+      console.error(`   这些文档同步项从未落地。请先完成同步并回填状态为 done/skipped（说明原因），再归档。`)
+      process.exit(1)
+    }
   }
   if (existsSync(destDir)) {
     console.error(`❌ 归档失败：目标目录已存在 ${destDir}`)
