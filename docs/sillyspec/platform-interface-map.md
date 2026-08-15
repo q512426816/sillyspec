@@ -103,7 +103,7 @@ mcp:
 ### 派发决策链
 1. **`probeSillyHub()`**（`dispatch/probe.js:144`）：no-config 同步快返回 → 负面缓存(TTL) → `probeDaemon` → `listTools` 预热路径A → root_path 越界校验 → `{available}`。
 2. **`renderDispatchInstruction(contract, probe)`**（`dispatch/strategy.js:69`）：`probe.available` → backend=`sillyhub`（注入 SillyHub 指令，含一 Wave 一 mission + dispatch_worker 参数 + 轮询 + kill lease + 回收约定）；否则 backend=`local`。**始终附 Local 兜底指令全文**。
-   - **两条消费路径**：① `sillyspec dispatch probe/hint` 命令——agent 主动探测/取指令，probe 结果直接传 `renderDispatchInstruction`；② **execute Wave prompt 注入**——`getDispatchMode()`（`execute.js:509`）同步三态判定（不发网络），`sillyhub` 态下以 `{available:true}` 硬编码调 `renderDispatchInstruction`（`execute.js:810`），probe 不参与。
+   - **两条消费路径**：① `sillyspec dispatch probe/hint` 命令——agent 主动探测/取指令，probe 结果直接传 `renderDispatchInstruction`；② **execute Wave prompt 注入**——`getDispatchMode()`（`execute.js:515`）同步三态判定（不发网络），`sillyhub` 态下以 `{available:true}` 硬编码调 `renderDispatchInstruction`（`execute.js:816`），probe 不参与。
 3. **路径A 降级**（`backends/sillyhub-mcp.js:104` `isPathASupported`）：env `SILLYHUB_PATH_A=1` 强开 > probe 预热缓存；未支持则指令追加降级提示，per-worker 回退 Local，**绝不硬试 MCP**（R-04）。
 4. **回收**（D-004）：worker **绝不 git commit**，SillySpec 自己 diff worktree 写 review.json，**不调 SillyHub 合并 tool**（`backends/sillyhub-mcp.js:47` `SILLYHUB_RECYCLE_RULE`）。
 
@@ -133,10 +133,10 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
 | `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:1466-1478；shared.js:451 |
 | **stage 命令启动时**（scan/status/quick/explore/brainstorm/plan/execute/verify/archive） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；低频边界点，**不每步 pull**） | index.js:770-771；shared.js:479 |
 | `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:1389-1407；sync.js:648/663 |
-| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:1337-1345；sync.js:854 |
+| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:1353-1361；sync.js:854 |
 | `platform resolve --keep-local/--take-platform/--abort` | 本地 | 读 sync-conflict 三选一，不网络 | sync.js:746 |
 | `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:1156-1196；probe.js:144 |
-| **execute Wave prompt 注入** | B | `getDispatchMode()` **同步三态判定**（读 MCP 配置 + 路径A 探测缓存，不发网络）：`sillyhub` → 注入完整派发指令（`{available:true}`）；`local-fallback`（配置但路径A 未落地）→ 短提示走 Local；`local` → 不注入 | execute.js:509/798-816 |
+| **execute Wave prompt 注入** | B | `getDispatchMode()` **同步三态判定**（读 MCP 配置 + 路径A 探测缓存，不发网络）：`sillyhub` → 注入完整派发指令（`{available:true}`）；`local-fallback`（配置但路径A 未落地）→ 短提示走 Local；`local` → 不注入 | execute.js:515/798-816 |
 | **execute Wave 步骤** | B | 指令文本驱动 agent 调 create_mission/dispatch_worker/list_workers/report_progress | backends/sillyhub-mcp.js:136 |
 | **scan 完成（平台模式）** | C | 落盘 manifest/postcheck + 指针 SCAN_COMPLETED；失败 exit(1) | complete-handlers.js:985 |
 

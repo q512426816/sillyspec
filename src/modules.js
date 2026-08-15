@@ -290,6 +290,10 @@ export async function generateDependenciesMd(cwd) {
 // 的 loadModuleContextIndex 与本文件 generateDependenciesMd 共用此函数（合并历史两份分叉副本，
 // 2026-08-07；字段集取并集：core_files/test_files/related_docs/verify_commands + role/risk_level）。
 export function parseModuleMapSimple(content) {
+  // CRLF 归一（2026-08-15 docs-debt-inject P1）：Windows 下生成的 map 是 CRLF 行尾，下方全部
+  // 行级正则（/^  (w+):$/ 等）不容  会整体失配 → 解析返回空对象 → 模块上下文注入全部哑掉。
+  // 入口一行归一，纯正则无副作用；行为扩散（本仓模块注入被激活）记录在 file-lifecycle。
+  if (typeof content === 'string') content = content.replace(/\r\n/g, '\n');
   const modules = {};
   let currentModule = null;
   let currentKey = null;

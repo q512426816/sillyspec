@@ -438,6 +438,61 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
     }
   }
 
+  // docs-debt 模块文档欠账事实注入（2026-08-15 docs-debt-inject D-006，债单第六节"CLI 算事实"）：
+  // Wave prompt {DOCS_DEBT} → computeDocsDebt（git diff × module-map）facts；空 facts 替换为空串
+  // （无债零输出，无残留占位符）。changedFiles 口径（D-001/FR-007）：worktree 根
+  // （meta.json 所在）git status --porcelain + diff baselineCommit..HEAD 并集；无 worktree
+  // （in-place/非 execute worktree 场景）退 cwd。全降级不抛（异常 → 单行说明）。
+  if (stageName === 'execute' && promptText.includes('{DOCS_DEBT}')) {
+    try {
+      const { computeDocsDebt } = await import('../docs-debt.js')
+      const debtSpecBase = resolvePromptSpecBase(platformOpts, cwd)
+      const debtProjectName = dbProjectName || basename(cwd)
+      // worktree 根解析：changeName → <specBase>/.runtime/worktrees/<changeName>/ 存在即锚
+      let debtProjectRoot = cwd
+      const wtRoot = join(debtSpecBase, '.runtime', 'worktrees', changeName || '')
+      if (changeName && existsSync(wtRoot)) {
+        debtProjectRoot = wtRoot
+      }
+      // changedFiles：已提交（baseline..HEAD）∪ 未提交（status porcelain，非未跟踪）
+      const changed = new Set()
+      const { safeGit } = await import('../git-helper.js')
+      const statusRes = safeGit(debtProjectRoot, ['status', '--porcelain'], { trim: false })
+      if (!statusRes.error && statusRes.value) {
+        for (const line of statusRes.value.split('\n')) {
+          if (!line.trim()) continue
+          // "XY path" / rename "R  old -> new" 取 new
+          const pathPart = line.slice(3).split('->').pop().trim().replace(/"/g, '')
+          if (pathPart && !pathPart.startsWith('.sillyspec/')) changed.add(pathPart.replace(/\\/g, '/'))
+        }
+      }
+      const { readFileSync: rf } = await import('node:fs')
+      const metaPath = join(wtRoot, 'meta.json')
+      if (changeName && existsSync(metaPath)) {
+        try {
+          const meta = JSON.parse(rf(metaPath, 'utf8'))
+          if (meta.baselineCommit) {
+            const diffRes = safeGit(debtProjectRoot, ['diff', '--name-only', `${meta.baselineCommit}..HEAD`], { trim: false })
+            if (!diffRes.error && diffRes.value) {
+              for (const f of diffRes.value.split('\n')) {
+                if (f.trim() && !f.trim().startsWith('.sillyspec/')) changed.add(f.trim().replace(/\\/g, '/'))
+              }
+            }
+          }
+        } catch { /* meta 读失败只用未提交集 */ }
+      }
+      const result = computeDocsDebt({
+        projectRoot: debtProjectRoot,
+        specBase: debtSpecBase,
+        projectName: debtProjectName,
+        changedFiles: [...changed],
+      })
+      promptText = promptText.replace(/\{DOCS_DEBT\}/g, result.facts)
+    } catch (e) {
+      promptText = promptText.replace(/\{DOCS_DEBT\}/g, `[docs-debt] 欠账计算异常（${e.message}），跳过`)
+    }
+  }
+
   // Execute: 注入 currentExecuteRunId（从变更专属标记文件读取）
   if (stageName === 'execute' && promptText.includes('{EXECUTE_RUN_ID}')) {
     let runId = ''
