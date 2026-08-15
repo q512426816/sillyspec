@@ -145,6 +145,16 @@ export const LOCAL_YAML_SCHEMA = {
         { path: 'auto_mode.force_quick_patterns', type: 'array', optional: true, status: 'live', readers: ['readAutoModeFromLocalYaml + classifyChange (src/classify-change.js)', 'runCommand (src/run/command.js)'], desc: '需求描述匹配任一正则 → 强制 quick。非法正则跳过不崩。', example: 'fix typo' },
       ],
     },
+    {
+      id: 'docs-check',
+      title: '文档引用校验',
+      note: 'sillyspec docs check 的扫描与断言配置（2026-08-15 docs-check-productize）。glob 相对源码仓根展开，仅支持 目录/**/*.扩展、目录/*.扩展、字面路径 三形态。',
+      keys: [
+        { path: 'docs-check.paths', type: 'array', optional: true, status: 'live', readers: ['docs check (src/index.js case docs) + runDocsCheck (src/docs-check.js)'], desc: '扫描的文档 glob 列表，缺省 docs/**/*.md。', example: 'docs/**/*.md' },
+        { path: 'docs-check.skip', type: 'array', optional: true, status: 'live', readers: ['walkGlob (src/docs-check.js)'], desc: '排除的路径/glob 列表，缺省空。', example: 'docs/sillyspec/archive' },
+        { path: 'docs-check.keywordAssert', type: 'boolean', optional: true, status: 'live', readers: ['runDocsCheck (src/docs-check.js)'], desc: '层2 关键词断言开关，缺省 true（关闭时 warning 提示仅做存在性校验）。', example: 'true' },
+      ],
+    },
   ],
 };
 
@@ -283,5 +293,13 @@ auto_mode:
     - 数据库|migration
   force_quick_patterns:
     - fix typo
+
+# ── 文档引用校验（sillyspec docs check；glob 相对源码仓根，三形态：递归/单层/字面路径）──
+docs-check:
+  paths:
+    - docs/**/*.md
+  # skip:
+  #   - docs/sillyspec/archive
+  keywordAssert: true
 `;
 }

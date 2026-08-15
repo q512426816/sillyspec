@@ -551,8 +551,47 @@ async function main() {
       if (docsSubCmd === 'migrate') {
         const { migrateDocs } = await import('./migrate.js');
         migrateDocs(dir);
+      } else if (docsSubCmd === 'check') {
+        // docs check（2026-08-15 docs-check-productize D-6）：文档 file:line 引用校验。
+        // exit code 三档（D-003）：0 全绿 / 1 存在无效引用 / 2 配置/IO 错误（DocsCheckConfigError）。
+        const docsCheckFlags = filteredArgs.slice(2).filter(a => !a.startsWith('--'));
+        const wantsJson = filteredArgs.includes('--json');
+        const pathsFlagIdx = filteredArgs.indexOf('--paths');
+        const cliPaths = pathsFlagIdx !== -1
+          ? (filteredArgs[pathsFlagIdx + 1] || '').split(',').map(s => s.trim()).filter(Boolean)
+          : null;
+        const { runDocsCheck, DocsCheckConfigError } = await import('./docs-check.js');
+        try {
+          const result = runDocsCheck({
+            projectRoot: dir,
+            docs: docsCheckFlags.length > 0 ? docsCheckFlags : null,
+            paths: cliPaths || undefined,
+          });
+          if (wantsJson) {
+            console.log(JSON.stringify(result, null, 2));
+          } else {
+            for (const w of result.warnings) console.warn(`⚠️  ${w}`);
+            if (result.ok) {
+              console.log(`✅ docs check: ${result.total} 处引用全通过（其中 ${result.kwChecked} 处带关键词断言）`);
+            } else {
+              console.error(`\n❌ docs check: ${result.invalid.length}/${result.total} 处引用失效：`);
+              for (const inv of result.invalid) {
+                console.error(`  ❌ [${inv.doc}:L${inv.docLine}] ${inv.ref} → ${inv.reason}`);
+              }
+              console.error(`\n修复指引：行号漂移 → 更新文档行号到当前源码；文件删改名 → 更新引用路径；`);
+              console.error(`关键词缺失但行号正确 → 确认符号是否改名，改文档 token 或行号。`);
+            }
+          }
+          process.exit(result.ok ? 0 : 1);
+        } catch (e) {
+          if (e instanceof DocsCheckConfigError) {
+            console.error(`❌ docs check 配置错误：${e.message}`);
+            process.exit(2);
+          }
+          throw e;
+        }
       } else {
-        console.log('用法: sillyspec docs migrate');
+        console.log('用法: sillyspec docs migrate | sillyspec docs check [--paths <glob,...>] [--json]');
       }
       break;
     }

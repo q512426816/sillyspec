@@ -179,7 +179,7 @@ export function walkGlob(projectRoot, pattern, skip = []) {
         else if (matchExt(e.name, ext)) out.push(relPath)
       }
     }
-    rec(join(projectRoot, baseDir), '', 0)
+    rec(join(projectRoot, baseDir), baseDir, 0)
     return out
   }
   // 形态 2：dir/*.ext（单层）
@@ -197,8 +197,8 @@ export function walkGlob(projectRoot, pattern, skip = []) {
     }
     return out
   }
-  // 形态 3：字面路径
-  if (!pattern.includes('*')) {
+  // 形态 3：字面路径（不含任何通配元字符才直传；含 ?、{ }、[ ] 等不支持形态落 error）
+  if (!/[*?{}\[\]]/.test(pattern)) {
     return existsSync(join(projectRoot, pattern)) ? [norm(pattern)] : []
   }
   throw new DocsCheckConfigError(`不支持的 glob 形态：${pattern}（当前仅支持 dir/**/*.ext、dir/*.ext、字面路径）`)
