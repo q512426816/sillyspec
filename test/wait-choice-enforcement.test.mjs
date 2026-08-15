@@ -1,12 +1,16 @@
 /**
- * wait 选项单选强制 CLI 行为测试（坑 wait-choice-enforcement）。
+ * wait 步骤 --answer 行为测试（坑 wait-choice-enforcement 移除，2026-08-16）。
  *
- * 锁住：定义了 waitOptions 的 requiresWait/repeatableWait 步骤，--answer 必须命中预设选项
- * 之一（防 agent 一句话代答绕过人工选择）；开放回答型步骤（澄清追问，声明 waitFreeAnswer）
- * 豁免，--answer 可为自由文本。
+ * 历史：43d4531 曾加 enforceWaitChoice（--answer 必须命中 waitOptions 全等匹配，防 AI
+ * 代答）。实证误伤人工选择：AskUserQuestion 回传的标签是「方案 A 读侧扩展（推荐）」
+ * 形态（选项词 + 附注），全等必失配；且人工 Other 自由填值也被拦。字符串匹配在原理上
+ * 区分不了谁答的，防不了故意代答（读报错抄选项即过）只伤真人——经用户拍板整道移除。
  *
- * 三条用户答案路径都覆盖：requiresWait 门 --done --answer（completeStep）、
- * --done --answer 解 waiting（resolveWaitingStepWithAnswer）、--continue --answer（continueStep）。
+ * 现在锁住的契约：
+ * 1. requiresWait 步骤 --done --answer 带自由文本（人工转述/Other 填值）→ 放行完成，
+ *    waitAnswer 落原始回答。
+ * 2. --continue --answer 自由文本解 waiting → 放行，waitAnswer 落原始回答。
+ * 3. requiresWait 门本身保留：--done 不带 --answer → 仍拦截（fail-loud）。
  */
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -15,81 +19,76 @@ import { makeRepo, initChange, runCLI, runStage, cleanup, report } from './_cli-
 const count = { passed: 0, failed: 0, failures: [] }
 const assert = (cond, msg) => { cond ? (count.passed++, console.log(`  ✅ PASS: ${msg}`)) : (count.failed++, count.failures.push(msg), console.log(`  ❌ FAIL: ${msg}`)) }
 
-const ERR_NEEDLE = '封闭单选 wait'
+async function seedBrainstorm(specBase, cwd, cn, steps) {
+  const { ProgressManager } = await import('../src/progress.js')
+  const p = new ProgressManager({ specDir: specBase })
+  const pr = await p.read(cwd, cn)
+  pr.currentChange = cn
+  pr.stages.brainstorm = { status: 'in-progress', startedAt: '2026/8/16 00:00:00', completedAt: null, steps }
+  await p._write(cwd, pr, cn)
+}
 
-console.log('=== wait 选项单选强制（completeStep / continueStep）===\n')
-
-console.log('--- 用例1: 封闭型 requiresWait（提出方案）--answer 非选项 → 拦截 ---')
-{
-  const { cwd, specBase } = makeRepo('cli-wc-blk-')
-  const cn = '2026-08-14-wait-choice-block'
-  const pm = await initChange(cwd, specBase, cn)
-  writeFileSync(join(specBase, 'changes', cn, 'design.md'), '# D\n背景\n目标\n方案\n')
-  runCLI(['--dir', cwd, 'run', 'brainstorm', '--change', cn], { cwd })
+async function locateProposeStep(pm, cwd, specBase, cn) {
   const all = (await pm.read(cwd, cn)).stages.brainstorm.steps
   const idx = all.findIndex(s => s.name === '提出 2-3 种方案')
   assert(idx > 0, `定位「提出 2-3 种方案」步骤（idx=${idx}）`)
-  const seeded = all.map((s, i) => ({ name: s.name, status: i < idx ? 'completed' : 'pending' }))
-  await (await import('../src/progress.js')).ProgressManager.prototype // noop
-  const { ProgressManager } = await import('../src/progress.js')
-  await (async () => {
-    const p = new ProgressManager({ specDir: specBase })
-    const pr = await p.read(cwd, cn)
-    pr.currentChange = cn
-    pr.stages.brainstorm = { status: 'in-progress', startedAt: '2026/8/14 00:00:00', completedAt: null, steps: seeded }
-    await p._write(cwd, pr, cn)
-  })()
-
-  const r = runStage('brainstorm', cn, cwd, { done: true, answer: '我觉得方案A最好' })
-  assert(r.status !== 0, `非选项 --answer → exit 非 0（实际 ${r.status}）`)
-  assert(r.combined.includes(ERR_NEEDLE), `含单选拦截信息（尾：${r.combined.slice(-80)}）`)
-  assert(r.combined.includes('方案A'), `错误信息列出可选项（方案A）`)
+  return { all, idx }
 }
 
-console.log('\n--- 用例2: 封闭型 --answer 命中选项 → 放行（不触发单选拦截）---')
+console.log('=== wait --answer 自由文本放行（单选强制已移除）===\n')
+
+console.log('--- 用例1: 封闭选项步 --done --answer 带人工转述文本 → 放行，waitAnswer 落原文 ---')
 {
-  const { cwd, specBase } = makeRepo('cli-wc-ok-')
-  const cn = '2026-08-14-wait-choice-pass'
+  const { cwd, specBase } = makeRepo('cli-wa-free-')
+  const cn = '2026-08-16-wait-freeform-done'
   const pm = await initChange(cwd, specBase, cn)
   writeFileSync(join(specBase, 'changes', cn, 'design.md'), '# D\n背景\n目标\n方案\n')
   runCLI(['--dir', cwd, 'run', 'brainstorm', '--change', cn], { cwd })
-  const all = (await pm.read(cwd, cn)).stages.brainstorm.steps
-  const idx = all.findIndex(s => s.name === '提出 2-3 种方案')
+  const { all, idx } = await locateProposeStep(pm, cwd, specBase, cn)
   const seeded = all.map((s, i) => ({ name: s.name, status: i < idx ? 'completed' : 'pending' }))
-  const { ProgressManager } = await import('../src/progress.js')
-  await (async () => {
-    const p = new ProgressManager({ specDir: specBase })
-    const pr = await p.read(cwd, cn)
-    pr.currentChange = cn
-    pr.stages.brainstorm = { status: 'in-progress', startedAt: '2026/8/14 00:00:00', completedAt: null, steps: seeded }
-    await p._write(cwd, pr, cn)
-  })()
+  await seedBrainstorm(specBase, cwd, cn, seeded)
 
-  const r = runStage('brainstorm', cn, cwd, { done: true, answer: '方案A' })
-  assert(!r.combined.includes(ERR_NEEDLE), `命中选项 → 不触发单选拦截（尾：${r.combined.slice(-80)}）`)
+  const r = runStage('brainstorm', cn, cwd, { done: true, answer: '方案 A 读侧扩展（推荐）' })
+  assert(r.status === 0, `转述文本 --answer → exit 0（实际 ${r.status}；尾：${r.combined.slice(-100)}）`)
+  const after = await pm.read(cwd, cn)
+  const s = after.stages.brainstorm.steps[idx]
+  assert(s.status === 'completed', `步骤 completed（实际 ${s.status}）`)
+  assert(s.waitAnswer === '方案 A 读侧扩展（推荐）', `waitAnswer 落原始回答（实际 ${JSON.stringify(s.waitAnswer)}）`)
 }
 
-console.log('\n--- 用例3: 开放型（waitFreeAnswer）--continue --answer 自由文本 → 不被单选拦 ---')
+console.log('\n--- 用例2: --continue --answer 自由文本解 waiting → 放行，waitAnswer 落原文 ---')
 {
-  const { cwd, specBase } = makeRepo('cli-wc-free-')
-  const cn = '2026-08-14-wait-choice-free'
+  const { cwd, specBase } = makeRepo('cli-wa-cont-')
+  const cn = '2026-08-16-wait-freeform-continue'
   const pm = await initChange(cwd, specBase, cn)
+  writeFileSync(join(specBase, 'changes', cn, 'design.md'), '# D\n背景\n目标\n方案\n')
   runCLI(['--dir', cwd, 'run', 'brainstorm', '--change', cn], { cwd })
-  const all = (await pm.read(cwd, cn)).stages.brainstorm.steps
-  const idx = all.findIndex(s => s.name === '对话式探索与需求澄清')
-  assert(idx >= 0, `定位「对话式探索与需求澄清」步骤（idx=${idx}）`)
+  const { all, idx } = await locateProposeStep(pm, cwd, specBase, cn)
   const seeded = all.map((s, i) => ({ name: s.name, status: i === idx ? 'waiting' : (i < idx ? 'completed' : 'pending') }))
-  const { ProgressManager } = await import('../src/progress.js')
-  await (async () => {
-    const p = new ProgressManager({ specDir: specBase })
-    const pr = await p.read(cwd, cn)
-    pr.currentChange = cn
-    pr.stages.brainstorm = { status: 'in-progress', startedAt: '2026/8/14 00:00:00', completedAt: null, steps: seeded }
-    await p._write(cwd, pr, cn)
-  })()
+  await seedBrainstorm(specBase, cwd, cn, seeded)
 
-  const r = runStage('brainstorm', cn, cwd, { continue: true, answer: '我要做一个工作区配置同步功能，需要后端+前端+daemon 三端联动' })
-  assert(!r.combined.includes(ERR_NEEDLE), `开放型自由文本 → 不被单选拦（尾：${r.combined.slice(-80)}）`)
+  const r = runStage('brainstorm', cn, cwd, { continue: true, answer: 'A 和 B 混合做，先 A 后 B' })
+  assert(r.status === 0, `自由文本 --continue → exit 0（实际 ${r.status}；尾：${r.combined.slice(-100)}）`)
+  const after = await pm.read(cwd, cn)
+  const s = after.stages.brainstorm.steps[idx]
+  assert(s.status === 'pending', `waiting 解回 pending（实际 ${s.status}）`)
+  assert(s.waitAnswer === 'A 和 B 混合做，先 A 后 B', `waitAnswer 落原始回答（实际 ${JSON.stringify(s.waitAnswer)}）`)
+}
+
+console.log('\n--- 用例3: requiresWait 门保留：--done 不带 --answer → 仍拦截 ---')
+{
+  const { cwd, specBase } = makeRepo('cli-wa-gate-')
+  const cn = '2026-08-16-wait-gate-intact'
+  const pm = await initChange(cwd, specBase, cn)
+  writeFileSync(join(specBase, 'changes', cn, 'design.md'), '# D\n背景\n目标\n方案\n')
+  runCLI(['--dir', cwd, 'run', 'brainstorm', '--change', cn], { cwd })
+  const { all, idx } = await locateProposeStep(pm, cwd, specBase, cn)
+  const seeded = all.map((s, i) => ({ name: s.name, status: i < idx ? 'completed' : 'pending' }))
+  await seedBrainstorm(specBase, cwd, cn, seeded)
+
+  const r = runStage('brainstorm', cn, cwd, { done: true })
+  assert(r.status !== 0, `无 --answer --done → exit 非 0（实际 ${r.status}）`)
+  assert(r.combined.includes('必须先等待用户输入'), `含 requiresWait 拦截信息（尾：${r.combined.slice(-100)}）`)
 }
 
 cleanup()

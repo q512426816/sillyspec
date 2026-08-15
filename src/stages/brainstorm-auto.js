@@ -66,7 +66,6 @@ export const definition = {
       maxWaitRounds: 5,
       waitReason: '等待用户回答需求问题',
       waitOptions: ['回答见--answer', '信息够了，进入设计'],
-      waitFreeAnswer: true, // 开放回答型：--answer 内容为自由文本（需求澄清回答），非封闭单选，豁免 enforceWaitChoice
       prompt: `分析需求，必要时追问，然后设计方案。
 
 ### 操作

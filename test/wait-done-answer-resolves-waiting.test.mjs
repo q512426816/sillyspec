@@ -83,8 +83,8 @@ console.log('\n=== 坑1 端到端：CLI --done --answer 解 brainstorm 已 waiti
   })
   await seedStage(pm, cwd, cn, 'brainstorm', steps)
 
-  // --answer 用该 step 的合法预设选项「确认」（wait-choice-enforcement 起封闭单选强制；
-  // 本用例聚焦 --done --answer 解 waiting 机制本身，answer 取合法选项不改变被测行为）
+  // --answer 用该 step 的预设选项「确认」（单选强制已移除，任意文本均可；
+  // 本用例聚焦 --done --answer 解 waiting 机制本身，answer 取选项不改变被测行为）
   const r = runCLI(['--dir', cwd, 'run', 'brainstorm', '--done', '--answer', '确认', '--change', cn, '--output', '分段展示完成'], { cwd })
 
   assert(r.status === 0, `不应非零退出（历史 bug：waiting 步骤会让流程卡住）（实际 ${r.status}）`)

@@ -64,32 +64,6 @@ export function resolveWaitingStepWithAnswer(steps, doneAnswer, nowStr) {
   return waitIdx
 }
 
-/**
- * wait 选项单选校验（坑 wait-choice-enforcement）：定义了 waitOptions 的 requiresWait/
- * repeatableWait 步骤，--answer 必须命中预设选项之一——防止 agent 一句话代答绕过人工
- * 选择（方案选择类 wait 的 answer 本就该是选项本身）。开放回答型步骤（澄清追问，answer
- * 为自由文本）在 step 定义显式声明 waitFreeAnswer: true 豁免。
- * 校验失败打印选项清单 + exit 1（fail-loud，与 requiresWait 门同风格）。
- *
- * waitOptions 优先取 stepDef（运行时构建的步骤定义，与 brainstorm/plan 静态定义同源），
- * 回退 DB step entry（--continue 路径 waiting 步骤的 waitOptions 已落盘）。
- */
-function enforceWaitChoice(stepDef, stepEntry, answer, stageName, changeName) {
-  if (answer == null) return
-  const opts = Array.isArray(stepDef?.waitOptions) ? stepDef.waitOptions
-    : (Array.isArray(stepEntry?.waitOptions) ? stepEntry.waitOptions : null)
-  if (!opts || opts.length === 0) return
-  if (stepDef?.waitFreeAnswer === true) return
-  if (opts.includes(answer)) return
-  console.error(`❌ Step "${stepEntry?.name || '当前步骤'}" 是封闭单选 wait，--answer 必须命中预设选项之一（防 AI 代答绕过人工选择）。`)
-  console.error(`   你的 --answer: ${JSON.stringify(answer)}`)
-  console.error(`   可选值（复制其一）: ${opts.join(' / ')}`)
-  console.error(`   自由文本回答的场景，该步骤应声明 waitFreeAnswer（当前未声明）。`)
-  if (changeName) console.error(`   重试：sillyspec run ${stageName} --done --answer "<选项>" --change ${changeName}`)
-  else console.error(`   重试：sillyspec run ${stageName} --done --answer "<选项>"`)
-  process.exit(1)
-}
-
 export async function completeStep(pm, progress, stageName, cwd, outputText, inputText = null, options = {}) {
   const { printNext = true, confirm = false, changeName, platformOpts = {}, nonInteractive = false, isForceBaseline = false, isAllowNew = false, isAllowDelete = false } = options
   const specBase = platformOpts.specRoot || join(cwd, '.sillyspec')
@@ -148,10 +122,6 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
   const defStepsForCurrent = await getStageSteps(stageName, cwd, progress, platformOpts?.specRoot || null)
   const currentStepDef = defStepsForCurrent?.[currentIdx] || {}
   const currentStep = steps[currentIdx]
-  // --done --answer 解 waiting 的路径同样过单选校验（与下方 requiresWait doneAnswer 分支同规则）
-  if (_resolvedWaitIdx !== -1 && _doneAnswer) {
-    enforceWaitChoice(currentStepDef, currentStep, _doneAnswer, stageName, changeName)
-  }
   if (currentStepDef.requiresWait === true && !currentStep.waitAnswer) {
     // 检查 --done 是否带了 --answer：如果是，自动补全 waitAnswer 状态，一步完成
     const doneAnswer = typeof options !== 'undefined' && options.doneAnswer ? options.doneAnswer : null
@@ -168,7 +138,6 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
       currentStep.waitReason = currentStepDef.waitReason || '等待用户输入'
       console.log(`⚠️  Step "${currentStep.name}" 的确认（${currentStepDef.waitReason}）已在前置步骤完成，自动跳过。`)
     } else if (doneAnswer) {
-      enforceWaitChoice(currentStepDef, currentStep, doneAnswer, stageName, changeName)
       currentStep.status = 'waiting'
       currentStep.waitAnswer = doneAnswer
       currentStep.waitReason = currentStepDef.waitReason || '等待用户输入'
@@ -750,7 +719,6 @@ export async function continueStep(pm, progress, stageName, cwd, answer, options
   const prevOutput = currentStep.output || ''
   const waitRound = (currentStep.waitRound || 0) + 1
   currentStep.waitRound = waitRound
-  enforceWaitChoice(currentStepDef, currentStep, answer, stageName, changeName)
   currentStep.waitAnswer = answer
   currentStep.waitAnswers = Array.isArray(currentStep.waitAnswers) ? currentStep.waitAnswers : []
   currentStep.waitAnswers.push({
