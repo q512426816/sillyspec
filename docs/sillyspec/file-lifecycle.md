@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-05-31 11:00:00
-updated_at: 2026-08-15T14:55:00+08:00
+updated_at: 2026-08-15T16:25:00+08:00
 ---
 
 # SillySpec 文件生命周期
@@ -73,6 +73,13 @@ updated_at: 2026-08-15T14:55:00+08:00
 | `.sillyspec/shared/` | 是 | `init.js` | 共享目录，当前无核心生命周期逻辑 |
 | `.sillyspec/workspace/` | 是 | `init.js` | 工作区目录，当前无核心生命周期逻辑 |
 | `.sillyspec/.runtime/` | 否 | `init.js`、`ProgressManager`、运行时命令 | DB、artifacts、history、workflow-runs、worktrees、knowledge-hit-report.json、postcheck-result.json、execute-runs（execute task review.json）、stage-reviews（brainstorm/plan/propose/execute 独立审查 review.json）、sync-conflict-<change>.json（平台同步双向冲突持久化，resolve 三选一后清理）、sillyspec.db.pre-import-<ts>.bak（pull/resolve --take-platform 的 import 前 snapshot） |
+
+### 平台模式项目根落盘物（不在 `.sillyspec/` 内，不污染源码结构）
+
+| 路径（相对项目根） | tracked | 创建/维护方 | 当前生命周期 |
+|---|---|---|---|
+| `.sillyspec-platform.json` | 否 | `run/shared.js` `writePlatformPointer`（init/scan/任何 run 带平台参数时） | 恢复指针：供裸调（不带 --spec-root）找回 specDir。status 状态机 ACTIVE→SCAN_COMPLETED，24h STALE 可被 `platform pointer --cleanup` 清理 |
+| `.sillyspec-platform-managed` | 否 | 同上（`writePlatformPointer` 三写之一） | **平台接管声明**：`{managed, specRoot 副本, workspaceId, declaredAt}` 四字段，**无过期**（STALE 清理不作用于它）。读侧 `checkPlatformManaged`（宽容：不存在/损坏/managed 非 true → null）。指针缺失但声明存在时 `resolvePlatformSpecDir` 抛 `PlatformManagedError`、`runCommand` 恢复链 exit 1（双入口 fail-closed，防静默建本地进度库）。**唯一删除路径 = `platform disconnect` 三清**（local.yaml platform 段 + 本指针 + 本声明） |
 
 `init.js` 会把 `.sillyspec/.runtime/`、`.sillyspec/local.yaml`、`.sillyspec/codebase/SCAN-RAW.md` 追加到 `.gitignore`。注意 `.sillyspec/local.yaml.example`（脱敏配置示例，2026-08-11 起 `init.js` `doInstall` 调 `config-schema.js` `renderExample()` 落盘）**不在** gitignore——它是给人/外部 agent 看的可提交配置发现物；真实 `local.yaml`（含凭据）才 gitignored。
 

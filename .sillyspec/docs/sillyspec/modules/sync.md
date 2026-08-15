@@ -4,8 +4,8 @@ created_at: 2026-06-01T09:05:00
 ---
 
 # sync
-> 最后更新：2026-08-11
-> 最近变更：ql-20260811-003-b023（connect/disconnect 文本级定向替换，保留 local.yaml 注释/其他段/数组/深嵌套）
+> 最后更新：2026-08-15
+> 最近变更：platform-takeover-declaration（disconnect 三清：local.yaml platform 段 + 恢复指针 .sillyspec-platform.json + 平台接管声明 .sillyspec-platform-managed——不删后两者则"disconnect 后恢复本地模式"不可达）
 > 模块路径：src/sync.js
 
 ## 职责
@@ -24,7 +24,7 @@ SillyHub 平台同步模块，负责与远程 SillyHub 服务建立连接、同�
 | `SyncManager` | 同步管理类，封装所有平台交互 | `constructor(cwd)` |
 | `SyncManager.testConnection(url)` | 测试远程连接（静态方法） | `url: string` |
 | `SyncManager.connect(url, token)` | 保存平台 + mcp 配置到 local.yaml（同源假设，mcp 段已存在则保留） | `url, token` |
-| `SyncManager.disconnect()` | 清除平台配置 | — |
+| `SyncManager.disconnect()` | 三清断开（D-C@v2）：local.yaml platform 段 + 恢复指针 + 平台接管声明（后两者 best-effort unlink，不存在不算错） | — |
 | `SyncManager.sync(changeName)` | 同步单个变更的进度到平台 | `changeName: string` |
 | `SyncManager.syncDocuments(changeName)` | 同步四件套文档（proposal/design/requirements/tasks）到平台 | `changeName: string` |
 | `SyncManager.checkApproval(changeName)` | 查询平台审批状态 | `changeName: string` |

@@ -12,14 +12,19 @@ const testDir = dirname(fileURLToPath(import.meta.url))
 // 全局指针污染防护：测试可能把 ~/.sillyspec-platform.json 写到 HOME（cwd 纠正到 home 的缝隙），
 // 不清理则污染用户真实环境——之后任何项目跑 sillyspec 都被静默引向死 temp 库。
 // 套件前后各清一次，兜底所有测试（无论哪个写 home）。
+// 平台接管声明（.sillyspec-platform-managed）同源防护：泄漏到 HOME 会让 home 下所有
+// 命令 fail-closed（PlatformManagedError）且套件不自愈——与指针一并清理。
 const homePointer = join(homedir(), '.sillyspec-platform.json')
+const homeManaged = join(homedir(), '.sillyspec-platform-managed')
 function cleanHomePointer() {
-  if (!existsSync(homePointer)) return
-  try {
-    const before = readFileSync(homePointer, 'utf8')
-    rmSync(homePointer, { force: true })
-    console.log(`[teardown] 清理 HOME 指针污染：${homePointer}（原指向 ${before.slice(0, 80)}...）`)
-  } catch {}
+  for (const [p, kind] of [[homePointer, '指针'], [homeManaged, '接管声明']]) {
+    if (!existsSync(p)) continue
+    try {
+      const before = readFileSync(p, 'utf8')
+      rmSync(p, { force: true })
+      console.log(`[teardown] 清理 HOME ${kind}污染：${p}（原内容 ${before.slice(0, 80)}...）`)
+    } catch {}
+  }
 }
 cleanHomePointer()
 

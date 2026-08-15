@@ -46,6 +46,8 @@ runStage(pm, progress, stageName, cwd, changeName)
 
 **execute 完成路径阶段级核验 warn**（2026-08-13-worktree-execute-loss-guard，D-002@v1，防空跑谎报）：`handleExecuteWorktreeCleanup`（`run/complete-handlers.js`）在 cleanup 之前调 `handleExecuteDeliverableCheck` —— 聚合最新 execute run 各 task review.json 的 `changedFiles`（主仓 repo 过滤 + `.sillyspec/`/meta.json 过滤），经 `findMissingDeliverables`（`src/worktree.js`）核验存在于 worktree 分支 tree 或 worktree 工作区；missing 列清单 warn（apply 将无源可复制）、`checked:false`（worktree 目录/分支不存在）保守提示人工确认、任何异常只 warn，均不影响 execute 完成（宽松非阻断）。
 
+**平台接管声明 fail-closed 双入口**（2026-08-15 platform-takeover-declaration，D-B@v2，堵状态分裂）：`runCommand` 独立指针恢复链（不经 `resolvePlatformSpecDir`）在「无显式平台参数 + 指针与 platform-scan.json 皆缺失 + 项目根存在接管声明 `.sillyspec-platform-managed`」时 `exit(1)` + 三选项引导（重跑 scan 重建指针 / `platform disconnect` 解除托管 / 显式 `--spec-dir`）——堵指针被 cleanup/STALE 清理后 run/quick/scan 全 stage 命令静默落本地库的旁路（与 `resolvePlatformSpecDir` 抛 `PlatformManagedError` 的入口一行为一致）。声明由 `writePlatformPointer`（`run/shared.js`）三写落盘，无过期，唯一删除路径 = `platform disconnect` 三清。
+
 ## 注意事项
 
 - `sillyspec init /path/to/project` 语法：第二个参数如果是路径会被当作 targetDir，而非子命令

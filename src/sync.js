@@ -12,6 +12,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, unlink
 import { join } from 'path';
 import { resolvePlatformSpecDir } from './progress.js';
 import { safeGit } from './git-helper.js';
+import { PLATFORM_MANAGED_FILENAME } from './run/shared.js';
 
 // sync 是 best-effort（网络失败只 warn）：平台指针失效时不抛，跳过平台、回退本地。
 function safePlatformSpecDir(cwd) {
@@ -327,28 +328,37 @@ export class SyncManager {
   }
 
   /**
-   * 断开平台连接。
-   * 从 local.yaml 删除 platform 配置段。
+   * 断开平台连接（三清，D-C@v2）。
+   * 1. 从 local.yaml 删除 platform 配置段；
+   * 2. 删恢复指针 <cwd>/.sillyspec-platform.json；
+   * 3. 删平台接管声明 <cwd>/.sillyspec-platform-managed。
+   * 不删后两者则"disconnect 后恢复本地模式"不可达（指针健在时 resolvePlatformSpecDir
+   * 仍解析平台 specRoot；声明健在时指针缺失会 fail-closed）。
    */
   disconnect() {
     const p = join(this.cwd, LOCAL_YAML);
-    if (!existsSync(p)) {
-      console.log('[sync] 已断开连接（无配置文件）');
-      return;
+    if (existsSync(p)) {
+      const text = readFileSync(p, 'utf8');
+      if (findTopLevelSectionRange(text, 'platform') !== null) {
+        // 文本级删除 platform 段，保留注释/其他段/数组/深嵌套/CRLF
+        const newText = replaceTopLevelSection(text, 'platform', null);
+        if (newText.trim() === '') {
+          // 删段后纯空白（无任何段也无注释）→ 删除整个文件；注释算内容，有注释则保留
+          try { unlinkSync(p); } catch { /* best effort */ }
+        } else {
+          writeFileSync(p, newText, 'utf8');
+        }
+      }
     }
-    const text = readFileSync(p, 'utf8');
-    if (findTopLevelSectionRange(text, 'platform') === null) {
-      console.log('[sync] 已断开连接（未连接）');
-      return;
+    // 三清之二/三：指针 + 接管声明（disconnect 是声明的唯一退出路径——design.md §5.4）
+    let cleaned = [];
+    for (const f of ['.sillyspec-platform.json', PLATFORM_MANAGED_FILENAME]) {
+      const fp = join(this.cwd, f);
+      if (existsSync(fp)) {
+        try { unlinkSync(fp); cleaned.push(f); } catch { /* best effort */ }
+      }
     }
-    // 文本级删除 platform 段，保留注释/其他段/数组/深嵌套/CRLF
-    const newText = replaceTopLevelSection(text, 'platform', null);
-    if (newText.trim() === '') {
-      // 删段后纯空白（无任何段也无注释）→ 删除整个文件；注释算内容，有注释则保留
-      try { unlinkSync(p); } catch { /* best effort */ }
-    } else {
-      writeFileSync(p, newText, 'utf8');
-    }
+    if (cleaned.length > 0) console.log(`[sync] 已清理平台指针与接管声明: ${cleaned.join(', ')}`);
     console.log('[sync] 已断开连接');
   }
 

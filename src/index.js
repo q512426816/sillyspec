@@ -1223,6 +1223,7 @@ SillySpec platform — SillyHub 平台同步
                 const { unlinkSync } = await import('fs')
                 unlinkSync(pointerPath)
                 console.log(`   🗑️ 已清理损坏指针。`)
+                console.log(`   ℹ️  如需彻底脱离平台（含接管声明 .sillyspec-platform-managed），请使用 sillyspec platform disconnect。`)
               }
             } else if (pointer.status === POINTER_STATUS.SCAN_COMPLETED) {
               if (isPointerStale(pointer)) {
@@ -1234,6 +1235,7 @@ SillySpec platform — SillyHub 平台同步
                   const { unlinkSync } = await import('fs')
                   unlinkSync(pointerPath)
                   console.log(`   🗑️ 已清理过时指针。`)
+                  console.log(`   ℹ️  如需彻底脱离平台（含接管声明 .sillyspec-platform-managed），请使用 sillyspec platform disconnect。`)
                 }
               } else {
                 console.log(`   状态: ${pointer.status} ✅`)

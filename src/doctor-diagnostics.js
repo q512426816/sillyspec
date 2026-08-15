@@ -24,6 +24,7 @@ import { openDatabase, pluckGet, pluckAll } from './db-engine.js';
 import { existsSync, statSync, readFileSync, readdirSync, mkdirSync, writeFileSync, unlinkSync } from 'fs';
 import { join } from 'path';
 import { CHECK_SEVERITY } from './constants.js';
+import { checkPlatformManaged } from './run/shared.js';
 
 // db 角色标签
 const DB_ROLE = {
@@ -216,8 +217,28 @@ function detectMultiDb(cwd, pointer) {
 
 // ── D2 pointer 健康 ───────────────────────────────────────────────────
 
-function detectPointerHealth(pointer) {
+function detectPointerHealth(pointer, cwd = null) {
   if (!pointer.present) {
+    // FR-06：指针缺失但接管声明存在 → 报 pointer_missing_but_managed（warning 非阻断）。
+    // 此状态 resolvePlatformSpecDir / runCommand 恢复链会 fail-closed 拒绝静默落本地，
+    // doctor 只读诊断给出同款恢复引导（不自动执行任何修复）。
+    if (cwd) {
+      const decl = checkPlatformManaged(cwd);
+      if (decl) {
+        return {
+          name: 'pointer_health',
+          label: '平台指针健康',
+          pass: false,
+          severity: CHECK_SEVERITY.WARNING,
+          findings: [
+            `pointer_missing_but_managed: 平台接管声明存在但恢复指针缺失（原 specRoot: ${decl.specRoot || '(未记录)'}）——` +
+            `裸调命令将 fail-closed 拒绝静默落本地。恢复：① 重跑平台 scan/init（带 --spec-root）重建指针；` +
+            `② sillyspec platform disconnect（删除接管声明，彻底脱离平台）；③ 显式 --spec-dir <路径> 临时指定。`,
+          ],
+          safe_actions: [{ dimension: 'pointer_health', action: 'recreate_pointer', risk: 'confirm_required', rationale: '接管声明存在但指针缺失，需重建指针或显式脱离平台', next_step: '重跑平台 scan（带 --spec-root）或 sillyspec platform disconnect' }],
+        };
+      }
+    }
     return {
       name: 'pointer_health',
       label: '平台指针健康',
@@ -489,7 +510,7 @@ function detectExecuteProgressPlanMismatch(authoritySpecRoot, authDb) {
 export async function runDoctorDiagnostics({ cwd }) {
   const pointer = resolvePointer(cwd);
   const multiDb = detectMultiDb(cwd, pointer);
-  const pointerHealth = detectPointerHealth(pointer);
+  const pointerHealth = detectPointerHealth(pointer, cwd);
   const changesSplit = detectChangesSplit(cwd, pointer);
   const changeDb = detectChangeDbConsistency(cwd, pointer, multiDb);
 

@@ -24,6 +24,7 @@ import { STAGE_ORDER, MAIN_FLOW_ORDER, VALID_STAGES, STAGE_LABELS, SPEC_DIR_NAME
 // 根治：home 下 .sillyspec 恒不命中，防 smoke/临时目录污染自我延续）。此处 re-export 保持
 // 既有 import 路径兼容；run/shared.js 对 progress.js 只有动态 import，无静态循环。
 import { resolveSpecDir } from './run/shared.js';
+import { checkPlatformManaged, PLATFORM_MANAGED_FILENAME } from './run/shared.js';
 export { resolveSpecDir };
 
 // 默认规范目录名（相对于 cwd）
@@ -54,6 +55,26 @@ export class PointerUnreachableError extends Error {
 }
 
 /**
+ * 平台接管声明生效错误（指针缺失但声明存在）。fail-closed 入口一：
+ * 防指针被 cleanup/STALE 清理或项目挪动后裸调静默建本地进度库（状态分裂根因）。
+ *
+ * ⚠️ 不覆写 this.name（保持父类的 'PointerUnreachableError'）——CLI 顶层 catch 按
+ * err?.name === 'PointerUnreachableError' 严格字符串匹配（index.js），子类改名会
+ * 落通用错误分支打 stack noise。靠 message 首行"平台接管声明生效"区分场景。
+ */
+export class PlatformManagedError extends PointerUnreachableError {
+  constructor({ declarationPath, specRoot }) {
+    super({
+      pointerPath: declarationPath,
+      specRoot,
+      reason: `平台接管声明生效——本项目已由平台托管，但恢复指针缺失（可能被 platform pointer --cleanup 清理或项目目录被移动），拒绝静默回退本地模式`,
+      hint: `① 重跑平台 scan/init（带 --spec-root）重建指针；② 确认不再使用平台：sillyspec platform disconnect（删除接管声明）；③ 显式 --spec-dir <路径> 临时指定目录`,
+    });
+    this.declarationPath = declarationPath;
+  }
+}
+
+/**
  * 平台感知的 specDir 解析（fail-closed，所有 CLI 子命令统一入口）。
  *
  * 优先级：显式 --spec-dir > pointer.specRoot（可达）> resolveSpecDir(cwd)。
@@ -69,6 +90,15 @@ export function resolvePlatformSpecDir(cwd, explicitSpecDir = null) {
   if (explicitSpecDir) return resolve(explicitSpecDir);
   const pointerPath = join(resolve(cwd), '.sillyspec-platform.json');
   if (!existsSync(pointerPath)) {
+    // 指针缺失：查平台接管声明（fail-closed 入口一）。声明存在 = 项目进过平台模式，
+    // 指针丢失不该静默当纯本地项目处理（会建本地进度库 → 状态分裂）。
+    const decl = checkPlatformManaged(cwd);
+    if (decl) {
+      throw new PlatformManagedError({
+        declarationPath: join(resolve(cwd), PLATFORM_MANAGED_FILENAME),
+        specRoot: decl.specRoot,
+      });
+    }
     return resolveSpecDir(cwd);
   }
   // pointer 存在 = 进过平台模式，严格校验，不静默回退

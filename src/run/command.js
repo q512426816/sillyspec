@@ -23,7 +23,7 @@ import { join, resolve, dirname } from 'node:path'
 import { existsSync, readdirSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
 import { randomBytes, randomUUID } from 'node:crypto'
 import { writeAtomicSync } from '../fs-atomic.js'
-import { resolveSpecDir, countAncestorSpecDirs, resolveChangeDir, triggerSync, getStageSteps, formatWaitOptions, checkApproval, didYouMean, assertSafeChangeName, detectQuickSessionDrift, detectWorktreeSpecDrift, resolveRuntimeRoot, writePlatformPointer } from './shared.js'
+import { resolveSpecDir, countAncestorSpecDirs, resolveChangeDir, triggerSync, getStageSteps, formatWaitOptions, checkApproval, didYouMean, assertSafeChangeName, detectQuickSessionDrift, detectWorktreeSpecDrift, resolveRuntimeRoot, writePlatformPointer, checkPlatformManaged, PLATFORM_MANAGED_FILENAME } from './shared.js'
 import { resolveQuickLinkedChanges } from './quick-audit.js'
 import { outputStep } from './prompt.js'
 import { completeStep, skipStep, waitStep, continueStep } from './complete.js'
@@ -312,6 +312,22 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
         console.error('   解决：删除该文件并重新运行首次 scan 传入 --spec-root')
         process.exit(2) // 环境错（文件损坏）→ exit 2
       }
+    }
+  }
+  // ── 平台接管声明 fail-closed（入口二，D-B@v2）──
+  // runCommand 有独立指针恢复链（不经 resolvePlatformSpecDir），指针缺失时若不在此
+  // 封堵，run/quick/scan 等全部 stage 命令会静默落本地库（与入口一行为分裂）。
+  // 触发条件：命令行没传平台参数 + 指针与 platform-scan.json 皆未命中 + 接管声明存在。
+  // 显式 --spec-dir/--spec-root 传参时 platformOpts.specRoot 已赋值，天然不进此分支（逃生口）。
+  if (!platformOpts.specRoot && !platformOpts.runtimeRoot && !platformFileExists) {
+    const decl = checkPlatformManaged(cwd)
+    if (decl) {
+      console.error(`❌ 平台接管声明生效：本项目已由平台托管（原 specRoot: ${decl.specRoot || '(未记录)'}），但恢复指针缺失，拒绝静默回退本地模式。`)
+      console.error(`   声明文件: ${join(cwd, PLATFORM_MANAGED_FILENAME)}`)
+      console.error('   恢复：① 重跑平台 scan/init（带 --spec-root）重建指针；② 确认不再使用平台：sillyspec platform disconnect（删除接管声明）；③ 显式 --spec-dir <路径> 临时指定目录。')
+      // exit(1) 而非邻近环境错的 exit(2)：这是"状态保护阻断"（对齐 PointerUnreachableError
+      // 顶层 catch 语义），非"用法/环境错"——见 design.md §5.3 v2 复审观察 (a)
+      process.exit(1)
     }
   }
   // 持久化 platformOpts

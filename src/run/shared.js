@@ -311,11 +311,14 @@ export function resolveQuickSessionsDir(platformOpts, localSpecBase) {
 }
 
 /**
- * 平台指针双写（单一数据源，runCommand scan 与 cmdInit 平台模式共用）。
+ * 平台指针三写（单一数据源，runCommand scan 与 cmdInit 平台模式共用）。
  *
- * 写两处（字段集一致，防两处漂移）：
+ * 写三处：
  *   1. <specRoot>/.runtime/platform-scan.json — 主持久化文件（后续 run/--done 恢复）
  *   2. <cwd>/.sillyspec-platform.json — 轻量恢复指针（供裸调——不带 --spec-root——找回 specDir）
+ *   3. <cwd>/.sillyspec-platform-managed — 平台接管声明（无过期，独立于指针生命周期；
+ *      指针被 cleanup/STALE 清理后它仍在，resolvePlatformSpecDir/runCommand 恢复链靠它
+ *      fail-closed 防静默落本地库。唯一删除路径 = platform disconnect）
  *
  * status 字段语义（POINTER_STATUS）：
  *   - init 落盘时传 status: 'active'（已接入未 scan，24h STALE 清理不作用于它）
@@ -326,9 +329,11 @@ export function resolveQuickSessionsDir(platformOpts, localSpecBase) {
  *
  * @param {string} cwd - 恢复指针落盘目录（= 调用方命令的 cwd，通常为项目根）
  * @param {object} platformOpts - { specRoot, runtimeRoot?, workspaceId?, scanRunId? }
- * @param {object} [extra] - 追加字段（如 { status: 'active' }）
+ * @param {object} [extra] - 追加字段（如 { status: 'active' }，只进指针/主文件不进声明）
  * @returns {boolean} 是否全部写入成功
  */
+export const PLATFORM_MANAGED_FILENAME = '.sillyspec-platform-managed'
+
 export function writePlatformPointer(cwd, platformOpts, extra = {}) {
   if (!platformOpts || (!platformOpts.specRoot && !platformOpts.runtimeRoot)) return false
   const payload = {
@@ -339,13 +344,47 @@ export function writePlatformPointer(cwd, platformOpts, extra = {}) {
     savedAt: new Date().toISOString(),
     ...extra,
   }
+  // 声明文件字段集独立于指针 payload（D-E@v2 四字段：无 status/savedAt/scanRunId——
+  // 声明语义是"项目归平台管"这一持久事实，非 scan 会话状态）
+  const declaration = {
+    managed: true,
+    specRoot: platformOpts.specRoot || null,
+    workspaceId: platformOpts.workspaceId || null,
+    declaredAt: new Date().toISOString(),
+  }
   try {
     mkdirSync(join(platformOpts.specRoot, '.runtime'), { recursive: true })
     writeFileSync(join(platformOpts.specRoot, '.runtime', 'platform-scan.json'), JSON.stringify(payload, null, 2) + '\n')
     writeFileSync(join(cwd, '.sillyspec-platform.json'), JSON.stringify(payload, null, 2) + '\n')
+    writeFileSync(join(cwd, PLATFORM_MANAGED_FILENAME), JSON.stringify(declaration, null, 2) + '\n')
     return true
   } catch {
     return false
+  }
+}
+
+/**
+ * 读平台接管声明（读侧宽容：任何异常情况返回 null = 视同无声明，不抛错）。
+ * 供 resolvePlatformSpecDir / runCommand 恢复链 / doctor 诊断三处消费。
+ *
+ * @param {string} cwd - 项目根（声明查找目录）
+ * @returns {{managed:true, specRoot, workspaceId, declaredAt}|null}
+ *   文件不存在 / JSON 损坏 / managed 非 true → null
+ */
+export function checkPlatformManaged(cwd) {
+  const p = join(resolve(cwd), PLATFORM_MANAGED_FILENAME)
+  if (!existsSync(p)) return null
+  try {
+    const decl = JSON.parse(readFileSync(p, 'utf8'))
+    if (!decl || decl.managed !== true) return null
+    return {
+      managed: true,
+      specRoot: decl.specRoot || null,
+      workspaceId: decl.workspaceId || null,
+      declaredAt: decl.declaredAt || null,
+    }
+  } catch {
+    return null
   }
 }
 
