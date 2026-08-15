@@ -619,8 +619,44 @@ async function main() {
           }
           throw e;
         }
+      } else if (docsSubCmd === 'gate') {
+        // docs gate（2026-08-15 doc-consistency-debt 第七节）：docs check 的 ratchet 门。
+        // 失效数 ≤ 基线放行、超基线拦（exit 1）；无基线/配置错 exit 2。--init-baseline
+        // 以当前实测数立基线（幂等，重跑覆盖）。基线文件 .sillyspec/docs-check-baseline。
+        // ⚠ flag 解析同 docs check 的教训：--json 全局解析器吞掉、--init-baseline 掉进
+        // filteredArgs，分支内识别后剔除，余下位置参数按 --paths 值处理前须成对校验。
+        const rawGateArgs = filteredArgs.slice(2);
+        let gateInitBaseline = false;
+        let gateCliPaths = null;
+        for (let i = 0; i < rawGateArgs.length; i++) {
+          if (rawGateArgs[i] === '--init-baseline') {
+            gateInitBaseline = true;
+          } else if (rawGateArgs[i] === '--paths' && rawGateArgs[i + 1] !== undefined) {
+            gateCliPaths = rawGateArgs[i + 1].split(',').map(s => s.trim()).filter(Boolean);
+            i++;
+          } else if (rawGateArgs[i] === '--paths') {
+            console.error('❌ docs gate: --paths 缺值（逗号分隔 glob，如 --paths "docs/**/*.md"）');
+            process.exit(2);
+          } else {
+            console.error(`❌ docs gate: 未知参数「${rawGateArgs[i]}」（支持 --init-baseline / --paths <glob,...>）`);
+            process.exit(2);
+          }
+        }
+        const { runDocsGate } = await import('./docs-gate.js');
+        // specBase：--spec-dir 优先，缺省 resolveSpecDir(cwd)（与其他 case 同口径）
+        const gateSpecBase = specDir || resolveSpecDir(dir);
+        const gateResult = await runDocsGate(
+          { projectRoot: dir, specBase: gateSpecBase, initBaseline: gateInitBaseline },
+          gateCliPaths ? { paths: gateCliPaths } : {},
+        );
+        if (json) {
+          console.log(JSON.stringify(gateResult, null, 2));
+        } else {
+          console.log(gateResult.message);
+        }
+        process.exit(gateResult.exitCode);
       } else {
-        console.log('用法: sillyspec docs migrate | sillyspec docs check [--paths <glob,...>] [--json]');
+        console.log('用法: sillyspec docs migrate | sillyspec docs check [--paths <glob,...>] [--json] | sillyspec docs gate [--init-baseline] [--paths <glob,...>] [--json]');
       }
       break;
     }

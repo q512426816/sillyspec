@@ -493,3 +493,12 @@
 根因：matchFilesToModules 二级用 content.includes(全路径) 精确子串，但本仓卡片契约表引用习惯是裸名（stages.md 写 execute.js 非 src/stages/execute.js）→ 改动文件归属 unmapped，模块欠账零输出（实测 src/stages/execute.js 修复前 unmapped、修复后正确归 stages 且算出 behind=38）
 方案：二级b 裸文件名兜底匹配——基名在卡内存在独立出现（两侧均非路径/标识符字符，防 a.js 误配 xa.js.txt），全路径命中优先裸名仅兜底
 结果：docs-debt 套件 14/14（+3 测试：裸名命中/边界字符防误配/全路径优先）；本仓实测 src/stages/execute.js 归属 stages+behind=38 事实正确；npm test 全量 exit 0；lint 过。并行会话 docs-signals-o12 的 O-1 归属升级共用本函数，本修复是其地基，正交无冲突
+
+## ql-20260815-020-9870 | 2026-08-15 23:31:21 | 文档一致性债第七节裁决落地 docs gate——唯一实测回本的机制做成完整产品（用户裁决直接做完整的
+状态：已完成
+关联变更：（无）
+文件：（见实际改动）
+需求：文档一致性债第七节裁决落地 docs gate——唯一实测回本的机制做成完整产品（用户裁决直接做完整的，不发版）
+根因：docs check 检测力已证（110→0 半小时清偿）但「想起才跑」无收敛动力，需要一个挂进 pre-push/CI 的门；阈值设计上 behind 计数是代理信号不可用（源码活跃≠卡错，误报致报警被忽略），docs check 失效数是直接信号
+方案：src/docs-gate.js（evaluateRatchet 纯判定 + runDocsGate IO 面，ratchet=失效数≤基线放行/超基线拦/清偿提示下调）；sillyspec docs gate 子命令（--init-baseline 显式立基线 fail-closed 不悄悄合法化存量、幂等覆盖、未知 flag exit 2 白名单）；本仓 .husky/pre-push 接线（lint+test 后第三道）；基线 .sillyspec/docs-check-baseline 团队共享进 git（本仓初始化 0=全绿）
+结果：test/docs-gate.test.mjs 10/10（判定语义 3+基线 IO 1+集成 6）；CLI 冒烟全链路（无基线 exit2→init→放行→未知 flag 拦截）；顺手修 platform-interface-map.md 6 处 index.js 行号漂移（并行改动+本 case 插入所致，建议行号首次实战）；npm test 全量 exit 0 + doc-ref-check 过 + lint 过；interface-contract §1.3b + 债单第七节（收手线+冻结清单+警讯）同步

@@ -1,5 +1,5 @@
 #!/bin/sh
-echo "🔧 pre-push: running lint + test..."
+echo "🔧 pre-push: running lint + test + docs gate..."
 npm run lint --silent 2>&1
 if [ $? -ne 0 ]; then
   echo "❌ pre-push: lint failed, aborting push"
@@ -10,4 +10,11 @@ if [ $? -ne 0 ]; then
   echo "❌ pre-push: test failed, aborting push"
   exit 1
 fi
-echo "✅ pre-push: lint + test passed"
+# docs gate ratchet（doc-consistency-debt 第七节）：docs check 失效数 ≤ 基线放行。
+# 基线 .sillyspec/docs-check-baseline 缺失/损坏时 fail-closed exit 2 拦截。
+node bin/sillyspec.js docs gate 2>&1
+if [ $? -ne 0 ]; then
+  echo "❌ pre-push: docs gate failed, aborting push"
+  exit 1
+fi
+echo "✅ pre-push: lint + test + docs gate passed"

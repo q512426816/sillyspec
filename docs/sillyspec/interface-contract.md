@@ -74,8 +74,20 @@ schema_version: 1
 - 扫描 local.yaml `docs-check.paths`（缺省 `docs/**/*.md`）或 `--paths` 覆盖的文档
 - 两层校验：层1 存在性（文件存在 + 行号边界 + 候选解析三段回退）；层2 关键词断言（`docs-check.keywordAssert` 缺省开，反引号代码符号在 [start-2, end+5] 窗口）
 - exit code：0 全绿 / 1 存在无效引用 / 2 配置错误（不支持的 glob 形态）
-- `--json` 输出 `{ ok, total, invalid: [{doc, docLine, ref, reason}], warnings, kwChecked }`
+- `--json` 输出 `{ ok, total, invalid: [{doc, docLine, ref, reason, suggest}], warnings, kwChecked }`（`suggest` = 失效引用的建议行号：token 在候选文件命中行，供人工确认改锚）
 - 实现：`src/docs-check.js`（runDocsCheck）；glob 手写 walker 零依赖，相对源码仓根展开（平台模式同锚）
+
+### 1.3b `sillyspec docs gate [--init-baseline] [--paths <glob,...>] [--json]`（2026-08-15 doc-consistency-debt 第七节）
+
+docs check 的 ratchet 门：**欠账只许减少不许增加**。挂进 pre-push/CI 用；失效数 ≤ 基线放行、超基线拦。
+
+- 基线文件 `.sillyspec/docs-check-baseline`（纯数字一行，可手工改）
+- 首次使用必须显式 `--init-baseline` 以当前实测数立基线（不悄悄合法化存量，fail-closed）；幂等，重跑覆盖——清偿后重跑即下调基线锁住成果
+- exit code：0 过（≤基线）/ 1 拦（>基线，报新增数）/ 2 无基线或基线损坏或配置错误
+- `--json` 输出 `{ exitCode, ok, current, baseline, delta, message, inited }`
+- 未知 flag 直接 exit 2（白名单：`--init-baseline` / `--paths` / 全局 `--json`）
+- 设计边界：**behind（commit 数）不参与 gate**——源码活跃不代表卡错，代理信号只配 advisory；gate 只信 docs check 的直接失效数
+- 实现：`src/docs-gate.js`（evaluateRatchet 纯判定 + runDocsGate IO 面）；文档引导挂接（不 init 自动注入 hook，往用户仓装 git hook 是侵入性动作）：`echo 'sillyspec docs gate' >> .husky/pre-push` 或 CI 一步
 
 ## 2. envelope schema v1
 

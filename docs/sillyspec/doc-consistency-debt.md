@@ -137,3 +137,11 @@ agent 拿到两行事实自己就会去改，不需要"请务必保持模块文�
 
 - **全量修完后 prompt 文字负增长**：可删 execute "module-impact 更新（可选不阻断）"段、verify 第 6 条劝说、archive sync-module-docs 步骤说明——约回收 800+ 字符，新增注入块全部是 CLI 生成的运行时事实（按需出现，无文档债时零输出）。
 - 判断一个修法是否优雅的试金石：**改动落点是 `src/stages/*.js` 的 prompt 字符串，还是 `src/` 的计算逻辑**。前者是往劝说的坑里继续堆，后者才是工具该干的事（SillySpec 定位=确定性校验，语义判定推 sillyhub）。
+
+## 七、收手线与 gate 落地（2026-08-15 晚裁决）
+
+用户质疑「这套是不是太复杂了、实际意义大吗」后确立收手线——目标从「文档永远新鲜」（做不到）退为「漂移可发现 + 清偿便宜 + 过期不被当真 + 欠账不增」，四件事今日全部达成，**此后本线冻结，不再自发加机制**：
+
+- **冻结待验证**：O-1（quick hint 归属精度升级——没人消费的警告不值得打磨精度）、O-2（建议行号内联进 docs-debt）、消费端卡级 staleness 注入。全部等 sillyhub 升级后两周实测：execute agent 看到 [docs-debt] 会不会真的同步卡片？不会则 docs-debt 注入本身砍掉，回退到「硬门 + docs check + gate」三件套。
+- **警讯记录**：当需要给「报债的机制」再造「整合信号的机制」（docs-signals 三源一屏设计稿）时，就是机制造多了的证据。D-8 提示本会话触发四次全被忽略，实证「无人消费」。机制自带出错面（docs-debt-inject 归档次日即被复核出裸名归属失配），机制越多数错越难。
+- **例外落地（用户裁决「直接做完整的」）**：`sillyspec docs gate` ratchet——唯一被实测证明「立即回本」的机制（docs check 清 110→0 半时）。子命令 + 本仓 `.husky/pre-push` 接线；基线 `.sillyspec/docs-check-baseline`，`--init-baseline` 显式立基线（fail-closed，不悄悄合法化存量），清偿后重跑即下调锁住成果；**behind 计数明确不参与 gate**（源码活跃≠卡错，代理信号的误报会让所有人学会忽略报警）。测试 test/docs-gate.test.mjs 10 用例；接入姿势 interface-contract.md §1.3b（文档引导挂 hook，不往用户仓自动注入）。
