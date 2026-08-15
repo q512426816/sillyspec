@@ -47,6 +47,7 @@ export const CUSTOM_KINDS = new Set([
   'cross-task-contract',     // task 卡片 provides/expects_from 对账(plan-postcheck)
   'design-file-coverage',    // design.md 文件清单 vs allowed_paths 覆盖(plan-postcheck)
   'task-id-continuity',      // task-NN id 连续性
+  'task-plan-reconciliation', // plan.md 声明任务 ↔ tasks/ 卡片双向对账(plan-postcheck)
   'design-readiness',        // design.md 进入 plan 前的章节就绪检查(validateDesignForPlan)
   'task-card-fields',        // task-NN.md 卡片字段存在性(validateBlueprintConsistency + validatePlanFeasibility)
   'verify-conclusion-gate',  // verify-result.md 结论 PASS/FAIL 门控
@@ -320,6 +321,20 @@ const PLAN_RULES = [
     },
     spec: 'design.md「文件变更清单」中的每个源码文件,必须被至少一个 task 的 allowed_paths 覆盖(前缀/glob 容差匹配),否则 execute 子代理无权改它→必然漏改。有 task 卡片但 design 缺「文件变更清单」章节也阻断(清单是覆盖对账的基准)。',
     failMessage: 'design.md 文件变更清单中 ${count} 个文件未被任何 task 的 allowed_paths 覆盖：\n${files}\n   这些文件在 execute 阶段将无 task 有权修改 → 必然漏改。\n   修复：为每个遗漏文件新建/补充 task 并在其 allowed_paths 声明，或在 design.md「不修改文件」章节说明不改原因。',
+  },
+  // task-plan-reconciliation(custom):plan.md 声明任务 ↔ tasks/ 卡片双向对账（债单 D-2b）。
+  // 修复场景：plan 列 17 个任务只生成 12 张卡（尾部文档同步类任务漏卡），execute 审计只看
+  // 卡片 → 漏卡任务零失败信号（sillyhub conversation-driven T-13~T-17 实证）。
+  // ${declared}/${cards} replaceAll。
+  {
+    id: 'plan.task-plan-reconciliation', stage: 'plan', source: 'validateBlueprintConsistency', severity: 'error', kind: 'task-plan-reconciliation',
+    target: { root: 'change', path: 'tasks' },
+    data: {
+      messageMissingCards: 'plan.md 声明了 ${declared} 个任务，但 tasks/ 只有部分卡片。缺卡: ${missing}\n   无卡片的任务不进 Wave、不受 execute 审计（allowed_paths/review.json 都不覆盖）→ 必然漏做（典型：尾部文档同步类任务）。\n   修复：为每个缺卡任务补 task-NN.md（含 allowed_paths/验收标准），或从 plan.md 删除该任务。',
+      messageOrphanCards: 'tasks/ 存在 plan.md 未声明的卡片: ${orphans}\n   这些任务不进任何 Wave，execute 不会执行。修复：在 plan.md 补声明，或删除孤儿卡片。',
+    },
+    spec: 'plan.md 中声明的每个 task-NN 必须有对应 tasks/task-NN.md 卡片（反向亦然），否则阻断——无卡片任务不受 execute 审计，必然漏做。',
+    failMessage: 'plan.md 任务与 tasks/ 卡片不对账',
   },
   // task-id-continuity(custom):task-NN id 从 task-01 起连续。算法留 validatePlanFeasibility。
   // ${expected}/${actual} replaceAll(零填充 2 位)。

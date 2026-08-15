@@ -175,6 +175,73 @@ console.log('\n--- 场景 7：三仓混合同名路径同 Wave → 全不冲突�
   rmSync(tmpDir, { recursive: true, force: true })
 }
 
+// ── 8: plan.md 声明任务 ↔ 卡片双向对账（债单 D-2b）— 尾部任务漏卡 → 阻断 ──
+// 修复场景：plan 列 17 任务只生成 12 卡（尾部文档同步类任务漏卡），旧校验只查已有卡片
+// 连续性 → 漏卡任务零失败信号（sillyhub conversation-driven T-13~T-17 实证）。
+console.log('\n--- 场景 8：plan 声明 3 任务只有 2 卡（尾部文档同步任务漏卡）→ 阻断（D-2b）---')
+{
+  const tmpDir = setupTasks(
+    [
+      { id: 'task-01', repo: null, path: 'src/a.py' },
+      { id: 'task-02', repo: null, path: 'src/b.py' },
+    ],
+    `# Plan\n\n## Wave 1\n- [ ] task-01: 实现\n- [ ] task-02: 测试\n- [ ] task-03: 同步模块文档\n`,
+  )
+  const r = validateBlueprintConsistency(tmpDir)
+  assert(!r.ok, `plan 声明 3 卡只有 2 应阻断（ok=false），errors: ${JSON.stringify(r.errors)}`)
+  assert(r.errors.some(e => e.includes('task-03') && e.includes('3 个任务')),
+    `error 应点出缺卡 task-03 与声明数 3，实际: ${JSON.stringify(r.errors)}`)
+  rmSync(tmpDir, { recursive: true, force: true })
+}
+
+// ── 9: 孤儿卡片（tasks/ 有卡但 plan.md 未声明）→ 阻断 ──
+console.log('\n--- 场景 9：孤儿卡片（plan 未声明 task-03）→ 阻断（D-2b）---')
+{
+  const tmpDir = setupTasks(
+    [
+      { id: 'task-01', repo: null, path: 'src/a.py' },
+      { id: 'task-02', repo: null, path: 'src/b.py' },
+      { id: 'task-03', repo: null, path: 'docs/x.md' },
+    ],
+    `# Plan\n\n## Wave 1\n- [ ] task-01: a\n- [ ] task-02: b\n`,
+  )
+  const r = validateBlueprintConsistency(tmpDir)
+  assert(!r.ok, `孤儿卡应阻断（ok=false），errors: ${JSON.stringify(r.errors)}`)
+  assert(r.errors.some(e => e.includes('task-03') && (e.includes('未声明') || e.includes('orphan') || e.includes('孤儿'))),
+    `error 应点出孤儿卡 task-03，实际: ${JSON.stringify(r.errors)}`)
+  rmSync(tmpDir, { recursive: true, force: true })
+}
+
+// ── 10: 声明与卡片完全对账 → 通过（零回归：既有场景 1/7 的 plan.md 均全声明）──
+console.log('\n--- 场景 10：声明与卡片完全对账 → 通过（D-2b）---')
+{
+  const tmpDir = setupTasks(
+    [
+      { id: 'task-01', repo: null, path: 'src/a.py' },
+      { id: 'task-02', repo: 'sillyspec', path: 'src/b.py' },
+    ],
+    `# Plan\n\n## Wave 1\n- [x] task-01: a（已完成勾选也算声明）\n- [ ] task-02: b\n`,
+  )
+  const r = validateBlueprintConsistency(tmpDir)
+  assert(r.ok, `声明与卡片对账应通过，errors: ${JSON.stringify(r.errors)}`)
+  rmSync(tmpDir, { recursive: true, force: true })
+}
+
+// ── 11: 无 plan.md（兼容旧流程）→ 跳过对账不误伤（场景 6 零回归确认）──
+console.log('\n--- 场景 11：无 plan.md → 跳过对账（零回归）---')
+{
+  const tmpDir = setupTasks(
+    [
+      { id: 'task-01', repo: null, path: 'src/a.py' },
+      { id: 'task-02', repo: 'sillyspec', path: 'src/a.py' },
+    ],
+    undefined,
+  )
+  const r = validateBlueprintConsistency(tmpDir)
+  assert(r.ok, `无 plan.md 应跳过对账通过，errors: ${JSON.stringify(r.errors)}`)
+  rmSync(tmpDir, { recursive: true, force: true })
+}
+
 console.log('\n==================================================')
 console.log(`✅ 通过: ${total - failed}  ❌ 失败: ${failed}`)
 console.log('==================================================')

@@ -57,28 +57,32 @@ console.log('--- brainstorm 末步 + design.md 缺失 → 回滚（exit 0，靠 
 }
 
 // ── plan gate 失败：runValidators(plan) 通过 + validatePlanForExecute 失败 → 回滚 ──
-// plan.md 有 task 但 id 不连续（task-01 → task-03，缺 task-02）→ validatePlanForExecute 失败。
+// plan.md 有重复 task id（task-01 出现两次）→ validatePlanForExecute 失败。
+// （2026-08-15 D-2b 前用「卡片连续、plan checkbox 不连续」触发，但 task-plan-reconciliation
+//  上线后该状态先被 postcheck 拦截走不到 Contract；改用重复 id——plan 声明 {task-01,task-02}、
+//  卡片同集合对账通过，重复 id 由 Contract 检查 2 拦，两层校验对象不同。）
 // plan 步骤是动态的（buildPlanSteps 按 plan.md 任务数生成），先 run plan init 拿真实步骤名，
 // 再 seedStage 把前 N-1 步标 completed、末步（Wave 重排/postcheck）pending，--done 触发阶段完成
-// → Plan→Execute Contract 校验 → 不连续 → 回滚。
-console.log('\n--- plan 末步 + plan.md task id 不连续 → Plan→Execute Contract 回滚 ---')
+// → Plan→Execute Contract 校验 → 重复 id → 回滚。
+console.log('\n--- plan 末步 + plan.md task id 重复 → Plan→Execute Contract 回滚 ---')
 {
   const { cwd, specBase } = makeRepo('cli-rollback-plan-')
   const cn = '2026-07-25-plan-rollback'
   const pm = await initChange(cwd, specBase, cn)
   const changeDir = join(specBase, 'changes', cn)
-  // plan.md 有 task 但 id 不连续（task-01 → task-03，缺 task-02）→ validatePlanForExecute 失败
+  // plan.md task id 重复（task-01 出现两次）→ validatePlanForExecute 失败
   // 不写 decisions.md（避免 P0/P1 阻塞 error 让 runValidators 先失败）
   writeFileSync(join(changeDir, 'plan.md'),
-    '# Plan\n\n## Wave 1\n\n- [ ] task-01: a\n- [ ] task-03: c\n')
+    '# Plan\n\n## Wave 1\n\n- [ ] task-01: a\n- [ ] task-01: a 重复\n- [ ] task-02: c\n')
   // plan.module-impact.exists(large) 要求——补上让校验过，聚焦 Contract 不连续
   writeFileSync(join(changeDir, 'module-impact.md'), '# 模块影响分析（Module Impact）— plan-rollback\n\n测试占位\n')
   // noAI 硬门（ql-20260814-005 noai-done-bypass）：--done 落到 postcheck step 时 completeStep
-  // 先执行 executePlanPostcheck（校验 tasks/ 卡片），须卡片连续齐全通过后才能到达
-  // Plan→Execute Contract（校验 plan.md checkbox）。卡片故意连续（01/02/03）而 plan.md
-  // checkbox 不连续（缺 task-02）→ 两层校验对象不同，聚焦 Contract 的不连续拦截。
+  // 先执行 executePlanPostcheck（校验 tasks/ 卡片），须卡片齐全通过后才能到达
+  // Plan→Execute Contract（校验 plan.md checkbox）。卡片集合与 plan.md 声明对账
+  // （task-01/task-02 各一卡，D-2b reconciliation 通过）而 plan.md checkbox 重复 task-01
+  // → 两层校验对象不同，聚焦 Contract 的重复 id 拦截。
   mkdirSync(join(changeDir, 'tasks'))
-  for (const n of ['01', '02', '03']) {
+  for (const n of ['01', '02']) {
     writeFileSync(join(changeDir, 'tasks', `task-${n}.md`), [
       '---',
       `id: task-${n}`,
@@ -114,7 +118,7 @@ console.log('\n--- plan 末步 + plan.md task id 不连续 → Plan→Execute Co
   const r = runStage('plan', cn, cwd, { done: true, output: '计划审查完成', answer: '确认' })
 
   assert(r.combined.includes('Plan → Execute Contract 校验失败') || r.combined.includes('Contract 校验失败'), 'stdout 含「Plan → Execute Contract 校验失败」')
-  assert(r.combined.includes('task id 不连续') || r.combined.includes('不连续'), 'stdout 点名 task id 不连续')
+  assert(r.combined.includes('task id 重复') || r.combined.includes('重复'), 'stdout 点名 task id 重复')
   assert(!r.combined.includes('阶段 plan 校验失败'), 'stdout 不含 runValidators 失败（plan.md 产物本身齐全）')
 
   const after = await new ProgressManager({ specDir: specBase }).read(cwd, cn)

@@ -439,6 +439,39 @@ export function validateBlueprintConsistency(changeDir) {
     }
   }
 
+  // plan.md 声明任务 ↔ tasks/ 卡片双向对账（债单 D-2b）：
+  // plan 列 17 任务只出 12 卡（尾部文档同步类任务漏卡）时，无卡任务不进 Wave、
+  // 不受 execute 审计 → 零失败信号漏做。口径与 plan.js parseTaskCount/parseTaskNames 一致
+  // （`- [ ] task-NN` checkbox；file 命名 task-NN.md + 卡内 id task-NN 均取，缺一即漏卡）。
+  const planMdPath = pJoin(changeDir, 'plan.md')
+  if (existsSync(planMdPath)) {
+    const declaredIds = new Set()
+    for (const line of readFileSync(planMdPath, 'utf8').split('\n')) {
+      const m = line.match(/^[-*]\s*\[[ x]\]\s*(task-\d+)\b/i)
+      if (m) declaredIds.add(m[1].toLowerCase())
+    }
+    if (declaredIds.size > 0) {
+      const tprRule = getRule('plan.task-plan-reconciliation')
+      const cardIds = new Set([...taskInfo.keys()].map(id => id.toLowerCase()))
+      const missing = [...declaredIds].filter(id => !cardIds.has(id))
+      if (missing.length > 0) {
+        errors.push(
+          tprRule.data.messageMissingCards
+            .replaceAll('${declared}', declaredIds.size)
+            .replaceAll('${missing}', missing.join(', '))
+        )
+      }
+      const orphans = [...cardIds].filter(id => !declaredIds.has(id))
+      if (orphans.length > 0) {
+        errors.push(
+          tprRule.data.messageOrphanCards.replaceAll('${orphans}', orphans.join(', '))
+        )
+      }
+    }
+    // declaredIds.size === 0：plan.md 无 task checkbox 声明（极端格式）→ 跳过对账，
+    // 由 validatePlanArtifacts/validatePlanForExecute 把关，不在此误伤。
+  }
+
   // 拓扑排序 + 循环依赖
   const depMap = new Map()
   for (const [taskId, info] of taskInfo) {

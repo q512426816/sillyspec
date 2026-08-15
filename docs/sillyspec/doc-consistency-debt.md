@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-08-15 14:48:00
-updated_at: 2026-08-15T14:48:00+08:00
+updated_at: 2026-08-15 15:05:00 +08:00
 ---
 
 # 文档一致性债：为什么"文档为本"在 sillyhub 落地失效（双代理实证）
@@ -60,7 +60,7 @@ sillyhub 的文档烂不是执行失误，是机制性的。
 |---|---|---|---|
 | D-1 | verify.js:137 明示"文档不一致不阻断"——制度根源 | 改为 advisory→blocking 可配置，或至少 verify 探针对账 module-impact 声明 vs 实际 diff | 中 |
 | D-2 | plan 覆盖对账跳过 `.sillyspec/` 文档路径（plan-postcheck.js:695 不传 keepSillyspecDocs，与 apply 阶段口径不一致） | ✅ 已修（2026-08-15 ql-20260815-006-a51d）：`parseDesignCoverageByRepo` 两处 `parseFileChangeList` 补传 `keepSillyspecDocs: true`，`.sillyspec/docs/` 模块文档须被 task `allowed_paths` 认领；`.sillyspec/` 非 docs 子路径仍排除（与 apply 口径一致）；新增 4 测试（test/design-coverage.test.mjs），删 1 个固化旧豁免契约的测试 | 小（quick 已完成） |
-| D-2b | 后置 task（T-13~T-17 类"文档同步"任务）无 task 卡即不受审计 | plan 阶段要求文档同步任务必须有 TaskCard | 中（prompt+校验） |
+| D-2b | 后置 task（T-13~T-17 类"文档同步"任务）无 task 卡即不受审计 | ✅ 已修（2026-08-15 ql-20260815-007-9ced）：`validateBlueprintConsistency` 加 plan.md 声明任务 ↔ tasks/ 卡片双向对账（rule `plan.task-plan-reconciliation`，缺卡/孤儿卡均阻断）；plan-postcheck-cross-repo 场景 8-11 四测试 + rollback 测试 fixture 迁移（不连续→重复 id 触发 Contract） | 中（已完成） |
 | D-3 | 仓库根 `docs/` 在 worktree 排除清单（worktree.js:171、worktree-apply.js:480），文档改动对流程不可见 | 从排除清单放开或改为可配置 | 小但需评估多 agent 噪声 |
 | D-4 | archive sync-module-docs 无结果校验（git add 无条件、空集静默通过） | 归档前对账 module-impact 声明的文档更新 vs 实际 diff，缺则 warning/阻断 | 中 |
 | D-5 | module-impact pending 死信箱（5+ change 带未清 pending 归档且 verify PASS） | verify/archive 对账 module-impact 内 pending/false 项，非零即阻断或强制清零 | 中 |
@@ -73,3 +73,33 @@ sillyhub 的文档烂不是执行失误，是机制性的。
 - 本文档登记全部缺口，D-1~D-8 待用户裁决优先级。
 - exec-g 债条目（prompt-control-debt.md:149）描述已过时（现行 filterDeliverableFiles 已保留 `.sillyspec/docs/`），应销账——本仓 quick 可顺手修。
 - docs/sillyspec/ 自身抽查：known-implementation-gaps.md 停 07-16 滞后一个月；interface-contract.md 不在 doc-ref-check 白名单。
+
+## 五、二次实证核验（2026-08-15 15:05，独立会话复核）
+
+初版分析出自双代理并行会话；本节为另一独立会话对关键论据的逐条复核结果，全部属实：
+
+**源码侧（本仓，逐行核对）：**
+
+| 论据 | 核验结果 |
+|---|---|
+| verify.js 探针 prompt「不符合时标记 ⚠️（不阻断，模块文档可能未及时更新）」 | ✅ 原文在盘（verify.js 设计一致性检查第 6 条） |
+| plan-postcheck.js `parseDesignCoverageByRepo` 补传 `keepSillyspecDocs: true`（D-2 修复） | ✅ 已在盘，注释明确标注与 apply 阶段口径一致 |
+| worktree.js / worktree-apply.js 排除清单含 `:(exclude)docs/`（D-3） | ✅ 两处排除清单逐字一致，`docs/` 均被排除 |
+| `.sillyspec/` 整目录也在排除清单 | ⚠️ 注意：`computeBaselineHash` 排除 `.sillyspec/` 整目录，但 apply 阶段 `resolveApplyAllowSet` 传 `keepSillyspecDocs: true` 保留 `.sillyspec/docs/`——排除口径（hash/dirty 判定）与放行口径（apply 集合）是两套，D-3 分析成立但需注意这个双层结构 |
+
+**sillyhub 侧（multi-agent-platform 仓，重新统计）：**
+
+| 论据 | 初版数字 | 复核数字 | 结论 |
+|---|---|---|---|
+| quick 条目总数 | 480 | **482**（`## ql-` 标题计数，QUICKLOG-qinyi.md 55 + 其余分日文件） | ✅ 量级成立 |
+| 归档 change 无 verify-result.md | 44 | **44** | ✅ 精确一致 |
+| daemon src commit vs 模块文档 commit（06-24 起） | 129 : 4 | **135 : 3** | ✅ 比例更悬殊，量级成立 |
+| lib-changes.md 仍列已删函数 | createChange/executeChange | ✅ 第 15/18 行原文在盘：`createChange(workspaceId, input)`、`executeChange(workspaceId, changeKey, provider?)`；但第 55 行 08-08 条目已注明 `executeChange` "既有方法不变"——即文档头部 CRUD 清单与尾部变更记录自相矛盾，漂移形态是"新旧记录叠加"而非单纯遗漏 | ✅ 成立，根因归类应属 B+C 混合 |
+| frontend/src 源文件数 | 305 | 457（含 .ts/.tsx/.js/.vue 全量） | ⚠️ 初版 305 可能只计某子集；无文档登记比例只会更差，结论方向不变 |
+
+**复核新增观察：**
+
+1. `_module-map.yaml` 之外，`.sillyspec/.runtime/worktrees/perf-remediation/` 里还残留一份**过期副本**的 lib-changes.md——worktree 未清理的文档副本本身就是第三份真相源，加剧漂移。
+2. 最新的 2026-08-15-error-message-l10n（246+ 处后端文案改动）已归档且 verify PASS——若其模块文档同步又是"声明完成实际漏同步"，则是 D-4/D-5 的最新活样本，建议裁决时优先核这一单。
+
+**复核结论：初版分析的全部结构性论断成立，无需推翻；量化数字已按复核值修正。**
