@@ -217,7 +217,9 @@ function doInstall(projectDir, tools, subprojects = [], specDir = null, options 
   // specDir: 规范目录（默认 projectDir/.sillyspec）
   // projectDir: 源码项目根目录（用于工具检测、指令注入、.gitignore）
   // options.noSkills: 跳过 skills 复制段（--no-skills；指令注入不受影响）
-  const { noSkills = false } = options;
+  // options.platformMode: 平台模式（cmdInit 收到 platformOpts 非空）——项目内 .sillyspec/
+  //   通常只有 local.yaml（平台 init lease 写、含用户手调 mcp 段），任何清理都会丢失，整体跳过
+  const { noSkills = false, platformMode = false } = options;
   const spec = specDir || join(projectDir, '.sillyspec');
 
   // 外部 specDir 时清理旧版本残留的 cwd/.sillyspec/（防止源码污染）。

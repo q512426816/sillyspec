@@ -12,6 +12,7 @@ node_modules/
 *.db-wal
 *.db-shm
 
-# 平台模式运行时指针/时间戳（每次运行重写，勿提交）
+# 平台模式运行时指针/接管声明/时间戳（每次运行重写，勿提交）
 .sillyspec-platform.json
+.sillyspec-platform-managed
 .sillyspec-platform-cleaned

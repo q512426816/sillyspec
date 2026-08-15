@@ -336,3 +336,114 @@
 根因：--help 在 runCommand knownFlags 白名单里被静默吞掉，无任何短路逻辑，流程继续走 cwd 纠正→quick 会话创建→QUICKLOG 落盘；-h 不在白名单被当未知参数 exit 2。
 方案：runCommand 在 flag 校验通过后、任何副作用之前检测 --help/-h 短路，新增 printStageUsage 打印 stage 用法帮助退出 0；-h 补进 knownFlags；未知 flag 校验不变。troubleshooting.md 补第 8 条。
 结果：新增 test/run-help-shortcircuit.test.mjs 15 断言全过（run quick --help/-h 退出 0+输出帮助+不增 quick-sessions 目录+不增 ql 条目；brainstorm/scan/顶层别名同测；--halp 仍 exit 2）；npm test 全量绿；lint 280 过。
+
+## ql-20260815-006-a51d | 2026-08-15 14:54:56 | D-2 修复 plan 覆盖对账跳过模块文档路径
+状态：已完成
+关联变更：（无）
+文件：
+- src/stages/plan-postcheck.js（两处 parseFileChangeList 补传 keepSillyspecDocs:true）
+- test/design-coverage.test.mjs（新增 D-2 四测试，删固化旧豁免契约一测试）
+- docs/sillyspec/file-lifecycle.md（同步覆盖对账口径说明+时间戳）
+- docs/sillyspec/doc-consistency-debt.md（D-2 销账）
+需求：D-2 修复 plan 覆盖对账跳过模块文档路径。
+根因：plan-postcheck.js parseDesignCoverageByRepo 两处 parseFileChangeList 未传 keepSillyspecDocs，change-list.js 默认过滤 .sillyspec/，与 apply 阶段口径不一致，design 声明的模块文档更新无 task 认领。
+方案：两处调用补传 keepSillyspecDocs: true（.sillyspec/docs/ 视为交付物参与覆盖对账，非 docs 子路径仍排除），先写 4 个新测试再改实现，删除 1 个固化旧豁免契约的测试。
+结果：design-coverage 44/44 绿，npm test 全量 0 失败，lint 280 文件通过；file-lifecycle.md 已同步说明，债单 D-2 已销账。
+
+## ql-20260815-007-9ced | 2026-08-15 15:03:27 | (quick 任务)
+状态：进行中
+关联变更：（无）
+文件：src/stages/plan-postcheck.js, test/design-coverage.test.mjs, docs/sillyspec/doc-consistency-debt.md, docs/sillyspec/file-lifecycle.md
+
+## ql-20260815-008-1fe8 | 2026-08-15 15:16:14 | D-2b 修复尾部任务漏卡零失败信号
+状态：已完成
+关联变更：（无）
+文件：
+- src/stages/plan-postcheck.js（validateBlueprintConsistency 加 plan 声明与卡片双向对账）
+- src/stage-contract-spec.js（新增 rule plan.task-plan-reconciliation + CUSTOM_KINDS 登记）
+- test/plan-postcheck-cross-repo.test.mjs（新增场景 8-11（缺卡/孤儿/对账通过/无 plan.md））
+- test/run-complete-step-validator-rollback.test.mjs（fixture 迁移为重复 id 触发 Contract）
+- docs/sillyspec/file-lifecycle.md（postcheck 描述同步）
+- docs/sillyspec/doc-consistency-debt.md（D-2b 销账）
+需求：D-2b 修复尾部任务漏卡零失败信号。
+根因：postcheck 的 task-id-continuity 只校验已有卡片内部连续，plan 列 17 任务只生成 12 卡时漏卡任务不进 Wave 不受 execute 审计（sillyhub T-13~T-17 实证）。
+方案：validateBlueprintConsistency 加 plan.md 声明任务与 tasks/ 卡片双向对账，新增 rule plan.task-plan-reconciliation（缺卡/孤儿卡均阻断）。
+结果：plan-postcheck-cross-repo 场景 8-11 四测试通过，rollback 测试 fixture 迁移为重复 id 触发（15/15），npm test 全量 0 失败，lint 280 文件通过，file-lifecycle.md 已同步，债单 D-2b 销账。
+
+## ql-20260815-009-b2de | 2026-08-15 15:19:43 | D-5 修复 module-impact pending 死信箱
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/complete-handlers.js（extractPendingDocSyncRows + 归档移动前死信校验）
+- test/archive-pending-deadletter.test.mjs（新建 10 单测）
+- docs/sillyspec/file-lifecycle.md（archive 行同步死信校验）
+- docs/sillyspec/doc-consistency-debt.md（D-5 销账）
+需求：D-5 修复 module-impact pending 死信箱。
+根因：更新结果表 pending 项无人回填即可归档且 verify 全 PASS（perf-remediation 实证）。
+方案：archiveChangeDirectory 移动前加 extractPendingDocSyncRows 死信校验，只查更新结果段表格末列精确 pending/待办/未同步/todo，非零阻断。
+结果：10 单测全绿，npm test 全量 0 失败，lint 281 文件通过；file-lifecycle 已同步，D-5 销账。
+
+## ql-20260815-010-7466 | 2026-08-15 15:24:16 | D-4 窄口径修复 sync-module-docs 假申报无校验
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/complete-handlers.js（extractDoneDocTargets + 归档后存在性对账）
+- test/archive-pending-deadletter.test.mjs（补 5 个 D-4 测试）
+- docs/sillyspec/doc-consistency-debt.md（D-4 销账）
+需求：D-4 窄口径修复 sync-module-docs 假申报无校验。
+根因：归档后 git add 无条件、声明 done 但目标文档不存在无信号。
+方案：extractDoneDocTargets 提取更新结果 done 行目标文档路径，归档后全路径存在性对账 warning。
+结果：15 单测全绿，npm test 全量 0 失败，lint 281 文件通过，D-4 销账（窄口径）。
+
+## ql-20260815-011-66ac | 2026-08-15 15:27:43 | D-1 修复 verify 阶段文档滞后零信号
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/gates.js（verify --done 死信探针）
+- src/stages/verify.js（措辞改硬门指向）
+- test/noai-completion-gate.test.mjs（T9/T10）
+- docs/prompt/_extracted.json（镜像重跑）
+- docs/sillyspec/file-lifecycle.md（verify 行同步）
+- docs/sillyspec/doc-consistency-debt.md（D-1 销账）
+需求：D-1 修复 verify 阶段文档滞后零信号。
+根因：verify.js 措辞把文档滞后合法化为不阻断，死信到 archive 才被拦。
+方案：verify --done 加死信探针（blocking 回滚）+ 措辞改为当场同步+指向硬门。
+结果：noai-completion-gate 30/30，npm test 全量 0 失败，lint 281 文件通过，D-1 销账。
+
+## ql-20260815-012-f521 | 2026-08-15 15:34:45 | D-8 quick 通道文档欠账显性化
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/shared.js（docSyncHint 检测）
+- src/run/quick-audit.js（欠账标记 warn）
+- test/audit-quick-completion.test.mjs（D-8 四场景）
+- docs/sillyspec/doc-consistency-debt.md（D-8 销账）
+需求：D-8 quick 通道文档欠账显性化。
+根因：quick 72% 流量 86% 不动文档零提示。
+方案：auditQuickCompletion docSyncHint 标记 + printQuickAuditReview warn。
+结果：audit 29/29，全量 0 失败，lint 通过，D-8 销账。
+
+## ql-20260815-013-623a | 2026-08-15 20:30:12 | D-7 方案 A scan 漂移检测落地
+状态：已完成
+关联变更：（无）
+文件：
+- src/scan-staleness.js（漂移检测新模块）
+- src/run/prompt.js（注入分支）
+- src/stages/brainstorm.js（占位符）
+- test/scan-staleness.test.mjs（9 单测）
+- docs/prompt/_extracted.json（镜像）
+- docs/sillyspec/file-lifecycle.md（brainstorm 行）
+- docs/sillyspec/doc-consistency-debt.md（D-7 销账）
+需求：D-7 方案 A scan 漂移检测落地。
+根因：scan 无刷新机制，agent 读过期架构零信号。
+方案：scan-staleness.js + brainstorm {SCAN_STALENESS} 事实注入。
+结果：9 单测绿，e2e 与主仓冒烟过，npm test 0 失败，lint 过，D-7 销账（部分）。
+
+## ql-20260815-014-3f34 | 2026-08-15 20:42:40 | 补 .sillyspec-platform-managed 声明文件的 gitignore 规则
+状态：已完成
+关联变更：（无）
+文件：.gitignore
+需求：补 .sillyspec-platform-managed 声明文件的 gitignore 规则
+根因：无，纯遗漏——接管声明机制新增项目根落盘物时漏更新 ignore 模板
+方案：init.js ignoreRules 补三规则（指针/声明/cleaned）+ 主仓 .gitignore 同步 + 清主仓自指残留根治重点亮
+结果：E2E tmpdir init 三规则齐；裸调不再重点亮；npm test exit=0 + lint 288 过 + doc-ref-check 80/80（并行会话行号漂移 7 处一并修）。模块文档无需更新（gitignore 模板属 init 行为非模块语义）。
