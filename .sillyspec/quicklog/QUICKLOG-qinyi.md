@@ -310,10 +310,20 @@
 关联变更：（无）
 文件：（无）
 
-## ql-20260815-004-64fc | 2026-08-15 14:23:58 | (quick 任务)
-状态：进行中
+## ql-20260815-004-64fc | 2026-08-15 14:23:58 | 平台操作 init 时直接生成平台指针文件
+状态：已完成
 关联变更：（无）
-文件：（见实际改动）
+文件：
+- src/run/shared.js（新增 writePlatformPointer：平台指针双写单一数据源，scan 与 init 共用）
+- src/run/command.js（runCommand 指针双写改用 helper，消重复）
+- src/index.js（顶层解析 --workspace-id/--runtime-root 传 cmdInit）
+- src/init.js（writeInitPlatformPointer：外部 specDir+平台 flag 时落双指针 status:active）
+- test/platform-init-pointer.test.mjs（新增：init 落指针/本地不落/裸调恢复/scan 覆盖 4 场景）
+- docs/sillyspec/platform-interface-map.md（8 处行号漂移修复 + init 落指针描述 + updated_at）
+需求：平台操作 init 时直接生成平台指针文件，复用 scan 的文件生成逻辑，消除 init→scan 窗口期 agent 裸调静默落本地模式的进度库分裂断点
+根因：指针双写逻辑只活在 runCommand（command.js）里，init 明明拿到 specDir 却不落指针；平台若先 init 后 scan，窗口期内 agent 裸调 run 命令找不到指针会静默回退本地模式
+方案：抽公共 helper writePlatformPointer（src/run/shared.js）收敛双写（主文件 specRoot/.runtime/platform-scan.json + 恢复指针 cwd/.sillyspec-platform.json）；index.js 顶层解析 --workspace-id/--runtime-root 传 cmdInit（仅平台专属 flag 触发，本地 --spec-dir 用法不受影响）；init.js writeInitPlatformPointer 在外部 specDir+平台 flag 时落双指针，status: active（不冒领 scan 身份，scanRunId=null，24h STALE 清理不误删）
+结果：新增 test/platform-init-pointer.test.mjs 15 断言全绿（init 落指针/本地模式不落/裸调不落本地库/scan 覆盖不丢字段）；npm test 全量 196 文件 exit=0；lint 280 文件过；platform-interface-map.md 同步（8 处行号漂移修复+新行为描述）
 
 ## ql-20260815-005-c1b1 | 2026-08-15 14:41:42 | 修 `run quick --help` 误开会话写 QUICKLOG（--help 静默吞）
 状态：已完成

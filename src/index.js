@@ -166,6 +166,9 @@ async function main() {
   let specDir = null;
   let tool = null;
   let interactive = false;
+  // 平台模式 flag（init 落平台指针用；非 init 命令时忽略——runCommand 自行解析 filteredArgs）
+  let platformWorkspaceId = null;
+  let platformRuntimeRoot = null;
   const filteredArgs = [];
 
   for (let i = 0; i < args.length; i++) {
@@ -181,6 +184,16 @@ async function main() {
       i++;
     } else if (args[i] === '--tool' && args[i + 1]) {
       tool = args[i + 1];
+      i++;
+    } else if (args[i] === '--workspace-id' && args[i + 1]) {
+      // 平台模式专属 flag（init 落平台指针用；--runtime-root/--scan-run-id 保持在
+      // filteredArgs 由 runCommand 解析，init 侧只需要 workspaceId 作为平台信号 + runtimeRoot）
+      platformWorkspaceId = args[i + 1];
+      filteredArgs.push(args[i], args[i + 1]);
+      i++;
+    } else if (args[i] === '--runtime-root' && args[i + 1]) {
+      platformRuntimeRoot = resolve(args[i + 1]);
+      filteredArgs.push(args[i], args[i + 1]);
       i++;
     } else if (args[i] === '--interactive' || args[i] === '-i') {
       interactive = true;
@@ -232,7 +245,7 @@ async function main() {
 
   switch (command) {
     case 'init':
-      await (await import('./init.js')).cmdInit(dir, { tool, interactive, specDir });
+      await (await import('./init.js')).cmdInit(dir, { tool, interactive, specDir, platformOpts: (platformWorkspaceId || platformRuntimeRoot) ? { workspaceId: platformWorkspaceId, runtimeRoot: platformRuntimeRoot } : null });
       break;
     case 'setup':
       const setupList = filteredArgs.includes('--list') || filteredArgs.includes('-l');

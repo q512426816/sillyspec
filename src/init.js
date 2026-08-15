@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs';
 import { join, resolve, dirname, basename } from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import { checkbox, confirm, input } from '@inquirer/prompts';
 import { ProgressManager } from './progress.js';
 import chalk from 'chalk';
@@ -386,6 +386,44 @@ function doInstall(projectDir, tools, subprojects = [], specDir = null) {
 
 // ── 安装完成总结 ──
 
+/**
+ * 平台模式 init 落盘指针（消除 init→scan 窗口期断点）。
+ *
+ * 触发条件：带平台专属信号（--workspace-id / --runtime-root，由 index.js 解析为 platformOpts）
+ * 且 --spec-dir 指向外部规范目录。仅 --spec-dir（本地外部目录用法）不触发——与 runCommand 侧
+ * 「带平台 flag 才算平台调用」判定一致，防本地用户误触发平台指针。
+ *
+ * 复用 scan 的指针生成逻辑（writePlatformPointer，单一数据源），status: active
+ * （POINTER_STATUS.ACTIVE，未 scan；24h STALE 清理只作用于 scan_completed，不会误删）。
+ */
+function writeInitPlatformPointer(projectDir, resolvedSpecDir, platformOpts) {
+  if (!platformOpts || !resolvedSpecDir) return;
+  const isExternalSpec = resolve(resolvedSpecDir) !== resolve(projectDir, '.sillyspec');
+  if (!isExternalSpec) return;
+  const { writePlatformPointer } = require_or_import_shared();
+  const ok = writePlatformPointer(projectDir, {
+    specRoot: resolve(resolvedSpecDir),
+    runtimeRoot: platformOpts.runtimeRoot || null,
+    workspaceId: platformOpts.workspaceId || null,
+    scanRunId: null,
+  }, { status: 'active' });
+  if (ok) {
+    console.log(chalk.green(`    ✓ 平台指针已落盘（.sillyspec-platform.json，status: active）`));
+    console.log(chalk.green(`      init→scan 窗口期裸调 run 命令将自动恢复平台 specRoot: ${resolvedSpecDir}`));
+  }
+}
+
+// ESM 下惰性加载 run/shared.js 的 writePlatformPointer。
+// 用 createRequire 而非顶层静态 import：init.js 被 index.js 按 case 动态加载已隔离，
+// 但 shared.js → git-helper 链在 CJS require 下无需解析 ESM 依赖图，路径最短。
+// （node:module 为内置模块，顶层 import 零依赖税。）
+import { createRequire } from 'node:module';
+function require_or_import_shared() {
+  const req = createRequire(import.meta.url);
+  return req('./run/shared.js');
+}
+
+
 function showSummary(version, tools, specDir) {
   const toolLabels = tools.map(t => TOOL_LABELS[t] || t);
 
@@ -409,7 +447,7 @@ function showSummary(version, tools, specDir) {
 // ── 主命令 ──
 
 export async function cmdInit(projectDir, options = {}) {
-  const { tool, interactive, specDir } = options;
+  const { tool, interactive, specDir, platformOpts = null } = options;
   const version = getVersion();
   const resolvedSpecDir = specDir ? resolve(specDir) : null;
 
@@ -510,6 +548,7 @@ export async function cmdInit(projectDir, options = {}) {
 
     console.log('');
     await doInstall(projectDir, selectedTools, subprojects, resolvedSpecDir);
+    writeInitPlatformPointer(projectDir, resolvedSpecDir, platformOpts);
     showSummary(version, selectedTools, resolvedSpecDir);
     return;
   }
@@ -529,6 +568,7 @@ export async function cmdInit(projectDir, options = {}) {
   }
 
   await doInstall(projectDir, tools, [], resolvedSpecDir);
+  writeInitPlatformPointer(projectDir, resolvedSpecDir, platformOpts);
 
   console.log('');
   console.log(chalk.green(`  ✅ SillySpec v${version} 安装完成！`));
