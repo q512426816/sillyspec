@@ -83,7 +83,7 @@ cron/timer 式自动 `scan --quick`。与多 agent 并发冲突（重扫期间�
 
 - 检测口径：`git rev-list --count <source_commit>..HEAD -- <scan 文档登记的模块路径>`；map 里登记的是 glob 时退化为全仓 count（宁可误报不漏报，advisory 性质允许噪声）
 - 阈值：落后 ≥ 50 commit 或 ≥ 14 天 → warn（可经 local.yaml 配置覆盖）
-- 注入点：brainstorm step1 prompt 渲染时 CLI 追加一行（类似现有模块上下文注入 `run.js:228` 先例）
+- 注入点：brainstorm step1 prompt 渲染时 CLI 追加一行（类似现有模块上下文注入 `src/run/prompt.js:30 loadModuleContextIndex` 先例）
 - 文档同步：file-lifecycle.md scan/brainstorm 行 + SKILL（若涉及）
 - 测试：source_commit 缺失（老文档）→ 跳过不误报；阈值内 → 静默；超阈值 → warn 文案
 

@@ -242,6 +242,52 @@ console.log('\n--- D-8 文档欠账标记 ---')
   assert(warns.some(w => w.includes('文档欠账标记')), `打印欠账标记 warn（实际 ${JSON.stringify(warns)}）`)
 }
 
+// ── docs check advisory：本次改动的 .md 含失效 file:line 引用 → docsCheckHint + warning ──
+console.log('\n--- docs check advisory ---')
+
+// case DC-1: 改动的文档引用失效（文件不存在）→ docsCheckHint + reasons + warning
+{
+  const d = makeRepo()
+  writeFileSync(join(d, 'README.md'), '见 `src/ghost.js:1`（不存在文件）\n')
+  const r = await auditQuickCompletion(d, baseGuard, {})
+  assert(r.docsCheckHint && r.docsCheckHint.invalid === 1,
+    `失效引用 → docsCheckHint（实际 ${JSON.stringify(r.docsCheckHint)}）`)
+  assert(r.reasons.some(x => x.includes('失效 file:line 引用')), `reasons 记录引用失效`)
+  assert(r.status === 'warning', `引用失效升 warning 不阻断（实际 ${r.status}）`)
+}
+
+// case DC-2: 改动的文档引用全合法 → 无 docsCheckHint、status 不受影响
+{
+  const d = makeRepo()
+  mkdirSync(join(d, 'src'), { recursive: true })
+  writeFileSync(join(d, 'src', 'index.js'), 'export const alpha = 1\n')
+  writeFileSync(join(d, 'README.md'), '见 `index.js:1`（`alpha` 定义，裸名在 src/ 递归解析）\n')
+  const r = await auditQuickCompletion(d, baseGuard, {})
+  assert(!r.docsCheckHint, `合法引用无 docsCheckHint（实际 ${JSON.stringify(r.docsCheckHint)}）`)
+  assert(!r.reasons.some(x => x.includes('file:line')), `无引用失效 reason`)
+}
+
+// case DC-3: 纯源码改动（无 .md）→ 不触发 docs check（DC 与 D-8 独立）
+{
+  const d = makeRepo()
+  writeFileSync(join(d, 'src-index.js'), 'export const x = 2\n')
+  const r = await auditQuickCompletion(d, baseGuard, {})
+  assert(!r.docsCheckHint, `无文档改动不跑 docs check（实际 ${JSON.stringify(r.docsCheckHint)}）`)
+}
+
+// case DC-4: printQuickAuditReview 打印引用失效提示
+{
+  const d = makeRepo()
+  writeFileSync(join(d, 'README.md'), '见 `src/ghost.js:1`\n')
+  const r = await auditQuickCompletion(d, baseGuard, {})
+  const origWarn = console.warn, origErr = console.error
+  const warns = []
+  console.warn = (...a) => { warns.push(a.join(' ')) }
+  console.error = (...a) => { warns.push(a.join(' ')) }
+  try { printQuickAuditReview(r) } finally { console.warn = origWarn; console.error = origErr }
+  assert(warns.some(w => w.includes('文档引用失效')), `打印引用失效 warn（实际 ${JSON.stringify(warns)}）`)
+}
+
 for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} }
 console.log(`\n${'='.repeat(50)}`)
 console.log(`✅ 通过: ${total - failed}  ❌ 失败: ${failed}`)

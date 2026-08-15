@@ -447,3 +447,21 @@
 根因：无，纯遗漏——接管声明机制新增项目根落盘物时漏更新 ignore 模板
 方案：init.js ignoreRules 补三规则（指针/声明/cleaned）+ 主仓 .gitignore 同步 + 清主仓自指残留根治重点亮
 结果：E2E tmpdir init 三规则齐；裸调不再重点亮；npm test exit=0 + lint 288 过 + doc-ref-check 80/80（并行会话行号漂移 7 处一并修）。模块文档无需更新（gitignore 模板属 init 行为非模块语义）。
+
+## ql-20260815-015-d4af | 2026-08-15 21:01:43 | 复核 D-1~D-8 处置真实性时发现 sillyspec docs check 无 local.yaml 裸跑必崩（null.flatMap TypeErro…
+状态：已完成
+关联变更：（无）
+文件：（见实际改动）
+需求：复核 D-1~D-8 处置真实性时发现 sillyspec docs check 无 local.yaml 裸跑必崩（null.flatMap TypeError，docs-check.js:253）
+根因：runDocsCheck 解构默认值 paths=['docs/**/*.md'] 只挡 undefined 不挡 null；readDocsCheckConfig 无 local.yaml 或无 docs-check 段时回退 {paths:null}，index.js:591 传 paths: cliPaths||cfg.paths 得 null 直入 flatMap
+方案：null/空数组统一落回缺省 glob（Array.isArray&&length>0 判断，解构默认值改防 undefined 层）；回归测试覆盖 null/[]/undefined 三态
+结果：node --test docs-check 套件 28/28 全过（新增 1 测试）；修后 CLI 实跑不再崩，全量暴露 110/416 处历史引用欠账（债单登记 51 后新增 59，含并行 D 系列修复未同步行号漂移）；npm test 全量 237/237 绿 + npm run lint 通过
+
+## ql-20260815-016-dc33 | 2026-08-15 21:37:55 | docs check 首扫 110/416 处引用失效且只涨不跌——修活文档欠账并让检测接入 quick --done 形成闭环
+状态：已完成
+关联变更：（无）
+文件：（见实际改动）
+需求：docs check 首扫 110/416 处引用失效且只涨不跌——修活文档欠账并让检测接入 quick --done 形成闭环
+根因：①D 系列修复与 W6 run.js 拆分产生行号漂移未同步文档；②docs check 只是命令，无环节自动消费，欠账无收敛动力
+方案：①批量修正 7 份活文档 71 处失效引用（行号校准/符号迁移改路径/脆弱多引用行去锚改叙述）；②历史评审快照 39 处冻结进 local.yaml docs-check.skip；③quick --done 审计接入 docs check advisory：本次 changedFiles 的 .md 跑 runDocsCheck，失效即 docsCheckHint+reasons+升 warning（复用 D-8 模式，只归因本次改动不扫全仓存量），quick-audit.js 打印修复指引
+结果：docs check 全仓绿（273 引用全过/155 带关键词断言，110→0）；新增 4 测试（DC-1~4），quick-audit 36/36；npm test 全量 237+/exit 0；lint 过。附带事故：bash 内联脚本反引号被命令替换吃掉致 architecture-4a.md 短暂损坏，已 git checkout 恢复并用脚本文件重做（教训入 memory）

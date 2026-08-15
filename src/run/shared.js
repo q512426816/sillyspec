@@ -746,6 +746,23 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
       result.docSyncHint = { touchedSource: srcChanged.length, docFiles: docChanged }
     }
 
+    // docs check advisory（doc-consistency-debt D-6 后续）：本次改动的 .md 文档跑 file:line
+    // 引用校验，失效即 warn + reasons——检测能力落地后欠账只涨不跌的最后一公里。只查本次
+    // changedFiles 的文档（归因到本次改动），不扫全仓历史欠账（那是存量问题，quick 不背锅）。
+    // docs-check 是 IO 面（walkGlob/existsSync），动态 import 隔离；任何异常 fail-open 只跳过。
+    const mdChanged = result.changedFiles.filter((f) => f.endsWith('.md') && !isQuickMetadata(f, guard.linkedChanges))
+    if (mdChanged.length > 0) {
+      try {
+        const { runDocsCheck } = await import('../docs-check.js')
+        const dc = runDocsCheck({ projectRoot: cwd, docs: mdChanged })
+        if (!dc.ok) {
+          result.reasons.push(`本次改动文档含 ${dc.invalid.length} 处失效 file:line 引用（sillyspec docs check 可复现）`)
+          result.docsCheckHint = { invalid: dc.invalid.length, total: dc.total }
+          if (result.status === 'safe') result.status = 'warning'
+        }
+      } catch { /* docs-check 不可用（老版本包等）→ 静默跳过，不阻断 quick */ }
+    }
+
     // task-02: 同文件并发检测——allowedFile 在 baseline（他者改过）且当前 hash ≠ step1 hash（我也改了）
     // → commit 整文件 pathspec 会夹带他者 hunk，warn 给分离指引（advisory，不阻断，D-002）
     if (allowedFiles.length > 0 && guard.allowedFilesHash) {

@@ -56,6 +56,10 @@ export function printQuickAuditReview(review) {
     console.warn(`\n📝 文档欠账标记（D-8）：本次 ${review.docSyncHint.touchedSource} 个源码文件改动未同步任何模块文档。`)
     console.warn(`   quick 不强制文档同步，但欠账已记录（QUICKLOG reasons）。若改动触及接口/契约，建议顺手同步模块文档。`)
   }
+  if (review.docsCheckHint && review.docsCheckHint.invalid > 0) {
+    console.warn(`\n📎 文档引用失效（docs check）：本次改动的文档含 ${review.docsCheckHint.invalid}/${review.docsCheckHint.total} 处失效 file:line 引用。`)
+    console.warn(`   行号漂移 → 更新到当前源码；文件删改名 → 更新引用路径。跑 sillyspec docs check 可看完整清单。`)
+  }
 }
 
 /**
