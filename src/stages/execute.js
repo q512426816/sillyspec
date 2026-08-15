@@ -23,6 +23,18 @@ export function validatePlanForExecute(planContent) {
 
   const waves = parseWavesFromPlan(planContent)
 
+  // 检查 0: Wave 编号带字母后缀（如 "## Wave 2b"）→ 显式报错（坑 plan-wave-letter-suffix）
+  // 解析正则 ^#+\s*Wave\s+(\d+) 不锚定结尾，"Wave 2b" 会被 parseInt 截断成 Wave 2 静默收容，
+  // 与显式 Wave 2 合并为同一 Wave 强制并行——串行意图静默失效且无任何提示，排查到源码才明白。
+  const letterSuffixWaves = [...planContent.matchAll(/^#+\s*Wave\s+(\d+)([a-z])(?![a-z0-9])/gim)]
+  for (const m of letterSuffixWaves) {
+    errors.push(
+      `Wave 编号带字母后缀：${m[0].trim()}（"${m[1]}${m[2]}"）不被支持。` +
+      `解析器只认纯数字编号（"## Wave N"），字母后缀会被截断为 "${m[1]}" 与显式 Wave ${m[1]} 静默合并强制并行。` +
+      `解法：改顺序纯数字编号（Wave 3/4…）或并入相邻 Wave`
+    )
+  }
+
   // 收集所有 task
   const allTasks = []
   for (const wave of waves) {

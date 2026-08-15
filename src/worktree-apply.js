@@ -877,7 +877,8 @@ export function assessApplyRisk(changeName, { cwd } = {}) {
     }
   }
 
-  // 检查 6: diff 规模异常（>2000 行变更视为异常）
+  // 检查 6: diff 规模异常（两档：>5000 行 BLOCKED；2000~5000 行 WARNING——正常规模 change
+  // 常超 2000 行（如 +2368），单档硬拦把正常变更逼进 rescue cp 手动路径，见 ql-20260815-001 复盘）
   const wtPath = meta?.worktreePath;
   const diffBase = meta?.baselineCommit || meta?.baseHash;
   let additions = 0, deletions = 0;
@@ -888,8 +889,10 @@ export function assessApplyRisk(changeName, { cwd } = {}) {
       const delMatch = shortstat?.match(/(\d+) deletion/);
       additions = insMatch ? parseInt(insMatch[1]) : 0;
       deletions = delMatch ? parseInt(delMatch[1]) : 0;
-      if (additions + deletions > 2000) {
-        reasons.push(`diff 规模异常（${additions} additions + ${deletions} deletions = ${additions + deletions} 行）`);
+      if (additions + deletions > 5000) {
+        reasons.push(`diff 规模异常（${additions} additions + ${deletions} deletions = ${additions + deletions} 行，超过 5000 硬上限）`);
+      } else if (additions + deletions > 2000) {
+        warnings.push(`diff 规模偏大（${additions} additions + ${deletions} deletions = ${additions + deletions} 行，2000~5000 区间放行为 WARNING，请确认属正常变更规模）`);
       }
     } catch {}
   }
