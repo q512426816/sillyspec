@@ -11,7 +11,7 @@
  */
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { extractPendingDocSyncRows } from '../src/run/complete-handlers.js'
+import { extractPendingDocSyncRows, extractDoneDocTargets } from '../src/run/complete-handlers.js'
 
 const mk = (updateResultRows) => `---
 author: test
@@ -98,5 +98,31 @@ describe('extractPendingDocSyncRows（D-5 死信提取）', () => {
   it('空输入 / 非字符串 → 空数组', () => {
     assert.deepEqual(extractPendingDocSyncRows(''), [])
     assert.deepEqual(extractPendingDocSyncRows(null), [])
+  })
+})
+
+describe('extractDoneDocTargets（D-4 窄口径：done 行目标文档提取）', () => {
+  it('done 行首列反引号全路径 → 提取', () => {
+    const content = mk('| `.sillyspec/docs/backend/modules/daemon.md` | 契约更新 | done |')
+    assert.deepEqual(extractDoneDocTargets(content), ['.sillyspec/docs/backend/modules/daemon.md'])
+  })
+
+  it('多 done 行 → 去重收集；skipped/pending 行不取', () => {
+    const content = mk(
+      '| modules/daemon.md | 契约更新 | done |\n| modules/daemon.md | 重复声明 | done |\n| modules/x.md | 跳过 | skipped |'
+    )
+    assert.deepEqual(extractDoneDocTargets(content), ['modules/daemon.md'])
+  })
+
+  it('_module-map.yaml 裸名 → 跳过（各项目都有，无判定价值）', () => {
+    assert.deepEqual(extractDoneDocTargets(mk('| modules/_module-map.yaml | 索引更新 | done |')), [])
+  })
+
+  it('done 行首列纯中文描述（无路径 token）→ 不误报', () => {
+    assert.deepEqual(extractDoneDocTargets(mk('| 卡片不存在跳过 | 无操作 | done |')), [])
+  })
+
+  it('无「更新结果」段 → 空数组', () => {
+    assert.deepEqual(extractDoneDocTargets('# 无段落\n\n内容\n'), [])
   })
 })

@@ -216,6 +216,54 @@ export function extractPendingDocSyncRows(content) {
   return rows
 }
 
+/**
+ * 提取 module-impact.md「更新结果」表中的已完成（done）行声明的目标文档路径（债单 D-4 窄口径）。
+ *
+ * done 行首列是目标标识：`modules/<id>.md`（模块卡片）、`_module-map.yaml`（映射索引）、
+ * `.sillyspec/docs/<project>/modules/<f>.md`（含仓库前缀的全路径）等。本函数提取首列里
+ * 能解析出的文档路径 token，供调用方校验文件存在性——声明 done 但目标文件不存在 = 假申报。
+ *
+ * 提取规则（保守，宁可漏报不误报）：
+ *   - 首列以反引号包裹或裸写的 `.md`/`.yaml` 结尾路径 token（含路径分隔符 /）
+ *   - `modules/<id>.md` 相对写法解析为 `<specBase>/docs/<project>/modules/<id>.md`——但 project
+ *     归属需读 _module-map，此处只返回原样 token，路径解析留给调用方（有 specBase 上下文）
+ *   - `_module-map.yaml` 裸名跳过（存在性由 map 本身保证，且各项目都有）
+ *
+ * 纯函数：无 fs/git 调用，export 供 test 直接 import。
+ * @param {string} content module-impact.md 全文
+ * @returns {string[]} done 行声明的文档路径 token（去重）
+ */
+export function extractDoneDocTargets(content) {
+  if (!content || typeof content !== 'string') return []
+  const normalized = content.replace(/\r\n/g, '\n')
+  const sectionStart = normalized.search(/^#{2,3}\s*更新结果\s*$/m)
+  if (sectionStart === -1) return []
+  const titleMatch = normalized.slice(sectionStart).match(/^#{2,3}\s*更新结果\s*$/m)
+  const bodyStart = sectionStart + titleMatch[0].length
+  const afterTitle = normalized.slice(bodyStart)
+  const nextSection = afterTitle.search(/^#{1,3}\s/m)
+  const section = nextSection === -1 ? afterTitle : afterTitle.slice(0, nextSection)
+  const targets = new Set()
+  for (const line of section.split('\n')) {
+    const trimmed = line.trim()
+    if (!trimmed.startsWith('|')) continue
+    const cells = trimmed.split('|').map(c => c.trim())
+    if (cells.length >= 2) cells.pop() // 行尾空 cell
+    const statusCell = cells[cells.length - 1]
+    if (!statusCell || statusCell.toLowerCase() !== 'done') continue
+    // 首个非空 cell（跳过 split 产生的行首空串）
+    const firstCell = cells.slice(1).find(c => c !== '') || ''
+    // 从首列提取 .md/.yaml 结尾且含 / 的路径 token（modules/x.md 或 a/b/c.yaml）；
+    // 反引号包裹优先，裸写次之。_module-map.yaml 无 / 跳过（见 docstring）。
+    const m = firstCell.match(/`([^`]*\.(?:md|yaml))`/) || firstCell.match(/(^|\s|（)([\w./-]+\/[\w./-]*\.(?:md|yaml))/)
+    if (m) {
+      const token = (m[2] !== undefined && m[2] !== null && m[1] !== '`') ? m[2] : m[1]
+      if (token && !token.endsWith('_module-map.yaml')) targets.add(token)
+    }
+  }
+  return [...targets]
+}
+
 export async function archiveChangeDirectory(pm, cwd, progress, specBase, platformOpts = {}) {
   const archiveChangeName = progress.currentChange
   if (!archiveChangeName) {
@@ -332,6 +380,26 @@ export async function handleArchiveConfirmStep({ stageName, steps, currentIdx, c
       for (const d of missingRecommended) console.warn(`   - ${d}（${archivedDir}）`)
     } else {
       console.log(`\n✅ 归档校验通过：核心文档齐全`)
+    }
+    // D-4 窄口径：更新结果表 done 行声明的目标文档存在性对账（warning 不阻断——
+    // 目标路径写法多样（modules/x.md 相对/全路径）+ 语义对账推 sillyhub，此处只抓
+    // 能确定性解析且确实不存在的假申报）。
+    const impactContent = existsSync(join(archivedDir, 'module-impact.md'))
+      ? readFileSync(join(archivedDir, 'module-impact.md'), 'utf8') : ''
+    const doneTargets = extractDoneDocTargets(impactContent)
+    if (doneTargets.length > 0) {
+      const missing = doneTargets.filter(t => {
+        // 相对 specBase 解析：modules/<x> → docs/<project>/modules/<x> 由 _module-map 归属，
+        // CLI 不猜 project——只对全路径（.sillyspec/docs/ 开头或含 3+ 段路径）做存在性判定
+        if (!t.includes('/')) return false
+        const abs = isAbsolute(t) ? t : resolve(cwd, t)
+        return !existsSync(abs)
+      })
+      if (missing.length > 0) {
+        console.warn(`\n⚠️ 归档校验警告：module-impact「更新结果」声明 done 的文档路径不存在（假申报嫌疑）`)
+        for (const t of missing) console.warn(`   - ${t}`)
+        console.warn(`   相对写法（modules/<id>.md）不在此校验范围；全路径声明但文件不存在请核实。`)
+      }
     }
   }
   return null
