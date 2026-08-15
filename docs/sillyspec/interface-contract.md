@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-07-09T13:05:00+08:00
-updated_at: 2026-08-09T00:40:00+08:00
+updated_at: 2026-08-15T16:40:00+08:00
 schema_version: 1
 ---
 
@@ -66,6 +66,16 @@ schema_version: 1
   非 `FACETS` 内的值（如 `nope`）属**非法 facet → exit 2**（见 §3、§5 真实示例）。
 
 ---
+
+### 1.3 `sillyspec docs check [--paths <glob,...>] [--json]`（2026-08-15 docs-check-productize）
+
+文档行号引用校验（原 dogfood 私有测试产品化）。只读、无状态单次调用。
+
+- 扫描 local.yaml `docs-check.paths`（缺省 `docs/**/*.md`）或 `--paths` 覆盖的文档
+- 两层校验：层1 存在性（文件存在 + 行号边界 + 候选解析三段回退）；层2 关键词断言（`docs-check.keywordAssert` 缺省开，反引号代码符号在 [start-2, end+5] 窗口）
+- exit code：0 全绿 / 1 存在无效引用 / 2 配置错误（不支持的 glob 形态）
+- `--json` 输出 `{ ok, total, invalid: [{doc, docLine, ref, reason}], warnings, kwChecked }`
+- 实现：`src/docs-check.js`（runDocsCheck）；glob 手写 walker 零依赖，相对源码仓根展开（平台模式同锚）
 
 ## 2. envelope schema v1
 

@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-05-31 11:00:00
-updated_at: 2026-08-15T16:25:00+08:00
+updated_at: 2026-08-15T16:40:00+08:00
 ---
 
 # SillySpec 文件生命周期
@@ -55,6 +55,15 @@ updated_at: 2026-08-15T16:25:00+08:00
 | explore | 1 | 只读探索 |
 | status | 3 | 项目级只读快照（非流程推进；查「下一步/当前阶段进度」用 `progress show`） |
 | doctor | 5 | 环境和项目自检 |
+
+## docs check 命令（2026-08-15 docs-check-productize）
+
+`sillyspec docs check [--paths <glob,...>] [--json]`：文档行号引用校验（原 dogfood 私有测试 test/doc-ref-check.test.mjs 产品化）。只读、可进 CI。
+
+- 实现 `src/docs-check.js`：层1 存在性（collectDocRefs 全文提取 + resolveCandidates 三段回退 + validateRefLines 行号边界）+ 层2 关键词断言（extractExpectedTokensFromLine，keywordAssert 可配缺省开）
+- 配置 local.yaml `docs-check` 段（paths 缺省 `docs/**/*.md` / skip / keywordAssert），glob 手写 walker 零依赖、相对源码仓根展开（平台模式同锚）
+- exit code 三档：0 全绿 / 1 无效引用 / 2 配置错误（不支持的 glob 形态）
+- dogfood 自身：npm test 的 test/doc-ref-check.test.mjs 已迁移为 runDocsCheck 调用方（白名单 platform-interface-map.md，两层全开）
 
 ## 顶层目录口径
 
