@@ -32,6 +32,7 @@ export const definition = {
 
 ### 操作
 1. 读取项目总览 \`{SPEC_ROOT}/docs/<project>/scan/PROJECT.md\` + 共享规范 + 子项目上下文
+   - 漂移事实（CLI 算）：{SCAN_STALENESS}
 2. 加载项目信息：\`cat {SPEC_ROOT}/projects/*.yaml 2>/dev/null\`
 3. 加载本地配置：\`cat {SPEC_ROOT}/local.yaml 2>/dev/null\`
 4. 棕地项目：读取 {SPEC_ROOT}/docs/<project>/scan/ 下的 STRUCTURE.md、CONVENTIONS.md、ARCHITECTURE.md

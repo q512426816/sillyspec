@@ -390,6 +390,24 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
     promptText = applyRootPlaceholders(promptText, { specRoot: specSillyspec, docsRoot, projectsRoot, workflowsRoot, knowledgeRoot })
   }
 
+  // scan 漂移事实注入（债单 D-7 方案 A）：brainstorm「加载项目上下文」读 scan 文档前，
+  // CLI 算出 staleness（source_commit vs HEAD）注入一行事实——"算事实注入"原则（债单第六节），
+  // 不是劝说指令。computeScanStaleness 内部全降级（无文档 null / git 失败 unknown），不阻断。
+  if (stageName === 'brainstorm' && promptText.includes('{SCAN_STALENESS}')) {
+    try {
+      const { computeScanStaleness } = await import('../scan-staleness.js')
+      const stalenessSpecBase = resolvePromptSpecBase(platformOpts, cwd)
+      const projectName = dbProjectName || basename(cwd)
+      const fact = computeScanStaleness({ projectRoot: cwd, specBase: stalenessSpecBase, projectName })
+      const injected = fact
+        ? `[docs-debt] scan 基线漂移：${fact.message}`
+        : '[docs-debt] scan 基线漂移：无 scan 文档（绿地项目），跳过判定'
+      promptText = promptText.replace(/\{SCAN_STALENESS\}/g, injected)
+    } catch (e) {
+      promptText = promptText.replace(/\{SCAN_STALENESS\}/g, `[docs-debt] scan 漂移检测异常（${e.message}），跳过判定`)
+    }
+  }
+
   // Knowledge hit report: execute 阶段注入匹配结果
   if (stageName === 'execute' && promptText.includes('{KNOWLEDGE_HIT_REPORT}')) {
     try {

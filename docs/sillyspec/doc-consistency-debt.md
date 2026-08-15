@@ -65,7 +65,7 @@ sillyhub 的文档烂不是执行失误，是机制性的。
 | D-4 | archive sync-module-docs 无结果校验（git add 无条件、空集静默通过） | ✅ 部分已修（2026-08-15 ql-20260815-010-7466，窄口径）：归档后 `extractDoneDocTargets` 提取「更新结果」done 行声明的目标文档路径，全路径声明但文件不存在 → warning（假申报嫌疑）。**剩余推语义审查**：「声明 done 但内容实际没改」的 diff 对账是语义判定（apply 期间文档可能已提交，git diff 为空≠没同步），且相对写法 modules/<id>.md 的 project 归属需读 module-map——按定位推 sillyhub/人类，本仓不做 | 窄口径已完成；语义对账不做（定位边界） |
 | D-5 | module-impact pending 死信箱（5+ change 带未清 pending 归档且 verify PASS） | ✅ 已修（2026-08-15 ql-20260815-009-b2de）：`archiveChangeDirectory` 移动前加死信校验（`extractPendingDocSyncRows`，只查「更新结果」段表格末列精确 pending/待办/未同步/todo，非零即 exit(1) 阻断归档）。**实况修正**：全量 archive 扫描死信形态仅一种（更新结果表 pending 行）；债单初版说的"change-center-rework 11 处 false"实为矩阵 needs_review 合法字段值非欠账信号。10 单测（test/archive-pending-deadletter.test.mjs） | 中（已完成） |
 | D-6 | doc-ref-check 能力未产品化（唯一硬一致性校验只覆盖 dogfood 仓一份文档） | ✅ 已修（2026-08-15 变更 2026-08-15-docs-check-productize，完整流程）：`sillyspec docs check` 命令落地（src/docs-check.js 两层校验 + glob walker 零依赖 + exit 0-1-2 + local.yaml docs-check 段）；dogfood 测试迁移调 runDocsCheck（检测力不降级）；**首次全量扫 docs/ 实证 51 处历史欠账**（architecture-4a.md 等行号漂移），登记待渐进修复——白名单暂维持 platform-interface-map.md 一份 | 中大（已完成） |
-| D-7 | scan 文档无刷新生命周期，与手工模块卡双轨 | archive 阶段提示刷新 scan 增量（prompt 级）或合并双轨（需设计） | 大（需设计） |
+| D-7 | scan 文档无刷新生命周期，与手工模块卡双轨 | ✅ 部分已修（2026-08-15 ql-20260815-013，方案 A）：`src/scan-staleness.js` CLI 算 source_commit vs HEAD 漂移事实（≥50 commit / ≥14 天 → stale），brainstorm step2 经 `{SCAN_STALENESS}` 注入一行事实（"不盲信 + 刷新指引"），绿地/unknown/异常全降级不阻断——本仓实测抓到 scan 停 850b485 落后 371 commit / 52 天。设计稿 docs/sillyspec/design-d7-scan-lifecycle.md。**剩余**（第六节重设计方向）：scan 增量刷新 CLI 化（算漂移文件清单注入）+ 双轨合并，长期项 | 部分（漂移信号已落地） |
 | D-8 | quick 通道零文档要求（72% 流量、14% 同步率） | ✅ 已修（2026-08-15 ql-20260815-012-f521，用户裁决：打标记显性化）：`auditQuickCompletion` 加 advisory 检测——changedFiles 含源码但无任何文档文件（.md/.yaml/.yml 或 docs/、.sillyspec/docs/ 路径）→ `docSyncHint` + reasons 记「本次未同步模块文档」+ printQuickAuditReview 打一行欠账标记 warn。零阻断零摩擦，欠账可事后审计 QUICKLOG reasons 追溯 | 小（已完成，用户裁决方案） |
 
 ## 四、行动裁决（2026-08-15）
@@ -103,3 +103,37 @@ sillyhub 的文档烂不是执行失误，是机制性的。
 2. 最新的 2026-08-15-error-message-l10n（246+ 处后端文案改动）已归档且 verify PASS——若其模块文档同步又是"声明完成实际漏同步"，则是 D-4/D-5 的最新活样本，建议裁决时优先核这一单。
 
 **复核结论：初版分析的全部结构性论断成立，无需推翻；量化数字已按复核值修正。**
+
+## 六、修法升级：从"提示词劝说"到"CLI 算事实注入"（2026-08-15 用户裁决输入）
+
+> 用户反馈：不要为一点点文档维护走一堆提示词要求，浪费 token。实测现状：五阶段 prompt 内文档相关文字合计约 2400 字符 ≈ 1500 token——**token 浪费不是主要成本，零效果才是**。据此确立修法设计原则，并重新分级 D-1~D-8。
+
+### 设计原则：CLI 算事实、一屏数据替代一段指令
+
+劝说型 prompt 的通病是"讲道理 + 列步骤 + 重复出现在每个阶段"，agent 读三遍也不会做。优雅替代是**把"该更新什么文档"变成 CLI 在 --done / run 时算出来的一条事实**，注入给 agent 的是结论不是要求：
+
+```
+[docs-debt] 本 Wave 触及模块 X/Y/Z（git diff × _module-map.yaml 对照，CLI 计算）：
+  - lib-changes.md：落 2026-06-24，期间源码 135 commit 未同步  ← 事实
+  - api-session.md：本次新增 export，卡内无该符号登记            ← 事实
+```
+
+agent 拿到两行事实自己就会去改，不需要"请务必保持模块文档与代码一致，步骤 1…2…3…"那种段落。**原则：凡是 CLI 能用 git diff + module-map 算出来的，一律算出来注入；算不出来的（语义对错）推 sillyhub/人类。**
+
+### 按新原则重分级 D-1~D-8
+
+| # | 原修法 | 升级后 | prompt 增量 |
+|---|---|---|---|
+| D-8 | 审计打标记 | **纯 CLI**：--done 审计 diff×module-map，往 quicklog 骨架写一行 `[docs-debt]` 标记。不新增任何 prompt | **零** |
+| D-4 | archive 对账 | **纯 CLI**：归档前 git diff 对账 module-impact 声明的文档更新，缺则阻断。sync-module-docs step 的劝说 prompt 可**删**（机制替代后文字负增长） | **负** |
+| D-5 | pending 死信箱 | **纯 CLI**：module-impact 内 pending 项非零即阻断归档 | **零** |
+| D-6 | docs check 命令 | 本来就是机制化方向，file:line 校验全 CLI 算 | **零** |
+| D-1 | advisory→blocking 可配置 | 机制化（探针对账声明 vs diff），不改 prompt | **零** |
+| D-3 | 排除清单放开 | 纯代码改动 | **零** |
+| D-2b | ~~prompt+校验~~ | **降级/重设计**：校验保留（文档同步任务必须有 TaskCard——这是硬校验），但"要求写 TaskCard"的 prompt 劝说删除，改为 plan --done 时 CLI 发现 design §6 声明了文档更新但无 task 认领即阻断（D-2 修复后这条链已通，**无需新增 prompt**） | **零** |
+| D-7 | ~~archive 提示刷新 scan（prompt 级）~~ | **重设计**：不靠提示。scan 增量刷新本身可 CLI 化（对比上次 scan 快照与当前文件树，算出漂移文件清单注入）；"合并双轨"仍是需设计的长期项 | **零** |
+
+### 净效果
+
+- **全量修完后 prompt 文字负增长**：可删 execute "module-impact 更新（可选不阻断）"段、verify 第 6 条劝说、archive sync-module-docs 步骤说明——约回收 800+ 字符，新增注入块全部是 CLI 生成的运行时事实（按需出现，无文档债时零输出）。
+- 判断一个修法是否优雅的试金石：**改动落点是 `src/stages/*.js` 的 prompt 字符串，还是 `src/` 的计算逻辑**。前者是往劝说的坑里继续堆，后者才是工具该干的事（SillySpec 定位=确定性校验，语义判定推 sillyhub）。
