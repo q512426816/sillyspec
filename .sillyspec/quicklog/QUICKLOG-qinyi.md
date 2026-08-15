@@ -290,3 +290,27 @@
 根因：①解析正则不锚定结尾，2b 被 parseInt 截断成 2 与显式 Wave 2 静默合并强制并行，串行意图失效无提示；②单档 >2000 即 BLOCKED，+2368 行正常变更被逼进 rescue cp 手动路径；③gen:types 是 consumer 命令，SillySpec 不该认识（定位约束），且 exec-h 债单已裁决 defer。
 方案：①validatePlanForExecute 加字母后缀显式报错（说明截断风险+解法）；②两档阈值 2000 警/5000 拦；③债单 exec-h 补通用化思路（commands.build 收尾 gate）。
 结果：新增两测试文件 14 断言全过，npm test 193 全绿，lint 277 过，platform-interface-map 行号同步，债单 exec-h 补观察。
+
+## ql-20260815-002-d025 | 2026-08-15 13:56:15 | resolveSpecDir 加 home 拒绝守卫，根治 ~/.sillyspec 平行进度库污染
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/shared.js（resolveSpecDir 加 home 拒绝守卫：向上遍历跳过 os.homedir() 层，home 下 .sillyspec 恒不命中，回退 cwd/.sillyspec）
+- src/progress.js（同名 resolveSpecDir 拷贝删除，改 re-export run/shared.js 单一真相源，防双写漂移）
+- test/spec-dir-home-guard.test.mjs（新建 8 断言：单元 5（子目录/home 自身/多层/真项目不受影响/正常链）+ e2e（home 存在 .sillyspec 时子目录跑 CLI 不写 home 库））
+- docs/sillyspec/troubleshooting.md（补第 7 条：home 平行进度库两层根因与根治记录）
+- docs/sillyspec/platform-interface-map.md（shared.js 函数行号漂移同步）
+需求：resolveSpecDir 加 home 拒绝守卫并补测试，根治 ~/.sillyspec 平行进度库污染自我延续。
+根因：resolveSpecDir 向上查找 .sillyspec 无 home 守卫，smoke 测试在 home 下临时目录种下 ~/.sillyspec 后，任何 home 子目录跑命令都向上撞它；且 ProgressManager._ensureDB 读路径即建库，读到哪建到哪。另发现 progress.js 存在同函数双源拷贝（无守卫），progress 命令实际走的是它。
+方案：resolveSpecDir（src/run/shared.js）向上遍历跳过 os.homedir() 一层，home 下 .sillyspec 恒不命中回退 cwd/.sillyspec；progress.js 同名拷贝删除改 re-export run/shared.js（单一真相源防双写漂移）；存量 ~/.sillyspec 备份后整目录删除（备份 ~/.sillyspec-backup-20260815/）。
+结果：新增 test/spec-dir-home-guard.test.mjs 8 断言全过（单元 5 + e2e：home 存在 .sillyspec 时子目录跑 CLI progress show 不写 home 库）；npm test 全量绿 + lint 278 过（本会话范围；另有 3 个失败文件系并行 session 未完成改动，stash 验证非本改动引入）；troubleshooting.md 补第 7 条；platform-interface-map.md 行号同步。
+
+## ql-20260815-003-5a03 | 2026-08-15 13:56:33 | （废弃：--help 误开的空壳会话，无实际改动）
+状态：已废弃
+关联变更：（无）
+文件：（无）
+
+## ql-20260815-004-64fc | 2026-08-15 14:23:58 | (quick 任务)
+状态：进行中
+关联变更：（无）
+文件：（见实际改动）

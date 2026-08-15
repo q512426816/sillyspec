@@ -20,26 +20,20 @@ import { ChangeRegistry } from './progress/change-registry.js';
 import { StepStore } from './progress/step-store.js';
 import { StageMachine } from './progress/stage-machine.js';
 import { STAGE_ORDER, MAIN_FLOW_ORDER, VALID_STAGES, STAGE_LABELS, SPEC_DIR_NAME, CURRENT_VERSION, emptyStage } from './progress/shared.js';
+// resolveSpecDir 单一真相源在 src/run/shared.js（含 home 拒绝守卫，坑 cwd-correction-home-collision
+// 根治：home 下 .sillyspec 恒不命中，防 smoke/临时目录污染自我延续）。此处 re-export 保持
+// 既有 import 路径兼容；run/shared.js 对 progress.js 只有动态 import，无静态循环。
+import { resolveSpecDir } from './run/shared.js';
+export { resolveSpecDir };
 
 // 默认规范目录名（相对于 cwd）
 // SPEC_DIR_NAME → ./progress/shared.js（W6 Step9d）
 const RUNTIME_SUBDIR = '.runtime';
 
 /**
- * 向上查找含 .sillyspec 目录的祖先目录，类似 git 找 .git 的逻辑。
- * 找到则返回 <祖先>/.sillyspec，否则 fallback 到 <cwd>/.sillyspec。
+ * 向上查找含 .sillyspec 目录的祖先目录——实现已收敛至 src/run/shared.js（单一真相源，
+ * 含 home 拒绝守卫），此处 re-export。见顶部 import 说明。
  */
-export function resolveSpecDir(startDir) {
-  let dir = resolve(startDir);
-  while (true) {
-    const candidate = join(dir, SPEC_DIR_NAME);
-    if (existsSync(candidate)) return candidate;
-    const parent = dirname(dir);
-    if (parent === dir) break; // 到达根目录
-    dir = parent;
-  }
-  return join(resolve(startDir), SPEC_DIR_NAME);
-}
 
 /**
  * 平台指针不可达错误。pointer 存在但失效时抛出，阻止静默回退到本地孤儿 db。

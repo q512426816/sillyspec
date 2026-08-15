@@ -11,8 +11,9 @@
  *     本模块仅 re-export，run/ 层现有调用方路径与行为不变。
  */
 import { basename, join, resolve, dirname, sep } from 'node:path'
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync, mkdirSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import os from 'node:os'
 
 // safeGit 收口至 src/git-helper.js：import 建本地词法绑定（本模块内部 L128/130/431 调用）+
 // re-export 供 run/ 层现有调用方继续从 shared.js 引用（pure re-export 不建本地绑定，会致内部 ReferenceError）。
@@ -94,6 +95,9 @@ export function resolvePromptIncludes(text) {
 
 /**
  * 找 .sillyspec 祖先目录：用户指定 specDir 优先，否则从 cwd 向上找。
+ * home 拒绝守卫：home 下的 .sillyspec 恒不命中——历史污染源（smoke 测试在 home 下临时目录
+ * 跑 CLI，_ensureDB 读路径即建库，~/.sillyspec 长出一整套平行进度库后，任何 home 子目录
+ * 跑命令都会向上撞它，污染自我延续）。撞 home 即停，回退 cwd/.sillyspec（子目录自建）。
  * @param {string} cwd
  * @param {object} [opts]
  * @param {string} [opts.specDir] - 用户指定的 specDir（通过 --spec-dir 或 --spec-root）
@@ -101,10 +105,15 @@ export function resolvePromptIncludes(text) {
  */
 export function resolveSpecDir(cwd, opts = {}) {
   if (opts.specDir) return resolve(opts.specDir)
+  const home = os.homedir()
   let dir = resolve(cwd)
   while (true) {
-    const candidate = join(dir, '.sillyspec')
-    if (existsSync(candidate)) return candidate
+    // home 拒绝守卫：cwd 本身就在 home 下（含恰好在 home 跑命令）时，home 层不匹配 .sillyspec，
+    // 继续向上只会离项目更远（home 的父目录不可能有真项目 .sillyspec），直接回退 cwd/.sillyspec。
+    if (dir !== home) {
+      const candidate = join(dir, '.sillyspec')
+      if (existsSync(candidate)) return candidate
+    }
     const parent = dirname(dir)
     if (parent === dir) break
     dir = parent
@@ -299,6 +308,45 @@ export function resolveRuntimeRoot(platformOpts, localSpecBase) {
  */
 export function resolveQuickSessionsDir(platformOpts, localSpecBase) {
   return join(resolveRuntimeRoot(platformOpts, localSpecBase), 'quick-sessions')
+}
+
+/**
+ * 平台指针双写（单一数据源，runCommand scan 与 cmdInit 平台模式共用）。
+ *
+ * 写两处（字段集一致，防两处漂移）：
+ *   1. <specRoot>/.runtime/platform-scan.json — 主持久化文件（后续 run/--done 恢复）
+ *   2. <cwd>/.sillyspec-platform.json — 轻量恢复指针（供裸调——不带 --spec-root——找回 specDir）
+ *
+ * status 字段语义（POINTER_STATUS）：
+ *   - init 落盘时传 status: 'active'（已接入未 scan，24h STALE 清理不作用于它）
+ *   - scan 完成时 complete-handlers 升级为 'scan_completed'
+ *   - 不传 status 则省略（与 runCommand 历史行为一致）
+ *
+ * 写失败静默（不阻断主流程），返回 true/false 供调用方决定是否提示。
+ *
+ * @param {string} cwd - 恢复指针落盘目录（= 调用方命令的 cwd，通常为项目根）
+ * @param {object} platformOpts - { specRoot, runtimeRoot?, workspaceId?, scanRunId? }
+ * @param {object} [extra] - 追加字段（如 { status: 'active' }）
+ * @returns {boolean} 是否全部写入成功
+ */
+export function writePlatformPointer(cwd, platformOpts, extra = {}) {
+  if (!platformOpts || (!platformOpts.specRoot && !platformOpts.runtimeRoot)) return false
+  const payload = {
+    specRoot: platformOpts.specRoot || null,
+    runtimeRoot: platformOpts.runtimeRoot || null,
+    workspaceId: platformOpts.workspaceId || null,
+    scanRunId: platformOpts.scanRunId || null,
+    savedAt: new Date().toISOString(),
+    ...extra,
+  }
+  try {
+    mkdirSync(join(platformOpts.specRoot, '.runtime'), { recursive: true })
+    writeFileSync(join(platformOpts.specRoot, '.runtime', 'platform-scan.json'), JSON.stringify(payload, null, 2) + '\n')
+    writeFileSync(join(cwd, '.sillyspec-platform.json'), JSON.stringify(payload, null, 2) + '\n')
+    return true
+  } catch {
+    return false
+  }
 }
 
 /**

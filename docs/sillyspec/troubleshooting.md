@@ -77,3 +77,20 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 **症状**：QUICKLOG-<user>.md 超 500 行自动轮转出 QUICKLOG-<user>-<日期>.md（git 跟踪新文件），--done 静默生成，提交时容易漏（旧 ql 条目只在本地）。
 
 **解法（已修 2026-08-13）**：`quicklog.js rotateIfNeeded` 轮转后 echo "已轮转 <user>.md → <archive>.md（提交时带上归档）"。提交 quick 时 pathspec 含轮转归档文件。关联记忆：`[[sillyspec-quicklog-is-tracked]]`
+
+---
+
+## 7. home 下长出平行 .sillyspec（读路径建库 + 向上解析无守卫，已根治）
+
+**症状**：`~/.sillyspec/` 莫名出现整套进度库（sillyspec.db + 430+ quick change + quicklog），且持续被更新。
+
+**根因（两层叠加）**：
+- **读路径建库**：`ProgressManager._ensureDB` 在 db 不存在时 `db.init()` 建库落盘，除 gate/derive（machine-interface.js 只读契约守卫）外，`progress show`/`status`/quick 守卫等命令读到哪建到哪。
+- **向上解析撞 home**：smoke 测试在 home 下临时目录跑 CLI 种下 `~/.sillyspec` 后，任何 home 子目录跑命令，`resolveSpecDir` 向上查找都会命中它——污染自我延续。
+
+**解法（已修 2026-08-15）**：
+- `resolveSpecDir`（`src/run/shared.js`）加 home 拒绝守卫：向上遍历时跳过 `os.homedir()` 一层，home 下 `.sillyspec` 恒不命中，回退 `cwd/.sillyspec`。
+- 双源收敛：progress.js 里的同名拷贝删除，re-export run/shared.js 单一真相源。
+- 存量清理：`~/.sillyspec` 整目录备份后删除（备份在 `~/.sillyspec-backup-20260815/`）。
+- 测试：`test/spec-dir-home-guard.test.mjs`（8 断言，含 e2e：home 存在 .sillyspec 时子目录跑 CLI 不写 home 库）。
+- 关联记忆：`[[sillyspec-cwd-correction-home-collision]]`

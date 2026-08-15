@@ -76,10 +76,10 @@ mcp:
 `connect` / `disconnect` / `sync` / `syncDocuments` / `checkApproval` / `pull` / `pullList` / `resolve` / `collectStatus` / `approve` / `reject` 均 export 为顶层函数，`new SyncManager(cwd)` 包装。
 
 ### run 流程里的三个触发器（`src/run/shared.js`）
-- **`triggerSync(cwd, changeName, platformOpts)`**（`shared.js:333`）：包 `sync()` + **8s 总超时熔断**。这是最常用的上推入口。
-- **`triggerPull(cwd, changeName, platformOpts)`**（`shared.js:364`）：包 `pull()`，8s 熔断。仅低频边界点触发，**不每步 pull**（避免高频写入/网络压力）。
-- **`checkApproval(cwd, changeName, platformOpts)`**（`shared.js:434`）：包 `syncMod.checkApproval`。
-- **`triggerPullActiveChange`**（`shared.js:392`）：`triggerPull` 便捷封装，未传 changeName 时自动推导单活跃变更（多/无活跃则跳过）。
+- **`triggerSync(cwd, changeName, platformOpts)`**（`shared.js:382`）：包 `sync()` + **8s 总超时熔断**。这是最常用的上推入口。
+- **`triggerPull(cwd, changeName, platformOpts)`**（`shared.js:413`）：包 `pull()`，8s 熔断。仅低频边界点触发，**不每步 pull**（避免高频写入/网络压力）。
+- **`checkApproval(cwd, changeName, platformOpts)`**（`shared.js:483`）：包 `syncMod.checkApproval`。
+- **`triggerPullActiveChange`**（`shared.js:441`）：`triggerPull` 便捷封装，未传 changeName 时自动推导单活跃变更（多/无活跃则跳过）。
 
 ---
 
@@ -130,8 +130,8 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
 | **每个进度落盘点**（step `--done` 完成、阶段启动/切换、stale 步骤重置、gate 拦截回滚等 `_write` 后） | A | `triggerSync` → POST `…/progress` 推六表进度（8s 熔断） | complete.js:340/400/646/749/889（--done）；stage.js:113/127/149（启动/切换/stale 重置）；gates.js:179；command.js:826/984/1034/1042/1209 |
 | **execute 阶段启动前**（runStage / auto 流程，非平台模式，`--skip-approval` 可跳过） | A | `checkApproval` → GET `…/approval`：**rejected → `exit(1)` 硬阻断**；pending → 提示待审批；unknown → 放行 | stage.js:47-58；command.js:1113-1129 |
 | `platform sync-docs`（手动命令，**唯一触发点**） | A | POST `…/documents` 推四件套全量；run 流程**不**自动推文档（sync.js:30 头注释称由 run 流程触发，已过时） | sync.js:439；index.js:1255 |
-| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:1395-1396；shared.js:364 |
-| **stage 命令启动时**（scan/status/quick/explore/brainstorm/plan/execute/verify/archive） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；低频边界点，**不每步 pull**） | index.js:693；shared.js:392 |
+| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:1395-1396；shared.js:413 |
+| **stage 命令启动时**（scan/status/quick/explore/brainstorm/plan/execute/verify/archive） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；低频边界点，**不每步 pull**） | index.js:693；shared.js:441 |
 | `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:1285-1325；sync.js:638/663 |
 | `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:1258-1284；sync.js:844 |
 | `platform resolve --keep-local/--take-platform/--abort` | 本地 | 读 sync-conflict 三选一，不网络 | sync.js:746 |
@@ -149,7 +149,7 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
 ### 本质
 平台模式是 **SillyHub daemon 调用 SillySpec CLI 时的模式**。它把默认落在 `cwd/.sillyspec/` 的产物目录（`specRoot`）和运行时目录（`runtimeRoot`）拆到别的位置，让 daemon 能多项目隔离管理。**人类本地用户默认不进平台模式。**
 
-`specRoot` 是实际开关（平台模式判定只看 `specRoot || runtimeRoot` 任一存在）；`runtimeRoot` **可缺省**——缺省时经 `resolveRuntimeRoot` 回落 `<specBase>/.runtime`（`shared.js:280-284`：runtimeRoot > specDriftAnchor/.runtime > specBase/.runtime），即"只拆 specRoot、runtime 跟着走"也是合法平台模式。
+`specRoot` 是实际开关（平台模式判定只看 `specRoot || runtimeRoot` 任一存在）；`runtimeRoot` **可缺省**——缺省时经 `resolveRuntimeRoot` 回落 `<specBase>/.runtime`（`shared.js:289`：runtimeRoot > specDriftAnchor/.runtime > specBase/.runtime），即"只拆 specRoot、runtime 跟着走"也是合法平台模式。
 
 ### 置位的两条路径（`command.js:245-317`）
 
@@ -194,10 +194,10 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
 
 ## 7. 关键开关与铁律
 
-- **平台模式总开关**：`platformOpts.specRoot` 或 `platformOpts.runtimeRoot` 存在 → `triggerSync`/`triggerPull`/`checkApproval` **全部 early-return**（`shared.js:335/366/436`）。平台模式下进度回传走 SillyHub daemon 自有链路，CLI 不直接打 `/api`。**§5 表中链路 A 的触发点仅非平台模式真正发请求。** 置位机制见上节 §6。
+- **平台模式总开关**：`platformOpts.specRoot` 或 `platformOpts.runtimeRoot` 存在 → `triggerSync`/`triggerPull`/`checkApproval` **全部 early-return**（`shared.js:383/414/484`）。平台模式下进度回传走 SillyHub daemon 自有链路，CLI 不直接打 `/api`。**§5 表中链路 A 的触发点仅非平台模式真正发请求。** 置位机制见上节 §6。
 - **未连接是合法默认**：`_getPlatform()`/`readMcpConfig()` 返回 null → 链路 A/B 静默跳过，不每步催连平台制造噪音。排查同步行为设 `SILLYSPEC_DEBUG_SYNC=1`（`debugLog` 在 `sync.js:34`）。
 - **best-effort 边界**：除 `approve`/`reject`（显式用户动作，失败必须可见 exitCode=1），其余平台调用失败一律 warn 不阻断。
-- **8s 熔断**：`triggerSync`/`triggerPull` 总超时 8s（`shared.js:331`），防 `--done` 在 sync 慢时体感 hang。
+- **8s 熔断**：`triggerSync`/`triggerPull` 总超时 8s（`shared.js:379`），防 `--done` 在 sync 慢时体感 hang。
 - **MCP 不硬试**：路径A 未落地保守回退 Local（R-04）；CLI 不碰 DB 持久化 worktree_path（D-004 / client.js:18）。
 - **派发不双写**：worker 不 commit，SillySpec 自己 apply（D-004），不调 SillyHub 合并 tool。
 
