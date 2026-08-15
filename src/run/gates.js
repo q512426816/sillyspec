@@ -248,6 +248,24 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
     const { runVerifyRequiredEvidenceCheck, printVerifyRequiredEvidenceCheck } = await import('../verify-postcheck.js')
     const evidenceCheck = runVerifyRequiredEvidenceCheck({ cwd, specBase, changeName })
     printVerifyRequiredEvidenceCheck(evidenceCheck)
+    // ── module-impact 死信探针（blocking，债单 D-1/D-5）：更新结果表 pending/待办行 → 阻断 verify ──
+    // 与 archive 移动前校验（extractPendingDocSyncRows）同一口径，把死信号从 archive 提前到 verify：
+    // agent 在 verify 阶段就须完成文档同步并回填 done/skipped，而非拖到归档被拦（修复 perf-remediation
+    // 类「verify PASS → archive 才发现 pending」的时序漏洞）。
+    const verifyChangeDir = resolveChangeDir(cwd, progress, platformOpts?.specRoot)
+    if (verifyChangeDir) {
+      const impactPath = join(verifyChangeDir, 'module-impact.md')
+      if (existsSync(impactPath)) {
+        const { extractPendingDocSyncRows } = await import('./complete-handlers.js')
+        const pendingRows = extractPendingDocSyncRows(readFileSync(impactPath, 'utf8'))
+        if (pendingRows.length > 0) {
+          console.error(`\n❌ verify 阶段被阻断：module-impact.md「更新结果」表存在 ${pendingRows.length} 个未清 pending/待办项（死信）`)
+          for (const row of pendingRows) console.error(`   - ${row}`)
+          console.error('   文档同步是 verify 的收尾义务：请完成模块文档同步并回填状态为 done/skipped（说明原因），再重新完成 verify。')
+          return rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)
+        }
+      }
+    }
     console.log('\n✅ 验证通过，下一步：sillyspec run archive')
   }
 

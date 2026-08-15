@@ -58,7 +58,7 @@ sillyhub 的文档烂不是执行失误，是机制性的。
 
 | # | 缺口 | 可选修法方向 | 规模 |
 |---|---|---|---|
-| D-1 | verify.js:137 明示"文档不一致不阻断"——制度根源 | 改为 advisory→blocking 可配置，或至少 verify 探针对账 module-impact 声明 vs 实际 diff | 中 |
+| D-1 | verify.js:137 明示"文档不一致不阻断"——制度根源 | ✅ 已修（2026-08-15 ql-20260815-011-66ac）：① verify --done 加 module-impact 死信探针（**blocking**，gates.js 复用 extractPendingDocSyncRows，pending 行阻断 verify 完成并回滚——死信号从 archive 提前到 verify）；② verify.js 探针段第 6 条措辞从"不符合时标记 ⚠️（不阻断）"改为"当场同步模块文档 + CLI 硬校验无死信"（prompt 镜像已重跑 _extract.mjs）。模块文档**内容**与代码的语义一致性仍属软判定（推 sillyhub/人类），本条只闭合确定性的死信/时序漏洞 | 中（已完成） |
 | D-2 | plan 覆盖对账跳过 `.sillyspec/` 文档路径（plan-postcheck.js:695 不传 keepSillyspecDocs，与 apply 阶段口径不一致） | ✅ 已修（2026-08-15 ql-20260815-006-a51d）：`parseDesignCoverageByRepo` 两处 `parseFileChangeList` 补传 `keepSillyspecDocs: true`，`.sillyspec/docs/` 模块文档须被 task `allowed_paths` 认领；`.sillyspec/` 非 docs 子路径仍排除（与 apply 口径一致）；新增 4 测试（test/design-coverage.test.mjs），删 1 个固化旧豁免契约的测试 | 小（quick 已完成） |
 | D-2b | 后置 task（T-13~T-17 类"文档同步"任务）无 task 卡即不受审计 | ✅ 已修（2026-08-15 ql-20260815-007-9ced）：`validateBlueprintConsistency` 加 plan.md 声明任务 ↔ tasks/ 卡片双向对账（rule `plan.task-plan-reconciliation`，缺卡/孤儿卡均阻断）；plan-postcheck-cross-repo 场景 8-11 四测试 + rollback 测试 fixture 迁移（不连续→重复 id 触发 Contract） | 中（已完成） |
 | D-3 | 仓库根 `docs/` 在 worktree 排除清单（worktree.js:171、worktree-apply.js:480） | ⊘ 2026-08-15 逐行复核后**评估保留，不改码**：排除清单只影响 coarse dirty 判定（防多 agent 下别人改文档误阻断 apply，高频踩坑的合理权衡）；worktree 里改 `docs/` 实际会进 changedFiles（`filterDeliverableFiles` 不排 docs/，worktree-apply.js:405），apply 能带回主仓；重叠场景由 step5a「未提交∩changedFiles 精确点名」兜底（该口径保留 docs/）。初版"文档改动对流程完全不可见"表述过重，据此修正 | 不修（合理权衡） |

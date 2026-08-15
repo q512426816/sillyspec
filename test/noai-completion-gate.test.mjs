@@ -181,5 +181,83 @@ console.log('\n--- T4: brainstorm 缺 design.md → runValidators fail 回滚 --
   assert(after.stages.brainstorm.steps[7].status === 'pending', 'DB: 末步回退 pending（可重新 --done）')
 }
 
+// ── T9 / D-1+D-5 verify 死信探针：module-impact 更新结果 pending 行 → 阻断 verify 完成 ──
+// 修复前：verify 全 PASS → archive 才发现 pending 死信（时序漏洞）；agent 在 verify 阶段零信号。
+// 修复后：verify --done 的 runStageCompletionGates 内 extractPendingDocSyncRows 非零 → 回滚。
+console.log('\n--- T9: verify + module-impact 更新结果 pending 死信 → 阻断回滚（D-1/D-5）---')
+{
+  const { cwd, specBase } = makeRepo('ncg-verify-')
+  const cn = 'ncg-verify-deadletter'
+  const pm = await initChange(cwd, specBase, cn)
+  const changeDir = join(specBase, 'changes', cn)
+  // verify 前置产物：design/plan（verify.core-docs 存在性）+ 结论二级标题 PASS（conclusion-gate）
+  writeFileSync(join(changeDir, 'design.md'), '# Design\n\n## 目标\n\n测试\n')
+  writeFileSync(join(changeDir, 'plan.md'), '# Plan\n\n## Wave 1\n\n- [x] task-01: a\n')
+  writeFileSync(join(changeDir, 'verify-result.md'), '---\nauthor: test\ncreated_at: 2026-08-15 00:00:00\n---\n# 验证报告\n\n## 结论\n\nPASS\n\n全部通过。\n')
+  writeFileSync(join(changeDir, 'module-impact.md'), `---
+author: test
+created_at: 2026-08-15 00:00:00
+---
+
+# 模块影响分析（Module Impact）— ncg-verify
+
+## 更新结果
+
+| 模块文档 | 操作 | 状态 |
+|----------|------|------|
+| （execute 完成后由 archive 阶段同步） | 待办 | pending |
+`)
+  // verify 步骤 7 步（file-lifecycle：只读校验 + 写 verify-result.md）
+  const VERIFY_STEPS = ['加载规范并锚定', '对照设计检查', '测试与质量扫描', '验证结果记录', '风险标记与收尾建议', '交叉验证（独立视角）', '汇总验证结论']
+  const steps = VERIFY_STEPS.map(name => ({ name, status: 'completed' }))
+  const progress = await seedStage(pm, cwd, cn, 'verify', steps, 'completed')
+
+  // runVerifyTestCheck 需要 local.yaml commands.test；无配置时 testCheck.status 非 failed（跳过）
+  const r = await runCapturing(() =>
+    completeStageGates({ stageName: 'verify', cwd, changeName: cn, platformOpts: {}, specBase, progress, pm, stageData: progress.stages.verify, steps, currentIdx: 6, outputText: null }))
+
+  assert(r.result && r.result.stageCompleted === false, `stageCompleted:false（死信阻断回滚），result: ${JSON.stringify(r.result)}`)
+  assert(r.stdout.includes('pending/待办'), 'stdout 含「pending/待办」死信提示')
+  assert(!r.stdout.includes('验证通过，下一步'), '死信未清不打验证通过提示')
+
+  const after = await pm.read(cwd, cn)
+  assert(after.stages.verify.status !== 'completed', `DB: verify status 已回滚（实际 ${after.stages.verify.status}）`)
+  assert(after.stages.verify.steps[6].status === 'pending', 'DB: verify 末步回退 pending')
+}
+
+// ── T10 / D-1+D-5 零回归：module-impact 无死信（done/skipped）→ verify 正常通过 ──
+console.log('\n--- T10: verify + module-impact 无死信 → gate 过（零回归）---')
+{
+  const { cwd, specBase } = makeRepo('ncg-verify-ok-')
+  const cn = 'ncg-verify-clean'
+  const pm = await initChange(cwd, specBase, cn)
+  const changeDir = join(specBase, 'changes', cn)
+  writeFileSync(join(changeDir, 'design.md'), '# Design\n\n## 目标\n\n测试\n')
+  writeFileSync(join(changeDir, 'plan.md'), '# Plan\n\n## Wave 1\n\n- [x] task-01: a\n')
+  writeFileSync(join(changeDir, 'verify-result.md'), '---\nauthor: test\ncreated_at: 2026-08-15 00:00:00\n---\n# 验证报告\n\n## 结论\n\nPASS\n\n全部通过。\n')
+  writeFileSync(join(changeDir, 'module-impact.md'), `---
+author: test
+created_at: 2026-08-15 00:00:00
+---
+
+# 模块影响分析（Module Impact）— ncg-verify-ok
+
+## 更新结果
+
+| 模块文档 | 操作 | 状态 |
+|----------|------|------|
+| modules/x.md | 契约更新 | done |
+| modules/y.md | 卡片不存在 | skipped |
+`)
+  const VERIFY_STEPS = ['加载规范并锚定', '对照设计检查', '测试与质量扫描', '验证结果记录', '风险标记与收尾建议', '交叉验证（独立视角）', '汇总验证结论']
+  const steps = VERIFY_STEPS.map(name => ({ name, status: 'completed' }))
+  const progress = await seedStage(pm, cwd, cn, 'verify', steps, 'completed')
+
+  const r = await runCapturing(() =>
+    completeStageGates({ stageName: 'verify', cwd, changeName: cn, platformOpts: {}, specBase, progress, pm, stageData: progress.stages.verify, steps, currentIdx: 6, outputText: null }))
+
+  assert(!r.stdout.includes('pending/待办'), '无死信不打死信提示')
+}
+
 cleanup()
 report(count.passed, count.failed, count.failures)
