@@ -60,6 +60,27 @@ export function matchFilesToModules(changedFiles, moduleIndex, opts = {}) {
         if (content && content.includes(f)) { matched = id; break }
       }
     }
+    // 二级b：裸文件名匹配——卡片引用习惯是裸名（`execute.js` 而非 `src/stages/execute.js`，
+    // 本仓 stages.md 实证），全路径 includes 对这类卡永远落空 → 归属 unmapped（假"无归属"）。
+    // 规则：基名在卡内存在"独立出现"（两侧均非路径/标识符字符），防 a.js 误配 xa.js.txt 等。
+    // 全路径命中（上面循环）优先，裸名仅在未命中时兜底。
+    if (!matched) {
+      const base = f.slice(f.lastIndexOf('/') + 1)
+      if (base && !base.startsWith('.')) {
+        outer: for (const [id, content] of cardContents) {
+          if (!content) continue
+          let pos = content.indexOf(base)
+          while (pos !== -1) {
+            const before = pos > 0 ? content[pos - 1] : ''
+            const after = content[pos + base.length] || ''
+            const beforeOk = before === '' || !/[A-Za-z0-9_\/.\-]/.test(before)
+            const afterOk = after === '' || !/[A-Za-z0-9_\-./]/.test(after)
+            if (beforeOk && afterOk) { matched = id; break outer }
+            pos = content.indexOf(base, pos + 1)
+          }
+        }
+      }
+    }
     if (!matched) { unmapped.push(f); continue }
     const entry = byModule.get(matched) || { doc: modules[matched].doc || '', files: [] }
     entry.files.push(f)

@@ -59,6 +59,32 @@ describe('matchFilesToModules（归属三级）', () => {
     assert.ok(byModule.has('legacy'))
   })
 
+  it('二级b：卡片裸文件名引用命中（stages.md 实证形态）', () => {
+    // 卡片只写裸名 execute.js（契约表习惯），changedFiles 是全路径 → 裸名兜底应归属
+    writeFileSync(join(cardsDir, 'stg.md'), '契约：`buildExecuteSteps(planFile)` 定义于 execute.js\n')
+    const idx = parseModuleMapSimple(['schema_version: 1', 'modules:', '  stg:', '    status: active', '    doc: modules/stg.md'].join('\n') + '\n')
+    const { byModule, unmapped } = matchFilesToModules(['src/stages/execute.js'], idx, { cardsDir })
+    assert.ok(byModule.has('stg'), `裸名 execute.js 应归 stg（实际 ${[...byModule.keys()]}）`)
+    assert.deepEqual(unmapped, [])
+  })
+
+  it('二级b：基名两侧有路径/标识符字符不算命中（防 a.js 误配 xa.js.txt）', () => {
+    writeFileSync(join(cardsDir, 'trap.md'), '旧文提及 fx/a.js.txt 与 mya.js2\n')
+    const idx = parseModuleMapSimple(['schema_version: 1', 'modules:', '  trap:', '    status: active', '    doc: modules/trap.md'].join('\n') + '\n')
+    const { byModule, unmapped } = matchFilesToModules(['src/a.js'], idx, { cardsDir })
+    assert.equal(byModule.size, 0, '嵌入更长 token 的出现不应命中')
+    assert.deepEqual(unmapped, ['src/a.js'])
+  })
+
+  it('二级b：全路径命中优先于裸名（两卡都含线索时先走二级）', () => {
+    // full.md 卡含全路径字面量，bare.md 卡只含裸名 → 全路径卡赢
+    writeFileSync(join(cardsDir, 'full.md'), '主接口在 `src/claim.js`\n')
+    writeFileSync(join(cardsDir, 'bare.md'), '也提到 claim.js\n')
+    const idx = parseModuleMapSimple(['schema_version: 1', 'modules:', '  full:', '    status: active', '    doc: modules/full.md', '  bare:', '    status: active', '    doc: modules/bare.md'].join('\n') + '\n')
+    const { byModule } = matchFilesToModules(['src/claim.js'], idx, { cardsDir })
+    assert.ok(byModule.has('full'), `全路径卡优先（实际 ${[...byModule.keys()]}）`)
+  })
+
   it('全不中 → unmapped', () => {
     const idx = parseModuleMapSimple(mkMap())
     const { byModule, unmapped } = matchFilesToModules(['x/y.js'], idx, { cardsDir })

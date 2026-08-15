@@ -474,3 +474,22 @@
 根因：invalid 项只含 reason（超界/关键词缺失），不含 token 在目标文件的实际命中行，定位靠人工 grep
 方案：docs-check.js 失效项加 suggest 字段（suggestLines：token 在首个候选文件全量命中行，取前 8；无 token/符号不在候选文件 → 空数组不硬猜）；index.js CLI 失效报告下打「💡 候选行号」行；测试 +2（合格 token 建议含真实行 / 符号不在候选文件空数组）
 结果：docs-check 套件 31/31；临时项目端到端冒烟验证「💡 候选行号: 4」正确指向 alphaSym 行；npm test 全量 exit 0（一次 worktree 套件 flaky 单跑通过，属 memory 已知 git/temp-dir flaky 非回归）；lint 过
+
+## ql-20260815-018-c9fc | 2026-08-15 22:26:59 | 整合评估设计稿
+状态：已完成
+关联变更：（无）
+文件：
+- docs/sillyspec/design-docs-signals-integration.md（设计稿）
+需求：整合评估设计稿。
+根因：四源互不引用。
+方案：O-1/O-2 推荐。
+结果：已落盘并提交，待裁决。
+
+## ql-20260815-019-fe6d | 2026-08-15 22:36:28 | 复核 docs-debt-inject 落地质量时发现归属二级匹配失配——卡片裸文件名引用普遍存在时 [docs-debt] 事实沉默漏报
+状态：已完成
+关联变更：（无）
+文件：src/docs-debt.js, test/docs-debt.test.mjs
+需求：复核 docs-debt-inject 落地质量时发现归属二级匹配失配——卡片裸文件名引用普遍存在时 [docs-debt] 事实沉默漏报
+根因：matchFilesToModules 二级用 content.includes(全路径) 精确子串，但本仓卡片契约表引用习惯是裸名（stages.md 写 execute.js 非 src/stages/execute.js）→ 改动文件归属 unmapped，模块欠账零输出（实测 src/stages/execute.js 修复前 unmapped、修复后正确归 stages 且算出 behind=38）
+方案：二级b 裸文件名兜底匹配——基名在卡内存在独立出现（两侧均非路径/标识符字符，防 a.js 误配 xa.js.txt），全路径命中优先裸名仅兜底
+结果：docs-debt 套件 14/14（+3 测试：裸名命中/边界字符防误配/全路径优先）；本仓实测 src/stages/execute.js 归属 stages+behind=38 事实正确；npm test 全量 exit 0；lint 过。并行会话 docs-signals-o12 的 O-1 归属升级共用本函数，本修复是其地基，正交无冲突
