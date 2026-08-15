@@ -250,3 +250,43 @@
 根因：URL 拼接未编码可路径注入；YAML 裸写 token 含 # : 时破坏段结构；note 带换行可伪造条目；SKILL 随包发布含开发者本机路径；非 https url 下 Bearer token 明文上线；dashboard 无鉴权可读 local.yaml 凭据；@latest 浮动版本是 trust-on-future-publish 供应链面。
 方案：见文件括注。
 结果：npm test 190/0 + lint 274 过；隔离环境验证 path-a-probe 59/0（主仓该用例失败系本机 local.yaml 有 mcp 段的环境依赖，非回归，与 memory spec-dir 隔离同款问题）。
+
+## ql-20260814-013-ef64 | 2026-08-14 23:06:52 | 修复 platform resolve 参数解析 bug
+状态：已完成
+关联变更：（无）
+文件：
+- src/index.js（platform resolve 变更名解析：--change 优先→非 flag 位置参数→唯一冲突自动选中+报错列候选）
+- src/sync.js（新增顶层 listConflictFiles(cwd) 便捷导出）
+- test/platform-resolve-args.test.mjs（新建 6 场景回归测试（flag-first/--change/自动选中/报错列候选））
+- docs/sillyspec/platform-interface-map.md（approve triggerPull 行号漂移同步 1368→1395）
+需求：修复 platform resolve 参数解析 bug，flag 放前面时被误当变更名。
+根因：case resolve 盲取 platformArgs[0] 当变更名，不剥离 flag，--change 写法被静默忽略，报错文案指向假变更名误导排查。
+方案：变更名解析顺序改为 --change 值→非 flag 位置参数→唯一未决冲突自动选中；无变更名多冲突/指定名无冲突时报错列出 .runtime 现有候选；sync.js 新增 listConflictFiles 顶层导出。
+结果：新增 test/platform-resolve-args.test.mjs 六场景全过，npm test 191 文件全绿，lint 通过，platform-interface-map.md 行号引用同步，sync.md 模块文档已更新。
+
+## ql-20260814-014-1d5f | 2026-08-14 23:35:00 | 登记两份 SillyHub API 文档产出并入库
+状态：已完成
+关联变更：（无）
+文件：
+- docs/sillyspec/sillyhub-api-reference.md（新建 SillyHub 接口参考（REST 8 端点 + MCP 12 tool 完整调用规范））
+- docs/sillyspec/api-verification-2026-08-14.md（新建全接口实测报告（12 MCP tool + REST 8 端点验证快照与当日修复记录））
+- docs/sillyspec/platform-interface-map.md（配套文档行补两份新文档引用）
+需求：登记两份 SillyHub API 文档产出并入库。
+根因：无代码缺陷，纯文档新增（用户实测产出）。
+方案：docs/sillyspec/ 下入库 api 参考与实测报告两份新文档，platform-interface-map.md 配套文档行同步引用。
+结果：纯 doc 改动，lint 不扫 docs 跳过，无源码影响，文档齐备可随本次发布一起推送。
+
+## ql-20260815-001-046c | 2026-08-15 13:19:24 | 处理三条负面反馈：①Wave 2b 标题解析报错不提示根因 ②worktree apply diff 规模 2000 行阈值误伤正常 change ③gen:t…
+状态：已完成
+关联变更：（无）
+文件：
+- src/stages/execute.js（validatePlanForExecute 新增检查0：Wave 编号字母后缀（2b）显式报错（治静默截断合并））
+- src/worktree-apply.js（检查6 diff 规模改两档：2000-5000 WARNING / >5000 BLOCKED）
+- test/plan-diagnose-wave.test.mjs（新建 11 断言（字母后缀报错+4 诊断分支回归））
+- test/worktree-apply-diff-size.test.mjs（新建 3 场景真实 git worktree（2368 警/5500 拦/1500 放））
+- docs/sillyspec/platform-interface-map.md（execute.js 行号漂移 497→509）
+- docs/sillyspec/prompt-control-debt.md（exec-h 补 2026-08-15 复盘观察（gen:types worktree 收尾预跑→commands.build 通用化 gate 思路））
+需求：处理三条负面反馈：①Wave 2b 标题解析报错不提示根因 ②worktree apply diff 规模 2000 行阈值误伤正常 change ③gen:types 与 worktree 配合缺收尾预跑。
+根因：①解析正则不锚定结尾，2b 被 parseInt 截断成 2 与显式 Wave 2 静默合并强制并行，串行意图失效无提示；②单档 >2000 即 BLOCKED，+2368 行正常变更被逼进 rescue cp 手动路径；③gen:types 是 consumer 命令，SillySpec 不该认识（定位约束），且 exec-h 债单已裁决 defer。
+方案：①validatePlanForExecute 加字母后缀显式报错（说明截断风险+解法）；②两档阈值 2000 警/5000 拦；③债单 exec-h 补通用化思路（commands.build 收尾 gate）。
+结果：新增两测试文件 14 断言全过，npm test 193 全绿，lint 277 过，platform-interface-map 行号同步，债单 exec-h 补观察。
