@@ -226,8 +226,14 @@ function doInstall(projectDir, tools, subprojects = [], specDir = null, options 
   // ⚠️ 必须保护真实资产：若本地 .sillyspec 含 changes/（非空）、projects/（非空）
   // 或 sillyspec.db（进度库），说明该项目本身就用 SillySpec 管理，整体删除会丢资产。
   // 此时只清运行时残留，拒绝整删；确无资产时才视为旧残留清理。
+  // 平台模式（platformMode）整体绕过清理段：项目内 .sillyspec/ 常只有 local.yaml
+  // （平台 init lease 第 5 步写，含用户手调 mcp 段），整删/残留清理都会丢配置。
   const legacyDir = join(projectDir, '.sillyspec');
-  if (specDir && existsSync(legacyDir)) {
+  if (platformMode) {
+    if (specDir && existsSync(legacyDir)) {
+      console.log('⏭️ 平台模式：跳过项目内 .sillyspec/ 清理（保留 local.yaml 等本地配置）');
+    }
+  } else if (specDir && existsSync(legacyDir)) {
     let hasChanges = false;
     try {
       const changesDir = join(legacyDir, 'changes');
@@ -560,7 +566,7 @@ export async function cmdInit(projectDir, options = {}) {
     }
 
     console.log('');
-    await doInstall(projectDir, selectedTools, subprojects, resolvedSpecDir, { noSkills });
+    await doInstall(projectDir, selectedTools, subprojects, resolvedSpecDir, { noSkills, platformMode: platformOpts != null });
     writeInitPlatformPointer(projectDir, resolvedSpecDir, platformOpts);
     showSummary(version, selectedTools, resolvedSpecDir);
     return;
@@ -588,7 +594,7 @@ export async function cmdInit(projectDir, options = {}) {
     tools = detectTools(projectDir);
   }
 
-  await doInstall(projectDir, tools, [], resolvedSpecDir, { noSkills });
+  await doInstall(projectDir, tools, [], resolvedSpecDir, { noSkills, platformMode: platformOpts != null });
   writeInitPlatformPointer(projectDir, resolvedSpecDir, platformOpts);
 
   console.log('');
