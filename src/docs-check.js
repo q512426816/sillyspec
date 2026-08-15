@@ -307,10 +307,27 @@ export function runDocsCheck(opts) {
         invalid.push({
           doc: docRel, docLine: r.docLine, ref: r.ref,
           reason: candidateFails.length > 1 ? `多候选全失败 → ${candidateFails.join(' | ')}` : candidateFails[0],
+          // 建议行号（--suggest）：token 在首个候选文件的全量命中行，供人工确认改锚——不自动改文件
+          suggest: suggestLines(candidates, tokens),
         })
       }
     }
   }
 
   return { ok: invalid.length === 0, total, invalid, warnings, kwChecked }
+}
+
+/**
+ * 建议行号计算（--suggest）：对失效引用，在候选文件里找 token 全量命中行。
+ * 无 token（纯行号断言）时返回空数组——没有符号线索无法定位，只能人工看。
+ */
+function suggestLines(candidates, tokens) {
+  if (tokens.length === 0) return []
+  try {
+    const lines = readLines(candidates[0])
+    if (lines === null) return []
+    const out = []
+    lines.forEach((l, i) => { if (tokens.some((t) => l.includes(t))) out.push(i + 1) })
+    return out.slice(0, 8)
+  } catch { return [] }
 }

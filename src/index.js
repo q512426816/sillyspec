@@ -603,6 +603,9 @@ async function main() {
               console.error(`\n❌ docs check: ${result.invalid.length}/${result.total} 处引用失效：`);
               for (const inv of result.invalid) {
                 console.error(`  ❌ [${inv.doc}:L${inv.docLine}] ${inv.ref} → ${inv.reason}`);
+                if (inv.suggest && inv.suggest.length > 0) {
+                  console.error(`     💡 候选行号: ${inv.suggest.join(', ')}（token 命中行，人工确认后更新文档锚）`);
+                }
               }
               console.error(`\n修复指引：行号漂移 → 更新文档行号到当前源码；文件删改名 → 更新引用路径；`);
               console.error(`关键词缺失但行号正确 → 确认符号是否改名，改文档 token 或行号。`);

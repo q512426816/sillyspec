@@ -465,3 +465,12 @@
 根因：①D 系列修复与 W6 run.js 拆分产生行号漂移未同步文档；②docs check 只是命令，无环节自动消费，欠账无收敛动力
 方案：①批量修正 7 份活文档 71 处失效引用（行号校准/符号迁移改路径/脆弱多引用行去锚改叙述）；②历史评审快照 39 处冻结进 local.yaml docs-check.skip；③quick --done 审计接入 docs check advisory：本次 changedFiles 的 .md 跑 runDocsCheck，失效即 docsCheckHint+reasons+升 warning（复用 D-8 模式，只归因本次改动不扫全仓存量），quick-audit.js 打印修复指引
 结果：docs check 全仓绿（273 引用全过/155 带关键词断言，110→0）；新增 4 测试（DC-1~4），quick-audit 36/36；npm test 全量 237+/exit 0；lint 过。附带事故：bash 内联脚本反引号被命令替换吃掉致 architecture-4a.md 短暂损坏，已 git checkout 恢复并用脚本文件重做（教训入 memory）
+
+## ql-20260815-017-8497 | 2026-08-15 22:23:52 | docs check 失效报告只有报错没有定位
+状态：已完成
+关联变更：（无）
+文件：（见实际改动）
+需求：docs check 失效报告只有报错没有定位，修 110 处欠账时人工六轮循环找候选行号——D-6 待办落产品化
+根因：invalid 项只含 reason（超界/关键词缺失），不含 token 在目标文件的实际命中行，定位靠人工 grep
+方案：docs-check.js 失效项加 suggest 字段（suggestLines：token 在首个候选文件全量命中行，取前 8；无 token/符号不在候选文件 → 空数组不硬猜）；index.js CLI 失效报告下打「💡 候选行号」行；测试 +2（合格 token 建议含真实行 / 符号不在候选文件空数组）
+结果：docs-check 套件 31/31；临时项目端到端冒烟验证「💡 候选行号: 4」正确指向 alphaSym 行；npm test 全量 exit 0（一次 worktree 套件 flaky 单跑通过，属 memory 已知 git/temp-dir flaky 非回归）；lint 过

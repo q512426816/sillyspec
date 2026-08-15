@@ -164,6 +164,31 @@ describe('runDocsCheck（集成）', () => {
     }
   })
 
+  it('失效引用带建议行号（suggest = token 在候选文件命中行）', () => {
+    // a.js:6 处 L4-L11 窗口无 alphaSymbol token（在 L1）→ 失效；suggest 应含 L1
+    writeFileSync(join(root, 'docs', 'sg.md'), '见 `src/a.js:6`（`alphaSymbol` 声明处）\n')
+    const r = runDocsCheck({ projectRoot: root, docs: ['docs/sg.md'] })
+    assert.equal(r.ok, false)
+    const inv = r.invalid[0]
+    assert.ok(Array.isArray(inv.suggest), 'suggest 字段存在且为数组')
+    assert.ok(inv.suggest.includes(1), `建议行号含 token 真实行 L1（实际 ${JSON.stringify(inv.suggest)}）`)
+    assert.ok(inv.suggest.every((n) => Number.isInteger(n) && n >= 1), '建议行号全为正整数')
+  })
+
+  it('token 不在候选文件（符号在别处/已删）→ suggest 空数组不硬猜', () => {
+    writeFileSync(join(root, 'docs', 'ghost.md'), '见 `src/a.js:6`（`gammaSymbol` 声明处）\n')
+    const r = runDocsCheck({ projectRoot: root, docs: ['docs/ghost.md'] })
+    assert.equal(r.ok, false)
+    assert.deepEqual(r.invalid[0].suggest, [], 'token 在 a.js 无命中 → suggest=[]')
+  })
+
+  it('无 token 的失效引用 suggest 为空数组（无符号线索不硬猜）', () => {
+    writeFileSync(join(root, 'docs', 'over.md'), '见 src/run/b.js:99\n')
+    const r = runDocsCheck({ projectRoot: root, docs: ['docs/over.md'] })
+    assert.equal(r.ok, false)
+    assert.deepEqual(r.invalid[0].suggest, [], '纯行号超界无 token → suggest=[]')
+  })
+
   it('文件不存在 → invalid（exit 1 语义）', () => {
     writeFileSync(join(root, 'docs', 'bad.md'), '见 src/ghost.js:1\n')
     const r = runDocsCheck({ projectRoot: root, docs: ['docs/bad.md'] })
