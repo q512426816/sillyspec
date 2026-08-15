@@ -165,6 +165,8 @@ async function main() {
   let targetDir = process.cwd();
   let specDir = null;
   let tool = null;
+  // --tool 多值收集（逗号分隔 + 重复 flag）；空数组 = 未提供，cmdInit 侧自动检测
+  const toolValues = [];
   let interactive = false;
   // init 专属：--no-skills 跳过 skills 复制段（platform init 勿污染项目内工具目录）
   let noSkills = false;
@@ -185,7 +187,11 @@ async function main() {
       specDir = resolve(args[i + 1]);
       i++;
     } else if (args[i] === '--tool' && args[i + 1]) {
-      tool = args[i + 1];
+      // 多值支持：逗号分隔（--tool claude,codex）与重复 flag（--tool a --tool b）都收集进数组
+      for (const v of args[i + 1].split(',')) {
+        const t = v.trim();
+        if (t) toolValues.push(t);
+      }
       i++;
     } else if (args[i] === '--no-skills') {
       // init 专属：跳过 skills 复制段（吞进变量，不透传 filteredArgs）
@@ -250,7 +256,7 @@ async function main() {
 
   switch (command) {
     case 'init':
-      await (await import('./init.js')).cmdInit(dir, { tool, interactive, specDir, noSkills, platformOpts: (platformWorkspaceId || platformRuntimeRoot) ? { workspaceId: platformWorkspaceId, runtimeRoot: platformRuntimeRoot } : null });
+      await (await import('./init.js')).cmdInit(dir, { tool, tools: toolValues.length > 0 ? toolValues : null, interactive, specDir, noSkills, platformOpts: (platformWorkspaceId || platformRuntimeRoot) ? { workspaceId: platformWorkspaceId, runtimeRoot: platformRuntimeRoot } : null });
       break;
     case 'setup':
       const setupList = filteredArgs.includes('--list') || filteredArgs.includes('-l');

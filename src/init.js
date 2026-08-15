@@ -458,7 +458,7 @@ function showSummary(version, tools, specDir) {
 // ── 主命令 ──
 
 export async function cmdInit(projectDir, options = {}) {
-  const { tool, interactive, specDir, noSkills = false, platformOpts = null } = options;
+  const { tool, tools: toolsOpt, interactive, specDir, noSkills = false, platformOpts = null } = options;
   const version = getVersion();
   const resolvedSpecDir = specDir ? resolve(specDir) : null;
 
@@ -567,13 +567,21 @@ export async function cmdInit(projectDir, options = {}) {
   // ── 默认快速模式：检测 → 安装 → 结束 ──
 
   let tools = [];
-  if (tool) {
-    if (!VALID_TOOLS.includes(tool)) {
-      console.error(`❌ 未知工具: ${tool}`);
-      console.error(`支持的工具: ${VALID_TOOLS.join(', ')}`);
-      process.exit(1);
+  // --tool 多值（tools 数组，index.js 解析逗号分隔/重复 flag 收集）优先；
+  // 兼容旧 tool 单值（程序化调用）。两者都校验 VALID_TOOLS 并合并去重（保序）。
+  const requested = [
+    ...(Array.isArray(toolsOpt) && toolsOpt.length > 0 ? toolsOpt : []),
+    ...(tool ? [tool] : []),
+  ];
+  if (requested.length > 0) {
+    for (const t of requested) {
+      if (!VALID_TOOLS.includes(t)) {
+        console.error(`❌ 未知工具: ${t}`);
+        console.error(`支持的工具: ${VALID_TOOLS.join(', ')}`);
+        process.exit(1);
+      }
     }
-    tools = [tool];
+    tools = [...new Set(requested)];
   } else {
     tools = detectTools(projectDir);
   }
