@@ -290,3 +290,13 @@ docs/sillyspec/platform-interface-map.md（守卫插入致行号漂移，doc-ref
 根因：init 固定下一步 brainstorm，棕地零代码上下文进 brainstorm 迷失（README:73 说棕地应 scan）；事后检测会把 init 自建 CLAUDE.md/.claude 误判为现有代码。
 方案：cmdInit 早期（doInstall 前）捕获目录状态，非隐藏条目判棕地。
 结果：绿地 brainstorm / 棕地 scan 实测正确；init 测试全过；全量 211/0；init.js:570 引用漂移修正。
+
+## ql-20260816-022-be87 | 2026-08-16 22:29:22 | C13 README 快速上手多处漂移（未纳入批次项上手#5）
+状态：已完成
+关联变更：（无）
+文件：
+- README.md（C13 六处漂移修正）
+需求：C13 README 快速上手多处漂移（未纳入批次项上手#5）。
+根因：README 与实际 CLI 能力漂移——假 flag/幽灵脚本/幽灵特性/幽灵 MCP 误导新用户，Node 版本自相矛盾。
+方案：逐项实证核验（init 无 --workspace、无 validate-* 脚本、setup 无 grep.app、playwright MCP 真实）后修正 6 处。
+结果：Node 版本两处一致 >=22.13、幽灵全清、docs-check 415 + doc-ref-check 80 + 全量 211/0。

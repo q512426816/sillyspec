@@ -29,7 +29,7 @@ SillySpec 把一个变更的完整生命周期固化为一组**强制阶段**—
 
 ## 快速开始
 
-需要 Node.js >= 18，一条命令完成初始化：
+需要 Node.js >= 22.13，一条命令完成初始化：
 
 ```bash
 npx sillyspec init
@@ -50,12 +50,10 @@ npx sillyspec init
 
 ```bash
 npx sillyspec init --tool claude      # 指定工具
-npx sillyspec init --workspace        # 多项目工作区模式
 npx sillyspec init --dir /path/to/x   # 指定项目目录
 npx sillyspec init --interactive      # 完整引导
 ```
 
-> 💡 启动 AI 时推荐使用跳过权限模式（如 `claude --dangerously-skip-permissions`）。SillySpec 会频繁执行 git、文件读写、校验脚本等操作，逐个批准会打断节奏——这也是 GSD / OpenSpec 的预期使用方式。
 
 ## 平台支持
 
@@ -101,7 +99,7 @@ SillySpec 进度库使用 SQLite 持久化（基于 Node.js 内置的 `node:sqli
 | `/sillyspec:brainstorm` | 需求探索 + 规范生成：产出 design.md + tasks.md |
 | `/sillyspec:plan` | 实现计划：文件路径 + 任务描述 + Wave 拓扑分组 |
 | `/sillyspec:execute` | TDD 执行：子代理并行 + worktree 隔离 |
-| `/sillyspec:verify` | 验证：对照规范 + 测试套件 + 代码审查 + E2E |
+| `/sillyspec:verify` | 验证：对照规范 + 测试套件 + 代码审查 |
 | `/sillyspec:archive` | 归档：规范沉淀到 knowledge/ |
 | `/sillyspec:auto` | 全自动推进全部阶段 |
 
@@ -142,7 +140,7 @@ sillyspec doctor                 全量自检 + 修复进度
 - **拓扑排序 Wave** — plan 阶段按蓝图依赖关系自动重排 Wave 分组
 - **进度持久化** — SQLite（sql.js WASM）持久化，支持断点恢复
 - **模块文档** — 模块级知识库，AI 执行时按需加载相关上下文
-- **E2E 验证** — 内置 E2E 测试流程，支持 Playwright / 浏览器 MCP，跨会话自动修复
+- **浏览器自动化** — 可选 MCP（Playwright / Chrome DevTools），供集成/E2E 冒烟验证
 - **平台同步** — 可选对接 SillyHub，文档同步 + 团队审批
 
 ## 可靠性保障
@@ -152,7 +150,6 @@ SillySpec 不只是 prompt，还有硬校验兜底：
 - **锚定确认** — 各阶段执行前必须逐个确认读过规范文件
 - **Hard Gate 自检** — 关键命令生成文件后强制自检格式，不通过则修正
 - **postcheck 识别偷懒** — 自动识别占位符、fallback、未分析等 AI 偷懒模式
-- **校验脚本** — shell 脚本自动化验证 AI 输出（validate-proposal/plan/scan/all）
 - **归档确认** — archive 操作前展示内容等待用户确认
 
 ## 防幻觉机制
@@ -162,14 +159,13 @@ SillySpec 不只是 prompt，还有硬校验兜底：
 | scan | 强制扫描代码库结构 / 约定 / 集成 / 测试 / 债务，生成 7 份文档 |
 | brainstorm | 必须读 ARCHITECTURE.md 数据模型，支持原型图分析 |
 | execute | 写代码前强制读现有源码，禁止编造方法调用 |
-| 全流程 | postcheck + 校验脚本兜底 |
+| 全流程 | postcheck + 硬门兜底 |
 
 ## MCP 增强
 
 通过 `sillyspec setup` 一键安装 MCP 工具，增强 AI 能力：
 
 - **Context7** — 查询最新库文档和 API 参考
-- **grep.app** — 搜索开源代码实现
 - **Chrome DevTools** — 浏览器自动化，支持 E2E 验证
 
 ## 目录结构
