@@ -245,3 +245,14 @@ docs/sillyspec/platform-interface-map.md（守卫插入致行号漂移，doc-ref
 根因：gate 分支只解析 --init-baseline，未知 --xxx 不 exit 2（interface-contract §1.3b 宣称未实现）；--paths 被忽略（runDocsGate.checkOpts 已支持但不接线）。
 方案：flag 白名单化（对齐 docs check）+ --paths 透传 + 位置参数拒绝。
 结果：实测未知 flag/位置参数/--paths 缺值全 exit 2、--paths 生效；platform-interface-map 8 处引用漂移修正；全量 210/0 + lint 298 + docs-check 415 + doc-ref-check 80。
+
+## ql-20260816-018-4eae | 2026-08-16 21:44:58 | B11 safeGit 未设 stdio 子进程 stderr 裸刷终端（未纳入批次项驾驭#6）
+状态：已完成
+关联变更：（无）
+文件：
+- src/git-helper.js（B11 stdio 配置）
+- .sillyspec/docs/sillyspec/modules/runtime.md（变更索引）
+需求：B11 safeGit 未设 stdio 子进程 stderr 裸刷终端（未纳入批次项驾驭#6）。
+根因：git-helper.js execFileSync 无 stdio 配置，git 失败 stderr 直接刷终端（实测确认）；同仓其他调用点均显式 stdio。
+方案：safeGit 与 git 加 stdio:['ignore','pipe','pipe']。
+结果：实测 fatal 不再裸刷；git-helper 14 用例 + 全量 210/0 + lint 298 + docs-check 415。

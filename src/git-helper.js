@@ -34,7 +34,7 @@ export function safeGit(cwd, args, opts = {}) {
   // 格式化（取首行）推迟到最终返回，避免重试分支重复格式化，并保留原始 code 供重试判定。
   const attempt = (t) => {
     try {
-      let value = execFileSync('git', fullArgs, { encoding: 'utf8', timeout: t })
+      let value = execFileSync('git', fullArgs, { encoding: 'utf8', timeout: t, stdio: ['ignore', 'pipe', 'pipe'] })
       if (trim) value = value.trim()
       return { value, errorObj: null }
     } catch (e) {
@@ -59,7 +59,7 @@ export function safeGit(cwd, args, opts = {}) {
 export function git(cwd, args, opts = {}) {
   const { trim = true, timeout = 5000 } = opts
   const fullArgs = ['-c', `safe.directory=${cwd}`, '-C', cwd, ...args]
-  const value = execFileSync('git', fullArgs, { encoding: 'utf8', timeout })
+  const value = execFileSync('git', fullArgs, { encoding: 'utf8', timeout, stdio: ['ignore', 'pipe', 'pipe'] })
   return trim ? value.trim() : value
 }
 
