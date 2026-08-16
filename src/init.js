@@ -470,6 +470,14 @@ export async function cmdInit(projectDir, options = {}) {
   const version = getVersion();
   const resolvedSpecDir = specDir ? resolve(specDir) : null;
 
+  // C14c：绿地/棕地引导——必须在 doInstall 之前捕获目录状态（init 会创建 .sillyspec/CLAUDE.md/
+  // .gitignore 等，事后检测会误判）；棕地（已有非隐藏源码）建议 scan，绿地（空目录）建议 brainstorm。
+  let brownfield = false;
+  try {
+    const entries = readdirSync(projectDir, { withFileTypes: true });
+    brownfield = entries.some(e => !e.name.startsWith('.'));
+  } catch { brownfield = false; }
+
   // ── 交互式模式（--interactive 或 -i）──
   if (interactive && isTTY()) {
     // 欢迎画面
@@ -603,9 +611,12 @@ export async function cmdInit(projectDir, options = {}) {
   const specDisplay = resolvedSpecDir || '.sillyspec';
   console.log(`  📁 规范目录: ${chalk.cyan(specDisplay)}`);
   console.log('');
-  console.log('  下一步：使用 AI 技能开始工作');
-  console.log(`    OpenClaw:    ${chalk.bold('/sillyspec:brainstorm')}`);
-  console.log(`    Claude Code: ${chalk.bold('/sillyspec:brainstorm')}`);
+  // C14c：绿地/棕地引导区分（README:73 棕地应 scan）——early 捕获的目录状态（init 前），
+  // 棕地有代码零上下文进 brainstorm 会迷失，建议先 scan 生成架构文档。
+  const nextCmd = brownfield ? '/sillyspec:scan' : '/sillyspec:brainstorm';
+  console.log('  下一步：使用 AI 技能开始工作' + (brownfield ? '（检测到现有代码，建议先扫描生成架构文档）' : ''));
+  console.log(`    OpenClaw:    ${chalk.bold(nextCmd)}`);
+  console.log(`    Claude Code: ${chalk.bold(nextCmd)}`);
   console.log('');
   console.log(chalk.dim('  💡 增强能力：sillyspec setup（安装 MCP 工具）'));
   console.log('');

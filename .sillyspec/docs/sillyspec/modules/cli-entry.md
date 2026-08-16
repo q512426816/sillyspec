@@ -80,4 +80,5 @@ runStage(pm, progress, stageName, cwd, changeName)
 - ql-20260816-016-db7f | B10 usage 后 exit 0 修复（未纳入批次项，CLI#4）：docs 未知子命令 + progress 未知子命令/缺参共 7 处 usage 打印后由 break（exit 0）改 process.exit(2)——对齐 worktree/modules/runtime 家族口径，hook 拼错不再静默成功。
 - ql-20260816-017-b1ca | B9 docs gate flag 白名单 + --paths 接线（未纳入批次项）：未知 --xxx exit 2（对齐 docs check 分支 / interface-contract §1.3b）、位置参数拒绝、--paths 透传 runDocsGate.checkOpts（原被忽略）、--paths 缺值 exit 2。
 - ql-20260816-019-a3bb | B11b docs 顶层 glob 边界（未纳入批次项，CLI#3）：docs-check walkGlob 加形态 0（根级 **/*.ext 递归——原被形态 2 误解析为字面目录 `**` 静默 0 命中全绿）+ 形态 3 目录字面量 statSync 检测（isDirectory 抛配置错误 exit 2——原 readFileSync EISDIR 裸崩 exit 1）。
+- ql-20260816-021-120d | C14c init 绿地/棕地引导（未纳入批次项，上手#8）：cmdInit 早期（doInstall 前）捕获目录状态，棕地（有非隐藏源码）下一步 /sillyspec:scan + 提示、绿地（空目录）保留 /sillyspec:brainstorm；修复 init 事后检测会把自建 CLAUDE.md 误判为现有代码的坑。
 <!-- MANUAL_NOTES_END -->

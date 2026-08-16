@@ -278,3 +278,15 @@ docs/sillyspec/platform-interface-map.md（守卫插入致行号漂移，doc-ref
 根因：_getNextSuggestion 第三循环（in-progress 阶段找待办步）不排除 scan，而 scan auxiliary 恒处 STAGE_ORDER 首位，中途未完成即劫持「下一步」为 scan 掩盖主流程待办；第四循环 plan-c 已排除、第三循环漏补同根因。
 方案：第三循环加 scan 排除。
 结果：next-suggestion 9 断言全过 + 全量 211/0。
+
+## ql-20260816-021-120d | 2026-08-16 22:18:56 | C14c init 引导不区分绿地/棕地（未纳入批次项上手#8）
+状态：已完成
+关联变更：（无）
+文件：
+- src/init.js（C14c 绿地/棕地引导）
+- docs/sillyspec/platform-interface-map.md（init.js 引用行号）
+- .sillyspec/docs/sillyspec/modules/cli-entry.md（变更索引）
+需求：C14c init 引导不区分绿地/棕地（未纳入批次项上手#8）。
+根因：init 固定下一步 brainstorm，棕地零代码上下文进 brainstorm 迷失（README:73 说棕地应 scan）；事后检测会把 init 自建 CLAUDE.md/.claude 误判为现有代码。
+方案：cmdInit 早期（doInstall 前）捕获目录状态，非隐藏条目判棕地。
+结果：绿地 brainstorm / 棕地 scan 实测正确；init 测试全过；全量 211/0；init.js:570 引用漂移修正。
