@@ -342,3 +342,14 @@ docs/sillyspec/platform-interface-map.md（守卫插入致行号漂移，doc-ref
 根因：index.js 顶层静态 import progress.js（拖 db→sqlite 链 48ms）+ run/shared.js（拖 stages 全家 30ms），--version/help 等轻路径用不到却全额支付。
 方案：两条边改 main() 早退后动态加载（审计预定修法，行为零变化）。
 结果：--version 137→71ms、help 68ms、重路径无回退；全量 211/0 + lint 300 + docs-check 415。
+
+## ql-20260816-027-8083 | 2026-08-16 23:48:50 | 22e-b lint 名不副实（未纳入批次项性能#7）
+状态：已完成
+关联变更：（无）
+文件：
+- test/check-syntax.mjs（22e-b 未引用导出检测）
+- .sillyspec/docs/sillyspec/modules/cli-entry.md（变更索引）
+需求：22e-b lint 名不副实（未纳入批次项性能#7）。
+根因：check-syntax 仅 node --check + 禁 console.assert，未引用导出检测缺失——A6 propose.js 死码、22d onboard 孤儿先例只能人肉 grep。
+方案：加 src/ 非入口模块 export 符号的跨文件文本引用检测（入口/stages registry 白名单），首版 advisory（21 候选含同文件内部消费误报，文本级无法区分）。
+结果：lint exit 0 + 检测器一次扫出 21 死码候选登记待确认 + 全量 211/0。

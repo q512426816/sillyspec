@@ -44,4 +44,50 @@ if (contentErrors.length) {
   process.exit(1)
 }
 
-console.log(`Checked ${allFiles.length} JavaScript files (src ${srcFiles.length} + test ${testFiles.length}); test/ 内容规则通过`)
+// 3. 未引用导出检测（22e-b，性能#7）：src/ 非入口模块的 export 符号在 src/+test/ 其余文件
+//    零引用即报（A6 propose.js 死码、22d onboard 孤儿先例只能人肉 grep 发现）。
+//    入口白名单：bin 入口、CLI index.js、各 stage 定义（动态经 stages/index.js registry 消费）。
+//    判定是文本级（import { X } / import(X) / 字符串引用），不解析 AST——零依赖与现有 lint 一致。
+const ENTRY_WHITELIST = new Set([
+  'src/index.js', 'src/version.js', 'src/db.js', 'src/db-engine.js',
+  'src/fs-atomic.js', 'src/git-helper.js', 'src/version.js',
+])
+const dynamicEntryPatterns = [
+  /await import\('\.\/stages\/(\w+)\.js'\)/,   // stages/index.js registry
+]
+const deadExports = []
+const srcContents = new Map() // file -> content（复用读取）
+for (const f of srcFiles) srcContents.set(f.replaceAll('\\', '/'), readFileSync(f, 'utf8'))
+const testContents = new Map()
+for (const f of testFiles) testContents.set(f.replaceAll('\\', '/'), readFileSync(f, 'utf8'))
+// 全体内容合串（引用检测语料）；排除待检文件自身
+const allContent = [...srcContents.entries(), ...testContents.entries()]
+
+for (const [file, content] of srcContents) {
+  if (ENTRY_WHITELIST.has(file)) continue
+  // stage 定义与 workflow 脚本经 registry/动态加载消费，跳过
+  if (file.startsWith('src/stages/') || file.startsWith('src/scan-diff')) continue
+  const namedExports = [...content.matchAll(/export\s+(?:async\s+)?(?:function|const|class)\s+([A-Za-z_$][\w$]*)/g)]
+    .map(m => m[1])
+  if (namedExports.length === 0) continue
+  const isStageIndex = file === 'src/stages/index.js'
+  if (isStageIndex) continue // registry 自身
+  for (const sym of namedExports) {
+    // 宽松文本级判定：符号名出现在其他任一 src/+test/ 文件即算引用（防误报优先；
+    // 动态 import 字符串路径、destructure、注释提及都会命中——代价是漏报，可接受）
+    const refRe = new RegExp(`\\b${sym}\\b`)
+    const referenced = allContent.some(([f2, c2]) => f2 !== file && refRe.test(c2))
+    if (!referenced) {
+      deadExports.push(`${file}: export \`${sym}\` 在 src/+test/ 其余文件零引用`)
+    }
+  }
+}
+if (deadExports.length) {
+  // advisory 不阻断（22e-b 首版）：22 个候选中含「同文件内部消费 + export 供测试用例直跑」的
+  // 有意导出（如 sanitizeQuicklogUser 同文件 4 处内部调用），文本级判定无法区分——先观察积累，
+  // 确认真死后逐个删除或收紧为 hard fail。
+  console.warn(`\n⚠️ 未引用导出候选 ${deadExports.length} 项（src/ 死码候选，22e-b advisory；含同文件内部消费的误报）：`)
+  for (const e of deadExports) console.warn('  - ' + e)
+}
+
+console.log(`Checked ${allFiles.length} JavaScript files (src ${srcFiles.length} + test ${testFiles.length}); test/ 内容规则通过 + 未引用导出候选 ${deadExports.length} 项（advisory）`)
