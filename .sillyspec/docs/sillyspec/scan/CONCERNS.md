@@ -14,19 +14,17 @@ generator: sillyspec-scan
 
 ### 🔴 高
 
-- **propose 阶段已废弃但代码仍在仓库**：`src/stages/propose.js:2` 标注 `@deprecated propose 阶段已移除入口（2026-06-14）`，入口已删但文件未清理，属于死代码，易误导维护者。
+- **propose 阶段死代码已清理**（2026-08-07 A6）：`src/stages/propose.js` 已删除，阶段注册表无 propose 条目。历史扫描曾记录「文件保留 `@deprecated` 标注未清理」。
 - **无 lint 框架、无静态分析**：`npm run lint` 仅是 `node --check` 语法校验（见 `test/check-syntax.mjs`），未接入 ESLint/Biome。无未使用变量、未处理 Promise、import 顺序等检查，质量风险靠人工巡检。
 - **测试框架不统一**：28 个测试文件中只有 `test/contract-artifacts.test.mjs` 用了 `node:test` 的 describe/it，其余多用内联自定义断言函数（`assertEqual`/`assertThrows`），无共享 util，断言失败信息与可读性参差。
 
 ### 🟡 中
 
-- **TODO 未完成项**（grep `TODO` 真实命中）：
-  - `src/index.js:611` — `⚠️ 未提供 --token，将使用交互式输入（TODO: task-11）`，token 交互输入路径尚未完成。
-  - `src/sync.js:406` — `// TODO: SillyHub 平台侧实现后启用`（approve 函数）。
-  - `src/sync.js:411` — `// TODO: SillyHub 平台侧实现后启用`（reject 函数）。即平台审批的 approve/reject 实际未实现，仅 `console.warn` 提示「尚未实现」。
+- **TODO 未完成项**（grep `TODO` 真实命中，历史扫描后多数已消化）：
+  - `src/sync.js:955` — `// TBD-hub-api: approve/reject 端点路径与请求体以 SillyHub 仓库实际 API 为准`——approve/reject 入口（`sync.js:1023/1027`）与 `_submitApproval` 已实现，仅端点契约待 SillyHub 侧对齐（decisions.md D-006@v1：显式动作失败打 error 并置 exitCode=1，非 best-effort warn）。
 - **大量 best-effort 容错点**（grep `console.warn(` 在 `src/` 共 50+ 处），关键路径降级后继续执行而非失败，包括：
   - `src/progress.js` 多处空值/异常跳过写入（`_write`、`registerChange`、`renameChange`、`unregisterChange`、`initChange` 空值跳过；`isolation` 状态更新失败仅 warn）。
-  - `src/progress.js:1717` gate-status.json 写入失败仅 warn，可能造成门禁状态丢失。
+  - gate-status.json 缓存双源已废除（progress.js 头注 task-10）：worktree-guard hook 直读 sillyspec.db，不再有「写入失败仅 warn 致门禁状态丢失」路径。
   - `src/run.js` 多处 manifest / baseline / workflow 校验失败仅 warn 不阻断（如 `:1065`、`:1596`、`:1644`、`:2670`、`:2798`、`:2831`）。
   - `src/worktree.js` 远程同步失败仅 warn（`:314`），baseline overlay 同目录跳过仅 warn（`:397`）。
 - **`in-place-fallback` 降级路径**：`src/worktree.js` 多处出现 `in-place-fallback` 模式（`:281`、`:409`、`:444`、`:491`、`:554`），当 git worktree 创建失败或 sandbox 权限不足时降级为主仓库内执行，标记为 `degraded`。这是核心隔离能力的降级路径，行为差异需文档化提醒用户。

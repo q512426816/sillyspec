@@ -14,15 +14,13 @@ generator: sillyspec-scan
 
 ### 1. ESM 顶层 + 函数体内 CJS 懒加载混用
 
-项目 `package.json` 声明 `"type":"module"`，所有源文件顶层一律用 `import ... from`（如 `src/worktree.js:11-14`、`src/setup.js:1-6`）。**但有少量文件在函数体内用 `require()` 做惰性加载**，这是一种刻意模式——把可选/重依赖推迟到真正调用时再加载，避免影响 CLI 启动速度或形成循环依赖：
+项目 package 清单声明 `"type":"module"`，所有源文件顶层一律用 `import ... from`（如 `src/worktree.js:11-13`、`src/setup.js:1-3`）。**但有少量文件在函数体内用 `require()` 做惰性加载**，这是一种刻意模式——把可选/重依赖推迟到真正调用时再加载，避免影响 CLI 启动速度或形成循环依赖：
 
 ```
-src/run.js:38       const { execSync } = require('child_process')
-src/run.js:127-128  const { existsSync, readFileSync } = require('fs')
-                     const { join } = require('path')
-src/worktree-apply.js:373  const { execSync: es } = require('child_process');
-src/stages/execute.js:414  const { buildContractMatrix } = require('../contract-matrix.js')
-src/stages/doctor.js:61    const fs = require('fs');
+src/run/command.js      （动态 import('./init.js') 等——W6 拆分后 require 惰性加载改为动态 import）
+src/worktree-apply.js   （安全修复后 git 子进程迁 execFileSync 数组参数）
+src/stages/doctor.js:64 const fs = require('fs');
+src/stages/doctor.js:67 const { execSync } = require('child_process');
 ```
 
 **隐形规则**：新代码默认顶层 `import`；只有当需要 (a) 推迟启动开销、(b) 打破循环依赖、(c) 在 bash heredoc 嵌入的 node 单行脚本里（doctor.js 中的内联诊断脚本）时，才在函数体内用 `require`。**不要把这种混用统一改成纯 import**——doctor.js 内嵌的 bash 诊断脚本必须保留 `require`（它在独立 node 进程里执行，没有 ESM 上下文）。
@@ -80,8 +78,7 @@ src/worktree.js:94   throw new Error(`changeName 不合法: "${changeName}"，�
 涉及删除/清理的代码点有刻意保留的 `// ⚠️` 中文警示注释，指向同一份「真实资产」清单：
 
 ```
-src/init.js:1191   // ⚠️ 同 init.js：必须保护真实资产（changes/、projects/、sillyspec.db）。
-src/init.js:112    // ⚠️ 必须保护真实资产：若本地 .sillyspec 含 changes/（非空）、projects/（非空）...
+src/init.js:226    // ⚠️ 必须保护真实资产：若本地 .sillyspec 含 changes/（非空）、projects/（非空）...
 ```
 
 **隐形规则**：任何会触碰 `.sillyspec/changes/`、`.sillyspec/projects/`、`.sillyspec/.runtime/sillyspec.db` 的清理/重置代码，必须保留 `// ⚠️ 必须保护真实资产` 注释并枚举受保护路径。修改这些函数时不可删除该注释。
@@ -91,7 +88,7 @@ src/init.js:112    // ⚠️ 必须保护真实资产：若本地 .sillyspec 含
 - **模块系统**：ESM only（`"type":"module"`），顶层 `import/export`，例外见上方「框架隐形规则 #1」。入口 `bin/sillyspec.js` 仅 2 行：`#!/usr/bin/env node` + `import '../src/index.js'`。
 - **导出**：命名导出为主（`export function`/`export const`/`export class`），仅 `src/db.js` 的 `DB` 用 `export class`。无默认导出（stages 用 `export const definition` 而非 `export default`）。
 - **git 子进程**：统一走 `execSync(\`git ${args}\`, { cwd, encoding:'utf8', stdio:['pipe','pipe','pipe'] })`（见 `worktree.js`/`worktree-apply.js` 多处），**stdio 三段 pipe 是为了吞掉 stderr 噪音**——新增 git 调用请沿用此形状。
-- **数字解析**：优先 `parseInt(x, 10)`（显式基数，见 `worktree.js:109-110`、`progress.js:1407`），NaN 判断用 `Number.isNaN`（`worktree-guard.js:149`）而非全局 `isNaN`。
+- **数字解析**：优先 `parseInt(x, 10)`（显式基数，见 `worktree.js:203-204`），NaN 判断用 `Number.isNaN` 而非全局 `isNaN`。
 - **时间戳**：落盘统一 `new Date().toISOString()`（`contract-matrix.js:152`、`scan-postcheck.js:256`）。
 
 ## 命名规范

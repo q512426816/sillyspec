@@ -33,7 +33,7 @@ SillyHub driver 模式的机器接口层。把 SillySpec 门控与事实核验�
 ## 注意事项
 
 - gate/derive 无状态单次调用（D-007，不引入 session/lease/lifecycle 状态机；文中 daemon 指 SillyHub 侧调用方，本仓库不实现守护进程）
-- `validateTaskReviews` 真实签名是**单 opts 解构** `{planContent, runtimeRoot, executeRunId, allowCannotVerify, changeDir, gitDir}`（非 `(changeDir, {gitDir})`）；调用需自行组装这些参数，现成范式见 `src/run.js:3223-3249` 与本模块 runGate/runDerive
+- `validateTaskReviews` 真实签名是**单 opts 解构** `{planContent, runtimeRoot, executeRunId, allowCannotVerify, changeDir, gitDir}`（非 `(changeDir, {gitDir})`）；调用需自行组装这些参数，现成范式见 `src/task-review.js:377`（validateTaskReviews 定义）与本模块 runGate/runDerive
 - runGate/runDerive 的 task-reviews 段 runtimeRoot 解析统一调 `resolveRuntimeRoot({runtimeRoot, specDriftAnchor}, specRoot)`（`src/run/shared.js`，三级优先级 runtimeRoot > specDriftAnchor > 本地 specBase/.runtime，坑 execute-runs-isolation）：drift 场景调用方传 specDriftAnchor=主仓 specBase 时，execute-run-id marker 读主仓 .runtime 而非 worktree 副本；未传则行为同旧公式（向后兼容）。调用方职责是据 drift 场景传入 anchor，本模块只消费
 - transition check 须传 `fromStageData`（`progress.stages[currentStage]`）以触发 failed_post_check 门控，与 completeStep 保持同源（design §8 风险对策）
 - Windows 下退出用 `process.exitCode` + 自然退出（非 `process.exit`），避免 UV_HANDLE_CLOSING assertion 覆盖退出码

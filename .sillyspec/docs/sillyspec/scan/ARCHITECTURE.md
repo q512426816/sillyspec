@@ -85,16 +85,18 @@ generator: sillyspec-scan
   reset / set-stage`（见 `index.js:193`）。
 - `run` 及阶段别名（`brainstorm` 等顶层名）统一转发到 `runCommand`（`src/run.js`）。
 
-### 阶段状态机引擎（src/run.js）
+### 阶段状态机引擎（src/run.js barrel → src/run/）
 
-`run.js` 是核心，grep 定位到的关键导出与函数：
+`src/run.js` 现为 23 行 barrel（W6 重构拆分），核心实现移入 `src/run/` 四模块
+（command.js 参数解析与生命周期 / stage.js 单阶段执行 / complete*.js 完成
+处理 / gates.js 完成门）。grep 定位到的关键导出与函数：
 
-- `runCommand(args, cwd, specDir)`（`run.js:1073`）：参数解析总入口，识别
+- `runCommand(args, cwd, specDir)`（`src/run/command.js:156`）：参数解析总入口，识别
   `--done / --skip / --reset / --reopen / --status / --auto / --skip-approval /
   --from-step / --confirm / --wait / --answer` 等生命周期 flag。
-- `runStage(...)`（`run.js:1454`）：单阶段执行器，做状态转换校验（调用
+- `runStage(...)`（`src/run/stage.js:30`）：单阶段执行器，做状态转换校验（调用
   `stage-contract.js` 的 `checkTransition`），逐 step 推进，处理审批门控。
-- `runAutoMode(...)`（`run.js:2977`）：自动模式，连续跑
+- `runAutoMode(...)`（`src/run/command.js:1039`）：自动模式，连续跑
   `['brainstorm','plan','execute','verify']` 主流程直到 `--done`。
 
 阶段流转语义（grep 自 `run.js`）：
@@ -109,9 +111,10 @@ generator: sillyspec-scan
 | `--auto` | 进入自动模式连跑主流程 |
 
 **perProject 按项目展开**：scan 阶段大量 step 带 `perProject: true` 标记（grep 自
-`src/stages/scan.js`，共 8 处）。`run.js:2282` 处逻辑：scan 第 2 步"构建扫描项目列表"
+`src/stages/scan.js`，共 8 处）。`handleScanProjectListStep`（`src/run/complete-handlers.js:456`）
+逻辑：scan 第 2 步"构建扫描项目列表"
 完成后，把后续所有 `perProject` step 按 `projectNames` 展开成
-`步骤 × 项目` 个独立子步骤（日志示例见 `run.js:2322`），移除原始未展开版本。
+`步骤 × 项目` 个独立子步骤，移除原始未展开版本。
 
 ### 阶段定义注册表（src/stages/）
 
@@ -140,7 +143,7 @@ generator: sillyspec-scan
 
 ### 进度持久化层
 
-- **`ProgressManager`**（`src/progress.js:79`）：对外 API 层，方法包括
+- **`ProgressManager`**（`src/progress.js:172`）：对外 API 层，方法包括
   `read / _write / listChanges / registerChange / initChange / setStage / addStep /
   updateStep / completeStage / renameChange / readChangeIsolation /
   updateChangeIsolation / checkConsistency / repairConsistency / validate / reset`。
@@ -162,7 +165,7 @@ SQLite Schema（grep 自 `db.js`，仅记表名 + 用途 + 字段数）：
 
 ### 平台同步层（src/sync.js）
 
-- **`SyncManager`**（`sync.js:121`）：独立于 ProgressManager，由 `run.js` / `index.js` 调用。
+- **`SyncManager`**（`src/sync.js:257`）：独立于 ProgressManager，由 `run/` 与 `index.js` 调用。
 - 动态 `import('./progress.js')` 读取进度后：
   - `POST {platform.url}/api/changes/{changeName}/progress` 同步进度；
   - `POST {platform.url}/api/changes/{changeName}/documents` 同步文档；
@@ -194,11 +197,11 @@ SQLite Schema（grep 自 `db.js`，仅记表名 + 用途 + 字段数）：
 ## 控制流：一次 `sillyspec run <stage>` 的生命周期
 
 ```
-argv → index.js switch('run') → runCommand(run.js:1073)
+argv → index.js switch('run') → runCommand(src/run/command.js:156)
    ├─ 解析 --done/--reset/--reopen/--skip/--auto 等 flag
    ├─ new ProgressManager() 读当前 change 进度
    ├─ 若 --auto → runAutoMode 连跑 brainstorm→plan→execute→verify
-   ├─ 否则 → runStage(run.js:1454)
+   ├─ 否则 → runStage(src/run/stage.js:30)
    │     ├─ stage-contract.checkTransition 校验状态转换
    │     ├─ stageRegistry[stage].steps 取步骤定义
    │     ├─ scan 阶段：perProject steps 按 projectNames 展开

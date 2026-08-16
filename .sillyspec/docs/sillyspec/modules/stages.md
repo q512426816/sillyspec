@@ -29,11 +29,11 @@ updated_at: 2026-08-06T06:34:27+08:00
 **核心阶段**（按流程顺序）：brainstorm → plan → execute → verify → archive
 **辅助阶段**：scan、quick、explore、status、doctor
 
-**execute prompt 路径约定**（2026-07-11 占位符化，坑 2）：execute stage prompt 中 review.json / endpoints.json 路径用 `{SPEC_ROOT}/.runtime/` 占位符（非裸 `.sillyspec/.runtime/` 硬编码）。`{SPEC_ROOT}` 由 `run.js` 平台路径重写消费——仓库内模式→`.sillyspec`，平台模式（specDir 指向外部目录）→specDir。修复平台模式下 review.json 落盘路径错位（`execute.js:623/644`）。
+**execute prompt 路径约定**（2026-07-11 占位符化，坑 2）：execute stage prompt 中 review.json / endpoints.json 路径用 `{SPEC_ROOT}/.runtime/` 占位符（非裸 `.sillyspec/.runtime/` 硬编码）。`{SPEC_ROOT}` 由 run 层平台路径重写消费（W6 后在 `src/run/prompt.js`）——仓库内模式→`.sillyspec`，平台模式（specDir 指向外部目录）→specDir。修复平台模式下 review.json 落盘路径错位（如 `src/stages/execute.js:908/937`）。
 
 **plan 完成校验**（2026-08-05，`plan-postcheck.js`）：`validateTaskCommands` 扫每个 TaskCard 的 `verify`/`implementation` 字段里 `npm/pnpm/yarn run <script>` 命令，按 `cd <subdir> &&` 前缀或 local.yaml `modules` 块定位子包 package.json 查脚本是否存在（monorepo 感知），不存在 → error 硬阻断 plan 完成（共享 helper `validateScriptCommands` 在 `src/stages/cmd-existence.js`，scan-postcheck 复用时维持 warning）。`validatePlanFeasibility` 另加 acceptance best-effort 字段 grep——从 acceptance 文本提 snake_case/camelCase 标识符 grep `allowed_paths` 源文件，未命中 → warning（不阻断，给 LLM 审查提线索）；`plan.js` `stepReviewPlan` 审查清单加「acceptance 对照实际 schema/类型源核验存在性与形态」条。
 
-**verify detectChangeRisk 早期 warning**（坑2，2026-08-06，`stage-contract.js:448`）：`detectChangeRisk` 判定高危（design/plan 含 session/lease/daemon 等关键词）且 design.md frontmatter 未显式声明 `risk_level`（!explicit）时，在 `validateVerifyResult` 的 evidence gate 前发 warning——引导在 design.md frontmatter 加 `risk_level:` 显式覆盖关键词判级（防「不改动 daemon」类否定语境被误判高危）。加了 frontmatter 显式等级后不发 warning（explicit 覆盖）；FAIL 结论照常透出不拦。遵 6417a27：只做关键词级 early-warning 引导，不扩成 design body 语义扫描。
+**verify detectChangeRisk 早期 warning**（坑2，2026-08-06，`stage-contract.js:469-490`）：`detectChangeRisk` 判定高危（design/plan 含 session/lease/daemon 等关键词）且 design.md frontmatter 未显式声明 `risk_level`（!explicit）时，在 verify evidence gate 前发 warning——引导在 design.md frontmatter 加 `risk_level:` 显式覆盖关键词判级（防「不改动 daemon」类否定语境被误判高危）。加了 frontmatter 显式等级后不发 warning（explicit 覆盖）；FAIL 结论照常透出不拦。遵 6417a27：只做关键词级 early-warning 引导，不扩成 design body 语义扫描。
 
 当前固定阶段步骤数：
 
