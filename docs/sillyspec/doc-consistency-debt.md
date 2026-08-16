@@ -145,3 +145,9 @@ agent 拿到两行事实自己就会去改，不需要"请务必保持模块文�
 - **冻结待验证**：O-1（quick hint 归属精度升级——没人消费的警告不值得打磨精度）、O-2（建议行号内联进 docs-debt）、消费端卡级 staleness 注入。全部等 sillyhub 升级后两周实测：execute agent 看到 [docs-debt] 会不会真的同步卡片？不会则 docs-debt 注入本身砍掉，回退到「硬门 + docs check + gate」三件套。
 - **警讯记录**：当需要给「报债的机制」再造「整合信号的机制」（docs-signals 三源一屏设计稿）时，就是机制造多了的证据。D-8 提示本会话触发四次全被忽略，实证「无人消费」。机制自带出错面（docs-debt-inject 归档次日即被复核出裸名归属失配），机制越多数错越难。
 - **例外落地（用户裁决「直接做完整的」）**：`sillyspec docs gate` ratchet——唯一被实测证明「立即回本」的机制（docs check 清 110→0 半时）。子命令 + 本仓 `.husky/pre-push` 接线；基线 `.sillyspec/docs-check-baseline`，`--init-baseline` 显式立基线（fail-closed，不悄悄合法化存量），清偿后重跑即下调锁住成果；**behind 计数明确不参与 gate**（源码活跃≠卡错，代理信号的误报会让所有人学会忽略报警）。测试 test/docs-gate.test.mjs 10 用例；接入姿势 interface-contract.md §1.3b（文档引导挂 hook，不往用户仓自动注入）。
+  - **⚠ 接线缺陷记录（2026-08-16 发现，同日修复）**：cff7479 落地时**漏了 index.js 的 `docs gate` CLI 分支**——`.husky/pre-push` 调 `docs gate` 命中的是 usage 分支且 exit 0，第三道关自上线起形同虚设（fail-open 假象：usage 输出被当 gate 通过）。1e370d7 补接线（`--init-baseline`/`--json`，specBase 平台模式优先）。教训：**hook 接线必须验证「拦得住」而非「跑得过」**——上线时只验了 hook 语法没验拦截路径；同类风险点：未来任何「hook 调 CLI 子命令」的接线，上线时手动制造一次失效确认 exit 1。
+
+## 八、后续补登（2026-08-16）
+
+- **scan/modules 产物纳入 docs-check 范围（本仓落地，ql-20260816-004-9afb / 1e370d7）**：`.sillyspec/docs/`（scan 7 文档 + modules 卡片）此前游离缺省范围（`docs/**`）外——dry-run 实测 24 处失效（W6 barrel 重构后 `run.js:NNNN` 全超界为主因），全部清偿后本仓 local.yaml `docs-check.paths` 纳入 `.sillyspec/docs/**/*.md`，基线维持 0。**consumer 通用解法留裁决**：CLI 缺省 paths 就含 `.sillyspec/docs/**`（对存量项目会突然冒失效数，需配合 gate 基线宽容）vs init 时写进 local.yaml 模板（新项目默认覆盖、存量项目不惊扰）——倾向后者（fail-closed 只拦增量的 gate 语义下，扩范围应显式 opt-in），未裁决不动缺省值。
+- **docs check token 断言已知局限（观察，不修）**：同一行多引用共享行首 token 断言（文档行首的裸词会被当作该行全部引用的关键词期望，如 CONVENTIONS.md「项目清单声明」行内两个 import 示例引用被要求窗口含 package 清单 token）——keywordAssert 本就是 best-effort 第二层，主校验（存在性+行号界）不受影响，改写文档文字可绕过。不登记 D 条目。
