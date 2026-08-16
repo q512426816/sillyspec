@@ -113,6 +113,9 @@ needs_human_review: true | false
 
 然后列出已加载的文件清单（含 decisions.md 当前版本/未决项状态、模块文档 + 模块依赖关系摘要）。
 
+### 落盘锚点（必须执行）
+把 plan_level 写进 plan.md frontmatter（\`plan_level: <none|light|full>\`）——上一步分类结果在本步落盘为持久锚点，后续步骤（及 context 压缩后的恢复）一律读 plan.md frontmatter，不依赖对话记忆传递。
+
 分类完成后，继续进入下一步。`,
   outputHint: '复杂度分类结果 + 文件清单',
   optional: false
@@ -125,13 +128,13 @@ needs_human_review: true | false
 const stepGeneratePlan = {
   id: 'generate_plan',
   name: '生成分级计划',
-  prompt: `根据上一步的 plan_level 结果，按对应级别生成计划。
+  prompt: `根据 plan.md frontmatter 的 plan_level 结果，按对应级别生成计划。
 
 ### 操作
-1. 读取上一步输出的 plan_level 分类结果
+1. 读取 plan.md frontmatter 的 \`plan_level:\` 字段（上一步已落盘为持久锚点；文件不存在或无该字段时回退读上一步输出的分类结果）
 2. 读取 tasks.md 和 design.md 了解需求范围
 3. 按 plan_level 选择对应模板输出
-4. 保存 plan.md（审查在下一步"审查计划"独立进行，不在本步自审——避免生成与自审同一次输出）
+4. 保存 plan.md（审查在下一步"审查计划"独立进行，不在本步自审——避免生成与自审同一次输出）；frontmatter 保留 plan_level 字段不删
 
 ---
 
@@ -283,7 +286,7 @@ full 计划的约束：
 ### 通用操作（所有级别）
 1. 读取 tasks.md 获取任务列表
 2. 读取 design.md 获取文件变更清单
-3. 读取上一步的 plan_level 分类结果
+3. 读取 plan.md frontmatter 的 \`plan_level:\` 字段（持久锚点；缺失时回退上一步输出）
 4. 按对应级别模板生成内容
 5. 保存到变更目录下的 plan.md（路径格式：\`{SPEC_ROOT}/changes/<change-name>/plan.md\`，其中 <change-name> 是变更目录名，直接使用，不加子目录。正确路径示例：\`{SPEC_ROOT}/changes/2026-05-28-agent-log-streaming/plan.md\`）
 **plan_level 为 none 时生成最小 plan.md（占位），不生成完整蓝图。**
@@ -346,15 +349,25 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
 ### 生成 module-impact.md 首版（scale≠small 时）
 计划审查通过后，顺带生成 module-impact.md 首版（本次变更的模块影响分析，供 execute/verify 阶段更新、archive 阶段终审）。scale=small 不生成（small 走 quick，module-impact 对 quick 无用）。
 
-输入（此时 TaskCard/allowed_paths 尚未生成——在下一步 generate_blueprints，故用以下两项作输入，粒度与 archive 现状一致）：
+输入（此时 TaskCard/allowed_paths 尚未生成——在下一步「生成 TaskCard」才产出，故用以下两项作输入，粒度与 archive 现状一致）：
 - design.md 的「文件变更清单」（本次计划改哪些源码文件）
 - plan.md 的任务列表（每个 task 改的范围）
 
-步骤（复用 archive extract-module-impact 的核心指引，同源——改 archive step2 prompt 时保持一致）：
+步骤（module-impact 的生成口径与 archive 终审一致）：
 1. 读 {SPEC_ROOT}/docs/<project>/modules/_module-map.yaml（模块→文件路径映射）。**不存在 → 降级**：生成只含 unmapped 部分的 module-impact.md + 提示「建议运行 scan 生成模块映射」，不阻断
 2. 对照 design 文件变更清单 + plan 任务列表，逐文件匹配所属模块（命中的归 mapped，未命中的归 unmapped）
 3. 生成模块影响矩阵（模块 × 影响类型[新增/修改/删除/依赖变更] × 说明），落盘 {SPEC_ROOT}/changes/<change>/module-impact.md
 4. 首行标题必须用中文：# 模块影响分析（Module Impact）— <变更简述>
+5. **必须含「更新结果」表骨架**（本表是 verify/archive 死信门控的收口目标——CLI 硬校验表内无 pending/待办行，漏写此表则 agent 只能从 gate 报错反推格式）：
+   \`\`\`markdown
+   ## 更新结果
+
+   | 目标 | 操作 | 状态 |
+   |------|------|------|
+   | \`modules/<id>.md\` | 更新<模块名>模块卡（本次变更涉及） | pending |
+   | \`_module-map.yaml\` | 无变化（未增删模块） | skipped |
+   \`\`\`
+   规则：每个受影响模块文档一行，状态列初始化 pending；无变化的行直接写 skipped。execute/verify 完成文档同步后把对应行回填 done；确定不同步的行改 skipped 并在操作列写明原因。**末列是状态列**（done/skipped/pending），不要在表尾追加其他列。
 
 execute/verify 阶段会按实际代码变更更新此文档；archive 阶段会最终确认它。
 
@@ -470,7 +483,9 @@ ${subagentPrompts}
 
 ## 验收（生成后自查，不另开步骤）
 - 每个 task-N.md 文件存在且非空
-- frontmatter 包含：id、title、author、created_at、priority、depends_on、blocks、allowed_paths、goal、implementation、acceptance、verify、constraints
+- frontmatter 字段分两组对照（与 plan-postcheck / taskcard-rules.md 同源，三处清单以此为准）：
+  - **硬校验 9 字段**（缺失 plan-postcheck 直接报错阻断）：id、title、title_zh、allowed_paths、goal、implementation、acceptance、verify、constraints
+  - **规范约定 5 字段**（应填但缺失只影响规范性，不阻断）：author、created_at、priority、depends_on、blocks
 - 每个 task 总长度 20~40 行
 - **一致性自查**：
   - allowed_paths 有无冲突

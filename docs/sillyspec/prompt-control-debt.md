@@ -100,8 +100,8 @@ updated_at: 2026-08-14T22:20:00+08:00
 
 来源：一次 plan 阶段 + quick 阶段使用复盘的 7 条改进点，逐条对源码核实后裁决（先查本债单 + 实证，不重复提议已决策项）。
 
-- ⏭ **plan-b TaskCard 行数逼字段丢失**：plan.js prompt 要求「总长度 20~40 行」（plan.js:400/368/411/467），但 plan-postcheck.js **无 max-line 校验**（grep 无 `>40`/maxLine）→ 20-40 是纯 persuasion；且 postcheck **不校验 `title_zh` 等字段完整性**（grep 无 title_zh）→ 子代理为压行数丢字段是**静默丢失**（实证：task-05 合并 title/title_zh 只留中文 title）。**裁决 defer**：修法二选一——① 放宽 prompt 行数上限（如 20~50，复杂 task 可到 60，frontmatter 字段不可缺）；② plan-postcheck 加 frontmatter 字段完整性硬校验（title_zh 等）。均改源码超 doc-only，留 follow-up；倾向②（enforcement 优于放宽劝说，符合债单原则）。
-- 🐛 **plan-c plan→scan 回头路（已知半修 bug）**：`run/complete.js:360-392` 注释明说——scan 是 STAGE_ORDER 首位且「永未完成」，通用 `_getNextSuggestion` 会「误推 scan（回头路）」；**仅 brainstorm/quick 加了专属分支**（complete.js:368/382），plan/execute/verify 仍走通用 else（complete.js:383）→ 用户 plan 完成后被提示「下一步 scan」（语义错，plan 后应 execute）。**裁决**：Bug，修法 = 给 plan/execute/verify 加专属分支（或 _getNextSuggestion 排除 auxiliary/永未完成阶段），改 complete.js，留 follow-up。
+- ⏭ **plan-b TaskCard 行数逼字段丢失**：plan.js prompt 要求「总长度 20~40 行」（plan.js:413/368/411/467），但 plan-postcheck.js **无 max-line 校验**（grep 无 `>40`/maxLine）→ 20-40 是纯 persuasion；且 postcheck **不校验 `title_zh` 等字段完整性**（grep 无 title_zh）→ 子代理为压行数丢字段是**静默丢失**（实证：task-05 合并 title/title_zh 只留中文 title）。**裁决 defer**：修法二选一——① 放宽 prompt 行数上限（如 20~50，复杂 task 可到 60，frontmatter 字段不可缺）；② plan-postcheck 加 frontmatter 字段完整性硬校验（title_zh 等）。均改源码超 doc-only，留 follow-up；倾向②（enforcement 优于放宽劝说，符合债单原则）。
+- 🐛 **plan-c plan→scan 回头路（已知半修 bug）**：`run/complete.js:360-392` 注释明说——scan 是 STAGE_ORDER 首位且「永未完成」，通用 `_getNextSuggestion` 会「误推 scan（回头路）」；**仅 brainstorm/quick 加了专属分支**（complete.js:385/382），plan/execute/verify 仍走通用 else（complete.js:383）→ 用户 plan 完成后被提示「下一步 scan」（语义错，plan 后应 execute）。**裁决**：Bug，修法 = 给 plan/execute/verify 加专属分支（或 _getNextSuggestion 排除 auxiliary/永未完成阶段），改 complete.js，留 follow-up。
 - ⏭ **quick-① QUICKLOG 四段 `--output` 落盘格式粗糙**：quick step3 `--done --output` 的四段（需求/根因/方案/结果）被 CLI 原样塞进单行 `结果：需求：…结果：…`（双层「结果：」前缀），强制 agent 手工精修拆行。属 P6「仪式负担下沉 CLI」主题——CLI 应解析四段分行落盘，不该让 agent 补排版。**裁决 defer**：改 quicklog.js 落盘逻辑（按「需求：/根因：/方案：/结果：」split 成 4 行），留 follow-up。
   - **2026-08-04 follow-up 已修 + 再补一坑**：首修用 `split(/(?=需求：|根因：|方案：|结果：)/)` 任意位置切，实证发现**正文引用字段标签字样会被误切**（根因里写「双层「结果：」前缀」→ 根因行被断成两行）——正是本次登记 quick 的 QUICKLOG 精修现场踩到。**二修改双级扫描 `splitSingleLineFields`**：先按字段边界严格扫描（真实标签=串首/前导空白/句末标点。；！？，引用字样因前导「/|( 非边界字符而跳过），严格失败退回顺序扫描兜底，缺标签落单行兜底。补回归 test 2e/2f（改前红改后绿），quicklog 82/0。残余边界：正文引用标签且**前导恰为空白/句末标点**时仍可能错位（如「按 方案： 处理」），属无标记文本固有歧义，写正文避免给标签字样加空白前缀。
 - ⏭ **quick-② lint 对 doc-only 改动空转**：CLAUDE.md 规则 8 要求 `--done` 前 npm test + lint，但 lint 只扫 JS 不碰 docs/（实证「Checked 66 JavaScript files」对 doc 改动零信息）。**裁决 defer**：修法二选一——① quick 按 `--files` 文件类型跳过 lint（全非 .js 时跳过）；② CLAUDE.md 规则 8 细化为「仅当触及 src/test 时必跑 lint/test」。倾向①（CLI 自动判定优于改人类指令）。
@@ -318,8 +318,8 @@ P2 遗留（按优先级登记）：
 
 **批次② 状态机 fail-open 组 → 完整流程 brainstorm（行为语义变更，单一 change 立项）**
 - **A5** `--done` 阶段产物 gate 失败只打 ❌ 但 exit 0：`src/run/complete.js:328-329` gate 早退 return 不设 process.exitCode——与 quick 审计 blocked→exit 1 同仓惯例分裂，agent/CI/hook 按 exit code 消费即 fail-open。
-- **B6** `--done` 完全绕过阶段转换守卫 + 辅助阶段污染 currentStage：`src/run/command.js:903-906` --done 直接进 `completeStep` 不查 `checkTransition`（stage.js:27-44 只在 runStage 调）；status/doctor 等 auxiliary 跑一次即写 `progress.currentStage`（stage.js:128-133）→ fromStage 变 status 后跳阶段静默放行（stage-contract.js:810-848 `AUXILIARY_STAGES` 一律放行）。
-- **B7** status/doctor 自称只读实则写库：`src/run/command.js:687-712` auxiliary fallback `initChange` 建 default 行 + 落盘 currentStage，与 SKILL「status 只读」矛盾，多 agent 并发 lastActive 互相覆盖。
+- **B6** `--done` 完全绕过阶段转换守卫 + 辅助阶段污染 currentStage：`src/run/command.js:949-963` --done 直接进 `completeStep` 不查 `checkTransition`（stage.js:27-44 只在 runStage 调）；status/doctor 等 auxiliary 跑一次即写 `progress.currentStage`（stage.js:128-133）→ fromStage 变 status 后跳阶段静默放行（stage-contract.js:810-848 `AUXILIARY_STAGES` 一律放行）。
+- **B7** status/doctor 自称只读实则写库：`src/run/command.js:680-711` auxiliary fallback `initChange` 建 default 行 + 落盘 currentStage，与 SKILL「status 只读」矛盾，多 agent 并发 lastActive 互相覆盖。
 - **B8** `run brainstorm` 无 --change 多活跃变更仓静默建幽灵变更：`src/run/command.js:717-731` 无条件 initChange（DB 实锤 08-15 一小时 4 个 `*-new-change-*` 活跃行）。
 - 裁决理由：四者共性强——状态机守卫 fail-open + 幽灵变更/幽灵阶段污染，属行为语义变更（多命令交互路径），非单点行修复。走完整流程 brainstorm → plan → execute，含 8b（新项目首跑 auxiliary 幽灵 default 变更）一并评估。
 

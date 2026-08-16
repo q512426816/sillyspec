@@ -96,7 +96,7 @@ generator: sillyspec-scan
   --from-step / --confirm / --wait / --answer` 等生命周期 flag。
 - `runStage(...)`（`src/run/stage.js:30`）：单阶段执行器，做状态转换校验（调用
   `stage-contract.js` 的 `checkTransition`），逐 step 推进，处理审批门控。
-- `runAutoMode(...)`（`src/run/command.js:1039`）：自动模式，连续跑
+- `runAutoMode(...)`（`src/run/command.js:1099`）：自动模式，连续跑
   `['brainstorm','plan','execute','verify']` 主流程直到 `--done`。
 
 阶段流转语义（grep 自 `run.js`）：

@@ -153,3 +153,18 @@ docs/sillyspec/platform-interface-map.md（守卫插入致行号漂移，doc-ref
 根因：A2 workflow.js 占位符替换把含反斜杠的 Windows 路径裸替换进 JSON 字面量再 parse 报 Bad escaped character 致 scan 质量门 fail-open；A3 dashboard 的 server.listen 排在同步全盘扫描后 Windows 实测 150s+ 假死。
 方案：A2 加 embedValue（字符串 JSON 转义嵌入）；A3 listen 前置 + startWatcher setImmediate 延后。
 结果：lint 298 文件 + 受影响测试 50 断言全过（workflow 三套 + 回归），workflow list 正常。
+
+## ql-20260816-011-a79a | 2026-08-16 18:25:09 | D 组 plan 系 5 项 prompt 债修复（self-audit D15/D19/D21b/D21c/D21）
+状态：已完成
+关联变更：（无）
+文件：
+- src/stages/plan.js（D15 表骨架+D19 清单分组+D21b 落盘锚点+D21 清注释）
+- templates/prompts/taskcard-rules.md（D21c title_zh 语义）
+- docs/prompt/plan.md（镜像同步+Step1 错挂修复）
+- docs/prompt/_extracted.json（重提取）
+- .sillyspec/docs/sillyspec/modules/stages.md（变更索引）
+- docs/sillyspec/self-audit-2026-08-16.md + prompt-control-debt.md + scan/ARCHITECTURE.md（docs-check 行号漂移修正）
+需求：D 组 plan 系 5 项 prompt 债修复（self-audit D15/D19/D21b/D21c/D21）。
+根因：module-impact 表格式无上游定义 agent 只能从 gate 报错反推；三份字段清单并存互不一致；plan_level 靠对话记忆跨步传递 context 压缩即失忆；title/title_zh 无语义区分说明全量产物两字段逐字节相同；维护者代号/注释泄入 prompt。
+方案：补表骨架+清单分组+落盘锚点+语义说明+清注释，重提取镜像同步，顺带修镜像 Step1 错挂漂移与 7 处 docs-check 行号漂移。
+结果：lint 298 过、docs-check 381 引用全过、受影响测试全绿（plan-postcheck 55 断言 + include 35 + prompt 34）。

@@ -1,6 +1,7 @@
 TaskCard 格式规则（必须严格遵守）：
 - 总长度 20~40 行，不要写成长文档
 - frontmatter 只含必要字段，不加 estimated_hours
+- title 用英文短语（kebab 风格动词短语，如 "Add readonly auxiliary constant"），title_zh 用对应中文标题——两字段是同一任务的双语表示，非不同信息；归档产物与 sillyhub 平台解析各取所需（title_zh 为中文展示首选）
 - goal: 一句话，用 > 多行字符串
 - implementation: 列表，每条一个具体步骤
 - acceptance: 列表，每条可独立验证（不是表格）
