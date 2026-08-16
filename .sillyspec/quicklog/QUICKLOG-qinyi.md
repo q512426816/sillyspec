@@ -141,3 +141,15 @@ docs/sillyspec/platform-interface-map.md（守卫插入致行号漂移，doc-ref
 根因：落后提交数不等于文档内容错误，本仓实测 404 commit/53 天后 platform 快照仍与当前结构一致，实证误报；文档失效应由 docs-check 直接信号判定。
 方案：status stale 改 needs-refresh（语义为建议核对/重扫而非判文档错）；message 明示落后数不等于文档错误、失效由 docs check 判并保留刷新指引；fresh/unknown 文案与头注释同步；测试断言 3 处、debt 第八节补登、file-lifecycle 与 design-signals 旧语义描述同步。
 结果：npm test 209/0 通过、lint 297 文件通过、docs check 381 引用全通过、scan-staleness 单测 9/9。
+
+## ql-20260816-010-50bf | 2026-08-16 17:03:37 | 批次③ Windows 组两个 P0 功能损坏修复（self-audit A2/A3）
+状态：已完成
+关联变更：（无）
+文件：
+- src/workflow.js（A2 占位符 JSON 转义）
+- packages/dashboard/server/index.js（A3 listen 前置）
+- docs/sillyspec/prompt-control-debt.md（批次①②完成状态登记）
+需求：批次③ Windows 组两个 P0 功能损坏修复（self-audit A2/A3）。
+根因：A2 workflow.js 占位符替换把含反斜杠的 Windows 路径裸替换进 JSON 字面量再 parse 报 Bad escaped character 致 scan 质量门 fail-open；A3 dashboard 的 server.listen 排在同步全盘扫描后 Windows 实测 150s+ 假死。
+方案：A2 加 embedValue（字符串 JSON 转义嵌入）；A3 listen 前置 + startWatcher setImmediate 延后。
+结果：lint 298 文件 + 受影响测试 50 断言全过（workflow 三套 + 回归），workflow list 正常。

@@ -52,6 +52,7 @@ useWebSocket() → Vue composable，connect/disconnect/send/onMessage
 - 子进程有超时保护，超时自动 kill
 - 进度文件监听使用 `fs.watch` + JSON 增量解析，避免全量重读
 - 前端为独立 Vite 项目（`packages/dashboard/`），构建产物在 `dist/`
+- ql-20260816-010-50bf | A3 修复：server.listen 前置 + startWatcher setImmediate 延后——原 listen 排在同步全盘扫描（homedir/Temp/桌面 depth 2 + 每项目多次 execSync('git')）后，Windows 实测 150s+ 假死；现在端口立即响应，初始 projects 数据由扫描完成后 broadcast 补发（self-audit-2026-08-16 A3）。
 
 ## 人工备注
 <!-- MANUAL_NOTES_START -->

@@ -308,6 +308,8 @@ P2 遗留（按优先级登记）：
 
 #### 三批次裁决（2026-08-16，按优先级）
 
+**推进状态**：批次① ✅ 已落地（quick ql-20260816-008-c809，commit 3192075，npm test 209/0）；批次② ✅ 已落地（完整流程 brainstorm→plan→execute→verify→archive，commit 3fd0e7d，npm test 210/0 + 回归测试 state-machine-guards.test.mjs 29 断言）；批次③ ⏳ 进行中（见下）。
+
 **批次① 一行修复组 → quick（1 个 quick change 合并 4 项）**
 - **A1** engines 抬 `>=22.13.0`：`package.json:16`（Node 官方 v22.13.0 才解除 `--experimental-sqlite` flag）+ `src/db-engine.js:5` 注释同步（断言「v22.11.0+ 无需 flag」错误）。
 - **C12** 模板幽灵命令 `sillyspec resume`：`templates/claude-instruction.md:15` 规则 9 改「`sillyspec progress show` 查看进度 + `sillyspec run <stage>` 续跑」（对齐主仓 CLAUDE.md 规则 9，index.js 零命中）。

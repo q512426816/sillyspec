@@ -564,18 +564,24 @@ function startServer({ port = 3456, open: openBrowser = true } = {}) {
     })
   })
 
-  try {
-    startWatcher((projects) => {
-      broadcast({ type: 'projects:updated', data: projects })
-    })
-  } catch (err) {
-    console.error('Failed to start file watcher:', err)
-  }
-
+  // listen 前置：Windows 下 startWatcher 的初始全盘同步扫描（homedir/Temp/桌面 depth 2 +
+  // 每项目多次 execSync('git')）实测 150s+，若排在其后则服务永不响应（假死）。
+  // 先绑定端口（listen 回调立即可达），扫描用 setImmediate 延后到事件循环——端口立即响应，
+  // 初始 projects 数据由扫描完成后 broadcast 补发。
   server.listen(port, '127.0.0.1', () => {
     console.log(`Dashboard server running on http://127.0.0.1:${port}`)
     if (openBrowser) {
       open(`http://127.0.0.1:${port}`)
+    }
+  })
+
+  setImmediate(() => {
+    try {
+      startWatcher((projects) => {
+        broadcast({ type: 'projects:updated', data: projects })
+      })
+    } catch (err) {
+      console.error('Failed to start file watcher:', err)
     }
   })
 

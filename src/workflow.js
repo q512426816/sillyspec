@@ -256,8 +256,13 @@ export function runPostCheck(wf, cwd, projectName, placeholders = {}, specBase) 
   let json = JSON.stringify(resolved)
   for (const [key, value] of Object.entries(allPlaceholders)) {
     // 支持 {key} 和 <key> 两种占位符语法
-    json = json.replace(new RegExp(`\{${key}\}`, 'g'), value)
-    json = json.replace(new RegExp(`<${key}>`, 'g'), value)
+    // 字符串值先做 JSON 转义再嵌入：Windows 路径等含反斜杠/引号的值裸替换进 JSON 字面量会
+    // 破坏 parse（实测报「Bad escaped character」→ scan 深度扫描质量门静默 fail-open）。
+    // JSON.stringify(v).slice(1,-1) 产出合法的 JSON 字符串内容（反斜杠→\\、引号→\"）；
+    // 非字符串值保持 String(v) 原样（数字占位符不被引号包裹，语义不变）。
+    const embedValue = (v) => (typeof v === 'string' ? JSON.stringify(v).slice(1, -1) : String(v))
+    json = json.replace(new RegExp(`\{${key}\}`, 'g'), embedValue(value))
+    json = json.replace(new RegExp(`<${key}>`, 'g'), embedValue(value))
   }
   resolved = JSON.parse(json)
 
