@@ -3,6 +3,7 @@ author: qinyi
 created_at: 2026-08-16T17:14:31+08:00
 updated_at: 2026-08-16T17:14:31+08:00
 scale: large
+risk_level: doc-only
 status: draft
 ---
 
