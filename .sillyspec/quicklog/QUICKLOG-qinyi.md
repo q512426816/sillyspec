@@ -310,3 +310,12 @@ docs/sillyspec/platform-interface-map.md（守卫插入致行号漂移，doc-ref
 根因：SKILL.md 表列 --json 但 sillyspec run <stage> --json 实测拒绝（exit 2，prompt 输出人类可读）；--skip-approval 描述「跳过审批/校验门控」过宽，gates.js:270 明确不能跳产物校验。
 方案：9 个 SKILL 删 --json 表行（doctor 结构化诊断合法保留）；7 个 --skip-approval 描述精化。
 结果：全量 211/0。
+
+## ql-20260816-024-97fb | 2026-08-16 22:45:42 | E22d templates/skills/sillyspec-onboard 孤儿模板删除（未纳入批次项性能#6）
+状态：已完成
+关联变更：（无）
+文件：templates/skills/sillyspec-onboard/SKILL.md
+需求：E22d templates/skills/sillyspec-onboard 孤儿模板删除（未纳入批次项性能#6）。
+根因：init 从 .claude/skills/ 复制（init.js:389）不读 templates/skills/，全仓 src/test 零消费者，纯死代码随 npm 发布。
+方案：rm -rf templates/skills（仅 1 个 SKILL.md）。
+结果：lint 300 过 + 全量 211/0。
