@@ -127,3 +127,17 @@ docs/sillyspec/platform-interface-map.md（守卫插入致行号漂移，doc-ref
 根因：A1 engines 虚低致 Node22.11/22.12 全 CLI 崩，C12 模板 resume 幽灵命令每个 init 项目照跑 exit1，D21d quick.js QUICKLOG gitignore 错误声明与事实矛盾，C14 auto 别名 usage 列出但 switch 漏路由。
 方案：engines 抬 >=22.13.0+db-engine 注释同步，模板规则9改 progress show+run stage 续跑，quick.js 删 gitignore 错句+docs/prompt 镜像同步，index.js 补 case auto 路由，连带同步版本声明文档与模块变更索引。
 结果：npm test 209/0、lint 297 文件、docs-check 381 引用全通过，auto 路由实测与 run auto 行为一致。
+
+## ql-20260816-009-fb44 | 2026-08-16 15:45:23 | scan-staleness 用 behind commit 数当文档过期/失真判据
+状态：已完成
+关联变更：（无）
+文件：
+- src/scan-staleness.js（status stale改needs-refresh+message语义修正）
+- test/scan-staleness.test.mjs（断言同步3处）
+- docs/sillyspec/doc-consistency-debt.md（第八节补登）
+- docs/sillyspec/file-lifecycle.md（brainstorm注入语义同步）
+- docs/sillyspec/design-docs-signals-integration.md（信号源表格语义同步）
+需求：scan-staleness 用 behind commit 数当文档过期/失真判据，与 docs-gate 既定原则（behind 计数不参与判定）矛盾，需修正判定信号与文案语义。
+根因：落后提交数不等于文档内容错误，本仓实测 404 commit/53 天后 platform 快照仍与当前结构一致，实证误报；文档失效应由 docs-check 直接信号判定。
+方案：status stale 改 needs-refresh（语义为建议核对/重扫而非判文档错）；message 明示落后数不等于文档错误、失效由 docs check 判并保留刷新指引；fresh/unknown 文案与头注释同步；测试断言 3 处、debt 第八节补登、file-lifecycle 与 design-signals 旧语义描述同步。
+结果：npm test 209/0 通过、lint 297 文件通过、docs check 381 引用全通过、scan-staleness 单测 9/9。

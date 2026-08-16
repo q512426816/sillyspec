@@ -2,7 +2,7 @@
  * scan-staleness 单测（债单 D-7 方案 A，ql-20260815-013）
  *
  * 覆盖：parseSourceCommit（含 CRLF 容错）、computeScanStaleness 四态
- * （fresh/stale/unknown/无目录 null）、阈值边界、prompt 注入占位符替换。
+ * （fresh/needs-refresh/unknown/无目录 null）、阈值边界、prompt 注入占位符替换。
  * fixture 全 tmp git 仓（safeGit 需要 .git），不污染真仓库。
  */
 import { describe, it, beforeEach, afterEach } from 'node:test'
@@ -67,15 +67,16 @@ describe('computeScanStaleness', () => {
     assert.equal(r.behindCommits, 0)
   })
 
-  it('落后 ≥ 阈值 commit → stale（message 含刷新指引）', () => {
+  it('落后 ≥ 阈值 commit → needs-refresh（提示核对/重扫，不判文档错）', () => {
     const base = execSync('git rev-parse HEAD', { cwd: root }).toString().trim()
     advance(STALENESS_THRESHOLDS.commits, 'c')
     mkScan(scanDoc(base))
     const r = computeScanStaleness({ projectRoot: root, specBase, projectName: 'demo' })
-    assert.equal(r.status, 'stale')
+    assert.equal(r.status, 'needs-refresh')
     assert.equal(r.behindCommits, STALENESS_THRESHOLDS.commits)
     assert.ok(r.message.includes('scan --standard --force-rescan'))
-    assert.ok(r.message.includes('不要盲信'))
+    assert.ok(r.message.includes('落后数≠文档错误'))
+    assert.ok(r.message.includes('docs check'))
   })
 
   it('阈值内 → fresh（不误报）', () => {
@@ -99,7 +100,7 @@ describe('computeScanStaleness', () => {
     advance(3, 'c')
     mkScan(scanDoc(base))
     const r = computeScanStaleness({ projectRoot: root, specBase, projectName: 'demo', thresholds: { commits: 2, days: 3650 } })
-    assert.equal(r.status, 'stale')
+    assert.equal(r.status, 'needs-refresh')
   })
 })
 

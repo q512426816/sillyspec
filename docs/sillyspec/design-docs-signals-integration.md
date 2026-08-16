@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-08-15 22:35:00
-updated_at: 2026-08-15T22:35:00+08:00
+updated_at: 2026-08-16T15:49:15+08:00
 status: design-draft（整合评估，供裁决）
 ---
 
@@ -15,7 +15,7 @@ status: design-draft（整合评估，供裁决）
 |---|---|---|---|---|
 | docs-debt | src/docs-debt.js | execute Wave prompt `{DOCS_DEBT}` | 一屏模块欠账（behind/untracked） | 模块卡落后源码 |
 | docs check | src/docs-check.js | 手动 CLI / quick --done（docsCheckHint） | 失效 file:line 引用清单 + 建议行号 | 文档引用漂移 |
-| scan-staleness | src/scan-staleness.js | brainstorm step2 `{SCAN_STALENESS}` | 一行基线漂移 | scan 文档过期 |
+| scan-staleness | src/scan-staleness.js | brainstorm step2 `{SCAN_STALENESS}` | 一行落后事实（needs-refresh=建议核对/重扫） | 文档失效由 docs check 判 |
 | docSyncHint（D-8） | src/run/shared.js | quick --done 审计 | 一行"未同步模块文档" | quick 改动零文档 |
 
 四源共享的底层能力：git 事实读取（safeGit）、`_module-map.yaml` 解析（parseModuleMapSimple，CRLF 已修）、token/路径启发式。**但互不引用**——docs-debt 不知道 docs check 的建议行号，docsCheckHint 不用 docs-debt 的归属逻辑。
