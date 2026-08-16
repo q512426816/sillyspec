@@ -104,3 +104,17 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 **根因**：`--help` 在 runCommand 的 knownFlags 白名单里但**没有任何短路逻辑**，被静默吞掉后继续走 cwd 纠正 → 会话创建 → QUICKLOG 落盘。查询意图产生了写副作用。
 
 **解法（已修 2026-08-15）**：runCommand 在 flag 校验通过后、任何副作用之前检测 `--help/-h` 短路，打印 stage 用法帮助（printStageUsage）退出 0；`-h` 补进 knownFlags。未知 flag 校验不变（`--halp` 仍 exit 2）。测试：`test/run-help-shortcircuit.test.mjs`（15 断言，含副作用零容忍：不增会话/不增 ql 条目）。
+
+---
+
+## 9. quick --done 审计把并行会话的删除算成本会话（双重误判，2026-08-16 实证）
+
+**症状**：`run quick --done` 被 BLOCKED，报「危险文件变更 + 删除文件 + 本次改动文档含 1 处失效引用」——三项全因同一个非本会话文件：`.sillyspec/plans/2026-04-05-dashboard.md` 的删除暂存（并行/历史残留操作留下的）。
+
+**根因**：审计 changedFiles 读 `git status` 全量。他人删除的 `.md` 文件被收进本会话 mdChanged，文件已不在盘 → docsCheckHint 记「文档不存在」1 处失效——**假失效**：逐文件复算（排除该删除后）真失效 0 处。这是「quick 并发批危险前缀误判」的变体：不只 DANGEROUS_PATTERNS 前缀误判，删除的 .md 还会经 docsCheckHint 链产生第二重假信号。
+
+**处置（当次绕行）**：确认删除合法（plans 目录 3871a9a 已整体移除、HEAD 里该文件确实待删）后 `git restore <file>` 恢复文件消除工作区脏 → --done 通过 → 提交后再重新表达删除意图（让删除走它自己的会话/流程）。**勿用 `--allow-delete` 解锁**——那会把他人删除夹带进本 quick 的 QUICKLOG 归属。
+
+**改进方向（未裁决）**：docsCheckHint 的 mdChanged 过滤 `git diff` 里 deleted 状态的文件（删除文件没有"引用校验"语义，只有删除确认语义，归 --allow-delete 管）。
+
+**关联记忆**：`[[sillyspec-quick-concurrent-dangerous-prefix]]`
