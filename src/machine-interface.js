@@ -113,14 +113,16 @@ export function buildEnvelope({
  */
 export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, specDriftAnchor, ctx = null } = {}) {
   const specRoot = specBase || resolveSpecDir(cwd);
-  const pm = new ProgressManager();
+  // A4：pm 用 specRoot（而非默认 resolveSpecDir(cwd)）——--spec-dir/平台模式下 specBase 是真实
+  // specDir，默认解析会指向本地孤儿库，与下方 planContent/changeDir 的 specRoot 两套事实源混拼。
+  const pm = new ProgressManager({ specDir: specRoot });
 
   try {
     // ── 只读契约守卫（D-002@v1）：db 不存在时 fail-closed 返回 exit 2，不触发建库落盘 ──
     // pm.read → _ensureDB → db.init() 在 db 不存在/schema 戳落后时会 _createSchema + _save 落盘
     // （db.js:init），这会让一个声明只读的查询命令在 spec 目录凭空建 sillyspec.db，违反只读契约。
     // db 还没建 = 该变更从未跑过流程，无从核验 → 显式返回「无法核验」而非建库。
-    const dbPath = join(resolveSpecDir(cwd), '.runtime', 'sillyspec.db');
+    const dbPath = join(specRoot, '.runtime', 'sillyspec.db');
     if (!existsSync(dbPath)) {
       const envelope = buildEnvelope({
         command: 'gate',
@@ -356,11 +358,12 @@ export async function runDerive(facet, changeName, { cwd, specBase, runtimeRoot,
   }
 
   const specRoot = specBase || resolveSpecDir(cwd);
-  const pm = new ProgressManager();
+  // A4：同 runGate——pm 用 specRoot 统一事实源，平台/--spec-dir 模式不读本地孤儿库。
+  const pm = new ProgressManager({ specDir: specRoot });
 
   try {
     // ── 只读契约守卫（D-002@v1，同 runGate）：db 不存在时 fail-closed 返回 exit 2，不建库落盘 ──
-    const dbPath = join(resolveSpecDir(cwd), '.runtime', 'sillyspec.db');
+    const dbPath = join(specRoot, '.runtime', 'sillyspec.db');
     if (!existsSync(dbPath)) {
       const envelope = buildEnvelope({
         command: 'derive',

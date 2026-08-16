@@ -593,9 +593,9 @@ console.log('\n--- 9. --spec-dir 透传 specBase（derive verify-test 读对 loc
 {
   const binPath = join(worktreeRoot, 'bin', 'sillyspec.js')
 
-  // cwd（--dir）：.sillyspec 下建 progress + 放"失败 local.yaml"做对照。
-  // runDerive 内部 ProgressManager 无参，progress 永远从 cwd 的 resolveSpecDir 读，
-  // specBase 只影响 local.yaml 读取——透传错时 local.yaml 也回退到 cwd/.sillyspec。
+  // cwd（--dir）：.sillyspec 下建 progress + 放"失败 local.yaml"做对照（9b 无 --spec-dir 时
+  // specBase 回退 resolveSpecDir(cwd) 读到这里）。A4 修复后 pm 从 specBase 读进度——
+  // specBase 才是 spec 根（progress + local.yaml 同处），故 proj/.sillyspec 也要有 progress。
   const proj = makeTmpDir('mi-specdir-proj-')
   const projSpec = join(proj, '.sillyspec')
   mkdirSync(projSpec, { recursive: true })
@@ -605,9 +605,13 @@ console.log('\n--- 9. --spec-dir 透传 specBase（derive verify-test 读对 loc
   writeFileSync(join(projSpec, 'local.yaml'),
     "commands:\n  test: 'node -e \"process.exit(1)\"'\n")
 
-  // specDir（--spec-dir）：独立目录，只放"成功 local.yaml"（透传对时被读取）
+  // specDir（--spec-dir）：独立 spec 目录，放 progress + "成功 local.yaml"（真实 spec 布局：
+  // progress 与 local.yaml 同处；A4 修复后 runDerive 的 pm 从 specBase 读进度，specDir 须有 change）
   const specDir = makeTmpDir('mi-specdir-spec-')
   mkdirSync(specDir, { recursive: true })
+  const pm2 = new ProgressManager({ specDir })
+  await pm2.init(proj)
+  await pm2.initChange(proj, 'c1')
   writeFileSync(join(specDir, 'local.yaml'), 'commands:\n  test: "node --version"\n')
 
   // 9a. derive verify-test --spec-dir → 读 specDir 成功命令 → passed

@@ -208,3 +208,17 @@ docs/sillyspec/platform-interface-map.md（守卫插入致行号漂移，doc-ref
 根因：装饰性「（必须严格遵守）」标题五处复用 + 单句双强度，强度信号退化噪音。
 方案：纯减法去装饰缀 + 收敛双强度，保留全部承重 enforcement。
 结果：必须 19→14、必须严格遵守 4→0；lint 298、docs-check 415、全量 npm test 210/0。
+
+## ql-20260816-015-92f9 | 2026-08-16 21:01:14 | A4 gate/derive specBase 平台模式机器门控不可用（self-audit
+状态：已完成
+关联变更：（无）
+文件：
+- src/machine-interface.js（runGate/runDerive specRoot 统一）
+- src/index.js（gate/derive resolvePlatformSpecDir 接线）
+- test/machine-interface.test.mjs（场景 9 夹具修正）
+- docs/sillyspec/platform-interface-map.md（6 处行号漂移）
+- .sillyspec/docs/sillyspec/modules/cli-entry.md（变更索引）
+需求：A4 gate/derive specBase 平台模式机器门控不可用（self-audit，未纳入批次项 P0）。
+根因：runGate/runDerive 的 pm 构造与 db 检查用 resolveSpecDir(cwd) 而 specRoot 用传入 specBase——同一 envelope 两套事实源，平台/--spec-dir 模式读本地孤儿库恒「无法核验」exit 2；index.js gate/derive 不读平台指针。
+方案：machine-interface 两函数统一用 specRoot + index.js 用 resolvePlatformSpecDir 三合一接线。
+结果：cwd/specDir 分离场景实测 gate 真实核验；machine-interface 101 断言全过 + 全量 210/0 + lint 298 + docs-check 415。

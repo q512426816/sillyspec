@@ -387,7 +387,11 @@ async function main() {
       // 只传 cwd 致 --spec-dir 对 gate verify 无效。不传 --spec-dir 时 specBase 走默认
       // resolveSpecDir(cwd)，向后兼容。
       const gateOpts = { cwd: dir };
-      if (specDir) gateOpts.specBase = specDir;
+      // A4：平台指针 / 显式 --spec-dir / 本地 fallback 三合一解析 specBase——平台模式（指针指向外部
+      // specDir）下 gate 也能核验（原只传 cwd 致 runGate 的 resolveSpecDir 指向本地孤儿库，恒
+      // 「无法核验」exit 2）。resolvePlatformSpecDir 指针失效时抛 PointerUnreachableError，由顶层 catch 优雅 fail-closed。
+      const gateSpecBase = resolvePlatformSpecDir(dir, specDir);
+      if (gateSpecBase) gateOpts.specBase = gateSpecBase;
       // drift 锚定（坑 execute-runs-isolation，对齐 command.js execute drift 守卫 + machine-interface
       // runGate 已扩展的 specDriftAnchor 入参）：gate 是顶层命令不走 runCommand/drift 守卫，worktree cwd
       // 下 execute 段 marker 读取会落副本 .runtime。仅在未显式 --spec-dir 时算（对齐守卫条件 !specDir），
@@ -442,7 +446,9 @@ async function main() {
       // derive verify-test facet 内部同样调 runVerifyTestCheck 依赖 specBase，平台模式
       // 下需透传；不传 --spec-dir 时走默认 resolveSpecDir(cwd)，向后兼容。
       const deriveOpts = { cwd: dir };
-      if (specDir) deriveOpts.specBase = specDir;
+      // A4：同 gate case——平台指针/--spec-dir/本地 fallback 三合一解析 specBase。
+      const deriveSpecBase = resolvePlatformSpecDir(dir, specDir);
+      if (deriveSpecBase) deriveOpts.specBase = deriveSpecBase;
       // drift 锚定（同 gate case，对齐 command.js drift 守卫 + machine-interface runDerive 的 specDriftAnchor
       // 入参）：derive 顶层命令不走 drift 守卫，worktree cwd 下 task-reviews facet 的 execute-run-id marker
       // 读取会落副本。未显式 --spec-dir 时算 anchor，runDerive task-reviews 的 resolveRuntimeRoot 读主仓 marker。
