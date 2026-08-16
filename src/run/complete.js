@@ -326,6 +326,9 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
       console.warn('⚠️ 阶段完成 ctx 构造失败，降级单仓 gate（' + (e && e.message ? e.message : e) + '）')
     }
     const _stageGatesResult = await completeStageGates({ stageName, cwd, changeName, platformOpts, specBase, progress, pm, stageData, steps, currentIdx, outputText, ctx: _completeCtx })
+    // task-04 / A5：gate 失败（stageCompleted===false）设进程退出码 1，对齐 quick 审计 blocked→exit 1 惯例。
+    // 用 process.exitCode 而非 process.exit(1)：让回滚 pm._write + triggerSync 落盘完成后自然退出，保留失败现场。
+    if (_stageGatesResult?.stageCompleted === false) process.exitCode = 1
     if (_stageGatesResult) return _stageGatesResult
 
     // 完整流程 change title 刷新：proposal/design 落盘后（brainstorm/plan 完成），从 proposal 首个 #
@@ -808,6 +811,8 @@ export async function continueStep(pm, progress, stageName, cwd, answer, options
       console.warn('⚠️ 阶段完成 ctx 构造失败，降级单仓 gate（' + (e && e.message ? e.message : e) + '）')
     }
     const _stageGatesResult = await completeStageGates({ stageName, cwd, changeName, platformOpts, specBase, progress, pm, stageData, steps: stageData.steps, currentIdx, outputText: null, ctx: _contCtx })
+    // task-04 / A5：gate 失败（stageCompleted===false）设进程退出码 1（与 completeStep 完成分支同语义）。
+    if (_stageGatesResult?.stageCompleted === false) process.exitCode = 1
     if (_stageGatesResult) return _stageGatesResult
     // 完整流程 change title 刷新（同 completeStep 完成分支，wait 解除后阶段完成也刷新）。
     if (changeName && !/^quick-[0-9a-f]{8}$/.test(changeName)) {

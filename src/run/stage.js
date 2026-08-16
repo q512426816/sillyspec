@@ -25,6 +25,7 @@ import { outputStep } from './prompt.js'
 import { allocateQuicklogEntry, deriveTitleFromLinkedChange, sanitizeDesc } from '../quicklog.js'
 import { createHash } from 'node:crypto'
 import { checkTransition } from '../stage-contract.js'
+import { AUXILIARY_STAGES } from '../constants.js'
 import { completeStageGates } from './gates.js'
 
 export async function runStage(pm, progress, stageName, cwd, changeName, skipApproval = false, platformOpts = {}, quickOpts = {}) {
@@ -125,8 +126,12 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
   }
 
   // 用户显式调用 sillyspec run <stage>：把它标记为当前阶段
+  // （D-003@v1：auxiliary 阶段不写 currentStage，避免 scan/quick/explore/archive/status/doctor
+  //   执行后污染主流程当前阶段；lastActive 心跳与 pm._write/triggerSync 照常）
   if (progress.currentStage !== stageName) {
-    progress.currentStage = stageName
+    if (!AUXILIARY_STAGES.includes(stageName)) {
+      progress.currentStage = stageName
+    }
     progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
     pm._write(cwd, progress, changeName)
     triggerSync(cwd, changeName, platformOpts)
@@ -375,6 +380,8 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
         // 阶段完成收尾共享管线（noAI 末步核心修复 S1：plan postcheck independent-tier review verdict=fail /
         // 平台 scan manifest 此前被绕过）。gate 失败已 rollback 为 in-progress，early-return（不 fall through 到末尾 return）。
         const _stageGatesResult = await completeStageGates({ stageName, cwd, changeName, platformOpts, specBase, progress, pm, stageData, steps, currentIdx, outputText: null })
+        // task-04 / A5：gate 失败（stageCompleted===false）设进程退出码 1（与 completeStep/continueStep 同语义）。
+        if (_stageGatesResult?.stageCompleted === false) process.exitCode = 1
         if (_stageGatesResult) return _stageGatesResult
         // gate 全过：persist completed（task-02 移后；此处无 triggerSync，与同文件 noAI 末步语义一致）。
         pm._write(cwd, progress, changeName)

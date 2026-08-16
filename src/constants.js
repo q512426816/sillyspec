@@ -104,3 +104,10 @@ export const AUXILIARY_STAGES = Object.freeze([
   'status',
   'doctor',
 ])
+
+// ── 只读辅助 stage 清单（查询型辅助阶段，可读短路不触碰进度库）──
+// 供 command.js 判断 status/doctor 等查询型辅助阶段执行只读短路（FR-04 / D-005@v2）。
+export const READONLY_AUXILIARY_STAGES = Object.freeze([
+  'status',
+  'doctor',
+])

@@ -30,7 +30,8 @@ import { completeStep, skipStep, waitStep, continueStep } from './complete.js'
 import { runStage } from './stage.js'
 import { sanitizeDesc } from '../quicklog.js'
 import { ProgressManager } from '../progress.js'
-import { validateChangeExists } from '../stage-contract.js'
+import { validateChangeExists, checkTransition } from '../stage-contract.js'
+import { READONLY_AUXILIARY_STAGES } from '../constants.js'
 import { stageRegistry, auxiliaryStages } from '../stages/index.js'
 import { definition as brainstormAutoDef } from '../stages/brainstorm-auto.js'
 import { setQuickFileNotes } from '../quicklog.js'
@@ -676,6 +677,39 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
 
   let progress = pm.read(cwd, changeName)
 
+  // task-03 (D-005@v2 / FR-04): READONLY_AUXILIARY_STAGES（status/doctor）查询只读短路。
+  // 无显式写 flag 时在 registerChange / ensureStageSteps 之前拦截，零副作用：
+  //   - 目标 progress 不存在 → 提示「只读查询不建变更」exit 0（不 initChange、不建 default 行，治 8b）
+  //   - 目标 progress 存在 → 只读展示，不 seed steps、不刷新 lastActive、不 registerChange
+  //     （治 B7 多 agent 并发 lastActive 互相覆盖）
+  // 显式写意图不短路：doctor 写操作 flag（--cleanup-remnant / --align-execute-progress）与
+  // 步骤动作 flag（--done/--skip/--reset/--reopen/--wait/--continue）走原写路径；--status 本身
+  // 是只读查询，纳入短路。--fix 是 worktree doctor 的 flag 不在此列（design.md Phase 4）。
+  const READONLY_WRITE_ACTIONS = ['--cleanup-remnant', '--align-execute-progress', '--done', '--skip', '--reset', '--reopen', '--wait', '--continue']
+  if (READONLY_AUXILIARY_STAGES.includes(stageName) && !flags.some(f => READONLY_WRITE_ACTIONS.includes(f))) {
+    if (!progress) {
+      console.log('ℹ️ 未找到进度数据（只读查询不建变更）')
+      process.exit(0)
+    }
+    // 只读展示路径：复用阶段定义渲染当前步骤 prompt（outputStep 对 status/doctor 纯只读），
+    // 不落盘任何 progress 改动。--status 走现有 showStatus 展示。
+    const readOnlyChange = changeName || progress.currentChange || resolveChangeName(cwd, progress, specRoot)
+    if (isStatus) {
+      let nextSuggestion = null
+      try { nextSuggestion = pm._getNextSuggestion(progress) } catch { /* 读建议失败不阻断展示 */ }
+      return showStatus(progress, stageName, nextSuggestion)
+    }
+    const readonlySteps = await getStageSteps(stageName, cwd, progress, specRoot)
+    if (readonlySteps && readonlySteps.length > 0) {
+      // 已有进度（历史 seed 过）则渲染当前待办步；无进度从首步开始
+      const existingSteps = progress.stages?.[stageName]?.steps
+      const pendingIdx = existingSteps ? existingSteps.findIndex(s => s.status === 'pending' || s.status === 'in-progress') : -1
+      const stepIdx = pendingIdx !== -1 ? pendingIdx : 0
+      await outputStep(stageName, stepIdx, readonlySteps, cwd, readOnlyChange, progress.project || null, platformOpts)
+    }
+    return
+  }
+
   if (!progress) {
     // 如果指定了变更名或有变更目录，自动初始化变更的 progress
     const autoChange = changeName || resolveChangeNameAuto(cwd, specRoot)
@@ -720,6 +754,17 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
           console.error('   请用 --change <变更名> 指定要完成的变更，')
           console.error('   或先运行 sillyspec run brainstorm --change <变更名> 初始化。')
           process.exit(2) // 用法错（--done 找不到变更，未传 --change）→ exit 2
+        }
+        // task-03 (D-006@v1 / FR-05): 无 --change 仅当无已存在活跃变更时 auto-create；
+        // 多活跃变更仓强制 --change（exit 2 引导），防 B8 幽灵变更。活跃变更数用 pm.listChanges
+        // （与 progress show 同源，DB changes 表 status='active'）。
+        const activeChanges = pm.listChanges(cwd)
+        if (activeChanges.length > 0) {
+          console.error(`❌ 已存在 ${activeChanges.length} 个活跃变更，run brainstorm 无 --change 不会自动创建新变更。`)
+          console.error(`   活跃变更：${activeChanges.join('、')}`)
+          console.error('   请用 --change <变更名> 指定要操作的变更，')
+          console.error('   或先归档/收尾现有活跃变更后重试。')
+          process.exit(2) // 用法错（多活跃变更未指定 --change）→ exit 2
         }
         const date = new Date().toISOString().slice(0, 10)
         const autoName = `${date}-new-change-${randomBytes(4).toString('hex')}`
@@ -901,6 +946,21 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
 
   // --done
   if (isDone) {
+    // task-03 (D-004@v1 / FR-02): --done 与 runStage（stage.js:35-45）同源状态转换守卫，
+    // 含 fromStageData 透传（让 scan failed_post_check 门控对 --done 同样生效）。
+    // auxiliary 的 --done 不受影响（checkTransition 对 auxiliary toStage 放行，见 stage-contract.js）。
+    // --skip-approval 绕过语义对齐 runStage（打错但放行）。
+    const prevStage = progress.currentStage || ''
+    const fromStageData = (progress.stages && prevStage && progress.stages[prevStage]) || undefined
+    const transition = checkTransition(prevStage, stageName, fromStageData ? { fromStageData } : {})
+    if (!transition.allowed) {
+      console.error(`❌ 阶段转换不允许: ${prevStage || '(起始)'} → ${stageName}`)
+      console.error(`   原因: ${transition.reason}`)
+      console.error(`   提示: 使用 --skip-approval 绕过（需明确意图）`)
+      if (!isSkipApproval) {
+        process.exit(1)
+      }
+    }
     const doneAnswer = getFlagValue('--answer')
     return await completeStep(pm, progress, stageName, cwd, outputText, inputText, { confirm: isConfirm, changeName: effectiveChange, nonInteractive: isNonInteractive && !isInteractive, platformOpts, doneAnswer, isForceBaseline, isAllowNew, isAllowDelete })
   }
