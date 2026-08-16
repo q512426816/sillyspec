@@ -115,6 +115,6 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 
 **处置（当次绕行）**：确认删除合法（plans 目录 3871a9a 已整体移除、HEAD 里该文件确实待删）后 `git restore <file>` 恢复文件消除工作区脏 → --done 通过 → 提交后再重新表达删除意图（让删除走它自己的会话/流程）。**勿用 `--allow-delete` 解锁**——那会把他人删除夹带进本 quick 的 QUICKLOG 归属。
 
-**改进方向（未裁决）**：docsCheckHint 的 mdChanged 过滤 `git diff` 里 deleted 状态的文件（删除文件没有"引用校验"语义，只有删除确认语义，归 --allow-delete 管）。
+**改进方向（已修，ql-20260816-007-0558 / 6d15d9a）**：mdChanged 排除 deletedFiles——删除的 .md 不进 docsCheckHint，删除语义归 --allow-delete 管；测试 DC-5 锁定（audit-quick-completion.test.mjs）。
 
 **关联记忆**：`[[sillyspec-quick-concurrent-dangerous-prefix]]`
