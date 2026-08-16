@@ -319,3 +319,14 @@ docs/sillyspec/platform-interface-map.md（守卫插入致行号漂移，doc-ref
 根因：init 从 .claude/skills/ 复制（init.js:389）不读 templates/skills/，全仓 src/test 零消费者，纯死代码随 npm 发布。
 方案：rm -rf templates/skills（仅 1 个 SKILL.md）。
 结果：lint 300 过 + 全量 211/0。
+
+## ql-20260816-025-9111 | 2026-08-16 22:52:01 | E22c quicklog 三操作 O(全历史) 扫描有界化（未纳入批次项性能#5）
+状态：已完成
+关联变更：（无）
+文件：
+- src/quicklog.js（E22c 归档日期过滤）
+- .sillyspec/docs/sillyspec/modules/runtime.md（变更索引）
+需求：E22c quicklog 三操作 O(全历史) 扫描有界化（未纳入批次项性能#5）。
+根因：scanExisting 分配当日 ql-ID 需读全部轮转归档，但归档内条目日期必 ≤ 文件名日期，早于今天的归档对当日分配零信息。
+方案：归档名日期 < 今天跳过读取。
+结果：本 quick ql-ID 分配即实测正确；quicklog 97 断言 + 全量 211/0 + lint 300。

@@ -216,7 +216,13 @@ function scanExisting(quicklogDir, today) {
   let maxSeq = 0
   const usedSuffix = new Set()
   const re = /^## ql-(\d{8})-(\d{3})-([0-9a-fA-F]{4})\b/gm
+  // E22c：轮转归档按文件名日期过滤——归档名 = QUICKLOG-<user>-<YYYY-MM-DD>.md（最后条目日期），
+  // 归档内全部条目 ≤ 名内日期；名内日期早于今天的归档不可能含当日条目，跳过读取
+  // （O(全历史归档) → O(当日文件)，consumer 已 10 归档文件 756KB 时免全量扫描）。
+  const todayDashed = today.length === 8 ? `${today.slice(0, 4)}-${today.slice(4, 6)}-${today.slice(6, 8)}` : today
   for (const f of listQuicklogFiles(quicklogDir)) {
+    const dm = f.match(/-(\d{4}-\d{2}-\d{2})\.md$/)
+    if (dm && dm[1] < todayDashed) continue // 早于今天的归档，必无当日条目
     let content = ''
     try { content = readFileSync(join(quicklogDir, f), 'utf8') } catch { continue }
     let m
