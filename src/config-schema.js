@@ -150,7 +150,7 @@ export const LOCAL_YAML_SCHEMA = {
       title: '文档引用校验',
       note: 'sillyspec docs check 的扫描与断言配置（2026-08-15 docs-check-productize）。glob 相对源码仓根展开，仅支持 目录/**/*.扩展、目录/*.扩展、字面路径 三形态。',
       keys: [
-        { path: 'docs-check.paths', type: 'array', optional: true, status: 'live', readers: ['docs check (src/index.js case docs) + runDocsCheck (src/docs-check.js)'], desc: '扫描的文档 glob 列表，缺省 docs/**/*.md。', example: 'docs/**/*.md' },
+        { path: 'docs-check.paths', type: 'array', optional: true, status: 'live', readers: ['docs check (src/index.js case docs) + runDocsCheck (src/docs-check.js)'], desc: '扫描的文档 glob 列表，缺省 docs/**/*.md 与 .sillyspec/docs/**/*.md（scan/modules 产物同纳入）。', example: 'docs/**/*.md' },
         { path: 'docs-check.skip', type: 'array', optional: true, status: 'live', readers: ['walkGlob (src/docs-check.js)'], desc: '排除的路径/glob 列表，缺省空。', example: 'docs/sillyspec/archive' },
         { path: 'docs-check.keywordAssert', type: 'boolean', optional: true, status: 'live', readers: ['runDocsCheck (src/docs-check.js)'], desc: '层2 关键词断言开关，缺省 true（关闭时 warning 提示仅做存在性校验）。', example: 'true' },
       ],
@@ -295,9 +295,11 @@ auto_mode:
     - fix typo
 
 # ── 文档引用校验（sillyspec docs check；glob 相对源码仓根，三形态：递归/单层/字面路径）──
+# 缺省已扫 docs/**/*.md 与 .sillyspec/docs/**/*.md；本段仅在需要收窄/排除时配置
 docs-check:
   paths:
     - docs/**/*.md
+    - .sillyspec/docs/**/*.md
   # skip:
   #   - docs/sillyspec/archive
   keywordAssert: true

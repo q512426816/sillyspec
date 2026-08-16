@@ -149,5 +149,6 @@ agent 拿到两行事实自己就会去改，不需要"请务必保持模块文�
 
 ## 八、后续补登（2026-08-16）
 
-- **scan/modules 产物纳入 docs-check 范围（本仓落地，ql-20260816-004-9afb / 1e370d7）**：`.sillyspec/docs/`（scan 7 文档 + modules 卡片）此前游离缺省范围（`docs/**`）外——dry-run 实测 24 处失效（W6 barrel 重构后 `run.js:NNNN` 全超界为主因），全部清偿后本仓 local.yaml `docs-check.paths` 纳入 `.sillyspec/docs/**/*.md`，基线维持 0。**consumer 通用解法留裁决**：CLI 缺省 paths 就含 `.sillyspec/docs/**`（对存量项目会突然冒失效数，需配合 gate 基线宽容）vs init 时写进 local.yaml 模板（新项目默认覆盖、存量项目不惊扰）——倾向后者（fail-closed 只拦增量的 gate 语义下，扩范围应显式 opt-in），未裁决不动缺省值。
+- **scan/modules 产物纳入 docs-check 范围（本仓落地，ql-20260816-004-9afb / 1e370d7）**：`.sillyspec/docs/`（scan 7 文档 + modules 卡片）此前游离缺省范围（`docs/**`）外——dry-run 实测 24 处失效（W6 barrel 重构后 `run.js:NNNN` 全超界为主因），全部清偿后本仓 local.yaml `docs-check.paths` 纳入 `.sillyspec/docs/**/*.md`，基线维持 0。
+  - **✅ 已裁决并落地（2026-08-16，用户裁决「不管新旧，旧的有问题就修」）**：改 CLI 缺省 paths 为 `docs/**/*.md` + `.sillyspec/docs/**/*.md`（`src/docs-check.js` DEFAULT_DOC_PATHS）——存量项目升级后会冒失效数，**按裁决语义这就是该修的文档错，不追责、修掉即对**；gate 是 fail-closed ratchet（只拦增量），存量失效不拦推送但 `docs check` 会如实报告。schema/example 同步（config-schema.js），本仓 local.yaml 的 paths 段删除只留 skip（配 paths 即覆盖缺省，留一条反而收窄回 docs/——实证 321→277 后纠正）。回归测试：缺省范围必扫 `.sillyspec/docs` 且显式 paths 可收窄。
 - **docs check token 断言已知局限（观察，不修）**：同一行多引用共享行首 token 断言（文档行首的裸词会被当作该行全部引用的关键词期望，如 CONVENTIONS.md「项目清单声明」行内两个 import 示例引用被要求窗口含 package 清单 token）——keywordAssert 本就是 best-effort 第二层，主校验（存在性+行号界）不受影响，改写文档文字可绕过。不登记 D 条目。

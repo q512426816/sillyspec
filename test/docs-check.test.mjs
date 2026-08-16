@@ -155,13 +155,27 @@ describe('runDocsCheck（集成）', () => {
 
   it('paths 传 null（无 local.yaml 的 CLI 回退路径）→ 落回缺省 glob 不崩', () => {
     // 回归：readDocsCheckConfig 无配置回退 { paths: null }，index.js 传 null 曾致
-    // null.flatMap TypeError（CLI 裸跑必崩）——null/空数组都必须落回 ['docs/**/*.md']。
+    // null.flatMap TypeError（CLI 裸跑必崩）——null/空数组都必须落回缺省范围。
     writeFileSync(join(root, 'docs', 'ok.md'), '见 `src/a.js:1`（`alphaSymbol` 定义处）\n')
     for (const paths of [null, [], undefined]) {
       const r = runDocsCheck({ projectRoot: root, paths })
       assert.equal(r.ok, true, `paths=${JSON.stringify(paths)}: ${JSON.stringify(r.invalid)}`)
       assert.equal(r.total, 1)
     }
+  })
+
+  it('缺省范围含 .sillyspec/docs（scan/modules 产物纳入；2026-08-16 用户裁决）', () => {
+    // 回归：缺省 paths 曾只有 docs/**/*.md，.sillyspec/docs 游离在外须显式 opt-in 才扫。
+    mkdirSync(join(root, '.sillyspec', 'docs'), { recursive: true })
+    writeFileSync(join(root, '.sillyspec', 'docs', 'mod.md'), '见 `src/a.js:1`（`alphaSymbol`）\n')
+    writeFileSync(join(root, '.sillyspec', 'docs', 'bad.md'), '见 `src/a.js:99`（超界）\n')
+    const r = runDocsCheck({ projectRoot: root })
+    assert.equal(r.total, 2, 'docs/ 之外 .sillyspec/docs/ 下的文档也被扫到')
+    assert.equal(r.ok, false, '其中的超界引用必须暴露')
+    assert.ok(r.invalid.some((i) => i.doc === '.sillyspec/docs/bad.md'))
+    // 显式 paths 覆盖时按覆盖值（可收窄回 docs/）
+    const narrowed = runDocsCheck({ projectRoot: root, paths: ['docs/**/*.md'] })
+    assert.equal(narrowed.total, 0, '显式收窄不扫 .sillyspec/docs')
   })
 
   it('失效引用带建议行号（suggest = token 在候选文件命中行）', () => {
