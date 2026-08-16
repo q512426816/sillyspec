@@ -2,7 +2,7 @@
 // 封装 node:sqlite 内置模块 + 消解 better-sqlite3 → node:sqlite 三缺口：
 //   pragma → exec / transaction → 手写 SAVEPOINT / pluck → Object.values 取首列
 // 供 db.js 与 doctor-diagnostics 共用（方案 B 单一换引擎点，D-002）。
-// node:sqlite 在 node v22.11.0+ 无需 --experimental-sqlite flag（仍发 ExperimentalWarning）。
+// node:sqlite 在 node v22.13.0+ 无需 --experimental-sqlite flag（仍发 ExperimentalWarning）。
 // Author: sillyspec execute W1 task-02
 // Created: 2026-08-11
 import { DatabaseSync } from 'node:sqlite';

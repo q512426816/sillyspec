@@ -186,5 +186,5 @@ CLI 落盘的条目已是结构化产物（非简版骨架）：标题从「需�
    - backend/app/modules/auth/router.py（登录端点串 check_rate_limit→assert_captcha_if_needed）
    - backend/app/modules/auth/captcha_service.py（新建：限流 INCR + 失败计数 + Pillow 滑块生成/校验）
 
-一条 quick = 一条独立 ql 条目；核对只动本次 <quicklog-id> 条目，不追加到旧条目。QUICKLOG 在 .sillyspec/（gitignore），核对不影响 --done 已通过的边界审计。
+一条 quick = 一条独立 ql 条目；核对只动本次 <quicklog-id> 条目，不追加到旧条目。QUICKLOG 在 .sillyspec/quicklog/（git 跟踪，--done 后需提交），核对不影响 --done 已通过的边界审计。
 ````

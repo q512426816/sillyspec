@@ -301,6 +301,36 @@ P2 遗留（按优先级登记）：
 - ✅ **neg-② worktree 自建 .venv 缺 pytest 迫使回归子代理换主仓 venv（exec-f 新维度，已修 ql-20260816-002-1506）**：worktree-deps.js python 分支（exec-f 已修）`uv sync` 会建 worktree 独立 .venv，但主仓 .venv 若是 pyenv-virtualenv / venv --copies 等非 symlink 共享形态，worktree 新 venv 无 pytest 等二级工具（uv sync 只装 pyproject 声明依赖，dev 依赖组是否装取决于 dependency-groups/uvsync 配置），回归子代理被迫换主仓 venv 跑（环境不一致隐患，好在已验证加载的是 worktree 代码）。**裁决**：不做 CLI 侧自动同步（识别「主仓 venv 形态 + 补装工具」是 consumer 环境语义，违反定位）；**已修（2026-08-16 quick ql-20260816-002-1506，commit bbf3598）**：execute「确认 worktree 路径」步工具链预告补 python 场景提示——worktree .venv 缺 pytest/ruff 等工具时优先在 worktree 内 `uv pip install pytest`（或 `uv sync --group dev`），避免回退主仓 venv 跑测试（环境不一致掩真 bug）；同步 _extracted.json + docs/prompt/execute.md 镜像，npm test EXIT=0 + lint 295 过。关联 exec-f（:148）与 memory `worktree-deps-junction-halfbroken`（nodejs 侧同病：主仓 node_modules 半坏时 worktree Junction 假阳性）。
 - ⏭ **neg-③ 审查子代理不能续聊，每次复审都重启重读材料，token 成本高（登记 defer，与 P4.3 边界相邻）**：execute 的 task review / stage review 子代理是一次性上下文，fail→修正→复审需整个重启重读 design/plan/代码，token 成本随复审次数线性涨。「复审边界/是否再派」本身 = P4.3a 已 defer（语义软判定推 sillyhub/agent 自判）；但「**重读成本**」是 CLI 侧可观测的新维度——当前无任何机制降低复审时的材料重读（如 review.json 草稿随 context 复用、复审子代理 prompt 注入「前轮审查结论 + 修正 diff 而非全量重读」）。用户建议「支持 agent 续用」（同一子代理会话续聊）。**裁决 defer**：续聊能力取决于宿主（Claude Code Agent tool SendMessage / Task 续跑）非 SillySpec CLI 可控，SillySpec 能做的是 prompt 侧引导（复审子代理只喂前轮 review.json + 修正 diff，不重读全量 design/plan）——可作为 execute review 派单 prompt 的低成本改进候选，与 cc-④ 改进空间①②同范畴，留单独评估。
 
+### 2026-08-16 五角度自身缺陷审计（agent 驾驭 / CLI 接口 / 上手体验 / 性能架构 / prompt 工程）
+状态：`裁决已登记（2026-08-16，见下方「三批次裁决」）——批次①③走 quick、批次②走完整流程 brainstorm`
+
+来源：用户要求多角度排查工具自身缺陷。5 并行只读代理 + 主会话亲验头部发现锚点，全部对本债单/doc-consistency-debt/troubleshooting 去重。30+ 项发现分级：A 功能损坏 5 项（engines 虚低致 Node 22.11/22.12 全崩、workflow.js 占位符替换 Windows 炸 JSON 致 scan 门 fail-open、dashboard Windows 永不启动、gate/derive specBase 分裂平台模式不可用、--done gate 失败 exit 0）；B 状态机 fail-open 6 项（--done 绕转换守卫、status 写库、run brainstorm 幽灵变更 DB 实锤 4 例、docs gate flag fail-open、未知子命令 exit 0、safeGit stderr 泄漏）；C 契约漂移 7 项（CLAUDE.md 模板幽灵命令 resume、README 假 flag/幽灵特性、SKILL 参数表不符、auto 别名未路由、scan 建议劫持第三循环、init 棕地引导断链）；D prompt 工程 7+4 项（module-impact 死信门格式无上游定义、验收 checkbox 协议矛盾、consumer 专有词硬编码、node -e 内部路径命令、三份自检清单漂移、强度通胀、内部注释泄漏、plan_level 无落盘锚点、title_zh 仪式化、QUICKLOG gitignore 错误声明）；E 性能模式债 6 项（45 模块静态闭包 ~80ms/命令、平台 pull 串行 8s、quicklog O(全历史)、onboard 孤儿模板、lint 名不副实、无 CI）。
+
+#### 三批次裁决（2026-08-16，按优先级）
+
+**批次① 一行修复组 → quick（1 个 quick change 合并 4 项）**
+- **A1** engines 抬 `>=22.13.0`：`package.json:16`（Node 官方 v22.13.0 才解除 `--experimental-sqlite` flag）+ `src/db-engine.js:5` 注释同步（断言「v22.11.0+ 无需 flag」错误）。
+- **C12** 模板幽灵命令 `sillyspec resume`：`templates/claude-instruction.md:15` 规则 9 改「`sillyspec progress show` 查看进度 + `sillyspec run <stage>` 续跑」（对齐主仓 CLAUDE.md 规则 9，index.js 零命中）。
+- **D21d** quick.js QUICKLOG 事实性错误：`src/stages/quick.js:138` 删「（gitignore）」错句——QUICKLOG 实际 git 跟踪（memory `sillyspec-quicklog-is-tracked`），改「{SPEC_ROOT}/quicklog/（git 跟踪，--done 后需提交）」；改 prompt 触发 docs/prompt 重提取。
+- **C14** auto 顶层别名未路由：`src/index.js` 别名组（:787-795）补 `case 'auto':`——runCommand（`src/run/command.js:758`）已支持 auto 模式，纯漏路由；顺带消除 did-you-mean 自指（topCommands 含 'auto' 距离 0）。
+
+**批次② 状态机 fail-open 组 → 完整流程 brainstorm（行为语义变更，单一 change 立项）**
+- **A5** `--done` 阶段产物 gate 失败只打 ❌ 但 exit 0：`src/run/complete.js:328-329` gate 早退 return 不设 process.exitCode——与 quick 审计 blocked→exit 1 同仓惯例分裂，agent/CI/hook 按 exit code 消费即 fail-open。
+- **B6** `--done` 完全绕过阶段转换守卫 + 辅助阶段污染 currentStage：`src/run/command.js:903-906` --done 直接进 `completeStep` 不查 `checkTransition`（stage.js:27-44 只在 runStage 调）；status/doctor 等 auxiliary 跑一次即写 `progress.currentStage`（stage.js:128-133）→ fromStage 变 status 后跳阶段静默放行（stage-contract.js:810-848 `AUXILIARY_STAGES` 一律放行）。
+- **B7** status/doctor 自称只读实则写库：`src/run/command.js:687-712` auxiliary fallback `initChange` 建 default 行 + 落盘 currentStage，与 SKILL「status 只读」矛盾，多 agent 并发 lastActive 互相覆盖。
+- **B8** `run brainstorm` 无 --change 多活跃变更仓静默建幽灵变更：`src/run/command.js:717-731` 无条件 initChange（DB 实锤 08-15 一小时 4 个 `*-new-change-*` 活跃行）。
+- 裁决理由：四者共性强——状态机守卫 fail-open + 幽灵变更/幽灵阶段污染，属行为语义变更（多命令交互路径），非单点行修复。走完整流程 brainstorm → plan → execute，含 8b（新项目首跑 auxiliary 幽灵 default 变更）一并评估。
+
+**批次③ Windows 组 + D 组 → quick 逐条（每项独立 quick change）**
+- **A2** `workflow.js:256-262` runPostCheck 占位符替换 Windows 路径炸 JSON → scan 质量门 fail-open：`json.replace` 用 `new RegExp('{SPEC_ROOT}')` 把含反斜杠路径裸替换进 JSON 再 parse 报「Bad escaped character」，改非 RegExp 字面量替换或转义。
+- **A3** dashboard Windows 永不启动：`packages/dashboard/server/index.js:567-580` listen 排在同步全盘扫描后（homedir/Temp/桌面深度 2 readdirSync + 每项目 3 次 execSync('git') 实测 150s+ 假死）→ listen 前置或扫描改异步。
+- **D 组 prompt 措辞逐条**：D15 module-impact「更新结果」表格式无上游定义（plan step2 模板落空表骨架）/ D16 verify step4 验收 checkbox 与 TaskCard frontmatter acceptance 协议矛盾 / D17 consumer 专有词硬编码 verify 通用 prompt（daemon/session_control_no_manager/422 + verify-probes.md:53 含 consumer 仓路径）/ D18 `node -e "import('./src/...')"` 内部源码命令注入 prompt（scan.js:141 / execute.js:326，consumer 必炸 ERR_MODULE_NOT_FOUND，改指现有 CLI 子命令）/ D19 三份字段自检清单并存互不一致（plan.js:473 vs taskcard-rules.md vs postcheck）/ D20 execute 指令强度通胀（18K 字符，必须×30+ 不要×32）/ D21 维护者内部注释泄入 prompt（plan.js:349/353、verify.js:78、scan.js:168、brainstorm.js:333-334）/ D21b plan_level 靠对话记忆跨步传递（无落盘锚点）/ D21c TaskCard title vs title_zh 双字段语义未定义（实测两字段逐字节相同）。
+  - 注：D21b（plan_level 落盘锚点）偏机制非措辞，执行时若超 quick 规模（需 CLI 落盘链路改动）则升级评估（单独完整流程或 defer）；D20 若为大规模重写亦同样评估。
+
+**未纳入三批次（留后续另行裁决）**：A4（gate/derive specBase 平台模式机器门控）、B9（docs gate 未知 flag 静默吞 + --paths 未接线）、B10（docs/progress 未知子命令 usage 后 exit 0）、B11（safeGit 未设 stdio stderr 裸刷）、B11b（docs 顶层 glob 边界）、C13/C13b（README 漂移 / SKILL 参数表）、C14b（scan 建议劫持第三循环）、C14c（init 棕地引导）、E 全组性能债（22 静态 import 闭包 / 22b 平台 pull 串行 / 22c quicklog O(全历史) / 22d onboard 孤儿模板 / 22e 测试编排 / 22e-b lint 名不副实）、F 组观察。
+
+---
+
 ## 总结
 
 - **代码完成 15 项**（B1、P1.3a/b、P1.4、P3.1、P4.1、P5.1a/b、P6.1a、P6.3、P6.4、P2.2.3、Q-A1、Q-B、Q-C）；全套 test EXIT=0、lint 49 文件通过。

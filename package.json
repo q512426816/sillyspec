@@ -13,7 +13,7 @@
     "sillyspec": "bin/sillyspec.js"
   },
   "engines": {
-    "node": ">=22.11.0"
+    "node": ">=22.13.0"
   },
   "keywords": [
     "sillyspec",

@@ -792,6 +792,7 @@ async function main() {
     case 'plan':
     case 'execute':
     case 'verify':
+    case 'auto':
     case 'archive': {
       const { runCommand } = await import('./run.js')
       const stageArgs = [command, ...filteredArgs.slice(1)]

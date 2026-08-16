@@ -205,7 +205,7 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
 
 ### 4.1 运行时
 
-- **Node ≥ 22.11.0**（`package.json:15`）——硬性下限因 `node:sqlite` 在 22.11.0+ 才无需 `--experimental-sqlite` flag（`src/db-engine.js:5`）。
+- **Node ≥ 22.13.0**（`package.json:16`）——硬性下限因 `node:sqlite` 在 v22.13.0 才移除 `--experimental-sqlite` flag（`src/db-engine.js:5`）。
 - **纯 ESM**（`package.json:11` `"type": "module"`），全源文件 `import/export`。
 - **入口** `bin/sillyspec.js`（shebang + 一行 `import '../src/index.js'`）。
 - `test`/`lint` 均自研纯 Node 脚本（`node test/run-tests.mjs` / `node test/check-syntax.mjs`），不依赖 jest/mocha/eslint。

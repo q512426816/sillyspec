@@ -61,7 +61,7 @@ npx sillyspec init --interactive      # 完整引导
 
 SillySpec 进度库使用 SQLite 持久化（基于 Node.js 内置的 `node:sqlite` 模块，纯 JS 无原生编译依赖）。
 
-- **Node.js 版本要求 >= 22.11.0**：`node:sqlite` 自 v22.11.0 起免 `--experimental-sqlite` flag 直接可用。支持 Linux x64、macOS x64 / arm64、Windows x64 等所有 Node.js 官方支持平台。
+- **Node.js 版本要求 >= 22.13.0**：`node:sqlite` 自 v22.13.0 起免 `--experimental-sqlite` flag 直接可用。支持 Linux x64、macOS x64 / arm64、Windows x64 等所有 Node.js 官方支持平台。
 - **零编译安装**：不依赖任何原生绑定 / node-gyp / C++ 工具链，npm install 即装即用，无平台编译失败风险。
 
 ## 从哪里开始

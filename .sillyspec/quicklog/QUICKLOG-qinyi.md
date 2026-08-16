@@ -105,3 +105,25 @@ docs/sillyspec/platform-interface-map.md（守卫插入致行号漂移，doc-ref
 根因：auditQuickCompletion 的 mdChanged 取自 changedFiles（含 deletedFiles），删除的 .md 不在盘被 runDocsCheck 报「文档不存在」；且 docsCheckHint warn 只教修不教写。
 方案：mdChanged 排除 deletedFiles（删除归 --allow-delete 管）；docsCheckHint warn 补一行 file.js:行号 + 反引号代码符号格式引导；测试 DC-5 锁定删除不假失效、DC-4 补格式断言。
 结果：46/0 断言过 + npm test 全量绿 + lint 297 + docs check 361 全过 + gate 0；顺手清偿并行 session self-audit 文档六处失效锚（逐条亲验后修正）。--force-baseline 解锁 src/run/* 危险前缀（本次正当改动面）。
+
+## ql-20260816-008-c809 | 2026-08-16 15:09:03 | 批次①一行修复组（self-audit A1/C12/D21d/C14）四项落库
+状态：已完成
+关联变更：（无）
+文件：
+- package.json（engines 抬 >=22.13.0）
+- src/db-engine.js（注释 22.11→22.13）
+- templates/claude-instruction.md（规则9删 resume 幽灵命令）
+- src/stages/quick.js（删 QUICKLOG「gitignore」错句）
+- src/index.js（auto 顶层别名补 case 路由）
+- docs/prompt/quick.md（镜像同步）
+- docs/sillyspec/architecture-4a.md（版本声明同步）
+- README.md（版本声明同步）
+- package-lock.json（engines 同步）
+- .sillyspec/docs/sillyspec/modules/runtime.md（变更索引追加）
+- .sillyspec/docs/sillyspec/modules/cli-entry.md（变更索引追加）
+- .sillyspec/docs/sillyspec/modules/stages.md（变更索引追加）
+- docs/sillyspec/prompt-control-debt.md（三批次裁决登记）
+需求：批次①一行修复组（self-audit A1/C12/D21d/C14）四项落库。
+根因：A1 engines 虚低致 Node22.11/22.12 全 CLI 崩，C12 模板 resume 幽灵命令每个 init 项目照跑 exit1，D21d quick.js QUICKLOG gitignore 错误声明与事实矛盾，C14 auto 别名 usage 列出但 switch 漏路由。
+方案：engines 抬 >=22.13.0+db-engine 注释同步，模板规则9改 progress show+run stage 续跑，quick.js 删 gitignore 错句+docs/prompt 镜像同步，index.js 补 case auto 路由，连带同步版本声明文档与模块变更索引。
+结果：npm test 209/0、lint 297 文件、docs-check 381 引用全通过，auto 路由实测与 run auto 行为一致。
