@@ -12,7 +12,7 @@
  * 只读校验（不修改任何被校验文件）；纯 Node 内置模块零依赖（D-008：glob 手写 walker，
  * 仅「目录递归」「目录单层」「字面路径」三形态）；Windows 路径归一化；兼容 CRLF/LF。
  */
-import { readFileSync, existsSync, readdirSync } from 'node:fs'
+import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import jsYaml from 'js-yaml'
 
@@ -190,6 +190,26 @@ export function walkGlob(projectRoot, pattern, skip = []) {
       (sn.includes('*') && matchSimple(rel, sn))
   })
   const matchExt = (name, ext) => name.endsWith(ext)
+  // 形态 0：**/*.ext（根级递归，无 base 前缀——B11b：原被形态 2 误解析为字面目录 `**` 静默 0 命中）
+  let m0 = norm(pattern).match(/^\*\*\/\*(\.[A-Za-z0-9]+)$/)
+  if (m0) {
+    const [, ext] = m0
+    const out = []
+    const rec = (dir, rel, depth) => {
+      if (depth > 12) return
+      let entries
+      try { entries = readdirSync(dir, { withFileTypes: true }) } catch { return }
+      for (const e of entries) {
+        if (e.name === 'node_modules' || e.name === '.git') continue
+        const relPath = rel ? `${rel}/${e.name}` : e.name
+        if (isSkipped(relPath)) continue
+        if (e.isDirectory()) rec(join(dir, e.name), relPath, depth + 1)
+        else if (matchExt(e.name, ext)) out.push(relPath)
+      }
+    }
+    rec(projectRoot, '', 0)
+    return out
+  }
   // 形态 1：**/*.ext
   let m = norm(pattern).match(/^(.+?)\/\*\*\/\*(\.[A-Za-z0-9]+)$/)
   if (m) {
@@ -227,7 +247,13 @@ export function walkGlob(projectRoot, pattern, skip = []) {
   }
   // 形态 3：字面路径（不含任何通配元字符才直传；含 ?、{ }、[ ] 等不支持形态落 error）
   if (!/[*?{}\[\]]/.test(pattern)) {
-    return existsSync(join(projectRoot, pattern)) ? [norm(pattern)] : []
+    const abs = join(projectRoot, pattern)
+    if (!existsSync(abs)) return []
+    // B11b：目录字面量抛配置错误（原直传 readFileSync 撞 EISDIR 裸崩 exit 1；契约应 exit 2）
+    if (statSync(abs).isDirectory()) {
+      throw new DocsCheckConfigError(`路径是目录不是文档：${pattern}（文档路径应为 .md 文件或 glob 形态 **/*.ext / dir/**/*.ext / dir/*.ext）`)
+    }
+    return [norm(pattern)]
   }
   throw new DocsCheckConfigError(`不支持的 glob 形态：${pattern}（当前仅支持 dir/**/*.ext、dir/*.ext、字面路径）`)
 }

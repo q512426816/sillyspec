@@ -256,3 +256,14 @@ docs/sillyspec/platform-interface-map.md（守卫插入致行号漂移，doc-ref
 根因：git-helper.js execFileSync 无 stdio 配置，git 失败 stderr 直接刷终端（实测确认）；同仓其他调用点均显式 stdio。
 方案：safeGit 与 git 加 stdio:['ignore','pipe','pipe']。
 结果：实测 fatal 不再裸刷；git-helper 14 用例 + 全量 210/0 + lint 298 + docs-check 415。
+
+## ql-20260816-019-a3bb | 2026-08-16 21:51:04 | B11b docs 家族顶层 glob 边界（未纳入批次项 CLI#3）
+状态：已完成
+关联变更：（无）
+文件：
+- src/docs-check.js（B11b 形态 0+目录检测）
+- .sillyspec/docs/sillyspec/modules/cli-entry.md（变更索引）
+需求：B11b docs 家族顶层 glob 边界（未纳入批次项 CLI#3）。
+根因：walkGlob 形态 2 把根级 **/*.md 误解析为字面目录 `**` 静默 0 命中全绿；目录字面量过 existsSync 后 readFileSync 撞 EISDIR 裸崩 exit 1（契约应 exit 2）。
+方案：加形态 0 根级递归 + 形态 3 statSync 目录检测抛配置错误。
+结果：**/*.md 真实命中 3081 引用、--paths docs exit 2、默认 415 无回归、全量 210/0。
