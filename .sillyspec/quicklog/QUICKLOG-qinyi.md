@@ -168,3 +168,16 @@ docs/sillyspec/platform-interface-map.md（守卫插入致行号漂移，doc-ref
 根因：module-impact 表格式无上游定义 agent 只能从 gate 报错反推；三份字段清单并存互不一致；plan_level 靠对话记忆跨步传递 context 压缩即失忆；title/title_zh 无语义区分说明全量产物两字段逐字节相同；维护者代号/注释泄入 prompt。
 方案：补表骨架+清单分组+落盘锚点+语义说明+清注释，重提取镜像同步，顺带修镜像 Step1 错挂漂移与 7 处 docs-check 行号漂移。
 结果：lint 298 过、docs-check 381 引用全过、受影响测试全绿（plan-postcheck 55 断言 + include 35 + prompt 34）。
+
+## ql-20260816-012-a975 | 2026-08-16 18:43:19 | D 组 verify 系 3 项 prompt 债修复（self-audit D16/D17/D21）
+状态：已完成
+关联变更：（无）
+文件：
+- src/stages/verify.js（D16 acceptance 对照+D17 模板通用化+D21 清注释）
+- templates/prompts/verify-probes.md（D17 示例通用占位）
+- docs/prompt/verify.md + _extracted.json（镜像同步）
+- .sillyspec/docs/sillyspec/modules/stages.md（变更索引）
+需求：D 组 verify 系 3 项 prompt 债修复（self-audit D16/D17/D21）。
+根因：验收步要求 checkbox 但 TaskCard 协议 acceptance 在 frontmatter 正文无 checkbox；Runtime Evidence 模板整段 consumer（sillyhub）专有词硬编码进通用 prompt 且教堆关键词过字面 gate 自我拆台；旧 prompt 迁移史注释泄入。
+方案：改 frontmatter 对照核验 + 模板通用化 + 清注释，镜像同步。
+结果：lint 298 过、docs-check 381 全过、verify 系测试全绿。

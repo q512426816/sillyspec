@@ -75,7 +75,7 @@ export const definition = {
 ### Execute Evidence 传递检查
 7. 检查 verify-required-evidence.json 是否存在（由 execute 阶段 Task Review Gate 写入）
    - 路径：变更目录下的 verify-required-evidence.json
-   - 文件 schema：\`{ items: [{ task, verdict, evidence: string[] }] }\`——顶层是 \`items\`，每项的 \`evidence\` 是字符串数组（**不是** \`requiredEvidence\` 键；旧 prompt 写 requiredEvidence 是字段名错配，照读必落空）
+   - 文件 schema：\`{ items: [{ task, verdict, evidence: string[] }] }\`——顶层是 \`items\`，每项的 \`evidence\` 是字符串数组（不是 \`requiredEvidence\` 键）
    - 如果存在 → 逐项读取 \`items\`，对每个 cannot_verify 任务逐条核对其 \`evidence\` 数组是否已满足
    - 每条 evidence 必须在 verify-result.md 中给出明确结论（satisfied / missing / partial）
    - 如果有任何 evidence 为 missing → verify 结论不能为 PASS
@@ -149,9 +149,8 @@ export const definition = {
 ### 操作
 1. 检查变更目录下 tasks/ 是否存在
 2. 如果存在：
-   - 逐个读取 tasks/task-NN.md
-   - 检查每个文件的「验收标准」checkbox 是否全部勾选
-   - 未勾选的项列为不通过
+   - 逐个读取 tasks/task-NN.md，对照 frontmatter 的 \`acceptance:\` 列表逐条核验（TaskCard 协议的验收标准在 frontmatter YAML，正文无 checkbox）
+   - 每条 acceptance 对照实际实现/测试结果判定满足与否，未满足的项列为不通过
 3. 如果不存在：跳过此步骤
 
 ### 输出
@@ -235,13 +234,13 @@ PASS / PASS WITH NOTES / FAIL
 （自动检测的 change_risk_profile: doc-only / unit-sufficient / contract-required / integration-critical / deployment-critical；若 design.md frontmatter 有 risk_level 显式声明，以声明为准并在此注明「显式声明 = <等级>」+ 理由）
 
 ## Runtime Evidence（integration-critical / deployment-critical 必填；自报告，CLI 仅校验字面存在、不独立核验，须真实执行过）
-- daemon 启动命令：
-- backend 地址：
-- 创建 session / 调用核心 API 的请求：
-- daemon 日志关键片段（不能出现 session_control_no_manager / fallback to task_runner / submitMessages agent_run_id empty / 422）：
-- backend 状态（AgentRun running -> completed/failed）：
-- session / lease end 状态：
-- 失败模式排除：
+按本次变更实际触碰的运行时组件填写（模板是通用形态——长驻进程 / 服务端点 / 生命周期状态机的证据结构；未涉及的行写「不涉及」并注明原因，勿堆砌无关关键词）：
+- 长驻进程/服务 启动命令：
+- 服务地址（本变更触碰的端点）：
+- 触发核心路径的请求/命令（附关键响应）：
+- 进程日志关键片段（证明走了新路径、无降级/回退分支）：
+- 生命周期终态断言（本变更涉及的状态机：初始态 → 运行态 → 终态，逐个确认到达）：
+- 失败模式排除（针对本变更声明的风险，逐条说明为何未触发）：
 
 ## 代码审查
 （问题列表 + 总体评价）

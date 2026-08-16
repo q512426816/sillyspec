@@ -46,11 +46,11 @@ grep -rl "<关键词>" <源码目录>/ --include="*.java" --include="*.js" --inc
 3. Diff 对账：
    - 前端调用路径在 backend 端点清单中找不到 → **❌ Missing backend endpoint**（advisory：CLI 复核后仅 warn，不硬阻断归档；但 contract gap 是真实集成缺陷，应诚实标 FAIL 并回 execute 补端点）
    - backend 端点在前端无调用 → ⚠️ Unused backend endpoint（warning，不阻断）
-4. 输出对账结果表格：
+4. 输出对账结果表格（示例用通用占位路径，实际填本仓真实文件）：
 
    | 状态 | 前端调用 | 后端端点 | 文件 |
    |---|---|---|---|
-   | ❌ missing | GET /api/ppm/project-plan/{param}/plan-nodes | — | frontend/src/lib/ppm/plan.ts |
+   | ❌ missing | GET /api/<域>/<资源>/<param> | — | <前端调用所在文件，如 src/lib/<模块>.ts> |
 
 如果发现 Missing backend endpoint，在验证报告中标记为 ❌ contract gap（CLI 仅 advisory 提示、不硬阻断归档；但缺口真实存在——诚实判 FAIL 并回 execute 补齐端点，勿因 CLI 不拦而放行）。
 
