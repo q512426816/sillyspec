@@ -78,4 +78,5 @@ runStage(pm, progress, stageName, cwd, changeName)
 <!-- MANUAL_NOTES_START -->
 - ql-20260816-015-92f9 | A4 gate/derive specBase 统一（未纳入批次项）：machine-interface.js runGate/runDerive 的 pm 构造 + db 检查改 specRoot（原 resolveSpecDir(cwd) 与 specBase 两套事实源，平台/--spec-dir 模式读本地孤儿库恒无法核验）；index.js gate/derive case 用 resolvePlatformSpecDir 三合一接线（平台指针/--spec-dir/本地 fallback）；machine-interface 测试场景 9 夹具随修正语义更新；platform-interface-map 6 处行号漂移修正。
 - ql-20260816-016-db7f | B10 usage 后 exit 0 修复（未纳入批次项，CLI#4）：docs 未知子命令 + progress 未知子命令/缺参共 7 处 usage 打印后由 break（exit 0）改 process.exit(2)——对齐 worktree/modules/runtime 家族口径，hook 拼错不再静默成功。
+- ql-20260816-017-b1ca | B9 docs gate flag 白名单 + --paths 接线（未纳入批次项）：未知 --xxx exit 2（对齐 docs check 分支 / interface-contract §1.3b）、位置参数拒绝、--paths 透传 runDocsGate.checkOpts（原被忽略）、--paths 缺值 exit 2。
 <!-- MANUAL_NOTES_END -->

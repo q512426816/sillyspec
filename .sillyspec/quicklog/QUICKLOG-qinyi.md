@@ -233,3 +233,15 @@ docs/sillyspec/platform-interface-map.md（守卫插入致行号漂移，doc-ref
 根因：docs else 与 progress default/缺参 7 处 usage 打印后 break 退出 0——typo 静默成功，hook 拼错 fail-open；与 worktree/modules/runtime 家族 exit 2+didYouMean 口径分裂。
 方案：统一改 process.exit(2)。
 结果：实测 4 场景全 exit 2；全量 210/0 + lint 298 + docs-check 415。
+
+## ql-20260816-017-b1ca | 2026-08-16 21:31:04 | B9 docs gate 未知 flag 静默吞 + --paths 未接线（未纳入批次项 CLI#2）
+状态：已完成
+关联变更：（无）
+文件：
+- src/index.js（B9 gate flag 白名单+paths 接线）
+- docs/sillyspec/platform-interface-map.md（8 处引用漂移）
+- .sillyspec/docs/sillyspec/modules/cli-entry.md（变更索引）
+需求：B9 docs gate 未知 flag 静默吞 + --paths 未接线（未纳入批次项 CLI#2）。
+根因：gate 分支只解析 --init-baseline，未知 --xxx 不 exit 2（interface-contract §1.3b 宣称未实现）；--paths 被忽略（runDocsGate.checkOpts 已支持但不接线）。
+方案：flag 白名单化（对齐 docs check）+ --paths 透传 + 位置参数拒绝。
+结果：实测未知 flag/位置参数/--paths 缺值全 exit 2、--paths 生效；platform-interface-map 8 处引用漂移修正；全量 210/0 + lint 298 + docs-check 415 + doc-ref-check 80。

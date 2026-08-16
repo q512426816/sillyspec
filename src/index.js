@@ -642,12 +642,39 @@ async function main() {
         // --init-baseline 立线（fail-closed，不悄悄合法化存量）。
         // ⚠ 2026-08-16 补接线：cff7479 落地时漏了本 CLI 分支，.husky/pre-push 一直在跑
         // usage 输出且 exit 0——gate 形同虚设（docs-signals 范围内文件+hook 已就位，仅此分支缺）。
-        const initBaseline = args.includes('--init-baseline');
+        // B9（2026-08-16）：flag 白名单化（对齐 docs check 分支）——未知 --xxx 显式 exit 2
+        // （interface-contract §1.3b 宣称），并接线 --paths 透传 runDocsGate.checkOpts（原被忽略）。
+        const GATE_BARE_FLAGS = ['--init-baseline'];
+        const GATE_PAIRED_FLAGS = ['--paths'];
+        const rawGateArgs = filteredArgs.slice(2);
+        let initBaseline = false;
+        let cliGatePaths = null;
+        for (let i = 0; i < rawGateArgs.length; i++) {
+          const a = rawGateArgs[i];
+          if (a === '--paths' && rawGateArgs[i + 1] !== undefined) {
+            cliGatePaths = rawGateArgs[i + 1].split(',').map(s => s.trim()).filter(Boolean);
+            i++;
+          } else if (a === '--paths') {
+            console.error('❌ docs gate: --paths 缺值（逗号分隔 glob，如 --paths "docs/**/*.md"）');
+            process.exit(2);
+          } else if (GATE_BARE_FLAGS.includes(a)) {
+            if (a === '--init-baseline') initBaseline = true;
+          } else if (a.startsWith('--')) {
+            console.error(`❌ docs gate: 未知 flag「${a}」。已知 flag：${[...GATE_BARE_FLAGS, ...GATE_PAIRED_FLAGS].join(' ')}（--json 为全局 flag）`);
+            process.exit(2);
+          } else {
+            console.error(`❌ docs gate: 多余位置参数「${a}」。用法：sillyspec docs gate [--init-baseline] [--paths <glob,...>] [--json]`);
+            process.exit(2);
+          }
+        }
         const { runDocsGate } = await import('./docs-gate.js');
         // specBase：平台模式（specDir 指针）优先，本地回退 <repo>/.sillyspec——基线文件锚定
         // 进度库根（与 .runtime 同级），跨命令稳定。
         const gateSpecBase = specDir || join(dir, '.sillyspec');
-        const g = await runDocsGate({ projectRoot: dir, specBase: gateSpecBase, initBaseline });
+        const g = await runDocsGate(
+          { projectRoot: dir, specBase: gateSpecBase, initBaseline },
+          cliGatePaths ? { paths: cliGatePaths } : undefined
+        );
         if (json) {
           console.log(JSON.stringify(g, null, 2));
         } else {
