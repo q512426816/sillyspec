@@ -203,7 +203,7 @@
    e. 等待该项目所有子代理完成后，验证文件是否生成且非空
    f. 该项目完成后，继续下一个项目
 3. 所有项目完成后，运行以下命令检查产物：
-   `node -e "import('./src/workflow.js').then(w => { const r = w.runPostCheck(w.loadWorkflow('.', 'scan-docs'), '.', '<project>'); console.log(w.formatCheckReport(r)) })`
+   `sillyspec workflow check scan-docs --project <project>`（CLI 子命令，任意项目根可用）
    对每个项目分别执行（将 `<project>` 替换为实际项目名）
 4. 如果检查报告有失败项，按报告中的角色和文件重试失败的部分
 
@@ -230,7 +230,7 @@
 - 断点续扫步骤列出的缺失文档列表
 - 环境探测结果摘要（如有 _env-detect.md，直接贴入）
 - **⚠️ 必须强调：子代理必须用 write 工具将文件写入磁盘**
-- **文件标题用中文**（sillyhub 平台解析识别用）：frontmatter 必须在文件最前（第 1 行 --- 起），frontmatter 结束的 --- 之后空一行，再写 # 中文名（English）作为标题。严禁把 # 标题放到 frontmatter 之前（否则 frontmatter 不在头部、Step11 检查项9 会报缺 author/created_at）。各文档标准标题格式：
+- **文件标题用中文**（sillyhub 平台解析识别用）：frontmatter 必须在文件最前（第 1 行 --- 起），frontmatter 结束的 --- 之后空一行，再写 # 中文名（English）作为标题。严禁把 # 标题放到 frontmatter 之前（否则 frontmatter 不在头部、「检查产物完整性」步的 frontmatter 检查会报缺 author/created_at）。各文档标准标题格式：
   - STRUCTURE.md = # 目录结构（Structure）
   - CONVENTIONS.md = # 代码约定（Conventions）
   - ARCHITECTURE.md = # 架构（Architecture）

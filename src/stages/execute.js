@@ -323,8 +323,9 @@ const fixedSuffix = [
 
 先检查当前 worktree 的隔离模式：
 \`\`\`bash
-node -e "import('./src/worktree.js').then(w => { const wm = new w.WorktreeManager(); const m = wm.getMeta('<change-name>'); console.log(m ? JSON.stringify({mode: m.mode, path: m.worktreePath}) : 'no meta'); })"
+sillyspec worktree meta <change-name>
 \`\`\`
+（CLI 子命令，输出 meta.json 的 mode / worktreePath 字段；无 meta 输出 no meta）
 
 ### 操作（mode = worktree，SillySpec 创建的隔离 worktree）
 

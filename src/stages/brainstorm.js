@@ -330,8 +330,8 @@ design.md 第一行标题必须用中文：# 设计文档（Design）— <变更
    - 长期术语只在 archive/scan 时再提升到 \`{SPEC_ROOT}/docs/<project>/glossary.md\`
 4. 格式自检（只查章节齐全；语义一致性/可行性/YAGNI 不在本步查，交给下一步 Design Grill 独立审查）：
    - design.md 含全部必填章节（背景/设计目标/非目标/总体方案/文件变更清单/接口定义/风险登记）
-   - design.md 头部 YAML frontmatter 字段齐全（author/created_at/scale 等）——step8 完成契约硬要求，审查前就补齐避免后续 docHash 漂移
-   - design.md 含「自审」字面命中章节（自审 / Self-Review / Self-review）——step8 完成契约 brainstorm.design.self-review 硬要求，写在本步自审段即可
+   - design.md 头部 YAML frontmatter 字段齐全（author/created_at/scale 等）——「生成规范文件」步完成契约硬要求，审查前就补齐避免后续 docHash 漂移
+   - design.md 含「自审」字面命中章节（自审 / Self-Review / Self-review）——「生成规范文件」步完成契约 brainstorm.design.self-review 硬要求，写在本步自审段即可
    - 如存在 decisions.md，design.md 是否引用所有当前版本 D-xxx@vN
    - 涉及 session/lease/agent_run/daemon/lifecycle 等关键词时，是否含「生命周期契约表」
 5. 缺章节 → 补齐后重检；章节齐全 → 进入下一步（Design Grill 做语义层交叉审查）

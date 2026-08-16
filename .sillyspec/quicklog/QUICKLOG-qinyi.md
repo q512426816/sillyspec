@@ -181,3 +181,17 @@ docs/sillyspec/platform-interface-map.md（守卫插入致行号漂移，doc-ref
 根因：验收步要求 checkbox 但 TaskCard 协议 acceptance 在 frontmatter 正文无 checkbox；Runtime Evidence 模板整段 consumer（sillyhub）专有词硬编码进通用 prompt 且教堆关键词过字面 gate 自我拆台；旧 prompt 迁移史注释泄入。
 方案：改 frontmatter 对照核验 + 模板通用化 + 清注释，镜像同步。
 结果：lint 298 过、docs-check 381 全过、verify 系测试全绿。
+
+## ql-20260816-013-00e8 | 2026-08-16 18:51:19 | D 组 scan/execute/brainstorm 系 3 项 prompt 债修复（self-audit D18/D21）
+状态：已完成
+关联变更：（无）
+文件：
+- src/stages/scan.js（D18 workflow 命令+D21 Step11 引用）
+- src/stages/execute.js（D18 worktree meta 命令）
+- src/stages/brainstorm.js（D21 step8 引用）
+- docs/prompt/{scan,execute,brainstorm}.md + _extracted.json（镜像同步）
+- .sillyspec/docs/sillyspec/modules/stages.md（变更索引）
+需求：D 组 scan/execute/brainstorm 系 3 项 prompt 债修复（self-audit D18/D21）。
+根因：node -e import('./src/...') 相对 cwd 解析，npm 分发到 consumer 项目必炸 ERR_MODULE_NOT_FOUND，同功能 CLI 子命令（workflow check / worktree meta）早已存在；数字 step 引用（step8/Step11）是 P6.4 name 引用裁决漏网，rename 即漂移。
+方案：改指 CLI 子命令 + step name 引用，镜像同步。
+结果：lint 298 过、docs-check 381 全过、全量 npm test 210/0。
