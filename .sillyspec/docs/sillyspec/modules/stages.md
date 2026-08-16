@@ -4,7 +4,7 @@ doc_type: module-card
 module_id: stages
 author: qinyi
 created_at: 2026-06-04T16:55:00+08:00
-updated_at: 2026-08-06T06:34:27+08:00
+updated_at: 2026-08-16T19:05:00+08:00
 ---
 
 # stages
@@ -28,6 +28,10 @@ updated_at: 2026-08-06T06:34:27+08:00
 
 **核心阶段**（按流程顺序）：brainstorm → plan → execute → verify → archive
 **辅助阶段**：scan、quick、explore、status、doctor
+
+**brainstorm-auto.js** — auto/full 模式使用的 brainstorm 步骤定义（artifact-first 直接写文件对话只出摘要、按 AC-001~AC-011 checklist 自动决策、产出 next-action.json 驱动下游推进、步骤从 ~13 步精简为 4 步）；与 brainstorm.js 同为 name: 'brainstorm' 阶段，由 run 层按模式选择定义。
+
+**knowledge.js** — agent-safe knowledge 管理命令（search / inspect / validate / refresh / 新知识提案 五个子命令）：全部输出 JSON、不打开编辑器、不直接覆盖人工区、失败带明确错误码；`sillyspec knowledge` 顶层命令的实现，配套 skill sillyspec-knowledge。
 
 **execute prompt 路径约定**（2026-07-11 占位符化，坑 2）：execute stage prompt 中 review.json / endpoints.json 路径用 `{SPEC_ROOT}/.runtime/` 占位符（非裸 `.sillyspec/.runtime/` 硬编码）。`{SPEC_ROOT}` 由 run 层平台路径重写消费（W6 后在 `src/run/prompt.js`）——仓库内模式→`.sillyspec`，平台模式（specDir 指向外部目录）→specDir。修复平台模式下 review.json 落盘路径错位（如 `src/stages/execute.js:908/937`）。
 
@@ -55,7 +59,7 @@ updated_at: 2026-08-06T06:34:27+08:00
 ## 人工备注
 
 <!-- MANUAL_NOTES_START -->
-- ql-20260604-001-7a4c | 对齐 file-lifecycle 文档与阶段实现，修复 brainstorm/propose 步骤丢失和 archive confirm 生命周期。
+- ql-20260604-001-7a4c | 对齐 file-lifecycle 文档与阶段实现，修复 brainstorm 步骤丢失和 archive confirm 生命周期。
 - ql-20260617-003-c3d9 | 收紧 Grill 流程语义，合并需求澄清 pass，并增强决策 ID/record 解析。
 - ql-20260617-004-a91f | 缺 priority 的 unresolved/blocking decision 按 P1 阻断，并补充 parser 回归测试。
 - ql-20260803-002-eff0 | archive step3 sync-module-docs 加 requiresWait，--continue 确认后回到本步由 agent 写模块卡片（修 verify-archive-flow-pitfalls 坑4）。

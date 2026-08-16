@@ -4,9 +4,9 @@ created_at: 2026-06-01T09:05:00
 ---
 
 # worktree
-> 最后更新：2026-08-13
-> 最近变更：2026-08-13-worktree-execute-loss-guard（cleanup 加 fail-closed 保护：未落主仓交付变更拒绝清理、新增返回 `result:'blocked'`，需显式 force 绕过（D-001@v1）；新增 findMissingDeliverables 纯函数导出 + execute 完成路径阶段级核验（D-002@v1）；apply 后自动 cleanup 与 execute reset 显式 force:true 绕过保护（D-006@v1））/ 2026-08-10-worktree-apply-dirty-resilient（dirty 拦截时输出逐文件 rescue cp 指令方案A：新增 export `generateRescueCommands`/`computeRescueDirtyFiles` + applyWorktree 返回值 additive `rescueCommands`/`deletedFiles` + step3.5 前移 hashMismatch 计算 + index.js apply/assess 结构化 rescue 打印段；step4.5/5a fail-loud 拦截决策零改动保留）/ 2026-08-09-worktree-git-injection（git 调用收口 src/git-helper.js：worktree.js/worktree-apply.js 删本地 git()/gitQuiet() helper、77 调用点 + 2 裸 execSync 注入核心全 execFileSync 数组化不经 shell，消除命令注入 + 空格拆词，与 run/shared.js safeGit 合一单一真相源）/ 2026-08-06-execute-runs-isolation（drift 守卫补设 `platformOpts.specDriftAnchor` + 抽 `resolveRuntimeRoot` 统一 `.runtime` 根解析 15 站点；drift 场景 execute-runs/stage-reviews 落主仓 `.runtime`，cleanup 整目录删 worktree 碰不到，archive step1 完成度 gate 不再因丢 review.json 阻断）/ 2026-08-05-tooling-feedback-fixes（doctor 加 `deps-main-drift` issue 探主仓 lockfile 漂移 + `--change` 过滤 + `--fix` force 重装；provisionDeps 加 `force` 选项；抽 H1 `checkDepsFreshness` 统一 doctor 与 execute 的 deps 判定）
-> 模块路径：src/worktree.js, src/worktree-apply.js, src/worktree-deps.js
+> 最后更新：2026-08-16
+> 最近变更：2026-08-16-scan-docs-reconcile（git-helper.js 补录进 _module-map v2 paths 归属，needs_review 项闭环）/ 2026-08-13-worktree-execute-loss-guard（cleanup 加 fail-closed 保护：未落主仓交付变更拒绝清理、新增返回 `result:'blocked'`，需显式 force 绕过（D-001@v1）；新增 findMissingDeliverables 纯函数导出 + execute 完成路径阶段级核验（D-002@v1）；apply 后自动 cleanup 与 execute reset 显式 force:true 绕过保护（D-006@v1））/ 2026-08-10-worktree-apply-dirty-resilient（dirty 拦截时输出逐文件 rescue cp 指令方案A：新增 export `generateRescueCommands`/`computeRescueDirtyFiles` + applyWorktree 返回值 additive `rescueCommands`/`deletedFiles` + step3.5 前移 hashMismatch 计算 + index.js apply/assess 结构化 rescue 打印段；step4.5/5a fail-loud 拦截决策零改动保留）/ 2026-08-09-worktree-git-injection（git 调用收口 src/git-helper.js：worktree.js/worktree-apply.js 删本地 git()/gitQuiet() helper、77 调用点 + 2 裸 execSync 注入核心全 execFileSync 数组化不经 shell，消除命令注入 + 空格拆词，与 run/shared.js safeGit 合一单一真相源）/ 2026-08-06-execute-runs-isolation（drift 守卫补设 `platformOpts.specDriftAnchor` + 抽 `resolveRuntimeRoot` 统一 `.runtime` 根解析 15 站点；drift 场景 execute-runs/stage-reviews 落主仓 `.runtime`，cleanup 整目录删 worktree 碰不到，archive step1 完成度 gate 不再因丢 review.json 阻断）/ 2026-08-05-tooling-feedback-fixes（doctor 加 `deps-main-drift` issue 探主仓 lockfile 漂移 + `--change` 过滤 + `--fix` force 重装；provisionDeps 加 `force` 选项；抽 H1 `checkDepsFreshness` 统一 doctor 与 execute 的 deps 判定）
+> 模块路径：src/worktree.js, src/worktree-apply.js, src/worktree-deps.js, src/git-helper.js
 
 ## 职责
 Git worktree 的创建、管理、变更应用与依赖供给 — 为 SillySpec 提供隔离且立即可构建的开发环境。
@@ -20,6 +20,8 @@ worktree 模块提供基于 git worktree 的分支隔离机制，让每个变更
 **worktree-apply.js** 提供 `applyWorktree()` 函数，负责将 worktree 中的变更安全地应用回主工作区。它执行冲突检测（检查主工作区和 worktree 是否修改了相同文件），支持仅检查模式（checkOnly）和实际应用模式。应用时使用 `git diff` 生成补丁并通过 `git apply` 应用。
 
 **worktree-deps.js** 提供 `provisionDeps()` 依赖供给引擎。在 `create()` 的 baseline overlay 之后调用，让 worktree 立即可构建/测试：lockfile 一致时 junction/symlink 主 checkout 的 node_modules（瞬时零网络），否则按 `local.yaml` 的 `project.type` + lockfile 推断并执行 install。供给结果（depsStatus 等）写入 meta.json，供 execute 阶段的验证硬门读取。供给可失败，但失败状态可观测、可由 doctor 重试（doctor --fix 走 `_doctorReprovision`：先解 node_modules junction（**解链失败 fail-loud 阻断，不调 provisionDeps，D-002@v1**）再 `provisionDeps(force=true)` 强制重供，绕过 tryLink 幂等短路，修 deps-main-drift 等主仓 lockfile 漂移场景）。另导出 H1 `checkDepsFreshness(meta, wtPath, mainCwd)`，统一 doctor 与 execute 入口的 deps 新鲜度判定（status 含新增 `main-drift`）。
+
+**git-helper.js** 是统一公共 git 调用入口（safeGit + git + gitQuiet：execFileSync 数组形式不经 shell，统一带 `-c safe.directory=<cwd>` 与 `-C cwd` 前缀、默认 timeout 5s 可覆盖、默认 trim），worktree 链（worktree.js/worktree-apply.js 全部 git 调用）与 run 层（run/shared.js re-export）共用，消除两套实现口径分裂。2026-08-16 补录进 _module-map v2 paths，卡上原「待升 v2 补录 git-helper.js」needs_review 项闭环。
 
 ## 对外接口（表格）
 

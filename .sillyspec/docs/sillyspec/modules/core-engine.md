@@ -4,9 +4,9 @@ created_at: 2026-06-01T09:05:00
 ---
 
 # core-engine
-> 最后更新：2026-08-09
-> 最近变更：ql-20260809-003-c88a（#5 next-action 读路径对齐变更根目录 + #6 initChange 用 VALID_STAGES 单一源 + 修正 propose 残留误述）
-> 模块路径：src/run.js, src/index.js, src/progress.js, src/db.js
+> 最后更新：2026-08-16
+> 最近变更：2026-08-16-scan-docs-reconcile（契约/评审族与基础原语补录归属 + propose 回收）/ ql-20260809-003-c88a（#5 next-action 读路径对齐变更根目录 + #6 initChange 用 VALID_STAGES 单一源 + 修正 propose 残留误述）
+> 模块路径：src/db.js, src/db-engine.js + 契约/评审族与基础原语（stage-contract 三件、check-primitives、stage-review、task-review、verify-postcheck、review-tier、change-risk-profile、classify-change、contract-matrix、endpoint-extractor、knowledge-match、doctor-diagnostics、fs-atomic、constants、scan-postcheck）；完整清单见 _module-map.yaml core-engine paths。历史正文中的 run.js / progress.js / index.js 章节已分属 runtime / progress / cli-entry 模块卡
 
 ## 职责
 SillySpec 的核心运行引擎 — 负责数据库存储、进度管理、阶段调度和 CLI 入口。
@@ -17,9 +17,28 @@ core-engine 是 SillySpec 的基础设施层，由三个层次组成：持久化
 
 **DB 类**（src/db.js）封装了 better-sqlite3（SQLite 的原生绑定，同步 API）。数据库文件位于 `.sillyspec/.runtime/sillyspec.db`，通过 PRAGMA 配置 journal_mode=WAL（伴随 `.db-wal`/`.db-shm` 侧车）、busy_timeout=5000、foreign_keys=ON、synchronous=NORMAL。better-sqlite3 打开即持久化，DDL/事务提交直接落盘主库，不再有旧 WASM 内存引擎的「全库 load 到内存 → 序列化写回」模型（旧模型是 last-writer-wins lost update 根因，现 WAL 单写者串行 + 应用层 SQLITE_BUSY 有限重试根治）。DB 类提供事务支持（`transaction` 方法，含 BUSY 退避重试），所有写操作通过事务批量提交；`close()` 时 better-sqlite3 自动做 WAL checkpoint 合并 `-wal`/`-shm` 回主库，无需显式 `_save`。`.bak` 损坏回退保留（主库→`.bak`→全新/报错 逐级回退）。
 
-**ProgressManager 类**（src/progress.js）是核心状态管理器，管理项目全局数据和变更级进度。每个变更的进度由 stages 对象表示，每个 stage 包含 steps 数组。VALID_STAGES 定义了 8 个合法阶段：scan, brainstorm, plan, execute, verify, archive, quick, explore（主流程顺序见 MAIN_FLOW_ORDER：brainstorm→plan→execute→verify→archive；propose 仅作 knowledge 阶段子命令，非流程阶段）。ProgressManager 通过 DB 类的 SQLite 后端存储所有状态。
+**ProgressManager 类**（src/progress.js）是核心状态管理器，管理项目全局数据和变更级进度。每个变更的进度由 stages 对象表示，每个 stage 包含 steps 数组。VALID_STAGES 定义了 8 个合法阶段：scan, brainstorm, plan, execute, verify, archive, quick, explore（主流程顺序见 MAIN_FLOW_ORDER：brainstorm→plan→execute→verify→archive；propose 阶段已移除——阶段合并进 brainstorm 产出四件套）。ProgressManager 通过 DB 类的 SQLite 后端存储所有状态。
 
 **runCommand 函数**（src/run.js）是 CLI 调度核心，处理参数解析、变更名解析、阶段步骤获取/确保、步骤完成/跳过/重置、自动模式运行等。它通过 stageRegistry 和 auxiliaryStages 从 stages 模块获取阶段定义。
+
+**契约/评审族与基础原语**（根级散文件，2026-08-16-scan-docs-reconcile 补录归属；与 ProgressManager/DB 同层共用）：
+
+- `src/stage-contract.js` — 阶段协议单一来源（允许前置/必须产出/validators），completeStep 后必须过 validator；另导出 detectChangeRisk / checkExecuteCodeEvidence
+- `src/stage-contract-spec.js` — 阶段产物字面校验规则的结构化 manifest（单一真相源：validators 消费它判定、prompt 渲染它事前预览，事前==事后同源）
+- `src/stage-contract-engine.js` — 产物字面校验通用引擎（消费 spec manifest 按 kind dispatch 产出 errors/warnings；引擎不碰 fs，readFile 由调用方注入）
+- `src/check-primitives.js` — 共享产物字面校验原语（纯函数：contains_sections/min_lines/no_placeholder/no_empty_files 全仓单一语义源），workflow 与 stage-contract 两引擎共用
+- `src/stage-review.js` — 阶段级审查门（brainstorm/plan/execute-acceptance 的阶段级 review.json 校验：文档证据 reviewedFiles + docHash）
+- `src/task-review.js` — execute 每 task 的 review.json 校验（git 代码 diff 证据：base/head）
+- `src/verify-postcheck.js` — verify 完成时 CLI 亲自执行 local.yaml 测试命令与 verify-result.md 自报告对账（自报 PASS 但实测失败 → 阻断）
+- `src/review-tier.js` — 审查分级（self/independent）：plan_level 确定性映射（none/light→self、full→independent），无 plan_level 阶段退文件数启发式；run/gates.js 与 run/prompt.js 消费
+- `src/change-risk-profile.js` — 变更风险分级检测（P0 阻塞确认 / P1 记录 / P2 通过，产出 risk-profile.json）
+- `src/classify-change.js` — 变更规模分类器（quick/auto/full，供 auto 模式决定内部流程深度）
+- `src/contract-matrix.js` / `src/endpoint-extractor.js` — API 契约矩阵生成与注入（provider/consumer 端点提取与 parity check）
+- `src/knowledge-match.js` — knowledge 关键词匹配引擎（INDEX.md 条目解析 + 任务上下文匹配生成 hit report）
+- `src/doctor-diagnostics.js` — 结构化项目自检（平台模式状态分裂检测 D1-D5 + safe_actions 只描述建议动作绝不自动执行，`sillyspec doctor --json`）
+- `src/fs-atomic.js` — 原子文件写 + Windows 友好 rename 重试（writeAtomicSync，用于 .runtime/*.json/pointer 等跨进程读文件；sillyspec.db 不走此路）
+- `src/constants.js` — 平台状态枚举（manifest/pointer/postcheck/workflow-runs 共享，SillyHub 侧直接用常量值）
+- `src/scan-postcheck.js` — CLI 层 scan 完成后强制校验（不依赖 agent 自检报告；平台模式须全过才 success 否则降级）
 
 ## 对外接口（表格）
 

@@ -4,7 +4,7 @@ doc_type: module-card
 module_id: runtime
 author: qinyi
 created_at: 2026-06-03T07:42:00+08:00
-updated_at: 2026-08-13T14:50:00+08:00
+updated_at: 2026-08-16T19:05:00+08:00
 ---
 # runtime
 
@@ -17,6 +17,10 @@ SQLite 数据库层 + 进度管理 + 迁移。提供 `.sillyspec/.runtime/sillys
 - **DB** (`src/db.js`) — 基于 Node.js 内置 `node:sqlite`（`DatabaseSync`，同步 API）经 `src/db-engine.js` 抽象层（方案 B，封装 DatabaseSync + 3 缺口 shim：pragma→exec / transaction→手写 SAVEPOINT / pluck→helper）绑定，提供 `init()` / `transaction()` / `getDb()` / `close()`；`init()` 经 `applyPragmas` 设 PRAGMA（journal_mode=WAL + busy_timeout=5000 + foreign_keys=ON + synchronous=NORMAL），主库→`.bak`→全新 逐级回退（`_openWithFallback`）；主库分支 tryOpen 撞并发 CHECKPOINT 瞬时失败时有限重试（复用 MAX_BUSY_RETRIES 递增退避，真损坏重试不过仍回落退/fail-loud，防吞进度语义零回归）；打开即持久化，事务提交直接落盘主库（WAL 侧车 `.db-wal`/`.db-shm`），无旧 WASM 引擎的「全库 load 到内存 → 序列化写回」模型，接口无 `query()` / `_save()`（progress.js 经 `getDb()` 拿原生 DatabaseSync 实例直接 `prepare/run`）
 - **ProgressManager** (`src/progress.js`) — 进度读写入口，通过 DB 实例操作 `project / changes / stages / steps / batch_progress / approvals` 六张表；核心读写方法已同步化（`read`/`_write` 等不再 async），`read()` 每次经 `getDb()` 直查 DB 取最新不缓存快照；支持 `read()` / `init()` / `initChange()` / `show()` / `validate()` / `reset()` / `_updatePlatformLastSync()` / `_updateApprovalStatus()` / `alignExecuteToPlan()` 等方法
 - **MultiRepoContext** (`src/run/multi-repo-context.js`) — 跨仓 task 支持的运行时多仓执行上下文（2026-08-12 新增）。进程级内存对象（随 CLI 进程生死，不入库不持久化，无状态机），`Map<repoKey, RepoEntry{repoKey,gitDir,worktreePath,projectRoot,isMain,resolveHead(),resolveBase(taskBaseCommit?)}>`。execute 启动由 `shared.js:getOrCreateMultiRepoContext` 构造一次贯穿 execute/apply/verify（D-013 G2），收口 7 单仓假设点（task-review/worktree-apply/verify-postcheck/gates/execute/index/machine-interface/complete 经 `ctx.resolve(repo)` 取 gitDir/base/head/projectRoot）。约束② fail-closed（未注册 repo / 跨仓 git 不可用抛错阻断 execute，不降级）。单仓 change 退化为 `{main:{...}}` 单值 map 零回归。head 经 resolveHead 实时 git rev-parse（不缓存）；task review 的 base/head 用 task 卡 base_commit/head_commit 双锡点（非 resolveHead）。declaredRepos 聚合双源：plan.md 内联 frontmatter 块 + tasks/task-NN.md 独立卡片（`collectTaskCardReposFallback` 兜底扫，坑7——plan.md 只留 checkbox 时跨仓仓仍注册进 ctx，不再误报 review 疑似伪造）
+
+- **quick-audit.js**（`src/run/quick-audit.js`，W6 Step2 从 run.js 抽出）— quick 审计结论打印 + quick 多变更关联选择（resolveQuickLinkedChanges 动态 import quick-recommend.js 打分 + safeGit 脏文件信号，交互式 checkbox 默认勾选关联目标）
+- **scan-profile.js**（`src/run/scan-profile.js`，W6 Step2 从 run.js 抽出）— scan profile 数据生成 + quick scan CLI preflight/postcheck（executeScanPostcheck 动态 import scan-postcheck.js 做 CLI 确定性校验，不依赖 agent 自检报告）
+- **quick-recommend.js**（`src/quick-recommend.js`，根级文件归 runtime）— quick 阶段多变更关联推荐打分：「脏文件 + 任务描述」双信号推测当前 quick 改动最可能归属哪些活跃变更，供交互式多选默认勾选；纯函数 + 只读文件系统无副作用
 
 ### ProgressManager 对齐相关方法
 

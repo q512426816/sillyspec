@@ -4,17 +4,19 @@ created_at: 2026-06-01T09:05:00
 ---
 
 # change-management
-> 最后更新：2026-08-07
-> 最近变更：ql-20260807-010-9897（keepSillyspecDocs option：模块文档 .sillyspec/docs/ 可进清单）/ ql-20260713-001-3e46（文件清单标题编号前缀容忍）
-> 模块路径：src/change-list.js
+> 最后更新：2026-08-16
+> 最近变更：2026-08-16-scan-docs-reconcile（quicklog.js 补录归属）/ ql-20260807-010-9897（keepSillyspecDocs option：模块文档 .sillyspec/docs/ 可进清单）/ ql-20260713-001-3e46（文件清单标题编号前缀容忍）
+> 模块路径：src/change-list.js, src/quicklog.js
 
 ## 职责
-从 design.md 解析文件变更清单，提取受影响文件路径集合，供 verify 等阶段做文件级别校验。
+从 design.md 解析文件变更清单（change-list.js），提取受影响文件路径集合供 verify 等阶段做文件级别校验；兼管 QUICKLOG 台账的 CLI 接管（quicklog.js）。
 
 ## 当前设计
 `parseFileChangeList` 是一个纯同步函数，接收 design.md 文件路径，返回 `Set<string>`。它定位 design.md 中"文件变更清单"标题下的 Markdown 表格，解析表格第二列的文件路径，过滤掉空路径、占位符（`—`/`-`）和 `.sillyspec/` 内部路径。
 
 模块设计极简，单文件单函数，无状态、无副作用。解析逻辑基于正则匹配 Markdown 表格行（`|` 分隔），跳过表头和分隔行。设计为 verify 阶段的前置工具：验证实现产出是否覆盖了 design 中声明的全部目标文件。
+
+**src/quicklog.js** 是 QUICKLOG 记录的 CLI 接管层：ql-ID 分配 + 条目追加 + O_EXCL lockfile 串行化全部下沉 CLI 进程内，消除 agent 手写漏记静默通过与多 quick 会话并发读-改-写丢更新（历史实证同一 ql-ID 出现两次）；导出 allocateQuicklogEntry / completeQuicklogEntry / findQuicklogEntry / deriveTitleFromLinkedChange / withFileLock 等，由 src/run/（command / complete-handlers / complete / stage）import 消费；无新 npm 依赖（仅 fs/path/crypto）。
 
 ## 对外接口（表格）
 | 函数/常量 | 说明 | 参数 |

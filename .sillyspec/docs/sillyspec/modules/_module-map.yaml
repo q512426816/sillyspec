@@ -1,7 +1,10 @@
-schema_version: 1
-generated_at: 2026-08-15 17:00:00
+schema_version: 2
+generated_at: 2026-08-16 19:05:00
 generator: sillyspec-modules-rebuild
-source_commit: f8191c6
+source_commit: 4401b3dd9e4a3afbefd769eb00c4ac47d9553ab6
+
+# Module Context Index — 机器可读的模块上下文索引（2026-08-16-scan-docs-reconcile 手工升 v2 并补录全模块 paths）
+# paths 为该模块覆盖的源文件/目录（目录条目以 / 结尾，读侧按前缀匹配）；⚠️ 勿跑 modules rebuild --force——会清空本文件手动维护的 paths
 
 modules:
   stages:
@@ -9,53 +12,215 @@ modules:
     doc: modules/stages.md
     needs_review: false
     review_reasons: []
+    paths:
+      - src/stages/
 
   runtime:
     status: active
     doc: modules/runtime.md
     needs_review: false
     review_reasons: []
+    paths:
+      - src/run.js
+      - src/run/
+      - src/quick-recommend.js
 
   cli-entry:
     status: active
     doc: modules/cli-entry.md
     needs_review: false
     review_reasons: []
+    paths:
+      - src/index.js
+      - bin/sillyspec.js
+      - src/version.js
+      - src/spec-dir-typo.js
 
-  dashboard:
+  progress:
     status: active
-    doc: modules/dashboard.md
+    doc: modules/progress.md
     needs_review: false
     review_reasons: []
+    paths:
+      - src/progress.js
+      - src/progress/
 
-  migration:
+  core-engine:
     status: active
-    doc: modules/migration.md
+    doc: modules/core-engine.md
     needs_review: false
     review_reasons: []
+    paths:
+      - src/db.js
+      - src/db-engine.js
+      - src/stage-contract.js
+      - src/stage-contract-engine.js
+      - src/stage-contract-spec.js
+      - src/check-primitives.js
+      - src/stage-review.js
+      - src/task-review.js
+      - src/verify-postcheck.js
+      - src/review-tier.js
+      - src/change-risk-profile.js
+      - src/classify-change.js
+      - src/contract-matrix.js
+      - src/endpoint-extractor.js
+      - src/knowledge-match.js
+      - src/doctor-diagnostics.js
+      - src/fs-atomic.js
+      - src/constants.js
+      - src/scan-postcheck.js
+
+  docs-consistency:
+    status: active
+    doc: modules/docs-consistency.md
+    needs_review: false
+    review_reasons: []
+    paths:
+      - src/docs-check.js
+      - src/docs-gate.js
+      - src/docs-debt.js
+      - src/scan-staleness.js
 
   worktree:
     status: active
     doc: modules/worktree.md
-    needs_review: true
-    review_reasons:
-      - src/git-helper.js 新公共 git 调用入口（safeGit+git+gitQuiet，execFileSync 数组形式不经 shell），跨 worktree/runtime 共用收口；schema_version=1 无 paths 字段无法收录此根级新文件，待升级 schema_version=2 时补录归属（建议归 worktree 模块或新建 git 模块）；worktree.js/worktree-apply.js 本身改动影响明确不需复核（见 module-impact.md），此 needs_review=true 仅表 git-helper.js 文件待补录
+    needs_review: false
+    review_reasons: []
+    paths:
+      - src/worktree.js
+      - src/worktree-apply.js
+      - src/worktree-deps.js
+      - src/git-helper.js
 
   machine-interface:
     status: active
     doc: modules/machine-interface.md
     needs_review: false
     review_reasons: []
+    paths:
+      - src/machine-interface.js
 
   dispatch:
     status: active
     doc: modules/dispatch.md
     needs_review: false
     review_reasons: []
+    paths:
+      - src/dispatch/
+
+  sync:
+    status: active
+    doc: modules/sync.md
+    needs_review: false
+    review_reasons: []
+    paths:
+      - src/sync.js
 
   sillyhub-mcp:
     status: active
     doc: modules/sillyhub-mcp.md
     needs_review: false
     review_reasons: []
+    paths:
+      - src/sillyhub-mcp/
+      - src/sync.js
+
+  migration:
+    status: active
+    doc: modules/migration.md
+    needs_review: false
+    review_reasons: []
+    paths:
+      - src/migrate.js
+      - src/modules.js
+
+  setup:
+    status: active
+    doc: modules/setup.md
+    needs_review: false
+    review_reasons: []
+    paths:
+      - src/init.js
+      - src/setup.js
+      - src/config-schema.js
+      - src/local-detect.js
+
+  change-management:
+    status: active
+    doc: modules/change-management.md
+    needs_review: false
+    review_reasons: []
+    paths:
+      - src/change-list.js
+      - src/quicklog.js
+
+  hooks:
+    status: active
+    doc: modules/hooks.md
+    needs_review: false
+    review_reasons: []
+    paths:
+      - src/hooks/
+
+  workflow:
+    status: active
+    doc: modules/workflow.md
+    needs_review: false
+    review_reasons: []
+    paths:
+      - src/workflow.js
+
+  dashboard:
+    status: active
+    doc: modules/dashboard.md
+    needs_review: false
+    review_reasons: []
+    paths:
+      - packages/dashboard/index.html
+      - packages/dashboard/package.json
+      - packages/dashboard/vite.config.js
+      - packages/dashboard/public/
+
+  dashboard-frontend:
+    status: active
+    doc: modules/dashboard-frontend.md
+    needs_review: false
+    review_reasons: []
+    paths:
+      - packages/dashboard/src/App.vue
+      - packages/dashboard/src/main.js
+      - packages/dashboard/src/style.css
+
+  dashboard-components:
+    status: active
+    doc: modules/dashboard-components.md
+    needs_review: false
+    review_reasons: []
+    paths:
+      - packages/dashboard/src/components/
+
+  dashboard-composables:
+    status: active
+    doc: modules/dashboard-composables.md
+    needs_review: false
+    review_reasons: []
+    paths:
+      - packages/dashboard/src/composables/
+
+  dashboard-server:
+    status: active
+    doc: modules/dashboard-server.md
+    needs_review: false
+    review_reasons: []
+    paths:
+      - packages/dashboard/server/
+
+  bin:
+    status: active
+    doc: modules/bin.md
+    needs_review: false
+    review_reasons: []
+    paths:
+      - bin/sillyspec.js
 

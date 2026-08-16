@@ -4,9 +4,9 @@ created_at: 2026-06-01T09:05:00
 ---
 
 # setup
-> 最后更新：2026-06-01
-> 最近变更：scan（初始生成）
-> 模块路径：src/init.js, src/setup.js, src/migrate.js
+> 最后更新：2026-08-16
+> 最近变更：2026-08-16-scan-docs-reconcile（config-schema/local-detect 补录归属；migrate.js 归属已划 migration 卡）
+> 模块路径：src/init.js, src/setup.js, src/config-schema.js, src/local-detect.js（migrate.js 归 migration 卡）
 
 ## 职责
 项目初始化、工具配置安装和文档迁移 — 负责 SillySpec 的首次设置和环境准备。
@@ -20,6 +20,10 @@ setup 模块由三个文件组成，分别处理 SillySpec 生命周期的不同
 **setup.js** 负责工具运行时的 MCP（Model Context Protocol）服务器配置和全局工具安装。cmdSetup 函数扫描可用的配置路径（Claude Code、Cursor 等），检测已安装的 MCP 工具，提供交互式安装界面。它管理三类工具：MCP_TOOLS（MCP 服务器）、DB_MCP_TOOLS（数据库相关 MCP）、GLOBAL_TOOLS（全局 CLI 工具）。
 
 **migrate.js** 提供文档迁移功能，migrateDocs 函数处理旧版本 SillySpec 的文档结构迁移，包括项目配置 YAML → SQLite、代码库文档、知识库文档、快速日志等格式的转换。
+
+**config-schema.js** 是 local.yaml 配置键的单一数据源（LOCAL_YAML_SCHEMA 集中全部已知键 + 生效状态 + 读取点），供 `sillyspec config schema`（人类可读树 / --json 机读）打印与 `sillyspec init` 调 renderExample() 落盘脱敏 local.yaml.example。
+
+**local-detect.js** 是纯 fs 项目类型嗅探（detectLocalYaml）：不 spawn 子进程、不耗 token，几秒完成项目类型判定；只返回数据结构不写盘（create/gate 无需为此跑完整 scan），落盘由 CLI 路由 / scan.js 调用方负责。
 
 ## 对外接口（表格）
 
