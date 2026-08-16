@@ -32,7 +32,7 @@ import { stageRegistry } from '../stages/index.js'
  * 只认 checkbox 行 `- [ ] task-XX:` / `- [x] task-XX:`（与 execute.js parseWavesFromPlan 的
  * 收容口径一致：### 标题式 task / 非 task 区 checkbox 不算），light plan 的 `## Tasks` 段同样收。
  */
-export function extractTaskIdsFromPlan(planContent) {
+function extractTaskIdsFromPlan(planContent) {
   if (!planContent) return []
   return [...String(planContent).matchAll(/^[-*]\s*\[[ x]\]\s*(?:.*\b)?task-(\d+)\b/gim)]
     .map(m => `task-${m[1].padStart(2, '0')}`)

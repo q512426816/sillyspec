@@ -58,7 +58,7 @@ export function detectIsolation(cwd = process.cwd()) {
  * @param {string} cwd - 项目根目录
  * @returns {{ ignored: boolean, path: string }}
  */
-export function checkWorktreeDirIgnored(cwd = process.cwd()) {
+function checkWorktreeDirIgnored(cwd = process.cwd()) {
   const relPath = WORKTREES_REL;
   try {
     git(cwd, ['check-ignore', '-q', relPath]);
@@ -195,7 +195,7 @@ function validateChangeName(changeName) {
  * @param {string} cwd
  * @returns {{ supported: boolean, version: string|null, reason?: string }}
  */
-export function isGitWorktreeSupported(cwd = process.cwd()) {
+function isGitWorktreeSupported(cwd = process.cwd()) {
   try {
     const raw = git(cwd, ['--version']);
     const match = raw.match(/git version (\d+)\.(\d+)/);

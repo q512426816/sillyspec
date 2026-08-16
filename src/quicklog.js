@@ -83,7 +83,7 @@ export function sanitizeDesc(description) {
 
 // git user.name → 文件名安全形式：白名单保留字母数字._- 与中文等 Unicode 字，
 // 剥路径元字符（/ \ ..）与控制字符。防 QUICKLOG-<user>.md / 锁文件 / 轮转归档穿越写。
-export function sanitizeQuicklogUser(user) {
+function sanitizeQuicklogUser(user) {
   const s = String(user || '').replace(/[\\/\r\n\0]/g, '').replace(/\.{2,}/g, '.').trim()
   if (!s) return ''
   return s.length > 64 ? s.slice(0, 64) : s

@@ -21,7 +21,7 @@ import { detectSpecDirTypo } from './spec-dir-typo.js'
 import { resolveRuntimeRoot } from './run/shared.js'
 
 // 文档型 stage review 的合法 reviewType
-export const STAGE_REVIEW_TYPES = ['design', 'plan', 'proposal', 'code', 'acceptance']
+const STAGE_REVIEW_TYPES = ['design', 'plan', 'proposal', 'code', 'acceptance']
 
 // checklist 每项 result 的合法值
 const CHECKLIST_RESULTS = ['pass', 'gap', 'fail']

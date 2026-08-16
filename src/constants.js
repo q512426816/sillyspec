@@ -36,22 +36,6 @@ export const CHECK_SEVERITY = Object.freeze({
   PASSED: 'passed',
 })
 
-// ── stage 步骤状态 ──
-export const STEP_STATUS = Object.freeze({
-  PENDING: 'pending',
-  IN_PROGRESS: 'in-progress',
-  COMPLETED: 'completed',
-  SKIPPED: 'skipped',
-})
-
-// ── stage 阶段状态 ──
-export const STAGE_STATUS = Object.freeze({
-  PENDING: 'pending',
-  IN_PROGRESS: 'in_progress',
-  COMPLETED: 'completed',
-  FAILED_POST_CHECK: 'failed_post_check',
-})
-
 /**
  * 判断指针是否过时（完成超过 24h）
  */

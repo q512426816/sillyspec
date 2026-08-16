@@ -30,9 +30,9 @@ import { resolveRuntimeRoot } from './run/shared.js'
 // 跨仓 task 写 review.json 可用 v2 带 repo 字段，单仓/旧 change 仍用 v1。后续可拆分 stage-review 专用
 // 常量，本期遵循 allowed_paths 约束不扩散到 stage-review.js。
 export const REVIEW_SCHEMA_VERSION = 1
-export const REVIEW_SCHEMA_VERSIONS_ACCEPTED = [1, 2]
+const REVIEW_SCHEMA_VERSIONS_ACCEPTED = [1, 2]
 // repo 缺省值（review.repo / task 卡 repo 缺省时统一按 'main' 处理）。design §7.2 / §7.4。
-export const DEFAULT_REPO_KEY = 'main'
+const DEFAULT_REPO_KEY = 'main'
 
 /**
  * 规范化 review.repo / task 卡 repo 字段为有效 repoKey。
@@ -53,7 +53,7 @@ export const VALID_VERDICTS = ['pass', 'fail', 'cannot_verify']
  * @param {string} planContent - plan.md 文件内容
  * @returns {string[]} task id 列表，如 ['task-01', 'task-02']
  */
-export function parseTaskIdsFromPlan(planContent) {
+function parseTaskIdsFromPlan(planContent) {
   if (!planContent) return []
   const ids = new Set()
   const re = /^\s*[-*]\s*\[[ x]\]\s*task-(\d+)/gim

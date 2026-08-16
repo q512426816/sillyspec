@@ -353,3 +353,26 @@ docs/sillyspec/platform-interface-map.md（守卫插入致行号漂移，doc-ref
 根因：check-syntax 仅 node --check + 禁 console.assert，未引用导出检测缺失——A6 propose.js 死码、22d onboard 孤儿先例只能人肉 grep。
 方案：加 src/ 非入口模块 export 符号的跨文件文本引用检测（入口/stages registry 白名单），首版 advisory（21 候选含同文件内部消费误报，文本级无法区分）。
 结果：lint exit 0 + 检测器一次扫出 21 死码候选登记待确认 + 全量 211/0。
+
+## ql-20260817-001-83fe | 2026-08-17 01:17:49 | 清理 22e-b lint 扫出的死导出并收紧为 hard fail
+状态：已完成
+关联变更：（无）
+文件：
+- src/change-risk-profile.js（删 detectRiskProfile+5 私有常量约 220 行，头部注释 P0/P1/P2 改 5 级；3 项去 export）
+- src/constants.js（删 STEP_STATUS/STAGE_STATUS 两枚举（零引用））
+- src/workflow.js（删 generateRetryPrompt/generateRolePrompt/generateAllRolePrompts 约 180 行；validateWorkflow 去 export）
+- src/quicklog.js（sanitizeQuicklogUser 去 export（原「供测试直跑」实证为误））
+- src/docs-check.js（REF_RE/DEFAULT_DOC_PATHS 去 export）
+- src/hooks/worktree-guard.js（shouldBlockBash 去 export）
+- src/run/gates.js（extractTaskIdsFromPlan 去 export）
+- src/stage-contract-spec.js（CUSTOM_KINDS 去 export）
+- src/stage-review.js（STAGE_REVIEW_TYPES 去 export）
+- src/task-review.js（3 项去 export）
+- src/worktree.js（2 项去 export）
+- test/check-syntax.mjs（22e-b advisory 收紧 hard fail + 注释更新）
+- docs/sillyspec/prompt-control-debt.md（22e-b 候选核验定案登记）
+- docs/sillyspec/platform-interface-map.md（sync.js 5 处行号漂移修复（并发 f976466 遗留））
+需求：清理 22e-b lint 扫出的死导出并收紧为 hard fail。
+根因：21+1 个导出符号在 src+test 全仓零代码引用（外部命中皆文档/历史档案，packages/bin/模板零消费，无 export * barrel），属积累死码。
+方案：6 项整体删除 + 16 项去 export（运行时零变化）+ lint advisory 收紧 hard fail + 修复并发会话遗留的 5 处平台地图行号。
+结果：lint 0 项全绿、npm test 211 pass、doc-ref-check 80/80、CLI 冒烟正常。

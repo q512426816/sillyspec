@@ -83,11 +83,12 @@ for (const [file, content] of srcContents) {
   }
 }
 if (deadExports.length) {
-  // advisory 不阻断（22e-b 首版）：22 个候选中含「同文件内部消费 + export 供测试用例直跑」的
-  // 有意导出（如 sanitizeQuicklogUser 同文件 4 处内部调用），文本级判定无法区分——先观察积累，
-  // 确认真死后逐个删除或收紧为 hard fail。
-  console.warn(`\n⚠️ 未引用导出候选 ${deadExports.length} 项（src/ 死码候选，22e-b advisory；含同文件内部消费的误报）：`)
-  for (const e of deadExports) console.warn('  - ' + e)
+  // hard fail（22e-b 首版 advisory → 21 候选全仓核验后收紧）：text 级判定只查「src+test 其余文件
+  // 零引用」——packages/bin/templates 不 import src（实证），stages/ 与 scan-diff 动态加载已跳过，
+  // 入口模块白名单豁免。确为有意导出（如供外部包消费）时用注释标注或收进白名单，勿静默积累死码。
+  console.error(`\n❌ 未引用导出 ${deadExports.length} 项（src/ 死码：src+test 其余文件零引用，见 22e-b 裁决）：`)
+  for (const e of deadExports) console.error('  - ' + e)
+  process.exit(1)
 }
 
-console.log(`Checked ${allFiles.length} JavaScript files (src ${srcFiles.length} + test ${testFiles.length}); test/ 内容规则通过 + 未引用导出候选 ${deadExports.length} 项（advisory）`)
+console.log(`Checked ${allFiles.length} JavaScript files (src ${srcFiles.length} + test ${testFiles.length}); test/ 内容规则通过 + 未引用导出 ${deadExports.length} 项（hard fail）`)

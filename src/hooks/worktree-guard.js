@@ -748,7 +748,7 @@ export function shouldBlockWrite(filePath, cwd) {
  * @param {string} cwd - 当前工作目录
  * @returns {{ blocked: boolean, reason?: string }}
  */
-export function shouldBlockBash(command, cwd) {
+function shouldBlockBash(command, cwd) {
   if (!command || !command.trim()) return { blocked: false }
 
   const callerCwd = cwd || process.cwd()

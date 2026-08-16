@@ -39,7 +39,7 @@ import { hasAllSections, hasNoPlaceholderLine, lineCount, meetsMinLines, missing
 import { SCAN_REQUIRED_DOCS } from './constants.js'
 
 // custom kind 集合:判定算法留在各 validator(复杂条件),引擎跳过不计入 errors/warnings。
-export const CUSTOM_KINDS = new Set([
+const CUSTOM_KINDS = new Set([
   'lifecycle-exemption',     // design.md 生命周期关键词触发 + 多层豁免(validateBrainstormOutputs)
   'entry-point-wiring',      // design.md 入口实例化 → task allowed_paths 覆盖对账(validatePlanOutputs)
   'id-traceability',         // FR/D 引用追踪(extractIds / warnMissingIds)
