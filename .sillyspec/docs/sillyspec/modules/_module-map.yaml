@@ -24,6 +24,7 @@ modules:
       - src/run.js
       - src/run/
       - src/quick-recommend.js
+      - src/scan-diff.js
 
   cli-entry:
     status: active
