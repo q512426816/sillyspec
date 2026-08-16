@@ -92,4 +92,5 @@ ProgressManager.alignExecuteToPlan(cwd, changeName, specBase, {confirm})
 - ql-20260815-021-9886 | 坑7 修复：getOrCreateMultiRepoContext 聚合 declaredRepos 兼扫 tasks/task-NN.md 独立卡片（collectTaskCardReposFallback，plan.md 只留 checkbox、卡片全在 tasks/ 时跨仓仓仍注册进 ctx，不再误报 review 疑似伪造）；task-review 跨仓未解析降级 warning 文案补真实排查方向（repo 声明源 + local.yaml 注册，非 review 伪造）。
 - ql-20260816-008-c809 | engines 抬 `>=22.13.0`（package.json:16 + db-engine.js:5 注释 + README/architecture-4a 版本声明同步）：Node 官方 v22.13.0 才移除 `--experimental-sqlite` flag，原 `>=22.11.0` 虚低致 Node 22.11/22.12 全 CLI import 即崩（self-audit-2026-08-16 A1）。
 - ql-20260816-018-4eae | B11 safeGit 未设 stdio stderr 裸刷（未纳入批次项，驾驭#6）：git-helper.js safeGit/git 的 execFileSync 加 stdio:['ignore','pipe','pipe']（对齐同仓其他调用点）——git 失败 stderr 不再裸刷终端，空仓跑 quick 不冒无上下文 fatal。
+- ql-20260816-020-12e1 | C14b scan 建议劫持第三循环（未纳入批次项，上手#7）：_getNextSuggestion 第三循环（in-progress 找待办步）排除 scan（第四循环 plan-c 已排除，补同根因）——scan auxiliary 恒处 STAGE_ORDER 首位中途未完成会劫持下一步。
 <!-- MANUAL_NOTES_END -->

@@ -267,3 +267,14 @@ docs/sillyspec/platform-interface-map.md（守卫插入致行号漂移，doc-ref
 根因：walkGlob 形态 2 把根级 **/*.md 误解析为字面目录 `**` 静默 0 命中全绿；目录字面量过 existsSync 后 readFileSync 撞 EISDIR 裸崩 exit 1（契约应 exit 2）。
 方案：加形态 0 根级递归 + 形态 3 statSync 目录检测抛配置错误。
 结果：**/*.md 真实命中 3081 引用、--paths docs exit 2、默认 415 无回归、全量 210/0。
+
+## ql-20260816-020-12e1 | 2026-08-16 22:07:41 | C14b scan 中途劫持下一步建议（未纳入批次项上手#7）
+状态：已完成
+关联变更：（无）
+文件：
+- src/progress/stage-machine.js（C14b 第三循环排除 scan）
+- .sillyspec/docs/sillyspec/modules/runtime.md（变更索引）
+需求：C14b scan 中途劫持下一步建议（未纳入批次项上手#7）。
+根因：_getNextSuggestion 第三循环（in-progress 阶段找待办步）不排除 scan，而 scan auxiliary 恒处 STAGE_ORDER 首位，中途未完成即劫持「下一步」为 scan 掩盖主流程待办；第四循环 plan-c 已排除、第三循环漏补同根因。
+方案：第三循环加 scan 排除。
+结果：next-suggestion 9 断言全过 + 全量 211/0。

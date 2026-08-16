@@ -275,7 +275,10 @@ export class StageMachine {
     }
 
     // 找到第一个有 pending/waiting/failed 步骤的 in-progress 阶段
+    // C14b：排除 scan（同下方主流程推荐循环）——scan 是 auxiliary，中途未完成时恒处
+    // STAGE_ORDER 首位且 in-progress，会把「下一步」劫持为 scan，掩盖主流程真实待办。
     for (const s of STAGE_ORDER) {
+      if (s === 'scan') continue
       const sd = data.stages[s];
       if (!sd) continue;
       if (sd.status === 'in-progress' && sd.steps) {
