@@ -81,6 +81,150 @@ export function sanitizeDesc(description) {
   return s.length > 120 ? s.slice(0, 120) + '…' : s
 }
 
+
+// ── 平台推送（best-effort，2026-08-16-change-center-quick-tab task-06 / D-003）──
+
+// 读 local.yaml platform 段（url+token）。quicklog 不 import sync.js（会拖 ProgressManager
+// 整链），自带同款轻量解析：只取 platform.url / platform.token 两键，与 parseSimpleYaml
+// 同风格（丢注释可接受——只读）。未连接返回 null（合法本地状态，静默跳过）。
+function _readPlatformConfig(specBase) {
+  try {
+    // specBase 即 <cwd>/.sillyspec（或平台 specRoot）；local.yaml 就在 spec 根下
+    const yamlPath = join(specBase, 'local.yaml')
+    if (!existsSync(yamlPath)) return null
+    const lines = readFileSync(yamlPath, 'utf8').split(/\r?\n/)
+    let inPlatform = false
+    const cfg = {}
+    for (const line of lines) {
+      if (!line.trim() || line.trim().startsWith('#')) continue
+      if (!/^\s/.test(line)) inPlatform = line.startsWith('platform:')
+      else if (inPlatform) {
+        const m = line.match(/^\s+(url|token)\s*:\s*(.*)$/)
+        if (m) {
+          let v = m[2].trim()
+          if (v.length >= 2 && ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'")))) v = v.slice(1, -1)
+          if (v) cfg[m[1]] = v
+        }
+      }
+    }
+    if (!cfg.url || !cfg.token) return null
+    return cfg
+  } catch {
+    return null
+  }
+}
+
+const PUSH_TIMEOUT_MS = 5_000
+
+// 从文件全文提取指定 qlId 的条目块（## 头到下一个 ## 头/文件尾）。null=未命中。
+// 与平台 quicklog_parser.py 同款切分口径（剥 \r），保证 CLI 推送的 raw_block 与平台解析一致。
+function extractRawBlock(content, qlId) {
+  if (!content) return null
+  const lines = content.split('\n')
+  const start = lines.findIndex(l => l.replace(/\r$/, '').startsWith(`## ${qlId} |`))
+  if (start === -1) return null
+  let end = lines.length
+  for (let i = start + 1; i < lines.length; i++) {
+    if (lines[i].replace(/\r$/, '').startsWith('## ')) { end = i; break }
+  }
+  return lines.slice(start, end).map(l => l.replace(/\r$/, '')).join('\n').trimEnd()
+}
+
+// 落盘条目块 → 推送 payload（design §5.3：以落盘终态为准，不从入参拼）。
+// 宽松标签解析对齐平台：全半角冒号、多条状态行取最后、文件行单行/多行 bullet。
+function buildPushPayloadFromRaw(rawBlock, { ql_id, author_raw, status, linked_changes, fallback_title }) {
+  const payload = {
+    ql_id,
+    timestamp: null,
+    title: fallback_title || '(quick 任务)',
+    status,
+    status_note: null,
+    author_raw,
+    linked_changes: Array.isArray(linked_changes) ? linked_changes : [],
+    files: [],
+    body_sections: {},
+    raw_block: rawBlock,
+  }
+  if (!rawBlock) return payload
+  const lines = rawBlock.split('\n')
+  const header = lines[0] || ''
+  const parts = header.split('|').map(s => s.trim())
+  if (parts.length >= 3) {
+    payload.timestamp = parts[1] || null
+    payload.title = parts.slice(2).join('|').trim() || payload.title
+  }
+  const labelRe = /^(状态|关联变更|文件|需求|根因|方案|结果)\s*[：:]\s*(.*)$/
+  const bulletRe = /^-\s+(.*)$/
+  let inFiles = false
+  let inLinked = false
+  let lastLabel = null
+  let lastStatus = null
+  for (const line of lines.slice(1)) {
+    const stripped = line.trim()
+    if (!stripped) { inFiles = false; inLinked = false; continue }
+    const m = stripped.match(labelRe)
+    if (m) {
+      const [, label, value] = m
+      if (label === '状态') lastStatus = value
+      else if (label === '关联变更') { payload.linked_changes = value.split(/[，,、+；;]/).map(s => s.trim()).filter(Boolean); inLinked = true; inFiles = false }
+      else if (label === '文件') { if (value) payload.files.push(...value.split(/[，,、+；;]/).map(s => s.trim()).filter(Boolean).map(p => ({ path: p, note: null }))); inFiles = true; inLinked = false }
+      else { payload.body_sections[label] = value; lastLabel = label }
+      continue
+    }
+    if (bulletRe.test(stripped) && inFiles) {
+      payload.files.push({ path: stripped.replace(/^-\s+/, ''), note: null })
+      continue
+    }
+    if (bulletRe.test(stripped) && inLinked) {
+      payload.linked_changes.push(...stripped.replace(/^-\s+/, '').split(/[，,、+；;]/).map(s => s.trim()).filter(Boolean))
+      continue
+    }
+    if (lastLabel) payload.body_sections[lastLabel] += '\n' + stripped
+  }
+  // 状态以落盘为准（flip 后是「已完成」或「已完成（括注）」）——多条取最后
+  if (lastStatus) {
+    payload.status = lastStatus.startsWith('已完成') ? 'completed'
+      : lastStatus.startsWith('已暂存') ? 'partial_done'
+      : lastStatus.startsWith('进行中') ? 'in_progress'
+      : status
+    const note = lastStatus.match(/（(.+)）$/)
+    payload.status_note = note ? note[1] : null
+  }
+  // 白名单正则对齐平台（^\d{4}-\d{2}-\d{2}- 才进列表，防自由文本进反向区块）
+  payload.linked_changes = payload.linked_changes.filter(c => /^\d{4}-\d{2}-\d{2}-/.test(c))
+  return payload
+}
+
+// 单条推送（导出供测试）：payload 字段对齐平台 QuicklogEntryPushRequest（snake_case）。
+// 任何失败（无配置/网络/非 2xx/超时）静默 warn 一行不抛（FR-02 best-effort，quick 主流程零阻断）。
+export async function pushQuicklogEntryToPlatform(specBase, entry) {
+  const cfg = _readPlatformConfig(specBase)
+  if (!cfg) {
+    if (process.env.SILLYSPEC_DEBUG_SYNC) console.warn('[quicklog-push] 未配置 platform 段，跳过推送')
+    return false
+  }
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), PUSH_TIMEOUT_MS)
+  try {
+    const res = await fetch(`${cfg.url.replace(/\/$/, '')}/api/quicklog-entries`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cfg.token}` },
+      body: JSON.stringify(entry),
+      signal: controller.signal,
+    })
+    if (!res.ok) {
+      console.warn(`[quicklog-push] ${entry.ql_id} → ${res.status}（文件链路兜底，不影响本地记录）`)
+      return false
+    }
+    return true
+  } catch (err) {
+    console.warn(`[quicklog-push] ${entry.ql_id} 推送失败: ${err && err.name === 'AbortError' ? '超时' : (err.message || err)}（文件链路兜底）`)
+    return false
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 // git user.name → 文件名安全形式：白名单保留字母数字._- 与中文等 Unicode 字，
 // 剥路径元字符（/ \ ..）与控制字符。防 QUICKLOG-<user>.md / 锁文件 / 轮转归档穿越写。
 function sanitizeQuicklogUser(user) {
@@ -447,6 +591,22 @@ export async function allocateQuicklogEntry(specBase, gitUser, { description, li
 
     for (const c of linked) appendTaskCheckbox(specBase, c, qlId, desc)
 
+    // 平台推送（task-06 / FR-02 / D-003）：锁外语义等同（推送不回写本地），但放锁内
+    // 保证「分配即推送」顺序一致；best-effort 失败不影响返回。
+    await pushQuicklogEntryToPlatform(specBase, {
+      ql_id: qlId,
+      timestamp: nowDatetime(),
+      title: desc,
+      status: 'in_progress',
+      status_note: null,
+      author_raw: user,
+      // 白名单正则对齐平台（^\d{4}-\d{2}-\d{2}- 才进列表；原文在 raw_block 不丢）
+      linked_changes: linked.filter(c => /^\d{4}-\d{2}-\d{2}-/.test(c)),
+      files: files.map(f => ({ path: f, note: null })),
+      body_sections: {},
+      raw_block: entry,
+    }).catch(() => {}) // pushQuicklogEntryToPlatform 自身已吞错；双保险防未来改动破坏 best-effort 契约
+
     return { qlId }
   })
 }
@@ -470,6 +630,8 @@ export async function completeQuicklogEntry(specBase, gitUser, qlId, { resultTex
 
   await withFileLock(lockPath, async () => {
     // 条目可能在主文件或轮转归档中
+    let updatedContent = null
+    let updatedFile = null
     for (const f of listQuicklogFiles(quicklogDir)) {
       const filePath = join(quicklogDir, f)
       let content = ''
@@ -477,10 +639,23 @@ export async function completeQuicklogEntry(specBase, gitUser, qlId, { resultTex
       const updated = flipEntryInContent(content, qlId, result, realFiles, fileNotes)
       if (updated !== null) {
         await writeAtomic(filePath, updated) // 命中处原子落盘（只改含目标条目的那一个文件）
+        updatedContent = updated
+        updatedFile = filePath
         break
       }
     }
     for (const c of linked) await checkTaskCheckbox(specBase, c, qlId)
+
+    // 平台推送（task-06 / FR-02 / D-003）：**以落盘终态为准**读回条目组装 payload
+    // （design §5.3：翻完成时标题行被 extractTitleFromResult 刷新，推送须与落盘一致，
+    // 不能用入参拼——标题/结果块/文件行都会在 flipEntryInContent 中重写）。
+    const rawBlock = extractRawBlock(updatedContent, qlId)
+    await pushQuicklogEntryToPlatform(specBase, buildPushPayloadFromRaw(rawBlock, {
+      ql_id: qlId,
+      author_raw: user,
+      status: 'completed',
+      linked_changes: linked,
+    })).catch(() => {})
   })
 }
 
