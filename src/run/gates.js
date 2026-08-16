@@ -28,6 +28,68 @@ import { detectConcurrentChanges, formatConcurrentWarning } from './concurrent-d
 import { stageRegistry } from '../stages/index.js'
 
 /**
+ * 从 plan.md 提取全部 task id（task-XX）——符号影响面覆盖度校验用。
+ * 只认 checkbox 行 `- [ ] task-XX:` / `- [x] task-XX:`（与 execute.js parseWavesFromPlan 的
+ * 收容口径一致：### 标题式 task / 非 task 区 checkbox 不算），light plan 的 `## Tasks` 段同样收。
+ */
+export function extractTaskIdsFromPlan(planContent) {
+  if (!planContent) return []
+  return [...String(planContent).matchAll(/^[-*]\s*\[[ x]\]\s*(?:.*\b)?task-(\d+)\b/gim)]
+    .map(m => `task-${m[1].padStart(2, '0')}`)
+}
+
+/**
+ * 符号影响面报告结构校验（纯函数）：execute「加载上下文」步的产出落盘核验。
+ *
+ * 治 persuasion-only 失效现场（ql-20260816-005-3d7f）：execute 前缀 4 步无任何 gate，agent 可
+ * <1s 连发 4 次 --done 盖章跳过，「符号影响面扫描」（execute.js 操作 11）被一句「上下文在会话内」
+ * 带过（输出契约只写「上下文摘要」，操作与输出脱节）。修法 = 报告落盘
+ * {SPEC_ROOT}/changes/<change>/symbol-impact.md + 本函数校验：plan.md 每个 task-XX 在报告中出现
+ * （逐 task 结论，「无签名级变更」也要显式写，治整体一句话带过）。语义质量（调用点找没找全）
+ * 仍归 agent，CLI 只核结构覆盖度——符合债单「persuasion-only → 补最小硬门」原则。
+ *
+ * @param {{reportContent: string|null, planContent: string|null}} params
+ * @returns {{ok: boolean, errors: string[]}}
+ */
+export function validateSymbolImpactReport({ reportContent, planContent }) {
+  const errors = []
+  if (!reportContent || !String(reportContent).trim()) {
+    return { ok: false, errors: ['symbol-impact.md 不存在或内容为空——「加载上下文」步的符号影响面报告必须落盘（逐 task 一行结论，「无签名级变更」也要显式写）'] }
+  }
+  const taskIds = extractTaskIdsFromPlan(planContent)
+  if (taskIds.length === 0) return { ok: true, errors } // plan 无 task 可列（默认兜底形态）→ 无可校验对象
+  const missing = taskIds.filter(id => !String(reportContent).includes(id))
+  for (const id of missing) {
+    errors.push(`${id} 未在 symbol-impact.md 中出现——每个 task 都要有一行结论（含「无签名级变更」的显式声明）`)
+  }
+  return { ok: errors.length === 0, errors }
+}
+
+/**
+ * 符号影响面报告硬门：execute「加载上下文」步 --done 时校验 symbol-impact.md 落盘 + task 覆盖度。
+ * fail-closed：不通过 → 当前步标 blocked + exit 1（进度不推进）。非目标步骤/阶段直接放行。
+ */
+export async function enforceSymbolImpactGate(stageName, changeName, currentStepName, specBase) {
+  if (stageName !== 'execute') return
+  if (!currentStepName || !currentStepName.includes('加载上下文')) return
+  const planPath = join(specBase, 'changes', changeName || '', 'plan.md')
+  const reportPath = join(specBase, 'changes', changeName || '', 'symbol-impact.md')
+  if (!existsSync(planPath)) return // plan.md 缺失场景已有 plan 阶段 gate 把关，此处不重复拦
+  let planContent = ''
+  try { planContent = readFileSync(planPath, 'utf8') } catch { return }
+  let reportContent = null
+  try { reportContent = readFileSync(reportPath, 'utf8') } catch { /* 缺失由 validate 报 */ }
+  const result = validateSymbolImpactReport({ reportContent, planContent })
+  if (result.ok) return
+  console.error('❌ ── 符号影响面报告校验阻断（本次 --done 未完成，进度未推进）──')
+  console.error(`   「加载上下文」步的符号影响面检查报告未落盘或不完整：`)
+  console.error(`   期望路径：${reportPath}`)
+  for (const e of result.errors) console.error(`   • ${e}`)
+  console.error('   修复：按「加载上下文」步操作 11 完成符号影响面扫描，逐 task 写结论（无签名级变更也要显式写「无」），落盘后重跑 execute --done。')
+  process.exit(1)
+}
+
+/**
  * 判断当前 execute step 所在 wave 是否全部 task 都声明 no_deps_verify: true（D-006@v2）。
  * 仅 wave 执行步骤（名如 "Wave N 执行"）可 opt-out；非 wave 步骤恒返回 false（保守过门）。
  */

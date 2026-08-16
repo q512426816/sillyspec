@@ -56,3 +56,25 @@ docs/sillyspec/platform-interface-map.md（守卫插入致行号漂移，doc-ref
 根因：docs-signals-o12 落地只做了 docs-gate.js 模块 + pre-push 接线，漏 index.js case 分支；.sillyspec/docs 不在缺省 paths 是范围设计缺口（本仓已用 local.yaml paths 纳入，consumer 通用解法留债单裁决）
 方案：30 处引用逐条重定位（--suggest 候选行号辅助）；local.yaml docs-check.paths 加 .sillyspec/docs/**/*.md；index.js 补 docs gate 分支
 结果：docs check 321 处全通过（171 带关键词断言）；docs gate 0=基线 0 放行 exit 0；npm test 全量 EXIT=0；lint 295 文件过；--force-baseline 解锁 src/index.js
+
+## ql-20260816-005-3d7f | 2026-08-16 13:12:02 | execute「加载上下文」步符号影响面产出核验：报告落盘 symbol-impact.md + CLI 结构硬门（plan 每 task 覆盖）
+状态：已完成
+关联变更：（无）
+文件：
+- src/stages/execute.js（操作 11 改报告落盘要求「CLI 硬校验」+ 输出契约补「符号影响面结论摘要」）
+- src/run/gates.js（新增 extractTaskIdsFromPlan / validateSymbolImpactReport 纯函数 + enforceSymbolImpactGate 硬门）
+- src/run/complete.js（enforceReviewJsonGate 后挂载新门，仅「加载上下文」步 --done 触发）
+- test/execute-symbol-impact-gate.test.mjs（新增：纯函数覆盖度 13 断言 + gate 集成放行/阻断 5 断言）
+- docs/prompt/execute.md（镜像逐字同步 + 占位符清单补 {SPEC_ROOT}）
+- docs/prompt/_extracted.json（_extract.mjs 再生成）
+- docs/sillyspec/file-lifecycle.md（execute 行补 symbol-impact.md 落盘核验 + 行号漂移修正）
+- docs/sillyspec/architecture-4a.md（gates.js 插入 67 行引发行号漂移，修正 5 处）
+- docs/sillyspec/platform-interface-map.md（同源行号漂移修正 gates.js:179→246）
+- docs/sillyspec/prompt-control-debt.md（gates.js/complete.js 行号漂移修正 8 处）
+- .sillyspec/docs/sillyspec/modules/runtime.md（gates.js 行号漂移修正 2 处）
+- .claude/skills/sillyspec-execute/SKILL.md（补「符号影响面报告硬门」一节，按对外纯净性规则不含内部路径/ql-ID）
+
+需求：execute 前缀步「加载上下文」的符号影响面扫描（操作 11）是 persuasion-only——实测（2026-08-12 multi-agent-platform change）agent <1s 连发 4 次 --done 盖章跳过前缀 4 步，实质产出被一句「上下文在会话内」带过；用户 2026-08-16 要求补轻量产出核验。
+根因：该步输出契约只写「上下文摘要」，与操作 11 要求的「报告：列出每个受影响符号、调用点位置」脱节——agent 写一句话即合规；且 execute 前缀 4 步无任何 gate（enforceDepsGate/enforceReviewJsonGate 只挂 Wave 步）。
+方案：① 报告落盘 {SPEC_ROOT}/changes/<change>/symbol-impact.md，每 task 一行结论（含「无签名级变更」显式声明）；② gates.js 新增 enforceSymbolImpactGate 硬门挂该步 --done（validateSymbolImpactReport：文件存在 + plan.md 每 task-XX 覆盖，缺 → blocked exit 1）；③ execute.js prompt 操作 11 补「报告落盘（CLI 硬校验）」要求 + 输出契约对齐；④ 同步镜像/_extracted.json/file-lifecycle/SKILL；⑤ 连带清偿 gates.js 插入 67 行引发的 16 处文档 file:line 行号漂移（docs check 从 80→321 处全绿）。语义质量（调用点找没找全）仍归 agent，CLI 只核结构覆盖度——对齐债单「persuasion-only → 补最小硬门」原则。
+结果：新增 test/execute-symbol-impact-gate.test.mjs 18 断言（纯函数覆盖度 13 + gate 集成放行/阻断 5）全过；npm test 全量 EXIT=0；lint 297 文件过；docs check 321 处引用全过。--force-baseline 解锁 src/run/*（危险前缀）；--allow-new 解锁新测试与镜像外文档。

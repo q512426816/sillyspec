@@ -72,17 +72,17 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
 |---|---|---|---|
 | 转换门 `checkTransition` | 阶段跳转不符合 allowedFrom / scan failed | `exit(1)` | `src/stage-contract.js:799` |
 | WAIT 门 | `--done` output 含等待标记 / step `requiresWait` 未答 | `exit(1)` | `src/run/complete.js:125` |
-| execute deps 门 | worktree `depsStatus` 未达标 | step blocked + `exit(1)` | `src/run/gates.js:61` |
+| execute deps 门 | worktree `depsStatus` 未达标 | step blocked + `exit(1)` | `src/run/gates.js:139` |
 | execute review.json 门 | 已勾 task 缺 review.json | step blocked + `exit(1)` | `src/run/gates.js:112` |
 | 阶段完成 gate 级联 | 所有 step completed 时跑 | 失败回滚 | `src/run/gates.js:190,572` |
 | archive `--confirm` | 归档步缺 `--confirm` | 回退该步 pending | `src/run/complete-handlers.js:262` |
 | quick 边界审计 | 命中受保护/危险文件或删除 | BLOCKED `exit(1)` | `src/run/shared.js:497` |
 
-**阶段完成 gate 级联**（`completeStageGates` `src/run/gates.js:601`，统一收尾管线）顺序：
+**阶段完成 gate 级联**（`completeStageGates` `src/run/gates.js:663`，统一收尾管线）顺序：
 1. `runValidators`（客观产物校验，`src/stage-contract.js:869`）：`validateBrainstormOutputs` / `validatePlanOutputs` / `validateExecuteOutputs`+`checkExecuteCodeEvidence` / `validateVerifyOutputs` / `validateScanOutputs`。
-2. verify 实测对账：CLI 亲跑 `local.yaml` 的 `commands.test`，自报告 PASS 但实测失败→阻断（`gates.js:219`）。
-3. Plan→Execute Contract（`validatePlanForExecute` `gates.js:277`）。
-4. Stage Review Gate（brainstorm/plan/execute，`gates.js:301`）：`classifyReviewTier` 判 tier=self（自审）/independent（强制独立子代理 review.json）。
+2. verify 实测对账：CLI 亲跑 `local.yaml` 的 `commands.test`，自报告 PASS 但实测失败→阻断（`gates.js:290`）。
+3. Plan→Execute Contract（`validatePlanForExecute` `gates.js:339`）。
+4. Stage Review Gate（brainstorm/plan/execute，`gates.js:376`）：`classifyReviewTier` 判 tier=self（自审）/independent（强制独立子代理 review.json）。
 5. Execute Task Review Gate（`gates.js:325`）：校验所有 task review.json 存在 + verdict 通过 + git 真实性交叉校验。
 
 ### 1.4 多 change 隔离

@@ -39,11 +39,12 @@
 
 **元数据**
 - optional：false
-- outputHint：上下文摘要
+- outputHint：上下文摘要 + 符号影响面结论
 - 等待配置：无（可直接 `--done`）
 
 **本步出现的运行时占位符**
 - `<project>` → 当前项目名（出现在 `.sillyspec/docs/<project>/...` 路径模板中）
+- `{SPEC_ROOT}` → 常规模式 `cwd/.sillyspec`；平台模式 `platformOpts.specRoot`（出现在 symbol-impact.md 报告落盘路径中）
 
 **提示词原文**
 
@@ -85,11 +86,11 @@
       ```
     - 将搜索到的调用点与 plan.md 和 tasks/task-NN.md 的 allowed_paths 对比
     - **发现调用点不在任何 task 的 allowed_paths 中 → 直接阻断 execute**
-    - 报告：列出每个受影响符号、调用点位置、是否在任务范围内
+    - **报告落盘（CLI 硬校验）**：把检查结论写入 `{SPEC_ROOT}/changes/<change-name>/symbol-impact.md`，每个 task 一行结论（task-XX: 变更类型 + 受影响调用点 + 是否在范围内；无签名级变更也要显式写「无签名级变更」）。`--done` 时 CLI 校验该文件存在且覆盖 plan.md 全部 task，缺失或不覆盖会阻断完成
     - 如果调用点不在范围内但任务明确写了"不改原因"，记录但不阻断
 
 ### 输出
-已加载的上下文摘要（含模块文档 + 源码锚点）
+已加载的上下文摘要（含模块文档 + 源码锚点）+ 符号影响面结论摘要
 ````
 
 ---

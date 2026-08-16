@@ -56,6 +56,14 @@ sillyspec worktree doctor --fix --change <变更名>
 
 `linked / installed / n/a` 放行；`missing / stale / failed / unknown` 阻断。Wave 内所有 task 声明 `no_deps_verify: true` 时可 opt-out。
 
+### 符号影响面报告（「加载上下文」步硬门）
+
+execute 前缀步「加载上下文」的 `--done` 会硬校验符号影响面报告：
+
+- 路径：`{SPEC_ROOT}/changes/<变更名>/symbol-impact.md`（步骤 prompt 中会输出具体路径）。
+- 要求：plan.md 中**每个 task-XX 都要有一行结论**——涉及签名级变更（构造函数参数/接口/DTO/方法签名增删改）就列变更类型 + 受影响调用点 + 是否在任务范围内；无签名级变更也要显式写「无签名级变更」。
+- 文件缺失或未覆盖全部 task → `--done` 被阻断（进度不推进），补全后重跑即可。
+
 ### Task Review Gate
 
 execute 完成时，每个 task 必须有 `review.json` 且 verdict 通过，否则阻断完成。**例外**：task 在 `tasks/task-XX.md` frontmatter 声明 `low_risk: true`（type-only / 机械迁移等低逻辑风险）时，缺 review.json 只发 warning 不阻断。`cannot_verify` 的 task 会写入 `verify-required-evidence.json`，由 verify 阶段消费。
