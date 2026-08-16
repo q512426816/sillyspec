@@ -313,7 +313,7 @@ console.log('\n--- docs check advisory ---')
   assert(!r.docsCheckHint, `无文档改动不跑 docs check（实际 ${JSON.stringify(r.docsCheckHint)}）`)
 }
 
-// case DC-4: printQuickAuditReview 打印引用失效提示
+// case DC-4: printQuickAuditReview 打印引用失效提示（含引用格式引导行）
 {
   const d = makeRepo()
   writeFileSync(join(d, 'README.md'), '见 `src/ghost.js:1`\n')
@@ -324,6 +324,21 @@ console.log('\n--- docs check advisory ---')
   console.error = (...a) => { warns.push(a.join(' ')) }
   try { printQuickAuditReview(r) } finally { console.warn = origWarn; console.error = origErr }
   assert(warns.some(w => w.includes('文档引用失效')), `打印引用失效 warn（实际 ${JSON.stringify(warns)}）`)
+  assert(warns.some(w => w.includes('引用格式')), `打印引用格式引导行（实际 ${JSON.stringify(warns)}）`)
+}
+
+// case DC-5（troubleshooting #9）: 删除的 .md 不进 docsCheckHint（无「文档不存在」假失效）
+//   并行会话删除并暂存的 .md 曾被算进本会话 mdChanged → 文件不在盘 → 假失效 + 危险/删除三重拦截。
+//   删除语义归 --allow-delete，mdChanged 必须滤掉 deleted 状态。
+{
+  const d = makeRepo()
+  // README.md 是 makeRepo 提交过的 tracked 文件，删它模拟他人删除（本会话 guard 不含它）
+  rmSync(join(d, 'README.md'))
+  const r = await auditQuickCompletion(d, baseGuard, {})
+  assert(r.deletedFiles.includes('README.md'), `删除仍被 deletedFiles 拦（fail-closed 不变）`)
+  assert(r.status === 'blocked', `删除默认 blocked（--allow-delete 语义不变，实际 ${r.status}）`)
+  assert(!r.docsCheckHint, `删除的 .md 不产生 docsCheckHint 假失效（实际 ${JSON.stringify(r.docsCheckHint)}）`)
+  assert(!r.reasons.some(x => x.includes('失效 file:line')), `reasons 无假失效条目（实际 ${JSON.stringify(r.reasons)}）`)
 }
 
 for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} }

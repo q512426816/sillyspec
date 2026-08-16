@@ -775,8 +775,11 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
     // docs check advisory（doc-consistency-debt D-6 后续）：本次改动的 .md 文档跑 file:line
     // 引用校验，失效即 warn + reasons——检测能力落地后欠账只涨不跌的最后一公里。只查本次
     // changedFiles 的文档（归因到本次改动），不扫全仓历史欠账（那是存量问题，quick 不背锅）。
+    // 排除删除文件（troubleshooting #9）：删除的 .md 不在盘，runDocsCheck 只会报「文档不存在」
+    // 假失效——删除语义归 --allow-delete 管，无引用校验可言（并行会话的删除尤其不该归属本会话）。
     // docs-check 是 IO 面（walkGlob/existsSync），动态 import 隔离；任何异常 fail-open 只跳过。
-    const mdChanged = result.changedFiles.filter((f) => f.endsWith('.md') && !isQuickMetadata(f, guard.linkedChanges))
+    const deletedSet = new Set(result.deletedFiles)
+    const mdChanged = result.changedFiles.filter((f) => f.endsWith('.md') && !deletedSet.has(f) && !isQuickMetadata(f, guard.linkedChanges))
     if (mdChanged.length > 0) {
       try {
         const { runDocsCheck } = await import('../docs-check.js')

@@ -92,3 +92,16 @@ docs/sillyspec/platform-interface-map.md（守卫插入致行号漂移，doc-ref
 根因：缺省 paths 只有 docs/**/*.md，.sillyspec/docs 游离在外；债单原倾向 init 模板显式 opt-in，用户裁决推翻该倾向直接改缺省。
 方案：src/docs-check.js 加 DEFAULT_DOC_PATHS 常量并替换两处硬编码；config-schema.js desc 与 renderExample 同步；本仓 local.yaml 删 paths 段只留 skip；回归测试锁定缺省含 .sillyspec/docs 且显式 paths 可收窄。
 结果：npm test 全量绿 + lint 297 过 + docs check 321 全过 + docs gate 基线 0 放行；interface-contract.md/file-lifecycle.md/债单已同步销账。
+
+## ql-20260816-007-0558 | 2026-08-16 14:43:04 | 修复 quick --done 把他人删除的 .md 算成本会话假失效（troubleshooting #9）
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/shared.js（mdChanged 排除 deletedFiles（troubleshooting #9））
+- src/run/quick-audit.js（docsCheckHint warn 补引用格式引导行）
+- test/audit-quick-completion.test.mjs（DC-5 删除不假失效 + DC-4 格式断言）
+- docs/sillyspec/self-audit-2026-08-16.md（六处失效锚修正（并行文档顺手清偿，untracked 新文件属并行会话））
+需求：修复 quick --done 把他人删除的 .md 算成本会话假失效（troubleshooting #9），并给 docsCheckHint 补引用格式引导。
+根因：auditQuickCompletion 的 mdChanged 取自 changedFiles（含 deletedFiles），删除的 .md 不在盘被 runDocsCheck 报「文档不存在」；且 docsCheckHint warn 只教修不教写。
+方案：mdChanged 排除 deletedFiles（删除归 --allow-delete 管）；docsCheckHint warn 补一行 file.js:行号 + 反引号代码符号格式引导；测试 DC-5 锁定删除不假失效、DC-4 补格式断言。
+结果：46/0 断言过 + npm test 全量绿 + lint 297 + docs check 361 全过 + gate 0；顺手清偿并行 session self-audit 文档六处失效锚（逐条亲验后修正）。--force-baseline 解锁 src/run/* 危险前缀（本次正当改动面）。
