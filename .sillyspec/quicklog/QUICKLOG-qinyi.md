@@ -78,3 +78,17 @@ docs/sillyspec/platform-interface-map.md（守卫插入致行号漂移，doc-ref
 根因：该步输出契约只写「上下文摘要」，与操作 11 要求的「报告：列出每个受影响符号、调用点位置」脱节——agent 写一句话即合规；且 execute 前缀 4 步无任何 gate（enforceDepsGate/enforceReviewJsonGate 只挂 Wave 步）。
 方案：① 报告落盘 {SPEC_ROOT}/changes/<change>/symbol-impact.md，每 task 一行结论（含「无签名级变更」显式声明）；② gates.js 新增 enforceSymbolImpactGate 硬门挂该步 --done（validateSymbolImpactReport：文件存在 + plan.md 每 task-XX 覆盖，缺 → blocked exit 1）；③ execute.js prompt 操作 11 补「报告落盘（CLI 硬校验）」要求 + 输出契约对齐；④ 同步镜像/_extracted.json/file-lifecycle/SKILL；⑤ 连带清偿 gates.js 插入 67 行引发的 16 处文档 file:line 行号漂移（docs check 从 80→321 处全绿）。语义质量（调用点找没找全）仍归 agent，CLI 只核结构覆盖度——对齐债单「persuasion-only → 补最小硬门」原则。
 结果：新增 test/execute-symbol-impact-gate.test.mjs 18 断言（纯函数覆盖度 13 + gate 集成放行/阻断 5）全过；npm test 全量 EXIT=0；lint 297 文件过；docs check 321 处引用全过。--force-baseline 解锁 src/run/*（危险前缀）；--allow-new 解锁新测试与镜像外文档。
+## ql-20260816-006-1a06 | 2026-08-16 13:58:19 | docs-check 缺省扫描范围纳入 .sillyspec/docs/**/*.md
+状态：已完成
+关联变更：（无）
+文件：
+- src/docs-check.js（DEFAULT_DOC_PATHS 常量 + 两处硬编码替换）
+- src/config-schema.js（docs-check.paths desc + renderExample 双 glob）
+- test/docs-check.test.mjs（缺省范围回归用例）
+- docs/sillyspec/interface-contract.md（§1.3 缺省范围）
+- docs/sillyspec/file-lifecycle.md（docs check 档案缺省措辞）
+- docs/sillyspec/doc-consistency-debt.md（§八待裁决项销账）
+需求：docs-check 缺省扫描范围纳入 .sillyspec/docs/**/*.md，用户裁决不管新旧项目，scan/modules 产物文档失效就该暴露出来修，不靠显式 opt-in。
+根因：缺省 paths 只有 docs/**/*.md，.sillyspec/docs 游离在外；债单原倾向 init 模板显式 opt-in，用户裁决推翻该倾向直接改缺省。
+方案：src/docs-check.js 加 DEFAULT_DOC_PATHS 常量并替换两处硬编码；config-schema.js desc 与 renderExample 同步；本仓 local.yaml 删 paths 段只留 skip；回归测试锁定缺省含 .sillyspec/docs 且显式 paths 可收窄。
+结果：npm test 全量绿 + lint 297 过 + docs check 321 全过 + docs gate 基线 0 放行；interface-contract.md/file-lifecycle.md/债单已同步销账。
