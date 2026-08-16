@@ -222,3 +222,14 @@ docs/sillyspec/platform-interface-map.md（守卫插入致行号漂移，doc-ref
 根因：runGate/runDerive 的 pm 构造与 db 检查用 resolveSpecDir(cwd) 而 specRoot 用传入 specBase——同一 envelope 两套事实源，平台/--spec-dir 模式读本地孤儿库恒「无法核验」exit 2；index.js gate/derive 不读平台指针。
 方案：machine-interface 两函数统一用 specRoot + index.js 用 resolvePlatformSpecDir 三合一接线。
 结果：cwd/specDir 分离场景实测 gate 真实核验；machine-interface 101 断言全过 + 全量 210/0 + lint 298 + docs-check 415。
+
+## ql-20260816-016-db7f | 2026-08-16 21:20:45 | B10 docs/progress 未知子命令 usage 后 exit 0 修复（未纳入批次项 CLI#4）
+状态：已完成
+关联变更：（无）
+文件：
+- src/index.js（B10 7 处 usage 错误改 exit 2）
+- .sillyspec/docs/sillyspec/modules/cli-entry.md（变更索引）
+需求：B10 docs/progress 未知子命令 usage 后 exit 0 修复（未纳入批次项 CLI#4）。
+根因：docs else 与 progress default/缺参 7 处 usage 打印后 break 退出 0——typo 静默成功，hook 拼错 fail-open；与 worktree/modules/runtime 家族 exit 2+didYouMean 口径分裂。
+方案：统一改 process.exit(2)。
+结果：实测 4 场景全 exit 2；全量 210/0 + lint 298 + docs-check 415。

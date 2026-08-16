@@ -308,21 +308,21 @@ async function main() {
           break;
         case 'set-stage': {
           const setStageName = filteredArgs[2];
-          if (!setStageName) { console.log('❌ 用法: sillyspec progress set-stage <stage> [--change <name>]'); break; }
+          if (!setStageName) { console.log('❌ 用法: sillyspec progress set-stage <stage> [--change <name>]'); process.exit(2); }
           pm.setStage(dir, setStageName, progChangeName);
           break;
         }
         case 'add-step': {
           const addStepStage = filteredArgs[2];
           const addStepName = filteredArgs[3];
-          if (!addStepStage || !addStepName) { console.log('❌ 用法: sillyspec progress add-step <stage> <step-name> [--change <name>]'); break; }
+          if (!addStepStage || !addStepName) { console.log('❌ 用法: sillyspec progress add-step <stage> <step-name> [--change <name>]'); process.exit(2); }
           pm.addStep(dir, addStepStage, addStepName, progChangeName);
           break;
         }
         case 'update-step': {
           const updStepStage = filteredArgs[2];
           const updStepName = filteredArgs[3];
-          if (!updStepStage || !updStepName) { console.log('❌ 用法: sillyspec progress update-step <stage> <step-name> --status <status> [--output <text>] [--change <name>]'); break; }
+          if (!updStepStage || !updStepName) { console.log('❌ 用法: sillyspec progress update-step <stage> <step-name> --status <status> [--output <text>] [--change <name>]'); process.exit(2); }
           let updStatus = null, updOutput = undefined;
           for (let ai = 0; ai < args.length; ai++) {
             if (args[ai] === '--status' && args[ai + 1]) { updStatus = args[ai + 1]; ai++; }
@@ -334,7 +334,7 @@ async function main() {
         }
         case 'complete-stage': {
           const compStageName = filteredArgs[2];
-          if (!compStageName) { console.log('❌ 用法: sillyspec progress complete-stage <stage> [--force]'); break; }
+          if (!compStageName) { console.log('❌ 用法: sillyspec progress complete-stage <stage> [--force]'); process.exit(2); }
           pm.completeStage(dir, compStageName, progChangeName, { force: args.includes('--force') });
           break;
         }
@@ -357,7 +357,7 @@ async function main() {
             if (Object.keys(batchData).length === 0) {
               console.log('用法: sillyspec progress batch --total 100 --completed 73');
               console.log('     sillyspec progress batch --status');
-              break;
+              process.exit(2);
             }
             pm.updateBatchProgress(dir, batchData, progChangeName);
             console.log('✅ 批量进度已更新');
@@ -366,6 +366,7 @@ async function main() {
         }
         default:
           console.log('用法: sillyspec progress <init|show|validate|reset|set-stage|add-step|update-step|complete-stage>');
+          process.exit(2);
       }
       break;
     }
@@ -655,6 +656,7 @@ async function main() {
         process.exit(g.exitCode);
       } else {
         console.log('用法: sillyspec docs migrate | sillyspec docs check [--paths <glob,...>] [--json] [--suggest] | sillyspec docs gate [--init-baseline] [--json]');
+        process.exit(2);
       }
       break;
     }
