@@ -1,9 +1,11 @@
 ---
 author: qinyi
 created_at: 2026-08-15 15:55:00
-updated_at: 2026-08-15T15:55:00+08:00
+updated_at: 2026-08-16T22:40:00+08:00
 status: design-draft（供裁决，未实现）
 ---
+
+> **落地记录（2026-08-16，change 2026-08-16-scan-diff-command）**：本设计稿方案 A（漂移检测信号）已先行落地为 `src/scan-staleness.js`（2026-08-15，ql-20260815-013，判定语义后经 ql-20260816-009-fb44 修正）；"剩余项：scan 增量刷新 CLI 化（算漂移文件清单注入）"已落地为 `sillyspec scan diff` 命令（`src/scan-diff.js`，git diff → module-map v2 paths 归模块 → A/D/M/R 四分类清单，agent 按清单定点补，`--report` 可落盘 diff-report.md）。方案 C（双轨合并）仍暂不做。
 
 # D-7 设计稿：scan 文档生命周期——从"一次性生成"到"漂移感知"
 

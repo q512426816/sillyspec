@@ -19,7 +19,7 @@
  *     './run/shared.js' / './run/quick-audit.js' / './run/prompt.js' / './run/complete.js' /
  *     './run/stage.js' → './shared.js' 等同级
  */
-import { join, resolve, dirname } from 'node:path'
+import { basename, join, resolve, dirname } from 'node:path'
 import { existsSync, readdirSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
 import { randomBytes, randomUUID } from 'node:crypto'
 import { writeAtomicSync } from '../fs-atomic.js'
@@ -44,6 +44,7 @@ const VALUE_FLAGS = new Set([
   '--output', '--input', '--change', '--linked-changes',
   '--spec-dir', '--spec-root', '--runtime-root', '--workspace-id', '--scan-run-id',
   '--files', '--file-notes', '--from-step', '--mode', '--dir', '--confirm-mode',
+  '--base', // scan diff 基线 commit（吃值；只在 run scan --diff 转发路径消费）
 ])
 
 /**
@@ -146,7 +147,7 @@ sillyspec run ${stageName}${stage && stage.title ? ` — ${stage.title}` : ''}${
             --interactive --skip-approval --json(不支持)
   quick 专属: --linked-changes none|a,b --files a.js,b.js --allow-new
              --allow-delete --force-baseline --confirm --file-notes
-  scan  专属: --quick --standard --deep --force-rescan
+  scan  专属: --quick --standard --deep --force-rescan --diff [--base <commit>] [--full] [--report]
   archive专属: --confirm
 `)
 }
@@ -354,6 +355,24 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     }
   }
 
+  // scan diff 转发（D-001@v1：command.js 只认 --diff flag，等价 `sillyspec scan diff` 子命令；
+  // 裸 token `run scan diff` 不在此解析——那是 index.js 子命令拦截的职责，防 command.js 静默吞）。
+  // 纯只读比较：零会话/QUICKLOG 副作用，仅解析 --base/--full/--report 后转发 scan-diff 退出码。
+  if (stageName === 'scan' && flags.includes('--diff')) {
+    const { runScanDiff } = await import('../scan-diff.js')
+    const diffBaseIdx = flags.indexOf('--base')
+    const diffBase = diffBaseIdx >= 0 && flags[diffBaseIdx + 1] ? flags[diffBaseIdx + 1] : null
+    process.exitCode = runScanDiff({
+      projectRoot: cwd,
+      specBase,
+      projectName: basename(cwd),
+      base: diffBase,
+      full: flags.includes('--full'),
+      report: flags.includes('--report'),
+    })
+    return
+  }
+
   // 平台模式：首次接入时清理旧版本残留的 cwd/.sillyspec/（防止源码污染）。
   // ⚠️ 同 init.js：必须保护真实资产（changes/、projects/、sillyspec.db）。
   // 只在「首次」执行一次——用 cwd 下的 .sillyspec-platform-cleaned 标记文件记录已处理，
@@ -553,6 +572,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     '--json', '--dir', '--help',
     '--reopen', '--from-step', '--mode',
     '--deep', '--quick', '--standard', // scan profile 三档显式选择（scan-profile.js 从 argv 读；互斥见下方 PROFILE_FLAGS 检测）
+    '--diff', '--base', '--full', '--report', // scan diff（D-001：command.js 只补 flag，裸 token 解析归 index.js 子命令拦截）
     '-h',
   ])
   for (let i = 0; i < flags.length; i++) {

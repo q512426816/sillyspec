@@ -42,6 +42,7 @@ sillyspec run scan --reset                     # 重置阶段（从头开始）
 | `--standard` | 强制 standard profile（压缩步骤，最多 1 子代理） |
 | `--deep` | 强制 deep profile（完整流程，不按规模裁剪） |
 | `--force-rescan` | 覆盖已有 scan 文档的保护（默认覆盖需 source_commit/updated_at 匹配） |
+| `--diff` | 增量漂移清单：`sillyspec scan diff`（或 `--diff` flag）算 source_commit..HEAD 的 A/D/M/R 四分类漂移，按 module-map paths 归模块，agent 据此定点补文档而非全量重扫（2026-08-16） |
 
 ### scanProfile（显式选择优先，否则按规模自动裁剪）
 

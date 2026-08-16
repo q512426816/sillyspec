@@ -108,7 +108,7 @@ scan-profile.js 扫描档位 / concurrent-detect.js 并发检测 / multi-repo-co
   D-03@v1）。
 - `runStage(...)`（`src/run/stage.js:31`）：单阶段执行器，做状态转换校验（调用
   `stage-contract.js` 的 `checkTransition`），逐 step 推进，处理审批门控。
-- `runAutoMode(...)`（`src/run/command.js:1099`）：自动模式，连续跑
+- `runAutoMode(...)`（`src/run/command.js:824`）：自动模式，连续跑
   `['brainstorm','plan','execute','verify']` 主流程直到 `--done`。
 
 阶段流转语义（grep 自 run/ 模块）：
@@ -289,7 +289,7 @@ argv → index.js switch('run') → runCommand(src/run/command.js:157)
    ├─ 解析 --done/--reset/--reopen/--skip/--auto 等 flag
    ├─ worktree 副本漂移守卫：specBase 命中 worktree 副本 → 自动锚回主仓
    ├─ new ProgressManager() 读当前 change 进度
-   ├─ 若 --auto → runAutoMode(src/run/command.js:1099) 连跑 brainstorm→plan→execute→verify
+   ├─ 若 --auto → runAutoMode(src/run/command.js:824) 连跑 brainstorm→plan→execute→verify
    ├─ 否则 → runStage(src/run/stage.js:31)
    │     ├─ stage-contract.checkTransition 校验状态转换
    │     ├─ stageRegistry[stage].steps 取步骤定义

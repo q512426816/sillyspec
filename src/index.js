@@ -8,7 +8,7 @@
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'fs';
 import { writeAtomicSync } from './fs-atomic.js';
-import { join, resolve } from 'path';
+import { basename, join, resolve } from 'path';
 import { execSync } from 'child_process';
 import { git } from './git-helper.js';
 import { getVersion } from './version.js';
@@ -56,6 +56,8 @@ SillySpec CLI — 规范驱动开发工具包
              --confirm                   完成时确认接受变更审计
     scan:    --quick | --standard | --deep   显式选择 profile（优先于规模自动判定；三档互斥）
              --force-rescan              覆盖已有 scan 文档保护
+             --diff [--base <commit>] [--full] [--report]   scan 文档 vs 源码漂移清单（纯只读）
+             （子命令: sillyspec scan diff 等价 --diff）
     archive: --confirm                   归档确认（必须）
     auto:    --mode <模式>               显式指定流程模式
     平台:    --runtime-root <path> / --workspace-id <id> / --scan-run-id <id>
@@ -819,7 +821,27 @@ async function main() {
       await runCommand([command, ...filteredArgs.slice(1)], doctorEffectiveDir, specDir, { json });
       break;
     }
-    case 'scan':
+    case 'scan': {
+      // scan diff 子命令（D-001@v1：接线唯一入口 index.js，非 command.js 裸 token 静默吞）。
+      // 纯只读比较命令：跳过下方共享块的 triggerPullActiveChange（不触发网络 pull），
+      // 也不走 scan 主流程（--standard/--deep 分支不动）。解析 --base/--full/--report 后转发 scan-diff。
+      if (filteredArgs[1] === 'diff') {
+        const { runScanDiff } = await import('./scan-diff.js')
+        const diffBaseIdx = filteredArgs.indexOf('--base')
+        const diffBase = diffBaseIdx >= 0 && filteredArgs[diffBaseIdx + 1] ? filteredArgs[diffBaseIdx + 1] : null
+        // specBase/projectName 与 scan 主流程同口径（scan-profile.js：specBase=进度库根，projectName=仓库根 basename）
+        const diffEffectiveDir = specDir ? dir : resolveEffectiveDir(dir)
+        process.exitCode = runScanDiff({
+          projectRoot: diffEffectiveDir,
+          specBase: specDir || join(diffEffectiveDir, '.sillyspec'),
+          projectName: basename(diffEffectiveDir),
+          base: diffBase,
+          full: filteredArgs.includes('--full'),
+          report: filteredArgs.includes('--report'),
+        })
+        break
+      }
+    }
     case 'status':
     case 'quick':
     case 'explore':
