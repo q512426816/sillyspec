@@ -31,8 +31,7 @@ sillyspec run scan --reset                     # 重置阶段（从头开始）
 |---|---|
 | `--spec-dir <path>` | 指定规范目录（默认 `<项目>/.sillyspec`） |
 | `--non-interactive` | CI/脚本下禁用交互式 prompt |
-| `--skip-approval` | 跳过审批/校验门控 |
-| `--json` | 输出 JSON（程序化读取） |
+| `--skip-approval` | 跳过阶段转换/审批检查（不能跳产物校验 gate——review.json/文档产物硬校验仍在） |
 
 ## scan 特有参数
 

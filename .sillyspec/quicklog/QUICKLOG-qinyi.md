@@ -300,3 +300,13 @@ docs/sillyspec/platform-interface-map.md（守卫插入致行号漂移，doc-ref
 根因：README 与实际 CLI 能力漂移——假 flag/幽灵脚本/幽灵特性/幽灵 MCP 误导新用户，Node 版本自相矛盾。
 方案：逐项实证核验（init 无 --workspace、无 validate-* 脚本、setup 无 grep.app、playwright MCP 真实）后修正 6 处。
 结果：Node 版本两处一致 >=22.13、幽灵全清、docs-check 415 + doc-ref-check 80 + 全量 211/0。
+
+## ql-20260816-023-eb4d | 2026-08-16 22:42:28 | C13b SKILL 通用参数表与 run 行为不符（未纳入批次项驾驭#7）
+状态：已完成
+关联变更：（无）
+文件：
+- .claude/skills/sillyspec-{archive,brainstorm,execute,explore,plan,quick,scan,status,verify}/SKILL.md（C13b --json 删除 + --skip-approval 精化）
+需求：C13b SKILL 通用参数表与 run 行为不符（未纳入批次项驾驭#7）。
+根因：SKILL.md 表列 --json 但 sillyspec run <stage> --json 实测拒绝（exit 2，prompt 输出人类可读）；--skip-approval 描述「跳过审批/校验门控」过宽，gates.js:270 明确不能跳产物校验。
+方案：9 个 SKILL 删 --json 表行（doctor 结构化诊断合法保留）；7 个 --skip-approval 描述精化。
+结果：全量 211/0。
