@@ -195,3 +195,16 @@ docs/sillyspec/platform-interface-map.md（守卫插入致行号漂移，doc-ref
 根因：node -e import('./src/...') 相对 cwd 解析，npm 分发到 consumer 项目必炸 ERR_MODULE_NOT_FOUND，同功能 CLI 子命令（workflow check / worktree meta）早已存在；数字 step 引用（step8/Step11）是 P6.4 name 引用裁决漏网，rename 即漂移。
 方案：改指 CLI 子命令 + step name 引用，镜像同步。
 结果：lint 298 过、docs-check 381 全过、全量 npm test 210/0。
+
+## ql-20260816-014-4a60 | 2026-08-16 19:51:04 | D20 execute 指令强度通胀收敛（self-audit prompt#6）
+状态：已完成
+关联变更：（无）
+文件：
+- src/stages/execute.js（D20 强度收敛）
+- docs/prompt/execute.md + _extracted.json（镜像同步）
+- test/dispatch/execute-dispatch-integration.test.mjs（标题断言同步）
+- .sillyspec/docs/sillyspec/modules/stages.md（变更索引）
+需求：D20 execute 指令强度通胀收敛（self-audit prompt#6）。
+根因：装饰性「（必须严格遵守）」标题五处复用 + 单句双强度，强度信号退化噪音。
+方案：纯减法去装饰缀 + 收敛双强度，保留全部承重 enforcement。
+结果：必须 19→14、必须严格遵守 4→0；lint 298、docs-check 415、全量 npm test 210/0。

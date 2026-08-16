@@ -740,7 +740,7 @@ ${prototypes.map(p => `- \`${path.join(protoRelDir, p)}\``).join('\n')}
       .map(i => `- task-${i.taskNum} → repo \`${i.repo}\`，workdir=\`${i.workdir}\``)
       .join('\n')
     crossRepoCommitSection = `
-### 跨仓 task 派发与双锡点（必须严格遵守）
+### 跨仓 task 派发与双锡点
 
 本 Wave 含跨仓 task（直接改跨仓仓主干，**不经主仓 worktree**）：
 
@@ -765,7 +765,7 @@ ${crossLines}
       `  - task-${i.taskNum} (repo: ${i.repo}) → workdir: "${i.workdir}"`
     ).join('\n')
     worktreeSection = `
-### 工作目录（必须严格遵守，per-task）
+### 工作目录（per-task）
 
 调用 Task 工具启动子代理时，**workdir 参数是强制必传的**，且本 Wave 内不同 task 的 workdir 不同（主仓 task vs 跨仓 task）。
 
@@ -789,7 +789,7 @@ ${workdirLines}
   } else {
     worktreeSection = (worktreePath)
       ? `
-### 工作目录（必须严格遵守）
+### 工作目录
 
 调用 Task 工具启动子代理时，**workdir 参数是强制必传的**。
 不传 workdir 会导致子代理把文件写到主工作区而非 worktree，破坏隔离。
@@ -836,7 +836,7 @@ ${workdirLines}
 
   return `## Wave ${waveIndex}: 执行以下任务
 
-## 执行方式（必须严格遵守）
+## 执行方式
 
 **每个任务必须由独立子代理执行，你不要自己写代码。**
 
@@ -882,7 +882,7 @@ ${contractInjection}${prototypeInjection}
 ${taskList}
 
 ### 调度要求
-1. **同一 Wave 内的任务必须并行启动子代理，禁止串行等待。** Wave 的定义就是"无依赖、可并行"，不要自行分析依赖关系。如果有依赖应该在 plan.md 的不同 Wave 中。
+1. **同一 Wave 内的任务必须并行启动子代理**（Wave 定义=无依赖可并行，不自行分析依赖关系；有依赖应在 plan.md 的不同 Wave 中）。
 2. **Reverse Sync**：子代理报告实现与 design.md 不一致时，先检查是代码错了还是文档有遗漏
 3. **不要频繁编译！** 编译很慢，只在以下情况运行：
    - 写了大量代码后需要验证语法正确性
@@ -894,7 +894,7 @@ ${taskList}
    - 记录改动文件和测试结果
 5. 遇到 BLOCKED → 记录原因，选择：重试/跳过/停止
 
-### Task Review Gate（必须执行，不可跳过）
+### Task Review Gate
 
 每个子代理完成后、勾选 checkbox **之前**，你必须创建 task review。
 

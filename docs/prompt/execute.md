@@ -183,7 +183,7 @@ worktree 路径 + 分支名 + 模式
 
 ````markdown## Wave 1: 执行以下任务
 
-## 执行方式（必须严格遵守）
+## 执行方式
 
 **每个任务必须由独立子代理执行，你不要自己写代码。**
 
@@ -194,7 +194,7 @@ worktree 路径 + 分支名 + 模式
 4. 记录改动文件和测试结果
 
 
-### 工作目录（必须严格遵守）
+### 工作目录
 
 调用 Task 工具启动子代理时，**workdir 参数是强制必传的**。
 不传 workdir 会导致子代理把文件写到主工作区而非 worktree，破坏隔离。
@@ -249,7 +249,7 @@ execute 按 Wave 持久化进度，task 级进度靠 plan.md checkbox 勾选。�
 - [ ] 默认任务 1 (TBD)
 
 ### 调度要求
-1. **同一 Wave 内的任务必须并行启动子代理，禁止串行等待。** Wave 的定义就是"无依赖、可并行"，不要自行分析依赖关系。如果有依赖应该在 plan.md 的不同 Wave 中。
+1. **同一 Wave 内的任务必须并行启动子代理**（Wave 定义=无依赖可并行，不自行分析依赖关系；有依赖应在 plan.md 的不同 Wave 中）。
 2. **Reverse Sync**：子代理报告实现与 design.md 不一致时，先检查是代码错了还是文档有遗漏
 3. **不要频繁编译！** 编译很慢，只在以下情况运行：
    - 写了大量代码后需要验证语法正确性
@@ -549,7 +549,7 @@ execute 是**动态阶段**，steps 由 `buildExecuteSteps(planFilePath, options
 
 - **contractInjection（跨 task 契约）**：由 `buildContractMatrix(planContent, changeDir)` / `buildConsumerInjection` / `buildContractFieldInjection` 生成，包含 `### API Contract Matrix`、`### 子代理 task-XX 的端点契约注入`（`<contract-injection>`）、`### 子代理 task-XX 的字段契约注入`（`<contract-field-injection>`）。命中「provider 漏字段、consumer fallback 编造 → 运行时 403/500」这类 bug 时强制注入。本文档示例 plan.md 无 provider/consumer 契约，故 contractInjection 为空字符串。
 - **prototypeInjection（HTML 原型引用）**：扫描 changeDir 下 `prototype-*.html`，命中则生成 `### 📐 原型参考（brainstorm 可视化确认）`，提示前端/UI task 照原型实现而非凭文字重新发明。本文档示例无原型文件，故 prototypeInjection 为空字符串。
-- **worktreeSection**：`options.worktreePath` 非空时生成 `### 工作目录（必须严格遵守）`，含 `"workdir": "${worktreePath}"` 的子代理调用模板。跨仓 task 支持下（`options.ctx` 传入 MultiRepoContext 且本 Wave 含跨仓 task 时），worktreeSection 切换为 **per-task 多值表**（主仓 task workdir=主仓 worktreePath，跨仓 task workdir=跨仓仓根）+ 跨仓 task commit 指引（直接改跨仓仓主干+commit，不经主仓 worktree）+ 双锡点（base_commit/head_commit）说明；无 ctx 或单仓 Wave 时沿用单值 worktreePath（零回归）。本文档示例由 `_extract.mjs` 不传 ctx 跑出，故展示单值版（零回归分支）。
+- **worktreeSection**：`options.worktreePath` 非空时生成 `### 工作目录`，含 `"workdir": "${worktreePath}"` 的子代理调用模板。跨仓 task 支持下（`options.ctx` 传入 MultiRepoContext 且本 Wave 含跨仓 task 时），worktreeSection 切换为 **per-task 多值表**（主仓 task workdir=主仓 worktreePath，跨仓 task workdir=跨仓仓根）+ 跨仓 task commit 指引（直接改跨仓仓主干+commit，不经主仓 worktree）+ 双锡点（base_commit/head_commit）说明；无 ctx 或单仓 Wave 时沿用单值 worktreePath（零回归）。本文档示例由 `_extract.mjs` 不传 ctx 跑出，故展示单值版（零回归分支）。
 
 ### Task Review Gate 机制
 

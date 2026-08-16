@@ -64,9 +64,9 @@ console.log('--- 1. Local 零回归（无 MCP 配置，getDispatchMode 同步判
   assertTrue(getDispatchMode() === 'local', "getDispatchMode() 无 env 同步返回 'local'")
   const out = buildWavePrompt(wave, 1, null, worktreePath)
   // 含现有结构关键词（先读源确认确切字符串）
-  assertContains(out, '## 执行方式（必须严格遵守）', 'Local 输出含现有「执行方式」段')
-  assertContains(out, '### 工作目录（必须严格遵守）', 'Local 输出含「工作目录」段（worktreePath 非空）')
-  assertContains(out, '### Task Review Gate（必须执行，不可跳过）', 'Local 输出含 Task Review Gate')
+  assertContains(out, '## 执行方式', 'Local 输出含现有「执行方式」段')
+  assertContains(out, '### 工作目录', 'Local 输出含「工作目录」段（worktreePath 非空）')
+  assertContains(out, '### Task Review Gate', 'Local 输出含 Task Review Gate')
   assertContains(out, '## Wave 1: 执行以下任务', 'Local 输出含 Wave 标题')
   // 零回归核心：dispatchSection=''，不含任何派发段
   assertNotContains(out, '派发后端：SillyHub', 'Local 输出不含 SillyHub 派发段（零回归核心）')
@@ -194,7 +194,7 @@ console.log('\n--- 6. 无 ctx 单仓退化（D-012 零回归）---')
   const w = { index: 1, tasks: [{ index: 1, name: 'task-01: 主仓', file: 'src/x.js' }] }
   const out = buildWavePrompt(w, 1, null, worktreePath)
   // 旧单值 worktreeSection 关键字（workdir 强制必传 + JSON 单值示例）
-  assertContains(out, '### 工作目录（必须严格遵守）', '无 ctx：worktreeSection 为旧单值标题（非 per-task）')
+  assertContains(out, '### 工作目录', '无 ctx：worktreeSection 为旧单值标题（非 per-task）')
   assertContains(out, `"workdir": "${worktreePath}"`, '无 ctx：worktreeSection JSON 示例注入单 worktreePath')
   assertNotContains(out, 'per-task workdir 表', '无 ctx：不注入 per-task 多值表')
   assertNotContains(out, '跨仓 task 派发与双锡点', '无 ctx：不注入跨仓 commit 指引段')
@@ -227,7 +227,7 @@ console.log('\n--- 7. per-task workdir 多值表（D-012 混合 Wave 主仓+跨�
   }
   const out = buildWavePrompt(w, 1, changeDir, mainRepo, { ctx })
   // per-task worktreeSection
-  assertContains(out, '### 工作目录（必须严格遵守，per-task）', 'ctx 跨仓：worktreeSection 切 per-task 标题')
+  assertContains(out, '### 工作目录（per-task）', 'ctx 跨仓：worktreeSection 切 per-task 标题')
   assertContains(out, 'task-01 (repo: main) → workdir', 'ctx 跨仓：per-task 表含 task-01 主仓行')
   assertContains(out, 'task-02 (repo: sillyspec) → workdir', 'ctx 跨仓：per-task 表含 task-02 跨仓行')
   assertContains(out, mainRepo, 'ctx 跨仓：主仓 task workdir=主仓 worktreePath')
@@ -290,7 +290,7 @@ console.log('\n--- 9. ctx 单仓（无跨仓 task）退化为单值 worktreeSect
   const w = { index: 1, tasks: [{ index: 1, name: 'task-01: 主仓', file: 'src/x.js' }] }
   const out = buildWavePrompt(w, 1, changeDir, mainRepo, { ctx })
   // ctx 存在但无跨仓 task → 退回旧单值 worktreeSection（不注入 per-task 表 / 跨仓段）
-  assertContains(out, '### 工作目录（必须严格遵守）', 'ctx 单仓：worktreeSection 旧单值标题（无 per-task）')
+  assertContains(out, '### 工作目录', 'ctx 单仓：worktreeSection 旧单值标题（无 per-task）')
   assertContains(out, `"workdir": "${mainRepo}"`, 'ctx 单仓：单值 JSON 注入主仓 worktreePath')
   assertNotContains(out, 'per-task workdir 表', 'ctx 单仓：不注入 per-task 多值表')
   assertNotContains(out, '跨仓 task 派发与双锡点', 'ctx 单仓：不注入跨仓 commit 指引段')
