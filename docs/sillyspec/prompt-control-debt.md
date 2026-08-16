@@ -308,7 +308,7 @@ P2 遗留（按优先级登记）：
 
 #### 三批次裁决（2026-08-16，按优先级）
 
-**推进状态**：批次① ✅ 已落地（quick ql-20260816-008-c809，commit 3192075，npm test 209/0）；批次② ✅ 已落地（完整流程 brainstorm→plan→execute→verify→archive，commit 3fd0e7d，npm test 210/0 + 回归测试 state-machine-guards.test.mjs 29 断言）；批次③ ⏳ 进行中（见下）。
+**推进状态**：批次① ✅ 已落地（quick ql-20260816-008-c809，commit 3192075，npm test 209/0）；批次② ✅ 已落地（完整流程 brainstorm→plan→execute→verify→archive，commit 3fd0e7d，npm test 210/0 + 回归测试 state-machine-guards.test.mjs 29 断言）；批次③ Windows 组 ✅ 已落地（quick ql-20260816-010-50bf，commit 10a0194，A2 占位符 JSON 转义 + A3 listen 前置）；批次③ D 组 ⏳ 待续（P2 prompt 措辞，每项需改源码→_extract.mjs 重提取→docs/prompt 镜像同步→测试完整链路，留后续 session 逐条 quick）。
 
 **批次① 一行修复组 → quick（1 个 quick change 合并 4 项）**
 - **A1** engines 抬 `>=22.13.0`：`package.json:16`（Node 官方 v22.13.0 才解除 `--experimental-sqlite` flag）+ `src/db-engine.js:5` 注释同步（断言「v22.11.0+ 无需 flag」错误）。
