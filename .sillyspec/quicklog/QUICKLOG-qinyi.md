@@ -41,3 +41,18 @@ test/multi-repo-context-entry.test.mjs（坑7 两场景：tasks/ 卡片补扫 + 
 test/quick-linked-change-existence-guard.test.mjs（新增 5 用例 14 断言）
 docs/sillyspec/platform-interface-map.md（守卫插入致行号漂移，doc-ref-check 抓到后校正 8 处落点）
 结果：暂存确认：cli-entry 模块卡已同步并暂存（正文守卫段 + 变更索引 ql-20260816-003-8a14 条目）。命中模块：cli-entry（run/command.js）。需求：quick 的 --change 传不存在变更名当关联变更被静默接受，挂悬空关联污染图谱，--done 时 sessionId fallback 可能命中他者会话；2026-08-02 踩过 f70c9c3 只修建幻影目录后果，误用本身仍复发。根因：linkedChanges 装载后无存在性校验，「关联不存在的变更」无任何合法场景。方案：flag 装载层 fail-loud 守卫（existsSync 逐一校验 + exit 2 + 三条出路文案），只检 CLI 显式装载值（持久化复用/交互式/sessionId 特例不检）。结果：新增 5 用例 14 断言全绿；npm test 全量 208 文件 exit=0；lint 过；doc-ref-check 80 处全过（行号漂移已连带校正）。注：ql-20260816-003-8a14 条目被并发会话 cf9a8df 误判孤儿删除，已按 CLI 骨架格式手工重建后重跑本 --done。--force-baseline 解锁 command.js；--allow-new 解锁新测试文件。
+
+## ql-20260816-004-9afb | 2026-08-16 11:31:24 | 清偿 30 处失效 file:line 引用（.sillyspec/docs 纳入 docs-check 范围）+ 接线 docs gate CLI 分支
+状态：已完成
+关联变更：（无）
+文件：
+- .sillyspec/docs/sillyspec/scan/ARCHITECTURE.md（run.js:NNNN 8 处重定位 W6 新落点 src/run/command.js:156 等 + perProject 展开点改指 complete-handlers.js:456）
+- .sillyspec/docs/sillyspec/scan/CONCERNS.md（propose.js 已删/approve-reject 已实现/gate-status 已废除三条过时事实改写）
+- .sillyspec/docs/sillyspec/scan/CONVENTIONS.md（惰性 require 段重写 W6 后现状 + init.js 资产注释行号 + parseInt 落点）
+- .sillyspec/docs/sillyspec/modules/machine-interface.md、runtime.md、stages.md（6 处行号漂移：validateTaskReviews→task-review.js:377、completeStageGates→gates.js:601、unregisterChange→complete-handlers.js:337、marker 自生→gates.js:302-327、SPEC_ROOT 注入→prompt.js、detectChangeRisk→stage-contract.js:469-490）
+- docs/sillyspec/architecture-4a.md、prompt-control-debt.md、platform-interface-map.md（complete.js 漂移 6 处 + interface-map index.js 漂移 6 处即修）
+- src/index.js（docs gate CLI 分支接线：--init-baseline/--json，specBase 平台优先——docs-signals-o12 漏接，pre-push 第三道关此前恒 exit 0 形同虚设）
+需求：scan/modules 产物游离 docs-check 缺省范围（docs/**）外，漂移静默积累（W6 barrel 重构后 run.js:NNNN 全超界 24 处）；docs gate CLI 分支缺失
+根因：docs-signals-o12 落地只做了 docs-gate.js 模块 + pre-push 接线，漏 index.js case 分支；.sillyspec/docs 不在缺省 paths 是范围设计缺口（本仓已用 local.yaml paths 纳入，consumer 通用解法留债单裁决）
+方案：30 处引用逐条重定位（--suggest 候选行号辅助）；local.yaml docs-check.paths 加 .sillyspec/docs/**/*.md；index.js 补 docs gate 分支
+结果：docs check 321 处全通过（171 带关键词断言）；docs gate 0=基线 0 放行 exit 0；npm test 全量 EXIT=0；lint 295 文件过；--force-baseline 解锁 src/index.js
