@@ -792,7 +792,15 @@ export async function generateTaskReviewDrafts({ changeName, cwd, platformOpts =
   } catch {}
   if (!executeRunId) {
     executeRunId = generateExecuteRunId()
-    try { mkdirSync(runtimeRoot, { recursive: true }); writeFileSync(runIdFile, executeRunId + '\n') } catch {}
+    // D-001#1 fallback 写入点：mkdir execute-runs/<runId>/tasks 先于 marker（不变量：marker 在则目录在）。
+    // 保留 fail-open 契约（调用方 catch 降级）——只去静默：失败 console.error 留痕，不 throw
+    //（草稿兜底缺了也只是退回 gate 报缺 review.json，不比修复前差）。
+    try {
+      mkdirSync(join(runtimeRoot, 'execute-runs', executeRunId, 'tasks'), { recursive: true })
+      writeFileSync(runIdFile, executeRunId + '\n')
+    } catch (e) {
+      console.error(`[sillyspec] execute run marker/目录写入失败（降级继续，草稿落盘仍尝试）: ${e.message}`)
+    }
   }
 
   // base..head diff 文件集（worktree-aware；null=git 不可用，[]=无 commit diff）

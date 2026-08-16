@@ -65,6 +65,14 @@ export function printQuickAuditReview(review) {
     console.warn(`   行号漂移 → 更新到当前源码；文件删改名 → 更新引用路径。跑 sillyspec docs check 可看完整清单。`)
     console.warn(`   引用格式：\`src/foo.js:42\`（或 42-48）+ 同行反引号代码符号（如 \`runDocsCheck\`）——符号可让 --suggest 给出候选行号。`)
   }
+  // task-03: 活文档引用漂移（advisory 不阻断，不改 status 三态判定）——方向与上方互补：
+  // 上方查「本次改的文档」，这里查「本次改的 src 被活文档（platform-interface-map 等）引用」。
+  if (review.docsCheckHint && review.docsCheckHint.livingDocDrift) {
+    const drift = review.docsCheckHint.livingDocDrift
+    const total = typeof drift.total === 'number' ? drift.total : drift.files.length
+    console.warn(`\n📎 活文档引用漂移：改动 ${drift.files.length}/${total} 被 ${drift.docs.join('、')} 引用——建议顺手跑 docs check 修引用行号。`)
+    console.warn(`   文件：${drift.files.join(', ')}`)
+  }
 }
 
 /**

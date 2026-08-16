@@ -698,6 +698,124 @@ function rollbackApply(projectRoot, trackedFiles, newFiles) {
 }
 
 /**
+ * merge 前预对齐 baseline 并行文件到 main 版（D-002@v1 / task-02）。
+ *
+ * 背景：baseline checkpoint 把 execute 启动时主仓 dirty 的并行会话文件快照进了 worktree 分支
+ * （worktree.js _createBaselineCheckpoint）。apply --merge 时主仓常已把这批文件推进（并行会话
+ * 落了 commit），分支侧旧快照与 main 新版在 merge-base 两侧同改同一文件 → merge 冲突。预对齐在
+ * merge 前把这批文件 checkout 成 main 版并提交到分支，使三方合并对该文件 ours == theirs，
+ * 消除冲突主因。
+ *
+ * 过滤集（四条件全满足才对齐；任一不满足跳过该文件）：
+ *   a. baseline checkpoint 文件集（已提交口径）：git diff --name-only <baseHash>..<baselineCommit>
+ *      ——不用 result.changedFiles（工作区口径且已过滤基础设施文件）
+ *   b. ∩ main 已推进集：git diff --name-only <merge-base>..<main HEAD>
+ *      （merge-base = 分支与 main HEAD 的最近公共祖先）
+ *   c. ∖ 分支已变更集：git diff --name-only <baselineCommit>..<branch> 含该文件（本变更交付，不动）
+ *   d. ∖ worktree 工作区 dirty 集：git status --porcelain -- <file> 非空（未提交改动会被 checkout 覆盖）
+ *   另排除「main HEAD 与分支 tip 内容已一致」的文件（对齐无意义，且防 nothing-to-commit 空提交）。
+ *
+ * 执行 cwd：checkout/commit 在 worktreePath（改的是 worktree 分支的 index+工作区）；mainHead /
+ * merge-base 锚点在 projectRoot 读取。merge 本身仍在 projectRoot（applyByMerge 原逻辑不动）。
+ *
+ * 降级（不阻断）：不适用场景（无 baseline checkpoint / 非 worktree 模式（in-place 的 worktreePath
+ * 就是主工作区，在其上 commit 等于绕过验收污染 main；native-worktree 是外部隔离环境）/ worktree
+ * 目录丢失 / worktree HEAD ≠ 分支 tip（checkout+commit 会落错分支，merge 的却是 meta.branch））
+ * 静默跳过；任一 git 步骤失败 → best-effort 回滚已 checkout 文件 + console.warn + result.warnings
+ * → 调用方走原 merge 路径（降级不阻断，D-002@v1 约束③）。
+ *
+ * @param {object} p
+ * @param {object} p.meta - worktree meta（baseHash / baselineCommit / worktreePath / mode）
+ * @param {string} p.branch - 将被 merge 的分支名（meta.branch）
+ * @param {string} p.projectRoot - 主仓库根（merge 的执行侧）
+ * @param {object} p.result - applyWorktree 的 result（预对齐信息写入 result.warnings，可追溯，约束④）
+ * @returns {{ aligned: string[], commit: string|null }} aligned=本次对齐的文件（空数组=未对齐）
+ */
+function preAlignBaselineToMain({ meta, branch, projectRoot, result }) {
+  const pushWarning = (msg) => {
+    result.warnings = result.warnings || [];
+    result.warnings.push(msg);
+  };
+
+  // 不适用场景（非失败，静默跳过）
+  if (!meta || !meta.baseHash || !meta.baselineCommit) return { aligned: [], commit: null };
+  if (meta.mode && meta.mode !== 'worktree') return { aligned: [], commit: null };
+  const worktreePath = meta.worktreePath;
+  if (!worktreePath || !existsSync(worktreePath)) return { aligned: [], commit: null };
+  const wtHead = gitQuiet(worktreePath, ['rev-parse', 'HEAD']);
+  const branchTip = gitQuiet(projectRoot, ['rev-parse', branch]);
+  if (!wtHead || !branchTip || wtHead !== branchTip) return { aligned: [], commit: null };
+
+  const { baseHash, baselineCommit } = meta;
+  const done = []; // 已 checkout 的文件（失败回滚用）
+  try {
+    // (a) baseline checkpoint 文件集（已提交口径；--no-renames：rename 退化为 D+A，两侧路径都进集）
+    const baselineSet = new Set(
+      (git(worktreePath, ['diff', '--no-renames', '--name-only', baseHash, baselineCommit]) || '')
+        .split('\n').filter(Boolean)
+    );
+    if (baselineSet.size === 0) return { aligned: [], commit: null };
+
+    // (b) main 已推进集（merge-base 后 main HEAD 的树差异；锚点拿不到 → 交原 merge，不算失败）
+    const mainHead = git(projectRoot, ['rev-parse', 'HEAD']);
+    const mergeBase = git(projectRoot, ['merge-base', branch, 'HEAD']);
+    if (!mainHead || !mergeBase) return { aligned: [], commit: null };
+    const mainAdvanced = new Set(
+      (git(projectRoot, ['diff', '--no-renames', '--name-only', mergeBase, mainHead]) || '')
+        .split('\n').filter(Boolean)
+    );
+
+    // (c) 分支已变更集（baselineCommit → 分支 tip 的已提交交付，不动）
+    const branchChanged = new Set(
+      (git(worktreePath, ['diff', '--no-renames', '--name-only', baselineCommit, branchTip]) || '')
+        .split('\n').filter(Boolean)
+    );
+
+    // (d) worktree 工作区 dirty + 两侧 HEAD 同内容排除 → 最终对齐集
+    const candidates = [];
+    for (const f of baselineSet) {
+      if (!mainAdvanced.has(f) || branchChanged.has(f)) continue;
+      // dirty（checkout 会覆盖 worktree 未提交改动）→ 跳过该文件
+      if ((gitQuiet(worktreePath, ['status', '--porcelain', '--', f]) || '') !== '') continue;
+      // main HEAD 与分支 tip 内容已一致 → 对齐无意义 + 防空提交
+      if ((gitQuiet(worktreePath, ['diff', '--name-only', mainHead, branchTip, '--', f]) || '') === '') continue;
+      candidates.push(f);
+    }
+    if (candidates.length === 0) return { aligned: [], commit: null };
+
+    // 对齐：逐文件 checkout main 版（worktree 内执行，同时更新 worktree 分支的 index+工作区）
+    for (const f of candidates) {
+      git(worktreePath, ['checkout', mainHead, '--', f]);
+      done.push(f);
+    }
+    // 显式 pathspec 提交：只提交对齐文件，不扫入 worktree 内其他 staged 改动（坑 git-commit-sweeps-prestaged）。
+    // --no-verify：对齐 commit 与 baseline checkpoint 同性质（锚点非交付物，worktree.js _createBaselineCheckpoint
+    // 同款处理）——项目 pre-commit hook（如 husky lint+全量测试）会把预对齐拖成分钟级甚至失败降级。
+    git(worktreePath, [
+      'commit', '--no-verify', '-m',
+      `sillyspec: align baseline files to main (pre-merge, ${done.length} files)`,
+      '--', ...done,
+    ]);
+    const shortHash = gitQuiet(worktreePath, ['rev-parse', '--short', 'HEAD']);
+    pushWarning(
+      `merge 前预对齐 ${done.length} 个 baseline 并行文件到 main 版` +
+      `${shortHash ? `（align commit ${shortHash}）` : ''}：${done.join(', ')}`
+    );
+    return { aligned: done, commit: shortHash };
+  } catch (e) {
+    // 降级：任一步失败 → best-effort 回滚已 checkout 文件（checkout <branchTip> -- f 还原 index+工作区）
+    for (const f of done) {
+      gitQuiet(worktreePath, ['checkout', branchTip, '--', f]);
+    }
+    const msg = `baseline 预对齐失败，已跳过（降级走原 merge 路径）：${(e.message || '').split('\n')[0]}` +
+      (done.length > 0 ? `；已回滚 ${done.length} 个已 checkout 文件` : '');
+    console.warn(`⚠️  ${msg}`);
+    pushWarning(msg);
+    return { aligned: [], commit: null };
+  }
+}
+
+/**
  * baseline 漂移时的 merge 降级路径（D-001）。
  *
  * 当主工作区 baseline 在 execute 期间漂移、patch 无法干净应用时，用
@@ -705,6 +823,7 @@ function rollbackApply(projectRoot, trackedFiles, newFiles) {
  * git merge 比 patch 鲁棒，能处理 baseline 漂移 + 潜在冲突。会引入合并提交
  * （D-002：与 worktree.md:84「patch 而非 merge 保持线性历史」架构决策的张力——
  * 仅作 --merge 显式 opt-in，不改变默认 patch 行为）。
+ * merge 前先经 preAlignBaselineToMain 预对齐 baseline 并行文件到 main 版（D-002@v1 / task-02，失败降级走原 merge）。
  *
  * merge 冲突时不自动解决：git merge --abort 回滚到合并前状态 + 报冲突文件列表。
  *
@@ -719,6 +838,9 @@ function applyByMerge(result, changeName, projectRoot, wm) {
   const changedFiles = result.changedFiles || [];
   // 用 meta.branch（native-worktree 模式分支名可能不是 sillyspec/<change>），不硬编码。
   const branch = meta.branch || `sillyspec/${changeName}`;
+
+  // --- merge 前预对齐（D-002@v1 / task-02）：baseline 并行旧文件对齐 main 版，消除 merge 冲突主因 ---
+  preAlignBaselineToMain({ meta, branch, projectRoot, result });
 
   try {
     git(projectRoot, ['merge', '--no-ff', branch], { timeout: 30000 });

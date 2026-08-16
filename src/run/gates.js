@@ -441,7 +441,11 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
           if (!executeRunId) {
             executeRunId = generateExecuteRunId()
             // 落盘（marker 缺失时 fallback 生成后写盘，保证后续 checkbox/gate 读到同一 ID）
-            try { mkdirSync(runtimeRoot, { recursive: true }); writeFileSync(runIdFile, executeRunId + '\n') } catch {}
+            // D-001#1 fallback 写入点：mkdir execute-runs/<runId>/tasks 先于 marker（不变量：
+            // marker 在则目录在）。不 try/catch——异常直穿外层 catch 走 fail-closed 阻断
+            //（gate 自身写 run 目录失败不能静默放行完成）。
+            mkdirSync(join(runtimeRoot, 'execute-runs', executeRunId, 'tasks'), { recursive: true })
+            writeFileSync(runIdFile, executeRunId + '\n')
           }
         }
 

@@ -607,6 +607,62 @@ async function matchQuickModules(srcChanged, specBase, projectName) {
   }
 }
 
+// ── task-03（2026-08-16-state-split-fixes）: 活文档漂移提示辅助 ──
+// 背景：platform-interface-map.md 等活文档持续维护 src 主入口的 file:line 映射；并行会话改
+// src/ 后引用行号静默失效，docs gate 只能事后拦到别人的流程上。审计（auditQuickCompletion）
+// 当场检测「本次改动的 src 文件是否被活文档引用」并提示（advisory 不阻断，docs gate 语义不变）。
+
+/** 缺省活文档：src 主入口 ↔ 文档接口映射（file:line 锚点密度最高的持续维护文档）。 */
+export const DEFAULT_LIVING_DOC = 'docs/sillyspec/platform-interface-map.md'
+
+/**
+ * 解析活文档集合：local.yaml `docs-check.living-docs` 列表【只追加不覆盖】缺省集合。
+ * 与 docs-check.paths 的覆盖语义刻意不同——paths 是扫描范围（配了即整体替换缺省），
+ * living-docs 是监控点登记（配了是加哨兵，不该把缺省监控点挤掉）。读配置走本模块现成的
+ * readLocalYamlRaw + js-yaml 动态 import（readDocsCheckConfig 不回 living-docs 键；动态
+ * import 与上方 docs-check 的隔离约定一致）；坏 YAML / 非数组 / 读失败 → 仅缺省。
+ * @param {string} cwd 仓库根（local.yaml 在 <cwd>/.sillyspec/local.yaml）
+ * @returns {Promise<string[]>} 去重后的活文档相对路径（仓库根相对 POSIX）
+ */
+export async function resolveLivingDocs(cwd) {
+  let configured = []
+  const raw = readLocalYamlRaw(cwd)
+  if (raw) {
+    try {
+      const mod = await import('js-yaml')
+      const yamlLoad = mod.load || mod.default?.load
+      const doc = yamlLoad(raw)
+      const dc = doc && typeof doc === 'object' ? doc['docs-check'] : null
+      const ld = dc && typeof dc === 'object' ? dc['living-docs'] : null
+      if (Array.isArray(ld)) configured = ld.filter((s) => typeof s === 'string' && s.trim() !== '')
+    } catch { /* 坏 YAML → 忽略配置，仅缺省 */ }
+  }
+  return [...new Set([DEFAULT_LIVING_DOC, ...configured])]
+}
+
+/**
+ * 纯函数：活文档引用的源码文件与本次改动的 src/ 文件求交。
+ * 匹配口径对齐 docs-check resolveCandidates 的三形态（纯路径比对，不查盘）：
+ *   ①仓库根相对：changed === ref（如 src/a.js）
+ *   ②src 内部相对：changed === 'src/' + ref（如 run/b.js → src/run/b.js）
+ *   ③裸名/中缀后缀：changed.endsWith('/' + ref)（如 b.js；前导斜杠防 aa.js 被引用 a.js 误吃）
+ * changedFiles 口径 = git status porcelain 归一后的仓库根相对 POSIX 路径（parsePorcelainPath 产物）。
+ * 同名多文件时后缀形态可能多报——与 docs-check 多候选宽容同向，advisory 仅提示可接受。
+ * @param {string[]} srcChangedFiles changedFiles 中 src/ 前缀的文件
+ * @param {Array<{file: string}>} refs collectDocRefs(md) 产物（只用 .file）
+ * @returns {string[]} 命中的 srcChangedFiles 子集（去重保序）
+ */
+export function matchLivingDocRefs(srcChangedFiles, refs) {
+  const hit = new Set()
+  for (const c of srcChangedFiles) {
+    if (refs.some((r) => r && typeof r.file === 'string' &&
+      (c === r.file || c === 'src/' + r.file || c.endsWith('/' + r.file)))) {
+      hit.add(c)
+    }
+  }
+  return [...hit]
+}
+
 export async function auditQuickCompletion(cwd, guard, options = {}) {
   const { baselineFiles, allowedFiles = [], allowNew = false, forceBaseline = false, allowDelete = false, specBase = null, projectName = null } = guard
   const { isConfirm } = options
@@ -790,6 +846,35 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
           if (result.status === 'safe') result.status = 'warning'
         }
       } catch { /* docs-check 不可用（老版本包等）→ 静默跳过，不阻断 quick */ }
+    }
+
+    // task-03: 活文档漂移提示（advisory，不阻断不改 status，docs gate 语义不变）。
+    // 方向与上方 docsCheckHint 相反：那是「本次改的文档引用失效吗」，这是「本次改的 src 被活文档
+    // 引用吗」——并行会话改 src/ 主入口后 platform-interface-map.md 的 file:line 行号静默失效，
+    // gate 事后拦到别人流程上；审计当场命中交集即提示顺手跑 docs check。fail-open：活文档
+    // 缺失/读失败/collectDocRefs 不可用 → 静默跳过（不误报不阻断）。
+    const srcChangedFiles = result.changedFiles.filter((f) => f.startsWith('src/') && !deletedSet.has(f))
+    if (srcChangedFiles.length > 0) {
+      try {
+        const { collectDocRefs } = await import('../docs-check.js')
+        const livingDocs = await resolveLivingDocs(cwd)
+        const files = []
+        const docs = []
+        for (const docRel of livingDocs) {
+          let md
+          try { md = readFileSync(join(cwd, docRel), 'utf8') } catch { continue } // 活文档缺失/读失败 → 跳过
+          const hit = matchLivingDocRefs(srcChangedFiles, collectDocRefs(md))
+          if (hit.length > 0) {
+            files.push(...hit)
+            docs.push(docRel)
+          }
+        }
+        if (files.length > 0) {
+          const uniqFiles = [...new Set(files)]
+          result.docsCheckHint = { ...(result.docsCheckHint || {}), livingDocDrift: { files: uniqFiles, docs, total: srcChangedFiles.length } }
+          result.reasons.push(`活文档引用漂移: 改动 ${uniqFiles.length} 个文件被活文档引用（${docs.join(', ')}）`)
+        }
+      } catch { /* collectDocRefs 不可用 → 静默跳过 */ }
     }
 
     // task-02: 同文件并发检测——allowedFile 在 baseline（他者改过）且当前 hash ≠ step1 hash（我也改了）

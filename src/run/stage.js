@@ -108,6 +108,15 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
     } catch {}
     if (!currentExecuteRunId) {
       currentExecuteRunId = generateExecuteRunId()
+      // D-001#1 主写入点：mkdir execute-runs/<runId>/tasks 先于 marker（不变量：marker 在则目录在，
+      // archive 完成度扫描/漂移兜底不再落到「有 marker 无目录」的空 run）。失败直接 throw——execute
+      // 启动即失败优于事后 review 错配（调用方 runCommand 冒到 CLI 顶层 exit 1，给出修复指引）。
+      try {
+        mkdirSync(join(runtimeRoot, 'execute-runs', currentExecuteRunId, 'tasks'), { recursive: true })
+      } catch (e) {
+        throw new Error(`execute run 目录创建失败（${join(runtimeRoot, 'execute-runs', currentExecuteRunId)}）: ${e.message}；` +
+          `请检查该路径是否为普通文件/只读，清理后重跑（sillyspec run execute --change ${changeName} --skip-approval）`)
+      }
       writeFileSync(runIdFile, currentExecuteRunId + '\n')
     }
   }

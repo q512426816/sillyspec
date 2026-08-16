@@ -118,3 +118,21 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 **改进方向（已修，ql-20260816-007-0558 / 6d15d9a）**：mdChanged 排除 deletedFiles——删除的 .md 不进 docsCheckHint，删除语义归 --allow-delete 管；测试 DC-5 锁定（audit-quick-completion.test.mjs）。
 
 **关联记忆**：`[[sillyspec-quick-concurrent-dangerous-prefix]]`
+
+---
+
+## 10. 并发状态分裂三坑（execute run 目录静默缺失 / apply --merge baseline 冲突 / 活文档引用漂移，2026-08-16 闭环）
+
+**症状（三坑各自反复出现）**：
+1. execute 启动后 marker `current-execute-run-id-<change>` 已写但 `execute-runs/<runId>/tasks/` 目录不存在（exec-182944 / exec-211357 两度实证）——目录只随 review.json 写入创建；archive 完成度扫描兜底误用上个变更的空 run，review 错配。
+2. `worktree apply --merge` 撞并行会话：baseline checkpoint 含主仓旧文件，merge 到已推进的 main 时整文件冲突，需手动 cp/hunk 拆救。
+3. 并行会话每次改 command.js/index.js，platform-interface-map.md 的 file:line 引用漂移失效（一次 12 处）——「谁污染谁治理」在并发下无人执行。
+
+**根因**：1) marker 写入与目录创建非原子且失败静默（`try{...}catch{}`）；2) baseline 与 main 各自前进，merge 前无预对齐；3) 活文档无自动化提示，漂移只能事后 docs check 发现。
+
+**修复（change 2026-08-16-state-split-fixes，D-001/D-002@v1）**：
+1. 四处 marker 写入点（stage.js 主点 + gates.js/prompt.js/task-review.js 补写点）统一「mkdir `execute-runs/<runId>/tasks` 先于 marker」+ 分层 fail（stage throw / gates fail-closed / prompt 降级留痕 / task-review 去静默保 fail-open）。测试 execute-run-dir-fail-loud.test.mjs 33 断言。
+2. `applyByMerge` merge 前预对齐：`git diff baseHash..baselineCommit` 已提交口径 ∩ main 已推进 ∖ 分支已变更 ∖ 工作区 dirty → checkout main 版 + commit「sillyspec: align baseline files to main (pre-merge, N files)」；失败降级原 merge 路径。测试 worktree-merge-baseline-align.test.mjs。
+3. quick 审计 docsCheckHint 扩展 `livingDocDrift`：改动活文档（缺省 platform-interface-map.md，`local.yaml docs-check.living-docs` 可追加不覆盖）引用的源码文件时即时提示漂移风险（advisory 不阻断）。测试 docs-living-drift-hint.test.mjs。
+
+**关联记忆**：`[[sillyspec-execute-done-auto-draft-pitfall]]`、`[[sillyspec-worktree-patch-apply-conflict]]`、`[[sillyspec-local-yaml-paths-override-semantics]]`
