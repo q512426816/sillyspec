@@ -195,9 +195,9 @@ function buildPushPayloadFromRaw(rawBlock, { ql_id, author_raw, status, linked_c
   return payload
 }
 
-// 单条推送（导出供测试）：payload 字段对齐平台 QuicklogEntryPushRequest（snake_case）。
+// 单条推送：payload 字段对齐平台 QuicklogEntryPushRequest（snake_case）。测试经 allocate/complete 间接触发。
 // 任何失败（无配置/网络/非 2xx/超时）静默 warn 一行不抛（FR-02 best-effort，quick 主流程零阻断）。
-export async function pushQuicklogEntryToPlatform(specBase, entry) {
+async function pushQuicklogEntryToPlatform(specBase, entry) {
   const cfg = _readPlatformConfig(specBase)
   if (!cfg) {
     if (process.env.SILLYSPEC_DEBUG_SYNC) console.warn('[quicklog-push] 未配置 platform 段，跳过推送')
