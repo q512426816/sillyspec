@@ -452,6 +452,18 @@ export class SyncManager {
     }
 
     console.log(`[sync] 已同步变更: ${changeName}`);
+
+    // 2026-08-16-auto-sync-from-repo：进度上行成功后顺带推四件套文档（best-effort）。
+    // 根因：run 流程此前只推进度不推文档（本文件头注释），本地直跑 sillyspec 的产出
+    // 文档永远不自动到平台（变更中心"进度到了文档没到"）。生产者直连，不依赖 daemon
+    // 缓存链路。失败仅 debugLog——文档同步失败不得影响进度上行的返回值与流程；
+    // 四件套全缺失时 syncDocuments 内部已有跳过（syncedCount===0 提前返回，不调端点）。
+    try {
+      await this.syncDocuments(changeName);
+    } catch (err) {
+      debugLog(`[sync] 文档同步失败（不影响进度）: ${changeName}: ${err.message}`);
+    }
+
     return { synced: 1, errors: [] };
   }
 
