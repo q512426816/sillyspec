@@ -330,3 +330,15 @@ docs/sillyspec/platform-interface-map.md（守卫插入致行号漂移，doc-ref
 根因：scanExisting 分配当日 ql-ID 需读全部轮转归档，但归档内条目日期必 ≤ 文件名日期，早于今天的归档对当日分配零信息。
 方案：归档名日期 < 今天跳过读取。
 结果：本 quick ql-ID 分配即实测正确；quicklog 97 断言 + 全量 211/0 + lint 300。
+
+## ql-20260816-026-7859 | 2026-08-16 23:03:04 | E22 顶层静态 import 闭包 45 模块最轻命令白付 ~78ms（未纳入批次项性能#2）
+状态：已完成
+关联变更：（无）
+文件：
+- src/index.js（E22 惰性动态 import）
+- docs/sillyspec/platform-interface-map.md（9 处行号漂移）
+- .sillyspec/docs/sillyspec/modules/cli-entry.md（变更索引）
+需求：E22 顶层静态 import 闭包 45 模块最轻命令白付 ~78ms（未纳入批次项性能#2）。
+根因：index.js 顶层静态 import progress.js（拖 db→sqlite 链 48ms）+ run/shared.js（拖 stages 全家 30ms），--version/help 等轻路径用不到却全额支付。
+方案：两条边改 main() 早退后动态加载（审计预定修法，行为零变化）。
+结果：--version 137→71ms、help 68ms、重路径无回退；全量 211/0 + lint 300 + docs-check 415。

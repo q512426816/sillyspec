@@ -81,4 +81,5 @@ runStage(pm, progress, stageName, cwd, changeName)
 - ql-20260816-017-b1ca | B9 docs gate flag 白名单 + --paths 接线（未纳入批次项）：未知 --xxx exit 2（对齐 docs check 分支 / interface-contract §1.3b）、位置参数拒绝、--paths 透传 runDocsGate.checkOpts（原被忽略）、--paths 缺值 exit 2。
 - ql-20260816-019-a3bb | B11b docs 顶层 glob 边界（未纳入批次项，CLI#3）：docs-check walkGlob 加形态 0（根级 **/*.ext 递归——原被形态 2 误解析为字面目录 `**` 静默 0 命中全绿）+ 形态 3 目录字面量 statSync 检测（isDirectory 抛配置错误 exit 2——原 readFileSync EISDIR 裸崩 exit 1）。
 - ql-20260816-021-120d | C14c init 绿地/棕地引导（未纳入批次项，上手#8）：cmdInit 早期（doInstall 前）捕获目录状态，棕地（有非隐藏源码）下一步 /sillyspec:scan + 提示、绿地（空目录）保留 /sillyspec:brainstorm；修复 init 事后检测会把自建 CLAUDE.md 误判为现有代码的坑。
+- ql-20260816-026-7859 | E22 index.js 静态 import 闭包拆解（未纳入批次项，性能#2）：progress.js（db→node:sqlite 链）与 run/shared.js（stages 全家）两条顶层静态 import 改 main() 早退后动态加载——最轻命令 --version 实测 137→71ms（省 66ms，轻路径零加载），重路径无回退，行为零变化。
 <!-- MANUAL_NOTES_END -->

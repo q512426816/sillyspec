@@ -12,12 +12,15 @@ import { basename, join, resolve } from 'path';
 import { execSync } from 'child_process';
 import { git } from './git-helper.js';
 import { getVersion } from './version.js';
-import { ProgressManager, resolvePlatformSpecDir } from './progress.js';
+
+// E22（性能#2）：progress.js（拖 db.js→node:sqlite 链 ~48ms）与 run/shared.js（拖 stages 全家
+// ~30ms）原先为顶层静态 import——最轻命令（--version/help）白付 ~78ms 启动税。两条链无模块级
+// 使用点（printUsage 纯文本），改在 main() 早退之后动态加载，轻路径零加载；重路径首个使用点
+// 之前完成加载，行为零变化。
 
 // ── CLI 入口 ──
 
-// did-you-mean 从 ./run/shared.js 复用（命令级 + flag 级 typo 建议）。
-import { didYouMean, assertSafeChangeName, resolveSpecDir, detectWorktreeSpecDrift } from './run/shared.js'
+// did-you-mean 从 ./run/shared.js 复用（命令级 + flag 级 typo 建议）。E22：同上改惰性动态加载。
 function printUsage() {
   console.log(`
 SillySpec CLI — 规范驱动开发工具包
@@ -160,6 +163,10 @@ async function main() {
     printUsage();
     process.exit(0);
   }
+
+  // E22：重路径统一加载（轻路径 --version/help 已早退，未付此税）。
+  const { ProgressManager, resolvePlatformSpecDir } = await import('./progress.js');
+  const { didYouMean, assertSafeChangeName, resolveSpecDir, detectWorktreeSpecDrift } = await import('./run/shared.js');
 
   // 解析全局选项
   let json = false;
