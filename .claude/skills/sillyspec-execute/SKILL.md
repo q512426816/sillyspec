@@ -116,6 +116,7 @@ execute 还有**第二道**独立的 stage 级审查：除逐 task review.json �
 
 - `docHash` = `sha256(主审查文档内容)`（hex）—— execute 主审查文档是 `design.md`，即 `reviewedFiles[0]`。CLI 会重算 sha256 比对，不符判伪造（fail-closed）；找不到主文档也 fail。**改 design.md 后须重算 docHash 再写**，可用 `sillyspec run execute --done` 触发的 prompt 注入版契约（运行时注入的 schema 表 + JSON 示例 + docHash 算法）逐字改值。
 - `tier=independent` 时必须由独立 QA 子代理产出该 review.json（独立上下文，不共享实现者分析）；`tier=self`（变更 ≤3 文件）降级为当前 agent 自审。
+- **审查范围分级**（tier=independent 时省重复消耗）：Task Review Gate 已产出 review.json 且 specVerdict/qualityVerdict 双 pass 的 task，QA 子代理只抽查（读 1-2 个核心 diff 文件抽验 reviewerNotes 与实际改动相符）；fail/cannot_verify/缺失的 task 全量重审。三项始终必查：跨 task 交界、design.md 整体对照、组装行为（全量测试/构建/启动）——task review 只看单 task diff，覆盖不到这三项。
 - 该 acceptance review 同时覆盖"代码审查"视角，后续代码审查步骤仅需轻量复审。
 
 > 运行时 CLI 会把精确 schema 表 + 完整 JSON 示例 + docHash 算法注入到该步 prompt。本段为常驻摘要；以你实际收到的注入版契约为权威逐字模板。

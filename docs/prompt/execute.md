@@ -359,10 +359,33 @@ Wave 3 的 prompt 结构与 Step 5（Wave 1）**完全相同**，由同一个 `b
 - `{REVIEW_TIER}` → 审查分级：`self`（当前 agent 自审）或 `independent`（强制独立子代理 + review.json）。由 `review-tier.js` 的 `classifyReviewTier({planLevel, designPath})` 按 plan_level / 变更文件数判定
 - `{REVIEW_TIER_REASON}` → 分级理由文案（如 `变更文件 3 ≤ 3` 或 `plan_level=none...`）
 - `{REVIEW_JSON_CONTRACT}` → `stage-review.js` 的 `renderReviewJsonContract()` 产出的 review.json 产物契约 markdown（schema + 完整示例 + docHash 算法）；execute 阶段主审查文档为 `design.md`
+- `{SPEC_ROOT}`、`{EXECUTE_RUN_ID}` → 审查范围分级段引用 task review.json 路径时使用（同 Step 5）
 
 **提示词原文**
 
-````markdown（Wave 3 的 prompt 由 `buildWavePrompt(wave=3, ...)` 生成，结构与 Step 5（Wave 1）**完全相同**——包含相同的角色调度 / Task Review Gate / **主代理 Wave 后汇总更新 module-impact** 等所有段落。两者唯一差异：标题为「## Wave 3: 执行以下任务」、「本 Wave 任务」复选项与任务摘要中的 task 名（默认 3-wave 示例的 Wave 3 task）。完整 prompt 模板见 Step 5。）
+````markdown
+对照 design.md 检查所有实现是否与设计一致。
+
+### 执行方式（CLI 按变更规模判定，占位符由 run.js 注入）
+tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
+- tier=self：当前 agent 汇总执行（对照 design.md 逐项检查 + 偏差说明）
+- tier=independent：必须用 Agent tool 启动一个独立的 QA 子代理（独立上下文，不共享实现者的分析），子代理对照 design.md 逐项检查实现一致性并输出 review.json。review.json 产物契约（CLI Stage Review Gate 将硬校验，schema + 完整示例 + docHash 算法如下，照抄改值；reviewedFiles 除主文档 design.md 外可追加 git diff 涉及的源码文件）:
+{REVIEW_JSON_CONTRACT}
+  该 acceptance review 同时覆盖"代码审查"视角（风格/bug/安全/冗余），后续代码审查步骤仅需轻量复审。
+
+  **审查范围分级（省重复消耗，task review 已覆盖的不全量重审）**：每个 task 在 Task Review Gate 已产出 review.json（{SPEC_ROOT}/.runtime/execute-runs/{EXECUTE_RUN_ID}/tasks/task-XX/review.json，specVerdict/qualityVerdict 双 pass）。QA 子代理按它分层：双 pass 的 task 只**抽查**（读 1-2 个核心 diff 文件抽验 reviewerNotes 与实际改动相符，不必逐文件重审）；未双 pass（fail/cannot_verify/缺失）的 task 必须全量重审。无论抽查还是全量，以下三项始终必查——task review 铁律是"只看当前 task 的 diff"，这三项是它覆盖不到、只有 stage review 能兜住的：
+  1. 跨 task 交界（A 产出的接口/数据结构与 B 的消费是否对得上）
+  2. design.md 整体对照（最终实现拼起来是否仍符合设计意图，而非仅各 task 局部合规）
+  3. 组装行为（全量测试/构建/启动通过——单 task 测试全绿 ≠ 组装正确）
+
+### 操作
+1. 读取 design.md（技术方案）
+2. 逐一对照 design.md 中的设计要点与实际代码实现
+3. 检查接口签名、数据结构、模块划分是否一致
+4. 记录偏差项（偏差 ≠ 错误，可能是合理的实现调整）
+
+### 输出
+检查清单：每项设计要点的实现状态 ✅/⚠️/❌ + 偏差说明
 ````
 
 ---

@@ -385,3 +385,18 @@ docs/sillyspec/platform-interface-map.md（守卫插入致行号漂移，doc-ref
 根因：并行会话 b1da59b（死导出清理，change-risk-profile 317→255 行）与 a815d69（sync.js 平台推送增量）改源码后未同步 prompt-control-debt.md 的 file:line 引用——「谁污染谁治理」在并发下无人执行（正是 state-split-fixes #3 livingDocDrift 提示要解的问题，本条是其首例获益场景的反面教材：提示机制上线前的存量债）。
 方案：三锚点单行校正——detectChangeRisk 273/317→137（同符号两处收敛到现位置，vrf-a 段补豁免注释 :141 锚点）；stage-contract.js:466→469（detectChangeRisk 调用点）；sync.js:502→536 ×2（cc-⑤ 段两处指向 SyncManager.checkApproval 类方法现位，fetchJson/unknown 分支在 536-556）。
 结果：docs check 415/415 全通过（191 处关键词断言）——本仓活文档引用零失效；纯 doc 单文件改动跳过 npm test（lint 不扫 docs/）；commit 797ff2d。
+
+## ql-20260817-003-802e | 2026-08-17 08:45:31 | execute acceptance 审查范围分级——task review 双 pass 的 task 抽查免全量重审（tier=independent QA 成本）
+状态：已完成
+关联变更：（无）
+文件：
+- src/stages/execute.js（acceptance step tier=independent 分支加「审查范围分级」指引：双 pass task 抽查、未双 pass 全量重审、跨 task 交界/design 整体/组装行为三项必查）
+- docs/prompt/_extracted.json（重跑 _extract.mjs 刷新镜像）
+- docs/prompt/execute.md（Step 8 镜像同步 + 修复预存 fence 错位：原误装 Wave 3 占位说明，换真实 acceptance prompt 原文）
+- .claude/skills/sillyspec-execute/SKILL.md（tier 段补分级摘要，遵守 SKILL 对外纯净性不引债单编号）
+- docs/sillyspec/platform-interface-map.md（3 处 execute.js 行号漂移修复：515→521 / 816→834 / 798-816→822-834）
+- docs/sillyspec/architecture-4a.md（1 处 execute.js 行号漂移修复：816→822）
+需求：execute acceptance step（对照设计检查）在 tier=independent 时要求 QA 子代理全量重审所有 task 的 diff，与 Task Review Gate 已产出的 task review 重复（实测 11 task 跨仓变更 101k tokens）。
+根因：stage review prompt 未区分 task review 已覆盖范围，双 pass task 被重复逐文件重审。
+方案：acceptance step tier=independent 分支加「审查范围分级」——task review specVerdict/qualityVerdict 双 pass 的 task 只抽查（读 1-2 核心 diff 抽验 reviewerNotes），fail/cannot_verify/缺失全量重审；跨 task 交界/design 整体对照/组装行为三项始终必查（task review 铁律只看单 task diff，覆盖不到）。
+结果：npm test 216/0、lint 305 文件通过、docs check 415/415 + doc-ref-check 80/80 全绿；同步 _extracted.json / execute.md 镜像 / SKILL.md，并修复镜像预存 fence 错位 + 测试暴露的 4 处行号漂移。

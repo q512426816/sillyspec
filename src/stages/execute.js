@@ -242,6 +242,11 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
 {REVIEW_JSON_CONTRACT}
   该 acceptance review 同时覆盖"代码审查"视角（风格/bug/安全/冗余），后续代码审查步骤仅需轻量复审。
 
+  **审查范围分级（省重复消耗，task review 已覆盖的不全量重审）**：每个 task 在 Task Review Gate 已产出 review.json（{SPEC_ROOT}/.runtime/execute-runs/{EXECUTE_RUN_ID}/tasks/task-XX/review.json，specVerdict/qualityVerdict 双 pass）。QA 子代理按它分层：双 pass 的 task 只**抽查**（读 1-2 个核心 diff 文件抽验 reviewerNotes 与实际改动相符，不必逐文件重审）；未双 pass（fail/cannot_verify/缺失）的 task 必须全量重审。无论抽查还是全量，以下三项始终必查——task review 铁律是"只看当前 task 的 diff"，这三项是它覆盖不到、只有 stage review 能兜住的：
+  1. 跨 task 交界（A 产出的接口/数据结构与 B 的消费是否对得上）
+  2. design.md 整体对照（最终实现拼起来是否仍符合设计意图，而非仅各 task 局部合规）
+  3. 组装行为（全量测试/构建/启动通过——单 task 测试全绿 ≠ 组装正确）
+
 ### 操作
 1. 读取 design.md（技术方案）
 2. 逐一对照 design.md 中的设计要点与实际代码实现
