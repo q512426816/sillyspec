@@ -440,8 +440,27 @@ docs/sillyspec/platform-interface-map.md（守卫插入致行号漂移，doc-ref
 ## ql-20260818-002-1734 | 2026-08-18 01:56:44 | 修复 quick --done 审计的 D-8 落盘假承诺
 状态：已完成
 关联变更：（无）
-文件：docs/sillyspec/platform-interface-map.md, src/quicklog.js, src/run/complete-handlers.js, src/run/quick-audit.js, test/quicklog-audit-notes.test.mjs
+文件：
+- src/quicklog.js（flipEntryInContent 加 auditNotes 参数幂等插「审计：」行；buildPushPayloadFromRaw 识别审计行不进 body_sections）
+- src/run/complete-handlers.js（从 review.docSyncHint/docsCheckHint 派生 auditNotes 传入 completeQuicklogEntry）
+- src/run/quick-audit.js（打印文案改准确：「已随本条 QUICKLOG「审计：」行落盘」）
+- test/quicklog-audit-notes.test.mjs（新增：落盘位置/幂等/向后兼容/平台 payload 不污染，8 断言）
+- docs/sillyspec/platform-interface-map.md（complete-handlers 行号漂移 1111-1228→1240-1382，doc-ref-check 拦截后校准）
 需求：修复 quick --done 审计的 D-8 落盘假承诺，让「欠账已记录」成真，供 2026-08-31 两周实测裁决有分母。
 根因：completeQuicklogEntry 只收 resultText/linkedChanges/changedFiles，review.docSyncHint/docsCheckHint 纯 console 打印后即丢，事后不可审计。
 方案：quicklog.js 条目落盘加 auditNotes（幂等「审计：」行 + 平台 payload 不污染）；complete-handlers.js 派生传入；quick-audit.js 文案改准确；新增 8 断言测试；顺手修 platform-interface-map.md 行号漂移（doc-ref-check 拦截实证）。
 结果：npm test 220 过 0 挂（含新测试）+ lint 通过；QUICKLOG 条目已带审计行落盘能力。
+
+## ql-20260818-003-b8c6 | 2026-08-18 02:11:19 | 清理决策文档腐烂与 gate 拦截的行号漂移存量
+状态：已完成
+关联变更：（无）
+文件：
+- docs/sillyspec/design-docs-signals-integration.md（status design-draft→done：O-1/O-2 已落地 a6a4b8b，加 2026-08-18 状态更正注记）
+- docs/sillyspec/doc-consistency-debt.md（新增 §九交叉审查后续 + updated_at 校准 + D-3 行号 worktree.js:1324→1368）
+- docs/sillyspec/prompt-control-debt.md（plan-b 行号 413→508 等校准 + cc-⑤ sync.js:536→546；title_zh 去反引号避开 keywordAssert 窗口半开局限）
+- .sillyspec/docs/sillyspec/scan/ARCHITECTURE.md（审批链路 3 处行号锚校准：536→546 / 1035→1046 / 1039→1050）
+- CLAUDE.md + .claude/CLAUDE.md（版本号 3.25.6→3.26.9，滞后 13 版校准）
+需求：清理决策文档腐烂与 gate 拦截的行号漂移存量，让本仓 docs check 回全绿、push 不被第三道关误拦。
+根因：并行会话推进 src（worktree.js/sync.js/plan.js）后文档引用行号漂移无人校准；设计稿 O-1/O-2 落地后 status 与 updated_at 未同步；CLAUDE.md 版本号手工维护滞后。
+方案：设计稿 status→done+状态更正注记；债单加 §九（gate 部署 sillyhub/D-8 落盘修复/hooksPath fail-open 修复/消费面盘点结论）；CLAUDE.md ×2 版本号 3.26.9；6 处引用行号逐一核对源码校准（含 scan/ARCHITECTURE.md 3 处行号锚校准，非覆盖重写）。
+结果：docs check 417 处引用全通过（190 keywordAssert）；纯 doc 改动未触及 src/test，npm test 无需重跑（quick #1 后源码未变，220 过基线仍有效）。

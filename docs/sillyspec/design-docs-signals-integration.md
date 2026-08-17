@@ -1,13 +1,15 @@
 ---
 author: qinyi
 created_at: 2026-08-15 22:35:00
-updated_at: 2026-08-16T15:49:15+08:00
-status: design-draft（整合评估，供裁决）
+updated_at: 2026-08-18T02:10:00+08:00
+status: done（O-1/O-2 已落地 2026-08-15 a6a4b8b；O-3/O-4 按 §七收手线冻结暂缓；F-1 已修 1e370d7）
 ---
 
 # 文档债信号源整合设计稿：三源一屏 + 修复闭环
 
 > 背景：2026-08-15 一天内落地三个文档债事实信号源 + quick 两类 hint，全部符合第六节"CLI 算事实注入"原则。本稿评估整合机会，供用户裁决。
+>
+> **2026-08-18 状态更正**：本文「推荐裁决 O-1 + O-2 排下一个完整流程变更」写于两者落地**之后**（同批 change docs-signals-o12 已归档），原 status 停在 design-draft 是文档腐烂实例（三代理交叉审查发现）。O-1/O-2 已在主干生效（`src/docs-debt.js:200` inlineCardInvalidRefs / `src/run/shared.js:585` matchQuickModules）；O-3 总线按 §七警讯暂缓（报债机制再造整合机制=机制造多证据）；O-4 等 O-1/O-2 实测数据。
 
 ## 一、现状盘点（四源各自为政）
 

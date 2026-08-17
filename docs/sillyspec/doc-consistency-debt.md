@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-08-15 14:48:00
-updated_at: 2026-08-15 15:20:00 +08:00
+updated_at: 2026-08-18 02:10:00 +08:00
 ---
 
 # 文档一致性债：为什么"文档为本"在 sillyhub 落地失效（双代理实证）
@@ -61,7 +61,7 @@ sillyhub 的文档烂不是执行失误，是机制性的。
 | D-1 | verify.js:137 明示"文档不一致不阻断"——制度根源 | ✅ 已修（2026-08-15 ql-20260815-011-66ac）：① verify --done 加 module-impact 死信探针（**blocking**，gates.js 复用 extractPendingDocSyncRows，pending 行阻断 verify 完成并回滚——死信号从 archive 提前到 verify）；② verify.js 探针段第 6 条措辞从"不符合时标记 ⚠️（不阻断）"改为"当场同步模块文档 + CLI 硬校验无死信"（prompt 镜像已重跑 _extract.mjs）。模块文档**内容**与代码的语义一致性仍属软判定（推 sillyhub/人类），本条只闭合确定性的死信/时序漏洞 | 中（已完成） |
 | D-2 | plan 覆盖对账跳过 `.sillyspec/` 文档路径（plan-postcheck.js:695 不传 keepSillyspecDocs，与 apply 阶段口径不一致） | ✅ 已修（2026-08-15 ql-20260815-006-a51d）：`parseDesignCoverageByRepo` 两处 `parseFileChangeList` 补传 `keepSillyspecDocs: true`，`.sillyspec/docs/` 模块文档须被 task `allowed_paths` 认领；`.sillyspec/` 非 docs 子路径仍排除（与 apply 口径一致）；新增 4 测试（test/design-coverage.test.mjs），删 1 个固化旧豁免契约的测试 | 小（quick 已完成） |
 | D-2b | 后置 task（T-13~T-17 类"文档同步"任务）无 task 卡即不受审计 | ✅ 已修（2026-08-15 ql-20260815-007-9ced）：`validateBlueprintConsistency` 加 plan.md 声明任务 ↔ tasks/ 卡片双向对账（rule `plan.task-plan-reconciliation`，缺卡/孤儿卡均阻断）；plan-postcheck-cross-repo 场景 8-11 四测试 + rollback 测试 fixture 迁移（不连续→重复 id 触发 Contract） | 中（已完成） |
-| D-3 | 仓库根 `docs/` 在 worktree 排除清单（worktree.js:1324、worktree-apply.js:405） | ⊘ 2026-08-15 逐行复核后**评估保留，不改码**：排除清单只影响 coarse dirty 判定（防多 agent 下别人改文档误阻断 apply，高频踩坑的合理权衡）；worktree 里改 `docs/` 实际会进 changedFiles（`filterDeliverableFiles` 不排 docs/，worktree-apply.js:405），apply 能带回主仓；重叠场景由 step5a「未提交∩changedFiles 精确点名」兜底（该口径保留 docs/）。初版"文档改动对流程完全不可见"表述过重，据此修正 | 不修（合理权衡） |
+| D-3 | 仓库根 `docs/` 在 worktree 排除清单（worktree.js:1368、worktree-apply.js:405） | ⊘ 2026-08-15 逐行复核后**评估保留，不改码**：排除清单只影响 coarse dirty 判定（防多 agent 下别人改文档误阻断 apply，高频踩坑的合理权衡）；worktree 里改 `docs/` 实际会进 changedFiles（`filterDeliverableFiles` 不排 docs/，worktree-apply.js:405），apply 能带回主仓；重叠场景由 step5a「未提交∩changedFiles 精确点名」兜底（该口径保留 docs/）。初版"文档改动对流程完全不可见"表述过重，据此修正 | 不修（合理权衡） |
 | D-4 | archive sync-module-docs 无结果校验（git add 无条件、空集静默通过） | ✅ 部分已修（2026-08-15 ql-20260815-010-7466，窄口径）：归档后 `extractDoneDocTargets` 提取「更新结果」done 行声明的目标文档路径，全路径声明但文件不存在 → warning（假申报嫌疑）。**剩余推语义审查**：「声明 done 但内容实际没改」的 diff 对账是语义判定（apply 期间文档可能已提交，git diff 为空≠没同步），且相对写法 modules/<id>.md 的 project 归属需读 module-map——按定位推 sillyhub/人类，本仓不做 | 窄口径已完成；语义对账不做（定位边界） |
 | D-5 | module-impact pending 死信箱（5+ change 带未清 pending 归档且 verify PASS） | ✅ 已修（2026-08-15 ql-20260815-009-b2de）：`archiveChangeDirectory` 移动前加死信校验（`extractPendingDocSyncRows`，只查「更新结果」段表格末列精确 pending/待办/未同步/todo，非零即 exit(1) 阻断归档）。**实况修正**：全量 archive 扫描死信形态仅一种（更新结果表 pending 行）；债单初版说的"change-center-rework 11 处 false"实为矩阵 needs_review 合法字段值非欠账信号。10 单测（test/archive-pending-deadletter.test.mjs） | 中（已完成） |
 | D-6 | doc-ref-check 能力未产品化（唯一硬一致性校验只覆盖 dogfood 仓一份文档） | ✅ 已修（2026-08-15 变更 2026-08-15-docs-check-productize，完整流程）：`sillyspec docs check` 命令落地（src/docs-check.js 两层校验 + glob walker 零依赖 + exit 0-1-2 + local.yaml docs-check 段）；dogfood 测试迁移调 runDocsCheck（检测力不降级）；**首次全量扫 docs/ 实证 51 处历史欠账**（architecture-4a.md 等行号漂移），登记待渐进修复——白名单暂维持 platform-interface-map.md 一份。**D-6 后续两落地（2026-08-15 ql-20260815-015-d4af / ql-20260815-016-dc33）**：① 无 local.yaml 裸跑必崩修复（readDocsCheckConfig 回退 {paths:null} 穿透解构默认值）；② 活文档欠账清零——71 处真欠账逐条校准 + 历史评审快照 39 处冻结进 local.yaml skip（快照是历史记录，改行号反而失真），全仓绿（273 引用/155 关键词断言）；③ quick --done 接入 docs check advisory（docsCheckHint 模式，只归因本次 changedFiles 的 .md 不扫存量）——欠账从"只涨不跌"变"落地即报"。**待办**：`--fix` 建议行号（失效报告附候选行号供确认，不自动改） | 中大（已完成+两后续） |
@@ -153,3 +153,12 @@ agent 拿到两行事实自己就会去改，不需要"请务必保持模块文�
   - **✅ 已裁决并落地（2026-08-16，用户裁决「不管新旧，旧的有问题就修」）**：改 CLI 缺省 paths 为 `docs/**/*.md` + `.sillyspec/docs/**/*.md`（`src/docs-check.js` DEFAULT_DOC_PATHS）——存量项目升级后会冒失效数，**按裁决语义这就是该修的文档错，不追责、修掉即对**；gate 是 fail-closed ratchet（只拦增量），存量失效不拦推送但 `docs check` 会如实报告。schema/example 同步（config-schema.js），本仓 local.yaml 的 paths 段删除只留 skip（配 paths 即覆盖缺省，留一条反而收窄回 docs/——实证 321→277 后纠正）。回归测试：缺省范围必扫 `.sillyspec/docs` 且显式 paths 可收窄。
 - **docs check token 断言已知局限（观察，不修）**：同一行多引用共享行首 token 断言（文档行首的裸词会被当作该行全部引用的关键词期望，如 CONVENTIONS.md「项目清单声明」行内两个 import 示例引用被要求窗口含 package 清单 token）——keywordAssert 本就是 best-effort 第二层，主校验（存在性+行号界）不受影响，改写文档文字可绕过。不登记 D 条目。
 - **scan-staleness 判定语义修正（2026-08-16，ql-20260816-009-fb44）**：D-7 方案 A 落地的 `≥50 commit / ≥14 天 → stale` 把 behind 计数当「文档失效/失真」判据，与第七节「behind 计数明确不参与 gate」原则矛盾——本仓实测平台快照内容与当前结构一致仍被判「可能失真」（404 commit / 53 天），实证误报。修正：status `stale` → `needs-refresh`（语义=该核对/重扫，不是文档判错）；message 明示「落后数≠文档错误，文档引用失效由 docs check 判定」并保留刷新指引；fresh/unknown 文案同步。判定信号分工收敛：**docs-check 失效数 = 文档是否失效（直接信号），behind 计数 = 该不该刷新（提示信号）**。
+
+## 九、交叉审查后续（2026-08-18，ql-20260818-002-1734 / ql-20260818-003-b8c6）
+
+用户质疑「文档实际会腐烂、没有维护入口」后三代理交叉审查（sillyhub 实证 / 消费面盘点 / 反方批判），净结论与落地动作：
+
+- **D-8 落盘假承诺已修（ql-20260818-002-1734）**：docSyncHint/docsCheckHint 原纯 console 打印即丢，「欠账可事后审计 QUICKLOG reasons 追溯」是不实承诺——08-31 裁决将有分子无分母。修法：`completeQuicklogEntry` 加 `auditNotes`，条目尾幂等落「审计：」行；平台 payload 不污染（审计行只进 raw_block）。**两周实测期起算修正：应从 2026-08-17 10:56（sillyhub 全局装 3.26.9）起算，到期 2026-08-31**；有效样本现状：SCAN_STALENESS 1 次真实注入 0 消费、DOCS_DEBT 0 次真实显示（Wave prompt 批量预渲染早于实现，无债可显——结构性盲区，裁决时区分「没机会出现」vs「出现被忽略」）、docSyncHint 本机 0 触发。
+- **docs gate 部署 sillyhub 主场（72% 欠账流量仓）**：75 处存量失效全数定性为跨仓引用（`docs/sillyspec/` 整目录 + `sillyspec-tool-side-requirements.md` 进 local.yaml skip；platform_sync.md 人工备注 2 处改写标注跨仓时点），真欠账清零，基线 0 起步，`.git/hooks/pre-push` 接线并实测「拦得住」（坏引用 exit 1）。
+- **本仓第三道关 fail-open 已修（同 ql-002）**：`.husky/pre-push` 文件在但 `core.hooksPath` 未设——git 从未调用，lint+test+docs gate 三道关自上线形同虚设（F-1 同型：接线断开未验证拦得住）。`git config core.hooksPath .husky` 接线 + dry-run push 验证触发。
+- **消费面盘点结论（供 08-31 后收缩裁决，现在不动）**：scan 7 文档正文零代码级消费（只有 frontmatter source_commit + 存在性）；代码级强消费 = `_module-map.yaml`（prompt 自动注入/docs-debt/quick 审计）+ knowledge INDEX.md（语义解析注入 execute）+ 模块卡（docs-check/verify gate/worktree 交付物三路夹持）。收缩候选（零消费实证）：INTEGRATIONS.md、flows/、glossary.md（standard 档已弃生成）；quick 档核心 4 份清单与真实读者面错配（STRUCTURE 仅 brainstorm 读，TESTING/CONCERNS 仅 verify 读却被 quick 档裁掉）。产品面变更等 A 数据，本仓 dogfood 可先行。
