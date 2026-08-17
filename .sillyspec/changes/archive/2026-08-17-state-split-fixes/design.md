@@ -73,6 +73,11 @@ status: draft
 | src/worktree-apply.js | 修改 | #2 applyByMerge 预对齐 baseline 并行文件（dirty 保护） |
 | src/run/shared.js | 修改 | #3 docsCheckHint 扩展 livingDocDrift |
 | src/run/quick-audit.js | 修改 | #3 漂移提示输出 |
+| src/config-schema.js | 修改 | #3 living-docs 配置键登记（task-04 补：config-schema 测试强制 live 键必入 renderExample 模板，防漂耦合） |
+| docs/sillyspec/file-lifecycle.md | 修改 | task-04 marker 不变量机制描述同步 |
+| docs/sillyspec/troubleshooting.md | 修改 | task-04 三坑闭环登记（#10） |
+| docs/sillyspec/platform-interface-map.md | 修改 | task-04 行号同步（stage.js:113/127/149 → 122/136/158，随 #1 源码 +9） |
+| docs/sillyspec/prompt-control-debt.md | 修改 | task-04 行号同步（prompt.js:563→571 / task-review.js:976→984 / gates.js:557→561，随源码编辑位移） |
 | test/execute-run-dir-fail-loud.test.mjs | 新增 | #1 四写入点目录创建+分层 fail 语义测试 |
 | test/worktree-merge-baseline-align.test.mjs | 新增 | #2 预对齐+merge+dirty 保护+降级测试 |
 | test/docs-living-drift-hint.test.mjs | 新增 | #3 交集提示测试 |

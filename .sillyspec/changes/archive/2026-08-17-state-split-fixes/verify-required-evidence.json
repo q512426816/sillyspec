@@ -1,0 +1,34 @@
+{
+  "generatedAt": "2026-08-16T18:27:00.049Z",
+  "schemaVersion": 1,
+  "items": [
+    {
+      "task": "task-01",
+      "verdict": "spec+quality",
+      "evidence": [
+        "auto-generated draft: 待 agent 对照 task-01 brief + diff 复核后升级为 pass/fail"
+      ]
+    },
+    {
+      "task": "task-02",
+      "verdict": "spec+quality",
+      "evidence": [
+        "auto-generated draft: 待 agent 对照 task-02 brief + diff 复核后升级为 pass/fail"
+      ]
+    },
+    {
+      "task": "task-03",
+      "verdict": "spec+quality",
+      "evidence": [
+        "auto-generated draft: 待 agent 对照 task-03 brief + diff 复核后升级为 pass/fail"
+      ]
+    },
+    {
+      "task": "task-04",
+      "verdict": "spec+quality",
+      "evidence": [
+        "auto-generated draft: 待 agent 对照 task-04 brief + diff 复核后升级为 pass/fail"
+      ]
+    }
+  ]
+}

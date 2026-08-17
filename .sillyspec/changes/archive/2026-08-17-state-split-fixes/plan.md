@@ -17,10 +17,10 @@ brainstorm 四件套（design.md 方案决策 D-001/002@v1 / FR-01~03）已确�
 
 ## Tasks
 
-- [ ] task-01: #1 四处 marker 写入点原子化（src/run/stage.js:96-112 主点 + gates.js:444 + prompt.js:518 + task-review.js:795）mkdir 先于 marker + 分层 fail 语义（D-001@v1）+ test/execute-run-dir-fail-loud.test.mjs（覆盖：FR-01, D-001@v1）
-- [ ] task-02: #2 applyByMerge 预对齐（四条件过滤集：`git diff baseHash..baselineCommit` 已提交口径 ∩ main 已推进 ∖ 分支已变更 ∖ 工作区 dirty；checkout main + commit；失败降级原 merge 路径）（D-002@v1）+ test/worktree-merge-baseline-align.test.mjs（覆盖：FR-02, D-002@v1）
-- [ ] task-03: #3 docsCheckHint 扩展 livingDocDrift（collectDocRefs 复用提取 platform-interface-map 引用源码集 ∩ changedFiles 交集非空提示；local.yaml living-docs 可配）+ test/docs-living-drift-hint.test.mjs（覆盖：FR-03）
-- [ ] task-04: 全量验证（npm test 全绿 + docs check 无新增失效）+ 文档同步（file-lifecycle marker 机制描述 / troubleshooting 登记三坑闭环）+ 显式 pathspec 提交（覆盖：全 FR）
+- [x] task-01: #1 四处 marker 写入点原子化（src/run/stage.js:96-112 主点 + gates.js:444 + prompt.js:518 + task-review.js:795）mkdir 先于 marker + 分层 fail 语义（D-001@v1）+ test/execute-run-dir-fail-loud.test.mjs（覆盖：FR-01, D-001@v1）
+- [x] task-02: #2 applyByMerge 预对齐（四条件过滤集：`git diff baseHash..baselineCommit` 已提交口径 ∩ main 已推进 ∖ 分支已变更 ∖ 工作区 dirty；checkout main + commit；失败降级原 merge 路径）（D-002@v1）+ test/worktree-merge-baseline-align.test.mjs（覆盖：FR-02, D-002@v1）
+- [x] task-03: #3 docsCheckHint 扩展 livingDocDrift（collectDocRefs 复用提取 platform-interface-map 引用源码集 ∩ changedFiles 交集非空提示；local.yaml living-docs 可配）+ test/docs-living-drift-hint.test.mjs（覆盖：FR-03）
+- [x] task-04: 全量验证（npm test 全绿 + docs check 无新增失效）+ 文档同步（file-lifecycle marker 机制描述 / troubleshooting 登记三坑闭环）+ 显式 pathspec 提交（覆盖：全 FR）
 
 任务依赖：task-01/02/03 相互独立可并行；task-04 依赖全部。
 
