@@ -19,10 +19,16 @@ import { join, relative, sep } from 'path';
 // worktrees 在任意深度按 basename 剪枝（可能嵌在 .runtime/worktrees 下）。
 const UPLOAD_EXCLUDE_TOP_BASE = new Set(['.runtime', 'runtime', 'projects']);
 const UPLOAD_PRUNE_NAMES_BASE = new Set(['worktrees']);
+// ql-20260818-002：local.yaml 是本机连接配置（platform/mcp 段含 shpsync_ token），
+// 不上传——与服务器侧过滤（backend spec_workspace SERVER_EXCLUDED_FILENAMES）双侧
+// 对齐。服务器清单残留 local.yaml 行时，本地 walk 不含它 → 生成 delete op，
+// 服务器放行 delete 清存量（token 不落 landing 树、不随 bundle 跨机分发）。
+const UPLOAD_EXCLUDE_FILENAMES = new Set(['local.yaml']);
 
 function isUploadExcludedPath(relPath) {
   const segs = relPath.split('/');
   if (UPLOAD_EXCLUDE_TOP_BASE.has(segs[0] ?? '')) return true;
+  if (UPLOAD_EXCLUDE_FILENAMES.has(segs[segs.length - 1] ?? '')) return true;
   return segs.some((s) => UPLOAD_PRUNE_NAMES_BASE.has(s));
 }
 

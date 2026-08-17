@@ -75,6 +75,8 @@ const specRoot1 = join(tmpRoot, 'ws1', '.sillyspec');
 mkdirSync(join(specRoot1, 'changes', '2026-08-17-demo'), { recursive: true });
 writeFileSync(join(specRoot1, 'changes', '2026-08-17-demo', 'design.md'), '# Design v2\n', 'utf8');
 writeFileSync(join(specRoot1, 'changes', '2026-08-17-demo', 'plan.md'), '# Plan\n', 'utf8');
+// ql-20260818-002：local.yaml（本机 token 配置）不上传——walk 必须排除
+writeFileSync(join(specRoot1, 'local.yaml'), 'platform:\n  token: shpsync_secret\n', 'utf8');
 
 manifestBody = {
   files: {
@@ -144,6 +146,24 @@ assert(designEntry && !designEntry.path.includes('\\'),
   `walk 输出 POSIX path（实际 ${designEntry && designEntry.path}）`);
 assert(designEntry && designEntry.path === 'changes/2026-08-17-demo/design.md',
   'POSIX path 与预期完全一致');
+
+// ─────────────────────────────────────────
+// 5. ql-20260818-002：local.yaml 排除 + 存量行清理
+// ─────────────────────────────────────────
+console.log('\n--- 5. local.yaml 排除 ---');
+const walkPaths5 = walkSpecTree(specRoot1).map((e) => e.path);
+assert(!walkPaths5.includes('local.yaml'), 'walk 排除 local.yaml（token 不上传）');
+// 服务器清单残留 local.yaml 行 → 本地无 → 生成 delete op（服务器放行清存量）
+const ops5 = computeSpecOps(
+  {
+    'local.yaml': { hash: 'stale', version: 3, exists: true },
+    'changes/2026-08-17-demo/plan.md': { hash: 'whatever', version: 1, exists: true },
+  },
+  hashFiles(walkSpecTree(specRoot1)),
+);
+const delOp5 = ops5.find((o) => o.path === 'local.yaml');
+assert(delOp5 && delOp5.op === 'delete' && delOp5.base_version === 3,
+  '服务器清单残留 local.yaml 行 → delete op（base_version=3，服务器清存量）');
 
 // 纯函数 extractChangeDirs 顺手验证
 const dirs = extractChangeDirs([
