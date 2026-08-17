@@ -401,10 +401,14 @@ docs/sillyspec/platform-interface-map.md（守卫插入致行号漂移，doc-ref
 方案：acceptance step tier=independent 分支加「审查范围分级」——task review specVerdict/qualityVerdict 双 pass 的 task 只抽查（读 1-2 核心 diff 抽验 reviewerNotes），fail/cannot_verify/缺失全量重审；跨 task 交界/design 整体对照/组装行为三项始终必查（task review 铁律只看单 task diff，覆盖不到）。
 结果：npm test 216/0、lint 305 文件通过、docs check 415/415 + doc-ref-check 80/80 全绿；同步 _extracted.json / execute.md 镜像 / SKILL.md，并修复镜像预存 fence 错位 + 测试暴露的 4 处行号漂移。
 
-## ql-20260817-004-1ca6 | 2026-08-17 14:36:07 | (quick 任务)
-状态：进行中
+## ql-20260817-004-1ca6 | 2026-08-17 14:36:07 | plan 阶段 TaskCard 生成改为 batch 模式
+状态：已完成
 关联变更：（无）
-文件：（见实际改动）
+文件：docs/prompt/plan.md, src/stages/plan.js, test/plan-optimization.test.mjs, test/plan-task-numbering.test.mjs, test/plan-taskcard-include.test.mjs
+需求：plan 阶段 TaskCard 生成改为 batch 模式，减少子代理数量。\n
+根因：原 buildCoordinatorStep 要求每个 task 一个独立子代理，task 数多时子代理调用线性爆炸。\n
+方案：按 2~4 task 一组分派子代理，一次生成多张 TaskCard；同步更新相关测试与 docs/prompt/plan.md。\n
+结果：改动已 stage，lint 与全量测试通过；待提交。
 
 ## ql-20260817-005-4369 | 2026-08-17 14:42:24 | 修复 execute 子代理中断接手成本高、task 越权、plan --done 多层校验迭代盲盒三个负面问题
 状态：已完成
