@@ -139,6 +139,7 @@ worktree 路径 + 分支名 + 模式
 
 **本步出现的运行时占位符**
 - `{KNOWLEDGE_HIT_REPORT}` → `knowledge-match.js` 的 `matchKnowledge()` 命中报告（基于 changeName + plan.md 任务名匹配 `knowledge/` 目录条目），同时落盘 `.runtime/knowledge-hit-report.json`；无命中时为 `Status: no matches` 文本
+- `{DOCS_DEBT}` → `run/prompt.js` 调 `docs-debt.js` 的 `computeDocsDebt()` 算出的模块文档欠账事实（changedFiles 口径 = worktree 根已提交 `baselineCommit..HEAD` ∪ 未提交 status 并集 × `_module-map.yaml`），注入「### 模块文档欠账（CLI 算事实）」段；无欠账时替换为空串，异常时降级为单行说明
 
 **提示词原文**
 
@@ -156,6 +157,12 @@ worktree 路径 + 分支名 + 模式
 
 如上所示的知识条目与本次任务相关。请阅读这些条目以获取项目约定和已知模式。
 如无命中条目（Status: no matches），跳过本节。
+
+### 模块文档欠账（CLI 算事实）
+{DOCS_DEBT}
+
+如上为 CLI 用 git 事实算出的本变更触及模块文档欠账（无输出=无欠账或归属数据缺失）。
+欠账处理：Wave 收尾时顺手同步对应模块卡（变更索引追加条目），不必为此停下。
 
 ### 铁律
 - **不要询问用户确认频率**，默认 wave 模式；用户已明确口头指定时遵从其指定
@@ -181,15 +188,23 @@ worktree 路径 + 分支名 + 模式
 
 **提示词原文**
 
-````markdown## Wave 1: 执行以下任务
+````markdown
+## Wave 1: 执行以下任务
 
 ## 执行方式
 
-**每个任务必须由独立子代理执行，你不要自己写代码。**
+**默认每个任务由独立子代理执行，你不要自己写代码。**
 
-你的角色是调度者 + 审查者：
-1. 为每个任务启动一个子代理（Agent tool），同 Wave 内可并行
-2. 子代理完成后审查结果
+可选 batch（合并实现）：同一 Wave 内，若一组任务同时满足以下三个条件，可把它们合并为一个 batch（最多 3 个 task），交给单个子代理串行逐个完成实现：
+- 组内任意两个 task 的 allowed_paths 无交集（文件正交）
+- 组内任意两个 task 之间无 provides / expects_from 契约链（契约 task 禁止同批——串行实现会读到半成品，契约 task 由独立子代理并行处理或落在不同 Wave）
+- 组大小不超过 3 个 task
+
+任一条件不满足，该 task 走独立子代理（默认形态）；拿不准就不合并。无论独立还是 batch，实现一律由子代理完成，你不要自己写代码。
+
+你的角色是调度者 + 审查者（batch 只合并实现、不合并审查）：
+1. 为每个任务启动一个子代理（Agent tool），或按上述三条件把多个任务合并为一个 batch 子代理，同 Wave 内可并行
+2. 子代理完成后审查结果——batch 子代理只做实现与自验，task 审查、review.json 产出与 checkbox 勾选仍归你（主 agent），在子代理返回后逐 task 进行；审查 batch 报告时逐 task 对照 allowed_paths 检查改动文件清单有无越权
 3. 勾选 plan.md 中的 checkbox
 4. 记录改动文件和测试结果
 
@@ -210,9 +225,7 @@ worktree 路径 + 分支名 + 模式
 ### 注意
 蓝图文件（tasks.md / design.md / proposal.md / requirements.md）在主工作区 .sillyspec/changes/<change>/ 下，它们可能不在 worktree 中。读取蓝图时使用主工作区路径，不要拼接到 worktree 路径下。
 
-### 派发后端提示：SillyHub MCP 已配置但路径A 未落地
-
-检测到 local.yaml mcp 段或 env 配置，但 SillyHub `dispatch_worker` 尚不支持 `worktree_path`（路径A 跨仓未落地）。本次派发走 Local（本机 Agent tool），与默认行为一致——上方「执行方式」与「工作目录」段适用。
+**SillyHub 派发互斥**：SillyHub 派发模式下按派发段执行（一 Wave 一 mission），不按 batch 分组；batch 分组指导仅适用于本地 Agent tool 派发。
 
 ### 任务摘要（按需读取完整蓝图）
 为每个任务启动子代理时，**只需告知任务目标和蓝图文件路径，让子代理按需读取**：
@@ -227,6 +240,7 @@ task-01: 默认任务 1 (TBD) → task-01.md
 5. 任务含测试代码时，把下方「测试用例设计」整段复制进子代理 prompt，要求子代理按此设计测试用例
 6. **增量落盘与中断接手指引**：每完成一个可见产出（代码/测试/文档），立即写盘并执行一次最小验证（如语法检查、单跑相关测试）。工作过程中如被 429/API 配额/会话中断，应在最终回复里输出「已完成清单」（含文件路径、测试命令、当前卡点），不要只输出结论——主代理会依据磁盘产物和该清单判断哪些部分已完成，哪些需接手补做，避免重做已落盘的工作
 7. **任务边界铁律**：严格只实现本 task 的 `allowed_paths` 内文件；若 design.md/plan.md 明确指定了接口/回调/钩子接入位置，必须逐字遵守；不允许顺手实现其他 task 的内容（如 task-01 不要把 task-02 的接入也做了）。如发现必须改其他 task 文件才能继续，先回到主代理由主代理决定是否重分 Wave 或调整 plan，禁止子代理私自越界
+8. **batch 子代理协议**（仅当按「执行方式」节条件合并 batch 时附加进该子代理 prompt）：按 batch 内 task 顺序逐个完成实现闭环——读取 tasks/task-N.md → 实现 → 跑该 task 的 verify 命令 → 记录该 task 报告（改动文件清单 / verify 结果 / 卡点）→ 才开始下一个 task；最终回复输出逐 task 报告清单。禁止写 review.json、禁止勾选 plan.md checkbox——task 审查与勾选归主 agent，在子代理返回后逐 task 进行。越权即停：发现必须改 batch 内其他 task 或任何 batch 外 task 的 allowed_paths 文件 → 立即停止本 task 及后续，报告冲突文件与卡点，回主 agent 裁决（重分 Wave / 调整 plan / 回退独立子代理）。第 7 条任务边界铁律在 batch 语境下的「本 task」= 当前正在实现的 task
 
 {{include: testcase-design}}
 
@@ -251,7 +265,7 @@ execute 按 Wave 持久化进度，task 级进度靠 plan.md checkbox 勾选。�
 - [ ] 默认任务 1 (TBD)
 
 ### 调度要求
-1. **同一 Wave 内的任务必须并行启动子代理**（Wave 定义=无依赖可并行，不自行分析依赖关系；有依赖应在 plan.md 的不同 Wave 中）。
+1. **同一 Wave 的多个子代理（独立或 batch）必须并行启动，batch 内部串行**（batch 分组仅按文件正交 / 无契约链判定，不改变 Wave 依赖语义——Wave 定义=无依赖可并行；有依赖应在 plan.md 的不同 Wave 中）。
 2. **Reverse Sync**：子代理报告实现与 design.md 不一致时，先检查是代码错了还是文档有遗漏
 3. **不要频繁编译！** 编译很慢，只在以下情况运行：
    - 写了大量代码后需要验证语法正确性
@@ -263,7 +277,7 @@ execute 按 Wave 持久化进度，task 级进度靠 plan.md checkbox 勾选。�
    - 记录改动文件和测试结果
 5. 遇到 BLOCKED → 记录原因，选择：重试/跳过/停止
 
-### Task Review Gate（必须执行，不可跳过）
+### Task Review Gate
 
 每个子代理完成后、勾选 checkbox **之前**，你必须创建 task review。
 
@@ -496,8 +510,9 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
 
 先检查当前 worktree 的隔离模式：
 ```bash
-`sillyspec worktree meta <change-name>`（CLI 子命令，输出 meta.json 的 mode / worktreePath 字段；无 meta 输出 no meta）
+sillyspec worktree meta <change-name>
 ```
+（CLI 子命令，输出 meta.json 的 mode / worktreePath 字段；无 meta 输出 no meta）
 
 ### 操作（mode = worktree，SillySpec 创建的隔离 worktree）
 

@@ -1,6 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-08-17 16:14:16
+risk_level: unit-sufficient
 ---
 
 # Design — execute 阶段 task 执行 batch 调度

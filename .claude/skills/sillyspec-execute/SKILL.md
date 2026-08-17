@@ -147,7 +147,7 @@ execute 还有**第二道**独立的 stage 级审查：除逐 task review.json �
 
 - **主仓 task**：子代理 workdir = 主仓 worktree 路径（CLI 自动创建的隔离 worktree）。
 - **跨仓 task**：子代理 workdir = 跨仓仓根目录（**直接在跨仓仓主干工作区改+commit，不经主仓 worktree、不建分支**）。commit 到跨仓仓主干即落盘。
-- 同一个 Wave 内允许混合主仓 + 跨仓 task（每个 task 独立子代理，各传各的 workdir）。Wave prompt 会注入 per-task workdir 表，按表选。
+- 同一个 Wave 内允许混合主仓 + 跨仓 task。默认每 task 独立子代理（各传各的 workdir，Wave prompt 注入 per-task workdir 表，按表选）；同 Wave 内满足**文件正交 / 无契约链 / 组 ≤3** 三个条件的 task 可合并为一个 batch 子代理串行实现——batch 只合并实现，task 审查、review.json 产出与 checkbox 勾选仍归主 agent（子代理返回后逐 task 进行）。
 
 ### 跨仓 task 的双锡点（CLI 写入，子代理不改）
 

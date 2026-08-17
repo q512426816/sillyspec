@@ -303,6 +303,67 @@ console.log('\n--- 9. ctx 单仓（无跨仓 task）退化为单值 worktreeSect
   restore()
 }
 
+// ── 10. batch 调度断言（2026-08-17-execute-batch-dispatch，FR-06）──
+// 断言锚点 = design.md「接口定义」节 prompt 文本契约；全部 needle 逐字取自
+// task-01 落地后 buildWavePrompt 实际产出（先 dump 实际输出核实再落盘，不预写死字符串）。
+console.log('\n--- 10. batch 调度（三条件分组 / 逐 task 闭环 / 职责边界 / 越权即停 / 并行铁律 / 旧文案移除）---')
+{
+  const restore = withoutSillyHubEnv()
+  const out = buildWavePrompt(wave, 1, null, worktreePath, { dispatchMode: 'local' })
+
+  // a. 三条件分组指导存在（①文件正交 ②无契约链 ③组大小上限 3）
+  assertContains(out,
+    '可选 batch（合并实现）：同一 Wave 内，若一组任务同时满足以下三个条件，可把它们合并为一个 batch（最多 3 个 task），交给单个子代理串行逐个完成实现：',
+    'batch 三条件分组指导存在（开篇整句含「最多 3 个 task」）')
+  assertContains(out, '组内任意两个 task 的 allowed_paths 无交集（文件正交）',
+    '条件①：组内 allowed_paths 两两无交集（文件正交）')
+  assertContains(out, '组内任意两个 task 之间无 provides / expects_from 契约链',
+    '条件②：组内无 provides / expects_from 契约链')
+  assertContains(out, '契约 task 禁止同批', '契约 task 禁止同批（与 plan batch「尽量同批」方向相反）')
+  assertContains(out, '组大小不超过 3 个 task', '条件③：组大小不超过 3 个 task（batch 上限 3）')
+
+  // b. 逐 task 实现闭环协议（「逐个完成实现」类表述 + 记录报告后才下一个）
+  assertContains(out, '按 batch 内 task 顺序逐个完成实现闭环',
+    'batch 协议含「逐个完成实现闭环」表述')
+  assertContains(out, '跑该 task 的 verify 命令 → 记录该 task 报告（改动文件清单 / verify 结果 / 卡点）→ 才开始下一个 task',
+    'batch 闭环顺序：verify → 记录报告 → 才开始下一个 task')
+  assertContains(out, '最终回复输出逐 task 报告清单', 'batch 最终回复输出逐 task 报告清单')
+
+  // c. 职责边界：batch 子代理不写 review.json、不勾选 checkbox（审查与勾选归主 agent）
+  assertContains(out, '禁止写 review.json、禁止勾选 plan.md checkbox——task 审查与勾选归主 agent',
+    'batch 子代理禁止写 review.json / 禁止勾选 checkbox（审查归主 agent）')
+  assertContains(out, 'batch 子代理只做实现与自验，task 审查、review.json 产出与 checkbox 勾选仍归你（主 agent）',
+    '主 agent 角色段：审查/review.json/勾选仍归主 agent（batch 只合并实现不合并审查）')
+
+  // d. 越权即停（「立即停止」类表述）
+  assertContains(out,
+    '越权即停：发现必须改 batch 内其他 task 或任何 batch 外 task 的 allowed_paths 文件 → 立即停止本 task 及后续，报告冲突文件与卡点，回主 agent 裁决',
+    '越权即停：改 batch 外/其他 task 文件立即停止并报告冲突')
+
+  // e. 并行铁律改写（「独立或 batch」+「并行启动」+「batch 内部串行」组合表述）
+  assertContains(out, '同一 Wave 的多个子代理（独立或 batch）必须并行启动，batch 内部串行',
+    '并行铁律改写：独立或 batch 并行启动 + batch 内部串行')
+
+  // f. 旧独占文案移除（NotContains 锚旧整句；新版为「默认每个任务由独立子代理执行」默认+例外结构，
+  //    不断言子串「由独立子代理执行」——该子串在新默认句中仍存在，会误伤）
+  assertNotContains(out, '每个任务必须由独立子代理执行，你不要自己写代码。',
+    '旧独占整句「每个任务必须由独立子代理执行，你不要自己写代码。」已移除')
+  assertContains(out, '默认每个任务由独立子代理执行',
+    '新版默认形态「默认每个任务由独立子代理执行」存在（默认+batch 例外结构）')
+
+  // g. SillyHub 互斥句存在（batch 分组仅本地 Agent tool 派发适用）
+  assertContains(out, 'SillyHub 派发模式下按派发段执行（一 Wave 一 mission），不按 batch 分组',
+    'SillyHub 派发互斥句存在（SillyHub 模式不按 batch 分组）')
+  assertContains(out, 'batch 分组指导仅适用于本地 Agent tool 派发',
+    'batch 分组指导仅适用于本地 Agent tool 派发')
+  // 互斥句在 SillyHub 派发段注入时同样在场（batch 指导与派发段共存时消歧）
+  const shOut = buildWavePrompt(wave, 1, null, worktreePath, { dispatchMode: 'sillyhub' })
+  assertContains(shOut, 'SillyHub 派发模式下按派发段执行（一 Wave 一 mission），不按 batch 分组',
+    'SillyHub 模式输出同样含派发互斥句（与派发段共存消歧）')
+
+  restore()
+}
+
 // 清理 task-08 tmp 仓（最后用例后）
 for (const d of task08TempDirs) {
   try { rmSync(d, { recursive: true, force: true }) } catch { /* Windows EPERM best-effort */ }
