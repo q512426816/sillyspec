@@ -7,11 +7,11 @@ created_at: 2026-08-17 16:45:00
 # 实现计划（Plan）：execute 阶段 task 执行 batch 调度
 
 ## Wave 1（基础：源码调度指令改造）
-- [ ] task-01: execute.js buildWavePrompt batch 调度指令改造（覆盖：FR-01, FR-02, FR-03, FR-04, FR-05）
+- [x] task-01: execute.js buildWavePrompt batch 调度指令改造（覆盖：FR-01, FR-02, FR-03, FR-04, FR-05）
 
 ## Wave 2（依赖 Wave 1：验证与镜像，两 task 文件正交）
-- [ ] task-02: execute-dispatch 集成测试新增 batch 调度断言 + 既有断言适配（覆盖：FR-06）
-- [ ] task-03: 文档同步——_extracted.json 再生、execute.md 镜像逐字替换、SKILL.md 核对、stages.md 变更索引（覆盖：NFR-01）
+- [x] task-02: execute-dispatch 集成测试新增 batch 调度断言 + 既有断言适配（覆盖：FR-06）
+- [x] task-03: 文档同步——_extracted.json 再生、execute.md 镜像逐字替换、SKILL.md 核对、stages.md 变更索引（覆盖：NFR-01）
 
 ## 任务总表
 | 编号 | 任务 | Wave | 优先级 | 依赖 | 覆盖 FR/D | 说明 |
