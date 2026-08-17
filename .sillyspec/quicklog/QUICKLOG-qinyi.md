@@ -377,11 +377,11 @@ docs/sillyspec/platform-interface-map.md（守卫插入致行号漂移，doc-ref
 方案：6 项整体删除 + 16 项去 export（运行时零变化）+ lint advisory 收紧 hard fail + 修复并发会话遗留的 5 处平台地图行号。
 结果：lint 0 项全绿、npm test 211 pass、doc-ref-check 80/80、CLI 冒烟正常。
 
-## ql-20260817-002-7378 | 2026-08-17 08:14:56 | 修 docs check 4 处 baseline 失效引用
+## ql-20260817-002-7378 | 2026-08-17 08:14:56 | docs check baseline 清零——debt 文档 4 处行号引用随并行会话源码演进同步
 状态：已完成
-关联变更：（无）
-文件：docs/sillyspec/prompt-control-debt.md
-需求：修 docs check 4 处 baseline 失效引用。
-根因：并行会话死码清理（b1da59b）与 sync.js 增量（a815d69）后未同步 debt 文档行号。
-方案：三锚点单行校正（detectChangeRisk→137+豁免注释:141 / stage-contract:469 / sync.js:536×2）。
-结果：docs check 415/415 全通过（191 关键词断言）；QUICKLOG 已由 CLI 落盘（ql-20260817-002-7378），提交待办：docs/sillyspec/prompt-control-debt.md + QUICKLOG。
+关联变更：（无；前序 state-split-fixes 归档时遗留的 baseline 失效）
+文件：docs/sillyspec/prompt-control-debt.md（P4.1 risk tier 段 / vrf-a 段 / cc-⑤ 段三处引用行号校正）
+需求：state-split-fixes 归档后 docs check 仍报 4 处 baseline 失效（非该变更引入）——change-risk-profile.js:273/317 超界（文件已被 22e-b 死码清理缩到 255 行）+ sync.js:502 ×2 漂移（auto-sync 功能推进）。
+根因：并行会话 b1da59b（死导出清理，change-risk-profile 317→255 行）与 a815d69（sync.js 平台推送增量）改源码后未同步 prompt-control-debt.md 的 file:line 引用——「谁污染谁治理」在并发下无人执行（正是 state-split-fixes #3 livingDocDrift 提示要解的问题，本条是其首例获益场景的反面教材：提示机制上线前的存量债）。
+方案：三锚点单行校正——detectChangeRisk 273/317→137（同符号两处收敛到现位置，vrf-a 段补豁免注释 :141 锚点）；stage-contract.js:466→469（detectChangeRisk 调用点）；sync.js:502→536 ×2（cc-⑤ 段两处指向 SyncManager.checkApproval 类方法现位，fetchJson/unknown 分支在 536-556）。
+结果：docs check 415/415 全通过（191 处关键词断言）——本仓活文档引用零失效；纯 doc 单文件改动跳过 npm test（lint 不扫 docs/）；commit 797ff2d。
