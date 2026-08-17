@@ -79,4 +79,5 @@ updated_at: 2026-08-16T19:05:00+08:00
 - ql-20260816-012-a975 | D 组 verify 系（self-audit D16/D17/D21）：任务蓝图验收改对照 TaskCard frontmatter acceptance 列表逐条核验（原「checkbox 勾选」与 TaskCard 协议矛盾，产物正文无 checkbox）；verify-result Runtime Evidence 模板通用化（去 sillyhub 专有词，改按实际触碰组件填写，治模板教堆关键词过字面 gate 的自我拆台）；verify-probes.md 端点对账示例改通用占位；清旧 prompt 迁移史注释。
 - ql-20260816-013-00e8 | D 组 scan/execute/brainstorm 系（self-audit D18/D21）：scan.js:141 node -e import 内部源码命令改 sillyspec workflow check scan-docs --project 子命令 + execute.js:326 改 sillyspec worktree meta（consumer 项目不再 ERR_MODULE_NOT_FOUND，同功能 CLI 子命令已存在）；brainstorm.js step8/scan.js Step11 检查项9 数字 step 引用改 step name（P6.4 裁决漏网）。同步 _extracted + 三镜像。
 - ql-20260816-014-4a60 | D20 execute 指令强度收敛（纯减法）：去 5 处装饰性「（必须严格遵守）/（必须执行，不可跳过）」标题缀 + 收敛 Wave 步「必须并行+禁止串行等待」双强度为单一必须（必须 19→14、必须严格遵守 4→0）；保留全部承重 enforcement（并行/前台/Wave 字面/ID/编译纪律/lint+format）；同步 _extracted + execute.md 镜像 + 派发测试断言（旧标题字面）。
+- 2026-08-17-quick-close-linked-changes | quick.js step3 prompt「收尾推荐顺序」第 2 步补自动归档说明：--linked-changes 关联的真实变更 tasks.md 全勾选时 CLI 自动归档到 changes/archive/，无需再跑完整 archive 阶段；同步 file-lifecycle.md / quick.md 镜像 / sillyspec-quick SKILL.md。
 <!-- MANUAL_NOTES_END -->

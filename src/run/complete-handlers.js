@@ -911,6 +911,21 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
       console.warn(`⚠️ QUICKLOG 完成态写入失败: ${e.message}`)
     }
 
+    // 轻量归档任务已全勾选的关联真实变更
+    try {
+      const closeResult = await closeQuickLinkedChanges({ pm, cwd, specBase, linkedChanges, platformOpts })
+      if (closeResult.closed.length > 0) {
+        console.log(`📦 已自动归档 ${closeResult.closed.length} 个关联变更：${closeResult.closed.join(', ')}`)
+      }
+      if (closeResult.skipped.length > 0) {
+        for (const s of closeResult.skipped) {
+          console.log(`⏭️ 关联变更 ${s.name} 未归档：${s.reason}`)
+        }
+      }
+    } catch (e) {
+      console.warn(`⚠️ 关联变更轻量归档失败（不阻断 quick 完成）: ${e.message}`)
+    }
+
     // 清理 session 目录（rmSync/unlinkSync 容忍不存在）。路径与写入对齐（Q4 resolveQuickSessionsDir）。
     try {
       if (changeName) {
@@ -933,8 +948,109 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
       }
     }
   }
+
   return null
 }
+
+/**
+ * 判定变更 tasks.md 是否全部勾选完成。
+ * 无 tasks.md 或有未勾选项均返回 false（保守策略）。
+ *
+ * @param {string} specBase - .sillyspec 根目录
+ * @param {string} changeName - 变更名
+ * @returns {boolean}
+ */
+function isChangeTasksComplete(specBase, changeName) {
+  const tasksPath = join(specBase, 'changes', changeName, 'tasks.md')
+  if (!existsSync(tasksPath)) return false
+  try {
+    const content = readFileSync(tasksPath, 'utf8').replace(/\r\n/g, '\n')
+    return !/^-\s*\[\s*\]\s+/m.test(content)
+  } catch {
+    return false
+  }
+}
+
+/**
+ * 对单个已完成的关联真实变更执行轻量归档（不校验 plan.md/module-impact.md）。
+ *
+ * @param {Object} opts
+ * @param {ProgressManager} opts.pm
+ * @param {string} opts.cwd
+ * @param {string} opts.specBase
+ * @param {string} opts.changeName
+ * @param {Object} [opts.platformOpts]
+ * @returns {Promise<{closed:boolean, destDir?:string, reason?:string}>}
+ */
+async function closeSingleQuickLinkedChange({ pm, cwd, specBase, changeName, platformOpts = {} }) {
+  const srcDir = join(specBase, 'changes', changeName)
+  if (!existsSync(srcDir)) {
+    return { closed: false, reason: '源目录不存在' }
+  }
+  const changesDir = join(specBase, 'changes')
+  const archiveDir = join(changesDir, 'archive')
+  const date = new Date().toISOString().slice(0, 10)
+  const destName = archiveDestDirName(date, changeName)
+  const destDir = join(archiveDir, destName)
+
+  // 幂等：目标目录已存在或已在 archive/ 中
+  if (existsSync(destDir) || findAlreadyArchivedDir(archiveDir, changeName)) {
+    return { closed: false, reason: `目标目录已存在（${destName}）` }
+  }
+
+  mkdirSync(archiveDir, { recursive: true })
+  try {
+    renameSyncRetry(srcDir, destDir)
+  } catch (e) {
+    return { closed: false, reason: `移动目录失败：${e.message}` }
+  }
+
+  pm.unregisterChange(cwd, changeName)
+  await archiveWorktreeCleanup(cwd, changeName, specBase, platformOpts)
+  safeGit(cwd, ['add', '--', `.sillyspec/changes/archive/${destName}/`])
+
+  console.log(`📦 关联变更已自动归档：${changeName} → archive/${destName}/`)
+  return { closed: true, destDir }
+}
+
+/**
+ * quick --done 完成后，自动关闭任务已全部完成的关联真实变更。
+ * quick-<hex> sessionId 自身不在此处理（由调用方单独注销）。
+ * 单个归档失败 catch warn，不阻断 quick 完成。
+ *
+ * @param {Object} opts
+ * @param {ProgressManager} opts.pm
+ * @param {string} opts.cwd
+ * @param {string} opts.specBase
+ * @param {string[]} [opts.linkedChanges]
+ * @param {Object} [opts.platformOpts]
+ * @returns {Promise<{closed:string[], skipped:{name:string,reason:string}[]}>}
+ */
+export async function closeQuickLinkedChanges({ pm, cwd, specBase, linkedChanges = [], platformOpts = {} }) {
+  const closed = []
+  const skipped = []
+  // 只处理真实变更，跳过 quick 会话 sessionId
+  const realChanges = linkedChanges.filter((name) => !/^quick-[0-9a-f]{8}$/.test(name))
+  for (const changeName of realChanges) {
+    try {
+      if (!isChangeTasksComplete(specBase, changeName)) {
+        skipped.push({ name: changeName, reason: 'tasks.md 未全勾选或不存在' })
+        continue
+      }
+      const result = await closeSingleQuickLinkedChange({ pm, cwd, specBase, changeName, platformOpts })
+      if (result.closed) {
+        closed.push(changeName)
+      } else {
+        skipped.push({ name: changeName, reason: result.reason || '未知原因' })
+      }
+    } catch (e) {
+      console.warn(`⚠️ 关联变更 ${changeName} 轻量归档失败（不阻断 quick 完成）: ${e.message}`)
+      skipped.push({ name: changeName, reason: e.message })
+    }
+  }
+  return { closed, skipped }
+}
+
 /**
  * execute「Wave N 执行」步骤完成后扫 worktree 提取 provider endpoint artifact（W6 Step6c 从
  * completeStep 内联块抽出）。供 verify 阶段 parity 对账 + consumer task 上游契约注入。

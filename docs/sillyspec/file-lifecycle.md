@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-05-31 11:00:00
-updated_at: 2026-08-17T00:58:00+08:00
+updated_at: 2026-08-17T10:49:12+08:00
 ---
 
 # SillySpec 文件生命周期
@@ -51,7 +51,7 @@ updated_at: 2026-08-17T00:58:00+08:00
 | execute | 动态 | 默认 12 步；Wave 来自 `plan.md`，解析失败时默认 3 个 Wave；完成时 `validateExecuteOutputs` 客观核验存在真实代码变更（plan 有 task 但确证零变更则阻断），Task Review Gate 另做 review.json git 真实性交叉校验；`--done` 时若 plan 全勾 + 代码客观核验通过则一次性补完剩余 step 直达完成（见后「execute --done 批量完成」）；Wave prompt 含中断续跑引导（429/API 配额/崩溃中断后，plan.md 已勾选 task 跳过不重跑，`sillyspec status` + `run execute` 回当前 Wave step 续跑）；Wave 调度要求 + acceptance「运行测试」步要求子代理**既跑 lint check 也跑 formatter**（只 check 不 format 会把格式问题留到 commit 被 pre-commit hook 拦）；「确认 worktree 路径」步预告 worktree 内工具链可能缺失（先 `--version` 确认，缺则 `uv tool install`/`uv sync`）；「加载上下文」步 2026-08-16 起符号影响面报告落盘核验（`{SPEC_ROOT}/changes/<change>/symbol-impact.md`，`gates.js` `enforceSymbolImpactGate` 在该步 --done 硬校验：文件存在 + plan.md 每个 task-XX 在报告中有结论行，缺 → blocked exit 1，防前缀步被一句摘要盖章跳过） |
 | verify | 7 | 只读校验 + 写 `verify-result.md`；「运行测试和质量扫描」step **不重复手动跑全量测试**（统一交 CLI 对账，避免与 CLI 实测重复耗时），只做 lint/静态检查 + 可选针对性冒烟；完成时 `validateVerifyOutputs` 校验 `verify-result.md` 存在且结论非 FAIL，缺失或 FAIL 则阻断完成；随后 CLI 亲自执行 `local.yaml` 的 `commands.test` 与自报告对账（实测失败阻断，结果写 `.runtime/verify-runs/<ts>/test-result.json`）；「对照设计检查」step 的 6 探针由 run/shared.js `resolvePromptIncludes` 从包内 `templates/prompts/verify-probes.md` 经 `{{include}}` 注入（prompt 组装时展开）；风险门控 `detectChangeRisk` 按 design/plan 关键词判级（integration/deployment-critical 缺真实集成证据则拦 PASS/PASS WITH NOTES），design.md frontmatter 可写 `risk_level:` 显式声明覆盖关键词判级（防「不改动 daemon」类否定语境被误判），显式等级下 PASS WITH NOTES 放宽不强制集成证据；verify --done 时另跑 runVerifyDeletionCheck（advisory）：git diff --name-status HEAD 提取本次删除文件，对账 design 声明操作（声明「新增/修改」却整文件删除 = 高风险；清单未列出 = 未声明），warning 不阻断完成（base 不可得→skipped）；另读 `changes/<change>/verify-required-evidence.json`（execute Task Review Gate 对 cannot_verify 任务落盘，schema `{items:[{task,verdict,evidence:[]}]}`）做 advisory 对账（`runVerifyRequiredEvidenceCheck`：cannot_verify 任务未在 verify-result.md 体现 → warn 不阻断归档；evidence 满足度由 agent 自报告，CLI 不语义判定。2026-08-07 闭合"只写不读死链 + verify.js 字段名 requiredEvidence 错配 + SKILL 谎报阻断"三连缺陷）；2026-08-15 D-1 起 verify --done 另跑 module-impact 死信探针（**blocking**，`gates.js` 复用 `extractPendingDocSyncRows`）：「更新结果」表存在 pending/待办行 → 阻断 verify 完成并回滚（与 archive 移动前校验同口径，死信号从 archive 提前到 verify；「对照设计检查」step prompt 同步改为"当场同步模块文档 + 回填 done/skipped"） |
 | archive | 5 | 辅助阶段；第 4 步必须带 `--confirm`，由 `run/complete-handlers.js`（`archiveChangeDirectory`）移动目录并注销 active change；移动前硬校验 `plan.md` 存在 + module-impact.md「更新结果」表无 pending/待办死信行（`extractPendingDocSyncRows`，2026-08-15 D-5：只查该段表格末列精确匹配 pending/待办/未同步/todo，防代码标识符误报），移动后校验 `design.md`/`module-impact.md`；step2 `extract-module-impact`（**不改名**）2026-08-13 起改为**终审**——module-impact.md 不再由 archive 生成，改由 plan review_plan 步生成首版（large）、execute 各 Wave 主代理汇总更新、verify 核对、archive 终审（活文档全程演化，见下「module-impact.md 多阶段」） |
-| quick | 3 | 辅助阶段；直接在主工作区实现，不创建 worktree；--done 审计带文档欠账信号——docSyncHint（D-8：改源码无文档 → 一行 warn；O-1 起含 modules 模块归属，matchFilesToModules 纯函数，specBase 由调用点透传，map 缺失降级）+ docsCheckHint（D-6 后续：本次改动 .md 的 file:line 引用校验，失效计数 warn） |
+| quick | 3 | 辅助阶段；直接在主工作区实现，不创建 worktree；--done 审计带文档欠账信号——docSyncHint（D-8：改源码无文档 → 一行 warn；O-1 起含 modules 模块归属，matchFilesToModules 纯函数，specBase 由调用点透传，map 缺失降级）+ docsCheckHint（D-6 后续：本次改动 .md 的 file:line 引用校验，失效计数 warn）；**--done 完成后，若 guard.json `linkedChanges` 中的关联真实变更其 `tasks.md` 已全部勾选，CLI 会自动调用轻量归档逻辑：将 `sillyspec.db` 中该变更 `status` 改为 `archived`，并将目录移动到 `.sillyspec/changes/archive/<date>-<change>/`，无需再手动跑完整 archive 阶段** |
 | explore | 1 | 只读探索 |
 | status | 3 | 项目级只读快照（非流程推进；查「下一步/当前阶段进度」用 `progress show`） |
 | doctor | 5 | 环境和项目自检 |
@@ -137,6 +137,11 @@ quick
   -> .sillyspec/quicklog/QUICKLOG-<git-user>.md              (CLI 写入：启动分配 ql-ID 写「进行中」，完成翻「已完成」+ 追加结构化结果块 需求/根因/方案/结果，缺字段则 step3 --done 被拒)
   -> .sillyspec/.runtime/quick-sessions/<sessionId>/guard.json  (CLI 启动建：sessionId=quick-<uuid8>，含 baselineFiles/allowedFiles/allowedFilesHash/linkedChanges/quicklogId + specDir 锚定创建时的 specBase。run/command.js 在 quick --done/--status 时调 detectQuickSessionDrift：当前 specBase 无本 session guard、但祖先链别处 specBase 有 → 判跨 specDir 漂移，fail-fast exit 2，治 monorepo cd 子项目后的无声分裂。allowedFilesHash = step1 启动时每个 allowedFile 内容的 sha256 映射 { "<file>": "<sha256>" }，文件不存在/读失败则该 file 不录入；--done auditQuickCompletion 末尾用其检测同文件并发——allowedFile 在 baselineFiles（他者改过）且当前 sha256 ≠ 录入值（我也改了）→ commit 整文件 pathspec 会夹带他者 hunk，CLI warn 给 git add -p/patch 分离指引，advisory 不阻断；旧 guard 无此字段 → 可选链判 undefined 跳过，向后兼容)
   -> CLI appends/checks checkbox in .sillyspec/changes/<change>/tasks.md
+  -> (--done 收尾, 2026-08-17) 关联变更 tasks.md 全勾选时 CLI 自动轻量归档：
+     status active → archived（sillyspec.db changes 表）+ changes/<c>/ 移动到
+     changes/archive/<date>-<c>/ + archiveWorktreeCleanup + git add archive/
+     （判定基于 tasks.md 当前快照；仍有未勾选 task 或无 tasks.md → skip+warn；
+     单个变更归档失败 warn 不阻断 quick 完成）
   -> code changes are made in the main workspace
 ```
 

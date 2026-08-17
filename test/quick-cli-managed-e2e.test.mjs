@@ -88,7 +88,20 @@ assert(qlog().includes('结果：52 passed'), 'step3 done 后结构化结果落�
 assert(qlog().includes('需求：列表默认最新在前'), '结构化结果含「需求：」字段')
 assert(qlog().includes('根因：apply_sort'), '结构化结果含「根因：」字段')
 assert(qlog().includes('方案：service 兜底'), '结构化结果含「方案：」字段')
-assert(readFileSync(join(specBase, 'changes', '2026-07-06-kanban-better-board', 'tasks.md'), 'utf8').includes(`- [x] ${guard.quicklogId}`), 'tasks.md 已勾选 - [x]')
+assert(doneOut.includes('自动归档'), 'quick --done 触发关联变更自动归档提示（2026-08-17-quick-close-linked-changes 新契约）')
+{
+  // 新契约：关联变更全勾选 → CLI 自动轻量归档，目录移到 changes/archive/<date>-<desc>/。
+  // 与 findAlreadyArchivedDir 同口径两级匹配：精确原名（手动 mv）或剥前导日期的描述命中。
+  const linkedName = '2026-07-06-kanban-better-board'
+  const descOf = (n) => String(n).replace(/^\d{4}-\d{2}-\d{2}-/, '')
+  const archivedBase = join(specBase, 'changes', 'archive')
+  const archivedDir = readdirSync(archivedBase, { withFileTypes: true })
+    .filter(e => e.isDirectory() && (e.name === linkedName || descOf(e.name) === descOf(linkedName)))
+    .map(e => join(archivedBase, e.name))[0]
+  assert(archivedDir, '关联变更全勾选后自动归档到 changes/archive/')
+  assert(!existsSync(join(specBase, 'changes', '2026-07-06-kanban-better-board')), '原 changes/<name>/ 目录已被移走')
+  assert(readFileSync(join(archivedDir, 'tasks.md'), 'utf8').includes(`- [x] ${guard.quicklogId}`), '归档目录 tasks.md 已勾选 - [x]')
+}
 assert(doneOut.includes('提交') && !doneOut.includes('run scan'), 'quick 完成推荐推「提交」不推 scan（不盲推回头路）')
 
 // 验收 3b：step3 --output 缺结构字段 → 阻断（exit 1），补全后可重跑完成
