@@ -24,11 +24,11 @@ created_at: 2026-08-17 16:45:00
 task-01 → task-02 → npm test 全量验证（task-03 与 task-02 并行，不在关键路径）
 
 ## 全局验收标准
-- [ ] npm test 全绿（217 文件零回归）、npm run lint 通过
-- [ ] buildWavePrompt 产出 prompt 含完整 batch 指导：三条件（文件正交/无契约链/≤3）、逐 task 实现闭环+报告协议、禁止子代理写 review.json/勾选 checkbox、越权即停、「同 Wave 的多个子代理（独立或 batch）必须并行启动」
-- [ ] 旧独占文案「每个任务必须由独立子代理执行，你不要自己写代码」不再作为唯一调度形态（改为默认+batch 例外结构）
-- [ ] Task Review Gate 段与调度要求 4 逐字未动（diff 验证）
-- [ ] docs/prompt/execute.md 镜像与 _extracted.json 逐字一致；SKILL.md 无内部路径/编号泄漏
+- [x] npm test 全绿（217 文件零回归）、npm run lint 通过
+- [x] buildWavePrompt 产出 prompt 含完整 batch 指导：三条件（文件正交/无契约链/≤3）、逐 task 实现闭环+报告协议、禁止子代理写 review.json/勾选 checkbox、越权即停、「同 Wave 的多个子代理（独立或 batch）必须并行启动」
+- [x] 旧独占文案「每个任务必须由独立子代理执行，你不要自己写代码」不再作为唯一调度形态（改为默认+batch 例外结构）
+- [x] Task Review Gate 段与调度要求 4 逐字未动（diff 验证）
+- [x] docs/prompt/execute.md 镜像与 _extracted.json 逐字一致；SKILL.md 无内部路径/编号泄漏
 
 ## 覆盖矩阵（FR 覆盖）
 | ID | 覆盖任务 | 验收证据 |

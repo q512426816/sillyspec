@@ -3,7 +3,7 @@ author: qinyi
 created_at: 2026-08-17 16:53:00
 ---
 
-# 模块影响分析
+# 模块影响分析（Module Impact）— execute 阶段 batch 调度指令改造
 
 ## 变更：2026-08-17-execute-batch-dispatch
 
