@@ -376,3 +376,12 @@ docs/sillyspec/platform-interface-map.md（守卫插入致行号漂移，doc-ref
 根因：21+1 个导出符号在 src+test 全仓零代码引用（外部命中皆文档/历史档案，packages/bin/模板零消费，无 export * barrel），属积累死码。
 方案：6 项整体删除 + 16 项去 export（运行时零变化）+ lint advisory 收紧 hard fail + 修复并发会话遗留的 5 处平台地图行号。
 结果：lint 0 项全绿、npm test 211 pass、doc-ref-check 80/80、CLI 冒烟正常。
+
+## ql-20260817-002-7378 | 2026-08-17 08:14:56 | 修 docs check 4 处 baseline 失效引用
+状态：已完成
+关联变更：（无）
+文件：docs/sillyspec/prompt-control-debt.md
+需求：修 docs check 4 处 baseline 失效引用。
+根因：并行会话死码清理（b1da59b）与 sync.js 增量（a815d69）后未同步 debt 文档行号。
+方案：三锚点单行校正（detectChangeRisk→137+豁免注释:141 / stage-contract:469 / sync.js:536×2）。
+结果：docs check 415/415 全通过（191 关键词断言）；QUICKLOG 已由 CLI 落盘（ql-20260817-002-7378），提交待办：docs/sillyspec/prompt-control-debt.md + QUICKLOG。
