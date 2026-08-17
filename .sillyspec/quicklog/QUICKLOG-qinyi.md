@@ -437,3 +437,11 @@ docs/sillyspec/platform-interface-map.md（守卫插入致行号漂移，doc-ref
 根因：A) _extract.mjs 调 buildExecuteSteps 未传 dispatchMode，读运行环境 local.yaml 的 mcp 段注入「派发后端提示」段，主仓与 worktree（无 local.yaml overlay）各跑一次必漂移——镜像进 git 但生成依赖本机 gitignore 配置；B) cleanup 第 4 步无条件 branch -D，apply 只复制文件内容不携带 commit（主仓重 commit 后 hash 不同），ref 一删 task review base/head 引用悬空（execute --done 批量完成 / apply 后 cleanup 两例实录）；C) verify 阶段不注入 worktree 分支基点，agent diff 对账拿主仓 HEAD/旧 release 兜底，主仓被并行 session 推进时把别人演进误判为本变更越权新增（2026-08-17 实录：误用 d192f89 实际 merge-base 49ade71，第 6/7 条铁律被误判新增）
 方案：A) _extract.mjs 补 dispatchMode:local（execute.js 已有 options.dispatchMode 覆盖机制，注释明言「避免 env 污染」，extract 漏传）；B) worktree.js 新增 _branchReviewReferences（扫描 execute-runs/*/tasks/*/review.json 的 base/head ∈ rev-list(branch) 集合则保留分支，branch kept 入 details + 提示手动 git branch -D；force 也不绕——force 语义=丢弃内容不含丢弃审计链；校验异常按有引用处理宁保留勿误删）；C) verify.js step2 加 {WORKTREE_BASELINE_INFO} + run/prompt.js 三分支 fail-soft 注入（分支存在→分支名+meta baseHash/actualBaseHash+真实 merge-base+勿用主仓 HEAD 警示；meta 存在分支不可达→审计链风险提示；均无→无 worktree 降级指引）
 结果：npm test 全量 exit=0 + lint exit=0（309 文件 src85+test224）；worktree-cleanup-guard 29/29（新增⑦⑧⑨三场景）；verify-baseline-injection 13/13（新文件四场景）；A 验证——主仓（有 mcp 配置）重跑 extract 产物零「派发后端提示」（与 worktree 产物版一致，跨环境幂等）；ROADMAP 两条 P2 延后项（_extract 环境敏感/apply 后 cleanup 删分支）本轮已修，待下轮清理登记
+## ql-20260818-002-1734 | 2026-08-18 01:56:44 | 修复 quick --done 审计的 D-8 落盘假承诺
+状态：已完成
+关联变更：（无）
+文件：docs/sillyspec/platform-interface-map.md, src/quicklog.js, src/run/complete-handlers.js, src/run/quick-audit.js, test/quicklog-audit-notes.test.mjs
+需求：修复 quick --done 审计的 D-8 落盘假承诺，让「欠账已记录」成真，供 2026-08-31 两周实测裁决有分母。
+根因：completeQuicklogEntry 只收 resultText/linkedChanges/changedFiles，review.docSyncHint/docsCheckHint 纯 console 打印后即丢，事后不可审计。
+方案：quicklog.js 条目落盘加 auditNotes（幂等「审计：」行 + 平台 payload 不污染）；complete-handlers.js 派生传入；quick-audit.js 文案改准确；新增 8 断言测试；顺手修 platform-interface-map.md 行号漂移（doc-ref-check 拦截实证）。
+结果：npm test 220 过 0 挂（含新测试）+ lint 通过；QUICKLOG 条目已带审计行落盘能力。

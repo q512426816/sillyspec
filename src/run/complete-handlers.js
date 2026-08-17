@@ -895,10 +895,23 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
       const realFiles = Array.isArray(review?.changedFiles)
         ? review.changedFiles.filter(f => !isQuickMetadata(f, linkedChanges))
         : []
+      // D-8 落盘（2026-08-18 修）：advisory 欠账信号从「纯打印」升级为「随条目落盘」——修复
+      // 「欠账已记录（QUICKLOG reasons）」的不实承诺（交叉审查实证 reasons 纯 stdout，事后不可审计）。
+      // 两周实测（2026-08-31 裁决，doc-consistency-debt §七）需要分母：信号触发次数必须可追溯。
+      const auditNotes = []
+      if (review?.docSyncHint && review.docSyncHint.touchedSource > 0 && review.docSyncHint.docFiles.length === 0) {
+        const mods = Array.isArray(review.docSyncHint.modules) && review.docSyncHint.modules.length > 0
+          ? `（涉及模块：${review.docSyncHint.modules.map((m) => m.id).join(' · ')}）` : ''
+        auditNotes.push(`📝 文档欠账（D-8）：${review.docSyncHint.touchedSource} 个源码文件改动未同步任何模块文档${mods}`)
+      }
+      if (review?.docsCheckHint && review.docsCheckHint.invalid > 0) {
+        auditNotes.push(`📎 文档引用失效：${review.docsCheckHint.invalid}/${review.docsCheckHint.total} 处 file:line 失效（sillyspec docs check 可复现）`)
+      }
       await completeQuicklogEntry(specBase, gitUser, qlId, {
         resultText: outputText || '',
         linkedChanges,
         changedFiles: realFiles,
+        auditNotes,
       })
       console.log(`📝 QUICKLOG 条目 ${qlId} 已标记完成`)
       // 刷新 DB title：从 step3「需求：」提取（agent 可改 title 的途径），覆盖启动时的兜底快照。

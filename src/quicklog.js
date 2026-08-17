@@ -153,7 +153,7 @@ function buildPushPayloadFromRaw(rawBlock, { ql_id, author_raw, status, linked_c
     payload.timestamp = parts[1] || null
     payload.title = parts.slice(2).join('|').trim() || payload.title
   }
-  const labelRe = /^(状态|关联变更|文件|需求|根因|方案|结果)\s*[：:]\s*(.*)$/
+  const labelRe = /^(状态|关联变更|文件|审计|需求|根因|方案|结果)\s*[：:]\s*(.*)$/
   const bulletRe = /^-\s+(.*)$/
   let inFiles = false
   let inLinked = false
@@ -168,6 +168,7 @@ function buildPushPayloadFromRaw(rawBlock, { ql_id, author_raw, status, linked_c
       if (label === '状态') lastStatus = value
       else if (label === '关联变更') { payload.linked_changes = value.split(/[，,、+；;]/).map(s => s.trim()).filter(Boolean); inLinked = true; inFiles = false }
       else if (label === '文件') { if (value) payload.files.push(...value.split(/[，,、+；;]/).map(s => s.trim()).filter(Boolean).map(p => ({ path: p, note: null }))); inFiles = true; inLinked = false }
+      else if (label === '审计') { /* D-8 advisory 行：只进 raw_block 不进结构化段（body_sections 不扩 schema），并阻断续行误挂 */ lastLabel = null; inFiles = false; inLinked = false }
       else { payload.body_sections[label] = value; lastLabel = label }
       continue
     }
@@ -477,7 +478,7 @@ function splitSingleLineFields(body) {
   return scanFields(body, findBoundaryLabel) ?? scanFields(body, (b, l, f) => b.indexOf(l, f))
 }
 
-function flipEntryInContent(content, qlId, result, changedFiles = [], fileNotes = []) {
+function flipEntryInContent(content, qlId, result, changedFiles = [], fileNotes = [], auditNotes = []) {
   const lines = content.split('\n')
   const startIdx = lines.findIndex(l => l.startsWith(`## ${qlId} |`))
   if (startIdx === -1) return null
@@ -541,6 +542,22 @@ function flipEntryInContent(content, qlId, result, changedFiles = [], fileNotes 
     const after = insertAt + resultLines.length
     if (after < lines.length && lines[after].startsWith('## ')) {
       lines.splice(after, 0, '')
+    }
+  }
+  // D-8 落盘（2026-08-18 修）：advisory 审计行（文档欠账 / 引用失效）写入条目尾部——修复
+  // quick-audit「欠账已记录（QUICKLOG reasons）」的不实承诺（原先纯 console 打印，事后不可审计；
+  // 两周实测需要分母：信号触发次数必须可追溯）。幂等：条目内已有 审计： 行则不重复写（--done 重跑安全）。
+  // 位置：结果块之后 / 条目尾部（重算边界，不吃上方 splice 的陈旧索引）。
+  if (auditNotes.length > 0) {
+    let entryEnd = -1
+    for (let i = startIdx + 1; i < lines.length; i++) {
+      if (lines[i].startsWith('## ')) { entryEnd = i; break }
+    }
+    if (entryEnd === -1) entryEnd = lines.length
+    if (!lines.slice(startIdx, entryEnd).some((l) => l.startsWith('审计：'))) {
+      let insertAt = entryEnd
+      while (insertAt - 1 > startIdx && lines[insertAt - 1].trim() === '') insertAt--
+      lines.splice(insertAt, 0, ...auditNotes.map((n) => `审计：${n}`))
     }
   }
   return lines.join('\n')
@@ -614,7 +631,7 @@ export async function allocateQuicklogEntry(specBase, gitUser, { description, li
 /**
  * 翻某 qlId 条目为「已完成」+ 追加结果 + 勾选关联 tasks.md。持锁。
  */
-export async function completeQuicklogEntry(specBase, gitUser, qlId, { resultText = '', linkedChanges = [], changedFiles = [] } = {}) {
+export async function completeQuicklogEntry(specBase, gitUser, qlId, { resultText = '', linkedChanges = [], changedFiles = [], auditNotes = [] } = {}) {
   const quicklogDir = join(specBase, 'quicklog')
   // 与 allocateQuicklogEntry 同源消毒：锁文件路径含 user（防穿越写，两入口必须一致否则锁不上同一文件）
   const user = sanitizeQuicklogUser(gitUser) || 'unknown'
@@ -636,7 +653,8 @@ export async function completeQuicklogEntry(specBase, gitUser, qlId, { resultTex
       const filePath = join(quicklogDir, f)
       let content = ''
       try { content = readFileSync(filePath, 'utf8') } catch { continue }
-      const updated = flipEntryInContent(content, qlId, result, realFiles, fileNotes)
+      const updated = flipEntryInContent(content, qlId, result, realFiles, fileNotes,
+        Array.isArray(auditNotes) ? auditNotes.filter((n) => typeof n === 'string' && n.trim() !== '') : [])
       if (updated !== null) {
         await writeAtomic(filePath, updated) // 命中处原子落盘（只改含目标条目的那一个文件）
         updatedContent = updated

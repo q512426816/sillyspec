@@ -111,7 +111,7 @@ mcp:
 
 ## 4. 链路 C：scan 指针握手（平台模式专用）
 
-scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时，**不发任何 HTTP**，而是落盘供 daemon 轮询消费（`complete-handlers.js:1111-1228` `handleScanStageCompleted`）：
+scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时，**不发任何 HTTP**，而是落盘供 daemon 轮询消费（`complete-handlers.js:1240-1382` `handleScanStageCompleted`）：
 
 1. 写 `manifest.json`（workspace_id/scan_run_id/source_commit/spec_root/scan_profile/postcheck…）到 `specRoot`。
 2. 跑 `scan-postcheck` → 写 `postcheck-result.json`（结构化结果）。

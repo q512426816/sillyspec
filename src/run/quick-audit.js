@@ -58,7 +58,7 @@ export function printQuickAuditReview(review) {
     if (Array.isArray(review.docSyncHint.modules) && review.docSyncHint.modules.length > 0) {
       console.warn(`   涉及模块：${review.docSyncHint.modules.map(m => m.id).join(' · ')}（模块卡待同步，execute 场景详见 [docs-debt] 块）`)
     }
-    console.warn(`   quick 不强制文档同步，但欠账已记录（QUICKLOG reasons）。若改动触及接口/契约，建议顺手同步模块文档。`)
+    console.warn(`   quick 不强制文档同步，欠账已随本条 QUICKLOG「审计：」行落盘（可事后追溯）。若改动触及接口/契约，建议顺手同步模块文档。`)
   }
   if (review.docsCheckHint && review.docsCheckHint.invalid > 0) {
     console.warn(`\n📎 文档引用失效（docs check）：本次改动的文档含 ${review.docsCheckHint.invalid}/${review.docsCheckHint.total} 处失效 file:line 引用。`)
