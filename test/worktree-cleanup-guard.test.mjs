@@ -129,6 +129,62 @@ console.log('--- ④ apply 后状态（main 工作区有副本未 commit）：�
   cleanup(d)
 }
 
+
+console.log('--- ⑦ branch review 引用保护：task review.json base/head 引用分支 commit → 保留分支 ---')
+{
+  const d = setupRepo(); const base = rev('git rev-parse HEAD', d)
+  const wtDir = makeWorktree(d)
+  writeMeta(wtDir, base)
+  // worktree 分支上做 1 个 task commit
+  fs.writeFileSync(path.join(wtDir, 'feat.txt'), 'feat\n')
+  sh('git add -A && git commit -m task-01', wtDir)
+  const head = rev('git rev-parse HEAD', wtDir)
+  // task review.json 引用该 commit（head）
+  const reviewDir = path.join(d, '.sillyspec', '.runtime', 'execute-runs', 'exec-x', 'tasks', 'task-01')
+  fs.mkdirSync(reviewDir, { recursive: true })
+  fs.writeFileSync(path.join(reviewDir, 'review.json'), JSON.stringify({
+    name_zh: '任务评审', schemaVersion: 1, task: 'task-01', base, head,
+    changedFiles: ['feat.txt'], specVerdict: 'pass', qualityVerdict: 'pass',
+    reviewerNotes: '', requiredEvidence: [],
+  }))
+  const r = wtCleanup(d, { force: true })
+  assertTrue(r.details.some(x => x.includes('branch kept')), '有 review 引用 → branch kept 入 details')
+  const branchAlive = (() => { try { rev('git rev-parse --verify sillyspec/tc', d); return true } catch { return false } })()
+  assertTrue(branchAlive, '分支 ref 保留（force 也不删——审计链保护）')
+  assertTrue(!fs.existsSync(wtDir), 'worktree 目录照常清理（保护只留分支 ref）')
+  cleanup(d)
+}
+
+console.log('--- ⑧ 无 review 引用 → 照删分支（行为不变）---')
+{
+  const d = setupRepo(); const base = rev('git rev-parse HEAD', d)
+  const wtDir = makeWorktree(d)
+  writeMeta(wtDir, base)
+  fs.writeFileSync(path.join(wtDir, 'feat.txt'), 'feat\n')
+  sh('git add -A && git commit -m task-01', wtDir)
+  const r = wtCleanup(d, { force: true })
+  assertTrue(r.details.some(x => x.includes('branch deleted')), '无 review 引用 → branch deleted')
+  const branchGone = (() => { try { rev('git rev-parse --verify sillyspec/tc', d); return false } catch { return true } })()
+  assertTrue(branchGone, '分支 ref 已删（零回归）')
+  cleanup(d)
+}
+
+console.log('--- ⑨ review 引用非分支 commit（无关 hash）→ 照删 ---')
+{
+  const d = setupRepo(); const base = rev('git rev-parse HEAD', d)
+  const wtDir = makeWorktree(d)
+  writeMeta(wtDir, base)
+  const reviewDir = path.join(d, '.sillyspec', '.runtime', 'execute-runs', 'exec-y', 'tasks', 'task-01')
+  fs.mkdirSync(reviewDir, { recursive: true })
+  fs.writeFileSync(path.join(reviewDir, 'review.json'), JSON.stringify({
+    name_zh: '任务评审', schemaVersion: 1, task: 'task-01', base: 'dead0000000000000000000000000000000000000', head: 'beef0000000000000000000000000000000000000',
+    changedFiles: [], specVerdict: 'pass', qualityVerdict: 'pass', reviewerNotes: '', requiredEvidence: [],
+  }))
+  const r = wtCleanup(d, { force: true })
+  assertTrue(r.details.some(x => x.includes('branch deleted')), '引用不在分支 commit 集 → branch deleted（不误保）')
+  cleanup(d)
+}
+
 console.log('--- ⑤ 无 meta 无目录 → skipped（幂等）---')
 {
   const d = fs.mkdtempSync(path.join(os.tmpdir(), 'wtcg-skip-'))

@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-06-04 16:25:42
-updated_at: 2026-08-09
+updated_at: 2026-08-18
 ---
 
 # Worktree 与 Hook 门禁
@@ -121,6 +121,8 @@ sillyspec/<change-name>
 | 无 meta 且目录不存在 | 返回 `skipped` |
 
 如果 `git worktree remove` 失败但目录可删，结果是 `force-cleaned`。
+
+**分支删除的审计保护**（2026-08-18）：删除分支前校验 `.runtime/execute-runs/*/tasks/*/review.json` 的 `base`/`head` 是否引用该分支上的 commit——有引用则**保留分支 ref**（`branch kept` 入 details，提示手动 `git branch -D`），`force` 也不绕过（force 语义=丢弃内容，不含丢弃审计链）。apply 只复制文件内容不携带 commit（主仓重 commit 后 hash 不同），ref 一删 task review 引用即悬空（gc 后真丢）。校验自身异常按"有引用"处理（宁保留勿误删）。
 
 ### 归档/完成时的自动清理判定（`hasUnappliedChanges`）
 

@@ -38,7 +38,9 @@ sillyspec run verify --reopen --from-step N    # 重新打开已完成阶段修�
 
 ## verify 特有：完成门控（重要）
 
-verify 是只读阶段（**禁止改代码/改 git 状态**，只检查 + 写报告）。完成时有硬校验：
+verify 是只读阶段（**禁止改代码/改 git 状态**，只检查 + 写报告）。
+
+**diff 对账基点**：本变更走 worktree 时，「加载规范并锚定」步骤会注入 worktree 基线锚点（分支名 + `git merge-base` 真实基点）——对照设计做 diff 对账时以它为基点，**不要拿主仓当前 HEAD 当基点**（主仓在 execute 期间可能被并行推进，用错基点会把别人的演进误判为本变更越权改动）。task review 的 base/head 引用分支上的 commit，逐 task 核验用 `git diff <base>..<head>`。完成时有硬校验：
 
 - **必须产出 `verify-result.md`**——不存在则阻断完成（不能跳过报告直接 `--done`）
 - **结论为 `FAIL` 则阻断完成**——不能带着 FAIL 标记 verify 完成

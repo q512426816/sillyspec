@@ -88,8 +88,11 @@ export const definition = {
 10. 读取匹配到的 \`.sillyspec/docs/<project>/modules/<module>.md\`
 11. **检查模块索引可信度**：如果相关模块的 needs_review 为 true，提示"该模块索引可能不可信，需要回看模块卡片或源码"
 
+### worktree 基线锚点（CLI 注入）
+{WORKTREE_BASELINE_INFO}
+
 ### 输出
-文件加载确认清单（含 decisions.md 当前版本/未决项状态、模块文档 + 索引可信度）`,
+文件加载确认清单（含 decisions.md 当前版本/未决项状态、模块文档 + 索引可信度、worktree 基线锚点）`,
       outputHint: '文件确认清单',
       optional: false
     },

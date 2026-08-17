@@ -605,6 +605,46 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
     }
   }
 
+  // verify Step2「加载规范并锚定」worktree 基线锚点注入：execute 在 worktree 分支上 commit，
+  // verify 的 diff 对账基点 = worktree 分支的真实基点（git merge-base），不是主仓当前 HEAD。
+  // agent 拿不到基点时会拿主仓 HEAD / 旧 release commit 兜底——主仓在 execute 期间推进时
+  // （并行 session commit）会把别人的演进误判为本变更越权新增（2026-08-17 实录：误用 d192f89
+  // 而实际 merge-base 49ade71，第 6/7 条铁律被误判新增）。注入 fail-soft：worktree/分支/meta
+  // 读不到时降级为自查指引，绝不阻断 verify。
+  if (stageName === 'verify' && promptText.includes('{WORKTREE_BASELINE_INFO}')) {
+    let baselineInfo
+    try {
+      const { WorktreeManager } = await import('../worktree.js')
+      const wm = new WorktreeManager({ cwd })
+      const meta = changeName ? wm.getMeta(changeName) : null
+      const branch = meta?.branch || (changeName ? 'sillyspec/' + changeName : null)
+      const branchExists = branch
+        ? safeGit(cwd, ['rev-parse', '--verify', '--quiet', branch + '^{commit}']).error === null
+        : false
+      if (branchExists) {
+        const baseBranch = meta?.baseBranch || 'main'
+        const mergeBase = safeGit(cwd, ['merge-base', baseBranch, branch]).value
+        baselineInfo =
+          `- 本变更 worktree 分支：${branch}（存在）\n` +
+          (meta
+            ? `- worktree 基点（创建时锚定）：baseHash=${meta.baseHash || '未知'}，actualBaseHash=${meta.actualBaseHash || '未知'}（含 dirty overlay 后的 worktree 起点）\n`
+            : '- worktree meta 已不可读（可能已被 cleanup），用下方 merge-base 即可\n') +
+          `- ⚠️ diff 对账基点：\`git merge-base ${baseBranch} ${branch}\` = ${mergeBase || '（计算失败，手动跑上面命令）'}\n` +
+          `  不要用主仓当前 HEAD / 最近 release commit 当基点——主仓在 execute 期间可能已被并行 session 推进，用错基点会把别人的演进误判为本变更越权改动。\n` +
+          `- task review 的 base/head 引用分支上的 commit，逐 task 核验 diff 用 \`git diff <base>..<head>\`（分支 ref 若已被 cleanup 删除，hash 仍可直达，但不要主动删分支）。`
+      } else if (meta) {
+        baselineInfo =
+          '- 本变更 worktree meta 存在但分支不可达（可能已被 cleanup）：按主仓 git log 对照本变更各 commit 核验；task review 的 base/head 若悬空，在 verify-result.md 标注审计链风险。'
+      } else {
+        baselineInfo =
+          '- 本变更无 worktree（in-place / 纯文档变更 / worktree 已清理且 meta 不可读）：按主仓 git log 最近提交对照核验。'
+      }
+    } catch (e) {
+      baselineInfo = '（worktree 基线注入失败：' + e.message + '——diff 对账前先 git branch -a 查 sillyspec/<change> 分支并用 git merge-base <main> <branch> 自查基点，勿用主仓 HEAD 当基点）'
+    }
+    promptText = promptText.split('{WORKTREE_BASELINE_INFO}').join(baselineInfo)
+  }
+
   // 注入模块上下文（brainstorm/plan/execute 阶段，基于 Module Context Index）
   if (['brainstorm', 'plan', 'execute'].includes(stageName) && projectName) {
     const effectiveSpecBase = resolvePromptSpecBase(platformOpts, cwd)

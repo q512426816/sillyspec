@@ -147,7 +147,7 @@ prompt 正文中出现的占位符，运行时由 `outputStep` 替换。下表�
 | `{REVIEW_JSON_CONTRACT}` | `stage-review.js` 的 `renderReviewJsonContract()` 产出的 review.json 产物契约 markdown：含 schema（schemaVersion=1、reviewType、verdicts∈pass/fail/cannot_verify、reviewedFiles、docHash）、完整示例、docHash 算法（主审查文档 sha256）。各阶段主审查文档：brainstorm/execute→design.md，plan→plan.md，propose→proposal.md | 同上 |
 | `{REVIEW_SCHEMA_VERSION}` | task review.json 示例模板用，替换为 CLI 当前 `REVIEW_SCHEMA_VERSION` 常量值（`src/task-review.js`，现=1）。避免 agent 照抄 design 目标版本（1→2）与 CLI 写侧常量漂移；升 v2 时随常量走，prompt 自动跟。与 `{REVIEW_JSON_CONTRACT}` 内 schemaVersion 同源（均取自该常量） | execute（task review 示例模板） |
 | `{TASK_COMPLETION_REPORT}` | `task-review.js` 的 `summarizeTaskCompletion({changeDir, runtimeRoot, changeName})` 产出的客观完成度报告：以 execute run 的 review.json verdict（specVerdict+qualityVerdict 均≠fail 视为完成）为准，替代 plan.md checkbox（依赖 autoCheckPlanFromReviews 回填，断裂时失真）；无 runId marker 时降级 checkbox 统计 + 标注 source | archive（Step 1 任务完成度检查） |
-
+| `{WORKTREE_BASELINE_INFO}` | `run/prompt.js` 注入的 worktree 基线锚点：变更 worktree 分支名 + 真实基点（git merge-base）+「勿用主仓 HEAD 当基点」警示（主仓在 execute 期间被并行推进时，用错基点会把别人的演进误判为越权改动）。分支/meta 不可读时降级自查指引，占位符绝不残留 | verify（Step 2 加载规范并锚定） |
 > **降级**：当 review-tier / stage-review 注入抛异常时，`{REVIEW_TIER}`→`self`、`{REVIEW_TIER_REASON}`→`分级异常降级 self: <err>`、`{REVIEW_JSON_CONTRACT}`→精简契约提示，避免 prompt 残留裸占位符。
 
 ### include 指令

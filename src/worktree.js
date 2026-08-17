@@ -757,6 +757,43 @@ export class WorktreeManager {
    *   partial=有残留（目录/meta/git 注册未清）；skipped=无需清理；kept=native-worktree 保留。
    *   residual：未清干净的路径/引用列表（空数组表示干净）。
    */
+  /**
+   * fail-closed：清理删分支前的审计引用校验（2026-08-18，两例实录：execute --done 批量完成 /
+   * worktree apply 后自动 cleanup 均无条件删分支 ref，task commit 变 dangling）。
+   * apply 只复制文件内容不携带 commit（主仓重 commit 后 hash 不同），分支 ref 一删，
+   * task review.json 的 base/head 引用即悬空（gc 后真丢，git diff base..head 无法复核）。
+   * 有引用 → cleanup 保留分支并提示手动删；校验自身异常也按"有引用"处理（宁保留勿误删）。
+   * @private
+   * @param {string} branch - 待删分支名
+   * @returns {string[]} 引用该分支 commit 的 review.json 路径列表（空 = 无引用，删分支安全）
+   */
+  _branchReviewReferences(branch) {
+    const runsDir = join(this.cwd, '.sillyspec', '.runtime', 'execute-runs');
+    if (!existsSync(runsDir)) return [];
+    const branchCommits = new Set(
+      (gitQuiet(this.cwd, ['rev-list', branch]) || '').split('\n').map(s => s.trim()).filter(Boolean)
+    );
+    if (branchCommits.size === 0) return [];
+    const refs = [];
+    const visit = (dir) => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const p = join(dir, entry.name);
+        if (entry.isDirectory()) visit(p);
+        else if (entry.name === 'review.json') {
+          try {
+            const r = JSON.parse(readFileSync(p, 'utf8'));
+            for (const key of ['base', 'head']) {
+              const h = typeof r[key] === 'string' ? r[key].trim() : '';
+              if (h && branchCommits.has(h)) { refs.push(p); break; }
+            }
+          } catch { /* review.json 损坏不参与判定 */ }
+        }
+      }
+    };
+    visit(runsDir);
+    return refs;
+  }
+
   cleanup(changeName, { force = false, maxRetries = 3 } = {}) {
     const name = validateChangeName(changeName);
     const meta = this.getMeta(name);
@@ -862,12 +899,19 @@ export class WorktreeManager {
       // prune 失败不阻断
     }
 
-    // 4. 删除分支（忽略分支不存在的错误）
+    // 4. 删除分支（fail-closed：task review 引用可达性校验。force 也不绕过——force 语义 =
+    //    丢弃内容，不含丢弃审计链；确要删用 git branch -D 手动执行）
     try {
-      gitQuiet(this.cwd, ['branch', '-D', branch]);
-      details.push('branch deleted');
+      const reviewRefs = this._branchReviewReferences(branch);
+      if (reviewRefs.length > 0) {
+        details.push(`branch kept: ${reviewRefs.length} 个 task review.json 引用分支上的 commit（base/head 审计保护）`);
+        console.log(`🔗 分支保留：${branch} 上有 ${reviewRefs.length} 个 task review.json 引用其 commit（apply 只复制文件内容，ref 删除后 base/head 悬空无法复核）。确要删除：git branch -D ${branch}`);
+      } else {
+        gitQuiet(this.cwd, ['branch', '-D', branch]);
+        details.push('branch deleted');
+      }
     } catch {
-      // 分支可能已被删除，幂等跳过
+      // 分支可能已被删除（幂等跳过）；引用校验自身异常也归入此分支——不因校验失败而误删
     }
 
     // 5. 清除 meta 目录（in-place 模式也执行——这是 in-place meta 残留的修复点）

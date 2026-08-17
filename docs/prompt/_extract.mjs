@@ -86,7 +86,9 @@ out.plan = extractDef(planMod.definition, false, {
 // ── execute（动态：buildExecuteSteps）──
 const execMod = await import(stageUrl('execute'))
 const demoPlanFile = join(demoChangeDir, 'plan.md') // 不存在 → buildExecuteSteps 用默认 3 Wave
-const execSteps = execMod.buildExecuteSteps(demoPlanFile, { worktreePath: '/tmp/worktrees/demo-change' })
+// dispatchMode 固定 'local'：提取输入只有源码——不固定会读运行环境 local.yaml 的 mcp 段，
+// 主仓（有 mcp 配置）与 worktree（无 local.yaml overlay）各跑一次必漂移，镜像跨环境 git diff 永不干净
+const execSteps = execMod.buildExecuteSteps(demoPlanFile, { worktreePath: '/tmp/worktrees/demo-change', dispatchMode: 'local' })
 out.execute = extractDef(execMod.definition, false, {
   sourceFile: 'src/stages/execute.js',
   inStageRegistry: true,
