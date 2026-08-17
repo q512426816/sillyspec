@@ -13,6 +13,7 @@ import { join } from 'path';
 import { resolvePlatformSpecDir } from './progress.js';
 import { safeGit } from './git-helper.js';
 import { PLATFORM_MANAGED_FILENAME } from './run/shared.js';
+import { syncSpecTree } from './spec-sync.js';
 
 // sync 是 best-effort（网络失败只 warn）：平台指针失效时不抛，跳过平台、回退本地。
 function safePlatformSpecDir(cwd) {
@@ -462,6 +463,15 @@ export class SyncManager {
       await this.syncDocuments(changeName);
     } catch (err) {
       debugLog(`[sync] 文档同步失败（不影响进度）: ${changeName}: ${err.message}`);
+    }
+
+    // 2026-08-17-spec-file-incremental-sync：进度上行+文档直推成功后顺带推整个 spec 树
+    // （plan.md、tasks/、module-impact.md 等），让变更中心文件树自动更新。
+    // 无 daemon 时 CLI 短进程无本地清单缓存，以服务器清单为锚做增量 diff。
+    try {
+      await syncSpecTree(join(this.cwd, '.sillyspec'), this._getPlatform(), changeName);
+    } catch (err) {
+      debugLog(`[sync] spec 树增量同步失败（不影响进度）: ${changeName}: ${err.message}`);
     }
 
     return { synced: 1, errors: [] };

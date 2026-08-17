@@ -27,7 +27,9 @@ const tmpRoot = mkdtempSync(join(tmpdir(), `sillyspec-sync-push-${process.pid}-`
 console.log('\n[platform-sync-push-header] task-09：sync POST 元字段走 HTTP header');
 
 // ─────────────────────────────────────────
-// mock HTTP server：记录最后请求，progress 端点按模式返回 200 / 409
+// mock HTTP server：记录最后 progress 请求，progress 端点按模式返回 200 / 409。
+// lastReq 只记 /progress——sync() 成功路径还会顺带发 spec-manifest/spec-sync
+// （2026-08-17-spec-file-incremental-sync 文件树增量同步），不过滤会被覆盖。
 // ─────────────────────────────────────────
 let lastReq = null;
 let conflictMode = false;
@@ -35,8 +37,8 @@ const server = http.createServer((req, res) => {
   let body = '';
   req.on('data', (c) => { body += c; });
   req.on('end', () => {
-    lastReq = { method: req.method, url: req.url, headers: req.headers, body };
     if (req.url.includes('/progress')) {
+      lastReq = { method: req.method, url: req.url, headers: req.headers, body };
       if (conflictMode) {
         res.writeHead(409, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
