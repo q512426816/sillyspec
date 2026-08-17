@@ -400,3 +400,13 @@ docs/sillyspec/platform-interface-map.md（守卫插入致行号漂移，doc-ref
 根因：stage review prompt 未区分 task review 已覆盖范围，双 pass task 被重复逐文件重审。
 方案：acceptance step tier=independent 分支加「审查范围分级」——task review specVerdict/qualityVerdict 双 pass 的 task 只抽查（读 1-2 核心 diff 抽验 reviewerNotes），fail/cannot_verify/缺失全量重审；跨 task 交界/design 整体对照/组装行为三项始终必查（task review 铁律只看单 task diff，覆盖不到）。
 结果：npm test 216/0、lint 305 文件通过、docs check 415/415 + doc-ref-check 80/80 全绿；同步 _extracted.json / execute.md 镜像 / SKILL.md，并修复镜像预存 fence 错位 + 测试暴露的 4 处行号漂移。
+
+## ql-20260817-004-1ca6 | 2026-08-17 14:36:07 | (quick 任务)
+状态：进行中
+关联变更：（无）
+文件：（见实际改动）
+
+## ql-20260817-005-4369 | 2026-08-17 14:42:24 | (quick 任务)
+状态：进行中
+关联变更：（无）
+文件：（见实际改动）

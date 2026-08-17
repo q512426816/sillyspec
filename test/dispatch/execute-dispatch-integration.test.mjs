@@ -58,11 +58,10 @@ console.log('=== execute 派发集成测试（task-09）===\n')
 
 // ── 1. Local 零回归（无 env，不传 dispatchMode）──
 // 验证 D-005：无 MCP 配置时 buildWavePrompt 输出与改前一致，dispatchSection 为空
-console.log('--- 1. Local 零回归（无 MCP 配置，getDispatchMode 同步判定）---')
+console.log('--- 1. Local 零回归（options.dispatchMode=local 强制本地派发路径）---')
 {
   const restore = withoutSillyHubEnv()
-  assertTrue(getDispatchMode() === 'local', "getDispatchMode() 无 env 同步返回 'local'")
-  const out = buildWavePrompt(wave, 1, null, worktreePath)
+  const out = buildWavePrompt(wave, 1, null, worktreePath, { dispatchMode: 'local' })
   // 含现有结构关键词（先读源确认确切字符串）
   assertContains(out, '## 执行方式', 'Local 输出含现有「执行方式」段')
   assertContains(out, '### 工作目录', 'Local 输出含「工作目录」段（worktreePath 非空）')
@@ -74,6 +73,11 @@ console.log('--- 1. Local 零回归（无 MCP 配置，getDispatchMode 同步判
   assertNotContains(out, 'create_mission', 'Local 输出不含 create_mission 指令')
   assertNotContains(out, 'dispatch_worker', 'Local 输出不含 dispatch_worker 指令')
   assertNotContains(out, 'list_workers', 'Local 输出不含 list_workers 指令')
+  // 2026-08-17-quick-close-linked-changes 工具驾驭修复：子代理 prompt 要点新增中断接手 + 边界纪律
+  assertContains(out, '增量落盘与中断接手指引', 'Local 输出含子代理中断接手指引')
+  assertContains(out, '任务边界铁律', 'Local 输出含子代理任务边界铁律')
+  assertContains(out, '已完成清单', 'Local 输出含「已完成清单」关键词')
+  assertContains(out, '严格只实现本 task 的', 'Local 输出含「严格只实现本 task」边界约束')
   restore()
 }
 

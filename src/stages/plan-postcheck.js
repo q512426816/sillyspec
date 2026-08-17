@@ -14,7 +14,7 @@ import { existsSync, readFileSync as _readFileSync, readdirSync, mkdtempSync, wr
 // frontmatter/字段正则（`^---\n`、`allowed_paths:\s*\n…`、`^goal:` 等）失配，报「缺 frontmatter
 // /缺字段」假错误（见缺陷 windows-python-crlf-taskcard）。读取时统一转 LF，一处覆盖全部正则。
 const readFileSync = (filePath, encoding) => _readFileSync(filePath, encoding).replace(/\r\n/g, '\n')
-import { join as pJoin } from 'path'
+import { join as pJoin, basename } from 'path'
 import { tmpdir } from 'os'
 import jsYaml from 'js-yaml'
 import { parseFileChangeList, pathMatches } from '../change-list.js'
@@ -1176,6 +1176,27 @@ export async function executePlanPostcheck(context) {
   }
   if (coverage.designFiles.length > 0 && coverage.uncovered.length === 0) {
     console.log(`  ✅ design.md ${coverage.designFiles.length} 个文件全部被 task allowed_paths 覆盖`)
+  }
+
+  // ── 1e. 阶段完成产物校验（plan stage contract）──
+  // plan 完成 gate 还会跑 stage-contract.validatePlanOutputs；为免「postcheck 通过 →
+  // stage gate 又报 module-impact 缺失/entry-point-wiring 未覆盖」的修一层撞一层，
+  // 在此把 stage contract 的 error/warning 也聚合进本轮输出。
+  const { validatePlanOutputs } = await import('../stage-contract.js')
+  if (typeof validatePlanOutputs === 'function') {
+    const contract = validatePlanOutputs(context.cwd, basename(changeDir), { specRoot })
+    if (contract.errors.length > 0) {
+      failures.push({
+        name: 'plan 阶段产物契约校验（stage-contract validatePlanOutputs）',
+        errors: contract.errors,
+        hint: '修复方式：补缺失产物（如 module-impact.md）、在 design.md 明示不改理由、或修正 task allowed_paths 覆盖 design.md 提及的入口文件。',
+      })
+    }
+    if (contract.warnings.length > 0) {
+      for (const w of contract.warnings) {
+        console.warn(`\n  ⚠️  ${w}`)
+      }
+    }
   }
 
   // ── 聚合输出：一轮 --done 暴露全部失败项（坑6③）──
