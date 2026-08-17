@@ -5,6 +5,29 @@ created_at: 2026-08-17 16:14:16
 
 # Design — execute 阶段 task 执行 batch 调度
 
+## 背景与目标
+
+**背景**：plan 阶段 TaskCard 生成已落地 batch 分派（9aa91aa）。execute 阶段 `buildWavePrompt`（`src/stages/execute.js:846`）仍要求「每个任务必须由独立子代理执行」，同 Wave 5~8 个 task 时子代理调用随 task 数线性增长——每个子代理重复读 design/plan/源文件，token 与协调开销大，且高并发易撞 429/529 限流。
+
+**问题**：同 Wave task 定义即「无依赖可并行」，其中大量 task 的 allowed_paths 完全正交（改不同文件、无契约消费），由一个子代理串行做完与多个子代理并行做产出等价，开销差数倍。
+
+**目标**：把「可选 batch」模式推广到 execute——默认每 task 独立子代理（零行为回归），同 Wave 内文件正交、无契约依赖链、组大小 ≤3 时可合并为一个子代理串行实现；同 Wave 的多个子代理（独立或 batch）仍并行启动。预期同 Wave 子代理调用数从 N 降至 ceil(正交分组数)。
+
+## 决策记录（方案选择）
+
+三个候选方案的裁决（详见 brainstorm step 4，用户拍板）：
+
+| 方案 | 结论 | 理由 |
+|---|---|---|
+| **A. 纯 prompt 调度层改造**（本设计） | ✅ 采纳 | 与 plan batch 模式一致；正交判定交给有 design/plan 上下文的主 agent 比 CLI 纯结构判定更准；零 schema/状态机变更，回退容易；review 缺失由既有 Task Review Gate 兜底 |
+| B. prompt + postcheck 硬校验 | ❌ 否决 | 需发明 batch 落盘 schema 才能校验，违反 YAGNI；plan batch 落地时也未加校验 |
+| C. CLI 代码化 batch 规划 | ❌ 否决 | CLI 重复实现契约图/路径解析逻辑；正交 ≠ 安全（测试连带、模块归属等语义因素），剥夺主 agent 语义判断反而增加误判风险 |
+
+关键设计决策：
+- 档位 = 平衡（可选 batch），用户拍板；batch 上限 3（execute 真实写代码，比 plan 的 4 保守）
+- batch 只合并**实现**不合并**审查**——review.json 产出与 checkbox 勾选始终归主 agent（Design Grill P0 修复，与 :848/:906/:929 现状职责一致）
+- 契约 task 禁止同批（与 plan 的「尽量同批」方向相反，理由见差异表）
+
 ## 总体设计
 
 **纯 prompt 调度层改造**（方案 A，用户已拍板）。只改 `src/stages/execute.js` 的 `buildWavePrompt` 调度指令，不新增 schema、不改状态机、不加 CLI 校验。借鉴 plan 阶段 TaskCard batch 分派（9aa91aa）的「可选 batch」模式，但**两阶段在契约 task 处理上方向相反**（见「与 plan batch 的差异」），且 execute 真实写代码，安全约束更严：batch 上限 3（plan 为 4）、batch 只合并**实现**不合并**审查**（review.json 产出与 checkbox 勾选始终归主 agent）。
