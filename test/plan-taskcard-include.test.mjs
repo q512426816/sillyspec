@@ -6,6 +6,9 @@
  * 子代理 prompt 里用 {{include: taskcard-rules}} 引用（resolvePromptIncludes 运行时注入）。
  * 收益=维护性（规则改一处）+ 可单独校验；token 不省（include 全替换，P2.2.3 已确认机制固有）。
  * 顺带 B5：自检清单区分「硬校验字段（plan-postcheck 阻断）」vs「规范约定字段（不阻断）」。
+ *
+ * 2026-08-17 更新：TaskCard 生成改为 batch 模式（2~4 个 task 一个子代理），2-task 场景下
+ * 整个 Wave 作为一个 batch，因此协调器 prompt 里只有一个 {{include: taskcard-rules}}。
  */
 import { buildCoordinatorStep } from '../src/stages/plan.js'
 import { resolvePromptIncludes } from '../src/run/shared.js'
@@ -31,8 +34,12 @@ console.log('=== buildCoordinatorStep TaskCard 规则抽模板（B4+B5）===\n')
     { num: '02', name: 'layout' },
   ])
   const prompt = step.prompt
-  assertTrue((prompt.match(/\{\{include: taskcard-rules\}\}/g) || []).length === 2,
-    '每个 task 子代理 prompt 各含一个 {{include: taskcard-rules}}（2-task → 2 个）')
+  assertTrue((prompt.match(/\{\{include: taskcard-rules\}\}/g) || []).length === 1,
+    '2-task 合并为 1 个 batch，batch 子代理 prompt 只含一个 {{include: taskcard-rules}}')
+  assertTrue(prompt.includes('每个 batch 包含 2~4 个 task'),
+    'prompt 指导按 2~4 task 一个 batch 分派子代理')
+  assertTrue(prompt.includes('为 batch 中的**每一个 task 独立生成**'),
+    'batch 子代理仍需为每个 task 独立生成 task-N.md')
   assertTrue(!prompt.includes('TaskCard 格式规则（必须严格遵守）：'),
     '内联公共规则已移除（不再逐字重复）')
   assertTrue(prompt.includes('task-01: 外壳') && prompt.includes('task-02: layout'),

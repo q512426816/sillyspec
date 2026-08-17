@@ -406,7 +406,11 @@ docs/sillyspec/platform-interface-map.md（守卫插入致行号漂移，doc-ref
 关联变更：（无）
 文件：（见实际改动）
 
-## ql-20260817-005-4369 | 2026-08-17 14:42:24 | (quick 任务)
-状态：进行中
+## ql-20260817-005-4369 | 2026-08-17 14:42:24 | 修复 execute 子代理中断接手成本高、task 越权、plan --done 多层校验迭代盲盒三个负面问题
+状态：已完成
 关联变更：（无）
-文件：（见实际改动）
+文件：docs/prompt/execute.md, src/stages/execute.js, src/stages/plan-postcheck.js, test/dispatch/execute-dispatch-integration.test.mjs
+需求：修复 execute 子代理中断接手成本高、task 越权、plan --done 多层校验迭代盲盒三个负面问题
+根因：派发 prompt 缺增量落盘/边界纪律指引；plan postcheck 与 stage-contract 分开报错
+方案：execute.js buildWavePrompt 子代理 prompt 要点新增第6/7项；plan-postcheck.js executePlanPostcheck 动态 import stage-contract validatePlanOutputs 聚合进 failures；同步 docs/prompt/execute.md/_extracted.json + 模块文档
+结果：execute-dispatch 56/0 pass、plan-postcheck 15/0 pass、npm run lint 306 文件通过；全量 npm test 215/0 pass（2 个失败为外部并行 plan.js batch 改造测试污染，已 reset 未提交）

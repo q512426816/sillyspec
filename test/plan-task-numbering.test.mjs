@@ -4,6 +4,9 @@
  * 修复前：buildCoordinatorStep 按 checkbox 出现顺序 i+1 重编号（task-01/02），
  * 与 execute 按原始编号定位 tasks/task-XX.md 错位（文件名 ≠ Wave 引用）。
  * 修复后：用 parseTaskNames 返回的原始编号（task-05/task-04），plan/execute 贯穿一致。
+ *
+ * 2026-08-17 更新：TaskCard 生成改为 batch 模式，文件路径不再在协调器 prompt 里逐 task 列出，
+ * 而是在 batch 子代理 prompt 模板中统一说明按实际 task id 生成 task-N.md。
  */
 import { buildCoordinatorStep } from '../src/stages/plan.js'
 
@@ -22,12 +25,15 @@ console.log('=== buildCoordinatorStep 保原始编号（bug#3）===\n')
     { num: '05', name: '外壳' },
     { num: '04', name: 'layout' },
   ]
-  const step = buildCoordinatorStep('/tmp/change', taskNames)
+  const changeDir = '/tmp/change'
+  const step = buildCoordinatorStep(changeDir, taskNames)
   const prompt = step.prompt
   assertTrue(prompt.includes('task-05: 外壳'), 'prompt 含 task-05: 外壳（原始编号）')
   assertTrue(prompt.includes('task-04: layout'), 'prompt 含 task-04: layout（原始编号）')
-  assertTrue(prompt.includes('tasks/task-05.md'), '文件路径 task-05.md（与 execute 标号一致）')
-  assertTrue(prompt.includes('tasks/task-04.md'), '文件路径 task-04.md')
+  assertTrue(prompt.includes(`${changeDir}/tasks/`),
+    'batch 子代理 prompt 模板含任务文件输出目录（由子代理按实际 task id 生成 task-N.md）')
+  assertTrue(prompt.includes('task-N.md') || prompt.includes('<task-id>'),
+    'batch 子代理 prompt 模板说明按实际 task id 生成对应文件')
 }
 
 console.log(`\n${'='.repeat(50)}`)

@@ -384,8 +384,10 @@ execute/verify 阶段会按实际代码变更更新此文档；archive 阶段会
 // ═══════════════════════════════════════════════════════════════
 
 /**
- * 构建紧凑 TaskCard 协调器步骤（单步，子代理并行写卡片）
+ * 构建紧凑 TaskCard 协调器步骤（单步，子代理按 batch 并行写卡片）
  * 每个 task 生成 20~40 行紧凑可执行卡片
+ * 允许把多个相关 task 合并为一个 batch，由单个子代理一次生成多张卡片，
+ * 在保留 plan 任务拆分完整性的同时减少子代理调用数量。
  */
 export function buildCoordinatorStep(changeDir, taskNames) {
   const taskList = taskNames.map(t => {
@@ -393,23 +395,9 @@ export function buildCoordinatorStep(changeDir, taskNames) {
     return `- task-${num}: ${t.name}`
   }).join('\n')
 
-  const subagentPrompts = taskNames.map(t => {
-    const num = t.num
-    return `\`\`\`
-任务编号：task-${num}
-任务名称：${t.name}
-文件路径：${changeDir}/tasks/task-${num}.md
-当前时间：<now-datetime>（frontmatter 的 created_at 使用此值）
-当前用户：<git-user>（frontmatter 的 author 使用此值）
-
-操作：
-1. 读取 ${changeDir}/design.md 和 ${changeDir}/plan.md 了解上下文
-2. 读取相关源文件了解现有代码
-3. 生成紧凑 TaskCard（20~40 行），格式如下：
-
----
-id: task-${num}
-title: ${t.name}
+  const taskcardTemplate = `---
+id: <task-id>
+title: <task-name>
 title_zh: <任务中文标题>
 author: <git-user>
 created_at: <now-datetime>
@@ -447,10 +435,7 @@ related_tests:                           # 可选。当本 task 改动会导致�
     reason: 旧断言假设单例，改归属键后需同步
 ---
 
-{{include: taskcard-rules}}
-\`\`\``
-  }).join('\n\n')
-
+{{include: taskcard-rules}}`
 
   const prompt = `为 plan.md 中的每个任务生成紧凑 TaskCard。
 
@@ -468,21 +453,55 @@ ${taskList}
 
 ## 执行方式（必须严格遵守）
 
-**你必须使用 Agent tool 启动子代理来写每个卡片，不要自己写。**
+**你必须使用 Agent tool 启动子代理来写卡片，不要自己写。**
 
 1. 确认 \`${changeDir}/tasks/\` 目录存在（不存在则创建）
-2. 为每个任务启动一个独立子代理（Agent tool），可并行启动多个
-3. 每个子代理使用对应的 prompt（见下方模板）
-4. 等待所有子代理完成
-5. 验证每个 task-N.md 文件已生成且非空
+2. **按 batch 分派子代理（减少总子代理数量，而不是一个 task 一个子代理）：**
+   - 把任务按「同一 Wave + 同一模块/相近能力 + 无跨 batch 强依赖」原则分组
+   - **每个 batch 包含 2~4 个 task**；Wave 内任务数 ≤4 时整个 Wave 可作为一个 batch
+   - 有提供/消费契约的 task 尽量放到同一 batch（子代理能同时看到 consumer 与 provider，避免契约字段漏配）
+   - 跨 Wave 依赖的 task 不要放在同一 batch（子代理只需读 plan.md，但 batch 内 task 的 allowed_paths 不应互相阻塞）
+3. 为每个 batch 启动一个独立子代理（Agent tool），可并行启动多个 batch
+4. 每个子代理使用下方「批量 TaskCard 子代理 prompt」，一次生成该 batch 的全部 task-N.md
+5. 等待所有 batch 子代理完成
+6. 验证每个 task-N.md 文件已生成且非空
 
-### 子代理 prompt 模板
-为每个任务使用以下 prompt 启动子代理：
+> 设计意图：plan.md 里 task 数可以较多（能力拆分完整），但 TaskCard 生成阶段要合理合并，避免子代理数量随 task 数线性爆炸。一个子代理生成 2~4 张卡片与生成 1 张卡片的 token/时间成本接近，却能显著减少协调开销。
 
-${subagentPrompts}
+### 批量 TaskCard 子代理 prompt
+\`\`\`
+你是一个专注的 TaskCard 生成器。你的任务是为指定 batch 生成全部 TaskCard。
+
+## 输入
+- 变更目录：${changeDir}
+- 当前时间：<now-datetime>（frontmatter 的 created_at 使用此值）
+- 当前用户：<git-user>（frontmatter 的 author 使用此值）
+- 本 batch 任务列表：
+  <由主 agent 注入：task-01: 名称 / task-02: 名称 / ...>
+
+## 操作
+1. 读取 ${changeDir}/design.md 和 ${changeDir}/plan.md 了解整体上下文
+2. 读取本 batch 涉及的相关源文件
+3. 为 batch 中的**每一个 task 独立生成**一个 task-N.md 文件
+4. 每个文件使用如下模板（把 <task-id> / <task-name> 替换为具体编号和名称）：
+
+${taskcardTemplate}
+
+## 约束
+- 每个 task 20~40 行；禁止在 TaskCard 里写实现细节之外的冗长设计
+- 同 batch 内 task 的 allowed_paths 不要互相冲突
+- 若 task 之间有 provides/expects_from 契约，同 batch 生成时必须字段对齐
+- 只生成本 batch 声明的任务，不要多写或少写
+- 不要在 TaskCard 里泄露 plan.md 中未出现的实现假设
+
+## 完成标志
+- 本 batch 的每个 task-N.md 都已写入 ${changeDir}/tasks/
+- 每个文件非空且 frontmatter 完整
+\`\`\`
 
 ## 验收（生成后自查，不另开步骤）
 - 每个 task-N.md 文件存在且非空
+- 所有 task 都被某个 batch 覆盖、无遗漏、无重复
 - frontmatter 字段分两组对照（与 plan-postcheck / taskcard-rules.md 同源，三处清单以此为准）：
   - **硬校验 9 字段**（缺失 plan-postcheck 直接报错阻断）：id、title、title_zh、allowed_paths、goal、implementation、acceptance、verify、constraints
   - **规范约定 5 字段**（应填但缺失只影响规范性，不阻断）：author、created_at、priority、depends_on、blocks
@@ -496,7 +515,7 @@ ${subagentPrompts}
 
   return {
     id: 'generate_blueprints',
-    name: '生成 TaskCard（子代理并行）',
+    name: '生成 TaskCard（子代理按 batch 并行）',
     prompt,
     outputHint: 'TaskCard 生成结果',
     optional: false

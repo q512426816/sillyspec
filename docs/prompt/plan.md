@@ -369,7 +369,7 @@ execute/verify 阶段会按实际代码变更更新此文档；archive 阶段会
 
 ---
 
-## Step 4/5：生成 TaskCard（子代理并行）
+## Step 4/5：生成 TaskCard（子代理按 batch 并行）
 
 **元数据**
 - id：`generate_blueprints`
@@ -380,12 +380,12 @@ execute/verify 阶段会按实际代码变更更新此文档；archive 阶段会
 **本步出现的运行时占位符与 include 指令**
 - `<now-datetime>` → `YYYY-MM-DD HH:MM:SS`（执行时刻）
 - `<git-user>` → `git config user.name`（失败为 `unknown`）
-- `{{include: taskcard-rules}}` → include 指令：`resolvePromptIncludes` 在占位符替换前，把仓库根 `templates/prompts/taskcard-rules.md` 拉进 prompt 正文（TaskCard 格式规则 + 保存前自检，下方每个子代理 prompt 展开后相同）
+- `{{include: taskcard-rules}}` → include 指令：`resolvePromptIncludes` 在占位符替换前，把仓库根 `templates/prompts/taskcard-rules.md` 拉进 prompt 正文（TaskCard 格式规则 + 保存前自检，batch 子代理 prompt 展开后相同）
 
 **示例值（来自 3-task 示例输入，实际随 plan.md 任务列表变化）**
 - 任务清单：task-01「添加用户创建接口（覆盖：FR-01, D-001@v1）」、task-02「添加角色创建接口（覆盖：FR-02）」、task-03「用户创建接口联调」——由 `buildPlanSteps(changeDir, planContent)` 从 plan.md 的 checkbox 任务解析后注入。
 - changeDir：`C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\changes\2026-05-13-demo-change`——示例变更目录，实际取自当前变更路径。
-- 下方三个子代理 prompt 模板（task-01 / task-02 / task-03）随任务数动态生成：每个 task 一个模板，结构相同，仅任务编号 / 任务名称 / 文件路径不同。
+- 下方展示**批量 TaskCard 子代理 prompt**：主 agent 按「同一 Wave + 同一模块/相近能力 + 无跨 batch 强依赖」把 task 分成 2~4 个一组的 batch，每个 batch 启动一个子代理，一次生成该 batch 内全部 task-N.md。本示例为 3-task 结果；实际任务数、任务清单、changeDir、batch 划分随当前变更的 plan.md 变化。
 
 **提示词原文**
 
@@ -408,32 +408,41 @@ execute/verify 阶段会按实际代码变更更新此文档；archive 阶段会
 
 ## 执行方式（必须严格遵守）
 
-**你必须使用 Agent tool 启动子代理来写每个卡片，不要自己写。**
+**你必须使用 Agent tool 启动子代理来写卡片，不要自己写。**
 
 1. 确认 `C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\changes\2026-05-13-demo-change/tasks/` 目录存在（不存在则创建）
-2. 为每个任务启动一个独立子代理（Agent tool），可并行启动多个
-3. 每个子代理使用对应的 prompt（见下方模板）
-4. 等待所有子代理完成
-5. 验证每个 task-N.md 文件已生成且非空
+2. **按 batch 分派子代理（减少总子代理数量，而不是一个 task 一个子代理）：**
+   - 把任务按「同一 Wave + 同一模块/相近能力 + 无跨 batch 强依赖」原则分组
+   - **每个 batch 包含 2~4 个 task**；Wave 内任务数 ≤4 时整个 Wave 可作为一个 batch
+   - 有提供/消费契约的 task 尽量放到同一 batch（子代理能同时看到 consumer 与 provider，避免契约字段漏配）
+   - 跨 Wave 依赖的 task 不要放在同一 batch（子代理只需读 plan.md，但 batch 内 task 的 allowed_paths 不应互相阻塞）
+3. 为每个 batch 启动一个独立子代理（Agent tool），可并行启动多个 batch
+4. 每个子代理使用下方「批量 TaskCard 子代理 prompt」，一次生成该 batch 的全部 task-N.md
+5. 等待所有 batch 子代理完成
+6. 验证每个 task-N.md 文件已生成且非空
 
-### 子代理 prompt 模板
-为每个任务使用以下 prompt 启动子代理：
+> 设计意图：plan.md 里 task 数可以较多（能力拆分完整），但 TaskCard 生成阶段要合理合并，避免子代理数量随 task 数线性爆炸。一个子代理生成 2~4 张卡片与生成 1 张卡片的 token/时间成本接近，却能显著减少协调开销。
 
+### 批量 TaskCard 子代理 prompt
 ```
-任务编号：task-01
-任务名称：添加用户创建接口（覆盖：FR-01, D-001@v1）
-文件路径：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\changes\2026-05-13-demo-change/tasks/task-01.md
-当前时间：<now-datetime>（frontmatter 的 created_at 使用此值）
-当前用户：<git-user>（frontmatter 的 author 使用此值）
+你是一个专注的 TaskCard 生成器。你的任务是为指定 batch 生成全部 TaskCard。
 
-操作：
-1. 读取 C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\changes\2026-05-13-demo-change/design.md 和 C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\changes\2026-05-13-demo-change/plan.md 了解上下文
-2. 读取相关源文件了解现有代码
-3. 生成紧凑 TaskCard（20~40 行），格式如下：
+## 输入
+- 变更目录：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\changes\2026-05-13-demo-change
+- 当前时间：<now-datetime>（frontmatter 的 created_at 使用此值）
+- 当前用户：<git-user>（frontmatter 的 author 使用此值）
+- 本 batch 任务列表：
+  <由主 agent 注入：task-01: 名称 / task-02: 名称 / ...>
+
+## 操作
+1. 读取 C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\changes\2026-05-13-demo-change/design.md 和 C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\changes\2026-05-13-demo-change/plan.md 了解整体上下文
+2. 读取本 batch 涉及的相关源文件
+3. 为 batch 中的**每一个 task 独立生成**一个 task-N.md 文件
+4. 每个文件使用如下模板（把 <task-id> / <task-name> 替换为具体编号和名称）：
 
 ---
-id: task-01
-title: 添加用户创建接口（覆盖：FR-01, D-001@v1）
+id: <task-id>
+title: <task-name>
 title_zh: <任务中文标题>
 author: <git-user>
 created_at: <now-datetime>
@@ -472,120 +481,22 @@ related_tests:                           # 可选。当本 task 改动会导致�
 ---
 
 {{include: taskcard-rules}}
-```
 
-```
-任务编号：task-02
-任务名称：添加角色创建接口（覆盖：FR-02）
-文件路径：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\changes\2026-05-13-demo-change/tasks/task-02.md
-当前时间：<now-datetime>（frontmatter 的 created_at 使用此值）
-当前用户：<git-user>（frontmatter 的 author 使用此值）
+## 约束
+- 每个 task 20~40 行；禁止在 TaskCard 里写实现细节之外的冗长设计
+- 同 batch 内 task 的 allowed_paths 不要互相冲突
+- 若 task 之间有 provides/expects_from 契约，同 batch 生成时必须字段对齐
+- 只生成本 batch 声明的任务，不要多写或少写
+- 不要在 TaskCard 里泄露 plan.md 中未出现的实现假设
 
-操作：
-1. 读取 C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\changes\2026-05-13-demo-change/design.md 和 C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\changes\2026-05-13-demo-change/plan.md 了解上下文
-2. 读取相关源文件了解现有代码
-3. 生成紧凑 TaskCard（20~40 行），格式如下：
-
----
-id: task-02
-title: 添加角色创建接口（覆盖：FR-02）
-title_zh: <任务中文标题>
-author: <git-user>
-created_at: <now-datetime>
-priority: P0
-depends_on: []
-blocks: []
-requirement_ids: [FR-XX]
-decision_ids: [D-XXX@vN]
-allowed_paths:
-  - frontend/src/lib/errors.ts
-provides:                              # 可选。仅当本 task 给其他 task 提供接口/DTO/响应时填
-  - contract: <DTO或响应类型名>          # 如 DaemonRuntimeRead
-    fields: [field_a, field_b]
-expects_from:                          # 可选。仅当本 task 消费其他 task 的契约时填
-  <provider-task-id>:                  # 如 task-05（占位符，不要照抄）
-    - contract: <DTO或响应类型名>
-      needs: [field_a]                 # 必须从该 provider 拿到的字段
-goal: >
-  一句话说明这个 task 要做什么、为什么。
-implementation:
-  - 具体步骤 1
-  - 具体步骤 2
-  - 具体步骤 3
-acceptance:
-  - 可验证的验收条件 1
-  - 可验证的验收条件 2
-  - 可验证的验收条件 3
-verify:
-  - cd frontend && pnpm exec tsc --noEmit
-constraints:
-  - 边界约束 1（如：不加测试）
-  - 边界约束 2（如：不修改传入参数）
-related_tests:                           # 可选。当本 task 改动会导致既有测试断言失效时填（共享源文件/UI文案/常量/签名变更等，判据=测试是否失败非文件是否共享）
-  - path: frontend/src/lib/errors.test.ts # 因本次改动断言失效的既有测试文件
-    reason: 旧断言假设单例，改归属键后需同步
----
-
-{{include: taskcard-rules}}
-```
-
-```
-任务编号：task-03
-任务名称：用户创建接口联调
-文件路径：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\changes\2026-05-13-demo-change/tasks/task-03.md
-当前时间：<now-datetime>（frontmatter 的 created_at 使用此值）
-当前用户：<git-user>（frontmatter 的 author 使用此值）
-
-操作：
-1. 读取 C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\changes\2026-05-13-demo-change/design.md 和 C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\changes\2026-05-13-demo-change/plan.md 了解上下文
-2. 读取相关源文件了解现有代码
-3. 生成紧凑 TaskCard（20~40 行），格式如下：
-
----
-id: task-03
-title: 用户创建接口联调
-title_zh: <任务中文标题>
-author: <git-user>
-created_at: <now-datetime>
-priority: P0
-depends_on: []
-blocks: []
-requirement_ids: [FR-XX]
-decision_ids: [D-XXX@vN]
-allowed_paths:
-  - frontend/src/lib/errors.ts
-provides:                              # 可选。仅当本 task 给其他 task 提供接口/DTO/响应时填
-  - contract: <DTO或响应类型名>          # 如 DaemonRuntimeRead
-    fields: [field_a, field_b]
-expects_from:                          # 可选。仅当本 task 消费其他 task 的契约时填
-  <provider-task-id>:                  # 如 task-05（占位符，不要照抄）
-    - contract: <DTO或响应类型名>
-      needs: [field_a]                 # 必须从该 provider 拿到的字段
-goal: >
-  一句话说明这个 task 要做什么、为什么。
-implementation:
-  - 具体步骤 1
-  - 具体步骤 2
-  - 具体步骤 3
-acceptance:
-  - 可验证的验收条件 1
-  - 可验证的验收条件 2
-  - 可验证的验收条件 3
-verify:
-  - cd frontend && pnpm exec tsc --noEmit
-constraints:
-  - 边界约束 1（如：不加测试）
-  - 边界约束 2（如：不修改传入参数）
-related_tests:                           # 可选。当本 task 改动会导致既有测试断言失效时填（共享源文件/UI文案/常量/签名变更等，判据=测试是否失败非文件是否共享）
-  - path: frontend/src/lib/errors.test.ts # 因本次改动断言失效的既有测试文件
-    reason: 旧断言假设单例，改归属键后需同步
----
-
-{{include: taskcard-rules}}
+## 完成标志
+- 本 batch 的每个 task-N.md 都已写入 C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\changes\2026-05-13-demo-change/tasks/
+- 每个文件非空且 frontmatter 完整
 ```
 
 ## 验收（生成后自查，不另开步骤）
 - 每个 task-N.md 文件存在且非空
+- 所有 task 都被某个 batch 覆盖、无遗漏、无重复
 - frontmatter 字段分两组对照（与 plan-postcheck / taskcard-rules.md 同源，三处清单以此为准）：
   - **硬校验 9 字段**（缺失 plan-postcheck 直接报错阻断）：id、title、title_zh、allowed_paths、goal、implementation、acceptance、verify、constraints
   - **规范约定 5 字段**（应填但缺失只影响规范性，不阻断）：author、created_at、priority、depends_on、blocks
@@ -629,7 +540,7 @@ plan 是**动态阶段**，steps 由 `src/stages/plan.js` 的 `buildPlanSteps(ch
   - Step 3 `review_plan`（审查计划）— 按 `{REVIEW_TIER}` 分级审查：`self` 由当前 agent 直接核对清单；`independent` 用 Agent tool 启动独立子代理对照审查清单并产出 `review.json`（`{REVIEW_JSON_CONTRACT}` 注入产物契约）。
 
 - **1 个动态协调器步骤**（仅当 plan.md 含 checkbox task 时追加）：
-  - Step 4 `generate_blueprints`（生成 TaskCard 子代理并行）— 由 `buildCoordinatorStep(changeDir, taskNames)` 生成。`buildPlanSteps` 从 `planContent` 解析出 `- [ ] task-XX:` 行得到任务清单，再为每个 task 拼接一段子代理 prompt 模板（结构相同，仅任务编号 / 名称 / 文件路径不同），由主 agent 并行启动子代理写入 `tasks/task-NN.md`。本目录展示的是 **3-task 示例**（task-01/02/03）+ 示例 changeDir（`C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\changes\2026-05-13-demo-change`）的生成结果；实际任务清单、任务数、changeDir 随当前变更的 plan.md 变化。任务数为 0 时本步骤不追加，整阶段退化为「3 固定 + postcheck」共 4 步。
+  - Step 4 `generate_blueprints`（生成 TaskCard 子代理按 batch 并行）— 由 `buildCoordinatorStep(changeDir, taskNames)` 生成。`buildPlanSteps` 从 `planContent` 解析出 `- [ ] task-XX:` 行得到任务清单；主 agent 按「同一 Wave + 同一模块/相近能力 + 无跨 batch 强依赖」把 task 分成 2~4 个一组的 batch，每个 batch 启动一个独立子代理，一次生成该 batch 内全部 `tasks/task-NN.md`。本目录展示的是 **3-task 示例**（task-01/02/03）+ 示例 changeDir（`C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\changes\2026-05-13-demo-change`）的生成结果；实际任务清单、任务数、changeDir、batch 划分随当前变更的 plan.md 变化。任务数为 0 时本步骤不追加，整阶段退化为「3 固定 + postcheck」共 4 步。
 
 - **1 个 noAI postcheck 步骤**（始终存在）：
   - Step 5 `postcheck`（Wave 重排与可行性校验）— 由 `buildPostcheckStep()` 生成，`noAI: true`、`_cliAction: 'planPostcheck'`、prompt 为空字符串。CLI 在 `--done` 时直接执行 `src/stages/plan-postcheck.js` 的 Wave 重排与一致性校验（含 `provides` / `expects_from` 跨 task 契约硬对账、allowed_paths 文件覆盖检查等），不调用 LLM，无 prompt 注入。
@@ -646,5 +557,5 @@ plan 是**动态阶段**，steps 由 `src/stages/plan.js` 的 `buildPlanSteps(ch
 - [x] prompt 用 4 反引号包裹，内部 3 反引号代码块未被破坏
 - [x] 元数据字段与 JSON step 对象一致（id / optional / outputHint / noAI / _cliAction）
 - [x] 动态阶段有「动态步骤说明」小节
-- [x] Step 4 协调器 prompt 完整（~7945 字符，含 task-01/02/03 三段子代理模板）
+- [x] Step 4 协调器 prompt 完整（batch 模式，含 3-task 示例 + 批量 TaskCard 子代理 prompt 模板）
 - [x] Step 5 postcheck 标注 noAI（无 prompt，逻辑见 `src/stages/plan-postcheck.js`）
