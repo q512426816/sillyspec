@@ -415,7 +415,7 @@ doc_type: module-card
 module_id: <module-id>
 ---
 
-# <module-id>
+# <中文名>（<module-id>）
 
 ## 定位
 （负责什么，不负责什么 — 明确边界）
@@ -437,6 +437,7 @@ module_id: <module-id>
 
 规则：
 - 不要编造接口或依赖，只写 grep/rg 能搜到的
+- 一级标题格式 \`# <中文名>（<module-id>）\`：中文名从模块职责提炼 2-8 字（如 认证与令牌、变更中心），括号内保留 module-id 原样——sillyhub 平台解析识别用
 - 目标长度：500-1000 字 / 80-150 行
 - 如果模块特别复杂（状态机、多角色交互、复杂领域规则），可以在 modules/details/ 下生成扩展文档（如 details/<module-id>-flow.md），agent 默认不读
 - 不要重复 _module-map.yaml 中的索引信息

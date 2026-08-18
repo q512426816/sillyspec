@@ -121,6 +121,7 @@
 3. 如果标记缺失或重复 → 在 _module-map.yaml 中标记 needs_review: true
 
 #### 新建模块卡片模板
+一级标题格式 `# <中文名>（<module-id>）`——中文名从模块职责提炼 2-8 字，括号内保留 module-id 原样（sillyhub 平台解析识别用，与 scan 生成约定一致）。
 ```markdown
 ---
 schema_version: 1
@@ -128,7 +129,7 @@ doc_type: module-card
 module_id: <module-id>
 ---
 
-# <module-id>
+# <中文名>（<module-id>）
 
 ## 定位
 

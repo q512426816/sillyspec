@@ -475,3 +475,14 @@ docs/sillyspec/platform-interface-map.md（守卫插入致行号漂移，doc-ref
 根因：无功能缺陷，纯 agent 知情缺口——启动 flag 持久化机制（stage.js:305 quickGuard）与 --done OR 合并（complete-handlers.js:789）早已存在，但 step1 prompt 不告知可预声明，预判改 src 核心的会话仍等 step3 拦截后重跑（本轮 ql-20260818-001 实录）。同报负面② safeGit 命名核实为两阶段刻意设计（内部 errorObj=原始 Error 供 ETIMEDOUT 重试判定，对外 error=首行 message），JSDoc 完整，不改
 方案：step1 prompt 加预声明段——预判触及 src 核心/新增/删除时重启 quick 带对应 flag 持久化进守卫；不预带则 step3 拦截后按提示补带，两路径等价（审计 fail-closed 语义不变）
 结果：本会话即实测——启动预带 --force-baseline，改 src/stages/quick.js（危险清单文件）后 step3 --done 审计 SAFE 零拦截（对比 ql-20260818-001 同场景被拦一轮）；npm test exit=0 + lint exit=0（310 文件）
+## ql-20260818-005-a999 | 2026-08-18 08:49:05 | scan/archive 模块卡片模板标题补中文名——# <中文名>（<module-id>）对齐 sillyhub 平台解析约定，消除平台文档列表一墙英文代号
+状态：已完成
+关联变更：（无；存量 94 张卡片批量补标题在 multi-agent-platform 仓另行处理）
+文件：
+- src/stages/scan.js（模块卡片子代理模板标题行改 # <中文名>（<module-id>）+ 规则列表补中文名要求：从模块职责提炼 2-8 字）
+- src/stages/archive.js（新建卡片模板标题行同步 + 模板上方补标题格式说明，与 scan 约定一致）
+- docs/prompt/_extracted.json + scan.md + archive.md + index.html（镜像四件同步：重跑 _extract.mjs + _build-site.mjs，md 模板与规则段逐字替换）
+需求：scan 生成的模块卡片一级标题是纯英文 module-id，平台文档列表一墙英文代号无可用标题
+根因：scan.js:168 与 548 对 scan 文档/knowledge 文件均有 # 中文名（English）标题约定（sillyhub 平台解析识别用），唯独模块卡片子代理模板硬编码 # <module-id>，子代理照模板生成；archive.js 新建卡片模板同样漏
+方案：两处模板标题行改 # <中文名>（<module-id>），scan 规则列表与 archive 模板说明处补中文名要求（从模块职责提炼 2-8 字）；modules.js 迁移模板不动（旧 H1 即 moduleId 来源，中文信息不独立且为冷路径）；CLI 解析不受影响（module_id 走 frontmatter/文件名，doctor 校验 frontmatter）
+结果：npm test 305 pass 0 fail；npm run lint 通过（310 文件）；镜像四件同步（_extracted.json/scan.md/archive.md/index.html）；file-lifecycle.md 无标题格式描述不需更新
