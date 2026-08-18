@@ -999,6 +999,19 @@ export function listConflictFiles(cwd) {
   return new SyncManager(cwd).listConflictFiles();
 }
 
+// ql-20260818-011：quick 会话专用 spec 树同步入口。quick-<hex8> 会话按设计无
+// changes/<name>/ 实体目录，progress/四件套上行对它是孤儿数据（平台变更中心按磁盘
+// change_key join 永不命中），但 spec 树增量（QUICKLOG/模块文档的上行通道）以服务器
+// 清单为锚做全树 diff，与变更目录无关——triggerSync 对 quick 会话降级只调本函数，
+// 不走 sync()（后者第二道 existsSync 门会以「变更不存在」提前 return）。
+// 未连接平台 → {synced: 0} 静默（本地合法状态，与 syncSpecTree 内部口径一致）。
+export async function syncSpecTreeOnly(changeName, cwd) {
+  const sm = new SyncManager(cwd);
+  const platform = sm._getPlatform();
+  if (!platform) return { synced: 0 };
+  return syncSpecTree(join(cwd, '.sillyspec'), platform, changeName);
+}
+
 // TBD-hub-api: approve/reject 端点路径与请求体以 SillyHub 仓库实际 API 为准；
 // 对齐时只改本函数（_submitApproval），无需动 approve/reject 入口。
 /**

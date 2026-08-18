@@ -47,3 +47,17 @@
 方案：auditQuickCompletion 复用 runDocsCheck 分层真校验（存在加行界加关键词窗口），matchLivingDocRefs 降为预过滤省 IO，新增 matchInvalidRefsToChanged 纯函数把 invalid 引用剥行号后按三形态匹配改动文件，drift.invalid 逐条带 doc 行号 ref 与原因，渲染列出前 8 条，全过零输出；顺手修 ql-008 遗留的 sync.js 四处锚点漂移（checkApproval 546 到 560 与 approve reject 入口 1046 1050 到 1071 1075）
 结果：docs check 417 处全绿；新增改写测试 20 断言全过（真失效命中、全过零输出、关键词窗口失败、invalid 剥行号匹配、渲染零噪声回归）；npm test 222 文件 0 失败、lint 312 文件通过
 审计：⚖️ 归属切分：2 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：.sillyspec/docs/sillyspec/scan/ARCHITECTURE.md, docs/sillyspec/prompt-control-debt.md
+
+## ql-20260818-010-1197 | 2026-08-18 13:39:42 | quick CLI 未知参数语义别名定向提示——--title 等常见别名 did-you-mean 猜形近 flag 语义错，给定向指引
+状态：进行中
+关联变更：（无）
+文件：src/run/command.js, test/run-exit-codes.test.mjs, .sillyspec/docs/sillyspec/modules/runtime.md
+
+## ql-20260818-011-9ae6 | 2026-08-18 13:47:43 | quick 会话收尾补平台 spec 树同步
+状态：已完成
+关联变更：（无）
+文件：docs/sillyspec/platform-interface-map.md, src/run/shared.js, src/sync.js, test/platform-sync-quick-session-spectree.test.mjs
+需求：quick 会话收尾补平台 spec 树同步
+根因：quick-<hex8> 会话按设计无 changes/<name>/ 实体目录，triggerSync 的 existsSync 门与 sync() 第二道门都锚定变更目录存在，把 spec 树增量（QUICKLOG/模块文档唯一上行通道）一并误伤
+方案：triggerSync 识别 QUICK_SID_RE 会话降级只调新增 syncSpecTreeOnly（跳过 progress/四件套防平台孤儿行），非 quick 形态维持静默防拼写噪音
+结果：新增 platform-sync-quick-session-spectree 4 组先红后绿；npm test 223 文件 0 失败；lint 313 文件过；doc-ref-check 80/80

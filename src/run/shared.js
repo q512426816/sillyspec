@@ -417,11 +417,35 @@ export function resolveChangeDir(cwd, progress, specDir = null) {
 // 历史痛点：--done 在 sync 慢时体感 hang，用户被迫用外部 timeout 兜底。
 const SYNC_TOTAL_TIMEOUT_MS = 8_000
 
+// quick 会话 ID 形态（quick-<hex8>）。与 run/command.js QUICK_SID_RE、progress.js
+// initChange 的跳过实体目录判断同源；shared.js 不反向 import command.js（重模块），
+// 局部复制正则保持轻载——改形态时三处同改。
+const QUICK_SID_RE = /^quick-[0-9a-f]{8}$/
+
 export async function triggerSync(cwd, changeName, platformOpts = {}) {
   // 平台模式（SillyHub）走自己的回传链路，不走 CLI 内置 sync
   if (platformOpts?.specRoot || platformOpts?.runtimeRoot) return
   try {
-    if (changeName && !existsSync(join(cwd, '.sillyspec', 'changes', changeName))) return
+    if (changeName && !existsSync(join(cwd, '.sillyspec', 'changes', changeName))) {
+      // ql-20260818-011：quick 会话按设计无实体变更目录（progress.js initChange 同款
+      // 跳过建目录），progress/四件套上行对它是孤儿数据；但 spec 树增量（QUICKLOG/
+      // 模块文档的上行通道）以服务器清单为锚，与变更目录无关——降级只推 spec 树。
+      // 其余形态（真实变更名拼错）维持静默 return，防噪音混入 spec 树通道。
+      if (QUICK_SID_RE.test(changeName)) {
+        // shared.js 在 src/run/，sync.js 在 src/ → 退一层
+        const syncMod = await import('../sync.js')
+        let timer
+        try {
+          await Promise.race([
+            syncMod.syncSpecTreeOnly(changeName, cwd),
+            new Promise((resolve) => { timer = setTimeout(resolve, SYNC_TOTAL_TIMEOUT_MS) }),
+          ])
+        } finally {
+          clearTimeout(timer)
+        }
+      }
+      return
+    }
     // shared.js 在 src/run/，sync.js 在 src/ → 退一层
     const syncMod = await import('../sync.js')
     let timer
