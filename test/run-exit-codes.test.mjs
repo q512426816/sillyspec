@@ -76,6 +76,34 @@ console.log('--- run <stage> 退出码三段契约（W1-A 用法/环境错 → e
   assert(msg.includes('bogus') || msg.includes('未知') || msg.includes('unknown') || msg.includes('参数'),
     `未知参数 stderr 含提示（实际 ${msg.slice(0, 80)}）`)
 }
+
+// F10b（ql-20260818-010）: 语义别名定向提示——did-you-mean 按编辑距离猜形近 flag，猜中的常是
+// 形近但语义错的（--title → --files，ql-20260818-003 负面③）。命中别名打定向指引替代形近猜测。
+{
+  const d = makeRepo()
+  const r = runSilly(['run', 'quick', '--done', '--title', 'x'], { cwd: d })
+  assert(r.status === 2, `--title 未知参数 → exit 2（实际 ${r.status}）`)
+  const msg = r.stderr + r.stdout
+  assert(msg.includes('需求：'), `--title 提示指向 --output「需求：」提取（实际 ${msg.slice(0, 200)}）`)
+  assert(!msg.includes('--files'), `--title 不再误导猜 --files（实际 ${msg.slice(0, 200)}）`)
+}
+{
+  const d = makeRepo()
+  const r = runSilly(['run', 'quick', '--done', '--name', 'my-session'], { cwd: d })
+  assert(r.status === 2, `--name 未知参数 → exit 2（实际 ${r.status}）`)
+  const msg = r.stderr + r.stdout
+  assert(msg.includes('quick-<hash>') || msg.includes('--change'),
+    `--name 提示指向自动 sessionId / --change 恢复（实际 ${msg.slice(0, 200)}）`)
+}
+// 未命中别名的形近未知 flag 仍走 did-you-mean 路径（回归保护）
+{
+  const d = makeRepo()
+  const r = runSilly(['run', 'quick', '--done', '--output2', 'x'], { cwd: d })
+  assert(r.status === 2, `形近未知参数 → exit 2（实际 ${r.status}）`)
+  const msg = r.stderr + r.stdout
+  assert(msg.includes('你是想输入「--output」') || msg.includes('已知参数'),
+    `形近参数仍走 did-you-mean / 已知参数路径（实际 ${msg.slice(0, 200)}）`)
+}
 {
   const d = makeRepo()
   const r = runSilly(['run', 'execute'], { cwd: d })

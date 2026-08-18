@@ -561,6 +561,22 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
   const isForceBaseline = flags.includes('--force-baseline')
   const isForceRescan = flags.includes('--force-rescan')
 
+  // F10b（ql-20260818-010）：语义别名定向提示。did-you-mean 按编辑距离猜形近 flag，猜中的常是
+  // 形近但语义错的（--title → --files，ql-20260818-003 负面③实证）。常见「语义别名」在此登记
+  // 定向指引：命中时替代 did-you-mean 打印，引导到真正承载该语义的 flag/机制。
+  const FLAG_SEMANTIC_HINTS = {
+    '--title': 'QUICKLOG 条目标题无独立参数——从 --output 的「需求：」字段自动提取（写成一句语义化短标题即可）',
+    '--message': '结果摘要用 --output（quick 末步须含 需求：/根因：/方案：/结果： 四字段）',
+    '--summary': '结果摘要用 --output（quick 末步须含 需求：/根因：/方案：/结果： 四字段）',
+    '--result': '结果摘要用 --output（quick 末步须含 需求：/根因：/方案：/结果： 四字段）',
+    '--name': 'quick 会话名由 CLI 自动分配（quick-<hash>），恢复会话用 --change <quick-session-id>；关联变更用 --linked-changes',
+    '--session': 'quick 会话名由 CLI 自动分配（quick-<hash>），恢复会话用 --change <quick-session-id>',
+    '--note': '文件括注用 --file-notes "path::注 || path::注"；启动时任务描述用 --input',
+    '--notes': '文件括注用 --file-notes "path::注 || path::注"',
+    '--desc': '启动时任务描述用 --input；QUICKLOG 标题从 --output「需求：」自动提取',
+    '--description': '启动时任务描述用 --input；QUICKLOG 标题从 --output「需求：」自动提取',
+  }
+
   // 未知参数 fail-fast
   const knownFlags = new Set([
     '--done', '--skip', '--status', '--reset', '--confirm', '--skip-approval',
@@ -579,11 +595,16 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     const f = flags[i]
     if (f.startsWith('--')) {
       if (!knownFlags.has(f)) {
-        // F10: flag 级 did-you-mean（此前只命令级有）
-        const suggestion = didYouMean(f, [...knownFlags])
+        // F10: flag 级 did-you-mean（此前只命令级有）；F10b：语义别名定向提示优先于形近猜测
+        const semanticHint = FLAG_SEMANTIC_HINTS[f]
         console.error(`❌ 未知参数: ${f}`)
-        if (suggestion) console.error(`   你是想输入「${suggestion}」吗？`)
-        else console.error(`已知参数: ${[...knownFlags].sort().join(', ')}`)
+        if (semanticHint) {
+          console.error(`   ${semanticHint}`)
+        } else {
+          const suggestion = didYouMean(f, [...knownFlags])
+          if (suggestion) console.error(`   你是想输入「${suggestion}」吗？`)
+          else console.error(`已知参数: ${[...knownFlags].sort().join(', ')}`)
+        }
         process.exit(2) // 用法错 → exit 2
       }
       // F2: 只有吃值的 flag 才跳下一个 token。布尔 flag（--done 等）不能 i++——

@@ -4,7 +4,7 @@ doc_type: module-card
 module_id: runtime
 author: qinyi
 created_at: 2026-06-03T07:42:00+08:00
-updated_at: 2026-08-18T13:10:00+08:00
+updated_at: 2026-08-18T20:15:00+08:00
 ---
 # runtime
 
@@ -102,4 +102,5 @@ ProgressManager.alignExecuteToPlan(cwd, changeName, specBase, {confirm})
 - ql-20260817-005-4369 | plan-postcheck.js executePlanPostcheck 聚合 stage-contract validatePlanOutputs：在原有六检查之后动态 import 阶段产物契约校验，把 module-impact 缺失/entry-point-wiring 未覆盖等 stage gate 错误一轮暴露，避免「postcheck 通过 → stage gate 又报错」的修一层撞一层；循环依赖由运行时动态 import 打破，stage-contract.js 仍静态 import plan-postcheck.js 的 parseAllowedPaths 不变。
 - ql-20260818-006-b5ae | quick QUICKLOG 文件行误归属修复（声明即归属）：auditQuickCompletion 产出 attributedFiles/undeclaredFiles（窗口∩声明∪同文件并发 / 窗口−声明），文件行回填改用 attributedFiles、未声明窗口脏文件进「审计：」行追溯；并发预检 ownFiles 锚点声明会话改 baseline∪allowed（治 changedFiles 污染自吞致预检失明，ql-20260818-003 实证）。
 - ql-20260818-009-9443 | 活文档漂移提示精度对齐 docs check：路径级「被引用即提示」升级为 runDocsCheck 分层真校验，只报真失效引用（drift.invalid 逐条 doc:line/ref/reason），全过零输出；matchLivingDocRefs 降为预过滤 + 新增 matchInvalidRefsToChanged。
+- ql-20260818-010-1197 | quick flag 级语义别名定向提示（F10b）：command.js 对 --title/--message/--summary/--result/--name/--session/--note/--notes/--desc/--description 等常见「不存在 flag」给定向指引，替代 did-you-mean 形近猜测（如 --title 不再误导猜 --files，而是指向 --output「需求：」自动提取 / --file-notes 文件括注）；test/run-exit-codes.test.mjs 加 3 条回归断言。
 <!-- MANUAL_NOTES_END -->

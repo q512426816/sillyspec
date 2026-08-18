@@ -48,10 +48,19 @@
 结果：docs check 417 处全绿；新增改写测试 20 断言全过（真失效命中、全过零输出、关键词窗口失败、invalid 剥行号匹配、渲染零噪声回归）；npm test 222 文件 0 失败、lint 312 文件通过
 审计：⚖️ 归属切分：2 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：.sillyspec/docs/sillyspec/scan/ARCHITECTURE.md, docs/sillyspec/prompt-control-debt.md
 
-## ql-20260818-010-1197 | 2026-08-18 13:39:42 | quick CLI 未知参数语义别名定向提示——--title 等常见别名 did-you-mean 猜形近 flag 语义错，给定向指引
-状态：进行中
+## ql-20260818-010-1197 | 2026-08-18 13:39:42 | quick CLI 未知 flag 语义别名定向提示（--title 等不再误导猜 --files）
+状态：已完成
 关联变更：（无）
-文件：src/run/command.js, test/run-exit-codes.test.mjs, .sillyspec/docs/sillyspec/modules/runtime.md
+文件：
+- src/run/command.js（新增 FLAG_SEMANTIC_HINTS + 语义提示优先于 did-you-mean）
+- test/run-exit-codes.test.mjs（--title/--name/--output2 三回归断言）
+- docs/sillyspec/platform-interface-map.md（command.js/shared.js 锚点随插入/并行提交重锚）
+- .sillyspec/docs/sillyspec/modules/runtime.md（补 ql-010 变更索引与 updated_at）
+需求：quick CLI 未知 flag 语义别名定向提示（--title 等不再误导猜 --files，而指向 --output「需求：」自动提取或 --file-notes）。
+根因：did-you-mean 按编辑距离形近猜测，对语义别名（如 --title 想写标题）给出错误建议。
+方案：在 command.js FLAG_SEMANTIC_HINTS 登记 10 组常见别名，未知 flag 命中时打印定向提示替代 did-you-mean。
+结果：npm test 223 文件全过；doc-ref-check 80/80 通过；lint 313 文件通过；新增 test/run-exit-codes.test.mjs 3 条断言。
+审计：⚖️ 归属切分：3 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：src/run/shared.js, src/sync.js, test/platform-sync-quick-session-spectree.test.mjs
 
 ## ql-20260818-011-9ae6 | 2026-08-18 13:47:43 | quick 会话收尾补平台 spec 树同步
 状态：已完成
