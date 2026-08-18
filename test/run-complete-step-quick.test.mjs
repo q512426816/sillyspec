@@ -15,6 +15,7 @@
  */
 import { writeFileSync, mkdirSync, existsSync, readFileSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
+import { execSync } from 'node:child_process'
 import { makeRepo, initChange, seedStage, runStage, cleanup, report } from './_cli-step-harness.mjs'
 import { ProgressManager } from '../src/progress.js'
 
@@ -127,6 +128,32 @@ console.log('\n--- happy：audit SAFE + 四标签齐全 + 条目存在 → 完�
   const after = await new ProgressManager({ specDir: specBase }).read(cwd, sid)
   // quick 是辅助阶段（auxiliary）→ 完成后重置 status=pending + steps=freshSteps，让 quick 可重跑
   assert(after.stages.quick.status === 'pending', 'DB: quick 是 auxiliary → 完成后 status 重置 pending（可重跑）')
+}
+
+// ── Case 4: 归属切分 E2E（2026-08-18 误归属修复）──QUICKLOG 文件行只落声明文件，他者窗口文件进「审计：」行 ──
+// ql-20260818-003 实证形态：并行会话窗口内改的文件曾被整行写进本会话「文件：」行（只能手动精修）。
+console.log('\n--- 归属切分 E2E：声明 mine.js + 他者 foreign.js 同窗口脏 ---')
+{
+  const { cwd, specBase } = makeRepo('cli-quick-attrib-')
+  const sid = 'quick-deadbee4'
+  writeFileSync(join(cwd, 'mine.js'), 'v1\n')
+  writeFileSync(join(cwd, 'foreign.js'), 'v1\n')
+  execSync('git add .', { cwd, stdio: 'pipe' })
+  execSync('git commit -q -m base', { cwd, stdio: 'pipe' })
+  await seedQuickToThird(cwd, specBase, sid)
+  writeGuard(specBase, sid, { allowedFiles: ['mine.js'] })
+  writeQuicklogEntry(specBase)
+  writeFileSync(join(cwd, 'mine.js'), 'v2\n')    // 本会话改（已声明）
+  writeFileSync(join(cwd, 'foreign.js'), 'v2\n') // 模拟并行会话窗口内改（未声明）
+
+  const r = runStage('quick', sid, cwd, { done: true, output: FULL_OUTPUT })
+
+  assert(r.status === 0, `归属切分不阻断（warning 级）exit 0（实际 ${r.status}，输出尾：${r.combined.slice(-150)}）`)
+  const qlContent = readFileSync(join(specBase, 'quicklog', 'QUICKLOG-test.md'), 'utf8')
+  const fileLine = qlContent.split('\n').find(l => l.startsWith('文件：'))
+  assert(fileLine !== undefined && fileLine.includes('mine.js'), `文件行含声明文件（实际 ${fileLine}）`)
+  assert(fileLine !== undefined && !fileLine.includes('foreign.js'), `文件行不含他者窗口文件（实际 ${fileLine}）`)
+  assert(/^审计：.*foreign\.js/m.test(qlContent), `他者窗口文件进「审计：」行落盘可追溯（实际审计行：${qlContent.split('\n').filter(l => l.startsWith('审计：')).join(' | ')}）`)
 }
 
 cleanup()

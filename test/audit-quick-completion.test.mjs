@@ -10,7 +10,7 @@
  *
  * 覆盖五条核心路径：无变更/新增/删除/危险文件/forceBaseline 放行。
  */
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs'
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import { execSync } from 'child_process'
@@ -339,6 +339,56 @@ console.log('\n--- docs check advisory ---')
   assert(r.status === 'blocked', `删除默认 blocked（--allow-delete 语义不变，实际 ${r.status}）`)
   assert(!r.docsCheckHint, `删除的 .md 不产生 docsCheckHint 假失效（实际 ${JSON.stringify(r.docsCheckHint)}）`)
   assert(!r.reasons.some(x => x.includes('失效 file:line')), `reasons 无假失效条目（实际 ${JSON.stringify(r.reasons)}）`)
+}
+
+// ── 归属切分（2026-08-18 误归属修复）：声明即归属，窗口内他者文件不进 attributedFiles ──
+console.log('\n--- 归属切分（attributedFiles / undeclaredFiles）---')
+
+// case AT-1: 声明会话窗口含他者文件 → attributed 只含声明命中，undeclared 记他者（QUICKLOG 文件行数据源）
+// ql-20260818-003 实证形态：并行会话在 quick 窗口内改的文件被算进本会话 changedFiles 污染文件行。
+{
+  const d = makeRepo()
+  writeFileSync(join(d, 'mine.js'), 'v1\n')
+  writeFileSync(join(d, 'foreign.js'), 'v1\n')
+  execSync('git add .', { cwd: d, stdio: 'pipe' })
+  execSync('git commit -q -m base', { cwd: d, stdio: 'pipe' })
+  writeFileSync(join(d, 'mine.js'), 'v2\n')    // 本会话改（已声明）
+  writeFileSync(join(d, 'foreign.js'), 'v2\n') // 模拟并行会话窗口内改（未声明）
+  const r = await auditQuickCompletion(d, { ...baseGuard, allowedFiles: ['mine.js'] }, {})
+  assert(r.attributedFiles.includes('mine.js'), `attributedFiles 含声明文件（实际 ${JSON.stringify(r.attributedFiles)}）`)
+  assert(!r.attributedFiles.includes('foreign.js'), `他者文件不进 attributedFiles（实际 ${JSON.stringify(r.attributedFiles)}）`)
+  assert(r.undeclaredFiles.includes('foreign.js'), `undeclaredFiles 记他者文件（实际 ${JSON.stringify(r.undeclaredFiles)}）`)
+  assert(r.reasons.some(x => x.startsWith('超出')), `超出声明 warning 口径保留（不变）`)
+}
+
+// case AT-2: 未声明会话（allowedFiles 空）→ attributed = changedFiles 全量、undeclared 空（口径不回归）
+{
+  const d = makeRepo()
+  writeFileSync(join(d, 'README.md'), 'updated\n')
+  const r = await auditQuickCompletion(d, baseGuard, {})
+  assert(r.attributedFiles.includes('README.md'), `未声明会话 attributed = changed 全量（实际 ${JSON.stringify(r.attributedFiles)}）`)
+  assert(r.undeclaredFiles.length === 0, `未声明会话 undeclared 空（实际 ${JSON.stringify(r.undeclaredFiles)}）`)
+}
+
+// case AT-3: 声明文件在 baseline（他者先改过）且本会话又改（hash 变化）→ 经同文件并发并入 attributed
+// 该形态文件被 isBaselineFile 跳过不进 changedFiles，但确属本会话产物，须靠 allowedFilesHash 差异捕获。
+{
+  const d = makeRepo()
+  writeFileSync(join(d, 'shared.js'), 'v1\n')
+  execSync('git add .', { cwd: d, stdio: 'pipe' })
+  execSync('git commit -q -m base', { cwd: d, stdio: 'pipe' })
+  writeFileSync(join(d, 'shared.js'), 'v1-his\n') // 他者先改（= step1 baseline 脏）
+  const { createHash } = await import('node:crypto')
+  const hash = createHash('sha256').update(readFileSync(join(d, 'shared.js'))).digest('hex')
+  writeFileSync(join(d, 'shared.js'), 'v1-his-mine\n') // 本会话再改（hash ≠ 启动时）
+  const r = await auditQuickCompletion(d, {
+    ...baseGuard,
+    baselineFiles: ['shared.js'],
+    allowedFiles: ['shared.js'],
+    allowedFilesHash: { 'shared.js': hash },
+  }, {})
+  assert(r.attributedFiles.includes('shared.js'), `baseline 声明文件 hash 变化并入 attributed（实际 ${JSON.stringify(r.attributedFiles)}）`)
+  assert(r.reasons.some(x => x.includes('同文件并发')), `同文件并发 warn 口径保留（不变）`)
 }
 
 for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} }

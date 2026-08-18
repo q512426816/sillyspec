@@ -579,7 +579,7 @@ export function isQuickMetadata(p, linkedChanges = []) {
 
 /**
  * quick 完成审计：对比 baseline 与实际变更。
- * @returns {{ status: 'safe'|'warning'|'blocked', reasons: string[], changedFiles: string[], newFiles: string[], deletedFiles: string[], baselineHit: string[], stagedTotal: number }}
+ * @returns {{ status: 'safe'|'warning'|'blocked', reasons: string[], changedFiles: string[], newFiles: string[], deletedFiles: string[], baselineHit: string[], stagedTotal: number, attributedFiles: string[], undeclaredFiles: string[] }}
  */
 /**
  * D-8 O-1 模块归属（2026-08-15 docs-signals-o12）：quick 欠账 hint 从"改了 N 文件"升级为
@@ -669,7 +669,7 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
   // stagedTotal：当前所有非 quick 元数据的未提交条目（含前序 baseline 残留）。
   // 与 changedFiles（扣 baseline 后的本轮新增）区分，供审计文案同时展示「本轮新增 vs 累计暂存」，
   // 避免叠加 quick 会话时把前序会话未提交文件误读为「本会话只动了 N 个」。
-  const result = { status: 'safe', reasons: [], changedFiles: [], newFiles: [], deletedFiles: [], baselineHit: [], stagedTotal: 0 }
+  const result = { status: 'safe', reasons: [], changedFiles: [], newFiles: [], deletedFiles: [], baselineHit: [], stagedTotal: 0, attributedFiles: [], undeclaredFiles: [] }
 
   try {
     // safeGit 带 -c safe.directory，避免 linked worktree/容器异 uid/挂载点下裸 `git status` 抛错被
@@ -879,8 +879,10 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
 
     // task-02: 同文件并发检测——allowedFile 在 baseline（他者改过）且当前 hash ≠ step1 hash（我也改了）
     // → commit 整文件 pathspec 会夹带他者 hunk，warn 给分离指引（advisory，不阻断，D-002）
+    // sameFileHits 提升到本层作用域：下方归属切分要把「baseline 声明文件且我也改了」并入
+    // attributedFiles（这类文件先被 isBaselineFile 跳过不进 changedFiles，但确属本会话产物）。
+    const sameFileHits = []
     if (allowedFiles.length > 0 && guard.allowedFilesHash) {
-      const sameFileHits = []
       for (const f of allowedFiles) {
         if (isBaselineFile(f) && guard.allowedFilesHash[f] !== undefined) {
           try {
@@ -897,6 +899,22 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
           console.warn(`     分离：git add -p ${f}（交互选你的 hunk）或 git diff ${f} > mine.patch（编辑留你的）+ git apply --cached mine.patch`)
         }
       }
+    }
+
+    // 归属切分（2026-08-18 误归属修复，ql-20260818-003 实证）：窗口 diff（changedFiles）在多 agent
+    // 并发仓库分不清「本会话改」与「他者窗口内改」，他者文件会污染 QUICKLOG「文件：」行。声明即归属：
+    // allowedFiles 非空时 attributedFiles = 窗口∩声明 ∪ sameFileHits（同文件并发 = 我也改了），
+    // undeclaredFiles = 窗口−声明（他者或漏声明，供「审计：」行落盘追溯——不静默丢，防漏声明时
+    // 真实改动被挤走无痕）。未声明会话无归属信息不猜，维持全量口径（attributed = changed）。
+    const declaredNorm = new Set(allowedFiles.map(f => normalizeGitPath(f)))
+    if (declaredNorm.size > 0) {
+      const own = result.changedFiles.filter(f => declaredNorm.has(normalizeGitPath(f)))
+      for (const f of sameFileHits) if (!own.includes(f)) own.push(f)
+      result.attributedFiles = own
+      result.undeclaredFiles = result.changedFiles.filter(f => !declaredNorm.has(normalizeGitPath(f)))
+    } else {
+      result.attributedFiles = result.changedFiles
+      result.undeclaredFiles = []
     }
 
     // --confirm 模式：展示 diff 并等待确认

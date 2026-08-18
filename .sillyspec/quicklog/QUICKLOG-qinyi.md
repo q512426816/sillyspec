@@ -486,3 +486,26 @@ docs/sillyspec/platform-interface-map.md（守卫插入致行号漂移，doc-ref
 根因：scan.js:168 与 548 对 scan 文档/knowledge 文件均有 # 中文名（English）标题约定（sillyhub 平台解析识别用），唯独模块卡片子代理模板硬编码 # <module-id>，子代理照模板生成；archive.js 新建卡片模板同样漏
 方案：两处模板标题行改 # <中文名>（<module-id>），scan 规则列表与 archive 模板说明处补中文名要求（从模块职责提炼 2-8 字）；modules.js 迁移模板不动（旧 H1 即 moduleId 来源，中文信息不独立且为冷路径）；CLI 解析不受影响（module_id 走 frontmatter/文件名，doctor 校验 frontmatter）
 结果：npm test 305 pass 0 fail；npm run lint 通过（310 文件）；镜像四件同步（_extracted.json/scan.md/archive.md/index.html）；file-lifecycle.md 无标题格式描述不需更新
+
+## ql-20260818-006-b5ae | 2026-08-18 08:55:07 | 修复 quick --done 审计在多 agent 并发仓把并行会话窗口内改动误归属进本会话 QUICKLOG 文件行
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/shared.js（auditQuickCompletion 归属切分 attributedFiles/undeclaredFiles + sameFileHits 提升作用域）
+- src/run/complete-handlers.js（realFiles 改用 attributedFiles + 未声明审计注 + ownFiles 锚点换 resolveConcurrentAnchor）
+- src/run/concurrent-detect.js（新增 resolveConcurrentAnchor 纯函数）
+- src/stages/quick.js（step1 补文件预声明段）
+- test/audit-quick-completion.test.mjs（AT-1..3 归属切分用例）
+- test/concurrent-preflight-hooks.test.mjs（A5 锚点用例）
+- test/run-complete-step-quick.test.mjs（Case4 归属切分 E2E）
+- docs/sillyspec/prompt-control-debt.md（缺口登记与修法）
+- docs/prompt/quick.md（提示词镜像）
+- docs/prompt/_extracted.json（提取刷新）
+- .claude/skills/sillyspec-quick/SKILL.md（--files 表行补归属语义）
+- .sillyspec/docs/sillyspec/modules/runtime.md（模块卡同步）
+- .sillyspec/docs/sillyspec/modules/stages.md（模块卡同步）
+需求：修复 quick --done 审计在多 agent 并发仓把并行会话窗口内改动误归属进本会话 QUICKLOG 文件行
+根因：归属口径是时间窗 diff（baseline 快照减 done 时 status）窗口内谁改的无从区分，--files 声明只接警告口径不接落盘口径，并发预检 ownFiles 锚点用污染集 changedFiles 自吞致失明
+方案：auditQuickCompletion 产出 attributedFiles（窗口交集声明并同文件并发命中）与 undeclaredFiles（窗口减声明），文件行回填改用 attributedFiles、未声明窗口脏文件进审计行落盘追溯；新增 resolveConcurrentAnchor 纯函数治预检锚点（声明会话等于 baseline 并集 allowed）；quick step1 prompt 补文件预声明提示
+结果：npm test 220 files 0 failures，lint 310 文件通过；新增测试 AT-1..3、A5、Case4（审计 54、预检 31、CLI E2E 21 断言全绿）；同步 _extracted、quick.md 镜像、SKILL、债单、runtime/stages 模块卡
+审计：⚖️ 归属切分：1 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：test/run-complete-step-quick.test.mjs

@@ -4,7 +4,7 @@ doc_type: module-card
 module_id: stages
 author: qinyi
 created_at: 2026-06-04T16:55:00+08:00
-updated_at: 2026-08-17T21:16:36+08:00
+updated_at: 2026-08-18T09:12:00+08:00
 ---
 
 # stages
@@ -82,4 +82,5 @@ updated_at: 2026-08-17T21:16:36+08:00
 - 2026-08-17-quick-close-linked-changes | quick.js step3 prompt「收尾推荐顺序」第 2 步补自动归档说明：--linked-changes 关联的真实变更 tasks.md 全勾选时 CLI 自动归档到 changes/archive/，无需再跑完整 archive 阶段；同步 file-lifecycle.md / quick.md 镜像 / sillyspec-quick SKILL.md。
 - ql-20260817-005-4369 | execute.js buildWavePrompt「子代理 prompt 要点」新增第 6 项「增量落盘与中断接手指引」（429/API 配额/会话中断时输出已完成清单，主代理按磁盘产物接手）和第 7 项「任务边界铁律」（严格只实现本 task allowed_paths、design 指定接入位置逐字遵守、禁止顺手实现其他 task）；同步 docs/prompt/execute.md 镜像 + execute-dispatch-integration 断言。
 - 2026-08-17-execute-batch-dispatch | execute batch 调度：buildWavePrompt 可选 batch（三条件≤3，只合并实现不合并审查）。
+- ql-20260818-006-b5ae | quick.js step1 prompt 补「🧭 文件预声明（多 agent 并发仓库推荐）」段：--done 审计按时间窗 diff 归属、并行会话窗口文件会混入文件行，建议启动即 --files 声明（声明即归属，配套 auditQuickCompletion attributedFiles 归属切分）；同步 _extracted + quick.md 镜像 + sillyspec-quick SKILL.md --files 表行。
 <!-- MANUAL_NOTES_END -->

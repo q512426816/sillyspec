@@ -26,7 +26,7 @@ import { basename, join, resolve, relative, isAbsolute } from 'node:path'
 import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync, unlinkSync, rmSync } from 'node:fs'
 import { renameSyncRetry, writeAtomicSync } from '../fs-atomic.js'
 import { resolveChangeDir, resolveQuickSessionsDir, safeGit, auditQuickCompletion, triggerSync, isQuickMetadata, resolveRuntimeRoot } from './shared.js'
-import { detectConcurrentChanges, formatConcurrentWarning } from './concurrent-detect.js'
+import { detectConcurrentChanges, formatConcurrentWarning, resolveConcurrentAnchor } from './concurrent-detect.js'
 import { stageRegistry } from '../stages/index.js'
 import { SCAN_STATUS, POINTER_STATUS } from '../constants.js'
 import { printQuickAuditReview } from './quick-audit.js'
@@ -812,10 +812,15 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
     // D-003），用 ?. + ?? [] 兜底防 spread undefined 抛 TypeError（B-005）。整钩子 try/catch 隔离
     // ——detect 本就 fail-open，保守再包一层，任何异常只吞不 bubble，主完成流程不受影响。
     try {
-      const ownFiles = [
-        ...(review?.changedFiles ?? []),
-        ...(mergedGuard?.baselineFiles ?? []),
-      ]
+      // ownFiles 锚点（2026-08-18 误归属修复）：声明会话 = baselineFiles ∪ allowedFiles（声明即归属），
+      // 不再用 changedFiles 全量——他者窗口文件已被污染进 changedFiles，旧口径自吞致预检对
+      // ql-20260818-003 形态结构性失明。未声明会话维持旧口径（changed ∪ baseline）：无声明无归属
+      // 信息，收窄锚点会把自身未声明改动全误报他者。resolveConcurrentAnchor 纯函数（concurrent-detect）。
+      const ownFiles = resolveConcurrentAnchor({
+        changedFiles: review?.changedFiles ?? [],
+        baselineFiles: mergedGuard?.baselineFiles ?? [],
+        allowedFiles: mergedGuard?.allowedFiles ?? [],
+      })
       const detected = detectConcurrentChanges(cwd, {
         changeName,
         linkedChanges: mergedGuard?.linkedChanges ?? [],
@@ -892,9 +897,12 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
     try {
       // 回填实际改动文件：review.changedFiles 含 quick 自身元数据（quicklog/.runtime/modules 等），
       // 用 isQuickMetadata 过滤掉，只留真实业务文件。brownfield 无 review → 空数组，文件行不动。
-      const realFiles = Array.isArray(review?.changedFiles)
-        ? review.changedFiles.filter(f => !isQuickMetadata(f, linkedChanges))
-        : []
+      // 归属口径（2026-08-18 误归属修复）：声明会话优先 attributedFiles（窗口∩声明∪同文件并发命中），
+      // 他者窗口文件不进文件行；未声明会话/旧 review 无 attributedFiles → 兜底 changedFiles 全量。
+      const auditFiles = Array.isArray(review?.attributedFiles)
+        ? review.attributedFiles
+        : (Array.isArray(review?.changedFiles) ? review.changedFiles : [])
+      const realFiles = auditFiles.filter(f => !isQuickMetadata(f, linkedChanges))
       // D-8 落盘（2026-08-18 修）：advisory 欠账信号从「纯打印」升级为「随条目落盘」——修复
       // 「欠账已记录（QUICKLOG reasons）」的不实承诺（交叉审查实证 reasons 纯 stdout，事后不可审计）。
       // 两周实测（2026-08-31 裁决，doc-consistency-debt §七）需要分母：信号触发次数必须可追溯。
@@ -906,6 +914,14 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
       }
       if (review?.docsCheckHint && review.docsCheckHint.invalid > 0) {
         auditNotes.push(`📎 文档引用失效：${review.docsCheckHint.invalid}/${review.docsCheckHint.total} 处 file:line 失效（sillyspec docs check 可复现）`)
+      }
+      // 归属切分注（2026-08-18 误归属修复）：窗口内未声明脏文件不进「文件：」行，但必须落盘可追溯
+      // （多 agent 并发仓他者窗口改动 / 本会话漏声明均可能），防真实改动被静默挤走。
+      if (Array.isArray(review?.undeclaredFiles) && review.undeclaredFiles.length > 0) {
+        const undeclared = review.undeclaredFiles.filter(f => !isQuickMetadata(f, linkedChanges))
+        if (undeclared.length > 0) {
+          auditNotes.push(`⚖️ 归属切分：${undeclared.length} 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：${undeclared.join(', ')}`)
+        }
       }
       await completeQuicklogEntry(specBase, gitUser, qlId, {
         resultText: outputText || '',

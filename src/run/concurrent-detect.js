@@ -31,6 +31,28 @@ function normalizeGitPath(p) {
 }
 
 /**
+ * 并发预检 ownFiles 锚点（2026-08-18 误归属修复）。
+ *
+ * 未声明会话（allowedFiles 空）维持旧口径 changedFiles ∪ baselineFiles——无声明即无归属信息，
+ * 收窄锚点会把本会话每次未声明的自身改动全误报他者。声明会话锚点 = baselineFiles ∪ allowedFiles
+ * （声明即归属）：窗口 diff（changedFiles）在多 agent 并发仓库可能含他者污染（ql-20260818-003
+ * 实证：并行会话窗口内改的文件被算进本会话 changedFiles 再被 ownFiles 自吞），超出声明集的
+ * 窗口新脏文件才作为 foreign 信号报出（= 他者或漏声明，歧义由 advisory 文案兜住）。
+ *
+ * 纯函数：不查盘不调 git，调用点（complete-handlers task-02 钩子）传入三个列表。
+ * @param {{ changedFiles?: string[], baselineFiles?: string[], allowedFiles?: string[] }} opts
+ * @returns {string[]} ownFiles 锚点集合（去重）
+ */
+export function resolveConcurrentAnchor({ changedFiles = [], baselineFiles = [], allowedFiles = [] } = {}) {
+  const arr = (x) => (Array.isArray(x) ? x : [])
+  const declared = arr(allowedFiles).map(normalizeGitPath).filter(Boolean)
+  if (declared.length === 0) {
+    return [...arr(changedFiles).map(normalizeGitPath), ...arr(baselineFiles).map(normalizeGitPath)]
+  }
+  return [...new Set([...arr(baselineFiles).map(normalizeGitPath), ...declared])]
+}
+
+/**
  * 检测工作树里的并发他者改动（非阻塞 advisory 用）。
  *
  * @param {string} cwd 主仓库根

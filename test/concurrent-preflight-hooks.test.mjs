@@ -20,7 +20,7 @@ import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { execSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { detectConcurrentChanges, formatConcurrentWarning } from '../src/run/concurrent-detect.js'
+import { detectConcurrentChanges, formatConcurrentWarning, resolveConcurrentAnchor } from '../src/run/concurrent-detect.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const repoRoot = join(__dirname, '..')
@@ -126,6 +126,34 @@ console.log('--- Part A：钩子行为（真实 git fixture）---')
   assert(detected.otherActiveChanges.includes('other-active'), 'A4 他者脏变更目录 → otherActiveChanges')
   assert(warn && warn.includes('other-active'), 'A4 warn 含他者变更目录')
   assert(warn && (warn.includes('脏变更目录') || warn.includes('git-dirty')), 'A4 warn 用「脏变更目录」/git-dirty（D-005 勿用「活跃」）')
+}
+
+// A5: 声明会话锚点（resolveConcurrentAnchor，2026-08-18 误归属修复）——
+// ownFiles 锚 = baseline ∪ allowed（不含窗口 diff）：changedFiles 里他者污染会被自吞致预检失明
+// （ql-20260818-003 形态）；未声明会话维持旧口径 changed ∪ baseline（收窄会把自身未声明改动全误报）。
+{
+  // 纯函数：声明会话 → 锚 = baseline ∪ allowed，窗口 diff 不进锚
+  const anchor1 = resolveConcurrentAnchor({ changedFiles: ['src/mine.js', 'src/foreign.js'], baselineFiles: ['src/base.js'], allowedFiles: ['src/mine.js'] })
+  assert(anchor1.includes('src/mine.js') && anchor1.includes('src/base.js'), 'A5 声明会话锚 = baseline ∪ allowed')
+  assert(!anchor1.includes('src/foreign.js'), 'A5 声明会话锚不含窗口 diff（他者污染不自吞）')
+  // 纯函数：未声明会话 → 旧口径 changed ∪ baseline
+  const anchor2 = resolveConcurrentAnchor({ changedFiles: ['src/mine.js'], baselineFiles: ['src/pre.js'], allowedFiles: [] })
+  assert(anchor2.includes('src/mine.js') && anchor2.includes('src/pre.js'), 'A5 未声明会话维持旧口径（changed ∪ baseline）')
+  // 行为串联：声明会话 ownFiles=锚 → 他者窗口文件入 foreignFiles → warn（旧口径下同输入会被自吞零告警）
+  const d = makeRepo()
+  commitFile(d, 'src/mine.js', 'a\n')
+  commitFile(d, 'src/foreign.js', 'b\n')
+  writeFileSync(join(d, 'src/mine.js'), 'a2\n')
+  writeFileSync(join(d, 'src/foreign.js'), 'b2\n')
+  const detected = detectConcurrentChanges(d, {
+    changeName: 'my-task',
+    linkedChanges: [],
+    ownFiles: resolveConcurrentAnchor({ changedFiles: ['src/mine.js', 'src/foreign.js'], baselineFiles: [], allowedFiles: ['src/mine.js'] }),
+  })
+  const warn = formatConcurrentWarning(detected)
+  assert(detected.foreignFiles.includes('src/foreign.js'), 'A5 声明会话他者窗口文件 → foreignFiles（旧口径失明点）')
+  assert(!detected.foreignFiles.includes('src/mine.js'), 'A5 声明文件不误报他者')
+  assert(warn && warn.includes('src/foreign.js'), 'A5 warn 含他者窗口文件')
 }
 
 // ---- Part B：挂载契约（钩子真实挂在 quick/execute 完成路径，非孤岛）----
