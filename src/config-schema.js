@@ -153,7 +153,7 @@ export const LOCAL_YAML_SCHEMA = {
         { path: 'docs-check.paths', type: 'array', optional: true, status: 'live', readers: ['docs check (src/index.js case docs) + runDocsCheck (src/docs-check.js)'], desc: '扫描的文档 glob 列表，缺省 docs/**/*.md 与 .sillyspec/docs/**/*.md（scan/modules 产物同纳入）。', example: 'docs/**/*.md' },
         { path: 'docs-check.skip', type: 'array', optional: true, status: 'live', readers: ['walkGlob (src/docs-check.js)'], desc: '排除的路径/glob 列表，缺省空。', example: 'docs/sillyspec/archive' },
         { path: 'docs-check.keywordAssert', type: 'boolean', optional: true, status: 'live', readers: ['runDocsCheck (src/docs-check.js)'], desc: '层2 关键词断言开关，缺省 true（关闭时 warning 提示仅做存在性校验）。', example: 'true' },
-        { path: 'docs-check.living-docs', type: 'array', optional: true, status: 'live', readers: ['resolveLivingDocs (src/run/shared.js) — 经 readLocalYamlRaw 直读'], desc: '活文档监控点追加列表（docs check 之外，quick 审计的 livingDocDrift 提示也监控）。只追加不覆盖缺省集合（缺省：docs/sillyspec/platform-interface-map.md）。配了是加哨兵，不该把缺省监控点挤掉。', example: 'docs/sillyspec/architecture.md' },
+        { path: 'docs-check.living-docs', type: 'array', optional: true, status: 'live', readers: ['resolveLivingDocs (src/run/shared.js) — 经 readLocalYamlRaw 直读'], desc: '活文档监控点追加列表（docs check 之外，quick 审计的 livingDocDrift 真失效提示也监控——只报校验真失败的引用，全过零输出）。只追加不覆盖缺省集合（缺省：docs/sillyspec/platform-interface-map.md）。配了是加哨兵，不该把缺省监控点挤掉。', example: 'docs/sillyspec/architecture.md' },
       ],
     },
   ],

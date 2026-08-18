@@ -133,6 +133,6 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 **修复（change 2026-08-16-state-split-fixes，D-001/D-002@v1）**：
 1. 四处 marker 写入点（stage.js 主点 + gates.js/prompt.js/task-review.js 补写点）统一「mkdir `execute-runs/<runId>/tasks` 先于 marker」+ 分层 fail（stage throw / gates fail-closed / prompt 降级留痕 / task-review 去静默保 fail-open）。测试 execute-run-dir-fail-loud.test.mjs 33 断言。
 2. `applyByMerge` merge 前预对齐：`git diff baseHash..baselineCommit` 已提交口径 ∩ main 已推进 ∖ 分支已变更 ∖ 工作区 dirty → checkout main 版 + commit「sillyspec: align baseline files to main (pre-merge, N files)」；失败降级原 merge 路径。测试 worktree-merge-baseline-align.test.mjs。
-3. quick 审计 docsCheckHint 扩展 `livingDocDrift`：改动活文档（缺省 platform-interface-map.md，`local.yaml docs-check.living-docs` 可追加不覆盖）引用的源码文件时即时提示漂移风险（advisory 不阻断）。测试 docs-living-drift-hint.test.mjs。
+3. quick 审计 docsCheckHint 扩展 `livingDocDrift`：改动活文档（缺省 platform-interface-map.md，`local.yaml docs-check.living-docs` 可追加不覆盖）引用的源码文件时即时提示漂移风险（advisory 不阻断）。测试 docs-living-drift-hint.test.mjs。**〔2026-08-18 精度对齐，ql-20260818-009-9443〕**原「被引用即提示」路径级口径在行号锚未真断时误报（实测 advisory 报漂移、docs check 417/417 全过）；升级为复用 `runDocsCheck` 分层真校验（存在 + 行界 + 关键词窗口），只报「真失效且指向本次改动文件」的引用（`drift.invalid` 逐条带 doc:line/ref/reason），全过零输出——与 docs check 结论同源。`matchLivingDocRefs` 降为预过滤（无引用命中跳过整档校验）。
 
 **关联记忆**：`[[sillyspec-execute-done-auto-draft-pitfall]]`、`[[sillyspec-worktree-patch-apply-conflict]]`、`[[sillyspec-local-yaml-paths-override-semantics]]`

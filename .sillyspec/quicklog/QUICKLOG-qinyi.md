@@ -29,3 +29,21 @@
 根因：①_updatePlatformLastSync 只写 platform_last_sync 展示列而 sync/pull 读 last_synced_platform_ts，写 A 读 B 致 CLI 直跑该列恒 NULL，乐观锁/脏度检测/behind 标记全失效（progress.js facade 还丢第三个参数）；②triggerPullActiveChange 只接顶层 stage 别名块，case 'run' 漏接与注释宣称语义分裂，且 pull 在本地领先场景会 import 平台旧快照覆盖本地进度；③spec-sync 树同步四条失败路径全 debugLog（SILLYSPEC_DEBUG_SYNC 才可见），四件套缺失在早期打误导性 warn——multi-agent-platform 实证 design/decisions 迟到 27 分钟、plan.md 迟到 8 分钟且无任何日志线索
 方案：push 成功后以平台回执 last_pushed_at（缺省回退本次 X-SillySpec-Pushed-At，与后端存储精确一致）推进 last_synced_platform_ts；case 'run' 补 triggerPullActiveChange + pull 增 skipIfLocalDirty 保守守卫（本地脏跳过 import，手动 platform pull 不变）；spec-sync 失败升 console.warn 带下次重试提示、syncDocuments 四件套缺失自动路径降 debug 手动保留 warn 且说清范围
 结果：全部落地——新增 platform-sync-base-ts-advance（6 组含 run 命令 CLI 子进程端到端）与 platform-sync-failure-visibility（3 组）先红后绿；npm test 222 文件 0 失败；npm run lint 312 文件通过；platform-interface-map.md 80 处 file:line 引用重锚全过（doc-ref-check）
+
+## ql-20260818-009-9443 | 2026-08-18 13:26:28 | 活文档漂移 advisory 精度对齐 docs check——只报真失效引用
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/shared.js（matchInvalidRefsToChanged 新纯函数 + 漂移块升级 runDocsCheck 真校验）
+- src/run/quick-audit.js（渲染改列 drift.invalid 逐条 doc:line ref reason）
+- src/config-schema.js（living-docs desc 对齐真失效口径）
+- test/docs-living-drift-hint.test.mjs（改写 20 断言（真失效命中与全过零输出））
+- docs/sillyspec/troubleshooting.md（坑 10 补 2026-08-18 精度对齐说明）
+- docs/sillyspec/prompt-control-debt.md（cc-⑤ 锚点 546 改 560）
+- .sillyspec/docs/sillyspec/scan/ARCHITECTURE.md（ql-008 遗留 sync.js 四处锚点修正）
+- .sillyspec/docs/sillyspec/modules/runtime.md（模块卡同步）
+需求：活文档漂移 advisory 精度对齐 docs check——只报真失效引用
+根因：原 livingDocDrift 是路径级「被引用即提示」口径，本次改动 src 文件被活文档引用就告警，但行号锚未真断时是误报（上会话实证 advisory 报漂移而 docs check 417 处全过），两套机制结论不同步
+方案：auditQuickCompletion 复用 runDocsCheck 分层真校验（存在加行界加关键词窗口），matchLivingDocRefs 降为预过滤省 IO，新增 matchInvalidRefsToChanged 纯函数把 invalid 引用剥行号后按三形态匹配改动文件，drift.invalid 逐条带 doc 行号 ref 与原因，渲染列出前 8 条，全过零输出；顺手修 ql-008 遗留的 sync.js 四处锚点漂移（checkApproval 546 到 560 与 approve reject 入口 1046 1050 到 1071 1075）
+结果：docs check 417 处全绿；新增改写测试 20 断言全过（真失效命中、全过零输出、关键词窗口失败、invalid 剥行号匹配、渲染零噪声回归）；npm test 222 文件 0 失败、lint 312 文件通过
+审计：⚖️ 归属切分：2 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：.sillyspec/docs/sillyspec/scan/ARCHITECTURE.md, docs/sillyspec/prompt-control-debt.md

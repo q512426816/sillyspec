@@ -65,13 +65,22 @@ export function printQuickAuditReview(review) {
     console.warn(`   行号漂移 → 更新到当前源码；文件删改名 → 更新引用路径。跑 sillyspec docs check 可看完整清单。`)
     console.warn(`   引用格式：\`src/foo.js:42\`（或 42-48）+ 同行反引号代码符号（如 \`runDocsCheck\`）——符号可让 --suggest 给出候选行号。`)
   }
-  // task-03: 活文档引用漂移（advisory 不阻断，不改 status 三态判定）——方向与上方互补：
+  // task-03: 活文档引用真失效提示（advisory 不阻断，不改 status 三态判定）——方向与上方互补：
   // 上方查「本次改的文档」，这里查「本次改的 src 被活文档（platform-interface-map 等）引用」。
+  // 2026-08-18 精度对齐：只渲染真失效引用（drift.invalid，auditQuickCompletion 已跑 runDocsCheck
+  // 分层校验），行号锚未真断时零输出——不再「被引用即提示」误报。
   if (review.docsCheckHint && review.docsCheckHint.livingDocDrift) {
     const drift = review.docsCheckHint.livingDocDrift
+    const invalid = Array.isArray(drift.invalid) ? drift.invalid : []
     const total = typeof drift.total === 'number' ? drift.total : drift.files.length
-    console.warn(`\n📎 活文档引用漂移：改动 ${drift.files.length}/${total} 被 ${drift.docs.join('、')} 引用——建议顺手跑 docs check 修引用行号。`)
-    console.warn(`   文件：${drift.files.join(', ')}`)
+    if (invalid.length > 0) {
+      console.warn(`\n📎 活文档引用真失效：${drift.files.length}/${total} 个改动 src 文件被 ${drift.docs.join('、')} 引用，其中 ${invalid.length} 处引用校验失败：`)
+      for (const x of invalid.slice(0, 8)) {
+        console.warn(`   - ${x.doc}:${x.docLine} \`${x.ref}\` → ${x.reason}`)
+      }
+      if (invalid.length > 8) console.warn(`   … 共 ${invalid.length} 处，跑 sillyspec docs check 看全量与建议行号`)
+      else console.warn(`   行号漂移 → 更新到当前源码；跑 sillyspec docs check 可看建议行号。`)
+    }
   }
 }
 

@@ -666,6 +666,26 @@ export function matchLivingDocRefs(srcChangedFiles, refs) {
   return [...hit]
 }
 
+/**
+ * 纯函数：docs check invalid 条目与本次改动 src 文件求交（2026-08-18 漂移提示精度对齐）。
+ * runDocsCheck 的 invalid 只带 ref 全串（`path:line(-end)`）——剥尾部行号段还原引用文件，
+ * 再按 matchLivingDocRefs 同款三形态匹配（仓库根相对 / src 内部相对 / 裸名后缀）。
+ * ref 空串（文档不存在条目）不匹配。
+ * @param {Array<{ref?: string, doc?: string, docLine?: number, reason?: string}>} invalidRefs runDocsCheck().invalid
+ * @param {string[]} srcChangedFiles changedFiles 中 src/ 前缀的文件
+ * @returns {Array<{changed: string, doc: string, docLine: number, ref: string, reason: string}>} 真失效且指向本次改动文件的引用
+ */
+export function matchInvalidRefsToChanged(invalidRefs, srcChangedFiles) {
+  const out = []
+  for (const x of Array.isArray(invalidRefs) ? invalidRefs : []) {
+    if (!x || typeof x.ref !== 'string' || x.ref === '') continue
+    const refFile = x.ref.replace(/:\d+(-\d+)?$/, '')
+    const changed = srcChangedFiles.find((c) => c === refFile || c === 'src/' + refFile || c.endsWith('/' + refFile))
+    if (changed) out.push({ changed, doc: x.doc || '', docLine: x.docLine || 0, ref: x.ref, reason: x.reason || '' })
+  }
+  return out
+}
+
 export async function auditQuickCompletion(cwd, guard, options = {}) {
   const { baselineFiles, allowedFiles = [], allowNew = false, forceBaseline = false, allowDelete = false, specBase = null, projectName = null } = guard
   const { isConfirm } = options
@@ -854,30 +874,36 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
     // task-03: 活文档漂移提示（advisory，不阻断不改 status，docs gate 语义不变）。
     // 方向与上方 docsCheckHint 相反：那是「本次改的文档引用失效吗」，这是「本次改的 src 被活文档
     // 引用吗」——并行会话改 src/ 主入口后 platform-interface-map.md 的 file:line 行号静默失效，
-    // gate 事后拦到别人流程上；审计当场命中交集即提示顺手跑 docs check。fail-open：活文档
-    // 缺失/读失败/collectDocRefs 不可用 → 静默跳过（不误报不阻断）。
+    // gate 事后拦到别人流程上。fail-open：活文档缺失/读失败/校验机器不可用 → 静默跳过（不误报不阻断）。
+    // 2026-08-18 精度对齐：原路径级「被引用即提示」在行号锚未真断时误报（实测 advisory 报漂移、
+    // docs check 417/417 全过）。升级为复用 runDocsCheck 分层真校验（存在 + 行界 + 关键词窗口），
+    // 只报「真失效且指向本次改动文件」的引用；全过 → 零输出（与 docs check 结论同源）。
+    // matchLivingDocRefs 留作廉价预过滤：该文档不引用任何本次改动文件时跳过整档真校验（省 IO）。
     const srcChangedFiles = result.changedFiles.filter((f) => f.startsWith('src/') && !deletedSet.has(f))
     if (srcChangedFiles.length > 0) {
       try {
-        const { collectDocRefs } = await import('../docs-check.js')
+        const { collectDocRefs, runDocsCheck } = await import('../docs-check.js')
         const livingDocs = await resolveLivingDocs(cwd)
         const files = []
         const docs = []
+        const invalidAll = []
         for (const docRel of livingDocs) {
           let md
           try { md = readFileSync(join(cwd, docRel), 'utf8') } catch { continue } // 活文档缺失/读失败 → 跳过
           const hit = matchLivingDocRefs(srcChangedFiles, collectDocRefs(md))
-          if (hit.length > 0) {
-            files.push(...hit)
-            docs.push(docRel)
-          }
+          if (hit.length === 0) continue
+          files.push(...hit)
+          docs.push(docRel)
+          const r = runDocsCheck({ projectRoot: cwd, docs: [docRel], keywordAssert: true })
+          for (const x of r.invalid) invalidAll.push({ ...x, doc: docRel })
         }
-        if (files.length > 0) {
+        const invalid = matchInvalidRefsToChanged(invalidAll, srcChangedFiles)
+        if (invalid.length > 0) {
           const uniqFiles = [...new Set(files)]
-          result.docsCheckHint = { ...(result.docsCheckHint || {}), livingDocDrift: { files: uniqFiles, docs, total: srcChangedFiles.length } }
-          result.reasons.push(`活文档引用漂移: 改动 ${uniqFiles.length} 个文件被活文档引用（${docs.join(', ')}）`)
+          result.docsCheckHint = { ...(result.docsCheckHint || {}), livingDocDrift: { files: uniqFiles, docs, total: srcChangedFiles.length, invalid } }
+          result.reasons.push(`活文档引用真失效: ${invalid.length} 处指向本次改动文件的引用校验失败（${docs.join(', ')}）`)
         }
-      } catch { /* collectDocRefs 不可用 → 静默跳过 */ }
+      } catch { /* 校验机器不可用 → 静默跳过 */ }
     }
 
     // task-02: 同文件并发检测——allowedFile 在 baseline（他者改过）且当前 hash ≠ step1 hash（我也改了）

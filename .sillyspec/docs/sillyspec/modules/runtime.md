@@ -4,7 +4,7 @@ doc_type: module-card
 module_id: runtime
 author: qinyi
 created_at: 2026-06-03T07:42:00+08:00
-updated_at: 2026-08-18T09:10:00+08:00
+updated_at: 2026-08-18T13:10:00+08:00
 ---
 # runtime
 
@@ -80,6 +80,7 @@ ProgressManager.alignExecuteToPlan(cwd, changeName, specBase, {confirm})
 - **safeGit 收口 src/git-helper.js**（2026-08-09-worktree-git-injection）：`run/shared.js` 原 safeGit 实现已移入根级 src/git-helper.js 作统一公共 git 调用入口（safeGit+git+gitQuiet，execFileSync 数组形式不经 shell），与 worktree 链共用消除口径分裂（原 safeGit vs worktree 本地 git/gitQuiet 双源）；run/shared.js 改 `import { safeGit } from '../git-helper.js'` + `export { safeGit }` 两段式（注：纯 `export { safeGit } from '...'` 不建本地词法绑定，内部 ancestorSpecDirs/auditQuickCompletion 等调用会 ReferenceError，故用 import+export 而非纯 re-export）；run/ 层调用方路径与行为不变
 
 - **quick --done 归属切分（声明即归属）**（2026-08-18 误归属修复，ql-20260818-003 实证，`run/shared.js` + `run/complete-handlers.js`）：`auditQuickCompletion` 新增产出 `attributedFiles`（声明会话=窗口∩allowedFiles ∪ 同文件并发命中）与 `undeclaredFiles`（窗口−声明）；QUICKLOG「文件：」行回填改用 attributedFiles（经 `completeQuicklogEntry` 的 realFiles），他者/漏声明的窗口脏文件以「审计：⚖️ 归属切分」行落盘追溯不静默丢；未声明会话（allowedFiles 空）维持全量口径不回归。同文件并发检测的 `sameFileHits` 提升作用域供归属切分复用（baseline 声明文件被 `isBaselineFile` 跳过不进 changedFiles，靠 hash 差异并入）。
+- **活文档漂移提示精度对齐 docs check**（2026-08-18，ql-20260818-009-9443，`run/shared.js` + `run/quick-audit.js`）：`livingDocDrift` 从路径级「被引用即提示」升级为复用 `runDocsCheck` 分层真校验（存在 + 行界 + 关键词窗口），只报「真失效且指向本次改动 src 文件」的引用——`drift.invalid` 逐条带 doc:line/ref/reason，打印列出（`printQuickAuditReview`），全过零输出（治「advisory 报漂移、docs check 全过」的结论不同步误报）。`matchLivingDocRefs` 降为预过滤（该文档不引用任何本次改动文件 → 跳过整档真校验省 IO），新增纯函数 `matchInvalidRefsToChanged`（invalid ref 剥尾部行号段后按三形态匹配改动文件，ref 空串的文档不存在条目跳过）。
 
 ## 人工备注
 <!-- MANUAL_NOTES_START -->
@@ -100,4 +101,5 @@ ProgressManager.alignExecuteToPlan(cwd, changeName, specBase, {confirm})
 - 2026-08-17-quick-close-linked-changes | complete-handlers.js 新增 closeQuickLinkedChanges（+isChangeTasksComplete/closeSingleQuickLinkedChange 辅助）——quick --done 在 completeQuicklogEntry 后、清理 session/注销 quick-<8hex> 前对 guard.linkedChanges 中 tasks.md 全勾选的真实变更执行轻量归档（unregisterChange + 目录移 changes/archive/<date>-<desc>/ + archiveWorktreeCleanup + safeGit add），跳过 plan.md/module-impact 硬校验，单变失败 warn 不阻断；过滤 quick-<8hex> sessionId；幂等跳过已归档目录；新增 test/quick-close-linked-changes.test.mjs（5 场景）+ quick-cli-managed-e2e 断言适配新契约。
 - ql-20260817-005-4369 | plan-postcheck.js executePlanPostcheck 聚合 stage-contract validatePlanOutputs：在原有六检查之后动态 import 阶段产物契约校验，把 module-impact 缺失/entry-point-wiring 未覆盖等 stage gate 错误一轮暴露，避免「postcheck 通过 → stage gate 又报错」的修一层撞一层；循环依赖由运行时动态 import 打破，stage-contract.js 仍静态 import plan-postcheck.js 的 parseAllowedPaths 不变。
 - ql-20260818-006-b5ae | quick QUICKLOG 文件行误归属修复（声明即归属）：auditQuickCompletion 产出 attributedFiles/undeclaredFiles（窗口∩声明∪同文件并发 / 窗口−声明），文件行回填改用 attributedFiles、未声明窗口脏文件进「审计：」行追溯；并发预检 ownFiles 锚点声明会话改 baseline∪allowed（治 changedFiles 污染自吞致预检失明，ql-20260818-003 实证）。
+- ql-20260818-009-9443 | 活文档漂移提示精度对齐 docs check：路径级「被引用即提示」升级为 runDocsCheck 分层真校验，只报真失效引用（drift.invalid 逐条 doc:line/ref/reason），全过零输出；matchLivingDocRefs 降为预过滤 + 新增 matchInvalidRefsToChanged。
 <!-- MANUAL_NOTES_END -->
