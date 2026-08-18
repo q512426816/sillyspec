@@ -464,3 +464,14 @@ docs/sillyspec/platform-interface-map.md（守卫插入致行号漂移，doc-ref
 根因：并行会话推进 src（worktree.js/sync.js/plan.js）后文档引用行号漂移无人校准；设计稿 O-1/O-2 落地后 status 与 updated_at 未同步；CLAUDE.md 版本号手工维护滞后。
 方案：设计稿 status→done+状态更正注记；债单加 §九（gate 部署 sillyhub/D-8 落盘修复/hooksPath fail-open 修复/消费面盘点结论）；CLAUDE.md ×2 版本号 3.26.9；6 处引用行号逐一核对源码校准（含 scan/ARCHITECTURE.md 3 处行号锚校准，非覆盖重写）。
 结果：docs check 417 处引用全通过（190 keywordAssert）；纯 doc 改动未触及 src/test，npm test 无需重跑（quick #1 后源码未变，220 过基线仍有效）。
+
+## ql-20260818-004-b4b1 | 2026-08-18 01:35:00 | quick step1 补危险文件预声明提示——启动预带 flag 持久化进守卫，省 step3 拦截一轮往返（上轮汇报负面①收尾）
+状态：已完成
+关联变更：（无；承接 ql-20260818-001-d36c 汇报负面①）
+文件：
+- src/stages/quick.js（step1 prompt sessionId 说明区后加「危险文件预声明」段：三 flag 语义 + 预带/事后补带两路径等价）
+- docs/prompt/_extracted.json + quick.md + index.html（镜像同步三件）
+需求：上一轮三修汇报的负面①「quick 审计解锁 flag 提示在 step3 才给出，若 step1 就带 flag 可少一轮往返」
+根因：无功能缺陷，纯 agent 知情缺口——启动 flag 持久化机制（stage.js:305 quickGuard）与 --done OR 合并（complete-handlers.js:789）早已存在，但 step1 prompt 不告知可预声明，预判改 src 核心的会话仍等 step3 拦截后重跑（本轮 ql-20260818-001 实录）。同报负面② safeGit 命名核实为两阶段刻意设计（内部 errorObj=原始 Error 供 ETIMEDOUT 重试判定，对外 error=首行 message），JSDoc 完整，不改
+方案：step1 prompt 加预声明段——预判触及 src 核心/新增/删除时重启 quick 带对应 flag 持久化进守卫；不预带则 step3 拦截后按提示补带，两路径等价（审计 fail-closed 语义不变）
+结果：本会话即实测——启动预带 --force-baseline，改 src/stages/quick.js（危险清单文件）后 step3 --done 审计 SAFE 零拦截（对比 ql-20260818-001 同场景被拦一轮）；npm test exit=0 + lint exit=0（310 文件）
