@@ -70,3 +70,24 @@
 根因：quick-<hex8> 会话按设计无 changes/<name>/ 实体目录，triggerSync 的 existsSync 门与 sync() 第二道门都锚定变更目录存在，把 spec 树增量（QUICKLOG/模块文档唯一上行通道）一并误伤
 方案：triggerSync 识别 QUICK_SID_RE 会话降级只调新增 syncSpecTreeOnly（跳过 progress/四件套防平台孤儿行），非 quick 形态维持静默防拼写噪音
 结果：新增 platform-sync-quick-session-spectree 4 组先红后绿；npm test 223 文件 0 失败；lint 313 文件过；doc-ref-check 80/80
+
+## ql-20260818-012-60e7 | 2026-08-18 14:46:38 | 仓库新增 .gitattributes 强制文本文件使用 LF 并清理现有 CRLF
+状态：已完成
+关联变更：（无）
+文件：
+- .gitattributes（强制所有文本文件使用 LF 换行）
+- .sillyspec/quicklog/QUICKLOG-qinyi.md（ql-20260818-012-60e7 记录）
+需求：仓库新增 .gitattributes 强制文本文件使用 LF 并清理现有 CRLF。
+根因：缺少 eol 策略时 Windows 系统级 core.autocrlf=true 导致工作区文本文件为 CRLF，git 对新增或修改文本文件给出 LF 转 CRLF 警告。
+方案：新增 .gitattributes 并写入 * text=auto eol=lf 作为唯一换行策略；通过 git ls-files 定位 484 个 w/crlf 文件，Node 脚本将其 CRLF 替换为 LF，再执行 git add --renormalize . 刷新索引消除幻影修改。
+结果：.gitattributes 与 QUICKLOG-qinyi.md 已暂存；git ls-files --eol 已无任何 w/crlf；工作区 484 个文本文件已归一化为 LF；未触及 src/test 文件，无需执行 npm test/lint；并发目录 .sillyspec/changes/2026-08-18-platform-map-auto-anchors/ 与本变更无关，未暂存。
+
+## ql-20260818-013-bd63 | 2026-08-18 16:58:11 | sync 归档后最终状态未推平台修复——目录检查硬拦
+状态：已完成
+关联变更：（无）
+文件：
+- src/sync.js（移除变更目录 existsSync 硬拦改为 warn 继续走 DB 路径（serializeForSync 从 DB 读不依赖目录））
+需求：sync 归档后最终状态未推平台修复——目录检查硬拦
+根因：archive 步骤4确认归档把变更目录移到 archive/ 后，sync.js sync() 的 existsSync(changeDir) 检查硬拦 return，步骤4-5 的完成状态永远推不到平台，平台停留在最后一次成功同步的 3/5
+方案：移除 existsSync 硬拦改为 console.warn 继续走 serializeForSync 从 DB 读最终状态推平台（数据源是 SQLite 非文件系统目录，目录检查是多余前置）
+结果：npm test 223 文件全过 0 失败 + npm run lint 通过（313 文件语法+内容规则）

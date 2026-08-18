@@ -381,11 +381,11 @@ export class SyncManager {
       return { synced: 0, errors: ['未指定变更名称'] };
     }
 
-    // 检查变更是否存在
+    // 检查变更目录是否存在（warn 不拦：归档后目录已移走但 DB 仍有最终状态需推平台，
+    // serializeForSync 从 DB 读不依赖文件系统目录；目录存在时 warn 也无害，仅辅助排查）
     const changeDir = join(this.cwd, CHANGES_DIR, changeName);
     if (!existsSync(changeDir)) {
-      console.warn(`[sync] 变更不存在: ${changeName}`);
-      return { synced: 0, errors: [`变更不存在: ${changeName}`] };
+      console.warn(`[sync] 变更目录不存在（可能是已归档，继续从 DB 同步最终状态）: ${changeName}`);
     }
 
     // 读取 progress 数据（serializeForSync 六表裸 JSON，task-02 / D-005@v2，替代 read() 聚合视图）
