@@ -792,7 +792,8 @@ export class ProgressManager {
 
   readChangeIsolation(cwd, changeName) { return this._changeRegistry.readChangeIsolation(cwd, changeName); }
 
-  _updatePlatformLastSync(cwd, changeName) { return this._changeRegistry._updatePlatformLastSync(cwd, changeName); }
+  // syncedTs 透传（ql-20260818-008）：push 成功推进 base_ts，facade 曾丢参致列永不写入
+  _updatePlatformLastSync(cwd, changeName, syncedTs = null) { return this._changeRegistry._updatePlatformLastSync(cwd, changeName, syncedTs); }
 
   _updateApprovalStatus(cwd, changeName, status, reason = null) { return this._changeRegistry._updateApprovalStatus(cwd, changeName, status, reason); }
 

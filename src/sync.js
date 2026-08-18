@@ -443,11 +443,14 @@ export class SyncManager {
       return { synced: 0, errors: [`同步请求失败: ${changeName}`] };
     }
 
-    // 更新 platform_last_sync
+    // 更新 platform_last_sync + 推进 base_ts（ql-20260818-008：值优先平台回执 last_pushed_at，
+    // 缺省用本次 pushedAt——服务器 _apply 存的就是客户端 X-SillySpec-Pushed-At 原值，回写一致。
+    // 修复前该列从不写，下次 push 永不带 X-SillySpec-Base-Ts、pull 脏度检测恒 false）
     try {
       const { ProgressManager } = await import('./progress.js');
       const pm = new ProgressManager({ specDir: safePlatformSpecDir(this.cwd) });
-      pm._updatePlatformLastSync(this.cwd, changeName);
+      const ackTs = res.body && typeof res.body.last_pushed_at === 'string' ? res.body.last_pushed_at : pushedAt;
+      pm._updatePlatformLastSync(this.cwd, changeName, ackTs);
     } catch (err) {
       console.warn(`[sync] 更新 platform_last_sync 失败: ${err.message}`);
     }
@@ -480,8 +483,12 @@ export class SyncManager {
   /**
    * 同步四件套文档到平台（全量同步）。
    * POST {url}/api/changes/{changeName}/documents
+   * @param {string} changeName
+   * @param {{manual?: boolean}} [opts] - manual=true 手动 sync-docs 命令路径（四件套缺失打 warn）；
+   *   默认自动路径（sync() 顺带推）四件套缺失是流程早期正常状态，降 debug 不噪音（ql-20260818-008）
    */
-  async syncDocuments(changeName) {
+  async syncDocuments(changeName, opts = {}) {
+    const { manual = false } = opts;
     const platform = this._getPlatform();
     if (!platform) {
       debugLog('[sync] 未连接平台（本地合法状态）；如需平台同步：sillyspec platform connect');
@@ -516,7 +523,14 @@ export class SyncManager {
     }
 
     if (syncedCount === 0) {
-      console.warn(`[sync] 未找到可同步的文档: ${changeName}`);
+      // ql-20260818-008：四件套缺失在流程早期是正常状态（brainstorm 中途 design/proposal 还没写），
+      // 自动路径降 debug——原 warn「未找到可同步的文档」不说只找四件套，曾让用户误判同步逻辑错了；
+      // 手动 platform sync-docs 是显式意图，保留 warn 但说清范围。
+      if (manual) {
+        console.warn(`[sync] 未找到可同步的四件套文档（proposal/design/requirements/tasks.md）: ${changeName}`);
+      } else {
+        debugLog(`[sync] 四件套尚未生成，跳过文档直推: ${changeName}`);
+      }
       return { synced: 0, errors: [...errors, '无可用文档'] };
     }
 
@@ -696,11 +710,13 @@ export class SyncManager {
    * 无冲突 → import() 重建 DB 行；import 后本地 base_ts/脏度重置为 pushed_at（D-013）。
    * Best Effort：未连接 / 网络失败 / 404 console.warn 不抛，返回 PullResult { ok, imported, conflict, reason? }。
    * @param {string} changeName
-   * @param {{force?: boolean}} [opts] - force 跳过本地脏度冲突检测直接 import（task-12 resolve --take-platform 用）
+   * @param {{force?: boolean, skipIfLocalDirty?: boolean}} [opts] - force 跳过本地脏度冲突检测直接
+   *   import（task-12 resolve --take-platform 用）；skipIfLocalDirty 自动注入点（triggerPull/
+   *   triggerPullActiveChange）专用保守守卫——本地有未同步改动时跳过 import（ql-20260818-008）
    * @returns {Promise<{ok: boolean, imported: boolean, conflict: boolean, reason?: string}>}
    */
   async pull(changeName, opts = {}) {
-    const { force = false } = opts;
+    const { force = false, skipIfLocalDirty = false } = opts;
     const platform = this._getPlatform();
     if (!platform) {
       debugLog('[sync] 未连接平台（本地合法状态）；pull 跳过');
@@ -755,6 +771,13 @@ export class SyncManager {
           platform_progress: platformProgress,
         });
         return { ok: false, imported: false, conflict: true, reason: `冲突: ${changeName} 本地脏且平台更新`, conflictPath };
+      }
+      // ql-20260818-008：自动注入点（triggerPull/triggerPullActiveChange）保守守卫——本地有未同步
+      // 改动时跳过 import。原逻辑只拦「本地脏 且 平台更新」的真冲突，「本地领先」（本地脏、平台更旧）
+      // 仍会 import 平台旧快照覆盖本地新进度（数据丢失）。手动 platform pull 不传该 flag，语义不变。
+      if (skipIfLocalDirty && localDirty) {
+        debugLog(`[sync] pull 跳过（本地有未同步改动，防平台旧快照覆盖）: ${changeName}`);
+        return { ok: false, imported: false, conflict: false, reason: '本地有未同步改动，自动 pull 跳过' };
       }
     }
 
@@ -940,8 +963,10 @@ export async function sync(changeName, cwd) {
   return new SyncManager(cwd).sync(changeName);
 }
 
+// manual=true：本导出对应 CLI platform sync-docs 手动命令（index.js platform 分支唯一调用方），
+// 四件套缺失打 warn；sync() 内的自动顺带推走 SyncManager 实例方法默认 auto（ql-20260818-008）
 export async function syncDocuments(changeName, cwd) {
-  return new SyncManager(cwd).syncDocuments(changeName);
+  return new SyncManager(cwd).syncDocuments(changeName, { manual: true });
 }
 
 export async function checkApproval(changeName, cwd) {
@@ -1097,7 +1122,8 @@ export async function syncModule(args, cwd) {
     case 'sync-docs':
     case 'sync-documents': {
       const changeName = args[1];
-      const result = await sm.syncDocuments(changeName);
+      // manual=true：CLI 手动命令路径，四件套缺失打 warn（ql-20260818-008 措辞分级）
+      const result = await sm.syncDocuments(changeName, { manual: true });
       if (result.errors.length > 0) {
         console.log(`文档同步完成，${result.errors.length} 个错误`);
       }

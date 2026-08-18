@@ -260,13 +260,17 @@ export async function syncSpecTree(specRoot, platform, changeName) {
       signal: AbortSignal.timeout(10000),
     });
     if (!res.ok) {
-      debugLog(`[spec-sync] 拉取清单失败 ${res.status}: ${changeName}`);
+      // ql-20260818-008：debugLog → console.warn。树同步失败原本完全静默（要
+      // SILLYSPEC_DEBUG_SYNC=1 才可见），文件迟到平台且无任何线索（multi-agent-platform
+      // 2026-08-18-workspace-file-browser 实证：design/decisions 迟到 27 分钟、plan.md 迟到
+      // 8 分钟才被后续步骤的同步补上）。失败可见、成功不打扰。
+      console.warn(`[spec-sync] 拉取清单失败 HTTP ${res.status}（文件树本次未同步，下次自动重试）: ${changeName}`);
       return { synced: 0 };
     }
     const body = await res.json().catch(() => ({}));
     serverManifest = body.files || {};
   } catch (err) {
-    debugLog(`[spec-sync] 拉取清单异常（不影响进度）: ${changeName}: ${err.message}`);
+    console.warn(`[spec-sync] 拉取清单异常（文件树本次未同步，下次自动重试）: ${changeName}: ${err.message}`);
     return { synced: 0 };
   }
 
@@ -292,7 +296,7 @@ export async function syncSpecTree(specRoot, platform, changeName) {
       signal: AbortSignal.timeout(30000),
     });
     if (!res.ok) {
-      debugLog(`[spec-sync] 同步请求失败 ${res.status}: ${changeName}`);
+      console.warn(`[spec-sync] 同步请求失败 HTTP ${res.status}（文件树本次未同步，下次自动重试）: ${changeName}`);
       return { synced: 0 };
     }
     const body = await res.json().catch(() => ({}));
@@ -305,7 +309,7 @@ export async function syncSpecTree(specRoot, platform, changeName) {
     console.log(`[spec-sync] 已同步 ${ops.length} 个文件变更: ${changeName}`);
     return { synced: ops.length };
   } catch (err) {
-    debugLog(`[spec-sync] 同步异常（不影响进度）: ${changeName}: ${err.message}`);
+    console.warn(`[spec-sync] 同步异常（文件树本次未同步，下次自动重试）: ${changeName}: ${err.message}`);
     return { synced: 0 };
   }
 }

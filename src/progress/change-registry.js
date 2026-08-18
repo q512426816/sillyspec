@@ -116,14 +116,20 @@ export class ChangeRegistry {
     }
   }
 
-  _updatePlatformLastSync(cwd, changeName) {
+  _updatePlatformLastSync(cwd, changeName, syncedTs = null) {
     if (!changeName) return;
     const db = this.pm._ensureDB(cwd);
     db.transaction(() => {
       const sqlDb = db.getDb();
+      // ql-20260818-008：push 成功后同时推进 base_ts（last_synced_platform_ts）。原实现只写
+      // 展示列 platform_last_sync，而 sync() 取 base_ts（sync.js）与 pull 脏度检测读的是
+      // last_synced_platform_ts——写 A 读 B 致 CLI 直跑场景该列恒 NULL：X-SillySpec-Base-Ts
+      // 永不携带（乐观锁失效）、本地脏度恒 false、platform status behind 恒跳过。值优先
+      // 平台回执 last_pushed_at，缺省回退本次 X-SillySpec-Pushed-At（后端 _apply 存的就是
+      // 该 header 原值，回写与服务器精确一致）。COALESCE 保旧值：无 syncedTs 只推进展示列。
       sqlDb.prepare(
-        'UPDATE changes SET platform_last_sync = ?, platform_sync_enabled = 1 WHERE name = ?'
-      ).run(new Date().toISOString(), changeName);
+        'UPDATE changes SET platform_last_sync = ?, platform_sync_enabled = 1, last_synced_platform_ts = COALESCE(?, last_synced_platform_ts) WHERE name = ?'
+      ).run(new Date().toISOString(), syncedTs, changeName);
     });
   }
 

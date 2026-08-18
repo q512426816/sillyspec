@@ -714,6 +714,11 @@ async function main() {
       const { runCommand } = await import('./run.js')
       // 平台模式（--spec-dir 已指定）时，--dir 是明确的 source_root，不应被 resolveEffectiveDir 纠正
       const effectiveDir = specDir ? dir : resolveEffectiveDir(dir)
+      // 下行 pull：对齐顶层 stage 别名块（task-10 / D-009 / FR-04）。修复前 case 'run' 漏接，
+      // sillyspec run <stage>（含 --done）从不 pull，与别名路径行为分裂（ql-20260818-008）。
+      // 未连接平台静默跳过；本地脏时 pull 内部 skipIfLocalDirty 保守跳过，不覆盖本地进度。
+      const { triggerPullActiveChange } = await import('./run/shared.js')
+      await triggerPullActiveChange(effectiveDir)
       await runCommand(filteredArgs.slice(1), effectiveDir, specDir, { json })
       break
     }

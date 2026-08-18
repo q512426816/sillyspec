@@ -442,8 +442,10 @@ export async function triggerSync(cwd, changeName, platformOpts = {}) {
 /**
  * 触发 pull（下行同步，task-10 / D-009 / FR-04 / FR-06）。
  * 复用 triggerSync 的 8s 熔断与 Best Effort 语义；未连接平台静默跳过（与现状一致）。
- * 注入时机：CLI 启动（run/--done）+ 关键决策点（approve/archive 前）+ 手动 platform pull。
- * 不在每步 pull（避免高频写入与网络压力），仅低频边界点。
+ * 注入时机：stage 命令启动（顶层别名 + case 'run'，ql-20260818-008 补齐后者）+ 关键决策点
+ * （approve 前）+ 手动 platform pull。不在每步 pull（避免高频写入与网络压力），仅低频边界点。
+ * 自动注入走 skipIfLocalDirty 保守守卫：本地有未同步改动时 pull 内部跳过 import，
+ * 防「本地领先」被平台旧快照覆盖（手动 platform pull 不受影响）。
  * @param {string} cwd
  * @param {string} changeName - 当前活跃变更（多变更时传 null 跳过，避免误拉）
  * @param {object} [platformOpts] - 平台模式 opts（specRoot/runtimeRoot 存在则跳过，走平台自有链路）
@@ -459,7 +461,7 @@ export async function triggerPull(cwd, changeName, platformOpts = {}) {
     let timer
     try {
       await Promise.race([
-        sm.pull(changeName),
+        sm.pull(changeName, { skipIfLocalDirty: true }),
         new Promise((resolve) => { timer = setTimeout(resolve, SYNC_TOTAL_TIMEOUT_MS) }),
       ])
     } finally {
@@ -497,12 +499,13 @@ export async function triggerPullActiveChange(cwd, platformOpts = {}) {
     // progress 不可达则跳过（Best Effort）
   }
   if (!cn) return
-  // 已确认连接 + 单活跃变更，调 pull（复用 triggerPull 的 8s 熔断）
+  // 已确认连接 + 单活跃变更，调 pull（复用 triggerPull 的 8s 熔断；skipIfLocalDirty 保守守卫
+  // 同 triggerPull——本地脏时跳过 import，防平台旧快照覆盖本地领先进度，ql-20260818-008）
   try {
     let timer
     try {
       await Promise.race([
-        sm.pull(cn),
+        sm.pull(cn, { skipIfLocalDirty: true }),
         new Promise((resolve) => { timer = setTimeout(resolve, SYNC_TOTAL_TIMEOUT_MS) }),
       ])
     } finally {
