@@ -147,7 +147,7 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 
 **解法（agent 侧）**：见裸 `[object Object]` 直接读同目录 workflow-runs 的 fail.json，`checks[].type/detail` 有完整失败原因；修完后重跑 `--done` 即可（步骤状态仍会推进，fail 只留痕不阻断状态机，但归档产物要干净就别留）。
 
-**修复方向（CLI 侧，未修）**：渲染检查失败时 `JSON.stringify(check, null, 2)` 或逐条打印 `type + detail`。
+**〔2026-08-19 已修 ql-20260819-006-d2d7〕**：渲染改为 `f.message ?? JSON.stringify(f)`（complete-handlers.js，message 是 failures 条目的人类可读 detail）；回归测试 test/archive-impact-failure-readable.test.mjs（章节缺失 → 明细含「缺少章节」无 `[object Object]`；合规 → 通过）。
 
 ## 12. plan 生成 module-impact 章节名与 archive-impact 契约不同源（2026-08-19 实证）
 

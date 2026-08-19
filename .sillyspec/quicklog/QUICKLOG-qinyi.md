@@ -163,3 +163,15 @@
 根因：execute 期间并行变更推进源码致 ARCHITECTURE/prompt-control-debt 的 file:line 锚失效（token 多命中不可自动修）；archive 实战暴露两个 CLI 缺陷（module-impact 检查失败打印 [object Object] / plan 与 archive 章节名契约不同源返工）
 方案：grep 源码语义定位逐处重锚（runAutoMode→1140、checkApproval→576、approve/reject→1132/1137、isQuickMetadata→590 补函数名 token、auditQuickCompletion→713、--done completeStep→1006）；self-audit-2026-08-16.md 按带日期快照先例加 local.yaml skip；troubleshooting.md 补第 11/12 条（agent 侧解法 + CLI 修复方向）
 结果：docs check 377/377 全绿（修前 9 失效）、doc-ref-check 80/80 通过；纯 doc/config 改动未触 src/test，npm test/lint 按规则跳过
+
+## ql-20260819-006-d2d7 | 2026-08-19 11:29:10 | archive 检查失败明细打印裸 [object Object] 修复——failures 条目取 message 字段渲染
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/complete-handlers.js（archive impact 检查失败明细渲染 f.message ?? JSON.stringify(f)）
+- test/archive-impact-failure-readable.test.mjs（新建回归测试（fixture 复刻 workflow yaml + 两 Case 六断言））
+- docs/sillyspec/troubleshooting.md（第 11 条标记已修引用 ql-20260819-006-d2d7）
+需求：archive 检查失败明细打印裸 [object Object] 修复——failures 条目取 message 字段渲染
+根因：complete-handlers.js archive extract-module-impact 检查块遍历 result.failures（条目为 {level,role_id,output,check,message} 对象）直接模板字符串化 ，String(obj) 得 [object Object]，失败原因完全不可读只能翻 workflow-runs fail.json
+方案：渲染改 f.message ?? JSON.stringify(f)（缺字段 stringify 兜底防再退化）；新增 CLI 子进程回归测试 fixture 复刻 archive-impact.yaml + 章节缺失 module-impact.md 断言可读明细；troubleshooting 第 11 条标记已修
+结果：新测试 6/6（失败路径明细可读无 [object Object] / 通过路径不受影响）；npm test 全量 exit=0；lint 317 文件通过（未引用导出 0）

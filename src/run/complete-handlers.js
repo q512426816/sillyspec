@@ -719,7 +719,9 @@ export async function handleWorkflowPostCheck({ stageName, steps, currentIdx, cw
           const icon = impactResult.status === 'pass' ? '✅' : '❌'
           console.log(`${icon} module-impact.md 检查${impactResult.status === 'pass' ? '通过' : '失败'}`)
           for (const f of (result.failures || []).filter(f => f.role_id === 'impact-analyzer')) {
-            console.log(`   └─ ${f}`)
+            // f 是 {level,role_id,output,check,message} 对象——直接 ${f} 打印裸 [object Object]（ql-20260819-006）；
+            // message 才是人类可读 detail（如「缺少章节: …」），缺字段时 stringify 兜底防再退化成不可诊断输出
+            console.log(`   └─ ${f.message ?? JSON.stringify(f)}`)
           }
         }
         const saved = saveWorkflowRun(result, {
