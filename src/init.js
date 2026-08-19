@@ -557,9 +557,9 @@ export async function cmdInit(projectDir, options = {}) {
 
           let repo = '';
           try {
-            const { execSync } = await import('child_process');
+            const { execFileSync } = await import('child_process');
             const absPath = resolve(projectDir, subPath.trim() || `./${name.trim()}`);
-            repo = execSync('git remote get-url origin', { cwd: absPath, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+            repo = execFileSync('git', ['remote', 'get-url', 'origin'], { cwd: absPath, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
           } catch {}
 
           subprojects.push({ name: name.trim(), path: subPath.trim() || `./${name.trim()}`, role: role.trim(), repo });

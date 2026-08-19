@@ -55,6 +55,12 @@ parseFileChangeList(designMdPath)
 - `_module-map.yaml` 使用手写 YAML 解析器（非库），格式依赖固定缩进（2 空格模块名、4 空格字段、6 空格数组项）
 - `parseFileChangeList` 返回相对路径，不含 `.sillyspec/` 内路径
 
+## 变更索引
+
+- 2026-06-03 | 初始文档
+- ql-20260819-012-66fc | 清理 modules.js 死 import DB
+- ql-20260819-015-65fa | modules.js rebuild 的 git rev-parse 改 execFileSync（去 shell 注入面）
+
 ## 人工备注
 <!-- MANUAL_NOTES_START -->
 <!-- MANUAL_NOTES_END -->

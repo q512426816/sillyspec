@@ -150,7 +150,7 @@ export class StepStore {
       const tDb = db.getDb();
       const now = new Date().toISOString();
       if (status) {
-        tDb.prepare('UPDATE steps SET status = ?, completed_at = ? WHERE id = ? AND name = ?').run(status, now, stepId, stepName);
+        tDb.prepare('UPDATE steps SET status = ?, completed_at = ? WHERE id = ? AND name = ?').run(status, status === 'completed' ? now : null, stepId, stepName);
       }
       if (output !== undefined) {
         tDb.prepare('UPDATE steps SET output = ? WHERE id = ? AND name = ?').run(output, stepId, stepName);

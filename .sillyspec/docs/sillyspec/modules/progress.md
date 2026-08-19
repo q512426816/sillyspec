@@ -4,7 +4,7 @@ doc_type: module-card
 module_id: progress
 author: qinyi
 created_at: 2026-08-16T19:05:00+08:00
-updated_at: 2026-08-19T15:30:00+08:00
+updated_at: 2026-08-19T09:03:14+08:00
 ---
 
 # progress
@@ -35,3 +35,9 @@ updated_at: 2026-08-19T15:30:00+08:00
 
 - 内部依赖：src/db.js（DB）、src/fs-atomic.js（writeAtomicSync）、src/stage-contract.js（runValidators 产物校验）、src/task-review.js（summarizeTaskCompletion）
 - 外部依赖：fs、path、os（tmpdir）
+
+## 变更索引
+
+- 2026-06-03 | 初始文档
+- 2026-08-16 | W6 重构：facade + 4 子模块
+- ql-20260819-012-66fc | updateStep completed_at 条件化 + waitAnswers JSON 损坏诊断 + 清理 makeInitialProgress/makeInitialGlobal/VALID_STAGE_STATUSES 死代码

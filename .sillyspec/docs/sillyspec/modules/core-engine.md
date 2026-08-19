@@ -1,4 +1,5 @@
 ---
+updated_at: 2026-08-19T11:27:03+08:00
 author: qinyi
 created_at: 2026-06-01T09:05:00
 ---
@@ -120,3 +121,4 @@ core-engine 是 SillySpec 的基础设施层，由三个层次组成：持久化
 | 2026-08-09 | 2026-08-08-progress-db-concurrency | DB 引擎换 better-sqlite3 原生 WAL 绑定（删全库 export/load 到内存模型，PM 核心读写同步化、read 取最新不缓存）；废阶段状态缓存文件双源，hook 改 queryDbFirstCell 直读 DB readonly 子进程 fail-closed |
 | 2026-08-09 | ql-20260809-003-c88a | #5 command.js:1115 next-action.json 读路径 brainstorm/→变更根目录（self-audit#3 漏改的读端，还回 has_blocking_questions 门控）；#6 progress.js:563 initChange allStages 改用 VALID_STAGES 单一源；顺带修正 core-engine.md propose 阶段残留误述（VALID_STAGES 实为 8 个、auto 流程无 propose） |
 | 2026-08-10 | 2026-08-10-platform-progress-sync | run/shared.js 新增 `triggerPull`/`triggerPullActiveChange`（8s 熔断 SYNC_TOTAL_TIMEOUT_MS、Best Effort console.warn 不抛、未连接/平台模式跳过；activeChange 单活跃自动推导，多/无跳过），CLI 启动（stage case block runCommand 前）+ platform approve 前注入下行拉最新；配套 db.js schema v4（changes 加 last_synced_platform_ts=base_ts 乐观锁 + last_local_modified_ts=本地脏度）+ progress.js `serializeForSync`（六表完整序列化，含 approvals，changes 排除 isolation_*）+ `import`（逆运算事务原子 + 独立 sillyspec.db.pre-import-<ts>.bak，import 后脏度重置 pushed_at D-013）+ 全写入路径 `_touchLocalModified` 脏度（读路径 `run().changes>0` guard 不标脏）。 |
+| 2026-08-19 | ql-20260819-014-0082 | 审计 medium 批修（core-engine 侧）：db.js close() 容错（close 抛错仍置 null + warn，防后续操作已损坏句柄）；fs-atomic.js writeAtomicSync tmp 名加随机段（pid 单因子撞 Windows PID 重用）；progress.js revision=0 不再被 falsy 吞（`!= null` 判定） |

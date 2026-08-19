@@ -380,6 +380,8 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
         await executeScanPostcheck(cwd, platformOpts, scanProfile)
       } else if (cliAction === 'planPostcheck') {
         await executePlanPostcheck(cwd, platformOpts, progress)
+      } else {
+        throw new Error(`noAI 步骤 ${stepName} 的未知 _cliAction: ${cliAction}——请在 stage.js 注册对应分支`)
       }
       stageData.steps[currentIdx].status = 'completed'
       stageData.steps[currentIdx].completedAt = new Date().toLocaleString('zh-CN', { hour12: false })

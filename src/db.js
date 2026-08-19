@@ -165,8 +165,14 @@ export class DB {
    */
   close() {
     if (this.db) {
-      this.db.close();
-      this.db = null;
+      try {
+        this.db.close();
+      } catch (err) {
+        // close 自身失败（如 WAL checkpoint 磁盘满）：仍置 null 防后续操作已损坏句柄，warn 留痕不吞
+        console.warn(`[db] close 失败（句柄已废弃）: ${err && err.message ? err.message : err}`);
+      } finally {
+        this.db = null;
+      }
     }
   }
 

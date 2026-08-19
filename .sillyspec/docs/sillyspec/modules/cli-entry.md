@@ -19,7 +19,7 @@ CLI 入口 + 命令分发 + 阶段执行引擎。`bin/sillyspec.js` 是 shebang 
 - **stageRegistry** (`src/stages/index.js`) — 阶段注册表，定义各阶段的步骤模板、输入输出规范、审批需求
 - **auxiliaryStages** — 辅助阶段列表（scan / explore / quick / doctor / status），无需初始化变更即可运行
 - **src/version.js** — 轻量 getVersion()（读 package.json 版本号，只依赖 fs/path/url），让 --version 等高频路径不付 init.js 重型交互库加载税；index.js 顶部静态 import
-- **src/spec-dir-typo.js** — review.json missing 时检测 .sillyspec 的近似拼写变体目录（.silyspec/.sillyspc 等），命中给「路径疑似拼错」模糊匹配提示；独立模块避免 stage-review↔task-review 反向循环依赖
+- **src/spec-dir-typo.js** — review.json missing 时检测 .sillyspec 的近似拼写变体目录（.silyspec/.sillyspc 等），命中给「路径疑似拼错」模糊匹配提示；独立模块避免 stage-review↔task-review 反向循环依赖。levenshtein 单一实现自 run/shared.js import（ql-20260819-015-65fa 去重复副本）
 
 ## 关键逻辑
 

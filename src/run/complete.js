@@ -216,6 +216,8 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
       await executeScanPostcheck(cwd, platformOpts, stageData.scanProfile || computeScanProfile(cwd, platformOpts))
     } else if (_cliAction === 'planPostcheck') {
       await runPlanPostcheckLib({ cwd, specRoot: platformOpts?.specRoot, resolveChangeDir, progress })
+    } else {
+      throw new Error(`noAI 步骤 ${steps[currentIdx].name} 的未知 _cliAction: ${_cliAction}——请在 complete.js 注册对应分支`)
     }
   }
 
@@ -646,7 +648,8 @@ async function autoCheckPlanFromReviews({ stageName, changeName, cwd, platformOp
       }
       return { autoChecked: checkedCount > 0, checkedCount, skippedCount }
     })
-  } catch {
+  } catch (err) {
+    console.warn(`⚠️ autoCheckPlanFromReviews 异常（跳过自动勾选）: ${err && err.message ? err.message : err}`);
     return { autoChecked: false, checkedCount: 0, skippedCount: 0 }
   }
 }

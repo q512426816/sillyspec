@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import { DB } from './db.js';
+
 
 /**
  * 查找项目下的 _module-map.yaml 路径
@@ -114,8 +114,8 @@ export async function rebuildModuleMap(cwd, { force = false } = {}) {
   const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
   let headCommit = '';
   try {
-    const { execSync } = await import('child_process');
-    headCommit = execSync('git rev-parse --short HEAD', { cwd, encoding: 'utf8', timeout: 5000 }).trim();
+    const { execFileSync } = await import('child_process');
+    headCommit = execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd, encoding: 'utf8', timeout: 5000 }).trim();
   } catch { /* ignore */ }
 
   let yaml = `schema_version: 2\n`;

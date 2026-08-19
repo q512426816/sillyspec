@@ -73,3 +73,4 @@ setup 模块由三个文件组成，分别处理 SillySpec 生命周期的不同
 ## 变更索引（表格，初始为空）
 | 日期 | 变更名 | 摘要 |
 |------|--------|------|
+| 2026-08-19 | ql-20260819-015-65fa | init.js 子项目 repo 探测的 git remote get-url 改 execFileSync（去 shell 注入面） |

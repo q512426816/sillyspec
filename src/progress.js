@@ -148,24 +148,6 @@ const CHANGES_SUBDIR = 'changes';
 // VALID_STAGES → ./progress/shared.js（W6 Step9c）
 // VALID_STATUSES → ./progress/step-store.js（updateStep 专用，本地化）
 
-// Stage statuses (superset of step statuses)
-const VALID_STAGE_STATUSES = ['pending', 'in-progress', 'completed', 'failed', 'blocked', 'revising', 'stale'];
-
-// STAGE_ORDER / MAIN_FLOW_ORDER → ./progress/shared.js（W6 Step9a：facade + 子模块共用）
-
-// STAGE_LABELS → ./progress/shared.js（W6 Step9c）
-
-// emptyStage → ./progress/shared.js（W6 Step9d）
-
-function makeInitialProgress(project) {
-  const stages = {};
-  for (const s of VALID_STAGES) stages[s] = emptyStage();
-  return { _version: CURRENT_VERSION, project: project || '', currentStage: '', currentChange: null, stages, lastActive: null };
-}
-
-function makeInitialGlobal(project) {
-  return { _version: CURRENT_VERSION, project: project || '', activeChanges: [] };
-}
 
 // ── ProgressManager ──
 

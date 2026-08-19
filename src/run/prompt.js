@@ -257,7 +257,9 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
       if (existsSync(sessionGuardFile)) {
         qlIdVal = JSON.parse(readFileSync(sessionGuardFile, 'utf8')).quicklogId || ''
       }
-    } catch {}
+    } catch (err) {
+      console.warn(`⚠️ quicklog-id 占位符读取 guard.json 失败: ${err && err.message ? err.message : err}`);
+    }
     promptText = promptText.replace(/<quicklog-id>/g, qlIdVal || '(未分配)')
   }
   // 替换 <linked-changes> 占位符（quick 阶段：从 .runtime/quick-sessions/<sessionId>/guard.json 读关联变更）

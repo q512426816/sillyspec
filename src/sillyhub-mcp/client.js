@@ -49,7 +49,6 @@ export class SillyHubMcpClient {
     if (this._url && !/^https:\/\//i.test(this._url) && !/^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/i.test(this._url)) {
       console.warn(`[sillyhub-mcp] mcp.url 非 https（${this._url.slice(0, 60)}），Bearer token 将明文传输——请确认为受控环境`);
     }
-    this._token = typeof t === 'string' ? t : '';
     this._timeoutMs = typeof timeoutMs === 'number' && timeoutMs > 0
       ? timeoutMs
       : DEFAULT_TIMEOUT_MS;
@@ -228,11 +227,8 @@ export class SillyHubMcpClient {
 
   /**
    * MCP initialize 握手：POST initialize → 从响应 header（或 body _meta）读 mcp-session-id。
-   * 成功存 this._sessionId；失败返回 false（best-effort，warn 不抛）。
-   *
-   * 注：协议要求 initialize 后发 notifications/initialized，本客户端只做探测
-   * （tools/list / 只读 tool），实测 FastMCP 不强制该通知即可用（2026-08-14 验证），
-   * 为省一次 RPC 不发；若未来 server 强校验再补。
+   * 成功存 this._sessionId 并补发 notifications/initialized（协议要求；FastMCP 实测不强制，
+   * best-effort 失败仅 warn）；失败返回 false（best-effort，warn 不抛）。
    * @returns {Promise<boolean>}
    */
   async _initialize(quiet = false) {
@@ -299,6 +295,28 @@ export class SillyHubMcpClient {
       return false;
     }
     this._sessionId = sid;
+    // MCP 2025-11-25 协议要求 initialize 后发 notifications/initialized（无 id 通知，server 不回包）。
+    // 2026-08-14 实测 FastMCP v1.29 不强制；补发是为防未来 server 强校验拒掉所有 tools/call。
+    // best-effort：失败仅 warn，不阻断（session 已建，宽松 server 仍可用）。
+    try {
+      const noteController = new AbortController();
+      const noteTimer = setTimeout(() => noteController.abort(), this._timeoutMs);
+      await fetch(this._endpoint, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this._token}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json, text/event-stream',
+          'MCP-Protocol-Version': MCP_PROTOCOL_VERSION,
+          'Mcp-Session-Id': this._sessionId,
+        },
+        body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }),
+        signal: noteController.signal,
+      }).catch(() => { /* best-effort */ });
+      clearTimeout(noteTimer);
+    } catch (err) {
+      if (!quiet) console.warn(`[sillyhub-mcp] notifications/initialized 发送失败（忽略）: ${err && err.message ? err.message : err}`);
+    }
     return true;
   }
 

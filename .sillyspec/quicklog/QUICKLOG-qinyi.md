@@ -274,7 +274,30 @@
 方案：archiveDestDirName 改为恒等返回并同步调整校验自愈逻辑测试文档与 SKILL
 结果：archive 相关 5 个测试文件 17/17 通过（change-exists-validation / archive-idempotent-selfheal / archive-cli-git-add / run-complete-step-archive / quick-close-linked-changes）；npm run lint 通过；全量 npm test 232 文件仅 progress-dump 并发 flaky 1 失败（单独跑通过，非本次回归）
 
-## ql-20260819-014-0082 | 2026-08-19 19:20:52 | (quick 任务)
-状态：进行中
+## ql-20260819-014-0082 | 2026-08-19 19:20:52 | 审计 medium 级 quick win 第二批修复完成
+状态：已完成
 关联变更：（无）
-文件：src/progress.js, src/fs-atomic.js, src/db.js, src/sillyhub-mcp/client.js, src/run/complete.js, src/run/prompt.js
+文件：
+- src/progress.js（revision 改 != null 判定保住 0 值）
+- src/fs-atomic.js（tmp 名加随机段双因子防 PID 重用碰撞）
+- src/db.js（close 容错 try/catch finally 置 null）
+- src/sillyhub-mcp/client.js（_initialize 成功后补发 notifications/initialized）
+- src/run/complete.js（autoCheckPlanFromReviews catch 加 warn）
+- src/run/prompt.js（quicklog-id guard.json 读取失败加 warn）
+需求：审计 medium 级 quick win 第二批修复完成。
+根因：六项独立缺陷——revision=0 falsy 吞字段、tmp 名 PID 单因子碰撞、DB.close 失败句柄残留、MCP 协议缺 initialized 通知、autoCheckPlanFromReviews 与 quicklog-id 两处空 catch 零诊断。
+方案：逐一修复并同步 core-engine/sillyhub-mcp/runtime 模块文档。
+结果：lint 322 文件通过；相关测试 db-atomic-write/stage-completion-atomicity/worktree-meta-atomic/progress-dump/execute-testcase-design-include 全绿
+
+## ql-20260819-015-65fa | 2026-08-19 21:50:36 | 审计第三批安全与重复代码修复完成
+状态：已完成
+关联变更：（无）
+文件：
+- src/modules.js（rebuild git rev-parse 改 execFileSync）
+- src/init.js（子项目 repo 探测改 execFileSync）
+- src/spec-dir-typo.js（levenshtein 改 import run/shared.js）
+- .claude/skills/sillyspec-knowledge/SKILL.md（两处 src/stages/ 内部路径改中性文案）
+需求：审计第三批安全与重复代码修复完成。
+根因：execSync 经 shell 的 git 注入面两处、levenshtein 重复实现、SKILL.md 内部路径违反外部纯净性。
+方案：execFileSync 数组参数、import 复用单一实现、示例文案中性化，同步 migration/cli-entry/setup 模块文档。
+结果：lint 322 文件通过，spec-dir-typo/init-claude-injection/modules-rebuild-dryrun 全绿

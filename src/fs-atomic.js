@@ -58,7 +58,9 @@ export function renameSyncRetry(from, to, retries = 5) {
  */
 export function writeAtomicSync(filePath, content) {
   const dir = dirname(filePath);
-  const tmpPath = join(dir, `.${basename(filePath)}.${process.pid}.tmp`);
+  // pid + 随机段双因子：Windows PID 重用激进，两进程可能撞同 pid，tmp 名碰撞 rename 互相覆盖
+  const rnd = Math.random().toString(36).slice(2, 10);
+  const tmpPath = join(dir, `.${basename(filePath)}.${process.pid}.${rnd}.tmp`);
   writeFileSync(tmpPath, content);
   try {
     renameSyncRetry(tmpPath, filePath);

@@ -13,30 +13,9 @@
 
 import { dirname, basename, join } from 'path'
 import { readdirSync } from 'fs'
-
-/**
- * 计算两字符串的 Levenshtein 编辑距离（大小写不敏感比较字符）。
- * @param {string} a
- * @param {string} b
- * @returns {number}
- */
-function levenshtein(a, b) {
-  const m = a.length
-  const n = b.length
-  if (m === 0) return n
-  if (n === 0) return m
-  let prev = Array.from({ length: n + 1 }, (_, j) => j)
-  let curr = new Array(n + 1)
-  for (let i = 1; i <= m; i++) {
-    curr[0] = i
-    for (let j = 1; j <= n; j++) {
-      const cost = a[i - 1].toLowerCase() === b[j - 1].toLowerCase() ? 0 : 1
-      curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost)
-    }
-    ;[prev, curr] = [curr, prev]
-  }
-  return prev[n]
-}
+// levenshtein 单一实现收敛到 run/shared.js（原本地副本与 shared.js 逐行相同）；
+// shared.js 不静态 import review 族，此处引入不成环
+import { levenshtein } from './run/shared.js'
 
 /**
  * 检测 spec 目录拼写变体。
