@@ -190,7 +190,7 @@ export async function enforceReviewJsonGate(stageName, cwd, changeName, step, st
   // 且真正含 tasks/ 的 run，用其齐备的 review.json 校验，避免误报「review.json 不存在」。注意不能用
   // resolveLatestExecuteRunId——它见 marker 非空即原样返回（不校验目录），恰是本场景要绕开的值。
   if (executeRunId && !existsSync(join(runtimeRoot, 'execute-runs', executeRunId, 'tasks'))) {
-    const relocated = resolveLatestExecuteRunIdWithTasks({ runtimeRoot })
+    const relocated = resolveLatestExecuteRunIdWithTasks({ runtimeRoot, changeName })
     if (relocated && relocated !== executeRunId) {
       console.warn(`⚠️ execute run marker 漂移：${executeRunId} 无 tasks/，改用真实含 review 的 run ${relocated}`)
       executeRunId = relocated
@@ -436,7 +436,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
           // marker 缺失：先扫描 execute-runs/ 既有目录找回真实 runId（与 getLatestStageReviewRunId
           // 目录扫描兜底同语义），避免 marker 丢失而 agent 已用旧 runId 落盘时，直接 generate 新 ID
           // 找不到旧 review、误判缺 review.json。仅当确实无既有 run 才 generate 新 ID 并落盘。
-          const { generateExecuteRunId, resolveLatestExecuteRunId } = await import('../task-review.js')
+          const { generateExecuteRunId, resolveLatestExecuteRunId, stampExecuteRunChange } = await import('../task-review.js')
           executeRunId = resolveLatestExecuteRunId({ runtimeRoot, changeName }) || ''
           if (!executeRunId) {
             executeRunId = generateExecuteRunId()
@@ -446,6 +446,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
             //（gate 自身写 run 目录失败不能静默放行完成）。
             mkdirSync(join(runtimeRoot, 'execute-runs', executeRunId, 'tasks'), { recursive: true })
             writeFileSync(runIdFile, executeRunId + '\n')
+            stampExecuteRunChange(runtimeRoot, executeRunId, changeName)
           }
         }
 

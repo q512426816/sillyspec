@@ -84,7 +84,7 @@ updated_at: 2026-08-19T17:11:14+08:00
 | `.sillyspec/quicklog/` | 是 | `src/quicklog.js`（CLI 接管，O_EXCL 锁 + writeAtomic 原子写） | 每次 quick 任务记录（CLI 启动时写「进行中」条目 + 分配 ql-ID，完成时翻「已完成」+ 追加结构化结果块 需求/根因/方案/结果，step3 --output 缺字段则 --done 被拒；关联变更另由 CLI 在各 change tasks.md 追加/勾选。读-改-写经 writeAtomic 原子覆盖，reader 不读半截） |
 | `.sillyspec/shared/` | 是 | `init.js` | 共享目录，当前无核心生命周期逻辑 |
 | `.sillyspec/workspace/` | 是 | `init.js` | 工作区目录，当前无核心生命周期逻辑 |
-| `.sillyspec/.runtime/` | 否 | `init.js`、`ProgressManager`、运行时命令 | DB、artifacts、history、workflow-runs、worktrees、knowledge-hit-report.json、postcheck-result.json、execute-runs（execute task review.json）、stage-reviews（brainstorm/plan/propose/execute 独立审查 review.json）、sync-conflict-<change>.json（平台同步双向冲突持久化，resolve 三选一后清理）、sillyspec.db.pre-import-<ts>.bak（pull/resolve --take-platform 的 import 前 snapshot） |
+| `.sillyspec/.runtime/` | 否 | `init.js`、`ProgressManager`、运行时命令 | DB、artifacts、history、workflow-runs、worktrees、knowledge-hit-report.json、postcheck-result.json、execute-runs（execute task review.json；2026-08-19 起 run 目录含 `change` 归属戳文件——marker 断裂后按戳归属，不再 mtime 最新错配他变更 run）、stage-reviews（brainstorm/plan/propose/execute 独立审查 review.json）、sync-conflict-<change>.json（平台同步双向冲突持久化，resolve 三选一后清理）、sillyspec.db.pre-import-<ts>.bak（pull/resolve --take-platform 的 import 前 snapshot） |
 
 ### 平台模式项目根落盘物（不在 `.sillyspec/` 内，不污染源码结构）
 
@@ -134,7 +134,7 @@ execute
   -> apply patch back to main workspace, then cleanup
 
 platform sync / pull（双向冲突命中时）
-  -> .sillyspec/.runtime/sync-conflict-<change>.json         (push 409 base_ts 过期 / pull 本地脏度+平台更新 命中写，payload 含 change/base_ts/local_modified_ts/platform_last_pushed_at/platform_progress/created_at；platform resolve --keep-local|--take-platform|--abort 后必清防累积，禁止字段级 auto-merge)
+  -> .sillyspec/.runtime/sync-conflict-<change>.json         (push 409 base_ts 过期 / pull 本地脏度+平台更新 命中写，payload 含 change/base_ts/local_modified_ts/platform_last_pushed_at/platform_progress/created_at；platform resolve --keep-local|--take-platform|--abort 后必清防累积，禁止字段级 auto-merge。2026-08-19 起 push 409 先做同机自竞态判定：fresh 重读 DB base_ts 已 ≥ 409 回执 ts（本机并发进程 push 后的回填）→ 刷新 base_ts 有界重试一次自愈、不落本文件；外来推送走原冲突路径。resolve --keep-local 推进 base_ts 后自动重推本地闭环——重推被拒（平台在裁决期间又有更新）时软提示不落新文件，下次常规 sync 按新 base 重新判定)
 
 quick
   -> .sillyspec/quicklog/QUICKLOG-<git-user>.md              (CLI 写入：启动分配 ql-ID 写「进行中」，完成翻「已完成」+ 追加结构化结果块 需求/根因/方案/结果，缺字段则 step3 --done 被拒。2026-08-19 ql-20260819-009 起：启动写「进行中」骨架后立即 triggerSync（run/stage.js guard 块尾）——quick-<hex8> 会话降级走 syncSpecTreeOnly 只推 spec 树，已连接平台时「进行中」占位条目起步即可见于平台快速修复列表，不等第一次 --done；未连接静默跳过、8s 熔断不阻断启动)

@@ -118,6 +118,10 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
           `请检查该路径是否为普通文件/只读，清理后重跑（sillyspec run execute --change ${changeName} --skip-approval）`)
       }
       writeFileSync(runIdFile, currentExecuteRunId + '\n')
+      // change 归属戳（坑 worktree-cleanup-marker-chain 根治）：run 目录自带变更身份，
+      // marker 断裂（worktree cleanup / 归档清理 / 并行误删）后按戳归属，不再错配其他变更的 run
+      const { stampExecuteRunChange } = await import('../task-review.js')
+      stampExecuteRunChange(runtimeRoot, currentExecuteRunId, changeName)
     }
   }
 

@@ -118,51 +118,48 @@ export function summarizeTaskCompletion({ changeDir, runtimeRoot, changeName }) 
       report: '⚠️ plan.md 未解析出任何 task-NN 条目（plan 可能未按规范写 checkbox 列表）。' }
   }
 
-  // runId 解析：marker → 扫描最新目录（marker 是 agent 可写内容，格式校验防注入/穿越）
-  let runId = null
-  const marker = join(runtimeRoot, `current-execute-run-id-${changeName}`)
-  try {
-    if (existsSync(marker)) {
-      const c = readFileSync(marker, 'utf8').trim()
-      if (c && !isValidExecuteRunId(c)) console.warn(`[sillyspec] execute run marker 内容非法（期望 exec-YYYY-MM-DD-HHMMSS，实得 ${JSON.stringify(c.slice(0, 60))}），忽略并回退目录扫描`)
-      if (isValidExecuteRunId(c)) runId = c
-    }
-  } catch {}
+  // runId 解析（坑 worktree-cleanup-marker-chain 根治）：归属化解析 resolveExecuteRunForChange——
+  // marker 优先但校验覆盖度；marker 断裂（worktree cleanup / 归档清理 / 并行误删）时按 change 戳
+  // 精确归属，旧 run 退覆盖度启发。不再盲目 mtime 最新（曾把其他变更的 run 错配给本变更 →
+  // 全部 task 误报「review.json 缺失」→ 手工回填 7 份实际存在于正确 run 里的 review）。
+  const resolved = resolveExecuteRunForChange({ runtimeRoot, changeName, taskIds })
+  const runId = resolved ? resolved.runId : null
+  if (resolved && resolved.relocated) {
+    console.warn(`[sillyspec] execute run 归属修正：marker 指向的 run 对变更 ${changeName} 零覆盖，改用 ${resolved.origin === 'stamp' ? 'change 戳' : '覆盖度'}命中的 run ${runId}（真实 review 所在）`)
+  }
+
+  // 无归属 run → 降级 plan.md checkbox 统计；报告区分「无法归属」与「没跑过 execute」，
+  // 避免把定位失败误导成「review 全缺、需手工回填」
   if (!runId) {
+    const { total, checked } = countPlanCheckboxes(planContent)
+    let runsNote = '无 execute-runs 目录（本变更未跑过 execute？）'
     try {
       const runsDir = join(runtimeRoot, 'execute-runs')
       if (existsSync(runsDir)) {
-        const entries = readdirSync(runsDir)
-          .map(e => ({ e, p: join(runsDir, e) }))
-          .filter(x => { try { return statSync(x.p).isDirectory() } catch { return false } })
-          .map(x => ({ e: x.e, mtime: statSync(x.p).mtimeMs }))
-          .sort((a, b) => b.mtime - a.mtime)
-        if (entries.length > 0) runId = entries[0].e
+        const n = readdirSync(runsDir).filter(e => { try { return statSync(join(runsDir, e)).isDirectory() } catch { return false } }).length
+        if (n > 0) runsNote = `execute-runs/ 有 ${n} 个 run 但无一能归属到本变更（无 change 戳且零覆盖——marker 链断裂且 review 可能从未生成）`
       }
     } catch {}
-  }
-
-  // 无 runId → 降级 plan.md checkbox 统计
-  if (!runId) {
-    const { total, checked } = countPlanCheckboxes(planContent)
     return {
       source: 'plan-checkbox-fallback', total, completed: checked,
       pending: taskIds.slice(0, Math.max(0, total - checked)).map(id => ({ id, reason: 'checkbox 未勾（降级口径）' })),
       report:
-        '⚠️ 客观源不可用（无 execute runId marker，review.json 无法定位）→ 降级用 plan.md checkbox。\n' +
+        '⚠️ 客观源不可用（execute run 无法归属到本变更：' + runsNote + '）→ 降级用 plan.md checkbox。\n' +
         `- 总任务：${total}\n- plan.md 已勾选：${checked}\n` +
         '⚠️ checkbox 可能因 autoCheckPlanFromReviews 回填断裂而失真，务必交叉核对 .runtime/execute-runs/*/tasks/task-NN/review.json 的 verdict 再下结论。'
     }
   }
 
-  // 有 runId → 读 review.json verdict
+  // 有 runId → 读 review.json verdict；cannot_verify 草稿单列（不是真正复核，归档前应可见）
   const completed = []
   const pending = []
+  let cannotVerifyCount = 0
   for (const id of taskIds) {
     const reviewPath = join(runtimeRoot, 'execute-runs', runId, 'tasks', id, 'review.json')
     const r = readReview(reviewPath)
     if (r.ok && r.review && r.review.specVerdict !== 'fail' && r.review.qualityVerdict !== 'fail') {
       completed.push(id)
+      if (r.review.specVerdict === 'cannot_verify' || r.review.qualityVerdict === 'cannot_verify') cannotVerifyCount++
     } else if (r.ok && r.review) {
       pending.push({ id, reason: `verdict 未通过（spec=${r.review.specVerdict}, quality=${r.review.qualityVerdict}）` })
     } else {
@@ -173,12 +170,17 @@ export function summarizeTaskCompletion({ changeDir, runtimeRoot, changeName }) 
   const pendingLines = pending.length > 0
     ? pending.map(p => `  - ${p.id}: ${p.reason}`).join('\n')
     : '  （无）'
+  const draftLines = cannotVerifyCount > 0
+    ? `- cannot_verify 草稿（未真正复核）: ${cannotVerifyCount}\n` +
+      '  ⚠️ 这些 task 的 review 是 cannot_verify（含自动草稿兜底）而非 pass——归档前应确认 verify 阶段已兑现其 requiredEvidence，否则派独立子代理对照 task brief + git diff 补真实复核，勿静默放行\n'
+    : ''
   return {
-    source: 'review.json', total: taskIds.length, completed: completed.length, pending,
+    source: 'review.json', total: taskIds.length, completed: completed.length, pending, cannotVerify: cannotVerifyCount, runId,
     report:
-      `客观任务完成度（真相源 = review.json verdict，runId=${runId}）:\n` +
+      `客观任务完成度（真相源 = review.json verdict，runId=${runId}${resolved.origin !== 'marker' ? `，归属=${resolved.origin}` : ''}）:\n` +
       `- 总任务：${taskIds.length}\n` +
       `- 已通过（spec + quality verdict 均非 fail）：${completed.length}\n` +
+      draftLines +
       `- 未通过 / 缺失：${pending.length}\n` +
       `- 未完成列表:\n${pendingLines}\n` +
       '注：以 review.json verdict 为准；plan.md checkbox 仅作显示态（回填断裂时会与客观 verdict 不一致，以下方客观点为准）。'
@@ -700,7 +702,7 @@ export function isValidExecuteRunId(runId) {
  * @param {{ runtimeRoot: string }} opts
  * @returns {string|null} 含 tasks/ 的最新 runId，无则 null
  */
-export function resolveLatestExecuteRunIdWithTasks({ runtimeRoot }) {
+export function resolveLatestExecuteRunIdWithTasks({ runtimeRoot, changeName = null }) {
   try {
     const runsDir = join(runtimeRoot, 'execute-runs')
     if (!existsSync(runsDir)) return null
@@ -710,7 +712,19 @@ export function resolveLatestExecuteRunIdWithTasks({ runtimeRoot }) {
       .filter(x => { try { return statSync(join(x.p, 'tasks')).isDirectory() } catch { return false } })
       .map(x => ({ e: x.e, mtime: statSync(x.p).mtimeMs }))
       .sort((a, b) => b.mtime - a.mtime)
-    return entries.length > 0 ? entries[0].e : null
+    if (entries.length === 0) return null
+    // changeName 给定时优先 change 戳等值的 run（坑 worktree-cleanup-marker-chain：mtime 最新
+    // 会错拿其他变更的 run）；无戳命中退回 mtime 最新（向后兼容，调用方多为 marker 漂移兜底，
+    // 宁可拿最新 run 也不空手而归——覆盖度由调用方 validateTaskReviews 复校验）
+    if (changeName) {
+      for (const x of entries) {
+        try {
+          const c = readFileSync(join(runsDir, x.e, 'change'), 'utf8').trim()
+          if (c === changeName) return x.e
+        } catch {}
+      }
+    }
+    return entries[0].e
   } catch {
     return null
   }
@@ -725,18 +739,143 @@ export function resolveLatestExecuteRunId({ runtimeRoot, changeName }) {
       if (isValidExecuteRunId(c)) return c
     }
   } catch {}
+  // marker 缺失（worktree cleanup / 归档清理 / 并行会话误删——坑 worktree-cleanup-marker-chain）
+  // 时不再盲目取 mtime 最新（会拿到其他变更的 run）：先按 change 归属戳过滤，命中才返回；
+  // 无戳（旧 run）退回 mtime 最新保持向后兼容。
   try {
-    const runsDir = join(runtimeRoot, 'execute-runs')
-    if (existsSync(runsDir)) {
-      const entries = readdirSync(runsDir)
-        .map(e => ({ e, p: join(runsDir, e) }))
-        .filter(x => { try { return statSync(x.p).isDirectory() } catch { return false } })
-        .map(x => ({ e: x.e, mtime: statSync(x.p).mtimeMs }))
-        .sort((a, b) => b.mtime - a.mtime)
-      if (entries.length > 0) return entries[0].e
-    }
+    const candidates = listExecuteRunCandidates(runtimeRoot, changeName)
+    if (candidates.stamped.length > 0) return candidates.stamped[0]
+    if (candidates.all.length > 0) return candidates.all[0]
   } catch {}
   return null
+}
+
+// ── execute run 的 change 归属戳（坑 worktree-cleanup-marker-chain 根治）──
+//
+// 背景：run 目录 execute-runs/<runId>/ 本身不带变更身份，change→run 的唯一链接是
+// current-execute-run-id-<change> marker；worktree cleanup / 归档 marker 清理 / 并行会话
+// 误删后链即断，各 fallback（mtime 最新）会错拿其他变更的 run → archive 完成度报告把
+// 已实现 task 全报「review.json 缺失」，只能手工回填。
+// 修法：marker 写入点同步在 run 目录落 `change` 戳；marker 断裂后按戳精确归属，
+// 旧 run（无戳）退回覆盖度启发式（run 的 tasks/ 含本变更 task-NN review 才算命中）。
+
+/**
+ * 在 run 目录写入 change 归属戳（execute-runs/<runId>/change，内容为 changeName）。
+ * 与 marker 写入点同步调用（stage.js 主点 + gates.js/task-review.js 补写点）。
+ * best-effort：失败仅 warn 不抛（戳是归属优化的载体，缺了退回覆盖度启发式，不阻断主流程）。
+ * @param {string} runtimeRoot
+ * @param {string} runId
+ * @param {string} changeName
+ */
+export function stampExecuteRunChange(runtimeRoot, runId, changeName) {
+  if (!runtimeRoot || !runId || !changeName) return
+  try {
+    // run 目录可能尚未创建（本 helper 先于 review 落盘调用的路径）——mkdir 保证自洽
+    mkdirSync(join(runtimeRoot, 'execute-runs', runId), { recursive: true })
+    writeFileSync(join(runtimeRoot, 'execute-runs', runId, 'change'), changeName + '\n')
+  } catch (e) {
+    console.warn(`[sillyspec] execute run change 戳写入失败（归属 fallback 退回覆盖度启发式，不阻断）: ${e.message}`)
+  }
+}
+
+/**
+ * 读 run 目录的 change 归属戳。
+ * @returns {string|null} 戳内容（trim 后非空），无戳/读失败返回 null
+ */
+function readExecuteRunChangeStamp(runtimeRoot, runId) {
+  try {
+    const c = readFileSync(join(runtimeRoot, 'execute-runs', runId, 'change'), 'utf8').trim()
+    return c || null
+  } catch { return null }
+}
+
+/**
+ * 扫描 execute-runs/ 候选 run（mtime 最新优先），按 change 归属戳分组。
+ * @returns {{ stamped: string[], all: string[] }} stamped=戳等 changeName 的 runId（新→旧）；
+ *   all=全部 runId（新→旧，含无戳旧 run，供覆盖度启发式与向后兼容 fallback）
+ */
+function listExecuteRunCandidates(runtimeRoot, changeName) {
+  const runsDir = join(runtimeRoot, 'execute-runs')
+  const out = { stamped: [], all: [] }
+  if (!existsSync(runsDir)) return out
+  const entries = readdirSync(runsDir)
+    .map(e => ({ e, p: join(runsDir, e) }))
+    .filter(x => { try { return statSync(x.p).isDirectory() } catch { return false } })
+    .map(x => ({ e: x.e, mtime: statSync(x.p).mtimeMs }))
+    .sort((a, b) => b.mtime - a.mtime)
+  for (const x of entries) {
+    out.all.push(x.e)
+    if (changeName && readExecuteRunChangeStamp(runtimeRoot, x.e) === changeName) out.stamped.push(x.e)
+  }
+  return out
+}
+
+/**
+ * 判定 run 对本变更 taskIds 的覆盖度：tasks/ 下存在多少个 task-NN/review.json ∈ taskIds。
+ * taskIds 为空时退化为「tasks/ 下存在任意 task-NN/review.json」（保守启发）。
+ * @returns {number} 命中的 review 数
+ */
+function executeRunCoverage(runtimeRoot, runId, taskIds) {
+  try {
+    const tasksDir = join(runtimeRoot, 'execute-runs', runId, 'tasks')
+    if (!existsSync(tasksDir)) return 0
+    const entries = readdirSync(tasksDir).filter(e => /^task-\d+$/.test(e))
+    if (taskIds.length > 0) return entries.filter(e => taskIds.includes(e) && existsSync(join(tasksDir, e, 'review.json'))).length
+    return entries.filter(e => existsSync(join(tasksDir, e, 'review.json'))).length
+  } catch { return 0 }
+}
+
+/**
+ * 归属化解析本变更的 execute run（marker 链断裂的根治入口）。
+ *
+ * 解析顺序：
+ *   1. marker（格式校验）指向的 run，若其对本变更有覆盖（tasks/ 有本变更 review）或戳匹配 → 用它；
+ *   2. marker 缺失/非法/零覆盖（坑10 型漂移：marker 指向空 run）→ 扫描候选：
+ *      a. change 戳等值的最新的 run；
+ *      b.（旧 run 无戳）覆盖度 ≥1 的最新 run；
+ *   3. 都不命中 → null（调用方降级，报告明确「run 无法归属」而非「review 全缺」）。
+ *
+ * fail-safe：任何异常 → null，绝不抛。
+ * @param {{ runtimeRoot: string, changeName: string, taskIds?: string[] }} opts
+ * @returns {{ runId: string, origin: 'marker'|'stamp'|'coverage', relocated?: boolean }|null}
+ */
+export function resolveExecuteRunForChange({ runtimeRoot, changeName, taskIds = [] }) {
+  try {
+    // 1. marker
+    let markerRunId = null
+    try {
+      const marker = join(runtimeRoot, `current-execute-run-id-${changeName}`)
+      if (existsSync(marker)) {
+        const c = readFileSync(marker, 'utf8').trim()
+        if (c && !isValidExecuteRunId(c)) console.warn(`[sillyspec] execute run marker 内容非法（期望 exec-YYYY-MM-DD-HHMMSS，实得 ${JSON.stringify(c.slice(0, 60))}），忽略并回退归属扫描`)
+        if (isValidExecuteRunId(c)) markerRunId = c
+      }
+    } catch {}
+    if (markerRunId) {
+      const stamped = readExecuteRunChangeStamp(runtimeRoot, markerRunId) === changeName
+      const covered = executeRunCoverage(runtimeRoot, markerRunId, taskIds)
+      if (stamped || covered > 0) return { runId: markerRunId, origin: 'marker' }
+      // marker 零覆盖且无戳：疑似漂移（坑10：marker 在、真实 review 在别的 run），下探扫描
+    }
+
+    // 2. 扫描：戳优先 → 覆盖度启发（旧 run）。
+    // 覆盖度启发跳过「戳属他变更」的 run：task-NN 命名跨变更同构（都从 task-01 起），只看覆盖度
+    // 会把他变更 run 的 task-01 review 误配给本变更；戳存在且不等值 = 该 run 有明确主人，排除。
+    const candidates = listExecuteRunCandidates(runtimeRoot, changeName)
+    if (candidates.stamped.length > 0) {
+      return { runId: candidates.stamped[0], origin: 'stamp', relocated: markerRunId ? markerRunId !== candidates.stamped[0] : true }
+    }
+    for (const runId of candidates.all) {
+      const stamp = readExecuteRunChangeStamp(runtimeRoot, runId)
+      if (stamp && stamp !== changeName) continue
+      if (executeRunCoverage(runtimeRoot, runId, taskIds) > 0) {
+        return { runId, origin: 'coverage', relocated: markerRunId ? markerRunId !== runId : true }
+      }
+    }
+    return null
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -798,6 +937,7 @@ export async function generateTaskReviewDrafts({ changeName, cwd, platformOpts =
     try {
       mkdirSync(join(runtimeRoot, 'execute-runs', executeRunId, 'tasks'), { recursive: true })
       writeFileSync(runIdFile, executeRunId + '\n')
+      stampExecuteRunChange(runtimeRoot, executeRunId, changeName)
     } catch (e) {
       console.error(`[sillyspec] execute run marker/目录写入失败（降级继续，草稿落盘仍尝试）: ${e.message}`)
     }

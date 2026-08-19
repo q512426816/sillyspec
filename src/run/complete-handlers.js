@@ -1155,7 +1155,9 @@ export async function handleExecuteWaveArtifact({ stageName, steps, currentIdx, 
 export async function collectExecuteChangedFiles({ runtimeRoot, changeName }) {
   if (!runtimeRoot || !changeName) return []
   const { resolveLatestExecuteRunIdWithTasks, readReview, normalizeRepoKey } = await import('../task-review.js')
-  const runId = resolveLatestExecuteRunIdWithTasks({ runtimeRoot })
+  // changeName 透传：run 解析按 change 戳优先归属（坑 worktree-cleanup-marker-chain），
+  // 避免 marker 断裂后聚合到其他变更 run 的 changedFiles 误报 missing
+  const runId = resolveLatestExecuteRunIdWithTasks({ runtimeRoot, changeName })
   if (!runId) return []
   const tasksDir = join(runtimeRoot, 'execute-runs', runId, 'tasks')
   if (!existsSync(tasksDir)) return []

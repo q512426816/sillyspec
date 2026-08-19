@@ -33,6 +33,7 @@
 - **真相源 = review.json verdict**：上方报告由 CLI 从 .runtime/execute-runs/<runId>/tasks/task-NN/review.json 的 specVerdict + qualityVerdict 算出。
 - plan.md 的 - [x] checkbox **仅作显示态参考**：它依赖自动回填，runId marker / review 缺失时会停在未勾态，与客观 verdict 不一致时**以本报告为准**，不要被未勾 checkbox 误导。
 - 报告「未通过 / 缺失」= 0 且 source 为 review.json → 完成度合格，进入下一步。
+- 报告含「cannot_verify 草稿（未真正复核）」计数 > 0 → 这些 task 只有 cannot_verify 草稿兜底、未被真正复核：先确认 verify 阶段已兑现其 requiredEvidence（verify-result.md 有对应证据），缺证据的派独立子代理对照 task brief + git diff 补真实复核（升级为 pass/fail），勿静默放行。
 - 报告 source 为 plan-checkbox-fallback（客观源不可用）→ 完成度无法客观确认，**必须暂停**让用户交叉核对，不要直接放行。
 - 存在未完成任务 → **必须暂停等待用户决定**，不要自行判断"可以归档"。
    - 调用：sillyspec run archive --wait --reason "存在未完成任务，是否继续归档" --options "继续归档,回到execute完成剩余任务" --output "未完成任务列表"
