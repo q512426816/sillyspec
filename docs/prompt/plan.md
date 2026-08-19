@@ -345,8 +345,10 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
 
 步骤（module-impact 的生成口径与 archive 终审一致）：
 1. 读 {SPEC_ROOT}/docs/<project>/modules/_module-map.yaml（模块→文件路径映射）。**不存在 → 降级**：生成只含 unmapped 部分的 module-impact.md + 提示「建议运行 scan 生成模块映射」，不阻断
-2. 对照 design 文件变更清单 + plan 任务列表，逐文件匹配所属模块（命中的归 mapped，未命中的归 unmapped）
-3. 生成模块影响矩阵（模块 × 影响类型[新增/修改/删除/依赖变更] × 说明），落盘 {SPEC_ROOT}/changes/<change>/module-impact.md
+2. 对照 design 文件变更清单 + plan 任务列表，逐文件匹配所属模块（命中的归 mapped，未命中的归「未匹配文件」章节）
+3. 落盘 {SPEC_ROOT}/changes/<change>/module-impact.md，**两个章节标题逐字固定**（archive-impact.yaml contains_sections 机械校验，写成「影响矩阵」等变体会被 archive 硬拦返工）：
+   - 「## 模块影响矩阵」：模块 × 影响类型[新增/修改/删除/依赖变更] × 说明
+   - 「## 未匹配文件」：unmatched 文件 × 处置说明（无未匹配文件也保留空章节，写「无」）
 4. 首行标题必须用中文：# 模块影响分析（Module Impact）— <变更简述>
 5. **必须含「更新结果」表骨架**（本表是 verify/archive 死信门控的收口目标——CLI 硬校验表内无 pending/待办行，漏写此表则 agent 只能从 gate 报错反推格式）：
    ```markdown

@@ -157,6 +157,6 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 
 **解法（agent 侧）**：写 module-impact.md 直接用 archive 契约的章节名（`## 模块影响矩阵` + `## 未匹配文件`），「## 更新结果」表可以共存（archive 只查存在性，不查多余章节）。
 
-**修复方向（CLI 侧，未修）**：plan 生成模板与 archive-impact.yaml contains_sections 同源（模板字面量从 yaml 读，或 yaml 期望改为模板实际输出）。
+**〔2026-08-19 已修 ql-20260819-007-d4f0〕**：plan 审查计划步 prompt 章节标题逐字钉死（「## 模块影响矩阵」「## 未匹配文件」，附变体警告）；新增三方同源回归测试 test/plan-module-impact-sections.test.mjs——解析 templates/workflows/archive-impact.yaml 的 contains_sections，断言 plan prompt + archive 降级补写 prompt 均含期望章节名 + 分发模板与 dogfood 活副本逐字节一致，任一侧漂移即测试失败。
 
 **关联记忆**：`[[sillyspec-doc-consistency-debt]]`（ enforcement 全在 design↔代码、模板漂移同类债）

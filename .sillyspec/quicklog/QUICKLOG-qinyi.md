@@ -175,3 +175,17 @@
 根因：complete-handlers.js archive extract-module-impact 检查块遍历 result.failures（条目为 {level,role_id,output,check,message} 对象）直接模板字符串化 ，String(obj) 得 [object Object]，失败原因完全不可读只能翻 workflow-runs fail.json
 方案：渲染改 f.message ?? JSON.stringify(f)（缺字段 stringify 兜底防再退化）；新增 CLI 子进程回归测试 fixture 复刻 archive-impact.yaml + 章节缺失 module-impact.md 断言可读明细；troubleshooting 第 11 条标记已修
 结果：新测试 6/6（失败路径明细可读无 [object Object] / 通过路径不受影响）；npm test 全量 exit=0；lint 317 文件通过（未引用导出 0）
+
+## ql-20260819-007-d4f0 | 2026-08-19 13:11:01 | plan 生成 module-impact 章节名与 archive-impact.yaml 契约同源化——prompt 钉死标题 + 三方回归断言
+状态：已完成
+关联变更：（无）
+文件：
+- src/stages/plan.js（审查计划步 module-impact 生成 prompt 章节标题钉死）
+- test/plan-module-impact-sections.test.mjs（新建三方同源回归测试 11 断言）
+- docs/prompt/_extracted.json（提取刷新）
+- docs/prompt/plan.md（镜像逐字同步）
+- docs/sillyspec/troubleshooting.md（第 12 条标记已修）
+需求：plan 生成 module-impact 章节名与 archive-impact.yaml 契约同源化——prompt 钉死标题 + 三方回归断言
+根因：plan 审查计划步 prompt 只说「生成模块影响矩阵」「归 unmapped」未钉死章节标题，agent 写「## 影响矩阵」变体；verify advisory 不查章节名放行，archive contains_sections 机械硬拦，agent 在两套期望间返工
+方案：prompt 步骤 3 两章节标题逐字固定并注明与 yaml 契约同源勿写变体（更新结果表骨架保留）；_extract.mjs 刷新镜像逐字同步 plan.md；新增 11 断言回归测试锁三方不变量（yaml 期望 × plan prompt × archive 降级 prompt + 分发模板与活副本一致）
+结果：新测试 11/11；npm test 全量 exit=0；lint 321 文件通过；troubleshooting 第 12 条标记已修（ql-20260819-007-d4f0）
