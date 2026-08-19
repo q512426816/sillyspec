@@ -181,7 +181,7 @@ module_id: <module-id>
 2. 确保所有 checkbox 都已勾选
 3. 让用户确认后，用 `--confirm` 完成本步骤：
    `sillyspec run archive --done --confirm --output "确认归档"`
-4. CLI 会创建 `.sillyspec/changes/archive/`，并将变更目录移动到 `.sillyspec/changes/archive/<归档日期>-<纯描述>（源名前导日期去重，避免双日期）/`
+4. CLI 会创建 `.sillyspec/changes/archive/`，并将变更目录移动到 `.sillyspec/changes/archive/<原变更名>/`
 
 ### 输出
 归档完成 + archive 目录路径

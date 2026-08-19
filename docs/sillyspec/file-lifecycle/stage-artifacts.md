@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-06-04 16:25:42
-updated_at: 2026-07-22T16:00:00+08:00
+updated_at: 2026-08-19T17:11:14+08:00
 ---
 
 # 阶段与变更产物
@@ -166,12 +166,12 @@ updated_at: 2026-07-22T16:00:00+08:00
 
 ## 归档目录
 
-目标目录：`.sillyspec/changes/archive/<date>-<change>/`
+目标目录：`.sillyspec/changes/archive/<change>/`
 
 当前移动目录由 `run.js` 执行：
 
 - archive 第 4 步是“确认归档”。
-- 执行 `sillyspec run archive --done --confirm --output "确认归档"` 时，`run.js` 会把 `.sillyspec/changes/<change>/` 移动到 `.sillyspec/changes/archive/<date>-<change>/`。
+- 执行 `sillyspec run archive --done --confirm --output "确认归档"` 时，`run.js` 会把 `.sillyspec/changes/<change>/` 移动到 `.sillyspec/changes/archive/<change>/`。
 - 移动后会调用 `ProgressManager.unregisterChange()`，注销 active change。
 - 如果没有带 `--confirm`，`run.js` 会把第 4 步回退为 pending，清除该步输出，并提示补上 `--confirm`。
 

@@ -62,8 +62,8 @@ console.log('--- Case 1: 源已移到 archive/<原 changeName>/ → 自愈，不
   assert(after.stages.archive.steps[4].status === 'pending', 'DB: 更新路线图和提交仍 pending（非末步推进）')
 }
 
-// ── Case 2: archive 目录换日期前缀（按描述部分匹配）→ 自愈 ──
-console.log('\n--- Case 2: archive 目录换日期前缀 → 描述匹配自愈 ---')
+// ── Case 2: archive 目录名与 changeName 不一致 → 不自愈 ──
+console.log('\n--- Case 2: archive 目录名不一致 → 不自愈 ---')
 {
   const { cwd, specBase } = makeRepo('arch-selfheal-2-')
   const cn = '2026-08-08-archive-desync-desc'
@@ -72,20 +72,17 @@ console.log('\n--- Case 2: archive 目录换日期前缀 → 描述匹配自愈 
   writeFileSync(join(changeDir, 'plan.md'), '# Plan\n')
   await seedStage(pm, cwd, cn, 'archive', ARCHIVE_STEPS('pending'))
 
-  // archive 目录用了另一个日期前缀（如 CLI 在别的天跑过 / 手动改名），描述部分一致
+  // archive 目录用了另一个名字（如被手动改名），不应被误判为当前 change 的归档
   const archiveDir = join(specBase, 'changes', 'archive')
   mkdirSync(archiveDir, { recursive: true })
-  const descDated = join(archiveDir, '2026-08-01-archive-desync-desc')
-  renameSync(changeDir, descDated)
+  const differentName = join(archiveDir, '2026-08-01-archive-desync-desc')
+  renameSync(changeDir, differentName)
 
   const r = runCLI(['--dir', cwd, 'run', 'archive', '--done', '--confirm', '--change', cn, '--output', '确认归档'], { cwd })
 
-  assert(r.status === 0, `描述匹配自愈 exit 0（实际 ${r.status}，输出尾：${r.combined.slice(-100)}）`)
-  assert(existsSync(descDated), '换日期前缀的归档目录保持不动')
-  assert(r.combined.includes('自愈'), 'stdout 含「自愈」提示')
-
-  const after = await pm.read(cwd, cn)
-  assert(after.stages.archive.steps[3].status === 'completed', 'DB: 确认归档 step 自愈后标 completed')
+  assert(r.status !== 0, `目录名不一致不应自愈（实际 exit ${r.status}）`)
+  assert(!r.combined.includes('自愈'), 'stdout 不含「自愈」提示')
+  assert(existsSync(differentName), 'archive/ 下目录保持不动')
 }
 
 // ── Case 3: srcDir 缺失且 archive/ 下无该变更 → 仍 exit(1)，不误判自愈 ──
@@ -123,22 +120,22 @@ console.log('\n--- Case 4: findAlreadyArchivedDir 单元（plan.md 把关 / 边�
     assert(findAlreadyArchivedDir(archiveDir, '2026-08-08-foo') === null, 'archive 目录不存在 → null')
 
     mkdirSync(archiveDir, { recursive: true })
-    // 同描述但【缺 plan.md】→ 不命中（plan.md 把关）
+    // 同【缺 plan.md】→ 不命中（plan.md 把关）
     mkdirSync(join(archiveDir, '2026-08-08-foo'), { recursive: true })
-    assert(findAlreadyArchivedDir(archiveDir, '2026-08-09-foo') === null, '缺 plan.md 的同名目录不命中')
-    // 补 plan.md → 命中（描述匹配，跨日期）
+    assert(findAlreadyArchivedDir(archiveDir, '2026-08-08-foo') === null, '缺 plan.md 的同名目录不命中')
+    // 补 plan.md → 精确原名命中
     writeFileSync(join(archiveDir, '2026-08-08-foo', 'plan.md'), '# Plan\n')
-    const hit1 = findAlreadyArchivedDir(archiveDir, '2026-08-09-foo')
-    assert(hit1 && hit1.endsWith('2026-08-08-foo'), '补 plan.md 后按描述命中跨日期目录')
+    const hit1 = findAlreadyArchivedDir(archiveDir, '2026-08-08-foo')
+    assert(hit1 && hit1.endsWith('2026-08-08-foo'), '补 plan.md 后精确原名命中')
 
-    // 精确原名命中
+    // 精确原名命中（另一个）
     mkdirSync(join(archiveDir, '2026-08-01-bar'), { recursive: true })
     writeFileSync(join(archiveDir, '2026-08-01-bar', 'plan.md'), '# Plan\n')
     const hit2 = findAlreadyArchivedDir(archiveDir, '2026-08-01-bar')
     assert(hit2 && hit2.endsWith('2026-08-01-bar'), '精确原名命中')
 
-    // 描述都不匹配 → null
-    assert(findAlreadyArchivedDir(archiveDir, '2026-08-09-totally-different') === null, '描述不匹配 → null')
+    // 名称不匹配 → null
+    assert(findAlreadyArchivedDir(archiveDir, '2026-08-09-totally-different') === null, '名称不匹配 → null')
   } finally {
     try { rmSync(root, { recursive: true, force: true }) } catch {}
   }

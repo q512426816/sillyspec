@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-05-31 11:00:00
-updated_at: 2026-08-19T13:34:00+08:00
+updated_at: 2026-08-19T17:11:14+08:00
 ---
 
 # SillySpec 文件生命周期
@@ -142,7 +142,7 @@ quick
   -> CLI appends/checks checkbox in .sillyspec/changes/<change>/tasks.md
   -> (--done 收尾, 2026-08-17) 关联变更 tasks.md 全勾选时 CLI 自动轻量归档：
      status active → archived（sillyspec.db changes 表）+ changes/<c>/ 移动到
-     changes/archive/<date>-<c>/ + archiveWorktreeCleanup + git add archive/
+     changes/archive/<c>/ + archiveWorktreeCleanup + git add archive/
      （判定基于 tasks.md 当前快照；仍有未勾选 task 或无 tasks.md → skip+warn；
      单个变更归档失败 warn 不阻断 quick 完成）
   -> code changes are made in the main workspace

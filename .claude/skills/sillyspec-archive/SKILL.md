@@ -64,7 +64,7 @@ sillyspec run archive --continue --answer "确认写入"
 
 ### 归档结果
 
-归档后变更目录从 `changes/<名>/` 移到 `changes/archive/YYYY-MM-DD-<名>/`，并从活跃列表注销。后续用 `/sillyspec:commit` 提交。
+归档后变更目录从 `changes/<名>/` 移到 `changes/archive/<名>/`，并从活跃列表注销。后续用 `/sillyspec:commit` 提交。
 
 ## 阶段流转
 

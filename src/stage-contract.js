@@ -61,22 +61,12 @@ export function validateChangeExists(specBase, stageName, changeName) {
   if (/^quick-[0-9a-f]{8}$/.test(changeName)) return null
   if (existsSync(join(specBase, 'changes', changeName))) return null
 
-  // archive 特例：step4 --confirm 已把变更从 changes/<name>/ 移到 changes/archive/<date>-<name>/。
+  // archive 特例：step4 --confirm 已把变更从 changes/<name>/ 移到 changes/archive/<name>/。
   // step5（更新路线图/提交）--change <name> 不应因 changes/<name>/ 已移走而被前置校验误拦。
-  // 精确匹配归档目录名（YYYY-MM-DD-<changeName>），避免后缀子串误匹配（auth ≠ deep-auth）。
   if (stageName === 'archive') {
     const archiveRoot = join(specBase, 'changes', 'archive')
-    if (existsSync(archiveRoot)) {
-      // 归档目录名恒为 <归档日>-<纯描述>（archiveDestDirName 写入时已 strip 源名前导日期）。
-      // 校验侧同样 strip changeName 前导日期再比 —— 否则「写 strip、读拿完整源名」语义不一致，
-      // 会让带日期前缀的源名（brainstorm 约定，如 2026-07-29-sidebar-menu-restructure）在 step5
-      // 被前置校验误拦（坑 archive-step5-leading-date-change-name）。
-      const stripped = String(changeName).replace(/^\d{4}-\d{2}-\d{2}-/, '')
-      const archived = readdirSync(archiveRoot).find(d => {
-        const m = d.match(/^\d{4}-\d{2}-\d{2}-(.+)$/)
-        return m && m[1] === stripped
-      })
-      if (archived) return null
+    if (existsSync(archiveRoot) && existsSync(join(archiveRoot, changeName))) {
+      return null
     }
   }
   return {
@@ -527,19 +517,10 @@ function validateVerifyOutputs(cwd, changeName, context = {}) {
 }
 
 /**
- * 计算归档目标目录名：保证 archive/ 下目录有且仅有一个日期前缀。
- *
- * 变更名创建时常已带 YYYY-MM-DD- 前缀（brainstorm 强制约定 + CLI 自动占位名），
- * 若归档时再无条件拼一次 date- 前缀，会产生 2026-07-28-2026-07-28-<desc> 双日期。
- * 这里先剥离源名前导日期，再统一拼归档当天日期 → 归档目录名恒为 <归档日期>-<纯描述>。
- * 不带日期的源名（如 quick-<hash>）strip 无效，正常补日期，行为不变。
- *
- * 写（archiveChangeDirectory）与校验（validateArchiveOutputs）共用此函数，
- * 避免「写和校验各自硬编码同公式」的漂移（曾因此导致双日期 bug 写校验都自洽通过）。
+ * 计算归档目标目录名：保持原变更名不变，直接移入 archive/。
  */
 export function archiveDestDirName(date, changeName) {
-  const stripped = String(changeName).replace(/^\d{4}-\d{2}-\d{2}-/, '')
-  return `${date}-${stripped}`
+  return String(changeName)
 }
 
 /**
@@ -547,8 +528,7 @@ export function archiveDestDirName(date, changeName) {
  */
 function validateArchiveOutputs(cwd, changeName) {
   const archiveDir = join(cwd, '.sillyspec', 'changes', 'archive')
-  const date = new Date().toISOString().slice(0, 10)
-  const destDir = join(archiveDir, archiveDestDirName(date, changeName))
+  const destDir = join(archiveDir, changeName)
 
   // 归档目录不存在 early return(引擎在存在时才跑)
   if (!existsSync(destDir)) {

@@ -240,3 +240,41 @@
 根因：title 刷新只挂在 completeStep/continueStep 的阶段完成分支，brainstorm 第 6 步 design.md 已落盘但阶段未走完时，DB 里 title 一直是启动 initChange 写入的英文 autoName 兜底，中途查看永远是英文 key
 方案：complete.js 抽 refreshChangeTitleFromArtifacts 公共 helper（deriveTitleFromLinkedChange 提取 proposal/design 首个 # 标题中文描述 + quick-hex 会话守卫 + 失败静默），挂到四个步骤持久化点——completeStep 单步完成、completeStep 阶段完成、continueStep wait 解除、continueStep 阶段完成，单步 --done 即刷新
 结果：新增单步刷新测试先红后绿；node --test 单文件 32/32 通过；npm test 全量 0 fail；npm run lint 通过（321 文件、未引用导出 0 项）
+
+## ql-20260819-012-66fc | 2026-08-19 16:45:57 | 审计发现的 7 项高优先级缺陷修复
+状态：已完成
+关联变更：（无）
+文件：
+- src/sillyhub-mcp/client.js（删除 _token 冗余赋值）
+- src/modules.js（删除 DB 死 import）
+- src/progress.js（waitAnswers JSON 损坏加诊断日志 + 清理死函数死常量）
+- src/run/stage.js（noAI 未知 cliAction 加 else throw）
+- src/run/complete.js（noAI 未知 cliAction 加 else throw）
+- src/progress/step-store.js（completed_at 条件写入）
+需求：审计发现的 7 项高优先级缺陷修复。
+根因：多维度审计暴露空 catch 吞错、noAI 分支缺兜底、completed_at 无条件写入、冗余赋值与死 import/死函数等代码质量债务。
+方案：client.js 删 _token 冗余赋值；modules.js 删 DB 死 import；progress.js waitAnswers JSON.parse catch 加 console.warn 并清理 makeInitialProgress/makeInitialGlobal/VALID_STAGE_STATUSES；stage.js/complete.js noAI 分支加 else throw fail-fast；step-store.js completed_at 改为 status 条件写入；同步更新 runtime/progress/sillyhub-mcp/migration 模块文档变更索引。
+结果：npm run lint 322 文件通过；npm test 230 通过 2 失败（change-exists-validation.test.mjs、archive-idempotent-selfheal.test.mjs 与本次改动无关，为 archive/change-exists 既有问题）；7 处修复点均经脚本核验正确
+审计：⚖️ 归属切分：3 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：test/archive-idempotent-selfheal.test.mjs, test/change-exists-validation.test.mjs, test/progress-dump.test.mjs.bak
+
+## ql-20260819-013-1b70 | 2026-08-19 17:22:12 | archive 与 quick 归档保持变更目录原名
+状态：已完成
+关联变更：（无）
+文件：
+- src/stage-contract.js（archiveDestDirName 恒等返回原名；validateArchiveOutputs/validateChangeExists 改精确匹配 archive/<changeName>）
+- src/run/complete-handlers.js（findAlreadyArchivedDir 删日期前缀剥离匹配，只按精确原名 + plan.md 把关）
+- src/stages/archive.js（确认归档 step4 prompt 目标路径改 <原变更名>）
+- test/change-exists-validation.test.mjs（archive 特例按原名目录断言）
+- test/archive-idempotent-selfheal.test.mjs（目录名不一致改负路径不自愈；单元改精确原名命中）
+- docs/sillyspec/file-lifecycle.md + stage-artifacts.md（归档目录名口径同步 <change>）
+- docs/prompt/archive.md + _extracted.json（重跑 extract 同步）
+- .claude/skills/sillyspec-archive/SKILL.md（归档结果路径改 archive/<名>）
+需求：archive 与 quick 归档保持变更目录原名
+根因：archiveDestDirName 剥离日期前缀后重拼归档日期导致文件夹重命名
+方案：archiveDestDirName 改为恒等返回并同步调整校验自愈逻辑测试文档与 SKILL
+结果：archive 相关 5 个测试文件 17/17 通过（change-exists-validation / archive-idempotent-selfheal / archive-cli-git-add / run-complete-step-archive / quick-close-linked-changes）；npm run lint 通过；全量 npm test 232 文件仅 progress-dump 并发 flaky 1 失败（单独跑通过，非本次回归）
+
+## ql-20260819-014-0082 | 2026-08-19 19:20:52 | (quick 任务)
+状态：进行中
+关联变更：（无）
+文件：src/progress.js, src/fs-atomic.js, src/db.js, src/sillyhub-mcp/client.js, src/run/complete.js, src/run/prompt.js

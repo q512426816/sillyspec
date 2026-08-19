@@ -98,10 +98,9 @@ export function validateParsedProjects(projects, sourceRoot) {
 /**
  * 在 changes/archive/ 下查找变更 <changeName> 是否已被归档（archive 脱钩自愈用）。
  *
- * 归档目录名 = archiveDestDirName(date, changeName) = `<归档日期>-<剥前导日期的描述>`；
- * 但手动 / 部分流程归档可能保留原 changeName（含前导日期）或用别的日期前缀。
- * 按「描述部分」（剥前导 YYYY-MM-DD-）匹配，并要求目录含 plan.md（归档必备产物，
- * 防止同名巧合误判）。issue: archive-stage-physical-tracking-desync。
+ * 归档目录名 = 原变更名（直接移入 archive/，不重命名）。
+ * 精确匹配 + 要求目录含 plan.md（归档必备产物，防止同名巧合误判）。
+ * issue: archive-stage-physical-tracking-desync。
  *
  * @param {string} archiveDir - changes/archive 绝对路径
  * @param {string} changeName - 变更名（currentChange）
@@ -115,15 +114,9 @@ export function findAlreadyArchivedDir(archiveDir, changeName) {
   } catch {
     return null
   }
-  const descOf = (n) => String(n).replace(/^\d{4}-\d{2}-\d{2}-/, '')
-  const targetDesc = descOf(changeName)
-  if (!targetDesc) return null
-  // 1. 精确原名命中（手动 mv 保留原 changeName）
+  // 精确原名命中
   const exact = entries.find((e) => e === changeName && existsSync(join(archiveDir, e, 'plan.md')))
   if (exact) return join(archiveDir, exact)
-  // 2. 描述部分命中（archiveDestDirName 产出的 <date>-<desc>，或手动剥前导日期的目录）
-  const descMatch = entries.find((e) => descOf(e) === targetDesc && existsSync(join(archiveDir, e, 'plan.md')))
-  if (descMatch) return join(archiveDir, descMatch)
   return null
 }
 

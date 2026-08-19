@@ -362,7 +362,7 @@
       {
         "index": 3,
         "name": "确认归档",
-        "prompt": "确认归档内容，由 CLI 执行目录移动。\n\n### 操作\n1. 展示：变更目录名、包含的文件列表（含 module-impact.md）、生成总结\n2. 确保所有 checkbox 都已勾选\n3. 让用户确认后，用 `--confirm` 完成本步骤：\n   `sillyspec run archive --done --confirm --output \"确认归档\"`\n4. CLI 会创建 `.sillyspec/changes/archive/`，并将变更目录移动到 `.sillyspec/changes/archive/<归档日期>-<纯描述>（源名前导日期去重，避免双日期）/`\n\n### 输出\n归档完成 + archive 目录路径",
+        "prompt": "确认归档内容，由 CLI 执行目录移动。\n\n### 操作\n1. 展示：变更目录名、包含的文件列表（含 module-impact.md）、生成总结\n2. 确保所有 checkbox 都已勾选\n3. 让用户确认后，用 `--confirm` 完成本步骤：\n   `sillyspec run archive --done --confirm --output \"确认归档\"`\n4. CLI 会创建 `.sillyspec/changes/archive/`，并将变更目录移动到 `.sillyspec/changes/archive/<原变更名>/`\n\n### 输出\n归档完成 + archive 目录路径",
         "outputHint": "归档确认",
         "optional": false
       },

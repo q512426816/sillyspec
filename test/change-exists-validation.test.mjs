@@ -57,25 +57,20 @@ assert(validateChangeExists(specBase, 'plan', null) === null, 'changeName null �
 // 7. 已存在变更 + 各阶段 → 通过（回归保护）
 assert(validateChangeExists(specBase, 'execute', 'real-change') === null, 'execute + 已存在变更 → 通过')
 
-// 8. archive 特例：变更已被 step4 移到 changes/archive/<date>-<name>/ → 放行（修复 verify-archive-pitfalls 坑3）
+// 8. archive 特例：变更已被 step4 移到 changes/archive/<name>/ → 放行（修复 verify-archive-pitfalls 坑3）
 {
-  mkdirSync(join(specBase, 'changes', 'archive', '2026-07-23-archived-change'), { recursive: true })
+  mkdirSync(join(specBase, 'changes', 'archive', 'archived-change'), { recursive: true })
   assert(validateChangeExists(specBase, 'archive', 'archived-change') === null, 'archive + 已归档变更（changes/<name>/ 已移走）→ 放行')
   // 精确匹配：后缀子串不算（auth ≠ deep-auth）
-  mkdirSync(join(specBase, 'changes', 'archive', '2026-07-22-deep-auth'), { recursive: true })
+  mkdirSync(join(specBase, 'changes', 'archive', 'deep-auth'), { recursive: true })
   assert(validateChangeExists(specBase, 'archive', 'auth') !== null, 'archive + 后缀子串不算已归档（auth ≠ deep-auth）→ 失败')
   // 其他阶段不享受 archive 特例
   assert(validateChangeExists(specBase, 'plan', 'archived-change') !== null, 'plan 阶段不享受 archive 已归档放行 → 失败')
 }
-// 9. archive 特例回归：变更名本身带日期前缀（brainstorm 源名约定），归档目录已 strip 前缀重拼为
-//    <归档日>-<纯描述>。校验侧同样 strip 再比 → 放行。
-//    （修复 archive-step5-leading-date-change-name：原实现 m[1]===changeName 对带前缀源名恒 false，
-//     step4 已移走、step5 --change <源名> 被前置校验误拦。归档日 07-30 ≠ 源名日期 07-29 更能体现写读对齐）
+// 9. archive 特例：变更名带日期前缀也按原样归档，目录名与 changeName 一致
 {
-  mkdirSync(join(specBase, 'changes', 'archive', '2026-07-30-sidebar-menu-restructure'), { recursive: true })
-  assert(validateChangeExists(specBase, 'archive', '2026-07-29-sidebar-menu-restructure') === null, 'archive + 带日期前缀源名（归档目录已去前缀重拼）→ 放行')
-  // 纯描述 changeName（无前缀）仍兼容，strip 无效原值不变
-  assert(validateChangeExists(specBase, 'archive', 'sidebar-menu-restructure') === null, 'archive + 纯描述源名 → 放行（向后兼容）')
+  mkdirSync(join(specBase, 'changes', 'archive', '2026-07-29-sidebar-menu-restructure'), { recursive: true })
+  assert(validateChangeExists(specBase, 'archive', '2026-07-29-sidebar-menu-restructure') === null, 'archive + 带日期前缀源名（归档目录保留原名）→ 放行')
 }
 // 清理
 try { rmSync(specBase, { recursive: true, force: true }) } catch {}
