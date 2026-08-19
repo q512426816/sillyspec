@@ -139,7 +139,7 @@ SillySpec 侧 `probeSillyHub`（`src/dispatch/probe.js:183-197`）已实现 root
 - [x] daemon `allowed_roots` 含仓根（`["C:\\Users\\qinyi"]` 覆盖 multi-agent-platform 仓根 + worktree；check-dispatch-allowed-roots.mjs 前置校验脚本 + sillyspec-dispatch.md 指引）
 - [x] 字段名统一 `branch`（D-009，跨仓契约 / client.js / 三入口一致，round-1 `worktree_branch` 漂移已收敛）
 - [x] SillySpec 侧 `isPathASupported()` 改 schema 探测（client.js listTools + probe.js 预热 + detectPathAFromTools；SILLYHUB_PATH_A=1 env 备选）
-- [x] SillySpec 侧 `createMission` 传 `orchestration_mode="external"` + `dispatchWorker` 传 `branch`（client.js:424/:292-294/:329）
+- [x] SillySpec 侧 `createMission` 传 `orchestration_mode="external"` + `dispatchWorker` 传 `branch`（client.js:442/:292-294/:329）
 - [ ] daemon 暴露 `root_path`（限制 ①）：当前 tools/list 不返 root_path，probe 越界校验生产不触发——待后续 daemon 增暴露后补勾
 - [ ] execute 启动期接 `probeSillyHub` 预热（限制 ②）：当前需 SILLYHUB_PATH_A=1 或先跑 dispatch probe——待后续 execute 接预热后补勾
 - [ ] （建议）专用 kill/lease-revoke tool（替代 `report_progress` kill 标记）

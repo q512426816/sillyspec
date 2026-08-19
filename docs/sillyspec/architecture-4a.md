@@ -47,7 +47,7 @@ SillySpec 是给 AI Agent 调用的 **CLI 流程状态机**：Agent 通过 CLI �
 
 ### 1.2 流程状态机
 
-**转换合法性**由 `checkTransition(fromStage, toStage)` 仲裁（`src/stage-contract.js:799-859`），契约转换图（`src/stage-contract.js:799`）：
+**转换合法性**由 `checkTransition(fromStage, toStage)` 仲裁（`src/stage-contract.js:782`），契约转换图（`src/stage-contract.js:782`）：
 
 ```
 brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
@@ -70,7 +70,7 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
 
 | 门 | 触发 | 阻断 | 依据 |
 |---|---|---|---|
-| 转换门 `checkTransition` | 阶段跳转不符合 allowedFrom / scan failed | `exit(1)` | `src/stage-contract.js:799` |
+| 转换门 `checkTransition` | 阶段跳转不符合 allowedFrom / scan failed | `exit(1)` | `src/stage-contract.js:782` |
 | WAIT 门 | `--done` output 含等待标记 / step `requiresWait` 未答 | `exit(1)` | `src/run/complete.js:106` |
 | execute deps 门 | worktree `depsStatus` 未达标 | step blocked + `exit(1)` | `src/run/gates.js:139` |
 | execute review.json 门 | 已勾 task 缺 review.json | step blocked + `exit(1)` | `src/run/gates.js:112` |
@@ -79,7 +79,7 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
 | quick 边界审计 | 命中受保护/危险文件或删除 | BLOCKED `exit(1)` | `src/run/shared.js:497` |
 
 **阶段完成 gate 级联**（`completeStageGates` `src/run/gates.js:663`，统一收尾管线）顺序：
-1. `runValidators`（客观产物校验，`src/stage-contract.js:869`）：`validateBrainstormOutputs` / `validatePlanOutputs` / `validateExecuteOutputs`+`checkExecuteCodeEvidence` / `validateVerifyOutputs` / `validateScanOutputs`。
+1. `runValidators`（客观产物校验，`src/stage-contract.js:852`）：`validateBrainstormOutputs` / `validatePlanOutputs` / `validateExecuteOutputs`+`checkExecuteCodeEvidence` / `validateVerifyOutputs` / `validateScanOutputs`。
 2. verify 实测对账：CLI 亲跑 `local.yaml` 的 `commands.test`，自报告 PASS 但实测失败→阻断（`gates.js:290`）。
 3. Plan→Execute Contract（`validatePlanForExecute` `gates.js:339`）。
 4. Stage Review Gate（brainstorm/plan/execute，`gates.js:376`）：`classifyReviewTier` 判 tier=self（自审）/independent（强制独立子代理 review.json）。
@@ -99,11 +99,11 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
 
 | 表 | 用途 | 关键列 / 依据 |
 |---|---|---|
-| `project` | 全局单行（id 恒为 1） | `name` / `schema_version`(=5) / 时间戳 — `db.js:218` |
-| `changes` | 变更主表 | `name`(UNIQUE) / `current_stage`(默认 scan) / `status`(active/archived) / 隔离列 / 平台同步戳 / `title`/`quicklog_id` — `db.js:229` + 8 列迁移 |
+| `project` | 全局单行（id 恒为 1） | `name` / `schema_version`(=5) / 时间戳 — `db.js:224` |
+| `changes` | 变更主表 | `name`(UNIQUE) / `current_stage`(默认 scan) / `status`(active/archived) / 隔离列 / 平台同步戳 / `title`/`quicklog_id` — `db.js:235` + 8 列迁移 |
 | `stages` | 阶段行 | `change_id`(FK CASCADE) / `stage` / `status` / `revision` 等重开支持列 — `db.js:240` |
-| `steps` | 步骤行 | `stage_id`(FK CASCADE) / `status` / `output` / `ordering` + wait 交互列；**无 UNIQUE**，用 DELETE-then-INSERT UPSERT — `db.js:253` |
-| `batch_progress` | 批量任务统计 | `change_id`(UNIQUE) / total/completed/failed/skipped — `db.js:266` |
+| `steps` | 步骤行 | `stage_id`(FK CASCADE) / `status` / `output` / `ordering` + wait 交互列；**无 UNIQUE**，用 DELETE-then-INSERT UPSERT — `db.js:264` |
+| `batch_progress` | 批量任务统计 | `change_id`(UNIQUE) / total/completed/failed/skipped — `db.js:273` |
 | `approvals` | 平台审批状态 | `change_id`(UNIQUE) / `status`(默认 not_required)；`read()` 不读此表 — `db.js:279` |
 
 外键级联：`changes` 删 → `stages`/`steps`/`batch_progress`/`approvals` 级联删（`ON DELETE CASCADE`）。
@@ -140,7 +140,7 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
 
 ### 2.5 运行时数据目录 `.sillyspec/.runtime/`
 
-`.runtime/` 在 `.gitignore`（`progress.js:534`）。核心文件：`sillyspec.db`（权威库）/ `sillyspec.db-wal`/`-shm`（WAL 侧车）/ `.bak`（损坏回退）/ `.schema-version`（版本戳）/ `user-inputs.md`（用户原话）/ `audit.log`（`--force` 审计）/ `artifacts/`（step output 全文归档）/ `history/`（complete-stage 快照）/ `verify-runs/`（CLI 实测）/ `worktrees/`（worktree 注册名单）/ `execute-runs/<run-id>/tasks/task-XX/review.json`（task review 产物）。
+`.runtime/` 在 `.gitignore`（`progress.js:516`）。核心文件：`sillyspec.db`（权威库）/ `sillyspec.db-wal`/`-shm`（WAL 侧车）/ `.bak`（损坏回退）/ `.schema-version`（版本戳）/ `user-inputs.md`（用户原话）/ `audit.log`（`--force` 审计）/ `artifacts/`（step output 全文归档）/ `history/`（complete-stage 快照）/ `verify-runs/`（CLI 实测）/ `worktrees/`（worktree 注册名单）/ `execute-runs/<run-id>/tasks/task-XX/review.json`（task review 产物）。
 
 > **`gate-status.json` 已废除**：`src/hooks/worktree-guard.js:8` + `src/progress.js:10` 注释明示，worktree-guard 改为直读 `sillyspec.db`（task-10 后唯一来源）。
 
@@ -325,4 +325,4 @@ TA  Node22 ESM · node:sqlite(WAL) · git worktree · 跨平台 fs-atomic · hus
 | 存储引擎 | `docs/sillyspec/file-lifecycle/storage-and-state.md:35` 写"better-sqlite3 原生绑定" | 已迁 `node:sqlite` | `src/db-engine.js:8` |
 | propose 阶段 | `docs/sillyspec/file-lifecycle.md` 阶段表残留 `propose | 7` 行 | 无独立 propose 阶段（已并入 brainstorm） | `src/stages/index.js:15-26`（10 阶段，无 propose） |
 | scan 步骤数 | `stage-artifacts.md` 写 scan 10 步 | scan 11 步 | `src/stages/scan.js` |
-| `.bak` 主动写时机 | `db.js:96`/`progress.js:535` 注释称"写前自动备份为 .bak" | `_write`/`transaction` 路径未见主动 copy 到主 `.bak`（主 `.bak` 实际由 `_openWithFallback` 恢复时使用 + import 的 `.pre-import-*.bak` 产生） | 已订正（见 ql-20260814-003）：4 处描述统一为「node:sqlite 提交即持久化、`.bak` 恢复是向后兼容兜底」 |
+| `.bak` 主动写时机 | `db.js:96`/`progress.js:517` 注释称"写前自动备份为 .bak" | `_write`/`transaction` 路径未见主动 copy 到主 `.bak`（主 `.bak` 实际由 `_openWithFallback` 恢复时使用 + import 的 `.pre-import-*.bak` 产生） | 已订正（见 ql-20260814-003）：4 处描述统一为「node:sqlite 提交即持久化、`.bak` 恢复是向后兼容兜底」 |

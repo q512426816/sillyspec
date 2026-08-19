@@ -123,7 +123,7 @@ scan-profile.js 扫描档位 / concurrent-detect.js 并发检测 / multi-repo-co
 | `--auto` | 进入自动模式连跑主流程 |
 
 **perProject 按项目展开**：scan 阶段大量 step 带 `perProject: true` 标记（grep 自
-`src/stages/scan.js`，共 8 处）。`handleScanProjectListStep`（`src/run/complete-handlers.js:456`）
+`src/stages/scan.js`，共 8 处）。`handleScanProjectListStep`（`src/run/complete-handlers.js:449`）
 逻辑：scan 第 2 步"构建扫描项目列表"
 完成后，把后续所有 `perProject` step 按 `projectNames` 展开成
 `步骤 × 项目` 个独立子步骤，移除原始未展开版本。
@@ -166,7 +166,7 @@ W6 重构后的结构：`src/progress.js` 是 ProgressManager facade（1127 行�
 
 | 文件 | 职责 |
 | --- | --- |
-| `src/progress.js` | `ProgressManager` facade（`src/progress.js:172` 类声明）：持久化核心（_ensureDB / read / _write 本体留在 facade），其余按组 delegate 到子模块 |
+| `src/progress.js` | `ProgressManager` facade（`src/progress.js:154` 类声明）：持久化核心（_ensureDB / read / _write 本体留在 facade），其余按组 delegate 到子模块 |
 | `src/progress/stage-machine.js` | 阶段状态机：completeStage / reopen / reset / validate / show / status + 产物校验门 + 下游级联 |
 | `src/progress/step-store.js` | stages / steps / batch_progress 三表读写（setStage / addStep / updateStep / batch） |
 | `src/progress/change-registry.js` | 变更注册表：changes 表生命周期（注册/注销/重命名/隔离状态/平台同步戳/审批状态） |
