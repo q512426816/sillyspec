@@ -40,8 +40,8 @@ created_at: 2026-08-19T11:40:12+08:00
 
 | 目标 | 操作 | 状态 |
 |------|------|------|
-| `modules/progress.md` | 更新 progress 模块卡（W1 completeStage stale 拒绝 + W2 批量守卫行为） | pending |
-| `modules/worktree.md` | 更新 worktree 模块卡（W3 merge-base 锚点策略 + 冲突列表报错） | pending |
-| `modules/runtime.md` | 更新 runtime 模块卡（W1/W2 complete.js 行为） | pending |
-| `modules/cli-entry.md` | 更新 cli-entry 模块卡（--base flag 解析） | pending |
+| `modules/progress.md` | 更新 progress 模块卡（W1 completeStage stale 拒绝 + W2 批量守卫行为） | done |
+| `modules/worktree.md` | 更新 worktree 模块卡（W3 merge-base 锚点策略 + 冲突列表报错） | done |
+| `modules/runtime.md` | 更新 runtime 模块卡（W1/W2 complete.js 行为） | done |
+| `modules/cli-entry.md` | 更新 cli-entry 模块卡（--base flag 解析） | done |
 | `_module-map.yaml` | 无变化（未增删模块，paths 不变） | skipped |
