@@ -487,12 +487,17 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
     return applyByMerge(result, changeName, projectRoot, wm);
   }
 
-  // --- 4.5 校验：主工作区是否有「未提交」脏改动（未提交 dirty 是 git apply --3way 危险区，必须拦）---
-  // 分工：4.5（排除规则下当前 dirty）+ 5a（脏∩changedFiles）挡「未提交」dirty；5b 管「已提交」HEAD 分叉（已放宽，见下）。
-  // 实测：主干未提交 dirty 时，git apply --3way 报 `does not match index` 且行为不一致（可能报错/可能半应用，
-  // 哪怕脏文件与 patch 不重叠）——这是 Windows/autocrlf 的 CRLF 副作用（非 git 本质限制：
-  // autocrlf off 时 --3way 在不重叠 dirty 树能 Applied cleanly，on 时才报 does not match index）。
-  // 但仓库 CRLF 混用 + 规则13 要求 Windows 兼容，fail-loud 在 Windows 仍有据，故此处友好拦截，引导用户先 commit/stash。
+  // --- 4.5 校验：主工作区「未提交」脏文件是否与本次变更重叠（overlap-only 拦截）---
+  // 分工：4.5（排除规则下 dirty∩changedFiles）+ 5a（更宽口径的同一交集）挡「未提交」dirty 重叠；
+  // 5b 管「已提交」HEAD 分叉（已放宽）。
+  // 2026-08-20 放宽（原全量拦截 → 只拦重叠）：原「排除规则下任何未提交文件即整体拒绝」会把与本次
+  // 变更无关的脏文件也硬挡，用户被迫走 rescue cp 手动路径。重叠（dirtyFiles ∩ changedFiles，
+  // changedFiles 已含删除文件与 worktree 新增同名文件）才是 git apply 无法安全应用的实际危险区。
+  // 残余风险与兜底（Windows/autocrlf）：实测 autocrlf on 时 git apply --3way 对 dirty 工作区可报
+  // `does not match index`（哪怕脏文件与 patch 不重叠；autocrlf off 时能干净应用，非 git 本质限制）。
+  // 交集空前提下该失败是安全的：step7 catch → rollbackApply 只 checkout/删除 patch 涉及文件
+  // （这些文件 apply 前无未提交修改，还原 = apply 前状态），无关脏文件不在 patch/rollback 范围
+  // 不受影响 → fail-safe，报错后 stash 重试即可。放行时 warning 提示此路径。
   // 排除非交付物的元数据/文档 churn（execute 自身改的 + 多操作者常改的 agent 指引/文档），
   // 否则别人改 CLAUDE.md/docs/.claude → 判定 dirty → apply 误阻断（多操作者仓库高频踩坑）。
   // 注意：排除规则必须和 computeBaselineHash (worktree.js) 一致（虽已不比对 hash，仍用同一口径判当前 dirty）。
@@ -503,38 +508,47 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
     const staged = gitQuiet(projectRoot, ['diff', '--cached', ...exclude]) || '';
     const unstaged = gitQuiet(projectRoot, ['diff', ...exclude]) || '';
     const untracked = gitQuiet(projectRoot, ['ls-files', '--others', '--exclude-standard', ...exclude]) || '';
-    // 意图（与 computeBaselineHash 注释一致）：只挡「未提交 dirty」——git apply --3way 对 dirty 工作区不稳。
+    // 意图（与 computeBaselineHash 注释一致）：只看「未提交 dirty」——git apply --3way 对 dirty 工作区不稳。
     // 不比对 hash 是否等于 execute 启动时 baselineHash：主仓 dirty→clean（execute 期间 commit 无关文件）后
     // hash 必变，若仍比对会永久死锁（须手改 meta.baselineHash）。改判「排除规则下当前是否有未提交 dirty」。
     const hasUncommittedDirty = staged !== '' || unstaged !== '' || untracked !== '';
     if (hasUncommittedDirty) {
-      // 未提交 dirty 拦截：列脏文件 + 指引先 commit/stash（git --3way 对 dirty 工作区不稳，merge 同理，故不再提 --merge）
       const dirtyFiles = [...new Set(
         ((gitQuiet(projectRoot, ['diff', '--name-only', 'HEAD']) || '').split('\n').filter(Boolean))
           .concat((gitQuiet(projectRoot, ['ls-files', '--others', '--exclude-standard']) || '').split('\n').filter(Boolean))
       )].filter(f => !f.startsWith('.sillyspec/') && f !== 'meta.json');
-      // rescue：dirty 拦截触发时生成逐文件 cp 安全子集（旁路 git apply），写 result.rescueCommands 供 assess/打印器消费
-      const rescueDirty = computeRescueDirtyFiles(projectRoot);
-      result.rescueCommands = generateRescueCommands({
-        changedFiles,
-        dirtyFiles: rescueDirty,
-        hashMismatchFiles: result.hashMismatchFiles,
-        deletedFiles: result.deletedFiles,
-        worktreePath,
-        projectRoot,
-      });
-      result.errors.push(
-        `主工作区有未提交的改动，git apply 无法安全应用。\n` +
-        (dirtyFiles.length > 0 ? `未提交文件：\n  ${dirtyFiles.join('\n  ')}\n` : '') +
-        `请先提交或暂存这些改动，再重新 apply：\n  git add -A && git commit -m "..."   或   git stash\n` +
-        (result.rescueCommands.commands.length > 0 || result.rescueCommands.warnings.length > 0
-          ? `或手动 rescue（旁路 git apply，逐文件 cp 安全子集；cp 后需手动 sillyspec worktree cleanup ${changeName}）：\n` +
-            result.rescueCommands.commands.map(c => `  ${c}`).join('\n') +
-            (result.rescueCommands.warnings.length > 0 ? '\n' + result.rescueCommands.warnings.map(w => `  ${w}`).join('\n') : '') +
-            `\n  （共 ${result.rescueCommands.cpFileCount} 个可安全 cp，${result.rescueCommands.excludedCount} 个被排除）\n`
-          : '')
-      );
-      if (!checkOnly) return result; // checkOnly 收集不短路（一次报全）；真实 apply 短路
+      const overlapDirty = dirtyFiles.filter(f => changedFiles.includes(f));
+      if (overlapDirty.length > 0) {
+        // 重叠拦截：只有与本次变更同文件的未提交改动才无法安全 apply（列重叠文件，非全部脏文件）
+        const rescueDirty = computeRescueDirtyFiles(projectRoot);
+        result.rescueCommands = generateRescueCommands({
+          changedFiles,
+          dirtyFiles: rescueDirty,
+          hashMismatchFiles: result.hashMismatchFiles,
+          deletedFiles: result.deletedFiles,
+          worktreePath,
+          projectRoot,
+        });
+        result.errors.push(
+          `主工作区以下未提交文件与本次 apply 的变更重叠，git apply 无法安全应用：\n  ${overlapDirty.join('\n  ')}\n` +
+          `请先提交或暂存这些改动，再重新 apply：\n  git add -A && git commit -m "..."   或   git stash\n` +
+          (result.rescueCommands.commands.length > 0 || result.rescueCommands.warnings.length > 0
+            ? `或手动 rescue（旁路 git apply，逐文件 cp 安全子集；cp 后需手动 sillyspec worktree cleanup ${changeName}）：\n` +
+              result.rescueCommands.commands.map(c => `  ${c}`).join('\n') +
+              (result.rescueCommands.warnings.length > 0 ? '\n' + result.rescueCommands.warnings.map(w => `  ${w}`).join('\n') : '') +
+              `\n  （共 ${result.rescueCommands.cpFileCount} 个可安全 cp，${result.rescueCommands.excludedCount} 个被排除）\n`
+            : '')
+        );
+        if (!checkOnly) return result; // checkOnly 收集不短路（一次报全）；真实 apply 短路
+      } else {
+        // 无关脏文件放行（只校验重叠文件）：--3way 若因 autocrlf 报 does not match index 会被
+        // step7 catch 回滚（交集空前提下无损，见上注释），stash 后重试即可——不再硬挡 rescue 手动路径
+        result.warnings = (result.warnings || []).concat([
+          `主工作区有 ${dirtyFiles.length} 个与本次 apply 无关的未提交文件，已放行（只校验重叠文件）：` +
+          `${dirtyFiles.slice(0, 5).join(', ')}${dirtyFiles.length > 5 ? ' 等' : ''}` +
+          `——若 apply --3way 因 CRLF/autocrlf 报 does not match index，可 git stash 后重试`
+        ]);
+      }
     }
   }
 
@@ -656,6 +670,17 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
       // FR-06：解析 git 原始 stderr 提取冲突文件列表（不静默吞掉）
       const rawStderr = e.message || '';
       const rollback = rollbackApply(projectRoot, trackedPatchFiles, newPatchFiles, rawStderr);
+      // autocrlf 副作用单独点名：主仓无关未提交 dirty + CRLF 转换可触发 does not match index
+      // （非文件内容冲突，交集空时 step4.5 已放行到这里）——回滚无损，stash 后重试即可
+      if (/does not match index/i.test(rawStderr)) {
+        result.errors.push(
+          `apply --3way 失败（does not match index）：多为主仓未提交文件 + Windows autocrlf 的 CRLF 副作用触发，非文件内容冲突。\n` +
+          `已回滚工作区到 apply 前状态（无损，无关未提交文件未受影响）。\n` +
+          `处理：git stash 后重试 sillyspec worktree apply ${changeName}，或 --merge 兜底。`
+        );
+        if (rollback.error) result.warnings = (result.warnings || []).concat([`回滚警告: ${rollback.error}`]);
+        return result;
+      }
       result.errors.push(
         `apply --3way 冲突：以下文件与主干「已提交」推进重叠，无法自动合并：\n` +
         `  ${rollback.conflicts.length > 0 ? rollback.conflicts.join('\n  ') : '(未能获取冲突文件列表)'}\n` +

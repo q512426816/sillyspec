@@ -4,10 +4,12 @@
  * 验证 applyWorktree 对「主干推进」的新行为边界：
  *   1. 主干【已提交】推进 + 不同文件 → --3way 干净合并（apply 成功，两改动都在）
  *   2. 主干【已提交】推进 + 同文件重叠 → --3way 冲突 → 回滚干净 + 提示 --merge；显式 --merge 兜底成功
- *   3. 主干【未提交】dirty（哪怕不重叠）→ 4.5 友好拦截，列脏文件 + 引导 commit/stash（git --3way 危险区）
+ *   3. 主干【未提交】dirty 与变更【不重叠】→ 4.5 放行 + warning（2026-08-20 overlap-only：
+ *      无关 dirty 不再硬挡逼 rescue cp 手动路径）；重叠场景由 worktree-apply-overlap-dirty.test.mjs 锁定
  *
  * 背景：原 step 5b 把「已提交推进改同文件」也 BLOCKED，没给 --3way 自动三路合并的机会。
- * 实测 git --3way：已提交推进可安全三路合并；未提交 dirty 报 does not match index 且行为不一致（危险区）。
+ * 实测 git --3way：已提交推进可安全三路合并；未提交 dirty 报 does not match index 且行为不一致（危险区）——
+ * 交集空前提下该失败可被 rollbackApply 无损回滚（fail-safe），故放宽为只拦重叠。
  */
 import fs from 'fs'
 import path from 'path'
@@ -105,24 +107,20 @@ console.log('--- 场景2: 已提交推进+同文件重叠 → --3way 冲突回�
   process.chdir(os.tmpdir()); fs.rmSync(d, { recursive: true, force: true })
 }
 
-// ── 场景 3: 主干未提交 dirty（不重叠）→ 4.5 友好拦截 ──
-console.log('--- 场景3: 未提交 dirty（不重叠）→ 4.5 友好拦截 ---')
+// ── 场景 3: 主干未提交 dirty（不重叠）→ 4.5 放行（2026-08-20 overlap-only：无关 dirty 不再硬挡）──
+console.log('--- 场景3: 未提交 dirty（不重叠）→ 4.5 放行 + warning ---')
 {
   const d = setupRepo()
   // worktree 改 fileA
   makeWorktree(d, 'tc', (wt) => fs.writeFileSync(path.join(wt, 'fileA.txt'), 'a1\na2\nWT-A3\na4\na5\n'))
-  // 主干未提交 dirty：改 fileB 不 commit（与 worktree 不重叠）
+  // 主干未提交 dirty：改 fileB 不 commit（与 worktree 不重叠 → 放行，不硬挡 rescue 手动路径）
   fs.writeFileSync(path.join(d, 'fileB.txt'), 'b1\nQUICK-B2\nb3\n')
 
   const r = applyWorktree('tc', { cwd: d })
-  assertTrue(r.ok === false, '未提交 dirty → ok=false（4.5 拦截）')
-  const errText = r.errors.join('\n')
-  assertTrue(errText.includes('未提交的改动'), '报「未提交的改动」（4.5 dirty 拦截）')
-  assertTrue(errText.includes('commit') && errText.includes('stash'), '引导先 commit/stash')
-  assertTrue(errText.includes('fileB.txt'), '列出脏文件 fileB.txt')
-  // 拦截后主仓未被改动
-  assertTrue(readNorm(path.join(d, 'fileA.txt')).includes('a3'), 'fileA 未被改动（仍是 original a3）')
-  assertTrue(readNorm(path.join(d, 'fileB.txt')).includes('QUICK-B2'), 'dirty 改动保留（fileB 含 QUICK-B2）')
+  assertTrue(r.ok === true, `未提交 dirty（不重叠）→ ok=true 放行（实际 errors: ${JSON.stringify((r.errors || []).map(e => e.slice(0, 60)))}）`)
+  assertTrue((r.warnings || []).some(w => w.includes('无关') && w.includes('放行')), 'warning 提示无关脏文件已放行（只校验重叠文件）')
+  assertTrue(readNorm(path.join(d, 'fileA.txt')).includes('WT-A3'), 'fileA 变更落地主仓（WT-A3）')
+  assertTrue(readNorm(path.join(d, 'fileB.txt')).includes('QUICK-B2'), 'dirty 改动保留（fileB 含 QUICK-B2，apply 不波及无关文件）')
   process.chdir(os.tmpdir()); fs.rmSync(d, { recursive: true, force: true })
 }
 

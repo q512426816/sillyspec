@@ -53,10 +53,11 @@ AI 子代理在执行任务时会在 worktree 中修改源码，而非直接在�
 - apply 成功后自动清理 worktree
 - `--merge`：显式用 `git merge sillyspec/<change>` 三方合并兜底（引合并提交），用于 `--3way` 冲突场景
 
-**主干推进时的行为（2026-07 放宽）**：
+**主干推进时的行为（2026-07 放宽；未提交 dirty 2026-08-20 再放宽为只拦重叠）**：
 
 - 主干**已提交**推进（如 quick 改完 commit）→ `--3way` 自动三路合并：不同文件/不同区域干净合，同区域重叠 → 回滚工作区干净 + 提示 `--merge` 兜底，不留半成品冲突标记。
-- 主干**未提交** dirty（如 quick 改了没 commit）→ apply 拒绝，列出脏文件并引导先 `commit`/`stash`（实测 git `--3way`/`merge` 对未提交 dirty 工作区均不稳，必须拦）。
+- 主干**未提交** dirty **与本次变更文件重叠** → apply 拒绝，点名重叠文件并引导先 `commit`/`stash`（重叠才是 git apply 无法安全应用的实际危险区）。
+- 主干**未提交** dirty **与本次变更无重叠** → 放行并 warning 提示（无关脏文件不再硬挡逼 rescue cp 手动路径）。残余风险：Windows autocrlf on 时 `--3way` 可报 `does not match index`（非内容冲突）——此时已自动回滚无损，`git stash` 后重试即可。
 
 **文件变更清单解析：** 从 `.sillyspec/changes/<change-name>/design.md` 中的 `## 文件变更清单` 表格提取。
 
@@ -227,9 +228,9 @@ git branch -D sillyspec/<change-name>
 
 ### apply 失败：主工作区有未提交的改动
 
-说明主工作区有未 commit 的脏改动（step 4.5/5a 拦截）。处理方式：
+说明主工作区有未 commit 的脏改动**且与本次 apply 的变更文件重叠**（step 4.5/5a 只拦重叠；无关未提交文件已放行并 warning 提示）。处理方式：
 
-1. 检查主工作区的变更：`git diff`（报错会列出脏文件）
+1. 检查重叠文件的变更：`git diff`（报错会点名重叠文件）
 2. 提交它们：`git add -A && git commit -m "..."`（推荐——已提交推进可被 `--3way` 自动合并）
 3. 或暂存：`git stash`，apply 后 `git stash pop`
 

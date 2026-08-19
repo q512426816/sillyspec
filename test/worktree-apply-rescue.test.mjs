@@ -147,18 +147,20 @@ console.log('--- A6: 空 changedFiles → 全零返回 ---')
   assertTrue(r.cpFileCount === 0 && r.excludedCount === 0, 'cpFileCount/excludedCount=0')
 }
 
-console.log('\n=== B. P0 时序回归（AC-1）：main 推进 fileA + fileB dirty → rescue 排除 fileA ===\n')
+console.log('\n=== B. P0 时序回归（AC-1）：main 推进 fileA + fileB dirty 重叠 → rescue 排除 fileA ===\n')
 {
   const d = setupRepo('wt-p0-')
   const wtDir = path.join(d, '.sillyspec', '.runtime', 'worktrees', 'tc')
   sh(`git worktree add "${wtDir}" -b sillyspec/tc`, d)
-  // worktree 改 fileA（未 commit 的工作区改动）
+  // worktree 改 fileA + fileB（fileB 进 changedFiles，使下方 main 的 fileB dirty 构成重叠——
+  // step4.5 为 overlap-only 拦截，无关 dirty 已放行，见 worktree-apply-overlap-dirty.test.mjs）
   fs.writeFileSync(path.join(wtDir, 'fileA.txt'), 'WT-A\n')
+  fs.writeFileSync(path.join(wtDir, 'fileB.txt'), 'WT-B\n')
   const base = git('rev-parse HEAD', d)
   // main 已提交推进 fileA（HEAD fileA ≠ base fileA → step3.5 hashMismatch 前移算出）
   fs.writeFileSync(path.join(d, 'fileA.txt'), 'MAIN-A\n')
   sh('git add -A && git commit -qm main-advance-fileA', d)
-  // main fileB 未提交 dirty（触发 step4.5 拦截 → 进 rescue 分支）
+  // main fileB 未提交 dirty（与 changedFiles 重叠 → 触发 step4.5 拦截 → 进 rescue 分支）
   fs.writeFileSync(path.join(d, 'fileB.txt'), 'DIRTY-B\n')
   const baselineHash = computeBaselineHash(d)
   writeMeta(d, {
@@ -264,10 +266,13 @@ console.log('\n=== F. applyWorktree 拦截集成 + assessApplyRisk 透出 ===\n'
   const d = setupRepo('wt-integ-')
   const wtDir = path.join(d, '.sillyspec', '.runtime', 'worktrees', 'tc')
   sh(`git worktree add "${wtDir}" -b sillyspec/tc`, d)
+  // worktree 改 src-deliverable.txt + 新增干净文件 src-clean.txt（后者保 SAFE-CP 断言）
   fs.writeFileSync(path.join(wtDir, 'src-deliverable.txt'), 'from-worktree\n')
+  fs.writeFileSync(path.join(wtDir, 'src-clean.txt'), 'clean-deliverable\n')
   const base = git('rev-parse HEAD', d)
-  // main 未提交 dirty（触发 step4.5 拦截）
-  fs.writeFileSync(path.join(d, 'fileB.txt'), 'DIRTY-B\n')
+  // main 未提交 dirty 落在与 changedFiles 重叠的 src-deliverable.txt（step4.5 overlap-only
+  // 拦截：无关 dirty 已放行，只有重叠才触发拦截 + rescue）
+  fs.writeFileSync(path.join(d, 'src-deliverable.txt'), 'DIRTY-MAIN\n')
   const baselineHash = computeBaselineHash(d)
   writeMeta(d, {
     name_zh: 'meta', changeName: 'tc', branch: 'sillyspec/tc',

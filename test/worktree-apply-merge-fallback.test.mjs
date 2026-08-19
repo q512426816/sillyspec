@@ -72,20 +72,23 @@ console.log('--- 场景 A: 漂移 + merge=true → git merge ---')
   process.chdir(os.tmpdir()); fs.rmSync(d, { recursive: true, force: true })
 }
 
-// ── 场景 B: 主仓未提交 dirty + merge=false → 4.5 拦，引导 commit/stash（不再指引 --merge）──
-console.log('--- 场景 B: 未提交 dirty + merge=false → 4.5 友好拦截 ---')
+// ── 场景 B: 主仓未提交 dirty 与变更重叠 + merge=false → 4.5 拦，引导 commit/stash（不再指引 --merge）──
+console.log('--- 场景 B: 未提交 dirty（重叠）+ merge=false → 4.5 友好拦截 ---')
 {
   const d = setupRepo()
   makeWorktree(d, 'tc', (wt) => fs.writeFileSync(path.join(wt, 'src-b.txt'), 'b\n'))
-  // 主仓真实 dirty：未提交文件触发 4.5（修复后语义=真实 dirty 才拦，不再靠 baselineHash='fake' 模拟漂移）
-  fs.writeFileSync(path.join(d, 'main-dirty.txt'), 'dirty\n')
+  // 主仓真实 dirty 落在与变更重叠的文件上（src-b.txt 在主仓为 untracked，与 worktree 新增同名文件
+  // 重叠 → 4.5 overlap 拦截。2026-08-20 起 4.5 只拦重叠，无关 dirty 放行——放行路径由
+  // worktree-apply-overlap-dirty.test.mjs / relax-committed-advance 场景 3 锁定）
+  fs.writeFileSync(path.join(d, 'src-b.txt'), 'dirty-main\n')
   const r = applyWorktree('tc', { cwd: d, merge: false })
   assertTrue(r.merged === false, 'B: result.merged === false（未走 merge）')
   assertTrue(r.errors.length > 0, 'B: 有 error（BLOCKED）')
   const errText = r.errors.join('\n')
-  assertTrue(errText.includes('未提交的改动'), 'B: error 含「未提交的改动」（4.5 dirty 拦截）')
+  assertTrue(errText.includes('未提交') && errText.includes('重叠'), 'B: error 含「未提交」+「重叠」（4.5 overlap 拦截）')
   assertTrue(errText.includes('commit') && errText.includes('stash'), 'B: error 引导先 commit/stash')
-  assertTrue(!fs.existsSync(path.join(d, 'src-b.txt')), 'B: 主仓库未应用变更（src-b.txt 不存在）')
+  assertTrue(!fs.existsSync(path.join(d, 'src-b.txt')) || fs.readFileSync(path.join(d, 'src-b.txt'), 'utf8') === 'dirty-main\n',
+    'B: 主仓库未应用变更（src-b.txt 保持 dirty 原文，未被 worktree 版覆盖）')
   process.chdir(os.tmpdir()); fs.rmSync(d, { recursive: true, force: true })
 }
 
