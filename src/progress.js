@@ -786,6 +786,9 @@ export class ProgressManager {
 
   listChanges(cwd) { return this._changeRegistry.listChanges(cwd); }
 
+  // 单变更阶段查询（quick 轻量归档阶段闸）：无行 null，读失败抛（调用方 fail-closed）
+  getChangeStage(cwd, changeName) { return this._changeRegistry.getChangeStage(cwd, changeName); }
+
   registerChange(cwd, changeName) { return this._changeRegistry.registerChange(cwd, changeName); }
 
   updateChangeIsolation(cwd, changeName, isolation) { return this._changeRegistry.updateChangeIsolation(cwd, changeName, isolation); }

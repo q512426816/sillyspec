@@ -115,3 +115,43 @@
 根因：keep-local 无条件覆盖 last_synced_platform_ts，冲突文件是历史快照其 ts 可能早于 DB 已回填值，回退后下次 sync 必撞 409 再落冲突（恢复实测二轮才收敛）
 方案：UPDATE 用 MAX(?, COALESCE(col, ?)) 单调只推进不回退，COALESCE 兜 SQLite 标量 MAX(x, NULL) 恒 NULL 的首同步边界
 结果：statemachine 测试 F（06:00 不被 05:00 回退）/G（NULL 直取平台 ts）全过，7 个 sync 相关测试全绿，npm test 全量 exit=0，lint 通过
+
+## ql-20260819-003-9d6f | 2026-08-19 10:43:13 | brainstorm HTML 原型指引改高保真可复用——删 ASCII 线框低保真三条
+状态：已完成
+关联变更：（无）
+文件：
+- src/stages/brainstorm.js（分段展示设计 step 原型生成节三条低保真指引改高保真两条）
+- docs/prompt/_extracted.json（重跑 _extract.mjs 再生）
+- docs/prompt/brainstorm.md（prompt 镜像逐字同步）
+- .sillyspec/docs/sillyspec/modules/stages.md（stages 模块变更索引追加 ql-20260819-003 条目）
+需求：brainstorm HTML 原型指引改高保真可复用——删 ASCII 线框低保真三条
+根因：旧指引把原型定位成线框示意（不需要精美 UI），与 execute.js 已有的原型引用注入（照原型布局/组件/交互实现、不重新发明）错位——低保真原型到 execute 阶段仍要重做视觉与交互，原型确认价值被浪费
+方案：src/stages/brainstorm.js 分段展示设计 step 的 HTML 原型生成节删三条低保真指引，替换为高保真（布局/组件/交互按真实效果呈现、execute 可直接对照复用）与项目代码风格一致（优先复用项目现有技术栈/组件库/设计 token、先查 scan 文档）；重跑 docs/prompt/_extract.mjs 再生 _extracted.json，brainstorm.md 镜像逐字同步；stages.md 模块文档变更索引追加 ql 条目
+结果：npm test 225 个测试文件全过（0 失败），lint 通过（315 文件、未引用导出 0 项）；brainstorm-auto 无原型生成步骤不受影响；skills 无原型引用无需同步
+
+## ql-20260819-004-ce90 | 2026-08-19 10:59:59 | quick 轻量归档加阶段闸——完整流程中途变更不再被穿插 quick 误归档
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/complete-handlers.js（阶段闸+QUICK_CLOSE_ALLOWED_STAGES 允许集）
+- src/progress/change-registry.js（新增 getChangeStage（无行 null/读失败抛））
+- src/progress.js（facade 转发）
+- src/stages/quick.js（step3 prompt 补未进入完整流程条件）
+- test/quick-close-linked-changes.test.mjs（补 verify/execute/plan/archive 挡+brainstorm 放行+fail-closed 6 场景）
+- test/progress-get-change-stage.test.mjs（新增真实 DB 单测）
+- docs/prompt/_extracted.json（脚本重跑）
+- docs/prompt/quick.md（镜像同步）
+- docs/sillyspec/file-lifecycle.md（quick 行补阶段闸+时间戳）
+- .claude/skills/sillyspec-quick/SKILL.md（收尾顺序同步）
+- .sillyspec/docs/sillyspec/modules/runtime.md（变更索引）
+- .sillyspec/docs/sillyspec/modules/stages.md（变更索引）
+需求：quick 轻量归档加阶段闸——完整流程中途变更不再被穿插 quick 误归档
+根因：closeQuickLinkedChanges 判定只看 tasks.md 全勾选不看进度库 current_stage，execute 完成后 tasks.md 必然全勾而 verify 未收尾，被穿插 quick 关联即绕过 verify/archive 全部校验归档注销
+方案：新增 ProgressManager.getChangeStage（读失败抛给上层 fail-closed），归档前查 current_stage 仅无 DB 记录或停在 scan/brainstorm 放行，plan/execute/verify/archive 一律 skip 提示走原流程；同步 prompt/镜像/SKILL/file-lifecycle/模块索引
+结果：quick-close-linked-changes 11 用例含 6 新场景 + progress-get-change-stage 1 用例全过，全量 npm test EXIT=0，lint 316 文件过
+审计：⚖️ 归属切分：3 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：.claude/skills/sillyspec-quick/SKILL.md, docs/prompt/quick.md, test/progress-get-change-stage.test.mjs
+
+## ql-20260819-005-eb50 | 2026-08-19 11:14:02 | (quick 任务)
+状态：进行中
+关联变更：（无）
+文件：.sillyspec/docs/sillyspec/scan/ARCHITECTURE.md, docs/sillyspec/prompt-control-debt.md, .sillyspec/local.yaml, docs/sillyspec/troubleshooting.md

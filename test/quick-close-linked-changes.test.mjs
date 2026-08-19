@@ -8,8 +8,15 @@
  *   - linkedChanges 为空数组 → 空结果，无副作用
  *   - linkedChanges 包含 quick-<8hex> sessionId → 过滤掉，不处理
  *
- * 用 os.tmpdir() + mkdtempSync 隔离 specDir，mock ProgressManager（只 spy unregisterChange），
- * 不依赖真实 DB / git / worktree。
+ * 阶段闸（quick-close-midflight 防误归档）：
+ *   - current_stage=verify/execute + tasks 全勾 → skipped（execute 完成后 tasks 必然全勾、
+ *     verify 未跑，被穿插 quick 关联不得绕过 verify/archive 校验归档）
+ *   - current_stage=brainstorm + tasks 全勾 → closed（d192f89 原始场景：small 逃生通道僵尸变更）
+ *   - 无 DB 记录（getChangeStage → null）→ 维持轻量判定（未注册目录桩）
+ *   - pm 缺 getChangeStage / 查询抛错 → fail-closed skipped
+ *
+ * 用 os.tmpdir() + mkdtempSync 隔离 specDir，mock ProgressManager（spy unregisterChange +
+ * stub getChangeStage），不依赖真实 DB / git / worktree。
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -32,10 +39,18 @@ function makeChange(specBase, changeName, tasksContent) {
   return changeDir
 }
 
-function makePm() {
+function makePm(stageByChange = null) {
   const calls = []
   return {
     unregisterChange: (cwd, changeName) => { calls.push({ cwd, changeName }) },
+    // stageByChange: null = 所有变更无 DB 记录（默认，未注册目录桩）；对象 = 按名返回
+    // { current_stage, status }（缺省键归一 null）
+    getChangeStage: stageByChange === null
+      ? () => null
+      : (cwd, changeName) => {
+          const s = stageByChange[changeName]
+          return s ? { current_stage: s.current_stage ?? null, status: s.status ?? null } : null
+        },
     _calls: calls,
   }
 }
@@ -150,6 +165,132 @@ test('linkedChanges 包含 quick-<8hex> sessionId → 过滤掉，不处理', as
     assert.deepEqual(result.skipped, [], 'skipped 应为空（sessionId 被过滤）')
     assert.equal(pm._calls.length, 0, 'unregisterChange 不应被调用')
     assert.ok(existsSync(sessionDir), 'session 目录应保持原位')
+  } finally {
+    cleanup(specBase)
+  }
+})
+
+// ── 阶段闸（quick-close-midflight 防误归档）──────────────────────────────
+// execute 完成后 tasks.md 必然全勾选而 current_stage='verify'——此时被穿插 quick 关联，
+// 旧实现会绕过 verify/archive 全部校验直接归档注销。阶段闸要求变更从未进入完整流程
+// （无 DB 记录或停在 scan/brainstorm）才允许轻量归档。
+
+test('current_stage=verify + tasks 全勾 → skipped 不归档（verify 未收尾的完整流程变更）', async () => {
+  const specBase = makeSpecBase('qclc-verify-')
+  const cwd = specBase
+  const changeName = '2026-08-19-midflight-verify'
+  try {
+    const changeDir = makeChange(specBase, changeName, '- [x] task-01 已完成\n- [x] task-02 已完成\n')
+    const pm = makePm({ [changeName]: { current_stage: 'verify', status: 'active' } })
+
+    const result = await closeQuickLinkedChanges({ pm, cwd, specBase, linkedChanges: [changeName] })
+
+    assert.deepEqual(result.closed, [], 'closed 应为空（verify 阶段不得自动归档）')
+    assert.equal(result.skipped.length, 1, 'skipped 应含 1 条')
+    assert.match(result.skipped[0].reason, /verify/, 'reason 应指明所处阶段')
+    assert.match(result.skipped[0].reason, /不自动归档|完整流程/, 'reason 应说明不自动归档原因')
+    assert.equal(pm._calls.length, 0, 'unregisterChange 不应被调用')
+    assert.ok(existsSync(changeDir), '源目录应保持原位')
+  } finally {
+    cleanup(specBase)
+  }
+})
+
+test('current_stage=execute + tasks 全勾 → skipped 不归档', async () => {
+  const specBase = makeSpecBase('qclc-exec-')
+  const cwd = specBase
+  const changeName = '2026-08-19-midflight-execute'
+  try {
+    const changeDir = makeChange(specBase, changeName, '- [x] task-01 已完成\n')
+    const pm = makePm({ [changeName]: { current_stage: 'execute', status: 'active' } })
+
+    const result = await closeQuickLinkedChanges({ pm, cwd, specBase, linkedChanges: [changeName] })
+
+    assert.deepEqual(result.closed, [], 'closed 应为空（execute 阶段不得自动归档）')
+    assert.match(result.skipped[0].reason, /execute/, 'reason 应指明所处阶段')
+    assert.equal(pm._calls.length, 0, 'unregisterChange 不应被调用')
+    assert.ok(existsSync(changeDir), '源目录应保持原位')
+  } finally {
+    cleanup(specBase)
+  }
+})
+
+test('current_stage=plan / archive + tasks 全勾 → 均 skipped 不归档', async () => {
+  const specBase = makeSpecBase('qclc-plan-arch-')
+  const cwd = specBase
+  const planChange = '2026-08-19-midflight-plan'
+  const archiveChange = '2026-08-19-midflight-archive'
+  try {
+    makeChange(specBase, planChange, '- [x] task-01 已完成\n')
+    makeChange(specBase, archiveChange, '- [x] task-01 已完成\n')
+    const pm = makePm({
+      [planChange]: { current_stage: 'plan', status: 'active' },
+      [archiveChange]: { current_stage: 'archive', status: 'active' },
+    })
+
+    const result = await closeQuickLinkedChanges({ pm, cwd, specBase, linkedChanges: [planChange, archiveChange] })
+
+    assert.deepEqual(result.closed, [], 'closed 应为空')
+    assert.equal(result.skipped.length, 2, '两个变更均应 skipped')
+    assert.ok(result.skipped.every(s => existsSync(join(specBase, 'changes', s.name))), '源目录均保持原位')
+    assert.equal(pm._calls.length, 0, 'unregisterChange 不应被调用')
+  } finally {
+    cleanup(specBase)
+  }
+})
+
+test('current_stage=brainstorm + tasks 全勾 → closed（small 逃生通道僵尸变更，原行为保留）', async () => {
+  const specBase = makeSpecBase('qclc-brainstorm-')
+  const cwd = specBase
+  const changeName = '2026-08-19-small-escape'
+  try {
+    const changeDir = makeChange(specBase, changeName, '- [x] ql-xxx 已完成任务\n')
+    const pm = makePm({ [changeName]: { current_stage: 'brainstorm', status: 'active' } })
+
+    const result = await closeQuickLinkedChanges({ pm, cwd, specBase, linkedChanges: [changeName] })
+
+    assert.deepEqual(result.closed, [changeName], 'closed 应含该变更（brainstorm 停留 = 轻量场景）')
+    assert.equal(pm._calls.length, 1, 'unregisterChange 应被调用')
+    assert.ok(!existsSync(changeDir), '源目录应被移走')
+  } finally {
+    cleanup(specBase)
+  }
+})
+
+test('pm 缺 getChangeStage 接口 → fail-closed skipped，不归档', async () => {
+  const specBase = makeSpecBase('qclc-noapi-')
+  const cwd = specBase
+  const changeName = '2026-08-19-no-stage-api'
+  try {
+    const changeDir = makeChange(specBase, changeName, '- [x] ql-xxx 已完成任务\n')
+    const pm = { unregisterChange: () => {} } // 无 getChangeStage
+
+    const result = await closeQuickLinkedChanges({ pm, cwd, specBase, linkedChanges: [changeName] })
+
+    assert.deepEqual(result.closed, [], 'closed 应为空（接口缺失 fail-closed）')
+    assert.equal(result.skipped.length, 1, 'skipped 应含 1 条')
+    assert.match(result.skipped[0].reason, /getChangeStage|阶段/, 'reason 应说明接口缺失')
+    assert.ok(existsSync(changeDir), '源目录应保持原位')
+  } finally {
+    cleanup(specBase)
+  }
+})
+
+test('getChangeStage 查询抛错 → fail-closed skipped，不归档', async () => {
+  const specBase = makeSpecBase('qclc-throw-')
+  const cwd = specBase
+  const changeName = '2026-08-19-stage-throw'
+  try {
+    const changeDir = makeChange(specBase, changeName, '- [x] ql-xxx 已完成任务\n')
+    const pm = makePm()
+    pm.getChangeStage = () => { throw new Error('db corrupted') }
+
+    const result = await closeQuickLinkedChanges({ pm, cwd, specBase, linkedChanges: [changeName] })
+
+    assert.deepEqual(result.closed, [], 'closed 应为空（查询失败 fail-closed）')
+    assert.equal(result.skipped.length, 1, 'skipped 应含 1 条')
+    assert.match(result.skipped[0].reason, /db corrupted/, 'reason 应含原始错误')
+    assert.ok(existsSync(changeDir), '源目录应保持原位')
   } finally {
     cleanup(specBase)
   }

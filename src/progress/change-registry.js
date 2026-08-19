@@ -20,6 +20,24 @@ export class ChangeRegistry {
   }
 
   /**
+   * 查询单个变更的流程阶段与状态（quick 轻量归档阶段闸用）。
+   * 与 readChangeIsolation 不同（展示读，catch → null 宽容）：本方法服务权限判定，读失败
+   * 直接抛给调用方 catch → skip（fail-closed），不静默降级为"无记录"放行。
+   * @param {string} cwd - 项目根目录
+   * @param {string} changeName - 变更名
+   * @returns {{ current_stage: string, status: string }|null} 无该行返回 null（未注册目录桩）
+   */
+  getChangeStage(cwd, changeName) {
+    const db = this.pm._ensureDB(cwd);
+    const sqlDb = db.getDb();
+    const row = sqlDb.prepare(
+      'SELECT current_stage, status FROM changes WHERE name = ?'
+    ).get(changeName);
+    if (row === undefined) return null;
+    return { current_stage: row.current_stage || '', status: row.status || '' };
+  }
+
+  /**
    * 注册变更到活跃列表
    * SQL: INSERT OR IGNORE → 若已 archived 则 UPDATE status='active'
    */

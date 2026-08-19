@@ -105,7 +105,7 @@ sillyspec run quick --done --change <id> --output "需求：… 根因：… 方
 
 ### 收尾推荐顺序（模块文档在 --done 前，QUICKLOG 在 --done 后，别记混）
 1. 【--done 前】命中模块 → 改模块文档 → \`git add -- <模块文档>\`（见下方「模块文档同步」）
-2. 【--done】\`sillyspec run quick --done --change <id> --output "四字段" [--file-notes "..."]\`（CLI 自动翻完成 + 勾 task + 落盘 QUICKLOG 标题/文件/正文；若关联变更的 tasks.md 已全部勾选，CLI 还会自动归档该关联变更到 \`changes/archive/\`，无需手动跑 archive 阶段）
+2. 【--done】\`sillyspec run quick --done --change <id> --output "四字段" [--file-notes "..."]\`（CLI 自动翻完成 + 勾 task + 落盘 QUICKLOG 标题/文件/正文；若关联变更的 tasks.md 已全部勾选**且该变更未进入完整流程**（进度库阶段停在 brainstorm 及之前），CLI 还会自动归档该关联变更到 \`changes/archive/\`；已走到 plan/execute/verify/archive 的变更不自动归档——tasks.md 全勾不等于流程收尾，须走原流程收尾）
 3. 【--done 后】核对 QUICKLOG 标题（CLI 已从「需求：」自动提取，仅弱标题才手改）→ 若改了再 \`git add\`
 
 ### 操作

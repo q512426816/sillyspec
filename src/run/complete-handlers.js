@@ -1043,9 +1043,21 @@ async function closeSingleQuickLinkedChange({ pm, cwd, specBase, changeName, pla
 }
 
 /**
+ * quick 轻量归档的阶段闸允许集：仅「从未进入完整流程」的变更可被 quick --done 自动归档
+ * （d192f89 原始场景：评估 small 转 quick、停在 brainstorm 的僵尸变更）。execute 完成后
+ * tasks.md 必然全勾选而流程未收尾——不看 current_stage 会把 verify/中途的完整流程变更
+ * 绕过 verify/archive 校验直接归档注销（quick-close-midflight 缺陷）。
+ */
+const QUICK_CLOSE_ALLOWED_STAGES = new Set(['', 'scan', 'brainstorm'])
+
+/**
  * quick --done 完成后，自动关闭任务已全部完成的关联真实变更。
  * quick-<hex> sessionId 自身不在此处理（由调用方单独注销）。
  * 单个归档失败 catch warn，不阻断 quick 完成。
+ *
+ * 阶段闸（fail-closed）：先查 changes.current_stage——无 DB 记录（未注册目录桩）或停在
+ * scan/brainstorm 才继续 tasks 判定；plan/execute/verify/archive 一律 skip 走原流程收尾。
+ * pm 缺 getChangeStage 接口或查询抛错同样 skip，不静默放行。
  *
  * @param {Object} opts
  * @param {ProgressManager} opts.pm
@@ -1062,6 +1074,18 @@ export async function closeQuickLinkedChanges({ pm, cwd, specBase, linkedChanges
   const realChanges = linkedChanges.filter((name) => !/^quick-[0-9a-f]{8}$/.test(name))
   for (const changeName of realChanges) {
     try {
+      if (typeof pm.getChangeStage !== 'function') {
+        skipped.push({ name: changeName, reason: '进度库接口缺失（getChangeStage），无法判定流程阶段，不自动归档' })
+        continue
+      }
+      const stageInfo = pm.getChangeStage(cwd, changeName)
+      if (stageInfo !== null && !QUICK_CLOSE_ALLOWED_STAGES.has(stageInfo.current_stage || '')) {
+        skipped.push({
+          name: changeName,
+          reason: `变更处于完整流程「${stageInfo.current_stage}」阶段（tasks.md 全勾不等于流程收尾），不自动归档——请走原流程收尾（sillyspec progress show 查看进度）`,
+        })
+        continue
+      }
       if (!isChangeTasksComplete(specBase, changeName)) {
         skipped.push({ name: changeName, reason: 'tasks.md 未全勾选或不存在' })
         continue
