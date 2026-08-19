@@ -337,7 +337,8 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
     const planPath = planFile ? join(planFile, 'plan.md') : null
     if (planPath && existsSync(planPath)) {
       const { validatePlanForExecute } = await import('../stages/execute.js')
-      const planContent = readFileSync(planPath, 'utf8')
+      // CRLF 归一：Windows 编辑器/python 写 plan.md 可产生 CRLF，归一后交校验（与 plan-postcheck.js 同口径）
+      const planContent = readFileSync(planPath, 'utf8').replace(/\r\n/g, '\n')
       const planValidation = validatePlanForExecute(planContent)
       if (!planValidation.ok) {
         console.error(`\n❌ Plan → Execute Contract 校验失败：`)

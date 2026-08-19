@@ -100,6 +100,9 @@ SillySpec CLI — 规范驱动开发工具包
     --dump-db --path <db 路径>         dump 指定 db 内容到文件（取证用）
     --json                             结构化诊断 + 落盘 .sillyspec/.runtime/doctor-diagnosis.json
   sillyspec modules <rebuild | status | migrate>
+  sillyspec taskcard <change> --task task-01[,task-02...] | --all [--force]
+                                      生成 Windows 安全 TaskCard 骨架（LF 行尾 + frontmatter 闭合 +
+                                      硬校验 9 字段齐全，标题自动取自 plan.md，Edit 填占位符即可）
   sillyspec change-rename <旧变更名> <新变更名>
   sillyspec knowledge <search --query "..." --limit N
                         | inspect --id "..."
@@ -1696,6 +1699,71 @@ SillySpec platform — SillyHub 平台同步
           console.error(`❌ 未知子命令: platform ${platformSub}`);
           console.log('   运行 sillyspec platform --help 查看帮助');
           process.exit(1);
+      }
+      break;
+    }
+    case 'taskcard': {
+      const tcName = filteredArgs.slice(1).find(a => !a.startsWith('-'));
+      if (!tcName || tcName === 'help' || tcName === '--help' || tcName === '-h') {
+        console.log(`
+SillySpec taskcard — 生成 Windows 安全的 TaskCard 骨架
+
+用法:
+  sillyspec taskcard <change-name> --task task-01[,task-02...] [--title <t>] [--title-zh <t>] [--force]
+  sillyspec taskcard <change-name> --all [--force]
+
+骨架由 CLI 直写（LF 行尾 + frontmatter 闭合 + 硬校验 9 字段齐全），标题自动取自 plan.md
+checkbox 行；之后用 Edit 填充占位符即可，勿手写整卡（CRLF/漏闭合 ---/漏字段的源头治理）。
+`);
+        break;
+      }
+      try { assertSafeChangeName(tcName, '变更名'); }
+      catch (e) { console.error(`❌ ${e.message}`); process.exit(2); }
+
+      const force = filteredArgs.includes('--force');
+      const all = filteredArgs.includes('--all');
+      const getVal = (flag) => {
+        const idx = filteredArgs.indexOf(flag);
+        return idx !== -1 && filteredArgs[idx + 1] && !filteredArgs[idx + 1].startsWith('-')
+          ? filteredArgs[idx + 1] : null;
+      };
+      const taskVal = getVal('--task');
+      const titleVal = getVal('--title');
+      const titleZhVal = getVal('--title-zh');
+
+      if (all && taskVal) {
+        console.error('❌ --all 与 --task 互斥（--all 取 plan.md 全部任务，--task 显式指定）');
+        process.exit(1);
+      }
+      if (!all && !taskVal) {
+        console.error('❌ 用法: sillyspec taskcard <change-name> --task task-01[,task-02...] | --all [--force]');
+        process.exit(1);
+      }
+
+      let taskIds;
+      if (all) {
+        taskIds = 'all';
+      } else {
+        const { normalizeTaskId } = await import('./taskcard.js');
+        try {
+          taskIds = taskVal.split(',').map(s => s.trim()).filter(Boolean).map(normalizeTaskId);
+        } catch (e) {
+          console.error(`❌ ${e.message}`);
+          process.exit(1);
+        }
+      }
+
+      const { cmdTaskcard } = await import('./taskcard.js');
+      try {
+        const result = cmdTaskcard(tcName, { cwd: dir, specDir, taskIds, title: titleVal, titleZh: titleZhVal, force });
+        for (const f of result.created) console.log(`✅ 已生成: ${f}`);
+        for (const f of result.skipped) console.log(`⏭️  已存在，跳过（--force 覆盖）: ${f}`);
+        if (result.created.length > 0) {
+          console.log(`   下一步：用 Edit tool 填充占位符（allowed_paths/goal/implementation/acceptance/verify/constraints），勿用 Write 整文件重写。`);
+        }
+      } catch (e) {
+        console.error(`❌ ${e.message}`);
+        process.exit(1);
       }
       break;
     }

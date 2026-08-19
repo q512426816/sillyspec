@@ -38,8 +38,10 @@ console.log('=== buildCoordinatorStep TaskCard 规则抽模板（B4+B5）===\n')
     '2-task 合并为 1 个 batch，batch 子代理 prompt 只含一个 {{include: taskcard-rules}}')
   assertTrue(prompt.includes('每个 batch 包含 2~4 个 task'),
     'prompt 指导按 2~4 task 一个 batch 分派子代理')
-  assertTrue(prompt.includes('为 batch 中的**每一个 task 独立生成**'),
-    'batch 子代理仍需为每个 task 独立生成 task-N.md')
+  assertTrue(prompt.includes('sillyspec taskcard') && prompt.includes('--task'),
+    'batch 子代理先跑 sillyspec taskcard 生成 Windows 安全骨架（CLI 直写，非手写整卡）')
+  assertTrue(prompt.includes('禁止用 Write 整文件重写'),
+    'batch 子代理用 Edit 填充占位符，禁止 Write 重写（防 CRLF/漏闭合/漏字段回归）')
   assertTrue(!prompt.includes('TaskCard 格式规则（必须严格遵守）：'),
     '内联公共规则已移除（不再逐字重复）')
   assertTrue(prompt.includes('task-01: 外壳') && prompt.includes('task-02: layout'),

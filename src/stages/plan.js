@@ -392,6 +392,7 @@ execute/verify 阶段会按实际代码变更更新此文档；archive 阶段会
  * 在保留 plan 任务拆分完整性的同时减少子代理调用数量。
  */
 export function buildCoordinatorStep(changeDir, taskNames) {
+  const changeName = path.basename(changeDir)
   const taskList = taskNames.map(t => {
     const num = t.num
     return `- task-${num}: ${t.name}`
@@ -484,8 +485,10 @@ ${taskList}
 ## 操作
 1. 读取 ${changeDir}/design.md 和 ${changeDir}/plan.md 了解整体上下文
 2. 读取本 batch 涉及的相关源文件
-3. 为 batch 中的**每一个 task 独立生成**一个 task-N.md 文件
-4. 每个文件使用如下模板（把 <task-id> / <task-name> 替换为具体编号和名称）：
+3. 为 batch 中的**每一个 task** 先运行 CLI 生成 Windows 安全骨架（在项目根目录执行；编号/标题自动取自 plan.md，author/created_at 自动填写）：
+   sillyspec taskcard ${changeName} --task <本 batch 任务号，逗号分隔，如 task-01,task-02>
+4. 用 Edit tool 逐卡填充骨架占位符（allowed_paths/goal/implementation/acceptance/verify/constraints 等）。**禁止用 Write 整文件重写**——手写整卡是 CRLF 行尾/漏闭合 --- /漏硬校验字段三类 postcheck 拒绝的根源，骨架 + Edit 从源头消灭
+5. 骨架字段含义与可选字段（provides/expects_from/related_tests，按需插进 frontmatter）参考下述模板：
 
 ${taskcardTemplate}
 
@@ -498,7 +501,7 @@ ${taskcardTemplate}
 
 ## 完成标志
 - 本 batch 的每个 task-N.md 都已写入 ${changeDir}/tasks/
-- 每个文件非空且 frontmatter 完整
+- 每个文件非空且 frontmatter 完整（保持骨架的 --- 闭合与 LF 行尾）
 \`\`\`
 
 ## 验收（生成后自查，不另开步骤）
@@ -568,8 +571,9 @@ function parseTaskCount(planContent) {
 
 /**
  * 从 plan.md 解析任务名列表
+ * export 供 taskcard.js 复用（sillyspec taskcard 从 checkbox 行自动带出编号/标题，口径须同源）
  */
-function parseTaskNames(planContent) {
+export function parseTaskNames(planContent) {
   // 返回 [{name, num}]：保留 plan.md 原始编号，避免 buildCoordinatorStep 按 i+1 重编号与 execute 原始编号错位
   const tasks = []
   const lines = planContent.split('\n')

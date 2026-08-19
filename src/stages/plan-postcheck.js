@@ -915,7 +915,15 @@ export function validatePlanFeasibility(changeDir, projectRoot = null) {
     const content = readFileSync(pJoin(tasksDir, file), 'utf8')
     const fmMatch = content.match(/^---\n([\s\S]*?)\n---/)
     if (!fmMatch) {
-      errors.push(fsRule.data.messageFrontmatter.replaceAll('${id}', file))
+      // 漏闭合 --- 高频坑细化：只报「缺少 YAML frontmatter」不具体，用户须逐轮试错。
+      // 有开头 --- 无闭合 / 完全无 --- 分开报并附修复动作（manifest messageFrontmatter 保持
+      // 基础句，细化文案内联——同 title_zh 内联先例）。骨架命令从源头保闭合 + LF。
+      const firstLine = (content.split('\n')[0] || '').trim()
+      errors.push(
+        firstLine === '---'
+          ? `${file}: frontmatter 未闭合——有开头 --- 但缺少结尾 ---。修复：补一行 --- 闭合（frontmatter 以 --- 行开始并以 --- 行结束），或 sillyspec taskcard <change> --task <task-id> 重新生成安全骨架后填充`
+          : `${fsRule.data.messageFrontmatter.replaceAll('${id}', file)}——文件必须以 --- 行开始。修复：sillyspec taskcard <change> --task <task-id> 生成安全骨架后填充`
+      )
       continue
     }
     const fm = fmMatch[1]
