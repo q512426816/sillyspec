@@ -104,3 +104,14 @@
 根因：冲突仅单行 warn 易淹没、pull 判冲突的 base_ts 首读撞 push 回填落库前窗口会误判自竞态、X-SillySpec-User 仅 local.yaml 显式配置才发送致平台 last_pusher 恒空
 方案：push/pull 冲突升级醒目横幅含 resolve 三步指引；pull 判冲突前重读 base_ts 已推进则自愈；user 兜底 git user.name>env（与 connect 写入侧同口径）
 结果：新增 platform-sync-silent-death 测试 11 断言全绿，存量 sync 测试零回归（push-header 断言随契约更新），lint 通过，doc-ref-check 80 处引用全绿
+
+## ql-20260819-002-8f16 | 2026-08-19 09:30:15 | resolve keep-local 用旧冲突文件 ts 回退已推进 base_ts 修复
+状态：已完成
+关联变更：（无）
+文件：
+- src/sync.js（resolve keep-local base_ts 单调防回退（MAX+COALESCE NULL 兜底））
+- test/sync-conflict-statemachine.test.mjs（F/G 两场景（防回退 + NULL 直取））
+需求：resolve keep-local 用旧冲突文件 ts 回退已推进 base_ts 修复
+根因：keep-local 无条件覆盖 last_synced_platform_ts，冲突文件是历史快照其 ts 可能早于 DB 已回填值，回退后下次 sync 必撞 409 再落冲突（恢复实测二轮才收敛）
+方案：UPDATE 用 MAX(?, COALESCE(col, ?)) 单调只推进不回退，COALESCE 兜 SQLite 标量 MAX(x, NULL) 恒 NULL 的首同步边界
+结果：statemachine 测试 F（06:00 不被 05:00 回退）/G（NULL 直取平台 ts）全过，7 个 sync 相关测试全绿，npm test 全量 exit=0，lint 通过

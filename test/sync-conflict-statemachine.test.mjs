@@ -181,6 +181,47 @@ console.log('\n--- E. abort → 状态不变 round-trip ---');
   assert(existsSync(conflictPath(cwd, 'rt-change')), 'E8: 重新检测写新冲突文件');
 }
 
+// ─────────────────────────────────────────
+// F. keep-local 防回退：DB base_ts 已新于冲突文件 ts 时 resolve 不拉回过去
+//    （坑 2026-08-19-resolve-keep-local-base-ts-rollback：旧冲突文件是历史快照，
+//     无条件覆盖会让下次 sync 立即撞 409 再落冲突文件）
+// ─────────────────────────────────────────
+console.log('\n--- F. keep-local base_ts 单调防回退 ---');
+{
+  const { cwd } = mkCwd('F-rollback');
+  // 本地基线：base_ts=06:00（已由后续成功 push 回填，新于冲突文件将存的平台 05:00）
+  setTs(cwd, 'rt-change', '2026-08-10T04:00:00.000Z', '2026-08-10T06:00:00.000Z');
+  postMode = 'conflict';
+  const sm = new SyncManager(cwd);
+  const r1 = await sm.sync('rt-change');
+  assert(r1.conflict === true, 'F1: push 进 conflict（平台 05:00 > base 06:00 不成立但 mock 409 强制）');
+  const r2 = await sm.resolve('rt-change', 'keep-local');
+  assert(r2.ok && r2.resolved && r2.mode === 'keep-local', 'F2: keep-local resolved');
+  const after = getRow(cwd, 'rt-change');
+  assert(after.last_synced_platform_ts === '2026-08-10T06:00:00.000Z',
+    `F3: DB base_ts(06:00) 新于冲突文件 ts(05:00) 时不回退（实际 ${after.last_synced_platform_ts}）`);
+  assert(!existsSync(conflictPath(cwd, 'rt-change')), 'F4: 冲突文件清理');
+}
+
+// ─────────────────────────────────────────
+// G. keep-local NULL 边界：首同步前 base_ts NULL → resolve 直取平台 ts
+//    （SQLite 标量 MAX(x, NULL) 恒 NULL，须 COALESCE 兜住）
+// ─────────────────────────────────────────
+console.log('\n--- G. keep-local base_ts NULL 直取平台 ts ---');
+{
+  const { cwd } = mkCwd('G-nullbase');
+  setTs(cwd, 'rt-change', '2026-08-10T04:00:00.000Z', null);
+  postMode = 'conflict';
+  const sm = new SyncManager(cwd);
+  const r1 = await sm.sync('rt-change');
+  assert(r1.conflict === true, 'G1: push 进 conflict');
+  const r2 = await sm.resolve('rt-change', 'keep-local');
+  assert(r2.ok && r2.resolved, 'G2: keep-local resolved');
+  const after = getRow(cwd, 'rt-change');
+  assert(after.last_synced_platform_ts === platformPushedAt,
+    `G3: base_ts NULL 时直取平台 ts（实际 ${after.last_synced_platform_ts}，期望 ${platformPushedAt}）`);
+}
+
 // 清理
 await new Promise((r) => server.close(r));
 try { rmSync(tmpRoot, { recursive: true, force: true }); }

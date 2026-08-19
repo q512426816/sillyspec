@@ -864,13 +864,17 @@ export class SyncManager {
     const platformPushedAt = cf.platform_last_pushed_at || null;
 
     if (mode === 'keep-local') {
-      // base_ts 推进到平台最新 last_pushed_at；本地 DB 不 import（用户本地为准，后续手动 push）
+      // base_ts 推进到平台最新 last_pushed_at；本地 DB 不 import（用户本地为准，后续手动 push）。
+      // MAX() 单调防回退（坑 2026-08-19-resolve-keep-local-base-ts-rollback）：冲突文件是历史快照，
+      // 其 platform_last_pushed_at 可能早于 DB 已由后续成功 push 回填的 base_ts——无条件覆盖会把
+      // base_ts 拉回过去，下次 sync 立即撞 409 再落冲突文件（恢复时实测二轮才收敛）。
+      // COALESCE 防 NULL：SQLite 标量 MAX(x, NULL) 恒 NULL，首同步前 base_ts NULL 应直取平台 ts。
       try {
         const { ProgressManager } = await import('./progress.js');
         const pm = new ProgressManager({ specDir: safePlatformSpecDir(this.cwd) });
         const db = pm._ensureDB(this.cwd).getDb();
-        db.prepare('UPDATE changes SET last_synced_platform_ts = ? WHERE name = ?')
-          .run(platformPushedAt, changeName);
+        db.prepare('UPDATE changes SET last_synced_platform_ts = MAX(?, COALESCE(last_synced_platform_ts, ?)) WHERE name = ?')
+          .run(platformPushedAt, platformPushedAt, changeName);
       } catch (err) {
         return { ok: false, resolved: false, reason: `keep-local 更新 base_ts 失败: ${err.message}` };
       }
