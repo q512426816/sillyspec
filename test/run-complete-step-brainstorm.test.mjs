@@ -10,6 +10,8 @@
  *   - stageData.status='completed' + completedAt + user-inputs.md 追加
  *   - scale=small → 下一步提示 quick --linked-changes（历史 bug：曾误推 plan）
  *   - --reopen --from-step N 后 --done：stale 步骤同步回填 completed
+ *   - 单步 --done（非末步，design.md 已落盘）→ changes.title 即刷新为 design 首个 #
+ *     标题的中文描述，不等阶段完成（历史 bug：brainstorm 全程 title 存英文 autoName 兜底）
  *
  * 中间状态用 ProgressManager 注入（与 wait-gates.test.mjs 同款：先让 CLI init 步骤 schema，
  * 再 read→tweak step status→write），避免逐步 --done 的输出文件细节耦合。
@@ -141,6 +143,44 @@ console.log('\n--- reopen --from-step N 后 --done：FR-01 门控——无 confi
   assert(asteps[6].status === 'completed', 'stale step 7 已回填 completed')
   assert(asteps[7].status === 'completed', 'stale step 8 已回填 completed')
   assert(asteps.every(s => s.status === 'completed'), '全部 8 步 completed，无 stale 残留、无状态矛盾')
+}
+
+console.log('\n--- 单步 --done（step 6 写设计文档，非末步）→ changes.title 即刷新为 design 中文标题 ---')
+{
+  const { cwd, specBase } = makeRepo('cli-brainstorm-title-')
+  const cn = '2026-08-19-new-change-abcd1234'
+  // 复刻真实启动路径：run brainstorm 无 --input → initChange title 兜底 = 英文 autoName
+  const pm = await initChange(cwd, specBase, cn)
+  runCLI(['--dir', cwd, 'run', 'brainstorm', '--change', cn], { cwd })
+  pm.updateChangeMeta(cwd, cn, { title: cn })
+  // seed：step 1-5 completed，step 6（写设计文档并自审）pending 起跑，7/8 仍 pending
+  await seedStage(pm, cwd, cn, 'brainstorm',
+    BRAINSTORM_STEPS.map((name, i) => ({ name, status: i < 5 ? 'completed' : 'pending' })))
+
+  const before = pm._ensureDB(cwd).getDb().prepare('SELECT title FROM changes WHERE name = ?').get(cn)
+  assert(before.title === cn, `前置：title 仍为英文 autoName 兜底（got ${JSON.stringify(before.title)}）`)
+
+  // agent 执行 step 6 产出：design.md 落盘（首个 # 标题带「设计文档（Design）—」固定前缀）
+  const changeDir = join(specBase, 'changes', cn)
+  writeFileSync(join(changeDir, 'design.md'),
+    '# 设计文档（Design）— 变更标题单步刷新\n\n## 背景\nbrainstorm 中途查 DB 应见中文标题。\n\n## 文件变更清单\n| 操作 | 文件路径 | 说明 |\n|------|---------|------|\n| 修改 | src/a.js | x |\n\n## 自审\n已核对。\n')
+
+  // 单步 --done：只完成 step 6（currentIdx=首个 pending），阶段未完成（7/8 仍 pending）
+  const r = runStage('brainstorm', cn, cwd, { done: true, output: 'design.md 已写入并自审' })
+
+  assert(r.status === 0, `单步 --done exit 0（实际 ${r.status}，输出尾：${r.combined.slice(-150)}）`)
+  const after = await pm.read(cwd, cn)
+  assert(after.stages.brainstorm.status !== 'completed', '阶段未完成（仍有 pending 步，走单步分支）')
+  const asteps = after.stages.brainstorm.steps
+  assert(asteps[5].status === 'completed', 'step 6 本次 --done 已完成')
+  assert(asteps[6].status === 'pending', 'step 7 保持 pending（未越步）')
+
+  // 核心断言：单步完成即刷新 title（不等阶段完成）
+  const titleRow = pm._ensureDB(cwd).getDb().prepare('SELECT title FROM changes WHERE name = ?').get(cn)
+  assert(
+    titleRow.title === '变更标题单步刷新',
+    `单步 --done 后 changes.title 刷新为 design 中文标题（got ${JSON.stringify(titleRow.title)}）`
+  )
 }
 
 cleanup()

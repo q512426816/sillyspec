@@ -35,6 +35,19 @@ import { gitQuiet } from '../git-helper.js'
 // 共享收尾管线，消除 noAI 末步 / continueStep 完成分支绕过 gate 的 S1/S2/S3 不对称）。
 // completeStep 阶段完成分支（task-02 接入 completeStageGates）+ brainstorm 下一步提示改 import 自 gates.js。
 
+// 完整流程 change title 刷新：从 proposal/design 首个 # 标题提取中文描述写 changes.title（人类可读
+// 展示元信息）。proposal/design 落盘后的**任意步骤持久化点**都调用——单步 --done（brainstorm
+// step6 design.md 已落盘但阶段未完）与阶段完成同样刷新，治「brainstorm 全程 title 存英文 autoName
+// 兜底」。quick-<hex> 无 proposal/design 目录，deriveTitleFromLinkedChange 返回 '' 不刷新
+// （quick 走 handleQuickStageCompletion 的 extractTitleFromResult）。失败静默（不阻断流程）。
+function refreshChangeTitleFromArtifacts(pm, cwd, specBase, changeName) {
+  if (!changeName || /^quick-[0-9a-f]{8}$/.test(changeName)) return
+  try {
+    const refinedTitle = deriveTitleFromLinkedChange(specBase, changeName)
+    if (refinedTitle) pm.updateChangeMeta(cwd, changeName, { title: refinedTitle })
+  } catch { /* title 刷新失败不阻断 */ }
+}
+
 /**
  * 坑1：用 --done --answer 解掉「已 waiting 的步骤」。
  *
@@ -377,15 +390,8 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
     if (_stageGatesResult?.stageCompleted === false) process.exitCode = 1
     if (_stageGatesResult) return _stageGatesResult
 
-    // 完整流程 change title 刷新：proposal/design 落盘后（brainstorm/plan 完成），从 proposal 首个 #
-    // 标题刷新 changes.title（人类可读中文标题，用户可随时刷新）。quick-<hex> 无 proposal 目录 →
-    // deriveTitleFromLinkedChange 返回 '' 不刷新（quick 走 handleQuickStageCompletion 的 extractTitleFromResult）。
-    if (changeName && !/^quick-[0-9a-f]{8}$/.test(changeName)) {
-      try {
-        const refinedTitle = deriveTitleFromLinkedChange(specBase, changeName)
-        if (refinedTitle) pm.updateChangeMeta(cwd, changeName, { title: refinedTitle })
-      } catch { /* title 刷新失败不阻断完成 */ }
-    }
+    // 完整流程 change title 刷新（阶段完成时；proposal/design 已落盘，机制见 refreshChangeTitleFromArtifacts）
+    refreshChangeTitleFromArtifacts(pm, cwd, specBase, changeName)
 
     // gate 全过：persist completed（task-01 移后）。此处到 _write 之间若崩，DB 仍 in-progress（内存已 completed 但未落盘），下次进 CLI 读 DB 即 in-progress，不产生"假 completed"。
     pm._write(cwd, progress, changeName)
@@ -450,6 +456,9 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
   progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
   pm._write(cwd, progress, changeName)
   triggerSync(cwd, changeName, platformOpts)
+  // 单步完成也刷新 change title：design.md 在 brainstorm step6 落盘，此后每次 --done 都该让
+  // changes.title 反映中文描述，不等阶段收尾（机制见 refreshChangeTitleFromArtifacts）。
+  refreshChangeTitleFromArtifacts(pm, cwd, specBase, changeName)
 
   // Append to user-inputs.md
   if (outputText) {
@@ -954,6 +963,8 @@ export async function continueStep(pm, progress, stageName, cwd, answer, options
   progress.lastActive = now
   pm._write(cwd, progress, changeName)
   triggerSync(cwd, changeName, platformOpts)
+  // wait 解除持久化点（含 repeatable 多轮）同样刷新 change title——多轮确认期间 design.md 已存在
+  refreshChangeTitleFromArtifacts(pm, cwd, specBase, changeName)
 
   console.log(`✅ Step ${currentIdx + 1}/${stageData.steps.length} 已继续：${currentStep.name}`)
   console.log(`   回答：${answer}`)
@@ -1010,12 +1021,7 @@ export async function continueStep(pm, progress, stageName, cwd, answer, options
     if (_stageGatesResult?.stageCompleted === false) process.exitCode = 1
     if (_stageGatesResult) return _stageGatesResult
     // 完整流程 change title 刷新（同 completeStep 完成分支，wait 解除后阶段完成也刷新）。
-    if (changeName && !/^quick-[0-9a-f]{8}$/.test(changeName)) {
-      try {
-        const refinedTitle = deriveTitleFromLinkedChange(specBase, changeName)
-        if (refinedTitle) pm.updateChangeMeta(cwd, changeName, { title: refinedTitle })
-      } catch { /* title 刷新失败不阻断完成 */ }
-    }
+    refreshChangeTitleFromArtifacts(pm, cwd, specBase, changeName)
     // gate 全过：persist completed（task-03 移后；此处无 triggerSync）。
     pm._write(cwd, progress, changeName)
     console.log(`\n✅ ${stageName} 阶段已完成（${stageData.steps.length}/${stageData.steps.length} 步）`)

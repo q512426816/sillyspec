@@ -229,7 +229,14 @@
 结果：node --test 15/15 过，全量 npm test 0 fail（0 not ok），lint 321 文件过。解锁说明：审计拦的 test/platform-sync-quick-session-spectree.test.mjs 与 .sillyspec/sillyspec.db* 为并行会话脏文件与共享 runtime DB，非本 quick 改动，提交用 pathspec 隔离不裹挟。
 审计：⚖️ 归属切分：5 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：docs/sillyspec/file-lifecycle.md, src/run/stage.js, test/platform-sync-quick-session-spectree.test.mjs, .sillyspec/sillyspec.db, .sillyspec/sillyspec.db.schema-version
 
-## ql-20260819-011-119b | 2026-08-19 13:38:58 | 修复：完整流程 change 的 changes.title 在 brainstorm 单步推进时不刷新——design.md 第 6 步已落盘但 title 仍存英文 autoName 兜底 key，刷新只在阶段完成分支触发。把 deri…
-状态：进行中
+## ql-20260819-011-119b | 2026-08-19 13:38:58 | changes.title 在 brainstorm 单步推进时即刷新为中文标题
+状态：已完成
 关联变更：（无）
-文件：（见实际改动）
+文件：
+- src/run/complete.js（抽 refreshChangeTitleFromArtifacts 公共 helper 挂四个步骤持久化点（单步完成/阶段完成 × completeStep/continueStep），替换原两处内联块）
+- test/run-complete-step-brainstorm.test.mjs（新增单步 --done 刷新 changes.title 案例（复刻英文 autoName 兜底前置态，先红后绿））
+- .sillyspec/docs/sillyspec/modules/runtime.md（注意事项补 title 刷新行为条目 + 变更索引补 ql-20260819-011-119b）
+需求：changes.title 在 brainstorm 单步推进时即刷新为中文标题
+根因：title 刷新只挂在 completeStep/continueStep 的阶段完成分支，brainstorm 第 6 步 design.md 已落盘但阶段未走完时，DB 里 title 一直是启动 initChange 写入的英文 autoName 兜底，中途查看永远是英文 key
+方案：complete.js 抽 refreshChangeTitleFromArtifacts 公共 helper（deriveTitleFromLinkedChange 提取 proposal/design 首个 # 标题中文描述 + quick-hex 会话守卫 + 失败静默），挂到四个步骤持久化点——completeStep 单步完成、completeStep 阶段完成、continueStep wait 解除、continueStep 阶段完成，单步 --done 即刷新
+结果：新增单步刷新测试先红后绿；node --test 单文件 32/32 通过；npm test 全量 0 fail；npm run lint 通过（321 文件、未引用导出 0 项）
