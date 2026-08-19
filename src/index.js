@@ -391,9 +391,9 @@ async function main() {
               console.log('📭 无活跃变更或进度数据不存在');
             } else {
               console.log(`项目: ${dumpData.project}`);
-              console.log(`当前变更: ${dumpData.currentChange || '(无)'}`);
-              console.log(`当前阶段: ${dumpData.currentStage || '(无)'}`);
-              console.log(`最后活跃: ${dumpData.lastActive || '(无)'}`);
+              console.log(`当前变更: ${dumpData.current_change || '(无)'}`);
+              console.log(`当前阶段: ${dumpData.current_stage || '(无)'}`);
+              console.log(`最后活跃: ${dumpData.last_active || '(无)'}`);
               console.log(`产物数: ${dumpData.artifacts?.length || 0}`);
             }
           }

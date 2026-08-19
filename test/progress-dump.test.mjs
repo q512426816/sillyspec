@@ -54,6 +54,36 @@ function makeTmpDir(prefix) {
 const worktreeRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
 const binPath = join(worktreeRoot, 'bin', 'sillyspec.js')
 
+// CLI 调用加固包装（沿 test/spec-dir.test.mjs run() 先例）：并发全量套件下 CLI 子进程
+// 偶发非 0 退出——并行会话编辑仓库源码时保存的中间态会让 import 链瞬时断裂，杀毒/索引
+// 锁 .runtime 文件时 CLI 阻塞实测可达 3-7s。失败先打印 cmd+exit+stderr 诊断再重试一次
+// （瞬时窗口 <1s 被消化，确定性失败重试仍败 → 带全量诊断抛出，保留失败定位能力）。
+// timeout 15s：单次实测 ~340ms，留足锁阻塞余量；3 次调用最坏 3×(15+15)s 仍 <
+// run-tests.mjs 单文件 120s 上限（原 10s 在锁阻塞下余量不足）。
+function runCli(args, opts = {}) {
+  const call = () => execFileSync('node', [binPath, ...args], {
+    cwd: opts.cwd,
+    encoding: 'utf8',
+    timeout: 15000,
+  })
+  try {
+    return call()
+  } catch (e) {
+    const stderr1 = (e.stderr || '').toString().slice(0, 800)
+    console.log(`  ⚠️ [progress-dump] CLI 偶发失败重试中: ${args.join(' ')} (exit ${e.status}, killed ${e.killed}, stderr: ${stderr1})`)
+    try {
+      return call()
+    } catch (e2) {
+      throw new Error(
+        `[progress-dump] CLI 重试仍失败: node ${[binPath, ...args].join(' ')}\n` +
+        `exit ${e2.status} killed ${e2.killed}\n` +
+        `stderr: ${(e2.stderr || '').toString().slice(0, 1200)}\n` +
+        `stdout: ${(e2.stdout || '').toString().slice(0, 400)}`
+      )
+    }
+  }
+}
+
 // 隔离 HOME，防止并发全量套件中 CLI 子进程读写真实 HOME 影响其他测试
 const originalHome = process.env.HOME
 const originalUserProfile = process.env.USERPROFILE
@@ -219,11 +249,7 @@ console.log('--- 5. buildEnvelope(progress dump) ---')
 console.log('--- 6. CLI progress dump --json ---')
 {
   const { proj, specBase, changeName } = await makeFixture({ withArtifacts: true, withUserInputs: true })
-  const result = execFileSync('node', [binPath, 'progress', 'dump', '--spec-dir', specBase, '--json'], {
-    cwd: proj,
-    encoding: 'utf8',
-    timeout: 10000,
-  })
+  const result = runCli(['progress', 'dump', '--spec-dir', specBase, '--json'], { cwd: proj })
   const envelope = JSON.parse(result)
   assert(envelope.schema_version === 1, `CLI --json schema_version === 1（实际 ${envelope.schema_version}）`)
   assert(envelope.command === 'progress dump', `CLI --json command === "progress dump"`)
@@ -241,11 +267,7 @@ console.log('--- 7. CLI progress dump 无 DB ---')
   const proj = makeTmpDir('dump-cli-nodb-')
   const specBase = join(proj, '.sillyspec')
   mkdirSync(specBase, { recursive: true })
-  const result = execFileSync('node', [binPath, 'progress', 'dump', '--spec-dir', specBase, '--json'], {
-    cwd: proj,
-    encoding: 'utf8',
-    timeout: 10000,
-  })
+  const result = runCli(['progress', 'dump', '--spec-dir', specBase, '--json'], { cwd: proj })
   const envelope = JSON.parse(result)
   assert(envelope.ok === false, '无 DB → ok === false')
   assert(envelope.errors.length > 0, 'errors 非空')
@@ -256,14 +278,14 @@ console.log('--- 7. CLI progress dump 无 DB ---')
 // ─────────────────────────────────────────
 console.log('--- 8. CLI progress dump 无 --json ---')
 {
-  const { proj, specBase } = await makeFixture()
-  const result = execFileSync('node', [binPath, 'progress', 'dump', '--spec-dir', specBase], {
-    cwd: proj,
-    encoding: 'utf8',
-    timeout: 10000,
-  })
+  const { proj, specBase, changeName } = await makeFixture()
+  const result = runCli(['progress', 'dump', '--spec-dir', specBase], { cwd: proj })
   assert(result.includes('项目:'), '人类可读输出含"项目:"')
   assert(result.includes('当前变更:'), '人类可读输出含"当前变更:"')
+  // snake_case 契约守护：9a63466 dump 契约修复时 index.js 人类可读分支漏改 camelCase
+  // 读取 → 三字段恒"(无)"。此处断言实值落地（变更名出现 + 全程无"(无)"兜底值）。
+  assert(result.includes(changeName), `人类可读输出含真实变更名 "${changeName}"（实际:\n${result}）`)
+  assert(!result.includes('(无)'), `人类可读输出无"(无)"兜底值（字段全落地，实际:\n${result}）`)
   assert(!result.includes('{'), '无 --json 时不输出 JSON')
 }
 

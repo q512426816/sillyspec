@@ -301,3 +301,16 @@
 根因：execSync 经 shell 的 git 注入面两处、levenshtein 重复实现、SKILL.md 内部路径违反外部纯净性。
 方案：execFileSync 数组参数、import 复用单一实现、示例文案中性化，同步 migration/cli-entry/setup 模块文档。
 结果：lint 322 文件通过，spec-dir-typo/init-claude-injection/modules-rebuild-dryrun 全绿
+
+## ql-20260819-016-4c70 | 2026-08-19 23:04:43 | 修复 progress-dump 测试并发全量偶发失败 + dump 人类可读输出 camelCase 回归
+状态：已完成
+关联变更：（无）
+文件：
+- src/index.js（progress dump 人类可读分支 3 字段改读 snake_case，9a63466 漏改回归修复）
+- test/progress-dump.test.mjs（runCli 加固包装+timeout 15s+section8 snake_case 守护断言）
+需求：修复 progress-dump 测试并发全量偶发失败 + dump 人类可读输出 camelCase 回归
+根因：环境瞬时类两机制叠加——①并发全量下 CLI 子进程（import 全链启动）撞上并行 agent 会话保存源码的瞬时中间态→罕见非0退出（c6e372f/392f0e9 两度实证同类；本次实证：另一会话改 src/sync.js 期间 sync-conflict-statemachine 全量偶发/单独通过，同机制）；②杀毒/索引独占锁 .runtime 文件时 CLI 阻塞实测 3-7s，原 timeout 10s 余量不足。另：9a63466 snake_case 契约修复漏改 index.js 人类可读分支→三字段恒(无)
+方案：测试加 runCli() 包装（沿 spec-dir.test.mjs run() 先例）——失败打印 cmd+exit+stderr 诊断后重试一次，仍败带全量诊断抛出保确定性失败定位；timeout 10s→15s（最坏 3×30s < run-tests 单文件 120s）；src/index.js:393-397 改读 current_change/current_stage/last_active；section 8 补守护断言（含真实变更名+无(无)兜底值）
+结果：progress-dump 60/60 通过（守护断言修复前按预期失败，实证回归存在）；并发自压 40 次 0 失败 0 重试；npm run lint 325 文件通过；全量 npm test 235 文件 progress-dump 通过，2 失败（doc-ref-check/sync-conflict-statemachine）均并行会话活编辑 stage.js/sync.js 所致、单独跑通过，非本次回归
+审计：📎 文档引用失效：3/80 处 file:line 失效（sillyspec docs check 可复现）
+审计：⚖️ 归属切分：1 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：docs/sillyspec/platform-interface-map.md
