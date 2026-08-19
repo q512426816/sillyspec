@@ -151,7 +151,15 @@
 结果：quick-close-linked-changes 11 用例含 6 新场景 + progress-get-change-stage 1 用例全过，全量 npm test EXIT=0，lint 316 文件过
 审计：⚖️ 归属切分：3 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：.claude/skills/sillyspec-quick/SKILL.md, docs/prompt/quick.md, test/progress-get-change-stage.test.mjs
 
-## ql-20260819-005-eb50 | 2026-08-19 11:14:02 | (quick 任务)
-状态：进行中
+## ql-20260819-005-eb50 | 2026-08-19 11:14:02 | 存量文档漂移 9 处重锚 + troubleshooting 补两 CLI 缺陷条目
+状态：已完成
 关联变更：（无）
-文件：.sillyspec/docs/sillyspec/scan/ARCHITECTURE.md, docs/sillyspec/prompt-control-debt.md, .sillyspec/local.yaml, docs/sillyspec/troubleshooting.md
+文件：
+- .sillyspec/docs/sillyspec/scan/ARCHITECTURE.md（三处重锚 runAutoMode/checkApproval/approve-reject）
+- docs/sillyspec/prompt-control-debt.md（四处重锚 isQuickMetadata/checkApproval/auditQuickCompletion/completeStep）
+- .sillyspec/local.yaml（docs-check.skip 增 self-audit-2026-08-16.md）
+- docs/sillyspec/troubleshooting.md（补第 11/12 条 CLI 缺陷条目）
+需求：存量文档漂移 9 处重锚 + troubleshooting 补两 CLI 缺陷条目
+根因：execute 期间并行变更推进源码致 ARCHITECTURE/prompt-control-debt 的 file:line 锚失效（token 多命中不可自动修）；archive 实战暴露两个 CLI 缺陷（module-impact 检查失败打印 [object Object] / plan 与 archive 章节名契约不同源返工）
+方案：grep 源码语义定位逐处重锚（runAutoMode→1140、checkApproval→576、approve/reject→1132/1137、isQuickMetadata→590 补函数名 token、auditQuickCompletion→713、--done completeStep→1006）；self-audit-2026-08-16.md 按带日期快照先例加 local.yaml skip；troubleshooting.md 补第 11/12 条（agent 侧解法 + CLI 修复方向）
+结果：docs check 377/377 全绿（修前 9 失效）、doc-ref-check 80/80 通过；纯 doc/config 改动未触 src/test，npm test/lint 按规则跳过

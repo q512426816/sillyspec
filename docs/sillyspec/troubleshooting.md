@@ -136,3 +136,27 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 3. quick 审计 docsCheckHint 扩展 `livingDocDrift`：改动活文档（缺省 platform-interface-map.md，`local.yaml docs-check.living-docs` 可追加不覆盖）引用的源码文件时即时提示漂移风险（advisory 不阻断）。测试 docs-living-drift-hint.test.mjs。**〔2026-08-18 精度对齐，ql-20260818-009-9443〕**原「被引用即提示」路径级口径在行号锚未真断时误报（实测 advisory 报漂移、docs check 417/417 全过）；升级为复用 `runDocsCheck` 分层真校验（存在 + 行界 + 关键词窗口），只报「真失效且指向本次改动文件」的引用（`drift.invalid` 逐条带 doc:line/ref/reason），全过零输出——与 docs check 结论同源。`matchLivingDocRefs` 降为预过滤（无引用命中跳过整档校验）。
 
 **关联记忆**：`[[sillyspec-execute-done-auto-draft-pitfall]]`、`[[sillyspec-worktree-patch-apply-conflict]]`、`[[sillyspec-local-yaml-paths-override-semantics]]`
+
+---
+
+## 11. archive module-impact 检查失败打印裸 [object Object]（2026-08-19 实证）
+
+**症状**：`run archive --done`（extract-module-impact 步）输出 `❌ module-impact.md 检查失败 └─ [object Object]`，错误内容完全不可读，只能去读 `.sillyspec/.runtime/workflow-runs/<ts>-archive-impact-<project>-fail.json` 才知道真实原因（本次是 contains_sections 章节名不匹配）。
+
+**根因**：archive-impact workflow 的检查结果渲染路径把 checks 数组里的 fail 对象直接字符串化（`detail` 有值但外层对象未展开），`String(errorObj)` 得 `[object Object]`。
+
+**解法（agent 侧）**：见裸 `[object Object]` 直接读同目录 workflow-runs 的 fail.json，`checks[].type/detail` 有完整失败原因；修完后重跑 `--done` 即可（步骤状态仍会推进，fail 只留痕不阻断状态机，但归档产物要干净就别留）。
+
+**修复方向（CLI 侧，未修）**：渲染检查失败时 `JSON.stringify(check, null, 2)` 或逐条打印 `type + detail`。
+
+## 12. plan 生成 module-impact 章节名与 archive-impact 契约不同源（2026-08-19 实证）
+
+**症状**：plan 阶段生成的 module-impact.md 首版用「## 影响矩阵」「## 更新结果」章节名，verify 的 advisory 核对也接受；到 archive 的 extract-module-impact 步被 contains_sections 硬拦——期望「## 模块影响矩阵」「## 未匹配文件」。同一文档两套期望，agent 先过 verify 再被 archive 拦，返工重排章节。
+
+**根因**：plan 模板与 `archive-impact.yaml` 的 contains_sections 期望各自维护，无单一事实源；verify 的核对只看语义不看章节名（更宽容），archive 是机械校验（更严格），严格侧契约没有回灌到生成侧。
+
+**解法（agent 侧）**：写 module-impact.md 直接用 archive 契约的章节名（`## 模块影响矩阵` + `## 未匹配文件`），「## 更新结果」表可以共存（archive 只查存在性，不查多余章节）。
+
+**修复方向（CLI 侧，未修）**：plan 生成模板与 archive-impact.yaml contains_sections 同源（模板字面量从 yaml 读，或 yaml 期望改为模板实际输出）。
+
+**关联记忆**：`[[sillyspec-doc-consistency-debt]]`（ enforcement 全在 design↔代码、模板漂移同类债）
