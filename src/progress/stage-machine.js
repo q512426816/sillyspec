@@ -310,6 +310,17 @@ export class StageMachine {
       const sd = data.stages[s];
       if (!sd) continue;
       if (sd.status === 'in-progress' && sd.steps) {
+        // waiting 优先于 pending/failed：暂停等用户决策的阶段，下一步是 --continue --answer
+        // 恢复（坑 archive-step3-wait-answer-hint-late：建议命令前置 --answer，而非泛泛的
+        // 「继续执行」让 agent 撞 --done 报错才知道要 --answer）
+        const waitIdx = sd.steps.findIndex(st => st.status === 'waiting');
+        if (waitIdx !== -1) {
+          const ws = sd.steps[waitIdx];
+          return {
+            text: `${STAGE_LABELS[s] || s} 进行中，Step ${waitIdx + 1}「${ws.name}」等待用户输入${ws.waitReason ? `（${ws.waitReason}）` : ''}，用 --answer 恢复。`,
+            command: `sillyspec run ${s} --continue --answer "用户回答"`,
+          };
+        }
         const hasPending = sd.steps.some(st => ['pending', 'waiting', 'failed'].includes(st.status));
         if (hasPending) {
           return {

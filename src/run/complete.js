@@ -127,6 +127,27 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
     currentIdx = _resolvedWaitIdx
     console.log(`⚠️  Step "${steps[_resolvedWaitIdx].name}" 此前处于 waiting，--done --answer 已补回答并拉回待完成。`)
   }
+  // ── waiting 前置守卫（坑 archive-step3-wait-answer-hint-late）──
+  // 普通 --done（无 --answer）时若存在 waiting 步骤：currentIdx 会跳过它推进后续步骤
+  //（findIndex 只查 pending/in-progress），步骤被静默越过 + --answer 要求要到别处报错才暴露。
+  // fail-closed 拒绝并把「需要 --answer」的提示前置到第一次尝试 --done 的时刻。
+  if (!_doneAnswer) {
+    const _waitIdx = steps.findIndex(s => s.status === 'waiting')
+    if (_waitIdx !== -1) {
+      const _ws = steps[_waitIdx]
+      console.error(`❌ Step ${_waitIdx + 1} "${_ws.name}" 处于等待用户输入状态（waiting），先恢复它再推进后续步骤。`)
+      if (_ws.waitReason) console.error(`   原因：${_ws.waitReason}`)
+      if (_ws.waitOptions) {
+        try {
+          const _opts = JSON.parse(_ws.waitOptions)
+          if (Array.isArray(_opts) && _opts.length > 0) console.error(`   选项：${_opts.join(', ')}`)
+        } catch { /* 兼容旧格式（逗号串）非 JSON，不额外展示 */ }
+      }
+      console.error(`   恢复：sillyspec run ${stageName} --continue --answer "用户回答"${changeName ? ` --change ${changeName}` : ''}`)
+      console.error(`   或一步完成：sillyspec run ${stageName} --done --answer "用户回答"${changeName ? ` --change ${changeName}` : ''} --output "你的摘要"`)
+      process.exit(1)
+    }
+  }
   if (currentIdx === -1) {
     // ── reopen stale 收尾路径（坑 reopen-done-escape-hatch-unreachable）──
     // 全 completed+stale（无 pending/in-progress）时若只有 exit(1)，--done --confirm 逃生门
@@ -310,6 +331,9 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
       const wsIdx = steps.findIndex(s => s.status === 'waiting')
       console.log(`\n⏸️  阶段暂停：Step ${wsIdx + 1} 等待用户输入`)
       if (steps[wsIdx].waitReason) console.log(`   原因：${steps[wsIdx].waitReason}`)
+      // 前置恢复指引（坑 archive-step3-wait-answer-hint-late）：暂停点直接给出 --answer 恢复命令，
+      // 不等用户撞 --done 报错才知道需要 --answer
+      console.log(`   恢复：sillyspec run ${stageName} --continue --answer "用户回答"${changeName ? ` --change ${changeName}` : ''}`)
       return { stageCompleted: false, currentIdx, nextPendingIdx: -1 }
     }
     // quick 收尾（W6 Step6b 抽至 complete-handlers.js handleQuickStageCompletion）
@@ -868,6 +892,13 @@ export async function waitStep(pm, progress, stageName, cwd, outputText, waitRea
   if (waitReason) console.log(`   原因：${waitReason}`)
   if (waitOptions) console.log(`   选项：${formatWaitOptions(waitOptions)}`)
   console.log(`   继续时执行：sillyspec run ${stageName} --continue --answer "你的选择"${changeName ? ` --change ${changeName}` : ''}`)
+  // requiresWait 语义前置（坑 archive-step3-wait-answer-hint-late）：--continue --answer 只是中继回答，
+  // 本步会回到待执行（回答后还需执行动作再 --done 收尾）；不想两段式可用 --done --answer 一步完成。
+  // 提示落在标记 --wait 的此刻，而非等 agent 撞 --done 报错才知道。
+  if (stepDef.requiresWait === true || currentStep.requiresWait === true) {
+    console.log(`   注：本步为 requiresWait 步骤——--continue --answer 后本步回到待执行，完成动作后需再 --done 收尾`)
+    console.log(`   或一步完成：sillyspec run ${stageName} --done --answer "你的选择"${changeName ? ` --change ${changeName}` : ''} --output "你的摘要"`)
+  }
 }
 
 export async function continueStep(pm, progress, stageName, cwd, answer, options = {}) {
