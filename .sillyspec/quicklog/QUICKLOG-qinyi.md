@@ -189,3 +189,25 @@
 根因：plan 审查计划步 prompt 只说「生成模块影响矩阵」「归 unmapped」未钉死章节标题，agent 写「## 影响矩阵」变体；verify advisory 不查章节名放行，archive contains_sections 机械硬拦，agent 在两套期望间返工
 方案：prompt 步骤 3 两章节标题逐字固定并注明与 yaml 契约同源勿写变体（更新结果表骨架保留）；_extract.mjs 刷新镜像逐字同步 plan.md；新增 11 断言回归测试锁三方不变量（yaml 期望 × plan prompt × archive 降级 prompt + 分发模板与活副本一致）
 结果：新测试 11/11；npm test 全量 exit=0；lint 321 文件通过；troubleshooting 第 12 条标记已修（ql-20260819-007-d4f0）
+
+## ql-20260819-008-7501 | 2026-08-19 13:27:48 | 存量漂移 11 处重锚——reopen-and-execute-batch-guard 变更 src 改动的伴生文档债清偿
+状态：已完成
+关联变更：（无）
+文件：
+- docs/sillyspec/architecture-4a.md（四处重锚 _getNextSuggestion/reopenStage/requiresWait/applyWorktree）
+- docs/sillyspec/doc-consistency-debt.md（D-3 两处 worktree-apply 锚→40）
+- docs/sillyspec/prompt-control-debt.md（L104 三处 + L300 两处（回头路注释段/分支锚/草稿调用点））
+需求：存量漂移 11 处重锚——reopen-and-execute-batch-guard 变更 src 改动的伴生文档债清偿
+根因：并行变更改动 stage-machine.js/complete.js/worktree-apply.js 后其文档锚点漂移（该变更的文档同步义务只覆盖模块卡，debt 类文档锚点无人跟）
+方案：grep 源码语义定位逐处重锚（定义优先于调用点，applyWorktree 行改双引用解决签名行无 token）；顺手把 L104 裸数字 /382 升级为合法 ref
+结果：docs check 378/378 全绿（修前 11 失效，新增 1 处合法断言）；纯 doc 未触 src/test 按规则 8 跳过 npm test/lint
+
+## ql-20260819-009-1463 | 2026-08-19 13:29:22 | quick 会话起步即推 QUICKLOG「进行中」占位条目到平台：run quick 起步在 QUICKLOG 预写进行中骨架条目后立即触发 spec 树增量同步（triggerSync→syncSpecTreeOnly），--done …
+状态：进行中
+关联变更：（无）
+文件：src/run/stage.js, test/platform-sync-quick-session-spectree.test.mjs, docs/sillyspec/file-lifecycle.md
+
+## ql-20260819-010-0af1 | 2026-08-19 13:29:24 | (quick 任务)
+状态：进行中
+关联变更：（无）
+文件：src/progress/change-registry.js, src/run/complete-handlers.js, test/progress-get-change-stage.test.mjs, test/quick-close-linked-changes.test.mjs
