@@ -10,7 +10,7 @@
  * worktree-guard hook 直读 sillyspec.db，不再有 gate-status.json 缓存双源（task-10 废除）。
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, unlinkSync, appendFileSync, copyFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, unlinkSync, appendFileSync, copyFileSync, readdirSync, statSync } from 'fs';
 import { join, basename, dirname, resolve, sep } from 'path';
 import { tmpdir } from 'os';
 import { DB } from './db.js';
@@ -288,7 +288,7 @@ export class ProgressManager {
     for (const row of stageRows) {
       const { id: sId, stage, status, started_at: startedAt, completed_at: completedAt, revision, reopened_from_step: reopenedFromStep, reopened_at: reopenedAt, stale_reason: staleReason } = row;
       stageMap[stage] = { _dbId: sId, status, startedAt, completedAt,
-        ...(revision ? { revision } : {}),
+        ...(revision != null ? { revision } : {}),
         ...(reopenedFromStep ? { reopenedFromStep } : {}),
         ...(reopenedAt ? { reopenedAt } : {}),
         ...(staleReason ? { staleReason } : {}),
@@ -309,7 +309,7 @@ export class ProgressManager {
         if (!stepsByStage[stageId]) stepsByStage[stageId] = [];
         let waitAnswers = null;
         if (waitAnswersJson) {
-          try { waitAnswers = JSON.parse(waitAnswersJson); } catch {}
+          try { waitAnswers = JSON.parse(waitAnswersJson); } catch (e) { console.warn(`[progress] waitAnswers JSON 损坏，已跳过: ${e.message}`); }
         }
         stepsByStage[stageId].push({
           name, status, output, completedAt,
@@ -1127,5 +1127,115 @@ export class ProgressManager {
     this._write(cwd, progress, changeName);
 
     return { ok: true, aligned, skipped, planTotal, planChecked };
+  }
+
+  // ── 只读 dump（task-01/02/03：daemon 进度读取）──
+
+  /**
+   * 只读导出进度数据，供 daemon 通过 `sillyspec progress dump --json` 消费。
+   *
+   * 纯读路径：打开 DB 只读、读 user-inputs.md、列 artifacts 目录，不写任何状态。
+   * 无活跃变更或 DB 不存在时返回 null（不抛异常，daemon 按 null 处理空数据）。
+   *
+   * @param {string} cwd - specDir（`.sillyspec` 目录），由 CLI 层 --spec-dir 传入
+   * @returns {object|null} 结构化进度数据，格式见 design.md §6.2
+   */
+  dump(cwd) {
+    const specRoot = this._getSpecDir(cwd);
+    const dbPath = this._runtimePath(cwd, 'sillyspec.db');
+
+    // DB 不存在 → 返回 null（项目未初始化进度）
+    if (!existsSync(dbPath)) return null;
+
+    const db = this._ensureDB(cwd);
+    const sqlDb = db.getDb();
+
+    // 1. project 行
+    const projectRow = sqlDb.prepare('SELECT name FROM project WHERE id = 1').get();
+    if (projectRow === undefined) return null;
+    const projectName = projectRow.name;
+
+    // 2. 活跃变更（取第一个，或空）
+    const changeRows = sqlDb.prepare("SELECT id, name, current_stage, last_active FROM changes WHERE status = 'active' ORDER BY name").all();
+    if (changeRows.length === 0) {
+      // 无活跃变更 → 返回仅含 project 的骨架
+      return {
+        project: projectName,
+        currentStage: null,
+        currentChange: null,
+        lastActive: null,
+        stages: {},
+        userInputs: this._readUserInputs(cwd),
+        artifacts: this._listArtifacts(cwd),
+      };
+    }
+
+    const change = changeRows[0];
+    const { id: changeId, name: changeName, current_stage: currentStage, last_active: lastActive } = change;
+
+    // 3. stages
+    const stageRows = sqlDb.prepare(
+      'SELECT id, stage, status, started_at, completed_at, revision FROM stages WHERE change_id = ? ORDER BY id'
+    ).all(changeId);
+
+    const stages = {};
+    for (const s of VALID_STAGES) {
+      stages[s] = { status: 'pending', steps: [] };
+    }
+    for (const row of stageRows) {
+      const stepRows = sqlDb.prepare(
+        'SELECT name, status, output, completed_at FROM steps WHERE stage_id = ? ORDER BY ordering'
+      ).all(row.id);
+      stages[row.stage] = {
+        status: row.status,
+        startedAt: row.started_at || undefined,
+        completedAt: row.completed_at || undefined,
+        ...(row.revision ? { revision: row.revision } : {}),
+        steps: stepRows.map(sr => ({
+          name: sr.name,
+          status: sr.status,
+          ...(sr.output ? { output: sr.output } : {}),
+          ...(sr.completed_at ? { completedAt: sr.completed_at } : {}),
+        })),
+      };
+    }
+
+    return {
+      project: projectName,
+      currentStage: currentStage || null,
+      currentChange: changeName,
+      lastActive: lastActive || null,
+      stages,
+      userInputs: this._readUserInputs(cwd),
+      artifacts: this._listArtifacts(cwd),
+    };
+  }
+
+  /** 只读 user-inputs.md 内容（不存在返回 null） */
+  _readUserInputs(cwd) {
+    const p = this._runtimePath(cwd, 'user-inputs.md');
+    if (!existsSync(p)) return null;
+    return readFileSync(p, 'utf8');
+  }
+
+  /** 列 artifacts 目录（不存在返回空数组） */
+  _listArtifacts(cwd) {
+    const dir = this._runtimePath(cwd, 'artifacts');
+    if (!existsSync(dir)) return [];
+    try {
+      return readdirSync(dir, { withFileTypes: true })
+        .filter(e => e.isFile())
+        .map(e => {
+          const fullPath = join(dir, e.name);
+          const st = statSync(fullPath);
+          return {
+            filename: e.name,
+            sizeBytes: st.size,
+            lastModified: st.mtime.toISOString(),
+          };
+        });
+    } catch {
+      return [];
+    }
   }
 }

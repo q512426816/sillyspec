@@ -373,8 +373,34 @@ async function main() {
           }
           break;
         }
+        case 'dump': {
+          // 只读进度导出（design §6.2）：daemon 消费的机器接口 JSON。
+          // --json 模式下劫持 console.log 到 stderr，stdout 留给纯 JSON（与 gate/derive 同纪律）。
+          const dumpData = pm.dump(progDir);
+          if (json) {
+            const { buildEnvelope } = await import('./machine-interface.js');
+            const envelope = buildEnvelope({
+              command: 'progress dump',
+              ok: dumpData !== null,
+              data: dumpData,
+              errors: dumpData === null ? ['无活跃变更或进度数据不存在'] : [],
+            });
+            console.log(JSON.stringify(envelope));
+          } else {
+            if (!dumpData) {
+              console.log('📭 无活跃变更或进度数据不存在');
+            } else {
+              console.log(`项目: ${dumpData.project}`);
+              console.log(`当前变更: ${dumpData.currentChange || '(无)'}`);
+              console.log(`当前阶段: ${dumpData.currentStage || '(无)'}`);
+              console.log(`最后活跃: ${dumpData.lastActive || '(无)'}`);
+              console.log(`产物数: ${dumpData.artifacts?.length || 0}`);
+            }
+          }
+          break;
+        }
         default:
-          console.log('用法: sillyspec progress <init|show|validate|reset|set-stage|add-step|update-step|complete-stage>');
+          console.log('用法: sillyspec progress <init|show|validate|reset|set-stage|add-step|update-step|complete-stage|dump>');
           process.exit(2);
       }
       break;
