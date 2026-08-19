@@ -78,6 +78,7 @@ SillySpec CLI — 规范驱动开发工具包
     list | meta <change>                列出 / 读取 meta.json
     cleanup <change> [--force]          清理 worktree
     doctor [--fix] [--stale-hours N]    健康检查 + 修复
+        --cleanup-ghosts [--confirm]     归档幽灵 active 记录（db 有行无目录，SS-2）
 
   sillyspec local detect [--dir <path>]   生成本地配置 local.yaml（纯 fs 嗅探，零 token、不跑 scan）
   sillyspec config [schema] [--json]      打印 local.yaml 全部已知键 + 生效状态 + 读取点（堵外部 agent 配置发现缺口）
@@ -822,8 +823,9 @@ async function main() {
     // slice(1) 去掉的是 'run' 字面量，这里 command 本身就是 stage 名不能丢。
     case 'doctor': {
       const doctorEffectiveDir = specDir ? dir : resolveEffectiveDir(dir);
-      // 执行流：--cleanup-remnant / --dump-db（结构化诊断之外的修复/取证动作）
+      // 执行流：--cleanup-remnant / --cleanup-ghosts / --dump-db（结构化诊断之外的修复/取证动作）
       const cleanupRemnant = filteredArgs.includes('--cleanup-remnant');
+      const cleanupGhosts = filteredArgs.includes('--cleanup-ghosts');
       const dumpDbFlag = filteredArgs.includes('--dump-db');
       const doctorConfirm = filteredArgs.includes('--confirm');
       const pathIdx = filteredArgs.indexOf('--path');
@@ -891,6 +893,23 @@ async function main() {
           for (const p of list) console.log(`   ${doctorConfirm ? '✅' : '-'} ${p}`);
           for (const e of r.errors) console.log(`   ❌ ${e.path}: ${e.error}`);
           if (!doctorConfirm && r.count > 0) console.log(`\n加 --confirm 执行删除（仅删 0 字节占位，不动有内容的 db）。`);
+        }
+        process.exitCode = r.errors.length > 0 ? 1 : 0;
+        break;
+      }
+      if (cleanupGhosts) {
+        // SS-2（2026-08-20）：归档幽灵行（db active 无目录）。默认 dry-run，--confirm 才写。
+        const { cleanupGhostChanges } = await import('./doctor-diagnostics.js');
+        const r = await cleanupGhostChanges({ cwd: doctorEffectiveDir, specDir, confirm: doctorConfirm });
+        if (json) {
+          console.log(JSON.stringify(r, null, 2));
+        } else {
+          console.log(`👻 幽灵 active 记录（db active 但无目录）${doctorConfirm ? '已归档' : '待清理（dry-run）'}：${r.count} 个  [db: ${r.db_path || '(未找到)'}]`);
+          for (const n of r.ghosts) console.log(`   ${doctorConfirm ? '✅' : '-'} ${n}`);
+          for (const e of r.errors) console.log(`   ❌ ${e.name || ''}: ${e.error}`);
+          if (!doctorConfirm && r.count > 0) console.log(`
+加 --confirm 执行归档（仅改 status=archived，可逆；不删任何目录）。`);
+          if (r.reason) console.log(`ℹ️ ${r.reason}`);
         }
         process.exitCode = r.errors.length > 0 ? 1 : 0;
         break;

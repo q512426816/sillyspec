@@ -181,14 +181,14 @@ export class StageMachine {
       const data = this.pm.read(cwd, cn);
       const dirMissing = !existsSync(join(changesRoot, cn));
       if (!data) {
-        console.log(`  📂 ${cn} — (无法读取)${dirMissing ? ' ⚠️ 目录缺失（残留记录，可用 doctor 清理）' : ''}`);
+        console.log(`  📂 ${cn} — (无法读取)${dirMissing ? ' ⚠️ 目录缺失（残留记录，sillyspec doctor --cleanup-ghosts --confirm 可归档清理）' : ''}`);
         continue;
       }
       const currentStage = data.currentStage || '(无)';
       const stageLabel = STAGE_LABELS[data.currentStage] || currentStage;
       const lastActive = data.lastActive ? this._timeAgo(data.lastActive) : '未知';
 
-      console.log(`  📂 ${cn}${dirMissing ? ' ⚠️ 目录缺失（残留记录，可用 doctor 清理）' : ''}`);
+      console.log(`  📂 ${cn}${dirMissing ? ' ⚠️ 目录缺失（残留记录，sillyspec doctor --cleanup-ghosts --confirm 可归档清理）' : ''}`);
       console.log(`     当前阶段: ${stageLabel}  最近活跃: ${lastActive}`);
       console.log('');
     }

@@ -211,6 +211,8 @@ function detectMultiDb(cwd, pointer) {
       change_count: d.change_count,
       last_active: d.last_active,
       active: d.readable ? summarizeActive(d.active_changes) : null,
+      // SS-2：全量名单随摘要透传，供 D4 精确集合对账（ghost/orphan）消费。
+      active_changes: d.readable ? (d.active_changes || []) : [],
     })),
   };
 }
@@ -373,25 +375,37 @@ function detectChangeDbConsistency(cwd, pointer, multiDb) {
   }
   const authoritySpecRoot = pointer.present && pointer.specRoot ? pointer.specRoot : join(cwd, '.sillyspec');
   const dirChanges = listChanges(authoritySpecRoot);
-  const dbActive = auth.active || { count: 0, sample: [] };
-  // active.count 是权威 db 的 active change 数；但 listChanges 给的是目录数，两者口径要对齐
-  // 这里用 active_changes 全量需从 probe 取——summary 只给了 count/sample，
-  // 所以用 count 与目录数做粗对齐，细对齐留给后续 dump。
-  const dirCount = dirChanges.length;
-  const dbCount = dbActive.count;
+  // SS-2（2026-08-20）：从 count 粗对齐升级为精确集合对账——ghost_rows（db active
+  // 无目录）与 orphan_dirs（目录无 db active 行）逐名列出，供 doctor --cleanup-ghosts
+  // 消费，不再让 52 条残留只停留在「需 dump 后细对齐」。
+  const activeNames = (auth.active_changes && Array.isArray(auth.active_changes))
+    ? auth.active_changes
+    : [];
+  const dirSet = new Set(dirChanges);
+  const activeSet = new Set(activeNames);
+  const ghostRows = activeNames.filter((n) => !dirSet.has(n));
+  const orphanDirs = dirChanges.filter((n) => !activeSet.has(n));
   const findings = [];
   let pass = true;
   let severity = null;
-  // 仅当差异显著才告警（口径不完全可比，避免误报）
-  if (Math.abs(dirCount - dbCount) > Math.max(2, dirCount * 0.2)) {
+  if (ghostRows.length > 0) {
     pass = false;
     severity = CHECK_SEVERITY.WARNING;
     findings.push(
-      `权威 db active changes (${dbCount}) 与 changes/ 目录数 (${dirCount}) 差异显著——` +
-      `可能存在孤儿目录（有目录无 db 记录）或幽灵记录（db 有记录无目录），需 dump 后细对齐`
+      `幽灵记录 ${ghostRows.length} 条（db active 但无目录）：${ghostRows.slice(0, 10).join(', ')}${ghostRows.length > 10 ? ' …' : ''}——` +
+      `可用 sillyspec doctor --cleanup-ghosts --confirm 归档清理`
     );
-  } else {
-    findings.push(`权威 db active changes (${dbCount}) 与 changes/ 目录数 (${dirCount}) 基本一致`);
+  }
+  if (orphanDirs.length > 0) {
+    pass = false;
+    severity = severity || CHECK_SEVERITY.WARNING;
+    findings.push(
+      `孤儿目录 ${orphanDirs.length} 个（目录存在但无 db active 行）：${orphanDirs.slice(0, 10).join(', ')}${orphanDirs.length > 10 ? ' …' : ''}——` +
+      `先 dump 确认再手工归位，doctor 不自动删目录`
+    );
+  }
+  if (pass) {
+    findings.push(`权威 db active changes (${activeNames.length}) 与 changes/ 目录数 (${dirChanges.length}) 完全一致`);
   }
   return {
     name: 'change_db_consistency',
@@ -399,10 +413,12 @@ function detectChangeDbConsistency(cwd, pointer, multiDb) {
     pass,
     severity,
     findings,
-    safe_actions: [],
+    safe_actions: ghostRows.length > 0 ? ['sillyspec doctor --cleanup-ghosts（dry-run）→ 加 --confirm 归档幽灵行'] : [],
     authority_spec_root: authoritySpecRoot,
-    dir_count: dirCount,
-    db_active_count: dbCount,
+    dir_count: dirChanges.length,
+    db_active_count: activeNames.length,
+    ghost_rows: ghostRows,
+    orphan_dirs: orphanDirs,
   };
 }
 
@@ -707,5 +723,90 @@ function writeDump(result, authoritySpecDir) {
     return { ...result, written_to: outPath };
   } catch (e) {
     return { ...result, dump_write_error: e.message };
+  }
+}
+
+
+/**
+ * SS-2（2026-08-20）：归档幽灵行——db active 但 changes/ 无同名目录的记录。
+ *
+ * 背景：quick 收尾注销缺陷（工具侧已修）在历史会话中累积了僵尸 active 行，
+ * 污染 listChanges/progress show 的「活跃变更」列表；旧 doctor 只 WARNING 不给
+ * 动作，提示与能力不符（stage-machine 提示「可用 doctor 清理」却清不掉）。
+ *
+ * 安全设计：
+ * - 仅把 changes.status 从 active 改为 archived（对齐 change-registry 归档语义，
+ *   可逆：INSERT OR IGNORE 路径会复活同名变更，不删任何行/目录）。
+ * - 默认 dry-run 只列名单；加 confirm 才写。
+ * - 只处理「无目录」的行；孤儿目录（有目录无行）不自动删，留给人工归位。
+ */
+export async function cleanupGhostChanges({ cwd, specDir = null, confirm = false }) {
+  const pointer = resolvePointer(cwd);
+  const localSpec = join(cwd, '.sillyspec');
+  const candidates = [
+    join(localSpec, '.runtime', 'sillyspec.db'),
+    join(localSpec, 'sillyspec.db'),
+  ];
+  if (pointer.specRoot) {
+    candidates.unshift(
+      join(pointer.specRoot, '.runtime', 'sillyspec.db'),
+      join(pointer.specRoot, 'sillyspec.db'),
+    );
+  }
+  let dbPath = null;
+  for (const p of candidates) {
+    try {
+      if (existsSync(p) && statSync(p).size > 0) { dbPath = p; break; }
+    } catch { /* stat 失败跳过 */ }
+  }
+  if (!dbPath) {
+    return { action: 'skipped', reason: '未找到非空 sillyspec.db', ghosts: [], archived: [], errors: [], count: 0 };
+  }
+  const authoritySpecRoot = (pointer.present && pointer.specRoot && existsSync(pointer.specRoot))
+    ? pointer.specRoot
+    : localSpec;
+  const changesDir = join(authoritySpecRoot, 'changes');
+  let dirNames = [];
+  try {
+    dirNames = readdirSync(changesDir, { withFileTypes: true })
+      .filter((e) => e.isDirectory() && e.name !== 'archive')
+      .map((e) => e.name);
+  } catch { /* 目录缺失 → 全部 active 都是幽灵 */ }
+  const dirSet = new Set(dirNames);
+
+  let db = null;
+  const archived = [];
+  const errors = [];
+  try {
+    db = openDatabase(dbPath, { readOnly: !confirm });
+    const activeNames = pluckAll(db, "SELECT name FROM changes WHERE status='active'");
+    const ghosts = activeNames.filter((n) => !dirSet.has(n));
+    if (confirm) {
+      const now = new Date().toISOString();
+      const stmt = db.prepare("UPDATE changes SET status = 'archived', last_active = ? WHERE name = ? AND status = 'active'");
+      for (const n of ghosts) {
+        try {
+          stmt.run(now, n);
+          archived.push(n);
+        } catch (e) {
+          errors.push({ name: n, error: e.message });
+        }
+      }
+    }
+    const activeAfter = confirm ? pluckAll(db, "SELECT name FROM changes WHERE status='active'") : null;
+    return {
+      action: confirm ? 'archived' : 'dry_run',
+      db_path: dbPath,
+      changes_dir: changesDir,
+      ghosts: confirm ? archived : ghosts,
+      archived,
+      errors,
+      count: ghosts.length,
+      active_after: activeAfter,
+    };
+  } catch (e) {
+    return { action: 'error', reason: e.message, ghosts: [], archived: [], errors: [{ error: e.message }], count: 0 };
+  } finally {
+    if (db) { try { db.close(); } catch { /* 忽略关闭失败 */ } }
   }
 }
