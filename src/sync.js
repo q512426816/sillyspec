@@ -409,7 +409,12 @@ export class SyncManager {
       Authorization: `Bearer ${platform.token}`,
     };
     const pushedAt = new Date().toISOString();
-    if (platform.user) headers['X-SillySpec-User'] = platform.user; // 推送者身份（task-08 local.yaml platform.user）
+    // 推送者身份（task-08）：local.yaml platform.user 显式配置优先，缺省回退
+    // resolvePlatformUser（git user.name > env USER/USERNAME，与 connect 写入侧同口径）。
+    // 修 last_pusher 空：此前仅 platform.user 配置时发送，本地直跑场景 local.yaml
+    // 常无 user 字段 → header 缺失 → 平台 last_pusher 恒空（2026-08-19 坑文档改进点 4）。
+    const pushUser = platform.user || resolvePlatformUser(this.cwd) || null;
+    if (pushUser) headers['X-SillySpec-User'] = pushUser;
     const baseTs = progressData.changes && progressData.changes[0] && progressData.changes[0].last_synced_platform_ts;
     if (baseTs) headers['X-SillySpec-Base-Ts'] = baseTs; // base_ts 乐观锁（NULL=首次同步不设，平台接受首次 push）
     headers['X-SillySpec-Pushed-At'] = pushedAt; // 平台存 last_pushed_at，作下次其他用户 push 的 base_ts 比对基准
@@ -425,7 +430,18 @@ export class SyncManager {
     if (!res.ok) {
       // 409 = base_ts 乐观锁冲突（平台已有更新）；读回平台最新 JSON 供 task-12 完整冲突处理
       if (res.status === 409) {
-        console.warn(`[sync] 冲突: ${changeName} 平台已有更新（base_ts 过期），请 platform status / resolve 处理`);
+        // 醒目冲突横幅（坑 2026-08-19-platform-sync-base-ts-silent-conflict 改进点 2）：
+        // 此前仅单行 warn，冲突文件静默落 .runtime——同步已卡死但 Agent/用户无从察觉，
+        // 平台页面永久停在旧阶段。横幅明确告知「已卡死 + 卡死原因 + 恢复命令」，不能只落文件。
+        console.warn('');
+        console.warn('⚠️⚠️⚠️════════════════════════════════════════════════════');
+        console.warn(`⚠️ 平台同步冲突：变更「${changeName}」推送被拒（base_ts 过期，平台已有更新）`);
+        console.warn('⚠️ 该变更的自动同步已卡死，不会自愈——需人工 resolve 才能恢复：');
+        console.warn(`⚠️   1. sillyspec platform status     # 查看未决冲突`);
+        console.warn(`⚠️   2. sillyspec platform resolve ${changeName} --keep-local | --take-platform | --abort`);
+        console.warn(`⚠️   3. sillyspec platform sync --change ${changeName}`);
+        console.warn('⚠️ 冲突详情已落盘: .sillyspec/.runtime/sync-conflict-' + changeName + '.json');
+        console.warn('⚠️⚠️⚠️════════════════════════════════════════════════════');
         // 平台 409 响应 { conflict:true, platform_progress, last_pushed_at }，platform_progress 即平台最新 progress JSON
         const platformProgress = res.body && res.body.platform_progress ? res.body.platform_progress : res.body;
         const platformLastPushedAt = (res.body && res.body.last_pushed_at) || null;
@@ -759,10 +775,39 @@ export class SyncManager {
       } catch (err) {
         console.warn(`[sync] 读取本地脏度失败 (${changeName}): ${err.message}`);
       }
-      const localDirty = localLastModified && localLastSynced && localLastModified > localLastSynced;
-      const platformNewer = platformPushedAt && (!localLastSynced || platformPushedAt > localLastSynced);
+      let localDirty = localLastModified && localLastSynced && localLastModified > localLastSynced;
+      let platformNewer = platformPushedAt && (!localLastSynced || platformPushedAt > localLastSynced);
+      // 自竞态防御（坑 2026-08-19-platform-sync-base-ts-silent-conflict 改进点 3）：
+      // 判冲突用的 localLastSynced 若落后于本进程刚完成的 push 回填（另一连接 3ms 前推完、
+      // 本 pull 在其回填写库前读了旧值），会把自己刚写的 platformPushedAt 误判为「平台有更新」
+      // → 卡死。重读一次 DB：期间 push 回填已落库则 base_ts 已推进（>= platformPushedAt），
+      // platformNewer 翻 false，冲突自愈。重读仍旧则真冲突，维持原判。
       if (localDirty && platformNewer) {
-        console.warn(`[sync] pull 冲突: ${changeName} 本地有未同步改动且平台已更新（base_ts 过期），请 platform resolve 处理`);
+        try {
+          const { ProgressManager } = await import('./progress.js');
+          const pm = new ProgressManager({ specDir: safePlatformSpecDir(this.cwd) });
+          const fresh = pm._ensureDB(this.cwd).getDb().prepare(
+            'SELECT last_synced_platform_ts FROM changes WHERE name = ?'
+          ).get(changeName);
+          if (fresh && fresh.last_synced_platform_ts) {
+            localLastSynced = fresh.last_synced_platform_ts;
+            platformNewer = platformPushedAt && platformPushedAt > localLastSynced;
+            if (!platformNewer) {
+              debugLog(`[sync] pull 自竞态解除: base_ts 已被本进程 push 回填推进到 ${localLastSynced}，平台 ts ${platformPushedAt} 非更新`);
+            }
+          }
+        } catch { /* 重读失败维持原判（fail-closed 到真冲突分支） */ }
+      }
+      if (localDirty && platformNewer) {
+        console.warn('');
+        console.warn('⚠️⚠️⚠️════════════════════════════════════════════════════');
+        console.warn(`⚠️ 平台同步冲突：变更「${changeName}」pull 判定冲突（本地有未同步改动且平台已更新，base_ts 过期）`);
+        console.warn('⚠️ 该变更的自动同步已卡死，不会自愈——需人工 resolve 才能恢复：');
+        console.warn(`⚠️   1. sillyspec platform status     # 查看未决冲突`);
+        console.warn(`⚠️   2. sillyspec platform resolve ${changeName} --keep-local | --take-platform | --abort`);
+        console.warn(`⚠️   3. sillyspec platform sync --change ${changeName}`);
+        console.warn('⚠️ 冲突详情已落盘: .sillyspec/.runtime/sync-conflict-' + changeName + '.json');
+        console.warn('⚠️⚠️⚠️════════════════════════════════════════════════════');
         // 写冲突文件（task-12 / D-002）：强制提示，绝不 auto-merge
         const conflictPath = this._writeConflictFile(changeName, {
           base_ts: localLastSynced,

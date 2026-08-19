@@ -91,3 +91,16 @@
 根因：archive 步骤4确认归档把变更目录移到 archive/ 后，sync.js sync() 的 existsSync(changeDir) 检查硬拦 return，步骤4-5 的完成状态永远推不到平台，平台停留在最后一次成功同步的 3/5
 方案：移除 existsSync 硬拦改为 console.warn 继续走 serializeForSync 从 DB 读最终状态推平台（数据源是 SQLite 非文件系统目录，目录检查是多余前置）
 结果：npm test 223 文件全过 0 失败 + npm run lint 通过（313 文件语法+内容规则）
+
+## ql-20260819-001-6a9e | 2026-08-19 09:02:58 | platform sync 冲突静默死亡三缺陷修复（横幅警告/自竞态防御/last_pusher 空）
+状态：已完成
+关联变更：（无）
+文件：
+- src/sync.js（X-SillySpec-User git 兜底 + 409/pull 冲突醒目横幅 + pull 自竞态重读防御）
+- test/platform-sync-silent-death.test.mjs（新增三修复点验收测试（user 兜底/冲突横幅/自竞态））
+- test/platform-sync-push-header.test.mjs（断言更新到新契约（无 user → git 兜底非缺失））
+- docs/sillyspec/platform-interface-map.md（sync.js 行号锚点随源码插入偏移同步）
+需求：platform sync 冲突静默死亡三缺陷修复（横幅警告/自竞态防御/last_pusher 空）
+根因：冲突仅单行 warn 易淹没、pull 判冲突的 base_ts 首读撞 push 回填落库前窗口会误判自竞态、X-SillySpec-User 仅 local.yaml 显式配置才发送致平台 last_pusher 恒空
+方案：push/pull 冲突升级醒目横幅含 resolve 三步指引；pull 判冲突前重读 base_ts 已推进则自愈；user 兜底 git user.name>env（与 connect 写入侧同口径）
+结果：新增 platform-sync-silent-death 测试 11 断言全绿，存量 sync 测试零回归（push-header 断言随契约更新），lint 通过，doc-ref-check 80 处引用全绿

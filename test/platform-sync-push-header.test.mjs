@@ -145,7 +145,11 @@ const sm2 = new SyncManager(cwd2);
 const r2 = await sm2.sync('legacy-change');
 assert(r2.synced === 1, `旧配置无 user + base_ts NULL 仍 push 成功（实际 synced=${r2.synced}）`);
 const h2 = lastReq && lastReq.headers;
-assert(h2 && h2['x-sillyspec-user'] === undefined, '无 user 配置 → 不设 X-SillySpec-User（未知推送者，平台兜底）');
+// 2026-08-19 修复（坑 base-ts-silent-conflict 改进点 4）：local.yaml 无 user 时回退
+// git user.name > env（与 connect 写入侧 resolvePlatformUser 同口径），修平台 last_pusher 恒空。
+// 本仓 git user.name 恒存在（qinyi），断言 header 非空字符串。
+assert(h2 && typeof h2['x-sillyspec-user'] === 'string' && h2['x-sillyspec-user'].length > 0,
+  `无 user 配置 → X-SillySpec-User 回退 git user.name（实际 ${JSON.stringify(h2 && h2['x-sillyspec-user'])}）`);
 assert(h2 && h2['x-sillyspec-base-ts'] === undefined, 'base_ts NULL（首次同步）→ 不设 X-SillySpec-Base-Ts');
 assert(h2 && typeof h2['x-sillyspec-pushed-at'] === 'string', 'X-SillySpec-Pushed-At 始终设');
 const parsed2 = JSON.parse(lastReq.body);
