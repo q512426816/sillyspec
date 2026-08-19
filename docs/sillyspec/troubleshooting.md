@@ -160,3 +160,22 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 **〔2026-08-19 已修 ql-20260819-007-d4f0〕**：plan 审查计划步 prompt 章节标题逐字钉死（「## 模块影响矩阵」「## 未匹配文件」，附变体警告）；新增三方同源回归测试 test/plan-module-impact-sections.test.mjs——解析 templates/workflows/archive-impact.yaml 的 contains_sections，断言 plan prompt + archive 降级补写 prompt 均含期望章节名 + 分发模板与 dogfood 活副本逐字节一致，任一侧漂移即测试失败。
 
 **关联记忆**：`[[sillyspec-doc-consistency-debt]]`（ enforcement 全在 design↔代码、模板漂移同类债）
+
+## 13. 工具驾驭三坑：review.json 手工回填 / --answer 提示滞后 / base_ts 冲突再现（2026-08-19 闭环）
+
+**症状（用户实测三条）**：
+1. worktree cleanup 后 7 个已实现 task 的 review.json 报缺失，被迫手工回填——实际是 marker 链断裂后完成度扫描错拿了别的 run（或空 run），真实 review 一直都在。
+2. archive step3（requiresWait）标 `--wait` 后习惯性 `--done`，报错此刻才知道要 `--answer`；且旧逻辑普通 `--done` 会静默跳过 waiting 步骤推进后续步骤。
+3. 平台同步 base_ts 冲突反复出现：同机多进程（CLI+daemon）并发 push 互相撞 409 落冲突文件；resolve --keep-local 后忘了手动 push，期间他人再推 → 又 409 的循环。
+
+**根因**：
+1. run 目录 `execute-runs/<runId>/` 不带变更身份，change→run 唯一链接是 `current-execute-run-id-<change>` marker；cleanup/归档清理/并行误删后链断，fallback 盲取 mtime 最新 → 跨变更错配。且 cannot_verify 自动草稿与真实 pass 混在「已通过」里不可见，掩盖「未真正复核」。
+2. `completeStep` 的 currentIdx 选择排除 waiting，普通 `--done` 无守卫；wait/waiting 相关提示散落在撞错后的报错里，未前置到标记/暂停时刻。
+3. push 成功后的 base_ts 回填写在本机共享 DB；并发 B 进程持旧 base_ts 撞 A 刚推完的 409，一律落冲突文件等人工 resolve——赢者其实是自己人。keep-local 推进 base_ts 后停在「请手动 push」，忘推即复发。
+
+**修复（2026-08-19，change 三处根治）**：
+1. **change 归属戳**：marker 三个写入点（stage.js 主点 + gates.js/task-review.js 补写点）同步写 `execute-runs/<runId>/change` 戳；`resolveExecuteRunForChange`（task-review.js）marker→戳→覆盖度启发三级归属，archive 完成度报告不再错配；无法归属时报告明示「定位失败」而非「review 全缺」。cannot_verify 草稿在完成度报告单列计数，archive step1 判定规则要求先兑现 verify requiredEvidence 再放行。测试 execute-run-change-stamp.test.mjs（20 断言）。
+2. **--answer 前置**：waiting 未解时普通 `--done` fail-closed 拒绝（`--done --answer` 坑1 路径不受影响），报错直接给两条出路；`--wait` 标记时刻即打印 requiresWait 语义（`--continue --answer` 后回待执行、仍需 `--done` 收尾 / `--done --answer` 一步完成）；「阶段暂停」消息附恢复命令；`_getNextSuggestion` 对 waiting 阶段建议 `--continue --answer`。测试 run-wait-frontload.test.mjs（13 断言）。
+3. **base_ts 自愈**：push 409 先 fresh 重读 DB base_ts，已 ≥ 平台回执 ts（本机并发已回填）→ 刷新重试一次自愈、不落冲突文件；外来推送不满足条件自然走原冲突路径（fail-closed）。resolve --keep-local 后自动重推本地闭环，重推被拒时软提示不落新文件（保持「keep-local 清冲突文件」生命周期契约，下次常规 sync 按新 base 重新判定）；成功回填的 base_ts 写入加重试（共享 SQLite WAL 并发窗口）。测试 platform-sync-self-heal.test.mjs（15 断言）。
+
+**关联记忆**：`[[sillyspec-worktree-cleanup-marker-chain]]`、`[[sillyspec-platform-sync-base-ts-silent-conflict]]`
