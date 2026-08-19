@@ -30,12 +30,12 @@ test('getChangeStage：未注册 → null；注册 → scan/active；推进 → 
     // 未注册 → null
     assert.equal(pm.getChangeStage(tmp, changeName), null, '未注册变更应返回 null')
 
-    // registerChange → 表默认 scan/active
+    // registerChange → 表默认 scan/active（无 stages 行 → stage_status=null，ql-20260819-010）
     pm.registerChange(tmp, changeName)
     assert.deepEqual(
       pm.getChangeStage(tmp, changeName),
-      { current_stage: 'scan', status: 'active' },
-      '注册后应返回默认 scan/active',
+      { current_stage: 'scan', status: 'active', stage_status: null },
+      '注册后应返回默认 scan/active + stage_status null',
     )
 
     // stage 推进（直接 SQL 模拟 verify 停留，不依赖 initChange 的阶段编排）
@@ -50,6 +50,35 @@ test('getChangeStage：未注册 → null；注册 → scan/active；推进 → 
     const archived = pm.getChangeStage(tmp, changeName)
     assert.equal(archived.status, 'archived', '归档后 status 应为 archived')
     assert.equal(archived.current_stage, 'verify', '归档后 current_stage 保留')
+  } finally {
+    try { rmSync(tmp, { recursive: true, force: true }) } catch {}
+  }
+})
+
+test('getChangeStage：stages 行带出 stage_status（brainstorm completed 空窗可判）', () => {
+  const tmp = mkdtempSync(join(tmpdir(), 'pm-stage2-'))
+  const specBase = join(tmp, '.sillyspec')
+  try {
+    const pm = new ProgressManager({ specDir: specBase })
+    pm.init(tmp)
+    const dbPath = join(specBase, '.runtime', 'sillyspec.db')
+    const changeName = '2026-08-19-stage-completed'
+
+    pm.registerChange(tmp, changeName)
+    // 模拟 brainstorm 完成但 current_stage 尚未推进到 plan 的空窗（事故现场形态）：
+    // changes.current_stage='brainstorm' + stages 里 brainstorm 行 status='completed'
+    const db = new DatabaseSync(dbPath)
+    try {
+      const changeId = db.prepare('SELECT id FROM changes WHERE name = ?').get(changeName).id
+      db.prepare(
+        "INSERT INTO stages (change_id, stage, status) VALUES (?, 'brainstorm', 'completed')"
+      ).run(changeId)
+      db.prepare("UPDATE changes SET current_stage = 'brainstorm' WHERE id = ?").run(changeId)
+    } finally { db.close() }
+
+    const info = pm.getChangeStage(tmp, changeName)
+    assert.equal(info.current_stage, 'brainstorm', 'current_stage 读 brainstorm')
+    assert.equal(info.stage_status, 'completed', '空窗期应读出 stage_status=completed')
   } finally {
     try { rmSync(tmp, { recursive: true, force: true }) } catch {}
   }

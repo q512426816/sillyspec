@@ -30,11 +30,24 @@ export class ChangeRegistry {
   getChangeStage(cwd, changeName) {
     const db = this.pm._ensureDB(cwd);
     const sqlDb = db.getDb();
+    // ql-20260819-010：LEFT JOIN stages 带 current_stage 对应阶段行的 status（stage_status）。
+    // quick 轻量归档闸除了「停在哪个阶段」还需要「该阶段是否已完成」——brainstorm 完成
+    // 到 plan 开始之间存在 current_stage 仍读 brainstorm 的空窗，只看阶段名会把即将进
+    // plan 的变更误判为僵尸（2026-08-19 quick-done-autoarchive-misfire 缺陷①）。
+    // 无阶段行（未 initChange 的目录桩 / brownfield）→ stage_status=null，调用方按
+    // 未完成放行（维持旧行为）。
     const row = sqlDb.prepare(
-      'SELECT current_stage, status FROM changes WHERE name = ?'
+      `SELECT c.current_stage, c.status, s.status AS stage_status
+       FROM changes c
+       LEFT JOIN stages s ON s.change_id = c.id AND s.stage = c.current_stage
+       WHERE c.name = ?`
     ).get(changeName);
     if (row === undefined) return null;
-    return { current_stage: row.current_stage || '', status: row.status || '' };
+    return {
+      current_stage: row.current_stage || '',
+      status: row.status || '',
+      stage_status: row.stage_status || null,
+    };
   }
 
   /**

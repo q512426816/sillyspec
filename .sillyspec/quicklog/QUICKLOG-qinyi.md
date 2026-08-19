@@ -202,12 +202,31 @@
 方案：grep 源码语义定位逐处重锚（定义优先于调用点，applyWorktree 行改双引用解决签名行无 token）；顺手把 L104 裸数字 /382 升级为合法 ref
 结果：docs check 378/378 全绿（修前 11 失效，新增 1 处合法断言）；纯 doc 未触 src/test 按规则 8 跳过 npm test/lint
 
-## ql-20260819-009-1463 | 2026-08-19 13:29:22 | quick 会话起步即推 QUICKLOG「进行中」占位条目到平台：run quick 起步在 QUICKLOG 预写进行中骨架条目后立即触发 spec 树增量同步（triggerSync→syncSpecTreeOnly），--done …
-状态：进行中
+## ql-20260819-009-1463 | 2026-08-19 13:29:22 | quick 起步（run quick
+状态：已完成
 关联变更：（无）
-文件：src/run/stage.js, test/platform-sync-quick-session-spectree.test.mjs, docs/sillyspec/file-lifecycle.md
+文件：docs/sillyspec/file-lifecycle.md, src/run/stage.js, test/platform-sync-quick-session-spectree.test.mjs
+需求：quick 起步（run quick，含平台 claim 派发模式同路径）即在 QUICKLOG 预写「进行中」占位条目并触发 spec 树增量同步，让平台快速修复列表实时可见执行中的 quick，消除起步到第一次 --done 的可见盲窗
+根因：runStage 前段三处 triggerSync（autoDetectChange/currentStage 切换/stale 复位）全在 quickGuard 块骨架分配之前执行，进行中条目要等第一次 --done 的 complete.js:452 才上平台（本会话自身即活证据）；--done 终态链路顺序本就正确（handleQuickStageCompletion 翻终态在前 complete.js:392 triggerSync 在后）无需改
+方案：stage.js quickGuard 块尾 pm._write 后补一行 triggerSync（注释说明盲窗成因/降级语义/幂等边界——existingGuard 跨进程重入跳过本块不重复推）；测试扩 platform-sync-quick-session-spectree 场景5 用异步 spawn 跑 CLI 子进程（spawnSync 冻结父进程事件循环致 mock server 无法 accept 假红，注释已记）；file-lifecycle.md:140 补同步时点
+结果：场景5 改前红改后绿（起步 spec-sync POST 到达+quicklog op+解码含状态：进行中+不发 progress），原4场景不回归；npm test 全量 exit=0；lint 321 文件过；真实平台手动补推 synced=4 服务端 v25 hash 对账一致。审计拦得的窗口期并发文件（change-registry.js 等，ql-20260819-010 会话产出）与本会话无涉，按并发协议 flag 解锁归审计行；.sillyspec 根位置空库残留已备份仓外清除
+审计：⚖️ 归属切分：5 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：src/progress/change-registry.js, src/run/complete-handlers.js, test/progress-get-change-stage.test.mjs, test/quick-close-linked-changes.test.mjs, test/run-complete-step-brainstorm.test.mjs
 
-## ql-20260819-010-0af1 | 2026-08-19 13:29:24 | (quick 任务)
+## ql-20260819-010-0af1 | 2026-08-19 13:29:24 | 修复 quick --done 轻量归档误伤进行中变更的缺陷
+状态：已完成
+关联变更：（无）
+文件：
+- src/progress/change-registry.js（getChangeStage LEFT JOIN stages 带 stage_status）
+- src/run/complete-handlers.js（阶段完成态闸 completed 不放行）
+- test/progress-get-change-stage.test.mjs（stage_status 断言+空窗用例）
+- test/quick-close-linked-changes.test.mjs（completed skip+in-progress closed 用例）
+需求：修复 quick --done 轻量归档误伤进行中变更的缺陷。
+根因：brainstorm 完成到 plan 开始的空窗期 current_stage 仍读 brainstorm，且 propose 骨架 tasks.md 无任务行使「无未勾选框=全勾」恒真，阶段闸只看阶段名误放行（2026-08-19 cross-workspace-team-mission 误归档事故）。
+方案：getChangeStage LEFT JOIN stages 带出 stage_status（无阶段行归一 null），closeQuickLinkedChanges 加阶段完成态闸——completed 一律 skip 走原流程；不动 isChangeTasksComplete（只有 ql 行的真僵尸逃生通道须保留）；两测试文件补 completed skip/in-progress closed/空窗查询用例。
+结果：node --test 15/15 过，全量 npm test 0 fail（0 not ok），lint 321 文件过。解锁说明：审计拦的 test/platform-sync-quick-session-spectree.test.mjs 与 .sillyspec/sillyspec.db* 为并行会话脏文件与共享 runtime DB，非本 quick 改动，提交用 pathspec 隔离不裹挟。
+审计：⚖️ 归属切分：5 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：docs/sillyspec/file-lifecycle.md, src/run/stage.js, test/platform-sync-quick-session-spectree.test.mjs, .sillyspec/sillyspec.db, .sillyspec/sillyspec.db.schema-version
+
+## ql-20260819-011-119b | 2026-08-19 13:38:58 | 修复：完整流程 change 的 changes.title 在 brainstorm 单步推进时不刷新——design.md 第 6 步已落盘但 title 仍存英文 autoName 兜底 key，刷新只在阶段完成分支触发。把 deri…
 状态：进行中
 关联变更：（无）
-文件：src/progress/change-registry.js, src/run/complete-handlers.js, test/progress-get-change-stage.test.mjs, test/quick-close-linked-changes.test.mjs
+文件：（见实际改动）

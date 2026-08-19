@@ -1049,6 +1049,11 @@ async function closeSingleQuickLinkedChange({ pm, cwd, specBase, changeName, pla
  * （d192f89 原始场景：评估 small 转 quick、停在 brainstorm 的僵尸变更）。execute 完成后
  * tasks.md 必然全勾选而流程未收尾——不看 current_stage 会把 verify/中途的完整流程变更
  * 绕过 verify/archive 校验直接归档注销（quick-close-midflight 缺陷）。
+ *
+ * 阶段名允许集之外还有「阶段完成态」闸（ql-20260819-010，quick-done-autoarchive-misfire
+ * 缺陷①）：current_stage=brainstorm 但该阶段 status=completed（brainstorm 收尾到 plan
+ * 开始之间的空窗）≠ 僵尸变更——此时关联 quick --done 会把即将进 plan 的进行中变更误
+ * 轻量归档。stage_status=completed 一律走原流程收尾。
  */
 const QUICK_CLOSE_ALLOWED_STAGES = new Set(['', 'scan', 'brainstorm'])
 
@@ -1085,6 +1090,19 @@ export async function closeQuickLinkedChanges({ pm, cwd, specBase, linkedChanges
         skipped.push({
           name: changeName,
           reason: `变更处于完整流程「${stageInfo.current_stage}」阶段（tasks.md 全勾不等于流程收尾），不自动归档——请走原流程收尾（sillyspec progress show 查看进度）`,
+        })
+        continue
+      }
+      // ql-20260819-010（quick-done-autoarchive-misfire 缺陷①）：当前阶段已完成 ≠
+      // 从未进入完整流程的僵尸。brainstorm 收尾到 plan 开始之间的空窗里 current_stage
+      // 仍读 brainstorm，只看阶段名会把即将进 plan 的变更误轻量归档（propose 骨架
+      // tasks.md 除 quick 追加的 ql 行外没有任务行，「无未勾选框=全勾」恒真）。
+      // stage_status=completed 一律原流程收尾；null（无阶段行/brownfield）与旧调用方
+      // mock 缺字段（undefined）均按未完成放行，僵尸逃生通道行为不变。
+      if (stageInfo !== null && stageInfo.stage_status === 'completed') {
+        skipped.push({
+          name: changeName,
+          reason: `变更当前阶段「${stageInfo.current_stage || '(空)'}」已完成（推进/收尾中，非僵尸变更），不自动归档——请走原流程收尾（sillyspec progress show 查看进度）`,
         })
         continue
       }

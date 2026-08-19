@@ -44,12 +44,19 @@ function makePm(stageByChange = null) {
   return {
     unregisterChange: (cwd, changeName) => { calls.push({ cwd, changeName }) },
     // stageByChange: null = 所有变更无 DB 记录（默认，未注册目录桩）；对象 = 按名返回
-    // { current_stage, status }（缺省键归一 null）
+    // { current_stage, status, stage_status }（缺省键归一 null；stage_status 为
+    // ql-20260819-010 新增的当前阶段完成态，旧 mock 不带 → undefined 按未完成放行）
     getChangeStage: stageByChange === null
       ? () => null
       : (cwd, changeName) => {
           const s = stageByChange[changeName]
-          return s ? { current_stage: s.current_stage ?? null, status: s.status ?? null } : null
+          return s
+            ? {
+                current_stage: s.current_stage ?? null,
+                status: s.status ?? null,
+                stage_status: s.stage_status ?? null,
+              }
+            : null
         },
     _calls: calls,
   }
@@ -250,6 +257,58 @@ test('current_stage=brainstorm + tasks 全勾 → closed（small 逃生通道僵
     const result = await closeQuickLinkedChanges({ pm, cwd, specBase, linkedChanges: [changeName] })
 
     assert.deepEqual(result.closed, [changeName], 'closed 应含该变更（brainstorm 停留 = 轻量场景）')
+    assert.equal(pm._calls.length, 1, 'unregisterChange 应被调用')
+    assert.ok(!existsSync(changeDir), '源目录应被移走')
+  } finally {
+    cleanup(specBase)
+  }
+})
+
+// ── 阶段完成态闸（ql-20260819-010 / quick-done-autoarchive-misfire 缺陷①）─────────
+// 事故形态：brainstorm 已 completed、plan 尚未开始的空窗里 current_stage 仍读
+// brainstorm，propose 骨架 tasks.md 无任务行（「无未勾选框=全勾」恒真）→ 关联 quick
+// --done 把即将进 plan 的进行中变更误轻量归档。stage_status=completed 一律不放行。
+
+test('current_stage=brainstorm + stage_status=completed + tasks 全勾 → skipped（事故场景：阶段完成空窗不放行）', async () => {
+  const specBase = makeSpecBase('qclc-brainstorm-done-')
+  const cwd = specBase
+  const changeName = '2026-08-19-cross-ws-mission'
+  try {
+    const changeDir = makeChange(
+      specBase,
+      changeName,
+      '- task-01：示例任务（propose 骨架，无勾选框）\n- [x] ql-20260819-002-4c90 提案：示例\n',
+    )
+    const pm = makePm({
+      [changeName]: { current_stage: 'brainstorm', status: 'active', stage_status: 'completed' },
+    })
+
+    const result = await closeQuickLinkedChanges({ pm, cwd, specBase, linkedChanges: [changeName] })
+
+    assert.deepEqual(result.closed, [], 'closed 应为空（阶段已完成 ≠ 僵尸变更）')
+    assert.equal(result.skipped.length, 1, 'skipped 应含 1 条')
+    assert.match(result.skipped[0].reason, /已完成/, 'reason 应指明阶段已完成')
+    assert.match(result.skipped[0].reason, /不自动归档/, 'reason 应说明不自动归档')
+    assert.equal(pm._calls.length, 0, 'unregisterChange 不应被调用')
+    assert.ok(existsSync(changeDir), '源目录应保持原位')
+  } finally {
+    cleanup(specBase)
+  }
+})
+
+test('current_stage=brainstorm + stage_status=in-progress → closed（真·僵尸，逃生通道保留）', async () => {
+  const specBase = makeSpecBase('qclc-brainstorm-wip-')
+  const cwd = specBase
+  const changeName = '2026-08-19-real-zombie'
+  try {
+    const changeDir = makeChange(specBase, changeName, '- [x] ql-xxx 已完成任务\n')
+    const pm = makePm({
+      [changeName]: { current_stage: 'brainstorm', status: 'active', stage_status: 'in-progress' },
+    })
+
+    const result = await closeQuickLinkedChanges({ pm, cwd, specBase, linkedChanges: [changeName] })
+
+    assert.deepEqual(result.closed, [changeName], 'closed 应含该变更（未完成 = 僵尸场景保留）')
     assert.equal(pm._calls.length, 1, 'unregisterChange 应被调用')
     assert.ok(!existsSync(changeDir), '源目录应被移走')
   } finally {
