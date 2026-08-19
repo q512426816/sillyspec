@@ -31,6 +31,10 @@ packages/dashboard/package-lock.json
 # 平台模式本地调试残留（specRoot 指针，含本地绝对路径；git 不跟踪，若不排除就会进 npm 包）
 .sillyspec-platform*
 
+# Claude Code 会话运行时产物（定时任务锁文件等，非工具运行时依赖）
+.claude/scheduled_tasks.lock
+.claude/scheduled_tasks.json
+
 # ⚠️ 不要忽略 .claude/skills/ 和 templates/ ——
 # sillyspec init 从这两个目录复制 skill 模板和 workflow 到用户项目（init.js:209,283）。
 
