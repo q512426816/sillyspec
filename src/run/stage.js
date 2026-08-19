@@ -323,6 +323,14 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
           pm.updateChangeMeta(cwd, changeName, { title: sanitizeDesc(quickDesc), quicklogId: qlId });
         } catch { /* 回填失败不阻断 quick 启动 */ }
         pm._write(cwd, progress, changeName)
+        // ql-20260819-009：起步即推「进行中」占位条目到平台。runStage 前段三处 triggerSync
+        // （autoDetectChange / currentStage 切换 / stale 复位）全在本块之前执行——「进行中」骨架
+        // 此前要等第一次 --done 才上平台，平台快速修复列表存在起步盲窗。此刻骨架已分配 + 进度已
+        // 落盘，补一次 triggerSync 立即推 QUICKLOG（quick-<hex8> 会话自动降级 syncSpecTreeOnly
+        // 只推 spec 树；未连接平台静默跳过、8s 熔断 best-effort，均不阻断 quick 启动）。平台派发
+        // （claim）模式起步同样走 runStage 本块，一处插入全覆盖；guard 已存在的跨进程重入走上方
+        // existingGuard 分支跳过本块，条目已在平台，不重复推。
+        triggerSync(cwd, changeName, platformOpts)
       } catch (e) {
         console.warn(`⚠️ baseline 记录失败: ${e.message}`)
       }

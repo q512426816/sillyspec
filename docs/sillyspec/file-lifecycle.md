@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-05-31 11:00:00
-updated_at: 2026-08-19T15:30:00+08:00
+updated_at: 2026-08-19T13:34:00+08:00
 ---
 
 # SillySpec 文件生命周期
@@ -137,7 +137,7 @@ platform sync / pull（双向冲突命中时）
   -> .sillyspec/.runtime/sync-conflict-<change>.json         (push 409 base_ts 过期 / pull 本地脏度+平台更新 命中写，payload 含 change/base_ts/local_modified_ts/platform_last_pushed_at/platform_progress/created_at；platform resolve --keep-local|--take-platform|--abort 后必清防累积，禁止字段级 auto-merge)
 
 quick
-  -> .sillyspec/quicklog/QUICKLOG-<git-user>.md              (CLI 写入：启动分配 ql-ID 写「进行中」，完成翻「已完成」+ 追加结构化结果块 需求/根因/方案/结果，缺字段则 step3 --done 被拒)
+  -> .sillyspec/quicklog/QUICKLOG-<git-user>.md              (CLI 写入：启动分配 ql-ID 写「进行中」，完成翻「已完成」+ 追加结构化结果块 需求/根因/方案/结果，缺字段则 step3 --done 被拒。2026-08-19 ql-20260819-009 起：启动写「进行中」骨架后立即 triggerSync（run/stage.js guard 块尾）——quick-<hex8> 会话降级走 syncSpecTreeOnly 只推 spec 树，已连接平台时「进行中」占位条目起步即可见于平台快速修复列表，不等第一次 --done；未连接静默跳过、8s 熔断不阻断启动)
   -> .sillyspec/.runtime/quick-sessions/<sessionId>/guard.json  (CLI 启动建：sessionId=quick-<uuid8>，含 baselineFiles/allowedFiles/allowedFilesHash/linkedChanges/quicklogId + specDir 锚定创建时的 specBase。run/command.js 在 quick --done/--status 时调 detectQuickSessionDrift：当前 specBase 无本 session guard、但祖先链别处 specBase 有 → 判跨 specDir 漂移，fail-fast exit 2，治 monorepo cd 子项目后的无声分裂。allowedFilesHash = step1 启动时每个 allowedFile 内容的 sha256 映射 { "<file>": "<sha256>" }，文件不存在/读失败则该 file 不录入；--done auditQuickCompletion 末尾用其检测同文件并发——allowedFile 在 baselineFiles（他者改过）且当前 sha256 ≠ 录入值（我也改了）→ commit 整文件 pathspec 会夹带他者 hunk，CLI warn 给 git add -p/patch 分离指引，advisory 不阻断；旧 guard 无此字段 → 可选链判 undefined 跳过，向后兼容)
   -> CLI appends/checks checkbox in .sillyspec/changes/<change>/tasks.md
   -> (--done 收尾, 2026-08-17) 关联变更 tasks.md 全勾选时 CLI 自动轻量归档：

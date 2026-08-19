@@ -202,10 +202,13 @@
 方案：grep 源码语义定位逐处重锚（定义优先于调用点，applyWorktree 行改双引用解决签名行无 token）；顺手把 L104 裸数字 /382 升级为合法 ref
 结果：docs check 378/378 全绿（修前 11 失效，新增 1 处合法断言）；纯 doc 未触 src/test 按规则 8 跳过 npm test/lint
 
-## ql-20260819-009-1463 | 2026-08-19 13:29:22 | quick 起步（run quick
+## ql-20260819-009-1463 | 2026-08-19 13:29:22 | quick 起步即推 QUICKLOG 进行中占位条目上平台——spec 树增量同步消除起步到首次 --done 的可见盲窗
 状态：已完成
 关联变更：（无）
-文件：docs/sillyspec/file-lifecycle.md, src/run/stage.js, test/platform-sync-quick-session-spectree.test.mjs
+文件：
+- src/run/stage.js（quickGuard 块尾 pm._write 后补 triggerSync：骨架分配+进度落盘后立即推，existingGuard 重入不重复推）
+- test/platform-sync-quick-session-spectree.test.mjs（场景5：CLI 子进程异步 spawn 跑真实 run quick 起步，断言 spec-sync POST 含 quicklog op 且解码含「状态：进行中」、不发 progress；spawnSync 会冻结父进程事件循环致 mock server 假红，注释已记）
+- docs/sillyspec/file-lifecycle.md（QUICKLOG 行补 2026-08-19 起步同步时点说明）
 需求：quick 起步（run quick，含平台 claim 派发模式同路径）即在 QUICKLOG 预写「进行中」占位条目并触发 spec 树增量同步，让平台快速修复列表实时可见执行中的 quick，消除起步到第一次 --done 的可见盲窗
 根因：runStage 前段三处 triggerSync（autoDetectChange/currentStage 切换/stale 复位）全在 quickGuard 块骨架分配之前执行，进行中条目要等第一次 --done 的 complete.js:452 才上平台（本会话自身即活证据）；--done 终态链路顺序本就正确（handleQuickStageCompletion 翻终态在前 complete.js:392 triggerSync 在后）无需改
 方案：stage.js quickGuard 块尾 pm._write 后补一行 triggerSync（注释说明盲窗成因/降级语义/幂等边界——existingGuard 跨进程重入跳过本块不重复推）；测试扩 platform-sync-quick-session-spectree 场景5 用异步 spawn 跑 CLI 子进程（spawnSync 冻结父进程事件循环致 mock server 无法 accept 假红，注释已记）；file-lifecycle.md:140 补同步时点

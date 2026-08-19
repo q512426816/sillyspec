@@ -33,13 +33,17 @@ const tmpRoot = mkdtempSync(join(tmpdir(), `sillyspec-quick-sync-${process.pid}-
 
 console.log('\n[platform-sync-quick-session-spectree] ql-20260818-011：quick 会话补 spec 树同步');
 
-// ── mock server：记录到达的请求路径；spec-sync 200 ──
+// ── mock server：记录到达的请求路径 + spec-sync POST body（场景 5 断言占位条目内容用）；spec-sync 200 ──
 const hits = [];
+const syncBodies = [];
 const server = http.createServer((req, res) => {
   let body = '';
   req.on('data', (c) => { body += c; });
   req.on('end', () => {
     hits.push(`${req.method} ${req.url}`);
+    if (req.url.includes('/api/changes/-/spec-sync') && req.method === 'POST') {
+      syncBodies.push(body);
+    }
     if (req.url.includes('/api/changes/-/spec-manifest')) {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ files: {} })); // 空清单 → 本地文件全 add
@@ -145,6 +149,54 @@ console.log('\n--- 4. 真实变更目录 → progress POST 照常 ---');
   await triggerSync(cwd, 'real-change');
   const progressHit = hits.some((h) => h.includes('POST /api/changes/real-change/progress'));
   assert(progressHit, 'progress POST 到达（原 sync() 主路径未被 quick 分支影响）');
+}
+
+// ─────────────────────────────────────────
+// 5. quick 起步（run quick，无任何 --done）→ 「进行中」占位条目即时上平台
+//    ql-20260819-009：runStage 前段 triggerSync（:128/:146/:168）全在骨架分配之前，
+//    起步时刻平台看不到进行中条目（盲窗到第一次 --done）。修复 = guard 块尾（骨架
+//    分配 + pm._write 之后）补一次 triggerSync。用 CLI 子进程测真实起步路径。
+// ─────────────────────────────────────────
+console.log('\n--- 5. quick 起步即推「进行中」占位条目（CLI 子进程，无 --done） ---');
+{
+  const { makeRepo, cleanup: harnessCleanup } = await import('./_cli-step-harness.mjs');
+  const { spawn } = await import('node:child_process');
+  const repoRoot2 = join(dirname(fileURLToPath(import.meta.url)), '..');
+  // 不能用 harness 的 runCLI（spawnSync）：它会冻结本进程事件循环，mock server 无法
+  // accept 子进程的连接 → 子进程 fetch 10s 超时假红。改异步 spawn，等待期间事件循环活着。
+  const runCLIAsync = (args, cwd) => new Promise((resolve) => {
+    const p = spawn(process.execPath, [join(repoRoot2, 'bin', 'sillyspec.js'), ...args], {
+      cwd, stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let combined = '';
+    p.stdout.on('data', (c) => { combined += c; });
+    p.stderr.on('data', (c) => { combined += c; });
+    p.on('close', (code) => resolve({ status: code, combined }));
+    p.on('error', (e) => resolve({ status: -1, combined: combined + String(e) }));
+  });
+  const { cwd } = makeRepo('cli-quick-start-sync-');
+  mkdirSync(join(cwd, '.sillyspec'), { recursive: true });
+  connectYaml(cwd); // 指向 mock server（QUICKLOG 文件名 = QUICKLOG-<git-user>.md，harness git user 为 test）
+  hits.length = 0;
+  syncBodies.length = 0;
+
+  const r = await runCLIAsync(['run', 'quick', '--files', 'src/app.js', '--input', '占位条目推送探针'], cwd);
+
+  assert(r.status === 0, 'quick 起步进程 exit 0（同步 best-effort 不阻断启动）');
+  const syncHit = hits.some((h) => h.includes('POST /api/changes/-/spec-sync'));
+  assert(syncHit, '起步即有 spec-sync POST 到达服务器（不等第一次 --done）');
+  // 从所有 spec-sync body 里找 quicklog 占位条目 op，解码断言「进行中」
+  const quicklogOps = syncBodies.flatMap((b) => {
+    try { return JSON.parse(b).ops || []; } catch { return []; }
+  }).filter((o) => typeof o.path === 'string' && o.path.startsWith('quicklog/QUICKLOG-'));
+  const inProgressPushed = quicklogOps.some((o) => {
+    try { return Buffer.from(o.content, 'base64').toString('utf8').includes('状态：进行中'); } catch { return false; }
+  });
+  assert(quicklogOps.length > 0, 'spec-sync 含 quicklog/QUICKLOG-*.md 文件 op');
+  assert(inProgressPushed, '推送内容含「状态：进行中」占位条目（平台快速修复列表可见执行中 quick）');
+  const progressHit = hits.some((h) => h.includes('/progress'));
+  assert(!progressHit, '起步不发 progress（quick 无变更目录，防平台孤儿行）');
+  harnessCleanup();
 }
 
 server.close();
