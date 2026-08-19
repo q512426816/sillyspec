@@ -368,8 +368,15 @@ export class SyncManager {
    * 读取 ProgressManager.serializeForSync() 的六表 JSON，POST 到平台。
    * 元字段（user/base_ts/pushed_at）走 HTTP header，body 保持裸 JSON（D-015，sillyhub 老版零回归）。
    * 同步完成后更新 changes 表的 platform_last_sync 字段；409 冲突读回平台最新 JSON（task-12 完整冲突处理）。
+   *
+   * push 409 自竞态自愈（坑 2026-08-19-platform-sync-base-ts-silent-conflict 根治侧）：
+   * 同机多进程（CLI + daemon）并发 push 时，B 进程持旧 base_ts POST 撞 A 进程刚推完的 409——
+   * 但 A 的成功回填就写在本机共享 DB。409 时 fresh 重读 DB：base_ts 已 ≥ 平台 409 回执 ts
+   * ⇒ 赢者是自己人 → 刷新 base_ts 重试一次即收敛，不再落冲突文件卡死人工 resolve。
+   * 外来推送（他机/他用户）不可能推进本机 DB 的 base_ts → 走原冲突路径，无误放行。
    */
-  async sync(changeName) {
+  async sync(changeName, opts = {}) {
+    const { fromResolve = false } = opts;
     const platform = this._getPlatform();
     if (!platform) {
       debugLog('[sync] 未连接平台（本地合法状态）；如需平台同步：sillyspec platform connect');
@@ -388,112 +395,174 @@ export class SyncManager {
       console.warn(`[sync] 变更目录不存在（可能是已归档，继续从 DB 同步最终状态）: ${changeName}`);
     }
 
-    // 读取 progress 数据（serializeForSync 六表裸 JSON，task-02 / D-005@v2，替代 read() 聚合视图）
-    let progressData;
-    try {
-      const { ProgressManager } = await import('./progress.js');
-      const pm = new ProgressManager({ specDir: safePlatformSpecDir(this.cwd) });
-      progressData = pm.serializeForSync(this.cwd, changeName);
-    } catch (err) {
-      console.warn(`[sync] 读取 progress 失败 (${changeName}): ${err.message}`);
-      return { synced: 0, errors: [`读取 progress 失败: ${err.message}`] };
-    }
-    if (progressData === null) {
-      console.warn(`[sync] 变更无进度数据 (无活跃进度): ${changeName}`);
-      return { synced: 0, errors: [`变更无进度数据: ${changeName}`] };
-    }
-
-    // 元字段走 HTTP header（D-015 / task-09）：body 保持裸六表 JSON，sillyhub 老版忽略 header 零回归
-    const headers = {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${platform.token}`,
-    };
-    const pushedAt = new Date().toISOString();
-    // 推送者身份（task-08）：local.yaml platform.user 显式配置优先，缺省回退
-    // resolvePlatformUser（git user.name > env USER/USERNAME，与 connect 写入侧同口径）。
-    // 修 last_pusher 空：此前仅 platform.user 配置时发送，本地直跑场景 local.yaml
-    // 常无 user 字段 → header 缺失 → 平台 last_pusher 恒空（2026-08-19 坑文档改进点 4）。
-    const pushUser = platform.user || resolvePlatformUser(this.cwd) || null;
-    if (pushUser) headers['X-SillySpec-User'] = pushUser;
-    const baseTs = progressData.changes && progressData.changes[0] && progressData.changes[0].last_synced_platform_ts;
-    if (baseTs) headers['X-SillySpec-Base-Ts'] = baseTs; // base_ts 乐观锁（NULL=首次同步不设，平台接受首次 push）
-    headers['X-SillySpec-Pushed-At'] = pushedAt; // 平台存 last_pushed_at，作下次其他用户 push 的 base_ts 比对基准
-
-    // POST 到平台（带状态码版本：识别 409 冲突，读回平台最新 JSON）。changeName encode 对齐 pull（:673）
-    const syncUrl = `${platform.url}/api/changes/${encodeURIComponent(changeName)}/progress`;
-    const res = await fetchJsonWithStatus(syncUrl, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(progressData),
-    });
-
-    if (!res.ok) {
-      // 409 = base_ts 乐观锁冲突（平台已有更新）；读回平台最新 JSON 供 task-12 完整冲突处理
-      if (res.status === 409) {
-        // 醒目冲突横幅（坑 2026-08-19-platform-sync-base-ts-silent-conflict 改进点 2）：
-        // 此前仅单行 warn，冲突文件静默落 .runtime——同步已卡死但 Agent/用户无从察觉，
-        // 平台页面永久停在旧阶段。横幅明确告知「已卡死 + 卡死原因 + 恢复命令」，不能只落文件。
-        console.warn('');
-        console.warn('⚠️⚠️⚠️════════════════════════════════════════════════════');
-        console.warn(`⚠️ 平台同步冲突：变更「${changeName}」推送被拒（base_ts 过期，平台已有更新）`);
-        console.warn('⚠️ 该变更的自动同步已卡死，不会自愈——需人工 resolve 才能恢复：');
-        console.warn(`⚠️   1. sillyspec platform status     # 查看未决冲突`);
-        console.warn(`⚠️   2. sillyspec platform resolve ${changeName} --keep-local | --take-platform | --abort`);
-        console.warn(`⚠️   3. sillyspec platform sync --change ${changeName}`);
-        console.warn('⚠️ 冲突详情已落盘: .sillyspec/.runtime/sync-conflict-' + changeName + '.json');
-        console.warn('⚠️⚠️⚠️════════════════════════════════════════════════════');
-        // 平台 409 响应 { conflict:true, platform_progress, last_pushed_at }，platform_progress 即平台最新 progress JSON
-        const platformProgress = res.body && res.body.platform_progress ? res.body.platform_progress : res.body;
-        const platformLastPushedAt = (res.body && res.body.last_pushed_at) || null;
-        // 本地脏度（progressData 是 serializeForSync 输出，changes[0] 含 last_local_modified_ts）
-        const localModified = (progressData.changes && progressData.changes[0] && progressData.changes[0].last_local_modified_ts) || null;
-        // 写冲突文件（task-12 / D-002）：base_ts=本次 push 的 base，强制提示走 resolve
-        const conflictPath = this._writeConflictFile(changeName, {
-          base_ts: baseTs || null,
-          local_modified_ts: localModified,
-          platform_last_pushed_at: platformLastPushedAt,
-          platform_progress: platformProgress,
-        });
-        return { synced: 0, errors: [`冲突: ${changeName}`], conflict: true, platform_progress: platformProgress, conflictPath };
+    const MAX_PUSH_ATTEMPTS = 2;
+    for (let attempt = 1; attempt <= MAX_PUSH_ATTEMPTS; attempt++) {
+      // 读取 progress 数据（serializeForSync 六表裸 JSON，task-02 / D-005@v2，替代 read() 聚合视图）。
+      // 每次 attempt 重新 serialize：自愈重试时本地 DB 可能已被并发进程推进，base_ts/内容都要刷新
+      let progressData;
+      try {
+        const { ProgressManager } = await import('./progress.js');
+        const pm = new ProgressManager({ specDir: safePlatformSpecDir(this.cwd) });
+        progressData = pm.serializeForSync(this.cwd, changeName);
+      } catch (err) {
+        console.warn(`[sync] 读取 progress 失败 (${changeName}): ${err.message}`);
+        return { synced: 0, errors: [`读取 progress 失败: ${err.message}`] };
       }
-      return { synced: 0, errors: [`同步请求失败: ${changeName}`] };
+      if (progressData === null) {
+        console.warn(`[sync] 变更无进度数据 (无活跃进度): ${changeName}`);
+        return { synced: 0, errors: [`变更无进度数据: ${changeName}`] };
+      }
+
+      // 元字段走 HTTP header（D-015 / task-09）：body 保持裸六表 JSON，sillyhub 老版忽略 header 零回归
+      const headers = {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${platform.token}`,
+      };
+      const pushedAt = new Date().toISOString();
+      // 推送者身份（task-08）：local.yaml platform.user 显式配置优先，缺省回退
+      // resolvePlatformUser（git user.name > env USER/USERNAME，与 connect 写入侧同口径）。
+      // 修 last_pusher 空：此前仅 platform.user 配置时发送，本地直跑场景 local.yaml
+      // 常无 user 字段 → header 缺失 → 平台 last_pusher 恒空（2026-08-19 坑文档改进点 4）。
+      const pushUser = platform.user || resolvePlatformUser(this.cwd) || null;
+      if (pushUser) headers['X-SillySpec-User'] = pushUser;
+      const baseTs = progressData.changes && progressData.changes[0] && progressData.changes[0].last_synced_platform_ts;
+      if (baseTs) headers['X-SillySpec-Base-Ts'] = baseTs; // base_ts 乐观锁（NULL=首次同步不设，平台接受首次 push）
+      headers['X-SillySpec-Pushed-At'] = pushedAt; // 平台存 last_pushed_at，作下次其他用户 push 的 base_ts 比对基准
+
+      // POST 到平台（带状态码版本：识别 409 冲突，读回平台最新 JSON）。changeName encode 对齐 pull（:673）
+      const syncUrl = `${platform.url}/api/changes/${encodeURIComponent(changeName)}/progress`;
+      const res = await fetchJsonWithStatus(syncUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(progressData),
+      });
+
+      if (res.ok) {
+        // 更新 platform_last_sync + 推进 base_ts（ql-20260818-008：值优先平台回执 last_pushed_at，
+        // 缺省用本次 pushedAt——服务器 _apply 存的就是客户端 X-SillySpec-Pushed-At 原值，回写一致。
+        // 修复前该列从不写，下次 push 永不带 X-SillySpec-Base-Ts、pull 脏度检测恒 false）
+        // 回填加固：共享 SQLite 并发（daemon+CLI）下 WAL 忙窗口可能偶发失败——重试一次，
+        // 仍失败打醒目 warn（base_ts 停留在旧值，下次 push 会 409，届时自竞态自愈会收敛）
+        let backfilled = false;
+        for (let bt = 1; bt <= 2 && !backfilled; bt++) {
+          try {
+            const { ProgressManager } = await import('./progress.js');
+            const pm = new ProgressManager({ specDir: safePlatformSpecDir(this.cwd) });
+            const ackTs = res.body && typeof res.body.last_pushed_at === 'string' ? res.body.last_pushed_at : pushedAt;
+            pm._updatePlatformLastSync(this.cwd, changeName, ackTs);
+            backfilled = true;
+          } catch (err) {
+            if (bt === 2) {
+              console.warn(`⚠️ [sync] base_ts 回填失败（下次 push 可能 409，自愈机制会处理）: ${err.message}`);
+            } else {
+              await new Promise((r) => setTimeout(r, 200));
+            }
+          }
+        }
+
+        console.log(`[sync] 已同步变更: ${changeName}`);
+
+        // 2026-08-16-auto-sync-from-repo：进度上行成功后顺带推四件套文档（best-effort）。
+        // 根因：run 流程此前只推进度不推文档（本文件头注释），本地直跑 sillyspec 的产出
+        // 文档永远不自动到平台（变更中心"进度到了文档没到"）。生产者直连，不依赖 daemon
+        // 缓存链路。失败仅 debugLog——文档同步失败不得影响进度上行的返回值与流程；
+        // 四件套全缺失时 syncDocuments 内部已有跳过（syncedCount===0 提前返回，不调端点）。
+        try {
+          await this.syncDocuments(changeName);
+        } catch (err) {
+          debugLog(`[sync] 文档同步失败（不影响进度）: ${changeName}: ${err.message}`);
+        }
+
+        // 2026-08-17-spec-file-incremental-sync：进度上行+文档直推成功后顺带推整个 spec 树
+        // （plan.md、tasks/、module-impact.md 等），让变更中心文件树自动更新。
+        // 无 daemon 时 CLI 短进程无本地清单缓存，以服务器清单为锚做增量 diff。
+        try {
+          await syncSpecTree(join(this.cwd, '.sillyspec'), this._getPlatform(), changeName);
+        } catch (err) {
+          debugLog(`[sync] spec 树增量同步失败（不影响进度）: ${changeName}: ${err.message}`);
+        }
+
+        return { synced: 1, errors: [] };
+      }
+
+      if (res.status !== 409) {
+        return { synced: 0, errors: [`同步请求失败: ${changeName}`] };
+      }
+
+      // ── 409 = base_ts 乐观锁冲突（平台已有更新）──
+      // 平台 409 响应 { conflict:true, platform_progress, last_pushed_at }，platform_progress 即平台最新 progress JSON
+      const platformProgress = res.body && res.body.platform_progress ? res.body.platform_progress : res.body;
+      const platformLastPushedAt = (res.body && res.body.last_pushed_at) || null;
+
+      // 自竞态自愈：fresh 重读本机 DB base_ts，若已被并发进程回填到 ≥ 平台 409 回执 ts，
+      // 说明赢者是本机自己人——刷新 base_ts 重试一次即收敛，不落冲突文件（外来推送不可能
+      // 推进本机 DB 的 base_ts，不满足条件自然落回下方真冲突分支，零误放行）
+      if (attempt < MAX_PUSH_ATTEMPTS && await this._localBaseTsCovers(changeName, platformLastPushedAt)) {
+        console.warn(`⚠️ [sync] push 409 自竞态判定：本机并发推送已回填 base_ts（平台 ts=${platformLastPushedAt}），刷新后自动重试`);
+        continue;
+      }
+
+      // resolve --keep-local 的自动重推再撞 409：不落新冲突文件、不打「已卡死」横幅——
+      // 原 conflict 已按用户裁决处理完（base_ts 已推进），此刻的 409 只是「平台在用户裁决期间
+      // 又动了」；立即落新文件会破坏「keep-local 清冲突文件回 clean」的生命周期契约（冲突文件
+      // 代表待人工三选一的未决状态，而用户刚做完选择）。下次常规同步会按新 base 重新判定，
+      // 真有新分歧自然再进 conflict 态。
+      if (fromResolve) {
+        console.warn(`⚠️ [sync] keep-local 自动重推被拒（平台又有更新，ts=${platformLastPushedAt}）；base_ts 已推进，下次常规同步将重新判定`);
+        return { synced: 0, errors: [`keep-local 自动重推被拒: ${changeName}`], conflict: true, platform_progress: platformProgress, suppressedConflictFile: true };
+      }
+
+      // 醒目冲突横幅（坑 2026-08-19-platform-sync-base-ts-silent-conflict 改进点 2）：
+      // 此前仅单行 warn，冲突文件静默落 .runtime——同步已卡死但 Agent/用户无从察觉，
+      // 平台页面永久停在旧阶段。横幅明确告知「已卡死 + 卡死原因 + 恢复命令」，不能只落文件。
+      console.warn('');
+      console.warn('⚠️⚠️⚠️════════════════════════════════════════════════════');
+      console.warn(`⚠️ 平台同步冲突：变更「${changeName}」推送被拒（base_ts 过期，平台已有更新）`);
+      console.warn('⚠️ 该变更的自动同步已卡死，不会自愈——需人工 resolve 才能恢复：');
+      console.warn(`⚠️   1. sillyspec platform status     # 查看未决冲突`);
+      console.warn(`⚠️   2. sillyspec platform resolve ${changeName} --keep-local | --take-platform | --abort`);
+      console.warn(`⚠️   3. sillyspec platform sync --change ${changeName}`);
+      console.warn('⚠️ 冲突详情已落盘: .sillyspec/.runtime/sync-conflict-' + changeName + '.json');
+      console.warn('⚠️⚠️⚠️════════════════════════════════════════════════════');
+      // 本地脏度（progressData 是 serializeForSync 输出，changes[0] 含 last_local_modified_ts）
+      const localModified = (progressData.changes && progressData.changes[0] && progressData.changes[0].last_local_modified_ts) || null;
+      // 写冲突文件（task-12 / D-002）：base_ts=本次 push 的 base，强制提示走 resolve
+      const conflictPath = this._writeConflictFile(changeName, {
+        base_ts: baseTs || null,
+        local_modified_ts: localModified,
+        platform_last_pushed_at: platformLastPushedAt,
+        platform_progress: platformProgress,
+      });
+      return { synced: 0, errors: [`冲突: ${changeName}`], conflict: true, platform_progress: platformProgress, conflictPath };
     }
 
-    // 更新 platform_last_sync + 推进 base_ts（ql-20260818-008：值优先平台回执 last_pushed_at，
-    // 缺省用本次 pushedAt——服务器 _apply 存的就是客户端 X-SillySpec-Pushed-At 原值，回写一致。
-    // 修复前该列从不写，下次 push 永不带 X-SillySpec-Base-Ts、pull 脏度检测恒 false）
+    // 循环耗尽（自愈重试后仍 409——两次都撞且第二次非自竞态；理论上第二次会落上方真冲突分支返回，
+    // 此行只作结构兜底）
+    return { synced: 0, errors: [`同步重试耗尽（仍冲突）: ${changeName}`] };
+  }
+
+  /**
+   * 自竞态判定辅助：fresh 读本地 DB 的 last_synced_platform_ts（base_ts），判断它是否已覆盖
+   * 平台 409 回执的 last_pushed_at（字符串字典序比较，契约 §4.2——ISO 8601 字典序 == 时间序）。
+   * 已覆盖 ⇒ 打赢 409 的推送来自本机并发进程（其成功回填写的就是这个共享 DB）。
+   * @param {string} changeName
+   * @param {string|null} platformTs 409 回执 last_pushed_at
+   * @returns {Promise<boolean>}
+   */
+  async _localBaseTsCovers(changeName, platformTs) {
+    if (!platformTs) return false;
     try {
       const { ProgressManager } = await import('./progress.js');
       const pm = new ProgressManager({ specDir: safePlatformSpecDir(this.cwd) });
-      const ackTs = res.body && typeof res.body.last_pushed_at === 'string' ? res.body.last_pushed_at : pushedAt;
-      pm._updatePlatformLastSync(this.cwd, changeName, ackTs);
-    } catch (err) {
-      console.warn(`[sync] 更新 platform_last_sync 失败: ${err.message}`);
+      const row = pm._ensureDB(this.cwd).getDb().prepare(
+        'SELECT last_synced_platform_ts FROM changes WHERE name = ?'
+      ).get(changeName);
+      const localTs = row && row.last_synced_platform_ts;
+      if (!localTs) return false;
+      return localTs >= platformTs;
+    } catch {
+      return false; // 读失败按非自竞态处理（fail-closed 到真冲突分支）
     }
-
-    console.log(`[sync] 已同步变更: ${changeName}`);
-
-    // 2026-08-16-auto-sync-from-repo：进度上行成功后顺带推四件套文档（best-effort）。
-    // 根因：run 流程此前只推进度不推文档（本文件头注释），本地直跑 sillyspec 的产出
-    // 文档永远不自动到平台（变更中心"进度到了文档没到"）。生产者直连，不依赖 daemon
-    // 缓存链路。失败仅 debugLog——文档同步失败不得影响进度上行的返回值与流程；
-    // 四件套全缺失时 syncDocuments 内部已有跳过（syncedCount===0 提前返回，不调端点）。
-    try {
-      await this.syncDocuments(changeName);
-    } catch (err) {
-      debugLog(`[sync] 文档同步失败（不影响进度）: ${changeName}: ${err.message}`);
-    }
-
-    // 2026-08-17-spec-file-incremental-sync：进度上行+文档直推成功后顺带推整个 spec 树
-    // （plan.md、tasks/、module-impact.md 等），让变更中心文件树自动更新。
-    // 无 daemon 时 CLI 短进程无本地清单缓存，以服务器清单为锚做增量 diff。
-    try {
-      await syncSpecTree(join(this.cwd, '.sillyspec'), this._getPlatform(), changeName);
-    } catch (err) {
-      debugLog(`[sync] spec 树增量同步失败（不影响进度）: ${changeName}: ${err.message}`);
-    }
-
-    return { synced: 1, errors: [] };
   }
 
   /**
@@ -879,7 +948,24 @@ export class SyncManager {
         return { ok: false, resolved: false, reason: `keep-local 更新 base_ts 失败: ${err.message}` };
       }
       this.clearConflictFile(changeName);
-      return { ok: true, resolved: true, mode: 'keep-local', reason: '保留本地，base_ts 已推进到平台最新（后续请 platform sync push 本地）' };
+      // 自动重推闭环（坑 2026-08-19-platform-sync-base-ts-silent-conflict 收尾侧）：keep-local 语义 =
+      // 本地为准，必然收尾是把本地推上平台。此前停在「后续请手动 platform sync」——忘了推，
+      // 期间他人再推 → 下次自动同步又 409 落冲突文件（「冲突再现」的根源之一）。resolve 成功即
+      // 自动 push 一次闭环；真撞上外来更新时软提示（fromResolve 抑制新冲突文件——冲突文件代表
+      // 待人工三选一的未决状态，用户刚做完选择，下次常规同步按新 base 重新判定）。
+      let repush = null;
+      try {
+        repush = await this.sync(changeName, { fromResolve: true });
+      } catch (err) {
+        debugLog(`[sync] keep-local 自动重推异常（不阻断 resolve 结果）: ${changeName}: ${err.message}`);
+      }
+      if (repush && repush.synced === 1) {
+        return { ok: true, resolved: true, mode: 'keep-local', reason: '保留本地，并已自动推送平台——冲突闭环，无需再手动 sync' };
+      }
+      if (repush && repush.conflict) {
+        return { ok: true, resolved: true, mode: 'keep-local', reason: '保留本地，base_ts 已推进；自动重推被拒（平台在裁决期间又有更新），下次常规同步将重新判定' };
+      }
+      return { ok: true, resolved: true, mode: 'keep-local', reason: '保留本地，base_ts 已推进；自动重推未成功（未连接/网络），请手动 sillyspec platform sync --change ' + changeName };
     }
 
     if (mode === 'take-platform') {
