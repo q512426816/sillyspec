@@ -9,10 +9,11 @@
  *
  * 纯函数（collectDocRefs/looksLikeCodeSymbol/validateRefLines/extractExpectedTokensFromLine）
  * 无 fs 依赖可单测；resolveCandidates/walkGlob/runDocsCheck 是 IO 面。
- * 只读校验（不修改任何被校验文件）；纯 Node 内置模块零依赖（D-008：glob 手写 walker，
+ * 校验链路只读（不修改任何被校验文件）；applyFixes 是唯一写回面（--fix 显式触发，design §9：
+ * 文档非多进程竞争的运行时文件，普通 writeFileSync）；纯 Node 内置模块零依赖（D-008：glob 手写 walker，
  * 仅「目录递归」「目录单层」「字面路径」三形态）；Windows 路径归一化；兼容 CRLF/LF。
  */
-import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs'
+import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import jsYaml from 'js-yaml'
 
@@ -270,7 +271,7 @@ function relDisplay(absPath, projectRoot) {
  * @param {{ projectRoot: string, docs?: string[], paths?: string[], skip?: string[], keywordAssert?: boolean }} opts
  *   projectRoot 源码仓根（候选解析与 glob 的锚点，平台模式也传源码仓根）
  *   docs 显式文档相对路径列表（优先于 paths glob 展开结果）
- * @returns {{ ok: boolean, total: number, invalid: Array<{doc, docLine, ref, reason}>, warnings: string[], kwChecked: number }}
+ * @returns {{ ok: boolean, total: number, invalid: Array<{doc, docLine, ref, reason, suggest?: number[], fix: {fixable: boolean, newLine?: number, reason: string}}>, warnings: string[], kwChecked: number }}
  * @throws {DocsCheckConfigError} glob 形态不支持
  */
 export function runDocsCheck(opts) {
@@ -291,7 +292,10 @@ export function runDocsCheck(opts) {
   for (const docRel of docFiles) {
     const docAbs = join(projectRoot, docRel)
     if (!existsSync(docAbs)) {
-      invalid.push({ doc: docRel, docLine: 0, ref: '', reason: '文档不存在' })
+      invalid.push({
+        doc: docRel, docLine: 0, ref: '', reason: '文档不存在',
+        fix: { fixable: false, reason: '文档不存在，无法自动定位' },
+      })
       continue
     }
     const md = readFileSync(docAbs, 'utf8')
@@ -305,6 +309,7 @@ export function runDocsCheck(opts) {
         invalid.push({
           doc: docRel, docLine: r.docLine, ref: r.ref,
           reason: '文件不存在（含 / 按仓库根解析；裸文件名在 src/ 递归）',
+          fix: { fixable: false, reason: '文件不存在，无法自动定位' },
         })
         continue
       }
@@ -338,6 +343,8 @@ export function runDocsCheck(opts) {
           reason: candidateFails.length > 1 ? `多候选全失败 → ${candidateFails.join(' | ')}` : candidateFails[0],
           // 建议行号（--suggest）：token 在首个候选文件的全量命中行，供人工确认改锚——不自动改文件
           suggest: suggestLines(candidates, tokens),
+          // 修复分类（--fix 判定依据）：全量候选 token 命中统计，唯一命中才 fixable（D-006 保守默认）
+          fix: classifyFix(candidates, tokens),
         })
       }
     }
@@ -359,4 +366,124 @@ function suggestLines(candidates, tokens) {
     lines.forEach((l, i) => { if (tokens.some((t) => l.includes(t))) out.push(i + 1) })
     return out.slice(0, 8)
   } catch { return [] }
+}
+
+/**
+ * 修复分类（--fix 判定依据）：对 resolveCandidates 全量候选跑 token 命中统计，跨候选合并行号后——
+ *   唯一命中 → fixable=true + newLine（自动重锚唯一解）；无 token / 零命中 / 多命中 → needs-manual。
+ * 与 suggestLines 的差异：suggest 只查首个候选（candidates[0]），本函数查全量候选（design §12 自审存疑 +
+ * R-01——多候选同名文件场景下防止定位到另一文件的同名符号）。合并口径按「去重后的行号集合」：
+ * 重锚写回的目标是行号，多个候选命中同一行号仍是唯一改写目标。
+ * 纯增量分类，不参与层1/层2 判定（D-004 兼容红线）。
+ * @param {string[]} candidates resolveCandidates 返回的全量候选绝对路径
+ * @param {string[]} tokens 层2 提取的期望 token（keywordAssert=false 时为空数组）
+ * @returns {{ fixable: boolean, newLine?: number, reason: string }}
+ */
+function classifyFix(candidates, tokens) {
+  if (tokens.length === 0) {
+    return { fixable: false, reason: '无 token 符号线索（纯位置引用或关键词断言关闭），无法自动定位' }
+  }
+  const hitLines = new Set()
+  for (const candAbs of candidates) {
+    const lines = readLines(candAbs)
+    if (lines === null) continue
+    lines.forEach((l, i) => { if (tokens.some((t) => l.includes(t))) hitLines.add(i + 1) })
+  }
+  if (hitLines.size === 0) {
+    return { fixable: false, reason: 'token 在全量候选文件零命中，无法自动定位' }
+  }
+  if (hitLines.size === 1) {
+    return { fixable: true, newLine: [...hitLines][0], reason: 'token 在全量候选唯一命中，可自动重锚' }
+  }
+  const sorted = [...hitLines].sort((a, b) => a - b)
+  const shown = sorted.slice(0, 8).join('、') + (sorted.length > 8 ? '…' : '')
+  return { fixable: false, reason: `token 多处命中（候选行号：${shown}），歧义需人工确认（D-006 保守默认）` }
+}
+
+/**
+ * 将可确定性修复的失效引用写回文档（--fix 消费面，design §7 接口逐字）。
+ * 纯机械定点替换：按 docLine + ref 串在该行内的字符偏移替换为 newRef，不解析行号语义、
+ * 不改引用文件名与 token（D-003：ref/newRef 一致性由调用方保证）；候选定位全部依赖调用方
+ * 传入（不读 local.yaml 不解析配置）。范围引用（src/a.js:3-8）newRef 同样由调用方给全串。
+ * 同一行多个 fix 按行内偏移从后往前（降序）替换，防前序替换挤偏后序偏移（R-04）；
+ * 其余字节不动：行内容只动命中片段，行结束符按原文（\r\n / \n 整文件统一口径）原样 join（R-05）。
+ * @param {string} projectRoot 源码仓根（doc 相对路径的锚点）
+ * @param {Array<{doc: string, docLine: number, ref: string, newRef: string}>} fixes
+ *   doc 为相对 projectRoot 的文档路径；ref 旧引用串（如 src/a.js:6），newRef 新引用串（如 src/a.js:1）
+ * @param {{dryRun?: boolean}} opts dryRun 为真时不写盘仅返回将应用列表
+ * @returns {{applied: number, skipped: Array<{ref: string, reason: string}>}}
+ *   dryRun 时 applied 为「将应用」计数；skipped 条目含 ref 与可读 reason（文档不存在/docLine 越界/
+ *   行内找不到 ref 串），跳过不中断批量
+ */
+export function applyFixes(projectRoot, fixes, opts = {}) {
+  const dryRun = opts.dryRun === true
+  let applied = 0
+  const skipped = []
+  if (!Array.isArray(fixes) || fixes.length === 0) return { applied, skipped }
+
+  // 按 doc 分组，每文档一次读改写（design §9：普通 writeFileSync，文档非运行时竞争文件）
+  const byDoc = new Map()
+  for (const f of fixes) {
+    if (!f || typeof f !== 'object' || typeof f.doc !== 'string' || typeof f.docLine !== 'number' ||
+      typeof f.ref !== 'string' || typeof f.newRef !== 'string') {
+      skipped.push({ ref: f && typeof f.ref === 'string' ? f.ref : '(条目缺失)', reason: 'fix 条目字段不完整（doc/docLine/ref/newRef）' })
+      continue
+    }
+    if (!byDoc.has(f.doc)) byDoc.set(f.doc, [])
+    byDoc.get(f.doc).push(f)
+  }
+
+  for (const [docRel, docFixes] of byDoc) {
+    const docAbs = join(projectRoot, docRel)
+    if (!existsSync(docAbs)) {
+      for (const f of docFixes) skipped.push({ ref: f.ref, reason: `文档不存在：${docRel}` })
+      continue
+    }
+    const raw = readFileSync(docAbs, 'utf8')
+    // 行结束符检测整文件统一口径（R-05）：原文含 \r\n 则 CRLF join，否则 LF——与 readLines 归一逻辑一致
+    const eol = raw.includes('\r\n') ? '\r\n' : '\n'
+    const lines = raw.split(/\r?\n/)
+    let dirty = false
+
+    // 同一 docLine 的多 fix 按行内偏移从后往前替换（R-04）：先按 docLine 分组，
+    // 组内按 ref 在该行内的命中偏移降序逐个定点替换
+    const byLine = new Map()
+    for (const f of docFixes) {
+      if (!byLine.has(f.docLine)) byLine.set(f.docLine, [])
+      byLine.get(f.docLine).push(f)
+    }
+    for (const [docLine, lineFixes] of byLine) {
+      if (!Number.isInteger(docLine) || docLine < 1 || docLine > lines.length) {
+        for (const f of lineFixes) skipped.push({ ref: f.ref, reason: `docLine=${docLine} 越界（文档共 ${lines.length} 行）` })
+        continue
+      }
+      const li = docLine - 1
+      const located = []
+      let cursor = 0
+      for (const f of lineFixes) {
+        // 找不到 ref 串、或两次命中同一偏移（重复 fix），该条目跳过不中断批量
+        const at = lines[li].indexOf(f.ref, cursor)
+        if (at === -1) {
+          skipped.push({ ref: f.ref, reason: `docLine=${docLine} 行内未找到引用串` })
+        } else {
+          located.push({ at, f })
+          cursor = at + f.ref.length
+        }
+      }
+      located.sort((a, b) => b.at - a.at) // 降序：后位先替换，前序替换不挤偏后序偏移
+      let line = lines[li]
+      for (const { at, f } of located) {
+        line = line.slice(0, at) + f.newRef + line.slice(at + f.ref.length)
+        applied++
+      }
+      if (located.length > 0) {
+        lines[li] = line
+        dirty = true
+      }
+    }
+
+    if (dirty && !dryRun) writeFileSync(docAbs, lines.join(eol))
+  }
+
+  return { applied, skipped }
 }

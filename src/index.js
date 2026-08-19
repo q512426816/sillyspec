@@ -585,12 +585,19 @@ async function main() {
         // json 变量（filteredArgs 不含）；分支内 BARE_FLAGS（无值）置位剔除、PAIRED_FLAGS（带值）
         // 成对剔除；未知 --xxx 显式 exit 2——不再静默落入文档路径误报"不存在"
         // （历史两次踩坑：--json 恒失效、--suggest 被当文档路径）。
-        const BARE_FLAGS = ['--suggest'];
+        // task-03（2026-08-18 platform-map-auto-anchors）：白名单加 --fix / --dry-run——
+        // --fix 对 fixable 失效引用自动重锚（消费 task-01 的 inv.fix 分类 + task-02 的 applyFixes
+        // 写回）；--dry-run 预览不写盘，单独传（无 --fix）也走预览路径——design §5.2 行为矩阵
+        // --dry-run 列独立存在（「报告修复预览 + exit 1」），即 dryRun 置位 = fix 语义自动生效
+        // 但零写盘（本口径记录于此，防歧义）。
+        const BARE_FLAGS = ['--suggest', '--fix', '--dry-run'];
         const PAIRED_FLAGS = ['--paths'];
         const rawDocsArgs = filteredArgs.slice(2);
         const docsCheckFlags = [];
         let cliPaths = null;
         let suggest = false;
+        let fix = false;
+        let dryRun = false;
         for (let i = 0; i < rawDocsArgs.length; i++) {
           const a = rawDocsArgs[i];
           if (a === '--paths' && rawDocsArgs[i + 1] !== undefined) {
@@ -601,6 +608,8 @@ async function main() {
             process.exit(2);
           } else if (BARE_FLAGS.includes(a)) {
             if (a === '--suggest') suggest = true;
+            else if (a === '--fix') fix = true;
+            else if (a === '--dry-run') dryRun = true;
           } else if (a.startsWith('--')) {
             console.error(`❌ docs check: 未知 flag「${a}」。已知 flag：${[...BARE_FLAGS, ...PAIRED_FLAGS].join(' ')}（--json 为全局 flag）`);
             process.exit(2);
@@ -608,7 +617,7 @@ async function main() {
             docsCheckFlags.push(a);
           }
         }
-        const { runDocsCheck, readDocsCheckConfig, DocsCheckConfigError } = await import('./docs-check.js');
+        const { runDocsCheck, readDocsCheckConfig, DocsCheckConfigError, applyFixes } = await import('./docs-check.js');
         try {
           // 配置优先级：--paths > local.yaml docs-check.paths > 缺省 docs/**/*.md
           const cfg = readDocsCheckConfig(dir);
@@ -619,7 +628,29 @@ async function main() {
             skip: cfg.skip,
             keywordAssert: cfg.keywordAssert,
           });
+          // task-03 修复链路（FR-04，platform-map-auto-anchors）：fixActive 才构造 fixes——
+          // 仅 fix.fixable===true 且 newLine 为整数的条目可重锚；newRef = ref 的行号部分替换为
+          // newLine（文件名原样保留；范围引用 src/a.js:3-8 重锚后收窄为单行语义，design §5.1
+          // 「自动改写为该行号」）。多命中/零命中（needs-manual）只报告不修（D-006），无 --force 逃生口。
+          // applyFixes 空列表零 IO 直返 {0,[]}，全绿时调用无副作用；fixes 与 invalid 条目一一对应，
+          // needs-manual 数 = invalid.length - fixes.length。
+          const fixActive = fix || dryRun;
+          const fixes = [];
+          const newRefByInv = new Map();
+          if (fixActive && !result.ok) {
+            for (const inv of result.invalid) {
+              if (inv.fix && inv.fix.fixable === true && Number.isInteger(inv.fix.newLine)) {
+                const newRef = inv.ref.replace(/(\d+)(?:-\d+)?$/, String(inv.fix.newLine));
+                fixes.push({ doc: inv.doc, docLine: inv.docLine, ref: inv.ref, newRef });
+                newRefByInv.set(inv, newRef);
+              }
+            }
+          }
+          const fixResult = fixActive ? applyFixes(dir, fixes, dryRun ? { dryRun: true } : {}) : null;
           if (json) {
+            // --fix 与 --json 组合保持 stdout 纯 JSON 可解析（constraints）：修复统计作 result.fixReport
+            // 附加后整体 stringify，主体仍是 runDocsCheck 返回（invalid[].fix 是 task-01 设计内增量）
+            if (fixResult) result.fixReport = { applied: fixResult.applied, skipped: fixResult.skipped.length, dryRun };
             console.log(JSON.stringify(result, null, 2));
           } else {
             for (const w of result.warnings) console.warn(`⚠️  ${w}`);
@@ -627,17 +658,50 @@ async function main() {
               console.log(`✅ docs check: ${result.total} 处引用全通过（其中 ${result.kwChecked} 处带关键词断言）`);
             } else {
               console.error(`\n❌ docs check: ${result.invalid.length}/${result.total} 处引用失效：`);
+              let appliedLeft = fixResult ? fixResult.applied : 0;
+              const skippedQueue = fixResult ? [...fixResult.skipped] : [];
               for (const inv of result.invalid) {
-                console.error(`  ❌ [${inv.doc}:L${inv.docLine}] ${inv.ref} → ${inv.reason}`);
+                const newRef = newRefByInv.get(inv);
+                if (newRef !== undefined && appliedLeft > 0) {
+                  // 已应用（dry-run 为将应用）：归因按构造顺序消耗 applied 计数——写回 skipped 仅
+                  // 防御路径（文档消失/行内失配）触发，CLI 正常流 fixable 必然落位
+                  console.error(`  ✅ [${inv.doc}:L${inv.docLine}] ${inv.ref} → ${newRef}${dryRun ? '（dry-run 未写盘）' : ''}`);
+                  appliedLeft--;
+                } else if (newRef !== undefined) {
+                  const s = skippedQueue.shift();
+                  console.error(`  ⚠️ [${inv.doc}:L${inv.docLine}] ${inv.ref} → 写回跳过：${s ? s.reason : '未知原因'}`);
+                } else if (fixResult) {
+                  // needs-manual：多命中歧义/零命中/无 token——fix.reason 含候选行号，交人工
+                  console.error(`  ❌ [${inv.doc}:L${inv.docLine}] ${inv.ref} → ${(inv.fix && inv.fix.reason) || inv.reason}（待人工）`);
+                } else {
+                  console.error(`  ❌ [${inv.doc}:L${inv.docLine}] ${inv.ref} → ${inv.reason}`);
+                }
                 if (suggest && inv.suggest && inv.suggest.length > 0) {
                   console.error(`     💡 候选行号: ${inv.suggest.join(', ')}（token 命中行，人工确认后更新文档锚）`);
                 }
+              }
+              if (fixResult) {
+                console.error(`\n🔧 重锚报告：${fixResult.applied} 处已${dryRun ? '预览' : '改写'}${dryRun ? '（dry-run 未写盘）' : ''}、${result.invalid.length - fixes.length} 处待人工${fixResult.skipped.length > 0 ? `、${fixResult.skipped.length} 处写回跳过` : ''}。`);
               }
               console.error(`\n修复指引：行号漂移 → 更新文档行号到当前源码；文件删改名 → 更新引用路径；`);
               console.error(`关键词缺失但行号正确 → 确认符号是否改名，改文档 token 或行号。`);
             }
           }
-          process.exit(result.ok ? 0 : 1);
+          // exit code（design §5.2 行为矩阵逐字对齐）：全绿 → 0（--fix 无操作）；--fix 后全部
+          // fixable 修复完且无 needs-manual 残留 → 0；仍有 needs-manual 或写回 skipped → 1；
+          // 配置错误 → 2（上方 catch DocsCheckConfigError 维持现状）。判定不重跑 runDocsCheck：
+          // fixable 条目数 === applied 且 needs-manual 数为 0 即全修（定点替换确定性成功，复查无
+          // 增量信息）。无 --fix/--dry-run 时维持 result.ok ? 0 : 1 现状（D-004 逐字节一致）。
+          if (result.ok) {
+            process.exit(0);
+          } else if (fixActive) {
+            const allFixed = fixResult.applied === fixes.length &&
+              fixResult.skipped.length === 0 &&
+              result.invalid.length - fixes.length === 0;
+            process.exit(allFixed ? 0 : 1);
+          } else {
+            process.exit(1);
+          }
         } catch (e) {
           if (e instanceof DocsCheckConfigError) {
             console.error(`❌ docs check 配置错误：${e.message}`);
@@ -691,7 +755,7 @@ async function main() {
         }
         process.exit(g.exitCode);
       } else {
-        console.log('用法: sillyspec docs migrate | sillyspec docs check [--paths <glob,...>] [--json] [--suggest] | sillyspec docs gate [--init-baseline] [--json]');
+        console.log('用法: sillyspec docs migrate | sillyspec docs check [--paths <glob,...>] [--json] [--suggest] [--fix] [--dry-run] | sillyspec docs gate [--init-baseline] [--json]');
         process.exit(2);
       }
       break;

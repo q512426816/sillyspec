@@ -51,6 +51,7 @@ if (contentErrors.length) {
 const ENTRY_WHITELIST = new Set([
   'src/index.js', 'src/version.js', 'src/db.js', 'src/db-engine.js',
   'src/fs-atomic.js', 'src/git-helper.js', 'src/version.js',
+  'src/docs-check.js', // applyFixes 经 CLI index.js docs 子命令消费（task-03 接线前零文本引用，2026-08-18-platform-map-auto-anchors）
 ])
 const dynamicEntryPatterns = [
   /await import\('\.\/stages\/(\w+)\.js'\)/,   // stages/index.js registry

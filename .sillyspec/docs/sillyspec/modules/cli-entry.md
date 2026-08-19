@@ -4,7 +4,7 @@ doc_type: module-card
 module_id: cli-entry
 author: qinyi
 created_at: 2026-06-03T07:42:00+08:00
-updated_at: 2026-08-16T19:05:00+08:00
+updated_at: 2026-08-19T10:52:00+08:00
 ---
 # cli-entry
 
@@ -72,6 +72,7 @@ runStage(pm, progress, stageName, cwd, changeName)
 - 2026-08-10-worktree-apply-dirty-resilient | apply/assess dirty 拦截补结构化 rescue 打印段（gated on rescueCommands 非空）：`🆘 Rescue commands (N safe / M excluded)` + 逐行 cp 指令（`generateRescueCommands` 逐文件四分类），旁路 git apply，cp 后提示手动 worktree cleanup；纯 additive，`rescueCommands===null` 零影响。
 - 2026-08-10-platform-progress-sync | platform case 新增 `pull` 子命令（--change 单变更 / 无参先 pullList 再逐个 pull）+ `resolve` 子命令（三 flag --keep-local/--take-platform/--abort 互斥校验，多/缺均报错）+ `status` 扩展（collectStatus：落后标记 + 未决冲突列表）；stage case block（brainstorm/plan/execute/verify/archive）runCommand 前 + platform approve 前注入 `triggerPullActiveChange`/`triggerPull`（下行拉最新避免过期状态审批）；help 文本同步加 pull/resolve 行。
 - ql-20260816-008-c809 | auto 顶层别名补 `case 'auto':` 路由（index.js 别名组，runCommand 已支持 auto 模式）——原 usage/topCommands 列了 auto 但 switch 无 case，`sillyspec auto` 报未知命令且 did-you-mean 自指（self-audit-2026-08-16 C14）。
+- 2026-08-18-platform-map-auto-anchors | docs check 子命令增 --fix/--dry-run flag（BARE_FLAGS 白名单 + fixActive + applyFixes 写回 + fixReport；未知 flag exit 2 语义不变；无新 flag 时与旧版逐字节一致）。写回逻辑在 docs-consistency 模块（src/docs-check.js），本模块只记路由层。
 - 2026-08-16-state-machine-fail-open | 状态机 fail-open 组修复（self-audit 批次②）：--done 补 checkTransition 转换守卫（含 fromStageData，D-004@v1）；status/doctor 只读短路（READONLY_AUXILIARY_STAGES，D-005@v2，不 initChange/不 seed steps/不刷 lastActive）；auxiliary 不写 currentStage（stage.js，D-003@v1）；gate 失败消费侧 `stageCompleted===false` → process.exitCode=1（D-002@v2，覆盖 rollback + scan 非平台 post-check）；brainstorm auto-create 按活跃变更数 gating（D-006@v1）；回归测试 state-machine-guards.test.mjs 29 断言。配套 docs/sillyspec/platform-interface-map.md 锚点行号重校。
 
 ## 人工备注

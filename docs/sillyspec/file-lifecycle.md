@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-05-31 11:00:00
-updated_at: 2026-08-17T10:49:12+08:00
+updated_at: 2026-08-19T09:58:49+08:00
 ---
 
 # SillySpec 文件生命周期
@@ -56,13 +56,16 @@ updated_at: 2026-08-17T10:49:12+08:00
 | status | 3 | 项目级只读快照（非流程推进；查「下一步/当前阶段进度」用 `progress show`） |
 | doctor | 5 | 环境和项目自检 |
 
-## docs check 命令（2026-08-15 docs-check-productize）
+## docs check 命令（2026-08-15 docs-check-productize；2026-08-18 platform-map-auto-anchors 增 --fix/--dry-run）
 
-`sillyspec docs check [--paths <glob,...>] [--json]`：文档行号引用校验（原 dogfood 私有测试 test/doc-ref-check.test.mjs 产品化）。只读、可进 CI。
+`sillyspec docs check [--paths <glob,...>] [--fix] [--dry-run] [--json]`：文档行号引用校验（原 dogfood 私有测试 test/doc-ref-check.test.mjs 产品化）。校验链路只读、可进 CI；`--fix` 是显式写路径（`applyFixes` 为 docs-check.js 内唯一写回面），不传时行为与旧版逐字节一致。
 
-- 实现 `src/docs-check.js`：层1 存在性（collectDocRefs 全文提取 + resolveCandidates 三段回退 + validateRefLines 行号边界）+ 层2 关键词断言（extractExpectedTokensFromLine，keywordAssert 可配缺省开）
+- 实现 `src/docs-check.js`：层1 存在性（collectDocRefs 全文提取 + resolveCandidates 三段回退 + validateRefLines 行号边界）+ 层2 关键词断言（extractExpectedTokensFromLine，keywordAssert 可配缺省开）+ 失效引用修复分类（classifyFix：token 在全量候选唯一命中 → fixable 自动重锚；多命中/零命中/无 token → needs-manual 保守不修，报告候选行号供人工确认）
 - 配置 local.yaml `docs-check` 段（paths 缺省 `docs/**/*.md` + `.sillyspec/docs/**/*.md`——2026-08-16 起缺省纳入 scan/modules 产物 / skip / keywordAssert），glob 手写 walker 零依赖、相对源码仓根展开（平台模式同锚）
-- exit code 三档：0 全绿 / 1 无效引用 / 2 配置错误（不支持的 glob 形态）
+- `--fix` 写入语义：对 fixable 失效引用按 docLine + 行内偏移定点替换行号——只改行号数字，不改引用文件名与 token；行结束符按原文（CRLF 保持）；同一行多引用按偏移从后往前替换不错位；普通 writeFileSync 整文件写回（文档非多进程竞争的运行时文件）。flag 走 BARE_FLAGS 白名单，未知 `--xxx` 显式 exit 2
+- `--dry-run`：预览不写盘；单独传（不带 --fix）也生效——dryRun 置位即 fix 语义生效但零写盘，等于零写盘的修复预览
+- exit code：全绿或 `--fix` 后全部 fixable 修复完且无 needs-manual 残留 → 0；仍有 needs-manual 或写回被跳过 → 1；配置错误（不支持的 glob 形态）→ 2（无 --fix/--dry-run 时维持 0 全绿 / 1 无效引用 / 2 配置错误旧口径）
+- `--fix --json`：修复统计以 `result.fixReport = {applied, skipped, dryRun}` 附加，stdout 保持纯 JSON 可解析
 - dogfood 自身：npm test 的 test/doc-ref-check.test.mjs 已迁移为 runDocsCheck 调用方（白名单 platform-interface-map.md，两层全开）
 
 ## 顶层目录口径
