@@ -59,7 +59,7 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
 
 **推进不是自动的，分三层**：
 1. **进入阶段** `runStage`（`src/run/stage.js:30`）→ `checkTransition` → 设 `currentStage`。execute 启动期自动创建 worktree（`stage.js:62-87`）、固定 `executeRunId`、审批检查。
-2. **步骤内推进** `completeStep`（`src/run/complete.js:67`）处理 `--done`：标记 step completed → 找下一个 pending → 无 pending 则进阶段完成分支。
+2. **步骤内推进** `completeStep`（`src/run/complete.js:81`）处理 `--done`：标记 step completed → 找下一个 pending → 无 pending 则进阶段完成分支。
 3. **下一步建议** `_getNextSuggestion`（`src/progress/stage-machine.js:284`）按状态机推荐下一阶段命令。
 
 **重开与级联**：`reopenStage`（`src/progress/stage-machine.js:401`）`--reopen --from-step N` 把 N 置 pending、其后置 stale，阶段转 `revising`，并级联把下游主链阶段标 `stale`。
@@ -71,7 +71,7 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
 | 门 | 触发 | 阻断 | 依据 |
 |---|---|---|---|
 | 转换门 `checkTransition` | 阶段跳转不符合 allowedFrom / scan failed | `exit(1)` | `src/stage-contract.js:799` |
-| WAIT 门 | `--done` output 含等待标记 / step `requiresWait` 未答 | `exit(1)` | `src/run/complete.js:146` |
+| WAIT 门 | `--done` output 含等待标记 / step `requiresWait` 未答 | `exit(1)` | `src/run/complete.js:106` |
 | execute deps 门 | worktree `depsStatus` 未达标 | step blocked + `exit(1)` | `src/run/gates.js:139` |
 | execute review.json 门 | 已勾 task 缺 review.json | step blocked + `exit(1)` | `src/run/gates.js:112` |
 | 阶段完成 gate 级联 | 所有 step completed 时跑 | 失败回滚 | `src/run/gates.js:190,572` |
