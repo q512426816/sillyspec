@@ -148,5 +148,89 @@ console.log('\n--- resolve 层：changeName 推断（单活跃变更）---')
   assert(after.stages.verify.status === 'completed', 'DB: 推断到唯一 change 并推进')
 }
 
+// ── Case 6: W1 stale 拒绝 — 存在 stale 步骤 + 无 force → 拒绝（不写盘）──
+console.log('\n--- W1 stale 拒绝：存在 stale 步骤 + 无 force → 拒绝 ---')
+{
+  const { cwd, specBase } = makeRepo('cs-stage-stale-')
+  const cn = '2026-08-19-stage-stale'
+  const pm = await initChange(cwd, specBase, cn)
+  await seedStage(pm, cwd, cn, 'verify', [
+    { name: '步骤1', status: 'completed' },
+    { name: '步骤2', status: 'stale' },  // stale 步骤
+    { name: '步骤3', status: 'pending' },
+  ])
+  writeVerifyArtifacts(join(specBase, 'changes', cn))
+
+  const r = await runCapturing(() => pm.completeStage(cwd, 'verify', cn))
+
+  assert(!r.error, 'stale 拒绝不应 process.exit/抛错')
+  assert(r.stdout.includes('❌ complete-stage 被拒绝：阶段 verify 存在'), 'stdout 含拒绝文案')
+  assert(r.stdout.includes('stale 步骤'), 'stdout 含 stale 关键词')
+  assert(r.stdout.includes('步骤2'), 'stdout 列出 stale 步骤名')
+  assert(r.stdout.includes('--force'), 'stdout 提示 --force 逃生门')
+
+  const after = await pm.read(cwd, cn)
+  assert(after.stages.verify.status !== 'completed', 'DB: status 未推进（stale 阻断）')
+  assert(after.stages.verify.steps.find(s => s.name === '步骤2').status === 'stale', 'stale 步骤保持不变')
+}
+
+// ── Case 7: W1 stale 放行 — 存在 stale 步骤 + force → audit + 回填推进 ──
+console.log('\n--- W1 stale 放行：存在 stale 步骤 + force → audit + 回填推进 ---')
+{
+  const { cwd, specBase } = makeRepo('cs-stage-stale-force-')
+  const cn = '2026-08-19-stage-stale-force'
+  const pm = await initChange(cwd, specBase, cn)
+  await seedStage(pm, cwd, cn, 'verify', [
+    { name: '步骤1', status: 'completed' },
+    { name: '步骤2', status: 'stale' },
+    { name: '步骤3', status: 'pending' },
+  ])
+  writeVerifyArtifacts(join(specBase, 'changes', cn))
+
+  const r = await runCapturing(() => pm.completeStage(cwd, 'verify', cn, { force: true }))
+
+  assert(!r.error, 'stale force 放行不应 process.exit/抛错')
+  assert(r.stdout.includes('✅ 阶段 verify 已标记为完成'), 'force 放行 → print ✅')
+
+  // audit.log 落地（force 写入，含 stale 步骤名）
+  const auditPath = join(specBase, '.runtime', 'audit.log')
+  assert(existsSync(auditPath), 'audit.log 存在')
+  const auditContent = readFileSync(auditPath, 'utf8')
+  const lines = auditContent.trim().split('\n')
+  const lastEntry = JSON.parse(lines[lines.length - 1])
+  assert(lastEntry.action === 'complete-stage --force', 'audit.action=complete-stage --force')
+  assert(lastEntry.stage === 'verify', 'audit.stage=verify')
+  assert(lastEntry.change === cn, 'audit.change=' + cn)
+  assert(Array.isArray(lastEntry.validationErrors), 'audit.validationErrors 是数组')
+  assert(lastEntry.validationErrors.some(e => e.includes('stale 步骤回填') && e.includes('步骤2')), 'validationErrors 含 stale 步骤名')
+
+  const after = await pm.read(cwd, cn)
+  assert(after.stages.verify.status === 'completed', 'DB: force 推进 status=completed')
+  assert(after.stages.verify.steps.every(s => s.status === 'completed'), 'DB: stale/pending 全部回填为 completed')
+}
+
+// ── Case 8: W1 无 stale 场景 — 零介入（无 stale 步骤，不触发新逻辑）──
+console.log('\n--- W1 无 stale 场景：零介入（无 stale 步骤，不触发新逻辑）---')
+{
+  const { cwd, specBase } = makeRepo('cs-stage-no-stale-')
+  const cn = '2026-08-19-stage-no-stale'
+  const pm = await initChange(cwd, specBase, cn)
+  await seedStage(pm, cwd, cn, 'verify', [
+    { name: '步骤1', status: 'completed' },
+    { name: '步骤2', status: 'pending' },  // 仅 pending，无 stale
+  ])
+  writeVerifyArtifacts(join(specBase, 'changes', cn))
+
+  const r = await runCapturing(() => pm.completeStage(cwd, 'verify', cn))
+
+  assert(!r.error, '无 stale 场景正常完成')
+  assert(r.stdout.includes('✅ 阶段 verify 已标记为完成'), 'print ✅（无 stale 阻断）')
+  assert(!r.stdout.includes('stale'), 'stdout 不含 stale 关键词（零介入）')
+
+  const after = await pm.read(cwd, cn)
+  assert(after.stages.verify.status === 'completed', 'DB: 正常推进')
+  assert(after.stages.verify.steps.every(s => s.status === 'completed'), 'DB: pending → completed')
+}
+
 cleanup()
 report(count.passed, count.failed, count.failures)

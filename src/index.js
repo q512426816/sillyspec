@@ -996,7 +996,7 @@ SillySpec worktree — git worktree 隔离管理
 
 用法:
   sillyspec worktree create <change-name> [--base <branch>]   创建隔离 worktree
-  sillyspec worktree apply <change-name> [--check-only]        校验并应用变更到主工作区
+  sillyspec worktree apply <change-name> [--check-only] [--base merge-base|baseline] [--merge]   校验并应用变更到主工作区
   sillyspec worktree assess <change-name>                     风险审计 + 自动 apply
   sillyspec worktree diff <change-name> [--base <commit>]      查看 worktree 相对 base 的变更
   sillyspec worktree list                                      列出所有活跃 worktree
@@ -1043,11 +1043,24 @@ SillySpec worktree — git worktree 隔离管理
         }
         case 'apply': {
           if (!wtName) {
-            console.error('❌ 用法: sillyspec worktree apply <change-name> [--check-only] [--merge]');
+            console.error('❌ 用法: sillyspec worktree apply <change-name> [--check-only] [--base merge-base|baseline] [--merge]');
             process.exit(1);
           }
           const checkOnly = args.includes('--check-only');
           const merge = args.includes('--merge');
+
+          // 解析 --base 参数（默认 merge-base）
+          let base = 'merge-base';
+          const baseIdx = args.indexOf('--base');
+          if (baseIdx !== -1) {
+            const baseVal = args[baseIdx + 1];
+            if (!baseVal || (!['merge-base', 'baseline'].includes(baseVal))) {
+              console.error('❌ --base 参数值非法，必须是 merge-base 或 baseline');
+              process.exit(1);
+            }
+            base = baseVal;
+          }
+
           const { applyWorktree } = await import('./worktree-apply.js');
           // W3 task-09：apply 链路构造 ctx（D-013），让 task-05 applyWorktree 按 ctx 区分主仓 A5 / 跨仓 no-op。
           // 跨仓 apply=no-op（G1 D-009）：校验 review.head 是跨仓真实 commit + 跳过 wm.cleanup。
@@ -1060,7 +1073,7 @@ SillySpec worktree — git worktree 隔离管理
             console.error(`❌ apply 失败：跨仓 MultiRepoContext 构造失败（${e.message}）`);
             process.exit(1);
           }
-          const result = applyWorktree(wtName, { cwd: dir, checkOnly, merge, ctx: _applyCtx });
+          const result = applyWorktree(wtName, { cwd: dir, checkOnly, merge, base, ctx: _applyCtx });
 
           if (result.errors.length > 0) {
             console.error(`❌ 校验失败:`);

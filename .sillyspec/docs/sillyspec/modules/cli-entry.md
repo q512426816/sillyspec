@@ -4,7 +4,7 @@ doc_type: module-card
 module_id: cli-entry
 author: qinyi
 created_at: 2026-06-03T07:42:00+08:00
-updated_at: 2026-08-19T10:52:00+08:00
+updated_at: 2026-08-19T15:30:00+08:00
 ---
 # cli-entry
 

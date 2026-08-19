@@ -4,7 +4,7 @@ doc_type: module-card
 module_id: runtime
 author: qinyi
 created_at: 2026-06-03T07:42:00+08:00
-updated_at: 2026-08-18T20:15:00+08:00
+updated_at: 2026-08-19T15:30:00+08:00
 ---
 # runtime
 
@@ -104,4 +104,5 @@ ProgressManager.alignExecuteToPlan(cwd, changeName, specBase, {confirm})
 - ql-20260818-009-9443 | 活文档漂移提示精度对齐 docs check：路径级「被引用即提示」升级为 runDocsCheck 分层真校验，只报真失效引用（drift.invalid 逐条 doc:line/ref/reason），全过零输出；matchLivingDocRefs 降为预过滤 + 新增 matchInvalidRefsToChanged。
 - ql-20260818-010-1197 | quick flag 级语义别名定向提示（F10b）：command.js 对 --title/--message/--summary/--result/--name/--session/--note/--notes/--desc/--description 等常见「不存在 flag」给定向指引，替代 did-you-mean 形近猜测（如 --title 不再误导猜 --files，而是指向 --output「需求：」自动提取 / --file-notes 文件括注）；test/run-exit-codes.test.mjs 加 3 条回归断言。
 - ql-20260819-004-ce90 | quick 轻量归档阶段闸（防误归档中途变更）：closeQuickLinkedChanges 原判定只看 tasks.md 全勾选——execute 完成后 tasks.md 必然全勾而 verify 未跑，穿插 quick 关联即被绕过 verify/archive 校验归档注销；新增 ProgressManager.getChangeStage（change-registry+facade 转发，读失败抛给上层 fail-closed），归档前查 current_stage，仅无 DB 记录或停在 scan/brainstorm（d192f89 原始 small 逃生通道场景）放行，plan/execute/verify/archive 一律 skip 提示走原流程；quick.js step3 prompt + quick.md 镜像 + SKILL.md + file-lifecycle.md 同步；test/quick-close-linked-changes.test.mjs 补 6 场景 + 新增 progress-get-change-stage.test.mjs。
+- 2026-08-19-reopen-and-execute-batch-guard | W1/W2：reopen --done stale 回填需 --confirm（complete.js ~303-343：无 --confirm 不回填、阶段不完成；带 --confirm 回填+audit；全 completed+stale 时走首个 stale 拉回完成管线）。completeStage 存在 stale 步骤时拒绝（stage-machine.js ~78-108，--force 逃生门）。execute 批量完成 blockedTasks 复核（shouldAutoCheckTask 加 ctx：自动草稿需 changedFiles 非空且 diff 非空；detectExecuteBatchFinish 逐 task 复核，review 缺失或草稿零 diff 阻断）。
 <!-- MANUAL_NOTES_END -->

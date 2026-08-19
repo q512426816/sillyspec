@@ -227,11 +227,13 @@ console.log('\n--- ⑤ gates.js：gate 内 mkdir 失败 → 外层 fail-closed �
   let r = runCli(cwd, ['run', 'execute', '--change', cn, '--skip-approval'])
   assert(r.status === 0, `前置 execute 启动 exit 0（实际 ${r.status}，尾输出：${r.combined.slice(-150)}）`)
 
-  // 种子进度：Wave 前全部 completed、Wave 1 执行 pending → --done 批量完成 → 进阶段完成分支
+  // 种子进度：除末步外全部 completed、末步 pending → --done 末步 → 进阶段完成分支
+  // （FR-04 后 review 缺失会阻断批量完成——gate 触发改走「末步完成」路径，不变量等价：
+  //   阶段完成时 Task Review Gate 对损坏 execute-runs 仍 fail-closed，不静默放行）
   const realSteps = (await pm.read(cwd, cn)).stages.execute.steps
-  const waveIdx = realSteps.findIndex(s => s.name.includes('Wave 1 执行'))
+  const lastIdx = realSteps.length - 1
   const progress = await pm.read(cwd, cn)
-  progress.stages.execute.steps = realSteps.map((s, i) => ({ name: s.name, status: i < waveIdx ? 'completed' : 'pending' }))
+  progress.stages.execute.steps = realSteps.map((s, i) => ({ name: s.name, status: i < lastIdx ? 'completed' : 'pending' }))
   await pm._write(cwd, progress, cn)
 
   // 障碍：execute-runs 改普通文件 + 删 marker（gate fallback 重新 generate + mkdir 必抛）

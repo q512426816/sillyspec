@@ -29,6 +29,7 @@ import { handleArchiveConfirmStep, handlePlanGeneratePlanStep, handleScanProject
 import { formatExecuteSummary } from '../worktree-apply.js'
 import { isEndToEndTaskText } from '../change-risk-profile.js'
 import { deriveTitleFromLinkedChange } from '../quicklog.js'
+import { gitQuiet } from '../git-helper.js'
 
 // validateMetadata / readDesignScale / validateFileLocations 已迁至 ./gates.js（completeStageGates
 // 共享收尾管线，消除 noAI 末步 / continueStep 完成分支绕过 gate 的 S1/S2/S3 不对称）。
@@ -114,8 +115,28 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
     console.log(`⚠️  Step "${steps[_resolvedWaitIdx].name}" 此前处于 waiting，--done --answer 已补回答并拉回待完成。`)
   }
   if (currentIdx === -1) {
-    console.error(`没有待完成的步骤（阶段 ${stageName} 已无 pending/in-progress 步骤）。当前阶段状态：${stageData?.status ?? '未知'}。用 \`sillyspec run ${stageName} --status\` 查看进度，或 \`sillyspec progress show\` 看全局下一步。`)
-    process.exit(1)
+    // ── reopen stale 收尾路径（坑 reopen-done-escape-hatch-unreachable）──
+    // 全 completed+stale（无 pending/in-progress）时若只有 exit(1)，--done --confirm 逃生门
+    // 永远到不了下方回填门控。修复：有 stale 时——无 confirm 报拦截指引（与门控同文案）；
+    // 带 confirm 把首个 stale 拉回 pending 走完整完成管线，末步后的回填门控 confirm 分支
+    // 收尾其余 stale（--confirm 语义 = 全部 stale 一并确认）。
+    const _staleIdx = steps.findIndex(s => s.status === 'stale')
+    if (_staleIdx !== -1) {
+      const _staleNames = steps.filter(s => s.status === 'stale').map(s => s.name)
+      if (!confirm) {
+        console.error(`\n⏸️  检测到 ${_staleNames.length} 个 stale 步骤（reopen 后未执行）：${_staleNames.join('、')}`)
+        console.error(`   两条出路：`)
+        console.error(`   ① sillyspec run ${stageName}${changeName ? ` --change ${changeName}` : ''} 逐个真实执行（stale 会被转为 pending）`)
+        console.error(`   ② 确认方案未变，一次性回填收尾：sillyspec run ${stageName} --done --confirm${changeName ? ` --change ${changeName}` : ''} --output "..."`)
+        process.exit(1)
+      }
+      steps[_staleIdx].status = 'pending'
+      currentIdx = _staleIdx
+      console.log(`⚠️  --confirm 收尾：把 stale 步骤 "${steps[_staleIdx].name}" 拉回当前步骤走完成管线，其余 stale 由回填门控一并确认。`)
+    } else {
+      console.error(`没有待完成的步骤（阶段 ${stageName} 已无 pending/in-progress 步骤）。当前阶段状态：${stageData?.status ?? '未知'}。用 \`sillyspec run ${stageName} --status\` 查看进度，或 \`sillyspec progress show\` 看全局下一步。`)
+      process.exit(1)
+    }
   }
 
   // ── requiresWait 硬门控 ──
@@ -285,15 +306,40 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
     // completed，否则进度数字与实际步骤明细矛盾（阶段已完成 + 6/8）。
     // 安全边界：仅进入阶段完成分支时才回填（stale 本就被跳过、不回填也照常标 completed），
     // 不改变单步推进行为；stale 若确需重跑，运行流（stage.js:141-148）会先于本分支转 pending 执行。
+    // FR-01 门控：无 --confirm 时不回填，阻断并给两条出路；带 --confirm 时回填并审计。
     const staleSteps = steps.filter(s => s.status === 'stale')
     if (staleSteps.length > 0) {
+      if (!confirm) {
+        // 无 confirm：不回填，阶段不完成，返回 staleBlocked 标记
+        const staleNames = staleSteps.map(s => `Step ${steps.indexOf(s) + 1}(${s.name})`).join(', ')
+        console.error(`⏸️  检测到 ${staleSteps.length} 个 stale 步骤（reopen 后未执行）——两条出路：`)
+        console.error(`   ① sillyspec run ${stageName} 逐个真实执行（首个 stale 自动转 pending）`)
+        console.error(`   ② 确认方案未变用 --done --confirm 一次性回填收尾`)
+        console.error(`   stale 步骤：${staleNames}`)
+        progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
+        pm._write(cwd, progress, changeName)
+        return { stageCompleted: false, currentIdx, nextPendingIdx: -1, staleBlocked: true }
+      }
+      // 带 confirm：按现行回填逻辑 + 审计记录
       const nowStr = new Date().toLocaleString('zh-CN',{hour12:false})
       for (const st of staleSteps) {
         st.status = 'completed'
         st.completedAt = st.completedAt || nowStr
       }
       pm._write(cwd, progress, changeName)
-      console.log(`  ⚠️ 同步回填 ${staleSteps.length} 个 stale 步骤为 completed（reopen --from-step N 后 --done，方案未变）`)
+      console.log(`  ⚠️ 同步回填 ${staleSteps.length} 个 stale 步骤为 completed（reopen --from-step N 后 --done --confirm，方案未变）`)
+      // 审计记录 reopen-stale-backfill
+      try {
+        pm._appendAuditLog(cwd, {
+          action: 'reopen-stale-backfill',
+          stage: stageName,
+          change: changeName,
+          steps: staleSteps.map(s => s.name),
+          confirmedAt: nowStr
+        })
+      } catch (e) {
+        console.warn('⚠️ 回填审计日志写入失败（不阻断）:', e.message)
+      }
     }
 
     stageData.status = 'completed'
@@ -454,20 +500,89 @@ function readTaskCardText(changeDir, taskNum) {
 }
 
 /**
+ * W2 task-04/05 共用 helper：构造草稿零 diff 校验用的 ctx（与 task-review.js generateTaskReviewDrafts 同源）。
+ * 用于 autoCheckPlanFromReviews（勾选层）和 detectExecuteBatchFinish（批量层）。
+ * 失败返回 null（调用方降级：勾选层不勾、批量层不过滤——向后兼容）。
+ *
+ * @returns {Promise<{gitDir:string, base:string, head:string}|null>}
+ */
+async function buildDraftContext(cwd, changeName) {
+  try {
+    const { WorktreeManager } = await import('../worktree.js')
+    const meta = new WorktreeManager({ cwd }).getMeta(changeName)
+    const base = meta?.baselineCommit || meta?.baseHash || null
+    let gitDir = cwd
+    let head = null
+    if (meta?.worktreePath && meta.mode !== 'in-place-fallback' && existsSync(meta.worktreePath)) {
+      gitDir = meta.worktreePath
+    }
+    if (base) {
+      try {
+        head = gitQuiet(gitDir, ['rev-parse', 'HEAD'])
+      } catch (e) {
+        console.warn(`⚠️ ctx 构造失败（git rev-parse HEAD 失败：${e && e.message ? e.message : e}），跳过草稿 diff 校验`)
+        return null
+      }
+    }
+    if (base && head && gitDir) {
+      return { gitDir, base, head }
+    }
+    return null
+  } catch (e) {
+    console.warn(`⚠️ ctx 构造失败（${e && e.message ? e.message : e}），跳过草稿 diff 校验`)
+    return null
+  }
+}
+
+/**
  * 判定 task 是否该被 autoCheckPlanFromReviews 自动勾选。
  * 端到端/deployment-critical task 要求 review spec+quality 双 pass（cannot_verify 不算，防批量完成
  * 放行未真验的端到端 task）；普通 task 非 fail 即可（保主 agent 直接实现模式体验，其 cannot_verify
  * 草稿仍可批量收尾）。坑 execute-batch-complete-endtoend-checkbox。
- * @param {{ok?:boolean, review?:{specVerdict?:string, qualityVerdict?:string}}} r readReview 结果
+ *
+ * W2 task-04 FR-03：草稿勾选层零 diff 守卫——review 为自动草稿且 ctx 给定时，额外要求
+ * changedFiles 非空且 git diff 实测非空。防 allowed_paths 误归属他人 diff 或陈旧 review.json 导致
+ * 空任务被自动勾选/批量放行。ctx 缺省时保持现行判定（向后兼容）。
+ *
+ * @param {{ok?:boolean, review?:{specVerdict?:string, qualityVerdict?:string, reviewerNotes?:string, changedFiles?:string[]}}} r readReview 结果
  * @param {boolean} endToEnd 是否端到端/deployment-critical task
+ * @param {{gitDir?:string, base?:string, head?:string}|null} [ctx] 实测 diff 上下文；缺省保持现行判定
  * @returns {boolean}
  */
-export function shouldAutoCheckTask(r, endToEnd) {
+export function shouldAutoCheckTask(r, endToEnd, ctx = null) {
   if (!r?.ok) return false
   const spec = r.review?.specVerdict
   const quality = r.review?.qualityVerdict
   if (spec === 'fail' || quality === 'fail') return false
   if (endToEnd) return spec === 'pass' && quality === 'pass'
+
+  // W2 task-04 草稿零 diff 守卫（FR-03）
+  // ctx 给定且 review 为自动草稿时，要求 changedFiles 非空且实测 diff 非空
+  if (ctx && r.review?.reviewerNotes && r.review.reviewerNotes.includes('auto-generated draft')) {
+    const changedFiles = r.review.changedFiles || []
+    if (changedFiles.length === 0) {
+      console.warn(`⚠️ 草稿 review changedFiles 为空，跳过自动勾选`)
+      return false
+    }
+    if (!ctx.gitDir || !ctx.base || !ctx.head) {
+      console.warn(`⚠️ ctx 信息不完整（gitDir=${ctx.gitDir}, base=${ctx.base}, head=${ctx.head}），跳过草稿 diff 校验，保守不勾`)
+      return false
+    }
+    try {
+      // 实测 diff：git diff --name-only <base>..<head> -- <changedFiles>
+      // 用数组参数避免 shell 拆词，复用 git-helper 安全模式
+      const diffResult = gitQuiet(ctx.gitDir, ['diff', '--name-only', `${ctx.base}..${ctx.head}`, '--', ...changedFiles], { trim: true })
+      if (!diffResult || diffResult.trim() === '') {
+        console.warn(`⚠️ 草稿 review 实测 diff 为空（base=${ctx.base.slice(0,8)}, head=${ctx.head.slice(0,8)}, files=${changedFiles.length}），跳过自动勾选`)
+        return false
+      }
+      console.log(`   ✓ 草稿 diff 校验通过（${diffResult.trim().split('\n').length} 个文件有改动）`)
+    } catch (e) {
+      console.warn(`⚠️ 草稿 diff 校验失败（${e && e.message ? e.message : e}），保守不勾`)
+      return false
+    }
+  }
+
   return true
 }
 async function autoCheckPlanFromReviews({ stageName, changeName, cwd, platformOpts }) {
@@ -491,6 +606,10 @@ async function autoCheckPlanFromReviews({ stageName, changeName, cwd, platformOp
       return { autoChecked: false, checkedCount: 0, skippedCount: 0 }
     }
     const executeRunId = c
+
+    // W2 task-04 FR-03：构造 ctx 供草稿零 diff 守卫用（与 task-review.js generateTaskReviewDrafts 同源）
+    const ctx = await buildDraftContext(cwd, changeName)
+
     // plan.md 是 agent 与 CLI 都会写的共享文件（agent 勾 checkbox、此处 autoCheck 也勾选）。
     // 读-改-写必须整体持锁（withFileLock 串行化多进程），否则并发 execute --done / 手动勾选互相覆盖
     // （后到者覆盖先到者）；写入用 writeAtomicSync（tmp+rename 原子），防 Windows 整文件覆盖被读半截
@@ -506,7 +625,7 @@ async function autoCheckPlanFromReviews({ stageName, changeName, cwd, platformOp
         const r = readReview(reviewPath)
         // 端到端 task：必须 pass（cannot_verify 不算）；普通 task：非 fail 即可（坑 execute-batch-complete-endtoend-checkbox）
         const endToEnd = isEndToEndTaskText(match + ' ' + readTaskCardText(changeDir, taskNum))
-        if (shouldAutoCheckTask(r, endToEnd)) {
+        if (shouldAutoCheckTask(r, endToEnd, ctx)) {
           checkedCount++
           return `${p1}x${p2}`   // 勾选
         }
@@ -530,8 +649,11 @@ async function autoCheckPlanFromReviews({ stageName, changeName, cwd, platformOp
  * 复用现成能力：readPlanCheckboxStatus（plan 勾选状态）+ checkExecuteCodeEvidence（代码客观核验，
  * 与 doctor --align-execute-progress 同源，D-002/D-004）。仅在 stageName==='execute' && changeName 触发。
  *
+ * W2 task-05 FR-04：plan 全勾后逐 task 复核——review 缺失或草稿零 diff → 阻断批量，
+ * 返回 blockedTasks 列表（task id 数组），调用方打印 reason。
+ *
  * 安全门：plan 零 checkbox / 未全勾 / 代码零变更（unchanged）均不批量——信任 plan 声明但用代码核验兜底。
- * @returns {Promise<{batched:boolean, aligned:number, reason?:string}>}
+ * @returns {Promise<{batched:boolean, aligned:number, reason?:string, blockedTasks?:string[]}>}
  */
 async function detectExecuteBatchFinish({ pm, stageName, changeName, cwd, specBase, steps }) {
   if (stageName !== 'execute' || !changeName) return { batched: false, aligned: 0 }
@@ -548,6 +670,78 @@ async function detectExecuteBatchFinish({ pm, stageName, changeName, cwd, specBa
     if (evidence.status === 'unchanged') {
       return { batched: false, aligned: 0, reason: `代码零变更（${evidence.detail}）` }
     }
+
+    // W2 task-05 FR-04：逐 task 复核（草稿零 diff 守卫——批量层）
+    // 读取 plan.md 提取已勾 task id 列表（正则 `- [x] task-NN`）
+    const planPath = join(changeDir, 'plan.md')
+    const planContent = readFileSync(planPath, 'utf8')
+    const taskCheckboxRegex = /-\s\[x\]\s+task-(\d+)/gi
+    const taskMatches = [...planContent.matchAll(taskCheckboxRegex)]
+    const taskIds = taskMatches.map(m => `task-${m[1].padStart(2, '0')}`)
+
+    if (taskIds.length === 0) {
+      return { batched: false, aligned: 0, reason: 'plan.md 无已勾 task checkbox' }
+    }
+
+    // 构造 ctx 供草稿零 diff 校验用（与 task-04 同源）
+    const ctx = await buildDraftContext(cwd, changeName)
+    const runtimeRoot = resolveRuntimeRoot({ specRoot: specBase }, specBase)
+    const runIdFile = join(runtimeRoot, `current-execute-run-id-${changeName}`)
+    const blockedTasks = []
+
+    for (const taskId of taskIds) {
+      let review = null
+      try {
+        const { readReview, isValidExecuteRunId } = await import('../task-review.js')
+        const c = readFileSync(runIdFile, 'utf8').trim()
+        if (!c || !isValidExecuteRunId(c)) {
+          blockedTasks.push(taskId)
+          continue
+        }
+        const executeRunId = c
+        const reviewPath = join(runtimeRoot, 'execute-runs', executeRunId, 'tasks', taskId, 'review.json')
+        const r = readReview(reviewPath)
+        if (!r?.ok) {
+          blockedTasks.push(taskId)
+          continue
+        }
+        review = r.review
+      } catch {
+        blockedTasks.push(taskId)
+        continue
+      }
+
+      // review 存在：判定是否为自动草稿且零 diff
+      if (review?.reviewerNotes && review.reviewerNotes.includes('auto-generated draft')) {
+        const changedFiles = review.changedFiles || []
+        // 草稿且 changedFiles 为空 → 阻断
+        if (changedFiles.length === 0) {
+          blockedTasks.push(taskId)
+          continue
+        }
+        // 草稿且有 changedFiles → 实测 diff 校验（ctx 与 task-04 同源）
+        if (ctx && ctx.gitDir && ctx.base && ctx.head) {
+          try {
+            const diffResult = gitQuiet(ctx.gitDir, ['diff', '--name-only', `${ctx.base}..${ctx.head}`, '--', ...changedFiles], { trim: true })
+            if (!diffResult || diffResult.trim() === '') {
+              blockedTasks.push(taskId)
+            }
+          } catch (e) {
+            // diff 校验失败保守处理：阻断（避免误批量）
+            blockedTasks.push(taskId)
+          }
+        }
+      }
+    }
+
+    // blockedTasks 非空 → 阻断批量
+    if (blockedTasks.length > 0) {
+      const reason = `以下 task 复核未过（review 缺失或草稿零 diff）：${blockedTasks.join(', ')}`
+      console.warn(`⚠️ 批量完成被阻断：${reason}`)
+      return { batched: false, aligned: 0, reason, blockedTasks }
+    }
+
+    // 全部复核通过 → 批量标 completed
     const now = new Date().toLocaleString('zh-CN', { hour12: false })
     let aligned = 0
     for (const step of steps) {
@@ -558,8 +752,9 @@ async function detectExecuteBatchFinish({ pm, stageName, changeName, cwd, specBa
       }
     }
     return { batched: true, aligned }
-  } catch {
-    return { batched: false, aligned: 0 }
+  } catch (e) {
+    // 异常 fail-open：不批量，reason 带错误信息
+    return { batched: false, aligned: 0, reason: `批量完成检测异常：${e && e.message ? e.message : e}` }
   }
 }
 

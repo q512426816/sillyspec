@@ -95,7 +95,7 @@ console.log('\n--- design.md scale=small → 下一步 quick --linked-changes（
   assert(!r.combined.includes('run scan'), 'brainstorm 完成不再误推 scan')
 }
 
-console.log('\n--- reopen --from-step N 后 --done：stale 步骤同步回填 completed（坑 brainstorm-reopen-step-state-desync） ---')
+console.log('\n--- reopen --from-step N 后 --done：FR-01 门控——无 confirm 阻断不回填，--confirm 回填收尾 ---')
 {
   const { cwd, specBase } = makeRepo('cli-brainstorm-reopen-')
   const cn = '2026-07-25-brainstorm-reopen'
@@ -117,14 +117,26 @@ console.log('\n--- reopen --from-step N 后 --done：stale 步骤同步回填 co
   assert(rsteps[5].status === 'pending', 'reopen 后 step 6 应为 pending（待重做）')
   assert(rsteps[6].status === 'stale' && rsteps[7].status === 'stale', 'reopen 后 step 7/8 应为 stale')
 
-  // --done 完成 step 6（当前 pending），应触发阶段完成分支并回填 step 7/8
+  // --done 完成 step 6（当前 pending）：FR-01 后不再静默回填——阻断 + 两条出路指引
   const r = runStage('brainstorm', cn, cwd, { done: true, output: '修订决策章节完成', answer: '确认' })
 
   assert(r.status === 0, `reopen 后 --done exit 0（实际 ${r.status}，输出尾：${r.combined.slice(-150)}）`)
   assert(!r.combined.includes('阶段校验跳过'), '不应再有「状态不同步」警告')
+  assert(r.combined.includes('stale 步骤') && r.combined.includes('--confirm'), 'FR-01: 输出含 stale 检测与 --confirm 出路指引')
+
+  const afterMid = await pm.read(cwd, cn)
+  assert(afterMid.stages.brainstorm.status !== 'completed', 'FR-01: 无 confirm 阶段不完成')
+  const msteps = afterMid.stages.brainstorm.steps
+  assert(msteps[5].status === 'completed', 'step 6 本次 --done 已完成')
+  assert(msteps[6].status === 'stale' && msteps[7].status === 'stale', 'FR-01: stale step 7/8 保持未回填')
+
+  // --done --confirm 逃生门：首个 stale 拉回完成管线 → 回填门控收尾其余 stale → 阶段完成
+  const rc = runStage('brainstorm', cn, cwd, { done: true, confirm: true, output: '确认方案未变，回填收尾' })
+
+  assert(rc.status === 0, `--done --confirm exit 0（实际 ${rc.status}，输出尾：${rc.combined.slice(-150)}）`)
 
   const after = await pm.read(cwd, cn)
-  assert(after.stages.brainstorm.status === 'completed', 'stage.status=completed')
+  assert(after.stages.brainstorm.status === 'completed', 'stage.status=completed（confirm 回填收尾）')
   const asteps = after.stages.brainstorm.steps
   assert(asteps[6].status === 'completed', 'stale step 7 已回填 completed')
   assert(asteps[7].status === 'completed', 'stale step 8 已回填 completed')

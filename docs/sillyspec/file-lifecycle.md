@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-05-31 11:00:00
-updated_at: 2026-08-19T11:20:00+08:00
+updated_at: 2026-08-19T15:30:00+08:00
 ---
 
 # SillySpec 文件生命周期
@@ -266,6 +266,8 @@ execute --done 批量完成（2026-07-28，`run/complete.js`）
   - **文案修正**：validator 失败提示不再声称 `--skip-approval` 可跳过产物校验（该 flag 只作用于阶段转换/审批检查）；quick 阶段 quicklog 缺失提示同步移除。
   - **wait 步骤答案无选项校验（wait-choice-enforcement 移除，2026-08-16）**：43d4531 曾加 `--answer` 必须命中 waitOptions 的全等校验（防 AI 代答）。实证误伤人工选择（AskUserQuestion 转述标签「方案 A 读侧扩展（推荐）」≠「方案A」全等失配；人工 Other 自由填值同样被拦），而字符串匹配区分不了谁答的、防不了故意代答——经用户拍板移除 `enforceWaitChoice` 及全部调用点。现契约：requiresWait/repeatableWait 的 `--answer` 接受任意非空文本，`waitAnswer` 落原始回答（人工转述形态原样入库）；requiresWait 门本身保留（`--done` 不带 `--answer` 仍 fail-loud 拦截）。`waitOptions` 字段保留，仅用于 wait 提示展示与 CLI `--options` 注入，不再参与校验；`waitFreeAnswer` 标记随豁免语义消失而删除。
   - **status 输出区分操作目标与活跃列表（status-change-pointer-ambiguous，2026-08-14）**：`progress show`/`status` 多变更汇总不再只列「活跃变更 N 个」，新增两行明确语义——「当前操作目标」（多活跃时不带 `--change` 的 run/progress 不隐式选定任一，须显式 `--change`）与「活跃变更记录」（下列为 DB 中存在的活跃记录，非操作目标）；DB 有记录但目录缺失的空壳 change（default/quick-xxx 残留）逐项标注 `⚠️ 目录缺失（残留记录，可用 doctor 清理）`，防止把残留空壳误当操作目标跑错 change。
+  - **reopen --done stale 回填需 --confirm（reopen-stale-confirm，2026-08-19）**：`--reopen --from-step N` 后 `--done` 无 `--confirm`：不回填 stale、阶段不完成，指引两条路（带 `--confirm` 回填 / 继续 `--done` 跳过 stale）；带 `--confirm`：回填 stale→completed + audit log（action=reopen-stale-backfill）。全 completed+stale 时 `--done --confirm` 走「首个 stale 拉回完成管线」逃生门。completeStage 存在 stale 步骤时拒绝（`--force` 逃生门，审计含 stale 步骤名）；stale 门位于产物校验门之前（`src/progress/stage-machine.js` ~78-108，`src/run/complete.js` ~303-343）。
+  - **execute 批量完成 blockedTasks 复核（execute-batch-blocked-tasks，2026-08-19）**：`shouldAutoCheckTask` 加可选 ctx（自动草稿需 changedFiles 非空且实测 diff 非空才勾选）；`detectExecuteBatchFinish` 批量放行前逐 task 复核，blockedTasks（review 缺失或草稿零 diff）阻断批量完成。
 - worktree execute 收尾 per-task review 草稿 + assess 顺带修复豁免（2026-07-30，坑 worktree-execute-apply-friction 1/2/4）：
   - **per-task review.json 草稿自动落盘**（坑2，`task-review.js generateTaskReviewDrafts`）：execute 每次 `--done`（`complete.js` execute 块，`detectExecuteBatchFinish` 之后）自动补写缺失的 `.runtime/execute-runs/<exec-id>/tasks/task-XX/review.json`。worktree execute「主 agent 直接实现」模式不走子代理 review 落盘 → review.json 全缺 → Task Review Gate 报「task-XX 缺少 review.json」阻断；现据 `resolveVerifyChangedFiles`（worktree-aware base..head diff）按各 task `allowed_paths`（`parseAllowedPaths` + `pathMatches`）归属，生成 `verdict=cannot_verify` + 非空 `requiredEvidence` 草稿（过 schema，流转 verify 兑现）。幂等：已存在的 review.json（人工/子代理已填 verdict）一律跳过不覆盖；空 changedFiles 的 task 不生成（verifyReviewGitEvidence 判空 diff 伪造）。exec-id 与 Task Review Gate（`gates.js`）/ `autoCheckPlanFromReviews` 同源：`current-execute-run-id-<change>` marker，缺失则 `generateExecuteRunId` + 落盘。
   - **execute run marker 写入原子化（不变量：marker 在则 `execute-runs/<runId>/tasks/` 目录在，2026-08-16 state-split-fixes #1）**：四处 marker 写入点统一改为「先 `mkdirSync(join(runtimeRoot,'execute-runs',<runId>,'tasks'),{recursive:true})` 再写 `current-execute-run-id-<change>`」——修复「目录只随 review.json 写入创建，marker 先落而目录缺失，archive 完成度扫描/漂移兜底落到上个变更的空 run」的并发坑（exec-182944/exec-211357 两度实证）。分层 fail 语义（D-001@v1）：主写入点 `run/stage.js`（execute 启动路径）mkdir 失败**直接 throw**（exit 1 + 修复指引，启动即失败优于事后 review 错配）；`run/gates.js` gate 内补写点 throw 直穿外层 `:494` catch fail-closed 阻断完成；`run/prompt.js` 渲染路径降级（catch 内 `console.error` 留痕 + ID 仍注入 prompt，渲染路径异常不能炸 prompt 输出）；`task-review.js` 草稿路径去 catch 静默（`console.error` 留痕但保 `:763` fail-open 契约，调用方 complete.js/index.js catch 降级不变）。测试 `test/execute-run-dir-fail-loud.test.mjs`（33 断言：四写入点顺序扫描 + 子进程 exit 码 + 分层语义各路径）。

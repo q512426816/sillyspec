@@ -330,7 +330,7 @@ function validateCrossRepoNoOp(ctx, projectRoot, changeName) {
  *   crossRepoValidated?: Array<{ repo: string, head: string }>
  * }}
  */
-export function applyWorktree(changeName, { cwd, checkOnly = false, merge = false, ctx = null } = {}) {
+export function applyWorktree(changeName, { cwd, checkOnly = false, merge = false, base = 'merge-base', ctx = null } = {}) {
   const projectRoot = cwd || process.cwd();
   const wm = new WorktreeManager({ cwd: projectRoot });
   const meta = wm.getMeta(changeName);
@@ -366,9 +366,30 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
     return result;
   }
 
-  const { worktreePath, baseHash, baselineCommit } = meta;
-  // diff 起始点：有 baseline checkpoint 用它（只合子代理改动），否则 fallback 到 baseHash
-  const diffBase = baselineCommit || baseHash;
+  const { worktreePath, baseHash, baselineCommit, branch } = meta;
+  // 改动点 5：交付集合锚点（判定 changedFiles，保「只合子代理改动」语义）
+  const deliverableBase = baselineCommit || baseHash;
+
+  // 改动点 6：patch 锚点（生成 patch preimage，默认 merge-base 消除占位文件假冲突）
+  let patchBase;
+  if (base === 'baseline') {
+    // 显式回退旧行为
+    patchBase = deliverableBase;
+  } else {
+    // 默认 merge-base：在 projectRoot 计算 merge-base <baseBranch> <branchTip>
+    const baseBranch = meta.baseBranch || 'master'; // meta.baseBranch 优先，否则默认 master
+    const branchTip = branch || `sillyspec/${changeName}`; // meta.branch 优先，否则按命名约定
+    try {
+      patchBase = gitQuiet(projectRoot, ['merge-base', baseBranch, branchTip]);
+      if (!patchBase) {
+        console.warn(`⚠️  merge-base 计算失败（分支可能已删除），回退到 baseline 锚点`);
+        patchBase = deliverableBase;
+      }
+    } catch (e) {
+      console.warn(`⚠️  merge-base 计算异常（${e.message}），回退到 baseline 锚点`);
+      patchBase = deliverableBase;
+    }
+  }
 
   if (!existsSync(worktreePath)) {
     result.errors.push(`worktree 目录不存在: ${worktreePath}`);
@@ -382,7 +403,8 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
   const deletedFiles = [];
   try {
     // 用 --name-status 捕获 rename/delete（--name-only 会丢失 rename 源文件）
-    const statusRaw = git(worktreePath, ['diff', '--name-status', diffBase]);
+    // 交付集合判定：用 deliverableBase（baselineCommit||baseHash），保「只合子代理改动」语义
+    const statusRaw = git(worktreePath, ['diff', '--name-status', deliverableBase]);
     const statusFiles = new Set();
     if (statusRaw) {
       for (const line of statusRaw.split('\n').filter(Boolean)) {
@@ -395,7 +417,7 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
       }
     }
 
-    // untracked 新文件（diffBase 中不存在的文件）
+    // untracked 新文件（deliverableBase 中不存在的文件）
     const untrackedRaw = gitQuiet(worktreePath, ['ls-files', '--others', '--exclude-standard']);
     const untrackedFiles = untrackedRaw ? untrackedRaw.split('\n').filter(Boolean) : [];
 
@@ -564,11 +586,12 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
     let patchContent = '';
 
     // 分 tracked 变更和 untracked 新文件生成 patch
-    // 批量化：一次 ls-tree（diffBase tree 中存在的文件）+ 一次 ls-files（index 中存在的文件）
+    // 批量化：一次 ls-tree（deliverableBase tree 中存在的文件）+ 一次 ls-files（index 中存在的文件）
     // 建集合，替代 per-file cat-file -e / ls-files --error-unmatch（原至多 2N spawn → 固定 2）。
-    // 语义等价：cat-file -e diffBase:f 成功 ⟺ f 在 ls-tree diffBase 输出（getBlobHashMap key）；
+    // 语义等价：cat-file -e deliverableBase:f 成功 ⟺ f 在 ls-tree deliverableBase 输出（getBlobHashMap key）；
     // ls-files --error-unmatch f 成功 ⟺ f 在 ls-files -- 输出。
-    const inTree = getBlobHashMap(worktreePath, diffBase, patchFiles);
+    // tracked 判定用 deliverableBase（集合判定侧）
+    const inTree = getBlobHashMap(worktreePath, deliverableBase, patchFiles);
     const inIndexList = patchFiles.length > 0
       ? (gitQuiet(worktreePath, ['ls-files', '--', ...patchFiles]) || '').split('\n').filter(Boolean)
       : [];
@@ -577,12 +600,13 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
     const trackedSet = new Set(trackedFiles);
     const untrackedPatchFiles = patchFiles.filter(f => !trackedSet.has(f));
 
-    // tracked 文件：git diff baseHash（数组形式，文件名逐个展开为独立 argv，不经 shell；
-    // trim:false 保留二进制补丁原样，timeout 放大到 60s 防大 diff 超时——原裸 execSync 无 timeout）
+    // tracked 文件：git diff patchBase（patch 生成锚点，默认 merge-base）
+    // 数组形式，文件名逐个展开为独立 argv，不经 shell；
+    // trim:false 保留二进制补丁原样，timeout 放大到 60s 防大 diff 超时——原裸 execSync 无 timeout
     if (trackedFiles.length > 0) {
       patchContent += git(
         worktreePath,
-        ['diff', '--binary', diffBase, '--', ...trackedFiles],
+        ['diff', '--binary', patchBase, '--', ...trackedFiles],
         { trim: false, timeout: 60000 }
       );
     }
@@ -629,7 +653,9 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
       git(projectRoot, ['apply', '--3way', patchPath], { timeout: 30000 });
     } catch (e) {
       // --3way 冲突（exit 1，工作区已留冲突标记）：回滚到 apply 前干净状态，不留半成品
-      const rollback = rollbackApply(projectRoot, trackedPatchFiles, newPatchFiles);
+      // FR-06：解析 git 原始 stderr 提取冲突文件列表（不静默吞掉）
+      const rawStderr = e.message || '';
+      const rollback = rollbackApply(projectRoot, trackedPatchFiles, newPatchFiles, rawStderr);
       result.errors.push(
         `apply --3way 冲突：以下文件与主干「已提交」推进重叠，无法自动合并：\n` +
         `  ${rollback.conflicts.length > 0 ? rollback.conflicts.join('\n  ') : '(未能获取冲突文件列表)'}\n` +
@@ -670,16 +696,67 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
  * @param {string} projectRoot
  * @param {string[]} trackedFiles 主仓库 HEAD 已存在、patch 触及的文件
  * @param {string[]} newFiles apply 前不存在、patch 可能新建的文件
+ * @param {string} [rawStderr] git apply 原始错误输出（FR-06：解析冲突文件列表）
  * @returns {{ conflicts: string[], error: string|null }} conflicts=冲突文件列表
  */
-function rollbackApply(projectRoot, trackedFiles, newFiles) {
+function rollbackApply(projectRoot, trackedFiles, newFiles, rawStderr = '') {
   let error = null;
-  // 冲突文件：git status 里带冲突标记（UU/AA 等）的文件
+  // 冲突文件来源：git status 探测 + stderr 解析（FR-06）
   let conflicts = [];
+
+  // 1. git status 探测（工作区遗留的 UU/AA 标记）
   try {
     const unmerged = gitQuiet(projectRoot, ['diff', '--name-only', '--diff-filter=U']) || '';
     conflicts = unmerged.split('\n').filter(Boolean);
   } catch {}
+
+  // 2. 解析 git apply stderr（FR-06）：提取冲突文件列表
+  let stderrConflicts = [];
+  if (rawStderr) {
+    try {
+      // 匹配模式：
+      // - error: patch failed: <file>:<line>
+      // - error: <file>: does not exist in index
+      // - CONFLICT (modify/delete): <file>
+      // - error: <file>: already exists in working directory
+      // - <file>: patch does not apply
+      // 容错：Windows 路径正斜杠、CRLF、引号包裹
+      const patterns = [
+        /error:\s+patch\s+failed:\s+(.+?)(?::\d+)?$/m,
+        /error:\s+(.+?):\s+does\s+not\s+exist\s+in\s+index$/m,
+        /CONFLICT\s+\([^)]+\):\s+(.+?)$/m,
+        /error:\s+(.+?):\s+already\s+exists/im,
+        /(.+?):\s+patch\s+does\s+not\s+apply$/m
+      ];
+
+      for (const pat of patterns) {
+        const match = rawStderr.match(pat);
+        if (match) {
+          let file = match[1].trim();
+          // 去除引号（git 有时给文件名加引号）
+          file = file.replace(/^['"]|['"]$/g, '');
+          // 统一路径分隔符（Windows 混用 \ 和 /）
+          file = file.replace(/\\/g, '/');
+          if (file && !stderrConflicts.includes(file)) {
+            stderrConflicts.push(file);
+          }
+        }
+      }
+    } catch (parseErr) {
+      // 解析失败静默忽略，不影响原有流程（FR-06 容错要求）
+    }
+  }
+
+  // 3. 合并去重
+  conflicts = [...new Set([...conflicts, ...stderrConflicts])];
+
+  // 4. 双源皆空：错误信息附原始 stderr 尾部（截 800 字符）
+  if (conflicts.length === 0 && rawStderr) {
+    const tail = rawStderr.length > 800 ?
+      '\n  ...（前略）...\n  ' + rawStderr.slice(-800) :
+      '\n  ' + rawStderr;
+    error = (error ? error + '\n' : '') + `原始 git apply 错误：${tail}`;
+  }
   // 回滚 tracked 文件到 HEAD（强制从 HEAD 还原——--3way 冲突标记同时污染工作区和 index，
   // `checkout -- f` 从 index 还原会拿到冲突版，必须 `checkout HEAD -- f` 才能还原干净）
   for (const f of trackedFiles) {

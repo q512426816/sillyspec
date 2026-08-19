@@ -51,9 +51,37 @@ export class StageMachine {
       if (!cn) { console.log('❌ 无法确定当前变更，请指定 --change <name>'); return; }
     }
 
+    // ── stale 拒绝门（W1 改动点 2）：complete-stage 不再静默回填 stale 步骤 ──
+    // 放在产物校验门之前——stale 是更具体的拒绝原因（产物缺失时旧序会被产物门先拦走，
+    // stale 门永远执行不到）；无 --force 拒绝并列名，有 --force 放行并把 stale 步骤名并入审计。
+    let staleBackfillNote = null;
+    {
+      const sqlDbForStaleCheck = db.getDb();
+      const changeRowForStale = sqlDbForStaleCheck.prepare('SELECT id FROM changes WHERE name = ?').get(cn);
+      if (changeRowForStale !== undefined) {
+        const stageRowForStale = sqlDbForStaleCheck.prepare('SELECT id FROM stages WHERE change_id = ? AND stage = ?').get(changeRowForStale.id, stage);
+        if (stageRowForStale !== undefined) {
+          const staleSteps = sqlDbForStaleCheck.prepare('SELECT name FROM steps WHERE stage_id = ? AND status = ?').all(stageRowForStale.id, 'stale');
+          if (staleSteps.length > 0) {
+            if (!force) {
+              console.error(`❌ complete-stage 被拒绝：阶段 ${stage} 存在 ${staleSteps.length} 个 stale 步骤`);
+              for (const st of staleSteps) console.error(`   - ${st.name}`);
+              console.error(`   stale 步骤需真实执行推进（sillyspec run ${stage} 逐个完成），或确认方案未变后用 --force 强制回填（将记录审计日志）。`);
+              return;
+            }
+            staleBackfillNote = `stale 步骤回填: ${staleSteps.map(s => s.name).join(', ')}`;
+          }
+        }
+      }
+    }
+
     // ── 产物校验门：complete-stage 不再是零校验后门 ──
     // 与 run.js completeStep 的 validator 同源；--force 为显式逃生口（留审计）。
     const validation = this._validateStageArtifacts(cwd, stage, cn);
+    if (staleBackfillNote) {
+      validation.errors = [...(validation.errors || []), staleBackfillNote];
+      validation.ok = false;
+    }
     if (!validation.ok) {
       if (!force) {
         console.error(`❌ complete-stage 被拒绝：阶段 ${stage} 产物校验未通过`);
@@ -92,7 +120,7 @@ export class StageMachine {
       if (stageRow !== undefined) {
         const stageId = stageRow.id;
         sqlDb.prepare(
-          `UPDATE steps SET status = 'completed', completed_at = ? WHERE stage_id = ? AND status IN ('pending', 'stale')` // stale 一并回填（reopen --done 场景，坑 brainstorm-reopen-step-state-desync）
+          `UPDATE steps SET status = 'completed', completed_at = ? WHERE stage_id = ? AND status IN ('pending', 'stale')` // stale 一并回填（reopen --done 场景，坑 brainstorm-reopen-step-state-desync；--force 时放行）
         ).run(now, stageId);
       }
 

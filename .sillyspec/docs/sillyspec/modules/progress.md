@@ -4,7 +4,7 @@ doc_type: module-card
 module_id: progress
 author: qinyi
 created_at: 2026-08-16T19:05:00+08:00
-updated_at: 2026-08-16T19:05:00+08:00
+updated_at: 2026-08-19T15:30:00+08:00
 ---
 
 # progress
@@ -28,6 +28,8 @@ updated_at: 2026-08-16T19:05:00+08:00
 
 - 历史迁移：v1/v2 使用 progress.json 文件，v3 起全部迁移至 SQLite；worktree-guard hook 直读 sillyspec.db（gate-status.json 双源已废）
 - facade 只留持久化核心 + 子模块装配（`new StageMachine(this)` 等构造注入）；run.js / index.js / hooks 等调用方零感知
+- **reopen --done stale 回填需 --confirm（W1，reopen-stale-confirm，2026-08-19）**：`--reopen --from-step N` 后 `--done` 无 `--confirm`：不回填 stale、阶段不完成，指引两条路（带 `--confirm` 回填 / 继续 `--done` 跳过 stale）；带 `--confirm`：回填 stale→completed + audit log（action=reopen-stale-backfill）。全 completed+stale 时 `--done --confirm` 走「首个 stale 拉回完成管线」逃生门。completeStage 存在 stale 步骤时拒绝（`--force` 逃生门，审计含 stale 步骤名）；stale 门位于产物校验门之前（`src/progress/stage-machine.js` ~78-108，`src/run/complete.js` ~303-343）。
+- **execute 批量完成 blockedTasks 复核（W2，execute-batch-blocked-tasks，2026-08-19）**：`shouldAutoCheckTask` 加可选 ctx（自动草稿需 changedFiles 非空且实测 diff 非空才勾选）；`detectExecuteBatchFinish` 批量放行前逐 task 复核，blockedTasks（review 缺失或草稿零 diff）阻断批量完成。
 
 ## 依赖关系
 
