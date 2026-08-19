@@ -1132,10 +1132,30 @@ export class ProgressManager {
   // ── 只读 dump（task-01/02/03：daemon 进度读取）──
 
   /**
+   * dump 输出的时间戳规范化：DB 内部两类形态（步骤推进时 JS Date 变量序列化
+   * 的 ISO 形态、部分历史路径写入的 `YYYY/M/D H:mm:ss` 斜杠形态）统一转 ISO。
+   * backend pydantic datetime 只吃 ISO（斜杠形态校验失败），斜杠 → new Date
+   * 可解析；解析失败原样返回（backend 侧按无效丢弃）。
+   */
+  _dumpIso(ts) {
+    if (!ts) return ts;
+    if (typeof ts === 'string' && /^\d{4}-\d{2}-\d{2}/.test(ts)) return ts;
+    const d = new Date(ts);
+    if (Number.isNaN(d.getTime())) return ts;
+    return d.toISOString();
+  }
+
+  /**
    * 只读导出进度数据，供 daemon 通过 `sillyspec progress dump --json` 消费。
    *
    * 纯读路径：打开 DB 只读、读 user-inputs.md、列 artifacts 目录，不写任何状态。
    * 无活跃变更或 DB 不存在时返回 null（不抛异常，daemon 按 null 处理空数据）。
+   *
+   * 输出字段 snake_case + ISO 时间戳（2026-08-19-runtime-live-daemon-read
+   * acceptance review P0 修复）：契约消费端 backend RuntimeProgress pydantic
+   * 是 snake_case（current_stage/last_active/started_at/size_bytes），
+   * dump 早期误用内部 camelCase；跨端字段名断裂会让 pydantic 静默忽略
+   * 未知字段导致前端核心字段全空。
    *
    * @param {string} cwd - specDir（`.sillyspec` 目录），由 CLI 层 --spec-dir 传入
    * @returns {object|null} 结构化进度数据，格式见 design.md §6.2
@@ -1161,11 +1181,11 @@ export class ProgressManager {
       // 无活跃变更 → 返回仅含 project 的骨架
       return {
         project: projectName,
-        currentStage: null,
-        currentChange: null,
-        lastActive: null,
+        current_stage: null,
+        current_change: null,
+        last_active: null,
         stages: {},
-        userInputs: this._readUserInputs(cwd),
+        user_inputs: this._readUserInputs(cwd),
         artifacts: this._listArtifacts(cwd),
       };
     }
@@ -1188,25 +1208,25 @@ export class ProgressManager {
       ).all(row.id);
       stages[row.stage] = {
         status: row.status,
-        startedAt: row.started_at || undefined,
-        completedAt: row.completed_at || undefined,
+        started_at: this._dumpIso(row.started_at) || undefined,
+        completed_at: this._dumpIso(row.completed_at) || undefined,
         ...(row.revision ? { revision: row.revision } : {}),
         steps: stepRows.map(sr => ({
           name: sr.name,
           status: sr.status,
           ...(sr.output ? { output: sr.output } : {}),
-          ...(sr.completed_at ? { completedAt: sr.completed_at } : {}),
+          ...(sr.completed_at ? { completed_at: this._dumpIso(sr.completed_at) } : {}),
         })),
       };
     }
 
     return {
       project: projectName,
-      currentStage: currentStage || null,
-      currentChange: changeName,
-      lastActive: lastActive || null,
+      current_stage: currentStage || null,
+      current_change: changeName,
+      last_active: this._dumpIso(lastActive) || null,
       stages,
-      userInputs: this._readUserInputs(cwd),
+      user_inputs: this._readUserInputs(cwd),
       artifacts: this._listArtifacts(cwd),
     };
   }
@@ -1230,8 +1250,8 @@ export class ProgressManager {
           const st = statSync(fullPath);
           return {
             filename: e.name,
-            sizeBytes: st.size,
-            lastModified: st.mtime.toISOString(),
+            size_bytes: st.size,
+            last_modified: st.mtime.toISOString(),
           };
         });
     } catch {

@@ -102,20 +102,34 @@ console.log('--- 1. dump() 有活跃变更 ---')
 
   assert(data !== null, 'dump() 返回非 null')
   assert(typeof data.project === 'string' && data.project.length > 0, `project 字段非空（实际 "${data.project}"）`)
-  assert(data.currentChange === changeName, `currentChange === "${changeName}"（实际 "${data.currentChange}"）`)
-  assert(typeof data.currentStage === 'string', `currentStage 为字符串（实际 ${typeof data.currentStage}）`)
+  assert(data.current_change === changeName, `current_change === "${changeName}"（实际 "${data.current_change}"）`)
+  assert(typeof data.current_stage === 'string', `current_stage 为字符串（实际 ${typeof data.current_stage}）`)
   assert(data.stages !== null && typeof data.stages === 'object', 'stages 为对象')
   assert('scan' in data.stages, 'stages 包含 scan')
   assert('brainstorm' in data.stages, 'stages 包含 brainstorm')
   assert(data.stages.scan.status === 'pending' || data.stages.scan.status === 'active', `scan.status 合法（实际 ${data.stages.scan.status}）`)
   assert(Array.isArray(data.stages.scan.steps), 'scan.steps 为数组')
-  assert(typeof data.userInputs === 'string' && data.userInputs.length > 0, 'userInputs 有内容')
+  assert(typeof data.user_inputs === 'string' && data.user_inputs.length > 0, 'user_inputs 有内容')
   assert(Array.isArray(data.artifacts), 'artifacts 为数组')
   assert(data.artifacts.length === 2, `artifacts 有 2 项（实际 ${data.artifacts.length}）`)
   assert(data.artifacts[0].filename === 'design.md' || data.artifacts[0].filename === 'plan.md', 'artifacts 含设计/计划文件')
-  assert(typeof data.artifacts[0].sizeBytes === 'number', 'artifacts[0].sizeBytes 为数字')
-  assert(typeof data.artifacts[0].lastModified === 'string', 'artifacts[0].lastModified 为字符串')
-  assert(data.lastActive !== null, 'lastActive 非 null')
+  assert(typeof data.artifacts[0].size_bytes === 'number', 'artifacts[0].size_bytes 为数字')
+  assert(typeof data.artifacts[0].last_modified === 'string', 'artifacts[0].last_modified 为字符串')
+  assert(data.last_active !== null, 'last_active 非 null')
+  // 跨端契约守护（2026-08-19-runtime-live-daemon-read acceptance P0 修复）：
+  // 消费端 backend RuntimeProgress pydantic 是 snake_case + ISO 时间戳——
+  // camelCase 或斜杠时间戳会被 pydantic 静默忽略/拒收，前端核心字段全空。
+  assert(!('currentStage' in data), '守护：顶层无 camelCase currentStage 残留')
+  assert(!('currentChange' in data), '守护：顶层无 camelCase currentChange 残留')
+  assert(!('lastActive' in data), '守护：顶层无 camelCase lastActive 残留')
+  assert(!('userInputs' in data), '守护：顶层无 camelCase userInputs 残留')
+  for (const [k, st] of Object.entries(data.stages)) {
+    assert(!('startedAt' in st) && !('completedAt' in st), `守护：stages.${k} 无 camelCase 时间戳残留`)
+    for (const ts of [st.started_at, st.completed_at].filter(Boolean)) {
+      assert(/^\d{4}-\d{2}-\d{2}/.test(ts), `守护：stages.${k} 时间戳为 ISO 形态（实际 ${ts}）`)
+    }
+  }
+  assert(/^\d{4}-\d{2}-\d{2}/.test(data.last_active), `守护：last_active 为 ISO 形态（实际 ${data.last_active}）`)
 }
 
 // ─────────────────────────────────────────
@@ -134,8 +148,8 @@ console.log('--- 2. dump() 无活跃变更 ---')
   const data = pm.dump(proj)
   assert(data !== null, '有 DB 但无变更 → 返回骨架（非 null）')
   assert(data.project !== '', 'project 非空')
-  assert(data.currentChange === null, 'currentChange 为 null')
-  assert(data.currentStage === null, 'currentStage 为 null')
+  assert(data.current_change === null, 'current_change 为 null')
+  assert(data.current_stage === null, 'current_stage 为 null')
   assert(data.stages !== null && typeof data.stages === 'object', 'stages 为空对象')
   assert(data.artifacts.length === 0, 'artifacts 为空数组')
 }
@@ -167,7 +181,7 @@ console.log('--- 4. dump() 无 artifacts/user-inputs ---')
   const pm = new ProgressManager({ specDir: specBase })
   const data = pm.dump(proj)
   assert(data.artifacts.length === 0, '无 artifacts 目录 → 空数组')
-  assert(data.userInputs === null, '无 user-inputs.md → null')
+  assert(data.user_inputs === null, '无 user-inputs.md → null')
 }
 
 // ─────────────────────────────────────────
@@ -215,7 +229,7 @@ console.log('--- 6. CLI progress dump --json ---')
   assert(envelope.command === 'progress dump', `CLI --json command === "progress dump"`)
   assert(envelope.ok === true, 'CLI --json ok === true')
   assert(envelope.data !== null && envelope.data !== undefined, 'CLI --json data 非 null')
-  assert(envelope.data.currentChange === changeName, `CLI --json currentChange === "${changeName}"`)
+  assert(envelope.data.current_change === changeName, `CLI --json current_change === "${changeName}"`)
   assert(Array.isArray(envelope.data.artifacts), 'CLI --json artifacts 为数组')
 }
 
