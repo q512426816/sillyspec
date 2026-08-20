@@ -77,7 +77,7 @@ SillyHub daemon 的 `ws.root_path` / `daemon_instances.allowed_roots`（`assertW
 
 落地：`docs/integrations/sillyspec-dispatch.md` 集成指引 + `scripts/check-dispatch-allowed-roots.mjs` smoke 前置硬校验脚本（task-10）。当前本机 daemon `allowed_roots=["C:\\Users\\qinyi"]`，已覆盖 multi-agent-platform 仓根及其 worktree。
 
-SillySpec 侧 `probeSillyHub`（`src/dispatch/probe.js:183-197`）已实现 root_path 校验：caller 传 `rootPath` 或 `client.getRootPath()` 拿到时，校验 `worktreePath` 在内，越界 → `{available:false, reason:'worktree-outside-root'}` → fallback Local。
+SillySpec 侧 `probeSillyHub`（`src/dispatch/probe.js:204-218`）已实现 root_path 校验：caller 传 `rootPath` 或 `client.getRootPath()` 拿到时，校验 `worktreePath` 在内，越界 → `{available:false, reason:'worktree-outside-root'}` → fallback Local。
 
 > ⚠️ **限制 ①（已知 gap，暂不阻断生产）**：当前 SillyHub MCP gateway 的 `tools/list` 响应仅返 `{tools:[...]}`，**不在顶层暴露 `root_path`**；daemon 亦无独立 MCP tool 查 `root_path`。故 SillySpec `client.getRootPath()`（`client.js:391-409`，defensively 读 `result.root_path`）**实际返回 null** → `probe.js` 的 worktree 越界校验在真实派发流程里**不触发**（生产不会因这个误判 fallback；但越界保护等于暂未生效）。`task-12 constraints` 已预见此 gap。待 daemon 暴露 `root_path`（如 `tools/list` 顶层增字段或增能力查询 tool）后，该校验自动生效——届时更新本节并补单测。
 
@@ -139,7 +139,7 @@ SillySpec 侧 `probeSillyHub`（`src/dispatch/probe.js:183-197`）已实现 root
 - [x] daemon `allowed_roots` 含仓根（`["C:\\Users\\qinyi"]` 覆盖 multi-agent-platform 仓根 + worktree；check-dispatch-allowed-roots.mjs 前置校验脚本 + sillyspec-dispatch.md 指引）
 - [x] 字段名统一 `branch`（D-009，跨仓契约 / client.js / 三入口一致，round-1 `worktree_branch` 漂移已收敛）
 - [x] SillySpec 侧 `isPathASupported()` 改 schema 探测（client.js listTools + probe.js 预热 + detectPathAFromTools；SILLYHUB_PATH_A=1 env 备选）
-- [x] SillySpec 侧 `createMission` 传 `orchestration_mode="external"` + `dispatchWorker` 传 `branch`（client.js:442/:292-294/:329）
+- [x] SillySpec 侧 `createMission` 传 `orchestration_mode="external"` + `dispatchWorker` 传 `branch`（client.js:492/:292-294/:329）
 - [ ] daemon 暴露 `root_path`（限制 ①）：当前 tools/list 不返 root_path，probe 越界校验生产不触发——待后续 daemon 增暴露后补勾
 - [ ] execute 启动期接 `probeSillyHub` 预热（限制 ②）：当前需 SILLYHUB_PATH_A=1 或先跑 dispatch probe——待后续 execute 接预热后补勾
 - [ ] （建议）专用 kill/lease-revoke tool（替代 `report_progress` kill 标记）

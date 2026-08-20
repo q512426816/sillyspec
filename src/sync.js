@@ -368,7 +368,10 @@ export class SyncManager {
         }
       }
     }
-    // 三清之二/三：指针 + 接管声明（disconnect 是声明的唯一退出路径——design.md §5.4）
+    // 三清之二/三：指针 + 接管声明（disconnect 是声明的唯一退出路径——design.md §5.4）。
+    // HUB-12 有意不清 .sillyspec-platform-cleaned marker：它防的是「重新接入平台时 init
+    // 重复做残留清理」——disconnect 后重连若清掉 marker，init 会对现在装着本地数据的
+    // .sillyspec 再跑一次平台残留清理（误删风险）。marker 跨 disconnect 存活是保护语义。
     let cleaned = [];
     for (const f of ['.sillyspec-platform.json', PLATFORM_MANAGED_FILENAME]) {
       const fp = join(this.cwd, f);
@@ -543,7 +546,6 @@ export class SyncManager {
       console.warn(`⚠️   1. sillyspec platform status     # 查看未决冲突`);
       console.warn(`⚠️   2. sillyspec platform resolve ${changeName} --keep-local | --take-platform | --abort`);
       console.warn(`⚠️   3. sillyspec platform sync --change ${changeName}`);
-      console.warn('⚠️ 冲突详情已落盘: .sillyspec/.runtime/sync-conflict-' + changeName + '.json');
       console.warn('⚠️⚠️⚠️════════════════════════════════════════════════════');
       // 本地脏度（progressData 是 serializeForSync 输出，changes[0] 含 last_local_modified_ts）
       const localModified = (progressData.changes && progressData.changes[0] && progressData.changes[0].last_local_modified_ts) || null;
@@ -554,6 +556,7 @@ export class SyncManager {
         platform_last_pushed_at: platformLastPushedAt,
         platform_progress: platformProgress,
       });
+      console.warn(`⚠️ 冲突详情已落盘: ${conflictPath}`);
       return { synced: 0, errors: [`冲突: ${changeName}`], conflict: true, platform_progress: platformProgress, conflictPath };
     }
 
@@ -923,7 +926,6 @@ export class SyncManager {
         console.warn(`⚠️   1. sillyspec platform status     # 查看未决冲突`);
         console.warn(`⚠️   2. sillyspec platform resolve ${changeName} --keep-local | --take-platform | --abort`);
         console.warn(`⚠️   3. sillyspec platform sync --change ${changeName}`);
-        console.warn('⚠️ 冲突详情已落盘: .sillyspec/.runtime/sync-conflict-' + changeName + '.json');
         console.warn('⚠️⚠️⚠️════════════════════════════════════════════════════');
         // 写冲突文件（task-12 / D-002）：强制提示，绝不 auto-merge
         const conflictPath = this._writeConflictFile(changeName, {
@@ -932,6 +934,7 @@ export class SyncManager {
           platform_last_pushed_at: platformPushedAt,
           platform_progress: platformProgress,
         });
+        console.warn(`⚠️ 冲突详情已落盘: ${conflictPath}`); // HUB-12d：真实落点（平台模式在 specRoot/.runtime），勿硬编码
         return { ok: false, imported: false, conflict: true, reason: `冲突: ${changeName} 本地脏且平台更新`, conflictPath };
       }
       // ql-20260818-008：自动注入点（triggerPull/triggerPullActiveChange）保守守卫——本地有未同步
@@ -1167,21 +1170,10 @@ export class SyncManager {
 // ── CLI 入口函数 ──
 
 /**
- * syncModule — sillyspec platform 子命令入口
- *
- * 用法:
- *   sillyspec platform connect <url> <token>
- *   sillyspec platform disconnect
- *   sillyspec platform sync [changeName]
- *   sillyspec platform sync-docs [changeName]
- *   sillyspec platform approval <changeName>
- *   sillyspec platform status
- *
- * @param {string[]} args — 子命令及参数
- * @param {string} cwd — 工作目录
- */
-/**
- * 便捷函数导出 — 供 index.js 和 run.js 直接调用
+ * 便捷函数导出 — 供 index.js 直接调用（platform 子命令分发生在 index.js case 'platform'）。
+ * HUB-10：原此处另有内嵌 syncModule(args) CLI 分发死代码（全仓零调用、参数形态/子命令面与
+ * index.js 实际分叉——位置参数 token、缺 pull/resolve/pointer、多余 approval/check-approval），
+ * 误导维护者改错地方，已删除。
  */
 export async function connect(url, token, cwd) {
   return new SyncManager(cwd).connect(url, token);
@@ -1329,79 +1321,5 @@ export async function status(cwd) {
   } else {
     console.log(`平台: ${st.url}`);
     console.log(`上次连接: ${st.lastSync || '未知'}`);
-  }
-}
-
-/**
- * syncModule — sillyspec platform 子命令入口
- */
-export async function syncModule(args, cwd) {
-  const sm = new SyncManager(cwd);
-
-  const sub = args[0];
-
-  switch (sub) {
-    case 'connect': {
-      const url = args[1];
-      const token = args[2];
-      if (!url || !token) {
-        console.error('用法: sillyspec platform connect <url> <token>');
-        process.exit(1);
-      }
-      await sm.connect(url, token);
-      break;
-    }
-
-    case 'disconnect':
-      sm.disconnect();
-      break;
-
-    case 'sync': {
-      const changeName = args[1];
-      const result = await sm.sync(changeName);
-      if (result.errors.length > 0) {
-        console.log(`同步完成，${result.errors.length} 个错误`);
-      }
-      break;
-    }
-
-    case 'sync-docs':
-    case 'sync-documents': {
-      const changeName = args[1];
-      // manual=true：CLI 手动命令路径，四件套缺失打 warn（ql-20260818-008 措辞分级）
-      const result = await sm.syncDocuments(changeName, { manual: true });
-      if (result.errors.length > 0) {
-        console.log(`文档同步完成，${result.errors.length} 个错误`);
-      }
-      break;
-    }
-
-    case 'approval':
-    case 'check-approval': {
-      const changeName = args[1];
-      if (!changeName) {
-        console.error('用法: sillyspec platform approval <changeName>');
-        process.exit(1);
-      }
-      const approval = await sm.checkApproval(changeName);
-      console.log(`审批状态: ${approval.status}${approval.reason ? ` (${approval.reason})` : ''}`);
-      break;
-    }
-
-    case 'status': {
-      const st = sm.status();
-      if (!st.connected) {
-        console.log('平台: 未连接');
-      } else {
-        console.log(`平台: ${st.url}`);
-        console.log(`上次连接: ${st.lastSync || '未知'}`);
-      }
-      break;
-    }
-
-    default:
-      console.error(`未知子命令: ${sub || '(无)'}`);
-      console.error('可用命令: connect, disconnect, sync, sync-docs, approval, status');
-      process.exit(1);
   }
 }

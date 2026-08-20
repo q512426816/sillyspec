@@ -46,7 +46,19 @@
 > 中断，不再「客户端放弃、平台已接受」；triggerSync 支持 opts.timeoutMs 供测试；
 > hub09-sync-circuit-abort.test.mjs 双层断言含服务器侧连接中断观测）已修复并验证
 > （246 测试 0 失败 + lint + docs gate 基线 0）。
-> 未修：PERF-03~05/07~11、QUAL-02~09、HUB-10~13 中除已修项、CLEAN-04~08——
+>
+> **修复进度（同日第五批：HUB-10/11/12 MCP client 侧收尾，测试先行）**：HUB-10（删除
+> sync.js 内嵌 syncModule() 死代码 85 行——零调用且命令面与 index.js 分叉，留注释防回归）；
+> HUB-11（session 过期识别补第二种形态：HTTP 200 + JSON-RPC error -32600「Missing session」
+> 同样落哨兵触发重连；-32602 等普通错误不误触发；hub11-mcp-session-rpc-error.test.mjs）；
+> HUB-12 六子项（a. probe 总超时 25s 截断 + tools/list 一次复用喂路径A预热与 root_path 校验
+> ——hub12-probe-timeout.test.mjs；b. client.close() 发 DELETE 收尾 session、close 后自动
+> 重建；c. cwd 纠正守卫补 checkPlatformManaged 防双入口 fail-closed 被绕过；d. 冲突横幅输出
+> 真实落点路径（conflictPath）而非硬编码 .sillyspec/.runtime；e. disconnect 不清 cleaned
+> marker 的意图已注释（防重连误清本地数据）；f. killLease killed:false 为跨仓开放项维持文档
+> 记载——hub10-12-platform-misc.test.mjs 源契约锁定 a/c/d 之外的 HUB-10/12c/12d）已修复
+> 并验证（250 测试 0 失败 + lint + docs gate 基线 0）。
+> 未修：PERF-03~05/07~11、QUAL-02~09、HUB-13 中除已修项、CLEAN-04~08——
 > 见「八、修复批次建议」，按批次推进。
 
 ---
@@ -54,7 +66,7 @@
 ## 一、缺陷（BUG）
 
 ### BUG-01【P1✅已验证】sync.js 平台模式下 spec 树同步可清空服务器全部文件
-- 位置：`src/sync.js:498`（`syncSpecTree(safePlatformSpecDir(...))`，修复后锚点）、`src/spec-sync.js:259`（syncSpecTree diff 逻辑内 computeSpecOps delete 分支）
+- 位置：`src/sync.js:504`（`syncSpecTree(safePlatformSpecDir(...))`，修复后锚点）、`src/spec-sync.js:259`（syncSpecTree diff 逻辑内 computeSpecOps delete 分支）
 - 问题：`sync()` 的进度读写锚点用 `safePlatformSpecDir(this.cwd)`（平台模式 → specRoot），但成功后链式推送 spec 树时本地树根硬编码 `cwd/.sillyspec`。平台模式下该目录只有 local.yaml（walkSpecTree 按文件名排除），localMap 为空 → 服务器清单中每个 exists=true 的文件都生成 delete op → **服务器侧 spec 树被整体清空**，且失败被 catch 吞成 debugLog。
 - 可达路径：平台模式仓库手动 `platform sync --change x`；push 409 冲突横幅指导用户跑 sync；`resolve --keep-local` 自动重推（sync.js:955-968）。
 - 修复方向：spec 树根与进度锚点统一用 `safePlatformSpecDir`；并在 computeSpecOps 加护栏——本地树为空且服务器清单非空时拒绝生成 delete（fail-closed）。

@@ -205,6 +205,13 @@ export class SillyHubMcpClient {
     }
 
     if (rpc.error) {
+      // HUB-11：session 过期第二种形态——HTTP 200 + JSON-RPC error -32600「Missing session」
+      // （api-reference 记载的形态；FastMCP 实测走 HTTP 400，两种都认）。落哨兵触发
+      // _sendRpc 重置重连；其余 error 维持 warn+null（如 -32602 Invalid params 是调用侧问题，
+      // 重连救不回，不误触发）
+      if (rpc.error.code === -32600 && /missing session/i.test(String(rpc.error.message || ''))) {
+        return SESSION_EXPIRED;
+      }
       if (!quiet) console.warn(`[sillyhub-mcp] ${tag} JSON-RPC error: ${JSON.stringify(rpc.error)}`);
       return null;
     }
@@ -403,6 +410,49 @@ export class SillyHubMcpClient {
     if (Array.isArray(result)) return result;            // daemon 直接返回数组（兼容）
     if (Array.isArray(result.tools)) return result.tools; // 标准 MCP {tools:[...]}
     return null;
+  }
+
+  /**
+   * HUB-12a：tools/list 的完整 result（一次请求同时喂路径A schema 预热与 root_path 越界
+   * 校验——此前 listTools + getRootPath 各发一次同 method 请求，probe 链路重复 RPC）。
+   * best-effort：未配置/失败 → null 不抛。形态：{tools:[...], root_path?} 或裸数组。
+   */
+  async listToolsWithMeta({ quiet = true } = {}) {
+    if (!this._configured) return null;
+    return this._sendRpc('tools/list', {}, { quiet, label: 'tools/list' });
+  }
+
+  /**
+   * HUB-12b：关闭 MCP session（streamable HTTP DELETE，2025-11-25 协议规定的会话终止方式）。
+   * CLI 短进程原本把 session 留给 server TTL 清理；长驻场景（未来 daemon 化）会积累半开
+   * session。best-effort：网络失败/无 session 返回 false 不抛；成功后清本地 session 态，
+   * 后续调用自动重新 initialize。
+   * @returns {Promise<boolean>} 是否发出了有效的 DELETE
+   */
+  async close() {
+    if (!this._configured || !this._sessionId) return false;
+    const sid = this._sessionId;
+    this._sessionId = null; // 先清本地态：DELETE 失败也不留「以为还活着」的 session
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), this._timeoutMs);
+      try {
+        const res = await fetch(this._endpoint, {
+          method: 'DELETE',
+          headers: {
+            Authorization: `Bearer ${this._token}`,
+            'MCP-Protocol-Version': MCP_PROTOCOL_VERSION,
+            'Mcp-Session-Id': sid,
+          },
+          signal: controller.signal,
+        });
+        return res.ok;
+      } finally {
+        clearTimeout(timer);
+      }
+    } catch {
+      return false;
+    }
   }
 
   /**

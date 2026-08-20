@@ -195,10 +195,13 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
   // ── cwd 纠正：向上查找真实项目根 ──
   // 防止多 project 工作区中 cwd 停在子目录（如 backend/）时
   // 状态写入子目录下误建的 .sillyspec，导致状态分裂
-  if (!specDir && !existsSync(join(cwd, '.sillyspec-platform.json'))) {
-    // 平台模式（cwd 有 .sillyspec-platform.json 指针）不做 cwd 纠正：指针已明确 specDir，
-    // 向上找 .sillyspec 反而会撞到无关项目（如用户 home 的 .sillyspec），导致 --done 恢复
-    // 读写 ~/.sillyspec-platform.json 出错的 specRoot。
+  // HUB-12c：守卫须同时查平台接管声明——指针被 cleanup、声明还在、祖先有别的 .sillyspec
+  //（monorepo 嵌套）时，cwd 被上移后 checkPlatformManaged 在新 cwd 扑空 → 静默落本地库，
+  // 双入口 fail-closed 被绕过（状态分裂正是它要防的）
+  if (!specDir && !existsSync(join(cwd, '.sillyspec-platform.json')) && !checkPlatformManaged(cwd)) {
+    // 平台模式（cwd 有 .sillyspec-platform.json 指针或接管声明）不做 cwd 纠正：指针已明确
+    // specDir，向上找 .sillyspec 反而会撞到无关项目（如用户 home 的 .sillyspec），导致
+    // --done 恢复读写 ~/.sillyspec-platform.json 出错的 specRoot。
     const resolvedRoot = resolveSpecDir(cwd)
     if (resolvedRoot && resolvedRoot !== join(cwd, '.sillyspec')) {
       const realRoot = dirname(resolvedRoot)

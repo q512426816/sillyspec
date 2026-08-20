@@ -33,7 +33,7 @@ platform:
   user: qinyi                   # 推送者身份（可选，回退 git user.name / env）
   last_connected: 2026-08-14T...
 ```
-- 读取者：`SyncManager._getPlatform()`（`sync.js:719`）→ 返回 `{url, token, ...}` 或 `null`（未连接）。
+- 读取者：`SyncManager._getPlatform()`（`sync.js:726`）→ 返回 `{url, token, ...}` 或 `null`（未连接）。
 - 缺段 → `_getPlatform()` 返回 `null` → 所有 REST 方法降级静默跳过（本地独立用户的合法默认状态）。
 
 ### `mcp:` 段 —— 驱动链路 B（MCP 派发）
@@ -65,11 +65,11 @@ mcp:
 | `connect` | GET | `/api/health` | ping 验活平台可达 | `sync.js:263` |
 | `connect` | POST | `/api/workspaces/resolve-by-root-path` | 用 user 级 token（shk_live_/JWT）+ 本地 `root_path` 换发 `shpsync_` workspace-scoped token | `sync.js:297` |
 | `sync` | POST | `/api/changes/{name}/progress` | **推六表进度 JSON**（serializeForSync）；元字段走 header：`Authorization`/`X-SillySpec-User`/`X-SillySpec-Base-Ts`(乐观锁)/`X-SillySpec-Pushed-At`；**409** = base_ts 冲突 → 写 `.runtime/sync-conflict-<change>.json` | `sync.js:434` |
-| `syncDocuments` | POST | `/api/changes/{name}/documents` | 推四件套（proposal/design/requirements/tasks.md）全量同步。**⚠️ 后端未实现（404，2026-08-14 实测）**——CLI 预留契约（`_submitApproval` 内 TBD-hub-api 注释），best-effort warn 静默失败 | `sync.js:593` |
-| `checkApproval` | GET | `/api/changes/{name}/approval` | 读审批状态 `pending/approved/rejected`，回写本地 approvals 表 | `sync.js:663` |
+| `syncDocuments` | POST | `/api/changes/{name}/documents` | 推四件套（proposal/design/requirements/tasks.md）全量同步。**⚠️ 后端未实现（404，2026-08-14 实测）**——CLI 预留契约（`_submitApproval` 内 TBD-hub-api 注释），best-effort warn 静默失败 | `sync.js:599` |
+| `checkApproval` | GET | `/api/changes/{name}/approval` | 读审批状态 `pending/approved/rejected`，回写本地 approvals 表 | `sync.js:670` |
 | `pullList` | GET | `/api/changes` | 轻量 change 列表（name/stage/last_pushed_at），CLI 比对本地决定哪些需更新 | `sync.js:816` |
 | `pull` | GET | `/api/changes/{name}/progress` | 拉平台权威 JSON → import 重建本地 DB 行；本地脏且平台更新 → 冲突写文件 | `sync.js:801` |
-| `approve`/`reject` | POST | `/api/changes/{name}/approval` | 提交审批决定；**非 best-effort** —— 失败置 `process.exitCode=1`（`sync.js:1262` `_submitApproval`，D-006@v1「显式用户动作失败必须可见」）。**⚠️ 后端未实现（405，只有 GET，2026-08-14 实测）**——CLI 预留契约（TBD-hub-api 注释在 `_submitApproval` 内），当前 `platform approve` 必失败 | `sync.js:1262` |
+| `approve`/`reject` | POST | `/api/changes/{name}/approval` | 提交审批决定；**非 best-effort** —— 失败置 `process.exitCode=1`（`sync.js:1254` `_submitApproval`，D-006@v1「显式用户动作失败必须可见」）。**⚠️ 后端未实现（405，只有 GET，2026-08-14 实测）**——CLI 预留契约（TBD-hub-api 注释在 `_submitApproval` 内），当前 `platform approve` 必失败 | `sync.js:1254` |
 | `resolve` | —（本地） | 读 sync-conflict 文件 | 三选一（keep-local/take-platform/abort），不发网络 | `sync.js:925` |
 
 ### CLI 便捷封装（`sync.js:886-925`）
@@ -94,14 +94,14 @@ mcp:
 |---|---|---|---|
 | `probeDaemon` | `list_agent_profiles` | 探连通性 + token 有效性 | `probe.js:163` |
 | `listTools` | `tools/list` | 列 tool schema；**探路径A**（dispatch_worker 是否含 `worktree_path`+`worker_prompt`） | `probe.js:113` |
-| `getRootPath` | `tools/list`(复用) | best-effort 拿 workspace root_path（越界校验用，当前 gateway 不暴露 → null） | `probe.js:189` |
+| `getRootPath` | `tools/list`(复用) | best-effort 拿 workspace root_path（越界校验用，当前 gateway 不暴露 → null） | `probe.js:211` |
 | `createMission` | `create_mission` | 一 Wave 一 mission | agent（指令注入） |
 | `dispatchWorker` | `dispatch_worker` | 派 worker（含 worktree_path/branch/worker_prompt 覆写） | agent（指令注入） |
 | `listWorkers` | `list_workers` | 轮询 worker 终态 | agent（指令注入） |
 | `killLease` | `report_progress`(kill 标记) | 超时防双写（当前无专用 kill tool，保守报 killed=false） | agent（指令注入） |
 
 ### 派发决策链
-1. **`probeSillyHub()`**（`dispatch/probe.js:144`）：no-config 同步快返回 → 负面缓存(TTL) → `probeDaemon` → `listTools` 预热路径A → root_path 越界校验 → `{available}`。
+1. **`probeSillyHub()`**（`dispatch/probe.js:133`）：no-config 同步快返回 → 负面缓存(TTL) → `probeDaemon` → `listTools` 预热路径A → root_path 越界校验 → `{available}`。
 2. **`renderDispatchInstruction(contract, probe)`**（`dispatch/strategy.js:69`）：`probe.available` → backend=`sillyhub`（注入 SillyHub 指令，含一 Wave 一 mission + dispatch_worker 参数 + 轮询 + kill lease + 回收约定）；否则 backend=`local`。**始终附 Local 兜底指令全文**。
    - **两条消费路径**：① `sillyspec dispatch probe/hint` 命令——agent 主动探测/取指令，probe 结果直接传 `renderDispatchInstruction`；② **execute Wave prompt 注入**——`getDispatchMode()`（`execute.js:521`）同步三态判定（不发网络），`sillyhub` 态下以 `{available:true}` 硬编码调 `renderDispatchInstruction`（`execute.js:834`），probe 不参与。
 3. **路径A 降级**（`backends/sillyhub-mcp.js:104` `isPathASupported`）：env `SILLYHUB_PATH_A=1` 强开 > probe 预热缓存；未支持则指令追加降级提示，per-worker 回退 Local，**绝不硬试 MCP**（R-04）。
@@ -135,7 +135,7 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
 | `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:1641；sync.js:816/812 |
 | `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:1593；sync.js:1131 |
 | `platform resolve --keep-local/--take-platform/--abort` | 本地 | 读 sync-conflict 三选一，不网络 | sync.js:746 |
-| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:1413/1441；probe.js:144 |
+| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:1413/1441；probe.js:133 |
 | **execute Wave prompt 注入** | B | `getDispatchMode()` **同步三态判定**（读 MCP 配置 + 路径A 探测缓存，不发网络）：`sillyhub` → 注入完整派发指令（`{available:true}`）；`local-fallback`（配置但路径A 未落地）→ 短提示走 Local；`local` → 不注入 | execute.js:521/822-834 |
 | **execute Wave 步骤** | B | 指令文本驱动 agent 调 create_mission/dispatch_worker/list_workers/report_progress | backends/sillyhub-mcp.js:136 |
 | **scan 完成（平台模式）** | C | 落盘 manifest/postcheck + 指针 SCAN_COMPLETED；失败 exit(1) | complete-handlers.js:985 |
@@ -159,12 +159,12 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
 - `--workspace-id <id>` / `--scan-run-id <id>` → 配套元信息
 
 **收这些 flag 的入口不止 `run scan`**：
-- **任何 `sillyspec run <stage>`**（scan/plan/execute/verify/archive/quick/brainstorm…）—— 都走 `runCommand`（`command.js:156`）公共入口，flag 在 `command.js:270`（`resolvedSpecDir`）起统一解析。scan 只是 daemon 流程的**第一个阶段**，所以是"典型首次激活点"，不是唯一入口。
+- **任何 `sillyspec run <stage>`**（scan/plan/execute/verify/archive/quick/brainstorm…）—— 都走 `runCommand`（`command.js:156`）公共入口，flag 在 `command.js:277`（`resolvedSpecDir`）起统一解析。scan 只是 daemon 流程的**第一个阶段**，所以是"典型首次激活点"，不是唯一入口。
 - **`sillyspec init <dir> --spec-dir <path>`** —— 外部 specDir 安装（`init.js:216` `doInstall(specDir)`，含源码目录旧 `.sillyspec` 残留清理）。⚠️ init **只认 `--spec-dir`**（顶层 `index.js:196` 解析后经 `case 'init'`（`index.js:267`）透传 `specDir`）；传 `--spec-root` 会被**静默忽略**（init 分支不读 filteredArgs）。**平台模式 init 落指针**：带平台专属 flag（`--workspace-id` / `--runtime-root`）时，init 即写双指针（`writePlatformPointer`（`init.js:605`/`571` 调用 `writeInitPlatformPointer`），status: active），消除 init→scan 窗口期 agent 裸调静默回退本地模式的断点。
 - **`backfill-reviews` / `register-stage-review` / worktree apply / assess 等子命令** —— 顶层 `--spec-dir` 透传为 `platformOpts.specRoot`（index.js:532（backfill-reviews）/ 538-557（register-stage-review）/ 840（worktree apply）/ 904（assess））。
 - **gate / derive**（machine-interface）—— 只读查询接受 specBase，**不写指针**。
 
-⚠️ **`--spec-dir` 与平台模式共用开关**：`command.js:270` 把 `--spec-dir` 与 `--spec-root` 同等置位 `specRoot`。本地用户为消歧 monorepo 传 `--spec-dir`（`command.js:328-331` 的提醒就是这么引导的）也会点亮平台语义：跳过链路 A 的 REST 同步 + 写粘性指针文件 + 触发下方"首次接入清理"。设计上"外部 specDir = 平台模式"是合并处理，但与"本地只是换个目录"的直觉有偏差，易踩。
+⚠️ **`--spec-dir` 与平台模式共用开关**：`command.js:277` 把 `--spec-dir` 与 `--spec-root` 同等置位 `specRoot`。本地用户为消歧 monorepo 传 `--spec-dir`（`command.js:328-331` 的提醒就是这么引导的）也会点亮平台语义：跳过链路 A 的 REST 同步 + 写粘性指针文件 + 触发下方"首次接入清理"。设计上"外部 specDir = 平台模式"是合并处理，但与"本地只是换个目录"的直觉有偏差，易踩。
 
 ### 激活的副作用：首次接入清理（`command.js:335-369`）
 `platformOpts.specRoot` 存在且 cwd 无 `.sillyspec-platform-cleaned` 标记时，CLI 会清理源码目录旧 `cwd/.sillyspec/`：
