@@ -19,7 +19,7 @@
 import { join, dirname } from 'node:path'
 import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { writeAtomicSync } from '../fs-atomic.js'
-import { resolveSpecDir, resolveChangeDir, resolveRuntimeRoot, resolveQuickSessionsDir, triggerSync, safeGit, parsePorcelainPath, formatWaitOptions, checkApproval, getStageSteps } from './shared.js'
+import { resolveSpecDir, resolveChangeDir, resolveRuntimeRoot, resolveQuickSessionsDir, triggerSync, safeGit, parsePorcelainPath, formatWaitOptions, checkApproval, getStageSteps, warnApprovalUnknown } from './shared.js'
 import { computeScanProfile, applyScanProfileSteps, executeScanPreflight, executeScanPostcheck } from './scan-profile.js'
 import { outputStep } from './prompt.js'
 import { allocateQuicklogEntry, deriveTitleFromLinkedChange, sanitizeDesc } from '../quicklog.js'
@@ -55,6 +55,11 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
       if (approval.status === 'pending') {
         console.log(`⏳ 变更 ${changeName} 的执行审批待处理中...`)
         console.log('  提示：使用 --skip-approval 跳过审批检查')
+      }
+      // HUB-07：unknown（连接了平台但 404/断网/非 JSON）此前静默落空（fail-open 无提示）——
+      // 醒目警告 + 留痕，放行但可审计
+      if (approval.status === 'unknown') {
+        warnApprovalUnknown(cwd, changeName, approval.reason)
       }
     }
   }
@@ -321,6 +326,16 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
         if (allowDelete) parts.push('允许删除文件')
         console.log(`🛡️ quick 变更边界已记录: ${parts.join(', ')}`)
         console.log(`📝 QUICKLOG 条目已创建: ${qlId}`)
+        // 缺 --input 且关联变更无可提取标题 → 条目落「(quick 任务)」占位标题，平台「快速修复」列表
+        // 默认隐藏进行中占位（task-06 口径），长会话全程不可见、语义标题要到最终 --done 才回填。
+        // 此刻会话刚起步零沉没成本，提示放弃重启带 --input 是最便宜的自愈点。
+        if (!quickDesc) {
+          console.warn('')
+          console.warn('⚠️ 本次 quick 未带 --input：QUICKLOG 条目将以占位标题「(quick 任务)」落盘')
+          console.warn('   平台「快速修复」列表默认隐藏进行中的占位条目，语义标题要到最终 --done 才回填。')
+          console.warn('   长任务建议放弃本会话、带一句话任务描述重启（旧会话 run quick --reset --change <sessionId> 重置）：')
+          console.warn('     sillyspec run quick --input "<一句话任务描述>" [--linked-changes <a,b>] [--files <...>]')
+        }
         // 回填 DB changes 行的 title + quicklog_id，让 quick-<hex> 可读、DB↔QUICKLOG 可对账。
         // title 用 quickDesc（任务描述或关联变更标题）经 sanitizeDesc 压一行限长，与 QUICKLOG 条目标题同源。
         try {

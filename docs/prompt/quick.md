@@ -62,6 +62,8 @@ step 3 --done 审计会把 src 核心文件（CLI / 状态机 / 注入框架等�
 - 在 `{SPEC_ROOT}/quicklog/QUICKLOG-<git-user>.md` 写入「进行中」条目（含关联变更与预估文件）
 - 对每个关联变更 `<c>`：在 `{SPEC_ROOT}/changes/<c>/tasks.md` 追加未勾选 task `- [ ] <quicklog-id> <任务描述>`
 
+> 💡 启动时带 `--input "<一句话任务描述>"` 可让条目从第一分钟就有语义标题（平台「快速修复」列表默认隐藏进行中的「(quick 任务)」占位条目）；未带时标题要到 step 3 --done 才从「需求：」回填。若你启动时漏带且任务较长，建议按 CLI 启动警告指引重启会话补带。
+
 **你不要创建或修改任何 QUICKLOG 的条目骨架 / tasks.md 记录**——ql-ID 分配、「进行中」条目、状态翻转、task 勾选、轮转全由 CLI 接管，你无需手写。<quicklog-id> 可用于 design.md / plan.md / archive / 模块变更索引引用。
 
 > ℹ️ step 3 --done 时，CLI 已落盘结构化 QUICKLOG 条目（标题从「需求：」提取——届时写一句语义化短标题，规则见 step3 结果摘要模板；正文四字段分行、文件行可用 --file-notes 写多行括注）。事后只需按需核对，详见 step 3「QUICKLOG 正文核对」。

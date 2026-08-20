@@ -50,6 +50,7 @@ sillyspec run quick --done --change quick-<hash> --output "…"  # 完成该会�
 | 参数 | 说明 |
 |---|---|
 | `--spec-dir <path>` | 指定规范目录（默认 `<项目>/.sillyspec`） |
+| `--input "<一句话任务描述>"` | 通用参数，**quick 启动时强烈建议带**：作为 QUICKLOG 条目标题，条目从第一分钟即语义可读。不带则落「(quick 任务)」占位标题——平台「快速修复」列表默认隐藏进行中的占位条目，语义标题要到最终 `--done` 才回填（关联变更有 proposal/design 标题时可自动提取，免传） |
 | `--non-interactive` | CI/脚本下禁用交互式 prompt |
 | `--interactive` | 强制交互（即便 stdin 非 TTY） |
 | `--skip-approval` | 跳过阶段转换/审批检查（不能跳产物校验 gate——review.json/文档产物硬校验仍在） |
@@ -79,6 +80,9 @@ sillyspec run quick --done --change quick-<hash> --output "…"  # 完成该会�
 ## 典型用法
 
 ```bash
+# 推荐启动：带一句话语义标题（QUICKLOG/平台快速修复列表进行中即可见可读）
+sillyspec run quick --input "修复登录限流 INCR 计数误清" --linked-changes none --files src/auth.ts
+
 # 单变更项目，直接开始
 sillyspec run quick
 
