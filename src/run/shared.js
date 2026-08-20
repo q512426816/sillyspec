@@ -461,18 +461,21 @@ export async function triggerSync(cwd, changeName, platformOpts = {}, opts = {})
   // 平台模式（SillyHub）走自己的回传链路，不走 CLI 内置 sync
   if (platformOpts?.specRoot || platformOpts?.runtimeRoot) return
   try {
-    if (changeName && !existsSync(join(cwd, '.sillyspec', 'changes', changeName))) {
-      // ql-20260818-011：quick 会话按设计无实体变更目录（progress.js initChange 同款
-      // 跳过建目录），progress/四件套上行对它是孤儿数据；但 spec 树增量（QUICKLOG/
-      // 模块文档的上行通道）以服务器清单为锚，与变更目录无关——降级只推 spec 树。
-      // 其余形态（真实变更名拼错）维持静默 return，防噪音混入 spec 树通道。
-      if (QUICK_SID_RE.test(changeName)) {
-        // shared.js 在 src/run/，sync.js 在 src/ → 退一层
-        const syncMod = await import('../sync.js')
-        await raceWithAbort((sig) => syncMod.syncSpecTreeOnly(changeName, cwd, sig), opts.timeoutMs)
-      }
+    // ql-20260818-011：quick 会话按设计无实体变更目录（progress.js initChange 同款
+    // 跳过建目录），progress/四件套上行对它是孤儿数据；但 spec 树增量（QUICKLOG/
+    // 模块文档的上行通道）以服务器清单为锚，与变更目录无关——降级只推 spec 树。
+    if (changeName && QUICK_SID_RE.test(changeName) && !existsSync(join(cwd, '.sillyspec', 'changes', changeName))) {
+      // shared.js 在 src/run/，sync.js 在 src/ → 退一层
+      const syncMod = await import('../sync.js')
+      await raceWithAbort((sig) => syncMod.syncSpecTreeOnly(changeName, cwd, sig), opts.timeoutMs)
       return
     }
+    // 目录缺失的非 quick 变更不再静默 return（archive-final-state-sync）：归档把
+    // changes/<name>/ 移到 changes/archive/<name>/ 并注销 DB 行后，第 4/5 步收尾的
+    // triggerSync 仍会触发——DB 里的终态（steps 完成态 + status='archived'）与文件树
+    // 移动必须推平台，否则平台进度永远停在移动前的最后一步。sync() 内部对目录缺失
+    // 本就是 warn-and-continue（serializeForSync 从 DB 读不依赖目录）；真实拼错名时
+    // 无 DB 行，sync() 在发出任何 HTTP 前即 return，仅多一行 warn（未连接平台则完全静默）。
     // shared.js 在 src/run/，sync.js 在 src/ → 退一层
     const syncMod = await import('../sync.js')
     await raceWithAbort((sig) => syncMod.sync(changeName, cwd, sig), opts.timeoutMs)

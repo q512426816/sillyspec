@@ -9,8 +9,9 @@
 // 1. quick 会话 + 平台已连接 → triggerSync 触发 spec 树增量同步
 //    （manifest GET + spec-sync POST 到达服务器），不调 progress/四件套（无孤儿行）
 // 2. quick 会话 + 未连接平台 → 静默跳过（无请求、无异常）
-// 3. 非 quick 名且变更目录不存在（真实变更名拼错）→ 原静默 return 行为不变
-//    （不推 spec 树——防拼写错误噪音；差异点仅在 quick-<hex8> 形态）
+// 3. 非 quick 名且变更目录不存在（真实变更名拼错）→ 仍零 HTTP 请求
+//    （archive-final-state-sync 后不再静默 return，但 sync() 无 DB 行时在发出任何
+//    请求前即返回，仅多一行 warn——拼写错误噪音不进网络通道）
 // 4. 真实变更目录存在 → 原路径不变（progress POST 照常，spec 树随 sync() 尾部推送）
 //
 // 隔离：cwd 用 os.tmpdir() 临时目录 + Node http mock server，绝不碰真实 .sillyspec/.runtime。
@@ -117,9 +118,9 @@ console.log('\n--- 2. quick 会话未连接平台 → 静默 ---');
 }
 
 // ─────────────────────────────────────────
-// 3. 非 quick 名且目录不存在 → 原静默行为（不推 spec 树）
+// 3. 非 quick 名且目录不存在 → 无请求（sync() 无 DB 行在发 HTTP 前返回）
 // ─────────────────────────────────────────
-console.log('\n--- 3. 拼错变更名 → 保持静默（不推 spec 树） ---');
+console.log('\n--- 3. 拼错变更名 → 无任何请求（仅本地 warn） ---');
 {
   const cwd = join(tmpRoot, 'typo-name');
   mkdirSync(join(cwd, '.sillyspec'), { recursive: true });
@@ -128,7 +129,7 @@ console.log('\n--- 3. 拼错变更名 → 保持静默（不推 spec 树） ---'
   hits.length = 0;
 
   await triggerSync(cwd, '2026-08-18-not-exist-typo');
-  assert(hits.length === 0, '无任何请求（防拼写错误噪音混入 spec 树通道）');
+  assert(hits.length === 0, '无任何请求（防拼写错误噪音混入网络通道）');
 }
 
 // ─────────────────────────────────────────

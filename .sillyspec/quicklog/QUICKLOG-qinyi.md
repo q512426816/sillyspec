@@ -331,3 +331,34 @@
 结果：新测试 11 断言全过；npm test 全量 244 过、2 失败文件均与本次无关（hub08 并发偶发单跑全过、doc-ref-check 13 处既有失败经 stash 排除法证实先在）；npm run lint 337 文件通过
 审计：📎 文档引用失效：1/197 处 file:line 失效（sillyspec docs check 可复现）
 审计：⚖️ 归属切分：7 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：.sillyspec/docs/sillyspec/scan/ARCHITECTURE.md, docs/sillyspec/platform-interface-map.md, docs/sillyspec/prompt-control-debt.md, src/run/command.js, src/run/shared.js, src/spec-sync.js, test/quick-start-input-hint.test.mjs
+
+## ql-20260820-002-2480 | 2026-08-20 10:38:15 | quick 中途支持 --files 追加边界
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/stage.js（恢复分支 --files 追加并入守卫（去重保序+hash+持久化+确认输出））
+- src/stages/quick.js（step1 文件预声明段补中途追加指引）
+- .claude/skills/sillyspec-quick/SKILL.md（--files 行补中途追加写法）
+- docs/prompt/quick.md（提示词镜像同步）
+- docs/prompt/_extracted.json（_extract.mjs 再生）
+- test/quick-files-resume-append.test.mjs（新增四用例锁定追加语义）
+需求：quick 中途支持 --files 追加边界
+根因：恢复分支 stage.js existingGuard 直接复用旧 guard、静默丢弃本次 --files，边界冻结在启动时刻；中途改声明外文件只能靠 --done 审计行事后归属（上轮会话实测：新测试文件被切进他者审计行）
+方案：恢复时带 --files 即去重保序并入 guard.allowedFiles + 点录 allowedFilesHash（不存在跳过同启动语义）+ 持久化回 guard.json（--done 审计直读该文件，追加即被归属消费）+ 打印追加确认；step1 提示词与技能文档补中途追加指引；新增四用例 CLI 子进程测试
+结果：新测试 19 断言全过（含追加后全流程 --done 文件行归属端到端）；npm test 全量 247 过 0 失败；npm run lint 338 文件通过
+
+## ql-20260820-003-3592 | 2026-08-20 13:25:10 | 全局验收标准段去 checkbox 形态
+状态：已完成
+关联变更：（无）
+文件：
+- src/stages/plan.js（全局验收标准段编号清单化+承接 blockquote）
+- docs/prompt/plan.md（镜像同步）
+- docs/prompt/_extracted.json（_extract.mjs 再生）
+- docs/sillyspec/file-lifecycle.md（plan 行描述补非执行态说明）
+- test/plan-global-acceptance-no-checkbox.test.mjs（新增三组断言回归）
+需求：全局验收标准段去 checkbox 形态，验收结论归 verify-result.md
+根因：模板用 - [ ] checkbox 但机器侧零消费（无解析器/勾选器/门禁），执行完永远未勾成僵尸态；验收实际走 TaskCard acceptance（task 级）与 verify-result.md（全局级），checkbox 无人指派勾选
+方案：plan.js full 模板改编号清单+段尾 blockquote 指明承接方；同步 _extracted/plan.md 镜像与 file-lifecycle 描述；新增 7 断言回归测试锁「无 checkbox+编号形态+承接说明+镜像一致」
+结果：新测试 7 断言全过；npm test 全量 253 文件 0 失败；npm run lint 344 文件通过
+审计：📎 文档引用失效：1/3 处 file:line 失效（sillyspec docs check 可复现）
+审计：⚖️ 归属切分：2 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：src/modules.js, src/verify-postcheck.js

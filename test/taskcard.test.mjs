@@ -83,9 +83,9 @@ console.log('\n=== B. buildTaskcardSkeleton 纯函数（Windows 安全骨架）=
     assertTrue(s.includes(`\n${field}`), `规范字段 ${field} 就位`)
   }
   assertTrue(s.includes('id: task-07'), 'id 占位符已填充')
-  assertTrue(s.includes('title: Add error constants'), 'title 已填充')
-  assertTrue(s.includes('title_zh: 新增错误常量'), 'title_zh 已填充')
-  assertTrue(s.includes('author: alice'), 'author 已填充')
+  assertTrue(s.includes("title: 'Add error constants'"), 'title 已填充')
+  assertTrue(s.includes("title_zh: '新增错误常量'"), 'title_zh 已填充')
+  assertTrue(s.includes("author: 'alice'"), 'author 已填充')
   assertTrue(s.includes('created_at: 2026-08-20 10:00:00'), 'created_at 已填充')
   assertTrue(/allowed_paths:\n\s+- /.test(s), 'allowed_paths 块式写法（每项一行 "  - 路径"，与校验器一致）')
   // frontmatter 正则提取 + YAML 可解析（jsYaml 层面合法性）
@@ -102,9 +102,9 @@ console.log('--- C1: 单任务生成（标题从 plan.md checkbox 行带出）--
   assertTrue(r.created.length === 1 && r.skipped.length === 0, `created=1/skipped=0（实际 ${r.created.length}/${r.skipped.length}）`)
   const card = fs.readFileSync(path.join(changeDir, 'tasks', 'task-01.md'), 'utf8')
   assertTrue(card.includes('id: task-01'), '卡片 id=task-01')
-  assertTrue(card.includes('title: 实现错误常量模块'), 'title 自动取自 plan.md 任务名')
-  assertTrue(card.includes('title_zh: 实现错误常量模块'), 'title_zh 自动取自 plan.md 任务名')
-  assertTrue(card.includes('author: t'), 'author 取 git config user.name')
+  assertTrue(card.includes("title: '实现错误常量模块'"), 'title 自动取自 plan.md 任务名')
+  assertTrue(card.includes("title_zh: '实现错误常量模块'"), 'title_zh 自动取自 plan.md 任务名')
+  assertTrue(card.includes("author: 't'"), 'author 取 git config user.name')
   assertTrue(/created_at: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(card), 'created_at 为时间戳格式')
   cleanup(d)
 }
@@ -131,7 +131,7 @@ console.log('--- C3: 多任务逗号分隔 ---')
   assertTrue(r.created.length === 2, `两卡均生成（实际 ${r.created.length}）`)
   assertTrue(fs.existsSync(path.join(changeDir, 'tasks', 'task-01.md')), 'task-01.md 存在')
   assertTrue(fs.existsSync(path.join(changeDir, 'tasks', 'task-02.md')), 'task-02.md 存在')
-  assertTrue(fs.readFileSync(path.join(changeDir, 'tasks', 'task-02.md'), 'utf8').includes('title: 接入展示层组件'), 'task-02 标题各自带出')
+  assertTrue(fs.readFileSync(path.join(changeDir, 'tasks', 'task-02.md'), 'utf8').includes("title: '接入展示层组件'"), 'task-02 标题各自带出')
   cleanup(d)
 }
 

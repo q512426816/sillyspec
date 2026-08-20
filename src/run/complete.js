@@ -175,6 +175,17 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
 
   // ── requiresWait 硬门控 ──
   const defStepsForCurrent = await getStageSteps(stageName, cwd, progress, platformOpts?.specRoot || null)
+  // def↔DB 一致性守卫（坑 execute-step-table-drift，2026-08-20 实证）：runCommand 入口已按名
+  // 重播种（ensureStageSteps），但同一命令进程内 plan.md 若再次被改（或绕过 runCommand 直调
+  // completeStep 的路径），def 与 DB 步数错位会让 currentIdx 的门控/prompt 施加到错误的步骤上
+  // （17/12 交替报错但仍在推进）。fail-closed：中止本次 --done，重跑即自愈（入口重播种）。
+  if (Array.isArray(defStepsForCurrent) && defStepsForCurrent.length > 0 && steps.length > 0
+      && defStepsForCurrent.length !== steps.length) {
+    console.error(`❌ 步骤表与当前阶段定义漂移（DB ${steps.length} 步 vs 定义 ${defStepsForCurrent.length} 步）——本次 --done 中止，防止错位门控/推进。`)
+    console.error(`   常见原因：plan.md 的 Wave 结构在本命令执行期间又被修改（execute 步骤由 plan 动态构建）。`)
+    console.error(`   解法：原样重跑本条 --done 命令——CLI 入口会先按步骤名保留完成态重播种（见 ⚠️ 漂移告警），然后正常推进。`)
+    process.exit(1)
+  }
   const currentStepDef = defStepsForCurrent?.[currentIdx] || {}
   const currentStep = steps[currentIdx]
   if (currentStepDef.requiresWait === true && !currentStep.waitAnswer) {

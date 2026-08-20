@@ -108,6 +108,11 @@ export async function ensureStageSteps(progress, stageName, cwd, specDir = null)
   // 检查步骤数量是否匹配（execute 动态步骤可能变化）
   if (progress.stages[stageName].steps.length !== steps.length) {
     const oldSteps = progress.stages[stageName].steps
+    // 漂移显式化（坑 execute-step-table-drift，2026-08-20 实证）：plan.md Wave 数在 execute
+    // 中途被改后 DB 步骤表与重算定义错位（17/12 交替），重播种本身按名保留完成态是对的，
+    // 但此前完全静默——agent 只见各处计数打架的报错，不知道发生了什么、该不该继续
+    console.warn(`⚠️ ${stageName} 步骤表与当前定义漂移（DB ${oldSteps.length} 步 → 定义 ${steps.length} 步，常见原因：execute 中途修改了 plan.md 的 Wave 结构）`)
+    console.warn(`   已按步骤名保留完成态重播种（新增步骤置 pending；Wave 重编号时同名步骤继承旧状态，勾选真相以 tasks.md/review.json 为准）`)
     progress.stages[stageName].steps = steps.map(s => {
       const old = oldSteps.find(step => step.name === s.name)
       if (old) return old  // 精确名命中 → 保留旧状态

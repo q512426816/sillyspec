@@ -1043,10 +1043,31 @@ export class WorktreeManager {
    *     不传则全量扫（兼容现有行为）。
    * @returns {{ issues: Array<{ type: string, name: string, detail: string, fixable: boolean }>, fixed: string[], unfixable: string[] }}
    */
-  doctor({ fix = false, staleHours = 24, changeName = null } = {}) {
+  async doctor({ fix = false, staleHours = 24, changeName = null } = {}) {
     const issues = [];
     const fixed = [];
     const unfixable = [];
+
+    // 活跃变更注册表（坑 doctor-fix-orphan-branch-parallel-active，2026-08-20 实证）：孤儿分支
+    // 判定原只看本地 meta 目录注册表（metaNames），与变更活跃态的权威注册表（进度库 changes 表）
+    // 数据源不一致——并行会话的活跃变更（meta 已清/in-place/平台模式 meta 在别处）分支会被全局
+    // doctor --fix 误删。删分支前交叉核对：分支名 ∈ 活跃变更 → 保留（fixable:false 提示人工确认）。
+    // 先探 DB 文件存在再实例化 ProgressManager（坑7 读路径建库：_ensureDB 不存在会建库污染）。
+    // null = 进度库存在但读失败（无法判定活跃态，保守不自动删）；空 Set = 无库/无活跃变更
+    // （git-only 工作流零回归，孤儿分支照删）。
+    let activeChanges = null;
+    try {
+      const specBaseOfWt = dirname(dirname(this.worktreeBase)); // <specBase>（.runtime/worktrees 上两级）
+      if (existsSync(join(specBaseOfWt, '.runtime', 'sillyspec.db'))) {
+        const { ProgressManager } = await import('./progress.js');
+        activeChanges = new Set(new ProgressManager({ specDir: specBaseOfWt }).listChanges(this.cwd));
+      } else {
+        activeChanges = new Set();
+      }
+    } catch (e) {
+      console.warn(`⚠️ doctor 进度库读取失败，孤儿分支的活跃态交叉核对不可用（保守不自动删）: ${e.message}`);
+      activeChanges = null;
+    }
 
     // 1. 列出 git worktree list 中的条目
     let gitWorktreeList = [];
@@ -1177,7 +1198,7 @@ export class WorktreeManager {
       }
     }
 
-    // 5. 检查 SillySpec 分支残留
+    // 5. 检查 SillySpec 分支残留（活跃变更交叉核对，见方法头 activeChanges 注释）
     try {
       // QUAL-01 收口：裸 execFileSync → git-helper git（原调用点未传 timeout，统一入口默认 5s 足够 branch --list）
       const branches = git(this.cwd, ['branch', '--list', `${BRANCH_PREFIX}*`]);
@@ -1187,7 +1208,20 @@ export class WorktreeManager {
           const name = branch.replace(BRANCH_PREFIX, '');
           if (changeName && name !== changeName) continue; // --change 过滤：仅扫指定 change
           if (!metaNames.has(name)) {
-            issues.push({ type: 'orphan-branch', name, detail: `分支残留（无对应 meta）: ${branch}`, fixable: true });
+            if (activeChanges && activeChanges.has(name)) {
+              // 变更仍注册活跃：分支大概率是并行会话在用（或 apply 后被 review 引用审计保护保留）
+              // ——数据源不一致的正解是保留 + 人工确认，不是删
+              issues.push({ type: 'active-branch', name, fixable: false,
+                detail: `分支 ${branch} 无本地 meta，但变更 "${name}" 在进度库仍注册为活跃（并行会话在跑 / meta 已清分支在用）——保留。确认废弃后：先归档/结束该变更，或手动 git branch -D ${branch}` });
+              continue;
+            }
+            if (activeChanges === null) {
+              // 进度库读失败：无法判定活跃态，保守不自动删（宁可漏删不可误删并行会话分支）
+              issues.push({ type: 'orphan-branch', name, fixable: false,
+                detail: `分支疑似残留（无对应 meta，且进度库不可读无法交叉核对活跃态）: ${branch}——保守不自动删，人工确认后 git branch -D ${branch}` });
+              continue;
+            }
+            issues.push({ type: 'orphan-branch', name, detail: `分支残留（无对应 meta，且非活跃变更）: ${branch}`, fixable: true });
             if (fix) {
               try { gitQuiet(this.cwd, ['branch', '-D', branch]); fixed.push(`deleted orphan branch: ${branch}`); } catch { unfixable.push(`branch delete failed: ${branch}`); }
             }

@@ -28,6 +28,18 @@ const TEST_TIMEOUT_MS = Number(process.env.SILLYSPEC_TEST_TIMEOUT_MS) || 10 * 60
 const OUTPUT_TAIL_CHARS = 4000
 
 /**
+ * 行尾归一（坑 verify-modules-crlf-blanket-fallback，2026-08-20 实证）：Windows 仓的
+ * local.yaml 常为 CRLF（编辑器/CLI 写入），手写行扫描器的逐行正则里 `.` 不匹配 `\r`、
+ * `$`（无 m 标志）又要求真串尾——`\r` 残留行尾导致条目正则整条失配。实证受害：
+ * extractModules 返回 null（modules 映射恒失效 → 永远回退全量 → 600s 默认超时必炸）、
+ * extractKnownFailures 块式只捕获第一条。统一在解析入口归一，JS 的 `\r?\n` 拆分与
+ * yaml 库均兼容 LF 文本（零回归）。
+ */
+function normalizeLineEndings(text) {
+  return String(text || '').replace(/\r\n?/g, '\n')
+}
+
+/**
  * 从 local.yaml 文本提取 commands.test。
  * 轻量正则（与 worktree-deps/scan-postcheck 同风格，不引 yaml 依赖）：
  * 支持带引号与不带引号两种写法；'unavailable' 视为未配置。
@@ -124,7 +136,7 @@ export function computeFullFallbackReason({ strategy, modulesPresent, hitCount }
  */
 export function extractModules(yamlText) {
   if (!yamlText) return null
-  const lines = yamlText.split('\n')
+  const lines = normalizeLineEndings(yamlText).split('\n')
 
   // 定位 modules: 起始行（必须是顶层 key，行首无缩进或仅注释后顶层）
   let startIdx = -1
@@ -168,8 +180,15 @@ function parseFlowValue(flowText, key) {
   const m = flowText.match(re)
   if (!m) return null
   let v = m[1].trim()
-  if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
-    v = v.slice(1, -1)
+  if (v.startsWith('"') && v.endsWith('"')) {
+    // 双引号值剥壳后解开转义（坑 verify-modules-crlf-blanket-fallback 次生发现）：modules 的
+    // test 命令常含嵌套引号（node -e "…" / pytest "…"），yaml 源里写作 \"；此前只剥外层引号
+    // 不解 \\ 与 \"，解析结果残留字面反斜杠 → 命令直接坏。其余冷门转义（\n 等）按 YAML 规范
+    // 应真转义，但保守留字面（可见优于静默变换，测试命令不含它们）
+    v = v.slice(1, -1).replace(/\\(["\\])/g, '$1')
+  } else if (v.startsWith("'") && v.endsWith("'")) {
+    // 单引号值的 YAML 转义是 '' → '
+    v = v.slice(1, -1).replace(/''/g, "'")
   }
   return v.length > 0 ? v : null
 }
@@ -228,11 +247,14 @@ export function aggregateStatus(results) {
  */
 export function extractKnownFailures(yamlText) {
   if (!yamlText) return []
-  const inline = yamlText.match(/^known_failures:\s*\[([^\]]*)\]\s*(?:#.*)?$/m)
+  // CRLF 归一（坑 verify-modules-crlf-blanket-fallback）：块式正则的 `.+`/`\n?` 在 CRLF 行
+  // 间失配，只捕获到第一条豁免项就停——归一后整块捕获恢复
+  const yaml = normalizeLineEndings(yamlText)
+  const inline = yaml.match(/^known_failures:\s*\[([^\]]*)\]\s*(?:#.*)?$/m)
   if (inline) {
     return inline[1].split(',').map(s => s.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean)
   }
-  const block = yamlText.match(/^known_failures:\s*\n((?:[ \t]+-[ \t].+\n?)+)/m)
+  const block = yaml.match(/^known_failures:\s*\n((?:[ \t]+-[ \t].+\n?)+)/m)
   if (block) {
     return (block[1].match(/^[ \t]+-[ \t]+(.+)/gm) || [])
       .map(s => s.replace(/^[ \t]+-[ \t]+/, '').trim().replace(/^['"]|['"]$/g, '').replace(/#.*$/, '').trim())

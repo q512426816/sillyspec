@@ -9,7 +9,7 @@
  */
 
 import { existsSync, readFileSync, realpathSync } from 'fs';
-import { join, isAbsolute } from 'path';
+import { join, isAbsolute, resolve as resolvePath, sep as pathSep } from 'path';
 import { execFileSync } from 'child_process';
 import { createHash } from 'crypto';
 
@@ -155,34 +155,71 @@ function tryLink(mainNodeModules, linkPath) {
  *   1. 调用方保证来源可信（provisionDeps 只对 source==='specBase' 的 userInstall 走到这里）
  *   2. 可执行前缀白名单（包管理器家族）
  *   3. shell 元字符黑名单（win32 额外拦 %，cmd.exe 会展开 %VAR%），通过后拆 argv 数组执行不经 shell
+ *
+ * 链式命令支持（坑 worktree-install-whitelist-monorepo-chain，2026-08-20 实证）：monorepo 的
+ * commands.install 常为链式写法（`cd web && pnpm install` / `npm install && npm run build:pkg`），
+ * 旧实现整条过白名单 + 元字符门，`&&` 必拒 → depsStatus=failed → execute deps 门控卡死且无自愈
+ * 路径（改 local.yaml 成单命令对需要 post-install build 的 monorepo 不可行）。现按 `&&` 拆段
+ * 逐段校验执行：每段独立过白名单 + 元字符门（拆分后残余的单 `&`/`|`/`;` 仍被元字符门拦），
+ * 段内允许 `cd <相对子路径>`（resolve 后必须仍在 worktree 根内，防越界建产物/读外部），
+ * 全程 argv 数组执行不经 shell、任一段失败即停（&& 语义）。安全面不变：每个执行段仍是
+ * 白名单包管理器命令，`||`/管道/`;`/后台均不支持。
  */
 const INSTALL_BINARY_WHITELIST = /^(?:\.\/)?(?:pnpm|npm|yarn|bun|mvn|gradle|gradlew|uv|pip|pip3|python|python3|poetry|make)(?:\.cmd|\.bat|\.exe)?(?:\s|$)/;
 const SHELL_METACHARS = /[;&|<>$`\n]/;
 const WIN_SHELL_METACHARS = /[;&|<>$`\n%]/;
+const CD_SEGMENT_RE = /^cd\s+([^\s]+)$/;
 
 function tryInstall(cmd, cwd, timeout) {
   const trimmed = String(cmd || '').trim();
-  if (!INSTALL_BINARY_WHITELIST.test(trimmed)) {
-    return { ok: false, error: `install 命令不在包管理器白名单内，拒绝执行: ${trimmed}` };
+  if (!trimmed) {
+    return { ok: false, error: 'install 命令为空' };
   }
   const metaRe = process.platform === 'win32' ? WIN_SHELL_METACHARS : SHELL_METACHARS;
-  if (metaRe.test(trimmed)) {
-    return { ok: false, error: `install 命令含 shell 元字符，拒绝执行: ${trimmed}` };
+  // && 拆段（单段命令与原路径完全一致，零回归）；空段（`a &&`/`&& b`）视为畸形命令拒绝
+  const segments = trimmed.split('&&').map(s => s.trim());
+  if (segments.some(s => s === '')) {
+    return { ok: false, error: `install 链式命令含空段，拒绝执行: ${trimmed}` };
   }
-  const argv = trimmed.split(/\s+/);
-  try {
-    if (process.platform === 'win32') {
-      // Windows 包管理器是 .cmd 垫片，无 shell 的 spawn 无法解析——经 cmd.exe /c 传参；
-      // 元字符（含 %）已拦，残余风险与 tryLink 的 mklink 同款
-      execFileSync('cmd.exe', ['/c', ...argv], { cwd, timeout, stdio: ['pipe', 'pipe', 'pipe'] });
-    } else {
-      execFileSync(argv[0], argv.slice(1), { cwd, timeout, stdio: ['pipe', 'pipe', 'pipe'] });
+  let curCwd = cwd;
+  const root = resolvePath(cwd);
+  const planned = [];
+  for (const seg of segments) {
+    // 白名单先于元字符（保持原判定顺序）：`curl … | sh` 报非白名单而非元字符，
+    // `npm install; rm …` 过白名单后被元字符门拦——两类拒绝语义与原实现一致
+    const cd = seg.match(CD_SEGMENT_RE);
+    if (!cd && !INSTALL_BINARY_WHITELIST.test(seg)) {
+      return { ok: false, error: `install 命令不在包管理器白名单内，拒绝执行: ${seg}（支持 && 链式与 cd <子目录> 段，各执行段仍须为白名单包管理器命令）` };
     }
-    return { ok: true };
-  } catch (e) {
-    const msg = e.killed ? `timeout after ${timeout}ms` : ((e.stderr && e.stderr.toString()) || e.message);
-    return { ok: false, error: `${cmd} failed: ${msg}` };
+    if (metaRe.test(seg)) {
+      return { ok: false, error: `install 命令段含 shell 元字符，拒绝执行: ${seg}（链式仅支持 &&；|| / 管道 / ; / 后台不支持）` };
+    }
+    if (cd) {
+      const target = resolvePath(curCwd, cd[1]);
+      if (target !== root && !target.startsWith(root + pathSep)) {
+        return { ok: false, error: `install 命令的 cd 段越出 worktree 根，拒绝执行: ${seg}（cwd ${cwd}）` };
+      }
+      curCwd = target;
+      continue;
+    }
+    planned.push(seg);
   }
+  for (const seg of planned) {
+    const argv = seg.split(/\s+/);
+    try {
+      if (process.platform === 'win32') {
+        // Windows 包管理器是 .cmd 垫片，无 shell 的 spawn 无法解析——经 cmd.exe /c 传参；
+        // 元字符（含 %）已拦，残余风险与 tryLink 的 mklink 同款
+        execFileSync('cmd.exe', ['/c', ...argv], { cwd: curCwd, timeout, stdio: ['pipe', 'pipe', 'pipe'] });
+      } else {
+        execFileSync(argv[0], argv.slice(1), { cwd: curCwd, timeout, stdio: ['pipe', 'pipe', 'pipe'] });
+      }
+    } catch (e) {
+      const msg = e.killed ? `timeout after ${timeout}ms` : ((e.stderr && e.stderr.toString()) || e.message);
+      return { ok: false, error: `${seg} failed (cwd ${curCwd}): ${msg}` };
+    }
+  }
+  return { ok: true };
 }
 
 /** 目录是否含 nodejs 标记（package.json 或任一 lockfile）——识别 monorepo 里的 nodejs 子模块 */

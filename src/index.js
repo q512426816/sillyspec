@@ -77,7 +77,7 @@ SillySpec CLI — 规范驱动开发工具包
     list | meta <change>                列出 / 读取 meta.json
     cleanup <change> [--force]          清理 worktree
     doctor [--fix] [--stale-hours N]    健康检查 + 修复
-        --cleanup-ghosts [--confirm]     归档幽灵 active 记录（db 有行无目录，SS-2）
+        --cleanup-ghosts [--confirm]     归档幽灵 active 记录（db 有行无目录 / 空壳目录 0 文件超 7 天，SS-2/2b）
 
   sillyspec local detect [--dir <path>]   生成本地配置 local.yaml（纯 fs 嗅探，零 token、不跑 scan）
   sillyspec config [schema] [--json]      打印 local.yaml 全部已知键 + 生效状态 + 读取点（堵外部 agent 配置发现缺口）
@@ -856,6 +856,20 @@ async function main() {
         // 复用顶层静态 import（line 12），不动态 await import
         const pm = new ProgressManager({ specDir: resolvePlatformSpecDir(doctorEffectiveDir, specDir) });
         const specBase = resolvePlatformSpecDir(doctorEffectiveDir, specDir) || join(doctorEffectiveDir, '.sillyspec');
+        // 坑 doctor-align-bypass-review-gate（2026-08-20 实证）：align 直写 completed 绕过
+        // completeStep，此前 execute 的 Stage/Task Review Gate 被整体跳过——worktree 清理后的
+        // 恢复场景恰是最需要审计的时刻。confirm 落盘前跑同源只读校验（dry-run 不拦，保持只读语义）。
+        if (doctorConfirm) {
+          const { enforceAlignExecuteReviewGate } = await import('./run/gates.js');
+          const gateBlocked = await enforceAlignExecuteReviewGate({
+            cwd: doctorEffectiveDir, changeName: alignChange, specBase,
+          });
+          if (gateBlocked) {
+            console.error('   对齐未执行（review 校验未过）。补齐 review 后重跑本命令。');
+            process.exitCode = 1;
+            break;
+          }
+        }
         let r;
         try {
           r = pm.alignExecuteToPlan(doctorEffectiveDir, alignChange, specBase, { confirm: doctorConfirm });
@@ -899,16 +913,19 @@ async function main() {
       }
       if (cleanupGhosts) {
         // SS-2（2026-08-20）：归档幽灵行（db active 无目录）。默认 dry-run，--confirm 才写。
+        // SS-2b：扩空壳目录（active + 目录 0 文件 + last_active 超 7 天），归档行并移除空目录。
         const { cleanupGhostChanges } = await import('./doctor-diagnostics.js');
         const r = await cleanupGhostChanges({ cwd: doctorEffectiveDir, specDir, confirm: doctorConfirm });
         if (json) {
           console.log(JSON.stringify(r, null, 2));
         } else {
-          console.log(`👻 幽灵 active 记录（db active 但无目录）${doctorConfirm ? '已归档' : '待清理（dry-run）'}：${r.count} 个  [db: ${r.db_path || '(未找到)'}]`);
+          console.log(`👻 幽灵 active 记录（db active 无目录 / 空壳目录超 7 天）${doctorConfirm ? '已归档' : '待清理（dry-run）'}：${r.count} 个  [db: ${r.db_path || '(未找到)'}]`);
           for (const n of r.ghosts) console.log(`   ${doctorConfirm ? '✅' : '-'} ${n}`);
+          for (const n of (r.empty_shells || [])) console.log(`   ${doctorConfirm ? '✅' : '🫙'} ${n}（空壳目录${doctorConfirm ? '，空目录已移除' : ''}）`);
+          for (const n of (r.skipped_nonempty || [])) console.log(`   ⏭️  ${n}（复查时目录已非空，已放过——可能是活跃变更）`);
           for (const e of r.errors) console.log(`   ❌ ${e.name || ''}: ${e.error}`);
           if (!doctorConfirm && r.count > 0) console.log(`
-加 --confirm 执行归档（仅改 status=archived，可逆；不删任何目录）。`);
+加 --confirm 执行归档（仅改 status=archived，可逆；空壳同时移除 0 文件空目录，不删任何有内容的目录）。`);
           if (r.reason) console.log(`ℹ️ ${r.reason}`);
         }
         process.exitCode = r.errors.length > 0 ? 1 : 0;
@@ -1350,7 +1367,7 @@ SillySpec worktree — git worktree 隔离管理
           const staleHours = staleIdx !== -1 && args[staleIdx + 1] ? parseInt(args[staleIdx + 1], 10) : 24;
           const changeIdx = args.indexOf('--change');
           const changeName = changeIdx !== -1 && args[changeIdx + 1] ? args[changeIdx + 1] : null;
-          const diag = wm.doctor({ fix: fixFlag, staleHours, changeName });
+          const diag = await wm.doctor({ fix: fixFlag, staleHours, changeName });
           if (diag.issues.length === 0) {
             console.log('✅ worktree 健康检查通过，无异常');
           } else {

@@ -187,3 +187,44 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 **根因**：硬校验的契约模板只存在于两处滞后位置——step3 长 prompt（渲染时易被淹没）与拦截报错（已撞墙）。推进到末步的转换时刻（step2 `--done` 输出尾部）没有短块预告。
 
 **解法（已修）**：`completeStep` 单步推进路径（complete.js printNext 块尾、task-08 锚定行之后）：`stageName === 'quick'` 且 `nextPendingIdx` 是末步时，输出 📌 预告块——四字段模板逐行 + 可照抄完整命令（含 `--change`）+ 「缺任一项被拒、补全重跑不丢进度」+ 可选 `--file-notes` 提示。非末步推进不出预告；拦截路径保留兜底。测试 quick-laststep-fourfields-preview.test.mjs（14 断言）。
+
+## 15. 三坑：install 白名单拒 monorepo 链式 / doctor --fix 误删活跃分支 / verify-postcheck CRLF（2026-08-20 闭环）
+
+**症状（三坑各自实证）**：
+1. monorepo 的 `commands.install: "cd web && pnpm install"` 类链式命令被「包管理器前缀白名单 + shell 元字符门」整条拒绝（`&&` 是元字符）→ depsStatus=failed → execute deps 门控卡死，改单命令对需要 post-install build 的 monorepo 不可行（无自愈路径）。
+2. 全局 `worktree doctor --fix` 误删并行会话活跃分支：第5步孤儿分支判定只看本地 meta 目录注册表，与变更活跃态权威注册表（进度库 changes 表）数据源不一致——并行会话的变更（meta 已清 / in-place / 平台模式 meta 在别处）分支被当孤儿删掉。
+3. Windows 仓 local.yaml 为 CRLF 时，verify-postcheck 手写行扫描器的逐行正则（`.` 不匹配 `\r`、`$` 要求真串尾）失配：`extractModules` 恒返回 null（modules 映射失效 → test_strategy:module 永远回退全量 → 600s 默认超时必炸，verify 从未真正跑过 module 子集）；`extractKnownFailures` 块式只捕获第一条豁免。
+
+**根因**：
+1. 白名单/元字符门按「整条命令」判定，未考虑 `&&` 链式与 `cd <子目录>` 段——安全目标（不经 shell 执行白名单包管理器命令）与命令形态（链式）被耦合在同一正则里。
+2. 判定数据源单一（meta 注册表），未交叉核对进度库活跃变更；「无 meta」≠「无人在用」。
+3. 手写 yaml 行扫描器假设 LF；Windows 编辑器/工具写出的 CRLF 让 `$` 锚定正则整条失配，且失败方式是静默降级（null → 回退全量）而非报错。
+
+**修复（2026-08-20）**：
+1. `tryInstall`（worktree-deps.js）按 `&&` 拆段逐段校验执行：每段独立过白名单 + 元字符门（拆分后残余单 `&`/`|`/`;` 仍被拦）、段内允许 `cd <相对子路径>`（resolve 后必须在 worktree 根内防越界）、argv 数组执行不经 shell、任一段失败即停（&& 语义）；`||`/管道/`;`/空段仍拒。白名单先于元字符的判定顺序保留（`curl|sh` 报非白名单）。测试 worktree-install-chain.test.mjs（9 断言）。
+2. `doctor()` 改 async，删分支前交叉核对进度库活跃变更（先探 DB 文件存在再实例化，避免坑7 读路径建库）：分支名 ∈ 活跃变更 → 报 active-branch（fixable:false）保留 + 人工确认指引；进度库读失败 → 保守不自动删；无库/非活跃 → 原孤儿删除行为零回归（git-only 工作流不受影响）。测试 worktree-doctor-active-branch.test.mjs（11 断言）。
+3. `normalizeLineEndings`（verify-postcheck.js）在 `extractModules`/`extractKnownFailures` 解析入口归一 `\r\n`/`\r` → `\n`；modules.js `showModuleStatus` 的行拆分同步改 `split(/\r?\n/)`。测试 verify-postcheck-crlf.test.mjs（12 断言，CRLF/LF/CR 三态输出一致 + module-subset 链路恢复）。
+
+**关联记忆**：`[[sillyspec-worktree-install-whitelist-monorepo-chain]]`、`[[sillyspec-doctor-fix-orphan-branch-parallel-active]]`、`[[sillyspec-verify-modules-crlf-blanket-fallback]]`
+
+## 16. 四坑：execute 步骤表漂移 / doctor align 绕过 review 门 / modules 引号值转义 / taskcard 反引号（2026-08-20 闭环）
+
+**症状（用户实测，详见产品仓 docs/sillyspec/2026-08-20-execute-step-table-drift-and-gate-bypass.md）**：
+1. plan.md 中途改 Wave 数后 execute 步骤表漂移——17/12 步数交替报错但仍可推进（门控/prompt 施加到错误步骤）。
+2. worktree 清理后用 `doctor --align-execute-progress --confirm` 恢复，execute 的 Stage Review Gate 与 Task Review Gate 被整体绕过（本次靠 15 份 task review + verify 全程补足覆盖）。
+3. local.yaml modules 块解析间歇失败回退全量（12 分钟 vs 应有 2 分钟，且引发一次超时误判；与坑 15-③ CRLF 同根因，另发现次生坑：引号值转义）。
+4. CLI 生成的任务卡 title 带反引号（`` ` `` 是 YAML 保留指示符）炸 frontmatter 解析，契约字段静默丢失（plan postcheck 兜住）。
+
+**根因**：
+1. execute 步骤由 plan.md 动态构建，DB 快照启动时播种；入口 `ensureStageSteps` 有按名重播种但**完全静默**，且同一命令进程内 plan 再变时 completeStep 的 def 与 DB 错位无守卫。
+2. `alignExecuteToPlan`（progress.js）显式「绕过 completeStep 推导」直写 completed，只查 checkbox 全勾 + 零变更核验，review 审计零覆盖——而 worktree 清理后的恢复场景恰是最需要审计的时刻。
+3. CRLF 主因坑 15-③ 已修；次生坑：`extractModules` 的 `parseFlowValue` 剥外层引号后不解开内层 `\"` 转义——modules 的 test 命令常含嵌套引号（`node -e "…"`），解析结果残留字面反斜杠命令直接坏。
+4. `buildTaskcardSkeleton`（taskcard.js）title/title_zh/author 裸插值进 frontmatter，自由文本无 YAML 安全序列化。
+
+**修复（2026-08-20）**：
+1. `ensureStageSteps` 漂移重播种显式化（⚠️ 告警含 旧→新 步数 + 按名保留说明）；`completeStep` 新增 def↔DB 步数一致性守卫——错位即 fail-closed 中止本次 --done（防错位门控/推进），重跑自愈（入口重播种）。测试 execute-step-drift-guard.test.mjs（14 断言）。
+2. 新增 `enforceAlignExecuteReviewGate`（gates.js）：doctor align 的 --confirm 落盘前跑同源只读校验——Stage Review（tier=independent 须有有效 execute stage review，tier=self 放行）+ Task Review（review.json 齐备且 verdict 非 fail；runId 只读解析不 generate）；任一不过拒绝 align 并给 register-stage-review/补 review 指引；dry-run 不拦（保持只读）。测试 align-execute-review-gate.test.mjs（12 断言）。
+3. `parseFlowValue`（verify-postcheck.js）双引号值剥壳后解 `\"`/`\\` 转义、单引号值解 `''`；e2e 测试 verify-crlf-module-subset-e2e.test.mjs 用 CRLF 配置 + 嵌套引号模块命令证明真跑 module 子集（marker 落盘、全量与未命中模块均未执行）。
+4. `yamlScalar`（taskcard.js）对 title/title_zh/author 统一单引号包裹 + `'` 双写转义；测试 taskcard-yaml-escape.test.mjs（20 断言，js-yaml round-trip + 契约 9 字段不丢 + e2e）。
+
+**关联记忆**：`[[sillyspec-execute-step-table-drift]]`、`[[sillyspec-doctor-align-bypass-review-gate]]`、`[[sillyspec-taskcard-title-backtick-yaml]]`

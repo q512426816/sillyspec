@@ -21,7 +21,7 @@
  * writer 落盘到 <authoritySpecDir>/.runtime/。
  */
 import { openDatabase, pluckGet, pluckAll } from './db-engine.js';
-import { existsSync, statSync, readFileSync, readdirSync, mkdirSync, writeFileSync, unlinkSync } from 'fs';
+import { existsSync, statSync, readFileSync, readdirSync, mkdirSync, writeFileSync, unlinkSync, rmSync } from 'fs';
 import { join } from 'path';
 import { CHECK_SEVERITY } from './constants.js';
 import { checkPlatformManaged } from './run/shared.js';
@@ -101,6 +101,14 @@ function probeDb(dbPath) {
       schema_version: pick('SELECT schema_version FROM project LIMIT 1'),
       change_count: pick('SELECT count(*) FROM changes', 0),
       active_changes: pickCol("SELECT name FROM changes WHERE status='active'"),
+      // SS-2b（2026-08-20）：active 行 name → last_active 映射，供 D4 空壳判定做时间门槛
+      //（刚创建的合法变更目录本来就是空的，见 GHOST_EMPTY_DIR_STALE_MS 注释）。
+      active_last_active: (() => {
+        try {
+          const rows = db.prepare("SELECT name, last_active FROM changes WHERE status='active'").all();
+          return Object.fromEntries(rows.map((r) => [r.name, r.last_active]));
+        } catch { return {}; }
+      })(),
       last_active: pick('SELECT MAX(last_active) FROM changes'),
       execute_status_by_change: pickExecuteStatusByChange(),
     };
@@ -213,6 +221,8 @@ function detectMultiDb(cwd, pointer) {
       active: d.readable ? summarizeActive(d.active_changes) : null,
       // SS-2：全量名单随摘要透传，供 D4 精确集合对账（ghost/orphan）消费。
       active_changes: d.readable ? (d.active_changes || []) : [],
+      // SS-2b：name → last_active 映射随摘要透传，供 D4 空壳判定（时间门槛）消费。
+      active_last_active: d.readable ? (d.active_last_active || {}) : {},
     })),
   };
 }
@@ -361,6 +371,35 @@ function detectChangesSplit(cwd, pointer) {
 
 // ── D4 change↔db 一致性（针对权威 db + 权威 changes 目录）──────────────
 
+// SS-2b（2026-08-20）：空壳目录判定的 last_active 时间门槛（7 天）。
+// 背景：brainstorm 刚注册的合法变更目录本来就是 0 文件（首份产物 proposal.md
+// 落盘前有空窗，2026-08-20 task-truth-unify 即空目录数小时）。「active 行 + 目录
+// 0 文件」不能直接判幽灵，必须叠加 last_active 陈旧度；门槛取 7 天（quick 会话
+// 生命周期通常当天结束，正规变更 brainstorm 首产物也远早于 7 天）。
+const GHOST_EMPTY_DIR_STALE_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** 目录内是否 0 个常规文件（递归；空目录/仅空子目录都算 0 文件）。读失败按非空处理（宁漏勿杀）。 */
+function dirHasNoFiles(dirPath) {
+  const stack = [dirPath];
+  while (stack.length > 0) {
+    const cur = stack.pop();
+    let entries;
+    try { entries = readdirSync(cur, { withFileTypes: true }); } catch { return false; }
+    for (const e of entries) {
+      if (e.isFile()) return false;
+      if (e.isDirectory()) stack.push(join(cur, e.name));
+    }
+  }
+  return true;
+}
+
+/** last_active 是否陈旧超过 GHOST_EMPTY_DIR_STALE_MS。无值/不可解析按非陈旧处理（宁漏勿杀）。 */
+function isStaleLastActive(lastActive, now = Date.now()) {
+  if (!lastActive) return false;
+  const ts = Date.parse(lastActive);
+  return Number.isFinite(ts) && (now - ts) > GHOST_EMPTY_DIR_STALE_MS;
+}
+
 function detectChangeDbConsistency(cwd, pointer, multiDb) {
   const auth = (multiDb.dbs || []).find((d) => d.role === DB_ROLE.AUTHORITY);
   if (!auth) {
@@ -385,6 +424,13 @@ function detectChangeDbConsistency(cwd, pointer, multiDb) {
   const activeSet = new Set(activeNames);
   const ghostRows = activeNames.filter((n) => !dirSet.has(n));
   const orphanDirs = dirChanges.filter((n) => !activeSet.has(n));
+  // SS-2b：空壳——db active + 目录存在但 0 文件 + last_active 超过 7 天。有目录所以
+  // 逃过 ghostRows 的「无目录」判定（2026-08-15 清理时 6 个空壳即此漏网形态）。
+  const activeLastActive = (auth.active_last_active && typeof auth.active_last_active === 'object')
+    ? auth.active_last_active
+    : {};
+  const emptyShells = activeNames.filter((n) =>
+    dirSet.has(n) && isStaleLastActive(activeLastActive[n]) && dirHasNoFiles(join(authoritySpecRoot, 'changes', n)));
   const findings = [];
   let pass = true;
   let severity = null;
@@ -394,6 +440,14 @@ function detectChangeDbConsistency(cwd, pointer, multiDb) {
     findings.push(
       `幽灵记录 ${ghostRows.length} 条（db active 但无目录）：${ghostRows.slice(0, 10).join(', ')}${ghostRows.length > 10 ? ' …' : ''}——` +
       `可用 sillyspec doctor --cleanup-ghosts --confirm 归档清理`
+    );
+  }
+  if (emptyShells.length > 0) {
+    pass = false;
+    severity = severity || CHECK_SEVERITY.WARNING;
+    findings.push(
+      `空壳目录 ${emptyShells.length} 个（db active + 目录 0 文件 + last_active 超 7 天）：${emptyShells.slice(0, 10).join(', ')}${emptyShells.length > 10 ? ' …' : ''}——` +
+      `可用 sillyspec doctor --cleanup-ghosts --confirm 归档行并移除空目录`
     );
   }
   if (orphanDirs.length > 0) {
@@ -413,12 +467,15 @@ function detectChangeDbConsistency(cwd, pointer, multiDb) {
     pass,
     severity,
     findings,
-    safe_actions: ghostRows.length > 0 ? ['sillyspec doctor --cleanup-ghosts（dry-run）→ 加 --confirm 归档幽灵行'] : [],
+    safe_actions: ghostRows.length > 0 || emptyShells.length > 0
+      ? ['sillyspec doctor --cleanup-ghosts（dry-run）→ 加 --confirm 归档幽灵行/空壳目录']
+      : [],
     authority_spec_root: authoritySpecRoot,
     dir_count: dirChanges.length,
     db_active_count: activeNames.length,
     ghost_rows: ghostRows,
     orphan_dirs: orphanDirs,
+    empty_shells: emptyShells,
   };
 }
 
@@ -731,16 +788,17 @@ function writeDump(result, authoritySpecDir) {
 
 /**
  * SS-2（2026-08-20）：归档幽灵行——db active 但 changes/ 无同名目录的记录。
- *
- * 背景：quick 收尾注销缺陷（工具侧已修）在历史会话中累积了僵尸 active 行，
- * 污染 listChanges/progress show 的「活跃变更」列表；旧 doctor 只 WARNING 不给
- * 动作，提示与能力不符（stage-machine 提示「可用 doctor 清理」却清不掉）。
+ * SS-2b（2026-08-20）：扩空壳目录——db active + 目录存在但 0 文件 + last_active 超
+ * 7 天（GHOST_EMPTY_DIR_STALE_MS）。两者都是 quick 收尾注销缺陷（工具侧已修）在
+ * 历史会话中累积的僵尸 active 行，污染 listChanges/progress show 的「活跃变更」
+ * 列表；旧 doctor 只 WARNING 不给动作（stage-machine 提示「可用 doctor 清理」却清不掉）。
  *
  * 安全设计：
  * - 仅把 changes.status 从 active 改为 archived（对齐 change-registry 归档语义，
- *   可逆：INSERT OR IGNORE 路径会复活同名变更，不删任何行/目录）。
+ *   状态可逆：手工改回 status='active' 即恢复，不删任何行）。
  * - 默认 dry-run 只列名单；加 confirm 才写。
- * - 只处理「无目录」的行；孤儿目录（有目录无行）不自动删，留给人工归位。
+ * - 空壳目录归档时同时移除空目录（删前复查仍为 0 文件，复查非空整条放过）；
+ *   有内容的目录一律不动。孤儿目录（有目录无行）不自动删，留给人工归位。
  */
 export async function cleanupGhostChanges({ cwd, specDir = null, confirm = false }) {
   const pointer = resolvePointer(cwd);
@@ -779,16 +837,39 @@ export async function cleanupGhostChanges({ cwd, specDir = null, confirm = false
   let db = null;
   const archived = [];
   const errors = [];
+  const skippedNonEmpty = [];
+  const removedDirs = [];
   try {
     db = openDatabase(dbPath, { readOnly: !confirm });
-    const activeNames = pluckAll(db, "SELECT name FROM changes WHERE status='active'");
-    const ghosts = activeNames.filter((n) => !dirSet.has(n));
+    // last_active 与 name 一起取：空壳判定需要时间门槛（见 isStaleLastActive）。
+    const activeRows = db.prepare("SELECT name, last_active FROM changes WHERE status='active'").all();
+    const ghosts = activeRows.filter((r) => !dirSet.has(r.name)).map((r) => r.name);
+    const emptyShells = activeRows
+      .filter((r) => dirSet.has(r.name) && isStaleLastActive(r.last_active) && dirHasNoFiles(join(changesDir, r.name)))
+      .map((r) => r.name);
     if (confirm) {
       const now = new Date().toISOString();
       const stmt = db.prepare("UPDATE changes SET status = 'archived', last_active = ? WHERE name = ? AND status = 'active'");
       for (const n of ghosts) {
         try {
           stmt.run(now, n);
+          archived.push(n);
+        } catch (e) {
+          errors.push({ name: n, error: e.message });
+        }
+      }
+      for (const n of emptyShells) {
+        // 删目录前复查非空：dry-run 与 --confirm 之间并发会话可能已往空目录写入首份产物
+        //（如 brainstorm 落 proposal.md）。复查非空 → 整条放过（行也不归档），宁漏勿杀。
+        const dirPath = join(changesDir, n);
+        if (!dirHasNoFiles(dirPath)) {
+          skippedNonEmpty.push(n);
+          continue;
+        }
+        try {
+          stmt.run(now, n);
+          rmSync(dirPath, { recursive: true, force: true });
+          removedDirs.push(n);
           archived.push(n);
         } catch (e) {
           errors.push({ name: n, error: e.message });
@@ -801,9 +882,12 @@ export async function cleanupGhostChanges({ cwd, specDir = null, confirm = false
       db_path: dbPath,
       changes_dir: changesDir,
       ghosts: confirm ? archived : ghosts,
+      empty_shells: confirm ? removedDirs : emptyShells,
+      skipped_nonempty: skippedNonEmpty,
+      removed_dirs: removedDirs,
       archived,
       errors,
-      count: ghosts.length,
+      count: ghosts.length + emptyShells.length,
       active_after: activeAfter,
     };
   } catch (e) {

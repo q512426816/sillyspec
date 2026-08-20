@@ -125,6 +125,99 @@ function isCurrentWaveAllNoDepsVerify(stepName, changeDir) {
 }
 
 /**
+ * doctor --align-execute-progress --confirm 的前置 review 门（坑 doctor-align-bypass-review-gate，
+ * 2026-08-20 实证）：alignExecuteToPlan 直写 completed「绕过 completeStep 推导」，此前 execute 的
+ * Stage Review Gate 与 Task Review Gate 被整体跳过——而 worktree 清理后的恢复场景恰是最需要
+ * review 审计的时刻（实证靠 15 份 task review + verify 全程补足覆盖才没出事）。
+ *
+ * 本函数供 CLI 层（index.js doctor align 分支）在 confirm 落盘前调用，跑与正常完成路径同源的
+ * 只读校验（不自动生成 marker/runId——恢复读场景缺失就是缺失，如实报告）：
+ *   1. Stage Review：tier=independent 时须存在有效 execute stage review.json（verdict 非 fail）；
+ *      tier=self 放行（与正常 gate 分级一致）。
+ *   2. Task Review：所有 task 的 review.json 齐备且 verdict 非 fail（runId 解析同 Task Review Gate：
+ *      marker → 含 tasks/ 目录扫描；不 generate）。
+ *
+ * @param {{ cwd: string, changeName: string, specBase: string, platformOpts?: object }} opts
+ * @returns {Promise<boolean>} true=被门阻断（CLI 应放弃 align 并 exit 1）；false=校验通过可继续
+ */
+export async function enforceAlignExecuteReviewGate({ cwd, changeName, specBase, platformOpts = {} }) {
+  const effectiveSpecBase = platformOpts?.specRoot || specBase
+  const runtimeRoot = resolveRuntimeRoot(platformOpts, effectiveSpecBase)
+  const reviewChangeDir = resolveChangeDir(cwd, { currentChange: changeName }, platformOpts?.specRoot || null)
+  const blocked = (msgs) => {
+    console.error('\n❌ doctor --align-execute-progress 前置 review 校验未过——execute 完成审计不能绕过：')
+    for (const m of msgs) console.error('   - ' + m)
+    console.error('   解法：补齐上述 review 后重跑 align（stage review：sillyspec register-stage-review --change ' + changeName + ' --stage execute；task review：按报错路径补 review.json）')
+    return true
+  }
+
+  // 1. Stage Review（tier 分级同正常 gate）
+  try {
+    const { classifyReviewTier } = await import('../review-tier.js')
+    const { validateStageReview, getLatestStageReviewRunId, printStageReviewResult } = await import('../stage-review.js')
+    const designPath = reviewChangeDir ? join(reviewChangeDir, 'design.md') : null
+    let planLevel = null
+    if (reviewChangeDir) {
+      const planPath = join(reviewChangeDir, 'plan.md')
+      if (existsSync(planPath)) {
+        const fmLine = readFileSync(planPath, 'utf8').split('\n').find(l => l.trim().startsWith('plan_level:'))
+        if (fmLine) planLevel = fmLine.split(':')[1].trim()
+      }
+    }
+    const tier = classifyReviewTier({ planLevel, designPath })
+    if (tier.tier === 'self') {
+      console.log('ℹ️  Stage Review: execute tier=self（' + tier.reason + '），align 前置门放行（不强制独立审查）')
+    } else {
+      // 只读解析（不 generate/写 marker）：恢复场景下缺失即缺失
+      const reviewRunId = getLatestStageReviewRunId(runtimeRoot, 'execute', changeName)
+      if (!reviewRunId) {
+        return blocked(['execute stage review runId 无法定位（marker 缺失且 stage-reviews/ 无含 review 的 run 目录）'])
+      }
+      const searchDirs = [effectiveSpecBase, reviewChangeDir, cwd].filter(Boolean)
+      const reviewResult = validateStageReview({ stage: 'execute', reviewType: 'acceptance', runtimeRoot, reviewRunId, searchDirs })
+      printStageReviewResult(reviewResult, { stage: 'execute', reviewRunId, runtimeRoot })
+      if (!reviewResult.ok) return true // printStageReviewResult 已给明细，不再重复列
+    }
+  } catch (e) {
+    // fail-closed：门自身异常阻断 align（与正常 gate 一致），不静默放行
+    console.error('❌ align 前置 Stage Review 校验异常，阻断对齐: ' + e.message)
+    return true
+  }
+
+  // 2. Task Review（runId 只读解析：marker → 含 tasks/ 扫描；不 generate）
+  try {
+    const { validateTaskReviews, printReviewResult, resolveLatestExecuteRunIdWithTasks, isValidExecuteRunId } = await import('../task-review.js')
+    const planPath = reviewChangeDir ? join(reviewChangeDir, 'plan.md') : null
+    if (!planPath || !existsSync(planPath)) {
+      return blocked(['plan.md 不存在，Task Review 无从校验（align 的 checkbox 判定依赖同目录，疑似路径解析异常）'])
+    }
+    const planContent = readFileSync(planPath, 'utf8')
+    const runIdFile = join(runtimeRoot, `current-execute-run-id-${changeName}`)
+    let executeRunId = ''
+    try {
+      if (existsSync(runIdFile)) {
+        const c = readFileSync(runIdFile, 'utf8').trim()
+        if (c && isValidExecuteRunId(c)) executeRunId = c
+      }
+    } catch {}
+    if (!executeRunId) {
+      executeRunId = resolveLatestExecuteRunIdWithTasks({ runtimeRoot, changeName }) || ''
+    }
+    if (!executeRunId) {
+      return blocked(['execute runId 无法定位（marker 缺失且 execute-runs/ 无含 review 的 run 目录）——15/N 份 task review 所在 run 不可寻，无法对账'])
+    }
+    const reviewResult = validateTaskReviews({ planContent, runtimeRoot, executeRunId, changeDir: reviewChangeDir, gitDir: cwd })
+    printReviewResult(reviewResult, { runtimeRoot, executeRunId })
+    if (!reviewResult.ok) return true // 报错明细已在 printReviewResult 输出
+    console.log('✅ align 前置 review 校验通过（stage review + task review 均齐备），继续对齐')
+  } catch (e) {
+    console.error('❌ align 前置 Task Review 校验异常，阻断对齐: ' + e.message)
+    return true
+  }
+  return false
+}
+
+/**
  * execute deps 验证硬门（change 2026-06-28-worktree-deps-provision / D-001@v1, D-003@v1, D-006@v2）。
  * depsStatus 不达标且非 wave 级 opt-out 时阻断 --done：置 step=blocked + exit(1)，与 requiresWait 同范式。
  * 放行返回 true；阻断时 process.exit(1) 不返回。

@@ -194,8 +194,9 @@ export async function showModuleStatus(cwd) {
 
   const content = readFileSync(mapPath, 'utf8');
 
-  // 简单解析
-  const lines = content.split('\n');
+  // 简单解析（CRLF 兼容：坑 verify-modules-crlf-blanket-fallback 同类——`$` 锚定正则在
+  // Windows 编辑器写出的 CRLF 文件上模块条目全失配，模块数恒显示 0）
+  const lines = content.split(/\r?\n/);
   const modules = [];
   let currentModule = null;
   let needsReview = false;

@@ -31,12 +31,26 @@ export function normalizeTaskId(raw) {
 }
 
 /**
+ * YAML 标量安全序列化（坑 taskcard-title-backtick-yaml，2026-08-20 实证）：plan checkbox 行名
+ * 是自由文本，带反引号（如 "`-p` 参数支持"）时裸插值进 frontmatter——`` ` `` 与 @ 是 YAML 保留
+ * 指示符，js-yaml 直接抛错，契约字段（allowed_paths/constraints 等）随整个 frontmatter 静默丢失，
+ * 靠 plan postcheck 才兜住。统一单引号包裹 + 内部 ' 双写（YAML 标准转义），无边界字符要判。
+ * @param {string} v
+ * @returns {string}
+ */
+function yamlScalar(v) {
+  const s = String(v ?? '')
+  return `'${s.replace(/'/g, "''")}'`
+}
+
+/**
  * 生成 TaskCard 骨架字符串（纯函数）。
  *
  * 硬校验 9 字段（plan-postcheck feasibility）+ 规范字段全部就位，占位符由子代理 Edit 填充；
  * 可选字段（provides/expects_from/related_tests）默认不生成——缩小 YAML 出错面，何时加的
  * 判据写在文件尾注释（规则详情见 templates/prompts/taskcard-rules.md）。
  * 字符串只含 \n：writeFileSync 直写不经任何行尾转换，Windows 下天然 LF 安全。
+ * title/title_zh/author 经 yamlScalar 转义（自由文本防 YAML 指示符炸解析）。
  *
  * @param {{ taskId: string, title: string, titleZh: string, author: string, now: string }} p
  * @returns {string}
@@ -44,9 +58,9 @@ export function normalizeTaskId(raw) {
 export function buildTaskcardSkeleton({ taskId, title, titleZh, author, now }) {
   return `---
 id: ${taskId}
-title: ${title}
-title_zh: ${titleZh}
-author: ${author}
+title: ${yamlScalar(title)}
+title_zh: ${yamlScalar(titleZh)}
+author: ${yamlScalar(author)}
 created_at: ${now}
 priority: P0
 depends_on: []

@@ -107,7 +107,7 @@ console.log('--- 1. deps-main-drift：主仓 lockfile 漂移 → 报 main-drift�
     depsLockHash: hashOf('lock-v1'), // 与 wt 一致 → 非 stale
   });
 
-  const diag = wm.doctor();
+  const diag = await wm.doctor();
   const drift = diag.issues.find(i => i.type === 'deps-main-drift' && i.name === 'driftA');
   assert(!!drift, `报 deps-main-drift（实际 issues: ${diag.issues.map(i => i.type).join(',')})`);
   assert(!!drift && drift.fixable, 'deps-main-drift fixable=true');
@@ -180,7 +180,7 @@ console.log('\n--- 3. doctor --fix：解 junction + force 重装 → meta.depsSt
     depsLockHash: hashOf(lock),
   });
 
-  const diag = wm.doctor({ fix: true });
+  const diag = await wm.doctor({ fix: true });
   const issue = diag.issues.find(i => i.type === 'deps-failed' && i.name === 'fixA');
   assert(!!issue, `doctor 报 deps-failed（实际 ${diag.issues.map(i => i.type).join(',')}）`);
   assert(diag.fixed.some(m => /re-provisioned fixA/.test(m)),
@@ -228,21 +228,21 @@ console.log('\n--- 4. doctor --change：多 wt 只扫指定 change ---');
   setupWt('chgB');
 
   // 不传 change → 全量扫，两个都报
-  const all = wm.doctor();
+  const all = await wm.doctor();
   assert(all.issues.some(i => i.name === 'chgA' && i.type === 'deps-main-drift'),
     `全量扫报 chgA main-drift（issues: ${all.issues.map(i => i.name).join(',')})`);
   assert(all.issues.some(i => i.name === 'chgB'),
     '全量扫报 chgB');
 
   // 传 --change chgA → 只扫 chgA，chgB 不出现
-  const only = wm.doctor({ changeName: 'chgA' });
+  const only = await wm.doctor({ changeName: 'chgA' });
   assert(only.issues.some(i => i.name === 'chgA'),
     `--change chgA 仍报 chgA（issues: ${only.issues.map(i => i.name).join(',')})`);
   assert(!only.issues.some(i => i.name === 'chgB'),
     '--change chgA 不报 chgB（其他 change 不出现在 issues）');
 
   // 传不存在的 change → 空issues，不崩
-  const none = wm.doctor({ changeName: 'nonexistent' });
+  const none = await wm.doctor({ changeName: 'nonexistent' });
   assertEqual(none.issues.length, 0, '--change 不存在 → issues 空');
 }
 
@@ -268,7 +268,7 @@ console.log('\n--- 5. in-place：mode=in-place-fallback 也检查 deps（不再�
     depsLockHash: hashOf('lock-ip'),
   });
 
-  const diag = wm.doctor();
+  const diag = await wm.doctor();
   const ip = diag.issues.find(i => i.name === 'ipA' && i.type === 'deps-failed');
   assert(!!ip,
     `in-place 也报 deps-failed（909 守卫放宽，issues: ${diag.issues.map(i => `${i.name}:${i.type}`).join(',')}）`);
