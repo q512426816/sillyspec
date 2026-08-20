@@ -657,6 +657,7 @@ async function main() {
             paths: cliPaths || cfg.paths,
             skip: cfg.skip,
             keywordAssert: cfg.keywordAssert,
+            crossRepoRoots: cfg.crossRepoRoots,
           });
           // task-03 修复链路（FR-04，platform-map-auto-anchors）：fixActive 才构造 fixes——
           // 仅 fix.fixable===true 且 newLine 为整数的条目可重锚；newRef = ref 的行号部分替换为
