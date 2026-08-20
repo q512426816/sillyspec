@@ -86,7 +86,7 @@ SillySpec 侧 `probeSillyHub`（`src/dispatch/probe.js:204-218`）已实现 root
 - `isPathASupported()`（`src/dispatch/backends/sillyhub-mcp.js:104-109`）改为探测：
   1. `process.env.SILLYHUB_PATH_A === '1'` → 强制 true（spike-01 备选 / 手动启用，最高优先级）；
   2. 否则读 probe 预热的 schema 探测缓存（`_pathAProbe.supported`）：`probe.js` `preheatPathAProbe`(:109-120) 调 `client.listTools()` → `detectPathAFromTools`(:92-99) 查 `dispatch_worker.inputSchema.properties` 含 `worktree_path` **和** `worker_prompt` 全命中 → true，任一缺失/探测失败 → false（保守，R-04 不硬试）。
-- `execute buildWavePrompt` 的 `getDispatchMode()`（`src/stages/execute.js:500-512`）：env 配置（`SILLYHUB_MCP_URL`+`SILLYHUB_MCP_TOKEN`）+ `isPathASupported()` 都满足才 'sillyhub'；否则 'local'（无配置，零回归）或 'local-fallback'（有配置但路径 A 不支持，短提示）。`buildWavePrompt`(:586) **同步读缓存**，不每 Wave 探测。
+- `execute buildWavePrompt` 的 `getDispatchMode()`（`src/stages/execute.js:530-533`）：env 配置（`SILLYHUB_MCP_URL`+`SILLYHUB_MCP_TOKEN`）+ `isPathASupported()` 都满足才 'sillyhub'；否则 'local'（无配置，零回归）或 'local-fallback'（有配置但路径 A 不支持，短提示）。`buildWavePrompt`(:619) **同步读缓存**，不每 Wave 探测。
 - `killLease`（`client.js`）：无专用 kill tool，best-effort `report_progress` 带 kill 标记 + 保守 `killed=false`。路径 A 后续建议 SillyHub 增专用 kill/lease-revoke tool。
 
 > ⚠️ **限制 ②（已知 gap，需运行时配置绕过）**：`execute.js` **自身不调 `probeSillyHub`**（grep 确认：execute.js 无 probe import / warming 调用，`getDispatchMode` 是同步读缓存）。`probeSillyHub` 预热只在 `src/index.js` 的 `dispatch-hint` CLI 子命令(:983/:1012)触发。故走 `sillyspec execute` 主流程时，schema 探测缓存**未被预热** → `isPathASupported()` 走分支 2 返回 false → dispatchMode 退 `local-fallback`，路径 A 不会自动启用。**两种启用方式**：(a) 设 env `SILLYHUB_PATH_A=1` 强制 true（推荐，绕过预热）；(b) 先跑一次 `sillyspec dispatch probe`（或 dispatch-hint）预热缓存再 execute。后续应在 execute 启动期接 `probeSillyHub` 预热（一次性）以消除该手动步骤——届时更新本节。

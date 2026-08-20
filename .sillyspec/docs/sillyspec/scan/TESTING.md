@@ -61,7 +61,7 @@ generator: sillyspec-scan
 ## 特色机制
 
 - **doc-ref-check 接入 npm test**：`test/doc-ref-check.test.mjs` 被 runner 自动收集，对白名单文档（`docs/sillyspec/platform-interface-map.md` 等）跑 docs-check 行号引用校验——改源码导致行号漂移会直接红测试。
-- **known_failures 预存豁免**（`src/verify-postcheck.js:228` `extractKnownFailures` + `test/verify-postcheck-known-failures.test.mjs`）：local.yaml 可声明 `known_failures: [...]` 豁免清单，verify 对账时预存失败不阻断，但豁免 0 命中会强制人工出口（防豁免清单烂尾）。
+- **known_failures 预存豁免**（`src/verify-postcheck.js:248` `extractKnownFailures` + `test/verify-postcheck-known-failures.test.mjs`）：local.yaml 可声明 `known_failures: [...]` 豁免清单，verify 对账时预存失败不阻断，但豁免 0 命中会强制人工出口（防豁免清单烂尾）。
 - **CLI 子进程验证模式**：run-complete-step 簇测试不 mock 内部函数，而是 seed 真实步骤数据后起 CLI 子进程验证等价性（两路等价测试用 `--spec-dir` 钉死隔离，避免 Windows 文件锁 flaky）。
 - **HOME 指针清理**：runner 入口即清 HOME 指针污染（见上），兜底所有测试。
 
