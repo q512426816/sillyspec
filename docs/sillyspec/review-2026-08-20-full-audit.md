@@ -33,7 +33,20 @@
 > 模块级 Map<dbPath> 连接池，同进程多实例共享单连接）；BUG-17（tasks.md 读-改-写改按目标文件
 > 派生锁，跨用户勾选/追加不再丢更新）；BUG-16（worktree create 降级 in-place 前重查并发赢家，
 > 消灭一 worktree + 一 in-place 分裂态）已修复并验证（242 测试 0 失败 + lint 通过）。
-> 未修：PERF-03~05/07~11、QUAL-02~09、HUB-07~13 中除已修项、CLEAN-04~08——
+>
+> **修复进度（同日第四批：HUB-07/08/09 平台语义闭环，测试先行）**：HUB-07（审批 unknown
+> 统一 warnApprovalUnknown：醒目多行警告 + .runtime/approval-unknown.log 留痕，接线
+> stage.js execute 启动与 command.js runAutoMode 三处 unknown 分支——此前静默 fail-open
+> 无迹可查；hub07-approval-unknown.test.mjs）；HUB-08（spec 树冲突闭环：syncSpecTree 冲突
+> 落 .runtime/spec-sync-conflict-<change>.json + platform status 经 listConflictFiles 列出
+> type:spec-tree + resolve 三态——keep-local 重定基线重推成功清文件 / take-platform
+> fail-closed 明示无下载端点 / abort 清标记；hub08-spec-sync-conflict.test.mjs 6 场景）；
+> HUB-09（熔断确定性取消：triggerSync/triggerPull/triggerPullActiveChange 改 raceWithAbort，
+> AbortSignal.any 合并单请求超时与外部熔断 signal 一路传到 fetch——熔断时在飞请求被真实
+> 中断，不再「客户端放弃、平台已接受」；triggerSync 支持 opts.timeoutMs 供测试；
+> hub09-sync-circuit-abort.test.mjs 双层断言含服务器侧连接中断观测）已修复并验证
+> （246 测试 0 失败 + lint + docs gate 基线 0）。
+> 未修：PERF-03~05/07~11、QUAL-02~09、HUB-10~13 中除已修项、CLEAN-04~08——
 > 见「八、修复批次建议」，按批次推进。
 
 ---

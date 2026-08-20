@@ -23,7 +23,7 @@ import { basename, join, resolve, dirname } from 'node:path'
 import { existsSync, readdirSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
 import { randomBytes, randomUUID } from 'node:crypto'
 import { writeAtomicSync } from '../fs-atomic.js'
-import { resolveSpecDir, countAncestorSpecDirs, resolveChangeDir, triggerSync, getStageSteps, formatWaitOptions, checkApproval, didYouMean, assertSafeChangeName, detectQuickSessionDrift, detectWorktreeSpecDrift, resolveRuntimeRoot, writePlatformPointer, checkPlatformManaged, PLATFORM_MANAGED_FILENAME } from './shared.js'
+import { resolveSpecDir, countAncestorSpecDirs, resolveChangeDir, triggerSync, getStageSteps, formatWaitOptions, checkApproval, warnApprovalUnknown, didYouMean, assertSafeChangeName, detectQuickSessionDrift, detectWorktreeSpecDrift, resolveRuntimeRoot, writePlatformPointer, checkPlatformManaged, PLATFORM_MANAGED_FILENAME } from './shared.js'
 import { resolveQuickLinkedChanges } from './quick-audit.js'
 import { outputStep } from './prompt.js'
 import { completeStep, skipStep, waitStep, continueStep } from './complete.js'
@@ -1271,8 +1271,9 @@ async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts = 
           console.log(`⏳ 变更 ${changeName} 的执行审批待处理中...`)
           console.log('  提示：使用 --skip-approval 跳过审批检查')
         }
+        // HUB-07：unknown 醒目警告 + 留痕（原单行 warn 不显眼且无记录）
         if (approval.status === 'unknown') {
-          console.warn(`⚠️ 变更 ${changeName} 的审批状态未知（${approval.reason || '请求失败'}），按本地模式放行（非审批中，无需等待）`)
+          warnApprovalUnknown(cwd, changeName, approval.reason)
         }
       }
     }
@@ -1310,8 +1311,9 @@ async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts = 
           console.log(`⏳ 变更 ${changeName} 的执行审批待处理中...`)
           console.log('  提示：使用 --skip-approval 跳过审批检查')
         }
+        // HUB-07：unknown 醒目警告 + 留痕（原单行 warn 不显眼且无记录）
         if (approval.status === 'unknown') {
-          console.warn(`⚠️ 变更 ${changeName} 的审批状态未知（${approval.reason || '请求失败'}），按本地模式放行（非审批中，无需等待）`)
+          warnApprovalUnknown(cwd, changeName, approval.reason)
         }
       }
     }
@@ -1386,8 +1388,9 @@ async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts = 
           console.log(`⏳ 变更 ${changeName} 的执行审批待处理中...`)
           console.log('  提示：使用 --skip-approval 跳过审批检查')
         }
+        // HUB-07：unknown 醒目警告 + 留痕（原单行 warn 不显眼且无记录）
         if (approval.status === 'unknown') {
-          console.warn(`⚠️ 变更 ${changeName} 的审批状态未知（${approval.reason || '请求失败'}），按本地模式放行（非审批中，无需等待）`)
+          warnApprovalUnknown(cwd, changeName, approval.reason)
         }
       }
     }

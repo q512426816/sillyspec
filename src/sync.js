@@ -199,11 +199,18 @@ function resolvePlatformUser(cwd, explicitUser) {
 
 // ── HTTP 辅助 ──
 
+// HUB-09：单请求超时与外部 signal 合并——自动同步熔断（run/shared.js trigger* 的 race）
+// 触发 abort 时在飞 fetch 被真实取消，而不是熔断后任由请求自行完成（平台可能已接受，
+// 客户端却当作超时放弃；spec 树推送无 base_ts 自愈兜底）。AbortSignal.any 需 Node ≥20.3。
+function combineSignals(external) {
+  const timeoutSignal = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+  return external ? AbortSignal.any([timeoutSignal, external]) : timeoutSignal;
+}
+
 async function fetchJson(url, options = {}) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const signal = combineSignals(options.signal);
   try {
-    const res = await fetch(url, { ...options, signal: controller.signal });
+    const res = await fetch(url, { ...options, signal });
     if (!res.ok) {
       const text = await res.text().catch(() => '');
       console.warn(`[sync] ${options.method || 'GET'} ${url} → ${res.status} ${text.slice(0, 200)}`);
@@ -216,13 +223,11 @@ async function fetchJson(url, options = {}) {
     return null;
   } catch (err) {
     if (err.name === 'AbortError') {
-      console.warn(`[sync] ${url} 请求超时 (${REQUEST_TIMEOUT_MS}ms)`);
+      console.warn(`[sync] ${url} 请求超时/中断 (${REQUEST_TIMEOUT_MS}ms 上限或外部熔断)`);
     } else {
       console.warn(`[sync] ${url} 请求失败: ${err.message}`);
     }
     return null;
-  } finally {
-    clearTimeout(timer);
   }
 }
 
@@ -232,10 +237,9 @@ async function fetchJson(url, options = {}) {
  * 仅 sync() 的 progress POST 使用（识别 base_ts 乐观锁冲突，D-015 / task-09）；其余调用仍走 fetchJson。
  */
 async function fetchJsonWithStatus(url, options = {}) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const signal = combineSignals(options.signal);
   try {
-    const res = await fetch(url, { ...options, signal: controller.signal });
+    const res = await fetch(url, { ...options, signal });
     const text = await res.text().catch(() => '');
     let body = null;
     if (text) {
@@ -247,13 +251,11 @@ async function fetchJsonWithStatus(url, options = {}) {
     return { ok: res.ok, status: res.status, body };
   } catch (err) {
     if (err.name === 'AbortError') {
-      console.warn(`[sync] ${url} 请求超时 (${REQUEST_TIMEOUT_MS}ms)`);
+      console.warn(`[sync] ${url} 请求超时/中断 (${REQUEST_TIMEOUT_MS}ms 上限或外部熔断)`);
     } else {
       console.warn(`[sync] ${url} 请求失败: ${err.message}`);
     }
     return { ok: false, status: 0, body: null };
-  } finally {
-    clearTimeout(timer);
   }
 }
 
@@ -450,6 +452,7 @@ export class SyncManager {
         method: 'POST',
         headers,
         body: JSON.stringify(progressData),
+        signal: opts.signal, // HUB-09：熔断 abort 传到底层请求
       });
 
       if (res.ok) {
@@ -483,7 +486,7 @@ export class SyncManager {
         // 缓存链路。失败仅 debugLog——文档同步失败不得影响进度上行的返回值与流程；
         // 四件套全缺失时 syncDocuments 内部已有跳过（syncedCount===0 提前返回，不调端点）。
         try {
-          await this.syncDocuments(changeName);
+          await this.syncDocuments(changeName, { signal: opts.signal });
         } catch (err) {
           debugLog(`[sync] 文档同步失败（不影响进度）: ${changeName}: ${err.message}`);
         }
@@ -495,7 +498,7 @@ export class SyncManager {
         // cwd/.sillyspec，平台模式下该目录只有 local.yaml（被 walk 排除）→ 本地树恒空
         // → 服务器清单全量 delete（BUG-01，computeSpecOps 护栏为第二道防线）。
         try {
-          await syncSpecTree(safePlatformSpecDir(this.cwd) || join(this.cwd, '.sillyspec'), this._getPlatform(), changeName);
+          await syncSpecTree(safePlatformSpecDir(this.cwd) || join(this.cwd, '.sillyspec'), this._getPlatform(), changeName, { signal: opts.signal });
         } catch (err) {
           debugLog(`[sync] spec 树增量同步失败（不影响进度）: ${changeName}: ${err.message}`);
         }
@@ -645,6 +648,7 @@ export class SyncManager {
         Authorization: `Bearer ${platform.token}`,
       },
       body: JSON.stringify(documents),
+      signal: opts.signal, // HUB-09：熔断 abort 传到底层请求
     });
 
     if (!result) {
@@ -764,6 +768,31 @@ export class SyncManager {
     }
   }
 
+  // ── HUB-08：spec 树冲突文件（spec-sync-conflict-<change>.json，由 spec-sync.js 写入）──
+
+  /** 读取 spec 树冲突文件；无/损坏返回 null */
+  readSpecConflictFile(changeName) {
+    const specDir = safePlatformSpecDir(this.cwd);
+    if (!specDir) return null;
+    const p = join(specDir, '.runtime', `spec-sync-conflict-${changeName}.json`);
+    if (!existsSync(p)) return null;
+    try {
+      return JSON.parse(readFileSync(p, 'utf8'));
+    } catch {
+      return null;
+    }
+  }
+
+  /** 删除 spec 树冲突文件 */
+  clearSpecConflictFile(changeName) {
+    const specDir = safePlatformSpecDir(this.cwd);
+    if (!specDir) return false;
+    const p = join(specDir, '.runtime', `spec-sync-conflict-${changeName}.json`);
+    if (!existsSync(p)) return false;
+    try { unlinkSync(p); return true; }
+    catch { return false; }
+  }
+
   /**
    * 删除冲突文件（resolve 完成后清理，task-13 用）。
    * @returns {boolean} 是否删除（文件不存在返回 false）
@@ -834,6 +863,7 @@ export class SyncManager {
     const progressUrl = `${platform.url}/api/changes/${encodeURIComponent(changeName)}/progress`;
     const result = await fetchJson(progressUrl, {
       headers: { Authorization: `Bearer ${platform.token}` },
+      signal: opts.signal, // HUB-09：熔断 abort 传到底层请求
     });
     if (result === null) {
       // sillyhub 未就绪 / 404 / 网络失败均 fetchJson 返回 null → Best Effort 降级
@@ -945,12 +975,16 @@ export class SyncManager {
    */
   async resolve(changeName, mode) {
     const cf = this.readConflictFile(changeName);
-    if (!cf) {
-      return { ok: false, resolved: false, reason: `无可解决冲突: ${changeName}（无 sync-conflict 文件）` };
+    const specCf = this.readSpecConflictFile(changeName);
+    if (!cf && !specCf) {
+      return { ok: false, resolved: false, reason: `无可解决冲突: ${changeName}（无 sync-conflict / spec-sync-conflict 文件）` };
     }
-    const platformPushedAt = cf.platform_last_pushed_at || null;
+    const platformPushedAt = (cf && cf.platform_last_pushed_at) || null;
 
-    if (mode === 'keep-local') {
+    // HUB-08：resolve 同时管辖进度冲突（sync-conflict-*）与 spec 树冲突（spec-sync-conflict-*），
+    // 各自产出 outcome 后合并返回；abort 统一清两类标记。
+    let progressOutcome = null;
+    if (mode === 'keep-local' && cf) {
       // base_ts 推进到平台最新 last_pushed_at；本地 DB 不 import（用户本地为准，后续手动 push）。
       // MAX() 单调防回退（坑 2026-08-19-resolve-keep-local-base-ts-rollback）：冲突文件是历史快照，
       // 其 platform_last_pushed_at 可能早于 DB 已由后续成功 push 回填的 base_ts——无条件覆盖会把
@@ -978,37 +1012,75 @@ export class SyncManager {
         debugLog(`[sync] keep-local 自动重推异常（不阻断 resolve 结果）: ${changeName}: ${err.message}`);
       }
       if (repush && repush.synced === 1) {
-        return { ok: true, resolved: true, mode: 'keep-local', reason: '保留本地，并已自动推送平台——冲突闭环，无需再手动 sync' };
+        progressOutcome = { ok: true, resolved: true, reason: '保留本地，并已自动推送平台——冲突闭环，无需再手动 sync' };
+      } else if (repush && repush.conflict) {
+        progressOutcome = { ok: true, resolved: true, reason: '保留本地，base_ts 已推进；自动重推被拒（平台在裁决期间又有更新），下次常规同步将重新判定' };
+      } else {
+        progressOutcome = { ok: true, resolved: true, reason: '保留本地，base_ts 已推进；自动重推未成功（未连接/网络），请手动 sillyspec platform sync --change ' + changeName };
       }
-      if (repush && repush.conflict) {
-        return { ok: true, resolved: true, mode: 'keep-local', reason: '保留本地，base_ts 已推进；自动重推被拒（平台在裁决期间又有更新），下次常规同步将重新判定' };
-      }
-      return { ok: true, resolved: true, mode: 'keep-local', reason: '保留本地，base_ts 已推进；自动重推未成功（未连接/网络），请手动 sillyspec platform sync --change ' + changeName };
     }
 
-    if (mode === 'take-platform') {
+    if (mode === 'take-platform' && cf) {
       // 用冲突文件的 platform_progress 调 import 覆盖本地（保隔离：import 不覆盖 isolation_*）
       if (!cf.platform_progress) {
-        return { ok: false, resolved: false, reason: '冲突文件缺 platform_progress，无法 take-platform（建议先 platform pull）' };
+        progressOutcome = { ok: false, resolved: false, reason: '冲突文件缺 platform_progress，无法 take-platform（建议先 platform pull）' };
       }
       try {
         const { ProgressManager } = await import('./progress.js');
         const pm = new ProgressManager({ specDir: safePlatformSpecDir(this.cwd) });
         pm.import(this.cwd, { ...cf.platform_progress, pushed_at: platformPushedAt || new Date().toISOString() }, changeName);
       } catch (err) {
-        return { ok: false, resolved: false, reason: `take-platform import 失败: ${err.message}` };
+        progressOutcome = { ok: false, resolved: false, reason: `take-platform import 失败: ${err.message}` };
       }
-      this.clearConflictFile(changeName);
-      return { ok: true, resolved: true, mode: 'take-platform', reason: '已用平台进度覆盖本地' };
+      if (progressOutcome === null) {
+        this.clearConflictFile(changeName);
+        progressOutcome = { ok: true, resolved: true, reason: '已用平台进度覆盖本地' };
+      }
     }
 
+    // ── spec 树冲突处置（HUB-08）──
+    let specOutcome = null;
+    if (specCf && mode === 'keep-local') {
+      // keep-local = 本地胜出：重新 GET 清单重定 base 后 POST 本地内容（last-writer-wins），
+      // 成功清冲突文件闭环；仍冲突（平台又有更新）保留文件待下次裁决
+      try {
+        const r = await syncSpecTree(safePlatformSpecDir(this.cwd) || join(this.cwd, '.sillyspec'), this._getPlatform(), changeName);
+        if (!r.conflict) {
+          this.clearSpecConflictFile(changeName);
+          specOutcome = { ok: true, resolved: true, reason: 'spec 树已以本地为准重定基线重推，冲突闭环' };
+        } else {
+          specOutcome = { ok: true, resolved: false, reason: 'spec 树重推仍冲突（平台在裁决期间又有更新），冲突文件保留待下次裁决' };
+        }
+      } catch (err) {
+        specOutcome = { ok: false, resolved: false, reason: `spec 树重推异常: ${err.message}` };
+      }
+    } else if (specCf && mode === 'take-platform') {
+      // fail-closed：平台无文件下载端点，无法把服务器内容写回本地——明确报错指路，不清文件
+      specOutcome = { ok: false, resolved: false, reason: 'spec 树冲突不支持 take-platform（平台无文件下载端点，无法把服务器内容写回本地）：请手动对齐本地文件后跑 --keep-local' };
+    }
+
+    // ── abort：两类标记一并清（本地 DB 与文件均不变，下次 push/pull 重新检测）──
     if (mode === 'abort') {
-      // 本地 DB 与 base_ts 均不变，仅清冲突文件（放弃本次同步，下次 push/pull 会重新检测）
-      this.clearConflictFile(changeName);
+      if (cf) this.clearConflictFile(changeName);
+      if (specCf) this.clearSpecConflictFile(changeName);
       return { ok: true, resolved: true, mode: 'abort', reason: '放弃本次同步，本地不变' };
     }
 
-    return { ok: false, resolved: false, reason: `未知 resolve 模式: ${mode}（--keep-local / --take-platform / --abort）` };
+    if (mode !== 'keep-local' && mode !== 'take-platform') {
+      return { ok: false, resolved: false, reason: `未知 resolve 模式: ${mode}（--keep-local / --take-platform / --abort）` };
+    }
+
+    // ── 合并两类冲突的处置结果 ──
+    const outcomes = [progressOutcome, specOutcome].filter(Boolean);
+    if (outcomes.length === 0) {
+      return { ok: false, resolved: false, reason: `无可解决冲突: ${changeName}` };
+    }
+    return {
+      ok: outcomes.every((o) => o.ok),
+      resolved: outcomes.every((o) => o.resolved),
+      mode,
+      reason: outcomes.map((o) => o.reason).join('；'),
+    };
   }
 
   /**
@@ -1025,15 +1097,22 @@ export class SyncManager {
     try { files = readdirSync(runtimeDir); }
     catch { return []; }
     const conflicts = [];
+    // HUB-08：同时扫描进度冲突（sync-conflict-*）与 spec 树冲突（spec-sync-conflict-*），
+    // type 字段供 status 展示与 resolve 分流
     for (const f of files) {
-      if (!f.startsWith('sync-conflict-') || !f.endsWith('.json')) continue;
+      let prefix = null;
+      if (f.startsWith('sync-conflict-') && f.endsWith('.json')) prefix = 'sync-conflict-';
+      else if (f.startsWith('spec-sync-conflict-') && f.endsWith('.json')) prefix = 'spec-sync-conflict-';
+      else continue;
+      const type = prefix === 'sync-conflict-' ? 'progress' : 'spec-tree';
       const filePath = join(runtimeDir, f);
       try {
         const cf = JSON.parse(readFileSync(filePath, 'utf8'));
         conflicts.push({
-          change: cf.change || f.replace(/^sync-conflict-/, '').replace(/\.json$/, ''),
+          change: cf.change || f.replace(/^spec-sync-conflict-|^sync-conflict-/, '').replace(/\.json$/, ''),
           created_at: cf.created_at || null,
           path: filePath,
+          type,
         });
       } catch {
         // 损坏文件跳过不崩（constraints：容错）
@@ -1112,8 +1191,8 @@ export async function disconnect(cwd) {
   return new SyncManager(cwd).disconnect();
 }
 
-export async function sync(changeName, cwd) {
-  return new SyncManager(cwd).sync(changeName);
+export async function sync(changeName, cwd, opts) {
+  return new SyncManager(cwd).sync(changeName, opts);
 }
 
 // manual=true：本导出对应 CLI platform sync-docs 手动命令（index.js platform 分支唯一调用方），
@@ -1158,12 +1237,12 @@ export function listConflictFiles(cwd) {
 // 清单为锚做全树 diff，与变更目录无关——triggerSync 对 quick 会话降级只调本函数，
 // 不走 sync()（后者第二道 existsSync 门会以「变更不存在」提前 return）。
 // 未连接平台 → {synced: 0} 静默（本地合法状态，与 syncSpecTree 内部口径一致）。
-export async function syncSpecTreeOnly(changeName, cwd) {
+export async function syncSpecTreeOnly(changeName, cwd, opts = {}) {
   const sm = new SyncManager(cwd);
   const platform = sm._getPlatform();
   if (!platform) return { synced: 0 };
   // 树根与 sync() 内链式推送同源（BUG-01：平台模式必须锚 specRoot，防本地空树触发全量 delete）
-  return syncSpecTree(safePlatformSpecDir(cwd) || join(cwd, '.sillyspec'), platform, changeName);
+  return syncSpecTree(safePlatformSpecDir(cwd) || join(cwd, '.sillyspec'), platform, changeName, { signal: opts.signal });
 }
 
 // TBD-hub-api: approve/reject 端点路径与请求体以 SillyHub 仓库实际 API 为准；

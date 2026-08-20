@@ -11,7 +11,7 @@
  */
 
 import { createHash } from 'crypto';
-import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
+import { existsSync, readdirSync, readFileSync, statSync, mkdirSync, writeFileSync } from 'fs';
 import { join, relative, sep } from 'path';
 
 // 与 sillyhub-daemon/src/spec-sync.ts 共用排除口径（task-07 / FR-06 / D-008@v2）：
@@ -256,11 +256,13 @@ function collectChangeDir(dirs, p) {
  * @param {string} changeName - 当前变更名
  * @returns {Promise<{synced: number, conflict?: boolean, serverVersions?: object}>}
  */
-export async function syncSpecTree(specRoot, platform, changeName) {
+export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
   if (!platform || !platform.url || !platform.token) {
     debugLog('[spec-sync] 未连接平台（本地合法状态）；跳过 spec 树增量同步');
     return { synced: 0 };
   }
+  // HUB-09：单请求超时与外部熔断 signal 合并——trigger* 熔断时在飞请求被真实取消
+  const withSignal = (timeoutMs) => (opts.signal ? AbortSignal.any([AbortSignal.timeout(timeoutMs), opts.signal]) : AbortSignal.timeout(timeoutMs));
 
   const manifestUrl = `${platform.url.replace(/\/$/, '')}/api/changes/-/spec-manifest`;
   const syncUrl = `${platform.url.replace(/\/$/, '')}/api/changes/-/spec-sync`;
@@ -270,7 +272,7 @@ export async function syncSpecTree(specRoot, platform, changeName) {
   try {
     const res = await fetch(manifestUrl, {
       headers: { Authorization: `Bearer ${platform.token}` },
-      signal: AbortSignal.timeout(10000),
+      signal: withSignal(10000),
     });
     if (!res.ok) {
       // ql-20260818-008：debugLog → console.warn。树同步失败原本完全静默（要
@@ -306,7 +308,7 @@ export async function syncSpecTree(specRoot, platform, changeName) {
         Authorization: `Bearer ${platform.token}`,
       },
       body: JSON.stringify({ ops }),
-      signal: AbortSignal.timeout(30000),
+      signal: withSignal(30000),
     });
     if (!res.ok) {
       console.warn(`[spec-sync] 同步请求失败 HTTP ${res.status}（文件树本次未同步，下次自动重试）: ${changeName}`);
@@ -314,10 +316,30 @@ export async function syncSpecTree(specRoot, platform, changeName) {
     }
     const body = await res.json().catch(() => ({}));
     if (body.conflict) {
-      console.warn(
-        `[spec-sync] 检测到冲突，请人工拍板。服务器版本: ${JSON.stringify(body.server_versions || {})}`
-      );
-      return { synced: 0, conflict: true, serverVersions: body.server_versions };
+      // HUB-08 冲突闭环：落 spec-sync-conflict-<change>.json（与进度 sync-conflict-* 同目录），
+      // 供 platform status 列出 + platform resolve 三态处置。此前只 warn 返回，下次 sync 用
+      // 同一 base_version 继续冲突循环，无人工裁决入口。
+      const serverVersions = body.server_versions || {};
+      let conflictPath = null;
+      try {
+        const runtimeDir = join(specRoot, '.runtime');
+        mkdirSync(runtimeDir, { recursive: true });
+        conflictPath = join(runtimeDir, `spec-sync-conflict-${changeName}.json`);
+        writeFileSync(conflictPath, JSON.stringify({
+          change: changeName,
+          kind: 'spec-tree',
+          created_at: new Date().toISOString(),
+          server_versions: serverVersions,
+          conflicting_paths: Object.keys(serverVersions),
+          note: 'spec 树文件冲突（服务器版本领先于本地 diff 基线）。resolve --keep-local 以本地为准重推；--take-platform 暂不支持（平台无文件下载端点）',
+        }, null, 2) + '\n', 'utf8');
+      } catch (e) {
+        console.warn(`[spec-sync] 冲突文件写入失败（冲突信息仅打印）: ${e.message}`);
+      }
+      console.warn('');
+      console.warn(`⚠️ [spec-sync] 检测到 spec 树冲突（${Object.keys(serverVersions).length} 个文件，服务器版本: ${JSON.stringify(serverVersions)}）`);
+      console.warn(`⚠️ 处置：sillyspec platform resolve ${changeName} --keep-local | --abort（冲突详情: ${conflictPath || '(写入失败)'}）`);
+      return { synced: 0, conflict: true, serverVersions, conflictPath };
     }
     console.log(`[spec-sync] 已同步 ${ops.length} 个文件变更: ${changeName}`);
     return { synced: ops.length };

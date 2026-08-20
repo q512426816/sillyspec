@@ -314,3 +314,20 @@
 结果：progress-dump 60/60 通过（守护断言修复前按预期失败，实证回归存在）；并发自压 40 次 0 失败 0 重试；npm run lint 325 文件通过；全量 npm test 235 文件 progress-dump 通过，2 失败（doc-ref-check/sync-conflict-statemachine）均并行会话活编辑 stage.js/sync.js 所致、单独跑通过，非本次回归
 审计：📎 文档引用失效：3/80 处 file:line 失效（sillyspec docs check 可复现）
 审计：⚖️ 归属切分：1 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：docs/sillyspec/platform-interface-map.md
+
+## ql-20260820-001-f651 | 2026-08-20 10:25:02 | quick 启动缺 --input 时提示占位标题后果与重启指引
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/stage.js（缺 --input 占位标题警告（后果+重启指引））
+- src/stages/quick.js（step1 补 --input 语义标题指引）
+- .claude/skills/sillyspec-quick/SKILL.md（参数表补 --input 行+推荐启动示例）
+- docs/prompt/quick.md（提示词镜像同步）
+- docs/prompt/_extracted.json（_extract.mjs 再生）
+- test/quick-start-input-hint.test.mjs（新增三用例锁定警告分支）
+需求：quick 启动缺 --input 时提示占位标题后果与重启指引
+根因：无 --input 且无可提取标题的关联变更时 QUICKLOG 落「(quick 任务)」占位标题，平台快速修复列表默认隐藏进行中占位条目（task-06 口径），长会话全程不可见被误判为同步故障；step1 提示词与技能参数表均未提 --input（command.js:651 早已支持）
+方案：stage.js 分配 ql-ID 后 quickDesc 为空即警告（占位后果+带 --input 重启指引+旧会话 --reset 提示）；quick.js step1 补指引；sillyspec-quick SKILL.md 参数表补 --input 行+推荐启动示例；docs/prompt 镜像同步；新增三用例 CLI 子进程测试锁定警告出现/不出现分支
+结果：新测试 11 断言全过；npm test 全量 244 过、2 失败文件均与本次无关（hub08 并发偶发单跑全过、doc-ref-check 13 处既有失败经 stash 排除法证实先在）；npm run lint 337 文件通过
+审计：📎 文档引用失效：1/197 处 file:line 失效（sillyspec docs check 可复现）
+审计：⚖️ 归属切分：7 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：.sillyspec/docs/sillyspec/scan/ARCHITECTURE.md, docs/sillyspec/platform-interface-map.md, docs/sillyspec/prompt-control-debt.md, src/run/command.js, src/run/shared.js, src/spec-sync.js, test/quick-start-input-hint.test.mjs

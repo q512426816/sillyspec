@@ -58,7 +58,7 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
 规则要点：辅助阶段（除 archive）随时可执行；同阶段可重跑；`scan` 处于 `failed_post_check` 时禁止进入主链下游；变更起始只能进 brainstorm 或辅助阶段。
 
 **推进不是自动的，分三层**：
-1. **进入阶段** `runStage`（`src/run/stage.js:30`）→ `checkTransition` → 设 `currentStage`。execute 启动期自动创建 worktree（`stage.js:62-87`）、固定 `executeRunId`、审批检查。
+1. **进入阶段** `runStage`（`src/run/stage.js:30`）→ `checkTransition` → 设 `currentStage`。execute 启动期自动创建 worktree（`stage.js:69-100`）、固定 `executeRunId`、审批检查。
 2. **步骤内推进** `completeStep`（`src/run/complete.js:81`）处理 `--done`：标记 step completed → 找下一个 pending → 无 pending 则进阶段完成分支。
 3. **下一步建议** `_getNextSuggestion`（`src/progress/stage-machine.js:284`）按状态机推荐下一阶段命令。
 

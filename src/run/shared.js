@@ -11,7 +11,7 @@
  *     本模块仅 re-export，run/ 层现有调用方路径与行为不变。
  */
 import { basename, join, resolve, dirname, sep } from 'node:path'
-import { existsSync, readdirSync, readFileSync, statSync, mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync, mkdirSync, writeFileSync, appendFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import os from 'node:os'
 
@@ -429,14 +429,35 @@ export function resolveChangeDir(cwd, progress, specDir = null) {
 // sync 总超时熔断：sync.js 是 best-effort 后台回传（每请求已有 10s 超时），但 sync() 可能串行多次
 // fetchJson 累积等待、阻塞 --done。给 8s 总超时，超时放弃（best-effort，失败不影响正确性，下次 --done 重试）。
 // 历史痛点：--done 在 sync 慢时体感 hang，用户被迫用外部 timeout 兜底。
+// HUB-09：熔断超时时必须 abort 底层在飞请求（opts.signal 一路传到 fetch）——否则熔断后请求
+// 仍在跑，平台可能已接受推送而客户端当作超时放弃（spec 树推送无 base_ts 自愈兜底）。
 const SYNC_TOTAL_TIMEOUT_MS = 8_000
+
+/**
+ * 熔断 race + 确定性取消：超时触发 controller.abort() 并 resolve，在飞 fetch 收到
+ * AbortError 后自然失败（各调用方 catch 返回降级值，进程不挂起）。
+ * @param {() => Promise} op 接收 { signal } 的异步操作
+ * @param {number} timeoutMs 熔断时长（测试可缩短）
+ */
+async function raceWithAbort(op, timeoutMs = SYNC_TOTAL_TIMEOUT_MS) {
+  const controller = new AbortController()
+  let timer
+  try {
+    await Promise.race([
+      op({ signal: controller.signal }),
+      new Promise((resolve) => { timer = setTimeout(() => { controller.abort(); resolve(null) }, timeoutMs) }),
+    ])
+  } finally {
+    clearTimeout(timer)
+  }
+}
 
 // quick 会话 ID 形态（quick-<hex8>）。与 run/command.js QUICK_SID_RE、progress.js
 // initChange 的跳过实体目录判断同源；shared.js 不反向 import command.js（重模块），
 // 局部复制正则保持轻载——改形态时三处同改。
 const QUICK_SID_RE = /^quick-[0-9a-f]{8}$/
 
-export async function triggerSync(cwd, changeName, platformOpts = {}) {
+export async function triggerSync(cwd, changeName, platformOpts = {}, opts = {}) {
   // 平台模式（SillyHub）走自己的回传链路，不走 CLI 内置 sync
   if (platformOpts?.specRoot || platformOpts?.runtimeRoot) return
   try {
@@ -448,29 +469,13 @@ export async function triggerSync(cwd, changeName, platformOpts = {}) {
       if (QUICK_SID_RE.test(changeName)) {
         // shared.js 在 src/run/，sync.js 在 src/ → 退一层
         const syncMod = await import('../sync.js')
-        let timer
-        try {
-          await Promise.race([
-            syncMod.syncSpecTreeOnly(changeName, cwd),
-            new Promise((resolve) => { timer = setTimeout(resolve, SYNC_TOTAL_TIMEOUT_MS) }),
-          ])
-        } finally {
-          clearTimeout(timer)
-        }
+        await raceWithAbort((sig) => syncMod.syncSpecTreeOnly(changeName, cwd, sig), opts.timeoutMs)
       }
       return
     }
     // shared.js 在 src/run/，sync.js 在 src/ → 退一层
     const syncMod = await import('../sync.js')
-    let timer
-    try {
-      await Promise.race([
-        syncMod.sync(changeName, cwd),
-        new Promise((resolve) => { timer = setTimeout(resolve, SYNC_TOTAL_TIMEOUT_MS) }),
-      ])
-    } finally {
-      clearTimeout(timer) // sync 先完成则清掉未触发的 timer，避免泄漏
-    }
+    await raceWithAbort((sig) => syncMod.sync(changeName, cwd, sig), opts.timeoutMs)
   } catch (e) {
     // sync.js 不存在或同步失败，静默跳过
     console.warn('⚠️ 同步失败:', e.message)
@@ -516,7 +521,7 @@ function _stampAutoPull(cwd) {
  * @param {string} changeName - 当前活跃变更（多变更时传 null 跳过，避免误拉）
  * @param {object} [platformOpts] - 平台模式 opts（specRoot/runtimeRoot 存在则跳过，走平台自有链路）
  */
-export async function triggerPull(cwd, changeName, platformOpts = {}) {
+export async function triggerPull(cwd, changeName, platformOpts = {}, opts = {}) {
   // 平台模式（SillyHub）走自己的链路，跳过
   if (platformOpts?.specRoot || platformOpts?.runtimeRoot) return
   try {
@@ -527,15 +532,7 @@ export async function triggerPull(cwd, changeName, platformOpts = {}) {
     if (!sm._getPlatform()) return
     if (_autoPullRecently(cwd)) return
     _stampAutoPull(cwd)
-    let timer
-    try {
-      await Promise.race([
-        sm.pull(changeName, { skipIfLocalDirty: true }),
-        new Promise((resolve) => { timer = setTimeout(resolve, SYNC_TOTAL_TIMEOUT_MS) }),
-      ])
-    } finally {
-      clearTimeout(timer)
-    }
+    await raceWithAbort((sig) => sm.pull(changeName, { skipIfLocalDirty: true, signal: sig.signal }), opts.timeoutMs)
   } catch (e) {
     // pull 失败静默跳过（Best Effort，失败不影响正确性）
     console.warn('⚠️ 拉取失败:', e.message)
@@ -572,29 +569,48 @@ export async function triggerPullActiveChange(cwd, platformOpts = {}) {
     // progress 不可达则跳过（Best Effort）
   }
   if (!cn) return
-  // 已确认连接 + 单活跃变更，调 pull（复用 triggerPull 的 8s 熔断；skipIfLocalDirty 保守守卫
+  // 已确认连接 + 单活跃变更，调 pull（复用 8s 熔断 + abort（HUB-09）；skipIfLocalDirty 保守守卫
   // 同 triggerPull——本地脏时跳过 import，防平台旧快照覆盖本地领先进度，ql-20260818-008）
   try {
-    let timer
-    try {
-      await Promise.race([
-        sm.pull(cn, { skipIfLocalDirty: true }),
-        new Promise((resolve) => { timer = setTimeout(resolve, SYNC_TOTAL_TIMEOUT_MS) }),
-      ])
-    } finally {
-      clearTimeout(timer)
-    }
+    await raceWithAbort((sig) => sm.pull(cn, { skipIfLocalDirty: true, signal: sig.signal }))
   } catch (e) {
     console.warn('⚠️ 拉取失败:', e.message)
   }
 }
 
 /**
+ * 审批状态 unknown（体检 HUB-07）的统一处置：醒目多行警告 + 落 .runtime/approval-unknown.log 留痕。
+ *
+ * 语义边界：unknown = 已连接平台但 404/断网/超时/非 JSON——**不是审批通过**。放行是
+ * fail-open 的既定取舍（网络故障不应硬阻断每一条 execute），但静默放行会让团队审批
+ * 形同虚设且无迹可查；至少要（a）让操作者当场看见（b）留下可审计记录。
+ * 留痕选 .runtime 日志而非 QUICKLOG：QUICKLOG 是 quick 会话的任务记录，run 流程的
+ * 审批事件写进去会污染 quick 语义与边界审计。
+ * @param {string} cwd
+ * @param {string} changeName
+ * @param {string} reason checkApproval 返回的 reason
+ */
+export function warnApprovalUnknown(cwd, changeName, reason) {
+  console.warn('')
+  console.warn('⚠️⚠️⚠️══════════════════════════════════════════════')
+  console.warn(`⚠️ 审批状态未知：变更「${changeName}」无法核实审批（${reason || '请求失败'}）`)
+  console.warn('⚠️ 本次 execute 按 fail-open 放行——这不是审批通过；平台恢复后请到平台复核审批记录')
+  console.warn('⚠️ 排查：平台服务是否可达（sillyspec platform status）/ 网络代理；确认无需审批可 --skip-approval 显式跳过')
+  console.warn('⚠️ 本次放行已记录：.sillyspec/.runtime/approval-unknown.log')
+  console.warn('⚠️⚠️══════════════════════════════════════════════')
+  try {
+    const logDir = join(cwd, '.sillyspec', '.runtime')
+    mkdirSync(logDir, { recursive: true })
+    appendFileSync(join(logDir, 'approval-unknown.log'),
+      `${new Date().toISOString()} | change=${changeName} | reason=${reason || 'unknown'}\n`, 'utf8')
+  } catch { /* 留痕失败不阻断流程（警告横幅已输出） */ }
+}
+
+/**
  * 审批检查：execute 阶段启动前检查（W6 Step8a 从 run.js 搬入，runStage + runAutoMode 共用）。
  * 平台模式走自己的链路，跳过；否则 await import sync.js。
  * @returns {{ status: string, reason?: string } | null}
- */
-export async function checkApproval(cwd, changeName, platformOpts = {}) {
+ */export async function checkApproval(cwd, changeName, platformOpts = {}) {
   // 平台模式不需要 CLI 内置审批检查
   if (platformOpts?.specRoot || platformOpts?.runtimeRoot) return null
   try {
