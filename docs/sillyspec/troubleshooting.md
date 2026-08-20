@@ -179,3 +179,11 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 3. **base_ts 自愈**：push 409 先 fresh 重读 DB base_ts，已 ≥ 平台回执 ts（本机并发已回填）→ 刷新重试一次自愈、不落冲突文件；外来推送不满足条件自然走原冲突路径（fail-closed）。resolve --keep-local 后自动重推本地闭环，重推被拒时软提示不落新文件（保持「keep-local 清冲突文件」生命周期契约，下次常规 sync 按新 base 重新判定）；成功回填的 base_ts 写入加重试（共享 SQLite WAL 并发窗口）。测试 platform-sync-self-heal.test.mjs（15 断言）。
 
 **关联记忆**：`[[sillyspec-worktree-cleanup-marker-chain]]`、`[[sillyspec-platform-sync-base-ts-silent-conflict]]`
+
+## 14. quick 末步四字段模板展示滞后（2026-08-20 已修）
+
+**症状**：quick step3 `--done` 的 `--output` 四字段（需求/根因/方案/结果）结构校验第一次拦截 agent 时才见到可照抄模板——模板其实写在 step3 prompt 中段，但 step3 prompt 很长（task-08 同因：长 prompt 易被 tail 截断/被忽略），agent 直接 `--done` 就撞拦截，白费一轮往返。
+
+**根因**：硬校验的契约模板只存在于两处滞后位置——step3 长 prompt（渲染时易被淹没）与拦截报错（已撞墙）。推进到末步的转换时刻（step2 `--done` 输出尾部）没有短块预告。
+
+**解法（已修）**：`completeStep` 单步推进路径（complete.js printNext 块尾、task-08 锚定行之后）：`stageName === 'quick'` 且 `nextPendingIdx` 是末步时，输出 📌 预告块——四字段模板逐行 + 可照抄完整命令（含 `--change`）+ 「缺任一项被拒、补全重跑不丢进度」+ 可选 `--file-notes` 提示。非末步推进不出预告；拦截路径保留兜底。测试 quick-laststep-fourfields-preview.test.mjs（14 断言）。
