@@ -154,6 +154,7 @@ export const LOCAL_YAML_SCHEMA = {
         { path: 'docs-check.skip', type: 'array', optional: true, status: 'live', readers: ['walkGlob (src/docs-check.js)'], desc: '排除的路径/glob 列表，缺省空。', example: 'docs/sillyspec/archive' },
         { path: 'docs-check.keywordAssert', type: 'boolean', optional: true, status: 'live', readers: ['runDocsCheck (src/docs-check.js)'], desc: '层2 关键词断言开关，缺省 true（关闭时 warning 提示仅做存在性校验）。', example: 'true' },
         { path: 'docs-check.living-docs', type: 'array', optional: true, status: 'live', readers: ['resolveLivingDocs (src/run/shared.js) — 经 readLocalYamlRaw 直读'], desc: '活文档监控点追加列表（docs check 之外，quick 审计的 livingDocDrift 真失效提示也监控——只报校验真失败的引用，全过零输出）。只追加不覆盖缺省集合（缺省：docs/sillyspec/platform-interface-map.md）。配了是加哨兵，不该把缺省监控点挤掉。', example: 'docs/sillyspec/architecture.md' },
+        { path: 'docs-check.cross_repo_roots', type: 'object', optional: true, status: 'live', readers: ['readDocsCheckConfig (src/docs-check.js)'], desc: 'repo://<仓库名> 跨仓引用 → 本机仓库根目录映射。文档里 repo://name/src/x.js:12 形态的引用：未配映射默认跳过（不同设备仓库位置不同，防跨设备误报）；配了映射走与本地引用相同的行号+关键词校验。local.yaml 是 gitignored，绝对路径不入库，每台设备各自配。', example: 'sillyspec: /c/Users/you/IdeaProjects/sillyspec' },
       ],
     },
   ],
@@ -306,5 +307,7 @@ docs-check:
   keywordAssert: true
   # living-docs:   # 活文档监控点追加（缺省已含 docs/sillyspec/platform-interface-map.md，只加哨兵不覆盖）
   #   - docs/sillyspec/architecture.md
+  # cross_repo_roots:   # repo://<仓库名> 跨仓引用 → 本机仓库根（每台设备各自配，绝对路径勿提交）
+  #   sillyspec: /c/Users/you/IdeaProjects/sillyspec
 `;
 }

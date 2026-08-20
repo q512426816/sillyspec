@@ -684,6 +684,9 @@ async function main() {
             console.log(JSON.stringify(result, null, 2));
           } else {
             for (const w of result.warnings) console.warn(`⚠️  ${w}`);
+            if (result.crossRepoSkipped > 0) {
+              console.log(`ℹ️ 跨仓 repo:// 引用跳过 ${result.crossRepoSkipped} 处（未配 docs-check.cross_repo_roots 映射；配置后走同款行号+关键词校验）`);
+            }
             if (result.ok) {
               console.log(`✅ docs check: ${result.total} 处引用全通过（其中 ${result.kwChecked} 处带关键词断言）`);
             } else {

@@ -76,6 +76,7 @@ export async function runDocsGate(opts = {}, checkOpts = {}) {
       paths: checkOpts.paths || cfg.paths,
       skip: checkOpts.skip || cfg.skip,
       keywordAssert: checkOpts.keywordAssert ?? cfg.keywordAssert,
+      crossRepoRoots: checkOpts.crossRepoRoots || cfg.crossRepoRoots,
     });
   } catch (e) {
     if (e instanceof DocsCheckConfigError) {

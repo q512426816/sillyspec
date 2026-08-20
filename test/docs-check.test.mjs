@@ -34,7 +34,8 @@ describe('collectDocRefs（全文扫描）', () => {
     const md = '见 `src/a.js:3` 与裸文本 b.js:2-5 结尾'
     const refs = collectDocRefs(md)
     assert.equal(refs.length, 2)
-    assert.deepEqual(refs[0], { ref: 'src/a.js:3', file: 'src/a.js', start: 3, end: 3, docLine: 1 })
+    // repo 字段：repo:// 跨仓标记（2026-08-20）——本地引用恒为 null
+    assert.deepEqual(refs[0], { ref: 'src/a.js:3', repo: null, file: 'src/a.js', start: 3, end: 3, docLine: 1 })
     assert.deepEqual(refs[1].file, 'b.js')
     assert.equal(refs[1].start, 2)
     assert.equal(refs[1].end, 5)

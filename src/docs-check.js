@@ -17,8 +17,13 @@ import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from '
 import { join } from 'node:path'
 import jsYaml from 'js-yaml'
 
-/** 提取 file.js:line / file.js:start-end 引用（.js/.mjs，反引号包裹与裸文本均命中，全文扫描 D-006） */
-const REF_RE = /([A-Za-z0-9_.\-\/]+\.(?:js|mjs)):(\d+)(?:-(\d+))?/g
+/** 提取 file.js:line / file.js:start-end 引用（.js/.mjs，反引号包裹与裸文本均命中，全文扫描 D-006）。
+ * repo:// 前缀（2026-08-20）：跨仓引用显式标记——`repo://<仓库名>/<路径>.js:行`。
+ * 不同设备兄弟仓库位置不同，未配映射时默认跳过本地校验（防跨设备误报）；
+ * 在本机 .sillyspec/local.yaml 的 docs-check.cross_repo_roots 配
+ * `<仓库名>: <本机绝对路径>` 后，走与本地引用完全相同的层1（行号边界）+ 层2（关键词窗口）校验。
+ * 正则组：1=仓库名（可选），2=文件，3=start，4=end。 */
+const REF_RE = /(?:repo:\/\/([A-Za-z0-9_.\-]+)\/)?([A-Za-z0-9_.\-\/]+\.(?:js|mjs)):(\d+)(?:-(\d+))?/g
 
 /** 缺省扫描范围：docs/ + .sillyspec/docs/（scan/modules 产物同是文档，失效即该暴露；2026-08-16 用户裁决改缺省，见 doc-consistency-debt.md §八） */
 const DEFAULT_DOC_PATHS = ['docs/**/*.md', '.sillyspec/docs/**/*.md']
@@ -26,10 +31,10 @@ const DEFAULT_DOC_PATHS = ['docs/**/*.md', '.sillyspec/docs/**/*.md']
 /**
  * 读 local.yaml 的 docs-check 段（best-effort，绝不抛；缺文件/无段 → 全缺省）。
  * @param {string} projectRoot 源码仓根（local.yaml 在 <root>/.sillyspec/local.yaml）
- * @returns {{ paths?: string[], skip: string[], keywordAssert: boolean }}
+ * @returns {{ paths?: string[], skip: string[], keywordAssert: boolean, crossRepoRoots: Record<string, string> }}
  */
 export function readDocsCheckConfig(projectRoot) {
-  const fallback = { paths: null, skip: [], keywordAssert: true }
+  const fallback = { paths: null, skip: [], keywordAssert: true, crossRepoRoots: {} }
   try {
     const p = join(projectRoot, '.sillyspec', 'local.yaml')
     if (!existsSync(p)) return fallback
@@ -37,10 +42,17 @@ export function readDocsCheckConfig(projectRoot) {
     if (!doc || typeof doc !== 'object') return fallback
     const dc = doc['docs-check']
     if (!dc || typeof dc !== 'object') return fallback
+    const crr = dc['cross_repo_roots']
     return {
       paths: Array.isArray(dc.paths) ? dc.paths.filter(s => typeof s === 'string') : null,
       skip: Array.isArray(dc.skip) ? dc.skip.filter(s => typeof s === 'string') : [],
       keywordAssert: typeof dc.keywordAssert === 'boolean' ? dc.keywordAssert : true,
+      // repo://<name> → 本机仓库根（每台设备各自配；local.yaml 是 gitignored，绝对路径不入库）
+      crossRepoRoots: crr && typeof crr === 'object' && !Array.isArray(crr)
+        ? Object.fromEntries(
+            Object.entries(crr).filter(([, v]) => typeof v === 'string' && v.trim() !== ''),
+          )
+        : {},
     }
   } catch {
     return fallback
@@ -63,9 +75,10 @@ export function collectDocRefs(md) {
   while ((m = re.exec(md)) !== null) {
     refs.push({
       ref: m[0],
-      file: m[1],
-      start: parseInt(m[2], 10),
-      end: m[3] !== undefined ? parseInt(m[3], 10) : parseInt(m[2], 10),
+      repo: m[1] !== undefined ? m[1] : null,
+      file: m[2],
+      start: parseInt(m[3], 10),
+      end: m[4] !== undefined ? parseInt(m[4], 10) : parseInt(m[3], 10),
       docLine: md.slice(0, m.index).split(/\r?\n/).length,
     })
   }
@@ -268,16 +281,20 @@ function relDisplay(absPath, projectRoot) {
 
 /**
  * IO 入口：跑一次完整校验。
- * @param {{ projectRoot: string, docs?: string[], paths?: string[], skip?: string[], keywordAssert?: boolean }} opts
+ * @param {{ projectRoot: string, docs?: string[], paths?: string[], skip?: string[], keywordAssert?: boolean, crossRepoRoots?: Record<string, string> }} opts
  *   projectRoot 源码仓根（候选解析与 glob 的锚点，平台模式也传源码仓根）
  *   docs 显式文档相对路径列表（优先于 paths glob 展开结果）
- * @returns {{ ok: boolean, total: number, invalid: Array<{doc, docLine, ref, reason, suggest?: number[], fix: {fixable: boolean, newLine?: number, reason: string}}>, warnings: string[], kwChecked: number }}
+ *   crossRepoRoots repo://<仓库名> → 本机仓库根映射（未映射的跨仓引用跳过不计失效）
+ * @returns {{ ok: boolean, total: number, invalid: Array<{doc, docLine, ref, reason, suggest?: number[], fix: {fixable: boolean, newLine?: number, reason: string}}>, warnings: string[], kwChecked: number, crossRepoSkipped: number }}
  * @throws {DocsCheckConfigError} glob 形态不支持
  */
 export function runDocsCheck(opts) {
   // paths/docs 显式传 null（readDocsCheckConfig 无 local.yaml 段时的回退值）须落回缺省 glob，
   // 解构默认值只挡 undefined 不挡 null——docs-check 无配置裸跑曾因此 null.flatMap 崩溃。
-  const { projectRoot, docs = null, paths: rawPaths = DEFAULT_DOC_PATHS, skip = [], keywordAssert = true } = opts || {}
+  const {
+    projectRoot, docs = null, paths: rawPaths = DEFAULT_DOC_PATHS, skip = [],
+    keywordAssert = true, crossRepoRoots = {},
+  } = opts || {}
   const paths = Array.isArray(rawPaths) && rawPaths.length > 0 ? rawPaths : DEFAULT_DOC_PATHS
   const warnings = []
   if (keywordAssert === false) warnings.push('关键词断言已关闭（keywordAssert=false），仅做存在性校验')
@@ -288,6 +305,8 @@ export function runDocsCheck(opts) {
   const invalid = []
   let total = 0
   let kwChecked = 0
+  // repo:// 跨仓引用：未配映射被跳过的数量（不计入 total/invalid，跨设备零误报）
+  let crossRepoSkipped = 0
 
   for (const docRel of docFiles) {
     const docAbs = join(projectRoot, docRel)
@@ -303,8 +322,32 @@ export function runDocsCheck(opts) {
     const mdLines = md.split(/\r?\n/)
 
     for (const r of refs) {
+      // repo:// 跨仓引用：未配映射 → 跳过（不同设备仓库位置不同，不按本仓解析误报）；
+      // 配了映射 → 以映射根为唯一候选，走与本地引用相同的层1+层2 校验。
+      let candidates
+      if (r.repo) {
+        const repoRoot = crossRepoRoots && typeof crossRepoRoots[r.repo] === 'string'
+          ? crossRepoRoots[r.repo]
+          : null
+        if (!repoRoot) {
+          crossRepoSkipped++
+          continue
+        }
+        const abs = join(repoRoot, r.file)
+        if (!existsSync(abs)) {
+          total++
+          invalid.push({
+            doc: docRel, docLine: r.docLine, ref: r.ref,
+            reason: `跨仓 repo://${r.repo} → 文件不存在（cross_repo_roots 映射根：${repoRoot}）`,
+            fix: { fixable: false, reason: '跨仓引用无法自动定位' },
+          })
+          continue
+        }
+        candidates = [abs]
+      } else {
+        candidates = resolveCandidates(projectRoot, r.file)
+      }
       total++
-      const candidates = resolveCandidates(projectRoot, r.file)
       if (candidates.length === 0) {
         invalid.push({
           doc: docRel, docLine: r.docLine, ref: r.ref,
@@ -338,9 +381,11 @@ export function runDocsCheck(opts) {
       }
       if (tokens.length > 0) kwChecked++
       if (!passedAny) {
+        // 跨仓校验失败的 reason 加 repo:// 前缀，用户一眼区分「改外部仓引用」还是「改本仓引用」
+        const repoPrefix = r.repo ? `跨仓 repo://${r.repo} → ` : ''
         invalid.push({
           doc: docRel, docLine: r.docLine, ref: r.ref,
-          reason: candidateFails.length > 1 ? `多候选全失败 → ${candidateFails.join(' | ')}` : candidateFails[0],
+          reason: repoPrefix + (candidateFails.length > 1 ? `多候选全失败 → ${candidateFails.join(' | ')}` : candidateFails[0]),
           // 建议行号（--suggest）：token 在首个候选文件的全量命中行，供人工确认改锚——不自动改文件
           suggest: suggestLines(candidates, tokens),
           // 修复分类（--fix 判定依据）：全量候选 token 命中统计，唯一命中才 fixable（D-006 保守默认）
@@ -350,7 +395,7 @@ export function runDocsCheck(opts) {
     }
   }
 
-  return { ok: invalid.length === 0, total, invalid, warnings, kwChecked }
+  return { ok: invalid.length === 0, total, invalid, warnings, kwChecked, crossRepoSkipped }
 }
 
 /**
