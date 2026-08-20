@@ -253,6 +253,25 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
     if (existingGuard) {
       // 跨进程重入：复用已分配的 ql-ID，跳过 baseline 重捕与分配（幂等）
       progress.quickGuard = existingGuard
+      // 中途追加边界：会话中途发现要改启动声明外的文件，此前 resume 会把 --files 静默丢弃、
+      // 边界冻结在启动时刻，只能靠事后归属/审计行兜底。恢复时带 --files 即并入 allowedFiles
+      // （追加不替换、去重保序），同时点录 allowedFilesHash 供同文件并发检测（文件不存在跳过，
+      // 与启动同语义）。--done 审计直读 guard.json（complete-handlers §4.6），追加即被归属消费。
+      const resumeFiles = Array.isArray(quickOpts?.quickFiles) ? quickOpts.quickFiles.filter(Boolean) : []
+      if (resumeFiles.length > 0) {
+        const known = new Set(progress.quickGuard.allowedFiles || [])
+        const added = resumeFiles.filter(f => !known.has(f))
+        if (added.length > 0) {
+          progress.quickGuard.allowedFiles = [...(progress.quickGuard.allowedFiles || []), ...added]
+          progress.quickGuard.allowedFilesHash = { ...(progress.quickGuard.allowedFilesHash || {}) }
+          for (const f of added) {
+            try { progress.quickGuard.allowedFilesHash[f] = createHash('sha256').update(readFileSync(join(cwd, f))).digest('hex') }
+            catch { /* 预声明将新建的文件，与启动时 allowedFilesHash 同语义：不存在跳过 */ }
+          }
+          writeAtomicSync(guardFile, JSON.stringify(progress.quickGuard, null, 2))
+          console.log(`🛡️ quick 边界已追加: ${added.length} 个文件（累计 ${progress.quickGuard.allowedFiles.length} 个）: ${added.join(', ')}`)
+        }
+      }
     } else {
       // baseline 采集用 safeGit（带 -c safe.directory，避免 linked worktree/容器异 uid/Windows 挂载点
       // 下裸 `git status` 抛错）。safeGit 已消除 safe.directory 类失败；若仍失败（真非 git 目录等），
