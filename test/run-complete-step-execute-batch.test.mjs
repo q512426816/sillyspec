@@ -22,8 +22,11 @@ const assert = (cond, msg) => { cond ? (count.passed++, console.log(`  ✅ PASS:
 
 function writePlan(changeDir, allChecked) {
   const t3 = allChecked ? '[x]' : '[ ]'
+  // 2026-08-20-task-truth-unify：勾选态在 tasks.md（注册表），plan.md 只留 Wave 引用行
+  writeFileSync(join(changeDir, 'tasks.md'),
+    `- [x] task-01: a\n- [x] task-02: b\n- ${t3} task-03: c\n`, 'utf8')
   writeFileSync(join(changeDir, 'plan.md'),
-    `# Plan\n\n## Wave 1\n\n- [x] task-01: a\n- [x] task-02: b\n- ${t3} task-03: c\n`, 'utf8')
+    '# Plan\n\n## Wave 1\n\n- task-01\n- task-02\n- task-03\n', 'utf8')
 }
 // worktree meta：depsStatus:'n/a' 让 enforceDepsGate 放行；无 baseHash → code evidence 走路径 3（working tree）
 function writeWorktreeMeta(specBase, cn, baseHash) {

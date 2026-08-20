@@ -29,13 +29,13 @@ import { stageRegistry } from '../stages/index.js'
 import { normalizeTaskId } from '../taskcard.js'
 
 /**
- * 从 plan.md 提取全部 task id（task-XX）——符号影响面覆盖度校验用。
- * 只认 checkbox 行 `- [ ] task-XX:` / `- [x] task-XX:`（与 execute.js parseWavesFromPlan 的
- * 收容口径一致：### 标题式 task / 非 task 区 checkbox 不算），light plan 的 `## Tasks` 段同样收。
+ * 从任务注册表（tasks.md）提取全部 task id（task-XX）——符号影响面覆盖度校验用。
+ * 只认 checkbox 行 `- [ ] task-XX:` / `- [x] task-XX:`（与 execute.js parseTaskRegistry 同口径）。
+ * 2026-08-20-task-truth-unify：源从 plan.md 迁 tasks.md（任务唯一真相）；ql-xxx 行不收。
  */
-function extractTaskIdsFromPlan(planContent) {
-  if (!planContent) return []
-  return [...String(planContent).matchAll(/^[-*]\s*\[[ x]\]\s*(?:.*\b)?task-(\d+)\b/gim)]
+function extractTaskIdsFromRegistry(tasksContent) {
+  if (!tasksContent) return []
+  return [...String(tasksContent).matchAll(/^[-*]\s*\[[ xX]\]\s*task-(\d+)\b/gim)]
     .map(m => `task-${m[1].padStart(2, '0')}`)
 }
 
@@ -57,8 +57,10 @@ export function validateSymbolImpactReport({ reportContent, planContent }) {
   if (!reportContent || !String(reportContent).trim()) {
     return { ok: false, errors: ['symbol-impact.md 不存在或内容为空——「加载上下文」步的符号影响面报告必须落盘（逐 task 一行结论，「无签名级变更」也要显式写）'] }
   }
-  const taskIds = extractTaskIdsFromPlan(planContent)
-  if (taskIds.length === 0) return { ok: true, errors } // plan 无 task 可列（默认兜底形态）→ 无可校验对象
+  // 2026-08-20-task-truth-unify：task 清单源迁 tasks.md（参数名 planContent 保持兼容既有调用，
+  // 语义=任务注册表内容；调用方 enforceSymbolImpactGate 已改读 tasks.md）
+  const taskIds = extractTaskIdsFromRegistry(planContent)
+  if (taskIds.length === 0) return { ok: true, errors } // 注册表无 task 可列（默认兜底形态）→ 无可校验对象
   const missing = taskIds.filter(id => !String(reportContent).includes(id))
   for (const id of missing) {
     errors.push(`${id} 未在 symbol-impact.md 中出现——每个 task 都要有一行结论（含「无签名级变更」的显式声明）`)
@@ -73,14 +75,14 @@ export function validateSymbolImpactReport({ reportContent, planContent }) {
 export async function enforceSymbolImpactGate(stageName, changeName, currentStepName, specBase) {
   if (stageName !== 'execute') return
   if (!currentStepName || !currentStepName.includes('加载上下文')) return
-  const planPath = join(specBase, 'changes', changeName || '', 'plan.md')
+  const tasksPath = join(specBase, 'changes', changeName || '', 'tasks.md')
   const reportPath = join(specBase, 'changes', changeName || '', 'symbol-impact.md')
-  if (!existsSync(planPath)) return // plan.md 缺失场景已有 plan 阶段 gate 把关，此处不重复拦
-  let planContent = ''
-  try { planContent = readFileSync(planPath, 'utf8') } catch { return }
+  if (!existsSync(tasksPath)) return // 注册表缺失场景已有 plan 阶段 gate 把关，此处不重复拦
+  let tasksContent = ''
+  try { tasksContent = readFileSync(tasksPath, 'utf8') } catch { return }
   let reportContent = null
   try { reportContent = readFileSync(reportPath, 'utf8') } catch { /* 缺失由 validate 报 */ }
-  const result = validateSymbolImpactReport({ reportContent, planContent })
+  const result = validateSymbolImpactReport({ reportContent, planContent: tasksContent })
   if (result.ok) return
   console.error('❌ ── 符号影响面报告校验阻断（本次 --done 未完成，进度未推进）──')
   console.error(`   「加载上下文」步的符号影响面检查报告未落盘或不完整：`)
@@ -106,7 +108,8 @@ function isCurrentWaveAllNoDepsVerify(stepName, changeDir) {
   const waveRe = new RegExp(`^##\\s*Wave\\s+${waveN}\\b[^\\n]*\\n([\\s\\S]*?)(?=\\n##\\s|\\n#\\s|$)`, 'm')
   const waveMatch = plan.match(waveRe)
   if (!waveMatch) return false
-  const taskIds = [...waveMatch[1].matchAll(/^[-*]\s*\[[ x]\]\s*(task-\d+)/gim)].map(x => x[1])
+  // 2026-08-20-task-truth-unify：Wave 段任务为纯 ID 引用行（"- task-XX"），不再有 checkbox
+  const taskIds = [...waveMatch[1].matchAll(/^[-*]\s+(task-\d+)\s*$/gim)].map(x => x[1])
   if (taskIds.length === 0) return false
   for (const id of taskIds) {
     // 体检 BUG-19：plan 常态写补零 task-01，但 AI 写出 task-3 时卡片实际是 task-03.md——
@@ -195,7 +198,12 @@ export async function enforceReviewJsonGate(stageName, cwd, changeName, step, st
     console.warn(`⚠️ execute run marker 内容非法（期望 exec-YYYY-MM-DD-HHMMSS，实得 ${JSON.stringify(executeRunId.slice(0, 60))}），改扫真实 run 目录`)
     executeRunId = ''
   }
-  const planContent = readFileSync(planPath, 'utf8')
+  // 2026-08-20-task-truth-unify：已勾 task 清单源迁 tasks.md（勾选唯一落点）；tasks.md 缺失
+  // 回退 planPath 内容（旧变更兼容读侧）。planPath 存在性已在上方把关。
+  const tasksRegistryPath = join(specBase, 'changes', changeName, 'tasks.md')
+  const planContent = existsSync(tasksRegistryPath)
+    ? readFileSync(tasksRegistryPath, 'utf8')
+    : readFileSync(planPath, 'utf8')
   // marker 读失败且重定位无果（无任何含 tasks/ 的 run）：无 run 可校验，放行（下游 Task Review Gate 兜底）
   if (!executeRunId) return true
   // marker 漂移兜底（gate-atom-a 正确修法）：marker 指向的 run 缺 tasks/（generateExecuteRunId 只写
@@ -344,19 +352,21 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
     console.log('\n✅ 验证通过，下一步：sillyspec run archive')
   }
 
-  // ── Plan postcheck contract：plan.md 必须满足 execute 契约 ──
+  // ── Plan postcheck contract：tasks.md（注册表）× plan.md（Wave 引用）须满足 execute 契约 ──
   if (stageName === 'plan') {
     const planFile = resolveChangeDir(cwd, progress, platformOpts?.specRoot)
     const planPath = planFile ? join(planFile, 'plan.md') : null
     if (planPath && existsSync(planPath)) {
       const { validatePlanForExecute } = await import('../stages/execute.js')
-      // CRLF 归一：Windows 编辑器/python 写 plan.md 可产生 CRLF，归一后交校验（与 plan-postcheck.js 同口径）
+      // CRLF 归一：Windows 编辑器/python 写文件可产生 CRLF，归一后交校验（与 plan-postcheck.js 同口径）
       const planContent = readFileSync(planPath, 'utf8').replace(/\r\n/g, '\n')
-      const planValidation = validatePlanForExecute(planContent)
+      const tasksPath = join(planFile, 'tasks.md')
+      const tasksContent = existsSync(tasksPath) ? readFileSync(tasksPath, 'utf8').replace(/\r\n/g, '\n') : ''
+      const planValidation = validatePlanForExecute(tasksContent, planContent)
       if (!planValidation.ok) {
         console.error(`\n❌ Plan → Execute Contract 校验失败：`)
         for (const err of planValidation.errors) console.error(`   - ${err}`)
-        console.error(`\n   plan.md 不满足 execute 契约，请修复后重新完成此步骤。`)
+        console.error(`\n   tasks.md/plan.md 不满足 execute 契约，请修复后重新完成此步骤。`)
         // 阻断 completed
         return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)
       }
@@ -429,7 +439,12 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
       const planPath = planFile ? join(planFile, 'plan.md') : null
 
       if (planPath && existsSync(planPath)) {
-        const planContent = readFileSync(planPath, 'utf8')
+        // 2026-08-20-task-truth-unify：任务清单源迁 tasks.md（validateTaskReviews 内按
+        // checkbox 行解析，tasks.md 行格式兼容原正则）；缺失回退 plan.md（旧变更兼容读侧）
+        const tasksRegistryPath = join(planFile, 'tasks.md')
+        const planContent = existsSync(tasksRegistryPath)
+          ? readFileSync(tasksRegistryPath, 'utf8')
+          : readFileSync(planPath, 'utf8')
         const runtimeRoot = resolveRuntimeRoot(platformOpts, effectiveSpecBase)
 
         // execute run id：从变更专属标记文件读取（agent 可写内容，格式校验防注入/穿越）
@@ -495,7 +510,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
           // 检查是否存在 checkbox 已勾但 review 不通过的情况
           const uncheckedTasks = reviewResult.errors.filter(e => e.includes('缺少 review.json'))
           if (uncheckedTasks.length > 0) {
-            console.error('\n⚠️  部分任务已在 plan.md 中勾选，但 review.json 不存在。')
+            console.error('\n⚠️  部分任务已在 tasks.md 中勾选，但 review.json 不存在。')
             console.error(`   请取消勾选这些任务的 checkbox，或补充对应的 review.json（execute run ID: ${executeRunId}）。`)
           }
           return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)

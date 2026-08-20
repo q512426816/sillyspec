@@ -432,14 +432,16 @@ function detectChangeDbConsistency(cwd, pointer, multiDb) {
  * @returns {{total:number, checked:number} | null} null = plan/tasks.md 都不存在或无 task 行
  */
 function readPlanCheckboxStatus(changeDir) {
-  const planPath = join(changeDir, 'plan.md');
+  // 2026-08-20-task-truth-unify：tasks.md（任务注册表）优先；plan.md 纯 ID 引用行无 checkbox，
+  // 旧「plan 优先」顺序对新契约变更恒 null（D5 诊断静默致盲）。tasks.md 缺失回退 plan.md（旧变更兼容）。
   const tasksPath = join(changeDir, 'tasks.md');
+  const planPath = join(changeDir, 'plan.md');
   let content = null;
-  if (existsSync(planPath)) {
-    try { content = readFileSync(planPath, 'utf8'); } catch { content = null; }
-  }
-  if (content == null && existsSync(tasksPath)) {
+  if (existsSync(tasksPath)) {
     try { content = readFileSync(tasksPath, 'utf8'); } catch { content = null; }
+  }
+  if (content == null && existsSync(planPath)) {
+    try { content = readFileSync(planPath, 'utf8'); } catch { content = null; }
   }
   if (content == null) return null;
   // match both "- [ ] task-01: title" and "- [x] task-01: title"

@@ -217,7 +217,7 @@ AC-011: 不涉及业务规则/产品范围/默认行为/用户可见行为变更
 1. 基于变更根目录下的设计产物（design.md / decisions.md / gaps.md / assumptions.md / next-action.json），生成规范文件（直接写入变更根目录）：
    - **proposal.md**：动机、关键问题、变更范围、不在范围内、成功标准
    - **requirements.md**：角色表 + FR 编号需求 + Given/When/Then + 非功能需求
-   - **tasks.md**：任务列表（只列名称，细节在 plan 阶段展开）
+   - **tasks.md**：任务列表骨架（只列名称；任务清单唯一真相，plan 阶段展开细节并写回本文件——execute 勾选与 verify 对照都在本文件）
 2. 所有规范文件头部包含 YAML frontmatter
 3. \`git add {SPEC_ROOT}/changes/<change-name>/\` — 暂存本变更的规范文件（勿用 .sillyspec/ 整目录——会裹挟其他活跃变更；不要 commit）
 

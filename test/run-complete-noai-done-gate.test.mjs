@@ -18,7 +18,8 @@ import { ProgressManager } from '../src/progress.js'
 const count = { passed: 0, failed: 0, failures: [] }
 const assert = (cond, msg) => { cond ? (count.passed++, console.log(`  ✅ PASS: ${msg}`)) : (count.failed++, count.failures.push(msg), console.log(`  ❌ FAIL: ${msg}`)) }
 
-const PLAN_WITH_TASK = '# Plan\n\n## Wave 1\n\n- [ ] task-01: 做 foo\n'
+const PLAN_WITH_TASK = '# Plan\n\n## Wave 1\n\n- task-01\n'
+const TASKS_MD = '- [ ] task-01: 做 foo\n'
 
 console.log('=== noAI 步骤 --done 硬门（planPostcheck）===\n')
 
@@ -29,13 +30,13 @@ console.log('--- 用例1: postcheck --done + tasks/ 缺失 → 校验拦截，�
   const pm = await initChange(cwd, specBase, cn)
   const changeDir = join(specBase, 'changes', cn)
   writeFileSync(join(changeDir, 'plan.md'), PLAN_WITH_TASK)
-  // init 步骤 schema（plan.md 含 task → 5 步）
+  // init 步骤 schema（任务清单 → 5 步；2026-08-20-task-truth-unify：注册表在 tasks.md）
   runCLI(['--dir', cwd, 'run', 'plan', '--change', cn], { cwd })
   // seed：前 4 步 completed，postcheck（Wave 重排与可行性校验）pending——模拟 agent 直奔 noAI step --done
   const progress = await pm.read(cwd, cn)
   const seeded = progress.stages.plan.steps.map(s => ({ name: s.name, status: s.name === 'Wave 重排与可行性校验' ? 'pending' : 'completed' }))
   await seedStage(pm, cwd, cn, 'plan', seeded)
-  // tasks/ 故意不建（generate_blueprints 被跳过的实证场景）
+  // tasks/ 故意不建（generate_blueprints 被跳过的实证场景）；tasks.md 用例1 也不建（聚焦 tasks/ 缺失拦截）
 
   const r = runStage('plan', cn, cwd, { done: true, output: 'plan 阶段完成，转 execute' })
 
@@ -54,6 +55,7 @@ console.log('\n--- 用例2: postcheck --done + 合法 task 卡 → 校验执行�
   const pm = await initChange(cwd, specBase, cn)
   const changeDir = join(specBase, 'changes', cn)
   writeFileSync(join(changeDir, 'plan.md'), PLAN_WITH_TASK)
+  writeFileSync(join(changeDir, 'tasks.md'), TASKS_MD)
   // 阶段收尾 gate 要求的产物：module-impact.md 首版（与 noAI 门无关，缺了会被产物校验拦）
   writeFileSync(join(changeDir, 'module-impact.md'), '# 模块影响分析（Module Impact）— 测试\n\n无模块映射，unmapped。\n')
   runCLI(['--dir', cwd, 'run', 'plan', '--change', cn], { cwd })

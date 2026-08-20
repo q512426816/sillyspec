@@ -70,10 +70,12 @@ console.log('\n--- plan 末步 + plan.md task id 重复 → Plan→Execute Contr
   const cn = '2026-07-25-plan-rollback'
   const pm = await initChange(cwd, specBase, cn)
   const changeDir = join(specBase, 'changes', cn)
-  // plan.md task id 重复（task-01 出现两次）→ validatePlanForExecute 失败
+  // tasks.md task id 重复（task-01 出现两次）→ validatePlanForExecute 失败（注册表唯一真相）
   // 不写 decisions.md（避免 P0/P1 阻塞 error 让 runValidators 先失败）
+  writeFileSync(join(changeDir, 'tasks.md'),
+    '- [ ] task-01: a\n- [ ] task-01: a 重复\n- [ ] task-02: c\n')
   writeFileSync(join(changeDir, 'plan.md'),
-    '# Plan\n\n## Wave 1\n\n- [ ] task-01: a\n- [ ] task-01: a 重复\n- [ ] task-02: c\n')
+    '# Plan\n\n## Wave 1\n\n- task-01\n- task-02\n')
   // plan.module-impact.exists(large) 要求——补上让校验过，聚焦 Contract 不连续
   writeFileSync(join(changeDir, 'module-impact.md'), '# 模块影响分析（Module Impact）— plan-rollback\n\n测试占位\n')
   // noAI 硬门（ql-20260814-005 noai-done-bypass）：--done 落到 postcheck step 时 completeStep
@@ -137,7 +139,8 @@ console.log('\n--- execute 无 worktree → enforceDepsGate 阻断 exit(1) ---')
   const cn = '2026-07-25-execute-deps'
   const pm = await initChange(cwd, specBase, cn)
   const changeDir = join(specBase, 'changes', cn)
-  writeFileSync(join(changeDir, 'plan.md'), '# Plan\n\n## Wave 1\n\n- [ ] task-01: do X\n')
+  writeFileSync(join(changeDir, 'plan.md'), '# Plan\n\n## Wave 1\n\n- task-01\n')
+  writeFileSync(join(changeDir, 'tasks.md'), '- [ ] task-01: do X\n')
   // 不跑 run execute（避免建 worktree meta）；seed 单步让 ensureStageSteps 在 --done 时重建
   await seedStage(pm, cwd, cn, 'execute', [{ name: 'Wave 1 执行', status: 'pending' }])
   const r = runStage('execute', cn, cwd, { done: true, output: '执行完成' })

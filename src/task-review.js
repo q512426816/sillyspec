@@ -105,17 +105,19 @@ export function summarizeTaskCompletion({ changeDir, runtimeRoot, changeName }) 
   }
   if (!changeDir) return noPlan
 
+  // 2026-08-20-task-truth-unify：任务清单唯一真相在 tasks.md，优先读注册表；plan.md 回退
+  // （旧归档变更兼容读侧——新契约 plan.md 为纯 ID 引用行，无 checkbox 可解析）
   const planPath = join(changeDir, 'plan.md')
   const tasksPath = join(changeDir, 'tasks.md')
   let planContent = null
-  if (existsSync(planPath)) planContent = readFileSync(planPath, 'utf8')
-  else if (existsSync(tasksPath)) planContent = readFileSync(tasksPath, 'utf8')
+  if (existsSync(tasksPath)) planContent = readFileSync(tasksPath, 'utf8')
+  else if (existsSync(planPath)) planContent = readFileSync(planPath, 'utf8')
   else return noPlan
 
   const taskIds = parseTaskIdsFromPlan(planContent)
   if (taskIds.length === 0) {
     return { source: 'no-tasks', total: 0, completed: 0, pending: [],
-      report: '⚠️ plan.md 未解析出任何 task-NN 条目（plan 可能未按规范写 checkbox 列表）。' }
+      report: '⚠️ tasks.md 未解析出任何 task-NN 条目（任务注册表可能未按规范写 checkbox 列表）。' }
   }
 
   // runId 解析（坑 worktree-cleanup-marker-chain 根治）：归属化解析 resolveExecuteRunForChange——

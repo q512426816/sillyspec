@@ -107,7 +107,8 @@ const PLAN_FULL = `## Wave 1
   const rr = mkdtempSync(join(tmpdir(), 'sig-scope-'))
   const changeDir = join(rr, 'changes', 'demo')
   mkdirSync(changeDir, { recursive: true })
-  writeFileSync(join(changeDir, 'plan.md'), PLAN_FULL)
+  // 2026-08-20-task-truth-unify：gate 读 tasks.md（任务注册表唯一真相）
+  writeFileSync(join(changeDir, 'tasks.md'), PLAN_FULL)
   let exited = 0
   const origExit = process.exit
   process.exit = (code) => { exited = code; throw new Error(`exit-${code}`) }
@@ -117,7 +118,7 @@ const PLAN_FULL = `## Wave 1
     await enforceSymbolImpactGate('execute', 'demo', 'Wave 1 执行', rr)
     assert(exited === 0, 'execute 非「加载上下文」步 → 放行（Wave 步不触发报告门）')
     await enforceSymbolImpactGate('execute', 'ghost-change', '加载上下文', rr)
-    assert(exited === 0, 'plan.md 不存在的 change → 放行（plan 缺失归 plan 阶段 gate 把关）')
+    assert(exited === 0, 'tasks.md 不存在的 change → 放行（注册表缺失归 plan 阶段 gate 把关）')
   } finally {
     process.exit = origExit
   }

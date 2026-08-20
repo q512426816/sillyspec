@@ -9,24 +9,67 @@ import { gitQuiet } from '../git-helper.js'
 import { parseRepo } from './plan-postcheck.js'
 
 /**
- * 校验 plan.md 是否满足 execute 执行契约
+ * 任务注册表解析（2026-08-20-task-truth-unify D-001@v1：tasks.md 唯一任务真相）。
+ * 行契约：`- [ ] task-01: 名称 [model:xxx] (depends_on: task-01,02)`——标注均可选；
+ * ql-xxx 等 task-XX 前缀之外的行（quick 挂载条目）与注册表正交，不收。
+ * @param {string} tasksContent - tasks.md 文件内容
+ * @returns {Array<{index:number, id:string, name:string, done:boolean, model:string|null, dependsOn:string[], file:string, steps:string, reference:string}>}
+ */
+export function parseTaskRegistry(tasksContent) {
+  const tasks = []
+  if (!tasksContent) return tasks
+  for (const line of String(tasksContent).split('\n')) {
+    const m = line.match(/^[-*]\s*\[([ xX])\]\s*task-(\d+)\b[:：]?\s*(.*)/)
+    if (!m) continue
+    let name = (m[3] || '').trim()
+    let model = null
+    const modelMatch = name.match(/\[model:([^\]]+)\]/i)
+    if (modelMatch) { model = modelMatch[1].trim(); name = name.replace(modelMatch[0], '').trim() }
+    let dependsOn = []
+    const depMatch = name.match(/\(depends_on:\s*([^)]+)\)/i)
+    if (depMatch) {
+      dependsOn = depMatch[1].split(/[,，]/).map(s => s.trim().replace(/^task-/i, '')).filter(Boolean).map(n => `task-${n.padStart(2, '0')}`)
+      name = name.replace(depMatch[0], '').trim()
+    }
+    // 兼容行尾 (文件路径) 尾注（旧 plan 内联习惯在 tasks.md 沿用时同样收容）
+    let file = ''
+    const fileMatch = name.match(/\(([^()]+)\)$/)
+    if (fileMatch) { file = fileMatch[1].trim(); name = name.replace(/\([^()]+\)$/, '').trim() }
+    tasks.push({
+      index: parseInt(m[2], 10),
+      id: `task-${m[2].padStart(2, '0')}`,
+      name,
+      done: (m[1] === 'x' || m[1] === 'X'),
+      model,
+      dependsOn,
+      file,
+      steps: '',
+      reference: ''
+    })
+  }
+  return tasks
+}
+
+/**
+ * 校验 tasks.md（任务注册表）× plan.md（Wave ID 引用）是否满足 execute 执行契约。
+ * 新契约（D-001@v1）：任务清单唯一真相在 tasks.md；plan.md Wave 段下为纯 ID 引用行
+ * （`- task-01`，不重抄任务名），交叉校验存在性/覆盖恰一次/编号连续。
+ * @param {string} tasksContent - tasks.md 文件内容
  * @param {string} planContent - plan.md 文件内容
  * @returns {{ ok: boolean, errors: string[], warnings: string[], tasks: object[], waves: object[] }}
  */
-export function validatePlanForExecute(planContent) {
+export function validatePlanForExecute(tasksContent, planContent) {
   const errors = []
   const warnings = []
+  const plan = String(planContent || '')
+  const registry = parseTaskRegistry(tasksContent)
 
-  if (!planContent || !planContent.trim()) {
-    return { ok: false, errors: ['plan.md 内容为空'], warnings, tasks: [], waves: [] }
+  if (!plan.trim() && !String(tasksContent || '').trim()) {
+    return { ok: false, errors: ['plan.md 与 tasks.md 内容均为空'], warnings, tasks: [], waves: [] }
   }
 
-  const waves = parseWavesFromPlan(planContent)
-
   // 检查 0: Wave 编号带字母后缀（如 "## Wave 2b"）→ 显式报错（坑 plan-wave-letter-suffix）
-  // 解析正则 ^#+\s*Wave\s+(\d+) 不锚定结尾，"Wave 2b" 会被 parseInt 截断成 Wave 2 静默收容，
-  // 与显式 Wave 2 合并为同一 Wave 强制并行——串行意图静默失效且无任何提示，排查到源码才明白。
-  const letterSuffixWaves = [...planContent.matchAll(/^#+\s*Wave\s+(\d+)([a-z])(?![a-z0-9])/gim)]
+  const letterSuffixWaves = [...plan.matchAll(/^#+\s*Wave\s+(\d+)([a-z])(?![a-z0-9])/gim)]
   for (const m of letterSuffixWaves) {
     errors.push(
       `Wave 编号带字母后缀：${m[0].trim()}（"${m[1]}${m[2]}"）不被支持。` +
@@ -35,69 +78,87 @@ export function validatePlanForExecute(planContent) {
     )
   }
 
-  // 收集所有 task
-  const allTasks = []
-  for (const wave of waves) {
-    for (const task of wave.tasks) {
-      allTasks.push(task)
-    }
+  // 检查 0.5: 旧格式残留——plan.md 内出现任务名级 checkbox 行（任务清单旧家）→ 指路迁移
+  const legacyCheckbox = [...plan.matchAll(/^[-*]\s*\[[ xX]\]\s*task-\d+\b[:：]/gim)]
+  if (legacyCheckbox.length > 0) {
+    errors.push(
+      `plan.md 含 ${legacyCheckbox.length} 处旧格式任务 checkbox 行（"- [ ] task-XX: 名称"）。` +
+      `新契约（2026-08-20-task-truth-unify）：任务清单唯一真相在 tasks.md，plan.md Wave 段下只写纯 ID 引用行。` +
+      `迁移：把任务 checkbox 行移入 tasks.md（保留 [model:xxx]/(depends_on: …) 行内标注），plan.md Wave 段改为 "- task-XX" 引用行`
+    )
   }
 
-  // 检查 1: 至少有一个 checkbox task
+  const waves = parseWavesFromPlan(plan, registry)
+  const allTasks = registry
+
+  // 检查 0.8: Wave 标题格式不对（W1/Wave1/波次1 等）→ 引用行不被收容，静默退化隐式单 Wave
+  // 全并行——串行意图失效且无提示（原「标题格式不对」诊断的新契约承接）。仅在确有疑似标题
+  // 且无任何显式 Wave 被解析时报，正常 Wave 10/带括号标题不误伤。
+  const hasExplicitWave = waves.some(w => !w.implicit)
+  const waveLikeHeading = /^#+\s*(?:wave\s*\d+|w\d+|波次\s*\d+)/im
+  if (!hasExplicitWave && waveLikeHeading.test(plan)) {
+    errors.push(
+      `Wave 标题格式不对：必须字面 "## Wave N"（Wave + 空格 + 数字），"## W1" / "## Wave1" / "## 波次1" 都不被识别。` +
+      `其下的 "- task-XX" 引用行不会被收容——任务将退化为单个隐式 Wave 全并行，串行意图失效`
+    )
+  }
+
+  // 检查 1: 注册表非空（tasks.md 无 task-XX checkbox → 三类根因诊断）
   if (allTasks.length === 0) {
-    // 诊断根因（坑 plan-md-format-contract-hidden）：笼统报"没有找到 checkbox task"逼 agent 试错。
-    // 区分：无 Wave/Tasks 段 / Wave 标题格式不对 / task 用 ### 标题 / checkbox 被非 Wave 标题打断。
-    const diags = diagnoseNoTaskRootCause(planContent)
-    errors.push('plan.md 中没有找到 checkbox task（格式: "- [ ] task-XX: 任务名"）')
+    const diags = diagnoseNoTaskRegistry(tasksContent, plan)
+    errors.push('tasks.md 中没有找到 task-XX checkbox（任务注册表为空，格式: "- [ ] task-XX: 任务名"）')
     for (const d of diags) errors.push(`  诊断：${d}`)
     return { ok: false, errors, warnings, tasks: allTasks, waves }
   }
 
-  // 检查 2: task id 唯一性
+  // 检查 2: task id 唯一性（tasks.md 内重复行）
   const idCounts = {}
-  for (const task of allTasks) {
-    if (task.index != null) {
-      const key = `task-${task.index}`
-      idCounts[key] = (idCounts[key] || 0) + 1
-    }
-  }
+  for (const task of allTasks) idCounts[task.id] = (idCounts[task.id] || 0) + 1
   for (const [id, count] of Object.entries(idCounts)) {
-    if (count > 1) {
-      errors.push(`task id 重复: ${id} 出现 ${count} 次`)
-    }
+    if (count > 1) errors.push(`task id 重复: ${id} 在 tasks.md 出现 ${count} 次`)
   }
 
   // 检查 3: task id 连续性（从 1 开始）
-  const ids = allTasks
-    .map(t => t.index)
-    .filter(i => i != null)
-    .sort((a, b) => a - b)
-  if (ids.length > 0) {
-    const expected = Array.from({ length: ids.length }, (_, i) => ids[0] + i)
-    // 只检查以 task-01 起始的情况（常见模式）
-    if (ids[0] === 1) {
-      for (let i = 0; i < ids.length; i++) {
-        if (ids[i] !== i + 1) {
-          errors.push(getRule('plan.task-id-continuity').failMessage.replaceAll('${expected}', String(i + 1).padStart(2, '0')).replaceAll('${actual}', String(ids[i]).padStart(2, '0')))
-          break
+  const ids = allTasks.map(t => t.index).sort((a, b) => a - b)
+  if (ids.length > 0 && ids[0] === 1) {
+    for (let i = 0; i < ids.length; i++) {
+      if (ids[i] !== i + 1) {
+        errors.push(getRule('plan.task-id-continuity').failMessage.replaceAll('${expected}', String(i + 1).padStart(2, '0')).replaceAll('${actual}', String(ids[i]).padStart(2, '0')))
+        break
+      }
+    }
+  }
+
+  // 检查 4: task name 非空（注册表行）
+  for (const task of allTasks) {
+    if (!task.name || !task.name.trim()) {
+      errors.push(`${task.id}: 任务名为空（tasks.md 行格式 "- [ ] ${task.id}: 一句话任务名"）`)
+    }
+  }
+
+  // 交叉校验：plan.md Wave 引用 × tasks.md 注册表（仅显式 Wave 结构参与；隐式 Wave 由
+  // parseWavesFromPlan 从注册表整体合成，天然全覆盖）
+  const explicitWaves = waves.filter(w => !w.implicit)
+  if (explicitWaves.length > 0) {
+    const refCount = {}
+    for (const wave of explicitWaves) {
+      for (const task of wave.tasks) {
+        refCount[task.id] = (refCount[task.id] || 0) + 1
+        if (task.dangling) {
+          errors.push(`plan.md Wave ${wave.index} 引用的 ${task.id} 不存在于 tasks.md 注册表（悬空引用）`)
         }
       }
     }
-  }
-
-  // 检查 4: task name 非空
-  for (const task of allTasks) {
-    if (!task.name || !task.name.trim()) {
-      errors.push(`task-${String(task.index || '?').padStart(2, '0')}: 任务名为空`)
+    // 覆盖恰一次：注册表每个 id 必须被引用（缺失）且只被一个 Wave 引用（重复）
+    for (const task of allTasks) {
+      const n = refCount[task.id] || 0
+      if (n === 0) errors.push(`${task.id} 未被任何 Wave 引用（plan.md Wave 段缺 "- ${task.id}" 引用行——未引用的任务不进 execute 步骤）`)
+      if (n > 1) errors.push(`${task.id} 被多个 Wave 重复引用 ${n} 次（一个任务只属一个 Wave；跨 Wave 依赖用 (depends_on: …) 声明）`)
     }
-  }
-
-  // 检查 5: task 无 id 的 warning（不限制只在有 id 时检查）
-  for (const wave of waves) {
-    for (const task of wave.tasks) {
-      if (task.index == null) {
-        warnings.push(`Wave ${wave.index}: task "${task.name}" 没有 task id（建议格式 task-XX: 名称）`)
-      }
+    // Wave 段空引用诊断
+    const emptyWave = explicitWaves.find(w => w.tasks.length === 0)
+    if (emptyWave) {
+      errors.push(`plan.md Wave ${emptyWave.index} 段下没有任何 "- task-XX" 引用行（新契约 Wave 段只收 ID 引用行）`)
     }
   }
 
@@ -134,7 +195,7 @@ const fixedPrefix = [
     prompt: `加载计划、设计和代码库上下文。
 
 ### 操作
-1. 读取 tasks.md（执行计划）
+1. 读取 tasks.md（任务注册表与勾选唯一真相；plan.md 只提供 Wave 分组/依赖结构——Wave 段下为纯 ID 引用行）
 2. 读取 design.md（技术方案）
 3. 读取 CONVENTIONS.md、ARCHITECTURE.md
 4. 读取 local.yaml（构建命令）；若 local.yaml 不存在，先 \`sillyspec local detect\` 生成骨架再读取
@@ -386,123 +447,71 @@ Apply Decision + 下一步建议
 ]
 
 /**
- * 诊断 plan.md 无 checkbox task 的根因（坑 plan-md-format-contract-hidden）。
- * 纯函数：读 planContent 文本，返回诊断提示数组。validatePlanForExecute 无 task 时追加到报错，
- * 帮 agent 区分 4 条隐性格式契约（Wave 标题字面 / task checkbox / task-XX 编号 / ### 打断 Wave 段）。
+ * 诊断任务注册表为空的根因（坑 plan-md-format-contract-hidden 延续：笼统报错逼 agent 试错）。
+ * 三类根因：tasks.md 无 task-XX checkbox / plan.md Wave 段无 ID 引用 / 旧格式（任务 checkbox 还在 plan.md）。
+ * @param {string} tasksContent
  * @param {string} planContent
  * @returns {string[]}
  */
-function diagnoseNoTaskRootCause(planContent) {
+function diagnoseNoTaskRegistry(tasksContent, planContent) {
   const diags = []
-  const hasWaveHeading = /^#+\s*Wave\s+\d+/im.test(planContent)         // "## Wave N"（字面）
-  const hasWaveWord = /^#+\s*(wave\s*\d+|w\d+|波次\s*\d+)/im.test(planContent) // 疑似 Wave 标题（含 W1/Wave1/波次1）
-  const hasCheckboxTask = /^[-*]\s*\[[ x]\]\s*task-\d+/im.test(planContent) // "- [ ] task-XX:" checkbox
-  const hasTaskHeading = /^#+\s*task-\d+/im.test(planContent)            // "### task-XX:" 标题（非 checkbox）
-  const hasTasksSection = /^#+\s*(tasks?|任务)\s*$/im.test(planContent)  // "## Tasks" / "## 任务"
+  const tc = String(tasksContent || '')
+  const pc = String(planContent || '')
+  const hasTaskCheckboxInTasks = /^[-*]\s*\[[ xX]\]\s*task-\d+/im.test(tc)
+  const hasQlLines = /^[-*]\s*\[[ xX]\]\s*ql-/im.test(tc)
+  const hasLegacyInPlan = /^[-*]\s*\[[ xX]\]\s*task-\d+\b[:：]/im.test(pc)
+  const hasWaveHeading = /^#+\s*Wave\s+\d+/im.test(pc)
+  const hasRefLine = /^[-*]\s+task-\d+\s*$/im.test(pc)
 
-  if (!hasWaveHeading && !hasTasksSection) {
-    if (hasWaveWord) {
-      diags.push('Wave 标题格式不对：必须字面 "## Wave N"（Wave + 空格 + 数字），"## W1" / "## Wave1" / "## 波次1" 都不被识别')
-    } else if (hasCheckboxTask) {
-      diags.push('有 task checkbox 但不在 "## Wave N"（full）或 "## Tasks"（light/none）段内——非任务区的 checkbox 不收')
-    } else {
-      diags.push('plan.md 缺任务区：full 需 "## Wave 1" 标题，light/none 需 "## Tasks" 标题')
-    }
+  if (hasLegacyInPlan) {
+    diags.push('任务 checkbox 还在 plan.md（旧格式）：请移入 tasks.md（行格式 "- [ ] task-XX: 一句话任务名"，[model:xxx]/(depends_on: …) 标注随行），plan.md Wave 段改为 "- task-XX" 纯 ID 引用行')
+  } else if (!tc.trim()) {
+    diags.push('tasks.md 内容为空或缺失：plan 阶段应把展开后的任务清单写回 tasks.md（brainstorm 骨架只是名字级占位）')
+  } else if (!hasTaskCheckboxInTasks && hasQlLines) {
+    diags.push('tasks.md 只有 ql-xxx 行（quick 挂载条目），没有 task-XX 任务行——完整流程变更的任务清单尚未写入')
+  } else if (!hasTaskCheckboxInTasks) {
+    diags.push('tasks.md 无 "- [ ] task-XX:" 格式的任务行：检查行首格式（- 空格 [ ] 空格 task-XX: 英文冒号）')
   }
-  if (hasTaskHeading) {
-    diags.push('task 用了 "### task-XX:" 标题（非 checkbox）：标题会打断 Wave 段导致后续 checkbox 全被跳过，请改用 "- [ ] task-XX: 名称"（英文冒号）')
-  }
-  if (hasWaveHeading && hasCheckboxTask && !hasTaskHeading) {
-    diags.push('有 Wave 段也有 checkbox task 但未收容：checkbox 可能落在非任务区（如 "## 自检" 段）或被 "###" 标题打断，请检查 task 是否紧跟在 "## Wave N" 下')
+  if (hasTaskCheckboxInTasks && hasWaveHeading && !hasRefLine) {
+    diags.push('plan.md 有 Wave 段但没有 "- task-XX" 引用行：新契约 Wave 段只收纯 ID 引用行（如 "- task-01"），未引用的任务不进 execute')
   }
   return diags
 }
 
 /**
- * 从 plan 文件解析 Wave 分组
+ * 从 plan 解析 Wave 分组（新契约：Wave 段下纯 ID 引用行 `- task-XX`，任务详情在 tasks.md 注册表）。
+ * @param {string} planContent
+ * @param {Array<object>} registry - parseTaskRegistry 产物（id → 任务详情富化源）
  */
-function parseWavesFromPlan(planContent) {
+function parseWavesFromPlan(planContent, registry = []) {
   const waves = []
-  const lines = planContent.split('\n')
+  const regById = new Map(registry.map(t => [t.id, t]))
   let currentWave = null
-  let currentTask = null
-  // light/none plan.md 用 `## Tasks`（无 `## Wave N`）包任务，需识别为隐式任务区，
-  // 让其中的 task checkbox 能被收进惰性创建的隐式 Wave（见下方 taskMatch 分支）。
-  let inImplicitTaskSection = false
 
-  for (const line of lines) {
+  for (const line of String(planContent || '').split('\n')) {
     const waveMatch = line.match(/^#+\s*Wave\s+(\d+)/i)
     if (waveMatch) {
       currentWave = { index: parseInt(waveMatch[1]), tasks: [] }
-      currentTask = null
-      inImplicitTaskSection = false
       waves.push(currentWave)
       continue
     }
-
-    // 任何非 Wave 的标题行：
-    //   1) 退出当前显式 Wave 段，避免「## 自检」段里的 - [x] checkbox 被误当 task 定义解析
-    //      （导致 Contract 校验报 task id 重复/不连续，详见 docs/sillyspec/plan-postcheck-self-check-checkbox-false-dup.md）
-    //   2) 识别 light/none 的 `## Tasks`/`## 任务` 任务区（无 Wave 标题），置位隐式任务区标志
-    const headingMatch = line.match(/^#+\s+(.+?)\s*$/)
-    if (headingMatch) {
-      currentWave = null
-      currentTask = null
-      const headingText = headingMatch[1].trim().toLowerCase()
-      inImplicitTaskSection = /^(tasks?|任务)$/.test(headingText)
-      continue
-    }
-
-    const taskMatch = line.match(/^[-*]\s*\[[ x]\]\s*(.+)/)
-    if (taskMatch) {
-      const taskNoMatch = taskMatch[1].match(/\btask-(\d+)\b/i)
-      // full plan.md：task 必须在显式 Wave 段内（currentWave 非 null），正常收容。
-      // light/none plan.md（无 Wave 标题，任务在 `## Tasks` 下）：在隐式任务区内，遇含
-      // task-XX 编号的 checkbox 时惰性创建隐式 Wave 收容，否则 validatePlanForExecute 会报
-      // "没有找到 checkbox task"。详见 docs/sillyspec/plan-light-needs-wave-heading.md
-      // 不收的情况：非任务区（## 自检/## 验收 等）的 checkbox，或任务区内无 task-XX 编号的 checkbox。
-      if (!currentWave) {
-        if (!inImplicitTaskSection || !taskNoMatch) continue
-        const nextIndex = waves.length === 0 ? 1 : (waves[waves.length - 1].index || waves.length) + 1
-        currentWave = { index: nextIndex, tasks: [], implicit: true }
-        currentTask = null
-        waves.push(currentWave)
-      }
-      currentTask = {
-        index: taskNoMatch ? parseInt(taskNoMatch[1], 10) : null,
-        name: taskMatch[1].trim(),
-        file: '',
-        steps: '',
-        reference: ''
-      }
-      // 兼容旧格式：任务名后跟 (文件路径)
-      const fileMatch = taskMatch[1].match(/\(([^)]+)\)$/)
-      if (fileMatch) {
-        currentTask.file = fileMatch[1]
-        currentTask.name = taskMatch[1].replace(/\([^)]+\)$/, '').trim()
-      }
-      currentWave.tasks.push(currentTask)
-      continue
-    }
-
-    // 解析子行信息（修改/参考/步骤）
-    if (currentTask) {
-      const modMatch = line.match(/^\s+-\s*修改:\s*(.+)/)
-      if (modMatch) { currentTask.file = modMatch[1].trim(); continue }
-
-      const refMatch = line.match(/^\s+-\s*参考:\s*(.+)/)
-      if (refMatch) { currentTask.reference = refMatch[1].trim(); continue }
-
-      const stepMatch = line.match(/^\s+-\s*步骤:/)
-      if (stepMatch) { currentTask.steps = line.replace(/^\s+-\s*步骤:\s*/, '').trim(); continue }
-
-      // 步骤续行（数字开头的子步骤）
-      if (currentTask.steps && line.match(/^\s+\d+\./)) {
-        currentTask.steps += '\n' + line.trim()
-      }
+    // 任何非 Wave 的标题行退出当前 Wave 段（「## 自检」段的行不收，与旧解析同守卫）
+    if (/^#{1,6}\s+/.test(line)) { currentWave = null; continue }
+    const refMatch = line.match(/^[-*]\s+task-(\d+)\s*$/i)
+    if (refMatch && currentWave) {
+      const id = `task-${refMatch[1].padStart(2, '0')}`
+      const reg = regById.get(id)
+      currentWave.tasks.push(reg
+        ? { ...reg }
+        : { index: parseInt(refMatch[1], 10), id, name: '', done: false, model: null, dependsOn: [], file: '', steps: '', reference: '', dangling: true })
     }
   }
 
+  // 无显式 Wave 结构但注册表非空（light 级：任务全在 tasks.md、plan.md 只留策略）→
+  // 合成单隐式 Wave 收容全部任务（与旧 light `## Tasks` 隐式收容语义对齐，单 Wave 串行执行）
+  if (waves.length === 0 && registry.length > 0) {
+    waves.push({ index: 1, implicit: true, tasks: registry.map(t => ({ ...t })) })
+  }
   return waves
 }
 
@@ -855,7 +864,7 @@ ${workdirLines}
 你的角色是调度者 + 审查者（batch 只合并实现、不合并审查）：
 1. 为每个任务启动一个子代理（Agent tool），或按上述三条件把多个任务合并为一个 batch 子代理，同 Wave 内可并行
 2. 子代理完成后审查结果——batch 子代理只做实现与自验，task 审查、review.json 产出与 checkbox 勾选仍归你（主 agent），在子代理返回后逐 task 进行；审查 batch 报告时逐 task 对照 allowed_paths 检查改动文件清单有无越权
-3. 勾选 plan.md 中的 checkbox
+3. 勾选 tasks.md 中对应任务的 checkbox
 4. 记录改动文件和测试结果
 
 ${worktreeSection}${crossRepoCommitSection}${dispatchSection}
@@ -874,7 +883,7 @@ ${taskSummary}
 5. 任务含测试代码时，把下方「测试用例设计」整段复制进子代理 prompt，要求子代理按此设计测试用例
 6. **增量落盘与中断接手指引**：每完成一个可见产出（代码/测试/文档），立即写盘并执行一次最小验证（如语法检查、单跑相关测试）。工作过程中如被 429/API 配额/会话中断，应在最终回复里输出「已完成清单」（含文件路径、测试命令、当前卡点），不要只输出结论——主代理会依据磁盘产物和该清单判断哪些部分已完成，哪些需接手补做，避免重做已落盘的工作
 7. **任务边界铁律**：严格只实现本 task 的 \`allowed_paths\` 内文件；若 design.md/plan.md 明确指定了接口/回调/钩子接入位置，必须逐字遵守；不允许顺手实现其他 task 的内容（如 task-01 不要把 task-02 的接入也做了）。如发现必须改其他 task 文件才能继续，先回到主代理由主代理决定是否重分 Wave 或调整 plan，禁止子代理私自越界
-8. **batch 子代理协议**（仅当按「执行方式」节条件合并 batch 时附加进该子代理 prompt）：按 batch 内 task 顺序逐个完成实现闭环——读取 tasks/task-N.md → 实现 → 跑该 task 的 verify 命令 → 记录该 task 报告（改动文件清单 / verify 结果 / 卡点）→ 才开始下一个 task；最终回复输出逐 task 报告清单。禁止写 review.json、禁止勾选 plan.md checkbox——task 审查与勾选归主 agent，在子代理返回后逐 task 进行。越权即停：发现必须改 batch 内其他 task 或任何 batch 外 task 的 allowed_paths 文件 → 立即停止本 task 及后续，报告冲突文件与卡点，回主 agent 裁决（重分 Wave / 调整 plan / 回退独立子代理）。第 7 条任务边界铁律在 batch 语境下的「本 task」= 当前正在实现的 task
+8. **batch 子代理协议**（仅当按「执行方式」节条件合并 batch 时附加进该子代理 prompt）：按 batch 内 task 顺序逐个完成实现闭环——读取 tasks/task-N.md → 实现 → 跑该 task 的 verify 命令 → 记录该 task 报告（改动文件清单 / verify 结果 / 卡点）→ 才开始下一个 task；最终回复输出逐 task 报告清单。禁止写 review.json、禁止勾选 tasks.md checkbox——task 审查与勾选归主 agent，在子代理返回后逐 task 进行。越权即停：发现必须改 batch 内其他 task 或任何 batch 外 task 的 allowed_paths 文件 → 立即停止本 task 及后续，报告冲突文件与卡点，回主 agent 裁决（重分 Wave / 调整 plan / 回退独立子代理）。第 7 条任务边界铁律在 batch 语境下的「本 task」= 当前正在实现的 task
 
 {{include: testcase-design}}
 
@@ -889,8 +898,8 @@ ${taskSummary}
    - ❄️ 冷上下文：其他变更的 design.md、历史 plan.md（不要主动加载，除非明确需要）
 
 ### 中断续跑（如曾中断恢复）
-execute 按 Wave 持久化进度，task 级进度靠 plan.md checkbox 勾选。若本 Wave 曾因 429/API 配额/崩溃中断：
-- plan.md 中**已勾选 \`- [x]\` 的 task 已完成，跳过不重跑**（子代理也可能在完成前中断，重跑前先确认该 task 产出文件是否完整）
+execute 按 Wave 持久化进度，task 级进度靠 tasks.md checkbox 勾选。若本 Wave 曾因 429/API 配额/崩溃中断：
+- tasks.md 中**已勾选 \`- [x]\` 的 task 已完成，跳过不重跑**（子代理也可能在完成前中断，重跑前先确认该 task 产出文件是否完整）
 - 用 \`sillyspec status\` 查当前进度，重新 \`sillyspec run execute\` 会回到当前 Wave step 继续，**不要从零重置或重跑已完成 Wave**
 - 本 Wave 已完成但不完整（产出缺文件）的 task 补做，不牵连其他 task
 
@@ -919,7 +928,7 @@ ${taskList}
 1. 读取当前 task 的 git diff（从 task 开始到完成的变更）
 2. 对照 plan.md 中该 task 的描述和 tasks/task-XX.md（如果存在）检查实现是否符合要求
 3. 写入 review.json 文件
-4. **只有 review.json 写入成功后，才允许勾选 plan.md 中的 checkbox**
+4. **只有 review.json 写入成功后，才允许勾选 tasks.md 中对应任务的 checkbox**（勾选唯一落点；CLI 的 autoCheckPlanFromReviews 机器勾选器同样写 tasks.md，文件锁 .tasks.md.lock 串行化双路勾选）
 
 **review.json 路径：**
 
@@ -970,9 +979,11 @@ export function buildExecuteSteps(planFilePath = null, options = {}) {
 
   if (planFilePath && existsSync(planFilePath)) {
     const planContent = readFileSync(planFilePath, 'utf8')
-    // Plan → Execute 契约由 plan 阶段完成时的 postcheck 把关（run.js completeStep），
-    // 此处只负责解析 waves，避免 buildExecuteSteps 与进程退出耦合。
-    waves = parseWavesFromPlan(planContent)
+    // 新契约（D-001@v1）：任务注册表在 tasks.md（与 plan.md 同目录），Wave 结构在 plan.md
+    const tasksPath = path.join(path.dirname(planFilePath), 'tasks.md')
+    const tasksContent = existsSync(tasksPath) ? readFileSync(tasksPath, 'utf8') : ''
+    const registry = parseTaskRegistry(tasksContent)
+    waves = parseWavesFromPlan(planContent, registry)
     changeDir = path.dirname(planFilePath)
   }
 

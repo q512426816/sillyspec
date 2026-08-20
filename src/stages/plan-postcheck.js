@@ -344,7 +344,10 @@ function parseTaskWavesFromPlan(planPath) {
     const wm = line.match(/^#+\s*Wave\s+(\d+)/i)
     if (wm) { currentWave = parseInt(wm[1], 10); continue }
     if (/^#+\s/.test(line)) { currentWave = null; continue } // 非 Wave 标题退出当前 Wave 段
-    const tm = line.match(/^[-*]\s*\[[ x]\]\s*(task-\d+)/i)
+    // 2026-08-20-task-truth-unify：Wave 段下为纯 ID 引用行（- task-XX）；旧 checkbox 行同收
+    // （旧变更读侧兼容——新格式由 validatePlanForExecute 拦旧形态，此处不重复把关）
+    const tm = line.match(/^[-*]\s+(?:\[[ x]\]\s*)?(task-\d+)\s*[:：\s]*$/i)
+      || line.match(/^[-*]\s*\[[ x]\]\s*(task-\d+)\b/i)
     if (tm && currentWave !== null) map.set(tm[1], currentWave)
   }
   return map
@@ -452,38 +455,46 @@ export function validateBlueprintConsistency(changeDir) {
     }
   }
 
-  // plan.md 声明任务 ↔ tasks/ 卡片双向对账（债单 D-2b）：
-  // plan 列 17 任务只出 12 卡（尾部文档同步类任务漏卡）时，无卡任务不进 Wave、
-  // 不受 execute 审计 → 零失败信号漏做。口径与 plan.js parseTaskCount/parseTaskNames 一致
-  // （`- [ ] task-NN` checkbox；file 命名 task-NN.md + 卡内 id task-NN 均取，缺一即漏卡）。
+  // 任务声明 ↔ tasks/ 卡片双向对账（债单 D-2b；2026-08-20-task-truth-unify：声明源迁 tasks.md 注册表）：
+  // 注册表列 17 任务只出 12 卡（尾部文档同步类任务漏卡）时，无卡任务不进 Wave、
+  // 不受 execute 审计 → 零失败信号漏做。口径与 execute.js parseTaskRegistry 一致
+  // （`- [ ] task-NN` checkbox 行；file 命名 task-NN.md + 卡内 id task-NN 均取，缺一即漏卡）。
   const planMdPath = pJoin(changeDir, 'plan.md')
-  if (existsSync(planMdPath)) {
-    const declaredIds = new Set()
+  const declaredIds = new Set()
+  const tasksMdPath = pJoin(changeDir, 'tasks.md')
+  if (existsSync(tasksMdPath)) {
+    for (const line of readFileSync(tasksMdPath, 'utf8').split('\n')) {
+      const m = line.match(/^[-*]\s*\[[ x]\]\s*(task-\d+)\b/i)
+      if (m) declaredIds.add(m[1].toLowerCase())
+    }
+  }
+  if (declaredIds.size === 0 && existsSync(planMdPath)) {
+    // 兼容读侧：tasks.md 缺失/无声明时回退解析 plan.md 旧 checkbox 声明（旧归档变更）
     for (const line of readFileSync(planMdPath, 'utf8').split('\n')) {
       const m = line.match(/^[-*]\s*\[[ x]\]\s*(task-\d+)\b/i)
       if (m) declaredIds.add(m[1].toLowerCase())
     }
-    if (declaredIds.size > 0) {
-      const tprRule = getRule('plan.task-plan-reconciliation')
-      const cardIds = new Set([...taskInfo.keys()].map(id => id.toLowerCase()))
-      const missing = [...declaredIds].filter(id => !cardIds.has(id))
-      if (missing.length > 0) {
-        errors.push(
-          tprRule.data.messageMissingCards
-            .replaceAll('${declared}', declaredIds.size)
-            .replaceAll('${missing}', missing.join(', '))
-        )
-      }
-      const orphans = [...cardIds].filter(id => !declaredIds.has(id))
-      if (orphans.length > 0) {
-        errors.push(
-          tprRule.data.messageOrphanCards.replaceAll('${orphans}', orphans.join(', '))
-        )
-      }
-    }
-    // declaredIds.size === 0：plan.md 无 task checkbox 声明（极端格式）→ 跳过对账，
-    // 由 validatePlanArtifacts/validatePlanForExecute 把关，不在此误伤。
   }
+  if (declaredIds.size > 0) {
+    const tprRule = getRule('plan.task-plan-reconciliation')
+    const cardIds = new Set([...taskInfo.keys()].map(id => id.toLowerCase()))
+    const missing = [...declaredIds].filter(id => !cardIds.has(id))
+    if (missing.length > 0) {
+      errors.push(
+        tprRule.data.messageMissingCards
+          .replaceAll('${declared}', declaredIds.size)
+          .replaceAll('${missing}', missing.join(', '))
+      )
+    }
+    const orphans = [...cardIds].filter(id => !declaredIds.has(id))
+    if (orphans.length > 0) {
+      errors.push(
+        tprRule.data.messageOrphanCards.replaceAll('${orphans}', orphans.join(', '))
+      )
+    }
+  }
+  // declaredIds.size === 0：注册表无 task 声明（极端格式）→ 跳过对账，
+  // 由 validatePlanArtifacts/validatePlanForExecute 把关，不在此误伤。
 
   // 拓扑排序 + 循环依赖
   const depMap = new Map()
@@ -1269,7 +1280,9 @@ export async function executePlanPostcheck(context) {
               currentWaveTasks = null
               continue
             }
-            const tm = line.match(/^[-*]\s*\[[ x]\]\s*task-(\d+)/i)
+            // 2026-08-20-task-truth-unify：Wave 段下纯 ID 引用行（- task-NN）；旧 checkbox 行同收
+            const tm = line.match(/^[-*]\s+(?:\[[ x]\]\s*)?task-(\d+)\s*[:：\s]*$/i)
+              || line.match(/^[-*]\s*\[[ x]\]\s*task-(\d+)/i)
             if (tm && currentWaveTasks) {
               currentWaveTasks.push(`task-${tm[1]}`)
             }

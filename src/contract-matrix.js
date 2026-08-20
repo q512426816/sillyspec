@@ -46,18 +46,24 @@ export function classifyTask(taskContent) {
 }
 
 /**
- * 从 plan.md 解析 task 依赖关系，识别 provider → consumer 对
- * @param {string} planContent - plan.md 内容
+ * 解析 task 依赖关系，识别 provider → consumer 对（2026-08-20-task-truth-unify D-003@v1：
+ * 行内 depends_on 标注源迁 tasks.md，函数内 tasks.md 优先、plan.md 回退拼接）
+ * @param {string} planContent - plan.md 内容（任务总表依赖列兜底源）
  * @param {string} changeDir - changes/<name>/ 目录
  * @returns {Array<{ provider: string, consumer: string, type: string }>}
  */
 export function buildContractMatrix(planContent, changeDir) {
   const contracts = []
 
-  // 解析 task 依赖关系
-  // 格式: - [ ] task-04: ... (depends_on: [task-01]) 或
-  //        | task-04 | ... | 01 |
-  const taskDeps = parseTaskDependencies(planContent)
+  // 解析 task 依赖关系（tasks.md 注册表行内标注优先；plan.md 总表列兜底——两源拼合去重）
+  // tasks.md 格式: - [ ] task-04: 名称 (depends_on: task-01,02)；
+  // plan.md 总表: | task-04 | ... | 01 |
+  const tasksMdPath = changeDir ? join(changeDir, 'tasks.md') : null
+  let registryContent = ''
+  if (tasksMdPath && existsSync(tasksMdPath)) {
+    try { registryContent = readFileSync(tasksMdPath, 'utf8') } catch { registryContent = '' }
+  }
+  const taskDeps = parseTaskDependencies(registryContent + '\n' + String(planContent || ''))
 
   // 读取各 task 文档，分类 provider/consumer
   // classify consumers（taskDeps keys）+ providers（deps 值）。
@@ -100,25 +106,28 @@ export function buildContractMatrix(planContent, changeDir) {
 }
 
 /**
- * 从 plan.md 解析 task 依赖关系
- * @param {string} planContent
+ * 解析 task 依赖关系（2026-08-20-task-truth-unify D-003@v1）。
+ * 方式 2（depends_on 行内标注）的机器解析源随任务行迁 tasks.md——调用方 buildContractMatrix
+ * 读 tasks.md 传入（缺失回退 plan.md 内容，旧变更兼容）；方式 1（任务总表依赖列）仍来自 plan.md。
+ * @param {string} registryContent - tasks.md 内容（优先）或 plan.md 内容（回退）
  * @returns {Record<string, string[]>} task → depends_on list
  */
-function parseTaskDependencies(planContent) {
+function parseTaskDependencies(registryContent) {
   const deps = {}
 
-  // 方式 1: 表格形式 | task-04 | ... | 01,02 |
+  // 方式 1: 任务总表表格形式 | task-04 | ... | 01,02 |
   // 列前缀用 [^|\d]*（不吃数字）：旧 [^|]* 贪婪会吃掉 deps 列前导 0（" 01" → g2=1 → task-1），
   // 导致 provider task-1.md 不存在 → contracts 恒空，端点契约管线失效。
-  const tableRows = planContent.matchAll(/\|[^|]*task-(\d+)[^|]*\|[^|]*\|[^|\d]*(?:task-)?(\d+(?:\s*[,，]\s*\d+)*)[^|]*\|/gi)
+  const tableRows = registryContent.matchAll(/\|[^|]*task-(\d+)[^|]*\|[^|]*\|[^|\d]*(?:task-)?(\d+(?:\s*[,，]\s*\d+)*)[^|]*\|/gi)
   for (const match of tableRows) {
     const task = `task-${match[1]}`
     const depList = match[2].split(/[,，\s]+/).map(d => `task-${d.trim()}`).filter(d => d.startsWith('task-'))
     deps[task] = depList
   }
 
-  // 方式 2: depends_on 关键字
-  const dependsPattern = planContent.matchAll(/task-(\d+).*?depends_on.*?(\d+(?:\s*[,，]\s*\d+)*)/gi)
+  // 方式 2: tasks.md 行内标注 "- [ ] task-04: 名称 (depends_on: task-01,02)"（新家，D-003@v1；
+  // 旧 plan.md checkbox 行内标注同格式兼容）
+  const dependsPattern = registryContent.matchAll(/task-(\d+).*?depends_on.*?(\d+(?:\s*[,，]\s*\d+)*)/gi)
   for (const match of dependsPattern) {
     const task = `task-${match[1]}`
     const depList = match[2].split(/[,，\s]+/).map(d => `task-${d.trim()}`).filter(d => d.startsWith('task-'))

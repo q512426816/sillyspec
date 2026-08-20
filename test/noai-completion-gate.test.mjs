@@ -56,7 +56,9 @@ console.log('--- T2: plan + task id 不连续 → Plan→Execute Contract 阻断
   const pm = await initChange(cwd, specBase, cn)
   const changeDir = join(specBase, 'changes', cn)
   // task-01 → task-03（缺 task-02）→ validatePlanForExecute 报 task id 不连续
-  writeFileSync(join(changeDir, 'plan.md'), '# Plan\n\n## Wave 1\n\n- [ ] task-01: a\n- [ ] task-03: c\n')
+  // （2026-08-20-task-truth-unify：注册表在 tasks.md，plan.md 只留 Wave 引用行）
+  writeFileSync(join(changeDir, 'tasks.md'), '- [ ] task-01: a\n- [ ] task-03: c\n')
+  writeFileSync(join(changeDir, 'plan.md'), '# Plan\n\n## Wave 1\n\n- task-01\n- task-03\n')
   // plan.module-impact.exists(large) 要求——补上让校验过，聚焦 Contract 不连续
   writeFileSync(join(changeDir, 'module-impact.md'), '# 模块影响分析（Module Impact）— ncg\n\n测试占位\n')
   const steps = [
@@ -129,7 +131,8 @@ console.log('\n--- T5+T8: plan skip optional 步骤 → S3 守卫满足 gate 仍
   const pm = await initChange(cwd, specBase, cn)
   const changeDir = join(specBase, 'changes', cn)
   // task-01 + task-02 连续 → contract 通过（隔离 S3 守卫，不让 contract fail 干扰）
-  writeFileSync(join(changeDir, 'plan.md'), '# Plan\n\n## Wave 1\n\n- [ ] task-01: a\n- [ ] task-02: b\n')
+  writeFileSync(join(changeDir, 'tasks.md'), '- [ ] task-01: a\n- [ ] task-02: b\n')
+  writeFileSync(join(changeDir, 'plan.md'), '# Plan\n\n## Wave 1\n\n- task-01\n- task-02\n')
   writeFileSync(join(changeDir, 'module-impact.md'), '# 模块影响分析（Module Impact）— ncg-s3\n\n测试占位\n')
   const steps = [
     { name: '复杂度分类与上下文加载', status: 'completed' },

@@ -98,7 +98,7 @@ export const definition = {
     },
     {
       name: '逐项检查任务',
-      prompt: `对照 tasks.md 检查每个任务完成状态。
+      prompt: `对照 tasks.md（任务注册表唯一真相）检查每个任务完成状态。勾选由 execute 双路写入（agent 按 review gate 手动勾 + CLI autoCheckPlanFromReviews 机器勾选器按 review.json 自动勾），本阶段只读对照、不改勾。
 
 ### 操作
 对每个 checkbox：

@@ -1012,22 +1012,25 @@ export class ProgressManager {
   // ── plan.md 对齐（doctor --align-execute-progress 入口）──
 
   /**
-   * 解析 changeDir/plan.md（回退 tasks.md）的 task checkbox 统计。
+   * 解析 changeDir/tasks.md（任务注册表唯一真相）的 task checkbox 统计。
+   * 2026-08-20-task-truth-unify：源从「plan.md 优先回退 tasks.md」改为 tasks.md 唯一源——
+   * 旧顺序下新契约 plan.md（纯 ID 引用行）恒 total=0，doctor --align-execute-progress 会静默失效。
+   * tasks.md 缺失时回退 plan.md（旧归档变更兼容读侧，不写侧迁移）。
    * 仅匹配 `- [ ] task-NN` / `- [x] task-NN` 形态的行（task- 前缀锚定，避免误捞非任务项）。
-   * @param {string} changeDir - 变更目录绝对路径（含 plan.md/tasks.md）
+   * @param {string} changeDir - 变更目录绝对路径（含 tasks.md/plan.md）
    * @returns {{ total: number, checked: number }}
    */
   readPlanCheckboxStatus(changeDir) {
     if (!changeDir || typeof changeDir !== 'string') {
       throw new Error('changeDir 不能为空');
     }
-    const planPath = join(changeDir, 'plan.md');
     const tasksPath = join(changeDir, 'tasks.md');
+    const planPath = join(changeDir, 'plan.md');
     let content = null;
-    if (existsSync(planPath)) {
-      content = readFileSync(planPath, 'utf8');
-    } else if (existsSync(tasksPath)) {
+    if (existsSync(tasksPath)) {
       content = readFileSync(tasksPath, 'utf8');
+    } else if (existsSync(planPath)) {
+      content = readFileSync(planPath, 'utf8');
     } else {
       return { total: 0, checked: 0 };
     }

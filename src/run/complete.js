@@ -639,10 +639,12 @@ async function autoCheckPlanFromReviews({ stageName, changeName, cwd, platformOp
   try {
     const specBaseLc = platformOpts?.specRoot || join(cwd, '.sillyspec')
     const changeDir = join(specBaseLc, 'changes', changeName)
-    const planPath = join(changeDir, 'plan.md')
+    // 2026-08-20-task-truth-unify D-001@v1：勾选写入目标从 plan.md 迁 tasks.md（任务唯一真相；
+    // plan.md Wave 引用行无 checkbox，无处可勾）。tasks.md 存在性作前置。
+    const tasksMdPath = join(changeDir, 'tasks.md')
     const runtimeRoot = resolveRuntimeRoot(platformOpts, specBaseLc)
     const runIdFile = join(runtimeRoot, `current-execute-run-id-${changeName}`)
-    if (!existsSync(planPath) || !existsSync(runIdFile)) {
+    if (!existsSync(tasksMdPath) || !existsSync(runIdFile)) {
       return { autoChecked: false, checkedCount: 0, skippedCount: 0 }
     }
     const c = readFileSync(runIdFile, 'utf8').trim()
@@ -657,16 +659,16 @@ async function autoCheckPlanFromReviews({ stageName, changeName, cwd, platformOp
     // W2 task-04 FR-03：构造 ctx 供草稿零 diff 守卫用（与 task-review.js generateTaskReviewDrafts 同源）
     const ctx = await buildDraftContext(cwd, changeName)
 
-    // plan.md 是 agent 与 CLI 都会写的共享文件（agent 勾 checkbox、此处 autoCheck 也勾选）。
+    // tasks.md 是 agent 与 CLI 都会写的共享文件（agent 勾 checkbox、此处 autoCheck 也勾选）。
     // 读-改-写必须整体持锁（withFileLock 串行化多进程），否则并发 execute --done / 手动勾选互相覆盖
     // （后到者覆盖先到者）；写入用 writeAtomicSync（tmp+rename 原子），防 Windows 整文件覆盖被读半截
     // （fs-atomic.js 头注明的 reader-writer 竞态坑）。锁文件放 changeDir，与 QUICKLOG 同机制。
-    const lockPath = join(changeDir, '.plan.md.lock')
+    const lockPath = join(changeDir, '.tasks.md.lock')
     return await withFileLock(lockPath, async () => {
-      const planContent = readFileSync(planPath, 'utf8')
+      const tasksContent = readFileSync(tasksMdPath, 'utf8')
       let checkedCount = 0
       let skippedCount = 0
-      const updated = planContent.replace(/^(\s*[-*]\s*\[)\s(\]\s*task-\d+)/gim, (match, p1, p2) => {
+      const updated = tasksContent.replace(/^(\s*[-*]\s*\[)\s(\]\s*task-\d+)/gim, (match, p1, p2) => {
         const taskNum = match.match(/task-(\d+)/)[1].padStart(2, '0')
         const reviewPath = join(runtimeRoot, 'execute-runs', executeRunId, 'tasks', `task-${taskNum}`, 'review.json')
         const r = readReview(reviewPath)
@@ -680,7 +682,7 @@ async function autoCheckPlanFromReviews({ stageName, changeName, cwd, platformOp
         return match              // 不勾
       })
       if (checkedCount > 0) {
-        writeAtomicSync(planPath, updated)
+        writeAtomicSync(tasksMdPath, updated)
       }
       return { autoChecked: checkedCount > 0, checkedCount, skippedCount }
     })
@@ -691,16 +693,17 @@ async function autoCheckPlanFromReviews({ stageName, changeName, cwd, platformOp
 }
 
 /**
- * execute 批量完成检测：plan.md 所有 task checkbox 已勾 + 代码客观核验非零变更 →
+ * execute 批量完成检测：tasks.md 所有 task checkbox 已勾 + 代码客观核验非零变更 →
  * 把剩余 pending/in-progress step 一次性标 completed，使 completeStep 本次 --done 即进入阶段完成
  * 分支（而非逐次 +1）。治"3 Wave 全做完仍显示未开工、需重走 7 次 --done"。
- * 复用现成能力：readPlanCheckboxStatus（plan 勾选状态）+ checkExecuteCodeEvidence（代码客观核验，
- * 与 doctor --align-execute-progress 同源，D-002/D-004）。仅在 stageName==='execute' && changeName 触发。
+ * 复用现成能力：readPlanCheckboxStatus（勾选状态，2026-08-20-task-truth-unify 起读 tasks.md）
+ * + checkExecuteCodeEvidence（代码客观核验，与 doctor --align-execute-progress 同源，D-002/D-004）。
+ * 仅在 stageName==='execute' && changeName 触发。
  *
- * W2 task-05 FR-04：plan 全勾后逐 task 复核——review 缺失或草稿零 diff → 阻断批量，
+ * W2 task-05 FR-04：全勾后逐 task 复核——review 缺失或草稿零 diff → 阻断批量，
  * 返回 blockedTasks 列表（task id 数组），调用方打印 reason。
  *
- * 安全门：plan 零 checkbox / 未全勾 / 代码零变更（unchanged）均不批量——信任 plan 声明但用代码核验兜底。
+ * 安全门：注册表零 checkbox / 未全勾 / 代码零变更（unchanged）均不批量——信任声明但用代码核验兜底。
  * @returns {Promise<{batched:boolean, aligned:number, reason?:string, blockedTasks?:string[]}>}
  */
 async function detectExecuteBatchFinish({ pm, stageName, changeName, cwd, specBase, steps }) {
@@ -708,11 +711,11 @@ async function detectExecuteBatchFinish({ pm, stageName, changeName, cwd, specBa
   try {
     const changeDir = join(specBase, 'changes', changeName)
     const { total: planTotal, checked: planChecked } = pm.readPlanCheckboxStatus(changeDir)
-    if (planTotal === 0) return { batched: false, aligned: 0, reason: 'plan.md 无 task checkbox' }
+    if (planTotal === 0) return { batched: false, aligned: 0, reason: 'tasks.md 无 task checkbox' }
     if (planChecked < planTotal) {
-      return { batched: false, aligned: 0, reason: `plan 未全勾（${planChecked}/${planTotal}）` }
+      return { batched: false, aligned: 0, reason: `tasks.md 未全勾（${planChecked}/${planTotal}）` }
     }
-    // plan 全勾 → 代码客观核验（防 plan 被手动勾伪造导致空完成）
+    // 全勾 → 代码客观核验（防手动勾伪造导致空完成）
     const { checkExecuteCodeEvidence } = await import('../stage-contract.js')
     const evidence = checkExecuteCodeEvidence(cwd, changeName)
     if (evidence.status === 'unchanged') {
@@ -720,15 +723,15 @@ async function detectExecuteBatchFinish({ pm, stageName, changeName, cwd, specBa
     }
 
     // W2 task-05 FR-04：逐 task 复核（草稿零 diff 守卫——批量层）
-    // 读取 plan.md 提取已勾 task id 列表（正则 `- [x] task-NN`）
-    const planPath = join(changeDir, 'plan.md')
-    const planContent = readFileSync(planPath, 'utf8')
+    // 读取 tasks.md 提取已勾 task id 列表（正则 `- [x] task-NN`；勾选唯一落点 tasks.md）
+    const tasksMdPath = join(changeDir, 'tasks.md')
+    const tasksContent = readFileSync(tasksMdPath, 'utf8')
     const taskCheckboxRegex = /-\s\[x\]\s+task-(\d+)/gi
-    const taskMatches = [...planContent.matchAll(taskCheckboxRegex)]
+    const taskMatches = [...tasksContent.matchAll(taskCheckboxRegex)]
     const taskIds = taskMatches.map(m => `task-${m[1].padStart(2, '0')}`)
 
     if (taskIds.length === 0) {
-      return { batched: false, aligned: 0, reason: 'plan.md 无已勾 task checkbox' }
+      return { batched: false, aligned: 0, reason: 'tasks.md 无已勾 task checkbox' }
     }
 
     // 构造 ctx 供草稿零 diff 校验用（与 task-04 同源）

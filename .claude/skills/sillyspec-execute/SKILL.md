@@ -187,7 +187,7 @@ execute 完成后（所有 Wave/task 完成 + Task Review Gate 通过），运�
 
 ### 批量完成（一次 --done 收尾）
 
-当 `plan.md` 所有 task checkbox 已勾（人工勾或基于各 task `review.json` pass 由 CLI 自动勾）且代码客观核验通过（`checkExecuteCodeEvidence` 非"零变更"）时，任一 execute `--done` 会**一次性补完所有剩余 step** 直达阶段完成，不必逐次 +1 推进。日志会打印 `🚀 execute 批量完成：plan 全勾 + 代码核验通过，一次性补完 N 个剩余 step`。条件不满足（plan 未全勾 / 代码零变更）时仍按单步推进，要求补 review 后重跑 `--done` 直至满足。
+当 `tasks.md`（任务注册表唯一真相）所有 task checkbox 已勾（agent 按 review gate 手动勾或基于各 task `review.json` pass 由 CLI `autoCheckPlanFromReviews` 自动勾，双路都写 tasks.md、文件锁 `.tasks.md.lock` 串行化）且代码客观核验通过（`checkExecuteCodeEvidence` 非"零变更"）时，任一 execute `--done` 会**一次性补完所有剩余 step** 直达阶段完成，不必逐次 +1 推进。日志会打印 `🚀 execute 批量完成` 提示。条件不满足（tasks.md 未全勾 / 代码零变更）时仍按单步推进，要求补 review 后重跑 `--done` 直至满足。
 
 ## 铁律
 

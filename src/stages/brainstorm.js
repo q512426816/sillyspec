@@ -537,7 +537,7 @@ Then 期望结果
 | D-001@v1 | FR-01 | ... |
 \`\`\`
 
-### tasks.md 格式要求（scale=large 时生成骨架，plan 阶段展开）
+### tasks.md 格式要求（scale=large 时生成骨架；任务清单唯一真相——plan 阶段展开细节并写回本文件）
 \`\`\`markdown
 ---
 author: <git-user>
@@ -548,6 +548,7 @@ created_at: <now-datetime>
 - [ ] task-01: <任务名>
 - [ ] task-02: <任务名>
 \`\`\`
+> 骨架只列任务名。plan 阶段会把展开后的清单**写回本文件**（checkbox 行带一句话名，可附 [model:xxx]/(depends_on: …) 标注；保留 frontmatter/标题/ql-xxx 等非 task-XX 行）；execute 勾选与 verify 对照都在本文件。
 
 ### decisions.md 格式要求（仅在有 Grill/重大决策时生成）
 \`\`\`markdown

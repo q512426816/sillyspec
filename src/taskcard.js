@@ -99,20 +99,23 @@ export function cmdTaskcard(changeName, opts = {}) {
     throw new Error(`变更目录不存在: ${changeDir}（先完成 plan 前置步骤，或检查 --change 名）`)
   }
 
-  // plan.md 任务清单（CRLF 归一后解析；plan.md 可能缺失/无 checkbox 行，--all 时才强依赖）
+  // 任务注册表 tasks.md（2026-08-20-task-truth-unify 唯一真相；CRLF 归一后解析，
+  // --all 时强依赖）。tasks.md 缺失回退 plan.md（旧归档变更兼容读侧）
   let planTasks = []
+  const tasksMdPath = join(changeDir, 'tasks.md')
   const planPath = join(changeDir, 'plan.md')
-  if (existsSync(planPath)) {
-    const planContent = readFileSync(planPath, 'utf8').replace(/\r\n/g, '\n')
-    planTasks = parseTaskNames(planContent)
+  const registryPath = existsSync(tasksMdPath) ? tasksMdPath : planPath
+  if (existsSync(registryPath)) {
+    const registryContent = readFileSync(registryPath, 'utf8').replace(/\r\n/g, '\n')
+    planTasks = parseTaskNames(registryContent)
   }
 
   let ids
   if (taskIds === 'all') {
     if (planTasks.length === 0) {
       throw new Error(
-        `--all 需要 plan.md 中存在 checkbox 任务行（格式 "- [ ] task-XX: 任务名"）` +
-        (existsSync(planPath) ? '，当前 plan.md 未解析到任何任务行' : '，且变更目录下未找到 plan.md')
+        `--all 需要 tasks.md 中存在 checkbox 任务行（格式 "- [ ] task-XX: 任务名"）` +
+        (existsSync(registryPath) ? '，当前任务清单未解析到任何任务行' : '，且变更目录下未找到 tasks.md/plan.md')
       )
     }
     ids = planTasks.map(t => `task-${t.num}`)

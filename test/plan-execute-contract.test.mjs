@@ -1,10 +1,15 @@
 /**
- * Plan → Execute Contract v1 测试
+ * Plan → Execute Contract 测试（2026-08-20-task-truth-unify 起新契约：tasks.md 注册表 × plan.md Wave ID 引用）
  *
- * 验证 plan.md 到 execute 的契约：
- * 1. 各复杂度场景的 plan 校验通过
- * 2. 非法 plan 被正确拒绝
- * 3. execute 不复用旧 task
+ * 验证 tasks.md/plan.md 到 execute 的契约：
+ * 1. 各复杂度场景的双文件校验通过
+ * 2. 非法注册表/引用被正确拒绝
+ * 3. 旧格式（plan.md 任务 checkbox）被拦并指路
+ *
+ * 适配说明：原 v1 用例的旧格式 fixture（plan.md 内 checkbox 任务行）已按新契约改写为
+ * 「tasks.md 注册表 + plan.md ID 引用行」双文件形态；被新契约取代的场景（无 id task 的
+ * warning、plan 内子行 修改/参考 解析、`## Tasks` 隐式任务区）由 parseTaskRegistry 的
+ * 对应用例（task-truth-contract.test.mjs ⑧/⑨）与本文对应新场景承接。
  */
 import { validatePlanForExecute } from '../src/stages/execute.js'
 
@@ -23,62 +28,52 @@ function assert(condition, msg) {
   }
 }
 
-console.log('=== Plan → Execute Contract v1 测试 ===\n')
+// 构造双文件 fixture：tasks 行列表 + plan body（Wave 段引用行）
+function fx(taskLines, planBody) {
+  const tasks = ['# 任务清单（Tasks）', '', ...taskLines].join('\n')
+  const plan = `# Plan\n\n${planBody}`
+  return { tasks, plan }
+}
+
+console.log('=== Plan → Execute Contract 测试（tasks.md × plan.md 新契约）===\n')
 
 // ─────────────────────────────────────────
-// Case 1: none plan（最小变更）通过
+// Case 1: 单任务（none 级形态）通过
 // ─────────────────────────────────────────
-console.log('--- Case 1: none plan contract 通过 ---')
+console.log('--- Case 1: 单任务 contract 通过 ---')
 {
-  const plan = `# Plan
-
-## Wave 1
-- [ ] task-01: 修复 typo
-`
-  const result = validatePlanForExecute(plan)
-  assert(result.ok, 'none plan 应校验通过')
+  const { tasks, plan } = fx(['- [ ] task-01: 修复 typo'], '## Wave 1\n- task-01\n')
+  const result = validatePlanForExecute(tasks, plan)
+  assert(result.ok, '单任务应校验通过')
   assert(result.tasks.length === 1, `应有 1 个 task，实际 ${result.tasks.length}`)
   assert(result.waves.length === 1, `应有 1 个 wave，实际 ${result.waves.length}`)
 }
 
 // ─────────────────────────────────────────
-// Case 2: light plan 通过
+// Case 2: 两任务单 Wave（light 级形态）通过
 // ─────────────────────────────────────────
-console.log('\n--- Case 2: light plan contract 通过 ---')
+console.log('\n--- Case 2: 两任务单 Wave 通过 ---')
 {
-  const plan = `# Plan
-
-## Wave 1
-- [ ] task-01: 添加 API 端点
-- [ ] task-02: 添加前端调用
-`
-  const result = validatePlanForExecute(plan)
-  assert(result.ok, 'light plan 应校验通过')
+  const { tasks, plan } = fx(
+    ['- [ ] task-01: 添加 API 端点', '- [ ] task-02: 添加前端调用'],
+    '## Wave 1\n- task-01\n- task-02\n'
+  )
+  const result = validatePlanForExecute(tasks, plan)
+  assert(result.ok, '两任务应校验通过')
   assert(result.tasks.length === 2, `应有 2 个 task，实际 ${result.tasks.length}`)
 }
 
 // ─────────────────────────────────────────
-// Case 3: full plan with waves 通过
+// Case 3: full plan 多 Wave 通过 + index 连续
 // ─────────────────────────────────────────
-console.log('\n--- Case 3: full plan wave contract 通过 ---')
+console.log('\n--- Case 3: full plan 多 Wave contract 通过 ---')
 {
-  const plan = `# Plan
-
-## Wave 1: 基础设施
-- [ ] task-01: 数据库 schema
-  - 修改: db/migrate/001.sql
-- [ ] task-02: 模型定义
-
-## Wave 2: 业务逻辑
-- [ ] task-03: API 实现
-- [ ] task-04: 业务规则
-
-## Wave 3: 测试
-- [ ] task-05: 集成测试
-  - 参考: tests/integration/
-`
-  const result = validatePlanForExecute(plan)
-  assert(result.ok, 'full plan 应校验通过')
+  const { tasks, plan } = fx(
+    ['- [ ] task-01: 数据库 schema', '- [ ] task-02: 模型定义', '- [ ] task-03: API 实现', '- [ ] task-04: 业务规则', '- [ ] task-05: 集成测试'],
+    '## Wave 1: 基础设施\n- task-01\n- task-02\n\n## Wave 2: 业务逻辑\n- task-03\n- task-04\n\n## Wave 3: 测试\n- task-05\n'
+  )
+  const result = validatePlanForExecute(tasks, plan)
+  assert(result.ok, `full plan 应校验通过（${result.errors.join('; ')}）`)
   assert(result.tasks.length === 5, `应有 5 个 task，实际 ${result.tasks.length}`)
   assert(result.waves.length === 3, `应有 3 个 wave，实际 ${result.waves.length}`)
   assert(result.tasks[0].index === 1, 'task-01 index 应为 1')
@@ -86,34 +81,26 @@ console.log('\n--- Case 3: full plan wave contract 通过 ---')
 }
 
 // ─────────────────────────────────────────
-// Case 4: 无 checkbox task 失败
+// Case 4: 注册表为空失败（诊断指路）
 // ─────────────────────────────────────────
-console.log('\n--- Case 4: 无 checkbox task 失败 ---')
+console.log('\n--- Case 4: 注册表为空失败 ---')
 {
-  const plan = `# Plan
-
-这个 plan 只有描述，没有任何 task。
-
-## 注意事项
-- 设计文档已就绪
-`
-  const result = validatePlanForExecute(plan)
-  assert(!result.ok, '无 checkbox task 应失败')
-  assert(result.errors.some(e => e.includes('checkbox task')), '错误应提到 checkbox task')
+  const plan = `# Plan\n\n这个 plan 只有描述，没有任何任务引用。\n`
+  const result = validatePlanForExecute('', plan)
+  assert(!result.ok, '注册表为空应失败')
+  assert(result.errors.some(e => e.includes('task-XX checkbox')), '错误应提到 task-XX checkbox')
 }
 
 // ─────────────────────────────────────────
-// Case 5: task id 重复失败
+// Case 5: task id 重复失败（tasks.md 内重复行）
 // ─────────────────────────────────────────
 console.log('\n--- Case 5: task id 重复失败 ---')
 {
-  const plan = `# Plan
-
-## Wave 1
-- [ ] task-01: 第一个任务
-- [ ] task-01: 重复的任务
-`
-  const result = validatePlanForExecute(plan)
+  const { tasks, plan } = fx(
+    ['- [ ] task-01: 第一个任务', '- [ ] task-01: 重复的任务'],
+    '## Wave 1\n- task-01\n'
+  )
+  const result = validatePlanForExecute(tasks, plan)
   assert(!result.ok, 'task id 重复应失败')
   assert(result.errors.some(e => e.includes('重复')), '错误应提到重复')
 }
@@ -123,331 +110,165 @@ console.log('\n--- Case 5: task id 重复失败 ---')
 // ─────────────────────────────────────────
 console.log('\n--- Case 6: task id 不连续失败 ---')
 {
-  const plan = `# Plan
-
-## Wave 1
-- [ ] task-01: 第一个
-- [ ] task-03: 跳过了第二个
-`
-  const result = validatePlanForExecute(plan)
+  const { tasks, plan } = fx(
+    ['- [ ] task-01: 第一个', '- [ ] task-03: 跳过了第二个'],
+    '## Wave 1\n- task-01\n- task-03\n'
+  )
+  const result = validatePlanForExecute(tasks, plan)
   assert(!result.ok, 'task id 不连续应失败')
   assert(result.errors.some(e => e.includes('不连续')), '错误应提到不连续')
 }
 
 // ─────────────────────────────────────────
-// Case 7: 空 plan 失败
+// Case 7: 空输入失败
 // ─────────────────────────────────────────
-console.log('\n--- Case 7: 空 plan 失败 ---')
+console.log('\n--- Case 7: 空输入失败 ---')
 {
-  const result1 = validatePlanForExecute('')
-  assert(!result1.ok, '空字符串应失败')
-
-  const result2 = validatePlanForExecute(null)
-  assert(!result2.ok, 'null 应失败')
-
-  const result3 = validatePlanForExecute('   ')
-  assert(!result3.ok, '纯空格应失败')
+  const r1 = validatePlanForExecute('', '')
+  assert(!r1.ok, '双空应失败')
+  const r2 = validatePlanForExecute(null, null)
+  assert(!r2.ok, 'null 应失败')
+  const r3 = validatePlanForExecute('   ', '   ')
+  assert(!r3.ok, '纯空格应失败')
 }
 
 // ─────────────────────────────────────────
-// Case 8: task name 非空
+// Case 8: task name 为空失败（注册表行）
 // ─────────────────────────────────────────
 console.log('\n--- Case 8: task name 为空失败 ---')
 {
-  // 注意：parseWavesFromPlan 在 task name 为空字符串时可能不触发
-  // 这个 case 验证 validator 能检测到空 name
-  const plan = `# Plan
-
-## Wave 1
-- [ ] task-01: 
-`
-  const result = validatePlanForExecute(plan)
-  // task name 为空时 trim 后为空
-  if (result.tasks.length > 0 && !result.tasks[0].name.trim()) {
-    assert(!result.ok, 'task name 为空应失败')
-  } else {
-    // 如果 parser 把空 name 过滤了，那至少 plan 能解析
-    console.log('  ℹ️  parser 过滤了空 name，跳过此 case')
-  }
+  const { tasks, plan } = fx(['- [ ] task-01: '], '## Wave 1\n- task-01\n')
+  const result = validatePlanForExecute(tasks, plan)
+  assert(!result.ok, 'task name 为空应失败')
+  assert(result.errors.some(e => e.includes('任务名为空')), '错误应提到任务名为空')
 }
 
 // ─────────────────────────────────────────
-// Case 9: task 无 id 只有 warning
+// Case 9: 行尾 (文件路径) 尾注解析（原「子行信息」用例的新契约承接）
 // ─────────────────────────────────────────
-console.log('\n--- Case 9: task 无 id 只有 warning ---')
+console.log('\n--- Case 9: 注册表行 (文件) 尾注解析 ---')
 {
-  const plan = `# Plan
-
-## Wave 1
-- [ ] 实现登录功能
-`
-  const result = validatePlanForExecute(plan)
-  // 无 id 的 task 只产生 warning，不阻止执行
-  assert(result.ok, '无 id task 不应阻止执行')
-  assert(result.warnings.length > 0, '应有 warning 关于缺少 task id')
+  const { tasks, plan } = fx(['- [ ] task-01: 实现功能 (src/auth.js)'], '## Wave 1\n- task-01\n')
+  const result = validatePlanForExecute(tasks, plan)
+  assert(result.ok, '带尾注的注册表应校验通过')
+  assert(result.tasks[0].file === 'src/auth.js', `task file 应为 src/auth.js（实际 ${result.tasks[0].file}）`)
+  assert(result.tasks[0].name === '实现功能', `尾注剥离后 name 干净（实际 "${result.tasks[0].name}"）`)
 }
 
 // ─────────────────────────────────────────
-// Case 10: 连续 id 从 1 开始
+// Case 10: 连续 id 从 1 开始（task-02 起始不报断档——兼容口径保留）
 // ─────────────────────────────────────────
 console.log('\n--- Case 10: task-02 起始不报不连续（兼容） ---')
 {
-  const plan = `# Plan
-
-## Wave 1
-- [ ] task-02: 第二个
-- [ ] task-03: 第三个
-`
-  const result = validatePlanForExecute(plan)
-  // 从 task-02 开始，ids[0]=2 ≠ 1，不触发连续性检查
-  assert(result.ok, 'task-02 起始不应报不连续')
+  const { tasks, plan } = fx(
+    ['- [ ] task-02: 第二个', '- [ ] task-03: 第三个'],
+    '## Wave 1\n- task-02\n- task-03\n'
+  )
+  const result = validatePlanForExecute(tasks, plan)
+  assert(result.ok, `task-02 起始不应报不连续（${result.errors.join('; ')}）`)
 }
 
 // ─────────────────────────────────────────
-// Case 11: 子行信息解析正确
+// Case 11: 多 Wave 各自引用
 // ─────────────────────────────────────────
-console.log('\n--- Case 11: 子行信息（修改/参考）解析正确 ---')
+console.log('\n--- Case 11: 多 Wave 各自引用 ---')
 {
-  const plan = `# Plan
-
-## Wave 1
-- [ ] task-01: 实现功能
-  - 修改: src/auth.js
-  - 参考: docs/auth.md
-  - 步骤: 1. 创建模型 2. 写中间件
-`
-  const result = validatePlanForExecute(plan)
-  assert(result.ok, '有子行的 plan 应校验通过')
-  assert(result.tasks[0].file === 'src/auth.js', 'task file 应为 src/auth.js')
-  assert(result.tasks[0].reference === 'docs/auth.md', 'task reference 应为 docs/auth.md')
-}
-
-// ─────────────────────────────────────────
-// Case 12: 多 Wave 各自有 task
-// ─────────────────────────────────────────
-console.log('\n--- Case 12: 多 Wave 各自有 task ---')
-{
-  const plan = `# Plan
-
-## Wave 1
-- [ ] task-01: A
-
-## Wave 2
-- [ ] task-02: B
-
-## Wave 3
-- [ ] task-03: C
-`
-  const result = validatePlanForExecute(plan)
-  assert(result.ok, '多 Wave plan 应校验通过')
+  const { tasks, plan } = fx(
+    ['- [ ] task-01: A', '- [ ] task-02: B', '- [ ] task-03: C'],
+    '## Wave 1\n- task-01\n\n## Wave 2\n- task-02\n\n## Wave 3\n- task-03\n'
+  )
+  const result = validatePlanForExecute(tasks, plan)
+  assert(result.ok, '多 Wave 应校验通过')
   assert(result.waves.length === 3, '应有 3 个 wave')
   assert(result.waves[0].tasks.length === 1, 'wave 1 应有 1 task')
   assert(result.waves[2].tasks[0].index === 3, 'wave 3 task 应为 task-03')
 }
 
 // ─────────────────────────────────────────
-// Plan Postcheck Contract: valid none plan 通过
+// Postcheck 形态回归：合法 none/light/full 通过（新契约双文件）
 // ─────────────────────────────────────────
-console.log('\n--- Plan Postcheck: valid none plan 通过 ---')
+console.log('\n--- Postcheck: 合法三级通过 ---')
 {
-  const plan = `# Plan\n\n## Wave 1\n- [ ] task-01: 修复 bug\n`
-  const result = validatePlanForExecute(plan)
-  assert(result.ok, 'none plan 应通过 postcheck contract')
-  assert(result.errors.length === 0, '不应有 errors')
+  const none = fx(['- [ ] task-01: 修复 bug'], '## Wave 1\n- task-01\n')
+  const r1 = validatePlanForExecute(none.tasks, none.plan)
+  assert(r1.ok && r1.errors.length === 0, 'none 形态应通过且无 errors')
+
+  const light = fx(['- [ ] task-01: API', '- [ ] task-02: 前端'], '## Wave 1\n- task-01\n- task-02\n')
+  const r2 = validatePlanForExecute(light.tasks, light.plan)
+  assert(r2.ok, 'light 形态应通过')
+
+  const full = fx(['- [ ] task-01: A', '- [ ] task-02: B', '- [ ] task-03: C'],
+    '## Wave 1\n- task-01\n## Wave 2\n- task-02\n## Wave 3\n- task-03\n')
+  const r3 = validatePlanForExecute(full.tasks, full.plan)
+  assert(r3.ok && r3.waves.length === 3, 'full 形态应通过且有 3 wave')
 }
 
 // ─────────────────────────────────────────
-// Plan Postcheck Contract: valid light plan 通过
+// Postcheck 形态回归：id 重复 / 断档失败
 // ─────────────────────────────────────────
-console.log('\n--- Plan Postcheck: valid light plan 通过 ---')
+console.log('\n--- Postcheck: id 重复/断档失败 ---')
 {
-  const plan = `# Plan\n\n## Wave 1\n- [ ] task-01: API\n- [ ] task-02: 前端\n`
-  const result = validatePlanForExecute(plan)
-  assert(result.ok, 'light plan 应通过 postcheck contract')
+  const dup = fx(['- [ ] task-01: A', '- [ ] task-01: B'], '## Wave 1\n- task-01\n')
+  assert(!validatePlanForExecute(dup.tasks, dup.plan).ok, 'id 重复应不通过')
+
+  const gap = fx(['- [ ] task-01: A', '- [ ] task-03: C'], '## Wave 1\n- task-01\n- task-03\n')
+  assert(!validatePlanForExecute(gap.tasks, gap.plan).ok, 'id 断档应不通过')
 }
 
 // ─────────────────────────────────────────
-// Plan Postcheck Contract: valid full plan 通过
+// Bug C 回归: 「## 自检」段 checkbox 不误解析（新契约下 plan 自检段无引用行即无影响；
+// 注册表侧 ql/验收 checkbox 由 task- 前缀锚定天然不收——双保险回归）
 // ─────────────────────────────────────────
-console.log('\n--- Plan Postcheck: valid full plan 通过 ---')
+console.log('\n--- Bug C 回归: 自检段不误解析 ---')
 {
-  const plan = `# Plan\n\n## Wave 1\n- [ ] task-01: A\n## Wave 2\n- [ ] task-02: B\n## Wave 3\n- [ ] task-03: C\n`
-  const result = validatePlanForExecute(plan)
-  assert(result.ok, 'full plan 应通过 postcheck contract')
-  assert(result.waves.length === 3, '应有 3 个 wave')
-}
-
-// ─────────────────────────────────────────
-// Plan Postcheck Contract: missing checkbox 失败
-// ─────────────────────────────────────────
-console.log('\n--- Plan Postcheck: missing checkbox 失败 ---')
-{
-  const plan = `# Plan\n\n只有描述没有 task。\n`
-  const result = validatePlanForExecute(plan)
-  assert(!result.ok, '无 checkbox 应不通过 postcheck')
-  assert(result.errors.length > 0, '应有 errors')
-  assert(result.errors.some(e => e.includes('checkbox task')), '应有 checkbox task 错误')
-}
-
-// ─────────────────────────────────────────
-// Plan Postcheck Contract: warning 不阻断
-// ─────────────────────────────────────────
-console.log('\n--- Plan Postcheck: warning 不阻断 completed ---')
-{
-  const plan = `# Plan\n\n## Wave 1\n- [ ] 实现功能（无 task id）\n`
-  const result = validatePlanForExecute(plan)
-  assert(result.ok, '有 warning 但应通过 postcheck（不阻断 completed）')
-  assert(result.warnings.length > 0, '应有 warning')
-}
-
-// ─────────────────────────────────────────
-// Plan Postcheck Contract: id 重复失败
-// ─────────────────────────────────────────
-console.log('\n--- Plan Postcheck: task id 重复失败 ---')
-{
-  const plan = `# Plan\n\n## Wave 1\n- [ ] task-01: A\n- [ ] task-01: B\n`
-  const result = validatePlanForExecute(plan)
-  assert(!result.ok, 'id 重复应不通过 postcheck')
-}
-
-// ─────────────────────────────────────────
-// Plan Postcheck Contract: id 不连续失败
-// ─────────────────────────────────────────
-console.log('\n--- Plan Postcheck: task id 不连续失败 ---')
-{
-  const plan = `# Plan\n\n## Wave 1\n- [ ] task-01: A\n- [ ] task-03: C\n`
-  const result = validatePlanForExecute(plan)
-  assert(!result.ok, 'id 不连续应不通过 postcheck')
-}
-
-// ─────────────────────────────────────────
-// Bug C 回归: 「## 自检」段的 - [x] checkbox 不应被解析为 task
-// 详见 docs/sillyspec/plan-postcheck-self-check-checkbox-false-dup.md
-// ─────────────────────────────────────────
-console.log('\n--- Bug C 回归: 自检段 checkbox 不误解析 ---')
-{
-  const plan = `# Plan
-
-## Wave 1
-- [ ] task-01: 建立 schema
-- [ ] task-02: 接口实现
-
-## Wave 2
-- [ ] task-03: 前端对接
-- [ ] task-04: 集成测试
-
-## 自检
-- [x] 每个 task 有编号(task-01~04),总数 4(≤15)
-- [x] 无泛泛风险(转为具体验收条目与 task-04/task-06 等)
-`
-  const result = validatePlanForExecute(plan)
-  assert(result.ok, `自检段含 - [x] 不应误报，errors: ${result.errors.join('; ')}`)
-  assert(result.tasks.length === 4, `应只解析 4 个 task，实际 ${result.tasks.length}（自检 checkbox 被误纳入）`)
+  const { tasks, plan } = fx(
+    ['- [ ] task-01: 建立 schema', '- [ ] task-02: 接口实现', '- [ ] task-03: 前端对接', '- [ ] task-04: 集成测试', '- [x] 每个 task 有编号(task-01~04),总数 4(≤15)'],
+    '## Wave 1\n- task-01\n- task-02\n\n## Wave 2\n- task-03\n- task-04\n\n## 自检\n- [x] 自检文本行（非引用行不收）\n'
+  )
+  const result = validatePlanForExecute(tasks, plan)
+  assert(result.ok, `自检段不误报，errors: ${result.errors.join('; ')}`)
+  assert(result.tasks.length === 4, `只收 4 个 task-XX 行，自检 checkbox 行不收（实际 ${result.tasks.length}）`)
   const ids = result.tasks.map(t => t.index).sort((a, b) => a - b)
   assert(JSON.stringify(ids) === JSON.stringify([1, 2, 3, 4]), `task id 应为 1-4，实际 ${ids}`)
 }
 
 // ─────────────────────────────────────────
-// light plan.md 用 `## Tasks`（无 `## Wave N`）通过 — 详见 docs/sillyspec/plan-light-needs-wave-heading.md
+// light plan（plan.md 无任务区，任务全在 tasks.md）→ 隐式单 Wave
+// （原「## Tasks 隐式任务区」用例的新契约承接）
 // ─────────────────────────────────────────
-console.log('\n--- light plan（## Tasks 无 Wave）contract 通过 ---')
+console.log('\n--- light plan（无 Wave 结构）隐式 Wave 通过 ---')
 {
-  const plan = `# 轻量计划：某需求
-
-## 来源
-直接引用 brainstorm 结论。
-
-## 范围
-- 涉及的文件/模块清单
-
-## Tasks
-- [ ] task-01: 添加 API 端点（覆盖：FR-01）
-- [ ] task-02: 添加前端调用
-- [ ] task-03: 联调
-
-## 验收
-- [ ] 所有单元测试通过
-- [ ] 接口契约符合设计
-
-## 覆盖矩阵
-| ID | 覆盖任务 | 验收证据 |
-|---|---|---|
-| FR-01 | task-01 | AC-01 |
-`
-  const result = validatePlanForExecute(plan)
-  assert(result.ok, `light plan（## Tasks）应校验通过，errors: ${result.errors.join('; ')}`)
+  const tasks = ['# 任务清单（Tasks）', '', '- [ ] task-01: 添加 API 端点（覆盖：FR-01）', '- [ ] task-02: 添加前端调用', '- [ ] task-03: 联调'].join('\n')
+  const plan = ['# 轻量计划：某需求', '', '## 来源', '直接引用 brainstorm 结论。', '', '## 验收', '- [ ] 所有单元测试通过'].join('\n')
+  const result = validatePlanForExecute(tasks, plan)
+  assert(result.ok, `light plan 应通过，errors: ${result.errors.join('; ')}`)
   assert(result.tasks.length === 3, `应解析 3 个 task，实际 ${result.tasks.length}`)
-  assert(result.waves.length === 1, `应归入 1 个隐式 Wave，实际 ${result.waves.length}`)
+  assert(result.waves.length === 1, `应合成 1 个隐式 Wave，实际 ${result.waves.length}`)
   assert(result.waves[0].implicit === true, '隐式 Wave 应标记 implicit: true')
   assert(result.waves[0].tasks[0].index === 1, '首个 task index 应为 1')
 }
 
 // ─────────────────────────────────────────
-// none plan.md 用 `## Tasks`（无 Wave）通过
+// 旧格式拦：plan.md 任务 checkbox 行 → 指路迁移（原各级模板用例的旧形态反例）
 // ─────────────────────────────────────────
-console.log('\n--- none plan（## Tasks 无 Wave）contract 通过 ---')
+console.log('\n--- 旧格式（plan.md checkbox 任务行）被拦 ---')
 {
-  const plan = `# 计划跳过
-
-## 原因
-小范围明确修改。
-
-## 建议直接 execute
-直接进入 execute 阶段完成下列最小任务。
-
-## Tasks
-- [ ] task-01: 按用户需求完成小范围明确修改
-
-## 验收
-- 修改范围符合用户需求
-`
-  const result = validatePlanForExecute(plan)
-  assert(result.ok, `none plan（## Tasks）应校验通过，errors: ${result.errors.join('; ')}`)
-  assert(result.tasks.length === 1, `应解析 1 个 task，实际 ${result.tasks.length}`)
+  const legacyPlan = '# Plan\n\n## Wave 1\n- [ ] task-01: 按用户需求完成小范围明确修改\n'
+  const legacyTasks = '- [ ] task-01: 按用户需求完成小范围明确修改\n'
+  const result = validatePlanForExecute(legacyTasks, legacyPlan)
+  assert(!result.ok, 'plan.md 含任务 checkbox 行应被拦（旧格式）')
+  assert(result.errors.some(e => e.includes('旧格式')), '错误应指路旧格式迁移')
 }
 
 // ─────────────────────────────────────────
-// light plan 的 `## 验收`/`## 自检` 段 checkbox 不误收为 task（回归防护）
-// light 引入隐式 Wave 后，须确保自检段 "- [x] ...task-XX..." 文本不被重新误收
-// （与 plan-postcheck-self-check-checkbox-false-dup 同源风险）
+// 注册表无 task-XX 行（只有无编号 checkbox）→ 失败
 // ─────────────────────────────────────────
-console.log('\n--- light plan 验收/自检段 checkbox 不误收 ---')
+console.log('\n--- 注册表无编号行失败 ---')
 {
-  const plan = `# 轻量计划
-
-## Tasks
-- [ ] task-01: 实现 A
-- [ ] task-02: 实现 B
-
-## 验收
-- [ ] 所有单元测试通过
-- [ ] task-01 与 task-02 联调通过
-
-## 自检
-- [x] 每个 task 有编号(task-01~02),总数 2
-- [x] 无泛泛风险(转为具体验收条目与 task-01/task-02 等)
-`
-  const result = validatePlanForExecute(plan)
-  assert(result.ok, `验收/自检段含 checkbox 不应误报，errors: ${result.errors.join('; ')}`)
-  assert(result.tasks.length === 2, `应只解析 2 个 task，实际 ${result.tasks.length}（验收/自检 checkbox 被误纳入）`)
-  const ids = result.tasks.map(t => t.index).sort((a, b) => a - b)
-  assert(JSON.stringify(ids) === JSON.stringify([1, 2]), `task id 应为 1-2，实际 ${ids}`)
-}
-
-// ─────────────────────────────────────────
-// light plan `## Tasks` 段内无 task-XX 编号的 checkbox 不触发隐式 Wave
-// ─────────────────────────────────────────
-console.log('\n--- light plan 无编号 checkbox 不触发隐式 Wave ---')
-{
-  const plan = `# 轻量计划
-
-## Tasks
-- [ ] 实现登录功能（无 task id）
-`
-  const result = validatePlanForExecute(plan)
-  // 无 task-XX 编号 → 不触发隐式 Wave → allTasks 为空 → 报"没有找到 checkbox task"
-  assert(!result.ok, '任务区无 task-XX 编号应失败（不触发隐式 Wave）')
-  assert(result.errors.some(e => e.includes('checkbox task')), '错误应提到 checkbox task')
+  const tasks = '- [ ] 实现登录功能（无 task id）\n'
+  const result = validatePlanForExecute(tasks, '# Plan\n')
+  assert(!result.ok, '注册表无 task-XX 编号应失败')
+  assert(result.errors.some(e => e.includes('task-XX checkbox')), '错误应提到 task-XX checkbox')
 }
 
 // ── 结果 ──

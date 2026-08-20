@@ -330,7 +330,8 @@ console.log('\n--- 10. batch 调度（三条件分组 / 逐 task 闭环 / 职责
   assertContains(out, '最终回复输出逐 task 报告清单', 'batch 最终回复输出逐 task 报告清单')
 
   // c. 职责边界：batch 子代理不写 review.json、不勾选 checkbox（审查与勾选归主 agent）
-  assertContains(out, '禁止写 review.json、禁止勾选 plan.md checkbox——task 审查与勾选归主 agent',
+  // 2026-08-20-task-truth-unify：勾选唯一落点迁 tasks.md
+  assertContains(out, '禁止写 review.json、禁止勾选 tasks.md checkbox——task 审查与勾选归主 agent',
     'batch 子代理禁止写 review.json / 禁止勾选 checkbox（审查归主 agent）')
   assertContains(out, 'batch 子代理只做实现与自验，task 审查、review.json 产出与 checkbox 勾选仍归你（主 agent）',
     '主 agent 角色段：审查/review.json/勾选仍归主 agent（batch 只合并实现不合并审查）')

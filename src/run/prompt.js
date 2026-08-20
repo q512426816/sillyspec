@@ -416,14 +416,16 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
       const { matchKnowledge } = await import('../knowledge-match.js')
       const effectiveSpecBase = resolvePromptSpecBase(platformOpts, cwd)
       const knowledgeDir = join(effectiveSpecBase, 'knowledge')
-      // taskContext: changeName + plan.md task names for better matching
+      // taskContext: changeName + tasks.md 任务名（注册表唯一真相，2026-08-20-task-truth-unify）
       let taskContext = changeName || ''
       if (changeName) {
+        const tasksMdPath = join(effectiveSpecBase, 'changes', changeName, 'tasks.md')
         const planPath = join(effectiveSpecBase, 'changes', changeName, 'plan.md')
+        const srcPath = existsSync(tasksMdPath) ? tasksMdPath : planPath
         try {
-          const planContent = readFileSync(planPath, 'utf8')
-          // match both "- [ ] task-01: title" and "## task-01: title" formats
-          const taskLines = [...planContent.matchAll(/(?:^\- \[[ x]\] |^## )task-\d+[^:]*:?\s*(.+)/gm)]
+          const registryContent = readFileSync(srcPath, 'utf8')
+          // match "- [ ] task-01: title" / "## task-01: title"（兼容旧 plan.md 内联两种形态）
+          const taskLines = [...registryContent.matchAll(/(?:^\- \[[ x]\] |^## )task-\d+[^:]*:?\s*(.+)/gm)]
           if (taskLines.length > 0) {
             taskContext += ' ' + taskLines.map(t => t[1]).join(' ')
           }

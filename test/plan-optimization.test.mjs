@@ -77,21 +77,15 @@ console.log('\n--- Test 1b: buildPlanSteps 有 task 时返回 4 步 ---')
 // ─────────────────────────────────────────
 // Test 2: light plan 最多 1~3 个 task（通过 parseTaskCount 验证）
 // ─────────────────────────────────────────
-console.log('\n--- Test 2: light plan checkbox 解析 ---')
+console.log('\n--- Test 2: light 任务清单（tasks.md 注册表）解析 ---')
 {
-  const lightPlan = `---
-plan_level: light
----
-
-# 轻量计划
-
-## Wave 1
-- [ ] task-01: 修改字段
+  // 2026-08-20-task-truth-unify：任务清单在 tasks.md（plan.md 只留策略/引用）
+  const lightTasks = `- [ ] task-01: 修改字段
 - [ ] task-02: 更新测试
 - [ ] task-03: 文档补全
 `
-  const result = validatePlanForExecute(lightPlan)
-  assert(result.ok, 'light plan 应通过 execute contract')
+  const result = validatePlanForExecute(lightTasks, '---\nplan_level: light\n---\n\n# 轻量计划\n\n## 验收\n- 测试通过\n')
+  assert(result.ok, 'light 注册表应通过 execute contract')
   assert(result.tasks.length === 3, `应有 3 个 task，实际 ${result.tasks.length}`)
 }
 
@@ -392,9 +386,9 @@ plan_level: none
 # 计划跳过
 
 ## Wave 1
-- [ ] task-01: 按用户需求完成修改
+- task-01
 `
-  const noneResult = validatePlanForExecute(nonePlan)
+  const noneResult = validatePlanForExecute('- [ ] task-01: 按用户需求完成修改\n', nonePlan)
   assert(noneResult.ok, `none plan 应通过 execute contract`)
 
   // light plan
@@ -404,14 +398,10 @@ plan_level: light
 
 # 轻量计划
 
-## Wave 1
-- [ ] task-01: 修改 A
-- [ ] task-02: 修改 B
-
 ## 验收
 - 测试通过
 `
-  const lightResult = validatePlanForExecute(lightPlan)
+  const lightResult = validatePlanForExecute('- [ ] task-01: 修改 A\n- [ ] task-02: 修改 B\n', lightPlan)
   assert(lightResult.ok, `light plan 应通过 execute contract`)
   assert(lightResult.tasks.length === 2, `light plan 应有 2 个 task`)
 
@@ -423,11 +413,11 @@ plan_level: full
 # 实现计划
 
 ## Wave 1
-- [ ] task-01: 基础
-- [ ] task-02: 配置
+- task-01
+- task-02
 
 ## Wave 2
-- [ ] task-03: 业务逻辑
+- task-03
 
 ## 任务总表
 | 编号 | 任务 | Wave | 优先级 | 依赖 | 覆盖 FR/D | 说明 |
@@ -436,7 +426,7 @@ plan_level: full
 | task-02 | 配置 | W1 | P0 | — | FR-02 | ... |
 | task-03 | 业务逻辑 | W2 | P0 | task-01,02 | FR-03 | ... |
 `
-  const fullResult = validatePlanForExecute(fullPlan)
+  const fullResult = validatePlanForExecute('- [ ] task-01: 基础\n- [ ] task-02: 配置\n- [ ] task-03: 业务逻辑\n', fullPlan)
   assert(fullResult.ok, `full plan 应通过 execute contract`)
   assert(fullResult.tasks.length === 3, `full plan 应有 3 个 task`)
   assert(fullResult.waves.length === 2, `full plan 应有 2 个 wave`)

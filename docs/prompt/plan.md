@@ -117,7 +117,8 @@ needs_human_review: true | false
 1. 读取 plan.md frontmatter 的 `plan_level:` 字段（上一步已落盘为持久锚点；文件不存在或无该字段时回退读上一步输出的分类结果）
 2. 读取 tasks.md 和 design.md 了解需求范围
 3. 按 plan_level 选择对应模板输出
-4. 保存 plan.md（审查在下一步"审查计划"独立进行，不在本步自审——避免生成与自审同一次输出）；frontmatter 保留 plan_level 字段不删
+4. **写回任务清单**：把展开后的任务清单写回 tasks.md（checkbox 行 `- [ ] task-XX: 一句话任务名`，可附 `[model:xxx]`/`(depends_on: task-01,02)` 行内标注）。**写回规则（D-002@v1）**：保留 frontmatter/中文标题/所有非 task-XX 行（quick 挂载的 ql-xxx 勾选行、注记等逐行保留），仅重写 task-XX checkbox 行集合——防摧毁 quick 挂载条目
+5. 保存 plan.md（审查在下一步"审查计划"独立进行，不在本步自审——避免生成与自审同一次输出）；frontmatter 保留 plan_level 字段不删。**plan.md Wave 段下任务一律纯 ID 引用行**（`- task-XX`，不重抄任务名——任务名唯一真相在 tasks.md，重抄即双写漂移）
 
 ---
 
@@ -134,17 +135,15 @@ plan_level: none
 <一句话说明判定理由>
 
 ## 建议直接 execute
-直接进入 execute 阶段完成下列最小任务。
-
-## Tasks
-- [ ] task-01: 按用户需求完成小范围明确修改
+直接进入 execute 阶段完成最小任务（任务清单见 tasks.md）。
 
 ## 验收
 - 修改范围符合用户需求
 - 不引入额外无关变更
 - 必要测试或检查通过
 ```
-**注意：** 所有 plan_level 都必须包含 `- [ ] task-XX:` 格式的 checkbox 任务，execute 阶段依赖此格式解析任务。
+同时把最小任务写入 tasks.md：`- [ ] task-01: 按用户需求完成小范围明确修改`（同样遵守写回规则）。
+**注意：** 任务 checkbox 只在 tasks.md（`- [ ] task-XX:` 格式，execute 阶段从 tasks.md 解析任务、按 plan.md Wave 引用分组）。
 
 ---
 
@@ -164,11 +163,6 @@ plan_level: light
 ## 范围
 - 涉及的文件/模块清单
 
-## Tasks
-- [ ] task-01: ...（覆盖：FR-01, D-001@v1）
-- [ ] task-02: ...
-- [ ] task-03: ...
-
 ## 验收
 - 具体可验证的验收条目
 
@@ -186,8 +180,8 @@ light 计划的约束：
 - 来源/目标直接引用已有文档，不重新生成
 - 如果存在 decisions.md，所有当前版本 D-xxx@vN 必须在 Tasks 或覆盖矩阵中出现（CLI 只校验 D-xxx@vN ID 字面出现在 plan.md，warning 不阻断；矩阵结构供人类追溯，CLI 不校验 D→FR→task 映射完整性）
 - 如果存在 P0/P1 unresolved blocker，不生成 plan.md
-- 任务列表控制在 10 条以内
-- **任务必须使用 checkbox 格式**（`- [ ] task-XX:`），不要用纯编号列表（`1. 2.`），execute 阶段依赖此格式解析任务
+- 任务清单（tasks.md）控制在 10 条以内
+- 任务名使用 tasks.md checkbox 格式（`- [ ] task-XX:`），plan.md 不放任务行
 
 ---
 
@@ -209,11 +203,11 @@ plan_level: full
 > 技术不确定性高时才需要 Spike。无不确定性则跳过此节。
 
 ## Wave 1（并行，无依赖）
-- [ ] task-01: 添加用户创建接口（覆盖：FR-01, D-001@v1）
-- [ ] task-02: 添加角色创建接口（覆盖：FR-02）
+- task-01
+- task-02
 
 ## Wave 2（依赖 Wave 1）
-- [ ] task-03: 用户创建接口联调
+- task-03
 
 ## 任务总表
 | 编号 | 任务 | Wave | 优先级 | 依赖 | 覆盖 FR/D | 说明 |
@@ -240,7 +234,7 @@ full 计划的约束：
 - **禁止**估时（任务总表不含估时列）
 - **禁止**泛泛风险分析（"需要充分测试"类废话转为具体验收条目）
 - Mermaid 依赖关系图**仅当依赖关系非平凡时生成**（线性依赖或全并行时不生成）
-- **Wave 下的 checkbox 行必须保留**（execute 阶段解析依赖 `- [ ] task-XX:` 格式）
+- **Wave 段 ID 引用行必须保留**（`- task-XX` 纯 ID、无 checkbox 无任务名——机器解析依赖；任务名唯一真相在 tasks.md，plan.md 重抄即双写漂移）
 - plan.md 包含 Wave 分组 + 任务总表 + 关键路径 + 全局验收标准，**不放实现细节**
 - 如果存在 decisions.md，plan.md 建议包含当前版本 D-xxx@vN/FR-xxx 覆盖矩阵（CLI 只校验 D-xxx@vN/FR-xxx ID 字面出现在 plan.md，warning 不阻断；矩阵的 D→FR→task 映射完整性供人类追溯，CLI 不校验——勿以为画了矩阵就被结构校验）
 - 如果存在 P0/P1 unresolved blocker，不生成 plan.md，输出阻塞清单
@@ -272,6 +266,7 @@ full 计划的约束：
 3. 读取 plan.md frontmatter 的 `plan_level:` 字段（持久锚点；缺失时回退上一步输出）
 4. 按对应级别模板生成内容
 5. 保存到变更目录下的 plan.md（路径格式：`{SPEC_ROOT}/changes/<change-name>/plan.md`，其中 <change-name> 是变更目录名，直接使用，不加子目录。正确路径示例：`{SPEC_ROOT}/changes/2026-05-28-agent-log-streaming/plan.md`）
+6. 写回 tasks.md（本步操作 4 的写回规则：仅重写 task-XX checkbox 行集合，保留非 task-XX 行）
 **plan_level 为 none 时生成最小 plan.md（占位），不生成完整蓝图。**
 
 ---
