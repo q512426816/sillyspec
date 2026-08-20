@@ -1,12 +1,12 @@
 ---
 name: sillyspec
-description: "规范驱动开发工具包。绿地用 /sillyspec:init，棕地用 /sillyspec:scan，全自动用 /sillyspec:auto。完整流程：scan → brainstorm → plan → execute → verify → archive。支持 TDD、子代理并行、worktree 隔离、E2E 验证。兼容 Claude Code / Cursor / Codex / OpenCode / OpenClaw。"
+description: "规范驱动开发工具包。绿地用 /sillyspec:init，棕地用 /sillyspec:scan，全自动用 /sillyspec:auto。完整流程：scan → brainstorm → plan → execute → verify → archive。支持 TDD、子代理并行、worktree 隔离、E2E 验证。兼容 Claude Code / Cursor / Codex / OpenCode / OpenClaw / Gemini。"
 ---
 
 # SillySpec
 
 从"你说要啥"到"代码能跑"的规范驱动开发工具包。
-Claude Code / Cursor / Codex / OpenCode / OpenClaw 通用。
+Claude Code / Cursor / Codex / OpenCode / OpenClaw / Gemini 通用。
 
 ## 快速开始
 
@@ -43,13 +43,14 @@ Claude Code / Cursor / Codex / OpenCode / OpenClaw 通用。
 
 | 命令 | 用途 |
 |---|---|
-| `/sillyspec:status` | 查看项目进度和状态 |
+| `/sillyspec:status` · `/sillyspec:state` | 查看项目进度和状态 |
 | `/sillyspec:continue` | 自动判断并执行下一步 |
 | `/sillyspec:explore` | 自由思考模式 |
 | `/sillyspec:quick` | 快速任务，跳过完整流程 |
 | `/sillyspec:resume` | 恢复工作 |
 | `/sillyspec:doctor` | 项目自检 |
 | `/sillyspec:commit` | 智能提交 |
+| `/sillyspec:knowledge` | 知识库检索 / 沉淀 |
 | `/sillyspec:export` | 导出成功方案为可复用模板 |
 | `/sillyspec:workspace` | 多项目工作区管理 |
 
@@ -80,7 +81,7 @@ sillyspec init                初始化（零交互，自动检测工具）
 - **E2E 验证** — 内置 E2E 测试流程，支持 Playwright / 浏览器 MCP
 - **模块文档** — 支持模块级知识库，AI 执行时按需加载相关模块上下文
 - **进度管理** — SQLite 持久化进度，断点恢复
-- **MCP 增强** — 一键安装 Context7、grep.app、Chrome DevTools
+- **MCP 增强** — 一键安装 Context7、Chrome DevTools、PinchTab
 
 ## MCP 工具
 

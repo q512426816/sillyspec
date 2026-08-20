@@ -144,8 +144,22 @@ export class DB {
             : 'sillyspec.db 损坏';
         console.warn(`⚠️  ${reason}，已从 .bak 备份恢复。`);
         bakDb.close();
-        // node:sqlite 绑定路径，无 _save：把 .bak 内容 copy 回主库，统一用 dbPath
-        copyFileSync(bakPath, this.dbPath);
+        // node:sqlite 绑定路径，无 _save：把 .bak 内容 copy 回主库，统一用 dbPath。
+        // 体检 BUG-18：主库可能正被其他进程（daemon/另一 CLI）打开——Windows 覆盖他人
+        // 打开的文件抛 EPERM/EBUSY，短暂退避重试（持有者通常是瞬时句柄），仍失败 fail-loud
+        let copied = false;
+        let lastErr = null;
+        for (let attempt = 0; attempt < 5 && !copied; attempt++) {
+          try {
+            copyFileSync(bakPath, this.dbPath);
+            copied = true;
+          } catch (e) {
+            if (!['EPERM', 'EBUSY', 'EACCES'].includes(e.code)) throw e;
+            lastErr = e;
+            _sleepSync(50 * (attempt + 1));
+          }
+        }
+        if (!copied) throw lastErr;
         return openDatabase(this.dbPath);
       }
     }

@@ -85,16 +85,31 @@ console.log('=== task-02: detectLocalYaml 纯 fs 嗅探 ===\n')
   rmSync(dir, { recursive: true, force: true })
 }
 
-// Case 3: gradle（写 build.gradle + gradlew → 前缀 ./gradlew）
+// Case 3: gradle（写 build.gradle + gradlew → 前缀平台相关：POSIX ./gradlew，win32 优先 gradlew.bat）
+// 体检 BUG-08：./gradlew 在 Windows cmd.exe 不可执行——win32 只有 POSIX gradlew（无 .bat）时回退全局 gradle
 {
   const dir = mkdtempSync(join(tmpdir(), 'ld-gradle-'))
   writeFileSync(join(dir, 'build.gradle'), "plugins { id 'java' }")
   writeFileSync(join(dir, 'gradlew'), '') // 补 gradlew 空文件使 existsSync 成立
   const r = detectLocalYaml(dir)
+  const isWin = process.platform === 'win32'
+  const expectedPrefix = isWin ? 'gradle' : './gradlew' // win32 无 gradlew.bat → 全局 gradle
   assert(r.project.type === 'gradle', `gradle: type=gradle（=${r.project.type}）`)
-  assert(r.commands.build === './gradlew build', `gradle: commands.build='./gradlew build'（=${r.commands.build}）`)
-  assert(r.commands.test === './gradlew test', `gradle: commands.test='./gradlew test'（=${r.commands.test}）`)
-  assert(r.commands.lint === './gradlew check', `gradle: commands.lint='./gradlew check'（=${r.commands.lint}）`)
+  assert(r.commands.build === `${expectedPrefix} build`, `gradle: commands.build='${expectedPrefix} build'（=${r.commands.build}）`)
+  assert(r.commands.test === `${expectedPrefix} test`, `gradle: commands.test='${expectedPrefix} test'（=${r.commands.test}）`)
+  assert(r.commands.lint === `${expectedPrefix} check`, `gradle: commands.lint='${expectedPrefix} check'（=${r.commands.lint}）`)
+  rmSync(dir, { recursive: true, force: true })
+}
+
+// Case 3c: gradle + gradlew.bat（win32 优先 .bat；POSIX 忽略 .bat 仍用 ./gradlew）
+{
+  const dir = mkdtempSync(join(tmpdir(), 'ld-gradle-bat-'))
+  writeFileSync(join(dir, 'build.gradle'), "plugins { id 'java' }")
+  writeFileSync(join(dir, 'gradlew.bat'), '')
+  if (process.platform !== 'win32') writeFileSync(join(dir, 'gradlew'), '')
+  const r = detectLocalYaml(dir)
+  const expectedPrefix = process.platform === 'win32' ? 'gradlew.bat' : './gradlew'
+  assert(r.commands.test === `${expectedPrefix} test`, `gradle-bat: commands.test='${expectedPrefix} test'（=${r.commands.test}）`)
   rmSync(dir, { recursive: true, force: true })
 }
 

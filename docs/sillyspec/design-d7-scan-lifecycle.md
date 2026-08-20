@@ -35,7 +35,7 @@ sillyhub 实证：前端 72% 源文件无文档登记、`_module-map.yaml` 停�
 
 **不做自动刷新，只做过期检测 + 显性化信号。**
 
-机制：scan 文档 frontmatter 已有 `source_commit`（覆盖保护 hook 在用，`worktree-guard.js:194`）。新增一个轻量探针（doctor 或 scan-profile preflight 内），比对：
+机制：scan 文档 frontmatter 已有 `source_commit`（覆盖保护 hook 在用，`worktree-guard.js:200`）。新增一个轻量探针（doctor 或 scan-profile preflight 内），比对：
 
 ```
 scan 文档 source_commit  vs  当前 HEAD（或 scan 文档涉及路径的最新 commit）

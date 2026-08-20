@@ -8,7 +8,7 @@
  * 分支命名：sillyspec/<change-name>
  */
 
-import { execSync, execFileSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, readdirSync, statSync, lstatSync, readlinkSync, unlinkSync } from 'fs';
 import { join, resolve, dirname, relative, isAbsolute } from 'path';
 import { createHash } from 'crypto';
@@ -462,6 +462,12 @@ export class WorktreeManager {
       const check = isGitWorktreeSupported(this.cwd);
       if (!check.supported) {
         throw new Error(`git worktree add 失败: ${e.stderr || e.message}\n\n${check.reason ? `原因: ${check.reason}` : ''}\n建议: 升级 git 到 >= 2.15；或运行 \`sillyspec worktree doctor --fix\` 检查 worktree 状态。`);
+      }
+      // 体检 BUG-16 并发竞态防御：多 agent 同时首建同名 change 时，败者的 add 失败可能只是
+      // 「赢家刚建成目录/分支」。此时降级 in-place 会造成一个 worktree + 一个 in-place 的
+      // 分裂状态（两 agent 各写各的基线）——先重查，并发赢家已建成则按 already exists 抛错。
+      if (existsSync(worktreePath) || gitQuiet(this.cwd, ['rev-parse', '--verify', `refs/heads/${branch}`])) {
+        throw new Error(`worktree already exists: ${name}（并发创建，另一进程已抢先建成，本进程不降级 in-place）. Run cleanup first.`);
       }
       // sandbox/permission fallback: 降级为 in-place + baseline protection
       console.log(`⚠️  git worktree add 失败（可能是沙箱权限限制），降级为 in-place 模式 + baseline protection`);
@@ -928,7 +934,11 @@ export class WorktreeManager {
     const residual = [];
     if (!isInPlace && existsSync(worktreePath)) residual.push(`worktree dir: ${worktreePath}`);
     if (existsSync(metaDir)) residual.push(`meta dir: ${metaDir}`);
-    if (!isInPlace && gitQuiet(this.cwd, ['worktree', 'list'], { timeout: 30000 })?.includes(worktreePath)) {
+    // 斜杠方向归一后比较（体检 BUG-07）：Windows 下 git worktree list 输出正斜杠、
+    // worktreePath 是反斜杠，直接 includes 恒 false → 残留场景漏报、cleanup 误报 cleaned
+    const toPosixNorm = (p) => String(p || '').replace(/\\/g, '/').toLowerCase()
+    const wtListOut = gitQuiet(this.cwd, ['worktree', 'list'], { timeout: 30000 })
+    if (!isInPlace && wtListOut && toPosixNorm(wtListOut).includes(toPosixNorm(worktreePath))) {
       residual.push('git worktree list still references this worktree');
     }
     if (residual.length > 0) {
@@ -1169,7 +1179,8 @@ export class WorktreeManager {
 
     // 5. 检查 SillySpec 分支残留
     try {
-      const branches = execFileSync('git', ['branch', '--list', `${BRANCH_PREFIX}*`], { cwd: this.cwd, encoding: 'utf8', stdio: ['pipe','pipe','pipe'] }).trim();
+      // QUAL-01 收口：裸 execFileSync → git-helper git（原调用点未传 timeout，统一入口默认 5s 足够 branch --list）
+      const branches = git(this.cwd, ['branch', '--list', `${BRANCH_PREFIX}*`]);
       if (branches) {
         for (const line of branches.split('\n').filter(Boolean)) {
           const branch = line.replace(/^\*?\s+/, '').trim();
@@ -1357,7 +1368,8 @@ export class WorktreeManager {
       if (staged) {
         try {
           // 用 Buffer 模式读取，避免二进制 patch 被 UTF-8 解码损坏
-          const patchBuf = execFileSync('git', ['diff', '--cached', '--binary'], { cwd: mainCwd, stdio: ['pipe','pipe','pipe'] });
+          // QUAL-01 收口：git-helper 新增 encoding:'buffer' 支持（二进制输出专用，跳过 trim）
+          const patchBuf = git(mainCwd, ['diff', '--cached', '--binary'], { encoding: 'buffer', timeout: 30000 });
           if (patchBuf && patchBuf.length > 0) {
             const patchFile = join(worktreePath, '.sillyspec-baseline-staged.patch');
             try {
@@ -1379,8 +1391,8 @@ export class WorktreeManager {
       const unstaged = gitQuiet(mainCwd, ['diff', '--name-only'], { timeout: 30000 }) || '';
       if (unstaged) {
         try {
-          // 用 Buffer 模式读取，避免二进制 patch 被 UTF-8 解码损坏
-          const patchBuf = execFileSync('git', ['diff', '--binary'], { cwd: mainCwd, stdio: ['pipe','pipe','pipe'] });
+          // 用 Buffer 模式读取，避免二进制 patch 被 UTF-8 解码损坏（QUAL-01 收口，同上）
+          const patchBuf = git(mainCwd, ['diff', '--binary'], { encoding: 'buffer', timeout: 30000 });
           if (patchBuf && patchBuf.length > 0) {
             const patchFile = join(worktreePath, '.sillyspec-baseline-unstaged.patch');
             try {

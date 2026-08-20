@@ -10,6 +10,7 @@ docs/
 .DS_Store
 STATE.md
 .playwright-mcp/
+.zcode/
 
 # 依赖
 node_modules/

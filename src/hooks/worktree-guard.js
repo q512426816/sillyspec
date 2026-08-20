@@ -121,8 +121,14 @@ function readWorktreeMeta(cwd, changeName) {
 
 function isPathInside(child, parent) {
   if (!child || !parent) return false
-  const absChild = path.resolve(child)
-  const absParent = path.resolve(parent)
+  let absChild = path.resolve(child)
+  let absParent = path.resolve(parent)
+  // Windows 文件系统大小写不敏感：git worktree list / 编辑器给出的路径大小写可能与
+  // 注册的 meta.worktreePath 不一致，敏感比较会把 worktree 内合法写入误判为越权（体检 BUG-09）
+  if (process.platform === 'win32') {
+    absChild = absChild.toLowerCase()
+    absParent = absParent.toLowerCase()
+  }
   return absChild === absParent || absChild.startsWith(absParent + path.sep)
 }
 

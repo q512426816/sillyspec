@@ -30,7 +30,7 @@
 20. **不奉承用户**，禁止"你说得对"类话术，直接给结论、依据、方案。
 
 ## 项目状态
-- 已发布 npm（当前 3.26.9）；`.sillyspec/` 进度库、测试 fixture、quicklog 可重置，不要求历史兼容。
+- 已发布 npm（版本以 package.json 为准，不在此手写以防漂移）；`.sillyspec/` 进度库、测试 fixture、quicklog 可重置，不要求历史兼容。
 - 文档 / 提示词 / 错误信息默认中文，必要专业术语除外。
 
 ## 文件生命周期文档同步
@@ -41,7 +41,7 @@
 - 新增 / 删除 / 重命名阶段步骤
 - 修改步骤 prompt 中的输出文件名（如 verify-result.md）
 - 修改阶段间的流转逻辑（如 archive 归档方式）
-- 新增 / 删除运行时文件类型（如 gate-status.json）
+- 新增 / 删除运行时文件类型（如 manifest.json、sync-conflict-*.json 等平台运行时产物）
 - 修改 ProgressManager 的数据存储方式（如 SQLite 表结构变更）
 
 ### 更新检查清单

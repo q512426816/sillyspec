@@ -9,8 +9,8 @@
  */
 
 import { existsSync, readFileSync, realpathSync } from 'fs';
-import { join } from 'path';
-import { execSync, execFileSync } from 'child_process';
+import { join, isAbsolute } from 'path';
+import { execFileSync } from 'child_process';
 import { createHash } from 'crypto';
 
 const LOCKFILES = ['pnpm-lock.yaml', 'package-lock.json', 'yarn.lock'];
@@ -44,16 +44,28 @@ function detectLockfile(dir) {
   return null;
 }
 
-/** 读取 local.yaml 文本（specBase 优先，回退 worktreePath/.sillyspec；不读 process.cwd 避免环境配置泄漏）*/
-function readLocalYaml(specBase, worktreePath) {
-  const candidates = [
-    specBase ? join(specBase, 'local.yaml') : null,
-    worktreePath ? join(worktreePath, '.sillyspec', 'local.yaml') : null,
-  ].filter(Boolean);
-  for (const p of candidates) {
-    if (existsSync(p)) return readFileSync(p, 'utf8');
+/**
+ * 读取 local.yaml 文本（specBase 优先，回退 worktreePath/.sillyspec；不读 process.cwd 避免环境配置泄漏）。
+ * 返回 { text, source }——source 标记信任级（体检 SEC-01）：
+ *   - 'specBase'：主仓配置，可信（其 commands.install 允许执行，仍过白名单+元字符门）
+ *   - 'worktree'：worktree 内副本，agent/子代理可写区——只作 project.type / modules 等
+ *     只读探测，其 commands.install 永不执行（否则绕过 worktree-guard 的危险命令拦截）
+ */
+function readLocalYamlSourced(specBase, worktreePath) {
+  if (specBase) {
+    const p = join(specBase, 'local.yaml');
+    if (existsSync(p)) return { text: readFileSync(p, 'utf8'), source: 'specBase' };
   }
-  return null;
+  if (worktreePath) {
+    const p = join(worktreePath, '.sillyspec', 'local.yaml');
+    if (existsSync(p)) return { text: readFileSync(p, 'utf8'), source: 'worktree' };
+  }
+  return { text: null, source: null };
+}
+
+/** 兼容旧签名：只要文本 */
+function readLocalYaml(specBase, worktreePath) {
+  return readLocalYamlSourced(specBase, worktreePath).text;
 }
 
 /** 从 local.yaml 文本提取 commands.install（轻量正则，不引 yaml 依赖，与 scan-postcheck 一致）*/
@@ -93,6 +105,10 @@ export function inferInstallCommand(projectType, worktreePath, userInstall) {
     case 'maven':
       return 'mvn -o test';
     case 'gradle':
+      // win32 cmd.exe 跑不了 ./gradlew（体检 BUG-08 同型）：优先 gradlew.bat，否则全局 gradle
+      if (process.platform === 'win32') {
+        return existsSync(join(worktreePath, 'gradlew.bat')) ? 'gradlew.bat test' : 'gradle test';
+      }
       return './gradlew test';
     case 'python':
       // uv 优先（现代 Python 工具链，pyproject.toml/uv.lock 项目走 uv sync 建 .venv + 装依赖，
@@ -130,10 +146,38 @@ function tryLink(mainNodeModules, linkPath) {
   }
 }
 
-/** 执行 install 命令（带超时）*/
+/**
+ * 执行 install 命令（带超时）。
+ *
+ * 安全收口（体检 SEC-01）：commands.install 来自 local.yaml 配置，若经 execSync(shell)
+ * 原样执行，yaml 里的 `$(...)`/反引号/`;` 必然被解释——且 worktree 副本属 agent 可写区。
+ * 三道门：
+ *   1. 调用方保证来源可信（provisionDeps 只对 source==='specBase' 的 userInstall 走到这里）
+ *   2. 可执行前缀白名单（包管理器家族）
+ *   3. shell 元字符黑名单（win32 额外拦 %，cmd.exe 会展开 %VAR%），通过后拆 argv 数组执行不经 shell
+ */
+const INSTALL_BINARY_WHITELIST = /^(?:\.\/)?(?:pnpm|npm|yarn|bun|mvn|gradle|gradlew|uv|pip|pip3|python|python3|poetry|make)(?:\.cmd|\.bat|\.exe)?(?:\s|$)/;
+const SHELL_METACHARS = /[;&|<>$`\n]/;
+const WIN_SHELL_METACHARS = /[;&|<>$`\n%]/;
+
 function tryInstall(cmd, cwd, timeout) {
+  const trimmed = String(cmd || '').trim();
+  if (!INSTALL_BINARY_WHITELIST.test(trimmed)) {
+    return { ok: false, error: `install 命令不在包管理器白名单内，拒绝执行: ${trimmed}` };
+  }
+  const metaRe = process.platform === 'win32' ? WIN_SHELL_METACHARS : SHELL_METACHARS;
+  if (metaRe.test(trimmed)) {
+    return { ok: false, error: `install 命令含 shell 元字符，拒绝执行: ${trimmed}` };
+  }
+  const argv = trimmed.split(/\s+/);
   try {
-    execSync(cmd, { cwd, timeout, stdio: ['pipe', 'pipe', 'pipe'] });
+    if (process.platform === 'win32') {
+      // Windows 包管理器是 .cmd 垫片，无 shell 的 spawn 无法解析——经 cmd.exe /c 传参；
+      // 元字符（含 %）已拦，残余风险与 tryLink 的 mklink 同款
+      execFileSync('cmd.exe', ['/c', ...argv], { cwd, timeout, stdio: ['pipe', 'pipe', 'pipe'] });
+    } else {
+      execFileSync(argv[0], argv.slice(1), { cwd, timeout, stdio: ['pipe', 'pipe', 'pipe'] });
+    }
     return { ok: true };
   } catch (e) {
     const msg = e.killed ? `timeout after ${timeout}ms` : ((e.stderr && e.stderr.toString()) || e.message);
@@ -175,6 +219,16 @@ function extractModulePaths(yamlText) {
 }
 
 /**
+ * modules 块 path 安全校验（体检 SEC-07）：只允许 worktree 内的相对子路径——
+ * 拒绝绝对路径与 `..` 段，防止 local.yaml 配置把 junction/symlink 建到 worktree 之外。
+ */
+function isSafeModulePath(p) {
+  if (!p || isAbsolute(p)) return false;
+  const segs = p.split(/[\\/]+/);
+  return !segs.includes('..');
+}
+
+/**
  * 对单个子模块目录 tryLink main 的 node_modules → wt 的 node_modules（modules 子模块专用）。
  * 仅走 link 快路径（不 install——子模块 install 慢且易失败；lockfile 不一致时交给用户 pnpm install）。
  * lockfile 一致才 link，避免误链不匹配的 deps。
@@ -211,12 +265,17 @@ function linkOneDir(wtDir, mainDir) {
 export function provisionDeps(worktreePath, mainCwd, opts = {}) {
   const { specBase = null, timeout = DEFAULT_TIMEOUT_MS, force = false } = opts;
   const depsCheckedAt = new Date().toISOString();
-  const yamlText = readLocalYaml(specBase, worktreePath);
+  const { text: yamlText, source: yamlSource } = readLocalYamlSourced(specBase, worktreePath);
   const wtHash = lockfileHash(worktreePath);
 
   // ── 1. 根目录供给 ──
   const projectType = detectProjectType(worktreePath, specBase);
-  const userInstall = extractUserInstall(yamlText);
+  // SEC-01：commands.install 只信主仓 specBase 的 local.yaml——worktree 副本是 agent 可写区，
+  // 其 install 命令若执行等于绕过 worktree-guard 的危险命令拦截
+  const userInstall = yamlSource === 'specBase' ? extractUserInstall(yamlText) : null;
+  if (yamlSource === 'worktree' && extractUserInstall(yamlText)) {
+    console.warn('⚠️ worktree 内 local.yaml 的 commands.install 被忽略（agent 可写区，只信主仓 .sillyspec/local.yaml）');
+  }
   const installCmd = inferInstallCommand(projectType, worktreePath, userInstall);
 
   let result;
@@ -257,6 +316,10 @@ export function provisionDeps(worktreePath, mainCwd, opts = {}) {
   const modulePaths = extractModulePaths(yamlText);
   const moduleResults = [];
   for (const mp of modulePaths) {
+    if (!isSafeModulePath(mp)) {
+      moduleResults.push({ path: mp, status: 'skipped', reason: 'path 越界（绝对路径或 .. 段），拒绝 link' });
+      continue;
+    }
     const wtDir = join(worktreePath, mp);
     const mainDir = mainCwd ? join(mainCwd, mp) : null;
     if (!existsSync(wtDir) || !mainDir || !hasNodeMarker(wtDir)) continue;

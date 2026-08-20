@@ -15,7 +15,8 @@
  *           测试，避免 monorepo 全量测试超 gate timeout。
  */
 
-import { execSync, execFileSync } from 'child_process'
+import { execSync } from 'child_process'
+import { gitQuiet } from './git-helper.js'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { verifyApiParity } from './contract-matrix.js'
@@ -381,44 +382,29 @@ function assertSafeRefSpec(refSpec) {
 /**
  * 在指定 cwd 跑 `git diff --name-only <refSpec>`，返回相对仓库根的文件列表。
  * git 不可用 / 非仓库 / ref 无效 → 返回 null（调用方 fallback）。
+ * QUAL-01 收口：本地 execFileSync 裸调 → git-helper gitQuiet（统一 safe.directory），timeout 30s 保留。
  */
 function runGitDiffNameOnly(cwd, refSpec) {
-  try {
-    const ref = refSpec ? assertSafeRefSpec(refSpec) : null
-    if (refSpec && !ref) return null
-    const args = ['diff', '--name-only']
-    if (ref) args.push(ref)
-    const out = execFileSync('git', args, {
-      cwd,
-      encoding: 'utf8',
-      timeout: 30 * 1000,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
-    return out.split('\n').map(l => l.trim()).filter(Boolean)
-  } catch {
-    return null
-  }
+  const ref = refSpec ? assertSafeRefSpec(refSpec) : null
+  if (refSpec && !ref) return null
+  const args = ['diff', '--name-only']
+  if (ref) args.push(ref)
+  const out = gitQuiet(cwd, args, { timeout: 30 * 1000, trim: false })
+  if (out === null) return null
+  return out.split('\n').map(l => l.trim()).filter(Boolean)
 }
 
 /**
  * 在指定 cwd 跑 `git diff --name-status <refSpec>`，返回原始文本（调用方按行解析，
  * 保留状态字母 D/R/C 供删除探针识别删除/重命名）。git 不可用 / 非仓库 / ref 无效 → 返回 null。
+ * QUAL-01 收口：同上走 gitQuiet（trim:false 保留原始文本）。
  */
 function runGitDiffNameStatus(cwd, refSpec) {
-  try {
-    const ref = refSpec ? assertSafeRefSpec(refSpec) : null
-    if (refSpec && !ref) return null
-    const args = ['diff', '--name-status']
-    if (ref) args.push(ref)
-    return execFileSync('git', args, {
-      cwd,
-      encoding: 'utf8',
-      timeout: 30 * 1000,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
-  } catch {
-    return null
-  }
+  const ref = refSpec ? assertSafeRefSpec(refSpec) : null
+  if (refSpec && !ref) return null
+  const args = ['diff', '--name-status']
+  if (ref) args.push(ref)
+  return gitQuiet(cwd, args, { timeout: 30 * 1000, trim: false })
 }
 
 /**
@@ -555,6 +541,11 @@ function resolveMainChangedFiles(cwd, changeName) {
  * }}
  */
 export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = null }) {
+  // 信任边界声明（体检 SEC-02 核实）：本函数三处 execSync(command) 的命令只来源于
+  // ① 主仓 specBase（resolveSpecDir → 主仓 .sillyspec/local.yaml）② 跨仓仓根
+  // <repo>/.sillyspec/local.yaml——均为仓库自有配置（与 `npm test` 同信任级：跑测试
+  // 本就是执行项目代码）。永不读取 agent 可写的 worktree 副本（对照 worktree-deps.js
+  // SEC-01 的源级分流）；修改 yaml 来源时必须维持此边界。
   const localYamlPath = join(specBase, 'local.yaml')
   const yamlText = existsSync(localYamlPath) ? readFileSync(localYamlPath, 'utf8') : null
 

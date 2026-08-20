@@ -10,7 +10,7 @@
 
 import { existsSync, readFileSync, mkdirSync, writeFileSync, readdirSync, statSync } from 'fs'
 import { join, resolve } from 'path'
-import { execFileSync } from 'child_process'
+import { git } from './git-helper.js'
 import { pathMatches } from './change-list.js'
 import { parseAllowedPaths, parseRepo, parseBaseCommit, parseHeadCommit } from './stages/plan-postcheck.js'
 import { resolveVerifyChangedFiles } from './verify-postcheck.js'
@@ -389,6 +389,9 @@ export function validateTaskReviews(opts) {
   const errors = []
   const warnings = []
   const requiredEvidence = []
+  // PERF-01：整个循环共享一份 git 结果缓存（同 gitDir 的探测/status、同 (base,head) 的
+  // diff 在多 task 间高度重复；N task 从 5N 个 git 子进程降到 ~2+去重后数量）
+  const evidenceCache = {}
 
   for (const taskId of taskIds) {
     const reviewDir = join(runtimeRoot, 'execute-runs', executeRunId, 'tasks', taskId)
@@ -449,7 +452,7 @@ export function validateTaskReviews(opts) {
       }
     }
     if (reviewGitDir) {
-      const evidence = verifyReviewGitEvidence(review, reviewGitDir)
+      const evidence = verifyReviewGitEvidence(review, reviewGitDir, evidenceCache)
       for (const w of evidence.warnings) warnings.push(`${taskId}: ${w}`)
       if (!evidence.ok) {
         for (const err of evidence.errors) errors.push(`${taskId}: ${err}`)
@@ -518,13 +521,10 @@ export function validateTaskReviews(opts) {
 
 // ── Git 真实性交叉校验 ──
 
+// QUAL-01 收口：原为本地 execFileSync('git')（无 safe.directory、与 git-helper 口径分裂），
+// 现走统一入口；抛错/trim 语义不变，timeout 15000 保留（rev-parse/diff 大仓余量）
 function runGit(gitDir, args) {
-  return execFileSync('git', args, {
-    cwd: gitDir,
-    encoding: 'utf8',
-    timeout: 15000,
-    stdio: ['ignore', 'pipe', 'pipe'],
-  }).trim()
+  return git(gitDir, args, { timeout: 15000 })
 }
 
 // porcelain 状态行 → 变更文件路径（对齐 shared.js:343 parsePorcelainPath：`XY path`、引号包裹、
@@ -554,31 +554,57 @@ function parsePorcelainFiles(statusOut) {
  * git 环境不可用（非 git 仓库 / git 缺失）时返回 unavailable，由调用方降级为
  * warning——不因环境问题误杀，但记录在输出中。
  *
+/**
  * @param {object} review - 已通过 schema 校验的 review 对象
  * @param {string} gitDir - 执行 git 命令的目录（worktree 优先，回退主仓库）
+ * @param {object} [cache] - 进程内单次校验批的共享缓存（体检 PERF-01：N task × 5 个 git
+ *   子进程去重——gitDir 探测与 status --porcelain 结果按 gitDir 恒同，commit 校验按
+ *   (gitDir,hash)、diff 按 (gitDir,base,head) 在多 task 间高度重复。validateTaskReviews
+ *   整个循环传同一份；不传则退化为逐次执行（单测/独立调用零回归）。缓存生命周期 =
+ *   一次校验批：working-tree status 是快照语义，跨批复用会读到陈旧状态。
  * @returns {{ ok: boolean, emptyDiff: boolean, errors: string[], warnings: string[], unavailable: boolean }}
  */
-export function verifyReviewGitEvidence(review, gitDir) {
+export function verifyReviewGitEvidence(review, gitDir, cache = null) {
   const errors = []
   const warnings = []
+  const c = cache || (cache = {})
+  c.gitOk = c.gitOk || new Map()
+  c.verified = c.verified || new Set()
+  c.diffs = c.diffs || new Map()
+  c.wtStatus = c.wtStatus || new Map()
 
-  // git 环境探测：失败即 unavailable，交由调用方降级
-  try {
-    runGit(gitDir, ['rev-parse', '--git-dir'])
-  } catch (e) {
+  // git 环境探测：失败即 unavailable，交由调用方降级（同 gitDir 结果恒同，批内缓存）
+  if (!c.gitOk.has(gitDir)) {
+    try {
+      runGit(gitDir, ['rev-parse', '--git-dir'])
+      c.gitOk.set(gitDir, true)
+    } catch (e) {
+      c.gitOk.set(gitDir, false)
+      return {
+        ok: true,
+        emptyDiff: false,
+        errors: [],
+        warnings: [`git 环境不可用（${gitDir}），跳过 review 真实性交叉校验: ${e.message?.split('\n')[0] || e.message}`],
+        unavailable: true,
+      }
+    }
+  } else if (c.gitOk.get(gitDir) === false) {
     return {
       ok: true,
       emptyDiff: false,
       errors: [],
-      warnings: [`git 环境不可用（${gitDir}），跳过 review 真实性交叉校验: ${e.message?.split('\n')[0] || e.message}`],
+      warnings: [`git 环境不可用（${gitDir}），跳过 review 真实性交叉校验（批内缓存判定）`],
       unavailable: true,
     }
   }
 
   for (const field of ['base', 'head']) {
     const hash = review[field]
+    const vkey = `${gitDir}\u0000${hash}`
+    if (c.verified.has(vkey)) continue
     try {
       runGit(gitDir, ['rev-parse', '--verify', '--quiet', `${hash}^{commit}`])
+      c.verified.add(vkey)
     } catch {
       errors.push(`${field} "${hash}" 不是仓库中的真实 commit — review.json 疑似伪造`)
     }
@@ -588,21 +614,32 @@ export function verifyReviewGitEvidence(review, gitDir) {
   }
 
   let diffFiles = []
-  try {
-    const out = runGit(gitDir, ['diff', '--name-only', `${review.base}..${review.head}`])
-    diffFiles = out ? out.split('\n').filter(Boolean) : []
-  } catch (e) {
-    warnings.push(`git diff ${review.base}..${review.head} 执行失败，跳过 diff 校验: ${e.message?.split('\n')[0] || e.message}`)
-    return { ok: true, emptyDiff: false, errors, warnings, unavailable: false }
+  const dkey = `${gitDir}\u0000${review.base}\u0000${review.head}`
+  if (c.diffs.has(dkey)) {
+    diffFiles = c.diffs.get(dkey)
+  } else {
+    try {
+      const out = runGit(gitDir, ['diff', '--name-only', `${review.base}..${review.head}`])
+      diffFiles = out ? out.split('\n').filter(Boolean) : []
+      c.diffs.set(dkey, diffFiles)
+    } catch (e) {
+      warnings.push(`git diff ${review.base}..${review.head} 执行失败，跳过 diff 校验: ${e.message?.split('\n')[0] || e.message}`)
+      return { ok: true, emptyDiff: false, errors, warnings, unavailable: false }
+    }
   }
 
   // 并入 working-tree 未提交改动（execute 复盘 a）：子代理默认不 commit，base..head 无 commit diff 时
   // diffFiles 留空 → 下方交叉比对拿空集对非空 changedFiles 必判「完全不相交」伪造，逼 agent 强制 commit
   // + 改 7 个 review head。对齐 checkExecuteCodeEvidence（stage-contract.js 同时查 working-tree）语义，
   // 未提交改动也算有效对账源。working-tree 有改动时无条件并入（覆盖「部分 commit + 未提交」）。
+  // PERF-01：同 gitDir 的 status 快照按批缓存（单次校验批内恒同，跨批复用会读到陈旧状态）
   const commitDiffFiles = diffFiles.slice()
   try {
-    const wtStatus = runGit(gitDir, ['status', '--porcelain'])
+    let wtStatus = c.wtStatus.get(gitDir)
+    if (wtStatus === undefined) {
+      wtStatus = runGit(gitDir, ['status', '--porcelain'])
+      c.wtStatus.set(gitDir, wtStatus)
+    }
     if (wtStatus && wtStatus.trim().length > 0) {
       const wtFiles = parsePorcelainFiles(wtStatus)
       if (wtFiles.length > 0) diffFiles = diffFiles.concat(wtFiles)
@@ -1044,6 +1081,12 @@ export async function generateTaskReviewDrafts({ changeName, cwd, platformOpts =
 
     // 空 changedFiles 的 task 不生成（verifyReviewGitEvidence 判空 diff 伪造，留给 agent 手补）
     if (taskChangedFiles.length === 0) {
+      skipped++
+      continue
+    }
+    // 主仓 task 缺 base/head（meta 缺失 / HEAD 解析失败，见上方 :968-981 注释承诺的"后续跳过"）：
+    // 跳过留给 agent 手补。此前 null.slice(0,8) 直接 TypeError 崩掉整个草稿生成（体检 BUG-06）
+    if (!crossEntry && (!taskBase || !taskHead)) {
       skipped++
       continue
     }

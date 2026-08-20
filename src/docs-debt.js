@@ -14,7 +14,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { safeGit } from './git-helper.js'
 import { parseModuleMapSimple } from './modules.js'
-import { runDocsCheck } from './docs-check.js'
+import { runDocsCheck, readDocsCheckConfig } from './docs-check.js'
 
 /** safeGit 超时（大仓 git log 慢时降级该模块，不挂起 Wave 渲染） */
 const GIT_TIMEOUT_MS = 5000
@@ -212,7 +212,11 @@ function inlineCardInvalidRefs(entry, docGitRoot, docPathPrefix) {
   if (!docGitRoot || !docPathPrefix || !entry.doc) return null
   try {
     const docGitPath = `${docPathPrefix}/${entry.doc.replace(/^modules\//, '')}`
-    const check = runDocsCheck({ projectRoot: docGitRoot, docs: [docGitPath] })
+    // HUB-06：补传 crossRepoRoots（与 docs gate 同口径），repo:// 跨仓引用不再恒跳过；
+    // 配置读取失败（无 local.yaml 段等）→ 不启用跨仓，与原行为一致
+    let crossRepoRoots
+    try { crossRepoRoots = readDocsCheckConfig(docGitRoot)?.crossRepoRoots } catch { crossRepoRoots = undefined }
+    const check = runDocsCheck({ projectRoot: docGitRoot, docs: [docGitPath], crossRepoRoots })
     if (check.ok || !Array.isArray(check.invalid) || check.invalid.length === 0) return null
     const parts = check.invalid.slice(0, 3).map((inv) => {
       const sug = Array.isArray(inv.suggest) && inv.suggest.length > 0 ? `→建议 L${inv.suggest.join('/L')}` : ''

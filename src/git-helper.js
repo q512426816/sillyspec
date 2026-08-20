@@ -53,13 +53,16 @@ export function safeGit(cwd, args, opts = {}) {
  * 调用方自行 catch；不经 shell，参数以数组元素传递。
  * @param {string} cwd
  * @param {string[]} args
- * @param {{ trim?: boolean, timeout?: number }} [opts]
- * @returns {string}
+ * @param {{ trim?: boolean, timeout?: number, encoding?: string }} [opts]
+ *   - encoding:'buffer' 返回原始 Buffer（git diff --binary 等**二进制输出**专用——
+ *     utf8 解码会破坏 NUL 字节使补丁不可应用；Buffer 输出跳过 trim）
+ * @returns {string|Buffer}
  */
 export function git(cwd, args, opts = {}) {
-  const { trim = true, timeout = 5000 } = opts
+  const { trim = true, timeout = 5000, encoding = 'utf8' } = opts
   const fullArgs = ['-c', `safe.directory=${cwd}`, '-C', cwd, ...args]
-  const value = execFileSync('git', fullArgs, { encoding: 'utf8', timeout, stdio: ['ignore', 'pipe', 'pipe'] })
+  const value = execFileSync('git', fullArgs, { encoding, timeout, stdio: ['ignore', 'pipe', 'pipe'] })
+  if (Buffer.isBuffer(value)) return value
   return trim ? value.trim() : value
 }
 

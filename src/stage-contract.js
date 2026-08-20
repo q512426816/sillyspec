@@ -7,7 +7,7 @@
 
 import { existsSync, readdirSync, readFileSync } from 'fs'
 import { join, basename } from 'path'
-import { execFileSync } from 'child_process'
+import { safeGit } from './git-helper.js'
 import { detectChangeRisk, checkIntegrationEvidence, VERIFICATION_NEEDS, RISK_LEVEL_CAUSES } from './change-risk-profile.js'
 import { SCAN_REQUIRED_DOCS, AUXILIARY_STAGES } from './constants.js'
 import { evaluateRules } from './stage-contract-engine.js'
@@ -563,18 +563,12 @@ function validateChangeClosed(cwd, changeName) {
 
 // ============ Execute 代码变更客观核验 ============
 
+// QUAL-01 收口：本地 execFileSync 裸调（无 safe.directory）→ git-helper safeGit 统一入口，
+// {ok,out,error} 适配语义与 timeout 15000 不变
 function gitTry(dir, args) {
-  try {
-    const out = execFileSync('git', args, {
-      cwd: dir,
-      encoding: 'utf8',
-      timeout: 15000,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    }).trim()
-    return { ok: true, out }
-  } catch (e) {
-    return { ok: false, out: '', error: e.message?.split('\n')[0] || String(e) }
-  }
+  const r = safeGit(dir, args, { timeout: 15000 })
+  if (r.value !== null) return { ok: true, out: r.value }
+  return { ok: false, out: '', error: r.error || 'git 执行失败' }
 }
 
 /**

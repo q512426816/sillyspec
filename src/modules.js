@@ -1,5 +1,6 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
+import { gitQuiet } from './git-helper.js';
 
 
 /**
@@ -114,8 +115,8 @@ export async function rebuildModuleMap(cwd, { force = false } = {}) {
   const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
   let headCommit = '';
   try {
-    const { execFileSync } = await import('child_process');
-    headCommit = execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd, encoding: 'utf8', timeout: 5000 }).trim();
+    // QUAL-01 收口：走 git-helper 统一入口（safe.directory + 数组形式）
+    headCommit = gitQuiet(cwd, ['rev-parse', '--short', 'HEAD']) || '';
   } catch { /* ignore */ }
 
   let yaml = `schema_version: 2\n`;

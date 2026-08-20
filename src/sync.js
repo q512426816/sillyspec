@@ -8,7 +8,7 @@
  * HTTP 请求：Node.js 原生 fetch（Node 22+）
  */
 
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, unlinkSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, unlinkSync, chmodSync } from 'fs';
 import { join } from 'path';
 import { resolvePlatformSpecDir } from './progress.js';
 import { safeGit } from './git-helper.js';
@@ -135,7 +135,11 @@ function replaceTopLevelSection(text, name, body) {
 function writeLocalYamlRaw(cwd, text) {
   const dir = join(cwd, '.sillyspec');
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  writeFileSync(join(cwd, LOCAL_YAML), text, 'utf8');
+  const yamlPath = join(cwd, LOCAL_YAML);
+  writeFileSync(yamlPath, text, 'utf8');
+  // 体检 SEC-04：local.yaml 含明文 token，收紧为仅属主可读写。POSIX chmod 0600 生效；
+  // Windows 上 Node chmod 只映射只读位（近似 no-op），属可接受 best-effort
+  try { chmodSync(yamlPath, 0o600); } catch { /* chmod 失败不阻断连接流程 */ }
 }
 
 function parseSimpleYaml(content) {
@@ -268,8 +272,19 @@ export class SyncManager {
    * @param {string} [user] - 推送者身份（可空，回退 git user.name / env，见 resolvePlatformUser）
    */
   async connect(url, token, user) {
+    if (!token) {
+      // 体检 HUB-02：falsy token 不允许 connect——health ping 无鉴权会"连接成功"，
+      // 但 local.yaml 会落盘字符串 "undefined"，后续所有同步持续 401
+      console.error('[sync] 缺少 token，拒绝连接（请在平台获取 token 后带 --token 重试）');
+      return false;
+    }
     // 验证连接
     const normalizedUrl = url.replace(/\/+$/, '');
+    // 体检 SEC-04：非 https 且非本机回环时 Bearer token 明文上线——MCP client 侧
+    // （sillyhub-mcp/client.js 构造器）早有同款 warn，sync 侧此前完全静默
+    if (!/^https:\/\//i.test(normalizedUrl) && !/^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/i.test(normalizedUrl)) {
+      console.warn(`[sync] platform.url 非 https（${normalizedUrl.slice(0, 60)}），同步 token 将明文传输——请确认为受控内网环境`);
+    }
     const healthUrl = `${normalizedUrl}/api/health`;
     const result = await fetchJson(healthUrl);
     if (result === null) {
@@ -476,8 +491,11 @@ export class SyncManager {
         // 2026-08-17-spec-file-incremental-sync：进度上行+文档直推成功后顺带推整个 spec 树
         // （plan.md、tasks/、module-impact.md 等），让变更中心文件树自动更新。
         // 无 daemon 时 CLI 短进程无本地清单缓存，以服务器清单为锚做增量 diff。
+        // 树根与进度锚点同源（safePlatformSpecDir，平台模式 → specRoot）：此前硬编码
+        // cwd/.sillyspec，平台模式下该目录只有 local.yaml（被 walk 排除）→ 本地树恒空
+        // → 服务器清单全量 delete（BUG-01，computeSpecOps 护栏为第二道防线）。
         try {
-          await syncSpecTree(join(this.cwd, '.sillyspec'), this._getPlatform(), changeName);
+          await syncSpecTree(safePlatformSpecDir(this.cwd) || join(this.cwd, '.sillyspec'), this._getPlatform(), changeName);
         } catch (err) {
           debugLog(`[sync] spec 树增量同步失败（不影响进度）: ${changeName}: ${err.message}`);
         }
@@ -1144,7 +1162,8 @@ export async function syncSpecTreeOnly(changeName, cwd) {
   const sm = new SyncManager(cwd);
   const platform = sm._getPlatform();
   if (!platform) return { synced: 0 };
-  return syncSpecTree(join(cwd, '.sillyspec'), platform, changeName);
+  // 树根与 sync() 内链式推送同源（BUG-01：平台模式必须锚 specRoot，防本地空树触发全量 delete）
+  return syncSpecTree(safePlatformSpecDir(cwd) || join(cwd, '.sillyspec'), platform, changeName);
 }
 
 // TBD-hub-api: approve/reject 端点路径与请求体以 SillyHub 仓库实际 API 为准；

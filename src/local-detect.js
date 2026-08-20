@@ -90,7 +90,15 @@ export function detectLocalYaml(workdir) {
 
   // 3. gradle
   if (existsSync(join(workdir, 'build.gradle'))) {
-    const gradlePrefix = existsSync(join(workdir, 'gradlew')) ? './gradlew' : 'gradle'
+    // Windows 上 cmd.exe 执行不了 ./gradlew（shell 脚本）——优先 gradlew.bat；
+    // 仅有 POSIX gradlew 且在 win32 时退回全局 gradle（体检 BUG-08）
+    const isWin = process.platform === 'win32'
+    let gradlePrefix = 'gradle'
+    if (isWin) {
+      gradlePrefix = existsSync(join(workdir, 'gradlew.bat')) ? 'gradlew.bat' : 'gradle'
+    } else {
+      gradlePrefix = existsSync(join(workdir, 'gradlew')) ? './gradlew' : 'gradle'
+    }
     return {
       project: { type: 'gradle' },
       commands: {

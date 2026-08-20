@@ -12,7 +12,6 @@
  * 8. 成功后自动 cleanup
  */
 
-import { execFileSync } from 'child_process';
 import { existsSync, unlinkSync, writeFileSync, mkdtempSync, rmSync, readdirSync, readFileSync } from 'fs';
 import { join, resolve } from 'path';
 import { tmpdir } from 'os';
@@ -1199,9 +1198,9 @@ export function formatExecuteSummary({ changeName, stepsCompleted, stepsTotal, a
     // worktree 还在，用 baselineCommit 或 baseHash 做 diff
     try {
       const diffBase = meta.baselineCommit || meta.baseHash;
-      // execFileSync 数组形式：路径无需引号化（含空格也安全）；stdio stderr=ignore
-      // 替代 `2>/dev/null`（Windows cmd.exe 无法解析该重定向，导致 Windows 上恒抛错→Changed Files 空）
-      const filesRaw = execFileSync('git', ['-C', meta.worktreePath, 'diff', '--name-only', diffBase], { encoding: 'utf8', stdio: ['ignore','pipe','ignore'] });
+      // QUAL-01 收口：裸 execFileSync → git-helper git（stderr 由 helper stdio 配置吞掉，
+      // 替代 `2>/dev/null`——Windows cmd.exe 无法解析该重定向，导致 Windows 上恒抛错→Changed Files 空）
+      const filesRaw = git(meta.worktreePath, ['diff', '--name-only', diffBase], { timeout: 30000 });
       const files = filesRaw ? filesRaw.trim().split('\n').filter(Boolean) : [];
       if (files.length > 0) {
         lines.push(``);

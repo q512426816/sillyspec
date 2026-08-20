@@ -12,7 +12,7 @@
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
-import { execSync } from 'child_process'
+import { git } from './git-helper.js'
 import { assertSafeChangeName, resolveSpecDir } from './run/shared.js'
 import { parseTaskNames } from './stages/plan.js'
 
@@ -130,7 +130,8 @@ export function cmdTaskcard(changeName, opts = {}) {
 
   const author = (() => {
     try {
-      return execSync('git config user.name', { cwd, encoding: 'utf8', timeout: 5000 }).trim() || 'unknown'
+      // QUAL-01 收口：原 execSync 字符串拼接（经 shell，违反自家注入规约）→ git-helper 数组形式
+      return git(cwd, ['config', 'user.name']) || 'unknown'
     } catch {
       return 'unknown'
     }

@@ -7,6 +7,7 @@ node_modules/
 .sillyspec/.runtime/
 .idea
 .playwright-mcp/
+.zcode/
 
 # SQLite WAL 模式侧车文件（node:sqlite 运行时产物，勿提交）
 *.db-wal

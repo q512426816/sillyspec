@@ -5,6 +5,7 @@ import { checkbox, confirm, input } from '@inquirer/prompts';
 import { ProgressManager } from './progress.js';
 import chalk from 'chalk';
 import { getVersion } from './version.js';
+import { gitQuiet } from './git-helper.js';
 import { renderExample } from './config-schema.js';
 // 向后兼容：getVersion 已抽到轻量 version.js（避免 index.js 为 --version 静态加载 init.js 的 inquirer 税），
 // 此处 re-export 保持 init.js 既有导出 API 不破坏（如 test/init-claude-injection.test.mjs）。
@@ -557,9 +558,9 @@ export async function cmdInit(projectDir, options = {}) {
 
           let repo = '';
           try {
-            const { execFileSync } = await import('child_process');
+            // QUAL-01 收口：裸 execFileSync → git-helper（safe.directory + 数组形式）
             const absPath = resolve(projectDir, subPath.trim() || `./${name.trim()}`);
-            repo = execFileSync('git', ['remote', 'get-url', 'origin'], { cwd: absPath, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+            repo = gitQuiet(absPath, ['remote', 'get-url', 'origin']) || '';
           } catch {}
 
           subprojects.push({ name: name.trim(), path: subPath.trim() || `./${name.trim()}`, role: role.trim(), repo });

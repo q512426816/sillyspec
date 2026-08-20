@@ -114,11 +114,39 @@ function isViewableDocPath(filePath) {
   return /\.(md|markdown|mdx|html?|txt|log|json|ya?ml|toml|xml|csv)$/i.test(filePath)
 }
 
-function isLocalOrigin(origin) {
+// ── 项目发现缓存 + 路径校验（体检 SEC-06；TTL 缓存兼避免每请求全量扫 HOME 级目录）──
+let _projectsCache = { at: 0, data: null }
+async function getDiscoveredProjects() {
+  const TTL_MS = 10_000
+  if (_projectsCache.data && Date.now() - _projectsCache.at < TTL_MS) return _projectsCache.data
+  const data = await discoverProjects()
+  _projectsCache = { at: Date.now(), data }
+  return data
+}
+
+/**
+ * 目标路径是否位于某个已发现项目内。此前 /api/docs/content 只查"路径含 .sillyspec 组件"，
+ * 磁盘上任意 .sillyspec 树（含 .runtime 运行时文件）都可读；detail API 还以任意路径为
+ * cwd 跑 git。收紧为"必须位于已发现项目的目录内"（与 WS cli:execute 的项目校验同范式）。
+ */
+async function isKnownProjectPath(targetPath) {
+  const projects = await getDiscoveredProjects()
+  return projects.some(p => isInside(p.path, targetPath))
+}
+
+/**
+ * 跨站防护（体检 SEC-03 收紧）：dashboard 前端由本服务自身托管，合法浏览器请求的
+ * Origin 端口必然等于服务端口。此前只校验 hostname，本机任意其他端口的 web 页面
+ * （被攻陷的 dev server / 恶意 npm 包起的页面）也能通过检查，驱动 WS cli:execute 等
+ * 完整 API。无 Origin 头（curl / 本地非浏览器进程）保持放行——与 localhost 服务
+ * "本地进程可信"的固有级别一致，浏览器攻击面才是本检查能挡的部分。
+ */
+function isSameDashboardOrigin(origin, ownPort) {
   if (!origin) return true
   try {
-    const { hostname } = new URL(origin)
-    return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1'
+    const { hostname, port: originPort } = new URL(origin)
+    if (hostname !== 'localhost' && hostname !== '127.0.0.1' && hostname !== '::1') return false
+    return String(originPort) === String(ownPort)
   } catch {
     return false
   }
@@ -287,7 +315,7 @@ function handleCliExecute(ws, data) {
 function startServer({ port = 3456, open: openBrowser = true } = {}) {
   const server = createServer((req, res) => {
     const origin = req.headers.origin
-    if (!isLocalOrigin(origin)) {
+    if (!isSameDashboardOrigin(origin, port)) {
       res.writeHead(403)
       res.end('Forbidden')
       return
@@ -315,41 +343,61 @@ function startServer({ port = 3456, open: openBrowser = true } = {}) {
       return
     }
 
-    // Detail API
+    // Detail API（SEC-06：projectPath 须位于已发现项目内——parseGitDetail 以其为 cwd 跑 git）
     const detailMatch = req.url?.match(/^\/api\/projects\/(.+)\/detail(\?|$)/)
     if (detailMatch) {
       const projectPath = decodeURIComponent(detailMatch[1])
       const url = new URL(req.url, `http://${req.headers.host}`)
       const type = url.searchParams.get('type')
-      let data
-      try {
-        if (type === 'git') data = parseGitDetail(projectPath)
-        else if (type === 'tech') data = parseTechStackDetail(projectPath)
-        else if (type === 'docs') data = parseSillyspecDocsTree(projectPath).groups
-        else { res.writeHead(400); res.end(JSON.stringify({ error: 'Invalid type' })); return }
-        res.setHeader('Content-Type', 'application/json')
-        res.writeHead(200)
-        res.end(JSON.stringify(data))
-      } catch (err) {
+      isKnownProjectPath(projectPath).then(known => {
+        if (!known) {
+          res.writeHead(403)
+          res.end(JSON.stringify({ error: 'Unknown project path' }))
+          return
+        }
+        let data
+        try {
+          if (type === 'git') data = parseGitDetail(projectPath)
+          else if (type === 'tech') data = parseTechStackDetail(projectPath)
+          else if (type === 'docs') data = parseSillyspecDocsTree(projectPath).groups
+          else { res.writeHead(400); res.end(JSON.stringify({ error: 'Invalid type' })); return }
+          res.setHeader('Content-Type', 'application/json')
+          res.writeHead(200)
+          res.end(JSON.stringify(data))
+        } catch (err) {
+          res.writeHead(500)
+          res.end(JSON.stringify({ error: err.message }))
+        }
+      }).catch(() => {
         res.writeHead(500)
-        res.end(JSON.stringify({ error: err.message }))
-      }
+        res.end(JSON.stringify({ error: 'Project discovery failed' }))
+      })
       return
     }
 
-    // Overview API
+    // Overview API（SEC-06：同 detail，projectPath 须位于已发现项目内）
     if (req.url?.startsWith('/api/projects/') && req.url.endsWith('/overview')) {
       const parts = req.url.replace('/api/projects/', '').replace('/overview', '').split('/')
       const projectPath = decodeURIComponent(parts.join('/'))
-      try {
-        const overview = parseProjectOverview(projectPath)
-        res.setHeader('Content-Type', 'application/json')
-        res.writeHead(200)
-        res.end(JSON.stringify(overview))
-      } catch (err) {
+      isKnownProjectPath(projectPath).then(known => {
+        if (!known) {
+          res.writeHead(403)
+          res.end(JSON.stringify({ error: 'Unknown project path' }))
+          return
+        }
+        try {
+          const overview = parseProjectOverview(projectPath)
+          res.setHeader('Content-Type', 'application/json')
+          res.writeHead(200)
+          res.end(JSON.stringify(overview))
+        } catch (err) {
+          res.writeHead(500)
+          res.end(JSON.stringify({ error: err.message }))
+        }
+      }).catch(() => {
         res.writeHead(500)
-        res.end(JSON.stringify({ error: err.message }))
-      }
+        res.end(JSON.stringify({ error: 'Project discovery failed' }))
+      })
       return
     }
 
@@ -382,27 +430,33 @@ function startServer({ port = 3456, open: openBrowser = true } = {}) {
         res.end(JSON.stringify({ error: 'Missing path parameter' }))
         return
       }
-      // Security: only allow reading viewable text documents under a .sillyspec tree.
+      // Security: only allow reading viewable text documents under a discovered
+      // project's .sillyspec tree（SEC-06：不限在已发现项目内则磁盘上任意 .sillyspec 树可读）.
       const normalizedPath = resolve(filePath)
-      if (!isSillyspecPath(normalizedPath) || !isViewableDocPath(normalizedPath) || isCredentialPath(normalizedPath)) {
-        res.writeHead(403)
-        res.end(JSON.stringify({ error: 'Access denied' }))
-        return
-      }
-      if (existsSync(normalizedPath)) {
-        try {
-          const content = readFileSync(normalizedPath, 'utf-8')
-          res.setHeader('Content-Type', 'text/plain; charset=utf-8')
-          res.writeHead(200)
-          res.end(content)
-        } catch (err) {
-          res.writeHead(500)
-          res.end(JSON.stringify({ error: err.message }))
+      isKnownProjectPath(normalizedPath).then(known => {
+        if (!known || !isSillyspecPath(normalizedPath) || !isViewableDocPath(normalizedPath) || isCredentialPath(normalizedPath)) {
+          res.writeHead(403)
+          res.end(JSON.stringify({ error: 'Access denied' }))
+          return
         }
-      } else {
-        res.writeHead(404)
-        res.end(JSON.stringify({ error: 'File not found' }))
-      }
+        if (existsSync(normalizedPath)) {
+          try {
+            const content = readFileSync(normalizedPath, 'utf-8')
+            res.setHeader('Content-Type', 'text/plain; charset=utf-8')
+            res.writeHead(200)
+            res.end(content)
+          } catch (err) {
+            res.writeHead(500)
+            res.end(JSON.stringify({ error: err.message }))
+          }
+        } else {
+          res.writeHead(404)
+          res.end(JSON.stringify({ error: 'File not found' }))
+        }
+      }).catch(() => {
+        res.writeHead(500)
+        res.end(JSON.stringify({ error: 'Project discovery failed' }))
+      })
       return
     }
 
@@ -460,7 +514,7 @@ function startServer({ port = 3456, open: openBrowser = true } = {}) {
   })
 
   wss.on('connection', (ws, req) => {
-    if (!isLocalOrigin(req.headers.origin)) {
+    if (!isSameDashboardOrigin(req.headers.origin, port)) {
       ws.close(1008, 'Forbidden origin')
       return
     }
@@ -589,6 +643,14 @@ function startServer({ port = 3456, open: openBrowser = true } = {}) {
     stopWatcher()
     activeProcesses.forEach(kill => kill())
     activeProcesses.clear()
+    // server.close() 只停止接受新连接，不终止已升级的 WS 连接——事件循环被客户端
+    // 持有导致 Ctrl+C 无法退出（体检 BUG-10）。先 terminate 客户端再关 wss。
+    if (wss) {
+      for (const client of wss.clients) {
+        try { client.terminate() } catch { /* 已断开的客户端忽略 */ }
+      }
+      try { wss.close() } catch { /* 关闭失败不阻断退出 */ }
+    }
     server.close()
   }
 

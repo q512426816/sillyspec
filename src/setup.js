@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
-import { execSync, execFileSync } from 'child_process';
+import { execSync } from 'child_process';
+import { gitQuiet } from './git-helper.js';
 import chalk from 'chalk';
 import ora from 'ora';
 import { checkbox, input } from '@inquirer/prompts';
@@ -359,16 +360,13 @@ export async function cmdSetup(dir, options = {}) {
       // 凭据提交风险提示（sec-c）：.claude/mcp.json / .cursor/mcp.json 是项目共享文件、通常随 git
       // 提交，而 DB MCP 的 env 含明文连接串/密码。检测 git 跟踪状态，已跟踪/未忽略时显式警告。
       if (selectedDb.length > 0) {
-        try {
-          execFileSync('git', ['-C', dir, 'ls-files', '--error-unmatch', path], { stdio: 'pipe' });
+        // QUAL-01 收口：裸 execFileSync → git-helper（-C 由 helper 统一注入）。
+        // 语义映射：ls-files --error-unmatch 命中（exit 0）= 已跟踪 → 警告；
+        // check-ignore -q 命中（exit 0）= 已忽略 → 不警告
+        if (gitQuiet(dir, ['ls-files', '--error-unmatch', path]) !== null) {
           console.warn(chalk.yellow(`  ⚠️ ${path} 已被 git 跟踪——其中数据库连接串/密码会随提交进入仓库，建议加入 .gitignore 或改用环境变量`));
-        } catch {
-          // 未被跟踪：再查是否被 ignore；都不满足（未忽略未跟踪）时提示防止将来误提交
-          try {
-            execFileSync('git', ['-C', dir, 'check-ignore', '-q', path], { stdio: 'pipe' });
-          } catch {
-            console.warn(chalk.yellow(`  ⚠️ ${path} 含数据库连接串/密码且未被 .gitignore 忽略——提交前请先加入 .gitignore 或改用环境变量`));
-          }
+        } else if (gitQuiet(dir, ['check-ignore', '-q', path]) === null) {
+          console.warn(chalk.yellow(`  ⚠️ ${path} 含数据库连接串/密码且未被 .gitignore 忽略——提交前请先加入 .gitignore 或改用环境变量`));
         }
       }
     }

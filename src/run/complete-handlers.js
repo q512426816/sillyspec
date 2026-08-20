@@ -499,9 +499,12 @@ export async function handleScanProjectListStep({ stageName, steps, currentIdx, 
         const yamlContent = readFileSync(join(projectsDir, yf), 'utf8')
         const pathMatch = yamlContent.match(/^path:\s*(.+)/m)
         const pPath = pathMatch ? pathMatch[1].trim() : pName
-        // 校验 path 是否存在且在 source_root 内
+        // 校验 path 是否存在且在 source_root 内。
+        // 用 relative 判越界（与 validateParsedProjects 同口径）：startsWith 前缀比较
+        // 无分隔符，C:\repo 会放行兄弟目录 C:\repository2（体检 BUG-13）
         const absPath = resolve(cwd, pPath)
-        if (pPath.includes('..') || (!absPath.startsWith(resolve(cwd)) && absPath !== resolve(cwd))) {
+        const rel = relative(resolve(cwd), absPath)
+        if (rel.startsWith('..') || isAbsolute(rel)) {
           fallbackSkipped.push(`${pName} (path 越界: ${pPath})`)
           continue
         }
@@ -1295,6 +1298,15 @@ export async function handleExecuteWorktreeCleanup({ stageName, changeName, cwd 
 export async function handleScanStageCompleted({ stageName, currentIdx, cwd, progress, pm, stageData, changeName, outputText, platformOpts }) {
   // 平台模式：scan 完成后生成 manifest.json + post-check
   if (stageName === 'scan' && (platformOpts.specRoot || platformOpts.runtimeRoot)) {
+    if (!platformOpts.specRoot) {
+      // 只传 runtimeRoot 无 specRoot（command.js 允许的组合）：manifest 无处落盘。
+      // 显式 fail-closed 报错——此前 mkdirSync(null) 抛 TypeError 被外层 catch 吞掉，
+      // postcheck/指针升级/阻断全部静默跳过，scan 失败也"干净成功"（体检 BUG-12）
+      console.error(`❌ 平台模式缺少 --spec-root，无法写 manifest.json（scan postcheck 中止）`)
+      stageData.scanMeta = stageData.scanMeta || {}; stageData.scanMeta.manifestWritten = false
+      stageData.scanMeta.manifestError = 'missing specRoot'
+      return
+    }
     try {
       stageData.scanMeta = stageData.scanMeta || {}; stageData.scanMeta.manifestWritten = false; // 默认失败
       const manifestDir = platformOpts.specRoot

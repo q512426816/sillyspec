@@ -336,12 +336,26 @@ export const PLATFORM_MANAGED_FILENAME = '.sillyspec-platform-managed'
 
 export function writePlatformPointer(cwd, platformOpts, extra = {}) {
   if (!platformOpts || (!platformOpts.specRoot && !platformOpts.runtimeRoot)) return false
+  // HUB-05：合并保留既有生命周期字段。scan 完成时指针被写入 status/completedAt/scanStatus
+  //（complete-handlers），但下一次任何平台模式 run（含只读 --status）都会重写指针——
+  // 恢复链只回填 specRoot 等四字段，不保留 status → 指针永远回 active、isPointerStale
+  // 恒 false、`platform pointer --cleanup` 的 STALE 分支不可达。extra 显式传值仍可覆盖。
+  let preserved = {}
+  try {
+    const existing = JSON.parse(readFileSync(join(cwd, '.sillyspec-platform.json'), 'utf8'))
+    if (existing && typeof existing === 'object') {
+      for (const k of ['status', 'completedAt', 'scanStatus']) {
+        if (existing[k] !== undefined && extra[k] === undefined) preserved[k] = existing[k]
+      }
+    }
+  } catch { /* 无既有指针/损坏 → 全新写入 */ }
   const payload = {
     specRoot: platformOpts.specRoot || null,
     runtimeRoot: platformOpts.runtimeRoot || null,
     workspaceId: platformOpts.workspaceId || null,
     scanRunId: platformOpts.scanRunId || null,
     savedAt: new Date().toISOString(),
+    ...preserved,
     ...extra,
   }
   // 声明文件字段集独立于指针 payload（D-E@v2 四字段：无 status/savedAt/scanRunId——
@@ -464,6 +478,34 @@ export async function triggerSync(cwd, changeName, platformOpts = {}) {
 }
 
 /**
+ * 自动 pull 节流（体检 PERF-02）：triggerPull/triggerPullActiveChange 在每条 stage 命令
+ * 启动时注入，agent 命令往往是秒级连发——每次都发 HTTP GET（daemon 挂/慢时单命令最多
+ * 阻塞 8s）。跨进程 marker 节流：10s 内已有自动 pull 则跳过（手动 `platform pull` 不走
+ * 此门，语义不变）。错过窗口的平台更新由下一条 >10s 的命令或 push 409 自愈兜底。
+ */
+const AUTO_PULL_THROTTLE_MS = 10_000
+
+function _autoPullThrottlePath(cwd) {
+  return join(cwd, '.sillyspec', '.runtime', 'auto-pull-throttle.json')
+}
+
+function _autoPullRecently(cwd) {
+  try {
+    const t = JSON.parse(readFileSync(_autoPullThrottlePath(cwd), 'utf8'))
+    return typeof t.at === 'number' && Date.now() - t.at < AUTO_PULL_THROTTLE_MS
+  } catch {
+    return false
+  }
+}
+
+function _stampAutoPull(cwd) {
+  try {
+    mkdirSync(dirname(_autoPullThrottlePath(cwd)), { recursive: true })
+    writeFileSync(_autoPullThrottlePath(cwd), JSON.stringify({ at: Date.now() }) + '\n', 'utf8')
+  } catch { /* best-effort：节流失效仅退化为逐次 pull */ }
+}
+
+/**
  * 触发 pull（下行同步，task-10 / D-009 / FR-04 / FR-06）。
  * 复用 triggerSync 的 8s 熔断与 Best Effort 语义；未连接平台静默跳过（与现状一致）。
  * 注入时机：stage 命令启动（顶层别名 + case 'run'，ql-20260818-008 补齐后者）+ 关键决策点
@@ -480,8 +522,11 @@ export async function triggerPull(cwd, changeName, platformOpts = {}) {
   try {
     const syncMod = await import('../sync.js')
     const sm = new syncMod.SyncManager(cwd)
-    // 未连接平台静默跳过（本地独立用户合法状态，不噪音）
+    // 未连接平台静默跳过（本地独立用户合法状态，不噪音）——节流 stamp 必须在此之后：
+    // 否则未连接的项目每次 run 都写 .sillyspec/.runtime/ 标记（凭空造目录）
     if (!sm._getPlatform()) return
+    if (_autoPullRecently(cwd)) return
+    _stampAutoPull(cwd)
     let timer
     try {
       await Promise.race([
@@ -513,6 +558,10 @@ export async function triggerPullActiveChange(cwd, platformOpts = {}) {
   } catch {
     return
   }
+  // PERF-02 节流（连接确认后才 stamp——未连接项目不得凭空写 .sillyspec/.runtime/）：
+  // 与 triggerPull 共用同一 marker（本函数与它在同一命令启动链上互斥出现）
+  if (_autoPullRecently(cwd)) return
+  _stampAutoPull(cwd)
   let cn = null
   try {
     const { ProgressManager } = await import('../progress.js')
@@ -774,7 +823,11 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
     ]
 
     for (const entry of currentEntries) {
-      const status = entry.slice(0, 2).trim()
+      // porcelain 两字符状态码（X=暂存区 Y=工作区）不能先 trim：' D'.trim()==='D' 使第二分支恒假、
+      // 'DD'/'AD' 等 trim 后不等于 'D' 而漏检——--allow-delete 门对此类删除静默放行（体检 BUG-04）。
+      // 用原始两字符判定任一侧为 D 即删除。
+      const rawStatus = entry.slice(0, 2)
+      const status = rawStatus.trim()
       const file = parsePorcelainPath(entry)   // 已去引号/处理 rename/归一化，修正首行丢首字符
       if (!file) continue
 
@@ -786,7 +839,7 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
       if (isBaselineFile(file)) continue
 
       result.changedFiles.push(file)
-      if (status === 'D' || status === ' D') result.deletedFiles.push(file)
+      if (rawStatus[0] === 'D' || rawStatus[1] === 'D') result.deletedFiles.push(file)
       if (status === '??') result.newFiles.push(file)
 
       // 检查是否命中 baseline protected files
@@ -885,8 +938,12 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
     const mdChanged = result.changedFiles.filter((f) => f.endsWith('.md') && !deletedSet.has(f) && !isQuickMetadata(f, guard.linkedChanges))
     if (mdChanged.length > 0) {
       try {
-        const { runDocsCheck } = await import('../docs-check.js')
-        const dc = runDocsCheck({ projectRoot: cwd, docs: mdChanged })
+        const { runDocsCheck, readDocsCheckConfig } = await import('../docs-check.js')
+        // HUB-06：补传 crossRepoRoots（与 docs gate / index.js docs check 同口径）——
+        // 否则 repo:// 跨仓引用在这条链路恒跳过；无 local.yaml 配置时 undefined = 不启用
+        let quickCfg = {}
+        try { quickCfg = readDocsCheckConfig(cwd) || {} } catch { quickCfg = {} }
+        const dc = runDocsCheck({ projectRoot: cwd, docs: mdChanged, crossRepoRoots: quickCfg.crossRepoRoots })
         if (!dc.ok) {
           result.reasons.push(`本次改动文档含 ${dc.invalid.length} 处失效 file:line 引用（sillyspec docs check 可复现）`)
           result.docsCheckHint = { invalid: dc.invalid.length, total: dc.total }
@@ -906,7 +963,11 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
     const srcChangedFiles = result.changedFiles.filter((f) => f.startsWith('src/') && !deletedSet.has(f))
     if (srcChangedFiles.length > 0) {
       try {
-        const { collectDocRefs, runDocsCheck } = await import('../docs-check.js')
+        const { collectDocRefs, runDocsCheck, readDocsCheckConfig } = await import('../docs-check.js')
+        // HUB-06：活文档（platform-interface-map.md 等最可能写 repo:// 引用的文档）同样补传
+        // crossRepoRoots；配置读一次提到循环外（per-cwd 恒同）
+        let livingCfg = {}
+        try { livingCfg = readDocsCheckConfig(cwd) || {} } catch { livingCfg = {} }
         const livingDocs = await resolveLivingDocs(cwd)
         const files = []
         const docs = []
@@ -918,7 +979,7 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
           if (hit.length === 0) continue
           files.push(...hit)
           docs.push(docRel)
-          const r = runDocsCheck({ projectRoot: cwd, docs: [docRel], keywordAssert: true })
+          const r = runDocsCheck({ projectRoot: cwd, docs: [docRel], keywordAssert: true, crossRepoRoots: livingCfg.crossRepoRoots })
           for (const x of r.invalid) invalidAll.push({ ...x, doc: docRel })
         }
         const invalid = matchInvalidRefsToChanged(invalidAll, srcChangedFiles)

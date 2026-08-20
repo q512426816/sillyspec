@@ -47,7 +47,7 @@ SillySpec 平台执行模式的核心设计：**SillySpec 写产物，SillyHub �
 ├── projects/*.yaml                         # 子项目注册
 ├── changes/<change-name>/                  # 变更目录
 └── .runtime/
-    ├── postcheck-result.json              # post-check 结构化结果
+    ├── postcheck-result.json              # post-check 结构化结果（仅无 scan-run 标识的回落路径；正常平台链路写 scan-runs/，见下节）
     └── platform-scan.json                  # 平台参数持久化（主文件）
 
 <runtime_root>/
@@ -191,49 +191,67 @@ scan 完成后追加：
 
 ## postcheck-result.json
 
-写入 `<spec_root>/.runtime/postcheck-result.json`（平台模式）或 `<cwd>/.sillyspec/.runtime/postcheck-result.json`（本地模式）。
+落点（HUB-04 对齐 `writeStructuredResult` 实际行为）：
+
+- **平台模式带 scan-run 标识**（`--runtime-root` + `--scan-run-id`，正常平台链路）：`<runtime_root>/scan-runs/<scan_run_id>/postcheck-result.json`
+- **平台模式缺 scan-run 标识**（仅 `--spec-root`）：回落 `<spec_root>/.runtime/postcheck-result.json`
+- **本地模式**：`<cwd>/.sillyspec/.runtime/postcheck-result.json`
+
+> manifest.json 的 `postcheck_result_path` 字段始终指向真实落盘路径，消费方优先信它而非按上表猜路径。
 
 ### 结构
 
+与 `formatStructuredResult`（src/scan-postcheck.js）输出一致：
+
 ```json
 {
+  "schema_version": 1,
+  "generated_at": "2026-08-20T00:00:00.000Z",
+  "overall_status": "success | completed_with_warnings | failed_post_check",
   "workspace_id": "ws-xxx",
   "scan_run_id": "scan-2026-06-14-test-001",
-  "status": "success | completed_with_warnings | failed_post_check",
   "source_root": "/path/to/source",
   "spec_root": "/path/to/spec",
   "runtime_root": "/path/to/runtime",
+  "summary": { "total_checks": 8, "critical": 0, "error": 0, "warning": 2 },
+  "failure_categories": {
+    "violations": [], "missing_outputs": [], "path_pollution": [],
+    "bad_references": [], "quality_warnings": []
+  },
   "checks": [
-    {
-      "name": "source_root_docs_leak",
-      "severity": "failed | warning",
-      "detail": "..."
-    }
-  ],
-  "source_root_leak": true,
-  "docs_missing": ["ARCHITECTURE.md"],
-  "profile": {
-    "mode": "quick | standard | deep",
-    "file_count": 10,
-    "source_bytes": 102400,
-    "project_count": 1,
-    "reason": "..."
-  }
+    { "name": "source_root_docs_leak", "severity": "critical", "detail": "..." }
+  ]
 }
 ```
 
+字段说明（HUB-03 对齐，防两端解析错位）：
+
+- 顶层状态字段名是 **`overall_status`**（manifest.json 内嵌的 `scan_post_check.status` 是另一个名字——两处契约不同名是现状，消费方各自对齐，勿混用）。
+- `checks[].severity` 枚举为 **`critical | error | warning`**：内部判定用的 `failed` 在结构化输出时统一重映射为 `critical`。
+- 可选元字段（workspace_id / scan_run_id / 三个 root 路径）仅在调用方提供时出现。
+- 不输出 `source_root_leak` / `docs_missing` / `profile` 顶层字段（早期草案字段，从未实现；profile 信息走 manifest.json 的 `scan_profile`）。
+
 ### check 类型
 
-| check name | severity | 说明 |
+| check name | 输出 severity | 说明 |
 |---|---|---|
-| `source_root_docs_leak` | failed | docs 文档泄漏到 source_root |
-| `source_root_leak` | failed | projects/workflows/knowledge/manifest/local 泄漏到 source_root |
-| `all_docs_missing` | failed | 7 份必需文档全部缺失 |
-| `partial_docs_missing` | failed | 部分文档缺失 |
+| `source_root_docs_leak` | critical | docs 文档泄漏到 source_root/.sillyspec/docs/ |
+| `source_root_leak` | critical | projects/workflows/knowledge/manifest/local 等泄漏到 source_root |
+| `all_docs_missing` | critical | 必需 scan 文档全部缺失 |
+| `partial_docs_missing` | critical | 部分 scan 文档缺失（quick profile 按 4 份核心清单） |
+| `missing_docs` | warning | quick profile 下缺少非核心文档（3 份深度文档，待 deep 补齐） |
+| `quick_profile_notice` | warning | 本次为 quick scan（仅 4 份核心文档）提示 |
 | `docs_missing_header` | warning | 文档缺少 frontmatter |
 | `local_config_invalid` | warning | local.yaml 中命令不存在 |
-| `tool_use_error` | warning | AI 执行工具调用错误 |
-| `api_error` | warning | API 错误（529/429/超时） |
+| `api_error_529` | warning | AI 输出中多次 API Error 529 |
+| `rate_limit_exhausted` | warning | AI 输出中多次 rate_limit exhausted |
+| `knowledge_index_missing` | warning | knowledge/INDEX.md 不存在 |
+| `knowledge_broken_refs` | warning | INDEX.md 引用了不存在的文件 |
+| `knowledge_dir_missing` | warning | knowledge/ 目录不存在 |
+| `manifest_write_failed` | critical | manifest.json 写入失败，平台无法消费 scan 结果 |
+| `project_list_parse_failed` | warning | Step 2 项目列表解析失败，回退注册列表 |
+
+> 早期草案的 `tool_use_error` / `api_error` check 已移除/改名（对应现 `api_error_529` / `rate_limit_exhausted`）。
 
 ## workflow-runs
 
@@ -277,7 +295,7 @@ post-check 会检查以下路径是否存在泄漏：
 
 SillyHub 判断 scan 结果的推荐顺序：
 
-1. `manifest.json` → `scan_post_check.overall_status` → 快速判断成功/失败
+1. `manifest.json` → `scan_post_check.status` → 快速判断成功/失败（注意：是 `status`，非 postcheck-result.json 的 `overall_status`——两处契约字段名不同，见上）
 2. `postcheck-result.json` → 完整检查明细 + failure_categories
 3. `workflow-runs/*.json` → workflow 检查证据
 4. `docs/<project>/scan/*.md` → 实际文档内容

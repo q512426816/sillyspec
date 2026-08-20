@@ -127,6 +127,19 @@ export function computeSpecOps(serverManifest, localFiles) {
   const serverPaths = Object.keys(server).filter((p) => server[p]?.exists !== false);
   const serverSet = new Set(serverPaths);
 
+  // fail-closed 护栏（2026-08-20 全量体检 BUG-01）：本地树为空而服务器非空时，
+  // 全量 delete 几乎必然是「锚错了目录」（如平台模式 cwd/.sillyspec 只剩 local.yaml
+  // 被 walk 排除），而不是用户真的删光了所有文件——一旦发出就是服务器整树清空。
+  // 唯一放行：服务器只剩 local.yaml 存量（顶层单文件），保留「delete 清 token 存量」
+  // 的既定语义（见 UPLOAD_EXCLUDE_FILENAMES 注释）。真实清空需求需本地树非空逐轮收敛。
+  const nonTrivialServer = serverPaths.filter((p) => p !== 'local.yaml');
+  if (localFiles.length === 0 && nonTrivialServer.length > 0) {
+    console.warn(
+      `[spec-sync] 本地 spec 树为空但服务器有 ${serverPaths.length} 个文件，跳过同步（防误清空；请检查 spec 目录锚点）`
+    );
+    return [];
+  }
+
   // rename 检测：旧路径（服务器有、本地无）↔ 新路径（本地有、服务器无）hash 相同
   const renames = [];
   const consumedNew = new Set();

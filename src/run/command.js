@@ -1288,6 +1288,12 @@ async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts = 
   const result = await completeStep(pm, progress, currentStage, cwd, outputText, inputText, { printNext: false, changeName, platformOpts })
   if (!result) return
   progress = pm.read(cwd, changeName)
+  // change 行被并发归档/删除时 read 返回 null（体检 BUG-05）：引导排查而非 TypeError 崩溃
+  if (!progress) {
+    console.error(`❌ 完成步骤后进度数据消失（变更 ${changeName} 可能被并发归档/删除），请用 sillyspec progress show 核对当前状态`)
+    process.exitCode = 1
+    return
+  }
 
   const nextPendingIdx = progress.stages[currentStage]?.steps?.findIndex(step => step.status === 'pending' || step.status === 'in-progress') ?? -1
   if (nextPendingIdx !== -1) {
@@ -1357,6 +1363,12 @@ async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts = 
   pm._write(cwd, progress, changeName)
   triggerSync(cwd, changeName, platformOpts)
   progress = pm.read(cwd, changeName)
+  // 同 BUG-05：写入后被并发删除的窗口，null 直接解引用会 TypeError
+  if (!progress) {
+    console.error(`❌ 阶段推进后进度数据消失（变更 ${changeName} 可能被并发归档/删除），请用 sillyspec progress show 核对当前状态`)
+    process.exitCode = 1
+    return
+  }
 
   console.log(`\n${currentStage} complete. Auto advanced to ${next}.`)
   const nextSteps = await getAutoSteps(next)

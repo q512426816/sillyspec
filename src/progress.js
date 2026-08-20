@@ -152,6 +152,9 @@ const CHANGES_SUBDIR = 'changes';
 // ── ProgressManager ──
 
 export class ProgressManager {
+  /** 模块级 DB 连接池：Map<dbPath, DB>（SEC-09/PERF-10，见 _ensureDB 注释） */
+  static _dbPool = new Map();
+
   /**
    * @param {object} [opts]
    * @param {string} [opts.specDir] - 规范目录绝对路径（默认 cwd/.sillyspec）
@@ -197,11 +200,26 @@ export class ProgressManager {
     }
   }
 
-  /** 懒初始化 DB 连接，缓存在实例上（better-sqlite3 同步 API，init 无 async） */
+  /**
+   * 懒初始化 DB 连接，缓存在实例上（better-sqlite3 同步 API，init 无 async）。
+   *
+   * SEC-09/PERF-10（2026-08-20 体检）：连接额外进模块级 Map<dbPath, DB> 单例——
+   * 一条平台命令此前会 new 多个 ProgressManager（triggerPull / sync / import 各建），
+   * 同一 sillyspec.db 被 open 3-5 次，每次重跑 PRAGMA + schema 探测，且多连接
+   * 提升 SQLITE_BUSY 概率、Windows 残留句柄影响文件替换。CLI 短进程生命周期内
+   * dbPath 不变，进程退出由 OS 回收句柄（node:sqlite 无显式泄漏）；进程内共享
+   * 单连接后 WAL 写竞争面反而缩小。
+   */
   _ensureDB(cwd) {
     if (!this._db) {
-      this._db = new DB(this._runtimePath(cwd, 'sillyspec.db'));
-      this._db.init();
+      const dbPath = this._runtimePath(cwd, 'sillyspec.db');
+      let db = ProgressManager._dbPool.get(dbPath);
+      if (!db) {
+        db = new DB(dbPath);
+        db.init();
+        ProgressManager._dbPool.set(dbPath, db);
+      }
+      this._db = db;
     }
     return this._db;
   }
@@ -546,7 +564,17 @@ export class ProgressManager {
     }
     const bakTs = new Date().toISOString().replace(/[:.]/g, '-');
     const bakPath = this._runtimePath(cwd, `sillyspec.db.pre-import-${bakTs}.bak`);
+    // 体检 BUG-18：WAL 模式下最近已提交事务可能仍在 -wal 侧车，直接 copy 主库文件会拿到
+    // 缺尾部提交的快照（恢复时静默回退进度）。先尽力 checkpoint(TRUNCATE) 把 WAL 合并回主库；
+    // 他进程持连接致 checkpoint 不完全时，把 -wal 侧车一并备份，恢复侧才有完整提交
+    try {
+      this._ensureDB(cwd).getDb().exec('PRAGMA wal_checkpoint(TRUNCATE)');
+    } catch { /* best-effort：失败退化为连 -wal 一起备份 */ }
     copyFileSync(dbPath, bakPath);
+    const walSidecar = `${dbPath}-wal`;
+    if (existsSync(walSidecar)) {
+      try { copyFileSync(walSidecar, `${bakPath}-wal`); } catch { /* 侧车消失=已 checkpoint，无碍 */ }
+    }
 
     const pushedAt = progressObj.pushed_at ?? null;
     const now = new Date().toISOString();
@@ -1184,10 +1212,21 @@ export class ProgressManager {
     for (const s of VALID_STAGES) {
       stages[s] = { status: 'pending', steps: [] };
     }
+    // PERF-06：一次 IN (...) 批量取全部 steps 再按 stage_id 分组（原逐 stage 查询是 N+1，
+    // dump 是 daemon 轮询接口；与 read() :283-287 的批量读法对齐）
+    const stepsByStage = new Map();
+    if (stageRows.length > 0) {
+      const placeholders = stageRows.map(() => '?').join(', ');
+      const allStepRows = sqlDb.prepare(
+        `SELECT stage_id, name, status, output, completed_at FROM steps WHERE stage_id IN (${placeholders}) ORDER BY stage_id, ordering`
+      ).all(...stageRows.map(r => r.id));
+      for (const sr of allStepRows) {
+        if (!stepsByStage.has(sr.stage_id)) stepsByStage.set(sr.stage_id, []);
+        stepsByStage.get(sr.stage_id).push(sr);
+      }
+    }
     for (const row of stageRows) {
-      const stepRows = sqlDb.prepare(
-        'SELECT name, status, output, completed_at FROM steps WHERE stage_id = ? ORDER BY ordering'
-      ).all(row.id);
+      const stepRows = stepsByStage.get(row.id) || [];
       stages[row.stage] = {
         status: row.status,
         started_at: this._dumpIso(row.started_at) || undefined,

@@ -9,8 +9,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'fs';
 import { writeAtomicSync } from './fs-atomic.js';
 import { basename, join, resolve } from 'path';
-import { execSync } from 'child_process';
-import { git } from './git-helper.js';
+import { safeGit, git } from './git-helper.js';
 import { getVersion } from './version.js';
 
 // E22（性能#2）：progress.js（拖 db.js→node:sqlite 链 ~48ms）与 run/shared.js（拖 stages 全家
@@ -246,12 +245,9 @@ async function main() {
   // 导致 sillyspec 命令找不到 .sillyspec。此函数尝试从 git root 解析。
   function resolveEffectiveDir(baseDir) {
     if (existsSync(join(baseDir, '.sillyspec'))) return baseDir
-    try {
-      const gitRoot = execSync('git rev-parse --show-toplevel', {
-        cwd: baseDir, encoding: 'utf8', timeout: 5000
-      }).trim()
-      if (gitRoot && existsSync(join(gitRoot, '.sillyspec'))) return gitRoot
-    } catch {}
+    // QUAL-01 收口：原 execSync 字符串拼接（经 shell）→ git-helper 数组形式
+    const r = safeGit(baseDir, ['rev-parse', '--show-toplevel'])
+    if (r.value && existsSync(join(r.value, '.sillyspec'))) return r.value
     return baseDir
   }
 
@@ -1002,6 +998,10 @@ async function main() {
       for (let i = 1; i < args.length; i++) {
         if (args[i] === '--port' && args[i + 1]) {
           port = parseInt(args[i + 1], 10);
+          if (!Number.isInteger(port) || port < 1 || port > 65535) {
+            console.error(`❌ 无效端口: ${args[i + 1]}（应为 1-65535 整数）`);
+            process.exit(2);
+          }
           i++;
         } else if (args[i] === '--no-open') {
           openBrowser = false;
@@ -1489,6 +1489,15 @@ SillySpec platform — SillyHub 平台同步
         process.exit(1);
       }
 
+      // 体检 SEC-05：platform 子命令族统一校验 --change 值——此前只有 run 命令族走
+      // assertSafeChangeName，platform sync/pull/resolve 直接透传，冲突文件名
+      // join(runtimeDir, `sync-conflict-${changeName}.json`) 可被 ../ 穿越出 .runtime
+      {
+        const pChangeIdx = args.indexOf('--change');
+        const pChangeVal = pChangeIdx >= 0 && args[pChangeIdx + 1] ? args[pChangeIdx + 1] : null;
+        if (pChangeVal) assertSafeChangeName(pChangeVal, 'platform --change 变更名');
+      }
+
       switch (platformSub) {
         case 'pointer': {
           // 指针状态检查（不依赖 sync 模块）
@@ -1555,7 +1564,11 @@ SillySpec platform — SillyHub 平台同步
           const tokenIdx = args.indexOf('--token');
           const token = tokenIdx >= 0 && args[tokenIdx + 1] ? args[tokenIdx + 1] : undefined;
           if (!token) {
-            console.error('⚠️ 未提供 --token，将使用交互式输入（TODO: task-11）');
+            // 缺 token 直接终止（体检 HUB-02）：交互式输入尚未实现（task-11），此前
+            // 继续执行会把 undefined 序列化成字符串 "undefined" 写入 local.yaml，
+            // 报"连接成功"后所有同步持续 401（Bearer undefined）
+            console.error('❌ 缺少 --token <token>（交互式输入暂未实现）；请在 SillyHub 平台获取 token 后重试');
+            process.exit(1);
           }
           await syncModule.connect(url, token, dir);
           break;
@@ -1678,6 +1691,8 @@ SillySpec platform — SillyHub 平台同步
             console.error('❌ 必须恰好指定 --keep-local / --take-platform / --abort 之一');
             process.exit(1);
           }
+          // 位置参数变更名与 --change 同规格校验（SEC-05：resolve 会按该名重推/删冲突文件）
+          assertSafeChangeName(resolveName, 'platform resolve 变更名');
           const modeMap = { '--keep-local': 'keep-local', '--take-platform': 'take-platform', '--abort': 'abort' };
           const resolveMode = modeMap[resolveFlags[0]];
           const r = await syncModule.resolve(resolveName, resolveMode, dir);

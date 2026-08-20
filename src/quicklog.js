@@ -14,15 +14,22 @@ import { join, dirname, basename } from 'path'
 import { getRule } from './stage-contract-spec.js'
 import {
   openSync, closeSync, unlinkSync, statSync, mkdirSync, existsSync,
-  readFileSync, writeFileSync, readdirSync, renameSync, appendFileSync,
+  readFileSync, writeFileSync, writeSync, readdirSync, renameSync, appendFileSync,
 } from 'fs'
 import { randomBytes } from 'crypto'
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms))
 
 /**
- * O_EXCL 文件锁。`openSync(lockPath,'wx')` 独占创建；已存在则按 mtime 判 stale 偷锁，
- * 否则退避重试至超时。CLI 短进程、低频写入，stale 阈值 30s 足够。
+ * O_EXCL 文件锁。`openSync(lockPath,'wx')` 独占创建并写入持有者唯一 id；已存在则按
+ * mtime 判 stale 偷锁（rename 原子抢占 + 内容校验），否则退避重试至超时。
+ * CLI 短进程、低频写入，stale 阈值 30s 足够。
+ *
+ * 偷锁为何用 rename 而非 unlink（2026-08-20 体检 BUG-02）：两进程同偷一把 stale 锁时，
+ * 后到者的 unlink 会把先到者刚重建的新锁删掉（TOCTOU）→ 双进程同时进临界区。
+ * rename 到唯一名后比对内容：只有"观察时看到的那把锁"才允许删除；偷到并发者
+ * 新建的锁则原路放回。残余窗口仅剩"纳秒级三方精确竞争"（放回前 existsSync 检查
+ * 与 rename 之间），相比旧实现的必现双进已可忽略。
  * @param {string} lockPath 锁文件路径（建议与被保护文件同目录）
  * @param {() => (any|Promise<any>)} fn 临界区
  * @param {{staleMs?:number, timeoutMs?:number, retryMs?:number}} opts
@@ -31,11 +38,13 @@ export async function withFileLock(lockPath, fn, opts = {}) {
   const { staleMs = 30000, timeoutMs = 10000, retryMs = 50 } = opts
   mkdirSync(dirname(lockPath), { recursive: true })
   const start = Date.now()
+  const myId = `${process.pid}-${randomBytes(6).toString('hex')}`
   let fd = null
   // 抢锁循环
   while (true) {
     try {
       fd = openSync(lockPath, 'wx') // O_EXCL：已存在抛 EEXIST
+      writeSync(fd, myId)
       break
     } catch (e) {
       if (e.code !== 'EEXIST') throw e
@@ -43,7 +52,19 @@ export async function withFileLock(lockPath, fn, opts = {}) {
       try {
         const mtime = statSync(lockPath).mtimeMs
         if (Date.now() - mtime > staleMs) {
-          try { unlinkSync(lockPath) } catch {} // 偷 stale 锁后重试
+          try {
+            const observed = readFileSync(lockPath, 'utf8') // 观察到的持有者 id
+            const claim = `${lockPath}.steal-${randomBytes(6).toString('hex')}`
+            renameSync(lockPath, claim) // 原子抢占：并发者只可能有一个 rename 成功
+            if (readFileSync(claim, 'utf8') === observed) {
+              try { unlinkSync(claim) } catch {} // 确实是那把 stale 锁 → 回收
+            } else {
+              // 偷到并发者新建的锁：放回（原位已被占则放弃，先占者保留）
+              let restored = false
+              try { if (!existsSync(lockPath)) { renameSync(claim, lockPath); restored = true } } catch {}
+              if (!restored) { try { unlinkSync(claim) } catch {} }
+            }
+          } catch {}
           continue
         }
       } catch {}
@@ -339,7 +360,7 @@ function listQuicklogFiles(quicklogDir) {
 // reader 句柄是瞬时的，故对占用类错误做异步重试+退避；非占用错误立即抛。
 async function writeAtomic(filePath, content, opts = {}) {
   const { retries = 100, baseDelayMs = 5, maxDelayMs = 100 } = opts
-  const tmp = join(dirname(filePath), basename(filePath) + '.tmp-' + process.pid)
+  const tmp = join(dirname(filePath), basename(filePath) + '.tmp-' + process.pid + '-' + randomBytes(4).toString('hex')) // 随机段：Windows PID 重用激进，仅 pid 会撞名（对齐 fs-atomic.js 的同款修复）
   writeFileSync(tmp, content) // 同目录 = 同文件系统，rename 才原子（跨 fs 会退化 copy+delete）
   for (let attempt = 0; ; attempt++) {
     try {
@@ -417,24 +438,34 @@ function tasksPath(specBase, change) {
 // 关联变更目录不存在（笔误 / 未建 / 仅作标签关联）→ 不 fabricate stub 目录（历史坑 quick-change-phantom：
 // mkdirSync 硬造 changes/<名>/tasks.md，致 quick --done 边界审计自造自拦 BLOCK）。关联仍记入
 // QUICKLOG「关联变更」行（allocateQuicklogEntry 独立写入，不依赖本函数）。
-function appendTaskCheckbox(specBase, change, qlId, desc) {
+// 体检 BUG-17：tasks.md 是跨用户共享文件——QUICKLOG 按 <user> 分锁只串行化同用户会话，
+// 用户 A 勾选与用户 B 追加跨用户并发时须按目标文件加锁，否则读-改-写互相覆盖。
+function tasksLockPath(p) {
+  return p + '.tasklock'
+}
+
+async function appendTaskCheckbox(specBase, change, qlId, desc) {
   const dir = join(specBase, 'changes', change)
   if (!existsSync(dir)) return
   const p = tasksPath(specBase, change)
-  let content = existsSync(p) ? readFileSync(p, 'utf8') : ''
-  if (content.includes(qlId)) return
-  const prefix = content && !content.endsWith('\n') ? '\n' : ''
-  appendFileSync(p, `${prefix}- [ ] ${qlId} ${desc}\n`)
+  await withFileLock(tasksLockPath(p), () => {
+    let content = existsSync(p) ? readFileSync(p, 'utf8') : ''
+    if (content.includes(qlId)) return
+    const prefix = content && !content.endsWith('\n') ? '\n' : ''
+    appendFileSync(p, `${prefix}- [ ] ${qlId} ${desc}\n`)
+  })
 }
 
-// 勾选该 qlId 对应 task：- [ ] → - [x]
+// 勾选该 qlId 对应 task：- [ ] → - [x]（同 BUG-17：按 tasks.md 文件锁串行化跨用户读-改-写）
 async function checkTaskCheckbox(specBase, change, qlId) {
   const p = tasksPath(specBase, change)
   if (!existsSync(p)) return
-  let content = readFileSync(p, 'utf8')
-  const re = new RegExp(`- \\[ \\] (${escapeRe(qlId)})`)
-  content = content.replace(re, '- [x] $1')
-  await writeAtomic(p, content)
+  await withFileLock(tasksLockPath(p), async () => {
+    let content = readFileSync(p, 'utf8')
+    const re = new RegExp(`- \\[ \\] (${escapeRe(qlId)})`)
+    content = content.replace(re, '- [x] $1')
+    await writeAtomic(p, content)
+  })
 }
 
 // 就地翻某 qlId 条目：状态进行中→已完成，追加结果行
@@ -606,7 +637,7 @@ export async function allocateQuicklogEntry(specBase, gitUser, { description, li
     ].join('\n')
     appendFileSync(userFile, entry)
 
-    for (const c of linked) appendTaskCheckbox(specBase, c, qlId, desc)
+    for (const c of linked) await appendTaskCheckbox(specBase, c, qlId, desc)
 
     // 平台推送（task-06 / FR-02 / D-003）：锁外语义等同（推送不回写本地），但放锁内
     // 保证「分配即推送」顺序一致；best-effort 失败不影响返回。

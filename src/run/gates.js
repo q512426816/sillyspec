@@ -26,6 +26,7 @@ import { runValidators } from '../stage-contract.js'
 import { handleScanStageCompleted, handleExecuteWorktreeCleanup } from './complete-handlers.js'
 import { detectConcurrentChanges, formatConcurrentWarning } from './concurrent-detect.js'
 import { stageRegistry } from '../stages/index.js'
+import { normalizeTaskId } from '../taskcard.js'
 
 /**
  * 从 plan.md 提取全部 task id（task-XX）——符号影响面覆盖度校验用。
@@ -108,7 +109,9 @@ function isCurrentWaveAllNoDepsVerify(stepName, changeDir) {
   const taskIds = [...waveMatch[1].matchAll(/^[-*]\s*\[[ x]\]\s*(task-\d+)/gim)].map(x => x[1])
   if (taskIds.length === 0) return false
   for (const id of taskIds) {
-    const cardPath = join(changeDir, 'tasks', `${id}.md`)
+    // 体检 BUG-19：plan 常态写补零 task-01，但 AI 写出 task-3 时卡片实际是 task-03.md——
+    // 未归一则 existsSync 恒 false，wave 级 no_deps_verify 豁免静默失效（保守方向）
+    const cardPath = join(changeDir, 'tasks', `${normalizeTaskId(id)}.md`)
     if (!existsSync(cardPath)) return false // 卡片缺失 → 保守不跳
     const card = readFileSync(cardPath, 'utf8')
     const fm = card.match(/^---\n([\s\S]*?)\n---/)
@@ -178,13 +181,23 @@ export async function enforceReviewJsonGate(stageName, cwd, changeName, step, st
   const planPath = join(specBase, 'changes', changeName, 'plan.md')
   if (!existsSync(runIdFile) || !existsSync(planPath)) return true
   const { validateCheckedTaskReviews, resolveLatestExecuteRunIdWithTasks, isValidExecuteRunId } = await import('../task-review.js')
-  let executeRunId = readFileSync(runIdFile, 'utf8').trim()
+  // existsSync 与 read 之间 marker 可能被并发 cleanup/归档删除（多 agent 场景）：读失败按
+  //「marker 缺失」处理，走漂移兜底重定位，不让 ENOENT 冒成顶层 stack（与 :426-435 口径对齐）
+  let executeRunId = ''
+  try {
+    executeRunId = readFileSync(runIdFile, 'utf8').trim()
+  } catch {
+    console.warn('⚠️ execute run marker 读取失败（可能被并发清理），改扫真实 run 目录')
+    executeRunId = resolveLatestExecuteRunIdWithTasks({ runtimeRoot, changeName }) || ''
+  }
   // marker 是 agent 可写内容：格式校验防注入/穿越，非法视为缺失走漂移兜底重定位
   if (executeRunId && !isValidExecuteRunId(executeRunId)) {
     console.warn(`⚠️ execute run marker 内容非法（期望 exec-YYYY-MM-DD-HHMMSS，实得 ${JSON.stringify(executeRunId.slice(0, 60))}），改扫真实 run 目录`)
     executeRunId = ''
   }
   const planContent = readFileSync(planPath, 'utf8')
+  // marker 读失败且重定位无果（无任何含 tasks/ 的 run）：无 run 可校验，放行（下游 Task Review Gate 兜底）
+  if (!executeRunId) return true
   // marker 漂移兜底（gate-atom-a 正确修法）：marker 指向的 run 缺 tasks/（generateExecuteRunId 只写
   // marker 不建目录，漂移后新 run 不继承旧 review）时，无视 marker 改扫 execute-runs/ 取 mtime 最新
   // 且真正含 tasks/ 的 run，用其齐备的 review.json 校验，避免误报「review.json 不存在」。注意不能用

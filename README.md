@@ -60,7 +60,7 @@ npx sillyspec init --interactive      # 完整引导
 SillySpec 进度库使用 SQLite 持久化（基于 Node.js 内置的 `node:sqlite` 模块，纯 JS 无原生编译依赖）。
 
 - **Node.js 版本要求 >= 22.13.0**：`node:sqlite` 自 v22.13.0 起免 `--experimental-sqlite` flag 直接可用。支持 Linux x64、macOS x64 / arm64、Windows x64 等所有 Node.js 官方支持平台。
-- **零编译安装**：不依赖任何原生绑定 / node-gyp / C++ 工具链，npm install 即装即用，无平台编译失败风险。
+- **零编译安装**：`node:sqlite` 是 Node.js 内置模块（官方预编译发行，非纯 JS 实现），不依赖 node-gyp / C++ 工具链或任何第三方原生绑定，npm install 即装即用，无平台编译失败风险。
 
 ## 从哪里开始
 
@@ -133,12 +133,12 @@ sillyspec doctor                 全量自检 + 修复进度
 ## 核心特性
 
 - **规范驱动** — 所有代码产出先有设计文档支撑，文档是 AI 的记忆
-- **阶段状态机** — 以 stage + step 粒度强制流转，gate-status + progress.db 双轨记录状态
+- **阶段状态机** — 以 stage + step 粒度强制流转，sillyspec.db（SQLite）单一进度源记录状态
 - **TDD 强制** — execute 阶段先写测试再写实现
 - **子代理并行** — 同一 Wave 内任务并行执行，加快交付
 - **Worktree 隔离** — execute 在独立 git worktree 中工作，不污染主分支
 - **拓扑排序 Wave** — plan 阶段按蓝图依赖关系自动重排 Wave 分组
-- **进度持久化** — SQLite（sql.js WASM）持久化，支持断点恢复
+- **进度持久化** — SQLite（node:sqlite）持久化，支持断点恢复
 - **模块文档** — 模块级知识库，AI 执行时按需加载相关上下文
 - **浏览器自动化** — 可选 MCP（Playwright / Chrome DevTools），供集成/E2E 冒烟验证
 - **平台同步** — 可选对接 SillyHub，文档同步 + 团队审批
@@ -175,12 +175,14 @@ sillyspec/
 ├── bin/sillyspec.js          # CLI 入口（shebang）
 ├── src/
 │   ├── index.js              # 命令分发
-│   ├── run.js                # 阶段状态机引擎
+│   ├── run.js + run/         # 阶段状态机引擎（barrel + 实现模块）
 │   ├── init.js / setup.js    # 初始化 + MCP 工具安装
-│   ├── progress.js / db.js   # SQLite 进度存储
+│   ├── progress.js / db.js   # SQLite 进度存储（facade + 实现）
 │   ├── sync.js               # SillyHub 平台同步
 │   ├── workflow.js           # 工作流编排 + postcheck
 │   ├── worktree*.js          # worktree 隔离执行
+│   ├── dispatch/             # 任务派发（本地 agent / SillyHub MCP）
+│   ├── sillyhub-mcp/         # SillyHub MCP 客户端
 │   ├── hooks/                # worktree 守卫等钩子
 │   └── stages/               # 各阶段定义（scan/brainstorm/plan/execute/verify/...）
 ├── templates/workflows/      # 工作流定义（scan-docs / archive-impact）
