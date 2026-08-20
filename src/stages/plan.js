@@ -238,9 +238,11 @@ plan_level: full
 task-01 → task-03（最长路径，决定最短交付周期）
 
 ## 全局验收标准
-- [ ] 所有单元测试通过
-- [ ] 集成敏感 task（路由/layout/跨进程装配）建议加集成冒烟验收——组件单测全绿 ≠ 集成正确
-- [ ] （brownfield）未配置新功能时行为不变
+1. 所有单元测试通过
+2. 集成敏感 task（路由/layout/跨进程装配）建议加集成冒烟验收——组件单测全绿 ≠ 集成正确
+3. （brownfield）未配置新功能时行为不变
+
+> 验收结论不落在 plan.md（此段是验收清单，plan.md 不做执行态文件）——逐项核验结果由 verify 阶段写入 verify-result.md（PASS/FAIL 结论与证据）；task 级验收对照 TaskCard frontmatter 的 acceptance 字段。
 
 ## 覆盖矩阵（如存在 decisions.md）
 | ID | 覆盖任务 | 验收证据 |
