@@ -12,7 +12,7 @@
  * 8. 成功后自动 cleanup
  */
 
-import { existsSync, unlinkSync, writeFileSync, mkdtempSync, rmSync, readdirSync, readFileSync } from 'fs';
+import { existsSync, unlinkSync, writeFileSync, mkdtempSync, rmSync, readdirSync, readFileSync, mkdirSync } from 'fs';
 import { join, resolve } from 'path';
 import { tmpdir } from 'os';
 import { WorktreeManager } from './worktree.js';
@@ -693,6 +693,20 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
     }
 
     result.ok = true;
+
+    // --- 7.5 提交复用 pathspec（坑 apply-commit-pathspec-sweep，2026-08-21 实证）---
+    // apply 后主仓常混有无关未提交文件（他者会话/并行 quick），agent 习惯 `git add <目录>/`
+    // 会把无关文件扫进暂存需手工剔除。落盘本变更精确 pathspec 供提交直接复用：
+    // 文件 + result 字段（CLI 输出可照抄 git add -- … / 长清单用 --pathspec-from-file）。
+    try {
+      const commitFiles = [...new Set(patchFiles)].sort().filter(Boolean);
+      result.commitPathspec = commitFiles;
+      const runtimeRoot = join(projectRoot, '.sillyspec', '.runtime');
+      mkdirSync(runtimeRoot, { recursive: true });
+      const pathspecFile = join(runtimeRoot, `apply-pathspec-${changeName}.txt`);
+      writeFileSync(pathspecFile, commitFiles.join('\n') + '\n');
+      result.pathspecFile = pathspecFile;
+    } catch { /* pathspec 落盘失败不影响 apply 结果 */ }
 
     // --- 8. 成功后自动 cleanup（失败不影响整体结果） ---
     try {

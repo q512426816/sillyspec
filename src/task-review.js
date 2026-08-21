@@ -525,12 +525,15 @@ export function validateTaskReviews(opts) {
 
 // QUAL-01 收口：原为本地 execFileSync('git')（无 safe.directory、与 git-helper 口径分裂），
 // 现走统一入口；抛错/trim 语义不变，timeout 15000 保留（rev-parse/diff 大仓余量）
-function runGit(gitDir, args) {
-  return git(gitDir, args, { timeout: 15000 })
+function runGit(gitDir, args, opts = {}) {
+  return git(gitDir, args, { timeout: 15000, ...opts })
 }
 
 // porcelain 状态行 → 变更文件路径（对齐 shared.js:343 parsePorcelainPath：`XY path`、引号包裹、
 // rename `R old -> new` 取箭头后）。未 commit 的 working-tree 改动对账用。
+// ⚠️ 入参必须是【未 trim】的原始输出（git(..., {trim:false})）——porcelain 行首空格是状态码
+// 一部分，git() 默认 trim 会把 ' M feature.js' 削成 'M feature.js'，slice(3) 再咬掉路径首字符
+// （实测 'eature.js'）→ 未提交文件对账全错位（verifyReviewGitEvidence 相交比对误判「完全不相交」）。
 function parsePorcelainFiles(statusOut) {
   const files = []
   for (const line of String(statusOut).split('\n')) {
@@ -639,7 +642,7 @@ export function verifyReviewGitEvidence(review, gitDir, cache = null) {
   try {
     let wtStatus = c.wtStatus.get(gitDir)
     if (wtStatus === undefined) {
-      wtStatus = runGit(gitDir, ['status', '--porcelain'])
+      wtStatus = runGit(gitDir, ['status', '--porcelain'], { trim: false })
       c.wtStatus.set(gitDir, wtStatus)
     }
     if (wtStatus && wtStatus.trim().length > 0) {
@@ -983,7 +986,30 @@ export async function generateTaskReviewDrafts({ changeName, cwd, platformOpts =
   }
 
   // base..head diff 文件集（worktree-aware；null=git 不可用，[]=无 commit diff）
-  const diffFiles = resolveVerifyChangedFiles(cwd, changeName)
+  let diffFiles = resolveVerifyChangedFiles(cwd, changeName)
+  // ⚠️ 并入 worktree 未提交改动（坑 draft-attribution-uncommitted-worktree，2026-08-21 实证）：
+  // 子代理默认不 commit（execute 复盘 a 同源事实），真实改动全在 worktree working-tree——只看
+  // base..HEAD commit diff 时归属恒空，9/9 草稿全成「无归属」靠主代理手写升级。与
+  // verifyReviewGitEvidence 的 working-tree 并入口径同源：status --porcelain 文件（排除
+  // .sillyspec/ 运行时产物）并入归属集，按 allowed_paths 正常路径归属；review.head 仍为 HEAD
+  // commit——evidence 校验对「commit diff 空 + working-tree 有改动」明示不判伪造，语义一致。
+  try {
+    const wm = new WorktreeManager({ cwd })
+    const meta = wm.getMeta(changeName)
+    if (meta) {
+      const wtGitDir = (meta.worktreePath && meta.mode !== 'in-place-fallback' && existsSync(meta.worktreePath))
+        ? meta.worktreePath
+        : cwd
+      const wtStatus = runGit(wtGitDir, ['status', '--porcelain'], { trim: false })
+      const wtFiles = parsePorcelainFiles(wtStatus)
+        .map(p => String(p).replace(/\\/g, '/'))
+        .filter(p => p !== '.sillyspec' && !p.startsWith('.sillyspec/'))
+      if (wtFiles.length > 0) {
+        diffFiles = [...new Set([...(Array.isArray(diffFiles) ? diffFiles : []), ...wtFiles])]
+        console.log(`[sillyspec] 草稿归属并入 ${wtFiles.length} 个 worktree 未提交文件（子代理未 commit 的改动按 allowed_paths 归属）`)
+      }
+    }
+  } catch { /* working-tree 并入失败退回 commit diff 口径（fail-open，不阻断草稿） */ }
   // 单仓模式（无 ctx）：主仓无 diff 即无任何 task 可生成 → 提前返回（原逻辑零回归）。
   // 有 ctx：主仓无 diff 不阻断——跨仓 task 的 diff 在跨仓仓根独立取（per-task），主仓 task 自然跳过（空 changedFiles）。
   if (!ctx && (!diffFiles || diffFiles.length === 0)) {

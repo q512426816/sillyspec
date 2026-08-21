@@ -108,7 +108,7 @@ scan-profile.js 扫描档位 / concurrent-detect.js 并发检测 / multi-repo-co
   D-03@v1）。
 - `runStage(...)`（`src/run/stage.js:31`）：单阶段执行器，做状态转换校验（调用
   `stage-contract.js` 的 `checkTransition`），逐 step 推进，处理审批门控。
-- `runAutoMode(...)`（`src/run/command.js:1246`）：自动模式，连续跑
+- `runAutoMode(...)`（`src/run/command.js:1255`）：自动模式，连续跑
   `['brainstorm','plan','execute','verify']` 主流程直到 `--done`。
 
 阶段流转语义（grep 自 run/ 模块）：
@@ -123,7 +123,7 @@ scan-profile.js 扫描档位 / concurrent-detect.js 并发检测 / multi-repo-co
 | `--auto` | 进入自动模式连跑主流程 |
 
 **perProject 按项目展开**：scan 阶段大量 step 带 `perProject: true` 标记（grep 自
-`src/stages/scan.js`，共 8 处）。`handleScanProjectListStep`（`src/run/complete-handlers.js:449`）
+`src/stages/scan.js`，共 8 处）。`handleScanProjectListStep`（`src/run/complete-handlers.js:506`）
 逻辑：scan 第 2 步"构建扫描项目列表"
 完成后，把后续所有 `perProject` step 按 `projectNames` 展开成
 `步骤 × 项目` 个独立子步骤，移除原始未展开版本。

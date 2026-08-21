@@ -907,11 +907,32 @@ export class WorktreeManager {
 
     // 4. 删除分支（fail-closed：task review 引用可达性校验。force 也不绕过——force 语义 =
     //    丢弃内容，不含丢弃审计链；确要删用 git branch -D 手动执行）
+    //    升级（坑 cleanup-branch-review-anchor-tag，2026-08-21 实证）：分支被 review.json 引用
+    //    时不再只能手动保留——打 `sillyspec-audit/<branch>` 轻量 tag 锚定分支 tip（ref 前缀独立
+    //    于 sillyspec/* 分支族，doctor 孤儿分支扫描不误伤），commit 经 tag 保持可达（gc 安全），
+    //    随后正常删分支。tag 创建失败 → 回退保留（宁保留勿丢审计链）。
     try {
       const reviewRefs = this._branchReviewReferences(branch);
       if (reviewRefs.length > 0) {
-        details.push(`branch kept: ${reviewRefs.length} 个 task review.json 引用分支上的 commit（base/head 审计保护）`);
-        console.log(`🔗 分支保留：${branch} 上有 ${reviewRefs.length} 个 task review.json 引用其 commit（apply 只复制文件内容，ref 删除后 base/head 悬空无法复核）。确要删除：git branch -D ${branch}`);
+        const tagName = 'sillyspec-audit/' + branch;
+        let tagOk = false;
+        try {
+          if (!gitQuiet(this.cwd, ['rev-parse', '--verify', '--quiet', `refs/tags/${tagName}`])) {
+            git(this.cwd, ['tag', tagName, branch]);
+          }
+          tagOk = true;
+        } catch (e) {
+          details.push(`audit tag creation failed: ${e.message}`);
+        }
+        if (tagOk) {
+          gitQuiet(this.cwd, ['branch', '-D', branch]);
+          details.push(`branch deleted after anchoring tip to tag ${tagName} (audit 链可达)`);
+          console.log(`🔗 审计锚定：${branch} 被 ${reviewRefs.length} 个 task review.json 引用其 commit——已打 tag ${tagName} 锚定（commit 保持可达，gc 安全）并删除分支 ref。`);
+          console.log(`   确认不再需要该审计链后可删 tag：git tag -d ${tagName}`);
+        } else {
+          details.push(`branch kept: ${reviewRefs.length} 个 task review.json 引用分支上的 commit（base/head 审计保护）`);
+          console.log(`🔗 分支保留：${branch} 上有 ${reviewRefs.length} 个 task review.json 引用其 commit（apply 只复制文件内容，ref 删除后 base/head 悬空无法复核）。确要删除：git branch -D ${branch}`);
+        }
       } else {
         gitQuiet(this.cwd, ['branch', '-D', branch]);
         details.push('branch deleted');
@@ -1388,6 +1409,13 @@ export class WorktreeManager {
    * 将主工作区未提交变更同步到 worktree（dirty baseline overlay）
    * 覆盖 staged + unstaged 的文件变更，以及 untracked 文件。
    * 使用 git diff + git apply 确保正确处理删除/rename/binary。
+   *
+   * .sillyspec/ 隔离（坑 baseline-overlay-cross-change-contamination，2026-08-21 实证）：
+   * overlay 原样全量吸收主仓未提交改动——多变更并行时其他变更的 spec 文档
+   * （changes/<他变更>/、ROADMAP.md、quicklog 等 39 个文件实测）被 checkpoint 进本变更
+   * baseline，apply 回 main 即随本变更交付，需人工隔离。spec 文档不参与 worktree 内
+   * 构建/测试（execute 的 spec 读写经 specDriftAnchor 锚回主仓），排除零功能损失；
+   * 排除清单显式打印保持可见（哪些跨变更文件被隔离、去哪了）。
    * @param {string} mainCwd - 主工作区路径
    * @param {string} worktreePath - worktree 路径
    * @returns {Array<string>} overlay 的文件列表
@@ -1395,15 +1423,26 @@ export class WorktreeManager {
   _overlayBaseline(mainCwd, worktreePath) {
     const files = [];
     const errors = [];
+    // git pathspec 排除（execFileSync 数组传参不经 shell，字面安全）：.sillyspec/ 整目录
+    const EXCLUDE_PATHSPEC = ':(exclude).sillyspec';
+    const collectExcluded = (raw, excluded) => {
+      for (const f of raw.split('\n').filter(Boolean)) {
+        const norm = f.replace(/\\/g, '/')
+        if (norm === '.sillyspec' || norm.startsWith('.sillyspec/')) excluded.push(f)
+      }
+    }
 
     try {
-      // staged 变更
-      const staged = gitQuiet(mainCwd, ['diff', '--cached', '--name-only'], { timeout: 30000 }) || '';
+      const excludedSpecFiles = [];
+      // staged 变更（pathspec 排除 .sillyspec/——跨变更 spec 文档不进 baseline）
+      const staged = gitQuiet(mainCwd, ['diff', '--cached', '--name-only', '--', '.', EXCLUDE_PATHSPEC], { timeout: 30000 }) || ''
+      const stagedAll = gitQuiet(mainCwd, ['diff', '--cached', '--name-only'], { timeout: 30000 }) || ''
+      collectExcluded(stagedAll, excludedSpecFiles)
       if (staged) {
         try {
           // 用 Buffer 模式读取，避免二进制 patch 被 UTF-8 解码损坏
           // QUAL-01 收口：git-helper 新增 encoding:'buffer' 支持（二进制输出专用，跳过 trim）
-          const patchBuf = git(mainCwd, ['diff', '--cached', '--binary'], { encoding: 'buffer', timeout: 30000 });
+          const patchBuf = git(mainCwd, ['diff', '--cached', '--binary', '--', '.', EXCLUDE_PATHSPEC], { encoding: 'buffer', timeout: 30000 });
           if (patchBuf && patchBuf.length > 0) {
             const patchFile = join(worktreePath, '.sillyspec-baseline-staged.patch');
             try {
@@ -1421,12 +1460,14 @@ export class WorktreeManager {
         files.push(...staged.split('\n').filter(Boolean));
       }
 
-      // unstaged 变更
-      const unstaged = gitQuiet(mainCwd, ['diff', '--name-only'], { timeout: 30000 }) || '';
+      // unstaged 变更（同上 pathspec 排除）
+      const unstaged = gitQuiet(mainCwd, ['diff', '--name-only', '--', '.', EXCLUDE_PATHSPEC], { timeout: 30000 }) || ''
+      const unstagedAll = gitQuiet(mainCwd, ['diff', '--name-only'], { timeout: 30000 }) || ''
+      collectExcluded(unstagedAll, excludedSpecFiles)
       if (unstaged) {
         try {
           // 用 Buffer 模式读取，避免二进制 patch 被 UTF-8 解码损坏（QUAL-01 收口，同上）
-          const patchBuf = git(mainCwd, ['diff', '--binary'], { encoding: 'buffer', timeout: 30000 });
+          const patchBuf = git(mainCwd, ['diff', '--binary', '--', '.', EXCLUDE_PATHSPEC], { encoding: 'buffer', timeout: 30000 });
           if (patchBuf && patchBuf.length > 0) {
             const patchFile = join(worktreePath, '.sillyspec-baseline-unstaged.patch');
             try {
@@ -1448,6 +1489,8 @@ export class WorktreeManager {
       const skippedDirs = [];
       if (untracked) {
         for (const f of untracked.split('\n').filter(Boolean)) {
+          const norm = f.replace(/\\/g, '/')
+          if (norm === '.sillyspec' || norm.startsWith('.sillyspec/')) { excludedSpecFiles.push(f); continue }
           const r = copyUntrackedEntry(join(mainCwd, f), join(worktreePath, f));
           if (r.status === 'copied') files.push(f);
           else if (r.status === 'skipped-dir') skippedDirs.push(f);
@@ -1456,6 +1499,13 @@ export class WorktreeManager {
       }
       if (skippedDirs.length > 0) {
         console.log(`ℹ️  baseline overlay 跳过 ${skippedDirs.length} 个 untracked 目录（不读目录避免 EISDIR，坑 execute-worktree-overlay-untracked-dir-eisdir）`);
+      }
+      // 跨变更 spec 文档隔离可见性：列出被排除的 .sillyspec/ 文件（去重，截断展示），
+      // 让「ROADMAP 被谁改动、为何不在本 baseline」在 create 时刻可查，不需事后考古
+      const excludedUnique = [...new Set(excludedSpecFiles)]
+      if (excludedUnique.length > 0) {
+        const preview = excludedUnique.slice(0, 8).join(', ') + (excludedUnique.length > 8 ? ` …（共 ${excludedUnique.length} 个）` : '')
+        console.log(`🧹 baseline overlay 已隔离 ${excludedUnique.length} 个 .sillyspec/ 未提交文件（跨变更 spec 文档不进本变更 baseline，留在主仓各自归属）：${preview}`)
       }
 
       if (files.length > 0) {

@@ -283,7 +283,10 @@ export async function archiveChangeDirectory(pm, cwd, progress, specBase, platfo
     const alreadyArchivedDir = findAlreadyArchivedDir(archiveDir, archiveChangeName)
     if (alreadyArchivedDir) {
       console.log(`ℹ️  源目录不存在但变更已在 archive/（${basename(alreadyArchivedDir)}），判定已归档，自愈进度 DB`)
-      pm.unregisterChange(cwd, archiveChangeName)
+      // 终态一致化（坑 manual-archive-desync-status-only）：手动搬目录绕过标准归档后，本自愈路径
+      // 不能只翻 status——同时收尾 archive 阶段（steps/stages/current_stage），否则推送平台的终态
+      // 是「已归档 + 归档 0/5 + 停在 execute」的矛盾体，详情页渲染成「进度丢失」
+      pm.unregisterChange(cwd, archiveChangeName, { archiveStepNames: typeof pm.archiveStepNamesForArchive === 'function' ? pm.archiveStepNamesForArchive() : null })
       await archiveWorktreeCleanup(cwd, archiveChangeName, specBase, platformOpts)
       console.log(`📦 已自愈归档：${archiveChangeName} → archive/${basename(alreadyArchivedDir)}/`)
       return alreadyArchivedDir
@@ -332,7 +335,9 @@ export async function archiveChangeDirectory(pm, cwd, progress, specBase, platfo
     process.exit(1)
   }
 
-  pm.unregisterChange(cwd, archiveChangeName)
+  // 正常路径同样走终态一致化（坑 manual-archive-desync-status-only）：标准 --done --confirm 流程
+  // 中 completeStep 随后也会逐项完成，此处先收尾是幂等写同值——保证任何走出本函数的归档终态一致
+  pm.unregisterChange(cwd, archiveChangeName, { archiveStepNames: typeof pm.archiveStepNamesForArchive === 'function' ? pm.archiveStepNamesForArchive() : null })
 
   // CLI 下沉 git add（坑4，FR-04）：确定性暂存归档目录 + 模块文档，不靠 step5 prompt 驱动。
   // step5 prompt 的 git add 保留作幂等兜底；POSIX 路径跨平台（git 接受正斜杠）。
@@ -342,6 +347,53 @@ export async function archiveChangeDirectory(pm, cwd, progress, specBase, platfo
     safeGit(cwd, ['add', '--', '.sillyspec/changes/archive/'])
     safeGit(cwd, ['add', '--', '.sillyspec/docs/'])
   } catch {}
+
+  // ── 他者半归档残留探测（坑 archive-other-residual-rename，2026-08-21 实证）──
+  // 并行变更的手动归档把 R 残留（源目录 rename 目标行）留在暂存区；本变更归档提交时
+  // git status 显示它们，agent 会误判「还没提交完 / 要做第二次提交」。区分：
+  //   本变更：未暂存的源侧移动（` D changes/<me>/...` + 未跟踪 archive/<me>/...）→ 补暂存
+  //           让归档成单次原子提交；
+  //   他者：已暂存的 rename（`R  changes/<他人>/... -> changes/archive/<他人>/...`）→ 只 warn
+  //         提示归属（不 stage 不动——别人的归别人的）。
+  try {
+    const raw = gitQuiet(cwd, ['status', '--porcelain'], { trim: false, timeout: 30000 })
+    if (raw && raw.trim()) {
+      const changesPrefix = '.sillyspec/changes/'
+      const minePaths = []
+      const othersResidual = []
+      for (const line of raw.split('\n')) {
+        if (!line || line.length < 4) continue
+        const x = line[0], y = line[1]
+        const body = line.slice(3).trim()
+        const arrow = body.indexOf(' -> ')
+        const src = arrow !== -1 ? body.slice(0, arrow).replace(/^"|"$/g, '') : null
+        const dst = (arrow !== -1 ? body.slice(arrow + 4) : body).replace(/^"|"$/g, '')
+        if (x === 'R' && y === ' ' && arrow !== -1 && dst.startsWith(changesPrefix + 'archive/')) {
+          // 已暂存 rename → 半归档残留；按目标目录名归属他者变更
+          const m = /^\.sillyspec\/changes\/archive\/([^/]+)\//.exec(dst)
+          const owner = m ? m[1] : '?'
+          if (owner !== archiveChangeName) othersResidual.push(owner)
+        } else if (x === ' ' && (y === 'D' || y === 'A' || y === 'M')) {
+          // 未暂存的源侧移动：源目录 D / 新位置 A——指向本变更的补暂存
+          const p = dst || src
+          if (p && (p.startsWith(changesPrefix + archiveChangeName + '/')
+                    || p.startsWith(changesPrefix + 'archive/' + archiveChangeName + '/'))) {
+            minePaths.push(p)
+          }
+        }
+      }
+      if (minePaths.length > 0) {
+        try { safeGit(cwd, ['add', '-A', '--', changesPrefix]) } catch {}
+        console.log(`🧾 已补暂存本变更归档的源侧移动（${minePaths.length} 项，归档成单次原子提交）`)
+      }
+      if (othersResidual.length > 0) {
+        const owners = [...new Set(othersResidual)].filter(Boolean)
+        console.warn(`⚠️  检测到「他者半归档」残留（暂存区存在其他变更的 rename 记录）：${owners.join('、')}`)
+        console.warn(`   这些是别的变更此前手动归档留下的暂存项，不属于本次归档——git status 里看到它们是正常的，`)
+        console.warn(`   本变更归档已完成，无需为其做第二次提交；如需清理走它们自己的收尾（或 git restore --staged 后核对）。`)
+      }
+    }
+  } catch { /* 探测失败不阻断归档（advisory） */ }
 
   // 归档时清理可能残留的 worktree（自愈路径也复用，见上方 srcDir 缺失分支）。
   await archiveWorktreeCleanup(cwd, archiveChangeName, specBase, platformOpts)
@@ -1037,7 +1089,8 @@ async function closeSingleQuickLinkedChange({ pm, cwd, specBase, changeName, pla
     return { closed: false, reason: `移动目录失败：${e.message}` }
   }
 
-  pm.unregisterChange(cwd, changeName)
+  // 终态一致化同标准归档（坑 manual-archive-desync-status-only）：轻量归档路径不能只翻 status
+  pm.unregisterChange(cwd, changeName, { archiveStepNames: typeof pm.archiveStepNamesForArchive === 'function' ? pm.archiveStepNamesForArchive() : null })
   await archiveWorktreeCleanup(cwd, changeName, specBase, platformOpts)
   safeGit(cwd, ['add', '--', `.sillyspec/changes/archive/${destName}/`])
 

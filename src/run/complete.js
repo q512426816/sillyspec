@@ -456,7 +456,7 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
         console.log(`\n${summary}`)
       } catch (e) {
         // summary 失败不影响主流程
-        console.log('\n👉 下一步：sillyspec run verify（验证通过后才能归档）')
+        console.log(`\n👉 下一步：sillyspec run verify${changeName ? ` --change ${changeName}` : ''}（验证通过后才能归档）`)
       }
     } else if (stageName === 'archive') {
       console.log('\n👉 归档完成！现在可以提交了：git commit -m "..."')

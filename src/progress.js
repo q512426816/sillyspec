@@ -19,6 +19,7 @@ import { ConsistencyDoctor } from './progress/consistency-doctor.js';
 import { ChangeRegistry } from './progress/change-registry.js';
 import { StepStore } from './progress/step-store.js';
 import { StageMachine } from './progress/stage-machine.js';
+import { stageRegistry } from './stages/index.js';
 import { STAGE_ORDER, MAIN_FLOW_ORDER, VALID_STAGES, STAGE_LABELS, SPEC_DIR_NAME, CURRENT_VERSION, emptyStage } from './progress/shared.js';
 // resolveSpecDir 单一真相源在 src/run/shared.js（含 home 拒绝守卫，坑 cwd-correction-home-collision
 // 根治：home 下 .sillyspec 恒不命中，防 smoke/临时目录污染自我延续）。此处 re-export 保持
@@ -812,7 +813,18 @@ export class ProgressManager {
 
   renameChange(cwd, oldName, newName) { return this._changeRegistry.renameChange(cwd, oldName, newName); }
 
-  unregisterChange(cwd, changeName) { return this._changeRegistry.unregisterChange(cwd, changeName); }
+  // opts.archiveStepNames 给定时做归档终态一致化收尾（见 change-registry.unregisterChange 注释，
+  // 坑 manual-archive-desync-status-only）；archiveStepNamesForArchive() 取 stageRegistry 单一真相
+  //（stages/* 不反向依赖 progress.js，静态 import 无环）。
+  unregisterChange(cwd, changeName, opts) { return this._changeRegistry.unregisterChange(cwd, changeName, opts); }
+
+  archiveStepNamesForArchive() {
+    if (!this._archiveStepNamesCache) {
+      const defs = stageRegistry?.archive?.steps
+      this._archiveStepNamesCache = Array.isArray(defs) ? defs.map(s => s.name) : []
+    }
+    return this._archiveStepNamesCache
+  }
 
   updateChangeMeta(cwd, changeName, meta) { return this._changeRegistry.updateChangeMeta(cwd, changeName, meta); }
 

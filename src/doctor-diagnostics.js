@@ -836,6 +836,7 @@ export async function cleanupGhostChanges({ cwd, specDir = null, confirm = false
 
   let db = null;
   const archived = [];
+  const finalized = [];
   const errors = [];
   const skippedNonEmpty = [];
   const removedDirs = [];
@@ -850,9 +851,56 @@ export async function cleanupGhostChanges({ cwd, specDir = null, confirm = false
     if (confirm) {
       const now = new Date().toISOString();
       const stmt = db.prepare("UPDATE changes SET status = 'archived', last_active = ? WHERE name = ? AND status = 'active'");
+      // 终态一致化（坑 manual-archive-desync-status-only，2026-08-21 实证）：手动搬目录到 archive/
+      // 绕过标准归档的变更在此被当幽灵归档——只翻 status 会留「已归档 + current_stage 停留 +
+      // 归档 0/5」的矛盾终态，平台渲染成「进度丢失」。有 archive/ 实体证据的幽灵同步收尾
+      // archive 阶段（current_stage/stages/steps）；目录真丢失（无实体证据）保持 status-only
+      //（收尾=宣称归档完成属伪造，保持可逆的原语义）。步骤名取 stageRegistry 单一真相。
+      const { stageRegistry } = await import('./stages/index.js').catch(() => ({ stageRegistry: null }));
+      const archiveStepNames = Array.isArray(stageRegistry?.archive?.steps)
+        ? stageRegistry.archive.steps.map(s => s.name) : [];
+      const archiveDir = join(changesDir, 'archive');
+      const finalizeTerminal = (name) => {
+        if (archiveStepNames.length === 0) return false;
+        try {
+          const row = db.prepare('SELECT id FROM changes WHERE name = ?').get(name);
+          if (!row) return false;
+          db.prepare("UPDATE changes SET current_stage = 'archive' WHERE id = ?").run(row.id);
+          db.prepare(
+            `INSERT INTO stages (change_id, stage, status, started_at, completed_at)
+             VALUES (?, 'archive', 'completed', ?, ?)
+             ON CONFLICT(change_id, stage) DO UPDATE SET status = 'completed', completed_at = excluded.completed_at`
+          ).run(row.id, now, now);
+          const stageRow = db.prepare('SELECT id FROM stages WHERE change_id = ? AND stage = ?').get(row.id, 'archive');
+          if (!stageRow) return false;
+          db.prepare('UPDATE steps SET status = ?, completed_at = ? WHERE stage_id = ?').run('completed', now, stageRow.id);
+          const existing = new Set(
+            db.prepare('SELECT name FROM steps WHERE stage_id = ?').all(stageRow.id).map(r => r.name)
+          );
+          let order = existing.size;
+          const ins = db.prepare(
+            `INSERT INTO steps (stage_id, name, status, completed_at, ordering) VALUES (?, ?, 'completed', ?, ?)`
+          );
+          for (const sn of archiveStepNames) {
+            if (!existing.has(sn)) ins.run(stageRow.id, sn, now, order++)
+          }
+          return true;
+        } catch { return false }
+      };
       for (const n of ghosts) {
         try {
           stmt.run(now, n);
+          // 手动归档证据：changes/archive/ 下有该变更目录 → 一并收尾终态
+          const archivedEvidence = (() => {
+            try {
+              if (!existsSync(archiveDir)) return false;
+              return readdirSync(archiveDir).some(e => e === n && existsSync(join(archiveDir, e, 'plan.md')))
+                || readdirSync(archiveDir).some(e => e.startsWith(n) && existsSync(join(archiveDir, e, 'plan.md')));
+            } catch { return false }
+          })();
+          if (archivedEvidence && finalizeTerminal(n)) {
+            finalized.push(n);
+          }
           archived.push(n);
         } catch (e) {
           errors.push({ name: n, error: e.message });
@@ -886,6 +934,7 @@ export async function cleanupGhostChanges({ cwd, specDir = null, confirm = false
       skipped_nonempty: skippedNonEmpty,
       removed_dirs: removedDirs,
       archived,
+      finalized, // 手动归档型幽灵已同步收尾 archive 阶段终态（坑 manual-archive-desync-status-only）
       errors,
       count: ghosts.length + emptyShells.length,
       active_after: activeAfter,

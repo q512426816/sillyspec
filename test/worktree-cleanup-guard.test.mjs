@@ -130,7 +130,7 @@ console.log('--- ④ apply 后状态（main 工作区有副本未 commit）：�
 }
 
 
-console.log('--- ⑦ branch review 引用保护：task review.json base/head 引用分支 commit → 保留分支 ---')
+console.log('--- ⑦ branch review 引用保护：task review.json base/head 引用分支 commit → tag 锚定后删分支（坑 cleanup-branch-review-anchor-tag）---')
 {
   const d = setupRepo(); const base = rev('git rev-parse HEAD', d)
   const wtDir = makeWorktree(d)
@@ -148,10 +148,14 @@ console.log('--- ⑦ branch review 引用保护：task review.json base/head 引
     reviewerNotes: '', requiredEvidence: [],
   }))
   const r = wtCleanup(d, { force: true })
-  assertTrue(r.details.some(x => x.includes('branch kept')), '有 review 引用 → branch kept 入 details')
+  // 新契约（坑 cleanup-branch-review-anchor-tag）：打 sillyspec-audit/ 轻量 tag 锚定 tip
+  //（commit 保持可达、gc 安全）后删分支——不再只能手动保留
+  assertTrue(r.details.some(x => x.includes('anchoring tip to tag')), `有 review 引用 → tag 锚定入 details（实际 ${JSON.stringify(r.details)}）`)
   const branchAlive = (() => { try { rev('git rev-parse --verify sillyspec/tc', d); return true } catch { return false } })()
-  assertTrue(branchAlive, '分支 ref 保留（force 也不删——审计链保护）')
-  assertTrue(!fs.existsSync(wtDir), 'worktree 目录照常清理（保护只留分支 ref）')
+  assertTrue(!branchAlive, '分支 ref 已删（tip 已被 tag 锚定）')
+  const tagTip = rev('git rev-parse sillyspec-audit/sillyspec/tc', d)
+  assertTrue(tagTip === head, `tag 锚定分支 tip commit（gc 安全；${tagTip.slice(0, 8)} === ${head.slice(0, 8)}）`)
+  assertTrue(!fs.existsSync(wtDir), 'worktree 目录照常清理（tag 锚定后工作区照常清）')
   cleanup(d)
 }
 

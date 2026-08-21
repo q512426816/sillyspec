@@ -867,6 +867,15 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
         changeName = autoName
       } else {
         console.error('❌ 未找到进度数据，请先运行 sillyspec init 或指定 --change <变更名>')
+        // 自愈引导（坑 suggestion-command-missing-change 同族）：多活跃变更仓不带 --change 时
+        // pm.read 无法自动定位（单活跃可自动），列出候选让 agent 一步补对，而非盲猜变更名
+        try {
+          const activeChanges = pm.listChanges(cwd)
+          if (activeChanges.length > 1) {
+            console.error(`   当前有 ${activeChanges.length} 个活跃变更（无法自动定位），请显式指定：`)
+            for (const c of activeChanges) console.error(`   - --change ${c}`)
+          }
+        } catch { /* 列举失败不掩盖原报错 */ }
         process.exit(2) // 环境错（未 init / 未传 --change）→ exit 2
       }
     }

@@ -276,8 +276,15 @@ export class ChangeRegistry {
   /**
    * 从活跃列表移除变更（归档时调用，不物理删除）
    * SQL: UPDATE changes SET status = 'archived'
+   *
+   * 归档终态一致化（坑 manual-archive-desync-status-only，2026-08-21 实证）：手动搬目录绕过
+   * `run archive --done --confirm` 后，自愈/幽灵清理路径只改 status 一个字段，留下「已归档 +
+   * current_stage 停在 execute + 归档 0/5 步」的自相矛盾终态，推送平台后渲染成「进度丢失」。
+   * opts.archiveStepNames（调用方取自 stageRegistry 单一真相）给定时同事务收尾：
+   * current_stage='archive' + stages.archive=completed + 其步骤行全 completed
+   * （缺行按定义补种——平台按步骤数展示完成度，零行会显示 0/5）。
    */
-  unregisterChange(cwd, changeName) {
+  unregisterChange(cwd, changeName, opts = {}) {
     if (!changeName) {
       console.warn('⚠️  unregisterChange: changeName 为空，跳过');
       return;
@@ -286,9 +293,41 @@ export class ChangeRegistry {
     db.transaction(() => {
       const sqlDb = db.getDb();
       const now = new Date().toISOString();
-      sqlDb.prepare(
-        `UPDATE changes SET status = 'archived', last_active = ? WHERE name = ?`
-      ).run(now, changeName);
+      let sql = `UPDATE changes SET status = 'archived', last_active = ?`;
+      const params = [now];
+      if (Array.isArray(opts.archiveStepNames)) sql += `, current_stage = 'archive'`;
+      sql += ` WHERE name = ?`;
+      params.push(changeName);
+      sqlDb.prepare(sql).run(...params);
+      if (Array.isArray(opts.archiveStepNames)) {
+        const row = sqlDb.prepare('SELECT id FROM changes WHERE name = ?').get(changeName);
+        if (row) {
+          sqlDb.prepare(
+            `INSERT INTO stages (change_id, stage, status, started_at, completed_at)
+             VALUES (?, 'archive', 'completed', ?, ?)
+             ON CONFLICT(change_id, stage) DO UPDATE SET status = 'completed', completed_at = excluded.completed_at`
+          ).run(row.id, now, now);
+          const stageRow = sqlDb.prepare(
+            'SELECT id FROM stages WHERE change_id = ? AND stage = ?'
+          ).get(row.id, 'archive');
+          if (stageRow) {
+            // 现有步骤行（含 pending/waiting）全收尾；定义里有而行里没有的（阶段从未初始化）按定义补种
+            sqlDb.prepare(
+              `UPDATE steps SET status = 'completed', completed_at = ? WHERE stage_id = ?`
+            ).run(now, stageRow.id);
+            const existing = new Set(
+              sqlDb.prepare('SELECT name FROM steps WHERE stage_id = ?').all(stageRow.id).map(r => r.name)
+            );
+            let order = existing.size;
+            const ins = sqlDb.prepare(
+              `INSERT INTO steps (stage_id, name, status, completed_at, ordering) VALUES (?, ?, 'completed', ?, ?)`
+            );
+            for (const name of opts.archiveStepNames) {
+              if (!existing.has(name)) { ins.run(stageRow.id, name, now, order++) }
+            }
+          }
+        }
+      }
       // 本地脏度（D-013 / task-04）：归档也是本地状态推进
       this.pm._touchLocalModified(cwd, changeName, now);
     });

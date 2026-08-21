@@ -282,13 +282,18 @@ export class StageMachine {
    * @returns {{ text: string, command?: string }|null}
    */
   _getNextSuggestion(data) {
+    // 建议命令携带 --change（坑 suggestion-command-missing-change，2026-08-21 实证）：
+    // 多活跃变更仓 pm.read(cwd, null) 无法自动定位变更 → 照抄建议命令（不带 --change）执行
+    // 报「未找到进度数据」，阶段完结后的 --wait 确认门也登记不上。progress 带 currentChange
+    // 时附加；无（测试 fixture / 旧数据）保持裸命令（存量断言零回归）。
+    const cc = data.currentChange ? ` --change ${data.currentChange}` : '';
     // 找到第一个 revising 阶段
     const revisingStage = STAGE_ORDER.find(s => data.stages[s]?.status === 'revising');
     if (revisingStage) {
       const sd = data.stages[revisingStage];
       return {
         text: `${STAGE_LABELS[revisingStage] || revisingStage} 正在修订中（revision ${sd.revision || 1}），请继续完成修订。`,
-        command: `sillyspec run ${revisingStage}`,
+        command: `sillyspec run ${revisingStage}${cc}`,
       };
     }
 
@@ -298,7 +303,7 @@ export class StageMachine {
       const sd = data.stages[staleStage];
       return {
         text: `${STAGE_LABELS[staleStage] || staleStage} 已失效（${sd.staleReason || '上游修订'}），需要从第一步重建。`,
-        command: `sillyspec run ${staleStage} --reopen --from-step 1`,
+        command: `sillyspec run ${staleStage} --reopen --from-step 1${cc}`,
       };
     }
 
@@ -318,14 +323,14 @@ export class StageMachine {
           const ws = sd.steps[waitIdx];
           return {
             text: `${STAGE_LABELS[s] || s} 进行中，Step ${waitIdx + 1}「${ws.name}」等待用户输入${ws.waitReason ? `（${ws.waitReason}）` : ''}，用 --answer 恢复。`,
-            command: `sillyspec run ${s} --continue --answer "用户回答"`,
+            command: `sillyspec run ${s} --continue --answer "用户回答"${cc}`,
           };
         }
         const hasPending = sd.steps.some(st => ['pending', 'waiting', 'failed'].includes(st.status));
         if (hasPending) {
           return {
             text: `${STAGE_LABELS[s] || s} 进行中，继续执行下一步。`,
-            command: `sillyspec run ${s}`,
+            command: `sillyspec run ${s}${cc}`,
           };
         }
       }
@@ -349,7 +354,7 @@ export class StageMachine {
       if (upstreamOk) {
         return {
           text: `可以开始 ${STAGE_LABELS[s] || s}。`,
-          command: `sillyspec run ${s}`,
+          command: `sillyspec run ${s}${cc}`,
         };
       }
     }

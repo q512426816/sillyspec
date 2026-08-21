@@ -257,3 +257,56 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 **解法（已修）**：按 QUICK_SID_RE（shared.js 导出，与 command.js/progress.js 同源）分流——quick 会话改述条件化：「纯代码改动直接写源码目录，无目录限制。仅当本 quick 需要落 spec 文档（复杂任务建议升级完整流程）时才写 changes/<id>/；QUICKLOG/tasks.md 由 CLI 接管不要手建」；普通变更的原硬规则原样保留。测试 quick-prompt-path-rule.test.mjs（6 断言，quick/普通双路径）。
 
 **关联记忆**：`[[sillyspec-quick-path-rule-misleading]]`
+
+## 19. 三坑：建议命令缺 --change / baseline 裹挟跨变更 spec 文档 / 草稿归属漏未提交改动（2026-08-21 闭环）
+
+**症状（用户实测）**：
+1. 阶段完结后 `--wait` 登记不上（报「未找到进度数据」）——full 级执行前确认门只能靠 AskUserQuestion 补位。
+2. execute 建仓时把 39 个主仓未提交文件全量 checkpoint 进 worktree baseline，跨变更文件（ROADMAP、他变更 spec 文档）混入需人工隔离。
+3. per-task review 草稿的 git-diff 归属对「未 commit 的 worktree 改动」全判空，9/9 草稿靠主代理手写升级。
+
+**根因**：
+1. 完成输出的下一步建议命令（`_getNextSuggestion` + complete.js 各分支硬编码）不带 `--change`；多活跃变更仓 `pm.read(cwd, null)` 无法自动定位 → 照抄执行即「未找到进度数据」，且报错不列候选无法自愈。
+2. `_overlayBaseline` 全量吸收 staged/unstaged/untracked——spec 文档（`.sillyspec/`）不参与 worktree 构建（execute 的 spec 读写经 specDriftAnchor 锚回主仓），裹挟纯属误伤。
+3. 归属集只取 `git diff base..HEAD`（commit diff），而子代理默认不 commit（execute 复盘 a 事实）；真实改动全在 working-tree。次生根因：`parsePorcelainFiles` 吃默认 trim 过的 status 输出，`' M file'` 被削成 `'M file'` 后 `slice(3)` 咬掉路径首字符（'eature.js'）——此存量 bug 同样影响 verifyReviewGitEvidence 的未提交对账（相交比对误判「完全不相交」）。
+
+**修复（2026-08-21）**：
+1. `_getNextSuggestion` 全分支（revising/stale/waiting/进行中/可开始）在 progress 带 `currentChange` 时附加 `--change <名>`（无则裸命令，存量断言零回归）；complete.js 的 verify 提示同步补；「未找到进度数据」报错列出全部活跃变更候选。测试 suggestion-change-flag.test.mjs（12 断言）。
+2. `_overlayBaseline` 三源（staged/unstaged patch + untracked 复制）统一 pathspec `:(exclude).sillyspec` 排除，被隔离文件显式打印（🧹 清单）保持可见；代码文件照常 overlay。测试 baseline-overlay-isolation.test.mjs 前半（5 断言）。
+3. `generateTaskReviewDrafts` 归属集并入 worktree `status --porcelain` 文件（过滤 .sillyspec/，按 allowed_paths 正常路径归属；review.head 仍为 HEAD commit，与 evidence 校验的「commit diff 空 + working-tree 有改动不判伪造」口径一致）；`runGit` 透传 opts，两处 status 调用 `trim:false`（git-helper 已有该开关与坑注释）。测试 baseline-overlay-isolation.test.mjs 后半（5 断言）。
+
+**关联记忆**：`[[sillyspec-suggestion-command-missing-change]]`、`[[sillyspec-baseline-overlay-cross-change-contamination]]`、`[[sillyspec-draft-attribution-uncommitted-worktree]]`
+
+## 20. 手动归档绕行 → 自愈/幽灵清理只翻 status，平台渲染成「进度丢失」（2026-08-21 闭环）
+
+**症状（产品仓实证，docs/sillyspec/2026-08-21-manual-archive-desync-status-only.md）**：手动 mv 目录 + git commit 绕过 `run archive --done --confirm` 后，CLI 自愈/doctor 幽灵清理路径补记归档——只改 `changes.status='archived'` 一个字段，留下「已归档 + current_stage 停在 execute + 归档 0/5 步」的自相矛盾终态并推送平台；平台照实展示，详情页就成了「进度丢失」（数据本身都在）。
+
+**根因**：`unregisterChange`（唯一归档状态 writer）只翻 status；`archiveChangeDirectory` 自愈分支与 `doctor --cleanup-ghosts` 都直接调它/裸 SQL——补记路径没有「终态一致」的概念。工具对绕行无法硬闸（用户总能 mv），能做的是任何写出 archived 的路径都产出一致终态。
+
+**修复（2026-08-21）**：
+1. `unregisterChange(cwd, name, { archiveStepNames })`（change-registry）：opts 给定时同事务收尾——`current_stage='archive'` + `stages.archive=completed`（ON CONFLICT upsert）+ 步骤行全 completed（缺行按 stageRegistry 定义补种，平台按步骤数展示完成度，零行会显示 0/5）。步骤名经 `pm.archiveStepNamesForArchive()`（progress.js，取 stageRegistry 单一真相，stages/* 不反向依赖 progress.js 无环）。
+2. 接线三个归档出口：`archiveChangeDirectory` 正常路径 + 自愈路径（源目录已在 archive/）、quick 轻量自动归档——全部传 archiveStepNames；quick 会话注销（无 archive 阶段语义）保持 status-only。
+3. `cleanupGhostChanges`（doctor）：幽灵分型——`changes/archive/<名>/` 有实体证据（含 plan.md）= 手动归档型，收尾完整终态并在结果中列 `finalized`；目录真丢失型保持 status-only（收尾=宣称归档完成属伪造，保持可逆原语义）。
+
+**流程纪律（不变）**：归档必须走 `sillyspec run archive --done --confirm`；手动搬目录必留半拉子状态——现在工具侧至少保证补记后的终态一致，不再把矛盾体推给平台。测试 archive-terminal-consistency.test.mjs（14 断言：收尾参数/自愈路径/ghost 分型/旧调用零回归）。
+
+**关联记忆**：`[[sillyspec-manual-archive-desync-status-only]]`
+
+## 21. 三坑：apply 后提交误扫 / 他者半归档残留无提示 / review 引用分支只能手动保留（2026-08-21 闭环）
+
+**症状（用户实测）**：
+1. apply 提示「N 个无关未提交文件已放行」做对了，但 agent 随后 `git add frontend/` 目录级操作仍把无关文件扫进暂存，得手工剔除。
+2. 归档时暂存区里「他者半归档」的 R 残留（他变更手动 mv + git add 留下的 rename 记录）没有识别和提示——git status 看到它一度误判要为本变更做第二次提交。
+3. worktree cleanup 因 review.json 引用保留分支的提示贴心，但只能手动保留——115 个 review 的 base/head 悬空风险让分支永远删不掉。
+
+**根因**：
+1. apply 成功输出只列变更文件清单，不给可复用的精确提交 pathspec——agent 自然退回目录级 `git add`。
+2. 归档的 CLI 下沉 git add 只管本变更目标目录，不探测暂存区里已有的他者 rename 残留，agent 靠 git status 肉眼判断归属性。
+3. 审计保护只能「保留分支 ref」一种形态——分支 ref 是唯一能保 commit 可达的入口，删了就 dangling。
+
+**修复（2026-08-21）**：
+1. apply 成功落盘 `.sillyspec/.runtime/apply-pathspec-<change>.txt`（patch 文件集排序去重），CLI 输出给两种可照抄命令：≤30 文件给 `git add -- <全清单>`，长清单给 `git add --pathspec-from-file=<文件>`；checkOnly 不产出（只读语义）。测试 worktree-apply-pathspec.test.mjs（7 断言，含 --pathspec-from-file 精确暂存验证）。
+2. `archiveChangeDirectory` 归档提交前探测 `git status --porcelain`（trim:false 防坑 19 的 trim 削路径）：`R  changes/<他人>/… → changes/archive/<他人>/…` 的已暂存 rename 报「他者半归档残留」warn（点名归属变更，明示无需为其做第二次提交，不 stage 不动）；本变更的未暂存源侧移动（` D changes/<me>/…` + 未跟踪 archive/<me>/…）自动补 `git add -A` 让归档成单次原子提交。
+3. cleanup 删分支前若被 review.json 引用 → 打 `sillyspec-audit/<branch>` 轻量 tag 锚定分支 tip（commit 经 tag 保持可达、gc 安全、ref 前缀独立于 sillyspec/* 分支族不被 doctor 孤儿扫描误伤），随后正常删分支；tag 创建失败回退保留分支（宁保留勿丢审计链）。测试 worktree-cleanup-guard.test.mjs ⑦ 用例更新（30 断言全过）。
+
+**关联记忆**：`[[sillyspec-apply-commit-pathspec-sweep]]`、`[[sillyspec-archive-other-residual-rename]]`、`[[sillyspec-cleanup-branch-review-anchor-tag]]`

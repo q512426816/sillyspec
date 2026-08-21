@@ -517,7 +517,8 @@ console.log('\n--- v1.1: progress 展示 revising 信息 ---')
   const suggestion = pm._getNextSuggestion(data)
   assert(suggestion !== null, '应有 suggestion')
   assert(suggestion.text.includes('brainstorm') || suggestion.text.includes('需求探索'), 'suggestion 应提到 brainstorm 修订中')
-  assert(suggestion.command === 'sillyspec run brainstorm', 'suggestion command 应为继续 brainstorm')
+  // 建议命令携带 --change（坑 suggestion-command-missing-change）：真实 progress 带 currentChange
+  assert(suggestion.command === `sillyspec run brainstorm --change ${changeName}`, `suggestion command 应为继续 brainstorm（带 --change，实际 ${suggestion.command}）`)
 }
 
 // ─────────────────────────────────────────

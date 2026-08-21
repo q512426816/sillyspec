@@ -1613,6 +1613,17 @@ SillySpec worktree — git worktree 隔离管理
             // 模块文档（.sillyspec/docs/）= 交付物，会 auto-apply 到主工作区；变更文档/运行时/quicklog 不 apply。
             // 须告知 agent 哪些未落地，否则它期望这些文件落地却找不到（memory: worktree-apply-excludes-module-docs）。
             console.log(`   ℹ️  注：.sillyspec/changes、.sillyspec/.runtime、.sillyspec/quicklog 下的文件按规则不自动 apply（模块文档 .sillyspec/docs/ 会自动 apply），如需请手动从 worktree 分支或 dangling commit 取（git show sillyspec/${wtName}:<path>）。`);
+            // 提交复用 pathspec（坑 apply-commit-pathspec-sweep）：主仓无关未提交文件易被目录级
+            // git add 误扫——给精确清单，勿用 git add <目录>/ 全扫
+            if (Array.isArray(result.commitPathspec) && result.commitPathspec.length > 0 && result.pathspecFile) {
+              console.log(`\n📌 提交时用本变更精确 pathspec（勿目录级 add 误扫无关文件）：`);
+              if (result.commitPathspec.length <= 30) {
+                console.log(`   git add -- ${result.commitPathspec.join(' ')}`);
+              } else {
+                console.log(`   git add --pathspec-from-file="${result.pathspecFile}"`);
+              }
+              console.log(`   （完整清单 ${result.commitPathspec.length} 个文件已存 ${result.pathspecFile}，可 --pathspec-from-file 复用）`);
+            }
           }
           if (result.warnings && result.warnings.length > 0) {
             for (const w of result.warnings) {
