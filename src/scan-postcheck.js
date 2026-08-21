@@ -9,6 +9,7 @@ import { existsSync, readdirSync, readFileSync, mkdirSync, writeFileSync } from 
 import { join, basename } from 'path'
 import { SCAN_STATUS, CHECK_SEVERITY, SCAN_REQUIRED_DOCS, SCAN_REQUIRED_DOCS_QUICK } from './constants.js'
 import { validateScriptCommands } from './stages/cmd-existence.js'
+import { git } from './git-helper.js'
 
 const REQUIRED_SCAN_DOCS = SCAN_REQUIRED_DOCS
 
@@ -112,7 +113,7 @@ export function runScanPostCheck({ cwd, specDir, outputText = '', scanMeta = {},
     checks.push({
       name: 'docs_missing_header',
       severity: CHECK_SEVERITY.WARNING,
-      detail: `${docsMissingHeader.length} 份文档缺少 author/created_at: ${docsMissingHeader.join(', ')}`
+      detail: `${docsMissingHeader.length} 份文档缺少 author/created_at: ${docsMissingHeader.join(', ')}（sillyspec scan-fix-headers 一键补齐）`
     })
   }
 
@@ -368,4 +369,70 @@ export function printScanPostCheckResult(result) {
     console.log(`  ${icon} CLI post-check [${check.name}]: ${check.detail}`)
   }
   console.log(`  📋 最终状态: ${result.status}`)
+}
+
+/**
+ * scan 文档 header 幂等补填（2026-08-21 agent-手工产出审计第三批 E3）。
+ *
+ * runScanPostCheck 对缺 author/created_at 只 warning，agent 手改常忘——本函数补齐：
+ * author = git user.name（回退 unknown），created_at = 当前时间。已有两键的文件不动；
+ * 有 frontmatter（--- 开头）就地插缺失键，无则补一段 frontmatter。
+ * `sillyspec scan-fix-headers [--project <名>]` 入口；与 runScanPostCheck 的
+ * 「头部 512 字符含 author:/created_at:」判定口径一致。
+ *
+ * @param {{ cwd: string, specDir?: string|null, project?: string|null }} opts
+ * @returns {{ fixed: string[], skipped: string[] }}
+ */
+export function fixScanDocHeaders({ cwd, specDir = null, project = null }) {
+  const specBase = specDir ? specDir : join(cwd, '.sillyspec')
+  const docsRoot = join(specBase, 'docs')
+  const projects = project
+    ? [project]
+    : (existsSync(docsRoot) ? readdirSync(docsRoot, { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name) : [])
+
+  let author = 'unknown'
+  try {
+    author = git(cwd, ['config', 'user.name']) || 'unknown'
+  } catch { /* git 不可用 → unknown */ }
+  const now = new Date().toISOString().slice(0, 19).replace('T', ' ')
+
+  const fixed = []
+  const skipped = []
+  for (const p of projects) {
+    const scanDir = join(docsRoot, p, 'scan')
+    if (!existsSync(scanDir)) continue
+    for (const f of readdirSync(scanDir)) {
+      if (!f.endsWith('.md')) continue
+      const filePath = join(scanDir, f)
+      let content
+      try {
+        content = readFileSync(filePath, 'utf8')
+      } catch {
+        continue
+      }
+      const header = content.slice(0, 512)
+      const hasAuthor = /author\s*:/.test(header)
+      const hasCreated = /created_at\s*:/.test(header)
+      if (hasAuthor && hasCreated) {
+        skipped.push(filePath)
+        continue
+      }
+      const inserts = []
+      if (!hasAuthor) inserts.push(`author: ${author}`)
+      if (!hasCreated) inserts.push(`created_at: ${now}`)
+      let newContent
+      if (content.startsWith('---\n') || content.startsWith('---\r\n')) {
+        // 有 frontmatter：插到开标签后（CRLF 归一写回，与其它 CLI 写入口径一致）
+        const normalized = content.replace(/\r\n?/g, '\n')
+        newContent = normalized.replace(/^---\n/, `---\n${inserts.join('\n')}\n`)
+      } else {
+        newContent = `---\n${inserts.join('\n')}\n---\n\n` + content
+      }
+      try {
+        writeFileSync(filePath, newContent)
+        fixed.push(filePath)
+      } catch { /* 只读文件等写失败 → 跳过不抛 */ }
+    }
+  }
+  return { fixed, skipped }
 }

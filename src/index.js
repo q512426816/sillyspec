@@ -8,7 +8,7 @@
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'fs';
 import { writeAtomicSync } from './fs-atomic.js';
-import { basename, join, resolve } from 'path';
+import { basename, extname, join, resolve } from 'path';
 import { safeGit, git } from './git-helper.js';
 import { getVersion } from './version.js';
 
@@ -95,6 +95,10 @@ SillySpec CLI — 规范驱动开发工具包
   sillyspec symbol-impact --change <name>      生成 symbol-impact.md 逐 task <!--TODO--> 骨架（gate 拒绝未替换占位，防骨架直接过门）
   sillyspec next                            项目状态探测：输出当前状态 + 下一步命令 + 依据（吸收 continue/resume 手工探测表）
   sillyspec commit [--json]                 智能提交建议：收集 QUICKLOG/已勾 task/阶段产出语义，生成建议 message（只建议不执行）
+  sillyspec verify-probes --change <name> [--init]  verify 机械探针（TODO 标记/测试覆盖/API 对账/删除对账）；--init 生成 verify-result.md 骨架
+  sillyspec module-impact --change <name>       生成 module-impact.md 骨架（文件×模块归属按 module-map 预填 + 未匹配清单）
+  sillyspec endpoints extract --change <name> [--task task-NN] [--dir <dir>|--files <a.py,b.js>]  静态扫描路由装饰器生成 endpoints.json
+  sillyspec scan-fix-headers [--project <名>]   scan 文档补 author/created_at header（幂等）
   sillyspec register-stage-review --change <name> (--stage <brainstorm|plan|execute> | --all) [--from <review.json>] [--refresh-hash] [--json]
                                       生成/adopt stage 级 review.json（docHash 自动算 + 写 marker，治 tier=independent marker 死锁）
 
@@ -663,6 +667,178 @@ async function main() {
         console.log('\n💡 无语义来源匹配——请结合上方 diff stat 手写 message');
       }
       console.log('\n（本命令只建议不提交；确认后执行上面的命令）');
+      break;
+    }
+    case 'verify-probes': {
+      // verify 机械探针命令化（2026-08-21 审计第三批 H1/H3/H5/H7/F9）：verify-probes.md 模板
+      // 六探针中的纯机械四个（未实现标记 grep / 测试文件递归查找 / API 契约对账 / 删除对账）
+      // 一条命令跑完并渲染成可直接粘贴的 markdown；半语义探针（2/4 + 3.4/3.5）显式留 TODO。
+      // --init 顺带生成 verify-result.md 七章节骨架（探针结果预填；结论留「待填」——gate 找
+      // 不到 PASS/FAIL 即判不过，骨架不能直接过门）。已存在不覆盖。
+      const vpChangeIdx = args.indexOf('--change');
+      const vpChange = vpChangeIdx >= 0 && args[vpChangeIdx + 1] ? args[vpChangeIdx + 1] : null;
+      const vpInit = args.includes('--init');
+      if (!vpChange) {
+        console.error('用法: sillyspec verify-probes --change <name> [--init] [--json] [--spec-dir <path>]\n  跑机械探针（TODO 标记/测试覆盖/API 对账/删除对账）输出 markdown；--init 生成 verify-result.md 骨架（探针预填，已存在不覆盖）');
+        process.exit(2);
+      }
+      assertSafeChangeName(vpChange, '--change 变更名');
+      const { runVerifyProbes, renderVerifyProbesReport, generateVerifyResultSkeleton } = await import('./verify-probes.js');
+      const vpResult = runVerifyProbes({ cwd: dir, changeName: vpChange, specDir });
+      if (json) {
+        console.log(JSON.stringify({ command: 'verify-probes', change: vpChange, ...vpResult }, null, 2));
+        break;
+      }
+      console.log(renderVerifyProbesReport(vpResult));
+      if (vpInit) {
+        const vpSpecBase = resolvePlatformSpecDir(dir, specDir) || join(dir, '.sillyspec');
+        const vpReportPath = join(vpSpecBase, 'changes', vpChange, 'verify-result.md');
+        if (existsSync(vpReportPath)) {
+          console.log(`\nℹ️  verify-result.md 已存在，不覆盖: ${vpReportPath}`);
+        } else {
+          writeFileSync(vpReportPath, generateVerifyResultSkeleton(vpResult));
+          console.log(`\n📄 已生成 verify-result.md 骨架: ${vpReportPath}（探针已预填；结论必须写明 PASS/FAIL，留待填会被 gate 判不过）`);
+        }
+      }
+      break;
+    }
+    case 'module-impact': {
+      // archive 模块影响矩阵骨架（2026-08-21 审计第三批 D3）：文件×模块归属按 _module-map.yaml
+      // paths 前缀匹配预填（机械），影响类型/review 标记留 <!--TODO-->（语义）。已存在不覆盖。
+      const miChangeIdx = args.indexOf('--change');
+      const miChange = miChangeIdx >= 0 && args[miChangeIdx + 1] ? args[miChangeIdx + 1] : null;
+      if (!miChange) {
+        console.error('用法: sillyspec module-impact --change <name> [--json] [--spec-dir <path>]\n  生成 module-impact.md 骨架（模块影响矩阵按 module-map 预填 + 未匹配文件清单；已存在不覆盖）');
+        process.exit(2);
+      }
+      assertSafeChangeName(miChange, '--change 变更名');
+      const { generateModuleImpactSkeleton } = await import('./module-impact.js');
+      const miResult = generateModuleImpactSkeleton({ cwd: dir, changeName: miChange, specDir });
+      if (!miResult) {
+        console.log('ℹ️ 无 module-map 或无 diff 文件可归类——骨架无从生成，agent 全手写（模块索引缺失可先跑 sillyspec modules rebuild）');
+        break;
+      }
+      const miSpecBase = resolvePlatformSpecDir(dir, specDir) || join(dir, '.sillyspec');
+      const miPath = join(miSpecBase, 'changes', miChange, 'module-impact.md');
+      if (json) {
+        console.log(JSON.stringify({ command: 'module-impact', change: miChange, path: miPath, ...miResult }, null, 2));
+        break;
+      }
+      if (existsSync(miPath)) {
+        console.log(`ℹ️  module-impact.md 已存在，不覆盖: ${miPath}`);
+        break;
+      }
+      writeFileSync(miPath, miResult.markdown);
+      console.log(`✅ 已生成 module-impact.md 骨架: ${miPath}`);
+      console.log(`   归类 ${miResult.matchedCount} 个文件，未匹配 ${miResult.unmatchedCount} 个；影响类型列逐行替换 <!--TODO-->。`);
+      break;
+    }
+    case 'endpoints': {
+      // endpoints artifact 生成（2026-08-21 审计第三批 H6）：后端 router task 的 endpoints.json
+      // 此前靠 agent 手扫装饰器手写（易漏 endpoint）。CLI 复用 endpoint-extractor 全套提取器
+      // （FastAPI @router.* / Express router.* / Spring @*Mapping）静态扫描生成，
+      // verify 探针 5（verifyApiParity）直接消费该产物。
+      const epSub = filteredArgs[1];
+      if (epSub !== 'extract') {
+        console.error('用法: sillyspec endpoints extract --change <name> [--task task-NN] [--dir <backendRoot> | --files <a.py,b.js...>] [--spec-dir <path>]\n  静态扫描后端路由装饰器生成 endpoints.json（FastAPI/Express/Spring）；verify 探针 5 消费');
+        process.exit(2);
+      }
+      const epChangeIdx = args.indexOf('--change');
+      const epChange = epChangeIdx >= 0 && args[epChangeIdx + 1] ? args[epChangeIdx + 1] : null;
+      const epTaskIdx = args.indexOf('--task');
+      const epTask = epTaskIdx >= 0 && args[epTaskIdx + 1] ? args[epTaskIdx + 1] : null;
+      const epDirIdx = args.indexOf('--dir');
+      const epDir = epDirIdx >= 0 && args[epDirIdx + 1] ? args[epDirIdx + 1] : null;
+      const epFilesIdx = args.indexOf('--files');
+      const epFilesRaw = epFilesIdx >= 0 && args[epFilesIdx + 1] ? args[epFilesIdx + 1] : null;
+      if (!epChange) {
+        console.error('❌ 缺 --change <变更名>');
+        process.exit(2);
+      }
+      assertSafeChangeName(epChange, '--change 变更名');
+      const { extractFastApiEndpoints, extractExpressEndpoints, extractSpringEndpoints, scanBackendEndpoints } = await import('./endpoint-extractor.js');
+      const endpoints = [];
+      const epSpecBase = resolvePlatformSpecDir(dir, specDir) || join(dir, '.sillyspec');
+      const epChangeDir = join(epSpecBase, 'changes', epChange);
+      if (!existsSync(epChangeDir)) {
+        console.error(`❌ 变更目录不存在: ${epChangeDir}`);
+        process.exit(1);
+      }
+      const collectFile = (f) => {
+        const abs = resolve(f)
+        if (!existsSync(abs)) return
+        const ext = extname(abs).toLowerCase()
+        try {
+          if (ext === '.py') endpoints.push(...extractFastApiEndpoints(abs))
+          else if (ext === '.js' || ext === '.ts') endpoints.push(...extractExpressEndpoints(abs))
+          else if (ext === '.java') endpoints.push(...extractSpringEndpoints(abs))
+        } catch { /* 单文件解析失败不阻断整体 */ }
+      }
+      if (epDir) {
+        endpoints.push(...scanBackendEndpoints(resolve(epDir)))
+      } else if (epFilesRaw) {
+        for (const f of epFilesRaw.split(',').map(s => s.trim()).filter(Boolean)) collectFile(f)
+      } else {
+        // 默认扫描面：task 卡 allowed_paths ∪ design §6 清单里的具体源码文件
+        const { parseFileChangeListDetailed } = await import('./change-list.js')
+        const candidates = new Set()
+        if (epTask) {
+          const cardPath = join(epChangeDir, 'tasks', `${epTask}.md`)
+          if (existsSync(cardPath)) {
+            const { parseAllowedPaths } = await import('./stages/plan-postcheck.js')
+            for (const p of parseAllowedPaths(readFileSync(cardPath, 'utf8'))) candidates.add(p)
+          }
+        }
+        const designPath = join(epChangeDir, 'design.md')
+        if (existsSync(designPath)) {
+          for (const e of parseFileChangeListDetailed(designPath)) {
+            if (!e.path.startsWith('.sillyspec/') && !/[*?[\]]/.test(e.path)) candidates.add(e.path)
+          }
+        }
+        let scanned = 0
+        for (const p of candidates) {
+          const abs = join(dir, p)
+          if (!existsSync(abs)) continue
+          scanned++
+          collectFile(p)
+        }
+        if (candidates.size === 0) {
+          console.error('❌ 无扫描面：--task 卡无 allowed_paths 且 design.md 无具体文件清单——显式传 --dir <backendRoot> 或 --files <a.py,b.js>');
+          process.exit(1);
+        }
+        console.log(`ℹ️  扫描 ${scanned}/${candidates.size} 个清单文件（不存在的跳过）`);
+      }
+      const artifact = {
+        generated_at: new Date().toISOString().slice(0, 19).replace('T', ' '),
+        generator: 'sillyspec endpoints extract',
+        endpoints: endpoints.map(e => ({ method: e.method, path: e.path, source: e.source })),
+      }
+      const epRuntimeRoot = (await import('./run/shared.js')).resolveRuntimeRoot({ specRoot: specDir }, epSpecBase);
+      const epOutDir = join(epRuntimeRoot, 'contract-artifacts', epChange, epTask || 'scan');
+      mkdirSync(epOutDir, { recursive: true });
+      const epOutPath = join(epOutDir, 'endpoints.json');
+      writeFileSync(epOutPath, JSON.stringify(artifact, null, 2) + '\n');
+      console.log(`✅ 提取 ${endpoints.length} 个端点 → ${epOutPath}`);
+      console.log(`   verify 阶段探针 5（API 契约对账）自动消费该产物；FastAPI/Express/Spring 装饰器均支持。`);
+      break;
+    }
+    case 'scan-fix-headers': {
+      // scan 文档 header 幂等补填（2026-08-21 审计第三批 E3）：scan-postcheck 对缺
+      // author/created_at 只 warning，agent 手改还常忘。本命令补齐（git user + 当前时间），
+      // 已有两键的文件不动；有 frontmatter 就地插入，无则补一段。
+      const sfhProjectIdx = args.indexOf('--project');
+      const sfhProject = sfhProjectIdx >= 0 && args[sfhProjectIdx + 1] ? args[sfhProjectIdx + 1] : null;
+      const { fixScanDocHeaders } = await import('./scan-postcheck.js');
+      const sfhResult = fixScanDocHeaders({ cwd: dir, specDir, project: sfhProject });
+      if (json) {
+        console.log(JSON.stringify({ command: 'scan-fix-headers', ...sfhResult }, null, 2));
+        break;
+      }
+      if (sfhResult.fixed.length > 0) {
+        for (const f of sfhResult.fixed) console.log(`✅ 已补 header: ${f}`);
+      }
+      if (sfhResult.skipped.length > 0) console.log(`ℹ️  ${sfhResult.skipped.length} 份已含 author/created_at，未动`);
+      if (sfhResult.fixed.length === 0 && sfhResult.skipped.length === 0) console.log('📭 未找到 scan 文档（无 docs/<project>/scan/ 目录）');
       break;
     }
     case 'symbol-impact': {
