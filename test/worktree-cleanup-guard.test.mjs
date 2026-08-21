@@ -115,17 +115,27 @@ console.log('--- ③ --force 显式绕过 → cleaned，目录/meta/分支全清
   cleanup(d)
 }
 
-console.log('--- ④ apply 后状态（main 工作区有副本未 commit）：无 force 拦截，force 放行，main 副本保留 ---')
+console.log('--- ④ apply 后状态（main 工作区有副本未 commit）：副本逐字节一致 → 放行；内容分叉 → 仍拦（坑 unapplied-false-positive-workspace-copy 新契约）---')
 {
   const d = setupRepo(); const base = rev('git rev-parse HEAD', d); const wtDir = makeWorktree(d)
   fs.writeFileSync(path.join(wtDir, 'new.txt'), 'new-content\n')
-  fs.writeFileSync(path.join(d, 'new.txt'), 'new-content\n') // 模拟 git apply --3way：复制到主仓工作区，未 commit
+  fs.writeFileSync(path.join(d, 'new.txt'), 'new-content\n') // 模拟 git apply --3way：复制到主仓工作区，未 commit（逐字节一致）
+  writeMeta(wtDir, base)
+  // 新契约（2026-08-21 用户实证降噪）：apply 后 main 工作区有逐字节一致副本 → 内容已落地，
+  // 不再误报「未落仓」拦截 doctor/cleanup（旧 Grill B-1 契约在此场景过于保守）
+  const r1 = wtCleanup(d)
+  assertTrue(r1.result === 'cleaned' || r1.result === 'force-cleaned', `副本一致 → 无 force 放行（实际: ${r1.result}）`)
+  assertTrue(fs.existsSync(path.join(d, 'new.txt')), 'main 工作区副本保留（cleanup 只清 worktree，不动主仓交付）')
+  cleanup(d)
+}
+{
+  // 保护面保留：main 工作区副本与 worktree 内容【分叉】→ 仍判未落仓拦截
+  const d = setupRepo(); const base = rev('git rev-parse HEAD', d); const wtDir = makeWorktree(d)
+  fs.writeFileSync(path.join(wtDir, 'new.txt'), 'worktree-version\n')
+  fs.writeFileSync(path.join(d, 'new.txt'), 'main-different-version\n') // main 副本内容不同
   writeMeta(wtDir, base)
   const r1 = wtCleanup(d)
-  assertTrue(r1.result === 'blocked', `apply 后 main HEAD 未变 → 无 force 仍 blocked（Grill B-1 契约，实际: ${r1.result}）`)
-  const r2 = wtCleanup(d, { force: true })
-  assertTrue(r2.result === 'cleaned' || r2.result === 'force-cleaned', `apply 后 cleanup 传 force:true → ${r2.result}（不误阻）`)
-  assertTrue(fs.existsSync(path.join(d, 'new.txt')), 'main 工作区副本保留（force 只清 worktree，不动主仓交付）')
+  assertTrue(r1.result === 'blocked', `副本内容分叉 → 无 force 仍 blocked（护栏保留，实际: ${r1.result}）`)
   cleanup(d)
 }
 

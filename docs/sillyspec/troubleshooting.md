@@ -373,3 +373,22 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 3. handleArchiveConfirmStep 在 archiveChangeDirectory 成功后同步内存快照 progress.currentStage='archive'——后续 _write 持久化的是终态而非旧值；progress show 归档后正确显示（变更非活跃时「没有活跃的变更」）。
 
 测试 archive-tail-consistency.test.mjs（9 断言）。**关联记忆**：`[[sillyspec-post-archive-sync-noise]]`、`[[sillyspec-archive-cleanup-orphan-physical-dir]]`、`[[sillyspec-archive-progress-show-stale]]`
+
+## 25. 三坑：未落仓虚警 / 归档变更 worktree 误供给 / verify 服务进程泄漏（2026-08-21 闭环）
+
+**症状（用户实证）**：
+1. doctor「未落主仓交付」虚警——M 文件与 main 逐字节一致仍算「未落仓」（护栏姿态对但降噪不足）。
+2. 已归档变更的 worktree 被 doctor 当活跃任务 re-provision（给死目录装依赖）。
+3. verify「真实启动验证」起的服务无回收机制（uvicorn 漏挂一天多）。
+
+**根因**：
+1. hasUnappliedChanges 的 HEAD-only 判定（原注释明示「不查 main 工作区未提交副本（防误删）」）——apply 后副本在工作区未 commit 是常态形态，保护意图应是「内容未落地」而非「HEAD 没有该 blob」。
+2. doctor 的 deps 检查只看 worktreeBase 目录 + meta，不查变更归档态。
+3. 服务进程由 agent 手起，CLI 无登记无回收钩子。
+
+**修复（2026-08-21）**：
+1. hasUnappliedChanges 第三层降噪：pending 集合逐文件比对 main 工作区副本（readFileSync 逐字节）——一致即剔除（删 worktree 无损）；分叉/无副本仍保守保留（护栏面不缩）。
+2. doctor deps 检查前归档态闸（changes/archive/ 实体 或 DB status='archived'）：命中报 worktree-archived-change，fix 走 cleanup（内建 hasUnappliedChanges 护栏仍在）而非 _doctorReprovision；活跃变更供给路径零回归。
+3. verify prompt 新增服务进程登记契约：长驻服务 PID 逐行登记 {SPEC_ROOT}/.runtime/verify-services.pids（deployment-critical 门控下未登记的真实启动证据视为不完整）；verify --done 收尾 gates 读文件逐 PID SIGTERM + 清文件（ESRCH 静默、失败给 taskkill/kill -9 指引不阻断）。
+
+测试 doctor-verify-feedback.test.mjs（11 断言，含真实子进程 e2e 回收）；worktree-cleanup-guard ④ 按新契约重锚 + 分叉保护面新变体。**关联记忆**：`[[sillyspec-unapplied-false-positive-workspace-copy]]`、`[[sillyspec-doctor-reprovision-archived-change]]`、`[[sillyspec-verify-service-process-leak]]`

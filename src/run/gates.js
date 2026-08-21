@@ -20,7 +20,7 @@
  * 不搬：ensureDepsFreshness（execute 入口 deps 自检，调用方 runStage 非 completeStep，归属未来 execute-handler）
  */
 import { basename, join, relative } from 'node:path'
-import { existsSync, readFileSync, readdirSync, statSync, mkdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, statSync, mkdirSync, unlinkSync } from 'node:fs'
 import { writeAtomicSync } from '../fs-atomic.js'
 import { triggerSync, resolveChangeDir, resolveRuntimeRoot } from './shared.js'
 import { runValidators } from '../stage-contract.js'
@@ -534,6 +534,24 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
         }
       }
     }
+    // ── verify 服务进程回收（坑 verify-service-process-leak，2026-08-21 实证：真实启动验证
+    // 起的 uvicorn 漏挂一天多）。verify prompt 要求长驻服务 PID 登记 .runtime/verify-services.pids，
+    // 此处收尾逐个 kill + 清文件。best-effort：ESRCH（已退出）静默，kill 失败 warn 不阻断 verify。
+    try {
+      const servicesPath = join(resolveRuntimeRoot(platformOpts, specBase), 'verify-services.pids')
+      if (existsSync(servicesPath)) {
+        const pids = readFileSync(servicesPath, 'utf8').split('\n').map(l => l.trim()).filter(l => /^\d+$/.test(l))
+        const reaped = []; const failed = []
+        for (const pid of pids) {
+          try { process.kill(parseInt(pid, 10), 'SIGTERM'); reaped.push(pid) }
+          catch (e) { if (e.code !== 'ESRCH') failed.push(`${pid}(${e.code || e.message})`) }
+        }
+        try { unlinkSync(servicesPath) } catch {}
+        if (reaped.length > 0) console.log(`🧹 verify 服务进程已回收 ${reaped.length} 个（PID: ${reaped.join(', ')}）`)
+        if (failed.length > 0) console.warn(`⚠️ 服务进程回收失败 ${failed.length} 个：${failed.join(', ')} — 手动处理：taskkill /PID <pid> /F（Windows）/ kill -9 <pid>`)
+      }
+    } catch (e) { console.warn(`⚠️ verify 服务进程回收异常（不阻断）: ${e.message}`) }
+
     console.log('\n✅ 验证通过，下一步：sillyspec run archive')
   }
 

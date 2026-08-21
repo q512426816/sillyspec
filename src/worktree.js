@@ -1153,7 +1153,29 @@ export class WorktreeManager {
         // 放宽原 909 in-place-fallback 守卫：in-place 也跑（main-drift/stale/failed 对它同样有意义，
         // 真 in-place 的 wtPath===主仓→wtHash===mainHash→不会误报 main-drift，仅 failed/stale 有意义）。
         // fix 时 _doctorReprovision 自行判断是否解链（in-place 不解链，仅 install）。
+        // 归档态前置闸（坑 doctor-reprovision-archived-change，2026-08-21 实证：已归档变更的
+        // worktree 被 doctor 当活跃任务 re-provision——给死目录装依赖）。归档判定（changes/archive/
+        // 实体 或 进度库 status='archived'）命中 → 跳过供给，fix 时走 cleanup（其内建
+        // hasUnappliedChanges 护栏仍在，未落仓内容照样拒删）。
         if (meta && meta.worktreePath && existsSync(meta.worktreePath)) {
+          const isArchivedChange = existsSync(join(this.cwd, '.sillyspec', 'changes', 'archive', name))
+            || this._isChangeArchivedInDb(name);
+          if (isArchivedChange) {
+            issues.push({ type: 'worktree-archived-change', name, fixable: meta.mode !== 'native-worktree',
+              detail: `变更 ${name} 已归档但 worktree 残留——不供给依赖（死目录），建议清理（cleanup 内建未落仓护栏）` });
+            if (fix && meta.mode !== 'native-worktree') {
+              try {
+                const r = this.cleanup(name);
+                if (r.result === 'cleaned' || r.result === 'force-cleaned') {
+                  fixed.push(`cleaned archived-change worktree: ${name}`);
+                } else if (r.result === 'blocked') {
+                  unfixable.push(`cleanup blocked (archived change 有未落仓内容): ${name} — 先 apply/commit 再清`);
+                } else {
+                  unfixable.push(`cleanup skipped (archived change): ${name}`);
+                }
+              } catch { unfixable.push(`cleanup failed (archived change): ${name}`); }
+            }
+          } else {
           const wtPath = meta.worktreePath;
           const fresh = checkDepsFreshness(meta, wtPath, this.cwd);
           const issueTypeByStatus = {
@@ -1169,6 +1191,7 @@ export class WorktreeManager {
               const r = this._doctorReprovision(name, wtPath);
               (r.ok ? fixed : unfixable).push(r.msg);
             }
+          }
           }
         }
 
@@ -1311,10 +1334,24 @@ export class WorktreeManager {
 
       // 2) 候选集中尚未落到主工作区 HEAD 的子集
       const pending = this._changesAlreadyOnMain(worktreePath, tracked, untracked);
-      if (pending.length === 0) {
-        return { hasChanges: false, changedFiles: [], reason: 'all changes already on main HEAD' };
+      // 3) main 工作区副本降噪层（坑 unapplied-false-positive-workspace-copy，2026-08-21 实证：
+      // apply 后 main 工作区有逐字节一致副本但未 commit → HEAD-only 判定报「未落仓」虚警拦
+      // doctor）。原注释「不查 main 工作区未提交副本（防误删）」的保护意图是内容未落地——
+      // 逐字节一致时内容确已落地（删 worktree 无损），仅逐字节不同的才保守保留。
+      const pendingAfterWs = pending.filter(f => {
+        try {
+          const mainCopy = join(this.cwd, f);
+          if (!existsSync(mainCopy)) return true; // main 工作区无副本 → 仍算未落仓
+          const wtCopy = join(worktreePath, f);
+          if (!existsSync(wtCopy)) return true; // worktree 侧是删除态、main 侧却在 → 内容分叉，保留
+          const a = readFileSync(wtCopy); const b = readFileSync(mainCopy);
+          return !(a.length === b.length && a.equals(b)); // 逐字节一致 → 已落地（剔除）
+        } catch { return true }
+      })
+      if (pendingAfterWs.length === 0) {
+        return { hasChanges: false, changedFiles: [], reason: 'all changes already on main (HEAD or identical workspace copy)' };
       }
-      return { hasChanges: true, changedFiles: pending };
+      return { hasChanges: true, changedFiles: pendingAfterWs };
     } catch (e) {
       // 检测失败时保守处理：视为有变更，保留 worktree
       return { hasChanges: true, changedFiles: [], reason: `check failed: ${e.message}` };
@@ -1383,6 +1420,26 @@ export class WorktreeManager {
       if (hash) map.set(line.slice(tab + 1), hash);
     }
     return map;
+  }
+
+  /**
+   * DB 归档态探测（坑 doctor-reprovision-archived-change）：changes 表 status='archived'。
+   * 只读直查（node:sqlite）——doctor 是同步方法，惰性动态 import 不可用；DB 不存在/无行/
+   * 读失败 → false（保守退回普通 deps 供给路径）。
+   * @param {string} name
+   * @returns {boolean}
+   */
+  _isChangeArchivedInDb(name) {
+    try {
+      const dbPath = join(this.cwd, '.sillyspec', '.runtime', 'sillyspec.db');
+      if (!existsSync(dbPath)) return false;
+      const { openDatabase } = require('./db-engine.js');
+      const db = openDatabase(dbPath, { readOnly: true });
+      try {
+        const row = db.prepare('SELECT status FROM changes WHERE name = ?').get(name);
+        return row?.status === 'archived';
+      } finally { try { db.close() } catch {} }
+    } catch { return false }
   }
 
   /**
