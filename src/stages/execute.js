@@ -118,7 +118,8 @@ export function validatePlanForExecute(tasksContent, planContent) {
     if (count > 1) errors.push(`task id 重复: ${id} 在 tasks.md 出现 ${count} 次`)
   }
 
-  // 检查 3: task id 连续性（从 1 开始）
+  // 检查 3: task id 连续性（从 1 开始；ids[0]!==1 时整体跳过 = 兼容旧变更编号不从 1 起，
+  // 契约由 test/plan-execute-contract.test.mjs Case 10 钉死，勿改）
   const ids = allTasks.map(t => t.index).sort((a, b) => a - b)
   if (ids.length > 0 && ids[0] === 1) {
     for (let i = 0; i < ids.length; i++) {
@@ -577,6 +578,10 @@ function writeBaseCommitToTaskCard(taskFilePath, baseCommit) {
   } catch {
     return false
   }
+  // CRLF 归一（坑 base-commit-crlf-frontmatter，plan-postcheck.js 同款）：跨仓 task 卡被
+  // 编辑器/子代理写成 CRLF 后 `^---\n` 匹配失败 → base_commit 锚点静默不落盘，而 Wave
+  // prompt 仍声称「CLI 已落盘」。归一后按 LF 写回（taskcard 生成侧本就强制 LF）。
+  content = content.replace(/\r\n?/g, '\n')
   const fmMatch = content.match(/^---\n([\s\S]*?)\n---/)
   if (!fmMatch) return false
   const fm = fmMatch[1]

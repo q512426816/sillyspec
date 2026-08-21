@@ -367,8 +367,14 @@ export function writePlatformPointer(cwd, platformOpts, extra = {}) {
     declaredAt: new Date().toISOString(),
   }
   try {
-    mkdirSync(join(platformOpts.specRoot, '.runtime'), { recursive: true })
-    writeFileSync(join(platformOpts.specRoot, '.runtime', 'platform-scan.json'), JSON.stringify(payload, null, 2) + '\n')
+    // platform-scan.json 只在 specRoot 存在时可写（坑 pointer-runtime-root-only-null-join）：
+    // runtimeRoot-only 平台组合（command.js 明确允许）下 specRoot 为 null，此前 join(null,…)
+    // 抛 ERR_INVALID_ARG_TYPE 落入总 catch → 指针与接管声明也一并静默未写，双入口 fail-closed
+    // 对该组合整体失效。分步写：specRoot 缺失只跳过 platform-scan.json，指针/声明照写。
+    if (platformOpts.specRoot) {
+      mkdirSync(join(platformOpts.specRoot, '.runtime'), { recursive: true })
+      writeFileSync(join(platformOpts.specRoot, '.runtime', 'platform-scan.json'), JSON.stringify(payload, null, 2) + '\n')
+    }
     writeFileSync(join(cwd, '.sillyspec-platform.json'), JSON.stringify(payload, null, 2) + '\n')
     writeFileSync(join(cwd, PLATFORM_MANAGED_FILENAME), JSON.stringify(declaration, null, 2) + '\n')
     return true
@@ -913,13 +919,17 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
     // 致 flag 对 status 失效。）
     if ((!forceBaseline && result.baselineHit.length > 0) || (!allowDelete && result.deletedFiles.length > 0) || result.reasons.some(r => r.startsWith('危险') || r.startsWith('删除'))) {
       result.status = 'blocked'
-    } else if ((!allowNew && result.newFiles.length > 0) || (allowedFiles.length > 0 && result.reasons.some(r => r.startsWith('超出')))) {
+    } else if ((!allowNew && result.newFiles.some(f => !isQuickMetadata(f, guard.linkedChanges))) || (allowedFiles.length > 0 && result.reasons.some(r => r.startsWith('超出')))) {
+      // newFiles 按元数据过滤后判定（坑 quick-metadata-warning-no-reason）：.sillyspec/ 被 git
+      // 跟踪的仓库里 quick 新建的 quicklog/*.md 是合法元数据，不过滤会 status=warning 而
+      // reasons 为空（reasons 侧已过滤），打印空原因的 WARNING 噪声。
       result.status = 'warning'
     }
 
-    // quicklog 存在性检查
+    // quicklog 存在性检查（specBase 感知：平台模式 quicklog 写在 specRoot 下，stage.js
+    // allocateQuicklogEntry 同源；硬编码 cwd/.sillyspec 会恒误报「目录不存在」抬 warning）
     try {
-      const quicklogDir = join(cwd, '.sillyspec', 'quicklog')
+      const quicklogDir = join(specBase || join(cwd, '.sillyspec'), 'quicklog')
       if (existsSync(quicklogDir)) {
         const qlFiles = readdirSync(quicklogDir).filter(f => f.endsWith('.md'))
         if (qlFiles.length === 0) {
@@ -1341,6 +1351,17 @@ export async function getStageSteps(stageName, cwd, progress, specDir = null) {
   if (stageName === 'plan') {
     const changeDir = resolveChangeDir(cwd, progress, specDir)
     return buildPlanSteps(changeDir)
+  }
+  if (stageName === 'scan') {
+    // quick 档感知（坑 scan-quick-profile-step-mismatch）：scan 的 scanProfile 在首进程
+    // runStage 里算出并持久化（stageData.scanProfile），quick 档把 11 步注册表裁成 3 步。
+    // 此处恒返回注册表会让后续进程 ensureStageSteps 见 3 vs 11 触发漂移重播种（quick 已完成
+    // 步丢失、从未执行的注册表步骤被 --done），同进程 outputStep 也用错位 defSteps 渲染。
+    // quick 档 → 与 applyScanProfileSteps 同源返回 3 步表；standard/deep 与注册表同长度零影响。
+    if (progress?.stages?.scan?.scanProfile?.mode === 'quick') {
+      const { buildQuickScanSteps } = await import('./scan-profile.js')
+      return buildQuickScanSteps()
+    }
   }
   const def = stageRegistry[stageName]
   return def ? def.steps : null

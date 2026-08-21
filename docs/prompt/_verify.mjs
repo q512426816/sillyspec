@@ -16,6 +16,8 @@ const json = JSON.parse(readFileSync(new URL('./_extracted.json', import.meta.ur
 
 function extractFences(md) {
   const blocks = []
+  // 行尾归一（坑 verify-md-crlf：verify.md 曾整文件 CRLF + 1 游离 \r，\n\2 配对全失配 → 0 块）
+  md = md.replace(/\r\n?/g, '\n')
   // 开 fence = 行首 3+ 反引号 (+可选语言)，闭 fence = 同数量反引号；\1 反向引用保证配对
   const re = /(^|\n)(`{3,})([^\n`]*)\n([\s\S]*?)\n\2(?=\n|$)/g
   let m

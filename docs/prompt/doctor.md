@@ -11,7 +11,7 @@
 
 ---
 
-## Step 0/5：SillySpec 内部检查
+## Step 1/5：SillySpec 内部检查
 
 **元数据**
 - optional：false
@@ -23,7 +23,7 @@
 ````markdown
 运行 SillySpec 内部检查。逐项执行以下命令并汇总结果：
 
-> ⚠️ Windows 兼容：下列 sqlite3 查询依赖外部 sqlite3 CLI（Windows 默认没有）。若某条 sqlite3 失败，改用 sillyspec 自身命令替代——sillyspec progress show 查看当前变更与各阶段状态（等价于查 changes/stages 表），sillyspec doctor --json 查看 db 健康与活跃变更列表。
+> ✅ Windows 兼容（SS-1，2026-08-20）：db 查询已全部改走 node:sqlite（node≥22.13 内置），不再依赖外部 sqlite3 CLI。若 node 脚本失败，改用 sillyspec 自身命令替代——sillyspec progress show 查看当前变更与各阶段状态，sillyspec doctor --json 查看 db 健康与活跃变更列表。
 
 ### 1. 目录结构完整性
 ```bash
@@ -55,16 +55,22 @@ done
 
 ### 3. 进度数据一致性
 ```bash
-# 从 sillyspec.db 读取活跃变更并检查目录存在性
+# 从 sillyspec.db 读取活跃变更并检查目录存在性（node:sqlite 主路径，Windows 无 sqlite3 CLI）
 DB_FILE='.sillyspec/.runtime/sillyspec.db'
 if [ ! -f "$DB_FILE" ]; then echo "⚠️ sillyspec.db 不存在"; exit 0; fi
-ACTIVE_CHANGE=$(sqlite3 "$DB_FILE" "SELECT name FROM changes WHERE status='active' ORDER BY last_active DESC LIMIT 1" 2>/dev/null)
-if [ -z "$ACTIVE_CHANGE" ]; then echo "ℹ️ 无当前变更"; exit 0; fi
-echo "当前变更: $ACTIVE_CHANGE"
-DIR=".sillyspec/changes/$ACTIVE_CHANGE"
-[ -d "$DIR" ] && echo "✅ 变更目录存在: $ACTIVE_CHANGE" || echo "❌ 变更目录不存在: $ACTIVE_CHANGE"
-# 检查各阶段状态
-sqlite3 -header -column "$DB_FILE" "SELECT stage, status FROM stages s JOIN changes c ON s.change_id=c.id WHERE c.name='$ACTIVE_CHANGE' ORDER BY s.stage" 2>/dev/null || echo "⚠️ 无法查询阶段数据"
+node --input-type=module -e "
+import { DatabaseSync } from 'node:sqlite';
+import { existsSync } from 'node:fs';
+const db = new DatabaseSync(process.argv[1], { readOnly: true });
+const row = db.prepare(\"SELECT name FROM changes WHERE status='active' ORDER BY last_active DESC LIMIT 1\").get();
+if (!row) { console.log('ℹ️ 无当前变更'); process.exit(0); }
+console.log('当前变更: ' + row.name);
+const dir = '.sillyspec/changes/' + row.name;
+console.log(existsSync(dir) ? '✅ 变更目录存在: ' + row.name : '❌ 变更目录不存在: ' + row.name);
+const stages = db.prepare('SELECT s.stage AS stage, s.status AS status FROM stages s JOIN changes c ON s.change_id=c.id WHERE c.name=? ORDER BY s.stage').all(row.name);
+if (stages.length === 0) console.log('⚠️ 无阶段数据'); else for (const s of stages) console.log('  ' + s.stage + ': ' + s.status);
+db.close();
+" "$DB_FILE" 2>/dev/null || echo "⚠️ 无法查询阶段数据"
 ```
 
 ### 4. 孤儿文件检查
@@ -73,18 +79,19 @@ DB_FILE='.sillyspec/.runtime/sillyspec.db'
 if [ ! -f "$DB_FILE" ]; then echo "⚠️ sillyspec.db 不存在"; exit 0; fi
 node -e "
 const fs = require('fs');
+const { DatabaseSync } = require('node:sqlite');
 const dir = '.sillyspec/changes';
-const subs = fs.existsSync(dir) ? fs.readdirSync(dir).filter(f => { try { return fs.statSync(dir+'/'+f).isDirectory(); } catch { return false; } }) : [];
-const { execSync } = require('child_process');
+const subs = fs.existsSync(dir) ? fs.readdirSync(dir).filter(f => { try { return fs.statSync(dir+'/'+f).isDirectory() && f !== 'archive'; } catch { return false; } }) : [];
 let known;
-try { const rows = execSync('sqlite3 -json ".sillyspec/.runtime/sillyspec.db" "SELECT name FROM changes WHERE status=\"active\""', {encoding:'utf8'}).trim(); known = new Set(JSON.parse(rows).map(r => r.name)); } catch { known = new Set(); }
-subs.forEach(s => {
-  console.log(known.has(s) ? '✅ ' + s + ' — 已关联' : '⚠️ ' + s + ' — 孤儿目录（可清理）');
+try { const db = new DatabaseSync('.sillyspec/.runtime/sillyspec.db', { readOnly: true }); known = new Set(db.prepare("SELECT name FROM changes WHERE status='active'").all().map(r => r.name)); db.close(); } catch (e) { console.log('⚠️ db 读取失败: ' + e.message + '（跳过孤儿判定，不做任何清理建议）'); known = null; }
+// known 为 null（db 不可读）时只列目录不判定孤儿，后续僵尸检查同样跳过——不守卫会 TypeError 半途崩
+if (known) subs.forEach(s => {
+  console.log(known.has(s) ? '✅ ' + s + ' — 已关联' : '⚠️ ' + s + ' — 孤儿目录（先 dump 取证再手工归位，勿直接 rm）');
 });
 // 反向检查（multi-agent-review Q1）：DB active 且匹配 quick-<hex> 但无目录 → 僵尸 quick 会话
 // （quick 收尾未注销，active 行累积污染 listChanges/doctor）。新代码已修收尾，此项清理历史残留。
 const QUICK_RE = /^quick-[0-9a-f]{8}$/;
-const zombieQuick = [...known].filter(n => QUICK_RE.test(n) && !subs.includes(n));
+const zombieQuick = known ? [...known].filter(n => QUICK_RE.test(n) && !subs.includes(n)) : [];
 if (zombieQuick.length > 0) {
   console.log('⚠️ 检测到 ' + zombieQuick.length + ' 个僵尸 quick 会话（DB active 但无目录）:');
   zombieQuick.forEach(n => console.log('   - ' + n));
@@ -143,7 +150,13 @@ DB_FILE='.sillyspec/.runtime/sillyspec.db'
 if [ -f "$DB_FILE" ]; then
   echo ""
   echo "isolation 状态（来自 sillyspec.db）:"
-  sqlite3 -header -column "$DB_FILE" "SELECT name, isolation_status AS status, isolation_mode AS mode, isolation_reason AS reason FROM changes WHERE status='active'" 2>/dev/null || echo "⚠️ 查询 isolation 失败"
+  node -e "
+const { DatabaseSync } = require('node:sqlite');
+const db = new DatabaseSync(process.argv[1], { readOnly: true });
+const rows = db.prepare("SELECT name, isolation_status AS status, isolation_mode AS mode, isolation_reason AS reason FROM changes WHERE status='active'").all();
+for (const r of rows) console.log('  ' + r.name + ' | ' + r.status + ' | ' + r.mode + ' | ' + (r.reason || ''));
+db.close();
+" "$DB_FILE" 2>/dev/null || echo "⚠️ 查询 isolation 失败"
 else
   echo ""
   echo "ℹ️ sillyspec.db 不存在（尚未初始化）"
@@ -164,7 +177,7 @@ fi
 
 ---
 
-## Step 1/5：构建环境检查
+## Step 2/5：构建环境检查
 
 **元数据**
 - optional：false
@@ -267,7 +280,7 @@ timeout 5 python3 --version 2>/dev/null
 
 ---
 
-## Step 2/5：外部依赖检查
+## Step 3/5：外部依赖检查
 
 **元数据**
 - optional：false
@@ -316,7 +329,7 @@ timeout 5 which docker 2>/dev/null && echo "✅ Docker 可用" || echo "ℹ️ D
 
 ---
 
-## Step 3/5：模块文档健康检查
+## Step 4/5：模块文档健康检查
 
 **元数据**
 - optional：false
@@ -358,7 +371,7 @@ timeout 5 which docker 2>/dev/null && echo "✅ Docker 可用" || echo "ℹ️ D
 
 ---
 
-## Step 4/5：汇总报告
+## Step 5/5：汇总报告
 
 **元数据**
 - optional：false

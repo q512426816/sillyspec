@@ -73,16 +73,14 @@ const dir = '.sillyspec/changes';
 const subs = fs.existsSync(dir) ? fs.readdirSync(dir).filter(f => { try { return fs.statSync(dir+'/'+f).isDirectory() && f !== 'archive'; } catch { return false; } }) : [];
 let known;
 try { const db = new DatabaseSync('.sillyspec/.runtime/sillyspec.db', { readOnly: true }); known = new Set(db.prepare(\"SELECT name FROM changes WHERE status='active'\").all().map(r => r.name)); db.close(); } catch (e) { console.log('⚠️ db 读取失败: ' + e.message + '（跳过孤儿判定，不做任何清理建议）'); known = null; }
+// known 为 null（db 不可读）时只列目录不判定孤儿，后续僵尸检查同样跳过——不守卫会 TypeError 半途崩
 if (known) subs.forEach(s => {
   console.log(known.has(s) ? '✅ ' + s + ' — 已关联' : '⚠️ ' + s + ' — 孤儿目录（先 dump 取证再手工归位，勿直接 rm）');
-});
-subs.forEach(s => {
-  console.log(known.has(s) ? '✅ ' + s + ' — 已关联' : '⚠️ ' + s + ' — 孤儿目录（可清理）');
 });
 // 反向检查（multi-agent-review Q1）：DB active 且匹配 quick-<hex> 但无目录 → 僵尸 quick 会话
 // （quick 收尾未注销，active 行累积污染 listChanges/doctor）。新代码已修收尾，此项清理历史残留。
 const QUICK_RE = /^quick-[0-9a-f]{8}$/;
-const zombieQuick = [...known].filter(n => QUICK_RE.test(n) && !subs.includes(n));
+const zombieQuick = known ? [...known].filter(n => QUICK_RE.test(n) && !subs.includes(n)) : [];
 if (zombieQuick.length > 0) {
   console.log('⚠️ 检测到 ' + zombieQuick.length + ' 个僵尸 quick 会话（DB active 但无目录）:');
   zombieQuick.forEach(n => console.log('   - ' + n));

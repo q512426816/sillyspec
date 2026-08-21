@@ -135,9 +135,14 @@ async function archiveWorktreeCleanup(cwd, archiveChangeName, specBase, platform
   try {
     const runtimeRoot = resolveRuntimeRoot(platformOpts, specBase)
     if (existsSync(runtimeRoot)) {
+      // stage-review marker 精确匹配（坑 marker-suffix-overmatch）：marker 名是
+      // current-stage-review-run-id-<stage>-<change>，按 endsWith('-'+change) 后缀匹配会在归档
+      // 手工短名变更（如 login）时误删自动日期前缀变更（2026-08-01-login 天然以 '-login' 结尾）
+      // 的 marker。stage 集合与写入侧 stageReviewMarkerPath 的调用方一致。
+      const REVIEW_STAGES = ['brainstorm', 'plan', 'execute', 'verify', 'archive']
       const markers = readdirSync(runtimeRoot).filter((f) =>
         f === `current-execute-run-id-${archiveChangeName}` ||
-        (f.startsWith('current-stage-review-run-id-') && f.endsWith(`-${archiveChangeName}`)),
+        REVIEW_STAGES.some(st => f === `current-stage-review-run-id-${st}-${archiveChangeName}`),
       )
       for (const m of markers) {
         try { unlinkSync(join(runtimeRoot, m)) } catch {}

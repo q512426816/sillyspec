@@ -104,8 +104,10 @@ export function detectConcurrentChanges(cwd, { changeName, linkedChanges = [], o
     if (!file) continue
 
     // rule1：落 .sillyspec/changes/<dir>/ 且 <dir> 非本变更非关联 → otherActiveChanges 去重。
+    // 'archive' 排除（坑 archive-dir-as-other-change）：归档移动产生 .sillyspec/changes/archive/...
+    // 脏路径，extractChangeDir 返回 'archive'，不排除会把归档动作误报成「他者活跃变更: archive」。
     const dir = extractChangeDir(file)
-    if (dir && !ownChangeSet.has(normalizeGitPath(dir))) {
+    if (dir && dir !== 'archive' && !ownChangeSet.has(normalizeGitPath(dir))) {
       otherActiveSet.add(dir)
       continue
     }

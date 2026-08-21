@@ -9,6 +9,7 @@
  */
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, unlinkSync, chmodSync } from 'fs';
+import { writeAtomicSync } from './fs-atomic.js';
 import { join } from 'path';
 import { resolvePlatformSpecDir } from './progress.js';
 import { safeGit } from './git-helper.js';
@@ -131,12 +132,14 @@ function replaceTopLevelSection(text, name, body) {
   return `${stripped}\n\n${name}:\n${body}\n`;
 }
 
-/** 文本级写 local.yaml（保留传入 text 的注释/结构）；确保 .sillyspec 目录存在。 */
+/** 文本级写 local.yaml（保留传入 text 的注释/结构）；确保 .sillyspec 目录存在。
+ *  原子写（fs-atomic 契约：local.yaml 被 hook/probe 等其他进程并发读，裸 writeFileSync 的
+ *  写入窗口可读到半截文件 → mcp 段解析失败回退 env → 误判 no-config 降级）。 */
 function writeLocalYamlRaw(cwd, text) {
   const dir = join(cwd, '.sillyspec');
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   const yamlPath = join(cwd, LOCAL_YAML);
-  writeFileSync(yamlPath, text, 'utf8');
+  writeAtomicSync(yamlPath, text, 'utf8');
   // 体检 SEC-04：local.yaml 含明文 token，收紧为仅属主可读写。POSIX chmod 0600 生效；
   // Windows 上 Node chmod 只映射只读位（近似 no-op），属可接受 best-effort
   try { chmodSync(yamlPath, 0o600); } catch { /* chmod 失败不阻断连接流程 */ }
@@ -364,7 +367,7 @@ export class SyncManager {
           // 删段后纯空白（无任何段也无注释）→ 删除整个文件；注释算内容，有注释则保留
           try { unlinkSync(p); } catch { /* best effort */ }
         } else {
-          writeFileSync(p, newText, 'utf8');
+          writeAtomicSync(p, newText, 'utf8');
         }
       }
     }
@@ -609,7 +612,10 @@ export class SyncManager {
       return { synced: 0, errors: ['未指定变更名称'] };
     }
 
-    const changeDir = join(this.cwd, CHANGES_DIR, changeName);
+    // 树根与进度/spec 树同源（safePlatformSpecDir，BUG-01 同族）：此前硬编码 cwd/.sillyspec/changes，
+    // 平台模式（specRoot 指向外部）下路径不存在 → syncDocuments 恒报「变更不存在」且调用方不查
+    // 返回值 → 文档在平台模式下静默永不同步。
+    const changeDir = join(safePlatformSpecDir(this.cwd) || join(this.cwd, '.sillyspec'), 'changes', changeName);
     if (!existsSync(changeDir)) {
       console.warn(`[sync] 变更不存在: ${changeName}`);
       return { synced: 0, errors: [`变更不存在: ${changeName}`] };
@@ -997,7 +1003,10 @@ export class SyncManager {
         const { ProgressManager } = await import('./progress.js');
         const pm = new ProgressManager({ specDir: safePlatformSpecDir(this.cwd) });
         const db = pm._ensureDB(this.cwd).getDb();
-        db.prepare('UPDATE changes SET last_synced_platform_ts = MAX(?, COALESCE(last_synced_platform_ts, ?)) WHERE name = ?')
+        // 参数侧同样 COALESCE（坑 keep-local-base-ts-null-param）：SQLite 标量 MAX() 任一参数
+        // 为 NULL 即返回 NULL——冲突文件 platform_last_pushed_at 为 null 时 MAX(NULL, 旧值)
+        // 会把已回填的 base_ts 清空，恰好违背本注释的单调防回退意图。
+        db.prepare('UPDATE changes SET last_synced_platform_ts = MAX(COALESCE(?, last_synced_platform_ts), COALESCE(last_synced_platform_ts, ?)) WHERE name = ?')
           .run(platformPushedAt, platformPushedAt, changeName);
       } catch (err) {
         return { ok: false, resolved: false, reason: `keep-local 更新 base_ts 失败: ${err.message}` };
@@ -1024,9 +1033,12 @@ export class SyncManager {
     }
 
     if (mode === 'take-platform' && cf) {
-      // 用冲突文件的 platform_progress 调 import 覆盖本地（保隔离：import 不覆盖 isolation_*）
+      // 用冲突文件的 platform_progress 调 import 覆盖本地（保隔离：import 不覆盖 isolation_*）。
+      // fail-closed（坑 take-platform-empty-import）：缺 platform_progress 时必须直接返回——
+      // { ...null } 展开为 {}，import 会照常跑完整事务（DELETE stages 后按空 JSON 重建 =
+      // 清空本地进度），返回值却报 ok:false「未执行」，用户以为无事发生实则数据已丢。
       if (!cf.platform_progress) {
-        progressOutcome = { ok: false, resolved: false, reason: '冲突文件缺 platform_progress，无法 take-platform（建议先 platform pull）' };
+        return { ok: false, resolved: false, reason: '冲突文件缺 platform_progress，无法 take-platform（建议先 platform pull）' };
       }
       try {
         const { ProgressManager } = await import('./progress.js');

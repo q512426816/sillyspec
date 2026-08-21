@@ -348,7 +348,10 @@ function parseTaskWavesFromPlan(planPath) {
     // （旧变更读侧兼容——新格式由 validatePlanForExecute 拦旧形态，此处不重复把关）
     const tm = line.match(/^[-*]\s+(?:\[[ x]\]\s*)?(task-\d+)\s*[:：\s]*$/i)
       || line.match(/^[-*]\s*\[[ x]\]\s*(task-\d+)\b/i)
-    if (tm && currentWave !== null) map.set(tm[1], currentWave)
+    // id 归一补零（与卡片/注册表 task-01 口径一致，坑 wave-ref-unpadded）：plan.md 写
+    // `- task-1` 时裸用捕获原文做 key，永远匹配不到卡片 id task-01 → 被判「未列入任何
+    // Wave」，同 Wave 共享文件检测静默跳过。execute.js parseWavesFromPlan 已补零，对齐。
+    if (tm && currentWave !== null) map.set(String(tm[1]).replace(/^task-(\d+)$/i, (_, n) => `task-${n.padStart(2, '0')}`), currentWave)
   }
   return map
 }
@@ -614,16 +617,19 @@ export function parseLocalYamlModules(yamlText) {
   const modules = {}
   for (let i = startIdx + 1; i < lines.length; i++) {
     const line = lines[i]
-    const entry = line.match(/^  ([A-Za-z0-9_.\-]+):\s*(.*)$/)
+    const entry = line.match(/^([ \t]+)([A-Za-z0-9_.\-]+):\s*(.*)$/)
     if (!entry) {
       // 遇到新的顶层 key（行首非空格且非注释）→ modules 块结束
       if (line.length > 0 && !line.startsWith(' ') && !line.startsWith('#') && line.trim() !== '') break
       continue
     }
-    const rest = entry[2] || ''
+    // 条目缩进放宽为「任意非零空白」（坑 modules-indent-hardcoded）：此前硬编码恰 2 空格，
+    // 4 空格/Tab 缩进的条目不匹配且不触发块结束 → 被静默跳过 → modules 丢失 →
+    // validateScriptCommands 退化为只查根 package.json，monorepo 子包命令被误报不存在。
+    const rest = entry[3] || ''
     // path 值：带引号或不带引号（flow mapping），取第一个匹配
     const pathMatch = rest.match(/path:\s*"([^"]+)"/) || rest.match(/path:\s*([^,\s}]+)/)
-    if (pathMatch) modules[entry[1]] = { path: pathMatch[1] }
+    if (pathMatch) modules[entry[2]] = { path: pathMatch[1] }
   }
   return Object.keys(modules).length > 0 ? modules : null
 }
@@ -669,9 +675,14 @@ export function validateTaskCommands(changeDir, projectRoot, modules = null) {
       continue // 非法 YAML 由 feasibility 处理，不重复
     }
 
-    // 合并 verify + implementation 文本（命令可能出现在任一字段）
-    const verifyText = typeof fm.verify === 'string' ? fm.verify : ''
-    const implText = typeof fm.implementation === 'string' ? fm.implementation : ''
+    // 合并 verify + implementation 文本（命令可能出现在任一字段）。
+    // 字段两形态都收（坑 taskcard-block-list-noop）：规范格式（taskcard.js 骨架 / plan 模板）的
+    // verify/implementation 是 YAML 块列表 → js-yaml 解析为数组；此前只收 string，规范卡片
+    // 恒落空 → 「命令存在性校验」（hard-error）对合规 TaskCard 整体 no-op，只有违规写成
+    // 纯标量的卡片才被校验。数组按行 join 回文本，与标量同管道。
+    const toCmdText = (v) => Array.isArray(v) ? v.map(String).join('\n') : (typeof v === 'string' ? v : '')
+    const verifyText = toCmdText(fm.verify)
+    const implText = toCmdText(fm.implementation)
     const text = `${verifyText}\n${implText}`
     if (!text.trim()) continue
 
@@ -1047,8 +1058,10 @@ export function validatePlanFeasibility(changeDir, projectRoot = null) {
   if (allTaskIds.length > 0) {
     const nums = allTaskIds.map(id => {
       const m = id.match(/task-(\d+)/i)
-      return m ? parseInt(m[1]) : null
+      return m ? parseInt(m[1], 10) : null
     }).filter(n => n !== null).sort((a, b) => a - b)
+    // nums[0]!==1 时跳过 = 兼容旧变更编号不从 1 起（契约同 validatePlanForExecute 检查 3，
+    // test/plan-execute-contract.test.mjs Case 10 钉死，勿改）
     if (nums.length > 0 && nums[0] === 1) {
       for (let i = 0; i < nums.length; i++) {
         if (nums[i] !== i + 1) {
@@ -1280,11 +1293,12 @@ export async function executePlanPostcheck(context) {
               currentWaveTasks = null
               continue
             }
-            // 2026-08-20-task-truth-unify：Wave 段下纯 ID 引用行（- task-NN）；旧 checkbox 行同收
+            // 2026-08-20-task-truth-unify：Wave 段下纯 ID 引用行（- task-NN）；旧 checkbox 行同收。
+            // 编号补零对齐卡片口径（坑 wave-ref-unpadded，同 parseTaskWavesFromPlan）
             const tm = line.match(/^[-*]\s+(?:\[[ x]\]\s*)?task-(\d+)\s*[:：\s]*$/i)
               || line.match(/^[-*]\s*\[[ x]\]\s*task-(\d+)/i)
             if (tm && currentWaveTasks) {
-              currentWaveTasks.push(`task-${tm[1]}`)
+              currentWaveTasks.push(`task-${String(tm[1]).padStart(2, '0')}`)
             }
           }
           if (currentWaveTasks) existingWaves.push(currentWaveTasks)

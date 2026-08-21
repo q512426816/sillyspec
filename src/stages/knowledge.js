@@ -276,10 +276,25 @@ export async function cmdRefresh(dir, args, opts = {}) {
   // refresh 只写 generated/ 区
   mkdirSync(generatedDir, { recursive: true })
 
-  // 扫描 scan 文档
+  // 扫描 scan 文档。项目名用 DB 注册名优先（坑 knowledge-basename-project-mismatch）：
+  // scan 写侧 docs/<project> 的 project 来自 dbProjectName || basename(cwd)，注册名 ≠ 目录名
+  // （projects yaml name/path 分离、平台模式 specRoot≠sourceRoot）时，用 basename(dir) 拼
+  // scanDir 永远找不到 → refresh 恒报 scan_docs_missing。DB 读失败回退 basename（与写侧
+  // default 同口径）。查不到注册名对应目录时再回退 basename 试一次（双形态兼容）。
   const base = opts.specDir || join(dir, '.sillyspec')
-  const projectName = basename(dir)
-  const scanDir = join(base, 'docs', projectName, 'scan')
+  let projectName = null
+  try {
+    const { DatabaseSync } = await import('node:sqlite')
+    const db = new DatabaseSync(join(base, '.runtime', 'sillyspec.db'), { readOnly: true })
+    const row = db.prepare('SELECT name FROM project LIMIT 1').get()
+    db.close()
+    if (row && row.name) projectName = row.name
+  } catch { /* db 不可读 → 走 basename 兜底 */ }
+  if (!projectName) projectName = basename(dir)
+  let scanDir = join(base, 'docs', projectName, 'scan')
+  if (!existsSync(scanDir) && projectName !== basename(dir)) {
+    scanDir = join(base, 'docs', basename(dir), 'scan')
+  }
 
   if (!existsSync(scanDir)) {
     output(false, {}, { code: 'scan_docs_missing', path: scanDir })

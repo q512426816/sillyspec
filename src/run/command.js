@@ -368,8 +368,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
   // 纯只读比较：零会话/QUICKLOG 副作用，仅解析 --base/--full/--report 后转发 scan-diff 退出码。
   if (stageName === 'scan' && flags.includes('--diff')) {
     const { runScanDiff } = await import('../scan-diff.js')
-    const diffBaseIdx = flags.indexOf('--base')
-    const diffBase = diffBaseIdx >= 0 && flags[diffBaseIdx + 1] ? flags[diffBaseIdx + 1] : null
+    const diffBase = getFlagValue('--base')
     process.exitCode = runScanDiff({
       projectRoot: cwd,
       specBase,
@@ -418,26 +417,26 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
   }
 
   // 解析 --output
+  // F4 守卫统一走 getFlagValue（坑 raw-flag-value-bypass）：裸 flags[idx+1] 会把漏值后紧跟的
+  // flag 名当值（--output --input x → output="--input"），--change --done 甚至会建出名为
+  // --done 的变更目录（assertSafeChangeName 的 [\w.-] 恰好放行）。getFlagValue 的 F4 注释
+  // 点名过本坑，此前只有 from-step 等少数 flag 用了它。
   let outputText = null
-  const outputIdx = flags.indexOf('--output')
-  if (outputIdx !== -1 && flags[outputIdx + 1]) {
-    outputText = flags[outputIdx + 1]
-  }
+  const outputValue = getFlagValue('--output')
+  if (outputValue !== null) outputText = outputValue
 
   // 解析 --input
   let inputText = null
-  const inputIdx = flags.indexOf('--input')
-  if (inputIdx !== -1 && flags[inputIdx + 1]) {
-    inputText = flags[inputIdx + 1]
-  }
+  const inputValue = getFlagValue('--input')
+  if (inputValue !== null) inputText = inputValue
 
   // 解析 --linked-changes <a,b|none>（quick 专用：显式声明关联变更，CI/脚本友好）
   // 与 --change 解耦：--linked-changes 语义清晰（关联变更），不与「指定变更名」混淆。
   // null = 未指定（走持久化/交互/兼容回退）；[] = 显式 none（不关联）；[...] = 显式列表
   let explicitLinked = null
-  const linkedIdx = flags.indexOf('--linked-changes')
-  if (linkedIdx !== -1 && flags[linkedIdx + 1]) {
-    const v = flags[linkedIdx + 1].trim()
+  const linkedValue = getFlagValue('--linked-changes')
+  if (linkedValue !== null) {
+    const v = linkedValue.trim()
     explicitLinked = v.toLowerCase() === 'none' ? [] : v.split(',').map(s => s.trim()).filter(Boolean)
   }
 
@@ -445,9 +444,9 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
   // 历史写法，语义与「指定变更名」冲突，新用法建议改用 --linked-changes）
   let changeName = null
   let linkedChanges = []
-  const changeIdx = flags.indexOf('--change')
-  if (changeIdx !== -1 && flags[changeIdx + 1]) {
-    changeName = flags[changeIdx + 1]
+  const changeValue = getFlagValue('--change')
+  if (changeValue !== null) {
+    changeName = changeValue
     if (stageName === 'quick') {
       linkedChanges = changeName.split(',').map(s => s.trim()).filter(Boolean)
       changeName = null
@@ -489,7 +488,9 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     // 1373-1376 已把 quick 的 --change 值清进 linkedChanges、changeName 置 null。
     // 此处回看 --change 原始值：若恰好是单个 quick-<8hex> → 识别为本会话 sessionId（精确恢复），
     // 并撤销把它当 linkedChanges 的误判。多值或不匹配 → 维持 linkedChanges 语义（旧兼容）。
-    const rawChange = changeIdx !== -1 && flags[changeIdx + 1] ? flags[changeIdx + 1].trim() : null
+    // F4 守卫同款（changeIdx 变量已随裸读清理移除，此处改 getFlagValue 复读原始值）
+    const rawChangeValue = getFlagValue('--change')
+    const rawChange = rawChangeValue !== null ? rawChangeValue.trim() : null
     const rawIsSingleSid = rawChange && rawChange.indexOf(',') === -1 && QUICK_SID_RE.test(rawChange)
     if (rawIsSingleSid) {
       // --done --change quick-<uuid8>：精确恢复（撤销 1373-1376 把它误当 linkedChanges）
@@ -549,18 +550,18 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     process.exit(2) // 用法错 → exit 2
   }
   let quickFiles = []
-  const filesIdx = flags.indexOf('--files')
-  if (filesIdx !== -1 && flags[filesIdx + 1]) {
-    quickFiles = flags[filesIdx + 1].split(',').map(f => f.trim()).filter(Boolean)
+  const filesValue = getFlagValue('--files')
+  if (filesValue !== null) {
+    quickFiles = filesValue.split(',').map(f => f.trim()).filter(Boolean)
   }
 
   // 解析 --file-notes "path::括注 || path::括注"（quick 专用：QUICKLOG「文件：」行落盘多行括注）。
   // 旁路注入 quicklog.js（per-process setter），不经 complete 收尾路径透传（避碰多 agent 并发改的收尾热点）。
   // completeQuicklogEntry 读后即清；不传 → '' → 回填审计到的实际文件单行（向后兼容）。
   let quickFileNotes = ''
-  const fileNotesIdx = flags.indexOf('--file-notes')
-  if (fileNotesIdx !== -1 && flags[fileNotesIdx + 1]) {
-    quickFileNotes = flags[fileNotesIdx + 1]
+  const fileNotesValue = getFlagValue('--file-notes')
+  if (fileNotesValue !== null) {
+    quickFileNotes = fileNotesValue
   }
   setQuickFileNotes(quickFileNotes)
 
@@ -771,16 +772,20 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
       let autoName = changeName || resolveChangeNameAuto(cwd, specRoot) || 'default'
       // archive 特例：归档后变更从活跃列表排除（listChanges WHERE status='active'），
       // 不带 --change 回退 default 会读错变更。无活跃变更时取最新归档变更，读其现有 progress。
+      // 归档目录名 = 原变更名恒等迁移（archiveDestDirName 不改名），直接原名对读——此前按
+      // 「日期前缀过滤 + 剥日期」找，剥出的短名与 DB 行名（含日期）恒不符 → pm.read 返回
+      // null → initChange 凭空建幻影变更再跑 archive（坑 archive-fallback-phantom-change）。
       if (stageName === 'archive' && autoName === 'default') {
         try {
           const archiveDir = join(specBase, 'changes', 'archive')
           if (existsSync(archiveDir)) {
-            const latest = readdirSync(archiveDir)
-              .filter(d => /^\d{4}-\d{2}-\d{2}-.+/.test(d))
+            const latest = readdirSync(archiveDir, { withFileTypes: true })
+              .filter(d => d.isDirectory())
+              .map(d => d.name)
               .sort()
               .pop()
             if (latest) {
-              autoName = latest.replace(/^\d{4}-\d{2}-\d{2}-/, '')
+              autoName = latest
               progress = pm.read(cwd, autoName)
             }
           }
@@ -887,12 +892,20 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     // stale/revising 阶段可能 steps 为空，或者 execute 阶段的 steps 需要从最新 plan.md 刷新
     const stageDataPre = progress.stages[stageName]
     const needsInit = !stageDataPre || !stageDataPre.steps || stageDataPre.steps.length === 0
-    // execute 阶段在 reopen 时需要从最新 plan.md 重新解析 steps（plan 可能已变更）
+    // execute 阶段在 reopen 时需要从最新 plan.md 重新解析 steps（plan 可能已变更）。
+    // 按名保留旧状态（坑 execute-reopen-wipes-prior-completion）：reopenStage 的语义是
+    // 「i < fromStep 保持原状（completed）」，此前预置全 pending 会把 fromStep 之前已完成的
+    // 步骤一并清空——CLI 打印「从步骤 N 开始修订」、prompt 注入「之前已完成不需要重做」，
+    // 实际 currentIdx 却回到 0，agent 被迫从头重做，修订语义完全失效。
     if (needsInit || stageName === 'execute') {
       const freshSteps = await getStageSteps(stageName, cwd, progress, specRoot)
       if (freshSteps && freshSteps.length > 0) {
         if (!progress.stages[stageName]) progress.stages[stageName] = { status: 'stale', steps: [] }
-        progress.stages[stageName].steps = freshSteps.map(s => ({ name: s.name, status: 'pending' }))
+        const oldSteps = progress.stages[stageName].steps || []
+        progress.stages[stageName].steps = freshSteps.map(s => {
+          const old = oldSteps.find(step => step.name === s.name)
+          return old ? { ...old } : { name: s.name, status: 'pending' }
+        })
         pm._write(cwd, progress, effectiveChange)
         progress = pm.read(cwd, effectiveChange) || progress
       }
@@ -1148,15 +1161,17 @@ async function resetStage(pm, progress, stageName, cwd, changeName, platformOpts
 async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts = {}) {
   const flowStages = ['brainstorm', 'plan', 'execute', 'verify', 'archive']
   const isDone = flags.includes('--done')
-  const outputIdx = flags.indexOf('--output')
-  const outputText = outputIdx !== -1 && flags[outputIdx + 1] ? flags[outputIdx + 1] : null
-  const inputIdx = flags.indexOf('--input')
-  const inputText = inputIdx !== -1 && flags[inputIdx + 1] ? flags[inputIdx + 1] : null
+  // F4 守卫（坑 raw-flag-value-bypass，与 runCommand getFlagValue 同款）：裸 flags[idx+1] 会把
+  // 漏值后紧跟的 flag 名当值（--output --done → outputText="--done" 污染落盘 output）。
+  const autoFlagValue = (name) => {
+    const i = flags.indexOf(name)
+    const next = i !== -1 ? flags[i + 1] : undefined
+    return next && !String(next).startsWith('--') ? next : null
+  }
+  const outputText = autoFlagValue('--output')
+  const inputText = autoFlagValue('--input')
   const skipApproval = flags.includes('--skip-approval')
-  const explicitMode = (() => {
-    const m = flags.indexOf('--mode')
-    return m !== -1 && flags[m + 1] ? flags[m + 1] : null
-  })()
+  const explicitMode = autoFlagValue('--mode')
   const specBase = platformOpts?.specRoot || join(cwd, '.sillyspec')
 
   // Helper: 在 auto 模式下获取步骤定义
@@ -1193,7 +1208,10 @@ async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts = 
         return progress
       }
     }
-    const changed = await ensureStageSteps(progress, stage, cwd)
+    // specRoot 必传（坑 auto-mode-specroot-miss）：平台模式 specRoot 是外部目录，漏传时
+    // getStageSteps 从 cwd 推导 miss 掉 plan/execute 动态步骤（buildPlanSteps(null) 只剩
+    // 2 步 fixedPrefix），种出的步骤表两次 --done 即判阶段完成，与 getAutoSteps 渲染双轨失配
+    const changed = await ensureStageSteps(progress, stage, cwd, platformOpts?.specRoot || null)
     if (stageChanged || changed) {
       pm._write(cwd, progress, changeName)
       triggerSync(cwd, changeName, platformOpts)
@@ -1369,7 +1387,8 @@ async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts = 
     progress.stages[next].startedAt = new Date().toLocaleString('zh-CN',{hour12:false})
   }
   progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
-  await ensureStageSteps(progress, next, cwd)
+  // specRoot 同上（坑 auto-mode-specroot-miss）：平台模式动态步骤表必须从外部 specRoot 构建
+  await ensureStageSteps(progress, next, cwd, platformOpts?.specRoot || null)
   pm._write(cwd, progress, changeName)
   triggerSync(cwd, changeName, platformOpts)
   progress = pm.read(cwd, changeName)

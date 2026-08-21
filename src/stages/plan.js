@@ -564,7 +564,9 @@ export const fixedSuffix = [] // postcheck 是动态生成的（需要 changeDir
  */
 function parseTaskCount(registryContent) {
   if (!registryContent || typeof registryContent !== 'string') return 0
-  const matches = registryContent.match(/^[-*]\s*\[[ x]\]\s*task-\d+/gm)
+  // [ xX] + i（坑 taskcount-uppercase-x）：parseTaskNames / gates.js extractTaskIdsFromRegistry
+  // 均收大写 [X]，此处漏收 → 全大写勾选的注册表计数 0 → 误走「无任务」分支丢 coordinator 步
+  const matches = registryContent.match(/^[-*]\s*\[[ xX]\]\s*task-\d+/gim)
   return matches ? matches.length : 0
 }
 
@@ -624,15 +626,18 @@ export function buildPlanSteps(changeDir = null, planContent = null) {
     return [...fixedPrefix, ...postcheck]
   }
 
-  // 解析任务名
+  // 解析任务名（源与计数同口径，坑 plan-tasknames-empty-under-registry-contract）：新契约
+  // （2026-08-20-task-truth-unify）下 plan.md Wave 段是纯 ID 引用行（无 checkbox 无任务名），
+  // 此前只从 planContent/plan.md 解析 → taskNames 恒空 → coordinator 步骤任务清单空白，
+  // 主 agent 只能自行读 tasks.md 兜底易漏派。tasks.md 优先（与 readTaskRegistryContent 同序）。
   let taskNames = []
-  if (planContent) {
-    taskNames = parseTaskNames(planContent)
-  } else if (changeDir) {
-    const planFile = path.join(changeDir, 'plan.md')
-    if (existsSync(planFile)) {
-      taskNames = parseTaskNames(readFileSync(planFile, 'utf8'))
-    }
+  let namesSource = planContent || null
+  if (changeDir) {
+    const registryContent = readTaskRegistryContent(changeDir)
+    if (registryContent != null) namesSource = registryContent
+  }
+  if (namesSource) {
+    taskNames = parseTaskNames(namesSource)
   }
 
   // 生成协调器步骤（TaskCard 生成）+ postcheck

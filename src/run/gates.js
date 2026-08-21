@@ -93,6 +93,26 @@ export async function enforceSymbolImpactGate(stageName, changeName, currentStep
 }
 
 /**
+ * UI 原型软提醒（非阻断）：brainstorm「生成规范文件」步 --done 时，design.md 命中前端文件
+ * 但变更目录无 prototype-*.html → console.warn 一行，用户可否决。程度判断（布局级才必须出）
+ * 是语义判断，CLI 不硬卡只提示——治 agent 对明显 UI 改造静默跳过原型的坑。
+ */
+export function warnMissingUiPrototype(stageName, changeName, currentStepName, specBase) {
+  if (stageName !== 'brainstorm' || !currentStepName || !currentStepName.includes('生成规范文件')) return
+  if (!changeName || !specBase) return
+  const changeDir = join(specBase, 'changes', changeName)
+  const designPath = join(changeDir, 'design.md')
+  if (!existsSync(designPath)) return
+  try {
+    if (readdirSync(changeDir).some(f => /^prototype-.*\.html$/i.test(f))) return
+  } catch { return } // 目录不可读（平台模式 specRoot 差异等）→ 静默跳过，不制造噪音
+  const design = readFileSync(designPath, 'utf8')
+  const feExts = [...new Set((design.match(/\.(vue|svelte|astro|tsx|jsx|css|scss|sass|less|styl|html)\b/gi) || []).map(s => s.replace('.', '').toLowerCase()))]
+  if (feExts.length === 0) return
+  console.warn(`   ⚠️ design.md 命中前端文件类型（${feExts.join('/')}）但变更目录无 prototype-*.html——轻微样式改动可忽略；布局/交互流程级变化应补原型（sillyspec run brainstorm --reopen 回到「分段展示设计」，或直接让 agent 补生成）`)
+}
+
+/**
  * 判断当前 execute step 所在 wave 是否全部 task 都声明 no_deps_verify: true（D-006@v2）。
  * 仅 wave 执行步骤（名如 "Wave N 执行"）可 opt-out；非 wave 步骤恒返回 false（保守过门）。
  */
@@ -854,6 +874,10 @@ export async function completeStageGates({ stageName, cwd, changeName, platformO
     stageData.steps = freshSteps
     stageData.status = 'pending'
     stageData.completedAt = null
+    // scan 的 quick 档 profile 随步骤表一并失效（坑 scan-quick-profile-step-mismatch 收尾）：
+    // getStageSteps 感知 scanProfile 返回 3 步表，重置后 DB 是 11 步注册表，残留 profile 会让
+    // 下次 --status 走 ensureStageSteps 时 11 vs 3 误报漂移重播种。下次 run scan 会重算 profile。
+    if (stageName === 'scan' && stageData.scanProfile) delete stageData.scanProfile
     if (progress.currentStage === stageName) progress.currentStage = ''
     pm._write(cwd, progress, changeName)
   }

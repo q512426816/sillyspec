@@ -15,7 +15,7 @@
 
 **元数据**
 - optional：false
-- outputHint：module-impact.md 终审结果 + 修正摘要
+- outputHint：完成度报告
 - 等待配置：无（可直接 --done）
 
 **本步出现的运行时占位符**
@@ -39,7 +39,8 @@
    - 调用：sillyspec run archive --wait --reason "存在未完成任务，是否继续归档" --options "继续归档,回到execute完成剩余任务" --output "未完成任务列表"
 
 ### 输出
-完成度报告（已通过/总数 + 数据源 + 未完成任务列表）````
+完成度报告（已通过/总数 + 数据源 + 未完成任务列表）
+````
 
 ---
 
@@ -47,12 +48,8 @@
 
 **元数据**
 - optional：false
-- outputHint：module-impact.md 路径 + 影响摘要
+- outputHint：module-impact.md 终审结果 + 修正摘要
 - 等待配置：无（可直接 --done）
-
-**本步出现的运行时占位符**
-- `<change-name>` → 当前变更名
-- `<project>` → 当前项目名（`basename(cwd)` 或 db 项目名）
 
 **提示词原文**
 

@@ -183,8 +183,11 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
   console.log(`project: ${projectName}`)
   if (changeName) {
     console.log(`change: ${changeName}`)
-    const isPlatform = platformOpts?.specRoot || platformOpts?.runtimeRoot
-    const changeDirBase = isPlatform ? platformOpts.specRoot : '.sillyspec'
+    // changeDir 根（坑 change-dir-base-mismatch）：平台/漂移锚定用绝对根（specDriftAnchor 防
+    // worktree 副本错位），普通本地保持相对 '.sillyspec' 展示契约（test 钉死）。此前
+    // isPlatform 用 specRoot||runtimeRoot 判定、取值只拿 specRoot——runtimeRoot-only 平台组合
+    // join(null,...) 直接 TypeError。
+    const changeDirBase = platformOpts?.specRoot || platformOpts?.specDriftAnchor || '.sillyspec'
     const changeDir = join(changeDirBase, 'changes', changeName)
     console.log(`changeDir: ${changeDir}`)
   }
@@ -715,8 +718,9 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
       console.log('- **平台模式：local.yaml 中的 commands 必须在 package.json scripts 中真实存在，不存在的标记 unavailable。**')
     }
     if (changeName) {
-      const isPlatform = platformOpts?.specRoot || platformOpts?.runtimeRoot
-      const changeDirBase = isPlatform ? platformOpts.specRoot : '.sillyspec'
+      // changeDir 根与上方头部同源（坑 change-dir-base-mismatch）：平台/漂移锚定绝对根，
+      // 普通本地保持相对 '.sillyspec' 展示；runtimeRoot-only 组合不再 join(null) 崩溃
+      const changeDirBase = platformOpts?.specRoot || platformOpts?.specDriftAnchor || '.sillyspec'
       const changeDir = join(changeDirBase, 'changes', changeName)
       console.log(`- **文件路径规则：所有变更文件必须写入 \`${changeDir}/\` 目录下。不要自己拼接路径，直接使用 changeDir 值。示例：\`${changeDir}/proposal.md\`**`)
     }

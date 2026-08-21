@@ -55,7 +55,6 @@
 1. `ls .sillyspec/changes/ 2>/dev/null | grep -v archive`
 2. 对每个进行中的变更：检查 proposal.md ✅/❌、design.md ✅/❌、requirements.md ✅/❌、tasks.md — X/Y 完成
 3. `ls .sillyspec/changes/archive/ 2>/dev/null | wc -l`
-4. `cat .sillyspec/HANDOFF.json 2>/dev/null`
 
 ### 输出
 变更状态列表

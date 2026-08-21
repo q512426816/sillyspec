@@ -24,7 +24,7 @@ import { triggerSync, WAIT_MARKER_RE, getStageSteps, formatWaitOptions, resolveR
 import { executeScanPreflight, executeScanPostcheck, computeScanProfile } from './scan-profile.js'
 import { executePlanPostcheck as runPlanPostcheckLib } from '../stages/plan-postcheck.js'
 import { outputStep } from './prompt.js'
-import { enforceDepsGate, enforceReviewJsonGate, enforceSymbolImpactGate, completeStageGates, readDesignScale } from './gates.js'
+import { enforceDepsGate, enforceReviewJsonGate, enforceSymbolImpactGate, warnMissingUiPrototype, completeStageGates, readDesignScale } from './gates.js'
 import { handleArchiveConfirmStep, handlePlanGeneratePlanStep, handleScanProjectListStep, handleWorkflowPostCheck, handleQuickStageCompletion, handleExecuteWaveArtifact } from './complete-handlers.js'
 import { formatExecuteSummary } from '../worktree-apply.js'
 import { isEndToEndTaskText } from '../change-risk-profile.js'
@@ -229,6 +229,8 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
   // 符号影响面报告硬门（ql-20260816-005-3d7f）：execute「加载上下文」步产出落盘核验——
   // symbol-impact.md 存在 + plan 每 task 有结论行；防前缀步被一句「上下文在会话内」盖章跳过。
   await enforceSymbolImpactGate(stageName, changeName, steps[currentIdx]?.name, specBase)
+  // UI 原型软提醒（非阻断）：brainstorm 收尾步 design.md 命中前端文件但无 prototype → 提示用户可否决
+  warnMissingUiPrototype(stageName, changeName, steps[currentIdx]?.name, specBase)
 
   // ── noAI 步骤硬门（坑 noai-done-bypass）：noAI 步骤的确定性校验不可被 --done 绕过 ──
   // 正常路径 agent 跑 `run <stage>` 推进到 noAI step 时，runStage 自动执行 _cliAction

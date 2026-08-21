@@ -105,21 +105,15 @@ export function computeScanProfile(cwd, platformOpts) {
 }
 
 /**
- * 根据 scanProfile 裁剪步骤
- * quick:   3 步 — CLI preflight / AI generate / CLI postcheck
- * standard: 跳过续扫检测(4), 跳过可选步骤(9)
+ * quick 档 3 步表构建（唯一真相）：applyScanProfileSteps（首进程裁剪）与 getStageSteps
+ * （后续进程重取定义）共用。此前 quick 步骤表只在首进程 applyScanProfileSteps 里内联构建，
+ * getStageSteps('scan') 恒返回 11 步注册表 → 同进程 outputStep 用注册表 defSteps[1] 渲染错位
+ * prompt；跨进程 ensureStageSteps 见 3 vs 11 触发长度漂移重播种，quick 已完成步丢失、
+ * agent 从未做过的注册表步骤被 --done（坑 scan-quick-profile-step-mismatch）。
  */
-export function applyScanProfileSteps(stageData, profile, cwd, platformOpts) {
-  const steps = stageData.steps
-  const mode = profile.mode
-
-  if (mode === 'quick') {
-    const specBase = platformOpts?.specRoot || join(cwd, '.sillyspec')
-    const projectName = basename(cwd)
-    const docsRoot = join(specBase, 'docs', projectName)
-
-    // Step 1: CLI preflight（不调 AI，自动完成）
-    const step1 = {
+export function buildQuickScanSteps() {
+  return [
+    {
       name: '项目概览（自动探测）',
       status: 'pending',
       noAI: true,
@@ -127,9 +121,8 @@ export function applyScanProfileSteps(stageData, profile, cwd, platformOpts) {
       prompt: '',
       outputHint: 'preflight 结果',
       optional: false
-    }
-    // Step 2: AI 生成核心文档（唯一 AI roundtrip）
-    const step2 = {
+    },
+    {
       name: '生成核心文档',
       status: 'pending',
       prompt: `## Quick Scan — 核心文档生成
@@ -156,13 +149,32 @@ export function applyScanProfileSteps(stageData, profile, cwd, platformOpts) {
 生成的文件列表`,
       outputHint: '文件列表',
       optional: false
+    },
+    {
+      // 名字与注册表末步一致（按名匹配/迁移语义）；prompt 清空、noAI postcheck 自动执行
+      name: '自检和提交',
+      status: 'pending',
+      prompt: '',
+      outputHint: '结果',
+      optional: false,
+      noAI: true,
+      _cliAction: 'scanPostcheck'
     }
-    // Step 3: CLI postcheck（不调 AI，自动完成）
-    const selfCheck = steps.find(s => s.name === '自检和提交') || {
-      name: '自检和提交', status: 'pending', prompt: '', outputHint: '结果', optional: false
-    }
-    const step3 = { ...selfCheck, status: 'pending', noAI: true, _cliAction: 'scanPostcheck', prompt: '' }
-    stageData.steps = [step1, step2, step3]
+  ]
+}
+
+/**
+ * 根据 scanProfile 裁剪步骤
+ * quick:   3 步 — CLI preflight / AI generate / CLI postcheck
+ * standard: 跳过续扫检测(4), 跳过可选步骤(9)
+ */
+export function applyScanProfileSteps(stageData, profile, cwd, platformOpts) {
+  const steps = stageData.steps
+  const mode = profile.mode
+
+  if (mode === 'quick') {
+    // 3 步表构建抽至 buildQuickScanSteps（getStageSteps 同源复用，防跨进程 3 vs 11 漂移）
+    stageData.steps = buildQuickScanSteps()
     return
   }
 
