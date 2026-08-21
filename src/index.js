@@ -93,6 +93,8 @@ SillySpec CLI — 规范驱动开发工具包
   sillyspec derive <facet> --change <name> [--json]    单项事实核验（facet: execute-evidence|verify-test|task-reviews|artifacts）
   sillyspec backfill-reviews --change <name> [--adopt] [--json]  缺 review.json 的 task 生成草稿；--adopt 重算代填已有 review 的 base/head 等机械字段（verdict 保留）
   sillyspec symbol-impact --change <name>      生成 symbol-impact.md 逐 task <!--TODO--> 骨架（gate 拒绝未替换占位，防骨架直接过门）
+  sillyspec next                            项目状态探测：输出当前状态 + 下一步命令 + 依据（吸收 continue/resume 手工探测表）
+  sillyspec commit [--json]                 智能提交建议：收集 QUICKLOG/已勾 task/阶段产出语义，生成建议 message（只建议不执行）
   sillyspec register-stage-review --change <name> (--stage <brainstorm|plan|execute> | --all) [--from <review.json>] [--refresh-hash] [--json]
                                       生成/adopt stage 级 review.json（docHash 自动算 + 写 marker，治 tier=independent marker 死锁）
 
@@ -594,6 +596,73 @@ async function main() {
           }
         }
       }
+      break;
+    }
+    case 'next': {
+      // 项目状态探测（2026-08-21 审计第二批 G7/G8）：吸收 continue/resume 两个 skill 的
+      // 手工探测表（文件存在性状态机），一条命令输出「状态 + 下一步命令 + 依据」。
+      // 纯 fs 零 token；活跃进度的权威状态仍归 progress show，本命令管无活跃进度时反推。
+      const { detectNextStep } = await import('./run/next.js');
+      const nxResult = detectNextStep({ cwd: dir, specDir });
+      if (json) {
+        console.log(JSON.stringify({ command: 'next', ...nxResult }, null, 2));
+        break;
+      }
+      console.log('🤖 SillySpec 状态探测');
+      console.log(`   状态：${nxResult.state}`);
+      if (nxResult.activeChanges.length > 0) {
+        for (const c of nxResult.activeChanges) {
+          console.log(`   - ${c.name}（task ${c.checked}/${c.total}）`);
+        }
+      }
+      console.log(`   👉 下一步：${nxResult.next}`);
+      if (nxResult.evidence.length > 0) {
+        console.log(`   依据：${nxResult.evidence.join('、')}`);
+      }
+      break;
+    }
+    case 'commit': {
+      // 智能提交建议（2026-08-21 审计第二批 G1-G3）：commit skill 此前让 agent 手工收集
+      // 语义（LAST_COMMIT_TIME / cat QUICKLOG / 扫变更目录 / 按路径模式分类）——进度库、
+      // quicklog、git 全在 CLI 手里。一条命令产出统计 + 语义来源 + conventional 建议 +
+      // 可照抄的 git 命令。**只建议不执行**（确认权在人，对齐 skill 绝对规则「不要自动提交」）。
+      const { collectCommitContext } = await import('./commit-suggest.js');
+      const cc = collectCommitContext({ cwd: dir, specDir });
+      if (json) {
+        console.log(JSON.stringify({ command: 'commit', ...cc }, null, 2));
+        break;
+      }
+      if (!cc.hasChanges) {
+        console.log('📭 没有需要提交的修改（工作区干净）');
+        break;
+      }
+      console.log(`📦 待提交变更（${cc.changedCount} 个文件${cc.untrackedCount > 0 ? `，其中未跟踪 ${cc.untrackedCount} 个` : ''}；上方 stat 仅列已跟踪文件的改动）`);
+      if (cc.stat) console.log(cc.stat.split('\n').map(l => '   ' + l).join('\n'));
+      if (cc.quickEntries.length > 0) {
+        console.log(`\n📝 QUICKLOG（上次提交 ${cc.lastCommitTime || '（无）'} 之后 ${cc.quickEntries.length} 条）：`);
+        for (const q of cc.quickEntries) {
+          console.log(`   ${q.status === '已完成' ? '✅' : '⏳'} ${q.qlId} | ${q.title}${q.status === '已完成' ? '' : '（进行中，不进 commit 语义）'}`);
+        }
+      }
+      if (cc.checkedTasks.length > 0) {
+        console.log(`\n✅ execute 已勾 task：`);
+        for (const t of cc.checkedTasks) console.log(`   - [${t.change}] ${t.item}`);
+      }
+      if (cc.stageArtifacts.length > 0) {
+        console.log(`\n📁 阶段产出：${cc.stageArtifacts.join(' / ')}`);
+      }
+      if (cc.suggestion) {
+        console.log(`\n💡 建议 commit message：`);
+        console.log(`   ${cc.suggestion.subject}`);
+        if (cc.suggestion.body) {
+          console.log(cc.suggestion.body.split('\n').map(l => '   ' + l).join('\n'));
+        }
+        const bodyArgs = cc.suggestion.body ? ` -m "${cc.suggestion.body.replace(/"/g, '\\"').replace(/\n/g, ' ')}"` : '';
+        console.log(`\n   执行：git add -A && git commit -m "${cc.suggestion.subject.replace(/"/g, '\\"')}"${bodyArgs}`);
+      } else {
+        console.log('\n💡 无语义来源匹配——请结合上方 diff stat 手写 message');
+      }
+      console.log('\n（本命令只建议不提交；确认后执行上面的命令）');
       break;
     }
     case 'symbol-impact': {

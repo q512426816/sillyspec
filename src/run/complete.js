@@ -534,12 +534,9 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
     // 易被 tail 截断），agent 常到 --done 被拦才第一次见到模板。推进到末步的此刻用底部短块预告
     // 模板 + 可照抄命令，省一轮拦截往返（拦截路径保留兜底）。
     if (stageName === 'quick' && nextPendingIdx === steps.length - 1) {
-      console.log(`\n📌 本步是 quick 末步：--done 的 --output 必须含四字段（CLI 硬校验，缺任一项会被拒、补全重跑不丢进度）。预告模板：`)
-      console.log(`   sillyspec run quick --done${changeName ? ` --change ${changeName}` : ''} --output "需求：一句话语义化短标题（即 QUICKLOG 条目标题）`)
-      console.log(`   根因：为什么这样改（纯新增/样式则写「无，纯新增/纯样式」）`)
-      console.log(`   方案：怎么改的`)
-      console.log(`   结果：验证情况（测试数 / lint / typecheck / 部署状态）"`)
-      console.log(`   四字段逐项一句话、不可「见前述」；可选 --file-notes "path::括注 || path2" 落多行文件括注`)
+      console.log(`\n📌 本步是 quick 末步：--done 必须给全四字段（CLI 硬校验，缺任一项会被拒、补全重跑不丢进度）。推荐四参数形式（CLI 自动合成，无格式事故面）：`)
+      console.log(`   sillyspec run quick --done${changeName ? ` --change ${changeName}` : ''} --req "一句话语义化短标题（即 QUICKLOG 条目标题）" --cause "为什么这样改（纯新增/样式则写「无，纯新增/纯样式」）" --solution "怎么改的" --result "验证情况（测试数 / lint / typecheck / 部署状态）"`)
+      console.log(`   兼容旧形式：--output "需求：… 根因：… 方案：… 结果：…"（四字段逐项一句话、不可「见前述」，正文内禁嵌套全角冒号）；可选 --file-notes "path::括注 || path2" 落多行文件括注`)
     }
   }
   return { stageCompleted: false, currentIdx, nextPendingIdx }

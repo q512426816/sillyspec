@@ -44,6 +44,7 @@ const VALUE_FLAGS = new Set([
   '--output', '--input', '--change', '--linked-changes',
   '--spec-dir', '--spec-root', '--runtime-root', '--workspace-id', '--scan-run-id',
   '--files', '--file-notes', '--from-step', '--mode', '--dir', '--confirm-mode',
+  '--req', '--cause', '--solution', '--result', // quick 末步四字段参数（合成 --output，见 outputText 解析段）
   '--base', // scan diff 基线 commit（吃值；只在 run scan --diff 转发路径消费）
 ])
 
@@ -425,6 +426,28 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
   const outputValue = getFlagValue('--output')
   if (outputValue !== null) outputText = outputValue
 
+  // 解析 quick 末步四字段参数（2026-08-21 agent-手工产出审计第二批 F6）：--req/--cause/
+  // --solution/--result 各传一项，CLI 合成单行四字段 outputText（quicklog 落盘侧
+  // splitSingleLineFields 会归一为多行字段块）。消灭 agent 手拼「需求：… 根因：…」模板的
+  // 格式事故面（嵌套全角冒号拆分误判 / 缺字段被 --done 拒 / 标题截断规则踩坑）。
+  // 任一四参数出现即要求全四；与 --output 互斥（两路同时给说明意图不明，fail-fast）。
+  {
+    const FOUR = [['--req', '需求：'], ['--cause', '根因：'], ['--solution', '方案：'], ['--result', '结果：']]
+    const fourVals = FOUR.map(([f]) => [f, getFlagValue(f)])
+    if (fourVals.some(([, v]) => v !== null)) {
+      if (outputText !== null) {
+        console.error('❌ --req/--cause/--solution/--result 与 --output 互斥——四参数由 CLI 合成结构化 output，勿混用');
+        process.exit(2)
+      }
+      const missing = fourVals.filter(([, v]) => v === null).map(([f]) => f)
+      if (missing.length > 0) {
+        console.error(`❌ quick 末步四字段参数缺项：${missing.join(' ')}（--req/--cause/--solution/--result 必须全给，或缺字段 --done 会被拒）`);
+        process.exit(2)
+      }
+      outputText = FOUR.map(([f, label]) => `${label}${getFlagValue(f)}`).join(' ')
+    }
+  }
+
   // 解析 --input
   let inputText = null
   const inputValue = getFlagValue('--input')
@@ -592,6 +615,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     '--wait', '--continue', '--non-interactive', '--interactive',
     '--reason', '--options', '--answer', '--confirm-mode',
     '--output', '--input', '--change', '--linked-changes',
+    '--req', '--cause', '--solution', '--result',
     '--spec-dir', '--spec-root', '--runtime-root', '--workspace-id', '--scan-run-id',
     '--files', '--file-notes', '--allow-new', '--allow-delete', '--force-baseline', '--force-rescan',
     '--json', '--dir', '--help',
