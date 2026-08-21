@@ -323,6 +323,9 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
       const _drafts = await generateTaskReviewDrafts({ changeName, cwd, platformOpts, ctx: _draftCtx })
       if (_drafts.generated > 0) {
         console.log('   📄 自动补写 ' + _drafts.generated + ' 个 per-task review.json 草稿（cannot_verify，主 agent 实现模式兜底，需 agent 复核后升级为 pass/fail）')
+        if (_drafts.noAttribution > 0) {
+          console.warn('   ⚠️ 其中 ' + _drafts.noAttribution + ' 个 task 的 allowed_paths 未命中本次 diff（无归属草稿，changedFiles 为空）——需人工确认实际改动后升级 verdict，确属未实现则回 fail')
+        }
         if (_drafts.unattributed && _drafts.unattributed.length > 0) {
           console.warn('   ⚠️ ' + _drafts.unattributed.length + ' 个变更文件未归属任何 task（顺带修复/非源码），草稿未覆盖：' + _drafts.unattributed.join(', '))
         }

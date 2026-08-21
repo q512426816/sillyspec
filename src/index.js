@@ -90,7 +90,7 @@ SillySpec CLI — 规范驱动开发工具包
   sillyspec gate <stage> --change <name> [--json]      机器门控：阶段能否标记完成（只读）
   sillyspec derive <facet> --change <name> [--json]    单项事实核验（facet: execute-evidence|verify-test|task-reviews|artifacts）
   sillyspec backfill-reviews --change <name> [--json]  为手动补的 task 生成 review.json 草稿（cannot_verify，解 archive 客观完成度阻断）
-  sillyspec register-stage-review --change <name> --stage <brainstorm|plan|execute> [--from <review.json>] [--json]
+  sillyspec register-stage-review --change <name> (--stage <brainstorm|plan|execute> | --all) [--from <review.json>] [--refresh-hash] [--json]
                                       生成/adopt stage 级 review.json（docHash 自动算 + 写 marker，治 tier=independent marker 死锁）
 
   sillyspec doctor [子命令]            进度库健康检查 + 修复（顶层命令，非 worktree doctor）
@@ -574,8 +574,14 @@ async function main() {
       const rsrStage = rsrStageIdx >= 0 && args[rsrStageIdx + 1] ? args[rsrStageIdx + 1] : null;
       const rsrFromIdx = args.indexOf('--from');
       const rsrFrom = rsrFromIdx >= 0 && args[rsrFromIdx + 1] ? args[rsrFromIdx + 1] : null;
-      if (!rsrChange || !rsrStage) {
-        console.error('用法: sillyspec register-stage-review --change <名> --stage <brainstorm|plan|execute> [--from <review.json>] [--spec-dir <path>] [--json]\n  生成/adopt stage 级 review.json（docHash 自动算 + 写 marker），治 tier=independent marker 死锁');
+      // docHash 联动（坑 stage-review-dochash-manual-resync，2026-08-21 实证）：改一版 design 要
+      // 重算 2-3 个 stage review 的 docHash，手工易漏、gate 报错才补。--refresh-hash 就地刷新单个
+      // 既有 review 的 hash（保留结论）；--all 一次处理三个 stage（有 review 刷 hash，无 review
+      // 生成骨架——改版后一条命令完成全部联动）。
+      const rsrRefreshHash = filteredArgs.includes('--refresh-hash');
+      const rsrAll = filteredArgs.includes('--all');
+      if (!rsrChange || (!rsrStage && !rsrAll) || (rsrAll && rsrStage)) {
+        console.error('用法: sillyspec register-stage-review --change <名> (--stage <brainstorm|plan|execute> | --all) [--from <review.json>] [--refresh-hash] [--spec-dir <path>] [--json]\n  生成/adopt/刷新 stage 级 review.json（docHash 自动算 + 写 marker）；--all 一次处理三个 stage（有 review 刷新 hash、无 review 生成骨架）；--refresh-hash 就地刷新既有 review 的 docHash（保留 verdict 待确认续用）');
         process.exit(2);
       }
       // 与 run 入口同源消毒（防路径穿越；register 下游写 marker、拼 changes/review 路径）
@@ -583,20 +589,38 @@ async function main() {
       const { registerStageReview } = await import('./stage-review.js');
       const rsrPlatformOpts = {};
       if (specDir) rsrPlatformOpts.specRoot = specDir;
-      try {
-        const result = registerStageReview({ changeName: rsrChange, stage: rsrStage, fromFile: rsrFrom, cwd: dir, platformOpts: rsrPlatformOpts });
-        if (json) {
-          process.stdout.write(JSON.stringify({ ok: true, command: 'register-stage-review', change: rsrChange, stage: rsrStage, ...result }));
-        } else {
-          console.log(`✅ 已注册 ${rsrStage} stage review [${result.reviewRunId}] → ${result.reviewPath}（mode: ${result.mode}）`);
-          console.log(`   marker → ${result.markerPath}`);
-          console.log(`   下一步：独立审查子代理对照 ${result.mainDoc} 填 verdict/checklist 后重跑 --done`);
+      const rsrStages = rsrAll ? ['brainstorm', 'plan', 'execute'] : [rsrStage];
+      const rsrResults = [];
+      let rsrFailed = 0;
+      for (const st of rsrStages) {
+        try {
+          // --all 的单 stage 语义：有既有 review → refresh-hash；无 → 骨架。显式 --refresh-hash
+          // 则强制 refresh（无既有 review 时报错，提示先生成骨架）
+          const { getLatestStageReviewRunId, stageReviewMarkerPath } = await import('./stage-review.js');
+          const { resolveRuntimeRoot } = await import('./run/shared.js');
+          const rsrRuntimeRoot = resolveRuntimeRoot(rsrPlatformOpts, rsrPlatformOpts.specRoot || join(dir, '.sillyspec'));
+          const hasExisting = !!getLatestStageReviewRunId(rsrRuntimeRoot, st, rsrChange);
+          const wantRefresh = rsrRefreshHash || (rsrAll && hasExisting);
+          const result = registerStageReview({ changeName: rsrChange, stage: st, fromFile: rsrFrom, cwd: dir, platformOpts: rsrPlatformOpts, refreshHash: wantRefresh });
+          rsrResults.push({ stage: st, ...result });
+          if (json) {
+            process.stdout.write(JSON.stringify({ ok: true, command: 'register-stage-review', change: rsrChange, stage: st, ...result }) + '\n');
+          } else {
+            console.log(`✅ 已注册 ${st} stage review [${result.reviewRunId}] → ${result.reviewPath}（mode: ${result.mode}）`);
+            console.log(`   marker → ${result.markerPath}`);
+            if (result.mode === 'refreshed') {
+              console.log(`   docHash 已按当前 ${result.mainDoc} 重算（verdict 结论是否仍适用需人工确认）`);
+            } else {
+              console.log(`   下一步：独立审查子代理对照 ${result.mainDoc} 填 verdict/checklist 后重跑 --done`);
+            }
+          }
+        } catch (e) {
+          rsrFailed++;
+          if (json) process.stdout.write(JSON.stringify({ ok: false, command: 'register-stage-review', change: rsrChange, stage: st, error: e.message }) + '\n');
+          else console.error(`❌ [${st}] ` + e.message);
         }
-      } catch (e) {
-        if (json) process.stdout.write(JSON.stringify({ ok: false, command: 'register-stage-review', error: e.message }));
-        else console.error('❌ ' + e.message);
-        process.exitCode = 1;
       }
+      if (rsrFailed > 0) process.exitCode = 1;
       break;
     }
     case 'docs': {

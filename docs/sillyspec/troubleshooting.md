@@ -228,3 +228,22 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 4. `yamlScalar`（taskcard.js）对 title/title_zh/author 统一单引号包裹 + `'` 双写转义；测试 taskcard-yaml-escape.test.mjs（20 断言，js-yaml round-trip + 契约 9 字段不丢 + e2e）。
 
 **关联记忆**：`[[sillyspec-execute-step-table-drift]]`、`[[sillyspec-doctor-align-bypass-review-gate]]`、`[[sillyspec-taskcard-title-backtick-yaml]]`
+
+## 17. 三坑：ruff format × CRLF stash 死循环 / docHash 手工联动 / task review 草稿漏 task（2026-08-21 闭环）
+
+**症状（用户实测）**：
+1. pre-commit 的 ruff format 在 Windows CRLF 仓与 hook 的 stash 机制死循环：hook stash 工作区 → format 产生行尾 diff → 恢复 stash 后工作区又脏 → 下一轮提交再触发，需手动预跑 `ruff format` 落定格式再提交。
+2. 改一版 design 后，brainstorm/execute（都锚 design.md）+ plan 的 stage review docHash 要手工重算 2-3 次，容易漏——Stage Review Gate 报「docHash 不匹配」才补。
+3. CLI 自动补写的 task review 草稿漏个别 task（task-08/task-10 两次都缺），--done 撞 Task Review Gate 后只能从零手写 review.json。
+
+**根因**：
+1. ruff format 对 CRLF 文件统一改写行尾，hook 的 stash/restore 循环里格式化产物与工作区互相制造 diff（工具组合行为，CLI 侧无 hook 管理面——落点为 workaround 文档化）。
+2. docHash 重算是纯机械劳动（sha256 一次 hash），但 register-stage-review 单次只处理一个 stage，改版联动要跑 2-3 次命令；且刷新已有 review 的 hash 无专用模式（只能重生成骨架丢结论，或手改 JSON）。
+3. generateTaskReviewDrafts 对「allowed_paths 未命中 diff」的 task 静默跳过（skipped++）——task-08/task-10 的改动与他人同文件/路径不匹配时归属为空，草稿缺席。跳过的本意是防空 diff 伪造，但 emptyDiff 伪造判定看的是真实 git diff 而非 review.changedFiles，空归属草稿并不触发它。
+
+**修复/处置（2026-08-21）**：
+1. （workaround 文档化）Windows CRLF 仓 + ruff format pre-commit：提交前先手动 `ruff format .` 落定格式（或给 hook 配行尾容忍：`ruff format --line-ending=auto` / pyproject `[tool.ruff] line-ending = "auto"`，或 pre-commit 加 `--skip` stash 的 hook 顺序调整）。死循环机理：hook stash 工作区 → format 重写行尾 → restore 后 stash pop 冲突/再脏 → 下轮再 format。落定一次后后续提交稳定。
+2. register-stage-review 新增 `--refresh-hash`（就地刷新既有 review 的 docHash：保留 verdict/checklist/requiredEvidence，reviewerNotes 追加刷新记录提示人工确认结论续用；不换 run 目录不重定向 marker）与 `--all`（一条命令处理 brainstorm/plan/execute：有 review 刷 hash、无 review 生成骨架）。改版 design 后一条 `register-stage-review --change <名> --all` 完成全部联动。测试 register-stage-review-refresh.test.mjs（18 断言）。
+3. generateTaskReviewDrafts 改全量对账：空归属 task 也生成「无归属草稿」（cannot_verify + changedFiles: [] + requiredEvidence 明示「allowed_paths 未命中 diff，需人工确认实际改动，确属未实现则回 fail」），返回值带 noAttribution 计数、--done 输出区分提示。安全性：空 changedFiles 不触发 emptyDiff 伪造误判（该判定看真实 git diff），shouldAutoCheckTask 零 diff 守卫保证不自动勾选，verify 阶段仍兑现 requiredEvidence——草稿从「漏了让 agent 从零写」变成「给了骨架让 agent 升级 verdict」。测试 task-review-draft.test.mjs 更新（23 断言全过）。
+
+**关联记忆**：`[[sillyspec-ruff-crlf-precommit-loop]]`、`[[sillyspec-stage-review-dochash-manual-resync]]`、`[[sillyspec-task-review-draft-skip-leak]]`

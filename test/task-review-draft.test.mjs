@@ -69,20 +69,20 @@ function writeTask(d, changeName, taskId, allowedPaths) {
 
 console.log('=== generateTaskReviewDrafts: 主 agent 实现模式 per-task review 草稿兜底（坑2）===\n')
 
-console.log('--- ① 主 agent 模式 → 按 diff+allowed_paths 生成 cannot_verify 草稿；空 changedFiles 不生成 ---')
+console.log('--- ① 主 agent 模式 → 按 diff+allowed_paths 生成 cannot_verify 草稿；空归属 task 生成无归属草稿（坑 task-review-draft-skip-leak）---')
 {
   const { d, base, wtDir } = setupRepo('trd1')
   fs.writeFileSync(path.join(wtDir, 'feature.js'), 'modified\n')
   sh('git add -A && git commit -m work', wtDir)
   const head = execSync('git rev-parse HEAD', { cwd: wtDir, encoding: 'utf8' }).trim()
   writeMeta(wtDir, 'trd1', base)
-  // task-01 覆盖 feature.js（diff 命中）；task-02 覆盖 other.js（diff 未命中 → 空 changedFiles）
+  // task-01 覆盖 feature.js（diff 命中）；task-02 覆盖 other.js（diff 未命中 → 无归属草稿，不再静默跳过）
   writeTask(d, 'trd1', 'task-01', ['feature.js'])
   writeTask(d, 'trd1', 'task-02', ['other.js'])
 
   const r = await generateTaskReviewDrafts({ changeName: 'trd1', cwd: d })
-  assertTrue(r.generated === 1, `generated=1（task-01，实际 ${r.generated}）`)
-  assertTrue(r.skipped >= 1, `skipped≥1（task-02 空 changedFiles 不生成，实际 ${r.skipped}）`)
+  assertTrue(r.generated === 2, `generated=2（task-01 有归属 + task-02 无归属草稿，实际 ${r.generated}）`)
+  assertTrue(r.noAttribution === 1, `noAttribution=1（task-02，实际 ${r.noAttribution}）`)
 
   const reviewPath = path.join(d, '.sillyspec', '.runtime', 'execute-runs', r.executeRunId, 'tasks', 'task-01', 'review.json')
   assertTrue(fs.existsSync(reviewPath), `task-01 review.json 已落盘`)
@@ -96,9 +96,18 @@ console.log('--- ① 主 agent 模式 → 按 diff+allowed_paths 生成 cannot_v
   assertTrue(Array.isArray(draft.requiredEvidence) && draft.requiredEvidence.length > 0, `requiredEvidence 非空（过 cannot_verify schema）`)
   assertTrue(validateReviewSchema(draft).ok, `草稿过 validateReviewSchema`)
 
-  // task-02 空 changedFiles → 不生成（verifyReviewGitEvidence 判空 diff 伪造，留给 agent）
+  // task-02 空 changedFiles → 无归属草稿（cannot_verify + 空 changedFiles + 明示 requiredEvidence），
+  // 不再静默跳过（坑 task-review-draft-skip-leak：task-08/task-10 两次漏草稿靠 gate 报错才发现）
   const r2path = path.join(d, '.sillyspec', '.runtime', 'execute-runs', r.executeRunId, 'tasks', 'task-02', 'review.json')
-  assertTrue(!fs.existsSync(r2path), `task-02 空 changedFiles → 不生成草稿`)
+  assertTrue(fs.existsSync(r2path), `task-02 无归属草稿已生成（不再静默跳过）`)
+  const draft2 = JSON.parse(fs.readFileSync(r2path, 'utf8'))
+  assertTrue(draft2.specVerdict === 'cannot_verify' && draft2.qualityVerdict === 'cannot_verify', `无归属草稿双 verdict=cannot_verify`)
+  assertTrue(Array.isArray(draft2.changedFiles) && draft2.changedFiles.length === 0, `无归属草稿 changedFiles 为空数组`)
+  assertTrue(draft2.requiredEvidence[0].includes('no-attributed-diff') || draft2.requiredEvidence[0].includes('未命中'), `requiredEvidence 明示无归属原因与人工确认要求`)
+  assertTrue(validateReviewSchema(draft2).ok, `无归属草稿过 validateReviewSchema`)
+  // 空归属草稿不会被自动勾选（shouldAutoCheckTask 零 diff 守卫）：changedFiles 空 → 不勾
+  const { shouldAutoCheckTask } = await import('../src/run/complete.js')
+  assertTrue(shouldAutoCheckTask({ ok: true, review: draft2 }, false, { gitDir: wtDir, base, head }) === false, `无归属草稿不被自动勾选（shouldAutoCheckTask 零 diff 守卫）`)
 
   process.chdir(os.tmpdir()); fs.rmSync(d, { recursive: true, force: true })
 }

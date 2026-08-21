@@ -465,7 +465,7 @@ export function printStageReviewResult(result, context = {}) {
  * @returns {{ ok: boolean, reviewRunId: string, reviewPath: string, markerPath: string, mode: 'skeleton'|'adopted', mainDoc: string, review: object }}
  * @throws {Error} changeName 空 / stage 非法 / 主文档缺失 / --from 不存在或 schema 不过
  */
-export function registerStageReview({ changeName, stage, fromFile, cwd, platformOpts = {} }) {
+export function registerStageReview({ changeName, stage, fromFile, cwd, platformOpts = {}, refreshHash = false }) {
   if (!changeName) throw new Error('register-stage-review: changeName 不能为空')
   if (!stage || !STAGE_MAIN_DOC[stage]) {
     throw new Error(`register-stage-review: stage 无效 "${stage}"（应为 brainstorm|plan|execute）`)
@@ -485,6 +485,45 @@ export function registerStageReview({ changeName, stage, fromFile, cwd, platform
     throw new Error(`register-stage-review: 计算 docHash 失败（computeDocHash 返回 null）：${mainDocPath}`)
   }
   const reviewedFiles = [`changes/${changeName}/${mainDoc}`]
+
+  // ── refresh-hash 模式（坑 stage-review-dochash-manual-resync，2026-08-21 实证）：改一版 design
+  // 要重算 2-3 个 stage review 的 docHash（brainstorm/execute 都锚 design.md），手工易漏、gate
+  // 报错才补。就地更新 marker 指向的已有 review.json——保留 verdict/checklist/requiredEvidence
+  // （结论是否仍适用由人确认），仅重算 docHash + reviewerNotes 追加刷新记录；不换 run 目录
+  // （换新 run 会把 marker 重定向到骨架，丢已审结论）。无既有 review → 报错（该用骨架模式生成）。
+  if (refreshHash) {
+    if (fromFile) throw new Error('register-stage-review: --refresh-hash 与 --from 互斥（refresh 就地更新既有 review，adopt 引入新文件）')
+    const existingRunId = getLatestStageReviewRunId(runtimeRoot, stage, changeName)
+    const existingPath = existingRunId
+      ? join(runtimeRoot, 'stage-reviews', `${stage}-${existingRunId}`, 'review.json')
+      : null
+    if (!existingPath || !existsSync(existingPath)) {
+      throw new Error(`register-stage-review: --refresh-hash 找不到 ${stage} 的既有 review.json（marker ${existingRunId || '无'} 无对应 run）——先去掉 --refresh-hash 生成骨架，或派审查子代理产出 review`)
+    }
+    let existing
+    try {
+      existing = JSON.parse(readFileSync(existingPath, 'utf8'))
+    } catch (e) {
+      throw new Error(`register-stage-review: 既有 review.json 解析失败 ${existingPath}: ${e.message}`)
+    }
+    const refreshedAt = new Date().toISOString().slice(0, 19).replace('T', ' ')
+    const review = {
+      ...existing,
+      docHash,
+      reviewedFiles,
+      reviewerNotes: `${existing.reviewerNotes || ''}\ndocHash refreshed at ${refreshedAt}（主文档改版后机械重算；verdict 结论是否仍适用需人工确认）`.trim(),
+    }
+    writeFileSync(existingPath, JSON.stringify(review, null, 2) + '\n')
+    const schemaRecheck = validateStageReviewSchema(review)
+    if (!schemaRecheck.ok) {
+      throw new Error(`register-stage-review: refresh 后 schema 自检失败 — ${schemaRecheck.errors.join('; ')}（原 review 字段异常，先修原文件）`)
+    }
+    const hashRecheck = verifyStageReviewDocHash(review, [specBase, changeDir, cwd])
+    if (!hashRecheck.ok) {
+      throw new Error(`register-stage-review: refresh 后 docHash 自检失败（不应发生）— ${hashRecheck.errors.join('; ')}`)
+    }
+    return { ok: true, reviewRunId: existingRunId, reviewPath: existingPath, markerPath: stageReviewMarkerPath(runtimeRoot, stage, changeName), mode: 'refreshed', mainDoc, review }
+  }
 
   let review
   let mode

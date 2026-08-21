@@ -1023,6 +1023,7 @@ export async function generateTaskReviewDrafts({ changeName, cwd, platformOpts =
   const taskFiles = readdirSync(tasksDir).filter(f => /^task-\d+\.md$/.test(f)).sort()
   let generated = 0
   let skipped = 0
+  let noAttributionCount = 0
   const attributed = new Set()
 
   for (const tf of taskFiles) {
@@ -1081,11 +1082,6 @@ export async function generateTaskReviewDrafts({ changeName, cwd, platformOpts =
         : []
     }
 
-    // 空 changedFiles 的 task 不生成（verifyReviewGitEvidence 判空 diff 伪造，留给 agent 手补）
-    if (taskChangedFiles.length === 0) {
-      skipped++
-      continue
-    }
     // 主仓 task 缺 base/head（meta 缺失 / HEAD 解析失败，见上方 :968-981 注释承诺的"后续跳过"）：
     // 跳过留给 agent 手补。此前 null.slice(0,8) 直接 TypeError 崩掉整个草稿生成（体检 BUG-06）
     if (!crossEntry && (!taskBase || !taskHead)) {
@@ -1095,6 +1091,42 @@ export async function generateTaskReviewDrafts({ changeName, cwd, platformOpts =
     // unattributed 只统计主仓 diff（跨仓 diff 路径相对跨仓仓根，与主仓 unattributed 语义无关）
     if (!crossEntry) {
       taskChangedFiles.forEach(f => attributed.add(f))
+    }
+
+    // 空 changedFiles 的 task 也生成「无归属」草稿（坑 task-review-draft-skip-leak，2026-08-21
+    // 实证：task-08/task-10 两次都因 allowed_paths 未命中 diff 被静默跳过，--done gate 拦截后
+    // agent 只能从零手写 review.json）。cannot_verify 草稿本就待复核（verify 阶段兑现
+    // requiredEvidence），空 changedFiles 不触发 emptyDiff 伪造误判（该判定看真实 git diff 而非
+    // review.changedFiles），shouldAutoCheckTask 零 diff 守卫也保证不会被自动勾选——草稿从
+    // 「漏了让 agent 从零写」变成「给了骨架让 agent 升级 verdict」。
+    if (taskChangedFiles.length === 0) {
+      const draft = {
+        schemaVersion: REVIEW_SCHEMA_VERSION,
+        task: taskId,
+        base: taskBase,
+        head: taskHead,
+        changedFiles: [],
+        specVerdict: 'cannot_verify',
+        qualityVerdict: 'cannot_verify',
+        requiredEvidence: ['auto-generated draft (no-attributed-diff): ' + taskId +
+          ' 的 allowed_paths 未命中本次 diff 任何文件（task 未实现 / 改动与他人同文件 / 路径不匹配）——' +
+          '需人工确认实际改动后升级 verdict，确属未实现则回 fail'],
+        reviewerNotes: 'auto-generated draft from git diff ' + taskBase.slice(0, 8) + '..' + taskHead.slice(0, 8) +
+          ';verdict=未评审（无归属 diff 兜底草稿，坑 task-review-draft-skip-leak）',
+      }
+      if (draftRepo) draft.repo = draftRepo
+      // fail-open（对齐函数头契约 + execute-run-dir-fail-loud 测试锁定的「写失败返回统计不抛」）：
+      // 无归属草稿写入失败（如 tasks/ 被普通文件占位 ENOTDIR）降级 skipped，不崩整个草稿生成
+      try {
+        mkdirSync(reviewDir, { recursive: true })
+        writeFileSync(reviewPath, JSON.stringify(draft, null, 2) + '\n')
+        generated++
+        noAttributionCount++
+      } catch (e) {
+        console.error(`[sillyspec] task ${taskId} 无归属草稿落盘失败（降级留给 agent 手补）: ${e.message}`)
+        skipped++
+      }
+      continue
     }
 
     const draft = {
@@ -1115,7 +1147,7 @@ export async function generateTaskReviewDrafts({ changeName, cwd, platformOpts =
   }
 
   const unattributed = (Array.isArray(diffFiles) ? diffFiles : []).filter(f => !attributed.has(f))
-  return { generated, skipped, unattributed, executeRunId }
+  return { generated, skipped, noAttribution: noAttributionCount, unattributed, executeRunId }
 }
 
 /**
