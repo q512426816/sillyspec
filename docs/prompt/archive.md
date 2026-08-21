@@ -125,6 +125,8 @@
 schema_version: 1
 doc_type: module-card
 module_id: <module-id>
+author: <git-user>
+created_at: <now-datetime>
 ---
 
 # <中文名>（<module-id>）

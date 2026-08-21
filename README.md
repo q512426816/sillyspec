@@ -109,7 +109,7 @@ SillySpec 进度库使用 SQLite 持久化（基于 Node.js 内置的 `node:sqli
 |---|---|
 | `/sillyspec:status` · `/sillyspec:state` | 查看进度 / 当前工作状态 |
 | `/sillyspec:continue` | 自动判断并执行下一步 |
-| `/sillyspec:explore` | 自由思考：画图、讨论、调研 |
+| `/sillyspec:explore` | 自由思考：画图、讨论、调研、HTML 原型 |
 | `/sillyspec:quick` | 快速模式：跳过完整流程 |
 | `/sillyspec:resume` | 恢复工作（支持大模块阶段进度） |
 | `/sillyspec:doctor` | 项目自检与状态修复 |

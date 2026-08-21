@@ -8,7 +8,7 @@
  * 见 change 2026-06-28-worktree-deps-provision / D-005@v1, D-007@v1。
  */
 
-import { existsSync, readFileSync, realpathSync } from 'fs';
+import { existsSync, readFileSync, realpathSync, lstatSync } from 'fs';
 import { join, isAbsolute, resolve as resolvePath, sep as pathSep } from 'path';
 import { execFileSync } from 'child_process';
 import { createHash } from 'crypto';
@@ -137,10 +137,22 @@ function tryLink(mainNodeModules, linkPath) {
       // execFileSync 数组形式不经 shell：POSIX 双引号内 `/$() 会执行、cmd.exe 双引号内 %VAR% 仍展开，
       // linkPath 含 local.yaml 模块 path，属项目内可配置值（安全收敛，与 git-helper 同范式）
       execFileSync('cmd.exe', ['/c', 'mklink', '/J', linkPath, mainNodeModules], { stdio: ['pipe', 'pipe', 'pipe'] });
-      return { ok: true, method: 'junction' };
+    } else {
+      execFileSync('ln', ['-s', mainNodeModules, linkPath], { stdio: ['pipe', 'pipe', 'pipe'] });
     }
-    execFileSync('ln', ['-s', mainNodeModules, linkPath], { stdio: ['pipe', 'pipe', 'pipe'] });
-    return { ok: true, method: 'symlink' };
+    // 创建后实物复核（坑 provision-silent-fake-installed 第②层，2026-08-21 实证：doctor 报
+    // re-provisioned 成功但 junction 实际没建）——mklink/ln 退出码 0 不等于链接落盘（cmd.exe
+    // 垫片链存在静默失败面），lstat+existsSync 复核不存在即判失败，交由调用方走 install 兜底
+    //（junction（reparse point）与 symlink 的 lstat 均报 isSymbolicLink=true）
+    try {
+      const st = lstatSync(linkPath);
+      if (!st.isSymbolicLink() || !existsSync(linkPath)) {
+        return { ok: false, error: 'link 创建后复核失败：lstat 非 link 或路径不可达' };
+      }
+    } catch (e) {
+      return { ok: false, error: `link 创建后复核失败（lstat ${e.message}）` };
+    }
+    return { ok: true, method: process.platform === 'win32' ? 'junction' : 'symlink' };
   } catch (e) {
     return { ok: false, error: e.message };
   }

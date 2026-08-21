@@ -782,6 +782,5 @@ export function applyRootPlaceholders(text, roots) {
     .replaceAll('{DOCS_ROOT}', roots.docsRoot)
     .replaceAll('{PROJECTS_ROOT}', roots.projectsRoot)
     .replaceAll('{WORKFLOWS_ROOT}', roots.workflowsRoot)
-    .replaceAll('{KNOWLEDGE_ROOT}', roots.knowledgeRoot)
-}
+    .replaceAll('{KNOWLEDGE_ROOT}', roots.knowledgeRoot)}
 

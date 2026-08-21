@@ -332,3 +332,25 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 4. taskcard 改用 parseTaskRegistry（带行内注解）：`depends_on` 自动反填进骨架 frontmatter；CLI 新增 `--set key=value`（可重复，yamlScalar 转义 + 白名单键）批量注入 design 提炼值。
 
 测试 dogfood-four-fixes.test.mjs（17 断言）；install-guard/chain 测试 fixture 补建 node_modules（后验证契约下无害命令需模拟 install 产物）。**关联记忆**：`[[sillyspec-provision-silent-fake-installed]]`、`[[sillyspec-verification-task-zero-diff]]`、`[[sillyspec-wave-heading-undercount]]`、`[[sillyspec-taskcard-design-field-conflicts]]`
+
+## 23. 四坑：parity 扫描噪音 / module 0 命中未提交改动 / junction 假成功第②层 / 模板元数据头滞后（2026-08-21 闭环）
+
+**症状（用户实证）**：
+1. 探针 5（API 契约对账）扫进 .claude/worktrees/agent-* 陈旧检出与 build 产物，872 条前端调用全噪音。
+2. frontend/** 变更明明映射 frontend 模块却 0 命中直接跳过（module 测试对账空转）。
+3. worktree doctor 的 node_modules junction 在 Windows 静默失败报成功，会话内手动补 junction。
+4. author/created_at 元数据校验在产物写完之后才提醒，事后返工补头。
+
+**根因**：
+1. scanFrontendApiCalls/scanBackendEndpoints 的排除清单过窄（仅 node_modules/.next/dist/__tests__），agent 隔离检出（.claude/worktrees）、各类构建产物目录、压缩文件全被当源码扫。
+2. module 命中集只取 base..HEAD commit diff——子代理默认不 commit（常态），frontend 改动全在 working-tree → 0 命中 → zero-hit 跳过（与草稿归属同族根因）。
+3. 上一轮已加 provision 后验证（第①层），但 tryLink 自身在 mklink/ln 退出码 0 后不复核链接落盘——cmd.exe 垫片链的静默失败在第②层放行。
+4. 模块卡等 agent 产出模板不带元数据头；author/created_at 铁律只在首步注入，agent 照模板写完才被 gate 提醒。
+
+**修复（2026-08-21）**：
+1. 两侧扫描排除清单对齐扩充：.claude/.vscode/.idea/.cursor/.git、dist/build/out/.next/.nuxt/.output/.turbo/.parcel-cache/coverage、.venv/venv/target/__pycache__、.sillyspec/.worktrees；文件级排除 .d.ts 与 *.min.* / *.bundle.*。
+2. resolveVerifyChangedFiles 新增 opt-in includeWorkingTree：worktree status --porcelain 文件（排除 .sillyspec/）并入命中集；runVerifyTestCheck 与 module-impact 命中判定启用（generateTaskReviewDrafts 维持自有并入点）。
+3. tryLink 创建后 lstat+existsSync 实物复核——假成功判失败走 install 兜底，与 provision 后验证构成双层防线。
+4. 模块卡模板 frontmatter 带真值占位符 author: <git-user> / created_at: <now-datetime>（outputStep 每步无条件替换的既有机制），照抄即过元数据校验；docs/prompt/archive.md 镜像同步。
+
+测试 verify-feedback-fixes.test.mjs（9 断言）。**关联记忆**：`[[sillyspec-parity-scan-stale-dirs]]`、`[[sillyspec-module-subset-zero-hit-uncommitted]]`、`[[sillyspec-skeleton-metadata-header-late]]`

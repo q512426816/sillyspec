@@ -573,9 +573,35 @@ function gitChangedFiles(cwd) {
  * @param {object|null} [ctx] - MultiRepoContext 实例（可选，缺省/null 走单仓原逻辑）
  * @returns {string[]|null} 变更文件列表；git 不可用返回 null（调用方按 hitCount=-1 处理）
  */
-export function resolveVerifyChangedFiles(cwd, changeName, ctx = null) {
+export function resolveVerifyChangedFiles(cwd, changeName, ctx = null, opts = {}) {
+  const { includeWorkingTree = false } = opts
   // 主仓 diff（原逻辑不动，单仓零回归）
-  const mainFiles = resolveMainChangedFiles(cwd, changeName)
+  let mainFiles = resolveMainChangedFiles(cwd, changeName)
+
+  // 并入 worktree 未提交改动（坑 module-subset-zero-hit-uncommitted，2026-08-21 实证：
+  // 子代理默认不 commit，真实改动全在 worktree working-tree——只看 base..HEAD commit diff
+  // 时 module 映射 0 命中直接跳过（frontend/** 变更未命中 frontend 模块）。与
+  // generateTaskReviewDrafts 的并入口径同源：meta.worktreePath 下 status --porcelain 文件
+  // （排除 .sillyspec/ 运行时产物）。opt-in（默认关）：d drafts 有自己的并入点，避免双并。
+  if (includeWorkingTree && mainFiles !== null) {
+    try {
+      const metaPath = join(cwd, '.sillyspec', '.runtime', 'worktrees', changeName, 'meta.json')
+      if (changeName && existsSync(metaPath)) {
+        const meta = JSON.parse(readFileSync(metaPath, 'utf8'))
+        const wtGitDir = (meta.worktreePath && meta.mode !== 'in-place-fallback' && existsSync(meta.worktreePath))
+          ? meta.worktreePath
+          : cwd
+        const wtStatus = gitQuiet(wtGitDir, ['status', '--porcelain'], { timeout: 30000, trim: false })
+        const wtFiles = String(wtStatus || '').split('\n')
+          .map(l => l.slice(3).trim().split(' -> ').pop() || '')
+          .map(p => p.replace(/^"|"$/g, '').replace(/\\/g, '/'))
+          .filter(p => p && p !== '.sillyspec' && !p.startsWith('.sillyspec/'))
+        if (wtFiles.length > 0) {
+          mainFiles = [...new Set([...(mainFiles || []), ...wtFiles])]
+        }
+      }
+    } catch { /* working-tree 并入失败退回 commit diff 口径（fail-open） */ }
+  }
 
   // 无 ctx / ctx 无跨仓 entry → 主仓 diff 即结果（零回归）
   if (!ctx || typeof ctx.repos !== 'object' || ctx.repos === null) return mainFiles
@@ -683,7 +709,9 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = nul
     const modules = extractModules(yamlText)
     if (modules) {
       modulesPresent = true
-      const changedFiles = resolveVerifyChangedFiles(cwd, changeName)
+      // includeWorkingTree（坑 module-subset-zero-hit-uncommitted）：子代理不 commit 的改动
+      // 也参与 module 命中判定，0 命中跳过不再误伤 worktree 未提交的真实变更
+      const changedFiles = resolveVerifyChangedFiles(cwd, changeName, null, { includeWorkingTree: true })
       if (changedFiles === null) {
         hitCount = -1 // git 不可用 / 非仓库
       } else {

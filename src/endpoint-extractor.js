@@ -160,8 +160,13 @@ export function extractSpringEndpoints(filePath) {
  * @returns {Array<{ method: string, path: string, source: string, line: number }>}
  */
 export function scanBackendEndpoints(dir, opts = {}) {
+  // 排除清单对齐 scanFrontendApiCalls（坑 parity-scan-stale-dirs：.claude/worktrees 陈旧检出
+  // 与各类 build 产物混入端点扫描全是噪音）——backend 侧另含 __pycache__/.gradle/maven target
   const excludePatterns = opts.excludePatterns || [
-    /^__pycache__$/, /^node_modules$/, /^\.venv$/, /^\.git$/, /^\.gradle$/,
+    /^__pycache__$/, /^node_modules$/, /^\.venv$/, /^venv$/, /^\.git$/, /^\.gradle$/,
+    /^\.claude$/, /^\.vscode$/, /^\.idea$/, /^\.cursor$/, /^\.next$/, /^\.nuxt$/,
+    /^\.output$/, /^\.turbo$/, /^\.parcel-cache$/, /^coverage$/,
+    /^\.sillyspec$/, /^\.worktrees$/, /^\.d\.ts$/,
     /^(dist|build|target|out)$/i,
     /test/i,
   ]
@@ -273,7 +278,19 @@ export function extractFrontendApiCalls(filePath) {
  */
 export function scanFrontendApiCalls(dir, opts = {}) {
   const filePattern = opts.filePattern || /\.(ts|tsx|js|jsx)$/
-  const excludePatterns = opts.excludePatterns || [/node_modules/, /\.next/, /dist/, /__tests__/, /\.d\.ts$/]
+  // 排除清单（坑 parity-scan-stale-dirs，2026-08-21 实证：扫进 .claude/worktrees/agent-* 陈旧
+  // 检出与 build 产物，872 条调用全是噪音）——目录名匹配，覆盖：
+  //   版本控制/编辑器：.git .claude（含 worktrees/agent-* 陈旧检出）.vscode .idea .cursor
+  //   构建产物：dist build out .next .nuxt .output .turbo .parcel-cache coverage
+  //   依赖/运行时：node_modules .venv venv target（rust/java）__pycache__
+  //   本工具自身：.sillyspec .sillyspec-platform.json 所在 .worktrees
+  // 文件级：.d.ts 声明、*.min.js / *.bundle.js 压缩产物（正则命中即跳）
+  const excludePatterns = opts.excludePatterns || [
+    /^node_modules$/, /^\.git$/, /^\.claude$/, /^\.vscode$/, /^\.idea$/, /^\.cursor$/,
+    /^dist$/, /^build$/, /^out$/, /^\.next$/, /^\.nuxt$/, /^\.output$/, /^\.turbo$/,
+    /^\.parcel-cache$/, /^coverage$/, /^\.venv$/, /^venv$/, /^target$/, /^__pycache__$/,
+    /^\.sillyspec$/, /^\.worktrees$/, /^__tests__$/, /^\.d\.ts$/,
+  ]
 
   const results = []
   if (!existsSync(dir)) return results
@@ -285,6 +302,8 @@ export function scanFrontendApiCalls(dir, opts = {}) {
         if (excludePatterns.some(p => p.test(entry.name))) continue
         walk(full)
       } else if (entry.isFile() && filePattern.test(entry.name)) {
+        if (/\.d\.ts$/.test(entry.name)) continue
+        if (/\.min\.(js|ts)$/.test(entry.name) || /\.bundle\.(js|ts)$/.test(entry.name)) continue
         try {
           results.push(...extractFrontendApiCalls(full))
         } catch {}
