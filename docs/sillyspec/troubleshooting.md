@@ -354,3 +354,22 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 4. 模块卡模板 frontmatter 带真值占位符 author: <git-user> / created_at: <now-datetime>（outputStep 每步无条件替换的既有机制），照抄即过元数据校验；docs/prompt/archive.md 镜像同步。
 
 测试 verify-feedback-fixes.test.mjs（9 断言）。**关联记忆**：`[[sillyspec-parity-scan-stale-dirs]]`、`[[sillyspec-module-subset-zero-hit-uncommitted]]`、`[[sillyspec-skeleton-metadata-header-late]]`
+
+## 24. 三坑：归档尾声 sync 噪音 / 孤儿 worktree 物理目录 / progress show 停留旧阶段（2026-08-21 闭环）
+
+**症状（用户实证）**：
+1. archive 后 CLI sync 尾声连打「变更目录不存在/变更不存在」warn + 异常——注销后正常时序观感像出错。
+2. worktree cleanup 因 meta 已注销跳过，物理目录若没被 apply 顺手清掉就成孤儿（这次侥幸）。
+3. progress show 归档后仍显示「验证确认」——DB current_stage 与展示不同步。
+
+**根因**：
+1. sync()/syncDocuments() 的目录检查不识别归档态——目录已移 archive/ 是归档的正常结果，warn 措辞全是「不存在」类错误口吻。
+2. archiveWorktreeCleanup 对 getMeta()==null 直接 return——meta 被先行流程（apply 自动 cleanup/doctor）注销后，残留物理目录无人管。
+3. unregisterChange 终态一致化在 DB 写了 current_stage='archive'，但 completeStep 持有的是命令开始时的旧 progress 快照，后续 _write 把旧值覆盖回去（上轮 manual-archive 修复在标准流程被回写抵消）。
+
+**修复（2026-08-21）**：
+1. sync() 归档终态探测（changes/archive/ 实体 或 DB status='archived'，node:sqlite 只读直查）：命中降为一行 info「变更已归档，继续从 DB 推送最终状态」；链内 syncDocuments 经 _suppressDocsMissingWarn 旗标降 debug（独立手动 sync-docs 保留 warn 不静默）。
+2. archiveWorktreeCleanup 无 meta 时不再 return：force 幂等清理（cleanup 对全不存在返回 skipped 零副作用），清掉孤儿输出「🧹 归档清理孤儿 worktree 残留」。
+3. handleArchiveConfirmStep 在 archiveChangeDirectory 成功后同步内存快照 progress.currentStage='archive'——后续 _write 持久化的是终态而非旧值；progress show 归档后正确显示（变更非活跃时「没有活跃的变更」）。
+
+测试 archive-tail-consistency.test.mjs（9 断言）。**关联记忆**：`[[sillyspec-post-archive-sync-noise]]`、`[[sillyspec-archive-cleanup-orphan-physical-dir]]`、`[[sillyspec-archive-progress-show-stale]]`

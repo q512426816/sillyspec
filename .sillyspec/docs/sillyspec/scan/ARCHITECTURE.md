@@ -123,7 +123,7 @@ scan-profile.js 扫描档位 / concurrent-detect.js 并发检测 / multi-repo-co
 | `--auto` | 进入自动模式连跑主流程 |
 
 **perProject 按项目展开**：scan 阶段大量 step 带 `perProject: true` 标记（grep 自
-`src/stages/scan.js`，共 8 处）。`handleScanProjectListStep`（`src/run/complete-handlers.js:506`）
+`src/stages/scan.js`，共 8 处）。`handleScanProjectListStep`（`src/run/complete-handlers.js:521`）
 逻辑：scan 第 2 步"构建扫描项目列表"
 完成后，把后续所有 `perProject` step 按 `projectNames` 展开成
 `步骤 × 项目` 个独立子步骤，移除原始未展开版本。
@@ -203,8 +203,8 @@ SQLite Schema（grep 自 `db.js`，仅记表名 + 用途 + 字段数）：
   - `POST {platform.url}/api/changes/{changeName}/progress` 同步进度（`sync.js:417`）；
   - `POST {platform.url}/api/changes/{changeName}/documents` 同步文档（`sync.js:501`）；
   - 同步完更新 `changes.platform_last_sync`。
-- 审批链路：`GET /api/changes/{name}/approval` 查询（`sync.js:676`，`checkApproval`）+ `approve` / `reject`
-  入口（`sync.js:1254`，共用 `_submitApproval`，端点契约 TBD-hub-api）。
+- 审批链路：`GET /api/changes/{name}/approval` 查询（`sync.js:698`，`checkApproval`）+ `approve` / `reject`
+  入口（`sync.js:1307`，共用 `_submitApproval`，端点契约 TBD-hub-api）。
 - 配置读 `.sillyspec/local.yaml` platform 段（connect/disconnect 用文本级改写保留注释）。
 - platform 子命令（connect / disconnect / sync / sync-docs / status / pull / resolve /
   approve / reject / pointer）见 `src/index.js:1263`。主 CLI 无 WebSocket 依赖。

@@ -13,6 +13,7 @@ import { writeAtomicSync } from './fs-atomic.js';
 import { join } from 'path';
 import { resolvePlatformSpecDir } from './progress.js';
 import { safeGit } from './git-helper.js';
+import { openDatabase } from './db-engine.js';
 import { PLATFORM_MANAGED_FILENAME } from './run/shared.js';
 import { syncSpecTree } from './spec-sync.js';
 
@@ -267,6 +268,9 @@ async function fetchJsonWithStatus(url, options = {}) {
 export class SyncManager {
   constructor(cwd) {
     this.cwd = cwd;
+    // 归档尾声静默化旗标（坑 post-archive-sync-noise）：sync() 探测到已归档时置位，
+    // 链内 syncDocuments 的「变更不存在」降 debug（每次 sync 调用重置）
+    this._suppressDocsMissingWarn = false;
   }
 
   /**
@@ -411,12 +415,24 @@ export class SyncManager {
       return { synced: 0, errors: ['未指定变更名称'] };
     }
 
-    // 检查变更目录是否存在（warn 不拦：归档后目录已移走但 DB 仍有最终状态需推平台，
-    // serializeForSync 从 DB 读不依赖文件系统目录；目录存在时 warn 也无害，仅辅助排查）
+    // 检查变更目录是否存在（归档后目录已移走但 DB 仍有最终状态需推平台，serializeForSync 从
+    // DB 读不依赖文件系统目录）。归档终态探测（坑 post-archive-sync-noise，2026-08-21 实证：
+    // 归档尾声连打「目录不存在/变更不存在」warn，观感像出错）：确认已归档（changes/archive/
+    // 有实体 或 DB status='archived'）时降为一行 info 措辞——正常时序不是告警。
     const changeDir = join(this.cwd, CHANGES_DIR, changeName);
+    let archivedQuietly = false;
     if (!existsSync(changeDir)) {
-      console.warn(`[sync] 变更目录不存在（可能是已归档，继续从 DB 同步最终状态）: ${changeName}`);
+      archivedQuietly = existsSync(join(this.cwd, CHANGES_DIR, 'archive', changeName))
+        || this._isChangeArchivedInDb(changeName);
+      if (archivedQuietly) {
+        console.log(`[sync] 变更已归档（目录在 archive/），继续从 DB 推送最终状态: ${changeName}`);
+      } else {
+        console.warn(`[sync] 变更目录不存在（可能是已归档，继续从 DB 同步最终状态）: ${changeName}`);
+      }
     }
+    // 透传给本次 sync 链内的 syncDocuments（best-effort 四件套直推：归档后目录已移走，
+    // 其「变更不存在」warn 属正常时序，静默化）
+    this._suppressDocsMissingWarn = archivedQuietly;
 
     const MAX_PUSH_ATTEMPTS = 2;
     for (let attempt = 1; attempt <= MAX_PUSH_ATTEMPTS; attempt++) {
@@ -617,6 +633,12 @@ export class SyncManager {
     // 返回值 → 文档在平台模式下静默永不同步。
     const changeDir = join(safePlatformSpecDir(this.cwd) || join(this.cwd, '.sillyspec'), 'changes', changeName);
     if (!existsSync(changeDir)) {
+      // 归档尾声静默化（坑 post-archive-sync-noise）：sync() 链内调用（_suppressDocsMissingWarn
+      // 置位，目录已移 archive/ 的正常时序）降为 debug；独立调用（手动 sync-docs）保留 warn
+      if (this._suppressDocsMissingWarn) {
+        debugLog(`[sync] 四件套目录不存在（变更已归档，跳过文档直推）: ${changeName}`);
+        return { synced: 0, errors: [] };
+      }
       console.warn(`[sync] 变更不存在: ${changeName}`);
       return { synced: 0, errors: [`变更不存在: ${changeName}`] };
     }
@@ -732,6 +754,25 @@ export class SyncManager {
   _getPlatform() {
     const config = readLocalYaml(this.cwd);
     return config.platform || null;
+  }
+
+  /**
+   * DB 侧归档态探测（坑 post-archive-sync-noise）：changes 表 status='archived' 即真。
+   * 只读直查（node:sqlite，不经 ProgressManager——sync 是短进程，惰性 import 无收益且
+   * 本调用点在同步代码段）；DB 不存在/无行/读失败 → false（保守退回普通 warn 措辞）。
+   * @param {string} changeName
+   * @returns {boolean}
+   */
+  _isChangeArchivedInDb(changeName) {
+    try {
+      const dbPath = join(safePlatformSpecDir(this.cwd) || join(this.cwd, '.sillyspec'), '.runtime', 'sillyspec.db');
+      if (!existsSync(dbPath)) return false;
+      const db = openDatabase(dbPath, { readOnly: true });
+      try {
+        const row = db.prepare("SELECT status FROM changes WHERE name = ?").get(changeName);
+        return row?.status === 'archived';
+      } finally { try { db.close() } catch {} }
+    } catch { return false }
   }
 
   /**

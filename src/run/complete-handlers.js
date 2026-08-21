@@ -127,7 +127,7 @@ export function findAlreadyArchivedDir(archiveDir, changeName) {
  * 见 stage.js execute 启动固定 executeRunId / stage-review.js stageReviewMarkerPath）。
  * 从 archiveChangeDirectory 抽出，供正常归档 + 自愈归档复用。
  */
-async function archiveWorktreeCleanup(cwd, archiveChangeName, specBase, platformOpts = {}) {
+export async function archiveWorktreeCleanup(cwd, archiveChangeName, specBase, platformOpts = {}) {
   // ── 清理 runId marker：execute（current-execute-run-id-<change>）与 stage-review
   //    （current-stage-review-run-id-<stage>-<change>）。marker 只服务 execute→verify→archive
   //    期间，归档后无读者；不删则 .runtime 随变更数无限累积。runtimeRoot 解析同写入侧
@@ -158,7 +158,17 @@ async function archiveWorktreeCleanup(cwd, archiveChangeName, specBase, platform
     const { WorktreeManager } = await import('../worktree.js')
     const wm = new WorktreeManager({ cwd })
     const meta = wm.getMeta(archiveChangeName)
-    if (!meta) return
+    if (!meta) {
+      // 无 meta 兜底（坑 archive-cleanup-orphan-physical-dir，2026-08-21 实证）：meta 已被先行
+      // 流程注销（apply 自动 cleanup / doctor 幽灵清理）时此前直接 return——若物理目录因中途
+      // 失败残留下就是孤儿（无 meta=无锚定基准，残留即孤儿）。force 清理（幂等：什么都不存在
+      // 时 cleanup 返回 skipped 零副作用）。
+      const orphan = wm.cleanup(archiveChangeName, { force: true })
+      if (orphan.result === 'cleaned' || orphan.result === 'force-cleaned' || orphan.result === 'partial') {
+        console.log(`🧹 归档清理孤儿 worktree 残留（meta 已注销）: ${archiveChangeName}${orphan.residual?.length ? '（残留: ' + orphan.residual.join('; ') + '）' : ''}`)
+      }
+      return
+    }
     const check = meta.mode !== 'in-place-fallback' ? wm.hasUnappliedChanges(archiveChangeName) : { hasChanges: false }
     if (check.hasChanges) {
       console.warn(`⚠️  归档时 worktree 仍有 ${check.changedFiles.length} 个未 apply 变更，保留 worktree`)
@@ -423,6 +433,11 @@ export async function handleArchiveConfirmStep({ stageName, steps, currentIdx, c
   }
   const archivedDir = await archiveChangeDirectory(pm, cwd, progress, specBase, platformOpts)
   if (archivedDir && existsSync(archivedDir)) {
+    // 内存快照同步（坑 archive-progress-show-stale，2026-08-21 实证）：archiveChangeDirectory 内
+    // unregisterChange 已在 DB 写 current_stage='archive'（终态一致化），但本进程 progress 是命令
+    // 开始时读的旧快照——不同步的话，completeStep 后续 _write 会用旧值（如停在 verify）把
+    // DB 覆盖回去，progress show 就一直显示归档前的阶段
+    progress.currentStage = 'archive'
     const recommendedDocs = ['design.md', 'module-impact.md']
     const missingRecommended = recommendedDocs.filter(d => !existsSync(join(archivedDir, d)))
     if (missingRecommended.length > 0) {
