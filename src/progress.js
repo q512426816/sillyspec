@@ -1188,8 +1188,11 @@ export class ProgressManager {
     if (projectRow === undefined) return null;
     const projectName = projectRow.name;
 
-    // 2. 活跃变更（取第一个，或空）
-    const changeRows = sqlDb.prepare("SELECT id, name, current_stage, last_active FROM changes WHERE status = 'active' ORDER BY name").all();
+    // 2. 活跃变更（取 last_active 最新的一个）
+    // ql-20260821-003：多活跃仓（变更隔离是常态，单仓可同时存在 N 个 active）下
+    // 原 ORDER BY name 恒取字典序最前（通常是最老的变更），「当前变更/最后活动」
+    // 停留在历史数据。dump 语义是「当前工作流状态」→ 取最近活跃的那个。
+    const changeRows = sqlDb.prepare("SELECT id, name, current_stage, last_active FROM changes WHERE status = 'active' ORDER BY last_active DESC").all();
     if (changeRows.length === 0) {
       // 无活跃变更 → 返回仅含 project 的骨架
       return {

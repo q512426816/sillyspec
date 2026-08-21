@@ -375,3 +375,21 @@
 根因：take-platform 缺 platform_progress 时无 return 空 import 清库；TaskCard 命令校验只收标量致规范块列表卡片 no-op；scan quick 档 3 步表与 11 步注册表跨进程漂移；outputStep isPlatform 判定与取值字段不一致 join(null) 崩溃；--change 等裸 flags[idx+1] 绕过 F4 守卫；execute reopen 预置全 pending 破坏修订语义；另有 MAX 参数 NULL、CRLF、正则口径、平台模式路径硬编码等机械缺陷
 方案：sync/gates/postcheck/command/prompt/shared/scan-profile/plan/execute/knowledge/doctor/concurrent-detect/complete-handlers 14 个源文件对应修复 + docs 行号与提示词文档同步；task id 非 1 起跳过连续性检查经 plan-execute-contract Case 10 证实为兼容契约，撤销该项误修并加防回归断言
 结果：npm test 262 文件 0 失败（新增 tool-defect-audit-fixes.test.mjs 18 断言全过）；npm run lint 353 文件通过；doc-ref-check 80 处引用全过
+
+## ql-20260821-002-a69b | 2026-08-21 09:34:33 | (quick 任务)
+状态：进行中
+关联变更：（无）
+文件：（见实际改动）
+
+## ql-20260821-003-6be6 | 2026-08-21 09:34:48 | progress dump 多活跃变更取错——恒取字典序最前（老变更）
+状态：已完成
+关联变更：quick-a19fb16c
+文件：
+- src/progress.js（dump 活跃变更选择改 last_active DESC（ql-20260821-003））
+- test/progress-dump.test.mjs（用例 1b 多活跃取最新（修复前红））
+需求：progress dump 多活跃变更取错——恒取字典序最前（老变更），应取 last_active 最新
+根因：dump() :1192 活跃变更查询 ORDER BY name 取第一个，多活跃仓（变更隔离常态）下「当前变更/当前阶段/最后活动」停留在历史数据（实测 multi-agent-platform 13 个活跃，页面恒显示 2026-07-22）
+方案：ORDER BY name → ORDER BY last_active DESC + 注释；test/progress-dump.test.mjs 新增用例 1b（a-old 先建+10ms+z-new，断言取 z-new，修复前红/修复后绿）；package.json 3.26.13→3.26.14
+结果：npm test 全量 300 用例 0 失败（37+263）；npm run lint 通过（354 文件）；file-lifecycle.md 不涉及（只读 dump 选变更语义，非文件生命周期）；全局重装与 daemon 链路验证随后在本机执行
+审计：📝 文档欠账（D-8）：3 个源码文件改动未同步任何模块文档（涉及模块：stages · progress）
+审计：⚖️ 归属切分：1 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：package.json

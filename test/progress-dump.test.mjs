@@ -163,6 +163,32 @@ console.log('--- 1. dump() 有活跃变更 ---')
 }
 
 // ─────────────────────────────────────────
+// 1b. dump() 多活跃变更 → 取 last_active 最新（非字典序最前）
+// ─────────────────────────────────────────
+// ql-20260821-003：multi-agent-platform 实测 13 个活跃变更时 dump 恒返回字典序
+// 最前的 2026-07-22 老变更（ORDER BY name 取第一个），页面「当前变更/最后活动」
+// 停在 7 月。正确语义 = 最新活跃的那一个。
+console.log('--- 1b. dump() 多活跃变更取 last_active 最新 ---')
+{
+  const proj = makeTmpDir('dump-multi-')
+  const specBase = join(proj, '.sillyspec')
+  mkdirSync(specBase, { recursive: true })
+
+  const pm = new ProgressManager({ specDir: specBase })
+  await pm.init(proj)
+  // 字典序早的先建（旧代码会错误选中它），间隔 10ms 保证 last_active 严格递增
+  await pm.initChange(proj, 'a-old-change')
+  await new Promise(r => setTimeout(r, 10))
+  await pm.initChange(proj, 'z-new-change')
+
+  const data = pm.dump(proj)
+  assert(data !== null, 'dump() 返回非 null')
+  assert(data.current_change === 'z-new-change', `current_change 取 last_active 最新（期望 z-new-change，实际 "${data.current_change}"）`)
+  assert(data.current_change !== 'a-old-change', '不取字典序最前的老变更')
+  assert(data.last_active !== null && /^\d{4}-\d{2}-\d{2}/.test(data.last_active), `last_active 为 ISO 形态（实际 ${data.last_active}）`)
+}
+
+// ─────────────────────────────────────────
 // 2. dump() 无活跃变更 → 骨架
 // ─────────────────────────────────────────
 console.log('--- 2. dump() 无活跃变更 ---')
