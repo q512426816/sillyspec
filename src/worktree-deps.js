@@ -9,7 +9,7 @@
  */
 
 import { existsSync, readFileSync, realpathSync, lstatSync } from 'fs';
-import { join, isAbsolute, resolve as resolvePath, sep as pathSep } from 'path';
+import { join, isAbsolute, relative, resolve as resolvePath, sep as pathSep } from 'path';
 import { execFileSync } from 'child_process';
 import { createHash } from 'crypto';
 
@@ -356,27 +356,45 @@ export function provisionDeps(worktreePath, mainCwd, opts = {}) {
         ? { depsStatus: 'installed', depsMethod: 'install', depsSource: 'install', depsLockHash: wtHash }
         : { depsStatus: 'failed', depsMethod: null, depsSource: null, depsLockHash: wtHash, depsError: installResult.error };
     }
-    // ── 结果后验证（坑 provision-silent-fake-installed，2026-08-21 Windows 实证）──
-    // doctor --fix 报「re-provisioned: installed」但 node_modules junction 实际没建——
-    // cmd.exe 垫片链存在退出码 0 却啥都没装的静默失败面，exit code 不可信。分层校验：
-    //   linked：junction 实存硬校验（本次事故形态——link 声称成功必留痕）；
-    //   installed：仅当 worktree package.json 声明了依赖（dependencies/devDependencies 等
-    //   非空）时校验 node_modules——空 deps 项目 npm install 合法地不产生 node_modules，
-    //   无差别校验会误杀（python 产物 .venv / jvm 本地仓库本就不适用，整体仅 nodejs）。
+    // ── 结果后验证（坑 provision-silent-fake-installed，2026-08-21 Windows 实证；
+    //    坑 provision-monorepo-subpackage-fake-installed，2026-08-22 复发：pnpm monorepo
+    //    workspace 根 package.json 的 dependencies 常为空（依赖在 frontend/daemon 子包），
+    //    只查根会把 installed 状态整体跳过——doctor 标 installed 但子包 node_modules 全缺，
+    //    Wave 1 测试才挂）。分层校验：
+    //   linked：根 junction 实存硬校验（link 声称成功必留痕）；
+    //   installed：校验目标集 = 根 + local.yaml modules 块声明的含 package.json 子模块，
+    //     其中【声明了依赖】的目录逐一要求 node_modules 存在（pnpm/npm/yarn workspace
+    //     安装都会给子包建 node_modules；无依赖声明的空壳目录合法地不建，不校验）。
+    //   python/.venv、jvm 本地仓库本就不适用（整体仅 nodejs）。
     if (projectType === 'nodejs') {
-      const nmPath = join(worktreePath, 'node_modules');
-      const hasDeclaredDeps = (() => {
+      const pkgHasDeps = (dir) => {
         try {
-          const pkg = JSON.parse(readFileSync(join(worktreePath, 'package.json'), 'utf8'))
+          const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'))
           return ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies']
             .some(k => pkg[k] && Object.keys(pkg[k]).length > 0)
         } catch { return false }
-      })()
-      const needVerify = result.depsStatus === 'linked' || (result.depsStatus === 'installed' && hasDeclaredDeps)
-      if (needVerify && !existsSync(nmPath)) {
-        result = {
-          depsStatus: 'failed', depsMethod: null, depsSource: null, depsLockHash: wtHash,
-          depsError: `${result.depsStatus} 后验证失败：${nmPath} 不存在（报成功但 node_modules 实际未落盘——Windows 静默失败面：cmd.exe 垫片解析/杀毒拦截）。手动兜底（PowerShell）：New-Item -ItemType Junction -Path "${nmPath}" -Target "${join(mainCwd || worktreePath, 'node_modules')}"，或在 worktree 内手动跑 ${installCmd} 后重试 doctor --fix`,
+      }
+      // 目标集：根 + modules 块内含 package.json 的安全子模块（monorepo 子包）
+      const verifyDirs = [worktreePath]
+      for (const mp of extractModulePaths(yamlText)) {
+        if (!isSafeModulePath(mp)) continue
+        const sub = join(worktreePath, mp)
+        if (existsSync(join(sub, 'package.json'))) verifyDirs.push(sub)
+      }
+      const depsDeclaredDirs = verifyDirs.filter(pkgHasDeps)
+      const needVerify = result.depsStatus === 'linked'
+        || (result.depsStatus === 'installed' && depsDeclaredDirs.length > 0)
+      if (needVerify) {
+        // linked 只验根（junction 语义）；installed 验全部声明依赖的目标目录
+        const targets = result.depsStatus === 'linked' ? [worktreePath] : depsDeclaredDirs
+        const missing = targets.filter(dir => !existsSync(join(dir, 'node_modules')))
+        if (missing.length > 0) {
+          const missingRel = missing.map(dir => relative(worktreePath, dir) || '(根)')
+          result = {
+            depsStatus: 'failed', depsMethod: null, depsSource: null, depsLockHash: wtHash,
+            depsError: `${result.depsStatus} 后验证失败：${missingRel.join('、')} 的 node_modules 不存在（报成功但实际未落盘——Windows 静默失败面：cmd.exe 垫片解析/杀毒拦截/frozen-lockfile 快退）。` +
+              `手动兜底：进 worktree 手动跑 ${installCmd}（子包随 workspace 一起装），或对 lockfile 一致的目录用 junction：New-Item -ItemType Junction -Path "<目标>/node_modules" -Target "<主仓对应目录>/node_modules"，然后重试 doctor --fix`,
+          }
         }
       }
     }

@@ -392,3 +392,13 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 3. verify prompt 新增服务进程登记契约：长驻服务 PID 逐行登记 {SPEC_ROOT}/.runtime/verify-services.pids（deployment-critical 门控下未登记的真实启动证据视为不完整）；verify --done 收尾 gates 读文件逐 PID SIGTERM + 清文件（ESRCH 静默、失败给 taskkill/kill -9 指引不阻断）。
 
 测试 doctor-verify-feedback.test.mjs（11 断言，含真实子进程 e2e 回收）；worktree-cleanup-guard ④ 按新契约重锚 + 分叉保护面新变体。**关联记忆**：`[[sillyspec-unapplied-false-positive-workspace-copy]]`、`[[sillyspec-doctor-reprovision-archived-change]]`、`[[sillyspec-verify-service-process-leak]]`
+
+## 26. 坑 22-① 复发：monorepo 子包假 installed（2026-08-22 闭环）
+
+**症状（复发实证）**：pnpm monorepo（frontend/daemon 子包）worktree 缺 node_modules，doctor 供给后仍标 installed、目录仍缺——Wave 1 daemon 测试挂，只能手补。
+
+**根因（坑 22 后验证的漏网）**：hasDeclaredDeps 只查 worktree **根** package.json——pnpm workspace 根的 dependencies 常为空（依赖在子包，根只有 workspaces 字段）→ 校验整体跳过 → 子包 node_modules 全缺也报 installed。坑 22 修的是「根无依赖的空项目不误杀」，但没料到 monorepo 根也长这样。
+
+**修复**：校验目标集扩展 = 根 + local.yaml modules 块声明的含 package.json 子模块；installed 状态下其中【声明了依赖】的目录逐一要求 node_modules 存在（pnpm/npm/yarn workspace 安装都会给子包建，合法契约；无依赖声明的空壳不校验防误杀）。缺失 → failed + depsError 点名缺失子包（相对路径）+ workspace install/junction 兜底指引——deps gate 据此阻断，错误可见而非测试中途才炸。
+
+测试 provision-monorepo-verify.test.mjs（6 断言：假 installed 识破点名 / 真安装放行 / 空壳零误杀 / 单包旧契约零回归）。**关联记忆**：`[[sillyspec-provision-monorepo-subpackage-fake-installed]]`
