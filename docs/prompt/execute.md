@@ -315,6 +315,13 @@ task-XX 对应：{SPEC_ROOT}/.runtime/execute-runs/{EXECUTE_RUN_ID}/tasks/task-X
 - 无 _module-map.yaml 时跳过模块匹配，仅按文件清单更新 unmapped 部分
 这是可选更新（不阻断 execute 完成），但保持 module-impact 与实际变更一致利于 verify 核对与 archive 终审。
 
+### 知识沉淀（主代理在本 Wave 收尾，与 module-impact.md 同批）
+本 Wave 各 task 子代理报告里若提到**真正的项目特有坑**（跨变更可复用、未来 agent 可能再次踩到、且不是本任务专属细节），由你在 Wave 收尾统一追加到 `{SPEC_ROOT}/knowledge/uncategorized.md`：
+- 条目格式：`## <一句话标题>` + 一段说明（坑的来龙去脉 + 规避/解法），末尾标注来源（task-XX）
+- 不由各 task 子代理分别写（并行改同一文件会互相覆盖），只由主代理在 Wave 收尾统一追加——与 module-impact.md 同一收尾节奏
+- 不要为了完成任务而硬凑条目；纯新增/纯样式/单点 bug 修复/临时绕过不写；拿不准时不写，宁缺毋滥
+- execute 末步「知识库审阅」会检查待确认条目并提示用户归类
+
 ### 完成后
 1. 为每个后端 router task，扫描变更文件提取 API 端点 artifact：
    - 在变更文件中搜索所有 router 注册路径（@router.get/post/put/delete）
@@ -340,7 +347,7 @@ task-XX 对应：{SPEC_ROOT}/.runtime/execute-runs/{EXECUTE_RUN_ID}/tasks/task-X
 
 Wave 2 的 prompt 结构与 Step 5（Wave 1）**完全相同**，由同一个 `buildWavePrompt(wave, waveIndex, changeDir, worktreePath)` 函数生成（`src/stages/execute.js`）。两者唯一的差异在标题（`## Wave 2: 执行以下任务`）、`本 Wave 任务` 复选项与任务摘要中的 task 名（默认 3-wave 示例中 Wave 2 的 task 摘要为 `task-01: 默认任务 2 (TBD) → task-01.md`，本 Wave 任务为 `- [ ] 默认任务 2 (TBD)`）。
 
-完整 prompt 模板请对照 [Step 5（Wave 1）](#step-512wave-1-执行)。实际各 Wave 的 **task 摘要、contractInjection（跨 task 端点/字段契约）、prototypeInjection（HTML 原型引用）随 plan.md 变化**——示例中 contractInjection/prototypeInjection 均为空字符串（无契约 / 无原型）；真实 plan.md 命中契约/原型时，`### API Contract Matrix`、`### 子代理 task-XX 的端点契约注入`、`### 子代理 task-XX 的字段契约注入`、`### 📐 原型参考（brainstorm 可视化确认）` 等段会插入到「Wave 开始前」与「本 Wave 任务」之间。**Task Review Gate** 段（强制每个 task 完成后、勾 checkbox 前写 `review.json`）原文保留在 Wave 1 完整 prompt 中，不在此重复粘贴。
+完整 prompt 模板请对照 [Step 5（Wave 1）](#step-512wave-1-执行)。实际各 Wave 的 **task 摘要、contractInjection（跨 task 端点/字段契约）、prototypeInjection（HTML 原型引用）随 plan.md 变化**——示例中 contractInjection/prototypeInjection 均为空字符串（无契约 / 无原型）；真实 plan.md 命中契约/原型时，`### API Contract Matrix`、`### 子代理 task-XX 的端点契约注入`、`### 子代理 task-XX 的字段契约注入`、`### 📐 原型参考（brainstorm 可视化确认）` 等段会插入到「Wave 开始前」与「本 Wave 任务」之间。**Task Review Gate** 段（强制每个 task 完成后、勾 checkbox 前写 `review.json`）原文保留在 Wave 1 完整 prompt 中，不在此重复粘贴。**知识沉淀**段（Wave 收尾追加 `knowledge/uncategorized.md`）同样保留在 Wave 1 完整 prompt 中，Wave 2/3 不在此重复。
 
 ---
 

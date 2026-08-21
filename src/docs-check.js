@@ -388,8 +388,8 @@ export function runDocsCheck(opts) {
           reason: repoPrefix + (candidateFails.length > 1 ? `多候选全失败 → ${candidateFails.join(' | ')}` : candidateFails[0]),
           // 建议行号（--suggest）：token 在首个候选文件的全量命中行，供人工确认改锚——不自动改文件
           suggest: suggestLines(candidates, tokens),
-          // 修复分类（--fix 判定依据）：全量候选 token 命中统计，唯一命中才 fixable（D-006 保守默认）
-          fix: classifyFix(candidates, tokens),
+          // 修复分类（--fix 判定依据）：全量候选 token 命中打分——唯一命中或选优严格领先可自动重锚
+          fix: classifyFix(candidates, tokens, r.start),
         })
       }
     }
@@ -415,34 +415,70 @@ function suggestLines(candidates, tokens) {
 
 /**
  * 修复分类（--fix 判定依据）：对 resolveCandidates 全量候选跑 token 命中统计，跨候选合并行号后——
- *   唯一命中 → fixable=true + newLine（自动重锚唯一解）；无 token / 零命中 / 多命中 → needs-manual。
+ *   唯一命中 → fixable=true + newLine（自动重锚唯一解）；
+ *   多命中 → 打分选优（2026-08-21 docs-ref-auto-pick，替代 D-006 一律人工）：top1 严格优于
+ *   top2（分数差 > 0）自动重锚，同分仍人工。实证：一次大改 34 处漂移只有 2 处唯一命中，
+ *   32 处人工逐个挑——多命中不代表歧义，行号漂移多为单次编辑的单调位移。
+ * 打分信号（全部来自现有数据，不新增 IO）：
+ *   - 距离：|命中行 - 文档旧行号|（权重封顶 400）——最近的命中大概率是原锚点漂移后的位置
+ *   - 定义行模式 +50：function/const/let/class/def/export 关键词**紧跟** token（引用锚通常指
+ *     定义起始行而非调用点；「keyword 后 60 字符内出现」的宽松口径会把调用点误判为定义）
+ *   - 注释行 -30（// * # -- 开头）
+ *   - 含最长 token（点分整串）+10，优于只含拆段
  * 与 suggestLines 的差异：suggest 只查首个候选（candidates[0]），本函数查全量候选（design §12 自审存疑 +
  * R-01——多候选同名文件场景下防止定位到另一文件的同名符号）。合并口径按「去重后的行号集合」：
  * 重锚写回的目标是行号，多个候选命中同一行号仍是唯一改写目标。
  * 纯增量分类，不参与层1/层2 判定（D-004 兼容红线）。
  * @param {string[]} candidates resolveCandidates 返回的全量候选绝对路径
  * @param {string[]} tokens 层2 提取的期望 token（keywordAssert=false 时为空数组）
+ * @param {number|null} [refStart] 文档引用的旧行号（打分用距离信号；范围引用取 start）
  * @returns {{ fixable: boolean, newLine?: number, reason: string }}
  */
-function classifyFix(candidates, tokens) {
+function escapeReLocal(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function classifyFix(candidates, tokens, refStart = null) {
   if (tokens.length === 0) {
     return { fixable: false, reason: '无 token 符号线索（纯位置引用或关键词断言关闭），无法自动定位' }
   }
-  const hitLines = new Set()
+  const longest = tokens.reduce((a, b) => (b.length > a.length ? b : a), '')
+  const defToken = longest.includes('.') ? longest.split('.').pop() : longest
+  const defRe = new RegExp(`(?:export\\s+)?(?:async\\s+)?(?:function|const|let|class|def)\\s+${escapeReLocal(defToken)}\\b`)
+  const byLine = new Map()
   for (const candAbs of candidates) {
     const lines = readLines(candAbs)
     if (lines === null) continue
-    lines.forEach((l, i) => { if (tokens.some((t) => l.includes(t))) hitLines.add(i + 1) })
+    lines.forEach((l, i) => {
+      if (!tokens.some((t) => l.includes(t))) return
+      const lineNo = i + 1
+      let score = 0
+      if (/^(\/\/|\*|#|--)/.test(l.trim())) score -= 30
+      if (defRe.test(l)) score += 50
+      if (l.includes(longest)) score += 10
+      if (refStart != null && Number.isFinite(refStart)) score -= Math.min(Math.abs(lineNo - refStart), 400)
+      // 同一行跨候选取最高分（合并口径不变：重锚目标是行号）
+      if (score > (byLine.get(lineNo) ?? -Infinity)) byLine.set(lineNo, score)
+    })
   }
-  if (hitLines.size === 0) {
+  if (byLine.size === 0) {
     return { fixable: false, reason: 'token 在全量候选文件零命中，无法自动定位' }
   }
-  if (hitLines.size === 1) {
-    return { fixable: true, newLine: [...hitLines][0], reason: 'token 在全量候选唯一命中，可自动重锚' }
+  if (byLine.size === 1) {
+    return { fixable: true, newLine: [...byLine.keys()][0], reason: 'token 在全量候选唯一命中，可自动重锚' }
   }
-  const sorted = [...hitLines].sort((a, b) => a - b)
-  const shown = sorted.slice(0, 8).join('、') + (sorted.length > 8 ? '…' : '')
-  return { fixable: false, reason: `token 多处命中（候选行号：${shown}），歧义需人工确认（D-006 保守默认）` }
+  const ranked = [...byLine.entries()].sort((a, b) => (b[1] - a[1]) || (a[0] - b[0]))
+  const [topLine, topScore] = ranked[0]
+  const [runLine, runScore] = ranked[1]
+  if (topScore > runScore) {
+    return {
+      fixable: true,
+      newLine: topLine,
+      reason: `多命中自动选优：picked=${topLine}（${topScore} 分）runnerUp=${runLine}（${runScore} 分，严格落后才自动改）`,
+    }
+  }
+  const shown = ranked.slice(0, 8).map(([l]) => l).join('、') + (ranked.length > 8 ? '…' : '')
+  return { fixable: false, reason: `token 多处命中且最优两行同分（候选行号：${shown}），歧义需人工确认（D-006 保守默认）` }
 }
 
 /**

@@ -150,10 +150,11 @@ describe('S1 单命中自动改（FR-01）', () => {
   })
 })
 
-describe('S2 多命中不动（FR-03/D-006）', () => {
+describe('S2 多命中：选优自动重锚 / 同分才人工（FR-03，2026-08-21 docs-ref-auto-pick）', () => {
   /**
-   * multiSym 在 L1/L5 两处出现；doc 引用 :7——窗口 [5,12] 即 L6-L8 全填充行，token 落窗口外
-   * （若用 :2 之类落在 [0,9] 窗口内会假合法），分类多命中歧义。
+   * multiSym 在 L1（定义行 export const）/ L5（调用点）两处出现；doc 引用 :7——窗口（行 6-12）
+   * 无 token → 失效。多命中打分：L1 定义行模式 +50 → 54 分，L5 仅含 token + 距离近 → 8 分，
+   * 严格领先 → 自动选优重锚 L1（实证痛点：一次大改 34 处漂移只有 2 处唯一命中，其余全人工）。
    */
   function s2Fixture() {
     return makeFixture({
@@ -165,34 +166,71 @@ describe('S2 多命中不动（FR-03/D-006）', () => {
     })
   }
 
-  it('单测层：fix.fixable=false 且 fix.reason 含候选行号列表，文档不动', () => {
+  it('单测层：定义行 vs 调用点严格分差 → fixable=true + newLine=1 + reason 可审计', () => {
     const d = s2Fixture()
     try {
       const r = runDocsCheck({ projectRoot: d, docs: ['docs/multi.md'] })
       assert.equal(r.ok, false, `前置：fixture 引用确为失效（invalid=${JSON.stringify(r.invalid)}）`)
       const inv = r.invalid[0]
-      assert.equal(inv.fix.fixable, false, '多命中不自动改（D-006 保守默认）')
+      assert.equal(inv.fix.fixable, true, '定义行严格领先调用点 → 自动选优')
+      assert.equal(inv.fix.newLine, 1, '重锚到定义行 L1')
+      assert.ok(inv.fix.reason.includes('picked=1'), `reason 附 picked 可审计（实际：${inv.fix.reason}）`)
+      assert.ok(inv.fix.reason.includes('runnerUp=5'), 'reason 附 runnerUp')
+    } finally { try { rmSync(d, { recursive: true, force: true }) } catch {} }
+  })
+
+  it('CLI 层：--fix 自动选优改写 + exit 0', () => {
+    const d = s2Fixture()
+    try {
+      const r = runDocsCli(d, ['--fix', '--paths', 'docs/multi.md'])
+      assert.equal(r.code, 0, `自动选优全修 exit 0（实际 ${r.code}；stderr=${r.stderr}）`)
+      assert.ok(r.stderr.includes('1 处已改写'), '重锚报告 1 处改写')
+      const after = readFileSync(join(d, 'docs', 'multi.md'), 'utf8')
+      assert.ok(after.includes('src/m.js:1'), `doc 已重锚到 :1（实际：${after.trim()}）`)
+    } finally { try { rmSync(d, { recursive: true, force: true }) } catch {} }
+  })
+
+  /**
+   * 真歧义：tieSym 两处纯调用（L1/L13，均无定义行模式），doc 引用 :7（距离 6/6 同分）→
+   * 选优无法严格分差 → 仍 needs-manual（保守语义保留的部分）。
+   */
+  function s2bFixture() {
+    return makeFixture({
+      'src/m.js': padLines(16, {
+        1: 'useA(tieSym)',
+        13: 'useB(tieSym)',
+      }).join('\n') + '\n',
+      'docs/tie.md': '见 `src/m.js:7`（`tieSym` 调用处）\n',
+    })
+  }
+
+  it('单测层：同分歧义 → fixable=false 且 reason 含候选行号，文档不动', () => {
+    const d = s2bFixture()
+    try {
+      const r = runDocsCheck({ projectRoot: d, docs: ['docs/tie.md'] })
+      assert.equal(r.ok, false, `前置：fixture 引用确为失效（invalid=${JSON.stringify(r.invalid)}）`)
+      const inv = r.invalid[0]
+      assert.equal(inv.fix.fixable, false, '同分不自动改（保守默认）')
       assert.ok(!('newLine' in inv.fix), '歧义条目不给 newLine')
-      assert.ok(inv.fix.reason.includes('多处命中'), `reason 分类为多命中（实际：${inv.fix.reason}）`)
-      assert.ok(inv.fix.reason.includes('1') && inv.fix.reason.includes('5'), `reason 含候选行号 1 与 5（实际：${inv.fix.reason}）`)
-      const before = readFileSync(join(d, 'docs', 'multi.md'))
-      const { fixResult } = runFixLayer(d, 'docs/multi.md')
+      assert.ok(inv.fix.reason.includes('同分'), `reason 分类为同分歧义（实际：${inv.fix.reason}）`)
+      assert.ok(inv.fix.reason.includes('1') && inv.fix.reason.includes('13'), `reason 含候选行号 1 与 13（实际：${inv.fix.reason}）`)
+      const before = readFileSync(join(d, 'docs', 'tie.md'))
+      const { fixResult } = runFixLayer(d, 'docs/tie.md')
       assert.equal(fixResult.applied, 0, '无 fixable 条目零应用')
-      assert.ok(Buffer.compare(before, readFileSync(join(d, 'docs', 'multi.md'))) === 0, '文档逐字节不动')
+      assert.ok(Buffer.compare(before, readFileSync(join(d, 'docs', 'tie.md'))) === 0, '文档逐字节不动')
     } finally { try { rmSync(d, { recursive: true, force: true }) } catch {} }
   })
 
   it('CLI 层：--fix 报 needs-manual + 候选行号 + exit 1（歧义无 --force 逃生口）', () => {
-    const d = s2Fixture()
+    const d = s2bFixture()
     try {
-      const before = readFileSync(join(d, 'docs', 'multi.md'))
-      const r = runDocsCli(d, ['--fix', '--paths', 'docs/multi.md'])
+      const before = readFileSync(join(d, 'docs', 'tie.md'))
+      const r = runDocsCli(d, ['--fix', '--paths', 'docs/tie.md'])
       assert.equal(r.code, 1, `needs-manual 残留 exit 1（实际 ${r.code}）`)
       assert.ok(r.stderr.includes('待人工'), '分类为待人工')
       assert.ok(r.stderr.includes('候选行号'), '报告含候选行号列表')
-      assert.ok(r.stderr.includes('1、5'), '候选行号列出 1 与 5')
       assert.ok(r.stderr.includes('0 处已改写'), '重锚报告零改写')
-      assert.ok(Buffer.compare(before, readFileSync(join(d, 'docs', 'multi.md'))) === 0, 'CLI --fix 对歧义条目零写盘')
+      assert.ok(Buffer.compare(before, readFileSync(join(d, 'docs', 'tie.md'))) === 0, 'CLI --fix 对歧义条目零写盘')
     } finally { try { rmSync(d, { recursive: true, force: true }) } catch {} }
   })
 })

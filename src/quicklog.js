@@ -14,7 +14,7 @@ import { join, dirname, basename } from 'path'
 import { getRule } from './stage-contract-spec.js'
 import {
   openSync, closeSync, unlinkSync, statSync, mkdirSync, existsSync,
-  readFileSync, writeFileSync, writeSync, readdirSync, renameSync, appendFileSync,
+  readFileSync, writeFileSync, writeSync, readdirSync, renameSync, appendFileSync, rmSync,
 } from 'fs'
 import { randomBytes } from 'crypto'
 
@@ -721,4 +721,109 @@ export function findQuicklogEntry(specBase, gitUser, qlId) {
     if (content.includes(header)) return true
   }
   return false
+}
+
+/**
+ * 取消一个 quick 会话（2026-08-21 agent-手工产出审计第四批 C-2，`run quick --cancel` 数据源）。
+ *
+ * 误启动/放弃的 quick 会话此前无取消出口：QUICKLOG「进行中」条目 + 关联变更 tasks.md 挂载行
+ * + .runtime/quick-sessions/<id>/ 永久残留，doctor --cleanup-ghosts 只清 db 幽灵行不清这三处。
+ * 本函数做 allocateQuicklogEntry 的反操作（三步全是已有函数的反面）：
+ *   1. QUICKLOG 条目状态翻「已取消」（非删除——保留痕迹可审计，与 doctor 宁漏勿杀口径一致）
+ *   2. tasks.md 里该 qlId 的挂载行整行移除（未勾的空壳行，勾了说明实际做了工作 → 拒绝取消）
+ *   3. 会话 guard 目录删除（quick-sessions/<sessionId>/，含 guard.json）
+ *   4. current-quick-run-id 若指向本会话则删除（防后续 --done fallback 命中死会话）
+ * db 侧 change 行由调用方 unregisterChange（quick 会话行，非真实变更）。
+ *
+ * fail-closed：已翻「已完成」的条目拒绝取消（那是真实工作）；tasks.md 挂载行已勾选同样拒绝。
+ *
+ * @param {{ specBase: string, gitUser: string, qlId: string, sessionId: string|null }} opts
+ * @returns {Promise<{ ok: boolean, reason?: string, quicklogFile?: string, removedTaskRows: string[] }>}
+ */
+export async function cancelQuickSession({ specBase, gitUser, qlId, sessionId = null }) {
+  if (!qlId) return { ok: false, reason: '缺 qlId（--change <quick-会话ID> 或 --ql <ql-xxx>）' }
+  const quicklogDir = join(specBase, 'quicklog')
+  const user = sanitizeQuicklogUser(gitUser) || 'unknown'
+  const lockPath = join(quicklogDir, `.QUICKLOG-${user}.md.lock`)
+
+  // 1. QUICKLOG 翻「已取消」：找到条目，校验未完成，就地改状态行
+  let quicklogFile = null
+  let flipped = false
+  await withFileLock(lockPath, async () => {
+    // 用户文件缺失时扫全部 QUICKLOG 文件（条目可能在别的 user 文件里，如 CI 场景 user 漂移）
+    const files = existsSync(join(quicklogDir, `QUICKLOG-${user}.md`))
+      ? [`QUICKLOG-${user}.md`]
+      : listQuicklogFiles(quicklogDir)
+    for (const f of files) {
+      const p = join(quicklogDir, f)
+      const content = existsSync(p) ? readFileSync(p, 'utf8') : ''
+      if (!content.includes(`## ${qlId} |`)) continue
+      quicklogFile = p
+      const lines = content.split('\n')
+      const startIdx = lines.findIndex(l => l.startsWith(`## ${qlId} |`))
+      let endIdx = lines.length
+      for (let i = startIdx + 1; i < lines.length; i++) {
+        if (lines[i].startsWith('## ')) { endIdx = i; break }
+      }
+      for (let i = startIdx + 1; i < endIdx; i++) {
+        if (/^状态：已完成/.test(lines[i])) {
+          throw new Error(`${qlId} 已完成（真实工作记录），拒绝取消；如需修正请手改 QUICKLOG`)
+        }
+      }
+      for (let i = startIdx + 1; i < endIdx; i++) {
+        if (/^状态：进行中/.test(lines[i])) {
+          lines[i] = '状态：已取消'
+          flipped = true
+          break
+        }
+      }
+      if (flipped) {
+        const eol = content.includes('\r\n') ? '\r\n' : '\n'
+        writeFileSync(p, lines.join(eol === '\r\n' ? '\r\n' : '\n'))
+      }
+      break
+    }
+  })
+  if (!quicklogFile) return { ok: false, reason: `未在任何 QUICKLOG 文件找到条目 ${qlId}` }
+  if (!flipped) return { ok: false, reason: `${qlId} 状态行异常（非进行中也非已完成），请手查 QUICKLOG` }
+
+  // 2. tasks.md 挂载行移除（所有活跃变更统一扫——allocate 时可能挂多个关联变更）
+  const removedTaskRows = []
+  const changesRoot = join(specBase, 'changes')
+  if (existsSync(changesRoot)) {
+    for (const c of readdirSync(changesRoot, { withFileTypes: true })) {
+      if (!c.isDirectory() || c.name === 'archive') continue
+      const tp = tasksPath(specBase, c.name)
+      if (!existsSync(tp)) continue
+      await withFileLock(tasksLockPath(tp), () => {
+        const content = readFileSync(tp, 'utf8')
+        if (!content.includes(qlId)) return
+        const lines = content.split('\n')
+        const kept = lines.filter(l => {
+          const m = l.match(/^[-*]\s*\[([ xX])\]\s*(\S+)/)
+          if (m && m[2] === qlId) {
+            if (m[1] !== ' ') throw new Error(`${c.name}/tasks.md 的 ${qlId} 行已勾选（实际做了工作），拒绝取消`)
+            removedTaskRows.push(`${c.name}/tasks.md`)
+            return false
+          }
+          return true
+        })
+        if (kept.length !== lines.length) {
+          const eol = content.includes('\r\n') ? '\r\n' : '\n'
+          writeFileSync(tp, kept.join(eol === '\r\n' ? '\r\n' : '\n'))
+        }
+      })
+    }
+  }
+
+  // 3+4. 会话目录与 current marker
+  if (sessionId) {
+    try { rmSync(join(specBase, '.runtime', 'quick-sessions', sessionId), { recursive: true, force: true }) } catch {}
+    const marker = join(specBase, '.runtime', 'current-quick-run-id')
+    try {
+      if (existsSync(marker) && readFileSync(marker, 'utf8').trim() === sessionId) unlinkSync(marker)
+    } catch {}
+  }
+
+  return { ok: true, quicklogFile, removedTaskRows }
 }

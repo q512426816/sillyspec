@@ -45,6 +45,7 @@ export const definition = {
 7. 检查全局模板：\`ls ~/.sillyspec/templates/\`
    - 有匹配模板 → 询问是否基于模板
    - 无相关内容 → 跳过，不输出
+8. 查询知识库：\`cat {SPEC_ROOT}/knowledge/INDEX.md 2>/dev/null\`（无索引则跳过）——按需求关键词命中条目时读取对应知识文件；known-issues/已知坑要在方案期就规避，不要等 execute 的命中报告才发现
 
 ### 模块匹配方法
 读取 _module-map.yaml 后，根据用户描述的需求关键词，匹配相关模块：

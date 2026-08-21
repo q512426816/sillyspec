@@ -18,6 +18,6 @@
 12. **hook 拦截提交时禁止跳过**（`.husky/pre-push`），修复问题后再提交。
 13. **代码必须兼容 Windows / Linux / macOS**（路径 / 换行 / 并发都要顾）。
 14. **任务记录隔离**：永不重置 / reset / 清零已存在的 change；多个活跃 change 各自 `--change <名>` 隔离不重叠；quick 同一 QUICKLOG 按 ql-ID 条目追加，不冲突。
-15. **quicklog 手动精修**：CLI 只写骨架，`--done` 后手动补语义化标题 / 文件多行带括注 / 结果四段。
+15. **quicklog 结构化落盘**：末步 `--done` 用四参数 `--req/--cause/--solution/--result`（CLI 合成结构化 output 并自动提取标题/四段分行）；文件括注用 `--file-notes "path::注 || path2"`。骨架由 CLI 接管，`--done` 后按需核对即可，勿手拼模板。
 16. **代码可能随时在修改**（多 agent 并行），Edit 前重跑 + 查最新态；破坏性 git op 前先备份。
 17. **不奉承用户**，禁止"你说得对"类话术，直接给结论、依据、方案。

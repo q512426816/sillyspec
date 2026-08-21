@@ -236,6 +236,16 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
   promptText = promptText.replace(/<now-datetime>/g, nowDatetime)
   promptText = promptText.replace(/<now-timestamp>/g, nowTimestamp)
   promptText = promptText.replace(/<now-date>/g, nowDate)
+  // <now-iso-datetime>（scan frontmatter updated_at 用；与 scan-fix-headers 同款秒级格式）
+  promptText = promptText.replace(/<now-iso-datetime>/g, now.toISOString().slice(0, 19).replace('T', ' '))
+  // <git-head-short>（scan frontmatter source_commit 用；CLI 代查，agent 勿自跑 rev-parse）
+  if (promptText.includes('<git-head-short>')) {
+    let headShort = 'unknown'
+    try {
+      headShort = safeGit(cwd, ['rev-parse', '--short', 'HEAD']).value || 'unknown'
+    } catch { /* git 不可用 → unknown，scan-postcheck 失配时再核 */ }
+    promptText = promptText.replace(/<git-head-short>/g, headShort)
+  }
   // 替换 {REVIEW_SCHEMA_VERSION} 占位符（task review 示例模板用，值=CLI 当前 REVIEW_SCHEMA_VERSION 常量，
   // 避免 agent 照抄 design 目标版本与 CLI 写侧常量漂移；与 stage review 契约 renderReviewJsonContract 动态注入同源）
   if (promptText.includes('{REVIEW_SCHEMA_VERSION}')) {

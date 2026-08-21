@@ -43,7 +43,7 @@ sillyspec run quick --done --change quick-<hash> --output "…"  # 完成该会�
 ```
 
 - 这里的 `--change quick-<hash>` 是「恢复到该 CLI 生成的 session」，与下方 `--linked-changes` 的关联业务变更语义不同：想关联真实业务变更才用 `--linked-changes`。
-- 误启动的空壳会话：`sillyspec run quick --reset --change quick-<hash>` 重置其进度；QUICKLOG 里残留的「(quick 任务)」骨架条目需手动删除，不留占位条目。
+- 误启动的空壳会话：`sillyspec run quick --cancel --change quick-<hash>` 一键取消（QUICKLOG 条目翻「已取消」+ tasks.md 挂载行移除 + 会话目录清理 + db 行注销；已完成/已勾选的拒绝取消）。
 
 ## 通用参数（所有阶段适用）
 

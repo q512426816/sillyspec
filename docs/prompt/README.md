@@ -172,7 +172,7 @@ prompt 正文中出现的占位符，运行时由 `outputStep` 替换。下表�
 
 - 步骤构成：4 个固定前缀步骤（进度确认 → 加载上下文 → 确认 worktree 路径 → 确认执行范围）+ N 个 Wave 执行步骤（`buildWavePrompt`，N = plan.md 的 Wave 数，无 plan 时默认 3）+ 3 个全局验收步骤（对照设计检查 → 运行测试 → 代码审查）+ 2 个固定后缀步骤（知识库审阅 → 完成确认）。
 - Wave prompt 含 contractInjection（跨 task 端点/字段契约，无契约时为空）、prototypeInjection（HTML 原型引用，无原型时为空）、worktree 路径段、task 摘要。本目录展示的是**默认 3-wave、无契约/原型**的生成结果，3 个 Wave prompt 内容相同（默认任务名）。
-- 每个 Wave prompt 内嵌 **Task Review Gate**（强制每个 task 完成后、勾 checkbox 前写 `review.json`）。
+- 每个 Wave prompt 内嵌 **Task Review Gate**（强制每个 task 完成后、勾 checkbox 前写 `review.json`）和 **知识沉淀**段（Wave 收尾由主代理统一追加 `knowledge/uncategorized.md`，避免并行子代理改同一文件冲突）。
 
 ---
 

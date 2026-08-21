@@ -99,6 +99,9 @@ SillySpec CLI — 规范驱动开发工具包
   sillyspec module-impact --change <name>       生成 module-impact.md 骨架（文件×模块归属按 module-map 预填 + 未匹配清单）
   sillyspec endpoints extract --change <name> [--task task-NN] [--dir <dir>|--files <a.py,b.js>]  静态扫描路由装饰器生成 endpoints.json
   sillyspec scan-fix-headers [--project <名>]   scan 文档补 author/created_at header（幂等）
+  sillyspec workspace add <名> <路径> [--role] [--repo] | remove <名> | status   多项目工作区登记与状态探测
+  sillyspec scan-fix-leak --spec-dir <specRoot>  source_root 误写产物搬到平台 specRoot（污染一键修复）
+  sillyspec run quick --cancel --change <会话ID> [--ql <ql-id>]  取消误启动的 quick 会话（QUICKLOG 翻已取消 + 挂载行移除）
   sillyspec register-stage-review --change <name> (--stage <brainstorm|plan|execute> | --all) [--from <review.json>] [--refresh-hash] [--json]
                                       生成/adopt stage 级 review.json（docHash 自动算 + 写 marker，治 tier=independent marker 死锁）
 
@@ -600,6 +603,97 @@ async function main() {
           }
         }
       }
+      break;
+    }
+    case 'workspace': {
+      // 多项目工作区管理命令化（2026-08-21 审计第四批 C-1）：workspace skill 此前纯手写
+      // projects/*.yaml + bash for-loop 探测（skill 明言「CLI 无 workspace 命令」）。
+      // 机械面全命令化：add 外科写入（init 三字段 + role/repo 追加，已有值保留）、
+      // remove 删登记、status 三态探测表。
+      const wsSub = filteredArgs[1];
+      const wsArgs = filteredArgs.slice(2);
+      const wsFlag = (name) => {
+        const i = wsArgs.indexOf(name);
+        return i >= 0 && wsArgs[i + 1] ? wsArgs[i + 1] : null;
+      };
+      const { workspaceAdd, workspaceRemove, workspaceStatus } = await import('./workspace.js');
+      if (wsSub === 'add') {
+        const name = wsFlag('--name') || wsArgs[0];
+        const projPath = wsFlag('--path') || wsArgs[1];
+        if (!name || !projPath) {
+          console.error('用法: sillyspec workspace add <name> <相对路径> [--role <角色>] [--repo <仓库地址>]\n  登记子项目到 .sillyspec/projects/<name>.yaml（外科写入，已有字段保留；路径须存在）');
+          process.exit(2);
+        }
+        try {
+          const r = workspaceAdd({ cwd: dir, name, path: projPath, role: wsFlag('--role'), repo: wsFlag('--repo'), specDir });
+          console.log(`✅ ${r.created ? '已登记' : '已更新'}子项目 ${name}: ${r.file}`);
+          console.log(`   下一步：cd ${projPath} && sillyspec init（或 scan）`);
+        } catch (e) {
+          console.error(`❌ ${e.message}`);
+          process.exit(1);
+        }
+      } else if (wsSub === 'remove') {
+        const name = wsFlag('--name') || wsArgs[0];
+        if (!name) {
+          console.error('用法: sillyspec workspace remove <name>\n  删除子项目登记（.sillyspec/projects/<name>.yaml；不删项目本体）');
+          process.exit(2);
+        }
+        try {
+          const r = workspaceRemove({ cwd: dir, name, specDir });
+          console.log(`🗑️  已移除子项目登记 ${name}: ${r.file}（项目本体未动）`);
+          console.log('   记得 git add 该删除');
+        } catch (e) {
+          console.error(`❌ ${e.message}`);
+          process.exit(1);
+        }
+      } else if (!wsSub || wsSub === 'status') {
+        const r = workspaceStatus({ cwd: dir, specDir });
+        if (json) {
+          console.log(JSON.stringify({ command: 'workspace status', ...r }, null, 2));
+          break;
+        }
+        if (r.projects.length === 0) {
+          console.log('📭 无子项目登记（.sillyspec/projects/ 为空）——sillyspec workspace add <name> <路径> 登记后管理');
+          break;
+        }
+        console.log(`🏢 工作区（${r.projects.length} 个子项目）：`);
+        const icon = { scanned: '✅', initialized: '⚠️', unregistered: '❌', missing: '❌' };
+        for (const p of r.projects) {
+          console.log(`  ${icon[p.state] || '•'} ${p.name.padEnd(16)} ${(p.path || '').padEnd(18)} ${(p.role || '').padEnd(14)} ${p.detail}`);
+        }
+        if (r.sharedDocs.length > 0) {
+          console.log(`📄 共享规范：${r.sharedDocs.length} 份（${r.sharedDocs.join('、')}）`);
+        }
+        console.log('💡 操作：workspace add/remove <name> <路径>');
+      } else {
+        console.error('用法: sillyspec workspace add <name> <路径> [--role] [--repo] | remove <name> | status');
+        process.exit(2);
+      }
+      break;
+    }
+    case 'scan-fix-leak': {
+      // source_root 污染一键修复（2026-08-21 审计第四批 C-3）：平台模式 scan-postcheck 对
+      // 「agent 把产物写到 <source_root>/.sillyspec/ 而非 specRoot」只报 FAILED 不修，agent 手工
+      // 搬常搬错。本命令按检查同款清单搬到 specRoot（已存在不覆盖，报告 skipped）。
+      const sflSpecDir = specDir || (await import('./progress.js')).resolvePlatformSpecDir(dir, null);
+      if (!sflSpecDir || !existsSync(sflSpecDir)) {
+        console.error('❌ 缺 --spec-dir <specRoot>（平台模式 spec 根）——scan-fix-leak 把 <cwd>/.sillyspec/ 误写产物搬到 specRoot');
+        process.exit(2);
+      }
+      const { fixSourceRootLeak } = await import('./scan-postcheck.js');
+      const r = fixSourceRootLeak({ cwd: dir, specDir: sflSpecDir });
+      if (json) {
+        console.log(JSON.stringify({ command: 'scan-fix-leak', ...r }, null, 2));
+        break;
+      }
+      if (r.moved.length === 0 && r.skipped.length === 0) {
+        console.log('📭 无污染（<cwd>/.sillyspec/ 下无 docs/projects/workflows/knowledge/manifest/local 产物）');
+        break;
+      }
+      for (const m of r.moved) console.log(`📦 已搬移: ${m}`);
+      for (const d of r.removedDirs) console.log(`🧹 已清空目录: ${d}`);
+      for (const s of r.skipped) console.log(`⏭️  ${s}`);
+      if (r.moved.length > 0) console.log('   搬完重跑 sillyspec scan 的 postcheck 应转绿');
       break;
     }
     case 'next': {

@@ -121,7 +121,10 @@ sillyspec run quick --done --change <id> --req "…" --cause "…" --solution "�
    - 禁止使用 \`git add -A\`
    - 不要暂存 quick 开始前就已存在的无关改动
 3. QUICKLOG / tasks.md 记录由 CLI 在本 step 完成时自动收尾（翻「已完成」+ 勾选 task + 轮转），你无需手动建/翻骨架——**QUICKLOG 核对按需**（见下方「QUICKLOG 正文核对」；文件行可用 --file-notes 免手改）
-4. 如果发现项目特有的坑，追加到 \`{SPEC_ROOT}/knowledge/uncategorized.md\`
+4. 只有遇到**真正的项目特有坑**（跨变更可复用、未来 agent 可能再次踩到、且不是本任务专属细节）时，才追加到 \`{SPEC_ROOT}/knowledge/uncategorized.md\`：
+   - 格式：\`## <一句话标题>\` + 一段说明（坑的来龙去脉 + 规避/解法），末尾标注来源 \`（<quicklog-id>）\`
+   - 不要为了完成任务而硬凑条目；纯新增/纯样式/单点 bug 修复/临时绕过不写
+   - 拿不准时不写，宁缺毋滥
 5. 任务比预期复杂 → 建议用完整流程
 
 ### 模块文档同步

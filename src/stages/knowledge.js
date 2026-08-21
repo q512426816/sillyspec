@@ -232,11 +232,12 @@ export async function cmdValidate(dir, args, opts = {}) {
     }
   }
 
-  // 4. uncategorized.md 条目数（多了提示需清理）
+  // 4. uncategorized.md 条目数（多了提示需清理）。条目行契约是 `## <qlId> | <标题>`
+  //（quick 自动候选与手工条目同格式），h3 形态一并兼容；原 `^###` 只数 h3 恒为 0
   const uncategorizedPath = join(knowledgeDir, 'uncategorized.md')
   if (existsSync(uncategorizedPath)) {
     const content = readFileSync(uncategorizedPath, 'utf8')
-    const entryCount = (content.match(/^###\s+/gm) || []).length
+    const entryCount = (content.match(/^#{2,3}\s+\S/gm) || []).length
     if (entryCount >= 10) {
       warnings.push({
         code: 'too_many_uncategorized',

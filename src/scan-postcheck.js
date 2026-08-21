@@ -5,7 +5,7 @@
  * 平台模式下必须通过所有 check 才能 success，否则降级。
  */
 
-import { existsSync, readdirSync, readFileSync, mkdirSync, writeFileSync } from 'fs'
+import { existsSync, readdirSync, readFileSync, mkdirSync, writeFileSync, renameSync, rmdirSync } from 'fs'
 import { join, basename } from 'path'
 import { SCAN_STATUS, CHECK_SEVERITY, SCAN_REQUIRED_DOCS, SCAN_REQUIRED_DOCS_QUICK } from './constants.js'
 import { validateScriptCommands } from './stages/cmd-existence.js'
@@ -435,4 +435,77 @@ export function fixScanDocHeaders({ cwd, specDir = null, project = null }) {
     }
   }
   return { fixed, skipped }
+}
+
+/**
+ * source_root 污染一键修复（2026-08-21 agent-手工产出审计第四批 C-3）。
+ *
+ * runScanPostCheck 对「agent 把产物写到 <source_root>/.sillyspec/ 而非平台 specRoot」只报
+ * FAILED 不修——agent 手工搬目录常搬错。本函数把检查枚举的同款清单（docs/projects/workflows/
+ * knowledge 目录 + manifest.json/local.yaml）搬到 specRoot 对应位置（已存在的不覆盖，报告
+ * skipped），搬完源目录若空则删除。与检查的路径口径逐字一致（pollutePaths/polluteFiles）。
+ *
+ * @param {{ cwd: string, specDir: string }} opts cwd=source_root，specDir=平台 spec_root 绝对路径
+ * @returns {{ moved: string[], skipped: string[], removedDirs: string[] }}
+ */
+export function fixSourceRootLeak({ cwd, specDir }) {
+  if (!cwd || !specDir) return { moved: [], skipped: [], removedDirs: [] }
+  const moved = []
+  const skipped = []
+  const removedDirs = []
+  const pollutePaths = ['docs', 'projects', 'workflows', 'knowledge']
+  const polluteFiles = ['manifest.json', 'local.yaml']
+
+  // 目标目录确保存在
+  try { mkdirSync(join(specDir, '.runtime'), { recursive: true }) } catch {}
+
+  for (const file of polluteFiles) {
+    const src = join(cwd, '.sillyspec', file)
+    const dst = join(specDir, file)
+    if (!existsSync(src)) continue
+    if (existsSync(dst)) {
+      skipped.push(`local.yaml 已存在于 specRoot（保留两份，人工合并凭据后删源）`.replace('local.yaml', file))
+      continue
+    }
+    try {
+      renameSync(src, dst)
+      moved.push(`.sillyspec/${file} → specRoot/${file}`)
+    } catch (e) {
+      skipped.push(`.sillyspec/${file} 搬移失败: ${e.message}`)
+    }
+  }
+
+  for (const sub of pollutePaths) {
+    const srcDir = join(cwd, '.sillyspec', sub)
+    if (!existsSync(srcDir)) continue
+    let entries = []
+    try { entries = readdirSync(srcDir, { withFileTypes: true }) } catch { continue }
+    if (entries.length === 0) {
+      try { rmdirSync(srcDir); removedDirs.push(`.sillyspec/${sub}/（空目录）`) } catch {}
+      continue
+    }
+    const dstDir = join(specDir, sub)
+    mkdirSync(dstDir, { recursive: true })
+    let allMoved = true
+    for (const e of entries) {
+      const src = join(srcDir, e.name)
+      const dst = join(dstDir, e.name)
+      if (existsSync(dst)) {
+        skipped.push(`.sillyspec/${sub}/${e.name}（specRoot 已有同名，不覆盖——人工比对后择一保留）`)
+        allMoved = false
+        continue
+      }
+      try {
+        renameSync(src, dst)
+        moved.push(`.sillyspec/${sub}/${e.name} → specRoot/${sub}/${e.name}`)
+      } catch (err) {
+        skipped.push(`.sillyspec/${sub}/${e.name} 搬移失败: ${err.message}`)
+        allMoved = false
+      }
+    }
+    if (allMoved) {
+      try { rmdirSync(srcDir); removedDirs.push(`.sillyspec/${sub}/`) } catch {}
+    }
+  }
+  return { moved, skipped, removedDirs }
 }

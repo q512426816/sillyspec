@@ -214,6 +214,7 @@ const fixedPrefix = [
 
 ### 符号影响面扩展检查
 11. **符号影响面扫描**（Critical — execute 前必做）：
+    - **报告骨架勿手写**：先跑 \`sillyspec symbol-impact --change <change-name>\`——CLI 从 tasks.md 生成逐 task \`<!--TODO-->\` 骨架（gate 拦截时也会自动落一份）；把每行占位替换为真实结论（**未替换的 TODO 占位会被 gate 拒绝**，骨架不能直接过门）
     - 读取所有 tasks/task-NN.md，提取每个任务涉及的修改文件
     - 对每个修改文件，检查是否涉及以下变更类型：
       - class 构造函数参数变更（新增/删除/修改参数）
@@ -221,7 +222,7 @@ const fixedPrefix = [
       - DTO / 类型定义变更
       - API client 方法签名变更
       - 函数/方法签名变更（参数增删改）
-    - 如果涉及上述变更类型，执行调用点搜索：
+    - 如果涉及上述变更类型，执行调用点搜索（用于补骨架外的调用点证据，不是生成报告的方式）：
       \`\`\`bash
       rg "new ClassName\(" src/
       rg "ClassName\(" src/
@@ -230,7 +231,7 @@ const fixedPrefix = [
       \`\`\`
     - 将搜索到的调用点与 plan.md 和 tasks/task-NN.md 的 allowed_paths 对比
     - **发现调用点不在任何 task 的 allowed_paths 中 → 直接阻断 execute**
-    - **报告落盘（CLI 硬校验）**：把检查结论写入 \`{SPEC_ROOT}/changes/<change-name>/symbol-impact.md\`，每个 task 一行结论（task-XX: 变更类型 + 受影响调用点 + 是否在范围内；无签名级变更也要显式写「无签名级变更」）。\`--done\` 时 CLI 校验该文件存在且覆盖 plan.md 全部 task，缺失或不覆盖会阻断完成
+    - **报告落盘（CLI 硬校验）**：结论写入 \`{SPEC_ROOT}/changes/<change-name>/symbol-impact.md\`，每个 task 一行结论（task-XX: 变更类型 + 受影响调用点 + 是否在范围内；无签名级变更也要显式写「无签名级变更」）。\`--done\` 时 CLI 校验该文件存在且覆盖 plan.md 全部 task，缺失或不覆盖会阻断完成
     - 如果调用点不在范围内但任务明确写了"不改原因"，记录但不阻断
 
 ### 输出
@@ -1033,6 +1034,13 @@ task-XX 对应：{SPEC_ROOT}/.runtime/execute-runs/{EXECUTE_RUN_ID}/tasks/task-X
 - **不由各 task 子代理分别改**（同 Wave 并行子代理改同一文件会互相覆盖）——只由主代理在 Wave 收尾统一更新一次
 - 无 _module-map.yaml 时跳过模块匹配，仅按文件清单更新 unmapped 部分
 这是可选更新（不阻断 execute 完成），但保持 module-impact 与实际变更一致利于 verify 核对与 archive 终审。
+
+### 知识沉淀（主代理在本 Wave 收尾，与 module-impact.md 同批）
+本 Wave 各 task 子代理报告里若提到**真正的项目特有坑**（跨变更可复用、未来 agent 可能再次踩到、且不是本任务专属细节），由你在 Wave 收尾统一追加到 \`{SPEC_ROOT}/knowledge/uncategorized.md\`：
+- 条目格式：\`## <一句话标题>\` + 一段说明（坑的来龙去脉 + 规避/解法），末尾标注来源（task-XX）
+- 不由各 task 子代理分别写（并行改同一文件会互相覆盖），只由主代理在 Wave 收尾统一追加——与 module-impact.md 同一收尾节奏
+- 不要为了完成任务而硬凑条目；纯新增/纯样式/单点 bug 修复/临时绕过不写；拿不准时不写，宁缺毋滥
+- execute 末步「知识库审阅」会检查待确认条目并提示用户归类
 
 ### 完成后
 1. 为每个后端 router task，扫描变更文件提取 API 端点 artifact：

@@ -36,7 +36,7 @@ export const definition = {
 5. module-impact.md 第一行标题必须用中文：# 模块影响分析（Module Impact）— <变更简述>
 
 ### 降级（module-impact.md 不存在）
-若缺失（如旧变更未经新 plan 流程，或 small 变更从未生成），按原生成逻辑补一份：读 .sillyspec/workflows/archive-impact.yaml 的 impact-analyzer 角色规则 + git diff + _module-map.yaml，生成模块影响矩阵（模块 × 影响类型 × 相关文件 × 更新摘要 × needs_review，未匹配文件归入 unmapped 表）落盘 module-impact.md。
+若缺失（如旧变更未经新 plan 流程，或 small 变更从未生成）：先跑 \`sillyspec module-impact --change <change-name>\`——CLI 按 _module-map.yaml paths 前缀匹配预填「模块影响矩阵」骨架（文件×模块归属 + 未匹配文件清单，机械部分全代算），你只需逐行填「影响类型」（逻辑变更/数据结构变更/接口变更/调用关系变更/配置变更/新增）与 needs_review 标记，补首行中文标题 \`# 模块影响分析（Module Impact）— <变更简述>\`。骨架无从生成（无 module-map / 无 diff）时才按 archive-impact.yaml 的 impact-analyzer 角色规则全手写。
 
 确认完成后，下一步 sync-module-docs 会读 module-impact.md 更新模块卡片文档。`,
       outputHint: 'module-impact.md 终审结果 + 修正摘要',

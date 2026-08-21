@@ -308,7 +308,7 @@ function doInstall(projectDir, tools, subprojects = [], specDir = null, options 
   mkdirSync(knowledgeDir, { recursive: true });
   const indexPath = join(knowledgeDir, 'INDEX.md');
   if (!existsSync(indexPath)) {
-    writeFileSync(indexPath, `# Knowledge Index\n\n> 子代理任务开始前查询此文件，按关键词匹配，只读命中的知识文件。\n> execute/quick 执行中发现的坑自动追加到 uncategorized.md，经用户确认后归类到对应文件。\n\n<!-- 格式：关键词1|关键词2|关键词3 → 文件路径 -->\n<!-- 示例：mybatis-plus|分页|Page → pagination.md -->\n<!-- 示例：跨域|CORS|preflight → cors.md -->\n`);
+    writeFileSync(indexPath, `# Knowledge Index\n\n> 子代理任务开始前查询此文件，按关键词匹配，只读命中的知识文件。\n> 只有遇到真正的项目特有坑（跨变更可复用、未来 agent 可能再次踩到）时才追加到 uncategorized.md；不要为了完成任务硬凑条目。经用户确认后归类到对应文件并更新本索引。\n\n<!-- 格式：关键词1|关键词2|关键词3 → 文件路径 -->\n<!-- 示例：mybatis-plus|分页|Page → pagination.md -->\n<!-- 示例：跨域|CORS|preflight → cors.md -->\n`);
   }
   const uncatPath = join(knowledgeDir, 'uncategorized.md');
   if (!existsSync(uncatPath)) {

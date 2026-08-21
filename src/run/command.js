@@ -45,6 +45,7 @@ const VALUE_FLAGS = new Set([
   '--spec-dir', '--spec-root', '--runtime-root', '--workspace-id', '--scan-run-id',
   '--files', '--file-notes', '--from-step', '--mode', '--dir', '--confirm-mode',
   '--req', '--cause', '--solution', '--result', // quick 末步四字段参数（合成 --output，见 outputText 解析段）
+  '--ql', // quick --cancel 显式指定 qlId（缺省读会话 guard.json）
   '--base', // scan diff 基线 commit（吃值；只在 run scan --diff 转发路径消费）
 ])
 
@@ -233,6 +234,18 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
   const isStatus = flags.includes('--status')
   const isReset = flags.includes('--reset')
   const isReopen = flags.includes('--reopen')
+  // --cancel（2026-08-21 审计第四批 C-2）：quick 误启动会话的官方取消口。取消 = QUICKLOG 条目
+  // 翻「已取消」+ tasks.md 挂载行移除 + 会话 guard 目录清理 + db 行注销（取消 quick 会话行，
+  // 非真实变更）。fail-closed：已完成/已勾选的拒绝（真实工作记录）。
+  const isCancel = flags.includes('--cancel')
+  if (isCancel && stageName !== 'quick') {
+    console.error('❌ --cancel 仅支持 quick 阶段（sillyspec run quick --cancel --change <quick-会话ID>）')
+    process.exit(2)
+  }
+  if (isCancel && (isDone || isSkip || isReset || isReopen || isStatus)) {
+    console.error('❌ --cancel 与 --done/--skip/--reset/--reopen/--status 互斥')
+    process.exit(2)
+  }
   const fromStepValue = getFlagValue('--from-step')
   const isConfirm = flags.includes('--confirm')
   const isSkipApproval = flags.includes('--skip-approval')
@@ -611,7 +624,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
 
   // 未知参数 fail-fast
   const knownFlags = new Set([
-    '--done', '--skip', '--status', '--reset', '--confirm', '--skip-approval',
+    '--done', '--skip', '--status', '--reset', '--confirm', '--skip-approval', '--cancel', '--ql',
     '--wait', '--continue', '--non-interactive', '--interactive',
     '--reason', '--options', '--answer', '--confirm-mode',
     '--output', '--input', '--change', '--linked-changes',
@@ -972,6 +985,54 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
         fromStep: revStageData.reopenedFromStep,
       }
     }
+  }
+
+  // ── quick --cancel：误启动会话的取消口（数据源 quicklog.js cancelQuickSession）──
+  // --change 取 quick-<uuid8> 会话 ID（quick 启动时 CLI echo 的 sessionId）；qlId 从会话 guard
+  // 或 --ql 显式参数解析。取消后 db 行注销（quick 会话行非真实变更，直接 unregister 安全）。
+  if (stageName === 'quick' && isCancel) {
+    const cancelSessionRaw = quickSessionId || changeName
+    const qlFlag = getFlagValue('--ql')
+    if (!cancelSessionRaw || cancelSessionRaw === 'quick-unknown') {
+      console.error('用法: sillyspec run quick --cancel --change <quick-会话ID> [--ql <ql-xxx>]\n  取消误启动的 quick 会话：QUICKLOG 条目翻「已取消」+ tasks.md 挂载行移除 + 会话目录清理 + db 行注销。\n  已完成/已勾选的会话拒绝取消（真实工作记录）')
+      process.exit(2)
+    }
+    const specBase = resolveSpecDir(cwd, { specDir })
+    // qlId 优先 --ql 显式；否则读会话 guard.json（allocate 时 CLI 写入）；再退 current marker 旁的会话
+    let qlId = qlFlag
+    if (!qlId) {
+      const guardPath = join(specBase, '.runtime', 'quick-sessions', cancelSessionRaw, 'guard.json')
+      try {
+        if (existsSync(guardPath)) qlId = JSON.parse(readFileSync(guardPath, 'utf8')).qlId
+      } catch { /* guard 损坏 → 下面按找不到报错 */ }
+    }
+    if (!qlId) {
+      console.error(`❌ 无法定位会话 ${cancelSessionRaw} 的 qlId（guard.json 缺失/损坏）——显式传 --ql <ql-xxx>（QUICKLOG 条目头）`)
+      process.exit(1)
+    }
+    let gitUser = 'unknown'
+    try { gitUser = (await import('../git-helper.js')).git(cwd, ['config', 'user.name']) || 'unknown' } catch {}
+    const { cancelQuickSession } = await import('../quicklog.js')
+    let result
+    try {
+      result = await cancelQuickSession({ specBase, gitUser, qlId, sessionId: cancelSessionRaw })
+    } catch (e) {
+      console.error(`❌ 取消失败: ${e.message}`)
+      process.exit(1)
+    }
+    if (!result.ok) {
+      console.error(`❌ 取消失败: ${result.reason}`)
+      process.exit(1)
+    }
+    // db 侧：quick 会话行注销（quick-<uuid8> 是进度库里的会话行，非真实变更目录）
+    try {
+      pm.unregisterChange(cwd, cancelSessionRaw)
+    } catch { /* 行不存在/平台模式 → 会话目录清理已完成，db 无行可注销不算失败 */ }
+    console.log(`🗑️  已取消 quick 会话 ${cancelSessionRaw}（qlId ${qlId}）`)
+    console.log(`   QUICKLOG 条目翻「已取消」: ${result.quicklogFile}`)
+    if (result.removedTaskRows.length > 0) console.log(`   tasks.md 挂载行已移除: ${result.removedTaskRows.join('、')}`)
+    console.log('   会话 guard 目录与 current marker 已清理（已完成条目不会被取消）')
+    return
   }
 
   // quick 启动（非 --done）：reset steps + 写 current-quick-run-id（本会话 sessionId，作 --done fallback）。
