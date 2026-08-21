@@ -460,8 +460,8 @@ async function raceWithAbort(op, timeoutMs = SYNC_TOTAL_TIMEOUT_MS) {
 
 // quick 会话 ID 形态（quick-<hex8>）。与 run/command.js QUICK_SID_RE、progress.js
 // initChange 的跳过实体目录判断同源；shared.js 不反向 import command.js（重模块），
-// 局部复制正则保持轻载——改形态时三处同改。
-const QUICK_SID_RE = /^quick-[0-9a-f]{8}$/
+// 局部复制正则保持轻载——改形态时三处同改（prompt.js 经本导出消费，勿再复制一份）。
+export const QUICK_SID_RE = /^quick-[0-9a-f]{8}$/
 
 export async function triggerSync(cwd, changeName, platformOpts = {}, opts = {}) {
   // 平台模式（SillyHub）走自己的回传链路，不走 CLI 内置 sync

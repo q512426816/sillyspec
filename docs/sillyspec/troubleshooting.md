@@ -247,3 +247,13 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 3. generateTaskReviewDrafts 改全量对账：空归属 task 也生成「无归属草稿」（cannot_verify + changedFiles: [] + requiredEvidence 明示「allowed_paths 未命中 diff，需人工确认实际改动，确属未实现则回 fail」），返回值带 noAttribution 计数、--done 输出区分提示。安全性：空 changedFiles 不触发 emptyDiff 伪造误判（该判定看真实 git diff），shouldAutoCheckTask 零 diff 守卫保证不自动勾选，verify 阶段仍兑现 requiredEvidence——草稿从「漏了让 agent 从零写」变成「给了骨架让 agent 升级 verdict」。测试 task-review-draft.test.mjs 更新（23 断言全过）。
 
 **关联记忆**：`[[sillyspec-ruff-crlf-precommit-loop]]`、`[[sillyspec-stage-review-dochash-manual-resync]]`、`[[sillyspec-task-review-draft-skip-leak]]`
+
+## 18. quick 会话的文件路径规则提示误导纯代码 quick（2026-08-21 已修）
+
+**症状（ql-20260821-011 实证）**：纯代码 quick（无 spec 文档产出）每步都被注入「**所有变更文件必须写入 `.sillyspec/changes/quick-xxx/` 目录下**」——quick 会话按设计无实体变更目录（progress.js initChange 对 quick-<hex8> 跳过建目录）、代码改动本来就该写源码目录，反复提示一个用不到的目录是误导。
+
+**根因**：outputStep 的路径规则注入（prompt.js）只按 `changeName` 存在与否分流，未区分 quick 会话 ID（quick-<hex8>）与普通变更名——普通变更的「变更文件集中在 changes/<名>/」铁律被套用到无目录语义的 quick 会话。
+
+**解法（已修）**：按 QUICK_SID_RE（shared.js 导出，与 command.js/progress.js 同源）分流——quick 会话改述条件化：「纯代码改动直接写源码目录，无目录限制。仅当本 quick 需要落 spec 文档（复杂任务建议升级完整流程）时才写 changes/<id>/；QUICKLOG/tasks.md 由 CLI 接管不要手建」；普通变更的原硬规则原样保留。测试 quick-prompt-path-rule.test.mjs（6 断言，quick/普通双路径）。
+
+**关联记忆**：`[[sillyspec-quick-path-rule-misleading]]`

@@ -21,7 +21,7 @@
 import { basename, join } from 'node:path'
 import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs'
 import { stageRegistry } from '../stages/index.js'
-import { resolvePromptIncludes, resolveRuntimeRoot, safeGit, WAIT_MARKER_RE } from './shared.js'
+import { resolvePromptIncludes, resolveRuntimeRoot, safeGit, WAIT_MARKER_RE, QUICK_SID_RE } from './shared.js'
 import { renderStageContract } from '../stage-contract-spec.js'
 import { parseModuleMapSimple } from '../modules.js'
 import { REVIEW_SCHEMA_VERSION, isValidExecuteRunId } from '../task-review.js'
@@ -722,7 +722,15 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
       // 普通本地保持相对 '.sillyspec' 展示；runtimeRoot-only 组合不再 join(null) 崩溃
       const changeDirBase = platformOpts?.specRoot || platformOpts?.specDriftAnchor || '.sillyspec'
       const changeDir = join(changeDirBase, 'changes', changeName)
-      console.log(`- **文件路径规则：所有变更文件必须写入 \`${changeDir}/\` 目录下。不要自己拼接路径，直接使用 changeDir 值。示例：\`${changeDir}/proposal.md\`**`)
+      // quick 会话（quick-<hex8>）按设计无实体变更目录（progress.js initChange 同款跳过），
+      // 纯代码 quick 根本不产 spec 文档——「所有变更文件必须写入 changes/<change>/」的硬规则
+      // 对它是误导（ql-20260821-011 实证：CLI 反复提示一个用不到的目录）。改述条件化：
+      // 仅「若本 quick 决定补文档」才落该目录，代码改动照常写源码目录。
+      if (QUICK_SID_RE.test(changeName)) {
+        console.log(`- **文件路径规则（quick 会话）：纯代码改动直接写源码目录，无目录限制。仅当本 quick 需要落 spec 文档（design/plan 等，复杂任务建议升级完整流程）时才写 \`${changeDir}/\`；QUICKLOG/tasks.md 记录由 CLI 接管，不要手建。**`)
+      } else {
+        console.log(`- **文件路径规则：所有变更文件必须写入 \`${changeDir}/\` 目录下。不要自己拼接路径，直接使用 changeDir 值。示例：\`${changeDir}/proposal.md\`**`)
+      }
     }
   }
   const changeFlag = changeName ? ` --change ${changeName}` : ''
