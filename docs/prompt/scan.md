@@ -219,6 +219,7 @@
   generator: sillyspec-scan
   ---
   ```
+  （`<git-head-short>` / `<now-iso-datetime>` 两占位符由 CLI 注入 prompt 时自动替换为当前 HEAD 短哈希与时间——照 prompt 里已替换的真实值抄写，勿自跑 git rev-parse；漏 header 事后 `sillyspec scan-fix-headers` 一键补 author/created_at）
 - 覆盖已有 scan 文档前先读取旧 frontmatter；如果旧文档的 `source_commit` 与当前 HEAD 不一致，或旧文档 `updated_at` 晚于本次 scan 开始时间，不要覆盖。
 - 如果用户明确传入 `--force-rescan`，允许覆盖，但仍需写入新的 `source_commit` 和 `updated_at`。
 

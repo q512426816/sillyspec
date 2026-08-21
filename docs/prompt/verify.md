@@ -238,11 +238,11 @@
    - Gradle：`./gradlew :<模块>:test`
    - npm/pnpm：`pnpm test --filter=<包名>` 或 `npm test -- --testPathPattern=<相关文件>`
    - Python：`pytest <变更模块路径>/`
-3. 如果 local.yaml 有 lint 命令，运行 lint 检查
+3. 如果 local.yaml 有 lint 命令，运行 lint 检查并修复报出的问题（--done 时 CLI 会亲自实测 commands.lint 对账，实测失败会明示）
 4. 搜索技术债务：grep TODO/FIXME/HACK/XXX（仅限变更文件）
 
 ### 注意
-- **CLI 对账机制**：verify 阶段最终 --done 时，CLI 会亲自执行 local.yaml 的 commands.test（同步，耗时可能较长）；实测失败会直接阻断 verify 完成，谎报测试结果没有意义
+- **CLI 对账机制**：verify 阶段最终 --done 时，CLI 会亲自执行 local.yaml 的 commands.test（同步，耗时可能较长）；实测失败会直接阻断 verify 完成，谎报测试结果没有意义。commands.lint 同样会被 CLI 实测对账（advisory）
 - 冒烟测试非必需：全量/模块实测结果以 CLI 对账为准，本步跑的结果仅供你提前发现问题并写入验证报告
 
 ### 输出
@@ -275,57 +275,15 @@
    你只需：在 verify-result.md 的「变更风险等级」section 如实记录变更性质；若变更涉及 daemon/backend 跨进程、session/lease/lifecycle 状态机、或部署启动路径，在「Runtime Evidence」section 提供真实集成证据（启动命令、daemon↔backend 调用与日志关键片段、终态断言）。
    - **集成证据是自报告、CLI 不独立运行时核验**：「Runtime Evidence」由你如实填写，CLI 只校验其**字面存在**（是否含关键词），**不会替你启动 daemon、打真实请求或跑迁移**——它是否名副其实取决于你是否实跑过。务必实跑后据实填写，不得凭堆关键词通过门控。（测试套件对账另算：commands.test 由 CLI 真实执行，那块谎报无效。）
 
-3. 生成 verify-result.md 文件，保存到 `.sillyspec/changes/<change-name>/verify-result.md`
-4. 给出结论：PASS / PASS WITH NOTES / FAIL（受风险门控约束）
+3. **生成 verify-result.md 骨架（勿从零手写）**：先跑 `sillyspec verify-probes --change <change-name> --init`——一条命令生成九章节骨架（已存在不覆盖），其中**探针结果章节已机械预填**（探针 1 的 TODO/FIXME 命中清单、探针 3 的测试覆盖、探针 5 的 API 契约对账表、探针 6 的删除对账三态判定），文件落 `.sillyspec/changes/<change-name>/verify-result.md`。你只需把各 `<!--TODO-->` 占位替换为语义结论；半语义探针（2 关键词覆盖 / 4 决策追踪）与断言抽查、集成盲区标注由你补在对应 TODO 处
+4. 给出结论：PASS / PASS WITH NOTES / FAIL（受风险门控约束）——**结论必须写明 PASS/FAIL 字样，留「待填」会被 gate 判不过**
 5. **核对 module-impact.md**（若 changes/<change>/module-impact.md 存在）：对照本次实际代码变更（git diff）与 module-impact.md 的模块影响矩阵，发现不一致（漏标受影响模块 / 影响类型错误 / 实际未触碰的模块被误标）则在 verify-result.md 标注。module-impact 由 plan 首版生成、execute 各 Wave 更新，verify 是最后一次核对机会（archive 仅终审不再生成）。这是 advisory 核对（不阻断 verify 完成），但 module-impact 与实际严重背离应记为风险。
 
-### verify-result.md 格式
-```markdown
-# 验证报告（Verify Result）
+### verify-result.md 章节结构（骨架已含，占位替换即可）
 
-## 结论
-PASS / PASS WITH NOTES / FAIL
+结论（PASS / PASS WITH NOTES / FAIL）→ 任务完成度 → 设计一致性 → 探针结果（已预填）→ 测试结果 → 决策追踪矩阵（`| 决策 ID | FR | Task | Evidence | 状态 |`，存在 decisions.md 才留）→ 技术债务 → 变更风险等级 → Runtime Evidence → 代码审查。
 
-## 任务完成度
-（逐项检查任务的结果）
-
-## 设计一致性
-（对照 design.md 的检查结果）
-
-## 探针结果
-- 未实现标记扫描：...
-- 关键词覆盖：...
-- 测试覆盖（含断言有效性抽查）：...
-- 决策追踪覆盖：...
-- API 契约对账：...
-- 代码删除对账：声明修改/新增却被整文件删除 = 高风险；清单未列出的删除 = 未声明（CLI 会用 git diff --name-status HEAD advisory 复核，仅 warn 不阻断——是否 FAIL blocker 由你诚实判定）
-
-## 决策追踪矩阵（如存在 decisions.md）
-| 决策 ID | FR | Task | Evidence | 状态 |
-|---|---|---|---|---|
-| D-001@v1 | FR-01 | task-01 | test/file/path | PASS/PARTIAL/MISSING |
-
-## 测试结果
-（测试套件执行结果）
-
-## 技术债务
-（TODO/FIXME/HACK 统计）
-
-## 变更风险等级
-（自动检测的 change_risk_profile: doc-only / unit-sufficient / contract-required / integration-critical / deployment-critical；若 design.md frontmatter 有 risk_level 显式声明，以声明为准并在此注明「显式声明 = <等级>」+ 理由）
-
-## Runtime Evidence（integration-critical / deployment-critical 必填；自报告，CLI 仅校验字面存在、不独立核验，须真实执行过）
-按本次变更实际触碰的运行时组件填写（模板是通用形态——长驻进程 / 服务端点 / 生命周期状态机的证据结构；未涉及的行写「不涉及」并注明原因，勿堆砌无关关键词）：
-- 长驻进程/服务 启动命令：
-- 服务地址（本变更触碰的端点）：
-- 触发核心路径的请求/命令（附关键响应）：
-- 进程日志关键片段（证明走了新路径、无降级/回退分支）：
-- 生命周期终态断言（本变更涉及的状态机：初始态 → 运行态 → 终态，逐个确认到达）：
-- 失败模式排除（针对本变更声明的风险，逐条说明为何未触发）：
-
-## 代码审查
-（问题列表 + 总体评价）
-```
+**Runtime Evidence 行结构**（integration/deployment-critical 必填；按实际触碰的运行时组件写，未涉及的行写「不涉及」勿堆关键词）：长驻进程启动命令 / 触碰的服务端点 / 触发核心路径的请求（附关键响应）/ 进程日志关键片段（证明走了新路径）/ 生命周期终态断言（初始态→运行态→终态）/ 失败模式排除（逐条说明为何未触发）。
 
 ### 输出
 verify-result.md 路径 + 验证报告摘要 + 下一步命令

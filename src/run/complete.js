@@ -222,10 +222,13 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
   }
 
   // ── execute deps 验证硬门（change 2026-06-28-worktree-deps-provision）──
-  await enforceDepsGate(stageName, cwd, changeName, steps[currentIdx], steps, currentIdx, specBase, platformOpts)
+  // persist 回调：gate 置 step=blocked 后 exit(1) 前落库（否则 blocked 只在内存，
+  // progress show/doctor 看到的仍是 pending，误导诊断）
+  const persistBlocked = () => pm._write(cwd, progress, changeName)
+  await enforceDepsGate(stageName, cwd, changeName, steps[currentIdx], steps, currentIdx, specBase, platformOpts, persistBlocked)
   // review.json 字段硬门（坑 review-json-field-gap）：已勾 [x] task 的 review.json 必须 schema 完整，
   // 提前到每次 --done 校验（而非等 Task Review Gate 在整阶段收尾才暴露，迫使用户事后批量补）。
-  await enforceReviewJsonGate(stageName, cwd, changeName, steps[currentIdx], steps, currentIdx, specBase, platformOpts)
+  await enforceReviewJsonGate(stageName, cwd, changeName, steps[currentIdx], steps, currentIdx, specBase, platformOpts, persistBlocked)
   // 符号影响面报告硬门（ql-20260816-005-3d7f）：execute「加载上下文」步产出落盘核验——
   // symbol-impact.md 存在 + plan 每 task 有结论行；防前缀步被一句「上下文在会话内」盖章跳过。
   await enforceSymbolImpactGate(stageName, changeName, steps[currentIdx]?.name, specBase)
@@ -595,6 +598,22 @@ async function buildDraftContext(cwd, changeName) {
 }
 
 /**
+ * 预取 base..head 全量 diff 文件集（一次 git spawn），供草稿零 diff 守卫按 task 内存归属判定。
+ * 此前每草稿 task 一次 `git diff --name-only base..head -- <files>`（同一对 base..head 查 N 次，
+ * 8 task ≈ 8-16 次串行 spawn）。失败返回 null → 调用方回退逐 task 实测路径。
+ */
+function prefetchDiffFileSet(ctx) {
+  if (!ctx?.gitDir || !ctx.base || !ctx.head) return ctx
+  try {
+    const out = gitQuiet(ctx.gitDir, ['diff', '--name-only', `${ctx.base}..${ctx.head}`], { trim: true })
+    if (!out) return ctx
+    return { ...ctx, diffFileSet: new Set(out.split('\n').filter(Boolean)) }
+  } catch {
+    return ctx
+  }
+}
+
+/**
  * 判定 task 是否该被 autoCheckPlanFromReviews 自动勾选。
  * 端到端/deployment-critical task 要求 review spec+quality 双 pass（cannot_verify 不算，防批量完成
  * 放行未真验的端到端 task）；普通 task 非 fail 即可（保主 agent 直接实现模式体验，其 cannot_verify
@@ -627,6 +646,16 @@ export function shouldAutoCheckTask(r, endToEnd, ctx = null) {
     if (!ctx.gitDir || !ctx.base || !ctx.head) {
       console.warn(`⚠️ ctx 信息不完整（gitDir=${ctx.gitDir}, base=${ctx.base}, head=${ctx.head}），跳过草稿 diff 校验，保守不勾`)
       return false
+    }
+    // 预取路径：一次全量 diff 文件集内存归属（autoCheckPlanFromReviews/批量路径已 prefetch）
+    if (ctx.diffFileSet) {
+      const hit = changedFiles.filter(f => ctx.diffFileSet.has(f))
+      if (hit.length === 0) {
+        console.warn(`⚠️ 草稿 review 实测 diff 为空（base=${ctx.base.slice(0, 8)}, head=${ctx.head.slice(0, 8)}, files=${changedFiles.length}），跳过自动勾选`)
+        return false
+      }
+      console.log(`   ✓ 草稿 diff 校验通过（实测 ${hit.length}/${changedFiles.length} 个声明文件有改动）`)
+      return true
     }
     try {
       // 实测 diff：git diff --name-only <base>..<head> -- <changedFiles>
@@ -670,7 +699,7 @@ async function autoCheckPlanFromReviews({ stageName, changeName, cwd, platformOp
     const executeRunId = c
 
     // W2 task-04 FR-03：构造 ctx 供草稿零 diff 守卫用（与 task-review.js generateTaskReviewDrafts 同源）
-    const ctx = await buildDraftContext(cwd, changeName)
+    const ctx = prefetchDiffFileSet(await buildDraftContext(cwd, changeName))
 
     // tasks.md 是 agent 与 CLI 都会写的共享文件（agent 勾 checkbox、此处 autoCheck 也勾选）。
     // 读-改-写必须整体持锁（withFileLock 串行化多进程），否则并发 execute --done / 手动勾选互相覆盖
@@ -748,7 +777,7 @@ async function detectExecuteBatchFinish({ pm, stageName, changeName, cwd, specBa
     }
 
     // 构造 ctx 供草稿零 diff 校验用（与 task-04 同源）
-    const ctx = await buildDraftContext(cwd, changeName)
+    const ctx = prefetchDiffFileSet(await buildDraftContext(cwd, changeName))
     const runtimeRoot = resolveRuntimeRoot({ specRoot: specBase }, specBase)
     const runIdFile = join(runtimeRoot, `current-execute-run-id-${changeName}`)
     const blockedTasks = []
@@ -783,11 +812,18 @@ async function detectExecuteBatchFinish({ pm, stageName, changeName, cwd, specBa
           blockedTasks.push(taskId)
           continue
         }
-        // 草稿且有 changedFiles → 实测 diff 校验（ctx 与 task-04 同源）
+        // 草稿且有 changedFiles → 实测 diff 校验（ctx 与 task-04 同源；优先用预取全量集，
+        // 免去每 task 一次 spawn——与 shouldAutoCheckTask 同口径）
         if (ctx && ctx.gitDir && ctx.base && ctx.head) {
           try {
-            const diffResult = gitQuiet(ctx.gitDir, ['diff', '--name-only', `${ctx.base}..${ctx.head}`, '--', ...changedFiles], { trim: true })
-            if (!diffResult || diffResult.trim() === '') {
+            let hit = null
+            if (ctx.diffFileSet) {
+              hit = changedFiles.filter(f => ctx.diffFileSet.has(f))
+            } else {
+              const diffResult = gitQuiet(ctx.gitDir, ['diff', '--name-only', `${ctx.base}..${ctx.head}`, '--', ...changedFiles], { trim: true })
+              hit = diffResult && diffResult.trim() !== '' ? changedFiles : []
+            }
+            if (hit.length === 0) {
               blockedTasks.push(taskId)
             }
           } catch (e) {

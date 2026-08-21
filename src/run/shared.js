@@ -17,9 +17,10 @@ import os from 'node:os'
 
 // safeGit 收口至 src/git-helper.js：import 建本地词法绑定（本模块内部 L128/130/431 调用）+
 // re-export 供 run/ 层现有调用方继续从 shared.js 引用（pure re-export 不建本地绑定，会致内部 ReferenceError）。
-import { safeGit } from '../git-helper.js'
+// unquoteGitPath 同理：parsePorcelainPath 内部消费 + re-export。
+import { safeGit, unquoteGitPath } from '../git-helper.js'
 import { createHash } from 'node:crypto'
-export { safeGit }
+export { safeGit, unquoteGitPath }
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -133,23 +134,41 @@ export function resolveSpecDir(cwd, opts = {}) {
  * 被 countAncestorSpecDirs（漂移提醒 warn）与 locateQuickSessionGuard（quick 漂移 fail-fast
  * 守卫，坑 quick-cwd-drift-splits-specdir）共用 —— 单一真相源，避免两处各自重写祖先枚举漂移。
  */
+// 祖先链 ceiling（git 主仓根）按 cwd 进程级缓存：每条 stage 命令必经（countAncestorSpecDirs
+// 漂移提醒 + quick 漂移守卫两条路径），此前固定 2 次串行 git spawn（Windows 60-200ms）。
+// 只缓存"git root 已找到"的结果——非 git 仓库不缓存，防测试流程中途 git init 后读到陈旧 null。
+const _ancestorCeilingCache = new Map()
+
+function resolveAncestorCeiling(resolved) {
+  if (_ancestorCeilingCache.has(resolved)) return _ancestorCeilingCache.get(resolved)
+  // 一次 spawn 拿两值（rev-parse 按参数序输出，每值一行）
+  const out = safeGit(resolved, ['rev-parse', '--show-toplevel', '--git-common-dir']).value
+  let ceiling = null
+  if (out) {
+    const lines = out.split('\n')
+    const topLevel = (lines[0] || '').trim()
+    if (topLevel) ceiling = resolve(topLevel)
+    const commonDir = (lines[1] || '').trim()
+    if (commonDir) {
+      const absCommonDir = resolve(resolved, commonDir)
+      if (existsSync(absCommonDir) && statSync(absCommonDir).isDirectory()) {
+        const mainRoot = dirname(absCommonDir)
+        // 主仓根是 worktree 根的祖先时取它(更靠上);monorepo/单仓两者相等不替换,行为不变
+        if (!ceiling || resolve(ceiling).startsWith(resolve(mainRoot) + sep)) ceiling = mainRoot
+      }
+    }
+  }
+  if (ceiling) _ancestorCeilingCache.set(resolved, ceiling)
+  return ceiling
+}
+
 export function ancestorSpecDirs(cwd) {
   const resolved = resolve(cwd)
   // 上界 = git root。但 linked worktree 内 --show-toplevel 返回 worktree 根(非主仓根),
   // 祖先链到不了主仓 .sillyspec → 漂移提醒/quick 守卫全哑(坑 worktree-execute-spec-drift)。
   // 复刻 worktree.js _resolveMainRepoRoot:--git-common-dir 的 dirname 才是主仓根,取更靠上者作 ceiling。
   // (git 可能返回相对路径,须 resolve(cwd, commonDir) 绝对化,否则相对 process.cwd 误解析。)
-  const topLevel = safeGit(resolved, ['rev-parse', '--show-toplevel']).value
-  let ceiling = topLevel ? resolve(topLevel) : null
-  const commonDir = safeGit(resolved, ['rev-parse', '--git-common-dir']).value
-  if (commonDir) {
-    const absCommonDir = resolve(resolved, commonDir)
-    if (existsSync(absCommonDir) && statSync(absCommonDir).isDirectory()) {
-      const mainRoot = dirname(absCommonDir)
-      // 主仓根是 worktree 根的祖先时取它(更靠上);monorepo/单仓两者相等不替换,行为不变
-      if (!ceiling || resolve(ceiling).startsWith(resolve(mainRoot) + sep)) ceiling = mainRoot
-    }
-  }
+  const ceiling = resolveAncestorCeiling(resolved)
   const dirs = []
   let dir = resolved
   while (true) {
@@ -499,6 +518,12 @@ export async function triggerSync(cwd, changeName, platformOpts = {}, opts = {})
  */
 const AUTO_PULL_THROTTLE_MS = 10_000
 
+// 自动 pull 专属熔断（2026-08-21 性能审查 PERF-04）：自动注入点（stage 命令分发前 / approve 前）
+// 在打印任何输出前 await，daemon 慢/挂时每 10s 窗口首条命令硬等上限即体感 hang——降为 2s。
+// 手动 `platform pull` 不经此路径（用户显式发起，等待 8s 合理）。超时语义与 8s 版一致：
+// abort 在飞请求（HUB-09），错过窗口的平台更新由下一条 >10s 命令或 push 409 自愈兜底。
+const AUTO_PULL_TIMEOUT_MS = 2_000
+
 function _autoPullThrottlePath(cwd) {
   return join(cwd, '.sillyspec', '.runtime', 'auto-pull-throttle.json')
 }
@@ -521,7 +546,7 @@ function _stampAutoPull(cwd) {
 
 /**
  * 触发 pull（下行同步，task-10 / D-009 / FR-04 / FR-06）。
- * 复用 triggerSync 的 8s 熔断与 Best Effort 语义；未连接平台静默跳过（与现状一致）。
+ * 熔断走 AUTO_PULL_TIMEOUT_MS（2s，见常量注释）与 Best Effort 语义；未连接平台静默跳过（与现状一致）。
  * 注入时机：stage 命令启动（顶层别名 + case 'run'，ql-20260818-008 补齐后者）+ 关键决策点
  * （approve 前）+ 手动 platform pull。不在每步 pull（避免高频写入与网络压力），仅低频边界点。
  * 自动注入走 skipIfLocalDirty 保守守卫：本地有未同步改动时 pull 内部跳过 import，
@@ -541,7 +566,7 @@ export async function triggerPull(cwd, changeName, platformOpts = {}, opts = {})
     if (!sm._getPlatform()) return
     if (_autoPullRecently(cwd)) return
     _stampAutoPull(cwd)
-    await raceWithAbort((sig) => sm.pull(changeName, { skipIfLocalDirty: true, signal: sig.signal }), opts.timeoutMs)
+    await raceWithAbort((sig) => sm.pull(changeName, { skipIfLocalDirty: true, signal: sig.signal }), opts.timeoutMs ?? AUTO_PULL_TIMEOUT_MS)
   } catch (e) {
     // pull 失败静默跳过（Best Effort，失败不影响正确性）
     console.warn('⚠️ 拉取失败:', e.message)
@@ -578,10 +603,10 @@ export async function triggerPullActiveChange(cwd, platformOpts = {}) {
     // progress 不可达则跳过（Best Effort）
   }
   if (!cn) return
-  // 已确认连接 + 单活跃变更，调 pull（复用 8s 熔断 + abort（HUB-09）；skipIfLocalDirty 保守守卫
+  // 已确认连接 + 单活跃变更，调 pull（自动注入 2s 熔断 + abort（HUB-09）；skipIfLocalDirty 保守守卫
   // 同 triggerPull——本地脏时跳过 import，防平台旧快照覆盖本地领先进度，ql-20260818-008）
   try {
-    await raceWithAbort((sig) => sm.pull(cn, { skipIfLocalDirty: true, signal: sig.signal }))
+    await raceWithAbort((sig) => sm.pull(cn, { skipIfLocalDirty: true, signal: sig.signal }), AUTO_PULL_TIMEOUT_MS)
   } catch (e) {
     console.warn('⚠️ 拉取失败:', e.message)
   }
@@ -639,7 +664,10 @@ export function parsePorcelainPath(line) {
   if (!line) return ''
   let path = line.slice(3).trim()
   if (path.length >= 2 && path.startsWith('"') && path.endsWith('"')) {
-    path = path.slice(1, -1).replace(/\\(.)/g, (_, c) => c)
+    // unquoteGitPath：\\ \" \n \t 与 \NNN 八进制字节聚合 UTF-8 解码——原 \\(.) 逐字符
+    // 解引会把 "\346\226\207.md" 拆成 "346226207.md"。git-helper 已统一 core.quotepath=false
+    // （非 ASCII 路径裸输出），此处兜底仍会被引号转义的路径（含控制字符等）。
+    path = unquoteGitPath(path.slice(1, -1))
   }
   const arrow = path.indexOf(' -> ')
   if (arrow !== -1) path = path.slice(arrow + 4)

@@ -33,16 +33,18 @@ async function main() {
   let input = ''
   try {
     input = await readStdin()
-  } catch {
-    // 无法读取 stdin → 放行（安全优先于阻断）
+  } catch (e) {
+    // 无法读取 stdin → 放行（安全优先于阻断），但留痕——本 hook 是阶段门禁唯一执行点，
+    // 静默解除全部防护会让故障无从诊断
+    console.error(`[sillyspec-hook] stdin 读取失败（放行）: ${e.message}`)
     process.exit(0)
   }
 
   let parsed
   try {
     parsed = JSON.parse(input)
-  } catch {
-    // 非法 JSON → 放行
+  } catch (e) {
+    console.error(`[sillyspec-hook] stdin JSON 解析失败（放行）: ${e.message}；input 长度 ${input.length}`)
     process.exit(0)
   }
 
@@ -122,4 +124,7 @@ function readStdin() {
   })
 }
 
-main().catch(() => process.exit(0))
+main().catch(e => {
+  console.error(`[sillyspec-hook] 未捕获异常（放行）: ${e && e.message}`)
+  process.exit(0)
+})

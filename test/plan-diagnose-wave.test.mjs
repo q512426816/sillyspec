@@ -15,7 +15,8 @@ const assert = (c, m) => {
   else { console.error('  ❌ ' + m); failed++ }
 }
 
-const wrap = (body) => `# Plan\n\n${body}`
+// plan_level frontmatter：validatePlanForExecute 自 2026-08-21 审查 CLI-5 起硬校验该锚点
+const wrap = (body) => `---\nplan_level: light\n---\n\n# Plan\n\n${body}`
 const REG2 = '- [ ] task-01: a\n- [ ] task-02: b'
 
 console.log('\n[plan-diagnose-wave] Wave 字母后缀（2b）显式报错 + 新三类根因回归')
@@ -64,10 +65,15 @@ console.log('\n--- 3. 注册表空三类根因诊断（新契约） ---')
 // ─────────────────────────────────────────
 console.log('\n--- 4. Wave 标题格式不对 → 显式报错（原「标题格式不对/缺任务区」承接） ---')
 {
-  for (const h of ['## W1（并行）', '## Wave1（并行）', '## 波次1（并行）']) {
-    const r = validatePlanForExecute(REG2, wrap(`${h}\n\n- task-01\n- task-02\n`))
-    assert(r.ok === false && r.errors.some(e => e.includes('Wave 标题格式不对')), `${h} 报「标题格式不对」（引用行不收容）`)
+  const mk = (h) => validatePlanForExecute(REG2, wrap(`${h}\n\n- task-01\n- task-02\n`))
+  // 宽容化分界（坑 wave-heading-undercount，2026-08-21）：Wave1（无空格）现被解析侧收容
+  //（宁可多收不可静默丢）；W1/波次1 仍不识别 → 显式报错
+  for (const h of ['## W1（并行）', '## 波次1（并行）']) {
+    const r = mk(h)
+    assert(r.ok === false && r.errors.some(e => e.includes('Wave 标题格式不对')), `${h} 报「Wave 标题格式不对」（引用行不收容）`)
   }
+  const rWave1 = mk('## Wave1（并行）')
+  assert(rWave1.ok === true, '## Wave1（无空格）宽容收容（坑 wave-heading-undercount：不再静默丢）')
   // 正常收容回归
   const rNormal = validatePlanForExecute(REG2, wrap('## Wave 1（并行）\n\n- task-01\n- task-02\n'))
   assert(rNormal.ok === true && rNormal.errors.length === 0, '正常 Wave 1 引用行收容成功')

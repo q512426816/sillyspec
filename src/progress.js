@@ -13,6 +13,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, unlinkSync, appendFileSync, copyFileSync, readdirSync, statSync } from 'fs';
 import { join, basename, dirname, resolve, sep } from 'path';
 import { tmpdir } from 'os';
+import { writeAtomicSync } from './fs-atomic.js';
 import { DB } from './db.js';
 import { checkExecuteCodeEvidence } from './stage-contract.js';
 import { ConsistencyDoctor } from './progress/consistency-doctor.js';
@@ -1015,9 +1016,12 @@ export class ProgressManager {
     if (existsSync(gitignorePath)) {
       const content = readFileSync(gitignorePath, 'utf8');
       if (content.includes(rule)) return;
-      writeFileSync(gitignorePath, content.trimEnd() + '\n' + rule + '\n');
+      // 按既有 EOL 追加（2026-08-21 审查 BUG-9）：CRLF 检出的文件混入 LF 行产生全文件
+      // diff 噪声/autocrlf 折腾；写走原子 rename 防并发 init 双跑交错
+      const eol = content.includes('\r\n') ? '\r\n' : '\n';
+      writeAtomicSync(gitignorePath, content.trimEnd() + eol + rule + eol);
     } else {
-      writeFileSync(gitignorePath, rule + '\n');
+      writeAtomicSync(gitignorePath, rule + '\n');
     }
   }
 

@@ -138,7 +138,7 @@ console.log('\n--- 2. provisionDeps force：hash 一致 → 非 force=linked，f
   // force：绕过快路径 → 走 install 分支（local.yaml 提供 trivial install 命令避免真跑 pnpm；SEC-01 白名单后须用包管理器前缀——node -e 属任意代码执行面会被拒）
   const specBase = mkTmp('force-spec');
   writeFileSync(join(specBase, 'local.yaml'),
-    'project:\n  type: nodejs\ncommands:\n  install: "npm --version"\n');
+    'project:\n  type: nodejs\ncommands:\n  install: "npm install"\n');
   const r2 = provisionDeps(wt, main, { specBase, force: true });
   assertEqual(r2.depsStatus, 'installed',
     `force + hash 一致 → installed（绕过快路径走 install，实际 ${r2.depsStatus}）`);
@@ -159,7 +159,7 @@ console.log('\n--- 3. doctor --fix：解 junction + force 重装 → meta.depsSt
   writeFileSync(join(wt, 'pnpm-lock.yaml'), lock);
   // local.yaml：trivial install，避免真跑 pnpm（CI 慢/不可用）
   writeFileSync(join(root, '.sillyspec', 'local.yaml'),
-    'project:\n  type: nodejs\ncommands:\n  install: "npm --version"\n');
+    'project:\n  type: nodejs\ncommands:\n  install: "npm install"\n');
 
   // 先用 provisionDeps 建立 junction（wt/node_modules → 主仓 node_modules）
   const init = provisionDeps(wt, root, { specBase: join(root, '.sillyspec') });
@@ -193,7 +193,7 @@ console.log('\n--- 3. doctor --fix：解 junction + force 重装 → meta.depsSt
   assertEqual(metaAfter.depsLockHash, hashOf(lock), 'meta.depsLockHash 更新为 wt lockfile hash');
   assert(!metaAfter.depsError, 'force 重装后 depsError 清空');
 
-  // junction 已解（_doctorReprovision 先解链；install=npm --version 不重建 node_modules）
+  // junction 已解（_doctorReprovision 先解链；npm install 重建的是真实目录非 link）
   assert(!existsSync(nmLink) || !lstatSync(nmLink).isSymbolicLink(),
     'wt/node_modules junction 已解（不再是指向主仓的 link）');
 }

@@ -141,6 +141,24 @@ export function generateModuleImpactSkeleton({ cwd, changeName, specDir = null }
   L.push('')
   L.push('逻辑变更 / 数据结构变更 / 接口变更 / 调用关系变更 / 配置变更 / 新增；不确定的影响标 needs review。')
   L.push('')
+  // 「更新结果」表骨架（2026-08-21 审查 CLI-3）：verify --done 死信门（extractPendingDocSyncRows）
+  // 与 archive 移动前校验同一口径硬校验本表无 pending 行，但骨架此前不产出该表——agent 只能
+  // 从 gate 报错反推格式（plan.js prompt 自认的坑）。此处按矩阵命中模块机械生成行，agent 只回填状态。
+  L.push('## 更新结果')
+  L.push('')
+  L.push('| 目标 | 操作 | 状态 |')
+  L.push('|------|------|------|')
+  for (const [moduleId] of rows) {
+    L.push(`| \`modules/${moduleId}.md\` | 更新${moduleId}模块卡（本次变更涉及） | pending |`)
+  }
+  if (unmatched.length > 0) {
+    L.push('| `_module-map.yaml` | <!--TODO: 有未匹配文件，判定模块索引是否需增改（modules rebuild）--> | pending |')
+  } else {
+    L.push('| `_module-map.yaml` | 无变化（未增删模块） | skipped |')
+  }
+  L.push('')
+  L.push('规则：execute/verify 完成文档同步后把对应行回填 done；确定不同步的行改 skipped 并在操作列写明原因。')
+  L.push('')
 
   return { markdown: L.join('\n'), matchedCount: sourceFiles.length - unmatched.length, unmatchedCount: unmatched.length }
 }

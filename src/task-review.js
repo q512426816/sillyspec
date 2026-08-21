@@ -10,7 +10,7 @@
 
 import { existsSync, readFileSync, mkdirSync, writeFileSync, readdirSync, statSync } from 'fs'
 import { join, resolve } from 'path'
-import { git } from './git-helper.js'
+import { git, unquoteGitPath } from './git-helper.js'
 import { pathMatches } from './change-list.js'
 import { parseAllowedPaths, parseRepo, parseBaseCommit, parseHeadCommit } from './stages/plan-postcheck.js'
 import { resolveVerifyChangedFiles } from './verify-postcheck.js'
@@ -378,6 +378,30 @@ function isTaskLowRisk(changeDir, taskId) {
   }
 }
 
+/**
+ * 纯验证 task 判定（坑 verification-task-zero-diff，2026-08-21 实证）：task-10/11 类
+ * 「跑测试/部署验证/观测确认」型任务无代码 diff 是本质属性而非伪造——emptyDiff 判伪造
+ * 对它们必误杀，此前只能引用验证区间并手工披露归属绕过。task 卡 frontmatter 显式声明
+ * `task_type: verification`（或 `verification_only: true`）即走合法零 diff 通道：
+ * emptyDiff 不判伪造（转 warning），但 review 必须带非空 requiredEvidence（披露验证
+ * 区间/结论出处）——不能拿声明逃掉披露义务。
+ * @returns {boolean}
+ */
+function isTaskVerification(changeDir, taskId) {
+  if (!changeDir) return false
+  const taskFile = join(changeDir, 'tasks', `${taskId}.md`)
+  if (!existsSync(taskFile)) return false
+  try {
+    const content = readFileSync(taskFile, 'utf8')
+    const fm = content.match(/^---\r?\n([\s\S]*?)\r?\n---/)
+    if (!fm) return false
+    return /^task_type:\s*['"]?verification['"]?\s*$/im.test(fm[1])
+      || /^verification_only:\s*true\s*$/im.test(fm[1])
+  } catch {
+    return false
+  }
+}
+
 export function validateTaskReviews(opts) {
   const { planContent, runtimeRoot, executeRunId, allowCannotVerify = true, changeDir = null, gitDir = null, ctx = null } = opts
 
@@ -463,6 +487,15 @@ export function validateTaskReviews(opts) {
       if (evidence.emptyDiff) {
         if (isTaskLowRisk(changeDir, taskId)) {
           warnings.push(`${taskId}: base..head 无代码变更（task 声明 low_risk: true，不阻断）`)
+        } else if (isTaskVerification(changeDir, taskId)) {
+          // 纯验证 task 零 diff 通道（坑 verification-task-zero-diff）：声明 task_type: verification
+          // 的「跑测试/部署验证/观测」型任务无代码 diff 是本质属性——不判伪造，但披露义务不豁免：
+          // requiredEvidence 为空 → error（声明不能替代证据）
+          if (Array.isArray(review.requiredEvidence) && review.requiredEvidence.length > 0) {
+            warnings.push(`${taskId}: base..head 无代码变更 — task 声明 task_type: verification（纯验证任务），零 diff 合法；requiredEvidence 已披露验证区间/结论出处`)
+          } else {
+            errors.push(`${taskId}: 纯验证 task（task_type: verification）零 diff 合法，但 review 缺 requiredEvidence（须披露验证区间/命令/结论出处）——声明不能替代披露`)
+          }
         } else {
           errors.push(`${taskId}: base..head（${review.base.slice(0, 8)}..${review.head.slice(0, 8)}）无任何代码变更 — 评审了一个零改动的任务，review 疑似伪造`)
           continue
@@ -539,7 +572,7 @@ function parsePorcelainFiles(statusOut) {
   for (const line of String(statusOut).split('\n')) {
     if (line.trim() === '') continue
     let p = line.slice(3).trim()
-    if (p.length >= 2 && p.startsWith('"') && p.endsWith('"')) p = p.slice(1, -1).replace(/\\(.)/g, (_, c) => c)
+    if (p.length >= 2 && p.startsWith('"') && p.endsWith('"')) p = unquoteGitPath(p.slice(1, -1))
     const arrow = p.indexOf(' -> ')
     if (arrow !== -1) p = p.slice(arrow + 4)
     if (p) files.push(p.replace(/\\/g, '/'))
@@ -1135,8 +1168,9 @@ export async function generateTaskReviewDrafts({ changeName, cwd, platformOpts =
         specVerdict: 'cannot_verify',
         qualityVerdict: 'cannot_verify',
         requiredEvidence: ['auto-generated draft (no-attributed-diff): ' + taskId +
-          ' 的 allowed_paths 未命中本次 diff 任何文件（task 未实现 / 改动与他人同文件 / 路径不匹配）——' +
-          '需人工确认实际改动后升级 verdict，确属未实现则回 fail'],
+          ' 的 allowed_paths 未命中本次 diff 任何文件（task 未实现 / 改动与他人同文件 / 路径不匹配 / 纯验证任务）——' +
+          '需人工确认实际改动后升级 verdict，确属未实现则回 fail；若是纯验证任务（跑测试/部署验证/观测，无代码 diff 是本质属性），' +
+          'task 卡 frontmatter 声明 task_type: verification + review 披露验证区间即走合法零 diff 通道'],
         reviewerNotes: 'auto-generated draft from git diff ' + taskBase.slice(0, 8) + '..' + taskHead.slice(0, 8) +
           ';verdict=未评审（无归属 diff 兜底草稿，坑 task-review-draft-skip-leak）',
       }

@@ -71,15 +71,23 @@ export function collectDocRefs(md) {
   if (!md || typeof md !== 'string') return []
   const refs = []
   const re = new RegExp(REF_RE.source, 'g')
+  // 行号单遍计算：regex match 天然按 index 升序，游标只前进——原逐引用
+  // slice(0,m.index).split() 是 O(引用数 × 文档长度)，长文档×多引用退化明显
+  let line = 1
+  let cursor = 0
   let m
   while ((m = re.exec(md)) !== null) {
+    for (let i = cursor; i < m.index; i++) {
+      if (md.charCodeAt(i) === 10) line++ // '\n'（\r\n 也以 \n 计数，1-based 行号不受影响）
+    }
+    cursor = m.index
     refs.push({
       ref: m[0],
       repo: m[1] !== undefined ? m[1] : null,
       file: m[2],
       start: parseInt(m[3], 10),
       end: m[4] !== undefined ? parseInt(m[4], 10) : parseInt(m[3], 10),
-      docLine: md.slice(0, m.index).split(/\r?\n/).length,
+      docLine: line,
     })
   }
   return refs
@@ -131,8 +139,16 @@ export function extractExpectedTokensFromLine(line) {
   return [...tokens]
 }
 
-/** 递归收集 dir 下与 baseName 同名的文件（相对 dir 的 POSIX 路径数组；排除 node_modules/.git） */
-function findInTree(dir, baseName, rel = '') {
+/** 递归收集 dir 下与 baseName 同名的文件（相对 dir 的 POSIX 路径数组；排除 node_modules/.git）。
+ *  treeCache 给定时按 baseName 复用全树扫描结果（N 条裸名引用同一文件免 N 次 walk） */
+function findInTree(dir, baseName, rel = '', treeCache = null) {
+  if (treeCache && rel === '') {
+    const hit = treeCache.get(baseName)
+    if (hit) return hit
+    const result = findInTree(dir, baseName, '', null)
+    treeCache.set(baseName, result)
+    return result
+  }
   const out = []
   let entries
   try { entries = readdirSync(dir, { withFileTypes: true }) } catch { return out }
@@ -149,9 +165,9 @@ function findInTree(dir, baseName, rel = '') {
  * 解析引用文件 → 候选绝对路径数组。文档写法三种混用（首跑实证）：
  * ①仓库根相对（src/sync.js / docs/...）→ 直拼；②src/ 内部相对（dispatch/probe.js）→
  * src/ 前缀重试；③裸中缀（backends/sillyhub-mcp.js）→ src/ 树内按路径后缀匹配。
- * 空数组 = 不存在。
+ * 空数组 = 不存在。treeCache（Map basename→findInTree 结果）给定时透传复用全树扫描。
  */
-export function resolveCandidates(projectRoot, refFile) {
+export function resolveCandidates(projectRoot, refFile, treeCache = null) {
   if (refFile.includes('/')) {
     const direct = join(projectRoot, refFile)
     if (existsSync(direct)) return [direct]
@@ -159,15 +175,22 @@ export function resolveCandidates(projectRoot, refFile) {
     if (existsSync(inSrc)) return [inSrc]
     const slash = refFile.lastIndexOf('/')
     const baseName = slash === -1 ? refFile : refFile.slice(slash + 1)
-    return findInTree(join(projectRoot, 'src'), baseName)
+    return findInTree(join(projectRoot, 'src'), baseName, '', treeCache)
       .filter((rel) => ('src/' + rel).endsWith('/' + refFile) || 'src/' + rel === 'src/' + refFile)
       .map((rel) => join(projectRoot, 'src', rel))
   }
-  return findInTree(join(projectRoot, 'src'), refFile).map((rel) => join(projectRoot, 'src', rel))
+  return findInTree(join(projectRoot, 'src'), refFile, '', treeCache).map((rel) => join(projectRoot, 'src', rel))
 }
 
-/** 读文件行数组（CRLF/LF 归一：split(/\r?\n/)，层2 只做子串查找不污染原文） */
-function readLines(absPath) {
+/** 读文件行数组（CRLF/LF 归一：split(/\r?\n/)，层2 只做子串查找不污染原文）。
+ *  linesCache 给定时按绝对路径复用（同文件被 N 条引用消费免 N 次读盘+split） */
+function readLines(absPath, linesCache = null) {
+  if (linesCache) {
+    if (linesCache.has(absPath)) return linesCache.get(absPath)
+    const lines = readLines(absPath)
+    linesCache.set(absPath, lines)
+    return lines
+  }
   try { return readFileSync(absPath, 'utf8').split(/\r?\n/) } catch { return null }
 }
 
@@ -307,6 +330,11 @@ export function runDocsCheck(opts) {
   let kwChecked = 0
   // repo:// 跨仓引用：未配映射被跳过的数量（不计入 total/invalid，跨设备零误报）
   let crossRepoSkipped = 0
+  // per-call 缓存：裸名引用的 src/ 全树扫描结果 + 候选文件行数组——100 文档 × 10 裸名引用
+  // 此前 = 1000 次全树 walk + 同文件 N 次重读（2026-08-21 性能审查 PERF-5）。仅本次调用
+  // 生命周期内有效，不跨调用（防测试流程中途改树后读到陈旧结果）
+  const treeCache = new Map()
+  const linesCache = new Map()
 
   for (const docRel of docFiles) {
     const docAbs = join(projectRoot, docRel)
@@ -345,7 +373,7 @@ export function runDocsCheck(opts) {
         }
         candidates = [abs]
       } else {
-        candidates = resolveCandidates(projectRoot, r.file)
+        candidates = resolveCandidates(projectRoot, r.file, treeCache)
       }
       total++
       if (candidates.length === 0) {
@@ -363,7 +391,7 @@ export function runDocsCheck(opts) {
       const candidateFails = []
       let passedAny = false
       for (const candAbs of candidates) {
-        const lines = readLines(candAbs)
+        const lines = readLines(candAbs, linesCache)
         if (lines === null) { candidateFails.push(`${relDisplay(candAbs, projectRoot)}: 读取失败`); continue }
         const v = validateRefLines(lines.length, r.start, r.end)
         // 层2：token 任一在 [start-2, end+5] 窗口命中即过
@@ -387,9 +415,9 @@ export function runDocsCheck(opts) {
           doc: docRel, docLine: r.docLine, ref: r.ref,
           reason: repoPrefix + (candidateFails.length > 1 ? `多候选全失败 → ${candidateFails.join(' | ')}` : candidateFails[0]),
           // 建议行号（--suggest）：token 在首个候选文件的全量命中行，供人工确认改锚——不自动改文件
-          suggest: suggestLines(candidates, tokens),
+          suggest: suggestLines(candidates, tokens, linesCache),
           // 修复分类（--fix 判定依据）：全量候选 token 命中打分——唯一命中或选优严格领先可自动重锚
-          fix: classifyFix(candidates, tokens, r.start),
+          fix: classifyFix(candidates, tokens, r.start, linesCache),
         })
       }
     }
@@ -402,10 +430,10 @@ export function runDocsCheck(opts) {
  * 建议行号计算（--suggest）：对失效引用，在候选文件里找 token 全量命中行。
  * 无 token（纯行号断言）时返回空数组——没有符号线索无法定位，只能人工看。
  */
-function suggestLines(candidates, tokens) {
+function suggestLines(candidates, tokens, linesCache = null) {
   if (tokens.length === 0) return []
   try {
-    const lines = readLines(candidates[0])
+    const lines = readLines(candidates[0], linesCache)
     if (lines === null) return []
     const out = []
     lines.forEach((l, i) => { if (tokens.some((t) => l.includes(t))) out.push(i + 1) })
@@ -438,7 +466,7 @@ function escapeReLocal(s) {
   return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-function classifyFix(candidates, tokens, refStart = null) {
+function classifyFix(candidates, tokens, refStart = null, linesCache = null) {
   if (tokens.length === 0) {
     return { fixable: false, reason: '无 token 符号线索（纯位置引用或关键词断言关闭），无法自动定位' }
   }
@@ -447,7 +475,7 @@ function classifyFix(candidates, tokens, refStart = null) {
   const defRe = new RegExp(`(?:export\\s+)?(?:async\\s+)?(?:function|const|let|class|def)\\s+${escapeReLocal(defToken)}\\b`)
   const byLine = new Map()
   for (const candAbs of candidates) {
-    const lines = readLines(candAbs)
+    const lines = readLines(candAbs, linesCache)
     if (lines === null) continue
     lines.forEach((l, i) => {
       if (!tokens.some((t) => l.includes(t))) return

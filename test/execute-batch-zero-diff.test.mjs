@@ -12,12 +12,11 @@
  */
 
 import { shouldAutoCheckTask } from '../src/run/complete.js'
-import { readFileSync, mkdirSync, writeFileSync, existsSync, rmSync } from 'fs'
+import { mkdirSync, writeFileSync, rmSync, mkdtempSync } from 'fs'
 import { join, dirname } from 'path'
-import { fileURLToPath } from 'url'
 import { execSync } from 'child_process'
+import { tmpdir } from 'os'
 
-const __dirname = dirname(fileURLToPath(import.meta.url))
 let failed = 0
 const failures = []
 function eq(actual, expected, msg) {
@@ -106,12 +105,11 @@ console.log('测试覆盖：真实 git fixture + commit 验证 changedFiles 空 
 
 console.log('\n=== 真实 git fixture：实测 base..head diff ===\n')
 
-// 临时仓构造：真实的 base..head diff 可控
-const tempRepo = join(__dirname, '.tmp-zero-diff-fixture')
+// 临时仓构造：真实的 base..head diff 可控。
+// mkdtemp 唯一目录——不用仓内固定路径（__dirname/.tmp-...），两套 npm test 并发时
+// 会共享同一目录互踩（git init 失败）；也不用 tmpdir() 根部固定名，同理。
+const tempRepo = mkdtempSync(join(tmpdir(), 'zero-diff-fixture-'))
 try {
-  // 清理旧仓
-  if (existsSync(tempRepo)) rmSync(tempRepo, { recursive: true, force: true })
-
   // 初始化仓
   mkdirSync(tempRepo, { recursive: true })
   execSync('git init', { cwd: tempRepo, stdio: 'pipe' })
@@ -143,8 +141,9 @@ try {
   console.log(`  真实 diff: ${realDiff}`)
   console.log(`  零 diff: "${zeroDiff}"`)
 
-  // 清理
-  rmSync(tempRepo, { recursive: true, force: true })
+  // 清理（maxRetries：Windows AV 扫描临时 git 仓时 EPERM 偶发——无重试会把
+  // 清理失败算进 catch 计为 fixture 失败，断言全过也判败）
+  rmSync(tempRepo, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 })
   console.log('  ✅ 临时仓已清理')
 } catch (e) {
   console.log(`  ❌ 真实 git fixture 失败：${e && e.message ? e.message : e}`)

@@ -61,6 +61,104 @@ export function extractTestCommand(yamlText) {
 }
 
 /**
+ * 从 local.yaml 文本提取 commands.lint（2026-08-21 审查 CLI-1：lint 对账）。
+ * 与 extractTestCommand 同风格同容错（带引号/不带引号/unavailable）。
+ * 模块内私有（runVerifyLintCheck 消费；extractTestCommand 系 export 供 test）。
+ */
+function extractLintCommand(yamlText) {
+  if (!yamlText) return null
+  const doubleQuoted = yamlText.match(/^\s*lint:\s*"([^"]+)"\s*(?:#.*)?$/m)
+  const singleQuoted = yamlText.match(/^\s*lint:\s*'([^']+)'\s*(?:#.*)?$/m)
+  const quoted = doubleQuoted || singleQuoted
+  if (quoted && quoted[1]) {
+    return quoted[1].toLowerCase() === 'unavailable' ? null : quoted[1].trim()
+  }
+  const bare = yamlText.match(/^\s*lint:\s*([^\n#"']+?)\s*(?:#.*)?$/m)
+  if (bare && bare[1]) {
+    const cmd = bare[1].trim()
+    return cmd.toLowerCase() === 'unavailable' ? null : cmd
+  }
+  return null
+}
+
+/**
+ * verify --done 实测跑 local.yaml commands.lint（2026-08-21 审查 CLI-1）。
+ * 此前 lint 全靠 agent 自跑自报（"我跑过 lint 了"纯口头），与 test 侧的对账不对称——
+ * agent 偷懒漏跑时格式债被推迟到用户 commit 才被 pre-commit hook 炸出。
+ * advisory 起步：失败只打印不阻断（test 门已 fail-closed，lint 门观察期后再升级）。
+ * 信任边界与 runVerifyTestCheck 一致：命令只来源于主仓 .sillyspec/local.yaml。
+ */
+export function runVerifyLintCheck({ cwd, specBase }) {
+  const localYamlPath = join(specBase, 'local.yaml')
+  const yamlText = existsSync(localYamlPath) ? readFileSync(localYamlPath, 'utf8') : null
+  const command = extractLintCommand(yamlText)
+
+  if (!command) {
+    return {
+      status: 'skipped',
+      command: null,
+      exitCode: null,
+      durationMs: null,
+      outputTail: null,
+      reason: yamlText
+        ? 'local.yaml 未配置 commands.lint（或标记 unavailable）'
+        : `local.yaml 不存在（${localYamlPath}）`,
+    }
+  }
+
+  const LINT_TIMEOUT_MS = Number(process.env.SILLYSPEC_LINT_TIMEOUT_MS) || 3 * 60 * 1000
+  const startedAt = Date.now()
+  let exitCode = 0
+  let output = ''
+  let reason = null
+  try {
+    output = execSync(command, {
+      cwd,
+      encoding: 'utf8',
+      timeout: LINT_TIMEOUT_MS,
+      maxBuffer: 32 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+  } catch (e) {
+    exitCode = typeof e.status === 'number' ? e.status : 1
+    output = [e.stdout, e.stderr].filter(Boolean).join('\n') || e.message
+    reason = e.signal === 'SIGTERM' && Date.now() - startedAt >= LINT_TIMEOUT_MS
+      ? `lint 命令超时（>${LINT_TIMEOUT_MS / 1000}s）`
+      : `lint 命令退出码 ${exitCode}`
+  }
+  const durationMs = Date.now() - startedAt
+  const outputTail = output.length > OUTPUT_TAIL_CHARS ? '…' + output.slice(-OUTPUT_TAIL_CHARS) : output
+
+  return {
+    status: exitCode === 0 ? 'passed' : 'failed',
+    command,
+    exitCode,
+    durationMs,
+    outputTail,
+    reason: exitCode === 0 ? null : reason,
+  }
+}
+
+/** 打印 lint 实测结果（advisory：失败不阻断，只把口头汇报对上账） */
+export function printVerifyLintCheck(result) {
+  if (result.status === 'skipped') {
+    console.warn(`\n⚠️  Verify lint 实测跳过：${result.reason}`)
+    return
+  }
+  if (result.status === 'passed') {
+    console.log(`\n✅ Verify lint 实测通过：\`${result.command}\` 退出码 0（${(result.durationMs / 1000).toFixed(1)}s）`)
+    return
+  }
+  console.error(`\n⚠️  Verify lint 实测失败（advisory，不阻断本次完成）：\`${result.command}\` — ${result.reason}`)
+  console.error('   agent 的 lint 自报告与实测不符时以实测为准；请修复后重跑，避免格式债推迟到 commit 被 pre-commit hook 拦截。')
+  if (result.outputTail) {
+    const tail = result.outputTail.split('\n').slice(-15).join('\n')
+    console.error('   输出（末尾）：')
+    for (const line of tail.split('\n')) console.error(`   | ${line}`)
+  }
+}
+
+/**
  * 从 local.yaml 文本提取顶层 test_strategy。
  * 轻量正则（与 extractTestCommand 同风格，不引 yaml 依赖）。
  *

@@ -28,10 +28,12 @@ function assert(condition, msg) {
   }
 }
 
-// 构造双文件 fixture：tasks 行列表 + plan body（Wave 段引用行）
+// 构造双文件 fixture：tasks 行列表 + plan body（Wave 段引用行）。
+// plan 一律带 plan_level frontmatter（2026-08-21 审查 CLI-5 起 validatePlanForExecute
+// 硬校验该锚点——它是 review tier 主锚，漏写会静默降级自审）
 function fx(taskLines, planBody) {
   const tasks = ['# 任务清单（Tasks）', '', ...taskLines].join('\n')
-  const plan = `# Plan\n\n${planBody}`
+  const plan = `---\nplan_level: light\n---\n\n# Plan\n\n${planBody}`
   return { tasks, plan }
 }
 
@@ -239,7 +241,7 @@ console.log('\n--- Bug C 回归: 自检段不误解析 ---')
 console.log('\n--- light plan（无 Wave 结构）隐式 Wave 通过 ---')
 {
   const tasks = ['# 任务清单（Tasks）', '', '- [ ] task-01: 添加 API 端点（覆盖：FR-01）', '- [ ] task-02: 添加前端调用', '- [ ] task-03: 联调'].join('\n')
-  const plan = ['# 轻量计划：某需求', '', '## 来源', '直接引用 brainstorm 结论。', '', '## 验收', '- [ ] 所有单元测试通过'].join('\n')
+  const plan = ['---', 'plan_level: light', '---', '', '# 轻量计划：某需求', '', '## 来源', '直接引用 brainstorm 结论。', '', '## 验收', '- [ ] 所有单元测试通过'].join('\n')
   const result = validatePlanForExecute(tasks, plan)
   assert(result.ok, `light plan 应通过，errors: ${result.errors.join('; ')}`)
   assert(result.tasks.length === 3, `应解析 3 个 task，实际 ${result.tasks.length}`)

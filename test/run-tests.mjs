@@ -1,13 +1,34 @@
-import { readdirSync, existsSync, rmSync, readFileSync } from 'node:fs'
+import { readdirSync, existsSync, rmSync, readFileSync, mkdtempSync, writeFileSync, mkdirSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFile } from 'node:child_process'
-import { homedir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { promisify } from 'node:util'
 
 const execFileP = promisify(execFile)
 
 const testDir = dirname(fileURLToPath(import.meta.url))
+
+// 套件级 TEMP 隔离：不少测试用 join(tmpdir(), 固定名) + 预清理 rmSync 建 fixture，
+// 两个 npm test 并发时（agent 与人各跑一次是 dogfood 常态）同路径互踩——
+// EPERM/ENOENT/git init 失败级联（2026-08-08 曾全量 102 文件污染，2026-08-21 双套件压测复现 5 处）。
+// 子进程 TEMP/TMP/TMPDIR 统一指向套件唯一目录后固定路径天然分家，无需逐个改测试；
+// os.tmpdir() 读 TMPDIR（POSIX）/ TEMP、TMP（Windows），三个都覆写。
+// HOME/USERPROFILE 一并隔离（2026-08-21 审查 BUG-12③）：mid-run 窗口内 ~/.sillyspec-platform.json
+// 指针仍可能写进真实 HOME（套件首尾清理护不住并发双套件的中间窗口）。os.homedir() 在
+// Windows 读 USERPROFILE、POSIX 读 HOME，两个都覆写；git 子进程因此读不到全局 .gitconfig，
+// 预置最小 .gitconfig（user 身份 + init.defaultBranch=main）保住 git fixture 的 commit/init。
+const suiteTmp = mkdtempSync(join(tmpdir(), 'sillyspec-suite-'))
+mkdirSync(join(suiteTmp, 'home'), { recursive: true })
+writeFileSync(join(suiteTmp, 'home', '.gitconfig'), '[user]\n\tname = sillyspec-test\n\temail = sillyspec-test@localhost\n[init]\n\tdefaultBranch = main\n')
+const childEnv = {
+  ...process.env,
+  TEMP: suiteTmp,
+  TMP: suiteTmp,
+  TMPDIR: suiteTmp,
+  HOME: join(suiteTmp, 'home'),
+  USERPROFILE: join(suiteTmp, 'home'),
+}
 
 // 全局指针污染防护：测试可能把 ~/.sillyspec-platform.json 写到 HOME（cwd 纠正到 home 的缝隙），
 // 不清理则污染用户真实环境——之后任何项目跑 sillyspec 都被静默引向死 temp 库。
@@ -21,9 +42,12 @@ function cleanHomePointer() {
     if (!existsSync(p)) continue
     try {
       const before = readFileSync(p, 'utf8')
-      rmSync(p, { force: true })
+      rmSync(p, { force: true, maxRetries: 3, retryDelay: 200 })
       console.log(`[teardown] 清理 HOME ${kind}污染：${p}（原内容 ${before.slice(0, 80)}...）`)
-    } catch {}
+    } catch (e) {
+      // 清理失败必须留痕：静默吞掉会让 HOME 污染原样留存——正是本函数要防的事故
+      console.error(`[teardown] ⚠️ 清理 HOME ${kind}污染失败：${p}（${e && e.message ? e.message : e}）——请手动删除`)
+    }
   }
 }
 cleanHomePointer()
@@ -72,6 +96,7 @@ async function runOne(fullPath) {
   try {
     const { stdout, stderr } = await execFileP(process.execPath, [fullPath], {
       cwd: testDir,
+      env: childEnv,
       timeout: 120_000,
       encoding: 'utf8',
       maxBuffer: 10 * 1024 * 1024
@@ -146,5 +171,11 @@ sorted.slice(0, 20).forEach((t, i) => {
 })
 
 cleanHomePointer()
+
+// 套件 TEMP 目录回收：子进程均已退出，句柄应已释放；Windows 偶发 EPERM 由
+// maxRetries 兜底，仍失败则放弃（留在系统 Temp 下由 OS 回收，不影响隔离语义）
+try {
+  rmSync(suiteTmp, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 })
+} catch {}
 
 process.exit(failed > 0 ? 1 : 0)

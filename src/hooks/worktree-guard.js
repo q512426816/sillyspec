@@ -177,7 +177,10 @@ function readScanGuard(scanDocInfo, projectRoot) {
     if (!existsSync(p)) continue
     try {
       return JSON.parse(readFileSync(p, 'utf8'))
-    } catch {
+    } catch (e) {
+      // 半截 JSON（写入窗口读到 truncate 中间态等）不能静默当"无 guard"放行覆盖——
+      // stderr 留痕便于诊断；放行语义不变（fail-open 是既定策略，见 DB 路径对照注释）
+      console.error(`[sillyspec hook] scan-guard.json 解析失败（${e.message.split('\n')[0]}）：${p}`)
       return null
     }
   }
@@ -404,6 +407,12 @@ function parseSimpleYaml(content) {
     return trimmed
   }
 
+  // 原型污染防护：local.yaml 是 agent 可写输入。`__proto__:` 顶层标量行赋值被
+  // setter 忽略但 topKey 落在 '__proto__'，随后缩进子键行经原型链读到的是
+  // Object.prototype（typeof 'object' 跳过重建）直接全局污染——危险键整节拒绝，
+  // 既不进结果也不作为子键挂载点。
+  const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
+
   for (const line of content.split('\n')) {
     const noComment = line.replace(/\s+#.*$/, '')
     const trimmed = noComment.trim()
@@ -415,6 +424,11 @@ function parseSimpleYaml(content) {
       if (!topLevelMatch) continue
       const key = topLevelMatch[1]
       const value = topLevelMatch[2]
+      if (UNSAFE_KEYS.has(key.trim())) {
+        topKey = null
+        childKey = null
+        continue
+      }
       topKey = key
       childKey = null
 
@@ -437,6 +451,7 @@ function parseSimpleYaml(content) {
     if (indent === 2) {
       const childMatch = trimmed.match(/^([^:]+):\s*(.*)$/)
       if (!childMatch) continue
+      if (UNSAFE_KEYS.has(childMatch[1].trim())) continue
       childKey = childMatch[1]
       const value = childMatch[2]
       if (typeof result[topKey] !== 'object' || Array.isArray(result[topKey])) result[topKey] = {}
@@ -500,8 +515,12 @@ function isSingleCommandReadonly(cmd, extraReadonlyCommands = []) {
     return true
   }
 
-  // local.yaml 扩展
-  if (extraReadonlyCommands.includes(cmdName)) return true
+  // local.yaml 扩展：配置面文档化（config-schema），但 local.yaml 本身是 agent 可写路径——
+  // 命中扩展而非内置白名单时 stderr 留痕，提醒人工复核该放行来源（防 agent 预写扩权静默生效）
+  if (extraReadonlyCommands.includes(cmdName)) {
+    console.error(`[sillyspec hook] 放行依据 = local.yaml worktreeHook.readonlyCommands 扩展（${cmdName}），非内置只读白名单`)
+    return true
+  }
 
   // git 只读子命令
   if (cmdName === 'git') {

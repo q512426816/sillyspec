@@ -58,6 +58,7 @@ function mkProject(name, { specYaml, wtYaml } = {}) {
 // 4. 主仓源白名单命令正常执行：npm --version → installed
 {
   const { d, main, wt, spec } = mkProject('ok', { specYaml: 'project:\n  type: nodejs\ncommands:\n  install: "npm --version"\n' })
+  mkdirSync(join(wt, 'node_modules'), { recursive: true }) // provision 后验证 fixture（坑 provision-silent-fake-installed）：无害命令不会真装，预建模拟 install 产物
   const r = provisionDeps(wt, main, { specBase: spec })
   assert(r.depsStatus === 'installed', `白名单命令放行（实得 ${r.depsStatus}，depsError=${r.depsError}）`)
   rmSync(d, { recursive: true, force: true })

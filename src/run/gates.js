@@ -19,8 +19,9 @@
  *
  * 不搬：ensureDepsFreshness（execute 入口 deps 自检，调用方 runStage 非 completeStep，归属未来 execute-handler）
  */
-import { basename, join } from 'node:path'
-import { existsSync, readFileSync, readdirSync, statSync, mkdirSync, writeFileSync } from 'node:fs'
+import { basename, join, relative } from 'node:path'
+import { existsSync, readFileSync, readdirSync, statSync, mkdirSync } from 'node:fs'
+import { writeAtomicSync } from '../fs-atomic.js'
 import { triggerSync, resolveChangeDir, resolveRuntimeRoot } from './shared.js'
 import { runValidators } from '../stage-contract.js'
 import { handleScanStageCompleted, handleExecuteWorktreeCleanup } from './complete-handlers.js'
@@ -104,7 +105,8 @@ export function generateSymbolImpactSkeleton(tasksContent) {
 
 /**
  * 符号影响面报告硬门：execute「加载上下文」步 --done 时校验 symbol-impact.md 落盘 + task 覆盖度。
- * fail-closed：不通过 → 当前步标 blocked + exit 1（进度不推进）。非目标步骤/阶段直接放行。
+ * fail-closed：不通过 → exit 1（进度不推进；步骤状态保持 pending，无 steps 句柄不标 blocked）。
+ * 非目标步骤/阶段直接放行。
  */
 export async function enforceSymbolImpactGate(stageName, changeName, currentStepName, specBase) {
   if (stageName !== 'execute') return
@@ -129,7 +131,7 @@ export async function enforceSymbolImpactGate(stageName, changeName, currentStep
     const skeleton = generateSymbolImpactSkeleton(tasksContent)
     if (skeleton) {
       try {
-        writeFileSync(reportPath, skeleton)
+        writeAtomicSync(reportPath, skeleton)
         skeletonNote = `\n   📄 已代生成逐 task 骨架：${reportPath}（逐行替换 <!--TODO--> 为结论，无签名级变更也显式写「无」）`
       } catch { /* 写失败只影响提示，不掩盖原始错误 */ }
     }
@@ -286,9 +288,10 @@ export async function enforceAlignExecuteReviewGate({ cwd, changeName, specBase,
 /**
  * execute deps 验证硬门（change 2026-06-28-worktree-deps-provision / D-001@v1, D-003@v1, D-006@v2）。
  * depsStatus 不达标且非 wave 级 opt-out 时阻断 --done：置 step=blocked + exit(1)，与 requiresWait 同范式。
- * 放行返回 true；阻断时 process.exit(1) 不返回。
+ * 放行返回 true；阻断时经 persist 回调落盘 blocked 后 exit(1)（此前只改内存不落库，
+ * progress show/doctor 看到的仍是 pending，与 docstring 承诺不符、误导诊断）。
  */
-export async function enforceDepsGate(stageName, cwd, changeName, step, steps, currentIdx, specBase, platformOpts) {
+export async function enforceDepsGate(stageName, cwd, changeName, step, steps, currentIdx, specBase, platformOpts, persist) {
   if (stageName !== 'execute') return true
   let meta = null
   let wm = null
@@ -324,6 +327,7 @@ export async function enforceDepsGate(stageName, cwd, changeName, step, steps, c
     console.error('   或在 worktree 内手动安装依赖后重试。')
     if (meta?.depsError) console.error(`   上次供给错误：${meta.depsError}`)
   }
+  if (persist) { try { await persist() } catch { /* 落盘失败不吞阻断语义 */ } }
   process.exit(1)
 }
 
@@ -333,10 +337,11 @@ export async function enforceDepsGate(stageName, cwd, changeName, step, steps, c
  * Task Review Gate（validateTaskReviews）只在 execute 整阶段完成时跑（complete.js 阶段完成分支的
  * actualCompleted===actualTotal 守卫），单 task --done 不校验 → 子代理勾 checkbox 却漏写/漏字段
  * review.json，要到收尾才暴露，用户被迫事后批量补。本门提前到每次 --done：校验 plan 里所有已勾
- * task 的 review.json，缺字段/不存在/JSON 坏 → 置 step=blocked + exit(1)，与 enforceDepsGate 同范式。
+ * task 的 review.json，缺字段/不存在/JSON 坏 → 置 step=blocked + exit(1)，与 enforceDepsGate 同范式
+ * （阻断前经 persist 回调落盘 blocked）。
  * 未勾 task 不校验（还没做）。平台模式/无 marker/无 plan 时放行（下游 Task Review Gate 兜底）。
  */
-export async function enforceReviewJsonGate(stageName, cwd, changeName, step, steps, currentIdx, specBase, platformOpts) {
+export async function enforceReviewJsonGate(stageName, cwd, changeName, step, steps, currentIdx, specBase, platformOpts, persist) {
   if (stageName !== 'execute' || !changeName) return true
   // head 锡点自动落盘（2026-08-21 审计项③，D-010 补对称）：跨仓 task base_commit 已在派发时
   // CLI 落盘，head_commit 此前靠主 agent 按 prompt 手跑 rev-parse 手写（漏抄/抄错炸 review gate）。
@@ -399,6 +404,7 @@ export async function enforceReviewJsonGate(stageName, cwd, changeName, step, st
     for (const e of f.errors) console.error(`       - ${e}`)
   }
   console.error('   修复：mechanics 字段（base/head/changedFiles/schemaVersion）缺错可跑 sillyspec backfill-reviews --change ' + changeName + ' --adopt 一键代填（verdict 保留）；verdict/证据缺失需人工补全后重跑 execute --done。')
+  if (persist) { try { await persist() } catch { /* 落盘失败不吞阻断语义 */ } }
   process.exit(1)
 }
 
@@ -486,6 +492,14 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
       console.error('   请修复失败的测试并更新 verify-result.md 后重新完成此步骤。')
       return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)
     }
+    // lint 对账（2026-08-21 审查 CLI-1）：test 侧"自报告 PASS 但实测失败→阻断"已闭环，
+    // lint 侧此前纯口头——CLI 亲自执行 commands.lint，advisory 起步（失败打印不阻断，观察期后升级）
+    const { runVerifyLintCheck, printVerifyLintCheck } = await import('../verify-postcheck.js')
+    const lintCheck = runVerifyLintCheck({ cwd, specBase })
+    if (lintCheck.status !== 'skipped') {
+      console.log(`\n⏳ Verify lint 对账：CLI 亲自执行 local.yaml 的 commands.lint…`)
+    }
+    printVerifyLintCheck(lintCheck)
     // 契约 parity 对账：扫前端 API 调用 vs execute 提取的 provider endpoint artifact。
     // 接线自 contract-matrix pipeline（verifyApiParity 的 CLI 入口）。
     const { runVerifyParityCheck, printVerifyParityCheck } = await import('../verify-postcheck.js')
@@ -581,7 +595,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
           reviewRunId = generateStageReviewRunId()
           try {
             mkdirSync(runtimeRoot, { recursive: true })
-            writeFileSync(stageReviewMarkerPath(runtimeRoot, stageName, changeName), reviewRunId + '\n')
+            writeAtomicSync(stageReviewMarkerPath(runtimeRoot, stageName, changeName), reviewRunId + '\n')
           } catch {}
         }
         const reviewType = stageName === 'brainstorm' ? 'design'
@@ -645,7 +659,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
             // marker 在则目录在）。不 try/catch——异常直穿外层 catch 走 fail-closed 阻断
             //（gate 自身写 run 目录失败不能静默放行完成）。
             mkdirSync(join(runtimeRoot, 'execute-runs', executeRunId, 'tasks'), { recursive: true })
-            writeFileSync(runIdFile, executeRunId + '\n')
+            writeAtomicSync(runIdFile, executeRunId + '\n')
             stampExecuteRunChange(runtimeRoot, executeRunId, changeName)
           }
         }
@@ -753,7 +767,7 @@ export function validateMetadata(cwd, stageName, specBase) {
   const unique = [...new Set(missing)]
   if (unique.length > 0) {
     console.log(`\n⚠️  以下文件缺少 author 或 created_at 元数据：`)
-    unique.forEach(f => console.log(`  - ${f.replace(cwd + '/', '')}`))
+    unique.forEach(f => console.log(`  - ${relative(cwd, f) || f}`))
     console.log('请在文件头部添加 author（git 用户名）和 created_at（精确到秒）')
   }
 }
@@ -794,13 +808,14 @@ export function validateFileLocations(cwd, stageName, progress, changeName, spec
 
   if (missing.length > 0) {
     console.log(`\n⚠️  文件位置验证：以下文件未在变更目录中找到`)
-    console.log(`  变更目录：${changeDir.replace(cwd + '/', '')}/`)
+    // relative(cwd, x)：Windows 下 join() 产物是反斜杠绝对路径，正斜杠拼接的 cwd 前缀裁剪永不命中
+    console.log(`  变更目录：${relative(cwd, changeDir) || changeDir}/`)
     for (const f of missing) {
       // 检查是否写到了错误的位置
       const wrongPath = join(specBase, 'changes', 'change', effectiveChange, f)
       if (existsSync(wrongPath)) {
-        console.log(`  ❌ ${f} — 不存在，但发现了错误路径：${wrongPath.replace(cwd + '/', '')}`)
-        console.log(`     提示：应该写入 ${changeDir.replace(cwd + '/', '')}/${f}`)
+        console.log(`  ❌ ${f} — 不存在，但发现了错误路径：${relative(cwd, wrongPath) || wrongPath}`)
+        console.log(`     提示：应该写入 ${relative(cwd, changeDir) || changeDir}/${f}`)
       } else {
         console.log(`  ⬜ ${f} — 未找到（该阶段可能未产出此文件）`)
       }

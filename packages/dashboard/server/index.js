@@ -468,10 +468,19 @@ function startServer({ port = 3456, open: openBrowser = true } = {}) {
         res.end(JSON.stringify({ error: 'Missing project parameter' }))
         return
       }
-      const docs = parseSillyspecDocsTree(projectPath)
-      res.setHeader('Content-Type', 'application/json')
-      res.writeHead(200)
-      res.end(JSON.stringify(docs))
+      // SEC-06 对齐：detail/content API 均已限"已发现项目内"，此处此前漏校验——
+      // 任意绝对路径可列其 .sillyspec/docs 树与根文档文件名
+      isKnownProjectPath(projectPath).then(known => {
+        if (!known) {
+          res.writeHead(403)
+          res.end(JSON.stringify({ error: 'Unknown project path' }))
+          return
+        }
+        const docs = parseSillyspecDocsTree(projectPath)
+        res.setHeader('Content-Type', 'application/json')
+        res.writeHead(200)
+        res.end(JSON.stringify(docs))
+      })
       return
     }
 
@@ -591,8 +600,15 @@ function startServer({ port = 3456, open: openBrowser = true } = {}) {
             break
           case 'docs:get':
             if (data.data?.projectPath) {
-              const docs = parseSillyspecDocsTree(data.data.projectPath)
-              ws.send(JSON.stringify({ type: 'docs:tree', data: docs }))
+              // SEC-06 对齐：与 /api/docs 同口径，仅已发现项目可列 docs 树
+              isKnownProjectPath(data.data.projectPath).then(known => {
+                if (!known) {
+                  ws.send(JSON.stringify({ type: 'docs:tree', data: { error: 'Unknown project path' } }))
+                  return
+                }
+                const docs = parseSillyspecDocsTree(data.data.projectPath)
+                ws.send(JSON.stringify({ type: 'docs:tree', data: docs }))
+              })
             }
             break
           default:

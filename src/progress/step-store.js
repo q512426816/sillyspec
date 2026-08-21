@@ -88,16 +88,16 @@ export class StepStore {
     }
     const stageId = stageRow.id;
 
-    // 重复步骤名检查
-    const dupRow = sqlDb.prepare('SELECT id FROM steps WHERE stage_id = ? AND name = ?').get(stageId, stepName);
-    if (dupRow !== undefined) {
-      console.log(`ℹ️  步骤 "${stepName}" 已存在于 ${stage}`);
-      return;
-    }
-
-    // INSERT INTO steps（ordering 递增）
+    // 重复步骤名检查 + INSERT 同事务（2026-08-21 审查 BUG-8）：查重在事务外时，
+    // 并发 add-step 同名可双双通过检查双插（steps 无 UNIQUE 约束），另一份 status 后续被 _write 覆盖丢失
+    let dupFound = false;
     db.transaction(() => {
       const tDb = db.getDb();
+      const dupRow = tDb.prepare('SELECT id FROM steps WHERE stage_id = ? AND name = ?').get(stageId, stepName);
+      if (dupRow !== undefined) {
+        dupFound = true;
+        return;
+      }
       tDb.prepare(
         `INSERT INTO steps (stage_id, name, ordering, status)
          VALUES (?, ?, (SELECT COALESCE(MAX(ordering), 0) + 1 FROM steps WHERE stage_id = ?), 'pending')`
@@ -106,6 +106,10 @@ export class StepStore {
       // 本地脏度（D-013 / task-04）：添加步骤是本地推进
       this.pm._touchLocalModified(cwd, cn);
     });
+    if (dupFound) {
+      console.log(`ℹ️  步骤 "${stepName}" 已存在于 ${stage}`);
+      return;
+    }
 
     console.log(`✅ 已添加步骤: ${stage}/${stepName}`);
   }

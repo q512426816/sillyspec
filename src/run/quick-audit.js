@@ -7,9 +7,10 @@
  * 路径修正（相对 src/run/）：
  *   - resolveQuickLinkedChanges 的 quick-recommend.js 动态 import './quick-recommend.js' → '../quick-recommend.js'
  *   - 脏文件信号改用 safeGit（带 safe.directory，Q3）；不再 import execSync
- *   - parsePorcelainPath 从 ./shared.js 重 import；checkbox 顶部 import
+ *   - parsePorcelainPath 从 ./shared.js 重 import；checkbox 改交互分支内动态 import——
+ *     本模块被 command.js 静态 import，顶部静态拉 @inquirer/prompts 会进**每条** run 命令
+ *     启动路径（实测冷加载 100-150ms），而 checkbox 仅"≥2 活跃变更 + TTY"分支用到
  */
-import { checkbox } from '@inquirer/prompts'
 import { parsePorcelainPath, safeGit } from './shared.js'
 
 /**
@@ -150,6 +151,8 @@ export async function resolveQuickLinkedChanges({ pm, cwd, specDir, quickFiles, 
   if (recommendedSet.size > 0) {
     console.log('   ⭐ = 基于脏文件/任务描述推荐，已默认勾选')
   }
+  // 动态 import：@inquirer/prompts 只在本交互分支加载，不进 run 命令通用启动路径
+  const { checkbox } = await import('@inquirer/prompts')
   const selected = await checkbox({ message: '关联变更（空格切换，回车确认）', choices })
   return selected
 }

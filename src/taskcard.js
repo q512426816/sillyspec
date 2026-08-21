@@ -14,7 +14,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { git } from './git-helper.js'
 import { assertSafeChangeName, resolveSpecDir } from './run/shared.js'
-import { parseTaskNames } from './stages/plan.js'
+import { parseTaskNames, readTaskRegistryContent } from './stages/plan.js'
+import { parseTaskRegistry } from './stages/execute.js'
 
 /**
  * 任务号归一：接受 task-01 / task-1 / 01 / 1，统一为 task-NN（两位补零，与任务卡文件名一致）。
@@ -52,21 +53,44 @@ function yamlScalar(v) {
  * 字符串只含 \n：writeFileSync 直写不经任何行尾转换，Windows 下天然 LF 安全。
  * title/title_zh/author 经 yamlScalar 转义（自由文本防 YAML 指示符炸解析）。
  *
- * @param {{ taskId: string, title: string, titleZh: string, author: string, now: string }} p
+ * @param {{ taskId: string, title: string, titleZh: string, author: string, now: string,
+ *           dependsOn?: string[], sets?: Record<string,string> }} p
+ *   dependsOn：tasks.md 行内注解反填（坑 taskcard-design-field-conflicts，2026-08-21 实证）——
+ *     "(depends_on: task-01,02)" 注解由 CLI 解析进 frontmatter，省主代理逐卡裁决
+ *   sets：--set key=value 覆盖（yamlScalar 转义；仅覆盖已存在的标量键，防注入任意结构）
  * @returns {string}
  */
-export function buildTaskcardSkeleton({ taskId, title, titleZh, author, now }) {
+export function buildTaskcardSkeleton({ taskId, title, titleZh, author, now, dependsOn = [], sets = {} }) {
+  const fm = {
+    id: taskId,
+    title: yamlScalar(title),
+    title_zh: yamlScalar(titleZh),
+    author: yamlScalar(author),
+    created_at: now,
+    priority: 'P0',
+    depends_on: (Array.isArray(dependsOn) && dependsOn.length > 0)
+      ? `[${dependsOn.map(d => `'${d}'`).join(', ')}]`
+      : '[]',
+    blocks: '[]',
+    requirement_ids: '[FR-XX]',
+    decision_ids: '[D-XXX@vN]',
+  }
+  // --set 覆盖（白名单键 + yamlScalar 转义值；depends_on 数组形态单独拼不进标量 map，跳过）
+  const SETTABLE_KEYS = new Set(['id', 'title', 'title_zh', 'author', 'priority', 'created_at', 'requirement_ids', 'decision_ids', 'blocks', 'goal'])
+  for (const [k, v] of Object.entries(sets || {})) {
+    if (SETTABLE_KEYS.has(k)) fm[k] = yamlScalar(v)
+  }
   return `---
-id: ${taskId}
-title: ${yamlScalar(title)}
-title_zh: ${yamlScalar(titleZh)}
-author: ${yamlScalar(author)}
-created_at: ${now}
-priority: P0
-depends_on: []
-blocks: []
-requirement_ids: [FR-XX]
-decision_ids: [D-XXX@vN]
+id: ${fm.id}
+title: ${fm.title}
+title_zh: ${fm.title_zh}
+author: ${fm.author}
+created_at: ${fm.created_at}
+priority: ${fm.priority}
+depends_on: ${fm.depends_on}
+blocks: ${fm.blocks}
+requirement_ids: ${fm.requirement_ids}
+decision_ids: ${fm.decision_ids}
 allowed_paths:
   - src/example/file.ts
 goal: >
@@ -105,7 +129,7 @@ constraints:
  * @returns {{ created: string[], skipped: string[], tasksDir: string }}
  */
 export function cmdTaskcard(changeName, opts = {}) {
-  const { cwd, specDir = null, taskIds, title = null, titleZh = null, force = false } = opts
+  const { cwd, specDir = null, taskIds, title = null, titleZh = null, force = false, sets = {} } = opts
   assertSafeChangeName(changeName, '变更名')
 
   const changeDir = join(resolveSpecDir(cwd, { specDir }), 'changes', changeName)
@@ -114,25 +138,27 @@ export function cmdTaskcard(changeName, opts = {}) {
   }
 
   // 任务注册表 tasks.md（2026-08-20-task-truth-unify 唯一真相；CRLF 归一后解析，
-  // --all 时强依赖）。tasks.md 缺失回退 plan.md（旧归档变更兼容读侧）
-  let planTasks = []
+  // --all 时强依赖）。tasks.md 缺失回退 plan.md（旧归档变更兼容读侧）。
+  // parseTaskRegistry（坑 taskcard-design-field-conflicts，2026-08-21）：除编号/标题外还带出
+  // 行内注解（[model:xxx] / (depends_on: task-01,02)）——depends_on 直接反填进骨架 frontmatter。
+  let registry = []
   const tasksMdPath = join(changeDir, 'tasks.md')
   const planPath = join(changeDir, 'plan.md')
   const registryPath = existsSync(tasksMdPath) ? tasksMdPath : planPath
   if (existsSync(registryPath)) {
     const registryContent = readFileSync(registryPath, 'utf8').replace(/\r\n/g, '\n')
-    planTasks = parseTaskNames(registryContent)
+    registry = parseTaskRegistry(registryContent)
   }
 
   let ids
   if (taskIds === 'all') {
-    if (planTasks.length === 0) {
+    if (registry.length === 0) {
       throw new Error(
         `--all 需要 tasks.md 中存在 checkbox 任务行（格式 "- [ ] task-XX: 任务名"）` +
         (existsSync(registryPath) ? '，当前任务清单未解析到任何任务行' : '，且变更目录下未找到 tasks.md/plan.md')
       )
     }
-    ids = planTasks.map(t => `task-${t.num}`)
+    ids = registry.map(t => t.id)
   } else if (Array.isArray(taskIds) && taskIds.length > 0) {
     ids = taskIds
   } else {
@@ -161,9 +187,9 @@ export function cmdTaskcard(changeName, opts = {}) {
   const created = []
   const skipped = []
   for (const id of ids) {
-    const planMatch = planTasks.find(t => `task-${t.num}` === id)
-    const finalTitle = title || (planMatch ? planMatch.name : null) || `${id} fill-english-title`
-    const finalTitleZh = titleZh || (planMatch ? planMatch.name : null) || finalTitle
+    const reg = registry.find(t => t.id === id)
+    const finalTitle = title || (reg ? reg.name : null) || `${id} fill-english-title`
+    const finalTitleZh = titleZh || (reg ? reg.name : null) || finalTitle
     const filePath = join(tasksDir, `${id}.md`)
     if (existsSync(filePath) && !force) {
       skipped.push(filePath)
@@ -171,6 +197,10 @@ export function cmdTaskcard(changeName, opts = {}) {
     }
     writeFileSync(filePath, buildTaskcardSkeleton({
       taskId: id, title: finalTitle, titleZh: finalTitleZh, author, now,
+      // depends_on 从 tasks.md 行内注解反填（坑 taskcard-design-field-conflicts）：注册表
+      // 注解与 plan/design 的依赖声明同源，骨架直接带上省主代理逐卡转录
+      dependsOn: reg ? reg.dependsOn : [],
+      sets,
     }), 'utf8')
     created.push(filePath)
   }

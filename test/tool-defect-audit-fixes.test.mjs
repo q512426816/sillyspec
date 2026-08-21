@@ -132,11 +132,11 @@ console.log('\n=== 3. plan 协调器步骤任务清单来自 tasks.md（plan.js�
 console.log('\n=== 4. task id 连续性：不从 1 开始=兼容放行（契约钉死，勿改）===')
 {
   const tasks = '# 任务清单（Tasks）\n\n- [ ] task-02: 甲\n- [ ] task-03: 乙\n'
-  const plan = '# 计划\n\n## Wave 1\n\n- task-02\n- task-03\n'
+  const plan = '---\nplan_level: light\n---\n\n# 计划\n\n## Wave 1\n\n- task-02\n- task-03\n'
   const r = validatePlanForExecute(tasks, plan)
   assert(r.ok === true, 'task-02 起编号 → 放行（旧变更编号兼容，plan-execute-contract Case 10 同契约）')
   const tasks2 = '# 任务清单（Tasks）\n\n- [ ] task-01: 甲\n- [ ] task-03: 乙\n'
-  const plan2 = '# 计划\n\n## Wave 1\n\n- task-01\n- task-03\n'
+  const plan2 = '---\nplan_level: light\n---\n\n# 计划\n\n## Wave 1\n\n- task-01\n- task-03\n'
   const r2 = validatePlanForExecute(tasks2, plan2)
   assert(r2.ok === false, '从 1 起但跳号（缺 task-02）→ 拦截')
 }

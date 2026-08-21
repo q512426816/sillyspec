@@ -8,6 +8,7 @@
  * 不经此处的 writeAtomicSync；sillyspec.db 不走原子写改名。
  */
 import { writeFileSync, renameSync, unlinkSync } from 'fs';
+import { randomBytes } from 'node:crypto';
 import { dirname, basename, join } from 'path';
 
 // Windows 上杀毒 / 索引 / IDE 占用文件时，rename 偶发这些错误，短退避重试即可
@@ -58,8 +59,9 @@ export function renameSyncRetry(from, to, retries = 5) {
  */
 export function writeAtomicSync(filePath, content) {
   const dir = dirname(filePath);
-  // pid + 随机段双因子：Windows PID 重用激进，两进程可能撞同 pid，tmp 名碰撞 rename 互相覆盖
-  const rnd = Math.random().toString(36).slice(2, 10);
+  // pid + 随机段双因子：Windows PID 重用激进，两进程可能撞同 pid，tmp 名碰撞 rename 互相覆盖。
+  // crypto 随机源（Math.random 可预测，tmp 名被预猜中有 symlink 预放置理论面）
+  const rnd = randomBytes(6).toString('hex');
   const tmpPath = join(dir, `.${basename(filePath)}.${process.pid}.${rnd}.tmp`);
   writeFileSync(tmpPath, content);
   try {

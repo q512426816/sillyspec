@@ -596,7 +596,10 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
   result.patchPath = patchPath;
 
   try {
-    let patchContent = '';
+    // patch 以 Buffer 聚合：git diff --binary 对二进制/非 UTF-8 文件输出任意字节序列，
+    // 按 utf8 string 拼接会破坏 NUL 字节成 U+FFFD → corrupt patch（git-helper.js git() 注释
+    // 同款坑；worktree.js 的 diff 采集已是 encoding:'buffer' 正确写法）。
+    const patchParts = [];
 
     // 分 tracked 变更和 untracked 新文件生成 patch
     // 批量化：一次 ls-tree（deliverableBase tree 中存在的文件）+ 一次 ls-files（index 中存在的文件）
@@ -615,32 +618,33 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
 
     // tracked 文件：git diff patchBase（patch 生成锚点，默认 merge-base）
     // 数组形式，文件名逐个展开为独立 argv，不经 shell；
-    // trim:false 保留二进制补丁原样，timeout 放大到 60s 防大 diff 超时——原裸 execSync 无 timeout
+    // encoding:'buffer' 保留二进制补丁原样，timeout 放大到 60s 防大 diff 超时——原裸 execSync 无 timeout
     if (trackedFiles.length > 0) {
-      patchContent += git(
+      patchParts.push(git(
         worktreePath,
         ['diff', '--binary', patchBase, '--', ...trackedFiles],
-        { trim: false, timeout: 60000 }
-      );
+        { encoding: 'buffer', timeout: 60000 }
+      ));
     }
 
     // untracked 新文件：git add 到 index，git diff --cached，然后 reset（均数组形式，文件名逐个展开）
     if (untrackedPatchFiles.length > 0) {
       git(worktreePath, ['add', '--', ...untrackedPatchFiles]);
       try {
-        // trim:false 保留二进制补丁原样，timeout 放大到 60s 防大 diff 超时
-        patchContent += git(
+        // encoding:'buffer' 保留二进制补丁原样，timeout 放大到 60s 防大 diff 超时
+        patchParts.push(git(
           worktreePath,
           ['diff', '--binary', '--cached', '--', ...untrackedPatchFiles],
-          { trim: false, timeout: 60000 }
-        );
+          { encoding: 'buffer', timeout: 60000 }
+        ));
       } finally {
         // 重置 index（不保留 staged 状态）
         gitQuiet(worktreePath, ['reset', 'HEAD', '--', ...untrackedPatchFiles]);
       }
     }
 
-    if (!patchContent.trim()) {
+    const patchContent = Buffer.concat(patchParts);
+    if (patchContent.length === 0) {
       // patch 为空（清单中部分文件可能没实际变更）
       result.ok = true;
       rmSync(tmpDir, { recursive: true, force: true });

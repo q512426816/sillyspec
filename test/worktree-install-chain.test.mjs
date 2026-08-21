@@ -40,6 +40,7 @@ console.log('--- ① cd 子目录 && 白名单命令：放行且在子目录执�
 {
   const { d, wt, spec } = mkProject('cd-ok', { specYaml: yamlOf('cd web && npm --version') })
   mkdirSync(join(wt, 'web'), { recursive: true })
+  mkdirSync(join(wt, 'node_modules'), { recursive: true }) // provision 后验证 fixture
   const r = provisionDeps(wt, join(d, 'main'), { specBase: spec })
   assert(r.depsStatus === 'installed', `cd web && npm --version 放行（实得 ${r.depsStatus} / ${r.depsError}）`)
   rmSync(d, { recursive: true, force: true })
@@ -48,6 +49,7 @@ console.log('--- ① cd 子目录 && 白名单命令：放行且在子目录执�
 console.log('--- ② 白名单 && 白名单：放行；失败段即停 ---')
 {
   const { d, wt, spec } = mkProject('chain-ok', { specYaml: yamlOf('npm --version && npm --version') })
+  mkdirSync(join(wt, 'node_modules'), { recursive: true }) // provision 后验证 fixture
   const r = provisionDeps(wt, join(d, 'main'), { specBase: spec })
   assert(r.depsStatus === 'installed', `npm --version && npm --version 放行（实得 ${r.depsStatus}）`)
   rmSync(d, { recursive: true, force: true })
@@ -87,6 +89,7 @@ console.log('--- ④ 链中非白名单段 / || / 空段 → 拒绝 ---')
 console.log('--- ⑤ 单命令零回归 ---')
 {
   const { d, wt, spec } = mkProject('single-ok', { specYaml: yamlOf('npm --version') })
+  mkdirSync(join(wt, 'node_modules'), { recursive: true }) // provision 后验证 fixture
   const r = provisionDeps(wt, join(d, 'main'), { specBase: spec })
   assert(r.depsStatus === 'installed', `单命令 npm --version 放行（实得 ${r.depsStatus}）`)
   rmSync(d, { recursive: true, force: true })

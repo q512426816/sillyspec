@@ -103,7 +103,8 @@ console.log('--- ① 源码顺序扫描：mkdir execute-runs/<runId>/tasks 先�
 
   function siteOrder(src, from, markerWriteName) {
     const mkIdx = src.indexOf("mkdirSync(join(runtimeRoot, 'execute-runs'", from)
-    const wrIdx = src.indexOf(`writeFileSync(${markerWriteName}`, from)
+    // 并行会话 fs-atomic 化：marker 写入可能经 writeAtomicSync（语义等价，原子性更强）
+    const wrIdx = Math.max(src.indexOf(`writeFileSync(${markerWriteName}`, from), src.indexOf(`writeAtomicSync(${markerWriteName}`, from))
     if (mkIdx === -1 || wrIdx === -1) return '缺 mkdir/writeFileSync'
     if (wrIdx < mkIdx) return 'marker 写在 mkdir 之前（逆序）'
     return src.slice(mkIdx, mkIdx + 90).includes("'tasks'") ? 1 : 'mkdir 目标不含 tasks/'

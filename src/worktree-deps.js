@@ -344,6 +344,30 @@ export function provisionDeps(worktreePath, mainCwd, opts = {}) {
         ? { depsStatus: 'installed', depsMethod: 'install', depsSource: 'install', depsLockHash: wtHash }
         : { depsStatus: 'failed', depsMethod: null, depsSource: null, depsLockHash: wtHash, depsError: installResult.error };
     }
+    // ── 结果后验证（坑 provision-silent-fake-installed，2026-08-21 Windows 实证）──
+    // doctor --fix 报「re-provisioned: installed」但 node_modules junction 实际没建——
+    // cmd.exe 垫片链存在退出码 0 却啥都没装的静默失败面，exit code 不可信。分层校验：
+    //   linked：junction 实存硬校验（本次事故形态——link 声称成功必留痕）；
+    //   installed：仅当 worktree package.json 声明了依赖（dependencies/devDependencies 等
+    //   非空）时校验 node_modules——空 deps 项目 npm install 合法地不产生 node_modules，
+    //   无差别校验会误杀（python 产物 .venv / jvm 本地仓库本就不适用，整体仅 nodejs）。
+    if (projectType === 'nodejs') {
+      const nmPath = join(worktreePath, 'node_modules');
+      const hasDeclaredDeps = (() => {
+        try {
+          const pkg = JSON.parse(readFileSync(join(worktreePath, 'package.json'), 'utf8'))
+          return ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies']
+            .some(k => pkg[k] && Object.keys(pkg[k]).length > 0)
+        } catch { return false }
+      })()
+      const needVerify = result.depsStatus === 'linked' || (result.depsStatus === 'installed' && hasDeclaredDeps)
+      if (needVerify && !existsSync(nmPath)) {
+        result = {
+          depsStatus: 'failed', depsMethod: null, depsSource: null, depsLockHash: wtHash,
+          depsError: `${result.depsStatus} 后验证失败：${nmPath} 不存在（报成功但 node_modules 实际未落盘——Windows 静默失败面：cmd.exe 垫片解析/杀毒拦截）。手动兜底（PowerShell）：New-Item -ItemType Junction -Path "${nmPath}" -Target "${join(mainCwd || worktreePath, 'node_modules')}"，或在 worktree 内手动跑 ${installCmd} 后重试 doctor --fix`,
+        }
+      }
+    }
   }
   result.depsCheckedAt = depsCheckedAt;
 

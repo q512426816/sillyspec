@@ -172,11 +172,11 @@ export const definition = {
    - Gradle：\`./gradlew :<模块>:test\`
    - npm/pnpm：\`pnpm test --filter=<包名>\` 或 \`npm test -- --testPathPattern=<相关文件>\`
    - Python：\`pytest <变更模块路径>/\`
-3. 如果 local.yaml 有 lint 命令，运行 lint 检查
+3. 如果 local.yaml 有 lint 命令，运行 lint 检查并修复报出的问题（--done 时 CLI 会亲自实测 commands.lint 对账，实测失败会明示）
 4. 搜索技术债务：grep TODO/FIXME/HACK/XXX（仅限变更文件）
 
 ### 注意
-- **CLI 对账机制**：verify 阶段最终 --done 时，CLI 会亲自执行 local.yaml 的 commands.test（同步，耗时可能较长）；实测失败会直接阻断 verify 完成，谎报测试结果没有意义
+- **CLI 对账机制**：verify 阶段最终 --done 时，CLI 会亲自执行 local.yaml 的 commands.test（同步，耗时可能较长）；实测失败会直接阻断 verify 完成，谎报测试结果没有意义。commands.lint 同样会被 CLI 实测对账（advisory）
 - 冒烟测试非必需：全量/模块实测结果以 CLI 对账为准，本步跑的结果仅供你提前发现问题并写入验证报告
 
 ### 输出

@@ -310,3 +310,25 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 3. cleanup 删分支前若被 review.json 引用 → 打 `sillyspec-audit/<branch>` 轻量 tag 锚定分支 tip（commit 经 tag 保持可达、gc 安全、ref 前缀独立于 sillyspec/* 分支族不被 doctor 孤儿扫描误伤），随后正常删分支；tag 创建失败回退保留分支（宁保留勿丢审计链）。测试 worktree-cleanup-guard.test.mjs ⑦ 用例更新（30 断言全过）。
 
 **关联记忆**：`[[sillyspec-apply-commit-pathspec-sweep]]`、`[[sillyspec-archive-other-residual-rename]]`、`[[sillyspec-cleanup-branch-review-anchor-tag]]`
+
+## 22. 四坑：provision 假 installed / 验证 task 零 diff 误杀 / Wave 漏识别 / taskcard 逐卡裁决（2026-08-21 闭环）
+
+**症状（用户实证）**：
+1. `worktree doctor --fix` 报「re-provisioned: installed」但 node_modules junction 实际没建（Windows 静默失败），只能 PowerShell 手动补 New-Item -ItemType Junction。
+2. 验证型 task（task-10/11）无代码 diff 是本质属性，review gate 的 emptyDiff 判伪造 + changedFiles∩diff 校验必误杀，只能引用验证区间手工披露绕过。
+3. plan 6 个 Wave 只解析出 5 个 Wave 步，末两个 task 静默落入「运行测试」验收步，靠批量完成兜住才没出事。
+4. task 卡骨架字段（depends_on/priority 等）与 design 声明冲突，主代理逐卡裁决转录。
+
+**根因**：
+1. tryInstall 信任 cmd.exe 垫片的退出码——PATH 解析/杀毒拦截存在「退出 0 却啥都没装」的静默失败面；无落盘后实物校验。
+2. emptyDiff 伪造判定只有一个 low_risk 豁免通道，没有「纯验证任务」的合法零 diff 语义。
+3. Wave 标题正则 `/^#+\s*Wave\s+(\d+)/` 要求 Wave+空格——"Wave6" 等变体被静默丢；部分识别 + 部分漏时既有的 0.8 检查（要求「无任何显式 Wave」才触发）不覆盖。
+4. taskcard 只从注册表带编号/标题，行内注解 `(depends_on: task-01,02)` 明明已结构化却不反填，--set 批量注入通道缺失。
+
+**修复（2026-08-21）**：
+1. provisionDeps 结果后验证（仅 nodejs——python 产物是 .venv 不校验 node_modules）：installed/linked 状态要求 node_modules 实存，缺了判 failed 并给 PowerShell junction 手动兜底命令——deps 门控据此阻断而非 execute 中途才炸。
+2. 纯验证 task 零 diff 通道：task 卡 frontmatter 声明 `task_type: verification`（或 `verification_only: true`）→ emptyDiff 不判伪造转 warning；requiredEvidence 为空仍拦（声明不能替代披露）；无归属草稿提示带上该通道说明。
+3. Wave 解析正则宽容化（空格可选收容 "Wave6"）；`parseWavesFromPlan` 运行时对 wave-like 未识别行（波次/W+数字）逐个点名 warn；`validatePlanForExecute` 新增检查 0.9——部分识别 + 部分漏识别 → plan --done 直接阻断列漏网标题。
+4. taskcard 改用 parseTaskRegistry（带行内注解）：`depends_on` 自动反填进骨架 frontmatter；CLI 新增 `--set key=value`（可重复，yamlScalar 转义 + 白名单键）批量注入 design 提炼值。
+
+测试 dogfood-four-fixes.test.mjs（17 断言）；install-guard/chain 测试 fixture 补建 node_modules（后验证契约下无害命令需模拟 install 产物）。**关联记忆**：`[[sillyspec-provision-silent-fake-installed]]`、`[[sillyspec-verification-task-zero-diff]]`、`[[sillyspec-wave-heading-undercount]]`、`[[sillyspec-taskcard-design-field-conflicts]]`

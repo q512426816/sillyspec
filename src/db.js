@@ -105,13 +105,19 @@ export class DB {
       if (!existsSync(p)) return null;
       return statSync(p).size === 0 ? 'empty' : 'ok';
     };
-    // tryOpen: openDatabase(path) + prepare 探测双保险（防打开成功但内容非 SQLite）
+    // tryOpen: openDatabase(path) + prepare 探测双保险（防打开成功但内容非 SQLite）。
+    // 探测前先设 busy_timeout（2026-08-21 审查 BUG-7）：init() 的 applyPragmas 在 _openWithFallback
+    // 之后才跑，探测 SELECT 此前以 busy_timeout=0（SQLite 默认）执行——他者进程 CHECKPOINT 改写
+    // 主库时探测立即 SQLITE_BUSY，3 次重试总窗口仅 350ms，大 WAL 下 checkpoint 秒级 → 健康库
+    // 被误判"损坏"硬抛错。先设 busy_timeout 让探测自身等待锁，重试只剩消化瞬时抖动。
     const tryOpen = (p) => {
       let db;
       try { db = openDatabase(p); }
       catch { return null; }
-      try { db.prepare('SELECT count(*) FROM sqlite_master').get(); return db; }
-      catch { try { db.close(); } catch { /* 关闭失败忽略 */ } return null; }
+      try {
+        db.exec('PRAGMA busy_timeout = 5000');
+        db.prepare('SELECT count(*) FROM sqlite_master').get(); return db;
+      } catch { try { db.close(); } catch { /* 关闭失败忽略 */ } return null; }
     };
 
     // 1. 主库（0 字节=截断信号，必须走回退，故门禁要求 'ok' 有内容）
@@ -144,6 +150,11 @@ export class DB {
             : 'sillyspec.db 损坏';
         console.warn(`⚠️  ${reason}，已从 .bak 备份恢复。`);
         bakDb.close();
+        // 覆盖前救援快照（2026-08-21 审查 BUG-7）：主库有内容但打不开（"损坏"）时，其中可能
+        // 含比 .bak 更新的数据——静默覆盖即静默丢。best-effort 留一份 .corrupt-<ts> 副本供人工恢复。
+        if (primaryRaw === 'ok') {
+          try { copyFileSync(this.dbPath, `${this.dbPath}.corrupt-${Date.now()}`); } catch { /* 救援失败不阻断恢复 */ }
+        }
         // node:sqlite 绑定路径，无 _save：把 .bak 内容 copy 回主库，统一用 dbPath。
         // 体检 BUG-18：主库可能正被其他进程（daemon/另一 CLI）打开——Windows 覆盖他人
         // 打开的文件抛 EPERM/EBUSY，短暂退避重试（持有者通常是瞬时句柄），仍失败 fail-loud

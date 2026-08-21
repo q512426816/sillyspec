@@ -18,7 +18,7 @@ import { ProgressManager } from '../src/progress.js'
 const count = { passed: 0, failed: 0, failures: [] }
 const assert = (cond, msg) => { cond ? (count.passed++, console.log(`  ✅ PASS: ${msg}`)) : (count.failed++, count.failures.push(msg), console.log(`  ❌ FAIL: ${msg}`)) }
 
-const PLAN_WITH_TASK = '# Plan\n\n## Wave 1\n\n- task-01\n'
+const PLAN_WITH_TASK = '---\nplan_level: light\n---\n\n# Plan\n\n## Wave 1\n\n- task-01\n'
 const TASKS_MD = '- [ ] task-01: 做 foo\n'
 
 console.log('=== noAI 步骤 --done 硬门（planPostcheck）===\n')

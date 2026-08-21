@@ -2209,11 +2209,12 @@ SillySpec platform — SillyHub 平台同步
 SillySpec taskcard — 生成 Windows 安全的 TaskCard 骨架
 
 用法:
-  sillyspec taskcard <change-name> --task task-01[,task-02...] [--title <t>] [--title-zh <t>] [--force]
-  sillyspec taskcard <change-name> --all [--force]
+  sillyspec taskcard <change-name> --task task-01[,task-02...] [--title <t>] [--title-zh <t>] [--set key=value]... [--force]
+  sillyspec taskcard <change-name> --all [--set key=value]... [--force]
 
-骨架由 CLI 直写（LF 行尾 + frontmatter 闭合 + 硬校验 9 字段齐全），标题自动取自 plan.md
-checkbox 行；之后用 Edit 填充占位符即可，勿手写整卡（CRLF/漏闭合 ---/漏字段的源头治理）。
+骨架由 CLI 直写（LF 行尾 + frontmatter 闭合 + 硬校验 9 字段齐全），标题自动取自 tasks.md
+checkbox 行；depends_on 自动反填行内注解 "(depends_on: task-01,02)"；--set 批量注入 design
+提炼的字段值（priority 等，yamlScalar 转义）。之后用 Edit 填充占位符即可，勿手写整卡。
 `);
         break;
       }
@@ -2230,6 +2231,20 @@ checkbox 行；之后用 Edit 填充占位符即可，勿手写整卡（CRLF/漏
       const taskVal = getVal('--task');
       const titleVal = getVal('--title');
       const titleZhVal = getVal('--title-zh');
+      // --set key=value（可重复，坑 taskcard-design-field-conflicts）：批量生成时从 design/
+      // plan 提炼的字段值直接注入骨架（yamlScalar 转义、白名单键校验在 buildTaskcardSkeleton），
+      // 省主代理逐卡 Edit 裁决
+      const sets = {};
+      for (let i = 0; i < filteredArgs.length; i++) {
+        if (filteredArgs[i] === '--set' && filteredArgs[i + 1]) {
+          const m = /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/.exec(filteredArgs[i + 1]);
+          if (!m) {
+            console.error(`❌ --set 格式非法：${filteredArgs[i + 1]}（应为 key=value，可重复）`);
+            process.exit(2);
+          }
+          sets[m[1]] = m[2];
+        }
+      }
 
       if (all && taskVal) {
         console.error('❌ --all 与 --task 互斥（--all 取 plan.md 全部任务，--task 显式指定）');
@@ -2255,7 +2270,7 @@ checkbox 行；之后用 Edit 填充占位符即可，勿手写整卡（CRLF/漏
 
       const { cmdTaskcard } = await import('./taskcard.js');
       try {
-        const result = cmdTaskcard(tcName, { cwd: dir, specDir, taskIds, title: titleVal, titleZh: titleZhVal, force });
+        const result = cmdTaskcard(tcName, { cwd: dir, specDir, taskIds, title: titleVal, titleZh: titleZhVal, force, sets });
         for (const f of result.created) console.log(`✅ 已生成: ${f}`);
         for (const f of result.skipped) console.log(`⏭️  已存在，跳过（--force 覆盖）: ${f}`);
         if (result.created.length > 0) {

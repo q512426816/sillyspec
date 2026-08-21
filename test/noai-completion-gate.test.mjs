@@ -132,7 +132,8 @@ console.log('\n--- T5+T8: plan skip optional 步骤 → S3 守卫满足 gate 仍
   const changeDir = join(specBase, 'changes', cn)
   // task-01 + task-02 连续 → contract 通过（隔离 S3 守卫，不让 contract fail 干扰）
   writeFileSync(join(changeDir, 'tasks.md'), '- [ ] task-01: a\n- [ ] task-02: b\n')
-  writeFileSync(join(changeDir, 'plan.md'), '# Plan\n\n## Wave 1\n\n- task-01\n- task-02\n')
+  // plan_level frontmatter：validatePlanForExecute 自 2026-08-21 审查 CLI-5 起硬校验
+  writeFileSync(join(changeDir, 'plan.md'), '---\nplan_level: light\n---\n\n# Plan\n\n## Wave 1\n\n- task-01\n- task-02\n')
   writeFileSync(join(changeDir, 'module-impact.md'), '# 模块影响分析（Module Impact）— ncg-s3\n\n测试占位\n')
   const steps = [
     { name: '复杂度分类与上下文加载', status: 'completed' },

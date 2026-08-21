@@ -323,10 +323,11 @@ task-XX 对应：{SPEC_ROOT}/.runtime/execute-runs/{EXECUTE_RUN_ID}/tasks/task-X
 - execute 末步「知识库审阅」会检查待确认条目并提示用户归类
 
 ### 完成后
-1. 为每个后端 router task，扫描变更文件提取 API 端点 artifact：
-   - 在变更文件中搜索所有 router 注册路径（@router.get/post/put/delete）
-   - 将端点清单写入 {SPEC_ROOT}/.runtime/contract-artifacts/<task-name>/endpoints.json
-   - 格式: { "task": "task-XX", "type": "backend_endpoints", "endpoints": [{ "method": "GET", "path": "/api/ppm/xxx" }] }
+1. 为每个后端 router task 生成 API 端点 artifact——**用 CLI 命令，勿手扫装饰器手写（易漏 endpoint）**：
+   - 逐 task 运行：sillyspec endpoints extract --change <change> --task <task-NN>（<change> = 当前变更名）
+   - CLI 静态扫描变更文件（FastAPI @router.* / Express router.* / Spring @*Mapping）生成
+     {SPEC_ROOT}/.runtime/contract-artifacts/<task-name>/endpoints.json
+   - 格式: { "task": "task-XX", "type": "backend_endpoints", "endpoints": [{ "method": "GET", "path": "/api/ppm/xxx" }] }（CLI 已按此格式写好，verify 探针 5 直接消费）
 
 ````
 

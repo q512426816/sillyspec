@@ -17,7 +17,7 @@
  *   - 'child_process'（execSync）裸模块名不变
  */
 import { join, dirname } from 'node:path'
-import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, mkdirSync } from 'node:fs'
 import { writeAtomicSync } from '../fs-atomic.js'
 import { resolveSpecDir, resolveChangeDir, resolveRuntimeRoot, resolveQuickSessionsDir, triggerSync, safeGit, parsePorcelainPath, formatWaitOptions, checkApproval, getStageSteps, warnApprovalUnknown } from './shared.js'
 import { computeScanProfile, applyScanProfileSteps, executeScanPreflight, executeScanPostcheck } from './scan-profile.js'
@@ -122,7 +122,7 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
         throw new Error(`execute run 目录创建失败（${join(runtimeRoot, 'execute-runs', currentExecuteRunId)}）: ${e.message}；` +
           `请检查该路径是否为普通文件/只读，清理后重跑（sillyspec run execute --change ${changeName} --skip-approval）`)
       }
-      writeFileSync(runIdFile, currentExecuteRunId + '\n')
+      writeAtomicSync(runIdFile, currentExecuteRunId + '\n')
       // change 归属戳（坑 worktree-cleanup-marker-chain 根治）：run 目录自带变更身份，
       // marker 断裂（worktree cleanup / 归档清理 / 并行误删）后按戳归属，不再错配其他变更的 run
       const { stampExecuteRunChange } = await import('../task-review.js')
@@ -207,7 +207,9 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
       }
       const guardFile = join(specBase, '.runtime', 'scan-guard.json')
       mkdirSync(dirname(guardFile), { recursive: true })
-      writeFileSync(guardFile, JSON.stringify(scanGuard, null, 2) + '\n')
+      // 原子写：hook 进程（worktree-guard 的 readScanGuard）并发读，裸 truncate→write 的
+      // 半截窗口会被 JSON.parse 吞成 null → 覆盖保护静默失效（fail-open）
+      writeAtomicSync(guardFile, JSON.stringify(scanGuard, null, 2) + '\n')
       if (scanGuard.forceRescan) {
         console.log('🛡️ scan 覆盖保护已记录: --force-rescan 已开启')
       } else {

@@ -91,7 +91,26 @@ export function validatePlanForExecute(tasksContent, planContent) {
   const waves = parseWavesFromPlan(plan, registry)
   const allTasks = registry
 
-  // 检查 0.8: Wave 标题格式不对（W1/Wave1/波次1 等）→ 引用行不被收容，静默退化隐式单 Wave
+  // 检查 0.6: plan_level 锚点缺失（2026-08-21 审查 CLI-5）：plan_level 是 review tier 的
+  // 判定主锚（classifyReviewTier）——漏写时静默退文件数启发式，full 级大变更会被降级成
+  // self 自审且无人报错（降级方向比 fail 更危险）。与 gates 读侧同口径：任意行 plan_level:。
+  const fmLine = plan.split('\n').find(l => l.trim().startsWith('plan_level:'))
+  if (!fmLine) {
+    errors.push(
+      `plan.md 缺 plan_level 锚点。brainstorm 的规模判定落盘（frontmatter 写 plan_level: none|light|full）是 review 分级的主锚，` +
+      `漏写会静默退文件数启发式——full 级变更可能被降级自审。修复：在 plan.md frontmatter 补一行，如 plan_level: full`
+    )
+  } else {
+    const planLevelValue = fmLine.split(':')[1].trim()
+    if (!['none', 'light', 'full'].includes(planLevelValue)) {
+      errors.push(
+        `plan_level 值非法：${JSON.stringify(planLevelValue)}（合法值 none|light|full）。` +
+        `非法值在 review 分级中被当作无锚点处理，同样会静默退文件数启发式`
+      )
+    }
+  }
+
+  // 检查 0.8: Wave 标题格式不对（W1/波次1 等）→ 引用行不被收容，静默退化隐式单 Wave
   // 全并行——串行意图失效且无提示（原「标题格式不对」诊断的新契约承接）。仅在确有疑似标题
   // 且无任何显式 Wave 被解析时报，正常 Wave 10/带括号标题不误伤。
   const hasExplicitWave = waves.some(w => !w.implicit)
@@ -101,6 +120,22 @@ export function validatePlanForExecute(tasksContent, planContent) {
       `Wave 标题格式不对：必须字面 "## Wave N"（Wave + 空格 + 数字），"## W1" / "## Wave1" / "## 波次1" 都不被识别。` +
       `其下的 "- task-XX" 引用行不会被收容——任务将退化为单个隐式 Wave 全并行，串行意图失效`
     )
+  }
+  // 检查 0.9（坑 wave-heading-undercount，2026-08-21 实证）：部分 Wave 被识别 + 部分
+  // wave-like 标题漏识别（6 标题解析 5 个）→ 漏掉 Wave 的任务静默落入后续步骤，收尾靠
+  // 批量完成兜住才没出事。逐个点名漏网标题，plan --done 即阻断修复。
+  if (hasExplicitWave) {
+    const strictRe = /^#+\s*Wave\s*\d+/i
+    const missed = plan.split('\n')
+      .map(l => l.replace(/\r$/, ''))
+      .filter(l => waveLikeHeading.test(l) && !strictRe.test(l))
+    if (missed.length > 0) {
+      errors.push(
+        `存在 ${missed.length} 个「疑似 Wave 标题但未被识别」的行（其余 Wave 已正常解析，这 ${missed.length} 个段的任务会漏进后续步骤）：` +
+        missed.slice(0, 5).map(l => `"${l.trim().slice(0, 50)}"`).join('、') +
+        `。必须字面 "## Wave N" 格式（Wave+空格+数字），修正后重跑 plan --done`
+      )
+    }
   }
 
   // 检查 1: 注册表非空（tasks.md 无 task-XX checkbox → 三类根因诊断）
@@ -489,9 +524,14 @@ function parseWavesFromPlan(planContent, registry = []) {
   const waves = []
   const regById = new Map(registry.map(t => [t.id, t]))
   let currentWave = null
+  // Wave 标题正则（坑 wave-heading-undercount，2026-08-21 实证：plan 6 个 Wave 只解析出 5 个，
+  // 末 Wave 任务静默落入「运行测试」验收步靠批量完成兜住）。空格可选（"Wave6"/"Wave 6"）、
+  // 编号后缀任意（"## Wave 6（测试）"）——解析侧宁可多收（字母后缀重复编号的硬拦仍在
+  // validatePlanForExecute），不可静默丢。
+  const WAVE_HEADING_RE = /^#+\s*Wave\s*(\d+)/i
 
   for (const line of String(planContent || '').split('\n')) {
-    const waveMatch = line.match(/^#+\s*Wave\s+(\d+)/i)
+    const waveMatch = line.match(WAVE_HEADING_RE)
     if (waveMatch) {
       currentWave = { index: parseInt(waveMatch[1]), tasks: [] }
       waves.push(currentWave)
@@ -508,6 +548,20 @@ function parseWavesFromPlan(planContent, registry = []) {
         : { index: parseInt(refMatch[1], 10), id, name: '', done: false, model: null, dependsOn: [], file: '', steps: '', reference: '', dangling: true })
     }
   }
+
+  // wave-like 漂移告警（坑 wave-heading-undercount 运行时防线）：比解析正则更宽的「像 Wave
+  // 标题」形态（波次/W+数字等）若未被收容，说明该 Wave 段的任务会被静默漏进后续步骤——
+  // execute 启动即 warn（agent 当场修 plan），而非收尾才发现步骤表缺 Wave。
+  try {
+    const likeRe = /^#{1,6}\s*(?:wave|w|波次)\s*\d+/i
+    const likeHeadings = String(planContent || '').split('\n')
+      .map(l => l.replace(/\r$/, ''))
+      .filter(l => likeRe.test(l) && !WAVE_HEADING_RE.test(l))
+    if (likeHeadings.length > 0) {
+      console.warn(`⚠️ plan 存在 ${likeHeadings.length} 个「疑似 Wave 标题但未被识别」的行（其任务会漏进后续步骤）：`)
+      for (const h of likeHeadings.slice(0, 5)) console.warn(`   ${h.trim().slice(0, 60)}（须字面 "## Wave N" 格式）`)
+    }
+  } catch { /* 告警失败不阻断解析 */ }
 
   // 无显式 Wave 结构但注册表非空（light 级：任务全在 tasks.md、plan.md 只留策略）→
   // 合成单隐式 Wave 收容全部任务（与旧 light `## Tasks` 隐式收容语义对齐，单 Wave 串行执行）
@@ -1043,10 +1097,11 @@ task-XX 对应：{SPEC_ROOT}/.runtime/execute-runs/{EXECUTE_RUN_ID}/tasks/task-X
 - execute 末步「知识库审阅」会检查待确认条目并提示用户归类
 
 ### 完成后
-1. 为每个后端 router task，扫描变更文件提取 API 端点 artifact：
-   - 在变更文件中搜索所有 router 注册路径（@router.get/post/put/delete）
-   - 将端点清单写入 {SPEC_ROOT}/.runtime/contract-artifacts/<task-name>/endpoints.json
-   - 格式: { "task": "task-XX", "type": "backend_endpoints", "endpoints": [{ "method": "GET", "path": "/api/ppm/xxx" }] }
+1. 为每个后端 router task 生成 API 端点 artifact——**用 CLI 命令，勿手扫装饰器手写（易漏 endpoint）**：
+   - 逐 task 运行：sillyspec endpoints extract --change <change> --task <task-NN>（<change> = 当前变更名）
+   - CLI 静态扫描变更文件（FastAPI @router.* / Express router.* / Spring @*Mapping）生成
+     {SPEC_ROOT}/.runtime/contract-artifacts/<task-name>/endpoints.json
+   - 格式: { "task": "task-XX", "type": "backend_endpoints", "endpoints": [{ "method": "GET", "path": "/api/ppm/xxx" }] }（CLI 已按此格式写好，verify 探针 5 直接消费）
 `
 }
 
