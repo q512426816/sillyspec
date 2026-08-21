@@ -11,10 +11,10 @@
  *   1. 纯函数 validateSymbolImpactReport（task 覆盖度校验核心，gates.js 导出）
  *   2. gate 集成语义：enforceSymbolImpactGate 非目标步骤/非 execute 直接放行
  */
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { validateSymbolImpactReport, enforceSymbolImpactGate } from '../src/run/gates.js'
+import { validateSymbolImpactReport, enforceSymbolImpactGate, generateSymbolImpactSkeleton } from '../src/run/gates.js'
 
 let total = 0, failed = 0
 function assert(cond, msg) {
@@ -132,6 +132,19 @@ const PLAN_FULL = `## Wave 1
   process.exit = origExit
   assert(blockedCode === 1, '「加载上下文」步 + symbol-impact.md 缺失 → exit 1 阻断')
 
+  // 报错即生成（2026-08-21 审计项⑤）：阻断时自动落逐 task TODO 骨架；未替换 TODO 再撞仍阻断
+  const autoSkeletonPath = join(changeDir, 'symbol-impact.md')
+  assert(existsSync(autoSkeletonPath), 'gate 阻断时自动落骨架（报错即生成）')
+  const skContent = readFileSync(autoSkeletonPath, 'utf8')
+  assert(skContent.includes('- task-01: <!--TODO-->') && skContent.includes('- task-03: <!--TODO-->'), '骨架含全部 task 的 TODO 占位行')
+  let blockedTodo = 0
+  process.exit = (code) => { blockedTodo = code; throw new Error(`exit-${code}`) }
+  try {
+    await enforceSymbolImpactGate('execute', 'demo', '加载上下文', rr)
+  } catch { /* 预期 throw */ }
+  process.exit = origExit
+  assert(blockedTodo === 1, '骨架 TODO 未替换 → 仍阻断（防骨架直接过门）')
+
   // 补全报告 → 放行
   writeFileSync(join(changeDir, 'symbol-impact.md'), '- task-01: 无签名级变更\n- task-02: 无签名级变更\n- task-03: 无签名级变更\n')
   let okExit = 0
@@ -142,6 +155,16 @@ const PLAN_FULL = `## Wave 1
   } finally {
     process.exit = origExit
   }
+}
+
+// ── 7. 骨架生成器 + TODO 拒绝（2026-08-21 审计项⑤）──
+{
+  const sk = generateSymbolImpactSkeleton(PLAN_FULL)
+  assert(sk !== null && sk.includes('- task-01: <!--TODO-->') && sk.includes('- task-02: <!--TODO-->') && sk.includes('- task-03: <!--TODO-->'), '骨架生成器含全部 task TODO 行')
+  assert(generateSymbolImpactSkeleton('# 无 checkbox 任务') === null, '注册表无 task 行 → null')
+  const r = validateSymbolImpactReport({ reportContent: sk, planContent: PLAN_FULL })
+  assert(r.ok === false, '未替换的骨架 → validate 拒绝')
+  assert(r.errors.some(e => e.includes('task-01') && e.includes('TODO')), '错误点名 TODO 占位行')
 }
 
 console.log(`\n合计: ${total} 断言, ${failed} 失败`)

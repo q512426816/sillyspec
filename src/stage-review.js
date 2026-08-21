@@ -65,9 +65,12 @@ export function renderReviewJsonContract({ stage, changeDir, reviewRunId, tier }
     '- `checklist`(可选): 扁平数组 —— 每项 { item: string, result: ∈ { ' + CHECKLIST_RESULTS.join(' / ') + ' }, note?: string }。注意是**扁平数组**,不是按层(定义/一致/可行性)嵌套对象',
     '- `reviewerNotes`: 说明(verdict=fail 时写明阻断项)',
     '',
-    '### docHash 算法(必须等于 reviewedFiles[0] 的 sha256)',
-    "- node: `crypto.createHash('sha256').update(require('fs').readFileSync(reviewedFiles[0])).digest('hex')`(对原始字节)",
-    '- shell: `sha256sum <reviewedFiles[0]>` 取首列(hex)',
+    '### docHash(一键代填,勿手算)',
+    '- **推荐**:docHash 先占位(如 `"TODO"`),review.json 写完后跑',
+    '  `sillyspec register-stage-review --change <变更名> --stage ' + stageLbl + ' --refresh-hash`',
+    '  —— CLI 重算真实 sha256 代填,verdict/checklist 原样保留;主文档改版后同样跑这条',
+    '  (多阶段联动用 `--all` 一次处理)。gate 拦 docHash 失配时也是同一条命令修复。',
+    '- 兜底手算口径(极端无 CLI 场景):node `crypto.createHash(\'sha256\').update(readFileSync(...))` (原始字节)/ `sha256sum <file>` 首列 hex。',
     '- ⚠️ **review.json 写入后若 ' + mainDoc + ' 再被改,必须重算 docHash** —— gate 会重算 reviewedFiles[0] 的 sha256 比对,不符判伪造(历史翻车根因:design 改了 rev 后 docHash 仍是旧值)',
     '',
     '### 完整 JSON 示例(照抄改值)',
@@ -209,8 +212,9 @@ export function verifyStageReviewDocHash(review, searchDirs) {
     if (claimed !== actualRaw.toLowerCase() && claimed !== actualLf.toLowerCase()) {
       errors.push(
         `docHash 与主审查文档 ${primaryRel} 的实际内容不匹配。` +
-        `若刚改过该文档（如 design 修订后忘重算），重算并更新 review.json 的 docHash 字段：` +
-        `在基准目录 ${base} 下运行 sha256sum "${primaryRel}" 取首列 hex 填入；` +
+        `若刚改过该文档（如 design 修订后忘重算），一键修复：` +
+        `sillyspec register-stage-review --change <变更名> --stage <阶段> --refresh-hash` +
+        `（CLI 重算 docHash 代填，verdict 保留；多阶段联动加 --all）；` +
         `若未改文档，则 review.json 疑似伪造（未真正读取文档）。`
       )
       return { ok: false, errors, warnings }
@@ -414,7 +418,7 @@ export function validateStageReview(opts) {
  * @param {object} context - { stage, reviewRunId } 用于错误提示路径
  */
 export function printStageReviewResult(result, context = {}) {
-  const { stage, reviewRunId, runtimeRoot } = context
+  const { stage, reviewRunId, runtimeRoot, changeName } = context
   if (result.ok && result.warnings.length === 0) {
     console.log(`\n✅ Stage Review Gate — ${stage} 阶段独立审查通过`)
     return
@@ -435,6 +439,11 @@ export function printStageReviewResult(result, context = {}) {
     }
     console.error(`\n   提示：tier=independent 要求独立审查子代理产出 review.json，补全后重新 --done`)
     console.error(`   可用 sillyspec register-stage-review --change <名> --stage ${stage} [--from <已有review.json>] 一步生成 run 目录 + review.json 骨架（docHash 自动算）+ 写 marker + 自检，省掉手动建目录/写 marker`)
+    // docHash 失配精确指路（2026-08-21 agent-手工产出审计项②）：改版后忘重算是最高频失败，
+    // 一键重算命令带上真实 change 名，agent 可直接照抄执行（--refresh-hash 保 verdict）。
+    if (result.errors.some(e => String(e).includes('docHash')) && changeName) {
+      console.error(`   docHash 失配修复：sillyspec register-stage-review --change ${changeName} --stage ${stage} --refresh-hash（主文档改版多阶段联动用 --all）`)
+    }
   }
 
   if (result.warnings.length > 0) {

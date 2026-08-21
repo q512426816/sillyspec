@@ -330,7 +330,7 @@ const PLAN_RULES = [
     id: 'plan.task-plan-reconciliation', stage: 'plan', source: 'validateBlueprintConsistency', severity: 'error', kind: 'task-plan-reconciliation',
     target: { root: 'change', path: 'tasks' },
     data: {
-      messageMissingCards: 'plan.md 声明了 ${declared} 个任务，但 tasks/ 只有部分卡片。缺卡: ${missing}\n   无卡片的任务不进 Wave、不受 execute 审计（allowed_paths/review.json 都不覆盖）→ 必然漏做（典型：尾部文档同步类任务）。\n   修复：为每个缺卡任务补 task-NN.md（含 allowed_paths/验收标准），或从 plan.md 删除该任务。',
+      messageMissingCards: 'plan.md 声明了 ${declared} 个任务，但 tasks/ 只有部分卡片。缺卡: ${missing}\n   无卡任务的 allowed_paths/review.json 都不覆盖，不进 Wave、不受 execute 审计 → 必然漏做（典型：尾部文档同步类任务）。\n   修复：跑 sillyspec taskcard <change> --all 一键补齐全部缺卡安全骨架（已存在的卡不动，之后填充语义字段），或从 tasks.md 删除该任务声明。',
       messageOrphanCards: 'tasks/ 存在 plan.md 未声明的卡片: ${orphans}\n   这些任务不进任何 Wave，execute 不会执行。修复：在 plan.md 补声明，或删除孤儿卡片。',
     },
     spec: 'plan.md 中声明的每个 task-NN 必须有对应 tasks/task-NN.md 卡片（反向亦然），否则阻断——无卡片任务不受 execute 审计，必然漏做。',

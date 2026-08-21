@@ -18,7 +18,9 @@ import { execFileSync } from 'child_process'
 const WORKTREE_STAGES = ['execute'] // 这些阶段必须在 worktree 里
 
 const FILE_WHITELIST_EXTS = ['.md']
-const FILE_WHITELIST_NAMES = ['package.json', 'tsconfig.json', 'local.yaml', 'local.yml']
+// local.yaml/local.yml 不在白名单：同名文件只允许存在于 .sillyspec/ 下（shouldBlockWrite
+// 规则 0 拦 .sillyspec/ 之外的写入，2026-08-21 root-local-yaml 治理）
+const FILE_WHITELIST_NAMES = ['package.json', 'tsconfig.json']
 
 /** 只读命令（命令名） */
 const READONLY_COMMANDS = new Set([
@@ -680,6 +682,23 @@ export function shouldBlockWrite(filePath, cwd) {
   const callerCwd = cwd || process.cwd()
   const projectRoot = findProjectRoot(callerCwd)
   const absPath = path.isAbsolute(filePath) ? filePath : path.resolve(callerCwd, filePath)
+
+  // 0. local.yaml 位置门禁（2026-08-21 root-local-yaml 治理）：local.yaml 只允许存在于
+  //    .sillyspec/ 下。agent 按根目录惯例找/建根级 local.yaml，而 loadLocalConfig 候选链
+  //    真会读它 → 根级副本会遮蔽/分裂真实配置。阶段无关——任何阶段写 .sillyspec/ 之外的
+  //    同名文件一律拦截并指路（真实读配置走 sillyspec config cat）。
+  const yamlBase = path.basename(absPath)
+  if ((yamlBase === 'local.yaml' || yamlBase === 'local.yml')
+    && !absPath.split(path.sep).includes('.sillyspec')) {
+    return {
+      blocked: true,
+      reason: [
+        `local.yaml 只能存在于 .sillyspec/ 目录下（当前目标：${absPath}）。`,
+        `真实配置：${path.join(projectRoot, '.sillyspec', 'local.yaml')}（gitignored，勿在别处建副本）。`,
+        '读配置：sillyspec config cat（自动定位真实路径，worktree 内也解析到主仓）；键清单：sillyspec config schema。',
+      ].join('\n'),
+    }
+  }
 
   // 1. 阶段门禁（直读 sillyspec.db）
   const stage = readCurrentStage(projectRoot) || '(none)'

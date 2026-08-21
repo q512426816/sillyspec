@@ -80,7 +80,9 @@ SillySpec CLI — 规范驱动开发工具包
         --cleanup-ghosts [--confirm]     归档幽灵 active 记录（db 有行无目录 / 空壳目录 0 文件超 7 天，SS-2/2b）
 
   sillyspec local detect [--dir <path>]   生成本地配置 local.yaml（纯 fs 嗅探，零 token、不跑 scan）
+  sillyspec local register-repo <key> <path>  注册跨仓仓到 local.yaml repos: 段（外科手术式写入，其余内容保留）
   sillyspec config [schema] [--json]      打印 local.yaml 全部已知键 + 生效状态 + 读取点（堵外部 agent 配置发现缺口）
+  sillyspec config cat [--json]           读取 local.yaml 实际内容（自动定位真实路径，worktree 内解析到主仓）
   sillyspec runtime list [--json]         枚举 .sillyspec/.runtime/ 运行时产物（只读，看手上有哪些证据/状态文件）
   sillyspec dispatch <probe | hint>       SillyHub 派发能力探测 + 策略生成（agent 调用桥，仅渲染不执行 tool）
 
@@ -89,7 +91,8 @@ SillySpec CLI — 规范驱动开发工具包
   sillyspec workflow list
   sillyspec gate <stage> --change <name> [--json]      机器门控：阶段能否标记完成（只读）
   sillyspec derive <facet> --change <name> [--json]    单项事实核验（facet: execute-evidence|verify-test|task-reviews|artifacts）
-  sillyspec backfill-reviews --change <name> [--json]  为手动补的 task 生成 review.json 草稿（cannot_verify，解 archive 客观完成度阻断）
+  sillyspec backfill-reviews --change <name> [--adopt] [--json]  缺 review.json 的 task 生成草稿；--adopt 重算代填已有 review 的 base/head 等机械字段（verdict 保留）
+  sillyspec symbol-impact --change <name>      生成 symbol-impact.md 逐 task <!--TODO--> 骨架（gate 拒绝未替换占位，防骨架直接过门）
   sillyspec register-stage-review --change <name> (--stage <brainstorm|plan|execute> | --all) [--from <review.json>] [--refresh-hash] [--json]
                                       生成/adopt stage 级 review.json（docHash 自动算 + 写 marker，治 tier=independent marker 死锁）
 
@@ -520,10 +523,15 @@ async function main() {
       // 无子代理 review 落盘 → archive step1 客观完成度（真相源=review.json verdict）判缺 → 阻断归档；本命令补齐
       // 缺失草稿，独立可随时跑（不必再 execute --done）。缺数据（无 tasks/ 目录 / 改动未 commit / 无 worktree meta）
       // 时 generateTaskReviewDrafts 提前返回 reason，如实打印不报错。
+      // --adopt（2026-08-21 agent-手工产出审计项①）：已存在 review.json 的 mechanics 字段
+      // （schemaVersion/task/base/head/changedFiles/repo）一键重算代填，agent/子代理只写
+      // verdict——手算 hash、手抄 diff 清单是纯错误面，gate 校验的恰是这些字段。与草稿互补：
+      // 草稿补「缺失」，adopt 修「已存在但 mechanics 错/缺」，verdict 原样保留。
       const brChangeIdx = args.indexOf('--change');
       const brChange = brChangeIdx >= 0 && args[brChangeIdx + 1] ? args[brChangeIdx + 1] : null;
+      const brAdopt = args.includes('--adopt');
       if (!brChange) {
-        console.error('用法: sillyspec backfill-reviews --change <name> [--json] [--spec-dir <path>]\n  为手动补的 task 生成 review.json 草稿（cannot_verify），解 archive 客观完成度阻断');
+        console.error('用法: sillyspec backfill-reviews --change <name> [--adopt] [--json] [--spec-dir <path>]\n  缺失 review.json → 生成 cannot_verify 草稿（解 archive 客观完成度阻断）\n  --adopt → 已存在 review.json 的 base/head/changedFiles 等 mechanics 字段一键重算代填（verdict 保留）');
         process.exit(2);
       }
       // 与 run 入口同源消毒（防路径穿越；backfill 下游拼 marker/changes/review 路径）
@@ -560,6 +568,69 @@ async function main() {
           console.log('   execute run id: ' + result.executeRunId);
         }
       }
+      if (brAdopt) {
+        const { adoptTaskReviewMechanics } = await import('./task-review.js');
+        const adoptResult = await adoptTaskReviewMechanics({ changeName: brChange, cwd: dir, platformOpts: brPlatformOpts, ctx: _brCtx });
+        if (json) {
+          process.stdout.write(JSON.stringify({ ok: true, command: 'backfill-reviews --adopt', change: brChange, ...adoptResult }));
+        } else {
+          if (adoptResult.adopted > 0) {
+            console.log('🔁 adopt: 重算代填 ' + adoptResult.adopted + ' 个已存在 review.json 的 mechanics 字段（verdict 原样保留） [' + brChange + ']');
+          }
+          if (adoptResult.unchanged > 0) {
+            console.log('   ' + adoptResult.unchanged + ' 个 mechanics 已一致，无需改写');
+          }
+          if (adoptResult.missing > 0) {
+            console.log('   ' + adoptResult.missing + ' 个 task 无 review.json（由上方草稿生成负责，adopt 不覆盖）');
+          }
+          if (adoptResult.downgraded.length > 0) {
+            console.warn('   ⚠️ ' + adoptResult.downgraded.join(', ') + ' 原 verdict 非法/缺失，已降级 cannot_verify（不猜本意，待人工复核升级）');
+          }
+          if (adoptResult.skipped > 0 || adoptResult.reasons.length > 0) {
+            console.log('   跳过 ' + adoptResult.skipped + ' 个：' + (adoptResult.reasons.join('；') || '原因见上'));
+          }
+          if (adoptResult.adopted === 0 && adoptResult.unchanged === 0 && adoptResult.skipped === 0 && adoptResult.missing === 0) {
+            console.log('ℹ️ adopt 无对象 [' + brChange + ']' + (adoptResult.reasons[0] ? '：' + adoptResult.reasons[0] : ''));
+          }
+        }
+      }
+      break;
+    }
+    case 'symbol-impact': {
+      // symbol-impact.md 骨架生成（2026-08-21 审计项⑤「报错即生成」的命令入口）：gate 此前
+      // 只报错不代填 → agent 从零手写整份报告，忘一个 task 就被拦。本命令从 tasks.md（回退
+      // plan.md）注册表生成逐 task <!--TODO--> 骨架；gate 拒绝未替换的占位（防骨架直接过门），
+      // agent 只需逐行填结论。已存在不覆盖（幂等，agent 产出优先）。
+      const siChangeIdx = args.indexOf('--change');
+      const siChange = siChangeIdx >= 0 && args[siChangeIdx + 1] ? args[siChangeIdx + 1] : null;
+      if (!siChange) {
+        console.error('用法: sillyspec symbol-impact --change <name> [--spec-dir <path>]\n  生成 symbol-impact.md 逐 task <!--TODO--> 骨架（已存在不覆盖）；gate 拒绝未替换的占位行');
+        process.exit(2);
+      }
+      assertSafeChangeName(siChange, '--change 变更名');
+      const siSpecBase = resolvePlatformSpecDir(dir, specDir) || join(dir, '.sillyspec');
+      const siChangeDir = join(siSpecBase, 'changes', siChange);
+      const siTasksPath = join(siChangeDir, 'tasks.md');
+      const siPlanPath = join(siChangeDir, 'plan.md');
+      const siRegistryPath = existsSync(siTasksPath) ? siTasksPath : (existsSync(siPlanPath) ? siPlanPath : null);
+      if (!siRegistryPath) {
+        console.error(`❌ 变更目录缺 tasks.md/plan.md: ${siChangeDir}`);
+        process.exit(1);
+      }
+      const { generateSymbolImpactSkeleton } = await import('./run/gates.js');
+      const siSkeleton = generateSymbolImpactSkeleton(readFileSync(siRegistryPath, 'utf8'));
+      if (!siSkeleton) {
+        console.error(`❌ 任务清单无 checkbox task 行: ${siRegistryPath}`);
+        process.exit(1);
+      }
+      const siReportPath = join(siChangeDir, 'symbol-impact.md');
+      if (existsSync(siReportPath)) {
+        console.log(`ℹ️  symbol-impact.md 已存在，不覆盖: ${siReportPath}`);
+        break;
+      }
+      writeFileSync(siReportPath, siSkeleton);
+      console.log(`✅ 已生成逐 task 骨架: ${siReportPath}`);
+      console.log('   逐行替换 <!--TODO--> 为结论（无签名级变更也显式写「无」）；gate 拒绝未替换的占位行。');
       break;
     }
     case 'register-stage-review': {
@@ -2037,8 +2108,52 @@ SillySpec modules — 模块文档管理
       // 本地配置探测（task-04 / D-001@v1）：纯 fs 嗅探项目类型 → 生成 local.yaml。
       // 轻量独立路由，不跑 scan、不消耗 token。探测逻辑归属 local-detect.js（task-02）。
       const localSubCmd = filteredArgs[1];
+      // register-repo（2026-08-21 审计项④）：跨仓 repo key 注册命令化。此前靠 agent 手编
+      // local.yaml repos: 段（正是 agent 满目录找/根目录乱建 local.yaml 的上游）；execute
+      // 启动 fail-closed 报错已列出缺的 key，本命令外科手术式写入——只动 repos: 段，
+      // 注释/凭据段逐行保留。写目标解析 worktree→主仓（config-cat.js 同源候选链）。
+      if (localSubCmd === 'register-repo') {
+        const rrKey = filteredArgs[2];
+        const rrPath = filteredArgs[3];
+        if (!rrKey || !rrPath || rrPath.startsWith('-')) {
+          console.error('用法: sillyspec local register-repo <key> <path>\n  注册跨仓仓到 local.yaml repos: 段（跨仓 task 卡 repo: 的 key 必须先注册，execute 启动 fail-closed 校验）\n  key 限字母数字._-；path 为跨仓仓根目录（相对路径按当前 cwd 解析，须是 git 仓）；main 隐式不用注册');
+          process.exit(2);
+        }
+        let rrSpecBase = null;
+        try {
+          rrSpecBase = resolvePlatformSpecDir(dir, specDir);
+        } catch (e) {
+          // fail-closed：平台 pointer 异常时不盲写（写错 local.yaml 比不写更糟），报修复引导
+          console.error(`❌ 无法解析 local.yaml 目标路径（平台指针异常）: ${e.message}`);
+          process.exit(1);
+        }
+        const absRepo = resolve(rrPath);
+        if (!existsSync(absRepo)) {
+          console.error(`❌ 路径不存在: ${absRepo}`);
+          process.exit(1);
+        }
+        if (!(await import('./git-helper.js')).gitQuiet(absRepo, ['rev-parse', '--git-dir'])) {
+          console.error(`❌ 不是 git 仓库: ${absRepo}（repos: 段注册的跨仓仓必须可 rev-parse，MultiRepoContext 会在其中跑 git）`);
+          process.exit(1);
+        }
+        const { resolveLocalYamlWriteTarget } = await import('./config-cat.js');
+        const target = resolveLocalYamlWriteTarget(dir, { specBase: rrSpecBase });
+        const { registerRepoInLocalYaml } = await import('./local-register.js');
+        let rrResult;
+        try {
+          rrResult = registerRepoInLocalYaml(target.path, rrKey, absRepo);
+        } catch (e) {
+          console.error(`❌ 注册失败: ${e.message}`);
+          process.exit(1);
+        }
+        const verb = rrResult.replaced ? '已更新（覆盖旧路径）' : '已注册';
+        console.log(`✅ repos.${rrKey} ${verb}: ${absRepo.replace(/\\/g, '/')}`);
+        console.log(`   写入: ${target.path}${rrResult.fileCreated ? '（新建文件）' : ''}${rrResult.sectionCreated ? '（新建 repos: 段）' : ''}`);
+        console.log('   查看: sillyspec config cat（真实配置）; main 隐式=主仓不用注册');
+        break;
+      }
       if (localSubCmd !== 'detect') {
-        console.error('用法: sillyspec local detect [--dir <path>]\n  纯 fs 嗅探项目类型并生成 local.yaml（不跑 scan、零 token）');
+        console.error('用法: sillyspec local detect [--dir <path>]\n       sillyspec local register-repo <key> <path>\n  detect: 纯 fs 嗅探项目类型并生成 local.yaml（不跑 scan、零 token）\n  register-repo: 注册跨仓仓到 local.yaml repos: 段（外科手术式写入，其余内容保留）');
         process.exit(2);
       }
 
@@ -2099,19 +2214,56 @@ SillySpec config — local.yaml 配置键速查
   sillyspec config schema         同上（显式子命令）
   sillyspec config --json         机读 JSON（程序化消费）
   sillyspec config schema --json  同上
+  sillyspec config cat            读取 local.yaml 实际内容（候选链：spec 根 → cwd 祖先链 →
+                                  git common-dir 主仓根；worktree 内 .sillyspec 是 checkout
+                                  副本无此文件，cat 自动解析到主仓）
+  sillyspec config cat --json     机读 JSON（dir/path/source/content；未找到退出 1）
 
 说明:
   - 数据源：src/config-schema.js（唯一真相；reader 见各键「读取点」）
   - 键分两类：【生效】配了即生效；【声明但未接线】代码/JSDoc 提及但无 reader，配了不生效
   - 脱敏示例文件：sillyspec init 生成 local.yaml.example（可提交；真实 local.yaml 是 gitignored）
+  - local.yaml 恒在 .sillyspec/ 下——项目根目录没有这个文件，别去那里找（写 .sillyspec/
+    之外的同名文件会被 hook 拦截）
 `);
         break;
       }
+      // config cat（2026-08-21 root-local-yaml 治理）：schema 只列键不含值，agent 拿实际配置
+      // 只能翻文件——worktree 内 .sillyspec 是 checkout 副本（gitignored 的 local.yaml 不随
+      // checkout 出现），找不到就漂去项目根乱找/乱建。cat = 唯一权威读取口，按「文件存在」
+      // 解析真实路径（config-cat.js：spec 根 → cwd 祖先链 → git common-dir 主仓根）。
+      // agent 本就有 shell 权限可自行 cat，CLI 回显明文不增加暴露面。
+      if (configSub === 'cat') {
+        let specBase = null
+        try { specBase = resolvePlatformSpecDir(dir, specDir) } catch { /* 平台 pointer 异常 → 走祖先链（真实 reader 各自 fail-closed，cat 只读不加重） */ }
+        const { resolveLocalYaml } = await import('./config-cat.js')
+        const r = resolveLocalYaml(dir, { specBase })
+        if (json) {
+          const payload = { cmd: 'config cat', dir: resolve(dir), exists: r.exists, path: r.path, source: r.source, searched: r.searched }
+          if (r.exists) payload.content = readFileSync(r.path, 'utf8')
+          console.log(JSON.stringify(payload, null, 2))
+          if (!r.exists) process.exitCode = 1
+          break
+        }
+        if (!r.exists) {
+          console.error(`📭 未找到 local.yaml（候选链均无此文件：${r.searched.slice(0, 3).join(' ; ')} …）`)
+          console.error('   注意：local.yaml 恒在 .sillyspec/ 下，项目根目录没有这个文件。')
+          console.error('   生成：sillyspec local detect（本地嗅探）/ sillyspec platform connect（平台凭据）')
+          console.error('   可用键清单：sillyspec config schema')
+          process.exitCode = 1
+          break
+        }
+        console.log(`📄 ${r.path}（来源：${r.source}）`)
+        const content = readFileSync(r.path, 'utf8')
+        process.stdout.write(content)
+        if (!content.endsWith('\n')) process.stdout.write('\n')
+        break;
+      }
       if (!isSchema) {
-        const sug = didYouMean(configSub, ['schema']);
+        const sug = didYouMean(configSub, ['schema', 'cat']);
         console.error(`❌ 未知子命令: config ${configSub}`);
         if (sug) console.error(`   你是想输入「config ${sug}」吗？`);
-        console.error('用法: sillyspec config [schema] [--json]   打印 local.yaml 配置键');
+        console.error('用法: sillyspec config [schema|cat] [--json]   打印 local.yaml 配置键 / 读取实际内容');
         process.exit(2);
       }
       const { renderSchemaHuman, renderSchemaJson } = await import('./config-schema.js');

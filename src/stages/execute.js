@@ -558,19 +558,20 @@ function resolveTaskRepo(task, changeDir) {
 }
 
 /**
- * 把 base_commit 锡点写入 task 卡 frontmatter（W3 task-08，D-010）。
- * 派发跨仓 task 前 CLI 实时 git rev-parse HEAD 落盘——锁定子代理起改的 base 锚点，
- * 防止同 Wave 多 task 改同一跨仓仓时 HEAD 推进致 diff 范围漂移（design §5.3 约束① / R-01）。
+ * 把 commit 锡点（base_commit/head_commit）写入 task 卡 frontmatter（W3 task-08，D-010；
+ * head 侧 2026-08-21 审计项③ 补对称）。
  *
- * 策略：幂等写——frontmatter 有 base_commit 行则就地替换，无则紧跟 repo 行后插入（
- * 无 frontmatter 时整段创建）。仅改 frontmatter 不动正文。已存在相同值不重复写。
+ * 策略：幂等写——frontmatter 有该字段行则就地替换，无则按 D-010 协议顺序插入：
+ * head_commit 跟在 base_commit 行后；base_commit 跟在 repo 行后；均无则插 frontmatter
+ * 首部。仅改 frontmatter 不动正文。已存在相同值不重复写。
  *
  * @param {string} taskFilePath - task-NN.md 绝对路径
- * @param {string} baseCommit - 跨仓仓 HEAD sha
+ * @param {'base_commit'|'head_commit'} field - 锚点字段名
+ * @param {string} commit - commit sha
  * @returns {boolean} 是否实际写入（false = 文件不存在 / 写失败 / 值未变）
  */
-function writeBaseCommitToTaskCard(taskFilePath, baseCommit) {
-  if (!taskFilePath || !baseCommit) return false
+export function writeCommitAnchorToTaskCard(taskFilePath, field, commit) {
+  if (!taskFilePath || !commit || (field !== 'base_commit' && field !== 'head_commit')) return false
   if (!existsSync(taskFilePath)) return false
   let content
   try {
@@ -579,27 +580,28 @@ function writeBaseCommitToTaskCard(taskFilePath, baseCommit) {
     return false
   }
   // CRLF 归一（坑 base-commit-crlf-frontmatter，plan-postcheck.js 同款）：跨仓 task 卡被
-  // 编辑器/子代理写成 CRLF 后 `^---\n` 匹配失败 → base_commit 锚点静默不落盘，而 Wave
+  // 编辑器/子代理写成 CRLF 后 `^---\n` 匹配失败 → 锚点静默不落盘，而 Wave
   // prompt 仍声称「CLI 已落盘」。归一后按 LF 写回（taskcard 生成侧本就强制 LF）。
   content = content.replace(/\r\n?/g, '\n')
   const fmMatch = content.match(/^---\n([\s\S]*?)\n---/)
   if (!fmMatch) return false
   const fm = fmMatch[1]
-  const baseLineRe = /^base_commit:\s*.*$/m
+  const lineRe = new RegExp(`^${field}:\\s.*$`, 'm')
   let newFm
-  if (baseLineRe.test(fm)) {
-    const existing = (fm.match(baseLineRe) || [''])[0]
-    if (existing === `base_commit: ${baseCommit}`) return false // 值未变，幂等跳过
-    newFm = fm.replace(baseLineRe, `base_commit: ${baseCommit}`)
+  if (lineRe.test(fm)) {
+    const existing = (fm.match(lineRe) || [''])[0]
+    if (existing === `${field}: ${commit}`) return false // 值未变，幂等跳过
+    newFm = fm.replace(lineRe, `${field}: ${commit}`)
   } else {
-    // 紧跟 repo 行后插入（与 D-010 协议同源顺序 repo→base_commit→head_commit）
-    const repoLineRe = /^repo:\s*.*$/m
-    const anchor = `base_commit: ${baseCommit}\n`
-    if (repoLineRe.test(fm)) {
-      newFm = fm.replace(repoLineRe, m => m + '\n' + anchor.trimEnd())
+    // 插入锚点（D-010 协议顺序 repo→base_commit→head_commit）：head 跟 base 后，
+    // base 跟 repo 后，都无则 frontmatter 首字段
+    const anchor = `${field}: ${commit}`
+    const prevField = field === 'head_commit' ? 'base_commit' : 'repo'
+    const prevRe = new RegExp(`^${prevField}:\\s.*$`, 'm')
+    if (prevRe.test(fm)) {
+      newFm = fm.replace(prevRe, m => m + '\n' + anchor)
     } else {
-      // 无 repo 行：插到 frontmatter 首部（frontmatter 首字段）
-      newFm = anchor.trimEnd() + '\n' + fm
+      newFm = anchor + '\n' + fm
     }
   }
   const newContent = content.replace(/^---\n[\s\S]*?\n---/, `---\n${newFm}\n---`)
@@ -610,6 +612,75 @@ function writeBaseCommitToTaskCard(taskFilePath, baseCommit) {
   } catch {
     return false
   }
+}
+
+function writeBaseCommitToTaskCard(taskFilePath, baseCommit) {
+  return writeCommitAnchorToTaskCard(taskFilePath, 'base_commit', baseCommit)
+}
+
+/**
+ * 跨仓 task head_commit 锡点自动落盘（2026-08-21 agent-手工产出审计项③，D-010 补对称）。
+ *
+ * base_commit 已在派发时 CLI 落盘，head_commit 此前靠主 agent 按 Wave prompt 指引手跑
+ * `rev-parse` 手写（漏抄/抄错直接炸 Task Review Gate 真实性校验）。本函数在 execute
+ * --done 时机补齐另一半：扫描 task 卡，跨仓 task（repo≠main）缺 head_commit 的，实时
+ * `git -C <跨仓仓根> rev-parse HEAD` 幂等写入（**已存在不覆盖**——agent 手写的精确锚点优先）。
+ *
+ * best-effort：MultiRepoContext 构造失败 / git 不可达 → 跳过该 task 记 reason，绝不抛。
+ *
+ * @param {{ changeName: string, cwd: string, specBase?: string, platformOpts?: object }} opts
+ * @returns {Promise<{ stamped: number, stampedTasks: string[], skipped: number, reasons: string[] }>}
+ */
+export async function stampCrossRepoHeadCommits({ changeName, cwd, specBase, platformOpts = {} }) {
+  const base = specBase || platformOpts.specRoot || path.join(cwd, '.sillyspec')
+  const reasons = []
+  const stampedTasks = []
+  if (!changeName) {
+    return { stamped: 0, stampedTasks, skipped: 0, reasons: ['无 changeName'] }
+  }
+  const tasksDir = path.join(base, 'changes', changeName, 'tasks')
+  if (!existsSync(tasksDir)) {
+    return { stamped: 0, stampedTasks, skipped: 0, reasons: ['无 tasks/ 目录（单 task 变更，无跨仓锡点）'] }
+  }
+  let ctx = null
+  try {
+    const { getOrCreateMultiRepoContext } = await import('../run/shared.js')
+    ctx = await getOrCreateMultiRepoContext({ cwd, changeName, platformOpts })
+  } catch (e) {
+    return { stamped: 0, stampedTasks, skipped: 0, reasons: [`MultiRepoContext 构造失败: ${e.message}`] }
+  }
+  let stamped = 0
+  let skipped = 0
+  for (const f of readdirSync(tasksDir).filter(n => /^task-\d+\.md$/.test(n)).sort()) {
+    const taskFile = path.join(tasksDir, f)
+    let content
+    try {
+      content = readFileSync(taskFile, 'utf8')
+    } catch {
+      skipped++
+      continue
+    }
+    if (/^head_commit:/m.test(content)) continue // 已有（手写或前次落盘）不覆盖
+    const repoKey = parseRepo(content)
+    if (!repoKey || repoKey === 'main') continue // 主仓 task 锚 meta，无 head_commit 字段
+    const entry = ctx && ctx.resolve ? ctx.resolve(repoKey) : null
+    if (!entry || !entry.gitDir) {
+      skipped++
+      reasons.push(`${f}: repo "${repoKey}" 无法解析 gitDir（local.yaml repos 未注册？）`)
+      continue
+    }
+    const head = gitQuiet(entry.gitDir, ['rev-parse', 'HEAD'])
+    if (!head) {
+      skipped++
+      reasons.push(`${f}: git rev-parse HEAD 失败（${entry.gitDir}）`)
+      continue
+    }
+    if (writeCommitAnchorToTaskCard(taskFile, 'head_commit', head)) {
+      stamped++
+      stampedTasks.push(f.replace(/\.md$/, ''))
+    }
+  }
+  return { stamped, stampedTasks, skipped, reasons }
 }
 
 /**
@@ -768,9 +839,9 @@ ${crossLines}
 **派发跨仓 task 前（base 锡点，CLI 已在 prompt 构造时落盘）：**
 - 跨仓 task 卡 frontmatter 的 \`base_commit\` 已由 CLI 实时 \`git -C <跨仓仓根> rev-parse HEAD\` 锁定（base 锡点，约束①）。子代理在此 HEAD 上改+commit，不受同 Wave 其他 task 推进 HEAD 影响。
 
-**回收跨仓 task review 前（head 锡点，你必须在子代理完成后落盘）：**
-- 跨仓 task 子代理完成 commit 后、写 review.json / 勾选 checkbox **之前**，你必须运行 \`git -C <跨仓仓根> rev-parse HEAD\` 把结果写入该 task 卡 frontmatter \`head_commit:\` 字段（与 \`base_commit:\` 同源 frontmatter 锡点写入）。
-- review.json 的 \`base\` 取 task 卡 \`base_commit\`、\`head\` 取 task 卡 \`head_commit\`（**非瞬时 HEAD**），锁 diff 范围不漂移。
+**回收跨仓 task（head 锡点，CLI 自动落盘，勿手写）：**
+- 子代理完成 commit 后，正常写 review.json（verdict/notes）并勾选 checkbox 即可。execute \`--done\` 时 CLI 自动 \`git -C <跨仓仓根> rev-parse HEAD\` 写入该 task 卡 \`head_commit:\`（幂等，已存在不覆盖——你若手写了精确锚点则以你的为准）。
+- review.json 的 mechanics 字段（\`base\`/\`head\`/\`changedFiles\`）无需手算：\`base\` 取 task 卡 \`base_commit\`、\`head\` 取 task 卡 \`head_commit\`，写完跑 \`sillyspec backfill-reviews --change <变更名> --adopt\` 一键代填（verdict 保留）。
 
 **跨仓 task 子代理 prompt 必须注入：**
 > 该 task 改的是 \`<repo>\` 仓，workdir=\`<跨仓仓根>\`。**直接在该仓主干工作区改+commit（git add + git commit 到该仓主干），不经主仓 worktree、不建分支。** commit 到该仓主干即落盘，apply 阶段对跨仓 task 为 no-op（design §5.4 G1）。

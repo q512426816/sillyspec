@@ -95,7 +95,15 @@ plan 完成校验会检查：design 提到入口文件（cli.ts/main.ts/server.t
 
 ### local.yaml `repos:` 段（跨仓注册表）
 
-跨仓 change 必须在 `.sillyspec/local.yaml` 注册所有跨仓仓路径：
+> 📍 `local.yaml` 恒在 `.sillyspec/local.yaml`——项目根目录**没有**这个文件，别去那里找或新建（hook 会拦）。worktree 内该文件不随 checkout 出现，读配置直接跑 `sillyspec config cat`（自动定位到主仓真实配置）；可用键清单见 `sillyspec config schema`。
+
+跨仓 change 的每个 repo key 都要注册（execute 启动 fail-closed 校验）。**用命令注册，勿手编 YAML**：
+
+```
+sillyspec local register-repo <key> <跨仓仓根路径>
+```
+
+（外科手术式写入，只动 `repos:` 段，其余内容保留；execute 启动报缺注册时，报错文案里就带这条命令。）手写格式参考：
 
 ```yaml
 repos:

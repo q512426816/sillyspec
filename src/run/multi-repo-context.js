@@ -79,7 +79,9 @@ export class MultiRepoContext {
       throw new Error(
         `MultiRepoContext: 以下 repo 未在 local.yaml repos: 段注册：[${unregistered.join(', ')}]。` +
         `当前已注册 repo：[${registered.join(', ')}]。` +
-        `请在 local.yaml repos: 段补注册后再启动 execute（约束② fail-closed，跨仓 apply 走错仓=数据所有权事故）。`
+        `一键注册（每个缺的 key 各跑一次，勿手编 YAML）：` +
+        unregistered.map(k => `sillyspec local register-repo ${k} <${k} 仓根路径>`).join('；') +
+        `。补注册后再启动 execute（约束② fail-closed，跨仓 apply 走错仓=数据所有权事故）。`
       );
     }
 

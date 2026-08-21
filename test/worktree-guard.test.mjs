@@ -130,6 +130,26 @@ try {
     '.sillyspec/local.yaml readonlyCommands should extend the bash whitelist'
   )
 
+  // root local.yaml 位置门禁（2026-08-21 root-local-yaml 治理）：.sillyspec/ 之外的同名文件
+  // 写入一律拦截并指路——agent 按根目录惯例找/建根级 local.yaml，loadLocalConfig 候选链
+  // 真会读它 → 根级副本遮蔽/分裂真实配置。阶段无关（execute 阶段下验证）。
+  {
+    const r = shouldBlock({ tool: 'Write', filePath: join(root, 'local.yaml'), cwd: root })
+    assert.equal(r.blocked, true, 'root-level local.yaml write should be blocked')
+    assert.ok(r.reason.includes('.sillyspec'), 'block reason should redirect to .sillyspec path')
+    assert.ok(r.reason.includes('config cat'), 'block reason should point to sillyspec config cat')
+  }
+  assert.equal(
+    shouldBlock({ tool: 'Write', filePath: join(root, 'local.yml'), cwd: root }).blocked,
+    true,
+    'root-level local.yml write should be blocked too'
+  )
+  assert.equal(
+    shouldBlock({ tool: 'Write', filePath: join(root, '.sillyspec', 'local.yaml'), cwd: root }).blocked,
+    false,
+    '.sillyspec/local.yaml write should stay allowed (config editing)'
+  )
+
   // 切到 quick 阶段（直读 DB）
   setStage('quick')
   assert.equal(

@@ -1151,6 +1151,194 @@ export async function generateTaskReviewDrafts({ changeName, cwd, platformOpts =
 }
 
 /**
+ * adoptTaskReviewMechanics —— 已存在 review.json 的 mechanics 字段一键重算代填（保 verdict）。
+ *
+ * 背景（2026-08-21 agent-手工产出审计项①）：review.json 里 schemaVersion/task/base/head/
+ * changedFiles(/repo) 全部可由 CLI 从 git + task 卡机械推导（generateTaskReviewDrafts 已证明），
+ * agent/子代理手算 hash、手抄 diff 清单是纯错误面——而 gate（verifyReviewGitEvidence）校验的
+ * 恰是这些字段。与草稿生成互补：草稿只补「缺失」，adopt 修「已存在但 mechanics 错/缺」——
+ * 保留人工语义字段（specVerdict/qualityVerdict/requiredEvidence/reviewerNotes），只重写 mechanics。
+ *
+ * verdict 保护策略（不猜 agent 本意）：
+ * - 合法 verdict（VALID_VERDICTS）原样保留；
+ * - 非法/缺失 verdict 降级 cannot_verify，reviewerNotes 追加标记，requiredEvidence 缺失补占位
+ *  （schema 要求 cannot_verify 必带非空 requiredEvidence）；
+ * - JSON 解析失败的 review 不救（无法可信保留任何字段），报出来留给 agent 修 JSON 后重跑。
+ *
+ * fail-open：与草稿生成同契约——缺数据返回统计与 reasons，不抛。
+ *
+ * @param {{ changeName: string, cwd: string, platformOpts?: object, ctx?: object|null }} opts
+ * @returns {Promise<{ adopted: number, unchanged: number, skipped: number, missing: number,
+ *                     downgraded: string[], reasons: string[], executeRunId?: string }>}
+ */
+export async function adoptTaskReviewMechanics({ changeName, cwd, platformOpts = {}, ctx = null }) {
+  const specBase = platformOpts.specRoot || join(cwd, '.sillyspec')
+  const runtimeRoot = resolveRuntimeRoot(platformOpts, specBase)
+  const tasksDir = join(specBase, 'changes', changeName, 'tasks')
+  const reasons = []
+
+  if (!changeName) {
+    return { adopted: 0, unchanged: 0, skipped: 0, missing: 0, downgraded: [], reasons: ['无 changeName'] }
+  }
+  if (!existsSync(tasksDir)) {
+    return { adopted: 0, unchanged: 0, skipped: 0, missing: 0, downgraded: [], reasons: ['无 tasks/ 目录'] }
+  }
+
+  // executeRunId：与草稿/gate 同源 marker。缺 marker 不新建 run——adopt 修的是当前 run 里
+  // 已存在的 review，marker 丢失说明无「当前 run」语义，无对象可修（gate 对 marker 缺失放行，
+  // 下游 Task Review Gate 兜底，这里同口径不造 run）。
+  const runIdFile = join(runtimeRoot, 'current-execute-run-id-' + changeName)
+  let executeRunId = ''
+  try {
+    if (existsSync(runIdFile)) {
+      const c = readFileSync(runIdFile, 'utf8').trim()
+      if (isValidExecuteRunId(c)) executeRunId = c
+    }
+  } catch {}
+  if (!executeRunId) {
+    return { adopted: 0, unchanged: 0, skipped: 0, missing: 0, downgraded: [], reasons: ['无 execute run marker——无当前 run，adopt 无对象'] }
+  }
+
+  // base/head + diff：与 generateTaskReviewDrafts 同源口径（meta 锡点 + worktree rev-parse +
+  // resolveVerifyChangedFiles），保证 adopt 产物与 gate 校验输入一致。
+  const diffFiles = resolveVerifyChangedFiles(cwd, changeName)
+  let base = null
+  let head = null
+  let reviewGitDir = cwd
+  try {
+    const wm = new WorktreeManager({ cwd })
+    const meta = wm.getMeta(changeName)
+    base = (meta && (meta.baselineCommit || meta.baseHash)) || null
+    if (meta && meta.worktreePath && meta.mode !== 'in-place-fallback' && existsSync(meta.worktreePath)) {
+      reviewGitDir = meta.worktreePath
+    }
+  } catch {}
+  if (base) {
+    try {
+      head = runGit(reviewGitDir, ['rev-parse', 'HEAD'])
+    } catch {
+      head = null
+    }
+  }
+
+  const taskFiles = readdirSync(tasksDir).filter(f => /^task-\d+\.md$/.test(f)).sort()
+  let adopted = 0
+  let unchanged = 0
+  let skipped = 0
+  let missing = 0
+  const downgraded = []
+
+  for (const tf of taskFiles) {
+    const taskId = tf.replace(/\.md$/, '')
+    const reviewPath = join(runtimeRoot, 'execute-runs', executeRunId, 'tasks', taskId, 'review.json')
+    if (!existsSync(reviewPath)) {
+      missing++
+      continue
+    }
+
+    const existing = readReview(reviewPath)
+    if (existing.parseError) {
+      skipped++
+      reasons.push(`${taskId}: JSON 解析失败，adopt 不猜字段——先修 JSON 再重跑`)
+      continue
+    }
+    const prev = existing.review || {}
+
+    const content = readFileSync(join(tasksDir, tf), 'utf8')
+    const allowedPaths = parseAllowedPaths(content)
+    const taskRepo = normalizeRepoKey(parseRepo(content))
+    const crossEntry = (ctx && taskRepo !== DEFAULT_REPO_KEY) ? ctx.resolve(taskRepo) : null
+    let taskBase = base
+    let taskHead = head
+    let taskChangedFiles
+    let draftRepo
+
+    if (crossEntry) {
+      const baseCommit = parseBaseCommit(content)
+      const headCommit = parseHeadCommit(content)
+      if (!baseCommit || !headCommit) {
+        skipped++
+        reasons.push(`${taskId}: 跨仓 task 卡缺 base/head 锡点，无法 adopt`)
+        continue
+      }
+      taskBase = baseCommit
+      taskHead = headCommit
+      draftRepo = taskRepo
+      let crossDiffFiles = []
+      try {
+        const out = runGit(crossEntry.gitDir, ['diff', '--name-only', `${baseCommit}..${headCommit}`])
+        crossDiffFiles = out ? out.split('\n').filter(Boolean).map(p => p.replace(/\\/g, '/')) : []
+      } catch {
+        skipped++
+        reasons.push(`${taskId}: 跨仓 git diff 失败（${crossEntry.gitDir}）`)
+        continue
+      }
+      taskChangedFiles = allowedPaths.length > 0
+        ? crossDiffFiles.filter(f => allowedPaths.some(p => pathMatches(f, p)))
+        : crossDiffFiles
+    } else {
+      const mainDiff = Array.isArray(diffFiles) ? diffFiles : []
+      taskChangedFiles = allowedPaths.length > 0
+        ? mainDiff.filter(f => allowedPaths.some(p => pathMatches(f, p)))
+        : []
+    }
+
+    if (!crossEntry && (!taskBase || !taskHead)) {
+      skipped++
+      reasons.push(`${taskId}: 主仓缺 worktree meta base/head，无法 adopt`)
+      continue
+    }
+
+    const merged = { ...prev }
+    merged.schemaVersion = REVIEW_SCHEMA_VERSION
+    merged.task = taskId
+    merged.base = taskBase
+    merged.head = taskHead
+    merged.changedFiles = taskChangedFiles
+    if (draftRepo) merged.repo = draftRepo
+
+    let verdictTouched = false
+    for (const v of ['specVerdict', 'qualityVerdict']) {
+      if (!VALID_VERDICTS.includes(merged[v])) {
+        merged[v] = 'cannot_verify'
+        verdictTouched = true
+      }
+    }
+    if (verdictTouched) downgraded.push(taskId)
+    let evidenceFilled = false
+    if ((merged.specVerdict === 'cannot_verify' || merged.qualityVerdict === 'cannot_verify')
+      && (!Array.isArray(merged.requiredEvidence) || merged.requiredEvidence.length === 0)) {
+      merged.requiredEvidence = [`adopt 代填：原 review 缺 requiredEvidence（verdict=${merged.specVerdict}/${merged.qualityVerdict}），待人工复核补证据`]
+      evidenceFilled = true
+    }
+    if (verdictTouched) {
+      merged.reviewerNotes = String(merged.reviewerNotes || '') + (merged.reviewerNotes ? '; ' : '')
+        + 'adopt: 原 verdict 非法/缺失已降级 cannot_verify（不猜本意）'
+    }
+
+    const mechanicsChanged = prev.schemaVersion !== merged.schemaVersion
+      || prev.base !== merged.base
+      || prev.head !== merged.head
+      || JSON.stringify(prev.changedFiles ?? null) !== JSON.stringify(merged.changedFiles)
+      || prev.repo !== merged.repo
+
+    try {
+      if (mechanicsChanged || verdictTouched || evidenceFilled) {
+        writeFileSync(reviewPath, JSON.stringify(merged, null, 2) + '\n')
+        adopted++
+      } else {
+        unchanged++
+      }
+    } catch (e) {
+      skipped++
+      reasons.push(`${taskId}: 写回失败 ${e.message}`)
+    }
+  }
+
+  return { adopted, unchanged, skipped, missing, downgraded, reasons, executeRunId }
+}
+
+/**
  * 获取当前（或最新）execute run id
  * 从 runtime 目录下查找 execute-runs/ 子目录
  *

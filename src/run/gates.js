@@ -65,7 +65,41 @@ export function validateSymbolImpactReport({ reportContent, planContent }) {
   for (const id of missing) {
     errors.push(`${id} 未在 symbol-impact.md 中出现——每个 task 都要有一行结论（含「无签名级变更」的显式声明）`)
   }
+  // 防骨架直接过门（2026-08-21 agent-手工产出审计项⑤）：CLI 会代生成逐 task TODO 骨架
+  //（generateSymbolImpactSkeleton），占位未替换即拦——骨架消灭的是「从零手写/漏 task」错误面，
+  // 不是把「逐 task 结论」本身变成走过场。
+  const report = String(reportContent)
+  const todoPending = taskIds.filter(id => new RegExp(`^[-*]\\s*${id}[^\\n]*<!--TODO-->`, 'm').test(report))
+  for (const id of todoPending) {
+    errors.push(`${id} 的结论仍是骨架 <!--TODO--> 占位——替换为真实结论（无签名级变更也显式写「无」）`)
+  }
   return { ok: errors.length === 0, errors }
+}
+
+/**
+ * 生成 symbol-impact.md 逐 task TODO 骨架（2026-08-21 审计项⑤「报错即生成」）。
+ *
+ * gate 此前只报错不代填 → agent 从零手写整份报告，忘一个 task 就被拦、再补再撞。
+ * 骨架从 tasks.md 注册表生成逐 task 占位行，agent 只需逐行填结论；占位 <!--TODO-->
+ * 由 validateSymbolImpactReport 拒绝，骨架不能直接过门（防偷懒）。
+ *
+ * @param {string} tasksContent - 任务注册表（tasks.md，回退 plan.md）内容
+ * @returns {string|null} 骨架全文（LF）；注册表无 task 行 → null
+ */
+export function generateSymbolImpactSkeleton(tasksContent) {
+  const taskIds = extractTaskIdsFromRegistry(tasksContent)
+  if (taskIds.length === 0) return null
+  const lines = [
+    '# 符号影响面报告',
+    '',
+    '> 骨架由 CLI 生成（`sillyspec symbol-impact --change <变更名>`，gate 失败时也会自动落一份）。',
+    '> 逐行把 `<!--TODO-->` 替换为真实结论：涉及签名级变更（构造函数参数/接口/DTO/方法签名增删改）',
+    '> 写变更类型 + 受影响调用点 + 是否在任务范围内；无签名级变更也要显式写「无签名级变更」。',
+    '> **gate 拒绝仍含 <!--TODO--> 的行**——骨架不能直接过门。',
+    '',
+  ]
+  for (const id of taskIds) lines.push(`- ${id}: <!--TODO-->`)
+  return lines.join('\n') + '\n'
 }
 
 /**
@@ -88,7 +122,19 @@ export async function enforceSymbolImpactGate(stageName, changeName, currentStep
   console.error(`   「加载上下文」步的符号影响面检查报告未落盘或不完整：`)
   console.error(`   期望路径：${reportPath}`)
   for (const e of result.errors) console.error(`   • ${e}`)
-  console.error('   修复：按「加载上下文」步操作 11 完成符号影响面扫描，逐 task 写结论（无签名级变更也要显式写「无」），落盘后重跑 execute --done。')
+  // 报错即生成（2026-08-21 审计项⑤）：报告缺失时自动落一份逐 task TODO 骨架，agent 从
+  // 「从零手写整份」变「逐行填结论」；TODO 占位由 validate 拒绝，骨架不能直接过门。
+  let skeletonNote = ''
+  if (!existsSync(reportPath)) {
+    const skeleton = generateSymbolImpactSkeleton(tasksContent)
+    if (skeleton) {
+      try {
+        writeFileSync(reportPath, skeleton)
+        skeletonNote = `\n   📄 已代生成逐 task 骨架：${reportPath}（逐行替换 <!--TODO--> 为结论，无签名级变更也显式写「无」）`
+      } catch { /* 写失败只影响提示，不掩盖原始错误 */ }
+    }
+  }
+  console.error(`   修复：按「加载上下文」步操作 11 完成符号影响面扫描，逐 task 写结论后重跑 execute --done。${skeletonNote}`)
   process.exit(1)
 }
 
@@ -195,7 +241,7 @@ export async function enforceAlignExecuteReviewGate({ cwd, changeName, specBase,
       }
       const searchDirs = [effectiveSpecBase, reviewChangeDir, cwd].filter(Boolean)
       const reviewResult = validateStageReview({ stage: 'execute', reviewType: 'acceptance', runtimeRoot, reviewRunId, searchDirs })
-      printStageReviewResult(reviewResult, { stage: 'execute', reviewRunId, runtimeRoot })
+      printStageReviewResult(reviewResult, { stage: 'execute', reviewRunId, runtimeRoot, changeName })
       if (!reviewResult.ok) return true // printStageReviewResult 已给明细，不再重复列
     }
   } catch (e) {
@@ -292,6 +338,18 @@ export async function enforceDepsGate(stageName, cwd, changeName, step, steps, c
  */
 export async function enforceReviewJsonGate(stageName, cwd, changeName, step, steps, currentIdx, specBase, platformOpts) {
   if (stageName !== 'execute' || !changeName) return true
+  // head 锡点自动落盘（2026-08-21 审计项③，D-010 补对称）：跨仓 task base_commit 已在派发时
+  // CLI 落盘，head_commit 此前靠主 agent 按 prompt 手跑 rev-parse 手写（漏抄/抄错炸 review gate）。
+  // 每次 --done 时机幂等补齐（已存在不覆盖）。best-effort：失败只 warn，不阻断 --done 主流程。
+  try {
+    const { stampCrossRepoHeadCommits } = await import('../stages/execute.js')
+    const stamped = await stampCrossRepoHeadCommits({ changeName, cwd, specBase, platformOpts })
+    if (stamped && stamped.stamped > 0) {
+      console.log(`📌 已自动落盘跨仓 task head_commit 锡点：${stamped.stampedTasks.join(', ')}（幂等，此后 --done 不再重复写）`)
+    }
+  } catch (e) {
+    console.warn(`⚠️ head_commit 锡点自动落盘失败（降级留给 agent 手写）: ${e.message}`)
+  }
   const runtimeRoot = resolveRuntimeRoot(platformOpts, specBase)
   const runIdFile = join(runtimeRoot, `current-execute-run-id-${changeName}`)
   const planPath = join(specBase, 'changes', changeName, 'plan.md')
@@ -340,7 +398,7 @@ export async function enforceReviewJsonGate(stageName, cwd, changeName, step, st
     console.error(`   • ${f.taskId}（${kindLabel}）: ${f.reviewPath}`)
     for (const e of f.errors) console.error(`       - ${e}`)
   }
-  console.error('   修复：补全上述 review.json 字段后重跑 execute --done。')
+  console.error('   修复：mechanics 字段（base/head/changedFiles/schemaVersion）缺错可跑 sillyspec backfill-reviews --change ' + changeName + ' --adopt 一键代填（verdict 保留）；verdict/证据缺失需人工补全后重跑 execute --done。')
   process.exit(1)
 }
 
@@ -531,7 +589,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
           : 'acceptance'
         const searchDirs = [effectiveSpecBase, reviewChangeDir, cwd].filter(Boolean)
         const reviewResult = validateStageReview({ stage: stageName, reviewType, runtimeRoot, reviewRunId, searchDirs })
-        printStageReviewResult(reviewResult, { stage: stageName, reviewRunId, runtimeRoot })
+        printStageReviewResult(reviewResult, { stage: stageName, reviewRunId, runtimeRoot, changeName })
         if (!reviewResult.ok) {
           return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)
         }
