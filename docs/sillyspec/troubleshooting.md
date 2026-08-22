@@ -459,3 +459,19 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 3. execute --done 收尾 gate（Task Review Gate 之前）advisory 提示 pending 死信清单 + 「verify 阶段会硬拦」预告——当场清债，verify 硬拦不变。
 
 测试 review-meta-execute-debt.test.mjs（11 断言）。**关联记忆**：`[[sillyspec-review-head-real-commit-late]]`、`[[sillyspec-changedfiles-annotation-suffix-mismatch]]`、`[[sillyspec-module-impact-debt-late-warn]]`
+
+## 30. 两坑：--file-notes 非末步静默丢 / --files 追加不解锁危险拦截（2026-08-22 闭环）
+
+**症状（用户实证）**：
+1. step2 的 --done 传 --file-notes 被静默忽略（只随 step3 生效）——文档有说明但 CLI 不提示，白传一轮。
+2. 改的三个模块文档被边界审计判「危险文件」拦截，追加 --files 边界并不解锁，必须 --force-baseline——「追加边界」与「解锁拦截」是两套开关，交互上易误解前者能解决后者。
+
+**根因**：
+1. --file-notes 经 per-process setter 注入 quicklog.js，CLI 短进程结束即丢——step2 进程的注入活不到 step3 收尾；解析点无任何提示。
+2. --files 语义是「哪些文件计入本会话的归属口径」，不改变危险判定；DANGEROUS/.sillyspec 判定的放行开关唯 --force-baseline——两套正交开关在 BLOCKED 输出里未区分说明。
+
+**修复（2026-08-22）**：
+1. runCommand 在 ensureStageSteps 后判定（progress 已就绪）：quick + 带了 --file-notes + 非「唯一 pending 的末步 --done」→ warn「本次不会生效，CLI 短进程注入即丢，请在末步 --done 连同 --output 一起传」；末步（消费点）不提示。
+2. printQuickAuditReview BLOCKED 分支：reasons 含「危险文件变更」时追加明示「追加 --files 边界不会解锁受保护/危险文件的拦截（两套开关——--files 只声明哪些文件计入本会话，不改变危险判定）。改这类文件必须 --force-baseline」。
+
+测试 quick-filenotes-audit-hints.test.mjs（10 断言，含 step2 提醒/末步不提醒/危险拦截两套开关 e2e）。**关联记忆**：`[[sillyspec-quick-file-notes-nonfinal-ignored]]`、`[[sillyspec-files-flag-not-unlock-protected]]`

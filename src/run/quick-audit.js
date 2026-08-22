@@ -35,6 +35,13 @@ export function printQuickAuditReview(review) {
       console.error(`   如确认接受这些变更，重新运行 --done 时带上对应 flag 即可解锁：`)
       console.error(`     sillyspec run quick --done --force-baseline --allow-new --change <id> --output "..."`)
       console.error(`     （--force-baseline 覆盖受保护/危险文件如 src/run.js；--allow-new 允许新增文件；--allow-delete 允许删除文件）`)
+      // 两套开关明示（坑 files-flag-not-unlock-protected，2026-08-22 实证：模块文档被判危险
+      // 文件，追加 --files 边界不解锁仍被拦——「追加边界」与「解锁拦截」是两套开关，交互上易误解
+      // 前者能解决后者）。命中危险文件 reason 时点名：--files 只改归属口径（哪些文件计入本
+      // 会话），不改变危险判定；受保护/危险文件的放行开关唯 --force-baseline。
+      if (review.reasons.some(r => r.startsWith('危险文件变更'))) {
+        console.error(`   ⛔ 注意：追加 --files 边界不会解锁受保护/危险文件的拦截（两套开关——--files 只声明哪些文件计入本会话，不改变危险判定）。改这类文件必须 --force-baseline。`)
+      }
     }
   } else if (review.status === 'warning') {
     console.warn(`\n⚠️ quick 变更边界审计 — WARNING：`)

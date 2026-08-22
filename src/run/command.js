@@ -1076,6 +1076,20 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     progress = pm.read(cwd, effectiveChange) || progress
   }
 
+  // --file-notes 非末步静默忽略前置 warn（坑 quick-file-notes-nonfinal-ignored，2026-08-22 实证：
+  // step2 --done 传 --file-notes 被静默丢——CLI 短进程，注入随进程结束即丢，白传一轮）。
+  // 放此处：ensureStageSteps 之后 progress 已就绪可判步骤状态；仅 quick + 带了 --file-notes +
+  // 非「唯一 pending 的末步 --done」时提示。末步 --done 是消费点，不提示。
+  if (quickFileNotes !== '' && stageName === 'quick' && !isStatus) {
+    try {
+      const qSteps = progress?.stages?.quick?.steps
+      const pendingCount = Array.isArray(qSteps) ? qSteps.filter(st => ['pending', 'in-progress'].includes(st?.status)).length : 0
+      if (!isDone || pendingCount > 1) {
+        console.warn(`⚠️ --file-notes 本次不会生效：它只在 quick 末步（暂存和更新记录）--done 时随收尾消费——CLI 是短进程，本次注入随进程结束即丢。请在末步 --done 时连同 --output 一起传。`)
+      }
+    } catch { /* 判定失败不提示（fail-open） */ }
+  }
+
   // --status
   if (isStatus) {
     // D9：状态展示末尾附「下一步该跑什么」。pm 持有状态机，按 progress 实际进度算出精确命令；
