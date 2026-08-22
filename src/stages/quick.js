@@ -132,10 +132,11 @@ sillyspec run quick --done --change <id> --req "…" --cause "…" --solution "�
 7. 对比本次修改的文件（\`git diff --name-only HEAD\`）与模块映射
 8. 如果命中模块 → 直接同步模块文档：
    - 读取对应的 \`{SPEC_ROOT}/docs/<project>/modules/<module>.md\`（如不存在则新建）
-   - 根据本次改动内容更新模块文档（正文描述当前状态，底部变更索引追加本步骤预注入的 ql-ID）
+   - 根据本次改动内容更新模块文档（正文描述当前状态；**勿把历史条目堆进正文——卡是子代理的读取税**）
+   - 变更索引条目追加到卡同目录 \`<module>.changelog.md\` sidecar（无则创建；历史段可跑 \`sillyspec modules split-changelog\` 迁出）
    - 变更索引格式：\`- <quicklog-id> | <一句话描述>\`
-   - 写入模块文档
-   - 使用 \`git add -- <module-doc>\` 暂存更新的模块文件
+   - 写入模块文档与 sidecar
+   - 使用 \`git add -- <module-doc>\` 暂存更新的模块文件（sidecar 一并暂存）
 9. 未命中任何模块 → 跳过，不做额外操作
 
 ### 输出

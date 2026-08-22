@@ -90,19 +90,29 @@ export const VERIFICATION_NEEDS = {
   },
   real_daemon_backend_integration: {
     desc: '真实 daemon↔backend 集成验证（非仅 mock 单测）。写「真实集成/端到端」的证据；',
-    literals: ['端到端', 'integration test', 'e2e test', 'daemon.*backend', '真实集成', 'runtime evidence', '运行时证据'],
+    // 同义扩充（坑 verify-literal-evidence-mismatch，2026-08-22 实证：证据第一轮就齐但表述
+    // 不含字面词被误拦三轮）——覆盖常见自然表述 + PID 登记句式（verify prompt 要求照写）
+    literals: ['端到端', 'integration test', 'e2e test', 'daemon.*backend', '真实集成',
+      'runtime evidence', '运行时证据', '联调', '打通', '实际请求', '真实请求', '跨进程',
+      'PID 已登记', 'verify-services'],
   },
   runtime_log_evidence: {
     desc: 'Runtime Evidence section + 指向真实日志/证据片段。',
-    literals: ['Runtime Evidence', '运行时证据', 'daemon log', '日志片段'],
+    literals: ['Runtime Evidence', '运行时证据', 'daemon log', '日志片段', '日志关键',
+      '日志:', '日志摘录', '日志', 'log 摘录', 'log 片段', '进程日志', 'PID 已登记', 'verify-services'],
   },
   real_startup_once: {
     desc: '真实启动一次本变更触及的部署/启动入口（服务入口、CLI 主入口、守护进程等——须是本变更实际改动的那一类入口，不能拿无关进程的启动来凑数）。',
-    literals: ['启动.*一次', '实际.*启动', 'real startup', 'docker up', 'npm start', 'node server'],
+    // 同义扩充（同坑）：自然表述 + CLI 回执句式；checkIntegrationEvidence 另拼 CLI 回执文本
+    //（verify-services.receipt.json，服务回收器落盘）——结构化信号不依赖 agent 措辞
+    literals: ['启动.*一次', '实际.*启动', 'real startup', 'docker up', 'npm start', 'node server',
+      '真实启动', '拉起', '已启动', '进程启动', '服务启动', '启动验证',
+      'PID 已登记', 'verify-services'],
   },
   terminal_state_assertion: {
     desc: '终态断言（建议项，不阻断）：AgentRun running→completed/failed、session/lease end 状态同步。',
-    literals: ['terminal state', '终态', 'completed failed', 'session end', 'lease end'],
+    literals: ['terminal state', '终态', 'completed failed', 'session end', 'lease end',
+      '生命周期终态', '状态同步'],
   },
 }
 
@@ -202,11 +212,16 @@ export function detectChangeRisk({ designContent = '', planContent = '', changed
 
 /**
  * 检查 verify-result.md 是否包含集成验证证据
+ *
+ * opts.extraEvidenceText（坑 verify-literal-evidence-mismatch，2026-08-22）：调用方可注入
+ * CLI 结构化回执文本（如 verify-services.receipt.json 的服务回收回执）——它随 verifyContent
+ * 一起参与 literals 匹配，agent 真实起过服务且 CLI 回收过（有回执）时不再依赖其自然语言
+ * 措辞恰好含字面词，表述差异不再误拦。
  */
-export function checkIntegrationEvidence(verifyContent, requiredVerification) {
+export function checkIntegrationEvidence(verifyContent, requiredVerification, opts = {}) {
   const errors = []
   const warnings = []
-  const lower = verifyContent.toLowerCase()
+  const lower = (String(verifyContent || '') + '\n' + String(opts.extraEvidenceText || '')).toLowerCase()
 
   // 字面证据正则从 VERIFICATION_NEEDS[k].literals 派生——与报错描述、prompt 事前契约严格同源,
   // 杜绝历史上"描述说 A、正则查 B"的分叉(checkIntegrationEvidence 正则曾比 VERIFICATION_NEEDS

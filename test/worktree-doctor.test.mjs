@@ -186,16 +186,18 @@ console.log('\n--- 3. doctor --fix：解 junction + force 重装 → meta.depsSt
   assert(diag.fixed.some(m => /re-provisioned fixA/.test(m)),
     `diag.fixed 含 re-provisioned fixA（实际 [${diag.fixed.join(' | ')}]）`);
 
-  // force 生效证明：meta.depsStatus=installed（非 force 会是 linked，因 hash 一致 + junction 已解后重链）
+  // 新契约（坑 doctor-reprovision-junction-missing，2026-08-22）：deps-failed 触发 relinkFirst
+  // ——非 force 跑 provisionDeps，lockfile 一致 → tryLink 重建 junction（快且对症 junction
+  // 丢失），而非旧的 force install 重装。旧断言（installed + 真实目录）已废。
   const metaAfter = wm.getMeta('fixA');
-  assertEqual(metaAfter.depsStatus, 'installed',
-    `force 重装后 depsStatus=installed（非 force 会是 linked，实际 ${metaAfter.depsStatus}）`);
+  assertEqual(metaAfter.depsStatus, 'linked',
+    `deps-failed → relinkFirst 重建 junction → linked（实际 ${metaAfter.depsStatus}）`);
   assertEqual(metaAfter.depsLockHash, hashOf(lock), 'meta.depsLockHash 更新为 wt lockfile hash');
-  assert(!metaAfter.depsError, 'force 重装后 depsError 清空');
+  assert(!metaAfter.depsError, '重供给后 depsError 清空');
 
-  // junction 已解（_doctorReprovision 先解链；npm install 重建的是真实目录非 link）
-  assert(!existsSync(nmLink) || !lstatSync(nmLink).isSymbolicLink(),
-    'wt/node_modules junction 已解（不再是指向主仓的 link）');
+  // junction 重建为指向主仓的 link（解链后 tryLink 重链——这正是「junction 未建」场景的对症修复）
+  assert(existsSync(nmLink) && lstatSync(nmLink).isSymbolicLink(),
+    'wt/node_modules junction 已重建（指向主仓的 link）');
 }
 
 // ── 4. doctor --change 过滤：多 wt 只扫指定 change ──

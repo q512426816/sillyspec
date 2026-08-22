@@ -130,6 +130,38 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
     }
   }
 
+  // ── 跨变更文件冲突预警（坑 cross-change-conflict-no-warning，2026-08-22 实证：并行变更改
+  // 同一文件靠人工发现——f578a08e 的「锚点更新」是好实践但工具无预警）。execute 启动时把本变更
+  // 的 diff 文件集与其他活跃变更的 diff 文件集求交集，advisory warn 交集与对端变更名 + 锚点
+  // 更新提示。best-effort：任何异常静默跳过（预警不阻断 execute 启动）。
+  if (stageName === 'execute' && changeName) {
+    try {
+      const { resolveVerifyChangedFiles } = await import('../verify-postcheck.js')
+      const activeChanges = (pm.listChanges(cwd) || []).filter(c => c && c !== changeName)
+      if (activeChanges.length > 0) {
+        const myFiles = resolveVerifyChangedFiles(cwd, changeName, null, { includeWorkingTree: true }) || []
+        const mySet = new Set(myFiles.map(f => f.replace(/\\/g, '/')).filter(f => !f.startsWith('.sillyspec/')))
+        if (mySet.size > 0) {
+          const conflicts = []
+          for (const other of activeChanges) {
+            const otherFiles = resolveVerifyChangedFiles(cwd, other, null, { includeWorkingTree: true }) || []
+            const overlap = [...new Set(otherFiles.map(f => f.replace(/\\/g, '/')))]
+              .filter(f => mySet.has(f))
+            if (overlap.length > 0) conflicts.push({ other, overlap })
+          }
+          if (conflicts.length > 0) {
+            console.warn(`⚠️ 跨变更文件冲突预警：本变更（${changeName}}）与其他活跃变更改动重叠——`)
+            for (const c of conflicts) {
+              console.warn(`   与 ${c.other} 重叠 ${c.overlap.length} 个文件：${c.overlap.slice(0, 5).join(', ')}${c.overlap.length > 5 ? ` …（共 ${c.overlap.length}）` : ''}`)
+            }
+            console.warn(`   并行 apply/归档时重叠文件会互相覆盖或冲突。实践：后完成方在其 verify/design 里记录「锚点更新」`)
+            console.warn(`  （说明基于对方已合入的版本重新锚定），并考虑串行化这两个变更的 apply。`)
+          }
+        }
+      }
+    } catch { /* 预警失败不阻断 execute */ }
+  }
+
   // 自动探测 currentChange
   if (autoDetectChange(progress, cwd)) {
     progress.lastActive = new Date().toLocaleString('zh-CN', { hour12: false })

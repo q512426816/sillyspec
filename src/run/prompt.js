@@ -510,6 +510,21 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
     }
   }
 
+  // 模块卡分级表注入（token 成本优化 P0a，2026-08-22-token-cost-optimization）：execute
+  // 「加载上下文」步 {MODULE_RESOLVE_TABLE} → resolveChangeModuleCards（tasks 卡 allowed_paths
+  // × 全部 _module-map.yaml 跨层最长前缀匹配，子项目细卡优先于根层大卡）。全降级不抛
+  // （异常 → 单行说明），无 map 由渲染函数给出跳过提示——占位符恒被替换。
+  if (stageName === 'execute' && promptText.includes('{MODULE_RESOLVE_TABLE}')) {
+    try {
+      const { renderModuleResolveTable } = await import('../module-resolve.js')
+      const mrSpecBase = resolvePromptSpecBase(platformOpts, cwd)
+      const table = renderModuleResolveTable({ cwd, specBase: mrSpecBase, changeName })
+      promptText = promptText.replace(/\{MODULE_RESOLVE_TABLE\}/g, table)
+    } catch (e) {
+      promptText = promptText.replace(/\{MODULE_RESOLVE_TABLE\}/g, `[modules-resolve] 模块卡分级解析异常（${e.message}），跳过——可手跑 sillyspec modules resolve --change <变更名>`)
+    }
+  }
+
   // Execute: 注入 currentExecuteRunId（从变更专属标记文件读取）
   if (stageName === 'execute' && promptText.includes('{EXECUTE_RUN_ID}')) {
     let runId = ''

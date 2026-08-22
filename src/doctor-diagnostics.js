@@ -582,6 +582,57 @@ function detectExecuteProgressPlanMismatch(authoritySpecRoot, authDb) {
 
 // ── 主入口 ────────────────────────────────────────────────────────────
 
+// ── 文档膨胀检测（token 成本优化 P0b/P2b，2026-08-22-token-cost-optimization）──
+// 模块卡与 knowledge/uncategorized.md 是每个 task 子代理的重复读取税：实测 backend.md
+// 18 天 15KB→55KB（变更索引段每变更追加、单调膨胀）、uncategorized.md 38KB 从未迁出。
+// 只读软检查（WARNING 级，不阻断）：超限给 safe_action 指路，不自动改文件。
+
+/** 模块卡整卡可读软上限（字节），与 module-resolve.js MODULE_CARD_SOFT_LIMIT_BYTES 同值 */
+const DOC_BLOAT_MODULE_CARD_LIMIT = 12 * 1024;
+/** knowledge/uncategorized.md 软上限（字节）——待确认条目应经知识审阅迁移，不该只增不减 */
+const DOC_BLOAT_UNCATEGORIZED_LIMIT = 20 * 1024;
+
+export function detectDocBloat(specRoot) {
+  const dim = { name: 'doc_bloat', label: '文档膨胀（模块卡/知识库读取税）', safe_actions: [] };
+  const findings = [];
+  if (!specRoot || !existsSync(specRoot)) {
+    return { ...dim, findings: ['无可达 specRoot，跳过文档膨胀检测'], pass: true, severity: null };
+  }
+  // 模块卡：docs/<p>/modules/*.md（排除 _module-map.yaml 与 *.changelog.md sidecar）
+  try {
+    for (const proj of readdirSync(join(specRoot, 'docs'), { withFileTypes: true })) {
+      if (!proj.isDirectory()) continue;
+      const modulesDir = join(specRoot, 'docs', proj.name, 'modules');
+      if (!existsSync(modulesDir)) continue;
+      for (const f of readdirSync(modulesDir)) {
+        if (!f.endsWith('.md') || f === '_module-map.yaml' || f.endsWith('.changelog.md')) continue;
+        const size = statSync(join(modulesDir, f)).size;
+        if (size > DOC_BLOAT_MODULE_CARD_LIMIT) {
+          findings.push(`模块卡超软上限 ${DOC_BLOAT_MODULE_CARD_LIMIT / 1024}KB：docs/${proj.name}/modules/${f}（${(size / 1024).toFixed(1)}KB）——子代理每次整读都是读取税`);
+        }
+      }
+    }
+  } catch { /* docs 不可读 → 跳过该项 */ }
+  if (findings.length > 0) {
+    dim.safe_actions.push({ action: '跑 sillyspec modules split-changelog（先 dry-run 预览，确认后 --force）把「变更索引」历史段迁出大卡', risk: 'low' });
+  }
+  // knowledge/uncategorized.md
+  try {
+    const uncPath = join(specRoot, 'knowledge', 'uncategorized.md');
+    if (existsSync(uncPath)) {
+      const size = statSync(uncPath).size;
+      if (size > DOC_BLOAT_UNCATEGORIZED_LIMIT) {
+        findings.push(`knowledge/uncategorized.md 超软上限 ${DOC_BLOAT_UNCATEGORIZED_LIMIT / 1024}KB（${(size / 1024).toFixed(1)}KB）——已确认/已修复条目应迁入专题文件后从待确认清单删除，而非只增不减`);
+        dim.safe_actions.push({ action: 'execute 末步「知识库审阅」把已确认条目归档迁出 uncategorized.md（迁入专题文件后删除原条目）', risk: 'low' });
+      }
+    }
+  } catch { /* knowledge 不可读 → 跳过该项 */ }
+
+  dim.findings = findings;
+  return findings.length === 0
+    ? { ...dim, findings: ['模块卡与知识库体量在软限内'], pass: true, severity: CHECK_SEVERITY.PASSED }
+    : { ...dim, pass: false, severity: CHECK_SEVERITY.WARNING };
+}
 export async function runDoctorDiagnostics({ cwd }) {
   const pointer = resolvePointer(cwd);
   const multiDb = detectMultiDb(cwd, pointer);
@@ -598,8 +649,9 @@ export async function runDoctorDiagnostics({ cwd }) {
         : null;
   const authDb = (multiDb.dbs || []).find((d) => d.role === DB_ROLE.AUTHORITY);
   const executeMismatch = detectExecuteProgressPlanMismatch(authoritySpecDir, authDb);
+  const docBloat = detectDocBloat(authoritySpecDir);
 
-  const dimensions = [multiDb, pointerHealth, changesSplit, changeDb, executeMismatch];
+  const dimensions = [multiDb, pointerHealth, changesSplit, changeDb, executeMismatch, docBloat];
 
   return {
     dimensions,

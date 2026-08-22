@@ -1003,7 +1003,7 @@ export class WorktreeManager {
    * @param {string} wtPath - worktree 根目录（meta.worktreePath）
    * @returns {{ ok: boolean, msg: string }}
    */
-  _doctorReprovision(name, wtPath) {
+  _doctorReprovision(name, wtPath, opts = {}) {
     try {
       const meta = this.getMeta(name) || {};
       const isInPlace = meta.mode === 'in-place-fallback';
@@ -1033,9 +1033,14 @@ export class WorktreeManager {
           }
         }
       }
+      // 触发分流（坑 doctor-reprovision-junction-missing，2026-08-22 实证：junction 未建的
+      // missing/failed 场景被 force install 强制重装——install 静默失败面大且慢；lockfile 一致时
+      // 重建 junction 才是对症动作。opts.relinkFirst（missing/failed 触发）→ 非 force 跑：解链后
+      // node_modules 不存在，tryLink 直接重建；lockfile 漂移自动落 install。stale/main-drift 维持
+      // force 重装（依赖确实变了）。
       const deps = provisionDeps(wtPath, this.cwd, {
         specBase: join(this.cwd, '.sillyspec'),
-        force: true,
+        force: !opts.relinkFirst,
       }) || {};
       const metaPath = join(this.getWorktreePath(name), META_FILE);
       // 成功重供时清掉旧 depsError（provisionDeps 成功结果不含该键，{...meta,...deps} 会残留旧值）
@@ -1188,7 +1193,9 @@ export class WorktreeManager {
           if (issueType) {
             issues.push({ type: issueType, name, detail: fresh.detail, fixable: true });
             if (fix) {
-              const r = this._doctorReprovision(name, wtPath);
+              // relinkFirst：missing/failed 多为 junction 丢失/上次供给失败——link 优先重建；
+              // stale/main-drift 是依赖真变了——force 重装
+              const r = this._doctorReprovision(name, wtPath, { relinkFirst: issueType === 'deps-missing' || issueType === 'deps-failed' });
               (r.ok ? fixed : unfixable).push(r.msg);
             }
           }

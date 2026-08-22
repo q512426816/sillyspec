@@ -721,6 +721,20 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
     }
 
   } catch (e) {
+    // ENOBUFS 自动降级（坑 apply-spawnsync-enobufs，2026-08-22 实证：大 diff 的 binary patch
+    // 超 maxBuffer 抛 ENOBUFS，此前只能 agent 手动 git merge 绕行）——git apply 路径走不通时
+    // 自动落 applyByMerge（既有 --merge 兜底，语义同为三方合并）
+    if (/ENOBUFS/i.test(String(e.message || e.code || ''))) {
+      result.warnings = (result.warnings || []).concat(
+        [`patch 生成超出进程缓冲区（ENOBUFS，超大 diff）——自动降级 git merge 路径应用`]
+      );
+      try {
+        return applyByMerge(result, changeName, projectRoot, wm);
+      } catch (mergeErr) {
+        result.errors.push(`ENOBUFS 降级 merge 也失败: ${mergeErr.message}`);
+        return result;
+      }
+    }
     result.errors.push(`patch 生成/应用异常: ${e.message}`);
     return result;
   } finally {

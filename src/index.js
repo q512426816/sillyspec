@@ -2446,6 +2446,12 @@ SillySpec modules — 模块文档管理
   sillyspec modules rebuild [--force]  从模块卡片 + 源码重建 _module-map.yaml（默认 dry-run 预览，--force 才覆盖）
   sillyspec modules status         显示模块索引状态
   sillyspec modules migrate        旧格式模块文档迁移到新格式
+  sillyspec modules resolve --change <名> [--spec-dir <path>] [--json]
+                                   per-task 模块卡级联解析（跨全部 _module-map.yaml 最长前缀匹配，
+                                   子项目细卡优先于根层大卡）——execute 加载上下文同源注入
+  sillyspec modules split-changelog [--force]
+                                   把模块卡「变更索引」历史段迁出到 <module>.changelog.md sidecar
+                                   （默认 dry-run 预览，--force 才写入；治大卡单调膨胀）
 `);
         break;
       }
@@ -2459,8 +2465,30 @@ SillySpec modules — 模块文档管理
       } else if (modulesSub === 'migrate') {
         const { migrateModuleDocs } = await import('./modules.js');
         await migrateModuleDocs(dir);
+      } else if (modulesSub === 'split-changelog') {
+        const { splitChangelog } = await import('./modules.js');
+        const scForce = filteredArgs.includes('--force');
+        splitChangelog(dir, { force: scForce });
+      } else if (modulesSub === 'resolve') {
+        // per-task 模块卡级联解析（token 成本优化 P0a）：execute「加载上下文」步的
+        // {MODULE_RESOLVE_TABLE} 注入同源；独立命令供 agent/人随时查（细卡优先，防整读大卡）
+        const mrChangeIdx = args.indexOf('--change');
+        const mrChange = mrChangeIdx >= 0 && args[mrChangeIdx + 1] ? args[mrChangeIdx + 1] : null;
+        if (!mrChange) {
+          console.error('用法: sillyspec modules resolve --change <名> [--spec-dir <path>] [--json]\n  输出 per-task 最优模块卡表（跨全部 _module-map.yaml 最长前缀匹配，细卡优先）');
+          process.exit(2);
+        }
+        assertSafeChangeName(mrChange, '--change 变更名');
+        const mrSpecBase = resolvePlatformSpecDir(dir, specDir) || join(dir, '.sillyspec');
+        const { resolveChangeModuleCards, renderModuleResolveTable } = await import('./module-resolve.js');
+        if (filteredArgs.includes('--json')) {
+          const r = resolveChangeModuleCards({ cwd: dir, specBase: mrSpecBase, changeName: mrChange });
+          console.log(JSON.stringify(r, null, 2));
+        } else {
+          console.log(renderModuleResolveTable({ cwd: dir, specBase: mrSpecBase, changeName: mrChange }));
+        }
       } else {
-        const modSubs = ['rebuild', 'status', 'migrate'];
+        const modSubs = ['rebuild', 'status', 'migrate', 'resolve', 'split-changelog'];
         const sug = didYouMean(modulesSub, modSubs);
         console.error(`❌ 未知子命令: modules ${modulesSub}`);
         if (sug) console.error(`   你是想输入「modules ${sug}」吗？`);

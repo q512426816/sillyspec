@@ -19,8 +19,9 @@
  *
  * 不搬：ensureDepsFreshness（execute 入口 deps 自检，调用方 runStage 非 completeStep，归属未来 execute-handler）
  */
-import { basename, join, relative } from 'node:path'
-import { existsSync, readFileSync, readdirSync, statSync, mkdirSync, unlinkSync } from 'node:fs'
+import { basename, join, relative, dirname } from 'node:path'
+import { createHash } from 'node:crypto'
+import { existsSync, readFileSync, readdirSync, statSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs'
 import { writeAtomicSync } from '../fs-atomic.js'
 import { triggerSync, resolveChangeDir, resolveRuntimeRoot } from './shared.js'
 import { runValidators } from '../stage-contract.js'
@@ -90,9 +91,17 @@ export function validateSymbolImpactReport({ reportContent, planContent }) {
 export function generateSymbolImpactSkeleton(tasksContent) {
   const taskIds = extractTaskIdsFromRegistry(tasksContent)
   if (taskIds.length === 0) return null
+  // tasks.md 内容指纹（token 成本优化 P2a）：中断续跑/阶段重开时若指纹一致且结论完整，
+  // 「加载上下文」步按 prompt 指引直接沿用既有报告，不重做调用点扫描（team-session-unify
+  // 实测该步 3h06min，重入重做是纯浪费）。指纹只作提示锚，gate 校验逻辑不变。
+  let fingerprint = ''
+  try {
+    fingerprint = createHash('sha256').update(String(tasksContent)).digest('hex').slice(0, 16)
+  } catch { /* 指纹失败不阻断骨架生成 */ }
   const lines = [
     '# 符号影响面报告',
     '',
+    `> tasks.md 内容指纹（生成时）: ${fingerprint}——重入本步时若与当前 tasks.md 指纹一致且结论已填全，直接沿用不重做扫描。`,
     '> 骨架由 CLI 生成（`sillyspec symbol-impact --change <变更名>`，gate 失败时也会自动落一份）。',
     '> 逐行把 `<!--TODO-->` 替换为真实结论：涉及签名级变更（构造函数参数/接口/DTO/方法签名增删改）',
     '> 写变更类型 + 受影响调用点 + 是否在任务范围内；无签名级变更也要显式写「无签名级变更」。',
@@ -548,6 +557,13 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
         }
         try { unlinkSync(servicesPath) } catch {}
         if (reaped.length > 0) console.log(`🧹 verify 服务进程已回收 ${reaped.length} 个（PID: ${reaped.join(', ')}）`)
+        // CLI 回执（坑 verify-literal-evidence-mismatch）：回收即真实启动的结构化证据——
+        // checkIntegrationEvidence（stage-contract）读回执注入匹配，agent 措辞差异不再误拦
+        try {
+          writeFileSync(join(dirname(servicesPath), 'verify-services.receipt.json'), JSON.stringify({
+            change: changeName || null, reapedPidCount: reaped.length, reapedAt: new Date().toISOString(),
+          }, null, 2) + '\n')
+        } catch {}
         if (failed.length > 0) console.warn(`⚠️ 服务进程回收失败 ${failed.length} 个：${failed.join(', ')} — 手动处理：taskkill /PID <pid> /F（Windows）/ kill -9 <pid>`)
       }
     } catch (e) { console.warn(`⚠️ verify 服务进程回收异常（不阻断）: ${e.message}`) }

@@ -480,7 +480,20 @@ function validateVerifyOutputs(cwd, changeName, context = {}) {
         warnings.push(`[${changeRiskProfile.level}] 结论 PASS WITH NOTES：design frontmatter 显式声明 risk_level=${changeRiskProfile.level}，残留项须为真实集成证据缺口，并在 verify-result.md 如实说明`)
       }
       if (requiresEvidence) {
-        const evidenceCheck = checkIntegrationEvidence(verify, changeRiskProfile.requiredVerification)
+        // CLI 回执注入（坑 verify-literal-evidence-mismatch，2026-08-22 实证：证据第一轮就齐
+        // 但自然措辞不含字面词被误拦三轮）：verify 服务回收器落的回执 = 真实启动+PID 登记
+        // 的结构化证据，作为附加匹配文本——有回执不依赖 agent 措辞；无回执维持原字面匹配
+        let receiptText = ''
+        try {
+          const receiptPath = join(cwd, '.sillyspec', '.runtime', 'verify-services.receipt.json')
+          if (existsSync(receiptPath)) {
+            const receipt = JSON.parse(readFileSync(receiptPath, 'utf8'))
+            if (receipt && (receipt.reapedPidCount || 0) > 0 && (!receipt.change || receipt.change === changeName)) {
+              receiptText = `CLI 回执：verify 服务进程已回收 ${receipt.reapedPidCount} 个（PID 已登记，真实启动，运行时证据 reapedAt=${receipt.reapedAt}）`
+            }
+          }
+        } catch { /* 回执损坏按无回执处理（fail 回原字面匹配） */ }
+        const evidenceCheck = checkIntegrationEvidence(verify, changeRiskProfile.requiredVerification, { extraEvidenceText: receiptText })
         if (!evidenceCheck.ok) {
           // A: 报错说人话 —— 把「缺哪一项、要写/做什么、判级原因」逐条列出，
           // 让 agent 不必靠改结论文案撞墙。detail 指明真实启动须是本变更实际改动的

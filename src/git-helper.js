@@ -73,7 +73,9 @@ function buildFullArgs(cwd, args) {
 // maxBuffer：execFileSync 默认 1MB，untracked 清单/大 diff 超限抛 ENOBUFS——
 // safeGit 吞成 null、调用方 `|| ''` 会把"输出很大"静默变成"输出为空"（补丁漏文件级联）。
 // 32MB 对齐 verify-postcheck 的 diff 读取口径。
-const GIT_MAX_BUFFER = 32 * 1024 * 1024
+// 256MB（坑 apply-spawnsync-enobufs，2026-08-22 实证：大 diff binary patch 超 32MB 抛
+// ENOBUFS 只能 git merge 绕行）——上限只在真输出那么大时才占用
+const GIT_MAX_BUFFER = 256 * 1024 * 1024
 
 /**
  * 安全执行 git：失败不抛，返回 { value, error } 结构。

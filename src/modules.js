@@ -182,10 +182,90 @@ export async function rebuildModuleMap(cwd, { force = false } = {}) {
 }
 
 /**
+ * split-changelog：把模块卡的「变更索引」历史段迁出到同目录 <module>.changelog.md sidecar
+ * （token 成本优化 P0b，2026-08-22-token-cost-optimization）。
+ *
+ * 背景：变更索引段每变更追加、单调膨胀（multi-agent-platform backend.md 实测 19.9KB/占整卡
+ * 36%，18 天 3.6 倍），而子代理实现新 task 只需要卡的「定位/契约摘要/注意事项」当前态——
+ * 历史段是纯读取税。迁出后卡只留指针行，新条目由 prompt 约定直接追加 sidecar。
+ *
+ * 安全（对齐 rebuild 的破坏性保护）：默认 dry-run 只预览不写，--force 才落盘。
+ * 只动「## 变更索引」一节，卡内其他节原样保留；sidecar 已存在则追加（幂等可重跑）。
+ *
+ * @param {string} cwd 项目根
+ * @param {{ force?: boolean }} opts
+ * @returns {{ dryRun: boolean, files: Array<{ card: string, sidecar: string, bytesMoved: number }>, skipped: number }}
+ */
+export function splitChangelog(cwd, { force = false } = {}) {
+  const docsDir = join(cwd, '.sillyspec', 'docs');
+  const results = [];
+  let skipped = 0;
+  const projects = existsSync(docsDir)
+    ? readdirSync(docsDir, { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name)
+    : [];
+
+  for (const project of projects) {
+    const modulesDir = join(docsDir, project, 'modules');
+    if (!existsSync(modulesDir)) continue;
+    const cards = readdirSync(modulesDir).filter(f => f.endsWith('.md') && f !== '_module-map.yaml');
+    for (const f of cards) {
+      const cardPath = join(modulesDir, f);
+      const content = readFileSync(cardPath, 'utf8');
+      // 提取「## 变更索引」节（CRLF 归一后行级匹配，与 modules.js 其余解析同防线）
+      const lines = content.replace(/\r\n/g, '\n').split('\n');
+      const startIdx = lines.findIndex(l => /^##\s*变更索引\s*$/.test(l));
+      if (startIdx < 0) { skipped++; continue; }
+      let endIdx = lines.length;
+      for (let i = startIdx + 1; i < lines.length; i++) {
+        if (/^##\s/.test(lines[i])) { endIdx = i; break; }
+      }
+      const body = lines.slice(startIdx + 1, endIdx).join('\n').trim();
+      // 已迁出（只剩指针行）或本就为空 → 跳过
+      if (!body || /^见\s/.test(body) || body.includes('.changelog.md')) { skipped++; continue; }
+      const bytesMoved = Buffer.byteLength(body, 'utf8');
+      const stem = f.replace(/\.md$/, '');
+      const sidecarPath = join(modulesDir, `${stem}.changelog.md`);
+      results.push({ card: cardPath, sidecar: sidecarPath, bytesMoved, _lines: lines, _startIdx: startIdx, _endIdx: endIdx, _body: body });
+    }
+  }
+
+  if (!force) {
+    if (results.length === 0) {
+      console.log('📭 没有需要迁出的「变更索引」段（无模块卡 / 已迁出 / 段为空）');
+    } else {
+      console.log('⚠️  split-changelog 默认不写入（破坏性保护）：会把模块卡「变更索引」节迁出到同目录 <module>.changelog.md');
+      for (const r of results) {
+        console.log(`    ${r.card} → ${r.sidecar}（${(r.bytesMoved / 1024).toFixed(1)}KB）`);
+      }
+      console.log('    本次为预览，未写入磁盘。确认迁出请运行：sillyspec modules split-changelog --force');
+    }
+    return { dryRun: true, files: results.map(({ card, sidecar, bytesMoved }) => ({ card, sidecar, bytesMoved })), skipped };
+  }
+
+  for (const r of results) {
+    // sidecar：已存在追加（分隔线 + 迁出来源），否则新建带头部
+    const header = `# ${r.card.split(/[\\/]/).pop().replace(/\.md$/, '')} 变更索引\n\n> 由 sillyspec modules split-changelog 自模块卡迁出；新条目继续追加到本文件，勿写回模块卡。\n`;
+    let sidecarContent = header;
+    if (existsSync(r.sidecar)) {
+      sidecarContent = readFileSync(r.sidecar, 'utf8').replace(/\s*$/, '') + '\n\n---\n\n' + r._body + '\n';
+    } else {
+      sidecarContent = header + '\n' + r._body + '\n';
+    }
+    writeFileSync(r.sidecar, sidecarContent, 'utf8');
+    // 卡内节体替换为指针行（只动该节，其余逐字保留；_lines 已是 LF 归一）
+    const stem = r.card.split(/[\\/]/).pop().replace(/\.md$/, '');
+    const newLines = [...r._lines.slice(0, r._startIdx + 1), '', `见 \`${stem}.changelog.md\`——历史条目已迁出；新条目直接追加 sidecar，勿写回本卡。`, '', ...r._lines.slice(r._endIdx)];
+    writeFileSync(r.card, newLines.join('\n'), 'utf8');
+    console.log(`✅ ${r.card} → ${r.sidecar}（迁出 ${(r.bytesMoved / 1024).toFixed(1)}KB，卡内留指针）`);
+  }
+  if (results.length === 0) console.log('📭 没有需要迁出的「变更索引」段');
+  return { dryRun: false, files: results.map(({ card, sidecar, bytesMoved }) => ({ card, sidecar, bytesMoved })), skipped };
+}
+
+/**
  * status: 显示模块索引状态
  */
-export async function showModuleStatus(cwd) {
-  const mapPath = findModuleMapPath(cwd);
+export async function showModuleStatus(cwd) {  const mapPath = findModuleMapPath(cwd);
   if (!mapPath || !existsSync(mapPath)) {
     console.log('📭 未找到 _module-map.yaml');
     console.log('   提示：先运行 sillyspec run scan 生成模块文档');

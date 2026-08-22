@@ -7,6 +7,10 @@ import { isPathASupported } from '../dispatch/backends/sillyhub-mcp.js'
 import { readMcpConfig } from '../sillyhub-mcp/config.js'
 import { gitQuiet } from '../git-helper.js'
 import { parseRepo } from './plan-postcheck.js'
+// 模块卡分级解析（token 成本优化 P0a）。注意：module-resolve.js 反向 import 本文件的
+// parseTaskRegistry（注册表同口径）——双向引用均为函数声明 + 调用时解引（无模块初始化期
+// 交叉求值），ESM live binding 下安全；两边都是纯读函数，无副作用序问题。
+import { resolveChangeModuleCards } from '../module-resolve.js'
 
 /**
  * 任务注册表解析（2026-08-20-task-truth-unify D-001@v1：tasks.md 唯一任务真相）。
@@ -237,18 +241,19 @@ const fixedPrefix = [
 4. 读取 local.yaml（构建命令）；若 local.yaml 不存在，先 \`sillyspec local detect\` 生成骨架再读取
 5. 加载项目总览 \`.sillyspec/docs/<project>/scan/PROJECT.md\`（如存在）
 
-### 模块文档加载
-6. 读取 \`.sillyspec/docs/<project>/modules/_module-map.yaml\`（不存在则跳过以下步骤）
-7. 根据 plan.md 中的任务文件路径匹配 _module-map.yaml 中的模块
-8. 读取匹配到的 \`.sillyspec/docs/<project>/modules/<module>.md\`
-9. 实现代码时遵循模块文档中描述的接口约定、数据流和依赖关系
-10. **利用模块索引快速定位源码**：
+### 模块文档加载（细粒度卡优先——CLI 已按 tasks 卡 allowed_paths 级联匹配）
+6. 读取下方注入的 per-task 模块卡表（{MODULE_RESOLVE_TABLE}）——跨全部 _module-map.yaml 最长前缀匹配，子项目细粒度卡优先于根层大卡
+7. 主代理与子代理**只读表中命中的卡**：细粒度卡整卡可读（体量小、语义近）；仅粗粒度大卡命中时**按节读**——只读「契约摘要」「注意事项」「定位」，跳过「变更索引」「人工备注」等历史累积段
+8. 实现代码时遵循模块卡中描述的接口约定、数据流和依赖关系
+9. **利用模块索引快速定位源码**：
     - 用 entrypoints 字段直接找到模块对外 API 的源码位置
     - 用 main_symbols 字段找到核心类/函数的定义位置
     - 子代理优先读模块卡片理解语义，再读 entrypoints/main_symbols 对应的源码
+10. 表查询命令同源可复跑：\`sillyspec modules resolve --change <change-name>\`（任务卡改动后重跑刷新表）
 
 ### 符号影响面扩展检查
 11. **符号影响面扫描**（Critical — execute 前必做）：
+    - **重入沿用（省重复消耗）**：若 symbol-impact.md 已存在、结论完整且其文件头「tasks.md 内容指纹」与当前 tasks.md 一致（中断续跑/阶段重开场景），直接复核沿用既有结论，**不重做调用点扫描**
     - **报告骨架勿手写**：先跑 \`sillyspec symbol-impact --change <change-name>\`——CLI 从 tasks.md 生成逐 task \`<!--TODO-->\` 骨架（gate 拦截时也会自动落一份）；把每行占位替换为真实结论（**未替换的 TODO 占位会被 gate 拒绝**，骨架不能直接过门）
     - 读取所有 tasks/task-NN.md，提取每个任务涉及的修改文件
     - 对每个修改文件，检查是否涉及以下变更类型：
@@ -317,7 +322,7 @@ worktree 路径 + 分支名 + 模式
 {DOCS_DEBT}
 
 如上为 CLI 用 git 事实算出的本变更触及模块文档欠账（无输出=无欠账或归属数据缺失）。
-欠账处理：Wave 收尾时顺手同步对应模块卡（变更索引追加条目），不必为此停下。
+欠账处理：Wave 收尾时顺手同步对应模块卡，不必为此停下。变更索引类条目追加到卡同目录 \`<module>.changelog.md\` sidecar（无则创建；可先跑 \`sillyspec modules split-changelog\` 迁出历史段）——勿把历史条目堆回模块卡正文（卡是子代理的读取税）。
 
 ### 铁律
 - **不要询问用户确认频率**，默认 wave 模式；用户已明确口头指定时遵从其指定`,
@@ -345,14 +350,17 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
   2. design.md 整体对照（最终实现拼起来是否仍符合设计意图，而非仅各 task 局部合规）
   3. 组装行为（全量测试/构建/启动通过——单 task 测试全绿 ≠ 组装正确）
 
+  **产物唯一化（省重复消耗）**：本步逐项对照结论**只落盘一份**——直接写进 review.json 的 \`checklist\` 数组（item=设计要点/FR/决策，note=实现状态 ✅/⚠️/❌ + 偏差说明 + commit 锚点），reviewerNotes 写汇总。**不要**另写独立的 design-check.md 长文（同一份 design×diff 二次消费；2026-08-22 实测该重复一遍 ≈8 分钟全量重读）。
+  **gate 重试修复**：review.json 落盘后若后续 gate 报 docHash 失配 / 路径错，跑 \`sillyspec register-stage-review --change <变更名> --stage execute --refresh-hash\` 一键重算修复——**不要重做审查**（重做=同一材料第三遍）。
+
 ### 操作
-1. 读取 design.md（技术方案）
+1. 读取 design.md（技术方案）——按章节精准读（design-check 对照表可借 tasks 卡 §锚点定位），避免反复整读全文
 2. 逐一对照 design.md 中的设计要点与实际代码实现
 3. 检查接口签名、数据结构、模块划分是否一致
 4. 记录偏差项（偏差 ≠ 错误，可能是合理的实现调整）
 
 ### 输出
-检查清单：每项设计要点的实现状态 ✅/⚠️/❌ + 偏差说明`,
+review.json 已落盘（checklist=逐项核验表）+ checklist 摘要与偏差说明；无独立长文产物`,
     outputHint: '设计对照检查清单',
     optional: false
   },
@@ -826,6 +834,94 @@ ${prototypes.map(p => `- \`${path.join(protoRelDir, p)}\``).join('\n')}
     } catch {}
   }
 
+  // ── 模块卡分级（P0a）：本 Wave per-task 最优卡表，细卡优先——治「根层大卡被每个子代理
+  // 整读」（multi-agent-platform backend.md 58KB 实测单卡一项 20 万+ tokens/全流程）。
+  // best-effort：解析失败/无 map 不注入（零回归），可经 `sillyspec modules resolve` 手查。
+  let moduleSection = ''
+  try {
+    if (changeDir) {
+      const specBase = path.dirname(path.dirname(changeDir))
+      // repo root 推导：默认 spec 布局（<repo>/.sillyspec/changes/<change>）从 specBase 反推，
+      // 平台模式（specRoot 异位）回退 process.cwd()——子项目目录前缀判定用，误差只降级匹配粒度
+      const repoRoot = path.basename(specBase) === '.sillyspec' ? path.dirname(specBase) : process.cwd()
+      const waveTaskIds = new Set(wave.tasks.map((t, ti) => `task-${String(t.index || (ti + 1)).padStart(2, '0')}`))
+      const { hasMaps, rows } = resolveChangeModuleCards({
+        cwd: repoRoot,
+        specBase,
+        changeName: path.basename(changeDir),
+      })
+      const hits = rows.filter(r => waveTaskIds.has(r.taskId) && r.moduleId)
+      if (hasMaps && hits.length > 0) {
+        const kb = n => (n > 0 ? `${(n / 1024).toFixed(1)}KB` : '?')
+        const cardLines = hits.map(r =>
+          `- ${r.taskId} → \`${r.cardPath}\`（${r.moduleId}，${r.granularity === 'fine' ? '细卡' : '粗卡'} ${kb(r.cardBytes)}：${r.advice}）`
+        ).join('\n')
+        moduleSection = `
+### 模块卡分级（本 Wave 子代理按表引用，勿按目录漫游 / 整读根层大卡）
+
+${cardLines}
+
+细粒度卡整卡读；粗粒度大卡只读「契约摘要/注意事项/定位」节（跳过变更索引/人工备注历史段）。为子代理写 prompt 时把对应卡路径直接写入。
+`
+      }
+    }
+  } catch { /* 模块卡分级是 best-effort：失败不注入不阻断 */ }
+
+  // ── design.md 热区（P1a）：Wave 前置只需「非目标/兼容策略」两节，CLI 提取直供——免每
+  // Wave 整读全文（28KB 级 design × 8 Wave 重复读）。无 design.md / 无对应节 → 不注入零回归。
+  let designHotzone = ''
+  let hasDesignHotzone = false
+  try {
+    if (changeDir) {
+      const designPath = path.join(changeDir, 'design.md')
+      if (existsSync(designPath)) {
+        const SECTION_CHAR_LIMIT = 2400
+        const dLines = readFileSync(designPath, 'utf8').replace(/\r\n/g, '\n').split('\n')
+        const sections = []
+        let cur = null
+        dLines.forEach((l, i) => {
+          const m = l.match(/^##\s+(.+)$/)
+          if (m) {
+            if (cur) cur.end = i
+            cur = { title: m[1].trim(), start: i, end: dLines.length }
+            sections.push(cur)
+          }
+        })
+        const grab = kwRe => {
+          const s = sections.find(s => kwRe.test(s.title))
+          if (!s) return null
+          const body = dLines.slice(s.start + 1, s.end).join('\n').trim()
+          if (!body) return null
+          return { title: s.title, body: body.length > SECTION_CHAR_LIMIT ? body.slice(0, SECTION_CHAR_LIMIT) + '\n…（超长截断，原文见 design.md）' : body }
+        }
+        const nonGoals = grab(/非目标/)
+        const compat = grab(/兼容/)
+        if (nonGoals || compat) {
+          hasDesignHotzone = true
+          const fmt = s => (s ? `#### ${s.title}\n${s.body}\n` : '')
+          const indexLines = sections.map(s => `- L${s.start + 1} ## ${s.title}`).join('\n')
+          designHotzone = `
+### design.md 热区（CLI 提取——Wave 前置只读这两节，勿整读全文）
+
+${fmt(nonGoals)}${fmt(compat)}
+### design.md 章节行号索引（需要其余章节时按行号精准读，Read offset/limit）
+
+${indexLines}
+`
+        }
+      }
+    }
+  } catch { /* 热区提取 best-effort：失败不注入 */ }
+
+  // 子代理要点 4 / Wave 开始前第 1 条：模块表 / 热区存在时换成「按注入内容执行」版文案，
+  // 否则保留原文（零回归——无 map / 无 design 的项目 prompt 不变）
+  const moduleDocPoint = moduleSection
+    ? '4. **模块卡分级**：把上方「模块卡分级」表中该 task 命中的卡路径写进子代理 prompt（细卡整读；粗大卡只读「契约摘要/注意事项/定位」节）——勿让子代理按目录漫游或整读根层大卡'
+    : '4. 如存在模块文档（.sillyspec/docs/*/modules/），按需读取涉及模块的 <module>.md 参考接口约定和数据流'
+  const waveStartItem1 = hasDesignHotzone
+    ? '1. 「非目标」「兼容策略」两节已由 CLI 提取附在上方「design.md 热区」——**不要再整读 design.md**；需要其余章节时按热区下方行号索引精准读取（Read offset/limit）。确保子代理不超范围、不破坏旧逻辑'
+    : '1. 读取 design.md 的「非目标」与「兼容策略」章节（如存在），确保子代理不超范围、不破坏旧逻辑'
+
   // 构建任务摘要（不再内联完整蓝图，减少上下文污染）
   const taskSummary = wave.tasks.map((t, ti) => {
     const taskNum = String(t.index || (ti + 1)).padStart(2, '0')
@@ -1000,7 +1096,7 @@ ${workdirLines}
 
 ${worktreeSection}${crossRepoCommitSection}${dispatchSection}
 **SillyHub 派发互斥**：SillyHub 派发模式下按派发段执行（一 Wave 一 mission），不按 batch 分组；batch 分组指导仅适用于本地 Agent tool 派发。
-
+${moduleSection}
 ### 任务摘要（按需读取完整蓝图）
 为每个任务启动子代理时，**只需告知任务目标和蓝图文件路径，让子代理按需读取**：
 
@@ -1010,7 +1106,7 @@ ${taskSummary}
 1. 任务目标（简短描述）
 2. 蓝图文件路径（让子代理自行读取详情）
 3. 编码铁律：先读后写、TDD、不编造方法、只做蓝图里写的事、遵守边界处理规则、不超出 allowed_paths
-4. 如存在模块文档（.sillyspec/docs/*/modules/），按需读取涉及模块的 <module>.md 参考接口约定和数据流
+4. ${moduleDocPoint}
 5. 任务含测试代码时，把下方「测试用例设计」整段复制进子代理 prompt，要求子代理按此设计测试用例
 6. **增量落盘与中断接手指引**：每完成一个可见产出（代码/测试/文档），立即写盘并执行一次最小验证（如语法检查、单跑相关测试）。工作过程中如被 429/API 配额/会话中断，应在最终回复里输出「已完成清单」（含文件路径、测试命令、当前卡点），不要只输出结论——主代理会依据磁盘产物和该清单判断哪些部分已完成，哪些需接手补做，避免重做已落盘的工作
 7. **任务边界铁律**：严格只实现本 task 的 \`allowed_paths\` 内文件；若 design.md/plan.md 明确指定了接口/回调/钩子接入位置，必须逐字遵守；不允许顺手实现其他 task 的内容（如 task-01 不要把 task-02 的接入也做了）。如发现必须改其他 task 文件才能继续，先回到主代理由主代理决定是否重分 Wave 或调整 plan，禁止子代理私自越界
@@ -1018,8 +1114,9 @@ ${taskSummary}
 
 {{include: testcase-design}}
 
+${designHotzone}
 ### Wave 开始前
-1. 读取 design.md 的「非目标」与「兼容策略」章节（如存在），确保子代理不超范围、不破坏旧逻辑
+${waveStartItem1}
 2. 读取 plan.md 了解全局任务划分和依赖关系
 3. 确认本 Wave 的输入/输出契约（前置 Wave 产出了什么，本 Wave 需要消费什么）
 4. 检查前置 Wave 的产出是否完整（文件是否存在、测试是否通过）

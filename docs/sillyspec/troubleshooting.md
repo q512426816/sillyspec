@@ -402,3 +402,25 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 **修复**：校验目标集扩展 = 根 + local.yaml modules 块声明的含 package.json 子模块；installed 状态下其中【声明了依赖】的目录逐一要求 node_modules 存在（pnpm/npm/yarn workspace 安装都会给子包建，合法契约；无依赖声明的空壳不校验防误杀）。缺失 → failed + depsError 点名缺失子包（相对路径）+ workspace install/junction 兜底指引——deps gate 据此阻断，错误可见而非测试中途才炸。
 
 测试 provision-monorepo-verify.test.mjs（6 断言：假 installed 识破点名 / 真安装放行 / 空壳零误杀 / 单包旧契约零回归）。**关联记忆**：`[[sillyspec-provision-monorepo-subpackage-fake-installed]]`
+
+## 27. 四坑（全程总结批）：junction 丢失强装依赖 / apply ENOBUFS / 字面证据误拦 / 跨变更冲突无预警（2026-08-22 闭环）
+
+**症状（用户全程总结实证）**：
+1. worktree doctor 报 installed 但 junction 未建（静默失败，已记知识库）。
+2. apply 的 spawnSync ENOBUFS（大 diff 缓冲区溢出），只能 git merge 绕行。
+3. verify gate 字面关键词对账被表述差异误拦——证据第一轮就齐，三轮才过。
+4. execute 期间与并行变更的冲突靠人工发现（工具层无变更间冲突预警）。
+
+**根因**：
+1. doctor reprovision 对 missing/failed 一律 force install——junction 丢失场景的对症动作是重建链接，install 路径慢且静默失败面大（坑 26 已让假 installed 显式化，但修复路径仍绕远）。
+2. GIT_MAX_BUFFER 32MB 对超大 binary patch 不够；apply 无 ENOBUFS 降级路径。
+3. checkIntegrationEvidence 只认窄字面词集（端到端/real startup 等），agent 自然表述（拉起/实际请求/日志摘录）不含字面词即拦；且无结构化信号通道。
+4. 无任何机制比对多活跃变更的改动文件集。
+
+**修复（2026-08-22）**：
+1. _doctorReprovision 按触发分流（relinkFirst）：missing/failed → 非 force 跑 provisionDeps（解链后 tryLink 直接重建 junction，lockfile 漂移自动落 install）；stale/main-drift 维持 force 重装。
+2. GIT_MAX_BUFFER 32→256MB；applyWorktree catch 识别 ENOBUFS → 自动 applyByMerge 降级（既有 --merge 语义），不再需手动绕行。
+3. 双通道：VERIFICATION_NEEDS literals 扩同义（拉起/已启动/联调/日志摘录/PID 已登记等）+ CLI 回执——verify 服务回收器落 verify-services.receipt.json，stage-contract 读回执注入 checkIntegrationEvidence 匹配（真实起过服务且 CLI 回收过 = 结构化证据，不依赖措辞）；无证据仍拦（底线不松）。
+4. execute 启动时跨变更冲突预警：本变更 diff（含 worktree 未提交）与其他活跃变更 diff 求交集，advisory warn 对端变更名 + 重叠文件 + 锚点更新/串行化 apply 提示。
+
+测试 final-four-fixes.test.mjs（17 断言）。**关联记忆**：`[[sillyspec-doctor-reprovision-junction-missing]]`、`[[sillyspec-apply-spawnsync-enobufs]]`、`[[sillyspec-verify-literal-evidence-mismatch]]`、`[[sillyspec-cross-change-conflict-no-warning]]`
