@@ -109,8 +109,8 @@ export function matchModuleCard(posixPath, maps) {
  * @returns {{ hasMaps: boolean, rows: Array<{ taskId: string, taskName: string,
  *            moduleId: string|null, granularity: 'fine'|'coarse'|null,
  *            cardPath: string|null, cardBytes: number, advice: string,
- *            matchedCount: number, pathCount: number, coarseFallback: string|null }> }}
- *   granularity：fine=更细一层 map 的最长前缀命中；coarse=仅根层（或唯一层）命中
+ *            matchedCount: number, pathCount: number }> }}
+ *   granularity：按胜者有效前缀段数判——1 段（整子项目）=coarse 大卡，≥2 段=fine 细卡
  */
 export function resolveChangeModuleCards({ cwd, specBase, changeName }) {
   const maps = collectModuleMaps({ cwd, specBase })
@@ -131,24 +131,22 @@ export function resolveChangeModuleCards({ cwd, specBase, changeName }) {
     if (paths.length === 0 && task.file) paths = [task.file]
     paths = paths.map(p => p.replace(/\\/g, '/')).filter(Boolean)
 
-    // 全路径逐个匹配，取「最长有效前缀」的模块为该 task 的最优卡；细卡为胜者时记录根层
-    // 粗卡（prefix=''）命中作 fallback 参考（细卡缺节时可回粗卡补，而非替读）
+    // 全路径逐个匹配，取「最长有效前缀」的模块为该 task 的最优卡。粒度按有效前缀段数判：
+    // 1 段（backend/frontend 整子项目）=粗层大卡；≥2 段=细层卡（段数与卡体量正相关，
+    // SillyHub 这类根相对细 map 同样正确——不能按 map 的 prefix 有无判，会误标）
     let winner = null
-    let coarseSeen = null
     let matchedCount = 0
-    const seenPrefixes = new Set()
     for (const p of paths) {
       const m = matchModuleCard(p, maps)
       if (!m) continue
       matchedCount++
-      seenPrefixes.add(m.effectivePrefix)
-      if (m.map.prefix === '') coarseSeen = m
       if (!winner || m.effectivePrefix.length > winner.effectivePrefix.length) winner = m
     }
-    // granularity：同一路径在多个不同长度前缀上命中（seenPrefixes>1）→ 胜者是细层；单层命中按
-    // 胜者 map 是否子项目 map 判定（子项目 map 内部也分模块，仍是「细」于根层单卡的粒度）
     let granularity = null
-    if (winner) granularity = (seenPrefixes.size > 1 || winner.map.prefix !== '') ? 'fine' : 'coarse'
+    if (winner) {
+      const segs = winner.effectivePrefix.split('/').filter(Boolean).length
+      granularity = segs >= 2 ? 'fine' : 'coarse'
+    }
 
     let cardPath = null
     let cardBytes = 0
@@ -178,9 +176,6 @@ export function resolveChangeModuleCards({ cwd, specBase, changeName }) {
       advice,
       matchedCount,
       pathCount: paths.length,
-      coarseFallback: granularity === 'fine' && coarseSeen
-        ? `${coarseSeen.moduleId}（${relative(cwd, join(coarseSeen.map.modulesDir, '..', coarseSeen.map.entries.get(coarseSeen.moduleId)?.doc || `modules/${coarseSeen.moduleId}.md`)).replace(/\\/g, '/')}）`
-        : null,
     })
   }
   return { hasMaps: maps.length > 0, rows }
