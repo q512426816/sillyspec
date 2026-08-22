@@ -424,3 +424,19 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 4. execute 启动时跨变更冲突预警：本变更 diff（含 worktree 未提交）与其他活跃变更 diff 求交集，advisory warn 对端变更名 + 重叠文件 + 锚点更新/串行化 apply 提示。
 
 测试 final-four-fixes.test.mjs（17 断言）。**关联记忆**：`[[sillyspec-doctor-reprovision-junction-missing]]`、`[[sillyspec-apply-spawnsync-enobufs]]`、`[[sillyspec-verify-literal-evidence-mismatch]]`、`[[sillyspec-cross-change-conflict-no-warning]]`
+
+## 28. 两坑：module 匹配对 monorepo 布局失灵 / dev server 端口竞争误判（2026-08-22 闭环）
+
+**症状（用户实证）**：
+1. test_strategy:module 下 0 命中直接跳过实测（靠第一次跑过的记录兜底）——模块匹配对纯 frontend 变更失灵，为何 0 命中完全黑箱。
+2. CLI 全量对账与用户自留 dev server 的资源竞争无任何提示——端口冲突导致的测试失败差点误报成代码 FAIL。
+
+**根因**：
+1. pickHitModules 只做严格前缀匹配（modules 配 frontend/ 只认 frontend/ 开头的 diff 路径）——pnpm monorepo 常见 packages/frontend 布局全落空；0 命中输出不含 modules 配置与 diff 对照，无从排查。
+2. runOneModule/runFullCommand 起测前不看端口占用，失败输出不做 EADDRINUSE 语义鉴别——资源竞争与代码失败同形。
+
+**修复（2026-08-22）**：
+1. pickHitModules 双层匹配：严格前缀优先；全严格 0 命中才启用段匹配兜底（diff 路径任一段 == 模块 path 首段，packages/frontend/src/x → 命中 frontend；段精确防 frontend-guide 误蹭），命中 warn「建议对齐 path 配置」；0 命中输出诊断（modules 配置 path 清单 + diff 文件样例前 5）。
+2. 实测前 warnPortRaceBeforeRun：提取命令端口（--port=N/--port N/PORT=N）→ spawnSync 试连占用 → warn「疑似自留 dev server，失败可能是资源竞争非代码问题」；失败输出含 EADDRINUSE 时 reason 追加鉴别提示（停服务重跑再定论）；runModuleSubset 顶层 reason 透传失败模块的鉴别明细。
+
+测试 module-match-portrace.test.mjs（11 断言，含真实端口占用 e2e）。**关联记忆**：`[[sillyspec-module-path-layout-mismatch]]`、`[[sillyspec-verify-devserver-port-race]]`

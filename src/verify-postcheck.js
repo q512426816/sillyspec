@@ -305,15 +305,30 @@ export function pickHitModules(changedFiles, modules) {
 
   const files = changedFiles.map(f => String(f).replace(/\\/g, '/'))
   const hits = []
+  const looseHits = []
   for (const [name, mod] of Object.entries(modules)) {
     if (!mod || !mod.path) continue
     const modPath = String(mod.path).replace(/\\/g, '/')
     const prefix = modPath.endsWith('/') ? modPath : modPath + '/'
     // path 本身被改 或 path/ 下任意文件被改
     const hit = files.some(f => f === modPath || f.startsWith(prefix))
-    if (hit) hits.push({ name, path: modPath, test: mod.test })
+    if (hit) { hits.push({ name, path: modPath, test: mod.test }); continue }
+    // 宽松段匹配 fallback（坑 module-path-layout-mismatch，2026-08-22 实证：pnpm monorepo
+    // 常见 packages/frontend 布局 vs modules 配 frontend/ 前缀——严格前缀 0 命中时按
+    // 「路径段等于模块首段」兜底（packages/frontend/src/x → 命中 frontend），多测不漏测。
+    // 首段去斜杠后比对，防 frontend-guide 之类前缀误蹭）
+    const firstSeg = prefix.split('/')[0]
+    if (firstSeg && files.some(f => ('/' + f + '/').includes('/' + firstSeg + '/'))) {
+      looseHits.push({ name, path: modPath, test: mod.test, looseMatch: true })
+    }
   }
-  return hits
+  // 严格命中优先；全部严格 0 命中才用宽松兜底（并 warn 可见——宽松规则可能多命中）
+  if (hits.length > 0) return hits
+  if (looseHits.length > 0) {
+    console.warn(`⚠️ 模块命中用宽松段匹配（modules path 前缀与 diff 布局不一致，如 packages/<name> vs <name>/）：命中 ${looseHits.map(h => h.name).join(', ')}——建议 local.yaml modules 的 path 对齐实际目录布局`)
+    return looseHits
+  }
+  return []
 }
 
 /**
@@ -458,6 +473,7 @@ function runOneModule(name, testCommand, cwd, knownFailures = []) {
   let exitCode = 0
   let output = ''
   let reason = null
+  warnPortRaceBeforeRun(testCommand)
   try {
     output = execSync(testCommand, {
       cwd,
@@ -472,6 +488,10 @@ function runOneModule(name, testCommand, cwd, knownFailures = []) {
     reason = e.signal === 'SIGTERM' && Date.now() - startedAt >= TEST_TIMEOUT_MS
       ? `模块 ${name} 测试超时（>${TEST_TIMEOUT_MS / 1000}s）`
       : `模块 ${name} 测试退出码 ${exitCode}`
+    // 资源竞争鉴别提示（坑 verify-devserver-port-race，同 runFullCommand）
+    if (/EADDRINUSE|address already in use|端口.*被占用|port.*already/i.test(output)) {
+      reason += '。⚠️ 输出含端口占用信号（EADDRINUSE）——极可能是与你自留 dev server 的资源竞争而非代码问题：停掉占用服务后重跑 verify 再定论'
+    }
   }
   const durationMs = Date.now() - startedAt
   const outputTail = output.length > OUTPUT_TAIL_CHARS ? '…' + output.slice(-OUTPUT_TAIL_CHARS) : output
@@ -705,6 +725,7 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = nul
   let modulesPresent = false
   let hitCount = 0
   let hits = []
+  let lastChangedFiles = [] // 0 命中诊断用（diff 文件样例可见性，坑 module-path-layout-mismatch）
   if (strategy === 'module') {
     const modules = extractModules(yamlText)
     if (modules) {
@@ -712,6 +733,7 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = nul
       // includeWorkingTree（坑 module-subset-zero-hit-uncommitted）：子代理不 commit 的改动
       // 也参与 module 命中判定，0 命中跳过不再误伤 worktree 未提交的真实变更
       const changedFiles = resolveVerifyChangedFiles(cwd, changeName, null, { includeWorkingTree: true })
+      lastChangedFiles = Array.isArray(changedFiles) ? changedFiles : []
       if (changedFiles === null) {
         hitCount = -1 // git 不可用 / 非仓库
       } else {
@@ -728,13 +750,24 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = nul
   } else if (action === 'module-zero-hit-skip') {
     // module 模式 0 命中：不静默回退注定超时/含预存失败的全量（坑 verify-worktree-... 修复方向 3）。
     // 据 verify-result.md 自报告判定；想跑全量请显式设 test_strategy: full。
+    // 诊断可见性（坑 module-path-layout-mismatch，2026-08-22 实证：0 命中「靠第一次跑过的
+    // 记录兜底」——为何没命中完全黑箱）：落 modules 配置 path vs diff 文件样例，配置前缀
+    // 对不上（如 packages/frontend vs frontend/）一眼可见
+    const modules_ = extractModules(yamlText) || {}
+    const diagLines = [
+      `已配置 modules（${Object.keys(modules_).length} 个）: ${Object.entries(modules_).map(([k, m]) => `${k}→${m.path}`).join('、') || '（无）'}`,
+      `本次 diff（${lastChangedFiles.length} 个文件，前 5）: ${lastChangedFiles.slice(0, 5).join(', ') || '（空）'}`,
+    ]
+    console.warn(`⚠️ 模块 0 命中诊断（对照 path 前缀与 diff 布局是否一致，如 packages/<name> vs <name>/）：`)
+    for (const l of diagLines) console.warn(`   ${l}`)
     mainResult = {
       status: 'skipped',
       command: null,
       exitCode: null,
       durationMs: null,
       outputTail: null,
-      reason: 'test_strategy: module 但本次变更未命中任何已配置 modules（0 命中）。为避免回退到注定超时/含预存失败的全量 commands.test，CLI 未自动跑全量——据 verify-result.md 自报告判定测试。若需全量覆盖，显式设 test_strategy: full。',
+      reason: 'test_strategy: module 但本次变更未命中任何已配置 modules（0 命中）。为避免回退到注定超时/含预存失败的全量 commands.test，CLI 未自动跑全量——据 verify-result.md 自报告判定测试。若需全量覆盖，显式设 test_strategy: full。' +
+        ` 诊断：${diagLines.join('；')}`,
       resultPath: null,
       mode: 'module-zero-hit',
       fallbackReason: null,
@@ -920,6 +953,53 @@ function mergeResultInfo(mainResult, crossResults) {
 /**
  * 全量跑 commands.test（现有逻辑，brownfield 行为不变）。
  */
+/**
+ * 从测试命令文本提取疑似服务端口（坑 verify-devserver-port-race，2026-08-22 实证：CLI 全量
+ * 对账与用户自留 dev server 资源竞争——端口被占导致测试失败，差点误报 FAIL 成代码问题）。
+ * 认 --port=N / --port N / PORT=N。
+ * @param {string} cmd
+ * @returns {number[]}
+ */
+function extractPortsFromCommand(cmd) {
+  const s = String(cmd || '')
+  const ports = new Set()
+  for (const m of s.matchAll(/--port[=\s]+(\d{2,5})/gi)) ports.add(Number(m[1]))
+  for (const m of s.matchAll(/\bPORT=(\d{2,5})/gi)) ports.add(Number(m[1]))
+  return [...ports]
+}
+
+/**
+ * 端口占用探测（同步 spawnSync node 试连——verify 实测是同步 execSync 流，无法 await）。
+ * @param {number} port
+ * @returns {boolean} true=已被占用（疑似自留 dev server/长驻服务在跑）
+ */
+function isPortOccupiedSync(port) {
+  try {
+    const { spawnSync } = require('node:child_process')
+    const r = spawnSync(process.execPath, ['-e',
+      `const n=require('node:net');const s=n.connect(${port},'127.0.0.1',()=>{console.log('Y');s.end()});s.on('error',()=>console.log('N'));setTimeout(()=>{console.log('N');process.exit(0)},1500)`],
+      { encoding: 'utf8', timeout: 4000 })
+    return (r.stdout || '').trim().endsWith('Y')
+  } catch { return false }
+}
+
+/**
+ * 实测前资源竞争预警（坑 verify-devserver-port-race）：测试命令涉及的端口已被占用 →
+ * 显著 warn「疑似自留 dev server」+ 建议停服务重跑——防把资源竞争误判成代码问题报 FAIL。
+ * best-effort：探测失败静默。
+ */
+function warnPortRaceBeforeRun(command) {
+  try {
+    const ports = extractPortsFromCommand(command)
+    for (const p of ports) {
+      if (isPortOccupiedSync(p)) {
+        console.warn(`⚠️ 端口 ${p} 已被占用（测试命令 ${command.slice(0, 50)}… 引用）——疑似你自留的 dev server/长驻服务。`)
+        console.warn(`   测试若因此失败（端口冲突/EADDRINUSE），是资源竞争而非代码问题——停掉占用服务（或换端口）后重跑 verify 再定论，勿直接报 FAIL。`)
+      }
+    }
+  } catch { /* 探测失败不阻断实测 */ }
+}
+
 function runFullCommand({ yamlText, localYamlPath, cwd, specBase, changeName, fallbackReason = null, knownFailures = [] }) {
   const command = extractTestCommand(yamlText)
 
@@ -943,6 +1023,7 @@ function runFullCommand({ yamlText, localYamlPath, cwd, specBase, changeName, fa
   let exitCode = 0
   let output = ''
   let reason = null
+  warnPortRaceBeforeRun(command)
   try {
     output = execSync(command, {
       cwd,
@@ -957,6 +1038,11 @@ function runFullCommand({ yamlText, localYamlPath, cwd, specBase, changeName, fa
     reason = e.signal === 'SIGTERM' && Date.now() - startedAt >= TEST_TIMEOUT_MS
       ? `测试命令超时（>${TEST_TIMEOUT_MS / 1000}s）`
       : `测试命令退出码 ${exitCode}`
+    // 资源竞争鉴别提示（坑 verify-devserver-port-race）：EADDRINUSE/端口占用类失败极可能是
+    // 自留 dev server 竞争而非代码问题——输出里明示鉴别路径，防误报 FAIL
+    if (/EADDRINUSE|address already in use|端口.*被占用|port.*already/i.test(output)) {
+      reason += '。⚠️ 输出含端口占用信号（EADDRINUSE）——极可能是与你自留 dev server 的资源竞争而非代码问题：停掉占用服务后重跑 verify 再定论'
+    }
   }
   const durationMs = Date.now() - startedAt
   const outputTail = output.length > OUTPUT_TAIL_CHARS ? '…' + output.slice(-OUTPUT_TAIL_CHARS) : output
@@ -999,6 +1085,11 @@ function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures = [] }
   const reason = status === 'passed'
     ? null
     : `模块子集测试失败：${perModule.filter(r => r.status === 'failed').map(r => r.name).join(', ')}`
+      // 失败模块的 reason 明细透传（坑 verify-devserver-port-race：EADDRINUSE 资源竞争鉴别
+      // 提示在 runOneModule 的 reason 里，不透传会被顶层 reason 吞掉）
+      + (perModule.filter(r => r.status === 'failed' && r.reason).some(r => /EADDRINUSE|资源竞争/.test(r.reason))
+        ? '。' + perModule.filter(r => r.status === 'failed' && r.reason && /EADDRINUSE|资源竞争/.test(r.reason)).map(r => r.reason).join('；')
+        : '')
 
   const result = {
     status,
