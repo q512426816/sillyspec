@@ -58,6 +58,16 @@ export function printQuickAuditReview(review) {
       console.log(`\n✅ quick 变更边界审计 — SAFE (本轮新增变更 ${review.changedFiles.length} 个文件)`)
     }
   }
+  // 关联变更遗留放行提示（坑 linked-change-leftover-false-block，独立于三态都打——放行可见
+  // 可审计，不静默）：这些文件属关联变更目录但不在本会话归属（启动后出现的他者遗留），
+  // 已剔除出本会话文件行，由关联变更自己的流程收尾。
+  if (Array.isArray(review.linkedChangeLeftovers) && review.linkedChangeLeftovers.length > 0) {
+    console.warn(`
+🧹 关联变更目录检测到 ${review.linkedChangeLeftovers.length} 个遗留脏文件（他者/上个 session 残留，非本会话改动）——已放行不计入本会话：`)
+    for (const f of review.linkedChangeLeftovers) console.warn(`   - ${f}`)
+    console.warn(`   它们归关联变更自己的流程管；若确系本会话需要改，用 --files 显式声明归属。`)
+  }
+
   // D-8 文档欠账显性化（advisory，独立于 status 三态都打）：改了源码没动文档 → 一行欠账标记。
   // 不阻断、不解锁、纯显性化——累积欠账可事后审计 QUICKLOG reasons 追溯。
   if (review.docSyncHint && review.docSyncHint.touchedSource > 0 && review.docSyncHint.docFiles.length === 0) {

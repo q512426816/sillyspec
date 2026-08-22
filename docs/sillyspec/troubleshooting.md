@@ -475,3 +475,19 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 2. printQuickAuditReview BLOCKED 分支：reasons 含「危险文件变更」时追加明示「追加 --files 边界不会解锁受保护/危险文件的拦截（两套开关——--files 只声明哪些文件计入本会话，不改变危险判定）。改这类文件必须 --force-baseline」。
 
 测试 quick-filenotes-audit-hints.test.mjs（10 断言，含 step2 提醒/末步不提醒/危险拦截两套开关 e2e）。**关联记忆**：`[[sillyspec-quick-file-notes-nonfinal-ignored]]`、`[[sillyspec-files-flag-not-unlock-protected]]`
+
+## 31. 两坑：关联变更遗留误拦 / tasks.md 追加行落「提案书（Proposal）」占位（2026-08-22 闭环）
+
+**症状（用户实证）**：
+1. 边界审计把关联变更目录里上个 session 的遗留脏文件当越界拦截（并发场景区分不了「他者遗留」与「本次偷改」），只能 --force-baseline 解锁。
+2. CLI 往关联变更 tasks.md 追加的行落成占位「提案书（Proposal）」而非 ql 标题。
+
+**根因**：
+1. 关联变更目录下的文件不在 isQuickMetadata 豁免（豁免只覆盖非关联变更），quick 启动后出现的他者遗留不在本会话 baseline → 落「危险文件」blocked。quick 无法区分遗留与偷改。
+2. deriveTitleFromLinkedChange 的破折号剥取对「提案书（Proposal）：冒号形态」/无后缀纯模板标题失败 → 整串前缀落进 desc。
+
+**修复（2026-08-22）**：
+1. auditQuickCompletion 关联变更遗留放行：命中关联变更目录前缀的文件完全剔除出本会话归属（changedFiles/newFiles/deletedFiles 退栈）——不触发危险/新增/越界三道门，输出 🧹 遗留清单提示（归关联变更自己的流程管，确系本会话改动用 --files 声明）。非关联 .sillyspec/ 仍 blocked（保护面零回归）。注：untracked 关联目录被 porcelain 折叠成目录 token、baseline 目录前缀天然放行（等效快照），leftover 分支覆盖的是已跟踪文件被修改的形态。
+2. deriveTitleFromLinkedChange 固定前缀显式剥（提案书（Proposal）/设计文档（Design）/Proposal/Design + 全/半角冒号与破折号分隔形态）；剥完为空（纯模板标题）继续找下一文档；tasks.md 追加行与 QUICKLOG 条目标题同源语义化。
+
+测试 quick-leftover-title.test.mjs（12 断言，含已跟踪遗留 e2e 放行+提示、untracked 折叠天然放行、非关联仍拦、三形态标题剥取 e2e）。**关联记忆**：`[[sillyspec-linked-change-leftover-false-block]]`、`[[sillyspec-linked-task-placeholder-title]]`

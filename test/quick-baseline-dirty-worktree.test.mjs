@@ -223,8 +223,11 @@ async function main() {
     assert(!review.reasons.some(r => r.includes('危险')), `场景11 不应报危险（实际 ${JSON.stringify(review.reasons)}）`)
   }
 
-  // 场景 12（Fix 2 关联变更仍审计）：关联变更文件被改且不在 baseline → 不放行，仍阻断
-  // （保护 reverse-sync 可见性：动自己关联变更的 design.md 需 --force-baseline 显式确认）。
+  // 场景 12（坑 linked-change-leftover-false-block 新契约，2026-08-22 用户裁决）：关联变更文件
+  // 被改且不在 baseline → 放行不阻断（quick 无法区分「他者遗留」与「本次偷改」），剔除出本会话
+  // 归属并收集 linkedChangeLeftovers（审计输出 🧹 提示，归关联变更自己的流程管）。旧契约
+  // （blocked + 危险 reason）已废——并发下上个 session 的遗留脏文件曾因此被误拦只能
+  // --force-baseline。
   {
     const dir = makeTmpDir('qk-dirty-12-')
     initGitRepo(dir)
@@ -234,8 +237,10 @@ async function main() {
     writeFileSync(join(dir, '.sillyspec', 'changes', 'mylinked', 'design.md'), '# v2\n')
     const guard = { baselineFiles: [], allowedFiles: [], allowNew: false, forceBaseline: false, linkedChanges: ['mylinked'] }
     const review = await auditQuickCompletion(dir, guard, {})
-    assert(review.status === 'blocked', `场景12 关联变更文件仍阻断（实际 ${review.status}）`)
-    assert(review.reasons.some(r => r.includes('危险')), `场景12 应报危险（实际 ${JSON.stringify(review.reasons)}）`)
+    assert(review.status !== 'blocked', `场景12 关联变更遗留放行不阻断（实际 ${review.status}）`)
+    assert((review.linkedChangeLeftovers || []).includes('.sillyspec/changes/mylinked/design.md'),
+      `场景12 遗留收集 linkedChangeLeftovers（实际 ${JSON.stringify(review.linkedChangeLeftovers)}）`)
+    assert(!review.changedFiles.includes('.sillyspec/changes/mylinked/design.md'), `场景12 遗留剔除出本会话归属`)
   }
 
   // 场景 13（Fix 3 porcelain 解析单元）：去引号 / rename 取新路径 / 归一化，且首行不丢首字符。

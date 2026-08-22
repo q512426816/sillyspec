@@ -265,10 +265,18 @@ export function deriveTitleFromLinkedChange(specBase, change) {
     try { content = readFileSync(join(specBase, 'changes', change, f), 'utf8') } catch { continue }
     const m = content.match(/^#\s+(.+?)\s*$/m)
     if (!m) continue
-    const raw = m[1].trim()
-    // 标题惯例「# 提案书（Proposal）— <desc>」「# 设计文档（Design）— <desc>」→ 取破折号后的 desc
+    let raw = m[1].trim()
+    // 标题惯例「# 提案书（Proposal）— <desc>」「# 设计文档（Design）— <desc>」→ 取破折号后的 desc。
+    // 固定前缀显式剥（坑 linked-task-placeholder-title，2026-08-22 实证：标题「# 提案书（Proposal）:
+    // xxx」或「# 提案书（Proposal）」无破折号时 dash 匹配失败，整串前缀落进 tasks.md 追加行）——
+    // 先剥固定模板词（含全/半角冒号分隔形态），再剥破折号；剥完为空（纯模板标题）继续找下一文档
+    for (const prefix of [/^提案书（Proposal）\s*[：:—\-]?\s*/, /^设计文档（Design）\s*[：:—\-]?\s*/, /^Proposal\s*[：:—\-]?\s*/i, /^Design\s*[：:—\-]?\s*/i]) {
+      raw = raw.replace(prefix, '').trim()
+    }
+    if (!raw) continue
     const dash = raw.match(/[—-]\s*(.+)$/)
-    return dash ? dash[1].trim() : raw
+    const title = dash ? dash[1].trim() : raw
+    if (title) return title
   }
   return ''
 }

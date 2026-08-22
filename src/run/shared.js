@@ -902,10 +902,26 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
 
       // 检查危险文件（除非 force-baseline）
       if (file.startsWith('.sillyspec/') && !isQuickMetadata(file, guard.linkedChanges) && !forceBaseline) {
+        // 关联变更目录遗留放行（坑 linked-change-leftover-false-block，2026-08-22 实证：并发下
+        // 关联变更目录里他者/上个 session 的遗留脏文件——审计时不在本会话 baseline（启动后出现）
+        // 且 isQuickMetadata 对关联变更目录不豁免 → 落「危险文件」blocked，只能 --force-baseline。
+        // quick 无法区分「他者遗留」与「本次偷改」，按用户裁决放行降 warning：完全剔除出本会话
+        // 归属（changedFiles/newFiles/deletedFiles 均退栈），不计文件行、不触发危险/新增/越界
+        // 三道门，遗留给关联变更自己的流程收尾。非关联的 .sillyspec/ 仍 blocked。
+        const linkedDir = (Array.isArray(guard.linkedChanges) ? guard.linkedChanges : [])
+          .find(lc => file.startsWith(`.sillyspec/changes/${String(lc).replace(/\\/g, '/')}/`))
+        if (linkedDir) {
+          result.changedFiles.pop()
+          if (status === '??') result.newFiles.pop()
+          if (rawStatus[0] === 'D' || rawStatus[1] === 'D') result.deletedFiles.pop()
+          result.linkedChangeLeftovers = result.linkedChangeLeftovers || []
+          result.linkedChangeLeftovers.push(file)
+          continue
+        }
         result.reasons.push(`危险文件变更: ${file}`)
       }
 
-      if (DANGEROUS_PATTERNS.some(p => file === p || file.startsWith(p)) && !forceBaseline) {
+      if (DANGEROUS_PATTERNS.some(p => p === file || file.startsWith(p)) && !forceBaseline) {
         result.reasons.push(`危险文件变更: ${file}`)
       }
     }
