@@ -644,7 +644,11 @@ export function verifyReviewGitEvidence(review, gitDir, cache = null) {
       runGit(gitDir, ['rev-parse', '--verify', '--quiet', `${hash}^{commit}`])
       c.verified.add(vkey)
     } catch {
-      errors.push(`${field} "${hash}" 不是仓库中的真实 commit — review.json 疑似伪造`)
+      // 可执行指引（坑 review-head-real-commit-late，2026-08-22 实证：head 必须真实 commit 的
+      // 要求撞门才知道——报错直接给操作序列：worktree 改动先 commit，取 HEAD 作 head）
+      errors.push(`${field} "${hash}" 不是仓库中的真实 commit — review.json 疑似伪造。` +
+        `head/base 必须是 git rev-parse 可解析的 commit hash：worktree 内先 git add -A && git commit -m "<task>"，` +
+        `再取 git rev-parse HEAD 作 head（base 用 task 卡锡点或基线 commit）；不要填分支名/伪 hash/working-tree 描述`)
     }
   }
   if (errors.length > 0) {
@@ -692,15 +696,25 @@ export function verifyReviewGitEvidence(review, gitDir, cache = null) {
 
   // changedFiles 交叉比对：完全不相交 = review 描述的改动与实际 diff 无关（diffFiles 已含 working-tree）
   if (!emptyDiff && Array.isArray(review.changedFiles) && review.changedFiles.length > 0) {
-    const normalize = (p) => String(p).replace(/^\.\//, '')
+    // 注记剥离（坑 changedfiles-annotation-suffix-mismatch，2026-08-22 实证：changedFiles 带
+    // 「src/a.js（新增）」类注记后缀被判完全不相交，agent 用正则修还贪婪吞了路径段两轮才对）。
+    // 结构化剥法：只剥「路径尾部」的注记形态——全角/半角括号注记、// 与 # 行内注释、空白后的
+    // 说明文字；注记本身不参与匹配（想写说明放 reviewerNotes/requiredEvidence）。
+    const normalize = (p) => String(p)
+      .replace(/^\.\//, '')
+      .replace(/[（(][^（()）]*[)）]\s*$/, '')   // 尾部（注记）/(note)——中段括号（路径段）不动
+      .replace(/\s+(\/\/|#).*$/, '')              // 空格后的 // 或 # 注释
+      .trim()
     const diffSet = new Set(diffFiles.map(normalize))
     const hasOverlap = review.changedFiles.some(f => {
       const nf = normalize(f)
+      if (!nf) return false
       // 兼容 review 写相对/部分路径：前后缀匹配即可
       return diffSet.has(nf) || diffFiles.some(d => d.endsWith(nf) || nf.endsWith(d))
     })
     if (!hasOverlap) {
-      errors.push(`changedFiles 与实际 git diff（${review.base.slice(0, 8)}..${review.head.slice(0, 8)}，${diffFiles.length} 个文件）完全不相交 — review 内容与代码变更无关`)
+      errors.push(`changedFiles 与实际 git diff（${review.base.slice(0, 8)}..${review.head.slice(0, 8)}，${diffFiles.length} 个文件）完全不相交 — review 内容与代码变更无关。` +
+        `检查：changedFiles 必须是纯文件路径（注记/说明写 reviewerNotes，不拼进路径数组）；路径拼写与 diff 对照`)
     }
   }
 

@@ -78,7 +78,7 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
 | archive `--confirm` | 归档步缺 `--confirm` | 回退该步 pending | `src/run/complete-handlers.js:262` |
 | quick 边界审计 | 命中受保护/危险文件或删除 | BLOCKED `exit(1)` | `src/run/shared.js:497` |
 
-**阶段完成 gate 级联**（`completeStageGates` `src/run/gates.js:917`，统一收尾管线）顺序：
+**阶段完成 gate 级联**（`completeStageGates` `src/run/gates.js:937`，统一收尾管线）顺序：
 1. `runValidators`（客观产物校验，`src/stage-contract.js:859`）：`validateBrainstormOutputs` / `validatePlanOutputs` / `validateExecuteOutputs`+`checkExecuteCodeEvidence` / `validateVerifyOutputs` / `validateScanOutputs`。
 2. verify 实测对账：CLI 亲跑 `local.yaml` 的 `commands.test`，自报告 PASS 但实测失败→阻断（`gates.js:496`）。
 3. Plan→Execute Contract（`validatePlanForExecute` `gates.js:579`）。

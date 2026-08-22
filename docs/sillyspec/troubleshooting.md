@@ -440,3 +440,22 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 2. 实测前 warnPortRaceBeforeRun：提取命令端口（--port=N/--port N/PORT=N）→ spawnSync 试连占用 → warn「疑似自留 dev server，失败可能是资源竞争非代码问题」；失败输出含 EADDRINUSE 时 reason 追加鉴别提示（停服务重跑再定论）；runModuleSubset 顶层 reason 透传失败模块的鉴别明细。
 
 测试 module-match-portrace.test.mjs（11 断言，含真实端口占用 e2e）。**关联记忆**：`[[sillyspec-module-path-layout-mismatch]]`、`[[sillyspec-verify-devserver-port-race]]`
+
+## 29. 三坑：head 真实 commit 契约后知 / changedFiles 注记后缀误判不相交 / 文档债拖到 verify 才拦（2026-08-22 闭环）
+
+**症状（用户实证，中断续跑批）**：
+1. review.head 必须是真实 commit（此前无此要求）——撞门才知道。
+2. changedFiles 带注记后缀（src/a.js（新增））判「完全不相交」；agent 用正则修还贪婪吞了 (dashboard) 路径段，两轮才对。
+3. module-impact pending 死信门在 verify 才拦（上次也拦）——文档债拖到 verify 末尾才暴露。
+
+**根因**：
+1. 伪 hash 报错只说「疑似伪造」，不给操作序列（commit 后取 HEAD）；契约无前置提示点。
+2. changedFiles 匹配的 normalize 只剥 ./ 前缀——尾部注记直接参与比对必不相交；而修复它用正则剥容易贪婪（教训：改 review 元数据用结构化重建别用正则剥——工具侧应容忍注记，让路径匹配只看路径）。
+3. extractPendingDocSyncRows 只在 verify gate 硬拦——execute 收尾零提示。
+
+**修复（2026-08-22）**：
+1. 伪 hash 报错给可执行指引：worktree 内 git add -A && git commit 后取 git rev-parse HEAD 作 head（base 用 task 卡锡点/基线），不填分支名/伪 hash/working-tree 描述。
+2. normalize 结构化剥尾部注记：全/半角括号注记（[（(][^（()）]*[)）]$ 锚定尾部，中段路径段如 packages/(dashboard)/ 不动）、空格后的 // 与 # 注释；注记想写就放 reviewerNotes。报错文案同步明示「changedFiles 必须纯路径」。
+3. execute --done 收尾 gate（Task Review Gate 之前）advisory 提示 pending 死信清单 + 「verify 阶段会硬拦」预告——当场清债，verify 硬拦不变。
+
+测试 review-meta-execute-debt.test.mjs（11 断言）。**关联记忆**：`[[sillyspec-review-head-real-commit-late]]`、`[[sillyspec-changedfiles-annotation-suffix-mismatch]]`、`[[sillyspec-module-impact-debt-late-warn]]`

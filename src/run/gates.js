@@ -649,6 +649,26 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
     }
   }
 
+  // ── module-impact pending 死信 execute 收尾提示（坑 module-impact-debt-late-warn，
+  // 2026-08-22 实证：死信门在 verify 才硬拦，文档债拖到 verify 末尾才暴露、上次也拦）。
+  // execute --done 即 advisory 提示（不阻断 execute——execute 期间可能仍在迭代模块文档；
+  // verify 的硬拦不变），让 agent 当场清债而非攒到 verify 撞门。
+  if (stageName === 'execute') {
+    try {
+      const execChangeDir = resolveChangeDir(cwd, progress, platformOpts?.specRoot)
+      const execImpactPath = execChangeDir ? join(execChangeDir, 'module-impact.md') : null
+      if (execImpactPath && existsSync(execImpactPath)) {
+        const { extractPendingDocSyncRows } = await import('./complete-handlers.js')
+        const execPendingRows = extractPendingDocSyncRows(readFileSync(execImpactPath, 'utf8'))
+        if (execPendingRows.length > 0) {
+          console.warn(`\n⚠️ module-impact.md「更新结果」表有 ${execPendingRows.length} 个 pending/待办项（文档同步债）——verify 阶段会硬拦：`)
+          for (const row of execPendingRows) console.warn(`   - ${row}`)
+          console.warn('   建议 execute 收尾就完成模块文档同步并回填 done/skipped（说明原因），别把债拖到 verify 末尾。')
+        }
+      }
+    } catch { /* 提示失败不阻断 execute */ }
+  }
+
   // ── Execute Task Review Gate：所有 task 必须有 review.json 且 verdict 通过 ──
   if (stageName === 'execute') {
     try {
