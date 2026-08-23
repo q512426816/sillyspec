@@ -24,6 +24,65 @@ const WORKTREES_REL = '.sillyspec/.runtime/worktrees';
 const BRANCH_PREFIX = 'sillyspec/';
 const META_FILE = 'meta.json';
 
+/**
+ * 解除 worktree 内全部 node_modules junction/symlink（根 + meta.depsModules 各子模块）。
+ *
+ * 坑 ghost-dir-junction-pierce（2026-08-23 实证：worktree apply 后目录残留，人工 rm -rf 经
+ * junction 穿透删主仓 node_modules——user-inputs 两次事故实录；npm ci / git worktree remove
+ * 同样跟随 junction）。任何删除 worktree 目录的路径（cleanup / create 幽灵强删 / doctor 修复）
+ * 必须先解链；此前解链逻辑三处复制粘贴且**不覆盖 modules 子模块 junction**
+ * （meta.depsModules 记录的 wt/<module>/node_modules）。
+ *
+ * lstat/rmdir 失败 fail-loud（D-001@v1：静默跳过解链的后果是穿透删主仓，宁可阻断）。
+ *
+ * @param {string} worktreePath worktree 根目录
+ * @param {object} [meta] 可含 depsModules（[{path}] 子模块清单）；null 时只解根
+ * @param {string[]} [details] 可选，记录解链明细（cleanup details 兼容）
+ * @returns {number} 实际解除的链接数
+ */
+export function unlinkNodeModulesLinks(worktreePath, meta = null, details = null) {
+  let removed = 0;
+  const targets = [join(worktreePath, 'node_modules')];
+  for (const m of Array.isArray(meta && meta.depsModules) ? meta.depsModules : []) {
+    // 子模块 path 安全校验（与 worktree-deps isSafeModulePath 同口径）：拒绝绝对路径与 .. 段
+    if (m && typeof m.path === 'string' && m.path && !isAbsolute(m.path) && !m.path.split(/[\\/]+/).includes('..')) {
+      targets.push(join(worktreePath, m.path, 'node_modules'));
+    }
+  }
+  for (const nm of targets) {
+    if (!existsSync(nm)) continue;
+    let isLink;
+    try {
+      isLink = lstatSync(nm).isSymbolicLink();
+    } catch (e) {
+      throw new Error(`worktree node_modules junction 检测失败（疑似 EPERM：杀毒/索引锁 junction），阻断删除以保护主仓 node_modules：${e.message}。请关闭占用进程或手动 rmdir "${nm}" 后重试`);
+    }
+    if (!isLink) continue;
+    try {
+      if (process.platform === 'win32') {
+        // Windows rmdir 删 junction（reparse point）不跟随目标；execFileSync 数组形式不经 shell
+        execFileSync('cmd.exe', ['/c', 'rmdir', nm]);
+      } else {
+        unlinkSync(nm);
+      }
+      removed++;
+      if (details) details.push(`worktree node_modules junction/symlink removed: ${relative(worktreePath, nm) || '(root)'} (protect main checkout)`);
+    } catch (e) {
+      throw new Error(`worktree node_modules junction 解链失败，阻断删除以保护主仓 node_modules：${e.message}。请手动 rmdir "${nm}" 后重试`);
+    }
+  }
+  return removed;
+}
+
+/**
+ * 安全删除 worktree 目录：先解链全部 node_modules junction 再 rmSync。
+ * 幽灵目录清理（create 强删 / doctor ghost 修复）的统一出口——不再裸 rmSync。
+ */
+export function safeRemoveWorktreeDir(worktreePath, meta = null) {
+  unlinkNodeModulesLinks(worktreePath, meta);
+  rmSync(worktreePath, { recursive: true, force: true });
+}
+
 // 进程级缓存：cwd → 主仓库根目录。避免每次 new WorktreeManager 都 spawn 一次
 // `git rev-parse --git-common-dir`（Windows 上每次 spawn 约 30-100ms，execute 一次命令
 // 会 new 多个 WorktreeManager）。git-common-dir 在进程内对同一 cwd 稳定，缓存安全。
@@ -416,7 +475,12 @@ export class WorktreeManager {
           );
         }
         console.log(`⚠️  检测到幽灵 worktree 目录（无 meta.json，无未提交改动），自动清理...`);
-        try { rmSync(worktreePath, { recursive: true, force: true }); } catch {}
+        // 安全删除（坑 ghost-dir-junction-pierce）：git status 拦不住 junction（gitignored 的
+        // node_modules 不进 status，junction 目标内容更非「未提交改动」），裸 rmSync/人工 rm -rf
+        // 会穿透 junction 删主仓 node_modules——先解链再删。
+        try { safeRemoveWorktreeDir(worktreePath); } catch (unlinkErr) {
+          throw new Error(`幽灵 worktree 安全清理失败（已阻断，主仓 node_modules 未受影响）：${unlinkErr.message}`)
+        }
         // 同步清理 git worktree 注册 + 残留分支，否则目录虽删但 git 内部状态未清，
         // 后续 git worktree add 会因「worktree 已注册」或「分支已存在」失败
         try { gitQuiet(this.cwd, ['worktree', 'prune'], { timeout: 30000 }); } catch {}
@@ -839,34 +903,11 @@ export class WorktreeManager {
 
     const branch = (meta && meta.branch) || BRANCH_PREFIX + name;
 
-    // Windows 保护：先解链接 worktree/node_modules（junction 指向主 checkout），
-    // 否则后续 git worktree remove / rmSync recursive 会跟随 junction 误删主 node_modules 内容。
+    // Windows 保护：先解链接 worktree 内全部 node_modules junction（根 + modules 子模块，
+    // 坑 ghost-dir-junction-pierce：子模块 junction 此前不覆盖——npm ci / rm -rf / git worktree
+    // remove 跟随任一 junction 都会穿透删主仓对应 node_modules）。
     if (!isInPlace && existsSync(worktreePath)) {
-      const wtNodeModules = join(worktreePath, 'node_modules');
-      if (existsSync(wtNodeModules)) {
-        // lstat 失败 fail-loud（D-001@v1 / review-2026-08-09 #4）：EPERM（杀毒/索引锁 junction）若静默跳过解链，
-        // 后续 git worktree remove / rmSync recursive 会跟随 junction 误删主仓 node_modules
-        let isLink;
-        try {
-          isLink = lstatSync(wtNodeModules).isSymbolicLink();
-        } catch (e) {
-          throw new Error(`worktree node_modules junction 检测失败（疑似 EPERM：杀毒/索引占用），阻断 cleanup 保护主仓 node_modules：${e.message}。请关闭占用进程或手动 rmdir "${wtNodeModules}" 后重试 sillyspec worktree cleanup`);
-        }
-        if (isLink) {
-          try {
-            if (process.platform === 'win32') {
-              // Windows rmdir 删 junction（reparse point）不跟随目标，保护主 checkout
-              // execFileSync 数组形式：路径含引号/特殊字符时不会经 shell 解析（安全收敛，与 git-helper 同范式）
-              execFileSync('cmd.exe', ['/c', 'rmdir', wtNodeModules]);
-            } else {
-              unlinkSync(wtNodeModules);
-            }
-            details.push('worktree node_modules junction/symlink removed (protect main checkout)');
-          } catch (e) {
-            throw new Error(`worktree node_modules junction 解链失败，阻断 cleanup 保护主仓 node_modules：${e.message}。请手动 rmdir "${wtNodeModules}" 后重试`);
-          }
-        }
-      }
+      unlinkNodeModulesLinks(worktreePath, meta, details)
     }
 
     // 1. git worktree remove（带 retry）—— in-place 跳过：无 git worktree 注册，且 worktreePath 即主工作区
@@ -1007,31 +1048,11 @@ export class WorktreeManager {
     try {
       const meta = this.getMeta(name) || {};
       const isInPlace = meta.mode === 'in-place-fallback';
-      // 先解 junction（非 in-place）：lstatSync 判 link → Windows rmdir junction / Unix unlinkSync
+      // 先解 junction（非 in-place）：统一走共享解链（坑 ghost-dir-junction-pierce：覆盖根 +
+      // depsModules 子模块；lstat/rmdir 失败 fail-loud，D-001@v1 / review-2026-08-09 #4——
+      // 静默跳过解链会让 install 经 junction 误改主仓 node_modules）
       if (!isInPlace && existsSync(wtPath)) {
-        const wtNodeModules = join(wtPath, 'node_modules');
-        if (existsSync(wtNodeModules)) {
-          // lstat 失败 fail-loud（D-001@v1）+ 解链失败 fail-loud（D-002@v1 / review-2026-08-09 #4）：
-          // 原 best-effort「交 provisionDeps install」会经 junction 误改主仓 node_modules，正是 #4 坑
-          let isLink;
-          try {
-            isLink = lstatSync(wtNodeModules).isSymbolicLink();
-          } catch (e) {
-            throw new Error(`worktree node_modules junction 检测失败（疑似 EPERM：杀毒/索引占用），阻断 doctor reprovision 保护主仓 node_modules：${e.message}。请关闭占用进程或手动 rmdir "${wtNodeModules}" 后重试`);
-          }
-          if (isLink) {
-            try {
-              if (process.platform === 'win32') {
-                // execFileSync 数组形式：不经 shell，防 meta.worktreePath 注入（安全收敛）
-                execFileSync('cmd.exe', ['/c', 'rmdir', wtNodeModules]);
-              } else {
-                unlinkSync(wtNodeModules);
-              }
-            } catch (e) {
-              throw new Error(`worktree node_modules junction 解链失败，阻断 doctor reprovision（不调 provisionDeps 避免经 junction 误改主仓）：${e.message}。请手动 rmdir "${wtNodeModules}" 后重试`);
-            }
-          }
-        }
+        unlinkNodeModulesLinks(wtPath, meta)
       }
       // 触发分流（坑 doctor-reprovision-junction-missing，2026-08-22 实证：junction 未建的
       // missing/failed 场景被 force install 强制重装——install 静默失败面大且慢；lockfile 一致时
@@ -1224,10 +1245,21 @@ export class WorktreeManager {
           if (files.length === 0 || (files.length === 1 && files[0] === META_FILE)) {
             issues.push({ type: 'ghost-dir', name, detail: `空目录/幽灵目录: ${dirPath}`, fixable: true });
             if (fix) {
-              try { rmSync(dirPath, { recursive: true, force: true }); fixed.push(`removed ghost dir: ${name}`); } catch { unfixable.push(`remove failed for: ${name}`); }
+              // 安全删除（坑 ghost-dir-junction-pierce）：统一先解 node_modules junction 再删
+              try { safeRemoveWorktreeDir(dirPath); fixed.push(`removed ghost dir: ${name}`); } catch (e) { unfixable.push(`remove failed for: ${name} (${e.message.slice(0, 120)})`); }
             }
           } else {
-            issues.push({ type: 'ghost-dir-with-files', name, detail: `目录存在但无 meta.json: ${dirPath} (含 ${files.length} 文件)`, fixable: false });
+            // junction 侦测（坑 ghost-dir-junction-pierce）：无 meta 的含文件目录不自动删（内容
+            // 不明，fixable:false 交人工裁决），但必须警示穿透风险 + 给安全手动指引——人工
+            // rm -rf（Git Bash coreutils 跟随 junction）会删主仓 node_modules。
+            const junctionHits = [];
+            for (const cand of [join(dirPath, 'node_modules'), ...files.filter(f => !f.startsWith('.')).slice(0, 20).map(f => join(dirPath, f, 'node_modules'))]) {
+              try { if (lstatSync(cand).isSymbolicLink()) junctionHits.push(relative(dirPath, cand) || '(root)') } catch {}
+            }
+            const junctionNote = junctionHits.length > 0
+              ? ` ⚠️ 含 node_modules junction（${junctionHits.join(', ')}）——手动删除前必须先解链（cmd /c rmdir "<目录>\\<相对路径>"），直接 rm -rf 会穿透删除主仓 node_modules；解链后删除目录或跑 sillyspec worktree doctor --fix`
+              : '';
+            issues.push({ type: 'ghost-dir-with-files', name, detail: `目录存在但无 meta.json: ${dirPath} (含 ${files.length} 文件)${junctionNote}`, fixable: false });
           }
         }
 

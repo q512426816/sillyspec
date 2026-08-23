@@ -44,7 +44,9 @@ export function registerRepoInLocalYaml(yamlPath, key, repoPath) {
 
   const existed = existsSync(yamlPath)
   // CRLF 归一后按 LF 写回（同 task 卡锚点写入的 CRLF 坑；local.yaml 各 CLI 写入口径均 LF）
-  const raw = existed ? readFileSync(yamlPath, 'utf8').replace(/\r\n?/g, '\n') : ''
+  const raw0 = existed ? readFileSync(yamlPath, 'utf8') : ''
+  const hadCr = raw0.includes('\r') // 磁盘原文带 CRLF → 幂等路径也要落盘治愈（见下方幂等分支）
+  const raw = existed ? raw0.replace(/\r\n?/g, '\n') : ''
   const posixPath = String(repoPath).replace(/\\/g, '/')
   const entryLine = `  ${key}: ${posixPath}`
 
@@ -79,6 +81,10 @@ export function registerRepoInLocalYaml(yamlPath, key, repoPath) {
   for (let i = reposIdx + 1; i < end; i++) {
     if (keyRe.test(lines[i])) {
       if (lines[i] === entryLine) {
+        // 坑 register-repo-crlf-idempotent-loop：磁盘原文带 CRLF 时（agent Write 工具/Windows
+        // 编辑器写入），内存归一后比对相等直接跳过 → 磁盘永不治愈 + CLI 报 ✅ 假成功 → 解析侧
+        // （修复前）空 Map → MultiRepoContext 报「未注册」→ 死循环。幂等路径也落盘一次治愈。
+        if (hadCr) write(lines.join('\n'))
         return { fileCreated: false, sectionCreated: false, replaced: false } // 值未变，幂等跳过
       }
       lines[i] = entryLine

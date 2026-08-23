@@ -173,7 +173,12 @@ export function parseHeadCommit(content) {
 export function parseRepoRegistry(yamlText) {
   const reg = new Map()
   if (!yamlText) return reg
-  const lines = yamlText.split('\n')
+  // CRLF 归一（坑 register-repo-crlf-idempotent-loop，2026-08-23 实证：Windows 下 agent Write
+  // 工具/编辑器写出的 local.yaml 带 \r——条目正则 `(.*)$` 的 `.` 不匹配 \r、`$` 又要求真串尾，
+  // 行尾残留 \r 时整条失配 → 空 Map → MultiRepoContext fail-closed 报「未注册」→ register-repo
+  // 幂等跳过不落盘 → 死循环。同文件 parseAllowedPaths/parseDependsOn/parseBaseCommit 均有此
+  // 归一，本函数是唯一缺口）
+  const lines = String(yamlText).replace(/\r\n?/g, '\n').split('\n')
   let startIdx = -1
   for (let i = 0; i < lines.length; i++) {
     if (/^repos:\s*(?:#.*)?$/.test(lines[i])) { startIdx = i; break }

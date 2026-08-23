@@ -512,6 +512,22 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
             console.error(`   ℹ️ 归因提示：主仓检出 ${hitForeign.length} 个并行会话声明的在途文件（${hitForeign.slice(0, 5).join(', ')}${hitForeign.length > 5 ? ' 等' : ''}）——实测失败可能混入他者 WIP 而非本变更问题。待其提交/收尾后复验，仍失败才是本变更的。`)
           }
         }
+        // 第二判据（坑 derived-artifact-stale-baseline）：本变更 apply 的文件（apply-pathspec 落盘）
+        // 与主仓近期提交重叠——本变更旧基线的生成产物可能覆盖了已合入内容，先在新基线重跑生成命令再复验
+        try {
+          const pathspecFile = join(resolveRuntimeRoot(platformOpts, specBase), `apply-pathspec-${changeName}.txt`)
+          if (changeName && existsSync(pathspecFile)) {
+            const ownFiles = new Set(readFileSync(pathspecFile, 'utf8').split('\n').map(l => l.trim()).filter(Boolean).map(f => f.replace(/\\/g, '/')))
+            if (ownFiles.size > 0) {
+              const recent = (gitQuiet(cwd, ['log', '-n', '10', '--name-only', '--pretty=format:']) || '')
+                .split('\n').map(l => l.trim().replace(/\\/g, '/')).filter(Boolean)
+              const overlap = [...new Set(recent)].filter(f => ownFiles.has(f))
+              if (overlap.length > 0) {
+                console.error(`   ℹ️ 归因提示②：本变更有 ${overlap.length} 个文件与主仓最近 10 条提交重叠（${overlap.slice(0, 5).join(', ')}${overlap.length > 5 ? ' 等' : ''}）——若为生成产物（api-types 等），本变更可能在旧基线生成并覆盖了已合入内容；先在新基线重跑生成命令（如 gen:types）再复验。`)
+              }
+            }
+          }
+        } catch { /* 判据②失败不影响主流程 */ }
       } catch { /* 归因提示失败不影响阻断语义 */ }
       console.error('   请修复失败的测试并更新 verify-result.md 后重新完成此步骤。')
       return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)

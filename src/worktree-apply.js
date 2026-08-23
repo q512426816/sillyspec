@@ -520,6 +520,20 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
     if (wtBlob === mainBlob) continue;
     result.hashMismatchFiles.push(f);
   }
+  // 派生产物基线漂移 advisory（坑 derived-artifact-stale-baseline，2026-08-23 实证：多 agent
+  // 并发仓中 worktree 旧基线生成的 api-types 被 apply 落地，把并行变更已合入主仓的新枚举刷掉，
+  // 一次 build 红）。hashMismatchFiles 此前只在 rescue 分类 / merge 冲突时冒头——语义级覆盖
+  // （旧内容文本可合 → --3way 静默成功）零提示。纯 warning 不阻断（生成器类变更的产物是合法
+  // 交付，是否重跑生成命令由 agent 判断）。
+  {
+    const derivedRisk = result.hashMismatchFiles.filter(f => changedFiles.includes(f));
+    if (derivedRisk.length > 0) {
+      result.warnings = (result.warnings || []).concat([
+        `${derivedRisk.length} 个变更文件在 worktree 基线后主仓已有新提交（并行变更可能已合入）：${derivedRisk.slice(0, 5).join(', ')}${derivedRisk.length > 5 ? ' 等' : ''}` +
+        `——若其中含生成产物（api-types/generated 等），本次 apply 可能以旧基线内容覆盖已合入的新内容；apply 后在新基线重跑生成命令（如 gen:types）再验证`
+      ]);
+    }
+  }
 
   // --- 4. 校验：变更文件 ⊆ 清单（无清单则跳过）---
   if (hasAllowList) {
@@ -820,6 +834,17 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
     // --- 8. 成功后自动 cleanup（失败不影响整体结果） ---
     // --skip-overlap 时先查 hasUnappliedChanges：跳过文件未落主仓 → 保留 worktree（不触发
     // cleanup 的拦截横幅吓人，主动判断 + 温和提示）；全部已落地（无跳过残留）才照常清理。
+    // cleanup 返回值必须消费（坑 ghost-dir-junction-pierce，2026-08-23 实证：apply 后 partial
+    // 残留被静默丢弃，用户以为已干净、人工 rm -rf 时穿透 junction 删主仓 node_modules）。
+    const consumeCleanup = (cr) => {
+      if (cr && (cr.result === 'partial' || (Array.isArray(cr.residual) && cr.residual.length > 0))) {
+        result.warnings.push(
+          `⚠️ worktree 部分清理残留（${cr.result}）：${(cr.residual || []).join('; ') || 'worktree 目录'}` +
+          `——Windows 勿直接 rm -rf（会穿透 node_modules junction 删主仓依赖）：先 cmd /c rmdir "<worktree>\\node_modules" 解链再删目录，或跑 sillyspec worktree doctor --fix`
+        )
+      }
+      return cr
+    }
     try {
       if (skipOverlap) {
         const unapplied = wm.hasUnappliedChanges(changeName);
@@ -830,14 +855,14 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
             `（${pend.slice(0, 5).join(', ')}${pend.length > 5 ? ' 等' : ''}）——主仓提交/stash 后重新 sillyspec worktree apply ${changeName} 只应用剩余文件，或确认放弃后 sillyspec worktree cleanup ${changeName} --force`
           );
         } else {
-          wm.cleanup(changeName, { force: true });
+          consumeCleanup(wm.cleanup(changeName, { force: true }));
         }
       } else {
-        wm.cleanup(changeName, { force: true });
+        consumeCleanup(wm.cleanup(changeName, { force: true }));
       }
     } catch (cleanupErr) {
       result.warnings = result.warnings || [];
-      result.warnings.push(`cleanup 失败（不影响应用结果）: ${cleanupErr.message}`);
+      result.warnings.push(`cleanup 失败（不影响应用结果；Windows 手动清理先解 junction 再删，勿 rm -rf）: ${cleanupErr.message}`);
     }
 
   } catch (e) {

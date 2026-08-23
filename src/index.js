@@ -1819,6 +1819,11 @@ SillySpec worktree — git worktree 隔离管理
               console.log(`   原因: in-place 模式没有隔离目录需要清理`);
             } else if (result.result === 'blocked') {
               console.error(`🚫 拒绝清理：有未落主仓交付变更，请先 sillyspec worktree apply ${wtName} 或 --force`);
+            } else if (result.result === 'partial') {
+              // 坑 ghost-dir-junction-pierce：partial 残留此前落进 else 打成「未找到」，用户误以为
+              // 干净、人工 rm -rf 穿透 junction——必须明示残留 + 安全清理指引
+              console.warn(`⚠️ 部分清理（残留：${(result.residual || []).join('; ') || 'worktree 目录'}）`);
+              console.warn(`   Windows 手动清理勿 rm -rf（穿透 node_modules junction 删主仓依赖）：先 cmd /c rmdir "<worktree>\\node_modules" 解链再删，或 sillyspec worktree doctor --fix`);
             } else {
               console.log(`ℹ️  worktree 未找到: ${wtName}`);
             }
