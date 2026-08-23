@@ -108,7 +108,7 @@ scan-profile.js 扫描档位 / concurrent-detect.js 并发检测 / multi-repo-co
   D-03@v1）。
 - `runStage(...)`（`src/run/stage.js:31`）：单阶段执行器，做状态转换校验（调用
   `stage-contract.js` 的 `checkTransition`），逐 step 推进，处理审批门控。
-- `runAutoMode(...)`（`src/run/command.js:1295`）：自动模式，连续跑
+- `runAutoMode(...)`（`src/run/command.js:1309`）：自动模式，连续跑
   `['brainstorm','plan','execute','verify']` 主流程直到 `--done`。
 
 阶段流转语义（grep 自 run/ 模块）：
@@ -203,8 +203,8 @@ SQLite Schema（grep 自 `db.js`，仅记表名 + 用途 + 字段数）：
   - `POST {platform.url}/api/changes/{changeName}/progress` 同步进度（`sync.js:417`）；
   - `POST {platform.url}/api/changes/{changeName}/documents` 同步文档（`sync.js:501`）；
   - 同步完更新 `changes.platform_last_sync`。
-- 审批链路：`GET /api/changes/{name}/approval` 查询（`sync.js:698`，`checkApproval`）+ `approve` / `reject`
-  入口（`sync.js:1361`，共用 `_submitApproval`，端点契约 TBD-hub-api）。
+- 审批链路：`GET /api/changes/{name}/approval` 查询（`sync.js:731`，`checkApproval`）+ `approve` / `reject`
+  入口（`sync.js:1386`，共用 `_submitApproval`，端点契约 TBD-hub-api）。
 - 配置读 `.sillyspec/local.yaml` platform 段（connect/disconnect 用文本级改写保留注释）。
 - platform 子命令（connect / disconnect / sync / sync-docs / status / pull / resolve /
   approve / reject / pointer）见 `src/index.js:1263`。主 CLI 无 WebSocket 依赖。
