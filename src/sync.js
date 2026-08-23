@@ -415,6 +415,19 @@ export class SyncManager {
       return { synced: 0, errors: ['未指定变更名称'] };
     }
 
+    // 冲突降噪（坑 sync-conflict-banner-spam，2026-08-23 实证：push 冲突落 sync-conflict 文件后，
+    // 每步完成的 triggerSync 都会再 push 再 409 再打全幅双线横幅——「已卡死不会自愈」连环刷屏，
+    // 观感像致命错误。冲突文件本身就代表「待人工三选一的未决状态」，文件在 = 用户已被告知，
+    // 后续自动同步单行提示即可（可见但不吓人）；resolve 后文件删除，推送自动恢复。fromResolve
+    // （keep-local 自动重推）不在此列——resolve 流程刚删冲突文件，它需要真实 push 判定平台态。
+    if (!fromResolve) {
+      const pendingConflict = this.readConflictFile(changeName);
+      if (pendingConflict) {
+        console.warn(`⚠️ [sync] 变更 ${changeName} 存在未决平台冲突，跳过自动推送。处理：sillyspec platform resolve ${changeName} --keep-local | --take-platform | --abort`);
+        return { synced: 0, errors: [`conflict pending: ${changeName}`], conflict: true, suppressed: true };
+      }
+    }
+
     // 检查变更目录是否存在（归档后目录已移走但 DB 仍有最终状态需推平台，serializeForSync 从
     // DB 读不依赖文件系统目录）。归档终态探测（坑 post-archive-sync-noise，2026-08-21 实证：
     // 归档尾声连打「目录不存在/变更不存在」warn，观感像出错）：确认已归档（changes/archive/
@@ -545,6 +558,26 @@ export class SyncManager {
         continue;
       }
 
+      // push 侧内容一致自愈（坑 push-409-foreign-noise，2026-08-23 实证：他机/部署重推了内容
+      // 相同的进度——pull 侧已有 _progressContentEquals 自愈（坑 pull-deploy-noise-conflict），
+      // push 409 路径没有：外来噪声形态落真冲突 + 横幅 + 人工 resolve，而内容其实零分歧）。
+      // 409 回执的 platform_progress 与本次待推内容过同一比对（忽略时间戳列），一致 → 平台
+      // 「更新」只是噪声重推，本地无可丢失 → 跳过本次推送 + base_ts 推进到平台 ts（与
+      // resolve --keep-local 同语义，自动闭环），不落冲突文件。内容不同 → 真分歧，维持原判。
+      try {
+        if (platformProgress && this._progressContentEquals(progressData, platformProgress)) {
+          try {
+            const { ProgressManager } = await import('./progress.js');
+            const pm = new ProgressManager({ specDir: safePlatformSpecDir(this.cwd) });
+            pm._ensureDB(this.cwd).getDb().prepare(
+              'UPDATE changes SET last_synced_platform_ts = MAX(?, COALESCE(last_synced_platform_ts, ?)) WHERE name = ?'
+            ).run(platformLastPushedAt || pushedAt, platformLastPushedAt || pushedAt, changeName);
+          } catch {}
+          console.warn(`⚠️ [sync] push 409 内容一致自愈: 平台 ts=${platformLastPushedAt} 为外来噪声重推（六表内容与本地一致），base_ts 已推进，不落冲突文件`);
+          return { synced: 1, errors: [], selfHealed: true, reason: 'push 409 平台内容与本地一致（外来噪声重推），base_ts 已推进' };
+        }
+      } catch { /* 比对失败维持原判（fail-closed 到真冲突分支） */ }
+
       // resolve --keep-local 的自动重推再撞 409：不落新冲突文件、不打「已卡死」横幅——
       // 原 conflict 已按用户裁决处理完（base_ts 已推进），此刻的 409 只是「平台在用户裁决期间
       // 又动了」；立即落新文件会破坏「keep-local 清冲突文件回 clean」的生命周期契约（冲突文件
@@ -561,7 +594,7 @@ export class SyncManager {
       console.warn('');
       console.warn('⚠️⚠️⚠️════════════════════════════════════════════════════');
       console.warn(`⚠️ 平台同步冲突：变更「${changeName}」推送被拒（base_ts 过期，平台已有更新）`);
-      console.warn('⚠️ 该变更的自动同步已卡死，不会自愈——需人工 resolve 才能恢复：');
+      console.warn('⚠️ 该变更的自动同步已暂停，等待人工 resolve 恢复（期间不再重复刷本横幅，后续自动同步单行提示）：');
       console.warn(`⚠️   1. sillyspec platform status     # 查看未决冲突`);
       console.warn(`⚠️   2. sillyspec platform resolve ${changeName} --keep-local | --take-platform | --abort`);
       console.warn(`⚠️   3. sillyspec platform sync --change ${changeName}`);
@@ -803,7 +836,12 @@ export class SyncManager {
         if (Array.isArray(v)) return v.map(strip);
         if (v && typeof v === 'object') {
           const out = {};
-          for (const [k, val] of Object.entries(v).sort()) {
+          // sort 必须按 key 字符串比较（坑 content-equals-sort-typeerror，2026-08-23 实证：
+          // 默认比较器把 [key, value] 元素转字符串，serializeForSync 输出的 project 字段是
+          // null-prototype 对象（不可转原始值）→ sort 抛 TypeError 被下方 catch 吞成恒 false
+          // ——pull/push 两侧内容一致自愈形同虚设，部署噪声全部落真冲突人工 resolve）。
+          const entries = Object.entries(v).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+          for (const [k, val] of entries) {
             if (IGNORE_KEYS.has(k)) continue;
             out[k] = strip(val);
           }
@@ -1023,7 +1061,7 @@ export class SyncManager {
         console.warn('');
         console.warn('⚠️⚠️⚠️════════════════════════════════════════════════════');
         console.warn(`⚠️ 平台同步冲突：变更「${changeName}」pull 判定冲突（本地有未同步改动且平台已更新，base_ts 过期）`);
-        console.warn('⚠️ 该变更的自动同步已卡死，不会自愈——需人工 resolve 才能恢复：');
+        console.warn('⚠️ 该变更的自动同步已暂停，等待人工 resolve 恢复（推送侧后续自动同步单行提示，不再重复刷本横幅）：');
         console.warn(`⚠️   1. sillyspec platform status     # 查看未决冲突`);
         console.warn(`⚠️   2. sillyspec platform resolve ${changeName} --keep-local | --take-platform | --abort`);
         console.warn(`⚠️   3. sillyspec platform sync --change ${changeName}`);

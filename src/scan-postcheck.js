@@ -10,6 +10,7 @@ import { join, basename } from 'path'
 import { SCAN_STATUS, CHECK_SEVERITY, SCAN_REQUIRED_DOCS, SCAN_REQUIRED_DOCS_QUICK } from './constants.js'
 import { validateScriptCommands } from './stages/cmd-existence.js'
 import { git } from './git-helper.js'
+import { nowWallClock } from './datetime.js'
 
 const REQUIRED_SCAN_DOCS = SCAN_REQUIRED_DOCS
 
@@ -394,7 +395,7 @@ export function fixScanDocHeaders({ cwd, specDir = null, project = null }) {
   try {
     author = git(cwd, ['config', 'user.name']) || 'unknown'
   } catch { /* git 不可用 → unknown */ }
-  const now = new Date().toISOString().slice(0, 19).replace('T', ' ')
+  const now = nowWallClock()
 
   const fixed = []
   const skipped = []

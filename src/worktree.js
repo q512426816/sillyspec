@@ -1043,11 +1043,18 @@ export class WorktreeManager {
         force: !opts.relinkFirst,
       }) || {};
       const metaPath = join(this.getWorktreePath(name), META_FILE);
-      // 成功重供时清掉旧 depsError（provisionDeps 成功结果不含该键，{...meta,...deps} 会残留旧值）
+      // 错误保真（坑 doctor-reprovision-error-erased，2026-08-23 实证：provisionDeps 的子模块
+      // 后验证/mismatch 摘要追加 depsError 但不降级 depsStatus——原「depsStatus!=='failed' 即删
+      // depsError」把失败证据从 meta 抹掉，msg 也不含 → doctor 报 re-provisioned 成功而子模块
+      // 实际无链接无提示）。三改：①本次供给全量干净（无 depsError 且非 failed）才清旧值；
+      // ②msg 拼上 depsError；③failed/有错误 → ok:false 落 unfixable（原无条件 ok:true 把失败
+      // 也进 fixed 数组，CLI 打 ✅ 误导「已修好」）。
+      const hasDepError = deps.depsStatus === 'failed' || !!deps.depsError;
       const merged = { ...meta, ...deps };
-      if (deps.depsStatus !== 'failed') delete merged.depsError;
+      if (!hasDepError) delete merged.depsError;
       writeMetaAtomic(metaPath, merged);
-      return { ok: true, msg: `re-provisioned ${name}: depsStatus=${deps.depsStatus}` };
+      const msg = `re-provisioned ${name}: depsStatus=${deps.depsStatus}` + (deps.depsError ? `；⚠️ ${deps.depsError}` : '');
+      return hasDepError ? { ok: false, msg } : { ok: true, msg };
     } catch (e) {
       return { ok: false, msg: `re-provision failed for ${name}: ${e.message}` };
     }

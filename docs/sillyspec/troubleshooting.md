@@ -570,3 +570,25 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 2. 四字段防线前移三层：① step2 prompt 内加「末步预告」段——四字段硬校验在实现阶段即告知，且点明「结果：验证情况」素材在本步产生、实现摘要当场记下具体验证数据（测试数/lint 告警数），step3 直接引用；② 缺 --output 拦截文案补推荐四参数形式（--req/--cause/--solution/--result，CLI 自动合成）；③ 四标签校验失败打回文案同样补四参数——打回后第二次照抄四参数不再踩旧形式嵌套全角冒号坑。既有 step2 --done 推进预告保留不动。
 
 测试 quick-foreign-session-declared.test.mjs（36 断言：豁免判定 8 形态 / 采集枚举·排除·僵尸·容错·runtimeRoot / 软警告渲染 / CLI e2e 注入链路 + 无声明对照仍拦）、quick-laststep-fourfields-preview.test.mjs 扩展（+8 断言：打回文案四参数 / 缺 --output 文案 / step2 prompt 预告渲染）。**关联记忆**：`[[sillyspec-foreign-session-declared-false-block]]`、`[[sillyspec-quick-step3-four-fields-late]]`
+
+## 36. 五坑：doctor 假 re-provisioned / apply 并发互踩+整批跳过 / push 409 内容一致自愈失效（sort TypeError）/ 409 横幅刷屏 / created_at UTC（2026-08-23 闭环）
+
+**症状（用户实证）**：
+1. `worktree doctor --fix` 报 re-provisioned 但实际没建 node_modules 链接（手工 junction 绕过）。
+2. apply 在主仓有并行在途变更时只会整批跳过并留下混合状态（rescue 手动 cp 后主仓半批未提交 + worktree 半批 + 清理被阻）；且并行会话间无互斥——两个会话同时操作 main 互相清文件，只能靠人判断收手。
+3. 平台同步 409 冲突需手动 resolve，报错较吓人（双线横幅 +「已卡死不会自愈」每步自动同步重复刷屏）。
+4. taskcard 骨架 created_at 是 UTC（01:39），子代理两次手工改。
+
+**根因**：
+1. tryLink 的 preexisting 分支把 worktree node_modules 的**真实目录**（install 半途中断残留）当「已有依赖」返回 ok → 根快路径标 depsStatus=linked，链接没建且后验证 existsSync 对空/残目录照样过；叠加两条静默路径：子模块 mismatch/skipped 只写 depsModules 零消费（doctor 报成功而子模块无链接无提示）、_doctorReprovision 在 depsStatus≠failed 时删 meta.depsError（4b05567 的子模块验证错误被抹）且无条件 ok:true（failed 也进 fixed 打 ✅）。另有 broken junction（existsSync false 但目录项占位）mklink 撞名死锁。
+2. 主仓 main 工作区是共享临界区（rollbackApply 的 checkout HEAD / applyByMerge 的 merge / 成功后 cleanup 都直接改主仓），apply 链零互斥；overlap 拦截只能整批短路，rescue 手动 cp 是唯一部分应用路径但无闭环。
+3. **pull 侧内容一致自愈（坑 33-③）从未真正生效**：_progressContentEquals 的 `Object.entries(v).sort()` 用默认比较器（把 [key,value] 元素转字符串），serializeForSync 输出的 project 字段是 null-prototype 对象（不可转原始值）→ sort 抛 TypeError 被 catch 吞成恒 false——部署噪声全部落真冲突人工 resolve；push 409 侧则根本没有内容比对（pull 有 _progressContentEquals 而 push 无）。冲突落文件后 sync() 不检查既有冲突文件 → 每步 triggerSync 再 409 再刷全幅横幅。
+4. taskcard/scan 文档头/scan updated_at（<now-iso-datetime>）/module-map generated_at 四处人读字段用 toISOString() 落 UTC（机器可读处用 ISO 是惯例不是坑）。
+
+**修复（2026-08-23）**：
+1. tryLink preexisting 分支 lstat 区分：指向 main 的 link 幂等✓ / 指向别处的 link 尊重不 clobber / **真实目录 → ok:false+preexistingDir**（根快路径降级 install 真重建说真话；linkOneDir 视为子模块本地安装 installed 保留，不误报 failed）；mklink 前清 broken junction（lstat 是 link 而 existsSync false → rmdir 后重建）；checkDepsFreshness 补 2b——meta.depsModules 中 linked 子模块逐一核验实存，缺失 → missing → doctor --fix relinkFirst 自愈闭环；provisionDeps 把 mismatch 子模块摘要进 depsError（可见但不降级，不卡 execute deps 门）；_doctorReprovision 三改：全量干净才清旧 depsError、msg 拼上错误、failed/有错 → ok:false 落 unfixable（CLI 不打 ✅）。
+2. apply 主仓互斥锁 withMainApplyLock（复用 quicklog withFileLock + content 写 {pid,changeName,startedAt} 供报错展示；O_EXCL + 10min stale 偷锁 + 60s 等待；手动 apply 与 assess 自动 apply 两入口包裹，checkOnly 只读不加锁；抢不到 → fail-closed 报错含持有者/删锁指引）；`--skip-overlap` 显式 opt-in 部分应用：重叠文件从 changedFiles/deletedFiles/hashMismatchFiles 剔除（记 skippedOverlapFiles + warning），非重叠子集正常 apply，step8 改非 force——hasUnappliedChanges 护栏（主仓工作区逐字节降噪层）拦住 cleanup，跳过文件安全留 worktree；全部重叠 → 明确报「无可应用子集」；拦截文案补 --skip-overlap 出路（替代 rescue cp）。
+3. _progressContentEquals 的 sort 改按 key 字符串比较（不转 value）——pull/push 两侧内容一致自愈真正生效；push 409 补内容一致自愈（409 回执 platform_progress vs 本地六表过同一比对，一致 → 跳过推送 + base_ts 推进到平台 ts + 单行 reason，不落冲突文件）；sync() 开头冲突降噪（已有 sync-conflict 文件且非 fromResolve → 单行提示 + 跳过推送，不再重复 409/横幅；resolve 后文件删除即恢复）；push/pull 横幅措辞「已卡死不会自愈」→「已暂停，等待人工 resolve」。
+4. 新增 src/datetime.js 的 nowWallClock()（本地墙钟 YYYY-MM-DD HH:mm:ss，手工拼接零 locale 依赖），四处替换（taskcard created_at / scan-fix-headers created_at / <now-iso-datetime> 占位符值——名字带 iso 是历史遗留，注释说明 / _module-map generated_at）；created_at 是纯文档字段（postcheck/gates 不读格式）改值零破坏。
+
+测试 worktree-deps-fakelink.test.mjs（8 断言：真实目录残留非假 linked / 子模块 installed 真话 / broken junction 重建 / checkDepsFreshness 子模块 missing 自愈闭环）、worktree-apply-mutex-skipoverlap.test.mjs（19 断言：--skip-overlap 部分应用+worktree 保留 / 全部重叠报错 / 无 flag 零回归 / 锁被占 fail-closed 含持有者 / 正常路径透传+释放）、platform-sync-self-heal.test.mjs 扩展（+7 断言：push 409 内容一致自愈 / 冲突文件单行降噪不刷横幅）、datetime-wallclock.test.mjs（5 断言）、taskcard.test.mjs C1 补本地墙钟断言；platform-sync-silent-death 横幅措辞断言同步更新。**关联记忆**：`[[sillyspec-provision-preexisting-dir-fake-linked]]`、`[[sillyspec-main-apply-no-mutex]]`、`[[sillyspec-apply-overlap-all-or-nothing]]`、`[[sillyspec-content-equals-sort-typeerror]]`、`[[sillyspec-push-409-foreign-noise]]`、`[[sillyspec-sync-conflict-banner-spam]]`、`[[sillyspec-taskcard-created-at-utc]]`

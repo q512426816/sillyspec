@@ -329,7 +329,49 @@ function validateCrossRepoNoOp(ctx, projectRoot, changeName) {
  *   crossRepoValidated?: Array<{ repo: string, head: string }>
  * }}
  */
-export function applyWorktree(changeName, { cwd, checkOnly = false, merge = false, base = 'merge-base', ctx = null } = {}) {
+/**
+ * 主仓 apply 互斥锁（坑 main-apply-no-mutex，2026-08-23 实证：两个会话同时 apply 操作 main
+ * 工作区互相清文件——rollbackApply 的 git checkout HEAD、applyByMerge 的 merge、成功后的自动
+ * cleanup 都直接改主仓，共享临界区此前零互斥，只能靠人判断收手）。
+ *
+ * 锁粒度 = 主仓级（竞争资源是 main 工作区本身，非 change）：O_EXCL 文件锁复用 quicklog 的
+ * withFileLock（stale 偷锁 + rename 防 TOCTOU），锁内容写 {pid, changeName, startedAt} 供超时
+ * 报错展示持有者。staleMs 10min（apply 大 diff/deps 可慢）；抢锁等待 60s 仍失败 → fail-closed
+ * 报错退出：apply 是破坏性操作，并发互踩不可自动恢复，宁可明确失败让人重试，不硬闯。
+ * checkOnly（assess 只读路径）不加锁。
+ */
+export async function withMainApplyLock(projectRoot, changeName, fn, opts = {}) {
+  const { withFileLock } = await import('./quicklog.js');
+  const lockPath = join(projectRoot, '.sillyspec', '.runtime', 'main-apply.lock');
+  const holder = JSON.stringify({ pid: process.pid, changeName, startedAt: new Date().toISOString() });
+  const { timeoutMs = 60 * 1000, staleMs = 10 * 60 * 1000, retryMs = 200 } = opts;
+  try {
+    return await withFileLock(lockPath, fn, {
+      content: holder,
+      staleMs,
+      timeoutMs,
+      retryMs,
+    });
+  } catch (e) {
+    if (/文件锁超时/.test(String(e.message))) {
+      let holderInfo = '';
+      try {
+        const raw = readFileSync(lockPath, 'utf8');
+        try {
+          const h = JSON.parse(raw);
+          holderInfo = `（持有者: pid=${h.pid}, change=${h.changeName}, 始于 ${h.startedAt}）`;
+        } catch { holderInfo = `（持有者标识: ${raw.slice(0, 120)}）`; }
+      } catch { /* 锁文件已被释放（竞态窗口）→ 无持有者信息 */ }
+      throw new Error(
+        `主仓 apply 互斥锁被占用${holderInfo}：另一会话正在向主仓应用变更（apply 会写主仓工作区/回滚/清理，并发互踩会互相清文件）。` +
+        `等它完成后重试即可；若确认持有进程已崩溃退出，删除锁文件后重试：${lockPath}`
+      );
+    }
+    throw e;
+  }
+}
+
+export function applyWorktree(changeName, { cwd, checkOnly = false, merge = false, base = 'merge-base', ctx = null, skipOverlap = false } = {}) {
   const projectRoot = cwd || process.cwd();
   const wm = new WorktreeManager({ cwd: projectRoot });
   const meta = wm.getMeta(changeName);
@@ -344,6 +386,7 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
     errors: [],
     merged: false,
     crossRepoValidated: [],
+    skippedOverlapFiles: [],
   };
 
   // --- 0. 跨仓 task no-op 校验（task-05 / D-009） ---
@@ -518,6 +561,29 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
       )].filter(f => !f.startsWith('.sillyspec/') && f !== 'meta.json');
       const overlapDirty = dirtyFiles.filter(f => changedFiles.includes(f));
       if (overlapDirty.length > 0) {
+        // --skip-overlap（坑 apply-overlap-all-or-nothing，2026-08-23 实证：多 agent 并发仓主仓
+        // 常态有在途变更，overlap 整批拦截使 apply 基本不可用，rescue 手动 cp 又留混合状态）：
+        // 显式 opt-in 剔除重叠文件、应用干净子集。重叠文件留在 worktree——step8 非 force
+        // cleanup 被 hasUnappliedChanges 护栏拦住（主仓工作区逐字节降噪层只剔除已应用文件），
+        // 待主仓干净后重新 apply（此时只剩剩余文件）或人工裁决。
+        if (skipOverlap && !checkOnly) {
+          const skipSet = new Set(overlapDirty);
+          result.skippedOverlapFiles = overlapDirty.slice();
+          changedFiles = changedFiles.filter(f => !skipSet.has(f));
+          result.changedFiles = changedFiles;
+          result.deletedFiles = deletedFiles.filter(f => !skipSet.has(f));
+          result.hashMismatchFiles = (result.hashMismatchFiles || []).filter(f => !skipSet.has(f));
+          if (changedFiles.length === 0) {
+            result.errors.push(
+              `--skip-overlap：本次 ${overlapDirty.length} 个变更文件全部与主仓未提交改动重叠，无可应用子集：\n  ${overlapDirty.join('\n  ')}\n` +
+              `请先提交/stash 主仓改动后重试（不带 --skip-overlap）。`
+            );
+            return result;
+          }
+          result.warnings = (result.warnings || []).concat([
+            `--skip-overlap：跳过 ${overlapDirty.length} 个与主仓未提交改动重叠的文件（留在 worktree，未应用）：${overlapDirty.join(', ')}——待主仓提交/stash 后重新 apply 只应用剩余文件，或确认放弃后 cleanup --force`
+          ]);
+        } else {
         // 重叠拦截：只有与本次变更同文件的未提交改动才无法安全 apply（列重叠文件，非全部脏文件）
         const rescueDirty = computeRescueDirtyFiles(projectRoot);
         result.rescueCommands = generateRescueCommands({
@@ -531,6 +597,7 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
         result.errors.push(
           `主工作区以下未提交文件与本次 apply 的变更重叠，git apply 无法安全应用：\n  ${overlapDirty.join('\n  ')}\n` +
           `请先提交或暂存这些改动，再重新 apply：\n  git add -A && git commit -m "..."   或   git stash\n` +
+          `或应用非重叠部分（重叠文件留在 worktree，主仓干净后重新 apply 只补剩余）：\n  sillyspec worktree apply ${changeName} --skip-overlap\n` +
           (result.rescueCommands.commands.length > 0 || result.rescueCommands.warnings.length > 0
             ? `或手动 rescue（旁路 git apply，逐文件 cp 安全子集；cp 后需手动 sillyspec worktree cleanup ${changeName}）：\n` +
               result.rescueCommands.commands.map(c => `  ${c}`).join('\n') +
@@ -539,6 +606,7 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
             : '')
         );
         if (!checkOnly) return result; // checkOnly 收集不短路（一次报全）；真实 apply 短路
+        }
       } else {
         // 无关脏文件放行（只校验重叠文件）：--3way 若因 autocrlf 报 does not match index 会被
         // step7 catch 回滚（交集空前提下无损，见上注释），stash 后重试即可——不再硬挡 rescue 手动路径
@@ -559,6 +627,27 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
     // 如果脏文件和本次 apply 的文件有交集 → 报错
     const conflictDirty = mainDirtyFiles.filter(f => changedFiles.includes(f));
     if (conflictDirty.length > 0) {
+      // --skip-overlap 同款剔除（4.5 过滤后此处残余多为 staged 口径差集，防御性同处理）
+      if (skipOverlap && !checkOnly) {
+        const skipSet5a = new Set(conflictDirty);
+        for (const f of conflictDirty) {
+          if (!result.skippedOverlapFiles.includes(f)) result.skippedOverlapFiles.push(f);
+        }
+        changedFiles = changedFiles.filter(f => !skipSet5a.has(f));
+        result.changedFiles = changedFiles;
+        result.deletedFiles = deletedFiles.filter(f => !skipSet5a.has(f));
+        result.hashMismatchFiles = (result.hashMismatchFiles || []).filter(f => !skipSet5a.has(f));
+        if (changedFiles.length === 0) {
+          result.errors.push(
+            `--skip-overlap：变更文件全部与主仓未提交改动重叠，无可应用子集：\n  ${conflictDirty.join('\n  ')}\n` +
+            `请先提交/stash 主仓改动后重试。`
+          );
+          return result;
+        }
+        result.warnings = (result.warnings || []).concat([
+          `--skip-overlap（5a 口径）：再剔除 ${conflictDirty.length} 个重叠文件：${conflictDirty.join(', ')}`
+        ]);
+      } else {
       const rescueDirty5a = computeRescueDirtyFiles(projectRoot);
       result.rescueCommands = generateRescueCommands({
         changedFiles, dirtyFiles: rescueDirty5a, hashMismatchFiles: result.hashMismatchFiles,
@@ -566,6 +655,7 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
       });
       result.errors.push(
         `主工作区有以下未 commit 的变更，会影响 apply：\n  ${conflictDirty.join('\n  ')}\n请先 commit 或 stash 这些变更。` +
+        `或应用非重叠部分：sillyspec worktree apply ${changeName} --skip-overlap` +
         (result.rescueCommands.commands.length > 0 || result.rescueCommands.warnings.length > 0
           ? `或手动 rescue（旁路 git apply，逐文件 cp 安全子集；cp 后需手动 sillyspec worktree cleanup ${changeName}）：\n` +
             result.rescueCommands.commands.map(c => `  ${c}`).join('\n') +
@@ -574,6 +664,7 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
           : '')
       );
       if (!checkOnly) return result; // checkOnly 收集不短路（一次报全）；真实 apply 短路
+      }
     }
   }
 
@@ -713,8 +804,23 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
     } catch { /* pathspec 落盘失败不影响 apply 结果 */ }
 
     // --- 8. 成功后自动 cleanup（失败不影响整体结果） ---
+    // --skip-overlap 时先查 hasUnappliedChanges：跳过文件未落主仓 → 保留 worktree（不触发
+    // cleanup 的拦截横幅吓人，主动判断 + 温和提示）；全部已落地（无跳过残留）才照常清理。
     try {
-      wm.cleanup(changeName, { force: true });
+      if (skipOverlap) {
+        const unapplied = wm.hasUnappliedChanges(changeName);
+        if (unapplied.hasChanges) {
+          const pend = unapplied.changedFiles || [];
+          result.warnings.push(
+            `worktree 已保留（--skip-overlap 有未应用文件）：${pend.length} 个文件仍在 worktree` +
+            `（${pend.slice(0, 5).join(', ')}${pend.length > 5 ? ' 等' : ''}）——主仓提交/stash 后重新 sillyspec worktree apply ${changeName} 只应用剩余文件，或确认放弃后 sillyspec worktree cleanup ${changeName} --force`
+          );
+        } else {
+          wm.cleanup(changeName, { force: true });
+        }
+      } else {
+        wm.cleanup(changeName, { force: true });
+      }
     } catch (cleanupErr) {
       result.warnings = result.warnings || [];
       result.warnings.push(`cleanup 失败（不影响应用结果）: ${cleanupErr.message}`);

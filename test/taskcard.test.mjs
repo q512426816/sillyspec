@@ -106,6 +106,15 @@ console.log('--- C1: 单任务生成（标题从 plan.md checkbox 行带出）--
   assertTrue(card.includes("title_zh: '实现错误常量模块'"), 'title_zh 自动取自 plan.md 任务名')
   assertTrue(card.includes("author: 't'"), 'author 取 git config user.name')
   assertTrue(/created_at: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(card), 'created_at 为时间戳格式')
+  // 坑 taskcard-created-at-utc：created_at 须为本地墙钟（原 toISOString 落 UTC，本地 09:39 写 01:39）。
+  // 比对到分钟（生成到断言间隔毫秒级，跨分钟窗口可忽略）。
+  {
+    const cm = card.match(/created_at: (\d{4}-\d{2}-\d{2} \d{2}:\d{2}):\d{2}/)
+    const n = new Date()
+    const p = (x) => String(x).padStart(2, '0')
+    const expect = `${n.getFullYear()}-${p(n.getMonth() + 1)}-${p(n.getDate())} ${p(n.getHours())}:${p(n.getMinutes())}`
+    assertTrue(cm && cm[1] === expect, `created_at 为本地墙钟（卡上 ${cm && cm[1]} vs 本地 ${expect}）`)
+  }
   cleanup(d)
 }
 

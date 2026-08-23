@@ -176,12 +176,17 @@ execute 还有**第二道**独立的 stage 级审查：除逐 task review.json �
 ```bash
 sillyspec worktree apply <变更名>              # 校验并应用 worktree 变更到主工作区
 sillyspec worktree apply <变更名> --check-only # 只检查不应用
+sillyspec worktree apply <变更名> --skip-overlap # 主仓有并行在途变更时：跳过重叠文件，只应用非重叠子集
 sillyspec worktree assess <变更名>             # 风险审计 + 自动 apply
 sillyspec worktree list                        # 列出所有活跃 worktree
 sillyspec worktree meta <变更名>               # 读取 worktree meta.json
 sillyspec worktree cleanup <变更名>            # 清理 worktree
 sillyspec worktree doctor [--fix]              # 健康检查 + 修复
 ```
+
+**apply 并发要点（多 agent 仓库）**：
+- **主仓互斥锁**：apply 内置主仓级互斥（`.sillyspec/.runtime/main-apply.lock`，10 分钟 stale）——两会话同时 apply 会报「互斥锁被占用（持有者: pid=…, change=…）」并退出，等对方完成重试即可；确认持有进程已崩溃时按报错里的路径删锁。
+- **`--skip-overlap`**：主仓有与本次变更**同文件**的未提交改动（并行会话在途变更）时，默认整批拦截；带 `--skip-overlap` 则只应用非重叠子集，重叠文件安全留在 worktree（不覆盖主仓在途改动），输出后续指引——主仓提交/stash 后重新 apply 只补剩余文件，或确认放弃后 `cleanup --force`。优先用这条路，别再走 rescue 手动 cp。
 
 ## 阶段流转
 

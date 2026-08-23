@@ -1547,11 +1547,12 @@ SillySpec worktree — git worktree 隔离管理
         }
         case 'apply': {
           if (!wtName) {
-            console.error('❌ 用法: sillyspec worktree apply <change-name> [--check-only] [--base merge-base|baseline] [--merge]');
+            console.error('❌ 用法: sillyspec worktree apply <change-name> [--check-only] [--base merge-base|baseline] [--merge] [--skip-overlap]');
             process.exit(1);
           }
           const checkOnly = args.includes('--check-only');
           const merge = args.includes('--merge');
+          const skipOverlap = args.includes('--skip-overlap');
 
           // 解析 --base 参数（默认 merge-base）
           let base = 'merge-base';
@@ -1565,7 +1566,7 @@ SillySpec worktree — git worktree 隔离管理
             base = baseVal;
           }
 
-          const { applyWorktree } = await import('./worktree-apply.js');
+          const { applyWorktree, withMainApplyLock } = await import('./worktree-apply.js');
           // W3 task-09：apply 链路构造 ctx（D-013），让 task-05 applyWorktree 按 ctx 区分主仓 A5 / 跨仓 no-op。
           // 跨仓 apply=no-op（G1 D-009）：校验 review.head 是跨仓真实 commit + 跳过 wm.cleanup。
           // ctx 构造 fail-closed（约束②）——跨仓配置错时 apply 必须阻断（走错仓=数据所有权事故），不降级。
@@ -1577,7 +1578,17 @@ SillySpec worktree — git worktree 隔离管理
             console.error(`❌ apply 失败：跨仓 MultiRepoContext 构造失败（${e.message}）`);
             process.exit(1);
           }
-          const result = applyWorktree(wtName, { cwd: dir, checkOnly, merge, base, ctx: _applyCtx });
+          // 主仓 apply 互斥锁（坑 main-apply-no-mutex）：真 apply（非 checkOnly）在锁内跑——
+          // apply 链（rollback/merge/cleanup）直接改主仓工作区，两会话并发互踩会互相清文件。
+          let result;
+          try {
+            result = checkOnly
+              ? applyWorktree(wtName, { cwd: dir, checkOnly, merge, base, ctx: _applyCtx, skipOverlap })
+              : await withMainApplyLock(dir, wtName, () => applyWorktree(wtName, { cwd: dir, checkOnly, merge, base, ctx: _applyCtx, skipOverlap }));
+          } catch (lockErr) {
+            console.error(`❌ ${lockErr.message}`);
+            process.exit(1);
+          }
 
           if (result.errors.length > 0) {
             console.error(`❌ 校验失败:`);
@@ -1685,8 +1696,15 @@ SillySpec worktree — git worktree 隔离管理
           console.log('');
           if (assessment.decision === 'SAFE' || assessment.decision === 'WARNING') {
             console.log('Action: auto-applying...');
-            const { applyWorktree } = await import('./worktree-apply.js');
-            const applyResult = applyWorktree(wtName, { cwd: dir, ctx: _assessCtx });
+            const { applyWorktree, withMainApplyLock } = await import('./worktree-apply.js');
+            // 主仓 apply 互斥锁（与手动 apply 同款）：自动 apply 同样改主仓工作区，必须互斥
+            let applyResult;
+            try {
+              applyResult = await withMainApplyLock(dir, wtName, () => applyWorktree(wtName, { cwd: dir, ctx: _assessCtx }));
+            } catch (lockErr) {
+              console.error(`❌ 自动 apply 未执行：${lockErr.message}`);
+              break;
+            }
             if (applyResult.errors.length > 0) {
               console.error('❌ apply 失败:', applyResult.errors.join('; '));
             } else {

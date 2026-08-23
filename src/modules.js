@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { gitQuiet } from './git-helper.js';
+import { nowWallClock } from './datetime.js';
 
 
 /**
@@ -112,7 +113,7 @@ export async function rebuildModuleMap(cwd, { force = false } = {}) {
 
   // 生成新的 _module-map.yaml
   // 保留已有的完整字段，补齐新卡片
-  const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
+  const now = nowWallClock();
   let headCommit = '';
   try {
     // QUAL-01 收口：走 git-helper 统一入口（safe.directory + 数组形式）

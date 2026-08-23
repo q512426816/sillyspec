@@ -32,13 +32,15 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms))
  * 与 rename 之间），相比旧实现的必现双进已可忽略。
  * @param {string} lockPath 锁文件路径（建议与被保护文件同目录）
  * @param {() => (any|Promise<any>)} fn 临界区
- * @param {{staleMs?:number, timeoutMs?:number, retryMs?:number}} opts
+ * @param {{staleMs?:number, timeoutMs?:number, retryMs?:number, content?:string}} opts
+ *   content：锁文件内容（默认 pid-randomId）。供超时报错时展示持有者语义（如 apply 锁写
+ *   {pid, changeName}）——仅展示用途，抢占/偷锁逻辑只比对内容一致性不解析语义。
  */
 export async function withFileLock(lockPath, fn, opts = {}) {
-  const { staleMs = 30000, timeoutMs = 10000, retryMs = 50 } = opts
+  const { staleMs = 30000, timeoutMs = 10000, retryMs = 50, content = null } = opts
   mkdirSync(dirname(lockPath), { recursive: true })
   const start = Date.now()
-  const myId = `${process.pid}-${randomBytes(6).toString('hex')}`
+  const myId = content || `${process.pid}-${randomBytes(6).toString('hex')}`
   let fd = null
   // 抢锁循环
   while (true) {

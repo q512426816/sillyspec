@@ -23,6 +23,7 @@ import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs'
 import { stageRegistry } from '../stages/index.js'
 import { resolvePromptIncludes, resolveRuntimeRoot, safeGit, WAIT_MARKER_RE, QUICK_SID_RE } from './shared.js'
 import { renderStageContract } from '../stage-contract-spec.js'
+import { nowWallClock } from '../datetime.js'
 import { parseModuleMapSimple } from '../modules.js'
 import { REVIEW_SCHEMA_VERSION, isValidExecuteRunId } from '../task-review.js'
 
@@ -228,16 +229,18 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
       promptText = promptText.replace(/<git-user>/g, 'unknown')
     }
   }
-  // 替换时间戳占位符
+  // 替换时间戳占位符（本地墙钟统一走 nowWallClock——坑 taskcard-created-at-utc：人读字段用
+  // UTC 会偏一个时区，子代理手工改）
   const now = new Date()
-  const nowDatetime = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0') + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0')
+  const nowDatetime = nowWallClock(now)
   const nowTimestamp = now.getFullYear() + String(now.getMonth()+1).padStart(2,'0') + String(now.getDate()).padStart(2,'0') + '-' + String(now.getHours()).padStart(2,'0') + String(now.getMinutes()).padStart(2,'0') + String(now.getSeconds()).padStart(2,'0')
   const nowDate = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0')
   promptText = promptText.replace(/<now-datetime>/g, nowDatetime)
   promptText = promptText.replace(/<now-timestamp>/g, nowTimestamp)
   promptText = promptText.replace(/<now-date>/g, nowDate)
-  // <now-iso-datetime>（scan frontmatter updated_at 用；与 scan-fix-headers 同款秒级格式）
-  promptText = promptText.replace(/<now-iso-datetime>/g, now.toISOString().slice(0, 19).replace('T', ' '))
+  // <now-iso-datetime>（scan frontmatter updated_at 用；与 scan-fix-headers 同款秒级格式）。
+  // 占位符名带 iso 是历史遗留——值已统一为本地墙钟（同 <now-datetime>），改名会破坏 stages 引用。
+  promptText = promptText.replace(/<now-iso-datetime>/g, nowWallClock(now))
   // <git-head-short>（scan frontmatter source_commit 用；CLI 代查，agent 勿自跑 rev-parse）
   if (promptText.includes('<git-head-short>')) {
     let headShort = 'unknown'

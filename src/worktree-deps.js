@@ -129,9 +129,33 @@ function tryLink(mainNodeModules, linkPath) {
       const resolvedTarget = realpathSync(mainNodeModules);
       if (resolved === resolvedTarget) return { ok: true, method: process.platform === 'win32' ? 'junction' : 'symlink' };
     } catch {}
+    // 真实目录 ≠ 已有依赖（坑 provision-preexisting-dir-fake-linked，2026-08-23 实证：doctor --fix
+    // 报 re-provisioned 但链接没建——worktree node_modules 是 install 半途中断残留的真实目录时，
+    // realpath 不等 main → 被 preexisting 短路标 ok，根快路径据此写 depsStatus=linked，一个链接
+    // 都没建且后验证 existsSync 对空/残目录照样过）。真实目录 → ok:false + preexistingDir 标记，
+    // 交调用方决策：根快路径降级 tryInstall 真重建（宁可重装不说谎）；linkOneDir 视为本地安装
+    // 保留（installed 语义，合法状态）。指向别处的 link 仍是「他者安装」，尊重不 clobber。
+    try {
+      if (!lstatSync(linkPath).isSymbolicLink()) {
+        return { ok: false, preexistingDir: true, error: `node_modules 已存在且为真实目录（非链接，疑似 install 残留）: ${linkPath}` };
+      }
+    } catch {}
     // 指向别处 → 不 clobber，视为已有依赖（installed 语义）
     return { ok: true, method: 'install', preexisting: true };
   }
+  // broken junction 清理（existsSync 对目标丢失的 junction/symlink 返回 false，但目录项占位会使
+  // mklink/ln 撞名失败 → 根：落 install 慢路径；子模块：linkOneDir failed。此坑在 _doctorReprovision
+  // 的解链段同样存在——它也用 existsSync 前置判断，broken junction 永远解不掉）：lstat 是 link 而
+  // existsSync false → 删目录项后重建（rmdir 删 junction 不跟随 reparse，与 worktree.js 解链同款）。
+  try {
+    if (lstatSync(linkPath).isSymbolicLink()) {
+      if (process.platform === 'win32') {
+        execFileSync('cmd.exe', ['/c', 'rmdir', linkPath], { stdio: ['pipe', 'pipe', 'pipe'] });
+      } else {
+        unlinkSync(linkPath);
+      }
+    }
+  } catch { /* lstat 抛 = 目录项真不存在，直接建 */ }
   try {
     if (process.platform === 'win32') {
       // execFileSync 数组形式不经 shell：POSIX 双引号内 `/$() 会执行、cmd.exe 双引号内 %VAR% 仍展开，
@@ -292,6 +316,9 @@ function linkOneDir(wtDir, mainDir) {
   }
   const r = tryLink(mainNodeModules, join(wtDir, 'node_modules'));
   if (r.ok) return { status: 'linked', method: r.method };
+  // 真实目录 = 子模块本地安装过（合法状态，如 mismatch 后用户手动 pnpm install）：保留为
+  // installed 真话，不假 linked 也不误报 failed（tryLink 的 preexistingDir 细分见其注释）
+  if (r.preexistingDir) return { status: 'installed', reason: '子模块 node_modules 为真实目录（本地安装），保留' };
   return { status: 'failed', error: r.error };
 }
 
@@ -443,6 +470,17 @@ export function provisionDeps(worktreePath, mainCwd, opts = {}) {
       const fmsg = failedModules.map(m => `${m.path}: ${m.error}`).join('; ');
       result.depsError = result.depsError ? `${result.depsError}; ${fmsg}` : fmsg;
     }
+    // mismatch 可见性（坑 modules-mismatch-invisible，2026-08-23 实证：mismatch/skipped 只写
+    // depsModules 而 src 内零消费——doctor 报 re-provisioned 成功、子模块实际无链接且无任何
+    // 提示）。mismatch（worktree 与主仓 lockfile 不一致，link 不适用）摘要进 depsError：可见、
+    // 落 meta、doctor msg 带出（_doctorReprovision 不再抹）；但不降级 depsStatus——mismatch 是
+    // 配置分叉态不是供给失败，降级会经 deps gate 卡死 execute（正确动作是用户在 worktree 跑
+    // pnpm install 或对齐 lockfile， doctor --fix 的 force 重装路径也会覆盖此场景）。
+    const mismatchModules = moduleResults.filter(m => m.status === 'mismatch');
+    if (mismatchModules.length > 0) {
+      const mmsg = `子模块 lockfile 与主仓不一致（未链接，本地 install 或对齐 lockfile）: ${mismatchModules.map(m => m.path).join('、')}`;
+      result.depsError = result.depsError ? `${result.depsError}; ${mmsg}` : mmsg;
+    }
   }
 
   return result;
@@ -490,6 +528,25 @@ export function checkDepsFreshness(meta, wtPath, mainCwd) {
       detail: `meta.depsStatus=${depsStatus} 但 node_modules 缺失`,
       wtHash, mainHash, metaLockHash,
     };
+  }
+
+  // 2b. 子模块 missing（坑 modules-submodule-missing-no-selfheal）：meta.depsModules 中 linked
+  // 状态的子模块逐一核验 wt/<mp>/node_modules 实存。provisionDeps 内的同款核验（坑
+  // modules-submodule-link-verify）只管供给时刻，此后 junction 被删（杀毒/手工误删/半途清理）
+  // 时本函数只查根（上方）→ 永远 fresh → doctor 不再报 → 漏链永不自愈。此处补 doctor 侧
+  // 闭环：缺失 → missing → doctor --fix 走 relinkFirst 重链（provisionDeps 非 force 路径
+  // 的 linkOneDir 对缺失目录直接重建 junction）。
+  if (Array.isArray(meta && meta.depsModules)) {
+    const missingMods = meta.depsModules.filter(m =>
+      m && m.status === 'linked' && typeof m.path === 'string'
+      && !existsSync(join(wtPath, m.path, 'node_modules')));
+    if (missingMods.length > 0) {
+      return {
+        status: 'missing',
+        detail: `${missingMods.length} 个 linked 子模块 node_modules 缺失: ${missingMods.map(m => m.path).join('、')}`,
+        wtHash, mainHash, metaLockHash,
+      };
+    }
   }
 
   // 3. stale：worktree 自身 lockfile 与 meta 快照不一致（对齐 doctor 916-917 / ensure 404）

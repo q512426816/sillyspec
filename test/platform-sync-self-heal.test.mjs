@@ -32,8 +32,9 @@ const platformPayload = (name, pushedAt) => ({
   last_pushed_at: pushedAt,
 });
 
-// mock server：按变更名路由 POST 行为（failOnce409 / always409 / ok）
-const postPolicy = new Map(); // changeName -> { mode, calls }
+// mock server：按变更名路由 POST 行为（failOnce409 / always409 / ok；payload 可覆盖 409 回执的
+// platform_progress——push 内容一致自愈用例需要回执内容与本地六表一致）
+const postPolicy = new Map(); // changeName -> { mode, calls, payload? }
 const server = http.createServer((req, res) => {
   const m = /\/api\/changes\/([^/]+)\/progress/.exec(req.url);
   if (m && req.method === 'POST') {
@@ -45,7 +46,7 @@ const server = http.createServer((req, res) => {
       res.writeHead(409, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({
         conflict: true,
-        platform_progress: platformPayload(name, '2026-08-19T04:00:00.000Z'),
+        platform_progress: policy.payload || platformPayload(name, '2026-08-19T04:00:00.000Z'),
         last_pushed_at: '2026-08-19T04:00:00.000Z',
       }));
     } else {
@@ -173,6 +174,57 @@ console.log('\n--- 4. keep-local 重推再撞 → 软提示不落新冲突文件
   assert(!existsSync(conflictPathOf(cwd, CN)), '不落新冲突文件（保持 keep-local 清文件回 clean 契约）');
   assert(postPolicy.get(CN).calls >= 1, '自动重推确实发起过（有界重试后软失败）');
   assert(getBaseTs(cwd, CN) === '2026-08-19T04:00:00.000Z', 'base_ts 已推进到平台最新（keep-local 主效果）');
+}
+
+// ─────────────────────────────────────────
+// 5. push 409 + 外来内容一致（部署噪声）→ 内容一致自愈，不落冲突文件
+//    （坑 push-409-foreign-noise：pull 侧有 _progressContentEquals 自愈，push 侧原没有——
+//     他机重推内容相同的进度仍落真冲突 + 横幅 + 人工 resolve，而内容其实零分歧）
+// ─────────────────────────────────────────
+console.log('\n--- 5. push 409 外来内容一致 → 自愈 ---');
+{
+  const CN = 'heal-noise';
+  const { cwd, pm } = setupCwd('noise', CN);
+  // 本机 base=02:00 < 平台 04:00（非自竞态）；409 回执的 platform_progress = 本地当前六表内容
+  setLocalTs(cwd, CN, '2026-08-19T03:00:00.000Z', '2026-08-19T02:00:00.000Z');
+  const localSnapshot = pm.serializeForSync(cwd, CN);
+  postPolicy.set(CN, { mode: 'always409', calls: 0, payload: localSnapshot });
+
+  const sm = new SyncManager(cwd);
+  const r = await sm.sync(CN);
+  assert(r.synced === 1 && r.selfHealed === true, `外来 409 内容一致 → 自愈 synced=1（实际 ${JSON.stringify(r)}）`);
+  assert(!existsSync(conflictPathOf(cwd, CN)), '内容一致不落冲突文件');
+  assert(postPolicy.get(CN).calls === 1, '单次 POST 即自愈收敛（不重试不空转）');
+  assert(getBaseTs(cwd, CN) === '2026-08-19T04:00:00.000Z', 'base_ts 推进到平台 ts（04:00，与 keep-local 同语义）');
+}
+
+// ─────────────────────────────────────────
+// 6. 冲突文件已存在 → sync() 降噪跳过（不再每步 triggerSync 刷全幅横幅）
+// ─────────────────────────────────────────
+console.log('\n--- 6. 冲突文件存在 → 单行降噪不刷横幅 ---');
+{
+  const CN = 'heal-pending';
+  const { cwd } = setupCwd('pending', CN);
+  setLocalTs(cwd, CN, '2026-08-19T03:00:00.000Z', '2026-08-19T02:00:00.000Z');
+  const sm = new SyncManager(cwd);
+  sm._writeConflictFile(CN, {
+    base_ts: '2026-08-19T02:00:00.000Z',
+    local_modified_ts: '2026-08-19T03:00:00.000Z',
+    platform_last_pushed_at: '2026-08-19T04:00:00.000Z',
+    platform_progress: platformPayload(CN, '2026-08-19T04:00:00.000Z'),
+  });
+  postPolicy.set(CN, { mode: 'always409', calls: 0 });
+
+  const warns = [];
+  const origWarn = console.warn;
+  console.warn = (...a) => { warns.push(a.join(' ')) };
+  let r;
+  try { r = await sm.sync(CN); } finally { console.warn = origWarn }
+  assert(r.suppressed === true && r.synced === 0, `冲突未决 → 跳过推送返回 suppressed（实际 ${JSON.stringify(r)}）`);
+  assert(postPolicy.get(CN).calls === 0, '不发 POST（不再撞 409）');
+  const bannerCount = warns.filter(w => w.includes('⚠️⚠️⚠️')).length;
+  assert(bannerCount === 0, '不打全幅双线横幅');
+  assert(warns.some(w => w.includes('未决平台冲突') && w.includes('resolve')), '单行提示含 resolve 指引（可见但不吓人）');
 }
 
 // 清理

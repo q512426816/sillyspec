@@ -13,6 +13,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { git } from './git-helper.js'
+import { nowWallClock } from './datetime.js'
 import { assertSafeChangeName, resolveSpecDir } from './run/shared.js'
 import { parseTaskNames, readTaskRegistryContent } from './stages/plan.js'
 import { parseTaskRegistry } from './stages/execute.js'
@@ -179,7 +180,8 @@ export function cmdTaskcard(changeName, opts = {}) {
       return 'unknown'
     }
   })()
-  const now = new Date().toISOString().slice(0, 19).replace('T', ' ')
+  // 本地墙钟（坑 taskcard-created-at-utc：toISOString 落 UTC，本地 09:39 写 01:39，子代理手工改两次）
+  const now = nowWallClock()
 
   const tasksDir = join(changeDir, 'tasks')
   mkdirSync(tasksDir, { recursive: true })

@@ -147,7 +147,9 @@ console.log('\n--- 2. push 409 冲突横幅 ---');
   assert(bannerText.includes('平台同步冲突'), `冲突输出含「平台同步冲突」标题（实际输出 ${JSON.stringify(bannerText.slice(0, 120))}）`);
   assert(bannerText.includes('platform resolve banner-change'), `横幅含 resolve 恢复命令（实际含？${bannerText.includes('platform resolve banner-change')}）`);
   assert(bannerText.includes('sync-conflict-banner-change.json'), `横幅指引冲突文件路径（实际含？${bannerText.includes('sync-conflict-banner-change.json')}）`);
-  assert(bannerText.includes('卡死'), `横幅明确「卡死不自愈」语义（实际含？${bannerText.includes('卡死')}）`);
+  // 坑 sync-conflict-banner-spam 后措辞更新（2026-08-23）：「已卡死不会自愈」→「已暂停等待人工
+  // resolve」——冲突未决期间后续自动同步单行降噪（不再每步刷横幅），语义从恐吓改为暂停+出路。
+  assert(bannerText.includes('已暂停') && bannerText.includes('resolve'), `横幅明确「已暂停等待人工 resolve」语义（实际含？${bannerText.includes('已暂停')}/${bannerText.includes('resolve')}）`);
   pushMode = 'ok';
 }
 
