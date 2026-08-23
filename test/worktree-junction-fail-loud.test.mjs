@@ -66,31 +66,40 @@ const realFs = await import('fs')
 const realCp = await import('child_process')
 const realDeps = await import('../src/worktree-deps.js')
 
-// ── 2. 模块级可变 impl + 计数器（默认安全值：lstat 委托真实；execSync no-op 成功；provision 计数+空成功）──
+// ── 2. 模块级可变 impl + 计数器（默认安全值：lstat/unlink 委托真实；execSync no-op 成功；provision 计数+空成功）──
+//   解链的平台分支（unlinkNodeModulesLinks）：win32 走 execFileSync('cmd.exe',['/c','rmdir'])，
+//   POSIX 走 fs unlinkSync —— 两侧都包 wrapper 计数，断言按平台取数（unlinkAttempts()）。
 let lstatImpl = (...a) => realFs.lstatSync(...a)
+let unlinkImpl = (...a) => realFs.unlinkSync(...a)
 let execSyncImpl = () => undefined // 默认 no-op 成功（不真跑 cmd.exe rmdir，避免副作用；代码只区分抛/不抛）
 let provisionImpl = () => { provisionCalls++; return {} } // 计数 + 返回空（模拟 install 成功，避免真跑 npm）
 let execSyncCalls = 0
+let unlinkCalls = 0
 let provisionCalls = 0
 
 // ── 3. 注册 mock（exports：spread real 命名导出 + 覆盖目标为 wrapper）──
-await mock.module('fs', {
-  exports: { ...realFs, lstatSync: (...a) => lstatImpl(...a) },
-})
-await mock.module('child_process', {
+// Node ≥26 兼容：内置 'fs' 的 constants 导出不可配置，spread 进 mock exports 后
+// Node 内部 cjsMockModuleLoad 对它 defineProperty 抛 "Cannot redefine property: constants"
+// （被测模块链上任何经裸 'fs' 的 ESM import 都会触发，含 fs-atomic.js）。src/ 无人经
+// 裸 'fs' 用 constants（项目 constants 全来自 './constants.js'），从 mock exports 剔除即可，
+// Node 24/26 行为一致。child_process 防御性同剔（该键不存在时 delete 为 no-op）。
+const fsExports = { ...realFs, lstatSync: (...a) => lstatImpl(...a), unlinkSync: (...a) => { unlinkCalls++; return unlinkImpl(...a) } }
+delete fsExports.constants
+await mock.module('fs', { exports: fsExports })
+const cpExports = {
   // wrapper 先计数再委托 impl（即便 impl 抛错，计数也已 +1，证明 junction rmdir 被尝试过）。
   // 安全收敛后 worktree.js 的 junction 解链走 execFileSync('cmd.exe', ['/c','rmdir',...])，
   // 但 mock 'child_process' 同时命中 git-helper 的 'node:child_process'（同 builtin），
   // 故计数仅统计 cmd.exe rmdir 调用，git 调用原样委托真实实现（不计数、不 no-op）。
-  exports: {
-    ...realCp,
-    execSync: (...a) => { execSyncCalls++; return execSyncImpl(...a) },
-    execFileSync: (cmd, args, ...rest) => {
-      if (cmd === 'cmd.exe') { execSyncCalls++; return execSyncImpl(cmd, args, ...rest) }
-      return realCp.execFileSync(cmd, args, ...rest)
-    },
+  ...realCp,
+  execSync: (...a) => { execSyncCalls++; return execSyncImpl(...a) },
+  execFileSync: (cmd, args, ...rest) => {
+    if (cmd === 'cmd.exe') { execSyncCalls++; return execSyncImpl(cmd, args, ...rest) }
+    return realCp.execFileSync(cmd, args, ...rest)
   },
-})
+}
+delete cpExports.constants
+await mock.module('child_process', { exports: cpExports })
 await mock.module('../src/worktree-deps.js', {
   exports: { ...realDeps, provisionDeps: (...a) => provisionImpl(...a) },
 })
@@ -129,7 +138,13 @@ function makeFixture () {
 
 function resetCounters () {
   execSyncCalls = 0
+  unlinkCalls = 0
   provisionCalls = 0
+}
+
+/** 解链尝试次数（平台分支：win32=cmd.exe rmdir 计数；POSIX=unlinkSync 计数） */
+function unlinkAttempts () {
+  return process.platform === 'win32' ? execSyncCalls : unlinkCalls
 }
 
 console.log('\n#4 worktree junction 解链 fail-loud（cleanup + _doctorReprovision）')
@@ -149,10 +164,11 @@ console.log('\n#4 worktree junction 解链 fail-loud（cleanup + _doctorReprovis
     '#1 cleanup lstatSync EPERM → throw「junction 检测失败」',
   )
   // lstat 在 :745 抛 → 直接传出 cleanup（该段无外层 try）→ :767 git worktree remove 不可达；
-  // execSync（junction rmdir）也未被调（计数 0）。
-  assert(execSyncCalls === 0, `#1 cleanup EPERM → execSync 计数=${execSyncCalls}（期望 0，证 junction rmdir + git remove 均未触达）`)
+  // 解链（win32 cmd.exe rmdir / POSIX unlinkSync）也未被调（计数 0）。
+  assert(execSyncCalls === 0 && unlinkCalls === 0, `#1 cleanup EPERM → 解链计数=${unlinkAttempts()}（期望 0，证 junction 解链 + git remove 均未触达）`)
 
   lstatImpl = (...a) => realFs.lstatSync(...a)
+  unlinkImpl = (...a) => realFs.unlinkSync(...a)
   rmSync(tmpBase, { recursive: true, force: true })
 }
 
@@ -163,18 +179,20 @@ console.log('\n#4 worktree junction 解链 fail-loud（cleanup + _doctorReprovis
   const { wm, tmpBase } = makeFixture()
   resetCounters()
   lstatImpl = () => ({ isSymbolicLink: () => true }) // 真junction
-  execSyncImpl = () => { throw new Error("rmdir: 目录不是空的 / EPERM") }
+  execSyncImpl = () => { throw new Error("rmdir: 目录不是空的 / EPERM") }   // win32 解链失败
+  unlinkImpl = () => { throw new Error('unlink: EPERM（目录被占用）') }      // POSIX 解链失败
 
   assertThrows(
     () => wm.cleanup(CHANGE, { maxRetries: 1 }),
     /junction 解链失败/,
     '#2 cleanup junction 解链失败 → throw「解链失败」',
   )
-  // execSync 被调一次（junction rmdir 尝试 + 抛错），随后 throw 传播出 cleanup →
-  // :767 git worktree remove（execFileSync via git-helper，不计入 execSync 计数）不可达。
-  assert(execSyncCalls === 1, `#2 cleanup 解链失败 → execSync 计数=${execSyncCalls}（期望 1=仅 junction rmdir 被尝试；throw 传播阻断后续 git remove）`)
+  // 解链被尝试一次（win32=cmd.exe rmdir / POSIX=unlinkSync）并抛错，随后 throw 传播出 cleanup →
+  // :767 git worktree remove（execFileSync via git-helper，不计入解链计数）不可达。
+  assert(unlinkAttempts() === 1, `#2 cleanup 解链失败 → 解链计数=${unlinkAttempts()}（期望 1=仅解链被尝试；throw 传播阻断后续 git remove）`)
 
   lstatImpl = (...a) => realFs.lstatSync(...a)
+  unlinkImpl = (...a) => realFs.unlinkSync(...a)
   rmSync(tmpBase, { recursive: true, force: true })
 }
 
@@ -185,7 +203,8 @@ console.log('\n#4 worktree junction 解链 fail-loud（cleanup + _doctorReprovis
   const { wm, tmpBase } = makeFixture()
   resetCounters()
   lstatImpl = () => ({ isSymbolicLink: () => true })
-  execSyncImpl = () => undefined // 解链成功（no-op）
+  execSyncImpl = () => undefined // win32 解链成功（no-op）
+  unlinkImpl = () => undefined   // POSIX 解链成功（no-op，不真 unlink fixture 目录）
 
   let result
   try {
@@ -197,9 +216,10 @@ console.log('\n#4 worktree junction 解链 fail-loud（cleanup + _doctorReprovis
   }
   assert(!!result && Array.isArray(result.details) && result.details.some(d => /junction\/symlink removed|junction.*removed/.test(d)),
     `#3 cleanup 正常 junction → details 含「junction/symlink removed」（result=${result ? result.result : 'n/a'}）`)
-  assert(execSyncCalls === 1, `#3 cleanup 正常 junction → execSync 计数=${execSyncCalls}（期望 1=junction rmdir 成功执行）`)
+  assert(unlinkAttempts() === 1, `#3 cleanup 正常 junction → 解链计数=${unlinkAttempts()}（期望 1=解链成功执行）`)
 
   lstatImpl = (...a) => realFs.lstatSync(...a)
+  unlinkImpl = (...a) => realFs.unlinkSync(...a)
   rmSync(tmpBase, { recursive: true, force: true })
 }
 
@@ -222,9 +242,10 @@ console.log('\n#4 worktree junction 解链 fail-loud（cleanup + _doctorReprovis
   }
   assert(!!result && Array.isArray(result.details) && !result.details.some(d => /junction\/symlink removed/.test(d)),
     '#4 cleanup 非 junction → details 不含 junction removed（未走解链分支）')
-  assert(execSyncCalls === 0, `#4 cleanup 非 junction → execSync 计数=${execSyncCalls}（期望 0=未尝试 rmdir）`)
+  assert(execSyncCalls === 0 && unlinkCalls === 0, `#4 cleanup 非 junction → 解链计数=${unlinkAttempts()}（期望 0=未尝试解链）`)
 
   lstatImpl = (...a) => realFs.lstatSync(...a)
+  unlinkImpl = (...a) => realFs.unlinkSync(...a)
   rmSync(tmpBase, { recursive: true, force: true })
 }
 
@@ -271,13 +292,15 @@ console.log('\n#4 worktree junction 解链 fail-loud（cleanup + _doctorReprovis
   const { wm, wtPath, tmpBase } = makeFixture()
   resetCounters()
   lstatImpl = () => ({ isSymbolicLink: () => true })
-  execSyncImpl = () => undefined // 解链成功
+  execSyncImpl = () => undefined // win32 解链成功
+  unlinkImpl = () => undefined   // POSIX 解链成功
 
   const r = wm._doctorReprovision(CHANGE, wtPath)
   assert(r.ok === true, `#7 doctor 正常 junction → ok:true（实际 ${r.ok}）`)
   assert(provisionCalls === 1, `#7 doctor 正常 junction → provisionDeps 被调一次（计数=${provisionCalls}，期望 1）`)
 
   lstatImpl = (...a) => realFs.lstatSync(...a)
+  unlinkImpl = (...a) => realFs.unlinkSync(...a)
   rmSync(tmpBase, { recursive: true, force: true })
 }
 

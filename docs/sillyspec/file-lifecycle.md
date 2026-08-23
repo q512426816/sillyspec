@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-05-31 11:00:00
-updated_at: 2026-08-21
+updated_at: 2026-08-23
 ---
 
 # SillySpec 文件生命周期
@@ -96,7 +96,7 @@ updated_at: 2026-08-21
 `init.js` 会把 `.sillyspec/.runtime/`、`.sillyspec/local.yaml`、`.sillyspec/codebase/SCAN-RAW.md` 追加到 `.gitignore`。注意 `.sillyspec/local.yaml.example`（脱敏配置示例，2026-08-11 起 `init.js` `doInstall` 调 `config-schema.js` `renderExample()` 落盘）**不在** gitignore——它是给人/外部 agent 看的可提交配置发现物；真实 `local.yaml`（含凭据）才 gitignored。
 
 > **平台模式残留清理边界**（`init.js` `cleanupRuntimeResidue`，由 `run/command.js`（`runCommand`）启动时首次执行一次）：
-> 当 `specRoot` 指向外部、源码目录的 `.sillyspec/` 含真实资产（`changes/`/`projects/`/`sillyspec.db`）时，只清理运行时残留，**不整删 `.runtime/`**。清理白名单保留权威状态：`worktrees/`、`sillyspec.db`、`global.json`、`contract-artifacts/`、`execute-runs/`；其余子项（`artifacts/`、`scan-runs/`、`scan-projects.json`、`user-inputs.md`、`postcheck-result.json` 等可重建缓存）逐项删除，`local.yaml`、`codebase/` 整删。未知子项默认保留（安全侧倾斜）。
+> 当 `specRoot` 指向外部、源码目录的 `.sillyspec/` 含真实资产（`changes/`/`projects/`/`sillyspec.db`）时，只清理运行时残留，**不整删 `.runtime/`**。清理白名单保留权威状态：`worktrees/`、`sillyspec.db`、`global.json`、`contract-artifacts/`、`execute-runs/`；其余子项（`artifacts/`、`scan-runs/`、`scan-projects.json`、`user-inputs.md`、`postcheck-result.json` 等可重建缓存）逐项删除，`codebase/` 整删；`local.yaml` 受保护保留——gitignored 凭据文件（平台 init lease 下发 / `local detect` / `platform connect` 写入，含用户手调 mcp 段），删除即永久丢失，2026-08-23 起不再随清理删除（此前曾整删，与平台模式 init 跳过清理的保护语义矛盾）。未知子项默认保留（安全侧倾斜）。
 > 该清理在 `run/command.js`（`runCommand`）启动时**仅执行一次**：首次处理后写 cwd 根的 `.sillyspec-platform-cleaned` 标记文件，后续每次 `run` 直接跳过。旧版每次启动都打印 `❌ 拒绝删除` 红叉属误导性噪声（清理既不阻塞流程也不动真实资产），已降为 `ℹ️` 一次性提示。
 
 > **drift 场景 `.runtime` 落点（`specDriftAnchor`，坑 execute-runs-isolation）**：

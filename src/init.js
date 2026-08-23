@@ -23,6 +23,9 @@ const __dirname = dirname(__filename);
 // 详见 docs/sillyspec/runtime-cleanup-destroys-worktree-meta.md
 //
 // 策略：白名单保留权威状态，逐项删除可重建的缓存子项；未知子项默认保留（安全侧倾斜）。
+// local.yaml 同样保留：gitignored 凭据文件（平台 init lease 第 5 步下发 / local detect /
+// platform connect 写入，含用户手调 mcp 段），删除即永久丢失无法从 git 找回。本函数曾把它
+// 当非权威残留整删，与 platformMode 跳过清理的保护语义自相矛盾，2026-08-23 起不再删。
 const RUNTIME_KEEP = new Set([
   'worktrees',          // worktree 目录 + meta.json（worktree.js:17）
   'sillyspec.db',       // SQLite 进度库（权威状态源，progress.js:7）
@@ -33,15 +36,14 @@ const RUNTIME_KEEP = new Set([
 
 /**
  * 清理 .sillyspec/ 下的运行时残留，保留权威状态。
- * 同时清理 local.yaml、codebase/（这些非权威，整删安全）。
+ * 同时清理 codebase/（非权威，整删安全）。local.yaml 受保护不删——
+ * 平台 init 下发的凭据配置，见上方策略注释。
  * @param {string} legacyDir - 源码目录的 .sillyspec/ 路径
  */
 export function cleanupRuntimeResidue(legacyDir) {
-  // local.yaml、codebase/ 非权威，整删
-  for (const residue of ['local.yaml', 'codebase']) {
-    const p = join(legacyDir, residue);
-    if (existsSync(p)) { try { rmSync(p, { recursive: true, force: true }) } catch {} }
-  }
+  // codebase/ 非权威，整删；local.yaml 是凭据配置，保留
+  const codebasePath = join(legacyDir, 'codebase');
+  if (existsSync(codebasePath)) { try { rmSync(codebasePath, { recursive: true, force: true }) } catch {} }
   // .runtime/ 逐项清理，白名单保留
   const runtimeDir = join(legacyDir, '.runtime');
   if (existsSync(runtimeDir)) {
@@ -251,7 +253,7 @@ function doInstall(projectDir, tools, subprojects = [], specDir = null, options 
       // 真实资产存在：拒绝整体删除，仅清理运行时残留
       console.error('❌ [sillyspec] 拒绝删除源码目录的 .sillyspec/：检测到真实资产（changes/、projects/ 或 sillyspec.db）。');
       console.error('   该项目似乎本身就用 SillySpec 管理。如需改用外部 spec 目录，请先手动迁移/备份。');
-      console.error('   本次仅清理运行时残留（.runtime/ 缓存、local.yaml、codebase/），保留 worktrees 与进度状态。');
+      console.error('   本次仅清理运行时残留（.runtime/ 缓存、codebase/），保留 local.yaml、worktrees 与进度状态。');
       cleanupRuntimeResidue(legacyDir);
     } else {
       // 无真实资产：确属旧版本残留，安全删除

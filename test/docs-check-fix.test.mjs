@@ -422,8 +422,17 @@ describe('S7 CLI 无 --fix 输出与改动前（84d498a）逐字节一致（FR-0
   // （Windows 用 junction 类型；POSIX 符号链接同义）。旧 index.js 只在 --version 与 dashboard
   // 分支触 packages/（archive 树缺它），docs check 路径不加载。钩子收在本 describe 内——
   // 单跑 S1-S6（--test-name-pattern 调试）不付建树成本。
+  // 84d498a 是当时开发分支的锚点提交，未经历过那条分支的克隆里不存在——先探测，缺失即整体
+  // skip（字节级历史对照只在含该提交的环境有意义，fail 只会制造"永远红"的环境耦合失败）。
   let oldRoot = null
+  const s7Skip = { missing: false, reason: '' }
   before(() => {
+    const probe = spawnSync('git', ['-C', REPO_ROOT, 'cat-file', '-t', '84d498a'], { encoding: 'utf8' })
+    if (probe.status !== 0 || !String(probe.stdout || '').includes('commit')) {
+      s7Skip.missing = true
+      s7Skip.reason = `锚点提交 84d498a 不在本克隆（${String(probe.stderr || '').trim() || probe.error || 'git cat-file 探测失败'}）——S7 字节级对照仅在含该提交的环境执行`
+      return
+    }
     const t = mkdtempSync(join(tmpdir(), 'dcfix-oldcli-'))
     try {
       const tarPath = join(t, 'tree.tar')
@@ -477,7 +486,8 @@ describe('S7 CLI 无 --fix 输出与改动前（84d498a）逐字节一致（FR-0
     return { code: r.status, stdout: r.stdout || '', stderr: r.stderr || '' }
   }
 
-  it('无 flag：stdout + stderr + exit code 新旧 CLI 三者一致（fixture 同仓各跑一次）', () => {
+  it('无 flag：stdout + stderr + exit code 新旧 CLI 三者一致（fixture 同仓各跑一次）', (t) => {
+    if (s7Skip.missing) return t.skip(s7Skip.reason)
     assert.ok(oldRoot, '前置：旧 CLI 树就绪（before 钩子）')
     const d = s7Fixture()
     try {
@@ -497,7 +507,8 @@ describe('S7 CLI 无 --fix 输出与改动前（84d498a）逐字节一致（FR-0
     } finally { try { rmSync(d, { recursive: true, force: true }) } catch {} }
   })
 
-  it('--suggest 门控行为同样逐字节一致（suggest 数据面新旧同源）', () => {
+  it('--suggest 门控行为同样逐字节一致（suggest 数据面新旧同源）', (t) => {
+    if (s7Skip.missing) return t.skip(s7Skip.reason)
     assert.ok(oldRoot, '前置：旧 CLI 树就绪（before 钩子）')
     const d = s7Fixture()
     try {
@@ -512,7 +523,8 @@ describe('S7 CLI 无 --fix 输出与改动前（84d498a）逐字节一致（FR-0
     } finally { try { rmSync(d, { recursive: true, force: true }) } catch {} }
   })
 
-  it('全绿 fixture：新旧 CLI stdout（✅ 全绿行）与 exit 0 一致', () => {
+  it('全绿 fixture：新旧 CLI stdout（✅ 全绿行）与 exit 0 一致', (t) => {
+    if (s7Skip.missing) return t.skip(s7Skip.reason)
     assert.ok(oldRoot, '前置：旧 CLI 树就绪（before 钩子）')
     const d = makeFixture({
       'src/alpha.js': padLines(2, { 1: 'export const alphaSymbol = 1' }).join('\n') + '\n',

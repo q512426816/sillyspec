@@ -17,6 +17,7 @@ import { execFileSync } from 'child_process'
 import { tmpdir } from 'os'
 
 import { resolveLocalYaml } from '../src/config-cat.js'
+import { pathEq } from './_path-eq.mjs'
 
 const testDir = dirname(fileURLToPath(import.meta.url))
 const binPath = join(testDir, '..', 'bin', 'sillyspec.js')
@@ -59,7 +60,7 @@ try {
   {
     const r = resolveLocalYaml(main)
     assert(r.exists === true, '主仓内命中 local.yaml')
-    assert(r.path === join(main, '.sillyspec', 'local.yaml'), `路径=<主仓>/.sillyspec/local.yaml（实际 ${r.path}）`)
+    assert(pathEq(r.path, join(main, '.sillyspec', 'local.yaml')), `路径=<主仓>/.sillyspec/local.yaml（实际 ${r.path}）`)
     assert(typeof r.source === 'string' && r.source.length > 0, 'source 非空')
   }
 
@@ -70,7 +71,7 @@ try {
     mkdirSync(other, { recursive: true })
     writeFileSync(join(other, 'local.yaml'), 'x: 1\n')
     const r = resolveLocalYaml(main, { specBase: other })
-    assert(r.exists === true && r.path === join(other, 'local.yaml'), 'specBase 候选最先命中')
+    assert(r.exists === true && pathEq(r.path, join(other, 'local.yaml')), 'specBase 候选最先命中')
     assert(r.source.includes('spec 根'), 'source 标注 spec 根')
   }
 
@@ -90,7 +91,7 @@ try {
   {
     const r = resolveLocalYaml(stdWt)
     assert(r.exists === true, 'worktree 内命中（local.yaml 不随 checkout 出现）')
-    assert(r.path === join(main, '.sillyspec', 'local.yaml'), `解析到主仓配置（实际 ${r.path}）`)
+    assert(pathEq(r.path, join(main, '.sillyspec', 'local.yaml')), `解析到主仓配置（实际 ${r.path}）`)
   }
 
   // ── 5. 外置 worktree：git common-dir 兜底 ──
@@ -98,7 +99,7 @@ try {
   {
     const r = resolveLocalYaml(extWt)
     assert(r.exists === true, '外置 worktree 内命中')
-    assert(r.path === join(main, '.sillyspec', 'local.yaml'), `git 兜底解析到主仓（实际 ${r.path}）`)
+    assert(pathEq(r.path, join(main, '.sillyspec', 'local.yaml')), `git 兜底解析到主仓（实际 ${r.path}）`)
     assert(r.source.includes('git common-dir'), 'source 标注 git 兜底')
   }
 

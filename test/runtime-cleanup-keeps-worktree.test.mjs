@@ -3,7 +3,8 @@
  *
  * 平台模式（specRoot 指向外部）下，源码目录 .sillyspec/ 含真实资产时，
  * cleanupRuntimeResidue 应只清缓存，保留 worktrees/、sillyspec.db、
- * global.json、contract-artifacts/、execute-runs/。
+ * global.json、contract-artifacts/、execute-runs/ 与 local.yaml
+ * （平台 init 下发的凭据配置，gitignored，删除即永久丢失）。
  * 详见 docs/sillyspec/runtime-cleanup-destroys-worktree-meta.md
  */
 import { cleanupRuntimeResidue } from '../src/init.js'
@@ -46,7 +47,7 @@ console.log('--- Case 1: worktrees / db / global.json 保留 ---')
   writeFileSync(join(runtime, 'scan-projects.json'), '{}')
   writeFileSync(join(runtime, 'user-inputs.md'), 'x')
   writeFileSync(join(runtime, 'postcheck-result.json'), '{}')
-  // local.yaml / codebase（非权威，应删）
+  // local.yaml（凭据，应保留）/ codebase（非权威，应删）
   writeFileSync(join(legacyDir, 'local.yaml'), 'x')
   mkdirSync(join(legacyDir, 'codebase'), { recursive: true })
 
@@ -61,7 +62,7 @@ console.log('--- Case 1: worktrees / db / global.json 保留 ---')
   assert(!existsSync(join(runtime, 'scan-runs')), 'scan-runs/ 缓存应删除')
   assert(!existsSync(join(runtime, 'scan-projects.json')), 'scan-projects.json 缓存应删除')
   assert(!existsSync(join(runtime, 'user-inputs.md')), 'user-inputs.md 缓存应删除')
-  assert(!existsSync(join(legacyDir, 'local.yaml')), 'local.yaml 应删除')
+  assert(existsSync(join(legacyDir, 'local.yaml')), 'local.yaml 应保留（平台 init 下发凭据，清理不得删）')
   assert(!existsSync(join(legacyDir, 'codebase')), 'codebase/ 应删除')
 
   rmSync(root, { recursive: true, force: true })

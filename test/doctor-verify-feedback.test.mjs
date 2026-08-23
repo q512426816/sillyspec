@@ -146,9 +146,19 @@ console.log('\n=== ③ verify 服务进程 PID 登记 + 收尾回收（坑 verif
   // 本地无 commands.test → verify 实测 skip 不阻断
   const r = run(`node "${binCLI}" --dir "${d}" run verify --done --change ${cn} --output "验证完成"`)
   assertTrue(r.out.includes('服务进程已回收'), `verify 收尾回收登记进程（输出含回收行，尾：${r.out.slice(-120)}）`)
+  // POSIX 坑：子进程被外部 SIGTERM 后成 zombie，父进程（本测试）在 execSync 阻塞期间没有
+  // 迭代事件循环就不会 reap，kill(pid,0) 对 zombie 也"成功"——假"泄漏"误报。轮询 ≤2s：
+  // 每轮先让事件循环迭代（setTimeout tick 触发 SIGCHLD 处理完成 reap），reap 判据 =
+  // exitCode/signalCode 已置（kill 信号退出时 exitCode=null/signalCode='SIGTERM'）或 kill 0 失败。
+  // Windows 无 zombie 概念，kill 0 立即失败，首轮即过。
   let alive = true
-  try { process.kill(child.pid, 0) } catch { alive = false }
-  assertTrue(!alive, '子进程已被 kill（不再泄漏）')
+  const deadline = Date.now() + 2000
+  while (Date.now() < deadline) {
+    await new Promise(resolve => setTimeout(resolve, 25))
+    if (child.exitCode !== null || child.signalCode !== null) { alive = false; break }
+    try { process.kill(child.pid, 0) } catch { alive = false; break }
+  }
+  assertTrue(!alive, '子进程已被 kill（不再泄漏；zombie 需事件循环迭代后 reap）')
   assertTrue(!fs.existsSync(join(runtimeRoot, `verify-services-${cn}.pids`)), 'PID 分片文件已清（不重复回收）')
 }
 

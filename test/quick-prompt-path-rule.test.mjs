@@ -39,7 +39,15 @@ console.log('--- ① quick 会话：提示条件化，不再强制 changes/ 目�
   assert(out.includes('纯代码改动直接写源码目录，无目录限制'), '提示「纯代码改动直接写源码目录」')
   assert(out.includes('仅当本 quick 需要落 spec 文档'), '补文档场景才提 changes/ 目录（条件化）')
   assert(!out.includes('所有变更文件必须写入'), '不再出现「所有变更文件必须写入」硬规则（对 quick 误导）')
-  assert(!out.includes('changes/quick-deadbee1'), '不再点名 quick 会话的 changes/quick-xxx 目录')
+  // 原「!out.includes('changes/quick-deadbee1')」字面断言只在 Windows 侥幸成立（join 产反斜杠），
+  // POSIX 下与上一条要求存在的条件句（内嵌 changeDir）必然矛盾。真实语义是「无硬规则点名」：
+  // 提及 changes/quick-xxx 路径的行只能是「仅当…才写」条件句或 changeDir 信息行。
+  const mentionRe = /changes[/\\]quick-deadbee1/
+  const mentioning = out.split('\n').filter(l => mentionRe.test(l))
+  assert(
+    mentioning.length > 0 && mentioning.every(l => l.includes('仅当本 quick 需要落 spec 文档') || l.trim().startsWith('changeDir:')),
+    `changes/quick-xxx 仅出现在条件句/changeDir 信息行（实际 ${mentioning.length} 处提及，无硬规则点名）`,
+  )
 }
 
 console.log('--- ② 普通变更：原硬规则零回归 ---')

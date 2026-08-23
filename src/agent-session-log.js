@@ -71,10 +71,14 @@ function toPosix(p) {
   return String(p).replace(/\\/g, '/');
 }
 
-/** cwd 等值比较口径：正斜杠归一 + Windows 大小写不敏感。 */
+/** cwd 等值比较口径：正斜杠归一 + Windows 形态路径大小写不敏感。
+ * 按数据形态判而非宿主平台——平台 hub 场景 daemon 跑在任意平台，都要能与 Windows
+ * agent 上报的 cwd（盘符 `c:/x` 或 UNC `\\server\share`）等值比较；toPosix 在前，
+ * UNC 的反斜杠此时已成 `//`。POSIX 形态路径保持大小写敏感（文件系统语义如此）。 */
 function normCwd(p) {
   const s = toPosix(p);
-  return process.platform === 'win32' ? s.toLowerCase() : s;
+  const winForm = /^[a-zA-Z]:\//.test(s) || s.startsWith('//');
+  return winForm ? s.toLowerCase() : s;
 }
 
 function cwdsMatch(a, b) {
@@ -585,7 +589,8 @@ export function readAgentLogArtifact(runtimeRoot) {
  * 登记 agent 会话日志路径进 <runtimeRoot>/agent-session-log.json（run 命令入口调用）。
  *
  * 合并语义：按 log_path 去重——同路径 invocations+1 / 刷新 last_seen_at 与文件 stat；
- * 新路径追加；entries 按 last_seen_at 新→旧排序，上限 10 条（超出淘汰最旧）。
+ * 新路径追加；entries 按 last_seen_at 新→旧排序（同毫秒平局按 seq 登记序决胜），
+ * 上限 10 条（超出淘汰最旧）。
  * 探测不到（非 agent 环境）不写盘不上报。全程 best-effort：失败 warn 一行返回 null 不抛。
  * 落盘后立即 REST 上报平台（POST /api/agent-logs，主通道），上报失败本地产物兜底。
  *
@@ -629,6 +634,11 @@ export async function recordAgentLogInvocation({ cwd, invokedCwd, platformOpts =
       const existing = readAgentLogArtifact(runtimeRoot);
       const byPath = new Map((existing?.entries || []).map(e => [e.log_path, e]));
 
+      // 平局决胜序号：last_seen_at 是毫秒精度 ISO，快机器上连续登记落在同一毫秒打平，
+      // 稳定排序会让旧条目留在首位（latestLogPath 假"未更新"）。seq 按登记触及顺序单调
+      // 递增并随条目持久化，平局时后触及者胜（存量产物无 seq 视为 0，老条目间次序不变）。
+      let seq = (existing?.entries || []).reduce((m, e) => Math.max(m, Number(e.seq) || 0), 0);
+
       for (const det of detected) {
         const st = statSafe(det.log_path);
         const prev = byPath.get(det.log_path);
@@ -652,11 +662,12 @@ export async function recordAgentLogInvocation({ cwd, invokedCwd, platformOpts =
           last_seen_at: nowIso,
           invocations: (prev?.invocations || 0) + 1,
           last_command: command || null,
+          seq: ++seq,
         });
       }
 
       const entries = [...byPath.values()]
-        .sort((a, b) => (b.last_seen_at || '').localeCompare(a.last_seen_at || ''))
+        .sort((a, b) => (b.last_seen_at || '').localeCompare(a.last_seen_at || '') || ((b.seq || 0) - (a.seq || 0)))
         .slice(0, MAX_ENTRIES);
 
       const artifact = {

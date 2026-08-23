@@ -13,6 +13,7 @@ import path from 'path'
 import os from 'os'
 import { execSync } from 'child_process'
 import { strict as assert } from 'node:assert'
+import { pathEq } from './_path-eq.mjs'
 
 // ── Test 1: _resolveMainRepoRoot 在主仓库内返回 cwd ──
 
@@ -30,7 +31,8 @@ async function test1_mainRepoRoot() {
   const { WorktreeManager } = await import('../src/worktree.js')
   const wm = new WorktreeManager({ cwd: d })
   const root = wm._resolveMainRepoRoot()
-  assert(root === d, `Test 1 FAIL: expected ${d}, got ${root}`)
+  // git 输出（realpath 形态）与 join 拼路径（symlink 形态）在 macOS 上字面不等——pathEq 归一比较
+  assert(pathEq(root, d), `Test 1 FAIL: expected ${d}, got ${root}`)
   console.log('✅ Test 1: main repo root resolves to cwd')
 
   fs.rmSync(d, { recursive: true })
@@ -59,7 +61,7 @@ async function test2_nativeWorktreeIdempotent() {
 
   // Verify worktreeBase points to main repo
   const expectedBase = path.join(d, '.sillyspec', '.runtime', 'worktrees')
-  assert(wm1.worktreeBase === expectedBase, `Test 2 FAIL: worktreeBase=${wm1.worktreeBase}, expected=${expectedBase}`)
+  assert(pathEq(wm1.worktreeBase, expectedBase), `Test 2 FAIL: worktreeBase=${wm1.worktreeBase}, expected=${expectedBase}`)
   console.log('✅ Test 2: worktreeBase fixed to main repo path')
 
   fs.rmSync(d, { recursive: true })

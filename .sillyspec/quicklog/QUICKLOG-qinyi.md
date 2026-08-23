@@ -393,3 +393,22 @@
 结果：npm test 全量 300 用例 0 失败（37+263）；npm run lint 通过（354 文件）；file-lifecycle.md 不涉及（只读 dump 选变更语义，非文件生命周期）；全局重装与 daemon 链路验证随后在本机执行
 审计：📝 文档欠账（D-8）：3 个源码文件改动未同步任何模块文档（涉及模块：stages · progress）
 审计：⚖️ 归属切分：1 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：package.json
+
+## ql-20260823-001-f97e | 2026-08-23 20:15:40 | (quick 任务)
+状态：进行中
+关联变更：（无）
+文件：（见实际改动）
+
+## ql-20260823-002-8e55 | 2026-08-23 20:19:45 | 清理保护分支连 local.yaml 一起保护——平台 init 凭据不再被误删
+状态：已完成
+关联变更：（无）
+文件：
+- src/init.js（cleanupRuntimeResidue 整删列表去 local.yaml，注释与保护分支提示文案同步）
+- test/runtime-cleanup-keeps-worktree.test.mjs（Case1 断言翻转——local.yaml 应保留）
+- docs/sillyspec/file-lifecycle.md（平台模式残留清理边界契约更新（updated_at 2026-08-23））
+- .sillyspec/docs/sillyspec/modules/setup.md（注意事项补 cleanup 保护边界）
+- .sillyspec/docs/sillyspec/modules/setup.changelog.md（新建 sidecar 记 ql-20260823-002-8e55）
+需求：清理保护分支连 local.yaml 一起保护——平台 init 凭据不再被误删
+根因：local.yaml 是 gitignored 凭据文件（平台 init lease 第 5 步下发/local detect/platform connect 写入），保护分支把它当非权威残留整删，与 platformMode 跳过清理的保护语义自相矛盾，且删除后无法从 git 找回
+方案：cleanupRuntimeResidue 整删列表去掉 local.yaml 仅留 codebase/，init.js:255 与 run/command.js:424 两个保护分支调用点随之保留；同步翻转回归断言、契约文档 file-lifecycle.md 平台残留清理边界、setup 模块卡注意事项并新建 changelog sidecar
+结果：针对性测试 28/28+7/7（本地模式无资产整删零回归）、全量 npm test 297/297、npm run lint 通过
