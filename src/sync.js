@@ -783,6 +783,38 @@ export class SyncManager {
    * @param {{base_ts?: string|null, local_modified_ts?: string|null, platform_last_pushed_at?: string|null, platform_progress?: object|null}} info
    * @returns {string|null} 冲突文件路径（specDir 不可达返回 null）
    */
+  /**
+   * 六表内容比对（坑 pull-deploy-noise-conflict 自愈用）：本地 serializeForSync 快照与平台
+   * 拉回的 JSON 逐表深度比对，忽略时间戳/同步元数据列（last_active/last_synced_platform_ts/
+   * last_local_modified_ts/started_at/completed_at/pushed_at/checked_at/completed_at 等——部署
+   * 噪声重推会刷新这些列但内容不变）。任一实质差异 → false。
+   * @param {object} local - serializeForSync 输出
+   * @param {object} platform - 平台 GET progress JSON（serializeForSync 同构）
+   * @returns {boolean}
+   */
+  _progressContentEquals(local, platform) {
+    try {
+      const IGNORE_KEYS = new Set([
+        'last_active', 'last_synced_platform_ts', 'last_local_modified_ts',
+        'started_at', 'completed_at', 'pushed_at', 'last_pushed_at', 'created_at',
+        'deps_checked_at', 'checked_at', 'waited_at', 'completedat',
+      ]);
+      const strip = (v) => {
+        if (Array.isArray(v)) return v.map(strip);
+        if (v && typeof v === 'object') {
+          const out = {};
+          for (const [k, val] of Object.entries(v).sort()) {
+            if (IGNORE_KEYS.has(k)) continue;
+            out[k] = strip(val);
+          }
+          return out;
+        }
+        return v;
+      };
+      return JSON.stringify(strip(local)) === JSON.stringify(strip(platform));
+    } catch { return false }
+  }
+
   _writeConflictFile(changeName, info = {}) {
     const specDir = safePlatformSpecDir(this.cwd);
     if (!specDir) return null;
@@ -964,6 +996,28 @@ export class SyncManager {
             }
           }
         } catch { /* 重读失败维持原判（fail-closed 到真冲突分支） */ }
+      }
+      // ── 内容一致自愈（坑 pull-deploy-noise-conflict，2026-08-22 实证：并行会话部署扰动——
+      // 他机 push 了内容相同的进度（如重启/重部署触发重推），本地脏 + 平台 ts 更新 → 拉冲突落
+      // sync-conflict 文件需人工 resolve，但内容其实无分歧。比对平台 JSON 与本地 serializeForSync
+      // 的六表内容（忽略时间戳列），一致 → 跳过 import（本地为准）+ base_ts 推进到平台 ts——
+      // 与 resolve --keep-local 同语义，自动闭环。内容不同 → 真冲突，维持原判。
+      if (localDirty && platformNewer && platformProgress) {
+        try {
+          const { ProgressManager } = await import('./progress.js');
+          const pm = new ProgressManager({ specDir: safePlatformSpecDir(this.cwd) });
+          const localSnapshot = pm.serializeForSync(this.cwd, changeName);
+          if (localSnapshot && this._progressContentEquals(localSnapshot, platformProgress)) {
+            try {
+              const db = pm._ensureDB(this.cwd).getDb();
+              db.prepare(
+                'UPDATE changes SET last_synced_platform_ts = MAX(?, COALESCE(last_synced_platform_ts, ?)) WHERE name = ?'
+              ).run(platformPushedAt, platformPushedAt, changeName);
+            } catch {}
+            debugLog(`[sync] pull 内容一致自愈: 平台 ts ${platformPushedAt} 为部署噪声重推（六表内容与本地一致），base_ts 已推进，不落冲突文件`);
+            return { ok: true, imported: false, conflict: false, reason: '平台重推内容与本地一致（部署噪声），base_ts 已推进' };
+          }
+        } catch { /* 比对失败维持原判（fail-closed 到真冲突分支） */ }
       }
       if (localDirty && platformNewer) {
         console.warn('');

@@ -141,7 +141,7 @@ sillyspec doctor                 全量自检 + 修复进度
 - **进度持久化** — SQLite（node:sqlite）持久化，支持断点恢复
 - **模块文档** — 模块级知识库，AI 执行时按需加载相关上下文
 - **浏览器自动化** — 可选 MCP（Playwright / Chrome DevTools），供集成/E2E 冒烟验证
-- **平台同步** — 可选对接 SillyHub，文档同步 + 团队审批
+- **平台同步** — 可选对接 SillyHub，文档同步 + 团队审批 + 本地 agent 会话日志路径主动上报（平台会话展示本地 agent 完整日志；支持 Claude Code / Codex / ZCode 自动探测，其他 CLI 用 `SILLYSPEC_AGENT_LOG` 显式指定）
 
 ## 可靠性保障
 

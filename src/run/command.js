@@ -163,6 +163,9 @@ sillyspec run ${stageName}${stage && stage.title ? ` — ${stage.title}` : ''}${
  * sillyspec run <stage> 主命令
  */
 export async function runCommand(args, cwd, specDir = null, opts = {}) {
+  // 原始 cwd 快照（下方 cwd 纠正前）：agent 在子目录启动时，其会话 transcript 挂在子目录
+  // 对应的 harness 项目目录下，agent-log 探测须用原始 cwd（纠正后的是项目根，探测会扑空）
+  const invokedCwd = cwd
   // W1-B: run <stage> 暂不支持 --json。之前 --json 进 knownFlags 白名单却从不读取（静默吞），
   // agent 按 gate/derive 契约期望 envelope 实则拿到混合人类文本。显式 fail-fast 杜绝歧义；
   // 完整 run envelope 待 outputStep 重构（W6）后支持（prompt + nextAction 结构化）。
@@ -365,6 +368,29 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
   // runCommand 后续所有 .sillyspec/ 操作必须用 specBase
   // let：下方 worktree 副本漂移守卫命中时锚回 wt.mainSpecBase（task-05/D-03）
   let specBase = platformOpts.specRoot || join(cwd, '.sillyspec')
+
+  // ── 本地 agent 会话日志登记 + 上报（平台会话展示用，best-effort）──
+  // 平台/daemon 模式下 SillyHub 只能看到 CLI 阶段信息，看不到本地 agent 的实际执行日志。
+  // 在此探测当前 agent 环境（Claude Code / Codex / ZCode transcript / SILLYSPEC_AGENT_LOG
+  // 覆盖），把日志本地路径登记进 <runtimeRoot>/agent-session-log.json（留底）并立即
+  // REST 上报平台（POST /api/agent-logs，与进度上报同风格；协议见
+  // docs/platform-agent-log-protocol.md）。探测不到不发不写；任何失败只 warn 一行，
+  // 绝不阻断 run 主流程。
+  try {
+    const { recordAgentLogInvocation } = await import('../agent-session-log.js')
+    const r = await recordAgentLogInvocation({
+      cwd,
+      invokedCwd,
+      platformOpts,
+      specBase,
+      // 只记 flag 名不记值（--output 等 flag 值是 agent 工作文本，不进产物）
+      command: [stageName, ...flags.filter(t => typeof t === 'string' && t.startsWith('--'))].join(' '),
+    })
+    if (r && r.isNew && r.latestLogPath) {
+      const pushNote = r.pushed === true ? '已上报平台' : r.pushed === false ? '上报失败（本地已留底）' : '本地留底'
+      console.log(`📄 本地 agent 日志已登记（${pushNote}）: ${r.latestLogPath}`)
+    }
+  } catch { /* best-effort：登记失败不影响 run 主流程 */ }
 
   // 漂移提醒:cwd 祖先链 ≥2 个 .sillyspec = monorepo 多实例,当前命中的「最近」实例
   // 可能不是用户意图的项目(如 cd 进被独立 scan 的子项目跑测试后忘回根)。

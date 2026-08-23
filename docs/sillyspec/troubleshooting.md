@@ -510,3 +510,22 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 3. 双向明示：quick 同文件并发提示附「边界说明」段（quick 轻量最坏后果 git 可分离故只提示；plan 硬拦因并行覆盖不可恢复）；plan 同 Wave 冲突报错附同款说明——勿以 quick 宽松推断 plan 边界。
 
 测试 plan-feedback-three.test.mjs（11 断言）。**关联记忆**：`[[sillyspec-taskcard-body-section-rework]]`、`[[sillyspec-design-combined-cell-mismatch]]`、`[[sillyspec-concurrent-policy-inconsistency]]`
+
+## 33. 三坑：探针5基线失配全量误报 / 子代理未 commit 纯新增文件 apply 炸 / pull 部署噪声落冲突（2026-08-23 闭环）
+
+**症状（用户实证）**：
+1. 探针 5 endpoints 基线失配全量误报（存量基线与 verify 时实际代码不一致）。
+2. apply 对「子代理未 commit 的纯新增文件」走 patch --3way 报 "does not exist in index" 炸——先在 worktree commit 再 apply 才顺。
+3. 平台进度同步 409/pull 冲突不自愈需手动 resolve——并行会话部署扰动（内容相同的重推）触发。
+
+**根因**：
+1. endpoints 基线是 execute 时落的存量 artifacts；verify 时主仓已被并行会话/部署推进，前端调用（当前代码）对不上旧端点集 → missingBackend 全量误报；存量过期端点反向误报 unusedBackend。
+2. 未 commit 的新文件不在 base commit 也不在 index——patch 生成侧的 git diff --cached 取不到内容；且派发提示只要求写 review 勾 checkbox，未明确要求 commit。
+3. pull 冲突判定只看时间戳（本地脏 + 平台 ts 更新）——部署噪声重推（内容一致仅 ts 推进）被当真分歧落 sync-conflict 文件。
+
+**修复（2026-08-23）**：
+1. verifyApiParity 现算端点并入：scanBackendEndpoints(scanRoot) 现算当前代码端点 ∪ 存量 artifacts 做 missingBackend 比对（现算主导、存量补充跨仓/已删代码）；unusedBackend 收窄到现算端点（存量过期端点不再误报）。真缺失（前端调用了后端没有的端点）仍报——底线不松。
+2. Wave prompt 调度要求第 4 条首项加「在 worktree 内 git add -A && git commit」——点明不 commit 的后果（纯新增文件 apply --3way 炸）与附带收益（review head 真实锚点）。
+3. pull 内容一致自愈：判冲突前比对平台 JSON 与本地 serializeForSync 六表内容（忽略时间戳/同步元数据列），一致 → 跳过 import + base_ts 推进到平台 ts（与 resolve --keep-local 同语义自动闭环，不落冲突文件）；内容实质差异 → 真冲突维持原判。与既有的 push 409 自竞态自愈、keep-local 自动重推构成三层自愈网。
+
+测试 final-verify-feedback.test.mjs（9 断言）。**关联记忆**：`[[sillyspec-probe5-endpoint-baseline-stale]]`、`[[sillyspec-subagent-uncommitted-newfile-apply3way]]`、`[[sillyspec-pull-deploy-noise-conflict]]`

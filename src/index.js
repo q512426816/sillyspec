@@ -85,6 +85,7 @@ SillySpec CLI — 规范驱动开发工具包
   sillyspec config cat [--json]           读取 local.yaml 实际内容（自动定位真实路径，worktree 内解析到主仓）
   sillyspec runtime list [--json]         枚举 .sillyspec/.runtime/ 运行时产物（只读，看手上有哪些证据/状态文件）
   sillyspec dispatch <probe | hint>       SillyHub 派发能力探测 + 策略生成（agent 调用桥，仅渲染不执行 tool）
+  sillyspec agent-log [--detect] [--json]  本地 agent 会话日志查询/现场探测（run 命令自动上报平台 POST /api/agent-logs 并本地留底）
 
   sillyspec workflow check <name> [--project <p>] [--change <c>] [--json] [--save]
                                       全局 workflow 校验（--save 归档到 .sillyspec/.runtime/workflow-runs/）
@@ -1843,6 +1844,13 @@ SillySpec worktree — git worktree 隔离管理
       }
       break;
     }
+    case 'agent-log': {
+      // 本地 agent 会话日志路径查询/探测（平台会话解析入口）：读 <runtimeRoot>/agent-session-log.json
+      //（run 命令在 agent 环境内自动登记），--detect 现场探测不落盘。协议见 docs/platform-agent-log-protocol.md。
+      const { cmdAgentLog } = await import('./agent-session-log.js');
+      await cmdAgentLog(filteredArgs.slice(1), { json, cwd: dir, specDir });
+      break;
+    }
     case 'dispatch': {
       // SillyHub 派发抽象层的 agent 调用桥（design.md §Phase2 / D-007@v1）：
       // 仅做能力探测（probe）与派发策略生成（hint），**不执行任何 tool 调用**——
@@ -2696,6 +2704,7 @@ SillySpec config — local.yaml 配置键速查
         'quick-guard.json': 'quick baseline 守卫（旧位置）',
         'worktrees': 'worktree meta（hooks 侧）',
         'user-inputs.md': '步骤输出/输入历史追加日志',
+        'agent-session-log.json': '本地 agent 会话日志登记留底（run 命令自动 REST 上报平台 POST /api/agent-logs，见 docs/platform-agent-log-protocol.md）',
         'current-quick-run-id': '当前 quick sessionId 指针（--done 无 --change 时 fallback）',
         'scan-runs': '平台模式 scan/workflow 取证目录',
         'artifacts': '派生产物目录（init 预建）',
@@ -2733,7 +2742,7 @@ SillySpec config — local.yaml 配置键速查
       break;
     }
     default: {
-      const topCommands = ['init', 'setup', 'run', 'progress', 'worktree', 'dispatch', 'local', 'workflow', 'gate', 'derive', 'backfill-reviews', 'register-stage-review', 'modules', 'change-rename', 'knowledge', 'platform', 'scan', 'brainstorm', 'plan', 'execute', 'verify', 'archive', 'quick', 'explore', 'status', 'doctor', 'auto', 'runtime'];
+      const topCommands = ['init', 'setup', 'run', 'progress', 'worktree', 'dispatch', 'agent-log', 'local', 'workflow', 'gate', 'derive', 'backfill-reviews', 'register-stage-review', 'modules', 'change-rename', 'knowledge', 'platform', 'scan', 'brainstorm', 'plan', 'execute', 'verify', 'archive', 'quick', 'explore', 'status', 'doctor', 'auto', 'runtime'];
       const suggestion = didYouMean(command, topCommands);
       console.error(`❌ 未知命令: ${command}`);
       if (command === '--status') {

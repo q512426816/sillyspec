@@ -372,17 +372,39 @@ export function verifyApiParity(specBase, scanRoot, runtimeRoot, changeName = nu
     return { ok: true, missingBackend: [], unusedBackend: [], summary: 'No scan root for parity check', backendCount: allProviderEndpoints.length, frontendCount: 0 }
   }
 
+  // ── 现算端点并入基线（坑 probe5-endpoint-baseline-stale，2026-08-22 实证：endpoints 基线
+  // 是 execute 时落的存量 artifacts，verify 时主仓已被并行会话/部署扰动推进——存量基线与当前
+  // 代码失配 → 前端调用（当前代码）对不上旧端点集 → missingBackend 全量误报。现算当前代码的
+  // 后端端点并入比对集：missingBackend 判定以「当前真实代码 ∪ 存量基线」为准（现算覆盖大部分、
+  // 存量补充跨仓/已删代码）；unusedBackend 只对现算端点算（存量过期端点不再误报 unused）。
+  let liveEndpoints = []
+  try { liveEndpoints = scanBackendEndpoints(scanRoot) } catch { /* 现算失败退回纯存量基线 */ }
+  const liveKeys = new Set(liveEndpoints.map(e => `${e.method} ${e.path}`))
+  const mergedProviderEndpoints = [...allProviderEndpoints]
+  for (const e of liveEndpoints) {
+    const key = `${e.method} ${e.path}`
+    if (!allProviderEndpoints.some(p => `${p.method} ${p.path}` === key)) {
+      mergedProviderEndpoints.push(e)
+    }
+  }
+
   const frontendCalls = scanFrontendApiCalls(scanRoot)
-  const { missingBackend, unusedBackend } = diffApiParity(frontendCalls, allProviderEndpoints)
+  const { missingBackend, unusedBackend } = diffApiParity(frontendCalls, mergedProviderEndpoints)
+  // unusedBackend 收窄到现算端点（存量 artifact 的过期端点不参与——它不在当前代码里，
+  // 「前端未调用」可能是端点已被重构掉而非真泄漏）
+  const narrowedUnused = unusedBackend.filter(u => {
+    const key = `${u.method} ${u.path}`
+    return liveKeys.has(key) || liveEndpoints.length === 0
+  })
 
   const ok = missingBackend.length === 0
   let summary = ok
-    ? `✅ API parity check passed: ${allProviderEndpoints.length} backend endpoints, ${frontendCalls.length} frontend calls`
+    ? `✅ API parity check passed: ${mergedProviderEndpoints.length} backend endpoints (live ${liveEndpoints.length} + artifact ${allProviderEndpoints.length}), ${frontendCalls.length} frontend calls`
     : `❌ API parity check failed: ${missingBackend.length} frontend calls have no matching backend endpoint`
 
-  if (unusedBackend.length > 0) {
-    summary += ` | ${unusedBackend.length} backend endpoints unused by frontend`
+  if (narrowedUnused.length > 0) {
+    summary += ` | ${narrowedUnused.length} backend endpoints unused by frontend`
   }
 
-  return { ok, missingBackend, unusedBackend, summary, backendCount: allProviderEndpoints.length, frontendCount: frontendCalls.length }
+  return { ok, missingBackend, unusedBackend: narrowedUnused, summary, backendCount: mergedProviderEndpoints.length, frontendCount: frontendCalls.length }
 }
