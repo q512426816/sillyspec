@@ -1566,7 +1566,7 @@ SillySpec worktree — git worktree 隔离管理
             base = baseVal;
           }
 
-          const { applyWorktree, withMainApplyLock } = await import('./worktree-apply.js');
+          const { applyWorktree, withMainRepoLock } = await import('./worktree-apply.js');
           // W3 task-09：apply 链路构造 ctx（D-013），让 task-05 applyWorktree 按 ctx 区分主仓 A5 / 跨仓 no-op。
           // 跨仓 apply=no-op（G1 D-009）：校验 review.head 是跨仓真实 commit + 跳过 wm.cleanup。
           // ctx 构造 fail-closed（约束②）——跨仓配置错时 apply 必须阻断（走错仓=数据所有权事故），不降级。
@@ -1584,7 +1584,7 @@ SillySpec worktree — git worktree 隔离管理
           try {
             result = checkOnly
               ? applyWorktree(wtName, { cwd: dir, checkOnly, merge, base, ctx: _applyCtx, skipOverlap })
-              : await withMainApplyLock(dir, wtName, () => applyWorktree(wtName, { cwd: dir, checkOnly, merge, base, ctx: _applyCtx, skipOverlap }));
+              : await withMainRepoLock(dir, wtName, 'apply', () => applyWorktree(wtName, { cwd: dir, checkOnly, merge, base, ctx: _applyCtx, skipOverlap }));
           } catch (lockErr) {
             console.error(`❌ ${lockErr.message}`);
             process.exit(1);
@@ -1696,11 +1696,11 @@ SillySpec worktree — git worktree 隔离管理
           console.log('');
           if (assessment.decision === 'SAFE' || assessment.decision === 'WARNING') {
             console.log('Action: auto-applying...');
-            const { applyWorktree, withMainApplyLock } = await import('./worktree-apply.js');
-            // 主仓 apply 互斥锁（与手动 apply 同款）：自动 apply 同样改主仓工作区，必须互斥
+            const { applyWorktree, withMainRepoLock } = await import('./worktree-apply.js');
+            // 主仓互斥锁（与手动 apply 同款）：自动 apply 同样改主仓工作区，必须互斥
             let applyResult;
             try {
-              applyResult = await withMainApplyLock(dir, wtName, () => applyWorktree(wtName, { cwd: dir, ctx: _assessCtx }));
+              applyResult = await withMainRepoLock(dir, wtName, 'assess-auto-apply', () => applyWorktree(wtName, { cwd: dir, ctx: _assessCtx }));
             } catch (lockErr) {
               console.error(`❌ 自动 apply 未执行：${lockErr.message}`);
               break;
@@ -1803,7 +1803,10 @@ SillySpec worktree — git worktree 隔离管理
           }
           const forceFlag = args.includes('--force');
           try {
-            const result = wm.cleanup(wtName, { force: forceFlag });
+            // 主仓互斥锁（坑 main-repo-no-mutex 二批）：cleanup 删 worktree 注册表/分支/目录，
+            // 与并行会话的 apply/cleanup 互踩会互相清——与其他写主仓操作共用一把 main-repo.lock
+            const { withMainRepoLock } = await import('./worktree-apply.js');
+            const result = await withMainRepoLock(dir, wtName, 'worktree-cleanup', () => wm.cleanup(wtName, { force: forceFlag }));
             if (result.result === 'cleaned' || result.result === 'force-cleaned') {
               console.log(`✅ worktree 已清理: ${wtName} (mode: ${result.mode})`);
               if (result.details?.length > 0) {

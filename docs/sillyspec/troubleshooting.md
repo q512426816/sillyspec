@@ -592,3 +592,25 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 4. 新增 src/datetime.js 的 nowWallClock()（本地墙钟 YYYY-MM-DD HH:mm:ss，手工拼接零 locale 依赖），四处替换（taskcard created_at / scan-fix-headers created_at / <now-iso-datetime> 占位符值——名字带 iso 是历史遗留，注释说明 / _module-map generated_at）；created_at 是纯文档字段（postcheck/gates 不读格式）改值零破坏。
 
 测试 worktree-deps-fakelink.test.mjs（8 断言：真实目录残留非假 linked / 子模块 installed 真话 / broken junction 重建 / checkDepsFreshness 子模块 missing 自愈闭环）、worktree-apply-mutex-skipoverlap.test.mjs（19 断言：--skip-overlap 部分应用+worktree 保留 / 全部重叠报错 / 无 flag 零回归 / 锁被占 fail-closed 含持有者 / 正常路径透传+释放）、platform-sync-self-heal.test.mjs 扩展（+7 断言：push 409 内容一致自愈 / 冲突文件单行降噪不刷横幅）、datetime-wallclock.test.mjs（5 断言）、taskcard.test.mjs C1 补本地墙钟断言；platform-sync-silent-death 横幅措辞断言同步更新。**关联记忆**：`[[sillyspec-provision-preexisting-dir-fake-linked]]`、`[[sillyspec-main-apply-no-mutex]]`、`[[sillyspec-apply-overlap-all-or-nothing]]`、`[[sillyspec-content-equals-sort-typeerror]]`、`[[sillyspec-push-409-foreign-noise]]`、`[[sillyspec-sync-conflict-banner-spam]]`、`[[sillyspec-taskcard-created-at-utc]]`
+
+## 37. 四坑：--merge 冲突即 abort / 已 merge 分支误判未落地 / archive 子确认碎 / verify 对账误伤+跨会话杀进程（2026-08-23 闭环）
+
+**症状（用户实证）**：
+1. `worktree apply --merge` 遇冲突直接 abort 不给手工解决的机会（要自己重新 git merge，冲突现场与上下文全丢）。
+2. `worktree cleanup` 的「未落地」判定比较文件内容而非合并可达性——分支已 merge 后主仓后续又改同批文件 → 逐字节不等 → 误判需 --force（用户用 git branch --merged 自证）。
+3. archive 模块文档同步的子确认门（requiresWait 三段式）与用户已确认的整个 archive 流程重复，交互碎。
+4. verify 实测对账撞并行会话在途 WIP 误伤本变更判定（可复验归因但阻断已发生）；且多会话并发工具互斥缺位（上批只覆盖了 apply）。
+
+**根因**：
+1. applyByMerge 的 catch 无条件 `git merge --abort`；且「主仓 dirty 拒绝启动（无 MERGE_HEAD）」与「真冲突」混为一谈都报「冲突请手动解决」。
+2. hasUnappliedChanges 判「已在 main」的口径是内容比对（worktree diff vs main HEAD + 工作区逐字节）——merge 后主仓演进必然逐字节不等；全函数无一处查 merge-base/祖先关系。
+3. sync-module-docs 的 requiresWait 硬门与 verify 文档同步阻断门、归档移动前死信校验、「确认归档 --confirm」四层确认语义重叠；硬门防的是「漏确认」而 --done --answer 一步可绕，安全增益有限、交互成本实高（brainstorm-auto 先例注释即「requiresWait 逼 AI 伪造 --answer」）。
+4. verify 服务 PID 单文件 `verify-services.pids` 无归属——A 会话 --done kill 文件里全部 PID，把 B 正在收集 Runtime Evidence 的服务一并杀掉（receipt 单份还会被后写覆盖）；对账四处（无 meta 回退的 module diff / 删除对账 / probe6 / probe5 回退）直接取主仓 HEAD diff 无归属过滤——并行 WIP 全量混入（误命中他者模块跑他者测试 / 他者删除产出未声明删除误报）；cleanup/archive 收尾与 apply 一样改主仓但无互斥。
+
+**修复（2026-08-23）**：
+1. applyByMerge 加 keepConflicts 参数并导出：**显式 --merge 冲突保留 merge-in-progress 现场** + 手工解决指引（编辑 → git add → git commit；或 git merge --abort 放弃）+ worktree/分支保留；ENOBUFS 自动降级路径显式传 false 维持 abort（无人善后）；catch 先验 MERGE_HEAD 区分「未启动（dirty 拒绝，指引 commit/stash/--skip-overlap）」与「真冲突（保留现场）」——原实现混报。
+2. hasUnappliedChanges 插合并可达性短路（四条件全真才短路、任一拿不准落回原逐字节逻辑 fail-open）：meta.branch 存在 + worktree HEAD===分支 tip + 工作区干净 + `merge-base(branch,HEAD)===tip`（tip 是 HEAD 祖先 = 全部交付已在主仓历史；不用 --is-ancestor——gitQuiet 无法区分 exit 1 与失败）→ hasChanges:false。修复一处四调用方受益（cleanup 拦截/doctor/归档保留判定/--skip-overlap 收尾）；cherry-pick 落地（tip 非祖先）走原路径零回归。
+3. sync-module-docs 降级 conditionalWait（brainstorm-auto 同款）：常规同步（无 needs_review/未映射/标记缺失）直接写入 + diff 摘要进 --output 后 --done；异常才 --wait 请裁决（选项沿用确认写入/跳过同步）。用户确认收敛到「确认归档 --confirm」一处；坑 4 的「无机会写入」不回归（写入动作由 prompt 约定在 --done 前）。
+4. ① 服务 PID 按变更分片 `verify-services-<change>.pids`（prompt 指引/reapVerifyServices 只回收本变更 + 兼容旧单文件；receipt 同名分片、stage-contract 优先读分片兼容旧名）；② 对账归属过滤——新零环模块 foreign-declared.js 的 collectForeignDeclaredFiles/splitOwnVsForeignDiffFiles（口径同坑 35：其他 quick 会话 guard.allowedFiles + 其他变更 design §6 清单；**无主文件保留参与判定 fail-closed**），接入四处（resolveMainChangedFiles 无 meta 回退 / runVerifyDeletionCheck / probe6 / _resolveDiffFilesForParity 无 meta 回退）+ 实测失败归因提示（testCheck failed 且主仓 dirty 命中他者声明 → 提示复验归因）；③ withMainApplyLock 泛化 withMainRepoLock（锁文件 main-repo.lock + purpose 字段 + env 覆盖等待时长 + process exit 钩子防 archive guard exit(1) 漏锁），新纳入 worktree cleanup CLI 入口、execute 收尾自动 cleanup（锁超时降级保留 worktree 不阻断完成）、archiveChangeDirectory（归档收尾）；verify 长耗时实测不上锁（靠归属过滤与归因提示治误伤）。
+
+测试 worktree-apply-merge-fallback 重写场景 C/E + 新增 D（24 断言：真冲突保留现场 MERGE_HEAD/降级路径 abort/dirty 未启动区分指引）、worktree-has-unapplied-changes 新增 ⑱⑲（已 merge 后主仓演进 → false 走短路；未 merge 内容分叉 → true）+ 两条 reason 断言兼容短路文案（40 断言）、worktree-apply-relax-committed-advance 场景 2 按新语义更新（17 断言）、worktree-apply-mutex-skipoverlap 更新锁名/purpose + 新增 cleanup CLI 撞锁（22 断言）、archive-sync-module-docs-wait 按conditionalWait 重写（11 断言）、verify-concurrency-fixes 新增（18 断言：分片互不误杀 e2e 真子进程 / foreign 收集与切分 / 删除对账过滤集成）。**关联记忆**：`[[sillyspec-merge-conflict-abort-no-chance]]`、`[[sillyspec-cleanup-merged-branch-byte-false-positive]]`、`[[sillyspec-archive-subconfirm-redundant]]`、`[[sillyspec-verify-pids-cross-session-kill]]`、`[[sillyspec-verify-reconcile-foreign-wip]]`、`[[sillyspec-main-repo-no-mutex]]`

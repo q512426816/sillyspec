@@ -44,9 +44,17 @@ export const definition = {
     },
     {
       name: 'sync-module-docs',
-      // 坑 verify-archive-flow-pitfalls 坑4：缺 requiresWait 时 --continue --answer 会直接标 completed、
-      // agent 无机会按 module-impact.md 写入模块卡片。加 requiresWait 使 --continue 确认后回到本步执行写入
-      requiresWait: true,
+      // conditionalWait（坑 archive-subconfirm-redundant，2026-08-23 实证：requiresWait 硬门强制
+      // 三段式 --wait → --continue --answer → --done，与 verify 文档同步阻断门、归档移动前死信
+      // 校验、下一步「确认归档 --confirm」四层确认重复，交互碎。改 conditionalWait（brainstorm-auto
+      // 同款先例）：常规同步直接写入 + --done（agent 写入动作在 --done 前完成，坑 verify-archive-
+      // flow-pitfalls 坑4 的「无机会写入」不回归）；仅异常（needs_review/未映射/标记缺失）才 --wait
+      // 请用户裁决。用户确认收敛到「确认归档 --confirm」一处。
+      conditionalWait: true,
+      repeatableWait: true,
+      maxWaitRounds: 3,
+      waitReason: '等待用户裁决模块文档同步异常',
+      waitOptions: ['确认写入', '跳过同步'],
       prompt: `根据 module-impact.md 同步更新模块索引和卡片文档。
 
 ### ⚠️ 核心原则：结构化事实改 _module-map.yaml，语义解释改模块卡片
@@ -109,17 +117,17 @@ created_at: <now-datetime>
 <!-- MANUAL_NOTES_END -->
 \`\`\`
 
-4. 展示所有更新内容（diff 摘要），**必须暂停等待用户确认**
-   - 调用：\`sillyspec run archive --wait --reason "等待用户确认模块文档同步" --options "确认写入,跳过同步" --output "diff 摘要"\`
-5. **只有用户通过 --continue --answer "确认写入" 后才写入文件**
-   - 写入 _module-map.yaml 和受影响的模块卡片
-6. 用户拒绝时，不写入，但提示"module-impact.md 已保留，可稍后手动同步"
-7. 回填 module-impact.md 的"更新结果"表格，区分目标：
+4. 展示所有更新内容（diff 摘要），按同步状态分流：
+   - **常规**（无 needs_review 影响、无 unmapped 模块、人工备注标记齐全）→ **直接写入** _module-map.yaml 和受影响的模块卡片，diff 摘要写入 --output 后 --done（本步不单独弹确认——用户确认收敛到下一步「确认归档 --confirm」，该步展示同一 diff 摘要）
+   - **异常**（含 needs_review 影响项 / unmapped 模块 / 人工备注标记缺失或重复 / 覆盖会丢失手动维护字段）→ 暂停请用户裁决：
+     \`sillyspec run archive --wait --reason "等待用户裁决模块文档同步异常" --options "确认写入,跳过同步" --output "diff 摘要 + 异常说明"\`
+     用户 --continue --answer "确认写入" 后写入；"跳过同步" 则不写入，提示 "module-impact.md 已保留，可稍后手动同步"
+5. 回填 module-impact.md 的"更新结果"表格，区分目标：
    - 目标列写 "\`_module-map.yaml: <module-id>\`" 或 "\`modules/<module-id>.md\`"
-8. **同步完成后**，如需刷新 \`_module-map.yaml\` 索引：\`sillyspec modules rebuild --force\`（默认 dry-run 只预览不写；\`--force\` 才覆盖，但会清空 tags/entrypoints/main_symbols/depends_on/used_by 等手动维护字段——与 archive-impact 的「人工备注保护」约束冲突，仅当手动字段已并入骨架或可接受覆盖时用；优先手动更新 dependencies.md / 模块卡片）
+6. **同步完成后**，如需刷新 \`_module-map.yaml\` 索引：\`sillyspec modules rebuild --force\`（默认 dry-run 只预览不写；\`--force\` 才覆盖，但会清空 tags/entrypoints/main_symbols/depends_on/used_by 等手动维护字段——与 archive-impact 的「人工备注保护」约束冲突，仅当手动字段已并入骨架或可接受覆盖时用；优先手动更新 dependencies.md / 模块卡片）
 
 ### 输出
-已更新的文件路径列表 + 用户确认状态`,
+已更新的文件路径列表 + diff 摘要（异常时附裁决结果）`,
       outputHint: '模块文档更新结果',
       optional: false
     },

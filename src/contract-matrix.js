@@ -11,6 +11,7 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from 'fs'
 import { join, resolve, basename, relative } from 'path'
 import { gitQuiet } from './git-helper.js'
+import { splitOwnVsForeignDiffFiles } from './foreign-declared.js'
 import {
   scanBackendEndpoints,
   scanFrontendApiCalls,
@@ -364,9 +365,16 @@ function _resolveDiffFilesForParity(scanRoot, changeName) {
         }
       }
     }
-    // 无 meta（brownfield/已 cleanup）：主仓未提交 diff
+    // 无 meta（brownfield/已 cleanup）：主仓未提交 diff。他者声明归属过滤（坑
+    // verify-reconcile-foreign-wip）：并行会话在途 WIP 的前端文件混入会产出「他者调用 ×
+    // 本变更端点」的 missingBackend 误报——剔除他者显式声明文件（fail-closed：无主保留）。
     const out = gitQuiet(scanRoot, ['diff', '--name-only', 'HEAD'], { timeout: 30000 })
-    return out !== null ? out.split('\n').filter(Boolean) : null
+    if (out === null) return null
+    const { own, foreign } = splitOwnVsForeignDiffFiles(scanRoot, changeName, out.split('\n').filter(Boolean))
+    if (foreign.length > 0) {
+      console.warn(`⚠️ parity 对账已排除 ${foreign.length} 个并行会话声明的文件（${foreign.slice(0, 5).map(x => x.file).join(', ')}${foreign.length > 5 ? ' 等' : ''}）`)
+    }
+    return own
   } catch { return null }
 }
 

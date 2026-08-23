@@ -17,7 +17,7 @@
 
 import { execSync } from 'child_process'
 import { gitQuiet } from './git-helper.js'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync } from 'fs'
 import { join } from 'path'
 import { verifyApiParity } from './contract-matrix.js'
 import { parseFileChangeListDetailed, pathMatches } from './change-list.js'
@@ -563,6 +563,12 @@ function gitChangedFiles(cwd) {
   return runGitDiffNameOnly(cwd, '')
 }
 
+// 他者声明归属过滤（坑 verify-reconcile-foreign-wip）：实现在零环模块 foreign-declared.js
+// （contract-matrix 被 verify-postcheck import，parity 侧不能反向 import 本模块），此处
+// re-export 保持既有消费方路径不变
+export { collectForeignDeclaredFiles, splitOwnVsForeignDiffFiles } from './foreign-declared.js'
+import { splitOwnVsForeignDiffFiles } from './foreign-declared.js'
+
 /**
  * 解析 verify 对账用的变更文件集（worktree-aware）。
  *
@@ -678,7 +684,18 @@ function resolveMainChangedFiles(cwd, changeName) {
       }
     }
   }
-  return gitChangedFiles(cwd)
+  const fallback = gitChangedFiles(cwd)
+  // 无 meta 回退（主仓 HEAD diff 全量）撞并行会话在途 WIP 的归属过滤（坑
+  // verify-reconcile-foreign-wip）：他者显式声明（quick --files / 他者 design 清单）的
+  // 文件剔除归他者——不混入本变更 module 命中。无主文件保留（fail-closed）。
+  if (fallback !== null && changeName && fallback.length > 0) {
+    const { own, foreign } = splitOwnVsForeignDiffFiles(cwd, changeName, fallback)
+    if (foreign.length > 0) {
+      console.warn(`⚠️ verify 对账已排除 ${foreign.length} 个并行会话声明的文件（不参与本变更判定）：${foreign.slice(0, 5).map(x => `${x.file}←${x.owners[0]}`).join(', ')}${foreign.length > 5 ? ' 等' : ''}`)
+      return own
+    }
+  }
+  return fallback
 }
 
 /**
@@ -1279,8 +1296,20 @@ export function runVerifyDeletionCheck({ cwd, specBase, changeName = null }) {
 
   // 排除交付物外文件（.sillyspec/ 变更包/运行时/quicklog + meta.json），避免污染删除信号。
   // 复用 worktree-apply.js 的 filterDeliverableFiles 去双写（坑3：保留 .sillyspec/docs/）。
-  const deliverable = filterDeliverableFiles(deletions.map(d => d.path))
+  let deliverable = filterDeliverableFiles(deletions.map(d => d.path))
     .map(p => deletions.find(d => d.path === p))
+
+  // 他者声明归属过滤（坑 verify-reconcile-foreign-wip）：主仓 HEAD diff 撞并行会话在途
+  // WIP 时，他者显式声明（quick --files / 他者 design 清单）的删除不参与本变更删除对账
+  // （否则「他者删的文件 × 本变更 design 三态」产出未声明删除误报）。无主删除保留（fail-closed）。
+  if (changeName && deliverable.length > 0) {
+    const { own, foreign } = splitOwnVsForeignDiffFiles(cwd, changeName, deliverable.map(d => d.path))
+    if (foreign.length > 0) {
+      console.warn(`⚠️ 删除对账已排除 ${foreign.length} 个并行会话声明的删除（${foreign.slice(0, 5).map(x => `${x.file}←${x.owners[0]}`).join(', ')}${foreign.length > 5 ? ' 等' : ''}）`)
+      const keep = new Set(own)
+      deliverable = deliverable.filter(d => keep.has(d.path))
+    }
+  }
 
   if (deliverable.length === 0) {
     return { status: 'skipped', highRisk: [], mediumRisk: [], compliant: [],

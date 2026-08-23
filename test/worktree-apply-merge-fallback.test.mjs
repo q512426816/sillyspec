@@ -17,9 +17,10 @@ import { execSync } from 'child_process'
 import { applyWorktree } from '../src/worktree-apply.js'
 
 let failed = 0
+let passedCount = 0
 const failures = []
 function assertTrue(cond, msg) {
-  if (cond) console.log(`  ✅ PASS: ${msg}`)
+  if (cond) { passedCount++; console.log(`  ✅ PASS: ${msg}`) }
   else { failed++; failures.push(msg); console.log(`  ❌ FAIL: ${msg}`) }
 }
 function sh(cmd, cwd) { execSync(cmd, { cwd, stdio: 'pipe' }) }
@@ -92,30 +93,72 @@ console.log('--- 场景 B: 未提交 dirty（重叠）+ merge=false → 4.5 友�
   process.chdir(os.tmpdir()); fs.rmSync(d, { recursive: true, force: true })
 }
 
-// ── 场景 C: merge 冲突 → 报冲突 + git merge --abort 回滚（FR-5）──
-console.log('--- 场景 C: merge 冲突 → abort 回滚 ---')
+// ── 场景 C: 显式 --merge 真冲突（分叉各改同一行）→ 保留冲突现场供手工解决（坑 merge-conflict-abort-no-chance）──
+// 2026-08-23 起改默认：显式 --merge 冲突不再直接 abort（原行为丢掉冲突现场，用户只能自己重新
+// git merge）——保留 merge-in-progress + 手工解决指引；ENOBUFS 自动降级路径维持 abort（场景 D）；
+// 主仓 dirty 拒绝启动是另一形态（场景 E，无现场可保留）。
+console.log('--- 场景 C: 显式 --merge 真冲突 → 保留冲突现场 ---')
 {
   const d = setupRepo()
-  // worktree 改 base.txt 一行；主仓库改 base.txt 另一行 → merge 冲突
+  // 分叉冲突：worktree commit 改 base.txt；主仓 commit 改同一文件（各自一行改动 → merge 冲突）
   makeWorktree(d, 'tc', (wt) => fs.writeFileSync(path.join(wt, 'base.txt'), 'worktree-line\n'))
-  // 主仓库 working-tree 改 base.txt（未 commit，制造冲突 + 同时也是漂移源）
   fs.writeFileSync(path.join(d, 'base.txt'), 'main-line\n')
+  sh('git add -A && git commit -m main-change', d)
   const beforeMerge = execSync('git rev-parse HEAD', { cwd: d, encoding: 'utf8' }).trim()
   const r = applyWorktree('tc', { cwd: d, merge: true })
   assertTrue(r.merged === false, 'C: 冲突时 result.merged === false')
   assertTrue(r.errors.length > 0, 'C: 冲突时报 error')
   const errText = r.errors.join('\n')
   assertTrue(errText.includes('冲突'), 'C: error 含「冲突」')
-  assertTrue(errText.includes('merge --abort'), 'C: error 提示已 abort')
-  // 主仓库 HEAD 未推进（abort 回滚）
+  assertTrue(errText.includes('保留冲突现场') && errText.includes('git add'), 'C: 指引手工解决（编辑 → git add → git commit）')
+  assertTrue(errText.includes('merge --abort'), 'C: 同时给放弃出路（git merge --abort）')
+  // 主仓处于 merge-in-progress（MERGE_HEAD 存在）——冲突现场保留，未回滚
+  assertTrue(fs.existsSync(path.join(d, '.git', 'MERGE_HEAD')), 'C: 主仓保留 merge-in-progress 现场（MERGE_HEAD 存在）')
   const afterMerge = execSync('git rev-parse HEAD', { cwd: d, encoding: 'utf8' }).trim()
-  assertTrue(afterMerge === beforeMerge, 'C: 主仓库 HEAD 未变（abort 回滚，无半成品合并）')
+  assertTrue(afterMerge === beforeMerge, 'C: HEAD 未推进（冲突未解决未提交）')
+  // 收尾：abort 清现场，避免影响后续 tmp 清理
+  shQuiet('git merge --abort', d)
+  process.chdir(os.tmpdir()); fs.rmSync(d, { recursive: true, force: true })
+}
+
+// ── 场景 D: ENOBUFS 自动降级路径（keepConflicts:false）→ 真冲突 abort 回滚干净态 ──
+console.log('--- 场景 D: 降级路径 keepConflicts:false → abort 回滚 ---')
+{
+  const d = setupRepo()
+  makeWorktree(d, 'tc', (wt) => fs.writeFileSync(path.join(wt, 'base.txt'), 'worktree-line\n'))
+  fs.writeFileSync(path.join(d, 'base.txt'), 'main-line\n')
+  sh('git add -A && git commit -m main-change', d)
+  const beforeMerge = execSync('git rev-parse HEAD', { cwd: d, encoding: 'utf8' }).trim()
+  const { applyByMerge } = await import('../src/worktree-apply.js')
+  const { WorktreeManager } = await import('../src/worktree.js')
+  const result = { ok: false, changedFiles: ['base.txt'], errors: [], warnings: [], merged: false }
+  const r = applyByMerge(result, 'tc', d, new WorktreeManager({ cwd: d }), { keepConflicts: false })
+  assertTrue(r.merged === false && r.errors.length > 0, 'D: 冲突报 error')
+  assertTrue(r.errors.join('\n').includes('已执行 git merge --abort'), 'D: 文案明示已 abort 回滚')
+  assertTrue(!fs.existsSync(path.join(d, '.git', 'MERGE_HEAD')), 'D: 无 merge-in-progress 残留（回滚干净态）')
+  const afterMerge = execSync('git rev-parse HEAD', { cwd: d, encoding: 'utf8' }).trim()
+  assertTrue(afterMerge === beforeMerge, 'D: HEAD 未变')
+  process.chdir(os.tmpdir()); fs.rmSync(d, { recursive: true, force: true })
+}
+
+// ── 场景 E: 主仓 dirty 重叠 → merge 拒绝启动（无 MERGE_HEAD）→ 指引 commit/stash/--skip-overlap ──
+console.log('--- 场景 E: dirty 拒绝启动（与真冲突区分）---')
+{
+  const d = setupRepo()
+  makeWorktree(d, 'tc', (wt) => fs.writeFileSync(path.join(wt, 'base.txt'), 'worktree-line\n'))
+  // 主仓 working-tree dirty 改同一文件（未 commit）→ git merge 拒绝启动
+  fs.writeFileSync(path.join(d, 'base.txt'), 'dirty-main\n')
+  const r = applyWorktree('tc', { cwd: d, merge: true })
+  assertTrue(r.merged === false && r.errors.length > 0, 'E: 报 error')
+  const errText = r.errors.join('\n')
+  assertTrue(errText.includes('未执行成功') || errText.includes('拒绝启动'), 'E: 文案明示 merge 未启动（非冲突）')
+  assertTrue(errText.includes('--skip-overlap') || errText.includes('stash'), 'E: 指引 commit/stash 或 --skip-overlap')
+  assertTrue(!fs.existsSync(path.join(d, '.git', 'MERGE_HEAD')), 'E: 无 merge-in-progress（未启动）')
   process.chdir(os.tmpdir()); fs.rmSync(d, { recursive: true, force: true })
 }
 
 console.log(`\n${'='.repeat(50)}`)
-const total = 14
-console.log(`✅ 通过: ${total - failed}  ❌ 失败: ${failed}`)
+console.log(`✅ 通过: ${passedCount}  ❌ 失败: ${failed}`)
 if (failures.length > 0) { console.log('失败项:'); failures.forEach(f => console.log(`  - ${f}`)) }
 console.log('='.repeat(50))
 if (failed > 0) process.exit(1)

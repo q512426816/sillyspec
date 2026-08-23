@@ -110,7 +110,7 @@ console.log('\n=== ③ verify 服务进程 PID 登记 + 收尾回收（坑 verif
 {
   // prompt 契约：登记指引 + 硬要求措辞
   const prompt = verifyDef.steps.map(s => s.prompt || '').join('\n')
-  assertTrue(prompt.includes('verify-services.pids'), 'verify prompt 含 PID 登记文件指引')
+  assertTrue(prompt.includes('verify-services-<change-name>.pids'), 'verify prompt 含 PID 分片登记文件指引（按变更分片，跨会话不误杀）')
   assertTrue(prompt.includes('自动回收'), 'prompt 明示 CLI 收尾自动回收')
   // 回收器 e2e：真实起一个长驻子进程，写 PID 文件，走 verify gate 收尾（直接调 gates 逻辑较重——
   // 用 node 起一个 sleep 进程 + 手动触发 gates.js 的回收段不可单独导出，改为 e2e：完整 verify --done）
@@ -127,7 +127,7 @@ console.log('\n=== ③ verify 服务进程 PID 登记 + 收尾回收（坑 verif
   child.unref()
   const runtimeRoot = join(d, '.sillyspec', '.runtime')
   fs.mkdirSync(runtimeRoot, { recursive: true })
-  fs.writeFileSync(join(runtimeRoot, 'verify-services.pids'), `${child.pid}\n`)
+  fs.writeFileSync(join(runtimeRoot, `verify-services-${cn}.pids`), `${child.pid}\n`)
   // 直接调回收逻辑：gates.js 的回收段在 runStageCompletionGates 内联——用最小驱动：种 verify 阶段并 --done
   const { ProgressManager } = await import(pathToFileURL(join(root, 'src', 'progress.js')).href)
   const pm = new ProgressManager({ specDir: join(d, '.sillyspec') })
@@ -149,7 +149,7 @@ console.log('\n=== ③ verify 服务进程 PID 登记 + 收尾回收（坑 verif
   let alive = true
   try { process.kill(child.pid, 0) } catch { alive = false }
   assertTrue(!alive, '子进程已被 kill（不再泄漏）')
-  assertTrue(!fs.existsSync(join(runtimeRoot, 'verify-services.pids')), 'PID 文件已清（不重复回收）')
+  assertTrue(!fs.existsSync(join(runtimeRoot, `verify-services-${cn}.pids`)), 'PID 分片文件已清（不重复回收）')
 }
 
 cleanupAll()

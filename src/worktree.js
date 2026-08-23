@@ -1330,6 +1330,41 @@ export class WorktreeManager {
     }
 
     const isDeliverable = f => f && !f.startsWith('.sillyspec/') && f !== 'meta.json';
+    const isDeliverablePath = isDeliverable;
+
+    // 合并可达性短路（坑 cleanup-merged-branch-byte-false-positive，2026-08-23 实证：分支已
+    // merge 进主仓后主仓后续提交又改了同一批文件——下方逐字节判定必然不等 → 误报「未落地」
+    // 拦 cleanup 要 --force，用户只能 git branch --merged 自证。历史可达性才是「交付已进主仓」
+    // 的权威口径：分支 tip 是主仓 HEAD 的祖先 ⟺ diffBase..tip 的全部交付已在主仓历史里，后续
+    // 演进不改写这一事实）。四条件全真才短路，任一拿不准（ref 已删/漂移/git 失败）落回原逐字节
+    // 逻辑 fail-open，cherry-pick 落地（tip 非祖先）同样走原路径——零回归。
+    try {
+      const branch = meta.branch;
+      if (branch) {
+        const tip = gitQuiet(this.cwd, ['rev-parse', '--verify', branch]);
+        const wtHead = gitQuiet(worktreePath, ['rev-parse', 'HEAD']);
+        // 条件②③：worktree HEAD 就是分支 tip（无漂移/未删），且工作区无未 commit/未 track 的
+        // 交付改动（那些不在祖先可达性内，须走逐字节路径逐个核对）
+        if (tip && wtHead && tip === wtHead) {
+          const wtStatus = gitQuiet(worktreePath, ['status', '--porcelain'], { timeout: 30000 });
+          if (wtStatus !== null) {
+            const deliverableDirty = wtStatus.split('\n').filter(Boolean)
+              .map(l => l.slice(3).split(' -> ').pop())
+              .some(isDeliverablePath);
+            if (!deliverableDirty) {
+              // 条件④：merge-base(branch, HEAD) === tip ⟺ tip 是 HEAD 祖先（不用 --is-ancestor：
+              // gitQuiet 把 exit 1「非祖先」与真失败都归 null 无法区分；merge-base 恒 exit 0，
+              // 输出等于 tip 即祖先，ref 失败返回 null 自然落回原逻辑）
+              const mb = gitQuiet(this.cwd, ['merge-base', branch, 'HEAD']);
+              if (mb === tip) {
+                return { hasChanges: false, changedFiles: [], reason: `branch fully merged into main HEAD (tip ${tip.slice(0, 8)} is ancestor; post-merge main edits are later history)` };
+              }
+            }
+          }
+        }
+      }
+    } catch { /* 可达性判定异常 → 落回原逐字节逻辑（fail-open） */ }
+
     try {
       // 1) 候选交付变更（worktree 工作区相对 diffBase）。--no-renames：rename 退化成 D+A，两侧文件都进集
       const trackedRaw = gitQuiet(worktreePath, ['diff', '--no-renames', '--name-only', diffBase], { timeout: 30000 });

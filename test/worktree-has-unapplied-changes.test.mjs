@@ -73,7 +73,9 @@ console.log('--- ① cherry-pick 全合并 → 已应用（false）---')
   writeMeta(wtDir, base)
   const r = hasUnapplied(d)
   assertTrue(r.hasChanges === false, `cherry-pick 全合并 → hasChanges:false（reason: ${r.reason}）`)
-  assertTrue((r.reason || '').includes('already on main'), 'reason 含 already on main')
+  // 坑 cleanup-merged-branch-byte-false-positive 后：分支 tip 是 main 祖先时先走合并可达性短路
+  //（reason 'branch fully merged'），非祖先形态落原逐字节路径（reason 'already on main'）——两者语义一致
+  assertTrue((r.reason || '').includes('already on main') || (r.reason || '').includes('fully merged'), 'reason 含 already on main / fully merged（合并可达性短路）')
   cleanup(d)
 }
 
@@ -196,7 +198,9 @@ console.log('--- ⑩ 短路合集：no meta / dir 缺失 / 无 diffBase / 空 wo
   const d4 = setupRepo(); const base4 = rev('git rev-parse HEAD', d4); const wtDir4 = makeWorktree(d4)
   writeMeta(wtDir4, base4)
   const r4 = hasUnapplied(d4)
-  assertTrue(r4.hasChanges === false && (r4.reason || '').includes('no changes'), `空 worktree → false/no changes（实际: ${r4.reason}）`)
+  // 空 worktree 且分支 tip 即 main HEAD（建了未动）→ 合并可达性短路同样判 false（tip===HEAD 时
+  // merge-base 输出 tip 自身，祖先成立），reason 文案与逐字节路径 'no changes' 二者皆可
+  assertTrue(r4.hasChanges === false && ((r4.reason || '').includes('no changes') || (r4.reason || '').includes('fully merged')), `空 worktree → false（实际: ${r4.reason}）`)
   cleanup(d4)
 }
 
@@ -348,6 +352,39 @@ console.log('--- ⑰ _resolveMainRepoRoot 不依赖 process.cwd（process.cwd �
   const r = wm.hasUnappliedChanges('tc')
   assertTrue(r.hasChanges === false, `process.cwd≠cwd 下 cherry-pick 落地 → 已应用（reason: ${r.reason}）`)
   process.chdir(os.tmpdir()); try { fs.rmSync(d, { recursive: true, force: true }); fs.rmSync(d2, { recursive: true, force: true }) } catch {}
+}
+
+console.log('--- ⑱ 分支已 merge 进主仓后主仓再改同批文件 → false（坑 cleanup-merged-branch-byte-false-positive）---')
+{
+  // 2026-08-23 实证：merge 落地 + 主仓后续演进 → 逐字节判定必然不等 → 误报未落地拦 cleanup
+  // 要 --force（用户只能 git branch --merged 自证）。合并可达性短路：tip 是 HEAD 祖先即已交付。
+  const d = setupRepo(); const base = rev('git rev-parse HEAD', d); const wtDir = makeWorktree(d)
+  // worktree 提交交付变更
+  fs.writeFileSync(path.join(wtDir, 'shared.txt'), 'merged-change\n')
+  sh('git add -A && git commit -m deliver', wtDir)
+  // 主仓 merge 分支，再继续演进同文件
+  sh('git merge --no-ff sillyspec/tc -m mergeit', d)
+  fs.writeFileSync(path.join(d, 'shared.txt'), 'post-merge-evolution\n')
+  sh('git add -A && git commit -m evolve', d)
+  writeMeta(wtDir, base)
+  const r = hasUnapplied(d)
+  assertTrue(r.hasChanges === false, `已 merge + 主仓后续演进 → false（实际 ${r.hasChanges}, reason: ${r.reason}）`)
+  assertTrue((r.reason || '').includes('fully merged'), `reason 走合并可达性短路（实际: ${r.reason}）`)
+  cleanup(d)
+}
+
+console.log('--- ⑲ 对照：分支领先未 merge（主仓后改同文件）→ 仍 true ---')
+{
+  const d = setupRepo(); const base = rev('git rev-parse HEAD', d); const wtDir = makeWorktree(d)
+  fs.writeFileSync(path.join(wtDir, 'shared.txt'), 'branch-change\n')
+  sh('git add -A && git commit -m deliver', wtDir)
+  // 主仓独立演进同文件（不 merge 分支）→ 分支交付未进主仓历史
+  fs.writeFileSync(path.join(d, 'shared.txt'), 'main-own-change\n')
+  sh('git add -A && git commit -m evolve', d)
+  writeMeta(wtDir, base)
+  const r = hasUnapplied(d)
+  assertTrue(r.hasChanges === true, `未 merge + 内容分叉 → true 保留 worktree（实际 ${r.hasChanges}）`)
+  cleanup(d)
 }
 
 console.log(`\n${'='.repeat(50)}`)

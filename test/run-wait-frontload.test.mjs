@@ -110,9 +110,9 @@ console.log('\n=== 2. waitStep 标记 --wait 当场前置 requiresWait 语义 ==
   for (let i = 0; i < syncIdx; i++) { sd.steps[i].status = 'completed'; sd.steps[i].completedAt = new Date().toISOString() }
   await writeProgress(projectDir, CN2, p)
 
-  const out = run(`node "${binCLI}" --dir "${projectDir}" run archive --wait --reason "等待用户确认模块文档同步" --options "确认写入,跳过同步" --output "diff 摘要" --change ${CN2}`)
+  const out = run(`node "${binCLI}" --dir "${projectDir}" run archive --wait --reason "等待用户裁决模块文档同步异常" --options "确认写入,跳过同步" --output "diff 摘要" --change ${CN2}`)
   assert(out.includes('已暂停等待'), '--wait 正常落 waiting')
-  assert(out.includes('requiresWait'), '当场标注本步为 requiresWait 步骤')
+  assert(out.includes('requiresWait/conditionalWait'), '当场标注本步为回执等待步骤（conditionalWait 降级后同提示）')
   assert(out.includes('回到待执行') && out.includes('--done 收尾'), '前置说明「--answer 后回待执行仍需 --done 收尾」')
   assert(out.includes('--done --answer'), '前置给出一步完成命令')
   cleanup(projectDir)

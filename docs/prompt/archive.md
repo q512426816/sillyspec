@@ -64,7 +64,7 @@
 5. module-impact.md 第一行标题必须用中文：# 模块影响分析（Module Impact）— <变更简述>
 
 ### 降级（module-impact.md 不存在）
-若缺失（如旧变更未经新 plan 流程，或 small 变更从未生成），按原生成逻辑补一份：读 .sillyspec/workflows/archive-impact.yaml 的 impact-analyzer 角色规则 + git diff + _module-map.yaml，生成模块影响矩阵（模块 × 影响类型 × 相关文件 × 更新摘要 × needs_review，未匹配文件归入 unmapped 表）落盘 module-impact.md。
+若缺失（如旧变更未经新 plan 流程，或 small 变更从未生成）：先跑 `sillyspec module-impact --change <change-name>`——CLI 按 _module-map.yaml paths 前缀匹配预填「模块影响矩阵」骨架（文件×模块归属 + 未匹配文件清单，机械部分全代算），你只需逐行填「影响类型」（逻辑变更/数据结构变更/接口变更/调用关系变更/配置变更/新增）与 needs_review 标记，补首行中文标题 `# 模块影响分析（Module Impact）— <变更简述>`。骨架无从生成（无 module-map / 无 diff）时才按 archive-impact.yaml 的 impact-analyzer 角色规则全手写。
 
 确认完成后，下一步 sync-module-docs 会读 module-impact.md 更新模块卡片文档。
 ````
@@ -119,7 +119,7 @@
 3. 如果标记缺失或重复 → 在 _module-map.yaml 中标记 needs_review: true
 
 #### 新建模块卡片模板
-一级标题格式 `# <中文名>（<module-id>）`——中文名从模块职责提炼 2-8 字，括号内保留 module-id 原样（sillyhub 平台解析识别用，与 scan 生成约定一致）。
+一级标题格式 `# <中文名>（<module-id>）`——中文名从模块职责提炼 2-8 字，括号内保留 module-id 原样（sillyhub 平台解析识别用，与 scan 生成约定一致）。frontmatter 已带 author/created_at 真值（<git-user>/<now-datetime> 占位符由 CLI 每步替换），照抄即过元数据校验、勿删。
 ```markdown
 ---
 schema_version: 1
@@ -146,17 +146,17 @@ created_at: <now-datetime>
 <!-- MANUAL_NOTES_END -->
 ```
 
-4. 展示所有更新内容（diff 摘要），**必须暂停等待用户确认**
-   - 调用：`sillyspec run archive --wait --reason "等待用户确认模块文档同步" --options "确认写入,跳过同步" --output "diff 摘要"`
-5. **只有用户通过 --continue --answer "确认写入" 后才写入文件**
-   - 写入 _module-map.yaml 和受影响的模块卡片
-6. 用户拒绝时，不写入，但提示"module-impact.md 已保留，可稍后手动同步"
-7. 回填 module-impact.md 的"更新结果"表格，区分目标：
+4. 展示所有更新内容（diff 摘要），按同步状态分流：
+   - **常规**（无 needs_review 影响、无 unmapped 模块、人工备注标记齐全）→ **直接写入** _module-map.yaml 和受影响的模块卡片，diff 摘要写入 --output 后 --done（本步不单独弹确认——用户确认收敛到下一步「确认归档 --confirm」，该步展示同一 diff 摘要）
+   - **异常**（含 needs_review 影响项 / unmapped 模块 / 人工备注标记缺失或重复 / 覆盖会丢失手动维护字段）→ 暂停请用户裁决：
+     `sillyspec run archive --wait --reason "等待用户裁决模块文档同步异常" --options "确认写入,跳过同步" --output "diff 摘要 + 异常说明"`
+     用户 --continue --answer "确认写入" 后写入；"跳过同步" 则不写入，提示 "module-impact.md 已保留，可稍后手动同步"
+5. 回填 module-impact.md 的"更新结果"表格，区分目标：
    - 目标列写 "`_module-map.yaml: <module-id>`" 或 "`modules/<module-id>.md`"
-8. **同步完成后**，如需刷新 `_module-map.yaml` 索引：`sillyspec modules rebuild --force`（默认 dry-run 只预览不写；`--force` 才覆盖，但会清空 tags/entrypoints/main_symbols/depends_on/used_by 等手动维护字段——与 archive-impact 的「人工备注保护」约束冲突，仅当手动字段已并入骨架或可接受覆盖时用；优先手动更新 dependencies.md / 模块卡片）
+6. **同步完成后**，如需刷新 `_module-map.yaml` 索引：`sillyspec modules rebuild --force`（默认 dry-run 只预览不写；`--force` 才覆盖，但会清空 tags/entrypoints/main_symbols/depends_on/used_by 等手动维护字段——与 archive-impact 的「人工备注保护」约束冲突，仅当手动字段已并入骨架或可接受覆盖时用；优先手动更新 dependencies.md / 模块卡片）
 
 ### 输出
-已更新的文件路径列表 + 用户确认状态
+已更新的文件路径列表 + diff 摘要（异常时附裁决结果）
 ````
 
 ---

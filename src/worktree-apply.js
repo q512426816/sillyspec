@@ -330,21 +330,32 @@ function validateCrossRepoNoOp(ctx, projectRoot, changeName) {
  * }}
  */
 /**
- * 主仓 apply 互斥锁（坑 main-apply-no-mutex，2026-08-23 实证：两个会话同时 apply 操作 main
- * 工作区互相清文件——rollbackApply 的 git checkout HEAD、applyByMerge 的 merge、成功后的自动
- * cleanup 都直接改主仓，共享临界区此前零互斥，只能靠人判断收手）。
+ * 主仓级互斥锁（坑 main-apply-no-mutex → 泛化 main-repo-no-mutex，2026-08-23 二批实证：
+ * 除 apply 外，cleanup（worktree 注册表/分支删除）、archive 收尾（目录 rename + 共享 index
+ * 的 git add + marker 删除）同样直接改主仓共享状态且零互斥——两会话并发操作互踩。泛化为
+ * withMainRepoLock：同一把主仓锁保护所有「写主仓的破坏性短操作」（apply / cleanup / archive
+ * 收尾）；verify 的长时间测试执行**不**上锁（读树为主，靠对账归属过滤与归因提示治误伤）。
  *
- * 锁粒度 = 主仓级（竞争资源是 main 工作区本身，非 change）：O_EXCL 文件锁复用 quicklog 的
- * withFileLock（stale 偷锁 + rename 防 TOCTOU），锁内容写 {pid, changeName, startedAt} 供超时
- * 报错展示持有者。staleMs 10min（apply 大 diff/deps 可慢）；抢锁等待 60s 仍失败 → fail-closed
- * 报错退出：apply 是破坏性操作，并发互踩不可自动恢复，宁可明确失败让人重试，不硬闯。
- * checkOnly（assess 只读路径）不加锁。
+ * 锁粒度 = 主仓级（竞争资源是 main 工作区/.git 状态，非 change）：O_EXCL 文件锁复用
+ * quicklog 的 withFileLock（stale 偷锁 + rename 防 TOCTOU），锁内容写
+ * {pid, changeName, purpose, startedAt} 供超时报错展示持有者。staleMs 10min（大 diff/deps
+ * 可慢）；抢锁等待 60s 仍失败 → fail-closed 报错退出：写主仓操作并发互踩不可自动恢复，
+ * 宁可明确失败让人重试，不硬闯。只读路径（--check-only/status）不加锁。
  */
-export async function withMainApplyLock(projectRoot, changeName, fn, opts = {}) {
+export async function withMainRepoLock(projectRoot, changeName, purpose, fn, opts = {}) {
   const { withFileLock } = await import('./quicklog.js');
-  const lockPath = join(projectRoot, '.sillyspec', '.runtime', 'main-apply.lock');
-  const holder = JSON.stringify({ pid: process.pid, changeName, startedAt: new Date().toISOString() });
-  const { timeoutMs = 60 * 1000, staleMs = 10 * 60 * 1000, retryMs = 200 } = opts;
+  const lockPath = join(projectRoot, '.sillyspec', '.runtime', 'main-repo.lock');
+  const holder = JSON.stringify({ pid: process.pid, changeName, purpose: purpose || 'unknown', startedAt: new Date().toISOString() });
+  const { staleMs = 10 * 60 * 1000, retryMs = 200 } = opts;
+  // 等待时长可被 env 覆盖（测试与紧急调参用；opts.timeoutMs 显式传入仍最高优先）
+  const envTimeout = parseInt(process.env.SILLYSPEC_MAIN_REPO_LOCK_TIMEOUT_MS || '', 10);
+  const defaultTimeout = Number.isFinite(envTimeout) && envTimeout > 0 ? envTimeout : 60 * 1000;
+  const { timeoutMs = defaultTimeout } = opts;
+  // 进程退出兜底清锁：临界区内 process.exit（如 archiveChangeDirectory 的 guard exit(1)）不会走
+  // withFileLock 的 finally——不挂此钩子锁会残留挡他者直到 staleMs（10min）被偷。正常路径
+  // finally 先释放并注销钩子，钩子只在进程真正退出时执行，无双删竞态。
+  const onExit = () => { try { unlinkSync(lockPath) } catch {} };
+  process.on('exit', onExit);
   try {
     return await withFileLock(lockPath, fn, {
       content: holder,
@@ -359,15 +370,17 @@ export async function withMainApplyLock(projectRoot, changeName, fn, opts = {}) 
         const raw = readFileSync(lockPath, 'utf8');
         try {
           const h = JSON.parse(raw);
-          holderInfo = `（持有者: pid=${h.pid}, change=${h.changeName}, 始于 ${h.startedAt}）`;
+          holderInfo = `（持有者: pid=${h.pid}, change=${h.changeName}, 操作=${h.purpose}, 始于 ${h.startedAt}）`;
         } catch { holderInfo = `（持有者标识: ${raw.slice(0, 120)}）`; }
       } catch { /* 锁文件已被释放（竞态窗口）→ 无持有者信息 */ }
       throw new Error(
-        `主仓 apply 互斥锁被占用${holderInfo}：另一会话正在向主仓应用变更（apply 会写主仓工作区/回滚/清理，并发互踩会互相清文件）。` +
+        `主仓互斥锁被占用${holderInfo}：另一会话正在对主仓执行写操作（apply/cleanup/归档会写主仓工作区与 git 状态，并发互踩会互相清文件）。` +
         `等它完成后重试即可；若确认持有进程已崩溃退出，删除锁文件后重试：${lockPath}`
       );
     }
     throw e;
+  } finally {
+    process.removeListener('exit', onExit);
   }
 }
 
@@ -525,8 +538,9 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
   // --- 4.6 显式 --merge：用户显式选择 git merge 兜底（主干已提交推进重叠时的三方合并） ---
   // 触发点从「4.5 baseline 漂移自动降级」改为「用户显式 --merge flag」（D-001 保留，触发方式变化）。
   // 用 --merge 时跳过未提交 dirty 拦截——merge 同样要求工作区相对干净，此处仅提示风险，真正失败由 applyByMerge 报告。
+  // keepConflicts:true——显式 --merge 冲突时保留现场供手工解决（不再直接 abort 丢上下文）。
   if (merge && !checkOnly) {
-    return applyByMerge(result, changeName, projectRoot, wm);
+    return applyByMerge(result, changeName, projectRoot, wm, { keepConflicts: true });
   }
 
   // --- 4.5 校验：主工作区「未提交」脏文件是否与本次变更重叠（overlap-only 拦截）---
@@ -835,7 +849,8 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
         [`patch 生成超出进程缓冲区（ENOBUFS，超大 diff）——自动降级 git merge 路径应用`]
       );
       try {
-        return applyByMerge(result, changeName, projectRoot, wm);
+        // keepConflicts:false——自动降级路径无人善后冲突状态，维持 abort 回滚干净态
+        return applyByMerge(result, changeName, projectRoot, wm, { keepConflicts: false });
       } catch (mergeErr) {
         result.errors.push(`ENOBUFS 降级 merge 也失败: ${mergeErr.message}`);
         return result;
@@ -1072,7 +1087,14 @@ function preAlignBaselineToMain({ meta, branch, projectRoot, result }) {
  * @param {object} wm - WorktreeManager 实例
  * @returns {object} result（merged=true 表示走了 merge 降级）
  */
-function applyByMerge(result, changeName, projectRoot, wm) {
+// opts.keepConflicts（坑 merge-conflict-abort-no-chance，2026-08-23 实证：--merge 遇冲突直接
+// abort 回滚，用户想手工解决只能自己重新 git merge——冲突现场与解决上下文全部丢失）：
+//   true（显式 --merge 路径）→ 冲突时保留 merge-in-progress 现场 + 完整解决指引（编辑冲突 →
+//     git add + git commit；或 git merge --abort 放弃）。worktree/分支/meta 本就保留。
+//   false（ENOBUFS 自动降级路径，默认）→ 维持 abort——自动降级无人善后冲突状态，回滚到
+//     干净态让用户显式重来更安全。
+export function applyByMerge(result, changeName, projectRoot, wm, opts = {}) {
+  const { keepConflicts = false } = opts;
   const meta = wm.getMeta(changeName);
   const changedFiles = result.changedFiles || [];
   // 用 meta.branch（native-worktree 模式分支名可能不是 sillyspec/<change>），不硬编码。
@@ -1084,12 +1106,36 @@ function applyByMerge(result, changeName, projectRoot, wm) {
   try {
     git(projectRoot, ['merge', '--no-ff', branch], { timeout: 30000 });
   } catch (e) {
-    // merge 冲突：取冲突文件列表 + abort 回滚（不 cleanup，保留 worktree）
+    // merge 失败两形态须区分（原实现混为一谈：dirty 拒绝启动也被当「冲突」报）：
+    //   ① 未启动：主仓有会被合并覆盖的未提交改动，git 直接拒绝（无 MERGE_HEAD）——没有现场
+    //      可保留也无需 abort，指引 commit/stash 或 --skip-overlap
+    //   ② 真冲突：merge 已启动留 MERGE_HEAD + 冲突标记——keepConflicts 时保留现场供手工解决
     let conflictFiles = [];
     try {
       const cf = gitQuiet(projectRoot, ['diff', '--name-only', '--diff-filter=U']);
       conflictFiles = cf ? cf.split('\n').filter(Boolean) : [];
     } catch {}
+    const mergeInProgress = gitQuiet(projectRoot, ['rev-parse', '-q', '--verify', 'MERGE_HEAD']) !== null;
+    if (!mergeInProgress) {
+      result.errors.push(
+        `git merge ${branch} 未执行成功——主仓有会被合并覆盖的未提交改动，git 拒绝启动合并（无冲突现场）。\n` +
+        `git 输出: ${String(e.message || '').split('\n').slice(0, 3).join(' | ').slice(0, 300)}\n` +
+        `请先 commit/stash 主仓改动后重试，或用 --skip-overlap 应用非重叠子集。`
+      );
+      return result;
+    }
+    if (keepConflicts) {
+      // 保留冲突现场（显式 --merge）：主仓处于 merge-in-progress（MERGE_HEAD + unmerged index +
+      // 冲突标记），用户可直接手工解决——解决前 git 操作受限由指引明示，sillyspec 主仓命令
+      // （apply/cleanup 等）也会被 dirty/merge 状态挡住，属预期。
+      result.errors.push(
+        `git merge ${branch} 冲突，已在主仓保留冲突现场（未 abort）。冲突文件：\n` +
+        (conflictFiles.length ? `  ${conflictFiles.join('\n  ')}\n` : `  (未能获取冲突文件列表——git diff --name-only --diff-filter=U 查看)\n`) +
+        `手工解决：编辑上述冲突文件 → git add <file> → git commit 完成合并（worktree/分支已保留，解决后无需重跑 apply）。\n` +
+        `放弃合并：git merge --abort 回到合并前状态后重试。注意：解决前主仓处于 merge 中状态，其他 sillyspec 主仓命令会被阻挡。`
+      );
+      return result;
+    }
     try { gitQuiet(projectRoot, ['merge', '--abort']); } catch {}
     result.errors.push(
       `git merge ${branch} 冲突，请手动解决。冲突文件：\n` +

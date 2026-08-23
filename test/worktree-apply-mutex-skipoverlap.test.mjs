@@ -17,7 +17,7 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 import { execSync } from 'child_process'
-import { applyWorktree, withMainApplyLock } from '../src/worktree-apply.js'
+import { applyWorktree, withMainRepoLock } from '../src/worktree-apply.js'
 import { computeBaselineHash } from '../src/worktree.js'
 
 let passed = 0
@@ -123,29 +123,54 @@ console.log('--- 3. 无 flag 整批拦截零回归 ---')
 }
 
 // ── 4. 主仓互斥锁：被占 → fail-closed 报错含持有者；正常路径透传 + 释放 ──
-console.log('--- 4. withMainApplyLock 互斥 ---')
+// （坑 main-apply-no-mutex → 二批泛化 main-repo-no-mutex：withMainRepoLock 加 purpose，
+//   apply/cleanup/归档共用 main-repo.lock）
+console.log('--- 4. withMainRepoLock 互斥 ---')
 {
   const d = fs.mkdtempSync(path.join(os.tmpdir(), 'sko-lock-'))
-  const lockPath = path.join(d, '.sillyspec', '.runtime', 'main-apply.lock')
+  const lockPath = path.join(d, '.sillyspec', '.runtime', 'main-repo.lock')
   fs.mkdirSync(path.join(d, '.sillyspec', '.runtime'), { recursive: true })
   // 预置他者会话的新鲜锁（pid=999 正在 apply other 变更）
-  fs.writeFileSync(lockPath, JSON.stringify({ pid: 999, changeName: 'other-change', startedAt: new Date().toISOString() }))
+  fs.writeFileSync(lockPath, JSON.stringify({ pid: 999, changeName: 'other-change', purpose: 'apply', startedAt: new Date().toISOString() }))
 
   let errMsg = ''
   try {
-    await withMainApplyLock(d, 'tc', async () => 'should-not-run', { timeoutMs: 400, retryMs: 80 })
+    await withMainRepoLock(d, 'tc', 'worktree-cleanup', async () => 'should-not-run', { timeoutMs: 400, retryMs: 80 })
   } catch (e) { errMsg = e.message }
-  assertTrue(errMsg.includes('互斥锁被占用'), `锁被占 → fail-closed 报错（实际: ${errMsg.slice(0, 90)}）`)
-  assertTrue(errMsg.includes('pid=999') && errMsg.includes('other-change'), '报错含持有者 pid/changeName（可定位谁在 apply）')
+  assertTrue(errMsg.includes('主仓互斥锁被占用'), `锁被占 → fail-closed 报错（实际: ${errMsg.slice(0, 90)}）`)
+  assertTrue(errMsg.includes('pid=999') && errMsg.includes('other-change'), '报错含持有者 pid/changeName（可定位谁在操作）')
+  assertTrue(errMsg.includes('apply'), '报错含持有者 purpose（在做什么操作）')
   assertTrue(errMsg.includes(lockPath), '报错给崩溃残留的删锁指引路径')
 
   // 正常路径（新目录：旧锁仍在他人手中是正确行为，本用例验证无竞争场景）：临界区执行 + 返回值透传 + 锁释放
   const d2 = fs.mkdtempSync(path.join(os.tmpdir(), 'sko-lock2-'))
-  const v = await withMainApplyLock(d2, 'tc', async () => 42, { timeoutMs: 1000 })
+  const v = await withMainRepoLock(d2, 'tc', 'apply', async () => 42, { timeoutMs: 1000 })
   assertTrue(v === 42, '无竞争时临界区返回值透传')
-  assertTrue(!fs.existsSync(path.join(d2, '.sillyspec', '.runtime', 'main-apply.lock')), '锁已释放（finally unlink）')
+  assertTrue(!fs.existsSync(path.join(d2, '.sillyspec', '.runtime', 'main-repo.lock')), '锁已释放（finally unlink）')
   fs.rmSync(d, { recursive: true, force: true })
   fs.rmSync(d2, { recursive: true, force: true })
+}
+
+// ── 5. worktree cleanup CLI 撞锁 → 报错退出（不与并行 apply 互踩）──
+console.log('--- 5. cleanup CLI 撞锁 fail-closed ---')
+{
+  const { spawnSync } = await import('child_process')
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'sko-cleanup-lock-'))
+  sh('git init -q -b main', d)
+  sh('git config user.email t@t.co && git config user.name t', d)
+  fs.writeFileSync(path.join(d, 'README.md'), 'x\n')
+  sh('git add -A && git commit -qm init', d)
+  fs.mkdirSync(path.join(d, '.sillyspec', '.runtime'), { recursive: true })
+  fs.writeFileSync(path.join(d, '.sillyspec', '.runtime', 'main-repo.lock'),
+    JSON.stringify({ pid: 999, changeName: 'other', purpose: 'apply', startedAt: new Date().toISOString() }))
+  const bin = path.join(path.dirname(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'))), 'bin', 'sillyspec.js')
+  const r = spawnSync(process.execPath, [bin, '--dir', d, 'worktree', 'cleanup', 'tc'], {
+    encoding: 'utf8', timeout: 30000,
+    env: { ...process.env, SILLYSPEC_MAIN_REPO_LOCK_TIMEOUT_MS: '500' },
+  })
+  assertTrue(r.status === 1 || /互斥锁被占用/.test(String(r.stderr || '') + String(r.stdout || '')), `cleanup 撞锁非零退出/报互斥（status=${r.status}）`)
+  assertTrue(String(r.stderr || '') .includes('互斥锁被占用'), '报错含互斥锁文案（含持有者信息）')
+  fs.rmSync(d, { recursive: true, force: true })
 }
 
 console.log(`\n${'='.repeat(50)}`)

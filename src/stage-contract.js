@@ -485,7 +485,12 @@ function validateVerifyOutputs(cwd, changeName, context = {}) {
         // 的结构化证据，作为附加匹配文本——有回执不依赖 agent 措辞；无回执维持原字面匹配
         let receiptText = ''
         try {
-          const receiptPath = join(cwd, '.sillyspec', '.runtime', 'verify-services.receipt.json')
+          // 回执按变更分片（坑 verify-pids-cross-session-kill：原单份被并行会话后写覆盖），
+          // 优先读本变更分片，兼容旧单份名（升级过渡期 receipt.change 过滤仍生效）
+          const runtimeDir = join(cwd, '.sillyspec', '.runtime')
+          const receiptPath = existsSync(join(runtimeDir, `verify-services-${changeName}.receipt.json`))
+            ? join(runtimeDir, `verify-services-${changeName}.receipt.json`)
+            : join(runtimeDir, 'verify-services.receipt.json')
           if (existsSync(receiptPath)) {
             const receipt = JSON.parse(readFileSync(receiptPath, 'utf8'))
             if (receipt && (receipt.reapedPidCount || 0) > 0 && (!receipt.change || receipt.change === changeName)) {

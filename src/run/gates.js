@@ -498,6 +498,21 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
     printVerifyTestCheck(testCheck)
     if (testCheck.status === 'failed') {
       console.error('\n❌ verify 阶段被阻断：verify-result.md 自报告通过，但 CLI 实测测试失败。')
+      // 并行 WIP 归因鉴别（坑 verify-reconcile-foreign-wip）：实测跑在主仓共享工作区，并行会话
+      // 在途 WIP 物理在场——他者文件命中声明集时提示复验归因（EADDRINUSE 鉴别同款风格），不静默背锅。
+      try {
+        const { collectForeignDeclaredFiles } = await import('../verify-postcheck.js')
+        const { gitQuiet } = await import('../git-helper.js')
+        const foreignMap = collectForeignDeclaredFiles(cwd, changeName)
+        if (foreignMap.size > 0) {
+          const dirty = (gitQuiet(cwd, ['diff', '--name-only', 'HEAD']) || '')
+            .split('\n').filter(Boolean).map(f => f.replace(/\\/g, '/'))
+          const hitForeign = dirty.filter(f => foreignMap.has(f))
+          if (hitForeign.length > 0) {
+            console.error(`   ℹ️ 归因提示：主仓检出 ${hitForeign.length} 个并行会话声明的在途文件（${hitForeign.slice(0, 5).join(', ')}${hitForeign.length > 5 ? ' 等' : ''}）——实测失败可能混入他者 WIP 而非本变更问题。待其提交/收尾后复验，仍失败才是本变更的。`)
+          }
+        }
+      } catch { /* 归因提示失败不影响阻断语义 */ }
       console.error('   请修复失败的测试并更新 verify-result.md 后重新完成此步骤。')
       return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)
     }
@@ -543,29 +558,10 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
         }
       }
     }
-    // ── verify 服务进程回收（坑 verify-service-process-leak，2026-08-21 实证：真实启动验证
-    // 起的 uvicorn 漏挂一天多）。verify prompt 要求长驻服务 PID 登记 .runtime/verify-services.pids，
-    // 此处收尾逐个 kill + 清文件。best-effort：ESRCH（已退出）静默，kill 失败 warn 不阻断 verify。
+    // ── verify 服务进程回收（坑 verify-service-process-leak；坑 verify-pids-cross-session-kill
+    // 见 reapVerifyServices 注释）──
     try {
-      const servicesPath = join(resolveRuntimeRoot(platformOpts, specBase), 'verify-services.pids')
-      if (existsSync(servicesPath)) {
-        const pids = readFileSync(servicesPath, 'utf8').split('\n').map(l => l.trim()).filter(l => /^\d+$/.test(l))
-        const reaped = []; const failed = []
-        for (const pid of pids) {
-          try { process.kill(parseInt(pid, 10), 'SIGTERM'); reaped.push(pid) }
-          catch (e) { if (e.code !== 'ESRCH') failed.push(`${pid}(${e.code || e.message})`) }
-        }
-        try { unlinkSync(servicesPath) } catch {}
-        if (reaped.length > 0) console.log(`🧹 verify 服务进程已回收 ${reaped.length} 个（PID: ${reaped.join(', ')}）`)
-        // CLI 回执（坑 verify-literal-evidence-mismatch）：回收即真实启动的结构化证据——
-        // checkIntegrationEvidence（stage-contract）读回执注入匹配，agent 措辞差异不再误拦
-        try {
-          writeFileSync(join(dirname(servicesPath), 'verify-services.receipt.json'), JSON.stringify({
-            change: changeName || null, reapedPidCount: reaped.length, reapedAt: new Date().toISOString(),
-          }, null, 2) + '\n')
-        } catch {}
-        if (failed.length > 0) console.warn(`⚠️ 服务进程回收失败 ${failed.length} 个：${failed.join(', ')} — 手动处理：taskkill /PID <pid> /F（Windows）/ kill -9 <pid>`)
-      }
+      reapVerifyServices(platformOpts, specBase, changeName)
     } catch (e) { console.warn(`⚠️ verify 服务进程回收异常（不阻断）: ${e.message}`) }
 
     console.log('\n✅ 验证通过，下一步：sillyspec run archive')
@@ -1027,3 +1023,46 @@ export async function completeStageGates({ stageName, cwd, changeName, platformO
   return null
 }
 
+
+/**
+ * verify 服务进程回收（verify --done 收尾调用）。
+ *
+ * 坑 verify-service-process-leak（2026-08-21）：真实启动验证起的长驻服务（uvicorn 等）漏挂
+ * 一天多——verify prompt 要求 PID 按变更分片登记 .runtime/verify-services-<change>.pids。
+ * 坑 verify-pids-cross-session-kill（2026-08-23）：原单文件无归属，A 会话 --done 会把 B 正在
+ * 收集 Runtime Evidence 的服务一并杀掉——分片后各回收各的；旧单文件兼容回收（升级过渡期）。
+ * 回执同样按变更分片（原单份被并行会话后写覆盖），checkIntegrationEvidence（stage-contract）
+ * 读分片名注入证据匹配。best-effort：ESRCH（已退出）静默，kill 失败 warn 不阻断 verify。
+ *
+ * @returns {{ reaped: number, receiptPath: string|null }}
+ */
+export function reapVerifyServices(platformOpts, specBase, changeName) {
+  const runtimeDir = resolveRuntimeRoot(platformOpts, specBase)
+  const reapFile = (path, label) => {
+    if (!existsSync(path)) return null
+    const pids = readFileSync(path, 'utf8').split('\n').map(l => l.trim()).filter(l => /^\d+$/.test(l))
+    const reaped = []; const failed = []
+    for (const pid of pids) {
+      try { process.kill(parseInt(pid, 10), 'SIGTERM'); reaped.push(pid) }
+      catch (e) { if (e.code !== 'ESRCH') failed.push(`${pid}(${e.code || e.message})`) }
+    }
+    try { unlinkSync(path) } catch {}
+    if (reaped.length > 0) console.log(`🧹 verify 服务进程已回收 ${reaped.length} 个${label}（PID: ${reaped.join(', ')}）`)
+    return { reaped: reaped.length, failed }
+  }
+  const own = reapFile(join(runtimeDir, `verify-services-${changeName}.pids`), '')
+  const legacy = reapFile(join(runtimeDir, 'verify-services.pids'), '（旧格式单文件，兼容回收）')
+  const reapedTotal = (own?.reaped || 0) + (legacy?.reaped || 0)
+  const failedAll = [...(own?.failed || []), ...(legacy?.failed || [])]
+  let receiptPath = null
+  if (reapedTotal > 0) {
+    try {
+      receiptPath = join(runtimeDir, `verify-services-${changeName}.receipt.json`)
+      writeFileSync(receiptPath, JSON.stringify({
+        change: changeName || null, reapedPidCount: reapedTotal, reapedAt: new Date().toISOString(),
+      }, null, 2) + '\n')
+    } catch { receiptPath = null }
+  }
+  if (failedAll.length > 0) console.warn(`⚠️ 服务进程回收失败 ${failedAll.length} 个：${failedAll.join(', ')} — 手动处理：taskkill /PID <pid> /F（Windows）/ kill -9 <pid>`)
+  return { reaped: reapedTotal, receiptPath }
+}

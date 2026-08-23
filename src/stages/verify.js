@@ -210,7 +210,7 @@ export const definition = {
 ### 🧹 服务进程登记与自动回收（真实启动验证必读，坑 verify-service-process-leak）
 「真实启动一次」起的长驻服务（uvicorn/node server 等）**必须登记 PID，CLI 在 verify 收尾自动回收**——不登记的进程会挂死机器（实测 uvicorn 漏挂一天多）：
 1. 后台启动服务并取 PID（PowerShell：\`Start-Process -PassThru\` 取 \`.Id\`；bash：\`cmd & echo $!\`）
-2. 每行一个 PID 追加到 \`\${SPEC_ROOT}/.runtime/verify-services.pids\`（\`Add-Content\` / \`echo >>\`）
+2. 每行一个 PID 追加到 \`\${SPEC_ROOT}/.runtime/verify-services-<change-name>.pids\`（\`Add-Content\` / \`echo >>\`；**按变更名分片**——多会话并发 verify 时各自的 --done 只回收自己的服务，互不误杀）
 3. verify \`--done\` 时 CLI 读该文件逐个 kill 并清空——你在 verify-result.md 的「生命周期终态断言」里写「PID 已登记，CLI 收尾回收」即可
 登记是硬要求：没有 PID 登记的「真实启动」证据在 deployment-critical 门控下视为不完整（进程无法证明被回收）。
 

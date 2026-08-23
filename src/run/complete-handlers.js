@@ -431,7 +431,11 @@ export async function handleArchiveConfirmStep({ stageName, steps, currentIdx, c
     console.log('⚠️  请添加 --confirm 确认归档，例如：sillyspec run archive --done --confirm --output "确认归档"')
     return { stageCompleted: false, currentIdx, nextPendingIdx: currentIdx }
   }
-  const archivedDir = await archiveChangeDirectory(pm, cwd, progress, specBase, platformOpts)
+  // 主仓互斥锁（坑 main-repo-no-mutex 二批）：archiveChangeDirectory 改主仓共享状态（目录
+  // rename + 共享 index 的 git add + marker 删除 + worktree 清理），与并行会话的 apply/cleanup
+  // 互踩。exit 钩子兜底：其内部 guard 失败 exit(1) 时锁也会被清（见 withMainRepoLock）。
+  const { withMainRepoLock } = await import('../worktree-apply.js')
+  const archivedDir = await withMainRepoLock(cwd, changeName, 'archive-finalize', () => archiveChangeDirectory(pm, cwd, progress, specBase, platformOpts))
   if (archivedDir && existsSync(archivedDir)) {
     // 内存快照同步（坑 archive-progress-show-stale，2026-08-21 实证）：archiveChangeDirectory 内
     // unregisterChange 已在 DB 写 current_stage='archive'（终态一致化），但本进程 progress 是命令
@@ -1339,21 +1343,38 @@ export async function handleExecuteWorktreeCleanup({ stageName, changeName, cwd 
       } else if (meta.mode === 'native-worktree') {
         console.log('🔗 Worktree: kept (外部隔离环境)');
       } else {
-        // in-place 模式不再短路：cleanup 现在能安全处理 in-place（只清 meta，不碰主工作区）
-        const check = wm.hasUnappliedChanges(changeName);
-        if (check.hasChanges) {
-          console.log(`🔗 Worktree: pending apply (${check.changedFiles.length} 个未应用变更)`);
-          console.log(`   下一步: sillyspec worktree apply ${changeName}`);
-        } else {
-          const cleanResult = wm.cleanup(changeName);
-          console.log(`🔗 Worktree: ${cleanResult.result}`);
-          if (cleanResult.residual?.length > 0) {
-            console.warn(`   ⚠️ 清理残留: ${cleanResult.residual.join('; ')}`);
-            console.warn(`   手动处理: sillyspec worktree cleanup ${changeName} --force`);
-          } else if (cleanResult.details?.length > 0) {
-            for (const d of cleanResult.details) {
-              if (d.startsWith('⚠️')) console.log(`   ${d}`);
+        // in-place 模式不再短路：cleanup 现在能安全处理 in-place（只清 meta，不碰主工作区）。
+        // 主仓互斥锁（坑 main-repo-no-mutex 二批）：检查+清理与并行会话的 apply/cleanup 互斥
+        // （防 TOCTOU：检查时他者正在 apply → 判定漂移）。best-effort：锁超时不阻断 execute
+        // 完成，降级为保留 worktree + 手动清理指引。
+        try {
+          const { withMainRepoLock } = await import('../worktree-apply.js')
+          const cleanResult = await withMainRepoLock(cwd, changeName, 'execute-cleanup', () => {
+            const check = wm.hasUnappliedChanges(changeName);
+            if (check.hasChanges) {
+              return { kept: true, check }
             }
+            return { kept: false, result: wm.cleanup(changeName) }
+          })
+          if (cleanResult.kept) {
+            console.log(`🔗 Worktree: pending apply (${cleanResult.check.changedFiles.length} 个未应用变更)`);
+            console.log(`   下一步: sillyspec worktree apply ${changeName}`);
+          } else {
+            console.log(`🔗 Worktree: ${cleanResult.result.result}`);
+            if (cleanResult.result.residual?.length > 0) {
+              console.warn(`   ⚠️ 清理残留: ${cleanResult.result.residual.join('; ')}`);
+              console.warn(`   手动处理: sillyspec worktree cleanup ${changeName} --force`);
+            } else if (cleanResult.result.details?.length > 0) {
+              for (const d of cleanResult.result.details) {
+                if (d.startsWith('⚠️')) console.log(`   ${d}`);
+              }
+            }
+          }
+        } catch (lockErr) {
+          if (/互斥锁被占用/.test(String(lockErr.message))) {
+            console.log(`🔗 Worktree 自动清理跳过（主仓互斥锁被他者会话持有）——稍后手动: sillyspec worktree cleanup ${changeName}`);
+          } else {
+            console.warn(`⚠️ worktree 清理异常（不阻断）: ${lockErr.message}`);
           }
         }
       }

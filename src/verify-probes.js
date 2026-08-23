@@ -20,6 +20,7 @@ import { gitQuiet } from './git-helper.js'
 import { parseFileChangeListDetailed } from './change-list.js'
 import { parseAllowedPaths } from './stages/plan-postcheck.js'
 import { verifyApiParity } from './contract-matrix.js'
+import { splitOwnVsForeignDiffFiles } from './foreign-declared.js'
 import { resolveSpecDir, resolveRuntimeRoot } from './run/shared.js'
 
 const TODO_MARKER_RE = /尚未实现|TODO|FIXME|HACK|XXX/
@@ -127,8 +128,20 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
 
   // ── 探针 6：代码删除对账（git diff --name-status HEAD 的 D/R × design 声明三态）──
   const probe6 = { deletions: [], note: '以 git 事实为准（真实 > 声明）；是否 FAIL blocker 由 agent 诚实判定' }
+  // 他者声明归属过滤（坑 verify-reconcile-foreign-wip）：并行会话在途删除/改动不进本变更对账
   const nsOut = gitQuiet(cwd, ['diff', '--name-status', 'HEAD']) || ''
-  for (const row of nsOut.split('\n').filter(Boolean)) {
+  let nsRows = nsOut.split('\n').filter(Boolean)
+  {
+    const rawTargets = nsRows.map(row => ((row.split('\t')[1]) || ''))
+      .filter(Boolean).map(t => t.split('\\').join('/'))
+    const { foreign } = splitOwnVsForeignDiffFiles(cwd, changeName, rawTargets)
+    if (foreign.length > 0) {
+      const foreignSet = new Set(foreign.map(x => x.file))
+      nsRows = nsRows.filter(row => !foreignSet.has((row.split('\t')[1] || '').split('\\').join('/')))
+      console.warn(`⚠️ 探针6 已排除 ${foreign.length} 个并行会话声明的删除/改动（${foreign.slice(0, 5).map(x => x.file).join(', ')}${foreign.length > 5 ? ' 等' : ''}）`)
+    }
+  }
+  for (const row of nsRows) {
     const [status, ...paths] = row.split('\t')
     const st = (status || '').trim().toUpperCase()
     if (!/^[DRC]/.test(st)) continue

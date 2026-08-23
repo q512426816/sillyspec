@@ -185,8 +185,9 @@ sillyspec worktree doctor [--fix]              # 健康检查 + 修复
 ```
 
 **apply 并发要点（多 agent 仓库）**：
-- **主仓互斥锁**：apply 内置主仓级互斥（`.sillyspec/.runtime/main-apply.lock`，10 分钟 stale）——两会话同时 apply 会报「互斥锁被占用（持有者: pid=…, change=…）」并退出，等对方完成重试即可；确认持有进程已崩溃时按报错里的路径删锁。
+- **主仓互斥锁**：apply / worktree cleanup / 归档收尾共用主仓级互斥锁（`.sillyspec/.runtime/main-repo.lock`，10 分钟 stale）——两会话并发对主仓的写操作会报「主仓互斥锁被占用（持有者: pid=…, change=…, 操作=…）」并退出，等对方完成重试即可；确认持有进程已崩溃时按报错里的路径删锁。等待时长可用 env `SILLYSPEC_MAIN_REPO_LOCK_TIMEOUT_MS` 调短。
 - **`--skip-overlap`**：主仓有与本次变更**同文件**的未提交改动（并行会话在途变更）时，默认整批拦截；带 `--skip-overlap` 则只应用非重叠子集，重叠文件安全留在 worktree（不覆盖主仓在途改动），输出后续指引——主仓提交/stash 后重新 apply 只补剩余文件，或确认放弃后 `cleanup --force`。优先用这条路，别再走 rescue 手动 cp。
+- **`--merge` 冲突保留现场**：--merge 遇真冲突不再直接 abort——主仓保留 merge-in-progress（冲突标记 + MERGE_HEAD），按提示编辑冲突文件 → `git add` → `git commit` 完成合并即可（无需重跑 apply）；`git merge --abort` 可放弃。若主仓有未提交改动会被合并覆盖，git 会拒绝启动合并（无现场），按提示先 commit/stash 或改用 `--skip-overlap`。
 
 ## 阶段流转
 

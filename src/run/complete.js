@@ -996,8 +996,11 @@ export async function waitStep(pm, progress, stageName, cwd, outputText, waitRea
   // requiresWait 语义前置（坑 archive-step3-wait-answer-hint-late）：--continue --answer 只是中继回答，
   // 本步会回到待执行（回答后还需执行动作再 --done 收尾）；不想两段式可用 --done --answer 一步完成。
   // 提示落在标记 --wait 的此刻，而非等 agent 撞 --done 报错才知道。
-  if (stepDef.requiresWait === true || currentStep.requiresWait === true) {
-    console.log(`   注：本步为 requiresWait 步骤——--continue --answer 后本步回到待执行，完成动作后需再 --done 收尾`)
+  // conditionalWait（坑 archive-subconfirm-redundant 后 archive step3 降级软门）+ repeatableWait 的
+  // --wait 同样回 pending（continueStep shouldReturnToCurrentStep），提示同样适用。
+  if (stepDef.requiresWait === true || currentStep.requiresWait === true
+    || stepDef.conditionalWait === true || currentStep.conditionalWait === true) {
+    console.log(`   注：本步为需回执的等待步骤（requiresWait/conditionalWait）——--continue --answer 后本步回到待执行，完成动作后需再 --done 收尾`)
     console.log(`   或一步完成：sillyspec run ${stageName} --done --answer "你的选择"${changeName ? ` --change ${changeName}` : ''} --output "你的摘要"`)
   }
 }

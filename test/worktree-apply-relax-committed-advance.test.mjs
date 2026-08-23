@@ -98,12 +98,17 @@ console.log('--- 场景2: 已提交推进+同文件重叠 → --3way 冲突回�
   assertTrue(afterPatch.includes('MAIN-A3'), '回滚干净：保留主干推进（MAIN-A3）')
   assertTrue(!afterPatch.includes('<<<<<<<'), '回滚干净：无冲突标记残留')
 
-  // 显式 --merge 兜底：三方合并（同区域重叠 → merge 也冲突，abort 回滚）
+  // 显式 --merge 兜底：三方合并（同区域重叠 → merge 也冲突）。2026-08-23 起显式 --merge 冲突
+  // 保留现场供手工解决（坑 merge-conflict-abort-no-chance）：冲突标记在场 + MERGE_HEAD 在
+  // （指引 git add/git commit 或 merge --abort）；abort 语义只剩 ENOBUFS 自动降级路径。
   const r2 = applyWorktree('tc', { cwd: d, merge: true })
-  assertTrue(r2.merged === false || r2.ok === false, '--merge 同区域重叠 → 冲突 abort（merged/ok=false）')
+  assertTrue(r2.merged === false || r2.ok === false, '--merge 同区域重叠 → 冲突（merged/ok=false）')
   const errText2 = r2.errors.join('\n')
-  assertTrue(errText2.includes('冲突') || errText2.includes('abort'), '--merge 冲突提示 abort 回滚')
-  assertTrue(!readNorm(path.join(d, 'fileA.txt')).includes('<<<<<<<'), '--merge abort 后无冲突标记残留')
+  assertTrue(errText2.includes('冲突') && errText2.includes('保留冲突现场'), '--merge 冲突提示保留现场 + 手工解决指引')
+  assertTrue(readNorm(path.join(d, 'fileA.txt')).includes('<<<<<<<'), '--merge 冲突标记在场（现场保留，供手工解决）')
+  assertTrue(fs.existsSync(path.join(d, '.git', 'MERGE_HEAD')), 'MERGE_HEAD 存在（merge-in-progress）')
+  // 收尾：abort 清现场
+  try { execSync('git merge --abort', { cwd: d, stdio: 'pipe' }) } catch {}
   process.chdir(os.tmpdir()); fs.rmSync(d, { recursive: true, force: true })
 }
 
