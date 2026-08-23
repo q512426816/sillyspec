@@ -25,6 +25,7 @@ const ARCHIVE_STEPS = (lastStatus) => [
   { name: '任务完成度检查', status: 'completed' },
   { name: 'extract-module-impact', status: 'completed' },
   { name: 'sync-module-docs', status: 'completed' },
+  { name: 'decision-distill 决策提炼', status: 'completed' },
   { name: '确认归档', status: 'pending' },
   { name: '更新路线图和提交', status: lastStatus },
 ]
@@ -58,8 +59,8 @@ console.log('--- Case 1: 源已移到 archive/<原 changeName>/ → 自愈，不
   assert(r.combined.includes('自愈'), 'stdout 含「自愈」提示')
 
   const after = await pm.read(cwd, cn)
-  assert(after.stages.archive.steps[3].status === 'completed', 'DB: 确认归档 step 自愈后标 completed')
-  assert(after.stages.archive.steps[4].status === 'pending', 'DB: 更新路线图和提交仍 pending（非末步推进）')
+  assert(after.stages.archive.steps[4].status === 'completed', 'DB: 确认归档 step 自愈后标 completed')
+  assert(after.stages.archive.steps[5].status === 'pending', 'DB: 更新路线图和提交仍 pending（非末步推进）')
 }
 
 // ── Case 2: archive 目录名与 changeName 不一致 → 不自愈 ──

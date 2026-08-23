@@ -36,6 +36,7 @@ const ARCHIVE_STEPS = (lastStatus) => [
   { name: '任务完成度检查', status: 'completed' },
   { name: 'extract-module-impact', status: 'completed' },
   { name: 'sync-module-docs', status: 'completed' },
+  { name: 'decision-distill 决策提炼', status: 'completed' },
   { name: '确认归档', status: 'pending' },
   { name: '更新路线图和提交', status: lastStatus },
 ]

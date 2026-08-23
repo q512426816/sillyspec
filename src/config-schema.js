@@ -115,9 +115,9 @@ export const LOCAL_YAML_SCHEMA = {
     {
       id: 'test_strategy',
       title: '测试策略',
-      note: 'verify 阶段 CLI 对账的收窄策略。',
+      note: 'verify 阶段 CLI 对账的收窄策略（D-005@v2：skip 接线兑现 + evidence-auto 新增，full/module 语义不变）。',
       keys: [
-        { path: 'test_strategy', type: 'enum', values: ['full', 'module'], optional: true, status: 'live', readers: ['extractTestStrategy (src/verify-postcheck.js)'], desc: 'full=全量 commands.test；module=按 git diff 命中 modules 子集收窄（需配 modules）。缺省=全量。', example: 'full' },
+        { path: 'test_strategy', type: 'enum', values: ['full', 'module', 'skip', 'evidence-auto'], optional: true, status: 'live', readers: ['extractTestStrategy (src/verify-postcheck.js)', 'resolveTestStrategy (src/verify-postcheck.js)'], desc: 'full=全量 commands.test；module=按 git diff 命中 modules 子集收窄（需配 modules）；skip=真跳过测试（不回退全量，verify 输出显式标注留审计痕迹，R-07）；evidence-auto=按变更目录 module-impact.md 影响类型推荐检查组合（行为→module 聚焦测试、文档/prompt→docs-check、门禁契约→gate；缺失/不可解析降级 module 并注记）。缺省=全量。', example: 'full' },
       ],
     },
     {
@@ -155,6 +155,14 @@ export const LOCAL_YAML_SCHEMA = {
         { path: 'docs-check.keywordAssert', type: 'boolean', optional: true, status: 'live', readers: ['runDocsCheck (src/docs-check.js)'], desc: '层2 关键词断言开关，缺省 true（关闭时 warning 提示仅做存在性校验）。', example: 'true' },
         { path: 'docs-check.living-docs', type: 'array', optional: true, status: 'live', readers: ['resolveLivingDocs (src/run/shared.js) — 经 readLocalYamlRaw 直读'], desc: '活文档监控点追加列表（docs check 之外，quick 审计的 livingDocDrift 真失效提示也监控——只报校验真失败的引用，全过零输出）。只追加不覆盖缺省集合（缺省：docs/sillyspec/platform-interface-map.md）。配了是加哨兵，不该把缺省监控点挤掉。', example: 'docs/sillyspec/architecture.md' },
         { path: 'docs-check.cross_repo_roots', type: 'object', optional: true, status: 'live', readers: ['readDocsCheckConfig (src/docs-check.js)'], desc: 'repo://<仓库名> 跨仓引用 → 本机仓库根目录映射。文档里 repo://name/src/x.js:12 形态的引用：未配映射默认跳过（不同设备仓库位置不同，防跨设备误报）；配了映射走与本地引用相同的行号+关键词校验。local.yaml 是 gitignored，绝对路径不入库，每台设备各自配。', example: 'sillyspec: /c/Users/you/IdeaProjects/sillyspec' },
+      ],
+    },
+    {
+      id: 'decisions',
+      title: '决策库复核阈值',
+      note: 'docs-check 决策规则（W1.1 behind 复核）的消费配置——决策锚定模块源码在「最近确认」后前进超阈值 → doctor 报「决策待复核」（advisory 不阻断）。读键按「存在则读、不存在用缺省」容错。',
+      keys: [
+        { path: 'decisions.behind_threshold', type: 'integer', optional: true, status: 'live', readers: ['readDecisionRulesConfig (src/docs-check.js)'], desc: '决策 behind 复核阈值（锚定模块源码在「最近确认」commit 后的前进数），缺省 10；超阈报「决策待复核」提示。', example: '10' },
       ],
     },
   ],
@@ -276,8 +284,15 @@ modules:
   frontend: { path: "frontend/", test: "cd frontend && pnpm test" }
   backend: { path: "backend/", test: "cd backend && npm test" }
 
-# ── 测试策略：full=全量 commands.test | module=按命中模块收窄（需配 modules）──
+# ── 测试策略（verify 实测收窄；full/module 语义不变，skip/evidence-auto 为 2026-08-23 新增）──
+# full=全量 commands.test | module=按命中模块收窄（需配 modules）
+# skip=真跳过测试（不回退全量，verify 输出显式标注留审计痕迹）
+# evidence-auto=按变更 module-impact.md 影响面推荐检查组合（行为→module 聚焦测试、文档→docs-check、门禁→gate；缺失降级 module）
 test_strategy: full
+
+# ── 决策库 behind 复核阈值（docs-check 决策规则：源码在「最近确认」后前进超阈值 → 待复核提示；缺省 10）──
+decisions:
+  behind_threshold: 10
 
 # ── 预存失败豁免清单（变更前就失败的测试行；务必定期复核，防误豁免真实失败）──
 known_failures:

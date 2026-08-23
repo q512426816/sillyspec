@@ -105,7 +105,7 @@ console.log('\n=== ③ progress show 归档终态（坑 archive-progress-show-st
   const cn = '2026-08-21-arch-show'
   fs.mkdirSync(join(d, '.sillyspec', 'changes', cn), { recursive: true })
   fs.writeFileSync(join(d, '.sillyspec', 'changes', cn, 'plan.md'), '# P\n')
-  // 种入 verify completed + execute completed 的进行前状态，走标准归档（step4 --confirm 触发目录移动+终态一致化）
+  // 种入 verify completed + execute completed 的进行前状态，走标准归档（确认归档 --confirm 触发目录移动+终态一致化）
   const pm = new ProgressManager({ specDir: join(d, '.sillyspec') })
   pm.init(d)
   pm.initChange(d, cn)
@@ -118,6 +118,7 @@ console.log('\n=== ③ progress show 归档终态（坑 archive-progress-show-st
     { name: '任务完成度检查', status: 'completed' },
     { name: 'extract-module-impact', status: 'completed' },
     { name: 'sync-module-docs', status: 'completed' },
+    { name: 'decision-distill 决策提炼', status: 'completed' },
     { name: '确认归档', status: 'pending' },
     { name: '更新路线图和提交', status: 'pending' },
   ]}

@@ -51,6 +51,7 @@
 **本步出现的运行时占位符**
 - `{SPEC_ROOT}` → 常规模式 `cwd/.sillyspec`；平台模式 specRoot
 - `<project>` → 当前项目名
+- `{DECISION_HITS}` → 否决决策提示（防复潮）：`knowledge-match.js` 的 `matchKnowledge()` 命中 INDEX.md `## Decisions` 路由的 rejected 条目时渲染（ID/标题/否决理由/复潮条件），无命中替换为空串。映射见 README「占位符总表 — 动态块占位符」
 
 **提示词原文**
 
@@ -73,6 +74,7 @@
    - 有匹配模板 → 询问是否基于模板
    - 无相关内容 → 跳过，不输出
 8. 查询知识库：`cat {SPEC_ROOT}/knowledge/INDEX.md 2>/dev/null`（无索引则跳过）——按需求关键词命中条目时读取对应知识文件；known-issues/已知坑要在方案期就规避，不要等 execute 的命中报告才发现
+   - decisions 库路由：INDEX.md `## Decisions` 段的路由行（`decisions/<域>.md`，由归档时决策提炼幂等维护）命中时，读取对应决策文件——rejected 条目须看到否决理由：除非复潮条件明确满足，否则不重新提出该方案（防复潮）；确要复潮时在本变更 decisions.md 记新版本条目（D-xxx@vN+1）说明依据。CLI 预注入的否决决策提示（无命中则为空）：{DECISION_HITS}
 
 ### 模块匹配方法
 读取 _module-map.yaml 后，根据用户描述的需求关键词，匹配相关模块：
@@ -414,6 +416,11 @@ design.md 第一行标题必须用中文：# 设计文档（Design）— <变更
    - 每条记录必须有稳定版本 ID：D-001@v1、D-002@v1 ...
    - 若后续 Design Grill 修正该决策，新记录使用 D-001@v2，并写明 supersedes: D-001@v1
    - 每条记录必须包含：type、status、source、question、answer、normalized_requirement、impacts、evidence、priority
+   - 九字段之外可另加四个可选字段，按需填写、不强制全填（旧格式决策记录缺这些字段不受影响）：
+     - 锚点：决策落点的主文件，格式 <src 路径>:<行号或符号>（status=confirmed 时必填）
+     - 模块域：决策涉及的模块 ID，取自 `{SPEC_ROOT}/docs/<project>/modules/_module-map.yaml`，可多个、用逗号分隔
+     - 否决理由：一句话说明为何否决（status=rejected 时必填）
+     - 复潮条件：什么前提下可重新考虑该决策（status=rejected 时必填）
    - 长期术语只在 archive/scan 时再提升到 `{SPEC_ROOT}/docs/<project>/glossary.md`
 4. 格式自检（只查章节齐全；语义一致性/可行性/YAGNI 不在本步查，交给下一步 Design Grill 独立审查）：
    - design.md 含全部必填章节（背景/设计目标/非目标/总体方案/文件变更清单/接口定义/风险登记）

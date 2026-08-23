@@ -426,6 +426,42 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
     }
   }
 
+  // 决策防复潮注入（W1.1 第 3 点，task-04，FR-05）：brainstorm「加载项目上下文」Step2 的
+  // {DECISION_HITS} → matchKnowledge decisionHits——命中 rejected 条目时渲染「否决决策提示」段
+  // （ID/标题/否决理由/复潮条件），无命中替换为空串零输出（不留残留占位符）；注入结果同步落
+  // runtime JSON（与 KNOWLEDGE_HIT_REPORT 的 json 落盘同口径）。advisory 展示，不改变步骤流程；
+  // 全降级不抛（异常 → 单行说明）。
+  if (stageName === 'brainstorm' && promptText.includes('{DECISION_HITS}')) {
+    try {
+      const { matchKnowledge } = await import('../knowledge-match.js')
+      const decSpecBase = resolvePromptSpecBase(platformOpts, cwd)
+      const decKnowledgeDir = join(decSpecBase, 'knowledge')
+      // taskContext：changeName（brainstorm Step2 时 tasks.md 尚未生成，变更名是唯一稳定任务
+      // 语料；与 execute 分支的 changeName 基底同口径）
+      const decResult = matchKnowledge(decKnowledgeDir, changeName || '')
+      const rejectedHits = (decResult.decisionHits || []).filter(h => h.status === 'rejected')
+      let decInjected = ''
+      if (rejectedHits.length > 0) {
+        const lines = [
+          '⚠️ 否决决策提示（历史已否决，防复潮）——下列决策此前已被否决。看到否决理由后，除非复潮条件明确满足，不要在本次方案中重新提出；若认为复潮条件已满足，须在本变更 decisions.md 记录新版本条目（D-xxx@vN+1）说明依据：'
+        ]
+        for (const h of rejectedHits) {
+          lines.push(`- ${h.id} ${h.title}（${h.file}）`)
+          lines.push(`  - 否决理由：${h.reason || '（未记录）'}`)
+          lines.push(`  - 复潮条件：${h.revisitWhen || '（未记录）'}`)
+        }
+        decInjected = '\n\n' + lines.join('\n')
+      }
+      promptText = promptText.replace(/\{DECISION_HITS\}/g, decInjected)
+      // 注入结果同步落 runtime JSON（与既有 KNOWLEDGE_HIT_REPORT 落盘口径一致）
+      const decRuntimeDir = join(decSpecBase, '.runtime')
+      mkdirSync(decRuntimeDir, { recursive: true })
+      writeFileSync(join(decRuntimeDir, 'decision-hits.json'), JSON.stringify({ matched: decResult.matched, decisionHits: decResult.decisionHits || [] }, null, 2) + '\n')
+    } catch (e) {
+      promptText = promptText.replace(/\{DECISION_HITS\}/g, `[decisions] 决策命中检测异常（${e.message}），跳过`)
+    }
+  }
+
   // Knowledge hit report: execute 阶段注入匹配结果
   if (stageName === 'execute' && promptText.includes('{KNOWLEDGE_HIT_REPORT}')) {
     try {
@@ -678,6 +714,33 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
       baselineInfo = '（worktree 基线注入失败：' + e.message + '——diff 对账前先 git branch -a 查 sillyspec/<change> 分支并用 git merge-base <main> <branch> 自查基点，勿用主仓 HEAD 当基点）'
     }
     promptText = promptText.split('{WORKTREE_BASELINE_INFO}').join(baselineInfo)
+  }
+
+  // verify「运行测试和质量扫描」evidence-auto 推荐注入（task-12，FR-11 / D-005@v2）：
+  // verify-postcheck 在 --done 事后解析 evidence-auto，agent 写 verify-result.md 时看不到
+  // 推荐组合、无从否决——故在 prompt 时点经 {EVIDENCE_AUTO_RECOMMENDATION} 把 task-11
+  // resolveTestStrategy 的 evidence_auto_recommendation.summary 渲染进 step prompt（含推荐
+  // 理由、降级注记与「可在 verify-result.md 否决并改跑全量」路径），供用户否决（FR-11）。
+  // 仅 test_strategy=evidence-auto 且 recommendation 非空时渲染；full/module/skip/未配置
+  // （recommendation=null）替换为空串零输出。fail-soft：读取/解析异常降级单行说明不抛，
+  // 绝不阻断 verify prompt 输出（对齐上方 {WORKTREE_BASELINE_INFO} 注入先例）。
+  if (stageName === 'verify' && promptText.includes('{EVIDENCE_AUTO_RECOMMENDATION}')) {
+    let eaInjected = ''
+    try {
+      const { resolveTestStrategy } = await import('../verify-postcheck.js')
+      const eaSpecBase = resolvePromptSpecBase(platformOpts, cwd)
+      // 信任边界：local.yaml 只读 specBase（平台 specRoot / 漂移锚定主仓 / cwd 本地），与
+      // runVerifyTestCheck 的 specBase 来源同口径，不读 agent 可写的 worktree 副本。
+      const eaYamlPath = join(eaSpecBase, 'local.yaml')
+      const eaYamlText = existsSync(eaYamlPath) ? readFileSync(eaYamlPath, 'utf8') : null
+      const eaChangeDir = changeName ? join(eaSpecBase, 'changes', changeName) : null
+      const resolution = resolveTestStrategy({ yamlText: eaYamlText, changeDir: eaChangeDir })
+      const rec = resolution.evidence_auto_recommendation
+      if (rec && rec.summary) eaInjected = rec.summary
+    } catch (e) {
+      eaInjected = `（evidence-auto 推荐注入失败：${e.message}——请读 .sillyspec/local.yaml 确认 test_strategy；--done 时 CLI 仍会按 resolveTestStrategy 实测对账，推荐不可用时可显式设 test_strategy: full/module）`
+    }
+    promptText = promptText.split('{EVIDENCE_AUTO_RECOMMENDATION}').join(eaInjected)
   }
 
   // 注入模块上下文（brainstorm/plan/execute 阶段，基于 Module Context Index）

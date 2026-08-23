@@ -16,6 +16,7 @@
 import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import jsYaml from 'js-yaml'
+import { parseModuleMapSimple } from './modules.js'
 
 /** 提取 file.js:line / file.js:start-end 引用（.js/.mjs，反引号包裹与裸文本均命中，全文扫描 D-006）。
  * repo:// 前缀（2026-08-20）：跨仓引用显式标记——`repo://<仓库名>/<路径>.js:行`。
@@ -595,4 +596,228 @@ export function applyFixes(projectRoot, fixes, opts = {}) {
   }
 
   return { applied, skipped }
+}
+
+// ---------------------------------------------------------------------------
+// 决策规则族（advisory，change: 2026-08-23-adopt-harness-practices task-05，FR-06 / D-003@v1）
+//
+// 校验对象：knowledge/decisions/<模块域>.md 的 D-xxx@vN 条目（producer = decision-distill
+// 归档提炼，条目字段行 状态/锚点/最近确认 是本处的机械解析契约）。两项规则：
+//   1) 锚点校验：implemented 条目「锚点：src/…」路径存在性（锚点：未记录 → 补录提示，非失效）；
+//   2) behind 复核：锚定模块源码在「最近确认」commit 后的前进数超阈值 → 决策待复核提示
+//      （computeModuleBehind 复用 docs-debt 既有 git 口径，C-10）。
+// 铁律（docs-consistency 模块卡）：advisory 只 warn 不进 runDocsCheck 的 invalid 阻断链——
+// ok/invalid 判定与 docs gate 阻断行为不受影响；校验链路只读零写盘；无 decisions 库 /
+// 无超阈 → findings 空（无信号零输出）。豁免走 known_failures 新键 decisions.* 命名空间
+// （C-17：条目级语义键匹配，不复用 docs-gate 的 baseline ratchet）。
+// ---------------------------------------------------------------------------
+
+/** behind 复核缺省阈值（local.yaml decisions.behind_threshold 可调；schema 注册归 task-11，
+ *  本处读键按「存在则读、不存在用缺省」容错，不依赖 schema 注册）。dogfood 校准前取 10。 */
+export const DECISIONS_DEFAULT_BEHIND_THRESHOLD = 10
+
+/**
+ * known_failures 键提取——读法逐字对齐 verify-postcheck.extractKnownFailures（块式 + 流式，
+ * 剥引号/行内注释，CRLF 归一；注释互指防两处口径漂移）。此处独立复刻不 import
+ * verify-postcheck（重模块静态依赖；本模块仅消费 decisions.* 前缀键，见 isDecisionExempt）。
+ * @param {string} yamlText local.yaml 全文
+ * @returns {string[]} 键列表；无声明返回 []
+ */
+function extractKnownFailureKeys(yamlText) {
+  if (!yamlText) return []
+  const yaml = String(yamlText).replace(/\r\n?/g, '\n')
+  const inline = yaml.match(/^known_failures:\s*\[([^\]]*)\]\s*(?:#.*)?$/m)
+  if (inline) {
+    return inline[1].split(',').map(s => s.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean)
+  }
+  const block = yaml.match(/^known_failures:\s*\n((?:[ \t]+-[ \t].+\n?)+)/m)
+  if (block) {
+    return (block[1].match(/^[ \t]+-[ \t]+(.+)/gm) || [])
+      .map(s => s.replace(/^[ \t]+-[ \t]+/, '').trim().replace(/^['"]|['"]$/g, '').replace(/#.*$/, '').trim())
+      .filter(Boolean)
+  }
+  return []
+}
+
+/**
+ * 读 local.yaml 的决策规则配置（best-effort 绝不抛；读取模式与 readDocsCheckConfig 一致：
+ * 缺文件/无段 → 全缺省）。decisions.behind_threshold 存在则读（数值校验），不存在用缺省 10
+ * ——schema 注册（config-schema.js）归 task-11，本处不依赖。
+ * @param {string} projectRoot 源码仓根（local.yaml 在 <root>/.sillyspec/local.yaml）
+ * @returns {{ behindThreshold: number, knownFailures: string[] }}
+ */
+export function readDecisionRulesConfig(projectRoot) {
+  const fallback = { behindThreshold: DECISIONS_DEFAULT_BEHIND_THRESHOLD, knownFailures: [] }
+  try {
+    const p = join(projectRoot, '.sillyspec', 'local.yaml')
+    if (!existsSync(p)) return fallback
+    const raw = readFileSync(p, 'utf8')
+    const knownFailures = extractKnownFailureKeys(raw)
+    const doc = jsYaml.load(raw)
+    if (!doc || typeof doc !== 'object') return { ...fallback, knownFailures }
+    const d = doc['decisions']
+    if (!d || typeof d !== 'object' || Array.isArray(d)) return { ...fallback, knownFailures }
+    const t = d['behind_threshold']
+    return {
+      behindThreshold: typeof t === 'number' && Number.isFinite(t) && t > 0 ? t : fallback.behindThreshold,
+      knownFailures,
+    }
+  } catch {
+    return fallback
+  }
+}
+
+/** 豁免键匹配（本变更范围先支持键匹配，非子串）：规则级 `decisions.<id>.<kind>` 精确命中，
+ *  或条目级 `decisions.<id>` 伞形命中（一条豁免该决策全部规则）。无 decisions. 前缀的键不参与。 */
+function isDecisionExempt(knownFailures, entryId, kind) {
+  const ruleKey = `decisions.${entryId}.${kind}`
+  const entryKey = `decisions.${entryId}`
+  return knownFailures.some(k => k === ruleKey || k === entryKey)
+}
+
+/**
+ * 纯函数：解析 knowledge/decisions/<域>.md 的 D-xxx@vN 条目（与 decision-distill.renderBlockLines
+ * 的写入契约对偶：producer=decision-distill → consumer=本规则族；字段行非列表项，顶层
+ * 「状态：/锚点：/最近确认：」标签精确匹配，防误吞正文）。旧格式字段缺失容错为 null。
+ * @param {string} md 域文件全文
+ * @returns {Array<{ id: string, title: string, status: string|null, anchor: string|null, lastConfirmed: string|null }>}
+ */
+export function parseDecisionEntries(md) {
+  const entries = []
+  let cur = null
+  const flush = () => { if (cur) entries.push(cur) }
+  for (const line of String(md || '').replace(/\r\n?/g, '\n').split('\n')) {
+    const h = line.match(/^##\s+(D-\d+)(?:@v(\d+))?\s*(.*)$/)
+    if (h) {
+      flush()
+      const version = h[2] ? parseInt(h[2], 10) : 1
+      cur = { id: `${h[1]}@v${version}`, title: h[3].trim(), status: null, anchor: null, lastConfirmed: null }
+      continue
+    }
+    if (!cur) continue
+    const f = line.match(/^(状态|锚点|最近确认)\s*[：:]\s*(.*)$/)
+    if (!f) continue
+    if (f[1] === '状态') cur.status = f[2].trim().split(/[\s（(]/)[0] || null
+    else if (f[1] === '锚点') cur.anchor = f[2].trim()
+    else cur.lastConfirmed = f[2].trim()
+  }
+  flush()
+  return entries
+}
+
+/** 锚点值 → 源码路径：剥「:行号 / :行号-行号 / :符号」后缀（锚点契约 `<src 路径>:<行号或符号>`；
+ *  旧条目可能只写路径）。「未记录」/空 → null（补录提示路径，非失效）。 */
+function anchorFilePath(anchor) {
+  const a = String(anchor || '').trim()
+  if (!a || a === '未记录') return null
+  return a.replace(/:(?:\d+(?:-\d+)?|[A-Za-z_$][A-Za-z0-9_$]*)$/, '').replace(/\\/g, '/') || null
+}
+
+/** specBase/docs 下任一项目的 modules/_module-map.yaml 尽力发现（对齐
+ *  decision-distill.discoverModuleIndex 口径：首个命中；失败 → null，域模块源码集退化为锚点文件兜底）。 */
+function discoverModuleMapIndex(specBase) {
+  try {
+    const docsDir = join(specBase, 'docs')
+    if (!existsSync(docsDir)) return null
+    for (const d of readdirSync(docsDir, { withFileTypes: true })) {
+      if (!d.isDirectory()) continue
+      const mapPath = join(docsDir, d.name, 'modules', '_module-map.yaml')
+      if (existsSync(mapPath)) return parseModuleMapSimple(readFileSync(mapPath, 'utf8'))
+    }
+  } catch { /* 尽力而为，失败归 null */ }
+  return null
+}
+
+/**
+ * IO 入口（advisory）：跑一次决策规则族。只产出 findings（warn 语义），不进 runDocsCheck 的
+ * invalid 阻断链、不写任何文件——无 decisions 库 / 无信号 → findings 空（零输出）。
+ * computeModuleBehind 经动态 import 取自 docs-debt（本模块被 docs-debt 静态 import，静态互引
+ * 成 ESM 环——对齐 run/shared.js 对 docs-debt 的动态 import 先例）。
+ * @param {{ projectRoot: string, specBase?: string, behindThreshold?: number, knownFailures?: string[], moduleIndex?: object|null }} opts
+ *   projectRoot 源码仓根（锚点解析与 git 锚）；specBase 缺省 = <projectRoot>/.sillyspec；
+ *   behindThreshold / knownFailures 缺省读 local.yaml（decisions.behind_threshold / known_failures）；
+ *   moduleIndex 缺省按 specBase/docs 下任一项目的 modules/_module-map.yaml 尽力发现
+ * @returns {Promise<{ empty: boolean, domains: number, entries: number, implemented: number,
+ *   threshold: number, findings: Array<{ id: string, domain: string, file: string,
+ *   kind: 'anchor'|'behind', behind?: number|null, threshold?: number, anchor?: string|null,
+ *   message: string }>, exempted: Array<{ key: string, id: string, kind: string }> }>}
+ *   empty=true = decisions 库不存在（冷启动，R-02 由 doctor 层提示）；exempted 为经
+ *   known_failures decisions.* 键豁免的条目（披露不隐藏）
+ */
+export async function runDecisionRules(opts) {
+  const { projectRoot, specBase, behindThreshold = null, knownFailures = null, moduleIndex = null } = opts || {}
+  const emptyResult = (threshold) => ({ empty: true, domains: 0, entries: 0, implemented: 0, threshold, findings: [], exempted: [] })
+  if (!projectRoot) return emptyResult(DECISIONS_DEFAULT_BEHIND_THRESHOLD)
+
+  const cfg = readDecisionRulesConfig(projectRoot)
+  const threshold = typeof behindThreshold === 'number' && Number.isFinite(behindThreshold) && behindThreshold > 0
+    ? behindThreshold
+    : cfg.behindThreshold
+  const failures = Array.isArray(knownFailures) ? knownFailures : cfg.knownFailures
+
+  const kb = specBase || join(projectRoot, '.sillyspec')
+  const decisionsDir = join(kb, 'knowledge', 'decisions')
+  let domainFiles = []
+  try {
+    domainFiles = readdirSync(decisionsDir).filter(f => f.endsWith('.md')).sort()
+  } catch {
+    return emptyResult(threshold) // 库不存在 → 零信号（doctor 层另行提示空库）
+  }
+
+  // 模块域 → 源码路径集（module-map paths∪core_files；未命中 map 的域退化为锚点文件兜底）
+  const mapIndex = moduleIndex || discoverModuleMapIndex(kb)
+  const flatIndex = mapIndex && mapIndex.modules ? mapIndex.modules : mapIndex
+  const { computeModuleBehind } = await import('./docs-debt.js')
+
+  const findings = []
+  const exempted = []
+  let entriesTotal = 0
+  let implementedTotal = 0
+  const treeCache = new Map() // resolveCandidates 全树扫描复用（同 docs check 主链路口径）
+
+  const emit = (id, domain, file, kind, extra, message) => {
+    if (isDecisionExempt(failures, id, kind)) {
+      exempted.push({ key: `decisions.${id}.${kind}`, id, kind })
+      return
+    }
+    findings.push({ id, domain, file, kind, ...extra, message })
+  }
+
+  for (const f of domainFiles) {
+    const domain = f.replace(/\.md$/, '')
+    const rel = `knowledge/decisions/${f}`
+    let entries
+    try { entries = parseDecisionEntries(readFileSync(join(decisionsDir, f), 'utf8')) } catch { continue }
+    for (const e of entries) {
+      entriesTotal++
+      if ((e.status || '').toLowerCase() !== 'implemented') continue // rejected/未知状态不做锚点与 behind 校验
+      implementedTotal++
+      const anchorPath = anchorFilePath(e.anchor)
+      // 规则 1：锚点存在性（未记录 → 补录提示；路径不存在 → 失效提示）
+      if (!anchorPath) {
+        emit(e.id, domain, rel, 'anchor', { anchor: e.anchor || null },
+          `「${e.id}」锚点未记录（${rel}）——旧格式条目，补「锚点：src/…」后可机械校验（advisory）`)
+      } else if (resolveCandidates(projectRoot, anchorPath, treeCache).length === 0) {
+        emit(e.id, domain, rel, 'anchor', { anchor: e.anchor },
+          `「${e.id}」锚点文件不存在：${anchorPath}（${rel}）——决策落点已漂移，人工复核（advisory）`)
+      }
+      // 规则 2：behind 复核（「最近确认」后锚定模块源码前进数超阈值 → 决策待复核；
+      // 「最近确认」未记录/域无源码集（无 map 无锚点）→ 无法计算，静默跳过——advisory 不产噪声）
+      if (!e.lastConfirmed || !/^[0-9a-f]{4,40}$/i.test(e.lastConfirmed)) continue
+      let srcPaths = null
+      const m = flatIndex && typeof flatIndex === 'object' ? flatIndex[domain] : null
+      if (m) srcPaths = [...(Array.isArray(m.paths) ? m.paths : []), ...(Array.isArray(m.core_files) ? m.core_files : [])]
+      if ((!srcPaths || srcPaths.length === 0) && anchorPath) srcPaths = [anchorPath]
+      if (!srcPaths || srcPaths.length === 0) continue
+      const { behind } = computeModuleBehind(domain, e.lastConfirmed, { projectRoot, srcPaths })
+      if (behind !== null && behind > threshold) {
+        emit(e.id, domain, rel, 'behind', { behind, threshold },
+          `「${e.id}」决策待复核：锚定模块 ${domain} 在最近确认 ${e.lastConfirmed} 后源码已前进 ${behind} commit，超阈值 ${threshold}（${rel}）——复核后更新「最近确认」`)
+      }
+    }
+  }
+
+  findings.sort((a, b) => a.file.localeCompare(b.file) || a.id.localeCompare(b.id))
+  exempted.sort((a, b) => a.key.localeCompare(b.key))
+  return { empty: false, domains: domainFiles.length, entries: entriesTotal, implemented: implementedTotal, threshold, findings, exempted }
 }

@@ -16,6 +16,7 @@
 > 源：`src/stages/verify.js` 的 `definition._globalGuardrails`。CLI 在 verify Step 1 完整注入下列全文；Step 2+ 仅注入一行精简提醒。
 
 ````markdown
+
 ## ⛔ verify 阶段绝对禁止的操作
 
 以下操作在 verify 阶段**绝对禁止**，无论出于任何原因（包括「恢复文件」「修复问题」「清理目录」）：
@@ -40,6 +41,13 @@
 - 写入 .sillyspec/changes/ 下的报告文件（verify-result.md）
 - 运行测试命令（不修改源码）
 - 运行 lint 命令（不自动修复）
+
+### 长测试/构建执行铁律
+- 长测试/构建/lint 命令必须**前台同步执行**，禁止 run_in_background:true / & / nohup / disown——后台任务易被会话生命周期回收导致中断无果
+
+### 检查选择与重复执行纪律（FR-12）
+- 不得为凑检查而重复执行已通过的检查——同一检查通过一次即为有效证据，重复执行只耗时不增信
+- 本地验证聚焦本次变更范围（模块子集 / 针对性检查）；全量测试与全仓扫描留给 CI 或用户明确要求时执行
 
 如果发现文件缺失或异常，**只报告问题，不尝试修复**。
 ````
@@ -188,6 +196,9 @@
 6. **模块文档一致性检查**：如果在"加载规范并锚定"步骤中加载了模块文档，检查实现是否符合模块文档描述的当前设计（特别关注接口签名、数据流、依赖关系）。不一致时**当场同步模块文档**（这是 verify 的收尾义务，不是可选项）；module-impact.md「更新结果」表的文档同步项也须在本阶段回填 done/skipped——CLI 在 verify --done 时硬校验该表无 pending/待办死信行，未清即阻断完成
 7. **决策链路检查**：如果存在 decisions.md，输出 D-xxx@vN → FR-xxx → task-xx → evidence 的追踪矩阵；缺失项必须列为风险（CLI 只校验每个 D-xxx@vN ID 字面出现在 verify-result.md，warning 不阻断；矩阵的 D→FR→task→evidence 映射完整性供人类追溯，CLI 不校验——是否真覆盖由你诚实判定）
 
+### 🩹 实现偏差 postmortem 提示（advisory，不强制——不影响 verify 结论判定）
+探针或 postcheck 检出**实现偏差**（不符合 design / 接口漂移 / 测试缺失 / 决策未闭环等）时，除按流程修复外，建议为该偏差补一条轻量 postmortem 记录进 QUICKLOG（走 quick 流程或既有条目的正文核对），根因块内按列表行写四子字段：`- 现象：`（偏差表现）、`- 根因：`（深层原因）、`- 护栏：`（防再犯措施）、`- 证据：`（可追溯路径——`sillyspec agent-log --json` 输出的本地会话日志 jsonl 路径、本变更 review.json、verify-result.md）。护栏结论经人工确认后归入 `.sillyspec/knowledge/known-issues.md`——走既有 knowledge 追加链路（同 quick 收尾先例：先入 knowledge/uncategorized.md，经知识整理确认后归类），不新建链路不新建命令。
+
 ### 输出
 探针报告 + 设计一致性检查结果 + 模块文档一致性检查结果 + 决策追踪矩阵（如有）
 ````
@@ -226,6 +237,9 @@
 - outputHint：质量扫描结果 + 技术债务
 - 等待配置：无（可直接 `--done`）
 
+**本步出现的运行时占位符**
+- `{EVIDENCE_AUTO_RECOMMENDATION}` → evidence-auto 推荐摘要：`verify-postcheck.js` 的 `resolveTestStrategy()` 按 local.yaml 的 test_strategy 与变更文件解析出 `evidence_auto_recommendation.summary`（含推荐理由、降级注记与「可在 verify-result.md 否决并改跑全量」路径）。仅 `test_strategy: evidence-auto` 且推荐非空时渲染；full/module/skip/未配置替换为空串。映射见 README「占位符总表 — 动态块占位符」
+
 **提示词原文**
 
 ````markdown
@@ -244,6 +258,16 @@
 ### 注意
 - **CLI 对账机制**：verify 阶段最终 --done 时，CLI 会亲自执行 local.yaml 的 commands.test（同步，耗时可能较长）；实测失败会直接阻断 verify 完成，谎报测试结果没有意义。commands.lint 同样会被 CLI 实测对账（advisory）
 - 冒烟测试非必需：全量/模块实测结果以 CLI 对账为准，本步跑的结果仅供你提前发现问题并写入验证报告
+
+### 检查选择指引（按变更影响面收窄，本地聚焦；FR-12）
+按本次变更的实际影响面选择检查组合，避免无差别全量：
+- **行为类改动**（源码逻辑/数据结构/接口/调用关系/配置）→ 聚焦测试：只跑变更命中模块的子集（local.yaml 配 `test_strategy: module` + modules 映射），CLI --done 对账同口径收窄
+- **文档/prompt 类改动**（*.md、docs/** 等）→ 文档检查（`sillyspec docs check` 口径），不跑代码测试
+- **门禁/契约类改动**（gate/contract 相关文件、对外接口契约）→ 契约对账（`sillyspec gate` 口径）优先于跑测试
+- **全量**仅在用户明确要求、或仓库级不可分变更（横切基础设施/全仓重命名等无法按模块拆分）时执行——本地聚焦，全量留给 CI 或明确要求
+
+### 测试策略推荐（CLI 注入；test_strategy: evidence-auto 时非空，其余策略为空）
+{EVIDENCE_AUTO_RECOMMENDATION}
 
 ### 输出
 质量扫描结果 + 技术债务标记

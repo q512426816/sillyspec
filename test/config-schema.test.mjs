@@ -114,6 +114,22 @@ console.log('\n--- 4. renderExample 防漂耦合（每个 live 键首段+末段�
   // 脱敏：token 占位符，不能泄露真实凭据
   assert(ex.includes('<your-mcp-token>'), 'example mcp.token 用占位符脱敏')
   assert(ex.includes('<your-platform-token>'), 'example platform.token 用占位符脱敏')
+  // test_strategy 枚举防漂（D-005@v2）：四值齐全且 example 注释提及 skip/evidence-auto 语义
+  const tsKey = liveKeys.find((k) => k.path === 'test_strategy')
+  assert(tsKey && Array.isArray(tsKey.values), 'test_strategy 键存在且 values 为数组')
+  assert(
+    tsKey && tsKey.values.length === 4 &&
+      ['full', 'module', 'skip', 'evidence-auto'].every((v) => tsKey.values.includes(v)),
+    `test_strategy 枚举含 full/module/skip/evidence-auto 四值（实际 ${JSON.stringify(tsKey && tsKey.values)}）`
+  )
+  assert(ex.includes('skip=真跳过'), 'example test_strategy 注释含 skip=真跳过语义')
+  assert(ex.includes('evidence-auto'), 'example test_strategy 注释含 evidence-auto')
+  // decisions.behind_threshold 防漂（task-11 新 live 键）：live + example 含 token（非注释行）
+  const btKey = liveKeys.find((k) => k.path === 'decisions.behind_threshold')
+  assert(btKey && btKey.status === 'live' && btKey.type === 'integer', 'decisions.behind_threshold 为 live integer 键')
+  assert(ex.includes('behind_threshold'), 'example 含 decisions.behind_threshold token')
+  assert(/^decisions:/m.test(ex), 'decisions 段在 example 为非注释行（live）')
+  assert(/^ {2}behind_threshold:/m.test(ex), 'behind_threshold 在 example 为非注释行（live）')
   // poll_interval_ms/worker_timeout_ms（路径A 预留·未落地）仍在 example 注释提醒；auto_mode 已 live 取消注释；fileWhitelist 已移除
   assert(ex.includes('poll_interval_ms'), 'example 含路径A 预留键 poll_interval_ms（注释提醒）')
   assert(ex.includes('路径A 预留'), 'example dispatch 注释点名路径A gate')
@@ -152,6 +168,15 @@ function runCli(args) {
   let parsed
   try { parsed = JSON.parse(r.out) } catch { parsed = null }
   assert(parsed !== null && Array.isArray(parsed.keys), 'config schema --json 输出合法 JSON 且含 keys')
+  // D-005@v2 / task-11 验收：--json 机读口径下四值枚举 + 新 live 键可查
+  const jsonTs = parsed && parsed.keys.find((k) => k.path === 'test_strategy')
+  assert(
+    jsonTs && Array.isArray(jsonTs.values) &&
+      ['full', 'module', 'skip', 'evidence-auto'].every((v) => jsonTs.values.includes(v)),
+    'config schema --json 的 test_strategy.values 含 full/module/skip/evidence-auto 四值'
+  )
+  const jsonBt = parsed && parsed.keys.find((k) => k.path === 'decisions.behind_threshold')
+  assert(jsonBt && jsonBt.status === 'live', 'config schema --json 可查 decisions.behind_threshold 且 status=live')
 }
 {
   const r = runCli(['bogus'])

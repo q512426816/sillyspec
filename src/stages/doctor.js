@@ -328,8 +328,68 @@ timeout 5 which docker 2>/dev/null && echo "✅ Docker 可用" || echo "ℹ️ D
       optional: false
     },
     {
+      name: '决策待复核检查',
+      prompt: `检查决策知识库（knowledge/decisions/）的待复核状态（advisory，不阻断）。
+
+### 操作
+运行 docs-check 决策规则族（锚点存在性 + behind 阈值复核，task: 2026-08-23-adopt-harness-practices）：
+
+\`\`\`bash
+# 定位 sillyspec 源码根：sillyspec 本仓 dogfood 优先用仓内源码（全局安装版本可能落后于本检查项）；
+# 其余场景经 bin 符号链接解析到安装包根；均不可得时降级跳过
+SRC_ROOT=""
+if grep -q '"name": *"sillyspec"' package.json 2>/dev/null && [ -f "src/docs-check.js" ]; then
+  SRC_ROOT="$PWD"
+else
+  BIN=$(command -v sillyspec)
+  if [ -n "$BIN" ]; then
+    SRC_ROOT=$(node -e 'const fs=require("fs");const p=fs.realpathSync(process.argv[1]).replace(/\\\\/g,"/");const i=p.lastIndexOf("/bin/sillyspec.js");console.log(i===-1?"":p.slice(0,i));' "$BIN")
+  fi
+fi
+if [ -z "$SRC_ROOT" ]; then
+  echo "ℹ️ 无法定位 sillyspec 源码（非 sillyspec 仓且未安装 sillyspec 命令），跳过决策待复核检查"
+else
+  node --input-type=module -e '
+import { readFileSync, existsSync } from "node:fs";
+import { pathToFileURL } from "node:url";
+let specBase = process.argv[2];
+if (existsSync(".sillyspec-platform.json")) {
+  try { const p = JSON.parse(readFileSync(".sillyspec-platform.json", "utf8")); if (p.specRoot) specBase = p.specRoot; } catch {}
+}
+const mod = await import(pathToFileURL(process.argv[1] + "/docs-check.js"));
+const r = await mod.runDecisionRules({ projectRoot: process.cwd(), specBase: specBase });
+if (r.empty) {
+  console.log("ℹ️ 决策库未初始化（" + specBase + "/knowledge/decisions/ 不存在）——冷启动空库，变更归档时 decision-distill 自动积累（R-02）");
+} else if (r.findings.length === 0) {
+  console.log("✅ 决策待复核：无信号（" + r.implemented + "/" + r.entries + " 条 implemented，behind 阈值 " + r.threshold + "）");
+} else {
+  console.log("⚠️ 决策待复核清单（" + r.findings.length + " 条，advisory 不阻断——D-003）:");
+  for (const f of r.findings) console.log("   - " + f.message);
+}
+if (r.exempted.length > 0) console.log("ℹ️ 另有 " + r.exempted.length + " 条经 known_failures decisions.* 键豁免: " + r.exempted.map(e => e.key).join(", "));
+' "$SRC_ROOT/src" "$PWD/.sillyspec" || echo "⚠️ 决策规则执行失败（降级跳过，不影响其他检查项）"
+fi
+\`\`\`
+
+### 输出格式
+\`\`\`
+📋 决策待复核
+✅ 决策待复核：无信号（3/5 条 implemented，behind 阈值 10）
+⚠️ 决策待复核清单（1 条，advisory 不阻断——D-003）:
+   - 「D-012@v1」决策待复核：锚定模块 docs-consistency 在最近确认 a1b2c3d 后源码已前进 15 commit，超阈值 10
+ℹ️ 决策库未初始化 —— 冷启动空库（R-02）
+\`\`\`
+
+### 注意
+- 本检查项为 advisory（只 ⚠️ 不 ❌），不作为修复阻断项
+- 待复核的复核再确认由用户完成：确认决策仍成立后，把条目「最近确认」更新为当前 HEAD——不要自动改写
+- 全程只读，不修改 knowledge/decisions/ 下任何文件`,
+      outputHint: '决策待复核清单',
+      optional: false
+    },
+    {
       name: '汇总报告',
-      prompt: `汇总前四步的所有检查结果，生成最终的自检报告。
+      prompt: `汇总前面各步的所有检查结果，生成最终的自检报告。
 
 ### 输出格式
 \`\`\`
@@ -350,6 +410,9 @@ timeout 5 which docker 2>/dev/null && echo "✅ Docker 可用" || echo "ℹ️ D
 ## 外部依赖
 ✅ Context7 MCP — 已配置
 ⚠️  grep.app — 不可达
+
+## 决策待复核（advisory）
+⚠️ 「D-012@v1」— 锚定模块源码 behind 15 超阈值 10（复核后更新「最近确认」）
 \`\`\`
 
 ### 要求
@@ -371,6 +434,9 @@ timeout 5 which docker 2>/dev/null && echo "✅ Docker 可用" || echo "ℹ️ D
 - Maven 私服不可达 → 检查 VPN、settings.xml 配置、私服状态
 - Git remote 不可达 → 检查网络、SSH key 或凭证
 - 工具未安装 → 给出安装命令（如 \`brew install maven\`）
+
+**状态错乱补 postmortem（advisory，不强制）：**
+若本次自检检出状态错乱或不一致（sillyspec.db 阶段状态与实际产出不符、孤儿目录、僵尸 quick 会话等）并已修复，建议补一条轻量 postmortem 记录进 QUICKLOG（走 quick 流程或既有条目正文核对），根因块内按列表行写四子字段：\`- 现象：\`（错乱表现）、\`- 根因：\`（深层原因）、\`- 护栏：\`（防再犯措施）、\`- 证据：\`（可追溯路径——\`sillyspec agent-log --json\` 输出的本地会话日志 jsonl 路径、相关变更 review.json、verify-result.md）。护栏结论经人工确认后归入 \`.sillyspec/knowledge/known-issues.md\`——走既有 knowledge 追加链路（先入 knowledge/uncategorized.md，经知识整理确认后归类），不新建链路不新建命令。
 
 每条建议格式：
 \`\`\`

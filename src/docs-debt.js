@@ -10,7 +10,7 @@
  *   behind = rev-list --count docCommit..srcCommit；untracked 卡 behind=null 显式"卡片从未提交"；
  *   git 失败/超时 5s → 该模块 behind=null + 降级注记，不抛。
  */
-import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, realpathSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { safeGit } from './git-helper.js'
 import { parseModuleMapSimple } from './modules.js'
@@ -18,6 +18,11 @@ import { runDocsCheck, readDocsCheckConfig } from './docs-check.js'
 
 /** safeGit 超时（大仓 git log 慢时降级该模块，不挂起 Wave 渲染） */
 const GIT_TIMEOUT_MS = 5000
+
+/** realpath 归一（失败回退原值——路径不可及时保持调用方原有行为） */
+function realpathSafe(p) {
+  try { return realpathSync(p) } catch { return p }
+}
 
 /**
  * 纯函数：把 changedFiles 归属到模块。
@@ -90,7 +95,31 @@ export function matchFilesToModules(changedFiles, moduleIndex, opts = {}) {
   return { byModule, unmapped }
 }
 
-/** 单模块欠账：双 commit 时间戳判方向 + rev-list 计数。全失败 → behind null + 注记。
+/** "h ct" 输出解析（git log -1 --format=%h %ct 的单行值）→ { h, ct }；空输出 → null。
+ *  刻意不额外校验 ct 可析性——与 moduleDebt 原内联解析逐字等价（含畸形输出 NaN ct 形态），
+ *  保证公共抽取零行为漂移。 */
+function parseHct(out) {
+  if (!out || !out.trim()) return null
+  const [h, ct] = out.trim().split(' ')
+  return { h, ct: parseInt(ct, 10) }
+}
+
+/** behind 公共口径（D-004；2026-08-23-adopt-harness-practices task-05 抽公共实现）：双 commit
+ *  时间戳判方向 + rev-list 计数。src.ct >= ref.ct → rev-list --count ref..src（git 失败 →
+ *  behind=null + degraded=true，不抛）；src 时间戳落后 ref → behind=0。ct 相等也进对账
+ *  （同一秒内的提交——测试/快速序列场景），由 rev-list count 分晓。
+ *  moduleDebt 与 computeModuleBehind 共用——behind 口径单一真相源。 */
+function behindWithDirection(gitRoot, srcCommit, refCommit) {
+  if (srcCommit.ct >= refCommit.ct) {
+    const cnt = safeGit(gitRoot, ['rev-list', '--count', `${refCommit.h}..${srcCommit.h}`], { timeout: GIT_TIMEOUT_MS })
+    const behind = cnt.error ? null : parseInt(cnt.value, 10)
+    return { behind, degraded: behind === null }
+  }
+  return { behind: 0, degraded: false }
+}
+
+/** 单模块欠账：双 commit 时间戳判方向 + rev-list 计数（复用 parseHct/behindWithDirection 公共
+ * 实现，抽取前后逐字等价，C-10）。全失败 → behind null + 注记。
  * docGitPath：模块卡的 git 相对路径（specBase 相对 projectRoot 换算——specBase 在项目内时
  * 是 .sillyspec/docs/<p>/modules/<id>.md；平台模式 specBase 在仓外时卡片不在 git 内 →
  * docLog 恒失败 → 走"从未提交"形态，如实呈现）。 */
@@ -102,39 +131,56 @@ function moduleDebt(projectRoot, moduleId, entry, docGitPath, docGitRoot) {
   let srcCommit = null
   let docCommit = null
   let neverCommitted = false
-  if (!srcLog.error && srcLog.value && srcLog.value.trim()) {
-    const [h, ct] = srcLog.value.trim().split(' ')
-    srcCommit = { h, ct: parseInt(ct, 10) }
-  } else {
-    notes.push('源码 commit 历史不可得（新文件或 git 失败）')
-  }
+  srcCommit = (!srcLog.error && srcLog.value) ? parseHct(srcLog.value) : null
+  if (!srcCommit) notes.push('源码 commit 历史不可得（新文件或 git 失败）')
   if (docGitPath) {
     // 卡片历史在卡片所在 git 仓查（docGitRoot；linked worktree 场景 = 主仓根），
     // 源码历史在 projectRoot 查——两侧 commit 同属一个仓库历史可 rev-list 对账
     const docGitCwd = docGitRoot || projectRoot
     const docLog = safeGit(docGitCwd, ['log', '-1', '--format=%h %ct', '--', docGitPath], { timeout: GIT_TIMEOUT_MS })
-    if (!docLog.error && docLog.value && docLog.value.trim()) {
-      const [h, ct] = docLog.value.trim().split(' ')
-      docCommit = { h, ct: parseInt(ct, 10) }
-    } else {
-      neverCommitted = true
-    }
+    docCommit = (!docLog.error && docLog.value) ? parseHct(docLog.value) : null
+    if (!docCommit) neverCommitted = true
   }
   if (srcCommit && !docCommit) {
     // 有源码历史但卡片从未提交 → 欠账最重形态
     return { module: moduleId, ...entry, srcCommit: srcCommit.h, docCommit: null, behind: null, neverCommitted: true, notes }
   }
   if (srcCommit && docCommit) {
-    // ct 相等也进对账（同一秒内的提交——测试/快速序列场景），由 rev-list count 分晓
-    if (srcCommit.ct >= docCommit.ct) {
-      const cnt = safeGit(docGitRoot || projectRoot, ['rev-list', '--count', `${docCommit.h}..${srcCommit.h}`], { timeout: GIT_TIMEOUT_MS })
-      behind = cnt.error ? null : parseInt(cnt.value, 10)
-      if (behind === null) notes.push('rev-list 失败降级')
-    } else {
-      return { module: moduleId, ...entry, srcCommit: srcCommit.h, docCommit: docCommit.h, behind: 0, neverCommitted: false, notes }
-    }
+    behind = behindWithDirection(docGitRoot || projectRoot, srcCommit, docCommit).behind
+    if (behind === null) notes.push('rev-list 失败降级')
   }
   return { module: moduleId, ...entry, srcCommit: srcCommit?.h || null, docCommit: docCommit?.h || null, behind, neverCommitted, notes }
+}
+
+/**
+ * 公共导出（C-10，2026-08-23-adopt-harness-practices task-05）：模块源码在参考 commit 后的
+ * 前进数（behind）。口径同 moduleDebt（D-004：双 commit 时间戳判方向 + rev-list 计数，复用
+ * behindWithDirection；git 失败/输入缺失 → behind=null + degraded=true，不抛）。
+ * 消费方：docs-check 决策规则 behind 复核（决策锚定模块源码在「最近确认」commit 后的前进数）。
+ * 不改 moduleDebt 对外行为与既有返回结构（computeDocsDebt / matchFilesToModules 输出不变）。
+ * @param {string} moduleId 模块 id（_module-map.yaml 键；决策规则里 = 条目所在域文件名）
+ * @param {string} lastConfirmedCommit 参考 commit（决策「最近确认」hash；空/「未记录」/非 hash 串 → degraded）
+ * @param {{ projectRoot?: string, srcPaths?: string[], moduleIndex?: object }} [opts]
+ *   projectRoot git 锚（缺省 process.cwd()）；srcPaths 显式源码路径集（优先）；
+ *   moduleIndex _module-map 解析结果（平铺或 {modules} 包裹均可，取该模块 paths∪core_files 兜底）
+ * @returns {{ behind: number|null, degraded: boolean }} degraded=true = behind 不可得
+ *   （路径集为空 / 参考 commit 不可解析 / git 失败），调用方降级呈现不阻断
+ */
+export function computeModuleBehind(moduleId, lastConfirmedCommit, opts = {}) {
+  const projectRoot = opts.projectRoot || process.cwd()
+  let srcPaths = Array.isArray(opts.srcPaths) ? opts.srcPaths.filter(Boolean).map(p => String(p)) : null
+  if ((!srcPaths || srcPaths.length === 0) && opts.moduleIndex) {
+    const flat = opts.moduleIndex.modules ? opts.moduleIndex.modules : opts.moduleIndex
+    const m = flat && typeof flat === 'object' ? flat[moduleId] : null
+    if (m) srcPaths = [...(Array.isArray(m.paths) ? m.paths : []), ...(Array.isArray(m.core_files) ? m.core_files : [])]
+  }
+  if (!srcPaths || srcPaths.length === 0) return { behind: null, degraded: true }
+  const ref = String(lastConfirmedCommit || '').trim()
+  if (!/^[0-9a-f]{4,40}$/i.test(ref)) return { behind: null, degraded: true }
+  const srcCommit = parseHct(safeGit(projectRoot, ['log', '-1', '--format=%h %ct', '--', ...srcPaths], { timeout: GIT_TIMEOUT_MS }).value)
+  const refCommit = parseHct(safeGit(projectRoot, ['log', '-1', '--format=%h %ct', ref], { timeout: GIT_TIMEOUT_MS }).value)
+  if (!srcCommit || !refCommit) return { behind: null, degraded: true }
+  return behindWithDirection(projectRoot, srcCommit, refCommit)
 }
 
 /**
@@ -177,7 +223,10 @@ export function computeDocsDebt(opts) {
     const specTop = safeGit(specBase, ['rev-parse', '--show-toplevel'], { timeout: GIT_TIMEOUT_MS })
     if (!specTop.error && specTop.value) {
       docGitRoot = specTop.value.trim()
-      const rel = relative(docGitRoot, cardsDir)
+      // macOS 坑：git 返回 realpath（/var → /private/var 的 symlink 解析），cardsDir 可能是
+      // symlink 形态（tmpdir/用户项目路径经符号链接）——两侧不归一时 relative() 产出 ../..
+      // 前缀 → 卡片被误判"从未提交"（假账）。两侧 realpathSync 归一后再算（失败回退原值）。
+      const rel = relative(realpathSafe(docGitRoot), realpathSafe(cardsDir))
       if (rel && !rel.startsWith('..')) docPathPrefix = rel.replace(/\\/g, '/')
     }
   } catch { /* 保持 null */ }

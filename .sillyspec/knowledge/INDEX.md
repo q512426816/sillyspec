@@ -38,3 +38,13 @@ created_at: 2026-06-19T12:40:00+08:00
 - propose|死代码|deprecated → [known-issues.md#propose-死代码](known-issues.md#propose-死代码)
 - 平台审核|approve|reject|SillyHub → [known-issues.md#平台审核占位](known-issues.md#平台审核占位)
 - 无build|无lint|check-syntax → [known-issues.md#无-buildlint-框架](known-issues.md#无-buildlint-框架)
+
+## Decisions
+- change-management|quicklog|标签|切段|decision|决策 → [decisions/change-management.md](decisions/change-management.md)
+- core-engine|SQLite|FTS5|db-engine|decision|决策 → [decisions/core-engine.md](decisions/core-engine.md)
+- hooks|hook|导入限制|npm-test|decision|决策 → [decisions/hooks.md](decisions/hooks.md)
+- setup|register-repo|CRLF|local.yaml|decision|决策 → [decisions/setup.md](decisions/setup.md)
+- worktree|junction|幽灵目录|node_modules|decision|决策 → [decisions/worktree.md](decisions/worktree.md)
+- unmapped|decision|决策 → [decisions/unmapped.md](decisions/unmapped.md)
+- docs-consistency|decision|决策 → [decisions/docs-consistency.md](decisions/docs-consistency.md)
+- stages|decision|决策 → [decisions/stages.md](decisions/stages.md)

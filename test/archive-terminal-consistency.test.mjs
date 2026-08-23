@@ -7,7 +7,7 @@
  *
  * 锁定语义：
  *   ① unregisterChange({archiveStepNames})：同事务收尾 current_stage='archive' +
- *      stages.archive=completed + 步骤全 completed（含从未初始化时按定义补种 5 步）
+ *      stages.archive=completed + 步骤全 completed（含从未初始化时按定义补种 6 步）
  *   ② archiveChangeDirectory 自愈路径（源目录已移 archive/）：走完整终态
  *   ③ doctor --cleanup-ghosts --confirm：手动归档型幽灵（archive/ 有实体证据）收尾终态；
  *      真丢失型（无证据）保持 status-only（可逆语义，不伪造完成）
@@ -56,7 +56,7 @@ function readTerminal(pm, cwd, cn) {
 
 console.log('=== 归档终态一致化（坑 manual-archive-desync-status-only）===\n')
 
-console.log('--- ① unregisterChange 收尾参数：未初始化 archive 阶段按定义补种 5 步 ---')
+console.log('--- ① unregisterChange 收尾参数：未初始化 archive 阶段按定义补种 6 步 ---')
 {
   const d = mkRepo('u1')
   const cn = '2026-08-21-term-a'
@@ -68,14 +68,14 @@ console.log('--- ① unregisterChange 收尾参数：未初始化 archive 阶段
   db.prepare("UPDATE changes SET current_stage = 'execute' WHERE id = ?").run(idRow.id)
 
   const names = pm.archiveStepNamesForArchive()
-  assert(names.length === 5, `archive 步骤名取自 registry（${names.length} 步）`)
+  assert(names.length === 6, `archive 步骤名取自 registry（${names.length} 步）`)
   pm.unregisterChange(d, cn, { archiveStepNames: names })
 
   const t = readTerminal(pm, d, cn)
   assert(t.status === 'archived', 'status=archived')
   assert(t.currentStage === 'archive', `current_stage 推进到 archive（实得 ${t.currentStage}）`)
   assert(t.stageStatus === 'completed', 'stages.archive=completed')
-  assert(t.steps.length === 5 && t.steps.every(s => s.status === 'completed'), `5 步全 completed（实得 ${t.steps.length} 步）`)
+  assert(t.steps.length === 6 && t.steps.every(s => s.status === 'completed'), `6 步全 completed（实得 ${t.steps.length} 步）`)
   cleanup()
 }
 
@@ -101,7 +101,7 @@ console.log('--- ② archiveChangeDirectory 自愈路径（手动搬目录后）
   assert(r && existsSync(r), '自愈路径返回归档目录')
   const t = readTerminal(pm, d, cn)
   assert(t.status === 'archived' && t.currentStage === 'archive', `终态一致（status=${t.status}, stage=${t.currentStage}）`)
-  assert(t.steps.length === 5 && t.steps.every(s => s.status === 'completed'), `归档步骤全 completed（${t.steps.filter(s => s.status === 'completed').length}/${t.steps.length}）`)
+  assert(t.steps.length === 6 && t.steps.every(s => s.status === 'completed'), `归档步骤全 completed（${t.steps.filter(s => s.status === 'completed').length}/${t.steps.length}）`)
   cleanup()
 }
 
@@ -124,7 +124,7 @@ console.log('--- ③ doctor --cleanup-ghosts：手动归档型收尾，真丢失
   const r = run(`node "${binCLI}" --dir "${d}" doctor --cleanup-ghosts --confirm`)
   assert(r.status === 0, `doctor 成功（exit ${r.status}，输出尾：${r.out.slice(-120)}）`)
   const tm = readTerminal(pm, d, cnManual)
-  assert(tm.status === 'archived' && tm.currentStage === 'archive' && tm.steps.length === 5 && tm.steps.every(s => s.status === 'completed'),
+  assert(tm.status === 'archived' && tm.currentStage === 'archive' && tm.steps.length === 6 && tm.steps.every(s => s.status === 'completed'),
     `手动归档型：完整终态（stage=${tm.currentStage}, ${tm.steps.filter(s => s.status === 'completed').length}/${tm.steps.length}）`)
   const tl = readTerminal(pm, d, cnLost)
   assert(tl.status === 'archived', `真丢失型：status=archived（可逆语义保留，实得 ${tl.status}）`)

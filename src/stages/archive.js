@@ -132,6 +132,38 @@ created_at: <now-datetime>
       optional: false
     },
     {
+      name: 'decision-distill 决策提炼',
+      // conditionalWait（同 sync-module-docs 先例）：常规提炼直接写入 + --done；仅异常（rejected
+      // 条目缺否决理由/复潮条件 → distillIntoKnowledge 返回 needsWait 非空）才 --wait 请用户裁决
+      // （补录后重跑幂等 / 跳过该条）。勿引入 requiresWait 硬门——与下一步「确认归档 --confirm」
+      // 重复确认（坑 archive-subconfirm-redundant）。
+      conditionalWait: true,
+      repeatableWait: true,
+      maxWaitRounds: 3,
+      waitReason: '等待用户裁决 rejected 决策缺字段',
+      waitOptions: ['补录后继续', '跳过该条'],
+      prompt: `读取变更 decisions.md，把有实现影响的决策提炼进决策知识库（提炼/幂等/INDEX 路由行本体在 CLI 纯函数 src/decision-distill.js，本步只接线，勿手工改写条目格式）。
+
+### 操作
+1. 定位参数：changeDir = \`.sillyspec/changes/<change-name>\`（decisions.md 所在——本步在「确认归档」移动目录之前，仍在原位）；knowledgeRoot = \`.sillyspec/knowledge\`；headHash = \`git rev-parse --short HEAD\`（落条目「最近确认」）
+2. 调用纯函数 \`distillIntoKnowledge(changeDir, knowledgeRoot, headHash)\`，按返回的 \`{ written, skipped, needsWait }\` 分流（见第 3 点）：
+   - 能解析到 sillyspec 源码/安装位置时（如 sillyspec 仓内 dogfood）直接 import 调用：\`node --input-type=module -e "import { distillIntoKnowledge } from './src/decision-distill.js'; console.log(JSON.stringify(distillIntoKnowledge(changeDir, knowledgeRoot, headHash), null, 2))"\`
+   - 解析不到（consumer 仓库无源码，node import 会 ERR_MODULE_NOT_FOUND）→ 按其语义执行：解析 D-xxx@vN 条目；入选规则 = 任意 type 的 status=rejected 留痕 + 五类 type（architecture/compatibility/boundary/definition/process）且 status∈{confirmed,accepted} 提炼 implemented，type=scope 不入选；条目幂等落 \`.sillyspec/knowledge/decisions/<模块域>.md\`（同 ID 同版本重写不重复追加、@vN+1 整段替换旧版并注 supersedes；「模块域」缺失按 impacts 路径与 _module-map.yaml paths 前缀匹配兜底，仍未中归 unmapped）；implemented 条目写「状态：implemented + 锚点：<src 路径:行号，未记录则填"未记录"> + 最近确认：<headHash> + 理由：<一句话>」，rejected 条目写「状态：rejected + 否决理由： + 复潮条件：」；\`knowledge/INDEX.md\` 的 decisions 路由行（\`- <域>|decision|决策 → [decisions/<域>.md](decisions/<域>.md)\`）幂等增删
+3. 分流规则：
+   - **常规**（needsWait 为空且 written 非空）→ 写入已由函数完成，written 摘要（decisions/<域>.md × D-xxx@vN × append/update/supersede）写入 --output 后直接 --done（本步不单独弹确认——用户确认收敛到下一步「确认归档 --confirm」）
+   - **needsWait 非空**（rejected 条目缺否决理由/复潮条件，该条目未写盘、其余条目照常提炼）→ 暂停请用户裁决：
+     \`sillyspec run archive --wait --reason "等待用户裁决 rejected 决策缺字段" --options "补录后继续,跳过该条" --output "needsWait 描述 + 已提炼摘要"\`
+     - 「补录后继续」→ 按 needsWait 描述在 changes/<change-name>/decisions.md 补齐缺失的否决理由/复潮条件，重跑第 2 步（幂等，重跑安全）
+     - 「跳过该条」→ 该条目不入库，--output 注记跳过原因后 --done
+   - **零输出**（skipped 非空 = 无 decisions.md / 无入选条目）→ 不创建任何文件、不动 INDEX，--output 注一句 skipped 原因后直接 --done（同 docs-debt 无债零输出原则）
+4. 降级：调用或解析异常（模块加载失败 / decisions.md 结构异常抛错）→ warn 记录异常摘要后跳过本步 --done（best-effort，同 agent-session-log 先例），不阻断归档——决策提炼失败不挡归档移动
+
+### 输出
+已提炼条目清单（decisions/<域>.md × D-xxx@vN × action）或零输出/跳过/降级原因`,
+      outputHint: '决策提炼结果',
+      optional: false
+    },
+    {
       name: '确认归档',
       prompt: `确认归档内容，由 CLI 执行目录移动。
 
@@ -155,7 +187,8 @@ created_at: <now-datetime>
 1. 如果 \`.sillyspec/ROADMAP.md\` 存在，标记对应 Phase 为已完成
 2. \`git add .sillyspec/changes/archive/\` — 暂存归档结果（archive/ 下仅本次归档新增，不会裹挟 changes/ 下其他活跃变更；不要 commit，由用户通过统一提交工具处理）
 3. \`git add .sillyspec/docs/<project>/modules/\` — 暂存模块文档更新（如有；精确到本次同步的模块文档，勿 add 整个 .sillyspec/docs/）
-4. 确认 sillyspec.db 中该变更已不再 active（确认归档步骤由 CLI 调用 unregisterChange）
+4. \`git add .sillyspec/knowledge/decisions/\` — 暂存决策知识库更新（如有；decision-distill 步骤的提炼产物，精确到 decisions 子目录，勿 add 整个 .sillyspec/knowledge/；不要 commit，由用户通过统一提交工具处理）
+5. 确认 sillyspec.db 中该变更已不再 active（确认归档步骤由 CLI 调用 unregisterChange）
 
 ### 输出
 归档完成确认 + 累积规范统计`,

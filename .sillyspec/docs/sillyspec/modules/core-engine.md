@@ -1,12 +1,12 @@
 ---
-updated_at: 2026-08-19T11:27:03+08:00
+updated_at: 2026-08-24T00:40:00+08:00
 author: qinyi
 created_at: 2026-06-01T09:05:00
 ---
 
 # core-engine
-> 最后更新：2026-08-16
-> 最近变更：2026-08-16-scan-docs-reconcile（契约/评审族与基础原语补录归属 + propose 回收）/ ql-20260809-003-c88a（#5 next-action 读路径对齐变更根目录 + #6 initChange 用 VALID_STAGES 单一源 + 修正 propose 残留误述）
+> 最后更新：2026-08-23
+> 最近变更：2026-08-23-adopt-harness-practices（knowledge-match 增 decisionHits 防复潮解析 + verify-postcheck skip 真跳过/evidence-auto 推荐）/ 2026-08-16-scan-docs-reconcile（契约/评审族与基础原语补录归属 + propose 回收）/ ql-20260809-003-c88a（#5 next-action 读路径对齐变更根目录 + #6 initChange 用 VALID_STAGES 单一源 + 修正 propose 残留误述）
 > 模块路径：src/db.js, src/db-engine.js + 契约/评审族与基础原语（stage-contract 三件、check-primitives、stage-review、task-review、verify-postcheck、review-tier、change-risk-profile、classify-change、contract-matrix、endpoint-extractor、knowledge-match、doctor-diagnostics、fs-atomic、constants、scan-postcheck）；完整清单见 _module-map.yaml core-engine paths。历史正文中的 run.js / progress.js / index.js 章节已分属 runtime / progress / cli-entry 模块卡
 
 ## 职责
@@ -30,12 +30,13 @@ core-engine 是 SillySpec 的基础设施层，由三个层次组成：持久化
 - `src/check-primitives.js` — 共享产物字面校验原语（纯函数：contains_sections/min_lines/no_placeholder/no_empty_files 全仓单一语义源），workflow 与 stage-contract 两引擎共用
 - `src/stage-review.js` — 阶段级审查门（brainstorm/plan/execute-acceptance 的阶段级 review.json 校验：文档证据 reviewedFiles + docHash）
 - `src/task-review.js` — execute 每 task 的 review.json 校验（git 代码 diff 证据：base/head）
-- `src/verify-postcheck.js` — verify 完成时 CLI 亲自执行 local.yaml 测试命令与 verify-result.md 自报告对账（自报 PASS 但实测失败 → 阻断）
+- `src/verify-postcheck.js` — verify 完成时 CLI 亲自执行 local.yaml 测试命令与 verify-result.md 自报告对账（自报 PASS 但实测失败 → 阻断）；2026-08-23 起 test_strategy 新值接线（D-005@v2）：`resolveTestStrategy` 统一入口（`src/verify-postcheck.js:354`）解析配置策略 + evidence-auto 按 module-impact.md 影响面推荐检查组合（行为→module 聚焦测试、文档/prompt→docs-check、门禁契约→gate；缺失/不可解析降级 module 并注记）；
+  skip=真跳过（`src/verify-postcheck.js:1010` mode 'strategy-skip'）——不回退全量、verify 输出显式标注留审计痕迹（R-07），`--done` 对账按 skip 分支放行
 - `src/review-tier.js` — 审查分级（self/independent）：plan_level 确定性映射（none/light→self、full→independent），无 plan_level 阶段退文件数启发式；run/gates.js 与 run/prompt.js 消费
 - `src/change-risk-profile.js` — 变更风险分级检测（P0 阻塞确认 / P1 记录 / P2 通过，产出 risk-profile.json）
 - `src/classify-change.js` — 变更规模分类器（quick/auto/full，供 auto 模式决定内部流程深度）
 - `src/contract-matrix.js` / `src/endpoint-extractor.js` — API 契约矩阵生成与注入（provider/consumer 端点提取与 parity check）
-- `src/knowledge-match.js` — knowledge 关键词匹配引擎（INDEX.md 条目解析 + 任务上下文匹配生成 hit report）
+- `src/knowledge-match.js` — knowledge 关键词匹配引擎（INDEX.md 条目解析 + 任务上下文匹配生成 hit report）；2026-08-23 起 INDEX `## Decisions` 段路由行进决策匹配（`src/knowledge-match.js:110-155`）：新增 `parseDecisionEntries` 解析 decisions/<域>.md 条目 + `matchKnowledge` 返回值新增 decisionHits——任务上下文命中的 Decisions 路由行所指向文件内全部 D-xxx@vN 条目，rejected 优先排序（防复潮信息最先可见）；matched/entries/report/json 旧四键结构与语义不变，无 decisions 库/路由行未命中 → decisionHits: []，供 brainstorm Step2 防复潮注入（runtime run/prompt.js 消费）
 - `src/doctor-diagnostics.js` — 结构化项目自检（平台模式状态分裂检测 D1-D5 + safe_actions 只描述建议动作绝不自动执行，`sillyspec doctor --json`）
 - `src/fs-atomic.js` — 原子文件写 + Windows 友好 rename 重试（writeAtomicSync，用于 .runtime/*.json/pointer 等跨进程读文件；sillyspec.db 不走此路）
 - `src/constants.js` — 平台状态枚举（manifest/pointer/postcheck/workflow-runs 共享，SillyHub 侧直接用常量值）

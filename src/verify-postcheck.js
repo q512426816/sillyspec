@@ -9,10 +9,17 @@
  * 未配置 commands.test（或标记 unavailable）时降级为 warning 不阻断，
  * 兼容无测试项目。
  *
- * test_strategy 支持（D-002@v1）：
+ * test_strategy 支持（D-002@v1；D-005@v2 扩 skip/evidence-auto）：
  * - full（默认）：整跑 commands.test（brownfield 行为不变）
  * - module：按 local.yaml modules 映射，仅跑 git diff 命中的模块子集
  *           测试，避免 monorepo 全量测试超 gate timeout。
+ * - skip：真跳过测试（不再回退全量——兑现声明语义，verify 输出显式
+ *         标注留审计痕迹，R-07；既有 skipped 状态机承载）。
+ * - evidence-auto：按变更目录 module-impact.md 影响类型推荐检查组合
+ *                 （行为→module 聚焦测试、文档/prompt→docs-check、门禁
+ *                 契约→gate；缺失/不可解析降级 module 并注记），推荐结果
+ *                 由 resolveTestStrategy 统一产出（契约 test_strategy_resolution，
+ *                 task-12 经 run/prompt.js 注入 prompt 供用户否决）。
  */
 
 import { execSync } from 'child_process'
@@ -162,16 +169,22 @@ export function printVerifyLintCheck(result) {
  * 从 local.yaml 文本提取顶层 test_strategy。
  * 轻量正则（与 extractTestCommand 同风格，不引 yaml 依赖）。
  *
+ * D-005@v2：识别 skip（真跳过）与 evidence-auto（按 module-impact 推荐）两新值；
+ * 未知值仍回 null（缺省全量口径不动）。
+ *
  * @param {string} yamlText
- * @returns {'full'|'module'|null} - 解析到的策略；缺省/无法解析返回 null（调用方按 full 处理）
+ * @returns {'full'|'module'|'skip'|'evidence-auto'|null} - 解析到的策略；缺省/无法解析返回 null（调用方按 full 处理）
  */
 export function extractTestStrategy(yamlText) {
   if (!yamlText) return null
-  const m = yamlText.match(/^\s*test_strategy:\s*([A-Za-z_]+)\s*(?:#.*)?$/m)
+  // 值字符集含 '-'（evidence-auto）；不含 '.'/空格，与顶层标量枚举写法一致
+  const m = yamlText.match(/^\s*test_strategy:\s*([A-Za-z_-]+)\s*(?:#.*)?$/m)
   if (!m || !m[1]) return null
   const v = m[1].trim().toLowerCase()
   if (v === 'module') return 'module'
   if (v === 'full') return 'full'
+  if (v === 'skip') return 'skip'
+  if (v === 'evidence-auto') return 'evidence-auto'
   return null
 }
 
@@ -191,6 +204,10 @@ export function extractTestStrategy(yamlText) {
  *   - strategy==='module' 有块但 0 命中（hitCount=0）→ hint
  *   - strategy==='module' 有块且命中（hitCount>0）→ null（走子集）
  *   - strategy===null（缺省）→ hint（默认全量）
+ *
+ * 注：strategy 仅接收 full/module/null——skip 短路在其上游（runVerifyTestCheck 的
+ * skip 分支）、evidence-auto 经 resolveTestStrategy 解析为生效策略后才进本函数，
+ * 两者的 hint 语义由各自分支承载，本函数行为不变（D-005@v2）。
  *
  * @param {object} ctx
  * @param {'full'|'module'|null} ctx.strategy
@@ -214,6 +231,199 @@ export function computeFullFallbackReason({ strategy, modulesPresent, hitCount }
   }
   // strategy === null（缺省 → 默认全量）
   return 'local.yaml 未配置 test_strategy（默认全量 commands.test，未按变更范围收窄）'
+}
+
+// ── evidence-auto 推荐逻辑（D-005@v2 / task-11，契约 test_strategy_resolution）──
+// 按 W3 检查选择口径把 module-impact.md 的影响面映射为检查组合：
+//   行为类（源码/逻辑/数据结构/接口/调用关系/配置/新增/修改）→ module 聚焦测试
+//   文档/prompt 类（*.md、docs/** 等）→ docs-check
+//   门禁/契约类（路径含 gate/contract）→ sillyspec gate
+//   module-impact.md 缺失/不可解析 → 降级 module 策略并注记（多测不漏测）
+
+/** 行为类影响信号词（module-impact.js 骨架「影响类型说明」词表 + 通用「修改/删除」）。 */
+const IMPACT_BEHAVIORAL_TOKENS = ['逻辑变更', '数据结构变更', '接口变更', '调用关系变更', '配置变更', '新增', '修改', '删除']
+
+/** 文档/prompt 面：md 系扩展名或 docs/ 前缀（.sillyspec/docs 同入）。 */
+function isDocsImpactPath(p) {
+  const n = String(p).replace(/\\/g, '/')
+  return /\.(mdx?|markdown|txt)$/i.test(n) || n.startsWith('docs/') || n.startsWith('doc/') || n.startsWith('.sillyspec/docs/')
+}
+
+/** 门禁/契约面：路径含 gate/contract（stage-contract*.js / docs-gate.js / contract-matrix.js 等）。 */
+function isGateImpactPath(p) {
+  return /(gate|contract)/i.test(String(p))
+}
+
+/** 从行文本提取路径样 token：优先反引号包裹（骨架表格用），再裸路径（扩展名必须字母开头）。 */
+function collectPathTokens(text) {
+  const tokens = new Set()
+  for (const m of String(text).matchAll(/`([^`]+)`/g)) {
+    const t = m[1].trim()
+    if (t) tokens.add(t)
+  }
+  const stripped = String(text).replace(/`[^`]*`/g, ' ')
+  for (const m of stripped.matchAll(/[A-Za-z_][\w./\\-]*\.[A-Za-z][\w]{0,9}/g)) {
+    tokens.add(m[0])
+  }
+  return [...tokens]
+}
+
+/**
+ * 解析 module-impact.md 的「模块影响矩阵」+「未匹配文件」两节，按检查面归类影响证据。
+ * 纯机械启发式（确定性：同输入同输出）；矩阵行 <!--TODO--> 未回填 → 保守计行为类
+ * （影响面未知时多测不漏测）。矩阵节缺失 / 无数据行 → parseable=false（调用方降级）。
+ *
+ * @param {string|null} mdText
+ * @returns {{ parseable: boolean, behavioral: string[], docs: string[], gate: string[] }}
+ */
+function classifyModuleImpactEvidence(mdText) {
+  const out = { parseable: false, behavioral: [], docs: [], gate: [] }
+  if (!mdText || !String(mdText).trim()) return out
+  const lines = normalizeLineEndings(String(mdText)).split('\n')
+  let section = null // 'matrix' | 'unmatched' | null
+  let matrixRows = 0
+  const consumeRow = (rowText) => {
+    const tokens = collectPathTokens(rowText)
+    let classified = 0
+    for (const t of tokens) {
+      if (isDocsImpactPath(t)) { out.docs.push(t); classified++ }
+      else if (isGateImpactPath(t)) { out.gate.push(t); classified++ }
+      else { out.behavioral.push(t); classified++ }
+    }
+    // 无路径 token 的行：落回影响类型信号词（如「| setup | 修改 | 枚举与新键 |」）
+    if (classified === 0) {
+      const tok = IMPACT_BEHAVIORAL_TOKENS.find((w) => rowText.includes(w))
+      if (tok) { out.behavioral.push(`（影响类型：${tok}）`); classified++ }
+    }
+    // 矩阵行 <!--TODO--> 未回填 → 影响面未知，保守计行为类
+    if (String(rowText).includes('<!--TODO')) { out.behavioral.push('<!--TODO--> 未回填行'); classified++ }
+    return classified
+  }
+  for (const line of lines) {
+    const h = line.match(/^##+\s*(.+?)\s*$/)
+    if (h) {
+      const t = h[1]
+      section = t.includes('模块影响矩阵') ? 'matrix' : t.includes('未匹配文件') ? 'unmatched' : null
+      continue
+    }
+    if (!section) continue
+    const trimmed = line.trim()
+    if (section === 'matrix' && trimmed.startsWith('|')) {
+      const cells = line.split('|').slice(1, -1).map((c) => c.trim())
+      if (cells.length === 0) continue
+      if (cells.every((c) => /^[-:\s]*$/.test(c))) continue // 分隔行 |---|---|
+      if (cells[0] === '模块' || cells.includes('变更文件') || cells.includes('影响类型')) continue // 表头
+      matrixRows++
+      consumeRow(trimmed)
+    } else if (section === 'unmatched') {
+      // 骨架产出 `- \`path\` <!--TODO-->` 列表行；手写形态可能是 `| 文件 | 处置说明 |` 表行
+      const bullet = trimmed.match(/^-\s+(.+)$/)
+      if (bullet) { consumeRow(bullet[1]); continue }
+      if (trimmed.startsWith('|')) {
+        const cells = line.split('|').slice(1, -1).map((c) => c.trim())
+        if (cells.length === 0) continue
+        if (cells.every((c) => /^[-:\s]*$/.test(c))) continue
+        if (cells[0] === '文件') continue
+        consumeRow(trimmed)
+      }
+    }
+  }
+  out.parseable = matrixRows > 0 && (out.behavioral.length + out.docs.length + out.gate.length) > 0
+  return out
+}
+
+/**
+ * resolveTestStrategy — test_strategy 解析 + evidence-auto 推荐统一入口
+ * （契约 test_strategy_resolution，2026-08-23 adopt-harness-practices task-11）。
+ *
+ * 非 evidence-auto（full/module/skip/未配置 null）→ 原样透传 strategy 且
+ * evidence_auto_recommendation=null（full/module/缺省消费路径逐字不变）；
+ * evidence-auto → 按 module-impact.md 影响面解析生效策略 + 推荐检查组合：
+ *   - 含行为类影响 → strategy='module'（聚焦测试）
+ *   - 纯文档/prompt、门禁/契约影响（无行为类）→ strategy='skip'（测试不在推荐组合内）
+ *   - module-impact.md 缺失/不可解析 → 降级 strategy='module' 且 degraded 注记
+ *
+ * @param {object} opts
+ * @param {string|null} opts.yamlText - local.yaml 全文（与 extractTestStrategy 同源）
+ * @param {string|null} [opts.changeDir] - 变更目录（定位 module-impact.md；evidence-auto 时缺省 → 降级）
+ * @param {string|null} [opts.moduleImpactText] - module-impact.md 文本（测试注入用；提供则不读盘）
+ * @returns {{ strategy: 'full'|'module'|'skip'|'evidence-auto'|null, evidence_auto_recommendation: object|null }}
+ *   下游契约：task-12 消费 evidence_auto_recommendation（run/prompt.js 注入），
+ *   task-13 消费 strategy（语义回归锁定）。两字段为 provides 契约的全部内容。
+ */
+export function resolveTestStrategy({ yamlText, changeDir = null, moduleImpactText = null }) {
+  const configured = extractTestStrategy(yamlText ?? null)
+  if (configured !== 'evidence-auto') {
+    // full / module / skip / 未配置（null）——原样透传，不掺推荐语义
+    return { strategy: configured, evidence_auto_recommendation: null }
+  }
+
+  let mdText = moduleImpactText
+  if (mdText == null && changeDir) {
+    const p = join(changeDir, 'module-impact.md')
+    try {
+      mdText = existsSync(p) ? readFileSync(p, 'utf8') : null
+    } catch { mdText = null }
+  }
+  const ev = classifyModuleImpactEvidence(mdText)
+  const sample = (arr) => arr.slice(0, 5).join('、') + (arr.length > 5 ? ` 等 ${arr.length} 处` : '')
+
+  if (!ev.parseable) {
+    const degradedReason = changeDir == null && moduleImpactText == null
+      ? '未提供变更目录（changeDir），无法定位 module-impact.md'
+      : 'module-impact.md 缺失或不可解析（无「模块影响矩阵」数据行）'
+    const summary = [
+      'test_strategy: evidence-auto 推荐：',
+      `- ⚠️ 降级注记：${degradedReason}——已降级 module 策略（多测不漏测），推荐结果不可信时请显式设 test_strategy: full/module。`,
+      '- 可在 verify-result.md 否决本推荐并改跑全量（显式设 test_strategy: full）。',
+    ].join('\n')
+    return {
+      strategy: 'module',
+      evidence_auto_recommendation: {
+        configured_strategy: 'evidence-auto',
+        resolved_strategy: 'module',
+        degraded: true,
+        degraded_reason: degradedReason,
+        impact: { behavioral: [], docs: [], gate: [] },
+        checks: [
+          { kind: 'module-tests', reason: `${degradedReason} → 降级 test_strategy=module（多测不漏测）` },
+        ],
+        summary,
+      },
+    }
+  }
+
+  const checks = []
+  if (ev.behavioral.length > 0) {
+    checks.push({ kind: 'module-tests', reason: `行为类影响 ${ev.behavioral.length} 处（${sample(ev.behavioral)}）→ test_strategy=module 聚焦测试` })
+  }
+  if (ev.docs.length > 0) {
+    checks.push({ kind: 'docs-check', reason: `文档/prompt 类影响 ${ev.docs.length} 处（${sample(ev.docs)}）→ sillyspec docs check` })
+  }
+  if (ev.gate.length > 0) {
+    checks.push({ kind: 'gate', reason: `门禁/契约类影响 ${ev.gate.length} 处（${sample(ev.gate)}）→ sillyspec gate` })
+  }
+  // 生效测试策略：有行为类影响 → module；纯文档/门禁面 → skip（测试不在推荐组合内）
+  const resolved = ev.behavioral.length > 0 ? 'module' : 'skip'
+  const summaryLines = ['test_strategy: evidence-auto 推荐（依据变更目录 module-impact.md 影响面）：']
+  for (const c of checks) summaryLines.push(`- ${c.reason}`)
+  if (resolved === 'skip') {
+    summaryLines.push('- 测试不在推荐组合内（module-impact.md 无行为类影响）——CLI 实测将跳过；如需全量实测，可在 verify-result.md 否决本推荐并显式设 test_strategy: full。')
+  } else {
+    summaryLines.push('- 可在 verify-result.md 否决本推荐并改跑全量（显式设 test_strategy: full）。')
+  }
+  return {
+    strategy: resolved,
+    evidence_auto_recommendation: {
+      configured_strategy: 'evidence-auto',
+      resolved_strategy: resolved,
+      degraded: false,
+      degraded_reason: null,
+      impact: { behavioral: ev.behavioral, docs: ev.docs, gate: ev.gate },
+      checks,
+      summary: summaryLines.join('\n'),
+    },
+  }
 }
 
 /**
@@ -450,12 +660,15 @@ export function judgeWithKnownFailures(exitCode, output, baseReason, knownFailur
 
 /**
  * 决定 verify 实测的执行动作（纯函数，便于测试；坑 verify-worktree-... 修复方向 3）。
+ *   - skip               → 'skip'（真跳过，D-005@v2——不落 full 兜底；evidence-auto 经
+ *                          resolveTestStrategy 解析出生效 skip 时同走此动作）
  *   - module + 命中模块  → 'module-subset'
  *   - module + 0 命中    → 'module-zero-hit-skip'（不静默回退注定超时/预存失败的全量）
  *   - 其余（full / module 无块 / module git 不可用 hitCount=-1）→ 'full'
- * @returns {'module-subset'|'module-zero-hit-skip'|'full'}
+ * @returns {'skip'|'module-subset'|'module-zero-hit-skip'|'full'}
  */
 export function decideVerifyTestAction({ strategy, modulesPresent, hitCount }) {
+  if (strategy === 'skip') return 'skip'
   if (strategy === 'module' && modulesPresent) {
     if (hitCount > 0) return 'module-subset'
     if (hitCount === 0) return 'module-zero-hit-skip'
@@ -732,8 +945,23 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = nul
   const localYamlPath = join(specBase, 'local.yaml')
   const yamlText = existsSync(localYamlPath) ? readFileSync(localYamlPath, 'utf8') : null
 
-  const strategy = extractTestStrategy(yamlText)
+  const rawStrategy = extractTestStrategy(yamlText)
   const knownFailures = extractKnownFailures(yamlText)
+
+  // —— evidence-auto 生效策略解析（D-005@v2 / task-11）——
+  // 按变更目录 module-impact.md 影响面取生效策略（行为→module、纯文档/门禁→skip、
+  // 缺失/不可解析→降级 module 并注记）再进既有链路；full/module/skip/缺省四路径
+  // 不经此分支（消费语义逐字不变）。
+  let strategy = rawStrategy
+  let evidenceAuto = null
+  if (rawStrategy === 'evidence-auto') {
+    const changeDir = changeName ? join(specBase, 'changes', changeName) : null
+    const resolution = resolveTestStrategy({ yamlText, changeDir })
+    strategy = resolution.strategy
+    evidenceAuto = resolution.evidence_auto_recommendation
+  }
+  // evidence-auto 解析为 module 后的 hint/reason 追加注记（full/module 路径为空串，输出逐字不变）
+  const eaNote = rawStrategy === 'evidence-auto' ? '（生效策略来自 test_strategy: evidence-auto 推荐）' : ''
 
   // —— 模块子集路径（test_strategy: module）：算 modulesPresent / hitCount / hits ——
   // resolveVerifyChangedFiles 返回 null 表示 git 不可用 → hitCount=-1（与 0 命中区分）。
@@ -762,7 +990,44 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = nul
 
   const action = decideVerifyTestAction({ strategy, modulesPresent, hitCount })
   let mainResult
-  if (action === 'module-subset') {
+  if (action === 'skip') {
+    // —— skip 真跳过（D-005@v2 / R-07）——
+    // 显式 skip：兑现声明语义，不回退全量；输出显式标注留审计痕迹（R-07 行为变化提示：
+    // 此前配置 skip 实际仍跑全量，本版本起真跳过）。
+    // evidence-auto→skip：测试不在推荐组合内（module-impact.md 无行为类影响），
+    // reason 附推荐依据与否决路径。
+    const reason = rawStrategy === 'skip'
+      ? '测试已按 test_strategy=skip 配置跳过（D-005@v2 兑现声明语义：不回退全量 commands.test）。⚠️ 行为变化提示（R-07）：此前配置 skip 实际仍跑全量，本版本起真跳过——本次 verify 结论不含测试客观核验；如需恢复实测，把 local.yaml 的 test_strategy 改回 full/module。'
+      : `测试已按 test_strategy=evidence-auto 推荐跳过：${evidenceAuto && evidenceAuto.summary ? evidenceAuto.summary : 'module-impact.md 判定无行为类影响'}。本次 verify 结论不含测试客观核验。`
+    mainResult = {
+      status: 'skipped',
+      command: null,
+      exitCode: null,
+      durationMs: null,
+      outputTail: null,
+      reason,
+      resultPath: null,
+      mode: 'strategy-skip',
+      fallbackReason: null,
+    }
+    // 审计痕迹落盘（R-07）：skip 决策与依据写入 verify-runs 时间线（test-result.json），供追溯
+    writeRunResult({
+      specBase,
+      changeName,
+      result: mainResult,
+      extra: {
+        strategy: rawStrategy,
+        ...(evidenceAuto ? {
+          evidence_auto: {
+            resolved_strategy: evidenceAuto.resolved_strategy,
+            degraded: evidenceAuto.degraded,
+            degraded_reason: evidenceAuto.degraded_reason,
+            checks: evidenceAuto.checks,
+          },
+        } : {}),
+      },
+    })
+  } else if (action === 'module-subset') {
     mainResult = runModuleSubset({ cwd, specBase, changeName, hits, knownFailures })
   } else if (action === 'module-zero-hit-skip') {
     // module 模式 0 命中：不静默回退注定超时/含预存失败的全量（坑 verify-worktree-... 修复方向 3）。
@@ -784,7 +1049,7 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = nul
       durationMs: null,
       outputTail: null,
       reason: 'test_strategy: module 但本次变更未命中任何已配置 modules（0 命中）。为避免回退到注定超时/含预存失败的全量 commands.test，CLI 未自动跑全量——据 verify-result.md 自报告判定测试。若需全量覆盖，显式设 test_strategy: full。' +
-        ` 诊断：${diagLines.join('；')}`,
+        ` 诊断：${diagLines.join('；')}` + eaNote,
       resultPath: null,
       mode: 'module-zero-hit',
       fallbackReason: null,
@@ -792,7 +1057,9 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = nul
   } else {
     // —— 全量路径（full / module 无块 / module git 不可用）——
     // fallbackReason 非 null 表示本次全量是"非显式"的（缺省/配置不全/未命中），需明示。
-    const fallbackReason = computeFullFallbackReason({ strategy, modulesPresent, hitCount })
+    // evidence-auto 解析为 module 后落全量兜底时追加推荐来源注记（eaNote；其余路径空串零变化）。
+    let fallbackReason = computeFullFallbackReason({ strategy, modulesPresent, hitCount })
+    if (fallbackReason && eaNote) fallbackReason = fallbackReason + eaNote
     mainResult = runFullCommand({ yamlText, localYamlPath, cwd, specBase, changeName, fallbackReason, knownFailures })
   }
 
@@ -1171,7 +1438,13 @@ function writeRunResult({ specBase, changeName, result, extra = {} }) {
 export function printVerifyTestCheck(result) {
   if (result.status === 'skipped') {
     console.warn(`\n⚠️  Verify 实测跳过：${result.reason}`)
-    console.warn('   建议在 local.yaml 的 commands.test 配置真实测试命令，让 CLI 可客观对账。')
+    if (result.mode === 'strategy-skip') {
+      // R-07：skip 由 test_strategy 显式生效（skip 配置 / evidence-auto 推荐），非「未配命令」——
+      // 不给「去配 commands.test」的误导建议，改标审计口径
+      console.warn('   （跳过由 test_strategy 配置生效，本次 verify 结论不含测试客观核验；跳过依据见上方 reason 并已落盘 test-result.json 留审计痕迹。）')
+    } else {
+      console.warn('   建议在 local.yaml 的 commands.test 配置真实测试命令，让 CLI 可客观对账。')
+    }
     return
   }
   if (result.status === 'passed') {

@@ -1,11 +1,12 @@
 ---
 author: qinyi
 created_at: 2026-06-01T09:05:00
+updated_at: 2026-08-24T00:40:00+08:00
 ---
 
 # setup
-> 最后更新：2026-08-16
-> 最近变更：2026-08-16-scan-docs-reconcile（config-schema/local-detect 补录归属；migrate.js 归属已划 migration 卡）
+> 最后更新：2026-08-23
+> 最近变更：2026-08-23-adopt-harness-practices（test_strategy 枚举扩 skip/evidence-auto + 新 live 键 decisions.behind_threshold）/ 2026-08-16-scan-docs-reconcile（config-schema/local-detect 补录归属；migrate.js 归属已划 migration 卡）
 > 模块路径：src/init.js, src/setup.js, src/config-schema.js, src/local-detect.js（migrate.js 归 migration 卡）
 
 ## 职责
@@ -21,7 +22,8 @@ setup 模块由三个文件组成，分别处理 SillySpec 生命周期的不同
 
 **migrate.js** 提供文档迁移功能，migrateDocs 函数处理旧版本 SillySpec 的文档结构迁移，包括项目配置 YAML → SQLite、代码库文档、知识库文档、快速日志等格式的转换。
 
-**config-schema.js** 是 local.yaml 配置键的单一数据源（LOCAL_YAML_SCHEMA 集中全部已知键 + 生效状态 + 读取点），供 `sillyspec config schema`（人类可读树 / --json 机读）打印与 `sillyspec init` 调 renderExample() 落盘脱敏 local.yaml.example。
+**config-schema.js** 是 local.yaml 配置键的单一数据源（LOCAL_YAML_SCHEMA 集中全部已知键 + 生效状态 + 读取点），供 `sillyspec config schema`（人类可读树 / --json 机读）打印与 `sillyspec init` 调 renderExample() 落盘脱敏 local.yaml.example。2026-08-23 起 test_strategy 枚举扩 skip / evidence-auto（`src/config-schema.js:120`，D-005@v2：skip=真跳过不回退全量、verify 输出显式标注留审计痕迹；evidence-auto=按变更 module-impact.md 影响面推荐检查组合，缺失/不可解析降级 module 并注记；full/module 语义不变），
+新增 live 键 `decisions.behind_threshold`（`src/config-schema.js:165`，决策 behind 复核阈值缺省 10，reader 为 `readDecisionRulesConfig` src/docs-check.js）；renderExample 落盘段与示例注释同步扩。
 
 **local-detect.js** 是纯 fs 项目类型嗅探（detectLocalYaml）：不 spawn 子进程、不耗 token，几秒完成项目类型判定；只返回数据结构不写盘（create/gate 无需为此跑完整 scan），落盘由 CLI 路由 / scan.js 调用方负责。
 

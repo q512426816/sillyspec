@@ -82,6 +82,7 @@ modules:
       - src/docs-gate.js
       - src/docs-debt.js
       - src/scan-staleness.js
+      - src/decision-distill.js
 
   worktree:
     status: active

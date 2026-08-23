@@ -176,6 +176,9 @@ function buildPushPayloadFromRaw(rawBlock, { ql_id, author_raw, status, linked_c
     payload.timestamp = parts[1] || null
     payload.title = parts.slice(2).join('|').trim() || payload.title
   }
+  // 顶层标签白名单（^ 行首锚定）：D-004@v1 根因块嵌套四子字段（- 现象：/- 根因：/- 护栏：/- 证据： 列表行）
+  // 因「- 」前缀不匹配本正则——它们是根因块正文内的列表行续行，不是新顶层标签，经 lastLabel 挂载
+  // 进 body_sections[根因]（见下方 inFiles 复位注释）。顶层四字段边界解析不受影响（R-03）。
   const labelRe = /^(状态|关联变更|文件|审计|需求|根因|方案|结果)\s*[：:]\s*(.*)$/
   const bulletRe = /^-\s+(.*)$/
   let inFiles = false
@@ -192,7 +195,9 @@ function buildPushPayloadFromRaw(rawBlock, { ql_id, author_raw, status, linked_c
       else if (label === '关联变更') { payload.linked_changes = value.split(/[，,、+；;]/).map(s => s.trim()).filter(Boolean); inLinked = true; inFiles = false }
       else if (label === '文件') { if (value) payload.files.push(...value.split(/[，,、+；;]/).map(s => s.trim()).filter(Boolean).map(p => ({ path: p, note: null }))); inFiles = true; inLinked = false }
       else if (label === '审计') { /* D-8 advisory 行：只进 raw_block 不进结构化段（body_sections 不扩 schema），并阻断续行误挂 */ lastLabel = null; inFiles = false; inLinked = false }
-      else { payload.body_sections[label] = value; lastLabel = label }
+      // 进入 需求/根因/方案/结果 字段块须关闭 inFiles/inLinked 续行模式（task-07 / D-004@v1）：否则根因块内
+      // 嵌套子字段列表行（- 现象：… 等）会命中下方「文件 bullet」分支被劫进 payload.files，从根因正文截断丢失。
+      else { payload.body_sections[label] = value; lastLabel = label; inFiles = false; inLinked = false }
       continue
     }
     if (bulletRe.test(stripped) && inFiles) {
@@ -346,6 +351,8 @@ const RESULT_REQUIRED_LABELS = getRule('quick.result-labels').data.literals
  * @returns {{ ok: boolean, missing: string[] }} ok=true 通过；missing=缺失的字段名列表
  */
 export function validateQuickResult(text) {
+  // 子串包含判定：根因块含嵌套四子字段列表行（- 现象：… 等，task-07 / D-004@v1 合法形态）时，
+  // 顶层四标签仍须齐备（模板契约），嵌套行不影响判定（「- 」前缀不构成顶层标签，亦不缺字段）。
   const missing = RESULT_REQUIRED_LABELS.filter(label => !String(text || '').includes(label))
   return { ok: missing.length === 0, missing }
 }
@@ -488,6 +495,9 @@ async function checkTaskCheckbox(specBase, change, qlId) {
 // 前缀」或正则 split(/(?=需求：|根因：|方案：|结果：)/)）因前导是「/|( 等非边界字符而跳过。严格失败
 // （如真实标签前导是「，」这类弱标点）退回宽松顺序扫描（上一标签之后首次出现）。缺标签返回 null → 落单行
 // 兜底（--done 契约校验仍会拦缺字段）。残余边界：正文引用标签且前导恰好是空白/句末标点时仍可能错位。
+// task-07 / D-004@v1 声明：本切分只作用于「单行四字段压缩归一」路径，嵌套四子字段（- 现象：/- 根因：/
+// - 护栏：/- 证据： 列表行）必须以多行列表行形态写入根因块正文——按序扫描先命中顶层「根因：」标签，
+// 其后的嵌套「- 根因：」等字样落在根因字段正文内不构成新边界，无需改动三个边界函数即天然兼容（Grill C-15）。
 function isFieldBoundary(body, idx) {
   if (idx <= 0) return true
   const prev = body[idx - 1]
@@ -569,6 +579,9 @@ function flipEntryInContent(content, qlId, result, changedFiles = [], fileNotes 
       if (segs) body = segs.join('\n')
     }
     // 多行结果（结构化 需求/根因/方案/结果 字段块）：逐行插入为独立字段行。
+    // 根因块嵌套四子字段（- 现象：/- 根因：/- 护栏：/- 证据： 列表行，D-004@v1 postmortem 形态）属
+    // 根因块正文：在此随多行结果逐行原样落盘（带「- 」前缀、保序含换行），不被字段边界扫描误切——
+    // 单行归一切分只认「- 」前缀之外的需求：/根因：/方案：/结果： 标签，嵌套行天然不参与边界判定。
     // 单行结果：保持「结果：<一句话>」一行，向后兼容简单用例。
     const resultLines = /\r?\n/.test(body)
       ? body.split(/\r?\n/).filter(l => l.trim() !== '')

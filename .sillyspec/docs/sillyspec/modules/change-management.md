@@ -1,11 +1,12 @@
 ---
 author: qinyi
 created_at: 2026-06-01T09:05:00
+updated_at: 2026-08-24T00:40:00+08:00
 ---
 
 # change-management
-> 最后更新：2026-08-16
-> 最近变更：2026-08-16-scan-docs-reconcile（quicklog.js 补录归属）/ ql-20260807-010-9897（keepSillyspecDocs option：模块文档 .sillyspec/docs/ 可进清单）/ ql-20260713-001-3e46（文件清单标题编号前缀容忍）
+> 最后更新：2026-08-23
+> 最近变更：2026-08-23-adopt-harness-practices（quicklog 根因块嵌套四子字段 + buildPushPayloadFromRaw 字段块复位修复）/ 2026-08-16-scan-docs-reconcile（quicklog.js 补录归属）/ ql-20260807-010-9897（keepSillyspecDocs option：模块文档 .sillyspec/docs/ 可进清单）/ ql-20260713-001-3e46（文件清单标题编号前缀容忍）
 > 模块路径：src/change-list.js, src/quicklog.js
 
 ## 职责
@@ -17,6 +18,10 @@ created_at: 2026-06-01T09:05:00
 模块设计极简，单文件单函数，无状态、无副作用。解析逻辑基于正则匹配 Markdown 表格行（`|` 分隔），跳过表头和分隔行。设计为 verify 阶段的前置工具：验证实现产出是否覆盖了 design 中声明的全部目标文件。
 
 **src/quicklog.js** 是 QUICKLOG 记录的 CLI 接管层：ql-ID 分配 + 条目追加 + O_EXCL lockfile 串行化全部下沉 CLI 进程内，消除 agent 手写漏记静默通过与多 quick 会话并发读-改-写丢更新（历史实证同一 ql-ID 出现两次）；导出 allocateQuicklogEntry / completeQuicklogEntry / findQuicklogEntry / deriveTitleFromLinkedChange / withFileLock 等，由 src/run/（command / complete-handlers / complete / stage）import 消费；无新 npm 依赖（仅 fs/path/crypto）。
+
+**根因块嵌套四子字段**（2026-08-23-adopt-harness-practices，D-004@v1 / task-07）：postmortem 场景根因块内按列表行写 `- 现象：`/`- 根因：`/`- 护栏：`/`- 证据：` 四子字段为**合法形态**——顶层标签白名单正则 `^` 行首锚定（`src/quicklog.js:182`），「- 」前缀不匹配顶层标签、经 lastLabel 挂载进 body_sections[根因]，顶层四字段边界解析不受影响（R-03）；旧条目（无嵌套子字段）回退不受影响。
+`buildPushPayloadFromRaw`（`src/quicklog.js:158`）字段块复位修复——进入 需求/根因/方案/结果 字段块须关闭 inFiles/inLinked 续行模式，否则嵌套子字段列表行被「文件 bullet」分支劫进 payload.files、从根因正文截断丢失；
+复位点在 `src/quicklog.js:198-199`；单行四字段切分声明（`src/quicklog.js:493-500`）：边界扫描只作用于「单行四字段压缩归一」路径，嵌套列表行形态天然兼容无需改动三个边界函数（Grill C-15）。
 
 ## 对外接口（表格）
 | 函数/常量 | 说明 | 参数 |
@@ -47,6 +52,7 @@ created_at: 2026-06-01T09:05:00
 - 依赖 design.md 中表格的第二列是文件路径列，如果表格格式变化需同步修改解析逻辑
 - 表头行通过首次出现的表格行自动跳过，假设第一行是表头
 - 章节标题正则 `FILE_LIST_SECTION_RE` 容忍可选编号前缀（`## 6. 文件变更清单`），同义词集与 `src/stage-contract.js` 对齐，避免两个校验器对「有没有清单」给出矛盾结论
+- 根因块嵌套四子字段（`- 现象：` 等列表行）是合法 postmortem 形态：顶层四字段边界不动、旧条目回退不受影响——改顶层标签白名单或边界扫描逻辑时须保持「嵌套列表行不构成新顶层边界」不变量（R-03 / Grill C-15 回归测试 quicklog-postmortem-fields.test.mjs）
 
 ## 变更索引（表格，初始为空）
 | 日期 | 变更名 | 摘要 |

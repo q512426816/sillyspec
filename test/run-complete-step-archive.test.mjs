@@ -23,6 +23,7 @@ const ARCHIVE_STEPS = (lastStatus) => [
   { name: '任务完成度检查', status: 'completed' },
   { name: 'extract-module-impact', status: 'completed' },
   { name: 'sync-module-docs', status: 'completed' },
+  { name: 'decision-distill 决策提炼', status: 'completed' },
   { name: '确认归档', status: 'pending' },
   { name: '更新路线图和提交', status: lastStatus },
 ]
@@ -60,8 +61,8 @@ console.log('--- Case 1: confirm + 推荐文档齐全 → 移动 + ✅ 通过 --
   assert(r.combined.includes('归档校验通过'), '推荐文档齐全 → ✅ 归档校验通过')
 
   const after = await new ProgressManager({ specDir: specBase }).read(cwd, cn)
-  assert(after.stages.archive.steps[3].status === 'completed', 'DB: 确认归档 step 已标 completed')
-  assert(after.stages.archive.steps[4].status === 'pending', 'DB: 更新路线图和提交仍 pending（非末步推进）')
+  assert(after.stages.archive.steps[4].status === 'completed', 'DB: 确认归档 step 已标 completed')
+  assert(after.stages.archive.steps[5].status === 'pending', 'DB: 更新路线图和提交仍 pending（非末步推进）')
 }
 
 // ── Case 2: --confirm + 缺 module-impact.md → ⚠️ 警告但不阻断，仍移动 ──
@@ -98,7 +99,7 @@ console.log('\n--- Case 3: 缺 --confirm → 不移动 + step 回退 ---')
   assert(r.combined.includes('请添加 --confirm') || r.combined.includes('--confirm'), 'stdout 含「请添加 --confirm」提示')
 
   const after = await new ProgressManager({ specDir: specBase }).read(cwd, cn)
-  assert(after.stages.archive.steps[3].status === 'pending', 'DB: 缺 confirm 时确认归档 step 回退为 pending')
+  assert(after.stages.archive.steps[4].status === 'pending', 'DB: 缺 confirm 时确认归档 step 回退为 pending')
 }
 
 // ── Case 4: 归档时清理该 change 的 runId marker（execute / stage-review）──

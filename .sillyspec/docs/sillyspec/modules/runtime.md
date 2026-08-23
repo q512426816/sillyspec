@@ -4,7 +4,7 @@ doc_type: module-card
 module_id: runtime
 author: qinyi
 created_at: 2026-06-03T07:42:00+08:00
-updated_at: 2026-08-19T11:27:03+08:00
+updated_at: 2026-08-24T00:40:00+08:00
 ---
 # runtime
 
@@ -73,6 +73,8 @@ ProgressManager.alignExecuteToPlan(cwd, changeName, specBase, {confirm})
 - `db.js` DDL `project.schema_version DEFAULT`、`DB_SCHEMA_VERSION`、`shared.js CURRENT_VERSION`、`progress._version` 四处 schema 版本应一致（当前 v5，title/quicklog_id 列）；改动加表/列/migration 时同步 bump 四处 + 测试断言
 - `migrateDocs` 是一次性脚本，不会幂等运行；已存在的文件会被跳过
 - **stage review gate marker 缺失自生**（坑1，`run/gates.js:644`）：tier=independent 且 `getLatestStageReviewRunId` 返回空时（execute 批量完成跳过 prompt 渲染等），gate 自身调 `generateStageReviewRunId()` + `stageReviewMarkerPath()` 写盘 + `mkdirSync`——错误路径从 `execute-null`（不可执行）变为 `execute-review-<id>`（可执行）。补充 prompt 渲染时落 marker（gap 6）的兜底：prompt 路径未走到时 gate 路径自生，marker 文件名/位置不变
+- **brainstorm/verify 双占位符注入（fail-soft）**（2026-08-23-adopt-harness-practices，`src/run/prompt.js:429-464`）：brainstorm Step2 的 {DECISION_HITS} ← matchKnowledge decisionHits——命中 rejected 条目渲染「否决决策提示」段（ID/标题/否决理由/复潮条件），无命中替换空串零输出（不留残留占位符）；注入结果同步落 runtime JSON（.runtime/decision-hits.json，与 KNOWLEDGE_HIT_REPORT 落盘同口径）；advisory 展示不改步骤流程，异常单行说明不抛（全降级）。
+  verify「运行测试和质量扫描」步的 {EVIDENCE_AUTO_RECOMMENDATION}（`src/run/prompt.js:719-746`）← resolveTestStrategy 的 evidence_auto_recommendation.summary 渲染进 step prompt——verify-postcheck 在 --done 事后才解析 evidence-auto，agent 写 verify-result.md 时看不到推荐无从否决，故在 prompt 时点注入（含推荐理由、降级注记与「可在 verify-result.md 否决并改跑全量」路径，FR-11）；同样 fail-soft（注入失败给读 local.yaml 确认 test_strategy 的指引，--done 仍按 resolveTestStrategy 实测对账）。
 - **archive CLI 下沉 git add**（坑4，`run/complete-handlers.js:289`）：`unregisterChange` 后 CLI 确定性 `safeGit add -- .sillyspec/changes/archive/ + .sillyspec/docs/`，不靠 archive step5 prompt 驱动（step5 prompt 的 git add 保留作幂等兜底）；safeGit 失败不阻断归档（目录已移动 + change 已注销）
 - **execute run marker 写入原子化 + 分层 fail**（2026-08-16-state-split-fixes #1，D-001@v1）：四处 marker 写入点（`run/stage.js` 主点 + `run/gates.js`/`run/prompt.js`/`task-review.js` 补写点）统一「mkdir `execute-runs/<runId>/tasks` 先于 marker」不变量——目录不再只随 review.json 写入创建，消除「有 marker 无目录」空 run 被 archive 完成度扫描误用。分层失败语义：stage 主点 throw（execute 启动 exit 1 + 修复指引）；gates 补写点异常直穿外层 catch fail-closed；prompt 渲染路径降级（console.error 留痕 + runId 仍注入）；task-review 去静默保 fail-open。测试 execute-run-dir-fail-loud.test.mjs（33 断言）。
 - **`.runtime` 根解析统一 `resolveRuntimeRoot`**（坑 execute-runs-isolation，`run/shared.js`）：`.runtime` 根（含 `sillyspec.db` / execute-runs / stage-reviews / quick-sessions）由 `resolveRuntimeRoot(platformOpts, localSpecBase)` 统一解析，三级优先级 `platformOpts.runtimeRoot`（平台）> `platformOpts.specDriftAnchor`（drift 锚点）> `localSpecBase/.runtime`（本地兜底）。drift 守卫（`run/command.js`）命中时设 `specDriftAnchor = 主仓 specBase`（**不**设 `specRoot`/`runtimeRoot`——否则触发平台 sentinel，误跳 `triggerSync`/`checkApproval`、误进平台渲染分支）→ 下游 15 处站点解析落主仓 `.runtime`，execute-runs / stage-reviews 不随 worktree cleanup 整目录删消失，archive step1 完成度 gate 真相源（磁盘主仓 review.json）不再丢

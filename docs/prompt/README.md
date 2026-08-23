@@ -17,9 +17,9 @@
 | [scan](./scan.md) | 项目扫描 | 辅助 | 11 | — | `src/stages/scan.js` |
 | [quick](./quick.md) | 快速任务 | 辅助 | 3 | 全栈老兵 | `src/stages/quick.js` |
 | [explore](./explore.md) | 自由探索 | 辅助 | 1 | 技术探索伙伴 | `src/stages/explore.js` |
-| [archive](./archive.md) | 归档 | 辅助 | 5 | — | `src/stages/archive.js` |
+| [archive](./archive.md) | 归档 | 辅助 | 6 | — | `src/stages/archive.js` |
 | [status](./status.md) | 项目快照 | 辅助 | 3 | — | `src/stages/status.js` |
-| [doctor](./doctor.md) | 自检 | 辅助 | 5 | — | `src/stages/doctor.js` |
+| [doctor](./doctor.md) | 自检 | 辅助 | 6 | — | `src/stages/doctor.js` |
 | [brainstorm-auto](./brainstorm-auto.md) | 自动模式头脑风暴 | 变体 | 4 | — | `src/stages/brainstorm-auto.js` |
 
 > 主流程阶段（brainstorm → plan → execute → verify）通过 `sillyspec run <stage>` 推进，有进度状态机。
@@ -140,7 +140,11 @@ prompt 正文中出现的占位符，运行时由 `outputStep` 替换。下表�
 | 占位符 | 替换为 | 出现阶段 |
 |---|---|---|
 | `{KNOWLEDGE_HIT_REPORT}` | `knowledge-match.js` 的 `matchKnowledge()` 命中报告（基于 changeName + plan.md 任务名匹配 `knowledge/` 目录条目）；同时落盘 `.runtime/knowledge-hit-report.json` | execute（确认执行范围步） |
+| `{DECISION_HITS}` | 决策防复潮注入（`run/prompt.js` outputStep，brainstorm 专属）：`matchKnowledge()` 的 `decisionHits` 命中 `knowledge/INDEX.md` `## Decisions` 路由的 **rejected** 条目时渲染「否决决策提示」段（ID/标题/否决理由/复潮条件，提示勿重新提出已否决方案）；无命中替换为空串零输出。注入结果同步落盘 `.runtime/decision-hits.json`（与 KNOWLEDGE_HIT_REPORT 落盘同口径） | brainstorm（Step 2 加载项目上下文，knowledge 路由说明行内） |
+| `{SCAN_STALENESS}` | scan 基线漂移事实注入（brainstorm 专属）：`scan-staleness.js` 的 `computeScanStaleness()` 算出 scan 文档 source_commit vs HEAD 的漂移事实，注入一行 `[docs-debt]` 提示；无 scan 文档（绿地）注入「跳过判定」；全降级不抛 | brainstorm（Step 2 加载项目上下文，读 scan 文档前） |
 | `{EXECUTE_RUN_ID}` | 当前 execute run 的固定 ID（从 `.runtime/current-execute-run-id-<change>` 读，无则 `generateExecuteRunId()` 生成并落盘） | execute（每个 Wave 执行步，用于 task review.json 路径） |
+| `{MODULE_RESOLVE_TABLE}` | 模块卡分级表注入（execute 专属）：`module-resolve.js` 的 `renderModuleResolveTable()`——tasks 卡 allowed_paths × 全部 `_module-map.yaml` 跨层最长前缀匹配（子项目细卡优先于根层大卡），供「加载上下文」步按需读卡控 token；无 map 时渲染跳过提示，占位符恒被替换 | execute（加载上下文步） |
+| `{DOCS_DEBT}` | docs-debt 模块文档欠账事实注入（execute 专属）：`docs-debt.js` 的 `computeDocsDebt()`（worktree 根 git status+diff baseline..HEAD 并集 × module-map）产出 facts；空 facts 替换为空串（无债零输出，无残留占位符）；全降级不抛 | execute（每个 Wave 执行步） |
 | `{REVIEW_TIER}` | 审查分级：`self`（当前 agent 自审）或 `independent`（强制独立子代理 + review.json）。由 `review-tier.js` 的 `classifyReviewTier({planLevel, designPath})` 按 plan_level / 变更文件数判定 | brainstorm / plan / execute 的 review 步 |
 | `{REVIEW_TIER_REASON}` | 分级理由文案（如 `变更文件 3 ≤ 3` 或 `plan_level=none...`） | 同上 |
 | `{STAGE_REVIEW_RUN_ID}` | stage review 运行 ID（从 `.runtime/current-stage-review-run-id-<stage>(-<change>)` 读，无则 `generateStageReviewRunId()` 生成并落盘；注入到 `{REVIEW_JSON_CONTRACT}` 的路径内，保证 prompt 注入的 ID == Stage Review Gate 读取的 ID） | 同上（经契约块内嵌） |
@@ -148,6 +152,7 @@ prompt 正文中出现的占位符，运行时由 `outputStep` 替换。下表�
 | `{REVIEW_SCHEMA_VERSION}` | task review.json 示例模板用，替换为 CLI 当前 `REVIEW_SCHEMA_VERSION` 常量值（`src/task-review.js`，现=1）。避免 agent 照抄 design 目标版本（1→2）与 CLI 写侧常量漂移；升 v2 时随常量走，prompt 自动跟。与 `{REVIEW_JSON_CONTRACT}` 内 schemaVersion 同源（均取自该常量） | execute（task review 示例模板） |
 | `{TASK_COMPLETION_REPORT}` | `task-review.js` 的 `summarizeTaskCompletion({changeDir, runtimeRoot, changeName})` 产出的客观完成度报告：以 execute run 的 review.json verdict（specVerdict+qualityVerdict 均≠fail 视为完成）为准，替代 plan.md checkbox（依赖 autoCheckPlanFromReviews 回填，断裂时失真）；无 runId marker 时降级 checkbox 统计 + 标注 source | archive（Step 1 任务完成度检查） |
 | `{WORKTREE_BASELINE_INFO}` | `run/prompt.js` 注入的 worktree 基线锚点：变更 worktree 分支名 + 真实基点（git merge-base）+「勿用主仓 HEAD 当基点」警示（主仓在 execute 期间被并行推进时，用错基点会把别人的演进误判为越权改动）。分支/meta 不可读时降级自查指引，占位符绝不残留 | verify（Step 2 加载规范并锚定） |
+| `{EVIDENCE_AUTO_RECOMMENDATION}` | evidence-auto 推荐注入（`run/prompt.js` outputStep，verify 专属）：`verify-postcheck.js` 的 `resolveTestStrategy({yamlText, changeDir})` 按 local.yaml `test_strategy` 与变更文件解析出的 `evidence_auto_recommendation.summary`（含推荐理由、降级注记与「可在 verify-result.md 否决并改跑全量」路径——prompt 时点注入供 agent 预知并否决，与 --done 事后对账闭环）。仅 `test_strategy: evidence-auto` 且推荐非空时渲染；full/module/skip/未配置替换为空串；fail-soft：读取/解析异常降级单行说明不抛 | verify（运行测试和质量扫描步） |
 > **降级**：当 review-tier / stage-review 注入抛异常时，`{REVIEW_TIER}`→`self`、`{REVIEW_TIER_REASON}`→`分级异常降级 self: <err>`、`{REVIEW_JSON_CONTRACT}`→精简契约提示，避免 prompt 残留裸占位符。
 
 ### include 指令
