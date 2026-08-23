@@ -1085,6 +1085,13 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
           console.warn(`   - ${f}`)
           console.warn(`     分离：git add -p ${f}（交互选你的 hunk）或 git diff ${f} > mine.patch（编辑留你的）+ git apply --cached mine.patch`)
         }
+        // 宽严差异明示（坑 concurrent-policy-inconsistency，2026-08-22 实证：quick 同文件并发只
+        // warn 不阻断、plan 阶段同 Wave 同文件却硬拦——两阶段宽严不一致易误判边界）。差异是设计
+        // 使然：quick 是轻量流程无子代理并行，同文件并发最坏后果是 commit 夹带他者 hunk（git 可
+        // 分离，提示分离命令即可）；plan 的同 Wave 同文件会让 execute 的并行子代理互相覆盖（不可
+        // 自动恢复），必须设计期硬拦。
+        console.warn(`   ℹ️ 边界说明：quick 对同文件并发只提示不阻断（最坏后果=commit 夹带他者 hunk，git 可分离）；`)
+        console.warn(`      plan 阶段同 Wave 同文件是硬错误（execute 并行子代理会互相覆盖，不可自动恢复）——两阶段宽严不同是设计使然，勿以 quick 的宽松推断 plan 的边界。`)
       }
     }
 

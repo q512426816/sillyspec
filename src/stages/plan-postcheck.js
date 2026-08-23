@@ -448,7 +448,9 @@ export function validateBlueprintConsistency(changeDir) {
       if (ts.length > 1) {
         errors.push(
           `路径 ${p} 被 Wave ${w} 内 ${ts.length} 个 task 修改: ${ts.join(', ')} — 同 Wave 任务 execute 强制并行（execute.js:603），` +
-          `子代理会互相覆盖该文件。解法：把它们拆到不同 Wave（串行）。`
+          `子代理会互相覆盖该文件。解法：把它们拆到不同 Wave（串行）。` +
+          `（注：quick 阶段对同文件并发只提示不阻断——那是轻量流程无并行子代理、最坏后果 git 可分离；` +
+          `此处硬拦是因并行覆盖不可自动恢复，两阶段宽严不同是设计使然）`
         )
       }
     }

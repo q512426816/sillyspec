@@ -491,3 +491,22 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 2. deriveTitleFromLinkedChange 固定前缀显式剥（提案书（Proposal）/设计文档（Design）/Proposal/Design + 全/半角冒号与破折号分隔形态）；剥完为空（纯模板标题）继续找下一文档；tasks.md 追加行与 QUICKLOG 条目标题同源语义化。
 
 测试 quick-leftover-title.test.mjs（12 断言，含已跟踪遗留 e2e 放行+提示、untracked 折叠天然放行、非关联仍拦、三形态标题剥取 e2e）。**关联记忆**：`[[sillyspec-linked-change-leftover-false-block]]`、`[[sillyspec-linked-task-placeholder-title]]`
+
+## 32. 三坑：TaskCard body 章节返工 / design 组合单元格对账过严 / 并发宽严不一致无说明（2026-08-22 闭环）
+
+**症状（用户实证）**：
+1. plan postcheck 的 TaskCard frontmatter 契约（id/title_zh/goal 等字段式）在生成步骤模板里没有明示——第一版按 body 章节写直接三组校验全挂，返工一轮。
+2. design 文件清单的"组合路径单元格"（"router.py + service.py"一行两文件）字面匹配不识别，逼文档写法服务校验器。
+3. quick 同文件并发只 warn 不阻断、plan 阶段硬拦——宽严不一致容易误判边界。
+
+**根因**：
+1. 生成 prompt 有模板和字段清单但缺「形态」警示——frontmatter YAML vs body 章节这一关键区别靠 agent 自悟。
+2. 表格单元格提取只 normalize 不拆分——组合写法整串当单路径，字面匹配对账必不过。
+3. 两阶段宽严差异是设计使然（quick 无并行子代理最坏 git 可分离；plan 并行覆盖不可恢复）但提示里不说，agent 以 quick 宽松推断 plan 边界。
+
+**修复（2026-08-22）**：
+1. 生成器 prompt 开头加「⚠️ 格式形态（第一眼必读）」：契约字段全在 frontmatter（YAML 键值对）不是 body 章节，goal 是 `goal: >` 多行标量，写成 body 章节三组校验全挂——先跑骨架命令再 Edit，骨架即正确形态。
+2. splitCombinedPaths：单元格按 + 、 ／ | ; ； 拆分，每 token 独立过 looksLikePath（自由文本滤掉）入表；单路径零变化。
+3. 双向明示：quick 同文件并发提示附「边界说明」段（quick 轻量最坏后果 git 可分离故只提示；plan 硬拦因并行覆盖不可恢复）；plan 同 Wave 冲突报错附同款说明——勿以 quick 宽松推断 plan 边界。
+
+测试 plan-feedback-three.test.mjs（11 断言）。**关联记忆**：`[[sillyspec-taskcard-body-section-rework]]`、`[[sillyspec-design-combined-cell-mismatch]]`、`[[sillyspec-concurrent-policy-inconsistency]]`

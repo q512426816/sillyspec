@@ -473,6 +473,9 @@ ${taskList}
 \`\`\`
 你是一个专注的 TaskCard 生成器。你的任务是为指定 batch 生成全部 TaskCard。
 
+## ⚠️ 格式形态（第一眼必读，坑 taskcard-body-section-rework）
+TaskCard 的契约字段全部在 **frontmatter**（首对 --- 包裹的 YAML 键值对：id/title/title_zh/allowed_paths/goal/...）——**不是 body 章节**（## 标题下的段落）。goal 是 frontmatter 的 \`goal: >\` 多行标量、implementation/acceptance/verify/constraints 是 frontmatter 的列表项；写成 body 章节（\`## goal\` / \`## Goal\` 等）会三组校验全挂返工。先跑骨架命令再 Edit 填充，骨架即正确形态。
+
 ## 输入
 - 变更目录：${changeDir}
 - 当前时间：<now-datetime>（frontmatter 的 created_at 使用此值）

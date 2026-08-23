@@ -19,6 +19,22 @@ export function normalizePath(raw) {
 }
 
 /**
+ * 组合路径单元格拆分（坑 design-combined-cell-mismatch，2026-08-22 实证："router.py + service.py"
+ * 一行两文件整体当单路径，字面匹配对账不过）。拆分符：+ 、 ／ | ; ；——每 token 独立校验
+ * （looksLikePath 不过的丢弃，防自由文本混入）；无分隔符返回单元素数组（零变化）。
+ * 不含空白要求（"a.py+b.py" 与 "a.py + b.py" 都拆）。
+ * @param {string} cell 路径单元格（normalizePath 后）
+ * @returns {string[]}
+ */
+function splitCombinedPaths(cell) {
+  const raw = String(cell || '').trim()
+  if (!raw) return []
+  const tokens = raw.split(/\s*[+|；;、]\s*|／/).map(t => t.trim()).filter(Boolean)
+  const valid = tokens.filter(t => !isPlaceholder(t) && looksLikePath(t) && !t.startsWith('.sillyspec/'))
+  return valid.length > 0 ? valid : (looksLikePath(raw) ? [raw] : [])
+}
+
+/**
  * glob → 正则：双星（globstar）跨零或多段目录（含零段，bash 语义）、
  * 单星 → 单段（[^/]*）、问号 → 单字符（[^/]），其余转义。
  * pattern 不含通配符时返回 false（调用方先用完全相等判断）。
@@ -226,8 +242,12 @@ function _parseFileListDetailed(designMdPath, { keepSillyspecDocs = false } = {}
       // incidental：说明列（非路径列的所有 cell）+ 路径 cell 原始值（剥注释前的括号内容）
       const incidental = cells.some((c, i) => i !== pathColIdx && INCIDENTAL_RE.test(c))
         || INCIDENTAL_RE.test(cells[pathColIdx] || '')
-      if (listMode === 'exclude') { entries.delete(filePath); continue }
-      entries.set(filePath, { path: filePath, operation, incidental })
+      // 组合路径单元格拆分（坑 design-combined-cell-mismatch，2026-08-22 实证：单元格写
+      // "router.py + service.py" 一行两文件——整体当单路径字面匹配对账不过，逼文档写法服务
+      // 校验器）。拆分符：+ / ／ / | / 、 / ; / ；——每个 token 独立过校验入表；单路径零变化。
+      const pathTokens = splitCombinedPaths(filePath)
+      if (listMode === 'exclude') { for (const t of pathTokens) entries.delete(t); continue }
+      for (const t of pathTokens) entries.set(t, { path: t, operation, incidental })
       continue
     }
 

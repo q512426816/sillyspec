@@ -20,7 +20,7 @@ sillyhub 的文档烂不是执行失误，是机制性的。
 | 阶段 | 强度 | 关键证据 |
 |---|---|---|
 | brainstorm | persuasion-only | 完成校验只查四件套文件存在（stage-contract.js + gates.js:195-219）；docHash 只防伪造 review，不校验 design↔代码 |
-| plan | hybrid（有硬门但**把文档路径排除在外**） | TaskCard allowed_paths / design §6 覆盖对账是 enforced（plan-postcheck.js:807-1211, 910-1211），但 `parseDesignCoverageByRepo`（plan-postcheck.js:721）调 `parseFileChangeList` **不传 keepSillyspecDocs**，change-list.js:256/238 默认跳过所有 `.sillyspec/` 路径——design 里声明的模块文档更新**不参与覆盖对账**，没有 task 被强制认领。对比 apply 阶段 resolveApplyAllowSet（worktree-apply.js:216-219）反而传了 keepSillyspecDocs: true——plan 放、apply 收，口径不一致 |
+| plan | hybrid（有硬门但**把文档路径排除在外**） | TaskCard allowed_paths / design §6 覆盖对账是 enforced（plan-postcheck.js:807-1211, 910-1211），但 `parseDesignCoverageByRepo`（plan-postcheck.js:721）调 `parseFileChangeList` **不传 keepSillyspecDocs**，change-list.js:276/238 默认跳过所有 `.sillyspec/` 路径——design 里声明的模块文档更新**不参与覆盖对账**，没有 task 被强制认领。对比 apply 阶段 resolveApplyAllowSet（worktree-apply.js:216-219）反而传了 keepSillyspecDocs: true——plan 放、apply 收，口径不一致 |
 | execute | 无覆盖 + 倒退 | 仓库根 `docs/` 在 worktree baseline/dirty 排除清单里（worktree.js:1324、worktree-apply.js:405），文档目录被定性为"非代码交付物 churn"，多 agent 场景下文档改动对流程不可见；module-impact 更新 prompt 自认"可选不阻断"（execute.js:920-926） |
 | verify | **明示不阻断** | verify.js:137 原文"不符合时标记 ⚠️（不阻断，模块文档可能未及时更新）"——工具自己把文档滞后合法化为常态；测试对账 enforced、文档一致性 advisory（verify-postcheck.js:995-1177 四探针全 advisory） |
 | archive | 名义同步主场，实为 persuasion-only + 用户确认 | sync-module-docs step 写入由 agent 做、CLI 不校验写入结果；归档后无条件 `git add .sillyspec/docs/`（complete-handlers.js:237-244），add 空集也静默通过；module-impact.exists 仅 warning（stage-contract-spec.js:416-420） |
