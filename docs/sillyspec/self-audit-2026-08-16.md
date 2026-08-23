@@ -24,10 +24,10 @@ updated_at: 2026-08-16 14:45:00
 
 ### B. 状态机与守卫 fail-open（P1）
 
-6. **`--done` 完全绕过阶段转换守卫 + 辅助阶段污染 currentStage**：`command.js:985` --done 直接进 `completeStep` 不查 checkTransition（stage.js:27-44 `checkTransition` 只在 runStage 调）；status/doctor 等 auxiliary 跑一次即写 `progress.currentStage`（stage.js:128-133 写库）→ fromStage 变 status 后跳阶段静默放行（stage-contract.js:810-848 `AUXILIARY_STAGES` 一律放行）。代理实测：brainstorm 仓跑 `run verify --done` 输出「Step 2/7 完成」无拦截。【驾驭#1，已亲验】
-7. **status/doctor 自称只读实则写库**：`command.js:680-711` auxiliary fallback `initChange` 建 default 行 + 落盘 currentStage；与 SKILL「status 只读」矛盾；多 agent 并发 lastActive 互相覆盖。【驾驭#2，已亲验】
+6. **`--done` 完全绕过阶段转换守卫 + 辅助阶段污染 currentStage**：`command.js:897` --done 直接进 `completeStep` 不查 checkTransition（stage.js:27-44 `checkTransition` 只在 runStage 调）；status/doctor 等 auxiliary 跑一次即写 `progress.currentStage`（stage.js:204 写库）→ fromStage 变 status 后跳阶段静默放行（stage-contract.js:810-848 `AUXILIARY_STAGES` 一律放行）。代理实测：brainstorm 仓跑 `run verify --done` 输出「Step 2/7 完成」无拦截。【驾驭#1，已亲验】
+7. **status/doctor 自称只读实则写库**：`command.js:799` auxiliary fallback `initChange` 建 default 行 + 落盘 currentStage；与 SKILL「status 只读」矛盾；多 agent 并发 lastActive 互相覆盖。【驾驭#2，已亲验】
 8. **`run brainstorm` 无 --change 在多活跃变更仓静默建幽灵变更**：`command.js:717-731` 无条件 initChange。DB 实锤：08-15 一小时内 4 个 `*-new-change-*` 活跃行。审计代理自身触发一次（已精确清理 2026-08-16-new-change-6307433e）。【驾驭#3，已亲验】
-8b. **新项目首跑 auxiliary 即产生幽灵 default 变更 + doctor 清理指引落空**：`_ensureChangeDir`（progress.js:227）建空 `changes/default/`；单变更视图（_showChange）无 dirMissing 警告，仅多变更视图有（stage-machine.js:154-163 的 `dirMissing` 检查）；doctor change_db_consistency 容差放行、「可用 doctor 清理」承诺不存在。【上手#3】
+8b. **新项目首跑 auxiliary 即产生幽灵 default 变更 + doctor 清理指引落空**：`_ensureChangeDir`（progress.js:227）建空 `changes/default/`；单变更视图（_showChange）无 dirMissing 警告，仅多变更视图有（stage-machine.js:182 的 `dirMissing` 检查）；doctor change_db_consistency 容差放行、「可用 doctor 清理」承诺不存在。【上手#3】
 9. **docs gate 未知 flag 静默吞 + `--paths` 未接线**：`index.js:638-649` 只解析 --init-baseline；interface-contract.md §1.3b 宣称的「未知 flag exit 2」未实现，实测 `--nonexistent-flag` exit 0 放行；`--paths` 被 docs-gate.js:69 忽略。与 docs check 分支白名单治理口径不一致。【CLI#2，已亲验】
 10. **`docs <未知子命令>` / `progress <未知子命令>/缺参` usage 后 exit 0**：`index.js:650-652`/`:367-369`/`:311+`——typo 静默成功，hook 拼错即 fail-open；worktree/modules/runtime 家族均 exit 1/2 + didYouMean，口径分裂。【CLI#4，已亲验】
 11. **safeGit 未设 stdio，子进程 stderr 裸刷终端**：`git-helper.js:37` 无 stdio 配置，空仓跑 quick 冒出无上下文 `fatal:`；同仓其他调用点均显式 `stdio:['ignore','pipe','pipe']`。【驾驭#6】
