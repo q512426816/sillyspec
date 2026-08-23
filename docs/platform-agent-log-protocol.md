@@ -33,6 +33,7 @@ Content-Type: application/json
   "agent_cwd": "C:/Users/qinyi/IdeaProjects/sillyspec",
   "workspace_id": "ws-xxx",              # CLI 侧拿到的 --workspace-id（缺省 null；权威归属以 token 派生为准）
   "scan_run_id": "scan-xxx",             # CLI 侧拿到的 --scan-run-id（缺省 null）
+  "hub_session_id": "9f0c...",           # 可选，body 级：run 所属平台会话 id（daemon 注入 env SILLYHUB_SESSION_ID；非空才带，见下方「会话化上下文」）
   "entries": [
     {
       "harness": "codex",
@@ -42,6 +43,8 @@ Content-Type: application/json
       "agent_cwd": "C:/Users/qinyi/sillyhub_workspaces",
       "session_id": "<uuid>",
       "originator": "sillyhub-daemon",
+      "change_key": "2026-08-23-agent-activity-sessions",  # 可选，entry 级：检出/更新该 entry 的那次 run 的 --change 值（随 entry 持久化）
+      "quick_id": null,                                     # 可选，entry 级：quick 会话 id（quick-<8hex> 原样；与 change_key 互斥、quick 优先）
       "exists": true,
       "size_bytes": 123456,
       "mtime_ms": 1787446398096.99,
@@ -62,6 +65,15 @@ Content-Type: application/json
 - **不受平台模式 sentinel 限制**：链路 A（进度同步）在平台模式跳过是因为 daemon 有自有进度回传链路；agent 日志没有 daemon 链路，**本上报就是它的主通道**，平台模式照常发。
 - **关闭开关**：env `SILLYSPEC_AGENT_LOG_PUSH=0`。
 
+### 会话化上下文（2026-08-23-agent-activity-sessions，协议纯可选增量）
+
+上报携带两级会话化上下文，供平台做「agent 日志 ↔ 平台会话」关联与聚合（`schema_version` 保持 1，所有新字段可选，旧 CLI/旧留底产物不带时服务端按缺省处理，完全向后兼容）：
+
+- **entry 级 ctx（`change_key` / `quick_id`）**：CLI 上报调用发生在 changeName/quickSessionId 解析之后，**检出/更新该 entry 的那次 run 的 ctx 随 entry 持久化**（本地产物与上报 payload 一致）——普通 run 写 `change_key`（`--change` 值，无则不带），quick 会话写 `quick_id`（`quick-<8hex>` 完整原样；与 `change_key` 互斥、quick 优先）。**未被本次 run 触及的存量 entry 保留原 ctx 不追新**——变更 B 的 run 全量重推留底 entries 时，不会把变更 A 检出的 entry 改挂到变更 B 名下。
+- **body 级 `hub_session_id`（非空才带）**：run 所属平台会话 id。唯一确定性注入通道是 daemon：平台会话 claim 后 spawn agent 子进程时注入 env **`SILLYHUB_SESSION_ID`**（create 与 restore/reload 两条路径的 env 重建都注入；非平台会话派发不含该键），CLI 读该 env 带进 body。服务端校验该会话属于 token 派生 workspace 后，把本批 entries 全部挂到该会话（对话流内展示）；未命中/跨 workspace 静默降级（entries 仍入库，best-effort）。
+- **平台端聚合口径**：无 `hub_session_id` 时，按 **`(workspace, harness, coalesce(entry.change_key, entry.quick_id, ''))`** 分组 find-or-create `origin=tool_report` 的自动会话（D-001/D-009）——同一变更/quick 会话的 agent 日志聚合进同一会话，无 ctx 落 workspace+harness 单桶。实现见主仓（multi-agent-platform）变更 `2026-08-23-agent-activity-sessions`。
+- ctx 值均为**标识类**（变更目录名 / quick 会话 id / 平台会话 id），不含 flag 值（协议 §7 克制口径不变）。
+
 ### 平台端（sillyhub 仓）要做的
 
 1. 新增端点 `POST /api/agent-logs`：鉴权与 `/api/changes/{name}/progress` 一致（`shpsync_`/`shk_live_`/JWT 分流），落库表建议以 `(workspace_id, log_path)` 为唯一键 upsert，整行存 entries 元信息。
@@ -78,7 +90,7 @@ Content-Type: application/json
 | 平台模式（仅 `--spec-root`） | `<specRoot>/.runtime/agent-session-log.json` |
 | 本地模式 | `<cwd>/.sillyspec/.runtime/agent-session-log.json` |
 
-结构与上报 body 相同（多一层 `generated_at`）。文件锁 + 原子写，多会话并发 run 不互相覆盖；entries 按 `last_seen_at` 新→旧，上限 10 条（超出淘汰最旧）。
+结构与上报 body 相同（多一层 `generated_at`）。文件锁 + 原子写，多会话并发 run 不互相覆盖；entries 按 `last_seen_at` 新→旧，上限 10 条（超出淘汰最旧）。entry 级 ctx（`change_key`/`quick_id`）同样随 entry 留底；**未被本次 run 触及的存量 entry 保留原 ctx 不追新**，旧版本产物（无 ctx 字段）合并读取完全兼容（缺省按 null）。
 
 ## 3. 探测规则（按 harness，全部本机实证）
 

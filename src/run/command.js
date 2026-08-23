@@ -369,29 +369,6 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
   // let：下方 worktree 副本漂移守卫命中时锚回 wt.mainSpecBase（task-05/D-03）
   let specBase = platformOpts.specRoot || join(cwd, '.sillyspec')
 
-  // ── 本地 agent 会话日志登记 + 上报（平台会话展示用，best-effort）──
-  // 平台/daemon 模式下 SillyHub 只能看到 CLI 阶段信息，看不到本地 agent 的实际执行日志。
-  // 在此探测当前 agent 环境（Claude Code / Codex / ZCode transcript / SILLYSPEC_AGENT_LOG
-  // 覆盖），把日志本地路径登记进 <runtimeRoot>/agent-session-log.json（留底）并立即
-  // REST 上报平台（POST /api/agent-logs，与进度上报同风格；协议见
-  // docs/platform-agent-log-protocol.md）。探测不到不发不写；任何失败只 warn 一行，
-  // 绝不阻断 run 主流程。
-  try {
-    const { recordAgentLogInvocation } = await import('../agent-session-log.js')
-    const r = await recordAgentLogInvocation({
-      cwd,
-      invokedCwd,
-      platformOpts,
-      specBase,
-      // 只记 flag 名不记值（--output 等 flag 值是 agent 工作文本，不进产物）
-      command: [stageName, ...flags.filter(t => typeof t === 'string' && t.startsWith('--'))].join(' '),
-    })
-    if (r && r.isNew && r.latestLogPath) {
-      const pushNote = r.pushed === true ? '已上报平台' : r.pushed === false ? '上报失败（本地已留底）' : '本地留底'
-      console.log(`📄 本地 agent 日志已登记（${pushNote}）: ${r.latestLogPath}`)
-    }
-  } catch { /* best-effort：登记失败不影响 run 主流程 */ }
-
   // 漂移提醒:cwd 祖先链 ≥2 个 .sillyspec = monorepo 多实例,当前命中的「最近」实例
   // 可能不是用户意图的项目(如 cd 进被独立 scan 的子项目跑测试后忘回根)。
   // 平台模式 / 显式 --spec-dir 跳过(已明确指定,无歧义)。仅提醒不阻断。
@@ -581,6 +558,43 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
       quickSessionId = changeName
     }
   }
+
+  // ── 本地 agent 会话日志登记 + 上报（平台会话展示用，best-effort）──
+  // 平台/daemon 模式下 SillyHub 只能看到 CLI 阶段信息，看不到本地 agent 的实际执行日志。
+  // 在此探测当前 agent 环境（Claude Code / Codex / ZCode transcript / SILLYSPEC_AGENT_LOG
+  // 覆盖），把日志本地路径登记进 <runtimeRoot>/agent-session-log.json（留底）并立即
+  // REST 上报平台（POST /api/agent-logs，与进度上报同风格；协议见
+  // docs/platform-agent-log-protocol.md）。探测不到不发不写；任何失败只 warn 一行，
+  // 绝不阻断 run 主流程。
+  // 位置（2026-08-23-agent-activity-sessions task-01）：必须在上方 changeName/quickSessionId
+  // 解析完成之后——上报携带会话化上下文 context：entry 级 changeKey/quickId（平台按
+  // (workspace, harness, entry.ctx) 聚合建会话；quick 会话 quickId 优先且与 changeKey 互斥）
+  // + body 级 hubSessionId（daemon 派发平台会话时注入 env SILLYHUB_SESSION_ID，非空才带）。
+  // 两段解析均在顶层作用域，此处统一算一次 context 两值皆可达。
+  try {
+    const isQuickSession = stageName === 'quick' && Boolean(quickSessionId)
+    const hubSessionIdEnv = typeof process.env.SILLYHUB_SESSION_ID === 'string' ? process.env.SILLYHUB_SESSION_ID.trim() : ''
+    const agentLogContext = {
+      hubSessionId: hubSessionIdEnv || null,
+      // quick 会话 → quickId（quick-<8hex> 完整原样，不剥前缀）；普通场景 → changeKey（--change 值，无则 null）
+      changeKey: isQuickSession ? null : (changeName || null),
+      quickId: isQuickSession ? quickSessionId : null,
+    }
+    const { recordAgentLogInvocation } = await import('../agent-session-log.js')
+    const r = await recordAgentLogInvocation({
+      cwd,
+      invokedCwd,
+      platformOpts,
+      specBase,
+      context: agentLogContext,
+      // 只记 flag 名不记值（--output 等 flag 值是 agent 工作文本，不进产物）
+      command: [stageName, ...flags.filter(t => typeof t === 'string' && t.startsWith('--'))].join(' '),
+    })
+    if (r && r.isNew && r.latestLogPath) {
+      const pushNote = r.pushed === true ? '已上报平台' : r.pushed === false ? '上报失败（本地已留底）' : '本地留底'
+      console.log(`📄 本地 agent 日志已登记（${pushNote}）: ${r.latestLogPath}`)
+    }
+  } catch { /* best-effort：登记失败不影响 run 主流程 */ }
 
   // quick 关联变更存在性守卫（坑 quick-change-phantom-linked）：quick 的 --change/--linked-changes
   // 被解析为关联变更后静默接受不存在的名字（quick 不建变更，链接幻影名必是笔误/语义误用——想给

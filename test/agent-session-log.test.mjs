@@ -12,6 +12,9 @@
  *    entries 上限 / 平台模式 workspace 元信息 / session_id 入产物 / 非 agent 环境不写盘）。
  * 4. readAgentLogArtifact / resolveAgentLogArtifactPath：读回 + 落点解析（本地/平台指针/损坏指针）。
  * 5. CLI 集成：sillyspec agent-log [--detect] [--json]。
+ * 6. 会话化上下文（2026-08-23-agent-activity-sessions）：entry 级 change_key/quick_id
+ *    （检出随 run 持久化 / 存量 entry 原值保留 / 旧留底产物无字段合并兼容 / quick 互斥优先）
+ *    + body 级 hub_session_id（env SILLYHUB_SESSION_ID 或 context 显式，缺失不带）。
  */
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, utimesSync, existsSync } from 'fs'
 import { join, dirname } from 'path'
@@ -434,6 +437,116 @@ console.log('--- 11. 上报平台（POST /api/agent-logs）---')
       assert(existsSync(join(specBaseF, '.runtime', AGENT_LOG_ARTIFACT_FILENAME)), `${mode} → 本地产物仍落盘兜底`)
     }
     fetchMode = 'ok'
+  } finally {
+    globalThis.fetch = savedFetch
+  }
+}
+
+console.log('--- 11b. 会话化上下文（entry 级 ctx + body 级 hub_session_id，2026-08-23-agent-activity-sessions）---')
+{
+  // mock fetch 收集器（对齐 §11 风格）
+  const savedFetch = globalThis.fetch
+  const captured = []
+  globalThis.fetch = async (url, options = {}) => {
+    captured.push({ url: String(url), options, body: options.body ? JSON.parse(options.body) : null })
+    return { ok: true, status: 200, headers: new Map(), json: async () => ({ status: 'ok' }) }
+  }
+  try {
+    const pos = p => p.replace(/\\/g, '/')
+    const root = makeTmpDir('al-ctx-')
+    const specBase = join(root, '.sillyspec')
+    const home = makeTmpDir('al-ctx-home-')
+    const logNew = join(home, 'new.jsonl'); writeFileSync(logNew, '{}\n')
+    const logOld = join(home, 'old.jsonl'); writeFileSync(logOld, '{}\n')
+    const logQuick = join(home, 'qk.jsonl'); writeFileSync(logQuick, '{}\n')
+    const logNoCtx = join(home, 'noctx.jsonl'); writeFileSync(logNoCtx, '{}\n')
+    const rt = join(specBase, '.runtime')
+    mkdirSync(specBase, { recursive: true })
+    writeFileSync(join(specBase, 'local.yaml'), 'platform:\n  url: http://hub.test\n  token: shpsync_ctx\n')
+
+    // 预置旧留底产物：logOld 带 change_key（上一次 run 的 ctx）、logNoCtx 无 ctx 字段（旧版本产物）
+    mkdirSync(rt, { recursive: true })
+    writeFileSync(join(rt, AGENT_LOG_ARTIFACT_FILENAME), JSON.stringify({
+      schema_version: 1,
+      generated_at: '2026-08-23T09:00:00.000Z',
+      agent_cwd: pos(root), workspace_id: null, scan_run_id: null,
+      entries: [
+        { harness: 'env-override', log_path: pos(logOld), format: 'jsonl', detected_via: 'env',
+          agent_cwd: pos(root), session_id: null, originator: null, exists: true, size_bytes: 4,
+          mtime_ms: 1, first_seen_at: '2026-08-23T09:00:00.000Z', last_seen_at: '2026-08-23T09:00:00.000Z',
+          invocations: 1, last_command: null, change_key: 'old-change', quick_id: null },
+        { harness: 'env-override', log_path: pos(logNoCtx), format: 'jsonl', detected_via: 'env',
+          agent_cwd: pos(root), session_id: null, originator: null, exists: true, size_bytes: 4,
+          mtime_ms: 1, first_seen_at: '2026-08-23T09:00:00.000Z', last_seen_at: '2026-08-23T09:00:00.000Z',
+          invocations: 1, last_command: null },
+      ],
+    }, null, 2))
+
+    // ① 普通场景：context.changeKey → 本次检出 entry 带 change_key；未触及存量 entry 保留原 ctx
+    const r1 = await recordAgentLogInvocation({
+      cwd: root, specBase, homeDir: home, command: 'execute --done',
+      env: { [AGENT_LOG_ENV_OVERRIDE]: logNew },
+      context: { changeKey: '2026-08-23-agent-activity-sessions' },
+    })
+    assert(r1 && r1.pushed === true, '① context 调用正常上报')
+    const body1 = captured.at(-1).body
+    const newE = body1.entries.find(e => e.log_path === pos(logNew))
+    assert(newE.change_key === '2026-08-23-agent-activity-sessions' && newE.quick_id == null,
+      '① 本次检出 entry 带 change_key、不带 quick_id')
+    const oldE = body1.entries.find(e => e.log_path === pos(logOld))
+    assert(oldE && oldE.change_key === 'old-change' && oldE.invocations === 1,
+      '① 未触及存量 entry 保留原 ctx 不追新（变更 B 的 run 不改挂变更 A 的 entry）')
+    const art = readAgentLogArtifact(rt)
+    assert(art.entries.find(e => e.log_path === pos(logNew)).change_key === '2026-08-23-agent-activity-sessions'
+      && art.entries.find(e => e.log_path === pos(logOld)).change_key === 'old-change',
+      '① 留底产物 entry 级 ctx 与 payload 一致')
+
+    // ④ 旧留底产物（无 ctx 字段）合并兼容：未触及原样保留；本次触及（无 context）→ ctx 落 null 不炸
+    const noCtxE = body1.entries.find(e => e.log_path === pos(logNoCtx))
+    assert(noCtxE && noCtxE.invocations === 1 && noCtxE.change_key === undefined,
+      '④ 旧产物无 ctx 字段的未触及 entry 原样保留（不追新）')
+    const r4 = await recordAgentLogInvocation({
+      cwd: root, specBase, homeDir: home, command: 'scan',
+      env: { [AGENT_LOG_ENV_OVERRIDE]: logNoCtx },
+    })
+    assert(r4 && r4.pushed === true, '④ 旧产物 entry 被本次触及（无 context）合并不炸')
+    const noCtxTouched = readAgentLogArtifact(rt).entries.find(e => e.log_path === pos(logNoCtx))
+    assert(noCtxTouched.invocations === 2 && noCtxTouched.change_key == null && noCtxTouched.quick_id == null,
+      '④ 触及的旧格式 entry ctx 归 null（无 prev ctx 可保，best-effort 不抛）')
+
+    // ② quick 场景：quickId 优先且与 changeKey 互斥（quick-<8hex> 完整原样）
+    const r2 = await recordAgentLogInvocation({
+      cwd: root, specBase, homeDir: home, command: 'quick --done',
+      env: { [AGENT_LOG_ENV_OVERRIDE]: logQuick },
+      context: { quickId: 'quick-abcd1234' },
+    })
+    assert(r2 && r2.pushed === true, '② quick 场景正常上报')
+    const qE = captured.at(-1).body.entries.find(e => e.log_path === pos(logQuick))
+    assert(qE.quick_id === 'quick-abcd1234' && qE.change_key == null,
+      '② quick 场景 entry 带 quick_id（含 quick- 前缀原样）且不带 change_key（互斥 quick 优先）')
+
+    // ③ body 级 hub_session_id：env SILLYHUB_SESSION_ID 存在才带；context 显式传入同生效；缺失不带
+    await recordAgentLogInvocation({
+      cwd: root, specBase, homeDir: home, command: 'plan',
+      env: { [AGENT_LOG_ENV_OVERRIDE]: logNew, SILLYHUB_SESSION_ID: 'sess-env-1' },
+      context: { changeKey: 'k' },
+    })
+    assert(captured.at(-1).body.hub_session_id === 'sess-env-1',
+      '③ env SILLYHUB_SESSION_ID 存在 → body 带 hub_session_id')
+    await recordAgentLogInvocation({
+      cwd: root, specBase, homeDir: home, command: 'plan',
+      env: { [AGENT_LOG_ENV_OVERRIDE]: logNew },
+      context: { changeKey: 'k' },
+    })
+    assert(!('hub_session_id' in captured.at(-1).body),
+      '③ env 缺失 → body 不带 hub_session_id 键（非空才带）')
+    await recordAgentLogInvocation({
+      cwd: root, specBase, homeDir: home, command: 'plan',
+      env: { [AGENT_LOG_ENV_OVERRIDE]: logNew },
+      context: { changeKey: 'k', hubSessionId: 'sess-explicit' },
+    })
+    assert(captured.at(-1).body.hub_session_id === 'sess-explicit',
+      '③ context.hubSessionId 显式传入（run/command.js 读 env 后传入路径）生效')
   } finally {
     globalThis.fetch = savedFetch
   }

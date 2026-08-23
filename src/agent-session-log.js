@@ -86,6 +86,17 @@ function statSafe(p) {
 }
 
 /**
+ * 会话化上下文 id 消毒（2026-08-23-agent-activity-sessions）：非空字符串 trim 后返回，
+ * 其余（undefined/null/空白）返回 null——best-effort 语义：ctx 解析失败不带、不抛错。
+ * 只用于标识类值（hubSessionId / changeKey / quickId），非 flag 值。
+ */
+function pickCtxId(v) {
+  if (typeof v !== 'string') return null;
+  const t = v.trim();
+  return t || null;
+}
+
+/**
  * 读文件首行并 JSON.parse（只读前 maxBytes 字节，防大日志整读）。
  * codex rollout 首行是 session_meta（含 cwd/originator），这是 cwd 精确匹配的数据源。
  * @returns {object|null} 解析失败/文件不可读返回 null
@@ -584,6 +595,10 @@ export function readAgentLogArtifact(runtimeRoot) {
  * @param {object}   [p.platformOpts] - 平台参数（workspaceId/scanRunId 进产物元信息）
  * @param {string}   p.specBase     - 规范基路径（本地模式 cwd/.sillyspec；平台模式 specRoot）
  * @param {string}   [p.command]    - 触发登记的命令描述（flag 名级，不含 flag 值）
+ * @param {object}   [p.context]    - 会话化上下文（2026-08-23-agent-activity-sessions，可选）：
+ *   {hubSessionId, changeKey, quickId}——hubSessionId 为 body 级（run 所属平台会话唯一，
+ *   daemon 注入 env SILLYHUB_SESSION_ID 的兜底也在此读取）；changeKey/quickId 为 entry 级
+ *   （本次 run 检出/更新的 entry 随 run 持久化，quick 会话 quickId 优先互斥）。缺省全不带。
  * @param {object}   [p.env]        - 探测用 env（默认 process.env；测试注入用）
  * @param {string}   [p.homeDir]    - 探测用 home（默认 homedir()；测试注入用）
  * @param {number}   [p.now]        - 探测用时钟（默认 Date.now()；测试注入用）
@@ -591,12 +606,19 @@ export function readAgentLogArtifact(runtimeRoot) {
  * @returns {Promise<{artifactPath:string, detected:number, latestLogPath:string|null, isNew:boolean, pushed:boolean|null}|null>}
  *   null = 未探测到 / 失败（调用方无需区分）
  */
-export async function recordAgentLogInvocation({ cwd, invokedCwd, platformOpts = {}, specBase, command, env, homeDir, now, windowMs } = {}) {
+export async function recordAgentLogInvocation({ cwd, invokedCwd, platformOpts = {}, specBase, command, context = {}, env, homeDir, now, windowMs } = {}) {
   try {
     if (!cwd || !specBase) return null;
     const cwdCandidates = [...new Set([invokedCwd, cwd].filter(Boolean))];
     const detected = detectAgentLogEntries({ cwdCandidates, env, homeDir, now, windowMs });
     if (detected.length === 0) return null;
+
+    // 会话化上下文（best-effort 消毒，解析失败不带）：entry 级 ctx（changeKey/quickId）随
+    // 检出/更新该 entry 的本次 run 持久化；hubSessionId 为 body 级——context 显式传入优先，
+    // 缺省回落 env SILLYHUB_SESSION_ID（daemon 派发平台会话时的注入通道，见 protocol 文档 §1）。
+    const hubSessionId = pickCtxId(context.hubSessionId) || pickCtxId((env || process.env).SILLYHUB_SESSION_ID);
+    const ctxChangeKey = pickCtxId(context.changeKey);
+    const ctxQuickId = pickCtxId(context.quickId);
 
     const runtimeRoot = resolveRuntimeRoot(platformOpts, specBase);
     const artifactPath = join(runtimeRoot, AGENT_LOG_ARTIFACT_FILENAME);
@@ -619,6 +641,10 @@ export async function recordAgentLogInvocation({ cwd, invokedCwd, platformOpts =
           agent_cwd: det.agent_cwd,
           session_id: det.session_id ?? prev?.session_id ?? null,
           originator: det.originator ?? prev?.originator ?? null,
+          // entry 级 ctx（D-009）：本次 run 非空者写入；context 未带（如无 --change 的 run）
+          // 保留原值——未被本次 run 触及的存量 entry 不进此循环，展开即保留原 ctx 不追新
+          change_key: ctxChangeKey ?? prev?.change_key ?? null,
+          quick_id: ctxQuickId ?? prev?.quick_id ?? null,
           exists: Boolean(st),
           size_bytes: st ? st.size : null,
           mtime_ms: st ? st.mtimeMs : (det.mtime_ms ?? null),
@@ -660,6 +686,9 @@ export async function recordAgentLogInvocation({ cwd, invokedCwd, platformOpts =
         agent_cwd: toPosix(invokedCwd || cwd),
         workspace_id: platformOpts.workspaceId ?? null,
         scan_run_id: platformOpts.scanRunId ?? null,
+        // body 级会话关联键（run 所属平台会话唯一；非空才带，schema_version 保持 1 纯可选增量）
+        ...(hubSessionId ? { hub_session_id: hubSessionId } : {}),
+        // entries 各自带 entry 级 ctx（change_key/quick_id，随 entry 持久化的原值或本次 run 的新值）
         entries: merged.entries,
       },
     });
