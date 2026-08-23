@@ -23,7 +23,7 @@ import { basename, join, resolve, dirname } from 'node:path'
 import { existsSync, readdirSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
 import { randomBytes, randomUUID } from 'node:crypto'
 import { writeAtomicSync } from '../fs-atomic.js'
-import { resolveSpecDir, countAncestorSpecDirs, resolveChangeDir, triggerSync, getStageSteps, formatWaitOptions, checkApproval, warnApprovalUnknown, didYouMean, assertSafeChangeName, detectQuickSessionDrift, detectWorktreeSpecDrift, resolveRuntimeRoot, writePlatformPointer, checkPlatformManaged, PLATFORM_MANAGED_FILENAME } from './shared.js'
+import { resolveSpecDir, countAncestorSpecDirs, resolveChangeDir, triggerSync, getStageSteps, formatWaitOptions, checkApproval, warnApprovalUnknown, didYouMean, assertSafeChangeName, detectQuickSessionDrift, detectWorktreeSpecDrift, resolveRuntimeRoot, writePlatformPointer, checkPlatformManaged, isSelfReferentialSpecRoot, PLATFORM_MANAGED_FILENAME } from './shared.js'
 import { resolveQuickLinkedChanges } from './quick-audit.js'
 import { outputStep } from './prompt.js'
 import { completeStep, skipStep, waitStep, continueStep } from './complete.js'
@@ -319,19 +319,27 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
       try {
         const { readFileSync } = await import('fs')
         const saved = JSON.parse(readFileSync(platformOptsFile, 'utf8'))
-        if (saved.specRoot) platformOpts.specRoot = saved.specRoot
-        if (saved.runtimeRoot) platformOpts.runtimeRoot = saved.runtimeRoot
-        if (saved.workspaceId) platformOpts.workspaceId = saved.workspaceId
-        if (saved.scanRunId) platformOpts.scanRunId = saved.scanRunId
-        // 平台模式 fail-fast：文件存在但缺少 specRoot
-        if (!platformOpts.specRoot && !platformOpts.runtimeRoot) {
-          console.error(`❌ 平台模式参数文件存在但缺少 specRoot/runtimeRoot: ${platformOptsFile}`)
-          console.error('   可能原因：platform-scan.json 损坏或写入不完整')
-          console.error('   解决：重新运行首次 scan 并传入 --spec-root')
-          process.exit(2) // 环境错（平台文件损坏）→ exit 2
+        // 自指指针免疫（FR-4，变更 2026-08-23-repo-native-spec-backfill）：saved.specRoot 经
+        // realpath 解析回本地 .sillyspec（repo-native junction 回环，旧模板投毒残留）→ 整体
+        // 忽略恢复（specRoot/runtimeRoot/workspaceId/scanRunId 全不回填，platformOpts 保持
+        // 无平台参数状态），按本地模式运行——内置 sync 走本地链路，specRoot 保持本地取值链。
+        if (isSelfReferentialSpecRoot(cwd, saved.specRoot)) {
+          console.warn(`⚠️ 检测到自指平台指针（repo-native junction 回环，specRoot 指回本地 .sillyspec），已忽略并按本地模式运行: ${platformOptsFile}`)
+        } else {
+          if (saved.specRoot) platformOpts.specRoot = saved.specRoot
+          if (saved.runtimeRoot) platformOpts.runtimeRoot = saved.runtimeRoot
+          if (saved.workspaceId) platformOpts.workspaceId = saved.workspaceId
+          if (saved.scanRunId) platformOpts.scanRunId = saved.scanRunId
+          // 平台模式 fail-fast：文件存在但缺少 specRoot
+          if (!platformOpts.specRoot && !platformOpts.runtimeRoot) {
+            console.error(`❌ 平台模式参数文件存在但缺少 specRoot/runtimeRoot: ${platformOptsFile}`)
+            console.error('   可能原因：platform-scan.json 损坏或写入不完整')
+            console.error('   解决：重新运行首次 scan 并传入 --spec-root')
+            process.exit(2) // 环境错（平台文件损坏）→ exit 2
+          }
+          // 恢复成功：更新 specRoot（初始值可能是 cwd/.sillyspec，恢复后应为真实 specDir）
+          specRoot = platformOpts.specRoot || specRoot
         }
-        // 恢复成功：更新 specRoot（初始值可能是 cwd/.sillyspec，恢复后应为真实 specDir）
-        specRoot = platformOpts.specRoot || specRoot
       } catch (e) {
         console.error(`❌ 平台模式参数文件读取失败: ${platformOptsFile}`)
         console.error(`   错误: ${e.message}`)
@@ -349,12 +357,20 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
   if (!platformOpts.specRoot && !platformOpts.runtimeRoot && !platformFileExists) {
     const decl = checkPlatformManaged(cwd)
     if (decl) {
-      console.error(`❌ 平台接管声明生效：本项目已由平台托管（原 specRoot: ${decl.specRoot || '(未记录)'}），但恢复指针缺失，拒绝静默回退本地模式。`)
-      console.error(`   声明文件: ${join(cwd, PLATFORM_MANAGED_FILENAME)}`)
-      console.error('   恢复：① 重跑平台 scan/init（带 --spec-root）重建指针；② 确认不再使用平台：sillyspec platform disconnect（删除接管声明）；③ 显式 --spec-dir <路径> 临时指定目录。')
-      // exit(1) 而非邻近环境错的 exit(2)：这是"状态保护阻断"（对齐 PointerUnreachableError
-      // 顶层 catch 语义），非"用法/环境错"——见 design.md §5.3 v2 复审观察 (a)
-      process.exit(1)
+      // 陈旧自指声明降级（FR-4，变更 2026-08-23-repo-native-spec-backfill）：decl.specRoot 经
+      // realpath 解析回本地 .sillyspec（repo-native junction 投毒残留、指针已被清理）→ 视为
+      // 陈旧声明，warn 后按本地模式继续（不 exit 1）——声明描述的"平台接管"物理上指向本地
+      // .sillyspec，无跨库状态分裂风险；非自指声明维持 fail-closed 原样（状态保护阻断）。
+      if (isSelfReferentialSpecRoot(cwd, decl.specRoot)) {
+        console.warn(`⚠️ 检测到陈旧的自指平台接管声明（repo-native junction 回环，原 specRoot 指回本地 .sillyspec），已降级并按本地模式运行；可 sillyspec platform disconnect 清理残留声明: ${join(cwd, PLATFORM_MANAGED_FILENAME)}`)
+      } else {
+        console.error(`❌ 平台接管声明生效：本项目已由平台托管（原 specRoot: ${decl.specRoot || '(未记录)'}），但恢复指针缺失，拒绝静默回退本地模式。`)
+        console.error(`   声明文件: ${join(cwd, PLATFORM_MANAGED_FILENAME)}`)
+        console.error('   恢复：① 重跑平台 scan/init（带 --spec-root）重建指针；② 确认不再使用平台：sillyspec platform disconnect（删除接管声明）；③ 显式 --spec-dir <路径> 临时指定目录。')
+        // exit(1) 而非邻近环境错的 exit(2)：这是"状态保护阻断"（对齐 PointerUnreachableError
+        // 顶层 catch 语义），非"用法/环境错"——见 design.md §5.3 v2 复审观察 (a)
+        process.exit(1)
+      }
     }
   }
   // 持久化 platformOpts
@@ -401,7 +417,11 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
   // ⚠️ 同 init.js：必须保护真实资产（changes/、projects/、sillyspec.db）。
   // 只在「首次」执行一次——用 cwd 下的 .sillyspec-platform-cleaned 标记文件记录已处理，
   // 后续每次 run 直接跳过，避免重复检查 + 红叉噪声（此清理不阻塞流程、不动真实资产）。
-  if (platformOpts.specRoot) {
+  // 自指守卫（FR-4，变更 2026-08-23-repo-native-spec-backfill）：显式自指 --spec-root
+  // （repo-native junction 回环）下 cwd/.sillyspec 与 specRoot 同物理目录——它就是平台
+  // 规范目录本体，绝非"旧版本残留"；跳过整个清理决策（含 marker 写入，防后续真平台
+  // 接入被误标记已清理）。否则 rmSync 会删掉 repo-native 唯一真理源并留下悬空链接。
+  if (platformOpts.specRoot && !isSelfReferentialSpecRoot(cwd, platformOpts.specRoot)) {
     const legacyDir = join(cwd, '.sillyspec')
     const cleanedMarker = join(cwd, '.sillyspec-platform-cleaned')
     if (!existsSync(cleanedMarker)) {

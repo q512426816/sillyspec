@@ -23,8 +23,9 @@
 import { openDatabase, pluckGet, pluckAll } from './db-engine.js';
 import { existsSync, statSync, readFileSync, readdirSync, mkdirSync, writeFileSync, unlinkSync, rmSync } from 'fs';
 import { join } from 'path';
+import jsYaml from 'js-yaml';
 import { CHECK_SEVERITY } from './constants.js';
-import { checkPlatformManaged } from './run/shared.js';
+import { checkPlatformManaged, isSelfReferentialSpecRoot, PLATFORM_MANAGED_FILENAME } from './run/shared.js';
 
 // db 角色标签
 const DB_ROLE = {
@@ -580,6 +581,104 @@ function detectExecuteProgressPlanMismatch(authoritySpecRoot, authDb) {
   return dim;
 }
 
+// ── D6 repo-native 断链画像（FR-4，变更 2026-08-23-repo-native-spec-backfill）─────
+//
+// repo-native 工作区的投毒残留三画像（daemon junction 回环：--spec-root 缓存路径指回源项目
+// <cwd>/.sillyspec）。新版 CLI（≥3.27.3）对三者均自动免疫（恢复忽略/写入拦截/声明降级），
+// 本维度把残留显性化给用户/agent——残留本身无阻断风险，凭据缺失才是上行断链的无感知杀手
+//（design 风险 5：内置 sync best-effort 静默跳过）。自指判定复用 run/shared.js 单一数据源
+//（本模块已有 checkPlatformManaged 静态 import 链，无独立脚本复制问题）。
+//
+// 三画像（均 WARNING 级 advisory，doctor 只读绝不自动清理）：
+//   ① 指针存在且自指（旧 CLI 中毒残留，建议升级 CLI 或删指针文件）
+//   ② 接管声明存在但指针缺失且自指（陈旧声明，可 sillyspec platform disconnect 清理）
+//   ③ cwd/.sillyspec 存在但 local.yaml 无 platform 段 + 自指残留（凭据缺失，上行静默失败）
+
+/** local.yaml 是否有 platform 段（url/token 凭据）。读失败/无文件/无段 → false（宁报缺勿漏报）。 */
+function localYamlHasPlatformSection(cwd) {
+  try {
+    const p = join(cwd, '.sillyspec', 'local.yaml');
+    if (!existsSync(p)) return false;
+    const doc = jsYaml.load(readFileSync(p, 'utf8'));
+    return !!(doc && typeof doc === 'object' && doc.platform && typeof doc.platform === 'object');
+  } catch {
+    return false;
+  }
+}
+
+function detectRepoNativeChain(cwd, pointer) {
+  const dim = {
+    name: 'repo_native_chain',
+    label: 'repo-native 断链画像',
+    safe_actions: [],
+    findings: [],
+  };
+  const decl = checkPlatformManaged(cwd);
+  const ptrSelfRef = pointer.present && !pointer.corrupted && isSelfReferentialSpecRoot(cwd, pointer.specRoot);
+  const declSelfRef = !!decl && isSelfReferentialSpecRoot(cwd, decl.specRoot);
+  let triggered = false;
+
+  // 画像①：自指指针在盘（runCommand 会忽略并按本地模式运行，但残留说明旧 CLI 投过毒）
+  if (ptrSelfRef) {
+    triggered = true;
+    dim.findings.push(
+      `repo_native_self_referential_pointer: 平台指针 specRoot 自指回环（realpath = 本地 .sillyspec，` +
+      `repo-native junction 投毒残留）：${pointer.specRoot}——新版 CLI 已自动忽略按本地模式运行；` +
+      `建议删除指针文件 ${pointer.path} 或升级 CLI（≥3.27.3）防旧版再中毒`
+    );
+    dim.safe_actions.push({
+      dimension: 'repo_native_chain',
+      action: 'remove_self_referential_pointer',
+      target: pointer.path,
+      risk: 'confirm_required',
+      rationale: '自指指针对新版 CLI 无效但会持续触发忽略告警；删除后本地模式零残留',
+      next_step: `rm "${pointer.path}"（保留 local.yaml 平台凭据）`,
+    });
+  }
+
+  // 画像②：陈旧自指声明（指针已删/未写，声明残留——runCommand 降级本地模式不阻断）
+  if (!pointer.present && declSelfRef) {
+    triggered = true;
+    dim.findings.push(
+      `repo_native_stale_declaration: 自指平台接管声明残留（原 specRoot 自指回环且恢复指针缺失）：` +
+      `${join(cwd, PLATFORM_MANAGED_FILENAME)}——新版 CLI 已降级按本地模式运行（不 fail-closed）；` +
+      `可 sillyspec platform disconnect 清理声明残留`
+    );
+    dim.safe_actions.push({
+      dimension: 'repo_native_chain',
+      action: 'platform_disconnect_cleanup',
+      risk: 'low',
+      rationale: '陈旧自指声明只触发降级告警；disconnect 三清（指针/声明/local.yaml platform 段）彻底出清',
+      next_step: 'sillyspec platform disconnect（若仍需上行同步，先确认 local.yaml 凭据再重连）',
+    });
+  }
+
+  // 画像③：repo-native 凭据缺失 + 自指残留（design 风险 5：内置 sync best-effort 静默跳过，
+  // 上行断链且无感知——CLI 本地模式化后 local.yaml platform 段是唯一上行通道）
+  if (existsSync(join(cwd, '.sillyspec')) && !localYamlHasPlatformSection(cwd) && (ptrSelfRef || declSelfRef)) {
+    triggered = true;
+    dim.findings.push(
+      `repo_native_missing_credentials: cwd/.sillyspec 存在但 local.yaml 无 platform 段，` +
+      `且存在自指指针/声明残留——内置 sync 因凭据缺失静默跳过，本地变更上行将静默失败` +
+      `（平台变更中心看不到，无任何告警）。恢复：sillyspec platform connect <url> <token> 写入凭据`
+    );
+    dim.safe_actions.push({
+      dimension: 'repo_native_chain',
+      action: 'platform_connect_credentials',
+      risk: 'low',
+      rationale: 'repo-native 源项目的上行通道是 CLI 内置 sync（local.yaml platform 段凭据 + resolve-by-root-path），凭据缺失即断链',
+      next_step: 'sillyspec platform connect <url> <token>（写入 local.yaml platform 段后自动恢复上行）',
+    });
+  }
+
+  dim.pass = !triggered;
+  dim.severity = triggered ? CHECK_SEVERITY.WARNING : null;
+  if (!triggered) {
+    dim.findings.push('无 repo-native 自指残留（指针/接管声明均健康或不存在）');
+  }
+  return dim;
+}
+
 // ── 主入口 ────────────────────────────────────────────────────────────
 
 // ── 文档膨胀检测（token 成本优化 P0b/P2b，2026-08-22-token-cost-optimization）──
@@ -650,8 +749,9 @@ export async function runDoctorDiagnostics({ cwd }) {
   const authDb = (multiDb.dbs || []).find((d) => d.role === DB_ROLE.AUTHORITY);
   const executeMismatch = detectExecuteProgressPlanMismatch(authoritySpecDir, authDb);
   const docBloat = detectDocBloat(authoritySpecDir);
+  const repoNativeChain = detectRepoNativeChain(cwd, pointer);
 
-  const dimensions = [multiDb, pointerHealth, changesSplit, changeDb, executeMismatch, docBloat];
+  const dimensions = [multiDb, pointerHealth, changesSplit, changeDb, executeMismatch, docBloat, repoNativeChain];
 
   return {
     dimensions,

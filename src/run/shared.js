@@ -11,7 +11,7 @@
  *     本模块仅 re-export，run/ 层现有调用方路径与行为不变。
  */
 import { basename, join, resolve, dirname, sep } from 'node:path'
-import { existsSync, readdirSync, readFileSync, statSync, mkdirSync, writeFileSync, appendFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync, mkdirSync, writeFileSync, appendFileSync, realpathSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import os from 'node:os'
 
@@ -404,6 +404,15 @@ export const PLATFORM_MANAGED_FILENAME = '.sillyspec-platform-managed'
 
 export function writePlatformPointer(cwd, platformOpts, extra = {}) {
   if (!platformOpts || (!platformOpts.specRoot && !platformOpts.runtimeRoot)) return false
+  // 自指写入拦截（FR-4，变更 2026-08-23-repo-native-spec-backfill）：specRoot 经 realpath
+  // 解析回本地 .sillyspec（repo-native junction 回环）时拒绝三写（主文件/指针/声明全不落盘）。
+  // 单点收口同时覆盖 runCommand 与 cmdInit(writeInitPlatformPointer) 两调用方——旧模板
+  // scan flag / init 平台模式显式传自指 specRoot 也不再重新投毒。runtimeRoot-only 组合
+  // 无 specRoot 可判（isSelfReferentialSpecRoot 对 null 恒 false），原语义不变。
+  if (isSelfReferentialSpecRoot(cwd, platformOpts.specRoot)) {
+    console.warn(`⚠️ 检测到自指平台指针（repo-native junction 回环，specRoot 指回本地 .sillyspec），已跳过指针写入并按本地模式运行: ${platformOpts.specRoot}`)
+    return false
+  }
   // HUB-05：合并保留既有生命周期字段。scan 完成时指针被写入 status/completedAt/scanStatus
   //（complete-handlers），但下一次任何平台模式 run（含只读 --status）都会重写指针——
   // 恢复链只回填 specRoot 等四字段，不保留 status → 指针永远回 active、isPointerStale
@@ -477,6 +486,48 @@ export function checkPlatformManaged(cwd) {
 }
 
 /**
+ * 自指 specRoot 判定（repo-native junction 回环检测，变更 2026-08-23-repo-native-spec-backfill）。
+ *
+ * daemon repo-native 工作区把缓存目录（--spec-root 入参，~/.sillyhub/daemon/specs/{ws}）以
+ * junction/symlink 指回源项目 <cwd>/.sillyspec——该 specRoot 经 realpath 解析后与本地
+ * .sillyspec 同物理目录，属"自指回环"：不应让 CLI 进入平台模式（内置 sync / auto-pull
+ * 按本地模式语义运行，断链修复见 design.md Phase 2）。
+ *
+ * 双方 fs.realpathSync（native，junction/symlink 跨平台穿透）后严格相等 → true；
+ * specRoot 空 / 任一路径不存在 / realpath 抛错 → false（按外部目录处理，保守不干预）。
+ * 约束：cwd 必须为项目根（与指针查找 join(cwd,'.sillyspec-platform.json') 同基准）。
+ *
+ * @param {string} cwd - 项目根
+ * @param {string|null} [specRoot] - 平台 specRoot（可 null/undefined/空串）
+ * @returns {boolean} 是否自指回环
+ */
+export function isSelfReferentialSpecRoot(cwd, specRoot) {
+  if (!specRoot || typeof specRoot !== 'string') return false
+  try {
+    return realpathSync(specRoot) === realpathSync(join(cwd, '.sillyspec'))
+  } catch {
+    return false
+  }
+}
+
+/**
+ * 平台模式判定单一数据源（自指免疫，变更 2026-08-23-repo-native-spec-backfill）。
+ *
+ * 语义：(specRoot || runtimeRoot) 存在且非自指 → 平台模式；自指回环（repo-native
+ * junction）按本地模式处理。本模块内平台模式门禁统一经本函数，裸表达式仅此一处
+ * （grep 验证：triggerSync/triggerPull/triggerPullActiveChange/checkApproval 四处收敛）。
+ * runtimeRoot 落在 specRoot 内，自指判定以 specRoot 为准即可覆盖；runtimeRoot-only
+ * 组合无 specRoot 可判，不触发自指豁免（保持平台模式）。
+ *
+ * @param {object} [platformOpts] - { specRoot?, runtimeRoot?, ... }（可 null/undefined）
+ * @param {string} cwd - 项目根（isSelfReferentialSpecRoot 同基准）
+ * @returns {boolean}
+ */
+export function isPlatformMode(platformOpts, cwd) {
+  return Boolean((platformOpts?.specRoot || platformOpts?.runtimeRoot) && !isSelfReferentialSpecRoot(cwd, platformOpts?.specRoot))
+}
+
+/**
  * 统一查找变更目录（与 progress.js 的变更检测逻辑一致）。
  */
 export function resolveChangeDir(cwd, progress, specDir = null) {
@@ -532,8 +583,8 @@ async function raceWithAbort(op, timeoutMs = SYNC_TOTAL_TIMEOUT_MS) {
 export const QUICK_SID_RE = /^quick-[0-9a-f]{8}$/
 
 export async function triggerSync(cwd, changeName, platformOpts = {}, opts = {}) {
-  // 平台模式（SillyHub）走自己的回传链路，不走 CLI 内置 sync
-  if (platformOpts?.specRoot || platformOpts?.runtimeRoot) return
+  // 平台模式（SillyHub）走自己的回传链路，不走 CLI 内置 sync；自指回环（repo-native junction）按本地模式处理
+  if (isPlatformMode(platformOpts, cwd)) return
   try {
     // ql-20260818-011：quick 会话按设计无实体变更目录（progress.js initChange 同款
     // 跳过建目录），progress/四件套上行对它是孤儿数据；但 spec 树增量（QUICKLOG/
@@ -605,8 +656,8 @@ function _stampAutoPull(cwd) {
  * @param {object} [platformOpts] - 平台模式 opts（specRoot/runtimeRoot 存在则跳过，走平台自有链路）
  */
 export async function triggerPull(cwd, changeName, platformOpts = {}, opts = {}) {
-  // 平台模式（SillyHub）走自己的链路，跳过
-  if (platformOpts?.specRoot || platformOpts?.runtimeRoot) return
+  // 平台模式（SillyHub）走自己的链路，跳过；自指回环（repo-native junction）按本地模式处理
+  if (isPlatformMode(platformOpts, cwd)) return
   try {
     const syncMod = await import('../sync.js')
     const sm = new syncMod.SyncManager(cwd)
@@ -628,7 +679,8 @@ export async function triggerPull(cwd, changeName, platformOpts = {}, opts = {})
  * 供 index.js 在 stage 命令（run/--done/archive）与 approve 决策点注入一行调用。
  */
 export async function triggerPullActiveChange(cwd, platformOpts = {}) {
-  if (platformOpts?.specRoot || platformOpts?.runtimeRoot) return
+  // 平台模式走自己的链路，跳过；自指回环（repo-native junction）按本地模式处理
+  if (isPlatformMode(platformOpts, cwd)) return
   // 先检查是否连接平台：未连接直接 return，避免 _ensureDB 在无 local.yaml 的 cwd 创建空 DB 污染
   let sm = null
   try {
@@ -694,8 +746,8 @@ export function warnApprovalUnknown(cwd, changeName, reason) {
  * 平台模式走自己的链路，跳过；否则 await import sync.js。
  * @returns {{ status: string, reason?: string } | null}
  */export async function checkApproval(cwd, changeName, platformOpts = {}) {
-  // 平台模式不需要 CLI 内置审批检查
-  if (platformOpts?.specRoot || platformOpts?.runtimeRoot) return null
+  // 平台模式不需要 CLI 内置审批检查；自指回环（repo-native junction）按本地模式处理
+  if (isPlatformMode(platformOpts, cwd)) return null
   try {
     // shared.js 在 src/run/，sync.js 在 src/ → 退一层
     const syncMod = await import('../sync.js')

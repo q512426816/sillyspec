@@ -1,6 +1,6 @@
 # SillySpec 平台接口操作地图
 
-> updated_at: 2026-08-23（新增链路 D agent 日志上报：run 命令入口探测本地 agent 会话日志路径（claude-code/codex/zcode + env 覆盖），REST POST /api/agent-logs 主动上报平台 + 本地 `<runtimeRoot>/agent-session-log.json` 留底——src/agent-session-log.js，协议见 docs/platform-agent-log-protocol.md）
+> updated_at: 2026-08-23（新增链路 D agent 日志上报：run 命令入口探测本地 agent 会话日志路径（claude-code/codex/zcode + env 覆盖），REST POST /api/agent-logs 主动上报平台 + 本地 `<runtimeRoot>/agent-session-log.json` 留底——src/agent-session-log.js，协议见 docs/platform-agent-log-protocol.md；同日：平台模式门禁收敛为 `isPlatformMode`（`shared.js:526`）——自指回环（repo-native junction）specRoot 豁免，内置 sync/auto-pull 按本地模式语义运行，变更 2026-08-23-repo-native-spec-backfill task-02）
 > 范围：SillySpec CLI 在使用过程中**操作 SillyHub 平台接口**的全部触发点 —— 哪个步骤会发请求、打哪个端点、做什么事。
 > 数据源：本文由源码（`src/sync.js` / `src/sillyhub-mcp/` / `src/dispatch/` / `src/run/`）实证归纳。改源码后同步本文。
 > 配套文档：`sillyhub-progress-sync-contract.md`（同步协议契约）、`sillyhub-path-a-contract.md`（派发路径A）、`file-lifecycle.md`（运行时文件）、`interface-contract.md`、`sillyhub-api-reference.md`（接口参考——REST 8 端点 + MCP 12 tool 完整调用规范）、`api-verification-2026-08-14.md`（全接口实测报告——含 12 MCP tool + REST 8 端点验证快照与当日修复记录）。
@@ -77,10 +77,10 @@ mcp:
 `connect` / `disconnect` / `sync` / `syncDocuments` / `checkApproval` / `pull` / `pullList` / `resolve` / `collectStatus` / `approve` / `reject` 均 export 为顶层函数，`new SyncManager(cwd)` 包装。
 
 ### run 流程里的三个触发器（`src/run/shared.js`）
-- **`triggerSync(cwd, changeName, platformOpts)`**（`shared.js:534`）：包 `sync()` + **8s 总超时熔断**。这是最常用的上推入口。
-- **`triggerPull(cwd, changeName, platformOpts)`**（`shared.js:563`）：包 `pull()`，8s 熔断，`skipIfLocalDirty` 保守守卫（本地脏跳过 import，防平台旧快照覆盖本地领先进度，ql-20260818-008）。仅低频边界点触发，**不每步 pull**（避免高频写入/网络压力）。
-- **`checkApproval(cwd, changeName, platformOpts)`**（`shared.js:696`）：包 `syncMod.checkApproval`。
-- **`triggerPullActiveChange`**（`shared.js:563`）：`triggerPull` 便捷封装，未传 changeName 时自动推导单活跃变更（多/无活跃则跳过）。
+- **`triggerSync(cwd, changeName, platformOpts)`**（`shared.js:585`）：包 `sync()` + **8s 总超时熔断**。这是最常用的上推入口。
+- **`triggerPull(cwd, changeName, platformOpts)`**（`shared.js:658`）：包 `pull()`，8s 熔断，`skipIfLocalDirty` 保守守卫（本地脏跳过 import，防平台旧快照覆盖本地领先进度，ql-20260818-008）。仅低频边界点触发，**不每步 pull**（避免高频写入/网络压力）。
+- **`checkApproval(cwd, changeName, platformOpts)`**（`shared.js:748`）：包 `syncMod.checkApproval`。
+- **`triggerPullActiveChange`**（`shared.js:681`）：`triggerPull` 便捷封装，未传 changeName 时自动推导单活跃变更（多/无活跃则跳过）。
 
 ---
 
@@ -128,12 +128,12 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
 | 步骤 / 命令 | 链路 | 具体动作 | 源码触发点 |
 |---|---|---|---|
 | `platform connect <url> <token>` | A | GET health ping → POST resolve-by-root-path 换 shpsync_ token → 写 platform/mcp 段 | `sync.js:260` |
-| **每个进度落盘点**（step `--done` 完成、阶段启动/切换、stale 步骤重置、gate 拦截回滚等 `_write` 后） | A | `triggerSync` → POST `…/progress` 推六表进度（8s 熔断） | complete.js:437/497/917/1027/1166（--done）；stage.js:192/155/177（启动/切换/stale 重置）；gates.js:452；command.js:995/1177/1229/1240/1416 |
-| **execute 阶段启动前**（runStage / auto 流程，非平台模式，`--skip-approval` 可跳过） | A | `checkApproval` → GET `…/approval`：**rejected → `exit(1)` 硬阻断**；pending → 提示待审批；unknown → 放行 | stage.js:47-58；command.js:1438/1354/1432 |
+| **每个进度落盘点**（step `--done` 完成、阶段启动/切换、stale 步骤重置、gate 拦截回滚等 `_write` 后） | A | `triggerSync` → POST `…/progress` 推六表进度（8s 熔断） | complete.js:437/497/917/1027/1166（--done）；stage.js:192/155/177（启动/切换/stale 重置）；gates.js:452；command.js:1015/1177/1229/1240/1416 |
+| **execute 阶段启动前**（runStage / auto 流程，非平台模式，`--skip-approval` 可跳过） | A | `checkApproval` → GET `…/approval`：**rejected → `exit(1)` 硬阻断**；pending → 提示待审批；unknown → 放行 | stage.js:47-58；command.js:1458/1354/1432 |
 | **run `<stage>` 入口**（所有 stage + 顶层别名，agent 环境内；平台/本地模式都上报，不受 sentinel 限制） | D | 探测本地 agent 会话日志（claude-code/codex/zcode 自动探测，env `SILLYSPEC_AGENT_LOG` 覆盖其他 CLI）→ 本地留底 + REST POST `…/api/agent-logs` 上报（best-effort 5s 熔断，失败不阻断；`SILLYSPEC_AGENT_LOG_PUSH=0` 可关） | command.js:564-583（`recordAgentLogInvocation`） |
 | `platform sync-docs`（手动命令，**唯一触发点**） | A | POST `…/documents` 推四件套全量；run 流程**不**自动推文档（sync.js:30 头注释称由 run 流程触发，已过时） | sync.js:439；index.js:1275 |
-| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:1249；shared.js:563 |
-| **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:1248/1340；shared.js:563 |
+| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:1249；shared.js:658 |
+| **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:1248/1340；shared.js:681 |
 | `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:2137；sync.js:936/812 |
 | `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:2089；sync.js:1236 |
 | `platform resolve --keep-local/--take-platform/--abort` | 本地 | 读 sync-conflict 三选一，不网络 | sync.js:746 |
@@ -151,7 +151,7 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
 ### 本质
 平台模式是 **SillyHub daemon 调用 SillySpec CLI 时的模式**。它把默认落在 `cwd/.sillyspec/` 的产物目录（`specRoot`）和运行时目录（`runtimeRoot`）拆到别的位置，让 daemon 能多项目隔离管理。**人类本地用户默认不进平台模式。**
 
-`specRoot` 是实际开关（平台模式判定只看 `specRoot || runtimeRoot` 任一存在）；`runtimeRoot` **可缺省**——缺省时经 `resolveRuntimeRoot` 回落 `<specBase>/.runtime`（`shared.js:308`：runtimeRoot > specDriftAnchor/.runtime > specBase/.runtime），即"只拆 specRoot、runtime 跟着走"也是合法平台模式。
+`specRoot` 是实际开关（平台模式判定只看 `specRoot || runtimeRoot` 任一存在，自指回环豁免见 §7）；`runtimeRoot` **可缺省**——缺省时经 `resolveRuntimeRoot` 回落 `<specBase>/.runtime`（`shared.js:308`：runtimeRoot > specDriftAnchor/.runtime > specBase/.runtime），即"只拆 specRoot、runtime 跟着走"也是合法平台模式。
 
 ### 置位的两条路径（`command.js:245-317`）
 
@@ -173,7 +173,7 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
 - 含真实资产（`changes/` / `projects/` / `sillyspec.db`）→ 只清运行时残留（白名单保留 worktrees/进度），**不整删**；
 - 无任何真实资产 → **整删目录**。
 
-每个 cwd 只执行一次（cleaned 标记，之后不再提示）。误传 `--spec-dir` 触发平台模式会连带此副作用——`--spec-dir` 混叠最实际的代价。
+每个 cwd 只执行一次（cleaned 标记，之后不再提示）。误传 `--spec-dir` 触发平台模式会连带此副作用——`--spec-dir` 混叠最实际的代价。**自指守卫（task-03）**：显式自指 `--spec-root`（junction 回环）下 `cwd/.sillyspec` 就是 specRoot 本体，整个清理决策跳过（含 marker 写入）——否则会删掉 repo-native 唯一真理源。
 
 **路径 2 —— 指针文件自动恢复**（`command.js:265-291`）：
 命令行没传 flag 时，CLI 按优先级读持久化文件补回 `platformOpts`：
@@ -181,6 +181,8 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
 2. `<specRoot>/.runtime/platform-scan.json`（首次 scan 写入的主文件）
 
 文件存在但缺 `specRoot`/`runtimeRoot` → **fail-fast `exit(2)`**（环境错，提示重跑首次 scan 传 `--spec-root`）。
+
+> **自指指针免疫（变更 2026-08-23-repo-native-spec-backfill task-03）**：指针 `specRoot` 自指回环（realpath = 本地 `.sillyspec`，repo-native junction 投毒残留）→ **忽略恢复**（全部字段不回填），warn 一行后按本地模式运行（内置 sync 走链路 A）。
 
 ### 自举循环（一次激活，后续自动续命）
 1. daemon 首次调 `sillyspec run scan --spec-root <X> --runtime-root <Y> --workspace-id <W> --scan-run-id <S>`
@@ -195,15 +197,15 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
 > pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:38`、枚举消费在 `index.js:2002`）。
 
 **平台接管声明（`.sillyspec-platform-managed`）**：与指针并存的持久声明（`managed`/`specRoot` 副本/`workspaceId`/`declaredAt` 四字段，**无过期**——24h STALE 只作用指针不作用声明）。堵"指针该在但不在 → 静默建本地进度库"的状态分裂断点：
-- **写入**：`writePlatformPointer` 三写收敛（`shared.js` 的 `writePlatformPointer`——主文件+指针+声明），init/scan 带平台参数自动落。
-- **fail-closed 双入口**：① `resolvePlatformSpecDir` 无指针分支查声明（`checkPlatformManaged`，命中抛 `PlatformManagedError`，name 保持父类值走顶层 catch）；② `runCommand` 恢复链在指针与 platform-scan.json 皆缺失后兜底本地前查声明（命中 exit 1 + 三选项引导）。
+- **写入**：`writePlatformPointer` 三写收敛（`shared.js` 的 `writePlatformPointer`——主文件+指针+声明），init/scan 带平台参数自动落。**自指写入拦截（task-03，单点收口覆盖 run/init 两调用方）**：specRoot 自指回环 → warn 后 `return false` 零落盘（显式自指 flag 也不再投毒）。
+- **fail-closed 双入口**：① `resolvePlatformSpecDir` 无指针分支查声明（`checkPlatformManaged`，命中抛 `PlatformManagedError`，name 保持父类值走顶层 catch）；② `runCommand` 恢复链在指针与 platform-scan.json 皆缺失后兜底本地前查声明（命中 exit 1 + 三选项引导）。**自指降级（task-03）**：② 的声明 `specRoot` 自指回环 → 陈旧声明，warn 后按本地模式继续不 exit（非自指维持 fail-closed）。
 - **删除唯一路径**：`platform disconnect` 三清（local.yaml platform 段 + 指针 + 声明）；`platform pointer --cleanup` 只删指针，输出提示 disconnect 才是彻底脱离。
 - **诊断**：doctor D2 报 `pointer_missing_but_managed`（warning 非阻断）。
 - **逃生口**：显式 `--spec-dir` 不受声明影响。
 
 ## 7. 关键开关与铁律
 
-- **平台模式总开关**：`platformOpts.specRoot` 或 `platformOpts.runtimeRoot` 存在 → `triggerSync`/`triggerPull`/`checkApproval` **全部 early-return**（`shared.js:534/607/696`）。平台模式下进度回传走 SillyHub daemon 自有链路，CLI 不直接打 `/api`。**§5 表中链路 A 的触发点仅非平台模式真正发请求。** 置位机制见上节 §6。
+- **平台模式总开关**：`isPlatformMode(platformOpts, cwd)`（`shared.js:526`，判定式 `(specRoot || runtimeRoot) && !isSelfReferentialSpecRoot`）为真 → `triggerSync`/`triggerPull`/`checkApproval` **全部 early-return**（`shared.js:585/658/748`）；**自指回环豁免**：specRoot 经 realpath 解析回 `<cwd>/.sillyspec`（repo-native junction 回环，`isSelfReferentialSpecRoot`，`shared.js:504`）不视为平台模式，内置 sync/auto-pull 按本地语义运行。平台模式下进度回传走 SillyHub daemon 自有链路，CLI 不直接打 `/api`。**§5 表中链路 A 的触发点仅非平台模式真正发请求。** 置位机制见上节 §6。
 - **未连接是合法默认**：`_getPlatform()`/`readMcpConfig()` 返回 null → 链路 A/B 静默跳过，不每步催连平台制造噪音。排查同步行为设 `SILLYSPEC_DEBUG_SYNC=1`（`debugLog` 在 `sync.js:731`）。
 - **best-effort 边界**：除 `approve`/`reject`（显式用户动作，失败必须可见 exitCode=1），其余平台调用失败一律 warn 不阻断。
 - **8s 熔断**：`triggerSync`/`triggerPull` 总超时 8s（`shared.js:534-606`），防 `--done` 在 sync 慢时体感 hang。
