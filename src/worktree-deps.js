@@ -426,6 +426,18 @@ export function provisionDeps(worktreePath, mainCwd, opts = {}) {
       result.depsMethod = linkedModules[0].method;
       result.depsSource = 'main-checkout';
     }
+    // 子模块 link 后验证（坑 modules-submodule-link-verify，2026-08-23 实证：Windows 下漏链
+    // frontend node_modules——linkOneDir 报 linked 但 junction 实际未建或 main 侧本就没有）。
+    // linked 状态的子模块逐一核验 wt/<mp>/node_modules 实存：缺失降 failed 并给兜底指引
+    //（不静默放行——跑测试时才发现就晚了）。
+    for (const m of moduleResults) {
+      if (m.status !== 'linked') continue
+      const nmPath = join(worktreePath, m.path, 'node_modules')
+      if (!existsSync(nmPath)) {
+        m.status = 'failed'
+        m.error = `linked 后验证失败：${m.path}/node_modules 不存在（报成功但实际未落盘）。兜底：New-Item -ItemType Junction -Path "<wt>/${m.path}/node_modules" -Target "<主仓>/${m.path}/node_modules"`
+      }
+    }
     const failedModules = moduleResults.filter(m => m.status === 'failed');
     if (failedModules.length > 0) {
       const fmsg = failedModules.map(m => `${m.path}: ${m.error}`).join('; ');

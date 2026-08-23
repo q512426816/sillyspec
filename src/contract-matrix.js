@@ -10,6 +10,7 @@
 
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from 'fs'
 import { join, resolve, basename, relative } from 'path'
+import { gitQuiet } from './git-helper.js'
 import {
   scanBackendEndpoints,
   scanFrontendApiCalls,
@@ -333,6 +334,43 @@ export function buildContractFieldInjection(changeDir, taskName) {
 // ─── Verify 阶段：parity check ──────────────────────────────────────────
 
 /**
+ * 取本变更 diff 文件集（parity 前端调用收窄用，坑 probe5-fullrepo-frontend-noise）。
+ * 优先 worktree meta 锚点 diff（与 verify 同源）；无 meta 退主仓 git diff HEAD。
+ * @returns {string[]|null}
+ */
+function _resolveDiffFilesForParity(scanRoot, changeName) {
+  try {
+    const metaPath = join(scanRoot, '.sillyspec', '.runtime', 'worktrees', changeName, 'meta.json')
+    if (existsSync(metaPath)) {
+      const meta = JSON.parse(readFileSync(metaPath, 'utf8'))
+      const diffBase = meta.baselineCommit || meta.actualBaseHash || meta.baseHash
+      const gitDir = (meta.worktreePath && meta.mode !== 'in-place-fallback' && existsSync(meta.worktreePath))
+        ? meta.worktreePath : scanRoot
+      if (diffBase) {
+        const out = gitQuiet(gitDir, ['diff', '--name-only', `${diffBase}..HEAD`], { timeout: 30000 })
+        if (out !== null) {
+          const files = out.split('\n').filter(Boolean)
+          // 并入 worktree 未提交（子代理默认不 commit 的形态，与 resolveVerifyChangedFiles 同口径）
+          try {
+            const wtStatus = gitQuiet(gitDir, ['status', '--porcelain'], { timeout: 30000, trim: false })
+            for (const line of String(wtStatus || '').split('\n')) {
+              if (!line || line.length < 4) continue
+              const p = line.slice(3).trim().split(' -> ').pop() || ''
+              const clean = p.replace(/^"|"$/g, '')
+              if (clean) files.push(clean)
+            }
+          } catch {}
+          return [...new Set(files)]
+        }
+      }
+    }
+    // 无 meta（brownfield/已 cleanup）：主仓未提交 diff
+    const out = gitQuiet(scanRoot, ['diff', '--name-only', 'HEAD'], { timeout: 30000 })
+    return out !== null ? out.split('\n').filter(Boolean) : null
+  } catch { return null }
+}
+
+/**
  * verify 阶段执行 API parity check
  * @param {string} specBase - .sillyspec 目录
  * @param {string} worktreePath - worktree 路径
@@ -388,7 +426,31 @@ export function verifyApiParity(specBase, scanRoot, runtimeRoot, changeName = nu
     }
   }
 
-  const frontendCalls = scanFrontendApiCalls(scanRoot)
+  // ── 前端调用收窄到本变更 diff（坑 probe5-fullrepo-frontend-noise，2026-08-23 实证：
+  // 「全仓前端调用 × 本变更局部登记」口径下，未受本变更影响的存量调用对不上局部端点集
+  // → 143 个 missing 全是误报噪音）。比对口径 = 本变更 diff 文件内的调用 ∪ 全仓（仅当
+  // 端点登记源也是全仓时——无 changeName 的 CLI contractScan 场景）。diff 不可得时退回
+  // 全仓（不静默跳过对账）。
+  let frontendCalls = []
+  let frontendScope = 'full-repo'
+  if (changeName) {
+    try {
+      const changed = _resolveDiffFilesForParity(scanRoot, changeName)
+      if (changed && changed.length > 0) {
+        const changedSet = new Set(changed.map(f => f.replace(/\\/g, '/')))
+        frontendCalls = scanFrontendApiCalls(scanRoot).filter(c => {
+          const src = String(c.source || '').replace(/\\/g, '/')
+          return changedSet.has(src) || [...changedSet].some(cf => src.endsWith(cf) || cf.endsWith(src))
+        })
+        frontendScope = `change-diff (${changed.length} files)`
+      } else {
+        frontendCalls = scanFrontendApiCalls(scanRoot)
+      }
+    } catch { frontendCalls = scanFrontendApiCalls(scanRoot) }
+  } else {
+    frontendCalls = scanFrontendApiCalls(scanRoot)
+  }
+
   const { missingBackend, unusedBackend } = diffApiParity(frontendCalls, mergedProviderEndpoints)
   // unusedBackend 收窄到现算端点（存量 artifact 的过期端点不参与——它不在当前代码里，
   // 「前端未调用」可能是端点已被重构掉而非真泄漏）
@@ -399,8 +461,8 @@ export function verifyApiParity(specBase, scanRoot, runtimeRoot, changeName = nu
 
   const ok = missingBackend.length === 0
   let summary = ok
-    ? `✅ API parity check passed: ${mergedProviderEndpoints.length} backend endpoints (live ${liveEndpoints.length} + artifact ${allProviderEndpoints.length}), ${frontendCalls.length} frontend calls`
-    : `❌ API parity check failed: ${missingBackend.length} frontend calls have no matching backend endpoint`
+    ? `✅ API parity check passed: ${mergedProviderEndpoints.length} backend endpoints (live ${liveEndpoints.length} + artifact ${allProviderEndpoints.length}), ${frontendCalls.length} frontend calls [scope: ${frontendScope}]`
+    : `❌ API parity check failed: ${missingBackend.length} frontend calls have no matching backend endpoint [scope: ${frontendScope}]`
 
   if (narrowedUnused.length > 0) {
     summary += ` | ${narrowedUnused.length} backend endpoints unused by frontend`

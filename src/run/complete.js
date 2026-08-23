@@ -167,6 +167,38 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
       steps[_staleIdx].status = 'pending'
       currentIdx = _staleIdx
       console.log(`⚠️  --confirm 收尾：把 stale 步骤 "${steps[_staleIdx].name}" 拉回当前步骤走完成管线，其余 stale 由回填门控一并确认。`)
+    } else if (stageData?.status !== 'completed' && steps.length > 0) {
+      // ── 矛盾态自愈（坑 execute-status-machine-contradiction，2026-08-23 实证：--done 报
+      // 「没有待完成的步骤」而 status 显示 15 步未完成——并发进程写入竞争后 DB 步骤行停在
+      // completed 但阶段 status 未推进的矛盾态，用户只能靠 verify 启动碰运气自愈）。
+      // 自愈 = 重播种：ensureStageSteps 按 def 步骤名重建步骤行（保留同名完成态），矛盾行
+      // （DB 有但 def 无的幽灵行/半写行）被清掉；重读后再走正常管线。自愈失败再报错给精确指引。
+      console.warn(`⚠️ 检测到状态机矛盾：阶段 ${stageName} 无 pending/in-progress 步骤但 status=${stageData.status}（并发写入竞争的半写态）。自动重播种修复…`)
+      try {
+        const { ensureStageSteps } = await import('./command.js')
+        const reseeded = await ensureStageSteps(progress, stageName, cwd, platformOpts?.specRoot || null)
+        if (reseeded && effectiveChange) {
+          pm._write(cwd, progress, effectiveChange)
+          progress = pm.read(cwd, effectiveChange) || progress
+        }
+        const freshSteps = progress?.stages?.[stageName]?.steps || []
+        const freshPending = freshSteps.findIndex(s => s.status === 'pending' || s.status === 'in-progress')
+        if (freshPending !== -1) {
+          console.log(`✅ 重播种成功：${freshSteps.filter(s => s.status === 'pending').length} 个待完成步骤恢复，继续完成管线`)
+          currentIdx = freshPending
+          steps.length = 0
+          steps.push(...freshSteps)
+          stageData.steps = freshSteps
+        } else {
+          console.error(`重播种后仍无待完成步骤（阶段 status=${progress?.stages?.[stageName]?.status ?? '未知'}）。`)
+          console.error(`   手动修复：sillyspec run ${stageName} --reset${changeName ? ` --change ${changeName}` : ''} 从头重跑，或 sillyspec doctor 诊断。`)
+          process.exit(1)
+        }
+      } catch (e) {
+        console.error(`❌ 矛盾态自愈失败: ${e.message}`)
+        console.error(`   手动修复：sillyspec run ${stageName} --reset${changeName ? ` --change ${changeName}` : ''}，或 sillyspec doctor`)
+        process.exit(1)
+      }
     } else {
       console.error(`没有待完成的步骤（阶段 ${stageName} 已无 pending/in-progress 步骤）。当前阶段状态：${stageData?.status ?? '未知'}。用 \`sillyspec run ${stageName} --status\` 查看进度，或 \`sillyspec progress show\` 看全局下一步。`)
       process.exit(1)
@@ -679,7 +711,12 @@ async function autoCheckPlanFromReviews({ stageName, changeName, cwd, platformOp
     return { autoChecked: false, checkedCount: 0, skippedCount: 0 }
   }
   try {
-    const specBaseLc = platformOpts?.specRoot || join(cwd, '.sillyspec')
+    // 勾选写入目标漂移锚定（坑 autocheck-worktree-tasks-lost，2026-08-23 实证：agent 在
+    // worktree 内跑 execute --done 且 drift 守卫未拦（非平台模式+无 specDriftAnchor 透传的
+    // 直调路径）时，tasks.md 勾选写进 worktree 的 .sillyspec/changes/ 副本——worktree 被
+    // cleanup 整目录删除后勾选丢失，主仓 tasks.md 停在未勾态需手动补。runtimeRoot 已走
+    // resolveRuntimeRoot（drift-aware），changeDir 同步对齐：specDriftAnchor > specRoot > cwd。
+    const specBaseLc = platformOpts?.specDriftAnchor || platformOpts?.specRoot || join(cwd, '.sillyspec')
     const changeDir = join(specBaseLc, 'changes', changeName)
     // 2026-08-20-task-truth-unify D-001@v1：勾选写入目标从 plan.md 迁 tasks.md（任务唯一真相；
     // plan.md Wave 引用行无 checkbox，无处可勾）。tasks.md 存在性作前置。

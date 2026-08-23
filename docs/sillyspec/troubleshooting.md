@@ -529,3 +529,28 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 3. pull 内容一致自愈：判冲突前比对平台 JSON 与本地 serializeForSync 六表内容（忽略时间戳/同步元数据列），一致 → 跳过 import + base_ts 推进到平台 ts（与 resolve --keep-local 同语义自动闭环，不落冲突文件）；内容实质差异 → 真冲突维持原判。与既有的 push 409 自竞态自愈、keep-local 自动重推构成三层自愈网。
 
 测试 final-verify-feedback.test.mjs（9 断言）。**关联记忆**：`[[sillyspec-probe5-endpoint-baseline-stale]]`、`[[sillyspec-subagent-uncommitted-newfile-apply3way]]`、`[[sillyspec-pull-deploy-noise-conflict]]`
+
+## 34. 五坑：状态机矛盾 / autoCheck 写 worktree / 子模块漏链 / 探针5口径 / 共享主仓竞态（2026-08-23 闭环）
+
+**症状（用户实证）**：
+1. execute step15 --done 报「没有待完成的步骤」而 status 显示 15 步未完成——状态机自相矛盾，靠 verify 启动碰运气自愈。
+2. 自动勾选写进已清理的 worktree 导致主仓 tasks.md 丢勾，需手动补。
+3. worktree 依赖供给 Windows 下漏链 frontend node_modules（手动 mklink /J 恢复）。
+4. 探针 5 用「全仓前端调用 × 本变更局部登记」口径，143 个 missing 全是误报噪音。
+5. 并行会话共享主仓工作区/共享部署库的竞态（文件被清、alembic 被推进、staged 混入）。
+
+**根因**：
+1. completeStep 的 currentIdx==-1 分支只处理 stale，不覆盖「无 pending 但 status 非 completed」的并发半写矛盾态。
+2. autoCheckPlanFromReviews 的 changeDir 解析未走 specDriftAnchor（runtimeRoot 走了、change 路径没走）——drift 场景下勾选写进 worktree 副本，cleanup 即丢。
+3. linkOneDir 报 linked 后无实物核验（与根 link 的双层核验不对称）。
+4. 前端调用扫描全仓但端点登记是本变更局部——口径不对齐。
+5. 无任何共享环境变更感知。
+
+**修复（2026-08-23）**：
+1. completeStep 矛盾态分支：无 pending/waiting/stale 且 status≠completed → ensureStageSteps 重播种自愈（继续完成管线）；失败给 reset/doctor 精确指引。
+2. autoCheckPlanFromReviews 的 changeDir 改 specDriftAnchor > specRoot > cwd（与 runtimeRoot 同范式）。
+3. modules 子模块 link 后验证：linked 状态逐一核验 wt/<mp>/node_modules 实存，缺失降 failed + junction 兜底指引。
+4. verifyApiParity 前端调用收窄：changeName 给定时按本变更 diff 文件（worktree meta 锚点 + 未提交并入，与 resolveVerifyChangedFiles 同口径）过滤调用；无 changeName（CLI contractScan）保持全仓；summary 标注 scope。
+5. execute/verify 启动时共享主仓竞态 advisory：主仓未提交文件中非本变更的（并行会话工作/部署产物）→ warn「提交用精确 pathspec，交接物异常先确认是否他者所为」。
+
+测试 fullflow-feedback-five.test.mjs（11 断言）。**关联记忆**：`[[sillyspec-execute-status-machine-contradiction]]`、`[[sillyspec-autocheck-worktree-tasks-lost]]`、`[[sillyspec-modules-submodule-link-verify]]`、`[[sillyspec-probe5-fullrepo-frontend-noise]]`、`[[sillyspec-parallel-shared-main-race]]`

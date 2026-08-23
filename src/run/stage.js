@@ -162,6 +162,29 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
     } catch { /* 预警失败不阻断 execute */ }
   }
 
+  // ── 共享主仓竞态防护（坑 parallel-shared-main-race，2026-08-23 实证：并行会话共享主仓
+  // 工作区/共享部署库的竞态——文件被清、alembic 被推进、staged 混入他者文件）。execute/verify
+  // 启动时探测三类信号并 advisory（不阻断——并发是合法工作模式，但要让 agent 知道环境在变）：
+  //   1. 主仓未提交改动中含非本变更文件（staged 混入：commit 时注意 pathspec）
+  //   2. worktree 存在时 base..HEAD 主仓推进（主仓在他者 apply 后已前进，diff 口径注意）
+  // best-effort：异常静默。
+  if ((stageName === 'execute' || stageName === 'verify') && changeName) {
+    try {
+      const mainDirty = (safeGit(cwd, ['status', '--porcelain'], { trim: false }).value || '')
+        .split('\n').filter(Boolean).map(l => l.slice(3).trim().split(' -> ').pop() || '')
+        .map(p => p.replace(/^"|"$/g, '').replace(/\\/g, '/'))
+        .filter(p => p && !p.startsWith('.sillyspec/'))
+      const myFiles = (await import('../verify-postcheck.js')).resolveVerifyChangedFiles(cwd, changeName, null, { includeWorkingTree: true }) || []
+      const mySet = new Set(myFiles.map(f => f.replace(/\\/g, '/')))
+      const foreign = mainDirty.filter(p => !mySet.has(p))
+      if (foreign.length > 0) {
+        console.warn(`⚠️ 主仓含 ${foreign.length} 个非本变更的未提交文件（并行会话工作/部署产物混入）——`)
+        console.warn(`   提交时用精确 pathspec（勿 git add -A / 目录级 add 夹带）：${foreign.slice(0, 4).join(', ')}${foreign.length > 4 ? ` …` : ''}`)
+        console.warn(`   交接物核对（文件被清/迁移被推进类异常）先确认是否他者会话所谓，再判定本变更问题。`)
+      }
+    } catch { /* 探测失败不阻断 */ }
+  }
+
   // 自动探测 currentChange
   if (autoDetectChange(progress, cwd)) {
     progress.lastActive = new Date().toLocaleString('zh-CN', { hour12: false })
