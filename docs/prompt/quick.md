@@ -103,6 +103,9 @@ step 3 --done 审计会把 src 核心文件（CLI / 状态机 / 注入框架等�
 ### 输出
 实现摘要 + 修改文件列表
 
+### 📌 末步预告：结果摘要四字段（step3 --done 硬校验，缺一被拒）
+下一步（step3）--done 必须给四字段结果摘要（推荐 `--req/--cause/--solution/--result` 四参数，CLI 自动合成；兼容 `--output "需求：… 根因：… 方案：… 结果：…"`）。其中「结果：验证情况（测试数 / lint / typecheck / 部署状态）」的素材在**本步**产生——实现摘要里请顺手记下具体验证数据（如「3 个单测通过、lint 0 告警」），step3 直接引用，避免到收尾时回忆不起来或被硬校验打回重跑。
+
 ### 铁律
 - 不要修改无关文件
 - 不要编造不存在的 CLI 子命令
@@ -183,10 +186,11 @@ sillyspec run quick --done --change <id> --req "…" --cause "…" --solution "�
 7. 对比本次修改的文件（`git diff --name-only HEAD`）与模块映射
 8. 如果命中模块 → 直接同步模块文档：
    - 读取对应的 `{SPEC_ROOT}/docs/<project>/modules/<module>.md`（如不存在则新建）
-   - 根据本次改动内容更新模块文档（正文描述当前状态，底部变更索引追加本步骤预注入的 ql-ID）
+   - 根据本次改动内容更新模块文档（正文描述当前状态；**勿把历史条目堆进正文——卡是子代理的读取税**）
+   - 变更索引条目追加到卡同目录 `<module>.changelog.md` sidecar（无则创建；历史段可跑 `sillyspec modules split-changelog` 迁出）
    - 变更索引格式：`- <quicklog-id> | <一句话描述>`
-   - 写入模块文档
-   - 使用 `git add -- <module-doc>` 暂存更新的模块文件
+   - 写入模块文档与 sidecar
+   - 使用 `git add -- <module-doc>` 暂存更新的模块文件（sidecar 一并暂存）
 9. 未命中任何模块 → 跳过，不做额外操作
 
 ### 输出

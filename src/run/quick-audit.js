@@ -68,6 +68,17 @@ export function printQuickAuditReview(review) {
     console.warn(`   它们归关联变更自己的流程管；若确系本会话需要改，用 --files 显式声明归属。`)
   }
 
+  // 他者会话声明豁免提示（坑 foreign-session-declared-false-block，独立于三态都打——放行可见
+  // 可审计，不静默，与上块同哲学）：多 agent 并发时并行 quick 会话 --files 已声明的文件在本会话
+  // 窗口内出现——不属本会话，已退栈归该会话审计，本会话无需 --force-baseline。
+  if (Array.isArray(review.foreignSessionDeclared) && review.foreignSessionDeclared.length > 0) {
+    console.warn(`
+🔗 ${review.foreignSessionDeclared.length} 个文件已由其他 active quick 会话声明——已剔除出本会话审计，归该会话边界管：`)
+    for (const x of review.foreignSessionDeclared) console.warn(`   - ${x.file} ← ${(x.sessions || []).join(', ')}`)
+    console.warn(`   并发下无需 --force-baseline：这些文件不属本会话。若确系本会话改动，恢复会话时 --files 追加声明归属（sillyspec run quick --files <file> --change <本会话ID>）；`)
+    console.warn(`   他者会话若为崩溃残留（超 7 天未收尾），sillyspec run quick --cancel --change <他者会话ID> 清理后声明即失效。`)
+  }
+
   // D-8 文档欠账显性化（advisory，独立于 status 三态都打）：改了源码没动文档 → 一行欠账标记。
   // 不阻断、不解锁、纯显性化——累积欠账可事后审计 QUICKLOG reasons 追溯。
   if (review.docSyncHint && review.docSyncHint.touchedSource > 0 && review.docSyncHint.docFiles.length === 0) {

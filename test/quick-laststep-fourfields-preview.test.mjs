@@ -90,6 +90,38 @@ console.log('--- ③ 拦截兜底保留：末步缺字段仍被拒 ---')
   assert(r.status === 1, '末步缺四字段仍被拒（拦截兜底零回归）')
   const after = await new ProgressManager({ specDir: specBase }).read(cwd, sid)
   assert(after.stages.quick.steps[2].status === 'pending', '末步回退 pending（既有行为）')
+  // 打回文案补四参数形式（坑 quick-step3-four-fields-late 第二层）：旧文案只给 --output 模板，
+  // 照抄旧形式仍可能踩嵌套全角冒号拆分坑（四参数形式正是为消灭它而生）——打回时刻同步给四参数。
+  assert(r.combined.includes('--req'), '打回文案含推荐四参数 --req（CLI 自动合成无冒号事故面）')
+  assert(r.combined.includes('--cause') && r.combined.includes('--solution') && r.combined.includes('--result'), '打回文案四参数齐全')
+  cleanup()
+}
+
+console.log('--- ④ 末步 --done 缺 --output 拦截文案同样给四参数形式 ---')
+{
+  const { cwd, specBase } = makeRepo('quick-preview-nooutput-')
+  const sid = 'quick-cafe0004'
+  await seed(cwd, specBase, sid, ['completed', 'completed', 'pending'])
+  writeGuard(specBase, sid)
+  writeQuicklogEntry(specBase)
+
+  const r = runStage('quick', sid, cwd, { done: true })
+  assert(r.status === 1, '末步缺 --output 仍被拒（Q6 既有行为）')
+  assert(r.combined.includes('--req'), '缺 --output 拦截文案含四参数 --req')
+  cleanup()
+}
+
+console.log('--- ⑤ step2 prompt 内预告末步四字段（防线前移：验证数据在 step2 产生当场记录）---')
+{
+  const { cwd, specBase } = makeRepo('quick-preview-step2-')
+  const sid = 'quick-cafe0005'
+  await seed(cwd, specBase, sid, ['completed', 'pending', 'pending'])
+
+  const r = runStage('quick', sid, cwd, {})
+  assert(r.status === 0, `渲染 step2 prompt 成功（实际 ${r.status}）`)
+  assert(r.combined.includes('末步预告'), 'step2 prompt 含末步预告段（硬校验模板在实现阶段即告知）')
+  assert(r.combined.includes('验证情况'), '预告点明「结果：验证情况」素材在本步产生')
+  assert(r.combined.includes('--req'), '预告给推荐四参数形式')
   cleanup()
 }
 

@@ -329,6 +329,55 @@ export function resolveQuickSessionsDir(platformOpts, localSpecBase) {
   return join(resolveRuntimeRoot(platformOpts, localSpecBase), 'quick-sessions')
 }
 
+// 他者会话声明豁免的僵尸阈值：超龄会话的声明不再作为豁免依据。与 doctor 幽灵清理
+// GHOST_EMPTY_DIR_STALE_MS 同口径（7 天）——正常并发会话间隔在分钟/小时级，7 天未收尾的
+// 会话按僵尸处理，防崩溃残留的 guard 永久「认领」文件侵蚀危险门。
+const FOREIGN_SESSION_STALE_MS = 7 * 24 * 60 * 60 * 1000
+
+/**
+ * 枚举其他 active quick 会话的显式文件声明（坑 foreign-session-declared-false-block）。
+ *
+ * 多 agent 并发时，并行 quick 会话在**本会话启动后**改的文件不在本会话 baseline →
+ * auditQuickCompletion 把它算进本会话窗口 → 命中危险清单（src/run/、package.json 等）或
+ * .sillyspec/ 判定即 blocked，只能 --force-baseline 无差别逃生。豁免口径 = 他者会话的
+ * **显式声明**（guard.allowedFiles，--files 传入）——他者的 baselineFiles 是「启动时已脏」
+ * 快照而非所有权声明，不作豁免依据（否则任何预存脏文件都能被洗白）。
+ *
+ * fail-open：目录不存在/损坏 guard.json/超龄僵尸/任何异常 → 跳过或整体返回 []，
+ * 采集失败回到无豁免现状（不放大豁免面）。
+ *
+ * @param {object} [platformOpts] 平台选项（resolveQuickSessionsDir 同参）
+ * @param {string} localSpecBase 本地 specBase（resolveQuickSessionsDir 同参）
+ * @param {string} currentSessionId 当前会话 sessionId（quick-<hex8>），枚举时排除
+ * @param {number} [nowMs] 当前时间戳（可注入，测试用）
+ * @returns {Array<{sessionId: string, files: string[]}>} 其他 active 会话的声明清单
+ */
+export function collectOtherQuickSessionDeclarations(platformOpts, localSpecBase, currentSessionId, nowMs = Date.now()) {
+  const out = []
+  try {
+    const sessionsDir = resolveQuickSessionsDir(platformOpts, localSpecBase)
+    let sessionDirs = []
+    try {
+      sessionDirs = readdirSync(sessionsDir, { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name)
+    } catch { return out } // 目录不存在/不可读 → 无他者会话
+    for (const sessionName of sessionDirs) {
+      if (sessionName === currentSessionId) continue
+      const guardFile = join(sessionsDir, sessionName, 'guard.json')
+      let guard = null
+      try { guard = JSON.parse(readFileSync(guardFile, 'utf8')) } catch { continue } // 损坏/缺失跳过
+      // 僵尸防御：超龄会话（崩溃残留，--done/--cancel 都不会再走）的声明不再认领文件
+      if (guard.startedAt) {
+        const startedAtMs = Date.parse(guard.startedAt)
+        if (Number.isFinite(startedAtMs) && nowMs - startedAtMs > FOREIGN_SESSION_STALE_MS) continue
+      }
+      const files = (Array.isArray(guard.allowedFiles) ? guard.allowedFiles : []).filter(f => typeof f === 'string' && f)
+      if (files.length === 0) continue
+      out.push({ sessionId: guard.sessionId || sessionName, files })
+    }
+  } catch { /* fail-open：整体异常返回已采集部分 */ }
+  return out
+}
+
 /**
  * 平台指针三写（单一数据源，runCommand scan 与 cmdInit 平台模式共用）。
  *
@@ -708,7 +757,7 @@ export function isQuickMetadata(p, linkedChanges = []) {
 
 /**
  * quick 完成审计：对比 baseline 与实际变更。
- * @returns {{ status: 'safe'|'warning'|'blocked', reasons: string[], changedFiles: string[], newFiles: string[], deletedFiles: string[], baselineHit: string[], stagedTotal: number, attributedFiles: string[], undeclaredFiles: string[] }}
+ * @returns {{ status: 'safe'|'warning'|'blocked', reasons: string[], changedFiles: string[], newFiles: string[], deletedFiles: string[], baselineHit: string[], stagedTotal: number, attributedFiles: string[], undeclaredFiles: string[], foreignSessionDeclared: Array<{file: string, sessions: string[]}> }}
  */
 /**
  * D-8 O-1 模块归属（2026-08-15 docs-signals-o12）：quick 欠账 hint 从"改了 N 文件"升级为
@@ -818,7 +867,7 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
   // stagedTotal：当前所有非 quick 元数据的未提交条目（含前序 baseline 残留）。
   // 与 changedFiles（扣 baseline 后的本轮新增）区分，供审计文案同时展示「本轮新增 vs 累计暂存」，
   // 避免叠加 quick 会话时把前序会话未提交文件误读为「本会话只动了 N 个」。
-  const result = { status: 'safe', reasons: [], changedFiles: [], newFiles: [], deletedFiles: [], baselineHit: [], stagedTotal: 0, attributedFiles: [], undeclaredFiles: [] }
+  const result = { status: 'safe', reasons: [], changedFiles: [], newFiles: [], deletedFiles: [], baselineHit: [], stagedTotal: 0, attributedFiles: [], undeclaredFiles: [], foreignSessionDeclared: [] }
 
   try {
     // safeGit 带 -c safe.directory，避免 linked worktree/容器异 uid/挂载点下裸 `git status` 抛错被
@@ -850,6 +899,38 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
     const isBaselineFile = (p) => {
       const f = normalizeGitPath(p)
       return baselineExact.has(f) || baselineDirs.some(d => f.startsWith(d))
+    }
+    // 他者 active 会话声明索引（坑 foreign-session-declared-false-block，2026-08-23 实证：多 agent
+    // 并发时并行会话窗口内改的文件——尤其命中危险清单的（daemon/router.py 之于本仓是 src/run/*、
+    // package.json）或 .sillyspec/ 下的——不在本会话 baseline，被算进本会话窗口直接 blocked，
+    // 只能 --force-baseline 无差别逃生）。声明即归属的他向版本：他者会话显式声明（--files）的文件
+    // 退栈归该会话审计。本会话也声明同一文件（--files 重叠）时不退栈——同文件并发归本会话审计
+    // （sameFileHits advisory 管辖）。豁免面 = 他者显式声明，不含他者 baseline 快照（那是「启动时
+    // 已脏」非所有权声明，当豁免依据会洗白任何预存脏文件）。
+    const ownDeclaredNorm = new Set((allowedFiles || []).map(f => normalizeGitPath(f)))
+    const foreignDeclaredIndex = new Map()
+    for (const s of Array.isArray(guard.otherSessionsDeclared) ? guard.otherSessionsDeclared : []) {
+      if (!s || typeof s !== 'object') continue
+      for (const f of Array.isArray(s.files) ? s.files : []) {
+        const nf = normalizeGitPath(f)
+        if (!nf || ownDeclaredNorm.has(nf)) continue
+        if (!foreignDeclaredIndex.has(nf)) foreignDeclaredIndex.set(nf, [])
+        if (!foreignDeclaredIndex.get(nf).includes(s.sessionId)) foreignDeclaredIndex.get(nf).push(s.sessionId)
+      }
+    }
+    const findForeignDeclaredOwner = (p) => {
+      const f = normalizeGitPath(p)
+      if (f.endsWith('/')) {
+        // 折叠目录 token（porcelain 把全新未跟踪目录折成 `dir/`）：目录下任一文件被他者声明 →
+        // 整目录归他者；但本会话在同目录下有声明时不退栈——目录内混有双方文件，留给各门判定
+        // （fail-closed：宁可误拦不可漏放，误拦有 --files 追加声明的明确出口）。
+        if ([...ownDeclaredNorm].some(x => x.startsWith(f))) return null
+        for (const [nf, owners] of foreignDeclaredIndex) {
+          if (nf.startsWith(f)) return owners
+        }
+        return null
+      }
+      return foreignDeclaredIndex.get(f) || null
     }
     const DANGEROUS_PATTERNS = [
       'package.json',
@@ -890,6 +971,15 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
 
       // 预存脏文件：step1 baseline 已记录，非本次 quick 产生，跳过审计（含折叠目录前缀匹配）
       if (isBaselineFile(file)) continue
+
+      // 他者 active 会话已声明 → 完全退栈归该会话审计（危险/删除/新增/越界/baseline 全部门跳过），
+      // 收进 foreignSessionDeclared 供 printQuickAuditReview 软警告——放行可见可审计不静默
+      // （与 linkedChangeLeftovers 同哲学）。stagedTotal 已在上方计数，累计暂存口径不受退栈影响。
+      const foreignOwners = findForeignDeclaredOwner(file)
+      if (foreignOwners) {
+        result.foreignSessionDeclared.push({ file, sessions: foreignOwners })
+        continue
+      }
 
       result.changedFiles.push(file)
       if (rawStatus[0] === 'D' || rawStatus[1] === 'D') result.deletedFiles.push(file)

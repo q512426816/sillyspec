@@ -554,3 +554,19 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 5. execute/verify 启动时共享主仓竞态 advisory：主仓未提交文件中非本变更的（并行会话工作/部署产物）→ warn「提交用精确 pathspec，交接物异常先确认是否他者所为」。
 
 测试 fullflow-feedback-five.test.mjs（11 断言）。**关联记忆**：`[[sillyspec-execute-status-machine-contradiction]]`、`[[sillyspec-autocheck-worktree-tasks-lost]]`、`[[sillyspec-modules-submodule-link-verify]]`、`[[sillyspec-probe5-fullrepo-frontend-noise]]`、`[[sillyspec-parallel-shared-main-race]]`
+
+## 35. 两坑：并行会话已声明文件误拦 / 四字段模板防线后置（2026-08-23 闭环）
+
+**症状（用户实证）**：
+1. 多 agent 并发时，quick --done 边界审计把并行会话窗口内改的未提交文件（如 daemon/router.py）判成本 quick 的危险变更直接 BLOCK，只能 --force-baseline 无差别逃生。
+2. 结果摘要四字段（需求/根因/方案/结果）硬校验第一次提交必然打回——模板到 --done 被拦才第一次见到（预告藏在 step3 长 prompt 中段 + step2 --done 输出尾行，agent 到收尾时已淡忘）。
+
+**根因**：
+1. 审计窗口 = step1 baseline 快照 → --done 时 git status 的 diff；并行会话在**本会话启动后**改的文件不在 baseline → 算进本会话窗口 → 命中危险清单（src/run/、package.json 等）或 .sillyspec/ 判定 → blocked。归属信息其实存在（他者会话 guard.json 的 allowedFiles 显式声明），审计没消费。
+2. step2 --done 推进到末步时的四字段预告（quick-step3-four-fields-late 第一层修复）只是 CLI 输出尾部一行，到 step3 --done 时隔了大量工作上下文已被淡忘；且「结果：验证情况（测试数/lint/typecheck）」的素材在 step2 产生，到 step3 才知道要收集为时已晚。打回文案只给 --output 旧形式模板，照抄仍可能踩嵌套全角冒号拆分坑（四参数形式正是为消灭它而生）。
+
+**修复（2026-08-23）**：
+1. 他者会话声明豁免（声明即归属的他向版本）：--done 审计枚举 quick-sessions 下其他 active 会话的**显式声明**（guard.allowedFiles，--files 传入），命中文件完全退栈归该会话审计（危险/删除/新增/越界/baseline 全部门跳过）+ 🔗 软警告可见放行（逐文件列归属会话；点明无需 --force-baseline，确系本会话改动用 --files 追加声明，僵尸会话 --cancel 清理）。边界：只信显式声明（他者 baselineFiles 是快照非所有权不作豁免）；本会话重叠声明不豁免（同文件并发归本会话审计）；超 7 天僵尸会话声明失效（与 doctor GHOST_EMPTY_DIR_STALE_MS 同口径）；折叠目录 token（`?? daemon/`）前缀双向匹配、同目录有本会话声明时不退栈（fail-closed 防目录内混文件漏放）；采集 fail-open（异常回到无豁免现状）。未被声明文件照旧拦截（保护面零回归）。
+2. 四字段防线前移三层：① step2 prompt 内加「末步预告」段——四字段硬校验在实现阶段即告知，且点明「结果：验证情况」素材在本步产生、实现摘要当场记下具体验证数据（测试数/lint 告警数），step3 直接引用；② 缺 --output 拦截文案补推荐四参数形式（--req/--cause/--solution/--result，CLI 自动合成）；③ 四标签校验失败打回文案同样补四参数——打回后第二次照抄四参数不再踩旧形式嵌套全角冒号坑。既有 step2 --done 推进预告保留不动。
+
+测试 quick-foreign-session-declared.test.mjs（36 断言：豁免判定 8 形态 / 采集枚举·排除·僵尸·容错·runtimeRoot / 软警告渲染 / CLI e2e 注入链路 + 无声明对照仍拦）、quick-laststep-fourfields-preview.test.mjs 扩展（+8 断言：打回文案四参数 / 缺 --output 文案 / step2 prompt 预告渲染）。**关联记忆**：`[[sillyspec-foreign-session-declared-false-block]]`、`[[sillyspec-quick-step3-four-fields-late]]`

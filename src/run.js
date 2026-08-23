@@ -15,8 +15,8 @@
  */
 // W6 Step8c: 主命令分发（runCommand）+ auto 模式 + ensureStageSteps 搬至 ./run/command.js
 export { runCommand, ensureStageSteps } from './run/command.js'
-// barrel re-export: parsePorcelainPath + auditQuickCompletion + isQuickMetadata 被 test 直接 import（契约保留）
-export { parsePorcelainPath, auditQuickCompletion, isQuickMetadata } from './run/shared.js'
+// barrel re-export: parsePorcelainPath + auditQuickCompletion + isQuickMetadata + collectOtherQuickSessionDeclarations 被 test 直接 import（契约保留）
+export { parsePorcelainPath, auditQuickCompletion, isQuickMetadata, collectOtherQuickSessionDeclarations } from './run/shared.js'
 // barrel re-export: applyRootPlaceholders 被 test/prompt-placeholders.test.mjs 直接 import（契约保留）
 export { applyRootPlaceholders } from './run/prompt.js'
 // barrel re-export: sanitizeProjectName + validateParsedProjects 被 test 直接 import（随 handleScan 搬走，契约保留）

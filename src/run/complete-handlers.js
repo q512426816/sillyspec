@@ -25,7 +25,7 @@
 import { basename, join, resolve, relative, isAbsolute } from 'node:path'
 import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync, unlinkSync, rmSync } from 'node:fs'
 import { renameSyncRetry, writeAtomicSync } from '../fs-atomic.js'
-import { resolveChangeDir, resolveQuickSessionsDir, safeGit, auditQuickCompletion, triggerSync, isQuickMetadata, resolveRuntimeRoot } from './shared.js'
+import { resolveChangeDir, resolveQuickSessionsDir, safeGit, auditQuickCompletion, triggerSync, isQuickMetadata, resolveRuntimeRoot, collectOtherQuickSessionDeclarations } from './shared.js'
 import { detectConcurrentChanges, formatConcurrentWarning, resolveConcurrentAnchor } from './concurrent-detect.js'
 import { stageRegistry } from '../stages/index.js'
 import { SCAN_STATUS, POINTER_STATUS } from '../constants.js'
@@ -863,6 +863,11 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
         // （平台模式 resolveSpecDir(cwd) 会 miss specRoot 静默丢信号，plan 审查 gap-5）
         specBase,
         projectName: progress?.project || null,
+        // 他者 active 会话声明索引（坑 foreign-session-declared-false-block）：多 agent 并发时
+        // 并行会话 --files 声明的文件退栈归该会话审计，不再误拦本会话。与上方 guard 读取同源
+        // （resolveQuickSessionsDir 同参，平台模式 runtimeRoot 对齐）；fail-open：采集失败 → 空
+        // → 回到无豁免现状。
+        otherSessionsDeclared: collectOtherQuickSessionDeclarations(platformOpts, specBase, changeName),
       }
       review = await auditQuickCompletion(cwd, mergedGuard, { isConfirm: confirm })
       printQuickAuditReview(review)
@@ -913,8 +918,9 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
     const isLastStep = currentIdx === steps.length - 1
     if (isLastStep && !outputText) {
       console.error('\n❌ quick 最后一步 --done 必须带 --output（四字段结果模板）。')
-      console.error('   --output 是 QUICKLOG「结果：」归档的唯一来源。补全后重跑 --done（不丢进度），照抄模板：')
-      console.error('     sillyspec run quick --done --change <changeName> --output "需求：… 根因：… 方案：… 结果：…"')
+      console.error('   --output 是 QUICKLOG「结果：」归档的唯一来源。补全后重跑 --done（不丢进度），推荐四参数形式（CLI 自动合成，无嵌套冒号事故面）：')
+      console.error('     sillyspec run quick --done --change <changeName> --req "一句话语义化短标题" --cause "为什么这样改" --solution "怎么改的" --result "验证情况（测试数 / lint / typecheck / 部署状态）"')
+      console.error('   兼容旧形式：--output "需求：… 根因：… 方案：… 结果：…"')
       steps[currentIdx].status = 'pending'
       steps[currentIdx].completedAt = null
       process.exit(1)
@@ -924,7 +930,9 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
       if (!resultCheck.ok) {
         console.error('\n' + getRule('quick.result-labels').failMessage.replaceAll('${missing}', resultCheck.missing.join('、')))
         console.error(`   --output 是 QUICKLOG「结果：」归档的唯一来源，四个标签必须放在 --output 里（不是 --input）。`)
-        console.error(`   补全后重跑 --done（不丢进度），直接照抄此模板：`)
+        console.error(`   补全后重跑 --done（不丢进度）。推荐四参数形式（CLI 自动合成结构化模板，避免旧形式嵌套全角冒号被拆分判定缺字段）：`)
+        console.error(`     sillyspec run quick --done --change <changeName> --req "一句话语义化短标题（即 QUICKLOG 条目标题）" --cause "为什么这样改（纯新增/样式则写「无，纯新增/纯样式」）" --solution "怎么改的" --result "验证情况（测试数 / lint / typecheck / 部署状态）"`)
+        console.error(`   或照抄旧形式模板：`)
         console.error(`     sillyspec run quick --done --change <changeName> --output "需求：用户/任务要什么`)
         console.error(`     根因：为什么这样改（纯新增/样式则写「无，纯新增/纯样式」）`)
         console.error(`     方案：怎么改的`)
