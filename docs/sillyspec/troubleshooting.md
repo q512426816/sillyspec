@@ -614,3 +614,22 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 4. ① 服务 PID 按变更分片 `verify-services-<change>.pids`（prompt 指引/reapVerifyServices 只回收本变更 + 兼容旧单文件；receipt 同名分片、stage-contract 优先读分片兼容旧名）；② 对账归属过滤——新零环模块 foreign-declared.js 的 collectForeignDeclaredFiles/splitOwnVsForeignDiffFiles（口径同坑 35：其他 quick 会话 guard.allowedFiles + 其他变更 design §6 清单；**无主文件保留参与判定 fail-closed**），接入四处（resolveMainChangedFiles 无 meta 回退 / runVerifyDeletionCheck / probe6 / _resolveDiffFilesForParity 无 meta 回退）+ 实测失败归因提示（testCheck failed 且主仓 dirty 命中他者声明 → 提示复验归因）；③ withMainApplyLock 泛化 withMainRepoLock（锁文件 main-repo.lock + purpose 字段 + env 覆盖等待时长 + process exit 钩子防 archive guard exit(1) 漏锁），新纳入 worktree cleanup CLI 入口、execute 收尾自动 cleanup（锁超时降级保留 worktree 不阻断完成）、archiveChangeDirectory（归档收尾）；verify 长耗时实测不上锁（靠归属过滤与归因提示治误伤）。
 
 测试 worktree-apply-merge-fallback 重写场景 C/E + 新增 D（24 断言：真冲突保留现场 MERGE_HEAD/降级路径 abort/dirty 未启动区分指引）、worktree-has-unapplied-changes 新增 ⑱⑲（已 merge 后主仓演进 → false 走短路；未 merge 内容分叉 → true）+ 两条 reason 断言兼容短路文案（40 断言）、worktree-apply-relax-committed-advance 场景 2 按新语义更新（17 断言）、worktree-apply-mutex-skipoverlap 更新锁名/purpose + 新增 cleanup CLI 撞锁（22 断言）、archive-sync-module-docs-wait 按conditionalWait 重写（11 断言）、verify-concurrency-fixes 新增（18 断言：分片互不误杀 e2e 真子进程 / foreign 收集与切分 / 删除对账过滤集成）。**关联记忆**：`[[sillyspec-merge-conflict-abort-no-chance]]`、`[[sillyspec-cleanup-merged-branch-byte-false-positive]]`、`[[sillyspec-archive-subconfirm-redundant]]`、`[[sillyspec-verify-pids-cross-session-kill]]`、`[[sillyspec-verify-reconcile-foreign-wip]]`、`[[sillyspec-main-repo-no-mutex]]`
+
+## 38. 三坑：register-repo CRLF 假成功死循环 / 幽灵目录 junction 穿透 / 派生产物旧基线覆盖（2026-08-23 闭环）
+
+**症状（用户实证，跨仓流程批）**：
+1. Windows 下 `local register-repo` 后跨仓注册「死循环」——命令报 ✅ 已注册，execute 仍报「未在 repos: 段注册」，只能手工把 local.yaml 转单行 LF 解开。
+2. worktree apply 后目录残留（幽灵），人工清理 `rm -rf` 会穿透 node_modules junction 删掉主仓 node_modules（user-inputs 两次事故实录），只能人工小心防。
+3. 多 agent 并发时，worktree 旧基线生成的 api-types 被 apply 落地，把并行变更已合入主仓的新枚举刷掉，一次 build 红——gen:types 必须在合并后基线重跑，工具此前零提示。
+
+**根因**：
+1. 写侧（registerRepoInLocalYaml）本身归一 LF，真凶是**幂等跳过不落盘**：外部（agent Write 工具/Windows 编辑器）写入的 CRLF 文件在内存归一后比对相等 → return 不写盘 → 磁盘永不治愈但 CLI 报 ✅；解析侧 parseRepoRegistry 是同文件唯一没做入口 LF 归一的函数（`(.*)$` 的 `.` 不匹配 `\r`）→ 条目全失配返回空 Map → MultiRepoContext fail-closed 报「未注册」→ agent 按报错指引再跑 register-repo → 死循环。
+2. apply step8 **丢弃 cleanup 返回值**——`partial`（目录残留）静默成功，用户误以为干净；解链逻辑三处复制粘贴且不覆盖幽灵路径（create 幽灵强删裸 rmSync、doctor ghost-dir-with-files 无警示）也**不覆盖 modules 子模块 junction**（meta.depsModules 的 wt/&lt;module&gt;/node_modules）；Git Bash rm -rf / npm ci / git worktree remove 均跟随 junction 穿透。
+3. apply step3.5 早已算出 hashMismatchFiles（变更文件在 worktree 基线后主仓有新提交），但默认 --3way 路径对它**完全静默**（只在 rescue 分类/merge 冲突时冒头）——语义级覆盖（旧内容文本可合 → 3way 静默成功）零提示；verify 的归因提示口径是「他者未提交 WIP 混入」，与此形态（本变更旧基线产物覆盖他者**已提交**内容）两侧都不匹配。
+
+**修复（2026-08-23）**：
+1. 双保险：parseRepoRegistry 入口 CRLF 归一（补齐同文件三兄弟函数的既有约定，一处修全链路）；registerRepoInLocalYaml 记 hadCr，幂等跳过分支在磁盘原文含 \r 时也落盘一次治愈——凡 register-repo 真跑过一次循环必然解开；LF 文件幂等仍零写入（既有断言零回归）。
+2. worktree.js 新增共享 `unlinkNodeModulesLinks(worktreePath, meta, details)`（解根 + meta.depsModules 各子模块 node_modules，lstat/rmdir 失败 fail-loud 保持 worktree-junction-fail-loud 断言兼容）与 `safeRemoveWorktreeDir`（解链 + rmSync）；cleanup / _doctorReprovision / create 幽灵强删 / doctor ghost-dir --fix 四处统一换用（cleanup 由此新增子模块 junction 覆盖）；apply step8 消费 cleanup 返回值——partial/residual 推 warning 含安全手动指引（先 cmd /c rmdir 解链再删，勿 rm -rf）；doctor ghost-dir-with-files 加 junction 侦测警示（fixable 维持 false：内容不明不自动删）；cleanup CLI 补 partial 分支（此前打成「未找到」）。
+3. apply step3.5 后消费 hashMismatchFiles：`∩ changedFiles` 非空 → warning 点名漂移文件 +「若含生成产物（api-types 等）apply 后在新基线重跑生成命令再验证」（checkOnly/assess 同带；纯 advisory 不阻断——生成器类变更的产物是合法交付，判断留给 agent）；verify 实测失败归因加第二判据：apply-pathspec 文件 ∩ 主仓最近 10 条提交 → 提示「若为生成产物先在新基线重跑生成命令再复验」。
+
+测试 crossrepo-three-fixes.test.mjs（19 断言：CRLF 解析/幂等治愈闭环 / Windows 真 junction 根+子模块全解且假主仓内容完好 / safeRemoveWorktreeDir 穿透防护 / doctor ghost 警示 fixable:false / apply 派生产物漂移 warning e2e 真 3way 干净合形态）；worktree-junction-fail-loud（18）等既有回归零破坏。**关联记忆**：`[[sillyspec-register-repo-crlf-idempotent-loop]]`、`[[sillyspec-ghost-dir-junction-pierce]]`、`[[sillyspec-derived-artifact-stale-baseline]]`

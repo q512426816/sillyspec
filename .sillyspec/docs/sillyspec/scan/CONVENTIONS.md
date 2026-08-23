@@ -108,13 +108,13 @@ src/init.js:226    // ⚠️ 必须保护真实资产：若本地 .sillyspec 含
 
 `src/docs-check.js` + `test/doc-ref-check.test.mjs`（npm test 自动收集）+ `.husky/pre-push` 的 docs gate 构成引用校验链：文档里的 `file.js:line` 引用必须文件存在且行号在界，关键词断言要求引用行的反引号 token 在源码对应窗口内命中。
 
-**隐形规则**：文档引用源码一律带实测行号（`worktree.js:203` 形态）；改源码后同步受影响文档的行号引用；失效数走 ratchet 门只许减少不许增加（基线 `.sillyspec/docs-check-baseline`）。
+**隐形规则**：文档引用源码一律带实测行号（`worktree.js:262` 形态）；改源码后同步受影响文档的行号引用；失效数走 ratchet 门只许减少不许增加（基线 `.sillyspec/docs-check-baseline`）。
 
 ## 代码风格
 
 - **模块系统**：ESM only（`"type":"module"`），顶层 `import/export`，例外见上方「框架隐形规则 #1」。入口 `bin/sillyspec.js` 仅 2 行：`#!/usr/bin/env node` + `import '../src/index.js'`。
 - **导出**：命名导出为主（`export function`/`export const`/`export class`），`src/db.js` 的 `DB`、`src/sync.js` 的 `SyncManager`、`src/progress.js` 的 `ProgressManager` 用 `export class`。无默认导出（stages 用 `export const definition` 而非 `export default`）。
-- **数字解析**：优先 `parseInt(x, 10)`（显式基数，见 `worktree.js:203`），NaN 判断用 `Number.isNaN` 而非全局 `isNaN`。
+- **数字解析**：优先 `parseInt(x, 10)`（显式基数，见 `worktree.js:262`），NaN 判断用 `Number.isNaN` 而非全局 `isNaN`。
 - **时间戳**：落盘统一 `new Date().toISOString()`（`contract-matrix.js:164`、`scan-postcheck.js:243`）。
 - **barrel 模式**：W6 重构后 `src/run.js`（23 行）/`src/progress.js`（facade）为纯 re-export / delegate 层，外部 import 契约不变——叶子模块实现细节不得穿透 facade（改内部拆分零感知）。
 
