@@ -27,7 +27,7 @@ export const definition = {
 ### 只允许的操作
 - git status / git diff / git show / git log / git stash list（只读）
 - cat / head / grep / find / wc（只读检查）
-- 写入 .sillyspec/changes/ 下的报告文件（verify-result.md）
+- 写入 {SPEC_ROOT}/changes/ 下的报告文件（verify-result.md）——一律用 CLI 替换出的**主仓绝对路径**落盘，绝不写进 worktree 的 .sillyspec 副本（CLI 校验读主仓，副本随 worktree 清理蒸发）
 - 运行测试命令（不修改源码）
 - 运行 lint 命令（不自动修复）
 
@@ -69,11 +69,11 @@ export const definition = {
 2. 如果存在 decisions.md，必须读取并提取所有当前版本 D-xxx@vN 决策 ID
    - 如果存在 P0/P1 unresolved/blocking 决策，验证结论不能为 PASS
    - 如果发现 superseded 决策被下游引用，标记为 ⚠️ stale decision reference
-3. 加载项目信息：\`cat .sillyspec/projects/*.yaml 2>/dev/null\`
-4. 加载本地配置：\`cat .sillyspec/local.yaml 2>/dev/null\`（构建命令、测试命令、lint 命令等）若 local.yaml 不存在，先 \`sillyspec local detect\` 生成骨架再读取
-5. 加载代码规范：\`cat .sillyspec/docs/<project>/scan/CONVENTIONS.md 2>/dev/null\`
-   - 测试现状：\`cat .sillyspec/docs/<project>/scan/TESTING.md 2>/dev/null\`（了解既有测试约定与覆盖范围，验收时对照）
-   - 技术债清单：\`cat .sillyspec/docs/<project>/scan/CONCERNS.md 2>/dev/null\`（🔴/🟡 区域；本次变更若触碰须在 verify-result.md 标注）
+3. 加载项目信息：\`cat {SPEC_ROOT}/projects/*.yaml 2>/dev/null\`
+4. 加载本地配置：\`cat {SPEC_ROOT}/local.yaml 2>/dev/null\`（构建命令、测试命令、lint 命令等）若 local.yaml 不存在，先 \`sillyspec local detect\` 生成骨架再读取
+5. 加载代码规范：\`cat {SPEC_ROOT}/docs/<project>/scan/CONVENTIONS.md 2>/dev/null\`
+   - 测试现状：\`cat {SPEC_ROOT}/docs/<project>/scan/TESTING.md 2>/dev/null\`（了解既有测试约定与覆盖范围，验收时对照）
+   - 技术债清单：\`cat {SPEC_ROOT}/docs/<project>/scan/CONCERNS.md 2>/dev/null\`（🔴/🟡 区域；本次变更若触碰须在 verify-result.md 标注）
 6. 标注每个文件的存在/不存在状态
 
 ### Execute Evidence 传递检查
@@ -87,9 +87,9 @@ export const definition = {
    - CLI 会 advisory 复核每个 cannot_verify 任务是否在 verify-result.md 体现（未体现仅 warn 不阻断归档；evidence 是否真满足由你诚实判定，CLI 不替你语义判定）
 
 ### 模块文档加载
-8. 读取 \`.sillyspec/docs/<project>/modules/_module-map.yaml\`（不存在则跳过以下步骤）
+8. 读取 \`{SPEC_ROOT}/docs/<project>/modules/_module-map.yaml\`（不存在则跳过以下步骤）
 9. 根据 design.md 的文件变更清单匹配 _module-map.yaml 中的模块
-10. 读取匹配到的 \`.sillyspec/docs/<project>/modules/<module>.md\`
+10. 读取匹配到的 \`{SPEC_ROOT}/docs/<project>/modules/<module>.md\`
 11. **检查模块索引可信度**：如果相关模块的 needs_review 为 true，提示"该模块索引可能不可信，需要回看模块卡片或源码"
 
 ### worktree 基线锚点（CLI 注入）
@@ -173,7 +173,7 @@ export const definition = {
       prompt: `运行代码质量扫描（测试实测统一由 CLI 对账执行，本步不重复手动跑全量）。
 
 ### 操作
-1. 读取 \`.sillyspec/local.yaml\` 获取构建、测试和 lint 命令若 local.yaml 不存在，先 \`sillyspec local detect\` 生成骨架再读取
+1. 读取 \`{SPEC_ROOT}/local.yaml\` 获取构建、测试和 lint 命令若 local.yaml 不存在，先 \`sillyspec local detect\` 生成骨架再读取
 2. **不要手动重复跑 commands.test**——CLI 会在最终 --done 时统一执行一次（按变更命中模块子集），本步再跑 = 与 CLI 对账重复耗时（实测 198s×2）。如为提前发现实现问题，可对变更模块做**针对性快速冒烟**（可选，非必需）：
    - Maven：\`mvn test -pl <变更模块> -am\`（仅编译变更模块及其依赖）
    - Gradle：\`./gradlew :<模块>:test\`
@@ -208,15 +208,15 @@ export const definition = {
 ### 操作
 1. 汇总以上所有检查结果
 2. **变更风险等级（change_risk_profile）由 CLI 自动判定与门控**：你无需自己扫描关键词。本步骤 --done 时，CLI 会用 detectChangeRisk 扫描 design.md / plan.md 自动判定等级（doc-only / unit-sufficient / contract-required / integration-critical / deployment-critical）并强制门控：integration-critical / deployment-critical 变更若结论为 PASS / PASS WITH NOTES 但缺少真实集成证据，CLI 直接阻断 verify 完成——谎报结论无效。
-   - **判级是机械字面匹配、不认否定语境**：design 里写「本次不改动 daemon/session」仍命中关键词被误判高危级。
+   - **判级是机械字面匹配 + 同句否定抑制**：关键词命中位置前方同句有否定提示（不/未/无/避免…，如「本次不新增 daemon 协议」）时该次命中被抑制、不参与判级；「daemon 不稳定」「不同模块的 daemon」这类否定词不在关键词前方的仍正常命中。
    - **误判时的诚实出路（豁免级）**：在 design.md 顶部 frontmatter 加一行 \`risk_level: <真实等级>\`（doc-only / unit-sufficient / contract-required / integration-critical / deployment-critical），CLI 会以声明为准覆盖关键词判级。声明后若是 unit-sufficient 等豁免级，PASS WITH NOTES 不再被强制拦；但结论为 PASS 仍需对应证据。
-   - **留痕要求（防逃逸）**：用了显式声明，必须在本报告「变更风险等级」section 写明「risk_level 由 design frontmatter 显式声明 = <等级>（覆盖关键词判级）」+ 一句话理由，让豁免可审计。
+   - **留痕要求（防逃逸）**：用了显式声明，必须在本报告「变更风险等级」section 写明「risk_level 由 design frontmatter 显式声明 = <等级>（覆盖关键词判级）」+ 一句话理由，让豁免可审计；若有命中被否定语境抑制，同样写明被抑制关键词与理由（抑制可审计，不许用来静默降级）。
    你只需：在 verify-result.md 的「变更风险等级」section 如实记录变更性质；若变更涉及 daemon/backend 跨进程、session/lease/lifecycle 状态机、或部署启动路径，在「Runtime Evidence」section 提供真实集成证据（启动命令、daemon↔backend 调用与日志关键片段、终态断言）。
    - **集成证据是自报告、CLI 不独立运行时核验**：「Runtime Evidence」由你如实填写，CLI 只校验其**字面存在**（是否含关键词），**不会替你启动 daemon、打真实请求或跑迁移**——它是否名副其实取决于你是否实跑过。务必实跑后据实填写，不得凭堆关键词通过门控。（测试套件对账另算：commands.test 由 CLI 真实执行，那块谎报无效。）
 
-3. **生成 verify-result.md 骨架（勿从零手写）**：先跑 \`sillyspec verify-probes --change <change-name> --init\`——一条命令生成九章节骨架（已存在不覆盖），其中**探针结果章节已机械预填**（探针 1 的 TODO/FIXME 命中清单、探针 3 的测试覆盖、探针 5 的 API 契约对账表、探针 6 的删除对账三态判定），文件落 \`.sillyspec/changes/<change-name>/verify-result.md\`。你只需把各 \`<!--TODO-->\` 占位替换为语义结论；半语义探针（2 关键词覆盖 / 4 决策追踪）与断言抽查、集成盲区标注由你补在对应 TODO 处
+3. **生成 verify-result.md 骨架（勿从零手写）**：先跑 \`sillyspec verify-probes --change <change-name> --init\`——一条命令生成九章节骨架（已存在不覆盖），其中**探针结果章节已机械预填**（探针 1 的 TODO/FIXME 命中清单、探针 3 的测试覆盖、探针 5 的 API 契约对账表、探针 6 的删除对账三态判定），文件落 \`{SPEC_ROOT}/changes/<change-name>/verify-result.md\`（CLI 替换出的**主仓绝对路径**；若当前 cwd 在 worktree 内也绝不落 worktree 副本——CLI 校验读主仓，副本随 worktree 清理蒸发）。你只需把各 \`<!--TODO-->\` 占位替换为语义结论；半语义探针（2 关键词覆盖 / 4 决策追踪）与断言抽查、集成盲区标注由你补在对应 TODO 处
 4. 给出结论：PASS / PASS WITH NOTES / FAIL（受风险门控约束）——**结论必须写明 PASS/FAIL 字样，留「待填」会被 gate 判不过**
-5. **核对 module-impact.md**（若 changes/<change>/module-impact.md 存在）：对照本次实际代码变更（git diff）与 module-impact.md 的模块影响矩阵，发现不一致（漏标受影响模块 / 影响类型错误 / 实际未触碰的模块被误标）则在 verify-result.md 标注。module-impact 由 plan 首版生成、execute 各 Wave 更新，verify 是最后一次核对机会（archive 仅终审不再生成）。这是 advisory 核对（不阻断 verify 完成），但 module-impact 与实际严重背离应记为风险。
+5. **核对 module-impact.md**（若 \`{SPEC_ROOT}/changes/<change>/module-impact.md\` 存在）：对照本次实际代码变更（git diff）与 module-impact.md 的模块影响矩阵，发现不一致（漏标受影响模块 / 影响类型错误 / 实际未触碰的模块被误标）则在 verify-result.md 标注。module-impact 由 plan 首版生成、execute 各 Wave 更新，verify 是最后一次核对机会（archive 仅终审不再生成）。这是 advisory 核对（不阻断 verify 完成），但 module-impact 与实际严重背离应记为风险。
 
 ### verify-result.md 章节结构（骨架已含，占位替换即可）
 
@@ -227,7 +227,7 @@ export const definition = {
 ### 🧹 服务进程登记与自动回收（真实启动验证必读，坑 verify-service-process-leak）
 「真实启动一次」起的长驻服务（uvicorn/node server 等）**必须登记 PID，CLI 在 verify 收尾自动回收**——不登记的进程会挂死机器（实测 uvicorn 漏挂一天多）：
 1. 后台启动服务并取 PID（PowerShell：\`Start-Process -PassThru\` 取 \`.Id\`；bash：\`cmd & echo $!\`）
-2. 每行一个 PID 追加到 \`\${SPEC_ROOT}/.runtime/verify-services-<change-name>.pids\`（\`Add-Content\` / \`echo >>\`；**按变更名分片**——多会话并发 verify 时各自的 --done 只回收自己的服务，互不误杀）
+2. 每行一个 PID 追加到 \`{SPEC_ROOT}/.runtime/verify-services-<change-name>.pids\`（\`Add-Content\` / \`echo >>\`；**按变更名分片**——多会话并发 verify 时各自的 --done 只回收自己的服务，互不误杀）
 3. verify \`--done\` 时 CLI 读该文件逐个 kill 并清空——你在 verify-result.md 的「生命周期终态断言」里写「PID 已登记，CLI 收尾回收」即可
 登记是硬要求：没有 PID 登记的「真实启动」证据在 deployment-critical 门控下视为不完整（进程无法证明被回收）。
 

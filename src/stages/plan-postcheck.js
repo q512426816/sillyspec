@@ -19,6 +19,7 @@ import { tmpdir } from 'os'
 import jsYaml from 'js-yaml'
 import { parseFileChangeList, pathMatches } from '../change-list.js'
 import { getRule } from '../stage-contract-spec.js'
+import { TASKCARD_PLACEHOLDERS } from '../taskcard-placeholders.js'
 import { validateScriptCommands } from './cmd-existence.js'
 
 // ═══════════════════════════════════════════════════════════════
@@ -359,6 +360,28 @@ function parseTaskWavesFromPlan(planPath) {
     if (tm && currentWave !== null) map.set(String(tm[1]).replace(/^task-(\d+)$/i, (_, n) => `task-${n.padStart(2, '0')}`), currentWave)
   }
   return map
+}
+
+/**
+ * 收集任务卡 depends_on → Map<taskId, deps>（Wave 重排 / plan-adopt-waves 共用）。
+ * taskId 优先取卡内 frontmatter id:（与文件名解耦——文件名 task-01 但 id 改写过时以 id 为准）。
+ * @param {string} tasksDir - changes/<name>/tasks 目录
+ * @returns {Map<string, string[]>}
+ */
+export function collectTaskDepMap(tasksDir) {
+  const depMap = new Map()
+  if (!existsSync(tasksDir)) return depMap
+  for (const file of readdirSync(tasksDir).filter(f => /^task-\d+\.md$/.test(f))) {
+    const content = readFileSync(pJoin(tasksDir, file), 'utf8')
+    const fmMatch = content.match(/^---\n([\s\S]*?)\n---/)
+    let taskId = file.replace('.md', '')
+    if (fmMatch) {
+      const idMatch = fmMatch[1].match(/^id:\s*(.+)/m)
+      if (idMatch) taskId = idMatch[1].trim()
+    }
+    depMap.set(taskId, parseDependsOn(content))
+  }
+  return depMap
 }
 
 /**
@@ -1007,6 +1030,22 @@ export function validatePlanFeasibility(changeDir, projectRoot = null) {
     if (!hasVerify) errors.push(fsRule.data.messageVerify.replaceAll('${id}', taskId || file))
     if (!hasConstraints) errors.push(fsRule.data.messageConstraints.replaceAll('${id}', taskId || file))
 
+    // 5b. 骨架占位符拦截（坑 taskcard-placeholder-slip，2026-08-24 用户实证：task 卡留成
+    // 空骨架、九字段「存在性」全过，直到人工审计才发现）。占位标记是 taskcard.js 生成的
+    // 封闭集合（TASKCARD_PLACEHOLDERS 同源导出），精确匹配；verify 字段的占位命令刻意
+    // 不拦（可能是真实 tsc 命令）。占位符视同缺字段，与 9 字段缺失同级 error。
+    // 先剥 HTML 注释再匹配——骨架尾部注释自身罗列了占位标记清单（填充指引），不剥会把
+    // 已填充卡的注释误判成占位残留。
+    const contentNoComments = content.replace(/<!--[\s\S]*?-->/g, '')
+    const placeholderHits = TASKCARD_PLACEHOLDERS.filter(p => contentNoComments.includes(p.marker))
+    if (placeholderHits.length > 0) {
+      errors.push(
+        (fsRule.data.messagePlaceholder || '${id}: task 卡仍是未填充的生成骨架')
+          .replaceAll('${id}', taskId || file)
+          .replaceAll('${fields}', placeholderHits.map(p => p.field).join('、'))
+      )
+    }
+
     // 6. acceptance best-effort 字段 grep（D-05 软约束，warning 不阻断）
     // 从 acceptance 文本提取 snake_case/camelCase 标识符，grep allowed_paths 指向的源文件；
     // 找不到 → warning（给 LLM 审查提线索，不阻断 execute）。宁漏不噪：只取 snake/camel，
@@ -1253,18 +1292,7 @@ export async function executePlanPostcheck(context) {
   const tasksDir = pJoin(changeDir, 'tasks')
   if (existsSync(tasksDir)) {
     const taskFiles = readdirSync(tasksDir).filter(f => /^task-\d+\.md$/.test(f))
-    const depMap = new Map()
-
-    for (const file of taskFiles) {
-      const content = readFileSync(pJoin(tasksDir, file), 'utf8')
-      const fmMatch = content.match(/^---\n([\s\S]*?)\n---/)
-      let taskId = file.replace('.md', '')
-      if (fmMatch) {
-        const idMatch = fmMatch[1].match(/^id:\s*(.+)/m)
-        if (idMatch) taskId = idMatch[1].trim()
-      }
-      depMap.set(taskId, parseDependsOn(content))
-    }
+    const depMap = collectTaskDepMap(tasksDir)
 
     const { waves, error: topoError } = topoSortWaves(depMap)
     if (topoError) {
@@ -1277,8 +1305,10 @@ export async function executePlanPostcheck(context) {
       console.log(`     Wave ${i + 1}: ${wave.join(', ')}`)
     })
 
-    // 比较 plan.md 现有 Wave 分组
-    if (waves.length > 1 && taskFiles.length > 1) {
+    // 比较 plan.md 现有 Wave 分组 + 依赖方向硬校验（坑 wave-dep-direction-unchecked，
+    // 2026-08-24 用户反馈二期：主控手排 Wave 与拓扑比对只警告不阻断，而真正的正确性违规
+    // ——depends_on 落同 Wave / 后置 Wave——此前完全没有校验）
+    if (taskFiles.length > 0) {
       const planPath = pJoin(changeDir, 'plan.md')
       if (existsSync(planPath)) {
         const planContent = readFileSync(planPath, 'utf8')
@@ -1310,6 +1340,30 @@ export async function executePlanPostcheck(context) {
           }
           if (currentWaveTasks) existingWaves.push(currentWaveTasks)
 
+          // ── 依赖方向硬校验 ──
+          // Wave 契约（execute.js Wave 要点 1）：同一 Wave 的子代理强制并行；有依赖的 task
+          // 必须落在其依赖的后置 Wave。同 Wave / 后置 Wave 引用都是正确性违规（并行破坏依赖
+          // / 顺序颠倒），硬拦；仅分组数差异（手工过度串行化）合法，保留下方 warning。
+          const waveOf = new Map()
+          existingWaves.forEach((ws, i) => { for (const t of ws) waveOf.set(t, i) })
+          const directionViolations = []
+          for (const [taskId, deps] of depMap) {
+            const w = waveOf.get(taskId)
+            if (w === undefined) continue // 卡片未列入任何 Wave → 由 validatePlanForExecute 覆盖校验兜底
+            for (const dep of deps) {
+              const dw = waveOf.get(dep)
+              if (dw === undefined) continue // 依赖不存在的 task → feasibility depends_on 引用校验兜底
+              if (dw === w) directionViolations.push(`${taskId} depends_on ${dep}，但两者同在 Wave ${w + 1}（同 Wave 强制并行，依赖被破坏）`)
+              else if (dw > w) directionViolations.push(`${taskId} depends_on ${dep}，但 ${dep} 在后置 Wave ${dw + 1}（顺序颠倒）`)
+            }
+          }
+          if (directionViolations.length > 0) {
+            console.error(`\n❌ Wave 依赖方向违规（${directionViolations.length} 处）：`)
+            for (const v of directionViolations) console.error(`   ${v}`)
+            console.error('   解法：sillyspec plan-adopt-waves --change <变更名> 一键按 depends_on 拓扑重排 plan.md Wave 段，或手动调整分组')
+            throw new Error('planPostcheck: Wave 依赖方向违规（depends_on 同 Wave / 后置 Wave）——' + directionViolations.join('；'))
+          }
+
           const sameStructure = waves.length === existingWaves.length &&
             waves.every((w, i) => {
               const a = [...w].sort().join(',')
@@ -1320,8 +1374,8 @@ export async function executePlanPostcheck(context) {
           if (sameStructure) {
             console.log('  ✅ Wave 分组与拓扑排序一致，无需更新 plan.md')
           } else {
-            console.log('  ⚠️  Wave 分组与拓扑排序不一致，建议手动调整 plan.md')
-            console.log('     拓扑排序建议的 Wave 分组见上方')
+            console.log('  ⚠️  Wave 分组与拓扑排序不一致（依赖方向已校验合法——手工比拓扑更细的串行化是安全做法，可保持现状）')
+            console.log('     标准分组见上方 📊；如需对齐：sillyspec plan-adopt-waves --change <变更名>（重排 plan.md Wave 段并同步任务总表 W 列）')
           }
         }
       }

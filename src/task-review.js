@@ -679,7 +679,7 @@ export function verifyReviewGitEvidence(review, gitDir, cache = null) {
   try {
     let wtStatus = c.wtStatus.get(gitDir)
     if (wtStatus === undefined) {
-      wtStatus = runGit(gitDir, ['status', '--porcelain'], { trim: false })
+      wtStatus = runGit(gitDir, ['status', '--porcelain', '--untracked-files=all'], { trim: false })
       c.wtStatus.set(gitDir, wtStatus)
     }
     if (wtStatus && wtStatus.trim().length > 0) {
@@ -1047,7 +1047,7 @@ export async function generateTaskReviewDrafts({ changeName, cwd, platformOpts =
       const wtGitDir = (meta.worktreePath && meta.mode !== 'in-place-fallback' && existsSync(meta.worktreePath))
         ? meta.worktreePath
         : cwd
-      const wtStatus = runGit(wtGitDir, ['status', '--porcelain'], { trim: false })
+      const wtStatus = runGit(wtGitDir, ['status', '--porcelain', '--untracked-files=all'], { trim: false })
       const wtFiles = parsePorcelainFiles(wtStatus)
         .map(p => String(p).replace(/\\/g, '/'))
         .filter(p => p !== '.sillyspec' && !p.startsWith('.sillyspec/'))

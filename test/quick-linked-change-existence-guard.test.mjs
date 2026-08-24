@@ -66,7 +66,7 @@ console.log('\n--- 用例4: --linked-changes <不存在名> → 同拦 ---')
 console.log('\n--- 用例5: --linked-changes none → 放行（语义值） ---')
 {
   const { cwd } = makeRepo('ql-guard-none-')
-  const r = runCLI(['--dir', cwd, 'run', 'quick', '--linked-changes', 'none'], { cwd })
+  const r = runCLI(['--dir', cwd, 'run', 'quick', '--linked-changes', 'none', '--input', '守卫测试'], { cwd })
   assert(r.status === 0, `exit 0（实际 ${r.status}，尾：${r.combined.slice(-150)}）`)
   assert(!r.combined.includes('以下变更不存在'), '语义值 none 不触发守卫')
 }

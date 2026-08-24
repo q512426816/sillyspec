@@ -9,7 +9,7 @@
  */
 
 import { execFileSync } from 'child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, readdirSync, statSync, lstatSync, readlinkSync, unlinkSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, readdirSync, statSync, lstatSync, readlinkSync, unlinkSync, copyFileSync } from 'fs';
 import { join, resolve, dirname, relative, isAbsolute } from 'path';
 import { createHash } from 'crypto';
 import { provisionDeps, checkDepsFreshness } from './worktree-deps.js';
@@ -864,6 +864,69 @@ export class WorktreeManager {
     return refs;
   }
 
+  /**
+   * 清理前打捞 spec 流程产物（坑 worktree-spec-artifact-misplace，2026-08-24 用户实证）。
+   *
+   * 子代理 cwd=worktree 时会把流程产物（verify-result.md / module-impact.md / 任务卡 / 模块文档）
+   * 写进 worktree 内的 .sillyspec——而 apply 的 filterDeliverableFiles 把 .sillyspec/changes/ 排除在
+   * 交付外（spec 文档不进代码 patch），cleanup 删除 worktree 这些产物即蒸发、主仓流程看不到。
+   * 删除前扫 worktree 内两棵子树做最后打捞：
+   *   changes/<name>/** → 主仓缺失则 copy 回（verify-result.md 等核心场景）；同名不同内容仅列
+   *                      清单 warn 不覆盖（主仓版本可能是更新的，覆盖会倒退）
+   *   docs/**           → 主仓缺失则 copy 回（模块文档卡片；同名差异不提示——tracked checkout 副本常态）
+   * 只扫本变更子树（其它 change 的副本文件不越权搬运）。异常只 warn 不阻断清理。
+   * @private
+   */
+  _salvageSpecArtifacts(name, worktreePath, details) {
+    try {
+      const mainSpec = join(this._resolveMainRepoRoot(), '.sillyspec');
+      const wtSpec = join(worktreePath, '.sillyspec');
+      if (!existsSync(wtSpec)) return;
+      if (resolve(wtSpec) === resolve(mainSpec)) return; // in-place：同一目录，无需打捞
+      const salvaged = [];
+      const conflicts = [];
+      const salvageTree = (subDir, reportConflict) => {
+        const srcRoot = join(wtSpec, subDir);
+        if (!existsSync(srcRoot)) return;
+        const walk = (dir) => {
+          for (const entry of readdirSync(dir, { withFileTypes: true })) {
+            const src = join(dir, entry.name);
+            if (entry.isDirectory()) { walk(src); continue; }
+            if (!entry.isFile()) continue;
+            const rel = relative(wtSpec, src);
+            const dst = join(mainSpec, rel);
+            try {
+              if (!existsSync(dst)) {
+                mkdirSync(dirname(dst), { recursive: true });
+                copyFileSync(src, dst);
+                salvaged.push(rel);
+              } else if (reportConflict && readFileSync(src, 'utf8') !== readFileSync(dst, 'utf8')) {
+                conflicts.push(rel);
+              }
+            } catch { /* 单文件失败不拖垮整体打捞 */ }
+          }
+        };
+        walk(srcRoot);
+      };
+      salvageTree(join('changes', name), true);
+      salvageTree('docs', false);
+      if (salvaged.length > 0) {
+        console.warn(`⚠️ worktree 清理前打捞：${salvaged.length} 个 spec 流程产物只存在于 worktree 副本，已复制回主仓（apply 不搬运 .sillyspec/changes，不捞即随清理蒸发）：`);
+        for (const f of salvaged.slice(0, 20)) console.warn(`   ${join(mainSpec, f)}`);
+        if (salvaged.length > 20) console.warn(`   …等共 ${salvaged.length} 个`);
+        details.push(`salvaged ${salvaged.length} spec artifacts to main repo`);
+      }
+      if (conflicts.length > 0) {
+        console.warn(`⚠️ worktree 与主仓存在同名但内容不同的流程产物（不覆盖，请人工确认是否需要合并）：`);
+        for (const f of conflicts.slice(0, 20)) console.warn(`   ${join(mainSpec, f)}`);
+        if (conflicts.length > 20) console.warn(`   …等共 ${conflicts.length} 个`);
+        details.push(`conflicting spec artifacts: ${conflicts.length}`);
+      }
+    } catch (e) {
+      console.warn(`⚠️ spec 产物打捞跳过（不阻断清理）: ${e?.message || e}`);
+    }
+  }
+
   cleanup(changeName, { force = false, maxRetries = 3 } = {}) {
     const name = validateChangeName(changeName);
     const meta = this.getMeta(name);
@@ -902,6 +965,12 @@ export class WorktreeManager {
     }
 
     const branch = (meta && meta.branch) || BRANCH_PREFIX + name;
+
+    // 打捞 spec 流程产物（坑 worktree-spec-artifact-misplace，2026-08-24 用户实证）：必须在任何
+    // 删除动作之前。in-place（worktree 即主工作区）与 native-worktree（外部隔离环境）跳过。
+    if (!isInPlace && mode !== 'native-worktree' && existsSync(worktreePath)) {
+      this._salvageSpecArtifacts(name, worktreePath, details);
+    }
 
     // Windows 保护：先解链接 worktree 内全部 node_modules junction（根 + modules 子模块，
     // 坑 ghost-dir-junction-pierce：子模块 junction 此前不覆盖——npm ci / rm -rf / git worktree

@@ -32,6 +32,11 @@ export function normalizeTaskId(raw) {
   return `task-${String(m[1]).padStart(2, '0')}`
 }
 
+// 占位符标记清单移至叶子模块 taskcard-placeholders.js（本文件与 plan-postcheck 两侧同源；
+// 留在此处会与 plan-postcheck → taskcard → stages/plan → stages/index 形成 ESM 循环 TDZ），
+// 此处 re-export 保持既有 import 兼容（test/taskcard.test.mjs 等直接从本模块取）。
+export { TASKCARD_PLACEHOLDERS } from './taskcard-placeholders.js'
+
 /**
  * YAML 标量安全序列化（坑 taskcard-title-backtick-yaml，2026-08-20 实证）：plan checkbox 行名
  * 是自由文本，带反引号（如 "`-p` 参数支持"）时裸插值进 frontmatter——`` ` `` 与 @ 是 YAML 保留
@@ -112,6 +117,8 @@ constraints:
 <!-- 骨架由 sillyspec taskcard 生成（LF 行尾 + frontmatter 已闭合 + 硬校验 9 字段齐全）。
      用 Edit tool 填充上方占位符（allowed_paths/goal/implementation/acceptance/verify/constraints 等），
      勿用 Write 整文件重写——会引入 CRLF 行尾/漏闭合 ---/漏字段回归。
+     ⚠️ plan --done 硬校验会拦截未替换的占位符（FR-XX / D-XXX / src/example/file.ts /
+     一句话说明这个 task / 具体步骤 1 / 可验证的验收条件 1 / 边界约束 1）——占位符视同缺字段。
      可选字段按需插进上方 frontmatter（规则见 taskcard-rules）：
      provides:      仅当本 task 给其他 task 提供接口/DTO/响应时填
      expects_from:  仅当本 task 消费其他 task 的契约时填

@@ -17,3 +17,6 @@ node_modules/
 .sillyspec-platform.json
 .sillyspec-platform-managed
 .sillyspec-platform-cleaned
+
+# eval A/B 评测运行时产物（评测库/工作副本/agent日志/基线快照），勿提交
+eval/results/

@@ -22,6 +22,7 @@ TaskCard 格式规则（必须严格遵守）：
 - 如果存在 decisions.md，无法覆盖的 D-xxx@vN 在 constraints 中标注
 - **保存前格式自检**（plan-postcheck 会硬校验，不通过到 Step 4 会批量报错，先在这里逐条自查）：
   - **硬校验字段**（缺失 plan-postcheck 直接报错阻断，必须齐全）：id、title、title_zh、allowed_paths、goal、implementation、acceptance、verify、constraints
+  - **占位符硬拦**（未替换视同缺字段，plan --done 直接报错阻断）：FR-XX（requirement_ids）、D-XXX（decision_ids）、src/example/file.ts（allowed_paths）、一句话说明这个 task（goal）、具体步骤 1（implementation）、可验证的验收条件 1（acceptance）、边界约束 1（constraints）——骨架带出来的占位值必须逐个替换成真实内容
   - **规范约定字段**（应填但不硬校验，缺失不阻断完成、只影响规范性）：author、created_at、priority、depends_on、blocks
   - allowed_paths 非空（至少一个真实源文件路径；回归类 task 无源码改动时填被验证的关键入口文件）
   - acceptance 与 verify 都在 frontmatter 内（漏写会被 plan-postcheck 报「缺少验收标准」/「缺少验证步骤」）

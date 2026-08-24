@@ -1,0 +1,6 @@
+{
+  "id": "003-word-report",
+  "title": "实现词频统计 CLI",
+  "tags": ["greenfield", "cli", "output-contract"],
+  "instruction": "当前目录 data/notes.txt 已提供输入样本。新建 bin/report.mjs（纯 Node 实现，禁止第三方依赖，package.json 已是 type=module）。\n\n功能：词频统计 CLI。用法：node bin/report.mjs [--input <路径>] [--top N] [--min-len M]\n- --input：输入文件路径，默认 data/notes.txt（相对当前工作目录解析）。\n- 读取文本，小写化后按空白切分为词。\n- --min-len：过滤掉长度小于 M 的词，默认 1。\n- --top：输出频次最高的前 N 个词，默认 5；频次相同时按词的字典序升序排列。\n- stdout 输出且仅输出一行 JSON：{\"totalWords\":<过滤后的总词数>,\"top\":[{\"word\":<词>,\"count\":<次数>}, ...]}\n- 输入文件不存在或不可读时：向 stderr 输出错误信息，退出码 1。"
+}

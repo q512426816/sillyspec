@@ -680,6 +680,11 @@ created_at: <now-datetime>
 
 ### decisions.md 格式要求（仅在有 Grill/重大决策时生成）
 ```markdown
+---
+author: <git-user>
+created_at: <now-datetime>
+---
+
 # 决策记录（Decisions）
 
 ## D-001@v1: 决策短标题

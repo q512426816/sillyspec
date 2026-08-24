@@ -153,7 +153,7 @@ console.log('\n=== Test 4: 平台模式 prompt 注入 ===')
   // execute 阶段会自动创建 worktree，在非 git 环境下会失败，跳过
   const stages = ['scan', 'brainstorm', 'plan', 'verify', 'quick']
   for (const stage of stages) {
-    const output = run(`node "${binCLI}" --dir "${projectDir}" --spec-dir "${specDir}" run ${stage} --skip-approval`)
+    const output = run(`node "${binCLI}" --dir "${projectDir}" --spec-dir "${specDir}" run ${stage} --skip-approval --input "spec-dir 测试"`)
     assert(output.includes('平台模式'), `${stage}: 包含平台模式指令`)
     assert(output.includes(`规范目录（specDir）: \`${specDir}\``), `${stage}: 包含正确的 specDir 路径`)
   }

@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-06-04 16:25:42
-updated_at: 2026-08-18
+updated_at: 2026-08-24
 ---
 
 # Worktree 与 Hook 门禁
@@ -121,6 +121,8 @@ sillyspec/<change-name>
 | 无 meta 且目录不存在 | 返回 `skipped` |
 
 如果 `git worktree remove` 失败但目录可删，结果是 `force-cleaned`。
+
+**清理前的 spec 产物打捞**（2026-08-24 坑 worktree-spec-artifact-misplace）：子代理 cwd=worktree 时可能把流程产物（verify-result.md / module-impact.md / 任务卡 / 模块文档）写进 worktree 的 `.sillyspec/`——而 apply 的 `filterDeliverableFiles` 把 `.sillyspec/changes/` 排除在交付外（spec 文档不进代码 patch），cleanup 删除 worktree 即蒸发。删除动作前 `_salvageSpecArtifacts` 扫两棵子树做最后打捞：`changes/<name>/**` 主仓缺失则 copy 回主仓（同名不同内容仅列清单 warn 不覆盖）、`docs/**` 主仓缺失则 copy 回；只扫本变更子树不越权，in-place / native-worktree 跳过，打捞异常只 warn 不阻断清理。配套防患于源：execute/verify 提示词中的蓝图/任务卡/verify-result.md/模块文档路径一律用 `{SPEC_ROOT}` 占位符（CLI 渲染为主仓绝对路径，worktree 漂移自动锚定），`verify-probes --init` 入口同款锚定（`resolveVerifyProbesSpecBase`）。
 
 **分支删除的审计保护**（2026-08-18）：删除分支前校验 `.runtime/execute-runs/*/tasks/*/review.json` 的 `base`/`head` 是否引用该分支上的 commit——有引用则**保留分支 ref**（`branch kept` 入 details，提示手动 `git branch -D`），`force` 也不绕过（force 语义=丢弃内容，不含丢弃审计链）。apply 只复制文件内容不携带 commit（主仓重 commit 后 hash 不同），ref 一删 task review 引用即悬空（gc 后真丢）。校验自身异常按"有引用"处理（宁保留勿误删）。
 

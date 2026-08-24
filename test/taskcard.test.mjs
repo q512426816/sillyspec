@@ -178,14 +178,38 @@ console.log('--- C5/C6/C7: 错误分支 ---')
   void changeDir
 }
 
-console.log('\n=== D. 集成：骨架直接过 validatePlanFeasibility 硬校验 ===\n')
+console.log('\n=== D. 集成：骨架占位符被 feasibility 硬拦（坑 taskcard-placeholder-slip，2026-08-24）===\n')
 {
   const { d, changeDir } = setup('tc-feas-')
   cmdTaskcard('tc', { cwd: d, taskIds: 'all' })
   // projectRoot 传 null 跳过 allowed_paths 存在性探测（骨架占位路径必然不存在，只应产生 warning 而非 error）
   const r = validatePlanFeasibility(changeDir, null)
-  assertTrue(r.errors.length === 0, `骨架过 feasibility 0 error（实际: ${JSON.stringify(r.errors)}）`)
-  assertTrue(r.ok === true, '骨架过 feasibility ok=true')
+  // 坑 taskcard-placeholder-slip：原断言「骨架 0 error」钉死了空骨架漏网（task-03/04/06/07
+  // 曾靠人工审计才发现）——现占位符视同缺字段硬拦；结构面（frontmatter 闭合/9 字段存在）仍由
+  // 骨架保证，报错只应来自占位符检查。
+  assertTrue(r.errors.length > 0, `未填充骨架被硬拦（实际 errors: ${JSON.stringify(r.errors)}）`)
+  assertTrue(r.errors.every(e => e.includes('未填充的生成骨架') || e.includes('占位')),
+    `报错均来自占位符检查（实际: ${JSON.stringify(r.errors)}）`)
+  assertTrue(r.errors.some(e => e.includes('FR-XX') || e.includes('requirement_ids')), '报错点名占位字段（requirement_ids/FR-XX）')
+
+  // 填充后的卡（占位符全替换）→ 0 error（拦截不误伤正常卡）
+  const tasksDir = path.join(changeDir, 'tasks')
+  for (const f of fs.readdirSync(tasksDir)) {
+    const p = path.join(tasksDir, f)
+    let content = fs.readFileSync(p, 'utf8')
+    content = content
+      .replace('requirement_ids: [FR-XX]', 'requirement_ids: [FR-01]')
+      .replace('decision_ids: [D-XXX@vN]', 'decision_ids: []')
+      .replace('- src/example/file.ts', '- src/real/file.ts')
+      .replace('一句话说明这个 task 要做什么、为什么。', '实现真实目标。')
+      .replace('- 具体步骤 1', '- 真实步骤一').replace('- 具体步骤 2', '- 真实步骤二')
+      .replace('- 可验证的验收条件 1', '- 真实验收一').replace('- 可验证的验收条件 2', '- 真实验收二')
+      .replace('- 边界约束 1（如：不加测试）', '- 真实约束一').replace('- 边界约束 2（如：不修改传入参数）', '- 真实约束二')
+    fs.writeFileSync(p, content)
+  }
+  const rFilled = validatePlanFeasibility(changeDir, null)
+  assertTrue(rFilled.errors.length === 0, `填充后的卡 0 error（实际: ${JSON.stringify(rFilled.errors)}）`)
+  assertTrue(rFilled.ok === true, '填充后的卡 feasibility ok=true')
   cleanup(d)
 }
 

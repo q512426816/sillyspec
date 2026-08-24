@@ -403,8 +403,9 @@ const PLAN_RULES = [
       messageVerify: '${id}: 缺少 verify 字段',
       messageConstraints: '${id}: 缺少 constraints 字段',
       messageDependsOnMissing: '${id}: depends_on 引用了不存在的 ${dep}',
+      messagePlaceholder: '${id}: task 卡仍是未填充的生成骨架（${fields} 里的占位符未替换）——占位符视同缺字段。用 Edit 填充 tasks/${id}.md 后重跑（勿删字段勿留 FR-XX/src/example/file.ts/具体步骤 等占位值）',
     },
-    spec: 'task 卡片完整 TaskCard schema(可行性,只认 frontmatter 字段,均 error):YAML frontmatter 必备;frontmatter 需 id、title;allowed_paths 非空;frontmatter 需 goal、implementation、acceptance、verify、constraints 五字段;depends_on 引用的 task 必须存在。',
+    spec: 'task 卡片完整 TaskCard schema(可行性,只认 frontmatter 字段,均 error):YAML frontmatter 必备;frontmatter 需 id、title;allowed_paths 非空;frontmatter 需 goal、implementation、acceptance、verify、constraints 五字段;depends_on 引用的 task 必须存在;骨架占位符(FR-XX/D-XXX/src/example/file.ts/一句话说明这个 task/具体步骤 1/可验证的验收条件 1/边界约束 1)未替换视同缺字段。',
     failMessage: '${id}: task 卡片 frontmatter 缺少必要字段(id/title/allowed_paths/goal/implementation/acceptance/verify/constraints)',
   },
 ]

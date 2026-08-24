@@ -489,6 +489,20 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
   const inputValue = getFlagValue('--input')
   if (inputValue !== null) inputText = inputValue
 
+  // quick 位置参数 → 任务描述（与 auto 模式建议的 `sillyspec run quick "需求"` 用法一致）。
+  // 旧行为静默忽略裸 token（QUICKLOG 标题回退占位）；现显式消费——跳过值类 flag 的值
+  // （--files src/a.js 的 src/a.js 不是位置参数），取第一个真位置 token。配合下方
+  // 「新会话必须带描述」启动门（坑 quick-no-input-placeholder-title）。
+  if (stageName === 'quick' && inputText === null) {
+    for (let i = 0; i < flags.length; i++) {
+      const t = flags[i]
+      if (typeof t !== 'string') continue
+      if (t.startsWith('--')) { if (VALUE_FLAGS.has(t)) i++; continue }
+      inputText = t
+      break
+    }
+  }
+
   // 解析 --linked-changes <a,b|none>（quick 专用：显式声明关联变更，CI/脚本友好）
   // 与 --change 解耦：--linked-changes 语义清晰（关联变更），不与「指定变更名」混淆。
   // null = 未指定（走持久化/交互/兼容回退）；[] = 显式 none（不关联）；[...] = 显式列表
@@ -543,6 +557,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
   const QUICK_SID_RE = /^quick-[0-9a-f]{8}$/
   let quickSessionId = null
   let quickFallbackUsed = false  // Q7: --done 未带 --change 时 fallback 读 current-quick-run-id 命中（区别于显式 --change quick-<hex>）
+  let quickSidFresh = false      // 本轮刚生成全新 sessionId（非 --change 精确恢复 / 非 fallback）——供下方「新会话必须带 --input」门判定
   if (stageName === 'quick') {
     // 1373-1376 已把 quick 的 --change 值清进 linkedChanges、changeName 置 null。
     // 此处回看 --change 原始值：若恰好是单个 quick-<8hex> → 识别为本会话 sessionId（精确恢复），
@@ -571,6 +586,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
       }
       if (!quickSessionId) {
         quickSessionId = 'quick-' + randomUUID().slice(0, 8)
+        quickSidFresh = true
       }
       changeName = quickSessionId
     } else {
@@ -654,10 +670,23 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
   // 解析 --file-notes "path::括注 || path::括注"（quick 专用：QUICKLOG「文件：」行落盘多行括注）。
   // 旁路注入 quicklog.js（per-process setter），不经 complete 收尾路径透传（避碰多 agent 并发改的收尾热点）。
   // completeQuicklogEntry 读后即清；不传 → '' → 回填审计到的实际文件单行（向后兼容）。
+  // 格式 fail-fast（坑 quick-file-notes-format-silent，2026-08-24）：分隔符写错（`|`/`,` 等）时
+  // 整段会被静默挤进第一个文件的括注、QUICKLOG 落盘后只能手工修——解析处直接拦。
   let quickFileNotes = ''
   const fileNotesValue = getFlagValue('--file-notes')
   if (fileNotesValue !== null) {
     quickFileNotes = fileNotesValue
+    const { validateFileNotesFormat } = await import('../quicklog.js')
+    const fv = validateFileNotesFormat(quickFileNotes)
+    if (!fv.ok) {
+      console.error(`❌ --file-notes 格式不对（${fv.problems.length} 处），已拒绝执行（旧行为会静默挤错进 QUICKLOG，只能手工修）：`)
+      for (const p of fv.problems.slice(0, 5)) {
+        console.error(`   「${p.seg.slice(0, 80)}」${p.reason}——${p.hint}`)
+      }
+      if (fv.problems.length > 5) console.error(`   …等共 ${fv.problems.length} 处`)
+      console.error('   正确格式: --file-notes "path1::括注1 || path2::括注2"（`||` 双竖线分隔多文件，`::` 分隔路径与括注）')
+      process.exit(2) // 用法错（--file-notes 格式非法）→ exit 2
+    }
   }
   setQuickFileNotes(quickFileNotes)
 
@@ -725,6 +754,22 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
   if (flags.includes('--help') || flags.includes('-h')) {
     printStageUsage(stageName)
     process.exit(0)
+  }
+
+  // 坑 quick-no-input-placeholder-title（2026-08-24 用户反馈二期①）：全新 quick 会话（上方
+  // 刚生成新 sessionId）不带 --input 且无 --linked-changes 可取标题 → 拒绝启动（exit 2）。
+  // 旧行为只 warn 提示「建议放弃重启」，占位标题「(quick 任务)」已落盘、只能 reset 重来——
+  // 语义标题要拖到最终 --done 才回填，平台「快速修复」列表全程隐藏。此刻零沉没成本（progress
+  // 行/QUICKLOG/guard 均未创建），直接拒掉最便宜。放在 --help 短路之后（help 查询不该被拦）、
+  // 任何会话副作用之前。精确恢复（--change quick-<hex>）与 done-like（--done/--reset/--cancel/
+  // --status/--skip/--reopen）不受限；--linked-changes 启动可从关联变更 proposal/design 提取标题。
+  if (stageName === 'quick' && quickSidFresh
+    && !(isDone || isStatus || isSkip || isReset || isReopen || isCancel)
+    && !inputText && !(Array.isArray(linkedChanges) && linkedChanges.length > 0)) {
+    console.error('❌ 新 quick 会话必须带 --input "<一句话任务描述>"（或 --linked-changes <a,b> 从关联变更取标题）。')
+    console.error('   不带描述启动会落「(quick 任务)」占位标题：平台「快速修复」列表隐藏占位条目、语义标题要拖到最终 --done 才回填，长任务全程不可见。')
+    console.error('   用法: sillyspec run quick --input "<一句话任务描述>" [--linked-changes <a,b>] [--files <...>]')
+    process.exit(2) // 用法错（新会话无任务描述）→ exit 2
   }
 
   const isAuxiliary = auxiliaryStages.includes(stageName)

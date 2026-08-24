@@ -59,7 +59,7 @@ console.log('=== ② 标题剥取（坑 linked-task-placeholder-title）===\n')
   // e2e：启动 quick（--linked-changes，无 --input）→ 关联 tasks.md 追加行带语义标题
   fs.writeFileSync(join(cd, 'proposal.md'), '# 提案书（Proposal）：修复表格列宽\n')
   run(`node "${binCLI}" --dir "${d}" init`)
-  const start = run(`node "${binCLI}" --dir "${d}" run quick --linked-changes ${cn} "关联修复"`)
+  const start = run(`node "${binCLI}" --dir "${d}" run quick --linked-changes ${cn}`)
   const sidM = start.out.match(/sessionId:\s*(quick-[0-9a-f]{8})/)
   assertTrue(!!sidM, 'quick 会话启动')
   const tasksMd = fs.readFileSync(join(cd, 'tasks.md'), 'utf8')
@@ -105,7 +105,7 @@ console.log('\n=== ① 关联变更遗留放行（坑 linked-change-leftover-fal
   fs.mkdirSync(scanDir, { recursive: true })
   fs.writeFileSync(join(scanDir, 'ARCHITECTURE.md'), '# v1\n')
   execSync('git add .sillyspec/docs && git commit -qm docs', { cwd: d2, stdio: 'pipe' })
-  const s2 = run(`node "${binCLI}" --dir "${d2}" run quick "x"`)
+  const s2 = run(`node "${binCLI}" --dir "${d2}" run quick --input "x"`)
   const sid2 = (s2.out.match(/sessionId:\s*(quick-[0-9a-f]{8})/) || [])[1]
   fs.writeFileSync(join(scanDir, 'ARCHITECTURE.md'), '# v2\n')
   run(`node "${binCLI}" --dir "${d2}" run quick --done --change ${sid2} --output "s1"`)

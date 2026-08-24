@@ -421,3 +421,41 @@
 根因：module-resolve 表已有软限（12KB 按节读）但只教 accommodating 不促精简——runtime.md 已 26.9KB、worktree 24KB、stages 20KB 在持续付税且无信号
 方案：renderModuleResolveTable 增 MODULE_CARD_BUDGET_BYTES=16KB 预算——超限行标 ⚠️超预算 + 表尾提示（split-changelog 迁历史段/精简正文，预算只降不升，对标 deepseek-harness verify-doc-budgets）；软限教怎么读、预算促变瘦两层分离
 结果：实测 runtime 26.9KB 触发行内警告+表尾提示（tasks.md+卡 fixture 实证）；node --check 过；token-cost-optimization 既有测试 N/N 全绿；lint 过。
+
+## ql-20260824-002-2a27 | 2026-08-24 11:54:58 | (quick 任务)
+状态：进行中
+关联变更：quick-a19fb16c
+文件：（见实际改动）
+
+## ql-20260824-003-8f3f | 2026-08-24 11:55:26 | worktree 产物归属/探针5 双根并集/风险判级否定抑制——二期学习批次③工具反馈三坑修复
+状态：已完成
+关联变更：（无）
+文件：src/change-risk-profile.js, src/stage-contract.js, src/contract-matrix.js, src/verify-probes.js, src/index.js, src/worktree.js, src/verify-postcheck.js, src/task-review.js, src/stages/verify.js, src/stages/execute.js, src/dispatch/backends/local-agent.js, test/stage-contract.test.mjs, test/probe5-worktree-parity.test.mjs, test/worktree-spec-salvage.test.mjs, docs/sillyspec/file-lifecycle.md, docs/sillyspec/file-lifecycle/worktree-and-guard.md, docs/sillyspec/platform-interface-map.md, docs/prompt/_extracted.json, docs/prompt/verify.md, docs/prompt/execute.md
+需求：worktree 产物归属/探针5 双根并集/风险判级否定抑制——二期学习批次③工具反馈三坑修复
+根因：用户实证反馈：①子代理 cwd=worktree 时按提示词相对路径把 verify-result.md/模块文档写进 worktree 副本，apply 的 filterDeliverableFiles 又排除 .sillyspec/changes，cleanup 即蒸发主仓看不到；②探针5 只现算 scanRoot 单根，另一侧端点不在比对集，主仓既有 daemon 端点被当 missing 全量误报；③design 写「不新增 daemon 协议」仍被判 integration-critical，frontmatter 覆盖通道对首次使用者不直观（verify 末段才暴露）
+方案：①提示词 spec 路径全量 {SPEC_ROOT} 占位符化（渲染为主仓绝对路径）+ verify-probes --init 漂移锚定（resolveVerifyProbesSpecBase，平台 pointer 才当平台根）+ cleanup 前 _salvageSpecArtifacts 打捞（changes/<name>/** 与 docs/** 主仓缺失 copy 回、同名不同内容仅 warn）；②verifyApiParity 后端端点集改三根并集（scanRoot ∪ meta.worktreePath ∪ git-common-dir 主仓根，按 method+path 去重），meta 读取优先 specBase/.runtime（修旧硬编码 worktree 内读不到），前端调用读真实 worktree，porcelain 四处同口径 --untracked-files=all（修目录折叠漏文件）；③detectChangeRisk 同句否定抑制（子句切分+16 字符否定窗口+枚举继承，排除不同/无状态/非常等假阳词；全部命中被抑制才降级）+ verify gate 抑制审计 warning + brainstorm --done 风险判级提前提示
+结果：npm test 304 个测试文件 0 失败（含新增 probe5-worktree-parity 12 例、worktree-spec-salvage 6 例、stage-contract 否定抑制 7 例与 gate 提示 2 例）；npm run lint 通过（408 文件）；docs/prompt 三脚本再生同步 + doc-ref-check 84 处引用全通过
+
+## ql-20260824-004-6437 | 2026-08-24 14:34:49 | 二期学习批次④：taskcard 占位符硬拦 / Wave 依赖方向硬拦+plan-adopt-waves / decisions header 根治+补齐 /…
+状态：已完成
+关联变更：（无）
+文件：
+- src/plan-adopt-waves.js（新命令核心（topo 重排+W 列同步+幂等+拒绝误删））
+- src/taskcard-placeholders.js（占位符清单叶子模块（断 ESM 循环，骨架/校验同源））
+- src/stages/plan-postcheck.js（占位符硬拦+Wave 方向硬拦+collectTaskDepMap 抽出）
+- src/run/command.js（quick 缺描述门+位置参数即描述+file-notes fail-fast）
+- src/quicklog.js（validateFileNotesFormat 导出）
+- src/stage-contract.js（ensureDecisionDocHeader 自动补齐）
+- src/run/gates.js（三道 gate 前幂等补齐接线）
+- src/index.js（plan-adopt-waves 命令接线）
+- src/scan-postcheck.js（backfillFrontmatter 抽共用）
+- src/stages/brainstorm.js（decisions 模板补 frontmatter）
+- src/stages/brainstorm-auto.js（同上）
+- templates/prompts/taskcard-rules.md（占位符硬拦事前契约）
+- src/stages/plan.js（coordinator prompt 三处同源）
+- test/plan-adopt-waves.test.mjs（24 例端到端（重排/幂等/dry-run/方向违规/无标题/混正文拒写））
+- test/decisions-header-backfill.test.mjs（15 例（模板根治/纯函数/gate 补齐/scan-fix 回归））
+需求：二期学习批次④：taskcard 占位符硬拦 / Wave 依赖方向硬拦+plan-adopt-waves / decisions header 根治+补齐 / quick 缺描述拒绝启动+位置参数即描述 / file-notes 格式 fail-fast
+根因：用户实证五坑：①taskcard 骨架占位符过九字段存在性硬校验，task-03/04/06/07 空骨架靠人工审计才发现；②主控手排 7 波与 CLI 拓扑比对只警告不阻断，且 depends_on 落同 Wave（execute 强制并行）此前零校验；③brainstorm step8 要求所有规范文件含 frontmatter 但其 decisions 模板自己不带，agent 照抄必缺 header 拖到后续环节才提示；④quick 缺 --input 落占位标题只能手工 reset 重来；⑤--file-notes 的 || 分隔符写错时整段静默挤进第一个文件括注
+方案：①占位符清单独立叶子模块 taskcard-placeholders.js 与骨架同源，validatePlanFeasibility 剥 HTML 注释后逐卡硬拦（manifest/rules/coordinator 三处事前契约同源）；②executePlanPostcheck Wave 段加依赖方向硬拦（同 Wave/后置 Wave → throw）+ 不一致 warning 降噪区分合法过度串行，新增 plan-adopt-waves 命令（depMap 与 postcheck 同源→topoSortWaves→重写 Wave 段+任务总表 W 列 best-effort+非引用内容拒绝重写+写后复跑一致性，--dry-run/幂等）；③brainstorm+brainstorm-auto decisions 模板补 frontmatter 根治，backfillFrontmatter 抽共用，ensureDecisionDocHeader 在三道 gate 前幂等补存量；④command.js 新会话（刚生成 sessionId）缺描述且无关联变更 → exit 2（--help 短路之后、任何副作用之前；精确恢复/done-like 豁免），quick 位置参数显式转任务描述（与 auto 建议用法一致）；⑤validateFileNotesFormat 逐段要求 path::括注，非法即拒
+结果：npm test 306 个测试文件 0 失败（新增 plan-adopt-waves 24 例、decisions-header-backfill 15 例，更新 taskcard D 段反转、quick-start-input-hint 改拒绝语义、4 个既有 quick 测试补 --input/去装饰位置参数）；lint 412 文件通过；doc-ref-check 84 处引用全过（index.js/command.js 行号重锚两批 11 处）

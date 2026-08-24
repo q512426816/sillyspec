@@ -5,13 +5,15 @@
  * CLI 不再相信 prompt 完成，completeStep 后必须过 validator。
  */
 
-import { existsSync, readdirSync, readFileSync } from 'fs'
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'fs'
 import { join, basename } from 'path'
 import { safeGit } from './git-helper.js'
+import { nowWallClock } from './datetime.js'
 import { detectChangeRisk, checkIntegrationEvidence, VERIFICATION_NEEDS, RISK_LEVEL_CAUSES } from './change-risk-profile.js'
 import { SCAN_REQUIRED_DOCS, AUXILIARY_STAGES } from './constants.js'
 import { evaluateRules } from './stage-contract-engine.js'
 import { getRule } from './stage-contract-spec.js'
+import { backfillFrontmatter } from './scan-postcheck.js'
 import { parseAllowedPaths } from './stages/plan-postcheck.js'
 
 /**
@@ -163,6 +165,31 @@ function parseDecisionRecords(content) {
   return records
 }
 
+/**
+ * decisions.md 缺 author/created_at header 时自动补齐（坑 decisions-header-late-warning，
+ * 2026-08-24 用户反馈二期：brainstorm step8 模板曾自带无 frontmatter 的 decisions 样例——
+ * agent 照抄生成必缺 header，拖到后续环节才提示。模板已修；本函数兜存量：gate 前幂等补
+ * 机械字段（author=git user / created_at=now），与 scan-fix-headers 同一 backfillFrontmatter 实现。
+ * @param {string} changeDir - changes/<name> 目录
+ * @returns {boolean} true = 本次补齐过（false = 无 decisions.md / header 已齐 / 写失败）
+ */
+export function ensureDecisionDocHeader(changeDir) {
+  try {
+    const decisionPath = join(changeDir, 'decisions.md')
+    if (!existsSync(decisionPath)) return false
+    const content = readFileSync(decisionPath, 'utf8')
+    let author = 'unknown'
+    const gitUser = safeGit(changeDir, ['config', 'user.name'])
+    if (gitUser && gitUser.value) author = String(gitUser.value).trim() || 'unknown'
+    const r = backfillFrontmatter(content, { author, createdAt: nowWallClock() })
+    if (!r.changed) return false
+    writeFileSync(decisionPath, r.content)
+    console.log(`ℹ️  已自动补齐 decisions.md 缺失的 author/created_at header: ${decisionPath}`)
+    return true
+  } catch { /* 补齐失败不阻断 gate——decisions 内容校验照常进行 */ }
+  return false
+}
+
 function extractCurrentDecisionIds(content) {
   const records = parseDecisionRecords(content)
   if (records.length === 0) return extractIds(content, 'D')
@@ -284,6 +311,27 @@ function validateBrainstormOutputs(cwd, changeName, context = {}) {
         if (!hasLifecycleTable) {
           errors.push(lcRule.failMessage)
         }
+      }
+    }
+
+    // ── 风险判级提前提示（坑 risk-first-use-opaque，2026-08-24 用户实证）──
+    // verify --done 的 risk gate 既往只在流程末段暴露，首次使用者撞墙后才知道 frontmatter
+    // risk_level 覆盖通道。design --done 即按同款 detectChangeRisk 预判一次（此时 plan.md 尚未
+    // 产出，verify 时会连 plan 一起重判、级别可能上浮——本提示 advisory 不作为定论）：
+    // 高危关键词命中 / 存在否定抑制 → 透出判级结果 + 覆盖指引，把机制可见性提前到 design 阶段。
+    {
+      const profile = detectChangeRisk({ designContent: content })
+      if (['integration-critical', 'deployment-critical'].includes(profile.level) && !profile.explicit) {
+        warnings.push(
+          `[risk] 本次 design 判级 ${profile.level}（命中关键词：${profile.triggers.join('、')}）——verify --done 将强制真实集成证据门控。` +
+          `若属关键词误伤（实际未触碰 daemon/session/启动入口），现在就在 design.md frontmatter 加 risk_level: <真实等级>（如 unit-sufficient）显式覆盖，免得到 verify 阶段才发现而返工。`
+        )
+      }
+      if ((profile.suppressedTriggers || []).length > 0) {
+        warnings.push(
+          `[risk] 关键词命中 ${profile.suppressedTriggers.join('、')} 已被同句否定语境抑制，当前判级 ${profile.level}。` +
+          `若实际涉及对应改动，请在 design.md frontmatter 声明高危级（抑制可审计，防静默降级逃证据门控）。`
+        )
       }
     }
   }
@@ -461,11 +509,22 @@ function validateVerifyOutputs(cwd, changeName, context = {}) {
       planContent: readIfExists(join(changeDir, 'plan.md')),
     })
     const conclusion = extractVerifyConclusion(verify)
+    // ── 否定抑制审计（坑 risk-negation-blindness）──
+    // 关键词命中被同句否定语境抑制而不参与判级时必须透出：抑制是把双刃剑（「本次不新增
+    // daemon」真豁免 vs 靠堆否定措辞静默降级逃证据门控），这里让每次抑制可见可核对；
+    // frontmatter risk_level 仍是双向权威覆盖通道。
+    if ((changeRiskProfile.suppressedTriggers || []).length > 0) {
+      warnings.push(
+        `[${changeRiskProfile.level}] 风险判级：关键词命中 ${changeRiskProfile.suppressedTriggers.join(', ')} 已被同句否定语境（不/未/无/避免…）抑制，未参与判级。` +
+        `若本变更实际涉及跨进程/状态机/启动入口改动，请在 design.md frontmatter 加 risk_level: integration-critical（或 deployment-critical）显式声明或提供真实集成证据——抑制可审计，不许用来静默降级。`
+      )
+    }
     if (['integration-critical', 'deployment-critical'].includes(changeRiskProfile.level)) {
       // 关键词误伤早期引导（坑2，FR-02）：命中高危关键词且无 frontmatter risk_level 时，
       // 无条件透出 frontmatter 覆盖指引（不依赖 conclusion / evidence），让 agent 早期即可
-      // 判断是否属误判并显式覆盖，而非撞到 evidence gate 末尾才发现出路③。遵 6417a27：不做
-      // body 否定语境扫描，只走 frontmatter 显式覆盖通道。
+      // 判断是否属误判并显式覆盖，而非撞到 evidence gate 末尾才发现出路③。含否定语境的
+      // 命中已在 detectChangeRisk 内被同句否定抑制（见 change-risk-profile.js NEGATION_CUES），
+      // 此处命中的都是无否定语境的真命中；仍误伤的走 frontmatter 显式覆盖通道。
       if (!changeRiskProfile.explicit) {
         warnings.push(
           `[${changeRiskProfile.level}] 本次变更被关键词判级（命中：${changeRiskProfile.triggers.join(', ')}）。` +

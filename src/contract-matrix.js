@@ -9,7 +9,7 @@
  */
 
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from 'fs'
-import { join, resolve, basename, relative } from 'path'
+import { join, resolve, basename, dirname, relative } from 'path'
 import { gitQuiet } from './git-helper.js'
 import { splitOwnVsForeignDiffFiles } from './foreign-declared.js'
 import {
@@ -335,25 +335,49 @@ export function buildContractFieldInjection(changeDir, taskName) {
 // ─── Verify 阶段：parity check ──────────────────────────────────────────
 
 /**
+ * 读 worktree meta（parity 双根扫描 / diff 收窄共用）。
+ * 优先 specBase/.runtime/worktrees/<change>/meta.json（主仓 spec 根——cwd=worktree 时 specBase 已被
+ * command.js 漂移守卫锚定主仓；旧实现硬编码 scanRoot/.sillyspec/.runtime，worktree 内运行永远读不到
+ * meta）；兼容回退 scanRoot/.sillyspec/.runtime（旧路径）。
+ * @returns {{ meta: object, gitDir: string }|null} gitDir = diff/扫描用 git 根（真实 worktree 或 scanRoot）
+ */
+function _readWorktreeMeta(specBase, scanRoot, changeName) {
+  if (!changeName) return null
+  const candidates = [
+    specBase ? join(specBase, '.runtime', 'worktrees', changeName, 'meta.json') : null,
+    join(scanRoot, '.sillyspec', '.runtime', 'worktrees', changeName, 'meta.json'),
+  ].filter(Boolean)
+  for (const metaPath of candidates) {
+    try {
+      if (!existsSync(metaPath)) continue
+      const meta = JSON.parse(readFileSync(metaPath, 'utf8'))
+      const gitDir = (meta.worktreePath && meta.mode !== 'in-place-fallback' && existsSync(meta.worktreePath))
+        ? meta.worktreePath : scanRoot
+      return { meta, gitDir }
+    } catch { /* 损坏 meta 试下一候选 */ }
+  }
+  return null
+}
+
+/**
  * 取本变更 diff 文件集（parity 前端调用收窄用，坑 probe5-fullrepo-frontend-noise）。
  * 优先 worktree meta 锚点 diff（与 verify 同源）；无 meta 退主仓 git diff HEAD。
  * @returns {string[]|null}
  */
-function _resolveDiffFilesForParity(scanRoot, changeName) {
+function _resolveDiffFilesForParity(specBase, scanRoot, changeName) {
   try {
-    const metaPath = join(scanRoot, '.sillyspec', '.runtime', 'worktrees', changeName, 'meta.json')
-    if (existsSync(metaPath)) {
-      const meta = JSON.parse(readFileSync(metaPath, 'utf8'))
-      const diffBase = meta.baselineCommit || meta.actualBaseHash || meta.baseHash
-      const gitDir = (meta.worktreePath && meta.mode !== 'in-place-fallback' && existsSync(meta.worktreePath))
-        ? meta.worktreePath : scanRoot
+    const wt = _readWorktreeMeta(specBase, scanRoot, changeName)
+    if (wt) {
+      const diffBase = wt.meta.baselineCommit || wt.meta.actualBaseHash || wt.meta.baseHash
       if (diffBase) {
-        const out = gitQuiet(gitDir, ['diff', '--name-only', `${diffBase}..HEAD`], { timeout: 30000 })
+        const out = gitQuiet(wt.gitDir, ['diff', '--name-only', `${diffBase}..HEAD`], { timeout: 30000 })
         if (out !== null) {
           const files = out.split('\n').filter(Boolean)
-          // 并入 worktree 未提交（子代理默认不 commit 的形态，与 resolveVerifyChangedFiles 同口径）
+          // 并入 worktree 未提交（子代理默认不 commit 的形态，与 resolveVerifyChangedFiles 同口径）。
+          // -uall：porcelain 默认把整目录折叠成 `dir/` 一项，文件级匹配（前端调用过滤）会漏新目录
+          // 里的文件（坑 probe5-worktree-single-root-noise 实证：web/ 折叠 → feature.js 漏匹配）
           try {
-            const wtStatus = gitQuiet(gitDir, ['status', '--porcelain'], { timeout: 30000, trim: false })
+            const wtStatus = gitQuiet(wt.gitDir, ['status', '--porcelain', '--untracked-files=all'], { timeout: 30000, trim: false })
             for (const line of String(wtStatus || '').split('\n')) {
               if (!line || line.length < 4) continue
               const p = line.slice(3).trim().split(' -> ').pop() || ''
@@ -418,18 +442,42 @@ export function verifyApiParity(specBase, scanRoot, runtimeRoot, changeName = nu
     return { ok: true, missingBackend: [], unusedBackend: [], summary: 'No scan root for parity check', backendCount: allProviderEndpoints.length, frontendCount: 0 }
   }
 
-  // ── 现算端点并入基线（坑 probe5-endpoint-baseline-stale，2026-08-22 实证：endpoints 基线
-  // 是 execute 时落的存量 artifacts，verify 时主仓已被并行会话/部署扰动推进——存量基线与当前
-  // 代码失配 → 前端调用（当前代码）对不上旧端点集 → missingBackend 全量误报。现算当前代码的
-  // 后端端点并入比对集：missingBackend 判定以「当前真实代码 ∪ 存量基线」为准（现算覆盖大部分、
-  // 存量补充跨仓/已删代码）；unusedBackend 只对现算端点算（存量过期端点不再误报 unused）。
-  let liveEndpoints = []
-  try { liveEndpoints = scanBackendEndpoints(scanRoot) } catch { /* 现算失败退回纯存量基线 */ }
+  // ── 双根并集现算（坑 probe5-worktree-single-root-noise，2026-08-24 用户实证：worktree 场景
+  // 只现算 scanRoot 单根，另一侧端点不在比对集——verify 从主仓跑（apply 前）漏 worktree 新增端点；
+  // verify 从 worktree 跑则既读不到 meta（旧路径硬编码 scanRoot/.sillyspec）也漏主仓既有 daemon
+  // 端点 → 前端调用全量误报 missing）。后端端点全集 = 主仓既有 ∪ worktree 新增 ∪ 存量 artifact：
+  // 现算根集 = [scanRoot, meta.worktreePath, 主仓根（cwd 自身在 linked worktree 内时经
+  // git-common-dir 解析）]，逐根 scanBackendEndpoints 按 method+path 去重。
+  // 存量基线失配坑（probe5-endpoint-baseline-stale，2026-08-22）由本并集一并覆盖：现算当前
+  // 代码 ∪ 存量基线；unusedBackend 只对现算端点算（存量过期端点不再误报 unused）。
+  const wt = _readWorktreeMeta(specBase, scanRoot, changeName)
+  const liveRoots = []
+  const pushRoot = (root, label) => {
+    if (!root || !existsSync(root)) return
+    const abs = resolve(root)
+    if (liveRoots.some(r => resolve(r.root) === abs)) return
+    liveRoots.push({ root, label })
+  }
+  pushRoot(scanRoot, 'scan-root')
+  if (wt && wt.gitDir !== scanRoot) pushRoot(wt.gitDir, 'worktree')
+  // cwd 自身是 linked worktree 时补主仓根（主仓返回 .git → dirname=scanRoot 被 pushRoot 去重）
+  try {
+    const commonDir = gitQuiet(scanRoot, ['rev-parse', '--git-common-dir'])
+    if (commonDir) pushRoot(dirname(resolve(scanRoot, commonDir)), 'main')
+  } catch { /* 非 git 目录/解析失败：单根继续 */ }
+
+  const liveByRoot = []
+  for (const { root, label } of liveRoots) {
+    try { liveByRoot.push({ root, label, endpoints: scanBackendEndpoints(root) }) } catch { /* 单根失败不拖垮整体 */ }
+  }
+  const liveEndpoints = liveByRoot.flatMap(r => r.endpoints)
   const liveKeys = new Set(liveEndpoints.map(e => `${e.method} ${e.path}`))
+  const mergedKeys = new Set(allProviderEndpoints.map(e => `${e.method} ${e.path}`))
   const mergedProviderEndpoints = [...allProviderEndpoints]
   for (const e of liveEndpoints) {
     const key = `${e.method} ${e.path}`
-    if (!allProviderEndpoints.some(p => `${p.method} ${p.path}` === key)) {
+    if (!mergedKeys.has(key)) {
+      mergedKeys.add(key)
       mergedProviderEndpoints.push(e)
     }
   }
@@ -439,24 +487,28 @@ export function verifyApiParity(specBase, scanRoot, runtimeRoot, changeName = nu
   // → 143 个 missing 全是误报噪音）。比对口径 = 本变更 diff 文件内的调用 ∪ 全仓（仅当
   // 端点登记源也是全仓时——无 changeName 的 CLI contractScan 场景）。diff 不可得时退回
   // 全仓（不静默跳过对账）。
+  // 扫描根优先真实 worktree（坑 probe5-worktree-single-root-noise）：apply 前新代码只在
+  // worktree，scanRoot（主仓 cwd）里是旧版本——读旧版会漏新调用/多已删调用。
   let frontendCalls = []
   let frontendScope = 'full-repo'
+  const frontendRoot = (wt && wt.gitDir !== scanRoot) ? wt.gitDir : scanRoot
+  const frontendRootLabel = frontendRoot === scanRoot ? 'scan-root' : 'worktree'
   if (changeName) {
     try {
-      const changed = _resolveDiffFilesForParity(scanRoot, changeName)
+      const changed = _resolveDiffFilesForParity(specBase, scanRoot, changeName)
       if (changed && changed.length > 0) {
         const changedSet = new Set(changed.map(f => f.replace(/\\/g, '/')))
-        frontendCalls = scanFrontendApiCalls(scanRoot).filter(c => {
+        frontendCalls = scanFrontendApiCalls(frontendRoot).filter(c => {
           const src = String(c.source || '').replace(/\\/g, '/')
           return changedSet.has(src) || [...changedSet].some(cf => src.endsWith(cf) || cf.endsWith(src))
         })
-        frontendScope = `change-diff (${changed.length} files)`
+        frontendScope = `change-diff (${changed.length} files @ ${frontendRootLabel})`
       } else {
-        frontendCalls = scanFrontendApiCalls(scanRoot)
+        frontendCalls = scanFrontendApiCalls(frontendRoot)
       }
-    } catch { frontendCalls = scanFrontendApiCalls(scanRoot) }
+    } catch { frontendCalls = scanFrontendApiCalls(frontendRoot) }
   } else {
-    frontendCalls = scanFrontendApiCalls(scanRoot)
+    frontendCalls = scanFrontendApiCalls(frontendRoot)
   }
 
   const { missingBackend, unusedBackend } = diffApiParity(frontendCalls, mergedProviderEndpoints)
@@ -468,13 +520,14 @@ export function verifyApiParity(specBase, scanRoot, runtimeRoot, changeName = nu
   })
 
   const ok = missingBackend.length === 0
+  const liveRootSummary = liveByRoot.map(r => `${r.label} ${r.endpoints.length}`).join(' + ')
   let summary = ok
-    ? `✅ API parity check passed: ${mergedProviderEndpoints.length} backend endpoints (live ${liveEndpoints.length} + artifact ${allProviderEndpoints.length}), ${frontendCalls.length} frontend calls [scope: ${frontendScope}]`
+    ? `✅ API parity check passed: ${mergedProviderEndpoints.length} backend endpoints (live [${liveRootSummary}] + artifact ${allProviderEndpoints.length}), ${frontendCalls.length} frontend calls [scope: ${frontendScope}]`
     : `❌ API parity check failed: ${missingBackend.length} frontend calls have no matching backend endpoint [scope: ${frontendScope}]`
 
   if (narrowedUnused.length > 0) {
     summary += ` | ${narrowedUnused.length} backend endpoints unused by frontend`
   }
 
-  return { ok, missingBackend, unusedBackend: narrowedUnused, summary, backendCount: mergedProviderEndpoints.length, frontendCount: frontendCalls.length }
+  return { ok, missingBackend, unusedBackend: narrowedUnused, summary, backendCount: mergedProviderEndpoints.length, frontendCount: frontendCalls.length, scanRoots: liveByRoot.map(r => r.root) }
 }

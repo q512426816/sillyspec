@@ -171,6 +171,13 @@ AC-011: 不涉及业务规则/产品范围/默认行为/用户可见行为变更
 #### decisions.md（必填，写入变更根目录 `decisions.md`）
 记录所有决策：
 ```markdown
+---
+author: <git-user>
+created_at: <now-datetime>
+---
+
+# 决策记录（Decisions）
+
 ## D-001@v1: 决策短标题
 - type: architecture | boundary | compatibility | ...
 - priority: P0 | P1 | P2

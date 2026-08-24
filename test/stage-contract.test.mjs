@@ -418,12 +418,49 @@ console.log('\n=== risk_level 显式豁免 ===')
     console.log('❌ detectChangeRisk 显式豁免未生效', r)
     failed++
   }
-  // 对照：无声明时同样措辞应被误判 integration-critical（证明关键词确实命中）
-  const rAuto = detectChangeRisk({ designContent: '# Design\n本次不改动 daemon / session / lifecycle。\n' })
+  // 对照：无声明、无否定语境的措辞仍按关键词判 integration-critical（证明关键词确实命中；
+  // 否定措辞场景由下方「同句否定抑制」单测覆盖，不再作为对照组）
+  const rAuto = detectChangeRisk({ designContent: '# Design\n涉及 daemon 与 session 状态机。\n' })
   if (rAuto.level === 'integration-critical' && !rAuto.explicit) {
-    console.log('✅ 对照：无显式声明时同措辞仍按关键词判 integration-critical（证明豁免生效于声明而非措辞）')
+    console.log('✅ 对照：无显式声明、无否定语境时仍按关键词判 integration-critical（证明豁免生效于声明而非措辞）')
   } else {
     console.log('❌ 对照判级异常', rAuto)
+    failed++
+  }
+}
+
+// 单测 2b：同句否定抑制（坑 risk-negation-blindness，2026-08-24）——机械窗口 + 枚举继承，
+// 全部命中被抑制才降级；否定词在关键词后方/「不同」合成词/跨子句/从属文字间隔均不抑制
+{
+  const cases = [
+    // [名, design, 期望 level, 期望 kept triggers, 期望 suppressed triggers]
+    ['枚举全抑制→doc-only', '# D\n本次不改动 daemon / session / lifecycle。\n', 'doc-only', [], ['daemon', 'session', 'lifecycle']],
+    ['后置否定不抑制', '# D\ndaemon 稳定性提升。\n', 'integration-critical', ['daemon'], []],
+    ['「不同」合成词不抑制', '# D\n不同模块的 daemon。\n', 'integration-critical', ['daemon'], []],
+    ['子句切断不继承', '# D\n不改动 daemon，新增 session 管理。\n', 'integration-critical', ['session'], ['daemon']],
+    ['从属文字间隔不继承', '# D\n在不涉及 daemon 的情况下重构 session 管理。\n', 'integration-critical', ['session'], ['daemon']],
+    ['部分抑制不降级', '# D\n不新增 daemon 协议，但重构 session 状态机。\n', 'integration-critical', ['session'], ['daemon']],
+    ['英文否定抑制', '# D\nno new daemon protocol in this change.\n', 'doc-only', [], ['daemon']],
+  ]
+  let allOk = true
+  for (const [name, design, wantLevel, wantKept, wantSup] of cases) {
+    const r = detectChangeRisk({ designContent: design })
+    const ok = r.level === wantLevel
+      && r.triggers.join(',') === wantKept.join(',')
+      && r.suppressedTriggers.join(',') === wantSup.join(',')
+    if (!ok) { allOk = false; console.log(`❌ 否定抑制「${name}」`, r) }
+  }
+  if (allOk) {
+    console.log('✅ detectChangeRisk 同句否定抑制：枚举继承/后置不抑制/「不同」不抑制/子句切断/部分抑制共 7 例')
+  } else {
+    failed++
+  }
+  // frontmatter 显式声明仍最高优先（声明分支不做否定分析，行为不变）
+  const rExplicit = detectChangeRisk({ designContent: '---\nrisk_level: integration-critical\n---\n# D\n本次不新增 daemon。\n' })
+  if (rExplicit.level === 'integration-critical' && rExplicit.explicit && rExplicit.suppressedTriggers.length === 0) {
+    console.log('✅ 显式声明优先于否定抑制（声明分支不分析否定，行为不变）')
+  } else {
+    console.log('❌ 显式声明与否定抑制优先级异常', rExplicit)
     failed++
   }
 }
@@ -608,6 +645,66 @@ if (!warnExplicit.warnings.some(w => w.includes('关键词判级') && w.includes
   failed++
 }
 rmSync(warnRoot, { recursive: true })
+
+// === 否定抑制审计 warning（坑 risk-negation-blindness，2026-08-24）===
+// design 写「不新增 daemon 协议」→ 命中被同句否定抑制、判级降为 doc-only（不强制集成证据），
+// 但降级必须可审计：validateVerifyOutputs 要透出抑制词 + 防静默降级指引。
+console.log('\n=== 否定抑制审计 warning ===')
+
+const supRoot = mkdtempSync(join(tmpdir(), 'sillyspec-risksup-'))
+const supDir = join(supRoot, '.sillyspec', 'changes', 'risksup')
+mkdirSync(supDir, { recursive: true })
+writeFileSync(join(supDir, 'design.md'), [
+  '# Design', '## 文件变更清单', '## 风险登记', '## 自审', '',
+  '本次不新增 daemon 协议，仅调整 service 文案。', 'D-001@v1', ''
+].join('\n'))
+writeFileSync(join(supDir, 'plan.md'), '# Plan\n\n- [ ] task-01: 调整文案\n')
+writeFileSync(join(supDir, 'verify-result.md'), '# 验证报告\n\n## 结论\n\nPASS\n\n单测全过。\n')
+const supAuto = runValidators('verify', supRoot, 'risksup')
+const supHit = supAuto.warnings.find(w =>
+  w.includes('已被同句否定语境') && w.includes('daemon') && w.includes('不许用来静默降级'))
+if (supHit && supAuto.ok === true) {
+  console.log('✅ 否定抑制降级 → 审计 warning 透出（抑制词 + 防静默降级指引），doc-only 放行不强制集成证据')
+} else {
+  console.log('❌ 否定抑制未透出审计 warning 或误阻断', { ok: supAuto.ok, warnings: supAuto.warnings, errors: supAuto.errors })
+  failed++
+}
+rmSync(supRoot, { recursive: true })
+
+// === design gate 风险判级提前提示（坑 risk-first-use-opaque，2026-08-24）===
+// 首次使用者在 design --done 就应看到判级结果 + frontmatter 覆盖指引，不必等 verify 撞墙。
+console.log('\n=== design gate 风险判级提前提示 ===')
+
+const ehRoot = mkdtempSync(join(tmpdir(), 'sillyspec-riskhint-'))
+const ehDir = join(ehRoot, '.sillyspec', 'changes', 'riskhint')
+mkdirSync(ehDir, { recursive: true })
+writeFileSync(join(ehDir, 'design.md'), [
+  '# Design', '## 文件变更清单', '## 风险登记', '## 自审', '',
+  '改 daemon 下发链路。', 'D-001@v1', ''
+].join('\n'))
+const ehAuto = runValidators('brainstorm', ehRoot, 'riskhint')
+const ehHit = ehAuto.warnings.find(w =>
+  w.includes('[risk]') && w.includes('integration-critical') && w.includes('frontmatter 加 risk_level'))
+if (ehHit) {
+  console.log('✅ design 命中 daemon → design gate 提前透出判级 + frontmatter 覆盖指引')
+} else {
+  console.log('❌ design gate 未透出风险判级提前提示', ehAuto.warnings)
+  failed++
+}
+
+// 否定抑制场景：design gate 也提示（抑制可审计，两道 gate 同口径）
+writeFileSync(join(ehDir, 'design.md'), [
+  '# Design', '## 文件变更清单', '## 风险登记', '## 自审', '',
+  '本次不新增 daemon 协议，仅调整文案。', 'D-001@v1', ''
+].join('\n'))
+const ehSup = runValidators('brainstorm', ehRoot, 'riskhint')
+if (ehSup.warnings.some(w => w.includes('[risk]') && w.includes('已被同句否定语境抑制'))) {
+  console.log('✅ design 否定抑制 → design gate 透出抑制审计提示')
+} else {
+  console.log('❌ design gate 未透出否定抑制提示', ehSup.warnings)
+  failed++
+}
+rmSync(ehRoot, { recursive: true })
 
 // === brainstorm scale=small 四件套豁免（矛盾1，2026-08-07）===
 // 历史矛盾：brainstorm 末步指引 scale=small 只产 design.md 后转 quick，但 validator 四件套全 error

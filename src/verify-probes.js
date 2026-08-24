@@ -21,11 +21,37 @@ import { parseFileChangeListDetailed } from './change-list.js'
 import { parseAllowedPaths } from './stages/plan-postcheck.js'
 import { verifyApiParity } from './contract-matrix.js'
 import { splitOwnVsForeignDiffFiles } from './foreign-declared.js'
-import { resolveSpecDir, resolveRuntimeRoot } from './run/shared.js'
+import { resolveSpecDir, resolveRuntimeRoot, detectWorktreeSpecDrift } from './run/shared.js'
 
 const TODO_MARKER_RE = /尚未实现|TODO|FIXME|HACK|XXX/
 const TEST_FILE_RE = /test|spec/i
 const PROBE1_MAX_MATCHES = 200
+
+/**
+ * verify-probes 的 spec 根解析（含 worktree 副本漂移锚定）。
+ *
+ * 坑 worktree-spec-artifact-misplace（2026-08-24 用户实证）：在 worktree 内跑
+ * `verify-probes --init` 时 spec 根随 cwd 落进 worktree 的 .sillyspec checkout 副本——骨架
+ * 写进副本、主仓 verify gate 读不到，副本随 worktree 清理蒸发。与 run/command.js 对
+ * plan/execute/verify/archive 的漂移守卫同口径：命中副本自动锚回主仓后继续（不 exit）；
+ * 平台模式 / 显式 --spec-dir 已明确指定，不纠正。
+ * @param {string} cwd
+ * @param {string|null} [specDir] --spec-dir（显式指定则不锚定）
+ * @param {string|null} [platformBase] 平台 spec 根（仅 .sillyspec-platform.json pointer 存在时传入；
+ *   resolvePlatformSpecDir 无 pointer 时回退本地解析会返回 worktree 副本根，不能当平台根传）
+ * @returns {string} spec 根绝对路径（漂移时为主仓）
+ */
+export function resolveVerifyProbesSpecBase(cwd, specDir = null, platformBase = null) {
+  if (platformBase) return platformBase
+  const base = resolveSpecDir(cwd, { specDir: specDir || undefined })
+  if (specDir) return base
+  const wt = detectWorktreeSpecDrift(base)
+  if (wt) {
+    console.warn(`⚠️ 已自动锚定主仓 spec：${wt.mainSpecBase}（原 cwd 命中 worktree 副本 ${wt.changeName}，verify-probes 产物落主仓，已纠正，流程继续）`)
+    return wt.mainSpecBase
+  }
+  return base
+}
 
 function listTaskIds(tasksPath) {
   if (!existsSync(tasksPath)) return []
@@ -68,7 +94,7 @@ function findTestFiles(rootDir, cwd, cap = 10) {
  * @returns {{ probe1: object, probe3: object, probe5: object, probe6: object }}
  */
 export function runVerifyProbes({ cwd, changeName, specDir = null }) {
-  const specBase = resolveSpecDir(cwd, { specDir })
+  const specBase = resolveVerifyProbesSpecBase(cwd, specDir)
   const changeDir = join(specBase, 'changes', changeName)
   const designPath = join(changeDir, 'design.md')
   const detailed = existsSync(designPath) ? parseFileChangeListDetailed(designPath) : []
@@ -204,6 +230,9 @@ export function renderVerifyProbesReport(result) {
 
   L.push('#### 探针 5：API Contract Parity')
   L.push(`- ${probe5.summary || `backend ${probe5.backendCount ?? 0} 端点 / frontend ${probe5.frontendCount ?? 0} 调用`}`)
+  if ((probe5.scanRoots || []).length > 1) {
+    L.push(`- ℹ️ 后端端点比对集为多根并集（主仓既有 ∪ worktree 新增 ∪ 存量 artifact），共扫 ${probe5.scanRoots.length} 个根`)
+  }
   if ((probe5.missingBackend || []).length > 0) {
     L.push('')
     L.push('| 状态 | 前端调用 | 后端端点 | 文件 |')
@@ -264,7 +293,7 @@ export function generateVerifyResultSkeleton(result) {
     '<!--TODO: TODO/FIXME/HACK 统计（探针 1 的命中已预填在上方探针结果）-->',
     '',
     '## 变更风险等级',
-    '<!--TODO: doc-only / unit-sufficient / contract-required / integration-critical / deployment-critical；若 design.md frontmatter 有 risk_level 显式声明，写明「显式声明 = <等级>」+ 理由（豁免可审计）-->',
+    '<!--TODO: doc-only / unit-sufficient / contract-required / integration-critical / deployment-critical；若 design.md frontmatter 有 risk_level 显式声明，写明「显式声明 = <等级>」+ 理由；若有命中被同句否定语境抑制（如「不新增 daemon 协议」），写明被抑制关键词与理由（抑制可审计，不许用来静默降级）-->',
     '',
     '## Runtime Evidence',
     '<!--TODO: 关键命令输出/时间戳/commit hash 证据链；integration/deployment-critical 必填，按实际触碰的运行时组件写（启动命令/端点/请求响应/日志片段/生命周期终态断言/失败模式排除），未涉及的行写「不涉及」-->',

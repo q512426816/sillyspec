@@ -411,31 +411,43 @@ export function fixScanDocHeaders({ cwd, specDir = null, project = null }) {
       } catch {
         continue
       }
-      const header = content.slice(0, 512)
-      const hasAuthor = /author\s*:/.test(header)
-      const hasCreated = /created_at\s*:/.test(header)
-      if (hasAuthor && hasCreated) {
+      const r = backfillFrontmatter(content, { author, createdAt: now })
+      if (!r.changed) {
         skipped.push(filePath)
         continue
       }
-      const inserts = []
-      if (!hasAuthor) inserts.push(`author: ${author}`)
-      if (!hasCreated) inserts.push(`created_at: ${now}`)
-      let newContent
-      if (content.startsWith('---\n') || content.startsWith('---\r\n')) {
-        // 有 frontmatter：插到开标签后（CRLF 归一写回，与其它 CLI 写入口径一致）
-        const normalized = content.replace(/\r\n?/g, '\n')
-        newContent = normalized.replace(/^---\n/, `---\n${inserts.join('\n')}\n`)
-      } else {
-        newContent = `---\n${inserts.join('\n')}\n---\n\n` + content
-      }
       try {
-        writeFileSync(filePath, newContent)
+        writeFileSync(filePath, r.content)
         fixed.push(filePath)
       } catch { /* 只读文件等写失败 → 跳过不抛 */ }
     }
   }
   return { fixed, skipped }
+}
+
+/**
+ * 通用 frontmatter 补齐（纯函数）：首 512 字节缺 author:/created_at: 时补缺失键。
+ * 有 frontmatter（--- 开头）→ 插到开标签后（CRLF 归一 LF 写回）；无 → 头部整块前置。
+ * fixScanDocHeaders 与 decisions.md 自动补（stage-contract.js ensureDecisionDocHeader）共用，
+ * 单一实现杜绝两处行尾/插入位置漂移。
+ * @param {string} content
+ * @param {{ author: string, createdAt: string }} p
+ * @returns {{ changed: boolean, content: string }}
+ */
+export function backfillFrontmatter(content, { author, createdAt }) {
+  const header = String(content || '').slice(0, 512)
+  const hasAuthor = /author\s*:/.test(header)
+  const hasCreated = /created_at\s*:/.test(header)
+  if (hasAuthor && hasCreated) return { changed: false, content }
+  const inserts = []
+  if (!hasAuthor) inserts.push(`author: ${author}`)
+  if (!hasCreated) inserts.push(`created_at: ${createdAt}`)
+  if (content.startsWith('---\n') || content.startsWith('---\r\n')) {
+    // 有 frontmatter：插到开标签后（CRLF 归一写回，与其它 CLI 写入口径一致）
+    const normalized = content.replace(/\r\n?/g, '\n')
+    return { changed: true, content: normalized.replace(/^---\n/, `---\n${inserts.join('\n')}\n`) }
+  }
+  return { changed: true, content: `---\n${inserts.join('\n')}\n---\n\n` + content.replace(/\r\n?/g, '\n') }
 }
 
 /**

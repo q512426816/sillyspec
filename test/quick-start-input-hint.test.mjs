@@ -1,16 +1,17 @@
 /**
- * quick 启动缺 --input 的占位标题提示（2026-08-20 实测踩坑：进行中条目平台不可见）
+ * quick 启动缺 --input 的启动门（2026-08-20 实测踩坑：进行中条目平台不可见；2026-08-24 用户
+ * 反馈二期①升级为拒绝启动，坑 quick-no-input-placeholder-title）
  *
- * 背景：quick 启动不带 --input 且无可提取标题的关联变更时，QUICKLOG 条目落「(quick 任务)」
- * 占位标题；平台「快速修复」列表默认隐藏进行中的占位条目（task-06 口径），长会话全程平台
- * 不可见，用户误判为同步故障。
+ * 背景：quick 新会话不带 --input 且无可提取标题的关联变更时，旧行为落「(quick 任务)」占位
+ * 标题 + 警告提示放弃重启——占位条目已落盘只能 reset 重来。现升级：新会话（刚生成 sessionId）
+ * 缺 --input 且无 --linked-changes → 直接拒绝启动（exit 2），零沉没成本。
  *
  * 锁定语义：
- *   1. 缺 --input 启动 → 警告出现（点名占位标题后果 + 给带 --input 重启指引）
- *   2. 带 --input 启动 → 无警告，QUICKLOG 条目标题 = 任务描述
- *   3. 关联变更 proposal.md 可提取标题 → 免 --input 也不警告（deriveTitleFromLinkedChange 兜底）
+ *   1. 新会话缺 --input（--linked-changes none）→ 拒绝启动 exit 2（含格式指引），QUICKLOG 不落占位条目
+ *   2. 带 --input 启动 → 正常启动，QUICKLOG 条目标题 = 任务描述
+ *   3. 关联变更 proposal.md 可提取标题 → 免 --input 也正常启动（deriveTitleFromLinkedChange 兜底）
  */
-import { writeFileSync, mkdirSync, readFileSync } from 'node:fs'
+import { writeFileSync, mkdirSync, readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { makeRepo, runCLI, cleanup, report } from './_cli-step-harness.mjs'
 
@@ -23,17 +24,18 @@ function readQuicklog(specBase) {
   return readFileSync(join(specBase, 'quicklog', 'QUICKLOG-test.md'), 'utf8')
 }
 
-console.log('=== quick 启动缺 --input 占位标题提示 ===\n')
+console.log('=== quick 启动缺 --input 拒绝启动门 ===\n')
 
-console.log('--- ① 缺 --input 启动 → 占位标题警告 + 重启指引 ---')
+console.log('--- ① 新会话缺 --input → 拒绝启动（exit 2），不落占位条目 ---')
 {
   const { cwd, specBase } = makeRepo('qs-input-blank-')
   const r = runCLI(['--dir', cwd, 'run', 'quick', '--linked-changes', 'none', '--non-interactive'], { cwd })
-  assert(r.status === 0, `启动成功（实际 ${r.status}，尾：${r.combined.slice(-120)}）`)
-  assert(r.combined.includes(WARN_MARK), '警告点名缺 --input')
-  assert(r.combined.includes('(quick 任务)'), '警告说明占位标题后果')
-  assert(r.combined.includes('run quick --input'), '给带 --input 重启指引')
-  assert(readQuicklog(specBase).includes('| (quick 任务)'), 'QUICKLOG 实落占位标题')
+  assert(r.status === 2, `拒绝启动 exit 2（实际 ${r.status}，尾：${r.combined.slice(-160)}）`)
+  assert(r.combined.includes('必须带 --input'), '报错点名必须带 --input')
+  assert(r.combined.includes('(quick 任务)'), '报错说明占位标题后果')
+  assert(r.combined.includes('--linked-changes'), '给出关联变更取标题的替代出路')
+  assert(!existsSync(join(specBase, 'quicklog', 'QUICKLOG-test.md')) || !readQuicklog(specBase).includes('| (quick 任务)'),
+    'QUICKLOG 未落占位标题条目（零沉没成本）')
 }
 
 console.log('\n--- ② 带 --input 启动 → 无警告，标题即任务描述 ---')

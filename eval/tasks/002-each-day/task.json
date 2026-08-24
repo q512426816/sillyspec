@@ -1,0 +1,6 @@
+{
+  "id": "002-each-day",
+  "title": "实现 eachDay 日期区间函数（棕地补全）",
+  "tags": ["brownfield", "date", "validation"],
+  "instruction": "src/dates.mjs 已有函数骨架 eachDay(start, end)（当前直接 throw），在原文件完成实现，保持具名导出 eachDay 不变，禁止引入第三方依赖。\n\n契约：\n- 入参为字符串，接受 'YYYY-MM-DD'，或以它开头的时间形式（如 '2024-01-01T10:00:00Z'、'2024-01-01 08:00'）；只取日期部分参与运算。\n- 返回闭区间 [start, end] 内每一天的 'YYYY-MM-DD' 字符串数组（含两端；起止同天返回单元素数组）。\n- 日期运算一律用 UTC（避免时区/DST 干扰）。\n- end 的日期小于 start 时抛 RangeError。\n- 格式非法（不匹配 'YYYY-MM-DD' 前缀、日期不存在如 '2024-02-30'、或非字符串）抛 TypeError('invalid date')。\n\n示例：\neachDay('2024-02-27', '2024-03-02') → ['2024-02-27','2024-02-28','2024-02-29','2024-03-01','2024-03-02']\neachDay('2024-01-15', '2024-01-15') → ['2024-01-15']"
+}

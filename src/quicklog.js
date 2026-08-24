@@ -339,6 +339,37 @@ export function parseFileNotes(raw) {
     .filter(Boolean)
 }
 
+/**
+ * 校验 --file-notes 原文格式（坑 quick-file-notes-format-silent，2026-08-24 用户反馈二期②：
+ * 多文件分隔符是 `||` 双竖线，写错成 `|`/`,` 时整段被当成第一个文件的括注静默落盘，只能手工修
+ * QUICKLOG）。命令入口 fail-fast 用：每个 `||` 段必须是 `path::括注`（`::` 必填，括注可空）；
+ * 括注内再出现 `::` 视为疑似漏写 `||` 分隔符。返回问题清单供调用方拼报错。
+ * @param {string} raw
+ * @returns {{ ok: boolean, problems: Array<{ seg: string, reason: string, hint: string }> }}
+ */
+export function validateFileNotesFormat(raw) {
+  const problems = []
+  if (!raw) return { ok: true, problems }
+  for (const seg of String(raw).split('||')) {
+    const s = seg.trim()
+    if (!s) continue
+    const idx = s.indexOf('::')
+    if (idx === -1) {
+      problems.push({ seg: s, reason: '缺 `::` 路径/括注分隔符', hint: '格式为 path::括注；不要括注也要写 path::（括注可空）' })
+      continue
+    }
+    const path = s.slice(0, idx).trim()
+    if (!path) {
+      problems.push({ seg: s, reason: '`::` 前路径为空', hint: '格式为 path::括注' })
+      continue
+    }
+    if (s.slice(idx + 2).includes('::')) {
+      problems.push({ seg: s, reason: '括注内出现 `::`', hint: '疑似多文件漏写 `||` 分隔符（双竖线）——多文件写法：path1::括注1 || path2::括注2' })
+    }
+  }
+  return { ok: problems.length === 0, problems }
+}
+
 // 结果块必填字段（quick step3 --done --output 的结构化结果模板，见 src/stages/quick.js）。
 // 4 个必填字段标签从 manifest 同源(stage-contract-spec.js quick.result-labels),prompt 事前契约与本校验单源。
 const RESULT_REQUIRED_LABELS = getRule('quick.result-labels').data.literals

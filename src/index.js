@@ -100,6 +100,7 @@ SillySpec CLI — 规范驱动开发工具包
   sillyspec module-impact --change <name>       生成 module-impact.md 骨架（文件×模块归属按 module-map 预填 + 未匹配清单）
   sillyspec endpoints extract --change <name> [--task task-NN] [--dir <dir>|--files <a.py,b.js>]  静态扫描路由装饰器生成 endpoints.json
   sillyspec scan-fix-headers [--project <名>]   scan 文档补 author/created_at header（幂等）
+  sillyspec plan-adopt-waves --change <名> [--dry-run]   plan.md Wave 段一键重排为 depends_on 拓扑分组（同步任务总表 W 列，幂等）
   sillyspec workspace add <名> <路径> [--role] [--repo] | remove <名> | status   多项目工作区登记与状态探测
   sillyspec scan-fix-leak --spec-dir <specRoot>  source_root 误写产物搬到平台 specRoot（污染一键修复）
   sillyspec run quick --cancel --change <会话ID> [--ql <ql-id>]  取消误启动的 quick 会话（QUICKLOG 翻已取消 + 挂载行移除）
@@ -778,15 +779,22 @@ async function main() {
         process.exit(2);
       }
       assertSafeChangeName(vpChange, '--change 变更名');
-      const { runVerifyProbes, renderVerifyProbesReport, generateVerifyResultSkeleton } = await import('./verify-probes.js');
-      const vpResult = runVerifyProbes({ cwd: dir, changeName: vpChange, specDir });
+      const { runVerifyProbes, renderVerifyProbesReport, generateVerifyResultSkeleton, resolveVerifyProbesSpecBase } = await import('./verify-probes.js');
+      // spec 根统一走漂移锚定（坑 worktree-spec-artifact-misplace）：在 worktree 内跑时锚回主仓，
+      // 探针读取与 --init 骨架都落主仓——与 plan/execute/verify/archive 的 command.js 守卫同口径。
+      // resolvePlatformSpecDir 仍先调（保留平台接管 fail-closed 检查副作用），但仅 pointer 存在时
+      // 才把它的返回值当平台根——无 pointer 时它回退 resolveSpecDir(cwd)，会返回 worktree 副本
+      // 根，当作 platformBase 传入会让锚定被跳过（骨架落回副本）。
+      const vpResolved = resolvePlatformSpecDir(dir, specDir);
+      const vpPlatformBase = existsSync(join(dir, '.sillyspec-platform.json')) ? vpResolved : null;
+      const vpSpecBase = resolveVerifyProbesSpecBase(dir, specDir, vpPlatformBase);
+      const vpResult = runVerifyProbes({ cwd: dir, changeName: vpChange, specDir: vpSpecBase });
       if (json) {
         console.log(JSON.stringify({ command: 'verify-probes', change: vpChange, ...vpResult }, null, 2));
         break;
       }
       console.log(renderVerifyProbesReport(vpResult));
       if (vpInit) {
-        const vpSpecBase = resolvePlatformSpecDir(dir, specDir) || join(dir, '.sillyspec');
         const vpReportPath = join(vpSpecBase, 'changes', vpChange, 'verify-result.md');
         if (existsSync(vpReportPath)) {
           console.log(`\nℹ️  verify-result.md 已存在，不覆盖: ${vpReportPath}`);
@@ -794,6 +802,52 @@ async function main() {
           writeFileSync(vpReportPath, generateVerifyResultSkeleton(vpResult));
           console.log(`\n📄 已生成 verify-result.md 骨架: ${vpReportPath}（探针已预填；结论必须写明 PASS/FAIL，留待填会被 gate 判不过）`);
         }
+      }
+      break;
+    }
+    case 'plan-adopt-waves': {
+      // plan.md Wave 段一键重排（坑 wave-manual-mismatch-noise，2026-08-24 用户反馈二期）：
+      // 手排 Wave 与拓扑比对不一致需手改；依赖方向硬拦（plan-postcheck）落地后给一条零手写出路。
+      // depMap 与 postcheck 同源（collectTaskDepMap）→ topoSortWaves → 重写 Wave 段 + 同步任务总表 W 列。
+      const pawChangeIdx = args.indexOf('--change');
+      const pawChange = pawChangeIdx >= 0 && args[pawChangeIdx + 1] ? args[pawChangeIdx + 1] : null;
+      const pawDryRun = args.includes('--dry-run');
+      if (!pawChange) {
+        console.error('用法: sillyspec plan-adopt-waves --change <name> [--dry-run] [--json] [--spec-dir <path>]\n  把 plan.md 的 Wave 段一键重排为 depends_on 拓扑分组（同步任务总表 W 列；--dry-run 只看不写）');
+        process.exit(2);
+      }
+      assertSafeChangeName(pawChange, '--change 变更名');
+      const { adoptPlanWaves } = await import('./plan-adopt-waves.js');
+      const pawSpecBase = resolvePlatformSpecDir(dir, specDir) || join(dir, '.sillyspec');
+      const pawResult = adoptPlanWaves({ changeDir: join(pawSpecBase, 'changes', pawChange), dryRun: pawDryRun });
+      if (json) {
+        console.log(JSON.stringify({ command: 'plan-adopt-waves', change: pawChange, ...pawResult }, null, 2));
+        break;
+      }
+      if (!pawResult.ok) {
+        console.error(`❌ ${pawResult.error}`);
+        process.exit(1);
+      }
+      console.log('📊 拓扑分组（depends_on）：');
+      pawResult.waves.forEach((wave, i) => {
+        console.log(`   Wave ${i + 1}: ${wave.join(', ')}`);
+      });
+      if (pawDryRun) {
+        console.log(`\n👁️ dry-run——将写入 ${pawResult.planPath} 的 Wave 段预览：`);
+        for (const l of pawResult.waveBlock) console.log(`   ${l}`);
+      } else {
+        console.log(`\n✅ plan.md Wave 段已重排: ${pawResult.planPath}（任务总表 W 列更新 ${pawResult.tableRowsUpdated} 行${pawResult.tableRowsSkipped > 0 ? `，${pawResult.tableRowsSkipped} 行非模板格式未改` : ''}；行尾统一 LF）`);
+      }
+      if (pawResult.postcheck) {
+        const pc = pawResult.postcheck;
+        if ((pc.errors || []).length > 0) {
+          console.warn(`⚠️ 重排后 blueprint 一致性问题（topo 只看依赖不看文件重叠——同 Wave 共享路径需手动拆分或补 depends_on）：`);
+          for (const e of pc.errors.slice(0, 10)) console.warn(`   ${e}`);
+          if (pc.errors.length > 10) console.warn(`   …等共 ${pc.errors.length} 条`);
+        } else {
+          console.log('✅ 重排后 blueprint 一致性校验通过（无同 Wave 共享路径冲突）');
+        }
+        for (const w of (pc.warnings || []).slice(0, 5)) console.warn(`⚠️ ${w}`);
       }
       break;
     }

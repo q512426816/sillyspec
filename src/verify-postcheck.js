@@ -830,7 +830,7 @@ export function resolveVerifyChangedFiles(cwd, changeName, ctx = null, opts = {}
         const wtGitDir = (meta.worktreePath && meta.mode !== 'in-place-fallback' && existsSync(meta.worktreePath))
           ? meta.worktreePath
           : cwd
-        const wtStatus = gitQuiet(wtGitDir, ['status', '--porcelain'], { timeout: 30000, trim: false })
+        const wtStatus = gitQuiet(wtGitDir, ['status', '--porcelain', '--untracked-files=all'], { timeout: 30000, trim: false })
         const wtFiles = String(wtStatus || '').split('\n')
           .map(l => l.slice(3).trim().split(' -> ').pop() || '')
           .map(p => p.replace(/^"|"$/g, '').replace(/\\/g, '/'))

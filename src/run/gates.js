@@ -463,6 +463,16 @@ function rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx,
  */
 export async function runStageCompletionGates({ stageName, cwd, changeName, platformOpts, specBase, progress, pm, stageData, steps, currentIdx, ctx = null }) {
   const projectName = progress.project || basename(cwd)
+  // decisions.md header 自动补齐（坑 decisions-header-late-warning，2026-08-24 用户反馈二期）：
+  // brainstorm step8 旧模板自带无 frontmatter 的 decisions 样例，存量变更照抄必缺 author/created_at，
+  // 拖到平台同步/后续环节才提示。gate 前幂等补机械字段（先例：autoCheckPlanFromReviews 同层写
+  // tasks.md），validator 读到的即已补齐版——补的是 CLI 可自证的机械字段，不替 agent 产出语义内容。
+  if (['brainstorm', 'plan', 'verify'].includes(stageName) && changeName) {
+    try {
+      const { ensureDecisionDocHeader } = await import('../stage-contract.js')
+      ensureDecisionDocHeader(resolveChangeDir(cwd, changeName, platformOpts?.specRoot))
+    } catch { /* 补齐失败不阻断 gate */ }
+  }
   const contractResult = runValidators(stageName, cwd, changeName, { projectName, specRoot: platformOpts?.specRoot })
   if (contractResult.errors.length > 0) {
     console.error(`\n❌ 阶段 ${stageName} 校验失败：`)

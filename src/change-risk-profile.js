@@ -122,13 +122,77 @@ export const RISK_LEVEL_CAUSES = {
     'design.md / plan.md 命中启动入口关键词（cli.ts / main.ts / server.(js|ts) / bootstrap / entrypoint）。' +
     '注意：这是按 design/plan 里的措辞判定的，不一定代表你真改了启动入口；若属误判可在 design.md frontmatter 用 risk_level 显式声明真实等级（如 unit-sufficient）覆盖——不要靠删措辞绕门控，危险链路该有真实启动证据。',
   'integration-critical':
-    'design.md / plan.md 命中跨进程/状态机关键词（daemon / backend / session / lease / lifecycle / heartbeat 等）。',
+    'design.md / plan.md 命中跨进程/状态机关键词（daemon / backend / session / lease / lifecycle / heartbeat 等）。' +
+    '关键词前方同句有否定提示（不/未/无/避免…）的命中已被抑制不参与判级——若本变更实际涉及跨进程/状态机改动，请在 design.md frontmatter 用 risk_level 声明真实等级。',
   'contract-required': 'design.md / plan.md 命中 API contract 关键词（api / client / contract / dto）。',
   'explicit': 'design.md frontmatter 的 risk_level 显式声明（覆盖关键词判级）。',
 }
 
 /** design.md frontmatter 可显式声明的合法 risk_level 值（与 detectChangeRisk 判级结果同集合） */
 const RISK_LEVELS = ['doc-only', 'unit-sufficient', 'contract-required', 'integration-critical', 'deployment-critical']
+
+// ============ 同句否定抑制（坑 risk-negation-blindness） ============
+//
+// detectChangeRisk 原为全文 blob 字面命中：design 写「本次不新增 daemon 协议」仍判
+// integration-critical、强制全套集成证据，对无状态后端变更误伤（用户实证 2026-08-24）。
+// 机械抑制规则（不做事语义理解，三段判定）：
+//   ① 子句切分：按 句号/分号/逗号/换行 切子句，否定只在同子句内生效——「不改动 A。新增 B」
+//      的 B 不继承否定；
+//   ② 直接否定：命中位置前方 NEGATION_WINDOW 字符内出现否定提示 → 抑制；
+//   ③ 枚举继承：「不改动 daemon / session / lifecycle」中后位关键词与前位被抑制关键词之间
+//      只隔枚举连接符（空格 / 、 , 和 与 及 and or）→ 继承抑制——纯距离窗口盖不住长枚举，
+//      而「不涉及 daemon 的情况下重构 session」的间隔是普通文字，不继承（session 正常命中）。
+// 同一关键词的**全部**命中都被抑制才不参与判级（任一处未抑制命中仍算数）。降级不静默：
+// design/verify 两道 gate 会把被抑制词打进 warning（可审计），design.md frontmatter
+// risk_level 仍是双向权威覆盖通道（声明优先级最高，行为不变）。
+//
+// 否定提示词排除假阳：不同/不断/不久/不时/不仅（「不」的非否定合成词）、无状态/无法
+// （「无状态后端」是常见肯定表述）、非常/非空/非法（「非空校验 session」是在改 session）。
+const NEGATION_CUES = /不(?!同|断|久|时|仅|妨)|未|无(?!状态|法)|非(?!常|空|法)|避免|排除|无需|不再|no\s+new|not\b|don'?t|without|avoid/i
+const NEGATION_WINDOW = 16
+const CLAUSE_SPLIT_RE = /[。；;，,\n]/
+const ENUM_GAP_RE = /^[\s/|、,，]*(?:(?:和|与|及|and|or)[\s/|、,，]*)*$/i
+
+/**
+ * 单行内统计各关键词命中（同子句否定窗口 + 枚举继承）。
+ * @returns {Map<string, {kept: number, suppressed: number}>} trigger 原文 → 命中统计
+ */
+function collectLineTriggerStats(line, patterns, stats = new Map()) {
+  for (const pattern of patterns) {
+    const re = new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : pattern.flags + 'g')
+    let m
+    while ((m = re.exec(line)) !== null) {
+      if (m[0].length === 0) { re.lastIndex++; continue }
+      // 行内绝对偏移 → 子句内相对偏移（子句内可能有多命中，逐一判定）
+      const clauseStart = line.slice(0, m.index).split(CLAUSE_SPLIT_RE).pop().length
+      const clauseStartAbs = m.index - clauseStart
+      const clause = line.slice(clauseStartAbs).split(CLAUSE_SPLIT_RE)[0]
+      const relIndex = m.index - clauseStartAbs
+      const prefix = clause.slice(0, relIndex)
+      let negated = NEGATION_CUES.test(prefix.slice(-NEGATION_WINDOW))
+      if (!negated && prefix.length > 0) {
+        // 枚举继承：查同子句内更早的关键词命中，且间隔只有枚举连接符
+        for (const other of patterns) {
+          const ore = new RegExp(other.source, other.flags.includes('g') ? other.flags : other.flags + 'g')
+          let om
+          while ((om = ore.exec(clause)) !== null) {
+            if (om[0].length === 0) { ore.lastIndex++; continue }
+            if (om.index >= relIndex) break
+            const gap = clause.slice(om.index + om[0].length, relIndex)
+            const prevSuppressed = NEGATION_CUES.test(clause.slice(0, om.index).slice(-NEGATION_WINDOW))
+            if (prevSuppressed && ENUM_GAP_RE.test(gap)) { negated = true; break }
+          }
+          if (negated) break
+        }
+      }
+      const stat = stats.get(m[0]) || { kept: 0, suppressed: 0 }
+      if (negated) stat.suppressed++
+      else stat.kept++
+      stats.set(m[0], stat)
+    }
+  }
+  return stats
+}
 
 /**
  * 从 design.md 顶部 frontmatter 提取显式 risk_level 声明。
@@ -148,10 +212,11 @@ export function detectChangeRisk({ designContent = '', planContent = '', changed
   const triggers = []
 
   // ── 显式豁免优先：design.md frontmatter 声明 risk_level → 以声明为准，跳过关键词判级 ──
-  // 历史教训：detectChangeRisk 是机械字面匹配，不认否定语境——design 写「本次不改动 daemon/session」
-  // 仍命中关键词被误判 integration/deployment-critical，强制要全套集成证据，对无状态后端变更误伤。
-  // 与其在正则层做脆弱的否定识别，不如给一条显式、诚实、可审计（落在 design frontmatter + verify-result）
-  // 的覆盖通道。声明仍走门控（结论 FAIL 仍拦），但豁免级（unit-sufficient 等）不再强制集成证据。
+  // 历史教训：detectChangeRisk 是机械字面匹配——design 写「本次不改动 daemon/session」曾命中关键词
+  // 被误判 integration/deployment-critical，强制要全套集成证据，对无状态后端变更误伤。现给两条通道：
+  // ① 同句否定抑制（上方 NEGATION_CUES，机械可审计、只认「关键词前方否定窗口」不做语义理解）；
+  // ② frontmatter 显式声明（显式、诚实、可审计，落在 design frontmatter + verify-result）——本分支。
+  // 声明仍走门控（结论 FAIL 仍拦），但豁免级（unit-sufficient 等）不再强制集成证据。
   const explicit = extractExplicitRiskLevel(designContent)
   if (explicit) {
     const requiredVerification =
@@ -160,17 +225,20 @@ export function detectChangeRisk({ designContent = '', planContent = '', changed
       explicit === 'contract-required' ? ['unit_tests', 'contract_tests'] :
       explicit === 'doc-only' ? ['static_check'] :
       ['unit_tests']
-    return { level: explicit, triggers: ['risk_level (explicit)'], requiredVerification, explicit: true }
+    return { level: explicit, triggers: ['risk_level (explicit)'], suppressedTriggers: [], requiredVerification, explicit: true }
   }
 
   const combined = [designContent, planContent].join('\n')
 
-  for (const pattern of INTEGRATION_CRITICAL_PATTERNS) {
-    if (pattern.test(combined)) {
-      pattern.lastIndex = 0
-      const match = combined.match(pattern)
-      if (match && !triggers.includes(match[0])) triggers.push(match[0])
-    }
+  // 逐行收集命中：同句否定窗口内的命中进 suppressed（全部命中均被抑制才剔除该 trigger）
+  const stats = new Map()
+  for (const line of combined.split('\n')) {
+    collectLineTriggerStats(line, INTEGRATION_CRITICAL_PATTERNS, stats)
+  }
+  const suppressedTriggers = []
+  for (const [t, stat] of stats) {
+    if (stat.kept > 0) triggers.push(t)
+    else suppressedTriggers.push(t)
   }
 
   for (const file of changedFiles) {
@@ -184,7 +252,8 @@ export function detectChangeRisk({ designContent = '', planContent = '', changed
   }
 
   if (triggers.length === 0) {
-    return { level: 'doc-only', triggers: [], requiredVerification: ['static_check'] }
+    // 关键词命中全被否定语境抑制（或本就无命中）→ doc-only；抑制词随 suppressedTriggers 上报可审计
+    return { level: 'doc-only', triggers: [], suppressedTriggers, requiredVerification: ['static_check'] }
   }
 
   const deploymentTrigger = triggers.some(t => /cli\.ts|main\.ts|server\.(js|ts)|bootstrap|entrypoint/i.test(t))
@@ -207,7 +276,7 @@ export function detectChangeRisk({ designContent = '', planContent = '', changed
     level = 'unit-sufficient'
   }
 
-  return { level, triggers, requiredVerification }
+  return { level, triggers, suppressedTriggers, requiredVerification }
 }
 
 /**

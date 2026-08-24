@@ -1,0 +1,6 @@
+{
+  "id": "001-slugify",
+  "title": "实现 slugify 工具函数",
+  "tags": ["greenfield", "utility", "edge-case"],
+  "instruction": "在当前目录新建 src/slugify.mjs（package.json 已存在且 type=module，禁止安装任何第三方依赖），实现并导出具名函数 slugify（同时提供指向同一函数的 default 导出）。\n\n函数签名：slugify(value, options = {})，返回字符串。\n\n转换规则（按顺序执行，分隔符记为 sep，默认 '-'）：\n1. value 为 null 或 undefined 时返回空字符串；其余值先 String() 转字符串。\n2. 整体 toLowerCase() 小写化。\n3. 连续空白字符（\\s+）替换为单个 sep。\n4. 删除所有不属于 [a-z0-9] 且不等于 sep 的字符。\n5. 连续多个 sep 合并为一个，并去掉首尾的 sep。\n\noptions 支持：\n- options.hyphen：分隔符 sep，默认 '-'。必须是长度为 1 的字符串，否则抛出 TypeError('hyphen must be a single character')。\n\n示例：\nslugify('  Hello   World!  ') === 'hello-world'\nslugify('a--b') === 'a-b'\nslugify('Ünïcode Test') === 'ncode-test'\nslugify(null) === ''\nslugify(42) === '42'\nslugify('Hello World', { hyphen: '_' }) === 'hello_world'"
+}

@@ -31,7 +31,7 @@ SillySpec 主体（你，调度 agent）对 worktree **工作区**做 git diff�
 
 1. 读取该 task 在 worktree 工作区的 git diff（task 开始 → 完成的变更）
 2. 对照 plan.md 与 tasks/task-XX.md 检查实现（不信任 implementer 自报，只看当前 task 的 diff）
-3. 写入 review.json：\`.runtime/execute-runs/<runId>/tasks/task-XX/review.json\`
+3. 写入 review.json：\`{SPEC_ROOT}/.runtime/execute-runs/<runId>/tasks/task-XX/review.json\`（{SPEC_ROOT} 由 CLI 渲染时替换为主仓绝对路径——调度者 cwd 无论在哪都写主仓 .runtime，不写 worktree 副本）
 4. review.json 写入成功后，该 task 的派发回收完成
 
 review.json 复用既有 task-review 契约（必填字段：schemaVersion / task / base / head /
@@ -126,8 +126,8 @@ export function renderLocalInstruction(contract) {
   主工作区、**破坏 worktree 隔离**，后续 assess / apply / review.json 全部错位，并可能
   撞其他并行 agent 的改动。
 ${branchLine}
-- 蓝图文件（tasks.md / design.md / tasks/task-XX.md）在主工作区 \`.sillyspec/changes/<change>/\`
-  下，可能不在 worktree 中——**读蓝图用主工作区绝对路径，不要拼接到 worktree 路径下**；
+- 蓝图文件（tasks.md / design.md / tasks/task-XX.md）在主工作区 \`{SPEC_ROOT}/changes/<change>/\`
+  下（{SPEC_ROOT} 由 CLI 渲染时替换为主仓绝对路径），可能不在 worktree 中——**读蓝图用主工作区绝对路径，不要拼接到 worktree 路径下**；
   写代码必须落在 workdir（worktree）内。
 
 ### 子代理 prompt 要点
@@ -136,7 +136,7 @@ ${branchLine}
 1. 任务目标（brief）：${briefLine}
 2. 蓝图文件路径（让子代理按需读取详情，不要内联整份蓝图污染上下文）
 3. 编码铁律：先读后写、TDD、不编造方法、只做蓝图里写的事、遵守边界处理规则、不超出 allowedPaths
-4. 如存在模块文档（\`.sillyspec/docs/*/modules/\`），按需读取涉及模块的 <module>.md 参考接口约定与数据流
+4. 如存在模块文档（\`{SPEC_ROOT}/docs/*/modules/\`），按需读取涉及模块的 <module>.md 参考接口约定与数据流（读主仓路径，不读 worktree 副本）
 5. 任务含测试代码时，把下方「测试用例设计」整段复制进子代理 prompt，要求子代理按此设计测试用例
 
 {{include: testcase-design}}

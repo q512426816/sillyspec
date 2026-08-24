@@ -941,16 +941,18 @@ ${indexLines}
   // 否则保留原文（零回归——无 map / 无 design 的项目 prompt 不变）
   const moduleDocPoint = moduleSection
     ? '4. **模块卡分级**：把上方「模块卡分级」表中该 task 命中的卡路径写进子代理 prompt（细卡整读；粗大卡只读「契约摘要/注意事项/定位」节）——勿让子代理按目录漫游或整读根层大卡'
-    : '4. 如存在模块文档（.sillyspec/docs/*/modules/），按需读取涉及模块的 <module>.md 参考接口约定和数据流'
+    : '4. 如存在模块文档（{SPEC_ROOT}/docs/*/modules/），按需读取涉及模块的 <module>.md 参考接口约定和数据流——读主仓路径（CLI 已替换为绝对路径），不要读 worktree 副本'
   const waveStartItem1 = hasDesignHotzone
     ? '1. 「非目标」「兼容策略」两节已由 CLI 提取附在上方「design.md 热区」——**不要再整读 design.md**；需要其余章节时按热区下方行号索引精准读取（Read offset/limit）。确保子代理不超范围、不破坏旧逻辑'
     : '1. 读取 design.md 的「非目标」与「兼容策略」章节（如存在），确保子代理不超范围、不破坏旧逻辑'
 
-  // 构建任务摘要（不再内联完整蓝图，减少上下文污染）
+  // 构建任务摘要（不再内联完整蓝图，减少上下文污染）。
+  // 任务卡路径用 {SPEC_ROOT} 占位符（坑 worktree-spec-artifact-misplace）：子代理 cwd=worktree 时
+  // 相对路径会解析到 worktree 的 .sillyspec 副本；占位符经 CLI 替换为主仓绝对路径。
   const taskSummary = wave.tasks.map((t, ti) => {
     const taskNum = String(t.index || (ti + 1)).padStart(2, '0')
     const taskRelPath = changeDir
-      ? `.sillyspec/changes/${path.basename(changeDir)}/tasks/task-${taskNum}.md`
+      ? `{SPEC_ROOT}/changes/${path.basename(changeDir)}/tasks/task-${taskNum}.md`
       : `task-${taskNum}.md`
     const fileInfo = t.file ? ` (${t.file})` : ''
     return `task-${taskNum}: ${t.name}${fileInfo} → ${taskRelPath}`
@@ -1049,7 +1051,7 @@ ${workdirLines}
 \`\`\`
 
 ### 注意
-蓝图文件（tasks.md / design.md / proposal.md / requirements.md / tasks/task-XX.md）在主工作区 .sillyspec/changes/<change>/ 下，它们不在跨仓仓也不在 worktree 中。读取蓝图时使用主工作区路径，不要拼接到 worktree / 跨仓仓路径下。
+蓝图文件（tasks.md / design.md / proposal.md / requirements.md / tasks/task-XX.md）在主工作区 {SPEC_ROOT}/changes/<change>/ 下（CLI 已替换为主仓绝对路径），它们不在跨仓仓也不在 worktree 中。读取蓝图时使用主工作区路径，不要拼接到 worktree / 跨仓仓路径下。
 `
   } else {
     worktreeSection = (worktreePath)
@@ -1068,7 +1070,7 @@ ${workdirLines}
 \`\`\`
 
 ### 注意
-蓝图文件（tasks.md / design.md / proposal.md / requirements.md）在主工作区 .sillyspec/changes/<change>/ 下，它们可能不在 worktree 中。读取蓝图时使用主工作区路径，不要拼接到 worktree 路径下。
+蓝图文件（tasks.md / design.md / proposal.md / requirements.md）在主工作区 {SPEC_ROOT}/changes/<change>/ 下（CLI 已替换为主仓绝对路径），它们可能不在 worktree 中。读取蓝图时使用主工作区路径，不要拼接到 worktree 路径下；同理，spec 流程产物（module-impact.md / knowledge 条目 / 模块文档）只写主仓 {SPEC_ROOT}，绝不写进 worktree 副本。
 `
       : ''
   }
