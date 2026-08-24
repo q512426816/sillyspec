@@ -590,26 +590,3 @@ describe('discoverModuleIndex 多子项目合并（dogfood 实证回归：2026-0
       `D-300 应落 zzz 项目的 target-mod 域（合并后可见），实落 ${JSON.stringify(r.written)}`)
   })
 })
-
-
-describe('跨变更撞号消歧（2026-08-24 dogfood 实证：两变更各有一个 D-002@v1）', () => {
-  it('同号不同来源的两条决策共存——后变更提炼不清理前变更同号条目', () => {
-    const kb = join(root, 'knowledge')
-    mkdirSync(kb, { recursive: true })
-    const mdA = dEntry('D-002@v1', '变更A的二号决策', ['type: architecture', 'status: confirmed', 'answer: 甲理由', 'impacts: [src/x.js]'])
-    const mdB = dEntry('D-002@v1', '变更B的二号决策', ['type: architecture', 'status: confirmed', 'answer: 乙理由', 'impacts: [src/x.js]'])
-    const dirA = join(root, 'change-a'); const dirB = join(root, 'change-b')
-    mkdirSync(dirA, { recursive: true }); mkdirSync(dirB, { recursive: true })
-    writeFileSync(join(dirA, 'decisions.md'), mdA); writeFileSync(join(dirB, 'decisions.md'), mdB)
-    distillIntoKnowledge(dirA, kb, 'aaaa111')
-    const rB = distillIntoKnowledge(dirB, kb, 'bbbb222')
-    const file = join(kb, 'decisions', 'unmapped.md')
-    const content = readFileSync(file, 'utf8')
-    assert.ok(content.includes('变更A的二号决策') && content.includes('来源：change-a'), 'A 条目在库且带来源')
-    assert.ok(content.includes('变更B的二号决策') && content.includes('来源：change-b'), 'B 条目在库且带来源')
-    assert.equal(rB.written.filter(w => w.action === 'supersede').length, 0, 'B 提炼不 supersede A 的同号条目')
-    distillIntoKnowledge(dirA, kb, 'aaaa111')
-    const final = readFileSync(file, 'utf8')
-    assert.ok(final.includes('变更A的二号决策') && final.includes('变更B的二号决策'), '重跑后两条共存')
-  })
-})

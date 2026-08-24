@@ -14,7 +14,7 @@ import { existsSync, readFileSync, readdirSync, realpathSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { safeGit } from './git-helper.js'
 import { parseModuleMapSimple } from './modules.js'
-import { runDocsCheck, readDocsCheckConfig } from './docs-check.js'
+import { runDocsCheck, readDocsCheckConfig, parseDecisionEntries, anchorFilePath } from './docs-check.js'
 
 /** safeGit 超时（大仓 git log 慢时降级该模块，不挂起 Wave 渲染） */
 const GIT_TIMEOUT_MS = 5000
@@ -276,4 +276,118 @@ function inlineCardInvalidRefs(entry, docGitRoot, docPathPrefix) {
   } catch {
     return null
   }
+}
+
+// ---------------------------------------------------------------------------
+// 决策锚点触碰事实（change: 2026-08-24-decision-touch-cli-drift task-01，W-A）
+// 同「CLI 算事实注入」原则：execute 期改到决策锚定文件时立即呈现「触碰 N 条决策锚点」
+// 事实（advisory 不阻断，无触碰零输出）。条目解析/锚点剥离复用 docs-check 口径
+// （parseDecisionEntries + anchorFilePath 静态 import，本文件已 import docs-check 无环），
+// 勿复刻正则防两处口径漂移。
+// ---------------------------------------------------------------------------
+
+/** 触碰事实行条数上限（R-05 prompt 体积）：超出截断 +「…另有 N 条」 */
+export const DECISION_TOUCH_RENDER_LIMIT = 5
+
+/**
+ * 纯事实计算：变更文件 × 决策锚点前缀匹配 → 触碰事实（唯一真相形态）。
+ * @param {string[]} changedFiles 变更文件（入口统一 POSIX 化——调用方不重复处理）
+ * @param {string} knowledgeRoot 知识库根（<specBase>/knowledge；decisions 库在其 decisions/ 子目录，
+ *   与 docs-check runDecisionRules 的 <specBase>/knowledge/decisions 同布局）
+ * @returns {{ touches: Array<{ id: string, title: string, anchorFile: string, touchedFile: string, file: string }>, empty: boolean }}
+ *   touches 每项 = 一条 implemented 决策 × 一个命中变更文件（file = 条目来源域文件
+ *   knowledge/decisions/<域>.md）；empty=true = decisions 库不存在（冷启动）；
+ *   无触碰 → touches=[] 且 empty=false（零输出由渲染层保证）
+ */
+export function computeDecisionTouches(changedFiles, knowledgeRoot) {
+  const emptyResult = { touches: [], empty: true }
+  if (!knowledgeRoot) return emptyResult
+  const decisionsDir = join(knowledgeRoot, 'decisions')
+  let domainFiles = []
+  try {
+    domainFiles = readdirSync(decisionsDir).filter(f => f.endsWith('.md')).sort()
+  } catch {
+    return emptyResult // decisions 库不存在 → 零信号（与 runDecisionRules 冷启动同语义）
+  }
+  const changed = (Array.isArray(changedFiles) ? changedFiles : [])
+    .filter(Boolean).map(f => String(f).replace(/\\/g, '/'))
+  const touches = []
+  for (const f of domainFiles) {
+    const file = `knowledge/decisions/${f}`
+    let entries
+    try { entries = parseDecisionEntries(readFileSync(join(decisionsDir, f), 'utf8')) } catch { continue }
+    for (const e of entries) {
+      if ((e.status || '').toLowerCase() !== 'implemented') continue // 仅 implemented（对齐 docs-check.js:793 先例，rejected 不提示）
+      const anchorPath = anchorFilePath(e.anchor) // 剥 :行号/:行号-行号/:符号 后缀 + POSIX 化；「未记录」/空 → null 跳过
+      if (!anchorPath) continue
+      for (const c of changed) {
+        // 前缀匹配粒度 = 文件或其子路径（R-03：锚点是文件级非目录级，防同前缀不同文件误报）
+        if (c === anchorPath || c.startsWith(anchorPath + '/')) {
+          touches.push({ id: e.id, title: e.title, anchorFile: anchorPath, touchedFile: c, file })
+        }
+      }
+    }
+  }
+  touches.sort((a, b) => a.file.localeCompare(b.file) || a.id.localeCompare(b.id) || a.touchedFile.localeCompare(b.touchedFile))
+  return { touches, empty: false }
+}
+
+/**
+ * 触碰事实 → 事实行文本（advisory）：无触碰返回 ''（零输出）；≤DECISION_TOUCH_RENDER_LIMIT 条
+ * 逐条呈现，超出截断加「…另有 N 条」（R-05）。双渲染点（run/prompt.js {DOCS_DEBT} 注入处 +
+ * stages/execute.js buildWavePrompt）共用同一渲染实现，防两处文案漂移。
+ * @param {Array<{ id: string, title: string, anchorFile: string, touchedFile: string, file: string }>} touches
+ * @returns {string}
+ */
+export function renderDecisionTouchFacts(touches) {
+  if (!Array.isArray(touches) || touches.length === 0) return ''
+  const shown = touches.slice(0, DECISION_TOUCH_RENDER_LIMIT)
+  const lines = [`[decision-touch] 本次变更触碰 ${touches.length} 条决策锚点（改动可能使该决策需复核）：`]
+  for (const t of shown) {
+    lines.push(`  - ${t.id}（${t.title || '无标题'}，锚点 ${t.anchorFile}）← 触碰文件 ${t.touchedFile}（${t.file}）`)
+  }
+  if (touches.length > DECISION_TOUCH_RENDER_LIMIT) {
+    lines.push(`  …另有 ${touches.length - DECISION_TOUCH_RENDER_LIMIT} 条`)
+  }
+  return lines.join('\n')
+}
+
+/**
+ * execute 期事实注入的 changedFiles 公共口径（D-003 主/次渲染点同源，勿双写）：
+ * worktree 根解析（changeName → <specBase>/.runtime/worktrees/<changeName>/ 存在即锚，
+ * 否则 cwd/显式 projectRoot）+ porcelain 未提交（剥 .sillyspec/ 前缀、rename 取新路径）∪
+ * worktree meta.json baselineCommit..HEAD 已提交并集，POSIX 化。从 run/prompt.js {DOCS_DEBT}
+ * 内联实现抽取（行为逐字等价）；execute.js buildWavePrompt（主渲染点）同源复用。
+ * git 失败/meta 读失败 → 只用可用集合，不抛。
+ * @param {{ specBase?: string, changeName?: string|null, cwd?: string|null, projectRoot?: string|null }} opts
+ * @returns {{ root: string, changedFiles: string[] }} root = 实际 git 锚（computeDocsDebt 的 projectRoot 同值）
+ */
+export function collectExecuteChangedFiles({ specBase, changeName, cwd, projectRoot } = {}) {
+  const wtRoot = specBase ? join(specBase, '.runtime', 'worktrees', changeName || '') : null
+  const root = projectRoot || (wtRoot && changeName && existsSync(wtRoot) ? wtRoot : cwd) || process.cwd()
+  const changed = new Set()
+  const statusRes = safeGit(root, ['status', '--porcelain'], { trim: false })
+  if (!statusRes.error && statusRes.value) {
+    for (const line of statusRes.value.split('\n')) {
+      if (!line.trim()) continue
+      // "XY path" / rename "R  old -> new" 取 new
+      const pathPart = line.slice(3).split('->').pop().trim().replace(/"/g, '')
+      if (pathPart && !pathPart.startsWith('.sillyspec/')) changed.add(pathPart.replace(/\\/g, '/'))
+    }
+  }
+  const metaPath = wtRoot ? join(wtRoot, 'meta.json') : null
+  if (metaPath && changeName && existsSync(metaPath)) {
+    try {
+      const meta = JSON.parse(readFileSync(metaPath, 'utf8'))
+      if (meta.baselineCommit) {
+        const diffRes = safeGit(root, ['diff', '--name-only', `${meta.baselineCommit}..HEAD`], { trim: false })
+        if (!diffRes.error && diffRes.value) {
+          for (const f of diffRes.value.split('\n')) {
+            if (f.trim() && !f.trim().startsWith('.sillyspec/')) changed.add(f.trim().replace(/\\/g, '/'))
+          }
+        }
+      }
+    } catch { /* meta 读失败只用未提交集 */ }
+  }
+  return { root, changedFiles: [...changed] }
 }

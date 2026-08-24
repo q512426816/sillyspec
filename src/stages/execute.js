@@ -11,6 +11,9 @@ import { parseRepo } from './plan-postcheck.js'
 // parseTaskRegistry（注册表同口径）——双向引用均为函数声明 + 调用时解引（无模块初始化期
 // 交叉求值），ESM live binding 下安全；两边都是纯读函数，无副作用序问题。
 import { resolveChangeModuleCards } from '../module-resolve.js'
+// 决策锚点触碰事实（2026-08-24-decision-touch-cli-drift task-01，W-A 主渲染点 D-003）：
+// changedFiles 口径与 {DOCS_DEBT} 现算同源（collectExecuteChangedFiles 唯一实现，勿双写）
+import { collectExecuteChangedFiles, computeDecisionTouches, renderDecisionTouchFacts } from '../docs-debt.js'
 
 /**
  * 任务注册表解析（2026-08-20-task-truth-unify D-001@v1：tasks.md 唯一任务真相）。
@@ -913,6 +916,27 @@ ${indexLines}
     }
   } catch { /* 热区提取 best-effort：失败不注入 */ }
 
+  // ── 决策锚点触碰事实（W-A 主渲染点，D-003）：changedFiles 口径与 run/prompt.js {DOCS_DEBT}
+  // 现算同源——collectExecuteChangedFiles（porcelain 未提交 ∪ baseline..HEAD）唯一实现，勿双写。
+  // 单过流程前缀第 4 步渲染 {DOCS_DEBT} 时 changedFiles 恒空，Wave 步（重入/续跑时已含前置
+  // Wave 已提交变更）才是触碰事实的主呈现时机。advisory：无触碰 section=''（模板字节不变，
+  // 零输出零阻断）；≤5 条截断（R-05）。best-effort：失败不注入不阻断。
+  let decisionTouchSection = ''
+  try {
+    if (changeDir) {
+      const dtSpecBase = path.dirname(path.dirname(changeDir))
+      const { changedFiles } = collectExecuteChangedFiles({
+        specBase: dtSpecBase,
+        changeName: path.basename(changeDir),
+        cwd: options.cwd || process.cwd(),
+      })
+      const dtFacts = renderDecisionTouchFacts(computeDecisionTouches(changedFiles, path.join(dtSpecBase, 'knowledge')).touches)
+      if (dtFacts) {
+        decisionTouchSection = `\n### 决策锚点触碰（CLI 算，advisory——改到锚定文件时复核对应决策）\n\n${dtFacts}\n`
+      }
+    }
+  } catch { /* 触碰事实 best-effort：失败不注入不阻断 */ }
+
   // 子代理要点 4 / Wave 开始前第 1 条：模块表 / 热区存在时换成「按注入内容执行」版文案，
   // 否则保留原文（零回归——无 map / 无 design 的项目 prompt 不变）
   const moduleDocPoint = moduleSection
@@ -1114,7 +1138,7 @@ ${taskSummary}
 
 {{include: testcase-design}}
 
-${designHotzone}
+${designHotzone}${decisionTouchSection}
 ### Wave 开始前
 ${waveStartItem1}
 2. 读取 plan.md 了解全局任务划分和依赖关系

@@ -706,8 +706,10 @@ export function parseDecisionEntries(md) {
 }
 
 /** 锚点值 → 源码路径：剥「:行号 / :行号-行号 / :符号」后缀（锚点契约 `<src 路径>:<行号或符号>`；
- *  旧条目可能只写路径）。「未记录」/空 → null（补录提示路径，非失效）。 */
-function anchorFilePath(anchor) {
+ *  旧条目可能只写路径）。「未记录」/空 → null（补录提示路径，非失效）。
+ *  export（2026-08-24-decision-touch-cli-drift task-01）：docs-debt.computeDecisionTouches
+ *  复用同一剥离口径（勿复刻正则防两处漂移）；仅加关键字，行为不变。 */
+export function anchorFilePath(anchor) {
   const a = String(anchor || '').trim()
   if (!a || a === '未记录') return null
   return a.replace(/:(?:\d+(?:-\d+)?|[A-Za-z_$][A-Za-z0-9_$]*)$/, '').replace(/\\/g, '/') || null

@@ -423,6 +423,89 @@ if (r.exempted.length > 0) console.log("ℹ️ 另有 " + r.exempted.length + " 
 fi
 ```
 
+同步骤追加 CLI 版本漂移检测（D-002 并入既有检查段不新增步骤；D-004 git/version 双轨；advisory 不阻断）——检测全局安装的 sillyspec 流程引擎与当前仓源码是否脱节：
+
+```bash
+# 安装根独立解析：command -v sillyspec → realpath → 向上找 name=sillyspec 的 package.json
+# 勿复用上方 SRC_ROOT——sillyspec 仓场景它被 dogfood 分支强制指向当前仓，比较恒等（Grill 实证陷阱）
+node --input-type=module -e '
+import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { dirname, join } from "node:path";
+
+const run = (cmd, args) => { try { return execFileSync(cmd, args, { encoding: "utf8", timeout: 8000, stdio: ["ignore", "pipe", "pipe"] }).trim(); } catch { return ""; } };
+const pkgOf = (dir) => { try { return JSON.parse(readFileSync(join(dir, "package.json"), "utf8")); } catch { return null; } };
+const short = (h) => h.slice(0, 7);
+
+try {
+  const cur = pkgOf(process.cwd());
+  if (!cur || cur.name !== "sillyspec") process.exit(0); // 当前仓非 sillyspec（消费项目）→ 静默跳过
+  const bin = run("sh", ["-c", "command -v sillyspec"]);
+  if (!bin) process.exit(0); // 无全局安装 → 静默跳过
+  let installRoot = "";
+  try {
+    let dir = dirname(realpathSync(bin));
+    for (;;) {
+      const p = pkgOf(dir);
+      if (p && p.name === "sillyspec") { installRoot = dir; break; }
+      const up = dirname(dir);
+      if (up === dir) break;
+      dir = up;
+    }
+  } catch {}
+  if (!installRoot) { console.log("⚠️ CLI 版本漂移检测降级：sillyspec 命令存在但未定位到安装根（" + bin + "），跳过比较，不阻断其余检查项"); process.exit(0); }
+  if (installRoot === process.cwd()) process.exit(0); // 安装根=当前仓（npm link 自身）→ 恒等不误报
+
+  // 双轨比较（D-004）：
+  // git 轨——安装根有 .git（开发态：npm link / file: 链接）→ rev-parse HEAD 双仓 + remote origin 归一化同源判定
+  // version 兜底轨——安装根无 .git（安装态：registry 安装 / npm i -g . 拷贝，npm 恒排除 .git）→ 比较双仓 package.json version
+  // 盲区声明（R-04）：同 version 不同 commit 的源码热改不检测——version 轨只在版本号变更时感知；
+  // git 轨管开发态、version 轨管安装态，两轨并集覆盖主流形态
+  const inst = pkgOf(installRoot) || {};
+  const curVer = cur.version || "?";
+  const instVer = inst.version || "?";
+  const warn = (detail) => console.log("⚠️ CLI 版本漂移：" + detail + "——全局安装的流程引擎与当前仓源码脱节，归档等流程行为可能滞后（2026-08-23 归档实证踩坑：五步版 archive 驱动六步定义，旧引擎驱动新定义），建议同步（安装根 git pull 或在 sillyspec 仓 npm i -g .）后重跑流程（advisory，不阻断）");
+
+  if (existsSync(join(installRoot, ".git"))) {
+    // remote 归一化：https/ssh 归一、.git 后缀剥离、host 小写——同源才可比较（异源 fork 无从判定 → 静默）
+    const normRemote = (u) => {
+      if (!u) return "";
+      let s = u.trim();
+      if (s.indexOf("://") === -1) {
+        const scp = s.match(/^([^@\/]+@)([^:\/]+):(.+)$/); // scp 形态 git@host:owner/repo.git
+        if (scp) s = "https://" + scp[2] + "/" + scp[3];
+      }
+      s = s.replace(/^ssh:\/\//, "https://").replace(/^git:\/\//, "https://");
+      const m = s.match(/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\/(.*)$/);
+      const rest = m ? m[1] : s;
+      const slash = rest.indexOf("/");
+      let host = slash === -1 ? rest : rest.slice(0, slash);
+      const tail = slash === -1 ? "" : rest.slice(slash);
+      const at = host.indexOf("@");
+      if (at !== -1) host = host.slice(at + 1); // 剥 userinfo（ssh://git@… / https://token@…）
+      let out = "https://" + host.toLowerCase() + tail;
+      out = out.replace(/\/+$/, "");
+      if (out.endsWith(".git")) out = out.slice(0, -4);
+      return out;
+    };
+    const curHead = run("git", ["-C", process.cwd(), "rev-parse", "HEAD"]);
+    const instHead = run("git", ["-C", installRoot, "rev-parse", "HEAD"]);
+    if (!curHead || !instHead) { console.log("⚠️ CLI 版本漂移检测降级：git 轨 rev-parse 失败（当前仓=" + (curHead ? "ok" : "fail") + " 安装根=" + (instHead ? "ok" : "fail") + "），跳过比较，不阻断其余检查项"); process.exit(0); }
+    const curRemote = normRemote(run("git", ["-C", process.cwd(), "remote", "get-url", "origin"]));
+    const instRemote = normRemote(run("git", ["-C", installRoot, "remote", "get-url", "origin"]));
+    if (curRemote && instRemote && curRemote !== instRemote) process.exit(0); // 非同源 → 静默
+    if (curHead !== instHead) warn("全局安装 " + installRoot + "（version " + instVer + " / commit " + short(instHead) + "）与当前仓（version " + curVer + " / HEAD " + short(curHead) + "）不一致");
+    // 同 commit → 一致静默
+  } else if (instVer !== curVer) {
+    warn("全局安装 " + installRoot + "（version " + instVer + "）与当前仓（version " + curVer + "）不一致（安装根无 .git，走 version 兜底轨）");
+    // 同 version → 一致静默（同 version 不同 commit 热改盲区见上方 R-04 注释）
+  }
+} catch (e) {
+  console.log("⚠️ CLI 版本漂移检测降级：" + (e && e.message ? e.message : String(e)) + "（不阻断其余检查项）");
+}
+' || echo "⚠️ CLI 版本漂移检测降级：脚本执行失败（不阻断其余检查项）"
+```
+
 ### 输出格式
 ```
 📋 决策待复核
@@ -430,12 +513,15 @@ fi
 ⚠️ 决策待复核清单（1 条，advisory 不阻断——D-003）:
    - 「D-012@v1」决策待复核：锚定模块 docs-consistency 在最近确认 a1b2c3d 后源码已前进 15 commit，超阈值 10
 ℹ️ 决策库未初始化 —— 冷启动空库（R-02）
+
+⚠️ CLI 版本漂移：全局安装 /path/to/sillyspec（version 3.26.0 / commit a1b2c3d）与当前仓（version 3.27.3 / HEAD e4f5a6b）不一致——全局安装的流程引擎与当前仓源码脱节，建议同步后重跑流程（仅漂移时输出；一致/非 sillyspec 仓/无全局安装/安装根=当前仓均静默）
 ```
 
 ### 注意
 - 本检查项为 advisory（只 ⚠️ 不 ❌），不作为修复阻断项
 - 待复核的复核再确认由用户完成：确认决策仍成立后，把条目「最近确认」更新为当前 HEAD——不要自动改写
 - 全程只读，不修改 knowledge/decisions/ 下任何文件
+- CLI 版本漂移检测（同步骤追加段，D-002/D-004）同为 advisory：漂移时一行警告；一致、非 sillyspec 仓消费场景、无全局安装、安装根=当前仓（npm link 自身）均静默；探测失败降级单行，不阻断其余检查项
 ````
 
 ---
@@ -474,6 +560,9 @@ fi
 
 ## 决策待复核（advisory）
 ⚠️ 「D-012@v1」— 锚定模块源码 behind 15 超阈值 10（复核后更新「最近确认」）
+
+## CLI 版本漂移（advisory）
+⚠️ 全局安装 sillyspec（version 3.26.0 / commit a1b2c3d）与当前仓（version 3.27.3 / HEAD e4f5a6b）不一致 — 同步后重跑流程
 ```
 
 ### 要求
@@ -494,6 +583,7 @@ fi
 - 孤儿目录 → 确认后 `rm -rf .sillyspec/changes/<目录名>`
 - Maven 私服不可达 → 检查 VPN、settings.xml 配置、私服状态
 - Git remote 不可达 → 检查网络、SSH key 或凭证
+- CLI 版本漂移（全局安装落后于当前仓）→ 在 sillyspec 仓执行 `npm i -g .` 重新全局安装（或安装根 git pull），同步后重跑流程
 - 工具未安装 → 给出安装命令（如 `brew install maven`）
 
 **状态错乱补 postmortem（advisory，不强制）：**
