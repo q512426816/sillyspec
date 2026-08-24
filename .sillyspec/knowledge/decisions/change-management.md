@@ -8,6 +8,7 @@ created_at: 2026-08-23T22:40:00+08:00
 > decision-distill 从变更 decisions.md 幂等提炼（「最近确认」= 归档时 HEAD）。条目字段行为 docs-check 机械解析契约，勿手改。
 
 ## D-905@v1 quicklog 标签切段先严格边界扫描再宽松兜底
+来源：seed-2026-08-23（历史坑手工回填）
 状态：implemented
 锚点：src/quicklog.js:493
 最近确认：71a7fe6

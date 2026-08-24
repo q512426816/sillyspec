@@ -244,13 +244,16 @@ function newDomainPreamble(domain) {
   ]
 }
 
-/** 单条目段落渲染（design 接口定义的条目格式，逐字对齐：状态/锚点/最近确认/理由 + rejected 专属两行） */
-function renderBlockLines(entry, headHash, supersedesNote) {
+/** 单条目段落渲染（状态/锚点/最近确认/理由/来源 + rejected 专属两行）。来源=<变更名> 是跨变更
+ * 撞号消歧键——D-xxx 编号是变更内编号，不同变更可同号不同决策（2026-08-24 dogfood 实证：
+ * 两变更各有一个 D-002@v1，按裸号清理误删对方条目）。 */
+function renderBlockLines(entry, headHash, supersedesNote, changeName) {
   const lines = [`## ${entry.id} ${oneLine(entry.title)}`.replace(/\s+$/, '')]
   lines.push(`状态：${entry.selected}`)
   lines.push(`锚点：${oneLine(entry.anchor) || NOT_RECORDED}`)
   lines.push(`最近确认：${oneLine(headHash) || NOT_RECORDED}`)
   lines.push(`理由：${oneLine(entry.answer || entry.normalizedRequirement || entry.question)}`)
+  if (changeName) lines.push(`来源：${oneLine(changeName)}`)
   if (supersedesNote) lines.push(`supersedes：${oneLine(supersedesNote)}`)
   if (entry.selected === 'rejected') {
     lines.push(`否决理由：${oneLine(entry.rejectReason)}`)
@@ -268,14 +271,18 @@ function splitKnowledgeSections(content) {
     const m = line.match(/^## (D-\d+)@v(\d+)\s*(.*)$/)
     if (m) {
       if (cur) sections.push(cur)
-      cur = { number: m[1], version: parseInt(m[2], 10), title: m[3].trim(), lines: [line] }
+      cur = { number: m[1], version: parseInt(m[2], 10), title: m[3].trim(), source: null, lines: [line] }
       continue
     }
     if (cur) cur.lines.push(line)
     else preamble.push(line)
   }
   if (cur) sections.push(cur)
-  for (const s of sections) s.id = `${s.number}@v${s.version}`
+  for (const s of sections) {
+    s.id = `${s.number}@v${s.version}`
+    const sm = s.lines.map(l => l.match(/^来源：(.+)$/)).find(Boolean)
+    if (sm) s.source = sm[1].trim()
+  }
   return { preamble, sections }
 }
 
@@ -295,13 +302,15 @@ function joinKnowledgeFile(preamble, sections) {
  * 单条目写入一个域文件的段落集（就地修改 sections）。
  * @returns {{ action: 'append'|'update'|'supersede' }|null} null = 高版本已落库，迟到低版本不降级。
  */
-function applyEntryToSections(sections, entry, headHash) {
-  const sameNumber = sections.filter(s => s.number === entry.number)
+function applyEntryToSections(sections, entry, headHash, changeName) {
+  // 撞号消歧：只认同变更来源的同号段（无来源的存量段视为未知变更，不参与本变更的
+  // update/supersede/清理——避免跨变更误吞）
+  const sameNumber = sections.filter(s => s.number === entry.number && (s.source === changeName || (!s.source && !changeName)))
   if (sameNumber.some(s => s.version > entry.version)) return null
   let action
   let supersedesNote = oneLine(entry.supersedes) || null
   if (sameNumber.length === 0) {
-    sections.push({ number: entry.number, version: entry.version, id: entry.id, title: entry.title, lines: renderBlockLines(entry, headHash, supersedesNote) })
+    sections.push({ number: entry.number, version: entry.version, id: entry.id, title: entry.title, source: changeName, lines: renderBlockLines(entry, headHash, supersedesNote, changeName) })
     action = 'append'
   } else {
     const same = sameNumber.find(s => s.version === entry.version)
@@ -309,10 +318,11 @@ function applyEntryToSections(sections, entry, headHash) {
     if (!same && !supersedesNote) supersedesNote = `${slot.number}@v${slot.version}`
     slot.version = entry.version
     slot.title = entry.title
-    slot.lines = renderBlockLines(entry, headHash, supersedesNote)
-    // 同号旧版本段（< 新版本）就地清除——同文件内同号只留一个段
+    slot.source = changeName
+    slot.lines = renderBlockLines(entry, headHash, supersedesNote, changeName)
+    // 同变更同号旧版本段（< 新版本）就地清除——同文件内该变更的同号只留一个段
     for (let i = sections.length - 1; i >= 0; i--) {
-      if (sections[i].number === entry.number && sections[i] !== slot) sections.splice(i, 1)
+      if (sections[i].number === entry.number && sections[i].source === changeName && sections[i] !== slot) sections.splice(i, 1)
     }
     action = same ? 'update' : 'supersede'
   }
@@ -412,6 +422,7 @@ function syncIndexRoutingLines(knowledgeRoot) {
  *   缺否决理由/复潮条件被拦下（该条目未写盘，其余条目照常提炼）。
  */
 export function distillIntoKnowledge(changeDir, knowledgeRoot, headHash, moduleIndex = null) {
+  const changeName = String(changeDir || '').replace(/[\\\\/]+$/, '').split(/[\\\\/]/).pop() || null
   const parsed = parseDecisions(changeDir)
   if (parsed.missing) {
     return { written: [], skipped: `decisions.md 不存在（${join(changeDir, 'decisions.md')}），零输出`, needsWait: null }
@@ -481,7 +492,7 @@ export function distillIntoKnowledge(changeDir, knowledgeRoot, headHash, moduleI
     targetSets.set(entry, new Set(domains))
     for (const d of domains) {
       const st = loadDomain(d)
-      const res = applyEntryToSections(st.sections, entry, headHash)
+      const res = applyEntryToSections(st.sections, entry, headHash, changeName)
       if (res) {
         st.dirty = true
         written.push({ file: `decisions/${d}.md`, id: entry.id, action: res.action })
@@ -498,7 +509,7 @@ export function distillIntoKnowledge(changeDir, knowledgeRoot, headHash, moduleI
     for (const d of allDomains) {
       if (targets.has(d)) continue
       const st = loadDomain(d)
-      const removed = st.sections.filter(s => s.number === entry.number && s.version <= entry.version)
+      const removed = st.sections.filter(s => s.number === entry.number && s.version <= entry.version && s.source === changeName)
       if (removed.length === 0) continue
       st.sections = st.sections.filter(s => !removed.includes(s))
       st.dirty = true

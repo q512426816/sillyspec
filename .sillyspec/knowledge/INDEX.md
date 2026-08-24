@@ -48,3 +48,4 @@ created_at: 2026-06-19T12:40:00+08:00
 - unmapped|decision|决策 → [decisions/unmapped.md](decisions/unmapped.md)
 - docs-consistency|decision|决策 → [decisions/docs-consistency.md](decisions/docs-consistency.md)
 - stages|decision|决策 → [decisions/stages.md](decisions/stages.md)
+- runtime|decision|决策 → [decisions/runtime.md](decisions/runtime.md)
