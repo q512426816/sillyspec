@@ -412,3 +412,12 @@
 根因：local.yaml 是 gitignored 凭据文件（平台 init lease 第 5 步下发/local detect/platform connect 写入），保护分支把它当非权威残留整删，与 platformMode 跳过清理的保护语义自相矛盾，且删除后无法从 git 找回
 方案：cleanupRuntimeResidue 整删列表去掉 local.yaml 仅留 codebase/，init.js:255 与 run/command.js:424 两个保护分支调用点随之保留；同步翻转回归断言、契约文档 file-lifecycle.md 平台残留清理边界、setup 模块卡注意事项并新建 changelog sidecar
 结果：针对性测试 28/28+7/7（本地模式无资产整删零回归）、全量 npm test 297/297、npm run lint 通过
+
+## ql-20260824-001-0aa2 | 2026-08-24 08:40:10 | 模块卡字数预算警告（防文档膨胀成 agent 读取税）
+状态：已完成
+关联变更：（无）
+文件：src/module-resolve.js
+需求：模块卡字数预算警告（防文档膨胀成 agent 读取税）
+根因：module-resolve 表已有软限（12KB 按节读）但只教 accommodating 不促精简——runtime.md 已 26.9KB、worktree 24KB、stages 20KB 在持续付税且无信号
+方案：renderModuleResolveTable 增 MODULE_CARD_BUDGET_BYTES=16KB 预算——超限行标 ⚠️超预算 + 表尾提示（split-changelog 迁历史段/精简正文，预算只降不升，对标 deepseek-harness verify-doc-budgets）；软限教怎么读、预算促变瘦两层分离
+结果：实测 runtime 26.9KB 触发行内警告+表尾提示（tasks.md+卡 fixture 实证）；node --check 过；token-cost-optimization 既有测试 N/N 全绿；lint 过。

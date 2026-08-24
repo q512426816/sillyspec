@@ -20,6 +20,11 @@
  *   - 判定语义（哪个模块才是「对的」）仍归 agent——本表只是机械最优匹配
  */
 import { existsSync, readFileSync, readdirSync, statSync } from 'fs'
+
+/** 模块卡字数预算（字节）：超限在 resolve 表标 ⚠️ 并提示精简——文档是 agent 的读取税
+ * （对标 deepseek-harness verify-doc-budgets 理念：预算只降不升；2026-08-24 起 runtime.md
+ * 28KB/worktree.md 24KB 已在付税）。advisory 不阻断，16 为 dogfood 校准前缺省。 */
+const MODULE_CARD_BUDGET_BYTES = 16 * 1024
 import { join, relative } from 'path'
 import { parseModuleMapSimple } from './modules.js'
 import { parseTaskRegistry } from './stages/execute.js'
@@ -197,9 +202,12 @@ export function renderModuleResolveTable({ cwd, specBase, changeName }) {
     '| task | 模块 | 粒度 | 模块卡（只读命中的卡，勿按目录整读） | 体量 | 读取建议 |',
     '|---|---|---|---|---|---|',
   ]
+  const budgetBreached = new Set()
   for (const r of rows) {
     if (r.moduleId) {
-      L.push(`| ${r.taskId} | ${r.moduleId} | ${r.granularity === 'fine' ? '细' : '粗'} | \`${r.cardPath}\` | ${kb(r.cardBytes)} | ${r.advice} |`)
+      const over = r.cardBytes > MODULE_CARD_BUDGET_BYTES
+      if (over) budgetBreached.add(r.moduleId)
+      L.push(`| ${r.taskId} | ${r.moduleId} | ${r.granularity === 'fine' ? '细' : '粗'} | \`${r.cardPath}\` | ${kb(r.cardBytes)}${over ? ' ⚠️超预算' : ''} | ${r.advice} |`)
     } else {
       L.push(`| ${r.taskId} | — | — | （无命中，跳过模块文档） | — | — |`)
     }
@@ -207,5 +215,8 @@ export function renderModuleResolveTable({ cwd, specBase, changeName }) {
   L.push('')
   L.push('> 匹配规则：全部 _module-map.yaml 跨层最长前缀（子项目细卡优先于根层大卡），源=tasks 卡 allowed_paths。')
   L.push('> 细卡整卡可读；仅粗卡命中且体量大时**按节读**——只读「契约摘要/注意事项/定位」，跳过「变更索引/人工备注」历史累积段。')
+  if (budgetBreached.size > 0) {
+    L.push(`> ⚠️ 模块卡超预算（>${Math.round(MODULE_CARD_BUDGET_BYTES / 1024)}KB）：${[...budgetBreached].join('、')}——文档是 agent 的读取税，本次变更触及该模块，收尾时顺手 \`sillyspec modules split-changelog\` 迁出历史段或精简正文（对标 deepseek-harness verify-doc-budgets：预算只降不升）。`)
+  }
   return L.join('\n')
 }
