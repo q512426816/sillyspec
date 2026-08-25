@@ -74,14 +74,17 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
       console.log(`🔗 worktree 已存在: ${existingMeta.worktreePath} (${existingMeta.mode})`)
     } else {
       try {
-        const result = wm.create(effectiveChange)
-        console.log(`🔗 worktree 已创建: ${result.worktreePath} (分支: ${result.branch}, 模式: ${result.mode})`)
+        const result = wm.create(effectiveChange, { adoptBranch: !!(quickOpts && quickOpts.adoptBranch) })
+        console.log(`🔗 worktree 已创建: ${result.worktreePath} (分支: ${result.branch}, 模式: ${result.mode}${result.adoptedBranch ? ', 收编既有分支' : ''})`)
       } catch (e) {
         console.error(`❌ worktree 创建失败: ${e.message}`)
+        // 修复建议不再无条件推荐 git branch -D（坑 worktree-user-branch-conflict，2026-08-24：
+        // 同名分支可能是用户有意创建的——分支冲突时 create 报错已带三选一决策菜单，删不删
+        // 交由菜单/人工判断；doctor 的分支删除也有 review 锚点 + 无库保守双保护）。
         console.error(`   修复建议：`)
-        console.error(`   1. 运行 sillyspec worktree doctor --fix 检查并修复 worktree 状态`)
-        console.error(`   2. 或手动清理残留：git worktree prune && git branch -D sillyspec/${effectiveChange}`)
-        console.error(`   3. 必要时删除残留目录 .sillyspec/.runtime/worktrees/${effectiveChange}/ 后重试`)
+        console.error(`   1. 同名分支冲突/收编：按上方报错内三选一菜单处置（遗留分支确认作废后才删；用户指定分支用 --adopt-branch 收编）`)
+        console.error(`   2. worktree 状态异常：sillyspec worktree doctor --fix（分支删除有 review 锚点保护，不会误删在用分支）`)
+        console.error(`   3. 目录残留：确认无未提交改动后清理 .sillyspec/.runtime/worktrees/${effectiveChange}/ 再重试`)
         process.exit(1)
       }
     }

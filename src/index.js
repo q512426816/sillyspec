@@ -1553,8 +1553,8 @@ async function main() {
 SillySpec worktree — git worktree 隔离管理
 
 用法:
-  sillyspec worktree create <change-name> [--base <branch>]   创建隔离 worktree
-  sillyspec worktree apply <change-name> [--check-only] [--base merge-base|baseline] [--merge]   校验并应用变更到主工作区
+  sillyspec worktree create <change-name> [--base <branch>] [--adopt-branch]   创建隔离 worktree（--adopt-branch：收编既有同名分支为工作分支，分支现状作 baseline）
+  sillyspec worktree apply <change-name> [--check-only] [--base merge-base|baseline] [--merge] [--skip-overlap] [--stash-dirty]   校验并应用变更到主工作区（--stash-dirty：主仓在途改动自动 stash→apply→恢复，SHA 兜底可审计）
   sillyspec worktree assess <change-name>                     风险审计 + 自动 apply
   sillyspec worktree diff <change-name> [--base <commit>]      查看 worktree 相对 base 的变更
   sillyspec worktree list                                      列出所有活跃 worktree
@@ -1572,7 +1572,7 @@ SillySpec worktree — git worktree 隔离管理
       switch (wtSubCmd) {
         case 'create': {
           if (!wtName) {
-            console.error('❌ 用法: sillyspec worktree create <change-name> [--base <branch>]');
+            console.error('❌ 用法: sillyspec worktree create <change-name> [--base <branch>] [--adopt-branch]');
             process.exit(1);
           }
           // F6 路径穿越消毒：worktree 名用于分支名 + worktree 目录，含 ../ 会逃出 .sillyspec/worktrees/。
@@ -1580,8 +1580,9 @@ SillySpec worktree — git worktree 隔离管理
           catch (e) { console.error(`❌ ${e.message}`); process.exit(2); }
           const baseIdx = args.indexOf('--base');
           const base = baseIdx >= 0 && args[baseIdx + 1] ? args[baseIdx + 1] : undefined;
+          const adoptBranch = args.includes('--adopt-branch'); // 收编既有同名分支为工作分支（坑 worktree-user-branch-conflict）
           try {
-            const info = wm.create(wtName, { base });
+            const info = wm.create(wtName, { base, adoptBranch });
             console.log(`✅ worktree 已创建`);
             console.log(`   分支: ${info.branch}`);
             console.log(`   路径: ${info.worktreePath}`);
@@ -1601,12 +1602,13 @@ SillySpec worktree — git worktree 隔离管理
         }
         case 'apply': {
           if (!wtName) {
-            console.error('❌ 用法: sillyspec worktree apply <change-name> [--check-only] [--base merge-base|baseline] [--merge] [--skip-overlap]');
+            console.error('❌ 用法: sillyspec worktree apply <change-name> [--check-only] [--base merge-base|baseline] [--merge] [--skip-overlap] [--stash-dirty]');
             process.exit(1);
           }
           const checkOnly = args.includes('--check-only');
           const merge = args.includes('--merge');
           const skipOverlap = args.includes('--skip-overlap');
+          const stashDirty = args.includes('--stash-dirty');
 
           // 解析 --base 参数（默认 merge-base）
           let base = 'merge-base';
@@ -1637,8 +1639,8 @@ SillySpec worktree — git worktree 隔离管理
           let result;
           try {
             result = checkOnly
-              ? applyWorktree(wtName, { cwd: dir, checkOnly, merge, base, ctx: _applyCtx, skipOverlap })
-              : await withMainRepoLock(dir, wtName, 'apply', () => applyWorktree(wtName, { cwd: dir, checkOnly, merge, base, ctx: _applyCtx, skipOverlap }));
+              ? applyWorktree(wtName, { cwd: dir, checkOnly, merge, base, ctx: _applyCtx, skipOverlap, stashDirty })
+              : await withMainRepoLock(dir, wtName, 'apply', () => applyWorktree(wtName, { cwd: dir, checkOnly, merge, base, ctx: _applyCtx, skipOverlap, stashDirty }));
           } catch (lockErr) {
             console.error(`❌ ${lockErr.message}`);
             process.exit(1);

@@ -63,21 +63,24 @@ console.log('--- ① 活跃变更的分支：--fix 不删，报 active-branch --
   cleanup()
 }
 
-console.log('--- ② 无进度库（git-only 工作流）：真孤儿分支照删（零回归）---')
+console.log('--- ② 无进度库（git-only 工作流）：保守保留（坑 worktree-user-branch-conflict，2026-08-24 收紧）---')
 {
   const root = mkRepo('nodb')
   const cn = '2026-08-20-dead-change'
   execSync(`git branch sillyspec/${cn}`, { cwd: root, stdio: 'ignore' })
-  // 不 init 进度库（无 sillyspec.db）→ activeChanges 空集 → 原删除行为
+  // 不 init 进度库（无 sillyspec.db）→ 无法区分孤儿与用户自建分支 → 保守保留（fixable:false）
+  // 旧行为「照删」是用户自建分支误删向量（用户反馈五期①），故意反转
 
   const diag = await new WorktreeManager({ cwd: root }).doctor({ fix: true })
-  assert(diag.issues.some(i => i.type === 'orphan-branch' && i.name === cn), '仍报 orphan-branch')
-  assert(diag.fixed.some(m => m.includes(cn)), `--fix 删除孤儿分支（fixed: [${diag.fixed.join(' | ')}]）`)
-  assert(!branchExists(root, cn), '分支已删')
+  const issue = diag.issues.find(i => i.type === 'orphan-branch' && i.name === cn)
+  assert(!!issue && issue.fixable === false, '无库场景 orphan-branch fixable=false（保守保留）')
+  assert(!!issue && issue.detail.includes('无进度库'), 'detail 注明无库无法区分')
+  assert(!diag.fixed.some(m => m.includes(cn)), `--fix 不删（fixed: [${diag.fixed.join(' | ')}]）`)
+  assert(branchExists(root, cn), '分支物理保留')
   cleanup()
 }
 
-console.log('--- ③ 变更已注销（非活跃）：孤儿分支照删 ---')
+console.log('--- ③ 变更已注销（非活跃）：孤儿分支照删（有进度库可核对，保持原行为）---')
 {
   const root = mkRepo('unreg')
   const cn = '2026-08-20-archived-change'
@@ -90,6 +93,37 @@ console.log('--- ③ 变更已注销（非活跃）：孤儿分支照删 ---')
   const diag = await new WorktreeManager({ cwd: root }).doctor({ fix: true })
   assert(!diag.issues.some(i => i.type === 'active-branch' && i.name === cn), '已注销变更不报 active-branch')
   assert(diag.fixed.some(m => m.includes(cn)), `非活跃孤儿分支被删（fixed: [${diag.fixed.join(' | ')}]）`)
+  cleanup()
+}
+
+console.log('--- ③b review 锚点保护（坑 worktree-user-branch-conflict）：非活跃但被 review 引用 → 不删 ---')
+{
+  const root = mkRepo('revref')
+  const cn = '2026-08-20-reviewed-change'
+  // 分支带一个真实 commit（review.head 引用它）
+  execSync(`git checkout -q -b sillyspec/${cn}`, { cwd: root, stdio: 'ignore' })
+  writeFileSync(join(root, 'feature.js'), 'x')
+  execSync('git add . && git commit -qm feature', { cwd: root, stdio: 'ignore' })
+  const head = execSync('git rev-parse HEAD', { cwd: root, encoding: 'utf8' }).trim()
+  execSync('git checkout -q main', { cwd: root, stdio: 'ignore' })
+  // 变更已注销（非活跃）但 review.json 的 head 引用分支上的 commit
+  const pm = new ProgressManager({ specDir: join(root, '.sillyspec') })
+  pm.init(root)
+  pm.initChange(root, cn)
+  pm.unregisterChange(root, cn)
+  const runTaskDir = join(root, '.sillyspec', '.runtime', 'execute-runs', 'exec-2026-08-24-100000', 'tasks', 'task-01')
+  mkdirSync(runTaskDir, { recursive: true })
+  writeFileSync(join(runTaskDir, 'review.json'), JSON.stringify({
+    schemaVersion: 2, task: 'task-01', base: '0'.repeat(40), head,
+    changedFiles: ['feature.js'], specVerdict: 'pass', qualityVerdict: 'pass', reviewerNotes: 't', requiredEvidence: [],
+  }))
+
+  const diag = await new WorktreeManager({ cwd: root }).doctor({ fix: true })
+  const issue = diag.issues.find(i => i.type === 'orphan-branch' && i.name === cn)
+  assert(!!issue && issue.fixable === false, 'review 锚点分支 fixable=false（保留）')
+  assert(!!issue && issue.detail.includes('review.json'), 'detail 注明 review 锚点保护')
+  assert(!diag.fixed.some(m => m.includes(cn)), '--fix 不删有审计锚点的分支')
+  assert(branchExists(root, cn), '分支物理保留')
   cleanup()
 }
 

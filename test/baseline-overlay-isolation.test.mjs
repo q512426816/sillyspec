@@ -81,6 +81,13 @@ console.log('=== ① baseline overlay 隔离 .sillyspec/（坑 baseline-overlay-
   const meta = wm.getMeta(cn)
   assertTrue(!(meta.baselineFiles || []).some(f => String(f).includes('.sillyspec')), `baselineFiles 不含 .sillyspec 文件（实际 ${JSON.stringify(meta.baselineFiles)}）`)
   assertTrue((meta.baselineFiles || []).includes('feature.js'), 'baselineFiles 含代码文件')
+  // 坑 baseline-checkpoint-opaque-carriage（2026-08-24 用户反馈三期③）：checkpoint 提交信息
+  // 正文列出夹带文件清单——逐任务归因时 `git log` 一眼可辨、可机械排除，无需人肉 diff。
+  const ckptMsg = execSync('git log --grep "baseline checkpoint" -1 --format=%B', { cwd: wt, encoding: 'utf8' })
+  assertTrue(ckptMsg.includes('baseline checkpoint for'), `找到 checkpoint 提交（实际：${ckptMsg.slice(0, 80)}）`)
+  assertTrue(ckptMsg.includes('主仓并行在途文件'), '提交信息正文标注夹带文件段')
+  assertTrue(ckptMsg.includes('- feature.js'), '夹带清单点名 feature.js')
+  assertTrue(!ckptMsg.includes('ROADMAP.md'), '隔离的 .sillyspec 文件不进夹带清单')
   process.chdir(os.tmpdir())
   fs.rmSync(d, { recursive: true, force: true })
 }

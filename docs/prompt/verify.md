@@ -321,7 +321,7 @@ verify-result.md 路径 + 验证报告摘要 + 下一步命令
 
 ### 注意
 - PASS → 运行 `sillyspec run archive` 归档
-- FAIL → 修复后运行 `sillyspec run verify` 重新验证
+- FAIL → 修复后运行 `sillyspec run verify` 重新验证——注意重验时 CLI 会重新执行 commands.test 全量对账（长套件数分钟、同步无输出属正常；可 local.yaml test_strategy: module 收窄）
 - verify-result.md 是变更包的正式验收记录，归档后保留
 - **CLI 对账机制**：本步骤 --done 时 CLI 会亲自执行 local.yaml 的 commands.test；结论写 PASS 但实测失败 → verify 完成被阻断
 ````

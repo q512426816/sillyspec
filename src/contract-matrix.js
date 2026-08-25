@@ -341,7 +341,7 @@ export function buildContractFieldInjection(changeDir, taskName) {
  * meta）；兼容回退 scanRoot/.sillyspec/.runtime（旧路径）。
  * @returns {{ meta: object, gitDir: string }|null} gitDir = diff/扫描用 git 根（真实 worktree 或 scanRoot）
  */
-function _readWorktreeMeta(specBase, scanRoot, changeName) {
+export function _readWorktreeMeta(specBase, scanRoot, changeName) {
   if (!changeName) return null
   const candidates = [
     specBase ? join(specBase, '.runtime', 'worktrees', changeName, 'meta.json') : null,

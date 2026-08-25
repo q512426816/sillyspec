@@ -416,7 +416,7 @@ export class WorktreeManager {
    * @returns {{ branch: string, worktreePath: string, baseHash: string }}
    * @throws {Error} worktree 已存在、git 不可用、changeName 为空
    */
-  create(changeName, { base } = {}) {
+  create(changeName, { base, adoptBranch = false } = {}) {
     const name = validateChangeName(changeName);
     const worktreePath = this.getWorktreePath(name);
     const branch = BRANCH_PREFIX + name;
@@ -481,18 +481,29 @@ export class WorktreeManager {
         try { safeRemoveWorktreeDir(worktreePath); } catch (unlinkErr) {
           throw new Error(`幽灵 worktree 安全清理失败（已阻断，主仓 node_modules 未受影响）：${unlinkErr.message}`)
         }
-        // 同步清理 git worktree 注册 + 残留分支，否则目录虽删但 git 内部状态未清，
-        // 后续 git worktree add 会因「worktree 已注册」或「分支已存在」失败
+        // 同步清理 git worktree 注册（git 内部状态），否则后续 worktree add 会因「已注册」失败。
+        // 不再盲删同名分支（坑 worktree-user-branch-conflict，2026-08-24 用户反馈五期①：该分支
+        // 可能是用户有意创建的，无凭据区分遗留 vs 自建——统一交由下方分支决策菜单处置）。
         try { gitQuiet(this.cwd, ['worktree', 'prune'], { timeout: 30000 }); } catch {}
-        try { gitQuiet(this.cwd, ['branch', '-D', branch]); } catch {}
       } else {
         throw new Error(`worktree already exists: ${name}. Run cleanup first.`);
       }
     }
 
-    // 2. 检查分支是否已存在
-    if (gitQuiet(this.cwd, ['rev-parse', '--verify', `refs/heads/${branch}`])) {
-      throw new Error(`branch already exists: ${branch}. Run cleanup first.`);
+    // 2. 检查分支是否已存在（坑 worktree-user-branch-conflict，2026-08-24 用户反馈五期①：
+    // 「用户要求在指定分支上做」时既有同名分支让 execute 直接死锁，旧报错只说 Run cleanup
+    // first、修复建议无条件推荐删分支——用户自建分支被引导误删。现给决策菜单；--adopt-branch
+    // 显式收编：检出该分支为 worktree 工作分支，分支现状作 baseline，仅后续新改动计入交付。）
+    const branchExists = !!gitQuiet(this.cwd, ['rev-parse', '--verify', `refs/heads/${branch}`]);
+    let adoptedBranch = false;
+    if (branchExists && !adoptBranch) {
+      throw new Error(
+        `分支已存在：${branch}（worktree create 需新建同名分支，直接冲突）。按实际情况三选一：\n` +
+        `  ① 本变更的遗留分支（上次 execute 残留、内容已落地或作废）：确认后 git branch -D ${branch} 再重跑；\n` +
+        `  ② 该分支是你有意让本变更在其上做的（用户指定分支）：sillyspec run execute --change ${name} --adopt-branch\n` +
+        `     —— 收编为 worktree 工作分支，分支既有内容计入 baseline（仅后续新改动算交付 diff）；\n` +
+        `  ③ 换变更名重跑。`
+      );
     }
 
     // 3. 解析 base 分支
@@ -521,7 +532,17 @@ export class WorktreeManager {
 
     // 5. 创建 worktree（含版本检测 + sandbox fallback）
     try {
-      git(this.cwd, ['worktree', 'add', worktreePath, '-b', branch, baseHash], { timeout: 120000 });
+      if (branchExists && adoptBranch) {
+        // --adopt-branch 收编（坑 worktree-user-branch-conflict）：检出既有分支为工作分支（不 -b），
+        // 分支当前 HEAD 作 baseHash——分支存量内容归 baseline，仅子代理新改动计入交付 diff
+        // （与 dirty baseline overlay 同哲学）。baseBranch 仍记主仓侧锚（sync 诊断用）。
+        git(this.cwd, ['worktree', 'add', worktreePath, branch], { timeout: 120000 });
+        baseHash = git(this.cwd, ['rev-parse', branch]);
+        adoptedBranch = true;
+        console.log(`📌 已收编既有分支 ${branch} 为 worktree 工作分支（--adopt-branch）：baseline = 分支 HEAD ${String(baseHash).slice(0, 8)}，分支既有内容不计交付 diff`);
+      } else {
+        git(this.cwd, ['worktree', 'add', worktreePath, '-b', branch, baseHash], { timeout: 120000 });
+      }
     } catch (e) {
       const check = isGitWorktreeSupported(this.cwd);
       if (!check.supported) {
@@ -582,8 +603,9 @@ export class WorktreeManager {
 
     // 5.7 创建 baseline checkpoint（有 dirty baseline 时才创建）
     let baselineCommit = null;
+    if (adoptedBranch) baselineCommit = baseHash; // adopt：分支 HEAD 恒作交付 diff 锚（无 dirty overlay 也要锚定）
     if (baselineFiles.length > 0) {
-      baselineCommit = this._createBaselineCheckpoint(worktreePath, name);
+      baselineCommit = this._createBaselineCheckpoint(worktreePath, name, baselineFiles);
     }
 
     // 5.8 依赖供给（change 2026-06-28-worktree-deps-provision）
@@ -616,12 +638,13 @@ export class WorktreeManager {
       depsLockHash: deps.depsLockHash || null,
       depsCheckedAt: deps.depsCheckedAt || null,
       ...(deps.depsError ? { depsError: deps.depsError } : {}),
+      ...(adoptedBranch ? { adoptedBranch: true } : {}),
     };
 
     const metaPath = join(worktreePath, META_FILE);
     writeMetaAtomic(metaPath, meta);
 
-    return { branch, worktreePath, baseHash, mode: meta.mode, syncDiagnostic };
+    return { branch, worktreePath, baseHash, mode: meta.mode, syncDiagnostic, ...(adoptedBranch ? { adoptedBranch: true } : {}) };
   }
 
   /**
@@ -719,7 +742,7 @@ export class WorktreeManager {
 
     let baselineCommit = null;
     if (baselineFiles.length > 0) {
-      baselineCommit = this._createBaselineCheckpoint(this.cwd, name);
+      baselineCommit = this._createBaselineCheckpoint(this.cwd, name, baselineFiles);
     }
 
     const meta = {
@@ -1017,6 +1040,11 @@ export class WorktreeManager {
 
     // 4. 删除分支（fail-closed：task review 引用可达性校验。force 也不绕过——force 语义 =
     //    丢弃内容，不含丢弃审计链；确要删用 git branch -D 手动执行）
+    //    native-worktree 豁免（坑 worktree-user-branch-conflict，2026-08-24）：该模式 meta.branch
+    //    记的是用户自己的检出分支（非 sillyspec 所建），force 也不删——只清 sillyspec 侧注册。
+    if (mode === 'native-worktree') {
+      details.push(`branch kept: native-worktree 模式的 branch（${branch}）是用户自己的检出分支，不删除`);
+    } else
     //    升级（坑 cleanup-branch-review-anchor-tag，2026-08-21 实证）：分支被 review.json 引用
     //    时不再只能手动保留——打 `sillyspec-audit/<branch>` 轻量 tag 锚定分支 tip（ref 前缀独立
     //    于 sillyspec/* 分支族，doctor 孤儿分支扫描不误伤），commit 经 tag 保持可达（gc 安全），
@@ -1176,16 +1204,19 @@ export class WorktreeManager {
     // 数据源不一致——并行会话的活跃变更（meta 已清/in-place/平台模式 meta 在别处）分支会被全局
     // doctor --fix 误删。删分支前交叉核对：分支名 ∈ 活跃变更 → 保留（fixable:false 提示人工确认）。
     // 先探 DB 文件存在再实例化 ProgressManager（坑7 读路径建库：_ensureDB 不存在会建库污染）。
-    // null = 进度库存在但读失败（无法判定活跃态，保守不自动删）；空 Set = 无库/无活跃变更
-    // （git-only 工作流零回归，孤儿分支照删）。
+    // null = 无法核对（读失败 或 无进度库——坑 worktree-user-branch-conflict 2026-08-24 收紧：
+    // 无库时无法区分孤儿与用户自建分支，从「照删」改保守保留，git-only 便利让位于不误删）；
+    // Set = 进度库可读（空集=无活跃变更，非活跃孤儿仍可删）。
     let activeChanges = null;
+    let dbMissing = false;
     try {
       const specBaseOfWt = dirname(dirname(this.worktreeBase)); // <specBase>（.runtime/worktrees 上两级）
       if (existsSync(join(specBaseOfWt, '.runtime', 'sillyspec.db'))) {
         const { ProgressManager } = await import('./progress.js');
         activeChanges = new Set(new ProgressManager({ specDir: specBaseOfWt }).listChanges(this.cwd));
       } else {
-        activeChanges = new Set();
+        activeChanges = null;
+        dbMissing = true;
       }
     } catch (e) {
       console.warn(`⚠️ doctor 进度库读取失败，孤儿分支的活跃态交叉核对不可用（保守不自动删）: ${e.message}`);
@@ -1375,9 +1406,20 @@ export class WorktreeManager {
               continue;
             }
             if (activeChanges === null) {
-              // 进度库读失败：无法判定活跃态，保守不自动删（宁可漏删不可误删并行会话分支）
+              // 无法核对活跃态（读失败 或 无进度库）：保守不自动删（宁可漏删不可误删——
+              // 坑 worktree-user-branch-conflict：无库时该分支可能是用户自建的，无凭据区分）
+              const why = dbMissing ? '无进度库，无法区分孤儿与用户自建分支' : '进度库不可读，无法交叉核对活跃态'
               issues.push({ type: 'orphan-branch', name, fixable: false,
-                detail: `分支疑似残留（无对应 meta，且进度库不可读无法交叉核对活跃态）: ${branch}——保守不自动删，人工确认后 git branch -D ${branch}` });
+                detail: `分支疑似残留（无对应 meta，且${why}）: ${branch}——保守不自动删，人工确认后 git branch -D ${branch}` });
+              continue;
+            }
+            // review 锚点复核（坑 worktree-user-branch-conflict）：分支上有 task review base/head
+            // 引用的 commit → 审计链在用，不自动删（与 cleanup 的分支删除审计保护同口径）
+            let reviewRefs = [];
+            try { reviewRefs = this._branchReviewReferences(branch); } catch { reviewRefs = [] }
+            if (reviewRefs.length > 0) {
+              issues.push({ type: 'orphan-branch', name, fixable: false,
+                detail: `分支无对应 meta 但被 ${reviewRefs.length} 个 task review.json 的 base/head 引用（审计锚点）——保留。确要删除：先归档/迁移审计引用，或手动 git branch -D ${branch}` });
               continue;
             }
             issues.push({ type: 'orphan-branch', name, detail: `分支残留（无对应 meta，且非活跃变更）: ${branch}`, fixable: true });
@@ -1748,9 +1790,13 @@ export class WorktreeManager {
    * 用于区分 "前置 dirty baseline" 和 "子代理新增改动"
    * @param {string} worktreePath
    * @param {string} changeName
+   * @param {string[]} [baselineFiles] 主仓并行在途文件清单（_overlayBaseline 返回的 files，
+   *   已排除 .sillyspec）——写入提交信息正文（坑 baseline-checkpoint-opaque-carriage，
+   *   2026-08-24 用户反馈三期③：checkpoint 把主仓并行脏文件带进分支 diff，逐任务归因要靠
+   *   人肉区分；清单入 message 后 `git log` 一眼可辨、可机械排除）
    * @returns {string} commit hash
    */
-  _createBaselineCheckpoint(worktreePath, changeName) {
+  _createBaselineCheckpoint(worktreePath, changeName, baselineFiles = []) {
     // 使用临时 git identity，避免用户未配置 user.name/user.email 导致失败
     const env = {
       GIT_AUTHOR_NAME: 'sillyspec',
@@ -1765,13 +1811,21 @@ export class WorktreeManager {
       if (!status) {
         return gitQuiet(worktreePath, ['rev-parse', 'HEAD']);
       }
+      // 提交信息正文列夹带文件（封顶 30 行，超出记总数）——清单与 meta.baselineFiles 同源
+      const CAP = 30
+      const files = Array.isArray(baselineFiles) ? baselineFiles.filter(Boolean) : []
+      const body = files.length > 0
+        ? ['\n主仓并行在途文件（非本变更改动，逐任务归因时排除）：',
+           ...files.slice(0, CAP).map(f => `- ${f}`),
+           ...(files.length > CAP ? [`…等共 ${files.length} 个`] : [])].join('\n')
+        : ''
       // --no-verify：baseline 是锚点不是交付物，只是把主仓库 dirty 文件快照到 worktree
       // 分支上以便区分「前置 baseline」与「子代理新增改动」。它不该触发项目 pre-commit
       // hook（如 ruff format），否则主仓库 dirty 文件中任一不达标的会被 hook reformat
       // 致 commit 失败 → worktree 创建失败 → execute 无法启动。
       execFileSync(
         'git',
-        ['commit', '--no-verify', '-m', `sillyspec: baseline checkpoint for ${changeName}`],
+        ['commit', '--no-verify', '-m', `sillyspec: baseline checkpoint for ${changeName}${body}`],
         { cwd: worktreePath, encoding: 'utf8', stdio: ['pipe','pipe','pipe'], env }
       );
       const hash = git(worktreePath, ['rev-parse', 'HEAD']);

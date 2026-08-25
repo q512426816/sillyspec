@@ -671,6 +671,30 @@ if (supHit && supAuto.ok === true) {
 }
 rmSync(supRoot, { recursive: true })
 
+// === FAIL 门控重验成本预告（坑 fail-gate-reattest-cost-hint，2026-08-24 用户反馈三期②）===
+// FAIL 快速阻断是对的，但旧文案不提示「修复后 verify --done 仍会全量对账 commands.test」——
+// 长套件耗时段 agent 心里没数。failMessage 须带成本预告 + test_strategy 收窄指引。
+console.log('\n=== FAIL 门控重验成本预告 ===')
+
+const fgRoot = mkdtempSync(join(tmpdir(), 'sillyspec-riskfail-'))
+const fgDir = join(fgRoot, '.sillyspec', 'changes', 'riskfail')
+mkdirSync(fgDir, { recursive: true })
+writeFileSync(join(fgDir, 'design.md'), [
+  '# Design', '## 文件变更清单', '## 风险登记', '## 自审', '',
+  '仅文案调整。', '',
+].join('\n'))
+writeFileSync(join(fgDir, 'plan.md'), '# Plan\n\n- [ ] task-01: 调整文案\n')
+writeFileSync(join(fgDir, 'verify-result.md'), '# 验证报告\n\n## 结论\n\nFAIL\n\n实测不过。\n')
+const fgAuto = runValidators('verify', fgRoot, 'riskfail')
+const fgHit = (fgAuto.errors || []).find(e => e.includes('结论为 FAIL') && e.includes('commands.test') && e.includes('test_strategy'))
+if (fgHit && fgAuto.ok === false) {
+  console.log('✅ FAIL 门控文案含重验成本预告（commands.test 全量对账 + test_strategy 收窄指引）')
+} else {
+  console.log('❌ FAIL 门控缺成本预告或未阻断', { ok: fgAuto.ok, errors: fgAuto.errors })
+  failed++
+}
+rmSync(fgRoot, { recursive: true })
+
 // === design gate 风险判级提前提示（坑 risk-first-use-opaque，2026-08-24）===
 // 首次使用者在 design --done 就应看到判级结果 + frontmatter 覆盖指引，不必等 verify 撞墙。
 console.log('\n=== design gate 风险判级提前提示 ===')

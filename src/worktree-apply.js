@@ -19,7 +19,7 @@ import { WorktreeManager } from './worktree.js';
 import { parseFileChangeList, parseFileChangeListDetailed, pathMatches } from './change-list.js';
 import { parseAllowedPaths, parseRepo } from './stages/plan-postcheck.js';
 import { git, gitQuiet } from './git-helper.js';
-import { resolveLatestExecuteRunId, readReview } from './task-review.js';
+import { resolveLatestExecuteRunId, resolveLatestExecuteRunIdWithTasks, readReview, normalizeRepoKey } from './task-review.js';
 
 const CHANGES_REL = '.sillyspec/changes';
 
@@ -230,6 +230,46 @@ export function resolveApplyAllowSet(projectRoot, changeName) {
 }
 
 /**
+ * 收集最新 execute run 各 task review.json 的 changedFiles 声明 → Map<repoKey, string[]>。
+ *
+ * 坑 apply-undeclared-deviation-block（2026-08-24 用户反馈四期③）：执行期有据越界文件
+ * （facade 转发/名单测试）不在 design §6 也不在 allowed_paths，Gate1 拦 apply 只能回改
+ * design.md。review.json changedFiles 是 reviewer 对实际改动的声明（Task Review Gate 的
+ * verifyReviewGitEvidence 已交叉校验其与真实 git diff 相交），作为第三源并入 allow set——
+ * 放行仅限「已声明且过证据校验」的文件，完全越界仍拦。口径与 complete-handlers 的
+ * collectExecuteChangedFiles 一致：change 戳归属 run、.sillyspec//meta.json 过滤、
+ * review.repo 切片（跨仓声明不进 main 集）。读不到 run/review → 空 Map（fail-closed 回退旧行为）。
+ *
+ * @param {string} projectRoot - 主仓库根
+ * @param {string} changeName - 变更名
+ * @returns {Map<string, string[]>}
+ */
+export function collectReviewDeclaredFiles(projectRoot, changeName) {
+  const byRepo = new Map();
+  try {
+    const runtimeRoot = join(projectRoot, '.sillyspec', '.runtime');
+    const runId = resolveLatestExecuteRunIdWithTasks({ runtimeRoot, changeName });
+    if (!runId) return byRepo;
+    const runTasksDir = join(runtimeRoot, 'execute-runs', runId, 'tasks');
+    if (!existsSync(runTasksDir)) return byRepo;
+    for (const taskId of readdirSync(runTasksDir)) {
+      const r = readReview(join(runTasksDir, taskId, 'review.json'));
+      if (!r.ok || !r.review || !Array.isArray(r.review.changedFiles)) continue;
+      const repoKey = normalizeRepoKey(r.review.repo);
+      const list = byRepo.get(repoKey) || [];
+      for (const f of r.review.changedFiles) {
+        // 交付物过滤（与 collectExecuteChangedFiles 同口径）：.sillyspec/ 运行时产物/meta.json 不进 allow
+        if (typeof f !== 'string' || f.trim() === '') continue;
+        if (f.startsWith('.sillyspec/') || f === 'meta.json') continue;
+        list.push(f);
+      }
+      byRepo.set(repoKey, list);
+    }
+  } catch { /* 读不到 run/review → 空 Map（fail-closed 回退旧行为） */ }
+  return byRepo;
+}
+
+/**
  * 跨仓 task apply = no-op 校验（task-05 / D-009 / design §6 A3 G1）。
  *
  * 跨仓 task 的 commit 已由子代理直接落跨仓仓主干（NG-3），apply 阶段无 patch 可打（跨仓仓无
@@ -384,7 +424,7 @@ export async function withMainRepoLock(projectRoot, changeName, purpose, fn, opt
   }
 }
 
-export function applyWorktree(changeName, { cwd, checkOnly = false, merge = false, base = 'merge-base', ctx = null, skipOverlap = false } = {}) {
+export function applyWorktree(changeName, { cwd, checkOnly = false, merge = false, base = 'merge-base', ctx = null, skipOverlap = false, stashDirty = false } = {}) {
   const projectRoot = cwd || process.cwd();
   const wm = new WorktreeManager({ cwd: projectRoot });
   const meta = wm.getMeta(changeName);
@@ -502,6 +542,29 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
   // （主仓 worktree diff 只含主仓文件，跨仓文件在跨仓仓不进主仓 worktree diff）。跨仓 allowed_paths
   // 仅作 Map 切片返回供上游用，主流程不消费（跨仓 apply=no-op，D-009）。
   const allowMap = resolveApplyAllowSet(projectRoot, changeName);
+  // --- 3b. review.json 声明偏差文件并入（坑 apply-undeclared-deviation-block）---
+  // 第三源：reviewer 声明的 changedFiles（已过 Task Review Gate git 证据交叉校验）——执行期
+  // 有据越界（facade 转发/名单测试）不再逼回改 design.md。各 repo 切片各自并入；仅靠 review
+  // 放行的文件记审计 warning（result.reviewAdmittedFiles），完全越界文件仍拦（Gate1 在扩展后判）。
+  const reviewDeclaredByRepo = collectReviewDeclaredFiles(projectRoot, changeName);
+  const reviewAdmittedFiles = [];
+  for (const [repoKey, files] of reviewDeclaredByRepo) {
+    const repoSet = allowMap.get(repoKey);
+    if (!repoSet) continue; // 该 repo 无 design/任务卡清单（无清单=不校验），无需扩展
+    const existing = [...repoSet];
+    for (const f of files) {
+      if (!existing.some(ap => pathMatches(f, ap))) {
+        repoSet.add(f);
+        if (repoKey === 'main') reviewAdmittedFiles.push(f);
+      }
+    }
+  }
+  if (reviewAdmittedFiles.length > 0) {
+    result.reviewAdmittedFiles = reviewAdmittedFiles;
+    result.warnings = (result.warnings || []).concat([
+      `${reviewAdmittedFiles.length} 个变更文件不在 design.md/任务卡清单，但已被 task review.json changedFiles 声明（review 声明放行，已过 Task Review Gate git 证据校验；审计留痕）：${reviewAdmittedFiles.join(', ')}`
+    ]);
+  }
   const allowSet = allowMap.get('main') || new Set();
   const hasAllowList = allowSet.size > 0;
 
@@ -541,7 +604,7 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
     if (violations.length > 0) {
       result.extraFiles.push(...violations);
       result.errors.push(
-        `文件清单校验失败：以下变更文件不在 design.md 清单中：\n  ${violations.join('\n  ')}`
+        `文件清单校验失败：以下变更文件不在 design.md 清单、也不在 task review.json changedFiles 声明中：\n  ${violations.join('\n  ')}\n（若属执行期合理偏差：在 task review.json 的 changedFiles 声明，或在 design.md §6 清单补行）`
       );
       // checkOnly（assess）模式不短路：继续跑 Gate3，收集所有道供一次报全（坑 worktree-execute-apply-friction 坑4）。
       // 真实 apply（checkOnly=false）仍短路，保安全。
@@ -549,83 +612,178 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
     }
   }
 
-  // --- 4.6 显式 --merge：用户显式选择 git merge 兜底（主干已提交推进重叠时的三方合并） ---
-  // 触发点从「4.5 baseline 漂移自动降级」改为「用户显式 --merge flag」（D-001 保留，触发方式变化）。
-  // 用 --merge 时跳过未提交 dirty 拦截——merge 同样要求工作区相对干净，此处仅提示风险，真正失败由 applyByMerge 报告。
-  // keepConflicts:true——显式 --merge 冲突时保留现场供手工解决（不再直接 abort 丢上下文）。
-  if (merge && !checkOnly) {
-    return applyByMerge(result, changeName, projectRoot, wm, { keepConflicts: true });
+  // --- 4.4 --stash-dirty：主仓在途改动自动 stash（坑 apply-main-dirty-no-first-class， ---
+  // 2026-08-24 用户反馈四期①：主仓并行在途改动下默认 / --skip-overlap（全重叠「无可应用子集」）/
+  // --merge（git 拒在脏树启动合并）三路死锁，手工 stash→3way→pop 流程未内置。flag 显式 opt-in
+  // （自动触碰用户未提交工作区必须可审计）：stash SHA 显著打印；恢复用 apply --index 保暂存区
+  // 状态（普通 pop 会把 staged 降级为 unstaged）；恢复失败保留条目绝不自动 drop（SHA 兜底）。
+  // checkOnly（assess）只读，绝不 stash。放在 Gate1 之后：清单违规先拦，不动用户树。
+  let stashInfo = null;
+  if (stashDirty && !checkOnly) {
+    try {
+      const dirtyProbe = computeRescueDirtyFiles(projectRoot);
+      if (dirtyProbe.length > 0) {
+        const marker = `sillyspec apply ${changeName} --stash-dirty ${new Date().toISOString()}`;
+        const before = (gitQuiet(projectRoot, ['stash', 'list']) || '').split('\n').filter(Boolean).length;
+        // pathspec 限定 stash 范围与探针/4.5 同口径（排除 .sillyspec/ 运行时与他者 spec 产物、
+        // .claude/docs/CLAUDE.md）——裸 push -u 会把排除项的未跟踪文件一并卷走，恢复时与
+        // apply 期间重建的 spec 文件 already exists 互踩（实证 dbg）。
+        git(projectRoot, ['stash', 'push', '--include-untracked', '-m', marker,
+          '--', '.', ':(exclude).sillyspec/', ':(exclude).claude/', ':(exclude)docs/', ':(exclude)CLAUDE.md'], { timeout: 60000 });
+        const headEntry = ((gitQuiet(projectRoot, ['stash', 'list']) || '').split('\n')[0] || '');
+        const after = (gitQuiet(projectRoot, ['stash', 'list']) || '').split('\n').filter(Boolean).length;
+        const sha = gitQuiet(projectRoot, ['rev-parse', '--verify', 'stash@{0}']);
+        if (after !== before + 1 || !sha || !headEntry.includes(marker.split(' ').slice(0, 4).join(' '))) {
+          // 栈顶非本次条目（并行外部操作插队）——不盲动栈，fail-closed
+          throw new Error(`stash push 后栈顶校验失败（before=${before} after=${after} head=${headEntry.slice(0, 60)}）`);
+        }
+        stashInfo = { sha: sha.trim(), marker };
+        console.log(`📦 主仓在途改动已 stash（--stash-dirty，${dirtyProbe.length} 个文件）：stash@{0} = ${stashInfo.sha}`);
+        console.log(`   apply 结束后自动恢复（git stash apply --index，保留暂存区状态）；若恢复冲突，stash 条目保留不丢弃，用上述 SHA 兜底`);
+      }
+    } catch (e) {
+      result.errors.push(`--stash-dirty：主仓 stash 失败（apply 未开始，主仓未改动）: ${e.message}——若栈中已有新条目请 git stash list 核对后再处置，勿盲 pop`);
+      return result;
+    }
   }
 
-  // --- 4.5 校验：主工作区「未提交」脏文件是否与本次变更重叠（overlap-only 拦截）---
-  // 分工：4.5（排除规则下 dirty∩changedFiles）+ 5a（更宽口径的同一交集）挡「未提交」dirty 重叠；
-  // 5b 管「已提交」HEAD 分叉（已放宽）。
-  // 2026-08-20 放宽（原全量拦截 → 只拦重叠）：原「排除规则下任何未提交文件即整体拒绝」会把与本次
-  // 变更无关的脏文件也硬挡，用户被迫走 rescue cp 手动路径。重叠（dirtyFiles ∩ changedFiles，
-  // changedFiles 已含删除文件与 worktree 新增同名文件）才是 git apply 无法安全应用的实际危险区。
-  // 残余风险与兜底（Windows/autocrlf）：实测 autocrlf on 时 git apply --3way 对 dirty 工作区可报
-  // `does not match index`（哪怕脏文件与 patch 不重叠；autocrlf off 时能干净应用，非 git 本质限制）。
-  // 交集空前提下该失败是安全的：step7 catch → rollbackApply 只 checkout/删除 patch 涉及文件
-  // （这些文件 apply 前无未提交修改，还原 = apply 前状态），无关脏文件不在 patch/rollback 范围
-  // 不受影响 → fail-safe，报错后 stash 重试即可。放行时 warning 提示此路径。
-  // 排除非交付物的元数据/文档 churn（execute 自身改的 + 多操作者常改的 agent 指引/文档），
-  // 否则别人改 CLAUDE.md/docs/.claude → 判定 dirty → apply 误阻断（多操作者仓库高频踩坑）。
-  // 注意：排除规则必须和 computeBaselineHash (worktree.js) 一致（虽已不比对 hash，仍用同一口径判当前 dirty）。
-  if (meta.baselineHash) {
-    // pathspec：`--` 结束选项，`.` 包含全部，后续 :(exclude) 排除非交付物元数据/文档 churn
-    // （与 computeBaselineHash 同口径）。数组形式逐元素传递，:(exclude) magic 字面直传不经 shell。
-    const exclude = ['--', '.', ':(exclude).sillyspec/', ':(exclude).claude/', ':(exclude)docs/', ':(exclude)CLAUDE.md'];
-    const staged = gitQuiet(projectRoot, ['diff', '--cached', ...exclude]) || '';
-    const unstaged = gitQuiet(projectRoot, ['diff', ...exclude]) || '';
-    const untracked = gitQuiet(projectRoot, ['ls-files', '--others', '--exclude-standard', ...exclude]) || '';
-    // 意图（与 computeBaselineHash 注释一致）：只看「未提交 dirty」——git apply --3way 对 dirty 工作区不稳。
-    // 不比对 hash 是否等于 execute 启动时 baselineHash：主仓 dirty→clean（execute 期间 commit 无关文件）后
-    // hash 必变，若仍比对会永久死锁（须手改 meta.baselineHash）。改判「排除规则下当前是否有未提交 dirty」。
-    const hasUncommittedDirty = staged !== '' || unstaged !== '' || untracked !== '';
-    if (hasUncommittedDirty) {
-      const dirtyFiles = [...new Set(
-        ((gitQuiet(projectRoot, ['diff', '--name-only', 'HEAD']) || '').split('\n').filter(Boolean))
-          .concat((gitQuiet(projectRoot, ['ls-files', '--others', '--exclude-standard']) || '').split('\n').filter(Boolean))
-      )].filter(f => !f.startsWith('.sillyspec/') && f !== 'meta.json');
-      const overlapDirty = dirtyFiles.filter(f => changedFiles.includes(f));
-      if (overlapDirty.length > 0) {
-        // --skip-overlap（坑 apply-overlap-all-or-nothing，2026-08-23 实证：多 agent 并发仓主仓
-        // 常态有在途变更，overlap 整批拦截使 apply 基本不可用，rescue 手动 cp 又留混合状态）：
-        // 显式 opt-in 剔除重叠文件、应用干净子集。重叠文件留在 worktree——step8 非 force
-        // cleanup 被 hasUnappliedChanges 护栏拦住（主仓工作区逐字节降噪层只剔除已应用文件），
-        // 待主仓干净后重新 apply（此时只剩剩余文件）或人工裁决。
+  try {
+    // --- 4.6 显式 --merge：用户显式选择 git merge 兜底（主干已提交推进重叠时的三方合并） ---
+    // 触发点从「4.5 baseline 漂移自动降级」改为「用户显式 --merge flag」（D-001 保留，触发方式变化）。
+    // 用 --merge 时跳过未提交 dirty 拦截——merge 同样要求工作区相对干净，此处仅提示风险，真正失败由 applyByMerge 报告。
+    // keepConflicts:true——显式 --merge 冲突时保留现场供手工解决（不再直接 abort 丢上下文）。
+    if (merge && !checkOnly) {
+      return applyByMerge(result, changeName, projectRoot, wm, { keepConflicts: true });
+    }
+
+    // --- 4.5 校验：主工作区「未提交」脏文件是否与本次变更重叠（overlap-only 拦截）---
+    // 分工：4.5（排除规则下 dirty∩changedFiles）+ 5a（更宽口径的同一交集）挡「未提交」dirty 重叠；
+    // 5b 管「已提交」HEAD 分叉（已放宽）。
+    // 2026-08-20 放宽（原全量拦截 → 只拦重叠）：原「排除规则下任何未提交文件即整体拒绝」会把与本次
+    // 变更无关的脏文件也硬挡，用户被迫走 rescue cp 手动路径。重叠（dirtyFiles ∩ changedFiles，
+    // changedFiles 已含删除文件与 worktree 新增同名文件）才是 git apply 无法安全应用的实际危险区。
+    // 残余风险与兜底（Windows/autocrlf）：实测 autocrlf on 时 git apply --3way 对 dirty 工作区可报
+    // `does not match index`（哪怕脏文件与 patch 不重叠；autocrlf off 时能干净应用，非 git 本质限制）。
+    // 交集空前提下该失败是安全的：step7 catch → rollbackApply 只 checkout/删除 patch 涉及文件
+    // （这些文件 apply 前无未提交修改，还原 = apply 前状态），无关脏文件不在 patch/rollback 范围
+    // 不受影响 → fail-safe，报错后 stash 重试即可。放行时 warning 提示此路径。
+    // 排除非交付物的元数据/文档 churn（execute 自身改的 + 多操作者常改的 agent 指引/文档），
+    // 否则别人改 CLAUDE.md/docs/.claude → 判定 dirty → apply 误阻断（多操作者仓库高频踩坑）。
+    // 注意：排除规则必须和 computeBaselineHash (worktree.js) 一致（虽已不比对 hash，仍用同一口径判当前 dirty）。
+    if (meta.baselineHash) {
+      // pathspec：`--` 结束选项，`.` 包含全部，后续 :(exclude) 排除非交付物元数据/文档 churn
+      // （与 computeBaselineHash 同口径）。数组形式逐元素传递，:(exclude) magic 字面直传不经 shell。
+      const exclude = ['--', '.', ':(exclude).sillyspec/', ':(exclude).claude/', ':(exclude)docs/', ':(exclude)CLAUDE.md'];
+      const staged = gitQuiet(projectRoot, ['diff', '--cached', ...exclude]) || '';
+      const unstaged = gitQuiet(projectRoot, ['diff', ...exclude]) || '';
+      const untracked = gitQuiet(projectRoot, ['ls-files', '--others', '--exclude-standard', ...exclude]) || '';
+      // 意图（与 computeBaselineHash 注释一致）：只看「未提交 dirty」——git apply --3way 对 dirty 工作区不稳。
+      // 不比对 hash 是否等于 execute 启动时 baselineHash：主仓 dirty→clean（execute 期间 commit 无关文件）后
+      // hash 必变，若仍比对会永久死锁（须手改 meta.baselineHash）。改判「排除规则下当前是否有未提交 dirty」。
+      const hasUncommittedDirty = staged !== '' || unstaged !== '' || untracked !== '';
+      if (hasUncommittedDirty) {
+        const dirtyFiles = [...new Set(
+          ((gitQuiet(projectRoot, ['diff', '--name-only', 'HEAD']) || '').split('\n').filter(Boolean))
+            .concat((gitQuiet(projectRoot, ['ls-files', '--others', '--exclude-standard']) || '').split('\n').filter(Boolean))
+        )].filter(f => !f.startsWith('.sillyspec/') && f !== 'meta.json');
+        const overlapDirty = dirtyFiles.filter(f => changedFiles.includes(f));
+        if (overlapDirty.length > 0) {
+          // --skip-overlap（坑 apply-overlap-all-or-nothing，2026-08-23 实证：多 agent 并发仓主仓
+          // 常态有在途变更，overlap 整批拦截使 apply 基本不可用，rescue 手动 cp 又留混合状态）：
+          // 显式 opt-in 剔除重叠文件、应用干净子集。重叠文件留在 worktree——step8 非 force
+          // cleanup 被 hasUnappliedChanges 护栏拦住（主仓工作区逐字节降噪层只剔除已应用文件），
+          // 待主仓干净后重新 apply（此时只剩剩余文件）或人工裁决。
+          if (skipOverlap && !checkOnly) {
+            const skipSet = new Set(overlapDirty);
+            result.skippedOverlapFiles = overlapDirty.slice();
+            changedFiles = changedFiles.filter(f => !skipSet.has(f));
+            result.changedFiles = changedFiles;
+            result.deletedFiles = deletedFiles.filter(f => !skipSet.has(f));
+            result.hashMismatchFiles = (result.hashMismatchFiles || []).filter(f => !skipSet.has(f));
+            if (changedFiles.length === 0) {
+              result.errors.push(
+                `--skip-overlap：本次 ${overlapDirty.length} 个变更文件全部与主仓未提交改动重叠，无可应用子集：\n  ${overlapDirty.join('\n  ')}\n` +
+                `请先提交/stash 主仓改动后重试（不带 --skip-overlap），或 sillyspec worktree apply ${changeName} --stash-dirty（工具内置 stash→apply→恢复，保暂存区状态，SHA 兜底可审计）。`
+              );
+              return result;
+            }
+            result.warnings = (result.warnings || []).concat([
+              `--skip-overlap：跳过 ${overlapDirty.length} 个与主仓未提交改动重叠的文件（留在 worktree，未应用）：${overlapDirty.join(', ')}——待主仓提交/stash 后重新 apply 只应用剩余文件，或确认放弃后 cleanup --force`
+            ]);
+          } else {
+          // 重叠拦截：只有与本次变更同文件的未提交改动才无法安全 apply（列重叠文件，非全部脏文件）
+          const rescueDirty = computeRescueDirtyFiles(projectRoot);
+          result.rescueCommands = generateRescueCommands({
+            changedFiles,
+            dirtyFiles: rescueDirty,
+            hashMismatchFiles: result.hashMismatchFiles,
+            deletedFiles: result.deletedFiles,
+            worktreePath,
+            projectRoot,
+          });
+          result.errors.push(
+            `主工作区以下未提交文件与本次 apply 的变更重叠，git apply 无法安全应用：\n  ${overlapDirty.join('\n  ')}\n` +
+            `请先提交或暂存这些改动，再重新 apply：\n  git add -A && git commit -m "..."   或   git stash\n` +
+            `或 sillyspec worktree apply ${changeName} --stash-dirty（工具内置 stash→apply→恢复，保暂存区状态，SHA 兜底可审计）\n` +
+            `或应用非重叠部分（重叠文件留在 worktree，主仓干净后重新 apply 只补剩余）：\n  sillyspec worktree apply ${changeName} --skip-overlap\n` +
+            (result.rescueCommands.commands.length > 0 || result.rescueCommands.warnings.length > 0
+              ? `或手动 rescue（旁路 git apply，逐文件 cp 安全子集；cp 后需手动 sillyspec worktree cleanup ${changeName}）：\n` +
+                result.rescueCommands.commands.map(c => `  ${c}`).join('\n') +
+                (result.rescueCommands.warnings.length > 0 ? '\n' + result.rescueCommands.warnings.map(w => `  ${w}`).join('\n') : '') +
+                `\n  （共 ${result.rescueCommands.cpFileCount} 个可安全 cp，${result.rescueCommands.excludedCount} 个被排除）\n`
+              : '')
+          );
+          if (!checkOnly) return result; // checkOnly 收集不短路（一次报全）；真实 apply 短路
+          }
+        } else {
+          // 无关脏文件放行（只校验重叠文件）：--3way 若因 autocrlf 报 does not match index 会被
+          // step7 catch 回滚（交集空前提下无损，见上注释），stash 后重试即可——不再硬挡 rescue 手动路径
+          result.warnings = (result.warnings || []).concat([
+            `主工作区有 ${dirtyFiles.length} 个与本次 apply 无关的未提交文件，已放行（只校验重叠文件）：` +
+            `${dirtyFiles.slice(0, 5).join(', ')}${dirtyFiles.length > 5 ? ' 等' : ''}` +
+            `——若 apply --3way 因 CRLF/autocrlf 报 does not match index，可 git stash 后重试`
+          ]);
+        }
+      }
+    }
+
+    // --- 5. 校验：主工作区文件 base hash 一致 ---
+    // 5a. 检查主工作区是否有未 commit 的脏文件（会影响 apply）
+    const mainDirtyRaw = gitQuiet(projectRoot, ['diff', '--name-only', 'HEAD']);
+    const mainDirtyFiles = mainDirtyRaw ? mainDirtyRaw.split('\n').filter(Boolean) : [];
+    if (mainDirtyFiles.length > 0) {
+      // 如果脏文件和本次 apply 的文件有交集 → 报错
+      const conflictDirty = mainDirtyFiles.filter(f => changedFiles.includes(f));
+      if (conflictDirty.length > 0) {
+        // --skip-overlap 同款剔除（4.5 过滤后此处残余多为 staged 口径差集，防御性同处理）
         if (skipOverlap && !checkOnly) {
-          const skipSet = new Set(overlapDirty);
-          result.skippedOverlapFiles = overlapDirty.slice();
-          changedFiles = changedFiles.filter(f => !skipSet.has(f));
+          const skipSet5a = new Set(conflictDirty);
+          for (const f of conflictDirty) {
+            if (!result.skippedOverlapFiles.includes(f)) result.skippedOverlapFiles.push(f);
+          }
+          changedFiles = changedFiles.filter(f => !skipSet5a.has(f));
           result.changedFiles = changedFiles;
-          result.deletedFiles = deletedFiles.filter(f => !skipSet.has(f));
-          result.hashMismatchFiles = (result.hashMismatchFiles || []).filter(f => !skipSet.has(f));
+          result.deletedFiles = deletedFiles.filter(f => !skipSet5a.has(f));
+          result.hashMismatchFiles = (result.hashMismatchFiles || []).filter(f => !skipSet5a.has(f));
           if (changedFiles.length === 0) {
             result.errors.push(
-              `--skip-overlap：本次 ${overlapDirty.length} 个变更文件全部与主仓未提交改动重叠，无可应用子集：\n  ${overlapDirty.join('\n  ')}\n` +
-              `请先提交/stash 主仓改动后重试（不带 --skip-overlap）。`
+              `--skip-overlap：变更文件全部与主仓未提交改动重叠，无可应用子集：\n  ${conflictDirty.join('\n  ')}\n` +
+              `请先提交/stash 主仓改动后重试，或 sillyspec worktree apply ${changeName} --stash-dirty（工具内置 stash→apply→恢复，保暂存区状态，SHA 兜底可审计）。`
             );
             return result;
           }
           result.warnings = (result.warnings || []).concat([
-            `--skip-overlap：跳过 ${overlapDirty.length} 个与主仓未提交改动重叠的文件（留在 worktree，未应用）：${overlapDirty.join(', ')}——待主仓提交/stash 后重新 apply 只应用剩余文件，或确认放弃后 cleanup --force`
+            `--skip-overlap（5a 口径）：再剔除 ${conflictDirty.length} 个重叠文件：${conflictDirty.join(', ')}`
           ]);
         } else {
-        // 重叠拦截：只有与本次变更同文件的未提交改动才无法安全 apply（列重叠文件，非全部脏文件）
-        const rescueDirty = computeRescueDirtyFiles(projectRoot);
+        const rescueDirty5a = computeRescueDirtyFiles(projectRoot);
         result.rescueCommands = generateRescueCommands({
-          changedFiles,
-          dirtyFiles: rescueDirty,
-          hashMismatchFiles: result.hashMismatchFiles,
-          deletedFiles: result.deletedFiles,
-          worktreePath,
-          projectRoot,
+          changedFiles, dirtyFiles: rescueDirty5a, hashMismatchFiles: result.hashMismatchFiles,
+          deletedFiles: result.deletedFiles, worktreePath, projectRoot,
         });
         result.errors.push(
-          `主工作区以下未提交文件与本次 apply 的变更重叠，git apply 无法安全应用：\n  ${overlapDirty.join('\n  ')}\n` +
-          `请先提交或暂存这些改动，再重新 apply：\n  git add -A && git commit -m "..."   或   git stash\n` +
-          `或应用非重叠部分（重叠文件留在 worktree，主仓干净后重新 apply 只补剩余）：\n  sillyspec worktree apply ${changeName} --skip-overlap\n` +
+          `主工作区有以下未 commit 的变更，会影响 apply：\n  ${conflictDirty.join('\n  ')}\n请先 commit 或 stash 这些变更。` +
+          `或应用非重叠部分：sillyspec worktree apply ${changeName} --skip-overlap` +
           (result.rescueCommands.commands.length > 0 || result.rescueCommands.warnings.length > 0
             ? `或手动 rescue（旁路 git apply，逐文件 cp 安全子集；cp 后需手动 sillyspec worktree cleanup ${changeName}）：\n` +
               result.rescueCommands.commands.map(c => `  ${c}`).join('\n') +
@@ -635,260 +793,259 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
         );
         if (!checkOnly) return result; // checkOnly 收集不短路（一次报全）；真实 apply 短路
         }
-      } else {
-        // 无关脏文件放行（只校验重叠文件）：--3way 若因 autocrlf 报 does not match index 会被
-        // step7 catch 回滚（交集空前提下无损，见上注释），stash 后重试即可——不再硬挡 rescue 手动路径
-        result.warnings = (result.warnings || []).concat([
-          `主工作区有 ${dirtyFiles.length} 个与本次 apply 无关的未提交文件，已放行（只校验重叠文件）：` +
-          `${dirtyFiles.slice(0, 5).join(', ')}${dirtyFiles.length > 5 ? ' 等' : ''}` +
-          `——若 apply --3way 因 CRLF/autocrlf 报 does not match index，可 git stash 后重试`
-        ]);
-      }
-    }
-  }
-
-  // --- 5. 校验：主工作区文件 base hash 一致 ---
-  // 5a. 检查主工作区是否有未 commit 的脏文件（会影响 apply）
-  const mainDirtyRaw = gitQuiet(projectRoot, ['diff', '--name-only', 'HEAD']);
-  const mainDirtyFiles = mainDirtyRaw ? mainDirtyRaw.split('\n').filter(Boolean) : [];
-  if (mainDirtyFiles.length > 0) {
-    // 如果脏文件和本次 apply 的文件有交集 → 报错
-    const conflictDirty = mainDirtyFiles.filter(f => changedFiles.includes(f));
-    if (conflictDirty.length > 0) {
-      // --skip-overlap 同款剔除（4.5 过滤后此处残余多为 staged 口径差集，防御性同处理）
-      if (skipOverlap && !checkOnly) {
-        const skipSet5a = new Set(conflictDirty);
-        for (const f of conflictDirty) {
-          if (!result.skippedOverlapFiles.includes(f)) result.skippedOverlapFiles.push(f);
-        }
-        changedFiles = changedFiles.filter(f => !skipSet5a.has(f));
-        result.changedFiles = changedFiles;
-        result.deletedFiles = deletedFiles.filter(f => !skipSet5a.has(f));
-        result.hashMismatchFiles = (result.hashMismatchFiles || []).filter(f => !skipSet5a.has(f));
-        if (changedFiles.length === 0) {
-          result.errors.push(
-            `--skip-overlap：变更文件全部与主仓未提交改动重叠，无可应用子集：\n  ${conflictDirty.join('\n  ')}\n` +
-            `请先提交/stash 主仓改动后重试。`
-          );
-          return result;
-        }
-        result.warnings = (result.warnings || []).concat([
-          `--skip-overlap（5a 口径）：再剔除 ${conflictDirty.length} 个重叠文件：${conflictDirty.join(', ')}`
-        ]);
-      } else {
-      const rescueDirty5a = computeRescueDirtyFiles(projectRoot);
-      result.rescueCommands = generateRescueCommands({
-        changedFiles, dirtyFiles: rescueDirty5a, hashMismatchFiles: result.hashMismatchFiles,
-        deletedFiles: result.deletedFiles, worktreePath, projectRoot,
-      });
-      result.errors.push(
-        `主工作区有以下未 commit 的变更，会影响 apply：\n  ${conflictDirty.join('\n  ')}\n请先 commit 或 stash 这些变更。` +
-        `或应用非重叠部分：sillyspec worktree apply ${changeName} --skip-overlap` +
-        (result.rescueCommands.commands.length > 0 || result.rescueCommands.warnings.length > 0
-          ? `或手动 rescue（旁路 git apply，逐文件 cp 安全子集；cp 后需手动 sillyspec worktree cleanup ${changeName}）：\n` +
-            result.rescueCommands.commands.map(c => `  ${c}`).join('\n') +
-            (result.rescueCommands.warnings.length > 0 ? '\n' + result.rescueCommands.warnings.map(w => `  ${w}`).join('\n') : '') +
-            `\n  （共 ${result.rescueCommands.cpFileCount} 个可安全 cp，${result.rescueCommands.excludedCount} 个被排除）\n`
-          : '')
-      );
-      if (!checkOnly) return result; // checkOnly 收集不短路（一次报全）；真实 apply 短路
-      }
-    }
-  }
-
-  // 5b hashMismatch 计算已前移到 step3.5（Grill P0），见上
-
-  // --- 6. checkOnly 模式：到此返回 ---
-  if (checkOnly) {
-    result.ok = true;
-    return result;
-  }
-
-  // --- 7. 生成 patch 并 apply ---
-  // 确定要包含在 patch 中的文件：有清单用「实际变更 ∩ 清单（pathMatches 容差）」，无清单用全部变更。
-  // 口径与 classifyAllowListViolations 一致（坑 apply-glob-manifest-passes-check-but-not-patch）。
-  const patchFiles = resolvePatchFiles(changedFiles, allowSet, hasAllowList);
-
-  // 创建临时文件
-  const tmpDir = mkdtempSync(join(tmpdir(), 'sillyspec-patch-'));
-  const patchPath = join(tmpDir, 'apply.patch');
-  result.patchPath = patchPath;
-
-  try {
-    // patch 以 Buffer 聚合：git diff --binary 对二进制/非 UTF-8 文件输出任意字节序列，
-    // 按 utf8 string 拼接会破坏 NUL 字节成 U+FFFD → corrupt patch（git-helper.js git() 注释
-    // 同款坑；worktree.js 的 diff 采集已是 encoding:'buffer' 正确写法）。
-    const patchParts = [];
-
-    // 分 tracked 变更和 untracked 新文件生成 patch
-    // 批量化：一次 ls-tree（deliverableBase tree 中存在的文件）+ 一次 ls-files（index 中存在的文件）
-    // 建集合，替代 per-file cat-file -e / ls-files --error-unmatch（原至多 2N spawn → 固定 2）。
-    // 语义等价：cat-file -e deliverableBase:f 成功 ⟺ f 在 ls-tree deliverableBase 输出（getBlobHashMap key）；
-    // ls-files --error-unmatch f 成功 ⟺ f 在 ls-files -- 输出。
-    // tracked 判定用 deliverableBase（集合判定侧）
-    const inTree = getBlobHashMap(worktreePath, deliverableBase, patchFiles);
-    const inIndexList = patchFiles.length > 0
-      ? (gitQuiet(worktreePath, ['ls-files', '--', ...patchFiles]) || '').split('\n').filter(Boolean)
-      : [];
-    const inIndex = new Set(inIndexList);
-    const trackedFiles = patchFiles.filter(f => inTree.has(f) || inIndex.has(f));
-    const trackedSet = new Set(trackedFiles);
-    const untrackedPatchFiles = patchFiles.filter(f => !trackedSet.has(f));
-
-    // tracked 文件：git diff patchBase（patch 生成锚点，默认 merge-base）
-    // 数组形式，文件名逐个展开为独立 argv，不经 shell；
-    // encoding:'buffer' 保留二进制补丁原样，timeout 放大到 60s 防大 diff 超时——原裸 execSync 无 timeout
-    if (trackedFiles.length > 0) {
-      patchParts.push(git(
-        worktreePath,
-        ['diff', '--binary', patchBase, '--', ...trackedFiles],
-        { encoding: 'buffer', timeout: 60000 }
-      ));
-    }
-
-    // untracked 新文件：git add 到 index，git diff --cached，然后 reset（均数组形式，文件名逐个展开）
-    if (untrackedPatchFiles.length > 0) {
-      git(worktreePath, ['add', '--', ...untrackedPatchFiles]);
-      try {
-        // encoding:'buffer' 保留二进制补丁原样，timeout 放大到 60s 防大 diff 超时
-        patchParts.push(git(
-          worktreePath,
-          ['diff', '--binary', '--cached', '--', ...untrackedPatchFiles],
-          { encoding: 'buffer', timeout: 60000 }
-        ));
-      } finally {
-        // 重置 index（不保留 staged 状态）
-        gitQuiet(worktreePath, ['reset', 'HEAD', '--', ...untrackedPatchFiles]);
       }
     }
 
-    const patchContent = Buffer.concat(patchParts);
-    if (patchContent.length === 0) {
-      // patch 为空（清单中部分文件可能没实际变更）
+    // 5b hashMismatch 计算已前移到 step3.5（Grill P0），见上
+
+    // --- 6. checkOnly 模式：到此返回 ---
+    if (checkOnly) {
       result.ok = true;
-      rmSync(tmpDir, { recursive: true, force: true });
       return result;
     }
 
-    writeFileSync(patchPath, patchContent);
+    // --- 7. 生成 patch 并 apply ---
+    // 确定要包含在 patch 中的文件：有清单用「实际变更 ∩ 清单（pathMatches 容差）」，无清单用全部变更。
+    // 口径与 classifyAllowListViolations 一致（坑 apply-glob-manifest-passes-check-but-not-patch）。
+    const patchFiles = resolvePatchFiles(changedFiles, allowSet, hasAllowList);
 
-    // apply --check 预检失败不再拦截（--check 只测 clean apply，--3way 能处理 clean apply 失败的
-    // 三路合并场景——主干已提交推进时 --check 恒失败但 --3way 可合）。故跳过 --check，直接试 --3way。
+    // 创建临时文件
+    const tmpDir = mkdtempSync(join(tmpdir(), 'sillyspec-patch-'));
+    const patchPath = join(tmpDir, 'apply.patch');
+    result.patchPath = patchPath;
 
-    // 回滚准备：记录 patch 涉及的 tracked 文件（--3way 冲突后需恢复 HEAD 版，不留半成品冲突标记）。
-    // tracked 文件冲突 → git checkout -- <f> 还原；untracked 新建文件（--3way 不会对其冲突）不在回滚范围，
-    // 但若 --3way 部分成功后冲突，已创建的新文件需删，故记录 untracked 集合。
-    const trackedPatchFiles = patchFiles.filter(f => {
-      // 该文件在主仓库 HEAD 存在 → 是 tracked（--3way 冲突时留标记需 checkout 还原）
-      return gitQuiet(projectRoot, ['cat-file', '-e', `HEAD:${f}`]) === null ? false : true;
-    });
-    const newPatchFiles = patchFiles.filter(f => !trackedPatchFiles.includes(f));
-
-    // apply --3way 正式应用（主干已提交推进时自动三路合并）
     try {
-      git(projectRoot, ['apply', '--3way', patchPath], { timeout: 30000 });
-    } catch (e) {
-      // --3way 冲突（exit 1，工作区已留冲突标记）：回滚到 apply 前干净状态，不留半成品
-      // FR-06：解析 git 原始 stderr 提取冲突文件列表（不静默吞掉）
-      const rawStderr = e.message || '';
-      const rollback = rollbackApply(projectRoot, trackedPatchFiles, newPatchFiles, rawStderr);
-      // autocrlf 副作用单独点名：主仓无关未提交 dirty + CRLF 转换可触发 does not match index
-      // （非文件内容冲突，交集空时 step4.5 已放行到这里）——回滚无损，stash 后重试即可
-      if (/does not match index/i.test(rawStderr)) {
+      // patch 以 Buffer 聚合：git diff --binary 对二进制/非 UTF-8 文件输出任意字节序列，
+      // 按 utf8 string 拼接会破坏 NUL 字节成 U+FFFD → corrupt patch（git-helper.js git() 注释
+      // 同款坑；worktree.js 的 diff 采集已是 encoding:'buffer' 正确写法）。
+      const patchParts = [];
+
+      // 分 tracked 变更和 untracked 新文件生成 patch
+      // 批量化：一次 ls-tree（deliverableBase tree 中存在的文件）+ 一次 ls-files（index 中存在的文件）
+      // 建集合，替代 per-file cat-file -e / ls-files --error-unmatch（原至多 2N spawn → 固定 2）。
+      // 语义等价：cat-file -e deliverableBase:f 成功 ⟺ f 在 ls-tree deliverableBase 输出（getBlobHashMap key）；
+      // ls-files --error-unmatch f 成功 ⟺ f 在 ls-files -- 输出。
+      // tracked 判定用 deliverableBase（集合判定侧）
+      const inTree = getBlobHashMap(worktreePath, deliverableBase, patchFiles);
+      const inIndexList = patchFiles.length > 0
+        ? (gitQuiet(worktreePath, ['ls-files', '--', ...patchFiles]) || '').split('\n').filter(Boolean)
+        : [];
+      const inIndex = new Set(inIndexList);
+      const trackedFiles = patchFiles.filter(f => inTree.has(f) || inIndex.has(f));
+      const trackedSet = new Set(trackedFiles);
+      const untrackedPatchFiles = patchFiles.filter(f => !trackedSet.has(f));
+
+      // tracked 文件：git diff patchBase（patch 生成锚点，默认 merge-base）
+      // 数组形式，文件名逐个展开为独立 argv，不经 shell；
+      // encoding:'buffer' 保留二进制补丁原样，timeout 放大到 60s 防大 diff 超时——原裸 execSync 无 timeout
+      if (trackedFiles.length > 0) {
+        patchParts.push(git(
+          worktreePath,
+          ['diff', '--binary', patchBase, '--', ...trackedFiles],
+          { encoding: 'buffer', timeout: 60000 }
+        ));
+      }
+
+      // untracked 新文件：git add 到 index，git diff --cached，然后 reset（均数组形式，文件名逐个展开）
+      if (untrackedPatchFiles.length > 0) {
+        git(worktreePath, ['add', '--', ...untrackedPatchFiles]);
+        try {
+          // encoding:'buffer' 保留二进制补丁原样，timeout 放大到 60s 防大 diff 超时
+          patchParts.push(git(
+            worktreePath,
+            ['diff', '--binary', '--cached', '--', ...untrackedPatchFiles],
+            { encoding: 'buffer', timeout: 60000 }
+          ));
+        } finally {
+          // 重置 index（不保留 staged 状态）
+          gitQuiet(worktreePath, ['reset', 'HEAD', '--', ...untrackedPatchFiles]);
+        }
+      }
+
+      const patchContent = Buffer.concat(patchParts);
+      if (patchContent.length === 0) {
+        // patch 为空（清单中部分文件可能没实际变更）
+        result.ok = true;
+        rmSync(tmpDir, { recursive: true, force: true });
+        return result;
+      }
+
+      writeFileSync(patchPath, patchContent);
+
+      // apply --check 预检失败不再拦截（--check 只测 clean apply，--3way 能处理 clean apply 失败的
+      // 三路合并场景——主干已提交推进时 --check 恒失败但 --3way 可合）。故跳过 --check，直接试 --3way。
+
+      // 回滚准备：记录 patch 涉及的 tracked 文件（--3way 冲突后需恢复 HEAD 版，不留半成品冲突标记）。
+      // tracked 文件冲突 → git checkout -- <f> 还原；untracked 新建文件（--3way 不会对其冲突）不在回滚范围，
+      // 但若 --3way 部分成功后冲突，已创建的新文件需删，故记录 untracked 集合。
+      const trackedPatchFiles = patchFiles.filter(f => {
+        // 该文件在主仓库 HEAD 存在 → 是 tracked（--3way 冲突时留标记需 checkout 还原）
+        return gitQuiet(projectRoot, ['cat-file', '-e', `HEAD:${f}`]) === null ? false : true;
+      });
+      const newPatchFiles = patchFiles.filter(f => !trackedPatchFiles.includes(f));
+
+      // apply --3way 正式应用（主干已提交推进时自动三路合并）
+      try {
+        git(projectRoot, ['apply', '--3way', patchPath], { timeout: 30000 });
+      } catch (e) {
+        // --3way 冲突（exit 1，工作区已留冲突标记）：回滚到 apply 前干净状态，不留半成品
+        // FR-06：解析 git 原始 stderr 提取冲突文件列表（不静默吞掉）
+        const rawStderr = e.message || '';
+        const rollback = rollbackApply(projectRoot, trackedPatchFiles, newPatchFiles, rawStderr);
+        // autocrlf 副作用单独点名：主仓无关未提交 dirty + CRLF 转换可触发 does not match index
+        // （非文件内容冲突，交集空时 step4.5 已放行到这里）——回滚无损，stash 后重试即可
+        if (/does not match index/i.test(rawStderr)) {
+          result.errors.push(
+            `apply --3way 失败（does not match index）：多为主仓未提交文件 + Windows autocrlf 的 CRLF 副作用触发，非文件内容冲突。\n` +
+            `已回滚工作区到 apply 前状态（无损，无关未提交文件未受影响）。\n` +
+            `处理：git stash 后重试 sillyspec worktree apply ${changeName}（手工 stash 记下 git stash list 的 SHA——pop 失败时兜底），或 --merge 兜底，或 --stash-dirty 由工具自动 stash→apply→恢复。`
+          );
+          if (rollback.error) result.warnings = (result.warnings || []).concat([`回滚警告: ${rollback.error}`]);
+          return result;
+        }
         result.errors.push(
-          `apply --3way 失败（does not match index）：多为主仓未提交文件 + Windows autocrlf 的 CRLF 副作用触发，非文件内容冲突。\n` +
-          `已回滚工作区到 apply 前状态（无损，无关未提交文件未受影响）。\n` +
-          `处理：git stash 后重试 sillyspec worktree apply ${changeName}，或 --merge 兜底。`
+          `apply --3way 冲突：以下文件与主干「已提交」推进重叠，无法自动合并：\n` +
+          `  ${rollback.conflicts.length > 0 ? rollback.conflicts.join('\n  ') : '(未能获取冲突文件列表)'}\n` +
+          `已回滚工作区到 apply 前状态（无半成品冲突标记）。\n` +
+          `可选：用 --merge 自动三方合并兜底（git merge sillyspec/${changeName}，会引入合并提交）：\n` +
+          `  sillyspec worktree apply ${changeName} --merge\n` +
+          `或手动解决后重试。`
         );
         if (rollback.error) result.warnings = (result.warnings || []).concat([`回滚警告: ${rollback.error}`]);
         return result;
       }
-      result.errors.push(
-        `apply --3way 冲突：以下文件与主干「已提交」推进重叠，无法自动合并：\n` +
-        `  ${rollback.conflicts.length > 0 ? rollback.conflicts.join('\n  ') : '(未能获取冲突文件列表)'}\n` +
-        `已回滚工作区到 apply 前状态（无半成品冲突标记）。\n` +
-        `可选：用 --merge 自动三方合并兜底（git merge sillyspec/${changeName}，会引入合并提交）：\n` +
-        `  sillyspec worktree apply ${changeName} --merge\n` +
-        `或手动解决后重试。`
-      );
-      if (rollback.error) result.warnings = (result.warnings || []).concat([`回滚警告: ${rollback.error}`]);
-      return result;
-    }
 
-    result.ok = true;
+      result.ok = true;
 
-    // --- 7.5 提交复用 pathspec（坑 apply-commit-pathspec-sweep，2026-08-21 实证）---
-    // apply 后主仓常混有无关未提交文件（他者会话/并行 quick），agent 习惯 `git add <目录>/`
-    // 会把无关文件扫进暂存需手工剔除。落盘本变更精确 pathspec 供提交直接复用：
-    // 文件 + result 字段（CLI 输出可照抄 git add -- … / 长清单用 --pathspec-from-file）。
-    try {
-      const commitFiles = [...new Set(patchFiles)].sort().filter(Boolean);
-      result.commitPathspec = commitFiles;
-      const runtimeRoot = join(projectRoot, '.sillyspec', '.runtime');
-      mkdirSync(runtimeRoot, { recursive: true });
-      const pathspecFile = join(runtimeRoot, `apply-pathspec-${changeName}.txt`);
-      writeFileSync(pathspecFile, commitFiles.join('\n') + '\n');
-      result.pathspecFile = pathspecFile;
-    } catch { /* pathspec 落盘失败不影响 apply 结果 */ }
+      // --- 7.5 提交复用 pathspec（坑 apply-commit-pathspec-sweep，2026-08-21 实证）---
+      // apply 后主仓常混有无关未提交文件（他者会话/并行 quick），agent 习惯 `git add <目录>/`
+      // 会把无关文件扫进暂存需手工剔除。落盘本变更精确 pathspec 供提交直接复用：
+      // 文件 + result 字段（CLI 输出可照抄 git add -- … / 长清单用 --pathspec-from-file）。
+      try {
+        const commitFiles = [...new Set(patchFiles)].sort().filter(Boolean);
+        result.commitPathspec = commitFiles;
+        const runtimeRoot = join(projectRoot, '.sillyspec', '.runtime');
+        mkdirSync(runtimeRoot, { recursive: true });
+        const pathspecFile = join(runtimeRoot, `apply-pathspec-${changeName}.txt`);
+        writeFileSync(pathspecFile, commitFiles.join('\n') + '\n');
+        result.pathspecFile = pathspecFile;
+      } catch { /* pathspec 落盘失败不影响 apply 结果 */ }
 
-    // --- 8. 成功后自动 cleanup（失败不影响整体结果） ---
-    // --skip-overlap 时先查 hasUnappliedChanges：跳过文件未落主仓 → 保留 worktree（不触发
-    // cleanup 的拦截横幅吓人，主动判断 + 温和提示）；全部已落地（无跳过残留）才照常清理。
-    // cleanup 返回值必须消费（坑 ghost-dir-junction-pierce，2026-08-23 实证：apply 后 partial
-    // 残留被静默丢弃，用户以为已干净、人工 rm -rf 时穿透 junction 删主仓 node_modules）。
-    const consumeCleanup = (cr) => {
-      if (cr && (cr.result === 'partial' || (Array.isArray(cr.residual) && cr.residual.length > 0))) {
-        result.warnings.push(
-          `⚠️ worktree 部分清理残留（${cr.result}）：${(cr.residual || []).join('; ') || 'worktree 目录'}` +
-          `——Windows 勿直接 rm -rf（会穿透 node_modules junction 删主仓依赖）：先 cmd /c rmdir "<worktree>\\node_modules" 解链再删目录，或跑 sillyspec worktree doctor --fix`
-        )
-      }
-      return cr
-    }
-    try {
-      if (skipOverlap) {
-        const unapplied = wm.hasUnappliedChanges(changeName);
-        if (unapplied.hasChanges) {
-          const pend = unapplied.changedFiles || [];
+      // --- 8. 成功后自动 cleanup（失败不影响整体结果） ---
+      // --skip-overlap 时先查 hasUnappliedChanges：跳过文件未落主仓 → 保留 worktree（不触发
+      // cleanup 的拦截横幅吓人，主动判断 + 温和提示）；全部已落地（无跳过残留）才照常清理。
+      // cleanup 返回值必须消费（坑 ghost-dir-junction-pierce，2026-08-23 实证：apply 后 partial
+      // 残留被静默丢弃，用户以为已干净、人工 rm -rf 时穿透 junction 删主仓 node_modules）。
+      const consumeCleanup = (cr) => {
+        if (cr && (cr.result === 'partial' || (Array.isArray(cr.residual) && cr.residual.length > 0))) {
           result.warnings.push(
-            `worktree 已保留（--skip-overlap 有未应用文件）：${pend.length} 个文件仍在 worktree` +
-            `（${pend.slice(0, 5).join(', ')}${pend.length > 5 ? ' 等' : ''}）——主仓提交/stash 后重新 sillyspec worktree apply ${changeName} 只应用剩余文件，或确认放弃后 sillyspec worktree cleanup ${changeName} --force`
-          );
+            `⚠️ worktree 部分清理残留（${cr.result}）：${(cr.residual || []).join('; ') || 'worktree 目录'}` +
+            `——Windows 勿直接 rm -rf（会穿透 node_modules junction 删主仓依赖）：先 cmd /c rmdir "<worktree>\\node_modules" 解链再删目录，或跑 sillyspec worktree doctor --fix`
+          )
+        }
+        return cr
+      }
+      try {
+        if (skipOverlap) {
+          const unapplied = wm.hasUnappliedChanges(changeName);
+          if (unapplied.hasChanges) {
+            const pend = unapplied.changedFiles || [];
+            result.warnings.push(
+              `worktree 已保留（--skip-overlap 有未应用文件）：${pend.length} 个文件仍在 worktree` +
+              `（${pend.slice(0, 5).join(', ')}${pend.length > 5 ? ' 等' : ''}）——主仓提交/stash 后重新 sillyspec worktree apply ${changeName} 只应用剩余文件，或确认放弃后 sillyspec worktree cleanup ${changeName} --force`
+            );
+          } else {
+            consumeCleanup(wm.cleanup(changeName, { force: true }));
+          }
         } else {
           consumeCleanup(wm.cleanup(changeName, { force: true }));
         }
-      } else {
-        consumeCleanup(wm.cleanup(changeName, { force: true }));
+      } catch (cleanupErr) {
+        result.warnings = result.warnings || [];
+        result.warnings.push(`cleanup 失败（不影响应用结果；Windows 手动清理先解 junction 再删，勿 rm -rf）: ${cleanupErr.message}`);
       }
-    } catch (cleanupErr) {
-      result.warnings = result.warnings || [];
-      result.warnings.push(`cleanup 失败（不影响应用结果；Windows 手动清理先解 junction 再删，勿 rm -rf）: ${cleanupErr.message}`);
+
+    } catch (e) {
+      // ENOBUFS 自动降级（坑 apply-spawnsync-enobufs，2026-08-22 实证：大 diff 的 binary patch
+      // 超 maxBuffer 抛 ENOBUFS，此前只能 agent 手动 git merge 绕行）——git apply 路径走不通时
+      // 自动落 applyByMerge（既有 --merge 兜底，语义同为三方合并）
+      if (/ENOBUFS/i.test(String(e.message || e.code || ''))) {
+        result.warnings = (result.warnings || []).concat(
+          [`patch 生成超出进程缓冲区（ENOBUFS，超大 diff）——自动降级 git merge 路径应用`]
+        );
+        try {
+          // keepConflicts:false——自动降级路径无人善后冲突状态，维持 abort 回滚干净态
+          return applyByMerge(result, changeName, projectRoot, wm, { keepConflicts: false });
+        } catch (mergeErr) {
+          result.errors.push(`ENOBUFS 降级 merge 也失败: ${mergeErr.message}`);
+          return result;
+        }
+      }
+      result.errors.push(`patch 生成/应用异常: ${e.message}`);
+      return result;
+    } finally {
+      // 清理临时目录
+      try { rmSync(tmpDir, { recursive: true, force: true }); } catch {}
     }
 
-  } catch (e) {
-    // ENOBUFS 自动降级（坑 apply-spawnsync-enobufs，2026-08-22 实证：大 diff 的 binary patch
-    // 超 maxBuffer 抛 ENOBUFS，此前只能 agent 手动 git merge 绕行）——git apply 路径走不通时
-    // 自动落 applyByMerge（既有 --merge 兜底，语义同为三方合并）
-    if (/ENOBUFS/i.test(String(e.message || e.code || ''))) {
-      result.warnings = (result.warnings || []).concat(
-        [`patch 生成超出进程缓冲区（ENOBUFS，超大 diff）——自动降级 git merge 路径应用`]
-      );
-      try {
-        // keepConflicts:false——自动降级路径无人善后冲突状态，维持 abort 回滚干净态
-        return applyByMerge(result, changeName, projectRoot, wm, { keepConflicts: false });
-      } catch (mergeErr) {
-        result.errors.push(`ENOBUFS 降级 merge 也失败: ${mergeErr.message}`);
-        return result;
-      }
-    }
-    result.errors.push(`patch 生成/应用异常: ${e.message}`);
     return result;
   } finally {
-    // 清理临时目录
-    try { rmSync(tmpDir, { recursive: true, force: true }); } catch {}
+    // stash 恢复（含 --merge 早退 / 各拦截 return / 异常路径——finally 全覆盖，绝不遗漏）
+    if (stashInfo) restoreMainStash(projectRoot, stashInfo);
   }
+}
 
-  return result;
+/**
+ * --stash-dirty 的收尾恢复（applyWorktree finally 调用）。
+ *
+ * 语义（坑 apply-main-dirty-no-first-class / stash-pop-silent-noop，2026-08-24 用户反馈四期①②）：
+ *   - 恢复用 `git stash apply --index`（保暂存区状态——普通 pop 会把 staged 降级为 unstaged）；
+ *   - apply 成功后才 drop 本次条目，drop 后核验栈顶已非本 SHA（用户实证 stash pop 有静默不落地
+ *     形态，退出码不可尽信）；
+ *   - apply --index 冲突/异常 → stash 条目保留（git apply 失败不 drop），大字打印 SHA 兜底，
+ *     绝不自动丢弃、绝不盲 pop 栈顶（并行外部操作可能插队，先按 SHA 校验栈顶归属）。
+ * @param {string} projectRoot
+ * @param {{ sha: string, marker: string }} stashInfo
+ */
+function restoreMainStash(projectRoot, { sha, marker }) {
+  // 栈顶归属校验按 SHA（git stash list 行不含 SHA，须 rev-parse 对比）——防并行外部操作插队后误恢复他者条目
+  const headSha = (gitQuiet(projectRoot, ['rev-parse', '--verify', 'stash@{0}']) || '').trim();
+  if (headSha !== sha) {
+    console.error(`⚠️ stash 恢复跳过：栈顶 stash@{0} 已非本次条目（本次 ${sha}，栈顶 ${headSha || '空'}）——可能被并行操作消费/弹出。若本次条目仍在栈中：git stash list 找 ${sha.slice(0, 8)} 后 git stash apply --index <该ref>`);
+    return;
+  }
+  // 两级恢复：① apply --index（保暂存区状态）——但 apply 本身会把变更留在工作区未提交，stash 树是
+  // 全量快照，--index 的合并对「stash 树内但未被 stash 改动的脏文件」（正是刚 apply 落地的文件）
+  // 会报 local changes would be overwritten；② 退普通 apply（内容保真恢复，staged 扁平化为
+  // unstaged——诚实降级并提示重 add）。两级都失败 → 保留条目 + SHA 兜底，绝不自动丢弃。
+  let restored = null // 'index' | 'plain'
+  try {
+    git(projectRoot, ['stash', 'apply', '--index', 'stash@{0}'], { timeout: 60000 });
+    restored = 'index';
+  } catch (eIndex) {
+    try {
+      git(projectRoot, ['stash', 'apply', 'stash@{0}'], { timeout: 60000 });
+      restored = 'plain';
+      console.warn(`⚠️ 暂存区状态未能完整还原（apply --index 与本次 apply 落地的未提交变更互斥），已退普通恢复——内容保真，staged 文件被扁平化为 unstaged，如需请重新 git add。原因：${String(eIndex.message || eIndex).split('\n').slice(-2)[0] || eIndex}`);
+    } catch (e) {
+      console.error(`⚠️ stash 恢复失败（apply 冲突或异常）——stash 条目已保留（未丢弃），SHA 兜底：${sha}`);
+      console.error(`   处理：git stash list 定位条目（marker 含 "${String(marker || '').slice(0, 50)}"）；解决工作区冲突后 git stash apply stash@{N} 重试或人工合并；确认无需后再 git stash drop。未跟踪文件若报 already exists，比对内容后手动处理。`);
+      console.error(`   git 输出: ${String(e.message || e).split('\n').slice(0, 3).join('\n            ')}`);
+      return;
+    }
+  }
+  try {
+    git(projectRoot, ['stash', 'drop', 'stash@{0}'], { timeout: 60000 });
+    // 防静默不落地（用户实证②）：drop 后栈顶不得仍是本 SHA
+    const headAfter = gitQuiet(projectRoot, ['rev-parse', '--verify', 'stash@{0}']);
+    if (headAfter && headAfter.trim() === sha) {
+      console.error(`⚠️ stash drop 未生效（栈顶仍为 ${sha}）——改动应已恢复，确认 git status 后手动 git stash drop stash@{0}`);
+    } else {
+      console.log(`✅ 主仓在途改动已恢复（${restored === 'index' ? 'apply --index 保留暂存区状态' : '普通恢复，内容保真'}）并清理 stash 条目：${sha}`);
+    }
+  } catch (e) {
+    console.error(`⚠️ stash drop 失败（改动应已恢复）——手动 git stash drop stash@{0}（${sha}）：${e.message}`);
+  }
 }
 
 /**
@@ -1145,7 +1302,7 @@ export function applyByMerge(result, changeName, projectRoot, wm, opts = {}) {
       result.errors.push(
         `git merge ${branch} 未执行成功——主仓有会被合并覆盖的未提交改动，git 拒绝启动合并（无冲突现场）。\n` +
         `git 输出: ${String(e.message || '').split('\n').slice(0, 3).join(' | ').slice(0, 300)}\n` +
-        `请先 commit/stash 主仓改动后重试，或用 --skip-overlap 应用非重叠子集。`
+        `请先 commit/stash 主仓改动后重试，或用 --skip-overlap 应用非重叠子集，或 sillyspec worktree apply ${changeName} --stash-dirty（自动 stash→apply→恢复，保暂存区状态，SHA 兜底）。`
       );
       return result;
     }
@@ -1266,19 +1423,27 @@ export function assessApplyRisk(changeName, { cwd } = {}) {
   const incidentalSet = new Set(
     parseFileChangeListDetailed(designPath).filter(e => e.incidental).map(e => e.path)
   );
+  // review.json 声明偏差文件（坑 apply-undeclared-deviation-block）：与顺带修复同等待遇——
+  // reviewer 声明（已过 git 证据校验）的执行期偏差豁免 allowed_paths 严格校验，降 warning 注明来源。
+  const reviewDeclaredSet = new Set(collectReviewDeclaredFiles(projectRoot, changeName).get('main') || []);
 
-  // 检查 2: 变更在 allowed_paths 内（仅在 TaskCard 存在时）；顺带修复文件豁免。
+  // 检查 2: 变更在 allowed_paths 内（仅在 TaskCard 存在时）；顺带修复/review 声明文件豁免。
   // 匹配换 pathMatches（与 Gate1/plan-postcheck 同语义容差），消除原字面前缀弱匹配漂移。
   if (allowedPaths.size > 0) {
     const isIncidental = f => [...incidentalSet].some(ap => pathMatches(f, ap));
+    const isReviewDeclared = f => [...reviewDeclaredSet].some(ap => pathMatches(f, ap));
     const outsideAll = changedFiles.filter(f => ![...allowedPaths].some(allowed => pathMatches(f, allowed)));
-    const outsidePaths = outsideAll.filter(f => !isIncidental(f));
+    const outsidePaths = outsideAll.filter(f => !isIncidental(f) && !isReviewDeclared(f));
     const exempted = outsideAll.filter(f => isIncidental(f));
+    const reviewExempted = outsideAll.filter(f => !isIncidental(f) && isReviewDeclared(f));
     if (outsidePaths.length > 0) {
       reasons.push(`变更文件超出 allowed_paths：\n  ${outsidePaths.join('\n  ')}`);
     }
     if (exempted.length > 0) {
       warnings.push(`顺带修复文件（已豁免 allowed_paths，来源 design §6 标记）：${exempted.join(', ')}`);
+    }
+    if (reviewExempted.length > 0) {
+      warnings.push(`review 声明偏差文件（已豁免 allowed_paths，来源 task review.json changedFiles，过 git 证据校验）：${reviewExempted.join(', ')}`);
     }
   }
 

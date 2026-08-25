@@ -51,7 +51,8 @@ sillyspec/<change-name>
    - 如果 git 版本低于 2.15 或不可用，报错。
    - 其他失败降级为 `in-place-fallback`，在主工作区记录 meta。
 9. 创建普通 worktree 后，**只读检测** base（主仓库 HEAD）与 `origin/<默认分支>` 的落后/分叉状态，报告风险 + 对齐命令，写 `syncDiagnostic` 到 meta。**不自动 fetch+ff、不阻断 create**（对齐 origin 的动作留给用户/agent）。
-10. 主工作区已有 staged/unstaged/untracked 变更时，会 overlay 到 worktree，并创建 baseline checkpoint commit。
+9.5. **同名分支冲突决策菜单**（2026-08-24 坑 worktree-user-branch-conflict）：`sillyspec/<change>` 分支已存在时不再只报 Run cleanup first——三选一菜单（遗留分支确认作废后删 / `--adopt-branch` 收编 / 换变更名）；`--adopt-branch`（`worktree create` flag 或 `run execute --change X --adopt-branch`）检出既有分支为工作分支，`baseHash = baselineCommit = 分支 HEAD`（分支存量归 baseline 不计交付 diff），`meta.adoptedBranch` 留审计。幽灵目录自动清理不再盲删同名分支（只 prune）。
+10. 主工作区已有 staged/unstaged/untracked 变更时，会 overlay 到 worktree，并创建 baseline checkpoint commit。checkpoint 提交信息正文自 2026-08-24（坑 baseline-checkpoint-opaque-carriage）列出夹带的主仓并行在途文件清单（封顶 30 行，与 `meta.baselineFiles` 同源，标注「逐任务归因时排除」）——`git log` 一眼可辨，无需人肉 diff 区分。
 11. **依赖供给**（change `2026-06-28-worktree-deps-provision`）：baseline overlay 后调用 `provisionDeps(worktreePath, mainCwd)`（`src/worktree-deps.js`）——lockfile 一致时 junction/symlink 主 checkout 的 `node_modules`（瞬时零网络），否则按 `local.yaml` 的 `project.type` + lockfile 推断并执行 install。结果写入 meta（`depsStatus` 等字段）。**供给失败不阻断 create**，只记 `depsStatus=failed`，交由 execute 验证硬门阻断。
 
 ## `meta.json`
@@ -94,10 +95,11 @@ sillyspec/<change-name>
 1. 读取 `meta.json`。
 2. diff base 使用 `baselineCommit || baseHash`。
 3. 收集 tracked diff 和 untracked 新文件。
-4. 从 `.sillyspec/changes/<change>/design.md` 解析“文件变更清单”作为 allow list。
-5. 如果 allow list 非空，要求 changed files 都在清单内。
+4. allow list **三源并集**：design §6“文件变更清单” ∪ 任务卡 `allowed_paths` ∪ **task review.json `changedFiles` 声明**（2026-08-24 坑 apply-undeclared-deviation-block：执行期有据越界文件——facade 转发/名单测试——不再逼回改 design.md；review 声明已过 Task Review Gate 的 git 证据交叉校验，仅靠 review 放行的文件记 `result.reviewAdmittedFiles` + 审计 warning；跨仓 review 按 `repo:` 切片不进 main 集；`.sillyspec/` 运行时产物/meta.json 过滤；完全越界文件仍拦）。
+5. 如果 allow list 非空，要求 changed files 都在清单内（violation 报错给「review.json changedFiles 声明 / design §6 补行」两条出路）。
+5.5 **`--stash-dirty`**（2026-08-24 坑 apply-main-dirty-no-first-class，用户反馈四期①）：主仓有并行在途改动时默认/`--skip-overlap`/`--merge` 三路死锁，本 flag 把手工 stash→3way→pop 内置——Gate1 之后（清单违规先拦不动用户树）按 4.5 同口径探针，脏则 `git stash push -u -- <pathspec 同款排除>`（stash SHA 显著打印），apply 正常走，finally 两级恢复：`apply --index`（保暂存区）优先、与 apply 落地的未提交变更互斥时退普通 apply（内容保真 + staged 扁平化明示）、都失败保留条目大字打印 SHA 兜底（绝不自动 drop）；drop 后核验栈顶防「静默不落地」（用户实证 stash pop 有静默失败形态）；checkOnly 只读绝不 stash；全程持主仓互斥锁。
 6. **显式 `--merge`**（用户 flag）→ 直接走 `applyByMerge`（`git merge sillyspec/<change>`，三方合并兜底，引合并提交），跳过后续 patch 流程。
-7. **未提交 dirty 拦截**（step 4.5）：如果 meta 有 `baselineHash`，重新计算主工作区 dirty hash（排除 `.sillyspec/.claude/docs/CLAUDE.md`）；不同 → 拒绝 apply 并列出脏文件 + 引导先 `commit`/`stash`（实测 git `--3way`/`merge` 对未提交 dirty 工作区均不稳，必须拦）。step 5a 再做一次脏∩changedFiles 精确点名。
+7. **未提交 dirty 拦截**（step 4.5）：如果 meta 有 `baselineHash`，重新计算主工作区 dirty hash（排除 `.sillyspec/.claude/docs/CLAUDE.md`）；不同 → 拒绝 apply 并列出脏文件 + 引导先 `commit`/`stash` 或 `--stash-dirty` 由工具代劳（实测 git `--3way`/`merge` 对未提交 dirty 工作区均不稳，必须拦）。step 5a 再做一次脏∩changedFiles 精确点名。
 8. **已提交推进**（step 5b）：比较主工作区 `HEAD` 与 worktree `baseHash` 的目标文件 blob。**放宽**：blob 不一致（主干已提交推进改了同文件）不再 BLOCKED，仅记入 `hashMismatchFiles` 作风险提示（assess WARNING），放行交 `--3way` 自动三路合并。
 9. `--check-only` 到这里返回。
 10. 生成临时 patch。
@@ -242,3 +244,9 @@ quick 阶段写文件直接放行，不要求 worktree。
 - execute 主工作区：危险黑名单拦截；只读白名单放行；其他不确定命令当前放行。
 
 `worktree-guard.js` 的本地扩展白名单优先读取 `.sillyspec/local.yaml` / `.sillyspec/local.yml`，并兼容项目根 `local.yaml` / `local.yml`。
+
+## doctor 分支删除收紧（2026-08-24 坑 worktree-user-branch-conflict）
+
+- **无进度库（git-only）**：孤儿分支从「照删」改**保守保留**（fixable:false 人工确认）——无库时无法区分孤儿与用户自建分支，git-only 便利让位于不误删。
+- **review 锚点复核**：`orphan-branch` 删除前跑 `_branchReviewReferences`——分支上有 task review base/head 引用的 commit → fixable:false 保留（与 cleanup 分支删除审计保护同口径）。
+- **cleanup `--force` × native-worktree**：该模式 `meta.branch` 是用户自己的检出分支，force 也不删（只清 sillyspec 侧注册）。

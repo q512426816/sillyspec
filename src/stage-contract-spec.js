@@ -223,7 +223,7 @@ const VERIFY_RULES = [
     target: { root: 'change', path: 'verify-result.md', scope: 'full' },
     data: {},
     spec: 'verify-result.md 结论不得为 FAIL(FAIL 阻断 verify 完成)。结论在含「结论/Conclusion/Result/结果」的二级标题后,值为 PASS / PASS WITH NOTES / FAIL。',
-    failMessage: 'verify-result.md 结论为 FAIL — 验证未通过，不能标记 verify 完成；请修复后重新运行验证',
+    failMessage: 'verify-result.md 结论为 FAIL — 验证未通过，不能标记 verify 完成；请修复后重新运行验证。⚠️ 重验成本预告：修复后 verify --done 时 CLI 会重新执行 local.yaml 的 commands.test 全量对账（同步执行，长套件可达数分钟、中途无输出属正常；可按 local.yaml test_strategy: module + modules 收窄命中模块），请在修复时一并评估测试范围',
     noConclusionWarning: 'verify-result.md 未识别到结论章节（含 结论/Conclusion/Result/结果 的二级标题，后跟 PASS / PASS WITH NOTES / FAIL）',
   },
   // integration-evidence(custom,D10 事前契约):风险门控。判定算法 detectChangeRisk +

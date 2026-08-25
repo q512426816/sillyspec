@@ -459,3 +459,48 @@
 根因：用户实证五坑：①taskcard 骨架占位符过九字段存在性硬校验，task-03/04/06/07 空骨架靠人工审计才发现；②主控手排 7 波与 CLI 拓扑比对只警告不阻断，且 depends_on 落同 Wave（execute 强制并行）此前零校验；③brainstorm step8 要求所有规范文件含 frontmatter 但其 decisions 模板自己不带，agent 照抄必缺 header 拖到后续环节才提示；④quick 缺 --input 落占位标题只能手工 reset 重来；⑤--file-notes 的 || 分隔符写错时整段静默挤进第一个文件括注
 方案：①占位符清单独立叶子模块 taskcard-placeholders.js 与骨架同源，validatePlanFeasibility 剥 HTML 注释后逐卡硬拦（manifest/rules/coordinator 三处事前契约同源）；②executePlanPostcheck Wave 段加依赖方向硬拦（同 Wave/后置 Wave → throw）+ 不一致 warning 降噪区分合法过度串行，新增 plan-adopt-waves 命令（depMap 与 postcheck 同源→topoSortWaves→重写 Wave 段+任务总表 W 列 best-effort+非引用内容拒绝重写+写后复跑一致性，--dry-run/幂等）；③brainstorm+brainstorm-auto decisions 模板补 frontmatter 根治，backfillFrontmatter 抽共用，ensureDecisionDocHeader 在三道 gate 前幂等补存量；④command.js 新会话（刚生成 sessionId）缺描述且无关联变更 → exit 2（--help 短路之后、任何副作用之前；精确恢复/done-like 豁免），quick 位置参数显式转任务描述（与 auto 建议用法一致）；⑤validateFileNotesFormat 逐段要求 path::括注，非法即拒
 结果：npm test 306 个测试文件 0 失败（新增 plan-adopt-waves 24 例、decisions-header-backfill 15 例，更新 taskcard D 段反转、quick-start-input-hint 改拒绝语义、4 个既有 quick 测试补 --input/去装饰位置参数）；lint 412 文件通过；doc-ref-check 84 处引用全过（index.js/command.js 行号重锚两批 11 处）
+
+## ql-20260824-005-4572 | 2026-08-24 19:00:19 | 三期学习批次：多行装饰器漏扫/探针1 worktree 盲区/FAIL 重验预告/checkpoint 夹带清单——工具反馈三坑修复
+状态：已完成
+关联变更：（无）
+文件：
+- src/endpoint-extractor.js（三框架装饰器全文匹配+lineOfIndex 助手）
+- src/verify-probes.js（probe1/3 worktree 路径回退+渲染注明）
+- src/contract-matrix.js（_readWorktreeMeta 导出共用）
+- src/stage-contract-spec.js（failMessage 重验成本预告）
+- src/stages/verify.js（FAIL 出路行补提示）
+- src/worktree.js（checkpoint 夹带清单入提交信息）
+需求：三期学习批次：多行装饰器漏扫/探针1 worktree 盲区/FAIL 重验预告/checkpoint 夹带清单——工具反馈三坑修复
+根因：用户实证三坑：①三框架端点提取器逐行匹配，多行装饰器（@router.get( 后路径独占行）静默漏扫——endpoints.json 与 live 扫描双失真，探针5 报 11 个存量端点 missing；②探针1 只按主仓 cwd 解析 design 清单路径，apply 前新文件只在 worktree，6 个新文件被误报不存在跳过不扫；③checkpoint 提交信息不带夹带清单，逐任务归因靠人肉 diff；FAIL 阻断文案不预告重验时仍会全量对账 commands.test，长套件耗时段心里没数
+方案：①装饰器匹配改全文正则（\s* 天然跨换行），FastAPI 三态合一/Express 路由同治/Spring 短旧两形式全文化，行号=装饰器起始行；探针1/3 复用探针5 的 _readWorktreeMeta（加 export）做 worktree 路径回退，worktreeHits 计数渲染注明；②failMessage 补重验成本预告（全量对账+耗时+test_strategy 收窄指引），verify prompt FAIL 出路行同步；③_createBaselineCheckpoint 收 _overlayBaseline 的 files 清单入提交信息正文（封顶30行，标注归因时排除），两调用点传参
+结果：npm test 306 个测试文件 0 失败（新增多行装饰器 3 用例/探针1 回退 4 断言/checkpoint 信息 4 断言/FAIL 预告 1 断言）；lint 412 文件通过；doc-ref-check 84 引用全过；docs/prompt 再生+file-lifecycle/worktree-and-guard/troubleshooting 第39条同步
+
+## ql-20260825-001-56a2 | 2026-08-25 02:24:43 | 四期学习批次：apply --stash-dirty 主仓在途改动一等支持 / review.json 声明偏差放行 / stash pop 静默失败工具化兜底
+状态：已完成
+关联变更：（无）
+文件：
+- src/worktree-apply.js（stashDirty 全链+collectReviewDeclaredFiles+Gate1/Gate2 三源扩展+restoreMainStash 两级恢复）
+- src/index.js（--stash-dirty flag+help 接线）
+- test/worktree-apply-stash-dirty.test.mjs（18 断言覆盖五场景）
+- test/worktree-apply-review-allowlist.test.mjs（11 断言覆盖声明/对照/跨仓/Gate2/过滤）
+需求：四期学习批次：apply --stash-dirty 主仓在途改动一等支持 / review.json 声明偏差放行 / stash pop 静默失败工具化兜底
+根因：用户实证三坑：①主仓并行在途改动下 apply 三路死锁（默认 4.5/5a 拦、--skip-overlap 全重叠无子集、--merge 被 git 拒脏树启动），被迫手工 stash→checkout→3way 补丁；②手工 stash pop 混合态两次静默不落地，靠人肉记 SHA 兜底；③apply 用 design 清单比对 worktree diff，执行期有据越界（facade 转发/名单测试）被拦只能回改 design.md
+方案：①新 flag --stash-dirty：Gate1 后同口径探针，脏则 stash push -u（pathspec 排除与探针同款防卷走 spec 文件），SHA 显著打印；apply 正常走；finally 两级恢复——apply --index 保暂存区优先、与 apply 落地未提交变更互斥时退普通 apply（内容保真+staged 扁平化明示）、都失败保留条目+SHA 大字兜底绝不自动 drop；drop 后 rev-parse 核验栈顶防静默不落地；checkOnly 绝不 stash；全程主仓互斥锁内；五处拦截文案补该出路；②即①的恢复校验链（退出码+栈顶 SHA+失败保留）把人肉 SHA 兜底工具化，手工指引同步提示记 SHA；③collectReviewDeclaredFiles 把最新 execute run 各 review.json changedFiles（过 Task Review Gate git 证据校验）按 repo 切片并入 Gate1 allow set，仅 review 放行记 reviewAdmittedFiles+审计 warning，Gate1 报错给 review 声明/design 补行双出路，assess Gate2 同等豁免降 warning，跨仓/运行时产物不进 main 集
+结果：npm test 308 个测试文件 0 失败（新增 stash-dirty 18 断言：非重叠干净恢复/staged 保真或诚实降级/重叠冲突标记+条目保留+SHA/干净零副作用/checkOnly 只读；review-allowlist 11 断言：声明放行+审计/无声明仍拦/跨仓切片/Gate2 豁免/产物过滤）；lint 414 文件通过；doc-ref-check 84 引用全过
+
+## ql-20260825-002-db58 | 2026-08-25 09:02:22 | 五期学习批次：worktree --adopt-branch 收编+分支误删四向量堵死 / brainstorm-auto 模板骨架化 / 多会话单工作区风险归…
+状态：已完成
+关联变更：（无）
+文件：
+- src/worktree.js（adoptBranch 收编+菜单+ghost 不盲删+doctor 收紧+native force 豁免）
+- src/run/stage.js（create 传参+修复建议菜单化）
+- src/run/command.js（--adopt-branch flag 接线）
+- src/index.js（worktree create flag+help）
+- src/stages/brainstorm-auto.js（design 完整骨架）
+- src/stages/brainstorm.js（豁免短语示例）
+- test/worktree-adopt-branch.test.mjs（19 断言）
+- test/brainstorm-auto-skeleton.test.mjs（13 断言含自洽）
+需求：五期学习批次：worktree --adopt-branch 收编+分支误删四向量堵死 / brainstorm-auto 模板骨架化 / 多会话单工作区风险归档
+根因：用户实证：①「用户要求在指定分支上做」与 execute worktree 直接冲突——同名分支报错且四处合力导向误删（create 只抛 Run cleanup first、ghost 清理无守卫 branch -D、execute 修复建议无条件推荐删分支、doctor 无库孤儿照删），用户被迫走主检出+--done 兜底规避；②校验器字面匹配（文件变更清单标题/Non-Goals 字面/生命周期豁免紧邻）连环卡七八轮，brainstorm-auto 的 design 规格只有一行散文没骨架；③多会话单工作区混战（分支被快进/文件混编/钩子 stash 冲突）是最大非技术消耗，需记录固有风险
+方案：①create() 同名分支→三选一菜单（删遗留/收编/换名）；--adopt-branch 检出既有分支为工作分支、分支 HEAD 作 baseline（存量不计交付 diff，meta.adoptedBranch 审计）；ghost 清理只 prune；execute 建议改菜单指引；doctor 无库保守保留+orphan 删前 review 锚点复核+native-worktree force 不删用户分支；CLI 双入口。②brainstorm-auto design 扩为完整骨架（含紧邻豁免短语字面示例+宽写法警示），brainstorm 同步补两例；骨架×校验器正则自契测试钉住防漂移。③troubleshooting 42 条归档（hunk 级暂存应对/锁覆盖边界声明/规避优先级 worktree 隔离>hunk 分离>时序错峰）
+结果：npm test 310 个测试文件 0 失败（新增 adopt-branch 19 断言、auto-skeleton 13 断言；doctor 测试②反转+③b 新增）；lint 416 文件通过；doc-ref-check 84 引用全过；docs/prompt 再生+worktree-and-guard/file-lifecycle/troubleshooting 41+42 同步

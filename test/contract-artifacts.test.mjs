@@ -85,6 +85,38 @@ describe('extractFastApiEndpoints', () => {
     assert.equal(endpoints[0].path, '/api/v2/users')
   })
 
+  // 坑 endpoint-multiline-decorator-miss（2026-08-24 用户实证：多行装饰器路径不在装饰器行，
+  // 旧逐行正则漏扫 → probe5 存量端点误报 missing；全文匹配后 \s* 跨换行命中）
+  it('多行装饰器（路径独占一行 + response_model 参数）', () => {
+    mkdirSync(tmpDir, { recursive: true })
+    writeFileSync(routerFile, [
+      'from fastapi import APIRouter',
+      'router = APIRouter(prefix="/api/daemon")',
+      '',
+      '@router.get(',
+      '    "/status",',
+      '    response_model=Status,',
+      ')',
+      'async def get_status():',
+      '    pass',
+      '',
+      '@router.post(',
+      '        "/reload",',
+      ')',
+      'async def reload():',
+      '    pass',
+    ].join('\n'), 'utf8')
+
+    const endpoints = extractFastApiEndpoints(routerFile)
+    assert.equal(endpoints.length, 2, `两个多行装饰器端点都提取（实际 ${JSON.stringify(endpoints)}）`)
+    assert.equal(endpoints[0].method, 'GET')
+    assert.equal(endpoints[0].path, '/api/daemon/status')
+    assert.equal(endpoints[0].line, 4, '行号 = 装饰器起始行')
+    assert.equal(endpoints[1].method, 'POST')
+    assert.equal(endpoints[1].path, '/api/daemon/reload')
+    assert.equal(endpoints[1].line, 11)
+  })
+
   it('空文件返回空', () => {
     mkdirSync(tmpDir, { recursive: true })
     writeFileSync(routerFile, '', 'utf8')
@@ -361,6 +393,24 @@ describe('extractExpressEndpoints', () => {
     assert.equal(endpoints[0].path, '/api/v1/users')
   })
 
+  // 坑 endpoint-multiline-decorator-miss：多行路由调用同病（handler 在后续行）
+  it('多行路由调用（路径独占一行）', () => {
+    mkdirSync(tmpDir, { recursive: true })
+    writeFileSync(routerFile, [
+      'const router = require("express").Router();',
+      '',
+      'router.get(',
+      '  "/api/daemon/status",',
+      '  getStatus',
+      ');',
+    ].join('\n'), 'utf8')
+    const endpoints = extractExpressEndpoints(routerFile)
+    assert.equal(endpoints.length, 1, `多行路由命中（实际 ${JSON.stringify(endpoints)}）`)
+    assert.equal(endpoints[0].method, 'GET')
+    assert.equal(endpoints[0].path, '/api/daemon/status')
+    assert.equal(endpoints[0].line, 3, '行号 = 路由起始行')
+  })
+
   it('链式 router.route(path).<method>()', () => {
     mkdirSync(tmpDir, { recursive: true })
     writeFileSync(routerFile, [
@@ -426,6 +476,36 @@ describe('extractSpringEndpoints', () => {
     assert.equal(endpoints.length, 1)
     assert.equal(endpoints[0].method, 'GET')
     assert.equal(endpoints[0].path, '/api/items')
+  })
+
+  // 坑 endpoint-multiline-decorator-miss：Spring 多行注解同病
+  it('多行 @GetMapping / @RequestMapping（路径独占一行）', () => {
+    mkdirSync(tmpDir, { recursive: true })
+    writeFileSync(controllerFile, [
+      '@RestController',
+      '@RequestMapping("/api")',
+      'public class Ctrl {',
+      '    @GetMapping(',
+      '        value = "/users/{id}",',
+      '        produces = "application/json"',
+      '    )',
+      '    public User get(@PathVariable Long id) { }',
+      '',
+      '    @RequestMapping(',
+      '        value = "/users",',
+      '        method = RequestMethod.POST',
+      '    )',
+      '    public User create() { }',
+      '}',
+    ].join('\n'), 'utf8')
+    const endpoints = extractSpringEndpoints(controllerFile)
+    assert.equal(endpoints.length, 2, `多行注解两端点都命中（实际 ${JSON.stringify(endpoints)}）`)
+    assert.equal(endpoints[0].method, 'GET')
+    assert.equal(endpoints[0].path, '/api/users/{id}')
+    assert.equal(endpoints[0].line, 4)
+    assert.equal(endpoints[1].method, 'POST')
+    assert.equal(endpoints[1].path, '/api/users')
+    assert.equal(endpoints[1].line, 10)
   })
 
   it('cleanup', () => {

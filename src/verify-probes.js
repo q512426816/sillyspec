@@ -19,7 +19,7 @@ import { join, dirname, basename } from 'path'
 import { gitQuiet } from './git-helper.js'
 import { parseFileChangeListDetailed } from './change-list.js'
 import { parseAllowedPaths } from './stages/plan-postcheck.js'
-import { verifyApiParity } from './contract-matrix.js'
+import { verifyApiParity, _readWorktreeMeta } from './contract-matrix.js'
 import { splitOwnVsForeignDiffFiles } from './foreign-declared.js'
 import { resolveSpecDir, resolveRuntimeRoot, detectWorktreeSpecDrift } from './run/shared.js'
 
@@ -101,17 +101,29 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
   const designOps = new Map(detailed.map(e => [e.path, e.operation]))
 
   // ── 探针 1：未实现标记扫描（design 清单具体文件；glob 项列出让 agent 展开）──
-  const probe1 = { matches: [], globEntries: [], skippedFiles: [] }
+  // worktree 路径回退（坑 probe1-worktree-path-blind，2026-08-24 用户实证：verify 从主仓跑、
+  // apply 前 design 清单新文件只在 worktree → 6 个新文件被报「不存在」跳过不扫）。主仓路径
+  // 缺失且存在真实 worktree（gitDir≠cwd，与探针 5 的 _readWorktreeMeta 同源解析）→ 读 worktree
+  // 版本并计数；两处皆缺才进 skippedFiles。in-place meta（gitDir==cwd）零行为变化。
+  const wtInfo = _readWorktreeMeta(specBase, cwd, changeName)
+  const wtRoot = (wtInfo && wtInfo.gitDir && wtInfo.gitDir !== cwd) ? wtInfo.gitDir : null
+  const probe1 = { matches: [], globEntries: [], skippedFiles: [], worktreeHits: 0 }
   for (const e of detailed) {
     if (e.path.startsWith('.sillyspec/')) continue
     if (/[*?[\]]/.test(e.path)) {
       probe1.globEntries.push(e.path)
       continue
     }
-    const abs = join(cwd, e.path)
+    let abs = join(cwd, e.path)
     if (!existsSync(abs)) {
-      probe1.skippedFiles.push(e.path)
-      continue
+      const wtAbs = wtRoot ? join(wtRoot, e.path) : null
+      if (wtAbs && existsSync(wtAbs)) {
+        abs = wtAbs
+        probe1.worktreeHits++
+      } else {
+        probe1.skippedFiles.push(e.path)
+        continue
+      }
     }
     try {
       const lines = readFileSync(abs, 'utf8').split('\n')
@@ -134,7 +146,15 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
     const moduleDirs = [...new Set(allowed.map(p => dirname(p.split('\\').join('/'))).filter(d => d && d !== '.'))]
     const testFiles = []
     for (const d of moduleDirs) {
-      for (const f of findTestFiles(join(cwd, d), cwd)) {
+      // 同探针 1 的 worktree 回退（坑 probe1-worktree-path-blind）：新模块目录 apply 前只在
+      // worktree——主仓目录缺失时到 worktree 找 co-located 测试（路径相对 worktree 根呈现）
+      let searchRoot = join(cwd, d)
+      let relBase = cwd
+      if (!existsSync(searchRoot) && wtRoot && existsSync(join(wtRoot, d))) {
+        searchRoot = join(wtRoot, d)
+        relBase = wtRoot
+      }
+      for (const f of findTestFiles(searchRoot, relBase)) {
         if (!testFiles.includes(f)) testFiles.push(f)
       }
     }
@@ -200,6 +220,7 @@ export function renderVerifyProbesReport(result) {
     for (const m of probe1.matches) L.push(`- ⚠️ \`${m.file}:${m.line}\` ${m.content}`)
   }
   if (probe1.globEntries.length > 0) L.push(`- ℹ️ glob 项未展开（agent 手动展开扫描）：${probe1.globEntries.join('、')}`)
+  if (probe1.worktreeHits > 0) L.push(`- ℹ️ ${probe1.worktreeHits} 个清单文件主仓不存在、已从 worktree 读取（apply 前新文件形态）`)
   if (probe1.skippedFiles.length > 0) L.push(`- ℹ️ 清单文件不存在（跳过）：${probe1.skippedFiles.join('、')}`)
   L.push('')
 

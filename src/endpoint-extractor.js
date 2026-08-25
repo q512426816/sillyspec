@@ -14,6 +14,17 @@ import { execSync } from 'child_process'
 // ─── Provider: 扫描后端 router 注册的端点 ───────────────────────────────
 
 /**
+ * matchIndex → 装饰器/路由起始行号（全文匹配配套；1-based）。
+ * 坑 endpoint-multiline-decorator-miss（2026-08-24 用户实证）：三框架提取器原为逐行匹配，
+ * 多行装饰器（`@router.get(\n  "/path",\n  response_model=…)` 等）路径不在装饰器行 → 端点
+ * 静默漏 → endpoints.json artifact 与 live 扫描双失真 → probe5 missingBackend 误报（11 个
+ * 存量端点）。装饰器匹配改为全文正则（`\s*` 天然跨换行），行号取起始行。
+ */
+function lineOfIndex(content, index) {
+  return content.slice(0, index).split('\n').length
+}
+
+/**
  * 从单个文件提取 FastAPI router 端点
  * 支持 APIRouter(prefix=...) 和 @router.get/post/put/delete/patch("/path")
  *
@@ -25,7 +36,7 @@ export function extractFastApiEndpoints(filePath) {
   const lines = content.split('\n')
   const endpoints = []
 
-  // 1. 提取 router prefix
+  // 1. 提取 router prefix（逐行，同文件近似——维持原行为）
   let routerPrefix = ''
   for (const line of lines) {
     const prefixMatch = line.match(/(?:APIRouter|router)\s*\(\s*(?:prefix\s*=\s*)?["'`]([^"'`]+)["'`]/)
@@ -35,40 +46,17 @@ export function extractFastApiEndpoints(filePath) {
     }
   }
 
-  // 2. 提取 @router.method("/path") 或分散式定义
-  //    FastAPI 支持两种写法：
-  //    a) @router.get("/path", ...) 下一行 def func():
-  //    b) @router.get 下一行 ("/path", ...)
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]
-    const decoratorMatch = line.match(
-      /@(?:router|api_router)\.(get|post|put|delete|patch)\s*\(\s*["'`]([^"'`]+)["'`]/
-    )
-    if (decoratorMatch) {
-      const method = decoratorMatch[1].toUpperCase()
-      const rawPath = decoratorMatch[2]
-      endpoints.push({
-        method,
-        path: routerPrefix + rawPath,
-        source: filePath,
-        line: i + 1,
-      })
-      continue
-    }
-    // 分散式: @router.get\n    ("/path",
-    const splitMatch = line.match(/@(?:router|api_router)\.(get|post|put|delete|patch)\s*$/)
-    if (splitMatch && i + 1 < lines.length) {
-      const nextLine = lines[i + 1]
-      const pathMatch = nextLine.match(/\(\s*["'`]([^"'`]+)["'`]/)
-      if (pathMatch) {
-        endpoints.push({
-          method: splitMatch[1].toUpperCase(),
-          path: routerPrefix + pathMatch[1],
-          source: filePath,
-          line: i + 1,
-        })
-      }
-    }
+  // 2. 装饰器全文匹配：单行 `@router.get("/path")`、分散式 `@router.get\n("/path")`、
+  //    多行参数 `@router.get(\n  "/path",\n  response_model=…)` 三态合一（\s* 跨换行）
+  const decoratorRe = /@(?:router|api_router)\.(get|post|put|delete|patch)\s*\(\s*["'`]([^"'`]+)["'`]/g
+  let m
+  while ((m = decoratorRe.exec(content)) !== null) {
+    endpoints.push({
+      method: m[1].toUpperCase(),
+      path: routerPrefix + m[2],
+      source: filePath,
+      line: lineOfIndex(content, m.index),
+    })
   }
 
   return endpoints
@@ -94,16 +82,18 @@ export function extractExpressEndpoints(filePath) {
     if (useMatch) routerPrefix = useMatch[1]
   }
 
+  // 路由全文匹配（坑 endpoint-multiline-decorator-miss：`router.get(\n  "/path",\n  handler)` 同病）
+  const routeRe = /\b(?:app|router)\.(get|post|put|delete|patch)\s*\(\s*["'`]([^"'`]+)["'`]/gi
+  let m
+  while ((m = routeRe.exec(content)) !== null) {
+    endpoints.push({ method: m[1].toUpperCase(), path: routerPrefix + m[2], source: filePath, line: lineOfIndex(content, m.index) })
+  }
+
+  // 链式 .route(path).get(h).put(h) —— 同行所有 method 配上 path（跨行链式不扩面，维持逐行）
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
-    const m = line.match(/\b(?:app|router)\.(get|post|put|delete|patch)\s*\(\s*["'`]([^"'`]+)["'`]/i)
-    if (m) {
-      endpoints.push({ method: m[1].toUpperCase(), path: routerPrefix + m[2], source: filePath, line: i + 1 })
-      continue
-    }
     const routeChain = line.match(/\.route\s*\(\s*["'`]([^"'`]+)["'`]/)
     if (routeChain) {
-      // 链式 .route(path).get(h).put(h) —— 同行所有 method 配上 path
       const chainPath = routerPrefix + routeChain[1]
       for (const mm of line.matchAll(/\.(get|post|put|delete|patch)\s*\(/gi)) {
         endpoints.push({ method: mm[1].toUpperCase(), path: chainPath, source: filePath, line: i + 1 })
@@ -135,17 +125,16 @@ export function extractSpringEndpoints(filePath) {
 
   const methodMap = { get: 'GET', post: 'POST', put: 'PUT', delete: 'DELETE', patch: 'PATCH' }
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]
-    const shortMatch = line.match(/@(Get|Post|Put|Delete|Patch)Mapping\s*\(\s*(?:value\s*=\s*)?["'`]([^"'`]+)["'`]/i)
-    if (shortMatch) {
-      endpoints.push({ method: methodMap[shortMatch[1].toLowerCase()], path: classPrefix + shortMatch[2], source: filePath, line: i + 1 })
-      continue
-    }
-    const oldMatch = line.match(/@RequestMapping\s*\(\s*(?:value\s*=\s*)?["'`]([^"'`]+)["'`][^)]*?method\s*=\s*RequestMethod\.(\w+)/i)
-    if (oldMatch) {
-      endpoints.push({ method: oldMatch[2].toUpperCase(), path: classPrefix + oldMatch[1], source: filePath, line: i + 1 })
-    }
+  // 短形式全文匹配（坑 endpoint-multiline-decorator-miss：`@GetMapping(\n  "/path"\n)` 同病）
+  const shortRe = /@(Get|Post|Put|Delete|Patch)Mapping\s*\(\s*(?:value\s*=\s*)?["'`]([^"'`]+)["'`]/gi
+  let m
+  while ((m = shortRe.exec(content)) !== null) {
+    endpoints.push({ method: methodMap[m[1].toLowerCase()], path: classPrefix + m[2], source: filePath, line: lineOfIndex(content, m.index) })
+  }
+  // 旧形式全文匹配（[^)]*? 字符类可跨行，`@RequestMapping(\n value="/p",\n method=…)` 随全文化一并覆盖）
+  const oldRe = /@RequestMapping\s*\(\s*(?:value\s*=\s*)?["'`]([^"'`]+)["'`][^)]*?method\s*=\s*RequestMethod\.(\w+)/gi
+  while ((m = oldRe.exec(content)) !== null) {
+    endpoints.push({ method: m[2].toUpperCase(), path: classPrefix + m[1], source: filePath, line: lineOfIndex(content, m.index) })
   }
 
   return endpoints

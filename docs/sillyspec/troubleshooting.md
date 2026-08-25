@@ -633,3 +633,75 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 3. apply step3.5 后消费 hashMismatchFiles：`∩ changedFiles` 非空 → warning 点名漂移文件 +「若含生成产物（api-types 等）apply 后在新基线重跑生成命令再验证」（checkOnly/assess 同带；纯 advisory 不阻断——生成器类变更的产物是合法交付，判断留给 agent）；verify 实测失败归因加第二判据：apply-pathspec 文件 ∩ 主仓最近 10 条提交 → 提示「若为生成产物先在新基线重跑生成命令再复验」。
 
 测试 crossrepo-three-fixes.test.mjs（19 断言：CRLF 解析/幂等治愈闭环 / Windows 真 junction 根+子模块全解且假主仓内容完好 / safeRemoveWorktreeDir 穿透防护 / doctor ghost 警示 fixable:false / apply 派生产物漂移 warning e2e 真 3way 干净合形态）；worktree-junction-fail-loud（18）等既有回归零破坏。**关联记忆**：`[[sillyspec-register-repo-crlf-idempotent-loop]]`、`[[sillyspec-ghost-dir-junction-pierce]]`、`[[sillyspec-derived-artifact-stale-baseline]]`
+
+## 39. 三坑：多行装饰器漏扫端点误报 / 探针1 worktree 路径盲区 / baseline checkpoint 夹带不透明 + FAIL 重验成本无预告（2026-08-24 闭环）
+
+**症状（用户实证）**：
+1. 探针 5 报 11 个存量 daemon 端点 missing——`endpoints.json` 与 live 扫描都漏了多行装饰器形态（`@router.get(
+  "/path",
+  response_model=…\)`，路径不在装饰器行）。
+2. 探针 1 报 6 个 design 清单新文件「不存在」——verify 从主仓跑、apply 前新文件只在 worktree，`join(cwd, e.path)` 主仓单根解析直接跳过不扫。
+3. baseline checkpoint 把主仓并行脏文件带进分支 diff，提交信息无清单，逐任务归因要人肉区分；FAIL 门控阻断时不预告「修复后 verify --done 仍会全量对账 commands.test」。
+
+**根因**：
+1. endpoint-extractor.js 三框架提取器全部逐行匹配——正则里 `\s*` 本可跨换行，但按行切片后永远失配（主形态与 split 式回退双双漏）。
+2. verify-probes.js 探针 1/3 只按 cwd 解析路径，无 worktree 回退（探针 5 已有 _readWorktreeMeta 双根机制，探针 1/3 未复用）。
+3. `_createBaselineCheckpoint` 只收 worktreePath/changeName，`_overlayBaseline` 算好的夹带清单没进提交信息；failMessage 只说「请修复后重新运行验证」，gates.js 的耗时预告逻辑没同步到阻断出口。
+
+**修复（2026-08-24）**：
+1. 三框架装饰器匹配改全文正则（`\s*` 跨换行，FastAPI 主形态/分散式/多行参数三态合一；行号=装饰器起始行）；Express 链式 `.route()` 维持逐行不扩面。
+2. 探针 1/3 worktree 路径回退：`_readWorktreeMeta` 导出共用，主仓路径缺失且 gitDir≠cwd 时读 worktree 版本（probe1.worktreeHits 计数 + 渲染注明来源）；in-place（gitDir==cwd）零行为变化。
+3. checkpoint 提交信息正文列夹带清单（封顶 30 行，与 meta.baselineFiles 同源，标注「主仓并行在途文件，逐任务归因时排除」）；failMessage 补重验成本预告（commands.test 全量对账、长套件数分钟、test_strategy: module 收窄指引），verify prompt 的 FAIL 出路行同步。
+
+测试 contract-artifacts.test.mjs（三框架多行装饰器 +3 用例）、probe5-worktree-parity.test.mjs（探针1 回退 +4 断言）、baseline-overlay-isolation.test.mjs（checkpoint 信息 +4 断言）、stage-contract.test.mjs（FAIL 成本预告 +1）。**关联记忆**：`[[sillyspec-endpoint-multiline-decorator-miss]]`、`[[sillyspec-probe1-worktree-path-blind]]`、`[[sillyspec-baseline-checkpoint-opaque-carriage]]`、`[[sillyspec-fail-gate-reattest-cost-hint]]`
+
+## 40. 三坑：主仓在途改动 apply 三路死锁 / stash pop 静默不落地 / review 未声明的执行期偏差拦 apply（2026-08-24 闭环）
+
+**症状（用户实证）**：
+1. worktree apply 对「主仓已有并行会话在途改动」无一等支持——EXCLUDE-DIRTY/MISMATCH 三连跳过后连 --merge 也被 git 拒绝启动，最后靠手工 stash→checkout→3-way 补丁完成。
+2. 手工 stash pop 在含未跟踪文件的混合态下两次静默不落地，靠 stash SHA 兜底才没丢东西。
+3. apply 用 design 清单比对 worktree diff，执行期有依据的越界文件（facade 转发/名单测试）被拦，只能在 design 补行才能过。
+
+**根因**：
+1. 默认路径被 4.5（重叠脏）/5a 拦截、--skip-overlap 全重叠「无可应用子集」、--merge 被 git 脏树拒绝——所有出口都只提示「先 commit/stash」，stash→3way→pop 流程未内置。
+2. stash pop/apply 退出码语义复杂（部分恢复也非零/静默形态），人工操作无可校验闭环。
+3. Gate1 allow set 只有 design §6 ∪ allowed_paths 两源，review.json changedFiles（已过 Task Review Gate git 证据交叉校验）不是输入。
+
+**修复（2026-08-24）**：
+1. `worktree apply --stash-dirty`：Gate1 后按 4.5 同口径探针，脏则 `stash push -u -- <pathspec 同款排除>`（范围与探针对齐——裸 push -u 会卷走排除项的未跟踪 spec 文件，恢复时与重建产物 already exists 互踩）；SHA 显著打印；apply 正常走；finally 两级恢复（apply --index 保暂存区优先 → 互斥时退普通 apply 内容保真+staged 扁平化明示 → 都失败保留条目 + SHA 大字兜底，绝不自动 drop）；drop 后核验栈顶防静默不落地；checkOnly 绝不 stash；全程主仓互斥锁内。五处拦截文案补 --stash-dirty 出路。
+2. 恢复校验链（退出码 + 栈顶 SHA 对比 + 失败保留）即 ② 的工具化；手工指引文案同步提示「stash 后记下 SHA」。
+3. `collectReviewDeclaredFiles`：最新 execute run 各 review.json changedFiles 按 repo 切片并入 allow set（跨仓不进 main；.sillyspec//meta.json 过滤）；仅靠 review 放行的文件记 reviewAdmittedFiles + 审计 warning；Gate1 报错给 review 声明/design 补行两条出路；assess Gate2 与「顺带修复」同等待遇豁免（降 warning 注明来源）。
+
+测试 worktree-apply-stash-dirty.test.mjs（18 断言：非重叠干净恢复/staged 内容保真或诚实降级/重叠冲突标记+条目保留+SHA/干净零副作用/checkOnly 只读）、worktree-apply-review-allowlist.test.mjs（11 断言：声明放行+审计/无声明仍拦/跨仓切片/Gate2 豁免/运行时产物过滤）。**关联记忆**：`[[sillyspec-apply-main-dirty-no-first-class]]`、`[[sillyspec-stash-pop-silent-noop]]`、`[[sillyspec-apply-undeclared-deviation-block]]`
+
+## 41. 两坑：同名分支冲突死锁+误导删分支 / brainstorm-auto 无模板骨架连环卡字面门（2026-08-24 闭环）
+
+**症状（用户实证）**：
+1. 「用户要求在指定分支上做」与 execute worktree 机制直接冲突——同名分支报错；execute 修复建议与 doctor --fix 都会导向删除该分支（用户自建分支被误删风险，用户未采用、走主检出+--done 兜底规避）。
+2. 校验器字面匹配（文件变更清单标题 / Non-Goals 字面短语 / 生命周期豁免必须紧邻）对不熟悉惯例的 agent 是连环坑（plan 后检器反复卡七八轮）。
+
+**根因**：
+1. create() 遇既有同名分支只抛 Run cleanup first；ghost 目录清理里有无守卫 branch -D；stage.js 修复建议无条件推荐 git branch -D；doctor 无库场景孤儿照删——四处合力把「用户指定分支」变成死锁+误删链。
+2. brainstorm-auto 的 design.md 规格只有一行散文，同一套字面校验器（brainstorm.design.* + lifecycle 紧邻豁免）打过去全是坑；豁免短语「紧邻」措辞只在报错文案里。
+
+**修复（2026-08-24）**：
+1. create() 同名分支 → 三选一决策菜单（删遗留/`--adopt-branch` 收编/换名）；`--adopt-branch` 检出既有分支为工作分支、分支 HEAD 作 baseline（存量不计交付）、meta.adoptedBranch 审计；ghost 清理只 prune 不删分支；execute 修复建议改为菜单指引；doctor 无库保守保留 + review 锚点复核；native-worktree force 不删用户分支。
+2. brainstorm-auto design 规格扩为完整骨架（清单表/生命周期契约表+豁免短语字面示例/风险登记表/自审章节）；brainstorm 生命周期段补豁免短语示例 + 宽写法警示；骨架与校验器正则自洽有测试钉住（防模板-校验器漂移）。
+
+测试 worktree-adopt-branch.test.mjs（19 断言）、worktree-doctor-active-branch.test.mjs（16，含无库保守+review 锚点两新例）、brainstorm-auto-skeleton.test.mjs（13，骨架×校验器自洽）。**关联记忆**：`[[sillyspec-worktree-user-branch-conflict]]`、`[[sillyspec-literal-template-trap]]`
+
+## 42. 多会话单工作区混战（固有风险记录，2026-08-24 用户实证归档）
+
+**症状**：并行会话共用同一主工作区时——分支被其他会话快进、多会话文件混编进同一次 diff、git 钩子的 stash 操作互相冲突。本次全流程最大的非技术消耗。
+
+**根因**：多会话单工作区模式的固有竞态——sillyspec 的主仓互斥锁只覆盖 sillyspec 自身的写操作（apply/cleanup/archive/quick 收尾），不覆盖各会话 agent 的自由 git 操作（checkout/commit/stash）；git 工作区与 index 是进程间共享的单例状态。
+
+**应对（有效实证）**：
+- **hunk 级暂存**（`git add -p`）把本会话改动从混编工作区里精确分离——本次有效应对；
+- quick 会话带 `--files` 声明（声明即归属，审计行隔离他者文件）；
+- 能走 worktree 隔离的变更优先走完整流程（execute 自动 worktree）；
+- 并行会话开工前先 commit 或 stash 存档本会话进度，减少共享态窗口。
+
+**固有风险声明**：只要多会话共享单工作区，上述竞态无法在工具层根除（锁不能覆盖非工具操作）。规避优先级：worktree 隔离 > hunk 级分离 > 时序错峰。**关联记忆**：`[[sillyspec-multi-session-shared-workdir-race]]`
+
+**补记（2026-08-25 用户实证升级形态）**：同日第三次被共享工作区坑到（暂存区混入、分支快进、HEAD 跳转三连），且升级为最高风险形态——并行会话不仅改文件，还直接改 git 状态：切分支、cherry-pick。stash/pop 保住了在途修复，但过程很脏（混合态、靠人肉记 SHA 兜底）。结论：hunk 分离/时序错峰只能缓解文件级混编，对 git 状态级互踩无解——**给每个活跃会话配独立 worktree 是唯一能同时隔离文件与 git 状态的手段**，优先级声明由此从建议升级为强推荐。

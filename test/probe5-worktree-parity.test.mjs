@@ -21,7 +21,7 @@ import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 import { verifyApiParity } from '../src/contract-matrix.js'
-import { resolveVerifyProbesSpecBase } from '../src/verify-probes.js'
+import { runVerifyProbes, renderVerifyProbesReport, resolveVerifyProbesSpecBase } from '../src/verify-probes.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const cliBin = join(__dirname, '..', 'bin', 'sillyspec.js')
@@ -148,6 +148,32 @@ console.log('--- 5b. CLI --init 在 worktree 内跑 → 骨架落主仓 ---')
   assert(out.status === 0 && existsSync(mainReport), `--init 骨架落主仓 ${mainReport}（exit=${out.status}）`)
   assert(!existsSync(wtReport), 'worktree 副本目录不落骨架（防蒸发错位）')
   if (out.status !== 0) console.log(out.stdout, out.stderr)
+  rmSync(proj, { recursive: true, force: true })
+}
+
+console.log('--- 6. 探针 1 worktree 路径回退（坑 probe1-worktree-path-blind）---')
+{
+  const { proj, specBase, wt } = makeWorktreeFixture()
+  // design §6 清单列出 worktree-only 新文件（含 TODO 标记）——主仓没有该文件
+  mkdirSync(join(specBase, 'changes', 'p5w'), { recursive: true })
+  writeFileSync(join(specBase, 'changes', 'p5w', 'design.md'), [
+    '# Design', '',
+    '## 文件变更清单',
+    '| 操作 | 文件路径 | 说明 |',
+    '|---|---|---|',
+    '| 新增 | modules/newmod.js | worktree 新文件 |',
+    '| 新增 | daemon/server.js | 主仓既有 |',
+    '',
+  ].join('\n'))
+  writeFileSync(join(wt, 'modules', 'newmod.js'),
+    'const router = require("express").Router()\nrouter.post("/api/new/thing", (req, res) => res.json({}))\n// TODO: 补参数校验\nmodule.exports = router\n')
+  const r = runVerifyProbes({ cwd: proj, changeName: 'p5w' })
+  assert(r.probe1.worktreeHits === 1, `worktree-only 文件回退命中（实际 ${r.probe1.worktreeHits}）`)
+  assert(r.probe1.skippedFiles.length === 0, `不再误报不存在（实际 ${JSON.stringify(r.probe1.skippedFiles)}）`)
+  assert(r.probe1.matches.some(m => m.file === 'modules/newmod.js' && m.content.includes('TODO')),
+    'worktree 版本内容被真扫（TODO 命中）')
+  const md = renderVerifyProbesReport(r)
+  assert(md.includes('已从 worktree 读取'), '渲染层注明 worktree 读取来源')
   rmSync(proj, { recursive: true, force: true })
 }
 
