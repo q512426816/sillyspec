@@ -49,7 +49,7 @@ console.log('\n=== ① 生成 prompt 形态警告（坑 taskcard-body-section-re
   const prompt = step?.prompt || ''
   assertTrue(prompt.includes('frontmatter') && prompt.includes('不是 body 章节'), 'prompt 明示「frontmatter 字段式 vs body 章节」')
   assertTrue(prompt.includes('三组校验全挂'), '点明返工后果')
-  assertTrue(prompt.includes('骨架即正确形态'), '引导先跑骨架再 Edit')
+  assertTrue(prompt.includes('预生成') && prompt.includes('正确形态'), '骨架已由主 agent 预生成（正确形态），引导直接 Edit 填充')
 }
 
 console.log('\n=== ③ 宽严差异双向明示（坑 concurrent-policy-inconsistency）===\n')

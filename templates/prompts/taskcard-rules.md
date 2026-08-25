@@ -26,4 +26,4 @@ TaskCard 格式规则（必须严格遵守）：
   - **规范约定字段**（应填但不硬校验，缺失不阻断完成、只影响规范性）：author、created_at、priority、depends_on、blocks
   - allowed_paths 非空（至少一个真实源文件路径；回归类 task 无源码改动时填被验证的关键入口文件）
   - acceptance 与 verify 都在 frontmatter 内（漏写会被 plan-postcheck 报「缺少验收标准」/「缺少验证步骤」）
-- **生成方式**：用 `sillyspec taskcard <change-name> --task task-NN [--all]` 生成安全骨架（LF 行尾 + frontmatter 必闭合 + 九个硬校验字段齐全 + author/created_at 自动填），再往骨架里填语义内容——**勿用 Write tool 整文件手写**（CRLF / 漏闭合 `---` / 漏字段的根源，postcheck 报错大多由此来）；已存在的卡命令会跳过不覆盖，局部修改用 Edit 定点改
+- **生成方式**：由主 agent 一次性 `sillyspec taskcard <change-name> --all` 预生成全部安全骨架（LF 行尾 + frontmatter 必闭合 + 九个硬校验字段齐全 + author/created_at 自动填；幂等，已存在跳过）。**子代理不要并行跑 taskcard CLI**（2026-08-25 实证撞进度库 SQLite 锁），只往骨架里填语义内容（LF 行尾 + frontmatter 必闭合 + 九个硬校验字段齐全 + author/created_at 自动填），再往骨架里填语义内容——**勿用 Write tool 整文件手写**（CRLF / 漏闭合 `---` / 漏字段的根源，postcheck 报错大多由此来）；已存在的卡命令会跳过不覆盖，局部修改用 Edit 定点改

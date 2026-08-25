@@ -175,6 +175,10 @@ sillyspec worktree create <change-name>
 
 execute **入口自检**：已存在 worktree（`create()` short-circuit 不供给）时，入口校验 `depsStatus` 缺失 / `node_modules` 丢失（missing）/ `lockfileHash` 变化（stale）→ 触发 `provisionDeps` 重供给并更新 meta，再交门判定。
 
+### doctor editable-install 越界检查（2026-08-25 坑 worktree-editable-install-escape）
+
+worktree venv 的 editable install 指向 worktree **外**（典型：主仓 checkout）时，`gen:types` / 后端命令 / pytest 会静默加载 worktree 外旧代码——改动不生效且零报错。`worktree doctor` 对存活 worktree 扫描 `.venv`/`venv` 的 site-packages，覆盖三种 editable 痕迹：路径型 `.pth`、PEP 660 `__editable___*_finder.py` 的 MAPPING 表、`*.dist-info/direct_url.json` 的 `dir_info.editable + file:// url`；目标路径 resolve 后不在 worktree 内即报 `editable-install-escape`（fixable:false，重装方式因项目而异留给用户：`uv sync` / `uv pip install -e .` 后重跑生成命令）。探测纯 FS 读取（`src/worktree-deps.js` `detectEditableInstallEscape`），失败不阻断 doctor。
+
 ## worktree 内跑 CLI 的 spec 漂移守卫
 
 worktree 是主仓完整 checkout，若 `.sillyspec/changes/` 被跟踪，worktree 内会 checkout 出一份 `.sillyspec` **副本**（`<mainRepo>/.sillyspec/.runtime/worktrees/<change>/.sillyspec`）。在 worktree 内 cwd 跑 `sillyspec run execute/verify/plan/archive` 时，`specBase = cwd/.sillyspec` 会命中**副本**而非主仓 spec → 进度/产出写进副本，与主仓 `.sillyspec` 分裂（副本随 `worktree cleanup` 丢失）。两层守卫（`src/run/shared.js` + `src/run/command.js`）：

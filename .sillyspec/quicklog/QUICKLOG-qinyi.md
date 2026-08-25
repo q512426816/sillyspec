@@ -504,3 +504,26 @@
 根因：用户实证：①「用户要求在指定分支上做」与 execute worktree 直接冲突——同名分支报错且四处合力导向误删（create 只抛 Run cleanup first、ghost 清理无守卫 branch -D、execute 修复建议无条件推荐删分支、doctor 无库孤儿照删），用户被迫走主检出+--done 兜底规避；②校验器字面匹配（文件变更清单标题/Non-Goals 字面/生命周期豁免紧邻）连环卡七八轮，brainstorm-auto 的 design 规格只有一行散文没骨架；③多会话单工作区混战（分支被快进/文件混编/钩子 stash 冲突）是最大非技术消耗，需记录固有风险
 方案：①create() 同名分支→三选一菜单（删遗留/收编/换名）；--adopt-branch 检出既有分支为工作分支、分支 HEAD 作 baseline（存量不计交付 diff，meta.adoptedBranch 审计）；ghost 清理只 prune；execute 建议改菜单指引；doctor 无库保守保留+orphan 删前 review 锚点复核+native-worktree force 不删用户分支；CLI 双入口。②brainstorm-auto design 扩为完整骨架（含紧邻豁免短语字面示例+宽写法警示），brainstorm 同步补两例；骨架×校验器正则自契测试钉住防漂移。③troubleshooting 42 条归档（hunk 级暂存应对/锁覆盖边界声明/规避优先级 worktree 隔离>hunk 分离>时序错峰）
 结果：npm test 310 个测试文件 0 失败（新增 adopt-branch 19 断言、auto-skeleton 13 断言；doctor 测试②反转+③b 新增）；lint 416 文件通过；doc-ref-check 84 引用全过；docs/prompt 再生+worktree-and-guard/file-lifecycle/troubleshooting 41+42 同步
+
+## ql-20260826-001-7c31 | 2026-08-26 07:16:09 | 六期学习批次：归属排除活性收敛 / taskcard 骨架内建预生成 / worktree editable-install 越界检查
+状态：已完成
+关联变更：（无）
+文件：
+- src/foreign-declared.js（filterStaleForeignDeclarations 活性收敛——quick/无存活 worktree 变更按主仓 porcelain 未提交集判活，存活隔离 worktree 整份保留，事实源失败 fail-closed 全保留）
+- src/taskcard.js（ensureTaskcardSkeletons 幂等预生成——注册表缺卡补齐、已存在跳过）
+- src/run/gates.js（plan gate 前主流程单进程接线预生成）
+- src/stages/plan.js（步骤 3 prompt 改主 agent --all 预生成 + 子代理禁跑 CLI）
+- templates/prompts/taskcard-rules.md（生成方式段同步）
+- src/worktree-deps.js（detectEditableInstallEscape 三痕迹探测——路径型 .pth / PEP660 finder MAPPING / direct_url.json）
+- src/worktree.js（doctor 增 editable-install-escape issue，fixable:false 指引 worktree 内重装）
+- test/foreign-declared-stale-liveness.test.mjs（10 例）/ test/taskcard-ensure-skeletons.test.mjs（10 例）/ test/worktree-editable-escape.test.mjs（7 例）新增
+- test/plan-taskcard-include.test.mjs / test/plan-feedback-three.test.mjs（断言按预生成新契约反转）
+- docs/prompt/_extracted.json + docs/prompt/plan.md（再生 + 步骤 3 原文块逐字替换，清偿 8-20 骨架化以来镜像漂移）
+- docs/sillyspec/troubleshooting.md（第 43 条三坑闭环）
+- docs/sillyspec/file-lifecycle/worktree-and-guard.md（doctor editable 检查一节）
+- docs/sillyspec/architecture-4a.md / doc-consistency-debt.md / prompt-control-debt.md / file-lifecycle.md + .sillyspec/docs 两卡（12 处漂移锚点重锚——4 处本批移行、8 处并行会话存量）
+- .gitignore（.worktrees/ 运行时目录排除）
+需求：六期学习批次：execute/verify 归属排除警告刷屏 / 并行子代理 taskcard CLI 撞 SQLite 锁 / gen:types worktree editable-install 坑——三负面反馈工具化
+根因：①design §6 清单与残留 quick guard 不随 commit 失效，已 apply+commit 的他者声明每轮重复刷排除警告；②plan 步骤 3 让并行 batch 子代理各自跑 taskcard CLI，多进程并发撞进度库锁；③worktree venv editable install 指向主仓时 gen:types 静默加载旧代码，只靠 backend.md 人工记忆
+方案：①foreign-declared 出口统一活性收敛（声明只在工作在途时有效）；②ensureTaskcardSkeletons 内建预生成 + plan gate 接线 + prompt 禁子代理跑 CLI（占位符硬拦不变）；③doctor 增 editable-install-escape 检查（fixable:false，指引 worktree 内 uv sync / uv pip install -e . 重装后重跑生成命令）
+结果：npm test 313 文件 0 失败（新增 27 断言全绿、两断言按新契约反转）；lint 419 文件通过；docs check 509/509 全绿（修前 23 处失效——本批移行 4 处 + 并行存量 8 处全部重锚）

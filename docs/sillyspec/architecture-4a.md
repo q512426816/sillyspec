@@ -47,7 +47,7 @@ SillySpec 是给 AI Agent 调用的 **CLI 流程状态机**：Agent 通过 CLI �
 
 ### 1.2 流程状态机
 
-**转换合法性**由 `checkTransition(fromStage, toStage)` 仲裁（`src/stage-contract.js:789`），契约转换图（`src/stage-contract.js:789`）：
+**转换合法性**由 `checkTransition(fromStage, toStage)` 仲裁（`src/stage-contract.js:853`），契约转换图（`src/stage-contract.js:853`）：
 
 ```
 brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
@@ -70,7 +70,7 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
 
 | 门 | 触发 | 阻断 | 依据 |
 |---|---|---|---|
-| 转换门 `checkTransition` | 阶段跳转不符合 allowedFrom / scan failed | `exit(1)` | `src/stage-contract.js:789` |
+| 转换门 `checkTransition` | 阶段跳转不符合 allowedFrom / scan failed | `exit(1)` | `src/stage-contract.js:853` |
 | WAIT 门 | `--done` output 含等待标记 / step `requiresWait` 未答 | `exit(1)` | `src/run/complete.js:106` |
 | execute deps 门 | worktree `depsStatus` 未达标 | step blocked + `exit(1)` | `src/run/gates.js:316` |
 | execute review.json 门 | 已勾 task 缺 review.json | step blocked + `exit(1)` | `src/run/gates.js:273` |
@@ -79,9 +79,9 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
 | quick 边界审计 | 命中受保护/危险文件或删除 | BLOCKED `exit(1)` | `src/run/shared.js:497` |
 
 **阶段完成 gate 级联**（`runStageCompletionGates` `src/run/gates.js:464`，统一收尾管线）顺序：
-1. `runValidators`（客观产物校验，`src/stage-contract.js:859`）：`validateBrainstormOutputs` / `validatePlanOutputs` / `validateExecuteOutputs`+`checkExecuteCodeEvidence` / `validateVerifyOutputs` / `validateScanOutputs`。
-2. verify 实测对账：CLI 亲跑 `local.yaml` 的 `commands.test`，自报告 PASS 但实测失败→阻断（`gates.js:496`）。
-3. Plan→Execute Contract（`validatePlanForExecute` `gates.js:591`）。
+1. `runValidators`（客观产物校验，`src/stage-contract.js:923`）：`validateBrainstormOutputs` / `validatePlanOutputs` / `validateExecuteOutputs`+`checkExecuteCodeEvidence` / `validateVerifyOutputs` / `validateScanOutputs`。
+2. verify 实测对账：CLI 亲跑 `local.yaml` 的 `commands.test`，自报告 PASS 但实测失败→阻断（`gates.js:518`）。
+3. Plan→Execute Contract（`validatePlanForExecute` `gates.js:618`）。
 4. Stage Review Gate（brainstorm/plan/execute，`gates.js:233`）：`classifyReviewTier` 判 tier=self（自审）/independent（强制独立子代理 review.json）。
 5. Execute Task Review Gate（`gates.js:527`）：校验所有 task review.json 存在 + verdict 通过 + git 真实性交叉校验。
 
@@ -180,7 +180,7 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
 
 **dispatch 双后端 —— "派发策略生成器，不是 JS 执行体"**（`dispatch/strategy.js:4-9`）：它**不调任何 tool，只生成注入 prompt 的"派发指令文本"**——因为本机 Agent tool 和 SillyHub MCP tool 都只有 agent 能调，CLI（Node）调不了。后端选择纯由 `probe.available` 驱动（available→sillyhub，否则 local）。execute 三态派发（派发段注入起 `stages/execute.js:594` `getDispatchMode`）：`local`/`local-fallback`/`sillyhub`。回收约定（R-07）：无论哪个后端，worker **绝不 git commit**，SillySpec 主体自己 `git diff` worktree 写 review.json。
 
-**worktree-apply —— 跨仓 task 合并回主干**（`applyWorktree` `src/worktree-apply.js:387` 起，变更文件列表经 `filterDeliverableFiles` `src/worktree-apply.js:482`）：跨仓 task no-op 校验 → meta 校验 → 变更文件列表（`filterDeliverableFiles` 排除 `.sillyspec/`）→ allowList 校验（从 task 卡 `allowed_paths` 读）→ `assessApplyRisk` 风险审计（SAFE/WARNING 自动 apply 到 main）。
+**worktree-apply —— 跨仓 task 合并回主干**（`applyWorktree` `src/worktree-apply.js:427` 起，变更文件列表经 `filterDeliverableFiles` `src/worktree-apply.js:39`）：跨仓 task no-op 校验 → meta 校验 → 变更文件列表（`filterDeliverableFiles` 排除 `.sillyspec/`）→ allowList 校验（从 task 卡 `allowed_paths` 读）→ `assessApplyRisk` 风险审计（SAFE/WARNING 自动 apply 到 main）。
 
 **MCP 客户端**（`src/sillyhub-mcp/`）：`config.js` 统一凭据读源（local.yaml mcp 段 > env > null）；`client.js` 封装 `probeDaemon`/`listTools`/`dispatchWorker` 等。
 
@@ -228,7 +228,7 @@ git worktree 隔离多 Agent 并发改动：每个 change 在 `.sillyspec/.runti
 
 - **创建**（方法 `worktree.js:360`，类 `worktree.js:286`）：submodule/native-worktree 检测 → gitignore 守卫 → 幽灵 worktree fail-closed → 解析 base → `git worktree add`（失败降级 in-place-fallback）→ 占位 meta 原子写 → dirty baseline overlay（`git diff --binary | git apply`）→ baseline checkpoint commit → 依赖供给 → 写完整 meta。
 - **三种 mode**：`worktree`（标准）/ `native-worktree`（外部已 linked）/ `in-place-fallback`（沙箱/权限降级）。
-- **cleanup**（`worktree.js:760-903`）：三重清理 + **fail-closed**（`hasUnappliedChanges` 有未 apply 交付则拒绝，需 `--force`）；**Windows junction 必须先解链**（`worktree.js:867-1050`），否则 `rmSync` 跟随 junction 误删主仓 node_modules。
+- **cleanup**（`worktree.js:953-1100`）：三重清理 + **fail-closed**（`hasUnappliedChanges` 有未 apply 交付则拒绝，需 `--force`）；**Windows junction 必须先解链**（`worktree.js:867-1050`），否则 `rmSync` 跟随 junction 误删主仓 node_modules。
 - **node_modules provision**（`src/worktree-deps.js`）：junction/symlink 快路径（Windows `mklink /J`，POSIX `ln -s`，lockfile 一致才 link）+ install 兜底（`inferInstallCommand` 推断 node/maven/gradle/python/generic）。
 
 ### 4.4 跨平台（Win/Linux/macOS）

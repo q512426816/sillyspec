@@ -473,6 +473,23 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
       ensureDecisionDocHeader(resolveChangeDir(cwd, changeName, platformOpts?.specRoot))
     } catch { /* 补齐失败不阻断 gate */ }
   }
+  // TaskCard 骨架幂等预生成（坑 taskcard-parallel-cli-lock，2026-08-25 用户实证：并行 batch
+  // 子代理各自起 sillyspec taskcard CLI 撞进度库 SQLite 锁，改主代理预生成+子代理只 Edit 才稳）。
+  // gate 前主流程单进程补齐缺卡骨架（已存在跳过），与 ensureDecisionDocHeader 同层同范式——
+  // 补的是 CLI 可自证的机械骨架，占位符硬拦（plan-postcheck）仍逼子代理 Edit 填语义。
+  if (stageName === 'plan' && changeName) {
+    try {
+      const { ensureTaskcardSkeletons } = await import('../taskcard.js')
+      const r = ensureTaskcardSkeletons(changeName, { cwd, specDir: platformOpts?.specRoot })
+      if (r.created.length > 0) {
+        console.log(`📌 已预生成 ${r.created.length} 张 TaskCard 骨架（主流程单进程生成，子代理只 Edit 填充，勿并行跑 taskcard CLI）:`)
+        for (const f of r.created.slice(0, 8)) console.log(`   + ${f}`)
+        if (r.created.length > 8) console.log(`   … 共 ${r.created.length} 张`)
+      }
+    } catch (e) {
+      console.warn(`⚠️ TaskCard 骨架预生成失败（不阻断 gate，仍可逐卡手动 sillyspec taskcard 生成）: ${e.message}`)
+    }
+  }
   const contractResult = runValidators(stageName, cwd, changeName, { projectName, specRoot: platformOpts?.specRoot })
   if (contractResult.errors.length > 0) {
     console.error(`\n❌ 阶段 ${stageName} 校验失败：`)

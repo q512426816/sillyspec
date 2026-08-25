@@ -8,8 +8,9 @@
  * 见 change 2026-06-28-worktree-deps-provision / D-005@v1, D-007@v1。
  */
 
-import { existsSync, readFileSync, realpathSync, lstatSync } from 'fs';
+import { existsSync, readFileSync, realpathSync, lstatSync, readdirSync } from 'fs';
 import { join, isAbsolute, relative, resolve as resolvePath, sep as pathSep } from 'path';
+import { fileURLToPath } from 'url';
 import { execFileSync } from 'child_process';
 import { createHash } from 'crypto';
 
@@ -573,4 +574,95 @@ export function checkDepsFreshness(meta, wtPath, mainCwd) {
     detail: '依赖新鲜',
     wtHash, mainHash, metaLockHash,
   };
+}
+
+/**
+ * editable install 越界探测（坑 worktree-editable-install-escape，2026-08-25 用户实证
+ * gen:types 坑）：worktree 内 Python venv 的 editable install 指向 worktree 外（典型：
+ * 主仓 checkout 路径）时，gen:types / 后端命令 / pytest 静默加载 worktree 外的旧代码——
+ * 改动不生效且无任何报错，此前靠模块文档注意事项人工记忆，本函数把它 CLI 检查化
+ * （worktree doctor 调用）。
+ *
+ * 覆盖三种 editable 痕迹：
+ *   1. 路径型 .pth（setuptools 旧式）：.pth 内容行即绝对路径
+ *   2. PEP 660 __editable__.<pkg>-*.pth + __editable___<pkg>_*_finder.py（MAPPING 表绝对路径）
+ *   3. *.dist-info/direct_url.json { dir_info.editable: true, url: file:///... }
+ * 判定统一为「目标路径 resolve 后不在 worktree 内」；venv/文件读取失败按无越界处理
+ * （doctor 体检语义，不阻断）。
+ *
+ * @param {string} wtPath worktree 根目录
+ * @returns {Array<{ pkg: string, target: string, via: string }>} 越界清单（空 = 干净或无 venv）
+ */
+export function detectEditableInstallEscape(wtPath) {
+  const offenders = [];
+  if (!wtPath || !existsSync(wtPath)) return offenders;
+  const wtRoot = resolvePath(wtPath);
+  const isEscape = (target) => {
+    if (!target || !isAbsolute(target)) return false;
+    const rel = relative(wtRoot, resolvePath(target));
+    return rel.startsWith('..') || isAbsolute(rel);
+  };
+  const seen = new Set();
+  const push = (pkg, target, via) => {
+    const key = `${pkg}|${target}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    offenders.push({ pkg, target, via });
+  };
+
+  for (const venvName of ['.venv', 'venv']) {
+    const venvDir = join(wtPath, venvName);
+    if (!existsSync(venvDir)) continue;
+    // site-packages 候选：Windows Lib/site-packages + POSIX lib/python*/site-packages
+    const spCandidates = [join(venvDir, 'Lib', 'site-packages')];
+    try {
+      for (const e of readdirSync(join(venvDir, 'lib'), { withFileTypes: true })) {
+        if (e.isDirectory() && e.name.toLowerCase().startsWith('python')) {
+          spCandidates.push(join(venvDir, 'lib', e.name, 'site-packages'));
+        }
+      }
+    } catch { /* 无 lib 目录（Windows 布局）跳过 */ }
+    for (const sp of spCandidates) {
+      if (!existsSync(sp)) continue;
+      let entries = [];
+      try { entries = readdirSync(sp, { withFileTypes: true }); } catch { continue; }
+      for (const e of entries) {
+        if (!e.isFile()) continue;
+        const fp = join(sp, e.name);
+        if (e.name.endsWith('.pth')) {
+          let lines = [];
+          try { lines = readFileSync(fp, 'utf8').split('\n'); } catch { continue; }
+          for (const raw of lines) {
+            const line = raw.trim();
+            if (!line || line.startsWith('#') || line.startsWith('import ')) continue;
+            if (isEscape(line)) push(e.name.replace(/\.pth$/, ''), line, '.pth');
+          }
+        } else if (/^__editable___.+_finder\.py$/.test(e.name)) {
+          let src = '';
+          try { src = readFileSync(fp, 'utf8'); } catch { continue; }
+          const mm = /MAPPING\s*=\s*\{([\s\S]*?)\}/.exec(src);
+          if (!mm) continue;
+          const pkg = e.name.replace(/^__editable___/, '').replace(/_finder\.py$/, '');
+          for (const pm of mm[1].matchAll(/'((?:[^'\\]|\\.)*)'/g)) {
+            const target = pm[1].replace(/\\\\/g, '\\');
+            if (isEscape(target)) push(pkg, target, 'pep660-finder');
+          }
+        }
+      }
+      // direct_url.json（pip/uv 现代 editable 标记）
+      for (const e of entries) {
+        if (!e.isDirectory() || !e.name.endsWith('.dist-info')) continue;
+        const du = join(sp, e.name, 'direct_url.json');
+        if (!existsSync(du)) continue;
+        try {
+          const meta = JSON.parse(readFileSync(du, 'utf8'));
+          if (meta?.dir_info?.editable && typeof meta.url === 'string' && meta.url.startsWith('file://')) {
+            const target = fileURLToPath(meta.url);
+            if (isEscape(target)) push(e.name.replace(/\.dist-info$/, ''), target, 'direct_url');
+          }
+        } catch { /* 解析失败跳过 */ }
+      }
+    }
+  }
+  return offenders;
 }

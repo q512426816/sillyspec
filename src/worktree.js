@@ -12,7 +12,7 @@ import { execFileSync } from 'child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, readdirSync, statSync, lstatSync, readlinkSync, unlinkSync, copyFileSync } from 'fs';
 import { join, resolve, dirname, relative, isAbsolute } from 'path';
 import { createHash } from 'crypto';
-import { provisionDeps, checkDepsFreshness } from './worktree-deps.js';
+import { provisionDeps, checkDepsFreshness, detectEditableInstallEscape } from './worktree-deps.js';
 import { writeAtomicSync } from './fs-atomic.js';
 import { git, gitQuiet } from './git-helper.js';
 
@@ -1327,6 +1327,17 @@ export class WorktreeManager {
               (r.ok ? fixed : unfixable).push(r.msg);
             }
           }
+          // editable install 越界检查（坑 worktree-editable-install-escape，2026-08-25 实证
+          // gen:types 坑）：worktree venv 的 editable install 指向 worktree 外（主仓）时，
+          // gen:types/后端命令/pytest 静默加载旧代码零报错——此前靠模块文档人工记忆，内建检查化。
+          // fixable:false（重装决策留给用户：uv sync / pip install -e . 需按项目方式选）。
+          try {
+            const escapes = detectEditableInstallEscape(wtPath);
+            if (escapes.length > 0) {
+              issues.push({ type: 'editable-install-escape', name, fixable: false,
+                detail: `worktree venv 含 ${escapes.length} 个 editable install 指向 worktree 外（${escapes.slice(0, 5).map(e => `${e.pkg}→${e.target}`).join(', ')}${escapes.length > 5 ? ' 等' : ''}）——gen:types/后端命令会静默加载 worktree 外旧代码。修复：在 worktree 内重装（uv sync / uv pip install -e .）后重跑生成命令` });
+            }
+          } catch { /* 探测失败不阻断 doctor */ }
           }
         }
 

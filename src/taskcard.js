@@ -127,6 +127,39 @@ constraints:
 }
 
 /**
+ * TaskCard 骨架幂等预生成（坑 taskcard-parallel-cli-lock，2026-08-25 实证：plan 生成
+ * TaskCard 步骤让并行 batch 子代理各自跑 sillyspec taskcard CLI，多进程并发撞进度库
+ * SQLite 锁——用户改为主代理预生成骨架+子代理只 Edit 才稳。本函数把该实践内建：
+ * plan gate 前主流程单进程调用，注册表（tasks.md）里有声明而 tasks/ 缺卡的任务一律
+ * 补骨架，已存在跳过不覆盖；骨架占位符硬拦（plan-postcheck）不变——预生成只消灭
+ * CLI 并发与格式错误，不替子代理产语义内容）。
+ *
+ * @param {string} changeName
+ * @param {{ cwd: string, specDir?: string|null }} opts
+ * @returns {{ created: string[], skipped: string[] }}
+ */
+export function ensureTaskcardSkeletons(changeName, opts = {}) {
+  const { cwd, specDir = null } = opts
+  assertSafeChangeName(changeName, '变更名')
+  const changeDir = join(resolveSpecDir(cwd, { specDir }), 'changes', changeName)
+  if (!existsSync(changeDir)) return { created: [], skipped: [] }
+  // 注册表口径与 cmdTaskcard 同源：tasks.md 优先，回退 plan.md（旧归档变更兼容读侧）
+  const tasksMdPath = join(changeDir, 'tasks.md')
+  const planPath = join(changeDir, 'plan.md')
+  const registryPath = existsSync(tasksMdPath) ? tasksMdPath : (existsSync(planPath) ? planPath : null)
+  if (!registryPath) return { created: [], skipped: [] }
+  const registry = parseTaskRegistry(readFileSync(registryPath, 'utf8').replace(/\r\n/g, '\n'))
+  if (registry.length === 0) return { created: [], skipped: [] }
+  const tasksDir = join(changeDir, 'tasks')
+  const missing = registry.map(t => t.id).filter(id => !existsSync(join(tasksDir, `${id}.md`)))
+  if (missing.length === 0) {
+    return { created: [], skipped: registry.map(t => join(tasksDir, `${t.id}.md`)) }
+  }
+  return cmdTaskcard(changeName, { cwd, specDir, taskIds: missing })
+}
+
+
+/**
  * taskcard 命令主逻辑：定位变更目录 → 解析任务清单（--task 显式列表 / 'all' 从 plan.md 取）→
  * 逐个写骨架。
  *

@@ -456,7 +456,12 @@ ${taskList}
 
 **你必须使用 Agent tool 启动子代理来写卡片，不要自己写。**
 
-1. 确认 \`${changeDir}/tasks/\` 目录存在（不存在则创建）
+0. **先由你（主 agent）一次性预生成全部骨架**（2026-08-25 实证：并行子代理各自跑 taskcard CLI 撞进度库 SQLite 锁，主代理单进程预生成 + 子代理只 Edit 才稳）：
+   \`\`\`
+   sillyspec taskcard ${changeName} --all
+   \`\`\`
+   幂等，已存在的卡跳过不覆盖；骨架带 LF 行尾 + 闭合 frontmatter + 硬校验 9 字段 + depends_on 反填。**只有主 agent 跑这一次，子代理一律不再运行 taskcard CLI。**
+1. 确认 \`${changeDir}/tasks/\` 目录存在（上一步预生成会自动创建）
 2. **按 batch 分派子代理（减少总子代理数量，而不是一个 task 一个子代理）：**
    - 把任务按「同一 Wave + 同一模块/相近能力 + 无跨 batch 强依赖」原则分组
    - **每个 batch 包含 2~4 个 task**；Wave 内任务数 ≤4 时整个 Wave 可作为一个 batch
@@ -474,7 +479,7 @@ ${taskList}
 你是一个专注的 TaskCard 生成器。你的任务是为指定 batch 生成全部 TaskCard。
 
 ## ⚠️ 格式形态（第一眼必读，坑 taskcard-body-section-rework）
-TaskCard 的契约字段全部在 **frontmatter**（首对 --- 包裹的 YAML 键值对：id/title/title_zh/allowed_paths/goal/...）——**不是 body 章节**（## 标题下的段落）。goal 是 frontmatter 的 \`goal: >\` 多行标量、implementation/acceptance/verify/constraints 是 frontmatter 的列表项；写成 body 章节（\`## goal\` / \`## Goal\` 等）会三组校验全挂返工。先跑骨架命令再 Edit 填充，骨架即正确形态。
+TaskCard 的契约字段全部在 **frontmatter**（首对 --- 包裹的 YAML 键值对：id/title/title_zh/allowed_paths/goal/...）——**不是 body 章节**（## 标题下的段落）。goal 是 frontmatter 的 \`goal: >\` 多行标量、implementation/acceptance/verify/constraints 是 frontmatter 的列表项；写成 body 章节（\`## goal\` / \`## Goal\` 等）会三组校验全挂返工。骨架已由主 agent 预生成（正确形态），直接 Edit 填充即可。
 
 ## 输入
 - 变更目录：${changeDir}
@@ -486,8 +491,7 @@ TaskCard 的契约字段全部在 **frontmatter**（首对 --- 包裹的 YAML �
 ## 操作
 1. 读取 ${changeDir}/design.md 和 ${changeDir}/plan.md 了解整体上下文
 2. 读取本 batch 涉及的相关源文件
-3. 为 batch 中的**每一个 task** 先运行 CLI 生成 Windows 安全骨架（在项目根目录执行；编号/标题自动取自 plan.md，author/created_at 自动填写）：
-   sillyspec taskcard ${changeName} --task <本 batch 任务号，逗号分隔，如 task-01,task-02>
+3. **骨架已由主 agent 预生成**（\`${changeDir}/tasks/task-NN.md\` 已存在，LF 行尾 + 闭合 frontmatter + 硬校验 9 字段齐全）。**禁止再运行 \`sillyspec taskcard\` CLI**——并行子代理各起 CLI 进程会撞进度库 SQLite 锁（2026-08-25 实证）；若发现本 batch 某卡骨架缺失，报告主 agent 补跑，不要自己跑
 4. 用 Edit tool 逐卡填充骨架占位符（allowed_paths/goal/implementation/acceptance/verify/constraints 等）。**禁止用 Write 整文件重写**——手写整卡是 CRLF 行尾/漏闭合 --- /漏硬校验字段三类 postcheck 拒绝的根源，骨架 + Edit 从源头消灭
 5. 骨架字段含义与可选字段（provides/expects_from/related_tests，按需插进 frontmatter）参考下述模板：
 

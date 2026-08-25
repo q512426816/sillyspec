@@ -705,3 +705,12 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 **固有风险声明**：只要多会话共享单工作区，上述竞态无法在工具层根除（锁不能覆盖非工具操作）。规避优先级：worktree 隔离 > hunk 级分离 > 时序错峰。**关联记忆**：`[[sillyspec-multi-session-shared-workdir-race]]`
 
 **补记（2026-08-25 用户实证升级形态）**：同日第三次被共享工作区坑到（暂存区混入、分支快进、HEAD 跳转三连），且升级为最高风险形态——并行会话不仅改文件，还直接改 git 状态：切分支、cherry-pick。stash/pop 保住了在途修复，但过程很脏（混合态、靠人肉记 SHA 兜底）。结论：hunk 分离/时序错峰只能缓解文件级混编，对 git 状态级互踩无解——**给每个活跃会话配独立 worktree 是唯一能同时隔离文件与 git 状态的手段**，优先级声明由此从建议升级为强推荐。
+
+## 43. 三坑：跨变更归属排除警告刷屏 / 并行子代理 taskcard CLI 撞 SQLite 锁 / worktree editable-install 越界（2026-08-25 闭环）
+
+**症状**：①execute/verify 期间反复出现「已排除 N 个并行会话声明的文件」类警告——并行会话 pathspec 重叠，且对方早已 apply+commit 的存量声明（design §6 清单不随 commit 失效、quick 会话目录残留）仍每轮刷警告，信息噪音大；②plan 生成 TaskCard 步骤并行 batch 子代理各自跑 `sillyspec taskcard` CLI，多进程并发撞进度库 SQLite 锁，用户改为主代理预生成骨架+子代理只 Edit 才稳；③`gen:types` 在 worktree 跑出主仓旧代码——worktree venv 的 editable install 指向主仓路径，此前靠 backend.md 注意事项人工记忆。
+
+**修复（已闭环）**：
+- ①`src/foreign-declared.js` 活性收敛（`filterStaleForeignDeclarations`）：声明只在「工作仍在途」时有效——quick 会话与无存活隔离 worktree 的变更按主仓 `git status --porcelain` 未提交集判定（已 commit 即收敛）；有存活隔离 worktree 的变更整份保留（WIP 主仓不可见）；事实源读不出一律保留（fail-closed）。四处警告调用点（verify-postcheck ×2 / verify-probes / contract-matrix）自动降噪，无需改动。
+- ②骨架预生成内建：`taskcard.js` 新增 `ensureTaskcardSkeletons`（注册表声明缺卡即补、已存在跳过、幂等），`run/gates.js` plan gate 前主流程单进程调用（与 ensureDecisionDocHeader 同层幂等补齐范式）；`plan.js` 步骤 3 prompt 改为主 agent 先跑一次 `taskcard --all` 再派 batch，子代理 prompt 明示**禁止再跑 taskcard CLI**（缺卡报主 agent）；`templates/prompts/taskcard-rules.md` 同步。占位符硬拦不变——预生成只消灭 CLI 并发与格式错误，不替子代理产语义。
+- ③`worktree-deps.js` 新增 `detectEditableInstallEscape`（路径型 .pth / PEP 660 finder MAPPING / direct_url.json editable 三痕迹，目标 resolve 后不在 worktree 内即越界），`worktree doctor` 对存活 worktree 报 `editable-install-escape`（fixable:false，指引 worktree 内 `uv sync` / `uv pip install -e .` 重装后重跑生成命令）。
