@@ -515,7 +515,9 @@ export function isSelfReferentialSpecRoot(cwd, specRoot) {
  *
  * 语义：(specRoot || runtimeRoot) 存在且非自指 → 平台模式；自指回环（repo-native
  * junction）按本地模式处理。本模块内平台模式门禁统一经本函数，裸表达式仅此一处
- * （grep 验证：triggerSync/triggerPull/triggerPullActiveChange/checkApproval 四处收敛）。
+ * （grep 验证：triggerPull/triggerPullActiveChange/checkApproval 三处收敛；triggerSync
+ * 已放行——平台模式上行回传经 env 凭据通道（sync.js _getPlatform），下行 pull 与审批
+ * 检查仍跳过，daemon 是权威数据面）。
  * runtimeRoot 落在 specRoot 内，自指判定以 specRoot 为准即可覆盖；runtimeRoot-only
  * 组合无 specRoot 可判，不触发自指豁免（保持平台模式）。
  *
@@ -549,7 +551,7 @@ export function resolveChangeDir(cwd, progress, specDir = null) {
 }
 
 /**
- * 触发 sync（平台模式走自己的链路，跳过；否则 await import sync.js）。
+ * 触发 sync（本地/平台模式都执行：平台模式凭据经 env 通道，见函数头注释）。
  */
 // sync 总超时熔断：sync.js 是 best-effort 后台回传（每请求已有 10s 超时），但 sync() 可能串行多次
 // fetchJson 累积等待、阻塞 --done。给 8s 总超时，超时放弃（best-effort，失败不影响正确性，下次 --done 重试）。
@@ -583,13 +585,17 @@ async function raceWithAbort(op, timeoutMs = SYNC_TOTAL_TIMEOUT_MS) {
 export const QUICK_SID_RE = /^quick-[0-9a-f]{8}$/
 
 export async function triggerSync(cwd, changeName, platformOpts = {}, opts = {}) {
-  // 平台模式（SillyHub）走自己的回传链路，不走 CLI 内置 sync；自指回环（repo-native junction）按本地模式处理
-  if (isPlatformMode(platformOpts, cwd)) return
+  // 平台模式不再整体跳过（2026-08-26 用户决策）：上行回传（进度 + 四件套 + spec 树）
+  // 在平台模式同样执行，凭据经 env SILLYHUB_PLATFORM_URL/TOKEN（daemon 注入通道，
+  // sync.js _getPlatform，链路 D 同款）；未注入 env 且 local.yaml 无 platform 段时
+  // sync() 内部静默跳过（合法状态）。下行 pull / 审批检查仍走平台自有链路（见各自门禁）。
   try {
     // ql-20260818-011：quick 会话按设计无实体变更目录（progress.js initChange 同款
     // 跳过建目录），progress/四件套上行对它是孤儿数据；但 spec 树增量（QUICKLOG/
     // 模块文档的上行通道）以服务器清单为锚，与变更目录无关——降级只推 spec 树。
-    if (changeName && QUICK_SID_RE.test(changeName) && !existsSync(join(cwd, '.sillyspec', 'changes', changeName))) {
+    // 存在性检查按平台 specRoot（A4 同族）：平台模式下实体目录在 specRoot/changes。
+    const tsSpecBase = platformOpts?.specRoot || join(cwd, '.sillyspec')
+    if (changeName && QUICK_SID_RE.test(changeName) && !existsSync(join(tsSpecBase, 'changes', changeName))) {
       // shared.js 在 src/run/，sync.js 在 src/ → 退一层
       const syncMod = await import('../sync.js')
       await raceWithAbort((sig) => syncMod.syncSpecTreeOnly(changeName, cwd, sig), opts.timeoutMs)

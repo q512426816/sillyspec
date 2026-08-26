@@ -19,7 +19,7 @@
 import { mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { outputStep } from '../src/run/prompt.js'
+import { outputStep, collectStageWaitHistory } from '../src/run/prompt.js'
 import { runCapturing, makeRepo, cleanup, report } from './_complete-step-harness.mjs'
 
 const count = { passed: 0, failed: 0, failures: [] }
@@ -164,6 +164,78 @@ console.log('\n--- {REVIEW_SCHEMA_VERSION} 替换：prompt 含占位符 → 渲�
   assert(!r.stdout.includes('{REVIEW_SCHEMA_VERSION}'), '占位符 {REVIEW_SCHEMA_VERSION} 已被替换（不残留字面量）')
   // 当前 REVIEW_SCHEMA_VERSION 常量值=1（src/task-review.js:32）；升 v2 时此断言随常量走
   assert(r.stdout.includes('"schemaVersion": 1'), '渲染为 CLI 当前 REVIEW_SCHEMA_VERSION 常量值（=1）')
+}
+
+// ── Case 8: waitHistory 历史回答回放块（跨会话恢复）──
+console.log('\n--- waitHistory：📜 历史用户回答块注入（步骤名 + 问/答 + 轮次） ---')
+{
+  const { cwd } = makeRepo('os-waithist-')
+  const steps = [{ name: '生成分级计划', prompt: '生成 plan', requiresWait: false }]
+  const waitHistory = [
+    {
+      stepName: '对话式探索与需求澄清',
+      rounds: [
+        { round: 1, answer: '要做导出功能，CSV 和 Excel 都要', question: '本次需求核心是什么？', answeredAt: null },
+        { round: 2, answer: '数据量最大 10 万行', question: null, answeredAt: null },
+      ],
+    },
+    { stepName: '提出 2-3 种方案', rounds: [{ round: 1, answer: '方案B', question: '请选择方案', answeredAt: null }] },
+  ]
+  const r = await runCapturing(() =>
+    outputStep('plan', 0, steps, cwd, null, null, {}, null, waitHistory))
+
+  assert(r.stdout.includes('### 📜 本阶段历史用户回答（进度库回放，跨会话恢复用）'), 'waitHistory → 📜 回放块标题')
+  assert(r.stdout.includes('**「对话式探索与需求澄清」**（2 轮）'), '步骤名 + 轮数标注')
+  assert(r.stdout.includes('   问：本次需求核心是什么？'), 'question 非空时渲染「问：」行')
+  assert(r.stdout.includes('   第1轮答：要做导出功能，CSV 和 Excel 都要'), '第 1 轮回答原文回放')
+  assert(r.stdout.includes('   第2轮答：数据量最大 10 万行'), '无 question 的轮次只渲染答行')
+  assert(r.stdout.includes('**「提出 2-3 种方案」**（1 轮）'), '第二个步骤条目')
+  assert(r.stdout.includes('已回答过的问题不要重复追问'), '回放块含「不要重复追问」指引')
+}
+
+// ── Case 9: 无 waitHistory → 无回放块（零输出，不破坏既有渲染）──
+console.log('\n--- 无 waitHistory：无 📜 块（回归保护） ---')
+{
+  const { cwd } = makeRepo('os-nohist-')
+  const steps = [{ name: '理解需求', prompt: '分析需求并产出方案', requiresWait: false }]
+  const r = await runCapturing(() =>
+    outputStep('brainstorm', 0, steps, cwd, null, null, {}, null, null))
+  assert(!r.stdout.includes('📜'), '无 waitHistory → 无 📜 回放块')
+  assert(r.stdout.includes('## Step 1/1: 理解需求'), '正常渲染不受影响')
+}
+
+// ── Case 10: collectStageWaitHistory 聚合（纯函数：多来源归一 + 空值过滤）──
+console.log('\n--- collectStageWaitHistory：waitAnswers/waitAnswer 归一聚合 ---')
+{
+  const mkProgress = (stepsArr) => ({ stages: { brainstorm: { steps: stepsArr } } })
+  // null / 缺阶段 → null
+  assert(collectStageWaitHistory(null, 'brainstorm') === null, 'progress=null → null')
+  assert(collectStageWaitHistory(mkProgress([]), 'plan') === null, '阶段缺失 → null')
+  // 全部步骤无回答 → null
+  assert(collectStageWaitHistory(mkProgress([{ name: '进度确认' }, { name: '加载项目上下文' }]), 'brainstorm') === null, '无回答记录 → null')
+
+  // waitAnswers 数组（含 question/round）+ 单值 wait_answer 兜底 + 脏数据过滤
+  const entries = collectStageWaitHistory(mkProgress([
+    { name: '进度确认' },
+    {
+      name: '对话式探索与需求澄清',
+      waitAnswers: [
+        { round: 1, answer: '回答一', question: '问题一', answeredAt: '2026/08/26 10:00:00' },
+        { round: 2, answer: '', question: null },            // 空回答 → 过滤
+        null,                                                  // 损坏条目 → 过滤
+        { answer: '无 round 字段' },                          // round 缺失 → 位置重编号
+      ],
+    },
+    { name: '提出 2-3 种方案', waitAnswer: '方案B', waitAnswers: [] }, // 仅单值列 → 并入第 1 轮
+  ]), 'brainstorm')
+
+  assert(Array.isArray(entries) && entries.length === 2, '两个步骤有条目（无回答步骤跳过）')
+  const [explore, propose] = entries
+  assert(explore.stepName === '对话式探索与需求澄清' && explore.rounds.length === 2, '探索步骤聚 2 轮（空/损坏条目过滤）')
+  assert(explore.rounds[0].question === '问题一' && explore.rounds[0].answeredAt === '2026/08/26 10:00:00', 'question/answeredAt 透传')
+  assert(explore.rounds[1].round === 2 && explore.rounds[1].answer === '无 round 字段', 'round 缺失按位置重编号')
+  assert(propose.rounds.length === 1 && propose.rounds[0].round === 1 && propose.rounds[0].answer === '方案B', '仅 wait_answer 单值 → 第 1 轮兜底')
+  assert(propose.rounds[0].question === null, '单值兜底轮 question=null')
 }
 
 cleanup()

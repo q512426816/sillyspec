@@ -14,8 +14,9 @@
  *   propose  — 提议新知识（写入 proposed/）
  */
 
-import { existsSync, readFileSync, readdirSync, mkdirSync, writeFileSync, statSync } from 'fs'
+import { existsSync, readFileSync, readdirSync, mkdirSync, statSync } from 'fs'
 import { join, basename } from 'path'
+import { writeAtomicSync } from '../fs-atomic.js'
 import { parseKnowledgeIndex, matchKnowledge } from '../knowledge-match.js'
 
 // ── 工具函数 ──
@@ -305,6 +306,11 @@ export async function cmdRefresh(dir, args, opts = {}) {
   const scanFiles = readdirSync(scanDir).filter(f => f.endsWith('.md'))
   const generated = []
   const overwritten = []
+  // 同 run 文件名去重（坑 knowledge-slug-collision）：slug 只由章节标题生成，不同 scan 文件
+  // 的同名章节（如各自都有「## 概述」）后者 writeFileSync 静默覆盖前者，INDEX 却登记两条
+  // 指向同一路径的条目——知识条目无声丢失。碰撞时追加 -2/-3 后缀保双份（唯一命名零扰动，
+  // 每次 refresh 按相同文件顺序重跑，后缀分配稳定）
+  const usedNames = new Set()
 
   for (const scanFile of scanFiles) {
     const scanPath = join(scanDir, scanFile)
@@ -321,7 +327,13 @@ export async function cmdRefresh(dir, args, opts = {}) {
         .replace(/^-|-$/g, '')
         .slice(0, 60)
 
-      const fileName = `${slug}.md`
+      let fileName = `${slug}.md`
+      if (usedNames.has(fileName)) {
+        let n = 2
+        while (usedNames.has(`${slug}-${n}.md`)) n++
+        fileName = `${slug}-${n}.md`
+      }
+      usedNames.add(fileName)
       const genPath = join(generatedDir, fileName)
       const isNew = !existsSync(genPath)
 
@@ -337,7 +349,8 @@ export async function cmdRefresh(dir, args, opts = {}) {
         section.body,
       ].join('\n')
 
-      writeFileSync(genPath, entryContent)
+      // INDEX/generated 是 search/validate 的解析源（跨进程读），走原子写防半截
+      writeAtomicSync(genPath, entryContent)
       generated.push({ file: `generated/${fileName}`, title: `${title} — ${section.heading}`, new: isNew })
       if (!isNew) overwritten.push(`generated/${fileName}`)
     }
@@ -358,7 +371,7 @@ export async function cmdRefresh(dir, args, opts = {}) {
   for (const g of generated) {
     indexLines.push(`- ${g.title} → [${g.file}](${g.file})`)
   }
-  writeFileSync(genIndexPath, indexLines.join('\n'))
+  writeAtomicSync(genIndexPath, indexLines.join('\n'))
 
   output(true, {
     generated_count: generated.length,
@@ -416,7 +429,7 @@ export async function cmdPropose(dir, args, opts = {}) {
     '> This is a proposed knowledge entry. Review and merge into manual/ or generated/.',
   ].join('\n')
 
-  writeFileSync(propPath, content)
+  writeAtomicSync(propPath, content)
 
   output(true, {
     id: `proposed/${slug}`,

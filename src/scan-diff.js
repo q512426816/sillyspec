@@ -246,8 +246,10 @@ function renderTerminal(r, { full }) {
 /** 文件归属状态字母（渲染用）：R（renameMap 命中）> A > D > M */
 function statusLetter(r, f) {
   if (r.renameMap[f]) return 'R'
-  if (r.added.includes(f)) return 'A'
-  if (r.deleted.includes(f)) return 'D'
+  // Set 惰性缓存（挂在 r 上，渲染期只建一次）：added/deleted 数组线性扫在数千文件逐条渲染时是 O(n²)
+  if (!r._statusSets) r._statusSets = { added: new Set(r.added), deleted: new Set(r.deleted) }
+  if (r._statusSets.added.has(f)) return 'A'
+  if (r._statusSets.deleted.has(f)) return 'D'
   return 'M'
 }
 

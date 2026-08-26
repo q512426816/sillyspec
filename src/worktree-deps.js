@@ -8,7 +8,7 @@
  * 见 change 2026-06-28-worktree-deps-provision / D-005@v1, D-007@v1。
  */
 
-import { existsSync, readFileSync, realpathSync, lstatSync, readdirSync } from 'fs';
+import { existsSync, readFileSync, realpathSync, lstatSync, readdirSync, unlinkSync } from 'fs';
 import { join, isAbsolute, relative, resolve as resolvePath, sep as pathSep } from 'path';
 import { fileURLToPath } from 'url';
 import { execFileSync } from 'child_process';

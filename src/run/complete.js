@@ -23,7 +23,7 @@ import { withFileLock } from '../quicklog.js'
 import { triggerSync, WAIT_MARKER_RE, getStageSteps, formatWaitOptions, resolveRuntimeRoot, getOrCreateMultiRepoContext, resolveChangeDir } from './shared.js'
 import { executeScanPreflight, executeScanPostcheck, computeScanProfile } from './scan-profile.js'
 import { executePlanPostcheck as runPlanPostcheckLib } from '../stages/plan-postcheck.js'
-import { outputStep } from './prompt.js'
+import { outputStep, collectStageWaitHistory } from './prompt.js'
 import { enforceDepsGate, enforceReviewJsonGate, enforceSymbolImpactGate, warnMissingUiPrototype, completeStageGates, readDesignScale } from './gates.js'
 import { handleArchiveConfirmStep, handlePlanGeneratePlanStep, handleScanProjectListStep, handleWorkflowPostCheck, handleQuickStageCompletion, handleExecuteWaveArtifact } from './complete-handlers.js'
 import { formatExecuteSummary } from '../worktree-apply.js'
@@ -80,7 +80,10 @@ export function resolveWaitingStepWithAnswer(steps, doneAnswer, nowStr) {
 
 export async function completeStep(pm, progress, stageName, cwd, outputText, inputText = null, options = {}) {
   const { printNext = true, confirm = false, changeName, platformOpts = {}, nonInteractive = false, isForceBaseline = false, isAllowNew = false, isAllowDelete = false } = options
-  const specBase = platformOpts.specRoot || join(cwd, '.sillyspec')
+  // specRoot(平台) > specDriftAnchor(worktree 漂移锚定主仓) > cwd/.sillyspec(本地)——
+  // 与 prompt.js resolvePromptSpecBase 同序：--done 收尾的 user-inputs.md/超长 artifact 落盘
+  // 必须与 prompt 渲染同一根，否则写进 worktree 副本目录、随 cleanup 整目录删除。
+  const specBase = platformOpts.specRoot || platformOpts.specDriftAnchor || join(cwd, '.sillyspec')
   const stageData = progress.stages[stageName]
 
   // ── WAIT MARKER 硬校验 ──
@@ -177,9 +180,10 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
       try {
         const { ensureStageSteps } = await import('./command.js')
         const reseeded = await ensureStageSteps(progress, stageName, cwd, platformOpts?.specRoot || null)
-        if (reseeded && effectiveChange) {
-          pm._write(cwd, progress, effectiveChange)
-          progress = pm.read(cwd, effectiveChange) || progress
+        const reseedChange = changeName || progress.currentChange
+        if (reseeded && reseedChange) {
+          pm._write(cwd, progress, reseedChange)
+          progress = pm.read(cwd, reseedChange) || progress
         }
         const freshSteps = progress?.stages?.[stageName]?.steps || []
         const freshPending = freshSteps.findIndex(s => s.status === 'pending' || s.status === 'in-progress')
@@ -324,7 +328,7 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
   await handleScanProjectListStep({ stageName, steps, currentIdx, outputText, stageData, specBase, cwd, platformOpts })
 
   // execute Wave artifact（W6 Step6c 抽至 complete-handlers.js handleExecuteWaveArtifact）
-  await handleExecuteWaveArtifact({ stageName, steps, currentIdx, changeName, specBase, cwd })
+  await handleExecuteWaveArtifact({ stageName, steps, currentIdx, changeName, specBase, cwd, platformOpts })
 
   // execute 批量完成检测：plan 全勾 + 代码客观核验通过 → 剩余 step 一次性标 completed，
   // 使本次 --done 直接进入阶段完成分支（治"3 Wave 做完仍逐次 +1、需重走 7 次 --done"）。
@@ -337,7 +341,7 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
     if (_ac.skippedCount > 0) {
       console.warn(`   ⚠️ ${_ac.skippedCount} 个 task 未勾（review.json 缺失/fail）→ 批量完成条件不满足，仍按单步推进`)
     }
-    const _bf = await detectExecuteBatchFinish({ pm, stageName, changeName, cwd, specBase, steps })
+    const _bf = await detectExecuteBatchFinish({ pm, stageName, changeName, cwd, specBase, platformOpts, steps })
     if (_bf.batched && _bf.aligned > 0) {
       console.log(`\n🚀 execute 批量完成：plan 全勾 + 代码核验通过，一次性补完 ${_bf.aligned} 个剩余 step → 进入阶段完成分支`)
     }
@@ -556,7 +560,7 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
   if (_wfResult) return _wfResult
 
   if (printNext) {
-    await outputStep(stageName, nextPendingIdx, defSteps, cwd, changeName, progress.project || null, platformOpts)
+    await outputStep(stageName, nextPendingIdx, defSteps, cwd, changeName, progress.project || null, platformOpts, null, collectStageWaitHistory(progress, stageName))
     // task-08：底部锚定行——outputStep 渲染的长 prompt 易被 tail 截断，末尾再打一行推进位置，
     // 让 agent 只看末几行也能知道「推进到第几步」。仅单步推进分支（阶段完成分支已有 ✅ 阶段已完成）。
     // defSteps 越界防御：平台模式 buildPlanSteps 长度漂移时 nextPendingIdx 可能越界
@@ -785,7 +789,7 @@ async function autoCheckPlanFromReviews({ stageName, changeName, cwd, platformOp
  * 安全门：注册表零 checkbox / 未全勾 / 代码零变更（unchanged）均不批量——信任声明但用代码核验兜底。
  * @returns {Promise<{batched:boolean, aligned:number, reason?:string, blockedTasks?:string[]}>}
  */
-async function detectExecuteBatchFinish({ pm, stageName, changeName, cwd, specBase, steps }) {
+async function detectExecuteBatchFinish({ pm, stageName, changeName, cwd, specBase, platformOpts, steps }) {
   if (stageName !== 'execute' || !changeName) return { batched: false, aligned: 0 }
   try {
     const changeDir = join(specBase, 'changes', changeName)
@@ -815,20 +819,27 @@ async function detectExecuteBatchFinish({ pm, stageName, changeName, cwd, specBa
 
     // 构造 ctx 供草稿零 diff 校验用（与 task-04 同源）
     const ctx = prefetchDiffFileSet(await buildDraftContext(cwd, changeName))
-    const runtimeRoot = resolveRuntimeRoot({ specRoot: specBase }, specBase)
+    // runtimeRoot 走 platformOpts 感知解析（与 autoCheckPlanFromReviews 同口径）：
+    // 平台模式 runtimeRoot / worktree 漂移 specDriftAnchor 不透传时 marker 恒读不到
+    // → 每个 task 进 blockedTasks → 批量完成静默失效
+    const runtimeRoot = resolveRuntimeRoot(platformOpts, specBase)
     const runIdFile = join(runtimeRoot, `current-execute-run-id-${changeName}`)
     const blockedTasks = []
+    const { readReview, isValidExecuteRunId } = await import('../task-review.js')
+    // runId marker 对全部 task 恒定：循环外一次读盘（原实现逐 task 重复 readFileSync 同一文件）
+    let executeRunId = null
+    try {
+      const c = readFileSync(runIdFile, 'utf8').trim()
+      if (c && isValidExecuteRunId(c)) executeRunId = c
+    } catch {}
 
     for (const taskId of taskIds) {
       let review = null
+      if (!executeRunId) {
+        blockedTasks.push(taskId)
+        continue
+      }
       try {
-        const { readReview, isValidExecuteRunId } = await import('../task-review.js')
-        const c = readFileSync(runIdFile, 'utf8').trim()
-        if (!c || !isValidExecuteRunId(c)) {
-          blockedTasks.push(taskId)
-          continue
-        }
-        const executeRunId = c
         const reviewPath = join(runtimeRoot, 'execute-runs', executeRunId, 'tasks', taskId, 'review.json')
         const r = readReview(reviewPath)
         if (!r?.ok) {
@@ -1132,7 +1143,9 @@ export async function continueStep(pm, progress, stageName, cwd, answer, options
         changeName,
         progress.project || null,
         platformOpts,
-        formatWaitHistory(currentStep)
+        formatWaitHistory(currentStep),
+        // 跨会话 --continue（新会话直接带回答恢复 waiting 步）时，其他步骤的历史回答同样要回放
+        collectStageWaitHistory(progress, stageName)
       )
     }
     return { stageCompleted: false, currentIdx, nextPendingIdx: currentIdx }
@@ -1195,7 +1208,7 @@ export async function continueStep(pm, progress, stageName, cwd, answer, options
   // 输出下一步
     if (nextPendingIdx !== -1 && defSteps) {
       console.log('')
-    await outputStep(stageName, nextPendingIdx, defSteps, cwd, changeName, progress.project || null, platformOpts, answer)
+    await outputStep(stageName, nextPendingIdx, defSteps, cwd, changeName, progress.project || null, platformOpts, answer, collectStageWaitHistory(progress, stageName))
   } else if (nextWaitingIdx !== -1 && defSteps) {
     // 下一个步骤也在等待状态
     const ws = stageData.steps[nextWaitingIdx]
@@ -1246,7 +1259,7 @@ export async function skipStep(pm, progress, stageName, cwd, changeName, platfor
   const nextPendingIdx = steps.findIndex(s => s.status === 'pending' || s.status === 'in-progress')
   if (nextPendingIdx !== -1 && defSteps) {
     console.log('')
-    await outputStep(stageName, nextPendingIdx, defSteps, cwd, changeName, progress.project || null, platformOpts)
+    await outputStep(stageName, nextPendingIdx, defSteps, cwd, changeName, progress.project || null, platformOpts, null, collectStageWaitHistory(progress, stageName))
   } else {
     const wsIdx = steps.findIndex(s => s.status === 'waiting')
     if (wsIdx !== -1) {

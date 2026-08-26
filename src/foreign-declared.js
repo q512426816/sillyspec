@@ -92,9 +92,13 @@ function filterStaleForeignDeclarations(foreign, cwd, specBase) {
 /**
  * @param {string} cwd 项目根
  * @param {string|null} currentChangeName 本变更名（quick 会话名或 change 名，排除自身）
+ * @param {{ specBase?: string, runtimeRoot?: string }} [opts] 平台模式路径（A4 同族）：
+ *   specBase 覆盖默认 join(cwd,'.sillyspec')（他者 design 清单 / quick 会话所在 spec 根），
+ *   runtimeRoot 覆盖 quick-sessions 目录（平台模式 runtime 可与 specBase/.runtime 分离）。
+ *   不传保持本地行为，零回归。
  * @returns {Map<string, string[]>} file → 声明者列表（quick-<hex> 或变更名）
  */
-export function collectForeignDeclaredFiles(cwd, currentChangeName) {
+export function collectForeignDeclaredFiles(cwd, currentChangeName, opts = {}) {
   const foreign = new Map()
   const add = (file, owner) => {
     const f = String(file || '').replace(/\\/g, '/')
@@ -102,10 +106,11 @@ export function collectForeignDeclaredFiles(cwd, currentChangeName) {
     if (!foreign.has(f)) foreign.set(f, [])
     if (!foreign.get(f).includes(owner)) foreign.get(f).push(owner)
   }
-  const specBase = join(cwd, '.sillyspec')
+  const specBase = opts.specBase || join(cwd, '.sillyspec')
+  const runtimeRoot = opts.runtimeRoot || join(specBase, '.runtime')
   try {
     // ① 其他 quick 会话的 --files 显式声明（guard.json）
-    const sessionsDir = join(specBase, '.runtime', 'quick-sessions')
+    const sessionsDir = join(runtimeRoot, 'quick-sessions')
     let sessionDirs = []
     try { sessionDirs = readdirSync(sessionsDir, { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name) } catch {}
     for (const sid of sessionDirs) {
@@ -138,11 +143,12 @@ export function collectForeignDeclaredFiles(cwd, currentChangeName) {
  * @param {string} cwd 项目根
  * @param {string|null} currentChangeName 本变更名
  * @param {string[]|null} diffFiles 待切分文件列表（null 透传，保持调用方 null 语义）
+ * @param {{ specBase?: string, runtimeRoot?: string }} [opts] 平台模式路径（透传 collectForeignDeclaredFiles）
  * @returns {{ own: string[]|null, foreign: Array<{file: string, owners: string[]}> }}
  */
-export function splitOwnVsForeignDiffFiles(cwd, currentChangeName, diffFiles) {
+export function splitOwnVsForeignDiffFiles(cwd, currentChangeName, diffFiles, opts = {}) {
   if (!Array.isArray(diffFiles)) return { own: diffFiles, foreign: [] }
-  const foreignMap = collectForeignDeclaredFiles(cwd, currentChangeName)
+  const foreignMap = collectForeignDeclaredFiles(cwd, currentChangeName, opts)
   if (foreignMap.size === 0) return { own: diffFiles, foreign: [] }
   const own = []
   const foreign = []

@@ -25,7 +25,7 @@ import { randomBytes, randomUUID } from 'node:crypto'
 import { writeAtomicSync } from '../fs-atomic.js'
 import { resolveSpecDir, countAncestorSpecDirs, resolveChangeDir, triggerSync, getStageSteps, formatWaitOptions, checkApproval, warnApprovalUnknown, didYouMean, assertSafeChangeName, detectQuickSessionDrift, detectWorktreeSpecDrift, resolveRuntimeRoot, writePlatformPointer, checkPlatformManaged, isSelfReferentialSpecRoot, PLATFORM_MANAGED_FILENAME } from './shared.js'
 import { resolveQuickLinkedChanges } from './quick-audit.js'
-import { outputStep } from './prompt.js'
+import { outputStep, collectStageWaitHistory } from './prompt.js'
 import { completeStep, skipStep, waitStep, continueStep } from './complete.js'
 import { runStage } from './stage.js'
 import { sanitizeDesc } from '../quicklog.js'
@@ -898,7 +898,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
       const existingSteps = progress.stages?.[stageName]?.steps
       const pendingIdx = existingSteps ? existingSteps.findIndex(s => s.status === 'pending' || s.status === 'in-progress') : -1
       const stepIdx = pendingIdx !== -1 ? pendingIdx : 0
-      await outputStep(stageName, stepIdx, readonlySteps, cwd, readOnlyChange, progress.project || null, platformOpts)
+      await outputStep(stageName, stepIdx, readonlySteps, cwd, readOnlyChange, progress.project || null, platformOpts, null, collectStageWaitHistory(progress, stageName))
     }
     return
   }
@@ -1517,7 +1517,7 @@ async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts = 
         }
       }
     }
-    await outputStep(currentStage, pendingIdx, defSteps, cwd, changeName, progress.project || null, platformOpts)
+    await outputStep(currentStage, pendingIdx, defSteps, cwd, changeName, progress.project || null, platformOpts, null, collectStageWaitHistory(progress, currentStage))
     return
   }
 
@@ -1557,7 +1557,7 @@ async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts = 
         }
       }
     }
-    await outputStep(currentStage, nextPendingIdx, defSteps, cwd, changeName, progress.project || null, platformOpts)
+    await outputStep(currentStage, nextPendingIdx, defSteps, cwd, changeName, progress.project || null, platformOpts, null, collectStageWaitHistory(progress, currentStage))
     return
   }
 
@@ -1635,7 +1635,7 @@ async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts = 
         }
       }
     }
-    await outputStep(next, firstPending, nextSteps, cwd, changeName, progress.project || null, platformOpts)
+    await outputStep(next, firstPending, nextSteps, cwd, changeName, progress.project || null, platformOpts, null, collectStageWaitHistory(progress, next))
   }
 }
 

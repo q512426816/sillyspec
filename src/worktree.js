@@ -14,6 +14,7 @@ import { join, resolve, dirname, relative, isAbsolute } from 'path';
 import { createHash } from 'crypto';
 import { provisionDeps, checkDepsFreshness, detectEditableInstallEscape } from './worktree-deps.js';
 import { writeAtomicSync } from './fs-atomic.js';
+import { openDatabase } from './db-engine.js';
 import { git, gitQuiet } from './git-helper.js';
 
 // meta.json 会被 hook 进程与其它 CLI 进程并发读取（worktree-guard / getMeta / create 幽灵判定），
@@ -551,7 +552,12 @@ export class WorktreeManager {
       // 体检 BUG-16 并发竞态防御：多 agent 同时首建同名 change 时，败者的 add 失败可能只是
       // 「赢家刚建成目录/分支」。此时降级 in-place 会造成一个 worktree + 一个 in-place 的
       // 分裂状态（两 agent 各写各的基线）——先重查，并发赢家已建成则按 already exists 抛错。
-      if (existsSync(worktreePath) || gitQuiet(this.cwd, ['rev-parse', '--verify', `refs/heads/${branch}`])) {
+      // adopt 路径排除「分支存在性」判据（坑 adopt-branch-misreport-race）：分支既存是 adopt 的
+      // 前置条件（498 行已验证），此处 rev-parse 恒真——不排除时「分支已被其他 worktree 检出 /
+      // checkout 冲突 / 超时」等任何失败都被误报成「并发创建，另一进程已抢先建成」，
+      // 把用户指向完全错误的处置方向（Run cleanup first）。adopt 下仅目录存在性可作竞态判据。
+      const isAdoptPath = branchExists && adoptBranch;
+      if (existsSync(worktreePath) || (!isAdoptPath && gitQuiet(this.cwd, ['rev-parse', '--verify', `refs/heads/${branch}`]))) {
         throw new Error(`worktree already exists: ${name}（并发创建，另一进程已抢先建成，本进程不降级 in-place）. Run cleanup first.`);
       }
       // sandbox/permission fallback: 降级为 in-place + baseline protection
@@ -1636,7 +1642,6 @@ export class WorktreeManager {
     try {
       const dbPath = join(this.cwd, '.sillyspec', '.runtime', 'sillyspec.db');
       if (!existsSync(dbPath)) return false;
-      const { openDatabase } = require('./db-engine.js');
       const db = openDatabase(dbPath, { readOnly: true });
       try {
         const row = db.prepare('SELECT status FROM changes WHERE name = ?').get(name);

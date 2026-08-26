@@ -71,7 +71,14 @@ export function validateSymbolImpactReport({ reportContent, planContent }) {
   //（generateSymbolImpactSkeleton），占位未替换即拦——骨架消灭的是「从零手写/漏 task」错误面，
   // 不是把「逐 task 结论」本身变成走过场。
   const report = String(reportContent)
-  const todoPending = taskIds.filter(id => new RegExp(`^[-*]\\s*${id}[^\\n]*<!--TODO-->`, 'm').test(report))
+  // 单遍扫描替代逐 task new RegExp（N 个 task 原实现编译 N 个正则 + 全文扫 N 次）
+  // 捕获 token 排除冒号/逗号：骨架行格式「- task-01: <!--TODO-->」，\S+ 会连冒号一起捕获导致永不命中
+  const idSet = new Set(taskIds)
+  const todoHitIds = new Set()
+  for (const m of report.matchAll(/^[-*][ \t]*([^\s:：,，]+)[^\n]*<!--TODO-->/gm)) {
+    if (idSet.has(m[1])) todoHitIds.add(m[1])
+  }
+  const todoPending = taskIds.filter(id => todoHitIds.has(id))
   for (const id of todoPending) {
     errors.push(`${id} 的结论仍是骨架 <!--TODO--> 占位——替换为真实结论（无签名级变更也显式写「无」）`)
   }
@@ -470,7 +477,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
   if (['brainstorm', 'plan', 'verify'].includes(stageName) && changeName) {
     try {
       const { ensureDecisionDocHeader } = await import('../stage-contract.js')
-      ensureDecisionDocHeader(resolveChangeDir(cwd, changeName, platformOpts?.specRoot))
+      ensureDecisionDocHeader(resolveChangeDir(cwd, { currentChange: changeName }, platformOpts?.specRoot))
     } catch { /* 补齐失败不阻断 gate */ }
   }
   // TaskCard 骨架幂等预生成（坑 taskcard-parallel-cli-lock，2026-08-25 用户实证：并行 batch
@@ -490,7 +497,10 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
       console.warn(`⚠️ TaskCard 骨架预生成失败（不阻断 gate，仍可逐卡手动 sillyspec taskcard 生成）: ${e.message}`)
     }
   }
-  const contractResult = runValidators(stageName, cwd, changeName, { projectName, specRoot: platformOpts?.specRoot })
+  // runtimeRoot 进 context（坑 verify-receipt-runtime-split）：verify 回执写入方
+  // reapVerifyServices 落 resolveRuntimeRoot(platformOpts, specBase)，校验器读侧不透传时
+  // 平台/漂移模式恒读不到回执 → 证据门退回纯字面匹配（回执机制正是为消灭它而生）
+  const contractResult = runValidators(stageName, cwd, changeName, { projectName, specRoot: platformOpts?.specRoot, runtimeRoot: resolveRuntimeRoot(platformOpts, specBase) })
   if (contractResult.errors.length > 0) {
     console.error(`\n❌ 阶段 ${stageName} 校验失败：`)
     for (const err of contractResult.errors) {
@@ -530,7 +540,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
       try {
         const { collectForeignDeclaredFiles } = await import('../verify-postcheck.js')
         const { gitQuiet } = await import('../git-helper.js')
-        const foreignMap = collectForeignDeclaredFiles(cwd, changeName)
+        const foreignMap = collectForeignDeclaredFiles(cwd, changeName, { specBase, runtimeRoot: resolveRuntimeRoot(platformOpts, specBase) })
         if (foreignMap.size > 0) {
           const dirty = (gitQuiet(cwd, ['diff', '--name-only', 'HEAD']) || '')
             .split('\n').filter(Boolean).map(f => f.replace(/\\/g, '/'))

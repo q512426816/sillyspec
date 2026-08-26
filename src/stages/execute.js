@@ -717,6 +717,8 @@ export async function stampCrossRepoHeadCommits({ changeName, cwd, specBase, pla
   }
   let stamped = 0
   let skipped = 0
+  // 同仓多 task 只 spawn 一次 rev-parse（Windows 单次 spawn 30-100ms，N task × 同仓纯浪费）
+  const headCache = new Map()
   for (const f of readdirSync(tasksDir).filter(n => /^task-\d+\.md$/.test(n)).sort()) {
     const taskFile = path.join(tasksDir, f)
     let content
@@ -735,7 +737,8 @@ export async function stampCrossRepoHeadCommits({ changeName, cwd, specBase, pla
       reasons.push(`${f}: repo "${repoKey}" 无法解析 gitDir（local.yaml repos 未注册？）`)
       continue
     }
-    const head = gitQuiet(entry.gitDir, ['rev-parse', 'HEAD'])
+    if (!headCache.has(entry.gitDir)) headCache.set(entry.gitDir, gitQuiet(entry.gitDir, ['rev-parse', 'HEAD']))
+    const head = headCache.get(entry.gitDir)
     if (!head) {
       skipped++
       reasons.push(`${f}: git rev-parse HEAD 失败（${entry.gitDir}）`)
@@ -760,6 +763,22 @@ export async function stampCrossRepoHeadCommits({ changeName, cwd, specBase, pla
  */
 export function buildWavePrompt(wave, waveIndex, changeDir, worktreePath, options = {}) {
   const ctx = options.ctx || null
+  // 跨 Wave 共享缓存（性能收敛 O(W×T) → O(T)）：一次 buildExecuteSteps 期间 plan/契约矩阵/
+  // task 卡/模块卡表/design 行集不变，每 Wave 重读重解析是纯浪费（6-8 Wave × 15 task 的
+  // full 级变更 = 数百次冗余 fs + 契约矩阵全卡重扫）。缓存对象由 buildExecuteSteps 创建传入；
+  // 直接调用（tests / 单 Wave）不传 _execCache 时全部退化为即时计算，行为不变
+  const cache = options._execCache || null
+  const memo = (slot, compute) => {
+    if (!cache) return compute()
+    if (!(slot in cache)) cache[slot] = compute()
+    return cache[slot]
+  }
+  const memoMap = (slot, key, compute) => {
+    if (!cache) return compute()
+    if (!cache[slot]) cache[slot] = new Map()
+    if (!cache[slot].has(key)) cache[slot].set(key, compute())
+    return cache[slot].get(key)
+  }
   // ── Contract Matrix：检查是否有 provider/consumer 契约需要注入 ──
   let contractInjection = ''
   let prototypeInjection = ''
@@ -767,7 +786,7 @@ export function buildWavePrompt(wave, waveIndex, changeDir, worktreePath, option
     try {
       const planFile = path.join(changeDir, 'plan.md')
       if (existsSync(planFile)) {
-        const planContent = readFileSync(planFile, 'utf8')
+        const planContent = memo('plan', () => readFileSync(planFile, 'utf8'))
         // 收集本 wave 所有 task（端点注入与字段注入共用）
         const waveTasks = wave.tasks.map((t, ti) => {
           const num = String(t.index || (ti + 1)).padStart(2, '0')
@@ -775,7 +794,7 @@ export function buildWavePrompt(wave, waveIndex, changeDir, worktreePath, option
         })
 
         // 1) 端点级契约（provider/consumer via buildContractMatrix）
-        const contracts = buildContractMatrix(planContent, changeDir)
+        const contracts = memo('contracts', () => buildContractMatrix(planContent, changeDir))
         const relevantContracts = contracts.filter(c => waveTasks.includes(c.consumer))
         if (relevantContracts.length > 0) {
           contractInjection = `
@@ -802,7 +821,7 @@ ${injection}
         // 命中「provider 漏字段、consumer fallback 编造 → 运行时 403/500」这类 bug：
         // 把 consumer 期望字段 vs provider 承诺字段显式注入子代理 prompt
         for (const taskName of waveTasks) {
-          const fi = buildContractFieldInjection(changeDir, taskName)
+          const fi = memoMap('fieldInjections', taskName, () => buildContractFieldInjection(changeDir, taskName))
           if (fi) {
             contractInjection += `
 ### 子代理 ${taskName} 的字段契约注入
@@ -848,11 +867,12 @@ ${prototypes.map(p => `- \`${path.join(protoRelDir, p)}\``).join('\n')}
       // 平台模式（specRoot 异位）回退 process.cwd()——子项目目录前缀判定用，误差只降级匹配粒度
       const repoRoot = path.basename(specBase) === '.sillyspec' ? path.dirname(specBase) : process.cwd()
       const waveTaskIds = new Set(wave.tasks.map((t, ti) => `task-${String(t.index || (ti + 1)).padStart(2, '0')}`))
-      const { hasMaps, rows } = resolveChangeModuleCards({
+      // 模块卡表与 Wave 无关（按 change 全量解析后本 Wave 过滤）：memo 跨 Wave 共享
+      const { hasMaps, rows } = memo('moduleCards', () => resolveChangeModuleCards({
         cwd: repoRoot,
         specBase,
         changeName: path.basename(changeDir),
-      })
+      }))
       const hits = rows.filter(r => waveTaskIds.has(r.taskId) && r.moduleId)
       if (hasMaps && hits.length > 0) {
         const kb = n => (n > 0 ? `${(n / 1024).toFixed(1)}KB` : '?')
@@ -879,7 +899,7 @@ ${cardLines}
       const designPath = path.join(changeDir, 'design.md')
       if (existsSync(designPath)) {
         const SECTION_CHAR_LIMIT = 2400
-        const dLines = readFileSync(designPath, 'utf8').replace(/\r\n/g, '\n').split('\n')
+        const dLines = memo('designLines', () => readFileSync(designPath, 'utf8').replace(/\r\n/g, '\n').split('\n'))
         const sections = []
         let cur = null
         dLines.forEach((l, i) => {
@@ -988,11 +1008,13 @@ ${indexLines}
 
     // D-010 跨仓 task base 锡点：派发前实时 git rev-parse HEAD 落 task 卡 base_commit
     // 仅对跨仓 task（repo≠'main'）落盘，主仓 task 锚 meta.baseHash（MultiRepoContext 已处理）
+    const baseCommitCache = new Map() // 同仓多 task 只 spawn 一次
     for (const item of perTaskWorkdirs) {
       if (item.repo === 'main') continue
       const entry = ctx.resolve(item.repo)
       if (!entry) continue
-      const baseCommit = gitQuiet(entry.gitDir, ['rev-parse', 'HEAD'])
+      if (!baseCommitCache.has(entry.gitDir)) baseCommitCache.set(entry.gitDir, gitQuiet(entry.gitDir, ['rev-parse', 'HEAD']))
+      const baseCommit = baseCommitCache.get(entry.gitDir)
       if (!baseCommit) continue // git 不可达已由 MultiRepoContext 构造时 fail-closed 拦截，此处置防御
       const taskFile = changeDir
         ? path.join(changeDir, 'tasks', `task-${item.taskNum}.md`)
@@ -1022,6 +1044,7 @@ ${crossLines}
 
 **跨仓 task 子代理 prompt 必须注入：**
 > 该 task 改的是 \`<repo>\` 仓，workdir=\`<跨仓仓根>\`。**直接在该仓主干工作区改+commit（git add + git commit 到该仓主干），不经主仓 worktree、不建分支。** commit 到该仓主干即落盘，apply 阶段对跨仓 task 为 no-op（design §5.4 G1）。
+> task 卡 allowed_paths 是相对**该仓根**的路径（如 \`src/routes/x.js\`）——不带仓库名前缀（\`<repo>/src/...\` ❌）、不是绝对路径；在 workdir 下直接按相对路径定位文件。
 `
   }
 
@@ -1265,10 +1288,14 @@ export function buildExecuteSteps(planFilePath = null, options = {}) {
   // （D-013）。缺省=null → buildWavePrompt 退化为单仓单 worktreePath（零回归）。
   const ctx = options.ctx || null
 
+  // 跨 Wave 共享缓存：plan/契约矩阵/task 卡字段注入/模块卡表/design 行集在一次步骤表
+  // 构建期间不变，逐 Wave 重读重算是 O(W×T) 纯浪费（见 buildWavePrompt 内 memo 注释）
+  const execCache = {}
+
   const waveSteps = waves.map((wave, i) => ({
     name: `Wave ${i + 1} 执行`,
     mode: 'implementation',
-    prompt: buildWavePrompt(wave, i + 1, changeDir, worktreePath, { dispatchMode: options.dispatchMode, branch: options.branch, ctx }),
+    prompt: buildWavePrompt(wave, i + 1, changeDir, worktreePath, { dispatchMode: options.dispatchMode, branch: options.branch, ctx, _execCache: execCache }),
     outputHint: `Wave ${i + 1} 执行结果`,
     optional: false
   }))

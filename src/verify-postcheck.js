@@ -22,7 +22,7 @@
  *                 task-12 经 run/prompt.js 注入 prompt 供用户否决）。
  */
 
-import { execSync } from 'child_process'
+import { execSync, spawnSync } from 'child_process'
 import { gitQuiet } from './git-helper.js'
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync } from 'fs'
 import { join } from 'path'
@@ -457,15 +457,17 @@ export function extractModules(yamlText) {
   const modules = {}
   for (let i = startIdx + 1; i < lines.length; i++) {
     const line = lines[i]
-    // 子条目：以 2 空格缩进 + key + ':' 开头
-    const entry = line.match(/^  ([A-Za-z0-9_.\-]+):\s*(.*)$/)
+    // 条目缩进放宽为「任意非零空白」（坑 modules-indent-hardcoded，plan-postcheck parseLocalYamlModules
+    // 同款修复）：此前硬编码恰 2 空格——4 空格缩进条目被静默跳过、Tab 缩进直接截断整个块 →
+    // modules 丢失 → modulesPresent=false 回退全量实测（600s 超时必炸）或 0 命中误跳过。
+    const entry = line.match(/^([ \t]+)([A-Za-z0-9_.\-]+):\s*(.*)$/)
     if (!entry) {
       // 遇到新的顶层 key（行首非空格且非注释）→ modules 块结束
       if (line.length > 0 && !line.startsWith(' ') && !line.startsWith('#') && line.trim() !== '') break
       continue
     }
-    const name = entry[1]
-    const rest = entry[2].trim()
+    const name = entry[2]
+    const rest = (entry[3] || '').trim()
     if (rest === '' || rest.startsWith('#')) continue // 子块展开式（本实现只支持 inline flow）
     // 解析 inline flow mapping: { path: "...", test: "..." }
     const pathVal = parseFlowValue(rest, 'path')
@@ -810,12 +812,15 @@ import { splitOwnVsForeignDiffFiles } from './foreign-declared.js'
  * @param {string} cwd - 项目根目录（主仓）
  * @param {string|null} changeName
  * @param {object|null} [ctx] - MultiRepoContext 实例（可选，缺省/null 走单仓原逻辑）
+ * @param {object} [opts]
+ * @param {boolean} [opts.includeWorkingTree=false]
+ * @param {string|null} [opts.specBase] spec 根（平台模式=specRoot，透传 resolveMainChangedFiles）
  * @returns {string[]|null} 变更文件列表；git 不可用返回 null（调用方按 hitCount=-1 处理）
  */
 export function resolveVerifyChangedFiles(cwd, changeName, ctx = null, opts = {}) {
   const { includeWorkingTree = false } = opts
   // 主仓 diff（原逻辑不动，单仓零回归）
-  let mainFiles = resolveMainChangedFiles(cwd, changeName)
+  let mainFiles = resolveMainChangedFiles(cwd, changeName, opts.specBase)
 
   // 并入 worktree 未提交改动（坑 module-subset-zero-hit-uncommitted，2026-08-21 实证：
   // 子代理默认不 commit，真实改动全在 worktree working-tree——只看 base..HEAD commit diff
@@ -857,6 +862,7 @@ export function resolveVerifyChangedFiles(cwd, changeName, ctx = null, opts = {}
   // 那是 task-04 的 scope，本函数不消费锡点——跨仓合并 diff 在 verify-postcheck 内仅供
   // 「per-repo diff 合并」语义契约 + 未来 consumer，module 子集只用主仓 diff）。
   const merged = mainFiles ? mainFiles.slice() : []
+  const seen = new Set(merged) // Set 去重：merged.includes 线性扫在大 diff × 多仓合并时是 O(n²)
   let anyAvailable = mainFiles !== null
   for (const entry of crossEntries) {
     // 跨仓仓 gitDir = 跨仓仓根（MultiRepoContext._buildCrossRepoEntry 已 fail-closed 保证可达）
@@ -864,7 +870,10 @@ export function resolveVerifyChangedFiles(cwd, changeName, ctx = null, opts = {}
     if (files !== null) {
       anyAvailable = true
       for (const f of files) {
-        if (!merged.includes(f)) merged.push(f)
+        if (!seen.has(f)) {
+          seen.add(f)
+          merged.push(f)
+        }
       }
     }
   }
@@ -877,11 +886,14 @@ export function resolveVerifyChangedFiles(cwd, changeName, ctx = null, opts = {}
  *
  * @param {string} cwd - 主仓根
  * @param {string|null} changeName
+ * @param {string|null} [specBase] spec 根（平台模式=specRoot；缺省 join(cwd,'.sillyspec')，
+ *   meta.json 查找与他者声明过滤同用此根——A4 同族修复）
  * @returns {string[]|null}
  */
-function resolveMainChangedFiles(cwd, changeName) {
+function resolveMainChangedFiles(cwd, changeName, specBase = null) {
+  const sb = specBase || join(cwd, '.sillyspec')
   if (changeName) {
-    const metaPath = join(cwd, '.sillyspec', '.runtime', 'worktrees', changeName, 'meta.json')
+    const metaPath = join(sb, '.runtime', 'worktrees', changeName, 'meta.json')
     if (existsSync(metaPath)) {
       let meta = null
       try { meta = JSON.parse(readFileSync(metaPath, 'utf8')) } catch {}
@@ -902,7 +914,7 @@ function resolveMainChangedFiles(cwd, changeName) {
   // verify-reconcile-foreign-wip）：他者显式声明（quick --files / 他者 design 清单）的
   // 文件剔除归他者——不混入本变更 module 命中。无主文件保留（fail-closed）。
   if (fallback !== null && changeName && fallback.length > 0) {
-    const { own, foreign } = splitOwnVsForeignDiffFiles(cwd, changeName, fallback)
+    const { own, foreign } = splitOwnVsForeignDiffFiles(cwd, changeName, fallback, { specBase: sb })
     if (foreign.length > 0) {
       console.warn(`⚠️ verify 对账已排除 ${foreign.length} 个并行会话声明的文件（不参与本变更判定）：${foreign.slice(0, 5).map(x => `${x.file}←${x.owners[0]}`).join(', ')}${foreign.length > 5 ? ' 等' : ''}`)
       return own
@@ -977,7 +989,7 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = nul
       modulesPresent = true
       // includeWorkingTree（坑 module-subset-zero-hit-uncommitted）：子代理不 commit 的改动
       // 也参与 module 命中判定，0 命中跳过不再误伤 worktree 未提交的真实变更
-      const changedFiles = resolveVerifyChangedFiles(cwd, changeName, null, { includeWorkingTree: true })
+      const changedFiles = resolveVerifyChangedFiles(cwd, changeName, null, { includeWorkingTree: true, specBase })
       lastChangedFiles = Array.isArray(changedFiles) ? changedFiles : []
       if (changedFiles === null) {
         hitCount = -1 // git 不可用 / 非仓库
@@ -1259,7 +1271,6 @@ function extractPortsFromCommand(cmd) {
  */
 function isPortOccupiedSync(port) {
   try {
-    const { spawnSync } = require('node:child_process')
     const r = spawnSync(process.execPath, ['-e',
       `const n=require('node:net');const s=n.connect(${port},'127.0.0.1',()=>{console.log('Y');s.end()});s.on('error',()=>console.log('N'));setTimeout(()=>{console.log('N');process.exit(0)},1500)`],
       { encoding: 'utf8', timeout: 4000 })
@@ -1576,7 +1587,7 @@ export function runVerifyDeletionCheck({ cwd, specBase, changeName = null }) {
   // WIP 时，他者显式声明（quick --files / 他者 design 清单）的删除不参与本变更删除对账
   // （否则「他者删的文件 × 本变更 design 三态」产出未声明删除误报）。无主删除保留（fail-closed）。
   if (changeName && deliverable.length > 0) {
-    const { own, foreign } = splitOwnVsForeignDiffFiles(cwd, changeName, deliverable.map(d => d.path))
+    const { own, foreign } = splitOwnVsForeignDiffFiles(cwd, changeName, deliverable.map(d => d.path), { specBase })
     if (foreign.length > 0) {
       console.warn(`⚠️ 删除对账已排除 ${foreign.length} 个并行会话声明的删除（${foreign.slice(0, 5).map(x => `${x.file}←${x.owners[0]}`).join(', ')}${foreign.length > 5 ? ' 等' : ''}）`)
       const keep = new Set(own)

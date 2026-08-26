@@ -198,7 +198,7 @@ export function extractProviderArtifact(changeDir, worktreePath, specBase, taskN
  * @param {{ changeDir: string, specBase: string, changeName: string, worktreePath: string|null }} args
  * @returns {string|null} 日志摘要；无 provider/无 plan/worktree 缺失时返回 null（不打扰）
  */
-export function extractArtifactsForChange({ changeDir, specBase, changeName, worktreePath }) {
+export function extractArtifactsForChange({ changeDir, specBase, changeName, worktreePath, runtimeRoot }) {
   if (!worktreePath || !changeDir || !existsSync(changeDir)) return null
   const planFile = join(changeDir, 'plan.md')
   if (!existsSync(planFile)) return null
@@ -207,7 +207,10 @@ export function extractArtifactsForChange({ changeDir, specBase, changeName, wor
   if (providers.length === 0) return null
   let withEndpoints = 0
   for (const taskName of providers) {
-    const r = extractProviderArtifact(changeDir, worktreePath, specBase, taskName)
+    // runtimeRoot 透传（坑 contract-artifact-runtime-split）：读侧（verify parity / consumer 注入）
+    // 统一走 resolveRuntimeRoot(platformOpts, specBase)，写侧不透传时平台模式落 specBase/.runtime
+    // → 读侧恒空 → parity 静默 skipped、契约注入整体失效
+    const r = extractProviderArtifact(changeDir, worktreePath, specBase, taskName, runtimeRoot)
     if (r.ok && r.endpoints.length > 0) withEndpoints++
   }
   return `📦 契约 artifact 提取: providers=${providers.join(',')}（${withEndpoints}/${providers.length} 含端点）`
@@ -394,7 +397,7 @@ function _resolveDiffFilesForParity(specBase, scanRoot, changeName) {
     // 本变更端点」的 missingBackend 误报——剔除他者显式声明文件（fail-closed：无主保留）。
     const out = gitQuiet(scanRoot, ['diff', '--name-only', 'HEAD'], { timeout: 30000 })
     if (out === null) return null
-    const { own, foreign } = splitOwnVsForeignDiffFiles(scanRoot, changeName, out.split('\n').filter(Boolean))
+    const { own, foreign } = splitOwnVsForeignDiffFiles(scanRoot, changeName, out.split('\n').filter(Boolean), { specBase })
     if (foreign.length > 0) {
       console.warn(`⚠️ parity 对账已排除 ${foreign.length} 个并行会话声明的文件（${foreign.slice(0, 5).map(x => x.file).join(', ')}${foreign.length > 5 ? ' 等' : ''}）`)
     }

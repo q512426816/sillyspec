@@ -25,6 +25,7 @@
 import { basename, join, resolve, relative, isAbsolute } from 'node:path'
 import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync, unlinkSync, rmSync } from 'node:fs'
 import { renameSyncRetry, writeAtomicSync } from '../fs-atomic.js'
+import { gitQuiet } from '../git-helper.js'
 import { resolveChangeDir, resolveQuickSessionsDir, safeGit, auditQuickCompletion, triggerSync, isQuickMetadata, resolveRuntimeRoot, collectOtherQuickSessionDeclarations } from './shared.js'
 import { detectConcurrentChanges, formatConcurrentWarning, resolveConcurrentAnchor } from './concurrent-detect.js'
 import { stageRegistry } from '../stages/index.js'
@@ -1213,7 +1214,7 @@ export async function closeQuickLinkedChanges({ pm, cwd, specBase, linkedChanges
  * ctx：stageName/steps/currentIdx/changeName/specBase/cwd。extractArtifactsForChange ← 动态 ../contract-matrix.js，
  * WorktreeManager ← 动态 ../worktree.js（真环依赖保留动态）。
  */
-export async function handleExecuteWaveArtifact({ stageName, steps, currentIdx, changeName, specBase, cwd }) {
+export async function handleExecuteWaveArtifact({ stageName, steps, currentIdx, changeName, specBase, cwd, platformOpts }) {
   if (stageName === 'execute' && /^Wave \d+ 执行$/.test(steps[currentIdx]?.name || '')) {
     try {
       const { extractArtifactsForChange } = await import('../contract-matrix.js')
@@ -1223,7 +1224,10 @@ export async function handleExecuteWaveArtifact({ stageName, steps, currentIdx, 
         const meta = new WorktreeManager({ cwd }).getMeta(changeName)
         if (meta?.worktreePath && existsSync(meta.worktreePath)) worktreePath = meta.worktreePath
       } catch {}
-      const msg = extractArtifactsForChange({ changeDir: join(specBase, 'changes', changeName), specBase, changeName, worktreePath })
+      // 写侧与读侧（gates.js verify parity / prompt.js consumer 注入）同走 resolveRuntimeRoot：
+      // 平台模式 runtimeRoot ≠ specBase/.runtime，分裂时 artifact 写一处读另一处恒空
+      const runtimeRoot = resolveRuntimeRoot(platformOpts || {}, specBase)
+      const msg = extractArtifactsForChange({ changeDir: join(specBase, 'changes', changeName), specBase, changeName, worktreePath, runtimeRoot })
       if (msg) console.log(msg)
     } catch (e) { console.warn(`⚠️ 契约 artifact 提取跳过: ${e?.message || e}`) }
   }

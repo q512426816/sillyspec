@@ -545,8 +545,11 @@ function validateVerifyOutputs(cwd, changeName, context = {}) {
         let receiptText = ''
         try {
           // 回执按变更分片（坑 verify-pids-cross-session-kill：原单份被并行会话后写覆盖），
-          // 优先读本变更分片，兼容旧单份名（升级过渡期 receipt.change 过滤仍生效）
-          const runtimeDir = join(cwd, '.sillyspec', '.runtime')
+          // 优先读本变更分片，兼容旧单份名（升级过渡期 receipt.change 过滤仍生效）。
+          // runtimeDir 与写入方 reapVerifyServices 同源解析（context.runtimeRoot > specRoot/.runtime
+          // > cwd/.sillyspec/.runtime）——平台/漂移模式下 cwd/.sillyspec 恒读不到回执
+          const runtimeDir = context.runtimeRoot
+            || join(context.specRoot || join(cwd, '.sillyspec'), '.runtime')
           const receiptPath = existsSync(join(runtimeDir, `verify-services-${changeName}.receipt.json`))
             ? join(runtimeDir, `verify-services-${changeName}.receipt.json`)
             : join(runtimeDir, 'verify-services.receipt.json')
@@ -602,9 +605,14 @@ export function archiveDestDirName(date, changeName) {
 
 /**
  * archive 完成校验：检查归档目录完整性
+ *
+ * context.specRoot（A4 同族）：平台模式下归档目录在 specRoot/changes/archive（gates.js /
+ * machine-interface.js 调 runValidators 已透传 specRoot: platformOpts?.specRoot），此前硬编码
+ * cwd/.sillyspec 平台模式恒报「归档目录缺失」。
  */
-function validateArchiveOutputs(cwd, changeName) {
-  const archiveDir = join(cwd, '.sillyspec', 'changes', 'archive')
+function validateArchiveOutputs(cwd, changeName, context = {}) {
+  const specBase = context.specRoot || join(cwd, '.sillyspec')
+  const archiveDir = join(specBase, 'changes', 'archive')
   const destDir = join(archiveDir, changeName)
 
   // 归档目录不存在 early return(引擎在存在时才跑)
@@ -620,14 +628,14 @@ function validateArchiveOutputs(cwd, changeName) {
 /**
  * archive 前置校验：所有主流程阶段完成
  */
-function validateChangeClosed(cwd, changeName) {
+function validateChangeClosed(cwd, changeName, context = {}) {
   const errors = []
   const warnings = []
 
-  // 检查前置阶段状态
-  const progressDir = join(cwd, '.sillyspec', '.runtime')
+  // context.specRoot：平台模式下变更目录在 specRoot/changes（同 validateArchiveOutputs）
+  const specBase = context.specRoot || join(cwd, '.sillyspec')
   // 这里只做文件层面的检查，DB 检查在 run.js 里做
-  const changeDir = join(cwd, '.sillyspec', 'changes', changeName)
+  const changeDir = join(specBase, 'changes', changeName)
   if (!existsSync(changeDir)) {
     errors.push(`变更目录不存在: ${changeDir}`)
     return { ok: false, errors, warnings }

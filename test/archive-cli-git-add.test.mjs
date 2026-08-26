@@ -96,10 +96,17 @@ console.log('--- Case 1: 确认归档后 archive/ + docs/ 已 staged ---')
   assert(r.status === 0, `归档 exit 0（实际 ${r.status}）`)
 
   const status = git(cwd, ['status', '--porcelain'])
-  // porcelain v1：前 2 字符 XY 状态码，index 列为 A 即 staged add
+  // porcelain v1：前 2 字符 XY 状态码，index 列为 A/R 即 staged add / staged rename。
+  // 「他者半归档残留探测」补暂存（坑 archive-other-residual-rename）把源侧 D 一并暂存后，
+  // git rename 检测会把「源删除 + 归档新增」聚合成 R 行（dest 是 rename 箭头右侧）——
+  // 归档文件在 index 里的形态是 R 而非纯 A，断言取 rename 目标路径
   const staged = status.split('\n')
-    .filter(l => l.length > 2 && l[0] === 'A')
-    .map(l => l.slice(3))
+    .filter(l => l.length > 2 && (l[0] === 'A' || l[0] === 'R'))
+    .map(l => {
+      const body = l.slice(3)
+      const arrow = body.indexOf(' -> ')
+      return arrow !== -1 ? body.slice(arrow + 4).replace(/^"|"$/g, '') : body
+    })
   console.log('    staged 文件:\n' + staged.map(s => '      ' + s).join('\n'))
 
   // 核心断言：archive/<dest>/ 下文件已暂存（rename 后由 CLI safeGit add 暂存）

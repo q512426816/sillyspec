@@ -62,7 +62,7 @@ Content-Type: application/json
 - **响应**：任意 2xx 即成功；body 客户端不读。
 - **best-effort**：无配置静默跳过；网络失败 / 非 2xx / 超时（5s）→ `console.warn` 一行，**绝不阻断 run 主流程**（本地产物已留底，见 §2）。
 - **上报配置来源**（优先级）：env `SILLYHUB_PLATFORM_URL` + `SILLYHUB_PLATFORM_TOKEN`（两键齐全才生效——daemon 注入通道，平台模式 specRoot 无 local.yaml platform 段时靠它）> `local.yaml` platform 段（url + token，与链路 A 进度同步同源）。
-- **不受平台模式 sentinel 限制**：链路 A（进度同步）在平台模式跳过是因为 daemon 有自有进度回传链路；agent 日志没有 daemon 链路，**本上报就是它的主通道**，平台模式照常发。
+- **不受平台模式 sentinel 限制**：链路 A 的上行进度同步自 2026-08-26 起在平台模式也照常发（`triggerSync` 门禁移除，凭据同走 env 通道）；此前被跳过时的理由是 daemon 有自有（拉模式）链路。agent 日志则从始至终没有 daemon 链路，**本上报就是它的主通道**，平台模式照常发。
 - **关闭开关**：env `SILLYSPEC_AGENT_LOG_PUSH=0`。
 
 ### 会话化上下文（2026-08-23-agent-activity-sessions，协议纯可选增量）

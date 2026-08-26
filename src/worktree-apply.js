@@ -24,6 +24,22 @@ import { resolveLatestExecuteRunId, resolveLatestExecuteRunIdWithTasks, readRevi
 const CHANGES_REL = '.sillyspec/changes';
 
 /**
+ * cleanup 返回值必须消费（坑 ghost-dir-junction-pierce，2026-08-23 实证：apply 后 partial
+ * 残留被静默丢弃，用户以为已干净、人工 rm -rf 时穿透 junction 删主仓 node_modules）。
+ * 模块级共享：applyWorktree 无变更早退 / skip-overlap / applyByMerge 成功路径三处统一走此消费。
+ */
+function consumeCleanupResult(cr, result) {
+  if (cr && (cr.result === 'partial' || (Array.isArray(cr.residual) && cr.residual.length > 0))) {
+    result.warnings = result.warnings || [];
+    result.warnings.push(
+      `⚠️ worktree 部分清理残留（${cr.result}）：${(cr.residual || []).join('; ') || 'worktree 目录'}` +
+      `——Windows 勿直接 rm -rf（会穿透 node_modules junction 删主仓依赖）：先 cmd /c rmdir "<worktree>\\node_modules" 解链再删目录，或跑 sillyspec worktree doctor --fix`
+    );
+  }
+  return cr;
+}
+
+/**
  * 过滤掉 worktree 基础设施文件（非交付物），让 apply 只关心真正的变更产出：
  *   - meta.json：worktree 元数据，baseline commit 中被跟踪、working-tree 被 CLI 改写
  *     （provisioning→linked 等）。它必须保持 modified（其 baselineCommit 字段是 apply diff
@@ -496,6 +512,10 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
   // 同时检测 untracked 新文件（git diff 不包含 untracked）
   let changedFiles;
   const deletedFiles = [];
+  // merge 后应「不存在于 main HEAD」的文件（D 删除 + R/C rename/copy 源路径）：
+  // applyByMerge 落地校验按此分流——原实现一律要求 cat-file 存在，含删除文件的变更
+  // merge 成功也恒报「未落地」失败、worktree 永不清理（坑 apply-merge-deleted-misjudged）
+  const absentAfterMerge = [];
   try {
     // 用 --name-status 捕获 rename/delete（--name-only 会丢失 rename 源文件）
     // 交付集合判定：用 deliverableBase（baselineCommit||baseHash），保「只合子代理改动」语义
@@ -509,8 +529,11 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
         if (parts.length >= 3) statusFiles.add(parts[parts.length - 2]);
         // 删除文件（status D / D100）→ 收集到 deletedFiles（rescue DELETE 分类用，design §逐文件分类）
         if (parts[0].startsWith('D')) deletedFiles.push(parts[parts.length - 1]);
+        // rename/copy 源路径（R100/C99 old new 三段式）→ 同删除语义：merge 后 HEAD 中不应存在
+        if (parts.length >= 3 && !parts[0].startsWith('D')) absentAfterMerge.push(parts[parts.length - 2]);
       }
     }
+    for (const f of deletedFiles) absentAfterMerge.push(f);
 
     // untracked 新文件（deliverableBase 中不存在的文件）
     const untrackedRaw = gitQuiet(worktreePath, ['ls-files', '--others', '--exclude-standard']);
@@ -527,11 +550,12 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
 
   result.changedFiles = changedFiles;
   result.deletedFiles = deletedFiles;
+  result.absentAfterMerge = absentAfterMerge;
 
   if (changedFiles.length === 0) {
     // 没有变更
     if (!checkOnly) {
-      wm.cleanup(changeName, { force: true });
+      consumeCleanupResult(wm.cleanup(changeName, { force: true }), result);
     }
     result.ok = true;
     return result;
@@ -936,15 +960,9 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
       // cleanup 的拦截横幅吓人，主动判断 + 温和提示）；全部已落地（无跳过残留）才照常清理。
       // cleanup 返回值必须消费（坑 ghost-dir-junction-pierce，2026-08-23 实证：apply 后 partial
       // 残留被静默丢弃，用户以为已干净、人工 rm -rf 时穿透 junction 删主仓 node_modules）。
-      const consumeCleanup = (cr) => {
-        if (cr && (cr.result === 'partial' || (Array.isArray(cr.residual) && cr.residual.length > 0))) {
-          result.warnings.push(
-            `⚠️ worktree 部分清理残留（${cr.result}）：${(cr.residual || []).join('; ') || 'worktree 目录'}` +
-            `——Windows 勿直接 rm -rf（会穿透 node_modules junction 删主仓依赖）：先 cmd /c rmdir "<worktree>\\node_modules" 解链再删目录，或跑 sillyspec worktree doctor --fix`
-          )
-        }
-        return cr
-      }
+      // cleanup 返回值必须消费（坑 ghost-dir-junction-pierce）——实现提升为模块级 consumeCleanupResult，
+      // 与无变更早退 / applyByMerge 成功路径三处共用
+      const consumeCleanup = (cr) => consumeCleanupResult(cr, result)
       try {
         if (skipOverlap) {
           const unapplied = wm.hasUnappliedChanges(changeName);
@@ -1329,13 +1347,19 @@ export function applyByMerge(result, changeName, projectRoot, wm, opts = {}) {
 
   // 落地校验：merge 报成功（exit 0）不代表交付物真进 main——
   // 分支可能只含 baseline checkpoint（子代理改动未 commit），merge 产生空内容合并，文件零落地。
-  // 逐个确认 changedFiles 在 main HEAD 存在。任一缺失 → 不 cleanup（fail-open：保留 worktree 唯一副本）。
+  // 落地语义按文件类型分流：普通交付文件应存在于 main HEAD；删除/rename 源文件（absentAfterMerge）
+  // 应「不存在」——原实现一律要求存在，含删除文件的变更 merge 成功也恒报失败（坑 apply-merge-deleted-misjudged）。
+  // 任一未按预期落地 → 不 cleanup（fail-open：保留 worktree 唯一副本）。
   result.merged = true;
-  const notLanded = changedFiles.filter(f => gitQuiet(projectRoot, ['cat-file', '-e', `HEAD:${f}`]) === null);
+  const absentExpected = new Set(result.absentAfterMerge || []);
+  const notLanded = changedFiles.filter(f => {
+    const inHead = gitQuiet(projectRoot, ['cat-file', '-e', `HEAD:${f}`]) !== null;
+    return absentExpected.has(f) ? inHead : !inHead;
+  });
   if (notLanded.length > 0) {
     result.ok = false;
     result.errors.push(
-      `git merge ${branch} 报成功，但 ${notLanded.length}/${changedFiles.length} 个交付文件未出现在 main HEAD` +
+      `git merge ${branch} 报成功，但 ${notLanded.length}/${changedFiles.length} 个交付文件未按预期落地 main HEAD` +
       `（分支可能只含 baseline checkpoint，子代理改动未 commit）。worktree 已保留（未 cleanup），` +
       `请用 git cherry-pick 或手动 cp 落地：\n  ${notLanded.join('\n  ')}`
     );
@@ -1345,7 +1369,7 @@ export function applyByMerge(result, changeName, projectRoot, wm, opts = {}) {
   result.ok = true;
   try { result.mergeSummary = git(projectRoot, ['log', '--oneline', '-1']); } catch {}
   try {
-    wm.cleanup(changeName, { force: true });
+    consumeCleanupResult(wm.cleanup(changeName, { force: true }), result);
   } catch (cleanupErr) {
     result.warnings = result.warnings || [];
     result.warnings.push(`cleanup 失败（不影响 merge 结果）: ${cleanupErr.message}`);

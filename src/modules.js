@@ -78,29 +78,27 @@ export async function rebuildModuleMap(cwd, { force = false } = {}) {
   if (existsSync(modulesDir)) {
     const files = readdirSync(modulesDir).filter(f => f.endsWith('.md') && f !== '_module-map.yaml');
     for (const f of files) {
-      const content = readFileSync(join(modulesDir, f), 'utf8');
+      // CRLF 归一：Windows 卡片 \r 会使 parseModuleCardFrontmatter 的 ^---\n 与
+      // extractSection 的 ## <名>\n 失配 → module_id 回退文件名、role 提取恒空
+      const content = readFileSync(join(modulesDir, f), 'utf8').replace(/\r\n/g, '\n');
       const fm = parseModuleCardFrontmatter(content);
       const moduleId = fm.module_id || parseModuleIdFromFilename(f);
       cards.push({ filename: f, moduleId, content });
     }
   }
 
-  // 解析现有 _module-map.yaml 保留已有字段
+  // 解析现有 _module-map.yaml 保留已有字段（复用 parseModuleMapSimple：原内置解析只收模块名、
+  // 从不收集列表项 → existingPaths 恒空 → --force 重建后 core_files 全丢，scan-diff scope 退化
+  // 为全量、module-impact classifyFile 全 unmatched——注释声称的「从已有 map 保留」名存实亡）
   let existingModules = {};
   if (existingMap) {
-    // 简单解析：提取 modules: 下的条目
-    const lines = existingMap.split('\n');
-    let currentModule = null;
-    let inModules = false;
-    for (const line of lines) {
-      if (line.startsWith('modules:')) { inModules = true; continue; }
-      if (!inModules) continue;
-      if (line.startsWith('  ') === false && line.trim() !== '') break;
-      const moduleMatch = line.match(/^  ([a-zA-Z0-9_-]+):/);
-      if (moduleMatch) {
-        currentModule = moduleMatch[1];
-        existingModules[currentModule] = existingModules[currentModule] || { paths: [] };
-      }
+    const parsed = parseModuleMapSimple(existingMap);
+    for (const [id, fields] of Object.entries(parsed || {})) {
+      existingModules[id] = {
+        core_files: Array.isArray(fields.core_files) ? fields.core_files : [],
+        test_files: Array.isArray(fields.test_files) ? fields.test_files : [],
+        entrypoints: Array.isArray(fields.entrypoints) ? fields.entrypoints : [],
+      };
     }
   }
 
@@ -152,11 +150,13 @@ export async function rebuildModuleMap(cwd, { force = false } = {}) {
     yaml += `    review_reasons: []\n`;
     // context index 字段（v2）
     if (role) yaml += `    role: "${escapeYamlString(role)}"\n`;
-    // core_files / test_files / entrypoints 从已有 _module-map 保留，或从卡片文件名推导
-    const existingPaths = existingModules[moduleId]?.paths || [];
-    if (existingPaths.length > 0) {
-      yaml += `    core_files:\n`;
-      for (const p of existingPaths) yaml += `      - ${p}\n`;
+    // core_files / test_files / entrypoints 从已有 _module-map.yaml 全量保留（列表项级保真）
+    const existing = existingModules[moduleId] || {};
+    for (const [field, items] of [['core_files', existing.core_files], ['test_files', existing.test_files], ['entrypoints', existing.entrypoints]]) {
+      if (Array.isArray(items) && items.length > 0) {
+        yaml += `    ${field}:\n`;
+        for (const p of items) yaml += `      - ${p}\n`;
+      }
     }
     if (card) yaml += `    verify_commands: []\n`;
     yaml += `    risk_level: low\n`;
@@ -383,7 +383,9 @@ export function parseModuleMapSimple(content) {
   let currentArray = null;
 
   for (const line of content.split('\n')) {
-    const moduleMatch = line.match(/^  ([a-zA-Z0-9_-]+):$/);
+    // 模块 id 字符集含点（db.engine 等，与 module-impact.js classifyFile 同口径）：
+    // 不含点时带点 id 的条目被静默丢弃，上下文注入/scan-diff 侧与 module-impact 侧给相反结论
+    const moduleMatch = line.match(/^  ([a-zA-Z0-9_.\-]+):$/);
     if (moduleMatch) {
       if (currentArray && currentModule && currentKey) {
         modules[currentModule][currentKey] = currentArray;

@@ -387,11 +387,17 @@ export function collectTaskDepMap(tasksDir) {
 /**
  * 本地一致性校验器
  * @param {string} changeDir - 变更目录
+ * @param {{ repoRegistry?: Map<string,string> }} [opts]
+ *   repoRegistry：local.yaml repos: 段解析结果（executePlanPostcheck 传入）。提供时启用两类
+ *   跨仓口径校验：① task 卡 repo: 键未注册 → error（提前到 plan 期拦，不等 execute fail-closed）；
+ *   ② allowed_paths 带其他注册键前缀 → warning。缺省（plan-adopt-waves / 单仓旧调用）只做
+ *   无注册表依赖的形态校验（绝对路径 / 自仓前缀），零回归。
  * @returns {{ ok: boolean, errors: string[], warnings: string[] }}
  */
-export function validateBlueprintConsistency(changeDir) {
+export function validateBlueprintConsistency(changeDir, opts = {}) {
   const errors = []
   const warnings = []
+  const repoRegistry = opts.repoRegistry instanceof Map ? opts.repoRegistry : null
 
   const tasksDir = pJoin(changeDir, 'tasks')
   if (!existsSync(tasksDir)) {
@@ -439,6 +445,48 @@ export function validateBlueprintConsistency(changeDir) {
     }
     if (!hasTdd) {
       warnings.push(bsRule.data.messageTdd.replaceAll('${id}', `${taskId} (${file})`))
+    }
+
+    // ── 跨仓路径口径校验（坑 cross-repo-allowed-path-base，2026-08-26 实证）──
+    // allowed_paths 的统一口径 = task 卡 repo: 声明仓的**仓根相对路径**（review 归属按
+    // `git -C <仓根> diff` 产出的仓根相对路径匹配、design 覆盖对账按「## <repo> 仓变更」
+    // 段内相对路径匹配）。agent 生成跨仓 task 卡时易把仓库名前缀 / 绝对盘符路径写进
+    // allowed_paths（如 sub-grid-security/src/...），两种对账都永不命中——task 改完却判
+    // 「无归属」、design 报「未被覆盖」，错误信号在下游且误导。此处前置拦根因：
+    //   绝对路径 / 自仓前缀（repo: X + 路径以 X/ 开头）→ error 硬拦（无合法布局）；
+    //   其他注册键前缀 → warning（主仓内与 repo 同名目录的罕见合法布局不阻断）。
+    for (const p of allowedPaths) {
+      const isAbsoluteShape = p.startsWith('/') || p.startsWith('\\\\') || /^[A-Za-z]:[\\/]/.test(p)
+      if (isAbsoluteShape) {
+        errors.push(
+          `${taskId} (${file}): allowed_paths 含绝对路径「${p}」——必须写 repo 声明仓的仓根相对路径（如 src/routes/x.js）。` +
+          `绝对路径在 review 归属对账（git -C <仓根> diff 产仓根相对路径）与 design 覆盖对账中永不命中，task 改完会被判「无归属」。`
+        )
+        continue
+      }
+      const firstSeg = p.split(/[\\/]/)[0]
+      if (repo !== 'main' && firstSeg === repo) {
+        errors.push(
+          `${taskId} (${file}): allowed_paths「${p}」带了自仓前缀「${repo}/」——该 task 已声明 repo: ${repo}，子代理 workdir 即该仓根，` +
+          `路径应为仓根相对（${p.slice(repo.length + 1)}），去掉前缀「${repo}/」。带前缀路径在两种对账中永不命中。`
+        )
+      } else if (repoRegistry && firstSeg !== 'main' && repoRegistry.has(firstSeg)) {
+        warnings.push(
+          `${taskId} (${file}): allowed_paths「${p}」首段「${firstSeg}」是 local.yaml repos: 注册键——` +
+          `若本 task 属于该跨仓仓：补 repo: ${firstSeg} 并去掉路径前缀（仓根相对）；` +
+          `若主仓内确有同名目录（罕见合法布局）：忽略本警告。`
+        )
+      }
+    }
+
+    // repo: 键注册校验（仅注册表可用时；execute 启动 MultiRepoContext 也会 fail-closed 拦，
+    // 此处提前到 plan --done，报错即给注册命令，不等 execute 才发现）
+    if (repoRegistry && repo !== 'main' && !repoRegistry.has(repo)) {
+      errors.push(
+        `${taskId} (${file}): repo: ${repo} 未在 local.yaml repos: 段注册——先跑 ` +
+        `\`sillyspec local register-repo ${repo} <${repo} 仓根路径>\` 注册（main 隐式不用注册），` +
+        `否则 execute 启动 fail-closed 阻断。`
+      )
     }
 
     for (const p of allowedPaths) {
@@ -1199,8 +1247,20 @@ export async function executePlanPostcheck(context) {
     }
   }
 
+  // ── local.yaml 预读（跨仓 repos 注册表 + monorepo modules，一次读两用）──
+  // repos 喂检查 1 的 allowed_paths 路径口径校验 + repo: 键注册校验；
+  // modules 喂检查 1c-b 的命令存在性校验（monorepo 子包感知）。
+  const localYamlPath = pJoin(specDir, 'local.yaml')
+  let taskModules = null
+  let repoRegistry = null
+  if (existsSync(localYamlPath)) {
+    const localYamlText = readFileSync(localYamlPath, 'utf8')
+    taskModules = parseLocalYamlModules(localYamlText)
+    repoRegistry = parseRepoRegistry(localYamlText)
+  }
+
   // ── 1. 一致性校验 ──
-  const consistency = validateBlueprintConsistency(changeDir)
+  const consistency = validateBlueprintConsistency(changeDir, { repoRegistry })
   if (consistency.errors.length > 0) {
     failures.push({ name: '蓝图一致性校验', errors: consistency.errors, hint: '请修复上述问题后重新完成此步骤。' })
   }
@@ -1230,11 +1290,7 @@ export async function executePlanPostcheck(context) {
   // scripts 中存在（monorepo 子包感知——读 local.yaml modules 块定位）。
   // invalid → error 硬阻断，避免 execute 子代理跑死命令（design D-04 / 问题 3）。
   // modules 块可选：无块时仅查根 package.json（与 scan-postcheck 历史行为一致）。
-  const localYamlPath = pJoin(specDir, 'local.yaml')
-  let taskModules = null
-  if (existsSync(localYamlPath)) {
-    taskModules = parseLocalYamlModules(readFileSync(localYamlPath, 'utf8'))
-  }
+  // local.yaml 已在检查 1 前预读（taskModules），此处直接消费。
   const taskCmds = validateTaskCommands(changeDir, context.cwd, taskModules)
   if (taskCmds.errors.length > 0) {
     failures.push({

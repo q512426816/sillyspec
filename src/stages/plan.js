@@ -329,7 +329,7 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
 - [ ] task 编号与 Wave checkbox 格式正确，execute 依赖此格式解析任务
 - [ ] plan_level 档位与实际复杂度匹配（none/light/full 没选错）
 - [ ] 跨任务契约：task-A 的产出（接口/DTO/响应）被 task-B 消费时，consumer 是否在 TaskCard expects_from 声明所需字段、provider 是否在 provides 承诺、两边字段一致？（plan-postcheck 会硬校验，此处是独立视角复查）
-- [ ] 文件覆盖：design.md 文件变更清单中的每个源码文件，是否都被至少一个 task 的 allowed_paths 覆盖？（漏覆盖 = execute 必然漏改）
+- [ ] 文件覆盖：design.md 文件变更清单中的每个源码文件，是否都被至少一个 task 的 allowed_paths 覆盖？（漏覆盖 = execute 必然漏改。跨仓变更对账口径：design 清单按「## <repo-key> 仓变更」分段、路径相对各仓根，task 卡 repo: + 同口径相对路径匹配——allowed_paths 带仓库名前缀或绝对路径 = 永不命中、对账不上）
 - [ ] 不存在 P0/P1 unresolved blocker 残留
 - [ ] 没有实现细节泄漏到 plan.md（接口签名/代码示例应在 tasks/task-NN.md）
 - [ ] 关键路径与 Wave 依赖合理（无循环依赖、无遗漏前置）
@@ -407,7 +407,8 @@ depends_on: []
 blocks: []
 requirement_ids: [FR-XX]
 decision_ids: [D-XXX@vN]
-allowed_paths:
+repo: <repo-key>                          # 可选。仅跨仓 task 填：local.yaml repos: 注册的仓 key（缺省=main，主仓 task 省略此行）
+allowed_paths:                            # ⚠️ 路径相对 repo 声明的仓根（跨仓=跨仓仓根，主仓=主仓根），禁止带仓库名前缀/绝对路径
   - frontend/src/lib/errors.ts
 provides:                              # 可选。仅当本 task 给其他 task 提供接口/DTO/响应时填
   - contract: <DTO或响应类型名>          # 如 DaemonRuntimeRead
@@ -500,6 +501,7 @@ ${taskcardTemplate}
 ## 约束
 - 每个 task 20~40 行；禁止在 TaskCard 里写实现细节之外的冗长设计
 - 同 batch 内 task 的 allowed_paths 不要互相冲突
+- **跨仓 task 路径口径（涉及 local.yaml repos: 注册仓的变更必读）**：跨仓 task frontmatter 必须填 \`repo: <repo-key>\`（local.yaml repos: 注册键，缺省=main 省略不填）；allowed_paths 相对**该仓根**写（\`src/routes/x.js\`），从 design.md「\`## <repo-key> 仓变更\`」段内路径原样搬。❌ 禁止带仓库名前缀（\`sub-grid-security/src/...\`）、❌ 禁止绝对路径/盘符（\`C:/repo/src/...\`）——review 对账按 \`git -C <仓根> diff\` 的仓根相对路径匹配 allowed_paths，带前缀/绝对路径永不命中 → task 改完却判「无归属」对账不上
 - 若 task 之间有 provides/expects_from 契约，同 batch 生成时必须字段对齐
 - 只生成本 batch 声明的任务，不要多写或少写
 - 不要在 TaskCard 里泄露 plan.md 中未出现的实现假设
@@ -519,6 +521,7 @@ ${taskcardTemplate}
 - 每个 task 总长度 20~40 行
 - **一致性自查**：
   - allowed_paths 有无冲突
+  - 跨仓 task：repo: 键是 local.yaml repos: 已注册键；allowed_paths 全部为仓根相对路径（无仓库名前缀、无绝对路径/盘符）；与 design.md 对应「仓变更」段路径同口径
   - depends_on 与 plan.md Wave 分组是否一致
   - provides/expects_from 契约自洽：每个 expects_from[provider].needs 字段都在该 provider task 的 provides.fields 里（plan-postcheck 会硬校验，这里提前自查）
   - related_tests 判据 = 是否有既有测试因本次改动而失败（非「源文件是否共享」；UI 文案/常量/签名变更等单文件场景也算）；若填，测试路径必须都在本 task 或某 task 的 allowed_paths 内（否则子代理无权改 → execute 测试债、主代理事后兜底）

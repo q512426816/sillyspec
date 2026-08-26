@@ -19,7 +19,8 @@
  *   - loadModuleContextIndex/buildModuleContextInjection 内 require('fs'/'path') 改顶部静态 import
  */
 import { basename, join } from 'node:path'
-import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, mkdirSync } from 'node:fs'
+import { writeAtomicSync } from '../fs-atomic.js'
 import { stageRegistry } from '../stages/index.js'
 import { resolvePromptIncludes, resolveRuntimeRoot, safeGit, WAIT_MARKER_RE, QUICK_SID_RE } from './shared.js'
 import { renderStageContract } from '../stage-contract-spec.js'
@@ -132,9 +133,52 @@ export function resolvePromptSpecBase(platformOpts, cwd) {
 }
 
 /**
+ * 收集某阶段全部步骤已记录的用户等待回答（跨会话恢复回放数据源）。
+ *
+ * 背景（坑 stage-wait-history-not-replayed）：waitAnswers 从 --continue / --done --answer 起就
+ * 持久化在进度库（steps.wait_answers），但 outputStep 此前只在 --continue 即时路径注入
+ * 「📩 上一步用户回答」（prevStepAnswer）——新会话 `run <stage>` 续跑时历史回答不回放，
+ * agent 只能重问已答过的问题、用户描述随旧会话丢失。此助手把整阶段（含当前步骤多轮）
+ * 的回答按步骤聚合，供 outputStep 恢复渲染；与 complete.js 的 formatWaitHistory（单步、
+ * 带追问指引）分工：本助手面向跨会话恢复语境，只做数据聚合不含指引。
+ *
+ * @param {object|null} progress - ProgressManager.read() 的进度对象
+ * @param {string} stageName - 阶段名
+ * @returns {Array<{stepName: string, rounds: Array<{round: number, answer: string, question: string|null, answeredAt: string|null}>}>|null}
+ *          无进度/无任何回答记录时返回 null（调用方零输出）
+ */
+export function collectStageWaitHistory(progress, stageName) {
+  const steps = progress?.stages?.[stageName]?.steps
+  if (!Array.isArray(steps)) return null
+  const entries = []
+  for (const step of steps) {
+    if (!step || typeof step.name !== 'string') continue
+    const rounds = []
+    if (Array.isArray(step.waitAnswers)) {
+      for (const item of step.waitAnswers) {
+        if (item && typeof item.answer === 'string' && item.answer.trim() !== '') {
+          rounds.push({
+            round: typeof item.round === 'number' ? item.round : rounds.length + 1,
+            answer: item.answer,
+            question: typeof item.question === 'string' && item.question.trim() !== '' ? item.question : null,
+            answeredAt: typeof item.answeredAt === 'string' ? item.answeredAt : null,
+          })
+        }
+      }
+    }
+    // 旧进度/部分路径只写单值列 wait_answer（--done --answer 坑1 路径）：并入为第 1 轮，避免丢
+    if (rounds.length === 0 && typeof step.waitAnswer === 'string' && step.waitAnswer.trim() !== '') {
+      rounds.push({ round: 1, answer: step.waitAnswer, question: null, answeredAt: null })
+    }
+    if (rounds.length > 0) entries.push({ stepName: step.name, rounds })
+  }
+  return entries.length > 0 ? entries : null
+}
+
+/**
  * 输出当前步骤的 prompt
  */
-export async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjectName, platformOpts = {}, prevStepAnswer = null) {
+export async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjectName, platformOpts = {}, prevStepAnswer = null, waitHistory = null) {
   const step = steps[stepIndex]
   const total = steps.length
   // ── 越界防御 ──
@@ -456,7 +500,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
       // 注入结果同步落 runtime JSON（与既有 KNOWLEDGE_HIT_REPORT 落盘口径一致）
       const decRuntimeDir = join(decSpecBase, '.runtime')
       mkdirSync(decRuntimeDir, { recursive: true })
-      writeFileSync(join(decRuntimeDir, 'decision-hits.json'), JSON.stringify({ matched: decResult.matched, decisionHits: decResult.decisionHits || [] }, null, 2) + '\n')
+      writeAtomicSync(join(decRuntimeDir, 'decision-hits.json'), JSON.stringify({ matched: decResult.matched, decisionHits: decResult.decisionHits || [] }, null, 2) + '\n')
     } catch (e) {
       promptText = promptText.replace(/\{DECISION_HITS\}/g, `[decisions] 决策命中检测异常（${e.message}），跳过`)
     }
@@ -488,7 +532,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
       // 写入 runtime JSON
       const runtimeDir = join(effectiveSpecBase, '.runtime')
       mkdirSync(runtimeDir, { recursive: true })
-      writeFileSync(join(runtimeDir, 'knowledge-hit-report.json'), JSON.stringify(knowledgeResult.json, null, 2) + '\n')
+      writeAtomicSync(join(runtimeDir, 'knowledge-hit-report.json'), JSON.stringify(knowledgeResult.json, null, 2) + '\n')
     } catch (e) {
       promptText = promptText.replace(/\{KNOWLEDGE_HIT_REPORT\}/g, 'Status: no matches (error: ' + e.message + ')')
     }
@@ -567,7 +611,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
       // 目录由下游 review 写入 / 其他写入点补齐）。
       try {
         mkdirSync(join(runtimeRoot, 'execute-runs', runId, 'tasks'), { recursive: true })
-        writeFileSync(runIdFile, runId + '\n')
+        writeAtomicSync(runIdFile, runId + '\n')
       } catch (e) {
         console.error(`[sillyspec] execute run marker/目录写入失败（降级继续，ID ${runId} 仍注入 prompt）: ${e.message}`)
       }
@@ -609,7 +653,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
         reviewRunId = generateStageReviewRunId()
         try {
           mkdirSync(tierRuntimeRoot, { recursive: true })
-          writeFileSync(reviewRunIdMarker, reviewRunId + '\n')
+          writeAtomicSync(reviewRunIdMarker, reviewRunId + '\n')
           // plan-c: echo 完整 review 目录路径，避免 agent 拿裸 runId 给子代理时漏连字符拼错路径
           const reviewDir = `${tierRuntimeRoot}/stage-reviews/${stageName}-${reviewRunId}`
           console.log(`  📁 Stage Review 写入目录（直接复制给 review 子代理，勿手拼 runId）：${reviewDir}/`)
@@ -742,6 +786,22 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
       console.error(`   这会导致 agent 写入源码目录而非 spec-root，属于源码污染 bug。`)
       console.error(`   请将路径改为对应的 {DOCS_ROOT}/{PROJECTS_ROOT}/{WORKFLOWS_ROOT}/{KNOWLEDGE_ROOT}/{SPEC_ROOT} 占位符。`)
       process.exit(2) // 内部异常（SillySpec 自身 prompt 配置 bug）→ exit 2，与 machine-interface 三段契约一致
+    }
+  }
+
+  // ── 跨会话恢复回放（坑 stage-wait-history-not-replayed）──
+  // 整阶段历史等待回答：数据由调用方从进度库 collectStageWaitHistory 聚合传入。与下方
+  // 「📩 上一步用户回答」分工：本块是恢复语境（跨步骤、含多轮），那块是刚收到的最新回答
+  // （更贴近 prompt 末尾）。同一轮内容可能短暂重复出现，属预期——两块框架语义不同。
+  if (waitHistory && waitHistory.length > 0) {
+    console.log(`\n### 📜 本阶段历史用户回答（进度库回放，跨会话恢复用）`)
+    console.log(`以下问答已由用户确认并记录在进度库，续跑时据此恢复上下文——已回答过的问题不要重复追问：`)
+    for (const entry of waitHistory) {
+      console.log(`\n**「${entry.stepName}」**（${entry.rounds.length} 轮）`)
+      for (const r of entry.rounds) {
+        if (r.question) console.log(`   问：${r.question}`)
+        console.log(`   第${r.round}轮答：${r.answer}`)
+      }
     }
   }
 

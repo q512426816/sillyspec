@@ -9,6 +9,20 @@ import { writeAtomicSync } from '../fs-atomic.js';
 import { runValidators } from '../stage-contract.js';
 import { VALID_STAGES, STAGE_LABELS, STAGE_ORDER, MAIN_FLOW_ORDER, SPEC_DIR_NAME, CURRENT_VERSION, emptyStage } from './shared.js';
 
+/**
+ * 归一化步骤的已记录等待回答（show 渲染用，跨会话恢复数据源）。
+ * waitAnswers 走 pm.read 时已 JSON.parse，但容错字符串/损坏；单值列 wait_answer（旧路径）并入第 1 轮。
+ */
+function _stepWaitRounds(step) {
+  let arr = step.waitAnswers;
+  if (typeof arr === 'string') { try { arr = JSON.parse(arr); } catch { arr = null; } }
+  const rounds = Array.isArray(arr) ? arr.filter(r => r && typeof r.answer === 'string' && r.answer.trim() !== '') : [];
+  if (rounds.length === 0 && typeof step.waitAnswer === 'string' && step.waitAnswer.trim() !== '') {
+    return [{ round: 1, answer: step.waitAnswer }];
+  }
+  return rounds.map((r, i) => ({ round: typeof r.round === 'number' ? r.round : i + 1, answer: r.answer }));
+}
+
 export class StageMachine {
   constructor(pm) {
     this.pm = pm;
@@ -244,6 +258,15 @@ export class StageMachine {
             if (step.waitReason) console.log(`       原因：${step.waitReason}`);
             if (step.waitOptions) console.log(`       选项：${(() => { try { const p = JSON.parse(step.waitOptions); return Array.isArray(p) ? p.join(', ') : step.waitOptions; } catch { return step.waitOptions; }})()}`);
             if (step.waitedAt) console.log(`       等待时间：${step.waitedAt}`);
+          }
+          // 已记录的历史回答（等待中/已完成步骤都可能累积多轮；续跑时由 outputStep 自动回放，
+          // 此处摘要供人工排查「中断后哪些用户回答还在」）。每轮截断 120 字，全文在进度库 wait_answers。
+          const rounds = _stepWaitRounds(step);
+          if (rounds.length > 0) {
+            console.log(`       历史回答（${rounds.length} 轮，续跑自动回放）：`);
+            for (const r of rounds) {
+              console.log(`         第${r.round}轮: ${r.answer.length > 120 ? r.answer.slice(0, 120) + '…' : r.answer}`);
+            }
           }
         }
       }

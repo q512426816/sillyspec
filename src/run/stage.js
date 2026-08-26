@@ -21,7 +21,7 @@ import { existsSync, readdirSync, readFileSync, mkdirSync } from 'node:fs'
 import { writeAtomicSync } from '../fs-atomic.js'
 import { resolveSpecDir, resolveChangeDir, resolveRuntimeRoot, resolveQuickSessionsDir, triggerSync, safeGit, parsePorcelainPath, formatWaitOptions, checkApproval, getStageSteps, warnApprovalUnknown } from './shared.js'
 import { computeScanProfile, applyScanProfileSteps, executeScanPreflight, executeScanPostcheck } from './scan-profile.js'
-import { outputStep } from './prompt.js'
+import { outputStep, collectStageWaitHistory } from './prompt.js'
 import { allocateQuicklogEntry, deriveTitleFromLinkedChange, sanitizeDesc } from '../quicklog.js'
 import { createHash } from 'node:crypto'
 import { checkTransition } from '../stage-contract.js'
@@ -142,18 +142,18 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
       const { resolveVerifyChangedFiles } = await import('../verify-postcheck.js')
       const activeChanges = (pm.listChanges(cwd) || []).filter(c => c && c !== changeName)
       if (activeChanges.length > 0) {
-        const myFiles = resolveVerifyChangedFiles(cwd, changeName, null, { includeWorkingTree: true }) || []
+        const myFiles = resolveVerifyChangedFiles(cwd, changeName, null, { includeWorkingTree: true, specBase }) || []
         const mySet = new Set(myFiles.map(f => f.replace(/\\/g, '/')).filter(f => !f.startsWith('.sillyspec/')))
         if (mySet.size > 0) {
           const conflicts = []
           for (const other of activeChanges) {
-            const otherFiles = resolveVerifyChangedFiles(cwd, other, null, { includeWorkingTree: true }) || []
+            const otherFiles = resolveVerifyChangedFiles(cwd, other, null, { includeWorkingTree: true, specBase }) || []
             const overlap = [...new Set(otherFiles.map(f => f.replace(/\\/g, '/')))]
               .filter(f => mySet.has(f))
             if (overlap.length > 0) conflicts.push({ other, overlap })
           }
           if (conflicts.length > 0) {
-            console.warn(`⚠️ 跨变更文件冲突预警：本变更（${changeName}}）与其他活跃变更改动重叠——`)
+            console.warn(`⚠️ 跨变更文件冲突预警：本变更（${changeName}）与其他活跃变更改动重叠——`)
             for (const c of conflicts) {
               console.warn(`   与 ${c.other} 重叠 ${c.overlap.length} 个文件：${c.overlap.slice(0, 5).join(', ')}${c.overlap.length > 5 ? ` …（共 ${c.overlap.length}）` : ''}`)
             }
@@ -177,7 +177,7 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
         .split('\n').filter(Boolean).map(l => l.slice(3).trim().split(' -> ').pop() || '')
         .map(p => p.replace(/^"|"$/g, '').replace(/\\/g, '/'))
         .filter(p => p && !p.startsWith('.sillyspec/'))
-      const myFiles = (await import('../verify-postcheck.js')).resolveVerifyChangedFiles(cwd, changeName, null, { includeWorkingTree: true }) || []
+      const myFiles = (await import('../verify-postcheck.js')).resolveVerifyChangedFiles(cwd, changeName, null, { includeWorkingTree: true, specBase }) || []
       const mySet = new Set(myFiles.map(f => f.replace(/\\/g, '/')))
       const foreign = mainDirty.filter(p => !mySet.has(p))
       if (foreign.length > 0) {
@@ -488,7 +488,7 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
       const nextIdx = stageData.steps.findIndex(s => s.status === 'pending' || s.status === 'in-progress')
       if (nextIdx !== -1 && defSteps[nextIdx]) {
         console.log('')
-        await outputStep(stageName, nextIdx, defSteps, cwd, changeName, progress.project || null, platformOpts)
+        await outputStep(stageName, nextIdx, defSteps, cwd, changeName, progress.project || null, platformOpts, null, collectStageWaitHistory(progress, stageName))
       } else {
         // 所有步骤完成
         stageData.status = 'completed'
@@ -506,7 +506,7 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
       }
       return
     }
-    await outputStep(stageName, currentIdx, defSteps, cwd, changeName, progress.project || null, platformOpts)
+    await outputStep(stageName, currentIdx, defSteps, cwd, changeName, progress.project || null, platformOpts, null, collectStageWaitHistory(progress, stageName))
   }
 }
 

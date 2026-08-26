@@ -29,8 +29,8 @@ const READONLY_COMMANDS = new Set([
   'node', 'npm', 'npx', // 只允许 --version 等只读子命令，在 matchReadonlyWhitelist 中处理
 ])
 
-/** 只读 git 子命令 */
-const READONLY_GIT_SUBS = new Set(['diff', 'status', 'log', 'show', 'branch', 'stash'])
+/** 只读 git 子命令（stash 不在此列：drop/clear/pop 破坏性，仅下方 matchReadonly 细化放行 list/裸查询） */
+const READONLY_GIT_SUBS = new Set(['diff', 'status', 'log', 'show', 'branch'])
 
 /** 危险 git 子命令 */
 const DANGER_GIT_SUBS = new Set([
@@ -510,7 +510,13 @@ function isSingleCommandReadonly(cmd, extraReadonlyCommands = []) {
       // 不能用 rest.includes('--version')：`npx any-pkg --version` 会执行 any-pkg，
       // 旧实现因 && 优先级高于 || 使 --version 分支无长度约束，可绕过只读白名单。
       const isBareVersionQuery = parts.length === 2 && (parts[1] === '--version' || parts[1] === '-v')
-      return isBareVersionQuery || rest === 'run test' || rest.startsWith('test')
+      // npm test（含 npm run test / npm test -- 传参）放行；词边界收紧（坑 test-prefix-bypass）：
+      // 旧实现 rest.startsWith('test') 使 `npx test-<任意包>`/`node test-<任意脚本>` 绕过白名单
+      // 下载执行任意代码。npx/node 只保留纯版本查询。
+      if (cmdName === 'npm') {
+        return isBareVersionQuery || /^test(\s|$)/.test(rest) || /^run test([:\s]|$)/.test(rest)
+      }
+      return isBareVersionQuery
     }
     return true
   }

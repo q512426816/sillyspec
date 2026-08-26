@@ -173,14 +173,17 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
   const probe5 = verifyApiParity(specBase, cwd, runtimeRoot, changeName)
 
   // ── 探针 6：代码删除对账（git diff --name-status HEAD 的 D/R × design 声明三态）──
-  const probe6 = { deletions: [], note: '以 git 事实为准（真实 > 声明）；是否 FAIL blocker 由 agent 诚实判定' }
+  const probe6 = { deletions: [], unavailable: false, note: '以 git 事实为准（真实 > 声明）；是否 FAIL blocker 由 agent 诚实判定' }
   // 他者声明归属过滤（坑 verify-reconcile-foreign-wip）：并行会话在途删除/改动不进本变更对账
-  const nsOut = gitQuiet(cwd, ['diff', '--name-status', 'HEAD']) || ''
-  let nsRows = nsOut.split('\n').filter(Boolean)
+  // gitQuiet 失败（非仓库/git 缺失/报错）返回 null ≠ 空结果：null 必须显式标记不可用，
+  // 否则半截对账被渲染成「✅ 无删除」的错误全清信号（对照 verify-postcheck runVerifyDeletionCheck 的 skipped 口径）
+  const nsOut = gitQuiet(cwd, ['diff', '--name-status', 'HEAD'])
+  if (nsOut === null) probe6.unavailable = true
+  let nsRows = (nsOut || '').split('\n').filter(Boolean)
   {
     const rawTargets = nsRows.map(row => ((row.split('\t')[1]) || ''))
       .filter(Boolean).map(t => t.split('\\').join('/'))
-    const { foreign } = splitOwnVsForeignDiffFiles(cwd, changeName, rawTargets)
+    const { foreign } = splitOwnVsForeignDiffFiles(cwd, changeName, rawTargets, { specBase, runtimeRoot })
     if (foreign.length > 0) {
       const foreignSet = new Set(foreign.map(x => x.file))
       nsRows = nsRows.filter(row => !foreignSet.has((row.split('\t')[1] || '').split('\\').join('/')))
@@ -191,8 +194,8 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
     const [status, ...paths] = row.split('\t')
     const st = (status || '').trim().toUpperCase()
     if (!/^[DRC]/.test(st)) continue
-    // R/C 的旧路径等价删除（paths[0]）；D 的唯一路径
-    const target = (st.startsWith('D') ? paths[0] : paths[0]) || ''
+    // R/C 的旧路径等价删除（paths[0]）；D 的唯一路径——两者都取 paths[0]
+    const target = paths[0] || ''
     const posix = target.split('\\').join('/')
     if (!posix || posix.startsWith('.sillyspec/') || posix === 'meta.json' || basename(posix) === 'meta.json') continue
     const op = designOps.get(posix)
@@ -270,7 +273,9 @@ export function renderVerifyProbesReport(result) {
   L.push('')
 
   L.push('#### 探针 6：代码删除对账')
-  if (probe6.deletions.length === 0) {
+  if (probe6.unavailable) {
+    L.push('- ⚠️ git 不可用或非仓库，删除对账无法执行（不能视为「无删除」，agent 需人工核对）')
+  } else if (probe6.deletions.length === 0) {
     L.push('- ✅ git diff 无整文件删除（D/R/C）记录')
   } else {
     for (const d of probe6.deletions) {

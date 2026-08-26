@@ -182,7 +182,7 @@ async function main() {
   }
 
   // E22：重路径统一加载（轻路径 --version/help 已早退，未付此税）。
-  const { ProgressManager, resolvePlatformSpecDir } = await import('./progress.js');
+  const { ProgressManager, resolvePlatformSpecDir, resolvePlatformOpts } = await import('./progress.js');
   const { didYouMean, assertSafeChangeName, resolveSpecDir, detectWorktreeSpecDrift } = await import('./run/shared.js');
 
   // 解析全局选项
@@ -456,7 +456,7 @@ async function main() {
       // 自然报「跨仓 commit 找不到」等错误进入 check.errors，gate 结论仍如实反映问题（D-002@v1 只读契约不破）。
       try {
         const { getOrCreateMultiRepoContext } = await import('./run/shared.js');
-        const _ctx = await getOrCreateMultiRepoContext({ cwd: dir, changeName: gateChange, platformOpts: specDir ? { specRoot: specDir } : {} });
+        const _ctx = await getOrCreateMultiRepoContext({ cwd: dir, changeName: gateChange, platformOpts: { specRoot: gateSpecBase } });
         if (_ctx) gateOpts.ctx = _ctx;
       } catch (e) {
         console.warn(`⚠️ gate ctx 构造失败，降级单仓核验（${e.message}）`);
@@ -509,7 +509,7 @@ async function main() {
       // W3 task-09：derive 同 gate，best-effort 构造 ctx 透传给 verify-test/task-reviews facet（D-013）。
       try {
         const { getOrCreateMultiRepoContext } = await import('./run/shared.js');
-        const _ctx = await getOrCreateMultiRepoContext({ cwd: dir, changeName: deriveChange, platformOpts: specDir ? { specRoot: specDir } : {} });
+        const _ctx = await getOrCreateMultiRepoContext({ cwd: dir, changeName: deriveChange, platformOpts: { specRoot: deriveSpecBase } });
         if (_ctx) deriveOpts.ctx = _ctx;
       } catch (e) {
         console.warn(`⚠️ derive ctx 构造失败，降级单仓核验（${e.message}）`);
@@ -548,9 +548,14 @@ async function main() {
       // 与 run 入口同源消毒（防路径穿越；backfill 下游拼 marker/changes/review 路径）
       assertSafeChangeName(brChange, '--change 变更名');
       const { generateTaskReviewDrafts } = await import('./task-review.js');
-      // --spec-dir 透传 platformOpts.specRoot（与 gate/derive 对称）；不传走默认 join(cwd,'.sillyspec')。
+      // --spec-dir / 平台指针二合一解析（A4 同族，与 register-stage-review case 对称）：此前
+      // 只认显式 --spec-dir，平台模式下 specRoot 缺失 → 草稿/adopt 落本地 join(cwd,'.sillyspec')。
       const brPlatformOpts = {};
-      if (specDir) brPlatformOpts.specRoot = specDir;
+      const brResolved = resolvePlatformOpts(dir, specDir);
+      if (brResolved) {
+        brPlatformOpts.specRoot = brResolved.specRoot;
+        if (brResolved.runtimeRoot) brPlatformOpts.runtimeRoot = brResolved.runtimeRoot;
+      }
       // W3 task-09：best-effort 构造 ctx 透传（D-013），让 task-04 generateTaskReviewDrafts 跨仓 task
       // 用跨仓 gitDir 取 base..head diff。失败降级 null（与 gate/derive 同语义，辅助修复命令不阻断）。
       let _brCtx = null;
@@ -1052,8 +1057,17 @@ async function main() {
       // 与 run 入口同源消毒（防路径穿越；register 下游写 marker、拼 changes/review 路径）
       assertSafeChangeName(rsrChange, '--change 变更名');
       const { registerStageReview } = await import('./stage-review.js');
+      // A4 同族修复（2026-08-26 实证）：此前只认显式 --spec-dir 拼 platformOpts，平台模式
+      // （cwd/.sillyspec-platform.json 指针存在）下 specRoot 缺失 → registerStageReview 落
+      // join(cwd,'.sillyspec')/changes/... 找主审查文档 → 「主审查文档不存在，无法算 docHash」
+      // → 逼 agent 手算 sha256 兜底。改走 resolvePlatformOpts（--spec-dir > 指针 specRoot+
+      // runtimeRoot > 纯本地 null），指针失效 fail-closed 由顶层 catch 优雅引导。
       const rsrPlatformOpts = {};
-      if (specDir) rsrPlatformOpts.specRoot = specDir;
+      const rsrResolved = resolvePlatformOpts(dir, specDir);
+      if (rsrResolved) {
+        rsrPlatformOpts.specRoot = rsrResolved.specRoot;
+        if (rsrResolved.runtimeRoot) rsrPlatformOpts.runtimeRoot = rsrResolved.runtimeRoot;
+      }
       const rsrStages = rsrAll ? ['brainstorm', 'plan', 'execute'] : [rsrStage];
       const rsrResults = [];
       let rsrFailed = 0;
@@ -1260,9 +1274,9 @@ async function main() {
           }
         }
         const { runDocsGate } = await import('./docs-gate.js');
-        // specBase：平台模式（specDir 指针）优先，本地回退 <repo>/.sillyspec——基线文件锚定
+        // specBase：平台指针 / 显式 --spec-dir / 本地 fallback 三合一（A4 同族）——基线文件锚定
         // 进度库根（与 .runtime 同级），跨命令稳定。
-        const gateSpecBase = specDir || join(dir, '.sillyspec');
+        const gateSpecBase = resolvePlatformSpecDir(dir, specDir) || join(dir, '.sillyspec');
         const g = await runDocsGate(
           { projectRoot: dir, specBase: gateSpecBase, initBaseline },
           cliGatePaths ? { paths: cliGatePaths } : undefined
@@ -1459,11 +1473,12 @@ async function main() {
         const { runScanDiff } = await import('./scan-diff.js')
         const diffBaseIdx = filteredArgs.indexOf('--base')
         const diffBase = diffBaseIdx >= 0 && filteredArgs[diffBaseIdx + 1] ? filteredArgs[diffBaseIdx + 1] : null
-        // specBase/projectName 与 scan 主流程同口径（scan-profile.js：specBase=进度库根，projectName=仓库根 basename）
+        // specBase/projectName 与 scan 主流程同口径（scan-profile.js：specBase=进度库根，projectName=仓库根 basename）。
+        // A4 同族：平台指针 / 显式 --spec-dir / 本地 fallback 三合一，平台模式下 diff 不落本地孤儿库。
         const diffEffectiveDir = specDir ? dir : resolveEffectiveDir(dir)
         process.exitCode = runScanDiff({
           projectRoot: diffEffectiveDir,
-          specBase: specDir || join(diffEffectiveDir, '.sillyspec'),
+          specBase: resolvePlatformSpecDir(dir, specDir) || join(diffEffectiveDir, '.sillyspec'),
           projectName: basename(diffEffectiveDir),
           base: diffBase,
           full: filteredArgs.includes('--full'),
@@ -1629,7 +1644,7 @@ SillySpec worktree — git worktree 隔离管理
           let _applyCtx = null;
           try {
             const { getOrCreateMultiRepoContext } = await import('./run/shared.js');
-            _applyCtx = await getOrCreateMultiRepoContext({ cwd: dir, changeName: wtName, platformOpts: specDir ? { specRoot: specDir } : {} });
+            _applyCtx = await getOrCreateMultiRepoContext({ cwd: dir, changeName: wtName, platformOpts: { specRoot: resolvePlatformSpecDir(dir, specDir) } });
           } catch (e) {
             console.error(`❌ apply 失败：跨仓 MultiRepoContext 构造失败（${e.message}）`);
             process.exit(1);
@@ -1713,7 +1728,7 @@ SillySpec worktree — git worktree 隔离管理
           let _assessCtx = null;
           try {
             const { getOrCreateMultiRepoContext } = await import('./run/shared.js');
-            _assessCtx = await getOrCreateMultiRepoContext({ cwd: dir, changeName: wtName, platformOpts: specDir ? { specRoot: specDir } : {} });
+            _assessCtx = await getOrCreateMultiRepoContext({ cwd: dir, changeName: wtName, platformOpts: { specRoot: resolvePlatformSpecDir(dir, specDir) } });
           } catch (e) {
             if (assessment.decision === 'SAFE' || assessment.decision === 'WARNING') {
               console.error(`❌ assess 自动 apply 失败：跨仓 MultiRepoContext 构造失败（${e.message}）`);

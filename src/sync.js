@@ -28,7 +28,6 @@ function safePlatformSpecDir(cwd) {
 }
 
 const LOCAL_YAML = '.sillyspec/local.yaml';
-const CHANGES_DIR = '.sillyspec/changes';
 const REQUEST_TIMEOUT_MS = 10_000;
 
 // 未连接平台是本地独立用户的合法默认状态。sync / checkApproval 由 run 流程在后台 best-effort
@@ -429,13 +428,17 @@ export class SyncManager {
     }
 
     // 检查变更目录是否存在（归档后目录已移走但 DB 仍有最终状态需推平台，serializeForSync 从
-    // DB 读不依赖文件系统目录）。归档终态探测（坑 post-archive-sync-noise，2026-08-21 实证：
-    // 归档尾声连打「目录不存在/变更不存在」warn，观感像出错）：确认已归档（changes/archive/
-    // 有实体 或 DB status='archived'）时降为一行 info 措辞——正常时序不是告警。
-    const changeDir = join(this.cwd, CHANGES_DIR, changeName);
+    // DB 读不依赖文件系统目录）。树根与 syncDocuments/spec 树同源（safePlatformSpecDir，
+    // BUG-01 同族）：此前硬编码 cwd/.sillyspec/changes，平台模式（specRoot 指向外部）目录
+    // 恒不存在 → 每次同步打「变更目录不存在」warn 噪音。归档终态探测（坑 post-archive-
+    // sync-noise，2026-08-21 实证：归档尾声连打「目录不存在/变更不存在」warn，观感像出错）：
+    // 确认已归档（changes/archive/ 有实体 或 DB status='archived'）时降为一行 info 措辞——
+    // 正常时序不是告警。
+    const specBase = safePlatformSpecDir(this.cwd) || join(this.cwd, '.sillyspec');
+    const changeDir = join(specBase, 'changes', changeName);
     let archivedQuietly = false;
     if (!existsSync(changeDir)) {
-      archivedQuietly = existsSync(join(this.cwd, CHANGES_DIR, 'archive', changeName))
+      archivedQuietly = existsSync(join(specBase, 'changes', 'archive', changeName))
         || this._isChangeArchivedInDb(changeName);
       if (archivedQuietly) {
         console.log(`[sync] 变更已归档（目录在 archive/），继续从 DB 推送最终状态: ${changeName}`);
@@ -768,23 +771,36 @@ export class SyncManager {
 
   /**
    * 查看同步状态。
-   * 读取 local.yaml 中的 platform 配置，返回连接信息。
+   * 基于本实例解析出的平台配置（env 优先，见 _getPlatform）返回连接信息；
+   * env 通道无 last_connected 可读，返回 null。
    */
   status() {
-    const config = readLocalYaml(this.cwd);
-    const platform = config.platform;
+    const platform = this._getPlatform();
     if (!platform) {
       return { connected: false };
     }
     return {
       connected: true,
       url: platform.url,
-      lastSync: platform.last_connected || null,
+      lastSync: readLocalYaml(this.cwd).platform?.last_connected || null,
     };
   }
 
-  /** 获取当前平台配置，未连接返回 null */
+  /**
+   * 获取当前平台配置，未连接返回 null。
+   * 优先级：env SILLYHUB_PLATFORM_URL + SILLYHUB_PLATFORM_TOKEN（两键齐全才生效——
+   * daemon 注入通道，平台模式 specRoot/local.yaml 常无 platform 段，与链路 D
+   * readPlatformPushConfig 同款先例）> local.yaml platform 段。
+   * env 由 daemon 注入、CLI 不管其生命周期（disconnect 仍只清 local.yaml——daemon
+   * 停止注入即失效）；triggerSync 平台模式放行（2026-08-26）后这是回传走通的关键通道。
+   */
   _getPlatform() {
+    if (process.env.SILLYHUB_PLATFORM_URL && process.env.SILLYHUB_PLATFORM_TOKEN) {
+      return {
+        url: process.env.SILLYHUB_PLATFORM_URL,
+        token: process.env.SILLYHUB_PLATFORM_TOKEN,
+      };
+    }
     const config = readLocalYaml(this.cwd);
     return config.platform || null;
   }

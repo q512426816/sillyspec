@@ -41,9 +41,10 @@ function countTasks(tasksPath) {
 /**
  * 单个活跃变更的产物推断：返回 { state, next, evidence }
  */
-function inferChange(changeDir, name) {
+function inferChange(changeDir, name, specBase) {
   const has = (f) => existsSync(join(changeDir, f))
-  const ev = (f) => join('.sillyspec', 'changes', name, f)
+  // evidence 用真实 spec 根（平台模式=specRoot 绝对路径，此前硬编码 .sillyspec/ 前缀误导）
+  const ev = (f) => join(specBase, 'changes', name, f)
   const t = countTasks(join(changeDir, 'tasks.md'))
 
   if (!has('proposal.md') && !has('design.md') && !has('tasks.md') && !has('plan.md')) {
@@ -98,7 +99,7 @@ export function detectNextStep({ cwd, specDir = null }) {
   } catch { /* 无 changes/ 目录 */ }
   if (active.length > 0) {
     // 多活跃时逐个推断全报告，next 取第一个（字典序最前）的；调用方输出含全部状态行
-    const inferences = active.map(name => inferChange(join(changesRoot, name), name))
+    const inferences = active.map(name => inferChange(join(changesRoot, name), name, specBase))
     const progress = active.map((name, i) => {
       const t = countTasks(join(changesRoot, name, 'tasks.md'))
       return { name, checked: t.checked, total: t.total, state: inferences[i].state }

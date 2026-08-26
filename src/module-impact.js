@@ -94,7 +94,7 @@ export function generateModuleImpactSkeleton({ cwd, changeName, specDir = null }
 
   // includeWorkingTree 同 verify module 子集（坑 module-subset-zero-hit-uncommitted）：
   // worktree 未提交改动也计入模块影响面（module-impact 按实际 diff 归属模块）
-  const diffFiles = resolveVerifyChangedFiles(cwd, changeName, null, { includeWorkingTree: true }) || []
+  const diffFiles = resolveVerifyChangedFiles(cwd, changeName, null, { includeWorkingTree: true, specBase }) || []
   const sourceFiles = diffFiles.map(f => f.split('\\').join('/')).filter(f => !f.startsWith('.sillyspec/'))
   if (sourceFiles.length === 0) return null
 

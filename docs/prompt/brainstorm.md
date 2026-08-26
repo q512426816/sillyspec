@@ -203,11 +203,15 @@
 5. **场景压力测试**：用具体 case 逼出边界（失败重试、部分成功、历史数据、权限不足、并发修改、兼容旧配置）
 6. **前提挑战优先**：如果现有设计或代码已有简单路径，先说明"可能不该新增"
 
-**决策记录草稿**：每解决一个有实现影响的问题，生成一个稳定 ID 的记录草稿（不要把闲聊都记录进去）：
+**决策记录（增量落盘，防会话中断丢失）**：每解决一个有实现影响的问题（不要把闲聊都记录进去），**当场追加**写入 `{SPEC_ROOT}/changes/<change-name>/decisions.md`——不要只在对话里留草稿等「写设计文档」步统一落盘：会话随时可能中断，未落盘的决策无法跨会话恢复。落盘规则：
+
+- 文件不存在则先创建：变更目录缺失先 `mkdir -p {SPEC_ROOT}/changes/<change-name>`；文件头部写 YAML frontmatter（`author: <git-user>` / `created_at: <now-datetime>`）+ 标题 `# 决策记录（Decisions）`
+- 每条记录追加到文件末尾，格式如下：
 
 ```markdown
 ## D-001@v1: <短标题>
 - type: term | boundary | premise | architecture | compatibility | risk
+- priority: P0 | P1 | P2
 - status: accepted | rejected | superseded
 - source: user | code | docs
 - question: <被解决的问题>
@@ -217,6 +221,8 @@
 - evidence: <文件路径/代码位置/用户回答轮次>
 ```
 
+- 幂等：写入前按 D-xxx@vN 查重，已存在的不重复追加；后续修正走新版本 D-001@v2 + supersedes（见 Design Grill 版本规则）
+
 ### 铁律 — 不要自问自答 / 等待用户
 - 这是人机协作步骤：提出问题后必须暂停等用户回答，**不要在输出里模拟用户回答然后说"需求已明确"**（命令由 CLI 在下方注入）
 - 需要拆分或批量模式时：列出方案并暂停等用户确认
@@ -224,11 +230,11 @@
 - 2-3 轮问答即进入方案讨论；达到 maxWaitRounds=8 后必须总结已确认内容与剩余风险，不要无限追问
 
 ### 输出
-需求理解摘要（用户确认的需求点列表）+ 拆分/批量结论（如适用）+ D-xxx@vN 决策记录草稿 + 剩余风险（如有）
+需求理解摘要（用户确认的需求点列表）+ 拆分/批量结论（如适用）+ 本步新增落盘的 D-xxx@vN 清单 + 剩余风险（如有）
 
 ### 注意
 - 第一次进入此步骤时，按 A→D 顺序处理；有原型先分析，再探索，再判规模，再澄清
-- 用户通过 `--continue --answer "回答"` 回答后，本步骤会再次执行，此时检查是否需要追问或可以结束
+- 用户通过 `--continue --answer "回答"` 回答后，本步骤会再次执行，此时检查是否需要追问或可以结束；再次执行时输出只需增量汇报（新结论 + 新落盘决策），已落盘内容不要重复输出
 ````
 
 ---
@@ -252,6 +258,7 @@
 1. 每种方案列出：核心思路、优势、劣势
 2. 如果上一步产生了 D-xxx@vN 决策记录，方案必须说明覆盖/违反哪些当前版本决策
 3. 给出推荐方案和理由
+4. 用户选定方案后，把选择结果**当场追加**到 `{SPEC_ROOT}/changes/<change-name>/decisions.md`（增量落盘规则同「对话式探索」步：目录/文件缺失先创建、按 D-xxx@vN 判重）：type 用 architecture、source 用 user、question 记方案取舍问题、answer 记用户所选方案与理由要点、evidence 记方案选择轮次——方案选择是本变更最关键的用户决策，必须随答随落盘，不能只留在对话里
 
 ### 铁律 — 必须等待用户选择方案
 - 列出方案对比表和推荐后必须暂停等用户选择，**不要自己说"推荐方案 A"然后当用户选了**（命令由 CLI 在下方注入）
@@ -363,8 +370,14 @@ design.md 第一行标题必须用中文：# 设计文档（Design）— <变更
 | 删除 | src/xxx/OldFile.java | 已被 xx 替代 |
 
    **字段数据流标注**（避免新增字段到 execute 才发现没透传）：当清单含「新增/修改对外字段、接口、DTO、响应体、事件 payload、配置键」时，对应行「说明」列必须交代 producer→consumer 数据流——产出方（producer）→ 每跳流转/归一化点（序列化/反序列化/字段映射/默认值兜底）→ 消费方（consumer）。漏标 = 字段在某跳 dormant（声明了却没透传），到 execute/verify 才暴露，属设计层缺口。
-   - 示例：「修改 daemon.ts：新增 budget_tokens，producer=backend/api-types.ts → ws_hub envelope 透传 → daemon.ts normalizeUsage 归一化（snake→camel）→ consumer=runtime/lease.ts 写 lease」
+   - 示例：「修改 daemon.ts：新增 budget_tokens，producer=backend/api-types.ts → ws_hub envelope 透传 → daemon.ts normalizeUsage（snake→camel）→ consumer=runtime/lease.ts 写 lease」
    - 仅改内部实现、无对外字段变动时，说明列照常写「新增 xx 方法」即可，无需数据流。
+
+   **跨仓变更写法**（本次变更涉及 local.yaml repos: 注册的其他仓时必读；纯主仓变更跳过）：
+   - 清单**按仓分段**：每个仓一个小节，标题格式固定 `## <repo-key> 仓变更`（如 `## sub-grid-security 仓变更`）。plan-postcheck 文件覆盖对账按此段头解析仓归属，写成「前端仓 / backend」等其他标题 → 对账不上
+   - 段内路径相对**该仓根**写（`src/routes/x.js`）；❌ 禁止带仓库名前缀（`sub-grid-security/src/routes/x.js`）、❌ 禁止绝对路径/盘符路径（`C:/repo/src/...`）——后续 TaskCard 的 allowed_paths 与 review 对账（`git -C <仓根> diff` 产仓根相对路径）都用同一口径，前缀/绝对路径永不命中
+   - 主仓文件放在第一个段头之前（无段头区域 = main），或单独写 `## main 仓变更` 段
+   - repo-key 必须是 local.yaml repos: 段已注册的键（未注册先跑 `sillyspec local register-repo <key> <仓根路径>`，main 隐式不用注册）
 
 7. **接口定义**：方法签名、数据结构（代码类任务必填）
 7.5. **生命周期契约表**（涉及以下关键词时必填，否则可省略）：
@@ -412,10 +425,11 @@ design.md 第一行标题必须用中文：# 设计文档（Design）— <变更
 1. 确认变更目录存在：`mkdir -p {SPEC_ROOT}/changes/<change-name>`（Windows 用 `mkdir {SPEC_ROOT}/changes\<变更名>` 或 PowerShell `New-Item -ItemType Directory -Force -Path {SPEC_ROOT}/changes/<change-name>`）
    - 变更名格式必须为 `YYYY-MM-DD-<简短描述>`（如 `2026-05-13-user-auth`）
 2. 将确认的设计写入 `{SPEC_ROOT}/changes/<change-name>/design.md`
-3. 如果对话探索或方案讨论产生了实现相关决策，写入 `{SPEC_ROOT}/changes/<change-name>/decisions.md`：
+3. 对账整理 `{SPEC_ROOT}/changes/<change-name>/decisions.md`（「对话式探索」「提出方案」步已按增量规则随答落盘，本步做对账而非从零写入）：
    - decisions.md 是本次变更的决策台账，不是长期术语表
    - 只记录有实现/验收影响的决策，闲聊和低风险偏好不记录
-   - 每条记录必须有稳定版本 ID：D-001@v1、D-002@v1 ...
+   - 已落盘条目按 D-xxx@vN 判重，不重复追加；补全缺失的九字段与可选字段
+   - 前序遗漏未落盘、确有实现影响的决策（增量规则漏网的），此时补写；每条记录必须有稳定版本 ID：D-001@v1、D-002@v1 ...
    - 若后续 Design Grill 修正该决策，新记录使用 D-001@v2，并写明 supersedes: D-001@v1
    - 每条记录必须包含：type、status、source、question、answer、normalized_requirement、impacts、evidence、priority
    - 九字段之外可另加四个可选字段，按需填写、不强制全填（旧格式决策记录缺这些字段不受影响）：
@@ -680,7 +694,7 @@ created_at: <now-datetime>
 ```
 > 骨架只列任务名。plan 阶段会把展开后的清单**写回本文件**（checkbox 行带一句话名，可附 [model:xxx]/(depends_on: …) 标注；保留 frontmatter/标题/ql-xxx 等非 task-XX 行）；execute 勾选与 verify 对照都在本文件。
 
-### decisions.md 格式要求（仅在有 Grill/重大决策时生成）
+### decisions.md 格式要求（前序步骤已增量创建时对账即可；无决策的变更不生成）
 ```markdown
 ---
 author: <git-user>

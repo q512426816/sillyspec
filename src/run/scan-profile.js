@@ -224,6 +224,7 @@ export async function executeScanPostcheck(cwd, platformOpts, scanProfile) {
   const result = runScanPostCheck({
     cwd,
     specDir,
+    scanProfile: scanProfile || null,
     scanMeta: {
       projectListParsed: true,
       manifestWritten: undefined,

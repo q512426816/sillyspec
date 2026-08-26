@@ -813,7 +813,7 @@ export async function cancelQuickSession({ specBase, gitUser, qlId, sessionId = 
       const content = existsSync(p) ? readFileSync(p, 'utf8') : ''
       if (!content.includes(`## ${qlId} |`)) continue
       quicklogFile = p
-      const lines = content.split('\n')
+      const lines = content.split(/\r?\n/)
       const startIdx = lines.findIndex(l => l.startsWith(`## ${qlId} |`))
       let endIdx = lines.length
       for (let i = startIdx + 1; i < lines.length; i++) {
@@ -832,8 +832,10 @@ export async function cancelQuickSession({ specBase, gitUser, qlId, sessionId = 
         }
       }
       if (flipped) {
+        // split(/\r?\n/) 吃掉行尾 \r 再按原 eol join：旧写法 split('\n') 保留 \r 又 join('\r\n')
+        // 会产出 \r\r\n 字节级污染（git diff 全文件红）；原子写防 agent/dashboard 轮询读半截
         const eol = content.includes('\r\n') ? '\r\n' : '\n'
-        writeFileSync(p, lines.join(eol === '\r\n' ? '\r\n' : '\n'))
+        await writeAtomic(p, lines.join(eol))
       }
       break
     }
@@ -849,10 +851,10 @@ export async function cancelQuickSession({ specBase, gitUser, qlId, sessionId = 
       if (!c.isDirectory() || c.name === 'archive') continue
       const tp = tasksPath(specBase, c.name)
       if (!existsSync(tp)) continue
-      await withFileLock(tasksLockPath(tp), () => {
+      await withFileLock(tasksLockPath(tp), async () => {
         const content = readFileSync(tp, 'utf8')
         if (!content.includes(qlId)) return
-        const lines = content.split('\n')
+        const lines = content.split(/\r?\n/)
         const kept = lines.filter(l => {
           const m = l.match(/^[-*]\s*\[([ xX])\]\s*(\S+)/)
           if (m && m[2] === qlId) {
@@ -864,7 +866,7 @@ export async function cancelQuickSession({ specBase, gitUser, qlId, sessionId = 
         })
         if (kept.length !== lines.length) {
           const eol = content.includes('\r\n') ? '\r\n' : '\n'
-          writeFileSync(tp, kept.join(eol === '\r\n' ? '\r\n' : '\n'))
+          await writeAtomic(tp, kept.join(eol))
         }
       })
     }

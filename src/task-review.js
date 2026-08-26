@@ -370,7 +370,9 @@ function isTaskLowRisk(changeDir, taskId) {
   if (!existsSync(taskFile)) return false
   try {
     const content = readFileSync(taskFile, 'utf8')
-    const fm = content.match(/^---\n([\s\S]*?)\n---/)
+    // \r? 容错（Windows 卡片 CRLF）：与下方 isTaskVerification 同款——硬锚 ^---\n 在 CRLF
+    // 文件上失配 → low_risk 豁免静默失效，缺 review.json 会被误判 error
+    const fm = content.match(/^---\r?\n([\s\S]*?)\r?\n---/)
     if (!fm) return false
     return /^low_risk:\s*true\s*$/im.test(fm[1])
   } catch {
@@ -1033,7 +1035,7 @@ export async function generateTaskReviewDrafts({ changeName, cwd, platformOpts =
   }
 
   // base..head diff 文件集（worktree-aware；null=git 不可用，[]=无 commit diff）
-  let diffFiles = resolveVerifyChangedFiles(cwd, changeName)
+  let diffFiles = resolveVerifyChangedFiles(cwd, changeName, null, { specBase })
   // ⚠️ 并入 worktree 未提交改动（坑 draft-attribution-uncommitted-worktree，2026-08-21 实证）：
   // 子代理默认不 commit（execute 复盘 a 同源事实），真实改动全在 worktree working-tree——只看
   // base..HEAD commit diff 时归属恒空，9/9 草稿全成「无归属」靠主代理手写升级。与
@@ -1275,7 +1277,7 @@ export async function adoptTaskReviewMechanics({ changeName, cwd, platformOpts =
 
   // base/head + diff：与 generateTaskReviewDrafts 同源口径（meta 锡点 + worktree rev-parse +
   // resolveVerifyChangedFiles），保证 adopt 产物与 gate 校验输入一致。
-  const diffFiles = resolveVerifyChangedFiles(cwd, changeName)
+  const diffFiles = resolveVerifyChangedFiles(cwd, changeName, null, { specBase })
   let base = null
   let head = null
   let reviewGitDir = cwd

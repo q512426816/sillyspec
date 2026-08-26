@@ -120,6 +120,8 @@ constraints:
      ⚠️ plan --done 硬校验会拦截未替换的占位符（FR-XX / D-XXX / src/example/file.ts /
      一句话说明这个 task / 具体步骤 1 / 可验证的验收条件 1 / 边界约束 1）——占位符视同缺字段。
      可选字段按需插进上方 frontmatter（规则见 taskcard-rules）：
+     repo:          仅跨仓 task 填（local.yaml repos: 注册的仓 key；缺省=main。allowed_paths 相对该仓根写，
+                    禁止带仓库名前缀/绝对路径——review 对账按仓根相对路径匹配，带前缀永不命中）
      provides:      仅当本 task 给其他 task 提供接口/DTO/响应时填
      expects_from:  仅当本 task 消费其他 task 的契约时填
      related_tests: 仅当本 task 改动导致既有测试断言失效时填（测试路径须同时进 allowed_paths） -->

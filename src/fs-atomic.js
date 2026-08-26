@@ -7,7 +7,7 @@
  * 注意：DB 持久化由 node:sqlite 引擎承担（提交即落盘 sillyspec.db + WAL 侧车），
  * 不经此处的 writeAtomicSync；sillyspec.db 不走原子写改名。
  */
-import { writeFileSync, renameSync, unlinkSync } from 'fs';
+import { renameSync, unlinkSync, openSync, writeSync, fsyncSync, closeSync, statSync } from 'fs';
 import { randomBytes } from 'node:crypto';
 import { dirname, basename, join } from 'path';
 
@@ -49,8 +49,13 @@ export function renameSyncRetry(from, to, retries = 5) {
 }
 
 /**
- * 原子写文本文件：同目录 tmp 写入 → rename 覆盖目标（带 Windows 退避重试）。
+ * 原子写文本文件：同目录 tmp 写入 → fsync → rename 覆盖目标（带 Windows 退避重试）。
  * - tmp 名含 pid，避免多进程并发写同一目标时 tmp 名碰撞（如多会话写 local.yaml）。
+ * - 写入后 fsync（fd 级）：rename 只保证「读者见旧版或新版」的并发原子性，不保证崩溃持久性——
+ *   tmp 数据滞留页缓存时 rename 的元数据先落盘，断电/蓝屏后目标可能是 0 字节或半截 JSON
+ *   （本函数契约对象恰是 local.yaml（含明文 token）/pointer/guard.json 这类跨进程凭据文件）。
+ * - 新 tmp 按目标现有 mode 创建：POSIX 下 local.yaml(0600) 重写不再有 0644 窗口
+ *   （Windows 上 chmod 近似 no-op，不受影响）。
  * - rename 失败时清理 tmp，避免留下孤儿 .tmp 文件。
  * - Node 的 rename 在 Windows 上用 MoveFileEx(REPLACE_EXISTING)，可覆盖已存在目标；
  *   EPERM 仅在文件被其他进程锁定时出现，由 renameSyncRetry 退避重试。
@@ -63,7 +68,19 @@ export function writeAtomicSync(filePath, content) {
   // crypto 随机源（Math.random 可预测，tmp 名被预猜中有 symlink 预放置理论面）
   const rnd = randomBytes(6).toString('hex');
   const tmpPath = join(dir, `.${basename(filePath)}.${process.pid}.${rnd}.tmp`);
-  writeFileSync(tmpPath, content);
+  let mode = 0o644;
+  try { mode = statSync(filePath).mode & 0o777; } catch { /* 目标不存在 → 默认 */ }
+  const fd = openSync(tmpPath, 'w', mode);
+  try {
+    const buf = Buffer.from(content, 'utf8');
+    let offset = 0;
+    while (offset < buf.length) {
+      offset += writeSync(fd, buf, offset);
+    }
+    fsyncSync(fd);
+  } finally {
+    closeSync(fd);
+  }
   try {
     renameSyncRetry(tmpPath, filePath);
   } catch (err) {

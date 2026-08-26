@@ -52,11 +52,12 @@ Agent 每个 step 实际收到的提示词**不只有 prompt 正文**。`outputS
 6. **平台模式 directives**（仅平台模式 `platformOpts.specRoot`）— 路径约束 / Write 工具规则 / workflow yaml 占位符映射；scan 阶段每步注入，其余仅 step 0。
 7. **scanProfile directives**（仅 scan）— 子代理上限 / 文档上限约束。
 8. **prompt 正文** — `step.prompt` 经 `resolvePromptIncludes`（拉 `{{include: name}}` 外部片段）+ 占位符替换（见下表）后的文本。
-9. **上一步用户回答**（仅 `--continue --answer`）— `### 📩 上一步用户回答`。
-10. **完成契约**（仅 step 0）— `renderStageContract(stageName)`，从 `stage-contract-spec.js` 渲染的「该阶段机械校验通过条件」（事前预知 == 事后校验）。
-11. **铁律**（仅 step 0）— 见下。
-12. **路径与平台规则**（step 1+，有 changeName 或平台模式时）— 安全关键，每步提醒。
-13. **完成后执行** — 根据 step 的 wait 配置，输出 `--wait` / `--continue --answer` / `--done` 命令模板。
+9. **本阶段历史用户回答**（有已记录的等待回答时）— `### 📜 本阶段历史用户回答（进度库回放，跨会话恢复用）`：整阶段各步骤累积的用户等待回答（含多轮与对应问题），由 `collectStageWaitHistory(progress, stageName)` 从进度库 `steps.wait_answers` 聚合。坑 stage-wait-history-not-replayed：此前新会话 `run <stage>` 续跑不回放历史回答，agent 只能重问已答过的问题。
+10. **上一步用户回答**（仅 `--continue --answer`）— `### 📩 上一步用户回答`。
+11. **完成契约**（仅 step 0）— `renderStageContract(stageName)`，从 `stage-contract-spec.js` 渲染的「该阶段机械校验通过条件」（事前预知 == 事后校验）。
+12. **铁律**（仅 step 0）— 见下。
+13. **路径与平台规则**（step 1+，有 changeName 或平台模式时）— 安全关键，每步提醒。
+14. **完成后执行** — 根据 step 的 wait 配置，输出 `--wait` / `--continue --answer` / `--done` 命令模板。
 
 ### persona 表（逐字，仅 step 0 注入）
 

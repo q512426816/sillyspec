@@ -15,7 +15,7 @@
  *   - T-02 cleanup 后 execute-runs 仍存（删副本目录，主仓 marker 存活）
  *   - T-03 stage-reviews 落主仓（stageReviewMarkerPath 组合断言）
  *   - T-04 marker 按 change 隔离（共享主仓 .runtime，marker 路径按 changeName 区分）
- *   - T-05 specDriftAnchor 不触发平台 sentinel（D-02 语义边界，对照 shared.js:288 triggerSync / :315 checkApproval）
+ *   - T-05 specDriftAnchor 不触发平台 sentinel（D-02 语义边界，对照 shared.js checkApproval/triggerPull 门禁；triggerSync 已放行平台模式回传，无门禁）
  *   - T-06 非 drift 零回归（specDriftAnchor 未设 → 本地 specBase/.runtime，行为同旧公式）
  *   - T-07 平台模式零回归（runtimeRoot 已设 → 返回平台值，specDriftAnchor 分支不触发）
  *   - T-08 非 drift quick + 手动 specDriftAnchor 一致性（守卫不扩到 quick；手动 anchor 一致锚主仓）
@@ -149,10 +149,11 @@ console.log('\n--- T-04: 多 change 并行 drift 无 marker 路径冲突 ---')
 // ════════════════════════════════════════════════════════════
 // T-05 specDriftAnchor 不触发平台 sentinel（D-02 语义边界）
 // ════════════════════════════════════════════════════════════
-console.log('\n--- T-05: specDriftAnchor 不触发平台 sentinel（triggerSync/checkApproval 仍走本地）---')
+console.log('\n--- T-05: specDriftAnchor 不触发平台 sentinel（checkApproval/triggerPull 等门禁不误跳）---')
 {
-  // sentinel 判定形式固定为 specRoot||runtimeRoot（shared.js:288 triggerSync / :315 checkApproval），
-  // specDriftAnchor 不参与 → drift 命中后 sync/approval/平台渲染分支不被误跳。
+  // sentinel 判定形式固定为 specRoot||runtimeRoot（isPlatformMode 单源，checkApproval/triggerPull
+  // 等门禁消费；triggerSync 已放行不设门禁），specDriftAnchor 不参与 → drift 命中后审批/下行
+  // pull/平台渲染分支不被误跳。
   const sentinel = (po) => !!(po?.specRoot || po?.runtimeRoot)
   assert(sentinel({ specDriftAnchor: mainSpec }) === false,
     'specDriftAnchor 单独设置 → sentinel 不触发（drift 不误进平台分支）')

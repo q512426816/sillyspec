@@ -25,8 +25,7 @@ import { STAGE_ORDER, MAIN_FLOW_ORDER, VALID_STAGES, STAGE_LABELS, SPEC_DIR_NAME
 // resolveSpecDir 单一真相源在 src/run/shared.js（含 home 拒绝守卫，坑 cwd-correction-home-collision
 // 根治：home 下 .sillyspec 恒不命中，防 smoke/临时目录污染自我延续）。此处 re-export 保持
 // 既有 import 路径兼容；run/shared.js 对 progress.js 只有动态 import，无静态循环。
-import { resolveSpecDir } from './run/shared.js';
-import { checkPlatformManaged, PLATFORM_MANAGED_FILENAME } from './run/shared.js';
+import { resolveSpecDir, checkPlatformManaged, PLATFORM_MANAGED_FILENAME, isSelfReferentialSpecRoot } from './run/shared.js';
 export { resolveSpecDir };
 
 // 默认规范目录名（相对于 cwd）
@@ -143,6 +142,43 @@ export function resolvePlatformSpecDir(cwd, explicitSpecDir = null) {
     );
   }
   return ptr.specRoot;
+}
+
+/**
+ * resolvePlatformSpecDir 的 platformOpts 版本：除 specRoot 外连 runtimeRoot 一起恢复。
+ *
+ * 供 register-stage-review / backfill-reviews 等需要拼 runtime 路径（marker、stage-reviews、
+ * execute-runs）的顶层子命令使用——此前这些 case 只认显式 --spec-dir，平台模式（指针存在）
+ * 下 specRoot 缺失 → 下游回退 join(cwd,'.sillyspec')，在项目本地找 design.md 报「主审查文档
+ * 不存在」，逼 agent 手算 docHash 兜底（2026-08-26 实证）。
+ *
+ * 语义（与 resolvePlatformSpecDir / runCommand 恢复链对齐）：
+ *   - 显式 --spec-dir：{ specRoot: resolve(显式), runtimeRoot: null }（runtimeRoot 走
+ *     resolveRuntimeRoot 默认 specRoot/.runtime）；
+ *   - 无指针：调一次 resolvePlatformSpecDir 保留接管声明 fail-closed（声明存在 →
+ *     PlatformManagedError 上抛），随后返回 null = 纯本地，调用方 platformOpts 保持空；
+ *   - 有指针：specRoot 经 resolvePlatformSpecDir 全量校验（损坏/缺字段/不可达 →
+ *     PointerUnreachableError 上抛），另读指针 runtimeRoot；自指回环（repo-native junction）
+ *     忽略指针返回 null（对齐 run/command.js:326 恢复链免疫）。
+ *
+ * @param {string} cwd 项目根
+ * @param {string|null} [explicitSpecDir] 显式 --spec-dir
+ * @returns {{ specRoot: string, runtimeRoot: string|null } | null} null = 纯本地（不设 specRoot）
+ */
+export function resolvePlatformOpts(cwd, explicitSpecDir = null) {
+  if (explicitSpecDir) return { specRoot: resolve(explicitSpecDir), runtimeRoot: null }
+  const pointerPath = join(resolve(cwd), '.sillyspec-platform.json')
+  const hasPointer = existsSync(pointerPath)
+  // 无指针也先过 resolvePlatformSpecDir：接管声明存在时它负责 fail-closed 上抛
+  const specRoot = resolvePlatformSpecDir(cwd, null)
+  if (!hasPointer) return null
+  if (isSelfReferentialSpecRoot(cwd, specRoot)) return null
+  let runtimeRoot = null
+  try {
+    runtimeRoot = JSON.parse(readFileSync(pointerPath, 'utf8')).runtimeRoot || null
+  } catch { /* specRoot 校验已在 resolvePlatformSpecDir 内做过，此处仅补读字段 */
+  }
+  return { specRoot, runtimeRoot }
 }
 
 const CHANGES_SUBDIR = 'changes';
