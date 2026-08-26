@@ -166,7 +166,7 @@ W6 重构后的结构：`src/progress.js` 是 ProgressManager facade（1127 行�
 
 | 文件 | 职责 |
 | --- | --- |
-| `src/progress.js` | `ProgressManager` facade（`src/progress.js:154` 类声明）：持久化核心（_ensureDB / read / _write 本体留在 facade），其余按组 delegate 到子模块 |
+| `src/progress.js` | `ProgressManager` facade（`src/progress.js:192` 类声明）：持久化核心（_ensureDB / read / _write 本体留在 facade），其余按组 delegate 到子模块 |
 | `src/progress/stage-machine.js` | 阶段状态机：completeStage / reopen / reset / validate / show / status + 产物校验门 + 下游级联 |
 | `src/progress/step-store.js` | stages / steps / batch_progress 三表读写（setStage / addStep / updateStep / batch） |
 | `src/progress/change-registry.js` | 变更注册表：changes 表生命周期（注册/注销/重命名/隔离状态/平台同步戳/审批状态） |
@@ -204,7 +204,7 @@ SQLite Schema（grep 自 `db.js`，仅记表名 + 用途 + 字段数）：
   - `POST {platform.url}/api/changes/{changeName}/documents` 同步文档（`sync.js:501`）；
   - 同步完更新 `changes.platform_last_sync`。
 - 审批链路：`GET /api/changes/{name}/approval` 查询（`sync.js:731`，`checkApproval`）+ `approve` / `reject`
-  入口（`sync.js:1386`，共用 `_submitApproval`，端点契约 TBD-hub-api）。
+  入口（`sync.js:1415`，共用 `_submitApproval`，端点契约 TBD-hub-api）。
 - 配置读 `.sillyspec/local.yaml` platform 段（connect/disconnect 用文本级改写保留注释）。
 - platform 子命令（connect / disconnect / sync / sync-docs / status / pull / resolve /
   approve / reject / pointer）见 `src/index.js:1263`。主 CLI 无 WebSocket 依赖。
