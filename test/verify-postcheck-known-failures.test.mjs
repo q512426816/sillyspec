@@ -128,6 +128,23 @@ Tests: 1 failed, 1 passed
   const r = partitionFailures(ansi, [])
   assertEqual('partitionFailures: ANSI 色码内的 ✓ 通过行不计入', r.failureLines, [])
 }
+{
+  // vitest 控制台捕获噪声：stderr 横幅（用例名含 failed 字样）+ jsdom Not implemented 警告
+  const noise = `stderr | src/components/card.test.tsx > 卡片操作 > 同步 5min 上限：超时后 syncStatus=failed + syncError 非空
+Warning: An update to Card inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+Error: Not implemented: window.getComputedStyle(elt, pseudoElt)
+ × src/components/broken.test.tsx > 真实失败 (30 ms)
+ ELIFECYCLE  Test failed. See above for more details.
+`
+  const r = partitionFailures(noise, ['broken.test.tsx'])
+  assertEqual(
+    'partitionFailures: stderr 捕获横幅/not implemented 噪声/ELIFECYCLE 退出横幅不计入，× 行保留',
+    r.failureLines,
+    [' × src/components/broken.test.tsx > 真实失败 (30 ms)'],
+  )
+}
 assertEqual('partitionFailures: 空输出', partitionFailures('', ['x']), { failureLines: [], exempted: [], remaining: [] })
 
 // ── judgeWithKnownFailures（fail-safe）───────────────────────────

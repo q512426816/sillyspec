@@ -731,4 +731,5 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 - `partitionFailures` 分类前剔除通过行：行首通过标记（`✓`/`√`/`✔` 前缀或 jest `PASS` 文件行）判定在剥 ANSI 色码后的行上做（TTY 捕获时标记可能被色码包裹）；返回保留原文行不变形。框架输出里通过行恒以通过标记开头、失败行恒以失败标记开头，行首判定即分离两类。
 - `PER_TEST_FAIL_RE` 补 vitest 实际使用的 `×`（U+00D7）失败标记（原只有 jest/mocha 形态 ✕✗✘；漏检有 fail-safe 兜底但 remaining 精度差）。
 - `SUMMARY_LINE_RE` 补 vitest 无冒号汇总行形态（`Test Files  N failed` / `Tests  N failed | M passed`），原只认 jest `Tests:` 冒号形态。
-- 使用方注意：升级本版 CLI 后，因本坑加的 `known_failures` 首条 `"✓"` workaround 应删除（真实失败按文件名模式豁免即可）。
+- 追加（真实输出实测后）：首轮修复只剔 ✓ 行仍余大量假阳性——vitest 控制台捕获噪声另三类一并剔除：`stdout|`/`stderr|` 捕获横幅行（横幅带用例名，名含 failed 字样即误判）、jsdom `Not implemented:` 环境警告行（`error:` 命中，正则须带 `i` 标志——实际输出大写 N）、`Failed Tests N` 分节头与 `ELIFECYCLE` 退出横幅归入汇总行。端到端实证（multi-agent-platform frontend 全量 2710 用例 4 真实失败）：失败行 382 → 15，7 条语义化豁免（3 文件名 + 2 套件名 + 2 错误类型）remaining=0。
+- 使用方注意：升级本版 CLI 后，因本坑加的 `known_failures` workaround 条目（`"✓"`/`stderr`/`not implemented`/`Test Files`/`Tests`/`ELIFECYCLE`）应整体删除，换成真实预存债的语义化豁免（文件名/套件名/错误类型）。

@@ -594,8 +594,14 @@ export function extractKnownFailures(yamlText) {
 // ×(U+00D7) 是 vitest 失败行的实际前缀标记（✕✗✘ 是 jest/mocha 形态）。
 const PER_TEST_FAIL_RE = /(FAILED|\bFAIL\b|✕|✗|✘|×|panic\s*:|assertionerror|traceback|---\s*fail|error:|exception)/i
 // 汇总/计数行（非单条失败）：pytest === 框、jest "Tests:"、vitest "Test Files  N failed"/"Tests  N failed | M passed"
-// （无冒号形态）、裸 "N failed/passed"、go "FAILED in Ns" 等。
-const SUMMARY_LINE_RE = /(={2,}.*={2,}|^\s*\d+\s+(failed|passed|skipped|pending)\b|tests?\s*:|test\s+suites?\s*:|^\s*(?:test\s+files|tests?)\s+\d|failed\s+in\s+\d)/i
+// （无冒号形态）、裸 "N failed/passed"、go "FAILED in Ns"、pnpm "ELIFECYCLE Test failed" 退出横幅等。
+const SUMMARY_LINE_RE = /(={2,}.*={2,}|^\s*\d+\s+(failed|passed|skipped|pending)\b|tests?\s*:|test\s+suites?\s*:|^\s*(?:test\s+files|tests?)\s+\d|failed\s+in\s+\d|failed\s+tests\s+\d|elifecycle)/i
+// 控制台捕获噪声行（非失败信号）：vitest 把测试内 console 输出捕获为
+// `stderr | <file> > <测试名>` 横幅 + 后续内容行——挂在通过用例上的噪声里常含
+// error:/failed 字样（jsdom「Not implemented」警告、用例名本身带 failed 等），
+// 与失败信号（× 行 / FAIL 横幅 / 汇总计数）无关，全部剔除。
+const CONSOLE_CAPTURE_RE = /^\s*(?:stdout|stderr)\s*\|/
+const ENV_NOISE_RE = /not\s+implemented\s*:/i
 // 通过行（行首标记，剥 ANSI 后判定）：vitest/jest/mocha 的 ✓√✔ 前缀行 + jest 的 PASS 文件行。
 // 坑 verify-known-failures-pass-line-false-positive：FAILED/error:/exception 是子串匹配，
 // 通过行用例名恰含这些字样（如「✓ … 超时后 syncStatus=failed」）会被误判失败行——
@@ -617,7 +623,10 @@ export function partitionFailures(output, knownFailures) {
   const failureLines = lines.filter(l => {
     if (PASS_LINE_RE.test(l)) return false
     const bare = l.replace(ANSI_RE, '')
-    return !PASS_LINE_RE.test(bare) && PER_TEST_FAIL_RE.test(bare) && !SUMMARY_LINE_RE.test(bare)
+    if (PASS_LINE_RE.test(bare)) return false
+    if (CONSOLE_CAPTURE_RE.test(bare)) return false
+    if (ENV_NOISE_RE.test(bare)) return false
+    return PER_TEST_FAIL_RE.test(bare) && !SUMMARY_LINE_RE.test(bare)
   })
   const pats = (knownFailures || []).map(p => String(p).toLowerCase()).filter(Boolean)
   const exempted = []
