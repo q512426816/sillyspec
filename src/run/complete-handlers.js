@@ -1365,6 +1365,20 @@ export async function handleExecuteWorktreeCleanup({ stageName, changeName, cwd 
             console.log(`   下一步: sillyspec worktree apply ${changeName}`);
           } else {
             console.log(`🔗 Worktree: ${cleanResult.result.result}`);
+            // 正当清理回执（坑 deps-gate-cleanup-order，2026-08-28 实证：cleanup 后重试 --done 被
+            // deps 门拦「worktree 不可用」，逼 doctor --align-execute-progress 手工对齐）：execute 完成时的
+            // 正当清理（无未应用变更）落 durable 标记，enforceDepsGate 读它区分「正当收尾」与「意外丢失」。
+            // apply 路径不写——apply-pathspec-<change>.txt 已是既定 apply 凭据，双标记冗余。
+            if (['cleaned', 'force-cleaned', 'partial'].includes(cleanResult.result.result)) {
+              try {
+                const runtimeDir = join(cwd, '.sillyspec', '.runtime');
+                mkdirSync(runtimeDir, { recursive: true });
+                writeFileSync(join(runtimeDir, `execute-cleanup-${changeName}.json`), JSON.stringify({
+                  change: changeName, cleanedAt: new Date().toISOString(),
+                  reason: 'execute-completed-no-unapplied-changes',
+                }, null, 2) + '\n', 'utf8');
+              } catch { /* 回执失败只损失 deps 门的放行判据，不影响 cleanup 结果 */ }
+            }
             if (cleanResult.result.residual?.length > 0) {
               console.warn(`   ⚠️ 清理残留: ${cleanResult.result.residual.join('; ')}`);
               console.warn(`   手动处理: sillyspec worktree cleanup ${changeName} --force`);

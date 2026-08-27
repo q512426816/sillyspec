@@ -324,10 +324,11 @@ task-XX 对应：{SPEC_ROOT}/.runtime/execute-runs/{EXECUTE_RUN_ID}/tasks/task-X
 
 ### 完成后
 1. 为每个后端 router task 生成 API 端点 artifact——**用 CLI 命令，勿手扫装饰器手写（易漏 endpoint）**：
-   - 逐 task 运行：sillyspec endpoints extract --change <change> --task <task-NN>（<change> = 当前变更名）
+   - 聚合一次跑全：sillyspec endpoints extract --change <change> --all-tasks（逐 task 卡 allowed_paths 各自提取落盘，<change> = 当前变更名；与 verify 探针 5 聚合对账口径一致）
    - CLI 静态扫描变更文件（FastAPI @router.* / Express router.* / Spring @*Mapping）生成
      {SPEC_ROOT}/.runtime/contract-artifacts/<task-name>/endpoints.json
    - 格式: { "task": "task-XX", "type": "backend_endpoints", "endpoints": [{ "method": "GET", "path": "/api/ppm/xxx" }] }（CLI 已按此格式写好，verify 探针 5 直接消费）
+   - 只提单 task（--task task-NN）会让探针 5 用局部端点集对账放大假 missing——多 task 变更必用 --all-tasks
 
 ````
 

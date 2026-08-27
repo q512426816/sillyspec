@@ -363,6 +363,23 @@ export async function enforceDepsGate(stageName, cwd, changeName, step, steps, c
   try {
     worktreeGone = !!(wm && changeName) && !existsSync(wm.getWorktreePath(changeName))
   } catch {}
+  // ── 正当收尾放行（坑 deps-gate-cleanup-order，2026-08-28 实证：apply 后 / execute 空变更
+  // cleanup 后重试 --done，被本门拦「worktree 不可用」逼 doctor --align-execute-progress 手工
+  // 对齐——顺序矛盾：cleanup 是流程自己做的收尾，门却当意外丢失拦）。两凭据二选一：
+  //   - apply-pathspec-<change>.txt：applyWorktree 成功后落盘（apply 后自动 cleanup 删 meta）；
+  //   - execute-cleanup-<change>.json：handleExecuteWorktreeCleanup 正当清理回执。
+  // 有凭据 = 隔离期已正当结束（交付已落主仓或本无交付），deps 能力要求不再适用 → 放行。
+  if (worktreeGone && changeName) {
+    try {
+      const runtimeRoot = resolveRuntimeRoot(platformOpts, specBase)
+      const legitimatelyEnded = existsSync(join(runtimeRoot, `apply-pathspec-${changeName}.txt`))
+        || existsSync(join(runtimeRoot, `execute-cleanup-${changeName}.json`))
+      if (legitimatelyEnded) {
+        console.log('ℹ️  worktree 已在 apply/execute 收尾时正当清理（凭据在 .runtime），deps 门放行')
+        return true
+      }
+    } catch { /* 凭据读取失败 → 维持原判定 */ }
+  }
   // ── fail-loud 块（Phase 3，D-005@v1：仅改拒绝侧 stderr）──
   console.error('❌ ── deps 门控阻断（本次 --done 未完成，进度未推进）──')
   if (worktreeGone) {
@@ -559,6 +576,19 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
     }
   }
 
+  // plan 门 facade 候选预检（坑 plan-facade-files-manual-backfill，2026-08-28 用户实证 ×2：
+  // daemon/service.py 类「透传必经文件」不在 allowed_paths → 执行期 apply Gate1 拦截 →
+  // 手工回补两轮）。allowed 集与 Gate1 同源（resolveApplyAllowSet 主仓切片），
+  // 静态引用/聚合扫描亮候选，advisory 不阻断。
+  if (stageName === 'plan' && changeName) {
+    try {
+      const { resolveApplyAllowSet } = await import('../worktree-apply.js')
+      const { warnFacadeCandidateFiles } = await import('../facade-hint.js')
+      const allowMap = resolveApplyAllowSet(cwd, changeName)
+      warnFacadeCandidateFiles({ cwd, changeName, allowSet: allowMap.get('main') })
+    } catch { /* 预检失败不阻断 plan 完成 */ }
+  }
+
   // verify 产物校验通过 + 结论非 FAIL（否则上面已阻断）。
   // 再由 CLI 亲自执行 local.yaml 的测试命令，与 verify-result.md 的自报告对账：
   // 自报告 PASS 但实测失败 → 阻断（防止"文案通过"绕过验证）。
@@ -576,16 +606,23 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
         const { collectForeignDeclaredFiles } = await import('../verify-postcheck.js')
         const { gitQuiet } = await import('../git-helper.js')
         const foreignMap = collectForeignDeclaredFiles(cwd, changeName, { specBase, runtimeRoot: resolveRuntimeRoot(platformOpts, specBase) })
+        // dirty 集提前算好：归因提示①（他者在途）与②（生成产物旧基线）共用
+        const dirty = (gitQuiet(cwd, ['diff', '--name-only', 'HEAD']) || '')
+          .split('\n').filter(Boolean).map(f => f.replace(/\\/g, '/'))
+        const dirtySet = new Set(dirty)
         if (foreignMap.size > 0) {
-          const dirty = (gitQuiet(cwd, ['diff', '--name-only', 'HEAD']) || '')
-            .split('\n').filter(Boolean).map(f => f.replace(/\\/g, '/'))
           const hitForeign = dirty.filter(f => foreignMap.has(f))
           if (hitForeign.length > 0) {
             console.error(`   ℹ️ 归因提示：主仓检出 ${hitForeign.length} 个并行会话声明的在途文件（${hitForeign.slice(0, 5).join(', ')}${hitForeign.length > 5 ? ' 等' : ''}）——实测失败可能混入他者 WIP 而非本变更问题。待其提交/收尾后复验，仍失败才是本变更的。`)
           }
         }
         // 第二判据（坑 derived-artifact-stale-baseline）：本变更 apply 的文件（apply-pathspec 落盘）
-        // 与主仓近期提交重叠——本变更旧基线的生成产物可能覆盖了已合入内容，先在新基线重跑生成命令再复验
+        // 与主仓近期提交重叠——本变更旧基线的生成产物可能覆盖了已合入内容，先在新基线重跑生成命令再复验。
+        // 坑 verify-attr2-foreign-wip-misdirection（2026-08-28 实证）：并行会话在途/近期收尾文件
+        // 让重叠集虚高（51 文件），每轮误导 agent 重跑 gen:types，实际失败源是他者 WIP。两道过滤：
+        //   - 必须 dirty：apply 落盘的旧内容此刻物理在场（verify gate 时本变更未提交，旧基线覆盖
+        //     必然表现为对 HEAD 的修改）——内容与 HEAD 一致时重跑生成命令改变不了本轮实测；
+        //   - 剔除他者声明集：那是归因提示①的领地（待其收尾后复验），不是生成产物过期。
         try {
           const pathspecFile = join(resolveRuntimeRoot(platformOpts, specBase), `apply-pathspec-${changeName}.txt`)
           if (changeName && existsSync(pathspecFile)) {
@@ -594,8 +631,9 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
               const recent = (gitQuiet(cwd, ['log', '-n', '10', '--name-only', '--pretty=format:']) || '')
                 .split('\n').map(l => l.trim().replace(/\\/g, '/')).filter(Boolean)
               const overlap = [...new Set(recent)].filter(f => ownFiles.has(f))
-              if (overlap.length > 0) {
-                console.error(`   ℹ️ 归因提示②：本变更有 ${overlap.length} 个文件与主仓最近 10 条提交重叠（${overlap.slice(0, 5).join(', ')}${overlap.length > 5 ? ' 等' : ''}）——若为生成产物（api-types 等），本变更可能在旧基线生成并覆盖了已合入内容；先在新基线重跑生成命令（如 gen:types）再复验。`)
+              const actionable = filterStaleBaselineOverlap(overlap, dirtySet, foreignMap)
+              if (actionable.length > 0) {
+                console.error(`   ℹ️ 归因提示②：本变更有 ${actionable.length} 个文件与主仓最近 10 条提交重叠且旧内容仍在工作区（${actionable.slice(0, 5).join(', ')}${actionable.length > 5 ? ' 等' : ''}）——若为生成产物（api-types 等），本变更可能在旧基线生成并覆盖了已合入内容；先在新基线重跑生成命令（如 gen:types）再复验。（重叠共 ${overlap.length} 个，其余未在工作区改动或属他者会话在途文件，已归提示①/无需处理）`)
               }
             }
           }
@@ -1111,6 +1149,25 @@ export async function completeStageGates({ stageName, cwd, changeName, platformO
   return null
 }
 
+
+/**
+ * 归因提示②（生成产物旧基线覆盖）的重叠集过滤（坑 verify-attr2-foreign-wip-misdirection）。
+ *
+ * 原始重叠 = 本变更 apply-pathspec ∩ 主仓最近提交。并行会话场景下该集合被在途/刚收尾的
+ * 他者文件虚高，逐轮误导 agent 重跑生成命令。只保留两个必要条件都成立的文件：
+ *   - dirty（此刻对 HEAD 有改动）：verify gate 时本变更未提交，旧基线覆盖必然物理在场；
+ *     内容与 HEAD 一致时重跑生成命令改变不了本轮实测。
+ *   - 非他者声明集（collectForeignDeclaredFiles）：他者在途文件归归因提示①（待其收尾
+ *     复验），不是生成产物过期。
+ *
+ * @param {string[]} overlap 原始重叠文件（POSIX 路径）
+ * @param {Set<string>} dirtySet 主仓当前对 HEAD 的改动集
+ * @param {Set<string>|Map} foreignDeclared 他者会话声明集（Map 亦可用 has 判定）
+ * @returns {string[]} 可行动子集（空 = 不出提示②，避免误导）
+ */
+export function filterStaleBaselineOverlap(overlap, dirtySet, foreignDeclared) {
+  return (overlap || []).filter(f => dirtySet?.has(f) && !(foreignDeclared?.has(f)))
+}
 
 /**
  * verify 服务进程回收（verify --done 收尾调用）。

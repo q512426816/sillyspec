@@ -98,7 +98,7 @@ SillySpec CLI — 规范驱动开发工具包
   sillyspec commit [--json]                 智能提交建议：收集 QUICKLOG/已勾 task/阶段产出语义，生成建议 message（只建议不执行）
   sillyspec verify-probes --change <name> [--init]  verify 机械探针（TODO 标记/测试覆盖/API 对账/删除对账）；--init 生成 verify-result.md 骨架
   sillyspec module-impact --change <name>       生成 module-impact.md 骨架（文件×模块归属按 module-map 预填 + 未匹配清单）
-  sillyspec endpoints extract --change <name> [--task task-NN] [--dir <dir>|--files <a.py,b.js>]  静态扫描路由装饰器生成 endpoints.json
+  sillyspec endpoints extract --change <name> [--task task-NN | --all-tasks] [--dir <dir>|--files <a.py,b.js>]  静态扫描路由装饰器生成 endpoints.json
   sillyspec scan-fix-headers [--project <名>]   scan 文档补 author/created_at header（幂等）
   sillyspec plan-adopt-waves --change <名> [--dry-run]   plan.md Wave 段一键重排为 depends_on 拓扑分组（同步任务总表 W 列，幂等）
   sillyspec workspace add <名> <路径> [--role] [--repo] | remove <名> | status   多项目工作区登记与状态探测
@@ -892,21 +892,29 @@ async function main() {
       // 此前靠 agent 手扫装饰器手写（易漏 endpoint）。CLI 复用 endpoint-extractor 全套提取器
       // （FastAPI @router.* / Express router.* / Spring @*Mapping）静态扫描生成，
       // verify 探针 5（verifyApiParity）直接消费该产物。
+      // --all-tasks（坑 probe5-single-task-artifact-scope，2026-08-28 实证：单 task 产物对账
+      // 产生大量假 missing）：聚合模式——逐 task 卡提取，各自落 contract-artifacts/<change>/<task>/，
+      // 与 verifyApiParity 的聚合读侧（contract-artifacts/<change>/*/endpoints.json 全量并集）对齐。
       const epSub = filteredArgs[1];
       if (epSub !== 'extract') {
-        console.error('用法: sillyspec endpoints extract --change <name> [--task task-NN] [--dir <backendRoot> | --files <a.py,b.js...>] [--spec-dir <path>]\n  静态扫描后端路由装饰器生成 endpoints.json（FastAPI/Express/Spring）；verify 探针 5 消费');
+        console.error('用法: sillyspec endpoints extract --change <name> [--task task-NN | --all-tasks] [--dir <backendRoot> | --files <a.py,b.js...>] [--spec-dir <path>]\n  静态扫描后端路由装饰器生成 endpoints.json（FastAPI/Express/Spring）；verify 探针 5 消费。\n  --all-tasks：聚合逐 task 卡 allowed_paths 各自提取（对账口径与探针 5 聚合读侧一致，推荐）');
         process.exit(2);
       }
       const epChangeIdx = args.indexOf('--change');
       const epChange = epChangeIdx >= 0 && args[epChangeIdx + 1] ? args[epChangeIdx + 1] : null;
       const epTaskIdx = args.indexOf('--task');
       const epTask = epTaskIdx >= 0 && args[epTaskIdx + 1] ? args[epTaskIdx + 1] : null;
+      const epAllTasks = args.includes('--all-tasks');
       const epDirIdx = args.indexOf('--dir');
       const epDir = epDirIdx >= 0 && args[epDirIdx + 1] ? args[epDirIdx + 1] : null;
       const epFilesIdx = args.indexOf('--files');
       const epFilesRaw = epFilesIdx >= 0 && args[epFilesIdx + 1] ? args[epFilesIdx + 1] : null;
       if (!epChange) {
         console.error('❌ 缺 --change <变更名>');
+        process.exit(2);
+      }
+      if (epAllTasks && (epTask || epDir || epFilesRaw)) {
+        console.error('❌ --all-tasks 与 --task/--dir/--files 互斥（聚合模式逐 task 卡自动取 allowed_paths）');
         process.exit(2);
       }
       assertSafeChangeName(epChange, '--change 变更名');
@@ -928,10 +936,56 @@ async function main() {
           else if (ext === '.java') endpoints.push(...extractSpringEndpoints(abs))
         } catch { /* 单文件解析失败不阻断整体 */ }
       }
+      // 单 task 产物写盘（taskName 归属目录）；返回提取数
+      const epRuntimeRoot = (await import('./run/shared.js')).resolveRuntimeRoot({ specRoot: specDir }, epSpecBase);
+      const writeArtifact = (taskName, eps) => {
+        const artifact = {
+          generated_at: new Date().toISOString().slice(0, 19).replace('T', ' '),
+          generator: 'sillyspec endpoints extract',
+          endpoints: eps.map(e => ({ method: e.method, path: e.path, source: e.source })),
+        }
+        const epOutDir = join(epRuntimeRoot, 'contract-artifacts', epChange, taskName);
+        mkdirSync(epOutDir, { recursive: true });
+        const epOutPath = join(epOutDir, 'endpoints.json');
+        writeFileSync(epOutPath, JSON.stringify(artifact, null, 2) + '\n');
+        return epOutPath;
+      }
       if (epDir) {
-        endpoints.push(...scanBackendEndpoints(resolve(epDir)))
+        endpoints.push(...scanBackendEndpoints(resolve(epDir)));
       } else if (epFilesRaw) {
         for (const f of epFilesRaw.split(',').map(s => s.trim()).filter(Boolean)) collectFile(f)
+      } else if (epAllTasks) {
+        // 聚合模式：逐 task 卡 allowed_paths 提取，各自落产物目录（对齐 verifyApiParity 聚合读侧）
+        const { parseAllowedPaths } = await import('./stages/plan-postcheck.js')
+        const tasksDir = join(epChangeDir, 'tasks')
+        const taskCards = existsSync(tasksDir)
+          ? readdirSync(tasksDir).filter(f => /^task-[\w.-]+\.md$/.test(f)).sort()
+          : []
+        if (taskCards.length === 0) {
+          console.error(`❌ --all-tasks 无 task 卡（${tasksDir} 不存在或无 task-*.md）——先跑 plan 生成 TaskCard`);
+          process.exit(1);
+        }
+        let total = 0
+        for (const card of taskCards) {
+          const taskName = card.replace(/\.md$/, '')
+          const eps = []
+          const perFile = (f) => {
+            const abs = resolve(f)
+            if (!existsSync(abs)) return
+            const ext = extname(abs).toLowerCase()
+            try {
+              if (ext === '.py') eps.push(...extractFastApiEndpoints(abs))
+              else if (ext === '.js' || ext === '.ts') eps.push(...extractExpressEndpoints(abs))
+              else if (ext === '.java') eps.push(...extractSpringEndpoints(abs))
+            } catch { /* 单文件解析失败不阻断整体 */ }
+          }
+          for (const p of parseAllowedPaths(readFileSync(join(tasksDir, card), 'utf8'))) perFile(p)
+          const outPath = writeArtifact(taskName, eps)
+          total += eps.length
+          console.log(`ℹ️  ${taskName}: ${eps.length} 个端点 → ${outPath}`)
+        }
+        console.log(`✅ 聚合提取完成：${taskCards.length} 个 task 卡共 ${total} 个端点（探针 5 对账时全量并集消费）`);
+        break;
       } else {
         // 默认扫描面：task 卡 allowed_paths ∪ design §6 清单里的具体源码文件
         const { parseFileChangeListDetailed } = await import('./change-list.js')
@@ -957,22 +1011,13 @@ async function main() {
           collectFile(p)
         }
         if (candidates.size === 0) {
-          console.error('❌ 无扫描面：--task 卡无 allowed_paths 且 design.md 无具体文件清单——显式传 --dir <backendRoot> 或 --files <a.py,b.js>');
+          console.error('❌ 无扫描面：--task 卡无 allowed_paths 且 design.md 无具体文件清单——显式传 --dir <backendRoot> 或 --files <a.py,b.js>，或用 --all-tasks 聚合逐卡提取');
           process.exit(1);
         }
         console.log(`ℹ️  扫描 ${scanned}/${candidates.size} 个清单文件（不存在的跳过）`);
       }
-      const artifact = {
-        generated_at: new Date().toISOString().slice(0, 19).replace('T', ' '),
-        generator: 'sillyspec endpoints extract',
-        endpoints: endpoints.map(e => ({ method: e.method, path: e.path, source: e.source })),
-      }
-      const epRuntimeRoot = (await import('./run/shared.js')).resolveRuntimeRoot({ specRoot: specDir }, epSpecBase);
-      const epOutDir = join(epRuntimeRoot, 'contract-artifacts', epChange, epTask || 'scan');
-      mkdirSync(epOutDir, { recursive: true });
-      const epOutPath = join(epOutDir, 'endpoints.json');
-      writeFileSync(epOutPath, JSON.stringify(artifact, null, 2) + '\n');
-      console.log(`✅ 提取 ${endpoints.length} 个端点 → ${epOutPath}`);
+      const outPath = writeArtifact(epTask || 'scan', endpoints);
+      console.log(`✅ 提取 ${endpoints.length} 个端点 → ${outPath}`);
       console.log(`   verify 阶段探针 5（API 契约对账）自动消费该产物；FastAPI/Express/Spring 装饰器均支持。`);
       break;
     }

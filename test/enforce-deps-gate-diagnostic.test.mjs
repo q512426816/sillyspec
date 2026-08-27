@@ -267,6 +267,56 @@ console.log('\n--- (B) e2e：depsStatus=failed → 拒绝 exit 1 + fail-loud + �
     `门控拒绝时 execute 无 step 被标 completed（${execSteps.length} 步均 pending，进度未推进）`)
 }
 
+// ════════════════════════════════════════════════════════════
+// (C) 正当收尾放行（坑 deps-gate-cleanup-order，2026-08-28 实证）：worktree 已在
+//     apply / execute 空变更 cleanup 时正当清理（meta 随之消失）→ 重试 --done 不再被
+//     拦「worktree 不可用」逼 doctor --align。凭据：apply-pathspec-<change>.txt（apply
+//     成功落盘）或 execute-cleanup-<change>.json（handleExecuteWorktreeCleanup 回执）。
+// ════════════════════════════════════════════════════════════
+console.log('\n--- (C) 正当收尾放行：cleanup 后 --done 不再被 deps 门拦 ---')
+{
+  const { enforceDepsGate } = await import('../src/run/gates.js')
+  const makeGoneRepo = () => {
+    const cwd = mkTmp('gone-receipt')
+    const specBase = join(cwd, '.sillyspec')
+    return { cwd, specBase, runtimeRoot: join(specBase, '.runtime') }
+  }
+  const call = ({ cwd, specBase }) =>
+    enforceDepsGate('execute', cwd, 'chg-c', { name: 'step-x' }, [{ name: 'step-x' }], 0, specBase, {}, null)
+
+  // C1: apply 凭据（apply-pathspec 在）→ 放行
+  {
+    const f = makeGoneRepo()
+    mkdirSync(f.runtimeRoot, { recursive: true })
+    writeFileSync(join(f.runtimeRoot, 'apply-pathspec-chg-c.txt'), 'src/a.py\nsrc/b.js\n')
+    const r = await call(f)
+    assertEqual(r, true, 'C1: worktree gone + apply-pathspec 凭据 → 门放行（return true）')
+  }
+  // C2: execute 正当清理回执 → 放行
+  {
+    const f = makeGoneRepo()
+    mkdirSync(f.runtimeRoot, { recursive: true })
+    writeFileSync(join(f.runtimeRoot, 'execute-cleanup-chg-c.json'), JSON.stringify({ change: 'chg-c', reason: 'x' }))
+    const r = await call(f)
+    assertEqual(r, true, 'C2: worktree gone + execute-cleanup 回执 → 门放行（return true）')
+  }
+  // C3: 无凭据 → 维持阻断（子进程隔离 process.exit；对照 fail-closed 不放水）
+  {
+    const f = makeGoneRepo()
+    const helper = [
+      `import { enforceDepsGate } from ${JSON.stringify(pathToFileURL(join(repoRoot, 'src', 'run', 'gates.js')).href)}`,
+      `const r = await enforceDepsGate('execute', ${JSON.stringify(f.cwd)}, 'chg-c', { name: 's' }, [{ name: 's' }], 0, ${JSON.stringify(f.specBase)}, {}, null)`,
+      `console.log('GATE_RETURN:' + r)`,
+      `process.exit(0)`,
+    ].join('\n')
+    const helperPath = join(f.cwd, '_neg-helper.mjs')
+    writeFileSync(helperPath, helper, 'utf8')
+    const res = spawnSync(process.execPath, [helperPath], { cwd: f.cwd, encoding: 'utf8', timeout: 60_000 })
+    assert(res.status === 1 && !(res.stdout || '').includes('GATE_RETURN'),
+      `C3: worktree gone 且无凭据 → 仍阻断 exit=1（实际 exit=${res.status}；凭据缺失不放水）`)
+  }
+}
+
 cleanup()
 
 console.log(`\n==================================================`)

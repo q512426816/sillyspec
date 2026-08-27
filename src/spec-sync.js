@@ -8,6 +8,11 @@
  *
  * 复用 daemon 已验证的排除口径（UPLOAD_EXCLUDE_TOP_BASE / UPLOAD_PRUNE_NAMES_BASE），
  * 与 daemon 共用同一套清单语义（base_version 乐观锁、conflict 提示但不阻塞）。
+ *
+ * 并行会话 fail-closed 护栏（computeSpecOps 空树/changes 整删守卫 + filterStaleUpdates
+ * 旧副本回推守卫）：共享同一平台工作空间的多会话/多机场景下，错锚或滞后本地的破坏性
+ * ops（整删 changes/、旧版内容回推）在发出前拦下——服务器侧一旦被破坏会经同步链路
+ * 落地回各端本地（2026-08-26/27 两次实证）。
  */
 
 import { createHash } from 'crypto';
@@ -140,6 +145,20 @@ export function computeSpecOps(serverManifest, localFiles) {
     return [];
   }
 
+  // 并行会话护栏（坑 spec-sync-parallel-changes-wipe，2026-08-26/27 两次实证：平台同步
+  // 删整个 changes 目录）：本地树非空但 changes/ 子树一个文件都没有、服务器却有——
+  // 几乎必然是错锚/新机未先落地，而非用户真删光了所有变更（archive 是移动不是清空）。
+  // 放行即服务器 changes/ 整树清空，再经 daemon/对端同步落地回本地（破坏本地）。
+  // 逐个变更目录的合法删除不受影响（本地仍有其他 changes/ 文件时不触发本护栏）。
+  const serverChanges = serverPaths.filter((p) => p.startsWith('changes/'));
+  const localChanges = localFiles.filter((f) => f.path.startsWith('changes/'));
+  if (localFiles.length > 0 && serverChanges.length > 0 && localChanges.length === 0) {
+    console.warn(
+      `[spec-sync] 本地 spec 树无 changes/ 文件但服务器有 ${serverChanges.length} 个，跳过同步（防并行会话/错锚整删 changes/；请检查 spec 目录锚点，新环境先完成平台侧文件落地）`
+    );
+    return [];
+  }
+
   // rename 检测：旧路径（服务器有、本地无）↔ 新路径（本地有、服务器无）hash 相同
   const renames = [];
   const consumedNew = new Set();
@@ -249,6 +268,62 @@ function collectChangeDir(dirs, p) {
 }
 
 /**
+ * 过滤「旧副本回推」型 update op（坑 spec-sync-parallel-stale-overwrite，2026-08-26/27
+ * 两次实证：平台同步把本地文件覆盖回旧版）。
+ *
+ * 判据：本地文件 mtime 早于上次成功同步（mtime + 1s 缓冲）= 该文件自上次同步后本地从未
+ * 改动——此刻服务器 hash 却不同，只可能是他者会话/他机推进了服务器内容。本地这份是旧
+ * 副本，照推 update 就是把服务器内容回退到旧版（再经 daemon/对端落地破坏各端本地）。
+ * 本地改过的文件（mtime 晚于上次同步）不受影响，正常 last-writer-wins。
+ *
+ * 被滤掉的文件如确需以本地为准覆盖服务器：本地重存（touch/再编辑）后重推。
+ *
+ * @param {Array} ops computeSpecOps 产物
+ * @param {Array} localFiles hashFiles 产物（含 mtime，Unix 秒）
+ * @param {number|null} lastSyncTs 上次成功同步完成时刻（ms）；null/0 → 不过滤
+ * @returns {{ ops: Array, stale: string[] }} 过滤后 ops + 被拦下的路径
+ */
+export function filterStaleUpdates(ops, localFiles, lastSyncTs) {
+  if (!lastSyncTs || !Array.isArray(ops) || ops.length === 0) {
+    return { ops, stale: [] };
+  }
+  const mtimeByPath = new Map(localFiles.map((f) => [f.path, f.mtime]));
+  const stale = [];
+  const kept = [];
+  for (const op of ops) {
+    if (op.op === 'update') {
+      const mtime = mtimeByPath.get(op.path);
+      if (mtime !== undefined && mtime * 1000 + 1000 <= lastSyncTs) {
+        stale.push(op.path);
+        continue;
+      }
+    }
+    kept.push(op);
+  }
+  return { ops: kept, stale };
+}
+
+// 上次成功同步标记（本地 .runtime 下，walk 排除不上传）：filterStaleUpdates 的时间锚。
+const LAST_SUCCESS_MARKER = 'spec-sync-last-success.json';
+
+function readLastSyncTs(specRoot) {
+  try {
+    const raw = readFileSync(join(specRoot, '.runtime', LAST_SUCCESS_MARKER), 'utf8');
+    const ts = JSON.parse(raw).ts;
+    return Number.isFinite(ts) ? ts : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeLastSyncTs(specRoot) {
+  try {
+    mkdirSync(join(specRoot, '.runtime'), { recursive: true });
+    writeFileSync(join(specRoot, '.runtime', LAST_SUCCESS_MARKER), JSON.stringify({ ts: Date.now() }) + '\n', 'utf8');
+  } catch { /* 标记失败只损失下次的防回推过滤，不影响本次同步结果 */ }
+}
+
+/**
  * 同步本地 .sillyspec 树到平台（CLI 直跑增量同步入口）。
  *
  * @param {string} specRoot - 本地 .sillyspec 目录绝对路径
@@ -292,7 +367,17 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
   // 2. walk/hash/diff
   const entries = walkSpecTree(specRoot);
   const localFiles = hashFiles(entries);
-  const ops = computeSpecOps(serverManifest, localFiles);
+  let ops = computeSpecOps(serverManifest, localFiles);
+
+  // 旧副本回推防护（并行会话一致性）：上次同步后本地从未改动的文件不回推覆盖服务器新内容
+  const lastSyncTs = readLastSyncTs(specRoot);
+  const filtered = filterStaleUpdates(ops, localFiles, lastSyncTs);
+  if (filtered.stale.length > 0) {
+    console.warn(
+      `[spec-sync] 拦下 ${filtered.stale.length} 个旧副本回推（本地自上次同步未改动而服务器已前进，如确需以本地为准：重存后重推）: ${filtered.stale.slice(0, 5).join(', ')}${filtered.stale.length > 5 ? ' 等' : ''}`
+    );
+  }
+  ops = filtered.ops;
 
   if (ops.length === 0) {
     debugLog(`[spec-sync] 无差异，跳过同步: ${changeName}`);
@@ -342,6 +427,7 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
       return { synced: 0, conflict: true, serverVersions, conflictPath };
     }
     console.log(`[spec-sync] 已同步 ${ops.length} 个文件变更: ${changeName}`);
+    writeLastSyncTs(specRoot);
     return { synced: ops.length };
   } catch (err) {
     console.warn(`[spec-sync] 同步异常（文件树本次未同步，下次自动重试）: ${changeName}: ${err.message}`);
@@ -354,5 +440,6 @@ export default {
   hashFiles,
   computeSpecOps,
   extractChangeDirs,
+  filterStaleUpdates,
   syncSpecTree,
 };

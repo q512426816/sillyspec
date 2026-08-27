@@ -392,10 +392,13 @@ export function _readWorktreeMeta(specBase, scanRoot, changeName) {
 
 /**
  * 取本变更 diff 文件集（parity 前端调用收窄用，坑 probe5-fullrepo-frontend-noise）。
- * 优先 worktree meta 锚点 diff（与 verify 同源）；无 meta 退主仓 git diff HEAD。
+ * 优先 worktree meta 锚点 diff（与 verify 同源）；无 meta 退主仓 git diff HEAD；
+ * 两者皆空再退 apply-pathspec-<change>.txt（apply 落盘的精确清单）。
+ * 兜底链每级都空才返回 null/[]（调用方回退全仓——坑 probe5-single-task-artifact-scope，
+ * 2026-08-28 实证：apply+commit/cleanup 后 diff 为空 → 全仓调用 × 局部端点 = 150 条假 missing）。
  * @returns {string[]|null}
  */
-function _resolveDiffFilesForParity(specBase, scanRoot, changeName) {
+function _resolveDiffFilesForParity(specBase, scanRoot, changeName, runtimeRoot) {
   try {
     const wt = _readWorktreeMeta(specBase, scanRoot, changeName)
     if (wt) {
@@ -429,7 +432,20 @@ function _resolveDiffFilesForParity(specBase, scanRoot, changeName) {
     if (foreign.length > 0) {
       console.warn(`⚠️ parity 对账已排除 ${foreign.length} 个并行会话声明的文件（${foreign.slice(0, 5).map(x => x.file).join(', ')}${foreign.length > 5 ? ' 等' : ''}）`)
     }
-    return own
+    if (own.length > 0) return own
+    // 主仓 diff 空（apply 后已 commit / cleanup 完毕）→ apply-pathspec 兜底：apply 成功时落盘的
+    // 本变更精确文件清单（与 gates 归因提示②同源）。仍拿不到才回 null（调用方退全仓）。
+    try {
+      const pathspecFile = join(runtimeRoot || join(specBase, '.runtime'), `apply-pathspec-${changeName}.txt`)
+      if (existsSync(pathspecFile)) {
+        const fromPathspec = readFileSync(pathspecFile, 'utf8').split('\n').map(l => l.trim()).filter(Boolean)
+        if (fromPathspec.length > 0) {
+          console.log(`ℹ️ parity 前端范围用 apply-pathspec 兜底（主仓 diff 为空，${fromPathspec.length} 文件）`)
+          return fromPathspec
+        }
+      }
+    } catch { /* 兜底失败 → null 交调用方全仓 */ }
+    return null
   } catch { return null }
 }
 
@@ -526,7 +542,7 @@ export function verifyApiParity(specBase, scanRoot, runtimeRoot, changeName = nu
   const frontendRootLabel = frontendRoot === scanRoot ? 'scan-root' : 'worktree'
   if (changeName) {
     try {
-      const changed = _resolveDiffFilesForParity(specBase, scanRoot, changeName)
+      const changed = _resolveDiffFilesForParity(specBase, scanRoot, changeName, runtimeRoot)
       if (changed && changed.length > 0) {
         const changedSet = new Set(changed.map(f => f.replace(/\\/g, '/')))
         frontendCalls = scanFrontendApiCalls(frontendRoot).filter(c => {

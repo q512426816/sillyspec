@@ -579,10 +579,21 @@ export function extractKnownFailures(yamlText) {
   if (inline) {
     return inline[1].split(',').map(s => s.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean)
   }
-  const block = yaml.match(/^known_failures:\s*\n((?:[ \t]+-[ \t].+\n?)+)/m)
+  // 坑 verify-known-failures-comment-line-truncation（2026-08-28 连续踩两次）：块内注释行/空行
+  // 打断「连续列表项」的捕获链 → 只取到注释前的项，注释后的项静默丢失 → 清单残缺、
+  // verify 实测 remaining>0 假红。块定义放行注释行与空行（提取侧本就只认 `- ` 项行，
+  // 吸收进块的注释不影响结果）。
+  const block = yaml.match(/^known_failures:\s*\n((?:[ \t]+-[ \t].+\n?|[ \t]*#[^\n]*\n?|[ \t]*\n)+)/m)
   if (block) {
     return (block[1].match(/^[ \t]+-[ \t]+(.+)/gm) || [])
-      .map(s => s.replace(/^[ \t]+-[ \t]+/, '').trim().replace(/^['"]|['"]$/g, '').replace(/#.*$/, '').trim())
+      .map(s => {
+        const item = s.replace(/^[ \t]+-[ \t]+/, '').trim()
+        const full = item.match(/^(['"])(.*)\1$/)
+        if (full) return full[2] // 整体引号值原样保留（内部 # 不是注释）
+        const stripped = item.replace(/[ \t]+#.*$/, '').trim() // 行尾注释须 # 前有空白（YAML 语义），裸 # 不截
+        const q2 = stripped.match(/^(['"])(.*)\1$/)
+        return q2 ? q2[2] : stripped
+      })
       .filter(Boolean)
   }
   return []
@@ -1552,6 +1563,12 @@ export function printVerifyParityCheck(result) {
     console.warn(`   - ${m.method} ${m.path}  ← ${m.consumerFile}:${m.consumerLine}`)
   }
   if (result.missingBackend.length > 20) console.warn(`   …还有 ${result.missingBackend.length - 20} 个`)
+  // 全仓口径告警（坑 probe5-single-task-artifact-scope，2026-08-28 实证：diff/apply 清单都不可得
+  // 时回退全仓，全仓调用 × 本变更局部端点 = 大量假 missing，agent 照单记 FAIL 误导归档判定）
+  if (/\[scope: full-repo\]/.test(result.summary || '')) {
+    console.warn('   ⚠️  本次 scope 为 full-repo（diff 与 apply-pathspec 均不可得时的兜底）——missing 大概率是口径错配噪音而非真实 contract gap。')
+    console.warn('      先收窄复跑：sillyspec verify-probes --change <变更名>（change-diff/apply-pathspec 口径）再判定。')
+  }
   console.warn('   提示：检查是否后端漏实现，或前端调用了尚未实现的端点。确认无误可在 design.md 标注豁免。')
 }
 

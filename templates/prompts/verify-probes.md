@@ -26,7 +26,8 @@ grep -rl "<关键词>" <源码目录>/ --include="*.java" --include="*.js" --inc
 6. 任意 P0/P1 unresolved/blocking 决策标记为 FAIL blocker
 
 **探针 5 补充（CLI 已出对账表，你做诚实判定）**
-CLI 的 missing backend endpoint 是 advisory（不硬阻断归档）——但 contract gap 是真实集成缺陷，应诚实标 FAIL 并回 execute 补端点，勿因 CLI 不拦而放行。后端 router 的端点清单可用 `sillyspec endpoints extract --change <变更名> --task <task-NN>` 重新静态提取（勿手扫装饰器）。
+CLI 的 missing backend endpoint 是 advisory（不硬阻断归档）——但 contract gap 是真实集成缺陷，应诚实标 FAIL 并回 execute 补端点，勿因 CLI 不拦而放行。后端 router 的端点清单用 `sillyspec endpoints extract --change <变更名> --all-tasks` 聚合提取（逐 task 卡各自落产物，与对账聚合口径一致；勿手扫装饰器、勿只提单 task——单 task 产物对账会放大假 missing）。
+先看对账表 scope 标注：`change-diff`（含 apply-pathspec 兜底）口径可信；若显示 `full-repo`（diff 与 apply 清单都不可得时的兜底），missing 大概率是「全仓调用 × 本变更局部端点」的口径错配噪音——先收窄复跑（`sillyspec verify-probes --change <变更名>`）再判定，不要把口径噪音直接记成 contract gap。
 
 **探针 6 补充（CLI 已出三态判定，你做终审）**
 以 git 事实为准（真实 > 声明）；CLI 的三态（合规/高风险/未声明）是机械判定，是否构成 FAIL blocker 由你诚实判定，务必如实记录——静默删除代码是 verify 的最大盲区。

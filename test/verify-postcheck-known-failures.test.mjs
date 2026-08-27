@@ -52,6 +52,38 @@ assertEqual(
   extractKnownFailures('known_failures:\n  - foo  # 预存\n  - bar\n'),
   ['foo', 'bar'],
 )
+// 坑 verify-known-failures-comment-line-truncation（2026-08-28 连续踩两次）：
+// 块内注释行/空行打断连续列表项捕获链 → 注释后的项静默丢失 → 豁免清单残缺假红
+assertEqual(
+  'extractKnownFailures: 块内注释行不截断（坑：注释后项丢失）',
+  extractKnownFailures('known_failures:\n  - "tests/test_ppm.py::test_legacy"\n  # 2026-08-27 追加：plan 旧债\n  - app/modules/plan/test_old\n'),
+  ['tests/test_ppm.py::test_legacy', 'app/modules/plan/test_old'],
+)
+assertEqual(
+  'extractKnownFailures: 块内空行不截断',
+  extractKnownFailures('known_failures:\n  - foo\n\n  - bar\n'),
+  ['foo', 'bar'],
+)
+assertEqual(
+  'extractKnownFailures: 首项前的注释行不失效',
+  extractKnownFailures('known_failures:\n  # 逐条注明豁免理由\n  - foo\n'),
+  ['foo'],
+)
+assertEqual(
+  'extractKnownFailures: 注释行在列表尾不吞后续键',
+  extractKnownFailures('known_failures:\n  - foo\n  # 尾注释\ncommands:\n  test: npm test\n'),
+  ['foo'],
+)
+assertEqual(
+  'extractKnownFailures: 引号值含 # 原样保留',
+  extractKnownFailures('known_failures:\n  - "tests/a.py::test_hash#1"\n'),
+  ['tests/a.py::test_hash#1'],
+)
+assertEqual(
+  'extractKnownFailures: 引号值 + 行尾注释',
+  extractKnownFailures('known_failures:\n  - "tests/a.py::t1"  # 预存\n'),
+  ['tests/a.py::t1'],
+)
 
 // ── partitionFailures（关键：summary 行不计入失败行）──────────────
 

@@ -13,7 +13,7 @@ import { join } from 'path'
 import { tmpdir } from 'os'
 import { spawn } from 'child_process'
 import { execSync } from 'child_process'
-import { reapVerifyServices } from '../src/run/gates.js'
+import { reapVerifyServices, filterStaleBaselineOverlap } from '../src/run/gates.js'
 import { collectForeignDeclaredFiles, splitOwnVsForeignDiffFiles } from '../src/foreign-declared.js'
 import { runVerifyDeletionCheck } from '../src/verify-postcheck.js'
 
@@ -138,6 +138,36 @@ console.log('\n=== ③ 删除对账的他者过滤集成（runVerifyDeletionChec
 }
 
 for (const d of tmpDirs) { try { rmSync(d, { recursive: true, force: true }) } catch {} }
+
+// ── ③ 归因提示②重叠集过滤（坑 verify-attr2-foreign-wip-misdirection：并行会话在途文件
+//    让重叠集虚高（51 文件），逐轮误导 agent 重跑 gen:types，实际失败源是他者 WIP）──
+console.log('\n=== ③ 归因提示②重叠集过滤（filterStaleBaselineOverlap）===\n')
+{
+  const overlap = ['src/gen/api-types.ts', 'src/app/page.tsx', 'src/other/wip.ts', 'src/clean/same.ts']
+  const dirty = new Set(['src/gen/api-types.ts', 'src/other/wip.ts']) // 仅前者在场且非他者
+  const foreign = new Set(['src/other/wip.ts'])                        // 他者会话声明的在途文件
+  const out = filterStaleBaselineOverlap(overlap, dirty, foreign)
+  console.log(`  overlap=${JSON.stringify(overlap)} → actionable=${JSON.stringify(out)}`)
+  assert(JSON.stringify(out) === JSON.stringify(['src/gen/api-types.ts']),
+    '只留「dirty 且非他者声明」的文件（他者在途归提示①、未落盘重叠不行动）')
+}
+{
+  // 2026-08-28 实证场景复原：51 个重叠全为他者在途/已收尾文件 → 提示②整体静默
+  const overlap = Array.from({ length: 51 }, (_, i) => `src/mod${i}/file.ts`)
+  const dirty = new Set(overlap)
+  const foreignMap = new Map(overlap.map((f) => [f, {}]))
+  const out = filterStaleBaselineOverlap(overlap, dirty, foreignMap)
+  assert(out.length === 0, `全为他者声明 → 空（不出提示②，实际 ${out.length}）；foreignDeclared 支持 Map`)
+}
+{
+  const out = filterStaleBaselineOverlap(['a', 'b'], new Set(), new Set())
+  assert(out.length === 0, '重叠文件均未落盘（不 dirty）→ 空（重跑生成命令改变不了本轮实测）')
+  const out2 = filterStaleBaselineOverlap(null, new Set(['a']), null)
+  assert(out2.length === 0, 'overlap null → 空不抛错')
+  const out3 = filterStaleBaselineOverlap(['a', 'b'], null, null)
+  assert(out3.length === 0, 'dirtySet null → 空不抛错（fail-closed 不出提示）')
+}
+
 console.log(`\n${'='.repeat(50)}`)
 console.log(`✅ 通过: ${passed}  ❌ 失败: ${failed}`)
 if (failures.length) console.log(`失败项: ${failures.join('; ')}`)

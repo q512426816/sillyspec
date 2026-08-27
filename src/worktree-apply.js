@@ -1377,6 +1377,60 @@ function rollbackApply(projectRoot, trackedFiles, newFiles, rawStderr = '') {
  * @param {object} p.result - applyWorktree 的 result（预对齐信息写入 result.warnings，可追溯，约束④）
  * @returns {{ aligned: string[], commit: string|null }} aligned=本次对齐的文件（空数组=未对齐）
  */
+/**
+ * merge 前自动 commit worktree 未提交交付物（坑 apply-merge-uncommitted-noop，2026-08-28 实证：
+ * 子代理默认不 commit，分支 tip 只有 baseline checkpoint → git merge 空转「Already up to date」/
+ * --no-ff 空合并，交付零落地，落地校验报错后只能手工 cherry-pick/cp 补救）。
+ * 默认 patch 路径本就能吃未提交内容（git diff <base> 到工作区）；只有 --merge/降级 merge 路径
+ * 只看已提交——在此补上衔接。与 preAlignBaselineToMain 同款 pathspec commit（坑
+ * git-commit-sweeps-prestaged：不扫入其他 staged 改动）。
+ *
+ * best-effort：commit 失败只 warning，交由下方落地校验兜底报错（不劣于原行为）。
+ * @returns {{ committed: string[], skipped: boolean, shortHash: string|null }}
+ */
+function autoCommitWorktreeWip({ meta, result, changeName }) {
+  const out = { committed: [], skipped: true, shortHash: null };
+  const worktreePath = meta?.worktreePath;
+  if (!worktreePath || !existsSync(worktreePath)) return out;
+  if (meta.mode && meta.mode !== 'worktree') return out;
+
+  // 未提交交付物 = tracked-modified（vs HEAD）∪ untracked，过 filterDeliverableFiles（排 meta.json/.sillyspec）
+  let wip = [];
+  try {
+    const modRaw = gitQuiet(worktreePath, ['diff', '--name-only', 'HEAD']);
+    const untrackedRaw = gitQuiet(worktreePath, ['ls-files', '--others', '--exclude-standard']);
+    wip = filterDeliverableFiles([
+      ...new Set([...(modRaw || '').split('\n'), ...(untrackedRaw || '').split('\n')].filter(Boolean)),
+    ]);
+  } catch { return out; }
+  if (wip.length === 0) return out;
+
+  try {
+    git(worktreePath, ['add', '-A', '--', ...wip]);
+    try {
+      git(worktreePath, ['commit', '--no-verify', '-m',
+        `sillyspec: auto-commit worktree WIP (${wip.length} files, apply --merge)`, '--', ...wip]);
+    } catch {
+      // 仓级 git 身份缺失时 commit 拒绝——补 -c 身份重试一次（worktree 继承不到全局配置的形态）
+      git(worktreePath, ['-c', 'user.name=sillyspec', '-c', 'user.email=sillyspec@apply.local',
+        'commit', '--no-verify', '-m',
+        `sillyspec: auto-commit worktree WIP (${wip.length} files, apply --merge)`, '--', ...wip]);
+    }
+    out.committed = wip;
+    out.skipped = false;
+    out.shortHash = gitQuiet(worktreePath, ['rev-parse', '--short', 'HEAD']);
+    result.warnings = result.warnings || [];
+    result.warnings.push(
+      `worktree 有 ${wip.length} 个未提交交付文件（子代理未 commit），已在分支自动 commit` +
+      `${out.shortHash ? `（${out.shortHash}）` : ''} 再 merge：${wip.slice(0, 5).join(', ')}${wip.length > 5 ? ' 等' : ''}`
+    );
+  } catch (e) {
+    result.warnings = result.warnings || [];
+    result.warnings.push(`worktree WIP 自动 commit 失败（merge 可能空转，落地校验将报未落地）：${(e.message || '').split('\n')[0]}`);
+  }
+  return out;
+}
+
 function preAlignBaselineToMain({ meta, branch, projectRoot, result }) {
   const pushWarning = (msg) => {
     result.warnings = result.warnings || [];
@@ -1494,6 +1548,10 @@ export function applyByMerge(result, changeName, projectRoot, wm, opts = {}) {
 
   // --- merge 前预对齐（D-002@v1 / task-02）：baseline 并行旧文件对齐 main 版，消除 merge 冲突主因 ---
   preAlignBaselineToMain({ meta, branch, projectRoot, result });
+
+  // --- merge 前自动 commit 未提交交付物（坑 apply-merge-uncommitted-noop）：预对齐在前——
+  // 它跳过 dirty 文件（不覆盖 WIP）且只提交对齐集；WIP commit 在后，两者不混提交 ---
+  autoCommitWorktreeWip({ meta, result, changeName });
 
   try {
     git(projectRoot, ['merge', '--no-ff', branch], { timeout: 30000 });
