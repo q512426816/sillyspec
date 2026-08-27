@@ -714,3 +714,11 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 - ①`src/foreign-declared.js` 活性收敛（`filterStaleForeignDeclarations`）：声明只在「工作仍在途」时有效——quick 会话与无存活隔离 worktree 的变更按主仓 `git status --porcelain` 未提交集判定（已 commit 即收敛）；有存活隔离 worktree 的变更整份保留（WIP 主仓不可见）；事实源读不出一律保留（fail-closed）。四处警告调用点（verify-postcheck ×2 / verify-probes / contract-matrix）自动降噪，无需改动。
 - ②骨架预生成内建：`taskcard.js` 新增 `ensureTaskcardSkeletons`（注册表声明缺卡即补、已存在跳过、幂等），`run/gates.js` plan gate 前主流程单进程调用（与 ensureDecisionDocHeader 同层幂等补齐范式）；`plan.js` 步骤 3 prompt 改为主 agent 先跑一次 `taskcard --all` 再派 batch，子代理 prompt 明示**禁止再跑 taskcard CLI**（缺卡报主 agent）；`templates/prompts/taskcard-rules.md` 同步。占位符硬拦不变——预生成只消灭 CLI 并发与格式错误，不替子代理产语义。
 - ③`worktree-deps.js` 新增 `detectEditableInstallEscape`（路径型 .pth / PEP 660 finder MAPPING / direct_url.json editable 三痕迹，目标 resolve 后不在 worktree 内即越界），`worktree doctor` 对存活 worktree 报 `editable-install-escape`（fixable:false，指引 worktree 内 `uv sync` / `uv pip install -e .` 重装后重跑生成命令）。
+
+## 44. 一坑：Git Bash(MSYS) 路径转换污染 quick prose 参数（2026-08-27 闭环）
+
+**症状**：Windows Git Bash 下 `--req "/sessions 页整页滚动条修复…"` 落盘后 QUICKLOG 标题与「需求：」行变成 `E:/Software/Git/sessions 页整页滚动条修复…`——MSYS2 对以 `/` 开头的命令行参数做 POSIX→Windows 自动转换（`/sessions` → `<Git 安装目录>/sessions`），CLI 收到的已是污染串，无感写进 QUICKLOG 并推送平台「快速修复」列表。引号不救（MSYS 只看参数形态）；任何以 `/xxx` 开头的 `--req`/`--output`/`--input` 文案都会触发（页面路由类反馈是高频场景）。
+
+**修复（已闭环）**：
+- `src/run/command.js` 新增 `looksLikeMsysMangledPath` 纯函数嗅探（盘符绝对路径开头 + 紧随空白与中文正文的启发式，零误报优先）+ `warnMsysMangledFlag` 告警出口，在 `--output` / quick 四字段参数（`--req`/`--cause`/`--solution`/`--result`）/ `--input`（含 quick 位置参数描述）三处解析点接线：命中向 stderr 打告警（点名 flag + 值前缀 + 修复指引），**不阻断**——合法值确可能以盘符路径开头，由 agent 看告警后自查重发。
+- 传参侧根治仍是 `MSYS_NO_PATHCONV=1` 前缀或去前导 `/` 改写表述（CLI 只能事后嗅探，转换发生在 shell 层、CLI 收到前）；纯英文正文 v1 检不出（启发式依赖中文正文字样）。

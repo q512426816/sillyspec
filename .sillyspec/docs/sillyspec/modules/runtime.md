@@ -112,4 +112,5 @@ ProgressManager.alignExecuteToPlan(cwd, changeName, specBase, {confirm})
 - ql-20260816-018-4eae | B11 safeGit 未设 stdio stderr 裸刷（未纳入批次项，驾驭#6）：git-helper.js safeGit/git 的 execFileSync 加 stdio:['ignore','pipe','pipe']（对齐同仓其他调用点）——git 失败 stderr 不再裸刷终端，空仓跑 quick 不冒无上下文 fatal。
 - ql-20260816-020-12e1 | C14b scan 建议劫持第三循环（未纳入批次项，驾驭#7）：_getNextSuggestion 第三循环（in-progress 找待办步）排除 scan（第四循环 plan-c 已排除，补同根因）——scan auxiliary 恒处 STAGE_ORDER 首位中途未完成会劫持下一步。
 - ql-20260816-025-9111 | E22c quicklog scanExisting 有界化（未纳入批次项，性能#5）：归档文件名日期 < 今天则跳过读取（归档内条目必 ≤ 名内日期，当日 ID 分配零信息损失）——O(全历史归档) → O(当日文件)，consumer 10 归档 756KB 免全量扫描。
+- ql-20260827-001-643a | MSYS 路径转换污染嗅探（坑 quick-req-msys-path-mangling）：command.js 新增 looksLikeMsysMangledPath 纯函数（盘符绝对路径开头+紧随空白与中文正文启发式）+ warnMsysMangledFlag 告警出口，接线 --output / quick 四字段参数 / --input（含位置参数描述）三处解析点——Git Bash 把 `/sessions 页…` 展开成 `<Git 安装目录>/sessions 页…` 后才传入 CLI、无感写入 QUICKLOG 标题并推送平台列表；命中 stderr 告警（点名 flag+修复指引）不阻断；test/quick-msys-path-sniff.test.mjs 纯函数 7 例 + CLI 冒烟 5 例。
 <!-- MANUAL_NOTES_END -->

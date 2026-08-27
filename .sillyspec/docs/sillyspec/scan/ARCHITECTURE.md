@@ -101,14 +101,14 @@ generator: sillyspec-scan
 scan-profile.js 扫描档位 / concurrent-detect.js 并发检测 / multi-repo-context.js
 多仓上下文 / shared.js 共享工具）。grep 定位到的关键导出与函数：
 
-- `runCommand(args, cwd, specDir)`（`src/run/command.js:163`）：参数解析总入口，识别
+- `runCommand(args, cwd, specDir)`（`src/run/command.js:197`）：参数解析总入口，识别
   `--done / --skip / --reset / --reopen / --status / --auto / --skip-approval /
   --from-step / --confirm / --wait / --answer` 等生命周期 flag；含祖先链多实例
   `.sillyspec` 检测与 worktree 副本漂移自动锚定守卫（坑 worktree-execute-spec-drift，
   D-03@v1）。
 - `runStage(...)`（`src/run/stage.js:31`）：单阶段执行器，做状态转换校验（调用
   `stage-contract.js` 的 `checkTransition`），逐 step 推进，处理审批门控。
-- `runAutoMode(...)`（`src/run/command.js:1394`）：自动模式，连续跑
+- `runAutoMode(...)`（`src/run/command.js:1441`）：自动模式，连续跑
   `['brainstorm','plan','execute','verify']` 主流程直到 `--done`。
 
 阶段流转语义（grep 自 run/ 模块）：

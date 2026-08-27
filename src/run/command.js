@@ -76,6 +76,38 @@ export function detectSpaceSeparatedFiles(flags) {
 }
 
 /**
+ * 检测 prose 参数值是否疑似被 Git Bash(MSYS) 路径转换污染（坑 quick-req-msys-path-mangling）。
+ *
+ * MSYS2 对以 / 开头的命令行参数做 POSIX→Windows 自动转换：--req "/sessions 页修复" 到达
+ * CLI 时已是 "<Git 安装目录>/sessions 页修复"（如 E:/Software/Git/sessions 页修复），无感
+ * 写入 QUICKLOG 标题与「需求：」行（该标题也是平台「快速修复」列表展示标题）。启发式：
+ * 盘符绝对路径开头 + 紧随空白与中文正文——人写的 Windows 路径引用不会以「盘符路径+中文
+ * 句子」形态开头；纯英文正文检不出（v1 取零误报优先，本仓主流为中文文案）。
+ *
+ * 纯函数：无副作用，供 command.js 解析层告警 + 单测复用。只告警不阻断——无法确定性区分
+ * 误报（合法值确可能以盘符路径开头），由 agent 看到 stderr 告警后自查重发。
+ * @param {string|null} v 待检值
+ * @returns {boolean} 疑似污染返回 true
+ */
+export function looksLikeMsysMangledPath(v) {
+  if (typeof v !== 'string' || v.length === 0) return false
+  const m = v.match(/^[A-Za-z]:[\\/]\S+/) // 盘符绝对路径 token（吃到首个空白）
+  if (!m) return false
+  const rest = v.slice(m[0].length)
+  return /^\s/.test(rest) && /[\u4e00-\u9fff]/.test(rest)
+}
+
+/**
+ * MSYS 污染告警出口：命中嗅探时向 stderr 打 flag 名 + 值前缀 + 修复指引（不阻断）。
+ */
+function warnMsysMangledFlag(flag, value) {
+  if (!looksLikeMsysMangledPath(value)) return
+  console.error(`⚠️ ${flag} 的值疑似被 Git Bash(MSYS) 路径转换污染：「${value.slice(0, 60)}${value.length > 60 ? '…' : ''}」`)
+  console.error('   以 / 开头的文案在 Git Bash 下会被展开成 <Git 安装目录>/… 绝对路径后才传入 CLI。')
+  console.error('   非本意 → 去掉前导 / 或改写表述后重发本命令；确需原样 → 命令前加 MSYS_NO_PATHCONV=1。')
+}
+
+/**
  * 从 progress 或变更目录推导变更名
  */
 function resolveChangeName(cwd, progress, specDir = null) {
@@ -473,6 +505,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
   let outputText = null
   const outputValue = getFlagValue('--output')
   if (outputValue !== null) outputText = outputValue
+  warnMsysMangledFlag('--output', outputValue)
 
   // 解析 quick 末步四字段参数（2026-08-21 agent-手工产出审计第二批 F6）：--req/--cause/
   // --solution/--result 各传一项，CLI 合成单行四字段 outputText（quicklog 落盘侧
@@ -492,6 +525,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
         console.error(`❌ quick 末步四字段参数缺项：${missing.join(' ')}（--req/--cause/--solution/--result 必须全给，或缺字段 --done 会被拒）`);
         process.exit(2)
       }
+      for (const [f] of FOUR) warnMsysMangledFlag(f, getFlagValue(f))
       outputText = FOUR.map(([f, label]) => `${label}${getFlagValue(f)}`).join(' ')
     }
   }
@@ -514,6 +548,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
       break
     }
   }
+  warnMsysMangledFlag('--input', inputText)
 
   // 解析 --linked-changes <a,b|none>（quick 专用：显式声明关联变更，CI/脚本友好）
   // 与 --change 解耦：--linked-changes 语义清晰（关联变更），不与「指定变更名」混淆。
