@@ -117,22 +117,50 @@ export function buildContractMatrix(planContent, changeDir) {
 function parseTaskDependencies(registryContent) {
   const deps = {}
 
-  // 方式 1: 任务总表表格形式 | task-04 | ... | 01,02 |
-  // 列前缀用 [^|\d]*（不吃数字）：旧 [^|]* 贪婪会吃掉 deps 列前导 0（" 01" → g2=1 → task-1），
-  // 导致 provider task-1.md 不存在 → contracts 恒空，端点契约管线失效。
-  const tableRows = registryContent.matchAll(/\|[^|]*task-(\d+)[^|]*\|[^|]*\|[^|\d]*(?:task-)?(\d+(?:\s*[,，]\s*\d+)*)[^|]*\|/gi)
-  for (const match of tableRows) {
-    const task = `task-${match[1]}`
-    const depList = match[2].split(/[,，\s]+/).map(d => `task-${d.trim()}`).filter(d => d.startsWith('task-'))
-    deps[task] = depList
+  // 方式 1: 任务总表表格形式（两种常见格式）
+  //   A: | task-04 | Wave | 优先级 | 说明 | 依赖 |  （task-NN 在独立列）
+  //   B: | task | desc | deps |                       （task-NN 在任意列，bare 数字依赖）
+  // 逐行按 | 分列解析，避免旧单正则 [^|]* 跨列贪婪误读说明列数字（409/HTTP 状态码）
+  // 为假依赖（坑 contract-matrix-false-deps）。
+  // deps 列判定：从行尾倒数第一个「非分隔符、非 task 自身、非单数字(Wave/优先级)」的列，
+  // 且须含逗号/task- 引用/bare 两位以上数字。
+  const lines = registryContent.split('\n')
+  for (const line of lines) {
+    const taskIdMatch = line.match(/task-(\d+)/i)
+    if (!taskIdMatch) continue
+    const taskId = `task-${taskIdMatch[1]}`
+
+    const cells = line.split('|').map(c => c.trim()).filter(c => c.length > 0)
+    if (cells.length < 2) continue
+
+    // 从行尾倒数找 deps 列
+    let depCell = null
+    for (let i = cells.length - 1; i >= 0; i--) {
+      const c = cells[i]
+      if (/^-+$/.test(c)) continue                          // 分隔符 "-"
+      if (c.toLowerCase() === taskId.toLowerCase()) continue // task 自身列
+      // deps 列候选：含逗号（多依赖）或含 task- 引用
+      if (/[,，]/.test(c) || /task-\d+/i.test(c)) { depCell = c; break }
+      // bare 数字：须 ≥2 位且位于行尾第2+列（跳过优先级/Wave 列的个位数）
+      if (/^\d{2,}$/.test(c) && i >= cells.length - 2) { depCell = c; break }
+    }
+    if (!depCell) continue
+    const depNums = depCell.match(/\d+/g) || []
+    deps[taskId] = depNums.map(d => `task-${d.padStart(2, '0')}`)
   }
 
   // 方式 2: tasks.md 行内标注 "- [ ] task-04: 名称 (depends_on: task-01,02)"（新家，D-003@v1；
-  // 旧 plan.md checkbox 行内标注同格式兼容）
-  const dependsPattern = registryContent.matchAll(/task-(\d+).*?depends_on.*?(\d+(?:\s*[,，]\s*\d+)*)/gi)
+  // 旧 plan.md checkbox 行内标注同格式兼容）。仅匹配 (depends_on: ...) 括号内内容，
+  // 不在自由文本上全文正则（坑 contract-matrix-false-deps：说明列数字被误读为依赖）。
+  const dependsPattern = registryContent.matchAll(/task-(\d+)\b[^)]*?\(depends_on:\s*([^)]+)\)/gi)
   for (const match of dependsPattern) {
     const task = `task-${match[1]}`
-    const depList = match[2].split(/[,，\s]+/).map(d => `task-${d.trim()}`).filter(d => d.startsWith('task-'))
+    const depStr = match[2]
+    // 兼容两种写法：task-01, task-02 或 01, 02
+    const depList = depStr.split(/[,，]\s*/).map(s => {
+      const num = s.trim().match(/\d+/)
+      return num ? `task-${num[0].padStart(2, '0')}` : null
+    }).filter(Boolean)
     if (!deps[task]) deps[task] = []
     for (const d of depList) {
       if (!deps[task].includes(d)) deps[task].push(d)

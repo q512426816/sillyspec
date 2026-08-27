@@ -1692,6 +1692,19 @@ SillySpec worktree — git worktree 隔离管理
             for (const f of result.changedFiles) {
               console.log(`   ${f}`);
             }
+            // 跨仓 worktree 回落报告（坑 cross-repo-no-worktree-isolation）：跨仓文件不进主仓
+            // changedFiles（在其所属仓的 diff 里），单独列出防漏看
+            if (Array.isArray(result.crossRepoApplied) && result.crossRepoApplied.length > 0) {
+              for (const c of result.crossRepoApplied) {
+                if (c.changedFiles.length > 0) {
+                  console.log(`✅ 跨仓 repo ${c.repoKey} 已回落 ${c.changedFiles.length} 个文件变更（worktree 已清理，分支保留作 review 锚点）:`);
+                  for (const f of c.changedFiles.slice(0, 20)) console.log(`   ${f}`);
+                  if (c.changedFiles.length > 20) console.log(`   … 共 ${c.changedFiles.length} 个`);
+                } else {
+                  console.log(`ℹ️ 跨仓 repo ${c.repoKey} 无交付变更（worktree 已清理）`);
+                }
+              }
+            }
             // filterDeliverableFiles 精细化排除（保留 .sillyspec/docs/，排 changes/+.runtime/+quicklog/ + meta.json）：
             // 模块文档（.sillyspec/docs/）= 交付物，会 auto-apply 到主工作区；变更文档/运行时/quicklog 不 apply。
             // 须告知 agent 哪些未落地，否则它期望这些文件落地却找不到（memory: worktree-apply-excludes-module-docs）。
@@ -1878,6 +1891,18 @@ SillySpec worktree — git worktree 隔离管理
             // 与并行会话的 apply/cleanup 互踩会互相清——与其他写主仓操作共用一把 main-repo.lock
             const { withMainRepoLock } = await import('./worktree-apply.js');
             const result = await withMainRepoLock(dir, wtName, 'worktree-cleanup', () => wm.cleanup(wtName, { force: forceFlag }));
+            // 跨仓 worktree（坑 cross-repo-no-worktree-isolation）：与主仓同锁清理——跨仓 worktree
+            // 注册在各跨仓仓 .git 内，但目录/meta 在主仓 .sillyspec 运行时区，同样怕并发互踩
+            const { cleanupCrossWorktrees } = await import('./worktree-cross.js');
+            const crossResult = cleanupCrossWorktrees({ cwd: dir, changeName: wtName, specBase: resolvePlatformSpecDir(dir, specDir), force: forceFlag });
+            for (const cr of crossResult.results) {
+              if (cr.result === 'cleaned') {
+                console.log(`✅ 跨仓 worktree 已清理: repo=${cr.repoKey}（${(cr.details || []).filter(d => d.startsWith('分支')).join('；') || '详情见上'}）`);
+              } else if (cr.result === 'partial') {
+                console.error(`🚫 跨仓 repo=${cr.repoKey} 清理受阻：${(cr.details || []).join('; ')}`);
+                for (const r of cr.residual || []) console.error(`   残留: ${r}`);
+              }
+            }
             if (result.result === 'cleaned' || result.result === 'force-cleaned') {
               console.log(`✅ worktree 已清理: ${wtName} (mode: ${result.mode})`);
               if (result.details?.length > 0) {

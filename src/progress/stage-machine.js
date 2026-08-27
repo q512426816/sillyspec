@@ -349,7 +349,9 @@ export class StageMachine {
             command: `sillyspec run ${s} --continue --answer "用户回答"${cc}`,
           };
         }
-        const hasPending = sd.steps.some(st => ['pending', 'waiting', 'failed'].includes(st.status));
+        // blocked（deps/review.json 门控阻断标记）也计入待办（坑 deps-gate-blocked-invisible）：
+        // 漏计会让全局「下一步」建议跳过被阻断的阶段/步骤，误导 agent 去跑更后面的阶段。
+        const hasPending = sd.steps.some(st => ['pending', 'waiting', 'failed', 'blocked'].includes(st.status));
         if (hasPending) {
           return {
             text: `${STAGE_LABELS[s] || s} 进行中，继续执行下一步。`,

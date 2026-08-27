@@ -58,7 +58,7 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
 规则要点：辅助阶段（除 archive）随时可执行；同阶段可重跑；`scan` 处于 `failed_post_check` 时禁止进入主链下游；变更起始只能进 brainstorm 或辅助阶段。
 
 **推进不是自动的，分三层**：
-1. **进入阶段** `runStage`（`src/run/stage.js:30`）→ `checkTransition` → 设 `currentStage`。execute 启动期自动创建 worktree（`stage.js:69-100`）、固定 `executeRunId`、审批检查。
+1. **进入阶段** `runStage`（`src/run/stage.js:30`）→ `checkTransition` → 设 `currentStage`。execute 启动期自动创建 worktree（`stage.js:37`）、固定 `executeRunId`、审批检查。
 2. **步骤内推进** `completeStep`（`src/run/complete.js:81`）处理 `--done`：标记 step completed → 找下一个 pending → 无 pending 则进阶段完成分支。
 3. **下一步建议** `_getNextSuggestion`（`src/progress/stage-machine.js:292`）按状态机推荐下一阶段命令。
 
@@ -71,17 +71,17 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
 | 门 | 触发 | 阻断 | 依据 |
 |---|---|---|---|
 | 转换门 `checkTransition` | 阶段跳转不符合 allowedFrom / scan failed | `exit(1)` | `src/stage-contract.js:861` |
-| WAIT 门 | `--done` output 含等待标记 / step `requiresWait` 未答 | `exit(1)` | `src/run/complete.js:106` |
+| WAIT 门 | `--done` output 含等待标记 / step `requiresWait` 未答 | `exit(1)` | `src/run/complete.js:118` |
 | execute deps 门 | worktree `depsStatus` 未达标 | step blocked + `exit(1)` | `src/run/gates.js:323` |
 | execute review.json 门 | 已勾 task 缺 review.json | step blocked + `exit(1)` | `src/run/gates.js:273` |
 | 阶段完成 gate 级联 | 所有 step completed 时跑 | 失败回滚 | `src/run/gates.js:371,628` |
 | archive `--confirm` | 归档步缺 `--confirm` | 回退该步 pending | `src/run/complete-handlers.js:262` |
 | quick 边界审计 | 命中受保护/危险文件或删除 | BLOCKED `exit(1)` | `src/run/shared.js:497` |
 
-**阶段完成 gate 级联**（`runStageCompletionGates` `src/run/gates.js:471`，统一收尾管线）顺序：
+**阶段完成 gate 级联**（`runStageCompletionGates` `src/run/gates.js:506`，统一收尾管线）顺序：
 1. `runValidators`（客观产物校验，`src/stage-contract.js:931`）：`validateBrainstormOutputs` / `validatePlanOutputs` / `validateExecuteOutputs`+`checkExecuteCodeEvidence` / `validateVerifyOutputs` / `validateScanOutputs`。
-2. verify 实测对账：CLI 亲跑 `local.yaml` 的 `commands.test`，自报告 PASS 但实测失败→阻断（`gates.js:533`）。
-3. Plan→Execute Contract（`validatePlanForExecute` `gates.js:628`）。
+2. verify 实测对账：CLI 亲跑 `local.yaml` 的 `commands.test`，自报告 PASS 但实测失败→阻断（`gates.js:568`）。
+3. Plan→Execute Contract（`validatePlanForExecute` `gates.js:663`）。
 4. Stage Review Gate（brainstorm/plan/execute，`gates.js:240`）：`classifyReviewTier` 判 tier=self（自审）/independent（强制独立子代理 review.json）。
 5. Execute Task Review Gate（`gates.js:527`）：校验所有 task review.json 存在 + verdict 通过 + git 真实性交叉校验。
 

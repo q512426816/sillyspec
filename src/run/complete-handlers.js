@@ -1385,6 +1385,26 @@ export async function handleExecuteWorktreeCleanup({ stageName, changeName, cwd 
     } catch (e) {
       console.warn(`🔗 Worktree: check failed — ${e.message}`);
     }
+    // 跨仓 worktree（坑 cross-repo-no-worktree-isolation）：execute 完成时不自动清——交付还在
+    // 跨仓 worktree 分支上未回落主工作副本，与主仓「pending apply」同语义，报状态 + 下一步指引
+    try {
+      const { listCrossWorktreeMetas } = await import('../worktree-cross.js')
+      const specBase = join(cwd, '.sillyspec')
+      for (const { repoKey, meta: cm } of listCrossWorktreeMetas(specBase, changeName)) {
+        let pending = 0
+        try {
+          const d = safeGit(cm.worktreePath, ['diff', '--name-only', cm.baseHash], { timeout: 30000 })
+          const u = safeGit(cm.worktreePath, ['ls-files', '--others', '--exclude-standard'], { timeout: 30000 })
+          pending = ((d.value || '') + '\n' + (u.value || '')).split('\n').filter(Boolean).length
+        } catch { /* 状态探测失败按未知处理 */ }
+        if (pending > 0) {
+          console.log(`🔗 跨仓 worktree repo=${repoKey}: pending apply (${pending} 个未回落变更)`)
+          console.log(`   下一步: sillyspec worktree apply ${changeName}（跨仓与主仓一并回落）`)
+        } else {
+          console.log(`🔗 跨仓 worktree repo=${repoKey}: 无未回落变更（apply 时将自动清理）`)
+        }
+      }
+    } catch { /* 跨仓状态报告 best-effort */ }
   }
   return null
 }

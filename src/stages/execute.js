@@ -1006,14 +1006,19 @@ ${indexLines}
       return { taskNum, repo, workdir }
     })
 
-    // D-010 跨仓 task base 锡点：派发前实时 git rev-parse HEAD 落 task 卡 base_commit
-    // 仅对跨仓 task（repo≠'main'）落盘，主仓 task 锚 meta.baseHash（MultiRepoContext 已处理）
+    // D-010 跨仓 task base 锡点：派发前落 task 卡 base_commit
+    // 仅对跨仓 task（repo≠'main'）落盘，主仓 task 锚 meta.baseHash（MultiRepoContext 已处理）。
+    // worktree 模式（跨仓 worktree 隔离，坑 cross-repo-no-worktree-isolation）优先 entry.baseCommitHint
+    //（= meta.baseHash 创建时快照）——worktree HEAD 会随子代理 commit 推进，rev-parse HEAD 当 base
+    // 会把 Wave 内前序 task 的交付错算进后续 task 的 base；legacy 直写模式沿用跨仓根实时 HEAD。
     const baseCommitCache = new Map() // 同仓多 task 只 spawn 一次
     for (const item of perTaskWorkdirs) {
       if (item.repo === 'main') continue
       const entry = ctx.resolve(item.repo)
       if (!entry) continue
-      if (!baseCommitCache.has(entry.gitDir)) baseCommitCache.set(entry.gitDir, gitQuiet(entry.gitDir, ['rev-parse', 'HEAD']))
+      if (!baseCommitCache.has(entry.gitDir)) {
+        baseCommitCache.set(entry.gitDir, entry.baseCommitHint || gitQuiet(entry.gitDir, ['rev-parse', 'HEAD']))
+      }
       const baseCommit = baseCommitCache.get(entry.gitDir)
       if (!baseCommit) continue // git 不可达已由 MultiRepoContext 构造时 fail-closed 拦截，此处置防御
       const taskFile = changeDir
@@ -1023,28 +1028,43 @@ ${indexLines}
       baseCommitWrites.push({ taskNum: item.taskNum, repo: item.repo, taskFile, written, baseCommit })
     }
 
-    // 跨仓 task commit 指引 + head_commit 落盘指引（D-010 回收时机）
+    // 跨仓 task commit 指引 + head_commit 落盘指引（D-010 回收时机）。
+    // worktree 模式（跨仓 worktree 隔离）：子代理在跨仓 worktree 分支改+commit，apply 阶段 CLI
+    // 统一 patch 回跨仓主工作区（与主仓同构）；legacy 直写模式保留原文案（commit 直落跨仓主干）。
+    const crossWorktreeItems = perTaskWorkdirs.filter(i => {
+      const e = i.repo !== 'main' ? ctx.resolve(i.repo) : null
+      return e && e.isWorktree
+    })
+    const crossLegacyItems = perTaskWorkdirs.filter(i => i.repo !== 'main' && !crossWorktreeItems.some(w => w.taskNum === i.taskNum))
     const crossLines = perTaskWorkdirs
       .filter(i => i.repo !== 'main')
-      .map(i => `- task-${i.taskNum} → repo \`${i.repo}\`，workdir=\`${i.workdir}\``)
+      .map(i => {
+        const e = ctx.resolve(i.repo)
+        return `- task-${i.taskNum} → repo \`${i.repo}\`，workdir=\`${i.workdir}\`${e && e.isWorktree ? '（worktree 隔离）' : ''}`
+      })
       .join('\n')
-    crossRepoCommitSection = `
-### 跨仓 task 派发与双锡点
+    const crossWorktreeSection = crossWorktreeItems.length > 0 ? `
 
-本 Wave 含跨仓 task（直接改跨仓仓主干，**不经主仓 worktree**）：
-
-${crossLines}
+**跨仓 worktree task（repo 已建 worktree 隔离）——像主仓 task 一样工作：**
+- 子代理在 workdir（跨仓 worktree）内改+commit（git add + git commit 到 worktree 当前分支），**不要碰跨仓主工作副本**。
+- apply 阶段 CLI 统一把各跨仓 worktree 的交付 patch 回对应跨仓主工作区（勿手工 apply）。
+- base 已锚 worktree meta.baseHash（创建时快照），review 的 base/head 由 CLI 按 task 卡锡点解析。` : ''
+    const crossLegacySection = crossLegacyItems.length > 0 ? `
 
 **派发跨仓 task 前（base 锡点，CLI 已在 prompt 构造时落盘）：**
 - 跨仓 task 卡 frontmatter 的 \`base_commit\` 已由 CLI 实时 \`git -C <跨仓仓根> rev-parse HEAD\` 锁定（base 锡点，约束①）。子代理在此 HEAD 上改+commit，不受同 Wave 其他 task 推进 HEAD 影响。
 
-**回收跨仓 task（head 锡点，CLI 自动落盘，勿手写）：**
-- 子代理完成 commit 后，正常写 review.json（verdict/notes）并勾选 checkbox 即可。execute \`--done\` 时 CLI 自动 \`git -C <跨仓仓根> rev-parse HEAD\` 写入该 task 卡 \`head_commit:\`（幂等，已存在不覆盖——你若手写了精确锚点则以你的为准）。
-- review.json 的 mechanics 字段（\`base\`/\`head\`/\`changedFiles\`）无需手算：\`base\` 取 task 卡 \`base_commit\`、\`head\` 取 task 卡 \`head_commit\`，写完跑 \`sillyspec backfill-reviews --change <变更名> --adopt\` 一键代填（verdict 保留）。
-
-**跨仓 task 子代理 prompt 必须注入：**
+**跨仓 task 子代理 prompt 必须注入（legacy 直写模式）：**
 > 该 task 改的是 \`<repo>\` 仓，workdir=\`<跨仓仓根>\`。**直接在该仓主干工作区改+commit（git add + git commit 到该仓主干），不经主仓 worktree、不建分支。** commit 到该仓主干即落盘，apply 阶段对跨仓 task 为 no-op（design §5.4 G1）。
-> task 卡 allowed_paths 是相对**该仓根**的路径（如 \`src/routes/x.js\`）——不带仓库名前缀（\`<repo>/src/...\` ❌）、不是绝对路径；在 workdir 下直接按相对路径定位文件。
+> task 卡 allowed_paths 是相对**该仓根**的路径（如 \`src/routes/x.js\`）——不带仓库名前缀（\`<repo>/src/...\` ❌）、不是绝对路径；在 workdir 下直接按相对路径定位文件。` : ''
+    crossRepoCommitSection = `
+### 跨仓 task 派发与双锡点
+
+${crossLines}${crossWorktreeSection}${crossLegacySection}
+
+**回收跨仓 task（head 锡点，CLI 自动落盘，勿手写）：**
+- 子代理完成 commit 后，正常写 review.json（verdict/notes）并勾选 checkbox 即可。execute \`--done\` 时 CLI 自动对跨仓仓（worktree 模式=该仓 worktree，legacy=仓根）\`git rev-parse HEAD\` 写入该 task 卡 \`head_commit:\`（幂等，已存在不覆盖——你若手写了精确锚点则以你的为准）。
+- review.json 的 mechanics 字段（\`base\`/\`head\`/\`changedFiles\`）无需手算：\`base\` 取 task 卡 \`base_commit\`、\`head\` 取 task 卡 \`head_commit\`，写完跑 \`sillyspec backfill-reviews --change <变更名> --adopt\` 一键代填（verdict 保留）。
 `
   }
 

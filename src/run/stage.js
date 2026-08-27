@@ -93,6 +93,26 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
       const execSpecBase = platformOpts?.specRoot || join(cwd, '.sillyspec')
       await ensureDepsFreshness(cwd, effectiveChange, execSpecBase, existingMeta)
     }
+
+    // ── 跨仓仓 worktree 隔离（坑 cross-repo-no-worktree-isolation，2026-08-27 用户实证）──
+    // 主仓 worktree 就绪后，为 plan 声明的每个跨仓仓建同构 worktree（幂等）。此前跨仓 task 直写
+    // 跨仓主工作副本，与用户在途改动混流、无 base 锚、无回滚面。fail-closed：建不起来不开工
+    //（对齐主仓 create 语义）。
+    try {
+      const { ensureCrossWorktrees } = await import('../worktree-cross.js')
+      const execSpecBase = platformOpts?.specRoot || join(cwd, '.sillyspec')
+      const cross = ensureCrossWorktrees({ cwd, changeName: effectiveChange, specBase: execSpecBase })
+      for (const c of cross.created) {
+        console.log(`🔗 跨仓 worktree 已创建: repo=${c.repoKey} → ${c.worktreePath}`)
+      }
+      for (const r of cross.reused) {
+        console.log(`🔗 跨仓 worktree 已存在: repo=${r.repoKey} → ${r.worktreePath}`)
+      }
+    } catch (e) {
+      console.error(`❌ 跨仓 worktree 创建失败: ${e.message}`)
+      console.error(`   修复后重跑本命令（已建成功的仓会幂等复用）。`)
+      process.exit(1)
+    }
   }
 
   // ── execute 阶段启动时固定 executeRunId（绑定变更名，避免跨变更复用） ──
@@ -228,8 +248,14 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
 
   let currentIdx = steps.findIndex(s => s.status !== 'completed' && s.status !== 'skipped')
 
-  // stale 步骤视为可执行（等同于 pending）
-  if (currentIdx !== -1 && steps[currentIdx].status === 'stale') {
+  // stale/blocked 步骤视为可执行（等同于 pending）：
+  //   stale = reopen 后未重做（原语义）；blocked = 门控（deps/review.json）阻断标记。
+  // blocked 必须一并转换（坑 deps-gate-blocked-invisible 的路径①失效面）：reopen 后首个未完成
+  // 步骤若是 blocked（早前门控阻断污染），只转 stale 会让 completeStep 的 findIndex(pending)
+  // 跳过它、--done 永远撞 stale 门控报错——「逐个真实执行」指引失效。门控在 --done 时会
+  // 重新校验，此处拉回 pending 不会绕过任何校验。
+  if (currentIdx !== -1 && (steps[currentIdx].status === 'stale' || steps[currentIdx].status === 'blocked')) {
+    console.log(`⚠️  Step "${steps[currentIdx].name}" 处于 ${steps[currentIdx].status}，已拉回待执行。`)
     steps[currentIdx].status = 'pending'
     pm._write(cwd, progress, changeName)
     triggerSync(cwd, changeName, platformOpts)

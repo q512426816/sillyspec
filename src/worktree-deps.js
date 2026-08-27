@@ -3,9 +3,14 @@
  *
  * 在 worktree.create() 的 baseline overlay 之后调用，让 worktree 立即可构建/测试。
  * 策略：junction/symlink 快路径（lockfile 一致）+ install 兜底；多语言按 local.yaml
- * project.type + lockfile 推断 install 命令。供给可失败，但状态写进 meta 供验证硬门读取。
+ * project.type + ECOSYSTEMS 清单表推断 install 命令。供给可失败，但状态写进 meta 供验证硬门读取。
  *
  * 见 change 2026-06-28-worktree-deps-provision / D-005@v1, D-007@v1。
+ *
+ * 生态中立（坑 deps-ecosystem-hardcode，2026-08-27）：本模块所有「按语言判断」一律走下方
+ * ECOSYSTEMS 清单表（单一事实源），不再散落 nodejs 特判——此前 lockfileHash 只认 nodejs
+ * 清单、missing 只认 node_modules、maven/gradle 无清单基准（pom.xml 改了不触发重供给）、
+ * node 校验与 java 校验各说各话。新生态补一行表项即可；表外项目落 generic → n/a 不阻断。
  */
 
 import { existsSync, readFileSync, realpathSync, lstatSync, readdirSync, unlinkSync } from 'fs';
@@ -18,20 +23,116 @@ const LOCKFILES = ['pnpm-lock.yaml', 'package-lock.json', 'yarn.lock'];
 const DEFAULT_TIMEOUT_MS = 300 * 1000;
 
 /**
- * 取目录下首个命中的 lockfile 的 sha256 前 16 位；
- * 无 lockfile 则 hash package.json；都没有返回 null。
+ * 生态清单表——deps 链路「按语言判断」的单一事实源。每项声明：
+ *   type:      project.type 值（local.yaml 可显式声明覆盖探测）
+ *   detect:    文件特征探测（表序即优先级；polyglot 目录按先命中者定性，hash 基准与 install
+ *              同取该生态——检测与供给/新鲜度始终同生态，不自相矛盾）
+ *   manifests: 依赖清单文件（按优先级取首个存在者作 freshness 的 hash 基准：清单变 = 依赖集变
+ *              = stale 触发重供给。nodejs 原以 lockfile/package.json 充当；maven/gradle/python
+ *              原先无基准 → pom.xml 改了也不触发，正是「node 校验的和 java 的不一样」的病根）
+ *   marker:    depsStatus=installed/linked 后应存在的 worktree 本地产物（missing 判定）。
+ *              null = 产物在用户级仓库（maven ~/.m2、gradle ~/.gradle）或安装方式两可
+ *              （python：uv sync 建 .venv、pip 装进当前环境），无 worktree 内统一标记，
+ *              freshness 只信 depsStatus + 清单 hash——不重蹈 non-nodejs-missing-misjudge
+ *   install:   无 commands.install 时的默认命令（null = 无默认，根供给 n/a）
+ */
+const ECOSYSTEMS = [
+  {
+    type: 'maven',
+    manifests: ['pom.xml'],
+    marker: null,
+    detect: (d) => existsSync(join(d, 'pom.xml')),
+    install: () => 'mvn -o test',
+  },
+  {
+    type: 'gradle',
+    manifests: ['build.gradle.kts', 'build.gradle', 'settings.gradle', 'gradle.lockfile'],
+    marker: null,
+    detect: (d) => existsSync(join(d, 'build.gradle')) || existsSync(join(d, 'build.gradle.kts')),
+    // win32 cmd.exe 跑不了 ./gradlew（体检 BUG-08 同型）：优先 gradlew.bat，否则全局 gradle
+    install: (d) => (process.platform === 'win32'
+      ? (existsSync(join(d, 'gradlew.bat')) ? 'gradlew.bat test' : 'gradle test')
+      : './gradlew test'),
+  },
+  {
+    type: 'nodejs',
+    manifests: ['pnpm-lock.yaml', 'package-lock.json', 'yarn.lock', 'package.json'],
+    marker: 'node_modules',
+    // 探测含 LOCKFILES（与 hasNodeMarker 同口径）：只有 lockfile 没有 package.json 的目录
+    //（子包/残缺 checkout）也是 nodejs——missing 护栏对它们同样生效
+    detect: (d) => existsSync(join(d, 'package.json')) || LOCKFILES.some(lf => existsSync(join(d, lf))),
+    install: (d) => {
+      if (existsSync(join(d, 'pnpm-lock.yaml'))) return 'pnpm install --frozen-lockfile';
+      if (existsSync(join(d, 'package-lock.json'))) return 'npm ci';
+      if (existsSync(join(d, 'yarn.lock'))) return 'yarn install --frozen-lockfile';
+      return 'npm install'; // 无 lockfile 兜底（X-2）
+    },
+  },
+  {
+    type: 'python',
+    manifests: ['uv.lock', 'poetry.lock', 'requirements.txt', 'pyproject.toml'],
+    marker: null,
+    detect: (d) => existsSync(join(d, 'pyproject.toml')) || existsSync(join(d, 'requirements.txt')),
+    // uv 优先（现代 Python 工具链，pyproject/uv.lock 项目走 uv sync 建 .venv + 装依赖，
+    // 与 execute worktree 环境预告一致）；纯 requirements.txt（无 pyproject）回退 pip
+    install: (d) => (existsSync(join(d, 'uv.lock')) || existsSync(join(d, 'pyproject.toml')) ? 'uv sync' : 'pip install -r requirements.txt'),
+  },
+  {
+    type: 'go',
+    manifests: ['go.mod', 'go.sum'],
+    marker: null,
+    detect: (d) => existsSync(join(d, 'go.mod')),
+    install: () => 'go mod download',
+  },
+  {
+    type: 'rust',
+    manifests: ['Cargo.lock', 'Cargo.toml'],
+    marker: null,
+    detect: (d) => existsSync(join(d, 'Cargo.toml')),
+    install: () => 'cargo fetch --locked',
+  },
+  {
+    type: 'php',
+    manifests: ['composer.lock', 'composer.json'],
+    marker: null,
+    detect: (d) => existsSync(join(d, 'composer.json')),
+    install: () => 'composer install',
+  },
+  {
+    type: 'ruby',
+    manifests: ['Gemfile.lock', 'Gemfile'],
+    marker: null,
+    detect: (d) => existsSync(join(d, 'Gemfile')),
+    install: () => 'bundle install',
+  },
+];
+
+/** 目录命中的生态表项（表序优先；无命中 → null = generic）。polyglot 目录取先命中生态。 */
+export function detectEcosystem(dir) {
+  if (!dir || !existsSync(dir)) return null;
+  for (const eco of ECOSYSTEMS) {
+    if (eco.detect(dir)) return eco;
+  }
+  return null;
+}
+
+/**
+ * 取目录下首个命中的生态清单文件的 sha256 前 16 位（全生态：pnpm-lock/yarn.lock/pom.xml/
+ * go.mod/Cargo.lock/composer.lock/Gemfile.lock…按 ECOSYSTEMS 表序）；无任何清单返回 null。
+ * 函数名保留 lockfileHash（历史导出名，worktree.js/modules 链接一致性判定等多处消费），
+ * 语义自 2026-08-27 起泛化为「依赖清单 hash」——maven 的 pom.xml 等与 nodejs 的 lockfile
+ * 同权作 stale/main-drift 基准。polyglot 目录首次泛化后基准可能从 package.json 切到先命中
+ * 生态的清单（一次性 stale 重供给，自愈后以新基准续跑）。
  */
 export function lockfileHash(dir) {
   if (!dir || !existsSync(dir)) return null;
-  for (const lf of LOCKFILES) {
-    const p = join(dir, lf);
-    if (existsSync(p)) {
-      return createHash('sha256').update(readFileSync(p)).digest('hex').slice(0, 16);
+  for (const eco of ECOSYSTEMS) {
+    for (const mf of eco.manifests) {
+      const p = join(dir, mf);
+      if (existsSync(p)) {
+        return createHash('sha256').update(readFileSync(p)).digest('hex').slice(0, 16);
+      }
     }
-  }
-  const pkg = join(dir, 'package.json');
-  if (existsSync(pkg)) {
-    return createHash('sha256').update(readFileSync(pkg)).digest('hex').slice(0, 16);
   }
   return null;
 }
@@ -78,47 +179,24 @@ function extractUserInstall(yamlText) {
   return null;
 }
 
-/** 从 local.yaml 提取 project.type；缺失时按文件特征推断 */
+/** 从 local.yaml 提取 project.type；缺失时按 ECOSYSTEMS 表文件特征推断（表序优先） */
 export function detectProjectType(worktreePath, specBase) {
   const yamlText = readLocalYaml(specBase, worktreePath);
   if (yamlText) {
     const m = yamlText.match(/type:\s*(\S+)/);
     if (m && m[1]) return m[1];
   }
-  if (existsSync(join(worktreePath, 'pom.xml'))) return 'maven';
-  if (existsSync(join(worktreePath, 'build.gradle')) || existsSync(join(worktreePath, 'build.gradle.kts'))) return 'gradle';
-  if (existsSync(join(worktreePath, 'package.json'))) return 'nodejs';
-  // Python：pyproject.toml（uv/poetry/pdm）或 requirements.txt（pip）——治 worktree 内 ruff/pre-commit 等
-  // 二进制不供给（exec 复盘 3-②：detectProjectType 原无 python 分支，python 项目根被误判 generic → n/a）
-  if (existsSync(join(worktreePath, 'pyproject.toml')) || existsSync(join(worktreePath, 'requirements.txt'))) return 'python';
-  return 'generic';
+  const eco = detectEcosystem(worktreePath);
+  return eco ? eco.type : 'generic';
 }
 
-/** 按 project.type + lockfile 推断 install 命令（无 commands.install 时）*/
+/** 按 project.type（+ 表内 install 探测）推断 install 命令（无 commands.install 时）。
+ *  表外 project.type（含 local.yaml 显式声明的自定义值）→ null → 根供给 n/a，
+ *  需要执行的装法在 local.yaml commands.install 显式声明（仍过白名单+元字符门）。 */
 export function inferInstallCommand(projectType, worktreePath, userInstall) {
   if (userInstall) return userInstall;
-  switch (projectType) {
-    case 'nodejs':
-      if (existsSync(join(worktreePath, 'pnpm-lock.yaml'))) return 'pnpm install --frozen-lockfile';
-      if (existsSync(join(worktreePath, 'package-lock.json'))) return 'npm ci';
-      if (existsSync(join(worktreePath, 'yarn.lock'))) return 'yarn install --frozen-lockfile';
-      return 'npm install'; // 无 lockfile 兜底（X-2）
-    case 'maven':
-      return 'mvn -o test';
-    case 'gradle':
-      // win32 cmd.exe 跑不了 ./gradlew（体检 BUG-08 同型）：优先 gradlew.bat，否则全局 gradle
-      if (process.platform === 'win32') {
-        return existsSync(join(worktreePath, 'gradlew.bat')) ? 'gradlew.bat test' : 'gradle test';
-      }
-      return './gradlew test';
-    case 'python':
-      // uv 优先（现代 Python 工具链，pyproject.toml/uv.lock 项目走 uv sync 建 .venv + 装依赖，
-      // 与 execute worktree 环境预告一致）；纯 requirements.txt（无 pyproject）回退 pip
-      if (existsSync(join(worktreePath, 'uv.lock')) || existsSync(join(worktreePath, 'pyproject.toml'))) return 'uv sync';
-      return 'pip install -r requirements.txt';
-    default:
-      return null; // generic → n/a
-  }
+  const eco = ECOSYSTEMS.find(e => e.type === projectType);
+  return eco ? eco.install(worktreePath) : null;
 }
 
 /** 在 worktreePath 创建 node_modules 链接到 mainNodeModules；失败回退 */
@@ -202,7 +280,7 @@ function tryLink(mainNodeModules, linkPath) {
  * 全程 argv 数组执行不经 shell、任一段失败即停（&& 语义）。安全面不变：每个执行段仍是
  * 白名单包管理器命令，`||`/管道/`;`/后台均不支持。
  */
-const INSTALL_BINARY_WHITELIST = /^(?:\.\/)?(?:pnpm|npm|yarn|bun|mvn|gradle|gradlew|uv|pip|pip3|python|python3|poetry|make)(?:\.cmd|\.bat|\.exe)?(?:\s|$)/;
+const INSTALL_BINARY_WHITELIST = /^(?:\.\/)?(?:pnpm|npm|yarn|bun|mvn|mvnd|gradle|gradlew|uv|pip|pip3|python|python3|poetry|make|go|cargo|composer|bundle|dotnet)(?:\.cmd|\.bat|\.exe)?(?:\s|$)/;
 const SHELL_METACHARS = /[;&|<>$`\n]/;
 const WIN_SHELL_METACHARS = /[;&|<>$`\n%]/;
 const CD_SEGMENT_RE = /^cd\s+([^\s]+)$/;
@@ -252,8 +330,15 @@ function tryInstall(cmd, cwd, timeout) {
         execFileSync(argv[0], argv.slice(1), { cwd: curCwd, timeout, stdio: ['pipe', 'pipe', 'pipe'] });
       }
     } catch (e) {
-      const msg = e.killed ? `timeout after ${timeout}ms` : ((e.stderr && e.stderr.toString()) || e.message);
-      return { ok: false, error: `${seg} failed (cwd ${curCwd}): ${msg}` };
+      const raw = e.killed ? `timeout after ${timeout}ms` : ((e.stderr && e.stderr.toString()) || e.message);
+      // 命令找不到 → 追加 PATH 定向指引（坑 deps-tool-not-on-path-failed-loop，2026-08-27 实证）：
+      // CLI 子进程继承调用方 shell 的 PATH，无 mvn/gradle 等工具链的环境里 install 必败，裸报
+      // "'mvn' 不是内部或外部命令" 让人误以为是项目配置问题。指引换环境重跑 doctor --fix。
+      const notFoundRe = /is not recognized|不是内部或外部命令|command not found|no such file or directory|ENOENT/i;
+      const hint = (!e.killed && notFoundRe.test(raw))
+        ? `（工具 ${argv[0]} 不在当前 shell 的 PATH——CLI 子进程继承调用方环境。请在含该工具链的环境重跑 sillyspec worktree doctor --fix --change <变更名>，或把工具目录加入 PATH 后重试）`
+        : '';
+      return { ok: false, error: `${seg} failed (cwd ${curCwd}): ${raw}${hint}` };
     }
   }
   return { ok: true };
@@ -491,15 +576,21 @@ export function provisionDeps(worktreePath, mainCwd, opts = {}) {
  * 统一的 worktree deps 新鲜度判定（H1，change 2026-08-05-tooling-feedback-fixes）。
  * 供 doctor（worktree.js）与 ensureDepsFreshness（run/stage.js）共用，消除两处双写漂移。
  *
+ * 生态中立（坑 deps-ecosystem-hardcode，2026-08-27）：判定基准全部来自 ECOSYSTEMS 清单表，
+ * 各生态同一套语义——不再有「node 一套校验、java 另一套」：
+ *
  * 判定优先级：failed → missing → stale → main-drift → fresh
  *   - failed: meta.depsStatus==='failed'（上次供给失败，占最高优先级）
- *   - missing: depsStatus ∈ {linked, installed} 且 node_modules 不存在
- *   - stale: wtHash 与 meta.depsLockHash 不一致（worktree 自身 lockfile 在上次供给后变化）
- *   - main-drift: wtHash 与主仓 mainHash 不一致（主仓 lockfile 漂移；复用 linkOneDir 177-178 的 mismatch 判据）
+ *   - missing: depsStatus ∈ {linked, installed} 且生态 marker（如 nodejs 的 node_modules）
+ *     不存在。仅对声明了 marker 的生态生效（nodejs）；maven/gradle/python 等产物在用户级
+ *     仓库或安装方式两可（表内 marker=null），只信 depsStatus + 清单 hash
+ *   - stale: wtHash 与 meta.depsLockHash 不一致（worktree 自身依赖清单在上次供给后变化——
+ *     nodejs 的 lockfile/package.json、maven 的 pom.xml、go 的 go.mod 等同权）
+ *   - main-drift: wtHash 与主仓 mainHash 不一致（主仓清单漂移；复用 linkOneDir 的 mismatch 判据）
  *   - fresh: 其余情况
  *
- * lockfileHash 返回 null（无 lockfile/package.json）时相关比较优雅降级——不报 stale / main-drift，
- * 避免无 lockfile 项目（如纯 generic / 非 nodejs）误判漂移。
+ * lockfileHash 返回 null（目录内无任何生态清单文件）时相关比较优雅降级——不报 stale /
+ * main-drift，避免无清单项目（如纯 generic）误判漂移。
  *
  * @param {object} [meta] - worktree meta（读 depsStatus / depsLockHash / depsError）
  * @param {string} wtPath - worktree 根目录
@@ -521,12 +612,18 @@ export function checkDepsFreshness(meta, wtPath, mainCwd) {
     };
   }
 
-  // 2. missing：曾 link/install 但 node_modules 已丢失（对齐 doctor 914-915 / ensure 403）
-  const nmExists = wtPath ? existsSync(join(wtPath, 'node_modules')) : false;
-  if (['linked', 'installed'].includes(depsStatus) && !nmExists) {
+  // 2. missing：曾 link/install 但生态 marker 已丢失（对齐 doctor 914-915 / ensure 403）。
+  // marker 来自 ECOSYSTEMS 表：nodejs → node_modules。marker=null 的生态（maven/gradle/python…）
+  // 产物在 ~/.m2、~/.gradle 或安装方式两可，worktree 内无统一标记——此前无此门会把这类项目
+  // 每次 execute 入口都误判 missing → 重跑 install → 无工具链 PATH 的 shell 里失败 →
+  // depsStatus 被打回 failed → deps 门控阻断 --done（坑 non-nodejs-missing-misjudge，2026-08-27
+  // maven 项目实证）。
+  const eco = detectEcosystem(wtPath);
+  const marker = eco ? eco.marker : null;
+  if (marker && ['linked', 'installed'].includes(depsStatus) && wtPath && !existsSync(join(wtPath, marker))) {
     return {
       status: 'missing',
-      detail: `meta.depsStatus=${depsStatus} 但 node_modules 缺失`,
+      detail: `meta.depsStatus=${depsStatus} 但 ${marker} 缺失（${eco.type} 生态就绪标记）`,
       wtHash, mainHash, metaLockHash,
     };
   }
@@ -550,20 +647,21 @@ export function checkDepsFreshness(meta, wtPath, mainCwd) {
     }
   }
 
-  // 3. stale：worktree 自身 lockfile 与 meta 快照不一致（对齐 doctor 916-917 / ensure 404）
+  // 3. stale：worktree 自身依赖清单与 meta 快照不一致（对齐 doctor 916-917 / ensure 404；
+  // 清单=ECOSYSTEMS 表内文件：nodejs lockfile/package.json、maven pom.xml、go go.mod 等同权）
   if (metaLockHash && wtHash && wtHash !== metaLockHash) {
     return {
       status: 'stale',
-      detail: `lockfile 变化 (${metaLockHash} -> ${wtHash})`,
+      detail: `依赖清单变化 (${metaLockHash} -> ${wtHash})`,
       wtHash, mainHash, metaLockHash,
     };
   }
 
-  // 4. main-drift（新增）：wtHash 与主仓 mainHash 不一致——主仓 lockfile 更新过、worktree 未跟
+  // 4. main-drift（新增）：wtHash 与主仓 mainHash 不一致——主仓依赖清单更新过、worktree 未跟
   if (wtHash && mainHash && wtHash !== mainHash) {
     return {
       status: 'main-drift',
-      detail: `worktree lockfile 与主仓不一致 (wt=${wtHash} main=${mainHash})`,
+      detail: `worktree 依赖清单与主仓不一致 (wt=${wtHash} main=${mainHash})`,
       wtHash, mainHash, metaLockHash,
     };
   }

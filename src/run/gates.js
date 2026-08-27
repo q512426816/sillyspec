@@ -321,10 +321,42 @@ export async function enforceDepsGate(stageName, cwd, changeName, step, steps, c
     console.warn(`⚠️ worktree meta 读取失败（deps gate 将走物理目录判定）: ${e.message}`)
   }
   const depsStatus = meta?.depsStatus
-  if (['linked', 'installed', 'n/a'].includes(depsStatus)) return true
+  const mainOk = ['linked', 'installed', 'n/a'].includes(depsStatus)
+  if (mainOk) {
+    // ── 跨仓 worktree deps 校验（坑 cross-repo-no-worktree-isolation）──
+    // 跨仓仓供给失败同样无构建/测试能力（前端仓无 node_modules 建不了 build）。只校验已建
+    // worktree 的跨仓仓（legacy 直写模式无 meta，维持原语义，下游 Task Review 兜底）。
+    let crossFailed = []
+    try {
+      const crossSpecBase = platformOpts?.specRoot || join(cwd, '.sillyspec')
+      const { listCrossWorktreeMetas } = await import('../worktree-cross.js')
+      crossFailed = listCrossWorktreeMetas(crossSpecBase, changeName)
+        .filter(({ meta: cm }) => cm.depsStatus && !['linked', 'installed', 'n/a'].includes(cm.depsStatus))
+    } catch (e) {
+      console.warn(`⚠️ 跨仓 worktree deps 校验跳过（${e.message}）`)
+    }
+    if (crossFailed.length === 0) return true
+    if (steps && steps[currentIdx]) {
+      steps[currentIdx].status = 'blocked'
+      steps[currentIdx].blockReason = `跨仓 deps 门控阻断（${crossFailed.map(f => f.repoKey).join(', ')}）：修复后重试 --done`
+    }
+    console.error('❌ ── deps 门控阻断（本次 --done 未完成，进度未推进）──')
+    for (const { repoKey, meta: cm } of crossFailed) {
+      console.error(`   跨仓 repo ${repoKey} 依赖未就绪（depsStatus=${cm.depsStatus || 'unknown'}）——workdir: ${cm.worktreePath}`)
+      if (cm.depsError) console.error(`   上次供给错误：${cm.depsError}`)
+    }
+    console.error('   修复：进上述跨仓 worktree 手动安装依赖（用该仓的包管理器），或重跑 sillyspec run execute 让 CLI 重试供给后 --done。')
+    if (persist) { try { await persist() } catch { /* 落盘失败不吞阻断语义 */ } }
+    process.exit(1)
+  }
   const changeDir = changeName ? join(specBase, 'changes', changeName) : null
   if (isCurrentWaveAllNoDepsVerify(step?.name, changeDir)) return true
-  if (steps && steps[currentIdx]) steps[currentIdx].status = 'blocked'
+  if (steps && steps[currentIdx]) {
+    steps[currentIdx].status = 'blocked'
+    // 阻断原因持久化（坑 deps-gate-blocked-invisible）：--status/诊断时可见，不依赖阻断当刻的
+    // stderr（跨进程即失忆）。completed 时由 completeStep 主流程覆盖整个步骤行，残留字段不外泄。
+    steps[currentIdx].blockReason = `deps 门控阻断（depsStatus=${depsStatus || 'unknown'}）：worktree doctor --fix 修复后重试 --done`
+  }
   // ── 诊断分支（Phase 2，G2/R3 修正：判定基于物理目录而非 !meta）──
   // getMeta 对"目录不存在"与"meta 损坏"都返回 null，后者会误判终态 → 用物理目录存在性判定。
   let worktreeGone = true
@@ -411,7 +443,10 @@ export async function enforceReviewJsonGate(stageName, cwd, changeName, step, st
   }
   const result = validateCheckedTaskReviews({ planContent, runtimeRoot, executeRunId })
   if (result.ok) return true
-  if (steps && steps[currentIdx]) steps[currentIdx].status = 'blocked'
+  if (steps && steps[currentIdx]) {
+    steps[currentIdx].status = 'blocked'
+    steps[currentIdx].blockReason = 'review.json 字段校验阻断：补齐后重试 --done（backfill-reviews --adopt 可代填 mechanics）'
+  }
   console.error('❌ ── review.json 字段校验阻断（本次 --done 未完成，进度未推进）──')
   console.error('   已勾选 [x] 的 task review.json 不完整（铁律：勾 checkbox 前必须先写完整 review.json）:')
   for (const f of result.failures) {

@@ -23,7 +23,7 @@ import { basename, join, resolve, dirname } from 'node:path'
 import { existsSync, readdirSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
 import { randomBytes, randomUUID } from 'node:crypto'
 import { writeAtomicSync } from '../fs-atomic.js'
-import { resolveSpecDir, countAncestorSpecDirs, resolveChangeDir, triggerSync, getStageSteps, formatWaitOptions, checkApproval, warnApprovalUnknown, didYouMean, assertSafeChangeName, detectQuickSessionDrift, detectWorktreeSpecDrift, resolveRuntimeRoot, writePlatformPointer, checkPlatformManaged, isSelfReferentialSpecRoot, PLATFORM_MANAGED_FILENAME } from './shared.js'
+import { resolveSpecDir, countAncestorSpecDirs, ancestorSpecDirs, resolveAncestorCeiling, resolveChangeDir, triggerSync, getStageSteps, formatWaitOptions, checkApproval, warnApprovalUnknown, didYouMean, assertSafeChangeName, detectQuickSessionDrift, detectWorktreeSpecDrift, resolveRuntimeRoot, writePlatformPointer, checkPlatformManaged, isSelfReferentialSpecRoot, PLATFORM_MANAGED_FILENAME } from './shared.js'
 import { resolveQuickLinkedChanges } from './quick-audit.js'
 import { outputStep, collectStageWaitHistory } from './prompt.js'
 import { completeStep, skipStep, waitStep, continueStep } from './complete.js'
@@ -385,14 +385,26 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
   // let：下方 worktree 副本漂移守卫命中时锚回 wt.mainSpecBase（task-05/D-03）
   let specBase = platformOpts.specRoot || join(cwd, '.sillyspec')
 
-  // 漂移提醒:cwd 祖先链 ≥2 个 .sillyspec = monorepo 多实例,当前命中的「最近」实例
+  // 漂移阻断:cwd 祖先链 ≥2 个 .sillyspec = monorepo 多实例,当前命中的「最近」实例
   // 可能不是用户意图的项目(如 cd 进被独立 scan 的子项目跑测试后忘回根)。
-  // 平台模式 / 显式 --spec-dir 跳过(已明确指定,无歧义)。仅提醒不阻断。
+  // 平台模式 / 显式 --spec-dir 跳过(已明确指定,无歧义)。
+  // 当前实例 ≠ git 顶层仓库实例 → 默认拒绝(坑 monorepo-cwd-wrong-spec-instance)。
   if (!platformOpts.specRoot && !specDir) {
-    const ancestorCount = countAncestorSpecDirs(cwd)
-    if (ancestorCount >= 2) {
-      console.warn(`⚠️  检测到祖先链有 ${ancestorCount} 个 .sillyspec 实例(monorepo 多实例),当前使用: ${specBase}`)
-      console.warn(`    若意图是另一个项目:cd 回该项目根,或用 --spec-dir <根>/.sillyspec 显式指定。`)
+    const ancestorSpecs = ancestorSpecDirs(cwd)
+    if (ancestorSpecs.length >= 2) {
+      // 判断当前命中的 .sillyspec 是否在 git 顶层仓库根下
+      const gitRoot = resolveAncestorCeiling(resolve(cwd))
+      const currentSpecParent = dirname(resolve(specBase))
+      const isAtGitRoot = gitRoot && resolve(currentSpecParent) === resolve(gitRoot)
+      if (!isAtGitRoot) {
+        console.error(`❌ 检测到祖先链有 ${ancestorSpecs.length} 个 .sillyspec 实例(monorepo 多实例)，当前使用: ${specBase}`)
+        console.error(`   当前 cwd 不在 git 顶层仓库根下，静默绑定到子项目实例会导致进度/QUICKLOG 分裂。`)
+        console.error(`   修复：cd 回项目根目录，或用 --spec-dir <根>/.sillyspec 显式指定。`)
+        process.exit(2)
+      }
+      // 在 git 根下但有多实例(子项目也有 .sillyspec)→ 仅警告(正确实例已命中)
+      console.warn(`⚠️  检测到祖先链有 ${ancestorSpecs.length} 个 .sillyspec 实例(monorepo 多实例)，当前使用: ${specBase}`)
+      console.warn(`    当前已绑定 git 顶层仓库实例。若意图是子项目:用 --spec-dir 显式指定。`)
     }
   }
 
@@ -896,7 +908,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     if (readonlySteps && readonlySteps.length > 0) {
       // 已有进度（历史 seed 过）则渲染当前待办步；无进度从首步开始
       const existingSteps = progress.stages?.[stageName]?.steps
-      const pendingIdx = existingSteps ? existingSteps.findIndex(s => s.status === 'pending' || s.status === 'in-progress') : -1
+      const pendingIdx = existingSteps ? existingSteps.findIndex(s => s.status === 'pending' || s.status === 'in-progress' || s.status === 'blocked') : -1
       const stepIdx = pendingIdx !== -1 ? pendingIdx : 0
       await outputStep(stageName, stepIdx, readonlySteps, cwd, readOnlyChange, progress.project || null, platformOpts, null, collectStageWaitHistory(progress, stageName))
     }
@@ -1295,7 +1307,7 @@ function showStatus(progress, stageName, nextSuggestion = null) {
 
   console.log('')
 
-  const firstPending = steps.findIndex(s => s.status === 'pending' || s.status === 'in-progress')
+  const firstPending = steps.findIndex(s => s.status === 'pending' || s.status === 'in-progress' || s.status === 'blocked')
 
   if (progress.batchProgress) {
     const bp = progress.batchProgress
@@ -1314,10 +1326,13 @@ function showStatus(progress, stageName, nextSuggestion = null) {
   }
 
   steps.forEach((step, i) => {
-    const icon = step.status === 'completed' ? '✅' : step.status === 'skipped' ? '⏭️' : step.status === 'waiting' ? '⏸️' : '⬜'
-    const isCurrent = (step.status === 'pending' || step.status === 'in-progress') && i === firstPending
+    const icon = step.status === 'completed' ? '✅' : step.status === 'skipped' ? '⏭️' : step.status === 'waiting' ? '⏸️' : step.status === 'blocked' ? '🚫' : '⬜'
+    const isCurrent = (step.status === 'pending' || step.status === 'in-progress' || step.status === 'blocked') && i === firstPending
     const isWaiting = step.status === 'waiting'
-    console.log(`${icon} Step ${i + 1}: ${step.name}${isCurrent ? ' ← 当前' : ''}${isWaiting ? ' [WAITING]' : ''}`)
+    console.log(`${icon} Step ${i + 1}: ${step.name}${isCurrent ? ' ← 当前' : ''}${isWaiting ? ' [WAITING]' : ''}${step.status === 'blocked' ? ' [BLOCKED]' : ''}`)
+    if (step.status === 'blocked') {
+      console.log(`       此前被门控阻断——${step.blockReason || 'deps 未就绪 / review.json 不完整'}；修复后重跑 --done 即恢复，无需 --reset`)
+    }
     if (isWaiting) {
       if (step.waitReason) console.log(`       原因：${step.waitReason}`)
       if (step.waitOptions) console.log(`       选项：${formatWaitOptions(step.waitOptions)}`)
@@ -1354,6 +1369,22 @@ async function resetStage(pm, progress, stageName, cwd, changeName, platformOpts
       }
     } catch (e) {
       console.warn(`⚠️  reset 清理 worktree 失败（不阻断 reset）: ${e.message}`)
+    }
+    // 跨仓 worktree 一并清理（坑 cross-repo-no-worktree-isolation）：否则下次 execute 因 meta
+    // 存在复用带脏状态的旧跨仓 worktree
+    try {
+      const { cleanupCrossWorktrees } = await import('../worktree-cross.js')
+      const cross = cleanupCrossWorktrees({
+        cwd, changeName,
+        specBase: platformOpts?.specRoot || join(cwd, '.sillyspec'),
+        force: true,
+      })
+      for (const cr of cross.results) {
+        if (cr.result === 'cleaned') console.log(`🧹 已清理跨仓 worktree repo=${cr.repoKey}，下次 execute 将重建`)
+        else if (cr.result === 'partial') console.warn(`⚠️ 跨仓 repo=${cr.repoKey} 清理残留: ${(cr.details || []).join('; ')} ${(cr.residual || []).join('; ')}`)
+      }
+    } catch (e) {
+      console.warn(`⚠️  reset 清理跨仓 worktree 失败（不阻断 reset）: ${e.message}`)
     }
   }
   const defSteps = await getStageSteps(stageName, cwd, progress, platformOpts?.specRoot || null)
@@ -1484,7 +1515,7 @@ async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts = 
     console.log('')
 
     const defSteps = await getAutoSteps(currentStage)
-    const pendingIdx = progress.stages[currentStage]?.steps?.findIndex(step => step.status === 'pending' || step.status === 'in-progress') ?? -1
+    const pendingIdx = progress.stages[currentStage]?.steps?.findIndex(step => step.status === 'pending' || step.status === 'in-progress' || step.status === 'blocked') ?? -1
     if (pendingIdx === -1) {
       const wsIdx = progress.stages[currentStage]?.steps?.findIndex(step => step.status === 'waiting') ?? -1
       if (wsIdx !== -1) {
@@ -1536,7 +1567,7 @@ async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts = 
     return
   }
 
-  const nextPendingIdx = progress.stages[currentStage]?.steps?.findIndex(step => step.status === 'pending' || step.status === 'in-progress') ?? -1
+  const nextPendingIdx = progress.stages[currentStage]?.steps?.findIndex(step => step.status === 'pending' || step.status === 'in-progress' || step.status === 'blocked') ?? -1
   if (nextPendingIdx !== -1) {
     const defSteps = await getAutoSteps(currentStage)
     // execute 阶段启动前检查审批
@@ -1615,7 +1646,7 @@ async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts = 
 
   console.log(`\n${currentStage} complete. Auto advanced to ${next}.`)
   const nextSteps = await getAutoSteps(next)
-  const firstPending = progress.stages[next]?.steps?.findIndex(step => step.status === 'pending' || step.status === 'in-progress') ?? -1
+  const firstPending = progress.stages[next]?.steps?.findIndex(step => step.status === 'pending' || step.status === 'in-progress' || step.status === 'blocked') ?? -1
   if (firstPending !== -1) {
     // execute 阶段启动前检查审批
     if (next === 'execute' && !skipApproval) {

@@ -459,13 +459,26 @@ function validatePlanOutputs(cwd, changeName, context = {}) {
  * 历史教训：原正则锚定确切「## 结论」，用户写「## 验收结论：✅ PASS」不被识别。
  */
 function extractVerifyConclusion(verify) {
-  const headingRe = /^##\s[^\n]*(?:结论|conclusion|result|结果)/im
-  const headingMatch = verify.match(headingRe)
-  if (!headingMatch) return ''
-  const start = headingMatch.index
-  const slice = verify.slice(start, start + 400)
-  const kw = slice.match(/\b(PASS(?:\s+WITH\s+NOTES)?|FAIL)\b/i)
-  return kw ? kw[1].toUpperCase().replace(/\s+/g, ' ') : ''
+  // 遍历所有含关键词的二级标题，取其 400 字符窗口内含 PASS/FAIL 的那个（坑
+  // verify-conclusion-heading-hijack：旧逻辑取首个匹配，"## 测试结果"等普通标题
+  // 排在真结论前时劫持识别）。优先精确匹配「## 结论」类窄标题。
+  const headingRe = /^##\s[^\n]*(?:结论|conclusion|result|结果)/gim
+  let best = null
+  let bestPriority = -1
+  for (const headingMatch of verify.matchAll(headingRe)) {
+    const start = headingMatch.index
+    const slice = verify.slice(start, start + 400)
+    const kw = slice.match(/\b(PASS(?:\s+WITH\s+NOTES)?|FAIL)\b/i)
+    if (!kw) continue
+    // 优先级：精确含「结论/conclusion」> 宽泛含「result/结果」
+    const text = headingMatch[0].toLowerCase()
+    const priority = (/结论|conclusion/i.test(text)) ? 1 : 0
+    if (priority > bestPriority || (priority === bestPriority && !best)) {
+      best = kw[1].toUpperCase().replace(/\s+/g, ' ')
+      bestPriority = priority
+    }
+  }
+  return best || ''
 }
 
 function validateVerifyOutputs(cwd, changeName, context = {}) {

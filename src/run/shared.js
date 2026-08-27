@@ -139,7 +139,7 @@ export function resolveSpecDir(cwd, opts = {}) {
 // 只缓存"git root 已找到"的结果——非 git 仓库不缓存，防测试流程中途 git init 后读到陈旧 null。
 const _ancestorCeilingCache = new Map()
 
-function resolveAncestorCeiling(resolved) {
+export function resolveAncestorCeiling(resolved) {
   if (_ancestorCeilingCache.has(resolved)) return _ancestorCeilingCache.get(resolved)
   // 一次 spawn 拿两值（rev-parse 按参数序输出，每值一行）
   const out = safeGit(resolved, ['rev-parse', '--show-toplevel', '--git-common-dir']).value

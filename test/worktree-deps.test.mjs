@@ -71,7 +71,7 @@ console.log('\n[worktree-deps] checkDepsFreshness 5 状态 + main-drift + 无 lo
   const meta = { depsStatus: 'linked', depsLockHash: hashOf('lock-v1') }; // 旧快照
   const r = checkDepsFreshness(meta, t.wt, t.main);
   assert(r.status === 'stale', `stale：wt lockfile 与 meta 快照不一致 → status=stale（实得 ${r.status}）`);
-  assert(/lockfile 变化/.test(r.detail), 'stale：detail 提示 lockfile 变化');
+  assert(/依赖清单变化|lockfile 变化/.test(r.detail), 'stale：detail 提示依赖清单变化（生态中立措辞，2026-08-27 deps-ecosystem-hardcode）');
   assert(r.wtHash === hashOf('lock-v2') && r.metaLockHash === hashOf('lock-v1'), 'stale：wtHash≠metaLockHash');
   rmSync(t.root, { recursive: true, force: true });
 }

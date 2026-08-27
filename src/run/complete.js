@@ -103,7 +103,16 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
   }
 
   const steps = stageData.steps
-  let currentIdx = steps.findIndex(s => s.status === 'pending' || s.status === 'in-progress')
+  // blocked（deps/review.json 门控阻断标记）也视为当前步骤（坑 deps-gate-blocked-invisible，
+  // 2026-08-27 实证）：门控阻断时 enforceDepsGate/enforceReviewJsonGate 把当前步置 blocked 后
+  // exit(1)，若谓词漏 blocked，被阻断步骤对 findIndex 永久隐身——重试 --done 落到其后第一个
+  // pending 步骤上（错步记账，DB 显示与事实脱节），且 blocked 步骤无任何恢复路径（状态机卡死，
+  // 只能 --reset 丢进度）。门控本身在下方会重新校验：deps 已修复 → 正常完成；未修复 → 再次
+  // 阻断同一步（幂等，不污染后续步骤）。
+  let currentIdx = steps.findIndex(s => s.status === 'pending' || s.status === 'in-progress' || s.status === 'blocked')
+  if (currentIdx !== -1 && steps[currentIdx].status === 'blocked') {
+    console.log(`⚠️  Step "${steps[currentIdx].name}" 此前被门控阻断（blocked），本次 --done 重新校验门控后继续推进。`)
+  }
   // ── 坑1：--done --answer 解「已 waiting 的步骤」──
   // findIndex 仅查 pending/in-progress，排除 waiting；故 --done --answer 落到已 --wait 暂停的
   // requiresWait 步骤时会跳过它、把 --answer 静默丢弃，步骤永久卡 WAITING、末步报「等待用户输入」。

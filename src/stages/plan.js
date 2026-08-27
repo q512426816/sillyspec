@@ -137,6 +137,12 @@ const stepGeneratePlan = {
 4. **写回任务清单**：把展开后的任务清单写回 tasks.md（checkbox 行 \`- [ ] task-XX: 一句话任务名\`，可附 \`[model:xxx]\`/\`(depends_on: task-01,02)\` 行内标注）。**写回规则（D-002@v1）**：保留 frontmatter/中文标题/所有非 task-XX 行（quick 挂载的 ql-xxx 勾选行、注记等逐行保留），仅重写 task-XX checkbox 行集合——防摧毁 quick 挂载条目
 5. 保存 plan.md（审查在下一步"审查计划"独立进行，不在本步自审——避免生成与自审同一次输出）；frontmatter 保留 plan_level 字段不删。**plan.md Wave 段下任务一律纯 ID 引用行**（\`- task-XX\`，不重抄任务名——任务名唯一真相在 tasks.md，重抄即双写漂移）
 
+> ⚠️ **Wave 段格式铁律（踩坑：旧先例 \`- [ ] task-XX: 描述\` 格式会导致 postcheck 告警）：**
+> ✅ 正确：\`- task-01\`（裸 ID 引用行，无 checkbox 无任务名）
+> ❌ 错误：\`- [ ] task-01: 添加用户创建接口\`（checkbox + 任务名——这是 tasks.md 格式，不是 plan.md Wave 段格式）
+> tasks.md 格式：\`- [ ] task-01: 一句话任务名\`（execute 从这里解析任务清单）
+> plan.md Wave 段格式：\`- task-01\`（纯 ID 引用，execute 据此分组）
+
 ---
 
 #### plan_level = none
@@ -445,6 +451,8 @@ related_tests:                           # 可选。当本 task 改动会导致�
 - **共享文件须分 Wave**：若多个 task 的 allowed_path 含同一文件，plan.md 必须把它们分到不同「## Wave N」（同 Wave 共享文件会被 execute 强制并行，子代理互相覆盖；postcheck 拦同 Wave 共享）
 - **task id 从 1 连续**：task-01、task-02、task-03… 不能跳号或重号（postcheck 校验 id 连续性，gap 会拦）
 这两条是跨 task 全局约束，子代理只写单卡看不到全局——你（主 agent）分派子代理前必须先在 plan.md 里确认 Wave 划分与编号正确。
+
+⚠️ **TaskCard 必备字段（缺一 postcheck 直接阻断）：** id、title（英文）、**title_zh（中文标题，必填）**、allowed_paths、goal、implementation、acceptance、verify、constraints。骨架已由 taskcard CLI 预生成（含 title_zh 占位），子代理只需 Edit 填值，不要删除任何必备字段。
 
 ## 任务清单
 ${taskList}

@@ -1107,8 +1107,15 @@ export async function generateTaskReviewDrafts({ changeName, cwd, platformOpts =
     const reviewPath = join(reviewDir, 'review.json')
 
     // 幂等：review.json 已存在（无论合法/解析错/schema 错）一律跳过，绝不覆盖人工/子代理 verdict
+    // 双重守卫：readReview 判定 + existsSync 兜底（坑 task-review-draft-overwrite：已存在真实
+    // review 仍被草稿覆盖的变体——readReview 路径/权限异常时 existsSync 作为最后防线）
     const existing = readReview(reviewPath)
     if (existing.ok || existing.parseError || existing.schemaError) {
+      skipped++
+      continue
+    }
+    if (existsSync(reviewPath)) {
+      // readReview 未捕获但文件存在（极端：权限/路径长度等）→ 宁跳不覆盖
       skipped++
       continue
     }

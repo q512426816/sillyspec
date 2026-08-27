@@ -16,6 +16,7 @@ import { existsSync, unlinkSync, writeFileSync, mkdtempSync, rmSync, readdirSync
 import { join, resolve } from 'path';
 import { tmpdir } from 'os';
 import { WorktreeManager } from './worktree.js';
+import { getCrossWorktreeMeta, cleanupCrossWorktrees } from './worktree-cross.js';
 import { parseFileChangeList, parseFileChangeListDetailed, pathMatches } from './change-list.js';
 import { parseAllowedPaths, parseRepo } from './stages/plan-postcheck.js';
 import { git, gitQuiet } from './git-helper.js';
@@ -440,6 +441,182 @@ export async function withMainRepoLock(projectRoot, changeName, purpose, fn, opt
   }
 }
 
+/**
+ * 跨仓 worktree 真实 apply（坑 cross-repo-no-worktree-isolation，2026-08-27）。
+ *
+ * 对有 worktree meta 的跨仓仓（worktree-cross.js 创建）执行与主仓 A5 同构的 patch 回落：
+ *   deliverables（diff baselineCommit||baseHash + untracked，filterDeliverableFiles 排除基础设施）
+ *   → 清单校验（resolveApplyAllowSet 按 repo 切片 ∪ review 声明切片）
+ *   → 跨仓主工作副本 dirty 重叠拦截
+ *   → patch（tracked diff + untracked add/diff --cached/reset，Buffer 防二进制损坏）
+ *   → git apply --3way 回跨仓主工作副本；成功后 cleanup 该跨仓 worktree（分支保留作锚）。
+ *
+ * 与主仓 apply 的顺序契约：本函数在主仓 patch 动作**之前**调用——任一跨仓失败即整体报错返回，
+ * 主仓工作区不动（不留半套状态）。legacy 直写模式的跨仓仓无 meta，不走本函数（原 no-op 校验）。
+ *
+ * @param {string} changeName
+ * @param {string} projectRoot 主仓根
+ * @param {object} ctx MultiRepoContext
+ * @param {{ checkOnly?: boolean }} opts
+ * @returns {{ repos: string[], applied: Array<{repoKey, changedFiles}>, errors: string[], warnings: string[], crossCleanups: string[] }}
+ */
+function applyCrossRepoWorktrees(changeName, projectRoot, ctx, { checkOnly = false } = {}) {
+  const specBase = (ctx.platformOpts && ctx.platformOpts.specRoot) || join(projectRoot, '.sillyspec');
+  const out = { repos: [], applied: [], errors: [], warnings: [], crossCleanups: [] };
+  for (const [repoKey, entry] of ctx.repos) {
+    if (entry.isMain) continue;
+    const cm = getCrossWorktreeMeta(specBase, changeName, repoKey);
+    if (!cm || !cm.isCross || !cm.worktreePath || !existsSync(cm.worktreePath)) continue;
+    out.repos.push(repoKey);
+    const crossRoot = cm.crossRepoRoot || entry.projectRoot;
+    const deliverableBase = cm.baselineCommit || cm.baseHash;
+
+    // 交付集合（与主仓 step2 同口径：--name-status 捕 rename/delete + untracked，过滤基础设施文件）
+    let changedFiles = [];
+    const deletedFiles = [];
+    try {
+      const statusRaw = git(cm.worktreePath, ['diff', '--name-status', deliverableBase]);
+      const statusFiles = new Set();
+      if (statusRaw) {
+        for (const line of statusRaw.split('\n').filter(Boolean)) {
+          const parts = line.split('\t');
+          if (parts.length >= 2) statusFiles.add(parts[parts.length - 1]);
+          if (parts.length >= 3) statusFiles.add(parts[parts.length - 2]);
+          if (parts[0].startsWith('D')) deletedFiles.push(parts[parts.length - 1]);
+        }
+      }
+      const untrackedRaw = gitQuiet(cm.worktreePath, ['ls-files', '--others', '--exclude-standard']) || '';
+      changedFiles = filterDeliverableFiles([...new Set([...statusFiles, ...untrackedRaw.split('\n').filter(Boolean)])]);
+    } catch (e) {
+      out.errors.push(`跨仓 ${repoKey}：获取变更文件列表失败（${cm.worktreePath}）: ${e.message}`);
+      continue;
+    }
+
+    if (changedFiles.length === 0) {
+      if (!checkOnly) {
+        const cr = cleanupCrossWorktrees({ cwd: crossRoot, changeName, specBase, force: true });
+        for (const r of cr.results) {
+          if (r.result === 'cleaned') out.crossCleanups.push(`${repoKey}（无变更，worktree 已清理）`);
+          else out.warnings.push(`跨仓 ${repoKey} 无变更但清理 partial：${(r.details || []).join('; ')}`);
+        }
+      }
+      out.applied.push({ repoKey, changedFiles: [] });
+      continue;
+    }
+
+    // 清单校验（per-repo 切片 + review 声明切片并入，与主仓 Gate1/3b 同语义）
+    const allowMap = resolveApplyAllowSet(projectRoot, changeName);
+    let allowSet = allowMap.get(repoKey) || new Set();
+    const reviewDeclared = collectReviewDeclaredFiles(projectRoot, changeName).get(repoKey);
+    if (reviewDeclared) {
+      const merged = new Set([...allowSet]);
+      for (const f of reviewDeclared) {
+        if (![...merged].some(ap => pathMatches(f, ap))) merged.add(f);
+      }
+      allowSet = merged;
+    }
+    if (allowSet.size > 0) {
+      const violations = classifyAllowListViolations(changedFiles, allowSet);
+      if (violations.length > 0) {
+        out.errors.push(
+          `跨仓 ${repoKey}：文件清单校验失败——以下变更文件不在 design.md 清单、也不在该仓 task review.json changedFiles 声明中：\n  ${violations.join('\n  ')}`
+        );
+        if (!checkOnly) continue;
+      }
+    }
+
+    if (checkOnly) {
+      out.applied.push({ repoKey, changedFiles });
+      continue;
+    }
+
+    // 跨仓主工作副本 dirty 重叠拦截（与主仓 step4.5 同语义：重叠 = git apply 无法安全应用）
+    try {
+      const dirtyFiles = [...new Set(
+        ((gitQuiet(crossRoot, ['diff', '--name-only', 'HEAD']) || '').split('\n').filter(Boolean))
+          .concat((gitQuiet(crossRoot, ['ls-files', '--others', '--exclude-standard']) || '').split('\n').filter(Boolean))
+      )].filter(f => !f.startsWith('.sillyspec/') && f !== 'meta.json');
+      const overlap = dirtyFiles.filter(f => changedFiles.includes(f));
+      if (overlap.length > 0) {
+        out.errors.push(
+          `跨仓 ${repoKey}（${crossRoot}）主工作副本以下未提交文件与本次 apply 重叠，无法安全应用：\n  ${overlap.join('\n  ')}\n` +
+          `请先在跨仓仓提交或 stash 这些改动后重试 apply。`
+        );
+        continue;
+      }
+    } catch (e) {
+      out.errors.push(`跨仓 ${repoKey}：dirty 重叠检测失败（${crossRoot}）: ${e.message}`);
+      continue;
+    }
+
+    // patch 生成 + apply --3way（tracked/untracked 分流与 Buffer 聚合，与主仓 step7 同款）
+    const patchFiles = allowSet.size > 0
+      ? resolvePatchFiles(changedFiles, allowSet, true)
+      : changedFiles;
+    const tmpDir = mkdtempSync(join(tmpdir(), 'sillyspec-cross-'));
+    const patchPath = join(tmpDir, 'apply.patch');
+    try {
+      const inTree = new Set(
+        (gitQuiet(cm.worktreePath, ['ls-tree', '-r', '--name-only', deliverableBase]) || '').split('\n').filter(Boolean)
+      );
+      const inIndexRaw = patchFiles.length > 0
+        ? (gitQuiet(cm.worktreePath, ['ls-files', '--', ...patchFiles]) || '')
+        : '';
+      const inIndex = new Set(inIndexRaw.split('\n').filter(Boolean));
+      const trackedFiles = patchFiles.filter(f => inTree.has(f) || inIndex.has(f));
+      const untrackedPatchFiles = patchFiles.filter(f => !trackedFiles.includes(f));
+      const patchParts = [];
+      if (trackedFiles.length > 0) {
+        patchParts.push(git(cm.worktreePath, ['diff', '--binary', deliverableBase, '--', ...trackedFiles], { encoding: 'buffer', timeout: 60000 }));
+      }
+      if (untrackedPatchFiles.length > 0) {
+        git(cm.worktreePath, ['add', '--', ...untrackedPatchFiles]);
+        try {
+          patchParts.push(git(cm.worktreePath, ['diff', '--binary', '--cached', '--', ...untrackedPatchFiles], { encoding: 'buffer', timeout: 60000 }));
+        } finally {
+          gitQuiet(cm.worktreePath, ['reset', 'HEAD', '--', ...untrackedPatchFiles]);
+        }
+      }
+      const patchContent = Buffer.concat(patchParts);
+      if (patchContent.length === 0) {
+        out.applied.push({ repoKey, changedFiles: [] });
+        continue;
+      }
+      writeFileSync(patchPath, patchContent);
+      try {
+        git(crossRoot, ['apply', '--3way', patchPath], { timeout: 30000 });
+      } catch (e) {
+        // 冲突回滚：tracked 文件还原 HEAD 版，--3way 新建的部分文件删除（与主仓 rollbackApply 同语义）
+        const rawStderr = e.message || '';
+        for (const f of patchFiles) {
+          try {
+            if (gitQuiet(crossRoot, ['cat-file', '-e', `HEAD:${f}`]) !== null) {
+              gitQuiet(crossRoot, ['checkout', 'HEAD', '--', f]);
+            } else {
+              try { rmSync(join(crossRoot, f), { force: true }) } catch { /* 新文件删除失败留残，rescue 提示 */ }
+            }
+          } catch { /* 回滚尽力而为 */ }
+        }
+        out.errors.push(
+          `跨仓 ${repoKey}：apply --3way 失败（已回滚跨仓主工作副本到 apply 前状态）：${rawStderr}\n` +
+          `可选：进 ${crossRoot} 手工合并 worktree 分支 ${cm.branch}（git merge ${cm.branch}），完成后手动清理跨仓 worktree。`
+        );
+        continue;
+      }
+      out.applied.push({ repoKey, changedFiles: patchFiles });
+      // 成功 → 清理该跨仓 worktree（分支保留作 review 锚点）
+      const cr = cleanupCrossWorktrees({ cwd: crossRoot, changeName, specBase, force: true });
+      for (const r of cr.results) {
+        if (r.result === 'cleaned') out.crossCleanups.push(repoKey);
+        else out.warnings.push(`跨仓 ${repoKey} apply 成功但清理 partial：${(r.details || []).join('; ')}${(r.residual || []).length ? '；残留: ' + r.residual.join('; ') : ''}`);
+      }
+    } finally {
+      try { rmSync(tmpDir, { recursive: true, force: true }) } catch { /* 临时目录清理尽力而为 */ }
+    }
+  }
+  return out;
+}
+
 export function applyWorktree(changeName, { cwd, checkOnly = false, merge = false, base = 'merge-base', ctx = null, skipOverlap = false, stashDirty = false } = {}) {
   const projectRoot = cwd || process.cwd();
   const wm = new WorktreeManager({ cwd: projectRoot });
@@ -458,11 +635,26 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
     skippedOverlapFiles: [],
   };
 
-  // --- 0. 跨仓 task no-op 校验（task-05 / D-009） ---
-  // 跨仓 task 的 commit 已落跨仓仓主干，apply = no-op（无 patch）。仅校验 review.head 是跨仓仓真实
-  // commit + 不 cleanup（wm.cleanup 只作用主仓 worktree）。校验失败 → 推 errors 阻断 apply（R-05）。
-  // 单仓 ctx 缺省 / 无跨仓 entry → validateCrossRepoNoOp 直接返回空（零回归）。
+  // --- 0. 跨仓处理（task-05 / D-009 + 坑 cross-repo-no-worktree-isolation） ---
+  // 0a. worktree 模式的跨仓仓：真实 apply（patch 回跨仓主工作副本 + 成功后 cleanup worktree）。
+  //     在主仓任何动作之前跑——任一跨仓失败即整体返回，主仓工作区不动（不留半套状态）。
+  // 0b. legacy 直写模式的跨仓仓：no-op 校验（review.head 是跨仓真实 commit + 不 cleanup）。
+  // 单仓 ctx 缺省 / 无跨仓 entry → 两步都空转（零回归）。
   if (ctx) {
+    const crossApplied = applyCrossRepoWorktrees(changeName, projectRoot, ctx, { checkOnly });
+    if (crossApplied.repos.length > 0) {
+      result.crossRepoApplied = crossApplied.applied;
+      for (const w of crossApplied.warnings) result.warnings = (result.warnings || []).concat([w]);
+      if (crossApplied.crossCleanups.length > 0) {
+        result.warnings = (result.warnings || []).concat([
+          `跨仓 worktree 已 apply 并清理：${crossApplied.crossCleanups.join(', ')}（分支保留作 review 锚点）`
+        ]);
+      }
+      if (crossApplied.errors.length > 0) {
+        result.errors.push(...crossApplied.errors);
+        return result; // 跨仓未落地 = 该仓 task 实际未完成，主仓 apply 不可继续
+      }
+    }
     const cross = validateCrossRepoNoOp(ctx, projectRoot, changeName);
     for (const e of cross.errors) result.errors.push(e);
     if (cross.warnings.length > 0) result.warnings = (result.warnings || []).concat(cross.warnings);

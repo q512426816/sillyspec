@@ -22,6 +22,8 @@
  * 不涉及生命周期契约（design §7.5）：纯内存对象，不跨进程、不持久化、不入库。
  */
 
+import { existsSync, readFileSync } from 'fs';
+import { join } from 'path';
 import { git, gitQuiet } from '../git-helper.js';
 
 /**
@@ -133,7 +135,9 @@ export class MultiRepoContext {
   }
 
   /**
-   * 跨仓 RepoEntry：isMain=false，gitDir=projectRoot=worktreePath=跨仓仓根。
+   * 跨仓 RepoEntry：有 worktree meta（worktree-cross.js 创建）→ gitDir=worktreePath=worktree，
+   * base 锚 meta.baseHash（与主仓同构，坑 cross-repo-no-worktree-isolation）；无 meta（legacy
+   * 直写主干模式）→ gitDir=projectRoot=worktreePath=跨仓仓根，base 靠 taskBaseCommit 锡点。
    * 构造时 `git -C <crossRepo> rev-parse HEAD` 必须 succeed（约束② fail-closed），
    * 路径不存在/非 git 仓 → throw 阻断 execute。
    * @param {string} repoKey
@@ -148,14 +152,26 @@ export class MultiRepoContext {
         `请补全路径（约束② fail-closed）。`
       );
     }
+    // worktree 模式检测：meta 在 = worktree-cross.js 已建隔离（路径公式与其 crossWorktreePath
+    // 保持同步；execute 启动时创建，晚于本构造的调用会命中）。
+    const specBase = (this.platformOpts && this.platformOpts.specRoot) || join(this.cwd, '.sillyspec');
+    let crossMeta = null;
+    try {
+      // 同步读（构造函数是同步的，不 import worktree-cross 避免 shared↔multi-repo-context 循环）
+      const metaPath = join(specBase, '.runtime', 'worktrees', `${this.changeName}--${repoKey}`, 'meta.json');
+      if (existsSync(metaPath)) crossMeta = JSON.parse(readFileSync(metaPath, 'utf8'));
+    } catch { crossMeta = null }
+    const inWorktree = !!(crossMeta && crossMeta.isCross && crossMeta.worktreePath && existsSync(crossMeta.worktreePath));
+    const workRoot = inWorktree ? crossMeta.worktreePath : crossRepoPath;
+
     // 约束②：跨仓 git 必须可达。失败 = 路径不存在 / 非 git 仓 / git 异常，一律阻断。
     // 不沿用主仓 verifyReviewGitEvidence unavailable 降级（design §9 兼容策略表）。
     let headVerify;
     try {
-      headVerify = git(crossRepoPath, ['rev-parse', 'HEAD']);
+      headVerify = git(workRoot, ['rev-parse', 'HEAD']);
     } catch (e) {
       throw new Error(
-        `MultiRepoContext: 跨仓 repo "${repoKey}" git 不可达（路径：${crossRepoPath}）。` +
+        `MultiRepoContext: 跨仓 repo "${repoKey}" git 不可达（路径：${workRoot}${inWorktree ? `（worktree，跨仓根 ${crossRepoPath}）` : ''}）。` +
         `rev-parse HEAD 失败：${e.message}。` +
         `请检查 local.yaml repos: 段路径是否正确、目录是否存在且为 git 仓（约束② fail-closed，配置错误不降级）。`
       );
@@ -164,9 +180,30 @@ export class MultiRepoContext {
       // git() 返回空串属异常态（无 commit 的空仓 rev-parse HEAD 会非零退出，已被 catch 兜底），
       // 此处仅作防御性双保险，触发同样走 fail-closed。
       throw new Error(
-        `MultiRepoContext: 跨仓 repo "${repoKey}"（${crossRepoPath}）rev-parse HEAD 返回空——` +
+        `MultiRepoContext: 跨仓 repo "${repoKey}"（${workRoot}）rev-parse HEAD 返回空——` +
         `疑似空 git 仓（无 commit）。跨仓 task 需仓库已有至少一个 commit（约束② fail-closed）。`
       );
+    }
+
+    if (inWorktree) {
+      // worktree 模式：子代理在跨仓 worktree 分支上改+commit，apply 阶段由 CLI patch 回跨仓
+      // 主工作区。base 锚 meta.baseHash（创建时快照），head 实时取 worktree HEAD（子代理
+      // commit 推进后反映最新）；baseCommitHint 供派发侧优先取（HEAD 会推进，不能当 base）。
+      return {
+        repoKey,
+        gitDir: workRoot,
+        worktreePath: workRoot,
+        projectRoot: crossRepoPath,
+        isMain: false,
+        isWorktree: true,
+        baseCommitHint: crossMeta.baseHash || null,
+        resolveHead: () => git(workRoot, ['rev-parse', 'HEAD']),
+        resolveBase: (taskBaseCommit) => crossMeta.baseHash || taskBaseCommit || (() => {
+          throw new Error(
+            `MultiRepoContext: 跨仓 repo "${repoKey}"（worktree 模式）meta.baseHash 缺失且未传 taskBaseCommit。`
+          );
+        })(),
+      };
     }
 
     return {
@@ -175,6 +212,7 @@ export class MultiRepoContext {
       worktreePath: crossRepoPath,
       projectRoot: crossRepoPath,
       isMain: false,
+      isWorktree: false,
       // 约束①：跨仓 HEAD 实时取，不缓存（task 推进后过期，每次 resolveHead 反映最新 HEAD）。
       resolveHead: () => git(crossRepoPath, ['rev-parse', 'HEAD']),
       // 约束①：跨仓 base = task 卡 base_commit 锡点（必传）。跨仓仓无 meta.json，
