@@ -591,9 +591,19 @@ export function extractKnownFailures(yamlText) {
 // 单条失败行标记（跨 pytest/jest/vitest/go/generic）。大小写不敏感。
 // 刻意用 FAIL/FAILED + 配合 SUMMARY_LINE_RE 排除汇总行：否则 pytest/jest 的
 // "N failed" 汇总会被误判为「需豁免的失败行」→ 永远 remaining>0 → known_failures 失效。
-const PER_TEST_FAIL_RE = /(FAILED|\bFAIL\b|✕|✗|✘|panic\s*:|assertionerror|traceback|---\s*fail|error:|exception)/i
-// 汇总/计数行（非单条失败）：pytest === 框、jest "Tests:"、裸 "N failed/passed"、go "FAILED in Ns" 等。
-const SUMMARY_LINE_RE = /(={2,}.*={2,}|^\s*\d+\s+(failed|passed|skipped|pending)\b|tests?\s*:|test\s+suites?\s*:|failed\s+in\s+\d)/i
+// ×(U+00D7) 是 vitest 失败行的实际前缀标记（✕✗✘ 是 jest/mocha 形态）。
+const PER_TEST_FAIL_RE = /(FAILED|\bFAIL\b|✕|✗|✘|×|panic\s*:|assertionerror|traceback|---\s*fail|error:|exception)/i
+// 汇总/计数行（非单条失败）：pytest === 框、jest "Tests:"、vitest "Test Files  N failed"/"Tests  N failed | M passed"
+// （无冒号形态）、裸 "N failed/passed"、go "FAILED in Ns" 等。
+const SUMMARY_LINE_RE = /(={2,}.*={2,}|^\s*\d+\s+(failed|passed|skipped|pending)\b|tests?\s*:|test\s+suites?\s*:|^\s*(?:test\s+files|tests?)\s+\d|failed\s+in\s+\d)/i
+// 通过行（行首标记，剥 ANSI 后判定）：vitest/jest/mocha 的 ✓√✔ 前缀行 + jest 的 PASS 文件行。
+// 坑 verify-known-failures-pass-line-false-positive：FAILED/error:/exception 是子串匹配，
+// 通过行用例名恰含这些字样（如「✓ … 超时后 syncStatus=failed」）会被误判失败行——
+// 2710 用例套件 382 个"失败行"里 378 假阳性，known_failures 无法逐条枚举而实质失效。
+// 框架输出里通过行恒以通过标记开头、失败行恒以失败标记开头，行首判定即足以分离两类。
+const PASS_LINE_RE = /^\s*(?:[✓√✔]|PASS\b)/
+// ANSI 色码剥离（分类用）：TTY 捕获的输出里 ✓/× 前缀可能被色码包裹，行首锚定会失配。
+const ANSI_RE = /\x1b\[[0-9;]*[A-Za-z]/g
 
 /**
  * 把测试输出按行筛出「失败行」，再按 known_failures 模式分为已豁免 / 未豁免。
@@ -603,7 +613,12 @@ const SUMMARY_LINE_RE = /(={2,}.*={2,}|^\s*\d+\s+(failed|passed|skipped|pending)
  */
 export function partitionFailures(output, knownFailures) {
   const lines = String(output || '').split(/\r?\n/)
-  const failureLines = lines.filter(l => PER_TEST_FAIL_RE.test(l) && !SUMMARY_LINE_RE.test(l))
+  // 分类在剥 ANSI 后的行上做，返回保留原文（remaining 展示给 agent 时不变形）
+  const failureLines = lines.filter(l => {
+    if (PASS_LINE_RE.test(l)) return false
+    const bare = l.replace(ANSI_RE, '')
+    return !PASS_LINE_RE.test(bare) && PER_TEST_FAIL_RE.test(bare) && !SUMMARY_LINE_RE.test(bare)
+  })
   const pats = (knownFailures || []).map(p => String(p).toLowerCase()).filter(Boolean)
   const exempted = []
   const remaining = []

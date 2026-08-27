@@ -100,6 +100,34 @@ Tests: 1 failed, 1 passed
   assertEqual('partitionFailures: jest 失败行=2（FAIL + ✕），summary 排除', r.failureLines.length, 2)
   assertEqual('partitionFailures: jest 全豁免', r.remaining, [])
 }
+{
+  // 坑 verify-known-failures-pass-line-false-positive：vitest 通过行用例名含
+  // failed/error/exception 字样（如「超时后 syncStatus=failed」）不得判为失败行
+  const vitest = ` ✓ src/lib/__tests__/sync.test.ts > 同步 5min 上限：超时后 syncStatus=failed (12 ms)
+ ✓ src/lib/__tests__/queue.test.ts > 服务端 failed 排队条目 (8 ms)
+ ✓ src/lib/__tests__/err.test.ts > handles exception gracefully (5 ms)
+ × src/lib/__tests__/broken.test.ts > 真实失败用例 (30 ms)
+ ❯ src/lib/__tests__/broken.test.ts (2 tests | 1 failed) 456ms
+
+ Test Files  1 failed (1) | 2 passed (2)
+      Tests  1 failed | 5 passed (6)
+`
+  const r = partitionFailures(vitest, ['broken.test.ts'])
+  assertEqual(
+    'partitionFailures: vitest 通过行（✓+用例名含 failed/error 字样）不计入失败行',
+    r.failureLines.length,
+    2, // × 用例行 + ❯ 文件摘要行（可按文件名豁免）
+  )
+  assertEqual('partitionFailures: 按文件名豁免后 remaining=0', r.remaining, [])
+  assert('partitionFailures: ×(U+00D7) 失败行被识别', r.failureLines.some(l => l.includes('真实失败用例')),
+    JSON.stringify(r.failureLines))
+}
+{
+  // ANSI 色码包裹的通过标记同样剔除（TTY 捕获形态）
+  const ansi = '\u001b[32m ✓ \u001b[0msrc/lib/x.test.ts > syncStatus=failed 断言 (10 ms)\n'
+  const r = partitionFailures(ansi, [])
+  assertEqual('partitionFailures: ANSI 色码内的 ✓ 通过行不计入', r.failureLines, [])
+}
 assertEqual('partitionFailures: 空输出', partitionFailures('', ['x']), { failureLines: [], exempted: [], remaining: [] })
 
 // ── judgeWithKnownFailures（fail-safe）───────────────────────────

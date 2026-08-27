@@ -722,3 +722,13 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 **修复（已闭环）**：
 - `src/run/command.js` 新增 `looksLikeMsysMangledPath` 纯函数嗅探（盘符绝对路径开头 + 紧随空白与中文正文的启发式，零误报优先）+ `warnMsysMangledFlag` 告警出口，在 `--output` / quick 四字段参数（`--req`/`--cause`/`--solution`/`--result`）/ `--input`（含 quick 位置参数描述）三处解析点接线：命中向 stderr 打告警（点名 flag + 值前缀 + 修复指引），**不阻断**——合法值确可能以盘符路径开头，由 agent 看告警后自查重发。
 - 传参侧根治仍是 `MSYS_NO_PATHCONV=1` 前缀或去前导 `/` 改写表述（CLI 只能事后嗅探，转换发生在 shell 层、CLI 收到前）；纯英文正文 v1 检不出（启发式依赖中文正文字样）。
+
+## 45. 一坑：verify 测试对账把含 failed 字样的通过行误判失败行（2026-08-28 闭环）
+
+**症状**：`verify --done` 测试对账把 vitest **通过行**判为失败行——`PER_TEST_FAIL_RE` 的 `FAILED`/`error:`/`exception` 是子串匹配，通过行用例名恰含这些字样（如「✓ … 超时后 syncStatus=failed」「✓ … 服务端 failed 排队条目」）即命中。实测 2710 用例套件 382 个"失败行"中 378 假阳性：known_failures 无法逐条枚举几百条随机用例名而实质失效，verify 护栏又禁改测试源码，形成「修不了测试、豁免不生效」双卡（multi-agent-platform 仓实证，曾用 local.yaml 首条 `"✓"` 豁免条目硬分离真假集合）。
+
+**修复（已闭环）**：
+- `partitionFailures` 分类前剔除通过行：行首通过标记（`✓`/`√`/`✔` 前缀或 jest `PASS` 文件行）判定在剥 ANSI 色码后的行上做（TTY 捕获时标记可能被色码包裹）；返回保留原文行不变形。框架输出里通过行恒以通过标记开头、失败行恒以失败标记开头，行首判定即分离两类。
+- `PER_TEST_FAIL_RE` 补 vitest 实际使用的 `×`（U+00D7）失败标记（原只有 jest/mocha 形态 ✕✗✘；漏检有 fail-safe 兜底但 remaining 精度差）。
+- `SUMMARY_LINE_RE` 补 vitest 无冒号汇总行形态（`Test Files  N failed` / `Tests  N failed | M passed`），原只认 jest `Tests:` 冒号形态。
+- 使用方注意：升级本版 CLI 后，因本坑加的 `known_failures` 首条 `"✓"` workaround 应删除（真实失败按文件名模式豁免即可）。
