@@ -743,6 +743,20 @@ async function main() {
       }
       console.log(`📦 待提交变更（${cc.changedCount} 个文件${cc.untrackedCount > 0 ? `，其中未跟踪 ${cc.untrackedCount} 个` : ''}；上方 stat 仅列已跟踪文件的改动）`);
       if (cc.stat) console.log(cc.stat.split('\n').map(l => '   ' + l).join('\n'));
+      // 暂存区快照（坑 same-main-staging-pollution，2026-08-28 实证：同 main 双会话共享暂存区，
+      // A 的 commit 扫入 B 暂存的文件）：git commit 只含暂存内容——提交前把快照亮出来供核对。
+      {
+        const { collectStagedArea } = await import('./commit-suggest.js');
+        const staged = collectStagedArea({ cwd: dir });
+        if (staged.available && staged.staged.length > 0) {
+          console.log(`\n📌 暂存区快照（git diff --cached --name-only，你的下一次 git commit 将恰好含这 ${staged.staged.length} 个文件）：`);
+          for (const f of staged.staged.slice(0, 15)) console.log(`   - ${f}`);
+          if (staged.staged.length > 15) console.log(`   … 共 ${staged.staged.length} 个`);
+          console.log(`   ⚠️ 同 main 并行会话共享同一暂存区——快照里非本会话的文件请先 git restore --staged <file> 剔除，否则会被你的 commit 扫入`);
+        } else if (staged.available) {
+          console.log(`\n📌 暂存区为空（git commit 前需先 git add；用 pathspec 级 add 防扫入无关文件）`);
+        }
+      }
       if (cc.quickEntries.length > 0) {
         console.log(`\n📝 QUICKLOG（上次提交 ${cc.lastCommitTime || '（无）'} 之后 ${cc.quickEntries.length} 条）：`);
         for (const q of cc.quickEntries) {
@@ -1764,6 +1778,20 @@ SillySpec worktree — git worktree 隔离管理
                 console.log(`   git add --pathspec-from-file="${result.pathspecFile}"`);
               }
               console.log(`   （完整清单 ${result.commitPathspec.length} 个文件已存 ${result.pathspecFile}，可 --pathspec-from-file 复用）`);
+              // 他者暂存差集（坑 same-main-staging-pollution）：暂存区已有非本变更文件时，
+              // 普通 git commit 会把它们一并扫入——提交前亮出来。pathspec 级 commit
+              // （git commit -m <msg> -- <paths>）只提交指定路径、不动他者暂存，双出口都给。
+              try {
+                const { collectStagedArea } = await import('./commit-suggest.js');
+                const stagedNow = collectStagedArea({ cwd: dir, ownFiles: result.commitPathspec });
+                if (stagedNow.available && stagedNow.foreign.length > 0) {
+                  console.warn(`\n⚠️  暂存区已有 ${stagedNow.foreign.length} 个非本变更文件（很可能为他者并行会话暂存，普通 git commit 会扫入）：`);
+                  for (const f of stagedNow.foreign.slice(0, 10)) console.warn(`   - ${f}`);
+                  if (stagedNow.foreign.length > 10) console.warn(`   … 共 ${stagedNow.foreign.length} 个`);
+                  console.warn(`   推荐用 pathspec 级 commit（不动他者暂存）：git commit -m "<msg>" --pathspec-from-file="${result.pathspecFile}"`);
+                  console.warn(`   或先剔除：git restore --staged -- <文件>（工作区内容不丢，对方可重新 add）`);
+                }
+              } catch { /* 暂存区快照失败不影响 apply 结果展示 */ }
             }
           }
           if (result.warnings && result.warnings.length > 0) {

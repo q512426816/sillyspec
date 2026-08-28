@@ -59,3 +59,12 @@
 根因：①--merge 路径只看已提交而子代理默认不 commit，分支 tip 只有 baseline checkpoint → merge 空转零落地；②apply+commit/cleanup 后主仓 diff 为空 → 前端调用回退全仓 × 局部端点集 = 口径错配噪音；③deps 门把 cleanup 后的「无 meta」当「依赖未就绪」拦——cleanup 是流程自己的正当收尾；④plan 生成无调用链分析，透传必经文件只能执行期撞 Gate1 后回补
 方案：①merge 前 autoCommitWorktreeWip（pathspec commit 不扫入无关 staged，--no-verify，失败降级 warning）；②兜底链补 apply-pathspec 级 + endpoints --all-tasks 聚合 + full-repo 口径告警 + 模板/SKILL/镜像四同步；③execute-cleanup 回执 + deps 门查 apply-pathspec/execute-cleanup 凭据放行（无凭据仍阻断不放水）；④plan 门 facade 预检（启发式 advisory：直接引用 allowed 模块 + 同目录聚合≥2 形态）
 结果：npm test 全绿 + lint 432 文件 + docs check 509/509（19处漂移 --fix 重锚）；四修复各有回归测试（5+9+11+3 断言）
+
+## ql-20260828-005-56b5 | 2026-08-28 08:11:49 | 用户实证两负面反馈工具化——同 main 两个活跃会话暂存区互相污染无防护（本轮竞态事故根因
+状态：已完成
+关联变更：（无）
+文件：src/commit-suggest.js（collectStagedArea——git diff --cached --name-only 快照 + ownFiles 差集他者暂存告警）, src/index.js（sillyspec commit 打暂存区快照段；worktree apply 成功路径对 commitPathspec 做他者暂存差集告警 + pathspec 级 commit 双出口）, src/decision-distill.js（条目加「变更：<name>」限定行；幂等键 号→号+变更；同号匹配/版本守卫/旧段清除/跨文件清理全部限定同变更；legacy 无变更行段只共存不误删）, src/docs-check.js（extractKnownFailureKeys 同步 verify-known-failures-comment-line-truncation 修复——两处口径互指契约对齐）, test/commit-suggest.test.mjs（+collectStagedArea 6 断言）, test/decision-distill-cross-change.test.mjs（新 13 断言：共存/同变更版本演进/幂等/legacy）
+需求：用户实证两负面反馈工具化——同 main 两个活跃会话暂存区互相污染无防护（本轮竞态事故根因，建议 commit 提示带 git diff --cached --name-only 快照）；决策提炼按 ID 全局幂等致跨变更同号决策（两个 D-002）在 knowledge 里互相 supersede（条目缺变更名限定）
+根因：①git 暂存区是仓级单例，同 main 双会话物理共享，A 的 commit 恰好提交 B 已暂存文件——工具的 commit 提示只有工作区视角（status/diff stat）无暂存区视角，污染不可见；②D-xxx 编号是变更内局部序号，提炼落库键只用 号@版本，跨变更同号天然碰撞，后归档者整段替换先归档者
+方案：①commit-suggest 新增 collectStagedArea（快照 + ownFiles 差集），接线两处——sillyspec commit 输出暂存区快照段（明示 git commit 将恰好含这些文件），worktree apply 成功路径对 commitPathspec 做差集告警（推荐 pathspec 级 commit 不动他者暂存 / 或 restore --staged）；②decision-distill 条目加「变更：」字段行（消费方 knowledge-match/docs-check 只认标签，增量安全），幂等键改 号+变更，supersede/清除/跨文件清理全部同变更内生效
+结果：npm test 325 文件 0 失败（新增 19 断言）+ lint + docs check 509/509（6 处 index.js 行号漂移 --fix 重锚）；CLI 烟测暂存区快照段输出正确；顺手同步 docs-check 的 known_failures 解析副本的注释截断修复（与 verify-postcheck 口径互指契约）

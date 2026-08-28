@@ -4,13 +4,15 @@ doc_type: module-card
 module_id: runtime
 author: qinyi
 created_at: 2026-06-03T07:42:00+08:00
-updated_at: 2026-08-24T00:40:00+08:00
+updated_at: 2026-08-28T00:00:00+08:00
 ---
 # runtime
 
 ## 定位
 
 SQLite 数据库层 + 进度管理 + 迁移。提供 `.sillyspec/.runtime/sillyspec.db` 作为权威状态源，管理项目、变更（change）、阶段（stage）、步骤（step）的全生命周期。不负责 CLI 解析、命令分发或阶段执行逻辑。
+
+**附属纯函数模块 `src/facade-hint.js`**（2026-08-28 ql-20260828-004，坑 plan-facade-files-manual-backfill）：plan 完成门的「透传必经文件」候选预检（advisory，run/gates.js 接线）——以 apply Gate1 同源 allowed 集为基准，静态扫仓内 py/js/ts/java 的 import/require，亮 direct import / 同目录聚合 ≥2 两类候选，提示补 allowed_paths/design §6，防 execute 期撞 Gate1 手工回补；性能护栏（allowed > 100 或源码 > 5000 静默跳过）。
 
 ## 契约摘要
 

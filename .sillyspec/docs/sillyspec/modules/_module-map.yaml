@@ -23,6 +23,7 @@ modules:
     paths:
       - src/run.js
       - src/run/
+      - src/facade-hint.js
       - src/quick-recommend.js
       - src/scan-diff.js
 
@@ -36,6 +37,7 @@ modules:
       - bin/sillyspec.js
       - src/version.js
       - src/spec-dir-typo.js
+      - src/commit-suggest.js
 
   progress:
     status: active
@@ -118,6 +120,7 @@ modules:
     review_reasons: []
     paths:
       - src/sync.js
+      - src/spec-sync.js
 
   sillyhub-mcp:
     status: active

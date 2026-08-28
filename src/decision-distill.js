@@ -22,7 +22,7 @@
  * 零输出：无 decisions.md 或无入选条目 → skipped 带原因，不写任何文件、不动 INDEX。
  */
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 
 /** FR-02：有实现影响的五类 type（scope 与未知 type 的 confirmed/accepted 不入选） */
 const IMPLEMENTED_TYPES = new Set(['architecture', 'compatibility', 'boundary', 'definition', 'process'])
@@ -244,10 +244,14 @@ function newDomainPreamble(domain) {
   ]
 }
 
-/** 单条目段落渲染（design 接口定义的条目格式，逐字对齐：状态/锚点/最近确认/理由 + rejected 专属两行） */
-function renderBlockLines(entry, headHash, supersedesNote) {
+/** 单条目段落渲染（design 接口定义的条目格式，逐字对齐：状态/锚点/最近确认/理由 + rejected 专属两行）。
+ * 变更：行（2026-08-28，坑 distill-cross-change-supersede）：D-xxx 编号是变更内局部序号，
+ * 跨变更同号（两个 D-002）互不相干——条目必须携带变更名限定，消费方（knowledge-match/
+ * docs-check 的字段行解析）只认各自标签，新增字段行是增量安全。 */
+function renderBlockLines(entry, headHash, supersedesNote, changeName) {
   const lines = [`## ${entry.id} ${oneLine(entry.title)}`.replace(/\s+$/, '')]
   lines.push(`状态：${entry.selected}`)
+  if (changeName) lines.push(`变更：${oneLine(changeName)}`)
   lines.push(`锚点：${oneLine(entry.anchor) || NOT_RECORDED}`)
   lines.push(`最近确认：${oneLine(headHash) || NOT_RECORDED}`)
   lines.push(`理由：${oneLine(entry.answer || entry.normalizedRequirement || entry.question)}`)
@@ -259,7 +263,9 @@ function renderBlockLines(entry, headHash, supersedesNote) {
   return lines
 }
 
-/** 知识文件切段：preamble 行 + D-xxx@vN 条目段（段边界 = 下一 `## D-` 头） */
+/** 知识文件切段：preamble 行 + D-xxx@vN 条目段（段边界 = 下一 `## D-` 头）。
+ * 段的变更归属取段内 `变更：<name>` 行；无该行的历史条目 → change=null（legacy：
+ * 升级前落库的条目，不参与新条目的同号匹配/supersede——只共存不误删）。 */
 function splitKnowledgeSections(content) {
   const sections = []
   const preamble = []
@@ -275,7 +281,11 @@ function splitKnowledgeSections(content) {
     else preamble.push(line)
   }
   if (cur) sections.push(cur)
-  for (const s of sections) s.id = `${s.number}@v${s.version}`
+  for (const s of sections) {
+    s.id = `${s.number}@v${s.version}`
+    const cm = s.lines.find(l => /^变更[：:]/.test(l))
+    s.change = cm ? cm.replace(/^变更[：:]\s*/, '').trim() || null : null
+  }
   return { preamble, sections }
 }
 
@@ -293,15 +303,20 @@ function joinKnowledgeFile(preamble, sections) {
 
 /**
  * 单条目写入一个域文件的段落集（就地修改 sections）。
- * @returns {{ action: 'append'|'update'|'supersede' }|null} null = 高版本已落库，迟到低版本不降级。
+ * 坑 distill-cross-change-supersede（2026-08-28 用户实证：跨变更同号 D-002 在 knowledge
+ * 里互相 supersede）：幂等键从「号」改为「号+变更」——同号匹配、版本守卫、旧版本段清除
+ * 全部限定在 entry.change 内；他者变更的同号段不参与（共存）。legacy 段（change=null，
+ * 升级前落库）不与任何新条目互认，只共存不误删。
+ * @returns {{ action: 'append'|'update'|'supersede' }|null} null = 同变更同号高版本已落库，迟到低版本不降级。
  */
 function applyEntryToSections(sections, entry, headHash) {
-  const sameNumber = sections.filter(s => s.number === entry.number)
+  const change = entry.change || null
+  const sameNumber = sections.filter(s => s.number === entry.number && (s.change || null) === change)
   if (sameNumber.some(s => s.version > entry.version)) return null
   let action
   let supersedesNote = oneLine(entry.supersedes) || null
   if (sameNumber.length === 0) {
-    sections.push({ number: entry.number, version: entry.version, id: entry.id, title: entry.title, lines: renderBlockLines(entry, headHash, supersedesNote) })
+    sections.push({ number: entry.number, version: entry.version, id: entry.id, title: entry.title, change, lines: renderBlockLines(entry, headHash, supersedesNote, change || undefined) })
     action = 'append'
   } else {
     const same = sameNumber.find(s => s.version === entry.version)
@@ -309,10 +324,10 @@ function applyEntryToSections(sections, entry, headHash) {
     if (!same && !supersedesNote) supersedesNote = `${slot.number}@v${slot.version}`
     slot.version = entry.version
     slot.title = entry.title
-    slot.lines = renderBlockLines(entry, headHash, supersedesNote)
-    // 同号旧版本段（< 新版本）就地清除——同文件内同号只留一个段
+    slot.lines = renderBlockLines(entry, headHash, supersedesNote, change || undefined)
+    // 同变更同号旧版本段（< 新版本）就地清除——同文件内同变更同号只留一个段
     for (let i = sections.length - 1; i >= 0; i--) {
-      if (sections[i].number === entry.number && sections[i] !== slot) sections.splice(i, 1)
+      if (sections[i].number === entry.number && (sections[i].change || null) === change && sections[i] !== slot) sections.splice(i, 1)
     }
     action = same ? 'update' : 'supersede'
   }
@@ -412,6 +427,9 @@ function syncIndexRoutingLines(knowledgeRoot) {
  *   缺否决理由/复潮条件被拦下（该条目未写盘，其余条目照常提炼）。
  */
 export function distillIntoKnowledge(changeDir, knowledgeRoot, headHash, moduleIndex = null) {
+  // 变更名限定（坑 distill-cross-change-supersede）：条目幂等键 = 号+变更。changeDir 末段
+  // 即变更名（changes/<name> 与 archive 后的 changes/archive/<name> 同为 <name>）。
+  const changeName = basename(changeDir)
   const parsed = parseDecisions(changeDir)
   if (parsed.missing) {
     return { written: [], skipped: `decisions.md 不存在（${join(changeDir, 'decisions.md')}），零输出`, needsWait: null }
@@ -450,7 +468,7 @@ export function distillIntoKnowledge(changeDir, knowledgeRoot, headHash, moduleI
   const taken = new Set()
   for (const e of distillable) {
     const keep = highestByNumber.get(e.number)
-    if (keep && !taken.has(e.number)) { taken.add(e.number); batch.push(keep) }
+    if (keep && !taken.has(e.number)) { taken.add(e.number); keep.change = changeName; batch.push(keep) }
   }
 
   const decisionsDir = join(knowledgeRoot, 'decisions')
@@ -489,7 +507,8 @@ export function distillIntoKnowledge(changeDir, knowledgeRoot, headHash, moduleI
     }
   }
 
-  // 跨文件清理：同号 ≤ 新版本的旧段散落其他域文件时移除（同号全局只留最高版本/目标文件）
+  // 跨文件清理：同变更同号 ≤ 新版本的旧段散落其他域文件时移除（同变更同号全局只留最高
+  // 版本/目标文件）；他者变更的同号段不参与（共存，坑 distill-cross-change-supersede）
   let onDisk = []
   try { onDisk = readdirSync(decisionsDir).filter(f => f.endsWith('.md')).map(f => f.replace(/\.md$/, '')) } catch { /* 刚创建，走 store */ }
   const allDomains = [...new Set([...onDisk, ...store.keys()])]
@@ -498,7 +517,7 @@ export function distillIntoKnowledge(changeDir, knowledgeRoot, headHash, moduleI
     for (const d of allDomains) {
       if (targets.has(d)) continue
       const st = loadDomain(d)
-      const removed = st.sections.filter(s => s.number === entry.number && s.version <= entry.version)
+      const removed = st.sections.filter(s => s.number === entry.number && s.version <= entry.version && (s.change || null) === (entry.change || null))
       if (removed.length === 0) continue
       st.sections = st.sections.filter(s => !removed.includes(s))
       st.dirty = true

@@ -72,6 +72,28 @@ function classifyStagePath(p) {
 }
 
 /**
+ * 暂存区快照（坑 same-main-staging-pollution，2026-08-28 用户实证：同 main 两个活跃会话
+ * 共享同一暂存区，A 的 commit 把 B 暂存的文件扫入——本轮竞态事故根因，无任何防护）。
+ * 防护 = 提交前可见：commit 提示里带 `git diff --cached --name-only` 快照 + 他者文件告警。
+ * @param {{ cwd: string, ownFiles?: string[]|null }} opts
+ *   ownFiles：本会话/本变更的精确文件集（apply-pathspec 等）；提供时对快照做差集，
+ *   不在集内的暂存文件 = 他者会话暂存（告警对象）。null/空数组 = 只出快照不做归属判定。
+ * @returns {{ available: boolean, staged: string[], foreign: string[] }}
+ *   available=false：git 不可用/非仓库（调用方静默跳过，不误报）。
+ */
+export function collectStagedArea({ cwd, ownFiles = null }) {
+  const raw = gitQuiet(cwd, ['diff', '--cached', '--name-only'])
+  if (raw === null) return { available: false, staged: [], foreign: [] }
+  const staged = raw.split('\n').filter(Boolean).map(f => f.replace(/\\/g, '/'))
+  let foreign = []
+  if (Array.isArray(ownFiles) && ownFiles.length > 0) {
+    const own = new Set(ownFiles.map(f => String(f).replace(/\\/g, '/')))
+    foreign = staged.filter(f => !own.has(f))
+  }
+  return { available: true, staged, foreign }
+}
+
+/**
  * 收集提交上下文并生成建议 message。
  * @param {{ cwd: string, specDir?: string|null }} opts
  * @returns {{

@@ -630,10 +630,20 @@ function extractKnownFailureKeys(yamlText) {
   if (inline) {
     return inline[1].split(',').map(s => s.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean)
   }
-  const block = yaml.match(/^known_failures:\s*\n((?:[ \t]+-[ \t].+\n?)+)/m)
+  // 坑 verify-known-failures-comment-line-truncation 同款（与 verify-postcheck.extractKnownFailures
+  // 口径互指对齐）：块内注释行/空行打断连续列表项捕获链 → 注释后的键静默丢失。块定义放行
+  // 注释行与空行；提取侧只认 - 项行；行尾注释须 # 前有空白（裸 # 不截）；引号值原样保留。
+  const block = yaml.match(/^known_failures:\s*\n((?:[ \t]+-[ \t].+\n?|[ \t]*#[^\n]*\n?|[ \t]*\n)+)/m)
   if (block) {
     return (block[1].match(/^[ \t]+-[ \t]+(.+)/gm) || [])
-      .map(s => s.replace(/^[ \t]+-[ \t]+/, '').trim().replace(/^['"]|['"]$/g, '').replace(/#.*$/, '').trim())
+      .map(s => {
+        const item = s.replace(/^[ \t]+-[ \t]+/, '').trim()
+        const full = item.match(/^(['"])(.*)\1$/)
+        if (full) return full[2]
+        const stripped = item.replace(/[ \t]+#.*$/, '').trim()
+        const q2 = stripped.match(/^(['"])(.*)\1$/)
+        return q2 ? q2[2] : stripped
+      })
       .filter(Boolean)
   }
   return []

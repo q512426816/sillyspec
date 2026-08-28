@@ -20,6 +20,7 @@ CLI 入口 + 命令分发 + 阶段执行引擎。`bin/sillyspec.js` 是 shebang 
 - **auxiliaryStages** — 辅助阶段列表（scan / explore / quick / doctor / status），无需初始化变更即可运行
 - **src/version.js** — 轻量 getVersion()（读 package.json 版本号，只依赖 fs/path/url），让 --version 等高频路径不付 init.js 重型交互库加载税；index.js 顶部静态 import
 - **src/spec-dir-typo.js** — review.json missing 时检测 .sillyspec 的近似拼写变体目录（.silyspec/.sillyspc 等），命中给「路径疑似拼错」模糊匹配提示；独立模块避免 stage-review↔task-review 反向循环依赖。levenshtein 单一实现自 run/shared.js import（ql-20260819-015-65fa 去重复副本）
+- **src/commit-suggest.js** — `sillyspec commit` 的语义收集 + conventional 建议（2026-08-21 G1-G3）：collectCommitContext 聚合 QUICKLOG/已勾 task/阶段产出三源生成建议 message，只建议不执行（确认权在人）。collectStagedArea（2026-08-28 ql-20260828-005，坑 same-main-staging-pollution）：`git diff --cached --name-only` 暂存区快照 + ownFiles 差集他者暂存告警——commit 提示与 worktree apply 成功路径两处消费（同 main 双会话共享暂存区的提交前可见性）
 
 ## 关键逻辑
 

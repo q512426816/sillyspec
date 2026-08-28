@@ -6,10 +6,12 @@ created_at: 2026-06-01T09:05:00
 # sync
 > 最后更新：2026-08-15
 > 最近变更：platform-takeover-declaration（disconnect 三清：local.yaml platform 段 + 恢复指针 .sillyspec-platform.json + 平台接管声明 .sillyspec-platform-managed——不删后两者则"disconnect 后恢复本地模式"不可达）
-> 模块路径：src/sync.js
+> 模块路径：src/sync.js、src/spec-sync.js
 
 ## 职责
 SillyHub 平台同步模块，负责与远程 SillyHub 服务建立连接、同步变更进度和文档、管理审批流程。
+
+`src/spec-sync.js`（2026-08-17 spec-file-incremental-sync 起）：CLI 直跑场景的 spec 文件树增量同步——以服务器清单为锚 walk/hash/diff 后只推送变化文件（add/update/delete/rename），复用 daemon 排除口径（local.yaml 不上传、worktrees 剪枝）。并行会话 fail-closed 护栏（2026-08-28 ql-20260828-003）：`computeSpecOps` changes/ 整删守卫（本地树非空但 changes/ 全空而服务器有 → 跳过防误删）+ `filterStaleUpdates` 旧副本回推守卫（.runtime/spec-sync-last-success.json 时间锚——本地自上次同步未改动而服务器已前进的 update 拦下，重存后重推为强制出口）。
 
 ## 当前设计
 `SyncManager` 是独立于 `ProgressManager` 的同步管理类，由 `run.js` 和 `index.js` 调用。设计遵循 "Best Effort" 原则：所有网络失败仅 `console.warn`，不抛错、不阻塞主流程。

@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
-import { collectCommitContext } from '../src/commit-suggest.js'
+import { collectCommitContext, collectStagedArea } from '../src/commit-suggest.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const cliBin = join(__dirname, '..', 'bin', 'sillyspec.js')
@@ -125,6 +125,43 @@ console.log('--- 4. CLI：只建议不提交 ---')
   const headAfter = git(fx.cwd, ['rev-parse', 'HEAD'])
   const logCount = git(fx.cwd, ['rev-list', '--count', 'HEAD'])
   assert(logCount === '1', '未产生新 commit（确认权在人）')
+}
+
+// ── 暂存区快照（坑 same-main-staging-pollution，2026-08-28 实证：同 main 双会话共享
+//    暂存区，A 的 commit 扫入 B 暂存的文件——commit 提示须带快照 + 他者文件差集告警）──
+console.log('\n--- collectStagedArea：快照 + 他者暂存差集 ---')
+{
+  const proj = mkdtempSync(join(tmpdir(), 'css-'))
+  tmpRoots.push(proj)
+  git(proj, ['init', '-q'])
+  git(proj, ['config', 'user.email', 't@t.local'])
+  git(proj, ['config', 'user.name', 't'])
+  writeFileSync(join(proj, 'own.js'), 'a\n')
+  writeFileSync(join(proj, 'foreign.js'), 'b\n')
+  writeFileSync(join(proj, 'unstaged.js'), 'c\n')
+  git(proj, ['add', '.'])
+  git(proj, ['commit', '-q', '-m', 'init'])
+  // 本会话 stage own.js；他者会话 stage foreign.js；unstaged.js 只在工作区
+  writeFileSync(join(proj, 'own.js'), 'a2\n')
+  writeFileSync(join(proj, 'foreign.js'), 'b2\n')
+  writeFileSync(join(proj, 'unstaged.js'), 'c2\n')
+  git(proj, ['add', 'own.js'])
+  git(proj, ['add', 'foreign.js'])
+
+  // 无 ownFiles：只出快照（staged 全量，不做归属）
+  const s1 = collectStagedArea({ cwd: proj })
+  assert(s1.available === true && s1.staged.length === 2, `快照含 2 个已暂存文件（实际 ${JSON.stringify(s1.staged)}）`)
+  assert(s1.staged.includes('own.js') && s1.staged.includes('foreign.js'), '快照 = git diff --cached --name-only 口径')
+  assert(s1.foreign.length === 0, '无 ownFiles 时不做归属判定（foreign 空）')
+
+  // 带 ownFiles：他者暂存文件差集命中
+  const s2 = collectStagedArea({ cwd: proj, ownFiles: ['own.js', 'src/new.js'] })
+  assert(s2.foreign.length === 1 && s2.foreign[0] === 'foreign.js', `他者暂存差集命中 foreign.js（实际 ${JSON.stringify(s2.foreign)}）`)
+  assert(!s2.staged.includes('unstaged.js'), '未暂存的工作区文件不进快照')
+
+  // 非目录：available=false 不误报
+  const s3 = collectStagedArea({ cwd: join(proj, 'no-such-dir') })
+  assert(s3.available === false && s3.staged.length === 0, '目录不存在 → available=false 静默（不误报）')
 }
 
 for (const t of tmpRoots) { try { rmSync(t, { recursive: true, force: true }) } catch {} }
