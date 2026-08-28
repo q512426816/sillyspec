@@ -68,3 +68,12 @@
 根因：①git 暂存区是仓级单例，同 main 双会话物理共享，A 的 commit 恰好提交 B 已暂存文件——工具的 commit 提示只有工作区视角（status/diff stat）无暂存区视角，污染不可见；②D-xxx 编号是变更内局部序号，提炼落库键只用 号@版本，跨变更同号天然碰撞，后归档者整段替换先归档者
 方案：①commit-suggest 新增 collectStagedArea（快照 + ownFiles 差集），接线两处——sillyspec commit 输出暂存区快照段（明示 git commit 将恰好含这些文件），worktree apply 成功路径对 commitPathspec 做差集告警（推荐 pathspec 级 commit 不动他者暂存 / 或 restore --staged）；②decision-distill 条目加「变更：」字段行（消费方 knowledge-match/docs-check 只认标签，增量安全），幂等键改 号+变更，supersede/清除/跨文件清理全部同变更内生效
 结果：npm test 325 文件 0 失败（新增 19 断言）+ lint + docs check 509/509（6 处 index.js 行号漂移 --fix 重锚）；CLI 烟测暂存区快照段输出正确；顺手同步 docs-check 的 known_failures 解析副本的注释截断修复（与 verify-postcheck 口径互指契约）
+
+## ql-20260828-006-4e49 | 2026-08-28 08:42:19 | 用户实证瑕疵——scan 类文档（ARCHITECTURE/CONCERNS）属受保护基线、--files 声明了照样拦必须 --force-baseline
+状态：已完成
+关联变更：（无）
+文件：src/run/shared.js（QUICK_DANGEROUS_PATTERNS 提升模块级 + predictProtectedQuickFiles 纯函数——与 auditQuickCompletion 危险门逐字同口径：isQuickMetadata 豁免 + 关联变更目录退栈 + 危险清单前缀/精确匹配）, src/run/stage.js（quick 起步 step1 与恢复追加 --files 两处预告打印——点名具体文件 + --force-baseline 出路 + 两套开关明示）, test/quick-protected-preview.test.mjs（新 10 断言：纯函数 6 口径 + e2e 起步预告）
+需求：用户实证瑕疵——scan 类文档（ARCHITECTURE/CONCERNS）属受保护基线、--files 声明了照样拦必须 --force-baseline，设计合理但提示太晚：要等 --done 审计轮才发现，白跑一轮往返；建议 step1 即告知哪些声明文件会触发基线拦截
+根因：拦截判定只在 --done 审计时执行（auditQuickCompletion 危险门），起步时的 --files 解析处无同口径预判——step1 prompt 只有通用文案（预判要改核心文件请带 --force-baseline），不点名本次声明里的具体命中文件
+方案：危险清单提升为模块级单一真相源（审计门与预告共用），新增 predictProtectedQuickFiles 纯函数（.sillyspec/ 非元数据非关联目录 + 危险清单，forceBaseline 已带则无预告），接线 quick 起步与恢复追加两处——预告明示「--files 只声明归属不解锁拦截」与 --force-baseline 出路
+结果：npm test 326 文件 0 失败（新增 10 断言）+ lint + docs gate 全绿（1 处行号漂移 --fix 重锚）；e2e 验证 step1 输出点名 scan 文件并给出口。子目录锚定（瑕疵②）为正面实证无需改动

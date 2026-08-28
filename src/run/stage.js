@@ -19,7 +19,7 @@
 import { join, dirname } from 'node:path'
 import { existsSync, readdirSync, readFileSync, mkdirSync } from 'node:fs'
 import { writeAtomicSync } from '../fs-atomic.js'
-import { resolveSpecDir, resolveChangeDir, resolveRuntimeRoot, resolveQuickSessionsDir, triggerSync, safeGit, parsePorcelainPath, formatWaitOptions, checkApproval, getStageSteps, warnApprovalUnknown } from './shared.js'
+import { resolveSpecDir, resolveChangeDir, resolveRuntimeRoot, resolveQuickSessionsDir, triggerSync, safeGit, parsePorcelainPath, formatWaitOptions, checkApproval, getStageSteps, warnApprovalUnknown, predictProtectedQuickFiles } from './shared.js'
 import { computeScanProfile, applyScanProfileSteps, executeScanPreflight, executeScanPostcheck } from './scan-profile.js'
 import { outputStep, collectStageWaitHistory } from './prompt.js'
 import { allocateQuicklogEntry, deriveTitleFromLinkedChange, sanitizeDesc } from '../quicklog.js'
@@ -328,6 +328,15 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
   // （D-003@v1：顶层 quickGuard 不跨进程持久化；agent 在 step 间用 `run quick` 取下一步
   // prompt 时每个新进程都进此块，按文件判幂等才不会重复分配 ql-ID / 重复写条目）。
   if (stageName === 'quick') {
+    // 受保护文件预告打印（坑 quick-protected-late-hint，2026-08-28 用户实证：scan 类文档
+    // ARCHITECTURE/CONCERNS 属受保护基线，--files 声明了照样拦、必须 --force-baseline——
+    // 设计合理但提示太晚。step1 即预告哪些声明文件会触发拦截，省一轮跑到 --done 才发现的往返）
+    const warnProtectedQuickFiles = (protectedFiles) => {
+      console.warn(`⚠️ 声明文件中 ${protectedFiles.length} 个属受保护/危险范围，--done 审计将拦截（--files 只声明归属，不解锁拦截）：`)
+      for (const f of protectedFiles) console.warn(`   - ${f}`)
+      console.warn(`   确认要改这类文件：本会话收尾带 --force-baseline（sillyspec run quick --done --force-baseline ...）；`)
+      console.warn(`   属误判或不该由本会话改：换出 --files 声明，或走完整流程（execute 有 review 把关）。`)
+    }
     // quick-sessions 目录经 resolveQuickSessionsDir 单一解析（multi-agent-review Q4）：
     // 平台模式 runtimeRoot 与 specBase/.runtime 不同时，写/读须对齐，否则 guard 写一处、收尾读另一处。
     const sessionGuardDir = join(resolveQuickSessionsDir(platformOpts, specBase), changeName)
@@ -348,6 +357,13 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
         const known = new Set(progress.quickGuard.allowedFiles || [])
         const added = resumeFiles.filter(f => !known.has(f))
         if (added.length > 0) {
+          // 受保护文件预告（坑 quick-protected-late-hint）：追加声明若含审计将拦的文件，
+          // 追加时即点破（省一轮跑到 --done 才发现）。--files 只声明归属，不解锁拦截。
+          const protectedPreview = predictProtectedQuickFiles(added, {
+            linkedChanges: progress.quickGuard.linkedChanges || [],
+            forceBaseline: quickOpts?.isForceBaseline || false,
+          })
+          if (protectedPreview.length > 0) warnProtectedQuickFiles(protectedPreview)
           progress.quickGuard.allowedFiles = [...(progress.quickGuard.allowedFiles || []), ...added]
           progress.quickGuard.allowedFilesHash = { ...(progress.quickGuard.allowedFilesHash || {}) }
           for (const f of added) {
@@ -385,6 +401,10 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
         const allowDelete = quickOpts?.isAllowDelete || false
         const forceBaseline = quickOpts?.isForceBaseline || false
         const linkedChanges = Array.isArray(quickOpts?.linkedChanges) ? quickOpts.linkedChanges : []
+        // 受保护文件预告（坑 quick-protected-late-hint）：会话起步（step1）即点破，
+        // 判定与 --done 审计危险门同口径（predictProtectedQuickFiles）
+        const protectedPreview = predictProtectedQuickFiles(allowedFiles, { linkedChanges, forceBaseline })
+        if (protectedPreview.length > 0) warnProtectedQuickFiles(protectedPreview)
         // CLI 接管：分配 ql-ID + 写 QUICKLOG「进行中」条目 + 关联 tasks.md（持锁、当天唯一）
         const gitUser = safeGit(cwd, ['config', 'user.name']).value || 'unknown'
         // 标题回退：启动 quick 不带 --input 时，从关联变更的 proposal/design 提取语义标题，

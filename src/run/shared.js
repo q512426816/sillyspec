@@ -813,6 +813,54 @@ export function isQuickMetadata(p, linkedChanges = []) {
   return false
 }
 
+// 危险文件清单（auditQuickCompletion 危险门与 predictProtectedQuickFiles 预告共用单一真相源）。
+// SillySpec 核心流程代码。W6 重构后 src/run.js（23 行 barrel）/ src/progress.js（facade）
+// 把真正逻辑下沉到 src/run/、src/progress/ 子目录——旧的精确文件名匹配
+// （file === 'src/run.js'）命中不到 src/run/command.js（. 与 / 不可混同），致危险文件门
+// 静默失效。改用「目录前缀（带尾斜杠，startsWith 不会误伤 src/runtime-* 等同名前缀）+
+// barrel/facade 本体精确名」双重覆盖。重构 src/ 模块时须同步本清单（multi-agent-review Q5）。
+const QUICK_DANGEROUS_PATTERNS = [
+  'package.json',
+  'package-lock.json',
+  'yarn.lock',
+  'pnpm-lock.yaml',
+  '.eslintrc',
+  'tsconfig.json',
+  'src/run.js',
+  'src/run/',
+  'src/progress.js',
+  'src/progress/',
+  'src/db.js',
+  'src/stage-contract.js',
+  'src/stage-contract-spec.js',
+  'src/worktree.js',
+  'src/worktree-apply.js',
+  'src/hooks/',
+]
+
+/**
+ * 预告：--files 声明中哪些文件会在 --done 审计被危险/基线门拦截（坑 quick-protected-late-hint，
+ * 2026-08-28 用户实证：scan 类文档 ARCHITECTURE/CONCERNS 属受保护基线，--files 声明了照样拦、
+ * 必须 --force-baseline——设计合理但提示太晚，要等审计轮才发现，白跑一轮往返）。
+ * 判定与 auditQuickCompletion 危险门逐字同口径（isQuickMetadata 豁免 + 关联变更目录退栈 +
+ * DANGEROUS_PATTERNS 前缀/精确匹配），forceBaseline 已带 → 无预告。
+ * @param {string[]} files 声明文件（--files）
+ * @param {{ linkedChanges?: string[], forceBaseline?: boolean }} opts
+ * @returns {string[]} 将被拦截的声明文件子集
+ */
+export function predictProtectedQuickFiles(files, { linkedChanges = [], forceBaseline = false } = {}) {
+  if (forceBaseline) return []
+  const linked = (Array.isArray(linkedChanges) ? linkedChanges : []).map(c => String(c).replace(/\\/g, '/'))
+  const isUnderLinkedChange = (f) => linked.some(lc => f.startsWith(`.sillyspec/changes/${lc}/`))
+  return (files || [])
+    .filter(Boolean)
+    .map(f => String(f).replace(/\\/g, '/'))
+    .filter(f => {
+      if (f.startsWith('.sillyspec/') && !isQuickMetadata(f, linked) && !isUnderLinkedChange(f)) return true
+      return QUICK_DANGEROUS_PATTERNS.some(p => p === f || f.startsWith(p))
+    })
+}
+
 /**
  * quick 完成审计：对比 baseline 与实际变更。
  * @returns {{ status: 'safe'|'warning'|'blocked', reasons: string[], changedFiles: string[], newFiles: string[], deletedFiles: string[], baselineHit: string[], stagedTotal: number, attributedFiles: string[], undeclaredFiles: string[], foreignSessionDeclared: Array<{file: string, sessions: string[]}> }}
@@ -990,29 +1038,7 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
       }
       return foreignDeclaredIndex.get(f) || null
     }
-    const DANGEROUS_PATTERNS = [
-      'package.json',
-      'package-lock.json',
-      'yarn.lock',
-      'pnpm-lock.yaml',
-      '.eslintrc',
-      'tsconfig.json',
-      // SillySpec 核心流程代码。W6 重构后 src/run.js（23 行 barrel）/ src/progress.js（facade）
-      // 把真正逻辑下沉到 src/run/、src/progress/ 子目录——旧的精确文件名匹配
-      // （file === 'src/run.js'）命中不到 src/run/command.js（. 与 / 不可混同），致危险文件门
-      // 静默失效。改用「目录前缀（带尾斜杠，startsWith 不会误伤 src/runtime-* 等同名前缀）+
-      // barrel/facade 本体精确名」双重覆盖。重构 src/ 模块时须同步本清单（multi-agent-review Q5）。
-      'src/run.js',
-      'src/run/',
-      'src/progress.js',
-      'src/progress/',
-      'src/db.js',
-      'src/stage-contract.js',
-      'src/stage-contract-spec.js',
-      'src/worktree.js',
-      'src/worktree-apply.js',
-      'src/hooks/',
-    ]
+    const DANGEROUS_PATTERNS = QUICK_DANGEROUS_PATTERNS
 
     for (const entry of currentEntries) {
       // porcelain 两字符状态码（X=暂存区 Y=工作区）不能先 trim：' D'.trim()==='D' 使第二分支恒假、
