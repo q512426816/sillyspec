@@ -14,7 +14,7 @@ import { join } from 'path';
 import { resolvePlatformSpecDir } from './progress.js';
 import { safeGit } from './git-helper.js';
 import { openDatabase } from './db-engine.js';
-import { PLATFORM_MANAGED_FILENAME } from './run/shared.js';
+import { PLATFORM_MANAGED_FILENAME, QUICK_SID_RE } from './run/shared.js';
 import { syncSpecTree } from './spec-sync.js';
 
 // sync 是 best-effort（网络失败只 warn）：平台指针失效时不抛，跳过平台、回退本地。
@@ -450,6 +450,13 @@ export class SyncManager {
     // 其「变更不存在」warn 属正常时序，静默化）
     this._suppressDocsMissingWarn = archivedQuietly;
 
+    // X1 墓碑判据之一（design §5.5，变更 2026-08-29-change-delete-closure-and-spec-pull task-13）：
+    // 实体目录双失——changes/<name>/ 与 changes/archive/<name>/ 都不在 = 本地裸删（用户手动
+    // rm -rf 变更目录）。归档态（DB status='archived'）在 serialize 后于循环内判定。
+    // 常规终态推送保持原语义（archived/active 原值照推，platform-sync-archive-final-state 钉死），
+    // 墓碑作为推送链成功后的追加 POST（见 _pushTombstone）。
+    const entityDirGone = !existsSync(changeDir) && !existsSync(join(specBase, 'changes', 'archive', changeName));
+
     const MAX_PUSH_ATTEMPTS = 2;
     for (let attempt = 1; attempt <= MAX_PUSH_ATTEMPTS; attempt++) {
       // 读取 progress 数据（serializeForSync 六表裸 JSON，task-02 / D-005@v2，替代 read() 聚合视图）。
@@ -467,6 +474,17 @@ export class SyncManager {
         console.warn(`[sync] 变更无进度数据 (无活跃进度): ${changeName}`);
         return { synced: 0, errors: [`变更无进度数据: ${changeName}`] };
       }
+
+      // X1 墓碑判定（design §5.5 / task-13）：本地已注销（unregisterChange 链——归档收尾/自愈/
+      // quick 收尾均置 status='archived'）或实体目录双失（裸删）时，常规推送成功后追加一次
+      // changes[].status='deleted' 墓碑（平台 task-04 写路径置 location='deleted' 收敛镜像）。
+      // quick 会话豁免：triggerSync 对 quick 已降级 syncSpecTreeOnly，直调也不给孤儿 key 造墓碑。
+      const tombstoneDue = !QUICK_SID_RE.test(changeName)
+        && (progressData.changes?.[0]?.status === 'archived' || entityDirGone);
+
+      // X3 步骤开始上报（design §8.2 / task-13）：opts.stepStart 时把 current_stage 的第一个
+      // 未完成步投影为 in-progress（仅载荷不写 DB；triggerStepStartSync 是唯一传该 flag 的入口）
+      if (opts.stepStart) this._projectStepStart(progressData, changeName);
 
       // 元字段走 HTTP header（D-015 / task-09）：body 保持裸六表 JSON，sillyhub 老版忽略 header 零回归
       const headers = {
@@ -492,6 +510,14 @@ export class SyncManager {
         body: JSON.stringify(progressData),
         signal: opts.signal, // HUB-09：熔断 abort 传到底层请求
       });
+
+      // X1（task-04 契约）：409 + code='change_deleted' = 平台已删 key 拒收——不是 base_ts 冲突。
+      // 单行提示即可，不落冲突文件、不打全幅横幅：墓碑已收敛后的重复上行（归档收尾多步各推一次）、
+      // 多用户下他端删除后本地仍在推进，都是可预期态，按冲突卡死人工 resolve 反而是误报。
+      if (res.status === 409 && res.body && res.body.code === 'change_deleted') {
+        console.warn(`⚠️ [sync] 平台已删除变更「${changeName}」，本次进度上行被拒收（change_deleted）；本地如仍需推进请在平台侧确认`);
+        return { synced: 0, errors: [], platformDeleted: true, reason: '平台已删除（change_deleted 拒收）' };
+      }
 
       if (res.ok) {
         // 更新 platform_last_sync + 推进 base_ts（ql-20260818-008：值优先平台回执 last_pushed_at，
@@ -539,6 +565,18 @@ export class SyncManager {
           await syncSpecTree(safePlatformSpecDir(this.cwd) || join(this.cwd, '.sillyspec'), this._getPlatform(), changeName, { signal: opts.signal });
         } catch (err) {
           debugLog(`[sync] spec 树增量同步失败（不影响进度）: ${changeName}: ${err.message}`);
+        }
+
+        // X1 墓碑上行（收敛加速器，best-effort）：常规终态 + 文档/spec 树都推完后追加一次
+        // changes[].status='deleted'（顺序在后——常规推送保持 archived/active 原语义是既有
+        // 契约，platform-sync-archive-final-state 钉死）。失败静默：平台闭环走方案 A 镜像驱动
+        // 收敛（design §5.5），墓碑只是让收敛即时。
+        if (tombstoneDue) {
+          try {
+            await this._pushTombstone(changeName, { signal: opts.signal });
+          } catch (err) {
+            debugLog(`[sync] 墓碑上行失败（不影响主推送）: ${changeName}: ${err.message}`);
+          }
         }
 
         return { synced: 1, errors: [] };
@@ -618,6 +656,92 @@ export class SyncManager {
     // 循环耗尽（自愈重试后仍 409——两次都撞且第二次非自竞态；理论上第二次会落上方真冲突分支返回，
     // 此行只作结构兜底）
     return { synced: 0, errors: [`同步重试耗尽（仍冲突）: ${changeName}`] };
+  }
+
+  /**
+   * X3 步骤开始上报的载荷投影（design §8.2，变更 2026-08-29-change-delete-closure-and-spec-pull
+   * task-13）：把 current_stage 下第一个未完成步（completed/skipped 之外，含 waiting——等待中
+   * 的步同样「在跑」）的 status 改为 'in-progress'。
+   *
+   * 仅改本次上行载荷，不写 DB——步骤行 DB 种子是 pending，completeStep 的
+   * findIndex(pending||in-progress) 两者等价，但保持 DB 不被推送侧污染（--done 推送路径
+   * 行为不变，回归约束）。六表 steps[].status 状态机本就含 in-progress 值（step-store
+   * VALID_STATUSES），平台侧裸 JSON 透传（design §8.2 已核实后端零改动）。
+   * @param {object} progressData serializeForSync 输出（原地修改）
+   * @param {string} changeName
+   */
+  _projectStepStart(progressData, changeName) {
+    try {
+      const row = progressData && progressData.changes && progressData.changes[0];
+      if (!row || !row.current_stage || !Array.isArray(progressData.steps)) return;
+      const idx = progressData.steps.findIndex(s =>
+        s.change_name === changeName && s.stage === row.current_stage
+        && s.status !== 'completed' && s.status !== 'skipped');
+      if (idx !== -1) progressData.steps[idx].status = 'in-progress';
+    } catch { /* 投影失败按原载荷推送（best-effort） */ }
+  }
+
+  /**
+   * X1：把墓碑状态写进载荷——changes[0].status='deleted'（对齐既有 'archived' 状态语义，
+   * design §5.5）。平台写路径（服务端 task-04 `_apply_cli_tombstone`）见到该值即置
+   * Change.location='deleted' 并触发镜像软删收敛。
+   * @param {object} progressData serializeForSync 输出（原地修改，返回同一引用）
+   */
+  _applyTombstoneStatus(progressData) {
+    if (progressData && Array.isArray(progressData.changes) && progressData.changes[0]) {
+      progressData.changes[0].status = 'deleted';
+    }
+    return progressData;
+  }
+
+  /**
+   * X1 墓碑上行（design §5.5 / task-13）：同端点同结构的一次追加 POST（changes[].status='deleted'）。
+   *
+   * 由 sync() 成功路径在常规推送 + 文档/spec 树链之后触发（CLI 单进程顺序推送，base_ts 进程内
+   * 单调，无乐观锁冲突）。fresh 重读 DB 序列化——常规推送成功的 base_ts 回填已落库，本推送带上
+   * 该 base_ts；重复墓碑（平台已删）收到 409 code='change_deleted' 属预期，静默返回。
+   * Best-effort：任何失败只 debugLog，不影响 sync() 主结果（平台闭环走方案 A 兜底）。
+   * @param {string} changeName
+   * @param {{signal?: object}} [opts]
+   * @returns {Promise<{synced: number}>}
+   */
+  async _pushTombstone(changeName, opts = {}) {
+    const platform = this._getPlatform();
+    if (!platform) return { synced: 0 };
+    const { ProgressManager } = await import('./progress.js');
+    const pm = new ProgressManager({ specDir: safePlatformSpecDir(this.cwd) });
+    const progressData = pm.serializeForSync(this.cwd, changeName);
+    if (progressData === null) return { synced: 0 }; // DB 行已不在（彻底删除），无墓碑可推，方案 A 兜底
+    this._applyTombstoneStatus(progressData);
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${platform.token}`,
+    };
+    const pushedAt = new Date().toISOString();
+    const pushUser = platform.user || resolvePlatformUser(this.cwd) || null;
+    if (pushUser) headers['X-SillySpec-User'] = pushUser;
+    const baseTs = progressData.changes?.[0]?.last_synced_platform_ts;
+    if (baseTs) headers['X-SillySpec-Base-Ts'] = baseTs;
+    headers['X-SillySpec-Pushed-At'] = pushedAt;
+
+    const syncUrl = `${platform.url}/api/changes/${encodeURIComponent(changeName)}/progress`;
+    const res = await fetchJsonWithStatus(syncUrl, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(progressData),
+      signal: opts.signal,
+    });
+    if (res.ok) {
+      console.log(`[sync] 已上行墓碑（status=deleted）: ${changeName}`);
+      try {
+        const ackTs = res.body && typeof res.body.last_pushed_at === 'string' ? res.body.last_pushed_at : pushedAt;
+        pm._updatePlatformLastSync(this.cwd, changeName, ackTs);
+      } catch { /* 回填失败下次 push 409 由自竞态自愈收敛 */ }
+      return { synced: 1 };
+    }
+    debugLog(`[sync] 墓碑上行未成功: ${changeName} (status=${res.status}，平台方案 A 兜底)`);
+    return { synced: 0 };
   }
 
   /**

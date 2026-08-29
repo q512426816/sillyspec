@@ -1214,6 +1214,7 @@ ${taskList}
 4. 每个任务完成后：
    - **在 worktree 内 git add -A && git commit -m "<task-NN 摘要>"**（坑 subagent-uncommitted-newfile-apply3way，2026-08-22 实证：纯新增文件不 commit 时 apply 的 git apply --3way 报 "does not exist in index" 直接炸——未 commit 的新文件不在 base commit 也不在 index，patch 生成取不到。commit 后 base..HEAD diff 完整、apply 顺畅，review.json 的 head 也有真实锚点）
    - **先写 review.json 再勾选 checkbox**（见下方 Task Review Gate）
+   - **任务边界上报（每任务一次，主仓根目录）**：勾选 checkbox 后跑一次 \`sillyspec platform sync --change <change-name>\`——以任务粒度把「最后信号」（last_pushed_at）与 tasks.md 勾选状态推上平台（变更中心「进行中」可见性）；未连接平台时该命令静默跳过，无需先检查连接状态
    - **既跑 lint check 也跑 formatter**：凡变更涉及的源码跑项目的 lint 检查 **和** 格式化（如 \`ruff format\` / \`prettier --write\`），不要只跑 check——只 check 不 format 会把格式问题留到 commit 时被 pre-commit hook 拦截（worktree 内二进制可能缺失，先 \`which <bin>\` 确认，缺则 \`uv tool install\` / \`uv sync\`）
    - 记录改动文件和测试结果
 5. 遇到 BLOCKED → 记录原因，选择：重试/跳过/停止

@@ -617,6 +617,38 @@ export async function triggerSync(cwd, changeName, platformOpts = {}, opts = {})
 }
 
 /**
+ * 触发步骤开始上报（X3 / design §8.2，变更 2026-08-29-change-delete-closure-and-spec-pull task-13）。
+ *
+ * 步骤启动时同端点同结构补推一次 progress：CLI 状态机的步骤行 DB 侧种子是 pending，
+ * 本推送在载荷层把 current_stage 的第一个未完成步投影为 in-progress（sync.js
+ * _projectStepStart，不写 DB，--done 推送路径不受影响）。真实效果 = 平台
+ * last_pushed_at 以步骤起点刷新（投影 current_step_status 对下一个 pending 步本就
+ * 推导为 active，X3 不改变其值，只让「最后信号」时间可信，停滞判定不再失真）。
+ * 与 triggerSync 同款契约：quick 会话降级跳过（无 progress 实体）、未连接平台在
+ * sync() 内部静默跳过、8s 总熔断（raceWithAbort + abort 在飞请求）、失败只 warn 不抛。
+ *
+ * 接线说明（本变更 allowed_paths 约束）：步骤 prompt 渲染点（run/stage.js outputStep
+ * 前段 / run/prompt.js）不在本变更可改文件集内——本导出即「步骤开始钩子」本体，
+ * 渲染侧一行 `triggerStepStartSync(cwd, changeName, platformOpts)` 的接线由后续
+ * 变更补上；execute 阶段的任务粒度信号已由 X4（stages/execute.js Wave prompt
+ * 每任务上报指引）覆盖。
+ */
+export async function triggerStepStartSync(cwd, changeName, platformOpts = {}, opts = {}) {
+  try {
+    const tsSpecBase = platformOpts?.specRoot || join(cwd, '.sillyspec')
+    if (changeName && QUICK_SID_RE.test(changeName) && !existsSync(join(tsSpecBase, 'changes', changeName))) {
+      return // quick 会话无 progress 实体（与 triggerSync 同判），无步骤可报
+    }
+    // shared.js 在 src/run/，sync.js 在 src/ → 退一层
+    const syncMod = await import('../sync.js')
+    await raceWithAbort((sig) => syncMod.sync(changeName, cwd, { ...sig, stepStart: true }), opts.timeoutMs)
+  } catch (e) {
+    // Best Effort：步骤开始上报失败不影响主流程（下次 --done 的 triggerSync 兜底）
+    console.warn('⚠️ 步骤开始上报失败:', e.message)
+  }
+}
+
+/**
  * 自动 pull 节流（体检 PERF-02）：triggerPull/triggerPullActiveChange 在每条 stage 命令
  * 启动时注入，agent 命令往往是秒级连发——每次都发 HTTP GET（daemon 挂/慢时单命令最多
  * 阻塞 8s）。跨进程 marker 节流：10s 内已有自动 pull 则跳过（手动 `platform pull` 不走
