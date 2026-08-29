@@ -1,10 +1,13 @@
 // task-13（2026-08-29-change-delete-closure-and-spec-pull，跨仓 sillyspec）：
 // X1 墓碑上报 + X3 步骤开始上报 + X4 execute 任务边界上报（design §5.5 / §8.2）。
 //
-// X1：删除/归档（unregisterChange 链、实体目录删除）后，progress 上行载荷含
+// X1：归档/注销（unregisterChange 链，DB status='archived'）后，progress 上行载荷含
 //     changes[].status='deleted'（对齐既有 archived 语义；平台写路径由服务端 task-04 落地）。
 //     兼容契约：常规终态推送保持原语义（archived/active 原值照推，platform-sync-archive-final-state
 //     钉死），墓碑作为同端点同结构的追加 POST——顺序在常规推送之后。
+//     审计 B1 收窄：「实体目录双失」不再触发墓碑——platform pull（进度同步）只写 DB 不建
+//     目录，DB active + 目录双失是合法态，误发墓碑会让平台把活跃变更软删（全体成员生效）。
+//     真实裸删由平台镜像收敛兜底（spec-sync delete ops → scoped 定向删除），CLI 不发墓碑。
 // X3：步骤启动补推一次 progress（steps[].status=in-progress；仅载荷投影不写 DB；
 //     无 --done 也推——经 triggerStepStartSync 钩子）。
 // X4：execute Wave prompt 含每任务完成后的 triggerSync 等效上报指引
@@ -134,7 +137,7 @@ test('X1-1 归档后（unregisterChange 链）→ 常规终态照推 + 追加墓
   } finally { m.restore() }
 })
 
-test('X1-2 裸删（实体目录双失，DB 行仍 active）→ 常规推送照旧 + 追加墓碑 deleted', async () => {
+test('X1-2 裸删（实体目录双失，DB 行仍 active）→ 不发墓碑（防 platform-pull 无目录态误判）', async () => {
   const cwd = makeFixture()
   const name = 'bare-deleted-change'
   seedChange(cwd, name)
@@ -145,10 +148,12 @@ test('X1-2 裸删（实体目录双失，DB 行仍 active）→ 常规推送照�
     const r = await new SyncManager(cwd).sync(name)
     assert.equal(r.synced, 1, '主推送成功（DB 是进度真相源）')
     assert.equal(m.progressBodies[0].changes[0].status, 'active', '首推保持 active 原语义（既有回归）')
-    assert.ok(
-      m.progressBodies.some(b => b.changes[0].status === 'deleted'),
-      '墓碑上行到达（目录双失 = 裸删收敛加速）',
-    )
+    // 审计 B1：目录双失 ≠ 裸删实证——platform pull 只写 DB 不建目录（DB active + 目录双失
+    // 是合法态），此处发墓碑会让平台把活跃变更软删（全体成员生效）。收敛交平台镜像
+    // （spec-sync delete ops → scoped 定向删除）。
+    for (const b of m.progressBodies) {
+      assert.notEqual(b.changes[0].status, 'deleted', '目录双失不发墓碑（DB active 是进度真相源）')
+    }
   } finally { m.restore() }
 })
 

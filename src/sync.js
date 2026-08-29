@@ -568,12 +568,10 @@ export class SyncManager {
     // 其「变更不存在」warn 属正常时序，静默化）
     this._suppressDocsMissingWarn = archivedQuietly;
 
-    // X1 墓碑判据之一（design §5.5，变更 2026-08-29-change-delete-closure-and-spec-pull task-13）：
-    // 实体目录双失——changes/<name>/ 与 changes/archive/<name>/ 都不在 = 本地裸删（用户手动
-    // rm -rf 变更目录）。归档态（DB status='archived'）在 serialize 后于循环内判定。
+    // X1 墓碑（design §5.5，变更 2026-08-29-change-delete-closure-and-spec-pull task-13）：
+    // 触发判据见循环内 tombstoneDue（DB status='archived'）。
     // 常规终态推送保持原语义（archived/active 原值照推，platform-sync-archive-final-state 钉死），
     // 墓碑作为推送链成功后的追加 POST（见 _pushTombstone）。
-    const entityDirGone = !existsSync(changeDir) && !existsSync(join(specBase, 'changes', 'archive', changeName));
 
     const MAX_PUSH_ATTEMPTS = 2;
     for (let attempt = 1; attempt <= MAX_PUSH_ATTEMPTS; attempt++) {
@@ -593,12 +591,17 @@ export class SyncManager {
         return { synced: 0, errors: [`变更无进度数据: ${changeName}`] };
       }
 
-      // X1 墓碑判定（design §5.5 / task-13）：本地已注销（unregisterChange 链——归档收尾/自愈/
-      // quick 收尾均置 status='archived'）或实体目录双失（裸删）时，常规推送成功后追加一次
-      // changes[].status='deleted' 墓碑（平台 task-04 写路径置 location='deleted' 收敛镜像）。
-      // quick 会话豁免：triggerSync 对 quick 已降级 syncSpecTreeOnly，直调也不给孤儿 key 造墓碑。
+      // X1 墓碑判定（design §5.5 / task-13；审计 B1 收窄）：仅 DB status='archived'
+      // （unregisterChange 链——归档收尾/自愈/quick 收尾均置该值）触发，常规推送成功后追加
+      // 一次 changes[].status='deleted' 墓碑（平台 task-04 写路径置 location='deleted' 收敛镜像）。
+      // 不再把「实体目录双失」当裸删发墓碑：platform pull（进度同步）只写 DB 不建目录 →
+      // DB active + 目录双失是合法态，误发墓碑会让平台把活跃变更软删（全体成员生效）。
+      // 真实裸删（用户手动 rm -rf 目录）由平台镜像收敛兜底（spec-sync delete ops → scoped
+      // 定向删除，computeSpecOps 护栏只拦整树/changes 整删，不拦单变更 scoped 删除），CLI
+      // 不发墓碑不损失收敛。quick 会话豁免：triggerSync 对 quick 已降级 syncSpecTreeOnly，
+      // 直调也不给孤儿 key 造墓碑。
       const tombstoneDue = !QUICK_SID_RE.test(changeName)
-        && (progressData.changes?.[0]?.status === 'archived' || entityDirGone);
+        && progressData.changes?.[0]?.status === 'archived';
 
       // X3 步骤开始上报（design §8.2 / task-13）：opts.stepStart 时把 current_stage 的第一个
       // 未完成步投影为 in-progress（仅载荷不写 DB；triggerStepStartSync 是唯一传该 flag 的入口）
