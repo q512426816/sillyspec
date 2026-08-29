@@ -57,19 +57,20 @@ function mockFetch(impl) {
 
 // 空目录场景的连接通道：local.yaml 写进 .sillyspec 会让目录非空（连接配置 ≠ spec 内容，
 // 但守卫按字面 readdir 判非空），故用 _getPlatform 的 env 通道（daemon 注入同款）供凭据。
-function withEnvPlatform(url, token, fn) {
-  return async (...a) => {
-    const saved = { u: process.env.SILLYHUB_PLATFORM_URL, t: process.env.SILLYHUB_PLATFORM_TOKEN }
-    process.env.SILLYHUB_PLATFORM_URL = url
-    process.env.SILLYHUB_PLATFORM_TOKEN = token
-    try {
-      await fn(...a)
-    } finally {
-      if (saved.u === undefined) delete process.env.SILLYHUB_PLATFORM_URL
-      else process.env.SILLYHUB_PLATFORM_URL = saved.u
-      if (saved.t === undefined) delete process.env.SILLYHUB_PLATFORM_TOKEN
-      else process.env.SILLYHUB_PLATFORM_TOKEN = saved.t
-    }
+// 审计 B2 排查发现：本 helper 原是「返回 thunk」工厂，而所有调用点都是 await withEnvPlatform(...)
+// 未追加 () 调用返回的 thunk → 回调从不执行，用例 1/2/6/7/8/14/15 全部空转变绿（假绿）。
+// 改为自执行 async：await withEnvPlatform(url, token, fn) 即真正进入 fn，调用点形态不变。
+async function withEnvPlatform(url, token, fn) {
+  const saved = { u: process.env.SILLYHUB_PLATFORM_URL, t: process.env.SILLYHUB_PLATFORM_TOKEN }
+  process.env.SILLYHUB_PLATFORM_URL = url
+  process.env.SILLYHUB_PLATFORM_TOKEN = token
+  try {
+    await fn()
+  } finally {
+    if (saved.u === undefined) delete process.env.SILLYHUB_PLATFORM_URL
+    else process.env.SILLYHUB_PLATFORM_URL = saved.u
+    if (saved.t === undefined) delete process.env.SILLYHUB_PLATFORM_TOKEN
+    else process.env.SILLYHUB_PLATFORM_TOKEN = saved.t
   }
 }
 
@@ -368,5 +369,47 @@ test('13. --force 后 local.yaml 存活且内容不变（其余整树覆盖语�
     // 其余整树覆盖语义不变：旧内容消失、新树落地
     assert.equal(existsSync(join(cwd, '.sillyspec', 'changes', 'stale-force')), false, '其余旧内容照常被 rm')
     assert.ok(existsSync(join(cwd, '.sillyspec', 'changes', '2026-08-29-demo-change', 'design.md')), '新树照常落地')
+  } finally { restore() }
+})
+
+// ─────────────────────────────────────────
+// 14-15. 下载超时独立大口径（审计 B2：整树 tar 流不走 10s REQUEST_TIMEOUT_MS）
+// ─────────────────────────────────────────
+
+test('14. 下载 signal 用独立 120s 口径生成，不再复用 REQUEST_TIMEOUT_MS(10s)', async () => {
+  const cwd = makeFixture({ emptySpecDir: true })
+  // 捕获 AbortSignal.timeout 入参：pullSpecBundle 的下载 fetch signal 应由
+  // PULL_BUNDLE_TIMEOUT_MS(120_000) 生成——大树/慢网下 10s 常规轮询口径必超时（审计 B2）
+  const savedTimeout = AbortSignal.timeout
+  const timeoutCalls = []
+  AbortSignal.timeout = (ms) => { timeoutCalls.push(ms); return savedTimeout.call(AbortSignal, ms) }
+  const restore = mockFetch(async () => okTarResponse(sampleBundle()))
+  try {
+    await withEnvPlatform('http://hub.example.com', 'shpsync_tok-14', async () => {
+      const r = await new SyncManager(cwd).pullSpecBundle()
+      assert.equal(r.ok, true, `ok（实际 reason=${r.reason}）`)
+      assert.ok(timeoutCalls.includes(120_000), `下载 signal 用 120s 独立口径（实际 ${JSON.stringify(timeoutCalls)}）`)
+      assert.ok(!timeoutCalls.includes(10_000), '不再复用 REQUEST_TIMEOUT_MS(10s) 小口径')
+    })
+  } finally {
+    AbortSignal.timeout = savedTimeout
+    restore()
+  }
+})
+
+test('15. 下载超时错误文案区分 120s 口径（不与常规 10ms 级请求文案混同）', async () => {
+  const cwd = makeFixture({ emptySpecDir: true })
+  const abortErr = new Error('The operation was aborted')
+  abortErr.name = 'AbortError'
+  const restore = mockFetch(async () => { throw abortErr })
+  try {
+    await withEnvPlatform('http://hub.example.com', 'shpsync_tok-15', async () => {
+      const r = await new SyncManager(cwd).pullSpecBundle()
+      assert.equal(r.ok, false)
+      assert.equal(r.pulled, false)
+      assert.match(r.reason || '', /下载超时/, `reason 区分下载超时语义（实际 ${r.reason}）`)
+      assert.match(r.reason || '', /120s/, 'reason 标注 120s 独立口径')
+      assert.doesNotMatch(r.reason || '', /10_?000ms|10s/, '不再出现 10s 小口径文案')
+    })
   } finally { restore() }
 })

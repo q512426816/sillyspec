@@ -29,6 +29,9 @@ function safePlatformSpecDir(cwd) {
 
 const LOCAL_YAML = '.sillyspec/local.yaml';
 const REQUEST_TIMEOUT_MS = 10_000;
+// X2 spec bundle 整树下载（tar 流式响应体，审计 B2）：大树/慢网远超常规 JSON 轮询口径，
+// 独立大超时（daemon 同端点 30s；CLI 面向交互式大仓更宽）。
+const PULL_BUNDLE_TIMEOUT_MS = 120_000;
 
 // 未连接平台是本地独立用户的合法默认状态。sync / checkApproval 由 run 流程在后台 best-effort
 // 触发（每步完成、execute 阶段启动）；syncDocuments 仅由手动 `sillyspec platform sync-docs`
@@ -205,8 +208,10 @@ function resolvePlatformUser(cwd, explicitUser) {
 // HUB-09：单请求超时与外部 signal 合并——自动同步熔断（run/shared.js trigger* 的 race）
 // 触发 abort 时在飞 fetch 被真实取消，而不是熔断后任由请求自行完成（平台可能已接受，
 // 客户端却当作超时放弃；spec 树推送无 base_ts 自愈兜底）。AbortSignal.any 需 Node ≥20.3。
-function combineSignals(external) {
-  const timeoutSignal = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+// timeoutMs 可选：pullSpecBundle 整树下载走 PULL_BUNDLE_TIMEOUT_MS 大口径（审计 B2），
+// 其余调用缺省 REQUEST_TIMEOUT_MS。
+function combineSignals(external, timeoutMs = REQUEST_TIMEOUT_MS) {
+  const timeoutSignal = AbortSignal.timeout(timeoutMs);
   return external ? AbortSignal.any([timeoutSignal, external]) : timeoutSignal;
 }
 
@@ -1402,16 +1407,21 @@ export class SyncManager {
       };
     }
 
-    // 下载流式 tar（spec 树小，整只缓冲与 daemon getSpecBundle 同口径）
+    // 下载流式 tar（spec 树小，整只缓冲与 daemon getSpecBundle 同口径）。
+    // 审计 B2：下载（含响应体读取）走 PULL_BUNDLE_TIMEOUT_MS 独立大口径——大树/慢网下
+    // 10s 常规轮询口径必超时；仍尊重外部熔断 signal（两者 combine）。
     const bundleUrl = `${platform.url}/api/changes/-/spec-bundle`;
     let res;
     try {
       res = await fetch(bundleUrl, {
         headers: { Authorization: `Bearer ${platform.token}` },
-        signal: combineSignals(opts.signal),
+        signal: combineSignals(opts.signal, PULL_BUNDLE_TIMEOUT_MS),
       });
     } catch (err) {
-      const why = err.name === 'AbortError' ? `请求超时/中断 (${REQUEST_TIMEOUT_MS}ms 上限或外部熔断)` : err.message;
+      // AbortSignal.timeout 到期抛 TimeoutError，外部 signal abort 抛 AbortError，两者都是超时/中断口径
+      const why = (err.name === 'AbortError' || err.name === 'TimeoutError')
+        ? `下载超时/中断 (${PULL_BUNDLE_TIMEOUT_MS / 1000}s 上限或外部熔断)`
+        : err.message;
       console.warn(`[sync] GET ${bundleUrl} 请求失败: ${why}`);
       return { ok: false, pulled: false, specDir, reason: `拉取 spec bundle 失败: ${why}` };
     }
