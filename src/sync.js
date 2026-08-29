@@ -289,17 +289,22 @@ function _readTarSize(field) {
   return parseInt(s, 8) || 0;
 }
 
-/** PAX 扩展头 data 解析为 {key: value}：记录形态 "<len> <key>=<value>\n" 重复，len 含自身位数。 */
+/**
+ * PAX 扩展头 data 解析为 {key: value}：记录形态 "<len> <key>=<value>\n" 重复，
+ * len 十进制**字节数**且含自身位数、空格与尾部 \n。
+ * 必须在 Buffer 上按字节偏移推进/切片：value 含非 ASCII（中文文件名）时 len（字节）
+ * > JS 字符串长度（UTF-16 码元），按码元校验会首记录即 break、path 丢失 → 文件落
+ * 实体头 name 的 ascii/replace 混淆路径并互相覆盖（与 daemon spec-sync.ts 同款修复）。
+ */
 function _parsePaxRecords(data) {
-  const text = data.toString('utf8');
   const out = {};
   let pos = 0;
-  while (pos < text.length) {
-    const sp = text.indexOf(' ', pos);
+  while (pos < data.length) {
+    const sp = data.indexOf(0x20, pos);
     if (sp === -1) break;
-    const len = parseInt(text.slice(pos, sp), 10);
-    if (!Number.isInteger(len) || len <= 0 || pos + len > text.length) break;
-    const record = text.slice(sp + 1, pos + len - 1); // 尾部 \n 不属于 value
+    const len = parseInt(data.toString('utf8', pos, sp), 10);
+    if (!Number.isInteger(len) || len <= 0 || pos + len > data.length) break;
+    const record = data.toString('utf8', sp + 1, pos + len - 1); // 尾部 \n 不属于 value
     const eq = record.indexOf('=');
     if (eq > 0) out[record.slice(0, eq)] = record.slice(eq + 1);
     pos += len;

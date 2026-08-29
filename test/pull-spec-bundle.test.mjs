@@ -448,3 +448,45 @@ test('16. --force 恢复失败 → 树外 local.yaml.bak 保留且内容正确�
     )
   } finally { restore() }
 })
+
+// ─────────────────────────────────────────
+// 17. 非 ASCII（中文）路径（2026-08-30 审计①：len=字节 ≠ 码元）
+// ─────────────────────────────────────────
+
+/** PAX path 记录（字节级长度）：非 ASCII 路径时 len（字节）> 码元数，paxPathEntry 的
+ *  码元算法不再自洽，须按 Buffer.byteLength 收敛不动点。 */
+function paxPathEntryBytes(longName) {
+  const rec = Buffer.from(`path=${longName}\n`, 'utf8')
+  let total = rec.length + 2
+  for (let i = 0; i < 8; i++) total = rec.length + 1 + String(total).length
+  const payload = Buffer.concat([Buffer.from(`${total} `, 'ascii'), rec])
+  assert.equal(payload.length, total, '测试侧 PAX 记录字节长度自洽')
+  return tarEntry('PaxHeader', payload, 'x')
+}
+
+test('17. PAX path 记录含非 ASCII（中文）路径 → 按字节长度解析，落到正确中文路径', async () => {
+  const cwd = makeFixture({ emptySpecDir: true })
+  // Python tarfile 实测：任何非 ASCII 名（即使 ≤100 字节）都写 path 记录，实体头
+  // name 字段为 ascii/replace 混淆形。修复前 _parsePaxRecords 按码元校验字节长度
+  // → 首记录即 break → path 丢失 → 文件落混淆路径（同长中文名互相覆盖）。
+  const realPath = 'docs/团队介绍/文件.md'
+  const mojibakeName = 'docs/?????/??.md'
+  const tarBuf = Buffer.concat([
+    paxPathEntryBytes(realPath),
+    tarEntry(mojibakeName, '团队内容'),
+    Buffer.alloc(1024),
+  ])
+  const restore = mockFetch(async () => okTarResponse(tarBuf, '1'))
+  try {
+    await withEnvPlatform('http://hub.example.com', 'shpsync_tok-17', async () => {
+      const r = await new SyncManager(cwd).pullSpecBundle()
+      assert.equal(r.ok, true, `ok（实际 reason=${r.reason}）`)
+      assert.equal(
+        readFileSync(join(cwd, '.sillyspec', ...realPath.split('/')), 'utf8'),
+        '团队内容',
+        '正确中文路径落地且内容完整',
+      )
+      assert.equal(existsSync(join(cwd, '.sillyspec', 'docs', '?????')), false, '混淆路径不落盘')
+    })
+  } finally { restore() }
+})
