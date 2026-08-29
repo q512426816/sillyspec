@@ -8,9 +8,9 @@
  * HTTP 请求：Node.js 原生 fetch（Node 22+）
  */
 
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, unlinkSync, chmodSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, unlinkSync, chmodSync, rmSync } from 'fs';
 import { writeAtomicSync } from './fs-atomic.js';
-import { join } from 'path';
+import { join, dirname, isAbsolute, relative } from 'path';
 import { resolvePlatformSpecDir } from './progress.js';
 import { safeGit } from './git-helper.js';
 import { openDatabase } from './db-engine.js';
@@ -260,6 +260,124 @@ async function fetchJsonWithStatus(url, options = {}) {
     }
     return { ok: false, status: 0, body: null };
   }
+}
+
+// ── X2 spec bundle tar 解析（task-14 / design §7.1）──
+
+// 平台 build_bundle（spec_workspace/service.py，Python tarfile mode "w"）输出未压缩 tar，
+// Python 3.8+ 默认 PAX 格式：路径 ≤100 字符是纯 ustar 头，超限走 typeflag 'x' 的 PAX
+// 扩展头（path 记录）+ 截断名条目；GNU tar 长名走 'L'。仓内无三方 tar 库（package.json
+// deps 无 tar/zlib 需求），按 512 字节头极简自实现——tar-slip 双重校验照搬 daemon
+// extractTar（sillyhub-daemon/src/spec-sync.ts:982）同款范式，两仓行为对齐。
+
+/** tar 头字符串字段读：截到首个 NUL，去首尾空白。 */
+function _readTarString(buf) {
+  const end = buf.indexOf(0);
+  const s = (end === -1 ? buf : buf.subarray(0, end)).toString('utf8');
+  return s.replace(/\0/g, '').trim();
+}
+
+/** tar 头 size 字段（12 字节八进制）→ 字节数。 */
+function _readTarSize(field) {
+  const s = _readTarString(field);
+  if (!s) return 0;
+  return parseInt(s, 8) || 0;
+}
+
+/** PAX 扩展头 data 解析为 {key: value}：记录形态 "<len> <key>=<value>\n" 重复，len 含自身位数。 */
+function _parsePaxRecords(data) {
+  const text = data.toString('utf8');
+  const out = {};
+  let pos = 0;
+  while (pos < text.length) {
+    const sp = text.indexOf(' ', pos);
+    if (sp === -1) break;
+    const len = parseInt(text.slice(pos, sp), 10);
+    if (!Number.isInteger(len) || len <= 0 || pos + len > text.length) break;
+    const record = text.slice(sp + 1, pos + len - 1); // 尾部 \n 不属于 value
+    const eq = record.indexOf('=');
+    if (eq > 0) out[record.slice(0, eq)] = record.slice(eq + 1);
+    pos += len;
+  }
+  return out;
+}
+
+/**
+ * tar-slip 双重校验（daemon extractTar 同款）：显式穿越模式 + join 后 relative 复核。
+ * 通过返回安全相对路径的原样 name；命中穿越抛 Error（调用方转为失败 reason，不落盘）。
+ */
+function _assertSafeTarName(name, targetDir) {
+  if (name.includes('..') || isAbsolute(name) || /^[A-Za-z]:[\\/]/.test(name)) {
+    throw new Error(`tar 路径越界已拦截: ${name}`);
+  }
+  const fullPath = join(targetDir, name);
+  const rel = relative(targetDir, fullPath);
+  if (rel.startsWith('..') || isAbsolute(rel)) {
+    throw new Error(`tar 路径逃逸目标目录已拦截: ${name} -> ${fullPath}`);
+  }
+}
+
+/**
+ * 解析整只未压缩 tar 为条目列表 [{ name, isDir, data }]（先全量解析校验，后落盘——
+ * 恶意/损坏 tar 在任何本地删除动作之前暴露，见 pullSpecBundle 覆盖顺序）。
+ * 容忍并落地 tar 顶层 PLATFORM-BUNDLE.json（task-08 快照元数据，design §7.3）；
+ * symlink/fifo/dev 等非常规条目跳过（spec 树不应含，daemon 同款）。
+ * @param {Buffer} tarBuf
+ * @returns {Array<{name: string, isDir: boolean, data: Buffer}>}
+ */
+function _parseSpecTar(tarBuf) {
+  const entries = [];
+  let offset = 0;
+  let pendingPath = null; // PAX 'x' path 记录 / GNU 'L' 长名，覆盖下一实条目的 name
+  while (offset + 512 <= tarBuf.length) {
+    const header = tarBuf.subarray(offset, offset + 512);
+    if (header.every((b) => b === 0)) break; // 结尾 zero block → 结束
+    const typeflag = String.fromCharCode(header[156] ?? 0);
+    const size = _readTarSize(header.subarray(124, 136));
+    offset += 512;
+    const data = tarBuf.subarray(offset, offset + size);
+    offset += Math.ceil(size / 512) * 512;
+
+    let name = _readTarString(header.subarray(0, 100));
+    // POSIX ustar prefix 字段（magic 'ustar\0' + version '00' 时有效）；GNU 长名走 'L' 条目
+    const magic = header.subarray(257, 263).toString('latin1');
+    const version = header.subarray(263, 265).toString('latin1');
+    if (magic.startsWith('ustar') && version === '00') {
+      const prefix = _readTarString(header.subarray(345, 500));
+      if (prefix) name = `${prefix}/${name}`;
+    }
+    if (pendingPath) { name = pendingPath; pendingPath = null; }
+
+    if (typeflag === 'x' || typeflag === 'X') {
+      const recs = _parsePaxRecords(data);
+      if (recs.path) pendingPath = recs.path;
+      continue;
+    }
+    if (typeflag === 'L') { // GNU LongLink（长文件名）
+      pendingPath = _readTarString(data);
+      continue;
+    }
+    if (typeflag === 'K') continue; // GNU 长链接目标：spec 树无符号链接，跳过
+    if (!name) continue;
+
+    if (typeflag === '5' || name.endsWith('/')) {
+      _assertSafeTarName(name.replace(/\/+$/, ''), '.'); // 目录条目同样过穿越校验（相对假根）
+      entries.push({ name, isDir: true, data: Buffer.alloc(0) });
+      continue;
+    }
+    if (typeflag === '0' || typeflag === '\0') {
+      _assertSafeTarName(name, '.');
+      entries.push({ name, isDir: false, data });
+      continue;
+    }
+    debugLog(`[sync] spec bundle tar 跳过非常规条目: ${name} (typeflag ${typeflag})`);
+  }
+  return entries;
+}
+
+/** 目录有内容判定（daemon dirHasContent 同语义）：不存在/读失败/空均视为无内容。 */
+function _dirHasContent(dir) {
+  try { return readdirSync(dir).length > 0; } catch { return false }
 }
 
 // ── SyncManager ──
@@ -1240,6 +1358,105 @@ export class SyncManager {
   }
 
   /**
+   * X2（task-14 / design §7.1 / FR-07 / FR-08）：拉平台 spec 整树快照并解压到 specDir。
+   *
+   * 与既有 pull()（进度六表 DB import）正交：本方法操作的是 .sillyspec **文件树**——
+   * GET {platform.url}/api/changes/-/spec-bundle（task-08 端点，Bearer shpsync token，
+   * application/x-tar 流 + X-Spec-Version 响应头）下载未压缩 tar 后解包。
+   *
+   * 覆盖语义对齐 daemon pullSpecBundle（sillyhub-daemon/src/spec-sync.ts）：
+   * - specDir 为空（或不存在）→ 直接解压；
+   * - 非空且无 force → 拒绝并明确提示（fail-fast，不发网络请求）；
+   * - force → rm 整树 + 解包（先下载并全量解析校验 tar，成功后才 rm——恶意/损坏
+   *   bundle 不先删本地）。
+   *
+   * 快照语义（design §7.4）：主动拉取服务器**打包时刻**快照，无自动同步、无会话中
+   * 刷新；daemon 模式任务/会话开始时按 latest_spec_version 自动取新（本方法不涉）。
+   *
+   * Best Effort：未连接平台静默跳过（本地合法状态）；网络/解包失败返回 ok:false 不抛。
+   * @param {{force?: boolean, specDir?: string|null, signal?: AbortSignal}} [opts]
+   *   force 整树覆盖；specDir 显式覆盖树根（--spec-dir 全局选项通道；缺省与 sync()
+   *   同源：平台模式锚 specRoot，本地模式 cwd/.sillyspec）；signal 外部熔断
+   * @returns {Promise<{ok: boolean, pulled: boolean, specDir?: string, specVersion?: string|null, reason?: string}>}
+   */
+  async pullSpecBundle(opts = {}) {
+    const { force = false } = opts;
+    const platform = this._getPlatform();
+    if (!platform) {
+      debugLog('[sync] 未连接平台（本地合法状态）；pullSpecBundle 跳过');
+      return { ok: false, pulled: false, reason: '未连接平台' };
+    }
+    // 树根与 sync()/spec 树推送同源（BUG-01：平台模式必须锚 specRoot，勿硬编码 cwd/.sillyspec）
+    const specDir = opts.specDir || safePlatformSpecDir(this.cwd) || join(this.cwd, '.sillyspec');
+
+    // 覆盖守卫（daemon 同款）：非空且无 --force 拒绝——先于网络请求，本地不可逆动作前 fail-fast
+    if (_dirHasContent(specDir) && !force) {
+      return {
+        ok: false, pulled: false, specDir,
+        reason: `specDir 非空（${specDir}），拒绝整树覆盖；确认用平台快照替换本地请加 --force`,
+      };
+    }
+
+    // 下载流式 tar（spec 树小，整只缓冲与 daemon getSpecBundle 同口径）
+    const bundleUrl = `${platform.url}/api/changes/-/spec-bundle`;
+    let res;
+    try {
+      res = await fetch(bundleUrl, {
+        headers: { Authorization: `Bearer ${platform.token}` },
+        signal: combineSignals(opts.signal),
+      });
+    } catch (err) {
+      const why = err.name === 'AbortError' ? `请求超时/中断 (${REQUEST_TIMEOUT_MS}ms 上限或外部熔断)` : err.message;
+      console.warn(`[sync] GET ${bundleUrl} 请求失败: ${why}`);
+      return { ok: false, pulled: false, specDir, reason: `拉取 spec bundle 失败: ${why}` };
+    }
+    if (!res.ok) {
+      const why = res.status === 404
+        ? '平台工作区尚无 spec 内容（HTTP 404，空 bundle）'
+        : `HTTP ${res.status}`;
+      console.warn(`[sync] GET ${bundleUrl} → ${res.status}`);
+      return { ok: false, pulled: false, specDir, reason: `拉取 spec bundle 失败: ${why}` };
+    }
+    const specVersion = res.headers.get('x-spec-version');
+    let tarBuf;
+    try {
+      tarBuf = Buffer.from(await res.arrayBuffer());
+    } catch (err) {
+      console.warn(`[sync] 读取 spec bundle 响应体失败: ${err.message}`);
+      return { ok: false, pulled: false, specDir, reason: `读取 spec bundle 失败: ${err.message}` };
+    }
+
+    // 全量解析 + 穿越校验在 rm 之前（tar-slip 命中时本地原样保留）
+    let entries;
+    try {
+      entries = _parseSpecTar(tarBuf);
+    } catch (err) {
+      console.warn(`[sync] spec bundle 无效: ${err.message}`);
+      return { ok: false, pulled: false, specDir, reason: `spec bundle 无效: ${err.message}` };
+    }
+
+    // 覆盖语义：rm 整树（容忍不存在）→ 逐条目落盘（join 后 relative 双重校验再走一道）
+    try {
+      rmSync(specDir, { recursive: true, force: true });
+      for (const e of entries) {
+        _assertSafeTarName(e.name.replace(/\/+$/, ''), specDir);
+        const fullPath = join(specDir, e.name);
+        if (e.isDir) {
+          mkdirSync(fullPath, { recursive: true });
+        } else {
+          mkdirSync(dirname(fullPath), { recursive: true });
+          writeFileSync(fullPath, e.data);
+        }
+      }
+    } catch (err) {
+      console.warn(`[sync] 解压 spec bundle 失败: ${err.message}`);
+      return { ok: false, pulled: false, specDir, reason: `解压 spec bundle 失败: ${err.message}` };
+    }
+    console.log(`[sync] 已拉取 spec 快照并解压到 ${specDir}${specVersion ? `（平台 spec_version: ${specVersion}，打包时刻快照非实时）` : ''}`);
+    return { ok: true, pulled: true, specDir, specVersion };
+  }
+
+  /**
    * 冲突解决三选一（task-13 / D-002 / D-010 / D-013 / FR-05）。
    * 读 task-12 写的 sync-conflict-<change>.json，按 mode 处理后必清冲突文件防累积（R-04 / constraints）。
    *
@@ -1491,6 +1708,12 @@ export async function pull(changeName, opts, cwd) {
 // 两级 pull 第一级（轻量 change 列表），platform pull 无 --change 时先拉列表再按需 pull
 export async function pullList(cwd) {
   return new SyncManager(cwd).pullList();
+}
+
+// X2（task-14 / FR-07 / FR-08）：spec 整树快照拉取便捷导出（index.js 顶层 pull --spec 命令用，
+// 与 SyncManager.pullSpecBundle 实例方法共用实现）。快照语义见实例方法 docstring（design §7.4）。
+export async function pullSpecBundle(cwd, opts) {
+  return new SyncManager(cwd).pullSpecBundle(opts);
 }
 
 // task-13 / D-002 / D-010 / D-013 / FR-05：冲突解决三选一（index.js platform resolve 子命令用）

@@ -127,6 +127,8 @@ SillySpec CLI — 规范驱动开发工具包
                       | sync [--change <name>] | sync-docs [--change <name>]
                       | status | pointer [--cleanup]
                       | approve <change> | reject <change> [--reason <r>]>
+  sillyspec pull --spec [--force]         拉取服务器 spec 快照到本地 .sillyspec（打包时刻
+                                          快照非实时、无自动同步；进度六表拉取用 platform pull）
   sillyspec docs migrate
   sillyspec dashboard [--port <N>] [--no-open]
 
@@ -2142,6 +2144,9 @@ SillySpec platform — SillyHub 平台同步
   sillyspec platform pointer [--cleanup]
   sillyspec platform approve <change-name>
   sillyspec platform reject <change-name> [--reason <reason>]
+
+注: platform pull 拉的是进度六表（多机进度同步）；拉取 spec 文件整树快照请用
+    sillyspec pull --spec（X2，打包时刻快照非实时）。
 `);
         break;
       }
@@ -2936,8 +2941,66 @@ SillySpec config — local.yaml 配置键速查
       }
       break;
     }
+    case 'pull': {
+      // X2（task-14 / design §7.1 §7.4 / FR-07 / FR-08）：拉取服务器 spec 整树快照。
+      // 注意与 platform pull（进度六表 DB import，多机进度同步）语义正交——本命令操作
+      // .sillyspec 文件树；命名 pull --spec 显式区分，防误用。
+      const pullSpecArgs = filteredArgs.slice(1);
+      const pullWantsHelp = pullSpecArgs.length === 0
+        || pullSpecArgs.includes('help') || pullSpecArgs.includes('--help') || pullSpecArgs.includes('-h');
+      const pullWantsSpec = pullSpecArgs.includes('--spec');
+      const printPullSpecHelp = () => console.log(`
+SillySpec pull — 拉取服务器 spec 快照到本地（X2 / FR-07）
+
+用法:
+  sillyspec pull --spec [--force]
+
+说明:
+  从 SillyHub 平台拉取当前工作区的 .sillyspec 整树快照（tar 解压到 specDir，
+  含 tar 顶层 PLATFORM-BUNDLE.json 快照元数据，可离线辨认快照新旧）。
+  覆盖语义：specDir 为空 → 直接解压；非空 → 必须加 --force 整树替换
+  （先删除本地整棵 .sillyspec 再解包——local.yaml（平台连接）、.runtime（进度 DB）
+  等本地文件会一并丢失，覆盖后需重新 platform connect）。
+
+  ⚠️ 快照语义：拉取的是服务器「打包时刻」的快照，非实时镜像——
+     本命令不自动同步、不在会话中自动刷新；拉取后本地的改动仍需正常推送。
+     daemon 模式下任务/会话开始时会按 spec_version 自动取新，无需手动跑本命令。
+
+  拉取进度六表（多机进度同步）请用：sillyspec platform pull [--change <name>]
+`);
+      if (pullWantsHelp || !pullWantsSpec) {
+        printPullSpecHelp();
+        if (!pullWantsHelp) {
+          console.error('❌ 缺少 --spec（本命令拉取 spec 整树快照；进度六表拉取用 sillyspec platform pull）');
+          process.exit(1);
+        }
+        break;
+      }
+
+      const pullSpecForce = pullSpecArgs.includes('--force');
+      const syncModule = await import('./sync.js');
+      // 未连接明确提示不崩（对齐 platform pull :2289 先例）
+      const smForSpecPull = new syncModule.SyncManager(dir);
+      if (!smForSpecPull._getPlatform()) {
+        console.error('❌ 未连接平台，请先 sillyspec platform connect');
+        process.exit(1);
+      }
+      const specR = await syncModule.pullSpecBundle(dir, { force: pullSpecForce, specDir });
+      if (specR.ok && specR.pulled) {
+        console.log(`✅ 已拉取 spec 快照 → ${specR.specDir}${specR.specVersion ? `（平台 spec_version: ${specR.specVersion}）` : ''}`);
+        console.log('   快照语义：打包时刻快照非实时，无自动同步；本地后续改动仍需正常推送。');
+      } else if (/非空/.test(specR.reason || '')) {
+        console.error(`❌ ${specR.reason}`);
+        console.error('   确认整树替换请加 --force（先删除本地 .sillyspec 整树再解包，local.yaml/进度 DB 一并丢失，需重新 connect）');
+        process.exit(1);
+      } else {
+        console.error(`❌ 拉取 spec 快照失败: ${specR.reason || '未知'}`);
+        process.exit(1);
+      }
+      break;
+    }
     default: {
-      const topCommands = ['init', 'setup', 'run', 'progress', 'worktree', 'dispatch', 'agent-log', 'local', 'workflow', 'gate', 'derive', 'backfill-reviews', 'register-stage-review', 'modules', 'change-rename', 'knowledge', 'platform', 'scan', 'brainstorm', 'plan', 'execute', 'verify', 'archive', 'quick', 'explore', 'status', 'doctor', 'auto', 'runtime'];
+      const topCommands = ['init', 'setup', 'run', 'progress', 'worktree', 'dispatch', 'agent-log', 'local', 'workflow', 'gate', 'derive', 'backfill-reviews', 'register-stage-review', 'modules', 'change-rename', 'knowledge', 'platform', 'pull', 'scan', 'brainstorm', 'plan', 'execute', 'verify', 'archive', 'quick', 'explore', 'status', 'doctor', 'auto', 'runtime'];
       const suggestion = didYouMean(command, topCommands);
       console.error(`❌ 未知命令: ${command}`);
       if (command === '--status') {
