@@ -2959,8 +2959,8 @@ SillySpec pull — 拉取服务器 spec 快照到本地（X2 / FR-07）
   从 SillyHub 平台拉取当前工作区的 .sillyspec 整树快照（tar 解压到 specDir，
   含 tar 顶层 PLATFORM-BUNDLE.json 快照元数据，可离线辨认快照新旧）。
   覆盖语义：specDir 为空 → 直接解压；非空 → 必须加 --force 整树替换
-  （先删除本地整棵 .sillyspec 再解包——local.yaml（平台连接）、.runtime（进度 DB）
-  等本地文件会一并丢失，覆盖后需重新 platform connect）。
+  （先删除本地整棵 .sillyspec 再解包——.runtime（进度 DB）等本地文件会一并丢失；
+  --force 保留连接凭据 local.yaml（服务端 bundle 恒排除它），覆盖后无需重新 connect）。
 
   ⚠️ 快照语义：拉取的是服务器「打包时刻」的快照，非实时镜像——
      本命令不自动同步、不在会话中自动刷新；拉取后本地的改动仍需正常推送。
@@ -2991,7 +2991,7 @@ SillySpec pull — 拉取服务器 spec 快照到本地（X2 / FR-07）
         console.log('   快照语义：打包时刻快照非实时，无自动同步；本地后续改动仍需正常推送。');
       } else if (/非空/.test(specR.reason || '')) {
         console.error(`❌ ${specR.reason}`);
-        console.error('   确认整树替换请加 --force（先删除本地 .sillyspec 整树再解包，local.yaml/进度 DB 一并丢失，需重新 connect）');
+        console.error('   确认整树替换请加 --force（先删除本地 .sillyspec 整树再解包，进度 DB 等本地文件一并丢失；连接凭据 local.yaml 保留，无需重新 connect）');
         process.exit(1);
       } else {
         console.error(`❌ 拉取 spec 快照失败: ${specR.reason || '未知'}`);

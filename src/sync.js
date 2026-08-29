@@ -1368,7 +1368,9 @@ export class SyncManager {
    * - specDir 为空（或不存在）→ 直接解压；
    * - 非空且无 force → 拒绝并明确提示（fail-fast，不发网络请求）；
    * - force → rm 整树 + 解包（先下载并全量解析校验 tar，成功后才 rm——恶意/损坏
-   *   bundle 不先删本地）。
+   *   bundle 不先删本地）。local.yaml 是唯一保留例外：本机连接凭据，服务端 bundle
+   *   恒排除它（spec-sync.js UPLOAD_EXCLUDE_FILENAMES），rm 前读出、解包落定后
+   *   原样恢复——删它零收益纯断连。
    *
    * 快照语义（design §7.4）：主动拉取服务器**打包时刻**快照，无自动同步、无会话中
    * 刷新；daemon 模式任务/会话开始时按 latest_spec_version 自动取新（本方法不涉）。
@@ -1436,6 +1438,21 @@ export class SyncManager {
     }
 
     // 覆盖语义：rm 整树（容忍不存在）→ 逐条目落盘（join 后 relative 双重校验再走一道）
+    // local.yaml 唯一豁免（rm 前校验存在性并读出，解包落定后原样恢复 + 校验回存在）：
+    // 本机连接凭据（platform/mcp 段含 shpsync token），服务端 bundle 恒排除它
+    // （spec-sync.js UPLOAD_EXCLUDE_FILENAMES）——rm 整树删它零收益纯断连。恢复放在
+    // 条目循环之后，即便异常 bundle 携带同名条目也以本地为准（凭据永不取自服务端）。
+    const localYamlPath = join(specDir, 'local.yaml');
+    let localYamlSaved = null; // null = 本无此文件，无需恢复
+    if (existsSync(localYamlPath)) {
+      try {
+        localYamlSaved = readFileSync(localYamlPath); // Buffer 字节级：注释/CRLF 原样
+      } catch (err) {
+        // fail-closed：读不出就无从恢复，继续 rm = 确定性丢凭据断连，宁可整单拒绝
+        console.warn(`[sync] local.yaml 存在但读取失败，拒绝 --force 整树覆盖: ${err.message}`);
+        return { ok: false, pulled: false, specDir, reason: `local.yaml 读取失败，已拒绝整树覆盖（防丢连接凭据）: ${err.message}` };
+      }
+    }
     try {
       rmSync(specDir, { recursive: true, force: true });
       for (const e of entries) {
@@ -1447,6 +1464,12 @@ export class SyncManager {
           mkdirSync(dirname(fullPath), { recursive: true });
           writeFileSync(fullPath, e.data);
         }
+      }
+      if (localYamlSaved !== null) {
+        mkdirSync(specDir, { recursive: true }); // 空 bundle（零条目）时树根未被条目重建
+        writeAtomicSync(localYamlPath, localYamlSaved); // fs-atomic 契约：hook/probe 并发读 local.yaml
+        try { chmodSync(localYamlPath, 0o600); } catch { /* SEC-04 best-effort，同 writeLocalYamlRaw */ }
+        if (!existsSync(localYamlPath)) throw new Error('local.yaml 恢复后校验缺失');
       }
     } catch (err) {
       console.warn(`[sync] 解压 spec bundle 失败: ${err.message}`);

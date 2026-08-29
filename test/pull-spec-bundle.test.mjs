@@ -4,7 +4,8 @@
 // 1. pullSpecBundle 以 shpsync token 打 GET /api/changes/-/spec-bundle（请求头/端点正确）
 //    流式下载 tar 并解压到 specDir（.sillyspec 内容根）
 // 2. specDir 为空目录直接解压；非空且无 --force 拒绝并明确提示；--force 整树覆盖
-//    （rm + 解包，对齐 daemon pullSpecBundle 语义）
+//    （rm + 解包，对齐 daemon pullSpecBundle 语义；local.yaml 连接凭据例外保留——
+//    rm 前读出、解包后原样恢复，凭据不断连）
 // 3. tar 顶层 PLATFORM-BUNDLE.json 容忍落地（task-08 产物，多一个文件不影响）
 // 4. tar-slip 路径穿越拒绝（对齐 daemon extractTar 双重校验）
 // 5. PAX 长路径（>100 字符）容忍（平台 Python tarfile PAX 默认格式）
@@ -325,6 +326,7 @@ test('10. sillyspec pull --help → 帮助文案含快照语义（打包时刻�
   assert.match(r.combined, /非实时/, '文案明示非实时')
   assert.match(r.combined, /不自动同步|无自动同步/, '文案明示无自动同步')
   assert.match(r.combined, /platform pull/, '文案与 platform pull（进度六表）语义区分')
+  assert.match(r.combined, /--force 保留连接凭据 local\.yaml/, '文案明示 --force 保留 local.yaml 连接凭据')
 })
 
 test('11. sillyspec pull --spec 未连接平台 → 明确提示不崩（对齐 platform pull 先例）', () => {
@@ -344,4 +346,27 @@ test('12. sillyspec pull --spec 非空无 --force → 拒绝提示 --force，本
   assert.notEqual(r.status, 0, '退出码非 0')
   assert.match(r.combined, /--force/, '提示 --force')
   assert.equal(readFileSync(join(cwd, '.sillyspec', 'changes', 'local-only', 'tasks.md'), 'utf8'), '本地未推送内容', '本地内容不动')
+})
+
+// ─────────────────────────────────────────
+// 13. --force 保留 local.yaml 连接凭据（rm 整树唯一豁免）
+// ─────────────────────────────────────────
+test('13. --force 后 local.yaml 存活且内容不变（其余整树覆盖语义不变，连接不断）', async () => {
+  const cwd = makeFixture({ platform: { url: 'http://hub.example.com', token: 'shpsync_tok-13' } })
+  const originalYaml = readFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'utf8')
+  mkdirSync(join(cwd, '.sillyspec', 'changes', 'stale-force'), { recursive: true })
+  writeFileSync(join(cwd, '.sillyspec', 'changes', 'stale-force', 'old.md'), 'stale')
+  const restore = mockFetch(async () => okTarResponse(sampleBundle()))
+  try {
+    const r = await new SyncManager(cwd).pullSpecBundle({ force: true })
+    assert.equal(r.ok, true, `ok（实际 reason=${r.reason}）`)
+    // local.yaml 存活 + 字节级内容不变（注释/换行原样，服务端 bundle 恒不含它，无覆盖来源）
+    assert.ok(existsSync(join(cwd, '.sillyspec', 'local.yaml')), '--force 整树清理后 local.yaml 存活')
+    assert.equal(readFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'utf8'), originalYaml, 'local.yaml 内容不变')
+    // 凭据仍可解析（覆盖后无需重新 connect）
+    assert.ok(new SyncManager(cwd)._getPlatform(), '_getPlatform 仍能读到凭据（连接不断）')
+    // 其余整树覆盖语义不变：旧内容消失、新树落地
+    assert.equal(existsSync(join(cwd, '.sillyspec', 'changes', 'stale-force')), false, '其余旧内容照常被 rm')
+    assert.ok(existsSync(join(cwd, '.sillyspec', 'changes', '2026-08-29-demo-change', 'design.md')), '新树照常落地')
+  } finally { restore() }
 })
