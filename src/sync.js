@@ -10,7 +10,7 @@
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, unlinkSync, chmodSync, rmSync } from 'fs';
 import { writeAtomicSync } from './fs-atomic.js';
-import { join, dirname, isAbsolute, relative } from 'path';
+import { join, dirname, basename, isAbsolute, relative } from 'path';
 import { resolvePlatformSpecDir } from './progress.js';
 import { safeGit } from './git-helper.js';
 import { openDatabase } from './db-engine.js';
@@ -1378,7 +1378,9 @@ export class SyncManager {
    * - force → rm 整树 + 解包（先下载并全量解析校验 tar，成功后才 rm——恶意/损坏
    *   bundle 不先删本地）。local.yaml 是唯一保留例外：本机连接凭据，服务端 bundle
    *   恒排除它（spec-sync.js UPLOAD_EXCLUDE_FILENAMES），rm 前读出、解包落定后
-   *   原样恢复——删它零收益纯断连。
+   *   原样恢复——删它零收益纯断连。崩溃安全（审计 B3）：rm 前凭据先原子备份到树外
+   *   `<specDir 根名>.local.yaml.bak`，成功后自动清理；恢复失败时从 .bak 兜底复制，
+   *   兜底也失败则 .bak 留在现场供手工恢复（凭据不因覆盖中断永久丢失）。
    *
    * 快照语义（design §7.4）：主动拉取服务器**打包时刻**快照，无自动同步、无会话中
    * 刷新；daemon 模式任务/会话开始时按 latest_spec_version 自动取新（本方法不涉）。
@@ -1455,7 +1457,14 @@ export class SyncManager {
     // 本机连接凭据（platform/mcp 段含 shpsync token），服务端 bundle 恒排除它
     // （spec-sync.js UPLOAD_EXCLUDE_FILENAMES）——rm 整树删它零收益纯断连。恢复放在
     // 条目循环之后，即便异常 bundle 携带同名条目也以本地为准（凭据永不取自服务端）。
+    //
+    // 审计 B3 崩溃安全（三层）：rm 整树后凭据只剩内存 Buffer，任一步失败（条目写失败/
+    // 恢复写失败——Windows EPERM·AV 锁·磁盘满）或进程崩溃即凭据永久丢失。三层防护：
+    // ①rm 前先把内容原子写到树外 `<specDir 根名>.local.yaml.bak`（树内会被 rm 一并删掉，
+    //   故放父目录）；②恢复主路径不变，失败时从 .bak 再兜底复制一次；③成功路径末尾
+    //   清理 .bak（明文 token 不留第二份；顺带清历史失败残留）。
     const localYamlPath = join(specDir, 'local.yaml');
+    const localYamlBakPath = join(dirname(specDir), `${basename(specDir)}.local.yaml.bak`);
     let localYamlSaved = null; // null = 本无此文件，无需恢复
     if (existsSync(localYamlPath)) {
       try {
@@ -1465,9 +1474,26 @@ export class SyncManager {
         console.warn(`[sync] local.yaml 存在但读取失败，拒绝 --force 整树覆盖: ${err.message}`);
         return { ok: false, pulled: false, specDir, reason: `local.yaml 读取失败，已拒绝整树覆盖（防丢连接凭据）: ${err.message}` };
       }
+      try {
+        writeAtomicSync(localYamlBakPath, localYamlSaved);
+        try { chmodSync(localYamlBakPath, 0o600); } catch { /* best-effort，同 local.yaml SEC-04 */ }
+      } catch (err) {
+        // 兜底都写不进（磁盘满等）：继续 rm = 凭据只剩内存一份，恢复再失败即永久丢失，拒绝整单
+        console.warn(`[sync] local.yaml 备份写入失败，拒绝 --force 整树覆盖: ${err.message}`);
+        return { ok: false, pulled: false, specDir, reason: `local.yaml 备份失败，已拒绝整树覆盖（防丢连接凭据）: ${err.message}` };
+      }
     }
     try {
       rmSync(specDir, { recursive: true, force: true });
+    } catch (err) {
+      // Windows EPERM/EBUSY：整树内 .runtime/sillyspec.db 被运行中 daemon/CLI 持有时 rm 必失败
+      //（本地树未被删除，可安全整单退出；.bak 留待下次成功覆盖时清理）
+      const holdHint = err.code === 'EBUSY' || err.code === 'EPERM'
+        ? '（可能被运行中的 daemon/CLI 持有 .runtime/sillyspec.db，请先停止相关进程再 --force）' : '';
+      console.warn(`[sync] 删除本地 specDir 失败${holdHint}: ${err.message}`);
+      return { ok: false, pulled: false, specDir, reason: `删除本地 specDir 失败${holdHint}: ${err.message}` };
+    }
+    try {
       for (const e of entries) {
         _assertSafeTarName(e.name.replace(/\/+$/, ''), specDir);
         const fullPath = join(specDir, e.name);
@@ -1484,7 +1510,19 @@ export class SyncManager {
         try { chmodSync(localYamlPath, 0o600); } catch { /* SEC-04 best-effort，同 writeLocalYamlRaw */ }
         if (!existsSync(localYamlPath)) throw new Error('local.yaml 恢复后校验缺失');
       }
+      // ③ 成功路径：兜底使命完成，清理 .bak（force:true 容忍本就无 .bak 的路径）
+      rmSync(localYamlBakPath, { force: true });
     } catch (err) {
+      // ② 恢复兜底：主路径失败（条目写失败中断恢复 / 恢复自身失败）时从 .bak 再试一次，
+      // 仍失败不掩盖——.bak 留在树外原处，用户可手工复制为 local.yaml（凭据不因本次失败丢失）
+      if (localYamlSaved !== null && existsSync(localYamlBakPath)) {
+        try {
+          mkdirSync(specDir, { recursive: true });
+          writeAtomicSync(localYamlPath, readFileSync(localYamlBakPath));
+          try { chmodSync(localYamlPath, 0o600); } catch { /* best-effort */ }
+        } catch { /* .bak 兜底也失败：保留 .bak 现场供手工恢复 */ }
+        console.warn(`[sync] 连接凭据已备份于 ${localYamlBakPath}，恢复失败可手工复制为 local.yaml`);
+      }
       console.warn(`[sync] 解压 spec bundle 失败: ${err.message}`);
       return { ok: false, pulled: false, specDir, reason: `解压 spec bundle 失败: ${err.message}` };
     }

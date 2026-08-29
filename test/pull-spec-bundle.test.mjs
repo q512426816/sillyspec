@@ -328,6 +328,7 @@ test('10. sillyspec pull --help → 帮助文案含快照语义（打包时刻�
   assert.match(r.combined, /不自动同步|无自动同步/, '文案明示无自动同步')
   assert.match(r.combined, /platform pull/, '文案与 platform pull（进度六表）语义区分')
   assert.match(r.combined, /--force 保留连接凭据 local\.yaml/, '文案明示 --force 保留 local.yaml 连接凭据')
+  assert.match(r.combined, /local\.yaml\.bak/, '文案明示崩溃安全备份 local.yaml.bak（审计 B3）')
 })
 
 test('11. sillyspec pull --spec 未连接平台 → 明确提示不崩（对齐 platform pull 先例）', () => {
@@ -369,6 +370,10 @@ test('13. --force 后 local.yaml 存活且内容不变（其余整树覆盖语�
     // 其余整树覆盖语义不变：旧内容消失、新树落地
     assert.equal(existsSync(join(cwd, '.sillyspec', 'changes', 'stale-force')), false, '其余旧内容照常被 rm')
     assert.ok(existsSync(join(cwd, '.sillyspec', 'changes', '2026-08-29-demo-change', 'design.md')), '新树照常落地')
+    // 审计 B3：成功路径清理崩溃安全备份 .bak（树外 <specDir 根名>.local.yaml.bak，
+    // 明文 token 不留第二份）；树内也不得残留同名文件
+    assert.equal(existsSync(join(cwd, '.sillyspec.local.yaml.bak')), false, '成功后 .bak 已清理')
+    assert.equal(existsSync(join(cwd, '.sillyspec', 'local.yaml.bak')), false, '树内无 .bak 残留')
   } finally { restore() }
 })
 
@@ -411,5 +416,35 @@ test('15. 下载超时错误文案区分 120s 口径（不与常规 10ms 级请�
       assert.match(r.reason || '', /120s/, 'reason 标注 120s 独立口径')
       assert.doesNotMatch(r.reason || '', /10_?000ms|10s/, '不再出现 10s 小口径文案')
     })
+  } finally { restore() }
+})
+
+// ─────────────────────────────────────────
+// 16. --force 凭据崩溃安全（审计 B3：rm 整树后凭据不得只剩内存 Buffer）
+// ─────────────────────────────────────────
+
+test('16. --force 恢复失败 → 树外 local.yaml.bak 保留且内容正确，函数返回失败但凭据可恢复', async () => {
+  const cwd = makeFixture({ platform: { url: 'http://hub.example.com', token: 'shpsync_tok-16' } })
+  const originalYaml = readFileSync(join(cwd, '.sillyspec', 'local.yaml'))
+  mkdirSync(join(cwd, '.sillyspec', 'changes', 'stale-16'), { recursive: true })
+  writeFileSync(join(cwd, '.sillyspec', 'changes', 'stale-16', 'old.md'), 'stale')
+  // 恢复失败注入：bundle 携带 local.yaml「目录」条目——恢复的 writeAtomicSync 走
+  // rename(file → 已存在目录) 必抛（POSIX EISDIR / Windows EPERM·EACCES 退避重试后抛），
+  // 与磁盘满/AV 锁导致的恢复写失败同类（等效 monkeypatch writeAtomicSync 抛错），跨平台确定性
+  const evil = buildTar([
+    { name: 'docs/', type: 'dir' },
+    { name: 'local.yaml/', type: 'dir' },
+  ])
+  const restore = mockFetch(async () => okTarResponse(evil))
+  try {
+    const r = await new SyncManager(cwd).pullSpecBundle({ force: true })
+    assert.equal(r.ok, false, '恢复失败 → 整单失败')
+    assert.equal(r.pulled, false)
+    const bakPath = join(cwd, '.sillyspec.local.yaml.bak')
+    assert.ok(existsSync(bakPath), '失败时崩溃安全备份 .bak 保留在树外（rm 删不到）')
+    assert.equal(
+      readFileSync(bakPath).compare(originalYaml), 0,
+      '.bak 内容与原 local.yaml 字节级一致（凭据可手工恢复为 local.yaml）',
+    )
   } finally { restore() }
 })

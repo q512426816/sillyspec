@@ -2960,7 +2960,9 @@ SillySpec pull — 拉取服务器 spec 快照到本地（X2 / FR-07）
   含 tar 顶层 PLATFORM-BUNDLE.json 快照元数据，可离线辨认快照新旧）。
   覆盖语义：specDir 为空 → 直接解压；非空 → 必须加 --force 整树替换
   （先删除本地整棵 .sillyspec 再解包——.runtime（进度 DB）等本地文件会一并丢失；
-  --force 保留连接凭据 local.yaml（服务端 bundle 恒排除它），覆盖后无需重新 connect）。
+  --force 保留连接凭据 local.yaml（服务端 bundle 恒排除它），覆盖后无需重新 connect；
+  崩溃安全：覆盖前凭据先备份为 .sillyspec.local.yaml.bak，成功后自动清理，
+  中途失败可从该备份文件恢复）。
 
   ⚠️ 快照语义：拉取的是服务器「打包时刻」的快照，非实时镜像——
      本命令不自动同步、不在会话中自动刷新；拉取后本地的改动仍需正常推送。
