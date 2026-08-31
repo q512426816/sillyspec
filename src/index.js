@@ -8,7 +8,7 @@
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'fs';
 import { writeAtomicSync } from './fs-atomic.js';
-import { basename, extname, join, resolve } from 'path';
+import { basename, extname, join, resolve, isAbsolute } from 'path';
 import { safeGit, git } from './git-helper.js';
 import { getVersion } from './version.js';
 
@@ -913,7 +913,7 @@ async function main() {
       // 与 verifyApiParity 的聚合读侧（contract-artifacts/<change>/*/endpoints.json 全量并集）对齐。
       const epSub = filteredArgs[1];
       if (epSub !== 'extract') {
-        console.error('用法: sillyspec endpoints extract --change <name> [--task task-NN | --all-tasks] [--dir <backendRoot> | --files <a.py,b.js...>] [--spec-dir <path>]\n  静态扫描后端路由装饰器生成 endpoints.json（FastAPI/Express/Spring）；verify 探针 5 消费。\n  --all-tasks：聚合逐 task 卡 allowed_paths 各自提取（对账口径与探针 5 聚合读侧一致，推荐）');
+        console.error('用法: sillyspec endpoints extract --change <name> [--task task-NN | --all-tasks] [--dir <backendRoot> | --files <a.py,b.js...>] [--spec-dir <path>]\n  静态扫描后端路由装饰器生成 endpoints.json（FastAPI/Express/Spring）；verify 探针 5 消费。\n  --all-tasks：聚合逐 task 卡 allowed_paths 各自提取（对账口径与探针 5 聚合读侧一致，推荐）。\n  execute worktree 模式：allowed_paths 自动按 worktree 根解析，产物恒落主仓 spec（坑 endpoints-extract-worktree-pitfalls）');
         process.exit(2);
       }
       const epChangeIdx = args.indexOf('--change');
@@ -936,14 +936,44 @@ async function main() {
       assertSafeChangeName(epChange, '--change 变更名');
       const { extractFastApiEndpoints, extractExpressEndpoints, extractSpringEndpoints, scanBackendEndpoints } = await import('./endpoint-extractor.js');
       const endpoints = [];
-      const epSpecBase = resolvePlatformSpecDir(dir, specDir) || join(dir, '.sillyspec');
+      let epSpecBase = resolvePlatformSpecDir(dir, specDir) || join(dir, '.sillyspec');
+      // 坑 endpoints-extract-worktree-pitfalls ②（2026-08-29 实测）：CLI 在 execute worktree 内跑时
+      // spec 命中副本（worktree 内 checkout 出来的 .sillyspec）→ 产物落 worktree 自己的
+      // contract-artifacts/，主仓 verify 探针 5 读不到。复用 detectWorktreeSpecDrift 判据锚回
+      // 主仓 spec：产物落点恒主仓，扫描面（--dir/--files 绝对路径）不受影响。
+      const epDrift = (await import('./run/shared.js')).detectWorktreeSpecDrift(epSpecBase);
+      if (epDrift) {
+        console.log(`⚠️ 已自动锚定主仓 spec：${epDrift.mainSpecBase}（endpoints 产物落主仓；当前 cwd 命中 worktree 副本 ${epDrift.changeName}，流程继续）`);
+        epSpecBase = epDrift.mainSpecBase;
+      }
       const epChangeDir = join(epSpecBase, 'changes', epChange);
       if (!existsSync(epChangeDir)) {
         console.error(`❌ 变更目录不存在: ${epChangeDir}`);
         process.exit(1);
       }
+      // 坑 endpoints-extract-worktree-pitfalls ①（2026-08-29 实测 13 task 全 0 端点）：
+      // execute worktree 模式下变更代码只在 worktree 里，allowed_paths 按主仓（cwd）相对
+      // 解析 0 命中。活跃 worktree meta 存在时相对路径优先按 worktree 根解析——worktree =
+      // baseline 检出 + 本变更改动，扫描结果即交付态；不在 worktree 的文件回落主仓（显式
+      // --files 绝对路径原样通过）。WorktreeManager 从 worktree 内跑也会经 git-common-dir
+      // 锚定主仓 meta（构造器注释），meta 读取失败按无 worktree 处理不阻断。
+      let epWorktreeRoot = null;
+      try {
+        const { WorktreeManager } = await import('./worktree.js');
+        const epWtMeta = new WorktreeManager(dir).getMeta(epChange);
+        if (epWtMeta?.worktreePath && existsSync(epWtMeta.worktreePath)) epWorktreeRoot = epWtMeta.worktreePath;
+      } catch { /* meta 读取失败按无 worktree 处理 */ }
+      const resolveScoped = (p) => {
+        if (isAbsolute(p)) return p;
+        if (epWorktreeRoot) {
+          const inWt = join(epWorktreeRoot, p);
+          if (existsSync(inWt)) return inWt;
+        }
+        return resolve(p);
+      };
+      if (epWorktreeRoot) console.log(`ℹ️  变更有活跃 worktree，扫描面优先按其根解析：${epWorktreeRoot}`);
       const collectFile = (f) => {
-        const abs = resolve(f)
+        const abs = resolveScoped(f)
         if (!existsSync(abs)) return
         const ext = extname(abs).toLowerCase()
         try {
@@ -986,7 +1016,7 @@ async function main() {
           const taskName = card.replace(/\.md$/, '')
           const eps = []
           const perFile = (f) => {
-            const abs = resolve(f)
+            const abs = resolveScoped(f)
             if (!existsSync(abs)) return
             const ext = extname(abs).toLowerCase()
             try {
@@ -1021,10 +1051,10 @@ async function main() {
         }
         let scanned = 0
         for (const p of candidates) {
-          const abs = join(dir, p)
+          const abs = resolveScoped(p)
           if (!existsSync(abs)) continue
           scanned++
-          collectFile(p)
+          collectFile(abs)
         }
         if (candidates.size === 0) {
           console.error('❌ 无扫描面：--task 卡无 allowed_paths 且 design.md 无具体文件清单——显式传 --dir <backendRoot> 或 --files <a.py,b.js>，或用 --all-tasks 聚合逐卡提取');

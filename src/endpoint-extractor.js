@@ -47,8 +47,10 @@ export function extractFastApiEndpoints(filePath) {
   }
 
   // 2. 装饰器全文匹配：单行 `@router.get("/path")`、分散式 `@router.get\n("/path")`、
-  //    多行参数 `@router.get(\n  "/path",\n  response_model=…)` 三态合一（\s* 跨换行）
-  const decoratorRe = /@(?:router|api_router)\.(get|post|put|delete|patch)\s*\(\s*["'`]([^"'`]+)["'`]/g
+  //    多行参数 `@router.get(\n  "/path",\n  response_model=…)` 三态合一（\s* 跨换行）。
+  //    路径组 `[^"'`]*` 允许空串（坑 endpoints-extract-worktree-pitfalls ③：`@router.get("")`
+  //    空路径装饰器 = 前缀本身即路由，`+` 量词静默漏扫——GET /notifications 实证丢失）。
+  const decoratorRe = /@(?:router|api_router)\.(get|post|put|delete|patch)\s*\(\s*["'`]([^"'`]*)["'`]/g
   let m
   while ((m = decoratorRe.exec(content)) !== null) {
     endpoints.push({
@@ -82,8 +84,9 @@ export function extractExpressEndpoints(filePath) {
     if (useMatch) routerPrefix = useMatch[1]
   }
 
-  // 路由全文匹配（坑 endpoint-multiline-decorator-miss：`router.get(\n  "/path",\n  handler)` 同病）
-  const routeRe = /\b(?:app|router)\.(get|post|put|delete|patch)\s*\(\s*["'`]([^"'`]+)["'`]/gi
+  // 路由全文匹配（坑 endpoint-multiline-decorator-miss：`router.get(\n  "/path",\n  handler)` 同病；
+  // 空串路径与 FastAPI 同理允许——`router.get("")` = use 前缀本身）
+  const routeRe = /\b(?:app|router)\.(get|post|put|delete|patch)\s*\(\s*["'`]([^"'`]*)["'`]/gi
   let m
   while ((m = routeRe.exec(content)) !== null) {
     endpoints.push({ method: m[1].toUpperCase(), path: routerPrefix + m[2], source: filePath, line: lineOfIndex(content, m.index) })
