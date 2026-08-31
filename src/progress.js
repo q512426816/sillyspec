@@ -850,6 +850,9 @@ export class ProgressManager {
 
   renameChange(cwd, oldName, newName) { return this._changeRegistry.renameChange(cwd, oldName, newName); }
 
+  // 删除语义与归档分离（status='deleted'，见 change-registry.deleteChange 注释）
+  deleteChange(cwd, changeName) { return this._changeRegistry.deleteChange(cwd, changeName); }
+
   // opts.archiveStepNames 给定时做归档终态一致化收尾（见 change-registry.unregisterChange 注释，
   // 坑 manual-archive-desync-status-only）；archiveStepNamesForArchive() 取 stageRegistry 单一真相
   //（stages/* 不反向依赖 progress.js，静态 import 无环）。

@@ -204,7 +204,7 @@ SQLite Schema（grep 自 `db.js`，仅记表名 + 用途 + 字段数）：
   - `POST {platform.url}/api/changes/{changeName}/documents` 同步文档（`sync.js:501`）；
   - 同步完更新 `changes.platform_last_sync`。
 - 审批链路：`GET /api/changes/{name}/approval` 查询（`sync.js:36`，`checkApproval`）+ `approve` / `reject`
-  入口（`sync.js:1828`，共用 `_submitApproval`，端点契约 TBD-hub-api）。
+  入口（`sync.js:1851`，共用 `_submitApproval`，端点契约 TBD-hub-api）。
 - 配置读 `.sillyspec/local.yaml` platform 段（connect/disconnect 用文本级改写保留注释）。
 - platform 子命令（connect / disconnect / sync / sync-docs / status / pull / resolve /
   approve / reject / pointer）见 `src/index.js:1263`。主 CLI 无 WebSocket 依赖。
@@ -270,6 +270,7 @@ lint + test + docs gate 三道关。
 | `src/endpoint-extractor.js` | 前后端端点提取与 diff（FastAPI / 前端 API 调用 / `diffApiParity`） |
 | `src/change-risk-profile.js` | 变更风险画像：`detectChangeRisk` / `checkIntegrationEvidence`（P0/P1/P2） |
 | `src/change-list.js` | 解析 design.md 中的文件变更清单 |
+| `src/change-delete.js` | 变更删除命令编排（两段式 dry-run/--confirm：DB status='deleted' + 移目录 + worktree 清理 + git 暂存 + 平台墓碑） |
 | `src/knowledge-match.js` | 知识库索引匹配（`parseKnowledgeIndex` / `matchKnowledge`） |
 | `src/scan-postcheck.js` | scan 后置检查（`runScanPostCheck` / 结构化结果写出，不信任 agent 自检） |
 | `src/modules.js` | 模块文档管理（modules 命令） |

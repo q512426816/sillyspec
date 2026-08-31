@@ -7,7 +7,7 @@ import { mkdirSync, existsSync } from 'fs';
 import { join, resolve, basename } from 'path';
 import { writeAtomicSync } from '../fs-atomic.js';
 import { runValidators } from '../stage-contract.js';
-import { VALID_STAGES, STAGE_LABELS, STAGE_ORDER, MAIN_FLOW_ORDER, SPEC_DIR_NAME, CURRENT_VERSION, emptyStage } from './shared.js';
+import { VALID_STAGES, STAGE_LABELS, STAGE_ORDER, MAIN_FLOW_ORDER, SPEC_DIR_NAME, CURRENT_VERSION, STALL_WARN_DAYS, emptyStage } from './shared.js';
 
 /**
  * 归一化步骤的已记录等待回答（show 渲染用，跨会话恢复数据源）。
@@ -21,6 +21,20 @@ function _stepWaitRounds(step) {
     return [{ round: 1, answer: step.waitAnswer }];
   }
   return rounds.map((r, i) => ({ round: typeof r.round === 'number' ? r.round : i + 1, answer: r.answer }));
+}
+
+/**
+ * 容错时间戳解析：ISO 8601（DB last_active 正常形态）优先，回退 zh-CN 本地格式
+ * （reopenStage/reset 等旧路径曾把 toLocaleString('zh-CN') 写进 lastActive）。解析失败 → null。
+ */
+function _parseFlexibleTs(dateStr) {
+  if (!dateStr) return null;
+  let ts = Date.parse(dateStr);
+  if (isNaN(ts)) {
+    const m = dateStr.match(/(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})[\s,]+(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+    if (m) ts = new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +(m[6] || 0)).getTime();
+  }
+  return isNaN(ts) ? null : ts;
 }
 
 export class StageMachine {
@@ -204,6 +218,14 @@ export class StageMachine {
 
       console.log(`  📂 ${cn}${dirMissing ? ' ⚠️ 目录缺失（残留记录，sillyspec doctor --cleanup-ghosts --confirm 可归档清理）' : ''}`);
       console.log(`     当前阶段: ${stageLabel}  最近活跃: ${lastActive}`);
+      // 滞留/疑似完成信号（2026-08-30 用户反馈②）：多变更汇总逐行透出，无需逐个 --change 看详情
+      const stall = this._stallSignal(cwd, data, cn);
+      if (stall) {
+        console.log(`     ⏳ ${stall.text}`);
+        console.log(stall.kind === 'likely-complete'
+          ? `        → 建议：${stall.command ? `${stall.command} 收口后走 verify，或 ` : ''}sillyspec doctor --align-execute-progress 对齐派生戳`
+          : `        → 若已放弃：sillyspec change-delete --change ${cn}（默认 dry-run）`);
+      }
       console.log('');
     }
 
@@ -286,6 +308,16 @@ export class StageMachine {
         console.log('');
         console.log(`  ${batchLine}`);
       }
+    }
+
+    // ── 滞留/疑似完成信号（2026-08-30 用户反馈②）──
+    const stall = this._stallSignal(cwd, data, changeName);
+    if (stall) {
+      console.log('');
+      console.log(`  ⏳ ${stall.text}`);
+      console.log(stall.kind === 'likely-complete'
+        ? `     建议：${stall.command ? `${stall.command} 收口后走 verify，或 ` : ''}sillyspec doctor --align-execute-progress 对齐派生戳`
+        : `     若已放弃：sillyspec change-delete --change ${changeName}（默认 dry-run）；若仍在推进请忽略`);
     }
 
     // ── Next 建议 ──
@@ -599,14 +631,59 @@ export class StageMachine {
     }
   }
 
-  _timeAgo(dateStr) {
-    if (!dateStr) return '未知';
-    let ts = Date.parse(dateStr);
-    if (isNaN(ts)) {
-      const m = dateStr.match(/(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})[\s,]+(\d{1,2}):(\d{2})(?::(\d{2}))?/);
-      if (m) ts = new Date(+m[1], +m[2]-1, +m[3], +m[4], +m[5], +(m[6]||0)).getTime();
+  /**
+   * 滞留信号检测（2026-08-30 用户反馈②：7 个「代码全落地但流程没收口」的变更挂 38 天
+   * 无人发现——progress 视图缺中期滞留提示）。两类信号（advisory，只打印提示行不阻断）：
+   *   - likely-complete：tasks.md 全勾但 execute 阶段未完成（不限天数——全勾未收口本身
+   *     即异常态；判据与 doctor D5 execute-progress-plan-mismatch 同源，但 D5 藏在
+   *     doctor --json 里，日常 progress show 看不见）
+   *   - stalled：流程未收口（archive 未完成）且 last_active 超 STALL_WARN_DAYS 天无活跃
+   * 流程已收口（archive completed / currentStage=archive）不提示。
+   * @returns {{kind:'likely-complete'|'stalled', text:string, command?:string}|null}
+   */
+  _stallSignal(cwd, data, changeName) {
+    if (!data || !data.stages) return null;
+    if (data.stages.archive?.status === 'completed' || data.currentStage === 'archive') return null;
+    const stageLabel = STAGE_LABELS[data.currentStage] || data.currentStage || '(无)';
+    // ① 实现疑似完成：tasks 全勾 + execute 未完成（回 verify 收口的前置是 execute 收口）
+    if (data.stages.execute?.status !== 'completed') {
+      let plan = null;
+      try {
+        plan = this.pm.readPlanCheckboxStatus(join(this.pm._getSpecDir(cwd), 'changes', changeName));
+      } catch { plan = null; }
+      if (plan && plan.total > 0 && plan.checked >= plan.total) {
+        return {
+          kind: 'likely-complete',
+          text: `实现疑似完成未收口：tasks ${plan.checked}/${plan.total} 全勾，但流程停在「${stageLabel}」（execute 阶段 ${data.stages.execute?.status || '未开始'}）`,
+          // execute 阶段才建议 run execute 收口；更早阶段（brainstorm/plan）tasks 全勾属
+          // 数据异常态，只提示事实 + doctor 对齐备选，不给当前状态下不可执行的命令
+          command: data.currentStage === 'execute'
+            ? `sillyspec run execute${data.currentChange ? ` --change ${data.currentChange}` : ''}`
+            : null,
+        };
+      }
     }
-    if (isNaN(ts)) return dateStr;
+    // ② 滞留：超 N 天无活跃
+    const days = this._daysSince(data.lastActive);
+    if (days !== null && days >= STALL_WARN_DAYS) {
+      return {
+        kind: 'stalled',
+        text: `滞留：已 ${days} 天无活跃，流程停在「${stageLabel}」未收口`,
+      };
+    }
+    return null;
+  }
+
+  /** last_active 距今天数（向下取整）；解析失败 → null（不提示，宁漏勿误报） */
+  _daysSince(dateStr) {
+    const ts = _parseFlexibleTs(dateStr);
+    if (ts === null) return null;
+    return Math.floor((Date.now() - ts) / 86400000);
+  }
+
+  _timeAgo(dateStr) {
+    const ts = _parseFlexibleTs(dateStr);
+    if (ts === null) return dateStr || '未知';
     const diff = Date.now() - ts;
     const minutes = Math.floor(diff / 60000);
     if (minutes < 1) return '刚刚';

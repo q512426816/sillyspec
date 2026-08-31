@@ -274,6 +274,34 @@ export class ChangeRegistry {
   }
 
   /**
+   * 删除变更（change-delete 命令的 DB 侧，2026-08-30 用户反馈①）
+   * SQL: UPDATE changes SET status = 'deleted'
+   *
+   * 语义区分：此前删除靠 git rm + 借道 doctor 幽灵清理，而幽灵清理把删除行写成
+   * archived——DB 无法区分「流程正常收尾的归档」与「中途废弃的删除」，事后审计只能
+   * 回溯 git。现在两种终态在 DB 里显式分离：
+   *   - archived = archive 阶段 --confirm / quick 轻量归档（流程收尾）
+   *   - deleted  = change-delete 显式废弃（行保留供审计，status 即语义载体）
+   * 与 unregisterChange 不同：不做 archive 终态一致化——删除不是「完成」，给删除行收尾
+   * archive 阶段属伪造终态（对齐 cleanupGhostChanges 对「目录真丢失」幽灵保持 status-only
+   * 的可逆语义）；stages/steps 行不动，保留原审计价值。
+   */
+  deleteChange(cwd, changeName) {
+    if (!changeName) {
+      console.warn('⚠️  deleteChange: changeName 为空，跳过');
+      return;
+    }
+    const db = this.pm._ensureDB(cwd);
+    db.transaction(() => {
+      const sqlDb = db.getDb();
+      const now = new Date().toISOString();
+      sqlDb.prepare(`UPDATE changes SET status = 'deleted', last_active = ? WHERE name = ?`).run(now, changeName);
+      // 本地脏度（D-013 / task-04）：删除也是本地状态推进（triggerSync 据此推终态/墓碑上行）
+      this.pm._touchLocalModified(cwd, changeName, now);
+    });
+  }
+
+  /**
    * 从活跃列表移除变更（归档时调用，不物理删除）
    * SQL: UPDATE changes SET status = 'archived'
    *

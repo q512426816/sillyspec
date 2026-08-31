@@ -842,10 +842,10 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
         const marker = `sillyspec apply ${changeName} --stash-dirty ${new Date().toISOString()}`;
         const before = (gitQuiet(projectRoot, ['stash', 'list']) || '').split('\n').filter(Boolean).length;
         // pathspec 限定 stash 范围与探针/4.5 同口径（排除 .sillyspec/ 运行时与他者 spec 产物、
-        // .claude/docs/CLAUDE.md）——裸 push -u 会把排除项的未跟踪文件一并卷走，恢复时与
+        // .claude/docs/CLAUDE.md/AGENTS.md）——裸 push -u 会把排除项的未跟踪文件一并卷走，恢复时与
         // apply 期间重建的 spec 文件 already exists 互踩（实证 dbg）。
         git(projectRoot, ['stash', 'push', '--include-untracked', '-m', marker,
-          '--', '.', ':(exclude).sillyspec/', ':(exclude).claude/', ':(exclude)docs/', ':(exclude)CLAUDE.md'], { timeout: 60000 });
+          '--', '.', ':(exclude).sillyspec/', ':(exclude).claude/', ':(exclude)docs/', ':(exclude)CLAUDE.md', ':(exclude)AGENTS.md'], { timeout: 60000 });
         const headEntry = ((gitQuiet(projectRoot, ['stash', 'list']) || '').split('\n')[0] || '');
         const after = (gitQuiet(projectRoot, ['stash', 'list']) || '').split('\n').filter(Boolean).length;
         const sha = gitQuiet(projectRoot, ['rev-parse', '--verify', 'stash@{0}']);
@@ -884,12 +884,12 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
     // （这些文件 apply 前无未提交修改，还原 = apply 前状态），无关脏文件不在 patch/rollback 范围
     // 不受影响 → fail-safe，报错后 stash 重试即可。放行时 warning 提示此路径。
     // 排除非交付物的元数据/文档 churn（execute 自身改的 + 多操作者常改的 agent 指引/文档），
-    // 否则别人改 CLAUDE.md/docs/.claude → 判定 dirty → apply 误阻断（多操作者仓库高频踩坑）。
+    // 否则别人改 CLAUDE.md/AGENTS.md/docs/.claude → 判定 dirty → apply 误阻断（多操作者仓库高频踩坑）。
     // 注意：排除规则必须和 computeBaselineHash (worktree.js) 一致（虽已不比对 hash，仍用同一口径判当前 dirty）。
     if (meta.baselineHash) {
       // pathspec：`--` 结束选项，`.` 包含全部，后续 :(exclude) 排除非交付物元数据/文档 churn
       // （与 computeBaselineHash 同口径）。数组形式逐元素传递，:(exclude) magic 字面直传不经 shell。
-      const exclude = ['--', '.', ':(exclude).sillyspec/', ':(exclude).claude/', ':(exclude)docs/', ':(exclude)CLAUDE.md'];
+      const exclude = ['--', '.', ':(exclude).sillyspec/', ':(exclude).claude/', ':(exclude)docs/', ':(exclude)CLAUDE.md', ':(exclude)AGENTS.md'];
       const staged = gitQuiet(projectRoot, ['diff', '--cached', ...exclude]) || '';
       const unstaged = gitQuiet(projectRoot, ['diff', ...exclude]) || '';
       const untracked = gitQuiet(projectRoot, ['ls-files', '--others', '--exclude-standard', ...exclude]) || '';

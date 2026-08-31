@@ -566,12 +566,18 @@ export class SyncManager {
     const changeDir = join(specBase, 'changes', changeName);
     let archivedQuietly = false;
     if (!existsSync(changeDir)) {
-      archivedQuietly = existsSync(join(specBase, 'changes', 'archive', changeName))
-        || this._isChangeArchivedInDb(changeName);
-      if (archivedQuietly) {
-        console.log(`[sync] 变更已归档（目录在 archive/），继续从 DB 推送最终状态: ${changeName}`);
+      // change-delete（2026-08-30）：DB status='deleted' 的行目录已随删除移除，属正常时序，
+      // 单行 info 提示后继续推删除终态/墓碑（不落入「目录不存在」warn）
+      if (this._changeDbStatus(changeName) === 'deleted') {
+        console.log(`[sync] 变更已删除（DB status=deleted），继续推送删除终态/墓碑: ${changeName}`);
       } else {
-        console.warn(`[sync] 变更目录不存在（可能是已归档，继续从 DB 同步最终状态）: ${changeName}`);
+        archivedQuietly = existsSync(join(specBase, 'changes', 'archive', changeName))
+          || this._changeDbStatus(changeName) === 'archived';
+        if (archivedQuietly) {
+          console.log(`[sync] 变更已归档（目录在 archive/），继续从 DB 推送最终状态: ${changeName}`);
+        } else {
+          console.warn(`[sync] 变更目录不存在（可能是已归档，继续从 DB 同步最终状态）: ${changeName}`);
+        }
       }
     }
     // 透传给本次 sync 链内的 syncDocuments（best-effort 四件套直推：归档后目录已移走，
@@ -602,16 +608,19 @@ export class SyncManager {
       }
 
       // X1 墓碑判定（design §5.5 / task-13；审计 B1 收窄）：仅 DB status='archived'
-      // （unregisterChange 链——归档收尾/自愈/quick 收尾均置该值）触发，常规推送成功后追加
+      // （unregisterChange 链——归档收尾/自愈/quick 收尾均置该值）或 status='deleted'
+      // （change-delete 命令，2026-08-30——载荷本身携带 deleted，平台 _apply_cli_tombstone
+      // 见该值即置 location='deleted'；追加墓碑 POST 幂等兜底）触发，常规推送成功后追加
       // 一次 changes[].status='deleted' 墓碑（平台 task-04 写路径置 location='deleted' 收敛镜像）。
       // 不再把「实体目录双失」当裸删发墓碑：platform pull（进度同步）只写 DB 不建目录 →
       // DB active + 目录双失是合法态，误发墓碑会让平台把活跃变更软删（全体成员生效）。
       // 真实裸删（用户手动 rm -rf 目录）由平台镜像收敛兜底（spec-sync delete ops → scoped
-      // 定向删除，computeSpecOps 护栏只拦整树/changes 整删，不拦单变更 scoped 删除），CLI
-      // 不发墓碑不损失收敛。quick 会话豁免：triggerSync 对 quick 已降级 syncSpecTreeOnly，
+      // 定向删除，computeSpecOps 护栏只拦整树/changes 整删，不拦单变更 scoped 删除），
+      // CLI 不发墓碑不损失收敛。quick 会话豁免：triggerSync 对 quick 已降级 syncSpecTreeOnly，
       // 直调也不给孤儿 key 造墓碑。
       const tombstoneDue = !QUICK_SID_RE.test(changeName)
-        && progressData.changes?.[0]?.status === 'archived';
+        && (progressData.changes?.[0]?.status === 'archived'
+          || progressData.changes?.[0]?.status === 'deleted');
 
       // X3 步骤开始上报（design §8.2 / task-13）：opts.stepStart 时把 current_stage 的第一个
       // 未完成步投影为 in-progress（仅载荷不写 DB；triggerStepStartSync 是唯一传该 flag 的入口）
@@ -1061,22 +1070,23 @@ export class SyncManager {
   }
 
   /**
-   * DB 侧归档态探测（坑 post-archive-sync-noise）：changes 表 status='archived' 即真。
+   * DB 侧变更状态探测（坑 post-archive-sync-noise；2026-08-30 泛化）：只读直查 changes.status，
+   * 供「目录缺失」降噪分支区分 archived（归档终态照推）与 deleted（change-delete 删除终态）。
    * 只读直查（node:sqlite，不经 ProgressManager——sync 是短进程，惰性 import 无收益且
-   * 本调用点在同步代码段）；DB 不存在/无行/读失败 → false（保守退回普通 warn 措辞）。
+   * 本调用点在同步代码段）；DB 不存在/无行/读失败 → null（保守退回普通 warn 措辞）。
    * @param {string} changeName
-   * @returns {boolean}
+   * @returns {string|null}
    */
-  _isChangeArchivedInDb(changeName) {
+  _changeDbStatus(changeName) {
     try {
       const dbPath = join(safePlatformSpecDir(this.cwd) || join(this.cwd, '.sillyspec'), '.runtime', 'sillyspec.db');
-      if (!existsSync(dbPath)) return false;
+      if (!existsSync(dbPath)) return null;
       const db = openDatabase(dbPath, { readOnly: true });
       try {
         const row = db.prepare("SELECT status FROM changes WHERE name = ?").get(changeName);
-        return row?.status === 'archived';
+        return row?.status || null;
       } finally { try { db.close() } catch {} }
-    } catch { return false }
+    } catch { return null }
   }
 
   /**

@@ -83,7 +83,7 @@ src/worktree.js:188  throw new Error(`changeName 不合法: "${changeName}"，�
 涉及删除/清理的代码点有刻意保留的 `// ⚠️` 中文警示注释，指向同一份「真实资产」清单：
 
 ```
-src/init.js:226    // ⚠️ 必须保护真实资产：若本地 .sillyspec 含 changes/（非空）、projects/（非空）...
+src/init.js:301    // ⚠️ 必须保护真实资产：若本地 .sillyspec 含 changes/（非空）、projects/（非空）...
 ```
 
 **隐形规则**：任何会触碰 `.sillyspec/changes/`、`.sillyspec/projects/`、`.sillyspec/.runtime/sillyspec.db` 的清理/重置代码，必须保留 `// ⚠️ 必须保护真实资产` 注释并枚举受保护路径（平台模式 `platformMode` 下整体绕过清理段——项目内 `.sillyspec/` 常只有 local.yaml，整删丢配置）。修改这些函数时不可删除该注释。

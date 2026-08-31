@@ -226,9 +226,9 @@ export function computeBaselineHash(cwd) {
   //   - .sillyspec/：brainstorm/plan 蓝图 + runtime 产物
   //   - .claude/：agent 配置/skills/CLAUDE.md（多操作者 agent 指引 churn）
   //   - docs/：文档（非代码交付物）
-  //   - CLAUDE.md：根 agent 指引（多操作者常改）
+  //   - CLAUDE.md / AGENTS.md：根 agent 指引（多操作者常改；AGENTS.md 为内容源、CLAUDE.md 为指针）
   // 必须和 applyWorktree step 4.5 (worktree-apply.js) 使用相同的排除规则。
-  const exclude = ['--', '.', ':(exclude).sillyspec/', ':(exclude).claude/', ':(exclude)docs/', ':(exclude)CLAUDE.md'];
+  const exclude = ['--', '.', ':(exclude).sillyspec/', ':(exclude).claude/', ':(exclude)docs/', ':(exclude)CLAUDE.md', ':(exclude)AGENTS.md'];
   const staged = gitQuiet(cwd, ['diff', '--cached', ...exclude], { timeout: 30000 }) || '';
   const unstaged = gitQuiet(cwd, ['diff', ...exclude], { timeout: 30000 }) || '';
   const untracked = gitQuiet(cwd, ['ls-files', '--others', '--exclude-standard', ...exclude], { timeout: 30000 }) || '';
@@ -1632,7 +1632,9 @@ export class WorktreeManager {
   }
 
   /**
-   * DB 归档态探测（坑 doctor-reprovision-archived-change）：changes 表 status='archived'。
+   * DB 终态探测（坑 doctor-reprovision-archived-change）：changes 表 status='archived'
+   * （归档收尾）或 'deleted'（change-delete 删除，2026-08-30）——两种终态的 worktree 都是
+   * 死目录，doctor 一致跳过供给、fix 走 cleanup。
    * 只读直查（node:sqlite）——doctor 是同步方法，惰性动态 import 不可用；DB 不存在/无行/
    * 读失败 → false（保守退回普通 deps 供给路径）。
    * @param {string} name
@@ -1645,7 +1647,7 @@ export class WorktreeManager {
       const db = openDatabase(dbPath, { readOnly: true });
       try {
         const row = db.prepare('SELECT status FROM changes WHERE name = ?').get(name);
-        return row?.status === 'archived';
+        return row?.status === 'archived' || row?.status === 'deleted';
       } finally { try { db.close() } catch {} }
     } catch { return false }
   }

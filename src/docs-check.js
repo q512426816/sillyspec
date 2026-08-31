@@ -833,3 +833,129 @@ export async function runDecisionRules(opts) {
   exempted.sort((a, b) => a.key.localeCompare(b.key))
   return { empty: false, domains: domainFiles.length, entries: entriesTotal, implemented: implementedTotal, threshold, findings, exempted }
 }
+
+// ---------------------------------------------------------------------------
+// 变更名提名规则族（advisory，2026-08-31 变更关联审计 P2）
+//
+// 校验对象：文档正文里提名的变更名 token（`2026-NN-NN-<slug>`）。背景实测：变更间关联
+// 的真实形态是散文提名（全仓 265 处他者提名，85% 属实质依赖/溯源/叙事），而非路径链接
+// 或声明式字段；提名当前完全不受校验——拼错、归档改名（历史 3 单）后静默烂掉没人发现。
+// 规则单一：提名的名字在「活跃 ∪ 归档」变更名单中存在；不存在 = 悬空。
+// 铁律（与决策规则族同款，docs-consistency 模块卡）：advisory 只 warn 不进 runDocsCheck
+// 的 invalid 阻断链——ok/invalid 判定、exit code、docs gate 阻断行为均不受影响；只读零写盘。
+// 豁免走 known_failures `change-name.<名字>` 键（decisions.* 同款机制）：prompt 模板示例名、
+// 跨仓变更名（repo:// 语义但散文书写）按名豁免，披露不隐藏。
+// 结构化排除（非豁免，正则层面）：
+//   - lookbehind [A-Za-z0-9-]：x- 前缀化合物不拆半名（review-2026-08-08.md 文档名、
+//     brainstorm-review-2026-08-23-205426 run-id 时间戳、双日期前缀目录名整体不命中）；
+//   - slug 字母开头：纯数字 slug（HHMMSS 时间戳类）不命中；
+//   - ql-* quicklog id 不是变更目录名，天然不命中（quick 关联另有 CLI 悬空守卫）。
+// ---------------------------------------------------------------------------
+
+/** 缺省扫描集：主链路 docs 两侧 + 变更文档。强制 skip 追加 archive/（归档文档是冻结
+ *  历史事实，当时提名不追改）与 docs/prompt/（agent 指令模板，示例变更名 by-design 虚构） */
+export const CHANGE_NAME_DEFAULT_PATHS = ['docs/**/*.md', '.sillyspec/docs/**/*.md', '.sillyspec/changes/**/*.md']
+const CHANGE_NAME_FORCED_SKIP = ['.sillyspec/changes/archive', 'docs/prompt']
+
+/** 变更名 token：日期前缀 + 字母开头 slug（≥3 字符） */
+const CHANGE_NAME_TOKEN_RE = /(?<![A-Za-z0-9-])(\d{4}-\d{2}-\d{2}-[a-z][a-z0-9-]{2,})/g
+
+/**
+ * 纯函数：提取文本里的变更名提名 token（matchAll 对共享 /g 正则内部克隆，无 lastIndex 竞态）。
+ * 紧随 `.md` 的 token 排除——那是文件名提及（.sillyspec/plans/ 计划快照、他仓 docs 路径），
+ * 不是变更目录提名（目录提名后随 `/` 或独立成词）。
+ * @param {string} text 行文本或全文
+ * @returns {string[]} 名字列表（含重复，调用方自行聚合计数）
+ */
+export function collectChangeNameTokens(text) {
+  const md = String(text || '')
+  return [...md.matchAll(CHANGE_NAME_TOKEN_RE)]
+    .filter(m => md.slice(m.index + m[0].length, m.index + m[0].length + 3).toLowerCase() !== '.md')
+    .map(m => m[1])
+}
+
+/**
+ * 变更名单收集：活跃目录 ∪ 归档目录（+ 调用方注入额 extraNames，如 DB 名单——DB 与目录
+ * 历史上曾分叉，并集口径防假阳性）。目录缺失 → 跳过不抛。
+ * @param {string} specBase 规范根（<root>/.sillyspec 或平台 specRoot）
+ * @param {string[]} [extraNames]
+ * @returns {Set<string>}
+ */
+export function collectKnownChangeNames(specBase, extraNames = []) {
+  const names = new Set()
+  for (const sub of ['changes', join('changes', 'archive')]) {
+    try {
+      for (const e of readdirSync(join(specBase, sub), { withFileTypes: true })) {
+        if (e.isDirectory()) names.add(e.name)
+      }
+    } catch { /* 目录缺失 → 跳过 */ }
+  }
+  for (const n of extraNames) if (n && typeof n === 'string') names.add(n)
+  return names
+}
+
+/**
+ * IO 入口（advisory）：扫文档集报告悬空的变更名提名。不进 invalid 阻断链、不写盘。
+ * @param {{ projectRoot: string, specBase?: string|null, paths?: string[]|null, skip?: string[]|null,
+ *   knownFailures?: string[]|null, extraNames?: string[] }} opts
+ *   paths 缺省 CHANGE_NAME_DEFAULT_PATHS（与主链路不同：多扫 .sillyspec/changes/——变更
+ *   design/proposal 是实质依赖提名的主阵地）；skip 缺省读 local.yaml 并强制追加
+ *   .sillyspec/changes/archive；knownFailures 缺省读 local.yaml known_failures
+ * @returns {{ empty: boolean, scannedDocs: number, mentions: number, uniqueNames: number,
+ *   findings: Array<{ doc: string, docLine: number, name: string, message: string }>,
+ *   exempted: Array<{ key: string, name: string }> }}
+ */
+export function runChangeNameAdvisory(opts) {
+  const { projectRoot, specBase = null, paths = null, skip = null, knownFailures = null, extraNames = [] } = opts || {}
+  const emptyResult = { empty: true, scannedDocs: 0, mentions: 0, uniqueNames: 0, findings: [], exempted: [] }
+  if (!projectRoot) return emptyResult
+
+  const cfg = readDocsCheckConfig(projectRoot)
+  const globs = paths || cfg.paths || CHANGE_NAME_DEFAULT_PATHS
+  const skipList = [...(skip || cfg.skip || []), ...CHANGE_NAME_FORCED_SKIP]
+  let failures = knownFailures
+  if (!Array.isArray(failures)) {
+    try {
+      failures = extractKnownFailureKeys(readFileSync(join(projectRoot, '.sillyspec', 'local.yaml'), 'utf8'))
+    } catch { failures = [] }
+  }
+
+  // 名单口径：本仓活跃∪归档 ∪ 调用方注入（如 DB 名）∪ 跨仓根（docs-check.cross_repo_roots
+  // 已配置的兄弟仓——散文跨仓提名无 repo:// 标记，出现在任一已配置根的变更名录即有效；
+  // 未配置根不参与，与 repo:// 行号校验的「未配映射跳过」同语义）
+  const known = collectKnownChangeNames(specBase || join(projectRoot, '.sillyspec'), extraNames)
+  for (const root of Object.values(cfg.crossRepoRoots || {})) {
+    for (const n of collectKnownChangeNames(join(root, '.sillyspec'))) known.add(n)
+  }
+
+  const docs = new Set()
+  for (const g of globs) for (const rel of walkGlob(projectRoot, g, skipList)) docs.add(rel)
+
+  const findings = []
+  const exempted = []
+  const seenNames = new Set()
+  let mentions = 0
+  let scanned = 0
+  for (const rel of [...docs].sort()) {
+    let lines
+    try { lines = readFileSync(join(projectRoot, rel), 'utf8').replace(/\r\n?/g, '\n').split('\n') } catch { continue }
+    scanned++
+    lines.forEach((line, i) => {
+      for (const name of collectChangeNameTokens(line)) {
+        mentions++
+        seenNames.add(name)
+        if (known.has(name)) continue
+        if (failures.includes(`change-name.${name}`)) {
+          exempted.push({ key: `change-name.${name}`, name })
+          continue
+        }
+        findings.push({
+          doc: rel, docLine: i + 1, name,
+          message: `[${rel}:L${i + 1}] 提名「${name}」在活跃∪归档变更名单中不存在——拼错 / 改名未同步 / 他仓变更？确认后修正，或在 local.yaml known_failures 加 "change-name.${name}" 豁免（advisory 不阻断）`,
+        })
+      }
+    })
+  }
+  findings.sort((a, b) => a.doc.localeCompare(b.doc) || a.docLine - b.docLine || a.name.localeCompare(b.name))
+  return { empty: scanned === 0, scannedDocs: scanned, mentions, uniqueNames: seenNames.size, findings, exempted }
+}

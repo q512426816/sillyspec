@@ -118,6 +118,8 @@ SillySpec CLI — 规范驱动开发工具包
                                       生成 Windows 安全 TaskCard 骨架（LF 行尾 + frontmatter 闭合 +
                                       硬校验 9 字段齐全，标题自动取自 plan.md，Edit 填占位符即可）
   sillyspec change-rename <旧变更名> <新变更名>
+  sillyspec change-delete <变更名> [--confirm]  删除变更（DB status='deleted' 与归档语义分离 +
+                                      移目录 + 清 worktree + 推平台墓碑；默认 dry-run）
   sillyspec knowledge <search --query "..." --limit N
                         | inspect --id "..."
                         | validate | refresh
@@ -1237,7 +1239,7 @@ async function main() {
             docsCheckFlags.push(a);
           }
         }
-        const { runDocsCheck, readDocsCheckConfig, DocsCheckConfigError, applyFixes } = await import('./docs-check.js');
+        const { runDocsCheck, readDocsCheckConfig, DocsCheckConfigError, applyFixes, runChangeNameAdvisory } = await import('./docs-check.js');
         try {
           // 配置优先级：--paths > local.yaml docs-check.paths > 缺省 docs/**/*.md
           const cfg = readDocsCheckConfig(dir);
@@ -1268,10 +1270,20 @@ async function main() {
             }
           }
           const fixResult = fixActive ? applyFixes(dir, fixes, dryRun ? { dryRun: true } : {}) : null;
+          // 变更名提名 advisory（2026-08-31 变更关联审计 P2）：铁律同决策规则族——只 warn，
+          // 不进 invalid、不影响下方 exit code 与 docs gate。降级容错：advisory 自身异常
+          // 不拖垮主检查（try-catch 吞并提示）。
+          let changeNameReport = null;
+          try {
+            changeNameReport = runChangeNameAdvisory({ projectRoot: dir });
+          } catch (e) {
+            console.warn(`⚠️ 变更名提名检查执行失败（advisory 降级跳过）：${e.message}`);
+          }
           if (json) {
             // --fix 与 --json 组合保持 stdout 纯 JSON 可解析（constraints）：修复统计作 result.fixReport
             // 附加后整体 stringify，主体仍是 runDocsCheck 返回（invalid[].fix 是 task-01 设计内增量）
             if (fixResult) result.fixReport = { applied: fixResult.applied, skipped: fixResult.skipped.length, dryRun };
+            if (changeNameReport) result.changeNameReport = changeNameReport;
             console.log(JSON.stringify(result, null, 2));
           } else {
             for (const w of result.warnings) console.warn(`⚠️  ${w}`);
@@ -1309,6 +1321,16 @@ async function main() {
               }
               console.error(`\n修复指引：行号漂移 → 更新文档行号到当前源码；文件删改名 → 更新引用路径；`);
               console.error(`关键词缺失但行号正确 → 确认符号是否改名，改文档 token 或行号。`);
+            }
+            // 变更名提名 advisory 段（主结果之后、exit 之前；不参与 ok/invalid 与 exit code）。
+            // 零输出原则（docs-check-fix 契约：无新 flag 时 stdout 逐字节一致；决策规则族同款
+            // 「无信号零输出」）：仅 findings 非空才输出——悬空即信号，无悬空不打扰。
+            if (changeNameReport && changeNameReport.findings.length > 0) {
+              console.warn(`⚠️ 变更名提名悬空 ${changeNameReport.findings.length}/${changeNameReport.mentions} 处（advisory 不阻断、不进 docs gate）：`);
+              for (const f of changeNameReport.findings) console.warn(`   - ${f.message}`);
+              if (changeNameReport.exempted.length > 0) {
+                console.log(`ℹ️ 另有 ${changeNameReport.exempted.length} 处经 known_failures change-name.* 键豁免`);
+              }
             }
           }
           // exit code（design §5.2 行为矩阵逐字对齐）：全绿 → 0（--fix 无操作）；--fix 后全部
@@ -2539,6 +2561,53 @@ checkbox 行；depends_on 自动反填行内注解 "(depends_on: task-01,02)"；
       pm.renameChange(dir, oldName, newName);
       break;
     }
+    case 'change-delete': {
+      // 2026-08-30 用户反馈①：一等删除路径——此前删变更靠 git rm + 借道幽灵清理，
+      // 且幽灵清理把删除行写成 archived，DB 无法区分归档与删除。两段式（默认 dry-run）。
+      // 变更名：位置参数（对齐 change-rename）或 --change（对齐 gate/derive）二选一。
+      let delName = filteredArgs[1];
+      if (!delName || delName.startsWith('-')) {
+        const idx = filteredArgs.indexOf('--change');
+        if (idx >= 0 && filteredArgs[idx + 1]) delName = filteredArgs[idx + 1];
+      }
+      if (!delName || delName.startsWith('-')) {
+        console.error('❌ 用法: sillyspec change-delete <变更名> [--confirm]（或 --change <变更名>）');
+        process.exitCode = 2;
+        break;
+      }
+      const delConfirm = filteredArgs.includes('--confirm');
+      const { deleteChange } = await import('./change-delete.js');
+      const r = await deleteChange({
+        cwd: dir,
+        specDir: resolvePlatformSpecDir(dir, specDir),
+        changeName: delName,
+        confirm: delConfirm,
+      });
+      if (json) {
+        console.log(JSON.stringify(r, null, 2));
+      } else if (!r.ok) {
+        console.error(`❌ ${r.reason}`);
+      } else if (r.action === 'dry_run') {
+        console.log(`🗑️  变更 ${delName} 待删除（dry-run，未执行）：`);
+        if (r.db_row) console.log(`   DB 行：status=${r.db_row.status}${r.already_deleted ? '（已删除，本次仅清残留）' : ` → deleted（与 archived 语义分离，审计可直接区分）`}`);
+        else console.log('   DB 行：无（孤儿目录，仅删目录）');
+        if (r.dir) console.log(`   目录：${r.dir.path}（${r.dir.files} 个文件，git tracked 文件可从历史回溯）`);
+        else console.log('   目录：不存在（仅 DB 行翻 deleted——取代 git rm 后借道幽灵清理的老路径）');
+        if (r.worktree) {
+          console.log(`   worktree：${r.worktree.mode}${r.worktree.unappliedChanges > 0
+            ? `（⚠️ ${r.worktree.unappliedChanges} 个未 apply 变更——删除时保留 worktree 不丢代码，确认废弃后手动 cleanup）`
+            : '（将一并清理）'}`);
+        }
+        console.log(`\n加 --confirm 执行删除（DB status='deleted' + 移除目录 + 清理 worktree + 暂存 git 删除 + 推平台墓碑）。`);
+      } else {
+        console.log(`🗑️  变更 ${delName} 已删除：`);
+        if (r.db_updated) console.log(`   ✅ DB status='deleted'（与 archived 语义分离，审计可直接区分）`);
+        if (r.dir_removed) console.log(`   ✅ 目录已移除（${r.files_removed} 个文件，git 历史可回溯）`);
+        for (const w of r.warnings || []) console.log(`   ⚠️ ${w}`);
+      }
+      process.exitCode = r.ok ? 0 : 1;
+      break;
+    }
     case 'workflow': {
       const wfSub = filteredArgs[1];
       if (!wfSub || wfSub === 'help' || wfSub === '--help') {
@@ -3032,7 +3101,7 @@ SillySpec pull — 拉取服务器 spec 快照到本地（X2 / FR-07）
       break;
     }
     default: {
-      const topCommands = ['init', 'setup', 'run', 'progress', 'worktree', 'dispatch', 'agent-log', 'local', 'workflow', 'gate', 'derive', 'backfill-reviews', 'register-stage-review', 'modules', 'change-rename', 'knowledge', 'platform', 'pull', 'scan', 'brainstorm', 'plan', 'execute', 'verify', 'archive', 'quick', 'explore', 'status', 'doctor', 'auto', 'runtime'];
+      const topCommands = ['init', 'setup', 'run', 'progress', 'worktree', 'dispatch', 'agent-log', 'local', 'workflow', 'gate', 'derive', 'backfill-reviews', 'register-stage-review', 'modules', 'change-rename', 'change-delete', 'knowledge', 'platform', 'pull', 'scan', 'brainstorm', 'plan', 'execute', 'verify', 'archive', 'quick', 'explore', 'status', 'doctor', 'auto', 'runtime'];
       const suggestion = didYouMean(command, topCommands);
       console.error(`❌ 未知命令: ${command}`);
       if (command === '--status') {

@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-05-31 11:00:00
-updated_at: 2026-08-26（+批次⑥：等待回答跨会话回放（outputStep 📜 历史用户回答块 collectStageWaitHistory / progress show 历史回答摘要行）/ brainstorm 决策记录增量落盘（step3/4 随答追加 decisions.md、step6 对账整理）；批次⑤：worktree --adopt-branch 收编/同名分支菜单/doctor 分支删除收紧（无库保守+review 锚点+native-worktree force 豁免）/brainstorm-auto design 骨架化+豁免短语示例；批次④：apply --stash-dirty 主仓在途改动一等支持（两级恢复+SHA 兜底）/ review.json changedFiles 声明偏差文件放行（Gate1/Gate2 三源扩展）；批次③：端点提取多行装饰器全文化 / 探针1/3 worktree 路径回退 / FAIL 门控重验成本预告 / baseline checkpoint 夹带清单入提交信息；批次②：taskcard 占位符硬拦 / Wave 依赖方向硬拦 + plan-adopt-waves / decisions.md header 模板根治+自动补齐 / quick 新会话缺 --input 拒绝启动 + 位置参数即任务描述 / --file-notes 格式 fail-fast）
+updated_at: 2026-08-30（+change-delete 一等删除命令（status='deleted' 与 archived 语义分离 + 移目录/清 worktree/推平台墓碑，两段式）/ progress show 滞留与疑似完成信号（tasks 全勾未收口 + 超 7 天无活跃）；批次⑥：等待回答跨会话回放（outputStep 📜 历史用户回答块 collectStageWaitHistory / progress show 历史回答摘要行）/ brainstorm 决策记录增量落盘（step3/4 随答追加 decisions.md、step6 对账整理）；批次⑤：worktree --adopt-branch 收编/同名分支菜单/doctor 分支删除收紧（无库保守+review 锚点+native-worktree force 豁免）/brainstorm-auto design 骨架化+豁免短语示例；批次④：apply --stash-dirty 主仓在途改动一等支持（两级恢复+SHA 兜底）/ review.json changedFiles 声明偏差文件放行（Gate1/Gate2 三源扩展）；批次③：端点提取多行装饰器全文化 / 探针1/3 worktree 路径回退 / FAIL 门控重验成本预告 / baseline checkpoint 夹带清单入提交信息；批次②：taskcard 占位符硬拦 / Wave 依赖方向硬拦 + plan-adopt-waves / decisions.md header 模板根治+自动补齐 / quick 新会话缺 --input 拒绝启动 + 位置参数即任务描述 / --file-notes 格式 fail-fast）
 ---
 
 # SillySpec 文件生命周期
@@ -94,6 +94,15 @@ updated_at: 2026-08-26（+批次⑥：等待回答跨会话回放（outputStep �
 | `.sillyspec-platform-managed` | 否 | 同上（`writePlatformPointer` 三写之一） | **平台接管声明**：`{managed, specRoot 副本, workspaceId, declaredAt}` 四字段，**无过期**（STALE 清理不作用于它）。读侧 `checkPlatformManaged`（宽容：不存在/损坏/managed 非 true → null）。指针缺失但声明存在时 `resolvePlatformSpecDir` 抛 `PlatformManagedError`、`runCommand` 恢复链 exit 1（双入口 fail-closed，防静默建本地进度库）。**唯一删除路径 = `platform disconnect` 三清**（local.yaml platform 段 + 本指针 + 本声明） |
 
 `init.js` 会把 `.sillyspec/.runtime/`、`.sillyspec/local.yaml`、`.sillyspec/codebase/SCAN-RAW.md` 追加到 `.gitignore`。注意 `.sillyspec/local.yaml.example`（脱敏配置示例，2026-08-11 起 `init.js` `doInstall` 调 `config-schema.js` `renderExample()` 落盘）**不在** gitignore——它是给人/外部 agent 看的可提交配置发现物；真实 `local.yaml`（含凭据）才 gitignored。
+
+### 项目根指令文件（AGENTS.md 单源，2026-08-30 起）
+
+`init.js` 在项目根写入的 agent 指引文件采用 AGENTS.md 单源方案：
+
+- `AGENTS.md`：**唯一内容源**，`injectAgentsInstructions` 注入完整指引模板（`templates/agents-instruction.md`），版本感知幂等三态四分支；claude/codex 共用同一注入器（`--tool claude,codex` 同选不产生双段）。codex 老安装的 `## SillySpec` 旧小段在下次 init 时自动迁移为新受管段（精确匹配优先，编辑过/CRLF 漂移回退按标题截除）。
+- `CLAUDE.md`：薄指针文件，仅含 `@AGENTS.md` 导入行（Claude Code 记忆导入语法），由 `injectClaudePointer` 维护；用户自有 CLAUDE.md 只在文末追加受管指针块。2026-08-02 方案的旧完整态 CLAUDE.md 不自动覆盖，stderr 提示迁移。
+- `GEMINI.md` / `INSTRUCTIONS.md`：维持小段追加（`injectInstructions`，`## SillySpec` 文本标记幂等），改 `@AGENTS.md` 指针需先验证两家对 `@` 导入语法的支持，留待后续变更。
+- 两文件同属「多操作者常改、非交付物」，已加入 worktree 基线 hash / dirty 检测 / `--stash-dirty` 的排除列表（`worktree.js` `computeBaselineHash` 与 `worktree-apply.js` step 4.5，与 `.claude/`、`docs/` 同口径）。
 
 > **平台模式残留清理边界**（`init.js` `cleanupRuntimeResidue`，由 `run/command.js`（`runCommand`）启动时首次执行一次）：
 > 当 `specRoot` 指向外部、源码目录的 `.sillyspec/` 含真实资产（`changes/`/`projects/`/`sillyspec.db`）时，只清理运行时残留，**不整删 `.runtime/`**。清理白名单保留权威状态：`worktrees/`、`sillyspec.db`、`global.json`、`contract-artifacts/`、`execute-runs/`；其余子项（`artifacts/`、`scan-runs/`、`scan-projects.json`、`user-inputs.md`、`postcheck-result.json` 等可重建缓存）逐项删除，`codebase/` 整删；`local.yaml` 受保护保留——gitignored 凭据文件（平台 init lease 下发 / `local detect` / `platform connect` 写入，含用户手调 mcp 段），删除即永久丢失，2026-08-23 起不再随清理删除（此前曾整删，与平台模式 init 跳过清理的保护语义矛盾）。未知子项默认保留（安全侧倾斜）。
@@ -226,6 +235,17 @@ sillyspec doctor --align-execute-progress [--confirm] [--change <name>]
      变更自动兜底。典型用于 worktree 已 cleanup（终态）但 execute 派生戳未盖上的死锁场景。
      只写 stages 表 step 状态（经 ProgressManager._write），不改 schema。
 
+sillyspec change-delete <变更名> [--confirm]
+  -> 删除变更（2026-08-30 用户反馈①，实现 `src/change-delete.js`）：此前删除靠 git rm +
+     借道幽灵清理，且幽灵清理把删除行写成 archived——DB 无法区分「归档」与「删除」，
+     事后审计只能回溯 git。现 DB status='deleted'（终态语义与 archived 分离，行保留供审计）
+     + 物理移除 changes/<名>/ + `archiveWorktreeCleanup` 清 worktree（未 apply 变更保留
+     不误删代码）+ `safeGit add -A` 暂存删除（best-effort）+ `triggerSync` 推终态（sync.js
+     见 status='deleted' 上行墓碑 → 平台软删收敛）。两段式：默认 dry-run 列出待删项
+     （DB 行/目录文件数/worktree 未 apply 数），--confirm 才执行（DB-first + 目录删除失败
+     回滚 DB；审计落 audit.log action=change-delete）。archived 行拒绝（归档历史走 git 层
+     处理）；幽灵行（active 无目录）与孤儿目录（无 DB 行）分别支持仅翻 status / 仅删目录。
+
 execute --done 批量完成（2026-07-28，`run/complete.js`）
   -> 任一 execute `--done` 完成当前 step 后，若满足① plan.md 所有 task checkbox 已勾
      （人工勾，或基于各 task review.json 双 verdict 非 fail 由 `autoCheckPlanFromReviews` 自动勾）
@@ -270,6 +290,7 @@ execute --done 批量完成（2026-07-28，`run/complete.js`）
   - **文案修正**：validator 失败提示不再声称 `--skip-approval` 可跳过产物校验（该 flag 只作用于阶段转换/审批检查）；quick 阶段 quicklog 缺失提示同步移除。
   - **wait 步骤答案无选项校验（wait-choice-enforcement 移除，2026-08-16）**：43d4531 曾加 `--answer` 必须命中 waitOptions 的全等校验（防 AI 代答）。实证误伤人工选择（AskUserQuestion 转述标签「方案 A 读侧扩展（推荐）」≠「方案A」全等失配；人工 Other 自由填值同样被拦），而字符串匹配区分不了谁答的、防不了故意代答——经用户拍板移除 `enforceWaitChoice` 及全部调用点。现契约：requiresWait/repeatableWait 的 `--answer` 接受任意非空文本，`waitAnswer` 落原始回答（人工转述形态原样入库）；requiresWait 门本身保留（`--done` 不带 `--answer` 仍 fail-loud 拦截）。`waitOptions` 字段保留，仅用于 wait 提示展示与 CLI `--options` 注入，不再参与校验；`waitFreeAnswer` 标记随豁免语义消失而删除。
   - **status 输出区分操作目标与活跃列表（status-change-pointer-ambiguous，2026-08-14）**：`progress show`/`status` 多变更汇总不再只列「活跃变更 N 个」，新增两行明确语义——「当前操作目标」（多活跃时不带 `--change` 的 run/progress 不隐式选定任一，须显式 `--change`）与「活跃变更记录」（下列为 DB 中存在的活跃记录，非操作目标）；DB 有记录但目录缺失的空壳 change（default/quick-xxx 残留）逐项标注 `⚠️ 目录缺失（残留记录，可用 doctor 清理）`，防止把残留空壳误当操作目标跑错 change。
+- **progress show 滞留/疑似完成信号（2026-08-30 用户反馈②，`progress/stage-machine.js` `_stallSignal`）**：7 个「代码全落地但流程没收口」的变更曾挂 38 天无人发现——progress 视图缺中期滞留提示。现 show（单变更详情 + 多变更汇总）对活跃变更输出两类 advisory 提示行：① likely-complete——tasks.md 全勾但 execute 阶段未完成（不限天数；判据与 doctor D5 execute-progress-plan-mismatch 同源，但 D5 藏在 doctor --json 里、日常 show 看不见），提示 `run execute --done` 收口后走 verify（或 doctor --align-execute-progress 对齐派生戳）；② stalled——流程未收口（archive 未 completed）且 last_active 超 STALL_WARN_DAYS（7 天，`progress/shared.js`，与空壳目录 7 天门槛同量级）无活跃，提示继续推进或 `change-delete` 放弃。archive 已完成的变更零提示；checkbox 统计走 `pm.readPlanCheckboxStatus`（tasks.md 唯一真相源）；last_active 解析容错 ISO 与 zh-CN 本地格式（`_parseFlexibleTs`）。
   - **reopen --done stale 回填需 --confirm（reopen-stale-confirm，2026-08-19）**：`--reopen --from-step N` 后 `--done` 无 `--confirm`：不回填 stale、阶段不完成，指引两条路（带 `--confirm` 回填 / 继续 `--done` 跳过 stale）；带 `--confirm`：回填 stale→completed + audit log（action=reopen-stale-backfill）。全 completed+stale 时 `--done --confirm` 走「首个 stale 拉回完成管线」逃生门。completeStage 存在 stale 步骤时拒绝（`--force` 逃生门，审计含 stale 步骤名）；stale 门位于产物校验门之前（`src/progress/stage-machine.js` ~78-108，`src/run/complete.js` ~303-343）。
   - **execute 批量完成 blockedTasks 复核（execute-batch-blocked-tasks，2026-08-19）**：`shouldAutoCheckTask` 加可选 ctx（自动草稿需 changedFiles 非空且实测 diff 非空才勾选）；`detectExecuteBatchFinish` 批量放行前逐 task 复核，blockedTasks（review 缺失或草稿零 diff）阻断批量完成。
 - worktree execute 收尾 per-task review 草稿 + assess 顺带修复豁免（2026-07-30，坑 worktree-execute-apply-friction 1/2/4）：

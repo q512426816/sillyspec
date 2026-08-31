@@ -41,9 +41,9 @@ npx sillyspec init
 
 | 工具 | `--tool` | 产物位置 |
 |---|---|---|
-| Claude Code（推荐） | `claude` | `.claude/skills/sillyspec-*/` |
+| Claude Code（推荐） | `claude` | `AGENTS.md`（完整指引）+ `CLAUDE.md`（`@AGENTS.md` 指针）+ `.claude/skills/sillyspec-*/` |
 | Cursor | `cursor` | `.cursor/skills/sillyspec-*/` |
-| OpenAI Codex | `codex` | `AGENTS.md` |
+| OpenAI Codex | `codex` | `AGENTS.md`（完整指引） |
 | OpenCode | `opencode` | `INSTRUCTIONS.md` |
 | OpenClaw | `openclaw` | `.openclaw/skills/sillyspec-*/` |
 | Gemini | `gemini` | `GEMINI.md` |
@@ -128,6 +128,7 @@ sillyspec init                   初始化（零交互，自动检测工具）
 sillyspec setup                  安装推荐 MCP 工具（交互式）
 sillyspec setup --list           查看已安装 MCP 状态
 sillyspec doctor                 全量自检 + 修复进度
+sillyspec change-delete <变更名>    删除变更（DB status=deleted 与归档语义分离；默认 dry-run，--confirm 执行）
 ```
 
 ## 核心特性

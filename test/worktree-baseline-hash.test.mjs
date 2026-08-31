@@ -8,7 +8,7 @@
  *   - .sillyspec/：plan/design 蓝图 + runtime
  *   - .claude/：agent 配置/skills/CLAUDE.md
  *   - docs/：文档（deliverable 文档冲突由 step5a/5b 兜底）
- *   - CLAUDE.md：根 agent 指引
+ *   - CLAUDE.md / AGENTS.md：根 agent 指引（AGENTS.md 为内容源、CLAUDE.md 为指针）
  * 同时验证保护未削弱：源码改动仍被检测。
  */
 import fs from 'fs'
@@ -57,10 +57,11 @@ console.log('\n--- 元数据/文档/agent 指引 churn → 不漂移 ---')
   // .claude/（agent 配置/skills/CLAUDE.md）
   fs.mkdirSync(path.join(d, '.claude'), { recursive: true })
   fs.writeFileSync(path.join(d, '.claude', 'CLAUDE.md'), '# agent\n')
-  // CLAUDE.md（根 agent 指引，多操作者常改）
+  // CLAUDE.md / AGENTS.md（根 agent 指引，多操作者常改；AGENTS.md 内容源 + CLAUDE.md 指针）
   fs.writeFileSync(path.join(d, 'CLAUDE.md'), '# root agent guide\n')
+  fs.writeFileSync(path.join(d, 'AGENTS.md'), '# agent guide (content source)\n')
   const h = computeBaselineHash(d)
-  assertTrue(h === h0, `.sillyspec/ + docs/ + .claude/ + CLAUDE.md 改动后 hash 不变（${h} === ${h0}）`)
+  assertTrue(h === h0, `.sillyspec/ + docs/ + .claude/ + CLAUDE.md + AGENTS.md 改动后 hash 不变（${h} === ${h0}）`)
 }
 
 // ── 源码改动 → hash 变（保护未削弱：coarse hash 仍敏感于代码 churn）──

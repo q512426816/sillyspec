@@ -29,6 +29,12 @@ export const MAIN_FLOW_ORDER = ['brainstorm', 'plan', 'execute', 'verify', 'arch
 // progress 数据版本（v3 = SQLite；v4 = changes 加 base_ts / 本地脏度两列，platform-sync §8）
 export const CURRENT_VERSION = 5;
 
+// 滞留提示阈值（天，2026-08-30 用户反馈②：7 个「代码全落地但流程没收口」的变更挂 38 天
+// 无人发现）：活跃变更 last_active 距今超该天数且流程未收口（archive 未完成）时，progress
+// show 输出滞留提示行。与 doctor-diagnostics 空壳目录 7 天门槛（GHOST_EMPTY_DIR_STALE_MS）
+// 同量级——「多久算滞留」全仓统一口径。
+export const STALL_WARN_DAYS = 7;
+
 // 空阶段骨架
 export function emptyStage() {
   return { status: 'pending', steps: [], startedAt: null, completedAt: null };

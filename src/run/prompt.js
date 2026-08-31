@@ -26,6 +26,7 @@ import { resolvePromptIncludes, resolveRuntimeRoot, safeGit, WAIT_MARKER_RE, QUI
 import { renderStageContract } from '../stage-contract-spec.js'
 import { nowWallClock } from '../datetime.js'
 import { parseModuleMapSimple } from '../modules.js'
+import { readModuleRecentChanges } from '../module-changelog.js'
 import { REVIEW_SCHEMA_VERSION, isValidExecuteRunId } from '../task-review.js'
 
 /**
@@ -111,6 +112,12 @@ function buildModuleContextInjection(taskDescription, moduleIndex, specBase, pro
     if (deps.length > 0) injection += `- **依赖**: ${deps.join(', ')}\n`
     const usedBy = data.used_by || []
     if (usedBy.length > 0) injection += `- **被引用**: ${usedBy.join(', ')}\n`
+    // 最近变更（模块卡「变更索引」惯例解析，2026-08-31 变更关联审计）：三阶段免扫描即知
+    // 该模块最近被谁动过。懒读命中模块的卡 + sidecar（matched 通常 ≤3 个，不做全目录扫描）
+    const recentChanges = readModuleRecentChanges(join(specBase, 'docs', projectName, 'modules'), moduleId)
+    if (recentChanges.length > 0) {
+      injection += `- **最近变更**: ${recentChanges.slice(0, 3).map(e => e.name).join('、')}\n`
+    }
     injection += '\n'
   }
 

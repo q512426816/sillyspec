@@ -1,4 +1,4 @@
-# Claude Code 指引
+# Agent 指引
 
 ## 项目说明
 本项目使用 **SillySpec** 管理变更，采用文档驱动开发。SillySpec 是给 Agent 调用的 CLI 流程控制器，不是给人类直接使用的产品，也不是处理业务逻辑的工具——你（Agent）通过 CLI 告诉它"我在哪"，它告诉你"下一步做什么"；你执行步骤，它校验产出、推进状态，人类只在关键决策点介入审批。要考虑多 agent 同时操作代码，代码随时可能变化。所有变更以稳定、可用、可维护为目标，按生产级标准处理。
@@ -15,7 +15,7 @@
 9. **中途停下不靠额外命令存进度**——进度已由上一次 `--done` 自动落盘；恢复时用 `sillyspec progress show` 查看进度，再用 `sillyspec run <stage>` 续跑，不直接 commit 半成品。
 10. **实现完成后对照文档验收**（design.md / 模块文档），并检查是否影响已有测试。
 11. **非测试逻辑本身有误时，禁止改测试来"通过"**——修逻辑，不修测试。
-12. **hook 拦截提交时禁止跳过**（`.husky/pre-push`），修复问题后再提交。
+12. **git hook 拦截提交时禁止跳过**（如 `.husky/pre-push`），修复问题后再提交。
 13. **代码必须兼容 Windows / Linux / macOS**（路径 / 换行 / 并发都要顾）。
 14. **任务记录隔离**：永不重置 / reset / 清零已存在的 change；多个活跃 change 各自 `--change <名>` 隔离不重叠；quick 同一 QUICKLOG 按 ql-ID 条目追加，不冲突。
 15. **quicklog 结构化落盘**：末步 `--done` 用四参数 `--req/--cause/--solution/--result`（CLI 合成结构化 output 并自动提取标题/四段分行）；文件括注用 `--file-notes "path::注 || path2"`。骨架由 CLI 接管，`--done` 后按需核对即可，勿手拼模板。

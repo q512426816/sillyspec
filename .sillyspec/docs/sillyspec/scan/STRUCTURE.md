@@ -22,7 +22,7 @@ sillyspec/
 │   ├── progress.js           ProgressManager W6 facade（1127 行），实现拆至 src/progress/ 子模块
 │   ├── version.js            轻量读 package.json 版本号（--version 高频路径不加载重型依赖）
 │   ├── constants.js          平台状态枚举等全局常量（scan/postcheck/workflow-runs 共享）
-│   ├── init.js               绿地项目初始化（cmdInit + Claude 指引注入 + .runtime 残留清理）
+│   ├── init.js               绿地项目初始化（cmdInit + AGENTS.md 指引注入 + CLAUDE.md 指针 + .runtime 残留清理）
 │   ├── setup.js              MCP 工具安装引导（cmdSetup，版本锁定）
 │   ├── migrate.js            旧 .sillyspec/ 结构迁移到统一 docs/<project>/（migrateDocs）
 │   ├── db-engine.js          node:sqlite DatabaseSync 引擎抽象层（pragma/事务/savepoint 封装）
@@ -42,6 +42,7 @@ sillyspec/
 │   ├── check-primitives.js   共享产物校验原语（contains_sections/min_lines 等纯函数）
 │   ├── change-list.js        design 文件清单解析（normalizePath/globMatch/parseFileChangeList）
 │   ├── change-risk-profile.js 变更风险分级 P0/P1/P2（detectChangeRisk → risk-profile）
+│   ├── change-delete.js      变更删除命令（status='deleted' 终态 + 移目录/清 worktree/推墓碑）
 │   ├── classify-change.js    变更规模分类器（quick/auto/full，供 auto 模式选流程深度）
 │   ├── contract-matrix.js    API 契约矩阵：plan 生成 provider/consumer，execute 注入
 │   ├── knowledge-match.js    knowledge 关键词匹配引擎（INDEX.md → hit report）
@@ -116,7 +117,7 @@ sillyspec/
 │   ├── dispatch/             dispatch 层测试（strategy/probe/execute 集成）
 │   └── *.test.mjs            约定式契约与回归测试（platform-* / scan-* / worktree-* 等）
 ├── templates/                模板资源（init 安装到用户项目）
-│   ├── claude-instruction.md Claude 指引模板
+│   ├── agents-instruction.md Agent 指引模板（AGENTS.md 完整内容源）
 │   ├── prompts/              plan/execute prompt 片段（taskcard-rules / testcase-design / verify-probes）
 │   ├── skills/               SKILL 模板（sillyspec-onboard）
 │   └── workflows/            工作流 YAML 模板（archive-impact.yaml、scan-docs.yaml）

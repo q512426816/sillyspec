@@ -271,7 +271,7 @@
 ## 四、代码质量（QUAL）
 
 ### QUAL-01【P2】git 调用封装分裂为 4+ 套 + 10 处裸调用绕过收口
-- 位置：`src/git-helper.js`（自称"收口为单一实现"）vs `src/stage-contract.js:567 gitTry()`（timeout 15s 无 safe.directory）、`src/task-review.js:521 runGit()`、`src/verify-postcheck.js:386/410`；裸调用：`src/worktree.js:1172/1360/1383`（讽刺：已 import git-helper 仍有 3 处裸调）、`worktree-apply.js:1204`、`modules.js:118`、`taskcard.js:133`、`init.js:562`、`setup.js:363/368`、`index.js:250`（execSync 字符串拼接，违反自家注入规约）。
+- 位置：`src/git-helper.js`（自称"收口为单一实现"）vs `src/stage-contract.js:567 gitTry()`（timeout 15s 无 safe.directory）、`src/task-review.js:521 runGit()`、`src/verify-postcheck.js:386/410`；裸调用：`src/worktree.js:1172/1360/1383`（讽刺：已 import git-helper 仍有 3 处裸调）、`worktree-apply.js:1204`、`modules.js:118`、`taskcard.js:133`、`init.js:642`、`setup.js:363/368`、`index.js:250`（execSync 字符串拼接，违反自家注入规约）。
 - 修复：全部收口 git-helper，超时档位集中 constants.js。
 
 ### QUAL-02【P2】index.js main() 1991 行 god 函数（67 个 case）

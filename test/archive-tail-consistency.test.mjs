@@ -62,8 +62,10 @@ console.log('=== ① 归档尾声 sync 噪音静默化（坑 post-archive-sync-n
   // 其后的网络动作是 best-effort debugLog/warn 单行）
   fs.writeFileSync(join(d, '.sillyspec', 'local.yaml'), 'platform:\n  url: http://127.0.0.1:1\n  token: tok\n')
   const sm = new SyncManager(d)
-  assertTrue(sm._isChangeArchivedInDb(cn) === true, 'DB 归档态探测命中（status=archived）')
-  assertTrue(sm._isChangeArchivedInDb('nonexistent-x') === false, '无行/未归档 → false（保守）')
+  // 2026-08-30 change-delete：_isChangeArchivedInDb 泛化为 _changeDbStatus（返回原始 status，
+  // 区分 archived / deleted 两种终态），断言同步改写
+  assertTrue(sm._changeDbStatus(cn) === 'archived', 'DB 归档态探测命中（status=archived）')
+  assertTrue(sm._changeDbStatus('nonexistent-x') === null, '无行 → null（保守）')
   // syncDocuments 独立调用仍 warn（不静默）；链内（旗标置位）降 debug——锁旗标语义
   // 链内（旗标置位）与独立调用分开捕获：前者不 warn（debug 降级），后者保留 warn
   const cap1 = []; const cap2 = []

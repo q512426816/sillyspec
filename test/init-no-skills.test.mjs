@@ -5,7 +5,7 @@
  * 1. --no-skills 时项目内不出现 .claude/skills/ 下 sillyspec-* 目录（走 bin CLI 全链路，
  *    覆盖 index.js 解析 → cmdInit → doInstall 透传）
  * 2. 不带 --no-skills 时 skills 照常复制（零回归）
- * 3. CLAUDE.md 指令注入不受 --no-skills 影响
+ * 3. 指令注入不受 --no-skills 影响（AGENTS.md 完整指引 + CLAUDE.md 指针）
  */
 
 import { join, resolve, dirname } from 'path'
@@ -48,7 +48,7 @@ function sillyspecSkillsIn(d) {
 }
 function clean(...dirs) { for (const d of dirs) try { rmSync(d, { recursive: true, force: true }) } catch {} }
 
-// ── Test 1: --no-skills → .claude/skills/ 无 sillyspec-*，但 CLAUDE.md 照常注入 ──
+// ── Test 1: --no-skills → .claude/skills/ 无 sillyspec-*，但指令文件照常注入 ──
 console.log('\n=== Test 1: --no-skills 跳过 skills 复制，指令注入不受影响 ===')
 {
   const project = tmpDir('t1'), spec = tmpDir('t1-spec')
@@ -57,7 +57,8 @@ console.log('\n=== Test 1: --no-skills 跳过 skills 复制，指令注入不受
 
   const skills = sillyspecSkillsIn(project)
   assert(skills.length === 0, `--no-skills 后 .claude/skills/ 无 sillyspec-* (got: ${skills.join(', ')})`)
-  assert(existsSync(join(project, 'CLAUDE.md')), 'CLAUDE.md 指令注入不受 --no-skills 影响')
+  assert(existsSync(join(project, 'CLAUDE.md')), 'CLAUDE.md 指针注入不受 --no-skills 影响')
+  assert(existsSync(join(project, 'AGENTS.md')), 'AGENTS.md 完整指引注入不受 --no-skills 影响')
   assert(existsSync(join(spec, '.runtime', 'sillyspec.db')), 'spec 目录照常初始化（DB 落外部 specDir）')
   clean(project, spec)
 }
@@ -72,6 +73,7 @@ console.log('\n=== Test 2: 不带 flag skills 照常复制 ===')
   const skills = sillyspecSkillsIn(project)
   assert(skills.length > 0, `不带 flag 时 .claude/skills/ 含 sillyspec-* skills (${skills.length} 个)`)
   assert(existsSync(join(project, 'CLAUDE.md')), 'CLAUDE.md 照常注入')
+  assert(existsSync(join(project, 'AGENTS.md')), 'AGENTS.md 照常注入')
   clean(project, spec)
 }
 

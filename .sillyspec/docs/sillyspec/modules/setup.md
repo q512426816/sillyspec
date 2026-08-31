@@ -1,12 +1,12 @@
 ---
 author: qinyi
 created_at: 2026-06-01T09:05:00
-updated_at: 2026-08-24T00:40:00+08:00
+updated_at: 2026-08-30T00:00:00+08:00
 ---
 
 # setup
-> 最后更新：2026-08-23
-> 最近变更：2026-08-23-adopt-harness-practices（test_strategy 枚举扩 skip/evidence-auto + 新 live 键 decisions.behind_threshold）/ 2026-08-16-scan-docs-reconcile（config-schema/local-detect 补录归属；migrate.js 归属已划 migration 卡）
+> 最后更新：2026-08-30
+> 最近变更：2026-08-30 AGENTS.md 单源改造（init 指引注入：AGENTS.md 承载完整模板、CLAUDE.md 退化为 @AGENTS.md 指针，codex 与 claude 共用注入器）/ 2026-08-23-adopt-harness-practices（test_strategy 枚举扩 skip/evidence-auto + 新 live 键 decisions.behind_threshold）/ 2026-08-16-scan-docs-reconcile（config-schema/local-detect 补录归属；migrate.js 归属已划 migration 卡）
 > 模块路径：src/init.js, src/setup.js, src/config-schema.js, src/local-detect.js（migrate.js 归 migration 卡）
 
 ## 职责
@@ -16,7 +16,7 @@ updated_at: 2026-08-24T00:40:00+08:00
 
 setup 模块由三个文件组成，分别处理 SillySpec 生命周期的不同阶段：
 
-**init.js** 是项目初始化入口，由 `cmdInit()` 和 `getVersion()` 两个导出函数组成。cmdInit 负责在目标项目中创建 `.sillyspec/` 目录结构，检测用户使用的 AI 工具（claude/cursor/openclaw/codex/gemini/opencode），通过交互式 inquirer 选择工具，复制对应的 skills 和配置文件。getVersion 从 package.json 读取版本号。
+**init.js** 是项目初始化入口，由 `cmdInit()`、`injectAgentsInstructions()`、`injectClaudePointer()` 和 `getVersion()` 组成。cmdInit 负责在目标项目中创建 `.sillyspec/` 目录结构，检测用户使用的 AI 工具（claude/cursor/openclaw/codex/gemini/opencode），通过交互式 inquirer 选择工具，复制对应的 skills 和配置文件。指令注入采用 AGENTS.md 单源方案（2026-08-30）：`injectAgentsInstructions` 为 AGENTS.md 注入完整指引模板（templates/agents-instruction.md，版本感知幂等三态四分支 + codex 老安装 `## SillySpec` 旧段迁移），claude/codex 共用；`injectClaudePointer` 为 Claude Code 写 CLAUDE.md 薄指针（`@AGENTS.md` 导入行）；gemini/opencode 维持各自文件的小段追加（GEMINI.md/INSTRUCTIONS.md）。getVersion 从 package.json 读取版本号。
 
 **setup.js** 负责工具运行时的 MCP（Model Context Protocol）服务器配置和全局工具安装。cmdSetup 函数扫描可用的配置路径（Claude Code、Cursor 等），检测已安装的 MCP 工具，提供交互式安装界面。它管理三类工具：MCP_TOOLS（MCP 服务器）、DB_MCP_TOOLS（数据库相关 MCP）、GLOBAL_TOOLS（全局 CLI 工具）。
 
@@ -34,6 +34,8 @@ setup 模块由三个文件组成，分别处理 SillySpec 生命周期的不同
 |-----------|------|------|
 | `getVersion()` | 从 package.json 读取 SillySpec 版本号 | — |
 | `cmdInit(projectDir, options?)` | 初始化项目 — 创建目录结构、安装 skills | `projectDir, {tools?, subprojects?}` |
+| `injectAgentsInstructions(projectDir)` | AGENTS.md 注入完整指引（版本感知幂等 + 旧段迁移），claude/codex 共用 | `projectDir` |
+| `injectClaudePointer(projectDir)` | CLAUDE.md 写 `@AGENTS.md` 导入指针（薄文件） | `projectDir` |
 
 ### src/setup.js
 | 函数/常量 | 说明 | 参数 |
@@ -47,7 +49,7 @@ setup 模块由三个文件组成，分别处理 SillySpec 生命周期的不同
 
 ## 关键数据流
 
-1. **初始化流**: cmdInit → 检测/选择工具 → 创建 .sillyspec/ 目录 → 复制 skills → 生成配置 → 写入 .gitignore
+1. **初始化流**: cmdInit → 检测/选择工具 → 创建 .sillyspec/ 目录 → 注入指令文件（AGENTS.md 完整指引 + CLAUDE.md 指针 / GEMINI.md / INSTRUCTIONS.md）→ 复制 skills → 生成配置 → 写入 .gitignore
 2. **工具配置流**: cmdSetup → 扫描 MCP_CONFIG_PATHS → 检测已安装工具 → 交互选择 → 写入 MCP 配置文件
 3. **迁移流**: migrateDocs → 读取旧格式文件 → 转换 → 写入新位置
 
