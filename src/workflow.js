@@ -583,6 +583,10 @@ export function saveWorkflowRun(result, options = {}) {
     workflow: result.workflow,
     project: result.project,
     status: result.status,
+    // 坑 archive-batch-31-tool-notes ①：status 按步骤口径而非 workflow 整体口径时
+    // 标注来源（如 step:extract-module-impact——整体 status 因下一步角色恒 fail，见
+    // complete-handlers.js archive 分支注释），排查者据此区分「本步失败」与「口径说明」。
+    ...(result.status_scope ? { status_scope: result.status_scope } : {}),
     spec_version: result.spec_version,
     roles: result.roles,
     workflow_checks: result.workflow_checks,

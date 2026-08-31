@@ -1222,11 +1222,36 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
   }
 
   // 确保步骤已初始化
+  // 坑 archive-batch-31-tool-notes ②（2026-08-30 实证）：漂移重播种（ensureStageSteps 按名
+  // 保留完成态）会改变「当前待完成步骤」的身份——旧表当前步「确认归档」、重播种后首个
+  // pending 变为新插入的中间步骤，带 --confirm 的 --done 被静默记到非预期步骤上（确认
+  // 标志被耗），操作者只见「步骤没完成、提示让补 --confirm」。fail-closed：mutating
+  // 命令（--done/--skip/--wait）在当前步身份变化时中止本次执行（重播种已落盘），指引
+  // 原样重跑——与 complete.js def↔DB 守卫「原样重跑即自愈」同哲学。首播（无旧表）与
+  // 按名保留后当前步不变的重播种不受影响。
+  const _preReseedPending = (progress.stages?.[stageName]?.steps || [])
+    .find(s => s.status === 'pending' || s.status === 'in-progress' || s.status === 'blocked')?.name || null
   const changed = await ensureStageSteps(progress, stageName, cwd, specRoot)
   if (changed && effectiveChange) {
     pm._write(cwd, progress, effectiveChange)
     triggerSync(cwd, effectiveChange, platformOpts)
     progress = pm.read(cwd, effectiveChange) || progress
+  }
+  if (changed && _preReseedPending && (isDone || isSkip || isWait)
+      && !['execute', 'plan', 'scan'].includes(stageName)) {
+    // 仅静态定义阶段（brainstorm/verify/archive/quick…）适用：老表来自旧版 CLI 定义，
+    // 重播种改变当前步身份属版本错位、应当显式中止。execute/plan/scan 的步骤表动态构建
+    //（plan.md Wave / buildPlanSteps / scanProfile 档位），DB↔定义漂移是常态，「重播种后
+    // 继续推进」是设计内自愈流（run-complete-step-validator-rollback 等测试锁住该行为），
+    // 不能中止——其错位防护由 complete.js def↔DB 守卫承担。
+    const _postReseedPending = (progress.stages?.[stageName]?.steps || [])
+      .find(s => s.status === 'pending' || s.status === 'in-progress' || s.status === 'blocked')?.name || null
+    if (_postReseedPending && _postReseedPending !== _preReseedPending) {
+      const _action = isDone ? '--done' : isSkip ? '--skip' : '--wait'
+      console.error(`⚠️ 步骤表漂移重播种后，当前步骤由「${_preReseedPending}」变为「${_postReseedPending}」——本次 ${_action} 未执行，防记到非预期步骤（如 --confirm 被耗在新插入的中间步骤）。`)
+      console.error(`   重播种已落盘，原样重跑同一命令即可按新步骤表推进（原 flags 全部生效）。`)
+      process.exit(1)
+    }
   }
 
   // --file-notes 非末步静默忽略前置 warn（坑 quick-file-notes-nonfinal-ignored，2026-08-22 实证：

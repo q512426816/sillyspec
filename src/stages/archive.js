@@ -177,6 +177,11 @@ created_at: <now-datetime>
 ### 输出
 归档完成 + archive 目录路径`,
       outputHint: '归档确认',
+      // 坑 archive-batch-31-tool-notes ②：完成本步必须带 --confirm（complete-handlers 门控），
+      // 但 outputStep 机器生成的「完成后执行」提示原是通用 --done 模板不带 --confirm——agent
+      // 照抄执行就撞「请添加 --confirm」。requiresConfirm 让提示行带上该 flag（数据驱动，其他
+      // 阶段未来有确认步同样声明即可）。
+      requiresConfirm: true,
       optional: false
     },
     {

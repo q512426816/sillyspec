@@ -868,6 +868,10 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
   const mayNeedWait = WAIT_MARKER_RE.test(stepPrompt) || requiresWait || conditionalWait
 
   console.log(`\n### 完成后执行`)
+  // requiresConfirm 步骤（如 archive「确认归档」）的完成命令必须带 --confirm——坑
+  // archive-batch-31-tool-notes ②：通用 --done 模板不带该 flag，agent 照抄执行撞
+  // 「请添加 --confirm」确认门，误以为参数没带。
+  const confirmFlag = step.requiresConfirm === true ? ' --confirm' : ''
   if (requiresWait) {
     console.log(`本步骤必须等待用户输入，不能直接 --done：`)
     console.log(`sillyspec run ${stageName} --wait --reason "${step.waitReason || '等待用户输入'}" --options "${(step.waitOptions || ['确认']).join(',')}"${changeFlag} --output "你的问题/方案摘要"`)
@@ -882,7 +886,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
     console.log(``)
     console.log(`如果不需要用户决策，正常完成：`)
   }
-  console.log(`sillyspec run ${stageName} --done${changeFlag} --input "用户原始需求/反馈" --output "你的摘要"`)
+  console.log(`sillyspec run ${stageName} --done${confirmFlag}${changeFlag} --input "用户原始需求/反馈" --output "你的摘要"`)
 }
 /**
  * 替换 prompt 文本中的路径根占位符 {SPEC_ROOT}/{DOCS_ROOT}/{PROJECTS_ROOT}/

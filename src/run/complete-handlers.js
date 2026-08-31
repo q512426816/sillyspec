@@ -797,7 +797,17 @@ export async function handleWorkflowPostCheck({ stageName, steps, currentIdx, cw
             console.log(`   └─ ${f.message ?? JSON.stringify(f)}`)
           }
         }
-        const saved = saveWorkflowRun(result, {
+        const saved = saveWorkflowRun(
+          // 坑 archive-batch-31-tool-notes ①（2026-08-30 实证）：archive-impact workflow 的
+          // 整体 status 含下一步 doc-syncer 角色（sync-module-docs 步才执行，本步恒 fail）——
+          // 按整体 status 命名会把本步已通过的产物误标 -fail.json（与「✅ module-impact.md
+          // 检查通过」矛盾，存量 75 个实证）。落盘记录按本步最终校验（impact-analyzer）定
+          // status/文件名；doc-syncer 的角色明细保留在 roles/failures 字段（另记字段不丢信息），
+          // status_scope 标注口径。impact-analyzer 角色缺失时维持整体 status（行为不变）。
+          impactResult && impactResult.status !== result.status
+            ? { ...result, status: impactResult.status, status_scope: 'step:extract-module-impact' }
+            : result,
+          {
           cwd,
           source: 'run.js',
           stage: 'archive',
