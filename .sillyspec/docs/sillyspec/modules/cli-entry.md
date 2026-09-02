@@ -4,7 +4,7 @@ doc_type: module-card
 module_id: cli-entry
 author: qinyi
 created_at: 2026-06-03T07:42:00+08:00
-updated_at: 2026-08-19T15:30:00+08:00
+updated_at: 2026-09-02T17:05:00+08:00
 ---
 # cli-entry
 
@@ -75,6 +75,7 @@ runStage(pm, progress, stageName, cwd, changeName)
 - ql-20260816-008-c809 | auto 顶层别名补 `case 'auto':` 路由（index.js 别名组，runCommand 已支持 auto 模式）——原 usage/topCommands 列了 auto 但 switch 无 case，`sillyspec auto` 报未知命令且 did-you-mean 自指（self-audit-2026-08-16 C14）。
 - 2026-08-18-platform-map-auto-anchors | docs check 子命令增 --fix/--dry-run flag（BARE_FLAGS 白名单 + fixActive + applyFixes 写回 + fixReport；未知 flag exit 2 语义不变；无新 flag 时与旧版逐字节一致）。写回逻辑在 docs-consistency 模块（src/docs-check.js），本模块只记路由层。
 - 2026-08-16-state-machine-fail-open | 状态机 fail-open 组修复（self-audit 批次②）：--done 补 checkTransition 转换守卫（含 fromStageData，D-004@v1）；status/doctor 只读短路（READONLY_AUXILIARY_STAGES，D-005@v2，不 initChange/不 seed steps/不刷 lastActive）；auxiliary 不写 currentStage（stage.js，D-003@v1）；gate 失败消费侧 `stageCompleted===false` → process.exitCode=1（D-002@v2，覆盖 rollback + scan 非平台 post-check）；brainstorm auto-create 按活跃变更数 gating（D-006@v1）；回归测试 state-machine-guards.test.mjs 29 断言。配套 docs/sillyspec/platform-interface-map.md 锚点行号重校。
+- 2026-09-02 P1-1（跨 agent 工单） | resolveEffectiveDir 补第四层 worktree 主仓锚定：cwd 无 .sillyspec 且 git root 也无（.sillyspec gitignore 仓的 linked worktree 场景）时，按 detectIsolation 同源判据（--git-dir ≠ --git-common-dir 且非 submodule）解析 common-dir 父目录主仓根，主仓有 .sillyspec → 锚定 + warn 返回主仓（治 quick 新会话在 worktree 内分裂进度库——run 链路 D-03 守卫只覆盖「有副本」、quick drift 守卫只覆盖「有 guard」，均拦不住新会话）；主仓无 .sillyspec / 非 worktree / submodule → 行为不变。新增 test/worktree-auto-anchor.test.mjs（4 场景 11 断言，真实 git worktree fixture）；platform-interface-map.md 8 处行号平移重校。
 
 ## 人工备注
 <!-- MANUAL_NOTES_START -->

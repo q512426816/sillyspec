@@ -8,7 +8,7 @@
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'fs';
 import { writeAtomicSync } from './fs-atomic.js';
-import { basename, extname, join, resolve, isAbsolute } from 'path';
+import { basename, dirname, extname, join, resolve, isAbsolute } from 'path';
 import { safeGit, git } from './git-helper.js';
 import { getVersion } from './version.js';
 
@@ -267,6 +267,25 @@ async function main() {
     // QUAL-01 收口：原 execSync 字符串拼接（经 shell）→ git-helper 数组形式
     const r = safeGit(baseDir, ['rev-parse', '--show-toplevel'])
     if (r.value && existsSync(join(r.value, '.sillyspec'))) return r.value
+    // P1-1 第四层锚定（2026-09-02 跨 agent 工单）：.sillyspec 被 gitignore 的仓，linked worktree
+    // 内无 .sillyspec 副本 → 上面两级全 miss，返回 baseDir 会在 worktree 里新建分裂进度库
+    // （run 链路的 D-03 守卫只覆盖「有副本」场景、quick drift 守卫只覆盖「已有 session guard」
+    // 场景，均拦不住新会话）。判据与 worktree.js detectIsolation/_resolveMainRepoRoot 同源：
+    // --git-dir ≠ --git-common-dir 且非 submodule = linked worktree → common-dir 父目录即主仓根。
+    const gd = safeGit(baseDir, ['rev-parse', '--git-dir'])
+    const gcd = safeGit(baseDir, ['rev-parse', '--git-common-dir'])
+    const superProj = safeGit(baseDir, ['rev-parse', '--show-superproject-working-tree'])
+    if (gd.value && gcd.value && gd.value !== gcd.value && !superProj.value) {
+      // common-dir 可能是相对路径，须相对 baseDir 绝对化（与 worktree.js _resolveMainRepoRoot 同坑同解）
+      const absCommonDir = resolve(baseDir, gcd.value)
+      if (existsSync(absCommonDir)) {
+        const mainRoot = dirname(absCommonDir)
+        if (mainRoot !== baseDir && existsSync(join(mainRoot, '.sillyspec'))) {
+          console.warn(`⚠️ cwd 位于 linked worktree，进度库已自动锚定主仓：${mainRoot}（治 worktree 分裂进度库，P1-1）。如确要在 worktree 内独立建进度库，请显式 --spec-dir。`)
+          return mainRoot
+        }
+      }
+    }
     return baseDir
   }
 

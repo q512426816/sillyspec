@@ -121,3 +121,16 @@
 根因：CLAUDE.md 规则 8「触及 src/test 先跑 test+lint」全靠 agent 自律，跳过无痕迹无阻断；verify 阶段已有 runVerifyTestCheck/runVerifyLintCheck 实测引擎而 quick 收尾路径无同款门禁
 方案：quick-audit.js 新增 runQuickTestLintGate（动态 import verify-postcheck 复用实测引擎；env 逃生门/空清单/doc-only 跳过、触及 src/test 才实测、未配置命令降级不阻断）+ printQuickTestLintGate；complete-handlers.js 边界审计后接线，fail 回 pending+exit 1；config-schema readers 登记；新增 test/quick-test-gate.test.mjs 21 断言；修 platform-interface-map 行号漂移；runtime.md 同步；本仓 local.yaml 补 commands 启用自监管
 结果：quick-test-gate 21/0；全量 npm test 339/0；lint 449 文件 0 告警；doc-ref-check 84 引用全过；本次 --done 已被门禁实测通过（dogfood 自证）
+
+## ql-20260902-004-0661 | 2026-09-02 17:04:35 | resolveEffectiveDir worktree 主仓自动锚定（治 quick 新会话分裂进度库
+状态：已完成
+关联变更：（无）
+文件：
+- src/index.js（resolveEffectiveDir 第四层锚定 + dirname import）
+- test/worktree-auto-anchor.test.mjs（新增 4 场景 11 断言）
+- docs/sillyspec/platform-interface-map.md（修复 8 处 index.js 行号漂移）
+- .sillyspec/docs/sillyspec/modules/cli-entry.md（变更索引 + updated_at）
+需求：resolveEffectiveDir worktree 主仓自动锚定（治 quick 新会话分裂进度库，P1-1）
+根因：resolveEffectiveDir 两级解析在 linked worktree 内全 miss（toplevel 返回 worktree 自身、.sillyspec gitignore 无副本）→ 返回 worktree cwd 新建分裂库；既有 D-03 守卫只覆盖有副本、quick drift 守卫只覆盖有 guard，新会话两者均拦不住
+方案：补第四层：detectIsolation 同源判据（git-dir≠common-dir 且非 submodule）→ common-dir 绝对化取父目录主仓根 → 有 .sillyspec 则 warn+锚定，否则行为不变；优于 --root 显式参数（零参数零习惯成本覆盖全部命令入口）；新增 worktree-auto-anchor.test.mjs 11 断言（真实 git worktree fixture）；修复 platform-interface-map 8 处行号漂移；同步 cli-entry.md
+结果：worktree-auto-anchor 11/0；全量 npm test 340/0；lint 450 文件 0 告警；doc-ref-check 84 引用全过
