@@ -233,6 +233,64 @@ export class StageMachine {
     console.log('');
   }
 
+  /**
+   * 只读全局总览数据（show 多变更汇总视图的机器版，2026-09-02 跨 agent 单一状态源）。
+   * 列出全部活跃变更：各自当前阶段 / 各阶段步骤计数 / ghost（目录缺失残留）/ stall 信号。
+   * 纯数据零 console——machine-interface.runStatusOverview 包装 envelope（`sillyspec progress show --json`）。
+   *
+   * 与 dump（§6.2 单变更视角）语义互补：dump 取最近活跃一个供 daemon 轮询「当前工作流状态」；
+   * overview 列出全部活跃，供 SillyHub 面板 / 跨 agent 看「谁在动哪些变更」（多活跃是变更隔离常态）。
+   * 字段 snake_case + last_active ISO 规范化（_dumpIso），与 dump 契约风格对齐（backend pydantic 消费）。
+   *
+   * @param {string} cwd - 项目根目录（show 同参语义，非 specDir）
+   * @returns {{project: string|null, active_changes: number, changes: Array<object>}}
+   */
+  overview(cwd) {
+    const changes = this.pm.listChanges(cwd);
+    const changesRoot = join(this.pm._getSpecDir(cwd), 'changes');
+    const list = [];
+    for (const cn of changes) {
+      const data = this.pm.read(cwd, cn);
+      const dirMissing = !existsSync(join(changesRoot, cn));
+      const entry = {
+        name: cn,
+        readable: !!data,
+        ghost: dirMissing,
+        current_stage: data?.currentStage || null,
+        stage_label: data ? (STAGE_LABELS[data.currentStage] || data.currentStage || null) : null,
+        last_active: this.pm._dumpIso(data?.lastActive) || null,
+      };
+      if (data) {
+        // 各阶段状态 + 步骤计数（面板进度条数据源）；总计另出顶层 steps 汇总
+        let stepsTotal = 0, stepsCompleted = 0;
+        const stages = {};
+        for (const st of VALID_STAGES) {
+          const sd = data.stages?.[st];
+          if (!sd) continue;
+          const steps = Array.isArray(sd.steps) ? sd.steps : [];
+          const completed = steps.filter(s => s.status === 'completed').length;
+          stages[st] = { status: sd.status || 'pending', steps_total: steps.length, steps_completed: completed };
+          stepsTotal += steps.length;
+          stepsCompleted += completed;
+        }
+        entry.stages = stages;
+        entry.steps = { total: stepsTotal, completed: stepsCompleted };
+        // 滞留/疑似完成信号（与 show 汇总同源 _stallSignal，纯数据不带渲染建议文案）
+        const stall = this._stallSignal(cwd, data, cn);
+        if (stall) {
+          entry.stall = { kind: stall.kind, days: this._daysSince(data.lastActive), text: stall.text };
+        }
+      }
+      list.push(entry);
+    }
+    const global = this.pm.readGlobal(cwd);
+    return {
+      project: global?.project || basename(cwd) || null,
+      active_changes: changes.length,
+      changes: list,
+    };
+  }
+
   _showChange(cwd, changeName) {
     const data = this.pm.read(cwd, changeName);
     if (!data) {

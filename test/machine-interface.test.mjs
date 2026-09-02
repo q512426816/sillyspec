@@ -659,6 +659,82 @@ console.log('\n--- 9. --spec-dir 透传 specBase（derive verify-test 读对 loc
 }
 
 // ─────────────────────────────────────────
+// 10. runStatusOverview：全局状态总览（progress show --json，单一状态源 2026-09-02）
+// ─────────────────────────────────────────
+console.log('--- 10. runStatusOverview（progress show --json）---')
+{
+  const { runStatusOverview } = await import('../src/machine-interface.js')
+  const binPath = join(worktreeRoot, 'bin', 'sillyspec.js')
+
+  // 10a. DB 不存在 → fail-closed exit 2，不建库（只读契约同 gate）
+  {
+    const proj = makeTmpDir('mi-ov-nodb-')
+    const specBase = join(proj, '.sillyspec')
+    mkdirSync(specBase, { recursive: true })
+    const { envelope, exitCode } = runStatusOverview({ cwd: proj })
+    assert(exitCode === EXIT_UNKNOWN, `DB 不存在 → exit 2（实际 ${exitCode}）`)
+    assert(envelope.ok === false && envelope.errors.length > 0, 'DB 不存在 → ok=false + errors 非空')
+    assert(!existsSync(join(specBase, '.runtime', 'sillyspec.db')), 'DB 不存在时不建库（只读契约）')
+  }
+
+  // 10b. 有活跃变更 → exit 0，envelope 含变更明细（stage/steps/ghost/stall 字段契约）
+  {
+    const { cwd, specBase, changeName } = await makeProjectFixture({ changeName: 'c1' })
+    const { envelope, exitCode } = runStatusOverview({ cwd, specBase })
+    assert(exitCode === EXIT_OK, `有活跃变更 → exit 0（实际 ${exitCode}）`)
+    assert(envelope.ok === true, 'ok=true')
+    assert(envelope.command === 'progress show', 'command=progress show')
+    assert(envelope.data && envelope.data.active_changes === 1, `active_changes=1（实际 ${envelope.data && envelope.data.active_changes}）`)
+    const c = envelope.data.changes[0]
+    assert(c && c.name === changeName, `changes[0].name=${changeName}`)
+    assert(c.ghost === false, '正常 fixture → ghost=false')
+    assert(c.readable === true, 'readable=true')
+    assert(typeof c.current_stage === 'string' || c.current_stage === null, 'current_stage 字段存在')
+    assert(c.stages && typeof c.stages === 'object', 'stages 汇总对象存在')
+    assert(c.steps && typeof c.steps.total === 'number' && typeof c.steps.completed === 'number', 'steps {total,completed} 数值汇总')
+  }
+
+  // 10c. ghost 变更（DB 有记录、目录缺失）→ ghost=true + warnings 透出
+  {
+    const { cwd, specBase, changeName } = await makeProjectFixture({ changeName: 'c-ghost' })
+    rmSync(join(specBase, 'changes', changeName), { recursive: true, force: true })
+    const { envelope, exitCode } = runStatusOverview({ cwd, specBase })
+    assert(exitCode === EXIT_OK, 'ghost 存在仍 exit 0（总览成功，ghost 是待清理事实非阻断）')
+    const c = envelope.data.changes.find(x => x.name === changeName)
+    assert(c && c.ghost === true, '目录缺失 → ghost=true')
+    assert(envelope.warnings.length === 1 && envelope.warnings[0].includes(changeName), 'ghost 升 warnings（含变更名）')
+  }
+
+  // 10d. 只读性：调用前后 DB project/changes 行不变（D-002 同源验证）
+  {
+    const { cwd, specBase, dbPath } = await makeProjectFixture({ changeName: 'c-ro' })
+    const before = readFileSync(dbPath)
+    runStatusOverview({ cwd, specBase })
+    const after = readFileSync(dbPath)
+    assert(before.equals(after), '总览调用前后 DB 文件字节不变（只读契约）')
+  }
+
+  // 10e. CLI 端到端：progress show --json stdout 纯 JSON 可解析（含 ghost 变更）
+  {
+    const { cwd, specBase } = await makeProjectFixture({ changeName: 'c-cli' })
+    let stdout, status
+    try {
+      stdout = execFileSync('node', [binPath, 'progress', 'show', '--json', '--dir', cwd],
+        { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+      status = 0
+    } catch (e) {
+      stdout = e.stdout ? e.stdout.toString() : ''
+      status = e.status ?? 1
+    }
+    let env
+    try { env = JSON.parse(stdout) } catch { env = null }
+    assert(env !== null, `CLI stdout 可 JSON.parse（实际 ${stdout.slice(0, 120)}）`)
+    assert(status === 0, `CLI 退出码 0（实际 ${status}）`)
+    assert(env && env.ok === true && env.data && Array.isArray(env.data.changes), 'CLI envelope.data.changes 数组')
+  }
+}
+
+// ─────────────────────────────────────────
 // 清理 & 汇总
 // ─────────────────────────────────────────
 for (const dir of tmpRoots) {

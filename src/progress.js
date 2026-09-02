@@ -966,6 +966,9 @@ export class ProgressManager {
 
   show(cwd, changeName = null) { return this._stageMachine.show(cwd, changeName); }
 
+  // 只读全局总览（show 多变更汇总的机器版，2026-09-02 单一状态源）：纯数据，machine-interface 包装
+  overview(cwd) { return this._stageMachine.overview(cwd); }
+
   _showChange(cwd, changeName) { return this._stageMachine._showChange(cwd, changeName); }
 
   _getNextSuggestion(data) { return this._stageMachine._getNextSuggestion(data); }

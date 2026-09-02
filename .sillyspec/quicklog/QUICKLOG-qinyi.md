@@ -77,3 +77,31 @@
 根因：拦截判定只在 --done 审计时执行（auditQuickCompletion 危险门），起步时的 --files 解析处无同口径预判——step1 prompt 只有通用文案（预判要改核心文件请带 --force-baseline），不点名本次声明里的具体命中文件
 方案：危险清单提升为模块级单一真相源（审计门与预告共用），新增 predictProtectedQuickFiles 纯函数（.sillyspec/ 非元数据非关联目录 + 危险清单，forceBaseline 已带则无预告），接线 quick 起步与恢复追加两处——预告明示「--files 只声明归属不解锁拦截」与 --force-baseline 出路
 结果：npm test 326 文件 0 失败（新增 10 断言）+ lint + docs gate 全绿（1 处行号漂移 --fix 重锚）；e2e 验证 step1 输出点名 scan 文件并给出口。子目录锚定（瑕疵②）为正面实证无需改动
+
+## ql-20260831-001-ad9d | 2026-08-31 11:55:50 | verify 捕获块内容行误判失败行（744→41）+ endpoints 挂载前缀假 missing（探针5 对齐）+ troubleshooting 46/…
+状态：已完成
+关联变更：（无）
+文件：src/verify-postcheck.js, src/endpoint-extractor.js, src/contract-matrix.js, src/verify-probes.js, test/verify-postcheck-known-failures.test.mjs, test/contract-artifacts.test.mjs, test/probe5-mount-prefix.test.mjs, docs/sillyspec/troubleshooting.md
+需求：verify 捕获块内容行误判失败行（744→41）+ endpoints 挂载前缀假 missing（探针5 对齐）+ troubleshooting 46/47
+根因：坑45 修复只剔 vitest 捕获横幅行本身，横幅下方内容行（挂通过用例的结构化日志）无跨行状态仍被逐行子串匹配——v3.27.12 实证升级治不了；挂载点前缀（main.py include_router/app.use）与 router 文件分离，静态提取系统性欠前缀
+方案：partitionFailures 改单遍捕获块状态机（横幅开块/报表行结束/空行不结束/块内全剔，×FAIL 报表行恒检出 fail-safe 不变）；endpoint-extractor 新增 extractMountPrefixes/scanMountPrefixes，diffApiParity 增 mountPrefixes 前缀对齐（原始路径恒首位、最长优先），verifyApiParity/探针5/contract scan 接线并在 summary/报告披露对齐数；troubleshooting.md 补 46/47 条（根因/修复/使用方注意含 local.yaml 33→15 收缩指引）
+结果：全量 npm test exit 0（4759 PASS，含新增 3 测试文件 15 断言组）+ lint 通过（446 文件 0 未引用导出）；daemon 全量 9681 行实跑对比：旧 744 失败行 → 新 41（全为真实 Windows 既有失败详情），multi-agent-platform local.yaml 豁免收缩清单 15 条实证写入注释；探针5 端到端用例（对齐/真缺失/全路径仓/渲染披露）全绿
+
+## ql-20260902-001-8f3a | 2026-09-02 09:05:00 | 用户实证三负面反馈工具化——conditionalWait 步骤 --continue 假完成（--done 落错步）/ pytest warnings summary 误判失败行（真实守卫失败被淹没）/ per-task review 与统一 commit 模式冲突
+状态：已完成
+关联变更：（无）
+文件：src/run/complete.js, src/verify-postcheck.js, src/task-review.js, src/stages/execute.js, src/index.js, test/plan-continue-conditional-wait.test.mjs, test/verify-postcheck-known-failures.test.mjs, test/task-review-diffpaths.test.mjs, test/contract-artifacts.test.mjs, docs/sillyspec/troubleshooting.md, docs/sillyspec/prompt-control-debt.md, docs/sillyspec/finished/self-audit-2026-08-07.md
+需求：修复 2026-09-01-session-group-chat dogfood 三个负面反馈：①--continue 后 --done 把后续步骤回填 completed（step 4 生成 TaskCard 假完成，需 --reopen 重做浪费一轮）；②verify 实测 PER_TEST_FAIL_RE 把 DeprecationWarning 块当失败行，真实失败（1 个守卫测试）被噪音淹没需人工分模块定位；③per-task review 要求 base..head diff 与主代理统一 commit 模式天然冲突，只能靠 changedFiles 归属说明
+根因：①waitStep 提示对 requiresWait/conditionalWait 同文承诺「--continue 后回待执行」，但 continueStep 的 shouldReturnToCurrentStep 谓词漏了 conditionalWait——审查计划被 --answer 直接收尾，agent 备好的 --done 落到下一步（user-inputs.md 实证 --continue 后 2 秒假完成，plan rev1 --reopen 重做）；②pytest warnings summary 归因行路径含 exception 子串（starlette _exception_handler.py 全家桶标配）命中 /exception/i，坑 45/46 的 vitest 捕获块状态机管不到 pytest 形态；③review 证据校验只认整区间 diff，schema 无「路径限定切片」字段，统一 commit 下 10 个 task 共用同一对 base..head 任务边界不可机器验证
+方案：①shouldReturnToCurrentStep 并入 conditionalWait（对齐提示语义；受影响=plan/审查计划、brainstorm/Design Grill、scan 两步，均「答案后完成动作再 --done」语义；--done --answer 一步式不受影响）；②partitionFailures 两层剔——warnings summary 区段头→下一 pytest 区段头整段剔 + 行级兜底（归因/分组/Node 警告行+同上下文 id/源码展示行，兼容 … 截断前缀），真实失败信号（E 行/AssertionError 归因/short summary FAILED）恒保留 fail-safe 不变；③review.json 新增可选 diffPaths（=task 卡 allowed_paths）——evidence 的 emptyDiff/交叉比对收窄到 git diff base..head -- diffPaths 切片，adopt/草稿自动代填（仅有归属切片时带），execute 契约补「base/head 两种取法」段
+结果：全量 npm test 338 文件 0 失败（新增 3 测试文件：plan-continue 14 断言 / diffpaths 21 断言 / known-failures 新增 3 用例组）+ lint 通过（448 文件 0 未引用导出）+ docs gate 0 失效（--fix 重锚 13 处，含 WIP 遗留 2 处）；实测 agent 模块截断 tail 2 行（1 假 1 真）→ 1 行真实 FAILED；顺手修 WIP 遗留 flaky：contract-artifacts scanMountPrefixes 用例共享 tmpDir 并发踩踏改独立目录；troubleshooting.md 补 48/49/50 条
+
+## ql-20260902-002-7f5f | 2026-09-02 11:07:00 | progress show --json 全局状态总览出口（跨 agent 单一状态源 P0-1）
+状态：已完成
+关联变更：（无）
+文件：src/machine-interface.js, src/progress.js, src/index.js
+需求：progress show --json 全局状态总览出口（跨 agent 单一状态源 P0-1）
+根因：SillyHub 面板与跨 agent 需要机器可读全局状态；现状 gate/derive 仅单变更粒度、dump 是单变更视角（daemon 轮询），多变更总览无 JSON 出口，两套账本导致并发互不知情
+方案：StageMachine 新增 overview(cwd) 只读纯数据方法（与 show 汇总同源），facade 转出；machine-interface 新增 runStatusOverview 封装 envelope（DB 不存在 fail-closed exit 2、ghost 升 warnings）；index.js progress show --json 接线 + help 文案；machine-interface.test.mjs 组10 十五断言；修复 platform-interface-map.md 8 处行号漂移；同步 machine-interface/progress 模块卡。--force-baseline 理由：progress.js/stage-machine.js 属受保护核心文件，本次为只读方法新增（overview 不写 DB），全量测试 338/0 验证通过
+结果：machine-interface.test.mjs 121/0（新增 15 断言全过）；全量 npm test 338/0；npm run lint 448 文件 0 告警；doc-ref-check 84 引用全过；真实仓 progress show --json 正确输出 4 活跃变更含 ghost/stall
+审计：⚖️ 归属切分：3 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：docs/sillyspec/platform-interface-map.md, src/progress/stage-machine.js, test/machine-interface.test.mjs

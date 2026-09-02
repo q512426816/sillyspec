@@ -541,3 +541,62 @@ export async function runDerive(facet, changeName, { cwd, specBase, runtimeRoot,
     return { envelope, exitCode: EXIT_UNKNOWN };
   }
 }
+
+// ============ 全局状态总览（单一状态源，2026-09-02 跨 agent 协作改进 P0-1）============
+
+/**
+ * 全局状态总览：全部活跃变更列表 + 各自阶段/步骤进度 + ghost/stall 标记。
+ *
+ * 与 gate/derive（单变更粒度）和 progress dump（单变更视角、daemon 轮询）互补——
+ * 本命令回答「这个项目现在有谁在动哪些变更」，供 SillyHub 面板 / 跨 agent 消费
+ * （`sillyspec progress show --json`）。
+ *
+ * 只读契约（同 runGate D-002@v1）：仅 ProgressManager 读路径，不写 sillyspec.db；
+ * DB 不存在 → fail-closed 返回 exit 2（项目未初始化，无从总览），不建库。
+ * 数据组装单点在 StageMachine.overview（与 show 汇总视图同源 listChanges/_stallSignal），
+ * 本函数只做 envelope 封装——沿「只聚合不新增校验」的模块定位。
+ *
+ * @param {object} opts
+ * @param {string} opts.cwd - 项目根目录
+ * @param {string} [opts.specBase] - .sillyspec（或平台 specRoot）目录；默认 resolveSpecDir(cwd)
+ * @returns {{ envelope: object, exitCode: number }} exitCode：0 总览成功（含空列表）/ 2 无法核验
+ */
+export function runStatusOverview({ cwd, specBase } = {}) {
+  const specRoot = specBase || resolveSpecDir(cwd);
+
+  try {
+    const dbPath = join(specRoot, '.runtime', 'sillyspec.db');
+    if (!existsSync(dbPath)) {
+      const envelope = buildEnvelope({
+        command: 'progress show',
+        ok: false,
+        errors: [`无法核验：进度库不存在（${dbPath}）——项目尚未初始化进度，只读总览不会为其建库`],
+      });
+      return { envelope, exitCode: EXIT_UNKNOWN };
+    }
+
+    const pm = new ProgressManager({ specDir: specRoot });
+    const data = pm.overview(cwd);
+
+    // ghost（目录缺失残留记录）升 warnings：不阻断 ok（总览本身是成功的，ghost 是待清理事实）
+    const warnings = data.changes
+      .filter(c => c.ghost)
+      .map(c => `${c.name}: 目录缺失（残留记录，sillyspec doctor --cleanup-ghosts --confirm 可归档清理）`);
+
+    const envelope = buildEnvelope({
+      command: 'progress show',
+      ok: true,
+      warnings,
+      data,
+    });
+    return { envelope, exitCode: EXIT_OK };
+  } catch (e) {
+    // 内部异常兜底（同 runDerive）：stdout 永远合法 JSON，exit 2
+    const envelope = buildEnvelope({
+      command: 'progress show',
+      ok: false,
+      errors: [`internal: ${e.message}`],
+    });
+    return { envelope, exitCode: EXIT_UNKNOWN };
+  }
+}

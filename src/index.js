@@ -151,6 +151,7 @@ SillySpec CLI — 规范驱动开发工具包
   sillyspec run plan --reopen --from-step 2          # 修订 plan，从第 2 步重做
   sillyspec run quick --non-interactive --done --output "CI 内的快修"  # 脚本/CI
   sillyspec progress show
+  sillyspec progress show --json        # 全局总览 envelope（面板/脚本消费）
   sillyspec worktree apply 2026-07-03-add-login
 `);
 }
@@ -306,9 +307,20 @@ async function main() {
           pm.init(progDir);
           break;
         case 'status':
-        case 'show':
+        case 'show': {
+          // --json：全局总览 envelope（machine-interface，2026-09-02 单一状态源）——多变更
+          // 列表 + 进度/ghost/stall 标记，供 SillyHub 面板 / 跨 agent 程序化消费（与 dump 的
+          // 单变更视角互补）。overview 是纯数据方法不发 console，stdout 直接留 JSON，无需劫持。
+          if (json) {
+            const { runStatusOverview } = await import('./machine-interface.js');
+            const { envelope, exitCode } = runStatusOverview({ cwd: progDir, specBase: resolvePlatformSpecDir(dir, specDir) });
+            console.log(JSON.stringify(envelope));
+            process.exitCode = exitCode;
+            break;
+          }
           pm.show(progDir, progChangeName);
           break;
+        }
         case 'check': {
           const result = pm.checkConsistency(progDir, progChangeName);
           // checkConsistency 只返回 {ok, issues, warnings}，不打印——必须在此输出，
@@ -418,7 +430,7 @@ async function main() {
           break;
         }
         default:
-          console.log('用法: sillyspec progress <init|show|validate|reset|set-stage|add-step|update-step|complete-stage|dump>');
+          console.log('用法: sillyspec progress <init|show|validate|reset|set-stage|add-step|update-step|complete-stage|dump>\n  show 支持 --json：全局总览 envelope（活跃变更列表 + 进度 + ghost/stall，面板/脚本消费）');
           process.exit(2);
       }
       break;
@@ -539,14 +551,14 @@ async function main() {
       // 缺失草稿，独立可随时跑（不必再 execute --done）。缺数据（无 tasks/ 目录 / 改动未 commit / 无 worktree meta）
       // 时 generateTaskReviewDrafts 提前返回 reason，如实打印不报错。
       // --adopt（2026-08-21 agent-手工产出审计项①）：已存在 review.json 的 mechanics 字段
-      // （schemaVersion/task/base/head/changedFiles/repo）一键重算代填，agent/子代理只写
+      // （schemaVersion/task/base/head/changedFiles/diffPaths/repo）一键重算代填，agent/子代理只写
       // verdict——手算 hash、手抄 diff 清单是纯错误面，gate 校验的恰是这些字段。与草稿互补：
       // 草稿补「缺失」，adopt 修「已存在但 mechanics 错/缺」，verdict 原样保留。
       const brChangeIdx = args.indexOf('--change');
       const brChange = brChangeIdx >= 0 && args[brChangeIdx + 1] ? args[brChangeIdx + 1] : null;
       const brAdopt = args.includes('--adopt');
       if (!brChange) {
-        console.error('用法: sillyspec backfill-reviews --change <name> [--adopt] [--json] [--spec-dir <path>]\n  缺失 review.json → 生成 cannot_verify 草稿（解 archive 客观完成度阻断）\n  --adopt → 已存在 review.json 的 base/head/changedFiles 等 mechanics 字段一键重算代填（verdict 保留）');
+        console.error('用法: sillyspec backfill-reviews --change <name> [--adopt] [--json] [--spec-dir <path>]\n  缺失 review.json → 生成 cannot_verify 草稿（解 archive 客观完成度阻断）\n  --adopt → 已存在 review.json 的 base/head/changedFiles/diffPaths 等 mechanics 字段一键重算代填（verdict 保留；统一 commit 模式 diffPaths=task 卡 allowed_paths）');
         process.exit(2);
       }
       // 与 run 入口同源消毒（防路径穿越；backfill 下游拼 marker/changes/review 路径）
