@@ -732,6 +732,30 @@ console.log('--- 10. runStatusOverview（progress show --json）---')
     assert(status === 0, `CLI 退出码 0（实际 ${status}）`)
     assert(env && env.ok === true && env.data && Array.isArray(env.data.changes), 'CLI envelope.data.changes 数组')
   }
+
+  // 10f. P2-2-①：未决同步冲突透出（pending_conflicts + warnings 升条）
+  {
+    const { cwd, specBase, changeName } = await makeProjectFixture({ changeName: 'c-cf' })
+    // 造两类冲突文件（progress + spec-tree），字段与 sync.js listConflictFiles 对齐
+    mkdirSync(join(specBase, '.runtime'), { recursive: true })
+    writeFileSync(join(specBase, '.runtime', `sync-conflict-${changeName}.json`),
+      JSON.stringify({ change: changeName, created_at: '2026-09-02T10:00:00Z' }))
+    writeFileSync(join(specBase, '.runtime', `spec-sync-conflict-${changeName}.json`),
+      JSON.stringify({ change: changeName }))
+    const { envelope, exitCode } = runStatusOverview({ cwd, specBase })
+    assert(exitCode === EXIT_OK, '有冲突仍 exit 0（总览成功，冲突是待处理事实非阻断）')
+    assert(Array.isArray(envelope.data.pending_conflicts) && envelope.data.pending_conflicts.length === 2,
+      `pending_conflicts 含 2 条（实际 ${JSON.stringify(envelope.data.pending_conflicts)}）`)
+    const types = envelope.data.pending_conflicts.map(c => c.type).sort()
+    assert(JSON.stringify(types) === JSON.stringify(['progress', 'spec-tree']), `type 字段区分两类冲突（实际 ${types}）`)
+    assert(envelope.warnings.some(w => w.includes(changeName) && w.includes('未决同步冲突')),
+      '冲突升 warnings（含变更名，面板看顶层即知）')
+    // 损坏文件容错：写一个坏 JSON → 按文件名兜底不崩
+    writeFileSync(join(specBase, '.runtime', 'sync-conflict-broken.json'), '{oops')
+    const again = runStatusOverview({ cwd, specBase })
+    assert(again.exitCode === EXIT_OK && again.envelope.data.pending_conflicts.some(c => c.change === 'broken'),
+      '损坏冲突文件按文件名兜底（不崩、change=broken）')
+  }
 }
 
 // ─────────────────────────────────────────

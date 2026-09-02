@@ -134,3 +134,20 @@
 根因：resolveEffectiveDir 两级解析在 linked worktree 内全 miss（toplevel 返回 worktree 自身、.sillyspec gitignore 无副本）→ 返回 worktree cwd 新建分裂库；既有 D-03 守卫只覆盖有副本、quick drift 守卫只覆盖有 guard，新会话两者均拦不住
 方案：补第四层：detectIsolation 同源判据（git-dir≠common-dir 且非 submodule）→ common-dir 绝对化取父目录主仓根 → 有 .sillyspec 则 warn+锚定，否则行为不变；优于 --root 显式参数（零参数零习惯成本覆盖全部命令入口）；新增 worktree-auto-anchor.test.mjs 11 断言（真实 git worktree fixture）；修复 platform-interface-map 8 处行号漂移；同步 cli-entry.md
 结果：worktree-auto-anchor 11/0；全量 npm test 340/0；lint 450 文件 0 告警；doc-ref-check 84 引用全过
+
+## ql-20260902-005-3298 | 2026-09-02 18:31:07 | P2-2：sync-conflict 标红透出 + doctor file-lifecycle 文档欠账自动检查
+状态：已完成
+关联变更：（无）
+文件：
+- src/progress/stage-machine.js（overview pending_conflicts + _listPendingConflicts + show 标红）
+- src/machine-interface.js（冲突升 warnings）
+- src/doctor-diagnostics.js（D8 lifecycle_doc_staleness 维度）
+- test/machine-interface.test.mjs（组10f 5 断言）
+- test/doctor-lifecycle-doc.test.mjs（新增 5 场景 10 断言）
+- .sillyspec/docs/sillyspec/modules/core-engine.md（D8 设计决策）
+- .sillyspec/docs/sillyspec/modules/progress.md（overview 冲突透出）
+- .sillyspec/docs/sillyspec/modules/machine-interface.md（pending_conflicts 契约）
+需求：P2-2：sync-conflict 标红透出 + doctor file-lifecycle 文档欠账自动检查
+根因：① 未决同步冲突只 platform status 可见，progress 总览/JSON 均不透出，agent 撞上才发现（冲突可见性缺口）；② CLAUDE.md file-lifecycle 检查清单是人工 checklist，docs-debt 只算模块卡、file-lifecycle.md 本身无 staleness 检查
+方案：① overview 加 pending_conflicts（_listPendingConflicts fs-only 同源扫描）+ show 变更级 🔴 标红 + runStatusOverview 冲突升 warnings；② doctor 新增 D8 lifecycle_doc_staleness：git %ct 比较文档 vs 六个生命周期敏感路径，落后 WARNING + safe_action，降级语义不误报；测试 +15 断言（含 Windows env 踩坑修复）；同步 core-engine/progress/machine-interface 三张模块卡
+结果：machine-interface 126/0（新增5）、doctor-lifecycle-doc 10/0（新增10）、全量 npm test 341/0、lint 451 文件 0 告警

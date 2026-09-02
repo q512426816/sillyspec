@@ -17,7 +17,7 @@ SillyHub driver 模式的机器接口层。把 SillySpec 门控与事实核验�
 
 - `sillyspec gate <stage> --change <name> [--json]`：聚合门控（回答「该阶段此刻能否标记完成」，一次调用出综合结论 + checks 数组）
 - `sillyspec derive <facet> --change <name> [--json]`：单项事实核验，facet ∈ {execute-evidence, verify-test, task-reviews, artifacts}
-- `sillyspec progress show --json`（runStatusOverview，2026-09-02 单一状态源）：全局总览——全部活跃变更列表 + 各自阶段/步骤计数 + ghost（目录缺失）/stall 标记；与 dump（单变更视角、daemon 轮询）互补。数据组装单点在 StageMachine.overview（与 show 汇总同源）
+- `sillyspec progress show --json`（runStatusOverview，2026-09-02 单一状态源）：全局总览——全部活跃变更列表 + 各自阶段/步骤计数 + ghost（目录缺失）/stall 标记 + pending_conflicts（未决同步冲突，P2-2-① 起冲突升 warnings）；与 dump（单变更视角、daemon 轮询）互补。数据组装单点在 StageMachine.overview（与 show 汇总同源）
 - envelope：`schema_version=1` + 固定字段（command/change/ok/errors/warnings/generated_at）+ 按需（stage/facet/checks/data）
 - 退出码：0 通过（可含 warnings）/ 1 事实阻断（JSON 含 errors）/ 2 无法核验（用法/环境/变更不存在/内部异常）
 - 只读语义（D-002）：不写 sillyspec.db、不 triggerSync、不推进 step/stage（原阶段状态缓存文件双源已废，不再列入只读边界；只读性为语义级断言——本模块自身不发 write 语句，WAL 引擎层 close/checkpoint 对主库的合并属 better-sqlite3 行为非本模块写入）；唯一例外是 verify-test 落盘 `.runtime/verify-runs/` 取证

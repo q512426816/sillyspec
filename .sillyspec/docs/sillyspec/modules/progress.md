@@ -18,7 +18,7 @@ updated_at: 2026-09-02T11:20:00+08:00
 | 文件 | 职责 |
 |------|------|
 | `src/progress.js` | ProgressManager facade：对外方法全部保留；持久化核心（`_ensureDB`/`read`/`_write`/`_changePath`/`_ensureRuntimeDir`/`_runtimePath`/`readGlobal`）本体留 facade，stage/step/变更注册/一致性检查组方法 delegate 到子模块 |
-| `src/progress/stage-machine.js` | 阶段状态机（W6 Step9d）：completeStage/reopen/reset/validate/show/status + 产物校验门 + 下游级联；completeStage 五层（resolve/validate/force/tx/history/print）整体搬迁不拆流水线；overview(cwd) 只读全局总览纯数据（2026-09-02，show 多变更汇总的机器版，供 machine-interface 包装） |
+| `src/progress/stage-machine.js` | 阶段状态机（W6 Step9d）：completeStage/reopen/reset/validate/show/status + 产物校验门 + 下游级联；completeStage 五层（resolve/validate/force/tx/history/print）整体搬迁不拆流水线；overview(cwd) 只读全局总览纯数据（2026-09-02，show 多变更汇总的机器版，供 machine-interface 包装；P2-2-① 起 show 汇总含未决同步冲突 🔴 标红 + overview 透出 pending_conflicts（_listPendingConflicts，与 sync.js listConflictFiles 同前缀同字段，fs-only 不引网络）） |
 | `src/progress/step-store.js` | 阶段/步骤/批量进度管理（W6 Step9c）：stages + steps + batch_progress 三表读写（setStage/addStep/updateStep/batch 读写）；纯 SQL + 常量，无 fs/path 依赖 |
 | `src/progress/change-registry.js` | 变更注册表（W6 Step9b）：changes 表生命周期——注册/注销/重命名/隔离状态/平台同步戳/审批状态 |
 | `src/progress/consistency-doctor.js` | 状态一致性检查与修复（W6 Step9a）：Revision v1 一致性检查 + `--force` 审计日志（`.runtime/audit.log`），doctor 阶段核心实现 |

@@ -582,6 +582,10 @@ export function runStatusOverview({ cwd, specBase } = {}) {
     const warnings = data.changes
       .filter(c => c.ghost)
       .map(c => `${c.name}: 目录缺失（残留记录，sillyspec doctor --cleanup-ghosts --confirm 可归档清理）`);
+    // P2-2-①：未决同步冲突同样升 warnings（冲突可见性——daemon/面板看顶层即知有冲突待处理）
+    for (const cf of (data.pending_conflicts || [])) {
+      warnings.push(`${cf.change}: 未决同步冲突（${cf.type === 'progress' ? '进度' : 'spec 树'}，sillyspec platform resolve 处理）`);
+    }
 
     const envelope = buildEnvelope({
       command: 'progress show',

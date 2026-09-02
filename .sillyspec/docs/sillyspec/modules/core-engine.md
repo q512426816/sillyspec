@@ -1,5 +1,5 @@
 ---
-updated_at: 2026-08-24T00:40:00+08:00
+updated_at: 2026-09-02T17:45:00+08:00
 author: qinyi
 created_at: 2026-06-01T09:05:00
 ---
@@ -102,6 +102,7 @@ core-engine 是 SillySpec 的基础设施层，由三个层次组成：持久化
 | VALID_STAGES 硬编码为常量 | 阶段固定且与 stageRegistry 一一对应 | 配置文件驱动 |
 | 进度快照写入 history 目录 | 便于回溯和调试 | 仅保留当前状态 |
 | 双层目录结构 (.runtime + changes) | 运行时数据与变更数据隔离 | 扁平结构 |
+| doctor D8 lifecycle_doc_staleness 用 git 提交时间比较（%ct），与 docs-debt 模块卡 behind 同哲学 | 只读事实计算 + WARNING 提示不阻断，把 CLAUDE.md 文档同步检查清单变自动卡点（P2-2-②，2026-09-02）；文档缺失/非 git/时间戳不可解析降级跳过不误报 | 校验文档内容与源码逐条对账（重、易误报） |
 
 ## 依赖关系
 - 内部依赖：src/stages/index.js（stageRegistry, auxiliaryStages）、src/stages/execute.js（buildExecuteSteps）、src/stages/plan.js（buildPlanSteps）、src/init.js（cmdInit, getVersion）

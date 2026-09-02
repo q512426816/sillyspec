@@ -21,6 +21,7 @@
  * writer 落盘到 <authoritySpecDir>/.runtime/。
  */
 import { openDatabase, pluckGet, pluckAll } from './db-engine.js';
+import { safeGit } from './git-helper.js';
 import { existsSync, statSync, readFileSync, readdirSync, mkdirSync, writeFileSync, unlinkSync, rmSync } from 'fs';
 import { join } from 'path';
 import jsYaml from 'js-yaml';
@@ -750,8 +751,10 @@ export async function runDoctorDiagnostics({ cwd }) {
   const executeMismatch = detectExecuteProgressPlanMismatch(authoritySpecDir, authDb);
   const docBloat = detectDocBloat(authoritySpecDir);
   const repoNativeChain = detectRepoNativeChain(cwd, pointer);
+  // P2-2-②：file-lifecycle 文档欠账（git behind 事实计算，治「改了生命周期代码忘同步文档」）
+  const lifecycleDoc = detectLifecycleDocStaleness(cwd);
 
-  const dimensions = [multiDb, pointerHealth, changesSplit, changeDb, executeMismatch, docBloat, repoNativeChain];
+  const dimensions = [multiDb, pointerHealth, changesSplit, changeDb, executeMismatch, docBloat, repoNativeChain, lifecycleDoc];
 
   return {
     dimensions,
@@ -761,6 +764,66 @@ export async function runDoctorDiagnostics({ cwd }) {
     dbs_summary: multiDb.dbs,
     authoritySpecDir,
   };
+}
+
+// ── D8 file-lifecycle 文档欠账（P2-2-②，2026-09-02 跨 agent 工单）──────────────────
+
+/** 生命周期敏感路径（CLAUDE.md「文件生命周期文档同步」界定的触及面） */
+const LIFECYCLE_DOC_REL = 'docs/sillyspec/file-lifecycle.md';
+const LIFECYCLE_SENSITIVE_PATHS = ['src/stages/', 'src/run.js', 'src/run/', 'src/progress.js', 'src/progress/', 'src/db.js'];
+
+/**
+ * file-lifecycle.md 是否落后于生命周期代码改动（git 提交时间事实比较，只读）。
+ * 与 docs-debt（模块卡 behind 计算）同哲学：CLI 算事实、WARNING 提示不阻断——把 CLAUDE.md
+ * 的「更新检查清单」从人工 checklist 变 doctor 自动卡点（agent 忘同步 → 体检可见）。
+ * 降级语义：文档不存在 / 非 git 仓 / git 失败 → pass: true + findings 注记（不误报）。
+ */
+function detectLifecycleDocStaleness(cwd) {
+  const base = { name: 'lifecycle_doc_staleness', label: '生命周期文档同步', safe_actions: [] };
+  const docAbs = join(cwd, LIFECYCLE_DOC_REL);
+  if (!existsSync(docAbs)) {
+    return { ...base, pass: true, severity: null, findings: [`未找到 ${LIFECYCLE_DOC_REL}（本仓无生命周期总文档，跳过）`] };
+  }
+  // 文档最后提交时间（untracked = 从未提交 → 直接提示）
+  const docLog = safeGit(cwd, ['log', '-1', '--format=%ct', '--', LIFECYCLE_DOC_REL]);
+  if (!docLog.value) {
+    return {
+      ...base,
+      pass: false,
+      severity: CHECK_SEVERITY.WARNING,
+      findings: [`${LIFECYCLE_DOC_REL} 存在但从未提交（untracked）——首次提交后本检查生效`],
+    };
+  }
+  const docTs = Number(docLog.value);
+  if (!Number.isFinite(docTs)) {
+    return { ...base, pass: true, severity: null, findings: ['文档时间戳不可解析，跳过（不误报）'] };
+  }
+  // 生命周期代码侧最新提交（取各敏感路径 max %ct；任一路径 untracked 新文件不在 log 里，
+  // git 不可见性注记——工作树未提交改动本就不该由 doctor 报，提交后自然可见）
+  let srcTs = 0;
+  let srcPath = null;
+  for (const p of LIFECYCLE_SENSITIVE_PATHS) {
+    const r = safeGit(cwd, ['log', '-1', '--format=%ct', '--', p]);
+    const ts = Number(r.value);
+    if (Number.isFinite(ts) && ts > srcTs) { srcTs = ts; srcPath = p; }
+  }
+  if (srcTs === 0) {
+    return { ...base, pass: true, severity: null, findings: ['生命周期代码无提交历史，跳过'] };
+  }
+  if (docTs < srcTs) {
+    const days = Math.floor((srcTs - docTs) / 86400);
+    return {
+      ...base,
+      pass: false,
+      severity: CHECK_SEVERITY.WARNING,
+      findings: [
+        `${LIFECYCLE_DOC_REL} 落后生命周期代码改动（最新代码提交 ${srcPath}，文档已落后 ${days} 天）——` +
+        `请按 CLAUDE.md「文件生命周期文档同步」检查清单核对并更新文档 + updated_at 时间戳`,
+      ],
+      safe_actions: [{ dimension: 'lifecycle_doc_staleness', action: 'sync_file_lifecycle_doc', risk: 'manual_edit', rationale: '文档落后于生命周期代码', next_step: `按 CLAUDE.md 检查清单更新 ${LIFECYCLE_DOC_REL} 与头部 updated_at` }],
+    };
+  }
+  return { ...base, pass: true, severity: null, findings: ['file-lifecycle.md 与生命周期代码改动时间线一致'] };
 }
 
 /**

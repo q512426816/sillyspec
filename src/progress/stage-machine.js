@@ -3,7 +3,7 @@
 // 调 pm.read/_write/_ensureDB/_getSpecDir/readGlobal/_runtimePath/listChanges/_appendAuditLog/
 // _renderBatchProgress（persistence-core + 其他组 delegate）。组内方法互调保持 this.X（同 class）。
 // completeStage 五层（resolve/validate/force/tx/history/print）整体搬迁，不拆流水线（保行为、最低风险）。
-import { mkdirSync, existsSync } from 'fs';
+import { mkdirSync, existsSync, readdirSync, readFileSync } from 'fs';
 import { join, resolve, basename } from 'path';
 import { writeAtomicSync } from '../fs-atomic.js';
 import { runValidators } from '../stage-contract.js';
@@ -205,6 +205,8 @@ export class StageMachine {
     console.log('');
 
     const changesRoot = join(this.pm._getSpecDir(cwd), 'changes');
+    // P2-2-①：未决同步冲突标红（overview 同源 _listPendingConflicts；该变更命中 → 🔴 行）
+    const pendingConflicts = this._listPendingConflicts(this.pm._getSpecDir(cwd));
     for (const cn of changes) {
       const data = this.pm.read(cwd, cn);
       const dirMissing = !existsSync(join(changesRoot, cn));
@@ -217,6 +219,13 @@ export class StageMachine {
       const lastActive = data.lastActive ? this._timeAgo(data.lastActive) : '未知';
 
       console.log(`  📂 ${cn}${dirMissing ? ' ⚠️ 目录缺失（残留记录，sillyspec doctor --cleanup-ghosts --confirm 可归档清理）' : ''}`);
+      // 变更级未决冲突标红（冲突可见性，2026-09-02 P2-2-①）：不再靠 agent 自己撞上才发现
+      const cnConflicts = pendingConflicts.filter(c => c.change === cn);
+      if (cnConflicts.length > 0) {
+        for (const cf of cnConflicts) {
+          console.log(`     🔴 未决同步冲突（${cf.type === 'progress' ? '进度' : 'spec 树'}${cf.created_at ? `，${cf.created_at}` : ''}）——请 sillyspec platform resolve 处理后再推进`);
+        }
+      }
       console.log(`     当前阶段: ${stageLabel}  最近活跃: ${lastActive}`);
       // 滞留/疑似完成信号（2026-08-30 用户反馈②）：多变更汇总逐行透出，无需逐个 --change 看详情
       const stall = this._stallSignal(cwd, data, cn);
@@ -247,7 +256,8 @@ export class StageMachine {
    */
   overview(cwd) {
     const changes = this.pm.listChanges(cwd);
-    const changesRoot = join(this.pm._getSpecDir(cwd), 'changes');
+    const specDir = this.pm._getSpecDir(cwd);
+    const changesRoot = join(specDir, 'changes');
     const list = [];
     for (const cn of changes) {
       const data = this.pm.read(cwd, cn);
@@ -288,7 +298,33 @@ export class StageMachine {
       project: global?.project || basename(cwd) || null,
       active_changes: changes.length,
       changes: list,
+      // P2-2-① 未决同步冲突透出（2026-09-02 跨 agent 工单）：fs-only 扫描 .runtime/ 下
+      // sync-conflict-*（进度冲突）与 spec-sync-conflict-*（spec 树冲突），前缀/字段与
+      // sync.js listConflictFiles 同源（此处不 new SyncManager——progress 层不引网络依赖，
+      // 损坏文件跳过不崩同 constraints）。有冲突时 show 汇总标红、--json envelope 升 warnings。
+      pending_conflicts: this._listPendingConflicts(specDir),
     };
+  }
+
+  /** 未决同步冲突列表（overview 数据源；与 sync.js listConflictFiles 同前缀同字段，fs-only） */
+  _listPendingConflicts(specDir) {
+    const runtimeDir = join(specDir, '.runtime');
+    let files = [];
+    try { files = readdirSync(runtimeDir); } catch { return []; }
+    const conflicts = [];
+    for (const f of files) {
+      const isProgress = f.startsWith('sync-conflict-');
+      if (!(isProgress || f.startsWith('spec-sync-conflict-')) || !f.endsWith('.json')) continue;
+      let change = f.replace(/^spec-sync-conflict-|^sync-conflict-/, '').replace(/\.json$/, '');
+      let createdAt = null;
+      try {
+        const cf = JSON.parse(readFileSync(join(runtimeDir, f), 'utf8'));
+        change = cf.change || change;
+        createdAt = cf.created_at || null;
+      } catch { /* 损坏文件按文件名兜底，不崩 */ }
+      conflicts.push({ change, created_at: createdAt, type: isProgress ? 'progress' : 'spec-tree' });
+    }
+    return conflicts;
   }
 
   _showChange(cwd, changeName) {
