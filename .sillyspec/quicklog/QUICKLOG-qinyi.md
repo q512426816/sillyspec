@@ -151,3 +151,14 @@
 根因：① 未决同步冲突只 platform status 可见，progress 总览/JSON 均不透出，agent 撞上才发现（冲突可见性缺口）；② CLAUDE.md file-lifecycle 检查清单是人工 checklist，docs-debt 只算模块卡、file-lifecycle.md 本身无 staleness 检查
 方案：① overview 加 pending_conflicts（_listPendingConflicts fs-only 同源扫描）+ show 变更级 🔴 标红 + runStatusOverview 冲突升 warnings；② doctor 新增 D8 lifecycle_doc_staleness：git %ct 比较文档 vs 六个生命周期敏感路径，落后 WARNING + safe_action，降级语义不误报；测试 +15 断言（含 Windows env 踩坑修复）；同步 core-engine/progress/machine-interface 三张模块卡
 结果：machine-interface 126/0（新增5）、doctor-lifecycle-doc 10/0（新增10）、全量 npm test 341/0、lint 451 文件 0 告警
+
+## ql-20260902-006-7535 | 2026-09-02 21:10:09 | show 总览补全局未决冲突段（P2-2 盲区
+状态：已完成
+关联变更：（无）
+文件：
+- src/progress/stage-machine.js（show 汇总全局冲突段）
+- test/machine-interface.test.mjs（10f 补丁断言）
+需求：show 总览补全局未决冲突段（P2-2 盲区，非活跃变更冲突漏显）
+根因：逐变更行匹配漏掉挂在 ghost/非活跃变更上的冲突，huber 面板联调实证 11 条显示 0
+方案：show 汇总段尾加全局冲突兜底段（pendingConflicts 全量，与 JSON 顶层 pending_conflicts 同口径）+ 10f 测试断言（≥2 活跃走汇总分支）
+结果：machine-interface 127/0；multi-agent-platform 实跑 11 条正确显示

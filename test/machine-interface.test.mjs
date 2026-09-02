@@ -755,6 +755,26 @@ console.log('--- 10. runStatusOverview（progress show --json）---')
     const again = runStatusOverview({ cwd, specBase })
     assert(again.exitCode === EXIT_OK && again.envelope.data.pending_conflicts.some(c => c.change === 'broken'),
       '损坏冲突文件按文件名兜底（不崩、change=broken）')
+
+    // 10f-补丁：挂在非活跃变更上的冲突，人类可读 show 全局段也显示（治 11 条漏显盲区）
+    // 注：全局段在多变更汇总分支——fixture 需 ≥2 活跃 change（单变更走 _showChange 详情分支）
+    writeFileSync(join(specBase, '.runtime', 'sync-conflict-archived-old.json'),
+      JSON.stringify({ change: 'archived-old', created_at: '2026-09-01T00:00:00Z' }))
+    {
+      const { ProgressManager } = await import('../src/progress.js')
+      const pmShow = new ProgressManager({ specDir: specBase })
+      await pmShow.initChange(cwd, 'second-active')
+      let showOut = ''
+      const origShowLog = console.log
+      console.log = (...a) => { showOut += a.join(' ') + '\n' }
+      try {
+        pmShow.show(cwd)
+      } finally {
+        console.log = origShowLog
+      }
+      assert(showOut.includes('未决同步冲突') && showOut.includes('archived-old'),
+        'show 人类可读全局段兜底显示非活跃变更的冲突（archived-old 可见）')
+    }
   }
 }
 

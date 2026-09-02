@@ -238,6 +238,17 @@ export class StageMachine {
       console.log('');
     }
 
+    // P2-2-① 补丁（2026-09-02 晚）：全局未决冲突汇总段——逐变更行只显示「对上活跃变更」的冲突，
+    // 挂在 ghost/非活跃变更上的冲突会漏（huber 面板联调实证 11 条只显示 0）。此处按
+    // pending_conflicts 全量兜底显示，与 --json envelope 顶层字段同口径。
+    if (pendingConflicts.length > 0) {
+      console.log(`  🔴 未决同步冲突（${pendingConflicts.length} 条，含未匹配活跃变更的）:`);
+      for (const cf of pendingConflicts) {
+        console.log(`     - ${cf.change}${cf.type ? `（${cf.type === 'progress' ? '进度' : 'spec 树'}${cf.created_at ? `，${cf.created_at}` : ''}）` : ''}`);
+      }
+      console.log(`     → sillyspec platform resolve 逐条裁决（以本地/以平台为准），处理完冲突消失`);
+    }
+
     console.log(`  💡 查看详情：sillyspec progress show --change <name>`);
     console.log('');
   }
