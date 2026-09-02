@@ -30,7 +30,7 @@ import { resolveChangeDir, resolveQuickSessionsDir, safeGit, auditQuickCompletio
 import { detectConcurrentChanges, formatConcurrentWarning, resolveConcurrentAnchor } from './concurrent-detect.js'
 import { stageRegistry } from '../stages/index.js'
 import { SCAN_STATUS, POINTER_STATUS } from '../constants.js'
-import { printQuickAuditReview } from './quick-audit.js'
+import { printQuickAuditReview, runQuickTestLintGate, printQuickTestLintGate } from './quick-audit.js'
 import { validateQuickResult, allocateQuicklogEntry, findQuicklogEntry, completeQuicklogEntry, extractTitleFromResult } from '../quicklog.js'
 import { getRule } from '../stage-contract-spec.js'
 import { archiveDestDirName } from '../stage-contract.js'
@@ -887,6 +887,22 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
       review = await auditQuickCompletion(cwd, mergedGuard, { isConfirm: confirm })
       printQuickAuditReview(review)
       if (review.status === 'blocked') {
+        steps[currentIdx].status = 'pending'
+        steps[currentIdx].completedAt = null
+        if (outputText) steps[currentIdx].output = null
+        process.exit(1)
+      }
+      // P0-2（2026-09-02 跨 agent 工单）：触及 src/test 的 quick --done 内置 test+lint
+      // 实测门禁——把 CLAUDE.md 规则 8 从 agent 自律下沉为 CLI 卡点（fail → step 回
+      // pending + exit 1，重跑不丢进度；纯 doc/配置与未配置命令自动跳过不阻断）。
+      const gate = await runQuickTestLintGate({
+        cwd,
+        specBase,
+        changedFiles: review.changedFiles,
+        changeName,
+      })
+      printQuickTestLintGate(gate)
+      if (gate.action === 'fail') {
         steps[currentIdx].status = 'pending'
         steps[currentIdx].completedAt = null
         if (outputText) steps[currentIdx].output = null

@@ -184,3 +184,84 @@ export async function resolveQuickLinkedChanges({ pm, cwd, specDir, quickFiles, 
   const selected = await checkbox({ message: '关联变更（空格切换，回车确认）', choices })
   return selected
 }
+
+// ============ quick --done test+lint 硬门禁（2026-09-02 跨 agent 工单 P0-2）============
+
+/**
+ * quick --done 内置 test+lint 实测门禁：把 CLAUDE.md 规则 8「触及 src/test 的改动先
+ * npm test + npm run lint」从 agent 自律下沉为 CLI 卡点。
+ *
+ * 语义（对齐规则 8 + verify-postcheck 既有降级哲学）：
+ *   - changedFiles 未触及 src/ 或 test/（纯 doc/配置改动）→ skip（不跑不阻断）
+ *   - 触及 → 亲自执行 local.yaml 的 commands.test / commands.lint（复用 verify 阶段
+ *     对账引擎 runVerifyTestCheck/runVerifyLintCheck，含 test_strategy/known_failures/
+ *     超时语义）；未配置命令 → 内部 skipped，不阻断（兼容无测试项目）
+ *   - 任一实测 failed → fail（调用方阻断 --done，step 回 pending）
+ *   - 逃生门：SILLYSPEC_QUICK_TEST_GATE=skip 显式跳过（CI/特殊场景，审计留痕）
+ *
+ * verify-postcheck 顶层 import 链较重（contract-matrix 等），且本函数仅 quick --done
+ * 收尾路径调用——用动态 import，不进 run 命令通用启动路径（与上方 @inquirer/prompts 同款纪律）。
+ *
+ * @param {object} opts
+ * @param {string} opts.cwd - 仓库根（命令执行 cwd）
+ * @param {string} opts.specBase - .sillyspec 目录（local.yaml 读取源，信任边界见 runVerifyTestCheck SEC-02 注释）
+ * @param {string[]} [opts.changedFiles] - 审计口径的本轮变更文件（仓库根相对 POSIX 路径；空/null → skip）
+ * @param {string} [opts.changeName] - quick 会话名（evidence-auto 策略解析用）
+ * @returns {Promise<{action:'pass'|'fail'|'skip', failed:string[], reason:string, test:object|null, lint:object|null}>}
+ */
+export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], changeName = null }) {
+  if (process.env.SILLYSPEC_QUICK_TEST_GATE === 'skip') {
+    return { action: 'skip', failed: [], reason: 'SILLYSPEC_QUICK_TEST_GATE=skip 显式跳过（审计留痕）', test: null, lint: null }
+  }
+  const files = Array.isArray(changedFiles) ? changedFiles : []
+  const codeFiles = files.filter(f => typeof f === 'string' && (f.startsWith('src/') || f.startsWith('test/')))
+  if (files.length === 0) {
+    return { action: 'skip', failed: [], reason: '无变更文件清单（brownfield 无 guard 或空审计），跳过', test: null, lint: null }
+  }
+  if (codeFiles.length === 0) {
+    return { action: 'skip', failed: [], reason: `纯 doc/配置改动（${files.length} 个文件均未触及 src/test，规则 8 语义跳过 test+lint）`, test: null, lint: null }
+  }
+
+  const { runVerifyTestCheck, runVerifyLintCheck } = await import('../verify-postcheck.js')
+  const test = runVerifyTestCheck({ cwd, specBase, changeName })
+  const lint = runVerifyLintCheck({ cwd, specBase })
+  const failed = []
+  if (test.status === 'failed') failed.push('test')
+  if (lint.status === 'failed') failed.push('lint')
+  return {
+    action: failed.length > 0 ? 'fail' : 'pass',
+    failed,
+    reason: failed.length > 0
+      ? `实测失败：${failed.join(' + ')}（命令与输出尾部见上；修复后重跑 --done 不丢进度）`
+      : `触及 src/test 共 ${codeFiles.length} 个文件，test+lint 实测通过（或未配置命令自动跳过）`,
+    test,
+    lint,
+  }
+}
+
+/**
+ * 打印 quick test+lint 门禁结论（fail 时附输出尾部，供 agent 直接定位修复）。
+ */
+export function printQuickTestLintGate(gate) {
+  if (!gate) return
+  if (gate.action === 'skip') {
+    console.log(`\n🧪 quick test+lint 门禁 — SKIP：${gate.reason}`)
+    return
+  }
+  for (const [label, r] of [['test', gate.test], ['lint', gate.lint]]) {
+    if (!r) continue
+    const icon = r.status === 'failed' ? '❌' : r.status === 'passed' ? '✅' : '⏭️'
+    const dur = typeof r.durationMs === 'number' ? ` (${(r.durationMs / 1000).toFixed(1)}s)` : ''
+    console.log(`${icon} ${label}: ${r.status}${r.command ? ` ← ${r.command}${dur}` : ''}${r.status === 'skipped' && r.reason ? ` — ${r.reason}` : ''}`)
+  }
+  if (gate.action === 'fail') {
+    console.error(`\n🚫 quick test+lint 门禁 — BLOCKED：${gate.reason}`)
+    for (const key of gate.failed) {
+      const r = gate[key]
+      if (r && r.outputTail) console.error(`   ── ${key} 输出尾部 ──\n${r.outputTail}`)
+    }
+    console.error(`   quick 已停止：修复后重跑 --done（进度不丢）；确认要跳过实测请设 SILLYSPEC_QUICK_TEST_GATE=skip（审计留痕）。`)
+  } else {
+    console.log(`\n✅ quick test+lint 门禁 — PASS（${gate.reason}）`)
+  }
+}

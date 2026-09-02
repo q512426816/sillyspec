@@ -4,7 +4,7 @@ doc_type: module-card
 module_id: runtime
 author: qinyi
 created_at: 2026-06-03T07:42:00+08:00
-updated_at: 2026-08-28T00:00:00+08:00
+updated_at: 2026-09-02T11:55:00+08:00
 ---
 # runtime
 
@@ -20,7 +20,7 @@ SQLite 数据库层 + 进度管理 + 迁移。提供 `.sillyspec/.runtime/sillys
 - **ProgressManager** (`src/progress.js`) — 进度读写入口，通过 DB 实例操作 `project / changes / stages / steps / batch_progress / approvals` 六张表；核心读写方法已同步化（`read`/`_write` 等不再 async），`read()` 每次经 `getDb()` 直查 DB 取最新不缓存快照；支持 `read()` / `init()` / `initChange()` / `show()` / `validate()` / `reset()` / `_updatePlatformLastSync()` / `_updateApprovalStatus()` / `alignExecuteToPlan()` 等方法
 - **MultiRepoContext** (`src/run/multi-repo-context.js`) — 跨仓 task 支持的运行时多仓执行上下文（2026-08-12 新增）。进程级内存对象（随 CLI 进程生死，不入库不持久化，无状态机），`Map<repoKey, RepoEntry{repoKey,gitDir,worktreePath,projectRoot,isMain,resolveHead(),resolveBase(taskBaseCommit?)}>`。execute 启动由 `shared.js:getOrCreateMultiRepoContext` 构造一次贯穿 execute/apply/verify（D-013 G2），收口 7 单仓假设点（task-review/worktree-apply/verify-postcheck/gates/execute/index/machine-interface/complete 经 `ctx.resolve(repo)` 取 gitDir/base/head/projectRoot）。约束② fail-closed（未注册 repo / 跨仓 git 不可用抛错阻断 execute，不降级）。单仓 change 退化为 `{main:{...}}` 单值 map 零回归。head 经 resolveHead 实时 git rev-parse（不缓存）；task review 的 base/head 用 task 卡 base_commit/head_commit 双锡点（非 resolveHead）。declaredRepos 聚合双源：plan.md 内联 frontmatter 块 + tasks/task-NN.md 独立卡片（`collectTaskCardReposFallback` 兜底扫，坑7——plan.md 只留 checkbox 时跨仓仓仍注册进 ctx，不再误报 review 疑似伪造）
 
-- **quick-audit.js**（`src/run/quick-audit.js`，W6 Step2 从 run.js 抽出）— quick 审计结论打印 + quick 多变更关联选择（resolveQuickLinkedChanges 动态 import quick-recommend.js 打分 + safeGit 脏文件信号，交互式 checkbox 默认勾选关联目标）
+- **quick-audit.js**（`src/run/quick-audit.js`，W6 Step2 从 run.js 抽出）— quick 审计结论打印 + quick 多变更关联选择（resolveQuickLinkedChanges 动态 import quick-recommend.js 打分 + safeGit 脏文件信号，交互式 checkbox 默认勾选关联目标）+ **quick --done test+lint 硬门禁**（runQuickTestLintGate/printQuickTestLintGate，2026-09-02 P0-2：changedFiles 触及 src/test 才实测 local.yaml commands.test/lint（动态 import verify-postcheck，不进通用启动路径），未配置/doc-only/brownfield 自动跳过，fail 阻断 --done，env 逃生门 SILLYSPEC_QUICK_TEST_GATE=skip）
 - **scan-profile.js**（`src/run/scan-profile.js`，W6 Step2 从 run.js 抽出）— scan profile 数据生成 + quick scan CLI preflight/postcheck（executeScanPostcheck 动态 import scan-postcheck.js 做 CLI 确定性校验，不依赖 agent 自检报告）
 - **quick-recommend.js**（`src/quick-recommend.js`，根级文件归 runtime）— quick 阶段多变更关联推荐打分：「脏文件 + 任务描述」双信号推测当前 quick 改动最可能归属哪些活跃变更，供交互式多选默认勾选；纯函数 + 只读文件系统无副作用
 
@@ -97,6 +97,7 @@ ProgressManager.alignExecuteToPlan(cwd, changeName, specBase, {confirm})
 - ql-20260819-011-119b | changes.title 单步持久化点刷新：complete.js 抽 refreshChangeTitleFromArtifacts 公共 helper 挂四点（completeStep 单步/阶段完成 + continueStep wait 解除/阶段完成），brainstorm step6 design.md 落盘后每次 --done 即把 changes.title 刷新为中文标题，治「brainstorm 全程 title 存英文 autoName 兜底」；test/run-complete-step-brainstorm.test.mjs 加单步刷新案例（先红后绿）。
 - ql-20260819-012-66fc | noAI 未知 cliAction fail-fast（stage.js/complete.js 加 else throw）、waitAnswers JSON 损坏诊断（progress.js catch 加 warn）、completed_at 条件写入（step-store.js）。
 - ql-20260819-014-0082 | autoCheckPlanFromReviews catch 加 warn 留痕（原静默返回假阴性）；prompt.js quicklog-id guard.json 读取失败加 warn（原空 catch 降级 (未分配) 无根因）。
+- 2026-09-02 P0-2（跨 agent 工单） | quick --done 内置 test+lint 硬门禁：complete-handlers.js quick 收尾在边界审计后接 runQuickTestLintGate（quick-audit.js），changedFiles 触及 src/test 时复用 verify-postcheck 的 runVerifyTestCheck/runVerifyLintCheck 亲自实测（commands.test/lint，含 test_strategy/known_failures/超时语义），任一 failed → step 回 pending + exit 1（与边界审计同款阻断），修复重跑不丢进度；纯 doc/配置、未配置命令、brownfield 无清单自动跳过不阻断；env 逃生门 SILLYSPEC_QUICK_TEST_GATE=skip 留痕跳过。治「--done 前跑 test+lint」靠 agent 自律的 CLAUDE.md 规则 8。新增 test/quick-test-gate.test.mjs（8 组 21 断言）；本仓 local.yaml 补 commands.test/lint 启用自监管。
 
 ## 人工备注
 <!-- MANUAL_NOTES_START -->

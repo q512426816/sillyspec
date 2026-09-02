@@ -105,3 +105,19 @@
 方案：StageMachine 新增 overview(cwd) 只读纯数据方法（与 show 汇总同源），facade 转出；machine-interface 新增 runStatusOverview 封装 envelope（DB 不存在 fail-closed exit 2、ghost 升 warnings）；index.js progress show --json 接线 + help 文案；machine-interface.test.mjs 组10 十五断言；修复 platform-interface-map.md 8 处行号漂移；同步 machine-interface/progress 模块卡。--force-baseline 理由：progress.js/stage-machine.js 属受保护核心文件，本次为只读方法新增（overview 不写 DB），全量测试 338/0 验证通过
 结果：machine-interface.test.mjs 121/0（新增 15 断言全过）；全量 npm test 338/0；npm run lint 448 文件 0 告警；doc-ref-check 84 引用全过；真实仓 progress show --json 正确输出 4 活跃变更含 ghost/stall
 审计：⚖️ 归属切分：3 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：docs/sillyspec/platform-interface-map.md, src/progress/stage-machine.js, test/machine-interface.test.mjs
+
+## ql-20260902-003-277a | 2026-09-02 15:31:39 | quick --done 内置 test+lint 硬门禁（规则 8 下沉为 CLI 卡点
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/quick-audit.js（新增 runQuickTestLintGate/printQuickTestLintGate）
+- src/run/complete-handlers.js（边界审计后接线门禁）
+- src/config-schema.js（commands.test/lint readers 登记）
+- test/quick-test-gate.test.mjs（新增 8 组 21 断言）
+- docs/sillyspec/platform-interface-map.md（修 1448→1464 行号漂移）
+- .sillyspec/docs/sillyspec/modules/runtime.md（quick-audit 职责+P0-2 条目）
+- .sillyspec/local.yaml（gitignore 本机文件补 commands 段（不进库））
+需求：quick --done 内置 test+lint 硬门禁（规则 8 下沉为 CLI 卡点，跨 agent 工单 P0-2）
+根因：CLAUDE.md 规则 8「触及 src/test 先跑 test+lint」全靠 agent 自律，跳过无痕迹无阻断；verify 阶段已有 runVerifyTestCheck/runVerifyLintCheck 实测引擎而 quick 收尾路径无同款门禁
+方案：quick-audit.js 新增 runQuickTestLintGate（动态 import verify-postcheck 复用实测引擎；env 逃生门/空清单/doc-only 跳过、触及 src/test 才实测、未配置命令降级不阻断）+ printQuickTestLintGate；complete-handlers.js 边界审计后接线，fail 回 pending+exit 1；config-schema readers 登记；新增 test/quick-test-gate.test.mjs 21 断言；修 platform-interface-map 行号漂移；runtime.md 同步；本仓 local.yaml 补 commands 启用自监管
+结果：quick-test-gate 21/0；全量 npm test 339/0；lint 449 文件 0 告警；doc-ref-check 84 引用全过；本次 --done 已被门禁实测通过（dogfood 自证）
