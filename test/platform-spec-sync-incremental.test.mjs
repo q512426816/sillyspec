@@ -257,12 +257,20 @@ const r8b = await syncSpecTree(specRoot8, platform, '2026-08-28-x');
 assert(syncRequests === reqBefore8b && lastSyncBody === null,
   `旧副本回推被拦 → 不发 POST（实际 +${syncRequests - reqBefore8b} 次，body=${JSON.stringify(lastSyncBody)}）`);
 assert(r8b.synced === 0, `拦下后无其他 op → synced=0（实际 ${r8b.synced}）`);
-// 8c. 本地重存（mtime 前移）→ 同一清单下 update 放行（确需以本地为准的强制出口）
+// 8c. 坑 quicksync-conflict-granularity（2026-09-03）：仅 mtime 前移（touch/重存）不再放行——
+//     内容基线快照判据免疫 mtime 伪造（git pull/checkout/归档重写刷新 mtime 的旧文件不能
+//     借 touch 回推服务器）。强制出口收敛为：真实改动内容，或 resolve --keep-local
+//     （forcePush 全旁路，hub08-spec-sync-conflict 用例覆盖）。
 utimesSync(join(design8, 'design.md'), new Date(), new Date());
-const r8c = await syncSpecTree(specRoot8, platform, '2026-08-28-x');
+let r8c = await syncSpecTree(specRoot8, platform, '2026-08-28-x');
+assert(!((lastSyncBody?.ops || []).some((o) => o.path === 'changes/2026-08-28-x/design.md')),
+  `touch 不再放行 update（内容未变 → 跟随服务器，实际 ${JSON.stringify(lastSyncBody?.ops)}）`);
+// 8c-2. 真实改动内容 → update 放行（内容级出口，last-writer-wins 不变）
+writeFileSync(join(design8, 'design.md'), '# v2 本地真改\n', 'utf8');
+r8c = await syncSpecTree(specRoot8, platform, '2026-08-28-x');
 const ops8c = (lastSyncBody?.ops || []).filter((o) => o.path === 'changes/2026-08-28-x/design.md');
 assert(ops8c.length === 1 && ops8c[0].op === 'update',
-  `本地重存后 update 放行（实际 ${JSON.stringify(ops8c)}）`);
+  `真实改动后 update 放行（实际 ${JSON.stringify(ops8c)}）`);
 assert(r8c.synced === 1, `r8c synced=1（实际 ${r8c.synced}）`);
 // 8d. 标记随成功同步推进（时间锚前进，防旧标记永续拦截）
 const markerTs8d = JSON.parse(readFileSync(markerPath8, 'utf8')).ts;

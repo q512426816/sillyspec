@@ -613,6 +613,31 @@ const SUMMARY_LINE_RE = /(={2,}.*={2,}|^\s*\d+\s+(failed|passed|skipped|pending)
 // 与失败信号（× 行 / FAIL 横幅 / 汇总计数）无关，全部剔除。
 const CONSOLE_CAPTURE_RE = /^\s*(?:stdout|stderr)\s*\|/
 const ENV_NOISE_RE = /not\s+implemented\s*:/i
+// 报表行（vitest/jest 测试运行器自身输出，非被捕获的 console 内容）：失败结果标记行
+// （×✕✗✘ 前缀 / FAIL 文件行）、❯ 文件摘要行、⎯ 分节分隔行——用作捕获块的结束边界。
+const REPORT_LINE_RE = /^\s*(?:[×✕✗✘]|FAIL\b|❯|⎯)/
+// Python/pytest 警告噪声（坑 verify-pytest-warnings-noise，2026-09-01 实证）：pytest 把
+// warnings summary 打印成「测试 id 行 + `<路径>:<行号>: <XxxWarning>: 消息` 归因行 + 缩进
+// 源码展示行」。归因行的**文件路径**常含 exception/error 子串（starlette `_exception_handler.py`
+// 是 FastAPI 全家桶标配，路径即命中 /exception/i）——整块被判失败行，backend 全量实测真实
+// 1 个守卫失败被上百行 DeprecationWarning 噪声淹没、只能人工分模块定位。warning 不是失败
+// 信号：① 区段级整段剔（区段头 → 下一 pytest 区段头）；② 行级剔（截断 tail 看不到区段头时
+// 兜底：归因/分组/Node 警告行 + 其上下文的 id/源码展示行）。真实失败的归因行（如
+// `file.py:42: AssertionError`）非 *Warning 类名，形态可分、不受影响。
+// 区段头：`============================== warnings summary ===============================`
+const PY_WARNINGS_SECTION_RE = /^\s*=+.*warnings summary.*=+\s*$/i
+// pytest 任意区段分隔头（`==== short test summary info ====` / `==== 3 failed, 300 passed in 12s ====`）
+const PY_SECTION_RE = /^\s*=+.*=+\s*$/
+// warning 归因行：`C:\...\file.py:59: DeprecationWarning: ...` / `file.py:7: UserWarning: ...`
+// （盘符/相对路径两形态；截断前缀 … 是普通非冒号字符，[^:\r\n] 天然兼容）
+const PY_WARNING_ATTR_RE = /^\s*(?:[A-Za-z]:)?(?:[^:\r\n]*[\\/])?[^:\r\n]*:\d+:\s+\w*Warning:/
+// 分组归因行：`tests/test_x.py: 13 warnings`
+const PY_WARNING_GROUP_RE = /^\s*(?:[A-Za-z]:)?[^:\r\n]*:\s*\d+\s+warnings?\b/i
+// Node 进程警告行：`(node:1234) [DEP0040] DeprecationWarning: ...`
+const NODE_WARNING_RE = /^\s*\(node:\d+\)\s*(?:\[[^\]]*\]\s*)?\w*Warning:/
+// pytest 测试 id 行（`path/to/test.py::TestClass::test_x`，无空格）——warnings summary 内
+// 逐条 warning 的归属头；只在 warning 上下文激活时剔（正常输出里的 id 行不动）
+const PY_TEST_ID_RE = /^\S+::\S+$/
 // 通过行（行首标记，剥 ANSI 后判定）：vitest/jest/mocha 的 ✓√✔ 前缀行 + jest 的 PASS 文件行。
 // 坑 verify-known-failures-pass-line-false-positive：FAILED/error:/exception 是子串匹配，
 // 通过行用例名恰含这些字样（如「✓ … 超时后 syncStatus=failed」）会被误判失败行——
@@ -630,15 +655,42 @@ const ANSI_RE = /\x1b\[[0-9;]*[A-Za-z]/g
  */
 export function partitionFailures(output, knownFailures) {
   const lines = String(output || '').split(/\r?\n/)
-  // 分类在剥 ANSI 后的行上做，返回保留原文（remaining 展示给 agent 时不变形）
-  const failureLines = lines.filter(l => {
-    if (PASS_LINE_RE.test(l)) return false
+  // 分类在剥 ANSI 后的行上做，返回保留原文（remaining 展示给 agent 时不变形）。
+  // 捕获块状态机（坑 verify-console-capture-block-noise，2026-08-31 daemon 套件 ~710 行实证）：
+  // vitest 把测试内 console 输出捕获为 `stdout|`/`stderr|` 横幅 + 后续内容行——旧逻辑只剔
+  // 横幅行本身，内容行（通过用例的结构化日志，常含 error:/failed 字样）仍中子串匹配成假
+  // 失败行。块以横幅开始，直到下一报表行（通过/失败标记、FAIL 文件行、❯ 文件摘要、⎯ 分节
+  // 符、汇总行）结束；块内内容行一律剔除。真实失败恒有 ×/FAIL 报表行（先结束块、照常参与
+  // 分类），失败检出不受影响；检测不到失败行时 judgeWithKnownFailures 仍 fail-safe 判 failed。
+  const failureLines = []
+  let inCapture = false
+  // pytest warnings summary 区段态：区段头开区、下一 pytest 区段头收区，区段内容整段剔
+  let inPyWarnings = false
+  // warning 上下文态（行级兜底）：命中归因/分组/Node 警告行后，紧随的缩进源码展示行、
+  // pytest 测试 id 行与组间空行同属该 warning 展示块，一并剔；报表行/其他内容行终结上下文。
+  let pyWarnCtx = false
+  for (const l of lines) {
     const bare = l.replace(ANSI_RE, '')
-    if (PASS_LINE_RE.test(bare)) return false
-    if (CONSOLE_CAPTURE_RE.test(bare)) return false
-    if (ENV_NOISE_RE.test(bare)) return false
-    return PER_TEST_FAIL_RE.test(bare) && !SUMMARY_LINE_RE.test(bare)
-  })
+    if (CONSOLE_CAPTURE_RE.test(bare)) { inCapture = true; pyWarnCtx = false; continue }
+    if (PY_WARNINGS_SECTION_RE.test(bare)) { inPyWarnings = true; pyWarnCtx = true; continue }
+    if (inPyWarnings) {
+      if (PY_SECTION_RE.test(bare)) inPyWarnings = false // 下一区段头（short test summary info 等）收区
+      continue // 区段内容（测试 id / 归因 / 源码展示行）：warning 噪声，非失败信号
+    }
+    const isReportLine = PASS_LINE_RE.test(bare) || REPORT_LINE_RE.test(bare) || SUMMARY_LINE_RE.test(bare)
+    if (inCapture && !isReportLine) continue // 捕获块内容行：console 噪声，非失败信号
+    if (isReportLine) inCapture = false
+    // ── Python/pytest 警告行级剔除（截断 tail 无区段头时的兜底）──
+    if (PY_WARNING_ATTR_RE.test(bare) || PY_WARNING_GROUP_RE.test(bare) || NODE_WARNING_RE.test(bare)) { pyWarnCtx = true; continue }
+    if (pyWarnCtx) {
+      if (isReportLine) pyWarnCtx = false // 报表行（含 short summary 区段头）终结 warning 上下文
+      else if (PY_TEST_ID_RE.test(bare) || /^\s{2,}\S/.test(bare) || bare.trim() === '') continue // 同块源码展示 / 测试 id / 组间空行
+      else pyWarnCtx = false
+    }
+    if (PASS_LINE_RE.test(bare)) continue
+    if (ENV_NOISE_RE.test(bare)) continue
+    if (PER_TEST_FAIL_RE.test(bare) && !SUMMARY_LINE_RE.test(bare)) failureLines.push(l)
+  }
   const pats = (knownFailures || []).map(p => String(p).toLowerCase()).filter(Boolean)
   const exempted = []
   const remaining = []

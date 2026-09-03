@@ -177,7 +177,105 @@ Error: Not implemented: window.getComputedStyle(elt, pseudoElt)
     [' × src/components/broken.test.tsx > 真实失败 (30 ms)'],
   )
 }
+{
+  // 坑 verify-console-capture-block-noise（2026-08-31 daemon 套件 ~710 行实证）：
+  // 捕获块【内容行】（通过用例的结构化日志，含 error:/failed/exception 字样）不再判失败行；
+  // 捕获块跨空行（多段 console 输出）整块剔除直到下一报表行；真实失败的 × 报表行
+  // （先结束捕获块、照常参与分类）不受影响；横幅本身带 ANSI 色码同样识别。
+  const daemonOut = [
+    '\u001b[90mstdout\u001b[2m | tests/daemon.test.ts > Daemon > AC-01: start 探测 agent 并单次 register\u001b[22m',
+    '[daemon.starting] runtime_id=runtime-uuid-123',
+    '[daemon.sillyspec_up_to_date] version=3.27.12',
+    '',
+    'stderr | tests/daemon.test.ts > Daemon > AC-02: 心跳上报',
+    '[daemon.daemon_latest_fetch_failed] url=http://127.0.0.1:8000/daemon/latest.json error=fetch failed',
+    '[task_runner] task failed, retrying: exception in worker',
+    '',
+    'stdout | tests/other.test.ts > 其他 > 捕获块跨空行（多段输出）',
+    'first line without keyword',
+    '',
+    'Caused by: serialized error in second paragraph',
+    ' ✓ tests/other.test.ts > 其他 > 通过用例 (5 ms)',
+    ' × tests/daemon.test.ts > Daemon > AC-09: 真实失败用例 (45 ms)',
+  ].join('\n') + '\n'
+  const r = partitionFailures(daemonOut, [])
+  assertEqual(
+    'partitionFailures: 捕获块内容行（含 error:/failed/Caused by 字样）全剔，仅 × 报表行计入',
+    r.failureLines,
+    [' × tests/daemon.test.ts > Daemon > AC-09: 真实失败用例 (45 ms)'],
+  )
+}
 assertEqual('partitionFailures: 空输出', partitionFailures('', ['x']), { failureLines: [], exempted: [], remaining: [] })
+
+{
+  // 坑 verify-pytest-warnings-noise（2026-09-01 multi-agent-platform backend 全量实证）：
+  // pytest warnings summary 的归因行 `<路径>:<行号>: DeprecationWarning: ...` 文件路径含
+  // exception 子串（starlette `_exception_handler.py`，FastAPI 全家桶标配）→ 子串匹配整块
+  // 误判失败行，真实 1 个守卫失败被上百行警告淹没。区段级（区段头→下一 pytest 区段头）
+  // 整段剔 + 行级兜底（截断 tail 无区段头：归因/分组/Node 警告行 + 同块 id/源码展示行）。
+  // 真实失败信号（traceback E 行 / `file.py:42: AssertionError` / short summary 的 FAILED）
+  // 全保留——fail-safe 不变。
+  const pyOut = [
+    '============================= test session starts =============================',
+    'collected 3646 items',
+    '..FF............',
+    '=================================== FAILURES ===================================',
+    '    def test_guard():',
+    '>       assert fields == expected',
+    'E       AssertionError: assert <36 items> == <35 items>',
+    'app/modules/agent/tests/test_mission_session_id.py:42: AssertionError',
+    '=============================== warnings summary ===============================',
+    'app/modules/agent/tests/test_router.py: 13 warnings',
+    '  C:\\Users\\qinyi\\IdeaProjects\\multi-agent-platform\\backend\\.venv\\Lib\\site-packages\\starlette\\_exception_handler.py:59: DeprecationWarning: \'HTTP_422_UNPROCESSABLE_ENTITY\' is deprecated. Use \'HTTP_422_UNPROCESSABLE_CONTENT\' instead.',
+    '    class McpConfigSecretUnresolvable(AppError):',
+    '',
+    'app/modules/agent/tests/test_exception_handler.py::TestX::test_error_path',
+    '  /usr/lib/python3/dist-packages/x/y.py:107: 12 warnings',
+    '  /usr/lib/python3/dist-packages/x/y.py:199: DeprecationWarning: datetime.datetime.utcnow() is deprecated',
+    '    started_at = datetime.utcnow()',
+    '-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html',
+    '=========================== short test summary info ============================',
+    'FAILED app/modules/agent/tests/test_mission_session_id.py::test_agent_sessions_model_fields_unchanged - AssertionError: assert <36 items>',
+    '================= 1 failed, 3645 passed, 120 warnings in 38.62s =================',
+  ].join('\n') + '\n'
+  const r = partitionFailures(pyOut, [])
+  assertEqual(
+    'partitionFailures: pytest warnings summary 整段剔（归因/分组/id/源码行），真实失败信号保留',
+    r.failureLines,
+    [
+      'E       AssertionError: assert <36 items> == <35 items>',
+      'app/modules/agent/tests/test_mission_session_id.py:42: AssertionError',
+      'FAILED app/modules/agent/tests/test_mission_session_id.py::test_agent_sessions_model_fields_unchanged - AssertionError: assert <36 items>',
+    ],
+  )
+}
+{
+  // 行级兜底（截断 tail 看不到 warnings summary 区段头——verify 的 output_tail 常带 … 前缀）：
+  // 归因行（路径含 exception）+ 缩进源码展示行 + 分组行 + Node 警告行全剔；真实 FAILED 保留。
+  const truncated = [
+    '…e.py:107: 12 warnings',
+    '  C:\\Users\\qinyi\\IdeaProjects\\multi-agent-platform\\backend\\.venv\\Lib\\site-packages\\starlette\\_exception_handler.py:59: DeprecationWarning: \'HTTP_422_UNPROCESSABLE_ENTITY\' is deprecated.',
+    '    class McpConfigSecretUnresolvable(AppError):',
+    '',
+    '(node:12345) [DEP0040] DeprecationWarning: The punycode module is deprecated.',
+    'FAILED app/modules/agent/tests/test_mission_session_id.py::test_agent_sessions_model_fields_unchanged',
+  ].join('\n') + '\n'
+  const r = partitionFailures(truncated, [])
+  assertEqual(
+    'partitionFailures: 截断 tail 行级兜底（无区段头）——警告归因/源码/分组/Node 行剔，FAILED 保留',
+    r.failureLines,
+    ['FAILED app/modules/agent/tests/test_mission_session_id.py::test_agent_sessions_model_fields_unchanged'],
+  )
+}
+{
+  // 真实失败归因行不被误剔：`file.py:42: AssertionError` 非 *Warning 类名（形态可分）。
+  const r = partitionFailures('app/foo.py:42: AssertionError: bad state\n  C:\\x\\_exception_handler.py:1: UserWarning: w\n', [])
+  assertEqual(
+    'partitionFailures: 失败归因行（AssertionError）保留、warning 归因行剔除',
+    r.failureLines,
+    ['app/foo.py:42: AssertionError: bad state'],
+  )
+}
 
 // ── judgeWithKnownFailures（fail-safe）───────────────────────────
 

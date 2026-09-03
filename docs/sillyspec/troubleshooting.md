@@ -735,3 +735,57 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 - `SUMMARY_LINE_RE` 补 vitest 无冒号汇总行形态（`Test Files  N failed` / `Tests  N failed | M passed`），原只认 jest `Tests:` 冒号形态。
 - 追加（真实输出实测后）：首轮修复只剔 ✓ 行仍余大量假阳性——vitest 控制台捕获噪声另三类一并剔除：`stdout|`/`stderr|` 捕获横幅行（横幅带用例名，名含 failed 字样即误判）、jsdom `Not implemented:` 环境警告行（`error:` 命中，正则须带 `i` 标志——实际输出大写 N）、`Failed Tests N` 分节头与 `ELIFECYCLE` 退出横幅归入汇总行。端到端实证（multi-agent-platform frontend 全量 2710 用例 4 真实失败）：失败行 382 → 15，7 条语义化豁免（3 文件名 + 2 套件名 + 2 错误类型）remaining=0。
 - 使用方注意：升级本版 CLI 后，因本坑加的 `known_failures` workaround 条目（`"✓"`/`stderr`/`not implemented`/`Test Files`/`Tests`/`ELIFECYCLE`）应整体删除，换成真实预存债的语义化豁免（文件名/套件名/错误类型）。
+
+## 46. 一坑：verify 对账把 vitest 捕获块【内容行】误判失败行（2026-08-31 闭环）
+
+**症状**：multi-agent-platform daemon 全量套件（186 文件 3309 用例，大量模拟错误路径的结构化日志）在**已含坑 45 修复的 CLI 3.27.11/3.27.12** 下仍产生 ~744 个「失败行」、其中 ~710 假阳性——agent 被迫登记 33 条豁免模式（local.yaml E2 段）。注意与坑 45 区分：坑 45 修的是横幅行本身与通过行，本坑是横幅**下方的内容行**。
+
+**根因**：vitest 把测试内 console 输出捕获为 `stdout | <file> > <测试名>` 横幅 + 后续内容行。坑 45 只剔横幅行本身；内容行（如 `[daemon.daemon_latest_fetch_failed] url=… error=fetch failed`、`[task_runner] task failed, retrying: exception in worker`——挂在**通过用例**上的模拟错误日志）逐行独立分类，子串命中 `error:`/`FAILED`/`exception` 即误判。逐行 filter 无跨行状态，看不到「这些行属于某横幅的捕获块」。
+
+**修复（已闭环，实测 744 → 41，剩余 41 行全部为真实失败的 ×/FAIL/断言详情行）**：
+- `partitionFailures` 改为单遍状态机：横幅行开启「捕获块」，块内内容行一律剔除，直到下一**报表行**（通过/失败结果标记 `✓×✕✗✘`、`FAIL` 文件行、`❯` 文件摘要、`⎯` 分节符、汇总行）结束块。空行**不**结束块——多段 console 输出（中间夹空行）整块剔除。
+- fail-safe 不变：真实失败恒有 `×`/`FAIL` 报表行（报表行先结束捕获块、照常参与分类），失败检出不受影响；检测不到失败行时 `judgeWithKnownFailures` 仍保守判 failed。
+- 使用方注意：升级后 daemon 类套件的 E2/A 段 workaround 条目（`"✓"`/`stderr`/`"Test Files"`/`"Tests"`/`ELIFECYCLE"`/`"not implemented"`/`"[daemon."`/`"task_runner:"`/`"spec_sync:"` 等结构化日志前缀类）应整体删除；实测收缩后清单 = E1 文件锚点 + `×` + 失败详情行（`AssertionError`/`Caused by:`/`Serialized Error`/`promise rejected`/`process.exit unexpectedly` 等 15 条，见 multi-agent-platform local.yaml E 段注释）。
+
+## 47. 一坑：endpoints artifact 不含挂载前缀 → 探针 5 全量假 missing（2026-08-31 闭环）
+
+**症状**：multi-agent-platform verify 探针 5 报 17 个 missingBackend，人工逐条定性（查 artifact、对照前端调用、核对后端路由测试）后才确认全是「口径噪音」——endpoints.json 里是 `/daemon/machines`，前端调用是 `/api/daemon/machines`。
+
+**根因**：FastAPI/Express 的路由挂载点（`main.py` 的 `app.include_router(daemon_router, prefix="/api")`、`app.use("/api", router)`）与 router 定义文件**分离**。端点提取只读 router 文件（`APIRouter(prefix="/daemon")` + `@router.get("/machines")` → `/daemon/machines`），挂载点前缀在另一个文件里，静态扫描不做导入图关联 → 提取口径系统性欠前缀，前端全路径调用对不上。
+
+**修复（已闭环）**：
+- `endpoint-extractor.js` 新增 `extractMountPrefixes`/`scanMountPrefixes`：递归扫描收集挂载前缀集合（`include_router(prefix=…)` 含多行形态 + `app.use("…")`，共用 backend 目录排除清单）。
+- `diffApiParity` 增可选 `mountPrefixes` 参数：前端调用路径按前缀集合剥除生成候选（原始路径恒在首位，最长前缀优先），任一候选命中即匹配；unused 侧同步对齐。`verifyApiParity`/探针 5/CLI `contract scan` 自动收集各扫描根前缀并传入，summary 与报告披露 `N 处经挂载前缀对齐匹配`（不静默）。
+- 边界：真缺失不因前缀对齐漏报（剥前缀后仍无匹配照报 missing）；装饰器自带全路径的仓（提取=真实路径）直配命中、行为不变。
+- 使用方注意：多根并集扫描下 `app.use` 前缀可能来自 daemon 等其他服务——只用于剥除对齐（strip-if-prefix），不影响直配。
+
+## 48. 一坑：verify 对账把 pytest warnings summary 误判失败行（2026-09-02 闭环）
+
+**症状**：multi-agent-platform backend 全量（3646 用例）verify 实测，真实只有 1 个守卫测试失败，但失败行被上百行 DeprecationWarning 噪声淹没，只能人工分模块定位（最后按 module 策略 14 模块子集跑才定位到 agent 模块）。注意与坑 45/46 区分：那两坑修的是 vitest 捕获横幅类，本坑是 pytest 的 warnings summary 区段。
+
+**根因**：pytest 把 warnings summary 打印成「测试 id 行 + `<路径>:<行号>: <XxxWarning>: 消息` 归因行 + 缩进源码展示行」。归因行的**文件路径**常含 exception/error 子串（starlette `_exception_handler.py` 是 FastAPI 全家桶标配，路径即命中 PER_TEST_FAIL_RE 的 `/exception/i`）——逐行子串匹配整块误判失败行。
+
+**修复（已闭环）**：
+- `partitionFailures` 两层剔除：① 区段级——`==== warnings summary ====` 区段头到下一 pytest 区段头（`short test summary info` / 汇总框）整段剔；② 行级兜底（verify 的 output_tail 常带 `…` 前缀截断、看不到区段头）——warning 归因行（`path:line: XxxWarning:`，盘符/相对/`…`截断前缀三形态）、分组行（`file.py: N warnings`）、Node 进程警告行（`(node:123) [DEP0040] DeprecationWarning:`）+ 同上下文的 pytest 测试 id 行/缩进源码展示行/组间空行一并剔。
+- fail-safe 不变：真实失败信号恒保留——traceback `E AssertionError` 行、失败归因行（`file.py:42: AssertionError`，非 `*Warning` 类名形态可分）、short summary 的 `FAILED` 行；检测不到失败行时 `judgeWithKnownFailures` 仍保守判 failed。实测 agent 模块截断 tail：2 行（1 假 1 真）→ 1 行（只剩真实 FAILED）。
+- 使用方注意：升级后 E2/A 段里为 warning 噪声登记的豁免条目（`_exception_handler`、`DeprecationWarning`、`utcnow` 等）可删除。
+
+## 49. 一坑：conditionalWait 步骤 --continue 被 --answer 直接收尾，agent 备好的 --done 落到下一步假完成（2026-09-02 闭环）
+
+**症状**：plan「审查计划」（plan_level=full 的执行前确认门）--wait 展示计划摘要 → 用户/超时兜底 --continue --answer → **2 秒后**「生成 TaskCard」就被 --done 假完成（TaskCard 从未生成），postcheck 拦下才发现，--reopen --from-step 4 重做浪费一轮（2026-09-01-session-group-chat 实证，08-31 两变更同形态 ×2）。
+
+**根因**：waitStep 的提示对 requiresWait/conditionalWait 两类同文——「--continue --answer 后本步回到待执行，完成动作后需再 --done 收尾」，但 continueStep 的 `shouldReturnToCurrentStep = repeatableWait || requiresWait` 漏了 conditionalWait——审查计划（conditionalWait、无 repeatableWait）被答案直接标 completed，agent 手里已备好的 --done（本步真实产出摘要）随即落到下一步上。
+
+**修复（已闭环）**：`shouldReturnToCurrentStep` 谓词并入 conditionalWait（对齐提示语义与 068382e 修复 B 的声明意图）。受影响步骤（conditionalWait 且无 repeatableWait）：plan/审查计划、brainstorm/Design Grill、scan/构建扫描项目列表、scan/生成模块卡片文档——语义都是「答案后还需完成动作再 --done」。不想两段式仍可用 `--done --answer` 一步完成（该路径不受影响）。
+
+## 50. 一坑：per-task review 的 base..head 与「主代理统一 commit」模式天然冲突（2026-09-02 闭环）
+
+**症状**：主代理统一实现 + 统一 commit（全部 task 一个提交）时，10 个 task 的 review 只能共用同一对 base..head（整变更区间，38 文件），任务边界只靠 changedFiles「归属说明」——gate 无法机器验证「本 task 的切片非空」。
+
+**根因**：review 证据校验（verifyReviewGitEvidence）只认整区间 diff：per-task commit 模式下 base..head 天然是任务区间；统一 commit 模式下该假设不成立，但 schema 没有表达「路径限定切片」的字段。
+
+**修复（已闭环）**：
+- review.json 新增可选 `diffPaths`（数组，=task 卡 allowed_paths）：有它时 emptyDiff/changedFiles 交叉比对都在 `git diff base..head -- diffPaths` 的路径限定切片上跑——统一 commit 模式成为一等公民，任务边界机器可验（切片空 = task 未实现，报错文案指引）。不带 diffPaths 时行为零变化（per-task commit 模式）。
+- `backfill-reviews --adopt` 与 execute 收尾草稿自动代填 diffPaths=allowed_paths（仅有归属切片时带；空归属不带，防切片恒空误判伪造）。
+- execute Wave prompt 的 Task Review Gate 契约补「base/head 两种取法」段：per-task commit 模式 vs 统一 commit 模式（后者必填 diffPaths）。
+- 使用方注意：统一 commit 模式下 review 复核 diff 用 `git diff <base>..<head> -- <allowed_paths>`；slice 为空的 task 要么补实现要么 verdict 回 fail。

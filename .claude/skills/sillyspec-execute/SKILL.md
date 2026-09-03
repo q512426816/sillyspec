@@ -92,7 +92,7 @@ execute 完成时，每个 task 必须有 `review.json` 且 verdict 通过，否
 
 > 🔧 **mechanics 字段不要手算**：`schemaVersion`/`task`/`base`/`head`/`changedFiles`(/跨仓 `repo`) 全部可由 CLI 从 git + task 卡推导。子代理/你只需写**语义字段**（`specVerdict`/`qualityVerdict`/`reviewerNotes`/`requiredEvidence`），mechanics 字段可以瞎填占位（如 `"base": "TODO"`），写完跑 `sillyspec backfill-reviews --change <变更名> --adopt` 一键重算代填（verdict 原样保留）。gate 拦下 mechanics 错误时也跑同一条命令修复。
 
-- 后端 router task 另需产出 API 端点清单：`sillyspec endpoints extract --change <变更名> --all-tasks`（聚合逐 task 卡 allowed_paths 提取，与 verify 探针 5 聚合对账口径一致；单 task 可 `--task task-NN`，也可 `--dir`/`--files` 显式指定）。勿手扫装饰器手写——易漏 endpoint；勿只提单 task——局部端点集对账放大假 missing。
+- 后端 router task 另需产出 API 端点清单：`sillyspec endpoints extract --change <变更名> --task <task-NN>`（CLI 静态扫描 FastAPI/Express/Spring 路由装饰器生成 endpoints.json，verify 探针 5 消费；扫描面默认取 task 卡 allowed_paths ∪ design 清单，也可 `--dir`/`--files` 显式指定）。勿手扫装饰器手写——易漏 endpoint。
 
 ### Stage Review Gate（execute 末尾的 acceptance review.json）
 

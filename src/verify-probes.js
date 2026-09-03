@@ -257,6 +257,9 @@ export function renderVerifyProbesReport(result) {
   if ((probe5.scanRoots || []).length > 1) {
     L.push(`- ℹ️ 后端端点比对集为多根并集（主仓既有 ∪ worktree 新增 ∪ 存量 artifact），共扫 ${probe5.scanRoots.length} 个根`)
   }
+  if (probe5.prefixAlignedCount > 0) {
+    L.push(`- ℹ️ ${probe5.prefixAlignedCount} 处前端调用经挂载前缀对齐匹配（endpoints 提取不含 include_router/app.use 挂载点前缀，比对时剥除对齐——非契约缺口）`)
+  }
   if ((probe5.missingBackend || []).length > 0) {
     L.push('')
     L.push('| 状态 | 前端调用 | 后端端点 | 文件 |')

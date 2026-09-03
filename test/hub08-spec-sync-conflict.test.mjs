@@ -93,6 +93,9 @@ console.log('\n--- 3. resolve --keep-local → 重定 base 重推 → 清文件 
 console.log('\n--- 4. keep-local 重推仍冲突 → 冲突文件保留 ---')
 {
   postPolicy = 'conflict'
+  // 冲突粒度收窄后（坑 quicksync-conflict-granularity）：内容未变的文件不再制造冲突
+  // （自动跟随服务器）——复现「重推仍冲突」需本地真实改动触发内容级真冲突
+  writeFileSync(join(cwd, '.sillyspec', 'a.md'), 'local version content scenario4 edit\n')
   await syncSpecTree(join(cwd, '.sillyspec'), { url: mockUrl, token: 'tok' }, CN)
   assert(existsSync(specConflictPath), '复现冲突文件')
   const sm = new SyncManager(cwd)
@@ -118,7 +121,7 @@ console.log('\n--- 6. resolve --abort → 清标记，本地不变 ---')
   const r = await sm.resolve(CN, 'abort')
   assert(r.ok === true && r.resolved === true, 'abort 成功')
   assert(!existsSync(specConflictPath), '冲突文件已清')
-  assert(readFileSync(join(cwd, '.sillyspec', 'a.md'), 'utf8') === 'local version content\n', '本地文件未被改动')
+  assert(readFileSync(join(cwd, '.sillyspec', 'a.md'), 'utf8') === 'local version content scenario4 edit\n', '本地文件未被改动（场景 4 的真实改动原样保留，abort 不碰内容）')
 }
 
 server.closeAllConnections?.()

@@ -323,6 +323,94 @@ function writeLastSyncTs(specRoot) {
   } catch { /* 标记失败只损失下次的防回推过滤，不影响本次同步结果 */ }
 }
 
+// 本地内容基线快照（坑 quicksync-conflict-granularity，2026-09-03 实证）：
+// 上次成功同步时刻的**本地文件 hash 全集**。「本地未改动」的内容级判据——
+// filterStaleUpdates 的 mtime 启发式会被 git 操作（pull/checkout/归档重写）刷新
+// mtime 击穿（本地 164 个旧归档全部伪装成「刚改过」，重试路径把陈旧副本静默
+// 推上服务器=回退）。hash 基线免疫 mtime 刷新：内容没变就是没改，服务器前进
+// 属正常多端演进 → 跟随服务器（不发 op、冲突时自动消解），只有内容真变了的
+// 文件才进冲突人工裁决。语义锚定「local at last sync」而非「server at last sync」：
+// 判据只回答「本地是否改过」，与服务器无关（bundle 拉回的新内容与快照不同 →
+// 视为本地改动照推，服务器同内容豁免兜底，无副作用）。
+const BASE_SNAPSHOT = 'spec-sync-base.json';
+
+function readBaseSnapshot(specRoot) {
+  try {
+    const raw = readFileSync(join(specRoot, '.runtime', BASE_SNAPSHOT), 'utf8');
+    const hashes = JSON.parse(raw).hashes;
+    return hashes && typeof hashes === 'object' ? hashes : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeBaseSnapshot(specRoot, localFiles) {
+  try {
+    const hashes = {};
+    for (const f of localFiles) hashes[f.path] = f.hash;
+    mkdirSync(join(specRoot, '.runtime'), { recursive: true });
+    writeFileSync(join(specRoot, '.runtime', BASE_SNAPSHOT), JSON.stringify({ ts: Date.now(), hashes }, null, 2) + '\n', 'utf8');
+  } catch { /* 快照失败只损失下次的内容级防回推，不影响本次同步结果 */ }
+}
+
+/**
+ * 丢弃「跟随服务器」型 update op（坑 quicksync-conflict-granularity ①）。
+ *
+ * 判据：本地文件 hash 与基线快照一致 = 自上次同步内容未变——此刻与服务器 hash
+ * 不同只可能是他端会话推进了服务器，本地是陈旧副本，推送即回退（spec-sync-
+ * parallel-stale-overwrite 同族，但 mtime 免疫）。与 filterStaleUpdates 互补：
+ * 快照覆盖内容级判定，mtime 兜底快照缺失（首次同步/快照损坏）的过渡期。
+ * 快照无该路径（新文件/过渡期）→ 保留 op 维持旧行为。
+ *
+ * @param {Array} ops computeSpecOps 产物
+ * @param {Array} localFiles hashFiles 产物
+ * @param {object|null} baseHashes 基线快照 { [path]: hash }；null → 不过滤
+ * @returns {{ ops: Array, followed: string[] }}
+ */
+export function dropFollowServerUpdates(ops, localFiles, baseHashes) {
+  if (!baseHashes || !Array.isArray(ops) || ops.length === 0) {
+    return { ops, followed: [] };
+  }
+  const hashByPath = new Map(localFiles.map((f) => [f.path, f.hash]));
+  const followed = [];
+  const kept = [];
+  for (const op of ops) {
+    if (op.op === 'update') {
+      const base = baseHashes[op.path];
+      const loc = hashByPath.get(op.path);
+      if (base !== undefined && loc !== undefined && base === loc) {
+        followed.push(op.path);
+        continue;
+      }
+    }
+    kept.push(op);
+  }
+  return { ops: kept, followed };
+}
+
+/**
+ * 冲突路径分流（坑 quicksync-conflict-granularity ②）：服务器 conflict 回告的路径里，
+ * 区分「本地未改动 → 自动跟随服务器」与「本地真改动 → 需人工裁决」。
+ * follower 判据 = 内容基线命中（hash 级）或 mtime 兜底（filterStaleUpdates 同款）。
+ * @returns {{ followers: string[], real: object }} real = { [path]: server_version }
+ */
+export function partitionConflictPaths(serverVersions, localFiles, baseHashes, lastSyncTs) {
+  const hashByPath = new Map(localFiles.map((f) => [f.path, f.hash]));
+  const mtimeByPath = new Map(localFiles.map((f) => [f.path, f.mtime]));
+  const followers = [];
+  const real = {};
+  for (const [path, version] of Object.entries(serverVersions || {})) {
+    const base = baseHashes?.[path];
+    const loc = hashByPath.get(path);
+    const mtime = mtimeByPath.get(path);
+    const contentUnchanged = base !== undefined && loc !== undefined && base === loc;
+    const mtimeStale = mtime !== undefined && lastSyncTs && mtime * 1000 + 1000 <= lastSyncTs;
+    if (contentUnchanged || mtimeStale) followers.push(path);
+    else real[path] = version;
+  }
+  return { followers, real };
+}
+
 /**
  * 同步本地 .sillyspec 树到平台（CLI 直跑增量同步入口）。
  *
@@ -369,15 +457,29 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
   const localFiles = hashFiles(entries);
   let ops = computeSpecOps(serverManifest, localFiles);
 
-  // 旧副本回推防护（并行会话一致性）：上次同步后本地从未改动的文件不回推覆盖服务器新内容
+  // 旧副本回推防护（并行会话一致性）：上次同步后本地从未改动的文件不回推覆盖服务器新内容。
+  // 双层判据（坑 quicksync-conflict-granularity）：内容基线快照（hash 级，免疫 git 操作刷新
+  // mtime——pull/checkout/归档重写后的旧文件内容未变即「未改动」）为主，mtime 启发式兜底
+  // 快照缺失的过渡期/新文件。forcePush（resolve --keep-local 强制重推）全旁路——用户显式
+  // 裁决「以本地为准」时本地意志高于跟随服务器语义，不得被防回推削掉。
   const lastSyncTs = readLastSyncTs(specRoot);
-  const filtered = filterStaleUpdates(ops, localFiles, lastSyncTs);
-  if (filtered.stale.length > 0) {
-    console.warn(
-      `[spec-sync] 拦下 ${filtered.stale.length} 个旧副本回推（本地自上次同步未改动而服务器已前进，如确需以本地为准：重存后重推）: ${filtered.stale.slice(0, 5).join(', ')}${filtered.stale.length > 5 ? ' 等' : ''}`
-    );
+  const baseHashes = readBaseSnapshot(specRoot);
+  if (!opts.forcePush) {
+    const dropped = dropFollowServerUpdates(ops, localFiles, baseHashes);
+    if (dropped.followed.length > 0) {
+      console.log(
+        `[spec-sync] ${dropped.followed.length} 个本地未改动文件自动跟随服务器（他端推进，内容未变不回推）: ${dropped.followed.slice(0, 5).join(', ')}${dropped.followed.length > 5 ? ' 等' : ''}`
+      );
+    }
+    ops = dropped.ops;
+    const filtered = filterStaleUpdates(ops, localFiles, lastSyncTs);
+    if (filtered.stale.length > 0) {
+      console.warn(
+        `[spec-sync] 拦下 ${filtered.stale.length} 个旧副本回推（本地自上次同步未改动而服务器已前进，如确需以本地为准：重存后重推）: ${filtered.stale.slice(0, 5).join(', ')}${filtered.stale.length > 5 ? ' 等' : ''}`
+      );
+    }
+    ops = filtered.ops;
   }
-  ops = filtered.ops;
 
   if (ops.length === 0) {
     debugLog(`[spec-sync] 无差异，跳过同步: ${changeName}`);
@@ -404,7 +506,26 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
       // HUB-08 冲突闭环：落 spec-sync-conflict-<change>.json（与进度 sync-conflict-* 同目录），
       // 供 platform status 列出 + platform resolve 三态处置。此前只 warn 返回，下次 sync 用
       // 同一 base_version 继续冲突循环，无人工裁决入口。
+      //
+      // 坑 quicksync-conflict-granularity（2026-09-03 实证 164 个旧归档整树冲突）：GET 清单
+      // → 全树 hash → POST 的竞态窗内他端推进，base_version 过期引发大规模「假冲突」——
+      // 这些文件本地根本没改（与本次 quick 零交集），却把冲突文件坐实、后续自动同步进
+      // resolve 流程。冲突粒度收窄：follower（本地未改动，内容基线/mtime 判定）自动跟随
+      // 服务器、不进冲突文件；服务器「冲突 op 跳过、其余照常 apply」语义下本会话真改动
+      // 已落——follower 清空即视为本轮同步成功（写基线，下次起 pre-POST 即拦）。
       const serverVersions = body.server_versions || {};
+      const { followers, real } = opts.forcePush
+        ? { followers: [], real: serverVersions }
+        : partitionConflictPaths(serverVersions, localFiles, baseHashes, lastSyncTs);
+      if (followers.length > 0) {
+        console.warn(`[spec-sync] ${followers.length} 个本地未改动文件自动跟随服务器（正常多端前进，无需人工裁决）: ${followers.slice(0, 5).join(', ')}${followers.length > 5 ? ' 等' : ''}`);
+      }
+      if (Object.keys(real).length === 0) {
+        writeLastSyncTs(specRoot);
+        writeBaseSnapshot(specRoot, localFiles);
+        console.log(`[spec-sync] 冲突已自动消解（0 个需人工裁决；本会话改动 ${ops.length - followers.length > 0 ? '已同步' : '无差异'}）: ${changeName}`);
+        return { synced: Math.max(ops.length - followers.length, 0), conflict: false, autoResolved: followers.length };
+      }
       let conflictPath = null;
       try {
         const runtimeDir = join(specRoot, '.runtime');
@@ -414,20 +535,22 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
           change: changeName,
           kind: 'spec-tree',
           created_at: new Date().toISOString(),
-          server_versions: serverVersions,
-          conflicting_paths: Object.keys(serverVersions),
-          note: 'spec 树文件冲突（服务器版本领先于本地 diff 基线）。resolve --keep-local 以本地为准重推；--take-platform 暂不支持（平台无文件下载端点）',
+          server_versions: real,
+          conflicting_paths: Object.keys(real),
+          auto_followed: followers,
+          note: 'spec 树文件冲突（仅列本地真改动文件；本地未改动文件已自动跟随服务器）。resolve --keep-local 以本地为准重推；--take-platform 暂不支持（平台无文件下载端点）',
         }, null, 2) + '\n', 'utf8');
       } catch (e) {
         console.warn(`[spec-sync] 冲突文件写入失败（冲突信息仅打印）: ${e.message}`);
       }
       console.warn('');
-      console.warn(`⚠️ [spec-sync] 检测到 spec 树冲突（${Object.keys(serverVersions).length} 个文件，服务器版本: ${JSON.stringify(serverVersions)}）`);
+      console.warn(`⚠️ [spec-sync] 检测到 spec 树冲突（${Object.keys(real).length} 个文件，服务器版本: ${JSON.stringify(real)}）`);
       console.warn(`⚠️ 处置：sillyspec platform resolve ${changeName} --keep-local | --abort（冲突详情: ${conflictPath || '(写入失败)'}）`);
-      return { synced: 0, conflict: true, serverVersions, conflictPath };
+      return { synced: 0, conflict: true, serverVersions: real, autoResolved: followers.length, conflictPath };
     }
     console.log(`[spec-sync] 已同步 ${ops.length} 个文件变更: ${changeName}`);
     writeLastSyncTs(specRoot);
+    writeBaseSnapshot(specRoot, localFiles);
     return { synced: ops.length };
   } catch (err) {
     console.warn(`[spec-sync] 同步异常（文件树本次未同步，下次自动重试）: ${changeName}: ${err.message}`);
@@ -441,5 +564,7 @@ export default {
   computeSpecOps,
   extractChangeDirs,
   filterStaleUpdates,
+  dropFollowServerUpdates,
+  partitionConflictPaths,
   syncSpecTree,
 };

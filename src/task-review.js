@@ -244,6 +244,19 @@ export function validateReviewSchema(review) {
     errors.push('缺少 head 字段（git commit hash）')
   }
 
+  // diffPaths（可选，统一 commit 模式）：路径限定评审范围。主代理统一 commit（全部 task 一个
+  // commit）下 per-task 提交区间不存在，base..head 只能取整变更区间——diffPaths=本 task 的
+  // allowed_paths，评审/校验 diff 收窄为 git diff base..head -- diffPaths 的路径限定切片
+  // （坑 task-review-unified-commit-scope，2026-09-01 实证：此前任务边界只靠 changedFiles
+  // 「归属说明」，gate 无法机器验证本 task 切片非空）。缺省=不过滤（per-task commit 模式
+  // base..head 本就是任务区间，行为零变化）。
+  if (review.diffPaths !== undefined) {
+    if (!Array.isArray(review.diffPaths) || review.diffPaths.length === 0
+        || !review.diffPaths.every(p => typeof p === 'string' && p.trim())) {
+      errors.push('diffPaths（若提供）应为非空字符串数组（路径限定评审范围，统一 commit 模式填本 task 的 allowed_paths；per-task commit 模式无需此字段）')
+    }
+  }
+
   return { ok: errors.length === 0, errors }
 }
 
@@ -499,7 +512,10 @@ export function validateTaskReviews(opts) {
             errors.push(`${taskId}: 纯验证 task（task_type: verification）零 diff 合法，但 review 缺 requiredEvidence（须披露验证区间/命令/结论出处）——声明不能替代披露`)
           }
         } else {
-          errors.push(`${taskId}: base..head（${review.base.slice(0, 8)}..${review.head.slice(0, 8)}）无任何代码变更 — 评审了一个零改动的任务，review 疑似伪造`)
+          const scopeNote = Array.isArray(review.diffPaths) && review.diffPaths.length > 0
+            ? `（diffPaths 路径限定切片为空——统一 commit 模式下 diffPaths 应为本 task 的 allowed_paths；task 确未实现请把 verdict 回 fail）`
+            : ''
+          errors.push(`${taskId}: base..head（${review.base.slice(0, 8)}..${review.head.slice(0, 8)}）无任何代码变更 — 评审了一个零改动的任务，review 疑似伪造${scopeNote}`)
           continue
         }
       }
@@ -590,6 +606,8 @@ function parsePorcelainFiles(statusOut) {
  *   1. base/head 必须是仓库中可解析的真实 commit
  *   2. base..head 的 diff 不能为空（评审一个零改动的"任务"无意义）
  *   3. review.changedFiles（如提供）必须与实际 diff 文件有交集
+ * 带 diffPaths（统一 commit 模式）时 2/3 在 `base..head -- diffPaths` 的路径限定切片上跑
+ * （坑 task-review-unified-commit-scope）：整变更区间下机器可验「本 task 切片非空」。
  *
  * git 环境不可用（非 git 仓库 / git 缺失）时返回 unavailable，由调用方降级为
  * warning——不因环境问题误杀，但记录在输出中。
@@ -694,9 +712,23 @@ export function verifyReviewGitEvidence(review, gitDir, cache = null) {
   } catch {}
   diffFiles = [...new Set(diffFiles)].filter(Boolean)
 
+  // ── diffPaths 路径限定切片（坑 task-review-unified-commit-scope，2026-09-01 实证）──
+  // 主代理统一 commit（全部 task 一个 commit）下 per-task 提交区间不存在，10 个 task 的
+  // review 只能共用同一对 base..head（整变更区间）——任务边界此前只靠 changedFiles「归属
+  // 说明」，本函数无法机器验证「本 task 的切片非空」。diffPaths（=task 的 allowed_paths）
+  // 把 emptyDiff/交叉比对收窄到切片：统一 commit 模式成为一等公民（per-task commit 模式
+  // 不填 diffPaths，行为零变化）。切片在 commit diff ∪ working-tree 并集之后过滤（与
+  // 归属口径同源：generateTaskReviewDrafts 的 allowed_paths 过滤用 pathMatches）。
+  const scopePaths = Array.isArray(review.diffPaths) && review.diffPaths.length > 0
+    ? review.diffPaths.filter(p => typeof p === 'string' && p.trim())
+    : null
+  const scopeNote = scopePaths ? `，diffPaths 切片 ${scopePaths.length} 路径` : ''
+  if (scopePaths) diffFiles = diffFiles.filter(f => scopePaths.some(p => pathMatches(f, p)))
+
   const emptyDiff = diffFiles.length === 0
 
-  // changedFiles 交叉比对：完全不相交 = review 描述的改动与实际 diff 无关（diffFiles 已含 working-tree）
+  // changedFiles 交叉比对：完全不相交 = review 描述的改动与实际 diff 无关（diffFiles 已含 working-tree，
+  // 有 diffPaths 时已收窄为路径限定切片）
   if (!emptyDiff && Array.isArray(review.changedFiles) && review.changedFiles.length > 0) {
     // 注记剥离（坑 changedfiles-annotation-suffix-mismatch，2026-08-22 实证：changedFiles 带
     // 「src/a.js（新增）」类注记后缀被判完全不相交，agent 用正则修还贪婪吞了路径段两轮才对）。
@@ -715,8 +747,9 @@ export function verifyReviewGitEvidence(review, gitDir, cache = null) {
       return diffSet.has(nf) || diffFiles.some(d => d.endsWith(nf) || nf.endsWith(d))
     })
     if (!hasOverlap) {
-      errors.push(`changedFiles 与实际 git diff（${review.base.slice(0, 8)}..${review.head.slice(0, 8)}，${diffFiles.length} 个文件）完全不相交 — review 内容与代码变更无关。` +
-        `检查：changedFiles 必须是纯文件路径（注记/说明写 reviewerNotes，不拼进路径数组）；路径拼写与 diff 对照`)
+      errors.push(`changedFiles 与实际 git diff（${review.base.slice(0, 8)}..${review.head.slice(0, 8)}${scopeNote}，${diffFiles.length} 个文件）完全不相交 — review 内容与代码变更无关。` +
+        `检查：changedFiles 必须是纯文件路径（注记/说明写 reviewerNotes，不拼进路径数组）；路径拼写与 diff 对照` +
+        (scopePaths ? `；diffPaths 是否覆盖了 changedFiles 所在路径（切片按 diffPaths 过滤）` : ''))
     }
   }
 
@@ -1218,6 +1251,11 @@ export async function generateTaskReviewDrafts({ changeName, cwd, platformOpts =
       base: taskBase,
       head: taskHead,
       changedFiles: taskChangedFiles,
+      // 统一 commit 模式（坑 task-review-unified-commit-scope）：base..head 是整变更区间时，
+      // diffPaths 把证据校验切片收窄到本 task 的 allowed_paths。仅在有归属切片时带
+      // （无归属草稿 changedFiles 为空，带 diffPaths 会让切片空 → emptyDiff 误判伪造，
+      // 与「留给 agent 复核升级」的草稿语义冲突）。
+      ...(allowedPaths.length > 0 ? { diffPaths: allowedPaths } : {}),
       specVerdict: 'cannot_verify',
       qualityVerdict: 'cannot_verify',
       requiredEvidence: ['auto-generated draft: 待 agent 对照 ' + taskId + ' brief + diff 复核后升级为 pass/fail'],
@@ -1378,6 +1416,14 @@ export async function adoptTaskReviewMechanics({ changeName, cwd, platformOpts =
     merged.base = taskBase
     merged.head = taskHead
     merged.changedFiles = taskChangedFiles
+    // diffPaths（统一 commit 模式，坑 task-review-unified-commit-scope）：与草稿同口径——仅
+    // 有归属切片（taskChangedFiles 非空）时带 allowed_paths，空归属不带（防切片恒空 →
+    // emptyDiff 误判伪造）。
+    if (taskChangedFiles.length > 0 && allowedPaths.length > 0) {
+      merged.diffPaths = allowedPaths
+    } else {
+      delete merged.diffPaths
+    }
     if (draftRepo) merged.repo = draftRepo
 
     let verdictTouched = false
@@ -1403,6 +1449,7 @@ export async function adoptTaskReviewMechanics({ changeName, cwd, platformOpts =
       || prev.base !== merged.base
       || prev.head !== merged.head
       || JSON.stringify(prev.changedFiles ?? null) !== JSON.stringify(merged.changedFiles)
+      || JSON.stringify(prev.diffPaths ?? null) !== JSON.stringify(merged.diffPaths ?? null)
       || prev.repo !== merged.repo
 
     try {

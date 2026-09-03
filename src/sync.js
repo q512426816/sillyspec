@@ -1636,9 +1636,11 @@ export class SyncManager {
     let specOutcome = null;
     if (specCf && mode === 'keep-local') {
       // keep-local = 本地胜出：重新 GET 清单重定 base 后 POST 本地内容（last-writer-wins），
-      // 成功清冲突文件闭环；仍冲突（平台又有更新）保留文件待下次裁决
+      // 成功清冲突文件闭环；仍冲突（平台又有更新）保留文件待下次裁决。
+      // forcePush（坑 quicksync-conflict-granularity）：用户显式裁决后本地意志高于
+      // 「未改动跟随服务器」语义——强制重推不得被内容基线/mtime 防回推过滤削掉。
       try {
-        const r = await syncSpecTree(safePlatformSpecDir(this.cwd) || join(this.cwd, '.sillyspec'), this._getPlatform(), changeName);
+        const r = await syncSpecTree(safePlatformSpecDir(this.cwd) || join(this.cwd, '.sillyspec'), this._getPlatform(), changeName, { forcePush: true });
         if (!r.conflict) {
           this.clearSpecConflictFile(changeName);
           specOutcome = { ok: true, resolved: true, reason: 'spec 树已以本地为准重定基线重推，冲突闭环' };

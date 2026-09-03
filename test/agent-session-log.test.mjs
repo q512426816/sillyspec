@@ -7,7 +7,8 @@
  *    - env 覆盖（绝对/相对路径，独立于任何 harness 标记）
  *    - claude-code（env 门控 + 活跃窗口 + 窗口外不登 + CLAUDE_SESSION_ID 精确匹配 + 子目录 cwd）
  *    - codex（sessions/YYYY/MM/DD/rollout 首行 session_meta.cwd 精确匹配 / 异 cwd 不登 / originator 带出）
- *    - zcode（ZCODE_* env 门控 + rollout/model-io-sess_ 命名 + session_id 剥前缀）
+ *    - zcode（ZCODE_* env 门控 + 首块工作目录标记 cwd 精确归属：异项目活跃会话不登 /
+ *      无标记 fail-closed 不登 / subagent <env> 标记形态同命中 / session_id 剥前缀）
  * 3. recordAgentLogInvocation：产物落盘与合并语义（新建 / invocations 递增 / 多路径共存 /
  *    entries 上限 / 平台模式 workspace 元信息 / session_id 入产物 / 非 agent 环境不写盘）。
  * 4. readAgentLogArtifact / resolveAgentLogArtifactPath：读回 + 落点解析（本地/平台指针/损坏指针）。
@@ -89,12 +90,20 @@ function makeCodexFixture(home, now, files) {
 }
 
 // 造 ZCode fixture：<home>/.zcode/cli/rollout/model-io-sess_<id>.jsonl
+// cwd 指定时写实证形态首行（系统提示词环境段工作目录标记，JSON.stringify 自然产生 \\ 与
+// \n 内嵌转义）；style 区分主会话（Primary working directory）与 subagent（<env> Working
+// directory）两种实证形态。无 cwd 写空对象（模拟读不出标记的文件）。
 function makeZcodeFixture(home, files) {
   const dir = join(home, '.zcode', 'cli', 'rollout')
   mkdirSync(dir, { recursive: true })
-  for (const { name, mtimeMs } of files) {
+  for (const { name, cwd, style, mtimeMs } of files) {
     const p = join(dir, name)
-    writeFileSync(p, '{}\n')
+    const envText = style === 'subagent'
+      ? `useful information about the environment you are running in:\n<env>\nWorking directory: ${cwd}\nIs directory a git repository: yes\n`
+      : `# Environment\n\nPrimary working directory: ${cwd}\n- Is a git repository: yes\n`
+    writeFileSync(p, cwd
+      ? JSON.stringify({ request: { body: { system: [{ type: 'text', text: envText }] } } }) + '\n'
+      : '{}\n')
     if (mtimeMs !== undefined) utimesSync(p, new Date(mtimeMs), new Date(mtimeMs))
   }
   return dir
@@ -185,20 +194,34 @@ console.log('--- 4. codex 自动探测（session_meta.cwd 精确匹配）---')
   assert(r3.filter(e => e.harness === 'codex').length === 1, 'CODEX_HOME 重定向生效')
 }
 
-console.log('--- 5. zcode 自动探测（ZCODE_* env 门控）---')
+console.log('--- 5. zcode 自动探测（env 门控 + 工作目录标记 cwd 精确归属）---')
 {
   const home = makeTmpDir('al-zc-')
   makeZcodeFixture(home, [
-    { name: 'model-io-sess_f9c2d817-bbdb-4500-b716-5f45099e43e9.jsonl', mtimeMs: NOW - 60 * 1000 },
-    { name: 'model-io-sess_subagent_agent_781ce17b-b3cb-430e-8d78-a47b9729cc49.jsonl', mtimeMs: NOW - 2 * 60 * 1000 },
-    { name: 'model-io-sess-old.jsonl', mtimeMs: NOW - 3 * 60 * 60 * 1000 },
+    { name: 'model-io-sess_f9c2d817-bbdb-4500-b716-5f45099e43e9.jsonl', cwd: WIN_CWD, mtimeMs: NOW - 60 * 1000 },
+    { name: 'model-io-sess_subagent_agent_781ce17b-b3cb-430e-8d78-a47b9729cc49.jsonl', cwd: WIN_CWD, style: 'subagent', mtimeMs: NOW - 2 * 60 * 1000 },
+    // 异项目并行会话（bug 实证形态：rollout 目录全局共享，另一 ZCode 窗口的活跃会话，
+    // mtime 比本会话新——修复前会排 entries 首位被上报为本地 agent 日志）
+    { name: 'model-io-sess_6a053981-3b46-4667-8204-49140bd3f736.jsonl', cwd: 'C:\\other\\project', mtimeMs: NOW - 30 * 1000 },
+    // 无工作目录标记的活跃文件（标记读不出 fail-closed 丢弃）
+    { name: 'model-io-sess-nomarker.jsonl', mtimeMs: NOW - 40 * 1000 },
+    // 窗口外旧会话
+    { name: 'model-io-sess-old.jsonl', cwd: WIN_CWD, mtimeMs: NOW - 3 * 60 * 60 * 1000 },
   ])
 
   const r = detectAgentLogEntries({ cwdCandidates: [WIN_CWD], env: { ZCODE_APP_VERSION: '3.8.1' }, homeDir: home, now: NOW })
   const zc = r.filter(e => e.harness === 'zcode')
-  assert(zc.length === 2, `活跃 2 条（主会话+subagent，实际 ${zc.length}）——窗口外不登`)
+  assert(zc.length === 2, `本 cwd 活跃 2 条（主+subagent，实际 ${zc.length}）——异项目/无标记/窗口外都不登`)
   assert(zc.some(e => e.session_id === 'f9c2d817-bbdb-4500-b716-5f45099e43e9'), 'session_id 剥 model-io-sess_ 前缀')
-  assert(zc.every(e => e.format === 'zcode-model-io-jsonl'), 'format 标注')
+  assert(zc.some(e => e.log_path.includes('subagent_agent_781ce17b')), 'subagent 会话（<env> Working directory 标记形态）同命中')
+  assert(zc.every(e => e.format === 'zcode-model-io-jsonl' && e.detected_via === 'zcode-workdir-marker'), 'format/detected_via 标注')
+  assert(!zc.some(e => e.log_path.includes('6a053981') || e.log_path.includes('nomarker')),
+    '异项目活跃会话被 cwd 校验拦截（本 bug 修复点）；无标记文件 fail-closed 丢弃')
+  assert(zc.every(e => e.agent_cwd === 'C:/proj/demo'), 'agent_cwd 用文件真实工作目录（非 CLI cwd 冒充）')
+
+  // cwd 匹配容忍大小写/分隔符差异（标记值为反斜杠形态，候选正斜杠小写）
+  const rSlash = detectAgentLogEntries({ cwdCandidates: ['c:/proj/demo'], env: { ZCODE_APP_VERSION: '3.8.1' }, homeDir: home, now: NOW })
+  assert(rSlash.filter(e => e.harness === 'zcode').length === 2, 'cwd 匹配容忍大小写/分隔符差异')
 
   const r2 = detectAgentLogEntries({ cwdCandidates: [WIN_CWD], env: {}, homeDir: home, now: NOW })
   assert(!r2.some(e => e.harness === 'zcode'), '无 ZCODE_* 标记不探测')
@@ -281,12 +304,8 @@ console.log('--- 8. cursor / opencode（loose 探测器：仅 precise 全落空�
   assert(oc.length === 1 && oc[0].session_id === 'sess_01AAA'
     && oc[0].log_path.endsWith('opencode/storage/session'), 'opencode：info 含 cwd 命中 → session 根登记')
 
-  // 压制场景：同 home 存在 precise 命中（zcode env + rollout）→ loose 全部不登
-  const zcDir = join(home, '.zcode', 'cli', 'rollout')
-  mkdirSync(zcDir, { recursive: true })
-  const zcFile = join(zcDir, 'model-io-sess_z1.jsonl')
-  writeFileSync(zcFile, '{}\n')
-  utimesSync(zcFile, new Date(NOW - 20 * 1000), new Date(NOW - 20 * 1000))
+  // 压制场景：同 home 存在 precise 命中（zcode env + rollout cwd 匹配）→ loose 全部不登
+  makeZcodeFixture(home, [{ name: 'model-io-sess_z1.jsonl', cwd: WIN_CWD, mtimeMs: NOW - 20 * 1000 }])
   const r2 = detectAgentLogEntries({
     cwdCandidates: [WIN_CWD], env: { ...ocEnv, ZCODE_APP_VERSION: '3.8.1' }, homeDir: home, now: NOW,
   })

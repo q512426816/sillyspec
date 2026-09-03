@@ -61,8 +61,8 @@ cli-logic 报的 critical「machine-interface 声明只读却会建库落盘写 
 **总评**：质量相当高，坑编号+历史教训注释密集，多数 gate fail-closed、回滚收敛、原子写齐备。但因经验补丁多，出现几处「三处判定不同源」裂缝（completeStep / checkTransition / runGate）。
 
 1. **[critical→med-high]** machine-interface 只读契约被破（详见上方复核结论）。
-2. **[high]** gate 对 execute 的 task-reviews 校验口径与 execute --done 完成门不一致；execute-run-id 缺失时 `gates.js:249` 直接 generate 覆盖 marker，无目录扫描兜底（stage-review 的 `getLatestStageReviewRunId` 有），marker 丢失而 agent 已用旧 runId 落盘时误判缺 review.json。两条 run-id 恢复路径不同源。
-3. **[high]** `autoCheckPlanFromReviews`（complete.js:599）execute --done 路径对 plan.md 读-改-写无锁，并发 execute --done / 手动勾选互相覆盖；plan.md 是 agent 与 CLI 共享文件，Windows 整文件覆盖会读半截（fs-atomic.js 头注明的坑这里没用原子写）。
+2. **[high]** gate 对 execute 的 task-reviews 校验口径与 execute --done 完成门不一致；execute-run-id 缺失时 `gates.js:256` 直接 generate 覆盖 marker，无目录扫描兜底（stage-review 的 `getLatestStageReviewRunId` 有），marker 丢失而 agent 已用旧 runId 落盘时误判缺 review.json。两条 run-id 恢复路径不同源。
+3. **[high]** `autoCheckPlanFromReviews`（complete.js:612）execute --done 路径对 plan.md 读-改-写无锁，并发 execute --done / 手动勾选互相覆盖；plan.md 是 agent 与 CLI 共享文件，Windows 整文件覆盖会读半截（fs-atomic.js 头注明的坑这里没用原子写）。
 4. **[medium]** `STAGE_ORDER` 含 scan（shared.js:22），`_getDownstreamStages` 把 scan 当主流程首环，一致性检查（consistency-doctor.js:45）在 scan stale/revising 时误报 brainstorm/plan/execute 不该 completed。`_getNextSuggestion` 已显式跳过 scan 但下游判定同源不同判。
 5. **[medium]** `resolveWaitingStepWithAnswer`（complete.js:140-195）只 `findIndex` 解第一个 waiting，多 waiting 时 `--done --answer` 静默落到非目标步骤；continueStep 已做「多 waiting 必须 --from-step 指定」保护，completeStep 没有。
 

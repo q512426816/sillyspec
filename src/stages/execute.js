@@ -1064,7 +1064,7 @@ ${crossLines}${crossWorktreeSection}${crossLegacySection}
 
 **回收跨仓 task（head 锡点，CLI 自动落盘，勿手写）：**
 - 子代理完成 commit 后，正常写 review.json（verdict/notes）并勾选 checkbox 即可。execute \`--done\` 时 CLI 自动对跨仓仓（worktree 模式=该仓 worktree，legacy=仓根）\`git rev-parse HEAD\` 写入该 task 卡 \`head_commit:\`（幂等，已存在不覆盖——你若手写了精确锚点则以你的为准）。
-- review.json 的 mechanics 字段（\`base\`/\`head\`/\`changedFiles\`）无需手算：\`base\` 取 task 卡 \`base_commit\`、\`head\` 取 task 卡 \`head_commit\`，写完跑 \`sillyspec backfill-reviews --change <变更名> --adopt\` 一键代填（verdict 保留）。
+- review.json 的 mechanics 字段（\`base\`/\`head\`/\`changedFiles\`/\`diffPaths\`）无需手算：\`base\` 取 task 卡 \`base_commit\`、\`head\` 取 task 卡 \`head_commit\`，写完跑 \`sillyspec backfill-reviews --change <变更名> --adopt\` 一键代填（verdict 保留）。
 `
   }
 
@@ -1243,9 +1243,13 @@ task-XX 对应：{SPEC_ROOT}/.runtime/execute-runs/{EXECUTE_RUN_ID}/tasks/task-X
  "qualityVerdict": "pass|fail|cannot_verify", "reviewerNotes": "评审说明",
  "requiredEvidence": [] }
 
+**base/head 两种取法（按提交模式选其一）：**
+- **per-task commit 模式**（默认，子代理每 task 一提交）：base=本 task 开始前的 commit，head=本 task 的 commit——base..head 天然就是本 task 的 diff，无需 diffPaths。
+- **统一 commit 模式**（主代理统一实现/收尾一次性 commit，全部 task 一个提交）：base=基线 commit（worktree meta 的 baseHash），head=统一 commit，并**必填 \`diffPaths\`（本 task 卡的 allowed_paths 原样数组）**——评审与 CLI 校验的 diff 都是 \`git diff base..head -- diffPaths\` 的路径限定切片，任务边界由 diffPaths 机器可验，不再只靠 changedFiles 归属说明。changedFiles 填切片内实际改动的文件。
+
 **评审铁律：**
 - 不信任 implementer 自报结果，对照 diff 和 task brief 验证
-- 只看当前 task 的 diff，不做全仓库漫游审查
+- 只看当前 task 的 diff（统一 commit 模式=路径限定切片），不做全仓库漫游审查
 - \`cannot_verify\` 只在确实无法验证且有待补充证据时使用，且 requiredEvidence 必须非空
 - \`sillyspec run execute --done\` 会校验所有 task 的 review.json，缺失或 fail 会阻断完成
 

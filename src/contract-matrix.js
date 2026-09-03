@@ -15,6 +15,7 @@ import { splitOwnVsForeignDiffFiles } from './foreign-declared.js'
 import {
   scanBackendEndpoints,
   scanFrontendApiCalls,
+  scanMountPrefixes,
   normalizePath,
   diffApiParity,
 } from './endpoint-extractor.js'
@@ -558,7 +559,16 @@ export function verifyApiParity(specBase, scanRoot, runtimeRoot, changeName = nu
     frontendCalls = scanFrontendApiCalls(frontendRoot)
   }
 
-  const { missingBackend, unusedBackend } = diffApiParity(frontendCalls, mergedProviderEndpoints)
+  // ── 挂载前缀收集（坑 endpoints-mount-prefix-gap，2026-08-31 用户实证）：endpoints 提取的是
+  // 「router 自身前缀 + 装饰器路径」，不含挂载点前缀（main.py 的 include_router(prefix=)/app.use
+  // 与 router 文件分离，静态扫描不做导入图关联）→ 前端全路径调用（/api/xxx）对不上欠前缀端点
+  // （/xxx）→ 17 个存量端点全量假 missing、人工逐条定性。对账时按前缀集合剥除前端调用前缀对齐。
+  const mountPrefixes = new Set()
+  for (const { root } of liveByRoot) {
+    try { for (const p of scanMountPrefixes(root)) mountPrefixes.add(p) } catch { /* 单根失败不拖垮整体 */ }
+  }
+
+  const { missingBackend, unusedBackend, prefixAlignedCount } = diffApiParity(frontendCalls, mergedProviderEndpoints, [...mountPrefixes])
   // unusedBackend 收窄到现算端点（存量 artifact 的过期端点不参与——它不在当前代码里，
   // 「前端未调用」可能是端点已被重构掉而非真泄漏）
   const narrowedUnused = unusedBackend.filter(u => {
@@ -575,6 +585,9 @@ export function verifyApiParity(specBase, scanRoot, runtimeRoot, changeName = nu
   if (narrowedUnused.length > 0) {
     summary += ` | ${narrowedUnused.length} backend endpoints unused by frontend`
   }
+  if (prefixAlignedCount > 0) {
+    summary += ` | ${prefixAlignedCount} calls matched after mount-prefix alignment (artifact paths exclude include_router/app.use prefixes)`
+  }
 
-  return { ok, missingBackend, unusedBackend: narrowedUnused, summary, backendCount: mergedProviderEndpoints.length, frontendCount: frontendCalls.length, scanRoots: liveByRoot.map(r => r.root) }
+  return { ok, missingBackend, unusedBackend: narrowedUnused, summary, backendCount: mergedProviderEndpoints.length, frontendCount: frontendCalls.length, prefixAlignedCount, scanRoots: liveByRoot.map(r => r.root) }
 }

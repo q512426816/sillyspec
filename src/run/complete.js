@@ -1081,7 +1081,15 @@ export async function continueStep(pm, progress, stageName, cwd, answer, options
   const currentStep = stageData.steps[currentIdx]
   const isRepeatableWait = currentStepDef.repeatableWait === true || currentStep.repeatableWait === true
   const requiresWait = currentStepDef.requiresWait === true || currentStep.requiresWait === true
-  const shouldReturnToCurrentStep = isRepeatableWait || requiresWait
+  // conditionalWait 并入「回当前步」（坑 continue-conditionalwait-premature-complete，2026-09-01
+  // 实证）：waitStep 的提示对 requiresWait/conditionalWait 两类同文——「--continue --answer 后本步
+  // 回到待执行，完成动作后需再 --done 收尾」，但此处谓词漏了 conditionalWait。审查计划
+  // （conditionalWait、无 repeatableWait）被 --answer 直接收尾 completed，agent 手里已备好的
+  // --done（本步真实产出摘要）随即落到下一步上：multi-agent-platform 2026-09-01-session-group-chat
+  // plan 阶段 --continue 后 2 秒 --done 把「生成 TaskCard」假完成（08-31 两变更同形态 ×2），
+  // 靠 --reopen --from-step 4 重做浪费一轮。对齐提示语义：conditionalWait 同样回 pending。
+  const isConditionalWait = currentStepDef.conditionalWait === true || currentStep.conditionalWait === true
+  const shouldReturnToCurrentStep = isRepeatableWait || requiresWait || isConditionalWait
 
   const now = new Date().toLocaleString('zh-CN', { hour12: false })
   const prevOutput = currentStep.output || ''
@@ -1136,7 +1144,7 @@ export async function continueStep(pm, progress, stageName, cwd, answer, options
     console.warn('⚠️ user-inputs.md 追加失败（不阻断）:', e.message)
   }
 
-  // shouldReturnToCurrentStep: 回到当前步骤继续执行（repeatable=多轮探索，requiresWait=确认后执行动作）
+  // shouldReturnToCurrentStep: 回到当前步骤继续执行（repeatable=多轮探索，requiresWait/conditionalWait=确认后执行动作）
   if (shouldReturnToCurrentStep) {
     console.log(`\n🔁 Step ${currentIdx + 1}/${stageData.steps.length} 已收到用户输入，回到当前步骤继续执行。`)
     if (isRepeatableWait) {

@@ -12,6 +12,8 @@ import {
   extractExpressEndpoints,
   extractSpringEndpoints,
   scanBackendEndpoints,
+  extractMountPrefixes,
+  scanMountPrefixes,
   extractFrontendApiCalls,
   normalizePath,
   diffApiParity,
@@ -243,6 +245,125 @@ describe('diffApiParity', () => {
     const result = diffApiParity(frontendCalls, backendEndpoints)
     assert.equal(result.unusedBackend.length, 1)
     assert.equal(result.unusedBackend[0].path, '/api/ppm/internal/health')
+  })
+
+  // ── 挂载前缀对齐（坑 endpoints-mount-prefix-gap，2026-08-31 用户实证）─────────
+
+  it('挂载前缀对齐：前端全路径调用命中欠前缀端点（/api 剥除后匹配）', () => {
+    const frontendCalls = [
+      { method: 'GET', path: '/api/daemon/machines', source: 'api.ts', line: 1 },
+    ]
+    const backendEndpoints = [
+      { method: 'GET', path: '/daemon/machines', source: 'router.py' }, // 欠挂载前缀（提取口径）
+    ]
+
+    const result = diffApiParity(frontendCalls, backendEndpoints, ['/api'])
+    assert.equal(result.missingBackend.length, 0, JSON.stringify(result.missingBackend))
+    assert.equal(result.ok, true)
+    assert.equal(result.prefixAlignedCount, 1)
+    // unused 侧同步对齐：欠前缀端点不再因前缀差误报 unused
+    assert.equal(result.unusedBackend.length, 0)
+  })
+
+  it('不传 mountPrefixes 时维持旧口径（假 missing 仍暴露——回归保护）', () => {
+    const frontendCalls = [
+      { method: 'GET', path: '/api/daemon/machines', source: 'api.ts', line: 1 },
+    ]
+    const backendEndpoints = [
+      { method: 'GET', path: '/daemon/machines', source: 'router.py' },
+    ]
+
+    const result = diffApiParity(frontendCalls, backendEndpoints)
+    assert.equal(result.missingBackend.length, 1)
+    assert.equal(result.prefixAlignedCount, 0)
+  })
+
+  it('多前缀最长优先：/api/ppm/project 命中欠 /api/ppm 的端点 /project', () => {
+    const frontendCalls = [
+      { method: 'GET', path: '/api/ppm/project-plan/{param}/nodes', source: 'api.ts', line: 1 },
+    ]
+    const backendEndpoints = [
+      { method: 'GET', path: '/project-plan/{param}/nodes', source: 'router.py' },
+    ]
+
+    const result = diffApiParity(frontendCalls, backendEndpoints, ['/api', '/api/ppm'])
+    assert.equal(result.missingBackend.length, 0, JSON.stringify(result.missingBackend))
+    assert.equal(result.prefixAlignedCount, 1)
+  })
+
+  it('真缺失不因前缀对齐漏报', () => {
+    const frontendCalls = [
+      { method: 'GET', path: '/api/genuinely-missing', source: 'api.ts', line: 1 },
+    ]
+    const backendEndpoints = [
+      { method: 'GET', path: '/daemon/machines', source: 'router.py' },
+    ]
+
+    const result = diffApiParity(frontendCalls, backendEndpoints, ['/api'])
+    assert.equal(result.missingBackend.length, 1)
+    assert.equal(result.ok, false)
+  })
+
+  it('装饰器自带全路径的仓（提取=真实路径）：直配命中不计 prefixAligned', () => {
+    const frontendCalls = [
+      { method: 'GET', path: '/api/users', source: 'api.ts', line: 1 },
+    ]
+    const backendEndpoints = [
+      { method: 'GET', path: '/api/users', source: 'routes.js' },
+    ]
+
+    const result = diffApiParity(frontendCalls, backendEndpoints, ['/api'])
+    assert.equal(result.missingBackend.length, 0)
+    assert.equal(result.prefixAlignedCount, 0, '原始路径恒在候选集首位，直配优先')
+  })
+})
+
+// ─── 挂载前缀提取（extractMountPrefixes / scanMountPrefixes）───────────────
+
+describe('extractMountPrefixes / scanMountPrefixes', () => {
+  const tmpDir = mkdtempSync(join(tmpdir(), 'sillyspec-mount-'))
+
+  it('FastAPI include_router（单行 + 多行）与 Express app.use 前缀提取', () => {
+    mkdirSync(tmpDir, { recursive: true })
+    writeFileSync(join(tmpDir, 'main.py'), [
+      'from fastapi import FastAPI',
+      'app = FastAPI()',
+      'app.include_router(daemon_router, prefix="/api")',
+      'app.include_router(',
+      '    ppm_router,',
+      '    prefix="/api/ppm",',
+      ')',
+      'app.include_router(health_router)  # 无前缀挂载不产出',
+    ].join('\n'), 'utf8')
+    writeFileSync(join(tmpDir, 'app.js'), [
+      'const express = require("express")',
+      'const app = express()',
+      'app.use("/v2", router)',
+    ].join('\n'), 'utf8')
+
+    assert.deepEqual(extractMountPrefixes(join(tmpDir, 'main.py')).sort(), ['/api', '/api/ppm'])
+    assert.deepEqual(extractMountPrefixes(join(tmpDir, 'app.js')), ['/v2'])
+  })
+
+  it('scanMountPrefixes 递归收集去重，node_modules/test 目录排除', () => {
+    // 独立临时目录（坑 mount-prefix-test-isolation，2026-09-02 npm test 偶发红）：describe 级
+    // 共享 tmpDir 时 node:test 并发子测试不保序——前序用例写在根目录的 main.py（含 /api/ppm）
+    // 会被本用例的递归扫描扫到，断言 ['/api'] 偶发多出 /api/ppm。扫描用例对目录内容敏感，
+    // 必须独占目录。
+    const scanDir = mkdtempSync(join(tmpdir(), 'sillyspec-mountscan-'))
+    mkdirSync(join(scanDir, 'backend', 'app'), { recursive: true })
+    writeFileSync(join(scanDir, 'backend', 'app', 'main.py'), 'app.include_router(r, prefix="/api")\n', 'utf8')
+    mkdirSync(join(scanDir, 'node_modules', 'lib'), { recursive: true })
+    writeFileSync(join(scanDir, 'node_modules', 'lib', 'm.js'), 'app.use("/noise", r)\n', 'utf8')
+    mkdirSync(join(scanDir, 'tests'), { recursive: true })
+    writeFileSync(join(scanDir, 'tests', 't.py'), 'app.include_router(r, prefix="/test-noise")\n', 'utf8')
+
+    assert.deepEqual(scanMountPrefixes(scanDir), ['/api'])
+    try { rmSync(scanDir, { recursive: true, force: true }) } catch {}
+  })
+
+  it('cleanup', () => {
+    try { rmSync(tmpDir, { recursive: true, force: true }) } catch {}
   })
 })
 

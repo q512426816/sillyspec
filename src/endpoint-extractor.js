@@ -144,6 +144,69 @@ export function extractSpringEndpoints(filePath) {
 }
 
 /**
+ * 从单个文件提取路由挂载前缀（挂载点侧，与 router 文件分离）。
+ * - FastAPI：`app.include_router(xxx_router, prefix="/api")`（含多行形态，`[^)]*?` 跨参数/换行）
+ * - Express：`app.use("/api", router)`
+ * 跨文件前缀无法在提取端点时合并（挂载点与 router 文件分离，静态扫描不做导入图关联），
+ * 收集为前缀集合供对账端剥除对齐（坑 endpoints-mount-prefix-gap）。
+ *
+ * @param {string} filePath - 文件绝对路径
+ * @returns {string[]} 挂载前缀列表
+ */
+export function extractMountPrefixes(filePath) {
+  const content = readFileSync(filePath, 'utf8')
+  const prefixes = []
+  for (const m of content.matchAll(/\.include_router\s*\([^)]*?prefix\s*=\s*["'`]([^"'`]+)["'`]/g)) {
+    prefixes.push(m[1])
+  }
+  for (const m of content.matchAll(/\bapp\.use\s*\(\s*["'`]([^"'`]+)["'`]/g)) {
+    prefixes.push(m[1])
+  }
+  return prefixes
+}
+
+// backend 扫描目录排除清单（端点提取与挂载前缀收集共用）。
+// 对齐 scanFrontendApiCalls（坑 parity-scan-stale-dirs：.claude/worktrees 陈旧检出
+// 与各类 build 产物混入端点扫描全是噪音）——backend 侧另含 __pycache__/.gradle/maven target
+const BACKEND_DIR_EXCLUDE = [
+  /^__pycache__$/, /^node_modules$/, /^\.venv$/, /^venv$/, /^\.git$/, /^\.gradle$/,
+  /^\.claude$/, /^\.vscode$/, /^\.idea$/, /^\.cursor$/, /^\.next$/, /^\.nuxt$/,
+  /^\.output$/, /^\.turbo$/, /^\.parcel-cache$/, /^coverage$/,
+  /^\.sillyspec$/, /^\.worktrees$/, /^\.d\.ts$/,
+  /^(dist|build|target|out)$/i,
+  /test/i,
+]
+
+/**
+ * 递归扫描目录收集路由挂载前缀集合（include_router prefix / app.use 路径）。
+ * @param {string} dir
+ * @param {{ excludePatterns?: RegExp[] }} opts
+ * @returns {string[]} 去重后的挂载前缀列表
+ */
+export function scanMountPrefixes(dir, opts = {}) {
+  const excludePatterns = opts.excludePatterns || BACKEND_DIR_EXCLUDE
+  const prefixes = new Set()
+  if (!existsSync(dir)) return [...prefixes]
+  function walk(d) {
+    for (const entry of readdirSync(d, { withFileTypes: true })) {
+      const full = join(d, entry.name)
+      if (entry.isDirectory()) {
+        if (excludePatterns.some(p => p.test(entry.name))) continue
+        walk(full)
+      } else if (entry.isFile()) {
+        const ext = extname(entry.name).toLowerCase()
+        if (ext !== '.py' && ext !== '.js' && ext !== '.ts') continue
+        try {
+          for (const p of extractMountPrefixes(full)) prefixes.add(p)
+        } catch {}
+      }
+    }
+  }
+  walk(dir)
+  return [...prefixes]
+}
+
+/**
  * 从目录递归扫描后端端点（多框架）。
  * 按扩展名分派：.py→FastAPI / .js,.ts→Express / .java→Spring。
  * 保留 excludePatterns（向后兼容 opts）；filePattern 在多框架分派下不再适用。
@@ -152,16 +215,7 @@ export function extractSpringEndpoints(filePath) {
  * @returns {Array<{ method: string, path: string, source: string, line: number }>}
  */
 export function scanBackendEndpoints(dir, opts = {}) {
-  // 排除清单对齐 scanFrontendApiCalls（坑 parity-scan-stale-dirs：.claude/worktrees 陈旧检出
-  // 与各类 build 产物混入端点扫描全是噪音）——backend 侧另含 __pycache__/.gradle/maven target
-  const excludePatterns = opts.excludePatterns || [
-    /^__pycache__$/, /^node_modules$/, /^\.venv$/, /^venv$/, /^\.git$/, /^\.gradle$/,
-    /^\.claude$/, /^\.vscode$/, /^\.idea$/, /^\.cursor$/, /^\.next$/, /^\.nuxt$/,
-    /^\.output$/, /^\.turbo$/, /^\.parcel-cache$/, /^coverage$/,
-    /^\.sillyspec$/, /^\.worktrees$/, /^\.d\.ts$/,
-    /^(dist|build|target|out)$/i,
-    /test/i,
-  ]
+  const excludePatterns = opts.excludePatterns || BACKEND_DIR_EXCLUDE
 
   const results = []
   if (!existsSync(dir)) return results
@@ -326,16 +380,30 @@ export function normalizePath(rawPath) {
 // ─── 对账 ───────────────────────────────────────────────────────────────
 
 /**
- * 比较前端调用的路径和后端注册的端点，返回差异
+ * 比较前端调用的路径和后端注册的端点，返回差异。
+ *
+ * 挂载前缀对齐（坑 endpoints-mount-prefix-gap，2026-08-31 用户实证）：后端提取到的是
+ * 「router 自身前缀 + 装饰器路径」，不含挂载点前缀（main.py 的 include_router(prefix=)/
+ * app.use 与 router 文件分离，静态扫描不做导入图关联）→ 前端全路径调用（/api/xxx）对不上
+ * 欠前缀端点（/xxx）→ probe5 全量假 missing（17 个实证，人工定性成本高）。传入
+ * mountPrefixes 时前端调用路径按前缀集合逐个剥除生成候选，任一候选命中即匹配；原始路径
+ * 恒在候选集首位——装饰器自带全路径的仓（提取路径=真实路径）行为不变。
  *
  * @param {Array<{ path: string, method: string, source: string }>} frontendCalls
  * @param {Array<{ path: string, method: string, source: string }>} backendEndpoints
+ * @param {string[]} [mountPrefixes] 挂载前缀集合（scanMountPrefixes 收集）
  * @returns {{
  *   missingBackend: Array<{ path: string, method: string, consumerFile: string, consumerLine: number }>,
- *   unusedBackend: Array<{ path: string, method: string, providerFile: string }>
+ *   unusedBackend: Array<{ path: string, method: string, providerFile: string }>,
+ *   prefixAlignedCount: number,
+ *   ok: boolean
  * }}
  */
-export function diffApiParity(frontendCalls, backendEndpoints) {
+export function diffApiParity(frontendCalls, backendEndpoints, mountPrefixes = []) {
+  // 前缀降序（长的先剥）：/api/ppm 先于 /api，避免剥短前缀后路径失配
+  const prefixes = [...new Set((mountPrefixes || []).filter(p => p && p !== '/'))]
+    .sort((a, b) => b.length - a.length)
+
   // 构建 backend 注册表：归一化 path + method → endpoint
   const backendMap = new Map()
   for (const ep of backendEndpoints) {
@@ -344,27 +412,32 @@ export function diffApiParity(frontendCalls, backendEndpoints) {
   }
 
   const missingBackend = []
+  const frontendKeySet = new Set()
+  let prefixAlignedCount = 0
   for (const call of frontendCalls) {
-    const key = `${call.method}:${normalizePath(call.path)}`
-    if (!backendMap.has(key)) {
+    const base = normalizePath(call.path)
+    const candidates = [base]
+    for (const p of prefixes) {
+      if (base.startsWith(p + '/')) candidates.push(base.slice(p.length))
+    }
+    for (const c of candidates) frontendKeySet.add(`${call.method}:${c}`)
+    const matched = candidates.find(c => backendMap.has(`${call.method}:${c}`))
+    if (!matched) {
       missingBackend.push({
-        path: normalizePath(call.path),
+        path: base,
         method: call.method,
         consumerFile: call.source,
         consumerLine: call.line,
       })
+    } else if (matched !== base) {
+      prefixAlignedCount++
     }
   }
-
-  // 构建 frontend 调用表
-  const frontendSet = new Set(
-    frontendCalls.map(c => `${c.method}:${normalizePath(c.path)}`)
-  )
 
   const unusedBackend = []
   for (const ep of backendEndpoints) {
     const key = `${ep.method}:${normalizePath(ep.path)}`
-    if (!frontendSet.has(key)) {
+    if (!frontendKeySet.has(key)) {
       unusedBackend.push({
         path: normalizePath(ep.path),
         method: ep.method,
@@ -373,7 +446,7 @@ export function diffApiParity(frontendCalls, backendEndpoints) {
     }
   }
 
-  return { missingBackend, unusedBackend, ok: missingBackend.length === 0 }
+  return { missingBackend, unusedBackend, prefixAlignedCount, ok: missingBackend.length === 0 }
 }
 
 // ─── CLI 入口 ────────────────────────────────────────────────────────────
@@ -394,7 +467,9 @@ export async function contractScan(args, cwd) {
 
   const backendEndpoints = scanBackendEndpoints(backendDir)
   const frontendCalls = scanFrontendApiCalls(frontendDir)
-  const { missingBackend, unusedBackend } = diffApiParity(frontendCalls, backendEndpoints)
+  // 挂载前缀收集（坑 endpoints-mount-prefix-gap）：backend 根的挂载点（include_router/app.use）
+  const mountPrefixes = scanMountPrefixes(backendDir)
+  const { missingBackend, unusedBackend, prefixAlignedCount } = diffApiParity(frontendCalls, backendEndpoints, mountPrefixes)
 
   return {
     backend: backendEndpoints.map(e => ({ method: e.method, path: normalizePath(e.path), file: e.source })),
@@ -406,6 +481,7 @@ export async function contractScan(args, cwd) {
       frontendCallCount: frontendCalls.length,
       missingBackendCount: missingBackend.length,
       unusedBackendCount: unusedBackend.length,
+      prefixAlignedCount,
       ok: missingBackend.length === 0,
     },
   }

@@ -18,7 +18,11 @@
  *   - codex：无可靠 env 标记，按 mtime 活跃窗口扫 <home>/.codex/sessions/YYYY/MM/DD/
  *       rollout-*.jsonl，读首行 session_meta.cwd 精确匹配 CLI cwd（并带出 originator，
  *       如 sillyhub-daemon，供平台关联派发来源）
- *   - zcode：env ZCODE_* 门控；<home>/.zcode/cli/rollout/model-io-sess_<id>.jsonl
+ *   - zcode：env ZCODE_* 门控；<home>/.zcode/cli/rollout/model-io-sess_<id>.jsonl（含
+ *       subagent 会话，文件名带 sess_subagent_agent_ 前缀）。rollout 目录全局共享（所有
+ *       ZCode 窗口/项目混居），读首块系统提示词工作目录标记与 cwd 精确匹配——主会话
+ *       `Primary working directory:` / subagent `<env>` 块 `Working directory:` 两形态均
+ *       实证；标记读不出 fail-closed 不登（错登比漏登危害大，SILLYSPEC_AGENT_LOG 兜底）
  *   - pi：目录名即 cwd 编码（--<路径非字母数字替'-'>--），无需 env 门控；
  *       <home>/.pi/agent/sessions/<safePath>/session.jsonl
  *   - deepseek-dsh（@deepseek-ai/dsh）：同 pi 构但 ':' 删除；
@@ -114,6 +118,51 @@ function readFirstLineJson(filePath, maxBytes = 16384) {
     const text = buf.subarray(0, n).toString('utf8');
     const nl = text.indexOf('\n');
     return JSON.parse(nl === -1 ? text : text.slice(0, nl));
+  } catch {
+    return null;
+  } finally {
+    if (fd !== null) { try { closeSync(fd) } catch { /* best effort */ } }
+  }
+}
+
+// zcode model-io 无结构化 cwd 字段，归属数据源 = 首行首个请求系统提示词的环境段工作目录标记。
+// 两形态均本机实证：主会话 `Primary working directory: <path>\n- Is a git repository: yes`；
+// subagent 会话 `<env>\nWorking directory: <path>\nIs directory a git repository`。
+const ZCODE_WORKDIR_RE = /[Ww]orking directory: /;
+
+/**
+ * 从 zcode model-io 文件首块字节提取会话工作目录（cwd 归属判定的数据源）。
+ *
+ * 文件是 JSONL：首行 = 首个模型请求（含完整系统提示词），路径以 JSON 字符串内嵌形态出现
+ * ——分隔符双写（`\\`）、行尾是字面 `\n` 两字符。因此取值不能裸 indexOf 截 `\n`：Windows
+ * 路径普遍含 `\n` 字面序列（`\node_modules`、`\notifications`…），须按转义逐字符扫描，
+ * 直到未转义的换行转义（提示词行边界）为止。只读首块不整行 JSON.parse（首行可达 MB 级）。
+ * @returns {string|null} 未命中标记/文件不可读/值为空返回 null（调用方 fail-closed 丢弃）
+ */
+function extractZcodeWorkdir(filePath, maxBytes = 64 * 1024) {
+  let fd = null;
+  try {
+    fd = openSync(filePath, 'r');
+    const buf = Buffer.alloc(maxBytes);
+    const n = readSync(fd, buf, 0, maxBytes, 0);
+    const text = buf.subarray(0, n).toString('utf8');
+    const m = ZCODE_WORKDIR_RE.exec(text);
+    if (!m) return null;
+    const s = text.slice(m.index + m[0].length);
+    let out = '';
+    for (let j = 0; j < s.length;) {
+      const c = s[j];
+      if (c !== '\\') { out += c; j += 1; continue; }
+      const e = s[j + 1];
+      if (e === undefined || e === 'n') break; // 行尾换行转义 → 值结束
+      if (e === 'u' && /^[0-9a-fA-F]{4}$/.test(s.slice(j + 2, j + 6))) {
+        out += String.fromCharCode(parseInt(s.slice(j + 2, j + 6), 16));
+        j += 6;
+      } else if (e === 'r') { out += '\r'; j += 2; }
+      else if (e === 't') { out += '\t'; j += 2; }
+      else { out += e === '/' ? '/' : e; j += 2; } // \\ \" \/ 等：取转义次字符
+    }
+    return out || null;
   } catch {
     return null;
   } finally {
@@ -233,21 +282,39 @@ function detectCodex(ctx) {
 /**
  * ZCode：env ZCODE_* 门控（本机实证子进程可见 ZCODE_APP_VERSION/ZCODE_ENV 等）；
  * <home>/.zcode/cli/rollout/model-io-sess_<id>.jsonl（含 subagent 会话，文件名带
- * sess_subagent_agent_ 前缀），完整模型 I/O。无 cwd 字段 → env 门控即归属依据。
+ * sess_subagent_agent_ 前缀），完整模型 I/O。
+ *
+ * cwd 归属：rollout 目录全局共享（所有 ZCode 窗口/项目混居），env 门控只证明「CLI 正被
+ * 某个 ZCode 实例驱动」，证明不了「该文件属于本项目」——多窗口并行时另一项目的活跃会话
+ * 会被整体误登（2026-08-31 实证：sillyspec run 把 multi-agent-platform 会话上报为本地
+ * agent 日志）。修法对齐 codex 的 session_meta.cwd 精确匹配：读首块工作目录标记
+ * （extractZcodeWorkdir）与 cwdCandidates 等值比较；标记读不出 fail-closed 丢弃
+ * （错登比漏登危害大——平台把该文件当本会话权威日志解析展示；env 覆盖是兜底通道）。
  */
 function detectZcode(ctx) {
   const { cwdCandidates, env, homeDir, now, windowMs } = ctx;
   const inZcode = Boolean(env.ZCODE_APP_VERSION || env.ZCODE_ENV || env.ZCODE_RUNTIME_ENV);
   if (!inZcode) return [];
   const rolloutDir = join(homeDir, '.zcode', 'cli', 'rollout');
-  const cwdPosix = toPosix(cwdCandidates[0] || '');
-  return listActiveFiles(rolloutDir, { now, windowMs, limit: MAX_PER_HARNESS }).map(f => ({
-    harness: 'zcode', format: 'zcode-model-io-jsonl', detected_via: 'zcode-env-marker',
-    log_path: toPosix(f.full), agent_cwd: cwdPosix,
-    session_id: f.name.replace(/^model-io-sess_/, '').replace(/\.jsonl$/, ''),
-    originator: null,
-    mtime_ms: f.mtimeMs,
-  }));
+  // 预筛多扫一倍再按 cwd 过滤：窗口内其他项目的活跃会话不应在过滤前挤占 MAX_PER_HARNESS 名额
+  const candidates = listActiveFiles(rolloutDir, { now, windowMs, limit: MAX_PER_HARNESS * 2 });
+  const entries = [];
+  for (const f of candidates) {
+    const workdir = extractZcodeWorkdir(f.full);
+    if (!workdir || !cwdCandidates.some(c => c && cwdsMatch(c, workdir))) {
+      debugLog(`zcode rollout cwd 不匹配/无标记，跳过: ${f.name} workdir=${workdir || '(none)'}`);
+      continue;
+    }
+    entries.push({
+      harness: 'zcode', format: 'zcode-model-io-jsonl', detected_via: 'zcode-workdir-marker',
+      log_path: toPosix(f.full), agent_cwd: toPosix(workdir),
+      session_id: f.name.replace(/^model-io-sess_/, '').replace(/\.jsonl$/, ''),
+      originator: null,
+      mtime_ms: f.mtimeMs,
+    });
+    if (entries.length >= MAX_PER_HARNESS) break;
+  }
+  return entries;
 }
 
 /**
