@@ -204,7 +204,7 @@ SQLite Schema（grep 自 `db.js`，仅记表名 + 用途 + 字段数）：
   - `POST {platform.url}/api/changes/{changeName}/documents` 同步文档（`sync.js:501`）；
   - 同步完更新 `changes.platform_last_sync`。
 - 审批链路：`GET /api/changes/{name}/approval` 查询（`sync.js:36`，`checkApproval`）+ `approve` / `reject`
-  入口（`sync.js:1851`，共用 `_submitApproval`，端点契约 TBD-hub-api）。
+  入口（`sync.js:1969`，共用 `_submitApproval`，端点契约 TBD-hub-api）。
 - 配置读 `.sillyspec/local.yaml` platform 段（connect/disconnect 用文本级改写保留注释）。
 - platform 子命令（connect / disconnect / sync / sync-docs / status / pull / resolve /
   approve / reject / pointer）见 `src/index.js:1263`。主 CLI 无 WebSocket 依赖。
