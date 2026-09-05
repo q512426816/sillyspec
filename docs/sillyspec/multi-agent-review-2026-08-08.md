@@ -33,9 +33,9 @@ SillySpec 在 **Grill-Me v1.1 三大原则**上：原则 3（Facts/Decisions 区
 
 #### 【S1·高·真 bug】noAI 步骤收尾绕过所有阶段完成 gate
 - **位置**：`src/run/stage.js:315-345`
-- **现象**：`runStage` 处理 `noAI: true` 步骤时，自动执行 `_cliAction` 后直接把 `stageData.status='completed'` 并落盘，**从不调用 `runStageCompletionGates`**。`runStageCompletionGates` 只在 `complete.js:454` 的 `completeStep` 阶段完成分支被调用——noAI 自动收尾与人工 `--done` 收尾走两套完全不同的逻辑。
+- **现象**：`runStage` 处理 `noAI: true` 步骤时，自动执行 `_cliAction` 后直接把 `stageData.status='completed'` 并落盘，**从不调用 `runStageCompletionGates`**。`runStageCompletionGates` 只在 `complete.js:467` 的 `completeStep` 阶段完成分支被调用——noAI 自动收尾与人工 `--done` 收尾走两套完全不同的逻辑。
 - **直接受害者**：
-  - **plan 阶段**：`buildPlanSteps` 返回 `[..., postcheck]`，postcheck 是 noAI 末步（`src/stages/plan.js:611`）。agent 完成 coordinator 后 `--done` → CLI 自动跑 postcheck → 直接标 plan completed。被绕过的 gate：Stage Review Gate（tier=independent 的 plan 审查 verdict=fail **不再阻断**）、`validatePlanOutputs`（FR 覆盖 / decision blocker / entry-point-wiring）、Plan→Execute Contract（`validatePlanForExecute`）。
+  - **plan 阶段**：`buildPlanSteps` 返回 `[..., postcheck]`，postcheck 是 noAI 末步（`src/stages/plan.js:627`）。agent 完成 coordinator 后 `--done` → CLI 自动跑 postcheck → 直接标 plan completed。被绕过的 gate：Stage Review Gate（tier=independent 的 plan 审查 verdict=fail **不再阻断**）、`validatePlanOutputs`（FR 覆盖 / decision blocker / entry-point-wiring）、Plan→Execute Contract（`validatePlanForExecute`）。
   - **平台 quick scan**：`scan-profile.js:161` 把 step3 设为 noAI `scanPostcheck` 末步。平台模式 quick scan 完成 → 跳过 `handleScanStageCompleted` → manifest.json / postcheck-result.json / SCAN_COMPLETED 指针全部不落盘，**SillyHub 看不到 scan 完成**。
 - **根因**："阶段完成"判定与"跑 gate"分散在 `completeStep` / `runStage-noAI` / `continueStep` 三处，没收敛到单一入口。
 - **建议修法**：在 `runStage` 的 noAI 自动收尾分支标记 completed 前，调用 `runStageCompletionGates`（失败回滚不标 completed，与 completeStep 同范式）；或更稳妥——noAI 步骤只标自身 completed + 推进下一步，**不直接标阶段 completed**，把阶段完成决策权交还 `completeStep`。
@@ -58,30 +58,30 @@ SillySpec 在 **Grill-Me v1.1 三大原则**上：原则 3（Facts/Decisions 区
 ### 2.2 quick·progress 一致性类
 
 #### 【Q1·中高·真 bug】quick 会话 change 行永不注销，listChanges 累积污染
-- **位置**：`src/run/complete-handlers.js:441`（`handleQuickStageCompletion` 全函数无 `unregisterChange`）；`src/run/command.js:828`（quick 启动 `registerChange` 对 `quick-<hex>` 也执行）；`src/progress/change-registry.js:287`（`unregisterChange` 仅被 archive 调用）。
+- **位置**：`src/run/complete-handlers.js:441`（`handleQuickStageCompletion` 全函数无 `unregisterChange`）；`src/run/command.js:921`（quick 启动 `registerChange` 对 `quick-<hex>` 也执行）；`src/progress/change-registry.js:315`（`unregisterChange` 仅被 archive 调用）。
 - **现象**：每个 quick sessionId（`quick-<8hex>`）启动时写入 `changes` 表 `status='active'`。`--done` 成功后只清 session 目录 + 重置 steps，**从不调用 `unregisterChange`**，归档也永远不走。结果 DB 里 active 的 `quick-<hex>` 行随每次 quick 单调累积。
 - **后果**：
   1. `resolveQuickLinkedChanges` 累积 ≥2 条后，新 quick 非交互环境返回 `[]`（不关联真正活跃变更），交互环境把僵尸 `quick-<hex>` 当可关联变更列出。
   2. `progress.js` 的 `listChanges().length===1` 自动择一降级失效 → 不带 `--change` 时退到"无法确定当前变更"。
-  3. doctor 孤儿检查（`doctor.js:59-76`）只遍历 `changes/` 目录、不遍历 DB active 集；quick-<hex> 无目录 → **既不被孤儿检查发现，也不被 consistency-doctor 发现**（quick 不在 `STAGE_ORDER`）。
+  3. doctor 孤儿检查（`doctor.js:65-78`）只遍历 `changes/` 目录、不遍历 DB active 集；quick-<hex> 无目录 → **既不被孤儿检查发现，也不被 consistency-doctor 发现**（quick 不在 STAGE_ORDER，定义已迁 `src/progress/shared.js:22`）。
 - **建议修法**：`handleQuickStageCompletion` 成功路径补 `await pm.unregisterChange(cwd, changeName)`；doctor 孤儿检查增加反向遍历"active 但无目录且匹配 `quick-<hex>`"的行并提示/自动归档。
 - **档位**：quick（修收尾 + 扩 doctor 检查）。
 
 #### 【Q2·中】多 agent 并发下他者源码改动被算进本 quick 审计
-- **位置**：`src/run/shared.js:341`（`auditQuickCompletion`）+ `src/run/stage.js:336`（baseline 录入）。
+- **位置**：`src/run/shared.js:341`（`auditQuickCompletion`）+ `src/run/stage.js:381`（baseline 录入）。
 - **现象**：baseline 只在 quick 启动那一刻快照"已脏文件"。会话期间另一 agent 改了 `src/business.js`（非 `.sillyspec/`），到本 quick `--done` 时该文件不在 baseline、又非元数据 → 进 `changedFiles`，按危险模式/新增文件规则计入本会话审计，可能触发 BLOCKED 或被回填进本 quick 的 QUICKLOG "文件："行。
 - **根因**：quick 用"整工作区"当审计域，无 per-session inflight 锚点。
 - **建议修法**：长期看向 worktree-apply 的"锚 commit diff"范式靠拢（quick 启动落一个 inflight 锚 commit，`--done` 时 `git diff <anchor>..HEAD` 归属）。短期至少先修 Q3（裸 git status 静默降级）。
 - **档位**：长期项走完整流程（需 design）；Q3 可 quick。
 
 #### 【Q3·中·真 bug】baseline/audit 用裸 `git status` 未带 safe.directory，失败静默降级
-- **位置**：`src/run/stage.js:255`、`src/run/shared.js:145`（裸 `execSync('git status --porcelain')`）；对比同文件 `safeGit(cwd, ['config','user.name'])`（stage.js:255）带 safe.directory。
+- **位置**：`src/run/stage.js:284`、`src/run/shared.js:145`（裸 `execSync('git status --porcelain')`）；对比同文件 `safeGit(cwd, ['config','user.name'])`（stage.js:284）带 safe.directory。
 - **现象**：两处不走 `safeGit`，在 cwd 存在 safe.directory 问题（linked worktree / 容器异 uid / Windows 挂载点）时抛错。stage.js baseline 抛错被 `catch` 吞（`:279` `console.warn('baseline 记录失败')`）→ `progress.quickGuard` 不写 → `--done` 时 guard=null → brownfield 跳过审计（同 Q4 后果）。
 - **建议修法**：两处改 `safeGit(cwd, ['status','--porcelain'])`；baseline 捕获失败时不应静默继续，应 fail-loud 或显式阻断。
 - **档位**：quick。
 
 #### 【Q4·中·真 bug】平台模式 quick guard 写入路径与读取路径不一致
-- **位置**：写 `src/run/stage.js:129`（`specBase/.runtime/quick-sessions/<change>`）；漂移检测读 `src/run/shared.js:308`（同 `specBase/.runtime`）；收尾读 `src/run/complete-handlers.js:761`（`resolveRuntimeRoot` → 设了 `runtimeRoot` 时返回 `runtimeRoot`，否则 `specBase/.runtime`）。
+- **位置**：写 `src/run/stage.js:123`（`specBase/.runtime/quick-sessions/<change>`）；漂移检测读 `src/run/shared.js:308`（同 `specBase/.runtime`）；收尾读 `src/run/complete-handlers.js:761`（`resolveRuntimeRoot` → 设了 `runtimeRoot` 时返回 `runtimeRoot`，否则 `specBase/.runtime`）。
 - **现象**：stage.js 与 shared.js 恒用 `specBase/.runtime`，complete-handlers.js 用 `resolveRuntimeRoot`。当 `runtimeRoot` 被设且与 `specBase/.runtime` 不同时，guard 写到 specBase/.runtime、收尾从 runtimeRoot 读 → 读不到 → `handleQuickStageCompletion` 走 guard=null brownfield 分支 → **完全跳过边界审计** + 兜底重分配 qlId + session 目录清错位置。
 - **建议修法**：把"quick-sessions 目录"位置抽成单一函数（`resolveQuickSessionsDir`），三处共用。
 - **档位**：quick。
@@ -174,7 +174,7 @@ SillySpec 在 **Grill-Me v1.1 三大原则**上：原则 3（Facts/Decisions 区
 - **建议**：先做 self-audit「遗留」段建议的"AI 中继帧单独计数"（CLI 可机械判定），再考虑是否对 Step 3 / plan full 加硬门。**属定位决策，需 brainstorm**。
 
 #### 【D2】plan.md / tasks.md 共享写竞态（lost update）
-- **位置**：`src/run/complete.js:599`（`autoCheckPlanFromReviews` 持 `.plan.md.lock` 但 agent Edit/Write 不持锁）；tasks.md 无同款锁。
+- **位置**：`src/run/complete.js:612`（`autoCheckPlanFromReviews` 持 `.plan.md.lock` 但 agent Edit/Write 不持锁）；tasks.md 无同款锁。
 - **现象**：CLI 的 read-modify-write 与 agent 写入存在 lost update；`enforceReviewJsonGate` 早跑只校验已勾 task，`autoCheckPlanFromReviews` 新勾的不复查。多 agent / 并发 session 撞同一 change 时高频。
 - **根因**：agent 侧无法加锁是根本限制。
 - **建议**：plan.md 的勾选权威收归 CLI（agent 只写 review.json，CLI 自动勾），彻底消除共享写；或 doctor 自检加"plan.md checkbox vs review.json verdict 对账"阻断型检查。
@@ -208,13 +208,13 @@ SillySpec 在 **Grill-Me v1.1 三大原则**上：原则 3（Facts/Decisions 区
 | L1 | `complete.js:857` | continueStep nextPendingIdx 只查 'pending' 漏 'in-progress'（latent，无现行触发路径） | 统一为 `pending \|\| in-progress` | quick |
 | L2 | `quicklog.js:30-62` | withFileLock stale 30s 偏紧，偷锁后无 predicate 校验 | staleMs 提到 60-120s 或 CAS 语义 | quick |
 | L3 | `command.js:172,689,781` | `--from-step`+`--done` 可同时传，前者被静默忽略 | 加入互斥校验 fail-fast | quick |
-| L4 | `complete.js:259` | `status='blocked'` 后 exit 不落盘是隐式不变量，一旦有路径 `_write` 就卡死 | runStage findIndex 显式排除 'blocked' | quick |
+| L4 | `complete.js:272` | `status='blocked'` 后 exit 不落盘是隐式不变量，一旦有路径 `_write` 就卡死 | runStage findIndex 显式排除 'blocked' | quick |
 | L5 | `shared.js:485-487` | 删除文件无 override flag，合法删除永久 BLOCKED | 显式声明"quick 禁删"或 `--force-baseline` 同时降级删除 | quick |
-| L6 | `quicklog.js:424` | `rotateIfNeeded` 裸 renameSync，Windows 读端占用会崩 | 复用 writeAtomic 重试机制 | quick |
+| L6 | `quicklog.js:455` | `rotateIfNeeded` 裸 renameSync，Windows 读端占用会崩 | 复用 writeAtomic 重试机制 | quick |
 | L7 | `quicklog.js:226-244` | tasks.md 无独立锁，跨 git-user 关联同一 change 有竞态 | 加 `.tasks.md.lock`（同 plan.md 范式） | quick |
 | L8 | `shared.js:466` | 死分支 `status === ' D'`（trim 后永不命中） | 删或注释说明 | quick |
 | L9 | `brainstorm.js:79,180` | maxWaitRounds=8 vs "2-3 轮即进入"张力 | 改"按 P0 歧义数决定轮次，P0 全澄清后即进入" | quick |
-| L10 | `prompt.js:203,178` | persona 含"不猜"但只注入 step0，context 压缩后失效 | 抽成 brainstorm `_globalGuardrails` 享每步提醒 | quick |
+| L10 | `prompt.js:254,178` | persona 含"不猜"但只注入 step0，context 压缩后失效 | 抽成 brainstorm `_globalGuardrails` 享每步提醒 | quick |
 | L11 | `brainstorm.md:547` | Step 8 缺 outputHint（其它 7 步都有） | 补 `outputHint: '规范文件路径列表'` | quick |
 | L12 | `brainstorm-auto.js:152-162` | AUTO_DECIDED 丢失 source 区分 | 规定 source 必填 code/docs 并附 evidence | quick |
 | L13 | `brainstorm-auto.js:154` | NEEDS_REVIEW 是无触发条件的死状态 | 定义触发条件或从枚举删除 | quick |
