@@ -162,3 +162,14 @@
 根因：逐变更行匹配漏掉挂在 ghost/非活跃变更上的冲突，huber 面板联调实证 11 条显示 0
 方案：show 汇总段尾加全局冲突兜底段（pendingConflicts 全量，与 JSON 顶层 pending_conflicts 同口径）+ 10f 测试断言（≥2 活跃走汇总分支）
 结果：machine-interface 127/0；multi-agent-platform 实跑 11 条正确显示
+
+## ql-20260906-001-1f6b | 2026-09-06 00:01:16 | 修 archive 文档等待配置漂移 + 注入模板去 npm 硬编码
+状态：已完成
+关联变更：（无）
+文件：
+- docs/prompt/archive.md（Step3 元数据对齐源码 conditionalWait）
+- templates/agents-instruction.md（规则8 改读 local.yaml 命令）
+需求：修 archive 文档等待配置漂移 + 注入模板去 npm 硬编码
+根因：①源码 2026-08-23 已把 sync-module-docs 改为 conditionalWait，_sync.mjs 只同步正文 fence 不同步手工元数据区，文档残留 requiresWait 与正文矛盾；②agents-instruction 模板会被 init 写入任意栈项目的 AGENTS.md，规则8硬编码 npm 命令对非 Node 项目是错误指令
+方案：①archive.md Step3 等待配置块改为 conditionalWait/repeatableWait/maxWaitRounds=3/waitReason 对齐源码；②规则8改为优先读 .sillyspec/local.yaml 的 commands.test/commands.lint，未配置按项目栈给等价命令（npm / pytest+ruff 示例）
+结果：node docs/prompt/_verify.mjs 通过；init-agents-injection 测试 52 断言全过 0 失败；改动仅 doc/模板未触 src/test
