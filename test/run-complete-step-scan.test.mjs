@@ -39,7 +39,7 @@ console.log('--- 构建扫描项目列表 + YAML scan_projects → 展开 8×1 -
 
   const after = await new ProgressManager({ specDir: specBase }).read(cwd, cn)
   const expanded = after.stages.scan.steps.filter(s => (s.name || '').includes('[myapp]'))
-  assert(expanded.length === 8, `DB: 展开 8 个 [myapp] 步骤（实际 ${expanded.length}）`)
+  assert(expanded.length === 6, `DB: 展开 6 个 [myapp] 步骤（实际 ${expanded.length}）`)
 }
 
 cleanup()

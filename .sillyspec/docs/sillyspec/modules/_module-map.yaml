@@ -73,6 +73,8 @@ modules:
       - src/fs-atomic.js
       - src/constants.js
       - src/scan-postcheck.js
+      - src/taskcard.js
+      - src/taskcard-placeholders.js
 
   docs-consistency:
     status: active
@@ -85,6 +87,8 @@ modules:
       - src/docs-debt.js
       - src/scan-staleness.js
       - src/decision-distill.js
+      - src/design-facts.js
+      - src/archive-delta.js
 
   worktree:
     status: active

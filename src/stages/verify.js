@@ -214,7 +214,7 @@ export const definition = {
    你只需：在 verify-result.md 的「变更风险等级」section 如实记录变更性质；若变更涉及 daemon/backend 跨进程、session/lease/lifecycle 状态机、或部署启动路径，在「Runtime Evidence」section 提供真实集成证据（启动命令、daemon↔backend 调用与日志关键片段、终态断言）。
    - **集成证据是自报告、CLI 不独立运行时核验**：「Runtime Evidence」由你如实填写，CLI 只校验其**字面存在**（是否含关键词），**不会替你启动 daemon、打真实请求或跑迁移**——它是否名副其实取决于你是否实跑过。务必实跑后据实填写，不得凭堆关键词通过门控。（测试套件对账另算：commands.test 由 CLI 真实执行，那块谎报无效。）
 
-3. **生成 verify-result.md 骨架（勿从零手写）**：先跑 \`sillyspec verify-probes --change <change-name> --init\`——一条命令生成九章节骨架（已存在不覆盖），其中**探针结果章节已机械预填**（探针 1 的 TODO/FIXME 命中清单、探针 3 的测试覆盖、探针 5 的 API 契约对账表、探针 6 的删除对账三态判定），文件落 \`{SPEC_ROOT}/changes/<change-name>/verify-result.md\`（CLI 替换出的**主仓绝对路径**；若当前 cwd 在 worktree 内也绝不落 worktree 副本——CLI 校验读主仓，副本随 worktree 清理蒸发）。你只需把各 \`<!--TODO-->\` 占位替换为语义结论；半语义探针（2 关键词覆盖 / 4 决策追踪）与断言抽查、集成盲区标注由你补在对应 TODO 处
+3. **生成 verify-result.md 骨架（勿从零手写）**：先跑 \`sillyspec verify-probes --change <change-name> --init\`——一条命令生成十章节骨架（已存在不覆盖），其中**探针结果章节已机械预填**（探针 1 的 TODO/FIXME 命中清单、探针 3 的测试覆盖、探针 5 的 API 契约对账表、探针 6 的删除对账三态判定），文件落 \`{SPEC_ROOT}/changes/<change-name>/verify-result.md\`（CLI 替换出的**主仓绝对路径**；若当前 cwd 在 worktree 内也绝不落 worktree 副本——CLI 校验读主仓，副本随 worktree 清理蒸发）。你只需把各 \`<!--TODO-->\` 占位替换为语义结论；半语义探针（2 关键词覆盖 / 4 决策追踪）与断言抽查、集成盲区标注由你补在对应 TODO 处
 4. **预填探针段不可篡改或删除**：verify \`--done\` gate 会重跑探针对比 verify-result.md 正文，不符即拦（ERROR）；对探针结果有异议只能在预填段旁追加说明，不得改写原文
 5. **verify-facts.json 为机器底稿，勿手改**：防篡改对比的基准是正文，改底稿无意义
 6. 给出结论：PASS / PASS WITH NOTES / FAIL（受风险门控约束）——**结论必须写明 PASS/FAIL 字样，留「待填」会被 gate 判不过**

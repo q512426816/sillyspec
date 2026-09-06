@@ -50,9 +50,8 @@ function assert(label, condition, detail) {
   assert('scan 模板使用 {SPEC_ROOT}', prompts.includes('{SPEC_ROOT}'))
   assert('scan 模板使用 {DOCS_ROOT}', prompts.includes('{DOCS_ROOT}'))
 
-  // 平台模式下 git add 应该是条件判断
-  assert('scan 模板平台模式跳过 git add', prompts.includes('如果平台模式：跳过 git add'))
-  assert('scan 模板非平台模式 git add 精确 pathspec', prompts.includes('git add {DOCS_ROOT}/ {KNOWLEDGE_ROOT}/'))
+  // git add 已 noAI 化（2026-09-05 11aa319）：scanFinalize CLI 统一处理（平台跳过/非平台精确 pathspec），prompt 文案卸责删除
+  assert('scan 模板不再含 git add 指令（scanFinalize CLI 接管）', !prompts.includes('git add'))
 }
 
 // ── 测试 2：prompt 自检不误杀安全说明 ──

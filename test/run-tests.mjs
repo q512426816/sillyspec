@@ -90,6 +90,12 @@ function lockedPrint(fn) {
   return p
 }
 
+// 重 IO 测试超时白名单（真实 git worktree 场景 Windows 单跑 ~4min，默认 120s 必超时假红；
+// 只对声明过的文件放宽，其余保持快速失败语义）
+const SLOW_TEST_TIMEOUT_MS = {
+  'worktree-has-unapplied-changes.test.mjs': 360_000,
+}
+
 async function runOne(fullPath) {
   const file = relative(testDir, fullPath)
   const t0 = performance.now()
@@ -97,7 +103,7 @@ async function runOne(fullPath) {
     const { stdout, stderr } = await execFileP(process.execPath, [fullPath], {
       cwd: testDir,
       env: childEnv,
-      timeout: 120_000,
+      timeout: SLOW_TEST_TIMEOUT_MS[file] ?? 120_000,
       encoding: 'utf8',
       maxBuffer: 10 * 1024 * 1024
     })
