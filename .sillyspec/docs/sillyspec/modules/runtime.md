@@ -119,4 +119,5 @@ ProgressManager.alignExecuteToPlan(cwd, changeName, specBase, {confirm})
 - 2026-09-06-ir-stage-p3a | IR P3a verify 侧接线：gates.js verify 块既有五项检查后追加 reconcileTargetFiles 调用（:677-694，动态 import 同块先例）——missing_declared→rollback 阻断、undeclared/skipped/degraded→WARNING 放行；writeReconcileRunResult 落盘 <runtimeRoot>/verify-runs/<ts>/reconcile-result.json（五状态全落、fail-soft、snake_case 对齐 test-result 先例）；envelope code 四值（reconcile_missing_declared/undeclared_file/skipped/ok）。
 - 2026-09-07-ir-stage-p3b | IR P3b gates 接线：verify 块 reconcile 之后追加 checkProbeConsistency 调用（:693-720）——mismatch+error→rollback 阻断、drift/skip 放行；信封 code 四值路由；独立落盘 verify-runs/<ts>/probe-consistency-result.json（snake_case，fail-soft，四状态全落）。
 - 2026-09-07-ir-stage-p3c | IR P3c：complete.js 步骤级钩子链（warnMissingUiPrototype 同点位 :283-313）新增 brainstorm「生成规范文件」步模块域核验——errors→exit 1（步骤保持 pending）/warnings 放行/skipped info/fail-open；prompt.js :477-506 brainstorm Step2 _facts.md 注入（{SCAN_FACTS} 占位符+双重门，15KB 截断+fail-soft，plan/execute 零误染）。
+- 2026-09-07-ir-stage-p3d | IR P3d：complete-handlers.js handleArchiveConfirmStep :435-459 归档移动前自动生成 delta.md（fail-soft 不阻断，提示手动补）；产物随归档目录保存。
 <!-- MANUAL_NOTES_END -->

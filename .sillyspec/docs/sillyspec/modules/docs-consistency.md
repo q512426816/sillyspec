@@ -36,3 +36,4 @@ updated_at: 2026-08-24T00:40:00+08:00
 - decision-distill 的 moduleIndex 由调用方注入（archive 步骤接线）；未注入时按 knowledgeRoot 同级 docs/<项目>/modules/_module-map.yaml 尽力发现（首个命中），失败 → 域模块源码集退化为锚点文件兜底
 - 外部依赖：fs、path
 | 2026-09-07 | 2026-09-07-ir-stage-p3c | IR P3c：新 src/design-facts.js（建议归本模块，paths 待批量补录）——parseDecisionDomains/loadModuleMap/validateDecisionModuleRefs（复用 distill parseDecisions+modules.js parseModuleMapSimple：幻觉模块 id ERROR 带 NEW: 前缀豁免与出路提示、声明域×实改面双向 WARNING）/generateDesignSkeleton（十三章节标题逐字对齐 stage-contract-spec，决策追踪表从 decisions.md 预填）；test/design-facts.test.mjs 112 断言 |
+| 2026-09-07 | 2026-09-07-ir-stage-p3d | IR P3d：新 src/archive-delta.js（collectDeltaSources 四源 fail-soft：reconcile 按 change 过滤取最新+apply-pathspec 兜底 / buildDeltaReport Before-Delta-After 三段式 + scan 刷新建议与端点基线立项提示）；design-facts deriveActualModules 加导出；test/archive-delta.test.mjs 102 断言 |

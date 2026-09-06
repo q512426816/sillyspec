@@ -95,6 +95,7 @@ SillySpec CLI — 规范驱动开发工具包
   sillyspec backfill-reviews --change <name> [--adopt] [--json]  缺 review.json 的 task 生成草稿；--adopt 重算代填已有 review 的 base/head 等机械字段（verdict 保留）
   sillyspec symbol-impact --change <name>      生成 symbol-impact.md 逐 task <!--TODO--> 骨架（gate 拒绝未替换占位，防骨架直接过门）
   sillyspec design-init --change <name> [--force]  从 decisions.md 生成 design.md 十三章节骨架（决策追踪表预填；已存在不覆盖）
+  sillyspec delta --change <name> [--json]   生成变更 delta.md（Before/Delta/After 三段式聚合；幂等覆盖重跑即刷新）
   sillyspec next                            项目状态探测：输出当前状态 + 下一步命令 + 依据（吸收 continue/resume 手工探测表）
   sillyspec commit [--json]                 智能提交建议：收集 QUICKLOG/已勾 task/阶段产出语义，生成建议 message（只建议不执行）
   sillyspec verify-probes --change <name> [--init]  verify 机械探针（TODO 标记/测试覆盖/API 对账/删除对账）；--init 生成 verify-result.md 骨架
@@ -1209,6 +1210,55 @@ async function main() {
       }
       console.log(`✅ 已生成 design.md 骨架: ${diDesignPath}${diExisted ? '（--force 覆盖既有文件）' : ''}`);
       console.log('   决策追踪表已按 decisions.md 当前版本 D 条目预填；回到 brainstorm Step 6（写设计文档并自审）逐节填散文，填毕删除生成注释。');
+      break;
+    }
+    case 'delta': {
+      // delta.md 生成（change: 2026-09-07-ir-stage-p3d，task-02）：task-01 buildDeltaReport
+      // 四源 fail-soft 聚合（reconcile/verify-facts/module-map/decisions）的 CLI 落盘入口——
+      // 归档确认步（handleArchiveConfirmStep）自动生成失败时的手动补跑通道。幂等覆盖
+      // （重跑即刷新）：与 design-init「agent 产出优先不覆盖」语义相反——delta 是源数据
+      // （verify-runs/module-map）时点快照，旧报告天然过期，重新生成即对齐。
+      const dlChangeIdx = args.indexOf('--change');
+      const dlChange = dlChangeIdx >= 0 && args[dlChangeIdx + 1] ? args[dlChangeIdx + 1] : null;
+      if (!dlChange) {
+        console.error('用法: sillyspec delta --change <name> [--spec-dir <path>] [--json]\n  生成变更 delta.md（Before/Delta/After 三段式；四源 fail-soft，缺源逐段降级注记；幂等覆盖重跑即刷新）');
+        process.exit(2);
+      }
+      assertSafeChangeName(dlChange, '--change 变更名');
+      const dlSpecBase = resolvePlatformSpecDir(dir, specDir) || join(dir, '.sillyspec');
+      const dlChangeDir = join(dlSpecBase, 'changes', dlChange);
+      if (!existsSync(dlChangeDir)) {
+        console.error(`❌ 变更目录不存在: ${dlChangeDir}`);
+        if (json) console.log(JSON.stringify({ command: 'delta', change: dlChange, ok: false, error: `变更目录不存在: ${dlChangeDir}` }, null, 2));
+        process.exit(1);
+      }
+      // runtimeRoot 解析同 register-stage-review 先例（resolvePlatformOpts > resolveRuntimeRoot）：
+      // reconcile（verify-runs/<ts>/reconcile-result.json）与 apply-pathspec 兜底清单都在 runtime 下。
+      const dlPlatformOpts = {};
+      const dlResolved = resolvePlatformOpts(dir, specDir);
+      if (dlResolved) {
+        dlPlatformOpts.specRoot = dlResolved.specRoot;
+        if (dlResolved.runtimeRoot) dlPlatformOpts.runtimeRoot = dlResolved.runtimeRoot;
+      }
+      const { resolveRuntimeRoot } = await import('./run/shared.js');
+      const dlRuntimeRoot = resolveRuntimeRoot(dlPlatformOpts, dlSpecBase);
+      const { buildDeltaReport } = await import('./archive-delta.js');
+      // CLI 不收 --project：project=null 走 loadModuleMap 降级路径（报告内「无 module-map」注记），
+      // 与归档确认步自动生成（progress.project 有值时命中 module-map）形成口径互补。
+      const dlMarkdown = buildDeltaReport({
+        changeDir: dlChangeDir,
+        specRoot: dlSpecBase,
+        project: null,
+        runtimeRoot: dlRuntimeRoot,
+      });
+      const dlPath = join(dlChangeDir, 'delta.md');
+      writeFileSync(dlPath, dlMarkdown);
+      if (json) {
+        console.log(JSON.stringify({ command: 'delta', change: dlChange, ok: true, path: dlPath, written: true }, null, 2));
+        break;
+      }
+      console.log(`✅ 已生成 delta.md: ${dlPath}（幂等覆盖，重跑即刷新）`);
+      console.log('   Before/Delta/After 三段式快照；归档确认步自动生成失败时可用本命令手动补。');
       break;
     }
     case 'register-stage-review': {

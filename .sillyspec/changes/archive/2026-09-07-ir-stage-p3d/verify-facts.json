@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-07-ir-stage-p3d",
+  "generatedAt": "2026-09-06T23:06:18.827Z",
+  "probes": {
+    "probe1": {
+      "command": "sillyspec verify-probes --change 2026-09-07-ir-stage-p3d",
+      "metrics": {
+        "matches": 22,
+        "skippedFiles": 0,
+        "worktreeHits": 0,
+        "globEntries": 0
+      }
+    },
+    "probe3": {
+      "command": "sillyspec verify-probes --change 2026-09-07-ir-stage-p3d",
+      "metrics": {
+        "tasks": 3,
+        "hasTest": 3
+      }
+    },
+    "probe5": {
+      "command": "sillyspec verify-probes --change 2026-09-07-ir-stage-p3d",
+      "metrics": {
+        "backendEndpoints": 2,
+        "frontendCalls": 0
+      }
+    },
+    "probe6": {
+      "command": "sillyspec verify-probes --change 2026-09-07-ir-stage-p3d",
+      "metrics": {
+        "deletions": 0,
+        "unavailable": false
+      }
+    }
+  }
+}

@@ -146,7 +146,7 @@ export function loadModuleMap(specRoot, project) {
  * @param {Array<{ id: string, path: string }>} prefixPairs loadModuleMap 的前缀对
  * @returns {Set<string>} 实改模块 id 集
  */
-function deriveActualModules(filePaths, prefixPairs) {
+export function deriveActualModules(filePaths, prefixPairs) {
   const actual = new Set()
   for (const f of filePaths) {
     const t = String(f || '').replace(/\\/g, '/').replace(/\/+$/, '')

@@ -432,6 +432,31 @@ export async function handleArchiveConfirmStep({ stageName, steps, currentIdx, c
     console.log('⚠️  请添加 --confirm 确认归档，例如：sillyspec run archive --done --confirm --output "确认归档"')
     return { stageCompleted: false, currentIdx, nextPendingIdx: currentIdx }
   }
+  // ── 归档前 delta.md 自动生成（P3d task-02，fail-soft 零阻断）──
+  // 目录移走前在 changes/<name>/ 落一份 Before/Delta/After 三段式快照（四源采集容缺，
+  // buildDeltaReport 见 ../archive-delta.js），随归档包留存。失败只 console.error 留痕、
+  // 提示 sillyspec delta --change 手动补，绝不抛出——归档主流程既有失败面（rename/git/清理）
+  // 一个不叠加。specRoot 同 complete.js :87 口径（specBase 已含 platform specRoot）；
+  // runtimeRoot 同本文件 archiveWorktreeCleanup 既有用法 resolveRuntimeRoot(platformOpts, specBase)。
+  const deltaChangeName = progress.currentChange || changeName
+  if (deltaChangeName) {
+    try {
+      const { buildDeltaReport } = await import('../archive-delta.js')
+      const deltaChangeDir = join(specBase, 'changes', deltaChangeName)
+      const deltaMd = buildDeltaReport({
+        changeDir: deltaChangeDir,
+        specRoot: specBase,
+        // project 缺参可 null（loadModuleMap null 降级路径已支持，报告内逐段降级注记）
+        project: progress?.project || null,
+        runtimeRoot: resolveRuntimeRoot(platformOpts, specBase),
+      })
+      writeFileSync(join(deltaChangeDir, 'delta.md'), deltaMd)
+      console.log(`📊 归档前已生成 delta.md: ${join(deltaChangeDir, 'delta.md')}`)
+    } catch (e) {
+      console.error(`⚠️  归档前 delta.md 自动生成失败（不阻断归档）: ${e.message}`)
+      console.error(`   可手动补: sillyspec delta --change ${deltaChangeName} --spec-dir ${specBase}`)
+    }
+  }
   // 主仓互斥锁（坑 main-repo-no-mutex 二批）：archiveChangeDirectory 改主仓共享状态（目录
   // rename + 共享 index 的 git add + marker 删除 + worktree 清理），与并行会话的 apply/cleanup
   // 互踩。exit 钩子兜底：其内部 guard 失败 exit(1) 时锁也会被清（见 withMainRepoLock）。
