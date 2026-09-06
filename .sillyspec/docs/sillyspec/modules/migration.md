@@ -57,9 +57,7 @@ parseFileChangeList(designMdPath)
 
 ## 变更索引
 
-- 2026-06-03 | 初始文档
-- ql-20260819-012-66fc | 清理 modules.js 死 import DB
-- ql-20260819-015-65fa | modules.js rebuild 的 git rev-parse 改 execFileSync（去 shell 注入面）
+见 `migration.changelog.md`——历史条目已迁出；新条目直接追加 sidecar，勿写回本卡。
 
 ## 人工备注
 <!-- MANUAL_NOTES_START -->

@@ -52,7 +52,7 @@ export const definition = {
 src/stages/explore.js:25   ### 铁律
 src/stages/quick.js:61     ### 铁律
 src/stages/execute.js:189/224/271  ### 铁律
-src/stages/scan.js:601     - ❌ 修改代码 / 编造路径 / 读源码全文
+src/stages/scan.js:442     - ❌ 修改代码 / 编造路径 / 读源码全文
 ```
 
 **隐形规则**：任何会派发给子代理的 step prompt，结尾必须有 `### 铁律`（或 `⚠️ 路径注意` 等同义警示段），用 `❌/✅/⚠️` emoji + 中文短句声明边界。这是 sillyspec 控制 AI 行为的核心机制——**新增 step 时不可省略此段**。

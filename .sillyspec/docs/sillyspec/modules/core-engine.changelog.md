@@ -1,16 +1,16 @@
----
-schema_version: 1
-doc_type: module-changelog
-module_id: core-engine
-author: qinyi
-created_at: 2026-08-24T00:40:00+08:00
-updated_at: 2026-08-24T00:40:00+08:00
----
+# core-engine 变更索引
 
-# core-engine 变更索引（changelog sidecar）
+> 由 sillyspec modules split-changelog 自模块卡迁出（手工批次：节标题带后缀/MANUAL_NOTES 区，工具正则不认）；新条目继续追加到本文件，勿写回模块卡。
 
-> 模块卡的变更索引历史条目迁出至此（卡正文保持精简，降低子代理读取税）；新条目追加到表尾，勿堆回卡正文。卡内既有「变更索引」表为迁出前历史，保留不动。
-
+## 变更索引（表格，初始为空）
 | 日期 | 变更名 | 摘要 |
 |------|--------|------|
-| 2026-08-23 | 2026-08-23-adopt-harness-practices | knowledge-match 增决策匹配：parseDecisionEntries 解析 decisions 条目、matchKnowledge 返回值新增 decisionHits（rejected 优先排序，matched/entries/report/json 旧四键不变，无库/未命中空数组）供 brainstorm Step2 防复潮注入；verify-postcheck 接线 test_strategy 新值（D-005@v2）——skip 真跳过（mode strategy-skip，不回退全量、输出显式标注留审计痕迹、审计落盘）+ resolveTestStrategy 统一入口（evidence-auto 按 module-impact.md 影响面推荐检查组合，缺失降级 module 并注记）。 |
+| 2026-07-13 | ql-20260713-002-7628 | quick 守卫两修复：(1) baseline 录入去掉 `.sillyspec/` 粗过滤，预存 untracked `.sillyspec/changes/` 不再被误判危险/新增；(2) `--done` 的 `--force-baseline`/`--allow-new` 并入 guard（原只传 `{isConfirm}` 致 flag 静默无效），并修正审计复审误导文案 |
+| 2026-08-09 | 2026-08-08-progress-db-concurrency | DB 引擎换 better-sqlite3 原生 WAL 绑定（删全库 export/load 到内存模型，PM 核心读写同步化、read 取最新不缓存）；废阶段状态缓存文件双源，hook 改 queryDbFirstCell 直读 DB readonly 子进程 fail-closed |
+| 2026-08-09 | ql-20260809-003-c88a | #5 command.js:1115 next-action.json 读路径 brainstorm/→变更根目录（self-audit#3 漏改的读端，还回 has_blocking_questions 门控）；#6 progress.js:563 initChange allStages 改用 VALID_STAGES 单一源；顺带修正 core-engine.md propose 阶段残留误述（VALID_STAGES 实为 8 个、auto 流程无 propose） |
+| 2026-08-10 | 2026-08-10-platform-progress-sync | run/shared.js 新增 `triggerPull`/`triggerPullActiveChange`（8s 熔断 SYNC_TOTAL_TIMEOUT_MS、Best Effort console.warn 不抛、未连接/平台模式跳过；activeChange 单活跃自动推导，多/无跳过），CLI 启动（stage case block runCommand 前）+ platform approve 前注入下行拉最新；配套 db.js schema v4（changes 加 last_synced_platform_ts=base_ts 乐观锁 + last_local_modified_ts=本地脏度）+ progress.js `serializeForSync`（六表完整序列化，含 approvals，changes 排除 isolation_*）+ `import`（逆运算事务原子 + 独立 sillyspec.db.pre-import-<ts>.bak，import 后脏度重置 pushed_at D-013）+ 全写入路径 `_touchLocalModified` 脏度（读路径 `run().changes>0` guard 不标脏）。 |
+| 2026-08-19 | ql-20260819-014-0082 | 审计 medium 批修（core-engine 侧）：db.js close() 容错（close 抛错仍置 null + warn，防后续操作已损坏句柄）；fs-atomic.js writeAtomicSync tmp 名加随机段（pid 单因子撞 Windows PID 重用）；progress.js revision=0 不再被 falsy 吞（`!= null` 判定） |
+| 2026-08-28 | ql-20260828-001-b050 | verify 测试对账通过行误判修复（坑 verify-known-failures-pass-line-false-positive）：partitionFailures 分类前按行首通过标记（✓/√/✔/PASS，剥 ANSI 色码后判定）剔除通过行——PER_TEST_FAIL_RE 的 FAILED/error:/exception 子串会命中用例名恰含这些字样的 vitest 通过行（2710 用例套件 382 个"失败行"中 378 假阳性，known_failures 实质失效）；PER_TEST_FAIL_RE 补 vitest ×(U+00D7) 失败标记；SUMMARY_LINE_RE 补 vitest 无冒号汇总行（Test Files/Tests + 数字）；test/verify-postcheck-known-failures.test.mjs 补 4 组回归 |
+| 2026-08-28 | ql-20260828-002-b3fa | 同坑追加（真实全量输出实测）：vitest 控制台捕获噪声另三类剔除——CONSOLE_CAPTURE_RE（stdout/stderr 捕获横幅行，横幅带用例名含 failed 字样）、ENV_NOISE_RE（jsdom `Not implemented:` 警告，i 标志修大写 N 失配）、SUMMARY_LINE_RE 增 Failed Tests 分节头与 ELIFECYCLE 退出横幅；端到端：multi-agent-platform frontend 全量（2710 用例 4 真实失败）失败行 382→15，7 条语义化豁免 remaining=0 |
+| 2026-09-07 | 2026-09-06-ir-stage-p3a | IR P3a：taskcard 骨架加 target_files 占位（frontmatter 字段=对账用精确文件级意图声明，NEW: 前缀表新建、禁 glob/目录前缀，与 allowed_paths 白名单语义分离）；verify-postcheck 新增 reconcileTargetFiles 纯函数——meta.json 判形态（A=resolveVerifyChangedFiles ctx:null+includeWorkingTree / B=merge-base 分支 diff ∪ status porcelain untracked（splitOwnVsForeignDiffFiles 剔并行 WIP）∪ apply-pathspec 兜底）× filterDeliverableFiles，三类差集（②missing_declared ERROR 候选/③undeclared WARNING+review.json 尽力归因），skipped/degraded 不产差集（存量零红）；test/plan-target-files.test.mjs 94→107 断言 |
+| 2026-09-07 | 2026-09-07-ir-stage-p3b | IR P3b verify 侧：verify-probes 新增 buildVerifyFacts/writeVerifyFacts（--init 落 verify-facts.json 机器底稿：四探针 command+metrics，最近快照覆盖，fail-soft）+ 骨架十章节层标注后缀（人工判断/可复跑探针/确定性检查，不新增行）；verify-postcheck 新增 checkProbeConsistency（#### 子节定界+五锚点正则导出+分级判定：probe1/6 不符 ERROR、3/5 WARNING、判别子全缺+facts 在场=ERROR、HEAD 前进子案降 WARNING fail-closed）；test/verify-probes-facts.test.mjs 149 断言 |

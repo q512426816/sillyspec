@@ -123,7 +123,7 @@ scan-profile.js 扫描档位 / concurrent-detect.js 并发检测 / multi-repo-co
 | `--auto` | 进入自动模式连跑主流程 |
 
 **perProject 按项目展开**：scan 阶段大量 step 带 `perProject: true` 标记（grep 自
-`src/stages/scan.js`，共 8 处）。`handleScanProjectListStep`（`src/run/complete-handlers.js:521`）
+`src/stages/scan.js`，共 8 处）。`handleScanProjectListStep`（`src/run/complete-handlers.js:7`）
 逻辑：scan 第 2 步"构建扫描项目列表"
 完成后，把后续所有 `perProject` step 按 `projectNames` 展开成
 `步骤 × 项目` 个独立子步骤，移除原始未展开版本。
