@@ -76,7 +76,11 @@
 **元数据**
 - optional：false
 - outputHint：模块文档更新结果
-- 等待配置：requiresWait（必须 --wait 等待用户确认，确认后回到本步由 agent 写入模块文档）
+- 等待配置：
+  - conditionalWait：true
+  - repeatableWait：true
+  - maxWaitRounds：3
+  - waitReason：等待用户裁决模块文档同步异常
 
 **本步出现的运行时占位符**
 - `<change-name>` → 当前变更名
