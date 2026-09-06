@@ -32,6 +32,10 @@ import { filterDeliverableFiles } from './worktree-apply.js'
 // target_files 声明侧解析（Wave 1 已落地）：依赖链已核实无环——plan-postcheck 不反向依赖本模块，
 // 且本模块已经 worktree-apply.js:21 间接依赖 plan-postcheck，此处改直连不引入新环（task-04）
 import { parseTargetFiles, parseRepo } from './stages/plan-postcheck.js'
+// 探针重跑（P3b task-02 一致性抽查）：依赖方向已核实无环——verify-probes 只依赖
+// fs/path/git-helper/change-list/plan-postcheck/contract-matrix/foreign-declared/run-shared，
+// 不反向依赖本模块，此处直连不引入循环
+import { runVerifyProbes } from './verify-probes.js'
 
 // 测试命令最长执行时间；超时视为失败（防止 CLI 被挂起的测试卡死）
 const TEST_TIMEOUT_MS = Number(process.env.SILLYSPEC_TEST_TIMEOUT_MS) || 10 * 60 * 1000
@@ -2158,4 +2162,260 @@ export function reconcileTargetFiles({ cwd, specBase = null, changeName = null, 
   // 状态聚合：②在场即 ERROR 态优先（gates 阻断语义靠它兑现）；仅③ → WARNING 态
   const status = missing.length > 0 ? 'missing_declared' : (undeclared.length > 0 ? 'undeclared' : 'ok')
   return { status, matched, missing, undeclared, skipReason: null, notes, form: actual.form, sources: actual.sources }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// P3b task-02：verify-result.md 探针预填段一致性抽查（D-002@v1 方案A 正文基准 + D-003@v1
+// G2/G8 锚点规格与判别子；接线 gates.js verify 块是 task-03 的 scope）
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * 正文预填段锚点正则（导出供 round-trip 测试锁定，R-01）：与 src/verify-probes.js
+ * renderVerifyProbesReport 的渲染形态逐条同源（行号为 2026-09-07 P3b 基线，渲染改版须
+ * 同步更新此处）。统一锚定行首 ^——正文散文行内出现同形片段不算命中（G8 紧锚）。
+ */
+
+/** probe1 命中行：`- ⚠️ \`${file}:${line}\` ${content}`（renderVerifyProbesReport :226；
+ *  `:\d+` 收尾反引号前的行号段是它与探针 3/6 同形 ⚠️ 行的区分点） */
+export const PROBE1_HIT_LINE_RE = /^- ⚠️ `[^`]+:\d+`/
+
+/** probe3 hasTest 行：`- ✅ task-N: 模块目录（…）找到 N 个测试文件（…）`（:245） */
+export const PROBE3_HASTEST_LINE_RE = /^- ✅ task-\d+: .*找到 \d+ 个测试文件/
+
+/** probe5 summary 锚行（:259——summary 恒渲染为子节首条 `- ` 行；四个前缀形态覆盖
+ *  verifyApiParity 的 pass/fail/无根三态 summary 与 summary 为 falsy 的兜底渲染。G2：锚行
+ *  存在性而非 backend/frontend 计数——总数在 FAIL 形态不进渲染文本） */
+export const PROBE5_SUMMARY_LINE_RE =
+  /^- (?:✅ API parity check passed:|❌ API parity check failed:|No scan root for parity check|backend \d+ 端点 \/ frontend \d+ 调用)/
+
+/** probe5 contract gap 表格行：`| ❌ missing | METHOD path | — | file:line |`（:271，
+ *  fail 形态锚 missing 数） */
+export const PROBE5_MISSING_ROW_RE = /^\| ❌ missing \|/
+
+/** probe6 删除条目行：`- <verdict> \`${path}\`（git 状态 D）`（:288；verdict 三态前缀与
+ *  runVerifyProbes 的 ✅ 合规 / ❌ 高风险 / ⚠️ 未声明删除同源，`（git 状态` 尾缀把它与
+ *  unavailable 行 / 无删除行 / ℹ️ note 行天然区分——后三者均无「反引号路径+状态尾缀」形态） */
+export const PROBE6_DELETION_LINE_RE = /^- (?:✅ 合规|❌ 高风险|⚠️ 未声明删除)[^`]* `[^`]+`（git 状态/
+
+/**
+ * `#### 探针 N` 子节定界（G8/R-05）：子节 = 标题行起、下一任意 markdown 标题（下一探针
+ * 子节 / `##` 章 / `#` 题）前止。探针 2/4 的 agent 补写内容天然落在本子节定界之外，其
+ * `- ⚠️` 同形散文不进 1/3/5/6 的锚点计数。
+ * @param {string} text verify-result.md 全文（CRLF 归一内部处理）
+ * @returns {Object<string, string[]>} 探针号（字符串）→ 子节正文行数组（不含自身标题行；
+ *   子节缺失则无该键；同名子节重复出现时合并计数——重复本身就会撞出 mismatch）
+ */
+function extractProbeSubsections(text) {
+  const sections = {}
+  let current = null
+  for (const line of normalizeLineEndings(String(text || '')).split('\n')) {
+    const m = line.match(/^#### 探针 (\d+)[：:]/)
+    if (m) {
+      current = m[1]
+      if (!sections[current]) sections[current] = []
+      continue
+    }
+    if (current === null) continue
+    if (/^#{1,6}\s/.test(line)) { current = null; continue }
+    sections[current].push(line)
+  }
+  return sections
+}
+
+/**
+ * 解析 verify-result.md 正文预填段锚点指标（checkProbeConsistency 的 doc 侧取数）。
+ * 导出供渲染→解析 round-trip 测试直接消费（R-01）。
+ * @param {string} text verify-result.md 全文
+ * @returns {{
+ *   subsections: { probe1: boolean, probe3: boolean, probe5: boolean, probe6: boolean, any: boolean },
+ *   probe1Hits: number,          // probe1 命中行计数（对比 probe1.matches.length）
+ *   probe3HasTest: number,       // probe3 hasTest 行计数（对比 tasks.filter(hasTest).length）
+ *   probe5SummaryPresent: boolean, // probe5 summary 锚行存在性（pass 形态锚）
+ *   probe5Missing: number,       // `| ❌ missing |` 行计数（fail 形态锚，对比 missingBackend.length）
+ *   probe6Deletions: number,     // probe6 删除条目行计数（对比 deletions.length）
+ * }}
+ */
+export function parseProbePrefillAnchors(text) {
+  const sections = extractProbeSubsections(text)
+  const count = (lines, re) => lines.reduce((n, l) => n + (re.test(l) ? 1 : 0), 0)
+  const s1 = sections['1'] || []
+  const s3 = sections['3'] || []
+  const s5 = sections['5'] || []
+  const s6 = sections['6'] || []
+  return {
+    subsections: {
+      probe1: '1' in sections,
+      probe3: '3' in sections,
+      probe5: '5' in sections,
+      probe6: '6' in sections,
+      any: Object.keys(sections).length > 0,
+    },
+    probe1Hits: count(s1, PROBE1_HIT_LINE_RE),
+    probe3HasTest: count(s3, PROBE3_HASTEST_LINE_RE),
+    probe5SummaryPresent: count(s5, PROBE5_SUMMARY_LINE_RE) > 0,
+    probe5Missing: count(s5, PROBE5_MISSING_ROW_RE),
+    probe6Deletions: count(s6, PROBE6_DELETION_LINE_RE),
+  }
+}
+
+/**
+ * 读 <changeDir>/verify-facts.json（verify-probes --init 落盘的机器底稿，task-01）。缺失 /
+ * 不可解析 / 非对象 → null。注意：facts 只是审计参照与判别子证据，防篡改对比基准是正文。
+ */
+function readVerifyFacts(changeDir) {
+  const factsPath = join(changeDir, 'verify-facts.json')
+  if (!existsSync(factsPath)) return null
+  try {
+    const parsed = JSON.parse(readFileSync(factsPath, 'utf8'))
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null
+  } catch { return null }
+}
+
+/**
+ * init 快照后 HEAD 是否前进（R-06）：facts.generatedAt 之后 `git log --oneline` 非空 → true。
+ * facts 缺失 / generatedAt 非法 / git 失败 → false——子案判定跳过 = 不降级，probe6 不符维持
+ * ERROR（fail-closed 侧：无法证实「环境漂移」就按「疑似篡改」报）。
+ */
+function detectHeadAdvanceSinceFacts(cwd, facts) {
+  const generatedAt = facts && typeof facts.generatedAt === 'string' ? facts.generatedAt.trim() : ''
+  if (!generatedAt) return false
+  const out = gitQuiet(cwd, ['log', '--oneline', `--since=${generatedAt}`], { timeout: 30 * 1000 })
+  if (out === null) return false
+  return out.trim().length > 0
+}
+
+/**
+ * verify-result.md 探针预填段一致性抽查（P3b task-02；D-002@v1 方案A——对比基准是**正文**
+ * 预填段而非 verify-facts.json，删底稿绕不过防护）。
+ *
+ * 纯函数风格（与 reconcileTargetFiles 同构导出）：只读 git/fs、重跑只读探针，不落盘、不改
+ * 既有导出语义。流程：
+ * 1. verify-result.md 不存在 → skip（未走 --init 的存量/quick 场景）；
+ * 2. 判别子（D-003）：任一 `#### 探针` 子节在场 = 新格式报告，进入逐探针对账；全部子节
+ *    缺失时——facts 在场 → ERROR（agent 删除预填段）；facts 也不在场 → skip（存量旧报告，
+ *    零红门禁）。残余（正文预填段+facts 同时删）降级 skip——防护弱化非绕过，如实声明；
+ * 3. 重跑 runVerifyProbes（specDir 显式传 sb——平台/主仓根口径由调用方给定，不走 cwd 祖先
+ *    推断与 worktree 漂移锚定）；异常 → degraded（fail-soft 不误红）；
+ * 4. 分级对账（D-002）：
+ *    - probe1 命中数不符 / probe6 删除数不符 = ERROR（probe1 对比排除 worktreeHits 维度
+ *      ——worktree 存活态与 init 时刻可能不同，R-02；probe6 重跑不可用（非仓库/git 失败）时
+ *      当前删除数无意义，跳过该维度不误红）；
+ *    - HEAD 前进子案（R-06）：facts.generatedAt 之后有新 commit 时 probe6 的 `git diff HEAD`
+ *      口径整体漂移 → 该 mismatch 降 WARNING 提示重跑 --init；
+ *    - probe3 hasTest 数 / probe5 锚（summary 行存在性 + missing 行数）不符 = WARNING
+ *      （测试文件布局与 parity 扫描根环境敏感）。
+ *
+ * 接线约定（task-03，gates.js）：status='mismatch' 且 severity='error' → 阻断回滚；
+ * 'mismatch'+'warning' → 放行告警（envelope probe_consistency_drift）；'skipped'/'degraded' →
+ * 放行提示（envelope probe_consistency_skipped）；'ok' → 静默。ERROR 级 mismatch 的信封 code
+ * 为 probe_consistency_mismatch。
+ *
+ * @param {object} opts
+ * @param {string} opts.cwd - 主仓根（git 调用根，与 runVerifyProbes 同参）
+ * @param {string|null} [opts.specBase] - .sillyspec 根（缺省 join(cwd,'.sillyspec')；平台模式
+ *   传 specRoot——changeDir/报告/facts 的定位基准，P3a reconcileTargetFiles 同款兜底）
+ * @param {string|null} [opts.changeName] - 变更名（quick 等无关联场景缺省 → skipped）
+ * @param {string|null} [opts.runtimeRoot] - 运行时根（缺省 join(specBase,'.runtime')；平台模式
+ *   与 specBase 分离时传 resolveRuntimeRoot 结果。取根口径与 P3a 一致——本检查的锚点产物
+ *   （verify-result.md/verify-facts.json）均在 changeDir，此参为 gates 统一传参的签名对齐预留）
+ * @returns {{
+ *   status: 'ok'|'mismatch'|'skipped'|'degraded',
+ *   severity: 'error'|'warning'|null, // mismatch 时 = mismatches 内最高级；其余状态恒 null
+ *   mismatches: Array<{probe: string, expected: *, actual: *, severity: 'error'|'warning', note: string}>,
+ *     // expected = 当前重跑指标（应然），actual = 正文锚点解析值（agent 可篡改侧）
+ *   skipReason: string|null,
+ *   subsections: {probe1: boolean, probe3: boolean, probe5: boolean, probe6: boolean, any: boolean}|null,
+ *     // 诊断（additive）：探针子节在场性；报告未读到的早期 skip 为 null
+ * }}
+ */
+export function checkProbeConsistency({ cwd, specBase = null, changeName = null, runtimeRoot = null }) {
+  if (!changeName) {
+    return { status: 'skipped', severity: null, mismatches: [],
+      skipReason: '无 changeName（quick 等无关联变更场景），探针一致性抽查跳过', subsections: null }
+  }
+  const sb = specBase || join(cwd, '.sillyspec')
+  const changeDir = join(sb, 'changes', changeName)
+  const reportPath = join(changeDir, 'verify-result.md')
+
+  if (!existsSync(reportPath)) {
+    return { status: 'skipped', severity: null, mismatches: [],
+      skipReason: `verify-result.md 不存在（${reportPath}），探针一致性抽查跳过`, subsections: null }
+  }
+  let reportText
+  try {
+    reportText = readFileSync(reportPath, 'utf8')
+  } catch (err) {
+    return { status: 'skipped', severity: null, mismatches: [],
+      skipReason: `verify-result.md 读取失败（${err && err.message ? err.message : err}），探针一致性抽查跳过`, subsections: null }
+  }
+
+  const anchors = parseProbePrefillAnchors(reportText)
+  const finish = (status, severity, mismatches, skipReason) =>
+    ({ status, severity, mismatches, skipReason, subsections: anchors.subsections })
+
+  // —— 判别子（D-003）：全部 `#### 探针` 子节缺失时不进入逐探针对账 ——
+  if (!anchors.subsections.any) {
+    if (readVerifyFacts(changeDir)) {
+      return finish('mismatch', 'error', [{
+        probe: 'prefill', expected: '#### 探针 预填子节在场', actual: '全部缺失', severity: 'error',
+        note: 'verify-facts.json 在场而正文探针子节全缺——疑似 agent 删除机械预填段（对比基准是正文，删 facts.json 绕不过防护）',
+      }], null)
+    }
+    return finish('skipped', null, [],
+      'verify-result.md 无 #### 探针 子节且无 verify-facts.json（存量旧格式报告），探针一致性抽查跳过')
+  }
+
+  // —— 重跑探针取当前指标（specDir 显式传 sb：根口径由调用方给定，不做祖先推断/漂移锚定） ——
+  let current
+  try {
+    current = runVerifyProbes({ cwd, changeName, specDir: sb })
+  } catch (err) {
+    return finish('degraded', null, [],
+      `探针重跑异常（${err && err.message ? err.message : err}），一致性抽查降级跳过（fail-soft 不误红）`)
+  }
+
+  const mismatches = []
+
+  // probe1 命中数（ERROR；worktreeHits/skippedFiles 环境维度不参与对比，R-02）
+  const curProbe1Hits = (((current.probe1 || {}).matches) || []).length
+  if (anchors.probe1Hits !== curProbe1Hits) {
+    mismatches.push({ probe: 'probe1', expected: curProbe1Hits, actual: anchors.probe1Hits, severity: 'error',
+      note: '未实现标记命中数与重跑不符——正文预填段疑似被篡改（worktree 存活态等环境维度不参与对比）' })
+  }
+
+  // probe6 删除数（ERROR；重跑不可用时跳过——非仓库/git 失败下当前删除数无意义，对照不成立）
+  const curProbe6 = current.probe6 || {}
+  const curProbe6Deletions = (curProbe6.deletions || []).length
+  if (!curProbe6.unavailable && anchors.probe6Deletions !== curProbe6Deletions) {
+    const advanced = detectHeadAdvanceSinceFacts(cwd, readVerifyFacts(changeDir))
+    mismatches.push({
+      probe: 'probe6', expected: curProbe6Deletions, actual: anchors.probe6Deletions,
+      severity: advanced ? 'warning' : 'error',
+      note: advanced
+        ? 'init 快照（verify-facts.json generatedAt）之后 HEAD 前进，probe6 以 HEAD 为锚整体漂移——请重跑 verify-probes --init 刷新预填（降 WARNING，R-06）'
+        : '删除对账条目数与重跑不符——正文预填段疑似被篡改',
+    })
+  }
+
+  // probe3 hasTest 数（WARNING——测试文件布局环境敏感）
+  const curProbe3HasTest = ((((current.probe3 || {}).tasks) || []).filter(t => t && t.hasTest)).length
+  if (anchors.probe3HasTest !== curProbe3HasTest) {
+    mismatches.push({ probe: 'probe3', expected: curProbe3HasTest, actual: anchors.probe3HasTest, severity: 'warning',
+      note: 'hasTest 任务数与重跑不符（探针3 对测试文件布局环境敏感，WARNING 不阻断）' })
+  }
+
+  // probe5 锚（WARNING——G2：summary 行存在性 + missing 行数；backend/frontend 总数不作锚）
+  const curProbe5Missing = ((((current.probe5 || {}).missingBackend) || [])).length
+  if (!anchors.probe5SummaryPresent) {
+    mismatches.push({ probe: 'probe5', expected: 'summary 锚行在场', actual: '缺失', severity: 'warning',
+      note: '探针5 summary 锚行缺失——正文预填段疑似被删改（锚行存在性口径，非计数口径）' })
+  }
+  if (anchors.probe5Missing !== curProbe5Missing) {
+    mismatches.push({ probe: 'probe5', expected: curProbe5Missing, actual: anchors.probe5Missing, severity: 'warning',
+      note: 'contract gap（missing backend）行数与重跑不符（探针5 扫描根/缓存口径环境敏感，WARNING 不阻断）' })
+  }
+
+  if (mismatches.length === 0) return finish('ok', null, [], null)
+  const severity = mismatches.some(m => m.severity === 'error') ? 'error' : 'warning'
+  return finish('mismatch', severity, mismatches, null)
 }

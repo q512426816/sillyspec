@@ -48,3 +48,6 @@ task 卡 frontmatter 的列表标量中出现 `X: `（半角冒号+空格，如�
 
 ## plan-postcheck 与 worktree-apply 存在既有依赖边，反向复用 filterDeliverableFiles 会成环
 worktree-apply.js:21 已 `import { parseAllowedPaths } from './stages/plan-postcheck.js'`——因此 plan-postcheck 侧不能反向 import worktree-apply 的 filterDeliverableFiles（ESM 循环）。需要在 plan-postcheck 内做「流程产物过滤」时，硬编码同口径清单（.sillyspec/changes|.runtime|quicklog + meta.json，保留 .sillyspec/docs/）并注释锚定来源，不引依赖。同类需求先 grep 双向 import 边再决定复用还是同口径复制。（来源：2026-09-06-ir-stage-p3a task-03）
+
+## JS 正则转义全角括号会静默失配（V8 行为）
+在 JS 正则里写 `\）` 或 `\（`（转义全角括号）不报错但永不匹配预期文本——V8 对非 ASCII 字符的冗余转义处理与 ASCII 不同，正则应裸写全角括号 `）`。排查特征：断言「理应命中」的中文文本匹配静默返回 null。（来源：2026-09-07-ir-stage-p3b task-05 E3 组实证）

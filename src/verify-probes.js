@@ -13,6 +13,9 @@
  * verify-result.md 骨架：七章节固定结构 + 探针结果机械预填 + 其余章节 <!--TODO--> 占位。
  * 结论章节留「待填」——extractVerifyConclusion 找不到 PASS/FAIL 关键词即判不过，骨架不能
  * 直接过门（与 symbol-impact 骨架同款防偷懒语义）。
+ * P3b 增量：①章节标题行末尾 claims 层标注（可复跑探针/确定性检查/人工判断，纯后缀不新增行）；
+ * ②--init 同步落盘 verify-facts.json 机器底稿（探针命令行 + 首跑关键指标 + 时间戳，CLI 全权写，
+ * 供事后独立复跑审计；重复 --init 覆盖为最近一次 init 快照）。
  */
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'fs'
 import { join, dirname, basename } from 'path'
@@ -290,8 +293,84 @@ export function renderVerifyProbesReport(result) {
 }
 
 /**
+ * 从 runVerifyProbes 结果构造 verify-facts.json 机器底稿对象（P3b 可复跑审计底稿）。
+ * 命令行统一 `sillyspec verify-probes --change <name>`；指标 fail-soft——字段不可得时少列
+ * 该键而非报错（probe5 形态随 verifyApiParity 演进，宁可少列不可失真）。
+ * @param {{ probe1?: object, probe3?: object, probe5?: object, probe6?: object }} result
+ * @param {{ changeName?: string, now?: string }} [opts] now 缺省取当前时刻（ISO）
+ * @returns {{ schemaVersion: number, change: string, generatedAt: string, probes: object }}
+ */
+export function buildVerifyFacts(result, { changeName, now } = {}) {
+  const command = `sillyspec verify-probes --change ${changeName}`
+  // undefined 值键不进 metrics（「取不到的字段宁可少列」）
+  const defined = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined))
+  const len = (a) => (Array.isArray(a) ? a.length : undefined)
+  const num = (v) => (typeof v === 'number' ? v : undefined)
+  const p1 = (result && result.probe1) || {}
+  const p3 = (result && result.probe3) || {}
+  const p5 = (result && result.probe5) || {}
+  const p6 = (result && result.probe6) || {}
+  return {
+    schemaVersion: 1,
+    change: changeName,
+    generatedAt: now || new Date().toISOString(),
+    probes: {
+      probe1: {
+        command,
+        metrics: defined({
+          matches: len(p1.matches),
+          skippedFiles: len(p1.skippedFiles),
+          worktreeHits: num(p1.worktreeHits),
+          globEntries: len(p1.globEntries),
+        }),
+      },
+      probe3: {
+        command,
+        metrics: defined({
+          tasks: len(p3.tasks),
+          hasTest: Array.isArray(p3.tasks) ? p3.tasks.filter(t => t && t.hasTest).length : undefined,
+        }),
+      },
+      probe5: {
+        command,
+        metrics: defined({
+          backendEndpoints: num(p5.backendCount),
+          frontendCalls: num(p5.frontendCount),
+        }),
+      },
+      probe6: {
+        command,
+        metrics: defined({
+          deletions: len(p6.deletions),
+          unavailable: typeof p6.unavailable === 'boolean' ? p6.unavailable : undefined,
+        }),
+      },
+    },
+  }
+}
+
+/**
+ * verify-probes --init 落盘 verify-facts.json（CLI 全权写）。重复 --init 无条件覆盖——语义是
+ * 「最近一次机械预填的审计底稿快照」（骨架已存在跳过时 facts 照样刷新），agent 勿手改：
+ * 事后复跑审计的对照快照，防篡改一致性检查的对比基准是 verify-result.md 正文（非本文件）。
+ * @param {string} changeDir 变更目录（spec 根下 changes/<name>）
+ * @param {object} result runVerifyProbes 返回值
+ * @param {string} changeName 变更名（统一命令行呈现）
+ * @returns {{ facts: object, path: string }}
+ */
+export function writeVerifyFacts(changeDir, result, changeName) {
+  const facts = buildVerifyFacts(result, { changeName })
+  const factsPath = join(changeDir, 'verify-facts.json')
+  writeFileSync(factsPath, JSON.stringify(facts, null, 2) + '\n')
+  console.log(`📝 已刷新 verify-facts.json 机器底稿: ${factsPath}（CLI 全权写，勿手改）`)
+  return { facts, path: factsPath }
+}
+
+/**
  * 生成 verify-result.md 骨架（七章节；探针结果机械预填，语义章节 <!--TODO--> 占位）。
  * 结论章节留「待填」——extractVerifyConclusion 无 PASS/FAIL 关键词即判不过，骨架不能直接过门。
+ * 章节标题行末尾带 claims 层标注（P3b）：探针结果=可复跑探针 / 测试结果=确定性检查 / 其余=
+ * 人工判断——纯渲染层后缀，不新增行，verify gate 结论提取按关键词窗口制不受影响。
  * @returns {string|null} 骨架全文；无 design.md/tasks.md（非完整流程变更）→ null
  */
 export function generateVerifyResultSkeleton(result) {
@@ -301,33 +380,33 @@ export function generateVerifyResultSkeleton(result) {
     '> 探针结果已机械预填；其余章节把 `<!--TODO-->` 替换为真实内容。**结论必须写明 PASS / FAIL**——',
     '> 留「待填」会被 gate 判不过（fail-closed）。',
     '',
-    '## 结论：<待填：PASS 或 FAIL（+一句话理由）>',
+    '## 结论：<待填：PASS 或 FAIL（+一句话理由）> [层：人工判断]',
     '',
-    '## 任务完成度',
+    '## 任务完成度 [层：人工判断]',
     '<!--TODO: 逐 task 对照 tasks.md 勾选与验收标准，完成/未完成/存疑三态-->',
     '',
-    '## 设计一致性',
+    '## 设计一致性 [层：人工判断]',
     '<!--TODO: 实现与 design.md 的偏差（无偏差也显式写「一致」）-->',
     '',
-    '## 探针结果（CLI 机械预填）',
+    '## 探针结果（CLI 机械预填） [层：可复跑探针——gate 抽查防篡改]',
     renderVerifyProbesReport(result),
     '',
-    '## 测试结果',
+    '## 测试结果 [层：确定性检查——CLI 实测对账]',
     '<!--TODO: 测试命令 + 结果（通过数/失败数；known_failures 豁免逐条注明）-->',
     '',
-    '## 决策追踪矩阵（如存在 decisions.md；无则删本节）',
+    '## 决策追踪矩阵（如存在 decisions.md；无则删本节） [层：人工判断]',
     '<!--TODO: | 决策 ID | FR | Task | Evidence | 状态 |（D-xxx@vN → FR-xxx → task → 证据回指闭环）-->',
     '',
-    '## 技术债务',
+    '## 技术债务 [层：人工判断]',
     '<!--TODO: TODO/FIXME/HACK 统计（探针 1 的命中已预填在上方探针结果）-->',
     '',
-    '## 变更风险等级',
+    '## 变更风险等级 [层：人工判断]',
     '<!--TODO: doc-only / unit-sufficient / contract-required / integration-critical / deployment-critical；若 design.md frontmatter 有 risk_level 显式声明，写明「显式声明 = <等级>」+ 理由；若有命中被同句否定语境抑制（如「不新增 daemon 协议」），写明被抑制关键词与理由（抑制可审计，不许用来静默降级）-->',
     '',
-    '## Runtime Evidence',
+    '## Runtime Evidence [层：人工判断]',
     '<!--TODO: 关键命令输出/时间戳/commit hash 证据链；integration/deployment-critical 必填，按实际触碰的运行时组件写（启动命令/端点/请求响应/日志片段/生命周期终态断言/失败模式排除），未涉及的行写「不涉及」-->',
     '',
-    '## 代码审查',
+    '## 代码审查 [层：人工判断]',
     '<!--TODO: 问题列表 + 总体评价-->',
     '',
   ]

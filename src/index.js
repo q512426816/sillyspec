@@ -833,7 +833,7 @@ async function main() {
         process.exit(2);
       }
       assertSafeChangeName(vpChange, '--change 变更名');
-      const { runVerifyProbes, renderVerifyProbesReport, generateVerifyResultSkeleton, resolveVerifyProbesSpecBase } = await import('./verify-probes.js');
+      const { runVerifyProbes, renderVerifyProbesReport, generateVerifyResultSkeleton, resolveVerifyProbesSpecBase, writeVerifyFacts } = await import('./verify-probes.js');
       // spec 根统一走漂移锚定（坑 worktree-spec-artifact-misplace）：在 worktree 内跑时锚回主仓，
       // 探针读取与 --init 骨架都落主仓——与 plan/execute/verify/archive 的 command.js 守卫同口径。
       // resolvePlatformSpecDir 仍先调（保留平台接管 fail-closed 检查副作用），但仅 pointer 存在时
@@ -856,6 +856,7 @@ async function main() {
           writeFileSync(vpReportPath, generateVerifyResultSkeleton(vpResult));
           console.log(`\n📄 已生成 verify-result.md 骨架: ${vpReportPath}（探针已预填；结论必须写明 PASS/FAIL，留待填会被 gate 判不过）`);
         }
+        writeVerifyFacts(join(vpSpecBase, 'changes', vpChange), vpResult, vpChange); // P3b：facts 底稿随 --init 刷新（骨架已存在也刷新，最近快照语义）
       }
       break;
     }

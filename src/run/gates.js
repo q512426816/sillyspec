@@ -690,6 +690,32 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
     if (reconcileBlocked) {
       return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)
     }
+    // ── verify-result.md 探针预填段一致性抽查（task-03 / ir-stage-p3b D-002@v1 方案A）──
+    // 「#### 探针 N」机械预填段（verify-probes --init 生成）长在 agent 可编辑的正文里，其防篡改
+    // 基准是正文锚点而非 verify-facts.json（删底稿绕不过防护）。checkProbeConsistency 重跑只读
+    // 探针与正文锚点对账，分级（D-003）：probe1/probe6 不符 = ERROR → 阻断回滚（正文预填段疑似
+    // 被篡改）；probe3/probe5 环境敏感维度 + R-06 HEAD 前进降级 = WARNING → 放行告警（drift）；
+    // skipped（存量旧格式报告/无 changeName）/degraded（重跑异常 fail-soft）→ 放行提示。
+    // 接线形态照上方 P3a reconcile 先例：envelope + print（ERROR 时 console.error 逐条 mismatch +
+    // supportedFixes）+ verify-runs 落盘 + rollbackCompletionAndReturn。
+    const { checkProbeConsistency } = await import('../verify-postcheck.js')
+    const probeCheck = checkProbeConsistency({
+      // 四参与 reconcile 同源取值：cwd/specBase/changeName 原样透传；runtimeRoot 复用上方
+      // reconcileRuntimeRoot（resolveRuntimeRoot(platformOpts, specBase)）——checkProbeConsistency
+      // 的锚点产物实际都在 changeDir，此参为统一传参签名对齐预留，口径一处定义不二算
+      cwd, specBase, changeName,
+      runtimeRoot: reconcileRuntimeRoot,
+    })
+    const probeEnvelope = buildProbeConsistencyEnvelope(probeCheck)
+    const probeBlocked = printProbeConsistencyCheck(probeCheck, probeEnvelope)
+    // 结果落盘（对齐 writeReconcileRunResult 先例）：独立文件 probe-consistency-result.json——
+    // 与 reconcile-result.json 同 gate 运行同目录组织（verify-runs/<ts>/），但不并入后者：
+    // reconcile-result.json 的 schema 已被 P3a 消费方锁定，塞探针字段（读改写/扩参）只会引入
+    // 两检查间耦合；各写各的回执、按文件名订阅更干净。fail-soft 不影响 gate 判定
+    writeProbeConsistencyRunResult({ runtimeRoot: reconcileRuntimeRoot, changeName, envelope: probeEnvelope, result: probeCheck })
+    if (probeBlocked) {
+      return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)
+    }
     // ── module-impact 死信探针（blocking，债单 D-1/D-5）：更新结果表 pending/待办行 → 阻断 verify ──
     // 与 archive 移动前校验（extractPendingDocSyncRows）同一口径，把死信号从 archive 提前到 verify：
     // agent 在 verify 阶段就须完成文档同步并回填 done/skipped，而非拖到归档被拦（修复 perf-remediation
@@ -1339,6 +1365,138 @@ export function printReconcileTargetFilesCheck(r, envelope = buildReconcileTarge
   // ok：①交集全落地
   console.log(`\n✅ target_files 对账通过：${r.matched.length} 个声明文件全部落地${r.form ? `（actual 形态=${r.form}）` : ''}`)
   for (const n of (r.notes || [])) console.log(`   ℹ️ ${n}`)
+  return false
+}
+
+/**
+ * 探针一致性抽查结果 → 诊断信封（task-03 接线配套，形态对齐 buildReconcileTargetFilesEnvelope）。
+ *
+ * code 路由键（task-02 JSDoc 接线约定）：mismatch+error → probe_consistency_mismatch（阻断，
+ * 正文预填段疑似被篡改）；mismatch+warning → probe_consistency_drift（probe3/probe5 环境敏感
+ * 维度 + R-06 HEAD 前进降级，放行告警）；skipped/degraded → probe_consistency_skipped（放行
+ * 提示——两态对消费方语义一致：本次无对账结论，照 P3a 五状态→四 code 的合流先例）；ok →
+ * probe_consistency_ok。severity 分级照 reconcile 先例：阻断=error、非阻断非 ok=warning、ok=info。
+ * evidence 携带 mismatch 计数（总/error/warning）+ subsections 在场性（task-02 返回值的诊断字段，
+ * 判别子 D-003 排查先看它——「哪个探针子节在场」决定走逐探针对账还是 prefill 整段缺失分支）。
+ *
+ * @param {object} r checkProbeConsistency 返回值
+ * @returns {{ code: string, name: string, severity: string, detail: string, evidence: object, supportedFixes: string[] }}
+ */
+export function buildProbeConsistencyEnvelope(r) {
+  const blocked = r.status === 'mismatch' && r.severity === 'error'
+  const drifted = r.status === 'mismatch' && !blocked
+  const supportedFixes = []
+  if (blocked) {
+    supportedFixes.push('如实重生成：跑 `sillyspec verify-probes --change <变更名> --init` 重新落盘机械预填段，再基于新预填段如实补写正文结论（删改预填段过门是 Step7 防篡改纪律红线）')
+    supportedFixes.push('若重生成后仍不符：核对 mismatch 的 expected（CLI 重跑指标）与 actual（正文锚点值）——确属环境变化（worktree 存活态/测试布局）时在 verify-result.md 注明差异原因')
+  } else if (drifted) {
+    supportedFixes.push('环境敏感维度漂移（probe3 测试布局 / probe5 扫描根 / probe6 HEAD 前进）：跑 `sillyspec verify-probes --change <变更名> --init` 刷新预填段对齐当前环境（不阻断，留审计）')
+  } else if (r.status === 'skipped' || r.status === 'degraded') {
+    supportedFixes.push('新变更走 `sillyspec verify-probes --change <变更名> --init` 生成带探针预填段的骨架后再写结论；存量旧格式报告/无 changeName 跳过属预期，无需补')
+  }
+  return {
+    // code 机器路由键（task-02 JSDoc）：四状态→四 code，供平台/上游按 code 分支
+    code: blocked ? 'probe_consistency_mismatch'
+      : drifted ? 'probe_consistency_drift'
+      : (r.status === 'ok' ? 'probe_consistency_ok' : 'probe_consistency_skipped'),
+    name: 'probe_consistency',
+    severity: blocked ? 'error' : (r.status === 'ok' ? 'info' : 'warning'),
+    detail: `verify-result.md 探针预填段一致性抽查：status=${r.status}`
+      + (r.status === 'mismatch' ? `（${(r.mismatches || []).length} 项不符，severity=${r.severity}）` : '')
+      + (r.skipReason ? `（${r.skipReason}）` : ''),
+    evidence: {
+      mismatch_count: (r.mismatches || []).length,
+      error_count: (r.mismatches || []).filter(m => m && m.severity === 'error').length,
+      warning_count: (r.mismatches || []).filter(m => m && m.severity === 'warning').length,
+      subsections: r.subsections ?? null,
+    },
+    supportedFixes,
+  }
+}
+
+/**
+ * 探针一致性抽查结果落盘 .runtime/verify-runs/<ts>/probe-consistency-result.json（task-03）。
+ *
+ * 形态选型（二选一取独立文件）：与 reconcile-result.json 同 gate 运行、同目录组织
+ * （verify-runs/<ts>/，ts=UTC 紧凑 YYYYMMDDHHmmss 对齐 writeRunResult 先例），但不并入后者——
+ * reconcile-result.json 的 schema 已被 P3a 消费方锁定，并入（读改写/扩参）引入两检查间耦合；
+ * 独立文件各写各的回执，平台/审计按文件名订阅（与 test-result.json 同一目录约定）。
+ * fail-soft：写失败只 console.error 留痕不阻断 gate（对齐 writeReconcileRunResult）；四状态全落
+ * （放行态同样留档——跳过/降级是审计事实，下次回看才知道为什么没有对账结论）。
+ *
+ * @param {{ runtimeRoot: string, changeName: string|null, envelope: object, result: object }} opts
+ * @returns {string|null} 成功返回落盘路径；失败返回 null
+ */
+export function writeProbeConsistencyRunResult({ runtimeRoot, changeName, envelope, result }) {
+  try {
+    const ts = new Date().toISOString().slice(0, 19).replace(/[-T:]/g, '')
+    const runDir = join(runtimeRoot, 'verify-runs', ts)
+    mkdirSync(runDir, { recursive: true })
+    const resultPath = join(runDir, 'probe-consistency-result.json')
+    // 落盘字段 snake_case 对齐 reconcile-result.json 机器消费口径（信封内存字段保持 camelCase
+    // 不动，写盘这层做一次映射）；mismatches 逐条落盘供平台按 probe/severity 细读
+    writeFileSync(resultPath, JSON.stringify({
+      change: changeName,
+      code: envelope.code,
+      severity: envelope.severity,
+      status: result.status,
+      result_severity: result.severity ?? null,
+      evidence: envelope.evidence,
+      supported_fixes: envelope.supportedFixes,
+      mismatches: result.mismatches || [],
+      skip_reason: result.skipReason ?? null,
+      subsections: result.subsections ?? null,
+      ran_at: new Date().toISOString(),
+    }, null, 2) + '\n')
+    console.log(`📄 探针一致性抽查结果已写入: ${resultPath}`)
+    return resultPath
+  } catch (e) {
+    console.error(`⚠️ 探针一致性抽查结果落盘失败（不影响 verify gate）: ${e.message}`)
+    return null
+  }
+}
+
+/**
+ * 打印探针一致性抽查结果（task-03 接线配套的打印层，阻断语义同 printReconcileTargetFilesCheck）。
+ *
+ * ERROR 级 mismatch：console.error 状态行 + 逐条 mismatch（probe/expected/actual/note，reconcile
+ * 先例同形）+ evidence 计数 + supportedFixes，返回 true（调用方据此走 rollbackCompletionAndReturn）；
+ * WARNING 级 mismatch：console.warn 同形明细返回 false 放行；skipped/degraded：一句 skipReason 放行
+ * （对齐 reconcile 降级分支形态）；ok：静默返回 false（task-02 JSDoc 接线约定「'ok' → 静默」——
+ * 正文锚点全符是常态，不刷存在感）。
+ *
+ * @param {object} r checkProbeConsistency 返回值
+ * @param {object} [envelope] 预构造信封（缺省现算；显式传入便于调用方先断言再打印）
+ * @returns {boolean} true = 阻断（status='mismatch' 且 severity='error'）
+ */
+export function printProbeConsistencyCheck(r, envelope = buildProbeConsistencyEnvelope(r)) {
+  // ERROR 级 mismatch：正文预填段与 CLI 重跑事实不符，疑似篡改 → 阻断
+  if (r.status === 'mismatch' && r.severity === 'error') {
+    console.error(`\n❌ 探针一致性抽查阻断：${(r.mismatches || []).length} 项与 CLI 重跑事实不符（其中 ERROR 级 ${envelope.evidence.error_count} 项）——verify-result.md 探针预填段疑似被篡改。`)
+    for (const m of (r.mismatches || [])) {
+      console.error(`   - ${m.probe}: 重跑 ${JSON.stringify(m.expected)} vs 正文 ${JSON.stringify(m.actual)}（${m.severity}）——${m.note}`)
+    }
+    console.error(`   evidence: mismatches=${envelope.evidence.mismatch_count}（error=${envelope.evidence.error_count} warning=${envelope.evidence.warning_count}）subsections=${JSON.stringify(envelope.evidence.subsections)}`)
+    for (const fix of envelope.supportedFixes) console.error(`   修复：${fix}`)
+    console.error(`   对比基准是正文锚点（删 verify-facts.json 绕不过防护）；如实重生成预填段后重新完成 verify。`)
+    return true
+  }
+  // WARNING 级 mismatch：环境敏感维度漂移 → 放行告警
+  if (r.status === 'mismatch') {
+    console.warn(`\n⚠️  探针一致性抽查发现 ${(r.mismatches || []).length} 项漂移（环境敏感维度，advisory 不阻断）：`)
+    for (const m of (r.mismatches || [])) {
+      console.warn(`   - ${m.probe}: 重跑 ${JSON.stringify(m.expected)} vs 正文 ${JSON.stringify(m.actual)}——${m.note}`)
+    }
+    console.warn(`   evidence: mismatches=${envelope.evidence.mismatch_count}（error=${envelope.evidence.error_count} warning=${envelope.evidence.warning_count}）`)
+    for (const fix of envelope.supportedFixes) console.warn(`   提示：${fix}`)
+    return false
+  }
+  // 降级（skipped/degraded）：放行，skipReason 一句话（存量旧报告/重跑异常，不误红）
+  if (r.status === 'skipped' || r.status === 'degraded') {
+    console.warn(`\n⚠️  探针一致性抽查${r.status === 'degraded' ? '降级' : '跳过'}（不阻断）：${r.skipReason}`)
+    return false
+  }
+  // ok：①正文锚点与重跑全符——静默放行
   return false
 }
 
