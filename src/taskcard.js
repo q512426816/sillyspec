@@ -55,7 +55,9 @@ function yamlScalar(v) {
  *
  * 硬校验 9 字段（plan-postcheck feasibility）+ 规范字段全部就位，占位符由子代理 Edit 填充；
  * 可选字段（provides/expects_from/related_tests）默认不生成——缩小 YAML 出错面，何时加的
- * 判据写在文件尾注释（规则详情见 templates/prompts/taskcard-rules.md）。
+ * 判据写在文件尾注释（规则详情见 templates/prompts/taskcard-rules.md）。例外：target_files
+ * 预置空占位注释行（[] + 行内 # 注释）——占位符硬拦基于 taskcard-placeholders.js 的封闭
+ * 字面清单，本行值与注释刻意不含任何占位标记字面量，不会被 plan --done 拦截。
  * 字符串只含 \n：writeFileSync 直写不经任何行尾转换，Windows 下天然 LF 安全。
  * title/title_zh/author 经 yamlScalar 转义（自由文本防 YAML 指示符炸解析）。
  *
@@ -99,6 +101,7 @@ requirement_ids: ${fm.requirement_ids}
 decision_ids: ${fm.decision_ids}
 allowed_paths:
   - src/example/file.ts
+target_files: []  # 可选：本 task 计划改动的文件（对账用精确路径清单，格式见下方注释；不填保留 []）
 goal: >
   一句话说明这个 task 要做什么、为什么。
 implementation:
@@ -119,6 +122,10 @@ constraints:
      勿用 Write 整文件重写——会引入 CRLF 行尾/漏闭合 ---/漏字段回归。
      ⚠️ plan --done 硬校验会拦截未替换的占位符（FR-XX / D-XXX / src/example/file.ts /
      一句话说明这个 task / 具体步骤 1 / 可验证的验收条件 1 / 边界约束 1）——占位符视同缺字段。
+     target_files 格式（可选，对账用精确文件级意图声明，与 allowed_paths 语义不同）：
+                    精确文件路径（仓根相对、正斜杠），当前不存在、将由本 task 新建的文件加
+                    NEW: 前缀（如 NEW:src/foo.js）；禁 glob（src/**）、禁目录前缀（src/dir/）、
+                    禁绝对路径；无明确文件级意图时保留 [] 占位行不动。
      可选字段按需插进上方 frontmatter（规则见 taskcard-rules）：
      repo:          仅跨仓 task 填（local.yaml repos: 注册的仓 key；缺省=main。allowed_paths 相对该仓根写，
                     禁止带仓库名前缀/绝对路径——review 对账按仓根相对路径匹配，带前缀永不命中）

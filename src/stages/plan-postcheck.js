@@ -95,6 +95,64 @@ export function parseAllowedPaths(content) {
 }
 
 /**
+ * 解析 task-NN.md frontmatter 的 target_files 字段（对账意图声明，design 总体方案 Wave 1 / X-10）。
+ *
+ * 与 parseAllowedPaths 同族的列表解析（inline [] + 顶格/缩进块列表双形态、CRLF 入口归一），
+ * 但语义相反——**严格模式**：allowed_paths 是 worktree 写入守卫的白名单（目录前缀 / glob /
+ * 引号皆合法、pathMatches 容差匹配）；target_files 是 verify 对账（task-04 reconcileTargetFiles）
+ * 用的逐文件精确意图声明——白名单容差若用于对账，目录前缀会把整目录算成「预期」使 scope
+ * creep 检出恒空（D-002）。故此处不剥引号、不放行通配，非法形态记入 entry.invalid 交
+ * validateTargetFiles 报 ERROR。解析器纯函数无 IO、不 throw——依赖链已核实无环
+ * （verify-postcheck → plan-postcheck 单向），供对账侧跨文件 import 复用。
+ *
+ * 条目格式：`[NEW:]<仓根相对精确文件路径>`，NEW: 前缀 = 当前不存在的待建文件。
+ * 非列表形态（标量 / 未闭合）与 parseAllowedPaths 家族同口径视同未声明（missing），
+ * 走调用方的汇总 WARNING 信号，不在解析器内造第三种状态。
+ *
+ * @param {string} content - task 文件内容（同 parseAllowedPaths：frontmatter 自提取）
+ * @returns {{ entries: Array<{raw: string, isNew: boolean, path: string, invalid: string|null}>, missing: boolean }}
+ *   raw = 条目原文（含 NEW: 前缀）；path = 剥 NEW: 后、反斜杠归一正斜杠的路径；
+ *   invalid = 非法形态原因（null = 合法）；missing = 字段缺失或空列表（存量卡兼容口径）
+ */
+export function parseTargetFiles(content) {
+  content = content.replace(/\r\n/g, '\n') // 同 parseAllowedPaths：入口归一，保护喂原始 CRLF 的外部调用方（task-04）
+  const fmMatch = content.match(/^---\n([\s\S]*?)\n---/)
+  if (!fmMatch) return { entries: [], missing: true }
+  const fm = fmMatch[1]
+  let raws = null
+  const inlineMatch = fm.match(/target_files:[ \t]*\[([^\]]*)\]/)
+  if (inlineMatch) {
+    raws = inlineMatch[1].split(',').map(s => s.trim()).filter(Boolean)
+  } else {
+    // 块列表 [ \t]*\n 不吃换行（坑6① 家族教训：\s* 贪婪吞顶格列表导致静默判空）
+    const blockMatch = fm.match(/target_files:[ \t]*\n((?:[ \t]*-[ \t]+.+\n?)+)/)
+    if (blockMatch) {
+      raws = blockMatch[1].match(/[ \t]*-[ \t]+(.+)/g)
+        ?.map(s => s.replace(/^[ \t]*-[ \t]+/, '').trim()).filter(Boolean) || []
+    }
+  }
+  if (raws === null || raws.length === 0) return { entries: [], missing: true }
+
+  const entries = raws.map(raw => {
+    let path = raw
+    let isNew = false
+    if (path.startsWith('NEW:')) { isNew = true; path = path.slice('NEW:'.length).trim() }
+    // 路径归一正斜杠（design 数据流标注）——UNC `\\srv\x` 归一后 `//srv/x` 恰落入下方绝对路径判定
+    path = path.replace(/\\/g, '/')
+    // 严格形态判定（X-10：每条 = 精确文件路径，禁 glob/目录前缀/引号/绝对路径）。
+    // 只记原因不 throw：解析器供对账复用，非法条目的处置（ERROR）归 plan-postcheck 校验层
+    let invalid = null
+    if (path === '') invalid = '剥 NEW: 前缀后为空'
+    else if (/[*?]/.test(path)) invalid = '含通配符（* 或 ?）——target_files 须逐文件精确声明，禁 glob（目录级覆盖会令 verify 对账的 scope creep 检出失效）'
+    else if (path.endsWith('/')) invalid = '以 / 结尾（目录前缀）——须精确到文件'
+    else if (/["'`]/.test(path)) invalid = '含引号/反引号——须裸路径书写（严格口径拒容差，防对账字面不匹配）'
+    else if (path.startsWith('/') || /^[A-Za-z]:/.test(path)) invalid = '是绝对路径——须写仓根相对路径'
+    return { raw, isNew, path, invalid }
+  })
+  return { entries, missing: false }
+}
+
+/**
  * 从 task-NN.md frontmatter 解析标量字段（repo / base_commit / head_commit）。
  * 复用 parseTaskContracts 的 frontmatter 提取 + js-yaml load 模式（标量可选字段，正则对引号/空值脆弱）。
  *
@@ -986,6 +1044,122 @@ export function validateDesignFileCoverage(changeDir) {
 }
 
 /**
+ * 流程产物前缀（target_files 不该声明的路径域）。
+ * 与 worktree-apply filterDeliverableFiles 同口径硬编码——不 import 复用是因为
+ * worktree-apply → plan-postcheck 已有依赖边（line 21 parseAllowedPaths），反向 import 成环。
+ * 注意 .sillyspec/docs/ 不在此列：dogfood 模块文档 = 交付物（D-2 keepSillyspecDocs），
+ * 声明它是合法的（verify 对账也保留 docs 路径）。
+ */
+const TARGET_FILES_PROCESS_PREFIXES = ['.sillyspec/changes/', '.sillyspec/.runtime/', '.sillyspec/quicklog/']
+
+/**
+ * task 卡 target_files 声明核验器（plan-postcheck 第 7 项检查，P3a Wave 1 / X-10 / X-13）。
+ *
+ * 修复场景（design 背景）：plan 侧「计划动了不存在的文件」类幻觉此前零核验，agent 写出
+ * 幻觉路径要到 execute 子代理落盘失败才暴露。此处逐条机器核验意图声明，把幻觉/格式问题
+ * 拦在 plan --done；同时为 task-04 verify 对账提供可信的声明侧（对账复用 parseTargetFiles）。
+ *
+ * 分级口径：
+ *   ERROR：格式非法（glob/目录前缀/引号/绝对路径——parseTargetFiles.invalid）；幻觉路径
+ *          （repoRoot 下不存在且未加 NEW: 前缀）。
+ *   WARNING（不阻断，存量兼容）：字段缺失**每变更汇总一条**（X-13：每卡一条会被存量卡
+ *          噪音淹没）；已存在文件带 NEW: 前缀（应去前缀）；流程产物路径；越出该卡
+ *          allowed_paths 白名单（提前暴露到 apply Gate1 才发现的越权，X-5）；design 清单外
+ *          路径（声明与 design 漂移提示）；跨仓卡剔除提示（路径相对其声明仓根，主仓核验
+ *          恒假误报，与对账侧 D-004 同口径剔除）。
+ *
+ * fail-open 边界：tasks/ 目录缺失或无卡（同既有检查行为）；design.md 缺失/无清单章节
+ * （缺清单 error 归 validateDesignFileCoverage 把关，不重复）；卡无 allowed_paths
+ * （feasibility 已报 error，跳过交叉防双重噪音）；repoRoot 缺省（纯函数测试场景）跳过存在性。
+ *
+ * @param {string} changeDir - 变更目录（读 tasks/ 卡与 design.md 清单）
+ * @param {string|null} [repoRoot=null] - 主仓根目录（target_files 存在性基准）
+ * @returns {{ ok: boolean, errors: string[], warnings: string[] }}
+ */
+export function validateTargetFiles(changeDir, repoRoot = null) {
+  const errors = []
+  const warnings = []
+
+  const tasksDir = pJoin(changeDir, 'tasks')
+  if (!existsSync(tasksDir)) {
+    return { ok: true, errors, warnings }
+  }
+  const taskFiles = readdirSync(tasksDir).filter(f => /^task-\d+\.md$/.test(f))
+  if (taskFiles.length === 0) {
+    return { ok: true, errors, warnings }
+  }
+
+  // design 清单交叉用清单（双交叉之一）：与 validateDesignFileCoverage 同源解析（含按仓分段、
+  // .sillyspec/docs 交付物口径），design 缺失/无清单 → 空列表 → 交叉自动跳过。检查间不共享
+  // 解析结果（各检查独立只读 changeDir 产物），重复解析是聚合架构的既定代价。
+  const designFiles = parseDesignCoverageByRepo(pJoin(changeDir, 'design.md')).allFiles
+
+  let missingCount = 0
+  for (const file of taskFiles) {
+    const content = readFileSync(pJoin(tasksDir, file), 'utf8')
+    if (!/^---\n([\s\S]*?)\n---/.test(content)) continue // feasibility 已报 frontmatter 缺失，不重复
+    const taskId = parseTaskId(content, file) || file
+    const label = `${taskId} (${file})`
+
+    // 跨仓卡剔除：其 target_files 相对声明仓根，主仓 repoRoot 下 existsSync 恒假 → 全员
+    // 误报幻觉路径。verify 对账（task-04）同口径剔除（D-004），此处只提示不核验
+    const repo = parseRepo(content)
+    if (repo) {
+      warnings.push(`${label}: 跨仓卡（repo: ${repo}）不参与主仓 target_files 核验——跨仓对账不在本变更范围，声明留待后续分期`)
+      continue
+    }
+
+    const { entries, missing } = parseTargetFiles(content)
+    if (missing) { missingCount++; continue }
+
+    const allowedPaths = parseAllowedPaths(content)
+    for (const e of entries) {
+      if (e.invalid) {
+        errors.push(`${label}: target_files「${e.raw}」格式非法——${e.invalid}。修复：改写为仓根相对的精确文件路径；当前不存在的文件加 NEW: 前缀（如 NEW:src/new.js）`)
+        continue
+      }
+      // 流程产物：声明了也对不上账（verify 对账 filterDeliverableFiles 同口径会滤掉），
+      // 且 changes/ 下路径属流程自产文件、不该是对账意图。提示后跳过后续核验（存在性/交叉
+      // 对流程产物无意义，只会叠加噪音）
+      if (TARGET_FILES_PROCESS_PREFIXES.some(p => e.path.startsWith(p)) || e.path === 'meta.json') {
+        warnings.push(`${label}: target_files「${e.raw}」是流程产物路径——流程产物不进 target_files 声明（verify 对账同口径会将其滤掉，声明了也对不上账）`)
+        continue
+      }
+      // 存在性：非 NEW 且不存在 = 幻觉路径（ERROR，本检查核心价值）；NEW 且已存在 = 前缀误用（WARNING）
+      if (repoRoot) {
+        const fileExists = existsSync(pJoin(repoRoot, e.path))
+        if (!e.isNew && !fileExists) {
+          errors.push(`${label}: target_files「${e.raw}」在仓库中不存在且未加 NEW: 前缀——幻觉路径。修复：核对真实路径；确属新建文件则写 NEW:${e.path}`)
+          continue // 路径本身不成立，allowed_paths/design 交叉对它无意义
+        }
+        if (e.isNew && fileExists) {
+          warnings.push(`${label}: target_files「${e.raw}」已存在于仓库——NEW: 前缀仅用于当前不存在的文件，应去前缀`)
+        }
+      }
+      // allowed_paths 交叉（双交叉之二，X-5）：声明文件不在该卡白名单 → execute worktree
+      // 写入守卫（apply Gate1）才暴露越权，此处提前到 plan 提示补白名单（容差匹配：目录
+      // 前缀/glob 的 allowed_paths 可覆盖精确 target_file，与 coverage 对账同 pathMatches 语义）
+      if (allowedPaths.length > 0 && !allowedPaths.some(ap => pathMatches(e.path, ap))) {
+        warnings.push(`${label}: target_files「${e.path}」不在本卡 allowed_paths 白名单内——execute 写入守卫会拦（apply Gate1 才暴露越权）。修复：补进 allowed_paths（目录前缀/glob 写法均可）或修正 target_files`)
+      }
+      // design 清单交叉：声明与 design 漂移提示（design 清单是覆盖对账的基准，target_files
+      // 声明清单外文件 = 两份意图清单分叉的早期信号）
+      if (designFiles.length > 0 && !designFiles.some(dp => pathMatches(e.path, dp))) {
+        warnings.push(`${label}: target_files「${e.path}」不在 design.md 文件变更清单内——请对齐（补 design 清单条目或修正声明），防声明与 design 漂移`)
+      }
+    }
+  }
+
+  // 字段缺失汇总（X-13）：每变更一条而非每卡一条——存量卡大量无此字段，每卡一条 WARNING
+  // 会淹没真正有价值的交叉警告；汇总粒度保信号可见又不阻断存量变更
+  if (missingCount > 0) {
+    warnings.push(`${missingCount} 张 task 卡未声明 target_files（存量卡可忽略——verify 对账将跳过；新卡请补：每条为仓根相对精确文件路径，不存在的文件加 NEW: 前缀）`)
+  }
+
+  return { ok: errors.length === 0, errors, warnings }
+}
+
+/**
  * Plan 可行性校验器（本地代码证明 execute 前置条件）
  * 检查 TaskCard 的完整性和可行性
  * @param {string} changeDir - 变更目录
@@ -1236,7 +1410,7 @@ export async function executePlanPostcheck(context) {
 
   console.log(`  📂 变更目录: ${changeDir}`)
 
-  // ── 报错聚合（坑6③）：六个检查全部跑完后统一输出全部失败项，一轮 --done 暴露全部问题，
+  // ── 报错聚合（坑6③）：七个检查全部跑完后统一输出全部失败项，一轮 --done 暴露全部问题，
   // 不再「失败一个抛一个、修一个冒一个」的迭代盲盒。各检查相互独立（都只读 changeDir 产物），
   // 前置检查失败不使后续检查失真——唯一例外是 tasks/ 目录缺失时后续检查都无意义，仍提前短路。
   const failures = [] // { name, errors, hint }
@@ -1332,6 +1506,21 @@ export async function executePlanPostcheck(context) {
       }
     }
   }
+
+  // ── 1f. task 卡 target_files 声明核验（P3a Wave 1）──
+  // 对账意图声明的 plan 期机器核验：幻觉路径 / 非法格式 → error 硬拦（消灭「计划动不存在
+  // 文件」的幻觉出口）；存量卡缺字段仅每变更一条汇总 WARNING（X-13，不阻断零红门禁）。
+  // 核验通过 = task-04 verify 对账的声明侧可信（对账 import parseTargetFiles 同源解析）。
+  // 追加在既有 6 项之后，不触碰其语义与顺序；本检查同样独立、只读 changeDir 产物。
+  const targetFiles = validateTargetFiles(changeDir, context.cwd)
+  if (targetFiles.errors.length > 0) {
+    failures.push({
+      name: 'task 卡 target_files 声明核验（幻觉路径/非法格式）',
+      errors: targetFiles.errors,
+      hint: '修复方式：核对仓库真实路径——已存在文件裸写、新建文件加 NEW: 前缀；每条须为仓根相对的精确文件路径（禁 glob/目录前缀/引号/绝对路径）。',
+    })
+  }
+  printSectionWarnings('target_files 声明', targetFiles.warnings)
 
   // ── 聚合输出：一轮 --done 暴露全部失败项（坑6③）──
   if (failures.length > 0) {

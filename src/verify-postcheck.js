@@ -29,6 +29,9 @@ import { join } from 'path'
 import { verifyApiParity } from './contract-matrix.js'
 import { parseFileChangeListDetailed, pathMatches } from './change-list.js'
 import { filterDeliverableFiles } from './worktree-apply.js'
+// target_files 声明侧解析（Wave 1 已落地）：依赖链已核实无环——plan-postcheck 不反向依赖本模块，
+// 且本模块已经 worktree-apply.js:21 间接依赖 plan-postcheck，此处改直连不引入新环（task-04）
+import { parseTargetFiles, parseRepo } from './stages/plan-postcheck.js'
 
 // 测试命令最长执行时间；超时视为失败（防止 CLI 被挂起的测试卡死）
 const TEST_TIMEOUT_MS = Number(process.env.SILLYSPEC_TEST_TIMEOUT_MS) || 10 * 60 * 1000
@@ -1819,4 +1822,340 @@ export function printVerifyRequiredEvidenceCheck(result) {
   for (const u of result.unacknowledged.slice(0, 20)) console.warn(`   - ${u.task}  (${u.reason})`)
   if (result.unacknowledged.length > 20) console.warn(`   …还有 ${result.unacknowledged.length - 20} 个`)
   console.warn('   提示：execute 标记的 cannot_verify 任务需在 verify-result.md 逐条给 evidence 结论（satisfied/missing/partial）。CLI 仅查任务被提及，是否真满足由你诚实判定。')
+}
+
+// ── plan target_files 声明 ↔ 实际改动 机器对账（task-04 / design 总体方案 Wave 2）──
+//
+// 背景：execute 的 scope creep 此前只有 symbol-impact 试图抓，「计划落空」（声明没做）更是
+// 全盲区——review.json changedFiles 是 agent 手写不能当事实源。本节让 CLI 用 git 三源口径
+// 亲自取 actual，与 plan 阶段的 target_files 意图声明做三类差集（①交集✓ ②声明没做=ERROR
+// ③做了没声明=WARNING）。纯函数导出，gates.js verify 块接线是 task-05 的 scope（本文件不
+// 聚合调用，与 runVerifyTestCheck 同构：导出消费、阻断语义归接线方）。
+
+/**
+ * 对账路径归一：剥 ./ 前缀、反斜杠归一正斜杠。actual 三源（diff / status / pathspec 文件）
+ * 与声明侧（parseTargetFiles 已归一）统一走此口径后做集合比较——任一侧漏归一都会令同一路径
+ * 字面失配，②③两类差集全成噪音。
+ */
+function normalizeReconcilePath(p) {
+  return String(p || '').trim().replace(/^\.\//, '').replace(/\\/g, '/')
+}
+
+/**
+ * review.json changedFiles 条目归一（尽力归因专用）：task-review.js changedFiles 交叉比对
+ * 的同款结构化剥法（坑 changedfiles-annotation-suffix-mismatch，2026-08-22 实证：agent 手写
+ * changedFiles 带「src/a.js（新增）」注记后缀 / // 行内注释，裸 exact match 恒失配）——只剥
+ * 路径尾部的注记形态，注记本身不参与匹配。
+ */
+function normalizeReviewChangedFile(p) {
+  return String(p || '')
+    .replace(/^\.\//, '')
+    .replace(/[（(][^（()）]*[)）]\s*$/, '')   // 尾部（注记）/(note)——中段括号（路径段）不动
+    .replace(/\s+(\/\/|#).*$/, '')              // 空格后的 // 或 # 注释
+    .trim()
+    .replace(/\\/g, '/')
+}
+
+/**
+ * 声明侧收集：读 change 下全部 task 卡（tasks/task-NN.md）的 target_files 并集。
+ *
+ * - 跨仓卡（frontmatter 有 repo: 键）剔除：其 target_files 相对声明仓根，主仓 actual 永远
+ *   对不上账，不剔除会全落②类假红（D-004；与 plan 侧 validateTargetFiles 同口径剔除+提示）。
+ * - 无声明卡（missing=true，存量卡）计不进 declarations——全部卡无声明由调用方判 skipped，
+ *   不在收集器内造第三种状态（与 parseTargetFiles 的缺失口径对齐）。
+ * - task 标识：frontmatter id 优先（与 review.json task 字段对齐），缺省文件名 stem——
+ *   ②类差集逐条报 task-NN + path，标识错位会让用户找不到对应的卡。
+ *
+ * @returns {{ cardCount: number, declarations: Array<{task:string, path:string, isNew:boolean, raw:string, invalid:string|null}>, crossRepoCards: string[], noDeclarationCount: number }}
+ */
+function collectDeclaredTargetFiles(specBase, changeName) {
+  const out = { cardCount: 0, declarations: [], crossRepoCards: [], noDeclarationCount: 0 }
+  const tasksDir = join(specBase, 'changes', changeName, 'tasks')
+  if (!existsSync(tasksDir)) return out
+  // task-NN.md 过滤 + 排序：与 plan-postcheck / task-review 的枚举口径一致，输出确定性
+  const taskFiles = readdirSync(tasksDir).filter(f => /^task-\d+\.md$/.test(f)).sort()
+  out.cardCount = taskFiles.length
+  for (const file of taskFiles) {
+    let content = ''
+    try { content = readFileSync(join(tasksDir, file), 'utf8') } catch { continue /* 单卡读失败不炸整体对账 */ }
+    const fm = content.match(/^---\n([\s\S]*?)\n---/)?.[1] || ''
+    const task = (fm.match(/^id:\s*(.+)/m)?.[1] || '').trim() || file.replace(/\.md$/, '')
+    const repo = parseRepo(content)
+    if (repo) { out.crossRepoCards.push(`${task}（repo: ${repo}）`); continue }
+    const { entries, missing } = parseTargetFiles(content)
+    if (missing) { out.noDeclarationCount++; continue }
+    for (const e of entries) {
+      // invalid（glob/目录前缀等非法形态）条目照常进声明集：plan 侧 gate 已在 plan 时点报过
+      // ERROR，verify 时点它对不上账属事实——落②类是真问题（改声明或补工作），静默剔除反而
+      // 给「写个 glob 蒙混过对账」留后门
+      out.declarations.push({ task, path: e.path, isNew: e.isNew, raw: e.raw, invalid: e.invalid })
+    }
+  }
+  return out
+}
+
+/**
+ * 解析 `git status --porcelain` 输出为文件路径列表（形态 B 的 untracked 捕获源）。
+ * 与本文件 resolveVerifyChangedFiles:926-929 的 worktree status 解析同款：slice(3) 剥 XY 状态
+ * 列、rename 取 -> 后新路径、剥包裹引号、反斜杠归一。
+ */
+function parsePorcelainFilePaths(raw) {
+  return String(raw || '').split('\n')
+    .map(l => l.slice(3).trim())
+    .map(p => (p.includes(' -> ') ? p.slice(p.lastIndexOf(' -> ') + 4) : p).trim())
+    .map(p => p.replace(/^"|"$/g, ''))
+    .map(p => p.replace(/\\/g, '/'))
+    .filter(Boolean)
+}
+
+/**
+ * actual 侧解析：三源并集，覆盖 worktree 生命周期两形态（R-03：口径封装单一函数，形态判定
+ * 不外泄）。返回带 sources 明细（诊断可见性：③类误报时先看用了哪个源）。
+ *
+ * 形态判定：meta.json 是 worktree 活性的唯一权威（与 resolveVerifyChangedFiles /
+ * checkExecuteCodeEvidence / task-review 同源）——
+ *   - 形态 A（meta 存在，worktree 存活）：复用 resolveVerifyChangedFiles(cwd, changeName,
+ *     null, { includeWorkingTree: true })。ctx 显式传 null（D-004）：跨仓 diff 不并入——
+ *     跨仓卡已从声明侧剔除，actual 若并入跨仓文件会全落③类噪音（对齐 runVerifyTestCheck
+ *     :1067-1068 不传 ctx 的先例）。includeWorkingTree 定死 true（R-04）：子代理默认不
+ *     commit，真实改动与 NEW 文件全在 worktree working-tree，漏并入 → ②类假红。
+ *   - 形态 B（meta 已删，post-apply——apply 成功即 cleanup 删 meta）：resolveVerifyChangedFiles
+ *     的 meta 锚点分支失效，自取三源——
+ *       B1 主仓 git diff --name-only <mergeBase>：mergeBase 锚 sillyspec/<change> 分支
+ *          merge-base（run/prompt.js:753-783 先例：主仓 HEAD 随并行 session 推进，拿 HEAD 当
+ *          基点会把别人的演进误判为本变更改动）。分支不存在（cleanup 删分支 / in-place 无
+ *          分支）→ 显式省略该源，B2∪B3 已覆盖标准流。git diff <commit> 对比 commit..工作树，
+ *          含 apply 后未 commit 的 tracked 改动。
+ *       B2 主仓 git status --porcelain --untracked-files=all：git apply --3way 不暂存新文件
+ *          （worktree-apply.js:1105），NEW 文件 untracked 只有此源可见（R-05，两形态无假
+ *          missing 的关键）。捕入的并行会话 WIP 先经 splitOwnVsForeignDiffFiles 剔除（坑
+ *          verify-reconcile-foreign-wip，调用先例本文件 resolveMainChangedFiles:1004）——
+ *          他者显式声明的文件不是本变更的 actual；无主文件保留（fail-closed）。
+ *       B3 兜底读 .sillyspec/.runtime/apply-pathspec-<change>.txt（worktree-apply.js:1145
+ *          apply 成功时落盘的本变更精确清单，每行一个路径）：主仓已 commit（B1/B2 双空）时
+ *          唯一的本变更文件来源（contract-matrix.js:440 同款兜底先例）。
+ *
+ * 降级（fail-soft 不误红）：git 全部不可用（形态 A diff 链整体 null / 形态 B 锚定 diff 未得
+ * 且 status 失败）→ ok=false——actual 覆盖面不完整时算②类必产假红，宁可整体 WARNING 跳过。
+ * B3 pathspec 不参与「不降级」判定：它是 apply 时点的快照，不含 apply 后的任何漂移，救不了
+ * 覆盖面。
+ *
+ * 统一收尾：filterDeliverableFiles 过滤基建产物（.sillyspec/changes|.runtime|quicklog、
+ * meta.json——流程产物不算 scope creep）+ 去重排序（输出确定性）。
+ *
+ * @returns {{ ok: boolean, form: 'worktree'|'post-apply', files: string[], sources: string[], foreignExcluded: number, degradedReason: string|null }}
+ */
+function resolveReconcileActualFiles({ cwd, specBase, runtimeRoot, changeName }) {
+  const metaPath = join(specBase, '.runtime', 'worktrees', changeName, 'meta.json')
+  const form = existsSync(metaPath) ? 'worktree' : 'post-apply'
+  const sources = []
+  const union = new Set()
+  let foreignExcluded = 0
+
+  if (form === 'worktree') {
+    // —— 形态 A：worktree 存活，整链复用（锚点优先级 baselineCommit>actualBaseHash>baseHash、
+    // working-tree 并入、fail-open 均为该函数既有语义，不另造口径）——
+    const files = resolveVerifyChangedFiles(cwd, changeName, null, { includeWorkingTree: true, specBase })
+    if (files === null) {
+      return { ok: false, form, files: [], sources, foreignExcluded,
+        degradedReason: 'worktree 锚点 diff 与主仓 fallback 均失败（git 不可用 / 非仓库）' }
+    }
+    sources.push('worktree:diff-base..HEAD', 'worktree:status-porcelain(uncommitted)')
+    for (const f of files) union.add(normalizeReconcilePath(f))
+  } else {
+    // —— 形态 B：post-apply 自取三源 ——
+    let diffOk = false
+    let statusOk = false
+    // B1 merge-base 锚定 diff（分支/merge-base 不可得时静默省略该源，不算 git 失败）
+    const branch = 'sillyspec/' + changeName
+    const branchHash = gitQuiet(cwd, ['rev-parse', '--verify', '--quiet', branch + '^{commit}'], { timeout: 30 * 1000 })
+    if (typeof branchHash === 'string' && branchHash.trim()) {
+      // 形态 B 定义下 meta 已删，baseBranch 无从读 → 缺省 'main'（run/prompt.js:764 同缺省）；
+      // 主分支叫 master 等仓库 merge-base 失败 → 与分支不存在同处置（省略该源）
+      const mergeBase = gitQuiet(cwd, ['merge-base', 'main', branch], { timeout: 30 * 1000 })
+      if (typeof mergeBase === 'string' && mergeBase.trim()) {
+        const files = runGitDiffNameOnly(cwd, mergeBase.trim())
+        if (files !== null) {
+          diffOk = true
+          sources.push('main:diff-merge-base')
+          for (const f of files) union.add(normalizeReconcilePath(f))
+        }
+      }
+    }
+    // B2 status porcelain（untracked 全量，含 --untracked-files=all 防整目录折叠漏文件）
+    const statusRaw = gitQuiet(cwd, ['status', '--porcelain', '--untracked-files=all'], { timeout: 30 * 1000, trim: false })
+    if (statusRaw !== null) {
+      statusOk = true
+      sources.push('main:status-porcelain(untracked-all)')
+      let files = parsePorcelainFilePaths(statusRaw)
+      if (files.length > 0) {
+        const { own, foreign } = splitOwnVsForeignDiffFiles(cwd, changeName, files, { specBase })
+        if (foreign.length > 0) foreignExcluded = foreign.length
+        files = own
+      }
+      for (const f of files) union.add(normalizeReconcilePath(f))
+    }
+    // B3 apply-pathspec 兜底（存在则并入，读取失败静默忽略——前两源不受影响）
+    const pathspecFile = join(runtimeRoot, `apply-pathspec-${changeName}.txt`)
+    if (existsSync(pathspecFile)) {
+      try {
+        const lines = readFileSync(pathspecFile, 'utf8').split('\n').map(l => l.trim()).filter(Boolean).map(normalizeReconcilePath)
+        if (lines.length > 0) {
+          sources.push('apply-pathspec')
+          for (const f of lines) union.add(f)
+        }
+      } catch { /* 兜底源失败 → 忽略 */ }
+    }
+    if (!diffOk && !statusOk) {
+      return { ok: false, form, files: [], sources, foreignExcluded,
+        degradedReason: 'merge-base 锚定 diff 未得且主仓 status 失败（git 不可用 / 非仓库 / 无锚点分支）' }
+    }
+  }
+
+  const files = [...new Set(filterDeliverableFiles([...union]).filter(Boolean))].sort()
+  return { ok: true, form, files, sources, foreignExcluded, degradedReason: null }
+}
+
+/**
+ * ③类尽力归因（仅报告不门禁，D-002 方案 B 否决后的附注保留）：扫 execute-runs 下 review.json
+ * 的 changedFiles，命中该文件的 task 即疑似作者。
+ *
+ * - 归属过滤：run 目录带 change 戳且不等值 → 他变更的 run 跳过（task-NN 跨变更同名，混扫必
+ *   错归因；无戳旧 run 保留——向后兼容，task-review.js resolveLatestExecuteRunIdWithTasks 同款）。
+ * - runId 形如 exec-YYYY-MM-DD-HHMMSS：字典序倒序 = 新 run 优先（review 以最新执行为准）。
+ * - changedFiles 是 agent 手写（注记/相对路径常态），归一后 exact match、首个命中即止——
+ *   归因只是③类报告的附注，错比漏代价低，不追求穷举。
+ *
+ * @param {string} runtimeRoot .sillyspec/.runtime
+ * @param {string} changeName
+ * @param {string[]} paths 待归因的③类路径（git 口径的干净路径）
+ * @returns {Map<string, string>} normalized(path) → taskId
+ */
+function attributeSuspectTasks(runtimeRoot, changeName, paths) {
+  const map = new Map()
+  if (!runtimeRoot || paths.length === 0) return map
+  const wantSet = new Set(paths.map(p => normalizeReviewChangedFile(p)))
+  const runsDir = join(runtimeRoot, 'execute-runs')
+  let runDirs
+  try {
+    runDirs = readdirSync(runsDir, { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name).sort().reverse()
+  } catch { return map /* 无 execute-runs（未走 execute 评审）→ 无从归因，空 Map */ }
+  for (const run of runDirs) {
+    try {
+      const stamp = readFileSync(join(runsDir, run, 'change'), 'utf8').trim()
+      if (stamp && stamp !== changeName) continue
+    } catch { /* 无戳旧 run：保留扫描（向后兼容） */ }
+    let taskDirs
+    try {
+      taskDirs = readdirSync(join(runsDir, run, 'tasks'), { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name).sort()
+    } catch { continue /* 该 run 无 tasks/ */ }
+    for (const t of taskDirs) {
+      let review
+      try { review = JSON.parse(readFileSync(join(runsDir, run, 'tasks', t, 'review.json'), 'utf8')) } catch { continue }
+      if (!review || typeof review !== 'object') continue
+      const taskId = (typeof review.task === 'string' && review.task.trim()) || t
+      for (const cf of Array.isArray(review.changedFiles) ? review.changedFiles : []) {
+        const n = normalizeReviewChangedFile(cf)
+        if (n && wantSet.has(n) && !map.has(n)) map.set(n, taskId)
+      }
+    }
+  }
+  return map
+}
+
+/**
+ * plan target_files 声明 ↔ 实际改动 机器对账（task-04；接线 gates.js verify 块是 task-05 的
+ * scope——②类 status='missing_declared' 为 ERROR 阻断语义、③类 'undeclared' 为 WARNING、
+ * 'skipped'/'degraded' 为 WARNING 不误红，均由接线方兑现，本函数只产差集事实）。
+ *
+ * 纯函数风格（与 runVerifyTestCheck 同构导出）：只读 git/fs，不落盘、不改既有导出语义。
+ * actual 三源口径见 resolveReconcileActualFiles；声明侧见 collectDeclaredTargetFiles。
+ *
+ * @param {object} opts
+ * @param {string} opts.cwd - 主仓根（git 调用根）
+ * @param {string|null} [opts.specBase] - .sillyspec 根（缺省 join(cwd,'.sillyspec')；平台模式传 specRoot）
+ * @param {string|null} [opts.changeName] - 变更名（quick 等无关联场景缺省 → skipped）
+ * @param {string|null} [opts.runtimeRoot] - 运行时根（缺省 join(specBase,'.runtime')；平台模式
+ *   与 specBase 分离时传 resolveRuntimeRoot 结果）
+ * @returns {{
+ *   status: 'ok'|'missing_declared'|'undeclared'|'skipped'|'degraded',
+ *   matched: string[],                    // ①交集（唯一路径排序）
+ *   missing: Array<{task: string, path: string, isNew?: boolean}>, // ②声明没做（isNew 标 NEW: 声明，剥前缀 path）
+ *   undeclared: Array<{path: string, suspectTask?: string}>,       // ③做了没声明（suspectTask=review.json 尽力归因）
+ *   skipReason: string|null,              // skipped/degraded 的原因（其余状态为 null）
+ *   notes: string[],                      // 跨仓卡剔除 / 并行 WIP 剔除等提示（additive）
+ *   form: 'worktree'|'post-apply'|null,   // actual 形态（skipped 无 actual 时为 null；additive）
+ *   sources: string[],                    // actual 实际用到的源（诊断可见性；additive）
+ * }}
+ */
+export function reconcileTargetFiles({ cwd, specBase = null, changeName = null, runtimeRoot = null }) {
+  const matched = []
+  const missing = []
+  const undeclared = []
+  const notes = []
+
+  if (!changeName) {
+    return { status: 'skipped', matched, missing, undeclared,
+      skipReason: '无 changeName（quick 等无关联变更场景），target_files 对账跳过', notes, form: null, sources: [] }
+  }
+  const sb = specBase || join(cwd, '.sillyspec')
+  const rt = runtimeRoot || join(sb, '.runtime')
+
+  // —— 声明侧 ——
+  const decl = collectDeclaredTargetFiles(sb, changeName)
+  for (const label of decl.crossRepoCards) {
+    notes.push(`跨仓 task 卡 ${label} 已剔除——跨仓对账不在本变更范围（D-004），其声明留待后续分期`)
+  }
+  if (decl.cardCount === 0) {
+    return { status: 'skipped', matched, missing, undeclared,
+      skipReason: `变更 ${changeName} 无 task 卡（tasks/ 缺失或为空），target_files 对账跳过`, notes, form: null, sources: [] }
+  }
+  if (decl.declarations.length === 0) {
+    // 存量零红门禁：全部卡无声明 / 全部跨仓 → WARNING 语义跳过，不产生 missing/undeclared
+    const reason = decl.noDeclarationCount === 0
+      ? `本变更 task 卡全部为跨仓卡（${decl.crossRepoCards.length} 张），主仓 target_files 对账跳过`
+      : `所有 task 卡均未声明 target_files（${decl.noDeclarationCount}/${decl.cardCount} 张无声明` +
+        `${decl.crossRepoCards.length > 0 ? `，另 ${decl.crossRepoCards.length} 张跨仓卡已剔除` : ''}）` +
+        `——存量卡可忽略；新卡请补：每条为仓根相对精确文件路径，不存在的文件加 NEW: 前缀`
+    return { status: 'skipped', matched, missing, undeclared, skipReason: reason, notes, form: null, sources: [] }
+  }
+
+  // —— actual 侧（三源并集，两形态）——
+  const actual = resolveReconcileActualFiles({ cwd, specBase: sb, runtimeRoot: rt, changeName })
+  if (actual.foreignExcluded > 0) {
+    notes.push(`主仓 status 捕入的 ${actual.foreignExcluded} 个并行会话声明文件已剔除（不参与本变更对账）`)
+  }
+  if (!actual.ok) {
+    // 降级（fail-soft 不误红）：git 全部不可用 → actual 不可得，不产生 missing/undeclared
+    return { status: 'degraded', matched, missing, undeclared,
+      skipReason: `git 全部不可用，actual 不可得，对账降级跳过——${actual.degradedReason}`,
+      notes, form: actual.form, sources: actual.sources }
+  }
+
+  // —— 三类差集 ——
+  const actualSet = new Set(actual.files)
+  const declaredPaths = [...new Set(decl.declarations.map(d => d.path))].sort()
+  const declaredSet = new Set(declaredPaths)
+  // ①交集（计数进 evidence）：唯一路径口径（多卡声明同文件只计一次）
+  for (const path of declaredPaths) {
+    if (actualSet.has(path)) matched.push(path)
+  }
+  // ②声明没做（计划落空，ERROR）：逐卡逐条报 task-NN + path；NEW: 声明的取剥前缀 path、带
+  // isNew 标（“新建文件没建”与“存量文件没动”的修复指引不同）
+  for (const d of decl.declarations) {
+    if (!actualSet.has(d.path)) {
+      missing.push(d.isNew ? { task: d.task, path: d.path, isNew: true } : { task: d.task, path: d.path })
+    }
+  }
+  // ③做了没声明（scope creep，WARNING）：actual − 声明集；suspectTask 尽力归因仅报告（D-002）
+  const suspect = attributeSuspectTasks(rt, changeName, actual.files.filter(p => !declaredSet.has(p)))
+  for (const path of actual.files) {
+    if (declaredSet.has(path)) continue
+    const s = suspect.get(normalizeReviewChangedFile(path))
+    undeclared.push(s ? { path, suspectTask: s } : { path })
+  }
+
+  // 状态聚合：②在场即 ERROR 态优先（gates 阻断语义靠它兑现）；仅③ → WARNING 态
+  const status = missing.length > 0 ? 'missing_declared' : (undeclared.length > 0 ? 'undeclared' : 'ok')
+  return { status, matched, missing, undeclared, skipReason: null, notes, form: actual.form, sources: actual.sources }
 }

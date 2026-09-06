@@ -134,7 +134,7 @@ const stepGeneratePlan = {
 1. 读取 plan.md frontmatter 的 \`plan_level:\` 字段（上一步已落盘为持久锚点；文件不存在或无该字段时回退读上一步输出的分类结果）
 2. 读取 tasks.md 和 design.md 了解需求范围
 3. 按 plan_level 选择对应模板输出
-4. **写回任务清单**：把展开后的任务清单写回 tasks.md（checkbox 行 \`- [ ] task-XX: 一句话任务名\`，可附 \`[model:xxx]\`/\`(depends_on: task-01,02)\` 行内标注）。**写回规则（D-002@v1）**：保留 frontmatter/中文标题/所有非 task-XX 行（quick 挂载的 ql-xxx 勾选行、注记等逐行保留），仅重写 task-XX checkbox 行集合——防摧毁 quick 挂载条目
+4. **写回任务清单**：把展开后的任务清单写回 tasks.md（checkbox 行 \`- [ ] task-XX: 一句话任务名\`，可附 \`[model:xxx]\`/\`(depends_on: task-01,02)\` 行内标注）。**写回规则（D-002@v1）**：保留 frontmatter/中文标题/所有非 task-XX 行（quick 挂载的 ql-xxx 勾选行、注记等逐行保留），仅重写 task-XX checkbox 行集合——防摧毁 quick 挂载条目。**展开任务时为每个 task 确定 target_files**（该 task 计划要改动的文件清单，随下一步「生成 TaskCard」按统一格式落进卡 frontmatter 的 target_files 字段）：每项为精确仓根相对路径（✅ \`src/foo.js\`），计划新建的文件加 \`NEW:\` 前缀（✅ \`NEW:src/bar.js\`）；❌ 禁 glob（\`src/**\`）/目录前缀（\`src/dir/\`）/绝对路径。target_files 与 allowed_paths 语义不同：前者=计划要动的具体文件，后者=权限范围
 5. 保存 plan.md（审查在下一步"审查计划"独立进行，不在本步自审——避免生成与自审同一次输出）；frontmatter 保留 plan_level 字段不删。**plan.md Wave 段下任务一律纯 ID 引用行**（\`- task-XX\`，不重抄任务名——任务名唯一真相在 tasks.md，重抄即双写漂移）
 
 > ⚠️ **Wave 段格式铁律（踩坑：旧先例 \`- [ ] task-XX: 描述\` 格式会导致 postcheck 告警）：**
@@ -416,6 +416,8 @@ decision_ids: [D-XXX@vN]
 repo: <repo-key>                          # 可选。仅跨仓 task 填：local.yaml repos: 注册的仓 key（缺省=main，主仓 task 省略此行）
 allowed_paths:                            # ⚠️ 路径相对 repo 声明的仓根（跨仓=跨仓仓根，主仓=主仓根），禁止带仓库名前缀/绝对路径
   - frontend/src/lib/errors.ts
+target_files:                             # 可选。本 task 计划要改动的文件清单（文件级意图，供对账；与 allowed_paths 语义不同——那是权限范围）。骨架已预置 [] 占位行，无明确意图保留 [] 不动
+  - src/foo.js                            # ✅ 精确仓根相对路径（口径同 allowed_paths）；计划新建文件加 NEW: 前缀（NEW:src/bar.js）。❌ 禁 glob（src/**）/目录前缀（src/dir/）/绝对路径
 provides:                              # 可选。仅当本 task 给其他 task 提供接口/DTO/响应时填
   - contract: <DTO或响应类型名>          # 如 DaemonRuntimeRead
     fields: [field_a, field_b]
@@ -453,6 +455,8 @@ related_tests:                           # 可选。当本 task 改动会导致�
 这两条是跨 task 全局约束，子代理只写单卡看不到全局——你（主 agent）分派子代理前必须先在 plan.md 里确认 Wave 划分与编号正确。
 
 ⚠️ **TaskCard 必备字段（缺一 postcheck 直接阻断）：** id、title（英文）、**title_zh（中文标题，必填）**、allowed_paths、goal、implementation、acceptance、verify、constraints。骨架已由 taskcard CLI 预生成（含 title_zh 占位），子代理只需 Edit 填值，不要删除任何必备字段。
+
+可选字段 **target_files**（本 task 计划要改动的文件清单；骨架已预置 \`target_files: []\` 占位行，按任务计划 Edit 填值，无明确文件级意图保留 []）：✅ 精确仓根相对路径 \`src/foo.js\`、计划新建文件 \`NEW:src/bar.js\`；❌ \`src/**\`（glob）、\`src/dir/\`（目录前缀）、绝对路径。语义区分：target_files=计划要动的具体文件，allowed_paths=权限范围。
 
 ## 任务清单
 ${taskList}
@@ -501,7 +505,7 @@ TaskCard 的契约字段全部在 **frontmatter**（首对 --- 包裹的 YAML �
 1. 读取 ${changeDir}/design.md 和 ${changeDir}/plan.md 了解整体上下文
 2. 读取本 batch 涉及的相关源文件
 3. **骨架已由主 agent 预生成**（\`${changeDir}/tasks/task-NN.md\` 已存在，LF 行尾 + 闭合 frontmatter + 硬校验 9 字段齐全）。**禁止再运行 \`sillyspec taskcard\` CLI**——并行子代理各起 CLI 进程会撞进度库 SQLite 锁（2026-08-25 实证）；若发现本 batch 某卡骨架缺失，报告主 agent 补跑，不要自己跑
-4. 用 Edit tool 逐卡填充骨架占位符（allowed_paths/goal/implementation/acceptance/verify/constraints 等）。**禁止用 Write 整文件重写**——手写整卡是 CRLF 行尾/漏闭合 --- /漏硬校验字段三类 postcheck 拒绝的根源，骨架 + Edit 从源头消灭
+4. 用 Edit tool 逐卡填充骨架占位符（allowed_paths/target_files/goal/implementation/acceptance/verify/constraints 等）。**禁止用 Write 整文件重写**——手写整卡是 CRLF 行尾/漏闭合 --- /漏硬校验字段三类 postcheck 拒绝的根源，骨架 + Edit 从源头消灭
 5. 骨架字段含义与可选字段（provides/expects_from/related_tests，按需插进 frontmatter）参考下述模板：
 
 ${taskcardTemplate}

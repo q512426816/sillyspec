@@ -44,3 +44,10 @@ supersedes：无（修订 design 初稿注入时机）
 最近确认：8aab190
 理由：git 轨（有 .git 时 commit+归一化 remote 同源比较）+ version 兜底轨（package.json version 双仓比较）；同 version 不同 commit 的热改残余盲区显式声明
 来源：2026-08-24-decision-touch-cli-drift
+
+## D-002@v1 : 方案A 双gate分治——plan 声明核验 + verify 对账，change 级 worktree diff 权威
+状态：implemented
+变更：2026-09-06-ir-stage-p3a
+锚点：未记录
+最近确认：11aa319
+理由：用户选方案A（2026-09-06 对话轮）：plan 侧 task 卡 target_files 声明 + plan-postcheck 新增声明核验检查；verify 侧新增对账检查，Σ(target_files) vs resolveVerifyChangedFiles（change 级 worktree diff，机器权威）算三类差集。拒绝方案B（per-task 对账押在 agent 手写 changedFiles 上，违背「CLI 算事实不信任 agent 自报告」约定，其归因价值降级为对账报告附注）与方案C（advisory 无门禁力，违背种子稿「对账 gate」意图）。

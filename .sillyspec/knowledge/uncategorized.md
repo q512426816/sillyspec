@@ -42,3 +42,9 @@ CLI 命令用 `process.exit(exitCode)` 强制退出时，若事件循环仍有�
 ## ql-20260802-002-36ae | spec-dir.test.mjs 全量套件 Windows 罕见进程级崩溃（flaky）
 
 `test/spec-dir.test.mjs` 在全量套件下**罕见**进程级崩溃：run-tests.mjs 报 `spec-dir.test.mjs exited with code N`，但 spec-dir 自身**无内部断言汇总**（断言 ❌ 型失败会有 `✅ 通过:N ❌ 失败:M` 汇总；进程崩溃无）。隔离单跑恒过（38/38）。实证复现率 ~13%（15 次跑 2 次）。**排除的根因**：① execSync 10s timeout——子进程常态 <1s（scan/brainstorm/plan/verify/quick 全测过），全量负载下不会从 <1s 涨到 >10s；② Test 5 不带 --spec-dir 撞 home .sillyspec——Test 5 init 后 projectDir 自带 .sillyspec，scan `--dir projectDir` 命中本地不上溯。**疑似根因**（未稳定抓 stderr 证实）：CLI 子进程罕见非0退出（sillyspec.db 锁 / home 指针 `.sillyspec-platform.json` 竞态 / fs 句柄），`run()` 未 try-catch → spec-dir 进程裸崩。**已采处置**（非根因治愈）：`run()` 加失败诊断（打印 cmd+stderr）+ 1 次重试吸收偶发崩溃 + timeout 10s→30s。**待办**：若未来复现且重试仍失败，错误信息会含 exit code + stderr，届时可定位真因根治。建议归类到 known-issues.md（测试 flaky）。
+
+## task 卡 frontmatter 列表项含半角「冒号+空格」会炸 jsYaml 静默吞掉契约字段
+task 卡 frontmatter 的列表标量中出现 `X: `（半角冒号+空格，如「剥 NEW: 前缀」）会让 jsYaml 把该项误判为 mapping entry 抛「bad indentation of a mapping entry」；parseTaskContracts 对解析失败 catch 后返回空 provides/expects_from——表象是 plan-postcheck 报「consumer 期望的字段未被 provider 承诺」，真实根因在 provider 卡的 YAML 非法。规避：frontmatter 列表项内避免半角冒号+空格（用中文冒号、去空格或给整项加单引号）；调试时用 jsYaml.load 单独解析可疑卡的 frontmatter 定位。（来源：2026-09-06-ir-stage-p3a task-03 前置排查，plan Step5 实证拦截）
+
+## plan-postcheck 与 worktree-apply 存在既有依赖边，反向复用 filterDeliverableFiles 会成环
+worktree-apply.js:21 已 `import { parseAllowedPaths } from './stages/plan-postcheck.js'`——因此 plan-postcheck 侧不能反向 import worktree-apply 的 filterDeliverableFiles（ESM 循环）。需要在 plan-postcheck 内做「流程产物过滤」时，硬编码同口径清单（.sillyspec/changes|.runtime|quicklog + meta.json，保留 .sillyspec/docs/）并注释锚定来源，不引依赖。同类需求先 grep 双向 import 边再决定复用还是同口径复制。（来源：2026-09-06-ir-stage-p3a task-03）

@@ -10,6 +10,11 @@ TaskCard 格式规则（必须严格遵守）：
 - 不需要：修改文件章节、覆盖来源章节、接口定义章节、TDD 步骤章节、参考章节
 - frontmatter 必须以三减号结尾闭合（开头和结尾各一行 ---）。缺结尾会让 postcheck 提取不到 frontmatter，误报「字段缺失 / allowed_paths 为空」
 - allowed_paths 用块式写法（键名换行后每项一行「  - 路径」），不要用流式方括号 [path]——块式与所有校验器一致最稳
+- target_files 是可选字段：对账用精确文件级意图声明——列出本 task 计划改动的文件，供事后「计划改哪些 vs 实际改了哪些」对账；无明确文件级意图时保留骨架带出的 `target_files: []` 空占位不动，不猜清单（空 `[]` 是唯一允许的流式写法，填入实际路径后必须改块式）
+  - 格式：块式列表（`target_files:` 换行后每项一行「  - 路径」），精确文件路径、仓根相对、正斜杠；当前不存在、将由本 task 新建的文件加 `NEW:` 前缀
+  - 正例：`target_files:` + `  - src/taskcard.js`（已存在文件，精确路径）+ `  - NEW:src/foo.js`（本 task 将新建的文件）
+  - 反例：`  - src/**`（禁 glob）、`  - src/dir/`（禁目录前缀）、`  - C:\repo\src\a.js` 或 `  - /repo/src/a.js`（禁绝对路径）——对账按精确路径逐字匹配，任何非精确形态永不命中
+  - 与 allowed_paths 的语义区别（两者并存、不可互替）：allowed_paths 是 worktree 写入守卫白名单（子代理只被授权改这些路径），目录前缀与 glob 合法（覆盖性授权）；target_files 是对账用精确文件级意图声明，禁 glob、禁目录前缀、禁绝对路径——且 target_files 列出的每个文件都应落在 allowed_paths 的授权范围内
 - implementation / acceptance / constraints / verify 的每条列表项是 YAML plain scalar，避免以下特殊字符触发 ScannerError：
   - 冒号+空格（如代码签名 provider_id:str、queryUsage(id:string)）会被当映射键报 mapping values are not allowed here——去掉冒号后空格或改成中文描述
   - 花括号且内部含冒号或引号（如 JS 对象、JS 模板字面量）会报 expected block end——改用不含这些字符的中文描述

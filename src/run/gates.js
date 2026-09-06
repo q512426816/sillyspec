@@ -666,6 +666,30 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
     const { runVerifyRequiredEvidenceCheck, printVerifyRequiredEvidenceCheck } = await import('../verify-postcheck.js')
     const evidenceCheck = runVerifyRequiredEvidenceCheck({ cwd, specBase, changeName })
     printVerifyRequiredEvidenceCheck(evidenceCheck)
+    // ── target_files 声明 ↔ 实际改动 对账（task-05 / ir-stage-p3a：②ERROR 阻断 / ③WARNING 放行）──
+    // 「计划落空」（task 卡声明没做）此前全盲区：review.json changedFiles 是 agent 手写不能当
+    // 事实源，execute 的 scope creep 只有 symbol-impact 试图抓。reconcileTargetFiles 用 git 三源
+    // 口径亲自取 actual，与 plan 阶段 task 卡 target_files 声明做三类差集：②类（声明未做）在场
+    // 即阻断——verify 的语义是「按计划交付且客观核验」，声明没做不能盖章归档；③类（做了没
+    // 声明=scope creep）启发式噪音面大（并行 WIP 剔除后仍可能有工具产物），WARNING 放行留审计；
+    // skipped/degraded（无 task 卡 / 全无声明 / git 不可用）降级不误红（存量变更零红门禁）。
+    // 阻断形态照 runVerifyTestCheck 先例：逐条列 task + path + 修复提示 + rollbackCompletionAndReturn。
+    const { reconcileTargetFiles } = await import('../verify-postcheck.js')
+    const reconcileRuntimeRoot = resolveRuntimeRoot(platformOpts, specBase)
+    const reconcileCheck = reconcileTargetFiles({
+      cwd, specBase, changeName,
+      // runtimeRoot 口径与上方 parity 对账同源（B3 apply-pathspec 兜底源在此根下；平台模式下
+      // specBase 与 .runtime 分离，不传会读不到兜底清单 → 假降级）
+      runtimeRoot: reconcileRuntimeRoot,
+    })
+    const reconcileEnvelope = buildReconcileTargetFilesEnvelope(reconcileCheck)
+    const reconcileBlocked = printReconcileTargetFilesCheck(reconcileCheck, reconcileEnvelope)
+    // 结果落盘（design Wave 2 承诺：对齐 .runtime/verify-runs/<ts>/ 先例）——五状态全落（含
+    // 放行态），fail-soft 不影响 gate 判定；②类阻断回执同样留档供平台/审计消费
+    writeReconcileRunResult({ runtimeRoot: reconcileRuntimeRoot, changeName, envelope: reconcileEnvelope, result: reconcileCheck })
+    if (reconcileBlocked) {
+      return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)
+    }
     // ── module-impact 死信探针（blocking，债单 D-1/D-5）：更新结果表 pending/待办行 → 阻断 verify ──
     // 与 archive 移动前校验（extractPendingDocSyncRows）同一口径，把死信号从 archive 提前到 verify：
     // agent 在 verify 阶段就须完成文档同步并回填 done/skipped，而非拖到归档被拦（修复 perf-remediation
@@ -1176,6 +1200,146 @@ export async function completeStageGates({ stageName, cwd, changeName, platformO
  */
 export function filterStaleBaselineOverlap(overlap, dirtySet, foreignDeclared) {
   return (overlap || []).filter(f => dirtySet?.has(f) && !(foreignDeclared?.has(f)))
+}
+
+/**
+ * target_files 对账结果 → 诊断信封（task-05 接线配套）。
+ *
+ * verify 块既有五项检查是「单结果对象 + print 函数 + 状态判定」形态（runVerifyTestCheck 先例），
+ * 无 scan-postcheck 那种 checks 数组聚合结构，故信封不进数组、字段命名对齐 scan-postcheck 的
+ * checks 条目（name/severity/detail/evidence/supportedFixes）——机器可路由口径跨模块一致。
+ * severity：②类阻断=error（产物级阻断而非流程崩溃，不取 critical）；③类与降级=warning；ok=info。
+ * evidence 携带三类清单计数 + actual 形态与源明细（③类误报排查先看 sources 归因）。
+ * code：五状态→四 code 的机器路由键（reconcile_missing_declared / reconcile_undeclared_file /
+ * reconcile_skipped / reconcile_ok，design 接口定义），写盘与平台消费按 code 分支。
+ *
+ * @param {object} r reconcileTargetFiles 返回值
+ * @returns {{ code: string, name: string, severity: string, detail: string, evidence: object, supportedFixes: string[] }}
+ */
+export function buildReconcileTargetFilesEnvelope(r) {
+  const severity = r.status === 'missing_declared' ? 'error'
+    : (r.status === 'ok' ? 'info' : 'warning')
+  // 修复提示按状态分级给「可执行」动作：②类=干活或改声明；③类=补声明或回退；降级=指引补声明
+  const supportedFixes = []
+  if (r.status === 'missing_declared') {
+    supportedFixes.push('完成声明的工作：把上方清单中 task 卡 target_files 声明的文件真正改出来（NEW: 声明的新建文件要先创建）')
+    supportedFixes.push('或修正声明：编辑 tasks/task-NN.md 的 target_files，移除不再交付的路径（改声明须与该 task 的 review 结论一致，不得为过门而删声明）')
+  } else if (r.status === 'undeclared') {
+    supportedFixes.push('补声明：把上方清单文件补进对应 task 卡的 target_files（存在的文件直接写仓根相对路径）')
+    supportedFixes.push('或回退越权改动：不属于任何 task 交付的文件应 revert（并行会话声明文件已被剔除，剩余即本变更产出）')
+  } else if (r.status === 'skipped' || r.status === 'degraded') {
+    supportedFixes.push('新 task 卡请声明 target_files（每条为仓根相对精确文件路径，不存在的文件加 NEW: 前缀）；存量卡无声明/跨仓卡跳过属预期，无需补')
+  }
+  return {
+    // code 机器路由键（审查 gap 回流，design 接口定义）：五状态→四 code（skipped/degraded 同
+    // 一个 reconcile_skipped——两者对消费方语义一致：本次无对账结论），供平台/上游按 code 分支
+    code: r.status === 'missing_declared' ? 'reconcile_missing_declared'
+      : r.status === 'undeclared' ? 'reconcile_undeclared_file'
+      : (r.status === 'ok' ? 'reconcile_ok' : 'reconcile_skipped'),
+    name: 'target_files_reconcile',
+    severity,
+    detail: `target_files 声明 ↔ 实际改动对账：status=${r.status}` + (r.skipReason ? `（${r.skipReason}）` : ''),
+    evidence: {
+      matched_count: r.matched.length,
+      missing_declared_count: r.missing.length,
+      undeclared_count: r.undeclared.length,
+      form: r.form,
+      sources: r.sources,
+    },
+    supportedFixes,
+  }
+}
+
+/**
+ * target_files 对账结果落盘 .runtime/verify-runs/<ts>/reconcile-result.json（审查 gap 回流）。
+ *
+ * design「总体方案 Wave 2」承诺「结果落盘对齐 .runtime/verify-runs/<ts>/ 先例」——console 输出
+ * 跨进程即失忆，落盘留审计痕迹供 SillyHub/平台消费。目录命名对齐 verify-postcheck.js
+ * writeRunResult 先例（ts=UTC 紧凑 YYYYMMDDHHmmss，与 test-result.json 同目录组织）。
+ * fail-soft：写失败只 console.error 留痕不阻断 gate（落盘是审计附件不是证据源，与
+ * writeRunResult 的 best-effort 同口径）；五状态全落（放行态也要留档——对账跳过/降级同样
+ * 是审计事实，下次回看才知道为什么没有差集）。
+ *
+ * @param {{ runtimeRoot: string, changeName: string|null, envelope: object, result: object }} opts
+ * @returns {string|null} 成功返回落盘路径；失败返回 null
+ */
+export function writeReconcileRunResult({ runtimeRoot, changeName, envelope, result }) {
+  try {
+    const ts = new Date().toISOString().slice(0, 19).replace(/[-T:]/g, '')
+    const runDir = join(runtimeRoot, 'verify-runs', ts)
+    mkdirSync(runDir, { recursive: true })
+    const resultPath = join(runDir, 'reconcile-result.json')
+    // 落盘字段 snake_case 对齐 writeRunResult 的 test-result.json 机器消费口径（信封内存字段
+    // 保持 camelCase 不动，写盘这层做一次映射）
+    writeFileSync(resultPath, JSON.stringify({
+      change: changeName,
+      code: envelope.code,
+      severity: envelope.severity,
+      status: result.status,
+      evidence: envelope.evidence,
+      supported_fixes: envelope.supportedFixes,
+      matched: result.matched,
+      missing: result.missing,
+      undeclared: result.undeclared,
+      notes: result.notes,
+      form: result.form,
+      sources: result.sources,
+      ran_at: new Date().toISOString(),
+    }, null, 2) + '\n')
+    console.log(`📄 target_files 对账结果已写入: ${resultPath}`)
+    return resultPath
+  } catch (e) {
+    console.error(`⚠️ target_files 对账结果落盘失败（不影响 verify gate）: ${e.message}`)
+    return null
+  }
+}
+
+/**
+ * 打印 target_files 对账结果（task-05 接线配套的打印层）。
+ *
+ * reconcileTargetFiles 是纯函数无配套 print（verify-postcheck 导出消费、打印归接线方），本函数
+ * 即其在 verify 块的打印层：②类阻断明细照 runVerifyTestCheck 的失败输出形态（状态行 + 逐条
+ * task + path + 修复行），③类/skipped/degraded 走 console.warn（advisory 形态照
+ * printVerifyRequiredEvidenceCheck 先例）。返回 true = ②类在场应阻断（调用方据此走
+ * rollbackCompletionAndReturn，与 testCheck.status==='failed' 分支同形）。
+ *
+ * @param {object} r reconcileTargetFiles 返回值
+ * @param {object} [envelope] 预构造信封（缺省现算；显式传入便于调用方先断言再打印）
+ * @returns {boolean} true = 阻断（status='missing_declared'）
+ */
+export function printReconcileTargetFilesCheck(r, envelope = buildReconcileTargetFilesEnvelope(r)) {
+  // ②类（声明未做=计划落空）：ERROR 阻断
+  if (r.status === 'missing_declared') {
+    console.error(`\n❌ target_files 对账阻断：${r.missing.length} 条「声明未做」（②类，计划落空）——声明的交付文件在实际改动中不存在。`)
+    for (const m of r.missing) {
+      console.error(`   - ${m.task}: ${m.path}${m.isNew ? '（NEW: 声明新建，文件未创建）' : ''}`)
+    }
+    console.error(`   evidence: matched=${envelope.evidence.matched_count} missing=${envelope.evidence.missing_declared_count} undeclared=${envelope.evidence.undeclared_count}`)
+    for (const fix of envelope.supportedFixes) console.error(`   修复：${fix}`)
+    console.error(`   对账口径 actual=${(r.sources || []).join(' + ') || 'n/a'}；修复后重新完成 verify。`)
+    return true
+  }
+  // ③类（做了没声明=scope creep）：WARNING 放行，suspectTask 尽力归因随行列出
+  if (r.status === 'undeclared') {
+    console.warn(`\n⚠️  target_files 对账发现 ${r.undeclared.length} 个实际改动未在任何 task 卡声明（③类 scope creep，advisory 不阻断）：`)
+    for (const u of r.undeclared.slice(0, 20)) {
+      console.warn(`   - ${u.path}${u.suspectTask ? `（疑似 ${u.suspectTask} 的改动——该 task 的 review.json changedFiles 提及）` : ''}`)
+    }
+    if (r.undeclared.length > 20) console.warn(`   …还有 ${r.undeclared.length - 20} 个`)
+    console.warn(`   evidence: matched=${envelope.evidence.matched_count} missing=${envelope.evidence.missing_declared_count} undeclared=${envelope.evidence.undeclared_count}`)
+    for (const fix of envelope.supportedFixes) console.warn(`   提示：${fix}`)
+    console.warn(`   对账口径 actual=${(r.sources || []).join(' + ') || 'n/a'}（③类误报先核对 sources 与并行会话剔除提示）。`)
+    return false
+  }
+  // 降级（skipped/degraded）：WARNING 放行，skipReason 一句话（存量卡/git 不可用，不误红）
+  if (r.status === 'skipped' || r.status === 'degraded') {
+    console.warn(`\n⚠️  target_files 对账${r.status === 'degraded' ? '降级' : '跳过'}（不阻断）：${r.skipReason}`)
+    return false
+  }
+  // ok：①交集全落地
+  console.log(`\n✅ target_files 对账通过：${r.matched.length} 个声明文件全部落地${r.form ? `（actual 形态=${r.form}）` : ''}`)
+  for (const n of (r.notes || [])) console.log(`   ℹ️ ${n}`)
+  return false
 }
 
 /**
