@@ -185,6 +185,7 @@ worktree 是主仓完整 checkout，若 `.sillyspec/changes/` 被跟踪，worktr
 
 1. **漂移 warn**（`countAncestorSpecDirs`，runCommand 入口）：cwd 祖先链 `.sillyspec` ≥2 个时提醒。祖先链上界用 `git rev-parse --git-common-dir` 的 dirname（主仓根），而非 `--show-toplevel`——后者在 linked worktree 内返回 **worktree 根**，会截断祖先链使其数不到主仓 `.sillyspec`（恒 ≤1，warn 永不响）。复刻自 `WorktreeManager._resolveMainRepoRoot`。平台模式 / 显式 `--spec-dir` 跳过。
 2. **worktree 副本硬守卫**（`detectWorktreeSpecDrift`）：`specBase` 路径形如 `<mainRepo>/.sillyspec/.runtime/worktrees/<change>/.sillyspec`（尾段须为 `.sillyspec`）→ 命中即 `exit 2`，提示 `cd` 回主仓根或 `--spec-dir <mainRepo>/.sillyspec`。覆盖 `plan/execute/verify/archive`（= `validateChangeExists` 的需要变更阶段），在 change 存在性校验**之前**触发——副本里 change 目录真实存在，存在性校验会被骗放行。平台模式 / 显式 `--spec-dir` 跳过。
+3. **done-like 幻影变更守卫**（`doneLikeTargetMaterialized`，2026-09-04，坑 `done-phantom-change-silent-create`）：`--done/--skip/--wait/--continue/--reset/--reopen` 且 `!progress` 时，目标 change（`--change` 值或 changes/ 目录唯一推导）在当前库未物化——DB 行缺（已知 `!progress`）且 `changes/<名>/` 目录缺（含 `changes/archive/<名>/`）且 quick 会话 guard 缺——→ `exit 2` 拒绝静默 `initChange` 新建，报当前库路径/指针模式/活跃清单/三分支排查（拼写、指针切库回旧库、确要新建走 brainstorm）。治「接管指针切换库后 `--done --change <旧库变更名>` 静默建幻影变更」的事故元凶。目标已物化（目录/会话 guard 在）仍放行走 `initChange` 自愈——DB 重建/迁移后从目录物化 DB 行是合法恢复路径。守卫先于 `validateChangeExists` 覆盖不到的阶段（auxiliary `explore`/`scan`/quick 会话等），与既有 plan/execute/verify/archive 目录守卫互补。
 
 不变准则：**CLI 状态推进只在主仓根 cwd 跑**；worktree 仅作代码隔离区，文件读写用绝对路径或 `git -C <worktree>`。
 

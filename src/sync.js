@@ -9,6 +9,7 @@
  */
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, unlinkSync, chmodSync, rmSync } from 'fs';
+import { createHash } from 'crypto';
 import { writeAtomicSync } from './fs-atomic.js';
 import { join, dirname, basename, isAbsolute, relative } from 'path';
 import { resolvePlatformSpecDir } from './progress.js';
@@ -1546,6 +1547,97 @@ export class SyncManager {
   }
 
   /**
+   * spec 树 take-platform 落地（坑 spec-sync-conflict-no-take-platform，2026-09-03 用户实证
+   * 「冲突没有接受服务器版本选项」）：拉平台整树 bundle（GET /changes/-/spec-bundle，与
+   * pullSpecBundle 同端点同鉴权），但**只覆盖冲突文件列出的路径**——不整树替换，本会话/
+   * 他端的其他本地改动不动。服务器已无该路径（远端删除）→ 删本地对应文件。
+   *
+   * 覆盖后同步刷新内容基线快照（spec-sync-base.json）中被覆盖路径的 hash：下次
+   * syncSpecTree 的 dropFollowServerUpdates 判「本地未改动」不再回推——take-platform =
+   * 服务器胜出，本地内容即服务器内容，回推同值无害但走基线豁免更干净。
+   *
+   * fail-closed：路径越界（../、绝对路径）逐条跳过计入 skipped 不中断其余；bundle 拉取/
+   * 解析失败整体 ok:false（本地不动）。
+   * @param {string} specDir spec 树根
+   * @param {string[]} paths 冲突路径（POSIX 相对 specDir，来自冲突文件 conflicting_paths）
+   * @returns {Promise<{ok: boolean, overwritten?: number, removed?: number, skipped?: string[], reason?: string}>}
+   */
+  async _takePlatformSpecPaths(specDir, paths) {
+    const platform = this._getPlatform();
+    if (!platform) return { ok: false, reason: '未连接平台（take-platform 需拉平台 bundle）' };
+    if (!Array.isArray(paths) || paths.length === 0) return { ok: false, reason: '冲突文件缺 conflicting_paths，无可接受路径' };
+
+    const bundleUrl = `${platform.url}/api/changes/-/spec-bundle`;
+    let res;
+    try {
+      res = await fetch(bundleUrl, {
+        headers: { Authorization: `Bearer ${platform.token}` },
+        // 大树/慢网同 pullSpecBundle 口径（审计 B2），不与外部熔断组合（resolve 是用户显式动作）
+        signal: AbortSignal.timeout(PULL_BUNDLE_TIMEOUT_MS),
+      });
+    } catch (err) {
+      const why = (err.name === 'AbortError' || err.name === 'TimeoutError') ? `下载超时/中断（${PULL_BUNDLE_TIMEOUT_MS / 1000}s 上限）` : err.message;
+      return { ok: false, reason: `拉取 spec bundle 失败: ${why}` };
+    }
+    if (!res.ok) {
+      const why = res.status === 404 ? '平台工作区尚无 spec 内容（HTTP 404）' : `HTTP ${res.status}`;
+      return { ok: false, reason: `拉取 spec bundle 失败: ${why}` };
+    }
+    let tarBuf;
+    try { tarBuf = Buffer.from(await res.arrayBuffer()); }
+    catch (err) { return { ok: false, reason: `读取 spec bundle 失败: ${err.message}` }; }
+    let entries;
+    try { entries = _parseSpecTar(tarBuf); }
+    catch (err) { return { ok: false, reason: `spec bundle 无效: ${err.message}` }; }
+
+    const serverFiles = new Map();
+    for (const e of entries) {
+      if (e.isDir || e.name === 'PLATFORM-BUNDLE.json') continue;
+      serverFiles.set(e.name.replace(/^\.\//, ''), e.data);
+    }
+
+    const normalized = [...new Set(paths.map((p) => String(p).replace(/\\/g, '/')).filter(Boolean))];
+    let overwritten = 0;
+    let removed = 0;
+    const skipped = [];
+    for (const p of normalized) {
+      try {
+        _assertSafeTarName(p, specDir);
+        const data = serverFiles.get(p);
+        if (data !== undefined) {
+          const full = join(specDir, p);
+          mkdirSync(dirname(full), { recursive: true });
+          writeFileSync(full, data);
+          overwritten++;
+        } else if (existsSync(join(specDir, p))) {
+          // 服务器已无该文件（远端删除）→ 接受服务器 = 删本地
+          rmSync(join(specDir, p), { force: true });
+          removed++;
+        }
+      } catch {
+        skipped.push(p);
+      }
+    }
+
+    // 基线快照刷新（best-effort）：被覆盖路径回写当前盘面 hash（= 服务器内容 hash）、被删
+    // 路径移除条目——下次同步这些路径按「本地未改动」豁免回推（take-platform 语义闭环）。
+    try {
+      const baseFile = join(specDir, '.runtime', 'spec-sync-base.json');
+      let base = null;
+      try { base = JSON.parse(readFileSync(baseFile, 'utf8')); } catch { base = null; }
+      const hashes = base && typeof base.hashes === 'object' ? base.hashes : {};
+      for (const p of normalized) {
+        try { hashes[p] = createHash('sha256').update(readFileSync(join(specDir, p))).digest('hex'); }
+        catch { delete hashes[p]; }
+      }
+      mkdirSync(join(specDir, '.runtime'), { recursive: true });
+      writeFileSync(baseFile, JSON.stringify({ ts: Date.now(), hashes }, null, 2) + '\n', 'utf8');
+    } catch { /* 快照失败只损失下次的防回推精度，覆盖结果本身已成立 */ }
+
+    return { ok: true, overwritten, removed, skipped };
+  }
+
+  /**
    * 冲突解决三选一（task-13 / D-002 / D-010 / D-013 / FR-05）。
    * 读 task-12 写的 sync-conflict-<change>.json，按 mode 处理后必清冲突文件防累积（R-04 / constraints）。
    *
@@ -1651,8 +1743,32 @@ export class SyncManager {
         specOutcome = { ok: false, resolved: false, reason: `spec 树重推异常: ${err.message}` };
       }
     } else if (specCf && mode === 'take-platform') {
-      // fail-closed：平台无文件下载端点，无法把服务器内容写回本地——明确报错指路，不清文件
-      specOutcome = { ok: false, resolved: false, reason: 'spec 树冲突不支持 take-platform（平台无文件下载端点，无法把服务器内容写回本地）：请手动对齐本地文件后跑 --keep-local' };
+      // spec 树 take-platform（坑 spec-sync-conflict-no-take-platform，2026-09-03 用户实证反馈
+      // 「冲突没有接受服务器版本选项」）：平台已有 CLI 可用的整树下载端点（GET /changes/-/
+      // spec-bundle，X2 task-08）——拉 bundle 只覆盖冲突文件列出的路径（不整树替换，本地其他
+      // 改动不动），基线快照同步刷新防回推，清冲突文件闭环。此前 fail-closed 报「平台无文件
+      // 下载端点」是端点落地前的旧事实。
+      try {
+        const specDir = safePlatformSpecDir(this.cwd) || join(this.cwd, '.sillyspec');
+        const paths = Array.isArray(specCf.conflicting_paths) && specCf.conflicting_paths.length > 0
+          ? specCf.conflicting_paths
+          : Object.keys(specCf.server_versions || {});
+        const r = await this._takePlatformSpecPaths(specDir, paths);
+        if (r.ok) {
+          this.clearSpecConflictFile(changeName);
+          const skippedNote = r.skipped && r.skipped.length > 0
+            ? `，${r.skipped.length} 个路径异常跳过（${r.skipped.slice(0, 3).join(', ')}${r.skipped.length > 3 ? ' 等' : ''}）`
+            : '';
+          specOutcome = {
+            ok: true, resolved: true,
+            reason: `spec 树已接受服务器版本：覆盖 ${r.overwritten} 个冲突文件${r.removed > 0 ? `、删除 ${r.removed} 个（服务器已删）` : ''}${skippedNote}，本地改动已放弃`,
+          };
+        } else {
+          specOutcome = { ok: false, resolved: false, reason: `spec 树 take-platform 失败: ${r.reason}（可重试；或手动对齐本地文件后 --keep-local）` };
+        }
+      } catch (err) {
+        specOutcome = { ok: false, resolved: false, reason: `spec 树 take-platform 异常: ${err.message}` };
+      }
     }
 
     // ── abort：两类标记一并清（本地 DB 与文件均不变，下次 push/pull 重新检测）──

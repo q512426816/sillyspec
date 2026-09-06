@@ -726,7 +726,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
   if (['brainstorm', 'plan', 'execute'].includes(stageName)) {
     try {
       const { classifyReviewTier } = await import('../review-tier.js')
-      const { validateStageReview, getLatestStageReviewRunId, printStageReviewResult, generateStageReviewRunId, stageReviewMarkerPath } = await import('../stage-review.js')
+      const { validateStageReviewWithAutoRefresh, getLatestStageReviewRunId, printStageReviewResult, generateStageReviewRunId, stageReviewMarkerPath } = await import('../stage-review.js')
       const effectiveSpecBase = platformOpts?.specRoot || specBase
       const reviewChangeDir = resolveChangeDir(cwd, progress, platformOpts?.specRoot)
       const designPath = reviewChangeDir ? join(reviewChangeDir, 'design.md') : null
@@ -758,7 +758,16 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
           : stageName === 'plan' ? 'plan'
           : 'acceptance'
         const searchDirs = [effectiveSpecBase, reviewChangeDir, cwd].filter(Boolean)
-        const reviewResult = validateStageReview({ stage: stageName, reviewType, runtimeRoot, reviewRunId, searchDirs })
+        // docHash 失配自动刷新（坑 stage-review-refresh-hash-manual-forget，2026-09-04 ③）：
+        // 主文档（design/plan.md）改版后忘跑 --refresh-hash 不再拦一轮——gate 机械重算放行
+        // （verdict 保留 + reviewerNotes 审计行 + 控制台留痕）；主文档缺失/schema/verdict=fail
+        // 不在自动刷新范围，照常 fail-closed。
+        const gated = validateStageReviewWithAutoRefresh({ stage: stageName, reviewType, runtimeRoot, reviewRunId, searchDirs, autoRefresh: true })
+        if (gated.autoRefreshed) {
+          console.warn(`\n🔄 stage review docHash 失配已自动刷新（主文档改版后机械重算，verdict/checklist 保留——结论是否仍适用于新文档需人工确认）`)
+          console.warn(`   已就地更新: ${gated.refreshedPath}`)
+        }
+        const reviewResult = gated.result
         printStageReviewResult(reviewResult, { stage: stageName, reviewRunId, runtimeRoot, changeName })
         if (!reviewResult.ok) {
           return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)

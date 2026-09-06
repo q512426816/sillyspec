@@ -115,7 +115,7 @@ updated_at: 2026-08-14T22:20:00+08:00
 来源：execute 阶段使用复盘的 3 个负面点，逐条对源码核实后裁决，均确认真新债（债单此前无相关条目）。
 
 - ✅ **exec-a Task Review base..head 对账坑**：子代理不 commit 时 `git diff base..head` 为空，`verifyReviewGitEvidence`（task-review.js:588）的 changedFiles 交叉比对拿**空 diffFiles** 对非空 changedFiles 必判「完全不相交」伪造，逼 agent 强制 commit + 改 7 个 review head。此前已有 working-tree 回退（避开「零改动伪造」假阳性），但 diffFiles 只算 commit diff、**未并入 working-tree 文件**。**修法**：新增 `parsePorcelainFiles` 解析 `git status --porcelain`，working-tree 改动并入 diffFiles 后再做交叉比对（对齐 `checkExecuteCodeEvidence` 同时查 working-tree 语义）；回归 agent-gate-hardening 加未 commit 对账用例。
-- ✅ **exec-b Stage Review run-id/marker 易错**：① marker 缺失时 `getLatestStageReviewRunId`（stage-review.js:269）fallback 扫描 `stage-reviews/<stage>-review-*` **全目录无 change 过滤** → 读到 proxy 等其他变更的 acceptance review 报错误导；② marker 内容若误写 execute 的 `exec-` 前缀 runId，按 `stage-reviews/<stage>-<runId>` 拼目录必找不到。**修法**：① fallback 按 review.json `reviewedFiles[0]`（契约=`changes/<change>/<mainDoc>`，renderReviewJsonContract）归属变更过滤，无归属 → null fail-closed + 显式 warn（不再跨变更取最新）；② marker 读取校验 `^review-` 前缀，非格式内容忽略 + warn + 退回扫描；回归 stage-review 加 marker 格式 + cross-change fallback 用例。
+- ✅ **exec-b Stage Review run-id/marker 易错**：① marker 缺失时 `getLatestStageReviewRunId`（stage-review.js:278）fallback 扫描 `stage-reviews/<stage>-review-*` **全目录无 change 过滤** → 读到 proxy 等其他变更的 acceptance review 报错误导；② marker 内容若误写 execute 的 `exec-` 前缀 runId，按 `stage-reviews/<stage>-<runId>` 拼目录必找不到。**修法**：① fallback 按 review.json `reviewedFiles[0]`（契约=`changes/<change>/<mainDoc>`，renderReviewJsonContract）归属变更过滤，无归属 → null fail-closed + 显式 warn（不再跨变更取最新）；② marker 读取校验 `^review-` 前缀，非格式内容忽略 + warn + 退回扫描；回归 stage-review 加 marker 格式 + cross-change fallback 用例。
 - ✅ **exec-c apply 校验 vs design §6 清单**：apply（worktree-apply.js:223）只认 design §6 清单硬卡「变更文件 ⊆ 清单」，而 assess（:565）用 task allowed_paths——**两 gate 口径不一致**——design §6 漏测试/产物文件时（task allowed_paths 已含）apply 卡住。**修法**：抽出 `resolveApplyAllowSet` = design 清单 ∪ 所有 task allowed_paths，applyWorktree 改用它；plan 已过 validateDesignFileCoverage 单向校验（design ⊆ plan），union 不放开 design/plan 之外的越界文件（仍拦）；回归 worktree-allow-list 加 union 用例（越界仍违规）。
 
 ### 2026-08-04 verify 复盘增补（关键词判级 / 测试重复跑 / 后台无进度）
@@ -216,7 +216,7 @@ updated_at: 2026-08-14T22:20:00+08:00
 来源：两轮工具驾驭复盘（brainstorm 跑通 + plan 跑通），6 条逐条对源码核实裁决（先查本债单 + 实证，不重复已决策项）。
 
 **brainstorm 复盘**
-- ⊘ **bs-a step7 四件套门时机错配（裁决：用户误判，代码无此 gate）**。`validateFileLocations`（gates.js:955）= advisory 打印不阻断（gates.js:955 注释 + stage-artifacts.md:57），守卫 `settledCount===total && total>0`（gates.js:955）仅阶段全部步骤完成时跑，step7（Design Grill）--done 时 step8 还 pending 不触发。「step7 被拦补三件」与代码不符，疑似把 step8（生成规范文件）--done 的 advisory `⬜ 未找到` 误读为硬拦 / 混淆 Stage Review Gate（查 design.md docHash 不查四件套）。**搁置**：待用户贴现场 CLI 输出（⚠️/❌/⬜ 标记 + exit code）再定 advisory 可读性优化（⬜→ℹ️ 提示不阻断）。
+- ⊘ **bs-a step7 四件套门时机错配（裁决：用户误判，代码无此 gate）**。`validateFileLocations`（gates.js:964）= advisory 打印不阻断（gates.js:964 注释 + stage-artifacts.md:57），守卫 `settledCount===total && total>0`（gates.js:964）仅阶段全部步骤完成时跑，step7（Design Grill）--done 时 step8 还 pending 不触发。「step7 被拦补三件」与代码不符，疑似把 step8（生成规范文件）--done 的 advisory `⬜ 未找到` 误读为硬拦 / 混淆 Stage Review Gate（查 design.md docHash 不查四件套）。**搁置**：待用户贴现场 CLI 输出（⚠️/❌/⬜ 标记 + exit code）再定 advisory 可读性优化（⬜→ℹ️ 提示不阻断）。
 - ⏭ **bs-b platform sync 10s 超时反复 warn（登记 defer）**。`sync.js:28` REQUEST_TIMEOUT_MS=10_000 + `:204-208` 超时 console.warn。契约 sillyhub-progress-sync-contract.md §10 明确「超时 → warn 不阻断」intentional（网络失败可见性，否决静默）。根因 sillyhub 后端 POST progress 端点未就绪（契约 §11 P0 待排期）→ 每步完成触发 sync 干等 10s + warn。**真新建议（债单+契约均无）**：客户端连续失败 N 次后该 session 退避降频（首失败仍 warn 保可见性）。defer——根治在 sillyhub 后端落地，客户端降频是缓解候选单独排。
 - ✅ **bs-c _module-map.yaml schema_version warn 缺升级路径（已修 ql-20260811-006-a73f）**。`prompt.js:44-46` 两行 warn（B2 advisory）只报问题不给 CLI 出路，预存 v1 漂移文件每个读 map 的 step（brainstorm step2/3/7）都刷屏。修法（纯文案）：两行各追加「跑 sillyspec modules rebuild 升级到 schema_version: 2 可消除此警告」。node --check + lint 250 文件 + npm test（除 pre-existing db-concurrency 无关失败）全绿。
 
@@ -318,13 +318,13 @@ P2 遗留（按优先级登记）：
 
 **批次② 状态机 fail-open 组 → 完整流程 brainstorm（行为语义变更，单一 change 立项）**
 - **A5** `--done` 阶段产物 gate 失败只打 ❌ 但 exit 0：`src/run/complete.js:328-329` gate 早退 return 不设 process.exitCode——与 quick 审计 blocked→exit 1 同仓惯例分裂，agent/CI/hook 按 exit code 消费即 fail-open。
-- **B6** `--done` 完全绕过阶段转换守卫 + 辅助阶段污染 currentStage：`src/run/command.js:1303` --done 直接进 `completeStep` 不查 `checkTransition`（stage.js:27-44 只在 runStage 调）；status/doctor 等 auxiliary 跑一次即写 `progress.currentStage`（stage.js:227）→ fromStage 变 status 后跳阶段静默放行（stage-contract.js:874 `AUXILIARY_STAGES` 一律放行）。
-- **B7** status/doctor 自称只读实则写库：`src/run/command.js:892` auxiliary fallback `initChange` 建 default 行 + 落盘 currentStage，与 SKILL「status 只读」矛盾，多 agent 并发 lastActive 互相覆盖。
+- **B6** `--done` 完全绕过阶段转换守卫 + 辅助阶段污染 currentStage：`src/run/command.js:1370` --done 直接进 `completeStep` 不查 `checkTransition`（stage.js:27-44 只在 runStage 调）；status/doctor 等 auxiliary 跑一次即写 `progress.currentStage`（stage.js:227）→ fromStage 变 status 后跳阶段静默放行（stage-contract.js:874 `AUXILIARY_STAGES` 一律放行）。
+- **B7** status/doctor 自称只读实则写库：`src/run/command.js:924` auxiliary fallback `initChange` 建 default 行 + 落盘 currentStage，与 SKILL「status 只读」矛盾，多 agent 并发 lastActive 互相覆盖。
 - **B8** `run brainstorm` 无 --change 多活跃变更仓静默建幽灵变更：`src/run/command.js:717-731` 无条件 initChange（DB 实锤 08-15 一小时 4 个 `*-new-change-*` 活跃行）。
 - 裁决理由：四者共性强——状态机守卫 fail-open + 幽灵变更/幽灵阶段污染，属行为语义变更（多命令交互路径），非单点行修复。走完整流程 brainstorm → plan → execute，含 8b（新项目首跑 auxiliary 幽灵 default 变更）一并评估。
 
 **批次③ Windows 组 + D 组 → quick 逐条（每项独立 quick change）**
-- **A2** `workflow.js:256-262` runPostCheck 占位符替换 Windows 路径炸 JSON → scan 质量门 fail-open：`json.replace` 用 `new RegExp('{SPEC_ROOT}')` 把含反斜杠路径裸替换进 JSON 再 parse 报「Bad escaped character」，改非 RegExp 字面量替换或转义。
+- **A2** `workflow.js:294-295` runPostCheck 占位符替换 Windows 路径炸 JSON → scan 质量门 fail-open：`json.replace` 用 `new RegExp('{SPEC_ROOT}')` 把含反斜杠路径裸替换进 JSON 再 parse 报「Bad escaped character」，改非 RegExp 字面量替换或转义。
 - **A3** dashboard Windows 永不启动：`packages/dashboard/server/index.js:567-580` listen 排在同步全盘扫描后（homedir/Temp/桌面深度 2 readdirSync + 每项目 3 次 execSync('git') 实测 150s+ 假死）→ listen 前置或扫描改异步。
 - **D 组 prompt 措辞逐条**：D15 module-impact「更新结果」表格式无上游定义（plan step2 模板落空表骨架）/ D16 verify step4 验收 checkbox 与 TaskCard frontmatter acceptance 协议矛盾 / D17 consumer 专有词硬编码 verify 通用 prompt（daemon/session_control_no_manager/422 + verify-probes.md:53 含 consumer 仓路径）/ D18 `node -e "import('./src/...')"` 内部源码命令注入 prompt（scan.js:141 / execute.js:326，consumer 必炸 ERR_MODULE_NOT_FOUND，改指现有 CLI 子命令）/ D19 三份字段自检清单并存互不一致（plan.js:473 vs taskcard-rules.md vs postcheck）/ D20 execute 指令强度通胀（18K 字符，必须×30+ 不要×32）/ D21 维护者内部注释泄入 prompt（plan.js:349/353、verify.js:78、scan.js:168、brainstorm.js:333-334）/ D21b plan_level 靠对话记忆跨步传递（无落盘锚点）/ D21c TaskCard title vs title_zh 双字段语义未定义（实测两字段逐字节相同）。
   - 注：D21b（plan_level 落盘锚点）偏机制非措辞，执行时若超 quick 规模（需 CLI 落盘链路改动）则升级评估（单独完整流程或 defer）；D20 若为大规模重写亦同样评估。

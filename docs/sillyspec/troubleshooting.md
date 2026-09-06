@@ -767,7 +767,7 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 
 **修复（已闭环）**：
 - `partitionFailures` 两层剔除：① 区段级——`==== warnings summary ====` 区段头到下一 pytest 区段头（`short test summary info` / 汇总框）整段剔；② 行级兜底（verify 的 output_tail 常带 `…` 前缀截断、看不到区段头）——warning 归因行（`path:line: XxxWarning:`，盘符/相对/`…`截断前缀三形态）、分组行（`file.py: N warnings`）、Node 进程警告行（`(node:123) [DEP0040] DeprecationWarning:`）+ 同上下文的 pytest 测试 id 行/缩进源码展示行/组间空行一并剔。
-- fail-safe 不变：真实失败信号恒保留——traceback `E AssertionError` 行、失败归因行（`file.py:42: AssertionError`，非 `*Warning` 类名形态可分）、short summary 的 `FAILED` 行；检测不到失败行时 `judgeWithKnownFailures` 仍保守判 failed。实测 agent 模块截断 tail：2 行（1 假 1 真）→ 1 行（只剩真实 FAILED）。
+- fail-safe 不变：真实失败信号恒保留——traceback `E AssertionError` 行、失败归因行（`file.py 第 42 行: AssertionError`，非 `*Warning` 类名形态可分）、short summary 的 `FAILED` 行；检测不到失败行时 `judgeWithKnownFailures` 仍保守判 failed。实测 agent 模块截断 tail：2 行（1 假 1 真）→ 1 行（只剩真实 FAILED）。
 - 使用方注意：升级后 E2/A 段里为 warning 噪声登记的豁免条目（`_exception_handler`、`DeprecationWarning`、`utcnow` 等）可删除。
 
 ## 49. 一坑：conditionalWait 步骤 --continue 被 --answer 直接收尾，agent 备好的 --done 落到下一步假完成（2026-09-02 闭环）
@@ -789,3 +789,55 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 - `backfill-reviews --adopt` 与 execute 收尾草稿自动代填 diffPaths=allowed_paths（仅有归属切片时带；空归属不带，防切片恒空误判伪造）。
 - execute Wave prompt 的 Task Review Gate 契约补「base/head 两种取法」段：per-task commit 模式 vs 统一 commit 模式（后者必填 diffPaths）。
 - 使用方注意：统一 commit 模式下 review 复核 diff 用 `git diff <base>..<head> -- <allowed_paths>`；slice 为空的 task 要么补实现要么 verdict 回 fail。
+
+## 51. 一坑：spec-sync 未决冲突期间横幅连环刷屏 + 残留标记永久红标（2026-09-03 闭环）
+
+**症状**：spec 树冲突落 `spec-sync-conflict-<change>.json` 后，每步完成的自动同步（triggerSync → syncSpecTreeOnly）都会对同一批真冲突路径再撞一次——每轮重写冲突文件 + 空行+全幅双线横幅，且横幅里 `JSON.stringify(server_versions)` 整包 dump 逐文件版本，冲突文件几十个时一行就把终端刷满，「已卡死不会自愈」连环刷屏（进度侧 sync() 的 409 横幅 2026-08-23 已修同族坑 sync-conflict-banner-spam，spec 树侧漏网）。次生坑：冲突实际已消解（对端停推后重推成功 last-writer-wins 收敛）但冲突文件残留 → platform status 永久红标 + 每轮单行提示不消。
+
+**根因**：`syncSpecTree` 冲突分支无条件走「写文件 + 全幅横幅」，没有进度侧的「冲突文件在 = 用户已被告知」降噪判定；横幅把 server_versions map 整包 stringify 到终端（信息都在冲突文件里，终端只需要知道有几个文件、怎么处置）；成功轮/自动消解轮不清残留标记（此前只有 resolve 三态清）。
+
+**修复（已闭环）**（`src/spec-sync.js`，测试 `test/spec-sync-conflict-banner-dedup.test.mjs` 6 断言组）：
+- **同集去重**：冲突文件已在且 `conflicting_paths` 与本轮真冲突集完全一致 → 单行提示（`⚠️ 变更 X 存在未决 spec 树冲突（N 个文件待裁决，本轮非冲突改动已照常同步）` + resolve 指引），不重写文件（created_at 稳定，status 红标语义不变），返回 `suppressed: true`；follower 跟随信息降级 debugLog。冲突集变化（新增/收敛）才重新全幅横幅 + 重写文件。
+- **横幅截断**：只列前 5 个路径 +「等」，撤掉整包 JSON dump；逐文件服务器版本在冲突详情文件里。
+- **残留标记收敛**：POST 无冲突成功轮、全 follower 自动消解轮均清 `spec-sync-conflict-<change>.json`——冲突不存在了红标也不该在。
+- **forcePush 豁免**：resolve --keep-local 刚裁决完的重推不参与去重（需真实判定 + 刷新冲突文件为最新服务器版本）。
+- 使用方注意：单行降噪不改变冲突语义——冲突文件仍在时同步照常 POST（服务器「冲突 op 跳过、其余照常 apply」），本会话非冲突改动不迟到；真冲突集仍需 `platform resolve` 三态裁决。
+
+## 52. 三坑：spec 树冲突无「接受服务器版本」/ quick WARNING 审计无解法指引 / 空壳会话只能手工清（2026-09-03 闭环）
+
+**症状**（2026-09-03 用户实证反馈三连，前接 #51 横幅降噪）：
+1. spec-sync 冲突只有 --keep-local/--abort 两态，想「接受服务器版本」（take-platform）没有入口——冲突文件 note 还写着「平台无文件下载端点」（旧事实）。
+2. quick --files 边界声明后中途追加测试文件 → `超出 allowedFiles` WARNING 只列问题不给解法（非阻断但体验差，"别只警告"）；且 --done 时带 --files 被解析却不生效（追加声明只能先恢复会话再 --done 两步走，与 ql-20260713-002-7628「--done --force-baseline 静默无效」同族）。
+3. 一次 CLI 输出被吞 → agent 误判失败重跑 → 重复空壳会话（已启动但零步骤完成），只能手工 reset + 删 QUICKLOG 骨架。
+
+**根因**：
+1. `resolve()` spec 树分支按「平台无下载端点」的旧事实 fail-closed——但 X2 task-08（2026-08-29）已落地 CLI 可用的 `GET /api/changes/-/spec-bundle`（shpsync token 鉴权，pullSpecBundle 在用）。
+2. `printQuickAuditReview` 的 WARNING 分支只打印 reasons（BLOCKED 分支有解锁咒语，WARNING 没有）；`handleQuickStageCompletion` 只把 --force-baseline/--allow-new/--allow-delete 并入 guard，--files 漏并入。
+3. 新 quick 会话起步时不感知他者空壳会话；--cancel 清理口存在但没人指路。
+
+**修复（已闭环）**：
+- **spec 树 take-platform**（`sync.js _takePlatformSpecPaths` + resolve 接线，hub08 测试场景 5 重写）：拉平台整树 bundle 后**只覆盖冲突文件列出的路径**（不整树替换，本地其他改动不动；服务器已删路径删本地对应文件），内容基线快照（spec-sync-base.json）同步回写覆盖后 hash——下次 syncSpecTree 按「本地未改动」豁免回推，take-platform 语义闭环。冲突横幅/单行降噪/冲突文件 note 的处置选项更新为 `--keep-local | --take-platform | --abort`。
+- **WARNING 给解法**（`quick-audit.js`）：`超出 allowedFiles` → 一条命令 `--done --files <全量逗号分隔> 重跑即并入边界`；`新增文件` → `--done --allow-new --files ...`，并点破两套开关（--files 管归属口径、--allow-new 管新增放行，坑 files-flag-not-unlock-protected 同教育）。非边界类 advisory 不误指路。
+- **--done --files 一步并入**（`shared.js mergeQuickBoundaryFiles` + complete-handlers/stage.js 双接线）：追加不替换、去重保序、allowedFilesHash 同步记录（与恢复路径同源同语义），持久化回 guard.json。
+- **空壳会话探测 + 清理指路**（`shared.js detectEmptyShellQuickSessions` + stage.js 起步打印）：新 quick 会话起步时点名他者「7 天内启动且零步骤完成」的会话，给出 `sillyspec run quick --cancel --change <id>` 清理咒语；fail-open（读不到进度/超龄/有完成步骤均不列），真并行会话不误伤。
+- 使用方注意：take-platform 会放弃冲突文件的本地改动（服务器胜出）；--cancel 是官方清理口，QUICKLOG 翻已取消 + 挂载行移除，勿再手工删骨架。
+
+## 53. 三坑：--done 对不存在 change 静默新建 / progress repair 对双库分裂失明 / docHash 失配忘手动刷新（2026-09-04 闭环）
+
+**症状**（2026-09-04 用户工具使用小结三连负面，事故复盘）：
+1. 平台接管指针切换进度库后，`run <stage> --done --change <旧库变更名>` 不报错——CLI 在新库静默 initChange 新建幻影变更（零进度起步），--done 记到幻影上，原变更进度停滞（本次事故直接元凶）。plan/execute/verify/archive 有 validateChangeExists 目录守卫，explore/scan 等 auxiliary 阶段与 quick 会话全裸奔。
+2. `progress repair` 只检查指针指向的当前库，旧库（cwd/.sillyspec）残留的活跃变更完全不可见——报告「未发现问题，无需修复」假阴性，对双库分裂失明。
+3. design 每次改版后须手动重跑 `register-stage-review --refresh-hash`（brainstorm/execute 都锚 design.md），易忘——忘则 --done 被 docHash 失配拦一轮，纯机械损耗。
+
+**根因**：
+1. runCommand 的 `!progress` 分支无条件 `initChange(autoChange)`——「变更目录存在、DB 行缺失」的自愈物化与「目录也不存在」的幻影新建共用一条路径，done-like 动作（--done/--skip/--wait/--continue/--reset/--reopen）没有存在性前置。
+2. ConsistencyDoctor.checkConsistency/repairConsistency 只对当前 specDir 的单库做一致性检查，无跨库视角；指针切库后旧库 DB 残留是新出现的常态输入。
+3. docHash 失配的门（verifyStageReviewDocHash）只报错指路，刷新动作（--refresh-hash 的机械重算）留在 agent 手上——两步走的第二步纯属可自动化摩擦。
+
+**修复（已闭环）**：
+- **done-like 幻影守卫**（`command.js doneLikeTargetMaterialized` 纯函数 + runCommand 守卫，测试 done-phantom-change-guard 21 断言）：--done/--skip/--wait/--continue/--reset/--reopen 且目标 change 在当前库未物化（DB 行缺 + changes/<名>/ 目录缺 + quick 会话 guard 缺）→ exit 2 fail-loud，报目标变更名/当前库路径/指针模式/本库活跃清单/三分支排查（拼写、指针切库回旧库、确要新建走 brainstorm）。已物化（目录或会话 guard 在）仍放行走 initChange 自愈（DB 重建后从目录物化是合法恢复路径）；归档目录（changes/archive/<名>/）算物化。quick 新会话起步（非 done-like）不受影响。
+- **双库分裂探测**（`consistency-doctor.js detectLibrarySplit` + check/repair 双接线，测试 progress-repair-dual-library 18 断言）：指针存在且指向 ≠ cwd/.sillyspec、旧库 sillyspec.db 残留 → 双库并存；两库均有活跃变更或目标变更只在旧库 → issue 级（repair 进 manual 清单，repair 修不了权威库归属只能亮出来）；仅并存单侧活跃 → warning 级（平台模式本地库保留真实资产是容忍态，防常态误报）。旧库只在 DB 已存在时直读，绝不新建库文件；读失败 fail-open。自指指针/无指针/旧库无 db 均不报。
+- **docHash 失配 gate 自动刷新**（`stage-review.js validateStageReviewWithAutoRefresh` + gates.js Stage Review Gate 接线，测试 stage-review-doc-hash-auto-refresh 11 断言）：--done 时 gate 检测「docHash 与主审查文档不匹配」（且仅此错误）→ 与 --refresh-hash 同语义就地机械重算放行（verdict/checklist/requiredEvidence 原样保留，reviewerNotes 追加 `docHash auto-refreshed` 审计行，控制台 🔄 留痕）——忘跑手动命令不再拦一轮。防伪造边界不降级：主文档在候选基准下均不存在（路径伪造/错位）、schema 失败、verdict=fail 一律不自动刷新照常阻断；写盘失败回落原失败结果。align 前置门（enforceAlignExecuteReviewGate）保持只读契约不接自动刷新。
+- 提示词/指引文案同步：renderReviewJsonContract（review.json 契约注入）、execute 对照设计检查步骤 prompt、verifyStageReviewDocHash 错误文案——一致口径「忘跑没关系 gate 自动机械重算；大幅改版结论是否仍适用需人工确认，勿把自动放行当新文档已审过」；docs/prompt/execute.md 同步（静态阶段 _verify 0 未匹配）。
+
+**关联坑名**：`done-phantom-change-silent-create`、`progress-repair-dual-library-blind`、`stage-review-refresh-hash-manual-forget`

@@ -354,7 +354,7 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
   3. 组装行为（全量测试/构建/启动通过——单 task 测试全绿 ≠ 组装正确）
 
   **产物唯一化（省重复消耗）**：本步逐项对照结论**只落盘一份**——直接写进 review.json 的 \`checklist\` 数组（item=设计要点/FR/决策，note=实现状态 ✅/⚠️/❌ + 偏差说明 + commit 锚点），reviewerNotes 写汇总。**不要**另写独立的 design-check.md 长文（同一份 design×diff 二次消费；2026-08-22 实测该重复一遍 ≈8 分钟全量重读）。
-  **gate 重试修复**：review.json 落盘后若后续 gate 报 docHash 失配 / 路径错，跑 \`sillyspec register-stage-review --change <变更名> --stage execute --refresh-hash\` 一键重算修复——**不要重做审查**（重做=同一材料第三遍）。
+  **gate 重试修复**：review.json 落盘后若 design.md 又有改版，gate 会**自动机械重算 docHash 放行**（verdict/checklist 保留，结论是否仍适用于新文档需人工确认）——**不要重做审查**（重做=同一材料第三遍）；主文档路径错/缺失不会被自动修复，按 gate 报错修正 reviewedFiles[0]，或跑 \`sillyspec register-stage-review --change <变更名> --stage execute --refresh-hash\`。
 
 ### 操作
 1. 读取 design.md（技术方案）——按章节精准读（design-check 对照表可借 tasks 卡 §锚点定位），避免反复整读全文

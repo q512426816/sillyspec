@@ -19,7 +19,7 @@
 import { join, dirname } from 'node:path'
 import { existsSync, readdirSync, readFileSync, mkdirSync } from 'node:fs'
 import { writeAtomicSync } from '../fs-atomic.js'
-import { resolveSpecDir, resolveChangeDir, resolveRuntimeRoot, resolveQuickSessionsDir, triggerSync, safeGit, parsePorcelainPath, formatWaitOptions, checkApproval, getStageSteps, warnApprovalUnknown, predictProtectedQuickFiles } from './shared.js'
+import { resolveSpecDir, resolveChangeDir, resolveRuntimeRoot, resolveQuickSessionsDir, triggerSync, safeGit, parsePorcelainPath, formatWaitOptions, checkApproval, getStageSteps, warnApprovalUnknown, predictProtectedQuickFiles, mergeQuickBoundaryFiles, detectEmptyShellQuickSessions } from './shared.js'
 import { computeScanProfile, applyScanProfileSteps, executeScanPreflight, executeScanPostcheck } from './scan-profile.js'
 import { outputStep, collectStageWaitHistory } from './prompt.js'
 import { allocateQuicklogEntry, deriveTitleFromLinkedChange, sanitizeDesc } from '../quicklog.js'
@@ -350,12 +350,12 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
       progress.quickGuard = existingGuard
       // 中途追加边界：会话中途发现要改启动声明外的文件，此前 resume 会把 --files 静默丢弃、
       // 边界冻结在启动时刻，只能靠事后归属/审计行兜底。恢复时带 --files 即并入 allowedFiles
-      // （追加不替换、去重保序），同时点录 allowedFilesHash 供同文件并发检测（文件不存在跳过，
-      // 与启动同语义）。--done 审计直读 guard.json（complete-handlers §4.6），追加即被归属消费。
+      // （追加不替换、去重保序，mergeQuickBoundaryFiles 与 --done 收尾路径同源），同时点录
+      // allowedFilesHash 供同文件并发检测（文件不存在跳过，与启动同语义）。--done 审计直读
+      // guard.json（complete-handlers §4.6），追加即被归属消费。
       const resumeFiles = Array.isArray(quickOpts?.quickFiles) ? quickOpts.quickFiles.filter(Boolean) : []
       if (resumeFiles.length > 0) {
-        const known = new Set(progress.quickGuard.allowedFiles || [])
-        const added = resumeFiles.filter(f => !known.has(f))
+        const { added } = mergeQuickBoundaryFiles(progress.quickGuard, resumeFiles, cwd)
         if (added.length > 0) {
           // 受保护文件预告（坑 quick-protected-late-hint）：追加声明若含审计将拦的文件，
           // 追加时即点破（省一轮跑到 --done 才发现）。--files 只声明归属，不解锁拦截。
@@ -364,12 +364,6 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
             forceBaseline: quickOpts?.isForceBaseline || false,
           })
           if (protectedPreview.length > 0) warnProtectedQuickFiles(protectedPreview)
-          progress.quickGuard.allowedFiles = [...(progress.quickGuard.allowedFiles || []), ...added]
-          progress.quickGuard.allowedFilesHash = { ...(progress.quickGuard.allowedFilesHash || {}) }
-          for (const f of added) {
-            try { progress.quickGuard.allowedFilesHash[f] = createHash('sha256').update(readFileSync(join(cwd, f))).digest('hex') }
-            catch { /* 预声明将新建的文件，与启动时 allowedFilesHash 同语义：不存在跳过 */ }
-          }
           writeAtomicSync(guardFile, JSON.stringify(progress.quickGuard, null, 2))
           console.log(`🛡️ quick 边界已追加: ${added.length} 个文件（累计 ${progress.quickGuard.allowedFiles.length} 个）: ${added.join(', ')}`)
         }
@@ -451,6 +445,19 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
         if (allowDelete) parts.push('允许删除文件')
         console.log(`🛡️ quick 变更边界已记录: ${parts.join(', ')}`)
         console.log(`📝 QUICKLOG 条目已创建: ${qlId}`)
+        // 空壳会话探测（坑 quick-duplicate-empty-shell，2026-09-03 用户实证：一次输出被吞 →
+        // agent 误判失败重跑 → 重复空壳会话，此前只能手工 reset + 删骨架）。新会话起步时点名
+        // 他者「已启动但零步骤完成」的会话 + 给官方清理口 --cancel（QUICKLOG 翻已取消 + 挂载行
+        // 移除）。advisory 不阻断：真在用的并行会话不受影响（有完成步骤即不列）。
+        try {
+          const shells = detectEmptyShellQuickSessions(platformOpts, specBase, changeName, pm, cwd)
+          if (shells.length > 0) {
+            console.warn('')
+            console.warn(`🧹 检测到 ${shells.length} 个疑似空壳 quick 会话（已启动但零步骤完成——常见于输出中断后误重启的残留）：`)
+            for (const s of shells) console.warn(`   - ${s.sessionId}（启动于 ${s.startedAt}）`)
+            console.warn(`   清理：sillyspec run quick --cancel --change <会话ID>；若确在用请忽略本提示。`)
+          }
+        } catch { /* fail-open：探测失败不打扰 quick 启动 */ }
         // 缺 --input 且关联变更无可提取标题 → 条目落「(quick 任务)」占位标题，平台「快速修复」列表
         // 默认隐藏进行中占位（task-06 口径），长会话全程不可见、语义标题要到最终 --done 才回填。
         // 此刻会话刚起步零沉没成本，提示放弃重启带 --input 是最便宜的自愈点。

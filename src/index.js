@@ -1610,6 +1610,25 @@ async function main() {
       break;
     }
     case 'scan': {
+      // scan facts 子命令（archify 借鉴：机械事实预咀嚼，2026-09-05）。
+      // CLI 确定性抽取端点/依赖/规模/git 基线 → docs/<project>/scan/_facts.md，
+      // 供 scan 步骤 3/5 的子代理共享（禁止各自 grep 重复发现）。与 diff 同为纯只读旁路。
+      if (filteredArgs[1] === 'facts') {
+        const { buildAndWriteScanFacts } = await import('./scan-facts.js')
+        const factsEffectiveDir = specDir ? dir : resolveEffectiveDir(dir)
+        const projIdx = filteredArgs.indexOf('--project')
+        const pathIdx = filteredArgs.indexOf('--path')
+        const r = buildAndWriteScanFacts({
+          cwd: factsEffectiveDir,
+          specDir: resolvePlatformSpecDir(dir, specDir) || join(factsEffectiveDir, '.sillyspec'),
+          projectName: projIdx >= 0 && filteredArgs[projIdx + 1] ? filteredArgs[projIdx + 1] : basename(factsEffectiveDir),
+          projectPath: pathIdx >= 0 && filteredArgs[pathIdx + 1] ? filteredArgs[pathIdx + 1] : null,
+        })
+        const f = r.facts
+        console.log(`scan facts 已写入: ${r.outPath}`)
+        console.log(`  类型 ${f.type} · 依赖 ${f.deps.length} · 端点 ${f.endpoints.backendTotal}（后端）/ ${f.endpoints.frontendTotal}（前端调用）· 源文件 ${f.size.fileCount}`)
+        break
+      }
       // scan diff 子命令（D-001@v1：接线唯一入口 index.js，非 command.js 裸 token 静默吞）。
       // 纯只读比较命令：跳过下方共享块的 triggerPullActiveChange（不触发网络 pull），
       // 也不走 scan 主流程（--standard/--deep 分支不动）。解析 --base/--full/--report 后转发 scan-diff。

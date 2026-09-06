@@ -77,7 +77,10 @@ console.log('--- ③ 多活跃变更不带 --change → 报错列候选 ---')
   }
   const r = run(`node "${binCLI}" --dir "${d}" run plan --wait --reason "确认" --output "x"`)
   assert(r.status !== 0, `exit 非 0（实际 ${r.status}）`)
-  assert(r.out.includes('未找到进度数据'), '报「未找到进度数据」')
+  // 2026-09-04 done-like 幽灵守卫（done-phantom-change-silent-create）前置：--wait 等 done-like
+  // 动作在多活跃无 --change 时改由守卫拒绝（原「未找到进度数据」分支不再先达），语义不变：
+  // exit 2 + 点名须显式 --change + 列出全部活跃候选。
+  assert(r.out.includes('拒绝静默新建') || r.out.includes('未找到进度数据'), '拒绝执行并点名缺 --change')
   assert(r.out.includes(cnA) && r.out.includes(cnB), `列出全部活跃变更候选（自愈引导，实际输出尾：${r.out.slice(-160)}）`)
   try { rmSync(d, { recursive: true, force: true }) } catch {}
 }

@@ -26,6 +26,7 @@ import { safeGit } from './git-helper.js'
 import { parseSourceCommit } from './scan-staleness.js'
 import { matchFilesToModules } from './docs-debt.js'
 import { parseModuleMapSimple } from './modules.js'
+import { collectDocRefs } from './docs-check.js'
 
 /** safeGit 超时（仿 docs-debt 的 GIT_TIMEOUT_MS 模式：大 diff 慢时降级不挂起） */
 const GIT_TIMEOUT_MS = 10000
@@ -40,7 +41,8 @@ const DEFAULT_LIST_CAP = 5
  *   specBase / projectName：scan 文档与 module-map 定位（specBase/docs/<projectName>/...）
  *   base：基线 commit（短/长哈希、引用均可）；缺省读 scan 文档 frontmatter 的 source_commit
  * @returns {{ ok: true, base, baseSource, head, behindCommits, daysSinceScan, scope,
- *   added, deleted, modified, unknown, unmapped, outOfScope, renameMap, byModule, warnings, driftCount }
+ *   added, deleted, modified, unknown, unmapped, outOfScope, renameMap, byModule,
+ *   staleRefs, warnings, driftCount }
  *   | { ok: false, error: string }}
  *   ok:false = 硬错误（参数缺失 / 无 source_commit / 无效 base / git diff 失败）
  *   added/deleted/modified/unknown：范围内变更文件（POSIX 相对路径；R/C 记新路径）
@@ -163,6 +165,40 @@ export function computeScanDiff({ projectRoot, specBase, projectName, base } = {
     byModule[id] = { doc: entry.doc || '', added: a, deleted: d, modified: m, files: entry.files }
   }
 
+  // ── 引用级漂移（archify 借鉴，2026-09-04）：scan 文档显式 file:line 引用 × 基线后变更文件集。
+  // 变更集取 parseNameStatus 全量——**不经 module-map scope 过滤**（引用自带范围：指向「已变更
+  // 但范围外」文件的引用同样过时，advisory 信号不该被 scope 吞掉）；rename 的旧路径也入集
+  //（文档写在 scan 时点，引用的是旧路径，重命名后引用必失效——最强失效信号）。
+  // best-effort（读不到文档/异常 → 空清单不阻断文件级结果），不计入 driftCount / 退出码
+  //（advisory：引用指向已变更文件 ≠ 引用失效，提示人工核对）。──
+  const staleRefs = []
+  try {
+    const scanDir = join(specBase, 'docs', projectName, 'scan')
+    if (existsSync(scanDir)) {
+      const fullChanged = new Map() // POSIX path → A/D/M/R
+      for (const item of parseNameStatus(diffRes.value)) {
+        if (item.status === 'A' || item.status === 'D') fullChanged.set(item.path, item.status)
+        else if (item.status === 'M' || item.status === 'C') fullChanged.set(item.path, 'M')
+        else if (item.status === 'R') { fullChanged.set(item.path, 'R'); fullChanged.set(item.oldPath, 'R') }
+      }
+      const hitChange = (p) => {
+        if (fullChanged.has(p)) return { file: p, change: fullChanged.get(p) }
+        // src/ 前缀双向归一：文档 src 相对写法 ↔ git 仓库根路径
+        const alt = p.startsWith('src/') ? p.slice(4) : `src/${p}`
+        return fullChanged.has(alt) ? { file: alt, change: fullChanged.get(alt) } : null
+      }
+      for (const f of readdirSync(scanDir)) {
+        if (!f.endsWith('.md')) continue
+        const content = readFileSync(join(scanDir, f), 'utf8')
+        for (const ref of collectDocRefs(content)) {
+          if (ref.repo !== null) continue
+          const hit = hitChange(ref.file.replace(/\\/g, '/'))
+          if (hit) staleRefs.push({ doc: f, ref: ref.ref, change: hit.change, file: hit.file })
+        }
+      }
+    }
+  } catch { /* 引用级漂移为 advisory，异常静默降级 */ }
+
   return {
     ok: true,
     base: baseDisplay,
@@ -174,6 +210,7 @@ export function computeScanDiff({ projectRoot, specBase, projectName, base } = {
     added, deleted, modified, unknown, unmapped, outOfScope,
     renameMap,
     byModule,
+    staleRefs,
     warnings,
     driftCount: added.length + deleted.length + modified.length,
   }
@@ -240,6 +277,13 @@ function renderTerminal(r, { full }) {
   if (r.unknown.length > 0) {
     console.log(`无法归类（unknown，${r.unknown.length} 条）：${r.unknown.slice(0, cap).join(', ')}`)
   }
+  if (r.staleRefs && r.staleRefs.length > 0) {
+    console.log(`引用过时（scan 文档 file:line 引用指向基线后已变更的文件，${r.staleRefs.length} 条，advisory）：`)
+    for (const s of r.staleRefs.slice(0, cap)) {
+      console.log(`  - ${s.doc}: \`${s.ref}\`（${s.change === 'D' ? '文件已删除' : s.change === 'A' ? '文件为基线后新增' : s.change === 'R' ? '文件已重命名' : '文件已变更'}）`)
+    }
+    if (r.staleRefs.length > cap) console.log(`    ... 其余 ${r.staleRefs.length - cap} 条，--full 展开`)
+  }
   console.log(`漂移合计：${r.driftCount} 条（A${r.added.length} / D${r.deleted.length} / M${r.modified.length}）`)
 }
 
@@ -302,6 +346,15 @@ function writeReport(r, { specBase, projectName }) {
   if (r.outOfScope.length > 0) {
     lines.push('## 范围外变更（不计入漂移）', '')
     for (const f of r.outOfScope) lines.push(`- \`${f}\``)
+    lines.push('')
+  }
+  if (r.staleRefs && r.staleRefs.length > 0) {
+    lines.push('## 引用过时（advisory，不计入漂移合计）', '')
+    lines.push('scan 文档 file:line 引用指向基线后已变更的文件——不必然失效，逐条核对：', '')
+    for (const s of r.staleRefs) {
+      const label = s.change === 'D' ? '文件已删除' : s.change === 'A' ? '文件为基线后新增' : s.change === 'R' ? '文件已重命名' : '文件已变更'
+      lines.push(`- ${s.doc}: \`${s.ref}\`（${label}）`)
+    }
     lines.push('')
   }
   if (r.warnings.length > 0) {

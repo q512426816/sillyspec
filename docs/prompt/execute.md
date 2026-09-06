@@ -403,14 +403,17 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
   2. design.md 整体对照（最终实现拼起来是否仍符合设计意图，而非仅各 task 局部合规）
   3. 组装行为（全量测试/构建/启动通过——单 task 测试全绿 ≠ 组装正确）
 
+  **产物唯一化（省重复消耗）**：本步逐项对照结论**只落盘一份**——直接写进 review.json 的 `checklist` 数组（item=设计要点/FR/决策，note=实现状态 ✅/⚠️/❌ + 偏差说明 + commit 锚点），reviewerNotes 写汇总。**不要**另写独立的 design-check.md 长文（同一份 design×diff 二次消费；2026-08-22 实测该重复一遍 ≈8 分钟全量重读）。
+  **gate 重试修复**：review.json 落盘后若 design.md 又有改版，gate 会**自动机械重算 docHash 放行**（verdict/checklist 保留，结论是否仍适用于新文档需人工确认）——**不要重做审查**（重做=同一材料第三遍）；主文档路径错/缺失不会被自动修复，按 gate 报错修正 reviewedFiles[0]，或跑 `sillyspec register-stage-review --change <变更名> --stage execute --refresh-hash`。
+
 ### 操作
-1. 读取 design.md（技术方案）
+1. 读取 design.md（技术方案）——按章节精准读（design-check 对照表可借 tasks 卡 §锚点定位），避免反复整读全文
 2. 逐一对照 design.md 中的设计要点与实际代码实现
 3. 检查接口签名、数据结构、模块划分是否一致
 4. 记录偏差项（偏差 ≠ 错误，可能是合理的实现调整）
 
 ### 输出
-检查清单：每项设计要点的实现状态 ✅/⚠️/❌ + 偏差说明
+review.json 已落盘（checklist=逐项核验表）+ checklist 摘要与偏差说明；无独立长文产物
 ````
 
 ---

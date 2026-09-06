@@ -48,6 +48,23 @@ export function printQuickAuditReview(review) {
     for (const r of review.reasons) {
       console.warn(`   - ${r}`)
     }
+    // WARNING 也给解法（坑 quick-audit-warning-no-guidance，2026-09-03 用户实证：--files 声明后
+    // 追加测试文件 →「超出 allowedFiles」只列问题不给出路，非阻断但体验差——「别只警告」）。
+    // 指引按 reason 类型给；其他 advisory（文档欠账/引用失效等）已有各自的处置行。
+    const outOfDecl = review.reasons.filter((r) => r.startsWith('超出 allowedFiles'))
+    const undeclaredNew = review.reasons.filter((r) => r.startsWith('新增文件'))
+    if (outOfDecl.length > 0) {
+      const sample = outOfDecl.map((r) => r.split(': ')[1]).filter(Boolean)[0] || '<追加文件>'
+      console.warn(`   ➜ 出路：文件属本会话 → 带 --files（全量逗号分隔）重跑 --done 即并入边界，一条命令消掉本警告：`)
+      console.warn(`     sillyspec run quick --done --files <已声明文件>,${sample} --change <会话ID>`)
+      console.warn(`     （--files 只声明归属口径；确认收尾不想再改也可直接忽略本警告——非阻断。）`)
+    }
+    if (undeclaredNew.length > 0) {
+      const sampleNew = undeclaredNew.map((r) => r.split(': ')[1]).filter(Boolean)[0] || '<新增文件>'
+      console.warn(`   ➜ 出路：新增文件确认收进本会话 → --done 时 --files 声明归属 + --allow-new 放行新增：`)
+      console.warn(`     sillyspec run quick --done --allow-new --files <原声明文件>,${sampleNew} --change <会话ID>`)
+      console.warn(`     （两套开关：--files 管归属口径，--allow-new 管新增放行；不想要该文件可删除后再 --done。）`)
+    }
   } else {
     // 区分「本轮新增」（changedFiles，已扣前序 baseline）vs「累计暂存」（stagedTotal，全部未提交）。
     // 仅当存在前序 baseline 残留（累计 > 本轮新增）时才追加括注，避免普通场景冗余。

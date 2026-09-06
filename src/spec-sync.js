@@ -16,7 +16,7 @@
  */
 
 import { createHash } from 'crypto';
-import { existsSync, readdirSync, readFileSync, statSync, mkdirSync, writeFileSync } from 'fs';
+import { existsSync, readdirSync, readFileSync, statSync, mkdirSync, writeFileSync, unlinkSync } from 'fs';
 import { join, relative, sep } from 'path';
 
 // 与 sillyhub-daemon/src/spec-sync.ts 共用排除口径（task-07 / FR-06 / D-008@v2）：
@@ -412,6 +412,35 @@ export function partitionConflictPaths(serverVersions, localFiles, baseHashes, l
 }
 
 /**
+ * 未决 spec 树冲突同集判定（坑 spec-sync-conflict-banner-spam）：读 .runtime 下该变更的
+ * 冲突文件，conflicting_paths 与本轮真冲突集完全一致 → 重复轮次（横幅单行降噪依据）。
+ * 文件缺失/损坏/集合增减 → false（按首报或集变化处理，全幅横幅+重写文件）。
+ */
+function isSamePendingSpecConflict(specRoot, changeName, realPaths) {
+  try {
+    const raw = readFileSync(join(specRoot, '.runtime', `spec-sync-conflict-${changeName}.json`), 'utf8');
+    const prev = JSON.parse(raw).conflicting_paths;
+    if (!Array.isArray(prev) || prev.length !== realPaths.length) return false;
+    const prevSet = new Set(prev);
+    return realPaths.every((p) => prevSet.has(p));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 清残留未决冲突标记（坑 spec-sync-conflict-banner-spam）：本轮同步无冲突 = 此前的
+ * spec 树冲突已不存在（对端停推后 last-writer-wins 收敛/本地覆盖成功），残留文件会让
+ * status 永久红标、每轮横幅去重单行提示不消。best-effort，失败只影响下一轮横幅形态。
+ */
+function clearSpecConflictMarker(specRoot, changeName) {
+  try {
+    const p = join(specRoot, '.runtime', `spec-sync-conflict-${changeName}.json`);
+    if (existsSync(p)) unlinkSync(p);
+  } catch { /* 清理失败不影响同步结果 */ }
+}
+
+/**
  * 同步本地 .sillyspec 树到平台（CLI 直跑增量同步入口）。
  *
  * @param {string} specRoot - 本地 .sillyspec 目录绝对路径
@@ -517,12 +546,29 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
       const { followers, real } = opts.forcePush
         ? { followers: [], real: serverVersions }
         : partitionConflictPaths(serverVersions, localFiles, baseHashes, lastSyncTs);
+      const realPaths = Object.keys(real);
+
+      // 冲突横幅降噪（坑 spec-sync-conflict-banner-spam，与 sync() 进度侧 2026-08-23 修法同族）：
+      // 未决 spec 树冲突存在期间，每步自动同步都会对同一批真冲突路径再撞一次——此前每轮
+      // 重写冲突文件 + 空行+全幅双线横幅（含整包 server_versions JSON dump），「已卡死不会
+      // 自愈」连环刷屏。冲突文件在且冲突集未变 = 用户已被告知：重复轮次单行提示（可见但不
+      // 吓人），不重写文件（created_at 稳定，status 红标语义不变）；冲突集变化才重写+全幅。
+      // forcePush（resolve --keep-local 刚裁决完重推）不参与去重——需真实判定与文件刷新。
+      const pendingSame = !opts.forcePush && realPaths.length > 0 && isSamePendingSpecConflict(specRoot, changeName, realPaths);
+      if (pendingSame) {
+        if (followers.length > 0) {
+          debugLog(`[spec-sync] ${followers.length} 个本地未改动文件自动跟随服务器: ${followers.slice(0, 5).join(', ')}${followers.length > 5 ? ' 等' : ''}`);
+        }
+        console.warn(`⚠️ [spec-sync] 变更 ${changeName} 存在未决 spec 树冲突（${realPaths.length} 个文件待裁决，本轮非冲突改动已照常同步）。处理：sillyspec platform resolve ${changeName} --keep-local | --take-platform | --abort`);
+        return { synced: 0, conflict: true, serverVersions: real, autoResolved: followers.length, conflictPath: join(specRoot, '.runtime', `spec-sync-conflict-${changeName}.json`), suppressed: true };
+      }
       if (followers.length > 0) {
         console.warn(`[spec-sync] ${followers.length} 个本地未改动文件自动跟随服务器（正常多端前进，无需人工裁决）: ${followers.slice(0, 5).join(', ')}${followers.length > 5 ? ' 等' : ''}`);
       }
-      if (Object.keys(real).length === 0) {
+      if (realPaths.length === 0) {
         writeLastSyncTs(specRoot);
         writeBaseSnapshot(specRoot, localFiles);
+        clearSpecConflictMarker(specRoot, changeName);
         console.log(`[spec-sync] 冲突已自动消解（0 个需人工裁决；本会话改动 ${ops.length - followers.length > 0 ? '已同步' : '无差异'}）: ${changeName}`);
         return { synced: Math.max(ops.length - followers.length, 0), conflict: false, autoResolved: followers.length };
       }
@@ -536,19 +582,25 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
           kind: 'spec-tree',
           created_at: new Date().toISOString(),
           server_versions: real,
-          conflicting_paths: Object.keys(real),
+          conflicting_paths: realPaths,
           auto_followed: followers,
-          note: 'spec 树文件冲突（仅列本地真改动文件；本地未改动文件已自动跟随服务器）。resolve --keep-local 以本地为准重推；--take-platform 暂不支持（平台无文件下载端点）',
+          note: 'spec 树文件冲突（仅列本地真改动文件；本地未改动文件已自动跟随服务器）。resolve --keep-local 以本地为准重推；--take-platform 拉平台 bundle 覆盖冲突文件（接受服务器版本，2026-09-03 起支持）',
         }, null, 2) + '\n', 'utf8');
       } catch (e) {
         console.warn(`[spec-sync] 冲突文件写入失败（冲突信息仅打印）: ${e.message}`);
       }
+      // 横幅只列前 5 个路径（截断防刷屏，坑 spec-sync-conflict-banner-spam）：逐文件服务器
+      // 版本在冲突详情文件里，不再整包 JSON.stringify dump 到终端。
+      const shownPaths = realPaths.slice(0, 5).join(', ') + (realPaths.length > 5 ? ' 等' : '');
       console.warn('');
-      console.warn(`⚠️ [spec-sync] 检测到 spec 树冲突（${Object.keys(real).length} 个文件，服务器版本: ${JSON.stringify(real)}）`);
-      console.warn(`⚠️ 处置：sillyspec platform resolve ${changeName} --keep-local | --abort（冲突详情: ${conflictPath || '(写入失败)'}）`);
+      console.warn(`⚠️ [spec-sync] 检测到 spec 树冲突（${realPaths.length} 个文件: ${shownPaths}；逐文件服务器版本见冲突详情文件）`);
+      console.warn(`⚠️ 处置：sillyspec platform resolve ${changeName} --keep-local | --take-platform | --abort（冲突详情: ${conflictPath || '(写入失败)'}）`);
       return { synced: 0, conflict: true, serverVersions: real, autoResolved: followers.length, conflictPath };
     }
     console.log(`[spec-sync] 已同步 ${ops.length} 个文件变更: ${changeName}`);
+    // 本轮无冲突 = 此前的未决 spec 树冲突已不存在，清残留标记（否则 status 永久红标、
+    // 横幅去重单行提示不消——坑 spec-sync-conflict-banner-spam）
+    clearSpecConflictMarker(specRoot, changeName);
     writeLastSyncTs(specRoot);
     writeBaseSnapshot(specRoot, localFiles);
     return { synced: ops.length };

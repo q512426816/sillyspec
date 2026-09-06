@@ -69,9 +69,13 @@ export function renderReviewJsonContract({ stage, changeDir, reviewRunId, tier }
     '- **推荐**:docHash 先占位(如 `"TODO"`),review.json 写完后跑',
     '  `sillyspec register-stage-review --change <变更名> --stage ' + stageLbl + ' --refresh-hash`',
     '  —— CLI 重算真实 sha256 代填,verdict/checklist 原样保留;主文档改版后同样跑这条',
-    '  (多阶段联动用 `--all` 一次处理)。gate 拦 docHash 失配时也是同一条命令修复。',
+    '  (多阶段联动用 `--all` 一次处理)。',
+    '- **忘了跑也没关系**:' + mainDoc + ' 改版后 --done 的 gate 检测到 docHash 失配会**自动机械重算放行**',
+    '  (verdict 保留;结论是否仍适用于新文档需人工确认,reviewerNotes 会留审计行)。',
     '- 兜底手算口径(极端无 CLI 场景):node `crypto.createHash(\'sha256\').update(readFileSync(...))` (原始字节)/ `sha256sum <file>` 首列 hex。',
-    '- ⚠️ **review.json 写入后若 ' + mainDoc + ' 再被改,必须重算 docHash** —— gate 会重算 reviewedFiles[0] 的 sha256 比对,不符判伪造(历史翻车根因:design 改了 rev 后 docHash 仍是旧值)',
+    '- ⚠️ **review.json 写入后若 ' + mainDoc + ' 再被改,须重算 docHash** —— 忘算也没关系:gate 会自动机械重算放行,',
+    '  但那只是「机械对齐」;大幅改版(设计要点/接口变更)时审查结论可能已过时,应人工确认结论续用或重审,',
+    '  不要把自动放行当「新文档已审过」(历史翻车根因:design 改了 rev 后结论未复核)。',
     '',
     '### 完整 JSON 示例(照抄改值)',
     '```json',
@@ -212,7 +216,8 @@ export function verifyStageReviewDocHash(review, searchDirs) {
     if (claimed !== actualRaw.toLowerCase() && claimed !== actualLf.toLowerCase()) {
       errors.push(
         `docHash 与主审查文档 ${primaryRel} 的实际内容不匹配。` +
-        `若刚改过该文档（如 design 修订后忘重算），一键修复：` +
+        `若刚改过该文档（如 design 修订后忘重算），--done gate 会自动机械重算放行（verdict 保留）；` +
+        `本调用方未走自动刷新时可手动执行：` +
         `sillyspec register-stage-review --change <变更名> --stage <阶段> --refresh-hash` +
         `（CLI 重算 docHash 代填，verdict 保留；多阶段联动加 --all）；` +
         `若未改文档，则 review.json 疑似伪造（未真正读取文档）。`
@@ -410,6 +415,60 @@ export function validateStageReview(opts) {
   }
 
   return { ok: errors.length === 0, errors, warnings, review: parsed }
+}
+
+/**
+ * validateStageReview 的 gate 时刻自动刷新包装（坑 stage-review-refresh-hash-manual-forget，
+ * 2026-09-04 用户实证③：design 每次改版都要手动重跑 register-stage-review --refresh-hash，
+ * 易忘——忘则 --done 被 docHash 失配拦一轮，纯机械损耗）。
+ *
+ * 语义与 --refresh-hash 完全同源：主文档改版后的 hash 机械重算，verdict/checklist/
+ * requiredEvidence 原样保留（结论是否仍适用由人工确认——reviewerNotes 追加审计行留痕）。
+ * 自动刷新不放宽防伪造边界：
+ *   - 真正判伪造/错位的「主文档在候选基准下均不存在」不触发自动刷新（仍 fail-closed）；
+ *   - schema 失败 / verdict=fail 不碰（照常阻断）；
+ *   - 写盘失败回落原失败结果（fail-closed，不静默放行）。
+ *
+ * @param {object} opts - 同 validateStageReview，另加 opts.autoRefresh（true 才尝试自动刷新）
+ * @returns {{ result: object, autoRefreshed: boolean, refreshedPath?: string, previousErrors?: string[] }}
+ */
+export function validateStageReviewWithAutoRefresh(opts) {
+  const result = validateStageReview(opts)
+  if (result.ok) return { result, autoRefreshed: false }
+  if (!opts.autoRefresh) return { result, autoRefreshed: false }
+  // 仅「docHash 与主审查文档 …不匹配」类错误才自动刷新；「均不存在」（路径伪造/基准错位）
+  // 与 schema/verdict 错误一律原样返回
+  const mismatchOnly = result.review
+    && Array.isArray(result.errors) && result.errors.length > 0
+    && result.errors.every(e => String(e).includes('docHash 与主审查文档'))
+  if (!mismatchOnly) return { result, autoRefreshed: false }
+
+  const reviewDir = join(opts.runtimeRoot, 'stage-reviews', `${opts.stage}-${opts.reviewRunId}`)
+  const reviewPath = join(reviewDir, 'review.json')
+  // 定位主文档并重算 hash（与 verifyStageReviewDocHash 同法：reviewedFiles[0] × searchDirs）
+  const primaryRel = Array.isArray(result.review.reviewedFiles) ? result.review.reviewedFiles[0] : null
+  let docHash = null
+  if (primaryRel) {
+    for (const base of (opts.searchDirs || [])) {
+      const abs = join(base, primaryRel)
+      if (existsSync(abs)) { docHash = computeDocHash(abs); break }
+    }
+  }
+  if (!docHash) return { result, autoRefreshed: false }
+
+  const refreshedAt = new Date().toISOString().slice(0, 19).replace('T', ' ')
+  const refreshed = {
+    ...result.review,
+    docHash,
+    reviewerNotes: `${result.review.reviewerNotes || ''}\ndocHash auto-refreshed at ${refreshedAt}（gate 检测主文档改版，机械重算；verdict 保留，结论是否仍适用需人工确认）`.trim(),
+  }
+  try {
+    writeFileSync(reviewPath, JSON.stringify(refreshed, null, 2) + '\n')
+  } catch {
+    return { result, autoRefreshed: false } // 写失败回落原失败结果，不静默放行
+  }
+  const recheck = validateStageReview(opts)
+  return { result: recheck, autoRefreshed: recheck.ok, refreshedPath: reviewPath, previousErrors: result.errors }
 }
 
 /**

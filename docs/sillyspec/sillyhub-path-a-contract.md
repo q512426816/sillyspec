@@ -47,13 +47,13 @@ SillySpec 侧调用（`src/sillyhub-mcp/client.js#dispatchWorker`）已按此契
 - caller 提供 → **跳过自建 worktree/分支**，`root_path = caller worktree_path`，分支 = caller `branch`。
 - caller 未提供 → 原自建逻辑不变（:217-221 的 `and not worktree_path` 短路）。
 
-⚠️ **路径 A 不写 `run.worktree_branch`**（DB 列保持 None）——该列是 team 模式 converge finalize 查 merge 的触发字段（`finalizer.py:255`）。路径 A 写它会触发 `git merge --no-ff <branch>` 污染 caller 主仓（R-01）。`branch` 入参仅作 lease metadata 记录，**不落 `run.worktree_branch` 列**。已由单测 `test_dispatch_worker_caller_worktree.py` 锁定（断言该列不被写）。
+⚠️ **路径 A 不写 `run.worktree_branch`**（DB 列保持 None）——该列是 team 模式 converge finalize 查 merge 的触发字段（`repo://sillyhub/backend/app/modules/agent/finalizer.py:255`）。路径 A 写它会触发 `git merge --no-ff <branch>` 污染 caller 主仓（R-01）。`branch` 入参仅作 lease metadata 记录，**不落 `run.worktree_branch` 列**。已由单测 `test_dispatch_worker_caller_worktree.py` 锁定（断言该列不被写）。
 
 daemon `workspace.ts` 分支 0（目录已存在 → 直接 cwd）已支持；路径 A 复用此分支。
 
 ### 3. `render_worker_prompt` 路径 A 下 worker 不 git commit（关键，UB-1）— 已落地
 
-`render_worker_prompt` 仍为 team 模式输出 `git add -A && git commit`（team 行为零回归）。路径 A 走方式 (b)：`dispatch_worker` 的 `worker_prompt` 覆写参数让 caller 直接控制 worker prompt——`execution.py:273` `prompt = worker_prompt if worker_prompt is not None else render_worker_prompt(run)`，SillySpec 侧 `worker_prompt` 已传「不 commit 留工作区」覆写。caller 传 → 完全替代 render（含 commit 指令被消除）。
+`render_worker_prompt` 仍为 team 模式输出 `git add -A && git commit`（team 行为零回归）。路径 A 走方式 (b)：`dispatch_worker` 的 `worker_prompt` 覆写参数让 caller 直接控制 worker prompt——`repo://sillyhub/backend/app/modules/agent/execution.py:638` `prompt = worker_prompt if worker_prompt is not None else render_worker_prompt(run)`，SillySpec 侧 `worker_prompt` 已传「不 commit 留工作区」覆写。caller 传 → 完全替代 render（含 commit 指令被消除）。
 
 ## mission "external" 模式（D-007，路径 A 配套）— 已落地
 
@@ -61,12 +61,12 @@ daemon `workspace.ts` 分支 0（目录已存在 → 直接 cwd）已支持；�
 
 `create_mission` 增可选参 `orchestration_mode: str = "team"`（默认 team，零回归）：
 
-- `orchestration_mode="external"`（路径 A，SillySpec 外部调度）→ `team_mission_entry`（`orchestrator.py:141`）**跳过 orchestrator run/lease**（:186-193 返回 `(mission, None)`），`AgentMission.constraints = {"orchestration_mode": "external"}`（:165-166）。返回 `{mission_id, status, main_run_id: null, workers: []}`（external 无 main_run）。
+- `orchestration_mode="external"`（路径 A，SillySpec 外部调度）→ `team_mission_entry`（`repo://sillyhub/backend/app/modules/agent/orchestrator.py:596`）**跳过 orchestrator run/lease**（:186-193 返回 `(mission, None)`），`AgentMission.constraints = {"orchestration_mode": "external"}`（:165-166）。返回 `{mission_id, status, main_run_id: null, workers: []}`（external 无 main_run）。
 - 默认 `"team"` → 走原逻辑（spawn orchestrator），既有调用方零回归。
 
 落地位置：
 - 链路 B：`mcp_gateway/tools.py` `create_mission`(:760) :771 参 + :810 透传
-- 链路 A：`backend/app/modules/agent/mission_schema.py:23` `orchestration_mode: Literal["team","external"] | None` + `router.py` create_mission 端点(:864/:872/:887)
+- 链路 A：`repo://sillyhub/backend/app/modules/agent/mission_schema.py:23` `orchestration_mode: Literal["team","external"] | None` + `router.py` create_mission 端点(:864/:872/:887)
 - 核心：`orchestrator.py` `team_mission_entry` external 分支(:186-193)
 - **converge 短路（R-01 根解）**：`finalizer.py` `converge_mission_for_completed_run`(:470) :514 检测 `mission.constraints.orchestration_mode=="external"` → 跳过 `finalize_execute_mission`/`cleanup_mission`（不 merge caller worktree、不清）。双保险：路径 A 不写 `run.worktree_branch`，即使 external 检测失效，finalize 查空也跳过 merge（:255）。
 - SillySpec 侧：`src/sillyhub-mcp/client.js` `createMission`(:284) 传 `orchestrationMode="external"`（:292-294 `args.orchestration_mode = mode`）
@@ -102,9 +102,9 @@ SillySpec 侧 `probeSillyHub`（`src/dispatch/probe.js:204-218`）已实现 root
   - `backend/app/modules/agent/tests/test_dispatch_worker_caller_worktree.py`（task-08）：caller-worktree 分支——断言 `git_worktree_add` 不被调 + `root_path` 透传 + `run.worktree_branch` 不被写（D-008）+ `worker_prompt` 进 prompt。覆盖 R-01 防御层 ② 与 ③。
   - `backend/app/modules/agent/tests/test_mission_external_mode.py`（task-07）：external 模式——`team_mission_entry` external 不 spawn orchestrator（constraints 含 mode）+ team 默认仍 spawn（回归对比）；converge external 短路跳过 finalize。覆盖 R-02 + R-01 防御层 ①。
 - **R-01（P0-1 worker 终态不污染主仓）三重防御验证状态**：
-  - 防御 ①（external converge 跳过 finalize）：`finalizer.py:514` + task-07 单测 ✅
+  - 防御 ①（external converge 跳过 finalize）：`repo://sillyhub/backend/app/modules/agent/finalizer.py:824` + task-07 单测 ✅
   - 防御 ②（路径 A 不写 run.worktree_branch）：`execution.py`（worktree_branch 仅 team 分支:260 写）+ task-08 单测 ✅
-  - 防御 ③（worker_prompt 覆写不 commit）：`execution.py:273` + SillySpec 侧 worker_prompt 文本 ✅
+  - 防御 ③（worker_prompt 覆写不 commit）：`repo://sillyhub/backend/app/modules/agent/execution.py:638` + SillySpec 侧 worker_prompt 文本 ✅
   - **端到端 smoke（worker 真写码 + 主仓 git log 无 SillyHub merge）**：`cannot_verify`——见下 §端到端 smoke。
 
 ## 端到端 smoke（cannot_verify，环境限制）
@@ -118,7 +118,7 @@ SillySpec 侧 `probeSillyHub`（`src/dispatch/probe.js:204-218`）已实现 root
 
 **requiredEvidence（R-01 三重防御已由下列验证覆盖，端到端 smoke 留环境就绪补）**：
 - 防御 ① ② 各有 task-07 / task-08 单测锁定（见上 §落地证据）。
-- 防御 ③ 由 `execution.py:273` prompt 覆写 + SillySpec worker_prompt 文本保证。
+- 防御 ③ 由 `repo://sillyhub/backend/app/modules/agent/execution.py:638` prompt 覆写 + SillySpec worker_prompt 文本保证。
 - spike-01 live 已证 create_mission(external) → main_run_id null（R-02）+ dispatch_worker schema 含路径 A 三参（探测可命中）。
 - **遗留**：待有可即兴拉起的 daemon + worker 环境（或 CI 提供），补完整 smoke 实测主仓 git log 无 SillyHub merge 提交（R-01 端到端），并跑通 SillySpec 回收 review.json + apply 全链路。
 
@@ -132,10 +132,10 @@ SillySpec 侧 `probeSillyHub`（`src/dispatch/probe.js:204-218`）已实现 root
 ## 校验清单（SillyHub 侧落地后）— 全勾
 
 - [x] `dispatch_worker` 接受 `worktree_path`/`branch`/`worker_prompt` 可选参数，不传走原逻辑（链路 A/B + daemon 三入口同构，spike-01 live schema 确认）
-- [x] `execution.py` caller 提供 worktree → 跳过自建，root_path/分支用 caller 的（execution.py:203-221，task-08 单测）
+- [x] execution.py caller 提供 worktree → 跳过自建，root_path/分支用 caller 的（`repo://sillyhub/backend/app/modules/agent/execution.py:533`，task-08 单测）
 - [x] 路径 A 不写 `run.worktree_branch`（execution.py 仅 team 分支:260 写；task-08 单测断言不写，D-008）
-- [x] `render_worker_prompt` 路径 A 下 worker 不 commit —— 走 `worker_prompt` 覆写（execution.py:273；SillySpec 侧 worker_prompt 文本「不 commit 留工作区」）
-- [x] mission external 模式：`create_mission` `orchestration_mode` 参（team 默认零回归）；external 跳 orchestrator spawn（task-07 单测 + spike-01 live main_run_id=null）；converge external 跳 finalize/cleanup（finalizer.py:514，task-07 单测，R-01 根解）
+- [x] `render_worker_prompt` 路径 A 下 worker 不 commit —— 走 `worker_prompt` 覆写（`repo://sillyhub/backend/app/modules/agent/execution.py:638`；SillySpec 侧 worker_prompt 文本「不 commit 留工作区」）
+- [x] mission external 模式：`create_mission` `orchestration_mode` 参（team 默认零回归）；external 跳 orchestrator spawn（task-07 单测 + spike-01 live main_run_id=null）；converge external 跳 finalize/cleanup（`repo://sillyhub/backend/app/modules/agent/finalizer.py:824`，task-07 单测，R-01 根解）
 - [x] daemon `allowed_roots` 含仓根（`["C:\\Users\\qinyi"]` 覆盖 multi-agent-platform 仓根 + worktree；check-dispatch-allowed-roots.mjs 前置校验脚本 + sillyspec-dispatch.md 指引）
 - [x] 字段名统一 `branch`（D-009，跨仓契约 / client.js / 三入口一致，round-1 `worktree_branch` 漂移已收敛）
 - [x] SillySpec 侧 `isPathASupported()` 改 schema 探测（client.js listTools + probe.js 预热 + detectPathAFromTools；SILLYHUB_PATH_A=1 env 备选）

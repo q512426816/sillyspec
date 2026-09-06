@@ -18,13 +18,18 @@ import { join } from 'node:path'
 import jsYaml from 'js-yaml'
 import { parseModuleMapSimple } from './modules.js'
 
-/** 提取 file.js:line / file.js:start-end 引用（.js/.mjs，反引号包裹与裸文本均命中，全文扫描 D-006）。
+/** 提取 file.js:line / file.js:start-end 引用（反引号包裹与裸文本均命中，全文扫描 D-006）。
+ * 扩展名覆盖（archify 借鉴 P1b，2026-09-04）：js/mjs/cjs/ts/tsx/jsx/py/java/go——
+ * scan 产物面向任意技术栈项目（如 SillyHub = Python + TypeScript），只认 .js 会让
+ * 非 JS 项目的文档引用全部漏检。注意：扩展会让存量文档中此前被忽略的引用新进入核验范围，
+ * 而 docs-gate ratchet 只拦增量不吸收增量（基线 0 时新失效必红 gate）——存量失效必须
+ * 在同一变更内消化（本仓 2026-09-04 已消化：跨仓 .py 引用改 repo:// 前缀、示例记法改写）。
  * repo:// 前缀（2026-08-20）：跨仓引用显式标记——`repo://<仓库名>/<路径>.js:行`。
  * 不同设备兄弟仓库位置不同，未配映射时默认跳过本地校验（防跨设备误报）；
  * 在本机 .sillyspec/local.yaml 的 docs-check.cross_repo_roots 配
  * `<仓库名>: <本机绝对路径>` 后，走与本地引用完全相同的层1（行号边界）+ 层2（关键词窗口）校验。
  * 正则组：1=仓库名（可选），2=文件，3=start，4=end。 */
-const REF_RE = /(?:repo:\/\/([A-Za-z0-9_.\-]+)\/)?([A-Za-z0-9_.\-\/]+\.(?:js|mjs)):(\d+)(?:-(\d+))?/g
+const REF_RE = /(?:repo:\/\/([A-Za-z0-9_.\-]+)\/)?([A-Za-z0-9_.\-\/]+\.(?:js|mjs|cjs|ts|tsx|jsx|py|java|go)):(\d+)(?:-(\d+))?/g
 
 /** 缺省扫描范围：docs/ + .sillyspec/docs/（scan/modules 产物同是文档，失效即该暴露；2026-08-16 用户裁决改缺省，见 doc-consistency-debt.md §八） */
 const DEFAULT_DOC_PATHS = ['docs/**/*.md', '.sillyspec/docs/**/*.md']
@@ -183,7 +188,72 @@ export function resolveCandidates(projectRoot, refFile, treeCache = null) {
   return findInTree(join(projectRoot, 'src'), refFile, '', treeCache).map((rel) => join(projectRoot, 'src', rel))
 }
 
+/**
+ * 联合核验一组文档的全部 file:line 引用（archify 借鉴，2026-09-04）：
+ * 层1（resolveCandidates 可解析 + validateRefLines 行号边界）+ 层2（引用行反引号 token
+ * 在源文件 [start-2, end+5] 窗口内命中，窗口与 runDocsCheck 共用 keywordWindowText 单一源）。
+ * 任一候选通过即有效。scan-postcheck（scan_doc_ref_invalid）与 workflow ref_exists 检查共用。
+ * 与 runDocsCheck 的已知差异：repo:// 跨仓引用一律跳过（不读 cross_repo_roots 映射）；
+ * 层2 无条件执行（不读 keywordAssert 配置）——需要降噪时在调用方处理。
+ * 单文档不可读（如路径是目录）降级跳过并计入 readFailures，不废整批。
+ * @param {string} projectRoot 引用解析锚点（源码项目根）
+ * @param {Array<{name: string, absPath: string}>} docEntries 文档标识与绝对路径
+ * @returns {{ invalid: Array<{doc: string, ref: string, reason: string}>, totalRefs: number, skippedCrossRepo: number, readFailures: number }}
+ */
+export function collectInvalidDocRefs(projectRoot, docEntries) {
+  const invalid = []
+  let totalRefs = 0
+  let skippedCrossRepo = 0
+  let readFailures = 0
+  const treeCache = new Map()
+  const linesCache = new Map()
+  for (const { name, absPath } of docEntries) {
+    let content
+    try {
+      content = readFileSync(absPath, 'utf8')
+    } catch {
+      readFailures++
+      continue
+    }
+    const docLines = content.split(/\r?\n/)
+    for (const ref of collectDocRefs(content)) {
+      if (ref.repo !== null) { skippedCrossRepo++; continue }
+      totalRefs++
+      const candidates = resolveCandidates(projectRoot, ref.file, treeCache)
+      if (candidates.length === 0) {
+        invalid.push({ doc: name, ref: ref.ref, reason: '文件不存在' })
+        continue
+      }
+      const tokens = extractExpectedTokensFromLine(docLines[ref.docLine - 1] || '')
+      const infos = candidates.map(abs => ({ lines: readLines(abs, linesCache) }))
+      const ok = infos.some(({ lines }) => {
+        if (!lines || lines.length === 0) return false
+        if (!validateRefLines(lines.length, ref.start, ref.end).ok) return false
+        if (tokens.length === 0) return true // 纯位置引用（行内无可断言符号），只做层1
+        return tokens.some(t => keywordWindowText(lines, ref.start, ref.end).includes(t))
+      })
+      if (!ok) {
+        const readable = infos.some(({ lines }) => lines && lines.length > 0)
+        const inBounds = readable && infos.some(({ lines }) => lines && validateRefLines(lines.length, ref.start, ref.end).ok)
+        const reason = !readable
+          ? (infos.some(({ lines }) => lines && lines.length === 0) ? '空文件（无可引用内容）' : '文件不可读')
+          : !inBounds ? '行号超界' : '关键词未命中（引用行附近不含所述符号）'
+        invalid.push({ doc: name, ref: ref.ref, reason })
+      }
+    }
+  }
+  return { invalid, totalRefs, skippedCrossRepo, readFailures }
+}
+
+/** 层2 关键词窗口文本（1-based 闭区间 [start-2, end+5]，含端点）。runDocsCheck 与
+ *  collectInvalidDocRefs 共用——此前两处手写 slice 相差一行（off-by-one），此函数即窗口单一语义源。 */
+function keywordWindowText(lines, start, end) {
+  return lines.slice(Math.max(0, start - 3), Math.min(lines.length, end + 5)).join('\n')
+}
+
 /** 读文件行数组（CRLF/LF 归一：split(/\r?\n/)，层2 只做子串查找不污染原文）。
+ *  尾换行产生的「幻影 N+1 行」剥除（编辑器口径 N 行 = split 后去掉一个尾部空元素）；
+ *  空文件返回 []（length 0）——:1 引用按超界判失效，不再因 [''] 假长度通过。
  *  linesCache 给定时按绝对路径复用（同文件被 N 条引用消费免 N 次读盘+split） */
 function readLines(absPath, linesCache = null) {
   if (linesCache) {
@@ -192,7 +262,11 @@ function readLines(absPath, linesCache = null) {
     linesCache.set(absPath, lines)
     return lines
   }
-  try { return readFileSync(absPath, 'utf8').split(/\r?\n/) } catch { return null }
+  try {
+    const lines = readFileSync(absPath, 'utf8').split(/\r?\n/)
+    if (lines.length > 0 && lines[lines.length - 1] === '') lines.pop()
+    return lines
+  } catch { return null }
 }
 
 /** 简单通配匹配（skip 排除用，仅 * 单段） */
@@ -395,13 +469,10 @@ export function runDocsCheck(opts) {
         const lines = readLines(candAbs, linesCache)
         if (lines === null) { candidateFails.push(`${relDisplay(candAbs, projectRoot)}: 读取失败`); continue }
         const v = validateRefLines(lines.length, r.start, r.end)
-        // 层2：token 任一在 [start-2, end+5] 窗口命中即过
+        // 层2：token 任一在 [start-2, end+5] 窗口命中即过（窗口与 collectInvalidDocRefs 共用 keywordWindowText）
         let kwOk = true
         if (tokens.length > 0) {
-          const from = Math.max(0, r.start - 2)
-          const to = Math.min(lines.length, r.end + 5)
-          const window = lines.slice(from, to).join('\n')
-          kwOk = tokens.some((t) => window.includes(t))
+          kwOk = tokens.some((t) => keywordWindowText(lines, r.start, r.end).includes(t))
         }
         if (v.ok && kwOk) { passedAny = true; break }
         const reasons = [...v.reasons]

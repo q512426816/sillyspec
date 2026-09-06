@@ -21,9 +21,12 @@ roles:
             min: 20
           - type: contains_sections
             sections: ["技术栈", "架构概览"]
+          - type: ref_exists
+            min: 3
     constraints:
       - "禁止读源码全文，只用 grep/rg 搜索"
       - "Schema 只记表名+说明+字段数"
+      - "关键架构事实（模块职责/技术栈组件/数据存储）带反引号 path:line 引用，禁止猜行号——postcheck 逐条核验"
 
   - id: conventions
     name: "代码约定"
@@ -65,9 +68,12 @@ roles:
           - type: file_exists
           - type: min_lines
             min: 15
+          - type: ref_exists
+            min: 1
     constraints:
       - "STRUCTURE: 目录树+模块说明"
       - "INTEGRATIONS: 按类型分组外部依赖"
+      - "外部集成条目带反引号 path:line 引用（真实可核验），禁止猜行号"
 
   - id: quality
     name: "测试+债务+概览"

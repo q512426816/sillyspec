@@ -26,7 +26,7 @@ import { basename, join, resolve, relative, isAbsolute } from 'node:path'
 import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync, unlinkSync, rmSync } from 'node:fs'
 import { renameSyncRetry, writeAtomicSync } from '../fs-atomic.js'
 import { gitQuiet } from '../git-helper.js'
-import { resolveChangeDir, resolveQuickSessionsDir, safeGit, auditQuickCompletion, triggerSync, isQuickMetadata, resolveRuntimeRoot, collectOtherQuickSessionDeclarations } from './shared.js'
+import { resolveChangeDir, resolveQuickSessionsDir, safeGit, auditQuickCompletion, triggerSync, isQuickMetadata, resolveRuntimeRoot, collectOtherQuickSessionDeclarations, mergeQuickBoundaryFiles } from './shared.js'
 import { detectConcurrentChanges, formatConcurrentWarning, resolveConcurrentAnchor } from './concurrent-detect.js'
 import { stageRegistry } from '../stages/index.js'
 import { SCAN_STATUS, POINTER_STATUS } from '../constants.js'
@@ -832,7 +832,7 @@ export async function handleWorkflowPostCheck({ stageName, steps, currentIdx, cw
  * isForceBaseline/isAllowNew/platformOpts。辅助函数直接 import（safeGit/auditQuickCompletion ← shared，
  * printQuickAuditReview ← quick-audit，4 个 quicklog fns ← quicklog，unlinkSync/rmSync ← fs 静态）。
  */
-export async function handleQuickStageCompletion({ stageName, steps, currentIdx, cwd, progress, changeName, specBase, outputText, confirm, isForceBaseline, isAllowNew, isAllowDelete, platformOpts, pm }) {
+export async function handleQuickStageCompletion({ stageName, steps, currentIdx, cwd, progress, changeName, specBase, outputText, confirm, isForceBaseline, isAllowNew, isAllowDelete, platformOpts, pm, quickFiles = [] }) {
   // quick 收尾：强校验 QUICKLOG 条目 + 翻状态 + 勾 tasks.md（CLI 接管）
   if (stageName === 'quick') {
     // §4.6 从 session guard.json 读 guard（不依赖 progress.quickGuard）。
@@ -860,6 +860,18 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
     // review.changedFiles；brownfield 无 guard 时保持 null → 文件行不回填（降级，不报错）。
     let review = null
 
+    // --done --files 一步并入边界（坑 quick-audit-warning-no-guidance 2026-09-03，与
+    // ql-20260713-002-7628 同族——flag 在 --done 被解析却不生效）：此前追加声明只能先
+    // 「恢复会话带 --files」再 --done 两步走。并入语义与 stage.js 恢复路径同款（追加不
+    // 替换、去重保序 + allowedFilesHash 记录），持久化回 guard.json——本轮审计与他者会话
+    // 声明豁免同源消费。guard 缺失（brownfield）不补建，跳过并入。
+    if (guard && Array.isArray(quickFiles) && quickFiles.filter(Boolean).length > 0) {
+      const { added } = mergeQuickBoundaryFiles(guard, quickFiles, cwd)
+      if (added.length > 0) {
+        try { writeAtomicSync(sessionGuardFile, JSON.stringify(guard, null, 2)) } catch { /* 持久化失败降级：本轮审计仍用内存合并值 */ }
+        console.log(`🛡️ quick 边界已追加: ${added.length} 个文件（累计 ${guard.allowedFiles.length} 个）: ${added.join(', ')}`)
+      }
+    }
     // 审计：仅在有 guard 时跑（brownfield 无 guard 跳过，兼容 D-003 brownfield 行为）。
     // task-02：mergedGuard 提升到 if 外声明，供下方并发预检钩子复用与 auditQuickCompletion
     // 同源的 guard 字段（baselineFiles/linkedChanges）。brownfield 无 guard 时保持 null，

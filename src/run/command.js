@@ -23,7 +23,7 @@ import { basename, join, resolve, dirname } from 'node:path'
 import { existsSync, readdirSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
 import { randomBytes, randomUUID } from 'node:crypto'
 import { writeAtomicSync } from '../fs-atomic.js'
-import { resolveSpecDir, countAncestorSpecDirs, ancestorSpecDirs, resolveAncestorCeiling, resolveChangeDir, triggerSync, getStageSteps, formatWaitOptions, checkApproval, warnApprovalUnknown, didYouMean, assertSafeChangeName, detectQuickSessionDrift, detectWorktreeSpecDrift, resolveRuntimeRoot, writePlatformPointer, checkPlatformManaged, isSelfReferentialSpecRoot, PLATFORM_MANAGED_FILENAME } from './shared.js'
+import { resolveSpecDir, countAncestorSpecDirs, ancestorSpecDirs, resolveAncestorCeiling, resolveChangeDir, triggerSync, getStageSteps, formatWaitOptions, checkApproval, warnApprovalUnknown, didYouMean, assertSafeChangeName, detectQuickSessionDrift, detectWorktreeSpecDrift, resolveRuntimeRoot, resolveQuickSessionsDir, writePlatformPointer, checkPlatformManaged, isSelfReferentialSpecRoot, PLATFORM_MANAGED_FILENAME } from './shared.js'
 import { resolveQuickLinkedChanges } from './quick-audit.js'
 import { outputStep, collectStageWaitHistory } from './prompt.js'
 import { completeStep, skipStep, waitStep, continueStep } from './complete.js'
@@ -105,6 +105,38 @@ function warnMsysMangledFlag(flag, value) {
   console.error(`⚠️ ${flag} 的值疑似被 Git Bash(MSYS) 路径转换污染：「${value.slice(0, 60)}${value.length > 60 ? '…' : ''}」`)
   console.error('   以 / 开头的文案在 Git Bash 下会被展开成 <Git 安装目录>/… 绝对路径后才传入 CLI。')
   console.error('   非本意 → 去掉前导 / 或改写表述后重发本命令；确需原样 → 命令前加 MSYS_NO_PATHCONV=1。')
+}
+
+/**
+ * done-like 步骤动作（--done/--skip/--wait/--continue/--reset/--reopen）的目标 change 在当前
+ * 库是否已「物化」（坑 done-phantom-change-silent-create，2026-09-04 事故元凶①）。
+ *
+ * 背景：接管指针切换/重建进度库后，--change 常指向旧库的变更名；新库里既无 DB 行也无
+ * changes/<name>/ 目录，runCommand 的 !progress 分支却无条件 initChange 静默新建——幻影
+ * 变更零进度起步，--done 被记到幻影上，原变更进度停滞（本次事故直接元凶）。
+ *
+ * 物化口径（progress 已知为 null，只查磁盘标记）：
+ *   - 普通变更：changes/<name>/ 存在（archive 已归档目录也算——归档后 DB 行仍可读，
+ *     但行被清理的恢复场景认 archive 目录物化，走 initChange 自愈是合法路径）；
+ *   - quick-<8hex> 会话：无 changes/ 目录，物化标记 = 会话 guard（per-session 目录或
+ *     legacy 单文件——legacy 无法归属会话，保守认物化，宁可漏拦不误杀真会话）。
+ *
+ * 纯函数：只读磁盘，供 command.js 守卫 + 单测复用。
+ * @param {object} opts
+ * @param {string|null} opts.target - 目标 change 名（--change 值或 changes/ 目录唯一推导）
+ * @param {string} opts.specBase - 当前进度库根（平台 specRoot 或 cwd/.sillyspec）
+ * @param {string|null} [opts.quickSessionsDir] - quick 会话 guard 目录（缺省按 specBase/.runtime 推导）
+ * @returns {boolean} true = 目标已物化（可走既有 initChange 自愈），false = 幻影（应拒绝新建）
+ */
+export function doneLikeTargetMaterialized({ target, specBase, quickSessionsDir = null }) {
+  if (!target || !specBase) return false
+  if (/^quick-[0-9a-f]{8}$/.test(target)) {
+    const rt = quickSessionsDir || join(specBase, '.runtime', 'quick-sessions')
+    return existsSync(join(rt, target, 'guard.json'))
+      || existsSync(join(specBase, '.runtime', 'quick-guard.json'))
+  }
+  return existsSync(join(specBase, 'changes', target))
+    || existsSync(join(specBase, 'changes', 'archive', target))
 }
 
 /**
@@ -951,6 +983,43 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
   }
 
   if (!progress) {
+    // ── done-like 存在性守卫（坑 done-phantom-change-silent-create，2026-09-04 事故元凶①）──
+    // --done/--skip/--wait/--continue/--reset/--reopen 都预设「目标 change 已存在于当前进度库」。
+    // 此前 !progress 时无条件 initChange 静默新建——接管指针切库/换库后 --change 指向旧库的
+    // 变更名，新库里凭空建幻影变更再把动作记上去。目标已物化（changes/ 目录或 quick 会话
+    // guard 存在）仍放行走下方 initChange 自愈（DB 重建/迁移后从目录物化是合法恢复路径）。
+    if (isDone || isSkip || isWait || isContinue || isReset || isReopen) {
+      const actionFlag = isDone ? '--done' : isSkip ? '--skip' : isWait ? '--wait'
+        : isContinue ? '--continue' : isReset ? '--reset' : '--reopen'
+      const guardTarget = changeName || resolveChangeNameAuto(cwd, specRoot)
+      if (!doneLikeTargetMaterialized({
+        target: guardTarget,
+        specBase,
+        quickSessionsDir: resolveQuickSessionsDir(platformOpts, specBase),
+      })) {
+        const pointerPath = join(cwd, '.sillyspec-platform.json')
+        const pointerMode = existsSync(pointerPath)
+        let activeList = []
+        try { activeList = pm.listChanges(cwd) } catch { /* 列举失败不掩盖主报错 */ }
+        console.error(`❌ ${actionFlag} 找不到目标变更的进度，拒绝静默新建（防幻影变更）。`)
+        console.error(`   目标变更: ${guardTarget || '(未指定 --change，且当前库无唯一活跃变更)'}`)
+        console.error(`   当前进度库: ${specBase}${pointerMode ? `（平台接管指针 ${pointerPath} 指向此库）` : '（本地模式）'}`)
+        console.error(`   本库活跃变更: ${activeList.length > 0 ? activeList.join('、') : '(无)'}`)
+        console.error('   排查：')
+        console.error(`   ① 变更名是否打错——从上面活跃列表选，或 sillyspec progress show 查看各变更进度`)
+        if (pointerMode) {
+          console.error(`   ② 最近是否切换/重建过平台接管指针（重跑平台 scan 会换库）——原变更可能留在旧库：检查 ${pointerPath} 的 specRoot，或用 --spec-dir 显式指回旧库`)
+        } else {
+          console.error(`   ② cwd 是否漂移/切库——用 --spec-dir <路径>/.sillyspec 显式指定正确的进度库`)
+        }
+        if (stageName === 'quick' || /^quick-[0-9a-f]{8}$/.test(guardTarget || '')) {
+          console.error(`   ③ quick 会话跨进程恢复须带 --change <quick-session-id>；本库无该会话 guard——会话可能属于旧库`)
+        } else {
+          console.error(`   ③ 确要新建变更：先 sillyspec run brainstorm --change <名>（不带 ${actionFlag}）`)
+        }
+        process.exit(2) // 用法/环境错（目标变更不在当前库）→ exit 2
+      }
+    }
     // 如果指定了变更名或有变更目录，自动初始化变更的 progress
     const autoChange = changeName || resolveChangeNameAuto(cwd, specRoot)
     if (autoChange) {
@@ -1310,7 +1379,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
       }
     }
     const doneAnswer = getFlagValue('--answer')
-    return await completeStep(pm, progress, stageName, cwd, outputText, inputText, { confirm: isConfirm, changeName: effectiveChange, nonInteractive: isNonInteractive && !isInteractive, platformOpts, doneAnswer, isForceBaseline, isAllowNew, isAllowDelete })
+    return await completeStep(pm, progress, stageName, cwd, outputText, inputText, { confirm: isConfirm, changeName: effectiveChange, nonInteractive: isNonInteractive && !isInteractive, platformOpts, doneAnswer, isForceBaseline, isAllowNew, isAllowDelete, quickFiles })
   }
 
   // 默认：输出当前步骤

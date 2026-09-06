@@ -444,3 +444,85 @@ async function runModuleMockScenario() {
     cleanup(specBase)
   }
 }
+
+// ── staleRefs：引用级漂移（archify 借鉴，2026-09-04） ──────────────────────────
+describe('staleRefs 引用级漂移', () => {
+  it('file:line 引用指向变更/删除文件 → staleRefs 命中；指向未变更文件不计入', (t) => {
+    const f = mkRepo()
+    t.after(() => cleanup(f.root))
+    // 文档引用：b.js（将被 M）、u.js（将被 D）、a.js（未变更，阴性对照）
+    writeFileSync(
+      join(f.specBase, 'docs', f.proj, 'scan', 'ARCH.md'),
+      scanDoc(f.base).replace('内容\n', '内容 `src/core/a.js:1` `src/core/b.js:1` `src/util/u.js:1`\n'),
+    )
+    f.run('git add -A')
+    f.run('git commit -q -m doc-refs')
+    writeFileSync(join(f.root, 'src/core/b.js'), 'b2\n') // M
+    rmSync(join(f.root, 'src/util/u.js')) // D
+    f.run('git add -A')
+    f.run('git commit -q -m changes')
+
+    const r = computeScanDiff(opts(f))
+    assert.equal(r.ok, true)
+    const hits = r.staleRefs.map((s) => `${s.file}:${s.change}`).sort()
+    assert.deepEqual(hits, ['src/core/b.js:M', 'src/util/u.js:D'])
+    // advisory：不计入 driftCount（driftCount 只含 A/D/M 文件级计数）
+    assert.equal(r.driftCount, 2)
+  })
+
+  it('src/ 相对写法的引用也能命中（hitChange 归一 src/ 前缀）', (t) => {
+    const f = mkRepo()
+    t.after(() => cleanup(f.root))
+    writeFileSync(
+      join(f.specBase, 'docs', f.proj, 'scan', 'ARCH.md'),
+      scanDoc(f.base).replace('内容\n', '内容 `core/b.js:1`\n'), // src-相对写法
+    )
+    f.run('git add -A')
+    f.run('git commit -q -m doc-refs')
+    writeFileSync(join(f.root, 'src/core/b.js'), 'b2\n')
+    f.run('git add -A')
+    f.run('git commit -q -m changes')
+
+    const r = computeScanDiff(opts(f))
+    assert.equal(r.ok, true)
+    assert.equal(r.staleRefs.length, 1)
+    assert.equal(r.staleRefs[0].file, 'src/core/b.js')
+  })
+})
+
+// ── staleRefs 边界（审查修复回归，2026-09-04） ────────────────────────────────
+describe('staleRefs 边界（审查修复回归）', () => {
+  it('rename 旧路径引用命中 R——文档写在 scan 时点，旧路径引用必失效', (t) => {
+    const f = mkRepo()
+    t.after(() => cleanup(f.root))
+    writeFileSync(join(f.specBase, 'docs', f.proj, 'scan', 'ARCH.md'), scanDoc(f.base).replace('内容\n', '内容 `src/core/a.js:1`\n'))
+    f.run('git add -A')
+    f.run('git commit -q -m doc-refs')
+    execSync('git mv src/core/a.js src/core/renamed.js', { cwd: f.root, stdio: 'pipe' })
+    f.run('git add -A')
+    f.run('git commit -q -m rename')
+    const r = computeScanDiff(opts(f))
+    assert.equal(r.ok, true)
+    assert.equal(r.staleRefs.length, 1)
+    assert.equal(r.staleRefs[0].file, 'src/core/a.js')
+    assert.equal(r.staleRefs[0].change, 'R')
+  })
+
+  it('范围外（module-map 未覆盖）已变更文件的引用同样命中——staleRefs 用全量变更集', (t) => {
+    const f = mkRepo()
+    t.after(() => cleanup(f.root))
+    writeFileSync(join(f.specBase, 'docs', f.proj, 'scan', 'ARCH.md'), scanDoc(f.base).replace('内容\n', '内容 `outside/o.js:1`\n'))
+    f.run('git add -A')
+    f.run('git commit -q -m doc-refs')
+    mkdirSync(join(f.root, 'outside'), { recursive: true })
+    writeFileSync(join(f.root, 'outside/o.js'), 'o2\n')
+    f.run('git add -A')
+    f.run('git commit -q -m outside-change')
+    const r = computeScanDiff(opts(f))
+    assert.equal(r.ok, true)
+    assert.ok(r.outOfScope.includes('outside/o.js'), 'outside/o.js 在范围外（不计文件级漂移）')
+    assert.equal(r.staleRefs.length, 1)
+    assert.equal(r.staleRefs[0].file, 'outside/o.js')
+    assert.equal(r.staleRefs[0].change, 'A') // 基线后新增文件，状态 A（M 变体由 rename/src 归一用例覆盖）
+  })
+})

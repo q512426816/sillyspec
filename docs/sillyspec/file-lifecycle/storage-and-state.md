@@ -49,6 +49,8 @@ updated_at: 2026-08-09
 
 注意：DB schema 版本号四处一致 = `5`（`db.js` 的 `DB_SCHEMA_VERSION` / `project.schema_version` DDL DEFAULT / `CURRENT_VERSION`（W6 Step9d 抽到 `src/progress/shared.js`）/ `progress.js read()._version`）。D-012（platform-progress-sync）原始对齐至 `4`；2026-08-11 changes 表加 `title`/`quicklog_id` 列 bump 至 `5`。bump 时四处须同步更新（`platform-sync-schema.test.mjs` 守卫锁死一致）。
 
+双库分裂探测（2026-09-04，坑 progress-repair-dual-library-blind）：`progress check`/`progress repair`（ConsistencyDoctor.detectLibrarySplit）在 cwd 存在平台接管指针且 specRoot ≠ cwd/.sillyspec、同时 cwd/.sillyspec/.runtime/sillyspec.db 残留时报告「双进度库并存」——两库均有活跃变更、或 --change 目标变更只在旧库活跃 → issue 级（repair 进 manual 清单：哪边是权威库 repair 修不了，只能亮出来）；仅并存单侧活跃 → warning 级（平台模式本地库保留真实资产是容忍态，防常态误报）。自指指针/无指针/旧库无 db 不报。旧库仅在其 sillyspec.db 已存在时直读（绝不新建库文件），读失败 fail-open 不阻断主流程。
+
 ## `global.json`
 
 `progress.js` 仍保留 `GLOBAL_FILE = 'global.json'` 常量和注释，但 `readGlobal()` / `writeGlobal()` 已经改为 SQL 查询/写入 `project` 与 `changes` 表。

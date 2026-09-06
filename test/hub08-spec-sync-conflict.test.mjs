@@ -9,6 +9,7 @@
  *   abort → 只清冲突标记。
  */
 import http from 'node:http'
+import { createHash } from 'node:crypto'
 import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -23,13 +24,40 @@ const assert = (cond, msg) => {
 
 const tmpRoot = mkdtempSync(join(tmpdir(), `hub08-specconf-${process.pid}-`))
 
-// mock 平台：GET spec-manifest 返回 a.md v3（hash 与本地不同）；POST spec-sync 按策略响应
+// mock 平台：GET spec-manifest 返回 a.md v3（hash 与本地不同）；POST spec-sync 按策略响应；
+// GET spec-bundle 返回整树 tar（take-platform 用，2026-09-03 起支持——坑 spec-sync-conflict-no-take-platform）
 let postCalls = 0
 let postPolicy = 'conflict' // conflict | ok
+const SERVER_A_MD = 'server version content v9 by peer\n'
+function buildTar(files) {
+  const chunks = []
+  for (const [name, content] of files) {
+    const h = Buffer.alloc(512)
+    h.write(name.slice(0, 99), 0, 'utf8')
+    h.write('0000644\0', 100, 'ascii')
+    h.write('0000000\0', 108, 'ascii')
+    h.write('0000000\0', 116, 'ascii')
+    const data = Buffer.from(content, 'utf8')
+    h.write(data.length.toString(8).padStart(11, '0') + '\0', 124, 'ascii')
+    h.write('        ', 148, 'ascii') // chksum（_parseSpecTar 不校验，占位）
+    h.write('0', 156, 'ascii')
+    chunks.push(h, data)
+    const pad = (512 - (data.length % 512)) % 512
+    if (pad > 0) chunks.push(Buffer.alloc(pad))
+  }
+  chunks.push(Buffer.alloc(1024))
+  return Buffer.concat(chunks)
+}
 const server = http.createServer((req, res) => {
   if (req.url.includes('/api/changes/-/spec-manifest') && req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json' })
     res.end(JSON.stringify({ files: { 'a.md': { hash: 'SERVERHASH-a', version: 3, exists: true } } }))
+    return
+  }
+  if (req.url.includes('/api/changes/-/spec-bundle') && req.method === 'GET') {
+    const tar = buildTar([['a.md', SERVER_A_MD], ['PLATFORM-BUNDLE.json', '{"spec_version": 9}\n']])
+    res.writeHead(200, { 'Content-Type': 'application/x-tar', 'X-Spec-Version': '9' })
+    res.end(tar)
     return
   }
   if (req.url.includes('/api/changes/-/spec-sync') && req.method === 'POST') {
@@ -104,24 +132,32 @@ console.log('\n--- 4. keep-local 重推仍冲突 → 冲突文件保留 ---')
   assert((r.reason || '').includes('仍') || (r.reason || '').includes('保留'), `reason 说明未收敛（${r.reason}）`)
 }
 
-// ── 5. take-platform：明确不支持（fail-closed）──
-console.log('\n--- 5. resolve --take-platform → spec 树不支持，明确报错 ---')
+// ── 5. take-platform：拉 bundle 覆盖冲突文件（接受服务器版本，2026-09-03 起支持）──
+console.log('\n--- 5. resolve --take-platform → 按服务器版本覆盖本地 + 清冲突文件 ---')
 {
   const sm = new SyncManager(cwd)
   const r = await sm.resolve(CN, 'take-platform')
-  assert(r.ok === false, 'take-platform 对 spec 冲突 fail-closed')
-  assert((r.reason || '').includes('下载') || (r.reason || '').includes('不支持'), `reason 说明原因与出路（${r.reason}）`)
-  assert(existsSync(specConflictPath), '冲突文件未被误清')
+  assert(r.ok === true && r.resolved === true, `take-platform 成功（实得 ${JSON.stringify(r)}）`)
+  assert((r.reason || '').includes('覆盖 1 个'), `reason 披露覆盖数（${r.reason}）`)
+  assert(readFileSync(join(cwd, '.sillyspec', 'a.md'), 'utf8') === SERVER_A_MD, '本地 a.md 已被服务器版本覆盖（本地改动放弃）')
+  assert(!existsSync(specConflictPath), '冲突文件已清（take-platform 闭环）')
+  // 基线快照刷新：被覆盖路径回写服务器内容 hash → 下次 syncSpecTree 按「本地未改动」豁免回推
+  const base = JSON.parse(readFileSync(join(cwd, '.sillyspec', '.runtime', 'spec-sync-base.json'), 'utf8'))
+  const sha = (s) => createHash('sha256').update(s).digest('hex')
+  assert(base.hashes && base.hashes['a.md'] === sha(SERVER_A_MD), '内容基线快照已刷新为服务器内容 hash（防下轮回推）')
 }
 
-// ── 6. abort：只清标记 ──
+// ── 6. abort：只清标记，本地不变（先重建一轮真冲突供 abort 消费）──
 console.log('\n--- 6. resolve --abort → 清标记，本地不变 ---')
 {
+  writeFileSync(join(cwd, '.sillyspec', 'a.md'), 'local version content scenario6 edit\n')
+  await syncSpecTree(join(cwd, '.sillyspec'), { url: mockUrl, token: 'tok' }, CN)
+  assert(existsSync(specConflictPath), 'abort 前重建冲突文件（场景 5 本地=服务器，v6 真改动再冲突）')
   const sm = new SyncManager(cwd)
   const r = await sm.resolve(CN, 'abort')
   assert(r.ok === true && r.resolved === true, 'abort 成功')
   assert(!existsSync(specConflictPath), '冲突文件已清')
-  assert(readFileSync(join(cwd, '.sillyspec', 'a.md'), 'utf8') === 'local version content scenario4 edit\n', '本地文件未被改动（场景 4 的真实改动原样保留，abort 不碰内容）')
+  assert(readFileSync(join(cwd, '.sillyspec', 'a.md'), 'utf8') === 'local version content scenario6 edit\n', '本地文件未被改动（场景 6 的真实改动原样保留，abort 不碰内容）')
 }
 
 server.closeAllConnections?.()

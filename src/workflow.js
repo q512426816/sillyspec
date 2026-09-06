@@ -14,6 +14,7 @@ import { join, resolve, basename } from 'path'
 import jsYaml from 'js-yaml'
 import { WORKFLOW_STATUS } from './constants.js'
 import { contentNonEmpty, lineCount, missingSections, placeholderLineMatches } from './check-primitives.js'
+import { collectInvalidDocRefs } from './docs-check.js'
 
 // ─── Workflow 加载 ───
 
@@ -211,6 +212,35 @@ function checkOutput(outputDef, projectName, cwd, specBase) {
           results.push({ passed: lineMatches.length === 0, check: 'no_placeholder', detail: lineMatches.length > 0 ? `包含占位文本: ${lineMatches.map(m => `"${m}"`).join(', ')} — ${rawPath}` : '' })
         } else {
           results.push({ passed: false, check: 'no_placeholder', detail: `文件不存在: ${rawPath}` })
+        }
+        break
+      }
+      case 'ref_exists': {
+        // 引用事实核验（archify 借鉴，2026-09-04）：层1+层2 联合核验，语义与
+        // scan-postcheck 的 scan_doc_ref_invalid 单一源（collectInvalidDocRefs）。
+        // min = 文档至少须含的 file:line 引用条数（缺省 1；显式 0 = 只核验有效性不求数量）。
+        if (existsSync(fullPath)) {
+          const min = check.min ?? 1
+          let verified
+          try {
+            verified = collectInvalidDocRefs(cwd, [{ name: rawPath, absPath: fullPath }])
+          } catch {
+            // 核验器故障 fail-open（与 scan-postcheck 的 checkScanDocRefs 同口径），不伪装成「引用数不足」
+            results.push({ passed: true, check: `ref_exists(${min})`, detail: '引用核验器异常，跳过（fail-open）' })
+            break
+          }
+          const enough = verified.totalRefs >= min
+          const passed = verified.invalid.length === 0 && enough
+          let detail = ''
+          if (!enough) {
+            const crossNote = verified.skippedCrossRepo > 0 ? `（另有 ${verified.skippedCrossRepo} 条 repo:// 跨仓引用未计入）` : ''
+            detail = `file:line 引用仅 ${verified.totalRefs} 条，要求至少 ${min} 条${crossNote}: ${rawPath}`
+          } else if (verified.invalid.length > 0) {
+            detail = `${verified.invalid.length} 条引用未通过核验: ${verified.invalid.slice(0, 3).map(i => `${i.ref}（${i.reason}）`).join('; ')} — ${rawPath}`
+          }
+          results.push({ passed, check: `ref_exists(${min})`, detail })
+        } else {
+          results.push({ passed: false, check: `ref_exists(${check.min ?? 1})`, detail: `文件不存在: ${rawPath}` })
         }
         break
       }

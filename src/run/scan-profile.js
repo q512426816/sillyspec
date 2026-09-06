@@ -130,19 +130,21 @@ export function buildQuickScanSteps() {
 当前为 quick profile（小项目自动判定 或 用户显式 --quick），一次性生成核心文档用于快速接入。
 
 ### 操作
-1. 读取项目结构和关键文件（package.json / pyproject.toml / README / 入口文件）
-2. 生成以下 4 份文档并写入 \`{DOCS_ROOT}/scan/\`：
+1. 先跑 \`sillyspec scan facts\`（CLI 确定性抽取端点/依赖/规模，产物 {DOCS_ROOT}/scan/_facts.md，零 token）——PROJECT/ARCHITECTURE 的技术栈与集成事实以底稿为准，不重复 grep 发现
+2. 读取项目结构和关键文件（package.json / pyproject.toml / README / 入口文件）
+3. 生成以下 4 份文档并写入 \`{DOCS_ROOT}/scan/\`：
    - **PROJECT.md** — 项目简介、技术栈、模块划分
    - **ARCHITECTURE.md** — 架构概览、模块关系、技术决策
    - **CONVENTIONS.md** — 代码风格、框架隐形规则
    - **STRUCTURE.md** — 目录树 + 模块说明
-3. 如发现子项目，注册到 \`{PROJECTS_ROOT}/\` 下
+4. 如发现子项目，注册到 \`{PROJECTS_ROOT}/\` 下
 
 每份文档 frontmatter 必须包含：\`author\`、\`created_at\`、\`scan_depth: quick\`（标记快速接入的浅层版本；后续深度扫描 --deep 会识别此标记并覆盖升级为完整文档）。
 
 ### ⛔ 硬约束
 - **严禁使用子代理（Agent/Task 工具）。** 所有文档在一个 turn 内完成。
 - 不要搜索 .sillyspec/ .claude/ .git/ node_modules/ dist/ build/
+- 关键事实（模块职责/技术栈组件/外部集成）须带反引号 path:line 引用（如 \`src/db.js:42\`，真实可核验——CLI postcheck 逐条核验）；不确定就不写行号，**禁止编造**
 - --output 只需要列出生成的文件名，不要写长篇总结
 
 ### 输出

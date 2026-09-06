@@ -11,8 +11,40 @@ import { SCAN_STATUS, CHECK_SEVERITY, SCAN_REQUIRED_DOCS, SCAN_REQUIRED_DOCS_QUI
 import { validateScriptCommands } from './stages/cmd-existence.js'
 import { git } from './git-helper.js'
 import { nowWallClock } from './datetime.js'
+import { collectInvalidDocRefs } from './docs-check.js'
 
 const REQUIRED_SCAN_DOCS = SCAN_REQUIRED_DOCS
+
+/**
+ * scan 文档引用事实核验（archify 借鉴 P0，2026-09-04）：
+ * 对 scan 产物里显式写的 file:line 引用跑 docs-check 的联合核验（层1 存在性+行号边界 +
+ * 层2 引用行符号窗口断言，语义单一源 collectInvalidDocRefs）。
+ * repo:// 跨仓引用需要本机映射，跳过本地校验（防跨设备误报，与 docs-check 立场一致）。
+ * 只核验「显式写了引用的」事实；没写引用的散文不在范围（P2 的 scan IR 才覆盖）。
+ * WARNING 级：scan 刚写完窗口极小，失效多为笔误；docs-gate ratchet 负责长期增量收敛。
+ * @param {string} cwd 源码项目根（引用解析锚点）
+ * @param {string} scanDir scan 文档目录
+ * @param {string[]} docs 存在的文档文件名列表
+ * @returns {object|null} check 条目；无引用或全部有效时返回 null
+ */
+function checkScanDocRefs(cwd, scanDir, docs) {
+  let verified
+  try {
+    verified = collectInvalidDocRefs(cwd, docs.map(d => ({ name: d, absPath: join(scanDir, d) })))
+  } catch {
+    return null // 核验器自身故障不阻断 postcheck（fail-open，仅损失一层 advisory）
+  }
+  const { invalid, totalRefs, skippedCrossRepo } = verified
+  if (invalid.length === 0) return null
+  const sample = invalid.slice(0, 3).map(i => `${i.doc}: \`${i.ref}\`（${i.reason}）`).join('；')
+  return {
+    name: 'scan_doc_ref_invalid',
+    severity: CHECK_SEVERITY.WARNING,
+    detail: `${invalid.length} 条 file:line 引用未通过核验（${totalRefs} 条中）: ${sample}${invalid.length > 3 ? ` 等 ${invalid.length} 条` : ''}`,
+    evidence: { invalidCount: invalid.length, totalRefs, skippedCrossRepo, checkedDocs: docs.length, sample: invalid.slice(0, 3) },
+    supportedFixes: ['运行 sillyspec docs check --suggest 查看候选锚点后修正引用', '删除无法核验的引用（引用了不存在的文件/行号）'],
+  }
+}
 
 /**
  * @param {object} opts
@@ -46,6 +78,11 @@ export function runScanPostCheck({ cwd, specDir, outputText = '', scanMeta = {},
     if (mode === 'quick') {
       checks.push({ name: 'quick_profile_notice', severity: CHECK_SEVERITY.WARNING, detail: 'quick scan：仅生成 4 份核心文档（PROJECT/ARCHITECTURE/CONVENTIONS/STRUCTURE），深度扫描待补齐' })
     }
+
+    // 引用事实核验（archify P0）：本地模式与平台模式同规则，防「本地过平台挂」
+    const existingLocalDocs = requiredDocs.filter(f => existsSync(join(scanDir, f)))
+    const refCheck = checkScanDocRefs(cwd, scanDir, existingLocalDocs)
+    if (refCheck) checks.push(refCheck)
 
     const hasWarning = checks.some(c => c.severity === 'warning')
     return { status: hasWarning ? 'completed_with_warnings' : 'success', checks }
@@ -114,9 +151,15 @@ export function runScanPostCheck({ cwd, specDir, outputText = '', scanMeta = {},
     checks.push({
       name: 'docs_missing_header',
       severity: CHECK_SEVERITY.WARNING,
-      detail: `${docsMissingHeader.length} 份文档缺少 author/created_at: ${docsMissingHeader.join(', ')}（sillyspec scan-fix-headers 一键补齐）`
+      detail: `${docsMissingHeader.length} 份文档缺少 author/created_at: ${docsMissingHeader.join(', ')}（sillyspec scan-fix-headers 一键补齐）`,
+      evidence: { count: docsMissingHeader.length, docs: docsMissingHeader },
+      supportedFixes: ['sillyspec scan-fix-headers'],
     })
   }
+
+  // 3.5 引用事实核验（archify 借鉴 P0）：scan 文档里显式写的 file:line 引用逐条核验
+  const refCheck = checkScanDocRefs(cwd, specScanDir, existingDocs)
+  if (refCheck) checks.push(refCheck)
 
   // 4. local.yaml 校验
   const localYamlPath = join(specDir, 'local.yaml')
@@ -132,7 +175,9 @@ export function runScanPostCheck({ cwd, specDir, outputText = '', scanMeta = {},
       checks.push({
         name: 'local_config_invalid',
         severity: CHECK_SEVERITY.WARNING,
-        detail: `local.yaml 引用不存在的命令: ${invalid.map(i => `${i.cmd} (${i.reason})`).join('; ')}`
+        detail: `local.yaml 引用不存在的命令: ${invalid.map(i => `${i.cmd} (${i.reason})`).join('; ')}`,
+        evidence: { invalid },
+        supportedFixes: ['修正 .sillyspec/local.yaml commands 中引用的 script 名（与 package.json scripts 对齐）'],
       })
     }
   }
@@ -267,6 +312,9 @@ export function formatStructuredResult(result, meta = {}) {
       name: c.name,
       severity: c.severity === 'failed' ? 'critical' : c.severity,
       detail: c.detail,
+      // 诊断信封升级（archify 借鉴 P1a，2026-09-04）：additive 字段，机器可路由的修复建议
+      ...(c.evidence !== undefined ? { evidence: c.evidence } : {}),
+      ...(Array.isArray(c.supportedFixes) ? { supportedFixes: c.supportedFixes } : {}),
     })),
   }
 
@@ -285,7 +333,7 @@ export function formatStructuredResult(result, meta = {}) {
       structured.failure_categories.missing_outputs.push(entry)
     }
     // 引用无效类
-    else if (check.name === 'local_config_invalid') {
+    else if (check.name === 'local_config_invalid' || check.name === 'scan_doc_ref_invalid') {
       structured.failure_categories.bad_references.push(entry)
     }
     // AI 输出质量类

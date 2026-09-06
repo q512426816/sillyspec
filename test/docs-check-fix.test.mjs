@@ -152,9 +152,10 @@ describe('S1 单命中自动改（FR-01）', () => {
 
 describe('S2 多命中：选优自动重锚 / 同分才人工（FR-03，2026-08-21 docs-ref-auto-pick）', () => {
   /**
-   * multiSym 在 L1（定义行 export const）/ L5（调用点）两处出现；doc 引用 :7——窗口（行 6-12）
-   * 无 token → 失效。多命中打分：L1 定义行模式 +50 → 54 分，L5 仅含 token + 距离近 → 8 分，
-   * 严格领先 → 自动选优重锚 L1（实证痛点：一次大改 34 处漂移只有 2 处唯一命中，其余全人工）。
+   * multiSym 在 L1（定义行 export const）/ L5（调用点）两处出现；doc 引用 :8——窗口（行 6-13）
+   * 无 token → 失效（2026-09-04 窗口语义钉平 [start-2, end+5] 后，原 :7 的窗口 5-12 含 L5
+   * 调用点会变合法，改 :8 保持失效前提）。多命中打分：L1 定义行模式 +50 → 严格领先，
+   * 自动选优重锚 L1（实证痛点：一次大改 34 处漂移只有 2 处唯一命中，其余全人工）。
    */
   function s2Fixture() {
     return makeFixture({
@@ -162,7 +163,7 @@ describe('S2 多命中：选优自动重锚 / 同分才人工（FR-03，2026-08-
         1: 'export const multiSym = 1',
         5: 'export const aliasSym = multiSym + 1 // multiSym 二次出现',
       }).join('\n') + '\n',
-      'docs/multi.md': '见 `src/m.js:7`（`multiSym` 声明处）\n',
+      'docs/multi.md': '见 `src/m.js:8`（`multiSym` 声明处）\n',
     })
   }
 
@@ -469,7 +470,9 @@ describe('S7 CLI 无 --fix 输出与改动前（84d498a）逐字节一致（FR-0
   /** 失效混合 fixture：行号超界 + 关键词漂移 + 合法引用，输出覆盖多形态行 */
   function s7Fixture() {
     return makeFixture({
-      'src/alpha.js': padLines(10, { 1: 'export const alphaSymbol = 1' }).join('\n') + '\n',
+      // 无尾换行：readLines 剥幻影 N+1 行后（2026-09-04 行数口径修正）新旧 CLI 对本 fixture
+      // 的「总行数」均为 10，字节级 parity 守卫继续监控其余输出面不被本次修正波及。
+      'src/alpha.js': padLines(10, { 1: 'export const alphaSymbol = 1' }).join('\n'),
       'docs/api.md': [
         '# 标题', '',
         '见 `src/alpha.js:99`（`alphaSymbol` 声明处，行号超界失效）', '',

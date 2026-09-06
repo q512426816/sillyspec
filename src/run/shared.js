@@ -379,6 +379,60 @@ export function collectOtherQuickSessionDeclarations(platformOpts, localSpecBase
 }
 
 /**
+ * quick 边界 --files 追加并入（stage.js 恢复路径与 --done 收尾共用，坑
+ * quick-audit-warning-no-guidance 2026-09-03）：追加不替换、去重保序；同时点录
+ * allowedFilesHash 供同文件并发检测（文件不存在跳过——预声明将新建文件与启动时同语义）。
+ * 就地修改 guard，返回 added 清单（空数组 = 无新增，调用方免打印免持久化）。
+ */
+export function mergeQuickBoundaryFiles(guard, quickFiles, cwd) {
+  const known = new Set(guard.allowedFiles || [])
+  const added = (Array.isArray(quickFiles) ? quickFiles : []).filter((f) => f && !known.has(f))
+  if (added.length === 0) return { guard, added: [] }
+  guard.allowedFiles = [...(guard.allowedFiles || []), ...added]
+  guard.allowedFilesHash = { ...(guard.allowedFilesHash || {}) }
+  for (const f of added) {
+    try { guard.allowedFilesHash[f] = createHash('sha256').update(readFileSync(join(cwd, f))).digest('hex') }
+    catch { /* 预声明将新建的文件，与启动时 allowedFilesHash 同语义：不存在跳过 */ }
+  }
+  return { guard, added }
+}
+
+/**
+ * 空壳 quick 会话探测（坑 quick-duplicate-empty-shell，2026-09-03 用户实证：一次输出被吞
+ * → agent 误判失败重跑 → 重复空壳会话，此前只能手工 reset + 删骨架）。判定：会话目录
+ * guard 存在、7 天内启动（超龄按僵尸跳过，与 collectOtherQuickSessionDeclarations 同口径）、
+ * 进度库中该会话有步骤记录但零步骤完成（全 pending——刚起步即中断的形态）。
+ * fail-open：进度读不到/无步骤记录的会话不列（宁可漏报不误报，并行真会话不误伤）。
+ */
+export function detectEmptyShellQuickSessions(platformOpts, localSpecBase, currentSessionId, pm, cwd, nowMs = Date.now()) {
+  const out = []
+  try {
+    const sessionsDir = resolveQuickSessionsDir(platformOpts, localSpecBase)
+    let sessionDirs = []
+    try {
+      sessionDirs = readdirSync(sessionsDir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name)
+    } catch { return out }
+    for (const sessionName of sessionDirs) {
+      if (sessionName === currentSessionId) continue
+      let guard = null
+      try { guard = JSON.parse(readFileSync(join(sessionsDir, sessionName, 'guard.json'), 'utf8')) } catch { continue }
+      if (!guard || !guard.startedAt) continue
+      const startedAtMs = Date.parse(guard.startedAt)
+      if (!Number.isFinite(startedAtMs) || nowMs - startedAtMs > FOREIGN_SESSION_STALE_MS) continue
+      try {
+        const p = pm.read(cwd, sessionName)
+        if (!p || !p.stages) continue
+        const allSteps = Object.values(p.stages).flatMap((s) => (Array.isArray(s.steps) ? s.steps : []))
+        if (allSteps.length === 0) continue // 无步骤记录：无法判定空壳，不列
+        if (allSteps.some((s) => s.completedAt)) continue // 有完成步骤 = 真实在用
+        out.push({ sessionId: guard.sessionId || sessionName, startedAt: guard.startedAt })
+      } catch { continue }
+    }
+  } catch { /* fail-open：探测失败不打扰 quick 启动 */ }
+  return out
+}
+
+/**
  * 平台指针三写（单一数据源，runCommand scan 与 cmdInit 平台模式共用）。
  *
  * 写三处：
