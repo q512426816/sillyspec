@@ -94,6 +94,7 @@ SillySpec CLI — 规范驱动开发工具包
   sillyspec derive <facet> --change <name> [--json]    单项事实核验（facet: execute-evidence|verify-test|task-reviews|artifacts）
   sillyspec backfill-reviews --change <name> [--adopt] [--json]  缺 review.json 的 task 生成草稿；--adopt 重算代填已有 review 的 base/head 等机械字段（verdict 保留）
   sillyspec symbol-impact --change <name>      生成 symbol-impact.md 逐 task <!--TODO--> 骨架（gate 拒绝未替换占位，防骨架直接过门）
+  sillyspec design-init --change <name> [--force]  从 decisions.md 生成 design.md 十三章节骨架（决策追踪表预填；已存在不覆盖）
   sillyspec next                            项目状态探测：输出当前状态 + 下一步命令 + 依据（吸收 continue/resume 手工探测表）
   sillyspec commit [--json]                 智能提交建议：收集 QUICKLOG/已勾 task/阶段产出语义，生成建议 message（只建议不执行）
   sillyspec verify-probes --change <name> [--init]  verify 机械探针（TODO 标记/测试覆盖/API 对账/删除对账）；--init 生成 verify-result.md 骨架
@@ -1155,6 +1156,59 @@ async function main() {
       writeFileSync(siReportPath, siSkeleton);
       console.log(`✅ 已生成逐 task 骨架: ${siReportPath}`);
       console.log('   逐行替换 <!--TODO--> 为结论（无签名级变更也显式写「无」）；gate 拒绝未替换的占位行。');
+      break;
+    }
+    case 'design-init': {
+      // design.md 十三章节骨架生成（change: 2026-09-07-ir-stage-p3c，task-02，FR-03）：agent 此前
+      // 从零手写整份设计文档，章节漏项到 stage-contract/plan 门禁才暴露。本命令从 decisions.md
+      // 当前版本 D 条目预填决策追踪表，章节标题逐字取自 brainstorm Step 6 模板（R-03，渲染本体在
+      // design-facts.js generateDesignSkeleton——本 case 只负责读盘/幂等保护/落盘）。已存在不覆盖
+      // （幂等，agent 产出优先），--force 覆盖重生成。
+      const diChangeIdx = args.indexOf('--change');
+      const diChange = diChangeIdx >= 0 && args[diChangeIdx + 1] ? args[diChangeIdx + 1] : null;
+      const diForce = args.includes('--force');
+      if (!diChange) {
+        console.error('用法: sillyspec design-init --change <name> [--force] [--json] [--spec-dir <path>]\n  从变更 decisions.md 生成 design.md 十三章节骨架（决策追踪表按当前版本 D 条目预填；已存在不覆盖，--force 覆盖）');
+        process.exit(2);
+      }
+      assertSafeChangeName(diChange, '--change 变更名');
+      const diSpecBase = resolvePlatformSpecDir(dir, specDir) || join(dir, '.sillyspec');
+      const diChangeDir = join(diSpecBase, 'changes', diChange);
+      const diDecisionsPath = join(diChangeDir, 'decisions.md');
+      if (!existsSync(diDecisionsPath)) {
+        console.error(`❌ decisions.md 不存在: ${diDecisionsPath}`);
+        console.error('   先跑 sillyspec run brainstorm 推进决策环节（形成技术决策落盘 decisions.md），再生成 design 骨架。');
+        if (json) console.log(JSON.stringify({ command: 'design-init', change: diChange, ok: false, error: `decisions.md 不存在: ${diDecisionsPath}` }, null, 2));
+        process.exit(1);
+      }
+      const { generateDesignSkeleton } = await import('./design-facts.js');
+      // author/created_at 与 taskcard/scan-postcheck 同口径：git user.name（回退 unknown）+ 本地墙钟
+      let diAuthor = 'unknown';
+      try { diAuthor = git(dir, ['config', 'user.name']) || 'unknown' } catch { /* git 不可用 → unknown */ }
+      const { nowWallClock } = await import('./datetime.js');
+      const diSkeleton = generateDesignSkeleton({
+        changeName: diChange,
+        decisionsText: readFileSync(diDecisionsPath, 'utf8'),
+        author: diAuthor,
+        now: nowWallClock(),
+      });
+      const diDesignPath = join(diChangeDir, 'design.md');
+      const diExisted = existsSync(diDesignPath);
+      if (diExisted && !diForce) {
+        if (json) {
+          console.log(JSON.stringify({ command: 'design-init', change: diChange, ok: true, path: diDesignPath, written: false, reason: 'exists' }, null, 2));
+        } else {
+          console.log(`ℹ️  design.md 已存在，不覆盖: ${diDesignPath}（确要重新生成骨架加 --force）`);
+        }
+        break;
+      }
+      writeFileSync(diDesignPath, diSkeleton);
+      if (json) {
+        console.log(JSON.stringify({ command: 'design-init', change: diChange, ok: true, path: diDesignPath, written: true, overwritten: diExisted }, null, 2));
+        break;
+      }
+      console.log(`✅ 已生成 design.md 骨架: ${diDesignPath}${diExisted ? '（--force 覆盖既有文件）' : ''}`);
+      console.log('   决策追踪表已按 decisions.md 当前版本 D 条目预填；回到 brainstorm Step 6（写设计文档并自审）逐节填散文，填毕删除生成注释。');
       break;
     }
     case 'register-stage-review': {

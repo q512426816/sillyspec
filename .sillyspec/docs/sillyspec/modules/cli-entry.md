@@ -87,3 +87,8 @@ runStage(pm, progress, stageName, cwd, changeName)
 - ql-20260816-026-7859 | E22 index.js 静态 import 闭包拆解（未纳入批次项，性能#2）：progress.js（db→node:sqlite 链）与 run/shared.js（stages 全家）两条顶层静态 import 改 main() 早退后动态加载——最轻命令 --version 实测 137→71ms（省 66ms，轻路径零加载），重路径无回退，行为零变化。
 - ql-20260816-027-8083 | 22e-b lint 加未引用导出检测（未纳入批次项，性能#7）：check-syntax.mjs 第 3 段——src/ 非入口模块 export 符号零文本引用即报（宽松防误报）。首版 advisory（21 候选含同文件内部消费误报），死码候选登记债单待逐个确认。
 <!-- MANUAL_NOTES_END -->
+
+## 变更索引（表格，初始为空）
+| 日期 | 变更名 | 摘要 |
+|------|--------|------|
+| 2026-09-07 | 2026-09-07-ir-stage-p3c | IR P3c：index.js 新 design-init case（--change/--force/--json/--spec-dir；幂等不覆盖，决策追踪表预填；缺 decisions exit 1 带指引） |

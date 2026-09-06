@@ -477,6 +477,35 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
     }
   }
 
+  // 机械事实底稿注入（IR P3c task-03，D-003@v1 三件套之三）：brainstorm「加载项目上下文」Step2
+  // 的 {SCAN_FACTS} → docs/<project>/scan/_facts.md 全文（scan facts CLI 确定性抽取的端点/依赖/
+  // 规模底稿）+ 红线一句（措辞对齐 scan 子代理先例 stages/scan.js——禁止重新 grep 发现底稿覆盖
+  // 的机械事实，冲突以底稿为准），探索期直接消费省 token。>15KB 按 UTF-8 字节截断并提示跑
+  // `sillyspec scan facts` 刷新（design R-04）；文件不存在/读取失败空注入（fail-soft，不留残留
+  // 占位符）。只挂 brainstorm：双重条件（stageName 判定 + 占位符仅存在于 brainstorm Step2
+  // prompt），与下方 buildModuleContextInjection（横跨 brainstorm/plan/execute 三阶段）相互独立。
+  if (stageName === 'brainstorm' && promptText.includes('{SCAN_FACTS}')) {
+    let factsInjected = ''
+    try {
+      const factsSpecBase = resolvePromptSpecBase(platformOpts, cwd)
+      const factsProjectName = dbProjectName || basename(cwd)
+      const factsPath = join(factsSpecBase, 'docs', factsProjectName, 'scan', '_facts.md')
+      if (existsSync(factsPath)) {
+        const factsBuf = readFileSync(factsPath) // Buffer：按 UTF-8 字节判 15KB 阈值
+        const FACTS_LIMIT = 15 * 1024
+        const factsBody = factsBuf.length > FACTS_LIMIT
+          ? factsBuf.subarray(0, FACTS_LIMIT).toString('utf8') +
+            `\n\n（⚠️ 底稿超过 15KB 已截断——完整内容可读 \`${factsPath}\`；底稿已过期时可跑 \`sillyspec scan facts\` 刷新）`
+          : factsBuf.toString('utf8')
+        factsInjected =
+          '\n\n### 🧾 机械事实底稿（scan facts CLI 抽取，docs/' + factsProjectName + '/scan/_facts.md 全文注入）\n\n' +
+          factsBody +
+          '\n\n⛔ 红线（同 scan 子代理先例）：禁止重新 grep 发现底稿覆盖的机械事实（端点/依赖/规模），冲突以底稿为准。\n'
+      }
+    } catch { /* fail-soft：读取失败空注入，不阻断 prompt 输出 */ }
+    promptText = promptText.replace(/\{SCAN_FACTS\}/g, factsInjected)
+  }
+
   // 决策防复潮注入（W1.1 第 3 点，task-04，FR-05）：brainstorm「加载项目上下文」Step2 的
   // {DECISION_HITS} → matchKnowledge decisionHits——命中 rejected 条目时渲染「否决决策提示」段
   // （ID/标题/否决理由/复潮条件），无命中替换为空串零输出（不留残留占位符）；注入结果同步落

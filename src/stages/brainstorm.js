@@ -32,6 +32,7 @@ export const definition = {
 ### 操作
 1. 读取项目总览 \`{SPEC_ROOT}/docs/<project>/scan/PROJECT.md\` + 共享规范 + 子项目上下文
    - 漂移事实（CLI 算）：{SCAN_STALENESS}
+   - 机械事实底稿（CLI 注入，无 scan 底稿则为空）：{SCAN_FACTS}
 2. 加载项目信息：\`cat {SPEC_ROOT}/projects/*.yaml 2>/dev/null\`
 3. 加载本地配置：\`cat {SPEC_ROOT}/local.yaml 2>/dev/null\`
 4. 棕地项目：读取 {SPEC_ROOT}/docs/<project>/scan/ 下的 STRUCTURE.md、CONVENTIONS.md、ARCHITECTURE.md
@@ -347,7 +348,7 @@ design.md 第一行标题必须用中文：# 设计文档（Design）— <变更
 ### 操作
 1. 确认变更目录存在：\`mkdir -p {SPEC_ROOT}/changes/<change-name>\`（Windows 用 \`mkdir {SPEC_ROOT}/changes\\<变更名>\` 或 PowerShell \`New-Item -ItemType Directory -Force -Path {SPEC_ROOT}/changes/<change-name>\`）
    - 变更名格式必须为 \`YYYY-MM-DD-<简短描述>\`（如 \`2026-05-13-user-auth\`）
-2. 将确认的设计写入 \`{SPEC_ROOT}/changes/<change-name>/design.md\`
+2. 将确认的设计写入 \`{SPEC_ROOT}/changes/<change-name>/design.md\`——优先跑 \`sillyspec design-init --change <change-name>\` 生成骨架再填散文（决策追踪表已按 decisions.md 当前版本预填，逐行补覆盖点后把「待确认」改「已覆盖」；文件清单表骨架就位）；存量手写路径仍合法（design-init 对已存在的 design.md 不覆盖）
 3. 对账整理 \`{SPEC_ROOT}/changes/<change-name>/decisions.md\`（「对话式探索」「提出方案」步已按增量规则随答落盘，本步做对账而非从零写入）：
    - decisions.md 是本次变更的决策台账，不是长期术语表
    - 只记录有实现/验收影响的决策，闲聊和低风险偏好不记录
@@ -357,7 +358,7 @@ design.md 第一行标题必须用中文：# 设计文档（Design）— <变更
    - 每条记录必须包含：type、status、source、question、answer、normalized_requirement、impacts、evidence、priority
    - 九字段之外可另加四个可选字段，按需填写、不强制全填（旧格式决策记录缺这些字段不受影响）：
      - 锚点：决策落点的主文件，格式 <src 路径>:<行号或符号>（status=confirmed 时必填）
-     - 模块域：决策涉及的模块 ID，取自 \`{SPEC_ROOT}/docs/<project>/modules/_module-map.yaml\`，可多个、用逗号分隔
+     - 模块域：决策涉及的模块 ID，取自 \`{SPEC_ROOT}/docs/<project>/modules/_module-map.yaml\`，可多个、用逗号分隔；规划中的新模块用 NEW:模块名 前缀声明（冒号后不加空格——\`NEW:foo\` 合法、\`NEW: foo\` 属书写错误），「生成规范文件」步 --done 的模块域核验会豁免 NEW 前缀并在模块落地后补录
      - 否决理由：一句话说明为何否决（status=rejected 时必填）
      - 复潮条件：什么前提下可重新考虑该决策（status=rejected 时必填）
    - 长期术语只在 archive/scan 时再提升到 \`{SPEC_ROOT}/docs/<project>/glossary.md\`

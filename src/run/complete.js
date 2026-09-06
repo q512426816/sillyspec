@@ -27,6 +27,7 @@ import { outputStep, collectStageWaitHistory } from './prompt.js'
 import { enforceDepsGate, enforceReviewJsonGate, enforceSymbolImpactGate, warnMissingUiPrototype, completeStageGates, readDesignScale } from './gates.js'
 import { handleArchiveConfirmStep, handlePlanGeneratePlanStep, handleScanProjectListStep, handleWorkflowPostCheck, handleQuickStageCompletion, handleExecuteWaveArtifact } from './complete-handlers.js'
 import { formatExecuteSummary } from '../worktree-apply.js'
+import { validateDecisionModuleRefs } from '../design-facts.js'
 import { isEndToEndTaskText } from '../change-risk-profile.js'
 import { deriveTitleFromLinkedChange } from '../quicklog.js'
 import { gitQuiet } from '../git-helper.js'
@@ -279,6 +280,37 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
   await enforceSymbolImpactGate(stageName, changeName, steps[currentIdx]?.name, specBase)
   // UI 原型软提醒（非阻断）：brainstorm 收尾步 design.md 命中前端文件但无 prototype → 提示用户可否决
   warnMissingUiPrototype(stageName, changeName, steps[currentIdx]?.name, specBase)
+  // 决策模块域核验硬门（task-02 接线 design-facts，FR-02/D-002）：brainstorm「生成规范文件」步
+  // --done 时核验 decisions.md 模块域引用。ERROR（decision_module_ref_invalid，消息已内嵌前缀）
+  // = 模块幻觉/书写错误 → fail-closed exit 1（进度不推进，步骤保持 pending）；WARNING
+  // （decision_module_domain_gap 声明×实改差异）→ warn 放行留人工裁量；skipped（无决策文件/
+  // 无 _module-map.yaml 索引）→ 单行 info 放行（无索引不误拦）。fail-soft：核验自身异常 →
+  // fail-open（warn 留痕后放行——门禁代码缺陷不应误拦真实完成，与「无索引跳过」同向）。
+  // project 解析与 handleWorkflowPostCheck 同链：progress.project（平台模式真实项目名）>
+  // steps[idx].project > null（brainstorm 非 perProject 展开，后两位常规为空）。
+  if (stageName === 'brainstorm' && steps[currentIdx]?.name?.includes('生成规范文件') && changeName) {
+    try {
+      const _dmProject = progress?.project || steps[currentIdx]?.project || null
+      const _dmResult = validateDecisionModuleRefs({
+        changeDir: join(specBase, 'changes', changeName),
+        specRoot: specBase,
+        project: _dmProject,
+      })
+      if ((_dmResult.errors || []).length > 0) {
+        console.error(`❌ ── 决策模块域核验阻断（本次 --done 未完成，进度未推进）──`)
+        for (const _dmErr of _dmResult.errors) console.error(`   • ${_dmErr}`)
+        console.error(`   修复：更正 decisions.md 对应条目的「模块域」字段（模块 ID 取自 docs/${_dmProject || '<项目>'}/modules/_module-map.yaml），或以 NEW:<名> 前缀声明新模块后重跑：`)
+        console.error(`   sillyspec run brainstorm --done${changeName ? ` --change ${changeName}` : ''} --output "修复说明"`)
+        process.exit(1)
+      }
+      for (const _dmWarn of (_dmResult.warnings || [])) console.warn(`   ⚠️ ${_dmWarn}`)
+      if (_dmResult.skipped) {
+        console.log(`ℹ️  [decision_module_check_skipped] ${_dmResult.skipped}`)
+      }
+    } catch (_dmEx) {
+      console.warn(`   ⚠️ 决策模块域核验自身异常，fail-open 放行（不误拦本次完成）：${_dmEx && _dmEx.message ? _dmEx.message : _dmEx}`)
+    }
+  }
 
   // ── noAI 步骤硬门（坑 noai-done-bypass）：noAI 步骤的确定性校验不可被 --done 绕过 ──
   // 正常路径 agent 跑 `run <stage>` 推进到 noAI step 时，runStage 自动执行 _cliAction
