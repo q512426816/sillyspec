@@ -1530,7 +1530,9 @@ export async function handleScanStageCompleted({ stageName, currentIdx, cwd, pro
       try { unlinkSync(platformOptsFile) } catch {}
 
       // CLI 层 post-check（替代旧的简单检查）
-      const { runScanPostCheck, printScanPostCheckResult, formatStructuredResult, writeStructuredResult } = await import('../scan-postcheck.js')
+      const { runScanPostCheck, printScanPostCheckResult, formatStructuredResult, writeStructuredResult, stampScanDocHeaders } = await import('../scan-postcheck.js')
+      // ② frontmatter CLI 盖章（2026-09-05，幂等兜底——正常已在 scanFinalize / quick postcheck 盖过）
+      stampScanDocHeaders({ cwd, specDir: platformOpts.specRoot, mode: stageData.scanProfile?.mode })
       const postResult = runScanPostCheck({
         cwd,
         specDir: platformOpts.specRoot,
@@ -1613,7 +1615,9 @@ export async function handleScanStageCompleted({ stageName, currentIdx, cwd, pro
 
   // 非 platform 模式 scan 也做轻量 post-check + 结构化输出
   if (stageName === 'scan' && !platformOpts.specRoot && !platformOpts.runtimeRoot) {
-    const { runScanPostCheck, printScanPostCheckResult, formatStructuredResult, writeStructuredResult } = await import('../scan-postcheck.js')
+    const { runScanPostCheck, printScanPostCheckResult, formatStructuredResult, writeStructuredResult, stampScanDocHeaders } = await import('../scan-postcheck.js')
+    // ② frontmatter CLI 盖章（2026-09-05，幂等兜底）
+    stampScanDocHeaders({ cwd, specDir: null, mode: stageData.scanProfile?.mode })
     const postResult = runScanPostCheck({ cwd, specDir: null, outputText, scanProfile: stageData.scanProfile || null })
     printScanPostCheckResult(postResult)
     // 结构化结果写入 .sillyspec/.runtime/

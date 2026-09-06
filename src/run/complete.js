@@ -21,7 +21,7 @@ import { existsSync, readFileSync, mkdirSync, writeFileSync, appendFileSync } fr
 import { writeAtomicSync } from '../fs-atomic.js'
 import { withFileLock } from '../quicklog.js'
 import { triggerSync, WAIT_MARKER_RE, getStageSteps, formatWaitOptions, resolveRuntimeRoot, getOrCreateMultiRepoContext, resolveChangeDir } from './shared.js'
-import { executeScanPreflight, executeScanPostcheck, computeScanProfile } from './scan-profile.js'
+import { executeScanPreflight, executeScanPostcheck, computeScanProfile, executeScanDetectProjects, executeScanResumeCheck, executeScanFinalize } from './scan-profile.js'
 import { executePlanPostcheck as runPlanPostcheckLib } from '../stages/plan-postcheck.js'
 import { outputStep, collectStageWaitHistory } from './prompt.js'
 import { enforceDepsGate, enforceReviewJsonGate, enforceSymbolImpactGate, warnMissingUiPrototype, completeStageGates, readDesignScale } from './gates.js'
@@ -296,6 +296,12 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
       await executeScanPreflight(cwd, platformOpts, stageData.scanProfile || computeScanProfile(cwd, platformOpts))
     } else if (_cliAction === 'scanPostcheck') {
       await executeScanPostcheck(cwd, platformOpts, stageData.scanProfile || computeScanProfile(cwd, platformOpts))
+    } else if (_cliAction === 'scanDetectProjects') {
+      await executeScanDetectProjects(cwd, platformOpts)
+    } else if (_cliAction === 'scanResumeCheck') {
+      await executeScanResumeCheck(cwd, platformOpts)
+    } else if (_cliAction === 'scanFinalize') {
+      await executeScanFinalize(cwd, platformOpts)
     } else if (_cliAction === 'planPostcheck') {
       await runPlanPostcheckLib({ cwd, specRoot: platformOpts?.specRoot, resolveChangeDir, progress })
     } else {
@@ -507,6 +513,13 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
         console.log(`\n👉 下一步：sillyspec run verify${changeName ? ` --change ${changeName}` : ''}（验证通过后才能归档）`)
       }
     } else if (stageName === 'archive') {
+      // 机械暂存 CLI 化（2026-09-05 全流程审计）：原步骤 6 的 3 条固定路径 git add agent 指令
+      // 改为完成时 CLI 直做（未变更路径 git add 是无害 no-op）。平台模式跳过（specRoot 在源码仓外）。
+      if (!platformOpts?.specRoot && !platformOpts?.runtimeRoot) {
+        const { stageArchiveArtifacts } = await import('../git-helper.js')
+        const r = stageArchiveArtifacts(cwd)
+        if (r.staged.length > 0) console.log(`  📦 已暂存归档产物（${r.staged.length} 个路径，未提交，由统一提交工具处理）`)
+      }
       console.log('\n👉 归档完成！现在可以提交了：git commit -m "..."')
     } else if (stageName === 'verify') {
       // verify 的"验证通过"提示延后到下方 validator 通过后才打印，

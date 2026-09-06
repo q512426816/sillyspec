@@ -683,6 +683,47 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
     }
   }
 
+  // 三主阶段 Step1「进度确认」快照注入（2026-09-05 全流程审计）：progress show 的核心信息
+  // （阶段/步骤位置/推进态）CLI 渲染 prompt 时已全部在手——注入替代 agent 跑一趟 CLI 的
+  // 工具往返（progress show 全量输出还很长）。fail-soft：异常降级为自查指引。
+  if (['brainstorm', 'execute', 'verify'].includes(stageName) && promptText.includes('{PROGRESS_SNAPSHOT}')) {
+    try {
+      const done = steps.filter(s => s.status === 'completed').length
+      const waiting = steps.filter(s => s.status === 'waiting').length
+      const snapshot =
+        `- 变更：${changeName || '（未知）'}\n` +
+        `- 阶段：${stageName}（CLI 已路由到本阶段，无需再跑 progress show 确认）\n` +
+        `- 步骤：${done}/${steps.length} 已完成${waiting > 0 ? `，${waiting} 个等待中` : ''}；当前推进到第 ${stepIndex + 1} 步`
+      promptText = promptText.split('{PROGRESS_SNAPSHOT}').join(snapshot)
+    } catch (e) {
+      promptText = promptText.split('{PROGRESS_SNAPSHOT}').join('（快照注入失败：' + e.message + '——可运行 sillyspec progress show 自查）')
+    }
+  }
+
+  // execute Step「确认 worktree 路径」meta 注入（2026-09-05 全流程审计）：worktree meta 由 CLI
+  // 读出直接注入，agent 省一趟 worktree meta 工具往返；工具链可用性检查（真实工作）仍归 agent。
+  if (stageName === 'execute' && promptText.includes('{WORKTREE_META}')) {
+    let metaInfo
+    try {
+      const { WorktreeManager } = await import('../worktree.js')
+      const wm = new WorktreeManager({ cwd })
+      const meta = changeName ? wm.getMeta(changeName) : null
+      if (meta && meta.worktreePath) {
+        const dirOk = existsSync(meta.worktreePath)
+        metaInfo =
+          `- worktreePath：${meta.worktreePath}\n` +
+          `- branch：${meta.branch || '（meta 未记录）'}\n` +
+          `- mode：${meta.mode || 'worktree'}\n` +
+          `- worktree 目录存在：${dirOk ? '是' : '否——in-place 模式属正常；worktree/native-worktree 模式缺失则停止并报错'}`
+      } else {
+        metaInfo = '（worktree meta 不可读——meta.json 不存在说明创建失败，停止并报错；可运行 sillyspec worktree meta ' + (changeName || '<change-name>') + ' 自查）'
+      }
+    } catch (e) {
+      metaInfo = '（注入失败：' + e.message + '——运行 sillyspec worktree meta 自查，meta.json 不存在则停止并报错）'
+    }
+    promptText = promptText.split('{WORKTREE_META}').join(metaInfo)
+  }
+
   // archive Step1「任务完成度检查」客观真相源注入：以 review.json verdict 算完成度，
   // 替代「机械数 plan.md checkbox」（checkbox 依赖 autoCheckPlanFromReviews 回填，runId marker /
   // review 缺失时回填静默 no-op，会停在未勾态导致完成度失真 → archive 误判「全未完成」）。

@@ -9,8 +9,9 @@
  *   - executeScanPostcheck 原冗余动态 import('fs'/'path'/'child_process') 删除，改顶部静态（execSync 实际未直接用，纯遗留）
  */
 import { join, basename, extname } from 'node:path'
-import { existsSync, readdirSync, statSync, mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, readdirSync, statSync, mkdirSync, writeFileSync, unlinkSync } from 'node:fs'
 import { safeGit } from './shared.js'
+import { SCAN_REQUIRED_DOCS } from '../constants.js'
 
 /**
  * 估算源码规模（文件数 + 字节数）—— 跨平台 Node 遍历，替代 Unix `find`（原生 Windows 无 find，
@@ -139,7 +140,7 @@ export function buildQuickScanSteps() {
    - **STRUCTURE.md** — 目录树 + 模块说明
 4. 如发现子项目，注册到 \`{PROJECTS_ROOT}/\` 下
 
-每份文档 frontmatter 必须包含：\`author\`、\`created_at\`、\`scan_depth: quick\`（标记快速接入的浅层版本；后续深度扫描 --deep 会识别此标记并覆盖升级为完整文档）。
+每份文档正文第 1 行直接写中文标题；frontmatter（author / created_at / source_commit / updated_at / generator / scan_depth: quick——标记快速接入的浅层版本，后续深度扫描 --deep 会识别此标记并覆盖升级）**由 CLI 在终检时自动注入，你不需要写 frontmatter、也不要跑 git 取值**。
 
 ### ⛔ 硬约束
 - **严禁使用子代理（Agent/Task 工具）。** 所有文档在一个 turn 内完成。
@@ -221,8 +222,11 @@ export async function executeScanPreflight(cwd, platformOpts, scanProfile) {
  */
 export async function executeScanPostcheck(cwd, platformOpts, scanProfile) {
   // scan-postcheck.js 在 src/，本模块在 src/run/ → 退一层（真环依赖，保留动态 import）
-  const { runScanPostCheck, printScanPostCheckResult } = await import('../scan-postcheck.js')
+  const { runScanPostCheck, printScanPostCheckResult, stampScanDocHeaders } = await import('../scan-postcheck.js')
   const specDir = platformOpts?.specRoot || null
+  // ② frontmatter CLI 盖章（幂等，只补缺不覆盖）：quick 档注入含 scan_depth: quick
+  const stamped = stampScanDocHeaders({ cwd, specDir, mode: scanProfile?.mode })
+  if (stamped.fixed.length > 0) console.log(`  📝 frontmatter 已由 CLI 注入 ${stamped.fixed.length} 份文档`)
   const result = runScanPostCheck({
     cwd,
     specDir,
@@ -268,5 +272,91 @@ export async function executeScanPostcheck(cwd, platformOpts, scanProfile) {
     } catch (e) {
       console.warn(`  ⚠️ manifest 写入失败: ${e.message}`)
     }
+  }
+}
+
+// ─── noAI 化步骤动作（2026-09-05 ①：ls 级操作不值整轮 agent 往返） ─────────────
+
+/** 已注册项目清单（projects/*.yaml 文件名去后缀）；无注册时回退 [仓库根 basename]（单项目口径） */
+function listRegisteredProjects(specBase, cwd) {
+  const projectsRoot = join(specBase, 'projects')
+  try {
+    const names = readdirSync(projectsRoot).filter(f => f.endsWith('.yaml')).map(f => f.replace(/\.yaml$/, ''))
+    if (names.length > 0) return names
+  } catch { /* 无 projects 目录 → 回退单项目 */ }
+  return [basename(cwd)]
+}
+
+/**
+ * CLI-only: 子项目探测（scan 步骤 1 的 noAI 化）。
+ * 顶层目录 × 构建文件存在性 → 打印建议清单；**只建议不注册**（原红线语义不变，注册仍由用户确认）。
+ */
+export async function executeScanDetectProjects(cwd, platformOpts) {
+  const specBase = platformOpts?.specRoot || join(cwd, '.sillyspec')
+  const projectsRoot = join(specBase, 'projects')
+  const buildFiles = [
+    ['package.json', 'Node.js'], ['pom.xml', 'Java/Maven'], ['build.gradle', 'Java/Gradle'],
+    ['pyproject.toml', 'Python'], ['requirements.txt', 'Python'], ['go.mod', 'Go'], ['Cargo.toml', 'Rust'],
+  ]
+  const skip = new Set(['node_modules', '.git', '.sillyspec', 'dist', 'build', 'out', 'target', 'coverage', '.claude'])
+  console.log('  📁 子项目探测（CLI，只建议不注册——注册需用户在后续步骤确认）')
+  let found = 0
+  try {
+    for (const e of readdirSync(cwd, { withFileTypes: true })) {
+      if (!e.isDirectory() || skip.has(e.name) || e.name.startsWith('.')) continue
+      const hit = buildFiles.find(([f]) => existsSync(join(cwd, e.name, f)))
+      if (!hit) continue
+      found++
+      const registered = existsSync(join(projectsRoot, `${e.name}.yaml`))
+      console.log(`  - ${e.name}：${hit[1]} · ${registered ? '已注册' : '未注册（是否注册由用户确认）'}`)
+    }
+  } catch { /* 顶层目录读取失败 → 空清单 */ }
+  if (found === 0) console.log('  （未发现独立子项目，按单项目扫描）')
+  console.log('')
+}
+
+/**
+ * CLI-only: 断点续扫检测（scan 步骤 4 的 noAI 化）。existsSync 级检查，一次遍历全部已注册项目。
+ */
+export async function executeScanResumeCheck(cwd, platformOpts) {
+  const specBase = platformOpts?.specRoot || join(cwd, '.sillyspec')
+  for (const p of listRegisteredProjects(specBase, cwd)) {
+    const scanDir = join(specBase, 'docs', p, 'scan')
+    const states = SCAN_REQUIRED_DOCS.map(d => existsSync(join(scanDir, d)) ? `✅${d.replace('.md', '')}` : `⬜${d.replace('.md', '')}`)
+    const facts = existsSync(join(scanDir, '_facts.md')) ? '· 底稿✅' : '· 底稿⬜'
+    console.log(`  📂 ${p}: ${states.join(' ')} ${facts}`)
+  }
+  console.log('')
+}
+
+/**
+ * CLI-only: scan 终检（步骤 11「自检和提交」的 noAI 化，含 ② frontmatter 盖章）。
+ * 顺序：frontmatter 注入（幂等）→ 清理 _env-detect.md → runScanPostCheck（本地轻量/平台严格）
+ * → failed_post_check 时 throw（step 保持 pending）→ 非平台 git add 扫描产物（不 commit）。
+ */
+export async function executeScanFinalize(cwd, platformOpts) {
+  const specDir = platformOpts?.specRoot || null
+  const specBase = specDir || join(cwd, '.sillyspec')
+  const { stampScanDocHeaders, runScanPostCheck, printScanPostCheckResult } = await import('../scan-postcheck.js')
+
+  const stamped = stampScanDocHeaders({ cwd, specDir })
+  if (stamped.fixed.length > 0) console.log(`  📝 frontmatter 已由 CLI 注入 ${stamped.fixed.length} 份文档（${stamped.stampedKeys} 个键，只补缺不覆盖）`)
+
+  for (const p of listRegisteredProjects(specBase, cwd)) {
+    const tmp = join(specBase, 'docs', p, 'scan', '_env-detect.md')
+    try { if (existsSync(tmp)) { unlinkSync(tmp); console.log(`  🧹 已清理 ${p}/scan/_env-detect.md`) } } catch { /* 清理失败不阻断 */ }
+  }
+
+  const result = runScanPostCheck({ cwd, specDir })
+  printScanPostCheckResult(result)
+  // 不 throw：平台模式的 manifest/指针/exit(1) 由 handleScanStageCompleted 在阶段完成时统一落
+  //（throw 会拦在完成前 → manifest.json 永不写入，破坏 SillyHub 消费契约，实测
+  //  run-complete-step-scan-platform Case 1）；本地模式的告警打印/postcheck-result.json 同理
+  // 由 complete-handlers 非平台收尾分支负责。本动作只负责：盖章 + 清理 + 即时报告 + 暂存。
+
+  if (!specDir) {
+    const r = safeGit(cwd, ['add', '.sillyspec/docs', '.sillyspec/knowledge'])
+    if (r && r.error) console.warn(`  ⚠️ git add 扫描产物失败（可手动处理）`)
+    else console.log('  📦 已暂存扫描产物 .sillyspec/docs 与 .sillyspec/knowledge（未提交，由统一提交工具处理）')
   }
 }

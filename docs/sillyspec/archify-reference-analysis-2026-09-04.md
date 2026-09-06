@@ -65,6 +65,12 @@
 
 **仍未做（agent 半边 IR 等）**：机制 1 的完整形态（agent claims sidecar）、机制 4 的 acceptsFix 机器验证修复建议——维持走正式 change 的判断。
 
+**第三轮（2026-09-05，①②落地 + ③方案稿）**：
+- **① 四个 ls 级步骤 noAI 化**：注册表步骤 1（子项目探测→`scanDetectProjects`）、4（断点续扫→`scanResumeCheck`）、11（自检提交→`scanFinalize`）全部转 CLI 直跑（复用 quick preflight 的 `noAI + _cliAction` 机制），每次深度扫描省 3-4 轮 agent 往返；步骤 2（用户交互确认）保持 agent。`scanFinalize` 不 throw——平台 manifest/指针/exit(1) 契约由 handleScanStageCompleted 在阶段完成时统一落（throw 会拦在完成前导致 manifest 永不写入，run-complete-step-scan-platform Case 1 实测）。
+- **② frontmatter CLI 原子盖章**：新 `stampScanDocHeaders`（`src/scan-postcheck.js`，与 backfillFrontmatter 同插入口径，只补缺不覆盖、幂等），接入三个路径（scanFinalize / quick postcheck / 平台+本地阶段收尾）；scan 深度档与 quick 档 prompt 全面卸责（「子代理不写 frontmatter、不跑 git 取值」，正文第 1 行直接写中文标题）。agent 手抄元数据的失败模式整体消灭，scan-fix-headers 降级为历史文档修复工具。
+- **③ 五阶段 IR 方案稿**：`docs/sillyspec/archify-ir-stage-proposal-2026-09-05.md`——统一「事实层（IR 机器核验）+ 判断层（散文人读）」双层原则，按 brainstorm/plan/execute/verify/archive 逐阶段给 IR 化点位与分期（P3a=execute touched_files 对账起步），供正式 change 立项。
+- 测试 `test/scan-noai-finalize.test.mjs` 18 断言；全量 26 套件 + lint 462 文件通过。
+
 ## 五、风险与边界
 
 - **agent 写 IR 的格式纪律**是最大风险（frontmatter 手抄前科）——P2 起 IR 校验失败应降级 warning + retry_prompts 重试，不 fail-closed。

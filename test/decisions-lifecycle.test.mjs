@@ -560,13 +560,28 @@ describe('FR-03 归档中途兼容（archive steps 按名匹配，新步骤为�
     assert.equal(definition.steps[i].conditionalWait, true, 'conditionalWait 先例（非 requiresWait 硬门）')
   })
 
-  it('末步 git add 清单含 knowledge/decisions/；存量五步名未变', async () => {
+  it('归档暂存含 knowledge/decisions/（C-20 语义迁移：prompt 指令 → CLI stageArchiveArtifacts）；存量五步名未变', async () => {
     const { definition } = await import('../src/stages/archive.js')
+    const { stageArchiveArtifacts } = await import('../src/git-helper.js')
     const names = definition.steps.map(s => s.name)
     const last = definition.steps[definition.steps.length - 1]
     assert.equal(last.name, '更新路线图和提交')
-    assert.ok(last.prompt.includes('git add .sillyspec/knowledge/decisions/'),
-      '末步 prompt 补决策库 git add 清单（C-20）')
+    // C-20 原「末步 prompt 补 decisions git add 指令」——2026-09-05 全流程审计后该职责
+    // 迁至 CLI（归档完成时自动暂存三路径），prompt 改为声明「CLI 已自动完成」。
+    assert.ok(last.prompt.includes('CLI 自动完成') && last.prompt.includes('knowledge/decisions/'),
+      '末步 prompt 声明 CLI 自动暂存（含 decisions 路径说明）')
+    assert.ok(!last.prompt.includes('git add .sillyspec'), 'agent 不再手动 git add（职责已迁移）')
+    // CLI 侧守卫：stageArchiveArtifacts 的候选路径必含 decisions（fixture 用伪 git 失败路径验证清单）
+    const mk = mkdtempSync(join(tmpdir(), 'c20-'))
+    try {
+      mkdirSync(join(mk, '.sillyspec', 'changes', 'archive'), { recursive: true })
+      mkdirSync(join(mk, '.sillyspec', 'knowledge', 'decisions'), { recursive: true })
+      mkdirSync(join(mk, '.sillyspec', 'docs', 'p1', 'modules'), { recursive: true })
+      // 非 git 目录：safeGit 失败 → skipped 返回完整候选清单（证明 decisions 在清单内）
+      const r = stageArchiveArtifacts(mk)
+      assert.ok(r.skipped.some(p => p.replaceAll('\\', '/').endsWith('knowledge/decisions')),
+        `stageArchiveArtifacts 候选含 knowledge/decisions/（实际 ${JSON.stringify(r.skipped)}）`)
+    } finally { rmSync(mk, { recursive: true, force: true }) }
     assert.deepEqual(names.filter(n => n !== 'decision-distill 决策提炼'),
       ['任务完成度检查', 'extract-module-impact', 'sync-module-docs', '确认归档', '更新路线图和提交'],
       '存量五步名与顺序未变（按名匹配兼容已过 sync-module-docs 的在途变更）')

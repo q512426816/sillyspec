@@ -20,7 +20,7 @@ import { join, dirname } from 'node:path'
 import { existsSync, readdirSync, readFileSync, mkdirSync } from 'node:fs'
 import { writeAtomicSync } from '../fs-atomic.js'
 import { resolveSpecDir, resolveChangeDir, resolveRuntimeRoot, resolveQuickSessionsDir, triggerSync, safeGit, parsePorcelainPath, formatWaitOptions, checkApproval, getStageSteps, warnApprovalUnknown, predictProtectedQuickFiles, mergeQuickBoundaryFiles, detectEmptyShellQuickSessions } from './shared.js'
-import { computeScanProfile, applyScanProfileSteps, executeScanPreflight, executeScanPostcheck } from './scan-profile.js'
+import { computeScanProfile, applyScanProfileSteps, executeScanPreflight, executeScanPostcheck, executeScanDetectProjects, executeScanResumeCheck, executeScanFinalize } from './scan-profile.js'
 import { outputStep, collectStageWaitHistory } from './prompt.js'
 import { allocateQuicklogEntry, deriveTitleFromLinkedChange, sanitizeDesc } from '../quicklog.js'
 import { createHash } from 'node:crypto'
@@ -529,6 +529,12 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
         await executeScanPreflight(cwd, platformOpts, scanProfile)
       } else if (cliAction === 'scanPostcheck') {
         await executeScanPostcheck(cwd, platformOpts, scanProfile)
+      } else if (cliAction === 'scanDetectProjects') {
+        await executeScanDetectProjects(cwd, platformOpts)
+      } else if (cliAction === 'scanResumeCheck') {
+        await executeScanResumeCheck(cwd, platformOpts)
+      } else if (cliAction === 'scanFinalize') {
+        await executeScanFinalize(cwd, platformOpts)
       } else if (cliAction === 'planPostcheck') {
         await executePlanPostcheck(cwd, platformOpts, progress)
       } else {

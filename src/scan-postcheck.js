@@ -499,6 +499,65 @@ export function backfillFrontmatter(content, { author, createdAt }) {
 }
 
 /**
+ * scan 文档 frontmatter CLI 原子注入（2026-09-05 ②，archify 借鉴：机器校验替代 agent 自检）。
+ *
+ * agent 只写正文，元数据由 CLI「盖章」：author / created_at / source_commit（HEAD 短哈希）/
+ * updated_at / generator: sillyspec-scan（quick 档另加 scan_depth: quick）。
+ * 只补缺失键、**绝不覆盖已有**（增量扫描时旧文档保留原 source_commit 溯源）；
+ * 插入口径与 backfillFrontmatter 逐字一致（有 --- 就地插入、无则前置整块、CRLF 归一写回）。
+ * 幂等——三个调用路径（scanFinalize / quick postcheck / 平台收尾）重复执行无害。
+ * 消灭 agent 手抄 CLI 注入值的失败模式（scan-fix-headers 从「兜底」降级为「历史文档修复工具」）。
+ *
+ * @param {{ cwd: string, specDir?: string|null, project?: string|null, mode?: string|null }} opts
+ * @returns {{ fixed: string[], skipped: string[], stampedKeys: number }}
+ */
+export function stampScanDocHeaders({ cwd, specDir = null, project = null, mode = null }) {
+  const specBase = specDir ? specDir : join(cwd, '.sillyspec')
+  const docsRoot = join(specBase, 'docs')
+  const projects = project
+    ? [project]
+    : (existsSync(docsRoot) ? readdirSync(docsRoot, { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name) : [])
+
+  let author = 'unknown'
+  try { author = git(cwd, ['config', 'user.name']) || 'unknown' } catch { /* git 不可用 → unknown */ }
+  let headShort = null
+  try { headShort = String(git(cwd, ['rev-parse', '--short', 'HEAD']) || '').trim() || null } catch { /* 非 git 仓 → 省略 source_commit */ }
+  const now = nowWallClock()
+  const updatedIso = new Date().toISOString()
+
+  const fixed = []
+  const skipped = []
+  let stampedKeys = 0
+  for (const p of projects) {
+    const scanDir = join(docsRoot, p, 'scan')
+    if (!existsSync(scanDir)) continue
+    for (const f of readdirSync(scanDir)) {
+      if (!f.endsWith('.md')) continue
+      const filePath = join(scanDir, f)
+      let content
+      try { content = readFileSync(filePath, 'utf8') } catch { continue }
+      const header = content.slice(0, 600)
+      const inserts = []
+      if (!/author\s*:/.test(header)) { inserts.push(`author: ${author}`); stampedKeys++ }
+      if (!/created_at\s*:/.test(header)) { inserts.push(`created_at: ${now}`); stampedKeys++ }
+      if (headShort && !/source_commit\s*:/.test(header)) { inserts.push(`source_commit: ${headShort}`); stampedKeys++ }
+      if (!/updated_at\s*:/.test(header)) { inserts.push(`updated_at: ${updatedIso}`); stampedKeys++ }
+      if (!/generator\s*:/.test(header)) { inserts.push(`generator: sillyspec-scan`); stampedKeys++ }
+      if (mode === 'quick' && !/scan_depth\s*:/.test(header)) { inserts.push(`scan_depth: quick`); stampedKeys++ }
+      if (inserts.length === 0) { skipped.push(filePath); continue }
+      const out = content.startsWith('---\n') || content.startsWith('---\r\n')
+        ? content.replace(/\r\n?/g, '\n').replace(/^---\n/, `---\n${inserts.join('\n')}\n`)
+        : `---\n${inserts.join('\n')}\n---\n\n` + content.replace(/\r\n?/g, '\n')
+      try {
+        writeFileSync(filePath, out)
+        fixed.push(filePath)
+      } catch { /* 只读文件等写失败 → 跳过不抛 */ }
+    }
+  }
+  return { fixed, skipped, stampedKeys }
+}
+
+/**
  * source_root 污染一键修复（2026-08-21 agent-手工产出审计第四批 C-3）。
  *
  * runScanPostCheck 对「agent 把产物写到 <source_root>/.sillyspec/ 而非平台 specRoot」只报

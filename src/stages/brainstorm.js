@@ -7,21 +7,20 @@ export const definition = {
       name: '进度确认',
       // 重命名自「状态检查」（③ status 消歧）：老进度里的「状态检查」completed 由迁移逻辑承接，防 currentIdx 回跳
       migratedFrom: ['状态检查'],
-      prompt: `检查当前变更的进度状态（sillyspec.db）。用 \`sillyspec progress show\` 查流程进度，不要用 \`sillyspec status\`（项目级快照，不推进流程）。
+      prompt: `检查当前变更的进度状态（快照已由 CLI 注入，勿再跑 progress show——那是全量输出，浪费上下文；\`sillyspec status\` 是项目级快照，也不推进流程）。
+
+### 进度快照（CLI 注入）
+{PROGRESS_SNAPSHOT}
 
 ### 操作
-1. 运行 \`sillyspec progress show\`
-2. 确认 currentStage 为 "brainstorm"
-3. 如果有进行中的 brainstorm，提示选择继续或重新开始
-4. 如果未初始化，提示先运行 sillyspec init
-5. **检查变更名称是否有意义**：如果当前变更名是自动生成的（如 \`2026-06-02-new-change-a3f2b7c1\`），询问用户确认实际变更名，然后运行 \`sillyspec change-rename <旧名> <新名>\` 重命名
+1. **检查变更名称是否有意义**：如果当前变更名是自动生成的（如 \`2026-06-02-new-change-a3f2b7c1\`），询问用户确认实际变更名，然后运行 \`sillyspec change-rename <旧名> <新名>\` 重命名
+2. 如果快照显示阶段不符或未初始化，输出正确提示并停止
 
 ### 输出
 当前状态摘要（1-2 句话）
 
 ### 注意
-- 以 CLI 返回为准，不要自行推断阶段
-- 如果阶段不对，输出正确提示并停止
+- 以 CLI 注入快照为准，不要自行推断阶段
 - **不要用 mv 命令重命名变更目录**，必须使用 \`sillyspec change-rename\`，否则 DB 和目录会脱节`,
       outputHint: '状态摘要',
       optional: false

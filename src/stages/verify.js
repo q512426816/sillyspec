@@ -47,13 +47,13 @@ export const definition = {
       migratedFrom: ['状态检查'],
       prompt: `> 💡 先说清楚：\`sillyspec run verify\`（不带 --done）**只下发执行指令，不会替你跑测试/构建**——真正的测试由 CLI 在最后 --done 时统一执行（local.yaml 的 commands.test，同步对账可能耗时较长）；「运行测试和质量扫描」那步**不需要你重复手动跑全量**（避免与 CLI 对账重复耗时），只做 lint/静态检查 + 可选快速冒烟。别以为敲了 run verify 就自动验证了。
 
-检查当前进度，确认可以执行 verify。
+检查当前进度，确认可以执行 verify（快照已由 CLI 注入，勿再跑 progress show；\`sillyspec status\` 是项目级快照，也不推进流程）。
 
-> ⚠️ 本步用 \`sillyspec progress show\` 查**流程进度**（推进工作流用），不要用 \`sillyspec status\`（那是**项目级快照**，只读、不推进流程，是另一条命令）。
+### 进度快照（CLI 注入）
+{PROGRESS_SNAPSHOT}
 
 ### 操作
-1. 运行 \`sillyspec progress show\`
-2. 确认 currentStage 为 "verify"
+1. 如果快照显示阶段不符，输出正确提示并停止
 
 ### 输出
 当前进度摘要`,

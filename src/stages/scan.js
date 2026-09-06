@@ -5,35 +5,13 @@ export const definition = {
   auxiliary: true,
   steps: [
     {
+      // noAI 化（2026-09-05 ①）：ls 级探测不值一整轮 agent 往返——CLI 直跑（scanDetectProjects），
+      // 只打印建议不注册（原红线语义不变）。步骤名保持不变（存量进度库按名匹配迁移）。
       name: '探测项目结构并建议子项目',
-      prompt: `扫描项目顶层目录结构，自动发现可能的子项目，**需用户确认后才创建 projects 配置**。
-
-### 操作
-1. 列出项目顶层目录：\`ls -d */ 2>/dev/null | grep -v node_modules | grep -v '.git' | grep -v '.sillyspec'\`
-2. 对每个顶层目录，快速判断是否为独立项目（检查 package.json / pom.xml / build.gradle / pyproject.toml / go.mod 等构建文件）
-3. 对每个疑似独立项目，检测技术栈：\`cat <dir>/package.json 2>/dev/null | head -5\` 或类似
-4. 对比 \`{PROJECTS_ROOT}/\` 已有配置，找出未注册的子项目
-
-### 判断标准（满足任一即为子项目）
-- 有独立的构建文件（package.json, pom.xml, build.gradle, pyproject.toml 等）
-- 有独立的源码目录结构（src/, app/, lib/ 等）
-- 有独立的测试目录（test/, tests/, __tests__/ 等）
-- 不是 .git / node_modules / .sillyspec / dist / build 等工具目录
-
-### 输出格式
-列出发现的可能子项目列表，每个含：
-- 目录名
-- 技术栈（如 Next.js + TypeScript、FastAPI + Python）
-- 是否已注册到 projects/
-- 建议：注册 / 跳过
-
-### ⛔ 红线
-- **不要自动创建 projects 配置文件**，只列出建议供用户确认
-- **不要修改任何文件**，只做探测和报告
-
-### 输出
-子项目建议列表（含技术栈和注册状态）`,
-      outputHint: '子项目建议列表',
+      noAI: true,
+      _cliAction: 'scanDetectProjects',
+      prompt: '',
+      outputHint: '子项目建议列表（CLI 探测输出）',
       optional: false
     },
     {
@@ -111,19 +89,13 @@ export const definition = {
       optional: false
     },
     {
+      // noAI 化（2026-09-05 ①）：existsSync×7 的机械检查——CLI 一次遍历全部已注册项目（scanResumeCheck）。
+      // 不再 perProject（单次 CLI 调用覆盖多项目，注册表步数不变仍为 11）。
       name: '断点续扫检测',
-      perProject: true,
-      prompt: `检测当前项目已有扫描文档，列出缺失的。
-
-### 操作
-对扫描列表中的每个项目分别执行：
-1. 检查 7 份文档是否存在：ARCHITECTURE、STRUCTURE、CONVENTIONS、INTEGRATIONS、TESTING、CONCERNS、PROJECT
-   路径：\`{DOCS_ROOT}/scan/<DOC>.md\`
-2. 列出已有 ✅ 和缺失 ⬜
-
-### 输出
-每个项目的已有/缺失文档列表`,
-      outputHint: '断点续扫状态',
+      noAI: true,
+      _cliAction: 'scanResumeCheck',
+      prompt: '',
+      outputHint: '各项目已有/缺失文档清单（CLI 输出）',
       optional: false
     },
     {
@@ -150,19 +122,9 @@ export const definition = {
 
 ### 覆盖保护
 - **scan_depth: quick 的浅层文档允许覆盖升级**：读取旧 frontmatter 时，若旧文档含 scan_depth: quick（由 --quick 快速接入生成的浅层版本），即使其 source_commit 与当前 HEAD 一致、updated_at 未变，也允许覆盖重写——深度扫描的目的就是把它升级为完整文档。
-- 生成每份 scan 文档时，frontmatter 必须包含：
-  \`\`\`yaml
-  ---
-  author: <git 用户名（git config user.name 的输出，如 qinyi）>
-  created_at: <精确到秒的时间，如 2026-07-27 10:30:00>
-  source_commit: <git-head-short>
-  updated_at: <now-iso-datetime>
-  generator: sillyspec-scan
-  ---
-  \`\`\`
-  （\`<git-head-short>\` / \`<now-iso-datetime>\` 两占位符由 CLI 注入 prompt 时自动替换为当前 HEAD 短哈希与时间——照 prompt 里已替换的真实值抄写，勿自跑 git rev-parse；漏 header 事后 \`sillyspec scan-fix-headers\` 一键补 author/created_at）
+- **frontmatter 由 CLI 自动写入（2026-09-05 ②）：子代理不写 frontmatter、不跑 git 取值**。文档正文第 1 行直接写中文标题；终检步骤（scanFinalize）的 CLI 会按需注入 author / created_at / source_commit / updated_at / generator，只补缺不覆盖。
 - 覆盖已有 scan 文档前先读取旧 frontmatter；如果旧文档的 \`source_commit\` 与当前 HEAD 不一致，或旧文档 \`updated_at\` 晚于本次 scan 开始时间，不要覆盖。
-- 如果用户明确传入 \`--force-rescan\`，允许覆盖，但仍需写入新的 \`source_commit\` 和 \`updated_at\`。
+- 如果用户明确传入 \`--force-rescan\`，允许覆盖（新 frontmatter 仍由 CLI 注入）。
 
 ### 子代理上下文注入
 启动每个子代理前，将以下信息拼入子代理 prompt：
@@ -173,7 +135,7 @@ export const definition = {
 - **事实底稿 \`{DOCS_ROOT}/scan/_facts.md\` 全文直接贴入**（CLI 确定性抽取的端点/依赖/规模清单——子代理**禁止重新 grep 发现**这些机械事实，只做解读与成文；INTEGRATIONS/ARCHITECTURE 中的端点与集成条目必须与底稿一致，并直接使用底稿里的 file:line 引用）
 - 环境探测补充摘要（如有 _env-detect.md，直接贴入）
 - **⚠️ 必须强调：子代理必须用 write 工具将文件写入磁盘**
-- **文件标题用中文**（sillyhub 平台解析识别用）：frontmatter 必须在文件最前（第 1 行 --- 起），frontmatter 结束的 --- 之后空一行，再写 # 中文名（English）作为标题。严禁把 # 标题放到 frontmatter 之前（否则 frontmatter 不在头部、「检查产物完整性」步的 frontmatter 检查会报缺 author/created_at）。各文档标准标题格式：
+- **文件标题用中文**（sillyhub 平台解析识别用）：正文第 1 行写 # 中文名（English）作为标题（CLI 会把 frontmatter 自动插到标题之前，你不用管）。各文档标准标题格式：
   - STRUCTURE.md = # 目录结构（Structure）
   - CONVENTIONS.md = # 代码约定（Conventions）
   - ARCHITECTURE.md = # 架构（Architecture）
@@ -574,46 +536,14 @@ INDEX.md 维护索引，格式（每行：关键词1|关键词2 → [条目名](
       optional: false
     },
     {
+      // noAI 化（2026-09-05 ①②）：原 40 行自检 prompt 的职责全部机器化——
+      // 文档存在性/header/路径污染/API 错误信号 → runScanPostCheck；frontmatter → stampScanDocHeaders；
+      // _env-detect 清理 + 非平台 git add → CLI 直做。failed_post_check 时 throw 保持 step pending。
       name: '自检和提交',
-      perProject: true,
-      prompt: `验证当前项目的扫描完整性，清理并提交。
-
-### 操作
-对扫描列表中的每个项目分别执行：
-1. 检查 7 份 scan 文档是否全部生成（\`{DOCS_ROOT}/scan/\`）
-2. 检查模块文档状态（\`{DOCS_ROOT}/modules/\`）
-3. 自检门控：ARCHITECTURE（技术栈+Schema摘要）、CONVENTIONS（隐形规则+代码风格）、STRUCTURE（目录结构）、INTEGRATIONS（外部依赖）、TESTING（测试现状）、CONCERNS（技术债务）、PROJECT（项目概览）
-4. 检查 flows/ 和 glossary.md 是否已生成（如有）
-5. 清理：\`rm -f {DOCS_ROOT}/scan/_env-detect.md\`
-6. 如果非平台模式：\`git add {DOCS_ROOT}/ {KNOWLEDGE_ROOT}/\` — 暂存本次扫描产物（scan 文档 / 模块文档 / flows / glossary / knowledge；勿用 .sillyspec/ 整目录——会裹挟 changes/ 下其他活跃变更；不要 commit，由用户通过统一提交工具处理）。如果平台模式：跳过 git add（specRoot 不在 sourceRoot 的 git repo 内）。
-
-### ⛔ 路径合规检查（平台模式下必须执行）
-7. 确认所有文档都写入 \`{DOCS_ROOT}/\`（spec-root 下），**而非源码目录下的 .sillyspec/**
-8. 检查是否出现 tool_use_error 或 API Error 未恢复
-9. 检查 7 份文档 header 是否包含 author 和 created_at
-10. 复查 detect 核验结果——commands 键已由 detect 核验 scripts 存在性，agent 无需重复核验或标 unavailable，仅确认 local.yaml 与 detect 产出一致
-
-### ⛔ API 错误处理
-- 遇到 API Error 529（服务过载）或 rate_limit 时，**停止当前操作并报告**，不要自动重试
-- 遇到 tool_use_error 时，记录错误信息并跳过该文件/操作，继续处理下一项
-- 如果连续 3 次操作失败，输出失败摘要并停止
-
-### ⛔ 最终状态判定
-如果出现以下**任意**情况，最终状态**不能**写"全部通过"，只能写 \`completed_with_warnings\` 或 \`failed_post_check\`：
-- 源码目录下存在 docs（路径合规检查失败）
-- source_commit 为 null
-- Write 工具出现过失败
-- API Error 529 或 rate_limit
-- fallback / retry / skipped validation
-- 文档引用不存在的文件或模块
-- 文档内容包含 .sillyspec/ 等工具目录的扫描结果
-
-### 输出
-每个项目的扫描完整性报告（必须包含路径合规检查结果和最终状态）
-
-### 注意
-- ❌ 修改代码 / 编造路径 / 读源码全文`,
-      outputHint: '自检报告',
+      noAI: true,
+      _cliAction: 'scanFinalize',
+      prompt: '',
+      outputHint: 'CLI 终检报告（frontmatter 注入 + postcheck + 清理 + 暂存）',
       optional: false
     }
   ]

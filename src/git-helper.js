@@ -13,6 +13,8 @@
  * safeGit 额外支持 opts.retryOnTimeout：ETIMEDOUT（机器忙瞬时抖动）时用 2× timeout 重试一次。
  */
 import { execFileSync } from 'node:child_process'
+import { existsSync, readdirSync } from 'node:fs'
+import { join } from 'node:path'
 
 /**
  * git C 风格引号路径解码：`\\` `\"` `\n` `\t` 与 `\NNN` 八进制**原始字节**。
@@ -147,4 +149,33 @@ export function gitQuiet(cwd, args, opts = {}) {
     }
     return null
   }
+}
+
+/**
+ * 归档产物机械暂存（2026-09-05 全流程审计：原 archive 步骤 6 的 3 条 git add agent 指令 CLI 化）。
+ * 固定路径：changes/archive/（归档产物）、knowledge/decisions/（决策提炼）、docs/<project>/modules/
+ * （本次同步的模块文档——按已存在目录枚举，未变的目录 git add 是无害 no-op）。
+ * 只 add 不 commit（统一提交工具处理）；平台模式由调用方跳过（specRoot 在源码仓外）。
+ * @param {string} cwd 源码项目根
+ * @returns {{ staged: string[], skipped: string[] }}
+ */
+export function stageArchiveArtifacts(cwd) {
+  const specBase = join(cwd, '.sillyspec')
+  const candidates = [join(specBase, 'changes', 'archive'), join(specBase, 'knowledge', 'decisions')]
+  const docsRoot = join(specBase, 'docs')
+  try {
+    for (const e of readdirSync(docsRoot, { withFileTypes: true })) {
+      if (e.isDirectory()) candidates.push(join(docsRoot, e.name, 'modules'))
+    }
+  } catch { /* 无 docs 目录 → 跳过 */ }
+  const staged = []
+  const skipped = []
+  const existing = candidates.filter(p => existsSync(p))
+  if (existing.length === 0) return { staged, skipped }
+  const r = safeGit(cwd, ['add', ...existing])
+  if (r && r.error) {
+    console.warn(`  ⚠️ 归档产物 git add 失败（可手动处理）：${String(r.error).slice(0, 120)}`)
+    return { staged, skipped: existing }
+  }
+  return { staged: existing, skipped }
 }

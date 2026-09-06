@@ -220,13 +220,14 @@ const fixedPrefix = [
   {
     name: '进度确认',
     migratedFrom: ['状态检查'],
-    prompt: `检查当前进度，确认可以执行 execute。用 \`sillyspec progress show\` 查流程进度，不要用 \`sillyspec status\`（项目级快照，不推进流程）。
+    prompt: `检查当前进度，确认可以执行 execute（快照已由 CLI 注入，勿再跑 progress show；\`sillyspec status\` 是项目级快照，也不推进流程）。
+
+### 进度快照（CLI 注入）
+{PROGRESS_SNAPSHOT}
 
 ### 操作
-1. 运行 \`sillyspec progress show\`
-2. 确认 currentStage 为 execute
-3. 如果不是 → 检查是否有未完成的 tasks.md
-4. 确认执行范围（$ARGUMENTS 指定 wave/task 或全部）
+1. 如果快照显示不是 execute 阶段 → 检查是否有未完成的 tasks.md
+2. 确认执行范围（$ARGUMENTS 指定 wave/task 或全部）
 
 ### 输出
 当前状态 + 执行范围确认`,
@@ -284,18 +285,18 @@ const fixedPrefix = [
   },
   {
     name: '确认 worktree 路径',
-    prompt: `确认当前 worktree 状态，提取隔离路径。
+    prompt: `确认当前 worktree 状态（meta 已由 CLI 注入，勿再跑 worktree meta）。
+
+### worktree 快照（CLI 注入）
+{WORKTREE_META}
 
 ### 操作
-1. 运行 \`sillyspec worktree meta <change-name>\` 读取 meta.json
-2. 从输出中提取 worktreePath、branch、mode 字段
-3. 确认 worktree 目录存在（如果是 worktree/native-worktree 模式）
-4. **确认工具链可用**：worktree 内项目工具链（lint/format/test 二进制，如 ruff / prettier / uv）可能不全——对本次会用到的工具先跑一次 \`--version\` 确认；缺失则按项目方式安装（Python 项目 \`uv tool install ruff\` / \`uv sync\`，Node 项目 node_modules 已由 CLI 链接主仓）。不要等到 commit 才发现二进制不在 PATH 被 hook 拦。**Python 项目注意**：worktree 自建 .venv 只含 pyproject 声明依赖，pytest 等 dev 工具可能缺失——优先在 worktree 内补装（\`uv sync --group dev\` / \`uv pip install pytest\`），**不要回退用主仓 venv 跑测试**（主仓 venv 加载的可能是主仓代码而非 worktree 代码，环境不一致会掩真 bug）
+1. **确认工具链可用**：worktree 内项目工具链（lint/format/test 二进制，如 ruff / prettier / uv）可能不全——对本次会用到的工具先跑一次 \`--version\` 确认；缺失则按项目方式安装（Python 项目 \`uv tool install ruff\` / \`uv sync\`，Node 项目 node_modules 已由 CLI 链接主仓）。不要等到 commit 才发现二进制不在 PATH 被 hook 拦。**Python 项目注意**：worktree 自建 .venv 只含 pyproject 声明依赖，pytest 等 dev 工具可能缺失——优先在 worktree 内补装（\`uv sync --group dev\` / \`uv pip install pytest\`），**不要回退用主仓 venv 跑测试**（主仓 venv 加载的可能是主仓代码而非 worktree 代码，环境不一致会掩真 bug）
 
 ### 铁律
 - **worktree 已由 CLI 在 execute 阶段启动时自动创建，不要自行创建或跳过**
-- **后续所有子代理的 cwd 必须设为该 worktree 路径**
-- 如果 meta.json 不存在（说明创建失败），停止并报错
+- **后续所有子代理的 cwd 必须设为快照中的 worktreePath**
+- 快照显示 meta 不可读（说明创建失败）→ 停止并报错
 - **不要自行检查 git dirty/uncommitted 状态来判断是否可以进入 worktree，CLI 已自动处理**
 
 ### 输出
