@@ -66,7 +66,7 @@
 ## 一、缺陷（BUG）
 
 ### BUG-01【P1✅已验证】sync.js 平台模式下 spec 树同步可清空服务器全部文件
-- 位置：`src/sync.js:18`（`syncSpecTree(safePlatformSpecDir(...))`，修复后锚点）、`src/spec-sync.js:422`（syncSpecTree diff 逻辑内 computeSpecOps delete 分支）
+- 位置：`src/sync.js:18`（`syncSpecTree(safePlatformSpecDir(...))`，修复后锚点）、`src/spec-sync.js:451`（syncSpecTree diff 逻辑内 computeSpecOps delete 分支）
 - 问题：`sync()` 的进度读写锚点用 `safePlatformSpecDir(this.cwd)`（平台模式 → specRoot），但成功后链式推送 spec 树时本地树根硬编码 `cwd/.sillyspec`。平台模式下该目录只有 local.yaml（walkSpecTree 按文件名排除），localMap 为空 → 服务器清单中每个 exists=true 的文件都生成 delete op → **服务器侧 spec 树被整体清空**，且失败被 catch 吞成 debugLog。
 - 可达路径：平台模式仓库手动 `platform sync --change x`；push 409 冲突横幅指导用户跑 sync；`resolve --keep-local` 自动重推（sync.js:955-968）。
 - 修复方向：spec 树根与进度锚点统一用 `safePlatformSpecDir`；并在 computeSpecOps 加护栏——本地树为空且服务器清单非空时拒绝生成 delete（fail-closed）。
