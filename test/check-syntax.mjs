@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { readdirSync, statSync, readFileSync } from 'node:fs'
+import { readdirSync, statSync, readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 
 function collect(root) {
@@ -92,4 +92,24 @@ if (deadExports.length) {
   process.exit(1)
 }
 
-console.log(`Checked ${allFiles.length} JavaScript files (src ${srcFiles.length} + test ${testFiles.length}); test/ 内容规则通过 + 未引用导出 ${deadExports.length} 项（hard fail）`)
+// ── module-map 覆盖检查（2026-09-07，「补录债」机制化：新文件落 src/ 必须录 _module-map.yaml
+//    paths——否则模块卡匹配/影响推导/上下文注入对该文件全盲。历史欠账 14 个已于同批补录归零）──
+{
+  const mapPath = join('.sillyspec', 'docs', 'sillyspec', 'modules', '_module-map.yaml')
+  if (existsSync(mapPath)) {
+    const yamlText = readFileSync(mapPath, 'utf8')
+    const covered = [...yamlText.matchAll(/^(\s+)- (\S+)$/gm)].map(m => m[2].replaceAll('\\', '/'))
+    const uncovered = srcFiles.map(f => f.replaceAll('\\', '/')).filter(f => !covered.some(c => {
+      const cc = c.endsWith('/') ? c.slice(0, -1) : c
+      return f === cc || f.startsWith(cc + '/')
+    }))
+    if (uncovered.length) {
+      console.error(`\n❌ src/ 未录 module-map ${uncovered.length} 个文件（模块归属盲区：模块卡匹配/影响推导/上下文注入对它们全盲）：`)
+      for (const f of uncovered) console.error('  - ' + f)
+      console.error('  修复：在 .sillyspec/docs/sillyspec/modules/_module-map.yaml 对应模块 paths 补录（或建新模块条目）')
+      process.exit(1)
+    }
+  }
+}
+
+console.log(`Checked ${allFiles.length} JavaScript files (src ${srcFiles.length} + test ${testFiles.length}); test/ 内容规则通过 + 未引用导出 ${deadExports.length} 项（hard fail）+ module-map 覆盖全`)

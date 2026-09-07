@@ -14,6 +14,7 @@ modules:
     review_reasons: []
     paths:
       - src/stages/
+      - src/plan-adopt-waves.js
 
   runtime:
     status: active
@@ -21,6 +22,8 @@ modules:
     needs_review: false
     review_reasons: []
     paths:
+      - src/agent-session-log.js
+      - src/workspace.js
       - src/run.js
       - src/run/
       - src/facade-hint.js
@@ -37,6 +40,9 @@ modules:
       - bin/sillyspec.js
       - src/version.js
       - src/spec-dir-typo.js
+      - src/change-delete.js
+      - src/config-cat.js
+      - src/local-register.js
       - src/commit-suggest.js
 
   progress:
@@ -68,11 +74,15 @@ modules:
       - src/classify-change.js
       - src/contract-matrix.js
       - src/endpoint-extractor.js
+      - src/verify-probes.js
+      - src/foreign-declared.js
       - src/knowledge-match.js
       - src/doctor-diagnostics.js
       - src/fs-atomic.js
+      - src/datetime.js
       - src/constants.js
       - src/scan-postcheck.js
+      - src/endpoint-baseline.js
       - src/taskcard.js
       - src/taskcard-placeholders.js
 
@@ -87,6 +97,10 @@ modules:
       - src/docs-debt.js
       - src/scan-staleness.js
       - src/decision-distill.js
+      - src/scan-facts.js
+      - src/module-changelog.js
+      - src/module-impact.js
+      - src/module-resolve.js
       - src/design-facts.js
       - src/archive-delta.js
 
@@ -99,6 +113,7 @@ modules:
       - src/worktree.js
       - src/worktree-apply.js
       - src/worktree-deps.js
+      - src/worktree-cross.js
       - src/git-helper.js
 
   machine-interface:
