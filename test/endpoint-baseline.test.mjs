@@ -18,6 +18,7 @@ import { tmpdir } from 'node:os'
 import { spawnSync, execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { captureEndpointBaseline, diffEndpointSets } from '../src/endpoint-baseline.js'
+import { scanBackendEndpoints } from '../src/endpoint-extractor.js'
 import { buildDeltaReport } from '../src/archive-delta.js'
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -369,6 +370,34 @@ test('CLI worktree 锚定：基线落主仓 endpoint-baselines/ 且内容 pre-ch
   assert.equal(payload.baseCommit, shortHead, 'baseCommit = 主仓 HEAD short（锚定后的 cwd）')
 })
 
+test('CLI worktree 锚定保险二：显式 --spec-dir 指向 worktree 副本仍锚定主仓（EB 审查 nit-3 专测）', () => {
+  const fx = makeTmp('eb-wt2-')
+  const mainRoot = join(fx, 'main')
+  const wtRoot = join(fx, 'wt')
+
+  mkdirSync(join(mainRoot, 'backend'), { recursive: true })
+  writeFileSync(join(mainRoot, 'backend', 'app.py'), PY_PRE)
+  writeFileSync(join(mainRoot, '.gitignore'), '.sillyspec/\n')
+  initGitRepo(mainRoot)
+  commitAll(mainRoot, 'pre-change')
+  mkdirSync(join(mainRoot, '.sillyspec'), { recursive: true })
+
+  gitAt(mainRoot, ['worktree', 'add', '-q', '-b', 'feat2', wtRoot])
+  writeFileSync(join(wtRoot, 'backend', 'app.py'), PY_AFTER)
+  // 误导源：worktree 副本内手建 spec 目录（resolvePlatformSpecDir 会返回显式路径）
+  mkdirSync(join(wtRoot, '.sillyspec', 'changes'), { recursive: true })
+
+  const cn = '2026-09-07-eb-wt2'
+  const r = runCLI(['endpoints', 'baseline', '--change', cn, '--spec-dir', join(wtRoot, '.sillyspec')], { cwd: wtRoot })
+
+  assert.equal(r.status, 0, `显式 --spec-dir 指副本 exit 0（combined 尾：${r.combined.slice(-200)}）`)
+  const baselinePath = join(mainRoot, '.sillyspec', '.runtime', 'endpoint-baselines', `${cn}.json`)
+  assert.ok(existsSync(baselinePath), '基线仍落主仓 runtimeRoot（drift 检查恒跑，显式副本路径不豁免锚定）')
+  assert.ok(!existsSync(join(wtRoot, '.sillyspec', '.runtime', 'endpoint-baselines', `${cn}.json`)), '副本 .runtime 无基线残留')
+  const payload = JSON.parse(readFileSync(baselinePath, 'utf8'))
+  assert.ok(payload.endpoints.every(e => !e.path.includes('/new')), '内容仍为 pre-change 态（锚定后扫描主仓代码）')
+})
+
 // ═════════════════════════════════════════════════════════════════════════════
 // 5. archive-delta 第五源集成（buildDeltaReport 直调）
 // ═════════════════════════════════════════════════════════════════════════════
@@ -443,6 +472,37 @@ test('delta 集成：backendEndpoints=0 → 无「### 端点基线提示」节�
   })
   assert.ok(!md.includes('### 端点基线提示'), 'backendEndpoints=0 → 端点提示节缺席')
   assert.ok(!md.includes('端点 diff') && !md.includes('无基线'), '节内任何形态均不出现')
+})
+
+test('delta 集成：基线 == 现算 → 「无增删」一行（EB 审查 nit-2 渲染级断言）', () => {
+  const fx = buildDeltaFixture({ backendEndpoints: 3 })
+  const current = scanBackendEndpoints(fx.curRoot)
+  assert.ok(current.length > 0, `fixture 现算非空（实际 ${current.length}）`)
+  const fx2 = buildDeltaFixture({ backendEndpoints: 3, baselineEps: current })
+  const md = buildDeltaReport({
+    changeDir: fx2.changeDir, specRoot: fx2.specRoot, project: 'demo',
+    runtimeRoot: fx2.runtimeRoot, cwd: fx2.curRoot, now: '2026-09-07T08:00:00.000Z',
+  })
+  assert.ok(md.includes('### 端点基线提示'), '门控命中 → 节出现')
+  assert.ok(md.includes(`端点增删：无增删（基线 ${current.length} 端点 × 现算 ${current.length} 端点`),
+    '「无增删」渲染行（基线×现算计数）')
+  assert.ok(!md.includes('| + 新增 |') && !md.includes('| - 删除 |'), '无增删不出增删表')
+})
+
+test('delta 集成：基线在 + 现算不可得（cwd 为文件 ENOTDIR）→ 现算失败降级注记（EB 审查 nit-2 渲染级断言）', () => {
+  const fx = buildDeltaFixture({
+    backendEndpoints: 3,
+    baselineEps: [{ method: 'GET', path: '/api/items', source: 'backend/app.py' }],
+  })
+  const md = buildDeltaReport({
+    changeDir: fx.changeDir, specRoot: fx.specRoot, project: 'demo',
+    runtimeRoot: fx.runtimeRoot,
+    cwd: join(fx.curRoot, 'app.py'), // 文件路径作扫描根：readdirSync ENOTDIR → collect 侧 catch → null
+    now: '2026-09-07T08:00:00.000Z',
+  })
+  assert.ok(md.includes('### 端点基线提示'), '门控命中 → 节出现')
+  assert.ok(md.includes('基线已拍（1 端点）但现算不可得（scanBackendEndpoints 扫描失败）'), '现算不可得降级注记渲染')
+  assert.ok(!md.includes('| + 新增 |'), '不可比不出增删表')
 })
 
 // ═════════════════════════════════════════════════════════════════════════════

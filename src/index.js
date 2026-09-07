@@ -8,7 +8,7 @@
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'fs';
 import { writeAtomicSync } from './fs-atomic.js';
-import { basename, dirname, extname, join, resolve, isAbsolute } from 'path';
+import { basename, dirname, extname, join, resolve, isAbsolute, sep } from 'path';
 import { safeGit, git } from './git-helper.js';
 import { getVersion } from './version.js';
 
@@ -996,6 +996,12 @@ async function main() {
               ebNote(`⚠️ cwd 在 linked worktree 内，基线扫描根与落点已锚定主仓: ${ebMainRoot}（变更前代码在主仓；worktree 内是交付态且其 .runtime 随清理丢失，防基线静默失效）`);
               ebScanCwd = ebMainRoot;
               ebSpecBase = resolvePlatformSpecDir(ebMainRoot, specDir) || join(ebMainRoot, '.sillyspec');
+              // 显式 --spec-dir 指向 worktree 副本（任意形态——手建目录/检出副本；下方 drift 只认
+              // .runtime/worktrees 检出形态，覆盖不了手建副本）→ 重算结果仍在 worktree 内时锚回主仓
+              if (!resolve(ebSpecBase).toLowerCase().startsWith(resolve(ebMainRoot).toLowerCase() + sep)) {
+                ebNote(`⚠️ 显式 spec 命中 worktree 副本（${ebSpecBase}），基线落点一并锚定主仓: ${join(ebMainRoot, '.sillyspec')}`);
+                ebSpecBase = join(ebMainRoot, '.sillyspec');
+              }
             }
           }
         } catch { /* git 不可用/非仓库 → 不锚定，按原 cwd 继续 */ }
