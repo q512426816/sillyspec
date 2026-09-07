@@ -441,16 +441,19 @@ export async function handleArchiveConfirmStep({ stageName, steps, currentIdx, c
   const deltaChangeName = progress.currentChange || changeName
   if (deltaChangeName) {
     try {
-      const { buildDeltaReport } = await import('../archive-delta.js')
+      const { buildDeltaReport, writeLastDeltaSidecar } = await import('../archive-delta.js')
       const deltaChangeDir = join(specBase, 'changes', deltaChangeName)
-      const deltaMd = buildDeltaReport({
+      const deltaResult = buildDeltaReport({
         changeDir: deltaChangeDir,
         specRoot: specBase,
         // project 缺参可 null（loadModuleMap null 降级路径已支持，报告内逐段降级注记）
         project: progress?.project || null,
         runtimeRoot: resolveRuntimeRoot(platformOpts, specBase),
+        // IR 回灌 sidecar（2026-09-07-ir-hardening D-006）：与手动补跑同源数据
+        withSummary: true,
       })
-      writeFileSync(join(deltaChangeDir, 'delta.md'), deltaMd)
+      writeFileSync(join(deltaChangeDir, 'delta.md'), deltaResult.markdown)
+      writeLastDeltaSidecar(resolveRuntimeRoot(platformOpts, specBase), deltaResult)
       console.log(`📊 归档前已生成 delta.md: ${join(deltaChangeDir, 'delta.md')}`)
     } catch (e) {
       console.error(`⚠️  归档前 delta.md 自动生成失败（不阻断归档）: ${e.message}`)

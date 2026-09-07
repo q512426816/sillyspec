@@ -9,8 +9,8 @@
  *   - executeScanPostcheck 原冗余动态 import('fs'/'path'/'child_process') 删除，改顶部静态（execSync 实际未直接用，纯遗留）
  */
 import { join, basename, extname } from 'node:path'
-import { existsSync, readdirSync, statSync, mkdirSync, writeFileSync, unlinkSync } from 'node:fs'
-import { safeGit } from './shared.js'
+import { existsSync, readdirSync, statSync, mkdirSync, writeFileSync, unlinkSync, readFileSync } from 'node:fs'
+import { safeGit, resolveRuntimeRoot } from './shared.js'
 import { SCAN_REQUIRED_DOCS } from '../constants.js'
 
 /**
@@ -327,6 +327,24 @@ export async function executeScanResumeCheck(cwd, platformOpts) {
     console.log(`  📂 ${p}: ${states.join(' ')} ${facts}`)
   }
   console.log('')
+
+  // IR 增量回灌 advisory（change: 2026-09-07-ir-hardening，D-006@v1，FR-03）：读
+  // .runtime/last-delta.json（归档/delta 补跑写入的最近变更快照），14 天窗口内提示本轮
+  // scan 优先核对其涉及模块——advisory 不阻断不改变步骤结构；缺失/过期/解析失败静默。
+  try {
+    const sidecarPath = join(resolveRuntimeRoot(platformOpts, specBase), 'last-delta.json')
+    if (existsSync(sidecarPath)) {
+      const sidecar = JSON.parse(readFileSync(sidecarPath, 'utf8'))
+      const ageMs = Date.now() - Date.parse(sidecar.updatedAt || '')
+      const FOURTEEN_DAYS = 14 * 24 * 60 * 60 * 1000
+      if (Number.isFinite(ageMs) && ageMs >= 0 && ageMs <= FOURTEEN_DAYS
+        && Array.isArray(sidecar.affectedModules) && sidecar.affectedModules.length > 0) {
+        console.log(`🔁 增量回灌提示（上次归档变更 ${sidecar.change}，${new Date(sidecar.updatedAt).toISOString().slice(0, 10)}）：`)
+        console.log(`   其涉及模块 ${sidecar.affectedModules.join('、')} 的文档与 staleRefs 本轮 scan 优先核对（advisory，不据此跳过其他模块）`)
+        console.log('')
+      }
+    }
+  } catch { /* sidecar 读取/解析失败静默跳过（advisory 缺席零影响） */ }
 }
 
 /**

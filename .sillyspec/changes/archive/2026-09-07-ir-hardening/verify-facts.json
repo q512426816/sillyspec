@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-07-ir-hardening",
+  "generatedAt": "2026-09-07T16:35:20.561Z",
+  "probes": {
+    "probe1": {
+      "command": "sillyspec verify-probes --change 2026-09-07-ir-hardening",
+      "metrics": {
+        "matches": 41,
+        "skippedFiles": 0,
+        "worktreeHits": 0,
+        "globEntries": 0
+      }
+    },
+    "probe3": {
+      "command": "sillyspec verify-probes --change 2026-09-07-ir-hardening",
+      "metrics": {
+        "tasks": 10,
+        "hasTest": 9
+      }
+    },
+    "probe5": {
+      "command": "sillyspec verify-probes --change 2026-09-07-ir-hardening",
+      "metrics": {
+        "backendEndpoints": 2,
+        "frontendCalls": 0
+      }
+    },
+    "probe6": {
+      "command": "sillyspec verify-probes --change 2026-09-07-ir-hardening",
+      "metrics": {
+        "deletions": 0,
+        "unavailable": false
+      }
+    }
+  }
+}

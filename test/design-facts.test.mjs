@@ -22,7 +22,7 @@
  *      fileCount 判档不被示例行虚高）。
  */
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { join, basename } from 'node:path'
+import { join, basename, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import {
   parseDecisionDomains,
@@ -412,14 +412,26 @@ async function seedBrainstormToLast(cwd, specBase, cn) {
     BRAINSTORM_STEPS.map((name, i) => ({ name, status: i < BRAINSTORM_STEPS.length - 1 ? 'completed' : 'pending' })))
 }
 /** 四件套 + design（末步核验若被移除，完整产物会让流程正常完成 exit 0——红断言只归于本门禁） */
-function writeCompleteArtifacts(specBase, cn, fileListRows) {
+function writeCompleteArtifacts(specBase, cn, fileListRows, cwd = null) {
   const changeDir = join(specBase, 'changes', cn)
   writeFileSync(join(changeDir, 'proposal.md'), '# Proposal\n\n## 不在范围内\n无\n')
   writeFileSync(join(changeDir, 'requirements.md'), '# Requirements\n\n- FR-001: 模块域核验\n')
   writeFileSync(join(changeDir, 'tasks.md'), '# Tasks\n\n- [ ] task-01: 改 a\n')
   writeFileSync(join(changeDir, 'design.md'),
     `# 设计文档（Design）— ${cn}\n\n## 背景\n决策模块域需核验。\n\n## 总体方案\ndesign-facts 纯函数核验。\n\n## 决策\nD-001@v1: 模块域登记。\n\n## 文件变更清单\n| 操作 | 文件路径 | 说明 |\n|------|---------|------|\n${fileListRows}\n\n## 风险登记\n低风险。\n\n## 自审\n已核对。\n`)
-}
+
+  // 2026-09-07-ir-hardening：design 清单行级核验 gate 上线后，fixture 清单路径必须真实存在于
+  // cwd（或写 NEW: 前缀）——按清单行同步落盘 stub 文件，各用例模块归属断言语义不变
+  if (cwd) {
+    for (const row of String(fileListRows).split('\n')) {
+      const m = row.match(/\|\s*[^|]+\|\s*([^|]+?)\s*\|/)
+      if (!m || !m[1]) continue
+      const rel = m[1].trim().replace(/^NEW:/, '')
+      if (!rel) continue
+      const abs = join(cwd, rel)
+      try { mkdirSync(dirname(abs), { recursive: true }); writeFileSync(abs, '// fixture stub') } catch {}
+    }
+  }}
 /** CLI 侧模块索引：project = DB project 行名 = basename(cwd)（makeRepo+initChange 同链） */
 function writeCliModuleMap(specBase, cwd) {
   const dir = join(specBase, 'docs', basename(cwd), 'modules')
@@ -432,7 +444,7 @@ console.log('--- ERROR 红路径：幻觉模块域 → exit 1 + 进度不推进�
   const { cwd, specBase } = makeRepo('df-cli-red-')
   const cn = '2026-09-07-dm-red'
   await seedBrainstormToLast(cwd, specBase, cn)
-  writeCompleteArtifacts(specBase, cn, '| 修改 | src/a/x.js | a 改动 |')
+  writeCompleteArtifacts(specBase, cn, '| 修改 | src/a/x.js | a 改动 |', cwd)
   writeFileSync(join(specBase, 'changes', cn, 'decisions.md'),
     '## D-001@v1 域声明\n- type: architecture\n- status: confirmed\n- 模块域: ghost-mod\n')
   writeCliModuleMap(specBase, cwd)
@@ -456,7 +468,7 @@ console.log('--- WARNING 放行：声明×实改差异双向 → ⚠️ 留痕�
   const { cwd, specBase } = makeRepo('df-cli-warn-')
   const cn = '2026-09-07-dm-warn'
   await seedBrainstormToLast(cwd, specBase, cn)
-  writeCompleteArtifacts(specBase, cn, '| 修改 | src/b/x.js | b 改动 |')
+  writeCompleteArtifacts(specBase, cn, '| 修改 | src/b/x.js | b 改动 |', cwd)
   writeFileSync(join(specBase, 'changes', cn, 'decisions.md'),
     '## D-001@v1 域声明\n- type: architecture\n- status: confirmed\n- 模块域: mod-a\n')
   writeCliModuleMap(specBase, cwd)
@@ -477,7 +489,7 @@ console.log('--- skipped 放行：无 _module-map.yaml → 单行 info + exit 0 
   const { cwd, specBase } = makeRepo('df-cli-skip-')
   const cn = '2026-09-07-dm-skip'
   await seedBrainstormToLast(cwd, specBase, cn)
-  writeCompleteArtifacts(specBase, cn, '| 修改 | src/a/x.js | a 改动 |')
+  writeCompleteArtifacts(specBase, cn, '| 修改 | src/a/x.js | a 改动 |', cwd)
   writeFileSync(join(specBase, 'changes', cn, 'decisions.md'),
     '## D-001@v1 域声明\n- type: architecture\n- status: confirmed\n- 模块域: mod-a\n')
   // 不写 module-map → 无索引

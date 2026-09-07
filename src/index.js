@@ -1397,16 +1397,29 @@ async function main() {
       const { resolveRuntimeRoot } = await import('./run/shared.js');
       const dlRuntimeRoot = resolveRuntimeRoot(dlPlatformOpts, dlSpecBase);
       const { buildDeltaReport } = await import('./archive-delta.js');
-      // CLI 不收 --project：project=null 走 loadModuleMap 降级路径（报告内「无 module-map」注记），
-      // 与归档确认步自动生成（progress.project 有值时命中 module-map）形成口径互补。
-      const dlMarkdown = buildDeltaReport({
+      // project 同口径修复（change: 2026-09-07-ir-hardening D-005@v1）：此前硬编码 null →
+      // 手动补跑恒走 loadModuleMap 降级（报告恒「无 module-map」注记）。改从 progress.project
+      // 取值（与归档确认步自动生成同源），null 兜底降级不变。
+      let dlProject = null;
+      try {
+        const { ProgressManager } = await import('./progress.js');
+        const dlPm = new ProgressManager({ specDir: dlSpecBase });
+        const dlProgress = dlPm.read(cwd, dlChange);
+        dlProject = dlProgress?.project || null;
+      } catch { /* 读 progress 失败 → null 兜底降级（fail-soft） */ }
+      const dlResult = buildDeltaReport({
         changeDir: dlChangeDir,
         specRoot: dlSpecBase,
-        project: null,
+        project: dlProject,
         runtimeRoot: dlRuntimeRoot,
+        withSummary: true,
       });
+      const dlMarkdown = dlResult.markdown;
       const dlPath = join(dlChangeDir, 'delta.md');
       writeFileSync(dlPath, dlMarkdown);
+      // 回灌 sidecar（2026-09-07-ir-hardening D-006）：fail-soft，写失败不阻断 delta 输出
+      const { writeLastDeltaSidecar } = await import('./archive-delta.js');
+      writeLastDeltaSidecar(dlRuntimeRoot, dlResult);
       if (json) {
         console.log(JSON.stringify({ command: 'delta', change: dlChange, ok: true, path: dlPath, written: true }, null, 2));
         break;
@@ -1502,12 +1515,11 @@ async function main() {
         // 写回）；--dry-run 预览不写盘，单独传（无 --fix）也走预览路径——design §5.2 行为矩阵
         // --dry-run 列独立存在（「报告修复预览 + exit 1」），即 dryRun 置位 = fix 语义自动生效
         // 但零写盘（本口径记录于此，防歧义）。
-        const BARE_FLAGS = ['--suggest', '--fix', '--dry-run'];
+        const BARE_FLAGS = ['--fix', '--dry-run'];
         const PAIRED_FLAGS = ['--paths'];
         const rawDocsArgs = filteredArgs.slice(2);
         const docsCheckFlags = [];
         let cliPaths = null;
-        let suggest = false;
         let fix = false;
         let dryRun = false;
         for (let i = 0; i < rawDocsArgs.length; i++) {
@@ -1519,8 +1531,7 @@ async function main() {
             console.error('❌ docs check: --paths 缺值（逗号分隔 glob，如 --paths "docs/**/*.md"）');
             process.exit(2);
           } else if (BARE_FLAGS.includes(a)) {
-            if (a === '--suggest') suggest = true;
-            else if (a === '--fix') fix = true;
+            if (a === '--fix') fix = true;
             else if (a === '--dry-run') dryRun = true;
           } else if (a.startsWith('--')) {
             console.error(`❌ docs check: 未知 flag「${a}」。已知 flag：${[...BARE_FLAGS, ...PAIRED_FLAGS].join(' ')}（--json 为全局 flag）`);
@@ -1560,6 +1571,31 @@ async function main() {
             }
           }
           const fixResult = fixActive ? applyFixes(dir, fixes, dryRun ? { dryRun: true } : {}) : null;
+          // 修复回执（change: 2026-09-07-ir-hardening D-007@v1，FR-04）：--fix 落盘后用与首查
+          // 完全相同的口径重跑一次失效收集，得 after 计数——「前 N → 重锚 M → 后 K（消除 N-K）」
+          // 即修复建议被机器证明消除了多少诊断（acceptsFix 最小件）。仅 --fix（写盘）路径；
+          // --dry-run 不写盘重跑无意义，receipt 为 null；非 fix 路径零变化。
+          let fixReceipt = null;
+          if (fix && !dryRun && fixResult && fixResult.applied > 0) {
+            try {
+              const after = runDocsCheck({
+                projectRoot: dir,
+                docs: docsCheckFlags.length > 0 ? docsCheckFlags : null,
+                paths: cliPaths || cfg.paths,
+                skip: cfg.skip,
+                keywordAssert: cfg.keywordAssert,
+                crossRepoRoots: cfg.crossRepoRoots,
+              });
+              fixReceipt = {
+                invalidBefore: result.invalid.length,
+                reAnchored: fixResult.applied,
+                invalidAfter: after.invalid.length,
+                eliminated: result.invalid.length - after.invalid.length,
+              };
+            } catch (e) {
+              console.warn(`⚠️ 修复回执重算失败（不影响修复本身）：${e && e.message ? e.message : e}`);
+            }
+          }
           // 变更名提名 advisory（2026-08-31 变更关联审计 P2）：铁律同决策规则族——只 warn，
           // 不进 invalid、不影响下方 exit code 与 docs gate。降级容错：advisory 自身异常
           // 不拖垮主检查（try-catch 吞并提示）。
@@ -1572,7 +1608,7 @@ async function main() {
           if (json) {
             // --fix 与 --json 组合保持 stdout 纯 JSON 可解析（constraints）：修复统计作 result.fixReport
             // 附加后整体 stringify，主体仍是 runDocsCheck 返回（invalid[].fix 是 task-01 设计内增量）
-            if (fixResult) result.fixReport = { applied: fixResult.applied, skipped: fixResult.skipped.length, dryRun };
+            if (fixResult) result.fixReport = { applied: fixResult.applied, skipped: fixResult.skipped.length, dryRun, ...(fixReceipt ? { receipt: fixReceipt } : {}) };
             if (changeNameReport) result.changeNameReport = changeNameReport;
             console.log(JSON.stringify(result, null, 2));
           } else {
@@ -1602,12 +1638,17 @@ async function main() {
                 } else {
                   console.error(`  ❌ [${inv.doc}:L${inv.docLine}] ${inv.ref} → ${inv.reason}`);
                 }
-                if (suggest && inv.suggest && inv.suggest.length > 0) {
+                if (inv.suggest && inv.suggest.length > 0) {
+                  // 2026-09-07-ir-hardening task-08：原 --suggest 旗标删除（no-op 首选路径退役），
+                  // 候选行号提示改为 needs-manual 默认输出——旗标唯一用途，默认开更有信息量
                   console.error(`     💡 候选行号: ${inv.suggest.join(', ')}（token 命中行，人工确认后更新文档锚）`);
                 }
               }
               if (fixResult) {
                 console.error(`\n🔧 重锚报告：${fixResult.applied} 处已${dryRun ? '预览' : '改写'}${dryRun ? '（dry-run 未写盘）' : ''}、${result.invalid.length - fixes.length} 处待人工${fixResult.skipped.length > 0 ? `、${fixResult.skipped.length} 处写回跳过` : ''}。`);
+              if (fixReceipt) {
+                console.error(`🔁 修复回执（机器复跑证明）：修复前 ${fixReceipt.invalidBefore} 处失效 → 重锚 ${fixReceipt.reAnchored} 处 → 修复后 ${fixReceipt.invalidAfter} 处（消除 ${fixReceipt.eliminated} 处）。`);
+              }
               }
               console.error(`\n修复指引：行号漂移 → 更新文档行号到当前源码；文件删改名 → 更新引用路径；`);
               console.error(`关键词缺失但行号正确 → 确认符号是否改名，改文档 token 或行号。`);
@@ -1691,7 +1732,7 @@ async function main() {
         }
         process.exit(g.exitCode);
       } else {
-        console.log('用法: sillyspec docs migrate | sillyspec docs check [--paths <glob,...>] [--json] [--suggest] [--fix] [--dry-run] | sillyspec docs gate [--init-baseline] [--json]');
+        console.log('用法: sillyspec docs migrate | sillyspec docs check [--paths <glob,...>] [--json] [--fix] [--dry-run] | sillyspec docs gate [--init-baseline] [--json]');
         process.exit(2);
       }
       break;

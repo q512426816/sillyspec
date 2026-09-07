@@ -352,3 +352,67 @@ export function generateDesignSkeleton({ changeName, decisionsText, author, now 
 
   return lines.join('\n')
 }
+
+
+// ---------------------------------------------------------------------------
+// design.md 文件清单行级核验（change: 2026-09-07-ir-hardening，D-004@v1，FR-02）
+// ---------------------------------------------------------------------------
+
+/** 剥路径中的 <...> 占位段（`docs/<project>/scan` → `docs/`；占位形态对齐 collectDocRefs 层1 容差先例） */
+function stripPathPlaceholders(p) {
+  return String(p || '').replace(/<[^/>]*>/g, '').replace(/\/{2,}/g, '/').replace(/\/$/, '')
+}
+
+/**
+ * validateDesignFileList —— design.md 文件变更清单逐条存在性核验（幻觉路径 gate）。
+ *
+ * 分级（design D-004 + Grill P2-⑤）：
+ *   - `NEW:` 前缀（解析器不剥前缀，startsWith 直判）→ 通过（计划新建文件豁免）
+ *   - 路径存在（cwd 相对 existsSync；判前剥 <...> 占位段）→ 通过
+ *   - 含 glob 字符（* / ?）→ warning 跳过（pathMatches 体系本支持 glob 合法形态，existsSync 恒 false 会假 ERROR——fail-soft）
+ *   - 其余 → errors { path, message }（信封 code design_file_ref_invalid）
+ *   - design.md 不存在/无清单段/解析异常 → warnings（small 变更可无清单；fail-soft 不阻断）
+ *
+ * 范围：keepSillyspecDocs=true——`.sillyspec/docs/**` 交付物路径在核验范围内（其余 .sillyspec/ 条目解析器本就丢弃）。
+ * 纯函数不落盘。
+ *
+ * @param {{ changeDir: string, cwd: string }} opts
+ * @returns {{ ok: boolean, errors: Array<{path, message}>, warnings: string[] }}
+ */
+export function validateDesignFileList({ changeDir, cwd } = {}) {
+  const errors = []
+  const warnings = []
+  try {
+    if (!changeDir || !cwd) {
+      return { ok: true, errors, warnings: ['design 清单核验跳过：缺少 changeDir/cwd'] }
+    }
+    const designPath = join(changeDir, 'design.md')
+    if (!existsSync(designPath)) {
+      return { ok: true, errors, warnings: ['design 清单核验跳过：design.md 不存在'] }
+    }
+    const entries = parseFileChangeListDetailed(designPath, { keepSillyspecDocs: true })
+    if (!Array.isArray(entries) || entries.length === 0) {
+      return { ok: true, errors, warnings: ['design 清单核验跳过：design.md 无文件变更清单段（small 变更可无清单）'] }
+    }
+    for (const e of entries) {
+      const raw = String((e && e.path) || '').trim()
+      if (!raw) continue
+      if (raw.startsWith('NEW:')) continue // 计划新建豁免（与 validateTargetFiles 同语义）
+      if (raw.includes('*') || raw.includes('?')) {
+        warnings.push(`design 清单条目含 glob 字符跳过存在性核验：${raw}`)
+        continue
+      }
+      const normalized = stripPathPlaceholders(raw)
+      if (!normalized || normalized === '.') continue
+      if (!existsSync(join(cwd, normalized))) {
+        errors.push({
+          path: raw,
+          message: `design_file_ref_invalid：文件变更清单条目「${raw}」既不存在也无 NEW: 前缀（幻觉路径/书写错误）——修正路径，或计划新建的文件改为 NEW:${raw} 前缀`,
+        })
+      }
+    }
+    return { ok: errors.length === 0, errors, warnings }
+  } catch (e) {
+    return { ok: true, errors, warnings: [`design 清单核验异常 fail-soft 放行：${e && e.message ? e.message : e}`] }
+  }
+}

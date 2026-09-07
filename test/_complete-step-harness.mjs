@@ -58,6 +58,13 @@ export async function initChange(cwd, specBase, changeName) {
   const pm = new ProgressManager({ specDir: specBase })
   await pm.init(cwd)
   await pm.initChange(cwd, changeName)
+  // 2026-09-07-ir-hardening D-001：回填存量 created_at（与 _cli-step-harness 同款）——
+  // 既有用例隐含「存量豁免」前提；严格档用例在 ir-strict-mode 显式构造。
+  try {
+    pm._ensureDB(cwd).getDb()
+      .prepare("UPDATE changes SET created_at = '2026-01-01T00:00:00.000Z' WHERE name = ?")
+      .run(changeName)
+  } catch { /* 回填失败不阻断（isStrictChange fail-open 同向兜底） */ }
   return pm
 }
 

@@ -42,7 +42,11 @@ function checkScanDocRefs(cwd, scanDir, docs) {
     severity: CHECK_SEVERITY.WARNING,
     detail: `${invalid.length} 条 file:line 引用未通过核验（${totalRefs} 条中）: ${sample}${invalid.length > 3 ? ` 等 ${invalid.length} 条` : ''}`,
     evidence: { invalidCount: invalid.length, totalRefs, skippedCrossRepo, checkedDocs: docs.length, sample: invalid.slice(0, 3) },
-    supportedFixes: ['运行 sillyspec docs check --suggest 查看候选锚点后修正引用', '删除无法核验的引用（引用了不存在的文件/行号）'],
+    supportedFixes: [
+      'sillyspec docs check --paths <该文档> --dry-run  查看候选锚点（fixable 条目会给出 newLine），确认后去 --dry-run 落盘重锚',
+      'sillyspec docs check --paths <该文档> --fix  对 fixable 引用自动重锚（回执附修复前后失效数对比）',
+      '先跑 sillyspec docs check --paths <该文档> 确认零候选锚点后，再删除确认无法核验的引用行',
+    ],
   }
 }
 

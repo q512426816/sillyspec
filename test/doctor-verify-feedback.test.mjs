@@ -133,6 +133,8 @@ console.log('\n=== ③ verify 服务进程 PID 登记 + 收尾回收（坑 verif
   const pm = new ProgressManager({ specDir: join(d, '.sillyspec') })
   pm.init(d)
   pm.initChange(d, cn)
+  // 2026-09-07-ir-hardening D-001：回填存量 created_at（存量豁免是用例隐含前提；严格档专测于 ir-strict-mode）
+  try { pm._ensureDB(d).getDb().prepare("UPDATE changes SET created_at = '2026-01-01T00:00:00.000Z' WHERE name = ?").run(cn) } catch {}
   const progress = pm.read(d, cn)
   progress.currentChange = cn
   progress.currentStage = 'verify'

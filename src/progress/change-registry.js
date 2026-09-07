@@ -20,6 +20,25 @@ export class ChangeRegistry {
   }
 
   /**
+   * 读变更创建时间（IR 严格模式闸门判别源，change: 2026-09-07-ir-hardening D-001@v1）。
+   * 只读不抛（与 listChanges 同款 DB 访问）：变更不存在 / db 异常 → null——调用方
+   * （isStrictChange）按 fail-open 落存量豁免，不误伤。
+   * @param {string} cwd
+   * @param {string} changeName
+   * @returns {string|null} ISO 时间字符串或 null
+   */
+  getChangeCreatedAt(cwd, changeName) {
+    if (!changeName || typeof changeName !== 'string') return null;
+    try {
+      const db = this.pm._ensureDB(cwd);
+      const row = db.getDb().prepare('SELECT created_at FROM changes WHERE name = ?').get(changeName);
+      return row && typeof row.created_at === 'string' ? row.created_at : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * 查询单个变更的流程阶段与状态（quick 轻量归档阶段闸用）。
    * 与 readChangeIsolation 不同（展示读，catch → null 宽容）：本方法服务权限判定，读失败
    * 直接抛给调用方 catch → skip（fail-closed），不静默降级为"无记录"放行。

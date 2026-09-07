@@ -95,3 +95,9 @@ export const READONLY_AUXILIARY_STAGES = Object.freeze([
   'status',
   'doctor',
 ])
+
+// ── IR 严格模式闸门（change: 2026-09-07-ir-hardening，D-001@v1）──
+// created_at ≥ 此值的变更进入严格模式（P3b 探针子节缺失 / P3a 主仓卡全零声明 → ERROR）；
+// 早于此值的存量变更保持既有豁免语义零变化。写入口径：changes.created_at 恒为
+// new Date().toISOString()（change-registry 全部写点同源），ISO 等长字符串字典序比较即确定。
+export const IR_STRICT_SINCE = '2026-09-07'

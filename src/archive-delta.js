@@ -28,7 +28,7 @@
  * 依赖方向（单向防环）：archive-delta → design-facts / modules / endpoint-baseline /
  * endpoint-extractor，被依赖者均不反向 import 本模块。
  */
-import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, writeFileSync, mkdirSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import { parseDecisionDomains, loadModuleMap, deriveActualModules } from './design-facts.js'
 import { parseModuleMapSimple } from './modules.js'
@@ -201,7 +201,7 @@ export function collectDeltaSources({ changeDir, specRoot, project, runtimeRoot,
  *   ISO（缺省当前时刻，测试可注入）
  * @returns {string} delta.md 全文（LF 行尾，单一尾换行）
  */
-export function buildDeltaReport({ changeDir, specRoot, project, runtimeRoot, cwd, now } = {}) {
+export function buildDeltaReport({ changeDir, specRoot, project, runtimeRoot, cwd, now, withSummary = false } = {}) {
   const change = changeDir ? basename(changeDir) : '<变更名>'
   const {
     reconcile, verifyFacts, moduleMap, decisions, deliverables,
@@ -415,5 +415,48 @@ export function buildDeltaReport({ changeDir, specRoot, project, runtimeRoot, cw
     L.push('')
   }
 
+  // IR 回灌（2026-09-07-ir-hardening D-006@v1）：withSummary=true 返回结构化对象——
+  // affectedFiles/affectedModules 复用函数内既有推导（matched+undeclared/deliverables 兜底、
+  // module-map 归属），sidecar 写入消费同一份（单一真相源，Grill P2-③采纳）。默认 false 返回
+  // 纯字符串（既有调用方零变化）。
+  if (withSummary) {
+    return {
+      markdown: L.join('\n'),
+      change,
+      affectedFiles: [...affectedFiles],
+      affectedModules: affectedModules ? [...affectedModules] : [],
+    }
+  }
   return L.join('\n')
+}
+
+
+/**
+ * writeLastDeltaSidecar —— delta 增量回灌 sidecar（change: 2026-09-07-ir-hardening，D-006@v1，FR-03）。
+ *
+ * 落 `.runtime/last-delta.json`（无主快照，幂等覆盖）：schema
+ * `{ schemaVersion: 1, change, affectedModules: string[], affectedFiles: string[], updatedAt: string(ISO) }`。
+ * 消费方：scan 断点续扫步（executeScanResumeCheck）读它打「本轮 scan 优先核对模块」advisory（14 天窗口）。
+ * fail-soft：写失败只 console.error 留痕，不阻断 delta.md 生成（advisory 缺席即静默，零影响）。
+ *
+ * @param {string} runtimeRoot
+ * @param {{ change: string, affectedFiles: string[], affectedModules: string[] }} summary - buildDeltaReport({withSummary:true}) 的返回
+ */
+export function writeLastDeltaSidecar(runtimeRoot, summary) {
+  try {
+    if (!runtimeRoot || !summary || !summary.change) return { ok: false, reason: '参数缺失' }
+    const payload = {
+      schemaVersion: 1,
+      change: summary.change,
+      affectedModules: Array.isArray(summary.affectedModules) ? summary.affectedModules : [],
+      affectedFiles: Array.isArray(summary.affectedFiles) ? summary.affectedFiles : [],
+      updatedAt: new Date().toISOString(),
+    }
+    mkdirSync(runtimeRoot, { recursive: true })
+    writeFileSync(join(runtimeRoot, 'last-delta.json'), JSON.stringify(payload, null, 2) + '\n')
+    return { ok: true, path: join(runtimeRoot, 'last-delta.json') }
+  } catch (e) {
+    console.error(`[sillyspec] last-delta sidecar 写入失败（advisory 将缺席，不阻断 delta 生成）：${e && e.message ? e.message : e}`)
+    return { ok: false, reason: e && e.message ? e.message : String(e) }
+  }
 }

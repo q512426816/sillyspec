@@ -16,7 +16,7 @@
  * 中间状态用 ProgressManager 注入（与 wait-gates.test.mjs 同款：先让 CLI init 步骤 schema，
  * 再 read→tweak step status→write），避免逐步 --done 的输出文件细节耦合。
  */
-import { writeFileSync, readFileSync, existsSync } from 'node:fs'
+import { writeFileSync, readFileSync, existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { makeRepo, initChange, seedStage, runStage, runCLI, cleanup, report } from './_cli-step-harness.mjs'
 import { ProgressManager } from '../src/progress.js'
@@ -55,6 +55,10 @@ console.log('--- 末步 + 四件套齐全 + design≤3 文件 → 阶段完成�
   writeFileSync(join(changeDir, 'requirements.md'), '# Requirements\n\n- FR-001: 列表默认最新在前\n')
   writeFileSync(join(changeDir, 'tasks.md'), '# Tasks\n\n- [ ] task-01: 改 a\n')
   // design.md：含文件变更清单（≤3 文件 → tier=self），无生命周期关键词
+  // 2026-09-07-ir-hardening：design 清单行级核验 gate 上线——fixture 清单路径需真实存在
+  mkdirSync(join(cwd, 'src'), { recursive: true })
+  writeFileSync(join(cwd, 'src', 'list.js'), '// fixture stub' + String.fromCharCode(10))
+  writeFileSync(join(cwd, 'src', 'a.js'), '// stub')
   writeFileSync(join(changeDir, 'design.md'),
     '# Design: 列表排序\n\n## 背景\n列表需默认最新在前。\n\n## 总体方案\nservice 兜底 order_by。\n\n## 决策\nD-001@v1: 直接改。\n\n## 文件变更清单\n| 操作 | 文件路径 | 说明 |\n|------|---------|------|\n| 修改 | src/list.js | 排序兜底 |\n\n## 风险登记\n低风险。\n\n## 自审\n已核对。\n')
 
@@ -85,6 +89,10 @@ console.log('\n--- design.md scale=small → 下一步 quick --linked-changes（
   writeFileSync(join(changeDir, 'requirements.md'), '# Requirements\n\n- FR-001: x\n')
   writeFileSync(join(changeDir, 'tasks.md'), '# Tasks\n\n- [ ] task-01: 改 a\n')
   // design.md 头部带 frontmatter scale: small，文件清单 1 文件
+  // 2026-09-07-ir-hardening：design 清单行级核验 gate 上线——fixture 清单路径需真实存在
+  mkdirSync(join(cwd, 'src'), { recursive: true })
+  writeFileSync(join(cwd, 'src', 'list.js'), '// fixture stub' + String.fromCharCode(10))
+  writeFileSync(join(cwd, 'src', 'a.js'), '// stub')
   writeFileSync(join(changeDir, 'design.md'),
     '---\nauthor: test\ncreated_at: 2026-07-25\nscale: small\n---\n# Design: 小改\n\n## 文件变更清单\n| 操作 | 文件路径 | 说明 |\n|------|---------|------|\n| 修改 | src/a.js | x |\n\n## 自审\n已核对。\n')
 
@@ -106,6 +114,10 @@ console.log('\n--- reopen --from-step N 后 --done：FR-01 门控——无 confi
   writeFileSync(join(changeDir, 'proposal.md'), '# Proposal\n\n## 不在范围内\n无\n')
   writeFileSync(join(changeDir, 'requirements.md'), '# Requirements\n\n- FR-001: 列表默认最新在前\n')
   writeFileSync(join(changeDir, 'tasks.md'), '# Tasks\n\n- [ ] task-01: 改 a\n')
+  // 2026-09-07-ir-hardening：design 清单行级核验 gate 上线——fixture 清单路径需真实存在
+  mkdirSync(join(cwd, 'src'), { recursive: true })
+  writeFileSync(join(cwd, 'src', 'list.js'), '// fixture stub' + String.fromCharCode(10))
+  writeFileSync(join(cwd, 'src', 'a.js'), '// stub')
   writeFileSync(join(changeDir, 'design.md'),
     '# Design: 列表排序\n\n## 背景\n列表需默认最新在前。\n\n## 总体方案\nservice 兜底 order_by。\n\n## 决策\nD-001@v1: 直接改。\n\n## 文件变更清单\n| 操作 | 文件路径 | 说明 |\n|------|---------|------|\n| 修改 | src/list.js | 排序兜底 |\n\n## 风险登记\n低风险。\n\n## 自审\n已核对。\n')
 
@@ -162,6 +174,10 @@ console.log('\n--- 单步 --done（step 6 写设计文档，非末步）→ chan
 
   // agent 执行 step 6 产出：design.md 落盘（首个 # 标题带「设计文档（Design）—」固定前缀）
   const changeDir = join(specBase, 'changes', cn)
+  // 2026-09-07-ir-hardening：design 清单行级核验 gate 上线——fixture 清单路径需真实存在
+  mkdirSync(join(cwd, 'src'), { recursive: true })
+  writeFileSync(join(cwd, 'src', 'list.js'), '// fixture stub' + String.fromCharCode(10))
+  writeFileSync(join(cwd, 'src', 'a.js'), '// stub')
   writeFileSync(join(changeDir, 'design.md'),
     '# 设计文档（Design）— 变更标题单步刷新\n\n## 背景\nbrainstorm 中途查 DB 应见中文标题。\n\n## 文件变更清单\n| 操作 | 文件路径 | 说明 |\n|------|---------|------|\n| 修改 | src/a.js | x |\n\n## 自审\n已核对。\n')
 

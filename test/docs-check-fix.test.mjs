@@ -1,3 +1,4 @@
+const NL_MARK = String.fromCharCode(10)
 /**
  * docs check --fix 六场景 + CLI 对照测试（change: 2026-08-18-platform-map-auto-anchors，task-04）
  *
@@ -501,31 +502,31 @@ describe('S7 CLI 无 --fix 输出与改动前（84d498a）逐字节一致（FR-0
       assert.equal(newR.code, 1, '新 CLI exit 1（fixture 有 2 处失效）')
       assert.ok(newR.stderr.includes('❌ docs check: 2/3 处引用失效'), `新 CLI 失效计数 2/3（实际 stderr=${newR.stderr.slice(0, 300)}）`)
       assert.ok(newR.stderr.includes('行号超界') && newR.stderr.includes('关键词缺失'), '两种失效形态都在输出')
-      // 逐字节三相等（D-004 缺省路径零显形）
+      // 逐字节三相等（D-004 缺省路径零显形）——2026-09-07-ir-hardening task-08 起 💡 候选行号
+      // 行改 needs-manual 默认输出（--suggest 门控随旗标退役），过滤 💡 行后应逐字节一致
+      const stripHint = (s) => String(s).split(NL_MARK).filter(l => !l.includes('💡')).join(NL_MARK)
       assert.equal(oldR.code, newR.code, 'exit code 一致')
       assert.equal(oldR.stdout, newR.stdout, `stdout 逐字节一致（旧=${JSON.stringify(oldR.stdout.slice(0, 200))} 新=${JSON.stringify(newR.stdout.slice(0, 200))}）`)
-      assert.equal(oldR.stderr, newR.stderr, `stderr 逐字节一致（旧=${JSON.stringify(oldR.stderr.slice(0, 200))} 新=${JSON.stringify(newR.stderr.slice(0, 200))}）`)
+      assert.equal(stripHint(oldR.stderr), stripHint(newR.stderr), `stderr 过滤 💡 行后逐字节一致（旧=${JSON.stringify(stripHint(oldR.stderr).slice(0, 200))} 新=${JSON.stringify(stripHint(newR.stderr).slice(0, 200))}）`)
+      assert.ok(newR.stderr.includes('💡'), '新 CLI needs-manual 默认带 💡 候选行号（task-08 契约）')
       // 新输出无修复链路痕迹（无 --fix 时 fix 面零显形）
       assert.ok(!newR.stderr.includes('重锚报告') && !newR.stderr.includes('dry-run'), '无 --fix 无重锚报告/dry-run 痕迹')
     } finally { try { rmSync(d, { recursive: true, force: true }) } catch {} }
   })
 
-  it('--suggest 门控行为同样逐字节一致（suggest 数据面新旧同源）', (t) => {
+  it('--suggest 已删除（2026-09-07-ir-hardening task-08）→ 新 CLI exit 2 显式报错', (t) => {
     if (s7Skip.missing) return t.skip(s7Skip.reason)
     assert.ok(oldRoot, '前置：旧 CLI 树就绪（before 钩子）')
     const d = s7Fixture()
     try {
-      const args = ['--dir', d, 'docs', 'check', '--suggest', '--paths', 'docs/api.md']
-      const oldR = runAt(join(oldRoot, 'bin', 'sillyspec.js'), args)
-      const newR = runAt(BIN, args)
-      assert.equal(newR.code, 1)
-      assert.ok(newR.stderr.includes('💡'), '新 CLI --suggest 打候选行号行')
-      assert.equal(oldR.code, newR.code)
-      assert.equal(oldR.stdout, newR.stdout)
-      assert.equal(oldR.stderr, newR.stderr, `--suggest stderr 逐字节一致（旧=${JSON.stringify(oldR.stderr.slice(0, 200))} 新=${JSON.stringify(newR.stderr.slice(0, 200))}）`)
+      const newR = runAt(BIN, ['--dir', d, 'docs', 'check', '--suggest', '--paths', 'docs/api.md'])
+      assert.equal(newR.code, 2, `--suggest 已删除 → 未知 flag exit 2（实际 ${newR.code}）`)
+      assert.ok(newR.stderr.includes('未知 flag'), '报错文案点名（no-op 旗标显式退役）')
+      // 旧 CLI 同参仍正常跑（对照证明：新行为是契约变更而非回归崩溃）
+      const oldR = runAt(join(oldRoot, 'bin', 'sillyspec.js'), ['--dir', d, 'docs', 'check', '--suggest', '--paths', 'docs/api.md'])
+      assert.equal(oldR.code, 1, '旧 CLI 同参 exit 1（旗标曾有效）')
     } finally { try { rmSync(d, { recursive: true, force: true }) } catch {} }
   })
-
   it('全绿 fixture：新旧 CLI stdout（✅ 全绿行）与 exit 0 一致', (t) => {
     if (s7Skip.missing) return t.skip(s7Skip.reason)
     assert.ok(oldRoot, '前置：旧 CLI 树就绪（before 钩子）')

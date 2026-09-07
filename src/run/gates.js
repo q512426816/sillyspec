@@ -674,13 +674,15 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
     // 声明=scope creep）启发式噪音面大（并行 WIP 剔除后仍可能有工具产物），WARNING 放行留审计；
     // skipped/degraded（无 task 卡 / 全无声明 / git 不可用）降级不误红（存量变更零红门禁）。
     // 阻断形态照 runVerifyTestCheck 先例：逐条列 task + path + 修复提示 + rollbackCompletionAndReturn。
-    const { reconcileTargetFiles } = await import('../verify-postcheck.js')
+    const { reconcileTargetFiles, isStrictChange } = await import('../verify-postcheck.js')
     const reconcileRuntimeRoot = resolveRuntimeRoot(platformOpts, specBase)
     const reconcileCheck = reconcileTargetFiles({
       cwd, specBase, changeName,
       // runtimeRoot 口径与上方 parity 对账同源（B3 apply-pathspec 兜底源在此根下；平台模式下
       // specBase 与 .runtime 分离，不传会读不到兜底清单 → 假降级）
       runtimeRoot: reconcileRuntimeRoot,
+      // IR 严格档（2026-09-07-ir-hardening D-003@v1）：主仓卡全零声明 → strictViolation → ERROR
+      strictMode: isStrictChange({ pm, cwd, changeName }),
     })
     const reconcileEnvelope = buildReconcileTargetFilesEnvelope(reconcileCheck)
     const reconcileBlocked = printReconcileTargetFilesCheck(reconcileCheck, reconcileEnvelope)
@@ -705,6 +707,9 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
       // 的锚点产物实际都在 changeDir，此参为统一传参签名对齐预留，口径一处定义不二算
       cwd, specBase, changeName,
       runtimeRoot: reconcileRuntimeRoot,
+      // IR 严格档（2026-09-07-ir-hardening D-002@v1）：created_at ≥ IR_STRICT_SINCE 的变更
+      // 探针子节全缺 = ERROR（存量 skip 语义零变化）；fail-open（读不到 → false 落豁免）
+      strictMode: isStrictChange({ pm, cwd, changeName }),
     })
     const probeEnvelope = buildProbeConsistencyEnvelope(probeCheck)
     const probeBlocked = printProbeConsistencyCheck(probeCheck, probeEnvelope)
@@ -1357,6 +1362,14 @@ export function printReconcileTargetFilesCheck(r, envelope = buildReconcileTarge
     console.warn(`   对账口径 actual=${(r.sources || []).join(' + ') || 'n/a'}（③类误报先核对 sources 与并行会话剔除提示）。`)
     return false
   }
+  // IR 严格档（2026-09-07-ir-hardening D-003）：strictViolation → ERROR 阻断（与②类同处置）
+  if (r.status === 'skipped' && r.strictViolation) {
+    console.error(`
+❌ target_files 对账阻断：${r.skipReason}`)
+    console.error(`   ${r.strictViolation.message}`)
+    console.error(`   信封 code: ${r.strictViolation.code}`)
+    return true
+  }
   // 降级（skipped/degraded）：WARNING 放行，skipReason 一句话（存量卡/git 不可用，不误红）
   if (r.status === 'skipped' || r.status === 'degraded') {
     console.warn(`\n⚠️  target_files 对账${r.status === 'degraded' ? '降级' : '跳过'}（不阻断）：${r.skipReason}`)
@@ -1385,6 +1398,12 @@ export function printReconcileTargetFilesCheck(r, envelope = buildReconcileTarge
 export function buildProbeConsistencyEnvelope(r) {
   const blocked = r.status === 'mismatch' && r.severity === 'error'
   const drifted = r.status === 'mismatch' && !blocked
+  // IR 严格档独立 code（2026-09-07-ir-hardening D-002）：首条 mismatch 携带
+  // probe_prefill_missing_strict 时路由专用 code（平台/上游按 code 分支可区分
+  // 「篡改预填段」与「从未生成预填段」两类 ERROR）
+  const strictMissing = blocked
+    && Array.isArray(r.mismatches) && r.mismatches.length > 0
+    && r.mismatches[0] && r.mismatches[0].code === 'probe_prefill_missing_strict'
   const supportedFixes = []
   if (blocked) {
     supportedFixes.push('如实重生成：跑 `sillyspec verify-probes --change <变更名> --init` 重新落盘机械预填段，再基于新预填段如实补写正文结论（删改预填段过门是 Step7 防篡改纪律红线）')
@@ -1396,7 +1415,8 @@ export function buildProbeConsistencyEnvelope(r) {
   }
   return {
     // code 机器路由键（task-02 JSDoc）：四状态→四 code，供平台/上游按 code 分支
-    code: blocked ? 'probe_consistency_mismatch'
+    code: strictMissing ? 'probe_prefill_missing_strict'
+      : blocked ? 'probe_consistency_mismatch'
       : drifted ? 'probe_consistency_drift'
       : (r.status === 'ok' ? 'probe_consistency_ok' : 'probe_consistency_skipped'),
     name: 'probe_consistency',

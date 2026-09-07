@@ -313,6 +313,29 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
     }
   }
 
+  // ── design.md 文件清单行级核验（2026-09-07-ir-hardening D-004@v1，FR-02）──
+  // 幻觉路径 ERROR（design_file_ref_invalid，与 plan 侧 validateTargetFiles 同语义先例）；
+  // NEW: 前缀豁免 / glob 跳过 / 清单缺失 WARNING。挂点与决策模块域核验同点位（brainstorm 末步）。
+  if (stageName === 'brainstorm' && steps[currentIdx]?.name?.includes('生成规范文件') && changeName) {
+    try {
+      const { validateDesignFileList } = await import('../design-facts.js')
+      const _dflResult = validateDesignFileList({
+        changeDir: join(specBase, 'changes', changeName),
+        cwd,
+      })
+      if ((_dflResult.errors || []).length > 0) {
+        console.error(`❌ ── design 文件清单核验阻断（本次 --done 未完成，进度未推进）──`)
+        for (const _dflErr of _dflResult.errors) console.error(`   • ${_dflErr.message}`)
+        console.error(`   修复：更正 design.md「文件变更清单」对应行路径，或计划新建文件加 NEW: 前缀后重跑：`)
+        console.error(`   sillyspec run brainstorm --done${changeName ? ` --change ${changeName}` : ''} --output "修复说明"`)
+        process.exit(1)
+      }
+      for (const _dflWarn of (_dflResult.warnings || [])) console.warn(`   ⚠️ ${_dflWarn}`)
+    } catch (_dflEx) {
+      console.warn(`   ⚠️ design 清单核验自身异常，fail-open 放行（不误拦本次完成）：${_dflEx && _dflEx.message ? _dflEx.message : _dflEx}`)
+    }
+  }
+
   // ── noAI 步骤硬门（坑 noai-done-bypass）：noAI 步骤的确定性校验不可被 --done 绕过 ──
   // 正常路径 agent 跑 `run <stage>` 推进到 noAI step 时，runStage 自动执行 _cliAction
   // （stage.js noAI 分支，不写 step output）；若 agent 对 noAI step 直接 --done，此前

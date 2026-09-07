@@ -833,6 +833,8 @@ export class ProgressManager {
   // ── 变更管理 ──
 
   listChanges(cwd) { return this._changeRegistry.listChanges(cwd); }
+  /** 读变更创建时间（IR 严格模式闸门判别源，2026-09-07-ir-hardening D-001）——只读不抛，缺行/异常 → null */
+  getChangeCreatedAt(cwd, changeName) { return this._changeRegistry.getChangeCreatedAt(cwd, changeName); }
 
   // 单变更阶段查询（quick 轻量归档阶段闸）：无行 null，读失败抛（调用方 fail-closed）
   getChangeStage(cwd, changeName) { return this._changeRegistry.getChangeStage(cwd, changeName); }

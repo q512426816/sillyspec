@@ -1,8 +1,8 @@
 /**
  * docs check CLI flag 行为测试（F-1，docs-signals-o12，FR-004/005）
  *
- * CLI 子进程实测三场景：--suggest 识别（不再被当文档路径）/ 未知 flag exit 2 /
- * 💡 候选行号行按 --suggest 门控。fixture 用隔离 tmp 仓（bin + 源文件 + 失效引用文档）。
+ * CLI 子进程实测三场景：--suggest 已删除（未知 flag exit 2）/ 未知 flag exit 2 /
+ * 💡 候选行号默认输出（2026-09-07-ir-hardening task-08 契约）。fixture 用隔离 tmp 仓。
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -40,12 +40,12 @@ function runCli(d, args) {
   }
 }
 
-test('F-1: --suggest 被识别为 flag，不再误当文档路径报"不存在"', () => {
+test('F-1: --suggest 已删除（2026-09-07-ir-hardening task-08）→ 未知 flag exit 2 显式报错', () => {
   const d = makeFixture()
   try {
     const r = runCli(d, ['--suggest', '--paths', 'docs/api.md'])
-    assert.ok(!r.stdout.includes('--suggest:L0'), `--suggest 不应被当文档路径（输出 ${r.stdout.slice(0, 200)}）`)
-    assert.ok(r.stdout.includes('❌') || r.code === 1, 'fixture 文档确有失效引用')
+    assert.equal(r.code, 2, `--suggest 已删除 → 未知 flag exit 2（实际 ${r.code}）`)
+    assert.ok(r.stdout.includes('未知 flag'), '报错文案点名（no-op 旗标显式退役优于静默）')
   } finally { rmSync(d, { recursive: true, force: true }) }
 })
 
@@ -58,13 +58,11 @@ test('F-1: 未知 flag → exit 2 显式报错（治模式：不再静默落入�
   } finally { rmSync(d, { recursive: true, force: true }) }
 })
 
-test('F-1: 💡 候选行号行按 --suggest 门控（不传不打，传了打）', () => {
+test('F-1: 💡 候选行号默认输出（2026-09-07-ir-hardening：--suggest 门控随旗标退役）', () => {
   const d = makeFixture()
   try {
-    const without = runCli(d, ['--paths', 'docs/api.md'])
-    assert.ok(!without.stdout.includes('💡'), `不传 --suggest 无 💡 行（输出 ${without.stdout.slice(0, 200)}）`)
-    const withFlag = runCli(d, ['--suggest', '--paths', 'docs/api.md'])
-    assert.ok(withFlag.stdout.includes('💡'), `传 --suggest 有 💡 行（输出 ${withFlag.stdout.slice(0, 300)}）`)
-    assert.ok(withFlag.stdout.includes('候选行号'), '💡 行含候选行号')
+    const out = runCli(d, ['--paths', 'docs/api.md'])
+    assert.ok(out.stdout.includes('💡'), `needs-manual 默认带 💡 候选行号（输出 ${out.stdout.slice(0, 300)}）`)
+    assert.ok(out.stdout.includes('候选行号'), '💡 行含候选行号')
   } finally { rmSync(d, { recursive: true, force: true }) }
 })

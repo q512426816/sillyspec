@@ -45,6 +45,13 @@ function writeCoreDocs(changeDir, conclusion) {
 // 让 CLI 初始化 verify 步骤 schema，再 seedStage 覆盖为末步 pending。
 async function seedVerifyToLast(cwd, specBase, cn) {
   const pm = await initChange(cwd, specBase, cn)
+  // 2026-09-07-ir-hardening D-002：fixture 变更回填存量 created_at（< IR_STRICT_SINCE）——
+  // 本套件锁「存量豁免」路径的 verify 收尾行为（探针子节缺失 skip 放行）；严格档 ERROR
+  // 由 test/ir-strict-mode.test.mjs 专测。不回填则新变更默认严格被拦，用例原意漂移。
+  try {
+    const db = pm._ensureDB(cwd)
+    db.getDb().prepare("UPDATE changes SET created_at = '2026-01-01T00:00:00.000Z' WHERE name = ?").run(cn)
+  } catch { /* 回填失败不阻断 */ }
   runCLI(['--dir', cwd, 'run', 'verify', '--change', cn], { cwd })
   return seedStage(pm, cwd, cn, 'verify', verifyStepsWithLastPending())
 }

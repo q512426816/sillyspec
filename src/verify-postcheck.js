@@ -23,6 +23,7 @@
  */
 
 import { execSync, spawnSync } from 'child_process'
+import { IR_STRICT_SINCE } from './constants.js'
 import { gitQuiet } from './git-helper.js'
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync } from 'fs'
 import { join } from 'path'
@@ -40,6 +41,25 @@ import { runVerifyProbes } from './verify-probes.js'
 // 测试命令最长执行时间；超时视为失败（防止 CLI 被挂起的测试卡死）
 const TEST_TIMEOUT_MS = Number(process.env.SILLYSPEC_TEST_TIMEOUT_MS) || 10 * 60 * 1000
 const OUTPUT_TAIL_CHARS = 4000
+// 判账失败行台账上限（坑 verify-test-reconcile-tail-blindspot）：对账按完整输出判、tail 只存
+// 末 4000 字符 → 失败行落在盲区时只剩 reason 里 5 行×120 字符采样，归因必须全量复跑。修法是
+// 判账行集（remaining/exempted 全量原文）随结果透传落盘/打印；台账只防病态体量——单行截
+// 300 字符、行数截 200，超出注明计数。judge 判账仍用全量行集，不受此截断影响。
+const FAILURE_LEDGER_MAX_LINES = 200
+const FAILURE_LEDGER_MAX_CHARS = 300
+
+/** 失败行台账截断（落盘/展示用；判账本身不受影响）。export 供 test 验证截断语义 */
+export function capFailureLedger(lines) {
+  if (!Array.isArray(lines) || lines.length === 0) return []
+  const out = lines.slice(0, FAILURE_LEDGER_MAX_LINES).map(l => {
+    const s = String(l)
+    return s.length > FAILURE_LEDGER_MAX_CHARS ? s.slice(0, FAILURE_LEDGER_MAX_CHARS) + '…' : s
+  })
+  if (lines.length > FAILURE_LEDGER_MAX_LINES) {
+    out.push(`…（共 ${lines.length} 行，仅列前 ${FAILURE_LEDGER_MAX_LINES} 行；判账按全量行集不受此截断影响）`)
+  }
+  return out
+}
 
 /**
  * 行尾归一（坑 verify-modules-crlf-blanket-fallback，2026-08-20 实证）：Windows 仓的
@@ -586,24 +606,37 @@ export function extractKnownFailures(yamlText) {
   if (inline) {
     return inline[1].split(',').map(s => s.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean)
   }
-  // 坑 verify-known-failures-comment-line-truncation（2026-08-28 连续踩两次）：块内注释行/空行
-  // 打断「连续列表项」的捕获链 → 只取到注释前的项，注释后的项静默丢失 → 清单残缺、
-  // verify 实测 remaining>0 假红。块定义放行注释行与空行（提取侧本就只认 `- ` 项行，
-  // 吸收进块的注释不影响结果）。
-  const block = yaml.match(/^known_failures:\s*\n((?:[ \t]+-[ \t].+\n?|[ \t]*#[^\n]*\n?|[ \t]*\n)+)/m)
-  if (block) {
-    return (block[1].match(/^[ \t]+-[ \t]+(.+)/gm) || [])
-      .map(s => {
-        const item = s.replace(/^[ \t]+-[ \t]+/, '').trim()
-        const full = item.match(/^(['"])(.*)\1$/)
-        if (full) return full[2] // 整体引号值原样保留（内部 # 不是注释）
-        const stripped = item.replace(/[ \t]+#.*$/, '').trim() // 行尾注释须 # 前有空白（YAML 语义），裸 # 不截
-        const q2 = stripped.match(/^(['"])(.*)\1$/)
-        return q2 ? q2[2] : stripped
-      })
-      .filter(Boolean)
+  // 坑 verify-known-failures-comment-line-truncation（2026-08-28 连续踩两次）→ 坑
+  // verify-known-failures-block-fragile-chain（2026-09-07 工具复盘升级修复）：块式捕获曾要求
+  // 「- 项行 / 注释行 / 空行」**连续成链**（(...)+），任何一行不合形态——手改残留的缩进杂行、
+  // 空项 `  -`、误删半截的段残迹——链条即断，其后所有条目**静默丢失**（实证形态：G/H 注释段
+  // 踩着 F 段残迹重写，F 段遗留行断链 → G/H 条目全丢 → 清单残缺 → verify 假红，且丢得多静默
+  // 就多难归因）。改为逐行扫描：块 = known_failures: 头之后连续的「缩进行 / 注释行（任意缩进，
+  // 含列首）/ 空行」，首个列首正文行收块；块内杂行一律容忍，`- ` 项行无论隔着什么都提取——
+  // 只有 YAML 本就不合法的形态（列首裸 `- 项`）才不取，不再因断链静默丢项。
+  const lines = yaml.split('\n')
+  const headIdx = lines.findIndex(l => /^known_failures:\s*(?:#.*)?$/.test(l))
+  if (headIdx === -1) return []
+  const itemRe = /^[ \t]+-[ \t]+(.+)$/
+  const items = []
+  for (let i = headIdx + 1; i < lines.length; i++) {
+    const l = lines[i]
+    if (l.trim() === '') continue // 空行：块内分隔，放行
+    if (/^[ \t]*#/.test(l)) continue // 注释行（任意缩进含列首）：段头/归因注记，放行
+    if (!/^[ \t]/.test(l)) break // 列首正文行：下一个顶层键，收块
+    const m = l.match(itemRe) // 其余缩进行一律留在块内；项行才提取（杂行不提取但不断链）
+    if (m) items.push(m[1])
   }
-  return []
+  return items
+    .map(s => {
+      const item = s.trim()
+      const full = item.match(/^(['"])(.*)\1$/)
+      if (full) return full[2] // 整体引号值原样保留（内部 # 不是注释）
+      const stripped = item.replace(/[ \t]+#.*$/, '').trim() // 行尾注释须 # 前有空白（YAML 语义），裸 # 不截
+      const q2 = stripped.match(/^(['"])(.*)\1$/)
+      return q2 ? q2[2] : stripped
+    })
+    .filter(Boolean)
 }
 
 // 单条失败行标记（跨 pytest/jest/vitest/go/generic）。大小写不敏感。
@@ -698,11 +731,15 @@ export function partitionFailures(output, knownFailures) {
     if (ENV_NOISE_RE.test(bare)) continue
     if (PER_TEST_FAIL_RE.test(bare) && !SUMMARY_LINE_RE.test(bare)) failureLines.push(l)
   }
-  const pats = (knownFailures || []).map(p => String(p).toLowerCase()).filter(Boolean)
+  // 豁免匹配同样在剥 ANSI 后的行上做（坑 verify-known-failures-ansi-exemption-split，2026-09-07
+  // 工具复盘）：TTY 捕获的失败行里色码把可见词拦腰拆开（`× \x1b[31mtests/foo.test.ts\x1b[0m > case`
+  // 连不成 `tests/foo.test.ts > case`），同一行被迫拆成两段各配一条模式才能豁免。模式侧同步剥
+  // ANSI（从原始输出誊抄来的模式可能自带码）；返回仍保留原文（remaining/exempted 展示不变形）。
+  const pats = (knownFailures || []).map(p => String(p).replace(ANSI_RE, '').toLowerCase()).filter(Boolean)
   const exempted = []
   const remaining = []
   for (const l of failureLines) {
-    const ll = l.toLowerCase()
+    const ll = l.replace(ANSI_RE, '').toLowerCase()
     if (pats.some(p => ll.includes(p))) exempted.push(l)
     else remaining.push(l)
   }
@@ -718,19 +755,28 @@ export function partitionFailures(output, knownFailures) {
  *       有未豁免失败行 / 检测不到失败行（保守）→ failed
  * fail-safe：检测不到失败行绝不自动 pass（避免解析盲区导致假 PASS）。
  *
- * @returns {{ status: 'passed'|'failed', reason: string|null, exemptedCount: number }}
+ * 判账行集全量随结果返回（坑 verify-test-reconcile-tail-blindspot）：对账按完整输出判，但
+ * outputTail 只留末 OUTPUT_TAIL_CHARS 字符——失败行落在盲区时 reason 采样不足以归因，只能
+ * 全量复跑。remainingLines/exemptedLines（全量原文行）由调用方透传到 test-result.json 与
+ * 控制台明细，盲区归因不再依赖复跑；passed 分支同样带 exemptedLines（豁免披露复核需要）。
+ *
+ * @returns {{ status: 'passed'|'failed', reason: string|null, exemptedCount: number,
+ *             remainingLines: string[], exemptedLines: string[] }}
  */
 export function judgeWithKnownFailures(exitCode, output, baseReason, knownFailures) {
-  if (exitCode === 0) return { status: 'passed', reason: baseReason, exemptedCount: 0 }
+  if (exitCode === 0) return { status: 'passed', reason: baseReason, exemptedCount: 0, remainingLines: [], exemptedLines: [] }
+  const { failureLines, exempted, remaining } = partitionFailures(output, knownFailures || [])
   if (!knownFailures || knownFailures.length === 0) {
-    return { status: 'failed', reason: baseReason, exemptedCount: 0 }
+    // 无清单分支同样带行集：豁免与否都不该丢判账依据（tail 盲区归因同权）
+    return { status: 'failed', reason: baseReason, exemptedCount: 0, remainingLines: remaining, exemptedLines: [] }
   }
-  const { failureLines, exempted, remaining } = partitionFailures(output, knownFailures)
   if (failureLines.length > 0 && remaining.length === 0) {
     return {
       status: 'passed',
       reason: `全部 ${failureLines.length} 个失败行命中 known_failures 已豁免（${exempted.length} 条）— 请人工复核豁免清单是否过宽`,
       exemptedCount: exempted.length,
+      remainingLines: [],
+      exemptedLines: exempted,
     }
   }
   // 剩余未豁免失败行：列出具体行 + 预存债指引（坑 verify-known-failures-stale-list）。
@@ -742,7 +788,9 @@ export function judgeWithKnownFailures(exitCode, output, baseReason, knownFailur
       const t = String(l).trim()
       return t.length > 120 ? t.slice(0, 120) + '…' : t
     })
-    const more = remaining.length > 5 ? `\n     …（其余 ${remaining.length - 5} 行见上方测试输出）` : ''
+    // 指针改指台账（坑 verify-test-reconcile-tail-blindspot）：原「见上方测试输出」只对 tail
+    // 窗口内的行成立，盲区行必须指向完整台账（控制台明细段 + test-result.json 的 failure_remaining）
+    const more = remaining.length > 5 ? `\n     …（其余 ${remaining.length - 5} 行完整清单见下方「未豁免失败行」明细，已全量落盘 test-result.json 的 failure_remaining——不受输出 tail 截断影响）` : ''
     detail = `${remaining.length} 个失败行未命中 known_failures 清单：\n     - ${sample.join('\n     - ')}${more}\n   → 若是预存债（变更前就失败），加入 local.yaml 的 known_failures 清单；若是本次变更引入的真实失败，请修复`
   } else {
     detail = '失败输出未检测到可豁免的失败行（保守判 fail）'
@@ -751,6 +799,8 @@ export function judgeWithKnownFailures(exitCode, output, baseReason, knownFailur
     status: 'failed',
     reason: baseReason ? `${baseReason}（${detail}）` : detail,
     exemptedCount: exempted.length,
+    remainingLines: remaining,
+    exemptedLines: exempted,
   }
 }
 
@@ -814,6 +864,8 @@ function runOneModule(name, testCommand, cwd, knownFailures = []) {
     outputTail,
     reason: judged.reason,
     exemptedCount: judged.exemptedCount,
+    failureRemaining: judged.remainingLines,
+    failureExempted: judged.exemptedLines,
   }
 }
 
@@ -1062,6 +1114,13 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = nul
 
   const rawStrategy = extractTestStrategy(yamlText)
   const knownFailures = extractKnownFailures(yamlText)
+  if (knownFailures.length > 0) {
+    // 豁免清单加载可见性（坑 verify-known-failures-block-fragile-chain 的观测面）：条数即时报出
+    // ——清单被块内残迹截断/误删段时「N 条」与预期不符一眼可见，不必等假红再反推。
+    // 走 stderr（console.warn）：本模块运行期叙述统一不碰 stdout（machine-interface 调用时
+    // stdout 留给机器可读输出）
+    console.warn(`📋 known_failures 豁免清单已加载：${knownFailures.length} 条模式（local.yaml）`)
+  }
 
   // —— evidence-auto 生效策略解析（D-005@v2 / task-11）——
   // 按变更目录 module-impact.md 影响面取生效策略（行为→module、纯文档/门禁→skip、
@@ -1304,6 +1363,8 @@ function runCrossRepoFullTest(entry) {
     mode: 'cross-repo-full',
     repoKey: entry.repoKey,
     exemptedCount: judged.exemptedCount,
+    failureRemaining: judged.remainingLines,
+    failureExempted: judged.exemptedLines,
   }
 }
 
@@ -1327,6 +1388,9 @@ function mergeResultStatus({ status, mainResult, crossResults, reason }) {
     resultPath: mainResult.resultPath,
     mode: 'cross-repo-merged',
     fallbackReason: mainResult.fallbackReason || null,
+    // 判账行集跨仓合并（坑 verify-test-reconcile-tail-blindspot）：mergedTail 截断不影响台账
+    failureRemaining: [...(mainResult.failureRemaining || []), ...crossResults.flatMap(r => r.result.failureRemaining || [])],
+    failureExempted: [...(mainResult.failureExempted || []), ...crossResults.flatMap(r => r.result.failureExempted || [])],
   }
 }
 
@@ -1457,6 +1521,8 @@ function runFullCommand({ yamlText, localYamlPath, cwd, specBase, changeName, fa
     mode: 'full',
     fallbackReason,
     exemptedCount: judged.exemptedCount,
+    failureRemaining: judged.remainingLines,
+    failureExempted: judged.exemptedLines,
   }
 
   writeRunResult({ specBase, changeName, result, extra: fallbackReason ? { fallback_reason: fallbackReason } : {} })
@@ -1500,6 +1566,10 @@ function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures = [] }
     mode: 'module-subset',
     fallbackReason: null,
     exemptedCount: perModule.reduce((n, r) => n + (r.exemptedCount || 0), 0),
+    // 判账行集聚合（坑 verify-test-reconcile-tail-blindspot）：合并 tail 会二次截断，行集不截——
+    // 每模块台账另见 extra.modules[].failure_remaining（带模块归属）
+    failureRemaining: perModule.flatMap(r => r.failureRemaining || []),
+    failureExempted: perModule.flatMap(r => r.failureExempted || []),
   }
 
   writeRunResult({
@@ -1515,6 +1585,8 @@ function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures = [] }
         duration_ms: r.durationMs,
         output_tail: r.outputTail,
         reason: r.reason,
+        ...(r.failureRemaining && r.failureRemaining.length ? { failure_remaining: capFailureLedger(r.failureRemaining) } : {}),
+        ...(r.failureExempted && r.failureExempted.length ? { failure_exempted: capFailureLedger(r.failureExempted) } : {}),
       })),
     },
   })
@@ -1523,9 +1595,9 @@ function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures = [] }
 
 /**
  * 结果落盘到 .runtime/verify-runs/<ts>/test-result.json（供追溯与 SillyHub 消费）。
- * 多模块时 extra.modules 描述各模块明细。
+ * 多模块时 extra.modules 描述各模块明细。export 供 test 验证台账落盘形状。
  */
-function writeRunResult({ specBase, changeName, result, extra = {} }) {
+export function writeRunResult({ specBase, changeName, result, extra = {} }) {
   try {
     const ts = new Date().toISOString().slice(0, 19).replace(/[-T:]/g, '')
     const runDir = join(specBase, '.runtime', 'verify-runs', ts)
@@ -1538,6 +1610,11 @@ function writeRunResult({ specBase, changeName, result, extra = {} }) {
       status: result.status,
       duration_ms: result.durationMs,
       output_tail: result.outputTail,
+      // 判账失败行台账（坑 verify-test-reconcile-tail-blindspot）：按完整输出判账的行集全量
+      // 落盘（受 capFailureLedger 防病态体量截断）——失败行落在 output_tail 盲区时归因读这里，
+      // 不再需要全量复跑。空集不落键（成功/跳过运行不添噪声）。
+      ...(result.failureRemaining && result.failureRemaining.length ? { failure_remaining: capFailureLedger(result.failureRemaining) } : {}),
+      ...(result.failureExempted && result.failureExempted.length ? { failure_exempted: capFailureLedger(result.failureExempted) } : {}),
       reason: result.reason,
       ran_at: new Date().toISOString(),
       ...extra,
@@ -1565,11 +1642,30 @@ export function printVerifyTestCheck(result) {
     if (result.exemptedCount > 0) {
       console.log(`\n✅ Verify 实测通过（含 ${result.exemptedCount} 个 known_failures 豁免）：\`${result.command}\` — ${result.reason}`)
       console.warn('   ⚠️  本次 PASS 依赖 known_failures 豁免清单——请人工复核清单是否过宽（避免误豁免本变更引入的真实失败）。')
+      // 豁免披露明细（坑 verify-test-reconcile-tail-blindspot）：被豁免的失败行同样可能落在
+      // tail 盲区——复核"清单是否过宽"不能只看 tail。前 10 条样例进控制台，全量台账在
+      // test-result.json 的 failure_exempted。
+      if (result.failureExempted && result.failureExempted.length) {
+        console.warn(`   已豁免失败行（共 ${result.failureExempted.length} 行，前 10 条；全量见 test-result.json 的 failure_exempted）：`)
+        for (const line of capFailureLedger(result.failureExempted).slice(0, 10)) console.warn(`   ~ ${line}`)
+      }
     } else {
       console.log(`\n✅ Verify 实测通过：\`${result.command}\` 退出码 0（${(result.durationMs / 1000).toFixed(1)}s）`)
     }
   } else {
     console.error(`\n❌ Verify 实测失败：\`${result.command}\` — ${result.reason}`)
+    // 未豁免失败行台账（坑 verify-test-reconcile-tail-blindspot）：判账按完整输出、下方 tail
+    // 只留末段——失败行落在盲区时 tail 里看不到，归因靠本段全量行集（≤30 条样例进控制台，
+    // 全量落盘 failure_remaining），不再需要全量复跑定位。
+    if (result.failureRemaining && result.failureRemaining.length) {
+      const ledger = capFailureLedger(result.failureRemaining)
+      const shown = ledger.slice(0, 30)
+      console.error(`   未豁免失败行（按完整输出判账，不受 tail 截断影响；共 ${result.failureRemaining.length} 行）：`)
+      for (const line of shown) console.error(`   ! ${line}`)
+      if (ledger.length > shown.length) {
+        console.error(`   ! …（其余 ${ledger.length - shown.length} 行全量见 test-result.json 的 failure_remaining）`)
+      }
+    }
     if (result.outputTail) {
       const tail = result.outputTail.split('\n').slice(-20).join('\n')
       console.error('   输出（末尾）：')
@@ -2101,7 +2197,7 @@ function attributeSuspectTasks(runtimeRoot, changeName, paths) {
  *   sources: string[],                    // actual 实际用到的源（诊断可见性；additive）
  * }}
  */
-export function reconcileTargetFiles({ cwd, specBase = null, changeName = null, runtimeRoot = null }) {
+export function reconcileTargetFiles({ cwd, specBase = null, changeName = null, runtimeRoot = null, strictMode = false }) {
   const matched = []
   const missing = []
   const undeclared = []
@@ -2124,6 +2220,19 @@ export function reconcileTargetFiles({ cwd, specBase = null, changeName = null, 
       skipReason: `变更 ${changeName} 无 task 卡（tasks/ 缺失或为空），target_files 对账跳过`, notes, form: null, sources: [] }
   }
   if (decl.declarations.length === 0) {
+    // IR 严格档（2026-09-07-ir-hardening D-003@v1，FR-01）：主仓卡全部零声明 → strictViolation。
+    // 判据（Grill P2-④修订）：noDeclarationCount > 0 且 == cardCount - 跨仓卡数——跨仓卡不参与
+    // 计数也不充当豁免（防「塞一张跨仓卡让全部主仓卡免检」绕过）。部分主仓卡已声明 → 不触发（灰度 WARNING）。
+    if (strictMode && decl.noDeclarationCount > 0
+      && decl.noDeclarationCount === decl.cardCount - decl.crossRepoCards.length) {
+      return { status: 'skipped', matched, missing, undeclared,
+        skipReason: `严格模式变更（created_at ≥ IR_STRICT_SINCE）主仓 task 卡全部未声明 target_files（${decl.noDeclarationCount}/${decl.cardCount - decl.crossRepoCards.length} 张主仓卡${decl.crossRepoCards.length > 0 ? `，另 ${decl.crossRepoCards.length} 张跨仓卡已剔除` : ''}）`,
+        notes, form: null, sources: [],
+        strictViolation: {
+          code: 'target_files_all_missing_strict',
+          message: `严格模式要求每个主仓 task 卡声明 target_files（计划改动的文件清单，taskcard 骨架已预置字段）——逐卡 Edit 填入：已存在文件写仓根相对精确路径，新建文件加 NEW: 前缀；填毕重跑 --done（进度不丢）`,
+        } }
+    }
     // 存量零红门禁：全部卡无声明 / 全部跨仓 → WARNING 语义跳过，不产生 missing/undeclared
     const reason = decl.noDeclarationCount === 0
       ? `本变更 task 卡全部为跨仓卡（${decl.crossRepoCards.length} 张），主仓 target_files 对账跳过`
@@ -2337,7 +2446,20 @@ function detectHeadAdvanceSinceFacts(cwd, facts) {
  *     // 诊断（additive）：探针子节在场性；报告未读到的早期 skip 为 null
  * }}
  */
-export function checkProbeConsistency({ cwd, specBase = null, changeName = null, runtimeRoot = null }) {
+/**
+ * IR 严格模式判别（change: 2026-09-07-ir-hardening，D-001@v1）：
+ * changes.created_at ≥ IR_STRICT_SINCE → true（严格档：P3b 探针段缺失 / P3a 主仓卡全零声明 ERROR）。
+ * fail-open：读不到 created_at（无行/db 异常/pm 缺失）→ false，落存量豁免不误伤。
+ * @param {{ getChangeCreatedAt?: Function }} opts.pm - ProgressManager（或含同名方法的对象）
+ */
+export function isStrictChange({ pm, cwd, changeName } = {}) {
+  if (!pm || typeof pm.getChangeCreatedAt !== 'function' || !changeName) return false
+  const createdAt = pm.getChangeCreatedAt(cwd, changeName)
+  if (!createdAt || typeof createdAt !== 'string') return false
+  return createdAt >= IR_STRICT_SINCE
+}
+
+export function checkProbeConsistency({ cwd, specBase = null, changeName = null, runtimeRoot = null, strictMode = false }) {
   if (!changeName) {
     return { status: 'skipped', severity: null, mismatches: [],
       skipReason: '无 changeName（quick 等无关联变更场景），探针一致性抽查跳过', subsections: null }
@@ -2370,8 +2492,20 @@ export function checkProbeConsistency({ cwd, specBase = null, changeName = null,
         note: 'verify-facts.json 在场而正文探针子节全缺——疑似 agent 删除机械预填段（对比基准是正文，删 facts.json 绕不过防护）',
       }], null)
     }
+  if (strictMode) {
+    // IR 严格档（2026-09-07-ir-hardening D-002@v1，FR-01）：闸门后变更不跑 verify-probes --init
+    // 即零子节——不再是「存量兼容 skip」而是 ERROR（可绕过口收紧）。文案必须带可执行指引（R-02）。
+    return finish('mismatch', 'error', [{
+      probe: 'prefill',
+      code: 'probe_prefill_missing_strict',
+      expected: '#### 探针 预填子节在场',
+      actual: '全部缺失',
+      severity: 'error',
+      note: '严格模式变更（created_at ≥ IR_STRICT_SINCE）的 verify-result.md 缺探针预填子节——先跑 sillyspec verify-probes --change <变更名> --init 生成九章节骨架并如实填写，再重跑 --done',
+    }], null)
+  }
     return finish('skipped', null, [],
-      'verify-result.md 无 #### 探针 子节且无 verify-facts.json（存量旧格式报告），探针一致性抽查跳过')
+      'verify-result.md 无 #### 探针 子节且无 verify-facts.json（存量旧格式报告，闸门前变更），探针一致性抽查跳过')
   }
 
   // —— 重跑探针取当前指标（specDir 显式传 sb：根口径由调用方给定，不做祖先推断/漂移锚定） ——

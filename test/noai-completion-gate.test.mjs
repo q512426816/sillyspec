@@ -221,7 +221,7 @@ created_at: 2026-08-15 00:00:00
     completeStageGates({ stageName: 'verify', cwd, changeName: cn, platformOpts: {}, specBase, progress, pm, stageData: progress.stages.verify, steps, currentIdx: 6, outputText: null }))
 
   assert(r.result && r.result.stageCompleted === false, `stageCompleted:false（死信阻断回滚），result: ${JSON.stringify(r.result)}`)
-  assert(r.stdout.includes('pending/待办'), 'stdout 含「pending/待办」死信提示')
+  assert(r.stdout.includes('pending/待办'), `stdout 含「pending/待办」死信提示，尾：${r.stdout.slice(-400)}`)
   assert(!r.stdout.includes('验证通过，下一步'), '死信未清不打验证通过提示')
 
   const after = await pm.read(cwd, cn)
