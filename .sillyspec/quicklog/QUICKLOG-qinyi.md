@@ -286,3 +286,12 @@
 根因：自查发现：brainstorm-auto 漏改（仍在教 agent cat local.yaml）；LOCAL_COMMANDS 注释声称剔除 unavailable 但实现没做；writeTaskReview 缺跨仓守卫（主仓锡点会被误配跨仓改动）；另实证 scan step1 自 2026-09-05 noAI 后铁律/契约一直静默丢失
 方案：auto 档注入行补齐；unavailable 过滤实现（regex 兼容带注释）；跨仓前置拒绝+adopt 指引+死代码清理；scan 恢复实证写入 lifecycle 注记；补 2 测试用例 + brainstorm-auto.md 同步
 结果：prompt-injection-gaps 15 断言 + review-write 17 断言全过；全量 362 过 0 失败 + lint 477 文件 0 告警；execute/scan 首渲染实测（noAI 自动执行 + persona/铁律落首可见步）
+
+## ql-20260908-001-102b | 2026-09-08 07:05:09 | auto-driver 收尾三件——残留登记/标记裁决/E2E 实测全过
+状态：已完成
+关联变更：（无）
+文件：docs/sillyspec/troubleshooting.md
+需求：auto-driver 收尾三件——残留登记/标记裁决/E2E 实测全过
+根因：上变更遗留观察项：归档转换拦截疑似 sync 回放；SS-META 四源公式落地的标记覆盖面待复查；driver 循环未端到端实测
+方案：troubleshooting #56 完整登记（症状/排查进展/workaround/裁决）；E2E 走真实 auto 循环两步验证三要素
+结果：E2E：零活跃建变更+SS-META 渲染+requiresUser 分叉+双命令同源全过；纯文档+验证零代码改动；npm test 不适用（docs only 规则 8 跳过）

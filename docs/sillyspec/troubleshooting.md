@@ -862,3 +862,23 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 3. `fetch failed`＝连接层失败（平台没起/DNS/拒连），带 socket cause。三者都是 best-effort 语义，重试在下一条命令；真要根治间歇触发，要么 env 放宽总预算，要么查平台端慢点。
 
 **关联坑名**：`spec-sync-aborted-looks-exception`；同源债 E22b（defer→本坑实证闭环前半段，连续失败退避降频仍随 sillyhub 后端排期不动）
+
+## 55. 三坑：verify 判账 tail 盲区归因难 / 豁免匹配不剥 ANSI / known_failures 连续链解析脆弱（2026-09-07 闭环）
+
+**症状**：工具使用复盘点出三个工具侧缺陷——① verify 测试对账按**完整输出**判账，但 `test-result.json` 只存 `output_tail` 末 4000 字符，失败行落在盲区时 reason 里 5 行×120 字符采样不够归因，只能全量复跑；② 豁免匹配（`partitionFailures` 子串 includes）在**原始行**上做，TTY 捕获的色码把可见词拦腰拆开（`× \x1b[31mtests/foo\x1b[0m > case` 连不成 `tests/foo.test.ts > case`），同一行被迫拆两段各配一条模式；③ `known_failures` 块解析要求「`-` 项行/注释/空行」**连续成链**（`(...)+` 正则），手改残留的缩进杂行/空项 `  -` 即断链，其后条目**静默丢失**（实证形态：G/H 注释段踩着 F 段残迹重写，F 段遗留行断链 → G/H 条目全丢 → 清单残缺假红）。
+
+**根因**：① 判账行集（remaining/exempted）在 `judgeWithKnownFailures` 里已按全量算出但只浓缩进 reason 采样，未随结果透传落盘；② 分类（PASS/summary/warning 判定）早已在剥 ANSI 后的行上做，唯独豁免匹配漏了同款处理；③ 块式正则把「语法上连续」当「语义上成块」——YAML 的块边界本该是列首缩进变化，不是行内容形态。
+
+**修复（已闭环）**：
+- **判账行集全量透传**（`verify-test-reconcile-tail-blindspot`）：`judgeWithKnownFailures` 全分支返回 `remainingLines`/`exemptedLines`（全量原文，无 known_failures 分支同样带失败行全集）；三个 runner（full/module 跨仓）透传到结果对象，module 子集与跨仓 merge 聚合（合并 tail 二次截断不影响台账）；`writeRunResult` 落盘 `failure_remaining`/`failure_exempted`（`capFailureLedger` 防病态体量：单行截 300 字符、行数截 200 注明计数，判账本身用全量不受影响；空集不落键）；`printVerifyTestCheck` 失败时打「未豁免失败行」明细段（≤30 条，`!` 前缀与 tail 的 `|` 区分）、豁免 PASS 时打已豁免样例（≤10 条）供「清单是否过宽」复核；reason 的「其余 N 行」指针从「见上方测试输出」（盲区行看不到）改为指向台账。
+- **豁免匹配剥 ANSI**（`verify-known-failures-ansi-exemption-split`）：`partitionFailures` 豁免匹配改在剥 ANSI 后的行上做，模式侧同步剥（从原始输出誊抄来的模式可能自带码）；返回仍保留原文，展示不变形。
+- **块解析逐行扫描**（`verify-known-failures-block-fragile-chain`）：`extractKnownFailures`（verify-postcheck）与 `extractKnownFailureKeys`（docs-check 逐字对齐拷贝）同改为行扫描——块 = 头之后连续的「缩进行/注释行（任意缩进含列首）/空行」，列首正文行收块；块内杂行容忍不提取但**不断链**。观测面：`runVerifyTestCheck` 加载清单后即报「📋 已加载 N 条模式」（stderr，不污染 machine-interface 的 stdout），截断/误删段时条数与预期不符一眼可见。附带修 docs-check 潜在连带丢失：`readDecisionRulesConfig` 的 `jsYaml.load` 单独兜底，YAML 整体不合法时豁免键存活（原先整段 catch 回 fallback、已提取的键静默丢）。
+- 测试：`test/verify-postcheck-known-failures.test.mjs` 补三坑回归（跨色码单条模式豁免/杂行不断链/台账落盘形状与截断语义）+ docs-check 侧走真实文件的 `readDecisionRulesConfig` 用例。
+
+## 56. 归档转换拦截「execute → archive」：verify 完成后 currentStage 残留（2026-09-08 观察，根因待专项）
+
+**症状**：`2026-09-08-auto-driver` 归档收尾时实证——verify 7/7 完成且 CLI 已提示「下一步：run archive」，随后 `run archive --done` 连续报「阶段转换不允许: execute → archive」（progress.currentStage 仍为 execute 而非 verify）。`--skip-approval` 显式意图可过。
+
+**排查进展**：run 路径的 currentStage 写点唯一（runStage 入口 :227，verify 非 auxiliary 进入即写 'verify'）；completeStageGates 完成路径不清写。疑似根因方向：**平台 sync 拉取回放**——收尾期间有「[sync] 已拉取变更进度」与「冲突已自动消解」记录，服务器侧 stale currentStage=execute（execute 完成时点推送）覆盖本地 verify 态。待专项：sync 拉取对 currentStage 的合并策略（应本地新值优先或按 stage 完成态推导）。
+
+**workaround**：① `run archive --skip-approval`（显式意图，已验证可行）② 重跑一次 `run verify`（入口重写 currentStage）再归档。**相关裁决**：SS-META requiresUser 的 WAIT_MARKER_RE 正文源在 auto 流程实际为零命中（auto prompt 无 [WAIT_FOR_USER] 类标记）——auto 的 wait 语义步全部有显式三键（brainstorm-auto step2 conditionalWait / step4 requiresWait），无三键步（step3 生成设计产物）免交互是 auto 本义，无需补标（2026-09-08 复查结论）。
