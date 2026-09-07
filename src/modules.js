@@ -212,21 +212,42 @@ export function splitChangelog(cwd, { force = false } = {}) {
     for (const f of cards) {
       const cardPath = join(modulesDir, f);
       const content = readFileSync(cardPath, 'utf8');
-      // 提取「## 变更索引」节（CRLF 归一后行级匹配，与 modules.js 其余解析同防线）
+      // 提取「## 变更索引」节（CRLF 归一后行级匹配，与 modules.js 其余解析同防线）。
+      // 标题正则允许后缀（如「（表格，初始为空）」——2026-09-07 实证 core-engine 形态漏迁）；
+      // miss 时再试 MANUAL_NOTES 区（stages/runtime 形态：<!-- MANUAL_NOTES_END --> 前的尾部
+      // 行块——全或无：块内行须全部为「- <变更名> | 摘要」形态才整体迁出，防误迁散文）
       const lines = content.replace(/\r\n/g, '\n').split('\n');
-      const startIdx = lines.findIndex(l => /^##\s*变更索引\s*$/.test(l));
-      if (startIdx < 0) { skipped++; continue; }
-      let endIdx = lines.length;
-      for (let i = startIdx + 1; i < lines.length; i++) {
-        if (/^##\s/.test(lines[i])) { endIdx = i; break; }
+      const startIdx = lines.findIndex(l => /^##\s*变更索引/.test(l));
+      let kind = 'index';
+      let segStart = -1, segEnd = -1, body = '';
+      if (startIdx >= 0) {
+        let endIdx = lines.length;
+        for (let i = startIdx + 1; i < lines.length; i++) {
+          if (/^##\s/.test(lines[i])) { endIdx = i; break; }
+        }
+        const b = lines.slice(startIdx + 1, endIdx).join('\n').trim();
+        // 已迁出（只剩指针行）或本就为空 → 跳过
+        if (!b || /^见\s/.test(b) || b.includes('.changelog.md')) { skipped++; continue; }
+        kind = 'index'; segStart = startIdx + 1; segEnd = endIdx; body = b;
+      } else {
+        const endMark = lines.findIndex(l => l.includes('<!-- MANUAL_NOTES_END -->'));
+        if (endMark < 0) { skipped++; continue; }
+        // 块首 = END 标记向上、以空行为界的连续内容块起点
+        let bs = endMark - 1;
+        while (bs >= 0 && lines[bs].trim() !== '') bs--;
+        // 块内剔除 HTML 注释行（区开标记 <!-- MANUAL_NOTES ... --> 等）后须全为变更行形态
+        const block = lines.slice(bs + 1, endMark).filter(l => {
+          const t = l.trim()
+          return t !== '' && !/^<!--.*-->$/.test(t)
+        });
+        const CHG_LINE = /^- [A-Za-z0-9][\w\-./]* \| /;
+        if (block.length === 0 || !block.every(l => CHG_LINE.test(l))) { skipped++; continue; }
+        kind = 'manual-notes'; segStart = bs + 1; segEnd = endMark; body = block.join('\n');
       }
-      const body = lines.slice(startIdx + 1, endIdx).join('\n').trim();
-      // 已迁出（只剩指针行）或本就为空 → 跳过
-      if (!body || /^见\s/.test(body) || body.includes('.changelog.md')) { skipped++; continue; }
       const bytesMoved = Buffer.byteLength(body, 'utf8');
       const stem = f.replace(/\.md$/, '');
       const sidecarPath = join(modulesDir, `${stem}.changelog.md`);
-      results.push({ card: cardPath, sidecar: sidecarPath, bytesMoved, _lines: lines, _startIdx: startIdx, _endIdx: endIdx, _body: body });
+      results.push({ card: cardPath, sidecar: sidecarPath, bytesMoved, kind, _lines: lines, _segStart: segStart, _segEnd: segEnd, _body: body });
     }
   }
 
@@ -253,9 +274,17 @@ export function splitChangelog(cwd, { force = false } = {}) {
       sidecarContent = header + '\n' + r._body + '\n';
     }
     writeFileSync(r.sidecar, sidecarContent, 'utf8');
-    // 卡内节体替换为指针行（只动该节，其余逐字保留；_lines 已是 LF 归一）
+    // 卡内替换（只动该段，其余逐字保留；_lines 已是 LF 归一）：
+    // index → 节体换指针行；manual-notes → 尾部块清空 + END 标记前留迁移指针注释
     const stem = r.card.split(/[\\/]/).pop().replace(/\.md$/, '');
-    const newLines = [...r._lines.slice(0, r._startIdx + 1), '', `见 \`${stem}.changelog.md\`——历史条目已迁出；新条目直接追加 sidecar，勿写回本卡。`, '', ...r._lines.slice(r._endIdx)];
+    let newLines;
+    if (r.kind === 'manual-notes') {
+      newLines = [...r._lines.slice(0, r._segStart),
+        `<!-- MANUAL_NOTES 区变更条目已迁出至 ${stem}.changelog.md（split-changelog）；新条目追加 sidecar，勿写回本卡 -->`,
+        ...r._lines.slice(r._segEnd)];
+    } else {
+      newLines = [...r._lines.slice(0, r._segStart), '', `见 \`${stem}.changelog.md\`——历史条目已迁出；新条目直接追加 sidecar，勿写回本卡。`, '', ...r._lines.slice(r._segEnd)];
+    }
     writeFileSync(r.card, newLines.join('\n'), 'utf8');
     console.log(`✅ ${r.card} → ${r.sidecar}（迁出 ${(r.bytesMoved / 1024).toFixed(1)}KB，卡内留指针）`);
   }
