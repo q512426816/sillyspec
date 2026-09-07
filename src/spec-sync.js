@@ -45,6 +45,23 @@ function debugLog(msg) {
   if (process.env.SILLYSPEC_DEBUG_SYNC) console.warn(msg);
 }
 
+// 同步失败分类文案（坑 spec-sync-aborted-looks-exception，2026-09-07 平台执行环境实证）：
+// undici 被取消时 err.message 是英文原始串（AbortError=「This operation was aborted」、
+// TimeoutError=「The operation was aborted due to timeout」），原样拼进 warn 看起来像未知
+// 异常。按 err.name 翻译：AbortError=外部总熔断取消（run/shared.js raceWithAbort，预算经
+// SILLYSPEC_SYNC_TIMEOUT_MS 可调，故不写死秒数）；TimeoutError=单请求超时（清单 10s /
+// 推送 30s 口径）；其余错误维持原样。判别口径同 sync.js fetchJson 的 AbortError/
+// TimeoutError 先例（外部 signal abort 抛 AbortError、AbortSignal.timeout 到期抛 TimeoutError）。
+export function describeSyncError(err) {
+  if (err && err.name === 'AbortError') {
+    return '平台响应慢，本轮同步被总预算熔断让路（best-effort，下一条命令自动重试）';
+  }
+  if (err && err.name === 'TimeoutError') {
+    return '单请求超时（清单 10s / 推送 30s 口径，best-effort，下次自动重试）';
+  }
+  return err && err.message ? err.message : String(err);
+}
+
 function _hashBuffer(buf) {
   return createHash('sha256').update(buf).digest('hex');
 }
@@ -477,7 +494,7 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
     const body = await res.json().catch(() => ({}));
     serverManifest = body.files || {};
   } catch (err) {
-    console.warn(`[spec-sync] 拉取清单异常（文件树本次未同步，下次自动重试）: ${changeName}: ${err.message}`);
+    console.warn(`[spec-sync] 拉取清单异常（文件树本次未同步，下次自动重试）: ${changeName}: ${describeSyncError(err)}`);
     return { synced: 0 };
   }
 
@@ -605,7 +622,7 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
     writeBaseSnapshot(specRoot, localFiles);
     return { synced: ops.length };
   } catch (err) {
-    console.warn(`[spec-sync] 同步异常（文件树本次未同步，下次自动重试）: ${changeName}: ${err.message}`);
+    console.warn(`[spec-sync] 同步异常（文件树本次未同步，下次自动重试）: ${changeName}: ${describeSyncError(err)}`);
     return { synced: 0 };
   }
 }

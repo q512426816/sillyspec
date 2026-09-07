@@ -173,3 +173,18 @@
 根因：①源码 2026-08-23 已把 sync-module-docs 改为 conditionalWait，_sync.mjs 只同步正文 fence 不同步手工元数据区，文档残留 requiresWait 与正文矛盾；②agents-instruction 模板会被 init 写入任意栈项目的 AGENTS.md，规则8硬编码 npm 命令对非 Node 项目是错误指令
 方案：①archive.md Step3 等待配置块改为 conditionalWait/repeatableWait/maxWaitRounds=3/waitReason 对齐源码；②规则8改为优先读 .sillyspec/local.yaml 的 commands.test/commands.lint，未配置按项目栈给等价命令（npm / pytest+ruff 示例）
 结果：node docs/prompt/_verify.mjs 通过；init-agents-injection 测试 52 断言全过 0 失败；改动仅 doc/模板未触 src/test
+
+## ql-20260907-001-c129 | 2026-09-07 10:24:27 | spec-sync 间歇 aborted 异常治理——AbortError 分类文案 + 同步总熔断 env 可调
+状态：已完成
+关联变更：（无）
+文件：
+- src/spec-sync.js（describeSyncError 分类器 + 两处 catch 接线）
+- src/run/shared.js（resolveSyncTotalTimeoutMs env 开关 + raceWithAbort 默认参数逐次求值）
+- test/spec-sync-abort-classification.test.mjs（新增 16 断言回归）
+- docs/sillyspec/platform-interface-map.md（shared.js 六处行号重锚 + §7 熔断条目新口径）
+- docs/sillyspec/troubleshooting.md（条目 #54 aborted=熔断 登记）
+需求：spec-sync 间歇 aborted 异常治理——AbortError 分类文案 + 同步总熔断 env 可调
+根因：平台执行环境后端偶发 >8s 响应，run/shared.js 8s 同步总熔断（HUB-09）外部取消在飞 fetch，undici AbortError 英文原始串 This operation was aborted 被 spec-sync.js 两处 catch 用 err.message 原样拼进 warn，像未知异常引一轮排查；间歇触发、best-effort 语义无害但观感吓人（债 E22b defer 场景实证）
+方案：spec-sync.js 新增 describeSyncError(err)（AbortError→总预算熔断让路人话 / TimeoutError→单请求超时 / 其余原样，口径同 sync.js fetchJson 先例），接线拉清单/同步两处 catch；run/shared.js 新增 resolveSyncTotalTimeoutMs()，SILLYSPEC_SYNC_TIMEOUT_MS 整数毫秒 [1000,120000] 非法回退 8s，raceWithAbort 默认参数改逐次求值 env 即时生效；platform-interface-map.md 六处 shared.js 行号重锚 + §7 熔断条目补口径；troubleshooting.md 追加条目 #54
+结果：npm test 358/358 绿（含新测试 spec-sync-abort-classification 16 断言：分类单元 + 外部 abort 集成 warn 不露英文串 + env 合法性九宫格 + env=1000 熔断实测 1034ms 生效）；doc-ref-check 87 引用全通过；npm run lint 472 文件 0 告警、未引用导出 0 项
+审计：⚖️ 归属切分：3 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：docs/sillyspec/platform-interface-map.md, docs/sillyspec/troubleshooting.md, test/spec-sync-abort-classification.test.mjs

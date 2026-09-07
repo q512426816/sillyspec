@@ -614,13 +614,24 @@ export function resolveChangeDir(cwd, progress, specDir = null) {
 // 仍在跑，平台可能已接受推送而客户端当作超时放弃（spec 树推送无 base_ts 自愈兜底）。
 const SYNC_TOTAL_TIMEOUT_MS = 8_000
 
+// 熔断总预算 env 开关（坑 spec-sync-aborted-looks-exception / 债 E22b 场景实证，2026-09-07）：
+// 真实平台执行环境后端偶发 >8s 响应，8s 熔断间歇触发（warn 文案见 spec-sync.js
+// describeSyncError）。SILLYSPEC_SYNC_TIMEOUT_MS 允许平台环境放宽总预算；代价是 --done
+// 最坏等待同比例变长（e2c9f90 治的体感 hang 需自行权衡）。整数毫秒，[1000, 120000]，
+// 非法/越界一律回退默认 8s。raceWithAbort 默认参数逐次求值——进程内改 env 即时生效。
+export function resolveSyncTotalTimeoutMs() {
+  const raw = Number(process.env.SILLYSPEC_SYNC_TIMEOUT_MS)
+  if (Number.isInteger(raw) && raw >= 1_000 && raw <= 120_000) return raw
+  return SYNC_TOTAL_TIMEOUT_MS
+}
+
 /**
  * 熔断 race + 确定性取消：超时触发 controller.abort() 并 resolve，在飞 fetch 收到
  * AbortError 后自然失败（各调用方 catch 返回降级值，进程不挂起）。
  * @param {() => Promise} op 接收 { signal } 的异步操作
  * @param {number} timeoutMs 熔断时长（测试可缩短）
  */
-async function raceWithAbort(op, timeoutMs = SYNC_TOTAL_TIMEOUT_MS) {
+async function raceWithAbort(op, timeoutMs = resolveSyncTotalTimeoutMs()) {
   const controller = new AbortController()
   let timer
   try {

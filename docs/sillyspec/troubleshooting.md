@@ -841,3 +841,24 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 - 提示词/指引文案同步：renderReviewJsonContract（review.json 契约注入）、execute 对照设计检查步骤 prompt、verifyStageReviewDocHash 错误文案——一致口径「忘跑没关系 gate 自动机械重算；大幅改版结论是否仍适用需人工确认，勿把自动放行当新文档已审过」；docs/prompt/execute.md 同步（静态阶段 _verify 0 未匹配）。
 
 **关联坑名**：`done-phantom-change-silent-create`、`progress-repair-dual-library-blind`、`stage-review-refresh-hash-manual-forget`
+
+---
+
+## 54. 一坑：spec-sync 间歇打 "This operation was aborted" 像未知异常（2026-09-07 闭环）
+
+**症状**（2026-09-07 平台执行环境实证）：平台跑 quick 时 spec-sync 间歇打 `[spec-sync] 拉取清单异常（文件树本次未同步，下次自动重试）: <change>: This operation was aborted`——英文原始串像 bug，用户排查一轮才发现无害。
+
+**根因**：这不是异常是**熔断动作**。quick 每步 `--done` 的自动同步经 `run/shared.js raceWithAbort` 走 8s 总预算熔断（HUB-09，commit e2c9f90/e1be9b，治 `--done` 体感 hang）；平台后端忙时响应超 8s，熔断 `controller.abort()` 取消在飞 fetch——undici 的 AbortError 原始 message（"This operation was aborted"）被 spec-sync.js 两处 catch 用 `err.message` 原样拼进 warn（sync.js/quicklog 链路早有人话翻译，只有 spec-sync 漏网）。间歇＝平台响应时间抖动；无害＝best-effort 契约本轮放弃、下一条命令自动重试（数据不丢）。历史背景：债 E22b（commit b15c222）当时 defer 的判断「8s 熔断仅平台 hang 时触发、需真实平台环境复现」，本坑正是该场景复现。
+
+**修复（已闭环，quick-2c6da904）**：
+- **catch 分类文案**（`spec-sync.js describeSyncError`，清单/推送两处 catch 接线）：AbortError → 「平台响应慢，本轮同步被总预算熔断让路（best-effort，下一条命令自动重试）」；TimeoutError → 「单请求超时（清单 10s / 推送 30s 口径）」；其余错误维持原样。判别口径同 sync.js fetchJson 的 AbortError/TimeoutError 先例。
+- **熔断总预算 env 可调**（`run/shared.js resolveSyncTotalTimeoutMs`）：`SILLYSPEC_SYNC_TIMEOUT_MS` 整数毫秒 [1000,120000]，非法/越界回退默认 8s；`raceWithAbort` 默认参数逐次求值，进程内改 env 即时生效。平台慢环境放宽总预算用；代价是 `--done` 最坏等待同比例变长，自行权衡。
+- 测试 spec-sync-abort-classification（16 断言）：单元分类 + 外部 abort 集成（warn 不再露英文串）+ env 合法性九宫格 + env=1000 熔断实测 1034ms 生效。
+- 文档重锚：platform-interface-map.md 六处 shared.js 行号漂移（resolveSyncTotalTimeoutMs 插入顶移 11 行）+ §7 熔断条目补新文案口径。
+
+**解法（遇到类似英文 undici 报错先想三层）**：
+1. `This operation was aborted`＝外部熔断取消（现已被 describeSyncError 翻译，不再出现）；
+2. `The operation was aborted due to timeout`（TimeoutError）＝单请求超时上限到期；
+3. `fetch failed`＝连接层失败（平台没起/DNS/拒连），带 socket cause。三者都是 best-effort 语义，重试在下一条命令；真要根治间歇触发，要么 env 放宽总预算，要么查平台端慢点。
+
+**关联坑名**：`spec-sync-aborted-looks-exception`；同源债 E22b（defer→本坑实证闭环前半段，连续失败退避降频仍随 sillyhub 后端排期不动）
