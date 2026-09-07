@@ -295,3 +295,12 @@
 根因：上变更遗留观察项：归档转换拦截疑似 sync 回放；SS-META 四源公式落地的标记覆盖面待复查；driver 循环未端到端实测
 方案：troubleshooting #56 完整登记（症状/排查进展/workaround/裁决）；E2E 走真实 auto 循环两步验证三要素
 结果：E2E：零活跃建变更+SS-META 渲染+requiresUser 分叉+双命令同源全过；纯文档+验证零代码改动；npm test 不适用（docs only 规则 8 跳过）
+
+## ql-20260908-002-3a55 | 2026-09-08 07:15:09 | currentStage 残留根因修复——--done 完成路径钉阶段
+状态：已完成
+关联变更：（无）
+文件：src/run/complete.js, src/run/stage.js, test/stage-completion-currentstage.test.mjs, docs/sillyspec/troubleshooting.md
+需求：currentStage 残留根因修复——--done 完成路径钉阶段
+根因：#56 实证：verify 全 --done 完成后归档报 execute→archive；唯一写点在裸 run 入口，直达完成路径漏写
+方案：三处完成持久化点统一 progress.currentStage = stageName（主阶段；complete.js ×2 + stage.js noAI）；辅助阶段不写与入口同语义；#56 根因订正（sync 误诊撤销）
+结果：stage-completion-currentstage 4 断言全过（钉阶段/归档放行/辅助不写）；全量 369 过 0 失败 + lint 484 文件 0 告警

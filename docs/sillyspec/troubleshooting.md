@@ -875,10 +875,12 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 - **块解析逐行扫描**（`verify-known-failures-block-fragile-chain`）：`extractKnownFailures`（verify-postcheck）与 `extractKnownFailureKeys`（docs-check 逐字对齐拷贝）同改为行扫描——块 = 头之后连续的「缩进行/注释行（任意缩进含列首）/空行」，列首正文行收块；块内杂行容忍不提取但**不断链**。观测面：`runVerifyTestCheck` 加载清单后即报「📋 已加载 N 条模式」（stderr，不污染 machine-interface 的 stdout），截断/误删段时条数与预期不符一眼可见。附带修 docs-check 潜在连带丢失：`readDecisionRulesConfig` 的 `jsYaml.load` 单独兜底，YAML 整体不合法时豁免键存活（原先整段 catch 回 fallback、已提取的键静默丢）。
 - 测试：`test/verify-postcheck-known-failures.test.mjs` 补三坑回归（跨色码单条模式豁免/杂行不断链/台账落盘形状与截断语义）+ docs-check 侧走真实文件的 `readDecisionRulesConfig` 用例。
 
-## 56. 归档转换拦截「execute → archive」：verify 完成后 currentStage 残留（2026-09-08 观察，根因待专项）
+## 56. 归档转换拦截「execute → archive」：--done 直达完成不写 currentStage（2026-09-08 已修复）
 
 **症状**：`2026-09-08-auto-driver` 归档收尾时实证——verify 7/7 完成且 CLI 已提示「下一步：run archive」，随后 `run archive --done` 连续报「阶段转换不允许: execute → archive」（progress.currentStage 仍为 execute 而非 verify）。`--skip-approval` 显式意图可过。
 
-**排查进展**：run 路径的 currentStage 写点唯一（runStage 入口 :227，verify 非 auxiliary 进入即写 'verify'）；completeStageGates 完成路径不清写。疑似根因方向：**平台 sync 拉取回放**——收尾期间有「[sync] 已拉取变更进度」与「冲突已自动消解」记录，服务器侧 stale currentStage=execute（execute 完成时点推送）覆盖本地 verify 态。待专项：sync 拉取对 currentStage 的合并策略（应本地新值优先或按 stage 完成态推导）。
+**根因（2026-09-08 已定位并修复，quick 级）**：`run <stage> --done` 直达完成路径**从不写 currentStage**——唯一写点在裸 `run <stage>` 入口（stage.js:227）。当 verify 全程经 `--done` 推进（无裸入口渲染），verify 完成后 currentStage 停留 execute → 归档的 checkTransition 读到 stale prevStage 误拦。初判「平台 sync 回放」为误诊（sync 的本地脏度守卫实际完好），已订正。
 
-**workaround**：① `run archive --skip-approval`（显式意图，已验证可行）② 重跑一次 `run verify`（入口重写 currentStage）再归档。**相关裁决**：SS-META requiresUser 的 WAIT_MARKER_RE 正文源在 auto 流程实际为零命中（auto prompt 无 [WAIT_FOR_USER] 类标记）——auto 的 wait 语义步全部有显式三键（brainstorm-auto step2 conditionalWait / step4 requiresWait），无三键步（step3 生成设计产物）免交互是 auto 本义，无需补标（2026-09-08 复查结论）。
+**修复**：三处阶段完成持久化点统一钉 `progress.currentStage = stageName`（主阶段；辅助阶段不写，与入口写点同语义）——completeStep 主完成分支（complete.js:513 区）/ continueStep wait 解除分支（:1247 区）/ noAI 完成分支（stage.js:558 区）。测试 `test/stage-completion-currentstage.test.mjs`（4 断言：--done 直达完成钉阶段/归档转换放行/辅助阶段不写）。
+
+**workaround（已无需，保留历史）**：① `run archive --skip-approval` ② 重跑裸 `run verify` 后归档。**相关裁决**：SS-META requiresUser 的 WAIT_MARKER_RE 正文源在 auto 流程实际为零命中（auto prompt 无 [WAIT_FOR_USER] 类标记）——auto 的 wait 语义步全部有显式三键（brainstorm-auto step2 conditionalWait / step4 requiresWait），无三键步（step3 生成设计产物）免交互是 auto 本义，无需补标（2026-09-08 复查结论）。

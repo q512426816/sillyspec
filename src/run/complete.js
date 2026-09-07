@@ -23,6 +23,7 @@ import { withFileLock } from '../quicklog.js'
 import { triggerSync, WAIT_MARKER_RE, getStageSteps, formatWaitOptions, resolveRuntimeRoot, getOrCreateMultiRepoContext, resolveChangeDir } from './shared.js'
 import { executeScanPreflight, executeScanPostcheck, computeScanProfile, executeScanDetectProjects, executeScanResumeCheck, executeScanFinalize } from './scan-profile.js'
 import { executeProgressConfirm } from './progress-confirm.js'
+import { AUXILIARY_STAGES } from '../constants.js'
 import { executePlanPostcheck as runPlanPostcheckLib } from '../stages/plan-postcheck.js'
 import { outputStep, collectStageWaitHistory } from './prompt.js'
 import { enforceDepsGate, enforceReviewJsonGate, enforceSymbolImpactGate, warnMissingUiPrototype, completeStageGates, readDesignScale } from './gates.js'
@@ -510,6 +511,11 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
       }
     }
 
+    // 主阶段完成钉 currentStage（troubleshooting #56 根因修复，2026-09-08）：
+    // `run <stage> --done` 直达完成不经过裸 run 入口（唯一写点 stage.js:227），
+    // currentStage 停留旧阶段 → 下游 checkTransition 用 stale prevStage 误拦
+    // （实证：verify 全 --done 完成后归档报 execute→archive）。与入口写点同语义：辅助阶段不写。
+    if (!AUXILIARY_STAGES.includes(stageName)) progress.currentStage = stageName
     stageData.status = 'completed'
     stageData.completedAt = new Date().toLocaleString('zh-CN',{hour12:false})
     progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
@@ -1246,6 +1252,11 @@ export async function continueStep(pm, progress, stageName, cwd, answer, options
   if (nextPendingIdx === -1 && nextWaitingIdx === -1) {
     stageData.status = 'completed'
     stageData.completedAt = now
+    // 主阶段完成钉 currentStage（troubleshooting #56 根因修复，2026-09-08）：
+    // `run <stage> --done` 直达完成不经过裸 run 入口（唯一写点 stage.js:227），
+    // currentStage 停留旧阶段 → 下游 checkTransition 用 stale prevStage 误拦
+    // （实证：verify 全 --done 完成后归档报 execute→archive）。与入口写点同语义：辅助阶段不写。
+    if (!AUXILIARY_STAGES.includes(stageName)) progress.currentStage = stageName
     // persist _write 移到 completeStageGates 成功之后（task-03 / review-2026-08-09 #2）：gate 异常/失败 → rollback 回 in-progress 落盘，此处未到 _write，DB 不留假 completed。
     // 阶段完成收尾共享管线（含 execute worktree cleanup），消除 continueStep 完成分支绕过 gate 的 S2（task-01 抽出）。
     // gate 失败已 rollback，early-return 跳过下方"阶段已完成/下一步"提示（与 completeStep 同语义）。
