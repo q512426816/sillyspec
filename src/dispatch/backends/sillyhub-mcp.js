@@ -234,11 +234,23 @@ dispatch 后在当前 step 内主动轮询，不阻塞等待：
 
 1. **轮询 \`list_workers\`**：间隔默认 15s，可配 local.yaml \`dispatch.poll_interval_ms\`
    - 入参 \`mission_id\`；关注每个 worker 的 status（pending → running → completed/failed）
-2. **per-worker 超时**：默认可配 local.yaml \`dispatch.worker_timeout_ms\`；超时 → 三步兜底：
-   - a. **标记**：调 \`report_progress\` tool（worker_id + 超时说明）记录该 worker 超时
-   - b. **kill lease 防双写**：调 \`report_progress\` tool（worker_id + \`kill: true\` + marker）终止 lease
-     （等价 client.js \`killLease(workerId)\` 路径；SillyHub 当前无专用 kill tool，路径A 落地后升级为专用 kill）
-   - c. **fallback Local 重派**：该 task 改用本机 Agent tool 重派（调 \`sillyspec dispatch hint\` 走 Local 模板）
+2. **worker 活性知情决策（2026-09-07-agent-liveness-states task-13）**：\`list_workers\`
+   返回的 worker 在 **running 期间** 附 \`liveness\` 字段（\`{ state, evidence, derived_at }\`，
+   无则为 null）——\`state\` 取值 \`working\` / \`blocked\` / \`idle\` / \`ended\` / \`unknown\`
+   （daemon liveness 推导；\`blocked\` 主源为第一方权限事件，PERMISSION_REQUEST 等人）。
+   轮询时按活性分流，替代无脑超时 kill：
+   - a. **\`liveness.state=blocked\` 且持续超阈值**（对齐平台 \`BLOCKED_ALERT_MS\`=120s 口径，
+     连续两轮轮询仍 blocked 即视为持续）→ **升级给人**：告知用户该 worker 在等权限确认
+     （harness + evidence），由人处理（平台会同步发 agent_blocked 通知）；**绝不 kill、
+     绝不自动批准**（自动批准权限提示=代人做安全决策，安全敏感）。
+   - b. **\`liveness.state=working\` 且久无终态** → 属长任务场景（日志持续增长、跑测试等），
+     按既有 \`dispatch.worker_timeout_ms\` 继续等待，**不抢跑 kill**——区分「在干活的长任务」
+     与「死了」正是活性字段的价值。
+   - c. **仅当超时且无 liveness / \`liveness.state=unknown\`** → 走既有三步兜底（超时兜底路径）：
+     - ① **标记**：调 \`report_progress\` tool（worker_id + 超时说明）记录该 worker 超时
+     - ② **kill lease 防双写**：调 \`report_progress\` tool（worker_id + \`kill: true\` + marker）终止 lease
+       （等价 client.js \`killLease(workerId)\` 路径；SillyHub 当前无专用 kill tool，路径A 落地后升级为专用 kill）
+     - ③ **fallback Local 重派**：该 task 改用本机 Agent tool 重派（调 \`sillyspec dispatch hint\` 走 Local 模板）
 3. **worker 终态（completed / failed / killed）** → 进入下方回收约定
 
 ${recycleRule}`
