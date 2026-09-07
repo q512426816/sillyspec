@@ -853,7 +853,18 @@ async function main() {
       if (vpInit) {
         const vpReportPath = join(vpSpecBase, 'changes', vpChange, 'verify-result.md');
         if (existsSync(vpReportPath)) {
-          console.log(`\nℹ️  verify-result.md 已存在，不覆盖: ${vpReportPath}`);
+          const vpExisting = readFileSync(vpReportPath, 'utf8');
+          if (!/^#### 探针 \d/m.test(vpExisting)) {
+            // P1 修复（2026-09-07）：存量旧格式（九章节）报告 + --init 曾是死路——facts 无条件刷新
+            // 而正文不补，checkProbeConsistency 判别子判「疑似 agent 删除预填段」error 阻断，而修复
+            // 指引「重跑 --init」对已存在报告是 no-op。修法：探针段是 CLI 拥有的机械段，检测缺失时
+            // 尾部补注入（正文其余不动），判别子自此有子节可对账。
+            const vpSection = `\n## 探针结果（CLI 机械预填，--init 补注入） [层：可复跑探针——gate 抽查防篡改]\n${renderVerifyProbesReport(vpResult)}\n`;
+            writeFileSync(vpReportPath, vpExisting.replace(/\s*$/, '\n') + vpSection);
+            console.log(`\n📄 存量旧格式 verify-result.md 已补注入探针预填段: ${vpReportPath}（正文其余未动；补注后按新预填段如实核对结论）`);
+          } else {
+            console.log(`\nℹ️  verify-result.md 已存在，不覆盖: ${vpReportPath}`);
+          }
         } else {
           writeFileSync(vpReportPath, generateVerifyResultSkeleton(vpResult));
           console.log(`\n📄 已生成 verify-result.md 骨架: ${vpReportPath}（探针已预填；结论必须写明 PASS/FAIL，留待填会被 gate 判不过）`);
