@@ -127,6 +127,26 @@ export class ChangeRegistry {
   }
 
   /**
+   * 读取变更回填的 quicklog_id（quick 启动时 stage.js 写入的分配 ql-ID）。
+   * quick --done 兜底路径复用启动 ql-ID 用（坑 platform-takeover-phantom-progress-db
+   * 同日变体：guard 缺失时补分配新号制造引用劈叉——落码注释/模块文档的 ql-ID 是启动
+   * 时就给出的，兜底换号必然劈叉；启动 ID 进度库里可查）。
+   * @param {string} cwd
+   * @param {string} changeName
+   * @returns {string|null} 行缺失/未回填/读取失败返回 null
+   */
+  getQuicklogId(cwd, changeName) {
+    if (!changeName) return null;
+    try {
+      const db = this.pm._ensureDB(cwd);
+      const row = db.getDb().prepare('SELECT quicklog_id FROM changes WHERE name = ?').get(changeName);
+      return (row && typeof row.quicklog_id === 'string' && row.quicklog_id) || null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * 读取变更的隔离状态
    * @param {string} cwd - 项目根目录
    * @param {string} changeName - 变更名

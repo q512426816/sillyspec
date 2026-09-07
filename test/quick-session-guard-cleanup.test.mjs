@@ -253,6 +253,59 @@ console.log('\n--- 验收 3：无任何 guard 文件 → 跳过审计仅清理�
 }
 
 // ─────────────────────────────────────────
+// 验收 4：guard 缺失 + QUICKLOG 文件缺失（启动/完成分裂库形态）→ 兜底复用启动 ql-ID，单 ID 收敛
+// 坑 platform-takeover-phantom-progress-db 同日变体：兜底补分配新号会劈叉（同会话两个
+// ql-ID、两份文件各半）；修复 = 优先复用进度库 changes.quicklog_id，条目缺失用原 ID 补建。
+// ─────────────────────────────────────────
+console.log('\n--- 验收 4：guard + QUICKLOG 双缺 → 复用启动 ql-ID（防劈叉） ---')
+{
+  const repo = makeTmpDir('qsgc-reuse-')
+  initGitRepo(repo)
+  writeFileSync(join(repo, '.gitignore'), '.sillyspec/\n')
+  writeFileSync(join(repo, 'main.js'), 'console.log(1)\n')
+  git(repo, ['add', '.'])
+  git(repo, ['commit', '-q', '-m', 'init'])
+
+  const specBase = join(repo, '.sillyspec')
+  const pmInit = new ProgressManager({ specDir: specBase })
+  await pmInit.init(repo)
+
+  const out = await captureStdout(() => runCommand(['quick', 'fix reuseId', '--non-interactive'], repo))
+  const sid = extractSessionId(out)
+  const sessionDir = join(specBase, '.runtime', 'quick-sessions', sid)
+  assert(sid, '会话已启动')
+
+  // 启动分配的 ql-ID 落在进度库 quicklog_id（复用源）
+  const startupQlId = pmInit.getQuicklogId(repo, sid)
+  assert(startupQlId && /^ql-/.test(startupQlId), `进度库已回填启动 ql-ID（实际 ${startupQlId}）`)
+
+  // 事故形态：guard 目录与 QUICKLOG 文件全部缺失（等价「条目在另一库的文件里」）
+  rmSync(sessionDir, { recursive: true, force: true })
+  const qlDir = join(specBase, 'quicklog')
+  try { for (const f of readdirSync(qlDir)) rmSync(join(qlDir, f), { force: true }) } catch {}
+
+  let step3Out = ''
+  let threw = null
+  try {
+    await captureStdout(() => runCommand(['quick', '--done', '--change', sid, '--output', 's1', '--confirm'], repo))
+    await captureStdout(() => runCommand(['quick', '--done', '--change', sid, '--output', 's2', '--confirm'], repo))
+    step3Out = await captureStdout(() => runCommand(['quick', '--done', '--change', sid, '--output', structured, '--confirm'], repo))
+  } catch (e) {
+    threw = e
+  }
+  assert(threw === null, `双缺场景 step3 收尾不抛异常（实际 ${threw ? threw.message : '无'}）`)
+  assert(/复用启动 ql-ID/.test(step3Out), `stdout 明示复用启动 ql-ID（实际含：${(step3Out.match(/📝[^\n]*/) || ['(无)'])[0]}）`)
+
+  const qlFiles = readdirSync(qlDir).filter(f => f.startsWith('QUICKLOG') && f.endsWith('.md'))
+  assert(qlFiles.length === 1, `仅一份 QUICKLOG 文件（实际 ${qlFiles.length}）`)
+  const body = readFileSync(join(qlDir, qlFiles[0]), 'utf8')
+  const allIds = [...body.matchAll(/^## (ql-\S+) \|/gm)].map(m => m[1])
+  assert(allIds.length === 1 && allIds[0] === startupQlId,
+    `单条目且为启动 ql-ID（实际 ${JSON.stringify(allIds)}，期望 [${startupQlId}]）——修复前会补分配出新号劈叉`)
+  assert(body.includes('状态：已完成'), '复用 ID 的条目已翻为已完成')
+}
+
+// ─────────────────────────────────────────
 // 清理 & 汇总
 // ─────────────────────────────────────────
 for (const dir of tmpRoots) {

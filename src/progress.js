@@ -868,6 +868,9 @@ export class ProgressManager {
 
   updateChangeMeta(cwd, changeName, meta) { return this._changeRegistry.updateChangeMeta(cwd, changeName, meta); }
 
+  // quick --done 兜底复用启动 ql-ID（坑 platform-takeover-phantom-progress-db 同日变体）
+  getQuicklogId(cwd, changeName) { return this._changeRegistry.getQuicklogId(cwd, changeName); }
+
   // ── CLI 命令 ──
 
   init(cwd) {

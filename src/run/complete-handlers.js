@@ -31,7 +31,7 @@ import { detectConcurrentChanges, formatConcurrentWarning, resolveConcurrentAnch
 import { stageRegistry } from '../stages/index.js'
 import { SCAN_STATUS, POINTER_STATUS } from '../constants.js'
 import { printQuickAuditReview, runQuickTestLintGate, printQuickTestLintGate } from './quick-audit.js'
-import { validateQuickResult, allocateQuicklogEntry, findQuicklogEntry, completeQuicklogEntry, extractTitleFromResult } from '../quicklog.js'
+import { validateQuickResult, allocateQuicklogEntry, appendQuicklogEntryWithId, findQuicklogEntry, completeQuicklogEntry, extractTitleFromResult } from '../quicklog.js'
 import { getRule } from '../stage-contract-spec.js'
 import { archiveDestDirName } from '../stage-contract.js'
 
@@ -1013,7 +1013,27 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
     }
 
     if (!qlId) {
-      // 无 ql-ID（guard 缺失或 brownfield 无 quicklogId）：补分配后立即完成，不阻断。
+      // 坑 platform-takeover-phantom-progress-db 同日变体：guard 缺失时兜底**优先复用启动
+      // 分配的 ql-ID**（进度库 changes.quicklog_id，quick 启动时 stage.js 回填）——落码
+      // 注释/模块文档的 ql-ID 是启动时就给出的，补分配新号必然制造引用劈叉（同一次会话
+      // 两个 ID、两份 QUICKLOG 各半）。ID 的条目不在当前 specBase（启动/完成分裂库形态）
+      // → 用原 ID 补建骨架，完成态落在同一 ID 上。库中也无（真 brownfield/极老会话）才
+      // 补分配。
+      try {
+        const dbQlId = pm.getQuicklogId(cwd, changeName)
+        if (dbQlId) {
+          const re = await appendQuicklogEntryWithId(specBase, gitUser, dbQlId, {
+            description: guard?.taskDescription || '(guard 缺失补建)',
+            linkedChanges,
+            allowedFiles: Array.isArray(guard?.allowedFiles) ? guard.allowedFiles : [],
+          })
+          qlId = dbQlId
+          console.log(`📝 QUICKLOG 兜底补写复用启动 ql-ID: ${qlId}（guard 缺失，ID 取自进度库 quicklog_id${re.existed ? '' : '，条目已补建'}）`)
+        }
+      } catch { /* 读取/补建失败退回补分配，不阻断 */ }
+    }
+    if (!qlId) {
+      // 无 ql-ID（库中也未回填，真 brownfield）：补分配后立即完成，不阻断。
       try {
         const alloc = await allocateQuicklogEntry(specBase, gitUser, {
           description: guard?.taskDescription || '(补分配)',

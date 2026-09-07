@@ -714,6 +714,57 @@ export async function allocateQuicklogEntry(specBase, gitUser, { description, li
 }
 
 /**
+ * 以**给定 ql-ID** 追加一条「进行中」骨架条目（不分配新 ID）。
+ *
+ * 坑 platform-takeover-phantom-progress-db 同日变体：quick --done 兜底复用启动分配的
+ * ql-ID（进度库 changes.quicklog_id 可查）时，该 ID 的条目可能不在当前 specBase 的
+ * QUICKLOG 文件里（启动与 --done 落到不同库/文件的分裂形态）——用原 ID 补建骨架再走
+ * 完成翻态，保证「同一次会话只有一个 ql-ID」。条目已存在则幂等跳过（不重复追加）。
+ * 与 allocateQuicklogEntry 同锁同格式同平台推送，仅跳过 ID 分配段。
+ */
+export async function appendQuicklogEntryWithId(specBase, gitUser, qlId, { description = '(guard 缺失补建)', linkedChanges = [], allowedFiles = [] } = {}) {
+  if (!qlId || typeof qlId !== 'string') throw new Error('appendQuicklogEntryWithId: qlId 必填')
+  if (findQuicklogEntry(specBase, gitUser, qlId)) return { qlId, existed: true }
+  const quicklogDir = join(specBase, 'quicklog')
+  mkdirSync(quicklogDir, { recursive: true })
+  const user = sanitizeQuicklogUser(gitUser) || 'unknown'
+  const userFile = join(quicklogDir, `QUICKLOG-${user}.md`)
+  const lockPath = join(quicklogDir, `.QUICKLOG-${user}.md.lock`)
+  const desc = sanitizeDesc(description)
+  const linked = Array.isArray(linkedChanges) ? linkedChanges : []
+  const files = Array.isArray(allowedFiles) ? allowedFiles : []
+
+  return await withFileLock(lockPath, async () => {
+    // 双检（锁内）：并发兜底同 ID 只落一条
+    if (findQuicklogEntry(specBase, gitUser, qlId)) return { qlId, existed: true }
+    await rotateIfNeeded(userFile, user)
+    const entry = [
+      '',
+      `## ${qlId} | ${nowDatetime()} | ${desc}`,
+      '状态：进行中',
+      `关联变更：${linked.length > 0 ? linked.join(', ') : '（无）'}`,
+      `文件：${files.length > 0 ? files.join(', ') : '（见实际改动）'}`,
+      '',
+    ].join('\n')
+    appendFileSync(userFile, entry)
+    for (const c of linked) await appendTaskCheckbox(specBase, c, qlId, desc)
+    await pushQuicklogEntryToPlatform(specBase, {
+      ql_id: qlId,
+      timestamp: nowDatetime(),
+      title: desc,
+      status: 'in_progress',
+      status_note: null,
+      author_raw: user,
+      linked_changes: linked.filter(c => /^\d{4}-\d{2}-\d{2}-/.test(c)),
+      files: files.map(f => ({ path: f, note: null })),
+      body_sections: {},
+      raw_block: entry,
+    }).catch(() => {})
+    return { qlId, existed: false }
+  })
+}
+
+/**
  * 翻某 qlId 条目为「已完成」+ 追加结果 + 勾选关联 tasks.md。持锁。
  */
 export async function completeQuicklogEntry(specBase, gitUser, qlId, { resultText = '', linkedChanges = [], changedFiles = [], auditNotes = [] } = {}) {
