@@ -1469,6 +1469,206 @@ export async function adoptTaskReviewMechanics({ changeName, cwd, platformOpts =
 }
 
 /**
+ * writeTaskReview —— 单 task review.json 的命令式写入（`sillyspec review write`，2026-09-07）。
+ *
+ * 背景（noAI 主流程批次 T2-4）：task 级 review.json 此前由 agent/子代理手拼 JSON + 手算
+ * base/head + 手抄 changedFiles——schemaVersion/目录创建/executeRunId 解析/git 锡点全部是
+ * 纯机械活（generateTaskReviewDrafts/adoptTaskReviewMechanics 已证明 CLI 可代算），agent 只
+ * 应贡献判断字段（verdict/notes/evidence）。命令式写入消灭「手拼 JSON→gate 拒→重写」循环。
+ *
+ * 职责分工：
+ *   - CLI 代算（mechanics）：executeRunId（marker 优先）、base/head（worktree meta 优先，
+ *     --base/--head 显式覆盖）、changedFiles（diff × allowed_paths 归属切片，--changed-files
+ *     显式覆盖）、diffPaths（allowed_paths 非空时）、repo 锡点（task 卡）。
+ *   - agent 供给（判断）：--spec/--quality verdict、--notes、--evidence。
+ *
+ * 防伪/防误写：
+ *   - review.json 已存在 → 拒绝覆盖（--force 显式越过，控制台留痕）——保护独立 reviewer 产物。
+ *   - verdict=cannot_verify 且未给 --evidence → 报错（schema 硬要求非空 requiredEvidence），
+ *     不静默填占位（与草稿语义不同：草稿是兜底待复核，这里是 agent 明确结论）。
+ *   - 归属切片为空（allowed_paths 未命中 diff）→ 报错并列出 diff 候选与 task allowed_paths
+ *     （帮 agent 当场发现「改了声明外文件 / 路径写错」），--changed-files 显式越过。
+ *
+ * @param {object} opts
+ * @param {string} opts.changeName
+ * @param {string} opts.cwd
+ * @param {string} opts.taskId - 形如 task-NN
+ * @param {string} opts.specVerdict - pass | fail | cannot_verify
+ * @param {string} opts.qualityVerdict - 同上
+ * @param {string} [opts.reviewerNotes]
+ * @param {string[]} [opts.requiredEvidence]
+ * @param {string|null} [opts.baseOverride] - 显式 base 锡点（无 worktree meta 时必填）
+ * @param {string|null} [opts.headOverride]
+ * @param {string[]|null} [opts.changedFilesOverride]
+ * @param {boolean} [opts.force] - 覆盖已存在 review.json
+ * @param {object} [opts.platformOpts]
+ * @returns {Promise<{ok: boolean, reviewPath?: string, executeRunId?: string, errors: string[], warnings: string[]}>}
+ */
+export async function writeTaskReview({
+  changeName, cwd, taskId, specVerdict, qualityVerdict,
+  reviewerNotes = '', requiredEvidence = [],
+  baseOverride = null, headOverride = null, changedFilesOverride = null,
+  force = false, platformOpts = {},
+}) {
+  const errors = []
+  const warnings = []
+  const specBase = platformOpts.specRoot || join(cwd, '.sillyspec')
+  const runtimeRoot = resolveRuntimeRoot(platformOpts, specBase)
+  const changeDir = join(specBase, 'changes', changeName)
+
+  // ── 入参校验 ──
+  if (!changeName || typeof changeName !== 'string') errors.push('缺少 --change <变更名>')
+  if (!taskId || !/^task-\d+$/.test(taskId)) errors.push(`--task 格式应为 task-NN（实际 ${taskId}）`)
+  if (!VALID_VERDICTS.includes(specVerdict)) errors.push(`--spec verdict 无效：${specVerdict}（应为 ${VALID_VERDICTS.join('/')}）`)
+  if (!VALID_VERDICTS.includes(qualityVerdict)) errors.push(`--quality verdict 无效：${qualityVerdict}（应为 ${VALID_VERDICTS.join('/')}）`)
+  if ((specVerdict === 'cannot_verify' || qualityVerdict === 'cannot_verify')
+    && (!Array.isArray(requiredEvidence) || requiredEvidence.filter(Boolean).length === 0)) {
+    errors.push('verdict=cannot_verify 必须给 --evidence "<非空说明>"（schema 硬要求 requiredEvidence 非空）')
+  }
+  if (errors.length > 0) return { ok: false, errors, warnings }
+
+  // ── task 卡与 executeRunId 解析（与草稿生成同源）──
+  const taskCardPath = join(changeDir, 'tasks', `${taskId}.md`)
+  if (!existsSync(taskCardPath)) {
+    return { ok: false, errors: [`task 卡不存在：${taskCardPath}（先由 plan 阶段生成或手建）`], warnings }
+  }
+  const markerFile = join(runtimeRoot, 'current-execute-run-id-' + changeName)
+  let executeRunId = ''
+  try {
+    if (existsSync(markerFile)) {
+      const c = readFileSync(markerFile, 'utf8').trim()
+      if (isValidExecuteRunId(c)) executeRunId = c
+    }
+  } catch {}
+  if (!executeRunId) {
+    executeRunId = resolveLatestExecuteRunId({ runtimeRoot, changeName }) || ''
+  }
+  if (!executeRunId) {
+    executeRunId = generateExecuteRunId()
+    warnings.push(`无 execute run marker——已生成新 runId ${executeRunId} 并建目录（正常应先跑过 execute Wave 步）`)
+    try {
+      mkdirSync(join(runtimeRoot, 'execute-runs', executeRunId, 'tasks'), { recursive: true })
+      writeFileSync(markerFile, executeRunId + '\n')
+      stampExecuteRunChange(runtimeRoot, executeRunId, changeName)
+    } catch (e) {
+      return { ok: false, errors: [`execute run 目录/marker 写入失败：${e.message}`], warnings }
+    }
+  }
+
+  const reviewDir = join(runtimeRoot, 'execute-runs', executeRunId, 'tasks', taskId)
+  const reviewPath = join(reviewDir, 'review.json')
+
+  // ── 已存在保护（--force 越过）──
+  if (existsSync(reviewPath) && !force) {
+    return { ok: false, errors: [`review.json 已存在：${reviewPath}——拒绝覆盖（保护既有 reviewer 结论）；确认重写加 --force`], warnings }
+  }
+  if (existsSync(reviewPath)) warnings.push(`--force 覆盖已存在 review：${reviewPath}`)
+
+  // ── mechanics 代算：base/head（worktree meta 优先，显式覆盖次之）──
+  let base = baseOverride
+  let head = headOverride
+  let reviewGitDir = cwd
+  if (!base || !head) {
+    try {
+      const wm = new WorktreeManager({ cwd })
+      const meta = wm.getMeta(changeName)
+      if (!base) base = (meta && (meta.baselineCommit || meta.baseHash)) || null
+      if (meta && meta.worktreePath && meta.mode !== 'in-place-fallback' && existsSync(meta.worktreePath)) {
+        reviewGitDir = meta.worktreePath
+      }
+    } catch { /* meta 读取失败走显式覆盖路径 */ }
+  }
+  if (!head) {
+    try { head = runGit(reviewGitDir, ['rev-parse', 'HEAD']) } catch { head = null }
+  }
+  if (!base || !head) {
+    return {
+      ok: false,
+      errors: [`无法确定 base/head（无 worktree meta 且未显式覆盖）——用 --base <commit> --head <commit> 显式给出（git rev-parse 取值）`],
+      warnings,
+    }
+  }
+
+  // ── mechanics 代算：changedFiles（diff × allowed_paths 归属切片；显式覆盖优先）──
+  const content = readFileSync(taskCardPath, 'utf8')
+  // 跨仓 task 守卫：base/head/changedFiles 的跨仓口径（task 卡锡点 + 跨仓仓 diff）本函数未实现
+  //（草稿生成有专门分支）——显式拒绝并引导既有路径，防主仓锡点被误配到跨仓改动上
+  const guardRepo = normalizeRepoKey(parseRepo(content))
+  if (guardRepo && guardRepo !== 'main') {
+    return {
+      ok: false,
+      errors: [`task 卡声明 repo=${guardRepo}（跨仓 task）——review write 暂不支持跨仓口径，请手写 review.json 后跑 sillyspec backfill-reviews --change ${changeName} --adopt 代填 mechanics（base/head 从 task 卡锡点取）`],
+      warnings,
+    }
+  }
+  const allowedPaths = parseAllowedPaths(content)
+  let changedFiles = null
+  if (Array.isArray(changedFilesOverride)) {
+    // 显式覆盖（含空数组=纯验证任务的合法零 diff 声明）
+    changedFiles = changedFilesOverride.map(p => String(p).replace(/\\/g, '/'))
+    warnings.push(`changedFiles 采用显式覆盖（${changedFiles.length} 个）——evidence 校验仍会与 git diff 相交比对`)
+  } else {
+    let diffFiles = resolveVerifyChangedFiles(cwd, changeName, null, { specBase })
+    // 并入 worktree 未提交改动（与草稿生成同源口径：子代理默认不 commit）
+    try {
+      const wm = new WorktreeManager({ cwd })
+      const meta = wm.getMeta(changeName)
+      if (meta) {
+        const wtGitDir = (meta.worktreePath && meta.mode !== 'in-place-fallback' && existsSync(meta.worktreePath))
+          ? meta.worktreePath
+          : cwd
+        const wtStatus = runGit(wtGitDir, ['status', '--porcelain', '--untracked-files=all'], { trim: false })
+        const wtFiles = parsePorcelainFiles(wtStatus)
+          .map(p => String(p).replace(/\\/g, '/'))
+          .filter(p => p !== '.sillyspec' && !p.startsWith('.sillyspec/'))
+        if (wtFiles.length > 0) diffFiles = [...new Set([...(Array.isArray(diffFiles) ? diffFiles : []), ...wtFiles])]
+      }
+    } catch { /* 退回 commit diff 口径 */ }
+    const mainDiff = Array.isArray(diffFiles) ? diffFiles : []
+    changedFiles = allowedPaths.length > 0
+      ? mainDiff.filter(f => allowedPaths.some(p => pathMatches(f, p)))
+      : []
+    if (changedFiles.length === 0) {
+      return {
+        ok: false,
+        errors: [
+          `归属切片为空：task 卡 allowed_paths ${JSON.stringify(allowedPaths)} 未命中本次 diff 任何文件。` +
+          `本变更 diff 共 ${mainDiff.length} 个文件：${mainDiff.slice(0, 10).join('、')}${mainDiff.length > 10 ? '…' : ''}。` +
+          `确认改动确属本 task → 用 --changed-files <a,b> 显式给出；纯验证任务（无代码 diff 是本质属性）用 --changed-files ""（空覆盖）+ --evidence 披露验证区间`,
+        ],
+        warnings,
+      }
+    }
+  }
+
+  // ── 组装 + schema 自检 + 落盘 ──
+  const review = {
+    schemaVersion: REVIEW_SCHEMA_VERSION,
+    task: taskId,
+    base,
+    head,
+    changedFiles,
+    ...(allowedPaths.length > 0 ? { diffPaths: allowedPaths } : {}),
+    specVerdict,
+    qualityVerdict,
+    ...(requiredEvidence.filter(Boolean).length > 0 ? { requiredEvidence: requiredEvidence.filter(Boolean) } : {}),
+    reviewerNotes: reviewerNotes || `written by sillyspec review write (${base.slice(0, 8)}..${head.slice(0, 8)})`,
+  }
+  const schemaResult = validateReviewSchema(review)
+  if (!schemaResult.ok) {
+    return { ok: false, errors: schemaResult.errors, warnings }
+  }
+  try {
+    mkdirSync(reviewDir, { recursive: true })
+    writeFileSync(reviewPath, JSON.stringify(review, null, 2) + '\n')
+  } catch (e) {
+    return { ok: false, errors: [`review.json 落盘失败：${e.message}`], warnings }
+  }
+  return { ok: true, reviewPath, executeRunId, errors: [], warnings }
+}
+// 注：跨仓 task（repo≠main）在上方 mechanics 段前置守卫拒绝——review.repo 恒为 main，不再单独赋值
+
+/**
  * 获取当前（或最新）execute run id
  * 从 runtime 目录下查找 execute-runs/ 子目录
  *

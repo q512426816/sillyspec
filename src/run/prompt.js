@@ -199,6 +199,16 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
     console.error(`   请检查 --change 指定的变更目录是否存在、specRoot 是否正确，然后重试。`)
     return false
   }
+
+  // ── 首个 agent 可见步索引（「首步一次建立」类注入的锚点）──
+  // step0 为 noAI（brainstorm/execute/verify 的 step1「进度确认」，2026-09-07）时不渲染 prompt，
+  // persona/护栏/完成契约/铁律/平台路径约束等 step0 专属注入须顺延到首个渲染步，否则整段丢失
+  //（spec-dir.test.mjs Test4 平台 specDir 断言即此坑的行为探针）。全 noAI 防御性回退 0。
+  const firstRenderableIdx = (() => {
+    const i = steps.findIndex(s => s?.noAI !== true)
+    return i === -1 ? 0 : i
+  })()
+
   const projectName = dbProjectName || basename(cwd)
 
   // ── Revision context injection ──
@@ -244,8 +254,8 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
     console.log(`changeDir: ${changeDir}`)
   }
   console.log(`---\n`)
-  // persona 只在 stage 首步注入（step0）——角色设定一次即可，后续 step 重复注入纯属 token 浪费
-  if (personas[stageName] && stepIndex === 0) {
+  // persona 只在首个 agent 可见步注入——角色设定一次即可，后续 step 重复注入纯属 token 浪费
+  if (personas[stageName] && stepIndex === firstRenderableIdx) {
     console.log(personas[stageName])
     console.log('')
   }
@@ -255,7 +265,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
 
   console.log(`## Step ${stepIndex + 1}/${total}: ${step.name}\n`)
   if (guardrails) {
-    if (stepIndex === 0) {
+    if (stepIndex === firstRenderableIdx) {
       console.log(guardrails.trim())
       console.log('')
     } else {
@@ -398,13 +408,15 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
       platformDirectives.push(`workspace_id: ${platformOpts.workspaceId}`)
     }
     // 平台 directives 前置条件：
-    //   - step0（对齐 persona 仅 step0 策略）：路径列表/Write 规则/占位符映射一次建立即可；
+    //   - 首个 agent 可见步（对齐 persona 仅 step0 策略）：路径列表/Write 规则/占位符映射
+    //     一次建立即可——step0 为 noAI（brainstorm/execute/verify 的 step1「进度确认」，
+    //     2026-09-07）时首个可见步顺延，按 defSteps 计算（坑同 scan quick 档 noAI preflight）；
     //   - scan 阶段所有 step：scan 的 profileDirectives 本就每步注入（见下方 L917），平台路径
     //     约束也需每步可见——否则 quick profile 的 step0 是 noAI preflight（自动执行），run scan
     //     输出的首个可见 step 是 step1，会漏掉 specDir 路径，导致平台模式写入约束丢失。
     //     后续 step 靠 changeDir header + footer 平台规则（L1077+）维持，platformDirectives
     //     每步重复约 500 tokens 仅在 scan（步数有限）可接受。
-    if (stepIndex === 0 || stageName === 'scan') {
+    if (stepIndex === firstRenderableIdx || stageName === 'scan') {
       promptText = platformDirectives.join('\n') + '\n\n' + promptText
     }
   } else {
@@ -504,6 +516,80 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
       }
     } catch { /* fail-soft：读取失败空注入，不阻断 prompt 输出 */ }
     promptText = promptText.replace(/\{SCAN_FACTS\}/g, factsInjected)
+  }
+
+  // ── 机械事实注入三件（2026-09-07 注入缺口批次）：{LOCAL_COMMANDS} / {GIT_DIRTY} / {TASKS_CHECKBOX} ──
+  // CLI 渲染 prompt 时已能确定性拿到的机械事实，替代 agent 各自跑一趟 cat local.yaml /
+  // git status / 手数勾选（全流程 7+ 处步骤的高频机械读）。全部 fail-soft：异常注入单行
+  // 说明，不留残留占位符；替换后占位符即消失（不存在的档位自然零输出）。
+
+  // ① {LOCAL_COMMANDS}：local.yaml commands 段原文（brainstorm/plan/execute/verify/quick 多步消费）
+  if (promptText.includes('{LOCAL_COMMANDS}')) {
+    let localBlock = ''
+    try {
+      const lcSpecBase = resolvePromptSpecBase(platformOpts, cwd)
+      const localPath = join(lcSpecBase, 'local.yaml')
+      if (existsSync(localPath)) {
+        const lcLines = String(readFileSync(localPath, 'utf8')).replace(/\r\n?/g, '\n').split('\n')
+        const start = lcLines.findIndex(l => /^commands:\s*(#.*)?$/.test(l))
+        if (start !== -1) {
+          const body = []
+          for (let i = start + 1; i < lcLines.length && !/^\S/.test(lcLines[i]); i++) body.push(lcLines[i])
+          // unavailable 标记的条目按未配置语义剔除行（与 extractTestCommand 同口径）
+          const avail = body.filter(l => !/^\s*[\w.-]+:\s*['"]?unavailable['"]?\s*(#.*)?$/i.test(l))
+          const trimmed = avail.join('\n').trim()
+          localBlock = trimmed
+            ? 'commands:\n' + trimmed
+            : '（local.yaml 存在但 commands 段为空——可跑 `sillyspec local detect` 补默认骨架）'
+        } else {
+          localBlock = '（local.yaml 存在但无 commands 段——可跑 `sillyspec local detect` 补默认骨架）'
+        }
+      } else {
+        localBlock = '（未配置 local.yaml——先跑 `sillyspec local detect` 生成骨架，以命令输出为准）'
+      }
+    } catch (e) {
+      localBlock = `（构建命令注入失败：${e.message}——可自行读 local.yaml）`
+    }
+    promptText = promptText.replace(/\{LOCAL_COMMANDS\}/g, localBlock)
+  }
+
+  // ② {GIT_DIRTY}：工作区脏文件清单（git status --porcelain，quick 收尾步消费）
+  if (promptText.includes('{GIT_DIRTY}')) {
+    let dirtyBlock = ''
+    try {
+      const { gitQuiet } = await import('../git-helper.js')
+      // gitQuiet 返回裸 string（失败 null）——非 safeGit 的 {value,error} 形状
+      const lines = String(gitQuiet(cwd, ['status', '--porcelain']) || '').split('\n').filter(Boolean)
+      dirtyBlock = lines.length === 0
+        ? '（工作区干净，无脏文件）'
+        : lines.slice(0, 40).join('\n') + (lines.length > 40 ? `\n（…共 ${lines.length} 行，超出 40 行截断——完整清单可自行跑 git status --porcelain）` : '')
+    } catch (e) {
+      dirtyBlock = `（脏文件注入失败：${e.message}——可自行跑 git status --porcelain）`
+    }
+    promptText = promptText.replace(/\{GIT_DIRTY\}/g, dirtyBlock)
+  }
+
+  // ③ {TASKS_CHECKBOX}：tasks.md 任务勾选状态投影（verify 逐项检查步消费——省 agent 手数）
+  if (promptText.includes('{TASKS_CHECKBOX}')) {
+    let tasksBlock = ''
+    try {
+      const tcSpecBase = resolvePromptSpecBase(platformOpts, cwd)
+      const tasksPath = changeName ? join(tcSpecBase, 'changes', changeName, 'tasks.md') : null
+      if (tasksPath && existsSync(tasksPath)) {
+        const re = /^(\s*[-*]\s+\[([ xX])\]\s+task-\d+.*)$/
+        const rows = String(readFileSync(tasksPath, 'utf8')).replace(/\r\n?/g, '\n').split('\n')
+          .map(l => l.match(re)).filter(Boolean).map(m => m[1].trim())
+        const checked = rows.filter(r => /\[x\]/i.test(r)).length
+        tasksBlock = rows.length === 0
+          ? '（tasks.md 无 task-NN checkbox 行）'
+          : `已勾 ${checked}/${rows.length}：\n` + rows.slice(0, 60).join('\n') + (rows.length > 60 ? `\n（…共 ${rows.length} 条，超出 60 条截断）` : '')
+      } else {
+        tasksBlock = '（tasks.md 不存在——跳过勾选对照）'
+      }
+    } catch (e) {
+      tasksBlock = `（勾选状态注入失败：${e.message}——可自行读 tasks.md）`
+    }
+    promptText = promptText.replace(/\{TASKS_CHECKBOX\}/g, tasksBlock)
   }
 
   // 决策防复潮注入（W1.1 第 3 点，task-04，FR-05）：brainstorm「加载项目上下文」Step2 的
@@ -712,22 +798,10 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
     }
   }
 
-  // 三主阶段 Step1「进度确认」快照注入（2026-09-05 全流程审计）：progress show 的核心信息
-  // （阶段/步骤位置/推进态）CLI 渲染 prompt 时已全部在手——注入替代 agent 跑一趟 CLI 的
-  // 工具往返（progress show 全量输出还很长）。fail-soft：异常降级为自查指引。
-  if (['brainstorm', 'execute', 'verify'].includes(stageName) && promptText.includes('{PROGRESS_SNAPSHOT}')) {
-    try {
-      const done = steps.filter(s => s.status === 'completed').length
-      const waiting = steps.filter(s => s.status === 'waiting').length
-      const snapshot =
-        `- 变更：${changeName || '（未知）'}\n` +
-        `- 阶段：${stageName}（CLI 已路由到本阶段，无需再跑 progress show 确认）\n` +
-        `- 步骤：${done}/${steps.length} 已完成${waiting > 0 ? `，${waiting} 个等待中` : ''}；当前推进到第 ${stepIndex + 1} 步`
-      promptText = promptText.split('{PROGRESS_SNAPSHOT}').join(snapshot)
-    } catch (e) {
-      promptText = promptText.split('{PROGRESS_SNAPSHOT}').join('（快照注入失败：' + e.message + '——可运行 sillyspec progress show 自查）')
-    }
-  }
+  // 三主阶段 Step1「进度确认」快照注入（2026-09-05 全流程审计）已随 step1 整体 noAI 化退役
+  // （2026-09-07）：brainstorm/execute/verify 的 step1 不再渲染 prompt，快照改由
+  // run/progress-confirm.js 的 progressConfirm 动作 console 直出（占位符 {PROGRESS_SNAPSHOT}
+  // 无消费者，注入分支删除）。
 
   // execute Step「确认 worktree 路径」meta 注入（2026-09-05 全流程审计）：worktree meta 由 CLI
   // 读出直接注入，agent 省一趟 worktree meta 工具往返；工具链可用性检查（真实工作）仍归 agent。
@@ -888,9 +962,9 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
   }
 
   // 完成契约(事前预知):该 stage 的机械校验通过条件,从 stage-contract-spec.js manifest 渲染,
-  // 与 CLI 完成校验严格同源(事前给的 == 事后查的)。仅 step0 注入(与 persona/guardrails 同模式,
-  // 一次建立即可;后续步靠 context 保留)。
-  if (stepIndex === 0) {
+  // 与 CLI 完成校验严格同源(事前给的 == 事后查的)。仅首个 agent 可见步注入(与 persona/guardrails
+  // 同模式,一次建立即可;后续步靠 context 保留)。
+  if (stepIndex === firstRenderableIdx) {
     const stageContract = renderStageContract(stageName)
     if (stageContract) {
       promptText = `${promptText}\n\n${stageContract}`
@@ -898,10 +972,10 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
   }
 
   console.log(promptText)
-  // 铁律拆分（W3 token 效率）：通用流程纪律（文档优先/不跳步/不编造命令）只在首步注入——
+  // 铁律拆分（W3 token 效率）：通用流程纪律（文档优先/不跳步/不编造命令）只在首个 agent 可见步注入——
   // 每步重复 ~800B 纯耗 context。但【平台写入规则 + 路径规则】是安全关键（防写错目录/绕过 Write），
   // 且依赖 changeName/platformOpts，必须【每步注入】（context 压缩丢失会让 agent 越界写源码）。
-  if (stepIndex === 0) {
+  if (stepIndex === firstRenderableIdx) {
     console.log(`\n### ⚠️ 铁律`)
     console.log('- 文档优先：代码产出必须先有对应的设计/规范文档支撑。')
     console.log('- 聚焦本步骤：只执行本步骤描述的操作并完整做完；自行扩展或跳步会破坏状态机推进，后续步骤再做后续事。')

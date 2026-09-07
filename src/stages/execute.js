@@ -220,18 +220,12 @@ const fixedPrefix = [
   {
     name: '进度确认',
     migratedFrom: ['状态检查'],
-    prompt: `检查当前进度，确认可以执行 execute（快照已由 CLI 注入，勿再跑 progress show；\`sillyspec status\` 是项目级快照，也不推进流程）。
-
-### 进度快照（CLI 注入）
-{PROGRESS_SNAPSHOT}
-
-### 操作
-1. 如果快照显示不是 execute 阶段 → 检查是否有未完成的 tasks.md
-2. 确认执行范围（$ARGUMENTS 指定 wave/task 或全部）
-
-### 输出
-当前状态 + 执行范围确认`,
-    outputHint: '当前状态 + 执行范围',
+    // noAI 化（2026-09-07）：快照复述/阶段检查机械化（progressConfirm 补 tasks 勾选计数）；
+    // 执行范围是会话层信息（$ARGUMENTS 不经 CLI），以用户会话指定为准。步骤名不变。
+    noAI: true,
+    _cliAction: 'progressConfirm',
+    prompt: '',
+    outputHint: '当前状态 + 执行范围（CLI 快照输出）',
     optional: false
   },
   {
@@ -242,7 +236,8 @@ const fixedPrefix = [
 1. 读取 tasks.md（任务注册表与勾选唯一真相；plan.md 只提供 Wave 分组/依赖结构——Wave 段下为纯 ID 引用行）
 2. 读取 design.md（技术方案）
 3. 读取 CONVENTIONS.md、ARCHITECTURE.md
-4. 读取 local.yaml（构建命令）；若 local.yaml 不存在，先 \`sillyspec local detect\` 生成骨架再读取
+4. 构建命令（CLI 自 local.yaml 注入，勿再读文件；未配置时按注入说明跑 local detect）：
+{LOCAL_COMMANDS}
 5. 加载项目总览 \`.sillyspec/docs/<project>/scan/PROJECT.md\`（如存在）
 
 ### 模块文档加载（细粒度卡优先——CLI 已按 tasks 卡 allowed_paths 级联匹配）
@@ -378,7 +373,8 @@ review.json 已落盘（checklist=逐项核验表）+ checklist 摘要与偏差�
 本步骤由当前 agent 执行，不需要启动独立子代理。
 
 ### 操作
-1. 读取 local.yaml 获取构建和测试命令；若 local.yaml 不存在，先 \`sillyspec local detect\` 生成骨架再读取
+1. 构建命令（CLI 自 local.yaml 注入，勿再读文件；未配置时按注入说明跑 local detect）：
+{LOCAL_COMMANDS}
 2. 运行测试套件（单元测试、集成测试）
 3. 运行 lint 检查 **+ 格式化**：凡变更涉及的源码，既跑 lint check 也跑 formatter（如 \`ruff format\` / \`prettier --write\` / \`black\`），不要只跑 check——只 check 不 format 会把格式问题留到 commit 时被 pre-commit hook 拦截
 4. 如果有测试失败 → 分析原因，标注是代码问题还是测试本身的问题

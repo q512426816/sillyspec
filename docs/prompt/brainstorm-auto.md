@@ -34,7 +34,8 @@
 ### 加载上下文
 4. 读取项目总览 `.sillyspec/docs/<project>/scan/PROJECT.md`（如存在）+ 共享规范 + 子项目上下文
 5. 加载项目信息：`cat .sillyspec/projects/*.yaml 2>/dev/null`
-6. 加载本地配置：`cat .sillyspec/local.yaml 2>/dev/null`
+6. 构建命令（CLI 自 local.yaml 注入，勿再读文件）：
+{LOCAL_COMMANDS}
 7. 棕地项目：读取 scan 下的 STRUCTURE.md、CONVENTIONS.md、ARCHITECTURE.md
 8. 加载模块索引：读取 `.sillyspec/docs/<project>/modules/_module-map.yaml`（如存在）
 9. 查看进行中的变更：`ls .sillyspec/changes/ | grep -v archive`

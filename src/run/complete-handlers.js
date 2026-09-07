@@ -932,10 +932,14 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
       // P0-2（2026-09-02 跨 agent 工单）：触及 src/test 的 quick --done 内置 test+lint
       // 实测门禁——把 CLAUDE.md 规则 8 从 agent 自律下沉为 CLI 卡点（fail → step 回
       // pending + exit 1，重跑不丢进度；纯 doc/配置与未配置命令自动跳过不阻断）。
+      // declaredFiles 兜底（2026-09-07）：倒推 B 模式（代码先行 --done 收尾）的文件全部
+      // 早于会话启动被基线吸收 → 审计 changedFiles 空 → 此前静默 skip；声明边界触及
+      // src/test 时实测仍应跑（quick-f9138c2f 实证）。
       const gate = await runQuickTestLintGate({
         cwd,
         specBase,
         changedFiles: review.changedFiles,
+        declaredFiles: Array.isArray(mergedGuard?.allowedFiles) ? mergedGuard.allowedFiles : [],
         changeName,
       })
       printQuickTestLintGate(gate)

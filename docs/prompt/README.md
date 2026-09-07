@@ -49,7 +49,7 @@ Agent 每个 step 实际收到的提示词**不只有 prompt 正文**。`outputS
 3. **全局护栏 `_globalGuardrails`**（仅 verify 有）— 首步全文注入，后续步注入一行精简提醒 `⛔ 本阶段护栏生效中（禁止破坏性操作，详见首步护栏）`。
 4. **模块上下文**（仅 brainstorm / plan / execute）— 基于 `_module-map.yaml` 匹配任务命中的模块，注入 `### 📦 模块上下文` 段（模块职责/风险等级/核心文件/依赖）。
 5. **修订上下文**（仅 revision 模式）— `### 🔄 Revision Context`，提示已有产物需更新而非重建。
-6. **平台模式 directives**（仅平台模式 `platformOpts.specRoot`）— 路径约束 / Write 工具规则 / workflow yaml 占位符映射；scan 阶段每步注入，其余仅 step 0。
+6. **平台模式 directives**（仅平台模式 `platformOpts.specRoot`）— 路径约束 / Write 工具规则 / workflow yaml 占位符映射；scan 阶段每步注入，其余仅**首个 agent 可见步**（`firstRenderableIdx`——step0 为 noAI 时顺延，2026-09-07 起）。
 7. **scanProfile directives**（仅 scan）— 子代理上限 / 文档上限约束。
 8. **prompt 正文** — `step.prompt` 经 `resolvePromptIncludes`（拉 `{{include: name}}` 外部片段）+ 占位符替换（见下表）后的文本。
 9. **本阶段历史用户回答**（有已记录的等待回答时）— `### 📜 本阶段历史用户回答（进度库回放，跨会话恢复用）`：整阶段各步骤累积的用户等待回答（含多轮与对应问题），由 `collectStageWaitHistory(progress, stageName)` 从进度库 `steps.wait_answers` 聚合。坑 stage-wait-history-not-replayed：此前新会话 `run <stage>` 续跑不回放历史回答，agent 只能重问已答过的问题。
@@ -154,6 +154,9 @@ prompt 正文中出现的占位符，运行时由 `outputStep` 替换。下表�
 | `{TASK_COMPLETION_REPORT}` | `task-review.js` 的 `summarizeTaskCompletion({changeDir, runtimeRoot, changeName})` 产出的客观完成度报告：以 execute run 的 review.json verdict（specVerdict+qualityVerdict 均≠fail 视为完成）为准，替代 plan.md checkbox（依赖 autoCheckPlanFromReviews 回填，断裂时失真）；无 runId marker 时降级 checkbox 统计 + 标注 source | archive（Step 1 任务完成度检查） |
 | `{WORKTREE_BASELINE_INFO}` | `run/prompt.js` 注入的 worktree 基线锚点：变更 worktree 分支名 + 真实基点（git merge-base）+「勿用主仓 HEAD 当基点」警示（主仓在 execute 期间被并行推进时，用错基点会把别人的演进误判为越权改动）。分支/meta 不可读时降级自查指引，占位符绝不残留 | verify（Step 2 加载规范并锚定） |
 | `{EVIDENCE_AUTO_RECOMMENDATION}` | evidence-auto 推荐注入（`run/prompt.js` outputStep，verify 专属）：`verify-postcheck.js` 的 `resolveTestStrategy({yamlText, changeDir})` 按 local.yaml `test_strategy` 与变更文件解析出的 `evidence_auto_recommendation.summary`（含推荐理由、降级注记与「可在 verify-result.md 否决并改跑全量」路径——prompt 时点注入供 agent 预知并否决，与 --done 事后对账闭环）。仅 `test_strategy: evidence-auto` 且推荐非空时渲染；full/module/skip/未配置替换为空串；fail-soft：读取/解析异常降级单行说明不抛 | verify（运行测试和质量扫描步） |
+| `{LOCAL_COMMANDS}` | 构建命令注入（2026-09-07 注入缺口批次）：local.yaml `commands:` 段原文（块级缩进扫描到下一顶层 key 止）；local.yaml 缺失/无 commands 段 → `sillyspec local detect` 指引文案。fail-soft 不留残留占位符 | brainstorm / plan / execute / verify / quick（各「加载上下文/构建命令」步） |
+| `{GIT_DIRTY}` | 工作区脏文件清单注入：`gitQuiet status --porcelain` 输出（>40 行截断提示）；干净仓 → 「工作区干净，无脏文件」 | quick（Step 3 暂存和更新记录） |
+| `{TASKS_CHECKBOX}` | tasks.md 勾选状态投影：`- [ ]/- [x] task-NN` 行计数 + 逐行原文（>60 条截断）；无 tasks.md → 跳过说明 | verify（Step 3 逐项检查任务） |
 > **降级**：当 review-tier / stage-review 注入抛异常时，`{REVIEW_TIER}`→`self`、`{REVIEW_TIER_REASON}`→`分级异常降级 self: <err>`、`{REVIEW_JSON_CONTRACT}`→精简契约提示，避免 prompt 残留裸占位符。
 
 ### include 指令

@@ -22,6 +22,7 @@ import { writeAtomicSync } from '../fs-atomic.js'
 import { withFileLock } from '../quicklog.js'
 import { triggerSync, WAIT_MARKER_RE, getStageSteps, formatWaitOptions, resolveRuntimeRoot, getOrCreateMultiRepoContext, resolveChangeDir } from './shared.js'
 import { executeScanPreflight, executeScanPostcheck, computeScanProfile, executeScanDetectProjects, executeScanResumeCheck, executeScanFinalize } from './scan-profile.js'
+import { executeProgressConfirm } from './progress-confirm.js'
 import { executePlanPostcheck as runPlanPostcheckLib } from '../stages/plan-postcheck.js'
 import { outputStep, collectStageWaitHistory } from './prompt.js'
 import { enforceDepsGate, enforceReviewJsonGate, enforceSymbolImpactGate, warnMissingUiPrototype, completeStageGates, readDesignScale } from './gates.js'
@@ -336,6 +337,9 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
       await executeScanFinalize(cwd, platformOpts)
     } else if (_cliAction === 'planPostcheck') {
       await runPlanPostcheckLib({ cwd, specRoot: platformOpts?.specRoot, resolveChangeDir, progress })
+    } else if (_cliAction === 'progressConfirm') {
+      // 与 stage.js noAI 分支同语义（brainstorm/execute/verify step1 进度确认）
+      executeProgressConfirm({ stageName, cwd, stageData, changeName, pm })
     } else {
       throw new Error(`noAI 步骤 ${steps[currentIdx].name} 的未知 _cliAction: ${_cliAction}——请在 complete.js 注册对应分支`)
     }

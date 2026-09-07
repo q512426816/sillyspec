@@ -15,29 +15,8 @@
 
 **元数据**
 - optional：false
-- outputHint：状态摘要
-- 等待配置：无（可直接 `--done`）
-
-**提示词原文**
-
-````markdown
-检查当前变更的进度状态（sillyspec.db）。用 `sillyspec progress show` 查流程进度，不要用 `sillyspec status`（项目级快照，不推进流程）。
-
-### 操作
-1. 运行 `sillyspec progress show`
-2. 确认 currentStage 为 "brainstorm"
-3. 如果有进行中的 brainstorm，提示选择继续或重新开始
-4. 如果未初始化，提示先运行 sillyspec init
-5. **检查变更名称是否有意义**：如果当前变更名是自动生成的（如 `2026-06-02-new-change-a3f2b7c1`），询问用户确认实际变更名，然后运行 `sillyspec change-rename <旧名> <新名>` 重命名
-
-### 输出
-当前状态摘要（1-2 句话）
-
-### 注意
-- 以 CLI 返回为准，不要自行推断阶段
-- 如果阶段不对，输出正确提示并停止
-- **不要用 mv 命令重命名变更目录**，必须使用 `sillyspec change-rename`，否则 DB 和目录会脱节
-````
+- **noAI：true（`_cliAction: progressConfirm`，2026-09-07 起）**——本步不渲染 prompt，`run brainstorm` / `--done` 由 CLI 自动执行（`src/run/progress-confirm.js`）：console 直出进度快照（变更/阶段/步骤位置）；变更名命中自动生成模式（`YYYY-MM-DD-new-change-<hex>`）时打印 `change-rename` 建议（不阻塞推进）。执行后自动推进渲染 Step 2。
+- 等待配置：无（noAI 步无等待语义）
 
 ---
 
@@ -62,7 +41,8 @@
 1. 读取项目总览 `{SPEC_ROOT}/docs/<project>/scan/PROJECT.md` + 共享规范 + 子项目上下文
    - 漂移事实（CLI 算）：{SCAN_STALENESS}
 2. 加载项目信息：`cat {SPEC_ROOT}/projects/*.yaml 2>/dev/null`
-3. 加载本地配置：`cat {SPEC_ROOT}/local.yaml 2>/dev/null`
+3. 构建命令（CLI 自 local.yaml 注入，勿再读文件）：
+{LOCAL_COMMANDS}
 4. 棕地项目：读取 {SPEC_ROOT}/docs/<project>/scan/ 下的 STRUCTURE.md、CONVENTIONS.md、ARCHITECTURE.md
 5. **加载模块索引**：读取 `{SPEC_ROOT}/docs/<project>/modules/_module-map.yaml`（如存在）
    - 这一步是高频操作，_module-map.yaml 回答"哪个文件属于哪个模块、模块之间怎么依赖"

@@ -207,3 +207,82 @@
 根因：initChange 对 quick-<hex8> 会话行特意不建 changes/ 实体目录（进度存 SQL），而 ghost 判定=DB active 且 changes/ 无目录、未排除 quick 行——进行中 quick 从写库起即误报 ghost，quick 收尾链中断（QUICKLOG 已完成、行未注销）则持久误报，面板观感「清了又长」（multi-agent-platform/docs/sillyspec/2026-09-07-quick-inflight-ghost-misjudge.md 实证）
 方案：按该文档建议修法：stage-machine.js 新增模块级 _isGhostChange（QUICK_SID_RE 豁免 quick 行），show 汇总与 overview 两处 dirMissing 同源换用；doctor-diagnostics.js D4 ghostRows 过滤 quick 行（QUICK_SID_RE 入既有 run/shared.js import）；cleanupGhostChanges 有意不动——保留「QUICKLOG 已完成但 DB 行仍 active」收尾中断形态的归档兜底（现场注释钉住不对称设计）；machine-interface 模块卡 ghost 语义补注、progress/core-engine changelog 补录、file-lifecycle updated_at 重锚。--force-baseline 理由：stage-machine.js 属受保护核心文件，本次为 ghost 判定条件收窄（quick 行豁免），不改数据写路径，全量测试 359/0 + 新契约测试 4 用例验证；--allow-new：新增专项测试文件
 结果：新增 test/quick-ghost-exclusion.test.mjs 4 用例（红态验证 3 败 1 过，修后全绿：overview envelope/show 渲染/D4 ghostRows 三判定豁免 + cleanup 保留归档契约）；全量 npm test 359 文件 0 失败；lint 473 文件 0 告警；docs check 550/550 全绿（--fix 重锚 4 处行号漂移）；真实仓实证 progress show --json quick 行 ghost=false、doctor D4 pass
+
+## ql-20260907-003-3356 | 2026-09-07 21:09:03 | skills 文档降 token 批次——死入口 propose 重定向 + 手册/重复表瘦身
+状态：已完成
+关联变更：（无）
+文件：
+- .claude/skills/sillyspec-propose/SKILL.md（重定向薄壳（原 87 行全量死指令））
+- .claude/skills/sillyspec-knowledge/SKILL.md（269→45 行）
+- .claude/skills/sillyspec-workspace/SKILL.md（175→35 行）
+- .claude/skills/sillyspec-resume/SKILL.md（70→25 行）
+- .claude/skills/sillyspec-continue/SKILL.md（47→19 行）
+- .claude/skills/sillyspec-state/SKILL.md（64→24 行）
+- .claude/skills/sillyspec-brainstorm/SKILL.md（docHash 自动刷新一句）
+- .claude/skills/sillyspec-plan/SKILL.md（同上）
+- .claude/skills/sillyspec-execute/SKILL.md（同上）
+需求：skills 文档降 token 批次——死入口 propose 重定向 + 手册/重复表瘦身
+根因：多角度分析发现 skill 指令层大量机械冗余且存在死指令（run propose 报未知阶段、propose 教手算 sha256）；knowledge/workspace 手册化复写 CLI --help；resume/continue/state 保留 CLI 已内置的探测表与排版模板
+方案：propose 重写为 brainstorm 重定向薄壳保触发词；knowledge 269→45 行 JSON 示例压速查表；workspace 175→35 行删 bash for-loop 与手写 yaml 兜底；resume/continue 删手工探测表留 sillyspec next；state 改 progress show 原样转述；brainstorm/plan/execute Stage Review Gate 段补 docHash gate 时自动刷新说明；删 verify-per-user 测试桩
+结果：npm test 全绿（26 套件 359+40 断言组）+ lint 473 文件 0 告警；CLI 行为零改动（纯 skill 文档），npm test/lint 均通过
+
+## ql-20260907-004-e44f | 2026-09-07 21:56:07 | 主流程 step1 进度确认 noAI 化——省三轮 agent 复述往返
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/progress-confirm.js（新模块）
+- src/run/prompt.js（firstRenderableIdx 五处注入锚）
+- src/stages/brainstorm.js（step1 noAI）
+- src/stages/execute.js（step1 noAI）
+- src/stages/verify.js（step1 noAI）
+- test/progress-confirm-noai.test.mjs（16 断言）
+需求：主流程 step1 进度确认 noAI 化——省三轮 agent 复述往返
+根因：分析报告 T2 梯队：step1 职责已全机械化（快照本就 CLI 注入/阶段路由由 run 落定/自动名检测是正则），agent 只在复述注入内容后 --done
+方案：新 progressConfirm 动作（快照+阶段专属提示 console 直出）挂 brainstorm/execute/verify step1；noAI 双分发点接线；连带修 prompt.js 五处仅-step0-注入判定为首个可见步（否则 persona/护栏/契约/铁律/平台路径整段丢失）；PROGRESS_SNAPSHOT 占位符退役；文档同步（docs/prompt×3 + file-lifecycle）
+结果：全量 27 套件 0 失败（新测试 progress-confirm-noai 16 断言全过；spec-dir Test4 与 blocked-recovery 修复后全绿）+ lint 475 文件 0 告警；三阶段步骤名/步骤数不变存量进度库兼容
+
+## ql-20260907-005-6658 | 2026-09-07 22:01:57 | quick test/lint 门禁倒推 B 兜底——声明边界触及 src 必实测
+状态：已完成
+关联变更：（无）
+文件：src/run/quick-audit.js, src/run/complete-handlers.js, test/quick-test-gate.test.mjs, templates/agents-instruction.md, CLAUDE.md
+需求：quick test/lint 门禁倒推 B 兜底——声明边界触及 src 必实测
+根因：倒推 B 模式（代码先行）的文件全部早于会话启动被基线吸收，审计 changedFiles 为空，门禁静默 skip——声明 --files 明确触及 src/test 却逃过实测（quick-f9138c2f 本日实证）；另规则 8 文案仍教 agent 手跑全套，未反映 2026-09-02 已落地的 CLI 实测门禁
+方案：runQuickTestLintGate 增 declaredFiles 参数：changedFiles 空时回退 guard.allowedFiles 判定触及面（skip reason 标注口径来源）；complete-handlers 调用点透传；规则 8 文案双处更新（CLI 实测为卡点/预跑可选）
+结果：quick-test-gate 25 断言全过（新增兜底两用例：触及 src 实测 pass / 纯 doc 仍 skip）+ audit-quick-completion 54 断言全过；lint 475 文件 0 告警
+
+## ql-20260907-006-deff | 2026-09-07 22:15:05 | 机械事实注入三占位符——省高频 cat/git status/手数勾选往返
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/prompt.js（三占位符替换块）
+- src/stages/quick.js（GIT_DIRTY+LOCAL_COMMANDS）
+- src/stages/verify.js（TASKS_CHECKBOX+LOCAL_COMMANDS×2）
+- test/prompt-injection-gaps.test.mjs（13 断言）
+需求：机械事实注入三占位符——省高频 cat/git status/手数勾选往返
+根因：分析报告注入缺口项：local.yaml 读取在 5 阶段 7+ 处步骤重复发生；quick 收尾让 agent 重跑 git status；verify 逐项检查让 agent 手数 checkbox——全部 CLI 渲染时可确定性直出
+方案：outputStep 增 LOCAL_COMMANDS/GIT_DIRTY/TASKS_CHECKBOX 三占位符（fail-soft 替换不留残留）；9 处 stage prompt 旧指令行替换为注入引用；修复 gitQuiet 返回形状误用（裸 string 非 value 对象）；docs/prompt 五 md + README 总表同步
+结果：prompt-injection-gaps 新测试 13 断言全过；全量套件 0 失败 + lint 476 文件 0 告警
+审计：📝 文档欠账（D-8）：1 个源码文件改动未同步任何模块文档（涉及模块：core-engine）
+审计：⚖️ 归属切分：1 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：src/verify-postcheck.js
+
+## ql-20260907-007-136f | 2026-09-07 22:38:39 | review write 命令式写入——task review.json 手拼 JSON 时代终结
+状态：已完成
+关联变更：（无）
+文件：
+- src/task-review.js（writeTaskReview）
+- src/index.js（review write case+help）
+- test/review-write.test.mjs（16 断言）
+- .claude/skills/sillyspec-execute/SKILL.md（命令式首选指引）
+需求：review write 命令式写入——task review.json 手拼 JSON 时代终结
+根因：分析报告 T2-4：task 级 review.json 仍由 agent 手拼 JSON+手算 base/head+手建目录，schemaVersion/锡点/归属切片全是机械活（drafts/adopt 已证明 CLI 可代算），gate 拒后重写循环烧轮次
+方案：writeTaskReview 纯函数 + CLI review write 子命令：verdict/notes/evidence 参数给，mechanics 全代算；防误写（已存在拒覆盖）与 fail-fast 指引（缺 evidence/空归属列 diff 候选）；execute skill 指引改命令式首选，手写降兼容路径
+结果：review-write 新测试 16 断言全过（happy/拒覆盖+force/evidence/空归属+覆盖/schema 自检）；全量 27+ 套件 362 过 0 失败 + lint 477 文件 0 告警；doc-ref 9 处漂移自动重锚后全绿
+
+## ql-20260907-008-d38c | 2026-09-07 22:48:45 | 完工复查批次——三遗漏修复 + scan 注入丢失意外修复实证
+状态：已完成
+关联变更：（无）
+文件：src/stages/brainstorm-auto.js, src/run/prompt.js, src/task-review.js, test/prompt-injection-gaps.test.mjs, test/review-write.test.mjs, docs/prompt/brainstorm-auto.md, docs/prompt/_extracted.json, docs/sillyspec/file-lifecycle.md
+需求：完工复查批次——三遗漏修复 + scan 注入丢失意外修复实证
+根因：自查发现：brainstorm-auto 漏改（仍在教 agent cat local.yaml）；LOCAL_COMMANDS 注释声称剔除 unavailable 但实现没做；writeTaskReview 缺跨仓守卫（主仓锡点会被误配跨仓改动）；另实证 scan step1 自 2026-09-05 noAI 后铁律/契约一直静默丢失
+方案：auto 档注入行补齐；unavailable 过滤实现（regex 兼容带注释）；跨仓前置拒绝+adopt 指引+死代码清理；scan 恢复实证写入 lifecycle 注记；补 2 测试用例 + brainstorm-auto.md 同步
+结果：prompt-injection-gaps 15 断言 + review-write 17 断言全过；全量 362 过 0 失败 + lint 477 文件 0 告警；execute/scan 首渲染实测（noAI 自动执行 + persona/铁律落首可见步）

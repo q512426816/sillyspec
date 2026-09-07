@@ -48,7 +48,8 @@ step 3 --done 审计会把 src 核心文件（CLI / 状态机 / 注入框架等�
 2. 理解任务：模糊则问一个问题确认
 3. 加载项目信息：`cat {SPEC_ROOT}/projects/*.yaml 2>/dev/null`（了解项目结构和技术栈）
 4. 加载上下文：`cat {SPEC_ROOT}/docs/<project>/scan/CONVENTIONS.md 2>/dev/null`
-5. 加载本地配置：`cat {SPEC_ROOT}/local.yaml 2>/dev/null`（构建命令、测试命令、环境变量等）
+5. 构建命令（CLI 自 local.yaml 注入，勿再读文件）：
+{LOCAL_COMMANDS}
 6. 若有关联变更，加载每个变更的设计文档：`cat {SPEC_ROOT}/changes/<c>/design.md 2>/dev/null`（理解设计意图）
 7. 如有需要，查询知识库：`cat {SPEC_ROOT}/knowledge/INDEX.md 2>/dev/null`
 
@@ -172,7 +173,8 @@ sillyspec run quick --done --change <id> --req "…" --cause "…" --solution "�
 3. 【--done 后】核对 QUICKLOG 标题（CLI 已从「需求：」自动提取，仅弱标题才手改）→ 若改了再 `git add`
 
 ### 操作
-1. 查看 `git status --porcelain`，确认只包含本次 quick 相关文件
+1. 工作区脏文件（CLI 注入，勿重跑 `git status`）——确认只包含本次 quick 相关文件，无关改动不暂存：
+{GIT_DIRTY}
 2. 使用 `git add -- <file...>` 暂存本次 quick 实际修改的文件（不要 commit，由用户通过统一提交工具处理）
    - 禁止使用 `git add -A`
    - 不要暂存 quick 开始前就已存在的无关改动

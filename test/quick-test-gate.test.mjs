@@ -164,6 +164,28 @@ console.log('--- 8. printQuickTestLintGate 三态打印 ---')
   assert(errs.some(e => e.includes('AssertionError: boom')), 'fail 态输出尾部含失败详情')
 }
 
+// ─── 9. 倒推 B 模式兜底：changedFiles 空 + declaredFiles 触及 src → 实测仍跑 ───
+console.log('--- 9. 倒推 B 兜底：声明边界触及 src → 实测 ---')
+{
+  const { proj, specBase } = makeGateFixture({
+    yaml: 'commands:\n  test: \'node -e "process.exit(0)"\'\n  lint: \'node -e "process.exit(0)"\'\n',
+  })
+  const gate = await runQuickTestLintGate({ cwd: proj, specBase, changedFiles: [], declaredFiles: SRC_FILES })
+  assert(gate.action === 'pass', `声明边界触及 src → 实测 pass（实际 ${gate.action}）`)
+  assert(gate.test.status === 'passed', '兜底口径下 test 真实执行')
+}
+
+// ─── 10. 倒推 B 兜底不扩大：declaredFiles 也纯 doc → 仍 skip ───
+console.log('--- 10. 倒推 B 兜底不扩大：声明边界纯 doc → skip ---')
+{
+  const { proj, specBase } = makeGateFixture({
+    yaml: 'commands:\n  test: \'node -e "process.exit(0)"\'\n  lint: \'node -e "process.exit(0)"\'\n',
+  })
+  const gate = await runQuickTestLintGate({ cwd: proj, specBase, changedFiles: [], declaredFiles: DOC_FILES })
+  assert(gate.action === 'skip', `声明边界纯 doc → skip（实际 ${gate.action}）`)
+  assert(gate.test === null, 'doc 声明边界不触发实测')
+}
+
 // ─── 清理 & 汇总 ───
 for (const dir of tmpRoots) {
   try { rmSync(dir, { recursive: true, force: true }) } catch {}

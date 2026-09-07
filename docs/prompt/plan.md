@@ -38,7 +38,8 @@
    - 如果发现 priority=P0/P1 且 status=unresolved/blocking 的决策，停止生成计划，要求先回到 brainstorm 的 Design Grill 修正
    - 如果发现 superseded 决策，只引用最新版本，不引用旧版本
 5. 读取 CONVENTIONS.md、ARCHITECTURE.md（技术栈含在 ARCHITECTURE.md）
-6. 读取 local.yaml 获取构建/测试命令
+6. 构建命令（CLI 自 local.yaml 注入，勿再读文件）：
+{LOCAL_COMMANDS}
 7. 读取 `{SPEC_ROOT}/docs/<project>/modules/_module-map.yaml`（不存在则跳过）
    - 根据 design.md 的文件变更清单匹配模块
    - 读取匹配到的模块文档

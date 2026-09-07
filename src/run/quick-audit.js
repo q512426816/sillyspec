@@ -209,12 +209,15 @@ export async function resolveQuickLinkedChanges({ pm, cwd, specDir, quickFiles, 
  * npm test + npm run lint」从 agent 自律下沉为 CLI 卡点。
  *
  * 语义（对齐规则 8 + verify-postcheck 既有降级哲学）：
- *   - changedFiles 未触及 src/ 或 test/（纯 doc/配置改动）→ skip（不跑不阻断）
+ *   - 变更文件未触及 src/ 或 test/（纯 doc/配置改动）→ skip（不跑不阻断）
  *   - 触及 → 亲自执行 local.yaml 的 commands.test / commands.lint（复用 verify 阶段
  *     对账引擎 runVerifyTestCheck/runVerifyLintCheck，含 test_strategy/known_failures/
  *     超时语义）；未配置命令 → 内部 skipped，不阻断（兼容无测试项目）
  *   - 任一实测 failed → fail（调用方阻断 --done，step 回 pending）
  *   - 逃生门：SILLYSPEC_QUICK_TEST_GATE=skip 显式跳过（CI/特殊场景，审计留痕）
+ *   - 倒推 B 模式兜底（2026-09-07，quick-f9138c2f 实证）：代码先行会话的文件全部早于
+ *     启动时间窗 → 审计 changedFiles 为空 → 此前静默 skip；--files 声明边界
+ *     （declaredFiles = guard.allowedFiles）明确触及 src/test 时实测仍应跑。
  *
  * verify-postcheck 顶层 import 链较重（contract-matrix 等），且本函数仅 quick --done
  * 收尾路径调用——用动态 import，不进 run 命令通用启动路径（与上方 @inquirer/prompts 同款纪律）。
@@ -222,18 +225,22 @@ export async function resolveQuickLinkedChanges({ pm, cwd, specDir, quickFiles, 
  * @param {object} opts
  * @param {string} opts.cwd - 仓库根（命令执行 cwd）
  * @param {string} opts.specBase - .sillyspec 目录（local.yaml 读取源，信任边界见 runVerifyTestCheck SEC-02 注释）
- * @param {string[]} [opts.changedFiles] - 审计口径的本轮变更文件（仓库根相对 POSIX 路径；空/null → skip）
+ * @param {string[]} [opts.changedFiles] - 审计口径的本轮变更文件（仓库根相对 POSIX 路径；空/null → 回退 declaredFiles）
+ * @param {string[]} [opts.declaredFiles] - 会话声明边界（guard.allowedFiles；changedFiles 为空时的兜底判定源）
  * @param {string} [opts.changeName] - quick 会话名（evidence-auto 策略解析用）
  * @returns {Promise<{action:'pass'|'fail'|'skip', failed:string[], reason:string, test:object|null, lint:object|null}>}
  */
-export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], changeName = null }) {
+export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], declaredFiles = [], changeName = null }) {
   if (process.env.SILLYSPEC_QUICK_TEST_GATE === 'skip') {
     return { action: 'skip', failed: [], reason: 'SILLYSPEC_QUICK_TEST_GATE=skip 显式跳过（审计留痕）', test: null, lint: null }
   }
-  const files = Array.isArray(changedFiles) ? changedFiles : []
+  const audited = Array.isArray(changedFiles) ? changedFiles : []
+  // 倒推 B 模式兜底：审计口径为空时回退声明边界（文件早于会话启动被基线吸收的场景）
+  const files = audited.length > 0 ? audited : (Array.isArray(declaredFiles) ? declaredFiles : [])
+  const fileSource = audited.length > 0 ? '审计' : (files.length > 0 ? '声明边界兜底（倒推 B：文件早于会话启动被基线吸收）' : '无')
   const codeFiles = files.filter(f => typeof f === 'string' && (f.startsWith('src/') || f.startsWith('test/')))
   if (files.length === 0) {
-    return { action: 'skip', failed: [], reason: '无变更文件清单（brownfield 无 guard 或空审计），跳过', test: null, lint: null }
+    return { action: 'skip', failed: [], reason: `无变更文件清单（${fileSource}口径均空——brownfield 无 guard 或空审计），跳过`, test: null, lint: null }
   }
   if (codeFiles.length === 0) {
     return { action: 'skip', failed: [], reason: `纯 doc/配置改动（${files.length} 个文件均未触及 src/test，规则 8 语义跳过 test+lint）`, test: null, lint: null }

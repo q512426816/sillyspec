@@ -7,22 +7,13 @@ export const definition = {
       name: '进度确认',
       // 重命名自「状态检查」（③ status 消歧）：老进度里的「状态检查」completed 由迁移逻辑承接，防 currentIdx 回跳
       migratedFrom: ['状态检查'],
-      prompt: `检查当前变更的进度状态（快照已由 CLI 注入，勿再跑 progress show——那是全量输出，浪费上下文；\`sillyspec status\` 是项目级快照，也不推进流程）。
-
-### 进度快照（CLI 注入）
-{PROGRESS_SNAPSHOT}
-
-### 操作
-1. **检查变更名称是否有意义**：如果当前变更名是自动生成的（如 \`2026-06-02-new-change-a3f2b7c1\`），询问用户确认实际变更名，然后运行 \`sillyspec change-rename <旧名> <新名>\` 重命名
-2. 如果快照显示阶段不符或未初始化，输出正确提示并停止
-
-### 输出
-当前状态摘要（1-2 句话）
-
-### 注意
-- 以 CLI 注入快照为准，不要自行推断阶段
-- **不要用 mv 命令重命名变更目录**，必须使用 \`sillyspec change-rename\`，否则 DB 和目录会脱节`,
-      outputHint: '状态摘要',
+      // noAI 化（2026-09-07）：快照本就 CLI 注入、阶段路由由 run 落定、变更名自动生成检测为机械
+      // 正则（命中只打印 rename 建议，agent 在工具结果可见、可在后续步骤交互改名）——省一轮
+      // 复述往返。步骤名保持不变（存量进度库按名匹配迁移）。
+      noAI: true,
+      _cliAction: 'progressConfirm',
+      prompt: '',
+      outputHint: '状态摘要（CLI 快照输出）',
       optional: false
     },
     {
@@ -34,7 +25,8 @@ export const definition = {
    - 漂移事实（CLI 算）：{SCAN_STALENESS}
    - 机械事实底稿（CLI 注入，无 scan 底稿则为空）：{SCAN_FACTS}
 2. 加载项目信息：\`cat {SPEC_ROOT}/projects/*.yaml 2>/dev/null\`
-3. 加载本地配置：\`cat {SPEC_ROOT}/local.yaml 2>/dev/null\`
+3. 构建命令（CLI 自 local.yaml 注入，勿再读文件）：
+{LOCAL_COMMANDS}
 4. 棕地项目：读取 {SPEC_ROOT}/docs/<project>/scan/ 下的 STRUCTURE.md、CONVENTIONS.md、ARCHITECTURE.md
 5. **加载模块索引**：读取 \`{SPEC_ROOT}/docs/<project>/modules/_module-map.yaml\`（如存在）
    - 这一步是高频操作，_module-map.yaml 回答"哪个文件属于哪个模块、模块之间怎么依赖"

@@ -52,9 +52,11 @@ console.log('\n--- ② 裸 run <stage>：首个非完成步骤是 blocked → �
   const pm = await initChange(cwd, specBase, cn)
   runCLI(['--dir', cwd, 'run', 'brainstorm', '--change', cn], { cwd })
   const real = (await pm.read(cwd, cn)).stages.brainstorm.steps
+  // 载体用 step1（agent 步）——step0「进度确认」已 noAI 化（2026-09-07）：blocked 拉回 pending 后
+  // 会被 CLI 自动执行成 completed，无法再观测「停在 pending 等渲染」的中间态
   const seeded = real.map((s, i) => ({
     name: s.name,
-    status: i === 0 ? 'blocked' : 'pending',
+    status: i === 0 ? 'completed' : i === 1 ? 'blocked' : 'pending',
   }))
   await seedStage(pm, cwd, cn, 'brainstorm', seeded)
 
@@ -63,8 +65,8 @@ console.log('\n--- ② 裸 run <stage>：首个非完成步骤是 blocked → �
   assert(r.combined.includes('拉回待执行'), 'stdout 提示 blocked → pending 转换')
   assert(r.status === 0, `裸 run 正常输出 prompt（exit ${r.status}）`)
   const after = await new ProgressManager({ specDir: specBase }).read(cwd, cn)
-  assert(after.stages.brainstorm.steps[0].status === 'pending',
-    `DB：blocked 已转 pending（实际 ${after.stages.brainstorm.steps[0].status}）`)
+  assert(after.stages.brainstorm.steps[1].status === 'pending',
+    `DB：blocked 已转 pending（实际 ${after.stages.brainstorm.steps[1].status}）`)
 }
 
 cleanup()

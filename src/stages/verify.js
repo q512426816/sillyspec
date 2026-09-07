@@ -45,19 +45,12 @@ export const definition = {
     {
       name: '进度确认',
       migratedFrom: ['状态检查'],
-      prompt: `> 💡 先说清楚：\`sillyspec run verify\`（不带 --done）**只下发执行指令，不会替你跑测试/构建**——真正的测试由 CLI 在最后 --done 时统一执行（local.yaml 的 commands.test，同步对账可能耗时较长）；「运行测试和质量扫描」那步**不需要你重复手动跑全量**（避免与 CLI 对账重复耗时），只做 lint/静态检查 + 可选快速冒烟。别以为敲了 run verify 就自动验证了。
-
-检查当前进度，确认可以执行 verify（快照已由 CLI 注入，勿再跑 progress show；\`sillyspec status\` 是项目级快照，也不推进流程）。
-
-### 进度快照（CLI 注入）
-{PROGRESS_SNAPSHOT}
-
-### 操作
-1. 如果快照显示阶段不符，输出正确提示并停止
-
-### 输出
-当前进度摘要`,
-      outputHint: '进度摘要',
+      // noAI 化（2026-09-07）：唯一非常量信息（「CLI 在 --done 统一跑测试」）改由 progressConfirm
+      // console 提示；快照复述与阶段检查已机械化。步骤名不变（存量进度库按名匹配迁移）。
+      noAI: true,
+      _cliAction: 'progressConfirm',
+      prompt: '',
+      outputHint: '进度摘要（CLI 快照输出）',
       optional: false
     },
     {
@@ -70,7 +63,8 @@ export const definition = {
    - 如果存在 P0/P1 unresolved/blocking 决策，验证结论不能为 PASS
    - 如果发现 superseded 决策被下游引用，标记为 ⚠️ stale decision reference
 3. 加载项目信息：\`cat {SPEC_ROOT}/projects/*.yaml 2>/dev/null\`
-4. 加载本地配置：\`cat {SPEC_ROOT}/local.yaml 2>/dev/null\`（构建命令、测试命令、lint 命令等）若 local.yaml 不存在，先 \`sillyspec local detect\` 生成骨架再读取
+4. 构建命令（CLI 自 local.yaml 注入，勿再读文件；未配置时按注入说明跑 local detect）：
+{LOCAL_COMMANDS}
 5. 加载代码规范：\`cat {SPEC_ROOT}/docs/<project>/scan/CONVENTIONS.md 2>/dev/null\`
    - 测试现状：\`cat {SPEC_ROOT}/docs/<project>/scan/TESTING.md 2>/dev/null\`（了解既有测试约定与覆盖范围，验收时对照）
    - 技术债清单：\`cat {SPEC_ROOT}/docs/<project>/scan/CONCERNS.md 2>/dev/null\`（🔴/🟡 区域；本次变更若触碰须在 verify-result.md 标注）
@@ -103,6 +97,9 @@ export const definition = {
     {
       name: '逐项检查任务',
       prompt: `对照 tasks.md（任务注册表唯一真相）检查每个任务完成状态。勾选由 execute 双路写入（agent 按 review gate 手动勾 + CLI autoCheckPlanFromReviews 机器勾选器按 review.json 自动勾），本阶段只读对照、不改勾。
+
+### 勾选状态（CLI 注入，勿手数）
+{TASKS_CHECKBOX}
 
 ### 操作
 对每个 checkbox：
@@ -173,7 +170,8 @@ export const definition = {
       prompt: `运行代码质量扫描（测试实测统一由 CLI 对账执行，本步不重复手动跑全量）。
 
 ### 操作
-1. 读取 \`{SPEC_ROOT}/local.yaml\` 获取构建、测试和 lint 命令若 local.yaml 不存在，先 \`sillyspec local detect\` 生成骨架再读取
+1. 构建命令（CLI 自 local.yaml 注入，勿再读文件；未配置时按注入说明跑 local detect）：
+{LOCAL_COMMANDS}
 2. **不要手动重复跑 commands.test**——CLI 会在最终 --done 时统一执行一次（按变更命中模块子集），本步再跑 = 与 CLI 对账重复耗时（实测 198s×2）。如为提前发现实现问题，可对变更模块做**针对性快速冒烟**（可选，非必需）：
    - Maven：\`mvn test -pl <变更模块> -am\`（仅编译变更模块及其依赖）
    - Gradle：\`./gradlew :<模块>:test\`

@@ -21,6 +21,7 @@ import { existsSync, readdirSync, readFileSync, mkdirSync } from 'node:fs'
 import { writeAtomicSync } from '../fs-atomic.js'
 import { resolveSpecDir, resolveChangeDir, resolveRuntimeRoot, resolveQuickSessionsDir, triggerSync, safeGit, parsePorcelainPath, formatWaitOptions, checkApproval, getStageSteps, warnApprovalUnknown, predictProtectedQuickFiles, mergeQuickBoundaryFiles, detectEmptyShellQuickSessions } from './shared.js'
 import { computeScanProfile, applyScanProfileSteps, executeScanPreflight, executeScanPostcheck, executeScanDetectProjects, executeScanResumeCheck, executeScanFinalize } from './scan-profile.js'
+import { executeProgressConfirm } from './progress-confirm.js'
 import { outputStep, collectStageWaitHistory } from './prompt.js'
 import { allocateQuicklogEntry, deriveTitleFromLinkedChange, sanitizeDesc } from '../quicklog.js'
 import { createHash } from 'node:crypto'
@@ -537,6 +538,10 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
         await executeScanFinalize(cwd, platformOpts)
       } else if (cliAction === 'planPostcheck') {
         await executePlanPostcheck(cwd, platformOpts, progress)
+      } else if (cliAction === 'progressConfirm') {
+        // 主流程 step1「进度确认」noAI 化（2026-09-07）：brainstorm/execute/verify——
+        // 快照本就 CLI 注入、阶段路由已由 run 落定，省一轮「复述摘要→--done」往返
+        executeProgressConfirm({ stageName, cwd, stageData, changeName, pm })
       } else {
         throw new Error(`noAI 步骤 ${stepName} 的未知 _cliAction: ${cliAction}——请在 stage.js 注册对应分支`)
       }

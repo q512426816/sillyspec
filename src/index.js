@@ -93,6 +93,9 @@ SillySpec CLI — 规范驱动开发工具包
   sillyspec gate <stage> --change <name> [--json]      机器门控：阶段能否标记完成（只读）
   sillyspec derive <facet> --change <name> [--json]    单项事实核验（facet: execute-evidence|verify-test|task-reviews|artifacts）
   sillyspec backfill-reviews --change <name> [--adopt] [--json]  缺 review.json 的 task 生成草稿；--adopt 重算代填已有 review 的 base/head 等机械字段（verdict 保留）
+  sillyspec review write --change <name> --task task-NN --spec <verdict> --quality <verdict>
+                                      [--notes ...] [--evidence ...] [--changed-files a,b] [--force]
+                                      单 task review.json 命令式写入：verdict/notes 你给，base/head/changedFiles/diffPaths CLI 代算
   sillyspec symbol-impact --change <name>      生成 symbol-impact.md 逐 task <!--TODO--> 骨架（gate 拒绝未替换占位，防骨架直接过门）
   sillyspec design-init --change <name> [--force]  从 decisions.md 生成 design.md 十三章节骨架（决策追踪表预填；已存在不覆盖）
   sillyspec delta --change <name> [--json]   生成变更 delta.md（Before/Delta/After 三段式聚合；幂等覆盖重跑即刷新）
@@ -563,6 +566,72 @@ async function main() {
         for (const w of (envelope.warnings || [])) console.log(`  ⚠ ${w}`);
       }
       process.exitCode = exitCode;
+      break;
+    }
+    case 'review': {
+      // 单 task review.json 命令式写入（2026-09-07 noAI 主流程批次 T2-4）：agent 只给判断字段
+      // （verdict/notes/evidence），mechanics（executeRunId/base/head/changedFiles/diffPaths）全由
+      // CLI 代算——消灭「手拼 JSON→gate 拒→重写」循环与手算 hash 错误面。
+      //   sillyspec review write --change <名> --task task-NN --spec pass --quality pass
+      //     [--notes "..."] [--evidence "..."]（cannot_verify 必填）
+      //     [--changed-files a,b]（归属切片为空或纯验证任务时显式给出；""=空覆盖）
+      //     [--base <rev> --head <rev>]（无 worktree meta 时显式锡点）[--force]
+      const rwSub = filteredArgs[1];
+      if (rwSub !== 'write') {
+        console.error('用法: sillyspec review write --change <名> --task task-NN --spec <pass|fail|cannot_verify> --quality <verdict>\n  [--notes "评审备注"] [--evidence "cannot_verify 证据说明"] [--changed-files a,b] [--base <rev> --head <rev>] [--force] [--json]\n  单 task review.json 命令式写入：verdict/notes 由你给，executeRunId/base/head/changedFiles/diffPaths 由 CLI 从 git + task 卡代算；已存在默认拒覆盖（--force 越过）');
+        process.exit(2);
+      }
+      const rwVal = (flag) => {
+        const i = filteredArgs.indexOf(flag);
+        return i >= 0 && filteredArgs[i + 1] ? filteredArgs[i + 1] : null;
+      };
+      const rwChange = rwVal('--change');
+      const rwTask = rwVal('--task');
+      const rwSpec = rwVal('--spec');
+      const rwQuality = rwVal('--quality');
+      const rwNotes = rwVal('--notes');
+      const rwEvidence = rwVal('--evidence');
+      const rwBase = rwVal('--base');
+      const rwHead = rwVal('--head');
+      const rwFilesIdx = filteredArgs.indexOf('--changed-files');
+      // --changed-files 存在即视为显式覆盖（含空串=纯验证任务零 diff 声明）；不存在传 null 走归属切片
+      const rwFilesOverride = rwFilesIdx >= 0
+        ? (filteredArgs[rwFilesIdx + 1] || '').split(',').map(s => s.trim()).filter(Boolean)
+        : null;
+      if (!rwChange || !rwTask || !rwSpec || !rwQuality) {
+        console.error('用法: sillyspec review write --change <名> --task task-NN --spec <verdict> --quality <verdict> [--notes ...] [--evidence ...] [--changed-files a,b] [--base <rev> --head <rev>] [--force]');
+        process.exit(2);
+      }
+      assertSafeChangeName(rwChange, '--change 变更名');
+      const { writeTaskReview } = await import('./task-review.js');
+      const rwPlatformOpts = {};
+      const rwResolved = resolvePlatformOpts(dir, specDir);
+      if (rwResolved) {
+        rwPlatformOpts.specRoot = rwResolved.specRoot;
+        if (rwResolved.runtimeRoot) rwPlatformOpts.runtimeRoot = rwResolved.runtimeRoot;
+      }
+      const rwResult = await writeTaskReview({
+        changeName: rwChange, cwd: dir, taskId: rwTask,
+        specVerdict: rwSpec, qualityVerdict: rwQuality,
+        reviewerNotes: rwNotes || '',
+        requiredEvidence: rwEvidence ? [rwEvidence] : [],
+        baseOverride: rwBase, headOverride: rwHead,
+        changedFilesOverride: rwFilesOverride,
+        force: filteredArgs.includes('--force'),
+        platformOpts: rwPlatformOpts,
+      });
+      if (json) {
+        console.log(JSON.stringify({ ok: rwResult.ok, ...rwResult }, null, 2));
+      } else if (rwResult.ok) {
+        console.log(`✅ review.json 已写入：${rwResult.reviewPath}`);
+        console.log(`   executeRunId: ${rwResult.executeRunId}`);
+        for (const w of rwResult.warnings) console.log(`⚠️  ${w}`);
+      } else {
+        console.error('❌ review write 失败：');
+        for (const e of rwResult.errors) console.error(`   - ${e}`);
+        for (const w of rwResult.warnings) console.error(`⚠️  ${w}`);
+        process.exit(1);
+      }
       break;
     }
     case 'backfill-reviews': {
