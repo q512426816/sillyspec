@@ -177,7 +177,7 @@ console.log('=== A. parseTargetFiles 严格解析 ===\n')
 // ── A11. NEW: 剥离后为空 → invalid ──
 {
   const r = parseTargetFiles(fm('id: task-01\ntarget_files: [NEW:]'))
-  assert(r.entries[0].invalid && r.entries[0].invalid.includes('剥 NEW: 前缀后为空'),
+  assert(r.entries[0].invalid && r.entries[0].invalid.includes('前缀后为空'),
     `NEW: 空壳记 invalid（实际: ${r.entries[0].invalid}）`)
 }
 
@@ -625,4 +625,96 @@ console.log('\n=== D. gates 接线阻断冒烟 ===\n')
 console.log('\n==================================================')
 console.log(`✅ 通过: ${total - failed}  ❌ 失败: ${failed}`)
 console.log('==================================================')
+if (failed > 0) process.exit(1)
+
+// ── C-P1 回归（2026-09-07 审查修复）：./ 前缀 / docs 交付物 / 平台 specBase 三假红场景 ──
+console.log('\n=== C-P1. 声明 ./ 前缀 + 形态 A docs 交付物 + 平台 specBase ===\n')
+
+// P1-1：声明 ./src/a.js（良性书写偏差）vs actual src/a.js → 归一后进交集，不再落②类假红
+{
+  const dir = mkRepo('tf-p11-')
+  try {
+    mkdirSync(join(dir, 'src'), { recursive: true })
+    writeFileSync(join(dir, 'src', 'a.js'), 'base')
+    commitAll(dir, 'base')
+    const baseHash = git(dir, 'rev-parse HEAD').trim()
+    const change = 'tf-p11'
+    writeCard(dir, change, 'task-01.md', fm('id: task-01\ntarget_files:\n- ./src/a.js'))
+    writeMeta(dir, change, { baseHash, worktreePath: dir, mode: 'worktree' })
+    writeFileSync(join(dir, 'src', 'a.js'), 'changed')
+    const r = reconcileTargetFiles({ cwd: dir, changeName: change })
+    assert(r.status === 'ok', `./ 前缀声明归一 → ok 不再假红（实际: ${r.status}, missing=${JSON.stringify(r.missing)}）`)
+    assert(JSON.stringify(r.matched) === JSON.stringify(['src/a.js']), `交集归一命中（实际: ${JSON.stringify(r.matched)}）`)
+  } finally { rmSync(dir, { recursive: true, force: true }) }
+}
+
+// P1-2：形态 A 下 .sillyspec/docs/** 是交付物（filterDeliverableFiles 口径）——声明模块文档不再假红；
+//        .runtime/ 运行时面仍被滤除（不进③类噪音）
+{
+  const dir = mkRepo('tf-p12-')
+  try {
+    mkdirSync(join(dir, 'src'), { recursive: true })
+    writeFileSync(join(dir, 'src', 'a.js'), 'base')
+    commitAll(dir, 'base')
+    const baseHash = git(dir, 'rev-parse HEAD').trim()
+    const change = 'tf-p12'
+    writeCard(dir, change, 'task-01.md', fm('id: task-01\ntarget_files:\n- NEW:.sillyspec/docs/m/core.md'))
+    writeMeta(dir, change, { baseHash, worktreePath: dir, mode: 'worktree' })
+    // 实际：新建 docs 交付物（未跟踪）+ 运行时面残留（不应进任何差集）
+    mkdirSync(join(dir, '.sillyspec', 'docs', 'm'), { recursive: true })
+    writeFileSync(join(dir, '.sillyspec', 'docs', 'm', 'core.md'), 'doc')
+    mkdirSync(join(dir, '.sillyspec', '.runtime', 'junk'), { recursive: true })
+    writeFileSync(join(dir, '.sillyspec', '.runtime', 'junk', 'x.json'), '{}')
+    const r = reconcileTargetFiles({ cwd: dir, changeName: change })
+    assert(r.status === 'ok', `docs 交付物进 actual → 声明命中不再假红（实际: ${r.status}, missing=${JSON.stringify(r.missing)}）`)
+    assert(JSON.stringify(r.matched) === JSON.stringify(['.sillyspec/docs/m/core.md']), `docs 交集命中（实际: ${JSON.stringify(r.matched)}）`)
+    assert(!r.undeclared.some(u => u.path.startsWith('.sillyspec/.runtime/')), `.runtime 运行时面仍被滤除（实际: ${JSON.stringify(r.undeclared)}）`)
+  } finally { rmSync(dir, { recursive: true, force: true }) }
+}
+
+// P1-3：平台模式（specBase 与 cwd 分离）——meta 在 specBase 下也能读到，形态 A 并入不失效
+{
+  const dir = mkRepo('tf-p13-')
+  try {
+    mkdirSync(join(dir, 'src'), { recursive: true })
+    writeFileSync(join(dir, 'src', 'a.js'), 'base')
+    commitAll(dir, 'base')
+    const baseHash = git(dir, 'rev-parse HEAD').trim()
+    const specBase = mkDir('tf-p13-spec-') // 独立 specRoot（平台形态：cwd 无 .sillyspec）
+    const change = 'tf-p13'
+    // 平台 specBase 即 specRoot 本体（非其父目录）——卡片直写 specRoot/changes/，不走 writeCard 的 .sillyspec 前缀拼接
+    const tasksDir = join(specBase, 'changes', change, 'tasks')
+    mkdirSync(tasksDir, { recursive: true })
+    writeFileSync(join(tasksDir, 'task-01.md'), fm('id: task-01\ntarget_files:\n- src/a.js'))
+    // meta 写在 specBase 的 .runtime 下（修复前硬编码 join(cwd,'.sillyspec') 读不到 → 形态并入失效假红）
+    const metaDir = join(specBase, '.runtime', 'worktrees', change)
+    mkdirSync(metaDir, { recursive: true })
+    writeFileSync(join(metaDir, 'meta.json'), JSON.stringify({ baseHash, worktreePath: dir, mode: 'worktree' }))
+    writeFileSync(join(dir, 'src', 'a.js'), 'changed')
+    const r = reconcileTargetFiles({ cwd: dir, changeName: change, specBase })
+    assert(r.status === 'ok', `平台 specBase 下形态 A 并入生效 → ok（实际: ${r.status}, missing=${JSON.stringify(r.missing)}）`)
+    assert(r.sources.includes('worktree:status-porcelain(uncommitted)'), `并入源在列（实际: ${JSON.stringify(r.sources)}）`)
+    rmSync(specBase, { recursive: true, force: true })
+  } finally { rmSync(dir, { recursive: true, force: true }) }
+}
+
+// P1-1 补（对抗复审 Q-1）：././ 双前缀也归一到底层
+{
+  const dir = mkRepo('tf-p11b-')
+  try {
+    mkdirSync(join(dir, 'src'), { recursive: true })
+    writeFileSync(join(dir, 'src', 'a.js'), 'base')
+    commitAll(dir, 'base')
+    const baseHash = git(dir, 'rev-parse HEAD').trim()
+    const change = 'tf-p11b'
+    writeCard(dir, change, 'task-01.md', fm('id: task-01\ntarget_files:\n- ././src/a.js'))
+    writeMeta(dir, change, { baseHash, worktreePath: dir, mode: 'worktree' })
+    writeFileSync(join(dir, 'src', 'a.js'), 'changed')
+    const r = reconcileTargetFiles({ cwd: dir, changeName: change })
+    assert(r.status === 'ok' && JSON.stringify(r.matched) === JSON.stringify(['src/a.js']),
+      `././ 双前缀归一到底层（实际: ${r.status}, matched=${JSON.stringify(r.matched)}）`)
+  } finally { rmSync(dir, { recursive: true, force: true }) }
+}
+
+// 尾部守卫：上方 C-P1 追加段在原汇总块之后执行，失败也必须反映到退出码
 if (failed > 0) process.exit(1)

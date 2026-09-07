@@ -855,7 +855,10 @@ async function main() {
         const vpReportPath = join(vpSpecBase, 'changes', vpChange, 'verify-result.md');
         if (existsSync(vpReportPath)) {
           const vpExisting = readFileSync(vpReportPath, 'utf8');
-          if (!/^#### 探针 \d/m.test(vpExisting)) {
+          // 检测正则与提取侧（parseProbePrefillAnchors 的 /^#### 探针 (\d+)[：:]/）对齐要求冒号——
+          // 对抗复审 BUG-1（2026-09-07）：agent 手写无冒号走样标题 `#### 探针 1` 会被宽松检测误判
+          // 「已有子节」跳过注入，而提取侧不认 → 死路复活（--init no-op + gate error 无解）。
+          if (!/^#### 探针 \d+[：:]/m.test(vpExisting)) {
             // P1 修复（2026-09-07）：存量旧格式（九章节）报告 + --init 曾是死路——facts 无条件刷新
             // 而正文不补，checkProbeConsistency 判别子判「疑似 agent 删除预填段」error 阻断，而修复
             // 指引「重跑 --init」对已存在报告是 no-op。修法：探针段是 CLI 拥有的机械段，检测缺失时

@@ -923,17 +923,26 @@ export function resolveVerifyChangedFiles(cwd, changeName, ctx = null, opts = {}
   // （排除 .sillyspec/ 运行时产物）。opt-in（默认关）：d drafts 有自己的并入点，避免双并。
   if (includeWorkingTree && mainFiles !== null) {
     try {
-      const metaPath = join(cwd, '.sillyspec', '.runtime', 'worktrees', changeName, 'meta.json')
+      // P1 修复（2026-09-07）：metaPath 吃 opts.specBase——此前硬编码 join(cwd,'.sillyspec')，
+      // 平台模式（specRoot 与 source_root 分离）下 worktree meta 静默读不到 → 形态 A 并入失效 → ②类假红。
+      // 与下方 resolveMainChangedFiles 的 specBase 兜底同口径。
+      const metaPath = join(opts.specBase || join(cwd, '.sillyspec'), '.runtime', 'worktrees', changeName, 'meta.json')
       if (changeName && existsSync(metaPath)) {
         const meta = JSON.parse(readFileSync(metaPath, 'utf8'))
         const wtGitDir = (meta.worktreePath && meta.mode !== 'in-place-fallback' && existsSync(meta.worktreePath))
           ? meta.worktreePath
           : cwd
         const wtStatus = gitQuiet(wtGitDir, ['status', '--porcelain', '--untracked-files=all'], { timeout: 30000, trim: false })
+        // P1 修复（2026-09-07）：过滤器改 filterDeliverableFiles 口径（worktree-apply.js 同款）——
+        // 此前 `.sillyspec/` 一刀切把 docs 交付物也滤掉，声明了模块文档的 task 在形态 A 下落②类假红
+        // （子代理默认不 commit，形态 A 是常态）。保留 .sillyspec/docs/**（交付物），只排运行时/进度面。
         const wtFiles = String(wtStatus || '').split('\n')
           .map(l => l.slice(3).trim().split(' -> ').pop() || '')
           .map(p => p.replace(/^"|"$/g, '').replace(/\\/g, '/'))
-          .filter(p => p && p !== '.sillyspec' && !p.startsWith('.sillyspec/'))
+          .filter(p => p && p !== '.sillyspec' &&
+            !p.startsWith('.sillyspec/changes/') &&
+            !p.startsWith('.sillyspec/.runtime/') &&
+            !p.startsWith('.sillyspec/quicklog/'))
         if (wtFiles.length > 0) {
           mainFiles = [...new Set([...(mainFiles || []), ...wtFiles])]
         }

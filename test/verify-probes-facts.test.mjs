@@ -782,3 +782,70 @@ console.log('\n==================================================')
 console.log(`✅ 通过: ${total - failed}  ❌ 失败: ${failed}`)
 console.log('==================================================')
 if (failed > 0) process.exit(1)
+
+// ═══════════════════════════════════════════════════════════════
+// H. P1 修复回归（2026-09-07）：旧格式报告 + --init 补注入探针预填段（修死路）
+// ═══════════════════════════════════════════════════════════════
+console.log('\n=== H. 旧格式 verify-result.md + --init 补注入（P1 修复）===\n')
+
+{
+  const fx = mkProbeFixture('vpc-oldfmt-', { rmOld: true })
+  try {
+    // 存量旧九章节格式：无任何 #### 探针 子节，正文是 agent 写过的真实内容
+    const reportPath = join(fx.cd, 'verify-result.md')
+    writeFileSync(reportPath, [
+      '# 验证报告（旧格式）', '',
+      '## 结论：PASS', '',
+      '## 任务完成度', '全部完成（agent 手写正文，必须保留）', '',
+    ].join('\n') + '\n')
+
+    // 修复前行为：--init 对已存在报告 no-op，但 facts 无条件刷新 →
+    // checkProbeConsistency 判「疑似 agent 删除预填段」error 阻断（死路：修复指引 --init 是 no-op）。
+    // 先手写一份 facts 模拟「agent 跑过 --init」后的状态
+    writeFileSync(join(fx.cd, 'verify-facts.json'), JSON.stringify({ schemaVersion: 1, change: fx.change }, null, 2) + '\n')
+    const r = checkProbeConsistency({ cwd: fx.dir, specBase: fx.sb, changeName: fx.change })
+    assert(r.status === 'mismatch' && r.severity === 'error', `修复前确认：旧格式 + facts 在场（手动写一份模拟）判 error`)
+    rmSync(join(fx.cd, 'verify-facts.json'), { force: true }) // 清掉手动模拟，走真实 CLI 路径
+
+    const cli = spawnSync(process.execPath, [cliBin, 'verify-probes', '--change', fx.change, '--init'],
+      { cwd: fx.dir, encoding: 'utf8', timeout: 120_000, stdio: ['ignore', 'pipe', 'pipe'] })
+    assert(cli.status === 0, `--init exit 0（实际 ${cli.status}: ${((cli.stdout || '') + (cli.stderr || '')).slice(0, 200)}）`)
+    const after = readFileSync(reportPath, 'utf8')
+    assert(after.includes('# 验证报告（旧格式）') && after.includes('agent 手写正文，必须保留'), '原正文逐字保留（只补注入不重写）')
+    assert(/^#### 探针 1：/m.test(after) && after.includes('## 探针结果（CLI 机械预填，--init 补注入）'), '探针预填段已补注入')
+    assert(existsSync(join(fx.cd, 'verify-facts.json')), 'facts 照常刷新')
+
+    // 补注入后：判别子有子节可对账 → 不再是 prefill-missing error（ok 或环境性 warning 均可，死路已通）
+    const r2 = checkProbeConsistency({ cwd: fx.dir, specBase: fx.sb, changeName: fx.change })
+    assert(r2.status !== 'mismatch' || r2.severity !== 'error' || !r2.mismatches.some(m => m.probe === 'prefill'),
+      `补注入后不再判 prefill 缺失 error（实际 ${r2.status}/${r2.severity}: ${JSON.stringify(r2.mismatches?.map(m => m.probe))}）`)
+
+    // 二跑：已有子节 → 不重复注入
+    const cli2 = spawnSync(process.execPath, [cliBin, 'verify-probes', '--change', fx.change, '--init'],
+      { cwd: fx.dir, encoding: 'utf8', timeout: 120_000, stdio: ['ignore', 'pipe', 'pipe'] })
+    const after2 = readFileSync(reportPath, 'utf8')
+    assert((after2.match(/## 探针结果（CLI 机械预填/g) || []).length === 1, '二跑不重复注入（幂等）')
+    assert(cli2.status === 0 && (cli2.stdout || '').includes('不覆盖'), '二跑输出不覆盖提示')
+  } finally { rmSync(fx.dir, { recursive: true, force: true }) }
+}
+
+// BUG-1 回归（对抗复审，2026-09-07）：无冒号走样探针标题 `#### 探针 1` 不算「已有子节」——
+// 检测正则须与提取侧对齐（要求 [：:]），否则 --init 跳过注入而提取侧不认 → 死路复活
+{
+  const fx = mkProbeFixture('vpc-nocolon-', { rmOld: true })
+  try {
+    const reportPath = join(fx.cd, 'verify-result.md')
+    writeFileSync(reportPath, '# 验证报告\n\n## 结论：PASS\n\n#### 探针 1\n（agent 手写走样标题，无冒号）\n')
+    const cli = spawnSync(process.execPath, [cliBin, 'verify-probes', '--change', fx.change, '--init'],
+      { cwd: fx.dir, encoding: 'utf8', timeout: 120_000, stdio: ['ignore', 'pipe', 'pipe'] })
+    assert(cli.status === 0, `--init exit 0（实际 ${cli.status}）`)
+    const after = readFileSync(reportPath, 'utf8')
+    assert(after.includes('## 探针结果（CLI 机械预填，--init 补注入）'), '无冒号走样标题不挡注入（预填段照常补入）')
+    assert(/^#### 探针 1：/m.test(after), '补入的规范子节（带冒号）在场')
+    const r = checkProbeConsistency({ cwd: fx.dir, specBase: fx.sb, changeName: fx.change })
+    assert(!r.mismatches?.some(m => m.probe === 'prefill'), `不落 prefill error（实际 ${r.status}: ${JSON.stringify(r.mismatches?.map(m => m.probe))}）`)
+  } finally { rmSync(fx.dir, { recursive: true, force: true }) }
+}
+
+// 尾部守卫：H / BUG-1 追加段在原汇总块之后执行，失败也必须反映到退出码
+if (failed > 0) process.exit(1)

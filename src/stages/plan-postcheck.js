@@ -111,7 +111,7 @@ export function parseAllowedPaths(content) {
  *
  * @param {string} content - task 文件内容（同 parseAllowedPaths：frontmatter 自提取）
  * @returns {{ entries: Array<{raw: string, isNew: boolean, path: string, invalid: string|null}>, missing: boolean }}
- *   raw = 条目原文（含 NEW: 前缀）；path = 剥 NEW: 后、反斜杠归一正斜杠的路径；
+ *   raw = 条目原文（含 NEW: 前缀）；path = 剥 NEW: 与 ./ 前缀、反斜杠归一正斜杠的路径；
  *   invalid = 非法形态原因（null = 合法）；missing = 字段缺失或空列表（存量卡兼容口径）
  */
 export function parseTargetFiles(content) {
@@ -139,10 +139,14 @@ export function parseTargetFiles(content) {
     if (path.startsWith('NEW:')) { isNew = true; path = path.slice('NEW:'.length).trim() }
     // 路径归一正斜杠（design 数据流标注）——UNC `\\srv\x` 归一后 `//srv/x` 恰落入下方绝对路径判定
     path = path.replace(/\\/g, '/')
+    // 剥 ./ 前缀（P1 修复，2026-09-07）：声明 `./src/a.js` vs actual `src/a.js` 曾字面失配落②类假红
+    // （normalizeReconcilePath 只归一 actual 侧）——此处的单源归一同时覆盖 plan 校验与 verify 对账。
+    // (\./)+ 贪婪多层：`././src/a.js` 双前缀也归一到层底（对抗复审 Q-1，actual 侧 git 路径永远干净）。
+    path = path.replace(/^(\.\/)+/, '')
     // 严格形态判定（X-10：每条 = 精确文件路径，禁 glob/目录前缀/引号/绝对路径）。
     // 只记原因不 throw：解析器供对账复用，非法条目的处置（ERROR）归 plan-postcheck 校验层
     let invalid = null
-    if (path === '') invalid = '剥 NEW: 前缀后为空'
+    if (path === '') invalid = '剥 NEW: / ./ 前缀后为空'
     else if (/[*?]/.test(path)) invalid = '含通配符（* 或 ?）——target_files 须逐文件精确声明，禁 glob（目录级覆盖会令 verify 对账的 scope creep 检出失效）'
     else if (path.endsWith('/')) invalid = '以 / 结尾（目录前缀）——须精确到文件'
     else if (/["'`]/.test(path)) invalid = '含引号/反引号——须裸路径书写（严格口径拒容差，防对账字面不匹配）'
