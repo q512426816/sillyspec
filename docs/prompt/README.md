@@ -156,6 +156,7 @@ prompt 正文中出现的占位符，运行时由 `outputStep` 替换。下表�
 | `{EVIDENCE_AUTO_RECOMMENDATION}` | evidence-auto 推荐注入（`run/prompt.js` outputStep，verify 专属）：`verify-postcheck.js` 的 `resolveTestStrategy({yamlText, changeDir})` 按 local.yaml `test_strategy` 与变更文件解析出的 `evidence_auto_recommendation.summary`（含推荐理由、降级注记与「可在 verify-result.md 否决并改跑全量」路径——prompt 时点注入供 agent 预知并否决，与 --done 事后对账闭环）。仅 `test_strategy: evidence-auto` 且推荐非空时渲染；full/module/skip/未配置替换为空串；fail-soft：读取/解析异常降级单行说明不抛 | verify（运行测试和质量扫描步） |
 | `{LOCAL_COMMANDS}` | 构建命令注入（2026-09-07 注入缺口批次）：local.yaml `commands:` 段原文（块级缩进扫描到下一顶层 key 止）；local.yaml 缺失/无 commands 段 → `sillyspec local detect` 指引文案。fail-soft 不留残留占位符 | brainstorm / plan / execute / verify / quick（各「加载上下文/构建命令」步） |
 | `{GIT_DIRTY}` | 工作区脏文件清单注入：`gitQuiet status --porcelain` 输出（>40 行截断提示）；干净仓 → 「工作区干净，无脏文件」 | quick（Step 3 暂存和更新记录） |
+| `{SS_META}` | **auto 专属注入（2026-09-08-auto-driver）**：每步 prompt 尾部单行 `<!--SS-META:{json}-->` 机器可读块（stage/stepIndex/stepName/requiresUser 四源判定/doneCommand 与正文同源/waitHint）——driver 化元数据，agent 免关键词猜与命令记忆；单阶段 run 零显形（autoMeta 缺省 null） |
 | `{TASKS_CHECKBOX}` | tasks.md 勾选状态投影：`- [ ]/- [x] task-NN` 行计数 + 逐行原文（>60 条截断）；无 tasks.md → 跳过说明 | verify（Step 3 逐项检查任务） |
 > **降级**：当 review-tier / stage-review 注入抛异常时，`{REVIEW_TIER}`→`self`、`{REVIEW_TIER_REASON}`→`分级异常降级 self: <err>`、`{REVIEW_JSON_CONTRACT}`→精简契约提示，避免 prompt 残留裸占位符。
 

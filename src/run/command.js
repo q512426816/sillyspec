@@ -1087,6 +1087,22 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
         // brainstorm 自动创建变更也写 title（--input 需求描述优先 / 自动名兜底），proposal 落盘后刷新。
         progress = pm.initChange(cwd, autoName, { title: inputText ? sanitizeDesc(inputText) : autoName })
         changeName = autoName
+      } else if (stageName === 'auto') {
+        // auto 零活跃建变更（2026-09-08-auto-driver D-003@v1，Grill P1-②）：SKILL 启动命令即
+        // run auto --input——此前此处 exit 2 是断头路。复用 brainstorm 命名（date-new-change-hex）。
+        // pm.read 对零/多活跃都返 null——先分流：多活跃报错列候选（不隐式选择），零活跃才建。
+        const activeCount = pm.listChanges(cwd)
+        if (activeCount.length > 1) {
+          console.error(`❌ 已存在 ${activeCount.length} 个活跃变更，run auto 无法自动定位目标。`)
+          console.error('   活跃变更：' + activeCount.join('、'))
+          console.error('   请用 --change <变更名> 显式指定，或先归档/收尾现有变更。')
+          process.exit(2)
+        }
+        const date = new Date().toISOString().slice(0, 10)
+        const autoName = `${date}-new-change-${randomBytes(4).toString('hex')}`
+        console.log(`🔄 auto 模式自动创建变更：${autoName}（可用 --change 指定名称，或事后 change-rename）`)
+        progress = pm.initChange(cwd, autoName, { title: inputText ? sanitizeDesc(inputText) : autoName })
+        changeName = autoName
       } else {
         console.error('❌ 未找到进度数据，请先运行 sillyspec init 或指定 --change <变更名>')
         // 自愈引导（坑 suggestion-command-missing-change 同族）：多活跃变更仓不带 --change 时
@@ -1546,7 +1562,14 @@ async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts = 
   const inputText = autoFlagValue('--input')
   const skipApproval = flags.includes('--skip-approval')
   const explicitMode = autoFlagValue('--mode')
+  // --wait-interactive（2026-09-08-auto-driver D-004@v1，FR-03）：TTY 下 requiresUser 步 readline 直收
+  const waitInteractive = autoFlagValue('--wait-interactive') === 'true'
+  globalThis.__ssWaitInteractive = waitInteractive  // maybeWaitInteractive 消费（同进程直通）
   const specBase = platformOpts?.specRoot || join(cwd, '.sillyspec')
+
+  // 单活跃自动选中为既有行为（入口 pm.read(cwd,null)）——此处仅回显（D-003@v1；
+  // 零活跃建变更已上移入口守卫层，多活跃 exit 2 由入口守卫处理）。
+  if (changeName) console.log(`🎯 auto 目标变更（单活跃自动选中或显式指定）：${changeName}`)
 
   // Helper: 在 auto 模式下获取步骤定义
   const getAutoSteps = async (stage) => {
@@ -1613,6 +1636,8 @@ async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts = 
     currentStage = firstOpenStage()
   }
   if (!currentStage) {
+      // 重进入且已全完成：复用收尾总结 helper（FR-04）
+      if (changeName) printAutoCompletionSummary(pm, cwd, changeName, flowStages, specBase)
     console.log('All auto flow stages are complete.')
     return
   }
@@ -1656,7 +1681,11 @@ async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts = 
       }
       const next = nextInFlow(currentStage)
       if (next) console.log(`${currentStage} is complete. Run: sillyspec run auto --done --output "${currentStage} complete"`)
-      else console.log('All auto flow stages are complete.')
+      else {
+        console.log('All auto flow stages are complete.')
+        // 展示路径全完成（阶段已关但用户重进）——复用收尾总结（FR-04）
+        printAutoCompletionSummary(pm, cwd, changeName, flowStages, specBase)
+      }
       return
     }
     // execute 阶段启动前检查审批
@@ -1677,7 +1706,9 @@ async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts = 
         }
       }
     }
-    await outputStep(currentStage, pendingIdx, defSteps, cwd, changeName, progress.project || null, platformOpts, null, collectStageWaitHistory(progress, currentStage))
+    await outputStep(currentStage, pendingIdx, defSteps, cwd, changeName, progress.project || null, platformOpts, null, collectStageWaitHistory(progress, currentStage), { changeName })
+    // wait 直通（FR-03）：requiresUser 且 TTY 且旗标开 → readline 直收，等价 --continue --answer
+    await maybeWaitInteractive(defSteps[pendingIdx], changeName, currentStage)
     return
   }
 
@@ -1717,13 +1748,15 @@ async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts = 
         }
       }
     }
-    await outputStep(currentStage, nextPendingIdx, defSteps, cwd, changeName, progress.project || null, platformOpts, null, collectStageWaitHistory(progress, currentStage))
+    await outputStep(currentStage, nextPendingIdx, defSteps, cwd, changeName, progress.project || null, platformOpts, null, collectStageWaitHistory(progress, currentStage), { changeName })
     return
   }
 
   const next = nextInFlow(currentStage)
   if (!next) {
     console.log('\nAll auto flow stages are complete.')
+    // 自然收尾点（--done 后 next==null，FR-04）：打印收尾总结
+    printAutoCompletionSummary(pm, cwd, changeName, flowStages, specBase)
     return
   }
 
@@ -1795,7 +1828,95 @@ async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts = 
         }
       }
     }
-    await outputStep(next, firstPending, nextSteps, cwd, changeName, progress.project || null, platformOpts, null, collectStageWaitHistory(progress, next))
+    await outputStep(next, firstPending, nextSteps, cwd, changeName, progress.project || null, platformOpts, null, collectStageWaitHistory(progress, next), { changeName })
   }
 }
 
+
+/**
+ * maybeWaitInteractive —— auto 模式 wait 用户输入直通（change: 2026-09-08-auto-driver，D-004@v1，FR-03）。
+ *
+ * 时序：outputStep 渲染返回后调用。条件全满足（旗标开 + requiresUser 四源 + stdin TTY）→
+ * readline 直收一行，等价自动 `--continue --answer <输入>`（复用 completeStep wait→continue 状态机，
+ * 无新状态）；任一不满足/异常 → 静默或提示回三段式（fail-open，Grill P2-①时序）。
+ * 仅 runAutoMode 的首渲染点消费（--done 推进路径不重收）。
+ */
+export async function maybeWaitInteractive(stepDef, changeName, stageName, { rlFactory = null } = {}) {
+  try {
+    if (!globalThis.__ssWaitInteractive) return
+    if (!stepDef) return
+    const { requiresUser } = await import('./prompt.js')
+    // prompt 正文在此不可得——四源三键优先（WAIT_MARKER_RE 源由 SS-META 渲染时已并入，直通用三键近似：
+    // 真需 wait 的步必有标记，纯正文标记步三段式照旧）
+    const needsUser = stepDef.requiresWait === true || stepDef.conditionalWait === true || stepDef.requiresConfirm === true
+    if (!needsUser) return
+    if (!process.stdin.isTTY || !process.stdout.isTTY) {
+      console.log('ℹ️  --wait-interactive 需要 TTY（当前非交互环境）——按 prompt 的 wait 指令走三段式')
+      return
+    }
+    // rlFactory 为测试缝（注入伪 readline）；生产路径用 node:readline/promises 真实 TTY
+    const rl = rlFactory
+      ? rlFactory()
+      : (await import('node:readline/promises')).createInterface({ input: process.stdin, output: process.stdout })
+    console.log('')
+    const answer = await rl.question('⌨️  本步需要你的输入（直通模式，回答后将自动 --continue --answer）：')
+    rl.close()
+    if (answer && answer.trim()) {
+      console.log(`📩 已接收，自动续行：sillyspec run auto --continue --answer "${answer.trim().slice(0, 60)}${answer.trim().length > 60 ? '…' : ''}" ...`)
+      // 复用既有 continue 路径：与 runCommand 的 --continue 同源（子进程自调避免递归锁）
+      const { execFileSync } = await import('node:child_process')
+      const binSelf = new URL('../bin/sillyspec.js', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')
+      try {
+        execFileSync(process.execPath, [binSelf, 'run', 'auto', '--continue', '--answer', answer.trim(), '--change', changeName], { stdio: 'inherit', cwd: process.cwd() })
+      } catch { /* continue 失败（非 waiting 态等）静默——回三段式由 agent 走 */ }
+    }
+  } catch (e) {
+    console.log(`ℹ️  wait 直通异常回退三段式：${e && e.message ? e.message : e}`)
+  }
+}
+
+
+/**
+ * printAutoCompletionSummary —— auto 流程收尾总结（change: 2026-09-08-auto-driver，D-005@v1，FR-04）。
+ * 挂点：--done 后 next==null 的自然收尾（:1726 区）+ :1616 重进入分支复用。纯 console 无新文件：
+ * 变更名/各阶段状态/tasks 勾选（readPlanCheckboxStatus）/产物存在清单/last-delta 模块清单（缺失跳过）。
+ */
+function printAutoCompletionSummary(pm, cwd, changeName, flowStages, specBase) {
+  try {
+    if (!changeName) return
+    const progress = pm.read(cwd, changeName)
+    console.log('')
+    console.log('═'.repeat(56))
+    console.log(`🏁 auto 流程收尾总结 — ${changeName}`)
+    for (const s of flowStages) {
+      const st = progress.stages?.[s]?.status || '未开始'
+      const icon = st === 'completed' ? '✅' : st === 'in-progress' ? '🔄' : '⬜'
+      console.log(`   ${icon} ${s}: ${st}`)
+    }
+    // tasks 勾选
+    try {
+      const changeDirCk = join((specBase || join(cwd, '.sillyspec')), 'changes', changeName)
+      const plan = pm.readPlanCheckboxStatus(changeDirCk)
+      if (plan && plan.total > 0) console.log(`   📋 任务勾选：${plan.checked}/${plan.total}`)
+    } catch { /* 勾选读取 fail-soft */ }
+    // 产物存在清单
+    const changeDirArt = join((specBase || join(cwd, '.sillyspec')), 'changes', changeName)
+    const artifacts = ['proposal.md', 'design.md', 'tasks.md', 'plan.md', 'verify-result.md', 'delta.md']
+    const found = artifacts.filter(a => existsSync(join(changeDirArt, a)))
+    if (found.length > 0) console.log(`   📁 产物：${found.join('、')}`)
+    // last-delta 模块清单（sidecar 缺失跳过）
+    try {
+      const runtimeRoot = join((specBase || join(cwd, '.sillyspec')), '.runtime')
+      const sidecarPath = join(runtimeRoot, 'last-delta.json')
+      if (existsSync(sidecarPath)) {
+        const sidecar = JSON.parse(readFileSync(sidecarPath, 'utf8'))
+        if (Array.isArray(sidecar.affectedModules) && sidecar.affectedModules.length > 0) {
+          console.log(`   🔁 涉及模块（最近 delta）：${sidecar.affectedModules.join('、')}`)
+        }
+      }
+    } catch { /* sidecar 读取 fail-soft */ }
+    console.log('═'.repeat(56))
+  } catch (e) {
+    console.log(`ℹ️  收尾总结渲染降级：${e && e.message ? e.message : e}`)
+  }
+}

@@ -185,7 +185,20 @@ export function collectStageWaitHistory(progress, stageName) {
 /**
  * 输出当前步骤的 prompt
  */
-export async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjectName, platformOpts = {}, prevStepAnswer = null, waitHistory = null) {
+/**
+ * requiresUser —— auto driver 元数据（change: 2026-09-08-auto-driver，D-002@v1）的四源判定纯函数：
+ * step.requiresWait / conditionalWait / requiresConfirm 三键（step 定义权威信号）+ WAIT_MARKER_RE 正文扫描
+ * （execute/verify 的 step 定义无三键，纯三源会漏真 wait 步）。全缺兜底 **false**——auto 默认语义是
+ * 继续驱动（Grill P1-①：保守 true 会让 execute/verify 逐步人工确认，推翻 FR-01）。
+ * 与 outputStep 内既有 mayNeedWait 计算同源（:1019 附近），仅多 requiresConfirm 一源。
+ */
+export function requiresUser(step, promptText) {
+  if (!step) return false
+  if (step.requiresWait === true || step.conditionalWait === true || step.requiresConfirm === true) return true
+  return WAIT_MARKER_RE.test(String(promptText || ''))
+}
+
+export async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjectName, platformOpts = {}, prevStepAnswer = null, waitHistory = null, autoMeta = null) {
   const step = steps[stepIndex]
   const total = steps.length
   // ── 越界防御 ──
@@ -1023,21 +1036,42 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
   // archive-batch-31-tool-notes ②：通用 --done 模板不带该 flag，agent 照抄执行撞
   // 「请添加 --confirm」确认门，误以为参数没带。
   const confirmFlag = step.requiresConfirm === true ? ' --confirm' : ''
+  // auto driver（2026-09-08-auto-driver D-002/P1-③）：auto 模式下命令一律 run auto 形态——
+  // 与 SS-META 的 doneCommand 同源（同一 cmdStage 变量），消灭「正文 run <stage> / 元数据 run auto」双命令
+  const cmdStage = autoMeta ? 'auto' : stageName
+  const doneCommand = `sillyspec run ${cmdStage} --done${confirmFlag}${changeFlag} --output "你的摘要"`
   if (requiresWait) {
     console.log(`本步骤必须等待用户输入，不能直接 --done：`)
-    console.log(`sillyspec run ${stageName} --wait --reason "${step.waitReason || '等待用户输入'}" --options "${(step.waitOptions || ['确认']).join(',')}"${changeFlag} --output "你的问题/方案摘要"`)
+    console.log(`sillyspec run ${cmdStage} --wait --reason "${step.waitReason || '等待用户输入'}" --options "${(step.waitOptions || ['确认']).join(',')}"${changeFlag} --output "你的问题/方案摘要"`)
     console.log(``)
     console.log(`用户回答后执行：`)
-    console.log(`sillyspec run ${stageName} --continue --answer "用户回答"${changeFlag}`)
+    console.log(`sillyspec run ${cmdStage} --continue --answer "用户回答"${changeFlag}`)
     console.log(``)
     console.log(`收到回答并完成本步骤总结后，再执行：`)
   } else if (mayNeedWait) {
     console.log(`如果需要用户决策（选择方案/确认设计等）：`)
-    console.log(`sillyspec run ${stageName} --wait --reason "${step.waitReason || '等待原因'}" --options "${(step.waitOptions || ['选项1', '选项2']).join(',')}"${changeFlag} --output "你的摘要"`)
+    console.log(`sillyspec run ${cmdStage} --wait --reason "${step.waitReason || '等待原因'}" --options "${(step.waitOptions || ['选项1', '选项2']).join(',')}"${changeFlag} --output "你的摘要"`)
     console.log(``)
     console.log(`如果不需要用户决策，正常完成：`)
   }
-  console.log(`sillyspec run ${stageName} --done${confirmFlag}${changeFlag} --input "用户原始需求/反馈" --output "你的摘要"`)
+  console.log(doneCommand + (autoMeta ? '' : ' --input "用户原始需求/反馈"'))
+
+  // ── SS-META 机器可读元数据块（change: 2026-09-08-auto-driver，D-002@v1，FR-01）──
+  // 仅 auto 模式（autoMeta 非空）渲染：单行 HTML 注释内 JSON，agent 低噪可读、脚本一行正则
+  // 可提取（<!--SS-META:(.*)-->）。requiresUser 四源见上方纯函数；doneCommand 与正文同源。
+  if (autoMeta) {
+    const meta = {
+      stage: stageName,
+      stepIndex: stepIndex + 1,
+      stepName: step.name,
+      requiresUser: requiresWait || mayNeedWait || step.requiresConfirm === true,
+      doneCommand,
+      waitHint: (requiresWait || mayNeedWait)
+        ? 'requiresUser=true：先与用户交互（wait/continue 或 --wait-interactive 直通），再 done'
+        : '直接执行任务后逐字跑 doneCommand',
+    }
+    console.log('<!--SS-META:' + JSON.stringify(meta) + '-->')
+  }
 }
 /**
  * 替换 prompt 文本中的路径根占位符 {SPEC_ROOT}/{DOCS_ROOT}/{PROJECTS_ROOT}/
