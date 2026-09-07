@@ -1591,6 +1591,10 @@ async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts = 
     if (stage === 'brainstorm') {
       const existingSteps = progress.stages?.brainstorm?.steps
       const isAutoModeSteps = existingSteps?.length === 4 && existingSteps?.[0]?.name === '进度确认与上下文加载'
+      // auto 表在位即早退（2026-09-08 E2E 实证 bug：此前仅 !isAutoModeSteps 重种后 return，
+      // auto 表存在时掉进下方通用 ensureStageSteps——主模式 8 步定义判 4 步 auto 表「漂移」
+      // 重种主模式表，与 getAutoSteps 渲染双轨互踩，进度永远回 step1）
+      if (isAutoModeSteps) return progress
       if (!isAutoModeSteps) {
         if (!progress.stages) progress.stages = {}
         progress.stages.brainstorm = {

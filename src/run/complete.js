@@ -21,6 +21,22 @@ import { existsSync, readFileSync, mkdirSync, writeFileSync, appendFileSync } fr
 import { writeAtomicSync } from '../fs-atomic.js'
 import { withFileLock } from '../quicklog.js'
 import { triggerSync, WAIT_MARKER_RE, getStageSteps, formatWaitOptions, resolveRuntimeRoot, getOrCreateMultiRepoContext, resolveChangeDir } from './shared.js'
+
+// auto 模式 brainstorm 步骤表感知解析（2026-09-08 E2E 实证 bug：--done/--wait 推进主模式 8 步表，
+// 与 runAutoMode getAutoSteps 的 4 步 auto 表双轨互踩——ensureAutoStage 判非 auto 表重种清零，
+// 进度永远回 step1）。DB 现存 brainstorm 表为 auto 形态（4 步+首名「进度确认与上下文加载」）时，
+// complete 路径与渲染路径同源用 brainstormAutoDef.steps。
+async function getStageStepsAutoAware(stageName, cwd, progress, specDir) {
+  const steps = await getStageSteps(stageName, cwd, progress, specDir)
+  if (stageName !== 'brainstorm') return steps
+  const existing = progress?.stages?.brainstorm?.steps
+  const isAutoTable = Array.isArray(existing) && existing.length === 4
+    && existing[0]?.name === '进度确认与上下文加载'
+  if (!isAutoTable) return steps
+  const { definition: brainstormAutoDef } = await import('../stages/brainstorm-auto.js')
+  return brainstormAutoDef.steps
+}
+
 import { executeScanPreflight, executeScanPostcheck, computeScanProfile, executeScanDetectProjects, executeScanResumeCheck, executeScanFinalize } from './scan-profile.js'
 import { executeProgressConfirm } from './progress-confirm.js'
 import { AUXILIARY_STAGES } from '../constants.js'
@@ -222,7 +238,7 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
   }
 
   // ── requiresWait 硬门控 ──
-  const defStepsForCurrent = await getStageSteps(stageName, cwd, progress, platformOpts?.specRoot || null)
+  const defStepsForCurrent = await getStageStepsAutoAware(stageName, cwd, progress, platformOpts?.specRoot || null)
   // def↔DB 一致性守卫（坑 execute-step-table-drift，2026-08-20 实证）：runCommand 入口已按名
   // 重播种（ensureStageSteps），但同一命令进程内 plan.md 若再次被改（或绕过 runCommand 直调
   // completeStep 的路径），def 与 DB 步数错位会让 currentIdx 的门控/prompt 施加到错误的步骤上
@@ -639,7 +655,7 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
     }
   }
 
-  const defSteps = await getStageSteps(stageName, cwd, progress, platformOpts?.specRoot || null)
+  const defSteps = await getStageStepsAutoAware(stageName, cwd, progress, platformOpts?.specRoot || null)
   console.log(`✅ Step ${currentIdx + 1}/${steps.length} 完成：${steps[currentIdx].name}\n`)
 
   // Workflow post_check（W6 Step6 抽至 complete-handlers.js handleWorkflowPostCheck）
@@ -1040,7 +1056,7 @@ export async function waitStep(pm, progress, stageName, cwd, outputText, waitRea
 
   // maxWaitRounds 硬上限：达到后拒绝继续 --wait
   const currentStep = stageData.steps[currentIdx]
-  const defSteps = await getStageSteps(stageName, cwd, progress, platformOpts?.specRoot || null)
+  const defSteps = await getStageStepsAutoAware(stageName, cwd, progress, platformOpts?.specRoot || null)
   const stepDef = defSteps?.[currentIdx] || {}
   const maxWaitRounds = currentStep.maxWaitRounds ?? stepDef.maxWaitRounds
   const currentWaitRound = currentStep.waitRound || 0
@@ -1154,7 +1170,7 @@ export async function continueStep(pm, progress, stageName, cwd, answer, options
   } else {
     currentIdx = waitingSteps[0].idx
   }
-  const defSteps = await getStageSteps(stageName, cwd, progress, platformOpts?.specRoot || null)
+  const defSteps = await getStageStepsAutoAware(stageName, cwd, progress, platformOpts?.specRoot || null)
   const currentStepDef = defSteps?.[currentIdx] || {}
   const currentStep = stageData.steps[currentIdx]
   const isRepeatableWait = currentStepDef.repeatableWait === true || currentStep.repeatableWait === true
@@ -1341,7 +1357,7 @@ export async function skipStep(pm, progress, stageName, cwd, changeName, platfor
     process.exit(1)
   }
 
-  const defSteps = await getStageSteps(stageName, cwd, progress, platformOpts?.specRoot || null)
+  const defSteps = await getStageStepsAutoAware(stageName, cwd, progress, platformOpts?.specRoot || null)
   const stepDef = defSteps ? defSteps[currentIdx] : null
   if (stepDef && !stepDef.optional) {
     console.error(`❌ 步骤 "${steps[currentIdx].name}" 不可跳过`)

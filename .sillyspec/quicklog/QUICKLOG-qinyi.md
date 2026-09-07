@@ -304,3 +304,12 @@
 根因：#56 实证：verify 全 --done 完成后归档报 execute→archive；唯一写点在裸 run 入口，直达完成路径漏写
 方案：三处完成持久化点统一 progress.currentStage = stageName（主阶段；complete.js ×2 + stage.js noAI）；辅助阶段不写与入口同语义；#56 根因订正（sync 误诊撤销）
 结果：stage-completion-currentstage 4 断言全过（钉阶段/归档放行/辅助不写）；全量 369 过 0 失败 + lint 484 文件 0 告警
+
+## ql-20260908-003-1ec5 | 2026-09-08 07:37:56 | auto 双轨步骤表互踩修复——auto 模式进度不再回 step1
+状态：已完成
+关联变更：（无）
+文件：src/run/command.js, src/run/complete.js, test/auto-dualtrack-brainstorm.test.mjs, docs/sillyspec/platform-interface-map.md
+需求：auto 双轨步骤表互踩修复——auto 模式进度不再回 step1
+根因：真实需求走 /sillyspec:auto 的 E2E 实证：run auto --done 推进主模式 8 步表而渲染走 auto 4 步表，ensureAutoStage 判非 auto 表重种清零——进度永远回 step1；wait/continue 同踩
+方案：ensureAutoStage auto 表早退 + getStageStepsAutoAware（complete 四处）；auto-dualtrack-brainstorm 3 断言锁行为
+结果：dualtrack 3 断言全过；全量 370 过 0 失败 + lint 485 文件 0 告警；doc-ref 1 处漂移 --fix 自愈（回执第三次实战）；手工实测 Step 1/4 完成且表保持
