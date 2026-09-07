@@ -7,7 +7,18 @@ import { mkdirSync, existsSync, readdirSync, readFileSync } from 'fs';
 import { join, resolve, basename } from 'path';
 import { writeAtomicSync } from '../fs-atomic.js';
 import { runValidators } from '../stage-contract.js';
+import { QUICK_SID_RE } from '../run/shared.js';
 import { VALID_STAGES, STAGE_LABELS, STAGE_ORDER, MAIN_FLOW_ORDER, SPEC_DIR_NAME, CURRENT_VERSION, STALL_WARN_DAYS, emptyStage } from './shared.js';
+
+// quick 会话行（quick-<8hex>）按设计无实体 changes/ 目录（progress.js initChange 跳过建目录），
+// 「DB active + changes/ 无同名目录」的 ghost 判定对它是类别错误——进行中的 quick 从写库那
+// 一刻起即命中误报（2026-09-07 quick-inflight-ghost-misjudge，面板「一键清理」清了又长：
+// 每次清理都成功，新 ghost 是清理后才启动的 quick）。show 与 overview 统一经此判定排除。
+// 注意：排除的只是「判定」，doctor --cleanup-ghosts 仍保留 quick 行归档能力（QUICKLOG 已
+// 完成但 DB 行未注销的收尾中断形态，那是兜底出口，不在此排除）。
+function _isGhostChange(changesRoot, cn) {
+  return !QUICK_SID_RE.test(cn) && !existsSync(join(changesRoot, cn));
+}
 
 /**
  * 归一化步骤的已记录等待回答（show 渲染用，跨会话恢复数据源）。
@@ -209,7 +220,7 @@ export class StageMachine {
     const pendingConflicts = this._listPendingConflicts(this.pm._getSpecDir(cwd));
     for (const cn of changes) {
       const data = this.pm.read(cwd, cn);
-      const dirMissing = !existsSync(join(changesRoot, cn));
+      const dirMissing = _isGhostChange(changesRoot, cn);
       if (!data) {
         console.log(`  📂 ${cn} — (无法读取)${dirMissing ? ' ⚠️ 目录缺失（残留记录，sillyspec doctor --cleanup-ghosts --confirm 可归档清理）' : ''}`);
         continue;
@@ -272,7 +283,7 @@ export class StageMachine {
     const list = [];
     for (const cn of changes) {
       const data = this.pm.read(cwd, cn);
-      const dirMissing = !existsSync(join(changesRoot, cn));
+      const dirMissing = _isGhostChange(changesRoot, cn);
       const entry = {
         name: cn,
         readable: !!data,

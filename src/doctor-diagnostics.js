@@ -26,7 +26,7 @@ import { existsSync, statSync, readFileSync, readdirSync, mkdirSync, writeFileSy
 import { join } from 'path';
 import jsYaml from 'js-yaml';
 import { CHECK_SEVERITY } from './constants.js';
-import { checkPlatformManaged, isSelfReferentialSpecRoot, PLATFORM_MANAGED_FILENAME } from './run/shared.js';
+import { checkPlatformManaged, isSelfReferentialSpecRoot, PLATFORM_MANAGED_FILENAME, QUICK_SID_RE } from './run/shared.js';
 
 // db 角色标签
 const DB_ROLE = {
@@ -424,7 +424,12 @@ function detectChangeDbConsistency(cwd, pointer, multiDb) {
     : [];
   const dirSet = new Set(dirChanges);
   const activeSet = new Set(activeNames);
-  const ghostRows = activeNames.filter((n) => !dirSet.has(n));
+  // ghost 判定排除 quick 会话行（quick-<8hex>）：initChange 对 quick 特意不建 changes/ 目录
+  // （进度存 SQL 不需要实体目录），「active + 无目录」是它的设计形态而非残留——不排除则
+  // 进行中 quick 从写库起即误报（2026-09-07 quick-inflight-ghost-misjudge）。与
+  // stage-machine overview/show 同源（同正则）；cleanupGhostChanges 不在此排除——
+  // 「QUICKLOG 已完成但 DB 行仍 active」的收尾中断行仍由它归档（兜底出口）。
+  const ghostRows = activeNames.filter((n) => !dirSet.has(n) && !QUICK_SID_RE.test(n));
   const orphanDirs = dirChanges.filter((n) => !activeSet.has(n));
   // SS-2b：空壳——db active + 目录存在但 0 文件 + last_active 超过 7 天。有目录所以
   // 逃过 ghostRows 的「无目录」判定（2026-08-15 清理时 6 个空壳即此漏网形态）。
@@ -1059,6 +1064,10 @@ export async function cleanupGhostChanges({ cwd, specDir = null, confirm = false
     db = openDatabase(dbPath, { readOnly: !confirm });
     // last_active 与 name 一起取：空壳判定需要时间门槛（见 isStaleLastActive）。
     const activeRows = db.prepare("SELECT name, last_active FROM changes WHERE status='active'").all();
+    // 有意不排除 quick 会话行（与 D4 ghost 判定不对称是设计，2026-09-07 quick-inflight-ghost
+    // -misjudge 文档明示）：quick 按设计无 changes/ 目录，D4/overview 豁免其 ghost 误报；
+    // 而本函数是「QUICKLOG 已完成但 DB 行仍 active」收尾中断形态的兜底归档出口，保留归档
+    // 能力。归档仅翻 status（可逆），进行中 quick 被误归档时其 --done 收尾链不受影响。
     const ghosts = activeRows.filter((r) => !dirSet.has(r.name)).map((r) => r.name);
     const emptyShells = activeRows
       .filter((r) => dirSet.has(r.name) && isStaleLastActive(r.last_active) && dirHasNoFiles(join(changesDir, r.name)))

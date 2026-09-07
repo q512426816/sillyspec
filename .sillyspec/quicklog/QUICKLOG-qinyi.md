@@ -188,3 +188,22 @@
 方案：spec-sync.js 新增 describeSyncError(err)（AbortError→总预算熔断让路人话 / TimeoutError→单请求超时 / 其余原样，口径同 sync.js fetchJson 先例），接线拉清单/同步两处 catch；run/shared.js 新增 resolveSyncTotalTimeoutMs()，SILLYSPEC_SYNC_TIMEOUT_MS 整数毫秒 [1000,120000] 非法回退 8s，raceWithAbort 默认参数改逐次求值 env 即时生效；platform-interface-map.md 六处 shared.js 行号重锚 + §7 熔断条目补口径；troubleshooting.md 追加条目 #54
 结果：npm test 358/358 绿（含新测试 spec-sync-abort-classification 16 断言：分类单元 + 外部 abort 集成 warn 不露英文串 + env 合法性九宫格 + env=1000 熔断实测 1034ms 生效）；doc-ref-check 87 引用全通过；npm run lint 472 文件 0 告警、未引用导出 0 项
 审计：⚖️ 归属切分：3 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：docs/sillyspec/platform-interface-map.md, docs/sillyspec/troubleshooting.md, test/spec-sync-abort-classification.test.mjs
+
+## ql-20260907-002-b9d4 | 2026-09-07 10:45:12 | ghost 判定排除 quick 会话行——overview/show 与 doctor D4 同源豁免
+状态：已完成
+关联变更：（无）
+文件：
+- src/progress/stage-machine.js（新增 _isGhostChange（QUICK_SID_RE 豁免 quick 行），show/overview 两处 dirMissing 同源换用）
+- src/doctor-diagnostics.js（D4 ghostRows 排除 quick 行；cleanupGhostChanges 有意保留 quick 归档能力+现场注释）
+- test/quick-ghost-exclusion.test.mjs（新建 4 用例——三判定豁免 + cleanup 保留归档契约）
+- .sillyspec/docs/sillyspec/modules/machine-interface.md（ghost 语义补注 quick 豁免）
+- .sillyspec/docs/sillyspec/modules/progress.changelog.md（补录本条）
+- .sillyspec/docs/sillyspec/modules/core-engine.changelog.md（补录本条）
+- docs/sillyspec/file-lifecycle.md（updated_at 重锚+批次注）
+- docs/sillyspec/architecture-4a.md（docs check --fix 行号重锚 2 处（本改动漂移））
+- docs/sillyspec/prompt-control-debt.md（docs check --fix 行号重锚（他会话在途漂移顺带））
+- docs/sillyspec/review-2026-08-20-full-audit.md（docs check --fix 行号重锚（他会话在途漂移顺带））
+需求：ghost 判定排除 quick 会话行——overview/show 与 doctor D4 同源豁免，cleanup 保留归档兜底
+根因：initChange 对 quick-<hex8> 会话行特意不建 changes/ 实体目录（进度存 SQL），而 ghost 判定=DB active 且 changes/ 无目录、未排除 quick 行——进行中 quick 从写库起即误报 ghost，quick 收尾链中断（QUICKLOG 已完成、行未注销）则持久误报，面板观感「清了又长」（multi-agent-platform/docs/sillyspec/2026-09-07-quick-inflight-ghost-misjudge.md 实证）
+方案：按该文档建议修法：stage-machine.js 新增模块级 _isGhostChange（QUICK_SID_RE 豁免 quick 行），show 汇总与 overview 两处 dirMissing 同源换用；doctor-diagnostics.js D4 ghostRows 过滤 quick 行（QUICK_SID_RE 入既有 run/shared.js import）；cleanupGhostChanges 有意不动——保留「QUICKLOG 已完成但 DB 行仍 active」收尾中断形态的归档兜底（现场注释钉住不对称设计）；machine-interface 模块卡 ghost 语义补注、progress/core-engine changelog 补录、file-lifecycle updated_at 重锚。--force-baseline 理由：stage-machine.js 属受保护核心文件，本次为 ghost 判定条件收窄（quick 行豁免），不改数据写路径，全量测试 359/0 + 新契约测试 4 用例验证；--allow-new：新增专项测试文件
+结果：新增 test/quick-ghost-exclusion.test.mjs 4 用例（红态验证 3 败 1 过，修后全绿：overview envelope/show 渲染/D4 ghostRows 三判定豁免 + cleanup 保留归档契约）；全量 npm test 359 文件 0 失败；lint 473 文件 0 告警；docs check 550/550 全绿（--fix 重锚 4 处行号漂移）；真实仓实证 progress show --json quick 行 ghost=false、doctor D4 pass
