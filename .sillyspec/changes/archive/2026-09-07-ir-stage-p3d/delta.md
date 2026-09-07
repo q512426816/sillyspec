@@ -1,5 +1,5 @@
 ---
-generated_at: 2026-09-06T23:07:24.930Z
+generated_at: 2026-09-06T23:47:43.338Z
 sources_reconcile: 命中（ran_at=2026-09-06T23:07:15.449Z，verify-runs 按 change 过滤取最新）
 sources_verify_facts: 命中
 sources_module_map: 命中
@@ -14,10 +14,11 @@ sources_decisions: 命中
 
 | 模块 | status | paths+core_files 条目数 |
 |---|---|---|
+| docs-consistency | active | 7 |
 | cli-entry | active | 5 |
 | runtime | active | 5 |
 
-未匹配文件（不归属任何模块 paths，人工裁量）：src/archive-delta.js、src/design-facts.js、test/archive-delta.test.mjs、.sillyspec/docs/sillyspec/modules/docs-consistency.md、.sillyspec/docs/sillyspec/modules/runtime.md
+未匹配文件（不归属任何模块 paths，人工裁量）：test/archive-delta.test.mjs、.sillyspec/docs/sillyspec/modules/docs-consistency.md、.sillyspec/docs/sillyspec/modules/runtime.md
 
 ### 声明域并集（decisions.md 模块域）
 
@@ -29,8 +30,8 @@ core-engine、runtime、cli-entry
 
 | 交付文件 | 模块归属 |
 |---|---|
-| src/archive-delta.js | —（未匹配） |
-| src/design-facts.js | —（未匹配） |
+| src/archive-delta.js | docs-consistency |
+| src/design-facts.js | docs-consistency |
 | src/index.js | cli-entry |
 | src/run/complete-handlers.js | runtime |
 | test/archive-delta.test.mjs | —（未匹配） |
@@ -61,8 +62,6 @@ core-engine、runtime、cli-entry
 
 （引自变更目录 module-impact.md，人工维护为准）
 
-## 更新结果
-
 | 目标 | 操作 | 状态 |
 |------|------|------|
 | `modules/docs-consistency.md` | 更新模块卡（archive-delta + design-facts export） | done |
@@ -72,8 +71,8 @@ core-engine、runtime、cli-entry
 
 ### scan 刷新建议
 
-- `sillyspec scan facts` 下次刷新重点关注：cli-entry、runtime（共 2 个模块）
-- 未匹配文件补录提示：以下文件未命中任何模块 paths——建议补录 _module-map.yaml（新文件）或核对归属（人工裁量）：src/archive-delta.js、src/design-facts.js、test/archive-delta.test.mjs、.sillyspec/docs/sillyspec/modules/docs-consistency.md、.sillyspec/docs/sillyspec/modules/runtime.md
+- `sillyspec scan facts` 下次刷新重点关注：docs-consistency、cli-entry、runtime（共 3 个模块）
+- 未匹配文件补录提示：以下文件未命中任何模块 paths——建议补录 _module-map.yaml（新文件）或核对归属（人工裁量）：test/archive-delta.test.mjs、.sillyspec/docs/sillyspec/modules/docs-consistency.md、.sillyspec/docs/sillyspec/modules/runtime.md
 
 ### 端点基线提示
 

@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-07-endpoint-baseline",
+  "generatedAt": "2026-09-07T00:19:56.452Z",
+  "probes": {
+    "probe1": {
+      "command": "sillyspec verify-probes --change 2026-09-07-endpoint-baseline",
+      "metrics": {
+        "matches": 12,
+        "skippedFiles": 0,
+        "worktreeHits": 0,
+        "globEntries": 0
+      }
+    },
+    "probe3": {
+      "command": "sillyspec verify-probes --change 2026-09-07-endpoint-baseline",
+      "metrics": {
+        "tasks": 4,
+        "hasTest": 4
+      }
+    },
+    "probe5": {
+      "command": "sillyspec verify-probes --change 2026-09-07-endpoint-baseline",
+      "metrics": {
+        "backendEndpoints": 2,
+        "frontendCalls": 1
+      }
+    },
+    "probe6": {
+      "command": "sillyspec verify-probes --change 2026-09-07-endpoint-baseline",
+      "metrics": {
+        "deletions": 0,
+        "unavailable": false
+      }
+    }
+  }
+}

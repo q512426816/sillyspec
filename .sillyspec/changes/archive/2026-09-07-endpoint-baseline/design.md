@@ -44,7 +44,7 @@ P3d 立项时实证：contract-matrix 只有 provider 完成后的 endpoints.jso
 
 - **CLI**（index.js）：`endpoints baseline --change <名> [--spec-dir] [--json]`（endpoints 已有子命令族——`endpoints extract` 先例，照其 case 结构挂兄弟分支）；--json 输出 {command,change,ok,written,count,path}。
 - **prompt 指引**（src/stages/execute.js Step 3 确认 worktree 路径）：操作清单加一行「涉及后端端点的变更：跑 `sillyspec endpoints baseline --change <change-name>` 拍变更前基线（幂等，已拍过跳过）——归档时用于计算端点增删」。
-- **delta 第五源**（src/archive-delta.js）：collectDeltaSources 增 `endpointBaseline`（读基线文件，fail-soft null）与现算 currentEndpoints（capture 同口径抽取，不落盘）；buildDeltaReport 的 After 段：基线+现算可得 → 「端点增删」节（added/removed 表，空则「无增删」一行）；基线缺失 → 既有「独立立项提示」条件行改为「无基线（变更未拍 baseline）」降级注记——**门控保留 backendEndpoints>0（Gap-4：无端点变更不收噪音注记）**。
+- **delta 第五源**（src/archive-delta.js）：collectDeltaSources 增 `endpointBaseline`（读基线文件，fail-soft null）与现算 currentEndpoints（capture 同口径抽取，不落盘）；buildDeltaReport 的 After 段：基线+现算可得 → 「端点增删」节（added/removed 表，空则「无增删」一行）；基线缺失 → 既有「独立立项提示」条件行改为「无基线（变更未拍 baseline）」降级注记——**门控保留 backendEndpoints>0（Gap-4：无端点变更不收噪音注记）；标题沿用「### 端点基线提示」防断言面扩大（plan 审查钉死）；test/archive-delta.test.mjs:296-298 旧提示断言随本变更更新至降级口径**。
 
 ## 文件变更清单
 
@@ -54,6 +54,7 @@ P3d 立项时实证：contract-matrix 只有 provider 完成后的 endpoints.jso
 | 修改 | src/index.js | endpoints baseline 子命令 case |
 | 修改 | src/stages/execute.js | Step 3 prompt 基线指引一行 |
 | 修改 | src/archive-delta.js | 第五源采集 + After 段端点增删节 |
+| 修改 | test/archive-delta.test.mjs | :296-298 旧提示断言更新至降级口径（plan 审查补） |
 | 新增 | test/endpoint-baseline.test.mjs | 抽取/幂等/diff 归一/降级/delta 集成断言 |
 
 **字段数据流标注**（新产物 endpoint-baselines/<change>.json）：producer = CLI（endpoints baseline 命令，agent 按 execute Step3 指引触发）→ 归一化 = diffEndpointSets 的 key 归一（method 大写/去尾斜杠）→ consumer = archive-delta 第五源（归档时现算对比）。contract-matrix/verify 探针不消费该文件（零触碰）。

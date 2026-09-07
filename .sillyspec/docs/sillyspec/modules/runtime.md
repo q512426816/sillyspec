@@ -102,4 +102,5 @@ ProgressManager.alignExecuteToPlan(cwd, changeName, specBase, {confirm})
 ## 人工备注
 <!-- MANUAL_NOTES_START -->
 <!-- MANUAL_NOTES 区已迁出至 runtime.changelog.md（手工批次，2026-09-07）——新条目追加到 sidecar，勿写回本卡 -->
+<!-- 2026-09-07-endpoint-baseline | （无 runtime 文件改动——指引在 stages/cli-entry 侧） -->
 <!-- MANUAL_NOTES_END -->

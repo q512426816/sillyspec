@@ -101,6 +101,7 @@ SillySpec CLI — 规范驱动开发工具包
   sillyspec verify-probes --change <name> [--init]  verify 机械探针（TODO 标记/测试覆盖/API 对账/删除对账）；--init 生成 verify-result.md 骨架
   sillyspec module-impact --change <name>       生成 module-impact.md 骨架（文件×模块归属按 module-map 预填 + 未匹配清单）
   sillyspec endpoints extract --change <name> [--task task-NN | --all-tasks] [--dir <dir>|--files <a.py,b.js>]  静态扫描路由装饰器生成 endpoints.json
+  sillyspec endpoints baseline --change <name> [--spec-dir <path>] [--json]  拍变更前端点基线（幂等不覆盖；worktree 内跑自动锚主仓；归档 delta 端点增删 before 侧）
   sillyspec scan-fix-headers [--project <名>]   scan 文档补 author/created_at header（幂等）
   sillyspec plan-adopt-waves --change <名> [--dry-run]   plan.md Wave 段一键重排为 depends_on 拓扑分组（同步任务总表 W 列，幂等）
   sillyspec workspace add <名> <路径> [--role] [--repo] | remove <名> | status   多项目工作区登记与状态探测
@@ -959,8 +960,72 @@ async function main() {
       // 产生大量假 missing）：聚合模式——逐 task 卡提取，各自落 contract-artifacts/<change>/<task>/，
       // 与 verifyApiParity 的聚合读侧（contract-artifacts/<change>/*/endpoints.json 全量并集）对齐。
       const epSub = filteredArgs[1];
+      // 子分发（变更 2026-09-07-endpoint-baseline task-02）：baseline（变更前基线）+ extract（原样）。
+      if (epSub === 'baseline') {
+        // 端点基线（D-002 gap-1）：变更起点全仓现扫端点集快照 → .runtime/endpoint-baselines/
+        // <change>.json（幂等，已拍过不覆盖——首次跑即变更前状态，重跑保持原快照）。归档 delta
+        // 端点增删的 before 侧；扫描/落盘在 endpoint-baseline.js 纯函数，此处只做参数解析 +
+        // worktree 主仓锚定 + 输出。
+        const ebChangeIdx = args.indexOf('--change');
+        const ebChange = ebChangeIdx >= 0 && args[ebChangeIdx + 1] ? args[ebChangeIdx + 1] : null;
+        if (!ebChange) {
+          console.error('用法: sillyspec endpoints baseline --change <name> [--spec-dir <path>] [--json]\n  拍变更前端点基线（全仓现扫，幂等已拍过不覆盖）→ .runtime/endpoint-baselines/<change>.json；归档 delta 端点增删的 before 侧。\n  execute worktree 内跑：扫描根与落点自动锚定主仓（变更前代码在主仓；worktree 内是交付态且其 .runtime 随清理丢失）');
+          process.exit(2);
+        }
+        assertSafeChangeName(ebChange, '--change 变更名');
+        // worktree 主仓锚定（D-002 gap-1 关键）：cwd 在 execute worktree 内时——
+        // ① 扫描 cwd 若保持 worktree：扫到的是 baseline 检出 + 本变更改动（非「变更前」端点集）；
+        // ② runtimeRoot 若随 cwd 落 worktree 副本 .runtime：基线随 worktree 清理静默丢失。
+        // 判据同 resolveEffectiveDir（P1-1）/ worktree.js _resolveMainRepoRoot：--git-dir ≠
+        // --git-common-dir 且非 submodule = linked worktree，common-dir（可能是相对路径，须相对
+        // dir 绝对化）父目录即主仓根 → 扫描根与 spec 解析都锚过去（--spec-dir 显式指定仍优先）。
+        let ebScanCwd = dir;
+        let ebSpecBase = resolvePlatformSpecDir(dir, specDir) || join(dir, '.sillyspec');
+        // --json 纪律（design §8）：机器输出模式下人类提示走 stderr，stdout 只留最终 JSON
+        const ebNote = (msg) => { (json ? console.error : console.log)(msg); };
+        try {
+          const gd = git(dir, ['rev-parse', '--git-dir']);
+          const gcd = git(dir, ['rev-parse', '--git-common-dir']);
+          const superProj = git(dir, ['rev-parse', '--show-superproject-working-tree']);
+          if (gd && gcd && gd !== gcd && !superProj) {
+            const ebMainRoot = dirname(resolve(dir, gcd));
+            if (ebMainRoot !== dir && existsSync(ebMainRoot)) {
+              ebNote(`⚠️ cwd 在 linked worktree 内，基线扫描根与落点已锚定主仓: ${ebMainRoot}（变更前代码在主仓；worktree 内是交付态且其 .runtime 随清理丢失，防基线静默失效）`);
+              ebScanCwd = ebMainRoot;
+              ebSpecBase = resolvePlatformSpecDir(ebMainRoot, specDir) || join(ebMainRoot, '.sillyspec');
+            }
+          }
+        } catch { /* git 不可用/非仓库 → 不锚定，按原 cwd 继续 */ }
+        // 终局兜底（同下方 extract 分支 detectWorktreeSpecDrift 用法，无论上面是否已锚定都跑：
+        // --spec-dir 显式指向 worktree 副本 spec 时，上面重算 resolvePlatformSpecDir 仍原样
+        // 返回该显式路径）——spec 命中副本 → 锚回主仓，防 runtimeRoot 落副本 .runtime。
+        const ebDrift = detectWorktreeSpecDrift(ebSpecBase);
+        if (ebDrift) {
+          ebNote(`⚠️ 已自动锚定主仓 spec: ${ebDrift.mainSpecBase}（基线落主仓；当前 spec 命中 worktree 副本 ${ebDrift.changeName}，流程继续）`);
+          ebSpecBase = ebDrift.mainSpecBase;
+        }
+        const ebRuntimeRoot = (await import('./run/shared.js')).resolveRuntimeRoot({ specRoot: specDir }, ebSpecBase);
+        const { captureEndpointBaseline } = await import('./endpoint-baseline.js');
+        const ebResult = captureEndpointBaseline({ cwd: ebScanCwd, changeName: ebChange, runtimeRoot: ebRuntimeRoot });
+        if (json) {
+          console.log(JSON.stringify({ command: 'endpoints-baseline', change: ebChange, ok: !ebResult.error, ...ebResult }, null, 2));
+          if (ebResult.error) process.exit(1);
+          break;
+        }
+        if (ebResult.error) {
+          console.error(`❌ 端点基线拍摄失败: ${ebResult.error}`);
+          process.exit(1);
+        }
+        if (!ebResult.written) {
+          console.log(`ℹ️  端点基线已存在，跳过（幂等不覆盖）: ${join(ebRuntimeRoot, 'endpoint-baselines', `${ebChange}.json`)}`);
+          break;
+        }
+        console.log(`✅ 已拍变更前端点基线（${ebResult.count} 个端点）→ ${ebResult.path}`);
+        console.log('   幂等：已拍过不覆盖（重跑保持首次快照）；归档 delta 用它计算端点增删（before 侧）。');
+        break;
+      }
       if (epSub !== 'extract') {
-        console.error('用法: sillyspec endpoints extract --change <name> [--task task-NN | --all-tasks] [--dir <backendRoot> | --files <a.py,b.js...>] [--spec-dir <path>]\n  静态扫描后端路由装饰器生成 endpoints.json（FastAPI/Express/Spring）；verify 探针 5 消费。\n  --all-tasks：聚合逐 task 卡 allowed_paths 各自提取（对账口径与探针 5 聚合读侧一致，推荐）。\n  execute worktree 模式：allowed_paths 自动按 worktree 根解析，产物恒落主仓 spec（坑 endpoints-extract-worktree-pitfalls）');
+        console.error('用法: sillyspec endpoints extract --change <name> [--task task-NN | --all-tasks] [--dir <backendRoot> | --files <a.py,b.js...>] [--spec-dir <path>]\n  静态扫描后端路由装饰器生成 endpoints.json（FastAPI/Express/Spring）；verify 探针 5 消费。\n  --all-tasks：聚合逐 task 卡 allowed_paths 各自提取（对账口径与探针 5 聚合读侧一致，推荐）。\n  execute worktree 模式：allowed_paths 自动按 worktree 根解析，产物恒落主仓 spec（坑 endpoints-extract-worktree-pitfalls）\nsillyspec endpoints baseline --change <name> [--spec-dir <path>] [--json]\n  拍变更前端点基线（全仓现扫，幂等已拍过不覆盖）→ .runtime/endpoint-baselines/<change>.json；归档 delta 端点增删的 before 侧。worktree 内跑自动锚定主仓。');
         process.exit(2);
       }
       const epChangeIdx = args.indexOf('--change');

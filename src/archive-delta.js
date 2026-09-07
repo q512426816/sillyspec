@@ -2,28 +2,38 @@
  * archive-delta — 归档变更 delta 聚合器（Before/Delta/After 三段式 delta.md 纯函数）
  * （change: 2026-09-07-ir-stage-p3d，task-01，D-001@v1/D-002@v1/D-003@v1）
  *
- * 职责（设计文档「总体方案」的四源采集 fail-soft + 三段式渲染，CLI/archive 接线在 task-02）：
- *   1. collectDeltaSources({ changeDir, specRoot, project, runtimeRoot })：四源采集——
+ * 职责（设计文档「总体方案」的五源采集 fail-soft + 三段式渲染，CLI/archive 接线在 task-02）：
+ *   1. collectDeltaSources({ changeDir, specRoot, project, runtimeRoot, cwd })：五源采集——
  *      ①reconcile：runtimeRoot/verify-runs/<ts>/reconcile-result.json 按 ts 倒序、change 字段
  *      过滤后取最新（R-01 跨变更串台防护：不同变更的 run 混存于同一 verify-runs/）；
  *      全无命中 → runtimeRoot/apply-pathspec-<change>.txt 逐行交付清单兜底（D-003，reconcile=null）。
  *      ②verifyFacts：changeDir/verify-facts.json（JSON.parse fail-soft → null）。
  *      ③moduleMap：复用 design-facts loadModuleMap；归属推导复用 deriveActualModules（P3d 导出）。
  *      ④decisions：changeDir/decisions.md 文本 → parseDecisionDomains（null-safe，文件缺 → null）。
+ *      ⑤endpointBaseline + currentEndpoints（change: 2026-09-07-endpoint-baseline，task-03）：
+ *      基线 runtimeRoot/endpoint-baselines/<change>.json（readJsonSafe fail-soft → null）；
+ *      现算 scanBackendEndpoints(scanRoot)——capture 同口径但不落盘（scanRoot=cwd 显式传入，
+ *      缺省 dirname(specRoot)：本地模式 specRoot=<repoRoot>/.sillyspec → 即主仓根），异常 → null。
  *   2. buildDeltaReport(...)：三段式 md（D-002）——Before（受影响模块 map 注册摘要 + 声明域并集）/
  *      Delta（交付文件×模块归属表 + missing/undeclared 差集附注 + 决策清单 + 探针 metrics 摘要）/
- *      After（module-impact.md「更新结果」表引用 + scan 刷新建议 + 端点基线独立立项提示）。
+ *      After（module-impact.md「更新结果」表引用 + scan 刷新建议 + 端点基线提示节）。
  *      缺源逐段降级注记（「（无 X：原因）」），不因缺源失败（兼容策略：存量变更仍生成）。
  *
- * 端点 before/after 基线不做（D-001@v1 非目标）——probe5 backendEndpoints > 0 时 After 段
- * 仅出一行独立立项提示，不含端点增删段。
+ * 端点基线提示节（2026-09-07-endpoint-baseline Wave2）：门控沿用 probe5 backendEndpoints>0
+ * （Gap-4：无端点变更不收噪音注记，条件不动防断言面扩大），节标题沿用「### 端点基线提示」；
+ * 节内三态——基线+现算可得 → diffEndpointSets 增删表（added/removed 各自格行，changed 不配对
+ * 天然呈独立行；空 → 「无增删」一行）；基线缺失 → 「无基线（变更未拍 baseline）」降级注记
+ * （替代 P3d 旧「独立立项」提示行）；基线在但现算不可得 → 现算失败降级注记。
  *
- * 依赖方向（单向防环）：archive-delta → design-facts / modules，两者均不反向 import 本模块。
+ * 依赖方向（单向防环）：archive-delta → design-facts / modules / endpoint-baseline /
+ * endpoint-extractor，被依赖者均不反向 import 本模块。
  */
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
-import { basename, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { parseDecisionDomains, loadModuleMap, deriveActualModules } from './design-facts.js'
 import { parseModuleMapSimple } from './modules.js'
+import { scanBackendEndpoints } from './endpoint-extractor.js'
+import { diffEndpointSets } from './endpoint-baseline.js'
 
 // ---------------------------------------------------------------------------
 // 小工具（全部 fail-soft：读不到/解析失败 → null / []，不抛出）
@@ -76,7 +86,8 @@ function loadModuleStatuses(specRoot, project) {
   return st
 }
 
-/** 提取 module-impact.md「## 更新结果」小节正文（到下一 `## ` 标题或文末）；无文件/无小节 → null */
+/** 提取 module-impact.md「## 更新结果」小节正文（不含标题行本身，到下一 `## ` 标题或文末；
+ *  引用正文嵌入 After 段 H3 小节下，原 H2 标题混入会破坏标题层级）；无文件/无小节 → null */
 function extractUpdateResultSection(mdPath) {
   const text = readTextSafe(mdPath)
   if (text === null) return null
@@ -84,8 +95,8 @@ function extractUpdateResultSection(mdPath) {
   const start = lines.findIndex(l => /^##\s+更新结果/.test(l))
   if (start < 0) return null
   const out = []
-  for (let i = start; i < lines.length; i++) {
-    if (i > start && /^##\s+/.test(lines[i])) break
+  for (let i = start + 1; i < lines.length; i++) {
+    if (/^##\s+/.test(lines[i])) break
     out.push(lines[i])
   }
   const body = out.join('\n').trim()
@@ -107,21 +118,26 @@ const probe5BackendEndpoints = (verifyFacts) => {
 }
 
 // ---------------------------------------------------------------------------
-// 四源采集（Gap-2 兜底：deliverables 仅在 reconcile 全无命中时填充）
+// 五源采集（Gap-2 兜底：deliverables 仅在 reconcile 全无命中时填充；
+// ⑤ endpointBaseline/currentEndpoints 为 2026-09-07-endpoint-baseline task-03 第五源）
 // ---------------------------------------------------------------------------
 
 /**
- * 纯函数：聚合变更 delta 的四源数据（fail-soft，任一/全部缺源不抛出）。
- * @param {{ changeDir?: string, specRoot?: string, project?: string, runtimeRoot?: string }} opts
+ * 纯函数：聚合变更 delta 的五源数据（fail-soft，任一/全部缺源不抛出）。
+ * @param {{ changeDir?: string, specRoot?: string, project?: string, runtimeRoot?: string, cwd?: string }} opts
  *   changeDir=变更目录（basename 即 changeName，active changes/ 或 archive/ 下均可）；
- *   specRoot=规范根（.sillyspec）；project=子项目名；runtimeRoot=运行时根（.sillyspec/.runtime）
+ *   specRoot=规范根（.sillyspec）；project=子项目名；runtimeRoot=运行时根（.sillyspec/.runtime）；
+ *   cwd=⑤现算扫描根（缺省 dirname(specRoot)——本地模式即主仓根，capture 同口径锚定）
  * @returns {{ reconcile: object|null, verifyFacts: object|null, moduleMap: object|null,
- *             decisions: Array<{id, domains}>|null, deliverables: string[] }}
+ *             decisions: Array<{id, domains}>|null, deliverables: string[],
+ *             endpointBaseline: object|null, currentEndpoints: Array<{method,path,source,line}>|null }}
  *   reconcile=按 change 过滤取最新的对账产物；verifyFacts=探针底稿；moduleMap=loadModuleMap
  *   返回形态；decisions=当前版本 D 条目模块域（decisions.md 缺 → null）；deliverables=
- *   reconcile 全无命中时的 apply-pathspec 兜底清单（否则 []）
+ *   reconcile 全无命中时的 apply-pathspec 兜底清单（否则 []）；endpointBaseline=基线文件
+ *   payload（缺/损坏 → null）；currentEndpoints=scanBackendEndpoints 现算端点集（不落盘，
+ *   扫描异常/无扫描根 → null）
  */
-export function collectDeltaSources({ changeDir, specRoot, project, runtimeRoot } = {}) {
+export function collectDeltaSources({ changeDir, specRoot, project, runtimeRoot, cwd } = {}) {
   const change = changeDir ? basename(changeDir) : ''
 
   // ① reconcile（R-01：先按 change 字段过滤再取最新，跨变更 run 不串台）
@@ -157,7 +173,21 @@ export function collectDeltaSources({ changeDir, specRoot, project, runtimeRoot 
     if (text !== null) decisions = parseDecisionDomains(text)
   }
 
-  return { reconcile, verifyFacts, moduleMap, decisions, deliverables }
+  // ⑤ endpointBaseline（2026-09-07-endpoint-baseline task-03）：基线 JSON fail-soft → null
+  const endpointBaseline = (runtimeRoot && change)
+    ? readJsonSafe(join(runtimeRoot, 'endpoint-baselines', `${change}.json`))
+    : null
+
+  // ⑤ currentEndpoints：归档时现算（capture 同口径 scanBackendEndpoints，不落盘）。
+  // 扫描根三择一：显式 cwd > dirname(specRoot)（本地模式 specRoot=<repoRoot>/.sillyspec →
+  // 主仓根）> 无（→ null）；扫描异常 fail-soft → null（报告端降级注记，不阻断）。
+  const scanRoot = cwd || (specRoot ? dirname(specRoot) : null)
+  let currentEndpoints = null
+  if (scanRoot) {
+    try { currentEndpoints = scanBackendEndpoints(scanRoot) } catch { currentEndpoints = null }
+  }
+
+  return { reconcile, verifyFacts, moduleMap, decisions, deliverables, endpointBaseline, currentEndpoints }
 }
 
 // ---------------------------------------------------------------------------
@@ -166,14 +196,17 @@ export function collectDeltaSources({ changeDir, specRoot, project, runtimeRoot 
 
 /**
  * 纯函数：生成 delta.md 全文（三段式，D-002；不落盘——写盘/幂等由 CLI task-02 负责）。
- * @param {{ changeDir?: string, specRoot?: string, project?: string, runtimeRoot?: string, now?: string }} opts
- *   前四项同 collectDeltaSources；now=生成时刻 ISO（缺省当前时刻，测试可注入）
+ * @param {{ changeDir?: string, specRoot?: string, project?: string, runtimeRoot?: string, cwd?: string, now?: string }} opts
+ *   前五项同 collectDeltaSources（cwd=⑤现算扫描根，缺省 dirname(specRoot)）；now=生成时刻
+ *   ISO（缺省当前时刻，测试可注入）
  * @returns {string} delta.md 全文（LF 行尾，单一尾换行）
  */
-export function buildDeltaReport({ changeDir, specRoot, project, runtimeRoot, now } = {}) {
+export function buildDeltaReport({ changeDir, specRoot, project, runtimeRoot, cwd, now } = {}) {
   const change = changeDir ? basename(changeDir) : '<变更名>'
-  const { reconcile, verifyFacts, moduleMap, decisions, deliverables } =
-    collectDeltaSources({ changeDir, specRoot, project, runtimeRoot })
+  const {
+    reconcile, verifyFacts, moduleMap, decisions, deliverables,
+    endpointBaseline, currentEndpoints,
+  } = collectDeltaSources({ changeDir, specRoot, project, runtimeRoot, cwd })
   const statuses = loadModuleStatuses(specRoot, project)
 
   // 差集路径归一（missing={task,path,isNew?} / undeclared={path,suspectTask?|string}——
@@ -352,11 +385,33 @@ export function buildDeltaReport({ changeDir, specRoot, project, runtimeRoot, no
     L.push(`- 未匹配文件补录提示：以下文件未命中任何模块 paths——建议补录 _module-map.yaml（新文件）或核对归属（人工裁量）：${unmatchedFiles.join('、')}`)
   }
   L.push('')
+  // 端点基线提示（2026-09-07-endpoint-baseline task-03）：门控沿用 probe5 backendEndpoints>0
+  // 不动（Gap-4：无端点变更不收噪音注记），节标题沿用防断言面扩大；节内三态（基线×现算 →
+  // diffEndpointSets 增删表 / 基线缺失 → 降级注记 / 现算不可得 → 降级注记）。
   const backendEndpoints = probe5BackendEndpoints(verifyFacts)
   if (backendEndpoints !== null && backendEndpoints > 0) {
     L.push('### 端点基线提示')
     L.push('')
-    L.push(`- backendEndpoints=${backendEndpoints}（>0）——端点 before/after 基线属独立立项（D-001@v1：contract-matrix 无 before 数据），本 delta 不含端点增删段`)
+    const baselineEps = (endpointBaseline && Array.isArray(endpointBaseline.endpoints))
+      ? endpointBaseline.endpoints
+      : null
+    if (!baselineEps) {
+      L.push(`- 无基线（变更未拍 baseline）：${join(runtimeRoot || '?', 'endpoint-baselines', `${change}.json`)} 不存在或不可解析——端点增删不可比（backendEndpoints=${backendEndpoints}（>0））`)
+    } else {
+      const endpointDiff = diffEndpointSets(baselineEps, currentEndpoints)
+      if (!endpointDiff) {
+        L.push(`- 基线已拍（${baselineEps.length} 端点）但现算不可得（scanBackendEndpoints 扫描失败）——端点增删不可比`)
+      } else if (endpointDiff.added.length === 0 && endpointDiff.removed.length === 0) {
+        L.push(`- 端点增删：无增删（基线 ${baselineEps.length} 端点 × 现算 ${currentEndpoints.length} 端点，method+归一 path 全一致）`)
+      } else {
+        L.push(`- 端点 diff：基线 ${baselineEps.length} 端点 × 现算 ${currentEndpoints.length} 端点（method+归一 path 集合运算；changed 不配对，天然呈独立行）`)
+        L.push('')
+        L.push('| 增删 | method | path | source |')
+        L.push('|---|---|---|---|')
+        for (const e of endpointDiff.added) L.push(`| + 新增 | ${e.method} | ${e.path} | ${e.source} |`)
+        for (const e of endpointDiff.removed) L.push(`| - 删除 | ${e.method} | ${e.path} | ${e.source} |`)
+      }
+    }
     L.push('')
   }
 

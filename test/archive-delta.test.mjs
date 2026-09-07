@@ -2,9 +2,10 @@
  * archive-delta 测试套件 — IR P3d task-03 收官（change: 2026-09-07-ir-stage-p3d）
  *
  * 被测对象（commit 23ae3ce/b231106）：
- *   - src/archive-delta.js：collectDeltaSources（四源 fail-soft 采集 + apply-pathspec 兜底）/
- *     buildDeltaReport（Before/Delta/After 三段式渲染，now 可注入）。本文件消费两导出，
- *     消 check-syntax 的 src 未引用导出项。
+ *   - src/archive-delta.js：collectDeltaSources（五源 fail-soft 采集 + apply-pathspec 兜底；
+ *     ⑤ endpointBaseline/currentEndpoints 为 2026-09-07-endpoint-baseline task-03，集成断言在
+ *     test/endpoint-baseline.test.mjs task-04）/ buildDeltaReport（Before/Delta/After 三段式
+ *     渲染，now 可注入）。本文件消费两导出，消 check-syntax 的 src 未引用导出项。
  *   - src/design-facts.js deriveActualModules（P3d 导出）：归属 + 反斜杠归一 + 未匹配。
  *   - src/index.js delta CLI：生成/幂等覆盖/--json/缺 --change exit 2/目录不存在 exit 1。
  *   - src/run/complete-handlers.js handleArchiveConfirmStep 归档接线（fail-soft）。
@@ -288,13 +289,14 @@ console.log('\n=== 2. buildDeltaReport（Before/Delta/After 三段式，now 注�
   assert(md.includes('### 模块卡同步状态（module-impact.md「更新结果」）'), '模块卡同步状态小节标题')
   assert(md.includes('（引自变更目录 module-impact.md，人工维护为准）') && md.includes('| mod-a 模块卡 | done |'),
     '「## 更新结果」小节正文被引用（含表格体）')
+  assert(!/^## 更新结果$/m.test(md), '引用正文不含原「## 更新结果」标题行（避免 H3 小节下嵌 H2 破坏层级）')
   assert(md.includes('### scan 刷新建议'), 'scan 刷新建议小节标题')
   assert(md.includes('- `sillyspec scan facts` 下次刷新重点关注：mod-a、mod-b（共 2 个模块）'), 'scan 建议点名受影响模块')
   assert(md.includes('- 未匹配文件补录提示：以下文件未命中任何模块 paths——建议补录 _module-map.yaml（新文件）或核对归属（人工裁量）：src/orphan.js'),
     '未匹配文件补录提示（After 段）')
-  assert(md.includes('### 端点基线提示'), '端点基线提示小节（backendEndpoints=3 > 0 → 出现）')
-  assert(md.includes('- backendEndpoints=3（>0）——端点 before/after 基线属独立立项（D-001@v1：contract-matrix 无 before 数据），本 delta 不含端点增删段'),
-    '端点提示一行（D-001@v1 非目标口径）')
+  assert(md.includes('### 端点基线提示'), '端点基线提示小节（backendEndpoints=3 > 0 → 出现，门控不变）')
+  assert(md.includes(`- 无基线（变更未拍 baseline）：${join(fx.runtimeRoot, 'endpoint-baselines', `${CN}.json`)} 不存在或不可解析——端点增删不可比（backendEndpoints=3（>0））`),
+    '端点提示降级注记（fixture 无基线 → 「无基线（变更未拍 baseline）」口径，2026-09-07-endpoint-baseline task-03 替代旧「独立立项」行）')
 
   console.log('--- 端点提示条件性：backendEndpoints=0 / 无 facts → 小节缺席 ---')
   const zeroFx = buildFixture({ facts: { ...FACTS, probes: { ...FACTS.probes, probe5: { metrics: { backendEndpoints: 0 } } } } })

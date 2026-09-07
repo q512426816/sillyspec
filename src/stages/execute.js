@@ -292,6 +292,7 @@ const fixedPrefix = [
 
 ### 操作
 1. **确认工具链可用**：worktree 内项目工具链（lint/format/test 二进制，如 ruff / prettier / uv）可能不全——对本次会用到的工具先跑一次 \`--version\` 确认；缺失则按项目方式安装（Python 项目 \`uv tool install ruff\` / \`uv sync\`，Node 项目 node_modules 已由 CLI 链接主仓）。不要等到 commit 才发现二进制不在 PATH 被 hook 拦。**Python 项目注意**：worktree 自建 .venv 只含 pyproject 声明依赖，pytest 等 dev 工具可能缺失——优先在 worktree 内补装（\`uv sync --group dev\` / \`uv pip install pytest\`），**不要回退用主仓 venv 跑测试**（主仓 venv 加载的可能是主仓代码而非 worktree 代码，环境不一致会掩真 bug）
+2. **涉及后端端点的变更拍基线**：跑 \`sillyspec endpoints baseline --change <change-name>\` 拍变更前基线（幂等，已拍过会跳过；在 worktree 内跑即可——CLI 自动把扫描根与落点锚定主仓）——归档时用于计算端点增删
 
 ### 铁律
 - **worktree 已由 CLI 在 execute 阶段启动时自动创建，不要自行创建或跳过**
