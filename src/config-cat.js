@@ -1,3 +1,5 @@
+import { homedir } from 'os'
+import { sep } from 'path'
 /**
  * config-cat.js — local.yaml 实际值读取的权威路径解析器（`sillyspec config cat` 数据源）。
  *
@@ -39,9 +41,18 @@ export function resolveLocalYaml(dir, opts = {}) {
     candidates.push({ path: key, source })
   }
 
+  // home 拒绝守卫（e4f2855 resolveSpecDir 同款，2026-09-09 补到 local.yaml 候选链）：
+  // 起点在 home 子树内（如 Temp 下的测试 fixture）时，祖先链走到 home 层不得命中
+  // ~/.sillyspec/local.yaml——那是用户全局配置，不是本项目配置；register-repo 写侧
+  // 经 resolveLocalYamlWriteTarget 同链解析，误命中会把项目注册静默写进全局配置
+  // （local-register.test.mjs 实证）。
+  const home = homedir()
+  const originBelowHome = start !== home && start.startsWith(home + sep)
   if (opts.specBase) push(join(opts.specBase, 'local.yaml'), 'spec 根（--spec-dir/平台 pointer/最近 .sillyspec）')
   for (let d = start; ; d = dirname(d)) {
-    push(join(d, '.sillyspec', 'local.yaml'), 'cwd 祖先链（worktree 内向上命中主仓）')
+    if (!(originBelowHome && d === home)) {
+      push(join(d, '.sillyspec', 'local.yaml'), 'cwd 祖先链（worktree 内向上命中主仓；home 层受守卫跳过）')
+    }
     const parent = dirname(d)
     if (parent === d) break
   }
