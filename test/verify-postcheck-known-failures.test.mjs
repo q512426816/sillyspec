@@ -13,7 +13,13 @@ import {
   partitionFailures,
   judgeWithKnownFailures,
   decideVerifyTestAction,
+  capFailureLedger,
+  writeRunResult,
 } from '../src/verify-postcheck.js'
+import { readDecisionRulesConfig } from '../src/docs-check.js'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 let passed = 0
 let failed = 0
@@ -83,6 +89,23 @@ assertEqual(
   'extractKnownFailures: 引号值 + 行尾注释',
   extractKnownFailures('known_failures:\n  - "tests/a.py::t1"  # 预存\n'),
   ['tests/a.py::t1'],
+)
+// 坑 verify-known-failures-block-fragile-chain（2026-09-07）：块内缩进杂行（手改残留/段残迹）
+// 不再打断提取链——旧「连续 - 行」块正则在杂行处断链，其后条目静默丢失
+assertEqual(
+  'extractKnownFailures: 块内缩进杂行不断链（坑：G/H 段踩 F 段残迹全丢）',
+  extractKnownFailures('known_failures:\n  # ── F 段 ──\n  - f_item\n  F 段残迹行（误删半截留下）\n  # ── G 段 ──\n  - g_item\n  # ── H 段 ──\n  - h_item\n'),
+  ['f_item', 'g_item', 'h_item'],
+)
+assertEqual(
+  'extractKnownFailures: 空项 `-` 不再断链',
+  extractKnownFailures('known_failures:\n  -\n  - foo\n'),
+  ['foo'],
+)
+assertEqual(
+  'extractKnownFailures: 列首注释行（任意缩进注释均属块内）',
+  extractKnownFailures('known_failures:\n  - a\n# 顶层风格注释也在块内\n  - b\ncommands:\n  test: npm test\n'),
+  ['a', 'b'],
 )
 
 // ── partitionFailures（关键：summary 行不计入失败行）──────────────
@@ -159,6 +182,25 @@ Tests: 1 failed, 1 passed
   const ansi = '\u001b[32m ✓ \u001b[0msrc/lib/x.test.ts > syncStatus=failed 断言 (10 ms)\n'
   const r = partitionFailures(ansi, [])
   assertEqual('partitionFailures: ANSI 色码内的 ✓ 通过行不计入', r.failureLines, [])
+}
+{
+  // 坑 verify-known-failures-ansi-exemption-split（2026-09-07）：豁免匹配在剥 ANSI 后的行上做——
+  // 色码把可见词拦腰拆开（\x1b[31mtests/foo\x1b[0m > case），裸子串匹配同一行要拆两段各配一条模式
+  const colored = [
+    '× \u001b[31mtests/foo.test.ts\u001b[0m > \u001b[31m提交并核对 > 双写一致性\u001b[0m (25 ms)',
+    '× \u001b[31mtests/bar.test.ts > 普通失败\u001b[0m (12 ms)',
+  ].join('\n') + '\n'
+  {
+    const r = partitionFailures(colored, ['tests/foo.test.ts > 提交并核对 > 双写一致性'])
+    assertEqual('partitionFailures: 跨色码整段可见文本单条模式即豁免', r.exempted.length, 1)
+    assertEqual('partitionFailures: 未豁免行保留 ANSI 原文（展示不变形）', r.remaining,
+      ['× \u001b[31mtests/bar.test.ts > 普通失败\u001b[0m (12 ms)'])
+  }
+  {
+    // 模式侧同步剥 ANSI：从原始输出誊抄来的模式可能自带色码
+    const r = partitionFailures(colored, ['\u001b[31mtests/bar.test.ts'])
+    assertEqual('partitionFailures: 模式自带 ANSI 码同样剥后匹配', r.exempted.length, 1)
+  }
 }
 {
   // vitest 控制台捕获噪声：stderr 横幅（用例名含 failed 字样）+ jsdom Not implemented 警告
@@ -282,7 +324,7 @@ assertEqual('partitionFailures: 空输出', partitionFailures('', ['x']), { fail
 assertEqual(
   'judge: exit 0 → passed（无需豁免）',
   judgeWithKnownFailures(0, PYTEST_OUT, null, ['test_ppm']),
-  { status: 'passed', reason: null, exemptedCount: 0 },
+  { status: 'passed', reason: null, exemptedCount: 0, remainingLines: [], exemptedLines: [] },
 )
 {
   const j = judgeWithKnownFailures(1, PYTEST_OUT, '退出码 1', [])
@@ -307,6 +349,74 @@ assertEqual(
   const j = judgeWithKnownFailures(1, 'build started\ncompiling...\ndone with warnings\n', '退出码 1', ['anything'])
   assert('judge: fail-safe 检测不到失败行 → failed', j.status === 'failed', JSON.stringify(j))
   assert('judge: fail-safe reason 含保守提示', (j.reason || '').includes('保守判 fail'))
+}
+{
+  // 坑 verify-test-reconcile-tail-blindspot（2026-09-07）：判账行集全量随结果返回——
+  // 失败行落在 output_tail 盲区时归因读 remainingLines，不再全量复跑
+  const long = 'FAILED tests/long.test.ts::test_case > ' + 'x'.repeat(300)
+  const out = ['FAILED tests/a.py::t1 - assert false', long].join('\n') + '\n'
+  const j = judgeWithKnownFailures(1, out, '退出码 1', ['t1'])
+  assert('judge: 部分豁免 → failed', j.status === 'failed')
+  assertEqual('judge: remainingLines 全量（含 reason 采样装不下的长行原文）', j.remainingLines, [long])
+  assertEqual('judge: exemptedLines 全量', j.exemptedLines, ['FAILED tests/a.py::t1 - assert false'])
+  // reason 的「其余 N 行」指针指向台账（>5 行才出现该提示）
+  const many = Array.from({ length: 7 }, (_, i) => `FAILED tests/m${i}.py::t${i}`).join('\n') + '\n'
+  const j2 = judgeWithKnownFailures(1, many, '退出码 1', ['m0'])
+  assert('judge: reason 指针指向台账而非「上方测试输出」', (j2.reason || '').includes('failure_remaining'), j2.reason)
+}
+{
+  // 无 known_failures 分支同样带行集（豁免与否都不丢判账依据）
+  const j = judgeWithKnownFailures(1, 'FAILED tests/a.py::t1\n', '退出码 1', [])
+  assertEqual('judge: 无清单 remainingLines=失败行全集', j.remainingLines, ['FAILED tests/a.py::t1'])
+  assertEqual('judge: 无清单 exemptedLines=[]', j.exemptedLines, [])
+}
+
+// ── capFailureLedger + writeRunResult（台账落盘形状）──────────────
+
+assertEqual('capFailureLedger: 空集', capFailureLedger([]), [])
+assertEqual('capFailureLedger: 短列表原样', capFailureLedger(['a', 'b']), ['a', 'b'])
+{
+  const capped = capFailureLedger([`${'x'.repeat(400)}`])
+  assert('capFailureLedger: 单行截 300 字符', capped[0].length === 301 && capped[0].endsWith('…'), `len=${capped[0] && capped[0].length}`)
+  const many = capFailureLedger(Array.from({ length: 205 }, (_, i) => `line-${i}`))
+  assert('capFailureLedger: 行数截 200 + 计数注明', many.length === 201 && many[200].includes('共 205 行'), JSON.stringify(many[200]))
+}
+{
+  // 台账落盘：failure_remaining / failure_exempted 全量进 test-result.json；空集不落键。
+  // 两次落盘各用独立临时目录（runDir 时间戳秒级精度，同秒会覆写同一文件）
+  const tmp1 = mkdtempSync(join(tmpdir(), 'sillyspec-ledger1-'))
+  const tmp2 = mkdtempSync(join(tmpdir(), 'sillyspec-ledger2-'))
+  try {
+    const withLedger = { status: 'failed', command: 'npm test', exitCode: 1, durationMs: 5, outputTail: '…tail', reason: '退出码 1', failureRemaining: ['FAILED a', 'FAILED b'], failureExempted: ['FAILED x'] }
+    writeRunResult({ specBase: tmp1, changeName: 'c', result: withLedger })
+    const j1 = JSON.parse(readFileSync(withLedger.resultPath, 'utf8'))
+    assertEqual('writeRunResult: failure_remaining 落盘', j1.failure_remaining, ['FAILED a', 'FAILED b'])
+    assertEqual('writeRunResult: failure_exempted 落盘', j1.failure_exempted, ['FAILED x'])
+    const clean = { status: 'passed', command: 'npm test', exitCode: 0, durationMs: 5, outputTail: 'ok', reason: null, failureRemaining: [], failureExempted: [] }
+    writeRunResult({ specBase: tmp2, changeName: 'c', result: clean })
+    const j2 = JSON.parse(readFileSync(clean.resultPath, 'utf8'))
+    assert('writeRunResult: 空台账不落键', !('failure_remaining' in j2) && !('failure_exempted' in j2), JSON.stringify(Object.keys(j2)))
+  } finally {
+    rmSync(tmp1, { recursive: true, force: true })
+    rmSync(tmp2, { recursive: true, force: true })
+  }
+}
+
+// ── docs-check 侧同款解析（readDecisionRulesConfig 走真实文件）──
+
+{
+  const tmp = mkdtempSync(join(tmpdir(), 'sillyspec-decision-'))
+  try {
+    mkdirSync(join(tmp, '.sillyspec'), { recursive: true })
+    // 坑 verify-known-failures-block-fragile-chain：docs-check 拷贝同修——块内杂行不断链
+    writeFileSync(join(tmp, '.sillyspec', 'local.yaml'),
+      'known_failures:\n  # ── F 段 ──\n  - decisions.D-001@v1.behind\n  F 段残迹行\n  # ── G 段 ──\n  - decisions.D-002@v1.behind\n')
+    const cfg = readDecisionRulesConfig(tmp)
+    assertEqual('readDecisionRulesConfig: docs-check 拷贝同款逐行扫描（杂行不断链）', cfg.knownFailures,
+      ['decisions.D-001@v1.behind', 'decisions.D-002@v1.behind'])
+  } finally {
+    rmSync(tmp, { recursive: true, force: true })
+  }
 }
 
 // ── decideVerifyTestAction（Fix 3：0 命中 skip）─────────────────

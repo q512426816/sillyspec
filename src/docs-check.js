@@ -28,11 +28,16 @@ import { parseModuleMapSimple } from './modules.js'
  * 不同设备兄弟仓库位置不同，未配映射时默认跳过本地校验（防跨设备误报）；
  * 在本机 .sillyspec/local.yaml 的 docs-check.cross_repo_roots 配
  * `<仓库名>: <本机绝对路径>` 后，走与本地引用完全相同的层1（行号边界）+ 层2（关键词窗口）校验。
- * 正则组：1=仓库名（可选），2=文件，3=start，4=end。 */
-const REF_RE = /(?:repo:\/\/([A-Za-z0-9_.\-]+)\/)?([A-Za-z0-9_.\-\/]+\.(?:js|mjs|cjs|ts|tsx|jsx|py|java|go)):(\d+)(?:-(\d+))?/g
+ * 正则组：1=仓库名（可选），2=文件，3=start，4=end。
+ * 文件段展开循环形（D-006，2026-09-08-docs-fix-capability）：普通段可选 + 零或多个「闭合括号段+普通段」
+ * 迭代——支持 Next.js 路由组 (dashboard) 等括号路径；markdown 链接 [t](foo.js:12) 在 `(` 处括号段
+ * 要求 `)` 先于 `:` 闭合而失败，回落 foo.js:12 零回归；嵌套 ((x)) 部分提取（与旧行为一致）。
+ * ⚠ 不用原子序列 (?:A+|B+)+——经典嵌套量词 ReDoS（Grill 实证 n=30 长 token 73.8s），
+ * 展开循环每次迭代必含括号段 → 划分唯一 → 线性。 */
+const REF_RE = /(?:repo:\/\/([A-Za-z0-9_.\-]+)\/)?([A-Za-z0-9_.\-\/]*(?:\([A-Za-z0-9_.\-\/]+\)[A-Za-z0-9_.\-\/]*)*\.(?:js|mjs|cjs|ts|tsx|jsx|py|java|go)):(\d+)(?:-(\d+))?/g
 
 /** 缺省扫描范围：docs/ + .sillyspec/docs/（scan/modules 产物同是文档，失效即该暴露；2026-08-16 用户裁决改缺省，见 doc-consistency-debt.md §八） */
-const DEFAULT_DOC_PATHS = ['docs/**/*.md', '.sillyspec/docs/**/*.md']
+export const DEFAULT_DOC_PATHS = ['docs/**/*.md', '.sillyspec/docs/**/*.md']
 
 /**
  * 读 local.yaml 的 docs-check 段（best-effort，绝不抛；缺文件/无段 → 全缺省）。
@@ -97,6 +102,44 @@ export function collectDocRefs(md) {
     })
   }
   return refs
+}
+
+/**
+ * 豁免判定双通道（FR-3 / D-003，2026-09-08-docs-fix-capability）：
+ * ①路径段：POSIX 归一后任一路径段 === archive 或 finished（历史快照/归档文档天然过时）；
+ * ②frontmatter：文件头 --- 块内行 `doc_type: snapshot`（机械精确匹配——容忍行内注释与首尾
+ * 空白，带引号 doc_type: "snapshot" 不识别，不做 YAML 解析）。
+ * 拆两函数：路径段判免 IO（readFileSync 前）；frontmatter 判需文件内容。
+ * @param {string} relPath 文档相对路径（POSIX 或 Windows 反斜杠均可）
+ * @returns {boolean}
+ */
+export function isExemptDocPath(relPath) {
+  if (typeof relPath !== 'string' || relPath === '') return false
+  const segs = relPath.replace(/\\/g, '/').split('/')
+  return segs.some(s => s === 'archive' || s === 'finished')
+}
+
+/**
+ * frontmatter 通道：文件头 --- 块内机械扫描 `doc_type: snapshot` 行。
+ * @param {string} mdText 文档全文（已读取）
+ * @returns {boolean}
+ */
+export function isExemptDocFrontmatter(mdText) {
+  if (typeof mdText !== 'string' || !mdText.startsWith('---')) return false
+  const end = mdText.indexOf('\n---', 3)
+  if (end === -1) return false
+  const block = mdText.slice(3, end)
+  return /^[ \t]*doc_type:[ \t]*snapshot[ \t]*(?:#.*)?$/m.test(block)
+}
+
+/**
+ * 双通道合并（调用方便利包装）。
+ * @param {string} relPath 文档相对路径
+ * @param {string} [mdText] 文档全文（路径段命中时可省——调用方先判路径段免 IO）
+ * @returns {boolean}
+ */
+export function isExemptDoc(relPath, mdText) {
+  return isExemptDocPath(relPath) || (mdText !== undefined && isExemptDocFrontmatter(mdText))
 }
 
 /**
@@ -391,7 +434,7 @@ export function runDocsCheck(opts) {
   // 解构默认值只挡 undefined 不挡 null——docs-check 无配置裸跑曾因此 null.flatMap 崩溃。
   const {
     projectRoot, docs = null, paths: rawPaths = DEFAULT_DOC_PATHS, skip = [],
-    keywordAssert = true, crossRepoRoots = {},
+    keywordAssert = true, crossRepoRoots = {}, exempt = true,
   } = opts || {}
   const paths = Array.isArray(rawPaths) && rawPaths.length > 0 ? rawPaths : DEFAULT_DOC_PATHS
   const warnings = []
@@ -405,6 +448,10 @@ export function runDocsCheck(opts) {
   let kwChecked = 0
   // repo:// 跨仓引用：未配映射被跳过的数量（不计入 total/invalid，跨设备零误报）
   let crossRepoSkipped = 0
+  // 豁免文档数（archive/finished 路径段或 frontmatter doc_type: snapshot，不计 invalid——FR-3）
+  let skippedExempt = 0
+  // 模糊路径引用数（含 `...` 省略号，跳过校验——FR-1.2）
+  let skippedFuzzy = 0
   // per-call 缓存：裸名引用的 src/ 全树扫描结果 + 候选文件行数组——100 文档 × 10 裸名引用
   // 此前 = 1000 次全树 walk + 同文件 N 次重读（2026-08-21 性能审查 PERF-5）。仅本次调用
   // 生命周期内有效，不跨调用（防测试流程中途改树后读到陈旧结果）
@@ -420,11 +467,17 @@ export function runDocsCheck(opts) {
       })
       continue
     }
+    // 豁免双通道（FR-3 / D-003）：路径段判定免 IO（readFileSync 前）；
+    // frontmatter 判定需读文件（读取后）。豁免文档整体跳过不计 invalid。
+    if (exempt && isExemptDocPath(docRel)) { skippedExempt++; continue }
     const md = readFileSync(docAbs, 'utf8')
+    if (exempt && isExemptDocFrontmatter(md)) { skippedExempt++; continue }
     const refs = collectDocRefs(md)
     const mdLines = md.split(/\r?\n/)
 
     for (const r of refs) {
+      // 模糊路径（含 `...` 省略号）：跳过校验（FR-1.2，宁漏不误报——文档作者明示意图非精确路径）
+      if (r.file.includes('...')) { skippedFuzzy++; continue }
       // repo:// 跨仓引用：未配映射 → 跳过（不同设备仓库位置不同，不按本仓解析误报）；
       // 配了映射 → 以映射根为唯一候选，走与本地引用相同的层1+层2 校验。
       let candidates
@@ -452,10 +505,20 @@ export function runDocsCheck(opts) {
       }
       total++
       if (candidates.length === 0) {
+        // FR-4（candidates JSON）：带 / 路径的文件不存在引用，basename 树扫非空 → 附同名文件候选
+        // （机械数据供脚本消费；裸文件名引用 resolveCandidates 已全树扫返回空时重扫恒空，无意义——Grill 修正）
+        const fixEntry = { fixable: false, reason: '文件不存在，无法自动定位' }
+        if (r.file.includes('/')) {
+          const baseName = r.file.slice(r.file.lastIndexOf('/') + 1)
+          const sameName = findInTree(join(projectRoot, 'src'), baseName, '', treeCache)
+          if (sameName.length > 0) {
+            fixEntry.candidates = sameName.map(rel => ({ file: 'src/' + rel }))
+          }
+        }
         invalid.push({
           doc: docRel, docLine: r.docLine, ref: r.ref,
           reason: '文件不存在（含 / 按仓库根解析；裸文件名在 src/ 递归）',
-          fix: { fixable: false, reason: '文件不存在，无法自动定位' },
+          fix: fixEntry,
         })
         continue
       }
@@ -489,13 +552,13 @@ export function runDocsCheck(opts) {
           // 建议行号（--suggest）：token 在首个候选文件的全量命中行，供人工确认改锚——不自动改文件
           suggest: suggestLines(candidates, tokens, linesCache),
           // 修复分类（--fix 判定依据）：全量候选 token 命中打分——唯一命中或选优严格领先可自动重锚
-          fix: classifyFix(candidates, tokens, r.start, linesCache),
+          fix: classifyFix(candidates, tokens, r.start, linesCache, projectRoot),
         })
       }
     }
   }
 
-  return { ok: invalid.length === 0, total, invalid, warnings, kwChecked, crossRepoSkipped }
+  return { ok: invalid.length === 0, total, invalid, warnings, kwChecked, crossRepoSkipped, skippedExempt, skippedFuzzy }
 }
 
 /**
@@ -532,13 +595,14 @@ function suggestLines(candidates, tokens, linesCache = null) {
  * @param {string[]} candidates resolveCandidates 返回的全量候选绝对路径
  * @param {string[]} tokens 层2 提取的期望 token（keywordAssert=false 时为空数组）
  * @param {number|null} [refStart] 文档引用的旧行号（打分用距离信号；范围引用取 start）
- * @returns {{ fixable: boolean, newLine?: number, reason: string }}
+ * @param {string} [projectRootHint] candidates 相对路径显示锚（tie candidates 的 file 字段用）
+ * @returns {{ fixable: boolean, newLine?: number, candidates?: Array<{file?: string, line: number}>, reason: string }}
  */
 function escapeReLocal(s) {
   return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-function classifyFix(candidates, tokens, refStart = null, linesCache = null) {
+function classifyFix(candidates, tokens, refStart = null, linesCache = null, projectRootHint = '') {
   if (tokens.length === 0) {
     return { fixable: false, reason: '无 token 符号线索（纯位置引用或关键词断言关闭），无法自动定位' }
   }
@@ -578,7 +642,16 @@ function classifyFix(candidates, tokens, refStart = null, linesCache = null) {
     }
   }
   const shown = ranked.slice(0, 8).map(([l]) => l).join('、') + (ranked.length > 8 ? '…' : '')
-  return { fixable: false, reason: `token 多处命中且最优两行同分（候选行号：${shown}），歧义需人工确认（D-006 保守默认）` }
+  // FR-4（candidates JSON）：tie 歧义时附机械候选行号数组（供 --json 消费，无置信度——D-001 边界）。
+  // file 字段仅在单候选文件时有意义（多候选同分行号已合并，行号不区分文件归属）。
+  const tieCandidates = ranked.slice(0, 8).map(([l]) =>
+    candidates.length === 1 ? { file: relDisplay(candidates[0], projectRootHint), line: l } : { line: l }
+  )
+  return {
+    fixable: false,
+    candidates: tieCandidates,
+    reason: `token 多处命中且最优两行同分（候选行号：${shown}），歧义需人工确认（D-006 保守默认）`,
+  }
 }
 
 /**
@@ -701,23 +774,35 @@ function extractKnownFailureKeys(yamlText) {
   if (inline) {
     return inline[1].split(',').map(s => s.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean)
   }
-  // 坑 verify-known-failures-comment-line-truncation 同款（与 verify-postcheck.extractKnownFailures
-  // 口径互指对齐）：块内注释行/空行打断连续列表项捕获链 → 注释后的键静默丢失。块定义放行
-  // 注释行与空行；提取侧只认 - 项行；行尾注释须 # 前有空白（裸 # 不截）；引号值原样保留。
-  const block = yaml.match(/^known_failures:\s*\n((?:[ \t]+-[ \t].+\n?|[ \t]*#[^\n]*\n?|[ \t]*\n)+)/m)
-  if (block) {
-    return (block[1].match(/^[ \t]+-[ \t]+(.+)/gm) || [])
-      .map(s => {
-        const item = s.replace(/^[ \t]+-[ \t]+/, '').trim()
-        const full = item.match(/^(['"])(.*)\1$/)
-        if (full) return full[2]
-        const stripped = item.replace(/[ \t]+#.*$/, '').trim()
-        const q2 = stripped.match(/^(['"])(.*)\1$/)
-        return q2 ? q2[2] : stripped
-      })
-      .filter(Boolean)
+  // 坑 verify-known-failures-comment-line-truncation → verify-known-failures-block-fragile-chain
+  // （与 verify-postcheck.extractKnownFailures 口径互指对齐，逐字同步）：块式捕获曾要求
+  // 「- 项行 / 注释行 / 空行」连续成链，手改残留的缩进杂行/空项断链 → 其后键静默丢失。
+  // 改为逐行扫描：块 = 头之后连续的「缩进行 / 注释行（任意缩进含列首）/ 空行」，列首正文行
+  // 收块；块内杂行容忍不提取但不断链，`- ` 项行无论隔着什么都提取。
+  // 行尾注释须 # 前有空白（裸 # 不截）；引号值原样保留。
+  const lines = yaml.split('\n')
+  const headIdx = lines.findIndex(l => /^known_failures:\s*(?:#.*)?$/.test(l))
+  if (headIdx === -1) return []
+  const itemRe = /^[ \t]+-[ \t]+(.+)$/
+  const items = []
+  for (let i = headIdx + 1; i < lines.length; i++) {
+    const l = lines[i]
+    if (l.trim() === '') continue // 空行：块内分隔，放行
+    if (/^[ \t]*#/.test(l)) continue // 注释行（任意缩进含列首）：段头/归因注记，放行
+    if (!/^[ \t]/.test(l)) break // 列首正文行：下一个顶层键，收块
+    const m = l.match(itemRe) // 其余缩进行一律留在块内；项行才提取（杂行不提取但不断链）
+    if (m) items.push(m[1])
   }
-  return []
+  return items
+    .map(s => {
+      const item = s.trim()
+      const full = item.match(/^(['"])(.*)\1$/)
+      if (full) return full[2]
+      const stripped = item.replace(/[ \t]+#.*$/, '').trim()
+      const q2 = stripped.match(/^(['"])(.*)\1$/)
+      return q2 ? q2[2] : stripped
+    })
+    .filter(Boolean)
 }
 
 /**
@@ -733,8 +818,15 @@ export function readDecisionRulesConfig(projectRoot) {
     const p = join(projectRoot, '.sillyspec', 'local.yaml')
     if (!existsSync(p)) return fallback
     const raw = readFileSync(p, 'utf8')
+    // knownFailures 用容错行扫描提取（与 verify-postcheck.extractKnownFailures 同款），且先于
+    // jsYaml——YAML 整体不合法（如 known_failures 块内手改残迹行）时 jsYaml 抛错不能连带丢掉
+    // 豁免键（坑 verify-known-failures-block-fragile-chain：曾整段 catch 回 fallback、键静默丢）。
+    // jsYaml 只供 behind_threshold，单独兜底；豁免键在任何形态下存活。
     const knownFailures = extractKnownFailureKeys(raw)
-    const doc = jsYaml.load(raw)
+    let doc = null
+    try {
+      doc = jsYaml.load(raw)
+    } catch { doc = null }
     if (!doc || typeof doc !== 'object') return { ...fallback, knownFailures }
     const d = doc['decisions']
     if (!d || typeof d !== 'object' || Array.isArray(d)) return { ...fallback, knownFailures }

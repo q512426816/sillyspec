@@ -9,13 +9,15 @@ const NL_MARK = String.fromCharCode(10)
  *   S4 dry-run 零写盘（FR-05）：--fix --dry-run 组合，内容与 mtime 均不变
  *   S5 CRLF 保持（R-05）：修复后行结束符仍 \r\n
  *   S6 同行多引用（R-04）：同一行两个失效引用都正确替换、前序变长不错位
- *   S7 CLI 无 --fix 输出与改动前（84d498a = task-03 前）逐字节一致（FR-04/D-004）
+ *   S7 CLI 报告文本新旧一致（FR-5 通道迁移后：报告内容统一 stdout，exit code 与文本逐字不变）
+ *   S8 通道契约（FR-5/D-005）：docs check 失败时 stdout 含失效清单、stderr 仅 ⚠️ 诊断或为空
  *
  * 双层覆盖：S1-S6 单测层（runDocsCheck 拿 invalid[].fix + applyFixes 写回）+ CLI 子进程层
  * （node bin/sillyspec.js --dir <fixture> docs check，exit code/stdout/stderr 实断言，不 mock 内部模块）。
  * S7 用 git archive 84d498a 完整树拼旧 CLI（node_modules junction 复用本 worktree 依赖），同一
- * fixture 新旧各跑一次，stdout/stderr/exit code 三者逐字节相等；限定非 json 模式（inv.fix 增量
- * 字段只在 json 输出可见，human 输出新旧同构）。
+ * fixture 新旧各跑一次——FR-5（2026-09-08-docs-fix-capability D-005）通道迁移后对照语义改为
+ * 「报告文本内容一致」（旧 stderr 文本 == 新 stdout 文本）+ exit code 一致；通道级字节一致
+ * 不再成立（报告从 stderr 迁 stdout 是本变更的预期行为变更，非回归）。
  *
  * fixture 语义注意（实现语义推导，防止 fixture 假合法/假歧义）：
  *   - 层2 窗口是 [start-2, end+5]，fixture 失效引用的行号必须让 token 落在窗口外；
@@ -61,8 +63,8 @@ function makeFixture(files) {
 }
 
 /**
- * CLI 子进程跑 docs check。spawnSync 分开收 stdout/stderr（失效详情走 stderr、全绿行走 stdout），
- * timeout 30000 治卡死。
+ * CLI 子进程跑 docs check。spawnSync 分开收 stdout/stderr（FR-5/D-005 起报告内容统一 stdout、
+ * stderr 仅 ⚠️ 诊断——此前失效详情走 stderr 是旧契约），timeout 30000 治卡死。
  * @returns {{ code: number, stdout: string, stderr: string }}
  */
 function runDocsCli(projectDir, args) {
@@ -128,10 +130,10 @@ describe('S1 单命中自动改（FR-01）', () => {
       const r = runDocsCli(d, ['--fix', '--paths', 'docs/one.md'])
       assert.equal(r.code, 0, `全部 fixable 修完 exit 0（实际 ${r.code}；stderr=${r.stderr.slice(0, 300)}）`)
       assert.equal(readFileSync(join(d, 'docs', 'one.md'), 'utf8'), '见 `src/a.js:1`（`alphaSymbol` 声明处）\n')
-      assert.ok(r.stderr.includes('src/a.js:6 → src/a.js:1'), '明细行含 ref → newRef')
-      assert.ok(r.stderr.includes('1 处已改写'), '重锚报告统计已改写 1 处')
-      assert.ok(r.stderr.includes('0 处待人工'), '汇总零待人工（头部 ❌ 失效计数行在 --fix 前统计，合法保留）')
-      assert.ok(!r.stderr.includes('（待人工）'), '无 needs-manual 条目行（条目行后缀（待人工）只在待修条目出现）')
+      assert.ok(r.stdout.includes('src/a.js:6 → src/a.js:1'), '明细行含 ref → newRef')
+      assert.ok(r.stdout.includes('1 处已改写'), '重锚报告统计已改写 1 处')
+      assert.ok(r.stdout.includes('0 处待人工'), '汇总零待人工（头部 ❌ 失效计数行在 --fix 前统计，合法保留）')
+      assert.ok(!r.stdout.includes('（待人工）'), '无 needs-manual 条目行（条目行后缀（待人工）只在待修条目出现）')
     } finally { try { rmSync(d, { recursive: true, force: true }) } catch {} }
   })
 
@@ -186,7 +188,7 @@ describe('S2 多命中：选优自动重锚 / 同分才人工（FR-03，2026-08-
     try {
       const r = runDocsCli(d, ['--fix', '--paths', 'docs/multi.md'])
       assert.equal(r.code, 0, `自动选优全修 exit 0（实际 ${r.code}；stderr=${r.stderr}）`)
-      assert.ok(r.stderr.includes('1 处已改写'), '重锚报告 1 处改写')
+      assert.ok(r.stdout.includes('1 处已改写'), '重锚报告 1 处改写')
       const after = readFileSync(join(d, 'docs', 'multi.md'), 'utf8')
       assert.ok(after.includes('src/m.js:1'), `doc 已重锚到 :1（实际：${after.trim()}）`)
     } finally { try { rmSync(d, { recursive: true, force: true }) } catch {} }
@@ -229,9 +231,9 @@ describe('S2 多命中：选优自动重锚 / 同分才人工（FR-03，2026-08-
       const before = readFileSync(join(d, 'docs', 'tie.md'))
       const r = runDocsCli(d, ['--fix', '--paths', 'docs/tie.md'])
       assert.equal(r.code, 1, `needs-manual 残留 exit 1（实际 ${r.code}）`)
-      assert.ok(r.stderr.includes('待人工'), '分类为待人工')
-      assert.ok(r.stderr.includes('候选行号'), '报告含候选行号列表')
-      assert.ok(r.stderr.includes('0 处已改写'), '重锚报告零改写')
+      assert.ok(r.stdout.includes('待人工'), '分类为待人工')
+      assert.ok(r.stdout.includes('候选行号'), '报告含候选行号列表')
+      assert.ok(r.stdout.includes('0 处已改写'), '重锚报告零改写')
       assert.ok(Buffer.compare(before, readFileSync(join(d, 'docs', 'tie.md'))) === 0, 'CLI --fix 对歧义条目零写盘')
     } finally { try { rmSync(d, { recursive: true, force: true }) } catch {} }
   })
@@ -267,8 +269,8 @@ describe('S3 零命中报告（FR-02）', () => {
       const before = readFileSync(join(d, 'docs', 'ghost.md'))
       const r = runDocsCli(d, ['--fix', '--paths', 'docs/ghost.md'])
       assert.equal(r.code, 1, `零命中残留 exit 1（实际 ${r.code}）`)
-      assert.ok(r.stderr.includes('零命中'), '报告零命中原因')
-      assert.ok(r.stderr.includes('待人工'), '分类为待人工')
+      assert.ok(r.stdout.includes('零命中'), '报告零命中原因')
+      assert.ok(r.stdout.includes('待人工'), '分类为待人工')
       assert.ok(Buffer.compare(before, readFileSync(join(d, 'docs', 'ghost.md'))) === 0, '零命中文件不动')
     } finally { try { rmSync(d, { recursive: true, force: true }) } catch {} }
   })
@@ -319,9 +321,9 @@ describe('S4 dry-run 零写盘（FR-05）', () => {
       // 全 fixable 预览完 → 0）。design §5.2 行为矩阵 --dry-run 列严格读是「报告修复预览 + exit 1」，
       // 与实现存在张力（已在任务报告登记，测试按实现口径锁定）。
       assert.equal(r.code, 0, `dry-run 全 fixable 预览完 exit 0（实际 ${r.code}；stderr=${r.stderr.slice(0, 300)}）`)
-      assert.ok(r.stderr.includes('src/a.js:6 → src/a.js:1'), '预览明细含 ref → newRef')
-      assert.ok(r.stderr.includes('（dry-run 未写盘）'), '预览标注 dry-run 未写盘')
-      assert.ok(r.stderr.includes('1 处已预览'), '重锚报告统计为预览')
+      assert.ok(r.stdout.includes('src/a.js:6 → src/a.js:1'), '预览明细含 ref → newRef')
+      assert.ok(r.stdout.includes('（dry-run 未写盘）'), '预览标注 dry-run 未写盘')
+      assert.ok(r.stdout.includes('1 处已预览'), '重锚报告统计为预览')
       assert.ok(Buffer.compare(before, readFileSync(docAbs)) === 0, '内容逐字节不变')
       assert.equal(statSync(docAbs).mtimeMs, m0, 'mtime 不变（零写盘实证）')
       // 对照：同一 fixture 随后纯 --fix 真写盘成功，证明 dry-run 没把修复链路置于坏状态
@@ -500,17 +502,21 @@ describe('S7 CLI 无 --fix 输出与改动前（84d498a）逐字节一致（FR-0
       const newR = runAt(BIN, args)
       // 语义前置：失效确被报出（防两边都空输出/都崩的假对齐）
       assert.equal(newR.code, 1, '新 CLI exit 1（fixture 有 2 处失效）')
-      assert.ok(newR.stderr.includes('❌ docs check: 2/3 处引用失效'), `新 CLI 失效计数 2/3（实际 stderr=${newR.stderr.slice(0, 300)}）`)
-      assert.ok(newR.stderr.includes('行号超界') && newR.stderr.includes('关键词缺失'), '两种失效形态都在输出')
-      // 逐字节三相等（D-004 缺省路径零显形）——2026-09-07-ir-hardening task-08 起 💡 候选行号
-      // 行改 needs-manual 默认输出（--suggest 门控随旗标退役），过滤 💡 行后应逐字节一致
+      assert.ok(newR.stdout.includes('❌ docs check: 2/3 处引用失效'), `新 CLI 失效计数 2/3 走 stdout（FR-5/D-005；实际 stdout=${newR.stdout.slice(0, 300)}）`)
+      assert.ok(newR.stdout.includes('行号超界') && newR.stdout.includes('关键词缺失'), '两种失效形态都在 stdout')
+      // FR-5 通道契约（2026-09-08-docs-fix-capability D-005）：报告内容统一 stdout，stderr 仅留
+      // ⚠️ 诊断。与旧 CLI 的逐字节对照只保 exit code 与「报告文本内容」（通道已合法迁移，
+      // 字节级 stderr 对照不再成立——旧 CLI 报告走 stderr 是旧契约）。stripHint 过滤 💡 行
+      // （task-08 needs-manual 默认输出）后比对 stdout 文本。
       const stripHint = (s) => String(s).split(NL_MARK).filter(l => !l.includes('💡')).join(NL_MARK)
       assert.equal(oldR.code, newR.code, 'exit code 一致')
-      assert.equal(oldR.stdout, newR.stdout, `stdout 逐字节一致（旧=${JSON.stringify(oldR.stdout.slice(0, 200))} 新=${JSON.stringify(newR.stdout.slice(0, 200))}）`)
-      assert.equal(stripHint(oldR.stderr), stripHint(newR.stderr), `stderr 过滤 💡 行后逐字节一致（旧=${JSON.stringify(stripHint(oldR.stderr).slice(0, 200))} 新=${JSON.stringify(stripHint(newR.stderr).slice(0, 200))}）`)
-      assert.ok(newR.stderr.includes('💡'), '新 CLI needs-manual 默认带 💡 候选行号（task-08 契约）')
+      // 报告文本内容一致（旧 stderr 文本 == 新 stdout 文本，通道迁移不改文案）
+      assert.equal(stripHint(oldR.stderr), stripHint(newR.stdout), `报告文本逐字节一致（旧 stderr=${JSON.stringify(stripHint(oldR.stderr).slice(0, 200))} 新 stdout=${JSON.stringify(stripHint(newR.stdout).slice(0, 200))}）`)
+      assert.ok(newR.stdout.includes('💡'), '新 CLI needs-manual 默认带 💡 候选行号（task-08 契约）')
+      // 新契约：stderr 仅留 ⚠️ 诊断（本 fixture 无 warnings → stderr 应为空或仅 ⚠️ 行）
+      assert.ok(!newR.stderr.includes('❌ docs check'), '新契约 stderr 不含报告头（FR-5）')
       // 新输出无修复链路痕迹（无 --fix 时 fix 面零显形）
-      assert.ok(!newR.stderr.includes('重锚报告') && !newR.stderr.includes('dry-run'), '无 --fix 无重锚报告/dry-run 痕迹')
+      assert.ok(!newR.stdout.includes('重锚报告') && !newR.stdout.includes('dry-run'), '无 --fix 无重锚报告/dry-run 痕迹')
     } finally { try { rmSync(d, { recursive: true, force: true }) } catch {} }
   })
 
@@ -521,7 +527,7 @@ describe('S7 CLI 无 --fix 输出与改动前（84d498a）逐字节一致（FR-0
     try {
       const newR = runAt(BIN, ['--dir', d, 'docs', 'check', '--suggest', '--paths', 'docs/api.md'])
       assert.equal(newR.code, 2, `--suggest 已删除 → 未知 flag exit 2（实际 ${newR.code}）`)
-      assert.ok(newR.stderr.includes('未知 flag'), '报错文案点名（no-op 旗标显式退役）')
+      assert.ok(newR.stderr.includes('未知 flag'), '报错文案点名（no-op 旗标显式退役；用法错误属诊断走 stderr——D-005 双轨：报告 stdout/诊断 stderr）')
       // 旧 CLI 同参仍正常跑（对照证明：新行为是契约变更而非回归崩溃）
       const oldR = runAt(join(oldRoot, 'bin', 'sillyspec.js'), ['--dir', d, 'docs', 'check', '--suggest', '--paths', 'docs/api.md'])
       assert.equal(oldR.code, 1, '旧 CLI 同参 exit 1（旗标曾有效）')
@@ -542,7 +548,29 @@ describe('S7 CLI 无 --fix 输出与改动前（84d498a）逐字节一致（FR-0
       assert.ok(newR.stdout.includes('✅ docs check: 1 处引用全通过'), `全绿行走 stdout（实际 ${JSON.stringify(newR.stdout)}）`)
       assert.equal(oldR.code, 0)
       assert.equal(oldR.stdout, newR.stdout, `全绿 stdout 逐字节一致（旧=${JSON.stringify(oldR.stdout)} 新=${JSON.stringify(newR.stdout)}）`)
-      assert.equal(oldR.stderr, newR.stderr)
+      // FR-5 通道契约：全绿时新旧 stderr 都应为空（报告走 stdout；旧 CLI 全绿行走 stdout 不变）
+      assert.equal(newR.stderr, '', '全绿 stderr 为空（FR-5：报告走 stdout）')
+    } finally { try { rmSync(d, { recursive: true, force: true }) } catch {} }
+  })
+
+  it('S8 通道契约（FR-5/D-005）：docs check 失败时 stdout 含失效清单、stderr 仅 ⚠️ 诊断或为空', () => {
+    const d = makeFixture({
+      'src/a.js': padLines(3, { 1: 'export const alphaSymbol = 1' }).join('\n') + '\n',
+      'docs/bad.md': '失效引用 `src/a.js:99`（`alphaSymbol`）\n', // 行号超界
+    })
+    try {
+      const r = runDocsCli(d, ['--paths', 'docs/bad.md'])
+      assert.equal(r.code, 1, 'exit 1（有失效）')
+      // 报告内容走 stdout
+      assert.ok(r.stdout.includes('❌ docs check'), 'stdout 含失效计数头')
+      assert.ok(r.stdout.includes('src/a.js:99'), 'stdout 含失效引用')
+      assert.ok(r.stdout.includes('修复指引'), 'stdout 含修复指引')
+      // stderr 仅 ⚠️ 诊断或为空（本 fixture 无 warnings → stderr 应为空）
+      const stderrNonEmpty = r.stderr.trim().split(NL_MARK).filter(l => l.trim() !== '')
+      for (const line of stderrNonEmpty) {
+        assert.ok(line.includes('⚠️') || line.trim().startsWith('⚠️'), `stderr 行须为 ⚠️ 诊断（实际：${line.slice(0, 80)}）`)
+      }
+      assert.ok(!r.stderr.includes('❌ docs check'), 'stderr 不含报告头（FR-5 契约）')
     } finally { try { rmSync(d, { recursive: true, force: true }) } catch {} }
   })
 })

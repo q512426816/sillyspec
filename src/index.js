@@ -1501,8 +1501,40 @@ async function main() {
     case 'docs': {
       const docsSubCmd = filteredArgs[1];
       if (docsSubCmd === 'migrate') {
-        const { migrateDocs } = await import('./migrate.js');
-        migrateDocs(dir);
+        // docs migrate 双形态（2026-09-08-docs-fix-capability / D-002+D-004）：
+        //   有 --from/--to → 新语义（路径引用前缀迁移，薄模块 docs-migrate.js）
+        //   无 flag → 旧语义（.sillyspec 结构一次性迁移 migrateDocs，兼容保留）
+        const rawMigrateArgs = filteredArgs.slice(2);
+        let mFrom = null, mTo = null, mApply = false;
+        for (let i = 0; i < rawMigrateArgs.length; i++) {
+          const a = rawMigrateArgs[i];
+          if (a === '--from' && rawMigrateArgs[i + 1] !== undefined) { mFrom = rawMigrateArgs[i + 1]; i++; }
+          else if (a === '--to' && rawMigrateArgs[i + 1] !== undefined) { mTo = rawMigrateArgs[i + 1]; i++; }
+          else if (a === '--apply') { mApply = true; }
+          else if (a === '--from' || a === '--to') {
+            console.error(`❌ docs migrate: ${a} 缺值（如 --from "modules/" --to "backend/app/modules/"）`);
+            process.exit(2);
+          } else if (a.startsWith('--')) {
+            console.error(`❌ docs migrate: 未知 flag「${a}」。已知 flag：--from --to --apply`);
+            process.exit(2);
+          }
+        }
+        if (mFrom !== null || mTo !== null) {
+          if (mFrom === null || mTo === null) {
+            console.error('❌ docs migrate: --from 与 --to 必须成对提供');
+            process.exit(2);
+          }
+          const { runDocsMigrate } = await import('./docs-migrate.js');
+          const result = runDocsMigrate({ projectRoot: dir, from: mFrom, to: mTo, apply: mApply });
+          // exit code 契约：0=dry-run 零计划或 --apply 后 postCheck 全绿；1=--apply 后仍失效或
+          // unverified>0；dry-run 有计划恒 0（预览不判成败）
+          if (!mApply) { process.exit(0); }
+          const fail = result.unverified > 0 || (result.postCheck && result.postCheck.invalid > 0);
+          process.exit(fail ? 1 : 0);
+        } else {
+          const { migrateDocs } = await import('./migrate.js');
+          migrateDocs(dir);
+        }
       } else if (docsSubCmd === 'check') {
         // docs check（2026-08-15 docs-check-productize D-6）：文档 file:line 引用校验。
         // exit code 三档（D-003）：0 全绿 / 1 存在无效引用 / 2 配置/IO 错误（DocsCheckConfigError）。
@@ -1515,13 +1547,14 @@ async function main() {
         // 写回）；--dry-run 预览不写盘，单独传（无 --fix）也走预览路径——design §5.2 行为矩阵
         // --dry-run 列独立存在（「报告修复预览 + exit 1」），即 dryRun 置位 = fix 语义自动生效
         // 但零写盘（本口径记录于此，防歧义）。
-        const BARE_FLAGS = ['--fix', '--dry-run'];
+        const BARE_FLAGS = ['--fix', '--dry-run', '--no-exempt'];
         const PAIRED_FLAGS = ['--paths'];
         const rawDocsArgs = filteredArgs.slice(2);
         const docsCheckFlags = [];
         let cliPaths = null;
         let fix = false;
         let dryRun = false;
+        let noExempt = false;
         for (let i = 0; i < rawDocsArgs.length; i++) {
           const a = rawDocsArgs[i];
           if (a === '--paths' && rawDocsArgs[i + 1] !== undefined) {
@@ -1533,6 +1566,7 @@ async function main() {
           } else if (BARE_FLAGS.includes(a)) {
             if (a === '--fix') fix = true;
             else if (a === '--dry-run') dryRun = true;
+            else if (a === '--no-exempt') noExempt = true;
           } else if (a.startsWith('--')) {
             console.error(`❌ docs check: 未知 flag「${a}」。已知 flag：${[...BARE_FLAGS, ...PAIRED_FLAGS].join(' ')}（--json 为全局 flag）`);
             process.exit(2);
@@ -1551,6 +1585,7 @@ async function main() {
             skip: cfg.skip,
             keywordAssert: cfg.keywordAssert,
             crossRepoRoots: cfg.crossRepoRoots,
+            exempt: !noExempt,
           });
           // task-03 修复链路（FR-04，platform-map-auto-anchors）：fixActive 才构造 fixes——
           // 仅 fix.fixable===true 且 newLine 为整数的条目可重锚；newRef = ref 的行号部分替换为
@@ -1619,7 +1654,10 @@ async function main() {
             if (result.ok) {
               console.log(`✅ docs check: ${result.total} 处引用全通过（其中 ${result.kwChecked} 处带关键词断言）`);
             } else {
-              console.error(`\n❌ docs check: ${result.invalid.length}/${result.total} 处引用失效：`);
+              // FR-5（D-005，2026-09-08-docs-fix-capability）：报告内容统一 stdout（脚本 capture_output
+              // 只读 stdout 可捕获）；stderr 仅留 ⚠️ 诊断（console.warn）与配置错误（exit 2 路径）。
+              // 文本逐字不变，只改通道。
+              console.log(`\n❌ docs check: ${result.invalid.length}/${result.total} 处引用失效：`);
               let appliedLeft = fixResult ? fixResult.applied : 0;
               const skippedQueue = fixResult ? [...fixResult.skipped] : [];
               for (const inv of result.invalid) {
@@ -1627,31 +1665,31 @@ async function main() {
                 if (newRef !== undefined && appliedLeft > 0) {
                   // 已应用（dry-run 为将应用）：归因按构造顺序消耗 applied 计数——写回 skipped 仅
                   // 防御路径（文档消失/行内失配）触发，CLI 正常流 fixable 必然落位
-                  console.error(`  ✅ [${inv.doc}:L${inv.docLine}] ${inv.ref} → ${newRef}${dryRun ? '（dry-run 未写盘）' : ''}`);
+                  console.log(`  ✅ [${inv.doc}:L${inv.docLine}] ${inv.ref} → ${newRef}${dryRun ? '（dry-run 未写盘）' : ''}`);
                   appliedLeft--;
                 } else if (newRef !== undefined) {
                   const s = skippedQueue.shift();
-                  console.error(`  ⚠️ [${inv.doc}:L${inv.docLine}] ${inv.ref} → 写回跳过：${s ? s.reason : '未知原因'}`);
+                  console.log(`  ⚠️ [${inv.doc}:L${inv.docLine}] ${inv.ref} → 写回跳过：${s ? s.reason : '未知原因'}`);
                 } else if (fixResult) {
                   // needs-manual：多命中歧义/零命中/无 token——fix.reason 含候选行号，交人工
-                  console.error(`  ❌ [${inv.doc}:L${inv.docLine}] ${inv.ref} → ${(inv.fix && inv.fix.reason) || inv.reason}（待人工）`);
+                  console.log(`  ❌ [${inv.doc}:L${inv.docLine}] ${inv.ref} → ${(inv.fix && inv.fix.reason) || inv.reason}（待人工）`);
                 } else {
-                  console.error(`  ❌ [${inv.doc}:L${inv.docLine}] ${inv.ref} → ${inv.reason}`);
+                  console.log(`  ❌ [${inv.doc}:L${inv.docLine}] ${inv.ref} → ${inv.reason}`);
                 }
                 if (inv.suggest && inv.suggest.length > 0) {
                   // 2026-09-07-ir-hardening task-08：原 --suggest 旗标删除（no-op 首选路径退役），
                   // 候选行号提示改为 needs-manual 默认输出——旗标唯一用途，默认开更有信息量
-                  console.error(`     💡 候选行号: ${inv.suggest.join(', ')}（token 命中行，人工确认后更新文档锚）`);
+                  console.log(`     💡 候选行号: ${inv.suggest.join(', ')}（token 命中行，人工确认后更新文档锚）`);
                 }
               }
               if (fixResult) {
-                console.error(`\n🔧 重锚报告：${fixResult.applied} 处已${dryRun ? '预览' : '改写'}${dryRun ? '（dry-run 未写盘）' : ''}、${result.invalid.length - fixes.length} 处待人工${fixResult.skipped.length > 0 ? `、${fixResult.skipped.length} 处写回跳过` : ''}。`);
+                console.log(`\n🔧 重锚报告：${fixResult.applied} 处已${dryRun ? '预览' : '改写'}${dryRun ? '（dry-run 未写盘）' : ''}、${result.invalid.length - fixes.length} 处待人工${fixResult.skipped.length > 0 ? `、${fixResult.skipped.length} 处写回跳过` : ''}。`);
               if (fixReceipt) {
-                console.error(`🔁 修复回执（机器复跑证明）：修复前 ${fixReceipt.invalidBefore} 处失效 → 重锚 ${fixReceipt.reAnchored} 处 → 修复后 ${fixReceipt.invalidAfter} 处（消除 ${fixReceipt.eliminated} 处）。`);
+                console.log(`🔁 修复回执（机器复跑证明）：修复前 ${fixReceipt.invalidBefore} 处失效 → 重锚 ${fixReceipt.reAnchored} 处 → 修复后 ${fixReceipt.invalidAfter} 处（消除 ${fixReceipt.eliminated} 处）。`);
               }
               }
-              console.error(`\n修复指引：行号漂移 → 更新文档行号到当前源码；文件删改名 → 更新引用路径；`);
-              console.error(`关键词缺失但行号正确 → 确认符号是否改名，改文档 token 或行号。`);
+              console.log(`\n修复指引：行号漂移 → 更新文档行号到当前源码；文件删改名 → 更新引用路径；`);
+              console.log(`关键词缺失但行号正确 → 确认符号是否改名，改文档 token 或行号。`);
             }
             // 变更名提名 advisory 段（主结果之后、exit 之前；不参与 ok/invalid 与 exit code）。
             // 零输出原则（docs-check-fix 契约：无新 flag 时 stdout 逐字节一致；决策规则族同款
@@ -1732,7 +1770,9 @@ async function main() {
         }
         process.exit(g.exitCode);
       } else {
-        console.log('用法: sillyspec docs migrate | sillyspec docs check [--paths <glob,...>] [--json] [--fix] [--dry-run] | sillyspec docs gate [--init-baseline] [--json]');
+        console.log('用法: sillyspec docs migrate [--from <旧前缀> --to <新前缀> [--apply]] | sillyspec docs check [--paths <glob,...>] [--json] [--fix] [--dry-run] [--no-exempt] | sillyspec docs gate [--init-baseline] [--json]');
+        console.log('  docs migrate：--from/--to 路径前缀迁移（默认 dry-run，--apply 写盘+自动复核）；无 flag = 旧 .sillyspec 结构迁移');
+        console.log('  docs check --no-exempt：archive/finished 与 doc_type: snapshot 文档照常校验（缺省豁免）');
         process.exit(2);
       }
       break;

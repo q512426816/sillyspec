@@ -93,6 +93,7 @@ modules:
     review_reasons: []
     paths:
       - src/docs-check.js
+      - src/docs-migrate.js
       - src/docs-gate.js
       - src/docs-debt.js
       - src/scan-staleness.js

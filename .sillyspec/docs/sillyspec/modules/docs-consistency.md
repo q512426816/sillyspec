@@ -4,7 +4,7 @@ doc_type: module-card
 module_id: docs-consistency
 author: qinyi
 created_at: 2026-08-16T19:05:00+08:00
-updated_at: 2026-08-24T00:40:00+08:00
+updated_at: 2026-09-08T11:00:00+08:00
 ---
 
 # docs-consistency
@@ -17,7 +17,8 @@ updated_at: 2026-08-24T00:40:00+08:00
 
 | 文件 | 职责 |
 |------|------|
-| `src/docs-check.js` | 文档行号引用校验核心：层1 存在性（文件存在 + 行号在界，范围引用查 end）+ 层2 关键词断言（引用行反引号代码 token 在源码窗口内命中，多候选任一全过即通过）+ 失效引用修复分类（classifyFix：token 全量候选唯一命中 → fixable，多/零命中或无 token → needs-manual）；核心逻辑纯函数无 fs 依赖可单测；校验链路只读，`--fix` 显式触发时 applyFixes 按 docLine+行内偏移定点改写行号（只改行号数字，不改引用文件名与 token，CRLF 保持，同行多引用从后往前不错位），是本模块唯一写回面。2026-08-23 起新增决策规则族 `runDecisionRules`（`src/docs-check.js:830`，async advisory）——扫 knowledge/decisions/<域>.md 的 D-xxx@vN implemented 条目做锚点存在性 + 锚定模块源码 behind 超阈值复核（`readDecisionRulesConfig` 读 local.yaml decisions.behind_threshold 缺省 10）；不进 ok/invalid 阻断链、校验链路只读零写盘、无 decisions 库/无超阈 → findings 空零输出；known_failures decisions.* 命名空间豁免（规则级/条目级伞形，与 verify-postcheck 读法逐字对齐）；消费者 = doctor 决策待复核检查步骤与 verify evidence-auto 推荐链 |
+| `src/docs-check.js` | 文档行号引用校验核心：层1 存在性（文件存在 + 行号在界，范围引用查 end）+ 层2 关键词断言（引用行反引号代码 token 在源码窗口内命中，多候选任一全过即通过）+ 失效引用修复分类（classifyFix：token 全量候选唯一命中 → fixable，多/零命中或无 token → needs-manual）；核心逻辑纯函数无 fs 依赖可单测；校验链路只读，`--fix` 显式触发时 applyFixes 按 docLine+行内偏移定点改写行号（只改行号数字，不改引用文件名与 token，CRLF 保持，同行多引用从后往前不错位），是本模块唯一写回面。2026-08-23 起新增决策规则族 `runDecisionRules`（`src/docs-check.js:815`，async advisory）——扫 knowledge/decisions/<域>.md 的 D-xxx@vN implemented 条目做锚点存在性 + 锚定模块源码 behind 超阈值复核（`readDecisionRulesConfig` 读 local.yaml decisions.behind_threshold 缺省 10）；不进 ok/invalid 阻断链、校验链路只读零写盘、无 decisions 库/无超阈 → findings 空零输出；known_failures decisions.* 命名空间豁免（规则级/条目级伞形，与 verify-postcheck 读法逐字对齐）；消费者 = doctor 决策待复核检查步骤与 verify evidence-auto 推荐链。2026-09-08 docs-fix-capability 起：REF_RE 文件段展开循环形支持括号路径（Next.js 路由组，markdown 链接零回归；D-006 否决原子序列形 ReDoS）；含 `...` 模糊路径跳过校验计 skippedFuzzy；豁免双通道 isExemptDoc（路径段 archive/finished + frontmatter doc_type: snapshot，opts.exempt 默认开、`--no-exempt` 关，豁免文档计 skippedExempt 不进 invalid）；classifyFix tie 与带 / 路径文件不存在分支附 fix.candidates 机械候选数组（仅 --json 面）；runDocsCheck 返回增 skippedExempt/skippedFuzzy |
+| `src/docs-migrate.js` | 确定性批量路径前缀迁移（2026-09-08 docs-fix-capability）：`docs migrate --from X --to Y` 对 docs check 同源文档集的 file:line 引用做前缀替换——默认 dry-run 输出计划零写盘、`--apply` 复用 applyFixes 写盘+自动 docs check 复核、目标不存在标 unverified（防 from/to 写反）；薄模块 import 复用 docs-check 导出不复制解析正则；exit 0=dry-run 零计划或 postCheck 全绿 / 1=apply 后仍失效或 unverified>0 / 2=用法错误；无 --from/--to 落回旧结构迁移 migrate.js 兼容 |
 | `src/docs-gate.js` | docs check 的 ratchet 门：失效数 ≤ 基线（`.sillyspec/docs-check-baseline`）即过、超基线拦——不管历史存量只拦增量；首次须显式 `--init-baseline`；exit 0 过 / 1 拦 / 2 配置或 IO 错误 |
 | `src/docs-debt.js` | 模块文档欠账事实计算：变更触及文件按 module.paths/core_files 归属到模块，git 双时间戳算 behind 计数；结论注入 execute Wave prompt（advisory、无债零输出、git 失败降级不抛）。2026-08-23 起新增导出 `computeModuleBehind`（`src/docs-debt.js:169`，单模块 behind 计数）——与 moduleDebt 共用 behind 口径单一真相源，供决策规则族复核调用，不改现有 debt 行为 |
 | `src/scan-staleness.js` | scan 文档新鲜度提示：source_commit vs HEAD 落后数生成 fresh / needs-refresh / unknown 三态结论，brainstorm 加载 scan 文档前注入一行提示（behind 只是「建议核对/重扫」的提示信号；引用失效判据归 docs-check） |
@@ -37,3 +38,4 @@ updated_at: 2026-08-24T00:40:00+08:00
 - 外部依赖：fs、path
 | 2026-09-07 | 2026-09-07-ir-stage-p3c | IR P3c：新 src/design-facts.js（建议归本模块，paths 待批量补录）——parseDecisionDomains/loadModuleMap/validateDecisionModuleRefs（复用 distill parseDecisions+modules.js parseModuleMapSimple：幻觉模块 id ERROR 带 NEW: 前缀豁免与出路提示、声明域×实改面双向 WARNING）/generateDesignSkeleton（十三章节标题逐字对齐 stage-contract-spec，决策追踪表从 decisions.md 预填）；test/design-facts.test.mjs 112 断言 |
 | 2026-09-07 | 2026-09-07-ir-stage-p3d | IR P3d：新 src/archive-delta.js（collectDeltaSources 四源 fail-soft：reconcile 按 change 过滤取最新+apply-pathspec 兜底 / buildDeltaReport Before-Delta-After 三段式 + scan 刷新建议与端点基线立项提示）；design-facts deriveActualModules 加导出；test/archive-delta.test.mjs 102 断言 |
+| 2026-09-08 | 2026-09-08-docs-fix-capability | 平台仓 1058→0 清理提案摘果子五项：REF_RE 展开循环形（括号路径/ReDoS 防护）+ 省略号模糊跳过 + 豁免双通道 + fix.candidates JSON + 报告出口统一 stdout（FR-5：报告走 stdout 诊断走 stderr）+ 新 src/docs-migrate.js 批量路径迁移；test/docs-fix-capability.test.mjs 16 断言 + test/docs-migrate.test.mjs 6 断言 + docs-check-fix 通道断言改造 S8 |
