@@ -856,7 +856,7 @@ export function detectMcpEndpoints(cwd) {
  * _module-map.yaml 的 needs_review=true 清单（卡缺失/精确校验归 modules rebuild/status）。
  * 只读 fail-soft。
  */
-export function detectModuleDocHealth(cwd) {
+function detectModuleDocHealth(cwd) {
   const base = { name: 'module_doc_health', label: '模块文档健康', safe_actions: [] }
   try {
     let mapText = null
@@ -891,7 +891,7 @@ export function detectModuleDocHealth(cwd) {
  * （behind 精确计算归 verify evidence-auto / docs-check 决策规则族——此处只做在场概览）。
  * 只读 fail-soft。
  */
-export function detectDecisionDrift(cwd) {
+function detectDecisionDrift(cwd) {
   const base = { name: 'decision_drift', label: '决策版本漂移', safe_actions: [] }
   try {
     const decDir = join(cwd, '.sillyspec', 'knowledge', 'decisions')
