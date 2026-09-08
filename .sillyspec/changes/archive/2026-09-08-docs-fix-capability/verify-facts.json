@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-08-docs-fix-capability",
+  "generatedAt": "2026-09-08T03:52:38.439Z",
+  "probes": {
+    "probe1": {
+      "command": "sillyspec verify-probes --change 2026-09-08-docs-fix-capability",
+      "metrics": {
+        "matches": 10,
+        "skippedFiles": 3,
+        "worktreeHits": 0,
+        "globEntries": 0
+      }
+    },
+    "probe3": {
+      "command": "sillyspec verify-probes --change 2026-09-08-docs-fix-capability",
+      "metrics": {
+        "tasks": 5,
+        "hasTest": 5
+      }
+    },
+    "probe5": {
+      "command": "sillyspec verify-probes --change 2026-09-08-docs-fix-capability",
+      "metrics": {
+        "backendEndpoints": 2,
+        "frontendCalls": 0
+      }
+    },
+    "probe6": {
+      "command": "sillyspec verify-probes --change 2026-09-08-docs-fix-capability",
+      "metrics": {
+        "deletions": 0,
+        "unavailable": false
+      }
+    }
+  }
+}
