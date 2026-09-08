@@ -18,6 +18,7 @@
 import { createHash } from 'crypto';
 import { existsSync, readdirSync, readFileSync, statSync, mkdirSync, writeFileSync, unlinkSync } from 'fs';
 import { join, relative, sep } from 'path';
+import { bindSyncNoiseRoot, syncConnectionWarn, isConnectionClassStatus, noteSyncSuccess } from './sync-noise.js';
 
 // 与 sillyhub-daemon/src/spec-sync.ts 共用排除口径（task-07 / FR-06 / D-008@v2）：
 // .runtime（有点）/ runtime（无点）/ projects（本地环境文件）在顶层排除；
@@ -457,6 +458,41 @@ function clearSpecConflictMarker(specRoot, changeName) {
   } catch { /* 清理失败不影响同步结果 */ }
 }
 
+// follower/stale 提示的跨轮去重（坑 spec-sync-follow-banner-spam，2026-09-08 用户反馈③）：
+// 「N 个本地未改动文件自动跟随服务器」的信息只在集合**首次出现/变化**时有价值。基线快照锚定
+// local-at-last-sync（见 writeBaseSnapshot 注释），本地落后于服务器的文件每轮都重新算出同样的
+// follower 集合（computeSpecOps 生成 op → dropFollowServerUpdates 再丢掉），平台未就绪 POST
+// 失败时基线还不落盘 → 同一集合每步重刷，实证 57 文件跟随逐条命令刷屏。marker 记上次已报集合，
+// 未变则降 debugLog；集合清空时清 key（此后同集合再现算「变化」重新报）。
+const FOLLOW_REPORT_MARKER = 'spec-sync-follow-reported.json';
+
+/**
+ * 判定 follower/stale 集合相对上次已报告是否变化（变化时更新 marker）。
+ * @param {string} specRoot
+ * @param {'follow'|'stale'} key
+ * @param {string[]} list 本轮集合
+ * @returns {boolean} true=有变化应报告；false=与上次相同应静默
+ */
+export function isFollowerSetChanged(specRoot, key, list) {
+  const sorted = [...(list || [])].sort();
+  const p = join(specRoot, '.runtime', FOLLOW_REPORT_MARKER);
+  let cur = {};
+  try { cur = JSON.parse(readFileSync(p, 'utf8')) || {}; } catch { /* 无 marker = 首报 */ }
+  const prev = Array.isArray(cur[key]) ? cur[key] : [];
+  const same = prev.length === sorted.length && prev.every((v, i) => v === sorted[i]);
+  if (same) return false;
+  try {
+    if (sorted.length === 0) delete cur[key];
+    else cur[key] = sorted;
+    if (Object.keys(cur).length === 0) { try { unlinkSync(p) } catch {} }
+    else {
+      mkdirSync(join(specRoot, '.runtime'), { recursive: true });
+      writeFileSync(p, JSON.stringify(cur) + '\n', 'utf8');
+    }
+  } catch { /* marker 失败 = 退化为逐轮报告（只损失降噪） */ }
+  return sorted.length > 0;
+}
+
 /**
  * 同步本地 .sillyspec 树到平台（CLI 直跑增量同步入口）。
  *
@@ -470,6 +506,9 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
     debugLog('[spec-sync] 未连接平台（本地合法状态）；跳过 spec 树增量同步');
     return { synced: 0 };
   }
+  // 绑定连接类失败噪音闸（sync-noise.js）：本目录所有 [spec-sync]/[sync] 失败 warn 的
+  // 跨进程静默窗口 marker 落这里（与 SyncManager 构造器绑定同目录）。
+  try { bindSyncNoiseRoot(join(specRoot, '.runtime')); } catch { /* 直通降级 */ }
   // HUB-09：单请求超时与外部熔断 signal 合并——trigger* 熔断时在飞请求被真实取消
   const withSignal = (timeoutMs) => (opts.signal ? AbortSignal.any([AbortSignal.timeout(timeoutMs), opts.signal]) : AbortSignal.timeout(timeoutMs));
 
@@ -488,13 +527,18 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
       // SILLYSPEC_DEBUG_SYNC=1 才可见），文件迟到平台且无任何线索（multi-agent-platform
       // 2026-08-18-workspace-file-browser 实证：design/decisions 迟到 27 分钟、plan.md 迟到
       // 8 分钟才被后续步骤的同步补上）。失败可见、成功不打扰。
-      console.warn(`[spec-sync] 拉取清单失败 HTTP ${res.status}（文件树本次未同步，下次自动重试）: ${changeName}`);
+      // 连接类失败（404=端点未就绪 / 5xx）走噪音闸（sync-noise.js）：平台未就绪期每步
+      // 自动同步重刷同一行，淹没门禁输出；其余状态码（4xx 业务态）每轮该看见。
+      const line = `[spec-sync] 拉取清单失败 HTTP ${res.status}（文件树本次未同步，下次自动重试）: ${changeName}`;
+      if (isConnectionClassStatus(res.status)) syncConnectionWarn(line);
+      else console.warn(line);
       return { synced: 0 };
     }
     const body = await res.json().catch(() => ({}));
     serverManifest = body.files || {};
   } catch (err) {
-    console.warn(`[spec-sync] 拉取清单异常（文件树本次未同步，下次自动重试）: ${changeName}: ${describeSyncError(err)}`);
+    const line = `[spec-sync] 拉取清单异常（文件树本次未同步，下次自动重试）: ${changeName}: ${describeSyncError(err)}`;
+    syncConnectionWarn(line); // 网络/超时/熔断均连接类
     return { synced: 0 };
   }
 
@@ -513,13 +557,19 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
   if (!opts.forcePush) {
     const dropped = dropFollowServerUpdates(ops, localFiles, baseHashes);
     if (dropped.followed.length > 0) {
-      console.log(
-        `[spec-sync] ${dropped.followed.length} 个本地未改动文件自动跟随服务器（他端推进，内容未变不回推）: ${dropped.followed.slice(0, 5).join(', ')}${dropped.followed.length > 5 ? ' 等' : ''}`
-      );
+      // 集合未变不重报（坑 spec-sync-follow-banner-spam）：本地落后集合每轮都重算出，
+      // 平台未就绪期同一批文件逐条命令刷屏。集合变化（新增漂移/清空后再现）才报。
+      if (isFollowerSetChanged(specRoot, 'follow', dropped.followed)) {
+        console.log(
+          `[spec-sync] ${dropped.followed.length} 个本地未改动文件自动跟随服务器（他端推进，内容未变不回推）: ${dropped.followed.slice(0, 5).join(', ')}${dropped.followed.length > 5 ? ' 等' : ''}`
+        );
+      } else {
+        debugLog(`[spec-sync] ${dropped.followed.length} 个本地未改动文件自动跟随服务器（集合与上次相同，不重报）`);
+      }
     }
     ops = dropped.ops;
     const filtered = filterStaleUpdates(ops, localFiles, lastSyncTs);
-    if (filtered.stale.length > 0) {
+    if (filtered.stale.length > 0 && isFollowerSetChanged(specRoot, 'stale', filtered.stale)) {
       console.warn(
         `[spec-sync] 拦下 ${filtered.stale.length} 个旧副本回推（本地自上次同步未改动而服务器已前进，如确需以本地为准：重存后重推）: ${filtered.stale.slice(0, 5).join(', ')}${filtered.stale.length > 5 ? ' 等' : ''}`
       );
@@ -544,7 +594,9 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
       signal: withSignal(30000),
     });
     if (!res.ok) {
-      console.warn(`[spec-sync] 同步请求失败 HTTP ${res.status}（文件树本次未同步，下次自动重试）: ${changeName}`);
+      const line = `[spec-sync] 同步请求失败 HTTP ${res.status}（文件树本次未同步，下次自动重试）: ${changeName}`;
+      if (isConnectionClassStatus(res.status)) syncConnectionWarn(line);
+      else console.warn(line);
       return { synced: 0 };
     }
     const body = await res.json().catch(() => ({}));
@@ -586,6 +638,7 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
         writeLastSyncTs(specRoot);
         writeBaseSnapshot(specRoot, localFiles);
         clearSpecConflictMarker(specRoot, changeName);
+        noteSyncSuccess();
         console.log(`[spec-sync] 冲突已自动消解（0 个需人工裁决；本会话改动 ${ops.length - followers.length > 0 ? '已同步' : '无差异'}）: ${changeName}`);
         return { synced: Math.max(ops.length - followers.length, 0), conflict: false, autoResolved: followers.length };
       }
@@ -614,6 +667,7 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
       console.warn(`⚠️ 处置：sillyspec platform resolve ${changeName} --keep-local | --take-platform | --abort（冲突详情: ${conflictPath || '(写入失败)'}）`);
       return { synced: 0, conflict: true, serverVersions: real, autoResolved: followers.length, conflictPath };
     }
+    noteSyncSuccess();
     console.log(`[spec-sync] 已同步 ${ops.length} 个文件变更: ${changeName}`);
     // 本轮无冲突 = 此前的未决 spec 树冲突已不存在，清残留标记（否则 status 永久红标、
     // 横幅去重单行提示不消——坑 spec-sync-conflict-banner-spam）
@@ -622,7 +676,8 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
     writeBaseSnapshot(specRoot, localFiles);
     return { synced: ops.length };
   } catch (err) {
-    console.warn(`[spec-sync] 同步异常（文件树本次未同步，下次自动重试）: ${changeName}: ${describeSyncError(err)}`);
+    const line = `[spec-sync] 同步异常（文件树本次未同步，下次自动重试）: ${changeName}: ${describeSyncError(err)}`;
+    syncConnectionWarn(line); // 网络/超时/熔断均连接类
     return { synced: 0 };
   }
 }

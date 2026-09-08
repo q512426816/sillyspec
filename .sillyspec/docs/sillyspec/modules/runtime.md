@@ -104,3 +104,7 @@ ProgressManager.alignExecuteToPlan(cwd, changeName, specBase, {confirm})
 <!-- MANUAL_NOTES 区已迁出至 runtime.changelog.md（手工批次，2026-09-07）——新条目追加到 sidecar，勿写回本卡 -->
 <!-- 2026-09-07-endpoint-baseline | （无 runtime 文件改动——指引在 stages/cli-entry 侧） -->
 <!-- MANUAL_NOTES_END -->
+
+## verify 收尾次序接线（2026-09-08-ir-verify-facts）
+
+gates.js verify 完成门重排：前置 slot-backfill（verify-result.md 槽段固化进 verify-facts.json——只固化既有底稿）+ verifyStartAt（ProgressManager.getStageCompletedAt 读 DB stages.completed_at，新只读访问器，change-registry 同款容错）注入 runValidators context；test 实测后 tests 段二次回填；cannot_verify 硬门（runVerifyRequiredEvidenceCheck status=blocked → rollback，逐 item verification 明细 + 修复指引）。无槽存量 md 走 legacy 降级不阻断。

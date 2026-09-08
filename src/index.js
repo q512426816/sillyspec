@@ -117,6 +117,7 @@ SillySpec CLI — 规范驱动开发工具包
     （无子命令）                       跑诊断，列出问题
     --align-execute-progress [--change <名>] [--confirm]   基于 plan.md 对齐 execute 派生戳（默认 dry-run）
     --cleanup-remnant [--confirm]      删除 0 字节空占位 db（默认 dry-run，仅 --confirm 落盘）
+    --gc-unstamped-runs [--confirm]    回收已归档变更留下的无 change 戳 execute-runs（默认 dry-run）
     --dump-db --path <db 路径>         dump 指定 db 内容到文件（取证用）
     --json                             结构化诊断 + 落盘 .sillyspec/.runtime/doctor-diagnosis.json
   sillyspec modules <rebuild | status | migrate>
@@ -942,7 +943,24 @@ async function main() {
           writeFileSync(vpReportPath, generateVerifyResultSkeleton(vpResult));
           console.log(`\n📄 已生成 verify-result.md 骨架: ${vpReportPath}（探针已预填；结论必须写明 PASS/FAIL，留待填会被 gate 判不过）`);
         }
-        writeVerifyFacts(join(vpSpecBase, 'changes', vpChange), vpResult, vpChange); // P3b：facts 底稿随 --init 刷新（骨架已存在也刷新，最近快照语义）
+        writeVerifyFacts(join(vpSpecBase, 'changes', vpChange), vpResult, vpChange); // P3b：facts 底稿随 --init 刷新（骨架已存在也刷新；v2 起分段合并保留固化段）
+        // 2026-09-08-ir-verify-facts R-02：已存在 md 缺证据账/回执槽段时仅追加骨架（幂等二跑
+        // 零改动）；task 行按 verify-required-evidence.json 预填（存在时）。
+        if (existsSync(vpReportPath)) {
+          let vpReqItems = []
+          try {
+            const vpReqPath = join(vpSpecBase, 'changes', vpChange, 'verify-required-evidence.json')
+            if (existsSync(vpReqPath)) {
+              const vpReq = JSON.parse(readFileSync(vpReqPath, 'utf8'))
+              vpReqItems = Array.isArray(vpReq.items) ? vpReq.items.map(it => ({ task: it.task, evidence: it.evidence || [] })) : []
+            }
+          } catch { /* 读取失败 → 空预填，不阻断 */ }
+          const { backfillMissingEvidenceSlots } = await import('./verify-probes.js')
+          const vpAdded = backfillMissingEvidenceSlots(vpReportPath, vpReqItems)
+          if (vpAdded.added.length > 0) {
+            console.log(`📄 已补齐缺失槽段（不触碰既有正文）: ${vpAdded.added.join('、')}`)
+          }
+        }
       }
       break;
     }
@@ -1810,9 +1828,10 @@ async function main() {
     // slice(1) 去掉的是 'run' 字面量，这里 command 本身就是 stage 名不能丢。
     case 'doctor': {
       const doctorEffectiveDir = specDir ? dir : resolveEffectiveDir(dir);
-      // 执行流：--cleanup-remnant / --cleanup-ghosts / --dump-db（结构化诊断之外的修复/取证动作）
+      // 执行流：--cleanup-remnant / --cleanup-ghosts / --gc-unstamped-runs / --dump-db（结构化诊断之外的修复/取证动作）
       const cleanupRemnant = filteredArgs.includes('--cleanup-remnant');
       const cleanupGhosts = filteredArgs.includes('--cleanup-ghosts');
+      const gcUnstampedRuns = filteredArgs.includes('--gc-unstamped-runs');
       const dumpDbFlag = filteredArgs.includes('--dump-db');
       const doctorConfirm = filteredArgs.includes('--confirm');
       const pathIdx = filteredArgs.indexOf('--path');
@@ -1916,6 +1935,29 @@ async function main() {
           if (r.reason) console.log(`ℹ️ ${r.reason}`);
         }
         process.exitCode = r.errors.length > 0 ? 1 : 0;
+        break;
+      }
+      if (gcUnstampedRuns) {
+        // ql-20260908-006-5f04：无戳 execute-runs 一次性清扫。默认 dry-run，--confirm 才删。
+        // 不进 archive 热路径（pruneArchivedChangeRuntime 故意不猜无戳 run）。
+        const { gcUnstampedExecuteRuns } = await import('./doctor-diagnostics.js');
+        const r = await gcUnstampedExecuteRuns({ cwd: doctorEffectiveDir, specDir, confirm: doctorConfirm });
+        if (json) {
+          console.log(JSON.stringify(r, null, 2));
+        } else {
+          const verb = doctorConfirm ? '已删除' : '待删除（dry-run）';
+          console.log(`🧹 无戳 execute-runs（仅已归档变更、交叉核验通过）${verb}：${r.count} 个  [runtime: ${r.runtime_root || '(无)'}]`);
+          for (const c of r.candidates || []) {
+            console.log(`   ${doctorConfirm ? '✅' : '-'} ${c.runId} ← ${c.owner}（via ${c.via}）`);
+          }
+          for (const s of r.skipped || []) console.log(`   ⏭️  ${s.runId}（${s.reason}）`);
+          for (const e of r.errors || []) console.log(`   ❌ ${e.runId || ''}: ${e.error}`);
+          if (!doctorConfirm && r.count > 0) {
+            console.log(`\n加 --confirm 执行删除（只删上面列出的无戳 run，有 change 戳 / 命中活跃变更 / 归属不明一律不动）。`);
+          }
+          if (r.reason) console.log(`ℹ️ ${r.reason}`);
+        }
+        process.exitCode = (r.errors && r.errors.length > 0) ? 1 : 0;
         break;
       }
       if (dumpDbFlag) {

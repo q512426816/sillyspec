@@ -9,7 +9,8 @@
  *   - DB：status='deleted'（与 archived 语义分离，DB 可直接审计区分，行保留不物理删）
  *   - 目录：changes/<name>/ 物理移除（git tracked 文件删除后照常 commit，历史仍可回溯）
  *   - worktree：复用 archiveWorktreeCleanup（有未 apply 变更时保留 worktree 只警告——
- *     不因删变更丢用户唯一副本的代码；顺带清 execute/stage-review runId marker）
+ *     不因删变更丢用户唯一副本的代码；顺带清 execute/stage-review runId marker
+ *     + 该变更的 runtime 取证（pruneArchivedChangeRuntime））
  *   - git：safeGit add -A 暂存目录删除（best-effort，对齐 archive CLI 下沉 git add）
  *   - 平台：triggerSync 推终态（sync.js 对 status='deleted' 上行墓碑，平台收敛软删）
  *

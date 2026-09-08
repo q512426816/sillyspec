@@ -1410,6 +1410,16 @@ export async function adoptTaskReviewMechanics({ changeName, cwd, platformOpts =
       continue
     }
 
+    // 切片空不冲声明（2026-09-08 用户反馈：backfill-reviews --adopt 冲掉 review）：task 卡
+    // 无 allowed_paths、或 allowed_paths 与 change 级 diff 的路径形态失配时，上方过滤产出
+    // 空 changedFiles——旧代码照样整字段覆写，reviewer 已声明且过证据校验的 changedFiles
+    // 被清空，gate（verifyReviewGitEvidence）随即按空集误判。adopt 的职责是重算 mechanics，
+    // 不是降级声明：计算切片为空而原声明非空时保留原声明并留 reason 可追溯。
+    if (taskChangedFiles.length === 0 && Array.isArray(prev.changedFiles) && prev.changedFiles.length > 0) {
+      taskChangedFiles = prev.changedFiles
+      reasons.push(`${taskId}: allowed_paths 未切出任何 diff 文件（卡无声明/路径形态失配），保留原 changedFiles ${prev.changedFiles.length} 条不冲空`)
+    }
+
     const merged = { ...prev }
     merged.schemaVersion = REVIEW_SCHEMA_VERSION
     merged.task = taskId

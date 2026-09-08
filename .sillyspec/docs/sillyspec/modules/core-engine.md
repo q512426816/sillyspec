@@ -30,7 +30,8 @@ core-engine 是 SillySpec 的基础设施层，由三个层次组成：持久化
 - `src/check-primitives.js` — 共享产物字面校验原语（纯函数：contains_sections/min_lines/no_placeholder/no_empty_files 全仓单一语义源），workflow 与 stage-contract 两引擎共用
 - `src/stage-review.js` — 阶段级审查门（brainstorm/plan/execute-acceptance 的阶段级 review.json 校验：文档证据 reviewedFiles + docHash）
 - `src/task-review.js` — execute 每 task 的 review.json 校验（git 代码 diff 证据：base/head）
-- `src/verify-postcheck.js` — verify 完成时 CLI 亲自执行 local.yaml 测试命令与 verify-result.md 自报告对账（自报 PASS 但实测失败 → 阻断）；2026-08-23 起 test_strategy 新值接线（D-005@v2）：`resolveTestStrategy` 统一入口（`src/verify-postcheck.js:21`）解析配置策略 + evidence-auto 按 module-impact.md 影响面推荐检查组合（行为→module 聚焦测试、文档/prompt→docs-check、门禁契约→gate；缺失/不可解析降级 module 并注记）；
+- `src/verify-postcheck.js` — verify 完成时 CLI 亲自执行 local.yaml 测试命令与 verify-result.md 自报告对账（自报 PASS 但实测失败 → 阻断）；
+- `src/verify-facts-schema.js` — verify-facts.json v2 schema 单点（2026-09-08-ir-verify-facts，D-005@v2）：FACTS_SCHEMA_VERSION/EVIDENCE_STATUS/EXEMPTION_RE/classifyVerifiedFile（code|artifact 证据核验口径分流）/parseEvidenceSlots（证据账+集成验证回执槽段解析，行首锚定占位 fail-closed）/validateFactsV2；builder/对账/集成证据/渲染四方 import 同源2026-08-23 起 test_strategy 新值接线（D-005@v2）：`resolveTestStrategy` 统一入口（`src/verify-postcheck.js:21`）解析配置策略 + evidence-auto 按 module-impact.md 影响面推荐检查组合（行为→module 聚焦测试、文档/prompt→docs-check、门禁契约→gate；缺失/不可解析降级 module 并注记）；
   skip=真跳过（`src/verify-postcheck.js:1010` mode 'strategy-skip'）——不回退全量、verify 输出显式标注留审计痕迹（R-07），`--done` 对账按 skip 分支放行
 - `src/review-tier.js` — 审查分级（self/independent）：plan_level 确定性映射（none/light→self、full→independent），无 plan_level 阶段退文件数启发式；run/gates.js 与 run/prompt.js 消费
 - `src/change-risk-profile.js` — 变更风险分级检测（P0 阻塞确认 / P1 记录 / P2 通过，产出 risk-profile.json）
@@ -119,3 +120,7 @@ core-engine 是 SillySpec 的基础设施层，由三个层次组成：持久化
 ## 变更索引
 
 见 [core-engine.changelog.md](core-engine.changelog.md)（split-changelog 迁出）。
+
+## verify-facts v2（2026-09-08-ir-verify-facts）
+
+verify-facts.json 升 schemaVersion 2：buildVerifyFacts 五段（probes 机器段原样 + conclusion/tests/requiredEvidence/runtimeEvidence/factsConsistency slot-backfill 段）；writeVerifyFacts 分段合并（re-init 保留固化段，P1-5）；--init 骨架增「证据账/集成验证回执」槽段（占位不含枚举词）+ 段落级补齐幂等（R-02）；backfillFactsFromMdAndTests 只固化既有底稿（创建唯一入口 --init——无中生有会误升存量判别）。runVerifyRequiredEvidenceCheck v2 槽优先分类核验（code=存在×mtime×diff 交集 / artifact 豁免 diff；verifyStartAt=execute completed_at，R-05 fallback design created_at；无槽 legacy 子串降级）+ status 扩 blocked；checkIntegrationEvidence v2 回执槽优先（绿判据 log 存在×mtime 窗口×签名扫描噪声剔除×exit 0，literals 降 legacy）；checkProbeConsistency 增 facts 基线对比维度（probe1/6=ERROR、probe3/5=WARNING，probe6 HEAD-advance 豁免防重复报）。消费方：run/gates.js 收尾接线（backfill 先行 → runValidators（context.verifyStartAt）→ test 实测 tests 二次回填 → cannot_verify 硬门 rollback）。

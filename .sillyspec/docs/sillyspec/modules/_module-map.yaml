@@ -75,6 +75,7 @@ modules:
       - src/contract-matrix.js
       - src/endpoint-extractor.js
       - src/verify-probes.js
+      - src/verify-facts-schema.js
       - src/foreign-declared.js
       - src/knowledge-match.js
       - src/doctor-diagnostics.js

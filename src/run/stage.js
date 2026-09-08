@@ -151,6 +151,9 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
       // marker 断裂（worktree cleanup / 归档清理 / 并行误删）后按戳归属，不再错配其他变更的 run
       const { stampExecuteRunChange } = await import('../task-review.js')
       stampExecuteRunChange(runtimeRoot, currentExecuteRunId, changeName)
+      // execute-runs 回收不在此处（ql-20260908-005/006 已定分野）：变更归属类证据走归档时
+      // 精确回收（complete-handlers pruneArchivedChangeRuntime）+ doctor --gc-unstamped-runs
+      // 清存量；写入侧 keep-N 滚动是启发式，会误删活跃变更的旧 run，不进证据类目录。
     }
   }
 
@@ -434,6 +437,9 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
           forceBaseline,
           linkedChanges,
           quicklogId: qlId,
+          // 刀①（2026-09-08）：启动 --input 的任务描述落 guard——prompt.js 渲染 step1 时据此做
+          // 模块上下文关键词匹配（changeName 是 quick-<hash> 无语义，step.prompt 全文噪音大）
+          taskDescription: quickDesc,
           startedAt: new Date().toISOString(),
         }
         // 写入 .runtime/quick-sessions/<sessionId>/guard.json 供 worktree-guard hook 读取

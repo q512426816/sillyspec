@@ -400,6 +400,13 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
       mkdirSync(artifactBase, { recursive: true })
       const ts = new Date().toISOString().slice(0,19).replace(/[-T:]/g, '')
       writeFileSync(join(artifactBase, `${changeName || 'unknown'}-${stageName}-step${currentIdx + 1}-${ts}.txt`), outputText)
+      // 写入侧滚动裁剪（runtime-hygiene.js，2026-09-08 系统性回收）：artifacts/ 只写不收，
+      // 实证本仓 534 份累积。文件名时间戳在尾部、前缀是变更名（长变更晚收尾会乱序）→ 按
+      // mtime 排序（write-once 本地审计文件，mtime 可靠）。fail-open 静默。
+      try {
+        const { pruneTimestampedEntries } = await import('../runtime-hygiene.js')
+        pruneTimestampedEntries({ dir: artifactBase, keep: 100, orderBy: 'mtime' })
+      } catch { /* 卫生动作 fail-open */ }
     } else {
       steps[currentIdx].output = outputText
     }

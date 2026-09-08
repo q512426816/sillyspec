@@ -72,3 +72,7 @@ updated_at: 2026-08-24T00:40:00+08:00
 <!-- MANUAL_NOTES_START -->
 <!-- MANUAL_NOTES 区已迁出至 stages.changelog.md（手工批次，2026-09-07）——新条目追加到 sidecar，勿写回本卡 -->
 <!-- MANUAL_NOTES_END -->
+
+## verify 阶段槽位指引（2026-09-08-ir-verify-facts）
+
+verify.js step2（Execute Evidence 传递检查）改 v2 硬门口径：结论写「## 证据账（cannot_verify 任务）」槽段（三选一状态 + verifiedFiles 精确路径 + 豁免后缀）；step7 报告结构章节序列增证据账/集成验证回执两槽段 + 回执四字段说明（绿判据四条件，literals 仅存量回退）。docs/prompt/verify.md 镜像经 _extract/_sync 同步。

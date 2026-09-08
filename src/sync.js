@@ -17,6 +17,7 @@ import { safeGit } from './git-helper.js';
 import { openDatabase } from './db-engine.js';
 import { PLATFORM_MANAGED_FILENAME, QUICK_SID_RE } from './run/shared.js';
 import { syncSpecTree } from './spec-sync.js';
+import { bindSyncNoiseFromCwd, syncConnectionWarn, isConnectionClassStatus, noteSyncSuccess } from './sync-noise.js';
 
 // sync 是 best-effort（网络失败只 warn）：平台指针失效时不抛，跳过平台、回退本地。
 function safePlatformSpecDir(cwd) {
@@ -218,11 +219,18 @@ function combineSignals(external, timeoutMs = REQUEST_TIMEOUT_MS) {
 
 async function fetchJson(url, options = {}) {
   const signal = combineSignals(options.signal);
+  // noMute 是本模块的闸门开关不是 fetch 参数，先剥掉再透传
+  const { noMute, ...init } = options;
   try {
-    const res = await fetch(url, { ...options, signal });
+    const res = await fetch(url, { ...init, signal });
     if (!res.ok) {
       const text = await res.text().catch(() => '');
-      console.warn(`[sync] ${options.method || 'GET'} ${url} → ${res.status} ${text.slice(0, 200)}`);
+      const line = `[sync] ${options.method || 'GET'} ${url} → ${res.status} ${text.slice(0, 200)}`;
+      // 连接类失败（404=端点未就绪 / 5xx）走跨进程噪音闸：平台未就绪期每条命令的自动
+      // 同步都撞同一批失败，重复刷屏淹没门禁输出（见 sync-noise.js 模块头）。409 冲突与
+      // 其余 4xx 业务态每轮都该看见，不走闸。用户显式命令（connect health ping）传 noMute。
+      if (!noMute && isConnectionClassStatus(res.status)) syncConnectionWarn(line);
+      else console.warn(line);
       return null;
     }
     const ct = res.headers.get('content-type') || '';
@@ -231,11 +239,11 @@ async function fetchJson(url, options = {}) {
     }
     return null;
   } catch (err) {
-    if (err.name === 'AbortError') {
-      console.warn(`[sync] ${url} 请求超时/中断 (${REQUEST_TIMEOUT_MS}ms 上限或外部熔断)`);
-    } else {
-      console.warn(`[sync] ${url} 请求失败: ${err.message}`);
-    }
+    const line = err.name === 'AbortError' || err.name === 'TimeoutError'
+      ? `[sync] ${url} 请求超时/中断 (${REQUEST_TIMEOUT_MS}ms 上限或外部熔断)`
+      : `[sync] ${url} 请求失败: ${err.message}`;
+    if (!noMute) syncConnectionWarn(line);
+    else console.warn(line);
     return null;
   }
 }
@@ -247,23 +255,26 @@ async function fetchJson(url, options = {}) {
  */
 async function fetchJsonWithStatus(url, options = {}) {
   const signal = combineSignals(options.signal);
+  const { noMute, ...init } = options;
   try {
-    const res = await fetch(url, { ...options, signal });
+    const res = await fetch(url, { ...init, signal });
     const text = await res.text().catch(() => '');
     let body = null;
     if (text) {
       try { body = JSON.parse(text); } catch { body = null; }
     }
     if (!res.ok) {
-      console.warn(`[sync] ${options.method || 'GET'} ${url} → ${res.status} ${text.slice(0, 200)}`);
+      const line = `[sync] ${options.method || 'GET'} ${url} → ${res.status} ${text.slice(0, 200)}`;
+      if (!noMute && isConnectionClassStatus(res.status)) syncConnectionWarn(line);
+      else console.warn(line);
     }
     return { ok: res.ok, status: res.status, body };
   } catch (err) {
-    if (err.name === 'AbortError') {
-      console.warn(`[sync] ${url} 请求超时/中断 (${REQUEST_TIMEOUT_MS}ms 上限或外部熔断)`);
-    } else {
-      console.warn(`[sync] ${url} 请求失败: ${err.message}`);
-    }
+    const line = err.name === 'AbortError' || err.name === 'TimeoutError'
+      ? `[sync] ${url} 请求超时/中断 (${REQUEST_TIMEOUT_MS}ms 上限或外部熔断)`
+      : `[sync] ${url} 请求失败: ${err.message}`;
+    if (!noMute) syncConnectionWarn(line);
+    else console.warn(line);
     return { ok: false, status: 0, body: null };
   }
 }
@@ -399,6 +410,12 @@ export class SyncManager {
     // 归档尾声静默化旗标（坑 post-archive-sync-noise）：sync() 探测到已归档时置位，
     // 链内 syncDocuments 的「变更不存在」降 debug（每次 sync 调用重置）
     this._suppressDocsMissingWarn = false;
+    // 绑定连接类失败噪音闸的 marker 目录（sync-noise.js）：本实例所有 fetch 失败 warn 的
+    // 跨进程静默窗口落这里。bindSyncNoiseFromCwd 零副作用（只读指针 JSON，不触发
+    // resolvePlatformSpecDir 的指针守卫 warn——doctor 两路字节一致契约）。
+    try {
+      bindSyncNoiseFromCwd(cwd);
+    } catch { /* 未绑定 = 闸门直通（多一行 warn，无正确性影响） */ }
   }
 
   /**
@@ -423,7 +440,8 @@ export class SyncManager {
       console.warn(`[sync] platform.url 非 https（${normalizedUrl.slice(0, 60)}），同步 token 将明文传输——请确认为受控内网环境`);
     }
     const healthUrl = `${normalizedUrl}/api/health`;
-    const result = await fetchJson(healthUrl);
+    // noMute：connect 是用户显式命令，health ping 的失败细节不走静默闸（用户正在诊断连接）
+    const result = await fetchJson(healthUrl, { noMute: true });
     if (result === null) {
       console.warn(`[sync] 平台连接验证失败: ${url}`);
       return;
@@ -661,6 +679,9 @@ export class SyncManager {
       }
 
       if (res.ok) {
+        // 平台连接恢复信号（sync-noise.js）：此前静默窗口内的失败在恢复的第一笔成功时
+        // 打一行提示并清 marker；之后照常「成功不打扰」。
+        noteSyncSuccess();
         // 更新 platform_last_sync + 推进 base_ts（ql-20260818-008：值优先平台回执 last_pushed_at，
         // 缺省用本次 pushedAt——服务器 _apply 存的就是客户端 X-SillySpec-Pushed-At 原值，回写一致。
         // 修复前该列从不写，下次 push 永不带 X-SillySpec-Base-Ts、pull 脏度检测恒 false）
@@ -1268,8 +1289,12 @@ export class SyncManager {
       signal: opts.signal, // HUB-09：熔断 abort 传到底层请求
     });
     if (result === null) {
-      // sillyhub 未就绪 / 404 / 网络失败均 fetchJson 返回 null → Best Effort 降级
-      console.warn(`[sync] 拉取变更进度失败: ${changeName}（sillyhub 未就绪或变更不存在）`);
+      // sillyhub 未就绪 / 404 / 网络失败均 fetchJson 返回 null → Best Effort 降级。
+      // 自动注入点（triggerPull，opts.autoPull）走噪音闸防刷屏；手动 `platform pull`
+      // 是用户显式诊断动作，恒可见。
+      const line = `[sync] 拉取变更进度失败: ${changeName}（sillyhub 未就绪或变更不存在）`;
+      if (opts.autoPull) syncConnectionWarn(line);
+      else console.warn(line);
       return { ok: false, imported: false, conflict: false, reason: '拉取变更进度失败' };
     }
 

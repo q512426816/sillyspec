@@ -217,23 +217,31 @@ function getBlobHashMap(cwd, treeish, files) {
  * 跨仓文件不在主仓 worktree 故永不进 diff）；跨仓 task 走 no-op（D-009），其 allowed_paths 仅
  * 作 Map 切片返回，供上游（assess / 跨仓 review 校验）按 repo 取用。
  *
+ * **specBase 解析（2026-09-08 用户反馈：平台模式 apply allowlist 读本地空目录整批 BLOCKED）**：
+ * 优先级 opts.specBase（调用方传 platformOpts.specRoot）> 平台指针（.sillyspec-platform.json
+ * 静默读，不触发 resolvePlatformSpecDir 的守卫 warn）> 本地 projectRoot/.sillyspec。平台模式下
+ * changes/ 实体在 specRoot，本地目录常为空——旧硬编码 CHANGES_REL 恒读空 → allow 集恒空 →
+ * Gate1 整批误拦（sync.js BUG-01 同族）。
+ *
  * @param {string} projectRoot - 主仓库根
  * @param {string} changeName - 变更名
+ * @param {{ specBase?: string }} [opts] specBase 显式传入（平台模式必传 specRoot）
  * @returns {Map<string, Set<string>>} repoKey → 并集清单 Set（无 design 清单且无 task 卡片时为空 Map）
  */
-export function resolveApplyAllowSet(projectRoot, changeName) {
+export function resolveApplyAllowSet(projectRoot, changeName, opts = {}) {
   const repoMap = new Map();
   const getOrCreate = (key) => {
     if (!repoMap.has(key)) repoMap.set(key, new Set());
     return repoMap.get(key);
   };
-  // design §6 清单归属 main（清单路径相对主仓根；跨仓 task 的 allowed_paths 由 task 卡片 repo 切片）
+  const specBase = opts.specBase || _silentPointerSpecRoot(projectRoot) || join(projectRoot, '.sillyspec');
+  // design §6 清单归属 main（清单路径相对主仓根；跨仓 task 的 allowed_paths 由 task 卡 repo 切片）
   const mainSet = getOrCreate('main');
   parseFileChangeList(
-    join(projectRoot, CHANGES_REL, changeName, 'design.md'),
+    join(specBase, 'changes', changeName, 'design.md'),
     { keepSillyspecDocs: true }
   ).forEach(p => mainSet.add(p));
-  const tasksDir = join(projectRoot, CHANGES_REL, changeName, 'tasks');
+  const tasksDir = join(specBase, 'changes', changeName, 'tasks');
   if (existsSync(tasksDir)) {
     for (const tf of readdirSync(tasksDir).filter(f => /^task-\d+\.md$/.test(f))) {
       const content = readFileSync(join(tasksDir, tf), 'utf8');
@@ -244,6 +252,18 @@ export function resolveApplyAllowSet(projectRoot, changeName) {
     }
   }
   return repoMap;
+}
+
+// 平台指针静默读（worktree-apply 内部用）：只读 <projectRoot>/.sillyspec-platform.json 的
+// specRoot 字段，不做存在性/自指/temp 守卫、不打 warn——allowlist 只需一个「读得到就用」的
+// 基准目录，坏指针/缺字段落回本地（与 sync-noise.js bindSyncNoiseFromCwd 同款零副作用风格）。
+function _silentPointerSpecRoot(projectRoot) {
+  try {
+    const p = join(projectRoot, '.sillyspec-platform.json');
+    if (!existsSync(p)) return null;
+    const s = JSON.parse(readFileSync(p, 'utf8').replace(/^\uFEFF/, ''));
+    return s && typeof s.specRoot === 'string' && s.specRoot ? s.specRoot : null;
+  } catch { return null; }
 }
 
 /**
@@ -257,14 +277,23 @@ export function resolveApplyAllowSet(projectRoot, changeName) {
  * collectExecuteChangedFiles 一致：change 戳归属 run、.sillyspec//meta.json 过滤、
  * review.repo 切片（跨仓声明不进 main 集）。读不到 run/review → 空 Map（fail-closed 回退旧行为）。
  *
+ * runtimeRoot 解析（2026-09-08 平台模式修复，与 resolveApplyAllowSet 的 specBase 同族）：
+ * 优先级 opts.runtimeRoot（调用方传 resolveRuntimeRoot(platformOpts, specBase) 产物）>
+ * 指针 specRoot/.runtime（静默读）> 本地 projectRoot/.sillyspec/.runtime。平台模式
+ * execute-runs 在平台 runtime root，旧硬编码本地恒空 → 第三源恒缺失。
+ *
  * @param {string} projectRoot - 主仓库根
  * @param {string} changeName - 变更名
+ * @param {{ runtimeRoot?: string }} [opts]
  * @returns {Map<string, string[]>}
  */
-export function collectReviewDeclaredFiles(projectRoot, changeName) {
+export function collectReviewDeclaredFiles(projectRoot, changeName, opts = {}) {
   const byRepo = new Map();
   try {
-    const runtimeRoot = join(projectRoot, '.sillyspec', '.runtime');
+    const ptrSpec = _silentPointerSpecRoot(projectRoot);
+    const runtimeRoot = opts.runtimeRoot
+      || (ptrSpec ? join(ptrSpec, '.runtime') : null)
+      || join(projectRoot, '.sillyspec', '.runtime');
     const runId = resolveLatestExecuteRunIdWithTasks({ runtimeRoot, changeName });
     if (!runId) return byRepo;
     const runTasksDir = join(runtimeRoot, 'execute-runs', runId, 'tasks');
@@ -504,10 +533,11 @@ function applyCrossRepoWorktrees(changeName, projectRoot, ctx, { checkOnly = fal
       continue;
     }
 
-    // 清单校验（per-repo 切片 + review 声明切片并入，与主仓 Gate1/3b 同语义）
-    const allowMap = resolveApplyAllowSet(projectRoot, changeName);
+    // 清单校验（per-repo 切片 + review 声明切片并入，与主仓 Gate1/3b 同语义）。
+    // specBase 显式传（平台模式 changes/ 在 specRoot；本地模式与旧硬编码同值零回归）。
+    const allowMap = resolveApplyAllowSet(projectRoot, changeName, { specBase });
     let allowSet = allowMap.get(repoKey) || new Set();
-    const reviewDeclared = collectReviewDeclaredFiles(projectRoot, changeName).get(repoKey);
+    const reviewDeclared = collectReviewDeclaredFiles(projectRoot, changeName, { runtimeRoot: join(specBase, '.runtime') }).get(repoKey);
     if (reviewDeclared) {
       const merged = new Set([...allowSet]);
       for (const f of reviewDeclared) {
@@ -754,15 +784,21 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
   }
 
   // --- 3. 解析 apply 文件清单（design §6 清单 ∪ plan TaskCard allowed_paths，execute 复盘 c） ---
+  // allowlist 基准目录（2026-09-08 平台模式修复）：ctx.platformOpts.specRoot 优先（execute
+  // ctx 透传），否则 resolveApplyAllowSet 内部静默读平台指针兜底，最后本地——旧硬编码在
+  // 平台模式读本地空 changes/ → allow 集恒空 → Gate1 整批误拦。
+  const allowSpecBase = (ctx && ctx.platformOpts && ctx.platformOpts.specRoot) || undefined;
+  const allowRuntimeRoot = (ctx && ctx.platformOpts && ctx.platformOpts.runtimeRoot)
+    || (allowSpecBase ? join(allowSpecBase, '.runtime') : undefined);
   // resolveApplyAllowSet 返回 Map<repo, Set>（task-05 跨仓切片）；主仓 apply 只消费 main 仓 Set
   // （主仓 worktree diff 只含主仓文件，跨仓文件在跨仓仓不进主仓 worktree diff）。跨仓 allowed_paths
   // 仅作 Map 切片返回供上游用，主流程不消费（跨仓 apply=no-op，D-009）。
-  const allowMap = resolveApplyAllowSet(projectRoot, changeName);
+  const allowMap = resolveApplyAllowSet(projectRoot, changeName, { specBase: allowSpecBase });
   // --- 3b. review.json 声明偏差文件并入（坑 apply-undeclared-deviation-block）---
   // 第三源：reviewer 声明的 changedFiles（已过 Task Review Gate git 证据交叉校验）——执行期
   // 有据越界（facade 转发/名单测试）不再逼回改 design.md。各 repo 切片各自并入；仅靠 review
   // 放行的文件记审计 warning（result.reviewAdmittedFiles），完全越界文件仍拦（Gate1 在扩展后判）。
-  const reviewDeclaredByRepo = collectReviewDeclaredFiles(projectRoot, changeName);
+  const reviewDeclaredByRepo = collectReviewDeclaredFiles(projectRoot, changeName, { runtimeRoot: allowRuntimeRoot });
   const reviewAdmittedFiles = [];
   for (const [repoKey, files] of reviewDeclaredByRepo) {
     const repoSet = allowMap.get(repoKey);
@@ -1693,13 +1729,15 @@ export function assessApplyRisk(changeName, { cwd } = {}) {
 
   // design §6 标记为「顺带修复」的文件（坑 worktree-execute-apply-friction 坑1）：合规修预存债，
   // 不属任何 task 边界，assess 豁免 allowed_paths 严格校验（降级 warning），避免被迫 cherry-pick 绕过。
-  const designPath = join(projectRoot, CHANGES_REL, changeName, 'design.md');
+  // specBase 走指针/本地解析（2026-09-08 平台模式修复，与 resolveApplyAllowSet 同族）。
+  const assessSpecBase = _silentPointerSpecRoot(projectRoot) || join(projectRoot, '.sillyspec');
+  const designPath = join(assessSpecBase, 'changes', changeName, 'design.md');
   const incidentalSet = new Set(
     parseFileChangeListDetailed(designPath).filter(e => e.incidental).map(e => e.path)
   );
   // review.json 声明偏差文件（坑 apply-undeclared-deviation-block）：与顺带修复同等待遇——
   // reviewer 声明（已过 git 证据校验）的执行期偏差豁免 allowed_paths 严格校验，降 warning 注明来源。
-  const reviewDeclaredSet = new Set(collectReviewDeclaredFiles(projectRoot, changeName).get('main') || []);
+  const reviewDeclaredSet = new Set(collectReviewDeclaredFiles(projectRoot, changeName, { runtimeRoot: join(assessSpecBase, '.runtime') }).get('main') || []);
 
   // 检查 2: 变更在 allowed_paths 内（仅在 TaskCard 存在时）；顺带修复/review 声明文件豁免。
   // 匹配换 pathMatches（与 Gate1/plan-postcheck 同语义容差），消除原字面前缀弱匹配漂移。

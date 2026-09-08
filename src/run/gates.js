@@ -552,7 +552,33 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
   // runtimeRoot 进 context（坑 verify-receipt-runtime-split）：verify 回执写入方
   // reapVerifyServices 落 resolveRuntimeRoot(platformOpts, specBase)，校验器读侧不透传时
   // 平台/漂移模式恒读不到回执 → 证据门退回纯字面匹配（回执机制正是为消灭它而生）
-  const contractResult = runValidators(stageName, cwd, changeName, { projectName, specRoot: platformOpts?.specRoot, runtimeRoot: resolveRuntimeRoot(platformOpts, specBase) })
+  //
+  // ── verify 收尾前置：facts slot-backfill + verifyStartAt（2026-09-08-ir-verify-facts FR-03）──
+  // 执行次序（design Phase 3）：backfill（结论/证据/回执槽固化）先行 → runValidators（结论门/
+  // 集成证据门读得到固化值与 context.verifyStartAt）→ verify 专属块（test 实测 → tests 段二次
+  // 回填 → cannot_verify 硬门）。verifyStartAt = DB execute 行 completed_at（只读；缺省 null →
+  // 证据核验走 R-05 design created_at fallback）。
+  let verifyStartAtIso = null
+  if (stageName === 'verify') {
+    try {
+      verifyStartAtIso = pm.getStageCompletedAt(cwd, changeName, 'execute')
+    } catch { verifyStartAtIso = null }
+    try {
+      const verifyMdPath = join(specBase, 'changes', changeName, 'verify-result.md')
+      if (existsSync(verifyMdPath)) {
+        const verifyMd = readFileSync(verifyMdPath, 'utf8')
+        const { backfillFactsFromMdAndTests } = await import('../verify-probes.js')
+        const { extractVerifyConclusionSlot } = await import('../stage-contract.js')
+        backfillFactsFromMdAndTests(join(specBase, 'changes', changeName, 'verify-facts.json'), {
+          verifyMd,
+          conclusion: extractVerifyConclusionSlot(verifyMd),
+        })
+      }
+    } catch (e) {
+      console.warn(`⚠️ facts slot-backfill 失败（fail-soft，不阻断；门禁仍读 md 槽）: ${e && e.message ? e.message : e}`)
+    }
+  }
+  const contractResult = runValidators(stageName, cwd, changeName, { projectName, specRoot: platformOpts?.specRoot, runtimeRoot: resolveRuntimeRoot(platformOpts, specBase), ...(verifyStartAtIso ? { verifyStartAt: verifyStartAtIso } : {}) })
   if (contractResult.errors.length > 0) {
     console.error(`\n❌ 阶段 ${stageName} 校验失败：`)
     for (const err of contractResult.errors) {
@@ -584,7 +610,9 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
     try {
       const { resolveApplyAllowSet } = await import('../worktree-apply.js')
       const { warnFacadeCandidateFiles } = await import('../facade-hint.js')
-      const allowMap = resolveApplyAllowSet(cwd, changeName)
+      // specBase 显式传（2026-09-08 平台模式修复）：changes/ 实体在 specRoot，本地目录常空——
+      // 旧硬编码在平台模式 allow 集恒空，facade 候选预检对空集全量误报
+      const allowMap = resolveApplyAllowSet(cwd, changeName, { specBase })
       warnFacadeCandidateFiles({ cwd, changeName, allowSet: allowMap.get('main') })
     } catch { /* 预检失败不阻断 plan 完成 */ }
   }
@@ -598,6 +626,21 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
     console.log(`\n⏳ Verify 测试对账：CLI 亲自执行 local.yaml 的 commands.test（同步，耗时可能较长，请等待…）`)
     const testCheck = runVerifyTestCheck({ cwd, specBase, changeName, ctx })
     printVerifyTestCheck(testCheck)
+    // tests 段二次回填（2026-09-08-ir-verify-facts FR-03 次序：实测在 runValidators 之后，
+    // tests 快照此刻才可得；不参与门禁——供 P3d 追溯）
+    try {
+      const verifyMdPath2 = join(specBase, 'changes', changeName, 'verify-result.md')
+      if (existsSync(verifyMdPath2)) {
+        const { backfillFactsFromMdAndTests } = await import('../verify-probes.js')
+        const { extractVerifyConclusionSlot } = await import('../stage-contract.js')
+        const verifyMd2 = readFileSync(verifyMdPath2, 'utf8')
+        backfillFactsFromMdAndTests(join(specBase, 'changes', changeName, 'verify-facts.json'), {
+          verifyMd: verifyMd2,
+          conclusion: extractVerifyConclusionSlot(verifyMd2),
+          testCheckResult: testCheck,
+        })
+      }
+    } catch { /* fail-soft：回填失败不影响门禁 */ }
     if (testCheck.status === 'failed') {
       console.error('\n❌ verify 阶段被阻断：verify-result.md 自报告通过，但 CLI 实测测试失败。')
       // 并行 WIP 归因鉴别（坑 verify-reconcile-foreign-wip）：实测跑在主仓共享工作区，并行会话
@@ -660,12 +703,26 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
     const { runVerifyDeletionCheck, printVerifyDeletionCheck } = await import('../verify-postcheck.js')
     const deletionCheck = runVerifyDeletionCheck({ cwd, specBase, changeName })
     printVerifyDeletionCheck(deletionCheck)
-    // ── required-evidence 对账（advisory，不阻断）：闭合 execute→verify evidence 死链 ──
-    // execute Task Review Gate 把 cannot_verify 任务的 evidence 落盘 verify-required-evidence.json，
-    // 本探针查每个 cannot_verify 任务是否在 verify-result.md 体现（CLI 只查提及，满足度 agent 自报告）。
+    // ── required-evidence 对账（2026-09-08-ir-verify-facts FR-03：v2 起 cannot_verify 不闭环阻断）──
+    // execute Task Review Gate 把 cannot_verify 任务的 evidence 落盘 verify-required-evidence.json。
+    // v2 槽优先分类核验（FR-02）：blocked = missing 无豁免或 satisfied 核验不过 → 阻断 verify 完成
+    // （此前 advisory 只查「提及」——死链不闭环）；无槽存量 md 降级 legacy 子串对账（warning 不阻断）。
     const { runVerifyRequiredEvidenceCheck, printVerifyRequiredEvidenceCheck } = await import('../verify-postcheck.js')
-    const evidenceCheck = runVerifyRequiredEvidenceCheck({ cwd, specBase, changeName })
+    const evidenceCheck = runVerifyRequiredEvidenceCheck({ cwd, specBase, changeName, verifyStartAt: verifyStartAtIso })
     printVerifyRequiredEvidenceCheck(evidenceCheck)
+    if (evidenceCheck.status === 'blocked') {
+      console.error(`\n❌ verify 阶段被阻断：cannot_verify 证据账未闭环（${evidenceCheck.summary}）。`)
+      for (const d of (evidenceCheck.detailed || [])) {
+        console.error(`   - ${d.task} [${d.status}${d.exempt ? '/豁免' : ''}] ${d.reason}`)
+        for (const v of (d.verification || [])) {
+          if (v && v.reason) console.error(`     · ${v.path || '(无路径)'} [${v.pathClass || '?'}] ${v.reason}（filesExist=${v.filesExist} mtimeOk=${v.mtimeOk} diffHit=${v.diffHit}）`)
+        }
+      }
+      console.error(`   修复：在 verify-result.md「## 证据账（cannot_verify 任务）」槽段逐 task 一行——`)
+      console.error(`   - task-NN: satisfied | verifiedFiles: <精确路径>（CLI 核验：代码类 存在×mtime×diff 交集；日志/文档类豁免 diff）`)
+      console.error(`   - 确实无法验证 → 填 missing 并加（豁免：<一句话理由>）后缀；部分满足 → partial + 已核验路径`)
+      return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)
+    }
     // ── target_files 声明 ↔ 实际改动 对账（task-05 / ir-stage-p3a：②ERROR 阻断 / ③WARNING 放行）──
     // 「计划落空」（task 卡声明没做）此前全盲区：review.json changedFiles 是 agent 手写不能当
     // 事实源，execute 的 scope creep 只有 symbol-impact 试图抓。reconcileTargetFiles 用 git 三源

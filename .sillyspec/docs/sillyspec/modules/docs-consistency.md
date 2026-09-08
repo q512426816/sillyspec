@@ -4,7 +4,7 @@ doc_type: module-card
 module_id: docs-consistency
 author: qinyi
 created_at: 2026-08-16T19:05:00+08:00
-updated_at: 2026-09-08T11:00:00+08:00
+updated_at: 2026-09-08T21:56:00+08:00
 ---
 
 # docs-consistency
@@ -22,6 +22,7 @@ updated_at: 2026-09-08T11:00:00+08:00
 | `src/docs-gate.js` | docs check 的 ratchet 门：失效数 ≤ 基线（`.sillyspec/docs-check-baseline`）即过、超基线拦——不管历史存量只拦增量；首次须显式 `--init-baseline`；exit 0 过 / 1 拦 / 2 配置或 IO 错误 |
 | `src/docs-debt.js` | 模块文档欠账事实计算：变更触及文件按 module.paths/core_files 归属到模块，git 双时间戳算 behind 计数；结论注入 execute Wave prompt（advisory、无债零输出、git 失败降级不抛）。2026-08-23 起新增导出 `computeModuleBehind`（`src/docs-debt.js:169`，单模块 behind 计数）——与 moduleDebt 共用 behind 口径单一真相源，供决策规则族复核调用，不改现有 debt 行为 |
 | `src/scan-staleness.js` | scan 文档新鲜度提示：source_commit vs HEAD 落后数生成 fresh / needs-refresh / unknown 三态结论，brainstorm 加载 scan 文档前注入一行提示（behind 只是「建议核对/重扫」的提示信号；引用失效判据归 docs-check） |
+| `src/module-impact.js` | module-impact.md 归类骨架生成（`sillyspec module-impact` 命令与 plan --done 首版共用，2026-08-21 建）：_module-map.yaml paths 前缀匹配把变更文件归属模块，双输入来源——diff 来源（archive/execute 后真实改动，resolveVerifyChangedFiles worktree-aware）与声明来源（plan --done 首版，design 文件变更清单 main 段，`sourceFiles` 参数，2026-09-08 刀②）；无 module-map / 无可归类文件返回 null（agent 手写兜底）；「更新结果」表按命中模块机械生成 pending 行（verify/archive 死信门目标）；卡此前漏登本文件（map paths 已归属、表格缺行，2026-09-08 补） |
 | `src/decision-distill.js` | 决策提炼纯函数（2026-08-23 新增，归本模块）：`parseDecisions`（`src/decision-distill.js:98-401`）解析变更 decisions.md 的 D-xxx@vN 条目（FR-01 四字段全可选容旧格式、入选裁决 implemented/rejected）；`distillIntoKnowledge` 把入选条目幂等提炼进 knowledge/decisions/<模块域>.md 并幂等维护 INDEX decisions 路由行——rejected 优先留痕（缺否决理由/复潮条件 → needsWait 该条不写盘，步骤层转 --wait 裁决）；域三级兜底（条目「模块域」→ impacts 路径与 _module-map.yaml paths/core_files 前缀匹配 → unmapped）；幂等键 = 号+变更（2026-08-28 坑 distill-cross-change-supersede：条目带「变更：<name>」限定行，同 ID 同版本重写、@vN+1 整段替换旧版注 supersedes、同变更同号只留最高版本；跨变更同号共存不互删，legacy 无变更行段只共存不触碰）；写入责任全部在本模块——archive 步骤只调用、knowledge-match/docs-check 只消费，不 import 它们也不接 DB/网络 |
 
 ## 关键逻辑

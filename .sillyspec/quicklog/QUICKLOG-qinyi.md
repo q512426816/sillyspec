@@ -313,3 +313,56 @@
 根因：真实需求走 /sillyspec:auto 的 E2E 实证：run auto --done 推进主模式 8 步表而渲染走 auto 4 步表，ensureAutoStage 判非 auto 表重种清零——进度永远回 step1；wait/continue 同踩
 方案：ensureAutoStage auto 表早退 + getStageStepsAutoAware（complete 四处）；auto-dualtrack-brainstorm 3 断言锁行为
 结果：dualtrack 3 断言全过；全量 370 过 0 失败 + lint 485 文件 0 告警；doc-ref 1 处漂移 --fix 自愈（回执第三次实战）；手工实测 Step 1/4 完成且表保持
+
+## ql-20260908-004-cdac | 2026-09-08 16:18:59 | pre-import 快照写入侧滚动裁剪
+状态：已完成
+关联变更：（无）
+文件：
+- src/progress.js（新增 _pruneImportBaks 私有方法 + PRE_IMPORT_BAK_KEEP_DEFAULT/PRE_IMPORT_BAK_RE 常量；import() 内 copyFileSync 落 bak 后接线，try/catch fail-open）
+- test/preimport-bak-rotation.test.mjs（新建：25 断言 5 组用例，锁死保留份数/时间序/侧车成对/相邻零误伤/并发护栏/fail-open 契约）
+- docs/sillyspec/file-lifecycle.md（.runtime 表格行与 sillyspec.db 流程行两处口径补裁剪语义 + 头部 updated_at 追 2026-09-08 批次）
+- docs/sillyspec/file-lifecycle/storage-and-state.md（Runtime 目录树补 pre-import 项 + 新增「pre-import 快照回收」专节，含为何修写入侧而非 GC 命令的取舍）
+- .sillyspec/docs/sillyspec/modules/progress.md（关键逻辑新增一条 + updated_at 重锚；CLI 审计按 .sillyspec/ 规则未计入自动文件行，手工补录）
+- .sillyspec/docs/sillyspec/modules/progress.changelog.md（变更索引追加 ql 条目；同上手工补录）
+需求：pre-import 快照写入侧滚动裁剪
+根因：ProgressManager.import() 每次 platform pull 或 resolve --take-platform 都 copyFileSync 一份全库快照 sillyspec.db.pre-import-<ts>.bak 并连带 -wal 侧车，写完从不回收，既无 TTL 也无份数上限；归档只清 runId marker 不管这条路径，init 的 cleanupRuntimeResidue 又是未知默认保留策略，于是按同步次数无限累积——实证 multi-agent-platform 仓 146 份 315MB、sillyspec 本仓 153 份 134MB，占两仓 .runtime 体积绝对大头（相邻 artifacts/stage-reviews/execute-runs/verify-runs 合计仅十几 MB）
+方案：src/progress.js 新增 _pruneImportBaks(cwd keepPath) 在 import() 落 bak 后立即滚动裁剪，默认留最新 1 份（PRE_IMPORT_BAK_KEEP_DEFAULT，SILLYSPEC_PREIMPORT_BAK_KEEP 可覆盖、非法值与小于 1 钳回）；排序取文件名内嵌 ISO 时间戳字典序而非 statSync mtime（copy 与同步工具会改写 mtime）；被裁份连 .bak-wal 成对删而存活份侧车保留（缺侧车恢复会丢尾部已提交事务，即 BUG-18 连 wal 备份的原因）；本次 keepPath 显式排除永不裁作并发 import 互删护栏；单份删除失败 continue 不连坐；整体 try/catch fail-open 只 warn 不阻断 import 主流程。刻意修在写入侧而非新增 doctor --gc-runtime，靠人工记得跑 GC 等于没有回收。同步 file-lifecycle.md 两处口径与头部批次、storage-and-state.md 新增 pre-import 快照回收专节、progress 模块卡关键逻辑与 changelog sidecar
+结果：新增 test/preimport-bak-rotation.test.mjs 25 断言全绿（默认留 1 份且侧车成对回收并断言存活份侧车保留、KEEP=3 按时间序保留最新几份、相邻文件零误伤含主 .bak 恢复链与 .corrupt-<ts> 救援副本与他者 .bak、非法 KEEP 降级与连续 import 幂等、不存在目录如实抛 ENOENT 而 import 不受影响）；全量 npm test 363 通过 10 失败，10 个失败逐一核验与本次无关——全部零 .import( 引用，单跑 8 个转绿属全量并发 12 互相污染，剩 archive-terminal-consistency 与 local-register 经 git stash 抽掉本次改动后基线同样 exit=1 属既有失败且改动已按 hash 校验完整恢复；npm run lint exit 0（489 文件 src 110 加 test 379，未引用导出 0 项）；止血按同源逻辑清理两仓陈旧快照共 297 份释放约 449MB，各留最新 1 份且主库完好
+
+## ql-20260908-005-7549 | 2026-09-08 16:49:31 | 归档后按 change 精确回收 runtime 取证
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/complete-handlers.js（pruneArchivedChangeRuntime + archiveWorktreeCleanup 接线在 worktree 早退前）
+- src/change-delete.js（注释同步取证回收）
+- test/archive-runtime-prune.test.mjs（32 断言五组契约）
+- docs/sillyspec/file-lifecycle.md（.runtime 表与 quick 归档流补回收口径）
+- docs/sillyspec/file-lifecycle/storage-and-state.md（新增归档取证回收专节）
+- .sillyspec/docs/sillyspec/modules/runtime.md（关键逻辑一条）
+- .sillyspec/docs/sillyspec/modules/runtime.changelog.md（ql 索引）
+需求：归档后按 change 精确回收 runtime 取证
+根因：archiveWorktreeCleanup 原先只清 runId marker，execute-runs/stage-reviews/verify-runs/apply-pathspec 归档后无人回收，按变更数无限累积；复制进 archive/evidence 会双写漂移且几乎不省盘。delta.md 已在归档移动前吃掉 reconcile 与 apply-pathspec
+方案：新增 pruneArchivedChangeRuntime，在 marker 清完、worktree 无 meta 早退之前按 change 精确删四类产物：apply-pathspec 文件名全等、execute-runs 仅有戳全等、stage-reviews 按 reviewedFiles 的 changes 首段精确相等防 login 误伤日期前缀长名、verify-runs 仅当目录内 JSON 的 change 字段集合唯一命中。无戳/无字段/混变更 fail-closed 不猜删。不扩 endpoint-baselines 与 contract-artifacts。fail-open 不阻断归档
+结果：新增 test/archive-runtime-prune.test.mjs 32 断言全绿（本变更回收/他变更保留、短名不误伤长名、fail-closed 不猜删、相邻权威文件零误伤、无 meta 早退仍回收）；既有 run-complete-step-archive 19/0 与 archive-tail-consistency 9/0 零回归；npm run lint exit 0（490 文件，未引用导出 0）
+
+## ql-20260908-006-5f04 | 2026-09-08 16:59:50 | doctor --gc-unstamped-runs 清已归档无戳 execute-runs
+状态：已完成
+关联变更：（无）
+文件：
+- src/doctor-diagnostics.js（gcUnstampedExecuteRuns 交叉核验）
+- src/index.js（doctor --gc-unstamped-runs 接线与 usage）
+- test/doctor-gc-unstamped-runs.test.mjs（15 断言）
+- docs/sillyspec/file-lifecycle.md（doctor 命令与 execute-runs 口径）
+- docs/sillyspec/file-lifecycle/storage-and-state.md（存量无戳专节）
+- .sillyspec/docs/sillyspec/modules/core-engine.md（doctor-diagnostics 写动作）
+- .sillyspec/docs/sillyspec/modules/core-engine.changelog.md（ql 索引）
+- .sillyspec/docs/sillyspec/modules/cli-entry.md（doctor 旁路）
+- .sillyspec/docs/sillyspec/modules/cli-entry.changelog.md（ql 索引）
+- .sillyspec/docs/sillyspec/modules/runtime.md（无戳走 doctor）
+- .sillyspec/docs/sillyspec/modules/runtime.changelog.md（交叉指针）
+- .sillyspec/docs/sillyspec/modules/_module-map.yaml（并发未跟踪 src 补录以免 lint 拦 --done）
+需求：doctor --gc-unstamped-runs 清已归档无戳 execute-runs
+根因：pruneArchivedChangeRuntime 故意不按 mtime 猜删无 change 戳的旧 execute-runs，归档热路径不能接启发式；存量只能旁路清扫
+方案：doctor 新增 --gc-unstamped-runs（默认 dry-run，--confirm 才删）：reviewedFiles 的 changes 首段精确命中归档目录，或与唯一归档 tasks.md 的 task-NN 集合全等；命中活跃/歧义/有戳/无归属 skip；不进 archive 热路径
+结果：新增 test/doctor-gc-unstamped-runs.test.mjs 15 断言全绿；既有 archive-runtime-prune 与 cleanup-ghosts 零回归；npm run lint exit 0（496 文件，未引用导出 0）
+审计：⚖️ 归属切分：13 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：src/quicklog.js, src/run/complete.js, src/run/shared.js, src/run/stage.js, src/stage-review.js, src/stages/quick.js, src/verify-postcheck.js, src/workflow.js, test/doctor-gc-unstamped-runs.test.mjs, src/runtime-hygiene.js, test/quick-feedback-fileline-title.test.mjs, test/runtime-hygiene.test.mjs, test/sync-noise.test.mjs

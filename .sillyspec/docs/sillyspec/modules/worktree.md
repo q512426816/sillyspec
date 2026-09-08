@@ -4,8 +4,8 @@ created_at: 2026-06-01T09:05:00
 ---
 
 # worktree
-> 最后更新：2026-08-19
-> 最近变更：2026-08-19-reopen-and-execute-batch-guard（W3 apply 锚点默认 merge-base + --base 回退 + 冲突列表 stderr 解析）/ 2026-08-16-state-split-fixes（#2 applyByMerge merge 前预对齐 baseline 并行文件：preAlignBaselineToMain 四条件过滤 + 对齐 commit + 失败降级）/ 2026-08-16-scan-docs-reconcile（git-helper.js 补录进 _module-map v2 paths 归属，needs_review 项闭环）/ 2026-08-13-worktree-execute-loss-guard（cleanup 加 fail-closed 保护：未落主仓交付变更拒绝清理、新增返回 `result:'blocked'`，需显式 force 绕过（D-001@v1）；新增 findMissingDeliverables 纯函数导出 + execute 完成路径阶段级核验（D-002@v1）；apply 后自动 cleanup 与 execute reset 显式 force:true 绕过保护（D-006@v1））/ 2026-08-10-worktree-apply-dirty-resilient（dirty 拦截时输出逐文件 rescue cp 指令方案A：新增 export `generateRescueCommands`/`computeRescueDirtyFiles` + applyWorktree 返回值 additive `rescueCommands`/`deletedFiles` + step3.5 前移 hashMismatch 计算 + index.js apply/assess 结构化 rescue 打印段；step4.5/5a fail-loud 拦截决策零改动保留）/ 2026-08-09-worktree-git-injection（git 调用收口 src/git-helper.js：worktree.js/worktree-apply.js 删本地 git()/gitQuiet() helper、77 调用点 + 2 裸 execSync 注入核心全 execFileSync 数组化不经 shell，消除命令注入 + 空格拆词，与 run/shared.js safeGit 合一单一真相源）/ 2026-08-06-execute-runs-isolation（drift 守卫补设 `platformOpts.specDriftAnchor` + 抽 `resolveRuntimeRoot` 统一 `.runtime` 根解析 15 站点；drift 场景 execute-runs/stage-reviews 落主仓 `.runtime`，cleanup 整目录删 worktree 碰不到，archive step1 完成度 gate 不再因丢 review.json 阻断）/ 2026-08-05-tooling-feedback-fixes（doctor 加 `deps-main-drift` issue 探主仓 lockfile 漂移 + `--change` 过滤 + `--fix` force 重装；provisionDeps 加 `force` 选项；抽 H1 `checkDepsFreshness` 统一 doctor 与 execute 的 deps 判定）
+> 最后更新：2026-09-08
+> 最近变更：ql-20260908-008（meta.json BOM 容错 + apply allowlist 平台模式读 specRoot——resolveApplyAllowSet/collectReviewDeclaredFiles 加 specBase/runtimeRoot 参 + 指针静默回退） / 2026-08-19-reopen-and-execute-batch-guard（W3 apply 锚点默认 merge-base + --base 回退 + 冲突列表 stderr 解析）/ 2026-08-16-state-split-fixes（#2 applyByMerge merge 前预对齐 baseline 并行文件：preAlignBase
 > 模块路径：src/worktree.js, src/worktree-apply.js, src/worktree-deps.js, src/git-helper.js
 
 ## 职责

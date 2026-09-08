@@ -472,6 +472,16 @@ export function writePlatformPointer(cwd, platformOpts, extra = {}) {
     console.warn(`⚠️ 检测到自指平台指针（repo-native junction 回环，specRoot 指回本地 .sillyspec），已跳过指针写入并按本地模式运行: ${platformOpts.specRoot}`)
     return false
   }
+  // temp 残留写侧守卫（2026-09-08 temp 投毒治理，防患于未然）：specRoot 在系统 temp 且
+  // 项目 cwd 不在 temp → 拒绝三写。真实平台 spec 根永不在 temp；此类组合只可能来自
+  // 测试/联调以临时 specRoot 在真实项目根跑平台模式命令——指针/声明一旦落盘，指针被
+  // 清理后残留声明会让全命令 fail-closed（读侧 isTempResidueSpecRoot 降级兜底已存在
+  // 的污染，此处从源头断新增）。cwd 同在 temp（套件隔离正常形态）不拦，平台模式
+  // 测试不受影响。
+  if (isTempResidueSpecRoot(cwd, platformOpts.specRoot)) {
+    console.warn(`⚠️ 拒绝写入平台指针：specRoot 指向系统 temp 目录（${platformOpts.specRoot}）而项目不在 temp 下——测试/联调残留特征，已跳过三写并按本地模式运行`)
+    return false
+  }
   // HUB-05：合并保留既有生命周期字段。scan 完成时指针被写入 status/completedAt/scanStatus
   //（complete-handlers），但下一次任何平台模式 run（含只读 --status）都会重写指针——
   // 恢复链只回填 specRoot 等四字段，不保留 status → 指针永远回 active、isPointerStale
@@ -567,6 +577,38 @@ export function isSelfReferentialSpecRoot(cwd, specRoot) {
   } catch {
     return false
   }
+}
+
+/**
+ * temp 残留 specRoot 判定（temp 投毒治理，2026-09-08：multi-agent-platform 工作台
+ * 「总览不可用」排障实证——Git Bash mktemp 临时 specRoot 的平台模式命令在真实项目根
+ * 写下指针+声明，指针随后被 cleanup/STALE 清理，声明按设计存活（唯一删除路径 =
+ * platform disconnect）→ 全命令 fail-closed，且 disconnect 会连带清 local.yaml
+ * platform 段误伤真实平台连接）。
+ *
+ * 判定：specRoot 位于系统 temp 目录 **且** cwd 不在 temp 下 → true。两个条件缺一不可：
+ * 真实平台的 spec 根永不在 temp（daemon 用 ~/.sillyhub/daemon/specs/{ws}，服务器用
+ * /data/spec-workspaces）；测试/联调的 temp specRoot 只允许配 temp 项目 cwd（套件隔离
+ * 正常形态，见 test/run-tests.mjs childEnv 与 platform-managed-declaration 夹具——
+ * cwd 与 spec 同在 temp 下时本函数返回 false，既有 fail-closed 测试语义不变）。
+ *
+ * 与 isSelfReferentialSpecRoot 并列为声明的两类「可证伪残留」：自指回环（repo-native
+ * junction 投毒）已有降级先例（run/command.js:429），本函数补 temp 残留这一类。
+ * 口径对齐 progress.js 指针路径的 temp 警告（resolve() 前缀比较，不 realpath——temp
+ * 判定是残留启发式，无需穿透 junction 的强一致）。
+ *
+ * @param {string} cwd - 项目根（与 isSelfReferentialSpecRoot 同基准）
+ * @param {string|null} [specRoot] - 平台 specRoot（可 null/undefined/空串）
+ * @returns {boolean} 是否 temp 残留（写侧应拒绝三写，读侧应降级本地并清理声明）
+ */
+export function isTempResidueSpecRoot(cwd, specRoot) {
+  if (!specRoot || typeof specRoot !== 'string') return false
+  const tmp = resolve(os.tmpdir())
+  const sr = resolve(specRoot)
+  if (sr !== tmp && !sr.startsWith(tmp + sep)) return false
+  const c = resolve(cwd)
+  if (c === tmp || c.startsWith(tmp + sep)) return false
+  return true
 }
 
 /**
@@ -774,7 +816,8 @@ export async function triggerPull(cwd, changeName, platformOpts = {}, opts = {})
     if (!sm._getPlatform()) return
     if (_autoPullRecently(cwd)) return
     _stampAutoPull(cwd)
-    await raceWithAbort((sig) => sm.pull(changeName, { skipIfLocalDirty: true, signal: sig.signal }), opts.timeoutMs ?? AUTO_PULL_TIMEOUT_MS)
+    // autoPull：噪音闸标识（sync.js pull 的失败 warn 走跨进程静默窗口，见 sync-noise.js）
+    await raceWithAbort((sig) => sm.pull(changeName, { skipIfLocalDirty: true, signal: sig.signal, autoPull: true }), opts.timeoutMs ?? AUTO_PULL_TIMEOUT_MS)
   } catch (e) {
     // pull 失败静默跳过（Best Effort，失败不影响正确性）
     console.warn('⚠️ 拉取失败:', e.message)
@@ -813,9 +856,10 @@ export async function triggerPullActiveChange(cwd, platformOpts = {}) {
   }
   if (!cn) return
   // 已确认连接 + 单活跃变更，调 pull（自动注入 2s 熔断 + abort（HUB-09）；skipIfLocalDirty 保守守卫
-  // 同 triggerPull——本地脏时跳过 import，防平台旧快照覆盖本地领先进度，ql-20260818-008）
+  // 同 triggerPull——本地脏时跳过 import，防平台旧快照覆盖本地领先进度，ql-20260818-008）。
+  // autoPull：噪音闸标识（sync.js pull 的失败 warn 走跨进程静默窗口，见 sync-noise.js）
   try {
-    await raceWithAbort((sig) => sm.pull(cn, { skipIfLocalDirty: true, signal: sig.signal }), AUTO_PULL_TIMEOUT_MS)
+    await raceWithAbort((sig) => sm.pull(cn, { skipIfLocalDirty: true, signal: sig.signal, autoPull: true }), AUTO_PULL_TIMEOUT_MS)
   } catch (e) {
     console.warn('⚠️ 拉取失败:', e.message)
   }
@@ -884,8 +928,9 @@ export function parsePorcelainPath(line) {
 }
 
 /**
- * quick 自身写入的 .sillyspec/ 元数据判定（auditQuickCompletion 审计 与 QUICKLOG「文件：」行回填
- * 单源）。回填文件行时复用：review.changedFiles 含这些元数据时过滤掉，只留真实业务文件。
+ * quick 自身写入的 .sillyspec/ 元数据判定（auditQuickCompletion 审计豁免的单一真相源）。
+ * 注意：QUICKLOG「文件：」行回填**不再直接复用**本谓词——记录面与审计豁免面已分叉
+ * （模块卡 + changelog sidecar 审计照旧放行、但要进文件行），见 isQuicklogFileLineNoise。
  *
  * 归类口径：
  * - quicklog/.runtime/modules/_module-map/knowledge-uncategorized 等 quick 自身产物 → 元数据
@@ -894,7 +939,7 @@ export function parsePorcelainPath(line) {
  *
  * 「并发工作 vs 偷建变更」的意图软判定留给 sillyhub，确定性校验只做路径归类。
  *
- * @param {string} p 文件路径（容错 \\ / 混用）
+ * @param {string} p 文件路径（容错 \ / 混用）
  * @param {string[]} [linkedChanges] 关联变更名列表（影响 changes/ 归类）
  * @returns {boolean} true=quick 元数据，应从业务文件列表过滤掉
  */
@@ -913,6 +958,24 @@ export function isQuickMetadata(p, linkedChanges = []) {
     if (!m || !linkedChangeNames.has(m[1])) return true
   }
   return false
+}
+
+/**
+ * QUICKLOG「文件：」行回填过滤——isQuickMetadata 的**记录面**变体（2026-09-08 用户反馈①：
+ * 审计按 .sillyspec/ 放行规则整体豁免没问题，但模块卡 + changelog sidecar 恰是收尾必改项，
+ * 被同一谓词从文件行滤掉后每回都得手工补录）。审计豁免面（isQuickMetadata）与记录面在此
+ * 分叉：quick 自身元数据（quicklog/.runtime/知识库未归类）照旧不入文件行，但本 quick 实际
+ * 改动的模块卡（`modules/<id>.md`）与 sidecar（`modules/<id>.changelog.md`，同被上方
+ * `[^/]+\.md$` 覆盖）保留——它们是真实收尾工作的一部分。`_module-map.yaml` 仍滤：CLI
+ * （module-resolve）维护的索引，非 agent 手工改动。
+ * @param {string} p 文件路径（容错 \ / 混用）
+ * @param {string[]} [linkedChanges] 关联变更名列表（透传 isQuickMetadata）
+ * @returns {boolean} true=元数据噪音，应从「文件：」行过滤掉
+ */
+export function isQuicklogFileLineNoise(p, linkedChanges = []) {
+  const file = String(p).replace(/\\/g, '/')
+  if (/^\.sillyspec\/docs\/[^/]+\/modules\/[^/]+\.md$/.test(file)) return false
+  return isQuickMetadata(p, linkedChanges)
 }
 
 // 危险文件清单（auditQuickCompletion 危险门与 predictProtectedQuickFiles 预告共用单一真相源）。

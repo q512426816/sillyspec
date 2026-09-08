@@ -203,7 +203,11 @@ function printSyncReport(diag, baseHash, changeName) {
 }
 
 function parseJSON(raw) {
-  try { return JSON.parse(raw); } catch { return null; }
+  // BOM 容错（2026-09-08 用户反馈：meta.json 带 UTF-8 BOM 被当损坏 → apply 报
+  // 「meta.json 不存在或已损坏」、幽灵判定误清）：Windows 编辑器（记事本/部分 PowerShell
+  // 重定向）写 JSON 常带 \uFEFF 前缀，JSON.parse 对首字符 BOM 直接抛。剥掉再 parse。
+  const s = typeof raw === 'string' ? raw.replace(/^\uFEFF/, '') : raw
+  try { return JSON.parse(s); } catch { return null; }
 }
 
 /**

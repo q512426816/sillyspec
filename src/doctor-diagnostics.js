@@ -16,6 +16,8 @@
  *   - 不删除/移动任何文件；orphan db 仅报告，处理交给后续 --dump-db / --confirm 流程。
  *   - execute-progress-plan-mismatch 维度同样只读：仅读 plan.md checkbox + 只读查 stages 表，
  *     绝不调用 ProgressManager 写方法（写操作是 progress.alignExecuteToPlan 的职责，D-001@v2 诊断/写分离）。
+ *   - 写动作是独立 opt-in 导出（--cleanup-ghosts / --gc-unstamped-runs / --cleanup-remnant），
+ *     与 --json 诊断路径分离；默认 dry-run，--confirm 才落盘。
  *
  * 风格对齐 scan-postcheck.js：checks 用 CHECK_SEVERITY，formatter 产出 schema_version JSON，
  * writer 落盘到 <authoritySpecDir>/.runtime/。
@@ -25,6 +27,7 @@ import { safeGit } from './git-helper.js';
 import { existsSync, statSync, readFileSync, readdirSync, mkdirSync, writeFileSync, unlinkSync, rmSync } from 'fs';
 import { join } from 'path';
 import jsYaml from 'js-yaml';
+import { pruneTimestampedEntries } from './runtime-hygiene.js';
 import { CHECK_SEVERITY } from './constants.js';
 import { checkPlatformManaged, isSelfReferentialSpecRoot, PLATFORM_MANAGED_FILENAME, QUICK_SID_RE } from './run/shared.js';
 
@@ -1167,5 +1170,246 @@ export async function cleanupGhostChanges({ cwd, specDir = null, confirm = false
     return { action: 'error', reason: e.message, ghosts: [], archived: [], errors: [{ error: e.message }], count: 0 };
   } finally {
     if (db) { try { db.close(); } catch { /* 忽略关闭失败 */ } }
+  }
+}
+
+// ── 存量无戳 execute-runs 清扫（doctor --gc-unstamped-runs）────────────────
+
+const TASK_ID_RE = /\btask-(\d+)\b/gi
+const CHANGE_PATH_RE = /(?:^|\/)changes\/([^/]+)\//
+const TASK_DIR_RE = /^task-(\d+)$/i
+
+function normTaskId(digits) {
+  return `task-${String(digits).padStart(2, '0')}`
+}
+
+function parseTaskIdsFromText(text) {
+  const ids = new Set()
+  if (!text) return ids
+  const re = new RegExp(TASK_ID_RE.source, TASK_ID_RE.flags)
+  for (const m of String(text).matchAll(re)) ids.add(normTaskId(m[1]))
+  return ids
+}
+
+function setEq(a, b) {
+  if (a.size !== b.size) return false
+  for (const x of a) if (!b.has(x)) return false
+  return true
+}
+
+function isSubset(small, big) {
+  for (const x of small) if (!big.has(x)) return false
+  return true
+}
+
+function listDirNames(dir) {
+  if (!dir || !existsSync(dir)) return []
+  try {
+    return readdirSync(dir, { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => e.name)
+  } catch {
+    return []
+  }
+}
+
+function loadTasksMd(changeDir) {
+  const p = join(changeDir, 'tasks.md')
+  if (!existsSync(p)) return new Set()
+  try {
+    return parseTaskIdsFromText(readFileSync(p, 'utf8'))
+  } catch {
+    return new Set()
+  }
+}
+
+/**
+ * 扫一个 execute-run 目录：戳 / reviewedFiles 路径首段 / task-NN 目录名。
+ * reviewedFiles 取全部条目（不只 [0]），路径段精确相等——login 不命中 2026-08-01-login。
+ */
+function inspectExecuteRun(runDir) {
+  const stampFile = join(runDir, 'change')
+  let stamp = ''
+  if (existsSync(stampFile)) {
+    try { stamp = readFileSync(stampFile, 'utf8').trim() } catch { /* 读失败当无戳 */ }
+  }
+  const pathOwners = new Set()
+  const taskIds = new Set()
+  const tasksDir = join(runDir, 'tasks')
+  if (existsSync(tasksDir)) {
+    let entries = []
+    try { entries = readdirSync(tasksDir, { withFileTypes: true }) } catch { entries = [] }
+    for (const e of entries) {
+      if (!e.isDirectory()) continue
+      const tm = e.name.match(TASK_DIR_RE)
+      if (tm) taskIds.add(normTaskId(tm[1]))
+      const rjPath = join(tasksDir, e.name, 'review.json')
+      if (!existsSync(rjPath)) continue
+      try {
+        const rj = JSON.parse(readFileSync(rjPath, 'utf8'))
+        const files = Array.isArray(rj.reviewedFiles) ? rj.reviewedFiles : []
+        for (const f of files) {
+          const m = String(f || '').replace(/\\/g, '/').match(CHANGE_PATH_RE)
+          if (m) pathOwners.add(m[1])
+        }
+      } catch { /* 坏 JSON 不据此猜归属 */ }
+    }
+  }
+  return { hasStamp: stamp.length > 0, stamp, pathOwners, taskIds }
+}
+
+/**
+ * 无戳 run 的归属判定。禁 mtime。命中活跃变更一律 skip。
+ *
+ * 1. reviewedFiles 路径 `changes/<name>/` 首段精确命中：
+ *    - ∩ active → matches_active
+ *    - ∩ archive 多个 → ambiguous_archive
+ *    - ∩ archive 恰好 1：若 tasks.md 有任务且 run 有多余 task-NN → tasks_md_mismatch；否则 via path
+ * 2. 无路径（或路径名既不在 active 也不在 archive）：
+ *    - taskIds 空 → no_attribution
+ *    - 与恰好一个归档 tasks.md **集合全等**且无 active 全等 → via tasks_md
+ *      （子集太弱：task-01 几乎每个变更都有）
+ */
+function classifyUnstampedRun(inspected, { active, archive, archiveTasks, activeTasks }) {
+  const pathActive = [...inspected.pathOwners].filter((n) => active.has(n))
+  if (pathActive.length) {
+    return { skip: true, reason: 'matches_active' }
+  }
+  const pathArchived = [...inspected.pathOwners].filter((n) => archive.has(n))
+  if (pathArchived.length > 1) {
+    return { skip: true, reason: 'ambiguous_archive' }
+  }
+  if (pathArchived.length === 1) {
+    const owner = pathArchived[0]
+    const mdTasks = archiveTasks.get(owner) || new Set()
+    if (mdTasks.size > 0 && inspected.taskIds.size > 0 && !isSubset(inspected.taskIds, mdTasks)) {
+      return { skip: true, reason: 'tasks_md_mismatch', owner }
+    }
+    return { delete: true, owner, via: 'path' }
+  }
+
+  if (inspected.taskIds.size === 0) {
+    return { skip: true, reason: 'no_attribution' }
+  }
+  const activeEquals = [...active].filter((n) => setEq(inspected.taskIds, activeTasks.get(n) || new Set()))
+  if (activeEquals.length) {
+    return { skip: true, reason: 'matches_active' }
+  }
+  const archivedEquals = [...archive].filter((n) => setEq(inspected.taskIds, archiveTasks.get(n) || new Set()))
+  if (archivedEquals.length === 1) {
+    return { delete: true, owner: archivedEquals[0], via: 'tasks_md' }
+  }
+  if (archivedEquals.length > 1) {
+    return { skip: true, reason: 'ambiguous_archive' }
+  }
+  return { skip: true, reason: 'no_attribution' }
+}
+
+/**
+ * 存量无戳 execute-runs 一次性清扫（ql-20260908-006-5f04）。
+ *
+ * 不进 archive 热路径：pruneArchivedChangeRuntime 故意不猜无戳 run（禁 mtime）。
+ * 本函数是 doctor 旁路，对齐 --cleanup-ghosts：默认 dry-run，--confirm 才 rmSync。
+ * 只处理 execute-runs/<runId>/（有 change 戳的留给归档精确回收；stage-reviews / verify-runs 本轮不动）。
+ *
+ * @param {{ cwd: string, specDir?: string|null, confirm?: boolean }} opts
+ */
+export async function gcUnstampedExecuteRuns({ cwd, specDir = null, confirm = false }) {
+  const pointer = resolvePointer(cwd)
+  const localSpec = specDir && existsSync(specDir) ? specDir : join(cwd, '.sillyspec')
+  const authoritySpecRoot = (pointer.present && pointer.specRoot && existsSync(pointer.specRoot))
+    ? pointer.specRoot
+    : localSpec
+  const runtimeRoot = (pointer.runtimeRoot && existsSync(pointer.runtimeRoot))
+    ? pointer.runtimeRoot
+    : join(authoritySpecRoot, '.runtime')
+  const execDir = join(runtimeRoot, 'execute-runs')
+  if (!existsSync(execDir)) {
+    return {
+      action: 'skipped',
+      reason: '未找到 execute-runs 目录',
+      runtime_root: runtimeRoot,
+      candidates: [],
+      skipped: [],
+      errors: [],
+      count: 0,
+    }
+  }
+
+  const activeNames = listChanges(authoritySpecRoot)
+  const archiveNames = listDirNames(join(authoritySpecRoot, 'changes', 'archive'))
+    .filter((n) => n !== 'archive')
+  const active = new Set(activeNames)
+  const archive = new Set(archiveNames)
+  const archiveTasks = new Map()
+  for (const n of archiveNames) {
+    archiveTasks.set(n, loadTasksMd(join(authoritySpecRoot, 'changes', 'archive', n)))
+  }
+  const activeTasks = new Map()
+  for (const n of activeNames) {
+    activeTasks.set(n, loadTasksMd(join(authoritySpecRoot, 'changes', n)))
+  }
+
+  const candidates = []
+  const skipped = []
+  const errors = []
+  let entries = []
+  try {
+    entries = readdirSync(execDir, { withFileTypes: true })
+  } catch (e) {
+    return {
+      action: 'error',
+      reason: e.message,
+      runtime_root: runtimeRoot,
+      candidates: [],
+      skipped: [],
+      errors: [{ error: e.message }],
+      count: 0,
+    }
+  }
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue
+    const runId = entry.name
+    const runDir = join(execDir, runId)
+    let inspected
+    try {
+      inspected = inspectExecuteRun(runDir)
+    } catch (e) {
+      errors.push({ runId, error: e.message })
+      continue
+    }
+    if (inspected.hasStamp) {
+      skipped.push({ runId, reason: 'has_stamp' })
+      continue
+    }
+    const verdict = classifyUnstampedRun(inspected, { active, archive, archiveTasks, activeTasks })
+    if (verdict.skip) {
+      skipped.push({ runId, reason: verdict.reason, owner: verdict.owner || null })
+      continue
+    }
+    candidates.push({ runId, owner: verdict.owner, via: verdict.via })
+  }
+
+  const removed = []
+  if (confirm) {
+    for (const c of candidates) {
+      try {
+        rmSync(join(execDir, c.runId), { recursive: true, force: true })
+        removed.push(c.runId)
+      } catch (e) {
+        errors.push({ runId: c.runId, error: e.message })
+      }
+    }
+  }
+
+  return {
+    action: confirm ? 'deleted' : 'dry_run',
+    runtime_root: runtimeRoot,
+    candidates,
+    skipped,
+    errors,
+    removed: confirm ? removed : [],
+    count: candidates.length,
   }
 }

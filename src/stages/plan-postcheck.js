@@ -1380,6 +1380,51 @@ export function validatePlanArtifacts(changeDir) {
 // ═══════════════════════════════════════════════════════════════
 
 /**
+ * plan --done 自动生成 module-impact.md 首版（刀②，2026-09-08 轮次经济学）。
+ *
+ * 文件×模块归属是机械分类（module-map 前缀匹配），此前 plan 审查步 prompt 让 agent 手写
+ * 首版——章节标题写变体会被 archive contains_sections 硬拦返工（prompt 自认「agent 只能从
+ * gate 报错反推格式」）。改为 --done 时 CLI 用 design 文件变更清单（main 段，代码未写、
+ * 无 diff 可取）生成骨架，影响类型列留 <!--TODO--> 由 execute/verify 按实际 diff 回填。
+ *
+ * 边界：已存在不覆盖；scale=small 豁免（与 stage-contract plan.module-impact.exists 的
+ * condition 同判法）；生成失败（无 module-map / 清单为空）不阻断——与旧手写路径行为一致，
+ * 由 check 1e 的 validatePlanOutputs 报缺失，agent 按 gate 提示兜底手写。
+ *
+ * @param {string} changeDir - 变更目录
+ * @param {string} cwd - 仓库根
+ * @param {string|null} [specRoot] - 规范根（平台模式显式传入）
+ * @returns {Promise<{status: 'generated'|'skipped', reason?: string, matchedCount?: number, unmatchedCount?: number}>}
+ */
+export async function generatePlanModuleImpactFirstVersion(changeDir, cwd, specRoot = null) {
+  const designPath = pJoin(changeDir, 'design.md')
+  const impactPath = pJoin(changeDir, 'module-impact.md')
+  if (!existsSync(designPath)) return { status: 'skipped', reason: 'no-design' }
+  if (existsSync(impactPath)) return { status: 'skipped', reason: 'exists' }
+
+  const scale = parseFrontmatterScalar(readFileSync(designPath, 'utf8'), 'scale')
+  if (scale === 'small') return { status: 'skipped', reason: 'scale-small' }
+
+  // 声明来源：design 文件变更清单 main 段（跨仓其他段的路径相对各仓根，不入主仓 module-map 归类）
+  const { byRepo } = parseDesignCoverageByRepo(designPath)
+  const mainFiles = [...(byRepo.get('main') || [])]
+  if (mainFiles.length === 0) return { status: 'skipped', reason: 'no-declared-files' }
+
+  const { generateModuleImpactSkeleton } = await import('../module-impact.js')
+  const result = generateModuleImpactSkeleton({
+    cwd,
+    changeName: basename(changeDir),
+    specDir: specRoot,
+    sourceFiles: mainFiles,
+    origin: 'plan --done CLI（design 声明清单 × module-map 前缀匹配）',
+  })
+  if (!result) return { status: 'skipped', reason: 'no-module-map' }
+
+  writeFileSync(impactPath, result.markdown)
+  return { status: 'generated', matchedCount: result.matchedCount, unmatchedCount: result.unmatchedCount }
+}
+
+/**
  * Plan postcheck 主函数：Wave 重排 + 一致性校验 + 产物确认
  *
  * @param {{ cwd: string, specRoot?: string, resolveChangeDir: Function, progress?: object }} context
@@ -1488,6 +1533,14 @@ export async function executePlanPostcheck(context) {
   }
   if (coverage.designFiles.length > 0 && coverage.uncovered.length === 0) {
     console.log(`  ✅ design.md ${coverage.designFiles.length} 个文件全部被 task allowed_paths 覆盖`)
+  }
+
+  // ── 1e-0. module-impact.md 首版 CLI 自动生成（刀②）──
+  // 在 1e 契约校验（plan.module-impact.exists）之前生成，使 scale≠small 的变更
+  // 天然通过；生成失败不报错（缺失由 1e 统一报，口径不变）。
+  const miGen = await generatePlanModuleImpactFirstVersion(changeDir, cwd, specRoot)
+  if (miGen.status === 'generated') {
+    console.log(`  ✅ module-impact.md 首版已由 CLI 自动生成（归类 ${miGen.matchedCount} 个文件，未匹配 ${miGen.unmatchedCount} 个；影响类型列由 execute/verify 回填）`)
   }
 
   // ── 1e. 阶段完成产物校验（plan stage contract）──

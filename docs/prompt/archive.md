@@ -243,14 +243,14 @@ created_at: <now-datetime>
 **提示词原文**
 
 ````markdown
-更新路线图并暂存变更。
+更新路线图并确认归档。
 
 ### 操作
 1. 如果 `.sillyspec/ROADMAP.md` 存在，标记对应 Phase 为已完成
-2. `git add .sillyspec/changes/archive/` — 暂存归档结果（archive/ 下仅本次归档新增，不会裹挟 changes/ 下其他活跃变更；不要 commit，由用户通过统一提交工具处理）
-3. `git add .sillyspec/docs/<project>/modules/` — 暂存模块文档更新（如有；精确到本次同步的模块文档，勿 add 整个 .sillyspec/docs/）
-4. `git add .sillyspec/knowledge/decisions/` — 暂存决策知识库更新（如有；decision-distill 步骤的提炼产物，精确到 decisions 子目录，勿 add 整个 .sillyspec/knowledge/；不要 commit，由用户通过统一提交工具处理）
-5. 确认 sillyspec.db 中该变更已不再 active（确认归档步骤由 CLI 调用 unregisterChange）
+2. 确认 sillyspec.db 中该变更已不再 active（确认归档步骤由 CLI 调用 unregisterChange）
+
+### 说明
+- **git 暂存已由 CLI 自动完成**（归档完成时自动 add：`.sillyspec/changes/archive/`、本次同步的模块文档、`.sillyspec/knowledge/decisions/`——未提交，由用户通过统一提交工具处理）——你不需要也不应该手动 git add
 
 ### 输出
 归档完成确认 + 累积规范统计

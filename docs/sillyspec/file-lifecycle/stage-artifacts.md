@@ -100,14 +100,23 @@ updated_at: 2026-08-19T17:11:14+08:00
 
 路径：`.sillyspec/changes/<change>/verify-result.md`
 
-创建方式：verify 阶段最后一步 prompt。
+创建方式：`sillyspec verify-probes --change <变更名> --init` 骨架（探针段机械预填 + 结论枚举槽）+ verify 阶段最后一步填判断散文。v2（2026-09-08-ir-verify-facts）起骨架另含两受控槽段：「## 证据账（cannot_verify 任务）」（逐 task 状态三选一 + verifiedFiles 精确路径 + 豁免后缀）与「## 集成验证回执」（claim/command/exit/log 四字段）——占位不含枚举词 fail-closed；已存在报告缺槽段时 --init 仅追加骨架（幂等）。
 
-`run.js` 不生成报告正文；verify 阶段完成时依次执行：
+`run.js` 不生成报告正文；verify 阶段完成时依次执行（v2 次序）：
 
-1. `validateVerifyOutputs`：文件必须存在、结论非 FAIL、集成证据满足风险门控，否则阻断并回滚阶段状态。
-2. CLI 实测对账（`verify-postcheck.js`）：执行 `local.yaml` 的 `commands.test`，结果写 `.runtime/verify-runs/<ts>/test-result.json`；自报告通过但实测失败 → 阻断完成。未配置 test 命令时降级 warning。
+1. slot-backfill：CLI 把结论枚举槽/证据账/回执槽解析固化进 `verify-facts.json`（只固化既有底稿；创建唯一入口 --init）。
+2. `validateVerifyOutputs`：文件必须存在、结论非 FAIL（读槽）、集成证据满足风险门控（回执槽优先绿判据，literals 存量回退），否则阻断并回滚阶段状态。
+3. CLI 实测对账（`verify-postcheck.js`）：执行 `local.yaml` 的 `commands.test`，结果写 `.runtime/verify-runs/<ts>/test-result.json` 并二次回填 facts.tests 段；自报告通过但实测失败 → 阻断完成。未配置 test 命令时降级 warning。
+4. cannot_verify 硬门：`runVerifyRequiredEvidenceCheck` 槽优先分类核验（code 类 存在×mtime×diff 交集 / artifact 类豁免 diff；verifyStartAt = execute 行 completed_at）——blocked（missing 无豁免或核验不过）→ 阻断回滚。
+5. facts 基线对比：checkProbeConsistency 重跑指标 vs facts 快照（probe1/6=ERROR、probe3/5=WARNING）——md 被手改对齐新代码而底稿过期时报出。
 
 均通过后才提示下一步 `sillyspec run archive`。
+
+## `verify-facts.json`
+
+路径：`.sillyspec/changes/<change>/verify-facts.json`（CLI 全权写，agent 勿手改）
+
+schemaVersion 2（2026-09-08-ir-verify-facts）：`probes`（--init 机械快照）+ slot-backfill/实测固化段 `conclusion / tests / requiredEvidence / runtimeEvidence` + `factsConsistency`（基线对比结论）。写入语义：--init 分段合并（刷新 probes、保留固化段）；--done 回填只固化既有底稿。消费方：P3d delta 回灌（后续变更）与 verify 各门禁。schema 单点 `src/verify-facts-schema.js`。
 
 ## `module-impact.md`
 

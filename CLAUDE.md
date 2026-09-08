@@ -81,3 +81,7 @@
 - 是否还有风险或遗留问题
 - 如有建议的下一步，把对应新 session 提示词写下
 - 如本次用到 sillyspec 工具，总结工具使用效果与驾驭能力（正面 / 负面都可，用于持续改进）
+
+<!-- SillySpec v3.28.3 START — 由 sillyspec init 注入，勿手动编辑此段 -->
+@AGENTS.md
+<!-- SillySpec END -->

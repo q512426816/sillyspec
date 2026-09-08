@@ -19,7 +19,7 @@
  *   - loadModuleContextIndex/buildModuleContextInjection 内 require('fs'/'path') 改顶部静态 import
  */
 import { basename, join } from 'node:path'
-import { existsSync, readFileSync, mkdirSync } from 'node:fs'
+import { existsSync, readFileSync, mkdirSync, readdirSync } from 'node:fs'
 import { writeAtomicSync } from '../fs-atomic.js'
 import { stageRegistry } from '../stages/index.js'
 import { resolvePromptIncludes, resolveRuntimeRoot, safeGit, WAIT_MARKER_RE, QUICK_SID_RE } from './shared.js'
@@ -122,6 +122,63 @@ function buildModuleContextInjection(taskDescription, moduleIndex, specBase, pro
   }
 
   return injection
+}
+
+/**
+ * 读 quick session guard 的任务描述（刀①）：启动 --input 由 stage.js 落 guard.taskDescription，
+ * 渲染 step1 模块上下文注入时作匹配源（changeName 是 quick-<hash> 无语义）。
+ * 与 <quicklog-id>/<linked-changes> 占位符同源同容错（session guard 优先，legacy 单文件回退）。
+ */
+export function readQuickGuardField(changeName, specBase, field) {
+  try {
+    const sessionGuardFile = join(specBase, '.runtime', 'quick-sessions', changeName, 'guard.json')
+    const legacyGuardFile = join(specBase, '.runtime', 'quick-guard.json')
+    const guard = existsSync(sessionGuardFile)
+      ? JSON.parse(readFileSync(sessionGuardFile, 'utf8'))
+      : (existsSync(legacyGuardFile) ? JSON.parse(readFileSync(legacyGuardFile, 'utf8')) : null)
+    return guard ? (guard[field] || '') : ''
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * quick step1 项目上下文摘要（刀①）：CLI 代读 projects/*.yaml 与 CONVENTIONS.md 开头注入
+ * prompt——替代 agent 两轮 cat（quick 是最高频路径，省 token + 省轮次）。fail-soft：
+ * 读不到落单行说明，绝不阻断 prompt 输出。
+ */
+export function buildQuickContextDigest(specBase, projectName) {
+  try {
+    const sections = []
+    // 项目登记摘要（name/path/status 一行一个——技术栈等扩展字段按行透传 top-level 短行）
+    const projectsDir = join(specBase, 'projects')
+    if (existsSync(projectsDir)) {
+      const lines = []
+      for (const f of readdirSync(projectsDir).filter(f => f.endsWith('.yaml'))) {
+        const text = readFileSync(join(projectsDir, f), 'utf8')
+        const name = (text.match(/^name:\s*(.+)$/m) || [])[1]
+        const path = (text.match(/^path:\s*(.+)$/m) || [])[1]
+        const status = (text.match(/^status:\s*(.+)$/m) || [])[1]
+        lines.push(`- ${name ? name.trim() : f.replace(/\.yaml$/, '')}（${path ? path.trim() : '?'}）${status ? ` — ${status.trim()}` : ''}`)
+      }
+      if (lines.length > 0) sections.push('### 项目登记（projects/*.yaml 摘要）\n' + lines.join('\n'))
+    }
+    // CONVENTIONS.md 开头（截断保底——全文可能很长，注入是省读取税不是塞全文）
+    const convPath = join(specBase, 'docs', projectName, 'scan', 'CONVENTIONS.md')
+    if (existsSync(convPath)) {
+      const text = readFileSync(convPath, 'utf8')
+      const HEAD_CHARS = 1200
+      const head = text.length > HEAD_CHARS
+        ? text.slice(0, HEAD_CHARS) + `\n…（截断——全文 ${convPath}，需要时再读）`
+        : text
+      sections.push('### 项目约定（CONVENTIONS.md 开头，CLI 代读）\n' + head)
+    }
+    return sections.length > 0
+      ? sections.join('\n\n')
+      : '（无项目登记/约定文档——需要时按 prompt 内路径自查）'
+  } catch (e) {
+    return `（项目上下文注入失败：${e && e.message ? e.message : e}——需要时再 cat {SPEC_ROOT}/projects/*.yaml 与 CONVENTIONS.md）`
+  }
 }
 
 // parseModuleMapSimple 复用 modules.js 的 canonical 实现（合并历史 copy-paste 副本，2026-08-07；
@@ -566,6 +623,14 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
     promptText = promptText.replace(/\{LOCAL_COMMANDS\}/g, localBlock)
   }
 
+  // ①b {QUICK_CONTEXT_DIGEST}（刀①，2026-09-08）：quick step1 的项目/约定上下文 CLI 代读注入
+  // ——替代 agent cat projects/*.yaml 与 CONVENTIONS.md 两轮文件读取（quick 是最高频路径）。
+  // fail-soft 同三件套；无 quick 占位符自然零输出。
+  if (stageName === 'quick' && promptText.includes('{QUICK_CONTEXT_DIGEST}')) {
+    const digestSpecBase = resolvePromptSpecBase(platformOpts, cwd)
+    promptText = promptText.replace(/\{QUICK_CONTEXT_DIGEST\}/g, buildQuickContextDigest(digestSpecBase, projectName))
+  }
+
   // ② {GIT_DIRTY}：工作区脏文件清单（git status --porcelain，quick 收尾步消费）
   if (promptText.includes('{GIT_DIRTY}')) {
     let dirtyBlock = ''
@@ -927,13 +992,19 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
     promptText = promptText.split('{EVIDENCE_AUTO_RECOMMENDATION}').join(eaInjected)
   }
 
-  // 注入模块上下文（brainstorm/plan/execute 阶段，基于 Module Context Index）
-  if (['brainstorm', 'plan', 'execute'].includes(stageName) && projectName) {
+  // 注入模块上下文（brainstorm/plan/execute 阶段全步 + quick 首步「理解任务」——刀①：quick
+  // step1 原让 agent cat module-map 再挑模块卡读，改为按任务描述匹配后注入，基于 Module Context Index）
+  const quickFirstStep = stageName === 'quick' && step && step.name === '理解任务'
+  if ((['brainstorm', 'plan', 'execute'].includes(stageName) || quickFirstStep) && projectName) {
     const effectiveSpecBase = resolvePromptSpecBase(platformOpts, cwd)
     const moduleIndex = loadModuleContextIndex(effectiveSpecBase, projectName)
     if (moduleIndex && Object.keys(moduleIndex).length > 0) {
-      // 尝试从 step prompt / changeName 匹配模块
-      const taskDesc = step.prompt || changeName || ''
+      // 尝试从 step prompt / changeName 匹配模块；quick 用 guard.taskDescription（启动 --input）——
+      // changeName 是 quick-<hash> 无语义、step.prompt 全文噪音大（刀①）
+      let taskDesc = step.prompt || changeName || ''
+      if (stageName === 'quick') {
+        taskDesc = readQuickGuardField(changeName, effectiveSpecBase, 'taskDescription') || taskDesc
+      }
       const injection = buildModuleContextInjection(taskDesc, moduleIndex, effectiveSpecBase, projectName)
       if (injection) {
         promptText = injection + '\n' + promptText

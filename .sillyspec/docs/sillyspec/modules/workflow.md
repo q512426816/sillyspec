@@ -109,6 +109,8 @@ saveWorkflowRun(result, options?) → string|null
 // 保存失败返回 null，只输出 warning 不影响 check 结果
 ```
 
+写入侧滚动回收（2026-09-08 ql-20260908-007）：`saveWorkflowRun` 落盘后调 `runtime-hygiene.js pruneTimestampedEntries({ dir: runDir, keep: 30 })` 裁旧归档——workflow run 无 change 归属语义、无生命周期事件可挂，只有时间价值，写入侧保留最新 30 份是唯一合适量身工具（文件名零填充时间戳开头，name 字典序==时间序；`SILLYSPEC_RUNTIME_KEEP` 可覆盖）。变更归属类证据不走此路，分野见 file-lifecycle/storage-and-state.md。
+
 ### Prompt 生成
 
 ```js

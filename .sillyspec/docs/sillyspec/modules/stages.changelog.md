@@ -31,3 +31,4 @@
 - 2026-09-06-ir-stage-p3a | IR P3a plan 侧：plan.js 两步（生成分级计划/生成 TaskCard）prompt 注入 target_files 填写指引（正反例+与 allowed_paths 语义区分）；plan-postcheck 新增第 7 项检查 validateTargetFiles（parseTargetFiles 严格解析拒 glob/前缀/引号/绝对路径/UNC、幻觉路径 ERROR、缺失每变更汇总一条 WARNING、design 清单与 allowed_paths 双交叉、跨仓卡剔除）+ 聚合 failures[] 接入（检查 1f）；流程产物过滤硬编码同口径（worktree-apply→plan-postcheck 既有依赖边反向 import 成环，见 knowledge）。
 - 2026-09-07-ir-stage-p3b | IR P3b：verify.js Step7 prompt 增两条纪律（预填探针段禁篡改——gate 重跑对比正文不符即拦；verify-facts.json 机器底稿禁手改）。
 - 2026-09-07-ir-stage-p3c | IR P3c：brainstorm.js 模块域指引补 NEW:写法（冒号后不加空格，核验豁免+落地后补录）；Step6 操作 2 卸责 design-init（骨架预填决策追踪表，手写路径保留）。
+- 2026-09-08-ir-verify-facts | verify.js step2/step7 槽位指引（证据账硬门口径 + 回执四字段）+ docs/prompt 镜像

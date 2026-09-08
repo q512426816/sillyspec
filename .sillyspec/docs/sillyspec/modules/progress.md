@@ -39,3 +39,7 @@ updated_at: 2026-09-02T11:20:00+08:00
 ## 变更索引
 
 见 `progress.changelog.md`——历史条目已迁出；新条目直接追加 sidecar，勿写回本卡。
+
+## getStageCompletedAt（2026-09-08-ir-verify-facts）
+
+新只读访问器：DB stages.completed_at（change-registry 查询 + ProgressManager 委托；无行/读失败 null，调用方走 R-05 fallback）——verify 证据分类核验的 verifyStartAt 基准（execute 行完成时刻）。

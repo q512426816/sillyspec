@@ -46,6 +46,22 @@ export class ChangeRegistry {
    * @param {string} changeName - 变更名
    * @returns {{ current_stage: string, status: string }|null} 无该行返回 null（未注册目录桩）
    */
+  /**
+   * 读某变更某阶段的 completed_at（2026-09-08-ir-verify-facts FR-02：verifyStartAt 基准——
+   * evidence 分类核验的 mtime 窗口下界，取 execute 行 completed_at）。只读不抛：无行/读失败
+   * 返回 null（调用方走 R-05 fallback，与 getChangeCreatedAt 同容错风格）。
+   */
+  getStageCompletedAt(cwd, changeName, stage) {
+    try {
+      const db = this.pm._ensureDB(cwd);
+      const row = db.getDb().prepare(
+        `SELECT s.completed_at FROM stages s JOIN changes c ON s.change_id = c.id
+         WHERE c.name = ? AND s.stage = ? ORDER BY s.completed_at DESC LIMIT 1`
+      ).get(changeName, stage);
+      return row && row.completed_at ? row.completed_at : null;
+    } catch { return null; }
+  }
+
   getChangeStage(cwd, changeName) {
     const db = this.pm._ensureDB(cwd);
     const sqlDb = db.getDb();

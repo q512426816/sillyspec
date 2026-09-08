@@ -4,9 +4,9 @@ created_at: 2026-06-01T09:05:00
 ---
 
 # sync
-> 最后更新：2026-08-15
-> 最近变更：platform-takeover-declaration（disconnect 三清：local.yaml platform 段 + 恢复指针 .sillyspec-platform.json + 平台接管声明 .sillyspec-platform-managed——不删后两者则"disconnect 后恢复本地模式"不可达）
-> 模块路径：src/sync.js、src/spec-sync.js
+> 最后更新：2026-09-08
+> 最近变更：sillyhub-not-ready-noise（平台未就绪期连接类失败跨进程噪音闸：sync-noise.js marker 窗口 + spec-sync follower 集合去重）
+> 模块路径：src/sync.js、src/spec-sync.js、src/sync-noise.js
 
 ## 职责
 SillyHub 平台同步模块，负责与远程 SillyHub 服务建立连接、同步变更进度和文档、管理审批流程。
@@ -81,6 +81,8 @@ SillyHub 平台同步模块，负责与远程 SillyHub 服务建立连接、同�
 - `local.yaml` 中 platform 配置包含明文 token，需注意 `.gitignore` 排除
 - `syncDocuments` 要求变更目录下存在四件套文件（proposal.md、design.md、requirements.md、tasks.md），缺失的文件会跳过并记录错误
 - `syncModule` 是 CLI 入口，遇到未知子命令会 `process.exit(1)`
+- **连接类失败噪音闸**（src/sync-noise.js，2026-09-08 用户反馈③）：平台未就绪（404/5xx/断网/超时）期间每条 CLI 命令的自动同步都会撞同一批失败——fetchJson/fetchJsonWithStatus/spec-sync 的连接类失败 warn 经 `syncConnectionWarn` 走跨进程 marker 窗口（.runtime/sync-noise-mute.json，10min）：首报命令完整展示本轮所有失败行，后续进程窗口内静默（SILLYSPEC_DEBUG_SYNC=1 全可见），任意成功清闸并打一行恢复提示。409/其余 4xx 业务态不走闸（每轮该看见）；connect 的 health ping 与手动 `platform pull`（noMute / 非 autoPull）恒可见。`SyncManager` 构造器经 `bindSyncNoiseFromCwd` 零副作用绑定 marker 目录（只读指针 JSON，不触发 resolvePlatformSpecDir 的指针守卫 warn——doctor 两路字节一致契约）。
+- **spec-sync follower 集合去重**（isFollowerSetChanged，marker .runtime/spec-sync-follow-reported.json）：「N 个本地未改动文件自动跟随服务器」只在集合首次出现/变化时报——基线快照锚定 local-at-last-sync，本地落后集合每轮重算，平台未就绪 POST 失败时基线不落盘、同一集合逐条命令刷屏（实证 57 文件）；集合清空清 key，后再现算变化重新报。
 
 ## 变更索引（表格，初始为空）
 | 日期 | 变更名 | 摘要 |
@@ -90,3 +92,4 @@ SillyHub 平台同步模块，负责与远程 SillyHub 服务建立连接、同�
 | 2026-08-14 | ql-20260814-008-fd62（quick） | 修正两处与实现不符的漂移注释：① 头注释移除 syncDocuments（实为手动 platform sync-docs 唯一触发，run 流程不自动推文档），保留 sync/checkApproval 的 run 流程触发描述；② mcp 段同源假设注释改为准确描述（url 复用 platform，token 用原始 user 级 token 而非换发的 effectiveToken）。纯注释改动。 |
 | 2026-08-14 | ql-20260814-013-ef64（quick） | index.js platform resolve 参数解析重写：变更名解析顺序 --change 值 → 非 flag 位置参数 → 唯一未决冲突自动选中（listConflictFiles）；无变更名多冲突/指定名无冲突文件时报错列出候选。修复旧实现盲取 platformArgs[0] 把 flag 名（如 --keep-local）当变更名报「无可解决冲突」。新增顶层导出 listConflictFiles(cwd)。 |
 | 2026-08-18 | ql-20260818-013-bd63（quick） | sync 目录检查硬拦致归档后最终状态未推平台——sync.js sync() 方法在变更目录不存在时硬拦 return（existsSync 检查），archive 归档移走目录后步骤 4-5 完成状态永远到不了平台。改为 warn 继续走 DB 路径（serializeForSync 从 DB 读不依赖文件系统目录）。 |
+| 2026-09-08 | ql-20260908-007（quick，sillyhub-not-ready-noise） | 新增 src/sync-noise.js 连接类失败噪音闸（syncConnectionWarn/noteSyncSuccess/isConnectionClassStatus/bindSyncNoiseFromCwd）+ spec-sync isFollowerSetChanged follower 集合去重；fetchJson/fetchJsonWithStatus 404/5xx/网络错分级走闸、connect health ping noMute、pull() 加 autoPull 区分自动/手动；sync()/spec-sync 成功路径 noteSyncSuccess 清闸打恢复行。新增 test/sync-noise.test.mjs。 |

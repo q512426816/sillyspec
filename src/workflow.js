@@ -12,6 +12,7 @@
 import { readFileSync, existsSync, readdirSync, writeFileSync, mkdirSync } from 'fs'
 import { join, resolve, basename } from 'path'
 import jsYaml from 'js-yaml'
+import { pruneTimestampedEntries } from './runtime-hygiene.js'
 import { WORKFLOW_STATUS } from './constants.js'
 import { contentNonEmpty, lineCount, missingSections, placeholderLineMatches } from './check-primitives.js'
 import { collectInvalidDocRefs } from './docs-check.js'
@@ -626,6 +627,11 @@ export function saveWorkflowRun(result, options = {}) {
 
   try {
     writeFileSync(filepath, JSON.stringify(record, null, 2), 'utf8')
+    // 写入侧滚动裁剪（runtime-hygiene.js，2026-09-08 系统性回收）：workflow-runs/ 只写不收，
+    // 实证本仓 21 份累积。文件名以零填充时间戳开头，name 字典序 == 时间序。fail-open 静默。
+    try {
+      pruneTimestampedEntries({ dir: runDir, keep: 30 })
+    } catch { /* 卫生动作 fail-open */ }
     return filepath
   } catch (e) {
     console.warn('⚠️ 保存 workflow run 失败:', e.message)

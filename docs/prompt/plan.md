@@ -334,37 +334,15 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
 {REVIEW_JSON_CONTRACT}
 4. verdict=fail 时在 reviewerNotes 写明阻断项
 
-### 生成 module-impact.md 首版（scale≠small 时）
-计划审查通过后，顺带生成 module-impact.md 首版（本次变更的模块影响分析，供 execute/verify 阶段更新、archive 阶段终审）。scale=small 不生成（small 走 quick，module-impact 对 quick 无用）。
-
-输入（此时 TaskCard/allowed_paths 尚未生成——在下一步「生成 TaskCard」才产出，故用以下两项作输入，粒度与 archive 现状一致）：
-- design.md 的「文件变更清单」（本次计划改哪些源码文件）
-- plan.md 的任务列表（每个 task 改的范围）
-
-步骤（module-impact 的生成口径与 archive 终审一致）：
-1. 读 {SPEC_ROOT}/docs/<project>/modules/_module-map.yaml（模块→文件路径映射）。**不存在 → 降级**：生成只含 unmapped 部分的 module-impact.md + 提示「建议运行 scan 生成模块映射」，不阻断
-2. 对照 design 文件变更清单 + plan 任务列表，逐文件匹配所属模块（命中的归 mapped，未命中的归「未匹配文件」章节）
-3. 落盘 {SPEC_ROOT}/changes/<change>/module-impact.md，**两个章节标题逐字固定**（archive-impact.yaml contains_sections 机械校验，写成「影响矩阵」等变体会被 archive 硬拦返工）：
-   - 「## 模块影响矩阵」：模块 × 影响类型[新增/修改/删除/依赖变更] × 说明
-   - 「## 未匹配文件」：unmatched 文件 × 处置说明（无未匹配文件也保留空章节，写「无」）
-4. 首行标题必须用中文：# 模块影响分析（Module Impact）— <变更简述>
-5. **必须含「更新结果」表骨架**（本表是 verify/archive 死信门控的收口目标——CLI 硬校验表内无 pending/待办行，漏写此表则 agent 只能从 gate 报错反推格式）：
-   ```markdown
-   ## 更新结果
-
-   | 目标 | 操作 | 状态 |
-   |------|------|------|
-   | `modules/<id>.md` | 更新<模块名>模块卡（本次变更涉及） | pending |
-   | `_module-map.yaml` | 无变化（未增删模块） | skipped |
-   ```
-   规则：每个受影响模块文档一行，状态列初始化 pending；无变化的行直接写 skipped。execute/verify 完成文档同步后把对应行回填 done；确定不同步的行改 skipped 并在操作列写明原因。**末列是状态列**（done/skipped/pending），不要在表尾追加其他列。
+### module-impact.md 首版（scale≠small 时：CLI 自动生成，审查步勿手写）
+module-impact.md 首版**由 CLI 在本阶段 --done 时自动生成**——文件×模块归属按 _module-map.yaml 前缀匹配机械预填，章节含「## 模块影响矩阵」「## 未匹配文件」「## 更新结果」表骨架（每受影响模块一行 pending），影响类型列留 <!--TODO--> 由 execute/verify 按实际 diff 回填。已存在不覆盖。手写整份首版是历史返工根源（章节标题变体会被 archive contains_sections 硬拦），**本步不要手写**。
+仅当 --done 报 module-impact 缺失时（如无 module-map 的绿地项目生成降级失败），按 gate 报错提示手写兜底：两章节标题逐字用「## 模块影响矩阵」「## 未匹配文件」（未命中的文件归「未匹配文件」章节），并含「## 更新结果」表骨架（行：`modules/<id>.md`、`_module-map.yaml`，状态列 pending/skipped，末列是状态列，勿追加其他列）。
 
 execute/verify 阶段会按实际代码变更更新此文档；archive 阶段会最终确认它。
 
 ### 输出
 - tier=self：审查清单结果（每条状态 + 偏差说明）
 - tier=independent：子代理产出的 review.json 路径 + verdict 摘要
-- scale≠small：附 module-impact.md 路径 + 影响摘要
 ````
 
 ---

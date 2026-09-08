@@ -51,3 +51,9 @@ worktree-apply.js:21 已 `import { parseAllowedPaths } from './stages/plan-postc
 
 ## JS 正则转义全角括号会静默失配（V8 行为）
 在 JS 正则里写 `\）` 或 `\（`（转义全角括号）不报错但永不匹配预期文本——V8 对非 ASCII 字符的冗余转义处理与 ASCII 不同，正则应裸写全角括号 `）`。排查特征：断言「理应命中」的中文文本匹配静默返回 null。（来源：2026-09-07-ir-stage-p3b task-05 E3 组实证）
+
+## 新增写入方不得无中生有建判别器依赖的文件
+gates 侧 backfill（verify-facts 回填）曾对无 facts 的存量变更凭空创建 verify-facts.json，而 checkProbeConsistency 存在「有 facts 无探针子节 → error」判别——凭空建文件把相邻判别器对存量变更的 skip 误升 error（e2e run-complete-step-verify 抓出）。规则：给既有判别器生态新增写入方时，必须枚举所有「以文件存在性为输入」的判别器并核对创建语义；底稿类文件的创建应收敛到单一入口（如 verify-probes --init），回填只固化既有文件。（2026-09-08-ir-verify-facts）
+
+## 双维度报同一漂移信号时后加维度须豁免
+checkProbeConsistency 增 facts 基线对比维度后，probe6 在 HEAD 前移场景与既有 md 锚点维度重复报同一漂移（一条信号两条告警）。规则：给既有检测新增第二维度时，识别「同一根因产生多路信号」的场景并在后加维度里豁免（HEAD-advance 时 facts 侧 probe6 不报，漂移由 md 锚点维度单报）。（2026-09-08-ir-verify-facts）

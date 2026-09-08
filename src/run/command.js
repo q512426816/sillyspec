@@ -20,10 +20,10 @@
  *     './run/stage.js' → './shared.js' 等同级
  */
 import { basename, join, resolve, dirname } from 'node:path'
-import { existsSync, readdirSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, readdirSync, mkdirSync, writeFileSync, readFileSync, rmSync, unlinkSync } from 'node:fs'
 import { randomBytes, randomUUID } from 'node:crypto'
 import { writeAtomicSync } from '../fs-atomic.js'
-import { resolveSpecDir, countAncestorSpecDirs, ancestorSpecDirs, resolveAncestorCeiling, resolveChangeDir, triggerSync, getStageSteps, formatWaitOptions, checkApproval, warnApprovalUnknown, didYouMean, assertSafeChangeName, detectQuickSessionDrift, detectWorktreeSpecDrift, resolveRuntimeRoot, resolveQuickSessionsDir, writePlatformPointer, checkPlatformManaged, isSelfReferentialSpecRoot, PLATFORM_MANAGED_FILENAME } from './shared.js'
+import { resolveSpecDir, countAncestorSpecDirs, ancestorSpecDirs, resolveAncestorCeiling, resolveChangeDir, triggerSync, getStageSteps, formatWaitOptions, checkApproval, warnApprovalUnknown, didYouMean, assertSafeChangeName, detectQuickSessionDrift, detectWorktreeSpecDrift, resolveRuntimeRoot, resolveQuickSessionsDir, writePlatformPointer, checkPlatformManaged, isSelfReferentialSpecRoot, isTempResidueSpecRoot, PLATFORM_MANAGED_FILENAME } from './shared.js'
 import { resolveQuickLinkedChanges } from './quick-audit.js'
 import { outputStep, collectStageWaitHistory } from './prompt.js'
 import { completeStep, skipStep, waitStep, continueStep } from './complete.js'
@@ -427,6 +427,15 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
       // .sillyspec，无跨库状态分裂风险；非自指声明维持 fail-closed 原样（状态保护阻断）。
       if (isSelfReferentialSpecRoot(cwd, decl.specRoot)) {
         console.warn(`⚠️ 检测到陈旧的自指平台接管声明（repo-native junction 回环，原 specRoot 指回本地 .sillyspec），已降级并按本地模式运行；可 sillyspec platform disconnect 清理残留声明: ${join(cwd, PLATFORM_MANAGED_FILENAME)}`)
+      } else if (isTempResidueSpecRoot(cwd, decl.specRoot)) {
+        // temp 残留降级（2026-09-08 temp 投毒治理，与入口一 resolvePlatformSpecDir 同源
+        // 判定）：声明 specRoot 在系统 temp 且 cwd 不在 temp → 可证伪的测试/联调残留。
+        // 与自指降级不同点：直接自动清理声明（自指场景 specRoot 指回本地 .sillyspec 有
+        // 真实数据面，留待 disconnect 是保守正确；temp 场景声明描述的 specRoot 物理上
+        // 就是临时产物，清理无损失，且不清理则每次命令重复 warn）。不用 disconnect——
+        // 它会连带清 local.yaml platform 段，误伤真实平台连接。删除失败仍按本地继续。
+        console.warn(`⚠️ 检测到 temp 残留平台接管声明（specRoot 指向系统 temp 目录：${decl.specRoot}，测试/联调投毒特征），已自动清理并按本地模式运行: ${join(cwd, PLATFORM_MANAGED_FILENAME)}`)
+        try { unlinkSync(join(cwd, PLATFORM_MANAGED_FILENAME)) } catch { /* best effort */ }
       } else {
         console.error(`❌ 平台接管声明生效：本项目已由平台托管（原 specRoot: ${decl.specRoot || '(未记录)'}），但恢复指针缺失，拒绝静默回退本地模式。`)
         console.error(`   声明文件: ${join(cwd, PLATFORM_MANAGED_FILENAME)}`)

@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-06-04 16:25:42
-updated_at: 2026-08-09
+updated_at: 2026-09-08
 ---
 
 # 存储与状态
@@ -13,16 +13,20 @@ updated_at: 2026-08-09
 ```text
 .sillyspec/.runtime/
 ├── sillyspec.db
+├── sillyspec.db.pre-import-<ts>.bak  (import 前全库快照，滚动只留最新 1 份，见下)
 ├── user-inputs.md
 ├── platform-scan.json            (平台 scan 参数暂存)
 ├── scan-projects.json            (scan step 2 后的项目展开状态)
 ├── audit.log                     (--force 绕过校验的审计记录，JSONL)
-├── artifacts/
+├── sync-noise-mute.json          (平台连接类失败噪音闸窗口 marker，成功即清，见 sync 模块卡)
+├── spec-sync-follow-reported.json (follower/stale 集合去重 marker，集合变化才重报)
+├── artifacts/                    (超长步骤输出存档，写入侧滚动保留最新 100 份)
 ├── history/
 ├── logs/
 ├── templates/
 ├── verify-runs/                  (verify 阶段 CLI 实测测试结果)
-├── workflow-runs/
+├── workflow-runs/                (workflow check 归档，写入侧滚动保留最新 30 份)
+├── doctor-dumps/                 (孤儿库诊断 dump，写入侧滚动保留最新 5 份)
 └── worktrees/
 ```
 
@@ -50,6 +54,24 @@ updated_at: 2026-08-09
 注意：DB schema 版本号四处一致 = `5`（`db.js` 的 `DB_SCHEMA_VERSION` / `project.schema_version` DDL DEFAULT / `CURRENT_VERSION`（W6 Step9d 抽到 `src/progress/shared.js`）/ `progress.js read()._version`）。D-012（platform-progress-sync）原始对齐至 `4`；2026-08-11 changes 表加 `title`/`quicklog_id` 列 bump 至 `5`。bump 时四处须同步更新（`platform-sync-schema.test.mjs` 守卫锁死一致）。
 
 双库分裂探测（2026-09-04，坑 progress-repair-dual-library-blind）：`progress check`/`progress repair`（ConsistencyDoctor.detectLibrarySplit）在 cwd 存在平台接管指针且 specRoot ≠ cwd/.sillyspec、同时 cwd/.sillyspec/.runtime/sillyspec.db 残留时报告「双进度库并存」——两库均有活跃变更、或 --change 目标变更只在旧库活跃 → issue 级（repair 进 manual 清单：哪边是权威库 repair 修不了，只能亮出来）；仅并存单侧活跃 → warning 级（平台模式本地库保留真实资产是容忍态，防常态误报）。自指指针/无指针/旧库无 db 不报。旧库仅在其 sillyspec.db 已存在时直读（绝不新建库文件），读失败 fail-open 不阻断主流程。
+
+## pre-import 快照回收
+
+位置：`.sillyspec/.runtime/sillyspec.db.pre-import-<ts>.bak`（+ 同名 `.bak-wal` 侧车）
+
+写入方：`ProgressManager.import()`（`src/progress.js`），每次 `platform pull` / `platform resolve --take-platform` 在 import 事务前落一份全库快照。独立于主 `sillyspec.db.bak` 回退链（不抢 `_openWithFallback` 的路径）。
+
+回收方：`ProgressManager._pruneImportBaks(cwd, keepPath)`，在 `copyFileSync` 落盘后立即调用。口径：
+
+- **默认只留最新 1 份**（`PRE_IMPORT_BAK_KEEP_DEFAULT`）。这类快照只服务「刚 pull 完发现平台盖错、要退回 pull 前」这一个场景，最新一份即可覆盖；越旧的快照 schema 可能已 bump，恢复价值随时间衰减。
+- 份数可用环境变量 `SILLYSPEC_PREIMPORT_BAK_KEEP` 覆盖（灾难排查期想多留几份），非法值 / `< 1` 钳回默认。
+- 排序依据 = **文件名内嵌的 ISO 时间戳字典序**（冒号/点已替换为 `-`，定宽无进位歧义，等价时间序）。不用 `statSync` 的 mtime——copy / 同步工具会改写 mtime。
+- 被裁的快照连自己的 `.bak-wal` 侧车成对删；**存活快照的侧车必须保留**（缺侧车的快照恢复时会丢尾部已提交事务，即 BUG-18 连 `-wal` 一起备份的原因）。
+- 本次刚写的 `keepPath` 显式排除、永不裁（并发 import 互删护栏）。
+- 单份删除失败（他进程持句柄 / 权限）跳过不连坐其余份，下次 import 再收。
+- 裁剪整体包在 `try/catch` 里 **fail-open**：卫生动作失败只 `console.warn`，不阻断 import 主流程。
+
+**为什么修在写入侧而不是新增 GC 命令**：靠人工记得跑 GC 等于没有回收——此前只写不裁，实证单仓（multi-agent-platform）累积 292 份 / 317MB，占该仓 `.runtime/` 体积绝对大头。写入侧自愈一次改完永久生效，多 agent 并行也无需协调。契约测试 `test/preimport-bak-rotation.test.mjs`（25 断言）。
 
 ## `global.json`
 
@@ -92,7 +114,21 @@ updated_at: 2026-08-09
 <change>-<stage>-step<N>-<YYYYMMDDHHMMSS>.txt
 ```
 
+回收方：写入侧滚动裁剪（`runtime-hygiene.js pruneTimestampedEntries`，keep=100 按 mtime——文件名时间戳在尾部、前缀是变更名，长变更晚收峰会乱序；实证本仓曾累积 534 份）。`SILLYSPEC_RUNTIME_KEEP` 可覆盖保留份数。
+
 注意：artifact 路径由 `completeStep()` 处理；这不等同于 workflow run 归档路径。
+
+## 无归属审计类产物的写入侧滚动回收
+
+`.runtime/` 只写不回收路径系统性排查（2026-09-08，与「归档取证回收」定界）后，按**产物是否有 change 归属语义**分两路回收：
+
+- **变更归属类证据**（execute-runs / stage-reviews / verify-runs / apply-pathspec）：走归档时按 change 精确回收（pruneArchivedChangeRuntime，见上方专节）+ `doctor --gc-unstamped-runs` 清存量。不接写入侧滚动——keep-N 是启发式，多 agent 高频写入会把活跃变更的证据跌出保留窗，Stage/Task Review Gate 会读到被裁掉的 review。
+- **无归属审计类**（本节，`src/runtime-hygiene.js pruneTimestampedEntries` 写入侧滚动）：无生命周期事件可挂、无归属语义、只有时间价值的产物：
+  - `artifacts/`：keep=100，orderBy=mtime（见上节）；
+  - `workflow-runs/`：`saveWorkflowRun` 写后裁，keep=30（文件名零填充时间戳开头，name 字典序==时间序）；
+  - `doctor-dumps/`：`writeDump` 写后裁，keep=5（孤儿库处置前的证据快照，决策完成即失效）。
+
+统一契约：单条删除失败跳过不连坐；目录缺失/异常返回 0 绝不抛（fail-open）；keep 内幂等；`SILLYSPEC_RUNTIME_KEEP`（整数 ≥1）统一覆盖各默认，非法值回落调用方默认。
 
 ## `history/`
 
@@ -130,7 +166,49 @@ updated_at: 2026-08-09
 
 写入方：`verify-postcheck.js` 的 `runVerifyTestCheck()`，在 verify 阶段完成、产物校验通过后由 `run.js` 触发。
 
-内容：CLI 亲自执行 `local.yaml` `commands.test` 的客观结果（`command`、`exit_code`、`status`、`duration_ms`、`output_tail`、`reason`、`ran_at`）。实测失败会阻断 verify 阶段完成（与 verify-result.md 自报告对账）。未配置 test 命令（或标记 `unavailable`）时跳过执行、不落盘、不阻断。额外字段：全量 fallback 时含 `fallback_reason`（非 null 表示本次全量是非显式 fallback——未配 `test_strategy` / `modules:` 块无效 / git 未命中——失败可能含未变更模块的预存错误）；`test_strategy: module` 命中子集时含 `modules` 各模块明细（`name`/`command`/`exit_code`/`status` 等）。
+内容：CLI 亲自执行 `local.yaml` `commands.test` 的客观结果（`command`、`exit_code`、`status`、`duration_ms`、`output_tail`、`reason`、`ran_at`）。实测失败会阻断 verify 阶段完成（与 verify-result.md 自报告对账）。未配置 test 命令（或标记 `unavailable`）时跳过执行、不落盘、不阻断。额外字段：全量 fallback 时含 `fallback_reason`（非 null 表示本次全量是非显式 fallback——未配 `test_strategy` / `modules:` 块无效 / git 未命中——失败可能含未变更模块的预存错误）；`test_strategy: module` 命中子集时含 `modules` 各模块明细（`name`/`command`/`exit_code`/`status` 等）。归档后该目录按 change 精确回收，见下方「归档取证回收」。
+
+## 归档取证回收
+
+接线：`archiveWorktreeCleanup`（`src/run/complete-handlers.js`）在清完 runId marker 之后、worktree `if (!meta) return` 早退之前调用 `pruneArchivedChangeRuntime(runtimeRoot, changeName)`。时点保证：`handleArchiveConfirmStep` 先 `buildDeltaReport` 把 reconcile / apply-pathspec 吃进 `delta.md`，再 `archiveChangeDirectory` → 本清理。自愈归档 / quick 轻量归档 / `change-delete` 无 delta 同样可删（变更已终态，runtime 取证无读者）。
+
+**不复制进 `changes/archive/<change>/evidence/`**：review.json 体积小，双写会漂移；delta.md 已覆盖交付清单。归档后再跑 `sillyspec delta --change` 会失去 runtime 侧 reconcile/apply-pathspec 源，以归档包内已有 `delta.md` + `verify-facts.json` 为准。
+
+归属 fail-closed（禁 mtime 猜、禁后缀匹配，对齐坑 marker-suffix-overmatch / execute-runs-isolation）：
+
+| 产物 | 删除条件 |
+|---|---|
+| `apply-pathspec-<change>.txt` | 文件名精确相等 |
+| `execute-runs/<runId>/` | 目录内 `change` 戳全等本变更；**无戳不删** |
+| `stage-reviews/<dir>/` | `review.json` 的 `reviewedFiles[0]` 解析 `changes/<name>/` 首段 **===** 本变更 |
+| `verify-runs/<ts>/` | 目录内 JSON 的 `change` 字段集合 size=1 且等于本变更；无字段 / 混有他变更 → 整目录不删 |
+
+本轮不扩 `endpoint-baselines/`、`contract-artifacts/`、`last-delta.json`、`sillyspec.db`。卫生动作 fail-open，不阻断归档。契约测试 `test/archive-runtime-prune.test.mjs`。
+
+## 存量无戳 execute-runs
+
+归档热路径故意留下无 `change` 戳的旧 `execute-runs/<runId>/`（禁 mtime 猜删）。存量清扫走旁路，**不接进 archive**：
+
+```text
+sillyspec doctor --gc-unstamped-runs           # dry-run 只列
+sillyspec doctor --gc-unstamped-runs --confirm # 才删除
+```
+
+实现：`src/doctor-diagnostics.js` `gcUnstampedExecuteRuns`，接线 `src/index.js` `case 'doctor'`（对齐 `--cleanup-ghosts`）。只处理无戳 execute-runs；有戳的留给 `pruneArchivedChangeRuntime`。
+
+归属 fail-closed（`archiveDestDirName` 原样返回 changeName，归档目录名 = 变更名）：
+
+| 判定 | 动作 |
+|---|---|
+| 目录内有非空 `change` 戳 | skip `has_stamp` |
+| `reviewedFiles` 的 `changes/<name>/` 首段命中 **活跃** 变更 | skip `matches_active`（`login` 不伤 `2026-08-01-login`） |
+| 路径命中多个归档目录 | skip `ambiguous_archive` |
+| 路径命中恰好一个归档；且 run 的 task-NN 是该归档 `tasks.md` 的子集（或 tasks.md 无任务） | 列为候选，via `path` |
+| 路径命中但 run 多出 `tasks.md` 没有的 task-NN | skip `tasks_md_mismatch` |
+| 无路径：task-NN 与恰好一个归档 `tasks.md` **集合全等**，且无活跃变更全等 | 列为候选，via `tasks_md`（子集太弱：`task-01` 几乎每个变更都有） |
+| 其余 | skip `no_attribution` |
+
+默认 dry-run 零写入；`--confirm` 才 `rmSync` 候选。不扩 `stage-reviews/` / `verify-runs/`。契约测试 `test/doctor-gc-unstamped-runs.test.mjs`。
 
 ## `local.yaml` 路径口径
 

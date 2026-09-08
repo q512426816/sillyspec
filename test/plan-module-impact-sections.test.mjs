@@ -48,9 +48,25 @@ const planSteps = buildPlanSteps(null, null)
 const reviewStep = planSteps.find(s => s.name === '审查计划')
 assert(!!reviewStep, 'buildPlanSteps 产出「审查计划」步（fixedPrefix）')
 for (const sec of expectedSections) {
-  assert(reviewStep.prompt.includes(`## ${sec}`), `plan 审查计划步 prompt 含章节标题字面「## ${sec}」`)
+  assert(reviewStep.prompt.includes(`## ${sec}`), `plan 审查计划步 prompt 含章节标题字面「## ${sec}」（兜底手写说明保留锚点）`)
 }
-assert(reviewStep.prompt.includes('未命中的归「未匹配文件」章节'), 'plan prompt 步骤 2 指引未命中文件归「未匹配文件」章节')
+assert(reviewStep.prompt.includes('CLI 自动生成') && reviewStep.prompt.includes('勿手写'),
+  'plan prompt 已切换为 CLI 自动生成口径（刀②），审查步不再指引 agent 手写首版')
+assert(reviewStep.prompt.includes('未命中的文件归「未匹配文件」章节'), 'plan prompt 兜底说明仍指引未命中文件归「未匹配文件」章节')
+
+// ── 3b. CLI 生成器输出与 yaml 契约同源（刀②后生成方=CLI，锁住真正的产出者）──
+const { generateModuleImpactSkeleton } = await import('../src/module-impact.js')
+const gen = generateModuleImpactSkeleton({
+  cwd: repoRoot,
+  changeName: '__sections_probe__',
+  sourceFiles: ['src/index.js', 'docs/random-note.md'],
+  origin: 'plan --done CLI',
+})
+assert(!!gen, 'generateModuleImpactSkeleton(sourceFiles 声明来源) 正常产出（不依赖 diff）')
+for (const sec of [...expectedSections, '更新结果']) {
+  assert(gen.markdown.includes(`## ${sec}`), `CLI 生成骨架含「## ${sec}」章节（contains_sections 契约同源）`)
+}
+assert(gen.markdown.includes('pending'), 'CLI 生成骨架含「更新结果」表 pending 行（死信门目标）')
 
 // ── 4. archive extract-module-impact 步 prompt（降级补写路径）同样含两章节名 ──
 const archiveSteps = (archiveDef.steps || [])

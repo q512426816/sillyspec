@@ -11,8 +11,8 @@
  * 探针2（关键词提取半语义）/探针3.4 集成盲区/3.5 断言抽查/探针4（决策追踪语义）留 agent。
  *
  * verify-result.md 骨架：七章节固定结构 + 探针结果机械预填 + 其余章节 <!--TODO--> 占位。
- * 结论章节留「待填」——extractVerifyConclusion 找不到 PASS/FAIL 关键词即判不过，骨架不能
- * 直接过门（与 symbol-impact 骨架同款防偷懒语义）。
+ * 结论走「结论枚举：」固定槽行（刀③）——占位符不含枚举词，槽未填 extractVerifyConclusionSlot
+ * 返回 '' 即判不过，骨架不能直接过门（与 symbol-impact 骨架同款防偷懒语义）。
  * P3b 增量：①章节标题行末尾 claims 层标注（可复跑探针/确定性检查/人工判断，纯后缀不新增行）；
  * ②--init 同步落盘 verify-facts.json 机器底稿（探针命令行 + 首跑关键指标 + 时间戳，CLI 全权写，
  * 供事后独立复跑审计；重复 --init 覆盖为最近一次 init 快照）。
@@ -20,6 +20,9 @@
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'fs'
 import { join, dirname, basename } from 'path'
 import { gitQuiet } from './git-helper.js'
+import {
+  FACTS_SCHEMA_VERSION, EVIDENCE_SLOT_HEADING, RECEIPT_SLOT_HEADING, parseEvidenceSlots,
+} from './verify-facts-schema.js'
 import { parseFileChangeListDetailed } from './change-list.js'
 import { parseAllowedPaths } from './stages/plan-postcheck.js'
 import { verifyApiParity, _readWorktreeMeta } from './contract-matrix.js'
@@ -310,8 +313,11 @@ export function buildVerifyFacts(result, { changeName, now } = {}) {
   const p3 = (result && result.probe3) || {}
   const p5 = (result && result.probe5) || {}
   const p6 = (result && result.probe6) || {}
+  // v2（2026-09-08-ir-verify-facts）：probes 机器段原样；conclusion/tests/requiredEvidence/
+  // runtimeEvidence/factsConsistency 五段是 slot-backfill/实测回填段（D-001@v2），--init 快照
+  // 不落键（writeVerifyFacts 分段合并时保留既有固化段），由 backfillFactsFromMdAndTests 填。
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     change: changeName,
     generatedAt: now || new Date().toISOString(),
     probes: {
@@ -350,37 +356,160 @@ export function buildVerifyFacts(result, { changeName, now } = {}) {
 }
 
 /**
- * verify-probes --init 落盘 verify-facts.json（CLI 全权写）。重复 --init 无条件覆盖——语义是
- * 「最近一次机械预填的审计底稿快照」（骨架已存在跳过时 facts 照样刷新），agent 勿手改：
- * 事后复跑审计的对照快照，防篡改一致性检查的对比基准是 verify-result.md 正文（非本文件）。
+ * verify-probes --init 落盘 verify-facts.json（CLI 全权写）。v2（2026-09-08-ir-verify-facts）改
+ * 分段合并：re-init 刷新机器段（probes/generatedAt），保留既有 slot-backfill/实测固化段
+ * （conclusion/tests/requiredEvidence/runtimeEvidence）——旧「无条件覆盖」会抹掉 --done 回填数据
+ * （设计审查 P1-5）。agent 勿手改：复跑审计的对照快照，防篡改基准是 verify-result.md 正文。
  * @param {string} changeDir 变更目录（spec 根下 changes/<name>）
  * @param {object} result runVerifyProbes 返回值
  * @param {string} changeName 变更名（统一命令行呈现）
  * @returns {{ facts: object, path: string }}
  */
 export function writeVerifyFacts(changeDir, result, changeName) {
-  const facts = buildVerifyFacts(result, { changeName })
+  const fresh = buildVerifyFacts(result, { changeName })
   const factsPath = join(changeDir, 'verify-facts.json')
+  let facts = fresh
+  try {
+    const prev = JSON.parse(readFileSync(factsPath, 'utf8'))
+    if (prev && prev.schemaVersion === FACTS_SCHEMA_VERSION) {
+      facts = {
+        ...fresh,
+        conclusion: prev.conclusion,
+        tests: prev.tests,
+        requiredEvidence: prev.requiredEvidence,
+        runtimeEvidence: prev.runtimeEvidence,
+        factsConsistency: prev.factsConsistency, // 保留至上次对比结论（下次 --done 重算覆盖）
+      }
+    }
+  } catch { /* 首次落盘/v1/损坏 → 全新快照（v1 无固化段，直接升 v2） */ }
   writeFileSync(factsPath, JSON.stringify(facts, null, 2) + '\n')
-  console.log(`📝 已刷新 verify-facts.json 机器底稿: ${factsPath}（CLI 全权写，勿手改）`)
+  console.log(`📝 已刷新 verify-facts.json 机器底稿: ${factsPath}（v2 分段合并，固化段保留；CLI 全权写，勿手改）`)
   return { facts, path: factsPath }
 }
 
 /**
+ * --done 回填（D-001@v2 slot-backfill）：结论枚举槽 + 证据/回执槽解析固化进 facts；
+ * testCheckResult 提供时回填 tests 段（实测在 runValidators 之后 → gates 二次回填，FR-03 次序）。
+ * 机器段（probes/factsConsistency）不经本函数（writeVerifyFacts / checkProbeConsistency 所有）。
+ * fail-soft：facts 缺失时原地升 v2（probes 保留或空）；落盘失败 warn 不抛。
+ * @param {string} factsPath verify-facts.json 路径
+ * @param {{ verifyMd: string, testCheckResult?: object|null }} opts
+ * @returns {{ facts: object, conclusion: string|null, evidenceCount: number, receiptCount: number, testsBackfilled: boolean }}
+ */
+export function backfillFactsFromMdAndTests(factsPath, { verifyMd, testCheckResult = null, conclusion = null }) {
+  let facts = null
+  try { facts = JSON.parse(readFileSync(factsPath, 'utf8')) } catch { /* 缺失见下 */ }
+  // 只固化既有底稿，不无中生有（2026-09-08-ir-verify-facts 接线实证）：无 facts 的存量变更
+  // （未跑过 --init）若被回填凭空建出 facts.json，checkProbeConsistency 的「有 facts 无探针
+  // 子节 → error」判别会把存量兼容 skip 误升 error（run-complete-step-verify e2e 抓出）。
+  // 底稿创建唯一入口是 verify-probes --init。
+  if (!facts) {
+    return { facts: null, skipped: true, conclusion: null, evidenceCount: 0, receiptCount: 0, testsBackfilled: false, reason: '无 verify-facts.json（未跑 --init），回填跳过——底稿创建唯一入口是 --init' }
+  }
+  if (facts.schemaVersion !== FACTS_SCHEMA_VERSION) {
+    facts = { ...facts, schemaVersion: FACTS_SCHEMA_VERSION, probes: (facts && facts.probes) || {} }
+  }
+  const slots = parseEvidenceSlots(verifyMd || '')
+  // conclusion 由调用方传 stage-contract.extractVerifyConclusionSlot(verifyMd) 的结果
+  // （避免 verify-probes → stage-contract 静态 import 的潜在环，分层单向）
+  const conclusionSlot = conclusion || null
+  if (conclusionSlot) facts.conclusion = conclusionSlot
+  if (slots.hasEvidenceSlot && slots.requiredEvidence.length > 0) {
+    facts.requiredEvidence = slots.requiredEvidence.map(e => ({
+      task: e.task, status: e.status, verifiedFiles: e.verifiedFiles,
+      ...(e.exempt ? { exempt: true, exemptionReason: e.exemptionReason } : {}),
+    }))
+  }
+  if (slots.hasReceiptSlot && slots.runtimeEvidence.length > 0) {
+    facts.runtimeEvidence = slots.runtimeEvidence
+  }
+  let testsBackfilled = false
+  if (testCheckResult && testCheckResult.status && testCheckResult.status !== 'skipped') {
+    facts.tests = {
+      command: testCheckResult.command || null,
+      exitCode: typeof testCheckResult.exitCode === 'number' ? testCheckResult.exitCode : null,
+      strategy: testCheckResult.mode || testCheckResult.strategy || null,
+      failedRemaining: testCheckResult.failureNames || testCheckResult.failedTests || [],
+      passedAt: new Date().toISOString(),
+    }
+    testsBackfilled = true
+  }
+  try {
+    writeFileSync(factsPath, JSON.stringify(facts, null, 2) + '\n')
+  } catch (e) {
+    console.warn(`⚠️ facts 回填落盘失败（fail-soft，不阻断）: ${e && e.message ? e.message : e}`)
+  }
+  return { facts, conclusion: conclusionSlot, evidenceCount: slots.requiredEvidence.length, receiptCount: slots.runtimeEvidence.length, testsBackfilled }
+}
+
+/**
+ * md 槽段缺失补齐（--init 段落级补齐，2026-09-08-ir-verify-facts R-02）：已存在的
+ * verify-result.md 缺「证据账/集成验证回执」槽段时仅追加骨架（不触碰既有正文），幂等二跑零改动。
+ * @param {string} mdPath verify-result.md 路径
+ * @param {Array<{task:string,evidence:string[]}>} [requiredEvidenceItems] verify-required-evidence.json items（预填 task 行）
+ * @returns {{ added: string[] }} 追加的槽段标题列表
+ */
+export function backfillMissingEvidenceSlots(mdPath, requiredEvidenceItems = []) {
+  let text = ''
+  try { text = readFileSync(mdPath, 'utf8') } catch { return { added: [] } }
+  const normalized = text.replace(/\r\n/g, '\n')
+  const added = []
+  const blocks = []
+  if (!normalized.includes(EVIDENCE_SLOT_HEADING)) {
+    const lines = [EVIDENCE_SLOT_HEADING, '[层：人工判断——CLI 核验]', '', '<!-- 无 cannot_verify 任务时本节写「无」 -->']
+    if (requiredEvidenceItems.length > 0) {
+      for (const it of requiredEvidenceItems) {
+        lines.push(`- ${it.task}: <待填：三选一> | verifiedFiles: <精确路径，逗号分隔>（satisfied 必填；豁免时填 missing 并加（豁免：<一句话理由>）后缀）`)
+      }
+    } else {
+      lines.push('无（本次变更无 cannot_verify 任务）')
+    }
+    lines.push('')
+    blocks.push(lines.join('\n'))
+    added.push(EVIDENCE_SLOT_HEADING)
+  }
+  if (!normalized.includes(RECEIPT_SLOT_HEADING)) {
+    blocks.push([
+      RECEIPT_SLOT_HEADING, '[层：自述声明——CLI 一致性校验]', '',
+      '<!-- integration-critical/deployment-critical 变更必填；其余写「无」 -->',
+      '- claim: <待填：一句话> | command: <待填：命令> | exit: <待填：0 或非 0> | log: <待填：日志路径>',
+      '',
+    ].join('\n'))
+    added.push(RECEIPT_SLOT_HEADING)
+  }
+  if (added.length > 0) {
+    writeFileSync(mdPath, normalized.replace(/\n?$/, '\n') + blocks.join('\n') + '\n')
+  }
+  return { added }
+}
+
+/**
  * 生成 verify-result.md 骨架（七章节；探针结果机械预填，语义章节 <!--TODO--> 占位）。
- * 结论章节留「待填」——extractVerifyConclusion 无 PASS/FAIL 关键词即判不过，骨架不能直接过门。
+ * 结论走「结论枚举：」固定槽行（刀③，2026-09-08）——占位符不含枚举词（<待填：三选一>），
+ * 槽未填 → extractVerifyConclusionSlot 返回 '' → gate 判不过（fail-closed；旧占位符
+ * `<待填：PASS 或 FAIL>` 含 PASS 字样会被窗口正则误读成已填 PASS，已修）。
  * 章节标题行末尾带 claims 层标注（P3b）：探针结果=可复跑探针 / 测试结果=确定性检查 / 其余=
- * 人工判断——纯渲染层后缀，不新增行，verify gate 结论提取按关键词窗口制不受影响。
+ * 人工判断——纯渲染层后缀，不新增行；结论解析槽优先于标题关键词窗口（存量兼容）。
  * @returns {string|null} 骨架全文；无 design.md/tasks.md（非完整流程变更）→ null
  */
 export function generateVerifyResultSkeleton(result) {
   const L = [
     '# 验证报告（骨架由 `sillyspec verify-probes --change <变更名> --init` 生成）',
     '',
-    '> 探针结果已机械预填；其余章节把 `<!--TODO-->` 替换为真实内容。**结论必须写明 PASS / FAIL**——',
-    '> 留「待填」会被 gate 判不过（fail-closed）。',
+    '> 探针结果已机械预填；其余章节把 `<!--TODO-->` 替换为真实内容。**结论只认「结论枚举：」槽行**——',
+    '> 槽行留「<待填：三选一>」会被 gate 判不过（fail-closed），正文其他位置的 PASS/FAIL 字样不参与判定。',
     '',
-    '## 结论：<待填：PASS 或 FAIL（+一句话理由）> [层：人工判断]',
+    '## 结论 [层：人工判断]',
+    '',
+    '结论枚举：`<待填：三选一>`（把尖括号占位整体替换为 PASS / PASS WITH NOTES / FAIL 之一；一句话理由写在枚举后同行或下一行）',
+    '',
+    '## 证据账（cannot_verify 任务） [层：人工判断——CLI 核验]',
+    '<!-- 无 cannot_verify 任务时本节写「无」；有则逐 task 一行 -->',
+    '- task-NN: <待填：三选一> | verifiedFiles: <精确路径，逗号分隔>（satisfied 必填；豁免时填 missing 并加（豁免：<一句话理由>）后缀）',
+    '',
+    '## 集成验证回执 [层：自述声明——CLI 一致性校验]',
+    '<!-- integration-critical/deployment-critical 变更必填；其余写「无」 -->',
+    '- claim: <待填：一句话> | command: <待填：命令> | exit: <待填：0 或非 0> | log: <待填：日志路径>',
     '',
     '## 任务完成度 [层：人工判断]',
     '<!--TODO: 逐 task 对照 tasks.md 勾选与验收标准，完成/未完成/存疑三态-->',

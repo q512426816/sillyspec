@@ -1122,3 +1122,37 @@ export function runChangeNameAdvisory(opts) {
   findings.sort((a, b) => a.doc.localeCompare(b.doc) || a.docLine - b.docLine || a.name.localeCompare(b.name))
   return { empty: scanned === 0, scannedDocs: scanned, mentions, uniqueNames: seenNames.size, findings, exempted }
 }
+
+/**
+ * 行号漂移自动重锚（quick --done 接线面，2026-09-08 用户反馈②）：活文档 file:line 硬编码
+ * 随任何源码插入失效，每回手跑 `docs check --fix` 是机械活。本函数 = --fix 主链路的编程化
+ * 封装：对给定文档集跑一次失效收集 → 取分类器判定确定性的条目（fixable 唯一/优选命中，
+ * 与 index.js --fix 同源构造 fixes）→ applyFixes 写回 → 同口径复跑得回执。
+ *
+ * 边界（与 --fix 的既定红线一致）：歧义/零命中条目不动（无 --force 逃生口）；仅改写
+ * fixable 条目的行号段，文件名与 token 原样。任何异常上抛由调用方 fail-open。
+ *
+ * @param {string} projectRoot 源码仓根
+ * @param {string[]} docs 本次改动文档的相对路径列表（audit 口径：changedFiles 中的 .md）
+ * @param {{ crossRepoRoots?: string[] }} [cfg] docs-check 配置（readDocsCheckConfig 产物）
+ * @returns {{ applied: number, invalidBefore: number, invalidAfter: number, remaining: number }}
+ *   applied=0 时 invalidBefore/After 同值（无可自动修条目，调用方维持纯 advisory）
+ */
+export function autoReanchorDocRefs(projectRoot, docs, cfg = {}) {
+  // 与 index.js --fix 完全同口径（skip/keywordAssert 透传；undefined 时 runDocsCheck 解构
+  // 默认值兜底：paths 缺省 glob、keywordAssert=true、exempt=true）
+  const scope = { projectRoot, docs, skip: cfg.skip, keywordAssert: cfg.keywordAssert, crossRepoRoots: cfg.crossRepoRoots };
+  const before = runDocsCheck(scope);
+  const fixes = [];
+  for (const inv of before.invalid) {
+    if (inv.fix && inv.fix.fixable === true && Number.isInteger(inv.fix.newLine)) {
+      fixes.push({ doc: inv.doc, docLine: inv.docLine, ref: inv.ref, newRef: inv.ref.replace(/(\d+)(?:-\d+)?$/, String(inv.fix.newLine)) });
+    }
+  }
+  if (fixes.length === 0) {
+    return { applied: 0, invalidBefore: before.invalid.length, invalidAfter: before.invalid.length, remaining: before.invalid.length };
+  }
+  const applied = applyFixes(projectRoot, fixes);
+  const after = runDocsCheck(scope);
+  return { applied: applied.applied, invalidBefore: before.invalid.length, invalidAfter: after.invalid.length, remaining: after.invalid.length };
+}

@@ -5,6 +5,8 @@
  * 判定 5 级风险（doc-only / unit-sufficient / contract-required /
  * integration-critical / deployment-critical），产出门控验证需求。
  */
+import { readFileSync, statSync } from 'fs'
+import { join } from 'path'
 
 // ============ 向后兼容：旧的 INTEGRATION_CRITICAL_PATTERNS ============
 
@@ -292,10 +294,40 @@ export function checkIntegrationEvidence(verifyContent, requiredVerification, op
   const warnings = []
   const lower = (String(verifyContent || '') + '\n' + String(opts.extraEvidenceText || '')).toLowerCase()
 
-  // 字面证据正则从 VERIFICATION_NEEDS[k].literals 派生——与报错描述、prompt 事前契约严格同源,
-  // 杜绝历史上"描述说 A、正则查 B"的分叉(checkIntegrationEvidence 正则曾比 VERIFICATION_NEEDS
-  // 描述多匹配 集成测试/backend.*daemon/real.*integration 等)。literals 为空的 need
-  // (unit_tests/contract_tests)无字面校验,视为满足。
+  // ── v2 回执槽优先（2026-09-08-ir-verify-facts FR-04，D-003@v1）：「集成验证回执」槽在场时
+  // 走结构化一致性校验（绿判据：logPath 存在 × mtime ∈ verify 窗口 × 日志尾 200 行失败签名
+  // 扫描（噪声剔除）× exitCode===0），literals 降 legacy 回退（存量兼容）。
+  // extraEvidenceText（verify-services 回执注入）保留合并为补充候选文本。CLI 不代跑集成进程。──
+  if (Array.isArray(opts.runtimeEvidence) && opts.runtimeEvidence.length > 0) {
+    const greenReceipts = []
+    const receiptAudit = []
+    for (const r of opts.runtimeEvidence) {
+      const audit = auditRuntimeReceipt(r, opts)
+      receiptAudit.push(audit)
+      if (audit.green) greenReceipts.push(r)
+    }
+    const needsIntegration = requiredVerification.includes('real_daemon_backend_integration')
+    const needsLogEvidence = requiredVerification.includes('runtime_log_evidence')
+    const needsRealStartup = requiredVerification.includes('real_startup_once')
+    // 任一绿回执 = 结构化在场证据（claim 语义由 agent 声明，一致性由 CLI 校验）
+    const hasGreen = greenReceipts.length > 0
+    if (needsIntegration && !hasGreen) {
+      const bad = receiptAudit.filter(a => !a.green)
+      errors.push(`integration-critical 变更无绿回执（${bad.length} 条回执校验不过：${bad.map(a => a.reason).join('；') || '无有效回执'}）——绿判据：log 存在 × mtime ∈ verify 窗口 × 日志无失败签名 × exit 0`)
+    }
+    if (needsLogEvidence && !hasGreen) {
+      errors.push('integration-critical 变更的回执未通过一致性校验（Runtime Evidence 等价物）')
+    }
+    if (needsRealStartup && !hasGreen) {
+      errors.push('deployment-critical 变更无绿回执（真实启动验证）')
+    }
+    if (receiptAudit.some(a => !a.green && a.failSignatures > 0)) {
+      warnings.push('回执日志含失败签名（error/exception/traceback/fatal 行首命中，已剔除「0 errors」类良性行）——确认是否预期内失败')
+    }
+    return { ok: errors.length === 0, errors, warnings, receiptAudit, structured: true }
+  }
+
+  // ── legacy literals 回退（无槽存量格式）──
   const hasEvidence = (k) => {
     const n = VERIFICATION_NEEDS[k]
     if (!n || !n.literals || n.literals.length === 0) return true
@@ -335,5 +367,44 @@ export function checkIntegrationEvidence(verifyContent, requiredVerification, op
     }
   }
 
-  return { ok: errors.length === 0, errors, warnings }
+  return { ok: errors.length === 0, errors, warnings, structured: false }
+}
+
+/**
+ * 单条回执一致性校验（FR-04 绿判据）。噪声剔除：签名行首匹配 + 剔除「0 errors」类良性行
+ * （本仓 verify-postcheck.js 测试输出解析先例同款）。fail-soft：校验依赖缺失（opts 无
+ * cwd/verifyStartAt）时只核 exitCode 与日志可读性，不假装跑了文件校验。
+ */
+function auditRuntimeReceipt(r, opts) {
+  const out = { claim: r && r.claim, logPath: r && r.logPath, green: false, logExists: null, mtimeInWindow: null, failSignatures: 0, exitCode: r && typeof r.exitCode === 'number' ? r.exitCode : null, reason: '' }
+  if (!r || !r.logPath) { out.reason = '回执缺 logPath'; return out }
+  let content = null
+  try {
+    const abs = opts.cwd ? join(opts.cwd, r.logPath) : r.logPath
+    content = readFileSync(abs, 'utf8')
+    out.logExists = true
+  } catch {
+    out.logExists = false
+    out.reason = `日志不存在：${r.logPath}`
+    return out
+  }
+  if (opts.verifyStartAt) {
+    try {
+      const startAt = new Date(opts.verifyStartAt).getTime()
+      out.mtimeInWindow = statSync(opts.cwd ? join(opts.cwd, r.logPath) : r.logPath).mtimeMs >= startAt - 60_000
+      if (!out.mtimeInWindow) { out.reason = `日志 mtime 早于 verifyStartAt（${r.logPath}）`; return out }
+    } catch { out.mtimeInWindow = null }
+  }
+  // 失败签名扫描（日志尾 200 行；行首匹配 + 良性计数行剔除）
+  const tail = content.split('\n').slice(-200)
+  const SIGNATURE_RE = /^(?:error|exception|traceback|fatal)\b/i
+  const BENIGN_RE = /\b0\s+(?:errors?|exceptions?|failures?)\b|no\s+(?:errors?|exceptions?)/i
+  for (const line of tail) {
+    if (SIGNATURE_RE.test(line.trim()) && !BENIGN_RE.test(line)) out.failSignatures++
+  }
+  if (out.failSignatures > 0) { out.reason = `日志含 ${out.failSignatures} 行失败签名（行首 error/exception/traceback/fatal，已剔除良性计数行）`; return out }
+  if (out.exitCode !== 0) { out.reason = `exitCode=${out.exitCode}（非 0 不可用作在场证据）`; return out }
+  out.green = true
+  out.reason = '绿回执（log 存在 × mtime 窗口 × 无失败签名 × exit 0）'
+  return out
 }

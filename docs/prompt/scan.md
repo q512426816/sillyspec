@@ -132,17 +132,23 @@
 **提示词原文**
 
 ````markdown
-探测当前项目的构建环境和依赖。
+生成事实底稿（机械事实由 CLI 预咀嚼）+ 补充机器拿不到的线索。
 
 ### 操作
 对扫描列表中的每个项目重复以下操作：
-1. 进入项目目录（子项目用其 path，如 `packages/dashboard/`）
-2. `cat package.json pom.xml build.gradle go.mod Cargo.toml requirements.txt pyproject.toml Gemfile composer.json 2>/dev/null`
-3. `find <project-dir> -maxdepth 2 -name "*.config.*" -not -path "*/node_modules/*" -not -path "*/.git/*" | head -20 | xargs cat 2>/dev/null`
-4. 结果保存到 `{DOCS_ROOT}/scan/_env-detect.md`（临时文件，扫描完删除）
+1. **先跑 CLI 确定性抽取**（端点/依赖/脚本/源码规模/git 基线，零 AI token）：
+   `sillyspec scan facts`（主项目；子项目加 `--path <仓库相对路径> --project <项目名>`）。
+   产物落 `{DOCS_ROOT}/scan/_facts.md`——后续所有子代理共享这一份底稿，**不要重复 grep 发现这些事实**。
+2. 补充机器拿不到的线索（保持精简）：README / CI 配置里的构建与测试命令、特殊环境要求、
+   配置文件要点（`cat <project-dir>/*.config.* 2>/dev/null | head -80`），
+   追加写入 `{DOCS_ROOT}/scan/_env-detect.md`（临时文件，扫描完删除）。
+
+### ⛔ 红线
+- **禁止自己 grep/rg 重新发现端点、路由、依赖清单**——以 `_facts.md` 为准；发现与源码冲突时以底稿为准并在文档中标注差异
+- 只读探测，不修改任何源文件
 
 ### 输出
-每个项目的环境探测结果摘要
+每个项目的 _facts.md 状态（类型/依赖数/端点数）+ 补充线索摘要
 ````
 
 ---
@@ -199,8 +205,8 @@
    a. 将 `<project>` 替换为实际项目名，得到该项目的目标文件路径
    b. 为每个角色启动独立子代理（可并行），每个子代理负责 1-2 份文档
    c. 子代理的搜索范围限定在该项目目录内（子项目如 `packages/dashboard/`，不要搜索主项目源码）
-   d. 子代理直接用 grep/rg 搜索源码并写入文件，结果不回传到你的上下文
-   e. 等待该项目所有子代理完成后，验证文件是否生成且非空
+   d. 子代理在**事实底稿覆盖范围内的机械事实**（端点/依赖/规模）直接消费注入的 `_facts.md`，不重新 grep 发现；底稿之外的架构理解仍用 grep/rg 搜索源码并写入文件，结果不回传到你的上下文
+   e. 等待该项目所有子代理完成后，直接进入下一项目——产物存在性/引用有效性由第 3 步 workflow check 与 postcheck **机器校验**，不要自己读回文件核对
    f. 该项目完成后，继续下一个项目
 3. 所有项目完成后，运行以下命令检查产物：
    `sillyspec workflow check scan-docs --project <project>`（CLI 子命令，任意项目根可用）
@@ -209,19 +215,9 @@
 
 ### 覆盖保护
 - **scan_depth: quick 的浅层文档允许覆盖升级**：读取旧 frontmatter 时，若旧文档含 scan_depth: quick（由 --quick 快速接入生成的浅层版本），即使其 source_commit 与当前 HEAD 一致、updated_at 未变，也允许覆盖重写——深度扫描的目的就是把它升级为完整文档。
-- 生成每份 scan 文档时，frontmatter 必须包含：
-  ```yaml
-  ---
-  author: <git 用户名（git config user.name 的输出，如 qinyi）>
-  created_at: <精确到秒的时间，如 2026-07-27 10:30:00>
-  source_commit: <git-head-short>
-  updated_at: <now-iso-datetime>
-  generator: sillyspec-scan
-  ---
-  ```
-  （`<git-head-short>` / `<now-iso-datetime>` 两占位符由 CLI 注入 prompt 时自动替换为当前 HEAD 短哈希与时间——照 prompt 里已替换的真实值抄写，勿自跑 git rev-parse；漏 header 事后 `sillyspec scan-fix-headers` 一键补 author/created_at）
+- **frontmatter 由 CLI 自动写入（2026-09-05 ②）：子代理不写 frontmatter、不跑 git 取值**。文档正文第 1 行直接写中文标题；终检步骤（scanFinalize）的 CLI 会按需注入 author / created_at / source_commit / updated_at / generator，只补缺不覆盖。
 - 覆盖已有 scan 文档前先读取旧 frontmatter；如果旧文档的 `source_commit` 与当前 HEAD 不一致，或旧文档 `updated_at` 晚于本次 scan 开始时间，不要覆盖。
-- 如果用户明确传入 `--force-rescan`，允许覆盖，但仍需写入新的 `source_commit` 和 `updated_at`。
+- 如果用户明确传入 `--force-rescan`，允许覆盖（新 frontmatter 仍由 CLI 注入）。
 
 ### 子代理上下文注入
 启动每个子代理前，将以下信息拼入子代理 prompt：
@@ -229,9 +225,10 @@
 - 目标文件路径（从 workflow YAML 中 `<project>` 替换后的路径）
 - 检查要求（从 workflow YAML 中该角色的 checks）
 - 断点续扫步骤列出的缺失文档列表
-- 环境探测结果摘要（如有 _env-detect.md，直接贴入）
+- **事实底稿 `{DOCS_ROOT}/scan/_facts.md` 全文直接贴入**（CLI 确定性抽取的端点/依赖/规模清单——子代理**禁止重新 grep 发现**这些机械事实，只做解读与成文；INTEGRATIONS/ARCHITECTURE 中的端点与集成条目必须与底稿一致，并直接使用底稿里的 file:line 引用）
+- 环境探测补充摘要（如有 _env-detect.md，直接贴入）
 - **⚠️ 必须强调：子代理必须用 write 工具将文件写入磁盘**
-- **文件标题用中文**（sillyhub 平台解析识别用）：frontmatter 必须在文件最前（第 1 行 --- 起），frontmatter 结束的 --- 之后空一行，再写 # 中文名（English）作为标题。严禁把 # 标题放到 frontmatter 之前（否则 frontmatter 不在头部、「检查产物完整性」步的 frontmatter 检查会报缺 author/created_at）。各文档标准标题格式：
+- **文件标题用中文**（sillyhub 平台解析识别用）：正文第 1 行写 # 中文名（English）作为标题（CLI 会把 frontmatter 自动插到标题之前，你不用管）。各文档标准标题格式：
   - STRUCTURE.md = # 目录结构（Structure）
   - CONVENTIONS.md = # 代码约定（Conventions）
   - ARCHITECTURE.md = # 架构（Architecture）
@@ -239,6 +236,11 @@
   - CONCERNS.md = # 关注点（Concerns）
   - INTEGRATIONS.md = # 集成（Integrations）
   - PROJECT.md = # 项目（Project）
+- **事实引用纪律**：子代理写入文档的关键事实（模块职责、技术栈组件、外部集成、核心命令）必须带反引号包裹的 path:line 引用（如 `src/db.js:42`），且引用必须真实——CLI postcheck 会逐条核验 file:line，失效引用产生 warning。**禁止猜行号**：不确定时只写文件路径不写行号；无法确证的结论标「待确认」，不写成事实。
+
+### 收敛规则（防打转）
+- `sillyspec workflow check scan-docs` 报告失败项后，**只修复报告点名的角色/文件对应的问题**，不要重写未失败的文档
+- 每轮修复后重跑检查，跟踪失败项数量：连续两轮失败项数量没有下降 → 停止重试，在 --output 里如实报告未解决的失败项与已尝试的修复，等待人工决策。**禁止为通过检查而编造内容或降低文档质量**
 
 ### 完成后
 列出每个项目的 7 份文档状态：

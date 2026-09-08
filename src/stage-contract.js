@@ -10,6 +10,7 @@ import { join, basename } from 'path'
 import { safeGit } from './git-helper.js'
 import { nowWallClock } from './datetime.js'
 import { detectChangeRisk, checkIntegrationEvidence, VERIFICATION_NEEDS, RISK_LEVEL_CAUSES } from './change-risk-profile.js'
+import { parseEvidenceSlots } from './verify-facts-schema.js'
 import { SCAN_REQUIRED_DOCS, AUXILIARY_STAGES } from './constants.js'
 import { evaluateRules } from './stage-contract-engine.js'
 import { getRule } from './stage-contract-spec.js'
@@ -457,6 +458,10 @@ function validatePlanOutputs(cwd, changeName, context = {}) {
  * 标题放宽：含「结论/Conclusion/Result/结果」的二级标题均可（B3c），
  * PASS/FAIL 可在标题行本身（如「## 验收结论：✅ PASS」）或紧邻标题的正文里。
  * 历史教训：原正则锚定确切「## 结论」，用户写「## 验收结论：✅ PASS」不被识别。
+ * 2026-09-08 刀③起降级为 legacy 回退：首选结论枚举槽（extractVerifyConclusionSlot），
+ * 仅当文件完全没有槽行时才走本窗口扫描（存量变更兼容）；槽存在即不走本函数——
+ * 骨架占位符 `<待填：三选一>` 不含枚举词，两种解析下都 fail-closed（修掉旧占位符
+ * `<待填：PASS 或 FAIL>` 被窗口正则误读成 PASS 的自通过缺陷）。
  */
 function extractVerifyConclusion(verify) {
   // 遍历所有含关键词的二级标题，取其 400 字符窗口内含 PASS/FAIL 的那个（坑
@@ -479,6 +484,38 @@ function extractVerifyConclusion(verify) {
     }
   }
   return best || ''
+}
+
+/**
+ * 结论枚举槽提取（刀③，2026-09-08）：verify-probes --init 骨架生成的固定槽行
+ * `结论枚举：`<枚举值>…``——解析只认该行的枚举词，标题措辞劫持面归零。
+ * @param {string} verify - verify-result.md 全文
+ * @returns {string|null} 枚举值（PASS / PASS WITH NOTES / FAIL）；'' = 有槽未填（fail-closed）；
+ *   null = 文件无槽行（调用方走 legacy 窗口扫描）
+ */
+export function extractVerifyConclusionSlot(verify) {
+  if (!/^结论枚举：/im.test(verify)) return null
+  const m = verify.match(/^结论枚举：`?(PASS WITH NOTES|PASS|FAIL)\b/im)
+  // 交替序 PASS WITH NOTES 在前，防裸 PASS 抢先截断
+  return m ? m[1] : ''
+}
+
+/**
+ * 结论解析统一入口：槽优先，无槽走 legacy 窗口扫描并对存量格式发迁移提示。
+ * @param {string} verify - verify-result.md 全文
+ * @param {string[]} [warnings] - 传入时追加 legacy 迁移 warning
+ * @returns {string} 枚举值或 ''（未识别/未填）
+ */
+function resolveVerifyConclusion(verify, warnings) {
+  const slot = extractVerifyConclusionSlot(verify)
+  if (slot !== null) return slot
+  if (warnings) {
+    warnings.push(
+      'verify-result.md 结论未用「结论枚举：」槽行（旧自由格式，关键词窗口解析对标题措辞敏感——已有两次历史坑）。' +
+      '新变更请用 `sillyspec verify-probes --change <变更> --init` 骨架的槽格式；窗口解析仅为存量变更保留。'
+    )
+  }
+  return extractVerifyConclusion(verify)
 }
 
 function validateVerifyOutputs(cwd, changeName, context = {}) {
@@ -509,7 +546,8 @@ function validateVerifyOutputs(cwd, changeName, context = {}) {
     // ── FAIL 结论门控（适用于所有变更，不限风险等级）──
     // verify-result.md 结论为 FAIL 时，verify 阶段不能 completed。
     // 历史教训：CLI 曾不校验结论，AI 写 FAIL 后 verify 仍被标记完成并提示"验证通过可以归档"。
-    const conclusionStr = extractVerifyConclusion(verify)
+    // 刀③起结论解析槽优先（extractVerifyConclusionSlot），一处解析两处消费。
+    const conclusionStr = resolveVerifyConclusion(verify, warnings)
     if (conclusionStr === 'FAIL') {
       errors.push(getRule('verify.conclusion.fail-gate').failMessage)
     } else if (!conclusionStr) {
@@ -521,7 +559,7 @@ function validateVerifyOutputs(cwd, changeName, context = {}) {
       designContent: readIfExists(join(changeDir, 'design.md')),
       planContent: readIfExists(join(changeDir, 'plan.md')),
     })
-    const conclusion = extractVerifyConclusion(verify)
+    const conclusion = conclusionStr // 槽优先解析结果复用（此前同输入重复扫两遍）
     // ── 否定抑制审计（坑 risk-negation-blindness）──
     // 关键词命中被同句否定语境抑制而不参与判级时必须透出：抑制是把双刃剑（「本次不新增
     // daemon」真豁免 vs 靠堆否定措辞静默降级逃证据门控），这里让每次抑制可见可核对；
@@ -573,7 +611,23 @@ function validateVerifyOutputs(cwd, changeName, context = {}) {
             }
           }
         } catch { /* 回执损坏按无回执处理（fail 回原字面匹配） */ }
-        const evidenceCheck = checkIntegrationEvidence(verify, changeRiskProfile.requiredVerification, { extraEvidenceText: receiptText })
+        // v2（2026-09-08-ir-verify-facts FR-04）：回执槽优先——verify-result.md「## 集成验证回执」
+        // 槽在场时传结构化 runtimeEvidence 走一致性校验（绿判据），无槽降 legacy literals。
+        // verifyStartAt 由调用方经 context 传入（gates 接线侧 ProgressManager.getStageCompletedAt
+        // 同步算好——runValidators 引擎是同步的，此处不做 DB IO；缺省 → auditRuntimeReceipt
+        // fail-soft 跳过 mtime 核验）。
+        let runtimeEvidence = null
+        try {
+          const slotsEv = parseEvidenceSlots(verify)
+          if (slotsEv.hasReceiptSlot) runtimeEvidence = slotsEv.runtimeEvidence
+        } catch { /* 解析失败按无槽 legacy */ }
+        const evidenceCheck = checkIntegrationEvidence(verify, changeRiskProfile.requiredVerification, {
+          extraEvidenceText: receiptText,
+          ...(runtimeEvidence ? { runtimeEvidence } : {}),
+          ...(context.verifyStartAt ? { verifyStartAt: context.verifyStartAt } : {}),
+          cwd,
+          specBase: context.specRoot || join(cwd, '.sillyspec'),
+        })
         if (!evidenceCheck.ok) {
           // A: 报错说人话 —— 把「缺哪一项、要写/做什么、判级原因」逐条列出，
           // 让 agent 不必靠改结论文案撞墙。detail 指明真实启动须是本变更实际改动的

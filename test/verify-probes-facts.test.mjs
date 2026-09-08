@@ -8,8 +8,8 @@
  *   - writeVerifyFacts（task-01）：落盘 JSON + 尾换行 + 覆盖刷新（两次调用 generatedAt 前进、
  *     metrics 反映最近一次 result——「最近一次 init 快照」语义）。
  *   - generateVerifyResultSkeleton 层标注（task-01）：十章节标题全部带 [层：…] 纯后缀（不新增行）、
- *     结论占位 <待填 前缀保留；extractVerifyConclusion 行为等价断言（stage-contract.js:461-482
- *     提取正则副本——层后缀不改 PASS/FAIL 关键词提取，骨架不能因后缀而过/不过门）。
+ *     结论枚举槽行保留（刀③）；extractVerifyConclusionSlot 槽优先断言 + legacy 窗口制副本
+ *     （层后缀不改提取；槽未填 fail-closed——旧占位符自通过缺陷回归锁）。
  *   - 锚点 round-trip（task-02，src/verify-postcheck.js）：runVerifyProbes 形态 result →
  *     renderVerifyProbesReport 渲染 → parseProbePrefillAnchors 解析 → 指标一致；探针 2/4 撞形
  *     散文不计数（#### 子节定界 G8）+ 行首锚定 + CRLF 归一。
@@ -31,6 +31,7 @@ import { fileURLToPath } from 'node:url'
 import {
   buildVerifyFacts, writeVerifyFacts, renderVerifyProbesReport, generateVerifyResultSkeleton, runVerifyProbes,
 } from '../src/verify-probes.js'
+import { extractVerifyConclusionSlot } from '../src/stage-contract.js'
 import {
   checkProbeConsistency, parseProbePrefillAnchors,
   PROBE1_HIT_LINE_RE, PROBE3_HASTEST_LINE_RE, PROBE5_SUMMARY_LINE_RE, PROBE5_MISSING_ROW_RE, PROBE6_DELETION_LINE_RE,
@@ -141,8 +142,9 @@ function rewriteFacts(factsPath, patch) {
 }
 
 /**
- * extractVerifyConclusion 行为等价副本（正则逐字复制自 src/stage-contract.js:461-482——该函数
- * 非 export，这里锁定「P3b 层标注后缀不改提取行为」的兼容契约：同输入必同输出）。
+ * extractVerifyConclusion（legacy 窗口制）行为等价副本（正则逐字复制自 src/stage-contract.js——
+ * 该函数非 export。刀③起窗口制降级为无槽存量文件的回退路径，主提取是 export 的
+ * extractVerifyConclusionSlot；此副本锁定 legacy 回退行为不回归）。
  */
 function extractConclusionLike(verify) {
   const headingRe = /^##\s[^\n]*(?:结论|conclusion|result|结果)/gim
@@ -210,7 +212,7 @@ console.log('=== A. buildVerifyFacts 纯函数 ===\n')
 // ── A1. 完整 result → metrics 映射 + 统一命令行 + 显式 now ──
 {
   const facts = buildVerifyFacts(mkRoundTripResult(), { changeName: '2026-09-07-vp', now: '2026-09-07T10:00:00.000Z' })
-  assert(facts.schemaVersion === 1, `schemaVersion=1（实际: ${facts.schemaVersion}）`)
+  assert(facts.schemaVersion === 2, `schemaVersion=2（v2 起含 slot-backfill 段；实际: ${facts.schemaVersion}）`)
   assert(facts.change === '2026-09-07-vp', `change 回填变更名（实际: ${facts.change}）`)
   assert(facts.generatedAt === '2026-09-07T10:00:00.000Z', `显式 now 原样进 generatedAt（实际: ${facts.generatedAt}）`)
   const cmd = 'sillyspec verify-probes --change 2026-09-07-vp'
@@ -300,7 +302,7 @@ const skeleton = generateVerifyResultSkeleton(mkRoundTripResult())
 // ── C1. 十章节标题全部带 [层：…] 纯后缀 ──
 {
   const headings = skeleton.split('\n').filter(l => l.startsWith('## '))
-  assert(headings.length === 10, `十章节齐全（实际: ${headings.length}——${headings.map(h => h.slice(0, 12)).join('/')}）`)
+  assert(headings.length === 12, `十二章节齐全（v2 增证据账/集成验证回执两槽段；实际: ${headings.length}——${headings.map(h => h.slice(0, 12)).join('/')}）`)
   assert(headings.every(h => /^## .+ \[层：[^\]]+\]$/.test(h)), '每章标题行以 [层：…] 后缀收尾')
   assert(headings.filter(h => h.endsWith('[层：人工判断]')).length === 8, '八个语义章节层标注=人工判断')
   const probeHeading = headings.find(h => h.startsWith('## 探针结果'))
@@ -317,35 +319,37 @@ const skeleton = generateVerifyResultSkeleton(mkRoundTripResult())
   assert(skeleton.includes('#### 探针 1：未实现标记扫描') && skeleton.includes('b.js:9'), '骨架探针章预填渲染报告产物')
 }
 
-// ── C2. 结论占位 <待填 前缀保留（gate 判不过语义的载体）──
+// ── C2. 结论枚举槽行保留（刀③：fail-closed 语义的载体）──
 {
-  const conclusionLine = skeleton.split('\n').find(l => l.startsWith('## 结论：'))
-  assert(conclusionLine && conclusionLine.includes('<待填：PASS 或 FAIL'), `结论占位 <待填 前缀保留（实际: ${conclusionLine}）`)
-  assert(conclusionLine && conclusionLine.indexOf('<待填') < conclusionLine.indexOf('[层：'), '占位在前、层后缀在后（顺序不倒）')
+  const headingLine = skeleton.split('\n').find(l => l.startsWith('## 结论'))
+  const slotLine = skeleton.split('\n').find(l => l.startsWith('结论枚举：'))
+  assert(headingLine && /\[层：人工判断\]/.test(headingLine), `结论标题行保留层标注（实际: ${headingLine}）`)
+  assert(slotLine && slotLine.includes('<待填：三选一>'), `结论枚举槽占位保留（实际: ${slotLine}）`)
 }
 
-// ── C3. extractVerifyConclusion 行为等价（stage-contract 提取正则副本）──
+// ── C3. 结论提取行为（刀③槽优先 extractVerifyConclusionSlot；窗口副本降级 legacy）──
 {
-  // ①层后缀不改提取行为：带后缀骨架 vs 去后缀骨架，提取结果一致
+  // ①骨架槽未填 → ''（gate 判不过，骨架不能直接过门——旧占位符 <待填：PASS 或 FAIL>
+  //   含 PASS 字样被窗口正则误读成已填 PASS 的自通过缺陷已修）
+  assert(extractVerifyConclusionSlot(skeleton) === '', '骨架槽未填 → 空串 fail-closed')
+  // ②层后缀不改提取：去后缀骨架与带后缀骨架槽解析一致
   const strippedSkeleton = skeleton.split('\n').map(l => l.replace(/ \[层：[^\]]+\]$/, '')).join('\n')
-  const withSuffix = extractConclusionLike(skeleton)
-  assert(withSuffix === extractConclusionLike(strippedSkeleton) && withSuffix === 'PASS',
-    `层后缀不改结论提取（带后缀=${withSuffix}，去后缀=${extractConclusionLike(strippedSkeleton)}——占位模板文案含关键词，两侧一致）`)
+  assert(extractVerifyConclusionSlot(strippedSkeleton) === '' && extractVerifyConclusionSlot(skeleton) === '',
+    '层后缀不改槽解析（两侧一致空串）')
+  // ③如实填写后提取命中（枚举词在槽行行首）
+  const passFilled = skeleton.replace(/^结论枚举：.*$/m, '结论枚举：`PASS` 全部探针与测试通过')
+  assert(extractVerifyConclusionSlot(passFilled) === 'PASS', `填写 PASS → 提取 PASS（实际: ${extractVerifyConclusionSlot(passFilled)}）`)
+  const failFilled = skeleton.replace(/^结论枚举：.*$/m, '结论枚举：`FAIL` 存在未修复缺陷')
+  assert(extractVerifyConclusionSlot(failFilled) === 'FAIL', `填写 FAIL → 提取 FAIL（实际: ${extractVerifyConclusionSlot(failFilled)}）`)
 
-  // ②如实填写后提取命中（P3b 后缀在场，关键词窗口制照常工作）
-  const passFilled = skeleton.replace(/^## 结论：.*$/m, '## 结论：PASS 全部探针与测试通过 [层：人工判断]')
-  assert(extractConclusionLike(passFilled) === 'PASS', `填写 PASS → 提取 PASS（实际: ${extractConclusionLike(passFilled)}）`)
-  const failFilled = skeleton.replace(/^## 结论：.*$/m, '## 结论：FAIL 存在未修复缺陷 [层：人工判断]')
-  assert(extractConclusionLike(failFilled) === 'FAIL', `填写 FAIL → 提取 FAIL（实际: ${extractConclusionLike(failFilled)}）`)
-
-  // ③无关键词占位 → ''（verify.conclusion.fail-gate 的 noConclusionWarning 路径——骨架不能直接过门）
-  const noKeyword = skeleton.replace(/^## 结论：.*$/m, '## 结论：<待填> [层：人工判断]')
-  assert(extractConclusionLike(noKeyword) === '', `占位无 PASS/FAIL 关键词 → 提取空串（gate 判不过，实际: ${JSON.stringify(extractConclusionLike(noKeyword))}）`)
-
-  // ④标题优先级不受层后缀劫持：结论章 PASS + 测试结果章正文含 FAIL → 仍取结论章（priority 结论>结果）
+  // ④「结果」系标题 FAIL 干扰不劫持槽（槽在场不走标题窗口制）
   const hijack = passFilled.replace(/<!--TODO: 测试命令 \+ 结果/, '测试输出出现 FAIL 字样（同形干扰）<!--TODO: 测试命令 + 结果')
-  assert(extractConclusionLike(hijack) === 'PASS',
-    `「结果」系标题的 FAIL 干扰不劫持「结论」章（实际: ${extractConclusionLike(hijack)}）`)
+  assert(extractVerifyConclusionSlot(hijack) === 'PASS',
+    `槽在场时「结果」系标题的 FAIL 干扰不劫持（实际: ${extractVerifyConclusionSlot(hijack)}）`)
+
+  // ⑤legacy 窗口副本仍锁行为：无槽存量自由格式照常提取（存量兼容路径不回归）
+  const legacyDoc = '## 验收结论：✅ PASS\n\n一切正常'
+  assert(extractConclusionLike(legacyDoc) === 'PASS', 'legacy 窗口副本：无槽存量格式仍可提取（仅供回退）')
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -636,10 +640,10 @@ console.log('\n=== F. verify-probes --init CLI 集成 ===\n')
     assert(existsSync(reportPath), '骨架 verify-result.md 落盘')
     assert(existsSync(factsPath), '机器底稿 verify-facts.json 落盘')
     const sk1 = readFileSync(reportPath, 'utf8')
-    assert(sk1.includes('#### 探针 1：未实现标记扫描') && (sk1.match(/^## .+ \[层：[^\]]+\]$/gm) || []).length === 10,
-      'CLI 骨架含探针子节 + 十章节层标注后缀')
+    assert(sk1.includes('#### 探针 1：未实现标记扫描') && (sk1.match(/^## .+ \[层：[^\]]+\]$/gm) || []).length === 12,
+      'CLI 骨架含探针子节 + 十二章节层标注后缀（v2 两槽段）')
     const f1 = JSON.parse(readFileSync(factsPath, 'utf8'))
-    assert(f1.schemaVersion === 1 && f1.change === fx.change && f1.probes.probe1.metrics.matches === 2,
+    assert(f1.schemaVersion === 2 && f1.change === fx.change && f1.probes.probe1.metrics.matches === 2,
       `CLI facts 底稿内容正确（实际: ${JSON.stringify(f1.probes.probe1.metrics)}）`)
 
     // 二跑：骨架已存在不覆盖；facts 照样刷新（最近快照语义——CLI 全权写，agent 手改无效）

@@ -5,8 +5,8 @@ updated_at: 2026-08-24T00:40:00+08:00
 ---
 
 # change-management
-> 最后更新：2026-08-23
-> 最近变更：2026-08-23-adopt-harness-practices（quicklog 根因块嵌套四子字段 + buildPushPayloadFromRaw 字段块复位修复）/ 2026-08-16-scan-docs-reconcile（quicklog.js 补录归属）/ ql-20260807-010-9897（keepSillyspecDocs option：模块文档 .sillyspec/docs/ 可进清单）/ ql-20260713-001-3e46（文件清单标题编号前缀容忍）
+> 最后更新：2026-09-08
+> 最近变更：ql-20260908-007（QUICKLOG「文件：」行保留模块卡 + changelog sidecar——isQuicklogFileLineNoise 与审计豁免面 isQuickMetadata 分叉；--req 标题不再截首标点，超 80 字就近断句）/ 2026-08-16-scan-docs-reconcile（quicklog.js 补录归属）/ ql-20260807-010-9897（keepSillyspecDocs option：模块文档 .sillyspec/docs/ 可进清单）/ ql-20260713-001-3e46（文件清单标题编号前缀容忍）
 > 模块路径：src/change-list.js, src/quicklog.js
 
 ## 职责
@@ -54,8 +54,14 @@ updated_at: 2026-08-24T00:40:00+08:00
 - 章节标题正则 `FILE_LIST_SECTION_RE` 容忍可选编号前缀（`## 6. 文件变更清单`），同义词集与 `src/stage-contract.js` 对齐，避免两个校验器对「有没有清单」给出矛盾结论
 - 根因块嵌套四子字段（`- 现象：` 等列表行）是合法 postmortem 形态：顶层四字段边界不动、旧条目回退不受影响——改顶层标签白名单或边界扫描逻辑时须保持「嵌套列表行不构成新顶层边界」不变量（R-03 / Grill C-15 回归测试 quicklog-postmortem-fields.test.mjs）
 
+## 注意事项（quicklog 收尾口径，2026-09-08 用户反馈①②）
+
+- **「文件：」行回填的记录面谓词 `isQuicklogFileLineNoise`**（`run/shared.js`，与审计豁免面 `isQuickMetadata` 分叉）：模块卡 `modules/<id>.md` 与 changelog sidecar `modules/<id>.changelog.md` 是收尾必改项，审计按 .sillyspec/ 规则放行 ≠ 不该记录——此前同一谓词把它们从文件行滤掉，每回手工补录。`_module-map.yaml` 仍滤（CLI 维护的索引非 agent 手工改动）。
+- **`extractTitleFromResult` 不再截到首个标点**：旧口径迫使 agent 避开标点写标题（「A，B」被截成「A」）；现原样保留，仅超 80 字在就近标点/空格处断句（前 40 字内找不到边界才硬截 80 + …）。
+
 ## 变更索引（表格，初始为空）
 | 日期 | 变更名 | 摘要 |
 |------|--------|------|
 | 2026-07-13 | ql-20260713-001-3e46 | `FILE_LIST_SECTION_RE` 加可选编号前缀 `(?:\d+[.)]\s*)?`，`## 6. 文件变更清单` 不再让解析返回空、plan Step4 postcheck 不再硬阻断 |
 | 2026-08-07 | ql-20260807-010-9897 | `_parseFileListDetailed` 加 `keepSillyspecDocs` option（默认 false 跳过全部 `.sillyspec/` 保持 review-tier fileCount 判档，true 时保留 `.sillyspec/docs/` 模块文档=交付物），`parseFileChangeList`/`Detailed` 透传 opts；供 `resolveApplyAllowSet` 识别模块文档清单（原 change-list 跳过 `.sillyspec/` 与 `filterDeliverableFiles` 保留 `.sillyspec/docs/` 语义打架） |
+| 2026-09-08 | ql-20260908-007（quick） | ① 文件行保留模块卡+sidecar：isQuicklogFileLineNoise（run/shared.js）与 isQuickMetadata 审计豁免面分叉，complete-handlers realFiles 过滤切换；② extractTitleFromResult 废弃「截到首个标点」，超 80 字就近断句，stages/quick.js step3 prompt 口径同步。新增 test/quick-feedback-fileline-title.test.mjs。 |

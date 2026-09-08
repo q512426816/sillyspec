@@ -4,7 +4,7 @@ doc_type: module-card
 module_id: cli-entry
 author: qinyi
 created_at: 2026-06-03T07:42:00+08:00
-updated_at: 2026-09-02T17:05:00+08:00
+updated_at: 2026-09-08T17:10:00+08:00
 ---
 # cli-entry
 
@@ -54,6 +54,8 @@ runStage(pm, progress, stageName, cwd, changeName)
 
 **quick 关联变更存在性守卫**（2026-08-16，坑 quick-change-phantom-linked，`run/command.js`）：quick 的 `--change`/`--linked-changes` 解析为关联变更后，逐一 `existsSync(specRoot/changes/<name>)` 校验，缺失即 `exit(2)` 列幻影名 + 三条出路（起名不传 `--change`（sessionId 自动生成）/ 关联须预存且显式写法 `--linked-changes` / 建变更走 brainstorm）——quick 不建变更，链接幻影名必是笔误/语义误用（想给会话起名却传了 `--change`），f70c9c3 只修了「建幻影目录」后果，本守卫把误用拦在 flag 装载层。只检 CLI 显式装载值；持久化 guard.json 复用（run↔--done 之间变更可能被归档）与交互式选择不检；sessionId 形态（`--done --change quick-<8hex>`）在守卫之前已被特例放行。
 
+**doctor --gc-unstamped-runs**（ql-20260908-006-5f04，`index.js` `case 'doctor'`）：一次性清扫已归档变更留下的无 `change` 戳 `execute-runs`。默认 dry-run，`--confirm` 才删。实现在 `doctor-diagnostics.js` `gcUnstampedExecuteRuns`，对齐 `--cleanup-ghosts` 旁路，**不接进 archive 热路径**。
+
 ## 注意事项
 
 - `sillyspec init /path/to/project` 语法：第二个参数如果是路径会被当作 targetDir，而非子命令
@@ -85,3 +87,5 @@ runStage(pm, progress, stageName, cwd, changeName)
 | 日期 | 变更名 | 摘要 |
 |------|--------|------|
 | 2026-09-07 | 2026-09-07-ir-stage-p3c | IR P3c：index.js 新 design-init case（--change/--force/--json/--spec-dir；幂等不覆盖，决策追踪表预填；缺 decisions exit 1 带指引） |
+| 2026-09-08 | ql-20260908-006-5f04 | doctor `--gc-unstamped-runs [--confirm]`：usage + case 'doctor' 接线 gcUnstampedExecuteRuns（默认 dry-run）；存量无戳 execute-runs 清扫，不进 archive 热路径 |
+

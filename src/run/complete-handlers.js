@@ -26,12 +26,12 @@ import { basename, join, resolve, relative, isAbsolute } from 'node:path'
 import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync, unlinkSync, rmSync } from 'node:fs'
 import { renameSyncRetry, writeAtomicSync } from '../fs-atomic.js'
 import { gitQuiet } from '../git-helper.js'
-import { resolveChangeDir, resolveQuickSessionsDir, safeGit, auditQuickCompletion, triggerSync, isQuickMetadata, resolveRuntimeRoot, collectOtherQuickSessionDeclarations, mergeQuickBoundaryFiles } from './shared.js'
+import { resolveChangeDir, resolveQuickSessionsDir, safeGit, auditQuickCompletion, triggerSync, isQuickMetadata, isQuicklogFileLineNoise, resolveRuntimeRoot, collectOtherQuickSessionDeclarations, mergeQuickBoundaryFiles } from './shared.js'
 import { detectConcurrentChanges, formatConcurrentWarning, resolveConcurrentAnchor } from './concurrent-detect.js'
 import { stageRegistry } from '../stages/index.js'
 import { SCAN_STATUS, POINTER_STATUS } from '../constants.js'
 import { printQuickAuditReview, runQuickTestLintGate, printQuickTestLintGate } from './quick-audit.js'
-import { validateQuickResult, allocateQuicklogEntry, appendQuicklogEntryWithId, findQuicklogEntry, completeQuicklogEntry, extractTitleFromResult } from '../quicklog.js'
+import { validateQuickResult, allocateQuicklogEntry, appendQuicklogEntryWithId, findQuicklogEntry, completeQuicklogEntry, extractTitleFromResult, parseFileNotes, getQuickFileNotes } from '../quicklog.js'
 import { getRule } from '../stage-contract-spec.js'
 import { archiveDestDirName } from '../stage-contract.js'
 
@@ -122,10 +122,114 @@ export function findAlreadyArchivedDir(archiveDir, changeName) {
 }
 
 /**
+ * reviewedFiles[0] → 归属变更名。契约为 `changes/<change>/<doc>`（stage-review.js
+ * getLatestStageReviewRunId）。取 `changes/` 后第一路径段精确相等——`includes('changes/'+name+'/')`
+ * 会让短名 login 命中 2026-08-01-login（坑 marker-suffix-overmatch 同类）。
+ * @returns {string|null}
+ */
+function ownerFromReviewedFiles(reviewedFiles) {
+  const r0 = Array.isArray(reviewedFiles) ? String(reviewedFiles[0] || '') : ''
+  const m = r0.replace(/\\/g, '/').match(/(?:^|\/)changes\/([^/]+)\//)
+  return m ? m[1] : null
+}
+
+/**
+ * 归档后按 change 精确回收 .runtime 取证（ql-20260908-005-7549）。
+ *
+ * 调用时点：handleArchiveConfirmStep 已把 reconcile/apply-pathspec 吃进 delta.md 之后
+ * （fail-soft 生成失败也不阻断——变更已终态，runtime 取证无读者）。自愈归档 / quick 轻量
+ * 归档 / change-delete 无 delta 同样可删。
+ *
+ * 归属 fail-closed（禁 mtime 猜、禁后缀匹配）：
+ *   apply-pathspec-<change>.txt 精确文件名
+ *   execute-runs/<runId>/ 仅当 `change` 戳全等（无戳旧 run 留下，不按覆盖度启发式删）
+ *   stage-reviews/<dir>/ 仅当 review.json reviewedFiles 首段 === changeName
+ *   verify-runs/<ts>/ 仅当目录内 JSON 的 change 字段集合 size=1 且等于本变更
+ * 本轮不扩 endpoint-baselines / contract-artifacts / last-delta.json。
+ *
+ * fail-open：卫生动作失败不抛，返回 { ok:true }。
+ *
+ * @param {string} runtimeRoot
+ * @param {string} changeName
+ * @returns {{ ok: true, removed: number }}
+ */
+export function pruneArchivedChangeRuntime(runtimeRoot, changeName) {
+  if (!runtimeRoot || !changeName || !existsSync(runtimeRoot)) return { ok: true, removed: 0 }
+  let removed = 0
+  const gone = (p, recursive = false) => {
+    try {
+      if (recursive) rmSync(p, { recursive: true, force: true })
+      else unlinkSync(p)
+      removed++
+    } catch { /* 单份失败不连坐，下次归档/删变更再收 */ }
+  }
+
+  try {
+    const pathspec = join(runtimeRoot, `apply-pathspec-${changeName}.txt`)
+    if (existsSync(pathspec)) gone(pathspec)
+  } catch {}
+
+  try {
+    const execDir = join(runtimeRoot, 'execute-runs')
+    if (existsSync(execDir)) {
+      for (const runId of readdirSync(execDir)) {
+        const stampFile = join(execDir, runId, 'change')
+        if (!existsSync(stampFile)) continue
+        let stamp = ''
+        try { stamp = readFileSync(stampFile, 'utf8').trim() } catch { continue }
+        if (stamp !== changeName) continue
+        gone(join(execDir, runId), true)
+      }
+    }
+  } catch {}
+
+  try {
+    const srDir = join(runtimeRoot, 'stage-reviews')
+    if (existsSync(srDir)) {
+      for (const entry of readdirSync(srDir, { withFileTypes: true })) {
+        if (!entry.isDirectory()) continue
+        const rjPath = join(srDir, entry.name, 'review.json')
+        if (!existsSync(rjPath)) continue
+        let owner = null
+        try {
+          const rj = JSON.parse(readFileSync(rjPath, 'utf8'))
+          owner = ownerFromReviewedFiles(rj.reviewedFiles)
+        } catch { continue }
+        if (owner !== changeName) continue
+        gone(join(srDir, entry.name), true)
+      }
+    }
+  } catch {}
+
+  try {
+    const vrDir = join(runtimeRoot, 'verify-runs')
+    if (existsSync(vrDir)) {
+      for (const entry of readdirSync(vrDir, { withFileTypes: true })) {
+        if (!entry.isDirectory()) continue
+        const dir = join(vrDir, entry.name)
+        let files = []
+        try { files = readdirSync(dir).filter(f => f.endsWith('.json')) } catch { continue }
+        const owners = new Set()
+        for (const f of files) {
+          try {
+            const data = JSON.parse(readFileSync(join(dir, f), 'utf8'))
+            if (data && typeof data.change === 'string' && data.change) owners.add(data.change)
+          } catch { /* 单文件坏 JSON 跳过，不据此猜归属 */ }
+        }
+        if (owners.size === 1 && owners.has(changeName)) gone(dir, true)
+      }
+    }
+  } catch {}
+
+  return { ok: true, removed }
+}
+
+/**
  * 归档时清理可能残留的 worktree（execute 自动清理未走到 / 有未 apply 变更被遗弃）。
  * 安全策略：有未 apply 变更时保留 worktree 并警告，避免误删用户未应用的代码。
  * 同时清理该变更的 execute / stage-review runId marker（只写不删的累积物，
- * 见 stage.js execute 启动固定 executeRunId / stage-review.js stageReviewMarkerPath）。
+ * 见 stage.js execute 启动固定 executeRunId / stage-review.js stageReviewMarkerPath）
+ * 以及归档后无读者的 runtime 取证（pruneArchivedChangeRuntime）。
  * 从 archiveChangeDirectory 抽出，供正常归档 + 自愈归档复用。
  */
 export async function archiveWorktreeCleanup(cwd, archiveChangeName, specBase, platformOpts = {}) {
@@ -150,6 +254,12 @@ export async function archiveWorktreeCleanup(cwd, archiveChangeName, specBase, p
       }
       if (markers.length > 0) {
         console.log(`🧹 归档清理 ${markers.length} 个 runId marker（execute/stage-review）`)
+      }
+      // 取证回收必须在下方 worktree 块的 `if (!meta) return` 之前：无 meta 早退是常态
+      // （apply 已 cleanup），漏接就会让 execute-runs/verify-runs 继续按变更数累积。
+      const pruned = pruneArchivedChangeRuntime(runtimeRoot, archiveChangeName)
+      if (pruned.removed > 0) {
+        console.log(`🧹 归档回收 ${pruned.removed} 项 runtime 取证（execute-runs/stage-reviews/verify-runs/apply-pathspec，按 change 精确匹配）`)
       }
     }
   } catch (e) {
@@ -900,6 +1010,21 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
         console.log(`🛡️ quick 边界已追加: ${added.length} 个文件（累计 ${guard.allowedFiles.length} 个）: ${added.join(', ')}`)
       }
     }
+    // --file-notes 路径同源并入边界（2026-09-08 用户反馈①：step3 只带 --file-notes 未带
+    // --files 时，QUICKLOG 文件行写进了这些文件、审计却按「超出 allowedFiles + 未声明」
+    // 拦——两条声明通道口径打架）。--file-notes 是显式的改动文件声明（路径部分参与落盘
+    // 文件行），与 --files 同语义追加；括注只是展示不参与。读取用 getQuickFileNotes（与
+    // 下方 completeQuicklogEntry 消费同一 per-process 值，读不清）。
+    {
+      const fileNotePaths = parseFileNotes(getQuickFileNotes()).map(n => n.path).filter(Boolean)
+      if (guard && fileNotePaths.length > 0) {
+        const { added } = mergeQuickBoundaryFiles(guard, fileNotePaths, cwd)
+        if (added.length > 0) {
+          try { writeAtomicSync(sessionGuardFile, JSON.stringify(guard, null, 2)) } catch { /* 同上：内存合并值兜底 */ }
+          console.log(`🛡️ quick 边界已追加（--file-notes 声明与文件行同源）: ${added.length} 个文件（累计 ${guard.allowedFiles.length} 个）: ${added.join(', ')}`)
+        }
+      }
+    }
     // 审计：仅在有 guard 时跑（brownfield 无 guard 跳过，兼容 D-003 brownfield 行为）。
     // task-02：mergedGuard 提升到 if 外声明，供下方并发预检钩子复用与 auditQuickCompletion
     // 同源的 guard 字段（baselineFiles/linkedChanges）。brownfield 无 guard 时保持 null，
@@ -1068,14 +1193,16 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
     // 翻状态进行中→已完成 + 追加结果 + 勾选关联 tasks.md
     // resultText 不再截断：结构化结果块（需求/根因/方案/结果）完整落盘，多行写成字段化块。
     try {
-      // 回填实际改动文件：review.changedFiles 含 quick 自身元数据（quicklog/.runtime/modules 等），
-      // 用 isQuickMetadata 过滤掉，只留真实业务文件。brownfield 无 review → 空数组，文件行不动。
+      // 回填实际改动文件：review.changedFiles 含 quick 自身元数据（quicklog/.runtime 等），
+      // 过滤掉只留真实业务文件——但**模块卡 + changelog sidecar 保留**（isQuicklogFileLineNoise，
+      // 2026-09-08 用户反馈①：收尾必改项此前每回手工补录；审计豁免面与记录面分叉）。brownfield
+      // 无 review → 空数组，文件行不动。
       // 归属口径（2026-08-18 误归属修复）：声明会话优先 attributedFiles（窗口∩声明∪同文件并发命中），
       // 他者窗口文件不进文件行；未声明会话/旧 review 无 attributedFiles → 兜底 changedFiles 全量。
       const auditFiles = Array.isArray(review?.attributedFiles)
         ? review.attributedFiles
         : (Array.isArray(review?.changedFiles) ? review.changedFiles : [])
-      const realFiles = auditFiles.filter(f => !isQuickMetadata(f, linkedChanges))
+      const realFiles = auditFiles.filter(f => !isQuicklogFileLineNoise(f, linkedChanges))
       // D-8 落盘（2026-08-18 修）：advisory 欠账信号从「纯打印」升级为「随条目落盘」——修复
       // 「欠账已记录（QUICKLOG reasons）」的不实承诺（交叉审查实证 reasons 纯 stdout，事后不可审计）。
       // 两周实测（2026-08-31 裁决，doc-consistency-debt §七）需要分母：信号触发次数必须可追溯。
@@ -1087,6 +1214,25 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
       }
       if (review?.docsCheckHint && review.docsCheckHint.invalid > 0) {
         auditNotes.push(`📎 文档引用失效：${review.docsCheckHint.invalid}/${review.docsCheckHint.total} 处 file:line 失效（sillyspec docs check 可复现）`)
+        // 行号漂移自动重锚（2026-09-08 用户反馈②：活文档 file:line 硬编码随任何插入失效，
+        // 每回手跑 docs check --fix 是机械活）：autoReanchorDocRefs = --fix 主链路编程化封装
+        // （fixable 唯一/优选命中才改 + 定点替换 + 同口径回执），只作用于本次改动的文档。
+        // fail-open：重锚任何异常只退化为上方 advisory 文案，绝不阻断 --done。
+        try {
+          const deletedSet = new Set(review.deletedFiles || [])
+          const mdChanged = (review.changedFiles || [])
+            .filter(f => f.endsWith('.md') && !deletedSet.has(f) && !isQuickMetadata(f, linkedChanges))
+          if (mdChanged.length > 0) {
+            const { autoReanchorDocRefs, readDocsCheckConfig } = await import('../docs-check.js')
+            let fixCfg = {}
+            try { fixCfg = readDocsCheckConfig(cwd) || {} } catch { fixCfg = {} }
+            const r = autoReanchorDocRefs(cwd, mdChanged, fixCfg)
+            if (r.applied > 0) {
+              auditNotes.push(`🔧 行号漂移已自动重锚 ${r.applied} 处（同口径复跑：${r.invalidBefore} → ${r.invalidAfter}；剩余 ${r.remaining} 处需人工 sillyspec docs check）`)
+              console.log(`🔧 文档行号漂移自动重锚：${r.applied} 处已改写，剩余 ${r.remaining} 处需人工（sillyspec docs check 可复现）`)
+            }
+          }
+        } catch { /* 自动重锚失败退化为纯 advisory（上方 auditNote 已落盘） */ }
       }
       // 归属切分注（2026-08-18 误归属修复）：窗口内未声明脏文件不进「文件：」行，但必须落盘可追溯
       // （多 agent 并发仓他者窗口改动 / 本会话漏声明均可能），防真实改动被静默挤走。

@@ -21,3 +21,4 @@
 - 2026-09-07-ir-stage-p3b | IR P3b gates 接线：verify 块 reconcile 之后追加 checkProbeConsistency 调用（:693-720）——mismatch+error→rollback 阻断、drift/skip 放行；信封 code 四值路由；独立落盘 verify-runs/<ts>/probe-consistency-result.json（snake_case，fail-soft，四状态全落）。
 - 2026-09-07-ir-stage-p3c | IR P3c：complete.js 步骤级钩子链（warnMissingUiPrototype 同点位 :283-313）新增 brainstorm「生成规范文件」步模块域核验——errors→exit 1（步骤保持 pending）/warnings 放行/skipped info/fail-open；prompt.js :477-506 brainstorm Step2 _facts.md 注入（{SCAN_FACTS} 占位符+双重门，15KB 截断+fail-soft，plan/execute 零误染）。
 - 2026-09-07-ir-stage-p3d | IR P3d：complete-handlers.js handleArchiveConfirmStep :435-459 归档移动前自动生成 delta.md（fail-soft 不阻断，提示手动补）；产物随归档目录保存。
+- 2026-09-08-ir-verify-facts | gates verify 收尾次序接线：backfill 先行/verifyStartAt 注入/tests 二次回填/cannot_verify 硬门 rollback；getStageCompletedAt 基准

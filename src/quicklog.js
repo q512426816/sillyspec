@@ -294,9 +294,17 @@ export function extractTitleFromResult(result) {
   if (!result) return ''
   const m = String(result).match(/需求：([^\n\r]*?)(?:\s+根因：|$)/)
   if (!m) return ''
-  let t = m[1].replace(/[，。；,;].*$/, '').trim() // 截到首个标点，取核心句
+  // 不再截到首个标点（2026-09-08 用户反馈②）：旧口径迫使 agent 刻意避开标点写标题，
+  // 「A，B」被截成「A」反而降低可读性。--req 的模板指引本就要求一句话短标题，
+  // 标点由写者自主掌控；CLI 只兜底超长截断。
+  let t = m[1].trim()
   if (!t) return ''
-  if (t.length > 80) t = t.slice(0, 80) + '…'
+  if (t.length > 80) {
+    // 超长截断优先在标点/空格处断（标题残句可读），找不到就近边界才硬截。
+    const cut = t.slice(0, 80)
+    const m2 = cut.match(/^[\s\S]*[，。；：,;:]\s*/)
+    t = (m2 && m2[0].length >= 40 ? m2[0] : cut).replace(/[，。；：,;:\s]+$/, '') + '…'
+  }
   return t
 }
 

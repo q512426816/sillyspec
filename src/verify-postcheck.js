@@ -25,7 +25,7 @@
 import { execSync, spawnSync } from 'child_process'
 import { IR_STRICT_SINCE } from './constants.js'
 import { gitQuiet } from './git-helper.js'
-import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync } from 'fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync } from 'fs'
 import { join } from 'path'
 import { verifyApiParity } from './contract-matrix.js'
 import { parseFileChangeListDetailed, pathMatches } from './change-list.js'
@@ -37,6 +37,7 @@ import { parseTargetFiles, parseRepo } from './stages/plan-postcheck.js'
 // fs/path/git-helper/change-list/plan-postcheck/contract-matrix/foreign-declared/run-shared，
 // 不反向依赖本模块，此处直连不引入循环
 import { runVerifyProbes } from './verify-probes.js'
+import { parseEvidenceSlots, classifyVerifiedFile } from './verify-facts-schema.js'
 
 // 测试命令最长执行时间；超时视为失败（防止 CLI 被挂起的测试卡死）
 const TEST_TIMEOUT_MS = Number(process.env.SILLYSPEC_TEST_TIMEOUT_MS) || 10 * 60 * 1000
@@ -116,6 +117,36 @@ function extractLintCommand(yamlText) {
 }
 
 /**
+ * lint advisory 观察期计数（刀③，2026-09-08）：advisory 失败不阻断，但「观察期后升级硬门」
+ * 需要失败率数据支撑（更硬 vs 更吵的决策依据——硬门误伤纯文档/跨平台路径会制造新噪音）。
+ * 每次非 skipped 实测追加计数进 <specBase>/.runtime/verify-lint-tally.json（passed/failed
+ * 都记，分母同要）；history 截尾 20 条。写失败静默降级——计数器不许反向阻断 verify。
+ */
+function recordVerifyLintTally({ specBase, result }) {
+  try {
+    const runtimeDir = join(specBase, '.runtime')
+    mkdirSync(runtimeDir, { recursive: true })
+    const tallyPath = join(runtimeDir, 'verify-lint-tally.json')
+    let tally = { totalRuns: 0, failedRuns: 0, history: [] }
+    try {
+      tally = { ...tally, ...JSON.parse(readFileSync(tallyPath, 'utf8')) }
+    } catch { /* 首跑/文件损坏 → 重置重新累计 */ }
+    tally.totalRuns += 1
+    if (result.status === 'failed') tally.failedRuns += 1
+    tally.lastRunAt = new Date().toISOString()
+    tally.lastStatus = result.status
+    tally.history = [
+      ...(Array.isArray(tally.history) ? tally.history : []),
+      { at: tally.lastRunAt, status: result.status, reason: result.reason || null },
+    ].slice(-20)
+    writeFileSync(tallyPath, JSON.stringify(tally, null, 2))
+    return { failedRuns: tally.failedRuns, totalRuns: tally.totalRuns }
+  } catch {
+    return null
+  }
+}
+
+/**
  * verify --done 实测跑 local.yaml commands.lint（2026-08-21 审查 CLI-1）。
  * 此前 lint 全靠 agent 自跑自报（"我跑过 lint 了"纯口头），与 test 侧的对账不对称——
  * agent 偷懒漏跑时格式债被推迟到用户 commit 才被 pre-commit hook 炸出。
@@ -162,14 +193,18 @@ export function runVerifyLintCheck({ cwd, specBase }) {
   }
   const durationMs = Date.now() - startedAt
   const outputTail = output.length > OUTPUT_TAIL_CHARS ? '…' + output.slice(-OUTPUT_TAIL_CHARS) : output
+  const status = exitCode === 0 ? 'passed' : 'failed'
+  const finalReason = exitCode === 0 ? null : reason
+  const tally = recordVerifyLintTally({ specBase, result: { status, reason: finalReason } })
 
   return {
-    status: exitCode === 0 ? 'passed' : 'failed',
+    status,
     command,
     exitCode,
     durationMs,
     outputTail,
-    reason: exitCode === 0 ? null : reason,
+    reason: finalReason,
+    tally, // { failedRuns, totalRuns } | null——观察期失败率，升级硬门的决策依据
   }
 }
 
@@ -185,6 +220,9 @@ export function printVerifyLintCheck(result) {
   }
   console.error(`\n⚠️  Verify lint 实测失败（advisory，不阻断本次完成）：\`${result.command}\` — ${result.reason}`)
   console.error('   agent 的 lint 自报告与实测不符时以实测为准；请修复后重跑，避免格式债推迟到 commit 被 pre-commit hook 拦截。')
+  if (result.tally) {
+    console.error(`   📊 lint advisory 失败累计 ${result.tally.failedRuns}/${result.tally.totalRuns} 次（观察期数据落 .runtime/verify-lint-tally.json——升级硬门前先看失败率，防「更硬换更吵」）。`)
+  }
   if (result.outputTail) {
     const tail = result.outputTail.split('\n').slice(-15).join('\n')
     console.error('   输出（末尾）：')
@@ -1620,6 +1658,9 @@ export function writeRunResult({ specBase, changeName, result, extra = {} }) {
       ...extra,
     }, null, 2) + '\n')
     result.resultPath = resultPath
+    // verify-runs 回收不在此处（ql-20260908-005 已定分野）：变更归属类证据走归档时精确
+    // 回收（pruneArchivedChangeRuntime 按目录内 JSON change 字段归属）；写入侧滚动是
+    // 启发式，不进证据类目录。
   } catch (e) {
     console.warn(`⚠️  verify 实测结果落盘失败: ${e.message}`)
   }
@@ -1877,7 +1918,7 @@ export function printVerifyDeletionCheck(result) {
  * @param {{cwd:string, specBase:string, changeName?:string}} args
  * @returns {{status:'skipped'|'passed'|'warning', items:Array, unacknowledged:Array, summary:string, reason:string|null}}
  */
-export function runVerifyRequiredEvidenceCheck({ cwd, specBase, changeName = null }) {
+export function runVerifyRequiredEvidenceCheck({ cwd, specBase, changeName = null, verifyStartAt = null }) {
   if (!changeName) {
     return { status: 'skipped', items: [], unacknowledged: [], summary: '', reason: '无 changeName（quick 等无关联变更场景），evidence 对账跳过' }
   }
@@ -1898,6 +1939,13 @@ export function runVerifyRequiredEvidenceCheck({ cwd, specBase, changeName = nul
   const verifyResultPath = join(specBase, 'changes', changeName, 'verify-result.md')
   const report = existsSync(verifyResultPath) ? readFileSync(verifyResultPath, 'utf8') : ''
 
+  // ── v2 槽优先（2026-09-08-ir-verify-facts FR-02）：「## 证据账」槽段在场走分类核验；
+  // 无槽（存量）降级 legacy 子串提及对账——行为等同旧版（D-001@v2，warning 不阻断）。──
+  const slots = parseEvidenceSlots(report)
+  if (slots.hasEvidenceSlot) {
+    return runRequiredEvidenceCheckV2({ items, slots, cwd, specBase, changeName, verifyStartAt })
+  }
+
   const unacknowledged = []
   for (const item of items) {
     const task = item && item.task
@@ -1912,16 +1960,115 @@ export function runVerifyRequiredEvidenceCheck({ cwd, specBase, changeName = nul
   }
 
   if (unacknowledged.length > 0) {
-    return { status: 'warning', items, unacknowledged,
+    return { status: 'warning', items, unacknowledged, legacy: true,
       summary: `${items.length} 个 cannot_verify evidence 任务中 ${unacknowledged.length} 个未在 verify-result.md 体现`, reason: null }
   }
-  return { status: 'passed', items, unacknowledged: [],
+  return { status: 'passed', items, unacknowledged: [], legacy: true,
     summary: `${items.length} 个 cannot_verify evidence 任务均在 verify-result.md 体现（满足度由 agent 自报告）`, reason: null }
 }
 
-/** 打印 required-evidence 对账结果（advisory，不阻断 verify 完成） */
+/**
+ * v2 分类核验（design Phase 2，FR-02）：证据账槽行状态 + verifiedFiles 逐文件核验。
+ * code 类（classifyVerifiedFile）：存在 × mtime ≥ verifyStartAt × git diff 交集三核验；
+ * artifact 类（.runtime/日志/文档）：存在 × mtime（diff 交集豁免——resolveVerifyChangedFiles
+ * 天然不覆盖该类路径，硬要求交集必假红）。verifyStartAt 缺省走 R-05 fallback（design.md
+ * created_at 之后宽容 + warning）。status 语义扩 'blocked'（missing 无豁免 / satisfied 核验
+ * 不过）——gates 接线（task-03）据此阻断 verify 完成。
+ */
+function runRequiredEvidenceCheckV2({ items, slots, cwd, specBase, changeName, verifyStartAt }) {
+  const warnings = []
+  let startAt = verifyStartAt ? new Date(verifyStartAt).getTime() : null
+  if (!startAt) {
+    // R-05 fallback：DB 不可得/接线间隙（W2→W3）——design.md created_at 之后即宽容
+    try {
+      const designPath = join(specBase, 'changes', changeName, 'design.md')
+      if (existsSync(designPath)) {
+        const fm = readFileSync(designPath, 'utf8').match(/^---\r?\n([\s\S]*?)\r?\n---/)
+        const cm = fm && fm[1].match(/^created_at:\s*(.+)$/m)
+        if (cm) {
+          const t = new Date(cm[1].trim()).getTime()
+          if (!Number.isNaN(t)) { startAt = t; warnings.push('verifyStartAt 未提供，走 design.md created_at 宽容基准（R-05 fallback）') }
+        }
+      }
+    } catch { /* fallback 的 fallback：不设基准（只核存在性） */ }
+    if (!startAt) warnings.push('verifyStartAt 与 design created_at 均不可得——mtime 核验降级为仅存在性')
+  }
+
+  // git diff 集合（code 类交集核验用；fail-soft 拿不到 → diffHit 记 null 不判红）
+  let changedSet = null
+  try {
+    const changed = resolveVerifyChangedFiles(cwd, changeName, null, { includeWorkingTree: true, specBase })
+    changedSet = new Set((changed || []).map(p => String(p).replace(/\\/g, '/')))
+  } catch { changedSet = null }
+
+  const detailed = []
+  let blockedCount = 0
+  for (const item of items) {
+    const task = item && item.task
+    if (!task) continue
+    const slot = slots.requiredEvidence.find(e => e.task === task) || null
+    if (!slot) {
+      detailed.push({ task, verdict: item.verdict || 'cannot_verify', status: 'missing', exempt: false,
+        verification: null, reason: `cannot_verify 任务 ${task} 未在证据账槽段登记（逐 task 一行：状态三选一 + verifiedFiles）` })
+      blockedCount++
+      continue
+    }
+    const perFile = []
+    let allOk = true
+    if (slot.status === 'satisfied' || slot.status === 'partial') {
+      if (slot.verifiedFiles.length === 0) {
+        allOk = false
+        perFile.push({ path: null, pathClass: null, filesExist: false, mtimeOk: null, diffHit: null,
+          reason: `${slot.status} 但 verifiedFiles 为空（精确路径必填）` })
+      }
+      for (const vf of slot.verifiedFiles) {
+        const pathClass = classifyVerifiedFile(vf)
+        const abs = join(cwd, vf)
+        const filesExist = existsSync(abs)
+        let mtimeOk = null
+        if (filesExist && startAt) {
+          try { mtimeOk = statSync(abs).mtimeMs >= startAt - 60_000 } catch { mtimeOk = null }
+        }
+        let diffHit = null
+        if (pathClass === 'code') {
+          diffHit = changedSet === null ? null : changedSet.has(vf)
+        } else {
+          diffHit = true // artifact 类豁免 diff（design Phase 2：日志/文档天然不在 diff）
+        }
+        const ok = filesExist && mtimeOk !== false && diffHit !== false
+        if (!ok) allOk = false
+        perFile.push({ path: vf, pathClass, filesExist, mtimeOk, diffHit,
+          reason: !filesExist ? '文件不存在'
+            : (mtimeOk === false ? `mtime 早于 verifyStartAt（${new Date(startAt).toISOString()}）`
+            : (diffHit === false ? '不在本变更 git diff 内' : null)) })
+      }
+    }
+    const failed = (slot.status === 'satisfied' && !allOk) || (slot.status === 'missing' && !slot.exempt)
+    if (failed) blockedCount++
+    detailed.push({
+      task, verdict: item.verdict || 'cannot_verify', status: slot.status, exempt: slot.exempt,
+      verification: perFile.length > 0 ? perFile : null,
+      reason: failed
+        ? (slot.status === 'missing' ? 'missing 且无（豁免：<理由>）后缀——cannot_verify 未闭环'
+          : (slot.status === 'satisfied' ? 'satisfied 核验不过（见 verification 明细）' : 'partial 但 verifiedFiles 全部核验不过'))
+        : (slot.exempt ? `missing 已豁免：${slot.exemptionReason}`
+          : (slot.status === 'partial' ? 'partial（部分核验通过，理由见槽行括注）' : '核验通过')),
+    })
+  }
+
+  if (blockedCount > 0) {
+    return { status: 'blocked', items, detailed, warnings,
+      unacknowledged: detailed.filter(d => d.status === 'missing' && !d.exempt && !d.verification).map(d => ({ task: d.task, reason: d.reason })),
+      summary: `${items.length} 个 cannot_verify 任务中 ${blockedCount} 个未闭环（missing 无豁免或核验不过）`, reason: null }
+  }
+  return { status: 'passed', items, detailed, unacknowledged: [], warnings,
+    summary: `${items.length} 个 cannot_verify 任务证据账全部闭环（状态 + 分类核验通过）`, reason: null }
+}
+
+/** 打印 required-evidence 对账结果（v2：blocked 由 gates 阻断；legacy warning 不阻断） */
 export function printVerifyRequiredEvidenceCheck(result) {
   if (result.status === 'skipped') return  // 静默：无 evidence 文件 / 无 changeName / 解析失败
+  if (result.status === 'blocked') return  // 阻断明细由 gates 接线侧统一输出（本函数不重复打印）
   if (result.status === 'passed') {
     console.log(`\n✅ required-evidence 对账通过：${result.summary}`)
     return
@@ -2255,24 +2402,35 @@ export function reconcileTargetFiles({ cwd, specBase = null, changeName = null, 
   }
 
   // —— 三类差集 ——
-  const actualSet = new Set(actual.files)
+  // 对账键（2026-09-08 用户反馈⑥：计划文件名 vs 实测文件名的字面差脆）：声明侧 task 卡是
+  // agent 手写（大小写随手、尾部注记、./ 前缀残留），actual 侧是 git 机器产出——字面相等
+  // 判定下这些形态差全部落②类假红（missing_declared，ERROR 态阻断 verify）。统一 canonical
+  // key 再比对：normalizeReviewChangedFile 归一（./ 前缀/尾部注记/行内注释/反斜杠）+
+  // win32/darwin 大小写折叠（默认文件系统大小写不敏感，两形指同一文件；Linux 保持敏感）。
+  // 报告侧仍用原始字面串（用户按自己写的名字找到声明处）。
+  const foldCase = process.platform === 'win32' || process.platform === 'darwin';
+  const pathKey = (p) => {
+    const n = normalizeReviewChangedFile(p);
+    return foldCase ? n.toLowerCase() : n;
+  };
+  const actualKeySet = new Set(actual.files.map(pathKey));
   const declaredPaths = [...new Set(decl.declarations.map(d => d.path))].sort()
-  const declaredSet = new Set(declaredPaths)
+  const declaredKeySet = new Set(declaredPaths.map(pathKey))
   // ①交集（计数进 evidence）：唯一路径口径（多卡声明同文件只计一次）
   for (const path of declaredPaths) {
-    if (actualSet.has(path)) matched.push(path)
+    if (actualKeySet.has(pathKey(path))) matched.push(path)
   }
   // ②声明没做（计划落空，ERROR）：逐卡逐条报 task-NN + path；NEW: 声明的取剥前缀 path、带
-  // isNew 标（“新建文件没建”与“存量文件没动”的修复指引不同）
+  // isNew 标（"新建文件没建"与"存量文件没动"的修复指引不同）
   for (const d of decl.declarations) {
-    if (!actualSet.has(d.path)) {
+    if (!actualKeySet.has(pathKey(d.path))) {
       missing.push(d.isNew ? { task: d.task, path: d.path, isNew: true } : { task: d.task, path: d.path })
     }
   }
   // ③做了没声明（scope creep，WARNING）：actual − 声明集；suspectTask 尽力归因仅报告（D-002）
-  const suspect = attributeSuspectTasks(rt, changeName, actual.files.filter(p => !declaredSet.has(p)))
+  const suspect = attributeSuspectTasks(rt, changeName, actual.files.filter(p => !declaredKeySet.has(pathKey(p))))
   for (const path of actual.files) {
-    if (declaredSet.has(path)) continue
+    if (declaredKeySet.has(pathKey(path))) continue
     const s = suspect.get(normalizeReviewChangedFile(path))
     undeclared.push(s ? { path, suspectTask: s } : { path })
   }
@@ -2558,7 +2716,62 @@ export function checkProbeConsistency({ cwd, specBase = null, changeName = null,
       note: 'contract gap（missing backend）行数与重跑不符（探针5 扫描根/缓存口径环境敏感，WARNING 不阻断）' })
   }
 
-  if (mismatches.length === 0) return finish('ok', null, [], null)
+  // —— facts 基线对比（2026-09-08-ir-verify-facts FR-05 / task-05）：重跑指标 vs
+  // verify-facts.json probes 快照（init 时点）。md 锚点对账查「正文没被改」，本维度查
+  // 「md 被手改对齐新代码后 facts 底稿过期」（P3d 数据源保鲜）。分级沿用现实现口径：
+  // probe1/6=ERROR、probe3/5=WARNING；probe6 继承 HEAD-advance 降级（R-06）。——
+  const factsSnapshot = readVerifyFacts(changeDir)
+  let factsConsistency = null
+  if (factsSnapshot && factsSnapshot.probes) {
+    const fm = []
+    const adv = detectHeadAdvanceSinceFacts(cwd, factsSnapshot)
+    const snap1 = (((factsSnapshot.probes.probe1 || {}).metrics) || {}).matches
+    if (typeof snap1 === 'number' && snap1 !== curProbe1Hits) {
+      fm.push({ probe: 'probe1', snapshot: snap1, rerun: curProbe1Hits, severity: 'error',
+        note: 'facts 快照命中数与重跑不符——md 疑已手改对齐新代码而 facts 底稿过期（修复：verify-probes --init 刷新 facts + 按新结果同步 md 探针段）' })
+    }
+    const snap6 = (((factsSnapshot.probes.probe6 || {}).metrics) || {}).deletions
+    if (!curProbe6.unavailable && typeof snap6 === 'number' && snap6 !== curProbe6Deletions && !adv) {
+      // adv（HEAD 前移）时豁免：同一漂移已由 md 锚点维度的 probe6 WARNING 报出（R-06 继承，
+      // 双维度重复报同一信号是噪音）；非 adv 的不符 = facts 底稿被手改对齐——ERROR
+      fm.push({ probe: 'probe6', snapshot: snap6, rerun: curProbe6Deletions, severity: 'error',
+        note: 'facts 快照删除数与重跑不符——底稿疑似过期（修复：verify-probes --init 刷新 facts + 同步 md 探针段）' })
+    }
+    const snap3 = (((factsSnapshot.probes.probe3 || {}).metrics) || {}).hasTest
+    if (typeof snap3 === 'number' && snap3 !== curProbe3HasTest) {
+      fm.push({ probe: 'probe3', snapshot: snap3, rerun: curProbe3HasTest, severity: 'warning',
+        note: 'facts 快照 hasTest 数与重跑不符（测试布局环境敏感，WARNING）' })
+    }
+    const snap5 = (((factsSnapshot.probes.probe5 || {}).metrics) || {}).backendEndpoints
+    const cur5 = (current.probe5 || {}).backendCount
+    if (typeof snap5 === 'number' && typeof cur5 === 'number' && snap5 !== cur5) {
+      fm.push({ probe: 'probe5', snapshot: snap5, rerun: cur5, severity: 'warning',
+        note: 'facts 快照 backend 端点数与重跑不符（扫描根口径环境敏感，WARNING）' })
+    }
+    factsConsistency = {
+      checked: fm.length === 0 ? ['probe1', 'probe3', 'probe5', 'probe6'] : [...new Set(fm.map(x => x.probe))],
+      verdict: fm.length === 0 ? 'match' : 'mismatch',
+      detail: fm.length === 0 ? null : fm,
+    }
+    for (const x of fm) {
+      mismatches.push({ probe: `facts:${x.probe}`, expected: x.rerun, actual: x.snapshot, severity: x.severity, note: x.note })
+    }
+    // 固化 factsConsistency（fail-soft；不动 probes 快照语义——probes 归 --init 所有）
+    try {
+      const factsPath2 = join(changeDir, 'verify-facts.json')
+      const f2 = JSON.parse(readFileSync(factsPath2, 'utf8'))
+      f2.factsConsistency = factsConsistency
+      writeFileSync(factsPath2, JSON.stringify(f2, null, 2) + '\n')
+    } catch { /* 固化失败不阻断对账 */ }
+  }
+
+  if (mismatches.length === 0) {
+    const okResult = finish('ok', null, [], null)
+    okResult.factsConsistency = factsConsistency
+    return okResult
+  }
   const severity = mismatches.some(m => m.severity === 'error') ? 'error' : 'warning'
-  return finish('mismatch', severity, mismatches, null)
+  const mismatchResult = finish('mismatch', severity, mismatches, null)
+  mismatchResult.factsConsistency = factsConsistency
+  return mismatchResult
 }

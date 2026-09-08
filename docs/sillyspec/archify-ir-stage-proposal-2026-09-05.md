@@ -58,3 +58,9 @@
 - 讨论型内容 IR 化（brainstorm 的发散讨论、CONCERNS 的判断、复盘散文）——判断层保持自由散文，只锚事实。
 - 全量替换现有 markdown 产物——双层并存，IR 是 markdown 的「可验证投影」而非替代；渲染方向永远是 IR → 模板 → md，不允许反向。
 - 跳过自家流程直接实施本文——本文的价值就是把取舍聊清楚，brainstorm 时以本文为输入。
+
+---
+
+> **状态（2026-09-09）**：P3b 经变更 2026-09-08-ir-verify-facts 完成收口（verify-facts v2 证据链）。
+>
+> **互指（2026-09-08）**：agent 轮次裁剪侧（整段 noAI / 骨架预生成 / 注入 / 判定下沉）见 `docs/sillyspec/round-trip-economics-2026-09-08.md`——本文管 IR 事实层 schema，该文管轮次经济学，两文同为 P3 brainstorm 双输入。另注意：本文 P3a（target_files 对账）与 P3b 的探针锚点部分**已有落地实现**（该文 §2 有现状盘点），brainstorm 时先盘现状防重复设计。

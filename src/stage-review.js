@@ -633,6 +633,9 @@ export function registerStageReview({ changeName, stage, fromFile, cwd, platform
   const reviewPath = join(reviewDir, 'review.json')
   mkdirSync(reviewDir, { recursive: true })
   writeFileSync(reviewPath, JSON.stringify(review, null, 2) + '\n')
+  // stage-reviews 回收不在此处（ql-20260908-005 已定分野）：变更归属类证据走归档时精确
+  // 回收（pruneArchivedChangeRuntime 按 reviewedFiles 归属）；写入侧滚动是启发式，
+  // 活跃变更的 review 可能因他端高频写而跌出 keep 窗，不进证据类目录。
 
   const markerPath = stageReviewMarkerPath(runtimeRoot, stage, changeName)
   if (existsSync(markerPath)) {

@@ -10,6 +10,8 @@
  * diff 源：resolveVerifyChangedFiles（worktree-aware，与 task-review 同源）；
  * module-map：.sillyspec/docs/<p>/modules/_module-map.yaml 的 modules.<id>.paths
  * （目录条目以 / 结尾按前缀匹配，与模块上下文索引读侧口径一致）。
+ * 声明源（plan --done 首版，2026-09-08 刀②）：design 文件变更清单——代码未写、无 diff，
+ * 归属分类同一套 module-map 前缀匹配，仅输入来源不同。
  */
 import { existsSync, readFileSync, readdirSync } from 'fs'
 import { join } from 'path'
@@ -68,11 +70,14 @@ function classifyFile(posixPath, modulePaths) {
 
 /**
  * 生成 module-impact.md 骨架。
- * @param {{ cwd: string, changeName: string, specDir?: string|null }} opts
+ * @param {{ cwd: string, changeName: string, specDir?: string|null, sourceFiles?: string[]|null, origin?: string|null }} opts
+ *   sourceFiles：声明来源（plan --done 首版用 design 文件变更清单——此时代码未写、无 diff 可取）；
+ *     缺省走 diff 来源（resolveVerifyChangedFiles，archive/execute 后的真实改动）。
+ *   origin：骨架首行的生成方说明（区分 plan 首版与 CLI 命令生成，追溯来源用）。
  * @returns {{ markdown: string, matchedCount: number, unmatchedCount: number }|null}
- *   无 module-map / 无 diff → null（无可归类输入，agent 全手写）
+ *   无 module-map / 无可归类文件 → null（无可归类输入，agent 全手写）
  */
-export function generateModuleImpactSkeleton({ cwd, changeName, specDir = null }) {
+export function generateModuleImpactSkeleton({ cwd, changeName, specDir = null, sourceFiles = null, origin = null }) {
   const specBase = resolveSpecDir(cwd, { specDir })
 
   // 找 _module-map.yaml（docs/<p>/modules/；多项目取首个含 modules 索引的）
@@ -92,15 +97,20 @@ export function generateModuleImpactSkeleton({ cwd, changeName, specDir = null }
   const modulePaths = parseModuleMapPaths(readFileSync(moduleMapPath, 'utf8'))
   if (modulePaths.size === 0) return null
 
-  // includeWorkingTree 同 verify module 子集（坑 module-subset-zero-hit-uncommitted）：
-  // worktree 未提交改动也计入模块影响面（module-impact 按实际 diff 归属模块）
-  const diffFiles = resolveVerifyChangedFiles(cwd, changeName, null, { includeWorkingTree: true, specBase }) || []
-  const sourceFiles = diffFiles.map(f => f.split('\\').join('/')).filter(f => !f.startsWith('.sillyspec/'))
-  if (sourceFiles.length === 0) return null
+  let sourceFileList
+  if (sourceFiles) {
+    sourceFileList = sourceFiles.map(f => f.split('\\').join('/')).filter(f => !f.startsWith('.sillyspec/'))
+  } else {
+    // includeWorkingTree 同 verify module 子集（坑 module-subset-zero-hit-uncommitted）：
+    // worktree 未提交改动也计入模块影响面（module-impact 按实际 diff 归属模块）
+    const diffFiles = resolveVerifyChangedFiles(cwd, changeName, null, { includeWorkingTree: true, specBase }) || []
+    sourceFileList = diffFiles.map(f => f.split('\\').join('/')).filter(f => !f.startsWith('.sillyspec/'))
+  }
+  if (sourceFileList.length === 0) return null
 
   const byModule = new Map()
   const unmatched = []
-  for (const f of sourceFiles) {
+  for (const f of sourceFileList) {
     const mod = classifyFile(f, modulePaths)
     if (mod) {
       if (!byModule.has(mod)) byModule.set(mod, [])
@@ -111,7 +121,9 @@ export function generateModuleImpactSkeleton({ cwd, changeName, specDir = null }
   }
 
   const L = [
-    '# 模块影响分析（骨架由 `sillyspec module-impact --change <变更名>` 生成）',
+    origin
+      ? `# 模块影响分析（骨架由 ${origin} 生成）`
+      : '# 模块影响分析（骨架由 `sillyspec module-impact --change <变更名>` 生成）',
     '',
     '> 文件×模块归属由 CLI 按 _module-map.yaml paths 前缀匹配预填；',
     '> **影响类型**（逻辑变更/数据结构变更/接口变更/调用关系变更/配置变更/新增）与 review 标记是语义判断，',
@@ -162,5 +174,5 @@ export function generateModuleImpactSkeleton({ cwd, changeName, specDir = null }
   L.push('规则：execute/verify 完成文档同步后把对应行回填 done；确定不同步的行改 skipped 并在操作列写明原因。')
   L.push('')
 
-  return { markdown: L.join('\n'), matchedCount: sourceFiles.length - unmatched.length, unmatchedCount: unmatched.length }
+  return { markdown: L.join('\n'), matchedCount: sourceFileList.length - unmatched.length, unmatchedCount: unmatched.length }
 }

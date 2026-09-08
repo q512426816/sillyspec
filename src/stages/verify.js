@@ -75,10 +75,12 @@ export const definition = {
    - 路径：变更目录下的 verify-required-evidence.json
    - 文件 schema：\`{ items: [{ task, verdict, evidence: string[] }] }\`——顶层是 \`items\`，每项的 \`evidence\` 是字符串数组（不是 \`requiredEvidence\` 键）
    - 如果存在 → 逐项读取 \`items\`，对每个 cannot_verify 任务逐条核对其 \`evidence\` 数组是否已满足
-   - 每条 evidence 必须在 verify-result.md 中给出明确结论（satisfied / missing / partial）
-   - 如果有任何 evidence 为 missing → verify 结论不能为 PASS
-   - 如果文件不存在 → 表示 execute 阶段无 cannot_verify 任务，正常继续
-   - CLI 会 advisory 复核每个 cannot_verify 任务是否在 verify-result.md 体现（未体现仅 warn 不阻断归档；evidence 是否真满足由你诚实判定，CLI 不替你语义判定）
+   - 每条 evidence 的结论写进 verify-result.md「## 证据账（cannot_verify 任务）」槽段（2026-09-08-ir-verify-facts v2 起为硬门）：逐 task 一行 \`- task-NN: <satisfied|missing|partial> | verifiedFiles: <精确路径，逗号分隔>\`
+   - verifiedFiles 是 CLI 核验对象：代码/测试类路径核 存在×mtime×git diff 交集（不在本变更 diff 内的文件会被拦）；日志/文档类（.runtime/、*.log、docs/）豁免 diff 只核存在×mtime
+   - satisfied 必填 verifiedFiles；确实无法验证 → 填 missing 并加（豁免：<一句话理由>）后缀；部分满足 → partial + 已核验路径
+   - 存在未豁免 missing 或 satisfied 核验不过 → CLI 阻断 verify 完成（rollback，明细逐文件列出）
+   - 如果文件不存在 → 表示 execute 阶段无 cannot_verify 任务，证据账槽段写「无」，正常继续
+   - 旧格式（无槽段）报告走 legacy 子串对账（warning 不阻断），新变更一律用 --init 骨架的槽格式
 
 ### 模块文档加载
 8. 读取 \`{SPEC_ROOT}/docs/<project>/modules/_module-map.yaml\`（不存在则跳过以下步骤）
@@ -215,12 +217,14 @@ export const definition = {
 3. **生成 verify-result.md 骨架（勿从零手写）**：先跑 \`sillyspec verify-probes --change <change-name> --init\`——一条命令生成十章节骨架（已存在不覆盖），其中**探针结果章节已机械预填**（探针 1 的 TODO/FIXME 命中清单、探针 3 的测试覆盖、探针 5 的 API 契约对账表、探针 6 的删除对账三态判定），文件落 \`{SPEC_ROOT}/changes/<change-name>/verify-result.md\`（CLI 替换出的**主仓绝对路径**；若当前 cwd 在 worktree 内也绝不落 worktree 副本——CLI 校验读主仓，副本随 worktree 清理蒸发）。你只需把各 \`<!--TODO-->\` 占位替换为语义结论；半语义探针（2 关键词覆盖 / 4 决策追踪）与断言抽查、集成盲区标注由你补在对应 TODO 处
 4. **预填探针段不可篡改或删除**：verify \`--done\` gate 会重跑探针对比 verify-result.md 正文，不符即拦（ERROR）；对探针结果有异议只能在预填段旁追加说明，不得改写原文
 5. **verify-facts.json 为机器底稿，勿手改**：防篡改对比的基准是正文，改底稿无意义
-6. 给出结论：PASS / PASS WITH NOTES / FAIL（受风险门控约束）——**结论必须写明 PASS/FAIL 字样，留「待填」会被 gate 判不过**
+6. 给出结论：PASS / PASS WITH NOTES / FAIL（受风险门控约束）——**结论只认骨架「结论枚举：」槽行（行首锚定，把 <待填：三选一> 整体替换为枚举值）；槽留待填会被 gate 判不过，正文其他位置的 PASS/FAIL 字样不参与判定**
 7. **核对 module-impact.md**（若 \`{SPEC_ROOT}/changes/<change>/module-impact.md\` 存在）：对照本次实际代码变更（git diff）与 module-impact.md 的模块影响矩阵，发现不一致（漏标受影响模块 / 影响类型错误 / 实际未触碰的模块被误标）则在 verify-result.md 标注。module-impact 由 plan 首版生成、execute 各 Wave 更新，verify 是最后一次核对机会（archive 仅终审不再生成）。这是 advisory 核对（不阻断 verify 完成），但 module-impact 与实际严重背离应记为风险。
 
 ### verify-result.md 章节结构（骨架已含，占位替换即可）
 
-结论（PASS / PASS WITH NOTES / FAIL）→ 任务完成度 → 设计一致性 → 探针结果（已预填）→ 测试结果 → 决策追踪矩阵（\`| 决策 ID | FR | Task | Evidence | 状态 |\`，存在 decisions.md 才留）→ 技术债务 → 变更风险等级 → Runtime Evidence → 代码审查。
+结论（PASS / PASS WITH NOTES / FAIL）→ 证据账（cannot_verify 任务，槽段）→ 集成验证回执（槽段）→ 任务完成度 → 设计一致性 → 探针结果（已预填）→ 测试结果 → 决策追踪矩阵（\`| 决策 ID | FR | Task | Evidence | 状态 |\`，存在 decisions.md 才留）→ 技术债务 → 变更风险等级 → Runtime Evidence → 代码审查。
+
+**「## 集成验证回执」槽行结构**（integration/deployment-critical 变更必填；其余写「无」）：\`- claim: <一句话> | command: <命令> | exit: <0 或非 0> | log: <日志路径>\`——CLI 一致性校验四条件：log 存在 × mtime 在 verify 窗口内 × 日志尾无失败签名（error/exception/traceback/fatal 行首，剔除「0 errors」类良性行）× exit 0；全绿才算在场证据，字面措辞不再参与判定（v2 起 literals 仅存量回退）。CLI 不代跑集成进程——回执必须来自你真实执行过的命令。
 
 **Runtime Evidence 行结构**（integration/deployment-critical 必填；按实际触碰的运行时组件写，未涉及的行写「不涉及」勿堆关键词）：长驻进程启动命令 / 触碰的服务端点 / 触发核心路径的请求（附关键响应）/ 进程日志关键片段（证明走了新路径）/ 生命周期终态断言（初始态→运行态→终态）/ 失败模式排除（逐条说明为何未触发）。
 

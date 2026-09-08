@@ -25,12 +25,18 @@ import { STAGE_ORDER, MAIN_FLOW_ORDER, VALID_STAGES, STAGE_LABELS, SPEC_DIR_NAME
 // resolveSpecDir 单一真相源在 src/run/shared.js（含 home 拒绝守卫，坑 cwd-correction-home-collision
 // 根治：home 下 .sillyspec 恒不命中，防 smoke/临时目录污染自我延续）。此处 re-export 保持
 // 既有 import 路径兼容；run/shared.js 对 progress.js 只有动态 import，无静态循环。
-import { resolveSpecDir, checkPlatformManaged, PLATFORM_MANAGED_FILENAME, isSelfReferentialSpecRoot } from './run/shared.js';
+import { resolveSpecDir, checkPlatformManaged, PLATFORM_MANAGED_FILENAME, isSelfReferentialSpecRoot, isTempResidueSpecRoot } from './run/shared.js';
 export { resolveSpecDir };
 
 // 默认规范目录名（相对于 cwd）
 // SPEC_DIR_NAME → ./progress/shared.js（W6 Step9d）
 const RUNTIME_SUBDIR = '.runtime';
+
+// import() 的 pre-import 快照保留份数。这类快照只服务「刚 pull 完发现平台盖错、要退回
+// pull 前」这一个场景，最新一份即可覆盖；越旧的快照 schema 可能已 bump，恢复价值随时间衰减。
+// 可用 SILLYSPEC_PREIMPORT_BAK_KEEP 覆盖（灾难排查期想多留几份时）。
+const PRE_IMPORT_BAK_KEEP_DEFAULT = 1;
+const PRE_IMPORT_BAK_RE = /^sillyspec\.db\.pre-import-.*\.bak$/;
 
 /**
  * 向上查找含 .sillyspec 目录的祖先目录——实现已收敛至 src/run/shared.js（单一真相源，
@@ -95,6 +101,18 @@ export function resolvePlatformSpecDir(cwd, explicitSpecDir = null) {
     // 指针丢失不该静默当纯本地项目处理（会建本地进度库 → 状态分裂）。
     const decl = checkPlatformManaged(cwd);
     if (decl) {
+      // temp 残留降级（2026-09-08 temp 投毒治理）：声明 specRoot 在系统 temp 且 cwd 不在
+      // temp → 可证伪的测试/联调残留（真实平台 spec 根永不在 temp），与指针路径的 temp
+      // 警告（下方 resolvedTmp 分支）及自指声明降级（run/command.js 恢复链）同类。warn +
+      // 自动清理声明后按本地模式继续——不清理则每次命令重复 warn，且 disconnect 会连带
+      // 清 local.yaml platform 段误伤真实平台连接，不适合作为残留清理手段。
+      // 删除失败仍按本地继续（best effort；下次命令重复 warn 提示手动清理）。
+      if (isTempResidueSpecRoot(cwd, decl.specRoot)) {
+        const declarationPath = join(resolve(cwd), PLATFORM_MANAGED_FILENAME);
+        console.warn(`⚠️ 检测到 temp 残留平台接管声明（specRoot 指向系统 temp 目录：${decl.specRoot}，测试/联调投毒特征），已自动清理并按本地模式运行: ${declarationPath}`);
+        try { unlinkSync(declarationPath) } catch { /* best effort */ }
+        return resolveSpecDir(cwd);
+      }
       throw new PlatformManagedError({
         declarationPath: join(resolve(cwd), PLATFORM_MANAGED_FILENAME),
         specRoot: decl.specRoot,
@@ -613,6 +631,14 @@ export class ProgressManager {
     if (existsSync(walSidecar)) {
       try { copyFileSync(walSidecar, `${bakPath}-wal`); } catch { /* 侧车消失=已 checkpoint，无碍 */ }
     }
+    // 写完即回收旧快照：每次 pull / resolve --take-platform 都新增一份全库快照，无上限时
+    // 按同步次数无限累积（实证单仓 292 份 / 317MB）。裁剪放在写入侧而非独立 GC 命令——
+    // 靠人工记得跑 GC 等于没有回收。fail-open：卫生动作不能阻断 import 主流程。
+    try {
+      this._pruneImportBaks(cwd, bakPath);
+    } catch (e) {
+      console.warn(`⚠️  pre-import 快照裁剪失败（不阻断 import）: ${e.message}`);
+    }
 
     const pushedAt = progressObj.pushed_at ?? null;
     const now = new Date().toISOString();
@@ -705,6 +731,38 @@ export class ProgressManager {
     }
 
     return { ok: true, imported: cn, reason: undefined, bakPath };
+  }
+
+  /**
+   * 滚动裁剪 .runtime/ 下的 pre-import 快照，只留最新 N 份（含各自 -wal 侧车）。
+   *
+   * 排序依据：文件名内嵌 ISO 时间戳（冒号/点已替换为 '-'，见 import() 的 bakTs），
+   * 定宽且无进位歧义，字典序 == 时间序，无需 statSync（mtime 会被 copy/同步工具改写）。
+   *
+   * @param {string} cwd
+   * @param {string|null} keepPath - 本次刚写的快照路径，绝不裁（并发 import 互删护栏）
+   * @returns {number} 实际删除的快照份数
+   */
+  _pruneImportBaks(cwd, keepPath) {
+    let keep = Number(process.env.SILLYSPEC_PREIMPORT_BAK_KEEP);
+    if (!Number.isInteger(keep) || keep < 1) keep = PRE_IMPORT_BAK_KEEP_DEFAULT;
+
+    const runtimeDir = this._runtimePath(cwd);
+    const baks = readdirSync(runtimeDir).filter(f => PRE_IMPORT_BAK_RE.test(f)).sort();
+    const keepName = keepPath ? basename(keepPath) : null;
+    const doomed = baks.slice(0, Math.max(0, baks.length - keep)).filter(f => f !== keepName);
+
+    let removed = 0;
+    for (const f of doomed) {
+      // 单份删除失败（他进程持句柄 / 权限）不连坐其余份：跳过即可，下次 import 再收。
+      try { unlinkSync(join(runtimeDir, f)); } catch { continue; }
+      removed++;
+      const wal = join(runtimeDir, `${f}-wal`);
+      if (existsSync(wal)) {
+        try { unlinkSync(wal); } catch { /* 侧车残留无害：不参与恢复链，下次裁剪再收 */ }
+      }
+    }
+    return removed;
   }
 
   /**
@@ -838,6 +896,9 @@ export class ProgressManager {
 
   // 单变更阶段查询（quick 轻量归档阶段闸）：无行 null，读失败抛（调用方 fail-closed）
   getChangeStage(cwd, changeName) { return this._changeRegistry.getChangeStage(cwd, changeName); }
+
+  // verifyStartAt 基准只读（2026-09-08-ir-verify-facts）：execute 行 completed_at；无行 null 走 R-05 fallback
+  getStageCompletedAt(cwd, changeName, stage) { return this._changeRegistry.getStageCompletedAt(cwd, changeName, stage); }
 
   registerChange(cwd, changeName) { return this._changeRegistry.registerChange(cwd, changeName); }
 
