@@ -366,3 +366,97 @@
 方案：doctor 新增 --gc-unstamped-runs（默认 dry-run，--confirm 才删）：reviewedFiles 的 changes 首段精确命中归档目录，或与唯一归档 tasks.md 的 task-NN 集合全等；命中活跃/歧义/有戳/无归属 skip；不进 archive 热路径
 结果：新增 test/doctor-gc-unstamped-runs.test.mjs 15 断言全绿；既有 archive-runtime-prune 与 cleanup-ghosts 零回归；npm run lint exit 0（496 文件，未引用导出 0）
 审计：⚖️ 归属切分：13 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：src/quicklog.js, src/run/complete.js, src/run/shared.js, src/run/stage.js, src/stage-review.js, src/stages/quick.js, src/verify-postcheck.js, src/workflow.js, test/doctor-gc-unstamped-runs.test.mjs, src/runtime-hygiene.js, test/quick-feedback-fileline-title.test.mjs, test/runtime-hygiene.test.mjs, test/sync-noise.test.mjs
+
+## ql-20260908-007-0c2f | 2026-09-08 17:36:30 | 工具使用反馈四项改进：①QUICKLOG 文件行纳入模块卡与 changelog sidecar（收尾必改项不再手工补录）；②--req 标题不再截到首个标点…
+状态：已完成
+关联变更：（无）
+文件：src/quicklog.js, src/run/shared.js, src/run/complete-handlers.js, src/run/complete.js, src/run/stage.js, src/stages/quick.js, src/sync.js, src/spec-sync.js, src/sync-noise.js（新建）, src/runtime-hygiene.js（新建）, src/workflow.js, src/doctor-diagnostics.js, src/stage-review.js, src/verify-postcheck.js, test/quick-feedback-fileline-title.test.mjs（新建）, test/sync-noise.test.mjs（新建）, test/runtime-hygiene.test.mjs（新建）, docs/sillyspec/file-lifecycle.md, docs/sillyspec/file-lifecycle/storage-and-state.md, docs/sillyspec/platform-interface-map.md（docs check --fix 重锚）, docs/sillyspec/prompt-control-debt.md（重锚）, docs/sillyspec/review-2026-08-20-full-audit.md（重锚）, .sillyspec/docs/sillyspec/modules/sync.md, .sillyspec/docs/sillyspec/modules/runtime.md, .sillyspec/docs/sillyspec/modules/runtime.changelog.md, .sillyspec/docs/sillyspec/modules/change-management.md, .sillyspec/docs/sillyspec/modules/change-management.changelog.md, .sillyspec/docs/sillyspec/modules/stages.md, .sillyspec/docs/sillyspec/modules/stages.changelog.md, .sillyspec/docs/sillyspec/modules/workflow.md, .sillyspec/docs/sillyspec/modules/core-engine.md, .sillyspec/docs/sillyspec/modules/core-engine.changelog.md
+需求：工具使用反馈四项改进：①QUICKLOG 文件行纳入模块卡与 changelog sidecar（收尾必改项不再手工补录）；②--req 标题不再截到首个标点；③平台 sillyhub 未就绪期 [sync]/[spec-sync] 噪音降噪；④.runtime 只写不回收路径系统性排查与回收
+根因：① isQuickMetadata 单谓词兼任审计豁免面与文件行记录面，模块卡被整体滤掉；② extractTitleFromResult 旧口径截首标点迫使避开标点写标题；③ 每步自动同步对同一批连接类失败逐条命令重刷（fetchJson 404 warn + follower 集合每轮重算重报，基线快照锚 local-at-last-sync、POST 失败不落盘则永不收敛）；④ pre-import 之外还有一族时间戳命名写后无回收路径（artifacts 534 份/stage-reviews 84/execute-runs 48/verify-runs 31/workflow-runs 21），逐个发现不如系统性覆盖
+方案：① run/shared.js 新增 isQuicklogFileLineNoise（记录面），complete-handlers 文件行过滤切换，审计豁免面 isQuickMetadata 不动；② extractTitleFromResult 原样保留标点、超 80 字才就近标点/空格断句，stages/quick.js prompt 口径同步；③ 新建 src/sync-noise.js 跨进程噪音闸（marker 窗口 10min：首报命令完整展示、后续进程静默、成功清闸打恢复行、SILLYSPEC_DEBUG_SYNC 全可见、409/4xx 业务态不走闸、connect health ping noMute、自动 pull 走 autoPull）+ spec-sync isFollowerSetChanged 集合去重 marker；④ 新建 src/runtime-hygiene.js pruneTimestampedEntries 写入侧滚动裁剪，与并行会话 ql-20260908-005/006 定界——变更归属类证据（execute-runs/stage-reviews/verify-runs）走归档精确回收不接 keep-N 启发式，无归属审计类（artifacts keep=100 mtime 序/workflow-runs keep=30/doctor-dumps keep=5）写入侧裁，SILLYSPEC_RUNTIME_KEEP 可覆盖
+结果：新增 3 个测试文件全绿（quick-feedback-fileline-title 21 断言/sync-noise 19/runtime-hygiene 12）；全量 npm test 369 过 9 失败——8 个单跑全绿属全量并发 12 互相污染，local-register 经 HEAD 基线 worktree 验证为既有失败；npm run lint 496 文件 0 告警；docs check 经 --fix 重锚 30 处漂移后 0 失效；中途实证修掉自身引入的两处回归（噪音闸吞掉同轮第二条失败行 → 开窗进程感知；构造器 resolvePlatformSpecDir 副作用 warn → bindSyncNoiseFromCwd 零副作用绑定）；另排查中误用 junction+worktree remove 删空 node_modules，npm ci（allow-remote=all）完整恢复
+
+## ql-20260908-008-6d1d | 2026-09-08 18:23:30 | 两轮使用反馈的六个负面项修复：--file-notes 与边界声明口径打架、活文档硬编码行号漂移、backfill --adopt 冲掉 review、平台模式…
+状态：已完成
+关联变更：（无）
+文件：src/worktree.js, src/worktree-apply.js, src/task-review.js, src/verify-postcheck.js, src/docs-check.js, src/run/complete-handlers.js, src/run/gates.js, test/feedback-batch2-hardening.test.mjs（新建）, docs/sillyspec/platform-interface-map.md（docs check --fix 重锚 9 处）, .sillyspec/docs/sillyspec/modules/worktree.md, .sillyspec/docs/sillyspec/modules/worktree.changelog.md, .sillyspec/docs/sillyspec/modules/core-engine.md, .sillyspec/docs/sillyspec/modules/core-engine.changelog.md, .sillyspec/docs/sillyspec/modules/docs-consistency.md, .sillyspec/docs/sillyspec/modules/docs-consistency.changelog.md, .sillyspec/docs/sillyspec/modules/runtime.md, .sillyspec/docs/sillyspec/modules/runtime.changelog.md
+需求：两轮使用反馈的六个负面项修复：--file-notes 与边界声明口径打架、活文档硬编码行号漂移、backfill --adopt 冲掉 review、平台模式 apply allowlist 整批 BLOCKED、meta.json BOM 当损坏、target_files 对账字面差假红
+根因：① fileNotes 只写 QUICKLOG 文件行不进 guard.allowedFiles，审计按另一口径判「超出+未声明」；② 行号漂移只能人工手跑 docs check --fix；③ adopt 在 allowed_paths 切片空时把 changedFiles 整字段覆写为空集；④ resolveApplyAllowSet/collectReviewDeclaredFiles 硬编码 projectRoot/.sillyspec，平台模式实体在 specRoot（sync.js BUG-01 同族）；⑤ parseJSON 不剥 ﻿，JSON.parse 对 BOM 首字符直接抛；⑥ 对账三类差集用字面 Set.has——声明侧手写大小写/尾部注记/前缀与 git 机器产出名不一致即落②类假红
+方案：① complete-handlers quick 收尾把 --file-notes 路径经 mergeQuickBoundaryFiles 并入边界（与 --files 同语义，持久化回 guard.json）；② docs-check 新增 autoReanchorDocRefs（--fix 主链路编程化：fixable 命中→applyFixes→同口径回执），--done 检出失效即自动重锚+落审计行；③ adopt 切片空而原声明非空时保留原 changedFiles 并留 reason；④ allowlist 两函数加 specBase/runtimeRoot 参+平台指针静默回退，四处调用点接线；⑤ parseJSON 剥 BOM；⑥ 差集改 canonical pathKey（normalizeReviewChangedFile+win32/darwin 大小写折叠）
+结果：新增 test/feedback-batch2-hardening.test.mjs 29 断言全绿（BOM 解析/adopt 保声明+mechanics 照常重算/allowlist 显式+指针+本地零回归三态/reconcile 归一命中+NEW 照拦/autoReanchor 检出-重锚-回执-幂等/quick E2E 无超出误拦+文件行一致）；全量 npm test 368 过 11 失败——9 个单跑全绿属并发污染、local-register 既有（上批 HEAD 基线已验）、doc-ref 为本批行号漂移经 --fix 自愈 9 处后 PASS；lint 497 文件 0 告警
+
+## ql-20260908-009-c69e | 2026-09-08 21:31:24 | 落盘轮次经济学分析docs+09-05文末互指行
+状态：已完成
+关联变更：（无）
+文件：
+- docs/sillyspec/round-trip-economics-2026-09-08.md（轮次经济学分析主文）
+- docs/sillyspec/archify-ir-stage-proposal-2026-09-05.md（文末互引段）
+需求：落盘轮次经济学分析docs+09-05文末互指行
+根因：noAI/CLI下沉审计与09-05 IR方案需分工互指防止后来者只见一份；P3a/P3b已动工现状需盘点防brainstorm重复设计
+方案：新增docs/sillyspec/round-trip-economics-2026-09-08.md（核心原则/分工表/已动工盘点/裁剪清单/三刀切分/风险防覆盖六节，不含实施设计）；archify-ir-stage-proposal-2026-09-05.md文末追加互引段
+结果：纯doc改动测试自动跳过；两文件git diff核对无意外改动
+
+## ql-20260908-010-8f3d | 2026-09-08 21:36:04 | plan --done CLI 自动生成 module-impact 首版（刀②）
+状态：已完成
+关联变更：（无）
+文件：
+- src/module-impact.js（sourceFiles/origin 双来源入口）
+- src/stages/plan-postcheck.js（check 1e-0 首版生成）
+- src/stages/plan.js（审查步 prompt 换 CLI 自动生成口径）
+- test/plan-module-impact-autogen.test.mjs（新建 6 用例）
+- test/plan-module-impact-sections.test.mjs（断言迁到生成器输出）
+- docs/sillyspec/platform-interface-map.md（13 处行号重锚（继承 WIP 漂移））
+- docs/prompt/plan.md + _extracted.json（镜像同步）
+需求：plan --done CLI 自动生成 module-impact 首版（刀②）
+根因：轮次经济学刀②：agent 手写首版是 archive contains_sections 硬拦返工根源（prompt 自认只能从 gate 报错反推格式），文件×模块归属是机械分类应归 CLI
+方案：module-impact.js 加 sourceFiles+origin 声明来源入口（design 清单 main 段输入，代码未写无 diff 可取）；plan-postcheck 增 check 1e-0 generatePlanModuleImpactFirstVersion（已存在不覆盖、scale=small/无清单/无 map 降级 skipped 不阻断）；plan.js 审查步 prompt 换 CLI 自动生成口径+兜底说明；顺路修 platform-interface-map.md 13 处过期行号（src/run/shared.js 重构漂移，doc-ref-check 假红）+ docs/prompt 镜像同步 + stages/docs-consistency 模块卡与 sidecar
+结果：plan-module-impact-autogen 6 用例全过；plan-module-impact-sections 17 断言全过；verify-probes/doc-ref-check 由红转绿；全量套件仅剩 11 个并行 flaky（单跑全过，非本次引入）；lint 见门禁输出
+审计：⚖️ 归属切分：2 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：src/run/command.js, test/platform-temp-residue-heal.test.mjs
+
+## ql-20260908-011-7d26 | 2026-09-08 21:50:08 | temp 残留平台声明治理——写侧守卫与双入口自愈降级
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/shared.js（isTempResidueSpecRoot 纯函数 + writePlatformPointer 写侧守卫）
+- src/progress.js（入口一声明分支 temp 残留自愈降级）
+- src/run/command.js（入口二恢复链 temp 残留自愈降级）
+- test/platform-temp-residue-heal.test.mjs（六场景（判定矩阵/写侧守卫/双入口自愈/双回归））
+需求：temp 残留平台声明治理——写侧守卫与双入口自愈降级
+根因：mktemp 临时 specRoot 的平台模式命令在真实项目根三写指针+声明，指针随后被清理，残留声明令双入口 fail-closed 全命令瘫痪；platform disconnect 会连带清 local.yaml platform 段，误伤要保留的平台连接（2026-09-08 multi-agent-platform 工作台「总览不可用」排障实证）
+方案：run/shared.js 新增 isTempResidueSpecRoot 纯函数（specRoot 在系统 temp 且 cwd 不在 temp，套件隔离形态不受影响）并接入 writePlatformPointer 写侧守卫；progress.js 入口一与 run/command.js 入口二声明分支按同判定 warn+自动清理声明+按本地模式继续，不动 local.yaml；新增 test/platform-temp-residue-heal.test.mjs 六场景
+结果：新测试 24/24、platform-managed-declaration 回归 27/27、lint 499 文件 0 告警、全量 npm test exit 0；真实污染仓库自愈后 progress show --json 正常、daemon sillyspec_status 采集恢复（跨两个采集周期零新增失败）
+
+## ql-20260908-012-31e5 | 2026-09-08 22:00:40 | verify 结论枚举槽化+lint advisory 计数器（刀③）
+状态：已完成
+关联变更：（无）
+文件：
+- src/stage-contract.js（槽提取器+统一解析入口）
+- src/verify-probes.js（骨架结论槽格式）
+- src/verify-postcheck.js（lint 观察期计数器）
+- src/stages/verify.js（Step4 纪律槽口径）
+- test/verify-conclusion-slot.test.mjs（新建 7 用例）
+- test/verify-probes-facts.test.mjs（C2/C3 断言块重写）
+- docs/prompt/verify.md（镜像同步：结论纪律槽口径；_extract.mjs 重提）
+需求：verify 结论枚举槽化+lint advisory 计数器（刀③）
+根因：轮次经济学刀③：结论门靠标题关键词+400字符窗口判定（两次标题措辞劫持历史坑），且实证发现旧骨架占位符 <待填：PASS 或 FAIL> 含 PASS 字样被窗口正则误读成已填 PASS——宣称的 fail-closed 实际失效
+方案：stage-contract 增 extractVerifyConclusionSlot（槽行行首锚定优先，占位未填返回空串真 fail-closed；无槽存量文件回退旧窗口扫描+迁移 warning；resolveVerifyConclusion 统一入口消除同输入双扫）；verify-probes 骨架结论改「结论枚举：<待填：三选一>」槽格式；verify.js Step4 纪律同步槽口径；runVerifyLintCheck 内嵌 recordVerifyLintTally 观察期计数（.runtime/verify-lint-tally.json，失败输出附累计 N/M）
+结果：verify-conclusion-slot 7 用例全过；verify-probes-facts 150 断言全过（C2/C3 断言块按槽格式重写）；stage-contract/verify-probes/machine-interface/verify 族 9 个套件全绿；test 门禁见输出
+审计：⚖️ 归属切分：1 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：docs/prompt/verify.md
+
+## ql-20260908-013-3eb1 | 2026-09-08 22:16:54 | quick step1 注入化：项目/约定/模块上下文 CLI 代读（刀①）
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/prompt.js（digest 构建+占位符接线+模块注入扩展+readQuickGuardField）
+- src/run/stage.js（quickGuard 落盘 taskDescription）
+- src/stages/quick.js（step1 操作段注入化）
+- test/quick-step1-injection.test.mjs（新建 5 用例）
+需求：quick step1 注入化：项目/约定/模块上下文 CLI 代读（刀①）
+根因：轮次经济学刀①：quick 是最高频路径，step1 让 agent cat projects/CONVENTIONS/module-map 六类文件再复述任务理解——CLI 已有全部数据（{LOCAL_COMMANDS}/{SCAN_FACTS} 注入先例），纯传话+读全文浪费 token 与轮次
+方案：prompt.js 新增 buildQuickContextDigest（projects name/path/status 摘要+CONVENTIONS 开头 1200 字截断）与 {QUICK_CONTEXT_DIGEST} 占位符接线（fail-soft 同三件套）；模块上下文注入从 brainstorm/plan/execute 扩展到 quick 首步，匹配源取 guard.taskDescription（stage.js quickGuard 新落盘启动 --input）；quick.js step1 操作段删 cat 指令改注入消费，保留模糊提问出口+关联变更 design.md+knowledge 按需读；docs/prompt 镜像 _sync 全量对齐；runtime/stages 卡同步
+结果：quick-step1-injection 5 用例全过；quick 族 7 个套件全绿（msys/空格分隔/files-resume/input-hint/path-rule/linked-guard/completion）；e2e 冒烟实证：step1 渲染含 runtime 模块上下文段+项目登记+CONVENTIONS 摘要，冒烟会话已 --cancel；test 门禁见输出
+
+## ql-20260908-014-b598 | 2026-09-08 22:18:53 | runtime 阶段注入测试冒烟
+状态：已取消
+关联变更：quick-33876a4a
+文件：（见实际改动）
