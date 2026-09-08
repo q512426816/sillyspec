@@ -14,8 +14,8 @@ export const FACTS_SCHEMA_VERSION = 2
 /** 证据状态枚举单源（「## 证据账」槽行 + facts.requiredEvidence[].status 共用） */
 export const EVIDENCE_STATUS = ['satisfied', 'missing', 'partial']
 
-/** 豁免后缀形态：missing + （豁免：<理由>）——机器可解析，无括注的 missing 不算豁免 */
-export const EXEMPTION_RE = /（豁免：[^）]+）/
+/** 豁免后缀形态：missing + （豁免：<理由>）——机器可解析，无括注的 missing 不算豁免（模块私有：parseEvidenceSlots 内部消费，外部读解析结果的 exempt 字段） */
+const EXEMPTION_RE = /（豁免：[^）]+）/
 
 /** 证据账槽段标题（与 generateVerifyResultSkeleton 渲染逐字一致——避开既有「## Runtime Evidence」人工判断章） */
 export const EVIDENCE_SLOT_HEADING = '## 证据账（cannot_verify 任务）'
