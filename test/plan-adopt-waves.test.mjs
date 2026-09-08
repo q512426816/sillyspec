@@ -33,6 +33,7 @@ function git(dir, args) {
 }
 
 const CARD_FILES = ['src/a.js', 'src/b.js', 'src/c.js']
+// makeFixture opts.files 覆盖 per-task allowed_paths（4c 同 Wave 重叠 fixture 用）
 const CARD_DEPS = { 'task-01': [], 'task-02': ['task-01'], 'task-03': ['task-02'] }
 
 function makeCard(id, file, deps) {
@@ -87,6 +88,8 @@ function makeFixture(opts = {}) {
   const changeDir = join(cwd, '.sillyspec', 'changes', 'paw')
   mkdirSync(join(changeDir, 'tasks'), { recursive: true })
 
+  const cardFiles = opts.files || CARD_FILES
+  const cardDeps = opts.deps || CARD_DEPS
   const waveLines = opts.waveLines !== undefined ? opts.waveLines : ['## Wave 1（并行，无依赖）', '- task-01', '- task-02', '- task-03']
   if (opts.extraWaveBody) waveLines.splice(2, 0, '这里是一段正文注记，不应被 adopt 吞掉。')
   const planLines = ['# 实现计划', '', '## 背景', '', '测试用。', '']
@@ -106,7 +109,7 @@ function makeFixture(opts = {}) {
     '## 文件变更清单',
     '| 操作 | 文件路径 | 说明 |',
     '|---|---|---|',
-    ...CARD_FILES.map(f => `| 修改 | ${f} | 改动 |`),
+    ...cardFiles.map(f => `| 修改 | ${f} | 改动 |`),
     '',
   ].join('\n'))
 
@@ -128,7 +131,7 @@ function makeFixture(opts = {}) {
 
   const ids = ['task-01', 'task-02', 'task-03']
   ids.forEach((id, i) => {
-    writeFileSync(join(changeDir, 'tasks', `${id}.md`), makeCard(id, CARD_FILES[i], CARD_DEPS[id]))
+    writeFileSync(join(changeDir, 'tasks', `${id}.md`), makeCard(id, cardFiles[i], cardDeps[id]))
   })
   return { cwd, changeDir }
 }
@@ -194,20 +197,42 @@ console.log('--- 3. --dry-run：不落盘 ---')
   rmSync(cwd, { recursive: true, force: true })
 }
 
-console.log('--- 4. 依赖方向违规：executePlanPostcheck 硬拦 ---')
+console.log('--- 4. 依赖方向违规：提案干净 → 自动修复（2026-09-09-plan-derived FR-01） ---')
 {
-  const { cwd } = makeFixture() // 全挤 Wave 1：task-02 depends_on task-01 同 Wave
+  const { cwd, changeDir } = makeFixture() // 全挤 Wave 1：task-02 depends_on task-01 同 Wave（各卡独占文件→提案干净）
   const r = await runPostcheck(cwd)
-  assert(r.threw !== null && r.threw.includes('Wave 依赖方向违规'), `同 Wave 依赖被硬拦（实际: ${r.threw}）`)
-  assert(r.threw.includes('task-02 depends_on task-01'), '报错点名违规对')
+  assert(r.threw === null, `不再硬拦（自动修复路径，实际 threw: ${r.threw}）`)
+  assert(r.logs.some(l => l.includes('Wave 依赖方向违规已按 depends_on 拓扑自动修复')), '回执含自动修复字样')
+  assert(r.logs.some(l => l.includes('task-02 depends_on task-01')), '回执点名违规对')
+  const after = readFileSync(join(changeDir, 'plan.md'), 'utf8')
+  const w2Idx = after.indexOf('## Wave 2')
+  assert(w2Idx > after.indexOf('## Wave 1'), 'plan.md 已按拓扑重排（多 Wave 落盘）')
   rmSync(cwd, { recursive: true, force: true })
 }
 
-console.log('--- 4b. 后置 Wave 依赖（顺序颠倒）同样硬拦 ---')
+console.log('--- 4b. 后置 Wave 依赖（顺序颠倒）同样自动修复 ---')
 {
-  const { cwd } = makeFixture({ waveLines: ['## Wave 1', '- task-01', '- task-03', '', '## Wave 2', '- task-02'] })
+  const { cwd, changeDir } = makeFixture({ waveLines: ['## Wave 1', '- task-01', '- task-03', '', '## Wave 2', '- task-02'] })
   const r = await runPostcheck(cwd)
-  assert(r.threw !== null && r.threw.includes('后置 Wave'), `后置依赖被硬拦（实际: ${r.threw}）`)
+  assert(r.threw === null, `后置依赖自动修复（实际 threw: ${r.threw}）`)
+  assert(r.logs.some(l => l.includes('自动修复')), '回执在场')
+  rmSync(cwd, { recursive: true, force: true })
+}
+
+console.log('--- 4c. 违规 + 提案脏（拓扑并 Wave 收敛出文件重叠）→ 保留原文仍硬拦 ---')
+{
+  // 手排 W1=[01,02]（task-01 dep task-02 同 Wave 违规）+ W2=[03]，各 Wave 内文件不重叠（check 1 过）；
+  // 拓扑 W1=[02,03]（两者独立）→ 提案把共享 shared.js 的 02/03 并入同 Wave → 提案脏
+  const { cwd, changeDir } = makeFixture({
+    files: ['src/a.js', 'src/shared.js', 'src/shared.js'],
+    deps: { 'task-01': ["'task-02'"], 'task-02': [], 'task-03': [] },
+    waveLines: ['## Wave 1', '- task-01', '- task-02', '', '## Wave 2', '- task-03'],
+  })
+  const before = readFileSync(join(changeDir, 'plan.md'), 'utf8')
+  const r = await runPostcheck(cwd)
+  assert(r.threw !== null && r.threw.includes('Wave 依赖方向违规'), `提案脏保原文仍拦（实际: ${r.threw}）`)
+  assert(readFileSync(join(changeDir, 'plan.md'), 'utf8') === before, '手排原文未被改写')
+  assert(r.logs.some(l => l.includes('共享路径') || l.includes('不可自动采纳')), '冲突明细透出')
   rmSync(cwd, { recursive: true, force: true })
 }
 

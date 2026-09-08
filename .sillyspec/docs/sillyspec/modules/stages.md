@@ -76,3 +76,6 @@ updated_at: 2026-08-24T00:40:00+08:00
 ## verify 阶段槽位指引（2026-09-08-ir-verify-facts）
 
 verify.js step2（Execute Evidence 传递检查）改 v2 硬门口径：结论写「## 证据账（cannot_verify 任务）」槽段（三选一状态 + verifiedFiles 精确路径 + 豁免后缀）；step7 报告结构章节序列增证据账/集成验证回执两槽段 + 回执四字段说明（绿判据四条件，literals 仅存量回退）。docs/prompt/verify.md 镜像经 _extract/_sync 同步。
+
+## Wave 派生化与 plan_level 复核（2026-09-09-plan-derived）
+plan-postcheck section 2 三类分流：依赖方向违规 → 提案-验证-落盘自动修复（adoptPlanWaves proposal 档 + validateWaveProposal：蓝图一致性 opts.waves 注入 + 逐 Wave allowed_paths 交集；干净才写，脏/异常保原文照旧拦）；合法保守串行 → 静默（旧 ⚠️ 提示噪音消）；一致 → ✅。plan_level 客观复核（PLAN_LEVEL_SIGNALS：>8 文件或 >2 模块）warning 不阻断。plan.js 审查清单补自动修复/合法串行说明。

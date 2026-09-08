@@ -60,12 +60,17 @@ function updateSummaryWaveColumn(lines, waveOf) {
 }
 
 /**
- * @param {{ changeDir: string, dryRun?: boolean }} opts
+ * @param {{ changeDir: string, dryRun?: boolean, mode?: 'write'|'proposal' }} opts
+ *   mode='proposal'（2026-09-09-plan-derived）：只读产拓扑布局提案——渲染 Wave 段草稿与
+ *   W 列同步结果但不落盘，供 postcheck「提案-验证-落盘」自动修复（FR-01）验证后决断写否。
  * @returns {{ ok: boolean, error?: string, waves?: string[][], planPath: string, dryRun: boolean,
  *             waveBlock?: string[], tableRowsUpdated?: number, tableRowsSkipped?: number,
+ *             planMdDraft?: string, rewritten?: boolean,
  *             postcheck?: { errors: string[], warnings: string[] } }}
+ *   planMdDraft：proposal 档下的完整 plan.md 草稿文本；rewritten：与原文比较是否有实际变更
+ *   （幂等重排零变更 → false，调用方静默）；write 档沿用既有 postcheck 字段。
  */
-export function adoptPlanWaves({ changeDir, dryRun = false }) {
+export function adoptPlanWaves({ changeDir, dryRun = false, mode = 'write' }) {
   const planPath = join(changeDir, 'plan.md')
   if (!existsSync(planPath)) return { ok: false, error: `plan.md 不存在: ${planPath}`, planPath, dryRun }
   const tasksDir = join(changeDir, 'tasks')
@@ -108,9 +113,11 @@ export function adoptPlanWaves({ changeDir, dryRun = false }) {
 
   const { updated, skipped } = updateSummaryWaveColumn(lines, waveOf)
   const content = lines.join('\n').replace(/\n*$/, '\n')
+  const rewritten = content !== original.replace(/\r\n/g, '\n').replace(/\n*$/, '\n')
 
-  if (dryRun) {
-    return { ok: true, waves, planPath, dryRun: true, waveBlock, tableRowsUpdated: updated, tableRowsSkipped: skipped }
+  if (dryRun || mode === 'proposal') {
+    return { ok: true, waves, planPath, dryRun: true, waveBlock, tableRowsUpdated: updated, tableRowsSkipped: skipped,
+      planMdDraft: content, rewritten }
   }
 
   writeFileSync(planPath, content, 'utf8')
@@ -122,5 +129,6 @@ export function adoptPlanWaves({ changeDir, dryRun = false }) {
   } catch (e) {
     postcheck = { errors: [`复跑校验异常: ${e?.message || e}`], warnings: [] }
   }
-  return { ok: true, waves, planPath, dryRun: false, waveBlock, tableRowsUpdated: updated, tableRowsSkipped: skipped, postcheck }
+  return { ok: true, waves, planPath, dryRun: false, waveBlock, tableRowsUpdated: updated, tableRowsSkipped: skipped,
+    rewritten, postcheck }
 }

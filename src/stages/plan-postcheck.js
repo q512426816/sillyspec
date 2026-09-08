@@ -1425,6 +1425,103 @@ export async function generatePlanModuleImpactFirstVersion(changeDir, cwd, specR
 }
 
 /**
+ * Wave 提案验证（2026-09-09-plan-derived FR-01，提案-验证-落盘三段式的验证段）：
+ * ①蓝图一致性（validateBlueprintConsistency 经 opts.waves 注入提案分组——读侧注入不改 plan.md）
+ * ②逐 Wave allowed_paths 两两交集（topo 只看依赖看不见文件重叠；合并手工安全串行可能收敛出
+ * 同 Wave 共享路径冲突——提案必须比它要替换的违规布局更干净才可落盘）。
+ * @returns {string[]} 冲突明细（空数组 = 提案干净可写）
+ */
+function validateWaveProposal(changeDir, waves, repoRegistry = null) {
+  const conflicts = []
+  try {
+    const consistency = validateBlueprintConsistency(changeDir, { repoRegistry, waves })
+    for (const e of consistency.errors || []) conflicts.push(`蓝图一致性：${e}`)
+  } catch (e) {
+    conflicts.push(`蓝图一致性复跑异常：${e?.message || e}`)
+  }
+  // 逐 Wave allowed_paths 两两交集
+  try {
+    const tasksDir = pJoin(changeDir, 'tasks')
+    if (existsSync(tasksDir)) {
+      for (const taskFiles of (waves || [])) {
+        const pathsPerTask = []
+        for (const tf of taskFiles) {
+          const card = readFileSync(pJoin(tasksDir, `${tf}.md`), 'utf8')
+          pathsPerTask.push(new Set(parseAllowedPaths(card)))
+        }
+        for (let i = 0; i < pathsPerTask.length; i++) {
+          for (let j = i + 1; j < pathsPerTask.length; j++) {
+            const overlap = [...pathsPerTask[i]].filter(x => pathsPerTask[j].has(x))
+            if (overlap.length > 0) conflicts.push(`同 Wave ${taskFiles[i]} × ${taskFiles[j]} 共享路径：${overlap.slice(0, 3).join('、')}`)
+          }
+        }
+      }
+    }
+  } catch { /* 卡片读取失败按无重叠证据 → 冲突留一致性段兜底 */ }
+  return conflicts
+}
+
+/** plan_level 客观复核阈值单点（2026-09-09-plan-derived FR-03，D-003@v1） */
+const PLAN_LEVEL_SIGNALS = { files: 8, modules: 2 }
+
+/**
+ * plan_level 第二把尺子（不接管，仅 warning）：design 文件清单数 / 模块跨度 / task 数
+ * 与声明档位比对。fail-open（design/map 读取失败 → null 零输出）。
+ * @returns {string|null} warning 文案
+ */
+async function reviewPlanLevelSignal(changeDir, planLevel) {
+  try {
+    const designPath = pJoin(changeDir, 'design.md')
+    if (!existsSync(designPath) || !planLevel) return null
+    const { byRepo } = parseDesignCoverageByRepo(designPath)
+    const fileList = [...(byRepo.get('main') || [])]
+    // 模块跨度：module-map 前缀命中去重（未命中文件不计——防新模块假信号）。
+    // map 来源 = parseModuleMapPaths（module-impact.js 同款扫描 docs/<p>/modules/_module-map.yaml，
+    // 免 project 名——loadModuleMap(specRoot, null) 会因第二参 null 短路恒返 null，勿用）。
+    let moduleIds = new Set()
+    try {
+      const { parseModuleMapPaths } = await import('../module-impact.js')
+      const specRoot = pJoin(changeDir, '..', '..')
+      let mapText = null
+      try {
+        for (const d of readdirSync(pJoin(specRoot, 'docs'), { withFileTypes: true })) {
+          if (!d.isDirectory()) continue
+          const cand = pJoin(specRoot, 'docs', d.name, 'modules', '_module-map.yaml')
+          if (existsSync(cand)) { mapText = readFileSync(cand, 'utf8'); break }
+        }
+      } catch { /* 无 docs/ → 只用文件数信号 */ }
+      if (mapText) {
+        const prefixMap = parseModuleMapPaths(mapText)
+        for (const f of fileList) {
+          const hit = deriveModuleIdFor(f, prefixMap)
+          if (hit) moduleIds.add(hit)
+        }
+      }
+    } catch { /* map 不可得 → 只用文件数信号 */ }
+    const tasksDir = pJoin(changeDir, 'tasks')
+    const taskCount = existsSync(tasksDir) ? readdirSync(tasksDir).filter(f => /^task-\d+\.md$/.test(f)).length : 0
+    const big = fileList.length > PLAN_LEVEL_SIGNALS.files || moduleIds.size > PLAN_LEVEL_SIGNALS.modules
+    const small = fileList.length <= 2 && moduleIds.size <= 1
+    if (planLevel !== 'full' && big) {
+      return `plan_level 声明 ${planLevel} 但客观规模信号偏大（design 清单 ${fileList.length} 文件 / ${moduleIds.size} 模块 / ${taskCount} task）——若确属轻量请在 plan.md 附一行理由，否则建议 full（tier=independent 独立审查）`
+    }
+    if (planLevel === 'full' && small && taskCount <= 2) {
+      return `plan_level 声明 full 但信号偏小（${fileList.length} 文件 / ${moduleIds.size} 模块）——可考虑降档 light/none 省审查仪式（advisory）`
+    }
+    return null
+  } catch { return null }
+}
+function deriveModuleIdFor(filePath, mapYaml) {
+  const posix = String(filePath).replace(/\\/g, '/')
+  for (const [id, paths] of mapYaml) {
+    for (const p of paths) {
+      if (p.endsWith('/') ? posix.startsWith(p) : (posix === p || posix.startsWith(p + '/'))) return id
+    }
+  }
+  return null
+}
+
+/**
  * Plan postcheck 主函数：Wave 重排 + 一致性校验 + 产物确认
  *
  * @param {{ cwd: string, specRoot?: string, resolveChangeDir: Function, progress?: object }} context
@@ -1579,6 +1676,16 @@ export async function executePlanPostcheck(context) {
   }
   printSectionWarnings('target_files 声明', targetFiles.warnings)
 
+  // ── 1g. plan_level 客观复核（第二把尺子，warning 不阻断——2026-09-09-plan-derived FR-03）──
+  try {
+    const planFm = readFileSync(pJoin(changeDir, 'plan.md'), 'utf8').match(/^plan_level:\s*(\w+)/m)
+    if (planFm) {
+      const levelWarn = await reviewPlanLevelSignal(changeDir, planFm[1])
+      if (levelWarn) console.warn(`
+  ⚠️  ${levelWarn}`)
+    }
+  } catch { /* fail-open */ }
+
   // ── 聚合输出：一轮 --done 暴露全部失败项（坑6③）──
   if (failures.length > 0) {
     console.error(`\n❌ plan postcheck 失败（${failures.length} 类问题，已全部列出——一次修复后重跑，无需逐个迭代）：`)
@@ -1660,10 +1767,35 @@ export async function executePlanPostcheck(context) {
             }
           }
           if (directionViolations.length > 0) {
-            console.error(`\n❌ Wave 依赖方向违规（${directionViolations.length} 处）：`)
-            for (const v of directionViolations) console.error(`   ${v}`)
-            console.error('   解法：sillyspec plan-adopt-waves --change <变更名> 一键按 depends_on 拓扑重排 plan.md Wave 段，或手动调整分组')
-            throw new Error('planPostcheck: Wave 依赖方向违规（depends_on 同 Wave / 后置 Wave）——' + directionViolations.join('；'))
+            // ── 2026-09-09-plan-derived FR-01：违规自动修复（提案-验证-落盘三段式）──
+            // 拓扑布局方向必然合法 → 产提案（不落盘）→ 双验证（蓝图一致性含 repoRegistry +
+            // 逐 Wave allowed_paths 两两交集——topo 只看依赖看不见文件重叠）→ 干净才写。
+            // 不干净保留手排原文照旧 throw（真冲突需人裁决：拆 Wave 或补 depends_on）。
+            // 提案任何异常回落原 throw 路径（零新阻断面）。
+            try {
+              const { adoptPlanWaves } = await import('../plan-adopt-waves.js')
+              const proposal = adoptPlanWaves({ changeDir, mode: 'proposal' })
+              const conflicts = validateWaveProposal(changeDir, proposal.waves, repoRegistry)
+              if (proposal.ok && proposal.rewritten && conflicts.length === 0) {
+                writeFileSync(planPath, proposal.planMdDraft, 'utf8')
+                console.log(`\n  🔧 Wave 依赖方向违规已按 depends_on 拓扑自动修复（${directionViolations.length} 处违规 → ${proposal.waves.length} 段重排，W 列同步 ${proposal.tableRowsUpdated} 行）：`)
+                for (const v of directionViolations) console.log(`     · ${v}`)
+                console.log('     提案验证通过（蓝图一致性 + 同 Wave 文件面无交集）；原文未被采纳的手工分组已按拓扑归一')
+              } else {
+                console.error(`\n❌ Wave 依赖方向违规（${directionViolations.length} 处），拓扑提案不可自动采纳（${!proposal.ok ? proposal.error : conflicts.length > 0 ? '同 Wave 文件面重叠' : '提案与现状等价'}）：`)
+                for (const v of directionViolations) console.error(`   ${v}`)
+                if (conflicts.length > 0) for (const c of conflicts) console.error(`   · 提案冲突：${c}`)
+                console.error('   解法：把共享文件的任务拆到不同 Wave，或补 depends_on 使拓扑合法；sillyspec plan-adopt-waves 可预览拓扑分组')
+                throw new Error('planPostcheck: Wave 依赖方向违规（depends_on 同 Wave / 后置 Wave）——' + directionViolations.join('；'))
+              }
+            } catch (e) {
+              if (e && e.message && e.message.startsWith('planPostcheck:')) throw e
+              // 提案链路异常 → 回落原硬拦（零新阻断面）
+              console.error(`\n❌ Wave 依赖方向违规（${directionViolations.length} 处，自动修复提案链路异常：${e?.message || e}）：`)
+              for (const v of directionViolations) console.error(`   ${v}`)
+              console.error('   解法：sillyspec plan-adopt-waves --change <变更名> 一键按 depends_on 拓扑重排 plan.md Wave 段，或手动调整分组')
+              throw new Error('planPostcheck: Wave 依赖方向违规（depends_on 同 Wave / 后置 Wave）——' + directionViolations.join('；'))
+            }
           }
 
           const sameStructure = waves.length === existingWaves.length &&
@@ -1675,10 +1807,9 @@ export async function executePlanPostcheck(context) {
 
           if (sameStructure) {
             console.log('  ✅ Wave 分组与拓扑排序一致，无需更新 plan.md')
-          } else {
-            console.log('  ⚠️  Wave 分组与拓扑排序不一致（依赖方向已校验合法——手工比拓扑更细的串行化是安全做法，可保持现状）')
-            console.log('     标准分组见上方 📊；如需对齐：sillyspec plan-adopt-waves --change <变更名>（重排 plan.md Wave 段并同步任务总表 W 列）')
           }
+          // 结构不一致但方向合法（手工保守串行）→ 静默放行（2026-09-09-plan-derived：
+          // 合法安全模式消每轮提示噪音；手动对齐出口保留 sillyspec plan-adopt-waves）
         }
       }
     }

@@ -32,3 +32,4 @@
 - 2026-09-07-ir-stage-p3b | IR P3b：verify.js Step7 prompt 增两条纪律（预填探针段禁篡改——gate 重跑对比正文不符即拦；verify-facts.json 机器底稿禁手改）。
 - 2026-09-07-ir-stage-p3c | IR P3c：brainstorm.js 模块域指引补 NEW:写法（冒号后不加空格，核验豁免+落地后补录）；Step6 操作 2 卸责 design-init（骨架预填决策追踪表，手写路径保留）。
 - 2026-09-08-ir-verify-facts | verify.js step2/step7 槽位指引（证据账硬门口径 + 回执四字段）+ docs/prompt 镜像
+- 2026-09-09-plan-derived | Wave 违规自动修复（提案-验证-落盘）+ 合法串行静默 + plan_level 复核 warn；plan.js 审查清单补说明
