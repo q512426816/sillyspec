@@ -96,13 +96,13 @@ const SLOW_TEST_TIMEOUT_MS = {
   'worktree-has-unapplied-changes.test.mjs': 360_000,
 }
 
-async function runOne(fullPath) {
+async function runOne(fullPath, { env = childEnv } = {}) {
   const file = relative(testDir, fullPath)
   const t0 = performance.now()
   try {
     const { stdout, stderr } = await execFileP(process.execPath, [fullPath], {
       cwd: testDir,
-      env: childEnv,
+      env,
       timeout: SLOW_TEST_TIMEOUT_MS[file] ?? 120_000,
       encoding: 'utf8',
       maxBuffer: 10 * 1024 * 1024
@@ -155,6 +155,34 @@ async function runAll() {
 
 const totalT0 = performance.now()
 await runAll()
+
+// ── 并发 flaky 复核：失败文件串行重跑一轮再定性（2026-09-09，轮次经济学 §7-1）──
+// 本机并发 12 下有一组子进程/git/tmpdir 竞态敏感文件（worktree/quick/platform 族）满载
+// 假红、单跑全过——失败清单常红会让真红被习惯性忽略（2026-09-08-ir-verify-facts 期间
+// verify-probes 的真 bug 正是混在 flaky 清单里靠单跑分离的）。重跑语义：串行（无 I/O
+// 争用）原样重跑；通过 → 计入 flaky 复核通过（exit 视为过，报告单列）；仍失败 → 真失败。
+// SILLYSPEC_TEST_RETRY_FLAKY=0 可关（排查竞态时想看满载原始失败态用）。
+const FLAKY_RETRY_DISABLED = process.env.SILLYSPEC_TEST_RETRY_FLAKY === '0'
+const flakyPassed = []
+if (failures.length > 0 && !FLAKY_RETRY_DISABLED) {
+  console.log(`\n🔁 并发失败文件串行复核（${failures.length} 个，满载竞态假红甄别）…`)
+  const prevFailures = [...failures]
+  failures.length = 0
+  for (const file of prevFailures) {
+    const beforeFailed = failed
+    // 单跑口径：真实 HOME/TEMP（非套件隔离 childEnv）——与人工「单跑复核」判定同口径；
+    // 套件隔离环境（HOME=套件临时 home）本身会令一组 HOME/指针敏感文件假红（会话前既有）
+    await runOne(join(testDir, file), { env: process.env })
+    if (failed === beforeFailed) {
+      // 重跑通过：净效果 = 该文件并发轮的 failed 转 passed（runOne 已 passed++，补 failed--）
+      failed--
+      flakyPassed.push(file)
+    } else {
+      // 重跑仍失败：runOne 又计了一次 failed，回退一次保持「每文件至多计 1」
+      failed--
+    }
+  }
+}
 const totalMs = Math.round(performance.now() - totalT0)
 
 // 按原始顺序排序 timings 后再打印汇总
