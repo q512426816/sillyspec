@@ -107,19 +107,24 @@ export function resolvePromptIncludes(text) {
 export function resolveSpecDir(cwd, opts = {}) {
   if (opts.specDir) return resolve(opts.specDir)
   const home = os.homedir()
-  let dir = resolve(cwd)
+  const origin = resolve(cwd)
+  const originBelowHome = origin.startsWith(home + sep) // 严格子目录，不含 home 自身
+  let dir = origin
+  let passedHome = false
   while (true) {
-    // home 拒绝守卫：cwd 本身就在 home 下（含恰好在 home 跑命令）时，home 层不匹配 .sillyspec，
-    // 继续向上只会离项目更远（home 的父目录不可能有真项目 .sillyspec），直接回退 cwd/.sillyspec。
-    if (dir !== home) {
+    // home 拒绝守卫：起点在 home 子树内时，home 层不检查 .sillyspec，
+    // 防止 home 子目录遍历经过 home 误命中 ~/.sillyspec；
+    // passedHome：经过 home 后不再检查（覆盖遍历到真实 home 的场景）。
+    if (!(passedHome || (dir === home && originBelowHome))) {
       const candidate = join(dir, '.sillyspec')
       if (existsSync(candidate)) return candidate
     }
+    if (dir === home) passedHome = true
     const parent = dirname(dir)
     if (parent === dir) break
     dir = parent
   }
-  return join(resolve(cwd), '.sillyspec')
+  return join(origin, '.sillyspec')
 }
 
 /**

@@ -10,11 +10,11 @@
  * 5. 外置 linked worktree（用户手动 git worktree add 到任意位置）→ git common-dir 兜底命中主仓。
  * 6. CLI 集成：cat / cat --json / 未找到退出码 / worktree cwd 下解析到主仓。
  */
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'fs'
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync, renameSync, existsSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { execFileSync } from 'child_process'
-import { tmpdir } from 'os'
+import { tmpdir, homedir } from 'os'
 
 import { resolveLocalYaml } from '../src/config-cat.js'
 import { pathEq } from './_path-eq.mjs'
@@ -32,6 +32,16 @@ function assert(condition, msg) {
 
 function sh(args, cwd) {
   return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+}
+
+// ── 隔离：临时备份真实 home 的 .sillyspec/local.yaml，防止污染测试 ──
+const homeSpecDir = join(homedir(), '.sillyspec')
+const homeLocalYaml = join(homeSpecDir, 'local.yaml')
+const homeLocalYamlBak = homeLocalYaml + '.test-bak'
+let hadHomeLocalYaml = false
+if (existsSync(homeLocalYaml)) {
+  hadHomeLocalYaml = true
+  try { renameSync(homeLocalYaml, homeLocalYamlBak) } catch {}
 }
 
 // ── fixture：真实 git 仓 + 主仓 .sillyspec/local.yaml + 两种布局的 linked worktree ──
@@ -142,6 +152,10 @@ try {
     assert(r.out.includes('.sillyspec'), '提示含 .sillyspec 指路')
   }
 } finally {
+  // 恢复真实 home 的 local.yaml
+  if (hadHomeLocalYaml && existsSync(homeLocalYamlBak)) {
+    try { renameSync(homeLocalYamlBak, homeLocalYaml) } catch {}
+  }
   // git worktree 持有主仓 .git 锁文件句柄，Windows 下先 prune 释放再删
   try { sh(['worktree', 'remove', '--force', join(base, 'external-wt')], main) } catch {}
   try { sh(['worktree', 'remove', '--force', join(main, '.sillyspec', '.runtime', 'worktrees', 'demo-change')], main) } catch {}
