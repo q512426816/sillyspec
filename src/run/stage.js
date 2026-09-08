@@ -544,6 +544,13 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
         await executeScanFinalize(cwd, platformOpts)
       } else if (cliAction === 'planPostcheck') {
         await executePlanPostcheck(cwd, platformOpts, progress)
+      } else if (cliAction === 'doctorRunDiagnostics') {
+        // 2026-09-09-doctor-noai FR-01：doctor 阶段折叠——noAI 步跑全量诊断
+        // （八维 + 三新 detector）+ renderDoctorSummary 渲染 + doctor-diagnosis.json 落盘
+        const { runDoctorDiagnostics, renderDoctorSummary, writeDoctorDiagnosis } = await import('../doctor-diagnostics.js')
+        const diag = await runDoctorDiagnostics({ cwd })
+        console.log(renderDoctorSummary(diag))
+        try { writeDoctorDiagnosis(diag, (platformOpts?.specRoot || join(cwd, '.sillyspec'))) } catch { /* 落盘 fail-soft */ }
       } else if (cliAction === 'progressConfirm') {
         // 主流程 step1「进度确认」noAI 化（2026-09-07）：brainstorm/execute/verify——
         // 快照本就 CLI 注入、阶段路由已由 run 落定，省一轮「复述摘要→--done」往返

@@ -1,0 +1,57 @@
+---
+id: task-03
+title: '测试收口 + 文档'
+title_zh: '测试收口 + 文档'
+author: 'qinyi'
+created_at: 2026-09-09 05:28:58
+priority: P1
+depends_on: ['task-02']
+blocks: []
+requirement_ids: [FR-03]
+decision_ids: [D-003@v1]
+allowed_paths:
+  - test/doctor-noai-fold.test.mjs
+  - docs/prompt/doctor.md
+  - docs/prompt/_extracted.json
+  - .sillyspec/docs/sillyspec/modules/stages.md
+  - .sillyspec/docs/sillyspec/modules/stages.changelog.md
+  - .sillyspec/docs/sillyspec/modules/core-engine.md
+  - .sillyspec/docs/sillyspec/modules/core-engine.changelog.md
+  - docs/sillyspec/file-lifecycle.md
+target_files:
+  - docs/prompt/doctor.md
+  - docs/prompt/doctor.md
+  - docs/prompt/_extracted.json
+  - .sillyspec/docs/sillyspec/modules/stages.md
+  - .sillyspec/docs/sillyspec/modules/core-engine.md
+  - docs/sillyspec/file-lifecycle.md
+goal: >
+  结构断言 + 渲染契约锁 + 文档同步。
+implementation:
+  - test/doctor-noai-fold.test.mjs 收口：doctor.js steps 结构断言（step1 _cliAction=doctorRunDactices 且 noAI/无 bash for 循环教学/renderDoctorSummary 关键行锁/顶层改道冒烟）
+  - docs/prompt/doctor.md 镜像（_extract + 手动正文同步）+ _verify exit 0
+  - stages 卡（阶段折叠 6→3）+ core-engine 卡（三 detector/renderDoctorSummary）+ sidecar + file-lifecycle doctor 步骤描述
+acceptance:
+  - steps 结构断言绿/_verify exit 0/卡与 sidecar 齐/npm test doctor 族模块子集绿
+verify:
+  - node --test test/doctor-noai-fold.test.mjs
+  - node docs/prompt/_verify.mjs
+constraints:
+  - 纯文档/prompt/测试层不改判定逻辑
+---
+
+<!-- 骨架由 sillyspec taskcard 生成（LF 行尾 + frontmatter 已闭合 + 硬校验 9 字段齐全）。
+     用 Edit tool 填充上方占位符（allowed_paths/goal/implementation/acceptance/verify/constraints 等），
+     勿用 Write 整文件重写——会引入 CRLF 行尾/漏闭合 ---/漏字段回归。
+     ⚠️ plan --done 硬校验会拦截未替换的占位符（FR-XX / D-XXX / src/example/file.ts /
+     一句话说明这个 task / 具体步骤 1 / 可验证的验收条件 1 / 边界约束 1）——占位符视同缺字段。
+     target_files 格式（可选，对账用精确文件级意图声明，与 allowed_paths 语义不同）：
+                    精确文件路径（仓根相对、正斜杠），当前不存在、将由本 task 新建的文件加
+                    NEW: 前缀（如 NEW:src/foo.js）；禁 glob（src/**）、禁目录前缀（src/dir/）、
+                    禁绝对路径；无明确文件级意图时保留 [] 占位行不动。
+     可选字段按需插进上方 frontmatter（规则见 taskcard-rules）：
+     repo:          仅跨仓 task 填（local.yaml repos: 注册的仓 key；缺省=main。allowed_paths 相对该仓根写，
+                    禁止带仓库名前缀/绝对路径——review 对账按仓根相对路径匹配，带前缀永不命中）
+     provides:      仅当本 task 给其他 task 提供接口/DTO/响应时填
+     expects_from:  仅当本 task 消费其他 task 的契约时填
+     related_tests: 仅当本 task 改动导致既有测试断言失效时填（测试路径须同时进 allowed_paths） -->

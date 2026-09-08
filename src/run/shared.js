@@ -338,6 +338,8 @@ export function resolveQuickSessionsDir(platformOpts, localSpecBase) {
 // GHOST_EMPTY_DIR_STALE_MS 同口径（7 天）——正常并发会话间隔在分钟/小时级，7 天未收尾的
 // 会话按僵尸处理，防崩溃残留的 guard 永久「认领」文件侵蚀危险门。
 const FOREIGN_SESSION_STALE_MS = 7 * 24 * 60 * 60 * 1000
+// 空壳会话点名宽限期：零步骤完成但启动未满此时长的不列（进行中会话的正常起步态）
+const EMPTY_SHELL_GRACE_MS = 10 * 60 * 1000
 
 /**
  * 枚举其他 active quick 会话的显式文件声明（坑 foreign-session-declared-false-block）。
@@ -424,6 +426,9 @@ export function detectEmptyShellQuickSessions(platformOpts, localSpecBase, curre
       if (!guard || !guard.startedAt) continue
       const startedAtMs = Date.parse(guard.startedAt)
       if (!Number.isFinite(startedAtMs) || nowMs - startedAtMs > FOREIGN_SESSION_STALE_MS) continue
+      // 宽限期（2026-09-09 §7-4，会话实证：2 分钟前刚启动的进行中会话被点名疑似空壳）：
+      // 零步骤完成对刚起步的会话是正常态，不满 10 分钟不列（宁可漏报不误报的同款取向）。
+      if (nowMs - startedAtMs < EMPTY_SHELL_GRACE_MS) continue
       try {
         const p = pm.read(cwd, sessionName)
         if (!p || !p.stages) continue

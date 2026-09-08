@@ -93,7 +93,9 @@ export const AUXILIARY_STAGES = Object.freeze([
 // 供 command.js 判断 status/doctor 等查询型辅助阶段执行只读短路（FR-04 / D-005@v2）。
 export const READONLY_AUXILIARY_STAGES = Object.freeze([
   'status',
-  'doctor',
+  // doctor 移出（2026-09-09-doctor-noai D-001@v1）：阶段形态走状态机（noAI 诊断步 +
+  // agent 修复步——只读短路使 _cliAction 不可达）；顶层 sillyspec doctor 命令的只读
+  // 语义由 index.js case 头部拦截保真（--json/--status 先行分流）。
 ])
 
 // ── IR 严格模式闸门（change: 2026-09-07-ir-hardening，D-001@v1）──

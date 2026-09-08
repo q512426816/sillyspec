@@ -124,3 +124,6 @@ core-engine 是 SillySpec 的基础设施层，由三个层次组成：持久化
 ## verify-facts v2（2026-09-08-ir-verify-facts）
 
 verify-facts.json 升 schemaVersion 2：buildVerifyFacts 五段（probes 机器段原样 + conclusion/tests/requiredEvidence/runtimeEvidence/factsConsistency slot-backfill 段）；writeVerifyFacts 分段合并（re-init 保留固化段，P1-5）；--init 骨架增「证据账/集成验证回执」槽段（占位不含枚举词）+ 段落级补齐幂等（R-02）；backfillFactsFromMdAndTests 只固化既有底稿（创建唯一入口 --init——无中生有会误升存量判别）。runVerifyRequiredEvidenceCheck v2 槽优先分类核验（code=存在×mtime×diff 交集 / artifact 豁免 diff；verifyStartAt=execute completed_at，R-05 fallback design created_at；无槽 legacy 子串降级）+ status 扩 blocked；checkIntegrationEvidence v2 回执槽优先（绿判据 log 存在×mtime 窗口×签名扫描噪声剔除×exit 0，literals 降 legacy）；checkProbeConsistency 增 facts 基线对比维度（probe1/6=ERROR、probe3/5=WARNING，probe6 HEAD-advance 豁免防重复报）。消费方：run/gates.js 收尾接线（backfill 先行 → runValidators（context.verifyStartAt）→ test 实测 tests 二次回填 → cannot_verify 硬门 rollback）。
+
+## doctor 三探测器与渲染（2026-09-09-doctor-noai）
+detectWorktreeHealth（复用 WorktreeManager.doctor 薄适配 + sillyspec/* 残留分支对账，锚定主仓根）/detectBuildEnv（engines 前缀比较 + 包管理器推断）/detectMcpEndpoints（项目级 MCP 配置在场，零网络）——全部只读 fail-soft、skipped 带内降级、并入 runDoctorDiagnostics 十一维；renderDoctorSummary（全新契约：逐维 ✅/⚠️/❌+label+findings 截三+safe_actions 提示）供顶层非 --json 命令与 _cliAction 步共用。

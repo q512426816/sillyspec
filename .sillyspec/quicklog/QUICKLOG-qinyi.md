@@ -460,3 +460,27 @@
 状态：已取消
 关联变更：quick-33876a4a
 文件：（见实际改动）
+
+## ql-20260909-001-05ce | 2026-09-09 04:13:26 | §7 债批五项：doctor 悬空声明/quick 会话过滤/空壳宽限/cancel 字段名/autoReanchor 扩展
+状态：已完成
+关联变更：（无）
+文件：
+- src/doctor-diagnostics.js（悬空声明检测）
+- src/quick-recommend.js（会话过滤）
+- src/run/shared.js（空壳宽限 10min）
+- src/run/command.js（cancel 字段名修复）
+- src/run/gates.js（verify 收尾 autoReanchor）
+- test/quick-recommend-filter.test.mjs（新建 2 用例）
+需求：§7 债批五项：doctor 悬空声明/quick 会话过滤/空壳宽限/cancel 字段名/autoReanchor 扩展
+根因：轮次经济学 §7 实施期新发现——dogfood 实证的五个小缺陷（含一个真 bug：--cancel 读 .qlId 但 guard 写 .quicklogId 恒 undefined）
+方案：①doctor 悬空声明检测：decl.specRoot 不存在 → 点名 disconnect 前置；②quick-recommend 过滤 quick-<hex8> 会话；③空壳探测 10 分钟宽限期；④--cancel 读 quicklogId 字段名修复；⑤autoReanchorDocRefs 挂 verify 收尾（md 来自 diff 三源，覆盖 archive 漂移面）
+结果：quick-recommend-filter 2/2；doctor-diagnostics/quick-linked-guard 回归绿；lint 全过；test 门禁实测见输出
+
+## ql-20260909-002-9920 | 2026-09-09 05:41:53 | 修 multi-agent-platform 实证的 verify --done target_files 对账误拦——当前变更声明并真实修改的共享文件被 fo…
+状态：已完成
+关联变更：（无）
+文件：src/foreign-declared.js, test/foreign-own-priority.test.mjs（新建）, docs/sillyspec/platform-interface-map.md（docs check --fix 重锚 5 处）, .sillyspec/docs/sillyspec/modules/core-engine.md, .sillyspec/docs/sillyspec/modules/core-engine.changelog.md
+需求：修 multi-agent-platform 实证的 verify --done target_files 对账误拦——当前变更声明并真实修改的共享文件被 foreign 排除剔除后判「声明未做」假红
+根因：splitOwnVsForeignDiffFiles 先查 foreignMap 再归 own，文件双方都声明时判 foreign（own 优先缺失）；叠加 collectForeignDeclaredFiles ② 段只看变更目录在不看进度库活性——未归档旧变更的陈旧 design 声明长期占位，其活性又被本变更自己的 dirty 反向喂活。缺陷文档 docs/sillyspec/verify-reconcile-own-file-foreign-false-positive.md（用户仓）三档建议中的 A
+方案：splitOwnVsForeignDiffFiles 改 own 优先——新增 loadOwnDeclaredSet（quick 会话 = guard.allowedFiles；变更 = design §6 ∪ task allowed_paths ∪ target_files），own 集内文件永不判 foreign；仅他者声明的在途文件照旧剔除（语义不放松）；own 集读不出时空集退回旧行为。修在切分函数内，verify-postcheck ×2 / verify-probes / contract-matrix 四消费点自动受益
+结果：新增 test/foreign-own-priority.test.mjs 10 断言全绿（用户场景端到端复现：双声明文件归 own + reconcile 不再 missing_declared 阻断；own 三源 design/allowed_paths/quick guard 各自生效；无 own 声明退回旧行为零回归）；既有 foreign-declared-stale-liveness / quick-foreign-session-declared / verify-concurrency-fixes 零回归；全量 npm test 389 过 0 失败；lint 508 文件 0 告警；docs check 5 处行号漂移 --fix 自愈后 0 失效

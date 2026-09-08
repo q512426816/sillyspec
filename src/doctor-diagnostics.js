@@ -25,7 +25,8 @@
 import { openDatabase, pluckGet, pluckAll } from './db-engine.js';
 import { safeGit } from './git-helper.js';
 import { existsSync, statSync, readFileSync, readdirSync, mkdirSync, writeFileSync, unlinkSync, rmSync } from 'fs';
-import { join } from 'path';
+import { join, relative, resolve, dirname } from 'path';
+import { gitQuiet } from './git-helper.js'
 import jsYaml from 'js-yaml';
 import { pruneTimestampedEntries } from './runtime-hygiene.js';
 import { CHECK_SEVERITY } from './constants.js';
@@ -242,15 +243,18 @@ function detectPointerHealth(pointer, cwd = null) {
     if (cwd) {
       const decl = checkPlatformManaged(cwd);
       if (decl) {
+        // 悬空声明检测（2026-09-09 §7-2，会话实证：.sillyspec-platform-managed 指向已删除的
+        // tmp 目录会挡住一切 CLI 命令）：声明 specRoot 不存在 = 平台会话已死/测试残留——
+        // disconnect 是唯一正解，点名前置（防用户对着死路径反复重建指针）。
+        const declDead = !!decl.specRoot && !existsSync(decl.specRoot)
         return {
           name: 'pointer_health',
           label: '平台指针健康',
           pass: false,
           severity: CHECK_SEVERITY.WARNING,
           findings: [
-            `pointer_missing_but_managed: 平台接管声明存在但恢复指针缺失（原 specRoot: ${decl.specRoot || '(未记录)'}）——` +
-            `裸调命令将 fail-closed 拒绝静默落本地。恢复：① 重跑平台 scan/init（带 --spec-root）重建指针；` +
-            `② sillyspec platform disconnect（删除接管声明，彻底脱离平台）；③ 显式 --spec-dir <路径> 临时指定。`,
+            `pointer_missing_but_managed: 平台接管声明存在但恢复指针缺失（原 specRoot: ${decl.specRoot || '(未记录)'}${declDead ? '——⚠️ 该路径已不存在（平台会话已死/测试残留），重建指针无意义' : ''}）——` +
+            `裸调命令将 fail-closed 拒绝静默落本地。恢复：${declDead ? '建议直接 sillyspec platform disconnect（删除接管声明，脱离平台后走本地库）；' : '① 重跑平台 scan/init（带 --spec-root）重建指针；② sillyspec platform disconnect（删除接管声明，彻底脱离平台）；'}③ 显式 --spec-dir <路径> 临时指定。`,
           ],
           safe_actions: [{ dimension: 'pointer_health', action: 'recreate_pointer', risk: 'confirm_required', rationale: '接管声明存在但指针缺失，需重建指针或显式脱离平台', next_step: '重跑平台 scan（带 --spec-root）或 sillyspec platform disconnect' }],
         };
@@ -741,6 +745,191 @@ export function detectDocBloat(specRoot) {
     ? { ...dim, findings: ['模块卡与知识库体量在软限内'], pass: true, severity: CHECK_SEVERITY.PASSED }
     : { ...dim, pass: false, severity: CHECK_SEVERITY.WARNING };
 }
+// ══ 2026-09-09-doctor-noai：净增三类探测器（只读 fail-soft，skipped 带内降级）══
+
+/**
+ * worktree 健康（FR-02）：复用 WorktreeManager.doctor()（薄适配不重复探测——设计审查附加
+ * gap 修正）+ sillyspec/* 残留分支对账（vs changes/ 活跃目录）。锚定主仓根
+ * .sillyspec/.runtime/worktrees（worktree.js:24——勿用 runtimeRoot，平台模式分离只影响
+ * execute-runs 族）。
+ */
+export function detectWorktreeHealth(cwd) {
+  const base = { name: 'worktree_health', label: 'worktree 隔离健康', safe_actions: [] }
+  try {
+    const { WorktreeManager } = require_wtm()
+    const wm = new WorktreeManager(cwd)
+    const r = wm.doctor(cwd)
+    const findings = []
+    for (const iss of r.issues || []) findings.push(`worktree: ${typeof iss === 'string' ? iss : JSON.stringify(iss)}`)
+    // 残留分支对账（sillyspec/* vs 活跃变更目录）
+    try {
+      const branches = gitQuiet(cwd, ['branch', '--list', 'sillyspec/*']) || ''
+      const activeDirs = new Set()
+      // 活跃变更目录锚定主仓根（审查 B-01：worktree 内 cwd/.sillyspec/changes 只含 archive——
+      // 活跃变更不入 git；git common-dir 反推主仓根，失败回退 cwd）
+      let mainRoot = cwd
+      try {
+        const commonDir = gitQuiet(cwd, ['rev-parse', '--git-common-dir'])
+        if (commonDir) mainRoot = resolve(dirname(resolve(cwd, String(commonDir).trim())))
+      } catch { /* 回退 cwd */ }
+      const changesDir = join(mainRoot, '.sillyspec', 'changes')
+      if (existsSync(changesDir)) {
+        for (const d of readdirSync(changesDir)) {
+          if (!d.startsWith('archive')) activeDirs.add(d)
+        }
+      }
+      for (const line of branches.split('\n')) {
+        // 剥 */+ 两前缀（审查 B-01：+ 是 worktree checkout 中标记，未剥致分支名与删除命令双重语法坏）
+        const b = line.trim().replace(/^[*+][ ]*/, '').replace(/^sillyspec\//, '')
+        if (b && !activeDirs.has(b)) findings.push(`残留分支 sillyspec/${b}（变更已归档/删除）——git branch -d sillyspec/${b} 或 sillyspec worktree cleanup`)
+      }
+    } catch { /* 分支读失败跳过该子项 */ }
+    return findings.length === 0
+      ? { ...base, findings: ['worktree 与会话目录健康'], pass: true, severity: CHECK_SEVERITY.PASSED }
+      : { ...base, findings, pass: false, severity: CHECK_SEVERITY.WARNING }
+  } catch (e) {
+    return { ...base, findings: [`探测降级（git 不可用或非仓库：${e?.message || e}）——skipped`], pass: true, severity: null, skipped: true }
+  }
+}
+
+/**
+ * 构建环境（FR-02）：node 版本 vs package.json engines.node（^/>=/= 前缀简化比较，
+ * 复杂区间 unknown 不判红）+ 包管理器存在性。无 package.json → skipped 注记。
+ */
+export function detectBuildEnv(cwd) {
+  const base = { name: 'build_env', label: '构建环境', safe_actions: [] }
+  try {
+    const pkgPath = join(cwd, 'package.json')
+    if (!existsSync(pkgPath)) return { ...base, findings: ['无 package.json（非 Node 项目）——skipped'], pass: true, severity: null, skipped: true }
+    const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'))
+    const findings = []
+    const want = pkg.engines && pkg.engines.node
+    if (want) {
+      const cur = process.version.replace(/^v/, '')
+      const m = String(want).match(/^(\^|>=|=)?\s*(\d+)\.?(\d+)?\.?(\d+)?/)
+      if (m) {
+        const [_, op, a, b, c] = m
+        const w = [Number(a), Number(b || 0), Number(c || 0)]
+        const cu = cur.split('.').map(Number)
+        const ge = cu[0] > w[0] || (cu[0] === w[0] && (cu[1] > w[1] || (cu[1] === w[1] && cu[2] >= w[2])))
+        const ok = op === '^' ? (cu[0] === w[0] && ge) : ge
+        if (!ok) findings.push(`node ${process.version} 不满足 engines.node ${want}`)
+      } else {
+        findings.push(`engines.node 区间复杂（${want}）——unknown 不判红`)
+      }
+    }
+    // 包管理器
+    const pm = (pkg.packageManager || '').split('@')[0]
+      || (existsSync(join(cwd, 'pnpm-lock.yaml')) ? 'pnpm' : existsSync(join(cwd, 'yarn.lock')) ? 'yarn' : 'npm')
+    findings.push(`node ${process.version} / 包管理器 ${pm}${pkg.packageManager ? `（packageManager 锁定）` : '（lockfile 推断）'}`)
+    return findings.some(f => f.includes('不满足'))
+      ? { ...base, findings, pass: false, severity: CHECK_SEVERITY.WARNING }
+      : { ...base, findings, pass: true, severity: CHECK_SEVERITY.PASSED }
+  } catch (e) {
+    return { ...base, findings: [`探测降级（${e?.message || e}）——skipped`], pass: true, severity: null, skipped: true }
+  }
+}
+
+/**
+ * MCP 端点配置在场性（FR-02）：项目级 .mcp.json / .cursor/mcp.json 查 Context7/grep.app
+ * 键——零网络请求。无配置 → skipped 注记（不判红——MCP 是可选增强）。
+ */
+export function detectMcpEndpoints(cwd) {
+  const base = { name: 'mcp_endpoints', label: 'MCP 端点配置', safe_actions: [] }
+  try {
+    const candidates = [join(cwd, '.mcp.json'), join(cwd, '.cursor', 'mcp.json')]
+    const found = candidates.find(p => existsSync(p))
+    if (!found) return { ...base, findings: ['无项目级 MCP 配置（.mcp.json/.cursor/mcp.json）——可选增强，skipped'], pass: true, severity: null, skipped: true }
+    const text = readFileSync(found, 'utf8')
+    const findings = [`配置文件：${relative(cwd, found)}`]
+    for (const key of ['context7', 'grep.app', 'grepapp']) {
+      if (text.toLowerCase().includes(key)) findings.push(`${key} 端点已配置 ✅`)
+    }
+    return { ...base, findings, pass: true, severity: CHECK_SEVERITY.PASSED }
+  } catch (e) {
+    return { ...base, findings: [`探测降级（${e?.message || e}）——skipped`], pass: true, severity: null, skipped: true }
+  }
+}
+
+/**
+ * 模块文档健康（2026-09-09-doctor-noai 审查 B-02 补维，FR-01 step1 承诺）：
+ * _module-map.yaml 的 needs_review=true 清单（卡缺失/精确校验归 modules rebuild/status）。
+ * 只读 fail-soft。
+ */
+export function detectModuleDocHealth(cwd) {
+  const base = { name: 'module_doc_health', label: '模块文档健康', safe_actions: [] }
+  try {
+    let mapText = null
+    const docsDir = join(cwd, '.sillyspec', 'docs')
+    if (existsSync(docsDir)) {
+      for (const d of readdirSync(docsDir)) {
+        const cand = join(docsDir, d, 'modules', '_module-map.yaml')
+        if (existsSync(cand)) { mapText = readFileSync(cand, 'utf8'); break }
+      }
+    }
+    if (!mapText) return { ...base, findings: ['无 _module-map.yaml（未 scan）——skipped'], pass: true, severity: null, skipped: true }
+    const findings = []
+    // needs_review 清单（模块块内 needs_review: true）
+    const blocks = mapText.split(/\n(?=  \\w)/)
+    for (const blk of blocks) {
+      const idM = blk.match(/^  ([\w.-]+):/)
+      if (idM && /needs_review:\s*true/.test(blk)) {
+        const reasons = (blk.match(/review_reasons:\s*\[([^\]]*)\]/) || [])[1] || ''
+        findings.push(`${idM[1]} needs_review=true${reasons ? `（${reasons.trim()}）` : ''}——按卡指引复核`)
+      }
+    }
+    return findings.length === 0
+      ? { ...base, findings: ['模块卡 needs_review 清零'], pass: true, severity: CHECK_SEVERITY.PASSED }
+      : { ...base, findings, pass: false, severity: CHECK_SEVERITY.WARNING }
+  } catch (e) {
+    return { ...base, findings: [`探测降级（${e?.message || e}）——skipped`], pass: true, severity: null, skipped: true }
+  }
+}
+
+/**
+ * 决策版本漂移（审查 B-02 补维）：knowledge/decisions/ 条目计数 + 提示精确复核链归属
+ * （behind 精确计算归 verify evidence-auto / docs-check 决策规则族——此处只做在场概览）。
+ * 只读 fail-soft。
+ */
+export function detectDecisionDrift(cwd) {
+  const base = { name: 'decision_drift', label: '决策版本漂移', safe_actions: [] }
+  try {
+    const decDir = join(cwd, '.sillyspec', 'knowledge', 'decisions')
+    if (!existsSync(decDir)) return { ...base, findings: ['无 knowledge/decisions/——skipped'], pass: true, severity: null, skipped: true }
+    let count = 0
+    for (const f of readdirSync(decDir)) {
+      if (!f.endsWith('.md')) continue
+      count += (readFileSync(join(decDir, f), 'utf8').match(/^## D-\d+@\d+/gm) || []).length
+    }
+    return { ...base, findings: [`decisions 库 ${count} 条（behind 精确复核在 verify evidence-auto 与 docs-check 决策规则族）`], pass: true, severity: CHECK_SEVERITY.PASSED }
+  } catch (e) {
+    return { ...base, findings: [`探测降级（${e?.message || e}）——skipped`], pass: true, severity: null, skipped: true }
+  }
+}
+
+/**
+ * renderDoctorSummary（FR-01，全新输出契约——2026-09-09-doctor-noai）：逐维
+ * ✅/⚠️/❌ + label + findings 首行 + safe_actions 提示行。顶层非 --json 命令与
+ * _cliAction 步共用。
+ */
+export function renderDoctorSummary(diagnostics) {
+  const L = ['🩺 SillySpec 项目自检诊断', '']
+  for (const d of (diagnostics.dimensions || [])) {
+    if (!d || !d.name) continue
+    const icon = d.pass === false && d.severity === CHECK_SEVERITY.FAILED ? '❌' : d.pass === false ? '⚠️' : '✅'
+    L.push(`${icon} ${d.label || d.name}`)
+    for (const f of (d.findings || []).slice(0, 3)) L.push(`   · ${f}`)
+    if ((d.findings || []).length > 3) L.push(`   · …还有 ${d.findings.length - 3} 条`)
+    for (const a of (d.safe_actions || []).slice(0, 2)) L.push(`   🔧 ${a.action}：${a.next_step || a.rationale || ''}`)
+  }
+  L.push('')
+  return L.join('\n')
+}
+
+// worktree.js 延迟引用（防环：worktree 不 import doctor-diagnostics）
+import * as _wtm from './worktree.js'
+function require_wtm() { return _wtm }
+
 export async function runDoctorDiagnostics({ cwd }) {
   const pointer = resolvePointer(cwd);
   const multiDb = detectMultiDb(cwd, pointer);
@@ -762,7 +951,10 @@ export async function runDoctorDiagnostics({ cwd }) {
   // P2-2-②：file-lifecycle 文档欠账（git behind 事实计算，治「改了生命周期代码忘同步文档」）
   const lifecycleDoc = detectLifecycleDocStaleness(cwd);
 
-  const dimensions = [multiDb, pointerHealth, changesSplit, changeDb, executeMismatch, docBloat, repoNativeChain, lifecycleDoc];
+  const worktreeHealth = detectWorktreeHealth(cwd)
+  const buildEnv = detectBuildEnv(cwd)
+  const mcpEndpoints = detectMcpEndpoints(cwd)
+  const dimensions = [multiDb, pointerHealth, changesSplit, changeDb, executeMismatch, docBloat, repoNativeChain, lifecycleDoc, worktreeHealth, buildEnv, mcpEndpoints];
 
   return {
     dimensions,

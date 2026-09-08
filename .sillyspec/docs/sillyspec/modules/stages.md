@@ -79,3 +79,6 @@ verify.js step2（Execute Evidence 传递检查）改 v2 硬门口径：结论�
 
 ## Wave 派生化与 plan_level 复核（2026-09-09-plan-derived）
 plan-postcheck section 2 三类分流：依赖方向违规 → 提案-验证-落盘自动修复（adoptPlanWaves proposal 档 + validateWaveProposal：蓝图一致性 opts.waves 注入 + 逐 Wave allowed_paths 交集；干净才写，脏/异常保原文照旧拦）；合法保守串行 → 静默（旧 ⚠️ 提示噪音消）；一致 → ✅。plan_level 客观复核（PLAN_LEVEL_SIGNALS：>8 文件或 >2 模块）warning 不阻断。plan.js 审查清单补自动修复/合法串行说明。
+
+## doctor 阶段折叠（2026-09-09-doctor-noai）
+doctor 阶段 6 步 → 3 步：step1 noAI `_cliAction doctorRunDiagnostics`（runDoctorDiagnostics 全量诊断 + renderDoctorSummary 渲染 + doctor-diagnosis.json 落盘）替换三大 bash 教学步；step2 agent 修复决策与执行（消费报告按 safe_actions 决策，--confirm 写操作独立 flag）；step3 汇总。doctor 移出 READONLY_AUXILIARY_STAGES（constants——只读短路使 _cliAction 不可达的历史误设）；顶层 sillyspec doctor 非 --json 改道直跑诊断渲染（只读零副作用保真）。

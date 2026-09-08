@@ -1986,9 +1986,21 @@ async function main() {
         process.exitCode = output.overall_status === 'pass' ? 0 : 1;
         break;
       }
-      // 否则：保持原有 prompt 驱动的 bash 自检流程
-      const { runCommand } = await import('./run.js');
-      await runCommand([command, ...filteredArgs.slice(1)], doctorEffectiveDir, specDir, { json });
+      // 2026-09-09-doctor-noai：--status 拦截（审查 B-03：等价只读渲染——阶段进度视图，
+      // 零副作用）；非 --json 其余形态改道直跑诊断 + renderDoctorSummary（不走
+      // runCommand/initChange/不刷 lastActive——只读零副作用承诺保真）。
+      if (filteredArgs.includes('--status')) {
+        // 等价只读渲染：复用 progress show（cwd 无活跃变更时提示无——与原只读短路视图同语义级）
+        const pm = new ProgressManager({ specDir: resolvePlatformSpecDir(dir, specDir) });
+        pm.show(doctorEffectiveDir);
+        break;
+      }
+      {
+        const { runDoctorDiagnostics, renderDoctorSummary, writeDoctorDiagnosis } = await import('./doctor-diagnostics.js')
+        const diag = await runDoctorDiagnostics({ cwd: doctorEffectiveDir })
+        console.log(renderDoctorSummary(diag))
+        try { writeDoctorDiagnosis(diag, resolvePlatformSpecDir(dir, specDir) || join(dir, '.sillyspec')) } catch { /* fail-soft */ }
+      }
       break;
     }
     case 'scan': {

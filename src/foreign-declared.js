@@ -14,6 +14,7 @@ import { existsSync, readFileSync, readdirSync } from 'fs'
 import { join } from 'path'
 import { parseFileChangeListDetailed } from './change-list.js'
 import { safeGit, unquoteGitPath } from './git-helper.js'
+import { parseAllowedPaths, parseTargetFiles } from './stages/plan-postcheck.js'
 
 /**
  * 主仓未提交文件集（staged + unstaged + untracked，rename 取新路径）。
@@ -139,7 +140,52 @@ export function collectForeignDeclaredFiles(cwd, currentChangeName, opts = {}) {
 }
 
 /**
+ * 本变更（currentChangeName）的 own 声明集——own 优先判据（坑
+ * verify-reconcile-own-file-foreign-false-positive，2026-09-09 实证）：
+ * quick 会话 = guard.allowedFiles；变更 = design §6 清单 ∪ task 卡 allowed_paths/target_files。
+ * 文件被本变更与他者**双方声明**时归 own：foreign 排除的职责是「他者的工作不混进我的
+ * 判定」，不是「我声明并真实修改的文件因他者（尤其未归档旧变更的陈旧 design 声明）也
+ * 声明过就被剔出我的对账」。读不出来（无 design/无 task 卡/quick guard 损坏）→ 空集
+ * （退回旧 foreign-first 行为，fail-closed 不放大放行面）。
+ * @returns {Set<string>} 正斜杠归一后的声明路径集
+ */
+function loadOwnDeclaredSet(specBase, runtimeRoot, currentChangeName) {
+  const set = new Set()
+  if (!currentChangeName) return set
+  const norm = (p) => String(p || '').replace(/\\/g, '/')
+  const addAll = (paths) => { for (const p of paths) { const n = norm(p); if (n) set.add(n) } }
+  try {
+    if (/^quick-[0-9a-f]{8}$/.test(currentChangeName)) {
+      try {
+        const guard = JSON.parse(readFileSync(join(runtimeRoot, 'quick-sessions', currentChangeName, 'guard.json'), 'utf8'))
+        addAll(Array.isArray(guard?.allowedFiles) ? guard.allowedFiles : [])
+      } catch { /* guard 缺失/损坏 → 空集退回旧行为 */ }
+      return set
+    }
+    const changeDir = join(specBase, 'changes', currentChangeName)
+    try { addAll(parseFileChangeListDetailed(join(changeDir, 'design.md')).map(e => e.path)) } catch {}
+    let taskFiles = []
+    try { taskFiles = readdirSync(join(changeDir, 'tasks')).filter(f => /^task-\d+\.md$/.test(f)) } catch {}
+    for (const tf of taskFiles) {
+      try {
+        const content = readFileSync(join(changeDir, 'tasks', tf), 'utf8')
+        addAll(parseAllowedPaths(content))
+        addAll(parseTargetFiles(content).entries.map(e => e.path))
+      } catch { /* 单卡损坏跳过 */ }
+    }
+  } catch { /* 整体异常 → 空集 */ }
+  return set
+}
+
+/**
  * 按他者声明集切分 diff 文件（collectForeignDeclaredFiles 的消费端快捷封装）。
+ *
+ * own 优先（2026-09-09 坑 verify-reconcile-own-file-foreign-false-positive 修复）：文件在
+ * 本变更 own 声明集（design §6 / task allowed_paths / target_files / quick guard）内时
+ * 永不判 foreign——哪怕他者变更（含未归档旧变更的陈旧声明，其活性被本变更自己的 dirty
+ * 反向喂活）也声明过。双方都声明 = 归属歧义按「自己声明优先」收敛：本变更的 dirty 是
+ * 自己工作的一部分，剔除它只会制造「声明未做」假红。
+ *
  * @param {string} cwd 项目根
  * @param {string|null} currentChangeName 本变更名
  * @param {string[]|null} diffFiles 待切分文件列表（null 透传，保持调用方 null 语义）
@@ -148,12 +194,17 @@ export function collectForeignDeclaredFiles(cwd, currentChangeName, opts = {}) {
  */
 export function splitOwnVsForeignDiffFiles(cwd, currentChangeName, diffFiles, opts = {}) {
   if (!Array.isArray(diffFiles)) return { own: diffFiles, foreign: [] }
-  const foreignMap = collectForeignDeclaredFiles(cwd, currentChangeName, opts)
+  const specBase = opts.specBase || join(cwd, '.sillyspec')
+  const runtimeRoot = opts.runtimeRoot || join(specBase, '.runtime')
+  const foreignMap = collectForeignDeclaredFiles(cwd, currentChangeName, { specBase, runtimeRoot })
   if (foreignMap.size === 0) return { own: diffFiles, foreign: [] }
+  const ownDeclared = loadOwnDeclaredSet(specBase, runtimeRoot, currentChangeName)
   const own = []
   const foreign = []
   for (const f of diffFiles) {
-    const owners = foreignMap.get(String(f).replace(/\\/g, '/'))
+    const n = String(f).replace(/\\/g, '/')
+    if (ownDeclared.size > 0 && ownDeclared.has(n)) { own.push(f); continue } // own 优先
+    const owners = foreignMap.get(n)
     if (owners) foreign.push({ file: f, owners })
     else own.push(f)
   }

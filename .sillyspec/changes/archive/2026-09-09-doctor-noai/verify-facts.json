@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 2,
+  "change": "2026-09-09-doctor-noai",
+  "generatedAt": "2026-09-08T22:02:56.431Z",
+  "probes": {
+    "probe1": {
+      "command": "sillyspec verify-probes --change 2026-09-09-doctor-noai",
+      "metrics": {
+        "matches": 18,
+        "skippedFiles": 1,
+        "worktreeHits": 0,
+        "globEntries": 0
+      }
+    },
+    "probe3": {
+      "command": "sillyspec verify-probes --change 2026-09-09-doctor-noai",
+      "metrics": {
+        "tasks": 3,
+        "hasTest": 3
+      }
+    },
+    "probe5": {
+      "command": "sillyspec verify-probes --change 2026-09-09-doctor-noai",
+      "metrics": {
+        "backendEndpoints": 2,
+        "frontendCalls": 0
+      }
+    },
+    "probe6": {
+      "command": "sillyspec verify-probes --change 2026-09-09-doctor-noai",
+      "metrics": {
+        "deletions": 0,
+        "unavailable": false
+      }
+    }
+  },
+  "conclusion": "PASS",
+  "tests": {
+    "command": "module[cli-core,run-gates]",
+    "exitCode": 0,
+    "strategy": "module-subset",
+    "failedRemaining": [],
+    "passedAt": "2026-09-08T22:04:20.195Z"
+  },
+  "factsConsistency": {
+    "checked": [
+      "probe1",
+      "probe3",
+      "probe5",
+      "probe6"
+    ],
+    "verdict": "match",
+    "detail": null
+  }
+}

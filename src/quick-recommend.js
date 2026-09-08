@@ -84,12 +84,17 @@ export function recommendChanges({
   taskDescription = '',
 }) {
   if (!activeChanges || activeChanges.length === 0) return []
+  // 活跃 quick 会话过滤（2026-09-09 §7-3）：quick-<hex8> 是会话不是完整流程变更——无
+  // design/proposal 语义可关联（冒烟实证：新 quick 被自动挂上另一活跃 quick 当关联变更）。
+  // 形态单源 QUICK_SID_RE（run/shared.js）；此处不 import 防把 fs 纯函数拖进 shared 依赖链。
+  const QUICK_SESSION_ID_RE = /^quick-[0-9a-f]{8}$/
+  const candidateChanges = activeChanges.filter((name) => !QUICK_SESSION_ID_RE.test(name))
 
   const dirtyFiles = [...new Set([...baselineFiles, ...quickFiles])]
     .filter(f => f && !f.startsWith('.sillyspec/'))
   const descTokens = [...new Set(tokenizeDescription(taskDescription))]
 
-  const results = activeChanges.map(name => {
+  const results = candidateChanges.map(name => {
     const reasons = []
 
     // 信号 1：脏文件命中 design.md 文件变更清单

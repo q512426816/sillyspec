@@ -1259,7 +1259,12 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     if (!qlId) {
       const guardPath = join(specBase, '.runtime', 'quick-sessions', cancelSessionRaw, 'guard.json')
       try {
-        if (existsSync(guardPath)) qlId = JSON.parse(readFileSync(guardPath, 'utf8')).qlId
+        if (existsSync(guardPath)) {
+          // 字段名 bug 修复（2026-09-09 §7-5，会话实证：guard 在场仍报「缺失/损坏」）：
+          // guard 写侧字段是 quicklogId（run/stage.js quickGuard），旧读侧读 .qlId 恒 undefined
+          const g = JSON.parse(readFileSync(guardPath, 'utf8'))
+          qlId = g.quicklogId || g.qlId
+        }
       } catch { /* guard 损坏 → 下面按找不到报错 */ }
     }
     if (!qlId) {

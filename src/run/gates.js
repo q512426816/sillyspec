@@ -778,6 +778,24 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
     if (probeBlocked) {
       return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)
     }
+    // ── 行号漂移自动重锚（2026-09-09 §7-6：quick --done 已接，verify/archive 收尾补接）──
+    // 本变更 diff 中的 .md 文档经 autoReanchorDocRefs 定点重锚（fixable 唯一/优选命中才改 +
+    // 同口径回执），消灭「src 改动平移行号 → 下次 docs gate 拦」的人工往返。挂 verify 收尾即
+    // 覆盖 archive 面（漂移源是 src 改动，archive 的文档同步步不产生新 src 平移）。fail-open。
+    try {
+      const { resolveVerifyChangedFiles } = await import('../verify-postcheck.js')
+      const mdChangedVa = (resolveVerifyChangedFiles(cwd, changeName, null, { includeWorkingTree: true, specBase }) || [])
+        .filter(f => f.endsWith('.md') && !f.startsWith('.sillyspec/changes/'))
+      if (mdChangedVa.length > 0) {
+        const { autoReanchorDocRefs, readDocsCheckConfig } = await import('../docs-check.js')
+        let fixCfgVa = {}
+        try { fixCfgVa = readDocsCheckConfig(cwd) || {} } catch { fixCfgVa = {} }
+        const rVa = autoReanchorDocRefs(cwd, mdChangedVa, fixCfgVa)
+        if (rVa.applied > 0) {
+          console.log(`🔧 文档行号漂移自动重锚（${stageName} 收尾）：${rVa.applied} 处已改写（${rVa.invalidBefore} → ${rVa.invalidAfter}；剩余 ${rVa.remaining} 处需人工 sillyspec docs check）`)
+        }
+      }
+    } catch { /* 自动重锚失败不影响收尾（docs gate 兜底） */ }
     // ── module-impact 死信探针（blocking，债单 D-1/D-5）：更新结果表 pending/待办行 → 阻断 verify ──
     // 与 archive 移动前校验（extractPendingDocSyncRows）同一口径，把死信号从 archive 提前到 verify：
     // agent 在 verify 阶段就须完成文档同步并回填 done/skipped，而非拖到归档被拦（修复 perf-remediation

@@ -17,3 +17,4 @@
 - 2026-09-07-endpoint-baseline | 新 src/endpoint-baseline.js：captureEndpointBaseline（幂等首拍快照，复用 scanBackendEndpoints 组装；baseCommit fail-soft）+ diffEndpointSets（METHOD+normalizePath 归一集合运算，changed 独立行）；test/endpoint-baseline.test.mjs 85 断言。
 | 2026-09-07 | ql-20260907-002-b9d4 | doctor-diagnostics D4 ghostRows 排除 quick 会话行（QUICK_SID_RE，与 stage-machine 同源）：quick-<8hex> 按设计无 changes/ 目录，进行中 quick 不再误报 ghost；cleanupGhostChanges 有意保留 quick 行归档能力（「QUICKLOG 已完成但 DB 行仍 active」收尾中断的兜底出口，代码现场注释钉住不对称设计） |
 - 2026-09-08-ir-verify-facts | facts v2 五段+分段合并+槽段/回填（verify-facts-schema 单点新模块）；evidence 分类核验 v2（blocked 语义）；集成回执绿判据；facts 基线对比；卡补 verify-facts-schema 行
+- 2026-09-09-doctor-noai | 三 detector（worktree 薄适配/构建环境/MCP 项目级）+ renderDoctorSummary 全新契约

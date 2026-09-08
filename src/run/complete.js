@@ -380,6 +380,12 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
     } else if (_cliAction === 'progressConfirm') {
       // 与 stage.js noAI 分支同语义（brainstorm/execute/verify step1 进度确认）
       executeProgressConfirm({ stageName, cwd, stageData, changeName, pm })
+    } else if (_cliAction === 'doctorRunDiagnostics') {
+      // 2026-09-09-doctor-noai：与 stage.js 分支同语义（诊断+渲染+落盘）
+      const { runDoctorDiagnostics, renderDoctorSummary, writeDoctorDiagnosis } = await import('../doctor-diagnostics.js')
+      const diag = await runDoctorDiagnostics({ cwd })
+      console.log(renderDoctorSummary(diag))
+      try { writeDoctorDiagnosis(diag, (platformOpts?.specRoot || join(cwd, '.sillyspec'))) } catch { /* 落盘 fail-soft */ }
     } else {
       throw new Error(`noAI 步骤 ${steps[currentIdx].name} 的未知 _cliAction: ${_cliAction}——请在 complete.js 注册对应分支`)
     }

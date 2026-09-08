@@ -33,3 +33,4 @@
 - 2026-09-07-ir-stage-p3c | IR P3c：brainstorm.js 模块域指引补 NEW:写法（冒号后不加空格，核验豁免+落地后补录）；Step6 操作 2 卸责 design-init（骨架预填决策追踪表，手写路径保留）。
 - 2026-09-08-ir-verify-facts | verify.js step2/step7 槽位指引（证据账硬门口径 + 回执四字段）+ docs/prompt 镜像
 - 2026-09-09-plan-derived | Wave 违规自动修复（提案-验证-落盘）+ 合法串行静默 + plan_level 复核 warn；plan.js 审查清单补说明
+- 2026-09-09-doctor-noai | doctor 阶段折叠 6→3 步（noAI 诊断步/修复决策/汇总）+ 移出 READONLY 常量
