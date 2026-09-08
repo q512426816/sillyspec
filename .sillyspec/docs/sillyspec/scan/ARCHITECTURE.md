@@ -108,7 +108,7 @@ scan-profile.js 扫描档位 / concurrent-detect.js 并发检测 / multi-repo-co
   D-03@v1）。
 - `runStage(...)`（`src/run/stage.js:31`）：单阶段执行器，做状态转换校验（调用
   `stage-contract.js` 的 `checkTransition`），逐 step 推进，处理审批门控。
-- `runAutoMode(...)`（`src/run/command.js:1551`）：自动模式，连续跑
+- `runAutoMode(...)`（`src/run/command.js:1560`）：自动模式，连续跑
   `['brainstorm','plan','execute','verify']` 主流程直到 `--done`。
 
 阶段流转语义（grep 自 run/ 模块）：
@@ -166,7 +166,7 @@ W6 重构后的结构：`src/progress.js` 是 ProgressManager facade（1127 行�
 
 | 文件 | 职责 |
 | --- | --- |
-| `src/progress.js` | `ProgressManager` facade（`src/progress.js:192` 类声明）：持久化核心（_ensureDB / read / _write 本体留在 facade），其余按组 delegate 到子模块 |
+| `src/progress.js` | `ProgressManager` facade（`src/progress.js:210` 类声明）：持久化核心（_ensureDB / read / _write 本体留在 facade），其余按组 delegate 到子模块 |
 | `src/progress/stage-machine.js` | 阶段状态机：completeStage / reopen / reset / validate / show / status + 产物校验门 + 下游级联 |
 | `src/progress/step-store.js` | stages / steps / batch_progress 三表读写（setStage / addStep / updateStep / batch） |
 | `src/progress/change-registry.js` | 变更注册表：changes 表生命周期（注册/注销/重命名/隔离状态/平台同步戳/审批状态） |
