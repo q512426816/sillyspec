@@ -23,6 +23,7 @@ modules:
     review_reasons: []
     paths:
       - src/agent-session-log.js
+      - src/runtime-hygiene.js
       - src/workspace.js
       - src/run.js
       - src/run/
@@ -142,6 +143,7 @@ modules:
     paths:
       - src/sync.js
       - src/spec-sync.js
+      - src/sync-noise.js
 
   sillyhub-mcp:
     status: active
