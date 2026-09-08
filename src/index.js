@@ -98,6 +98,7 @@ SillySpec CLI — 规范驱动开发工具包
                                       单 task review.json 命令式写入：verdict/notes 你给，base/head/changedFiles/diffPaths CLI 代算
   sillyspec symbol-impact --change <name>      生成 symbol-impact.md 逐 task <!--TODO--> 骨架（gate 拒绝未替换占位，防骨架直接过门）
   sillyspec design-init --change <name> [--force]  从 decisions.md 生成 design.md 十三章节骨架（决策追踪表预填；已存在不覆盖）
+  sillyspec fourpiece-init --change <name>     生成 proposal/requirements/decisions 骨架（frontmatter+章节+模板占位；已存在不覆盖）
   sillyspec delta --change <name> [--json]   生成变更 delta.md（Before/Delta/After 三段式聚合；幂等覆盖重跑即刷新）
   sillyspec next                            项目状态探测：输出当前状态 + 下一步命令 + 依据（吸收 continue/resume 手工探测表）
   sillyspec commit [--json]                 智能提交建议：收集 QUICKLOG/已勾 task/阶段产出语义，生成建议 message（只建议不执行）
@@ -1329,6 +1330,94 @@ async function main() {
       writeFileSync(siReportPath, siSkeleton);
       console.log(`✅ 已生成逐 task 骨架: ${siReportPath}`);
       console.log('   逐行替换 <!--TODO--> 为结论（无签名级变更也显式写「无」）；gate 拒绝未替换的占位行。');
+      break;
+    }
+    case 'fourpiece-init': {
+      // 四件套骨架预生成（2026-09-09 ql-20260909-003，轮次经济学 §3.2）：brainstorm 期 agent
+      // 手写 proposal/requirements/decisions 的 frontmatter/章节骨架是格式返工根源——本命令
+      // 逐文件生成骨架（已存在不覆盖），agent 只填语义。与 design-init 同族（幂等）。
+      const fpChangeIdx = args.indexOf('--change');
+      const fpChange = fpChangeIdx >= 0 && args[fpChangeIdx + 1] ? args[fpChangeIdx + 1] : null;
+      if (!fpChange) {
+        console.error('用法: sillyspec fourpiece-init --change <name> [--json] [--spec-dir <path>]\n  生成 proposal.md/requirements.md/decisions.md 骨架（frontmatter+章节标题+模板占位；已存在不覆盖；design.md 归 design-init）');
+        process.exit(2);
+      }
+      const fpSpecBase = resolvePlatformSpecDir(dir, specDir) || join(dir, '.sillyspec');
+      const fpDir = join(fpSpecBase, 'changes', fpChange);
+      mkdirSync(fpDir, { recursive: true });
+      const fpNow = new Date();
+      const fpDate = fpNow.toISOString().slice(0, 10);
+      const fpStamp = fpNow.toISOString().slice(0, 19).replace('T', ' ');
+      const generated = [];
+      const mk = (fname, body) => {
+        const p = join(fpDir, fname);
+        if (existsSync(p)) { console.log(`ℹ️  ${fname} 已存在，不覆盖`); return; }
+        writeFileSync(p, body);
+        generated.push(fname);
+        console.log(`✅ 已生成 ${fname} 骨架: ${p}`);
+      };
+      mk('proposal.md', `---
+author: qinyi
+created_at: ${fpStamp}
+---
+# 提案书（Proposal）
+
+## 动机
+<!--TODO: 为什么做、解决什么核心问题-->
+
+## 关键问题
+<!--TODO: 为什么现有方案不够（2-3 个痛点）-->
+
+## 变更范围
+<!--TODO: 本次做什么-->
+
+## 不在范围内（显式清单）
+- <!--TODO: 不做 X-->
+
+## 成功标准（可验证）
+- <!--TODO: 可验证条目-->
+`);
+      mk('requirements.md', `---
+author: qinyi
+created_at: ${fpStamp}
+---
+# 需求规格（Requirements）
+
+## 角色
+| 角色 | 说明 |
+|---|---|
+| <!--TODO--> | <!--TODO--> |
+
+## 功能需求
+
+### FR-01: <!--TODO-->
+Given <!--TODO-->
+When <!--TODO-->
+Then <!--TODO-->
+
+## 非功能需求
+- 兼容性：<!--TODO-->
+
+## 决策覆盖矩阵（如存在 decisions.md）
+| 决策 ID | 覆盖的 FR | 说明 |
+|---|---|---|
+`);
+      mk('decisions.md', `---
+author: qinyi
+created_at: ${fpStamp}
+change: ${fpChange}
+---
+
+# 决策记录（Decisions）
+
+<!-- 增量落盘：每解决一个有实现影响的问题当场追加一条（格式见 brainstorm Step 3 模板）；幂等按 D-xxx@vN 判重 -->
+`);
+      if (json) {
+        console.log(JSON.stringify({ command: 'fourpiece-init', change: fpChange, generated }, null, 2));
+      } else if (generated.length > 0) {
+        console.log(`
+${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语义内容（骨架勿手删章节）；design.md 用 sillyspec design-init。`);
+      }
       break;
     }
     case 'design-init': {

@@ -100,11 +100,18 @@ export function looksLikeMsysMangledPath(v) {
 /**
  * MSYS 污染告警出口：命中嗅探时向 stderr 打 flag 名 + 值前缀 + 修复指引（不阻断）。
  */
-function warnMsysMangledFlag(flag, value) {
+function warnMsysMangledFlag(flag, value, { block = false } = {}) {
   if (!looksLikeMsysMangledPath(value)) return
-  console.error(`⚠️ ${flag} 的值疑似被 Git Bash(MSYS) 路径转换污染：「${value.slice(0, 60)}${value.length > 60 ? '…' : ''}」`)
-  console.error('   以 / 开头的文案在 Git Bash 下会被展开成 <Git 安装目录>/… 绝对路径后才传入 CLI。')
-  console.error('   非本意 → 去掉前导 / 或改写表述后重发本命令；确需原样 → 命令前加 MSYS_NO_PATHCONV=1。')
+  const head = `⚠️ ${flag} 的值疑似被 Git Bash(MSYS) 路径转换污染：「${value.slice(0, 60)}${value.length > 60 ? '…' : ''}」`
+  const fix = '   以 / 开头的文案在 Git Bash 下会被展开成 <Git 安装目录>/… 绝对路径后才传入 CLI。\n   非本意 → 去掉前导 / 或改写表述后重发本命令；确需原样 → 命令前加 MSYS_NO_PATHCONV=1。'
+  // 2026-09-09 ql-20260909-003（轮次经济学 §3.4）：--output/--input 携带落盘语义（标题/正文
+  // 会写进 QUICKLOG），warn 会被忽略继续落脏标题——升 exit 2 阻断；其余调用点维持 warn。
+  if (block) {
+    console.error(head + '\n' + fix + '\n   已阻断：修复后重发本命令（进度未推进，无重跑代价）。')
+    process.exit(2)
+  }
+  console.error(head)
+  console.error(fix)
 }
 
 /**
@@ -546,7 +553,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
   let outputText = null
   const outputValue = getFlagValue('--output')
   if (outputValue !== null) outputText = outputValue
-  warnMsysMangledFlag('--output', outputValue)
+  warnMsysMangledFlag('--output', outputValue, { block: true })
 
   // 解析 quick 末步四字段参数（2026-08-21 agent-手工产出审计第二批 F6）：--req/--cause/
   // --solution/--result 各传一项，CLI 合成单行四字段 outputText（quicklog 落盘侧
@@ -589,7 +596,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
       break
     }
   }
-  warnMsysMangledFlag('--input', inputText)
+  warnMsysMangledFlag('--input', inputText, { block: true })
 
   // 解析 --linked-changes <a,b|none>（quick 专用：显式声明关联变更，CI/脚本友好）
   // 与 --change 解耦：--linked-changes 语义清晰（关联变更），不与「指定变更名」混淆。

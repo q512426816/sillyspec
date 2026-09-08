@@ -484,3 +484,8 @@
 根因：splitOwnVsForeignDiffFiles 先查 foreignMap 再归 own，文件双方都声明时判 foreign（own 优先缺失）；叠加 collectForeignDeclaredFiles ② 段只看变更目录在不看进度库活性——未归档旧变更的陈旧 design 声明长期占位，其活性又被本变更自己的 dirty 反向喂活。缺陷文档 docs/sillyspec/verify-reconcile-own-file-foreign-false-positive.md（用户仓）三档建议中的 A
 方案：splitOwnVsForeignDiffFiles 改 own 优先——新增 loadOwnDeclaredSet（quick 会话 = guard.allowedFiles；变更 = design §6 ∪ task allowed_paths ∪ target_files），own 集内文件永不判 foreign；仅他者声明的在途文件照旧剔除（语义不放松）；own 集读不出时空集退回旧行为。修在切分函数内，verify-postcheck ×2 / verify-probes / contract-matrix 四消费点自动受益
 结果：新增 test/foreign-own-priority.test.mjs 10 断言全绿（用户场景端到端复现：双声明文件归 own + reconcile 不再 missing_declared 阻断；own 三源 design/allowed_paths/quick guard 各自生效；无 own 声明退回旧行为零回归）；既有 foreign-declared-stale-liveness / quick-foreign-session-declared / verify-concurrency-fixes 零回归；全量 npm test 389 过 0 失败；lint 508 文件 0 告警；docs check 5 处行号漂移 --fix 自愈后 0 失效
+
+## ql-20260909-003-7cfc | 2026-09-09 06:05:26 | Change C：brainstorm 四件套骨架预生成（proposal/requirements/decisions 骨架 CLI 化）+ 危险文件预检前移 + MSYS warn 升阻断
+状态：进行中
+关联变更：（无）
+文件：src/stages/brainstorm.js, src/index.js, src/run/command.js, src/run/prompt.js, NEW:test/brainstorm-skeleton-preqen.test.mjs
