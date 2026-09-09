@@ -1075,10 +1075,12 @@ export class SyncManager {
   /**
    * 获取当前平台配置，未连接返回 null。
    * 优先级：env SILLYHUB_PLATFORM_URL + SILLYHUB_PLATFORM_TOKEN（两键齐全才生效——
-   * daemon 注入通道，平台模式 specRoot/local.yaml 常无 platform 段，与链路 D
-   * readPlatformPushConfig 同款先例）> local.yaml platform 段。
-   * env 由 daemon 注入、CLI 不管其生命周期（disconnect 仍只清 local.yaml——daemon
-   * 停止注入即失效）；triggerSync 平台模式放行（2026-08-26）后这是回传走通的关键通道。
+   * 预留的外部注入通道，与链路 D readPlatformPushConfig 同款先例。⚠️ daemon 并未实现
+   * 该注入（2026-09-09 核对全仓历史，见 multi-agent-platform 仓
+   * docs/sillyspec/init-lease-silent-no-local-yaml.md）——env 需用户/脚本在 shell 显式
+   * export，别按「daemon 会注」排障）> local.yaml platform 段。
+   * env 生命周期 CLI 不管（disconnect 仍只清 local.yaml）；triggerSync 平台模式放行
+   * （2026-08-26）后平台模式回传的主凭据实为 local.yaml platform 段（env 缺席时）。
    */
   _getPlatform() {
     if (process.env.SILLYHUB_PLATFORM_URL && process.env.SILLYHUB_PLATFORM_TOKEN) {

@@ -30,8 +30,8 @@
  *   - cursor / opencode：loose 探测器（无 cwd/env 归属线索，仅 precise 全落空时启用）
  *   - 其他 CLI：env SILLYSPEC_AGENT_LOG 显式指定（绝对路径）
  *
- * 上报配置来源（优先级）：env SILLYHUB_PLATFORM_URL + SILLYHUB_PLATFORM_TOKEN（daemon
- * 注入通道）> local.yaml platform 段（与进度同步同源）。**不受平台模式 sentinel 限制**
+ * 上报配置来源（优先级）：env SILLYHUB_PLATFORM_URL + SILLYHUB_PLATFORM_TOKEN（预留
+ * 通道，daemon 未实现注入、需显式 export）> local.yaml platform 段（与进度同步同源）。**不受平台模式 sentinel 限制**
  * （链路 A 进度同步在平台模式跳过是因为 daemon 自有进度回传链路；agent 日志没有
  * daemon 链路，本上报就是它的主通道）。env SILLYSPEC_AGENT_LOG_PUSH=0 可关。
  *
@@ -559,7 +559,8 @@ export function detectAgentLogEntries({
  * 不 import sync.js 防拖 ProgressManager 重链）。
  *
  * 优先级：env SILLYHUB_PLATFORM_URL + SILLYHUB_PLATFORM_TOKEN（两键齐全才生效——
- * daemon 注入通道，平台模式 specRoot 的 local.yaml 无 platform 段时靠它）>
+ * 预留的外部注入通道，daemon 未实现注入、需显式 export；平台模式 specRoot 的
+ * local.yaml 无 platform 段时本就无凭据可上报，勿指望 env 兜底）>
  * specBase/local.yaml platform 段（url + token，与链路 A 同源）。
  * @returns {{url:string, token:string}|null} 未配置返回 null（合法状态，静默跳过上报）
  */

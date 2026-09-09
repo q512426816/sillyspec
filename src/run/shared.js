@@ -703,9 +703,10 @@ export const QUICK_SID_RE = /^quick-[0-9a-f]{8}$/
 
 export async function triggerSync(cwd, changeName, platformOpts = {}, opts = {}) {
   // 平台模式不再整体跳过（2026-08-26 用户决策）：上行回传（进度 + 四件套 + spec 树）
-  // 在平台模式同样执行，凭据经 env SILLYHUB_PLATFORM_URL/TOKEN（daemon 注入通道，
-  // sync.js _getPlatform，链路 D 同款）；未注入 env 且 local.yaml 无 platform 段时
-  // sync() 内部静默跳过（合法状态）。下行 pull / 审批检查仍走平台自有链路（见各自门禁）。
+  // 在平台模式同样执行，凭据经 env SILLYHUB_PLATFORM_URL/TOKEN（预留通道，daemon 未
+  // 实现注入——需外部显式 export，sync.js _getPlatform，链路 D 同款）或 local.yaml
+  // platform 段；两者皆缺时 sync() 内部静默跳过（合法状态）。下行 pull / 审批检查仍走
+  // 平台自有链路（见各自门禁）。
   try {
     // ql-20260818-011：quick 会话按设计无实体变更目录（progress.js initChange 同款
     // 跳过建目录），progress/四件套上行对它是孤儿数据；但 spec 树增量（QUICKLOG/
