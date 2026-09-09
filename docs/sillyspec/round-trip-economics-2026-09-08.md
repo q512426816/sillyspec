@@ -50,7 +50,7 @@
 - proposal/requirements/tasks frontmatter（author/created_at 等纯机械值）
 - module-impact.md 首版（`generateModuleImpactSkeleton` 已存在 + `sillyspec module-impact` 命令已接线，plan 侧手写是返工根源）→ **本批刀②**
 - plan.md 任务总表重抄 tasks.md（已知双写漂移源；Wave 段已改纯 ID 引用，总表未改）
-- design 格式自检步（`validateDesignForPlan` 已有同款字面校验，agent 复检纯浪费）
+- design 格式自检步（`validateDesignForPlan` 已有同款字面校验，agent 复检纯浪费）——**未认领**
 - TaskCard / 任务 id 连续性 agent 自查步（plan-postcheck 已硬校验，重复）
 - 生命周期豁免短语字面契约（"否定词必须紧邻"类）
 
@@ -66,7 +66,7 @@
 ### 3.4 注入减负（省 token）
 
 - quick step1 的 cat 清单（projects.yaml、CONVENTIONS、design、knowledge INDEX、module-map、命中模块卡）→ 仿 `{SCAN_FACTS}`/`{TASKS_CHECKBOX}` 注入先例
-- 危险文件预检前移：现只在 `--done` 时 blocked（带 --force-baseline 重跑一轮），前移到 step1 的 `_cliAction`
+- 危险文件预检前移：现只在 `--done` 时 blocked（带 --force-baseline 重跑一轮），前移到 step1 的 `_cliAction`——**未认领**
 - MSYS 路径污染仅 warn → 阻断或 CLI 自动矫正（agent 易忽略告警落盘脏标题）
 
 ### 3.5 IR 一致性债（结构治理，进 P3 brainstorm）
@@ -85,6 +85,17 @@
 | 刀① | quick step1 注入化（{QUICK_CONTEXT_DIGEST} + 模块上下文注入扩展到 quick 首步） | quick.js / prompt.js / stage.js | ✅ 2026-09-08 ql-20260908-013 |
 
 三刀拆三次 quick 完成（原约定不捆档）。IR 大件不开 quick，进 P3 brainstorm。
+
+### §4b 后续批次落地记录（2026-09-09 补记）
+
+| 批次 | 内容 | 形态/状态 |
+|---|---|---|
+| §7 债批 | doctor 悬空声明/quick 会话过滤/空壳宽限/cancel 字段名 bug/autoReanchor 扩展 | ✅ ql-20260909-001 |
+| plan 派生化 | Wave 违规自动修复（提案-验证-落盘）+ 合法串行静默 + plan_level 客观复核（§3.5 Wave 项收口） | ✅ 全流程归档 d05fb87（Design Grill 抓 P0 合法串行陷阱后重设计） |
+| doctor 折叠 | 6→3 步 + noAI 诊断步（13 维含三新 detector）+ 顶层改道（§3.1 doctor 项收口） | ✅ 全流程归档 862370e（三轮审查抓 6 blocker） |
+| 四件套骨架 + MSYS 阻断 | fourpiece-init 命令 + brainstorm 指引 + --output/--input 污染 exit 2（§3.2/§3.4 部分收口） | ✅ ql-20260909-003 |
+| archive 收口 | 三重核对 CLI 代算 + {ARCHIVE_IMPACT_AUDIT} 注入（§3.1 archive 机械项收口） | ✅ ql-20260909-004 |
+| flaky 治理 | 失败文件串行真实环境复核（§7-1 收口） | ✅ 01704d5 |
 
 ## 5. 风险与防覆盖（落地约束）
 
