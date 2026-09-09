@@ -391,6 +391,38 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
     }
   }
 
+  // ── 并发 --done 防护（坑 execute-concurrent-done-skips-next-wave，2026-09-08 实证）──
+  // 会话 B 先 --done 推进了 Wave N，会话 A 随后的 --done 会落到**新的当前步 = Wave N+1**，
+  // 用 Wave N 的摘要静默完成 Wave N+1（产物未落地却标完成）。CLI 短进程无法读心，两层防护：
+  // ① 醒目前置横幅（邻步 60s 内刚被完成 = 疑似并行会话刚推进）——操作者在看到「✅ Step N
+  //    完成：Wave X」与自己所做不符时可立即 --reopen，不静默；
+  // ② 写前重读校验（本命令读库→落盘窗口内的真实竞态）：重读 DB，若本命令要完成的步骤
+  //    已被并行进程标 completed/skipped，拒绝覆盖式推进（防双写交错把状态机写花）。
+  if (stageName === 'execute' && currentIdx > 0) {
+    const prev = steps[currentIdx - 1]
+    const _prevDoneAgoSec = prev?.completedAt ? Math.round((Date.now() - new Date(prev.completedAt.replace(/(\d{4})\/(\d{2})\/(\d{2})/, '$1-$2-$3')).getTime()) / 1000) : null
+    if (_prevDoneAgoSec !== null && Number.isFinite(_prevDoneAgoSec) && _prevDoneAgoSec >= 0 && _prevDoneAgoSec <= 60) {
+      console.warn('')
+      console.warn(`⚠️ 并发防护：上一步「${prev.name}」${_prevDoneAgoSec}s 前刚被（可能另一会话的）--done 完成——本次将完成的是「${steps[currentIdx].name}」。`)
+      console.warn(`   若与你刚做完的 Wave 不符，立即停手：sillyspec run ${stageName} --reopen --from-step ${currentIdx + 1}${changeName ? ` --change ${changeName}` : ''} 退回本步，勿继续下一 Wave。`)
+      console.warn('')
+    }
+  }
+  let _dupCompletedByPeer = false
+  try {
+    const _fresh = pm.read(cwd, changeName)
+    const _freshSteps = _fresh?.stages?.[stageName]?.steps
+    if (Array.isArray(_freshSteps) && _freshSteps[currentIdx] && _freshSteps[currentIdx].name === steps[currentIdx].name
+        && (_freshSteps[currentIdx].status === 'completed' || _freshSteps[currentIdx].status === 'skipped')) {
+      _dupCompletedByPeer = true
+    }
+  } catch { /* 重读失败（平台模式瞬态等）不阻断——横幅防护仍在 */ }
+  if (_dupCompletedByPeer) {
+    console.error(`❌ 步骤「${steps[currentIdx].name}」刚被并行会话完成（本命令读库后被推进），拒绝重复推进——防把下一步误标完成。`)
+    console.error(`   排查：sillyspec progress show${changeName ? ` --change ${changeName}` : ''} 确认当前步；你若也完成了同一 Wave，无需再次 --done；若要完成的是下一步，重跑 --done（此时它会落在正确的当前步）。`)
+    process.exit(1)
+  }
+
   steps[currentIdx].status = 'completed'
   steps[currentIdx].completedAt = new Date().toLocaleString('zh-CN',{hour12:false})
   if (outputText) {

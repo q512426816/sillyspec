@@ -1398,7 +1398,21 @@ export async function adoptTaskReviewMechanics({ changeName, cwd, platformOpts =
         ? crossDiffFiles.filter(f => allowedPaths.some(p => pathMatches(f, p)))
         : crossDiffFiles
     } else {
-      const mainDiff = Array.isArray(diffFiles) ? diffFiles : []
+      // 坑 backfill-reviews-adopt-empties-changedfiles（2026-09-08 实证）：主仓 task 同样
+      // 优先卡锚点切片（base_commit/head_commit），不再共用「worktree 基线..当前 HEAD」——
+      // per-task commit 模式下 base 必须是本 task 起点commit，diff 才与 allowed_paths 对齐
+      // （跨仓路径本就按卡切片）；卡无锚点回落 change 级切片（旧语义，兼容 wave 级提交）。
+      const cardHead = parseHeadCommit(content)
+      const cardBase = parseBaseCommit(content)
+      let mainDiff = Array.isArray(diffFiles) ? diffFiles : []
+      if (cardHead) {
+        taskHead = cardHead
+        taskBase = cardBase || taskBase
+        try {
+          const out = runGit(reviewGitDir, ['diff', '--name-only', `${taskBase}..${taskHead}`])
+          mainDiff = out ? out.split('\n').filter(Boolean).map(p => p.replace(/\\/g, '/')) : []
+        } catch { /* 锚点不可解析（如卡记短 hash 仓内无引用）→ 回落 change 级切片 */ }
+      }
       taskChangedFiles = allowedPaths.length > 0
         ? mainDiff.filter(f => allowedPaths.some(p => pathMatches(f, p)))
         : []

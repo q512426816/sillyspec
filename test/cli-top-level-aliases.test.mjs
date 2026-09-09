@@ -118,9 +118,16 @@ try {
       top.status === viaRun.status,
       `exit code 一致: doctor=${top.status}, run doctor=${viaRun.status}`
     )
+    // 2026-09-09-doctor-noai 改道后契约变化：顶层 doctor 直跑诊断渲染（只读零副作用），
+    // run doctor 走阶段状态机（noAI step1 诊断 + 步骤框架）——不再字节一致，改为
+    // 双路径都产出同一诊断报告头（🩺 renderDoctorSummary 契约锚）。
     assert(
-      top.stdout === viaRun.stdout,
-      `stdout 字节一致 (len=${top.stdout.length})`
+      top.stdout.includes('SillySpec 项目自检诊断'),
+      `顶层 doctor 含诊断报告头 (len=${top.stdout.length})`
+    )
+    assert(
+      viaRun.stdout.includes('SillySpec 项目自检诊断'),
+      `run doctor 含诊断报告头 (len=${viaRun.stdout.length})`
     )
     assert(
       top.stderr === viaRun.stderr,

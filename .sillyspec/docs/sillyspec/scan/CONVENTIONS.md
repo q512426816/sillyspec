@@ -19,8 +19,8 @@ generator: sillyspec-scan
 ```
 src/run/command.js      （动态 import('./init.js') 等——W6 拆分后 require 惰性加载改为动态 import）
 src/worktree-apply.js   （安全修复后 git 子进程迁 execFileSync 数组参数）
-src/stages/doctor.js:64 const fs = require('fs');
-src/stages/doctor.js:67 const { execSync } = require('child_process');
+src/stages/doctor.js（2026-09-09-doctor-noai 折叠后 noAI 诊断步——bash 探测段已删）
+同上
 ```
 
 **隐形规则**：新代码默认顶层 `import`；只有当需要 (a) 推迟启动开销、(b) 打破循环依赖、(c) 在 bash heredoc 嵌入的 node 单行脚本里（doctor.js 中的内联诊断脚本）时，才在函数体内用 `require`。**不要把这种混用统一改成纯 import**——doctor.js 内嵌的 bash 诊断脚本必须保留 `require`（它在独立 node 进程里执行，没有 ESM 上下文）。

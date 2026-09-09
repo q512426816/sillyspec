@@ -48,7 +48,7 @@ updated_at: 2026-08-24T00:40:00+08:00
 
 **quick 嵌套子字段说明**（2026-08-23-adopt-harness-practices）：step2 单行旧形式警告补「嵌套列表行合法」说明（`src/stages/quick.js:103`）——根因块内以列表行形态出现的 `- 现象：`/`- 根因：`/`- 护栏：`/`- 证据：` 嵌套子字段是合法形态（「- 」前缀不构成顶层标签、不参与拆分判定，顶层四字段边界不受影响）；step3 加可选提示（`src/stages/quick.js:105`）——postmortem 场景可改用多行 --output 在根因块内按列表行补四子字段，常规场景仍推荐四参数形式。
 
-**doctor 决策待复核检查**（2026-08-23-adopt-harness-practices，5→6 步）：新第 5 步「决策待复核检查」（`src/stages/doctor.js:331`）——调 docs-check 决策规则族（runDecisionRules，本体归 docs-consistency 卡）扫 knowledge/decisions/ 的 implemented 条目：锚点存在性 + 锚定模块源码 behind 超阈值复核（decisions.behind_threshold 缺省 10），advisory 不阻断、无信号零输出；无法定位 sillyspec 源码时跳过。汇总报告步（`src/stages/doctor.js:391`）加「决策待复核（advisory）」段 + 状态错乱修复后补轻量 postmortem 提示（`src/stages/doctor.js:438`）。
+**doctor 决策待复核检查**（2026-08-23-adopt-harness-practices，5→6 步）：新第 5 步「决策待复核检查」（`src/stages/doctor.js（决策待复核——已并入 2026-09-09-doctor-noai 折叠后的 step1 诊断维度 decision_drift）`）——调 docs-check 决策规则族（runDecisionRules，本体归 docs-consistency 卡）扫 knowledge/decisions/ 的 implemented 条目：锚点存在性 + 锚定模块源码 behind 超阈值复核（decisions.behind_threshold 缺省 10），advisory 不阻断、无信号零输出；无法定位 sillyspec 源码时跳过。汇总报告步（`同上（折叠后见 detectDecisionDrift）`）加「决策待复核（advisory）」段 + 状态错乱修复后补轻量 postmortem 提示（`同上（决策待复核语义部分归 step2 修复决策）`）。
 
 当前固定阶段步骤数：
 

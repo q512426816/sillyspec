@@ -470,7 +470,7 @@
       {
         "index": 2,
         "name": "汇总报告",
-        "prompt": "汇总本次自检。\n\n### 输出\n1. 诊断总览（几维过/警告/失败/跳过）\n2. 已执行修复 + 效果\n3. 剩余风险与后续建议（含豁免项理由）",
+        "prompt": "汇总本次自检。\n\n### 输出\n1. 诊断总览（几维过/警告/失败/跳过）\n2. 已执行修复 + 效果\n3. 剩余风险与后续建议（含豁免项理由）\n\n### 🩹 状态错乱补 postmortem 提示（advisory，不强制——2026-08-22 起）\n本次自检若发现**状态错乱类问题**（进度库分裂/幻影变更/指针漂移/步骤表漂移等），除按流程修复外，建议为该问题补一条轻量 postmortem 记录进 QUICKLOG（走 quick 流程或既有条目的正文核对），根因块内按列表行写四子字段：\n- 现象：（出了什么问题——如多 db 分裂的表现）\n- 根因：（深层原因——如平台接管声明残留/指针未随目录迁移）\n- 护栏：（防再犯措施——本自检的哪个维度此后能拦住它）\n- 证据：（可追溯路径——`sillyspec agent-log --json` 输出的本地会话日志 jsonl 路径、review.json、verify-result.md）\n护栏结论经人工确认后归入 `.sillyspec/knowledge/known-issues.md`——走既有 knowledge 追加链路（同 quick 收尾先例：先入 knowledge/uncategorized.md，经知识整理确认后归类），不新建链路不新建命令。",
         "outputHint": "自检汇总",
         "optional": false
       }
