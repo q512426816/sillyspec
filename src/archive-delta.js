@@ -34,6 +34,7 @@ import { parseDecisionDomains, loadModuleMap, deriveActualModules } from './desi
 import { parseModuleMapSimple } from './modules.js'
 import { scanBackendEndpoints } from './endpoint-extractor.js'
 import { diffEndpointSets } from './endpoint-baseline.js'
+import { resolveVerifyChangedFiles } from './verify-postcheck.js'
 
 // ---------------------------------------------------------------------------
 // 小工具（全部 fail-soft：读不到/解析失败 → null / []，不抛出）
@@ -458,5 +459,39 @@ export function writeLastDeltaSidecar(runtimeRoot, summary) {
   } catch (e) {
     console.error(`[sillyspec] last-delta sidecar 写入失败（advisory 将缺席，不阻断 delta 生成）：${e && e.message ? e.message : e}`)
     return { ok: false, reason: e && e.message ? e.message : String(e) }
+  }
+}
+/**
+ * archive 三重核对（2026-09-09 ql-20260909-004，轮次经济学 §3.1 archive 收口机械化）：
+ * module-impact.md 矩阵记录 vs 真实变更文件 vs module-map 归属——机械比对 CLI 代算，
+ * agent 只裁决不一致项。只读，供 archive extract-module-impact 步 prompt 注入/命令消费。
+ * @returns {{ ok: boolean, mismatches: string[], impactFiles: string[], actualFiles: string[], summary: string }}
+ */
+export function auditModuleImpactAgainstDiff({ cwd, changeName, specDir = null }) {
+  const mismatches = []
+  const specBase = specDir || join(cwd, '.sillyspec')
+  const impactPath = join(specBase, 'changes', changeName, 'module-impact.md')
+  let impactText = null
+  try { impactText = readFileSync(impactPath, 'utf8') } catch { /* 缺失由降级路径处理 */ }
+  const actualFiles = (resolveVerifyChangedFiles(cwd, changeName, null, { includeWorkingTree: true, specBase: specDir || join(cwd, '.sillyspec') }) || [])
+    .map(f => String(f).replace(/\\/g, '/'))
+    .filter(f => !f.startsWith('.sillyspec/changes/'))
+  if (!impactText) {
+    return { ok: false, mismatches: ['module-impact.md 不存在（走 --init 降级路径）'], impactFiles: [], actualFiles, summary: `真实变更 ${actualFiles.length} 文件；无 module-impact 可核` }
+  }
+  // 矩阵反引号路径收集
+  const impactFiles = [...impactText.matchAll(/`([^`]+[.](?:js|mjs|ts|py|java|md|yaml))`/g)].map(m => m[1].split(String.fromCharCode(92)).join('/'))
+  const impactSet = new Set(impactFiles)
+  const actualSet = new Set(actualFiles)
+  const inDiffNotDoc = [...actualSet].filter(f => !impactSet.has(f))
+  const inDocNotDiff = [...impactSet].filter(f => !actualSet.has(f))
+  if (inDiffNotDoc.length > 0) mismatches.push(`diff 有而 module-impact 未列（${inDiffNotDoc.length}）：${inDiffNotDoc.slice(0, 5).join('、')}${inDiffNotDoc.length > 5 ? ' …' : ''}`)
+  if (inDocNotDiff.length > 0) mismatches.push(`module-impact 列而 diff 无（${inDocNotDiff.length}）：${inDocNotDiff.slice(0, 5).join('、')}${inDocNotDiff.length > 5 ? ' …' : ''}`)
+  return {
+    ok: mismatches.length === 0,
+    mismatches,
+    impactFiles,
+    actualFiles,
+    summary: `module-impact ${impactFiles.length} 文件 × 真实 diff ${actualFiles.length} 文件：${mismatches.length === 0 ? '一致 ✓' : mismatches.length + ' 类不一致'}`,
   }
 }

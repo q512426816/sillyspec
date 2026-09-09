@@ -58,10 +58,10 @@
 
 ### 操作
 1. 读取 changes/<change>/module-impact.md（应已存在；large 变更 plan 阶段产出首版）
-2. 运行 git diff --name-only HEAD~1（或 git diff --name-only --cached）获取真实修改文件列表
-3. 三重核对：module-impact.md 记录的受影响模块/文件 vs 真实 git diff 文件列表 vs .sillyspec/docs/<project>/modules/_module-map.yaml 模块映射（不存在则仅核 unmapped 部分）。以 git diff 为准（真实 > 记录）
-4. 发现不一致（漏标受影响模块 / 影响类型错误 / 实际未触碰的模块被误标）→ 直接修正 module-impact.md，使其与实际变更一致
-5. module-impact.md 第一行标题必须用中文：# 模块影响分析（Module Impact）— <变更简述>
+2. **机械核对已由 CLI 代算（2026-09-09 起）**：下方「三重核对报告」区块由 CLI 注入（module-impact 矩阵文件 × 真实 diff 三源文件 × module-map 归属的机器比对结果）——不要重跑 git diff 手工比对，直接消费报告：
+{ARCHIVE_IMPACT_AUDIT}
+3. 报告标「不一致」的项才需要你裁决：漏标受影响模块 / 影响类型错误 / 实际未触碰的模块被误标 → 直接修正 module-impact.md，使其与实际变更一致（以 git diff 为准——真实 > 记录）；报告「一致 ✓」则跳过修正
+4. module-impact.md 第一行标题必须用中文：# 模块影响分析（Module Impact）— <变更简述>
 
 ### 降级（module-impact.md 不存在）
 若缺失（如旧变更未经新 plan 流程，或 small 变更从未生成）：先跑 `sillyspec module-impact --change <change-name>`——CLI 按 _module-map.yaml paths 前缀匹配预填「模块影响矩阵」骨架（文件×模块归属 + 未匹配文件清单，机械部分全代算），你只需逐行填「影响类型」（逻辑变更/数据结构变更/接口变更/调用关系变更/配置变更/新增）与 needs_review 标记，补首行中文标题 `# 模块影响分析（Module Impact）— <变更简述>`。骨架无从生成（无 module-map / 无 diff）时才按 archive-impact.yaml 的 impact-analyzer 角色规则全手写。

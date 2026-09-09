@@ -149,3 +149,31 @@ if (failed.length > 0) {
 }
 
 process.exit(failed.length > 0 ? 1 : 0)
+
+// ── 坑 platform-sync-progress-rollback-and-db-corruption 坑3：NEW: 前缀两道门禁互斥 ──
+// brainstorm 幻觉核验要求「当前不存在的待建文件加 NEW:」；plan 覆盖对账按裸路径匹配。
+// 修复：pathMatches 比对语义剥 NEW:（存在性核验仍见原文，豁免不受影响）。
+import { pathMatches } from '../src/change-list.js'
+{
+  assert('pathMatches 剥 NEW:：design NEW:src/new.js vs task 裸路径 → 命中',
+    pathMatches('NEW:src/new.js', 'src/new.js') === true)
+  assert('pathMatches 双侧 NEW: 同剥 → 命中', pathMatches('NEW:src/new.js', 'NEW:src/new.js') === true)
+  assert('pathMatches 无前缀行为不变', pathMatches('src/a.js', 'src/a.js') === true)
+  assert('pathMatches 剥前缀后目录前缀包含仍成立', pathMatches('NEW:src/mod/x.js', 'src/mod') === true)
+  assert('pathMatches 不误吞非前缀 NEW:（中段出现不剥）',
+    pathMatches('src/NEW:x.js', 'src/NEW:x.js') === true && pathMatches('src/NEW:x.js', 'src/x.js') === false)
+  // 反向门禁不回归：解析器输出保留原文前缀，validateDesignFileList 的 NEW: 豁免仍生效
+  const root = mkdtempSync(join(tmpdir(), 'clop-new-'))
+  try {
+    const specDir = join(root, '.sillyspec')
+    mkdirSync(specDir, { recursive: true })
+    writeFileSync(join(specDir, 'design.md'),
+      '# d\n## 文件变更清单\n| 操作 | 文件路径 | 说明 |\n|--|--|--|\n| 新增 | NEW:src/future.js | 待建 |\n| 修改 | src/exists.js | 已存在 |\n', 'utf8')
+    const entries = parseFileChangeListDetailed(join(specDir, 'design.md'))
+    assert('解析器保留 NEW: 原文（存在性核验豁免依赖）',
+      entries.some(e => e.path === 'NEW:src/future.js') === true)
+    assert('同一清单裸路径照常解析', entries.some(e => e.path === 'src/exists.js') === true)
+    assert('带 NEW: 的待建文件与裸 allowed_path 经 pathMatches 对账命中（两道门共存的写法成立）',
+      entries.some(e => e.path === 'NEW:src/future.js' && pathMatches(e.path, 'src/future.js')) === true)
+  } finally { rmSync(root, { recursive: true, force: true }) }
+}

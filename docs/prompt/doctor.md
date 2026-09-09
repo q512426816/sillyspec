@@ -8,7 +8,7 @@ updated_at: 2026-09-09
 > 由 `node docs/prompt/_extract.mjs` 提取；正文手动同步（结构以 _extracted.json 为准）。
 > 2026-09-09-doctor-noai：阶段折叠 6 步 → 3 步（step1 noAI CLI 全量诊断 / step2 修复决策与执行 / step3 汇总）。
 
-## Step 1/3：CLI 全量诊断（noAI——_cliAction: doctorRunDiagnostics）
+## Step 1/3：CLI 全量诊断
 
 本步由 CLI 自动执行：runDoctorDiagnostics 八维既有 + worktree_health/build_env/mcp_endpoints 三新探测器 + 模块文档健康 + 决策版本漂移的 CLI 可算部分；输出 renderDoctorSummary 逐维报告并落盘 doctor-diagnosis.json。agent 无操作。
 

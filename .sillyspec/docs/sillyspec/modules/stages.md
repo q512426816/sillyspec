@@ -82,3 +82,6 @@ plan-postcheck section 2 三类分流：依赖方向违规 → 提案-验证-落
 
 ## doctor 阶段折叠（2026-09-09-doctor-noai）
 doctor 阶段 6 步 → 3 步：step1 noAI `_cliAction doctorRunDiagnostics`（runDoctorDiagnostics 全量诊断 + renderDoctorSummary 渲染 + doctor-diagnosis.json 落盘）替换三大 bash 教学步；step2 agent 修复决策与执行（消费报告按 safe_actions 决策，--confirm 写操作独立 flag）；step3 汇总。doctor 移出 READONLY_AUXILIARY_STAGES（constants——只读短路使 _cliAction 不可达的历史误设）；顶层 sillyspec doctor 非 --json 改道直跑诊断渲染（只读零副作用保真）。
+
+## archive 三重核对机械化（2026-09-09 ql-20260909-004）
+archive extract-module-impact 步的三重核对（module-impact × diff × module-map）由 CLI 代算：archive-delta 新增 auditModuleImpactAgainstDiff（resolveVerifyChangedFiles 三源取真实 diff × 矩阵反引号路径集合比对，输出一致/两类不一致清单）；run/prompt.js 经 {ARCHIVE_IMPACT_AUDIT} 注入报告——agent 只裁决不一致项（删「重跑 git diff 手工比对」教学）。

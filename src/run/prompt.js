@@ -992,6 +992,26 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
     promptText = promptText.split('{EVIDENCE_AUTO_RECOMMENDATION}').join(eaInjected)
   }
 
+  // {ARCHIVE_IMPACT_AUDIT}（2026-09-09 ql-20260909-004）：archive extract-module-impact 步的
+  // 三重核对机械预填——auditModuleImpactAgainstDiff 代算（module-impact × diff × map 归属），
+  // agent 只裁决不一致项。fail-soft：审计异常降级单行指引（回退手跑 git diff）。
+  if (stageName === 'archive' && promptText.includes('{ARCHIVE_IMPACT_AUDIT}')) {
+    let auditBlock = ''
+    try {
+      const { auditModuleImpactAgainstDiff } = await import('../archive-delta.js')
+      const auditSpecBase = resolvePromptSpecBase(platformOpts, cwd)
+      const r = auditModuleImpactAgainstDiff({ cwd, changeName, specDir: auditSpecBase })
+      auditBlock = [
+        '【三重核对报告（CLI 机械预填）】',
+        r.summary,
+        ...(r.mismatches.length > 0 ? ['不一致项：', ...r.mismatches.map(m => '  - ' + m), '→ 逐项裁决并修正 module-impact.md；其余（未列出的 diff 文件为 .sillyspec 产物不参与核对）无需处理。'] : ['一致 ✓——第 3 步修正可跳过。']),
+      ].join(String.fromCharCode(10))
+    } catch (e) {
+      auditBlock = '（三重核对机械预填失败：' + (e && e.message ? e.message : e) + '——回退手跑 git diff --name-only 比对）'
+    }
+    promptText = promptText.split('{ARCHIVE_IMPACT_AUDIT}').join(auditBlock)
+  }
+
   // 注入模块上下文（brainstorm/plan/execute 阶段全步 + quick 首步「理解任务」——刀①：quick
   // step1 原让 agent cat module-map 再挑模块卡读，改为按任务描述匹配后注入，基于 Module Context Index）
   const quickFirstStep = stageName === 'quick' && step && step.name === '理解任务'

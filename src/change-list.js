@@ -74,8 +74,13 @@ export function globMatch(str, pattern) {
  * @returns {boolean}
  */
 export function pathMatches(a, b) {
-  a = normalizePath(a)
-  b = normalizePath(b)
+  // 坑 platform-sync-progress-rollback-and-db-corruption 坑3：NEW: 前缀（待建文件标记）在
+  // 「比对」语义下剥除对齐——design 清单带 NEW: 的待建文件 vs task allowed_paths 裸路径 /
+  // 主仓脏文件，比的是目标文件而非「新建意图」，剥后两道门禁（brainstorm 幻觉核验要求加
+  // NEW: / plan 覆盖对账按裸路径匹配）不再互斥。仅在比对处剥：存在性核验（design-facts
+  // 的 NEW: 豁免）不走本函数、仍见原文前缀；target_files 解析器（plan-postcheck）本就剥。
+  a = normalizePath(a).replace(/^NEW:/, '')
+  b = normalizePath(b).replace(/^NEW:/, '')
   if (!a || !b) return false
   if (a === b) return true
   if (a.startsWith(b + '/') || b.startsWith(a + '/')) return true

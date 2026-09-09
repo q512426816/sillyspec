@@ -186,6 +186,7 @@
 
 **决策记录（增量落盘，防会话中断丢失）**：每解决一个有实现影响的问题（不要把闲聊都记录进去），**当场追加**写入 `{SPEC_ROOT}/changes/<change-name>/decisions.md`——不要只在对话里留草稿等「写设计文档」步统一落盘：会话随时可能中断，未落盘的决策无法跨会话恢复。落盘规则：
 
+- **优先跑 `sillyspec fourpiece-init --change <change-name>` 生成骨架再填语义**（2026-09-09 起：proposal/requirements/decisions 的 frontmatter/章节标题由 CLI 预生成，已存在不覆盖——手写 frontmatter/章节漏项是格式返工根源）；design.md 骨架归 `sillyspec design-init`
 - 文件不存在则先创建：变更目录缺失先 `mkdir -p {SPEC_ROOT}/changes/<change-name>`；文件头部写 YAML frontmatter（`author: <git-user>` / `created_at: <now-datetime>`）+ 标题 `# 决策记录（Decisions）`
 - 每条记录追加到文件末尾，格式如下：
 

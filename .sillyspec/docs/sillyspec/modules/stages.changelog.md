@@ -34,3 +34,4 @@
 - 2026-09-08-ir-verify-facts | verify.js step2/step7 槽位指引（证据账硬门口径 + 回执四字段）+ docs/prompt 镜像
 - 2026-09-09-plan-derived | Wave 违规自动修复（提案-验证-落盘）+ 合法串行静默 + plan_level 复核 warn；plan.js 审查清单补说明
 - 2026-09-09-doctor-noai | doctor 阶段折叠 6→3 步（noAI 诊断步/修复决策/汇总）+ 移出 READONLY 常量
+- ql-20260909-004 | archive 三重核对机械化：auditModuleImpactAgainstDiff + {ARCHIVE_IMPACT_AUDIT} 注入（agent 只裁决不一致项）
