@@ -3063,7 +3063,12 @@ checkbox 行；depends_on 自动反填行内注解 "(depends_on: task-01,02)"；
 
       const { cmdTaskcard } = await import('./taskcard.js');
       try {
-        const result = cmdTaskcard(tcName, { cwd: dir, specDir, taskIds, title: titleVal, titleZh: titleZhVal, force, sets });
+        // 坑 platform-sync-progress-rollback-and-db-corruption 坑4：taskcard 此前只走
+        // resolveSpecDir（祖先遍历本地 .sillyspec），不感知平台接管指针——平台模式下
+        // 仓库根裸跑报「变更目录不存在」，需显式 --spec-dir（与 run/plan 系列不一致）。
+        // 对齐 endpoints 等命令：先 resolvePlatformSpecDir（指针 fail-closed 语义同源）。
+        const tcPlatformSpecDir = resolvePlatformSpecDir(dir, specDir) || specDir;
+        const result = cmdTaskcard(tcName, { cwd: dir, specDir: tcPlatformSpecDir, taskIds, title: titleVal, titleZh: titleZhVal, force, sets });
         for (const f of result.created) console.log(`✅ 已生成: ${f}`);
         for (const f of result.skipped) console.log(`⏭️  已存在，跳过（--force 覆盖）: ${f}`);
         if (result.created.length > 0) {
