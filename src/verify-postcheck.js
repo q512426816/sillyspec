@@ -208,6 +208,17 @@ export function runVerifyLintCheck({ cwd, specBase }) {
   }
 }
 
+/**
+ * lint 硬门决策（2026-09-09 升硬，外部数据驱动）：观察期 tally 14 次 5 败全真阳性零误伤，
+ * 且 pre-push 钩子本就硬拦——verify 侧硬门只是同一标准 fail-fast 前移。
+ * 逃生档：SILLYSPEC_VERIFY_LINT_GATE=advisory（审计留痕，对齐 quick 门 skip env 先例）。
+ * @returns {boolean} failed 且非逃生档 → true（调用方 rollback）
+ */
+export function shouldBlockVerifyLint(lintCheck, env = process.env) {
+  if (!lintCheck || lintCheck.status !== 'failed') return false
+  return env.SILLYSPEC_VERIFY_LINT_GATE !== 'advisory'
+}
+
 /** 打印 lint 实测结果（advisory：失败不阻断，只把口头汇报对上账） */
 export function printVerifyLintCheck(result) {
   if (result.status === 'skipped') {

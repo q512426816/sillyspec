@@ -403,6 +403,28 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
         // 判定与 --done 审计危险门同口径（predictProtectedQuickFiles）
         const protectedPreview = predictProtectedQuickFiles(allowedFiles, { linkedChanges, forceBaseline })
         if (protectedPreview.length > 0) warnProtectedQuickFiles(protectedPreview)
+        // 任务描述驱动预检（2026-09-09 刀批，轮次经济学 §3.4）：未预声明 --files 且未带
+        // forceBaseline 时，用当前脏文件 × 任务描述 token 粗匹配猜可能触及的文件，命中
+        // 受保护面即起步点破——省「--done 撞危险门 → 带 --force-baseline 重跑」一整轮。
+        // 启发式 advisory：猜错零代价（误报忽略），猜中省一轮；精确判定仍归 --done 审计。
+        if (protectedPreview.length === 0 && !forceBaseline) {
+          try {
+            const desc = quickOpts?.taskDescription || ''
+            if (desc) {
+              const dirty = String(safeGit(cwd, ['status', '--porcelain', '--untracked-files=all']).value || '')
+                .split('\n').map(l => l.slice(3).trim().split(' -> ').pop() || '')
+                .map(pp => pp.replace(/^"|"$/g, '').replace(/\\/g, '/'))
+                .filter(pp => pp && !pp.startsWith('.sillyspec/'))
+              const tokens = desc.toLowerCase().split(/[\s,，。；;:：/\\]+/).filter(t => t.length >= 3)
+              const guessed = dirty.filter(pp => tokens.some(t => pp.toLowerCase().includes(t) || t.includes(pp.split('/').pop().replace(/[.][a-z]+$/, '').toLowerCase())))
+              const guessedProtected = predictProtectedQuickFiles(guessed, { linkedChanges, forceBaseline })
+              if (guessedProtected.length > 0) {
+                console.warn(`⚠️ 任务描述可能触及受保护文件（启发式预检，精确判定在 --done）：${guessedProtected.slice(0, 3).join('、')}${guessedProtected.length > 3 ? ' …' : ''}`)
+                console.warn('   若确要改它们：重启 quick 带 --force-baseline 预声明，省 --done 被拦重跑一轮；误报忽略即可。')
+              }
+            }
+          } catch { /* 预检 fail-open */ }
+        }
         // CLI 接管：分配 ql-ID + 写 QUICKLOG「进行中」条目 + 关联 tasks.md（持锁、当天唯一）
         const gitUser = safeGit(cwd, ['config', 'user.name']).value || 'unknown'
         // 标题回退：启动 quick 不带 --input 时，从关联变更的 proposal/design 提取语义标题，

@@ -106,7 +106,7 @@
 ## 6. 互指
 
 - IR 事实层 schema 与分期：`docs/sillyspec/archify-ir-stage-proposal-2026-09-05.md`
-- 本批三刀 quick 的 quicklog 条目：`.sillyspec/quicklog/QUICKLOG-qinyi.md`（ql-20260908-010 / -012 / -013）
+- quicklog 条目（按日轮转——按 ql-ID 检索 `.sillyspec/quicklog/` 目录）：三刀 ql-20260908-010/-012/-013；债批 ql-20260909-001~005
 
 ## 7. 实施期新发现（2026-09-08 三刀落地时实证，待立项）
 

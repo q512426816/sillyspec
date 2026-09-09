@@ -13,7 +13,7 @@
  * 声明源（plan --done 首版，2026-09-08 刀②）：design 文件变更清单——代码未写、无 diff，
  * 归属分类同一套 module-map 前缀匹配，仅输入来源不同。
  */
-import { existsSync, readFileSync, readdirSync } from 'fs'
+import { existsSync, readFileSync, readdirSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { resolveVerifyChangedFiles } from './verify-postcheck.js'
 import { resolveSpecDir } from './run/shared.js'
@@ -77,6 +77,59 @@ function classifyFile(posixPath, modulePaths) {
  * @returns {{ markdown: string, matchedCount: number, unmatchedCount: number }|null}
  *   无 module-map / 无可归类文件 → null（无可归类输入，agent 全手写）
  */
+/**
+ * 模块文档 sidecar 同步命令化（2026-09-09 刀批，轮次经济学 §3.1 模块文档同步项）：
+ * quick/archive 两处 prompt 让 agent 手写 sidecar 追加行——机械部分（变更归属模块、
+ * sidecar 追加、卡 updated_at 戳）CLI 代算，agent 只留卡片正文语义更新。
+ * 幂等：sidecar 已含 `- <change> |` 行则跳过该模块；卡不存在只建 sidecar 不建卡（卡内容是语义）。
+ * @returns {{ synced: string[], unmatched: string[], skipped: string[] }}
+ */
+export function syncModuleDocSidecars({ cwd, changeName, note, specDir = null }) {
+  const specBase = resolveSpecDir(cwd, { specDir })
+  // 复用 generateModuleImpactSkeleton 的 map 发现 + 归类（diff 来源）
+  const skel = generateModuleImpactSkeleton({ cwd, changeName, specDir })
+  if (!skel) return { synced: [], unmatched: [], skipped: [], reason: '无 module-map 或无 diff 可归类' }
+  const modulesDir = findModulesDir(specBase)
+  if (!modulesDir) return { synced: [], unmatched: [], skipped: [], reason: 'modules 目录不存在' }
+  // 从骨架 markdown 反解归类结果（命中模块集合 + 未匹配清单）
+  const hitModules = [...skel.markdown.matchAll(/^\| (\S+) \| `([^`]+)`/gm)].map(m => m[1])
+  const unmatched = [...skel.markdown.matchAll(/^- `([^`]+)` /gm)].map(m => m[1])
+  const synced = []
+  const skipped = []
+  for (const mod of [...new Set(hitModules)]) {
+    const sidecarPath = join(modulesDir, `${mod}.changelog.md`)
+    let sidecar = ''
+    try { sidecar = readFileSync(sidecarPath, 'utf8') } catch { sidecar = '' }
+    if (sidecar.includes(`- ${changeName} |`)) { skipped.push(mod); continue }
+    const NL = String.fromCharCode(10)
+    const line = `- ${changeName} | ${note || '(见该变更 quicklog/归档)'}`
+    const base = sidecar
+      ? sidecar.replace(/\n*$/, NL)
+      : `# ${mod} 变更索引` + NL + NL
+    writeFileSync(sidecarPath, base + line + NL)
+    // 卡 updated_at 戳（存在才戳）
+    const cardPath = join(modulesDir, `${mod}.md`)
+    try {
+      const card = readFileSync(cardPath, 'utf8')
+      const stamped = card.replace(/^updated_at:.*$/m, `updated_at: ${new Date().toISOString().slice(0, 19) + '+08:00'}`)
+      if (stamped !== card) writeFileSync(cardPath, stamped)
+    } catch { /* 卡不存在——sidecar 照写，卡内容留给 agent */ }
+    synced.push(mod)
+  }
+  return { synced, unmatched, skipped }
+}
+
+function findModulesDir(specBase) {
+  try {
+    for (const p of readdirSync(join(specBase, 'docs'), { withFileTypes: true })) {
+      if (!p.isDirectory()) continue
+      const cand = join(specBase, 'docs', p.name, 'modules')
+      if (existsSync(join(cand, '_module-map.yaml'))) return cand
+    }
+  } catch { /* 无 docs/ */ }
+  return null
+}
+
 export function generateModuleImpactSkeleton({ cwd, changeName, specDir = null, sourceFiles = null, origin = null }) {
   const specBase = resolveSpecDir(cwd, { specDir })
 

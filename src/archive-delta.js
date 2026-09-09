@@ -479,7 +479,7 @@ export function auditModuleImpactAgainstDiff({ cwd, changeName, specDir = null }
   if (!impactText) {
     return { ok: false, mismatches: ['module-impact.md 不存在（走 --init 降级路径）'], impactFiles: [], actualFiles, summary: `真实变更 ${actualFiles.length} 文件；无 module-impact 可核` }
   }
-  // 矩阵反引号路径收集
+  // 矩阵反引号路径收集（启发式——advisory 注入用，非硬门真相源：无反引号表格格会漏，外部审核 P3-3）
   const impactFiles = [...impactText.matchAll(/`([^`]+[.](?:js|mjs|ts|py|java|md|yaml))`/g)].map(m => m[1].split(String.fromCharCode(92)).join('/'))
   const impactSet = new Set(impactFiles)
   const actualSet = new Set(actualFiles)
@@ -487,11 +487,58 @@ export function auditModuleImpactAgainstDiff({ cwd, changeName, specDir = null }
   const inDocNotDiff = [...impactSet].filter(f => !actualSet.has(f))
   if (inDiffNotDoc.length > 0) mismatches.push(`diff 有而 module-impact 未列（${inDiffNotDoc.length}）：${inDiffNotDoc.slice(0, 5).join('、')}${inDiffNotDoc.length > 5 ? ' …' : ''}`)
   if (inDocNotDiff.length > 0) mismatches.push(`module-impact 列而 diff 无（${inDocNotDiff.length}）：${inDocNotDiff.slice(0, 5).join('、')}${inDocNotDiff.length > 5 ? ' …' : ''}`)
+  // 第三重：module-map 归属一致性（2026-09-09 外部审核 P2-1——「三重核对」此前名实不符：
+  // 矩阵行的模块列 vs map 前缀推导——误标模块点名；未命中 map 的归 unmatched 提示不判红）
+  const moduleMisattrib = auditImpactModuleAttribution(impactText, actualFiles, specBase)
+  mismatches.push(...moduleMisattrib)
   return {
     ok: mismatches.length === 0,
     mismatches,
     impactFiles,
     actualFiles,
-    summary: `module-impact ${impactFiles.length} 文件 × 真实 diff ${actualFiles.length} 文件：${mismatches.length === 0 ? '一致 ✓' : mismatches.length + ' 类不一致'}`,
+    summary: `module-impact ${impactFiles.length} 文件 × 真实 diff ${actualFiles.length} 文件 × map 归属：${mismatches.length === 0 ? '一致 ✓' : mismatches.length + ' 类不一致'}`,
   }
 }
+
+/**
+ * 第三重核对（P2-1）：矩阵行「| <模块> | `文件` |」的模块列 vs _module-map.yaml 前缀推导。
+ * 只读 fail-soft：map 不可得 → 返回 []（前两重仍有效，注入文案会带 map 跳过注记）。
+ */
+function auditImpactModuleAttribution(impactText, actualFiles, specBase) {
+  try {
+    // 找 _module-map.yaml（docs/<p>/modules/ 扫描——detectModuleDocHealth 同款）
+    let mapText = null
+    const docsDir = join(specBase, 'docs')
+    if (existsSync(docsDir)) {
+      for (const d of readdirSync(docsDir)) {
+        const cand = join(docsDir, d, 'modules', '_module-map.yaml')
+        if (existsSync(cand)) { mapText = readFileSync(cand, 'utf8'); break }
+      }
+    }
+    if (!mapText) return []
+    const { parseModuleMapPaths } = require_module_impact()
+    const map = parseModuleMapPaths(mapText)
+    const deriveMod = (posixPath) => {
+      for (const [id, paths] of map) {
+        for (const pp of paths) {
+          if (pp.endsWith('/') ? posixPath.startsWith(pp) : (posixPath === pp || posixPath.startsWith(pp + '/'))) return id
+        }
+      }
+      return null
+    }
+    const out = []
+    for (const m of impactText.matchAll(/^\|\s*([^|]+?)\s*\|[^|]*`([^`]+)`/gm)) {
+      const recorded = m[1].trim()
+      const file = m[2].split(String.fromCharCode(92)).join('/')
+      if (recorded.startsWith('---') || recorded.startsWith('模块')) continue
+      const derived = deriveMod(file)
+      if (derived && recorded !== derived && recorded !== 'unmapped') {
+        out.push(`map 归属不一致：${file} 矩阵记「${recorded}」但 map 推导为「${derived}」——修正矩阵模块列或跑 modules rebuild`)
+      }
+    }
+    return out
+  } catch { return [] }
+}
+// 延迟引用（防环：module-impact 不反向依赖本模块）
+import * as _moduleImpactMod from './module-impact.js'
+function require_module_impact() { return _moduleImpactMod }

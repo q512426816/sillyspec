@@ -104,6 +104,7 @@ SillySpec CLI — 规范驱动开发工具包
   sillyspec commit [--json]                 智能提交建议：收集 QUICKLOG/已勾 task/阶段产出语义，生成建议 message（只建议不执行）
   sillyspec verify-probes --change <name> [--init]  verify 机械探针（TODO 标记/测试覆盖/API 对账/删除对账）；--init 生成 verify-result.md 骨架
   sillyspec module-impact --change <name>       生成 module-impact.md 骨架（文件×模块归属按 module-map 预填 + 未匹配清单）
+  sillyspec module-docs-sync --change <name> [--note ...]  diff 归属模块 → sidecar 追加变更索引行 + 卡 updated_at 戳（幂等）
   sillyspec endpoints extract --change <name> [--task task-NN | --all-tasks] [--dir <dir>|--files <a.py,b.js>]  静态扫描路由装饰器生成 endpoints.json
   sillyspec endpoints baseline --change <name> [--spec-dir <path>] [--json]  拍变更前端点基线（幂等不覆盖；worktree 内跑自动锚主仓；归档 delta 端点增删 before 侧）
   sillyspec scan-fix-headers [--project <名>]   scan 文档补 author/created_at header（幂等）
@@ -963,6 +964,32 @@ async function main() {
           }
         }
       }
+      break;
+    }
+    case 'module-docs-sync': {
+      // 模块文档 sidecar 同步命令化（2026-09-09 刀批）：diff 归属模块 → sidecar 追加变更索引行 +
+      // 卡 updated_at 戳——机械部分 CLI 代算，卡片正文语义更新仍归 agent/归档流程。幂等。
+      const mdsChangeIdx = args.indexOf('--change');
+      const mdsChange = mdsChangeIdx >= 0 && args[mdsChangeIdx + 1] ? args[mdsChangeIdx + 1] : null;
+      const mdsNoteIdx = args.indexOf('--note');
+      const mdsNote = mdsNoteIdx >= 0 && args[mdsNoteIdx + 1] ? args[mdsNoteIdx + 1] : null;
+      if (!mdsChange) {
+        console.error('用法: sillyspec module-docs-sync --change <name> [--note "一句话"] [--json]\n  diff 归属模块 → sidecar 追加变更索引行 + 卡 updated_at 戳（幂等；卡片正文语义更新仍归 agent）');
+        process.exit(2);
+      }
+      const { syncModuleDocSidecars } = await import('./module-impact.js');
+      const mdsResult = syncModuleDocSidecars({ cwd: dir, changeName: mdsChange, note: mdsNote, specDir });
+      if (json) {
+        console.log(JSON.stringify({ command: 'module-docs-sync', change: mdsChange, ...mdsResult }, null, 2));
+        break;
+      }
+      if (mdsResult.reason) console.log(mdsResult.reason);
+      if (mdsResult.synced.length > 0) {
+        console.log(String.fromCharCode(9989) + ' sidecar 已同步 ' + mdsResult.synced.length + ' 个模块: ' + mdsResult.synced.join(', '));
+        console.log('   卡 updated_at 已戳；卡片正文语义更新（如需要）仍归归档流程/agent。');
+      }
+      if (mdsResult.skipped.length > 0) console.log(String.fromCharCode(8505) + ' 已含本变更行跳过: ' + mdsResult.skipped.join(', '));
+      if (mdsResult.unmatched.length > 0) console.log(String.fromCharCode(9888) + ' 未匹配模块的文件 ' + mdsResult.unmatched.length + ' 个（不入 sidecar）: ' + mdsResult.unmatched.slice(0, 5).join(', '));
       break;
     }
     case 'plan-adopt-waves': {

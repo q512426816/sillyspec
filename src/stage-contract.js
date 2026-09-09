@@ -11,6 +11,7 @@ import { safeGit } from './git-helper.js'
 import { nowWallClock } from './datetime.js'
 import { detectChangeRisk, checkIntegrationEvidence, VERIFICATION_NEEDS, RISK_LEVEL_CAUSES } from './change-risk-profile.js'
 import { parseEvidenceSlots } from './verify-facts-schema.js'
+import { IR_STRICT_SINCE } from './constants.js'
 import { SCAN_REQUIRED_DOCS, AUXILIARY_STAGES } from './constants.js'
 import { evaluateRules } from './stage-contract-engine.js'
 import { getRule } from './stage-contract-spec.js'
@@ -518,6 +519,22 @@ function resolveVerifyConclusion(verify, warnings) {
   return extractVerifyConclusion(verify)
 }
 
+/**
+ * IR 严格档判别（审核 P2-2）：design.md frontmatter created_at ≥ IR_STRICT_SINCE。
+ * 与 verify-postcheck isStrictChange 同锚（常量单源 constants.js），此处只读 design
+ * 文件（不接 DB——validator 层保持纯文件判定，db 侧判别归 isStrictChange）。
+ */
+function isIrStrictVerifyChange(changeDir) {
+  try {
+    const dp = join(changeDir, 'design.md')
+    if (!existsSync(dp)) return false
+    const fm = readFileSync(dp, 'utf8').match(/^---\r?\n([\s\S]*?)\r?\n---/)
+    const cm = fm && fm[1].match(/^created_at:\s*(\d{4}-\d{2}-\d{2})/m)
+    if (!cm) return false
+    return cm[1] >= IR_STRICT_SINCE
+  } catch { return false }
+}
+
 function validateVerifyOutputs(cwd, changeName, context = {}) {
   const { specRoot } = context
   const changeDir = resolveChangeDir(cwd, changeName, specRoot)
@@ -548,6 +565,15 @@ function validateVerifyOutputs(cwd, changeName, context = {}) {
     // 历史教训：CLI 曾不校验结论，AI 写 FAIL 后 verify 仍被标记完成并提示"验证通过可以归档"。
     // 刀③起结论解析槽优先（extractVerifyConclusionSlot），一处解析两处消费。
     const conclusionStr = resolveVerifyConclusion(verify, warnings)
+    // ── 严格档结论槽必在（2026-09-09 外部审核 P2-2）：有槽 fail-closed，但整行删「结论枚举：」
+    // 曾可逃回 legacy 窗口正则蹭关键词。IR 严格档变更（design created_at ≥ IR_STRICT_SINCE）
+    // 无槽直接 ERROR——存量变更不受影响（legacy 回退保留）。──
+    if (!/^结论枚举：/im.test(verify)) {
+      const strict = isIrStrictVerifyChange(changeDir)
+      if (strict) {
+        errors.push('严格档变更（created_at ≥ ' + IR_STRICT_SINCE + '）verify-result.md 缺「结论枚举：」槽行——删槽回退关键词窗口的通道已关闭。修复：跑 `sillyspec verify-probes --change <变更名> --init` 补槽段（已有正文不覆盖），把 <待填：三选一> 替换为枚举值。')
+      }
+    }
     if (conclusionStr === 'FAIL') {
       errors.push(getRule('verify.conclusion.fail-gate').failMessage)
     } else if (!conclusionStr) {

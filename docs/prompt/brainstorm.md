@@ -420,14 +420,7 @@ design.md 第一行标题必须用中文：# 设计文档（Design）— <变更
      - 否决理由：一句话说明为何否决（status=rejected 时必填）
      - 复潮条件：什么前提下可重新考虑该决策（status=rejected 时必填）
    - 长期术语只在 archive/scan 时再提升到 `{SPEC_ROOT}/docs/<project>/glossary.md`
-4. 格式自检（只查章节齐全；语义一致性/可行性/YAGNI 不在本步查，交给下一步 Design Grill 独立审查）：
-   - design.md 含全部必填章节（背景/设计目标/非目标/总体方案/文件变更清单/接口定义/风险登记）
-   - design.md 头部 YAML frontmatter 字段齐全（author/created_at/scale 等）——「生成规范文件」步完成契约硬要求，审查前就补齐避免后续 docHash 漂移
-   - design.md 含「自审」字面命中章节（自审 / Self-Review / Self-review）——「生成规范文件」步完成契约 brainstorm.design.self-review 硬要求，写在本步自审段即可
-   - 如存在 decisions.md，design.md 是否引用所有当前版本 D-xxx@vN
-   - 涉及 session/lease/agent_run/daemon/lifecycle 等关键词时，是否含「生命周期契约表」
-   - UI 原型核对：文件清单含前端文件（.vue/.tsx/.jsx/.svelte/.html/.css 等）且改动达到「必须生成/建议生成」原型级别（分级见「分段展示设计」步）时，变更目录应已有 `prototype-*.html`——没有则本步补生成；确不生成时把跳过原因记入 design.md 风险登记，不得静默缺位
-5. 缺章节 → 补齐后重检；章节齐全 → 进入下一步（Design Grill 做语义层交叉审查）
+4. **格式自检不做 agent 侧复刻**（2026-09-09 刀批：章节齐全/frontmatter/自审章节/D-xxx@vN 引用/生命周期豁免/UI 原型六项全部由 CLI 硬校验承担——「生成规范文件」步 --done 的 brainstorm.design.* 规则 + plan 阶段 validateDesignForPlan 同款字面检查，漏项门禁会逐条点名，复检是浪费轮）。design.md 骨架用 `sillyspec design-init` 生成（章节/frontmatter 已就位）即天然合规
 
 ### 输出
 design.md 文件路径 + 自审结果

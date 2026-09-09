@@ -693,6 +693,19 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
       console.log(`\n⏳ Verify lint 对账：CLI 亲自执行 local.yaml 的 commands.lint…`)
     }
     printVerifyLintCheck(lintCheck)
+    // lint 硬门（2026-09-09 升硬：观察期 14 次 5 败全真阳性，pre-push 本就硬拦——fail-fast 前移；
+    // 逃生 SILLYSPEC_VERIFY_LINT_GATE=advisory）
+    const { shouldBlockVerifyLint } = await import('../verify-postcheck.js')
+    if (shouldBlockVerifyLint(lintCheck)) {
+      console.error('\n❌ verify 阶段被阻断：CLI 亲自实测 lint 失败（agent 的 lint 自报告与实测不符时以实测为准）。')
+      if (lintCheck.outputTail) {
+        const tail = lintCheck.outputTail.split('\n').slice(-8).join('\n')
+        console.error('   输出（末尾）：')
+        for (const line of tail.split('\n')) console.error(`   | ${line}`)
+      }
+      console.error('   修复后重跑 --done（进度不丢）；确认要跳过实测请设 SILLYSPEC_VERIFY_LINT_GATE=advisory（审计留痕）。')
+      return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)
+    }
     // 契约 parity 对账：扫前端 API 调用 vs execute 提取的 provider endpoint artifact。
     // 接线自 contract-matrix pipeline（verifyApiParity 的 CLI 入口）。
     const { runVerifyParityCheck, printVerifyParityCheck } = await import('../verify-postcheck.js')
