@@ -489,7 +489,7 @@ export function auditModuleImpactAgainstDiff({ cwd, changeName, specDir = null }
   if (inDocNotDiff.length > 0) mismatches.push(`module-impact 列而 diff 无（${inDocNotDiff.length}）：${inDocNotDiff.slice(0, 5).join('、')}${inDocNotDiff.length > 5 ? ' …' : ''}`)
   // 第三重：module-map 归属一致性（2026-09-09 外部审核 P2-1——「三重核对」此前名实不符：
   // 矩阵行的模块列 vs map 前缀推导——误标模块点名；未命中 map 的归 unmatched 提示不判红）
-  const moduleMisattrib = auditImpactModuleAttribution(impactText, actualFiles, specBase)
+  const moduleMisattrib = auditImpactModuleAttribution(impactText, specBase)
   mismatches.push(...moduleMisattrib)
   return {
     ok: mismatches.length === 0,
@@ -504,7 +504,7 @@ export function auditModuleImpactAgainstDiff({ cwd, changeName, specDir = null }
  * 第三重核对（P2-1）：矩阵行「| <模块> | `文件` |」的模块列 vs _module-map.yaml 前缀推导。
  * 只读 fail-soft：map 不可得 → 返回 []（前两重仍有效，注入文案会带 map 跳过注记）。
  */
-function auditImpactModuleAttribution(impactText, actualFiles, specBase) {
+function auditImpactModuleAttribution(impactText, specBase) {
   try {
     // 找 _module-map.yaml（docs/<p>/modules/ 扫描——detectModuleDocHealth 同款）
     let mapText = null
