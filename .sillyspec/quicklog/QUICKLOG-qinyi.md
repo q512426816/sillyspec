@@ -55,3 +55,14 @@
 根因：复核 P2 文案与 rollback 行为打架 / P3 文状态滞后
 方案：printVerifyLintCheck 按 shouldBlockVerifyLint 分支（硬门已阻断+逃生 / advisory 保留旧措辞）；经济学文 §3 翻已收口 + §4b 补三行；死参移除
 结果：lint-print-branch 3/3；回归 7 绿；lint 过
+
+## ql-20260909-008-c8a9 | 2026-09-09 12:19:59 | 修复 12 个测试满载并发假红：套件 HOME 隔离改锚 suiteTmp 根 + config-cat passedHome 截断
+状态：已完成
+关联变更：（无）
+文件：
+- src/config-cat.js（resolveLocalYaml 补 passedHome 截断（经过 home 层后候选链整段截断））
+- test/run-tests.mjs（套件 HOME/USERPROFILE 改锚 suiteTmp 本身 + 根级 .gitconfig 补放）
+需求：修复 12 个测试满载并发假红：套件 HOME 隔离改锚 suiteTmp 根 + config-cat passedHome 截断
+根因：套件 HOME 指向 suiteTmp/home 子目录而 fixture 在 TEMP 兄弟层，home 守卫（originBelowHome）恒不激活，CLI 向上遍历撞真实 home 的 ~/.sillyspec，写入被劫持到真实 home 造成 fixture ENOENT + 历届污染积累
+方案：①run-tests.mjs HOME/USERPROFILE 改锚 suiteTmp 本身（fixture 恒在 fake home 子树，守卫全激活，passedHome 拦截 suiteTmp 之上一切层）+ suiteTmp 根补 .gitconfig；②config-cat.js resolveLocalYaml 补 passedHome 截断（与 resolveSpecDir e4f2855 同构，生产语义矩阵验证不变）；③备份后清理真实 home 历届测试污染（backup-20260909-121332，保留真实 local.yaml）
+结果：满载裸跑（SILLYSPEC_TEST_RETRY_FLAKY=0）连跑 3 轮 397 文件全绿零失败（修复前同口径 12 文件稳定假红）；标准 npm test 全绿；npm run lint 516 文件通过；真实 home 三轮跑后零新污染

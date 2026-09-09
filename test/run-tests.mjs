@@ -21,13 +21,22 @@ const testDir = dirname(fileURLToPath(import.meta.url))
 const suiteTmp = mkdtempSync(join(tmpdir(), 'sillyspec-suite-'))
 mkdirSync(join(suiteTmp, 'home'), { recursive: true })
 writeFileSync(join(suiteTmp, 'home', '.gitconfig'), '[user]\n\tname = sillyspec-test\n\temail = sillyspec-test@localhost\n[init]\n\tdefaultBranch = main\n')
+// HOME= suiteTmp 本身（2026-09-09 满载假红根治）：此前 HOME=suiteTmp/home 与 fixture（TEMP=
+// suiteTmp 下兄弟目录）构成「起点不在 home 子树」——resolveSpecDir/config-cat 的 home 守卫
+// （originBelowHome）不激活，向上遍历越过 suiteTmp 撞真实 home 的 ~/.sillyspec，12 个测试
+// 满载假红 + ~/.sillyspec 下 changes/quicklog 污染积累。HOME=suiteTmp 后所有 fixture 恒在
+// fake home 子树内，守卫全激活（passedHome 拦掉 suiteTmp 之上一切层，含真实 home）。
+// .gitconfig 仍放 suiteTmp/home 子目录：git 找 XDG(.$XDG_CONFIG_HOME/git/config)→~/.gitconfig，
+// HOME=suiteTmp 时 git 只看 suiteTmp/.gitconfig——为保「home 子目录预置」形态不动，同时在
+// suiteTmp 根也放一份（两层都有，git 找到根级即用）。
+writeFileSync(join(suiteTmp, '.gitconfig'), '[user]\n\tname = sillyspec-test\n\temail = sillyspec-test@localhost\n[init]\n\tdefaultBranch = main\n')
 const childEnv = {
   ...process.env,
   TEMP: suiteTmp,
   TMP: suiteTmp,
   TMPDIR: suiteTmp,
-  HOME: join(suiteTmp, 'home'),
-  USERPROFILE: join(suiteTmp, 'home'),
+  HOME: suiteTmp,
+  USERPROFILE: suiteTmp,
 }
 
 // 全局指针污染防护：测试可能把 ~/.sillyspec-platform.json 写到 HOME（cwd 纠正到 home 的缝隙），

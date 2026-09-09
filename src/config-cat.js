@@ -49,10 +49,15 @@ export function resolveLocalYaml(dir, opts = {}) {
   const home = homedir()
   const originBelowHome = start !== home && start.startsWith(home + sep)
   if (opts.specBase) push(join(opts.specBase, 'local.yaml'), 'spec 根（--spec-dir/平台 pointer/最近 .sillyspec）')
+  let passedHome = false
   for (let d = start; ; d = dirname(d)) {
-    if (!(originBelowHome && d === home)) {
+    // passedHome：经过 home 后不再入候选（resolveSpecDir e4f2855 同款语义）——套件隔离下
+    // HOME 与 fixture 可能同根（HOME=suiteTmp、fixture=suiteTmp/x），遍历越过 home 层后
+    // 仍会撞真实 home 的 ~/.sillyspec/local.yaml，须整段截断。
+    if (!(passedHome || (originBelowHome && d === home))) {
       push(join(d, '.sillyspec', 'local.yaml'), 'cwd 祖先链（worktree 内向上命中主仓；home 层受守卫跳过）')
     }
+    if (d === home) passedHome = true
     const parent = dirname(d)
     if (parent === d) break
   }
