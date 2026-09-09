@@ -29,7 +29,16 @@
 结果：audit-fixes-batch 3/3；回归 8 套件绿；docs 520 全过；lint 过
 审计：⚖️ 归属切分：2 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：docs/sillyspec/architecture-4a.md, docs/sillyspec/prompt-control-debt.md
 
-## ql-20260909-006-52eb | 2026-09-09 09:59:27 | 小刀批：design 格式自检步删除 + 危险预检前移 + 模块文档 sidecar 同步命令化
-状态：进行中
+## ql-20260909-006-52eb | 2026-09-09 09:59:27 | 刀批 2：design 自检删除 + 危险预检前移 + module-docs-sync
+状态：已完成
 关联变更：（无）
-文件：src/stages/brainstorm.js, src/run/stage.js, src/index.js, NEW:test/knife-batch2.test.mjs
+文件：
+- src/stages/brainstorm.js（自检删除）
+- src/run/stage.js（预检）
+- src/module-impact.js（sync 函数）
+- src/index.js（命令）
+- test/knife-batch2.test.mjs（3 用例）
+需求：刀批 2：design 自检删除 + 危险预检前移 + module-docs-sync
+根因：轮次经济学未认领三刀：自检与门禁同款复刻/危险文件 --done 才拦/sidecar 两处手写
+方案：Step6 操作 4 改门禁承担声明；会话创建点任务描述×脏文件启发式预检；syncModuleDocSidecars + CLI（幂等）
+结果：knife-batch2 3/3；module-impact/quick 族 9 绿；lint 过；_verify 0
