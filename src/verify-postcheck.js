@@ -219,7 +219,10 @@ export function shouldBlockVerifyLint(lintCheck, env = process.env) {
   return env.SILLYSPEC_VERIFY_LINT_GATE !== 'advisory'
 }
 
-/** 打印 lint 实测结果（advisory：失败不阻断，只把口头汇报对上账） */
+/**
+ * 打印 lint 实测结果（2026-09-09 起按 shouldBlockVerifyLint 分支）：硬门档「已阻断」+
+ * 逃生 env 指引（rollback 由 gates 接线侧执行）；advisory 档保留旧观察期措辞。
+ */
 export function printVerifyLintCheck(result) {
   if (result.status === 'skipped') {
     console.warn(`\n⚠️  Verify lint 实测跳过：${result.reason}`)
@@ -229,10 +232,21 @@ export function printVerifyLintCheck(result) {
     console.log(`\n✅ Verify lint 实测通过：\`${result.command}\` 退出码 0（${(result.durationMs / 1000).toFixed(1)}s）`)
     return
   }
-  console.error(`\n⚠️  Verify lint 实测失败（advisory，不阻断本次完成）：\`${result.command}\` — ${result.reason}`)
-  console.error('   agent 的 lint 自报告与实测不符时以实测为准；请修复后重跑，避免格式债推迟到 commit 被 pre-commit hook 拦截。')
-  if (result.tally) {
-    console.error(`   📊 lint advisory 失败累计 ${result.tally.failedRuns}/${result.tally.totalRuns} 次（观察期数据落 .runtime/verify-lint-tally.json——升级硬门前先看失败率，防「更硬换更吵」）。`)
+  // 文案随门禁档位分支（2026-09-09 复核修正 P2：硬门档下旧「不阻断/观察期」措辞与
+  // gates 的 rollback 行为打架，agent 会误判 CLI 抽风）——rollback 本体在 gates 接线侧。
+  if (shouldBlockVerifyLint(result)) {
+    console.error(`\n❌ Verify lint 实测失败——verify 完成已阻断（2026-09-09 起硬门）：\`${result.command}\` — ${result.reason}`)
+    console.error('   agent 的 lint 自报告与实测不符时以实测为准；修复后重跑 --done（进度不丢）。')
+    if (result.tally) {
+      console.error(`   📊 累计 ${result.tally.failedRuns}/${result.tally.totalRuns} 次（.runtime/verify-lint-tally.json）。`)
+    }
+    console.error('   确认要跳过实测：SILLYSPEC_VERIFY_LINT_GATE=advisory（审计留痕）。')
+  } else {
+    console.error(`\n⚠️  Verify lint 实测失败（advisory 档，不阻断本次完成）：\`${result.command}\` — ${result.reason}`)
+    console.error('   agent 的 lint 自报告与实测不符时以实测为准；请修复后重跑，避免格式债推迟到 commit 被 pre-commit hook 拦截。')
+    if (result.tally) {
+      console.error(`   📊 lint advisory 失败累计 ${result.tally.failedRuns}/${result.tally.totalRuns} 次（数据落 .runtime/verify-lint-tally.json）。`)
+    }
   }
   if (result.outputTail) {
     const tail = result.outputTail.split('\n').slice(-15).join('\n')

@@ -50,7 +50,7 @@
 - proposal/requirements/tasks frontmatter（author/created_at 等纯机械值）
 - module-impact.md 首版（`generateModuleImpactSkeleton` 已存在 + `sillyspec module-impact` 命令已接线，plan 侧手写是返工根源）→ **本批刀②**
 - plan.md 任务总表重抄 tasks.md（已知双写漂移源；Wave 段已改纯 ID 引用，总表未改）
-- design 格式自检步（`validateDesignForPlan` 已有同款字面校验，agent 复检纯浪费）——**未认领**
+- design 格式自检步（`validateDesignForPlan` 已有同款字面校验，agent 复检纯浪费）——✅ ql-20260909-006（Step6 改门禁承担声明）
 - TaskCard / 任务 id 连续性 agent 自查步（plan-postcheck 已硬校验，重复）
 - 生命周期豁免短语字面契约（"否定词必须紧邻"类）
 
@@ -66,7 +66,7 @@
 ### 3.4 注入减负（省 token）
 
 - quick step1 的 cat 清单（projects.yaml、CONVENTIONS、design、knowledge INDEX、module-map、命中模块卡）→ 仿 `{SCAN_FACTS}`/`{TASKS_CHECKBOX}` 注入先例
-- 危险文件预检前移：现只在 `--done` 时 blocked（带 --force-baseline 重跑一轮），前移到 step1 的 `_cliAction`——**未认领**
+- 危险文件预检前移：现只在 `--done` 时 blocked（带 --force-baseline 重跑一轮），前移到 step1 的 `_cliAction`——✅ ql-20260909-006（会话创建点任务描述×脏文件启发式预检）
 - MSYS 路径污染仅 warn → 阻断或 CLI 自动矫正（agent 易忽略告警落盘脏标题）
 
 ### 3.5 IR 一致性债（结构治理，进 P3 brainstorm）
@@ -96,6 +96,9 @@
 | 四件套骨架 + MSYS 阻断 | fourpiece-init 命令 + brainstorm 指引 + --output/--input 污染 exit 2（§3.2/§3.4 部分收口） | ✅ ql-20260909-003 |
 | archive 收口 | 三重核对 CLI 代算 + {ARCHIVE_IMPACT_AUDIT} 注入（§3.1 archive 机械项收口） | ✅ ql-20260909-004 |
 | flaky 治理 | 失败文件串行真实环境复核（§7-1 收口） | ✅ 01704d5 |
+| 审核修正批 | lint 升硬门（shouldBlockVerifyLint+advisory 逃生）/ 三重核对真接 map / 严格档结论槽必在 / 文档口径三处 | ✅ ql-20260909-005 |
+| 刀批 2 | design 自检删除 / 危险预检前移 / module-docs-sync（§3.2/§3.4 收口） | ✅ ql-20260909-006 |
+| 复核修正 | lint 打印文案随门禁档位分支（消「不阻断」与 rollback 打架） | ✅ ql-20260909-007 |
 
 ## 5. 风险与防覆盖（落地约束）
 

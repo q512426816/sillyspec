@@ -42,3 +42,16 @@
 根因：轮次经济学未认领三刀：自检与门禁同款复刻/危险文件 --done 才拦/sidecar 两处手写
 方案：Step6 操作 4 改门禁承担声明；会话创建点任务描述×脏文件启发式预检；syncModuleDocSidecars + CLI（幂等）
 结果：knife-batch2 3/3；module-impact/quick 族 9 绿；lint 过；_verify 0
+
+## ql-20260909-007-c720 | 2026-09-09 10:41:34 | lint 打印文案随门禁档位分支 + 经济学文补记 + 死参清理
+状态：已完成
+关联变更：（无）
+文件：
+- src/verify-postcheck.js（分支+JSDoc）
+- src/archive-delta.js（死参）
+- docs/sillyspec/round-trip-economics-2026-09-08.md（补记）
+- test/lint-print-branch.test.mjs（3 用例）
+需求：lint 打印文案随门禁档位分支 + 经济学文补记 + 死参清理
+根因：复核 P2 文案与 rollback 行为打架 / P3 文状态滞后
+方案：printVerifyLintCheck 按 shouldBlockVerifyLint 分支（硬门已阻断+逃生 / advisory 保留旧措辞）；经济学文 §3 翻已收口 + §4b 补三行；死参移除
+结果：lint-print-branch 3/3；回归 7 绿；lint 过
