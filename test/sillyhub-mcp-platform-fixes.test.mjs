@@ -57,28 +57,111 @@ test('① getDaemonStatus 三态解析（daemon_online 布尔 / isError / 未配
   rmSync(cleanDir, { recursive: true, force: true })
 })
 
+// 2026-09-10-review-dispatch task-02：getWorkerResult 封装（FR-04 终态回收链）——
+// get_worker_result tool 此前无 CLI 封装；artifacts 原样透传不裁剪（语义解析归
+// task-03 extractReviewFromArtifacts），降级三分支与 dispatchWorker/getDaemonStatus 同族不抛
+test('getWorkerResult 三分支：正常 artifacts 原样透传 / 空缺 [] / isError·null·未配置 → unavailable 不抛', async () => {
+  const cli = new SillyHubMcpClient({ url: 'http://127.0.0.1:9999', token: 'shmcp_x' })
+  // Arrange：捕获 tool 调用参数，返回带 artifacts 的平台形态（含白名单外字段验证不裁剪）
+  let lastCall = null
+  cli._callTool = async (toolName, args) => {
+    lastCall = { toolName, args }
+    return {
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          worker_id: 'w-9', status: 'completed',
+          artifacts: [
+            { kind: 'review_json', content_ref: 'file://.sillyspec/stage-reviews/x/review.json', id: 'a-1' },
+            { kind: 'summary', content: '审查通过', extra_field: '形态演进字段原样保留' },
+          ],
+        }),
+      }],
+    }
+  }
+  // Act + Assert：正常分支——tool 名/参数 snake_case 对齐，三字段原样解析
+  const r = await cli.getWorkerResult({ missionId: 'm-1', workerId: 'w-9' })
+  assert.equal(lastCall.toolName, 'get_worker_result', '调 get_worker_result tool')
+  assert.deepEqual(lastCall.args, { mission_id: 'm-1', worker_id: 'w-9' }, '参数 snake_case 对齐 SillyHub schema')
+  assert.equal(r.workerId, 'w-9', 'worker_id 解析')
+  assert.equal(r.status, 'completed', 'status 解析')
+  assert.deepEqual(
+    r.artifacts,
+    [
+      { kind: 'review_json', content_ref: 'file://.sillyspec/stage-reviews/x/review.json', id: 'a-1' },
+      { kind: 'summary', content: '审查通过', extra_field: '形态演进字段原样保留' },
+    ],
+    'artifacts 整组原样透传，不按 {kind,content_ref,id} 白名单裁剪',
+  )
+  // 平台实返 {id,…} 形态（dispatchWorker id 兜底同款）
+  cli._callTool = async () => ({ content: [{ type: 'text', text: JSON.stringify({ id: 'w-plat', status: 'completed', artifacts: [] }) }] })
+  const rId = await cli.getWorkerResult({ missionId: 'm-1', workerId: 'w-plat' })
+  assert.equal(rId.workerId, 'w-plat', 'id 兜底解析（平台实返形态）')
+  // 空分支：返回无 artifacts 字段 → []；status 缺省 'unknown'
+  cli._callTool = async () => ({ content: [{ type: 'text', text: JSON.stringify({ worker_id: 'w-9' }) }] })
+  const rEmpty = await cli.getWorkerResult({ missionId: 'm-1', workerId: 'w-9' })
+  assert.deepEqual(rEmpty, { workerId: 'w-9', status: 'unknown', artifacts: [] }, '无 artifacts → []，status 缺省 unknown')
+  // isError 分支（token 缺 scope 形态）→ unavailable 形态
+  cli._callTool = async () => ({ content: [{ type: 'text', text: "Error executing tool: MCP token lacks required scope 'read'." }], isError: true })
+  assert.deepEqual(
+    await cli.getWorkerResult({ missionId: 'm-1', workerId: 'w-9' }),
+    { workerId: null, status: 'unavailable', artifacts: [] },
+    'isError → unavailable 不抛',
+  )
+  // 网络失败（_callTool null）→ unavailable 形态
+  cli._callTool = async () => null
+  assert.deepEqual(
+    await cli.getWorkerResult({ missionId: 'm-1', workerId: 'w-9' }),
+    { workerId: null, status: 'unavailable', artifacts: [] },
+    '网络失败 null → unavailable 不抛',
+  )
+  // 未配置 → unavailable 且不发网（_callTool 被调即炸；cwd 喂干净 tmp 隔离仓活配置）
+  const cleanDir2 = mkdtempSync(join(tmpdir(), 'mcpc-gwr-'))
+  const uncfg2 = new SillyHubMcpClient({ cwd: cleanDir2 })
+  uncfg2._callTool = async () => { throw new Error('未配置不得发网') }
+  assert.deepEqual(
+    await uncfg2.getWorkerResult({ missionId: 'm-1', workerId: 'w-9' }),
+    { workerId: null, status: 'unavailable', artifacts: [] },
+    '未配置 → unavailable 不发网不抛',
+  )
+  rmSync(cleanDir2, { recursive: true, force: true })
+})
+
 test('③ probe daemon 在线层：false 拦 / true 与 null 放（fail-open）', async () => {
   clearProbeCache()
-  const mk = (online) => ({
-    probeDaemon: async () => true,
-    listToolsWithMeta: async () => ({ tools: [{ name: 'dispatch_worker', inputSchema: { properties: { worktree_path: {}, worker_prompt: {} } } }] }),
-    getDaemonStatus: async () => ({ online }),
-  })
-  const off = await probeSillyHub({ client: mk(false), worktreePath: null })
-  assert.equal(off.available, false, 'daemon_online=false → unavailable')
-  assert.equal(off.reason, 'daemon-offline', 'reason 类型化（区别于 daemon-unreachable）')
-  clearProbeCache()
-  const on = await probeSillyHub({ client: mk(true), worktreePath: null })
-  assert.equal(on.available, true, 'daemon_online=true → 可用')
-  assert.equal(on.daemonOnline, true, 'daemonOnline 透传（调用方可区分探明在线/未知）')
-  clearProbeCache()
-  const unknown = await probeSillyHub({
-    client: { probeDaemon: async () => true, listToolsWithMeta: async () => ({ tools: [] }) }, // 无 getDaemonStatus 方法 = 旧 backend
-    worktreePath: null,
-  })
-  assert.equal(unknown.available, true, '无工具（旧 backend）→ fail-open 不判不可用')
-  assert.equal(unknown.daemonOnline, null, '未知透传 null')
-  clearProbeCache()
+  // 坑 probe-cwd 环境依赖（probe-no-config-cwd-leak 对偶面）：probeSillyHub 即使注入
+  // client 也先过 readMcpConfig(cwd) 的 no-config 门——主仓进程 cwd 有活 local.yaml 能过，
+  // worktree（gitignore 不带 local.yaml）则 no-config 短路、注入 client 根本不被消费。
+  // 喂 tmp 配置目录（mcp 段齐）显式过门，主仓/worktree 行为一致（daemon-offline 分支
+  // 不进负面缓存，三例同 fingerprint 无串扰）
+  const cfgDir = mkdtempSync(join(tmpdir(), 'mcpc-probe-'))
+  mkdirSync(join(cfgDir, '.sillyspec'), { recursive: true })
+  writeFileSync(join(cfgDir, '.sillyspec', 'local.yaml'), 'mcp:\n  url: "http://127.0.0.1:9998"\n  token: "shmcp_probe"\n')
+  try {
+    const mk = (online) => ({
+      probeDaemon: async () => true,
+      listToolsWithMeta: async () => ({ tools: [{ name: 'dispatch_worker', inputSchema: { properties: { worktree_path: {}, worker_prompt: {} } } }] }),
+      getDaemonStatus: async () => ({ online }),
+    })
+    const off = await probeSillyHub({ client: mk(false), worktreePath: null, cwd: cfgDir })
+    assert.equal(off.available, false, 'daemon_online=false → unavailable')
+    assert.equal(off.reason, 'daemon-offline', 'reason 类型化（区别于 daemon-unreachable）')
+    clearProbeCache()
+    const on = await probeSillyHub({ client: mk(true), worktreePath: null, cwd: cfgDir })
+    assert.equal(on.available, true, 'daemon_online=true → 可用')
+    assert.equal(on.daemonOnline, true, 'daemonOnline 透传（调用方可区分探明在线/未知）')
+    clearProbeCache()
+    const unknown = await probeSillyHub({
+      client: { probeDaemon: async () => true, listToolsWithMeta: async () => ({ tools: [] }) }, // 无 getDaemonStatus 方法 = 旧 backend
+      worktreePath: null,
+      cwd: cfgDir,
+    })
+    assert.equal(unknown.available, true, '无工具（旧 backend）→ fail-open 不判不可用')
+    assert.equal(unknown.daemonOnline, null, '未知透传 null')
+  } finally {
+    clearProbeCache()
+    rmSync(cfgDir, { recursive: true, force: true })
+  }
 })
 
 test('② connect mcp 段成对签发：gateway_url+token 覆盖写；失败降级不覆盖手填段', async () => {

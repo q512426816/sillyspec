@@ -212,7 +212,26 @@
 方案：①worktree-apply.js 新增 resolveActiveOrArchiveChangeDir（活跃缺 design.md 而归档在→回退读归档目录），resolveApplyAllowSet 与 assess 段豁免集统一接线，不动归档回收策略；②两 resolver 的 mtime fallback 排除有主 run（戳属他变更即跳过，全部有主→null；无 changeName 旧调用零回归）；③index.js docs check 渲染层折叠重复硬失效（×N）+ advisory 尾部分区 + 按名聚合，invalid 集与 exit code 不动；顺手重锚 7 份活文档 20 处行号漂移（docs check 520 全过、gate 基线 0 恢复绿）
 结果：新增测试 4+1+2 断言组全绿（apply-archive-docs-fallback 4/4、docs-check-output-noise 1/1 含 exit 1 断言、change-stamp ⑪⑫ 25/25）；worktree-apply 回归 17/17、marker-drift/isolation/docs-check 系全绿；lint 527 文件 0 hard fail；全量 405 过 2 挂均他者在途（sillyhub-mcp flake 单独跑过、scope-audit 他者 AM 态）
 
-## ql-20260910-009-a684 | 2026-09-10 15:20:00 | scope-audit 归档形态支持：预检接受 changes/archive/<名>、快照优先记录态展示、无锚点时 HEAD 未提交窗口行数兜底
-状态：进行中
+## ql-20260910-009-a684 | 2026-09-10 15:20:00 | scope-audit 归档形态支持——已归档变更可查
+状态：已完成
 关联变更：（无）
-文件：（见实际改动）
+文件：
+- src/index.js（归档预检双目录 + usage 文案）
+- src/scope-audit.js（resolveChangeDir/快照记录态/HEAD 兜底/排除面 note）
+- test/scope-audit.test.mjs（新契约改写 + 归档两用例）
+需求：scope-audit 归档形态支持——已归档变更可查
+根因：上一变更交付的 scope-audit 预检只认活跃目录 changes/<名>，归档后目录移入 changes/archive/ 即 exit 1；且 post-apply 无锚点形态行数恒降级 —、他者声明退栈文件无声消失（计划内文件误显计划未动不可解释）
+方案：index.js 预检双目录接受；scope-audit.js 目录解析兼容归档 + 归档且实时窗口空时读 execute 快照出记录态（快照缺失空表诚实说明）+ 无锚点行数按 HEAD 未提交窗口兜底 + 排除面计数 note 可见；测试按新契约改写并补归档两用例
+结果：node --test 11/11；npm test 全量 0 失败（doc-ref 锚点 ±5 容差窗内）；dogfood 实测归档变更出三态全表+真实行数 +1370/-35
+审计：⚖️ 归属切分：7 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：.sillyspec/docs/sillyspec/scan/ARCHITECTURE.md, docs/sillyspec/architecture-4a.md, docs/sillyspec/file-lifecycle.md, docs/sillyspec/prompt-control-debt.md, docs/sillyspec/sillyhub-path-a-contract.md, b2-core-engine.patch, b2-src_index.js.patch
+
+## ql-20260910-010-d973 | 2026-09-10 18:54:03 | scope-audit baseAnchor 修复——审计 tag merge-base 锚
+状态：已完成
+关联变更：2026-09-10-review-dispatch
+文件：
+- src/verify-postcheck.js（形态 B diffRef 三级解析（分支→审计 tag→null））
+- test/scope-audit.test.mjs（新增审计 tag 锚用例）
+需求：scope-audit baseAnchor 修复——审计 tag merge-base 锚
+根因：无，纯新增——apply+cleanup 删分支后形态 B 的 merge-base 源因分支 rev-parse 失败被静默省略，baseAnchor 恒 null，行数降级 HEAD 未提交窗口口径（不含已提交改动）；而 worktree.js:1065 早就打了 sillyspec-audit/<branch> 审计 tag，数据在却没用
+方案：resolveReconcileActualFiles 形态 B diffRef 三级解析：分支 → sillyspec-audit/<分支全名> tag → null；merge-base 与 B1 diff 用 tag ref 照算，baseAnchor 恢复真值、文件集与行数恢复完整锚定口径
+结果：node --test 12/12（新增 tag 锚用例+保留 HEAD 兜底用例双路径）；npm test 全量 0 失败；dogfood 实测本变更基点 3f22d6b 真锚、+2365/-101 完整行数

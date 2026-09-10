@@ -34,12 +34,15 @@ dispatch:
   # poll_interval_ms: 15000   # ⚠ 路径A 预留·未落地，配了暂不生效
   # worker_timeout_ms: 60000  # ⚠ 路径A 预留·未落地，配了暂不生效
 
-# ── 独立审查通道优先序（tier=independent 时按序尝试首个可用通道；只配偏好不管能力，某通道宿主不可用自动跳过）──
-# 可选值：agent-tool（宿主 Agent 子代理）/ platform（CLI 直发平台 worker，⚠ review-dispatch 命令
-#         P2 未落地，当前版本遇此通道跳过）/ host-mcp（宿主自有 MCP 派活）/ self（降级自审，恒垫底）
+# ── 独立审查通道优先序与派发调参（tier=independent；只配偏好不管能力，某通道宿主不可用自动跳过）──
+# 可选通道：agent-tool（宿主 Agent 子代理）/ platform（CLI 直发平台 worker——sillyspec review-dispatch
+#           派发 + --status 轮询回收）/ host-mcp（宿主自有 MCP 派活）/ self（降级自审，恒垫底）
 # 缺省 = [agent-tool, platform, host-mcp, self]（现状序）；未知值忽略；self 永远隐式垫底不会无路可走
 # review_dispatch:
 #   channel_priority: [platform, agent-tool, host-mcp, self]
+#   budget_usd: 1.0     # 单次审查 mission 预算上限（默认 1.0）
+#   stall_ms: 900000    # 停滞判定窗（默认 15 分钟；queued 排队不计时；疑似停滞只提示不自动 kill）
+#   timeout_ms: 0       # 总时长提示上限（默认 0=永不提示；处置永远归人：--kill 显式）
 
 # ── monorepo 子模块映射（test_strategy: module 时按 git diff 命中模块收窄测试）──
 # 只支持 inline flow 形态（嵌套展开式解析不出）：

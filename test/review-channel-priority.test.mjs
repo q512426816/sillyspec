@@ -3,7 +3,7 @@
 //   ② classifyReviewerChannel：reviewer.channel 结构化落款优先 > reviewerNotes 首行「降级：」
 //      向后兼容 > unspecified（存量无标记 review，gate 不特殊处理）
 //   ③ renderReviewJsonContract：tier=independent 头部渲染「审查执行通道」段（按配置序；
-//      platform P2 未落地标注暂跳过，不引用不存在命令）+ reviewer 字段契约与示例；
+//      platform 通道指向 review-dispatch 命令）+ reviewer 字段契约与示例；
 //      tier=self 无通道段（自审无需独立通道）
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -72,7 +72,7 @@ test('② classifyReviewerChannel：结构化落款 > 首行约定 > unspecified
   assert.equal(classifyReviewerChannel(null), 'unspecified', 'review=null 不抛')
 })
 
-test('③ renderReviewJsonContract：通道段按配置序 + platform 未落地标注 + reviewer 契约', () => {
+test('③ renderReviewJsonContract：通道段按配置序 + platform 命令指引 + reviewer 契约', () => {
   const md = renderReviewJsonContract({
     stage: 'plan', changeDir: '/tmp/x/.sillyspec/changes/demo', reviewRunId: 'review-20990101-0000',
     tier: 'independent', channelPriority: ['platform', 'agent-tool', 'self'],
@@ -82,7 +82,8 @@ test('③ renderReviewJsonContract：通道段按配置序 + platform 未落地�
   const agentToolIdx = md.indexOf('2. **agent-tool**')
   const selfIdx = md.indexOf('3. **self**')
   assert.ok(platformIdx > 0 && agentToolIdx > platformIdx && selfIdx > agentToolIdx, '通道按传入优先序编号排列')
-  assert.ok(md.includes('当前版本未落地，遇此通道直接跳过'), 'platform P2 未落地显式标注（不引导调用不存在的命令）')
+  assert.ok(md.includes('sillyspec review-dispatch --change'), 'platform 通道指向已落地命令（2026-09-10-review-dispatch P2）')
+  assert.ok(!md.includes('未落地'), '旧「未落地暂跳过」标注已随命令落地移除')
   assert.ok(md.includes('`reviewer`(可选,审计字段)'), '契约列 reviewer 字段说明')
   assert.ok(md.includes('"reviewer": { "channel": "<agent-tool|platform|host-mcp|self>"'), 'JSON 示例含 reviewer 行')
   assert.ok(md.includes('review_dispatch.channel_priority'), '指引点出配置键（用户可查可改）')

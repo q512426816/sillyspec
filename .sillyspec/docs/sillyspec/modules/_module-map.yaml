@@ -68,10 +68,12 @@ modules:
       - src/stage-contract-spec.js
       - src/check-primitives.js
       - src/stage-review.js
+      - src/stage-review-checklist.js
       - src/task-review.js
       - src/verify-postcheck.js
       - src/review-tier.js
       - src/change-risk-profile.js
+      - src/scope-audit.js
       - src/classify-change.js
       - src/contract-matrix.js
       - src/endpoint-extractor.js
@@ -134,6 +136,7 @@ modules:
     review_reasons: []
     paths:
       - src/dispatch/
+      - src/review-dispatch.js
 
   sync:
     status: active

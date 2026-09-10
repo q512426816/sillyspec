@@ -120,7 +120,7 @@ export function renderReviewJsonContract({ stage, changeDir, reviewRunId, tier, 
     : readReviewChannelPriority(process.cwd())
   const CHANNEL_DESC = {
     'agent-tool': '宿主 Agent tool 派独立子代理（subagent_type: general，独立上下文）',
-    'platform': 'CLI 直发平台独立 worker（P2 的 `sillyspec review-dispatch` 命令；**当前版本未落地，遇此通道直接跳过**）',
+    'platform': 'CLI 直发平台独立 worker（`sillyspec review-dispatch --change <变更名> --stage <stage>` 派发，`--status` 轮询回收——独立进程/会话，宿主无 Agent/MCP 亦可用）',
     'host-mcp': '宿主自有 MCP 派独立执行者（能派活的 MCP tool，如平台 MCP 的 dispatch 类工具）',
     'self': '降级自审：主代理切换审查者角色，reviewerNotes **首行**记「降级：环境无子代理可用」+ reviewer.channel="self"（gate 放行但留 ⚠️ 审计行），逐条结论附源码锚点补偿独立性',
   }
@@ -596,6 +596,24 @@ export function printStageReviewResult(result, context = {}) {
     }
     console.error(`\n   提示：tier=independent 要求独立审查子代理产出 review.json，补全后重新 --done`)
     console.error(`   宿主环境无 Agent tool（如 PI agent）→ 降级条款：当前 agent 切审查者角色自审产出，reviewerNotes 首行记「降级：环境无子代理可用」（gate 放行但留 ⚠️ 审计行），勿伪装子代理审查`)
+    // 在途区分（2026-09-10-review-dispatch FR-06）：review-dispatch 已派发平台审查但 worker 未终态时，
+    // 提示区分「在途」而非只有笼统缺件——agent 看得懂该等（--status 回收）还是该处置（--kill 后降级）。
+    // 内联读在途记录（同步 readFileSync，不经 import——review-dispatch.js 静态 import 本模块，反向
+    // import 成环；路径契约 = review-dispatch.js dispatchRecordPath：runtimeRoot/review-dispatch-<change>.json）。
+    // fail-open：无 changeName / 无记录 / 读失败 → 零输出（旧口径）。
+    if (changeName && runtimeRoot) {
+      try {
+        const recPath = join(runtimeRoot, `review-dispatch-${changeName}.json`)
+        if (existsSync(recPath)) {
+          const rec = JSON.parse(readFileSync(recPath, 'utf8'))
+          if (rec && typeof rec === 'object' && (rec.state === 'in-flight' || rec.state === 'dispatching')) {
+            console.error(`\n   🛰️ 平台审查在途：mission ${rec.missionId}（state ${rec.lastState || rec.state}，最近进展 ${rec.lastStateAt ? new Date(rec.lastStateAt).toLocaleString('zh-CN') : '未知'}）`)
+            console.error(`      → 先 sillyspec review-dispatch --status --change ${changeName} 轮询回收（worker completed 后自动落盘 review.json）；`)
+            console.error(`      → 或 sillyspec review-dispatch --kill --change ${changeName} 显式放弃后走通道降级。`)
+          }
+        }
+      } catch { /* fail-open */ }
+    }
     console.error(`   可用 sillyspec register-stage-review --change <名> --stage ${stage} [--from <已有review.json>] 一步生成 run 目录 + review.json 骨架（docHash 自动算）+ 写 marker + 自检，省掉手动建目录/写 marker`)
     // docHash 失配精确指路（2026-08-21 agent-手工产出审计项②）：改版后忘重算是最高频失败，
     // 一键重算命令带上真实 change 名，agent 可直接照抄执行（--refresh-hash 保 verdict）。

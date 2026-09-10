@@ -590,6 +590,37 @@ export class SillyHubMcpClient {
   }
 
   /**
+   * 取 worker 结果产物（调 get_worker_result tool，FR-04 终态回收链——worker completed 后
+   * 经此取 artifacts，此前该 tool 无 CLI 封装）。
+   *
+   * artifacts 原样透传不裁剪：平台实返形态（[{kind, content_ref, id}…] 或演进形态）整组
+   * 透传——kind 匹配 / JSON 提取等语义解析归消费方（review-dispatch 的
+   * extractReviewFromArtifacts），本封装保持传输层纯度（task-02 constraints）。
+   * @param {object} p
+   * @param {string} p.missionId
+   * @param {string} p.workerId
+   * @returns {Promise<{workerId: string|null, status: string, artifacts: Array}>}
+   *   正常 → {workerId, status, artifacts} 原样解析（status 缺省 'unknown'，artifacts 缺省 []）；
+   *   未配置 / 调用失败(null) / tool isError → { workerId: null, status: 'unavailable', artifacts: [] }
+   *   （与 dispatchWorker/getDaemonStatus 同族 best-effort，绝不向上抛）
+   */
+  async getWorkerResult({ missionId, workerId } = {}) {
+    if (!this._configured) return { workerId: null, status: 'unavailable', artifacts: [] };
+    const result = await this._callTool('get_worker_result', { mission_id: missionId, worker_id: workerId });
+    if (result === null || result.isError) return { workerId: null, status: 'unavailable', artifacts: [] };
+    const value = this._parseToolReturnValue(result);
+    // workerId 兜底链与 dispatchWorker 同款（2026-09-10 平台实返 {id,…} 形态实证）
+    const wid = value && typeof value === 'object'
+      ? (value.worker_id ?? value.workerId ?? value.id ?? null)
+      : null;
+    const status = value && typeof value === 'object'
+      ? (value.status ?? 'unknown')
+      : 'unknown';
+    const artifacts = value && Array.isArray(value.artifacts) ? value.artifacts : [];
+    return { workerId: wid, status, artifacts };
+  }
+
+  /**
    * 终止 worker lease 防双写（UB-6 超时 fallback 用）。
    *
    * 注：SillyHub 当前 8 个 tool 无显式 kill，路径A 未落地；best-effort 实现——
