@@ -11,9 +11,9 @@ requirement_ids: [FR-01, FR-02, FR-03, FR-04, FR-07]
 decision_ids: [D-001@1, D-002@1, D-003@1]
 allowed_paths:
   - src/index.js
-  target_files:
+target_files:
   - src/index.js
-  goal: >
+goal: >
   注册顶级命令 sillyspec review-dispatch 并把三形态接到 task-03 的 runReviewDispatch(opts) 入口（plan 关键契约段）——缺省=创建（--change 必填 + --stage ∈ brainstorm|plan|execute；probeSillyHub 三层前置 no-config/daemon-unreachable/daemon-offline 任一不可用 → 非零退出 + readReviewChannelPriority 去掉 platform 后的剩余通道指引 → create_mission(orchestration_mode=external, budget_usd≤配置) → dispatch_worker(read_only, worker_prompt=buildReviewerTaskBook 产物) → 写在途记录 + 打印 missionId 与 --status 指引后退出，创建即返回不阻塞）；--status（list_workers 更新记录 → 停滞检测 → 终态回收 getWorkerResult → persistStageReview）；--kill（清在途记录 + 平台处置指引，无专用 kill tool 时 fail-open）。index/command 只做 flag 解析与退出码映射——PI 等无 Agent tool/MCP 宿主由此获得 platform 审查通道的 CLI 入口（D-001）。
 implementation:
   - src/index.js 加 case 'review-dispatch'——参照 register-stage-review 先例（index.js:1628）的解析风格，args.indexOf 取 --change/--stage 值、filteredArgs.includes 判 --status/--kill 布尔，缺参/形态互斥（--status 与 --kill 同给）打用法 + process.exit(2)，assertSafeChangeName 消毒 --change，stage 白名单校验 ∈ brainstorm|plan|execute

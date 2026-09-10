@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, readdirSync } from 'fs'
 import path from 'path'
 import { getRule } from '../stage-contract-spec.js'
+import { REVIEW_CHECKLISTS } from '../stage-review-checklist.js'
 
 // 从 plan-postcheck.js 重导出（保持向后兼容）
 export {
@@ -331,18 +332,10 @@ plan.md 审查通过后、进入 execute 前，若 plan_level=full（跨模块/�
 tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
 - tier=self：当前 agent 直接执行下方审查清单（小变更，独立审查仪式成本 > 收益）
 - tier=independent：必须用 Agent tool 启动一个独立的计划审查子代理（独立上下文，不共享你生成 plan 时的分析与倾向），由子代理执行下方审查清单并输出 review.json
+  宿主环境无 Agent tool 可用（调用报 Unknown agent / Available agents: none）→ 不卡死：主代理切换为审查者角色自审替代，reviewerNotes 首行记录「降级：环境无子代理可用」，逐条结论附源码锚点（file:line 或 grep/read 证据）补偿独立性。
 
 ### 审查清单（读取 plan.md 的 plan_level，逐条核对）
-- [ ] task 编号与 Wave checkbox 格式正确，execute 依赖此格式解析任务
-- [ ] plan_level 档位与实际复杂度匹配（none/light/full 没选错）
-- [ ] 跨任务契约：task-A 的产出（接口/DTO/响应）被 task-B 消费时，consumer 是否在 TaskCard expects_from 声明所需字段、provider 是否在 provides 承诺、两边字段一致？（plan-postcheck 会硬校验，此处是独立视角复查）
-- [ ] 文件覆盖：design.md 文件变更清单中的每个源码文件，是否都被至少一个 task 的 allowed_paths 覆盖？（漏覆盖 = execute 必然漏改。跨仓变更对账口径：design 清单按「## <repo-key> 仓变更」分段、路径相对各仓根，task 卡 repo: + 同口径相对路径匹配——allowed_paths 带仓库名前缀或绝对路径 = 永不命中、对账不上）
-- [ ] 不存在 P0/P1 unresolved blocker 残留
-- [ ] 没有实现细节泄漏到 plan.md（接口签名/代码示例应在 tasks/task-NN.md）
-- [ ] 关键路径与 Wave 依赖合理（无循环依赖、无遗漏前置）
-- [ ] Wave 分组说明：依赖方向违规（depends_on 同 Wave / 后置 Wave）在 --done 时会按拓扑**自动修复**（提案经一致性+文件面验证后落盘）；共享文件的手工分 Wave 串行是合法安全模式，不会被自动改写
-- [ ] 连带测试归属：本批改动是否会导致既有测试断言失效（改共享/被多 task 依赖源文件、改被测试精确匹配的值如 UI 文案/按钮文本/错误信息/常量/枚举字面量、改函数签名或返回结构等单文件场景）？此类 task 是否在 related_tests 声明了失效测试、且路径在 allowed_paths 内（或由独立测试 task 覆盖）？（漏声明 = execute 阶段测试债、主代理事后兜底）
-- [ ] acceptance 字段对照实际 schema/类型源文件核验存在性与形态，不凭 design.md 文字臆断（plan-postcheck best-effort grep 会给 allowed_paths 源文件未命中的 snake_case/camelCase 标识符提 warning，此处是语义层复查；臆断 = execute 阶段返工）
+${REVIEW_CHECKLISTS.plan.map((item) => '- [ ] ' + item).join('\n')}
 
 ### tier=independent 时：启动 plan-review 子代理
 用 Agent tool 启动子代理（subagent_type: general），prompt 要点：

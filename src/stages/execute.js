@@ -6,6 +6,7 @@ import { renderDispatchInstruction } from '../dispatch/strategy.js'
 import { isPathASupported } from '../dispatch/backends/sillyhub-mcp.js'
 import { readMcpConfig } from '../sillyhub-mcp/config.js'
 import { gitQuiet } from '../git-helper.js'
+import { REVIEW_CHECKLISTS } from '../stage-review-checklist.js'
 import { parseRepo } from './plan-postcheck.js'
 // 模块卡分级解析（token 成本优化 P0a）。注意：module-resolve.js 反向 import 本文件的
 // parseTaskRegistry（注册表同口径）——双向引用均为函数声明 + 调用时解引（无模块初始化期
@@ -342,13 +343,12 @@ const acceptanceSteps = [
 tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
 - tier=self：当前 agent 汇总执行（对照 design.md 逐项检查 + 偏差说明）
 - tier=independent：必须用 Agent tool 启动一个独立的 QA 子代理（独立上下文，不共享实现者的分析），子代理对照 design.md 逐项检查实现一致性并输出 review.json。review.json 产物契约（CLI Stage Review Gate 将硬校验，schema + 完整示例 + docHash 算法如下，照抄改值；reviewedFiles 除主文档 design.md 外可追加 git diff 涉及的源码文件）:
+  宿主环境无 Agent tool 可用（调用报 Unknown agent / Available agents: none）→ 不卡死：主代理切换为审查者角色自审替代，reviewerNotes 首行记录「降级：环境无子代理可用」，逐条结论附源码锚点（file:line 或 grep/read 证据）补偿独立性。
 {REVIEW_JSON_CONTRACT}
   该 acceptance review 同时覆盖"代码审查"视角（风格/bug/安全/冗余），后续代码审查步骤仅需轻量复审。
 
   **审查范围分级（省重复消耗，task review 已覆盖的不全量重审）**：每个 task 在 Task Review Gate 已产出 review.json（{SPEC_ROOT}/.runtime/execute-runs/{EXECUTE_RUN_ID}/tasks/task-XX/review.json，specVerdict/qualityVerdict 双 pass）。QA 子代理按它分层：双 pass 的 task 只**抽查**（读 1-2 个核心 diff 文件抽验 reviewerNotes 与实际改动相符，不必逐文件重审）；未双 pass（fail/cannot_verify/缺失）的 task 必须全量重审。无论抽查还是全量，以下三项始终必查——task review 铁律是"只看当前 task 的 diff"，这三项是它覆盖不到、只有 stage review 能兜住的：
-  1. 跨 task 交界（A 产出的接口/数据结构与 B 的消费是否对得上）
-  2. design.md 整体对照（最终实现拼起来是否仍符合设计意图，而非仅各 task 局部合规）
-  3. 组装行为（全量测试/构建/启动通过——单 task 测试全绿 ≠ 组装正确）
+${REVIEW_CHECKLISTS.execute.map((item, index) => '  ' + (index + 1) + '. ' + item).join('\n')}
 
   **产物唯一化（省重复消耗）**：本步逐项对照结论**只落盘一份**——直接写进 review.json 的 \`checklist\` 数组（item=设计要点/FR/决策，note=实现状态 ✅/⚠️/❌ + 偏差说明 + commit 锚点），reviewerNotes 写汇总。**不要**另写独立的 design-check.md 长文（同一份 design×diff 二次消费；2026-08-22 实测该重复一遍 ≈8 分钟全量重读）。
   **gate 重试修复**：review.json 落盘后若 design.md 又有改版，gate 会**自动机械重算 docHash 放行**（verdict/checklist 保留，结论是否仍适用于新文档需人工确认）——**不要重做审查**（重做=同一材料第三遍）；主文档路径错/缺失不会被自动修复，按 gate 报错修正 reviewedFiles[0]，或跑 \`sillyspec register-stage-review --change <变更名> --stage execute --refresh-hash\`。

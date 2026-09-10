@@ -57,3 +57,9 @@ gates 侧 backfill（verify-facts 回填）曾对无 facts 的存量变更凭空
 
 ## 双维度报同一漂移信号时后加维度须豁免
 checkProbeConsistency 增 facts 基线对比维度后，probe6 在 HEAD 前移场景与既有 md 锚点维度重复报同一漂移（一条信号两条告警）。规则：给既有检测新增第二维度时，识别「同一根因产生多路信号」的场景并在后加维度里豁免（HEAD-advance 时 facts 侧 probe6 不报，漂移由 md 锚点维度单报）。（2026-09-08-ir-verify-facts）
+
+## 2026-09-10 平台通道活体发现的两个平台侧缺口（待平台仓修复，sillyspec 侧兜底已就绪）
+
+- **worker 结论不落 artifacts**：mission 77470369（read_only PI worker，13min completed）get_worker_result 返 artifacts:[]，完整审查结论只在 get_run_logs 的 [ASSISTANT] 流。sillyspec 侧行为正确（completed-no-artifact → 人工核对指引兜底，不崩不静默）。平台侧修法：终态时把最终 assistant 消息/结构化段落为 kind=summary artifact。已列平台侧提示词 P0-1。
+- **配额池不独立**：本地 agent 子代理与平台 worker（pi-coding-agent）同吃账号级池（429/1308 同锁两边，15:30-18:31 全通道瘫痪实证）——「本地耗尽→平台兜底」价值主张需平台 worker 支持独立 provider/key 才成立。已列平台侧提示词 P0-2。
+- 附带实证：平台独立 worker 抓到了归档 task-04.md frontmatter YAML 缩进缺陷（主代理自审与 CLI 门禁均漏过）——独立审查通道有效性的直接证据。

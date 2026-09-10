@@ -1,3 +1,5 @@
+import { REVIEW_CHECKLISTS } from '../stage-review-checklist.js'
+
 export const definition = {
   name: 'brainstorm',
   title: '头脑风暴',
@@ -380,6 +382,7 @@ design.md 文件路径 + 自审结果
 tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
 - tier=self：当前 agent 直接执行下方交叉审查（小变更）
 - tier=independent：必须用 Agent tool 启动一个独立的设计审查子代理（独立上下文，不共享你的分析与倾向），子代理按下方"交叉审查模型"审查 design.md 并输出 review.json。review.json 产物契约（CLI Stage Review Gate 将硬校验，schema + 完整示例 + docHash 算法如下，照抄改值）:
+  宿主环境无 Agent tool 可用（调用报 Unknown agent / Available agents: none）→ 不卡死：主代理切换为审查者角色自审替代，reviewerNotes 首行记录「降级：环境无子代理可用」，逐条结论附源码锚点（file:line 或 grep/read 证据）补偿独立性。
 {REVIEW_JSON_CONTRACT}
   子代理只产出 review + Unresolved Blockers，**是否调用 sillyspec run brainstorm --wait 仍由你（主 agent）根据其 verdict 决定**（子代理不直接操作 CLI 状态机）。
 
@@ -403,18 +406,11 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
 
 ### 交叉审查模型
 按三层检查并输出 cross-check matrix：
-1. **定义层**：模糊概念是否有可测试定义。例如"高可用""异常数据""本地缓存""重试"。
-2. **一致性层**：跨章节/跨产物是否打架。例如数据流 vs 容错策略、schema vs 输入格式、非目标 vs tasks。
-3. **可行性层**：关键假设是否有来源。例如 P99 延迟、上游 SLA、缓存 TTL、数据量、权限模型、兼容旧配置。
+${REVIEW_CHECKLISTS.brainstorm.slice(0, 3).map((item, index) => (index + 1) + '. ' + item).join('\n')}
 
 ### 交叉点抽取
 重点找这些交叉点：
-- 模块 A 依赖模块 B 的实体/状态/接口
-- requirements.md 的 FR 与 design.md 的数据模型/API/状态机
-- design.md 的容错策略与数据流、缓存、重试、回滚
-- tasks.md 的执行范围与 design.md 的非目标
-- decisions.md 的 D-xxx@vN 与 design.md 当前说法
-- scan/module docs 或源码中的真实约束与 design.md 假设
+${REVIEW_CHECKLISTS.brainstorm.slice(3).map((item) => '- ' + item).join('\n')}
 
 ### 问答处理
 1. 先自动交叉审查，不要一上来问用户。
