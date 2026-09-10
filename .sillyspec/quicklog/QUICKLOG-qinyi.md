@@ -160,3 +160,14 @@
 根因：平台侧 22cdf89d1 已修 gateway 暴露/成对签发/get_daemon_status 并留三遗留：dispatchWorker 解析只认 worker_id 但平台实返 id（派发成功 workerId=null 轮询全断）；旧 mcp 段写入按 url 同源假设致凭据三头分裂永不愈合；daemon 不在线只能真派发才发现（no_online_daemon 快速失败）
 方案：client.js dispatchWorker 解析链补 id 兜底并新增 getDaemonStatus（isError/未配置→null fail-open）；sync.js connect 经 mcp-tokens API（scope=read+dispatch）取 gateway_url+token 成对覆盖写 mcp 段（陈旧段修复性覆盖，签发失败降级旧口径不覆盖手填段）；probe.js 连通后调 get_daemon_status——false→available false reason daemon-offline（不进负面缓存），true/null 透传 daemonOnline；另修既有测试环境泄漏（probeSillyHub 加 cwd 注入，dev 仓自身连平台时 no-config 用例读到真配置）
 结果：test/sillyhub-mcp-platform-fixes.test.mjs 4 组全绿，dispatch 族回归 5 套与 lint 绿，远端活体冒烟 available true + 旧 token daemonOnline null（fail-open 实证）；sillyhub-mcp 模块卡与 sidecar 同步
+
+## ql-20260910-006-2134 | 2026-09-10 13:03:10 | 成对签发消费侧 hotfix：client 端点双形态兼容（origin 拼 /mcp/ vs 完整端点不再叠加）
+状态：已完成
+关联变更：（无）
+文件：
+- src/sillyhub-mcp/client.js（_endpoint 双形态兼容（/mcp$ 尾不再叠加 /mcp/））
+- test/sillyhub-mcp-platform-fixes.test.mjs（端点双形态 5 断言 + getDaemonStatus 未配置用例 cwd 隔离）
+需求：成对签发消费侧 hotfix：client 端点双形态兼容（origin 拼 /mcp/ vs 完整端点不再叠加）
+根因：connect 原样写 gateway_url（完整端点）进 mcp.url，而 client 历来按 origin 语义自拼 /mcp/ → /mcp/mcp/ 必 404（活体首跑实证）；平台侧 daemon local-yaml-writer 也写 origin+/mcp 形态，两种形态在野，任一单侧修都会破坏另一形态
+方案：client 构造器端点解析改双形态：url 以 /mcp 结尾视为完整端点（补尾斜杠即用），否则视为 origin 拼 /mcp/；测试补端点 5 断言（origin/完整/尾斜杠/子路径/未配置）并修 getDaemonStatus 未配置用例的 cwd 隔离（仓自身 local.yaml 现为活配置，进程 cwd 会真发网）
+结果：test/sillyhub-mcp-platform-fixes.test.mjs 5 组全绿，dispatch 族回归不变绿；活体验证全链路点亮：endpoint 归一 https://crrcdt.ppdmq.top/mcp/ + probeDaemon true + daemonOnline true（成对 token read scope 生效）

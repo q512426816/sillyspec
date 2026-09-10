@@ -54,8 +54,11 @@ export class SillyHubMcpClient {
       : DEFAULT_TIMEOUT_MS;
     // 缺 url 或 token → 视为未配置，所有方法降级不发网络
     this._configured = Boolean(this._url && this._token);
-    // 端点必须带尾斜杠
-    this._endpoint = this._url ? `${this._url}/mcp/` : '';
+    // 端点必须带尾斜杠。双形态兼容（2026-09-10 成对签发批次，活体实证 /mcp/mcp/ 404）：
+    // ① origin 形态（历史 local.yaml / §7.4 兜底写入，如 https://host）——本客户端拼 /mcp/；
+    // ② 完整端点形态（平台 mcp-tokens 签发响应的 gateway_url 如 https://host/mcp/，及平台侧
+    //   daemon local-yaml-writer 写的 origin+'/mcp'）——路径已含 /mcp 不再叠加，叠加必 404。
+    this._endpoint = !this._url ? '' : (/\/mcp$/.test(this._url) ? `${this._url}/` : `${this._url}/mcp/`);
     this._rpcId = 0;
     // MCP streamable HTTP session 状态：惰性 initialize 后才有（见 _ensureSession）
     this._sessionId = null;

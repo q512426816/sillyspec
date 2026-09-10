@@ -14,6 +14,15 @@ import { SillyHubMcpClient } from '../src/sillyhub-mcp/client.js'
 import { probeSillyHub, clearProbeCache } from '../src/dispatch/probe.js'
 import { SyncManager } from '../src/sync.js'
 
+test('① 端点双形态兼容（origin 拼 /mcp/ vs 完整端点不再叠加——活体实证 /mcp/mcp/ 404）', () => {
+  const mk = (url) => new SillyHubMcpClient({ url, token: 't' })._endpoint
+  assert.equal(mk('http://x'), 'http://x/mcp/', 'origin 形态（历史 local.yaml）→ 拼 /mcp/')
+  assert.equal(mk('http://x/mcp'), 'http://x/mcp/', '完整端点形态（平台 gateway_url / daemon writer）→ 不叠加')
+  assert.equal(mk('http://x/mcp/'), 'http://x/mcp/', '带尾斜杠归一')
+  assert.equal(mk('https://host/api/mcp'), 'https://host/api/mcp/', '子路径 gateway（未来部署形态）→ 不叠加')
+  assert.equal(mk(''), '', '未配置 → 空端点不发网')
+})
+
 test('① dispatchWorker 解析平台实返的 id 字段（旧解析恒 null 的缺口）', async () => {
   const cli = new SillyHubMcpClient({ url: 'http://127.0.0.1:9999', token: 'shmcp_x' })
   // monkey-patch _callTool：返回平台实测形态 {id, role, status}（无 worker_id 键）
@@ -41,9 +50,11 @@ test('① getDaemonStatus 三态解析（daemon_online 布尔 / isError / 未配
   // 无 daemon_online 字段（返回形态意外）→ null
   cli._callTool = async () => ({ content: [{ type: 'text', text: JSON.stringify({ other: 1 }) }] })
   assert.equal((await cli.getDaemonStatus()).online, null, '无字段 → null')
-  // 未配置 client → null 不发网
-  const uncfg = new SillyHubMcpClient({})
+  // 未配置 client → null 不发网（cwd 喂干净 tmp——仓自身 local.yaml 现为活配置，进程 cwd 会真发网）
+  const cleanDir = mkdtempSync(join(tmpdir(), 'mcpc-clean-'))
+  const uncfg = new SillyHubMcpClient({ cwd: cleanDir })
   assert.equal((await uncfg.getDaemonStatus()).online, null, '未配置 → null')
+  rmSync(cleanDir, { recursive: true, force: true })
 })
 
 test('③ probe daemon 在线层：false 拦 / true 与 null 放（fail-open）', async () => {
