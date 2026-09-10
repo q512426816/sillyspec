@@ -781,13 +781,31 @@ export function writeVerifyRequiredEvidence(changeDir, requiredEvidence) {
 }
 
 /**
- * 生成 execute run id
- * @returns {string} 如 'exec-2026-06-23-131400'
+ * 生成 execute run id。
+ * changeName 给定时附 change 名 FNV-1a 哈希后缀（坑 exec-run-id-same-second-collision
+ * 结构化隔离层，2026-09-10 驾驭小结第三批①，用户建议「run 目录取 change 名哈希隔离」）：
+ * 两变更同秒启动 execute 必得不同 runId（run 目录天然分家），与 claimExecuteRunId 的
+ * 排他认领互补——认领治「同 ID 两主」，哈希治「不同变更天生同 ID」。同变更重试（marker
+ * 断裂 regenerate）哈希恒同，幂等；无参调用保持裸秒级形态（向后兼容/测试注入）。
+ * @param {string|null} [changeName] 变更名（缺省=裸秒级形态，无哈希后缀）
+ * @returns {string} 如 'exec-2026-06-23-131400' / 'exec-2026-06-23-131400-3fa2c1'
  */
-export function generateExecuteRunId() {
+export function generateExecuteRunId(changeName = null) {
   const now = new Date()
   const pad = (n) => String(n).padStart(2, '0')
-  return `exec-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`
+  const base = `exec-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`
+  if (!changeName) return base
+  return `${base}-${changeNameHash(changeName)}`
+}
+
+/** change 名 → 6 位小写十六进制哈希（FNV-1a 32bit 截断；确定性、字符集落在 runId 后缀合法域 [a-z0-9]） */
+function changeNameHash(name) {
+  let h = 0x811c9dc5
+  for (let i = 0; i < name.length; i++) {
+    h ^= name.charCodeAt(i)
+    h = Math.imul(h, 0x01000193) >>> 0
+  }
+  return h.toString(16).padStart(6, '0').slice(0, 6)
 }
 
 /**
@@ -827,18 +845,19 @@ function randomRunIdSuffix() {
 }
 
 /**
- * execute run id 格式校验：exec-YYYY-MM-DD-HHMMSS（可选 -<小写字母数字> 短后缀）。
+ * execute run id 格式校验：exec-YYYY-MM-DD-HHMMSS（可选 1-2 段小写字母数字短后缀）。
  * marker 文件是 agent 可写内容，读回后既注入 prompt（{EXECUTE_RUN_ID}）又拼进
  * join(runtimeRoot, 'execute-runs', runId) 路径——格式校验同时防提示词注入与路径穿越
  * （对齐 stage-review marker 的 review- 前缀校验范式）。
- * 后缀形态（2026-09-10 驾驭小结①，坑 exec-run-id-same-second-collision）：claimExecuteRunId
- * 同秒碰撞时附随机短后缀换道；存量无后缀 ID（历史 run / 无碰撞路径）继续通过，读侧双形态兼容。
+ * 后缀两段语义：①change 哈希段（generateExecuteRunId(changeName)，坑
+ * exec-run-id-same-second-collision 结构化隔离）；②claim 碰撞随机段（claimExecuteRunId
+ * 同秒认领冲突换道）。存量无后缀 ID（历史 run）继续通过，读侧全形态兼容。
  * @param {string} runId
  * @returns {boolean}
  */
 export function isValidExecuteRunId(runId) {
   return typeof runId === 'string'
-    && /^exec-\d{4}-\d{2}-\d{2}-\d{6}(?:-[a-z0-9]{1,8})?$/.test(runId)
+    && /^exec-\d{4}-\d{2}-\d{2}-\d{6}(?:-[a-z0-9]{1,8}){0,2}$/.test(runId)
 }
 
 /**
@@ -877,8 +896,10 @@ export function resolveLatestExecuteRunIdWithTasks({ runtimeRoot, changeName = n
       .sort((a, b) => b.mtime - a.mtime)
     if (entries.length === 0) return null
     // changeName 给定时优先 change 戳等值的 run（坑 worktree-cleanup-marker-chain：mtime 最新
-    // 会错拿其他变更的 run）；无戳命中退回 mtime 最新（向后兼容，调用方多为 marker 漂移兜底，
-    // 宁可拿最新 run 也不空手而归——覆盖度由调用方 validateTaskReviews 复校验）
+    // 会错拿其他变更的 run）；无戳命中退 mtime 最新——但排除「戳属他变更」的有主 run（坑
+    // exec-run-id-same-second-collision 收尾，2026-09-10 驾驭小结第二批②：与
+    // resolveExecuteRunForChange / resolveLatestExecuteRunId 同语义，戳存在且不等值 = 有明确
+    // 主人，误拿即串台）。无 changeName（旧行为，调用方 marker 漂移兜底）纯 mtime 零回归。
     if (changeName) {
       for (const x of entries) {
         try {
@@ -886,6 +907,11 @@ export function resolveLatestExecuteRunIdWithTasks({ runtimeRoot, changeName = n
           if (c === changeName) return x.e
         } catch {}
       }
+      const ownerless = entries.find(x => {
+        try { return !existsSync(join(runsDir, x.e, 'change')) } catch { return true }
+      })
+      if (ownerless) return ownerless.e
+      return null
     }
     return entries[0].e
   } catch {
@@ -904,11 +930,16 @@ export function resolveLatestExecuteRunId({ runtimeRoot, changeName }) {
   } catch {}
   // marker 缺失（worktree cleanup / 归档清理 / 并行会话误删——坑 worktree-cleanup-marker-chain）
   // 时不再盲目取 mtime 最新（会拿到其他变更的 run）：先按 change 归属戳过滤，命中才返回；
-  // 无戳（旧 run）退回 mtime 最新保持向后兼容。
+  // 无戳（旧 run）退 mtime 最新——但排除「戳属他变更」的有主 run（坑
+  // exec-run-id-same-second-collision 收尾，2026-09-10 驾驭小结第二批②：writeTaskReview 在
+  // marker 缺失场景靠本函数定位 run，误拿有主 run 即把本变更 review.json 写进他变更 run 的
+  // tasks/——串台残余入口。与 resolveExecuteRunForChange 的覆盖度启发排除同语义）；全部 run
+  // 有主 → null（宁缺毋错，调用方走「无 run」分支而非错写）。
   try {
     const candidates = listExecuteRunCandidates(runtimeRoot, changeName)
     if (candidates.stamped.length > 0) return candidates.stamped[0]
-    if (candidates.all.length > 0) return candidates.all[0]
+    const ownerless = candidates.all.find(runId => readExecuteRunChangeStamp(runtimeRoot, runId) === null)
+    if (ownerless) return ownerless
   } catch {}
   return null
 }
@@ -1093,7 +1124,7 @@ export async function generateTaskReviewDrafts({ changeName, cwd, platformOpts =
     }
   } catch {}
   if (!executeRunId) {
-    executeRunId = generateExecuteRunId()
+    executeRunId = generateExecuteRunId(changeName)
     // D-001#1 fallback 写入点：mkdir execute-runs/<runId>/tasks 先于 marker（不变量：marker 在则目录在）。
     // 保留 fail-open 契约（调用方 catch 降级）——只去静默：失败 console.error 留痕，不 throw
     //（草稿兜底缺了也只是退回 gate 报缺 review.json，不比修复前差）。
@@ -1627,7 +1658,7 @@ export async function writeTaskReview({
     executeRunId = resolveLatestExecuteRunId({ runtimeRoot, changeName }) || ''
   }
   if (!executeRunId) {
-    executeRunId = generateExecuteRunId()
+    executeRunId = generateExecuteRunId(changeName)
     try {
       // 排他认领（坑 exec-run-id-same-second-collision）+ 幂等 mkdir，认领碰撞换后缀
       executeRunId = claimExecuteRunId(runtimeRoot, executeRunId)

@@ -21,6 +21,7 @@
  */
 import { basename, join, relative, dirname } from 'node:path'
 import { createHash } from 'node:crypto'
+import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync, statSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs'
 import { writeAtomicSync } from '../fs-atomic.js'
 import { triggerSync, resolveChangeDir, resolveRuntimeRoot } from './shared.js'
@@ -1007,7 +1008,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
           const { generateExecuteRunId, resolveLatestExecuteRunId, stampExecuteRunChange, claimExecuteRunId } = await import('../task-review.js')
           executeRunId = resolveLatestExecuteRunId({ runtimeRoot, changeName }) || ''
           if (!executeRunId) {
-            executeRunId = generateExecuteRunId()
+            executeRunId = generateExecuteRunId(changeName)
             // 落盘（marker 缺失时 fallback 生成后写盘，保证后续 checkbox/gate 读到同一 ID）
             // D-001#1 fallback 写入点：mkdir execute-runs/<runId>/tasks 先于 marker（不变量：
             // marker 在则目录在）。不 try/catch——异常直穿外层 catch 走 fail-closed 阻断
@@ -1643,11 +1644,50 @@ export function printProbeConsistencyCheck(r, envelope = buildProbeConsistencyEn
  * 一天多——verify prompt 要求 PID 按变更分片登记 .runtime/verify-services-<change>.pids。
  * 坑 verify-pids-cross-session-kill（2026-08-23）：原单文件无归属，A 会话 --done 会把 B 正在
  * 收集 Runtime Evidence 的服务一并杀掉——分片后各回收各的；旧单文件兼容回收（升级过渡期）。
+ * 坑 verify-service-process-leak 子进程泄漏（2026-09-10 驾驭小结第三批③，用户实锤 python
+ * 子进程泄漏）：原 process.kill(pid) 只杀登记的 shell 包装进程（`cmd /c` / `sh -c` 起的
+ * uvicorn 等），子进程成了孤儿继续挂机——改 killProcessTree 进程树击杀（win taskkill /T /F
+ * + POSIX 递归枚举子进程）；prompt 指引同步补「优先登记服务本体（叶子）PID」。
  * 回执同样按变更分片（原单份被并行会话后写覆盖），checkIntegrationEvidence（stage-contract）
  * 读分片名注入证据匹配。best-effort：ESRCH（已退出）静默，kill 失败 warn 不阻断 verify。
  *
  * @returns {{ reaped: number, receiptPath: string|null }}
  */
+export function killProcessTree(pid, sig = 'SIGTERM') {
+  const pidNum = parseInt(pid, 10)
+  if (!Number.isInteger(pidNum) || pidNum <= 0) return false
+  if (process.platform === 'win32') {
+    // /T = 连同子进程树（shell 包装下的 python/node 服务本体）；/F = 强制（长驻服务常吞 SIGTERM 等价物）
+    try {
+      execFileSync('taskkill', ['/PID', String(pidNum), '/T', '/F'], { stdio: 'ignore', timeout: 15000 })
+      return true
+    } catch (e) {
+      // taskkill 对不存在进程退出码 128（等价 ESRCH，已退出按回收静默）；其余（拒绝访问等）上抛
+      if (e && (e.status === 128 || /could not be found|找不到/i.test(String(e.stderr || '') + String(e.message || '')))) return false
+      throw e
+    }
+  }
+  // POSIX：先递归杀子进程（shell 包装的子进程是服务本体），再杀登记进程本身
+  for (const child of listChildPids(pidNum)) {
+    try { killProcessTree(child, sig) } catch { /* 子进程已退出/权限不足不连坐父进程回收 */ }
+  }
+  try { process.kill(pidNum, sig); return true }
+  catch (e) { if (e.code === 'ESRCH') return false; throw e }
+}
+
+/** ps 枚举直接子进程 PID（POSIX；失败返回空——杀不到子进程不阻断父进程回收） */
+function listChildPids(parentPid) {
+  try {
+    const out = execFileSync('ps', ['-axo', 'pid=,ppid='], { encoding: 'utf8', timeout: 5000 })
+    const children = []
+    for (const line of String(out).split('\n')) {
+      const m = line.trim().match(/^(\d+)\s+(\d+)$/)
+      if (m && Number(m[2]) === parentPid) children.push(Number(m[1]))
+    }
+    return children
+  } catch { return [] }
+}
+
 export function reapVerifyServices(platformOpts, specBase, changeName) {
   const runtimeDir = resolveRuntimeRoot(platformOpts, specBase)
   const reapFile = (path, label) => {
@@ -1655,11 +1695,12 @@ export function reapVerifyServices(platformOpts, specBase, changeName) {
     const pids = readFileSync(path, 'utf8').split('\n').map(l => l.trim()).filter(l => /^\d+$/.test(l))
     const reaped = []; const failed = []
     for (const pid of pids) {
-      try { process.kill(parseInt(pid, 10), 'SIGTERM'); reaped.push(pid) }
-      catch (e) { if (e.code !== 'ESRCH') failed.push(`${pid}(${e.code || e.message})`) }
+      // 进程树击杀（坑 verify-service-process-leak 子进程泄漏）：连带 shell 包装下的服务本体
+      try { if (killProcessTree(pid)) reaped.push(pid) }
+      catch (e) { if (e.code !== 'ESRCH') failed.push(`${pid}(${e.code || e.status || e.message})`) }
     }
     try { unlinkSync(path) } catch {}
-    if (reaped.length > 0) console.log(`🧹 verify 服务进程已回收 ${reaped.length} 个${label}（PID: ${reaped.join(', ')}）`)
+    if (reaped.length > 0) console.log(`🧹 verify 服务进程已回收 ${reaped.length} 个${label}（PID: ${reaped.join(', ')}，进程树击杀）`)
     return { reaped: reaped.length, failed }
   }
   const own = reapFile(join(runtimeDir, `verify-services-${changeName}.pids`), '')

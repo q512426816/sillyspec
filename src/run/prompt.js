@@ -804,7 +804,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
     } catch {}
     if (!runId) {
       const { generateExecuteRunId, claimExecuteRunId } = await import('../task-review.js')
-      runId = generateExecuteRunId()
+      runId = generateExecuteRunId(changeName)
       // 落盘（与启动站点一致），保证 agent 收到的 ID == gate/checkbox 读取的 ID
       // D-001#1 fallback 写入点：mkdir execute-runs/<runId>/tasks 先于 marker（不变量：marker 在则目录在）。
       // 渲染路径异常不能炸 prompt 输出 → catch 内 console.error 留痕 + 保留降级（ID 注入继续，

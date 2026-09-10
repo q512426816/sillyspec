@@ -7,6 +7,10 @@
  * ② 对账归属过滤（2026-08-23 实证：verify 对账在主仓共享工作区取 git diff，无 meta 回退时
  *   并行会话在途 WIP 全量混入本变更判定）：只认他者显式声明（quick --files / 他者 design
  *   清单），无主文件保留参与判定（fail-closed）。
+ * ③ 进程树击杀（2026-09-10 驾驭小结第三批③，坑 verify-service-process-leak 子进程泄漏：
+ *   python 服务经 shell 包装启动，原 process.kill 只杀包装 PID，子进程成孤儿挂机）：
+ *   killProcessTree win32 走 taskkill /T /F、POSIX 递归枚举子进程——只登记包装 PID 也连带
+ *   杀掉服务本体（子进程把自己的 PID 写文件供断言）。
  */
 import { mkdirSync, mkdtempSync, writeFileSync, rmSync, existsSync, readFileSync } from 'fs'
 import { join } from 'path'
@@ -64,6 +68,38 @@ console.log('=== ① verify 服务 PID 分片回收（reapVerifyServices）===\n
   assert(receipt.change === 'changeA' && receipt.reapedPidCount >= 1, `回执内容正确（${JSON.stringify(receipt)}）`)
   // 收尾：杀 B 的子进程
   try { process.kill(pidB, 'SIGKILL') } catch {}
+}
+
+console.log('\n=== ①b 进程树击杀：只登记 shell 包装 PID 也连带杀掉服务本体子进程 ===\n')
+{
+  const cwd = mkTmp('treekill')
+  const runtimeDir = join(cwd, '.sillyspec', '.runtime')
+  mkdirSync(runtimeDir, { recursive: true })
+  // 「python 服务」模拟：node 子进程把自己的 PID 写到文件后长驻；经 shell 包装启动（用户实锤形态）
+  const childPidFile = join(runtimeDir, 'child.pid')
+  const childScript = `require('fs').writeFileSync(${JSON.stringify(childPidFile)}, String(process.pid)); setInterval(() => {}, 60000)`
+  const shell = process.platform === 'win32'
+    ? spawn('cmd.exe', ['/c', process.execPath, '-e', childScript], { stdio: 'ignore' })
+    : spawn('/bin/sh', ['-c', `"${process.execPath}" -e ${JSON.stringify(childScript)} & wait`], { stdio: 'ignore' })
+  const wrapperPid = shell.pid
+  // 等子进程 PID 落盘（最多 5s）
+  let childPid = null
+  for (let i = 0; i < 50 && !childPid; i++) { await sleep(100); try { childPid = parseInt(readFileSync(childPidFile, 'utf8').trim(), 10) } catch {} }
+  assert(Number.isInteger(childPid), `子进程 PID 已落盘（wrapper=${wrapperPid}, child=${childPid}）`)
+  await sleep(300)
+  assert(isAlive(childPid), '击杀前：服务本体子进程存活')
+  // 只登记包装 PID（用户实锤形态：shell 包装 PID 进了 pids 文件）
+  writeFileSync(join(runtimeDir, 'verify-services-treekill.pids'), `${wrapperPid}\n`)
+  const r = reapVerifyServices(null, join(cwd, '.sillyspec'), 'treekill')
+  // 击杀生效窗口（taskkill /T 异步完成 / POSIX SIGTERM 传播）
+  let childDead = false
+  for (let i = 0; i < 30 && !childDead; i++) { await sleep(100); childDead = !isAlive(childPid) }
+  assert(childDead, `服务本体子进程被进程树击杀连带回收（child=${childPid}）——坑 verify-service-process-leak 子进程泄漏核心`)
+  let wrapperDead = false
+  for (let i = 0; i < 10 && !wrapperDead; i++) { await sleep(100); wrapperDead = !isAlive(wrapperPid) }
+  assert(wrapperDead, '包装进程本身也被回收')
+  assert(r.reaped >= 1, `回收计数 ≥1（实际 ${r.reaped}）`)
+  try { shell.kill() } catch {}
 }
 
 console.log('\n=== ② 他者声明归属过滤（foreign-declared）===\n')

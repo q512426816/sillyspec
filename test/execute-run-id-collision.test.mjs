@@ -62,12 +62,38 @@ test('碰撞（他者已认领同秒 ID）→ 随机短后缀重试，两会话 
 
 test('isValidExecuteRunId：存量无后缀兼容 + 带后缀通过 + 注入/超长拒绝', () => {
   assert.equal(isValidExecuteRunId('exec-2026-09-10-153000'), true, '存量秒级形态（历史 run）仍合法')
-  assert.equal(isValidExecuteRunId('exec-2026-09-10-153000-a1b2'), true, '新带后缀形态合法')
+  assert.equal(isValidExecuteRunId('exec-2026-09-10-153000-a1b2'), true, '单段后缀形态合法')
+  assert.equal(isValidExecuteRunId('exec-2026-09-10-153000-3fa2c1'), true, 'change 哈希段（6 hex）合法')
+  assert.equal(isValidExecuteRunId('exec-2026-09-10-153000-3fa2c1-x9y8'), true, '哈希段+碰撞随机段（两段）合法')
   assert.equal(isValidExecuteRunId('exec-2026-09-10-153000-../etc'), false, '后缀路径穿越拒绝')
   assert.equal(isValidExecuteRunId('exec-2026-09-10-153000-a1b2\nrm -rf'), false, '后缀换行注入拒绝')
   assert.equal(isValidExecuteRunId('exec-2026-09-10-153000-a1b2c3d4e5f'), false, '后缀超长（>8）拒绝')
   assert.equal(isValidExecuteRunId('exec-2026-09-10-153000-A1B2'), false, '大写后缀拒绝（生成侧仅小写）')
-  assert.equal(isValidExecuteRunId('exec-2026-09-10-153000-a1b2-c3d4'), false, '双后缀拒绝（生成侧不会产出）')
+  assert.equal(isValidExecuteRunId('exec-2026-09-10-153000-a1b2-c3d4-e5f6'), false, '三段后缀拒绝（生成侧最多两段）')
+})
+
+test('change 哈希隔离：两变更同秒必不同 runId、同变更幂等、无参裸形态', () => {
+  const a1 = generateExecuteRunId('2026-09-10-change-a')
+  const a2 = generateExecuteRunId('2026-09-10-change-a')
+  const b = generateExecuteRunId('2026-09-10-change-b')
+  assert.ok(isValidExecuteRunId(a1) && isValidExecuteRunId(b), '哈希形态过格式校验')
+  assert.equal(a1.split('-').pop(), a2.split('-').pop(), '同变更哈希段恒同（幂等 regenerate）')
+  assert.notEqual(a1.split('-').pop(), b.split('-').pop(), '不同变更哈希段不同（同秒结构化隔离核心）')
+  if (a1.slice(0, -8) === b.slice(0, -8)) {
+    // 同秒调用成功对拍（跨秒时前缀不同也已隔离，断言只加强）
+    assert.notEqual(a1, b, '两变更同秒 → runId 必不同')
+  }
+  assert.match(generateExecuteRunId(), /^exec-\d{4}-\d{2}-\d{2}-\d{6}$/, '无参调用保持裸秒级形态（向后兼容）')
+})
+
+test('claimExecuteRunId 与哈希基准兼容：碰撞重试产出两段后缀仍合法', () => {
+  const runtimeRoot = mkRuntime()
+  const hashedBase = generateExecuteRunId('2026-09-10-collide')
+  const idA = claimExecuteRunId(runtimeRoot, hashedBase)
+  assert.equal(idA, hashedBase, '哈希基准无碰撞原样认领')
+  const idB = claimExecuteRunId(runtimeRoot, hashedBase)
+  assert.ok(isValidExecuteRunId(idB), `碰撞换道产物过格式校验（实际 ${idB}）`)
+  assert.ok(existsSync(join(runtimeRoot, 'execute-runs', idB, 'tasks')), '换道 run 目录已建')
 })
 
 test('真实 fs 障碍：execute-runs 被普通文件占用 → 原样上抛（分层 fail 语义交写入点）', () => {

@@ -1806,3 +1806,33 @@ export async function getStageSteps(stageName, cwd, progress, specDir = null) {
   return def ? def.steps : null
 }
 
+
+/**
+ * 平台模式产物双写镜像（坑 platform-init-artifact-daemon-dir-only，2026-09-10 驾驭小结
+ * 第三批②，用户两次实锤）：agent 在平台接管项目（pointer 存在）本地跑 design-init /
+ * verify-probes --init 时，spec 根解析为 hub/daemon specs 同步目录——产物只落镜像根，
+ * 主仓 changeDir 要等 spec-sync 回程才可见（同步失败即失联）。双写：镜像根照写（平台
+ * 权威数据面不动），同时把内容镜像到 cwd 本地主仓 changes/<change>/<file>——本地即时
+ * 可见可核对，不再单点依赖 spec-sync 兜底。
+ * 跳过条件（任一）：非平台模式（platformBase 空）/ 显式 --spec-dir（daemon 上下文——
+ * cwd 不是主仓，镜像会写错地方）/ 本地主仓 changeDir 不存在（不凭空建目录）/ 镜像与
+ * 本地同路径（本地模式正常态）。
+ * @param {{ cwd: string, changeName: string, file: string, content: string,
+ *   platformBase: string|null, specDirExplicit?: boolean|string }} opts
+ * @returns {string|null} 镜像落盘路径（跳过返回 null）
+ */
+export function mirrorPlatformArtifactToMainRepo({ cwd, changeName, file, content, platformBase, specDirExplicit = false }) {
+  if (!platformBase || specDirExplicit) return null
+  const localPath = join(cwd, '.sillyspec', 'changes', changeName, file)
+  const mirrorPath = join(platformBase, 'changes', changeName, file)
+  if (resolve(localPath) === resolve(mirrorPath)) return null
+  if (!existsSync(dirname(localPath))) return null
+  try {
+    writeFileSync(localPath, content)
+    console.log(`📎 平台模式产物已双写镜像主仓: ${localPath}（不再单点依赖 spec-sync 回程）`)
+    return localPath
+  } catch (e) {
+    console.warn(`⚠️ 平台产物镜像主仓失败（不阻断，仍以 ${mirrorPath} 为权威）: ${e && e.message ? e.message : e}`)
+    return null
+  }
+}

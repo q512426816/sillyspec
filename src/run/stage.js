@@ -136,7 +136,7 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
       }
     } catch {}
     if (!currentExecuteRunId) {
-      currentExecuteRunId = generateExecuteRunId()
+      currentExecuteRunId = generateExecuteRunId(changeName)
       // D-001#1 主写入点：mkdir execute-runs/<runId>/tasks 先于 marker（不变量：marker 在则目录在，
       // archive 完成度扫描/漂移兜底不再落到「有 marker 无目录」的空 run）。失败直接 throw——execute
       // 启动即失败优于事后 review 错配（调用方 runCommand 冒到 CLI 顶层 exit 1，给出修复指引）。

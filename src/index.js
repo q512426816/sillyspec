@@ -921,6 +921,16 @@ async function main() {
       // 平台模式回显注记（2026-09-10 驾驭小结②）：物理路径在 hub 镜像根，产物经 daemon
       // spec-sync 落主仓——回显补主仓同步位置，消「回显镜像路径 / 核对主仓路径」的显示混乱
       const vpPlatformNote = formatPlatformPathNote(vpPlatformBase, vpChange, 'verify-result.md');
+      // 平台模式双写镜像（坑 platform-init-artifact-daemon-dir-only，2026-09-10 驾驭小结第三批②）：
+      // agent 本地（pointer 态、非显式 --spec-dir）--init 产物同时镜像主仓 changeDir，不再单点
+      // 依赖 spec-sync 回程（用户两次实锤产物落 daemon specs 同步目录）。
+      const mirrorInitArtifact = async (platformPath, file, content) => {
+        if (!vpPlatformBase || specDir) return null
+        try {
+          const { mirrorPlatformArtifactToMainRepo } = await import('./run/shared.js')
+          return mirrorPlatformArtifactToMainRepo({ cwd: dir, changeName: vpChange, file, content, platformBase: vpPlatformBase })
+        } catch { return null }
+      }
       const vpResult = runVerifyProbes({ cwd: dir, changeName: vpChange, specDir: vpSpecBase });
       if (json) {
         console.log(JSON.stringify({ command: 'verify-probes', change: vpChange, ...vpResult }, null, 2));
@@ -940,18 +950,25 @@ async function main() {
             // 指引「重跑 --init」对已存在报告是 no-op。修法：探针段是 CLI 拥有的机械段，检测缺失时
             // 尾部补注入（正文其余不动），判别子自此有子节可对账。
             const vpSection = `\n## 探针结果（CLI 机械预填，--init 补注入） [层：可复跑探针——gate 抽查防篡改]\n${renderVerifyProbesReport(vpResult)}\n`;
-            writeFileSync(vpReportPath, vpExisting.replace(/\s*$/, '\n') + vpSection);
+            const vpInjected = vpExisting.replace(/\s*$/, '\n') + vpSection;
+            writeFileSync(vpReportPath, vpInjected);
+            await mirrorInitArtifact(vpReportPath, 'verify-result.md', vpInjected);
             console.log(`\n📄 存量旧格式 verify-result.md 已补注入探针预填段: ${vpReportPath}（正文其余未动；补注后按新预填段如实核对结论）${vpPlatformNote}`);
           } else {
             console.log(`\nℹ️  verify-result.md 已存在，不覆盖: ${vpReportPath}${vpPlatformNote}`);
           }
         } else {
-          writeFileSync(vpReportPath, generateVerifyResultSkeleton(vpResult));
+          const vpSkeleton = generateVerifyResultSkeleton(vpResult);
+          writeFileSync(vpReportPath, vpSkeleton);
+          await mirrorInitArtifact(vpReportPath, 'verify-result.md', vpSkeleton);
           console.log(`\n📄 已生成 verify-result.md 骨架: ${vpReportPath}（探针已预填；结论必须写明 PASS/FAIL，留待填会被 gate 判不过）${vpPlatformNote}`);
         }
-        writeVerifyFacts(join(vpSpecBase, 'changes', vpChange), vpResult, vpChange, {
+        const vpFacts = writeVerifyFacts(join(vpSpecBase, 'changes', vpChange), vpResult, vpChange, {
           platformNote: formatPlatformPathNote(vpPlatformBase, vpChange, 'verify-facts.json'),
         }); // P3b：facts 底稿随 --init 刷新（骨架已存在也刷新；v2 起分段合并保留固化段）
+        if (vpFacts && vpFacts.path) {
+          try { await mirrorInitArtifact(vpFacts.path, 'verify-facts.json', readFileSync(vpFacts.path, 'utf8')) } catch { /* 读回失败跳过镜像 */ }
+        }
         // 2026-09-08-ir-verify-facts R-02：已存在 md 缺证据账/回执槽段时仅追加骨架（幂等二跑
         // 零改动）；task 行按 verify-required-evidence.json 预填（存在时）。
         if (existsSync(vpReportPath)) {
@@ -1560,6 +1577,17 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
         break;
       }
       writeFileSync(diDesignPath, diSkeleton);
+      // 平台模式双写镜像（坑 platform-init-artifact-daemon-dir-only，2026-09-10 驾驭小结第三批②）：
+      // agent 本地（pointer 态、非显式 --spec-dir）跑 design-init 时 design.md 同时镜像主仓
+      // changeDir——不再单点依赖 spec-sync 回程（两次实锤产物落 daemon specs 同步目录）。
+      try {
+        const { mirrorPlatformArtifactToMainRepo } = await import('./run/shared.js');
+        mirrorPlatformArtifactToMainRepo({
+          cwd: dir, changeName: diChange, file: 'design.md', content: diSkeleton,
+          platformBase: existsSync(join(dir, '.sillyspec-platform.json')) ? diSpecBase : null,
+          specDirExplicit: Boolean(specDir),
+        });
+      } catch { /* 镜像失败不阻断主写入 */ }
       if (json) {
         console.log(JSON.stringify({ command: 'design-init', change: diChange, ok: true, path: diDesignPath, written: true, overwritten: diExisted }, null, 2));
         break;
@@ -1860,29 +1888,45 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
               // 只读 stdout 可捕获）；stderr 仅留 ⚠️ 诊断（console.warn）与配置错误（exit 2 路径）。
               // 文本逐字不变，只改通道。
               console.log(`\n❌ docs check: ${result.invalid.length}/${result.total} 处引用失效：`);
+              // 显示去重（2026-09-10 驾驭小结第二批③）：同 doc+docLine+ref 的重复 invalid（同一
+              // 引用在行内多次出现时逐条收集）只显示一次、带 ×N 次数——invalid 集与 exit code
+              // 不动，纯渲染降噪。
+              const shownInvalid = [];
+              const dupCountByIdentity = new Map();
+              for (const inv of result.invalid) {
+                const key = `${inv.doc}#${inv.docLine}#${inv.ref}`;
+                dupCountByIdentity.set(key, (dupCountByIdentity.get(key) || 0) + 1);
+                if (dupCountByIdentity.get(key) === 1) shownInvalid.push(inv);
+              }
+              const dupTotal = result.invalid.length - shownInvalid.length;
               let appliedLeft = fixResult ? fixResult.applied : 0;
               const skippedQueue = fixResult ? [...fixResult.skipped] : [];
-              for (const inv of result.invalid) {
+              for (const inv of shownInvalid) {
+                const dupN = dupCountByIdentity.get(`${inv.doc}#${inv.docLine}#${inv.ref}`);
+                const dupTag = dupN > 1 ? `（同引用重复 ×${dupN}）` : '';
                 const newRef = newRefByInv.get(inv);
                 if (newRef !== undefined && appliedLeft > 0) {
                   // 已应用（dry-run 为将应用）：归因按构造顺序消耗 applied 计数——写回 skipped 仅
                   // 防御路径（文档消失/行内失配）触发，CLI 正常流 fixable 必然落位
-                  console.log(`  ✅ [${inv.doc}:L${inv.docLine}] ${inv.ref} → ${newRef}${dryRun ? '（dry-run 未写盘）' : ''}`);
+                  console.log(`  ✅ [${inv.doc}:L${inv.docLine}] ${inv.ref} → ${newRef}${dryRun ? '（dry-run 未写盘）' : ''}${dupTag}`);
                   appliedLeft--;
                 } else if (newRef !== undefined) {
                   const s = skippedQueue.shift();
-                  console.log(`  ⚠️ [${inv.doc}:L${inv.docLine}] ${inv.ref} → 写回跳过：${s ? s.reason : '未知原因'}`);
+                  console.log(`  ⚠️ [${inv.doc}:L${inv.docLine}] ${inv.ref} → 写回跳过：${s ? s.reason : '未知原因'}${dupTag}`);
                 } else if (fixResult) {
                   // needs-manual：多命中歧义/零命中/无 token——fix.reason 含候选行号，交人工
-                  console.log(`  ❌ [${inv.doc}:L${inv.docLine}] ${inv.ref} → ${(inv.fix && inv.fix.reason) || inv.reason}（待人工）`);
+                  console.log(`  ❌ [${inv.doc}:L${inv.docLine}] ${inv.ref} → ${(inv.fix && inv.fix.reason) || inv.reason}（待人工）${dupTag}`);
                 } else {
-                  console.log(`  ❌ [${inv.doc}:L${inv.docLine}] ${inv.ref} → ${inv.reason}`);
+                  console.log(`  ❌ [${inv.doc}:L${inv.docLine}] ${inv.ref} → ${inv.reason}${dupTag}`);
                 }
                 if (inv.suggest && inv.suggest.length > 0) {
                   // 2026-09-07-ir-hardening task-08：原 --suggest 旗标删除（no-op 首选路径退役），
                   // 候选行号提示改为 needs-manual 默认输出——旗标唯一用途，默认开更有信息量
                   console.log(`     💡 候选行号: ${inv.suggest.join(', ')}（token 命中行，人工确认后更新文档锚）`);
                 }
+              }
+              if (dupTotal > 0) {
+                console.log(`  ℹ️ 已折叠 ${dupTotal} 条同文档行同引用的重复条目（计数 ×N 已并入上文）。`);
               }
               if (fixResult) {
                 console.log(`\n🔧 重锚报告：${fixResult.applied} 处已${dryRun ? '预览' : '改写'}${dryRun ? '（dry-run 未写盘）' : ''}、${result.invalid.length - fixes.length} 处待人工${fixResult.skipped.length > 0 ? `、${fixResult.skipped.length} 处写回跳过` : ''}。`);
@@ -1896,9 +1940,21 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
             // 变更名提名 advisory 段（主结果之后、exit 之前；不参与 ok/invalid 与 exit code）。
             // 零输出原则（docs-check-fix 契约：无新 flag 时 stdout 逐字节一致；决策规则族同款
             // 「无信号零输出」）：仅 findings 非空才输出——悬空即信号，无悬空不打扰。
+            // 输出降噪（2026-09-10 驾驭小结第二批③）：①advisory 固定尾部分区（硬失效区块与
+            // 修复指引之后），标题明示「不阻断、不进 exit code」，与硬失效 ❌ 视觉分离；②同一
+            // 悬空名多处提名按名聚合一行（名 + 提及处数 + 首处定位），不再逐处刷屏。
             if (changeNameReport && changeNameReport.findings.length > 0) {
-              console.warn(`⚠️ 变更名提名悬空 ${changeNameReport.findings.length}/${changeNameReport.mentions} 处（advisory 不阻断、不进 docs gate）：`);
-              for (const f of changeNameReport.findings) console.warn(`   - ${f.message}`);
+              console.log(`\n⚠️ ── 变更名提名悬空（advisory：不阻断、不进 exit code / docs gate）──`);
+              const byName = new Map(); // name -> { count, first }
+              for (const f of changeNameReport.findings) {
+                const e = byName.get(f.name) || { count: 0, first: f };
+                e.count++;
+                byName.set(f.name, e);
+              }
+              for (const [name, e] of byName) {
+                console.log(`   - 「${name}」${e.count} 处提及悬空（活跃∪归档变更名单中不存在；首处 ${e.first.doc}:L${e.first.docLine}）——拼错 / 改名未同步 / 他仓变更？修正后复跑，或 local.yaml known_failures 加 "change-name.${name}" 豁免`);
+              }
+              console.log(`   （共 ${changeNameReport.findings.length} 处 / ${changeNameReport.uniqueNames} 个名字，全文提及 ${changeNameReport.mentions} 处）`);
               if (changeNameReport.exempted.length > 0) {
                 console.log(`ℹ️ 另有 ${changeNameReport.exempted.length} 处经 known_failures change-name.* 键豁免`);
               }

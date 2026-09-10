@@ -110,10 +110,11 @@ console.log('--- ① 源码顺序扫描：mkdir execute-runs/<runId>/tasks 先�
     return src.slice(mkIdx, mkIdx + 90).includes("'tasks'") ? 1 : 'mkdir 目标不含 tasks/'
   }
 
-  const s1 = stageSrc.indexOf("currentExecuteRunId = generateExecuteRunId()")
-  const g1 = gatesSrc.indexOf("executeRunId = generateExecuteRunId()")
-  const p1 = promptSrc.indexOf("runId = generateExecuteRunId()")
-  const t1 = trSrc.indexOf("executeRunId = generateExecuteRunId()")
+  // 调用形态 2026-09-10 第三批起带 changeName（哈希隔离）——扫描锚同步，不变量语义不变
+  const s1 = stageSrc.indexOf("currentExecuteRunId = generateExecuteRunId(changeName)")
+  const g1 = gatesSrc.indexOf("executeRunId = generateExecuteRunId(changeName)")
+  const p1 = promptSrc.indexOf("runId = generateExecuteRunId(changeName)")
+  const t1 = trSrc.indexOf("executeRunId = generateExecuteRunId(changeName)")
   assert(siteOrder(stageSrc, s1, 'runIdFile') === 1, 'stage.js 主写入点：mkdir …/tasks 先于 marker')
   assert(siteOrder(gatesSrc, g1, 'runIdFile') === 1, 'gates.js:444 fallback：mkdir …/tasks 先于 marker')
   assert(siteOrder(promptSrc, p1, 'runIdFile') === 1, 'prompt.js:518 fallback：mkdir …/tasks 先于 marker')
