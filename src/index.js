@@ -8,7 +8,7 @@
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'fs';
 import { writeAtomicSync } from './fs-atomic.js';
-import { basename, dirname, extname, join, resolve, isAbsolute, sep } from 'path';
+import { basename, dirname, extname, join, resolve, isAbsolute, sep, relative } from 'path';
 import { safeGit, git } from './git-helper.js';
 import { getVersion } from './version.js';
 
@@ -3220,6 +3220,27 @@ checkbox 行；depends_on 自动反填行内注解 "(depends_on: task-01,02)"；
         // 对齐 endpoints 等命令：先 resolvePlatformSpecDir（指针 fail-closed 语义同源）。
         const tcPlatformSpecDir = resolvePlatformSpecDir(dir, specDir) || specDir;
         const result = cmdTaskcard(tcName, { cwd: dir, specDir: tcPlatformSpecDir, taskIds, title: titleVal, titleZh: titleZhVal, force, sets });
+        // 平台模式产物双写镜像（坑 platform-init-artifact-daemon-dir-only 同族，2026-09-10 驾驭
+        // 小结第六批①，用户实证 taskcard --all 落 daemon 镜像「中间一度两份副本」）：agent 本地
+        // （pointer 态、非显式 --spec-dir）生成的卡片即时镜像主仓 changeDir——不再等 spec-sync
+        // 回程。镜像失败不阻断（镜像根照写，spec-sync 仍是兜底）。
+        if (result.created.length > 0 && existsSync(join(dir, '.sillyspec-platform.json')) && !specDir) {
+          try {
+            const { mirrorPlatformArtifactToMainRepo } = await import('./run/shared.js');
+            const changesAbs = join(tcPlatformSpecDir, 'changes', tcName);
+            for (const created of result.created) {
+              const rel = relative(changesAbs, created).split('\\').join('/');
+              if (!rel || rel.startsWith('..')) continue;
+              try {
+                mirrorPlatformArtifactToMainRepo({
+                  cwd: dir, changeName: tcName, file: rel,
+                  content: readFileSync(created, 'utf8'),
+                  platformBase: tcPlatformSpecDir, ensureParentDir: true,
+                });
+              } catch { /* 单卡镜像失败不连坐 */ }
+            }
+          } catch { /* 镜像链路异常不阻断主命令 */ }
+        }
         for (const f of result.created) console.log(`✅ 已生成: ${f}`);
         for (const f of result.skipped) console.log(`⏭️  已存在，跳过（--force 覆盖）: ${f}`);
         if (result.created.length > 0) {

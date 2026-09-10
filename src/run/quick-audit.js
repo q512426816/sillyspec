@@ -11,6 +11,7 @@
  *     本模块被 command.js 静态 import，顶部静态拉 @inquirer/prompts 会进**每条** run 命令
  *     启动路径（实测冷加载 100-150ms），而 checkbox 仅"≥2 活跃变更 + TTY"分支用到
  */
+import { join } from 'node:path'
 import { parsePorcelainPath, safeGit } from './shared.js'
 
 /**
@@ -247,19 +248,43 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
   }
 
   const { runVerifyTestCheck, runVerifyLintCheck } = await import('../verify-postcheck.js')
-  const test = runVerifyTestCheck({ cwd, specBase, changeName })
-  const lint = runVerifyLintCheck({ cwd, specBase })
-  const failed = []
-  if (test.status === 'failed') failed.push('test')
-  if (lint.status === 'failed') failed.push('lint')
-  return {
-    action: failed.length > 0 ? 'fail' : 'pass',
-    failed,
-    reason: failed.length > 0
-      ? `实测失败：${failed.join(' + ')}（命令与输出尾部见上；修复后重跑 --done 不丢进度）`
-      : `触及 src/test 共 ${codeFiles.length} 个文件，test+lint 实测通过（或未配置命令自动跳过）`,
-    test,
-    lint,
+
+  // ── 隔离快照执行（2026-09-10 驾驭小结第六批②，用户实证「lint 实测对账在主仓跑被并行
+  // 会话脏文件拦门」）：HEAD 干净快照 + 本会话文件 overlay 后在快照内跑 test+lint——并行
+  // 会话的未提交改动不再污染本会话门禁。快照基建失败 → 回退主仓现行为（零回归）。
+  // 门禁结果归属：快照内失败 = HEAD+本会话文件的真实失败（拦得对）；主仓 fallback 失败
+  // 语义同旧版。两条路径的命令/超时/known_failures 语义同源（runVerify*Check 只换 cwd）。
+  let gateCwd = cwd
+  let gateSpecBase = specBase
+  let snapshot = null
+  if (files.length > 0 && !process.env.SILLYSPEC_QUICK_GATE_SNAPSHOT_OFF) {
+    try {
+      const { createGateSnapshot } = await import('./gate-snapshot.js')
+      snapshot = createGateSnapshot({ cwd, files })
+      if (snapshot) {
+        gateCwd = snapshot.snapshotRoot
+        gateSpecBase = join(snapshot.snapshotRoot, '.sillyspec')
+        console.log(`🧪 门禁隔离快照：HEAD + 本会话 ${snapshot.overlaid} 个文件（并行会话脏文件不参与判定）`)
+      }
+    } catch { /* 快照链路异常 → 主仓现行为 */ }
+  }
+  try {
+    const test = runVerifyTestCheck({ cwd: gateCwd, specBase: gateSpecBase, changeName })
+    const lint = runVerifyLintCheck({ cwd: gateCwd, specBase: gateSpecBase })
+    const failed = []
+    if (test.status === 'failed') failed.push('test')
+    if (lint.status === 'failed') failed.push('lint')
+    return {
+      action: failed.length > 0 ? 'fail' : 'pass',
+      failed,
+      reason: failed.length > 0
+        ? `实测失败：${failed.join(' + ')}（命令与输出尾部见上；修复后重跑 --done 不丢进度）`
+        : `触及 src/test 共 ${codeFiles.length} 个文件，test+lint 实测通过（或未配置命令自动跳过）${snapshot ? '（隔离快照口径：并行会话脏文件不计入）' : ''}`,
+      test,
+      lint,
+    }
+  } finally {
+    if (snapshot) { try { snapshot.cleanup() } catch { /* 清理失败不连坐门禁结论 */ } }
   }
 }
 

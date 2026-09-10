@@ -90,6 +90,61 @@ export function filterDeliverableFiles(files) {
  *   excludedCount: number    // EXCLUDE-DIRTY + EXCLUDE-MISMATCH 数
  * }}
  */
+
+/**
+ * EXCLUDE-DIRTY 重叠文件的自动三方合并（坑 apply-dirty-block-no-merge，2026-09-10 驾驭
+ * 小结第六批③，用户实证 daemon.ts 需手工 patch 合并——三仓并发活跃时 cp 清单不可用）。
+ *
+ * 语义：对每个 dirty∩changed 重叠文件做 git merge-file 三方合并——base = apply 锚点
+ * （baseHash）版本、ours = 主仓当前脏版本（并行会话在途）、theirs = worktree 版本（本变更
+ * 交付）。**clean 合并才写回主仓**（两侧改动都保留），该文件视为已应用、由调用方从 patch
+ * 集剔除；冲突文件不写回、维持原拦截 + rescue 出口（绝不留半合并现场）。审计：
+ * mergedDirtyFiles 逐文件留痕 + 每文件一行日志。
+ *
+ * fail-soft：base 版本取不到（文件在锚点不存在 = 全新文件）/ merge-file 不可用 → 计入
+ * conflicts 列表走原拦截路径，不阻断 apply 主流程。
+ *
+ * @param {{ projectRoot: string, worktreePath: string, baseHash: string }} ctx
+ * @param {string[]} overlapFiles 重叠文件（仓库根相对路径）
+ * @returns {{ merged: string[], conflicts: string[] }}
+ */
+export function mergeDirtyOverlapThreeWay({ projectRoot, worktreePath, baseHash }, overlapFiles) {
+  const merged = []
+  const conflicts = []
+  const tmpDir = mkdtempSync(join(tmpdir(), 'sillyspec-3way-'))
+  try {
+    for (const f of overlapFiles) {
+      try {
+        const baseRaw = git(projectRoot, ['show', `${baseHash}:${f}`], { encoding: 'buffer', timeout: 15000 })
+        const wtRaw = readFileSync(join(worktreePath, f))
+        const mainRaw = readFileSync(join(projectRoot, f))
+        const p = (tag) => join(tmpDir, `${tag}-${Math.random().toString(36).slice(2, 8)}`)
+        const baseP = p('base'); const oursP = p('ours'); const theirsP = p('theirs')
+        writeFileSync(baseP, baseRaw); writeFileSync(oursP, mainRaw); writeFileSync(theirsP, wtRaw)
+        // merge-file <current=ours> <base> <other=theirs> -p：stdout=合并结果；exit 0=clean，>0=冲突数
+        let outBuf, code = 0
+        try {
+          outBuf = git(projectRoot, ['merge-file', '-p', oursP, baseP, theirsP], { encoding: 'buffer', timeout: 15000 })
+        } catch (e) {
+          code = (typeof e.status === 'number') ? e.status : -1
+          outBuf = (e.stdout instanceof Buffer) ? e.stdout : Buffer.alloc(0)
+          if (code < 0) { conflicts.push(f); continue } // merge-file 本身不可用 → 原拦截
+        }
+        if (code === 0) {
+          writeFileSync(join(projectRoot, f), outBuf)
+          merged.push(f)
+          console.log(`🔀 EXCLUDE-DIRTY 三方合并成功（clean）: ${f}——主仓在途改动与 worktree 交付均已保留`)
+        } else {
+          conflicts.push(f)
+        }
+      } catch { conflicts.push(f) }
+    }
+  } finally {
+    try { rmSync(tmpDir, { recursive: true, force: true }) } catch {}
+  }
+  return { merged, conflicts }
+}
+
 export function generateRescueCommands({ changedFiles, dirtyFiles, hashMismatchFiles, deletedFiles = [], worktreePath, projectRoot }) {
   // 集合归一：dirtyFiles 接受 Set 或数组（调用方 step4.5/5a 可能传任一形态），其余统一数组→Set
   const dirtySet = dirtyFiles instanceof Set ? dirtyFiles : new Set(dirtyFiles || []);
@@ -235,13 +290,19 @@ export function resolveApplyAllowSet(projectRoot, changeName, opts = {}) {
     return repoMap.get(key);
   };
   const specBase = opts.specBase || _silentPointerSpecRoot(projectRoot) || join(projectRoot, '.sillyspec');
+  // 变更目录读侧归档回退（坑 apply-archived-evidence-recycled，2026-09-10 驾驭小结第二批①）：
+  // archive 收尾对「未 apply 的 worktree」有意保留并期待归档后补 apply，但归档同时把变更目录
+  // rename 到 changes/archive/<name>/ ——旧读侧只认活跃路径，归档后补 apply 时 design/tasks
+  // 全部失联，allow 集恒空 → Gate1 整批误拦「不在清单」。活跃目录缺 design.md 而（且）归档
+  // 目录在 → 回退读归档版（取证自愈，不改归档回收策略）。
+  const changeDir = resolveActiveOrArchiveChangeDir(specBase, changeName);
   // design §6 清单归属 main（清单路径相对主仓根；跨仓 task 的 allowed_paths 由 task 卡 repo 切片）
   const mainSet = getOrCreate('main');
   parseFileChangeList(
-    join(specBase, 'changes', changeName, 'design.md'),
+    join(changeDir, 'design.md'),
     { keepSillyspecDocs: true }
   ).forEach(p => mainSet.add(p));
-  const tasksDir = join(specBase, 'changes', changeName, 'tasks');
+  const tasksDir = join(changeDir, 'tasks');
   if (existsSync(tasksDir)) {
     for (const tf of readdirSync(tasksDir).filter(f => /^task-\d+\.md$/.test(f))) {
       const content = readFileSync(join(tasksDir, tf), 'utf8');
@@ -252,6 +313,24 @@ export function resolveApplyAllowSet(projectRoot, changeName, opts = {}) {
     }
   }
   return repoMap;
+}
+
+/**
+ * 变更文档目录读侧解析：活跃 changes/<name> 优先；活跃目录缺 design.md 而归档
+ * changes/archive/<name>/design.md 存在 → 返回归档目录（apply 校验在「归档后补 apply」
+ * 场景仍能取到 design/tasks 取证，坑 apply-archived-evidence-recycled）。两处皆缺返回
+ * 活跃路径原样（调用方 existsSync 自行降级，行为与旧版一致）。行为经 resolveApplyAllowSet
+ * 直测（apply-archive-docs-fallback.test.mjs）覆盖。
+ * @param {string} specBase
+ * @param {string} changeName
+ * @returns {string} 变更目录路径（活跃或归档）
+ */
+function resolveActiveOrArchiveChangeDir(specBase, changeName) {
+  const active = join(specBase, 'changes', changeName);
+  if (existsSync(join(active, 'design.md'))) return active;
+  const archived = join(specBase, 'changes', 'archive', changeName);
+  if (existsSync(join(archived, 'design.md'))) return archived;
+  return active;
 }
 
 // 平台指针静默读（worktree-apply 内部用）：只读 <projectRoot>/.sillyspec-platform.json 的
@@ -940,27 +1019,50 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
         )].filter(f => !f.startsWith('.sillyspec/') && f !== 'meta.json');
         const overlapDirty = dirtyFiles.filter(f => changedFiles.includes(f));
         if (overlapDirty.length > 0) {
-          // --skip-overlap（坑 apply-overlap-all-or-nothing，2026-08-23 实证：多 agent 并发仓主仓
-          // 常态有在途变更，overlap 整批拦截使 apply 基本不可用，rescue 手动 cp 又留混合状态）：
-          // 显式 opt-in 剔除重叠文件、应用干净子集。重叠文件留在 worktree——step8 非 force
-          // cleanup 被 hasUnappliedChanges 护栏拦住（主仓工作区逐字节降噪层只剔除已应用文件），
-          // 待主仓干净后重新 apply（此时只剩剩余文件）或人工裁决。
-          if (skipOverlap && !checkOnly) {
-            const skipSet = new Set(overlapDirty);
-            result.skippedOverlapFiles = overlapDirty.slice();
+          // 自动三方合并（坑 apply-dirty-block-no-merge，2026-09-10 驾驭小结第六批③）：先对
+          // 重叠文件尝试 merge-file（base=锚点版 ours=主仓脏版 theirs=worktree 版），clean 合并
+          // 写回主仓、该文件视为已应用（从 patch 集剔除）；仅剩冲突文件才走原拦截+rescue 出口。
+          // checkOnly（assess 只读）不试合并——探查路径零写盘。
+          let conflictDirty = overlapDirty;
+          if (!checkOnly && deliverableBase && worktreePath && worktreePath !== projectRoot) {
+            try {
+              const m3 = mergeDirtyOverlapThreeWay({ projectRoot, worktreePath, baseHash: deliverableBase }, overlapDirty);
+              if (m3.merged.length > 0) {
+                result.mergedDirtyFiles = (result.mergedDirtyFiles || []).concat(m3.merged);
+                const mergedSet = new Set(m3.merged);
+                changedFiles = changedFiles.filter(f => !mergedSet.has(f));
+                result.changedFiles = changedFiles;
+                result.deletedFiles = deletedFiles.filter(f => !mergedSet.has(f));
+                result.hashMismatchFiles = (result.hashMismatchFiles || []).filter(f => !mergedSet.has(f));
+                conflictDirty = m3.conflicts;
+              } else {
+                conflictDirty = m3.conflicts.length > 0 ? m3.conflicts : overlapDirty;
+              }
+            } catch { conflictDirty = overlapDirty; /* 合并链路异常 → 原拦截 */ }
+          }
+          if (conflictDirty.length === 0) {
+            result.warnings = (result.warnings || []).concat([
+              `EXCLUDE-DIRTY 全部经三方合并消解（${overlapDirty.length} 个文件 clean 合并已写回，主仓在途改动与 worktree 交付均保留）——继续正常 apply 剩余文件`
+            ]);
+          } else if (skipOverlap && !checkOnly) {
+            // --skip-overlap（坑 apply-overlap-all-or-nothing，2026-08-23 实证）：剔除仍冲突的
+            // 重叠文件（三方合并已消解的不在此列）、应用干净子集。重叠文件留在 worktree——
+            // step8 非 force cleanup 被 hasUnappliedChanges 护栏拦住，待主仓干净后重新 apply 或人工裁决。
+            const skipSet = new Set(conflictDirty);
+            result.skippedOverlapFiles = conflictDirty.slice();
             changedFiles = changedFiles.filter(f => !skipSet.has(f));
             result.changedFiles = changedFiles;
             result.deletedFiles = deletedFiles.filter(f => !skipSet.has(f));
             result.hashMismatchFiles = (result.hashMismatchFiles || []).filter(f => !skipSet.has(f));
             if (changedFiles.length === 0) {
               result.errors.push(
-                `--skip-overlap：本次 ${overlapDirty.length} 个变更文件全部与主仓未提交改动重叠，无可应用子集：\n  ${overlapDirty.join('\n  ')}\n` +
+                `--skip-overlap：本次 ${conflictDirty.length} 个变更文件与主仓未提交改动重叠且无法自动三方合并，无可应用子集：\n  ${conflictDirty.join('\n  ')}\n` +
                 `请先提交/stash 主仓改动后重试（不带 --skip-overlap），或 sillyspec worktree apply ${changeName} --stash-dirty（工具内置 stash→apply→恢复，保暂存区状态，SHA 兜底可审计）。`
               );
               return result;
             }
             result.warnings = (result.warnings || []).concat([
-              `--skip-overlap：跳过 ${overlapDirty.length} 个与主仓未提交改动重叠的文件（留在 worktree，未应用）：${overlapDirty.join(', ')}——待主仓提交/stash 后重新 apply 只应用剩余文件，或确认放弃后 cleanup --force`
+              `--skip-overlap：跳过 ${conflictDirty.length} 个与主仓未提交改动重叠的文件（留在 worktree，未应用）：${conflictDirty.join(', ')}——待主仓提交/stash 后重新 apply 只应用剩余文件，或确认放弃后 cleanup --force`
             ]);
           } else {
           // 重叠拦截：只有与本次变更同文件的未提交改动才无法安全 apply（列重叠文件，非全部脏文件）
@@ -974,7 +1076,7 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
             projectRoot,
           });
           result.errors.push(
-            `主工作区以下未提交文件与本次 apply 的变更重叠，git apply 无法安全应用：\n  ${overlapDirty.join('\n  ')}\n` +
+            `主工作区以下未提交文件与本次 apply 的变更重叠，自动三方合并后仍冲突，无法安全应用：\n  ${conflictDirty.join('\n  ')}\n` +
             `请先提交或暂存这些改动，再重新 apply：\n  git add -A && git commit -m "..."   或   git stash\n` +
             `或 sillyspec worktree apply ${changeName} --stash-dirty（工具内置 stash→apply→恢复，保暂存区状态，SHA 兜底可审计）\n` +
             `或应用非重叠部分（重叠文件留在 worktree，主仓干净后重新 apply 只补剩余）：\n  sillyspec worktree apply ${changeName} --skip-overlap\n` +
@@ -1730,8 +1832,11 @@ export function assessApplyRisk(changeName, { cwd } = {}) {
   // design §6 标记为「顺带修复」的文件（坑 worktree-execute-apply-friction 坑1）：合规修预存债，
   // 不属任何 task 边界，assess 豁免 allowed_paths 严格校验（降级 warning），避免被迫 cherry-pick 绕过。
   // specBase 走指针/本地解析（2026-09-08 平台模式修复，与 resolveApplyAllowSet 同族）。
+  // 归档回退（坑 apply-archived-evidence-recycled）：归档后补 apply 时变更目录已 rename，
+  // design/tasks 从 changes/archive/<name>/ 读（与 resolveApplyAllowSet 同口径）。
   const assessSpecBase = _silentPointerSpecRoot(projectRoot) || join(projectRoot, '.sillyspec');
-  const designPath = join(assessSpecBase, 'changes', changeName, 'design.md');
+  const assessChangeDir = resolveActiveOrArchiveChangeDir(assessSpecBase, changeName);
+  const designPath = join(assessChangeDir, 'design.md');
   const incidentalSet = new Set(
     parseFileChangeListDetailed(designPath).filter(e => e.incidental).map(e => e.path)
   );

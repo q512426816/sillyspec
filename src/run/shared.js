@@ -1845,12 +1845,17 @@ export async function getStageSteps(stageName, cwd, progress, specDir = null) {
  *   platformBase: string|null, specDirExplicit?: boolean|string }} opts
  * @returns {string|null} 镜像落盘路径（跳过返回 null）
  */
-export function mirrorPlatformArtifactToMainRepo({ cwd, changeName, file, content, platformBase, specDirExplicit = false }) {
+export function mirrorPlatformArtifactToMainRepo({ cwd, changeName, file, content, platformBase, specDirExplicit = false, ensureParentDir = false }) {
   if (!platformBase || specDirExplicit) return null
   const localPath = join(cwd, '.sillyspec', 'changes', changeName, file)
   const mirrorPath = join(platformBase, 'changes', changeName, file)
   if (resolve(localPath) === resolve(mirrorPath)) return null
-  if (!existsSync(dirname(localPath))) return null
+  if (!existsSync(dirname(localPath))) {
+    // ensureParentDir（taskcard 等子目录产物用，2026-09-10 驾驭小结第六批①）：本地 changeDir
+    // 在而子目录（tasks/）未建时建子目录——守卫仍在 changeDir 层（不凭空建变更目录）。
+    if (!ensureParentDir || !existsSync(dirname(dirname(localPath)))) return null
+    try { mkdirSync(dirname(localPath), { recursive: true }) } catch { return null }
+  }
   try {
     writeFileSync(localPath, content)
     console.log(`📎 平台模式产物已双写镜像主仓: ${localPath}（不再单点依赖 spec-sync 回程）`)

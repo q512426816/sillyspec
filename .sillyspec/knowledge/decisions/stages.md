@@ -40,7 +40,7 @@ supersedes：无（修订 design 初稿注入时机）
 
 ## D-004@v1 CLI 漂移检测双轨：git 比较 + version 兜底
 状态：implemented
-锚点：src/stages/doctor.js:331
+锚点：src/doctor-diagnostics.js:933
 最近确认：8aab190
 理由：git 轨（有 .git 时 commit+归一化 remote 同源比较）+ version 兜底轨（package.json version 双仓比较）；同 version 不同 commit 的热改残余盲区显式声明
 来源：2026-08-24-decision-touch-cli-drift

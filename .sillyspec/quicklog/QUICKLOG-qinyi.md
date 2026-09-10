@@ -309,3 +309,24 @@
 根因：①pointer specRoot 为 daemon 写入的 junction 路径（读写同文件无害但路径呈现漂移、junction 随 daemon 蒸发），自指检测在两处每命令重复 warn；②探针 3「主仓目录缺失才回退 worktree」条件在「目录在主仓已存在而新测试 untracked 在 worktree」时不触发，5 条假 warning 逼人工消解；③骨架 depends_on 唯一来源 tasks.md 行内注解常被漏写，三批子代理均发现空，拓扑退化全 Wave 1
 方案：①resolvePlatformSpecDir 对 ptr.specRoot realpath 规范化 + warnSelfRefPointerOnce 跨进程 10min 窗口降频两处自指 warn；②探针 3 改主仓 ∪ worktree 无条件双根并集（与探针 5 三根并集同族，in-place 零变化）；③cmdTaskcard depends_on 双来源（行内注解优先，缺失时 parsePlanWaveDeps 按 plan.md Wave 分组兜底：Wave N → Wave N-1 全部任务）
 结果：新测试 9 用例全绿（selfref 4/4 含 Windows junction 实测、probe3 双根 1/1 真实 git worktree、taskcard Wave 4/4）；相邻回归全绿；lint 536 文件 0 hard fail；全量 npm test 414/414；锚漂 12 处已重锚、docs check 520 全过
+
+## ql-20260910-019-f91b | 2026-09-10 23:03:10 | 修驾驭小结第六批三负面：taskcard --all 镜像双写主仓 + quick 门禁隔离快照 + apply EXCLUDE-DIRTY 自动三方合并
+状态：已完成
+关联变更：quick-ad3c0ebe
+文件：
+- src/run/shared.js（mirror ensureParentDir）
+- src/index.js（taskcard case 镜像接线）
+- src/run/gate-snapshot.js（新建快照 helper）
+- src/run/quick-audit.js（门禁快照优先）
+- src/worktree-apply.js（mergeDirtyOverlapThreeWay + 4.5 接线）
+- test/taskcard-mirror-mainrepo.test.mjs（2 用例）
+- test/quick-gate-snapshot.test.mjs（4 用例）
+- test/apply-dirty-threeway.test.mjs（3 用例）
+- docs/sillyspec/*.md+knowledge/*.md（锚重锚 13 处）
+- modules/runtime.md,worktree.md（补记）
+需求：修驾驭小结第六批三负面：taskcard --all 镜像双写主仓 + quick 门禁隔离快照 + apply EXCLUDE-DIRTY 自动三方合并
+根因：①taskcard --all 经指针解析落 daemon 镜像根，spec-sync 回程前主仓无副本（两份副本窗口）；②门禁在主仓 cwd 实测，并行会话脏文件污染结果把无辜会话拦门（advisory 逃生口只是绕过不是修复）；③主仓脏改动与 worktree 交付不同区域的机器可合并场景也走人工 cp/patch（daemon.ts 实证）
+方案：①mirrorPlatformArtifactToMainRepo 增 ensureParentDir + taskcard case pointer 态逐卡镜像；②run/gate-snapshot.js createGateSnapshot（HEAD worktree+会话文件 overlay+node_modules junction+local.yaml 复制），runQuickTestLintGate 快照优先、基建失败 fallback 主仓；③mergeDirtyOverlapThreeWay（git merge-file clean 才写回、mergedDirtyFiles 审计、冲突维持拦截），4.5 接线残余集分流
+结果：新测试 9 用例全绿（mirror 2/2 含端到端、snapshot 4/4 含脏坏文件不拦门、threeway 3/3 真实 worktree）；apply 系回归 21/21；lint 545 文件 0 fail；全量 npm test 420/420；docs check 547 全过（漂移 13 处重锚含并行会话 knowledge 2 处）
+审计：⚖️ 归属切分：9 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：.claude/skills/sillyspec-archive/SKILL.md, .claude/skills/sillyspec-auto/SKILL.md, .claude/skills/sillyspec-verify/SKILL.md, src/docs-check.js, src/stages/archive.js, test/decisions-lifecycle.test.mjs, test/output-synthesis-and-gate-precheck.test.mjs, src/run/archive-distill.js, test/archive-distill-noai.test.mjs
+
