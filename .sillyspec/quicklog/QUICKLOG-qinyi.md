@@ -248,3 +248,8 @@
 根因：archive step3 跳过致卡正文与 module-map 脱节
 方案：dispatch.md 落 D-007 显式例外与防泛化护栏并补 runReviewDispatch 三条目；core-engine.md 补 checklist 单源条目与在途区分；双 sidecar 追加
 结果：四文件落盘纯文档批次门禁自动跳过
+
+## ql-20260910-012-e069 | 2026-09-10 20:15:32 | 修驾驭小结第三批三负面：①exec run 目录并行覆写残余——runId 附 change 名哈希后缀结构化隔离（两变更同秒必不同目录，与 claimExecuteRunId 排他认领互补；isValidExecuteRunId 兼容 1…
+状态：进行中
+关联变更：（无）
+文件：src/task-review.js, src/run/stage.js, src/run/gates.js, src/run/prompt.js, src/run/shared.js, src/index.js, src/stages/verify.js, test/execute-run-id-collision.test.mjs, test/verify-probes-platform-note.test.mjs, test/verify-concurrency-fixes.test.mjs, .sillyspec/docs/sillyspec/modules/core-engine.md, .sillyspec/docs/sillyspec/modules/runtime.md
