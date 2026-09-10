@@ -92,3 +92,17 @@
 根因：file-notes 括注只落声明文件，测试文件漏声明时审计行有提示但文件行不自动补齐，连续两批需手工核对（2026-09-10 用户反馈）
 方案：matchSameModuleTestFiles（run/shared.js）按 stem 相等/前缀+分隔符匹配窗口内未声明测试文件，auditQuickCompletion 出 review.softTestFiles，flipEntryInContent 补入文件行 bullet 带软归属括注；审计行拆 ⚖️ 真未知与 🔍 软归属单列，硬归属口径声明即归属不变
 结果：test/quicklog-soft-attribution.test.mjs 27 断言全绿，相关回归 6 套与 lint 绿，docs check 520 引用通过，change-management 模块卡与 sidecar 同步
+
+## ql-20260910-002-9beb | 2026-09-10 09:15:48 | stage review 降级自审 CLI 侧配套：无 Agent 宿主 tier=independent 降级可见可追溯
+状态：已完成
+关联变更：（无）
+文件：
+- src/stage-review.js（isDegradedSelfReview 首行降级检测 + 契约/缺件报错/gate FAILED 提示带降级出口）
+- src/run/gates.js（Stage Review Gate 放行时降级自审留 ⚠️ 审计行）
+- test/stage-review-degraded-selfreview.test.mjs（13 断言（检测/报错出口/契约文档化））
+- .sillyspec/docs/sillyspec/modules/core-engine.md（模块卡 stage-review 条目补降级配套）
+- .sillyspec/docs/sillyspec/modules/core-engine.changelog.md（sidecar 追加 ql-20260910-002-9beb）
+需求：stage review 降级自审 CLI 侧配套：无 Agent 宿主 tier=independent 降级可见可追溯
+根因：PI agent 等宿主环境无 Agent tool，tier=independent 硬要求子代理时只能降级自审（2026-09-10 用户反馈①，三处）；prompt 降级条款已有（并行会话未提交改动），但 gate 静默放行降级 review、缺件报错无降级出口，事后审计无法区分降级与真子代理审查
+方案：stage-review.js 新增 isDegradedSelfReview（reviewerNotes 首行降级 colon 约定检测，向后兼容不新增阻断），gates.js Stage Review Gate 放行时检测到降级标记留 ⚠️ 审计行；缺 review.json 报错与 gate FAILED 提示补降级出口指引，renderReviewJsonContract 契约文档化该约定
+结果：test/stage-review-degraded-selfreview.test.mjs 13 断言全绿，stage-review 回归 8 套与 lint 绿，core-engine 模块卡与 sidecar 同步

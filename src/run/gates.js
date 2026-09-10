@@ -869,7 +869,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
   if (['brainstorm', 'plan', 'execute'].includes(stageName)) {
     try {
       const { classifyReviewTier } = await import('../review-tier.js')
-      const { validateStageReviewWithAutoRefresh, getLatestStageReviewRunId, printStageReviewResult, generateStageReviewRunId, stageReviewMarkerPath } = await import('../stage-review.js')
+      const { validateStageReviewWithAutoRefresh, getLatestStageReviewRunId, printStageReviewResult, generateStageReviewRunId, stageReviewMarkerPath, isDegradedSelfReview } = await import('../stage-review.js')
       const effectiveSpecBase = platformOpts?.specRoot || specBase
       const reviewChangeDir = resolveChangeDir(cwd, progress, platformOpts?.specRoot)
       const designPath = reviewChangeDir ? join(reviewChangeDir, 'design.md') : null
@@ -914,6 +914,12 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
         printStageReviewResult(reviewResult, { stage: stageName, reviewRunId, runtimeRoot, changeName })
         if (!reviewResult.ok) {
           return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)
+        }
+        // 降级自审留痕（2026-09-10 用户反馈①：PI agent 等宿主无 Agent tool，prompt 降级条款允许
+        // 当前 agent 自审产出 review.json）。放行但独立性折损必须可见：⚠️ 审计行区分降级 review
+        // 与真子代理 review（事后可审计），与 ⚖️/🔍 软归属同哲学——可见的折损优于静默的伪装。
+        if (isDegradedSelfReview(reviewResult.review)) {
+          console.warn(`\n⚠️ Stage Review 降级自审（tier=independent 但宿主无 Agent tool）：${stageName} review 按 prompt 降级条款由当前 agent 自审产出——独立性折损已留痕（reviewerNotes 首行「降级：」），结论应附源码锚点补偿，建议人工抽查关键结论。`)
         }
       }
     } catch (e) {

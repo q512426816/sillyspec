@@ -63,7 +63,7 @@ export function renderReviewJsonContract({ stage, changeDir, reviewRunId, tier }
     '- `docHash`: reviewedFiles[0] 文件内容的 sha256(hex,见下方算法)',
     '- `requiredEvidence`: 非空数组(specVerdict 或 qualityVerdict = cannot_verify 时必填,反逃逸)',
     '- `checklist`(可选): 扁平数组 —— 每项 { item: string, result: ∈ { ' + CHECKLIST_RESULTS.join(' / ') + ' }, note?: string }。注意是**扁平数组**,不是按层(定义/一致/可行性)嵌套对象',
-    '- `reviewerNotes`: 说明(verdict=fail 时写明阻断项)',
+    '- `reviewerNotes`: 说明(verdict=fail 时写明阻断项;宿主环境无 Agent tool 降级自审时**首行**记「降级：环境无子代理可用」——gate 放行但留 ⚠️ 审计行,勿伪装子代理审查)',
     '',
     '### docHash(一键代填,勿手算)',
     '- **推荐**:docHash 先占位(如 `"TODO"`),review.json 写完后跑',
@@ -324,6 +324,21 @@ export function getLatestStageReviewRunId(runtimeRoot, stage, changeName) {
 }
 
 /**
+ * 降级自审检测（2026-09-10 用户反馈①：PI agent 等宿主环境无 Agent tool，tier=independent
+ * 硬要求子代理时只能降级自审——stage prompts 降级条款约定 reviewerNotes **首行**记
+ * 「降级：环境无子代理可用」）。gate 侧配套：检测到该标记 → 放行但留 ⚠️ 审计行——独立性折损
+ * 可见可追溯，与「宁可见的折损，不可静默的伪装」口径一致（静默放行会把降级 review 与真子代理
+ * review 混同，事后审计无法区分）。best-effort：无标记视为未降级（向后兼容，不构成新阻断）。
+ * @param {object|null} review - 解析后的 review.json（validateStageReview 的返回值 .review）
+ * @returns {boolean}
+ */
+export function isDegradedSelfReview(review) {
+  const notes = review && typeof review.reviewerNotes === 'string' ? review.reviewerNotes : ''
+  const firstLine = notes.split(/\r?\n/, 1)[0].trim()
+  return /^降级[：:]/.test(firstLine)
+}
+
+/**
  * stage-level review 总校验（brainstorm/plan/execute-acceptance 的 done gate）
  *
  * 规则（与 task-review.validateTaskReviews 对称）：
@@ -356,7 +371,7 @@ export function validateStageReview(opts) {
   const reviewPath = join(reviewDir, 'review.json')
 
   if (!reviewRunId || !existsSync(reviewPath)) {
-    const errs = [`缺少 ${stage} 阶段的 stage review.json — tier=independent 要求独立审查子代理产出（期望路径：${reviewPath}）`]
+    const errs = [`缺少 ${stage} 阶段的 stage review.json — tier=independent 要求独立审查子代理产出（期望路径：${reviewPath}）；宿主环境无 Agent tool（如 PI agent）时按 prompt 降级条款由当前 agent 自审产出，reviewerNotes 首行记「降级：环境无子代理可用」`]
     const typo = detectSpecDirTypo(runtimeRoot)
     if (typo) errs.push(`💡 路径疑似拼错：发现 ${typo.typoDir} 目录（应为 ${typo.canonical}），review.json 可能误存于此——检查是否把 .sillyspec 拼成了变体`)
     return {
@@ -497,6 +512,7 @@ export function printStageReviewResult(result, context = {}) {
       console.error(`      ${reviewDir}/review.json`)
     }
     console.error(`\n   提示：tier=independent 要求独立审查子代理产出 review.json，补全后重新 --done`)
+    console.error(`   宿主环境无 Agent tool（如 PI agent）→ 降级条款：当前 agent 切审查者角色自审产出，reviewerNotes 首行记「降级：环境无子代理可用」（gate 放行但留 ⚠️ 审计行），勿伪装子代理审查`)
     console.error(`   可用 sillyspec register-stage-review --change <名> --stage ${stage} [--from <已有review.json>] 一步生成 run 目录 + review.json 骨架（docHash 自动算）+ 写 marker + 自检，省掉手动建目录/写 marker`)
     // docHash 失配精确指路（2026-08-21 agent-手工产出审计项②）：改版后忘重算是最高频失败，
     // 一键重算命令带上真实 change 名，agent 可直接照抄执行（--refresh-hash 保 verdict）。
