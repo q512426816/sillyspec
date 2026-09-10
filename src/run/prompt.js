@@ -825,7 +825,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
   if (['brainstorm', 'plan', 'execute'].includes(stageName) && promptText.includes('{REVIEW_TIER}')) {
     try {
       const { classifyReviewTier } = await import('../review-tier.js')
-      const { generateStageReviewRunId, renderReviewJsonContract, stageReviewMarkerPath } = await import('../stage-review.js')
+      const { generateStageReviewRunId, renderReviewJsonContract, stageReviewMarkerPath, readReviewChannelPriority } = await import('../stage-review.js')
       const tierSpecBase = resolvePromptSpecBase(platformOpts, cwd)
       const tierChangeDir = changeName ? join(tierSpecBase, 'changes', changeName) : null
       const designPath = tierChangeDir ? join(tierChangeDir, 'design.md') : null
@@ -859,8 +859,12 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
           console.log(`  📁 Stage Review 写入目录（直接复制给 review 子代理，勿手拼 runId）：${reviewDir}/`)
         } catch {}
       }
-      // review.json 产物契约(schema + 示例 + docHash 算法 + 重算提示)事前注入,与 validateStageReviewSchema 同源
-      const reviewContractMd = renderReviewJsonContract({ stage: stageName, changeDir: tierChangeDir, reviewRunId, tier: tier.tier })
+      // review.json 产物契约(schema + 示例 + docHash 算法 + 重算提示)事前注入,与 validateStageReviewSchema 同源。
+      // 通道优先序显式传入（readReviewChannelPriority 吃精确 cwd——平台模式 specRoot 异位时
+      // process.cwd 兜底会读错 local.yaml，2026-09-10 通道配置批次）；tier=independent 时契约
+      // 头部渲染「审查执行通道」段（按用户配置序，见 local.yaml review_dispatch.channel_priority）。
+      const reviewChannelPriority = readReviewChannelPriority(cwd)
+      const reviewContractMd = renderReviewJsonContract({ stage: stageName, changeDir: tierChangeDir, reviewRunId, tier: tier.tier, channelPriority: reviewChannelPriority })
       promptText = promptText
         .split('{REVIEW_TIER}').join(tier.tier)
         .split('{REVIEW_TIER_REASON}').join(tier.reason)

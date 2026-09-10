@@ -881,7 +881,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
   if (['brainstorm', 'plan', 'execute'].includes(stageName)) {
     try {
       const { classifyReviewTier } = await import('../review-tier.js')
-      const { validateStageReviewWithAutoRefresh, getLatestStageReviewRunId, printStageReviewResult, generateStageReviewRunId, stageReviewMarkerPath, isDegradedSelfReview } = await import('../stage-review.js')
+      const { validateStageReviewWithAutoRefresh, getLatestStageReviewRunId, printStageReviewResult, generateStageReviewRunId, stageReviewMarkerPath } = await import('../stage-review.js')
       const effectiveSpecBase = platformOpts?.specRoot || specBase
       const reviewChangeDir = resolveChangeDir(cwd, progress, platformOpts?.specRoot)
       const designPath = reviewChangeDir ? join(reviewChangeDir, 'design.md') : null
@@ -930,8 +930,16 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
         // 降级自审留痕（2026-09-10 用户反馈①：PI agent 等宿主无 Agent tool，prompt 降级条款允许
         // 当前 agent 自审产出 review.json）。放行但独立性折损必须可见：⚠️ 审计行区分降级 review
         // 与真子代理 review（事后可审计），与 ⚖️/🔍 软归属同哲学——可见的折损优于静默的伪装。
-        if (isDegradedSelfReview(reviewResult.review)) {
+        // channel 识别（2026-09-10 通道优先序批次）：reviewer.channel 结构化落款优先，兼容
+        // reviewerNotes 首行「降级：」约定；platform 通道（P2 review-dispatch 落地后）ℹ️ 留痕
+        // missionId 供追溯，其余通道正常放行。
+        const { classifyReviewerChannel } = await import('../stage-review.js')
+        const reviewChannel = classifyReviewerChannel(reviewResult.review)
+        if (reviewChannel === 'self') {
           console.warn(`\n⚠️ Stage Review 降级自审（tier=independent 但宿主无 Agent tool）：${stageName} review 按 prompt 降级条款由当前 agent 自审产出——独立性折损已留痕（reviewerNotes 首行「降级：」），结论应附源码锚点补偿，建议人工抽查关键结论。`)
+        } else if (reviewChannel === 'platform') {
+          const mid = reviewResult.review && reviewResult.review.reviewer && reviewResult.review.reviewer.missionId
+          console.log(`\nℹ️ Stage Review 平台派发（channel=platform${mid ? `，missionId=${mid}` : '，missionId 未落款'}）：${stageName} review 由平台独立 worker 产出（独立进程/会话）。`)
         }
       }
     } catch (e) {

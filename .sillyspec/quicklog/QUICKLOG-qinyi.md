@@ -126,3 +126,20 @@
 根因：PI 会话实证②：worktree 已提交改动对主仓 diff 与 status 双盲区致草稿 changedFiles 空，mtime 锚 execute 完成时刻把 execute 期间产的证据判旧，两核验互斥只能 missing+豁免收口；③ verify-result.md 被平台同步覆盖回旧版无告警；④ 目录级 git add 夹带并行会话文件甚至误删已提交文档（2026-09-10 用户反馈）
 方案：②a 两处 worktree 并入点补 merge-base(主仓HEAD, worktreeHEAD)..worktreeHEAD 已提交 diff；②b getStageStartedAt 锚点放宽（gates started 优先 completed 兜底）；③ trackVerifyResultRegression 高水位指纹（hash+mtime）检出内容回退+mtime 倒流即告警（覆盖者在仓外，CLI 侧保证可见）；④ agents 模板核心规则 18 + 本仓 AGENTS.md + quick 完成提示三处禁目录级 git add
 结果：test/verify-window-regression.test.mjs 3 断言组全绿（worktree 真实 git worktree 构造），回归 8 套与 lint 绿，core-engine/progress 模块卡与 sidecar 同步
+
+## ql-20260910-004-b807 | 2026-09-10 10:40:12 | 独立审查通道优先序可配置（P1 垫底）：channel_priority 按用户配置序注入契约 + reviewer.channel 审计
+状态：已完成
+关联变更：2026-09-10-change-scope-audit
+文件：
+- src/stage-review.js（readReviewChannelPriority + classifyReviewerChannel + 契约通道段/reviewer 字段/骨架字段）
+- src/run/prompt.js（契约注入显式传配置序（精确 cwd））
+- src/run/gates.js（channel 审计分支（self ⚠️ / platform ℹ️ missionId / 其余静默））
+- .sillyspec/local.yaml.example（review_dispatch.channel_priority 配置块）
+- test/review-channel-priority.test.mjs（三段（配置语义/channel 识别/契约渲染））
+- .sillyspec/docs/sillyspec/modules/core-engine.md（模块卡 stage-review 条目扩通道批次）
+- .sillyspec/docs/sillyspec/modules/core-engine.changelog.md（sidecar 追加）
+需求：独立审查通道优先序可配置（P1 垫底）：channel_priority 按用户配置序注入契约 + reviewer.channel 审计
+根因：通道选择顺序是主观权衡（信本机子代理 vs 平台跨模型最大独立性），CLI 拍死任何固定序都会替用户做价值判断（2026-09-10 用户裁决）；PI 等「平台 MCP 可派独立审查但宿主无 Agent」的根治通道 review-dispatch 是 P2 架构级，先垫配置面与审计面
+方案：stage-review.js 新增 readReviewChannelPriority（local.yaml review_dispatch.channel_priority：缺省现状序零回归/未知值忽略/self 恒隐式垫底）与 classifyReviewerChannel（结构化落款 > 首行降级约定兼容 > unspecified）；renderReviewJsonContract 在 tier=independent 头部按配置序渲染审查执行通道段（platform 标注 P2 未落地暂跳过，不引用不存在命令）+ reviewer 可选字段契约与示例；register-stage-review 骨架带 reviewer 占位；gates.js 按 channel 分支留痕（self ⚠️ / platform ℹ️ missionId）；prompt.js 契约注入显式传精确 cwd 读配置
+结果：test/review-channel-priority.test.mjs 3 断言组全绿（配置语义 6 形态/channel 识别 9 形态/契约渲染），stage-review 回归 8 套与 lint 绿，core-engine 模块卡与 sidecar 同步
+审计：⚖️ 归属切分：1 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：.sillyspec/changes/2026-09-10-change-scope-audit/tasks/

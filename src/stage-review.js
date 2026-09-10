@@ -16,6 +16,7 @@
 import { existsSync, readFileSync, mkdirSync, readdirSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { createHash } from 'crypto'
+import jsYaml from 'js-yaml'
 import { VALID_VERDICTS, REVIEW_SCHEMA_VERSION } from './task-review.js'
 import { detectSpecDirTypo } from './spec-dir-typo.js'
 import { resolveRuntimeRoot } from './run/shared.js'
@@ -31,6 +32,65 @@ const STAGE_MAIN_DOC = { brainstorm: 'design.md', plan: 'plan.md', execute: 'des
 // stage → reviewType(对齐 gates.js Stage Review Gate 的映射)
 const STAGE_REVIEW_TYPE = { brainstorm: 'design', plan: 'plan', execute: 'acceptance' }
 
+// ── 独立审查通道优先序（2026-09-10 用户裁决：通道顺序是主观权衡，归用户配置不归 CLI 拍死）──
+// 可选通道（tier=independent 时按序尝试首个可用）：
+//   agent-tool 宿主 Agent tool 派子代理（现状默认首位）
+//   platform   CLI 直发平台 worker（sillyspec review-dispatch，P2 落地——P1 指引标注「暂跳过」）
+//   host-mcp   宿主自有 MCP 派活（能派独立执行者的 MCP tool）
+//   self       降级自审（兜底；reviewerNotes 首行「降级：」+ reviewer.channel="self"，gate ⚠️ 留痕）
+const REVIEW_CHANNELS = ['agent-tool', 'platform', 'host-mcp', 'self']
+/** 缺省序 = 现状行为（agent-tool 打头），未配置用户零行为变化。 */
+export const DEFAULT_REVIEW_CHANNEL_PRIORITY = ['agent-tool', 'platform', 'host-mcp', 'self']
+
+/**
+ * 读 local.yaml `review_dispatch.channel_priority`（best-effort 绝不抛）。
+ * 语义规则：未知通道名过滤（warn 一次）；`self` 永远隐式垫底（防「全配置但全不可用 → 无路可走」）；
+ * 空/缺段/解析失败 → 缺省序。配置只在**可用通道之间**起偏好作用——宿主没 Agent tool 时该通道
+ * 自然跳过（PI 上实际生效序退化为 platform → self），配的是偏好不是能力。
+ * @param {string} cwd 项目根（local.yaml 定位）
+ * @returns {string[]} 通道优先序（恒非空，末位恒为 'self'）
+ */
+export function readReviewChannelPriority(cwd) {
+  let raw = null
+  try {
+    const p = join(cwd || process.cwd(), '.sillyspec', 'local.yaml')
+    if (existsSync(p)) raw = jsYaml.load(readFileSync(p, 'utf8'))
+  } catch { raw = null }
+  const rd = raw && typeof raw === 'object' && raw.review_dispatch && typeof raw.review_dispatch === 'object'
+    ? raw.review_dispatch
+    : null
+  const arr = rd && Array.isArray(rd.channel_priority) ? rd.channel_priority : null
+  if (!arr || arr.length === 0) return DEFAULT_REVIEW_CHANNEL_PRIORITY.slice()
+  const picked = []
+  for (const v of arr) {
+    if (typeof v !== 'string') continue
+    const name = v.trim()
+    if (!REVIEW_CHANNELS.includes(name)) {
+      if (name) console.warn(`[stage-review] review_dispatch.channel_priority 未知通道「${name}」已忽略（可选：${REVIEW_CHANNELS.join(' / ')}）`)
+      continue
+    }
+    if (name !== 'self' && !picked.includes(name)) picked.push(name)
+  }
+  if (picked.length === 0) return DEFAULT_REVIEW_CHANNEL_PRIORITY.slice()
+  return [...picked, 'self']
+}
+
+/**
+ * reviewer.channel 识别（gate 审计分支依据）。优先级：结构化 reviewer.channel（合法值）>
+ * reviewerNotes 首行「降级：」约定（2026-09-10 负面①降级条款的落款形态，向后兼容）>
+ * 'unspecified'（既无标记的存量 review——历史产物默认宿主子代理口径，gate 不特殊处理）。
+ * @param {object|null} review 解析后的 review.json
+ * @returns {string} 'agent-tool'|'platform'|'host-mcp'|'self'|'unspecified'
+ */
+export function classifyReviewerChannel(review) {
+  const ch = review && typeof review === 'object' && review.reviewer
+    && typeof review.reviewer === 'object' && typeof review.reviewer.channel === 'string'
+    ? review.reviewer.channel.trim()
+    : ''
+  if (REVIEW_CHANNELS.includes(ch)) return ch
+  return isDegradedSelfReview(review) ? 'self' : 'unspecified'
+}
+
 /**
  * 渲染 review.json 产物契约(markdown)给 review 子代理事前看 —— schema 表 + 完整 JSON 示例 +
  * docHash 算法 + 重算提示 + 位置。复用 validateStageReviewSchema 的同源常量,事前给的 == 事后查的。
@@ -38,10 +98,13 @@ const STAGE_REVIEW_TYPE = { brainstorm: 'design', plan: 'plan', execute: 'accept
  * 历史教训:review 子代理靠读 stage-review.js 源码 + 翻模板才搞清 schema,常错(漏 schemaVersion /
  * checklist 按层嵌套对象 / docHash 用主文档改版前的旧 sha256)。本函数把契约前置进 prompt。
  *
- * @param {{ stage?: string, changeDir?: string, reviewRunId?: string, tier?: string }} opts
+ * @param {{ stage?: string, changeDir?: string, reviewRunId?: string, tier?: string, channelPriority?: string[] }} opts
+ *   channelPriority：通道优先序（readReviewChannelPriority 产物）。tier=independent 时渲染
+ *   「审查执行通道」段（按用户配置序，缺省现状序）；缺省参数则函数自读（cwd 取 process.cwd，
+ *   prompt.js/gates.js 等有精确 cwd 的调用方显式传入）。
  * @returns {string} markdown 段;tier=self 返回简短提示(无需 review.json)
  */
-export function renderReviewJsonContract({ stage, changeDir, reviewRunId, tier } = {}) {
+export function renderReviewJsonContract({ stage, changeDir, reviewRunId, tier, channelPriority } = {}) {
   if (tier === 'self') {
     return '> review.json 契约:tier=self(此刻 design.md 变更文件数 ≤3,当前 agent 自审即可)。⚠️ 注意:本判定基于此刻 design.md 快照——Stage Review Gate 会以 --done 时刻的 design.md 重新判定,若 design 后续扩大到 >3 文件,tier 将升级为 independent 并硬要求独立审查子代理产出 review.json。以 gate 实际校验结果为准(FAILED 即 independent 需补 review.json),勿据本提示提前断言无需 review.json。'
   }
@@ -50,7 +113,25 @@ export function renderReviewJsonContract({ stage, changeDir, reviewRunId, tier }
   const mainDocRel = changeDir ? 'changes/<change>/' + mainDoc : mainDoc
   const stageLbl = stage || '<stage>'
   const runIdLbl = reviewRunId || '<reviewRunId>'
+  // 通道指引（2026-09-10 用户裁决：顺序归配置）。platform 通道 P2（review-dispatch 命令）落地前
+  // 标注暂跳过——指引不引用不存在的命令（stage prompt 铁律「不编造 CLI 子命令」）。
+  const priority = Array.isArray(channelPriority) && channelPriority.length > 0
+    ? channelPriority
+    : readReviewChannelPriority(process.cwd())
+  const CHANNEL_DESC = {
+    'agent-tool': '宿主 Agent tool 派独立子代理（subagent_type: general，独立上下文）',
+    'platform': 'CLI 直发平台独立 worker（P2 的 `sillyspec review-dispatch` 命令；**当前版本未落地，遇此通道直接跳过**）',
+    'host-mcp': '宿主自有 MCP 派独立执行者（能派活的 MCP tool，如平台 MCP 的 dispatch 类工具）',
+    'self': '降级自审：主代理切换审查者角色，reviewerNotes **首行**记「降级：环境无子代理可用」+ reviewer.channel="self"（gate 放行但留 ⚠️ 审计行），逐条结论附源码锚点补偿独立性',
+  }
+  const channelLines = priority.map((c, i) => `${i + 1}. **${c}** —— ${CHANNEL_DESC[c] || c}`).join('\n')
   const L = [
+    '## 审查执行通道（tier=independent，按 local.yaml `review_dispatch.channel_priority` 优先序，**按序尝试首个可用通道**；顺序是用户配置的偏好，不是能力判定——某通道在当前宿主不可用就跳到下一个）',
+    '',
+    channelLines,
+    '',
+    '无论走哪个通道，review.json 落款 `reviewer: { "channel": "<通道名>", "missionId": null, "model": null }`（channel 用上方通道名；platform 通道填 missionId，可查模型时填 model）。这是审计面：gate 按 channel 留痕，self 触发 ⚠️——如实声明，勿伪装通道。',
+    '',
     '## review.json 产物契约(CLI Stage Review Gate 将硬校验,以下为精确 schema —— 事前给的 == 事后查的)',
     '',
     '> 路径:`{SPEC_ROOT}/.runtime/stage-reviews/' + stageLbl + '-' + runIdLbl + '/review.json`(本次 reviewType=' + reviewType + ',主审查文档=' + mainDocRel + ')',
@@ -63,6 +144,7 @@ export function renderReviewJsonContract({ stage, changeDir, reviewRunId, tier }
     '- `docHash`: reviewedFiles[0] 文件内容的 sha256(hex,见下方算法)',
     '- `requiredEvidence`: 非空数组(specVerdict 或 qualityVerdict = cannot_verify 时必填,反逃逸)',
     '- `checklist`(可选): 扁平数组 —— 每项 { item: string, result: ∈ { ' + CHECKLIST_RESULTS.join(' / ') + ' }, note?: string }。注意是**扁平数组**,不是按层(定义/一致/可行性)嵌套对象',
+    '- `reviewer`(可选,审计字段): { "channel": "agent-tool|platform|host-mcp|self", "missionId"?: string, "model"?: string } —— 审查执行通道落款(见上方「审查执行通道」段)',
     '- `reviewerNotes`: 说明(verdict=fail 时写明阻断项;宿主环境无 Agent tool 降级自审时**首行**记「降级：环境无子代理可用」——gate 放行但留 ⚠️ 审计行,勿伪装子代理审查)',
     '',
     '### docHash(一键代填,勿手算)',
@@ -89,6 +171,7 @@ export function renderReviewJsonContract({ stage, changeDir, reviewRunId, tier }
     '  "checklist": [',
     '    { "item": "<审查项>", "result": "pass", "note": "<证据/说明>" }',
     '  ],',
+    '  "reviewer": { "channel": "<agent-tool|platform|host-mcp|self>", "missionId": null, "model": null },',
     '  "reviewerNotes": "<总结>"',
     '}',
     '```',
@@ -639,6 +722,7 @@ export function registerStageReview({ changeName, stage, fromFile, cwd, platform
       reviewedFiles,
       docHash,
       requiredEvidence: [`待独立审查子代理对照 ${mainDoc} 逐节核验（骨架由 register-stage-review 生成）`],
+      reviewer: { channel: null, missionId: null, model: null },
       reviewerNotes: '骨架由 register-stage-review 生成，verdict 待独立审查子代理填写',
     }
     mode = 'skeleton'
