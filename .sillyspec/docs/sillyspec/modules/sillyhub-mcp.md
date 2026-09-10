@@ -20,7 +20,8 @@ SillyHub MCP streamable HTTP 客户端。封装与 SillyHub daemon 的 MCP tool 
 - **src/sillyhub-mcp/client.js** — `export class SillyHubMcpClient`，构造 `new SillyHubMcpClient({cwd?, url?, token?, timeoutMs?}={})`（cwd 默认 `process.cwd()`；缺省经 readMcpConfig 读 local.yaml mcp 段 + env fallback，timeoutMs 默认 10000）。**优先级**：显式 url/token > `readMcpConfig(cwd)` > env fallback > 空串。
   - `async probeDaemon(): Promise<boolean>` — 调 `list_agent_profiles` 验连通 + token。未配置/异常/非2xx → false（不抛）。
   - `async createMission({objective, changeId, budgetUsd?}): Promise<{missionId}>` — 调 `create_mission`。未配置/失败 → `{missionId:null}`。
-  - `async dispatchWorker({missionId, objective, worktreePath?, branch?, readOnly?, model?, agentProfileId?, workerPrompt?}): Promise<{workerId, status}>` — 调 `dispatch_worker`（路径A 入参含 worktree_path/branch/worker_prompt）。未配置/失败 → `{workerId:null, status:'unavailable'}`。
+  - `async dispatchWorker({missionId, objective, worktreePath?, branch?, readOnly?, model?, agentProfileId?, workerPrompt?}): Promise<{workerId, status}>` — 调 `dispatch_worker`（路径A 入参含 worktree_path/branch/worker_prompt）。未配置/失败 → `{workerId:null, status:'unavailable'}`。**id 兜底解析**（2026-09-10 平台侧交付遗留①，spike+远端回归双实证）：dispatch_worker 实返 `{id, role, status…}`，解析链 `worker_id ?? workerId ?? id`——旧口径只认前两者，派发成功时 workerId=null 致轮询全断。
+  - `async getDaemonStatus(): Promise<{online: boolean|null, raw}>` — 调 `get_daemon_status`（平台侧 2026-09-10 P1-3 新增，read scope、吃 ws_hub 实时连接比 DB status 强）。fail-open 三态：true/false 明确；null=未知（旧 backend 无工具/token 缺 read scope/isError），调用方不得据此判不可用。
   - `async listWorkers(missionId): Promise<Array>` — 调 `list_workers`。未配置/失败 → `[]`。
   - `async killLease(workerId): Promise<{killed, reason?}>` — 超时 fallback 防双写（UB-6）。路径A stub：best-effort 调 `report_progress` 带 kill 标记，**保守 `killed=false`**（无专用 kill tool），reason 标明路径A 未落地。
 
@@ -38,7 +39,7 @@ SillyHubMcpClient
   对外方法均 _configured 门控 + _callTool + _parseToolReturnValue，返回结构化降级值
 ```
 
-probeSillyHub（dispatch/probe.js）消费 `probeDaemon`：readMcpConfig 返回 null（local.yaml mcp 段 + env 都缺）→ no-config（同步不发网络）；配置齐 → probeDaemon 验连通 → false 缓存 daemon-unreachable。
+probeSillyHub（dispatch/probe.js）消费 `probeDaemon`：readMcpConfig 返回 null（local.yaml mcp 段 + env 都缺）→ no-config（同步不发网络）；配置齐 → probeDaemon 验连通 → false 缓存 daemon-unreachable。**daemon 在线层**（2026-09-10 平台侧 P1-3 消费侧）：连通后调 `getDaemonStatus`——online=false → `{available:false, reason:'daemon-offline'}`（spike 实证 no_online_daemon 0.2s 快速失败的正面探明，不进负面缓存，活状态与 worktree-outside-root 同类）；true/null 透传 `daemonOnline`（fail-open：未知按可用走，活体冒烟实证旧 token 缺 read scope → daemonOnline:null 不误拦）。probeSillyHub 新增 `cwd` 注入参数（坑 probe-no-config-cwd-leak：dev 仓自身 local.yaml 带 mcp 段时 no-config 用例读到真配置，测试注入干净 tmp 目录隔离）。**connect 成对签发**（平台侧 P0-2 消费侧，sync.js）：connect 经 `POST /api/workspaces/{id}/mcp-tokens`（scope=read+dispatch，converge 按 D-004 不申请）取 `gateway_url+token` 成对覆盖写 mcp 段——陈旧/错部署段是修复性覆盖；签发失败降级旧口径（手填段保留 / §7.4 同源假设补段）。
 
 ## 注意事项
 

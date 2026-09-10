@@ -20,6 +20,13 @@
  * 被 run-tests.mjs 递归发现（test/dispatch/ 子目录）。
  */
 import { probeSillyHub, clearProbeCache, DEFAULT_PROBE_TTL_MS } from '../../src/dispatch/probe.js'
+// cwd 隔离（坑 probe-no-config-cwd-leak）：dev 仓自身 local.yaml 带 mcp 段时 no-config 用例
+// 读到真配置——注入干净 tmp 目录恢复「配置只由 env 决定」的测试语义（probe.js cwd 参数）
+import { mkdtempSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+const CLEAN_CWD = mkdtempSync(join(tmpdir(), 'probe-clean-'))
+
 import { renderDispatchInstruction } from '../../src/dispatch/strategy.js'
 import {
   isPathASupported,
@@ -86,7 +93,7 @@ try {
   setEnv(undefined, undefined)
   {
     const c = makeMockClient(true) // 即便 mock 返回 true，no-config 路径也不该调到
-    const r = await probeSillyHub({ client: c })
+    const r = await probeSillyHub({ client: c, cwd: CLEAN_CWD })
     assertTrue(r.available === false, `no-config: available=false（实际 ${r.available}）`)
     assertTrue(r.reason === 'no-config', `no-config: reason='no-config'（实际 ${r.reason}）`)
     assertTrue(
@@ -101,7 +108,7 @@ try {
   setEnv('http://hub.test', 'tok')
   {
     const c = makeMockClient(true)
-    const r = await probeSillyHub({ client: c })
+    const r = await probeSillyHub({ client: c, cwd: CLEAN_CWD })
     assertTrue(r.available === true, `daemon-up: available=true（实际 ${r.available}）`)
     assertTrue(r.reason === undefined, `daemon-up: 无 reason 字段（实际 ${r.reason}）`)
     assertTrue(c.getCalls() === 1, `daemon-up: probeDaemon 调用 1 次（实际 ${c.getCalls()}）`)
@@ -113,7 +120,7 @@ try {
   setEnv('http://hub.test', 'tok')
   {
     const c = makeMockClient(false)
-    const r = await probeSillyHub({ client: c })
+    const r = await probeSillyHub({ client: c, cwd: CLEAN_CWD })
     assertTrue(r.available === false, `daemon-down: available=false（实际 ${r.available}）`)
     assertTrue(
       r.reason === 'daemon-unreachable',
@@ -128,7 +135,7 @@ try {
   {
     const c = makeMockClient(false)
 
-    const r1 = await probeSillyHub({ client: c })
+    const r1 = await probeSillyHub({ client: c, cwd: CLEAN_CWD })
     assertTrue(c.getCalls() === 1, `首次探测 probeDaemon 调用 1 次（实际 ${c.getCalls()}）`)
     assertTrue(
       r1.reason === 'daemon-unreachable',
@@ -136,7 +143,7 @@ try {
     )
 
     // 同 fp（URL）下再调，命中缓存 → probeDaemon 计数不增
-    const r2 = await probeSillyHub({ client: c })
+    const r2 = await probeSillyHub({ client: c, cwd: CLEAN_CWD })
     assertTrue(
       c.getCalls() === 1,
       `命中缓存 probeDaemon 计数不增仍 1（实际 ${c.getCalls()}）`
@@ -148,7 +155,7 @@ try {
 
     // clearProbeCache 后再调 → 重探，计数 +1
     clearProbeCache()
-    const r3 = await probeSillyHub({ client: c })
+    const r3 = await probeSillyHub({ client: c, cwd: CLEAN_CWD })
     assertTrue(
       c.getCalls() === 2,
       `clearProbeCache 后重探计数 +1=2（实际 ${c.getCalls()}）`

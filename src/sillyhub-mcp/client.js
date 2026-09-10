@@ -541,13 +541,34 @@ export class SillyHubMcpClient {
     const result = await this._callTool('dispatch_worker', args);
     if (result === null) return { workerId: null, status: 'unavailable' };
     const value = this._parseToolReturnValue(result);
+    // id 兜底（2026-09-10 spike + 平台侧 22cdf89d1 回归实证）：dispatch_worker 实返
+    // {id, role, objective, status, agent_type…}——旧解析只认 worker_id/workerId，派发
+    // 成功时 workerId=null，后续轮询/get_worker_result 全断（平台侧交付遗留①）。
     const workerId = value && typeof value === 'object'
-      ? (value.worker_id ?? value.workerId ?? null)
+      ? (value.worker_id ?? value.workerId ?? value.id ?? null)
       : null;
     const status = value && typeof value === 'object'
       ? (value.status ?? 'unknown')
       : 'unknown';
     return { workerId, status };
+  }
+
+  /**
+   * daemon 在线状态（调 get_daemon_status tool——平台侧 2026-09-10 P1-3 新增，read scope、
+   * 无副作用，比 DB status 强：后者有 45s 假在线窗口，本工具吃 ws_hub 实时连接）。
+   * fail-open 三态：online=true/false 为明确判定；null = 未知（旧 backend 无此 tool /
+   * token 缺 read scope / 调用异常）——调用方不得据此判不可用。
+   * @returns {Promise<{online: boolean|null, raw: object|null}>}
+   */
+  async getDaemonStatus() {
+    if (!this._configured) return { online: null, raw: null };
+    const result = await this._callTool('get_daemon_status', {}, { quiet: true });
+    if (result === null || result.isError) return { online: null, raw: null };
+    const value = this._parseToolReturnValue(result);
+    const online = value && typeof value === 'object' && typeof value.daemon_online === 'boolean'
+      ? value.daemon_online
+      : null;
+    return { online, raw: value ?? null };
   }
 
   /**

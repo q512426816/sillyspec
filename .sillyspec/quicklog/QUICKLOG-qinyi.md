@@ -143,3 +143,20 @@
 方案：stage-review.js 新增 readReviewChannelPriority（local.yaml review_dispatch.channel_priority：缺省现状序零回归/未知值忽略/self 恒隐式垫底）与 classifyReviewerChannel（结构化落款 > 首行降级约定兼容 > unspecified）；renderReviewJsonContract 在 tier=independent 头部按配置序渲染审查执行通道段（platform 标注 P2 未落地暂跳过，不引用不存在命令）+ reviewer 可选字段契约与示例；register-stage-review 骨架带 reviewer 占位；gates.js 按 channel 分支留痕（self ⚠️ / platform ℹ️ missionId）；prompt.js 契约注入显式传精确 cwd 读配置
 结果：test/review-channel-priority.test.mjs 3 断言组全绿（配置语义 6 形态/channel 识别 9 形态/契约渲染），stage-review 回归 8 套与 lint 绿，core-engine 模块卡与 sidecar 同步
 审计：⚖️ 归属切分：1 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：.sillyspec/changes/2026-09-10-change-scope-audit/tasks/
+
+## ql-20260910-005-fb40 | 2026-09-10 12:41:09 | 平台侧 MCP 修复三遗留的消费侧落地：派发解析/成对凭据/daemon 在线探测
+状态：已完成
+关联变更：（无）
+文件：
+- src/sillyhub-mcp/client.js（dispatchWorker id 兜底解析 + getDaemonStatus 三态方法）
+- src/sync.js（connect mcp-tokens 成对签发（gateway_url+token 覆盖写/失败降级旧口径））
+- src/dispatch/probe.js（daemon 在线层（get_daemon_status false→daemon-offline，null fail-open）+ cwd 注入参数）
+- test/dispatch/path-a-probe.test.mjs（CLEAN_CWD 隔离（修环境泄漏））
+- test/dispatch/strategy.test.mjs（同款隔离）
+- test/sillyhub-mcp-platform-fixes.test.mjs（4 组（id 解析/getDaemonStatus/probe 三态/connect 成对写））
+- .sillyspec/docs/sillyspec/modules/sillyhub-mcp.md（模块卡同步）
+- .sillyspec/docs/sillyspec/modules/sillyhub-mcp.changelog.md（sidecar 追加）
+需求：平台侧 MCP 修复三遗留的消费侧落地：派发解析/成对凭据/daemon 在线探测
+根因：平台侧 22cdf89d1 已修 gateway 暴露/成对签发/get_daemon_status 并留三遗留：dispatchWorker 解析只认 worker_id 但平台实返 id（派发成功 workerId=null 轮询全断）；旧 mcp 段写入按 url 同源假设致凭据三头分裂永不愈合；daemon 不在线只能真派发才发现（no_online_daemon 快速失败）
+方案：client.js dispatchWorker 解析链补 id 兜底并新增 getDaemonStatus（isError/未配置→null fail-open）；sync.js connect 经 mcp-tokens API（scope=read+dispatch）取 gateway_url+token 成对覆盖写 mcp 段（陈旧段修复性覆盖，签发失败降级旧口径不覆盖手填段）；probe.js 连通后调 get_daemon_status——false→available false reason daemon-offline（不进负面缓存），true/null 透传 daemonOnline；另修既有测试环境泄漏（probeSillyHub 加 cwd 注入，dev 仓自身连平台时 no-config 用例读到真配置）
+结果：test/sillyhub-mcp-platform-fixes.test.mjs 4 组全绿，dispatch 族回归 5 套与 lint 绿，远端活体冒烟 available true + 旧 token daemonOnline null（fail-open 实证）；sillyhub-mcp 模块卡与 sidecar 同步

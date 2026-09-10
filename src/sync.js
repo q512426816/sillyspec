@@ -471,6 +471,28 @@ export class SyncManager {
       );
     }
 
+    // mcp 段成对签发（2026-09-10 平台侧 P0-2 修复的消费侧落地，交付遗留②）：mcp-tokens
+    // 签发 API 的 201 响应带 gateway_url，与 token 成对——「url 指哪、token 就在哪生效」，
+    // 消 spike 实证的凭据三头分裂（mcp.url 指远端而 token 属本地部署 / 旧 token 缺 read
+    // scope 致 get_daemon_status 等全挂）。scope 定 read+dispatch（P2 审查通道：get_daemon_
+    // status/get_worker_result 需 read，dispatch_worker 需 dispatch；converge 按 D-004 不申请）。
+    // 失败（旧 backend 无端点 / 403 / 断网）→ 降级旧行为（下方 §7.4 分支），不阻断 connect。
+    let mcpIssued = null;
+    if (resolved && resolved.workspace_id) {
+      const issueUrl = `${normalizedUrl}/api/workspaces/${resolved.workspace_id}/mcp-tokens`;
+      const issued = await fetchJson(issueUrl, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'sillyspec-cli', scope: ['read', 'dispatch'] }),
+      });
+      if (issued && typeof issued.token === 'string' && issued.token.startsWith('shmcp_')) {
+        mcpIssued = issued;
+        console.log(`[sync] MCP token 成对签发成功 (gateway: ${issued.gateway_url || normalizedUrl})`);
+      } else {
+        console.warn('[sync] MCP token 签发失败（旧 backend 无端点/权限不足），mcp 段按旧口径处理');
+      }
+    }
+
     // 解析推送者身份（D-004）：显式 > git user.name > env；全失败留空不写 user 字段
     const resolvedUser = resolvePlatformUser(this.cwd, user);
 
@@ -489,10 +511,16 @@ export class SyncManager {
     }
     let text = readLocalYamlRaw(this.cwd);
     text = replaceTopLevelSection(text, 'platform', platformEntries.join('\n'));
-    // mcp 段同源假设（design §7.4）：url 复用 platform 的 url；token 用原始 user 级 token
-    // （非换发的 effectiveToken——MCP 派发需 user 级权限，platform 段才是最小权限的 shpsync_）。
-    // 用户已手填 mcp 段则保留不覆盖（R-09，文本级检测）
-    if (findTopLevelSectionRange(text, 'mcp') === null) {
+    // mcp 段写入优先级（2026-09-10 成对签发批次）：①签发成功 → 覆盖写（含手填旧段——
+    // 成对值是确定性有效凭据，覆盖陈旧/错部署段是修复不是破坏，spike 实证的「旧 token
+    // 永不愈合」正源于旧口径的不覆盖）；②签发失败但段缺 → §7.4 同源假设补 url + user
+    // token（旧行为）；③签发失败且段在 → 手填段保留（R-09 不覆盖）。
+    if (mcpIssued) {
+      const gwUrl = typeof mcpIssued.gateway_url === 'string' && mcpIssued.gateway_url
+        ? mcpIssued.gateway_url.replace(/\/+$/, '')
+        : `${normalizedUrl}/mcp`;
+      text = replaceTopLevelSection(text, 'mcp', `  url: ${yamlStr(gwUrl)}\n  token: ${yamlStr(mcpIssued.token)}`);
+    } else if (findTopLevelSectionRange(text, 'mcp') === null) {
       text = replaceTopLevelSection(text, 'mcp', `  url: ${yamlStr(normalizedUrl)}\n  token: ${yamlStr(token)}`);
     }
     writeLocalYamlRaw(this.cwd, text);

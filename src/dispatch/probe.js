@@ -128,26 +128,31 @@ export function detectPathAFromTools(tools) {
  *                                       拿（task-12 #5），拿不到则跳过越界校验（不判 unavailable）
  * @param {number} [opts.ttlMs]        - 负面缓存 TTL 覆盖（优先于 local.yaml）
  * @param {number} [opts.totalTimeoutMs] - 总超时覆盖（默认 25s，HUB-12a）
- * @returns {Promise<{ available: boolean, reason?: string }>}
+ * @param {string} [opts.cwd]           - local.yaml/env 定位根（默认 process.cwd()）。测试
+ *                                        注入干净 tmp 目录隔离「dev 仓自身已连平台」的环境
+ *                                        （坑 probe-no-config-cwd-leak：本仓 local.yaml 带 mcp
+ *                                        段时 no-config 用例读到真配置，同步快速路径判定漂移）
+ * @returns {Promise<{ available: boolean, reason?: string, daemonOnline?: boolean|null }>}
  */
-export async function probeSillyHub({ client, worktreePath, rootPath, ttlMs, totalTimeoutMs } = {}) {
+export async function probeSillyHub({ client, worktreePath, rootPath, ttlMs, totalTimeoutMs, cwd } = {}) {
+  const probeCwd = cwd || process.cwd();
   // 1. 同步快速路径：无 local.yaml mcp 段且 env 缺凭据即 unavailable（不发网络，零回归关键）。
   //    readMcpConfig 纯 fs + env 读（best-effort 不抛不发网络），返回 null = 两源都缺 → no-config。
-  if (!readMcpConfig(process.cwd())) {
+  if (!readMcpConfig(probeCwd)) {
     return { available: false, reason: 'no-config' };
   }
 
   // 2. 负面缓存命中（未过 TTL）→ 直接返回，不发网络（R-06 抖动期免反复探测）
-  const fp = configFingerprint(process.cwd());
+  const fp = configFingerprint(probeCwd);
   const cached = negativeCache.get(fp);
   if (cached && cached.expiresAt > Date.now()) {
     return cached.result;
   }
 
-  const cli = client || new SillyHubMcpClient({ cwd: process.cwd() });
+  const cli = client || new SillyHubMcpClient({ cwd: probeCwd });
   const cacheNegative = (reason) => {
     const result = { available: false, reason };
-    const ttl = resolveTtl(ttlMs, process.cwd());
+    const ttl = resolveTtl(ttlMs, probeCwd);
     negativeCache.set(fp, { result, expiresAt: Date.now() + ttl });
     return result;
   };
@@ -202,6 +207,23 @@ export async function probeSillyHub({ client, worktreePath, rootPath, ttlMs, tot
       setPathAProbeResult(false);
     }
 
+    // 3.6 daemon 在线层（2026-09-10 平台侧 P1-3 新工具 get_daemon_status）：daemon_online
+    // =false 是确定性「派了也无人认领」信号（spike 实证：无 daemon 认领时 worker 0.2s
+    // 快速失败 no_online_daemon）——正面探明，替代「真派发一次才知道」的浪费。fail-open
+    // 三态：true/false 明确；null（无工具=旧 backend / token 缺 read scope / 调用异常）不判
+    // unavailable，回退旧口径（可用性未知按可用走）。不进负面缓存（活状态随 daemon 起停
+    // 变化，与 worktree-outside-root 同类，非网络派生）。
+    let daemonOnline = null;
+    try {
+      if (typeof cli.getDaemonStatus === 'function') {
+        const st = await cli.getDaemonStatus();
+        if (st && typeof st.online === 'boolean') daemonOnline = st.online;
+      }
+    } catch { daemonOnline = null; }
+    if (daemonOnline === false) {
+      return { available: false, reason: 'daemon-offline', daemonOnline };
+    }
+
     if (worktreePath) {
       let effectiveRoot = rootPath;
       if (effectiveRoot === undefined) {
@@ -221,8 +243,9 @@ export async function probeSillyHub({ client, worktreePath, rootPath, ttlMs, tot
       }
     }
 
-    // 5. 全通过：不缓存正面结果，下次重新探测（让 daemon 恢复/退化及时反映）
-    return { available: true };
+    // 5. 全通过：不缓存正面结果，下次重新探测（让 daemon 恢复/退化及时反映）；
+    //    daemonOnline 透传（true/null——调用方可区分「探明在线」与「未知」）
+    return { available: true, daemonOnline };
   })();
 
   let timeoutId = null;

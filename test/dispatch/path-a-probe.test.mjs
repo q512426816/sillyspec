@@ -26,6 +26,13 @@
  * 被 run-tests.mjs 递归发现（test/dispatch/ 子目录）。
  */
 import { probeSillyHub, clearProbeCache, detectPathAFromTools } from '../../src/dispatch/probe.js'
+// cwd 隔离（坑 probe-no-config-cwd-leak）：dev 仓自身 local.yaml 带 mcp 段时 no-config 用例
+// 读到真配置——注入干净 tmp 目录恢复「配置只由 env 决定」的测试语义（probe.js cwd 参数）
+import { mkdtempSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+const CLEAN_CWD = mkdtempSync(join(tmpdir(), 'probe-clean-'))
+
 import { SillyHubMcpClient } from '../../src/sillyhub-mcp/client.js'
 import {
   isPathASupported,
@@ -212,7 +219,7 @@ try {
       },
     ]
     const c = makeMockClient({ reachable: true, tools })
-    const r = await probeSillyHub({ client: c })
+    const r = await probeSillyHub({ client: c, cwd: CLEAN_CWD })
     assertTrue(r.available === true, `available=true（实际 ${r.available}）`)
     assertTrue(
       isPathASupported() === true,
@@ -230,7 +237,7 @@ try {
       { name: 'dispatch_worker', inputSchema: { properties: { worktree_path: {} } } }, // 缺 worker_prompt
     ]
     const c = makeMockClient({ reachable: true, tools })
-    const r = await probeSillyHub({ client: c })
+    const r = await probeSillyHub({ client: c, cwd: CLEAN_CWD })
     assertTrue(r.available === true, `available=true（探测不影响 availability，实际 ${r.available}）`)
     assertTrue(
       isPathASupported() === false,
@@ -244,7 +251,7 @@ try {
   clearPathAProbeCache()
   {
     const c = makeMockClient({ reachable: true, listToolsThrows: true })
-    const r = await probeSillyHub({ client: c })
+    const r = await probeSillyHub({ client: c, cwd: CLEAN_CWD })
     assertTrue(r.available === true, `listTools 异常不影响 available（仍 true，实际 ${r.available}）`)
     assertTrue(
       isPathASupported() === false,
@@ -260,7 +267,7 @@ try {
     const c = {
       probeDaemon: async () => true, // 旧 mock 只有 probeDaemon
     }
-    const r = await probeSillyHub({ client: c })
+    const r = await probeSillyHub({ client: c, cwd: CLEAN_CWD })
     assertTrue(r.available === true, `旧 mock available=true（实际 ${r.available}）`)
     assertTrue(isPathASupported() === false, '无 listTools → 不预热 → 默认 false')
   }
@@ -415,7 +422,7 @@ try {
   clearProbeCache()
   {
     const c = makeMockClient({ reachable: true, tools: [], rootPath: 'C:/repo' })
-    const r = await probeSillyHub({ client: c }) // 无 worktreePath
+    const r = await probeSillyHub({ client: c, cwd: CLEAN_CWD }) // 无 worktreePath
     assertTrue(r.available === true, `无 worktreePath available=true（实际 ${r.available}）`)
     assertTrue(
       c.getCalls().getRootPathCalls === 0,
@@ -437,7 +444,7 @@ try {
   setEnv(undefined, undefined, undefined) // 清 env（readMcpConfig env fallback 也落空）
   {
     const c = makeMockClient({ reachable: true, tools: [], rootPath: 'C:/repo' })
-    const r = await probeSillyHub({ client: c })
+    const r = await probeSillyHub({ client: c, cwd: CLEAN_CWD })
     assertTrue(r.available === false, `无配置 available=false（实际 ${r.available}）`)
     assertTrue(r.reason === 'no-config', `reason=no-config（实际 ${r.reason}）`)
     assertTrue(
