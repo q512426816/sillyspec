@@ -10,7 +10,7 @@
  * worktree-guard hook 直读 sillyspec.db，不再有 gate-status.json 缓存双源（task-10 废除）。
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, unlinkSync, appendFileSync, copyFileSync, readdirSync, statSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, unlinkSync, appendFileSync, copyFileSync, readdirSync, statSync, realpathSync } from 'fs';
 import { join, basename, dirname, resolve, sep } from 'path';
 import { tmpdir } from 'os';
 import { writeAtomicSync } from './fs-atomic.js';
@@ -159,6 +159,14 @@ export function resolvePlatformSpecDir(cwd, explicitSpecDir = null) {
       `   修复：sillyspec platform pointer --cleanup（删除 ${pointerPath}），或删除该 pointer 文件后回到项目目录重跑。`
     );
   }
+  // junction 规范化（2026-09-10 驾驭小结第五批①，用户实锤「design-init/endpoints 落盘路径
+  // 偶发锚到 daemon junction 副本」）：daemon 写入的 pointer specRoot 可能是通向真实 spec 根的
+  // junction/symlink 路径——经 junction 读写与真实路径同文件（无害）但路径呈现与比对漂移、
+  // junction 随 daemon 生命周期可能蒸发。realpath 坍缩为真实路径（失败回退原值，保守不干预）。
+  try {
+    const canonical = realpathSync(ptr.specRoot)
+    if (canonical && canonical !== ptr.specRoot) return canonical
+  } catch { /* realpath 失败（权限/竞态删除）→ 原值（上方已过存在性检查） */ }
   return ptr.specRoot;
 }
 

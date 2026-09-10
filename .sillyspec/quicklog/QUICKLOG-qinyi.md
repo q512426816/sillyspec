@@ -286,3 +286,26 @@
 根因：①task-13 子代理把模块文档写进 worktree 的 .sillyspec 副本而非主仓（原「只写主仓」规则埋在长 prompt 尾部一句带过未遵守），归档被迫 checkout 补救；②决策提炼器只认 ## 标题式条目，扁平列表格式 decisions.md 解析 0 条静默放行；③本地注销已由 CLI 完成（CLI 主动上行墓碑）撞平台 409 change_deleted，CLI 仍按「需排查」口吻 warn——提示语义滞后一个动作
 方案：①execute.js 两处升格铁律（Wave prompt 欠账段原地重申 + 派发 prompt 注意段 ⚠️ 铁律：主仓 {SPEC_ROOT} 绝对路径、点破 checkout 副本随 cleanup 蒸发、子代理透传绝对路径）；②parseDecisions 兼容扁平列表式（行内 ｜ 字段白名单 + 缩进子项字段 + applyField 补中文别名），0 条含 D-xxx 形态 → zeroWithContent + distill 显式 warn；③sync.js 409 分流：本地墓碑态降 ℹ️ 预期回执（注销已完成无需动作），active 态维持 ⚠️
 结果：新测试 execute-prompt-mainrepo-docs 2/2 + decision-distill-flat-list 5/5 + tombstone X1-4b（11/11）；distill 系回归 32/32；全量 npm test 410 文件仅 doc-ref 锚漂（我 sync.js 插入所致）已重锚 4 处，docs check 520 全过；lint 533 文件 0 hard fail
+
+## ql-20260910-014-ad3b | 2026-09-10 21:08:55 | 修驾驭小结第五批三负面：daemon junction 锚与自指警告降频 + 探针 3 双根并集 + taskcard depends_on Wave 反填
+状态：已完成
+关联变更：（无）
+文件：
+- src/progress.js（ptr.specRoot realpath 规范化）
+- src/run/shared.js（warnSelfRefPointerOnce 窗口 helper + writePlatformPointer 接线）
+- src/run/command.js（恢复链 warn 接线）
+- src/verify-probes.js（探针 3 双根并集）
+- src/taskcard.js（parsePlanWaveDeps + depsFor 双来源）
+- test/selfref-warn-window.test.mjs（新增 4 用例）
+- test/verify-probes-probe3-dualroot.test.mjs（新增真实 worktree 用例）
+- test/taskcard-depends-wave.test.mjs（新增 4 用例）
+- docs/sillyspec/platform-interface-map.md（锚重锚）
+- docs/sillyspec/prompt-control-debt.md（锚重锚）
+- docs/sillyspec/architecture-4a.md（锚重锚）
+- .sillyspec/docs/sillyspec/scan/ARCHITECTURE.md（锚重锚）
+- .sillyspec/docs/sillyspec/modules/runtime.md（第五批补记）
+- .sillyspec/docs/sillyspec/modules/core-engine.md（探针 3 补记）
+需求：修驾驭小结第五批三负面：daemon junction 锚与自指警告降频 + 探针 3 双根并集 + taskcard depends_on Wave 反填
+根因：①pointer specRoot 为 daemon 写入的 junction 路径（读写同文件无害但路径呈现漂移、junction 随 daemon 蒸发），自指检测在两处每命令重复 warn；②探针 3「主仓目录缺失才回退 worktree」条件在「目录在主仓已存在而新测试 untracked 在 worktree」时不触发，5 条假 warning 逼人工消解；③骨架 depends_on 唯一来源 tasks.md 行内注解常被漏写，三批子代理均发现空，拓扑退化全 Wave 1
+方案：①resolvePlatformSpecDir 对 ptr.specRoot realpath 规范化 + warnSelfRefPointerOnce 跨进程 10min 窗口降频两处自指 warn；②探针 3 改主仓 ∪ worktree 无条件双根并集（与探针 5 三根并集同族，in-place 零变化）；③cmdTaskcard depends_on 双来源（行内注解优先，缺失时 parsePlanWaveDeps 按 plan.md Wave 分组兜底：Wave N → Wave N-1 全部任务）
+结果：新测试 9 用例全绿（selfref 4/4 含 Windows junction 实测、probe3 双根 1/1 真实 git worktree、taskcard Wave 4/4）；相邻回归全绿；lint 536 文件 0 hard fail；全量 npm test 414/414；锚漂 12 处已重锚、docs check 520 全过

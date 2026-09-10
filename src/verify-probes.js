@@ -152,16 +152,18 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
     const moduleDirs = [...new Set(allowed.map(p => dirname(p.split('\\').join('/'))).filter(d => d && d !== '.'))]
     const testFiles = []
     for (const d of moduleDirs) {
-      // 同探针 1 的 worktree 回退（坑 probe1-worktree-path-blind）：新模块目录 apply 前只在
-      // worktree——主仓目录缺失时到 worktree 找 co-located 测试（路径相对 worktree 根呈现）
-      let searchRoot = join(cwd, d)
-      let relBase = cwd
-      if (!existsSync(searchRoot) && wtRoot && existsSync(join(wtRoot, d))) {
-        searchRoot = join(wtRoot, d)
-        relBase = wtRoot
-      }
-      for (const f of findTestFiles(searchRoot, relBase)) {
-        if (!testFiles.includes(f)) testFiles.push(f)
+      // 双根并集扫描（坑 probe3-worktree-test-false-negative，2026-09-10 驾驭小结第五批②，
+      // 用户实证 5 条假 warning）：apply 前新测试文件只在 worktree（untracked），而模块目录在
+      // 主仓**已存在**——旧「主仓目录缺失才回退 worktree」条件不触发，探针 3 报「未找到测试
+      // 文件」假阴。改为无条件双根并集（主仓 ∪ worktree，各自存在才扫，路径相对各自根呈现，
+      // 按 rel 去重主仓优先——与探针 5 的三根并集同族）。主仓 in-place（wtRoot=null）零变化。
+      const roots = []
+      if (existsSync(join(cwd, d))) roots.push({ root: join(cwd, d), base: cwd })
+      if (wtRoot && wtRoot !== cwd && existsSync(join(wtRoot, d))) roots.push({ root: join(wtRoot, d), base: wtRoot })
+      for (const s of roots) {
+        for (const f of findTestFiles(s.root, s.base)) {
+          if (!testFiles.includes(f)) testFiles.push(f)
+        }
       }
     }
     probe3.tasks.push({

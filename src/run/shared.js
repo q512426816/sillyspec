@@ -466,6 +466,28 @@ export function detectEmptyShellQuickSessions(platformOpts, localSpecBase, curre
  */
 export const PLATFORM_MANAGED_FILENAME = '.sillyspec-platform-managed'
 
+// ── 自指指针警告降频（2026-09-10 驾驭小结第五批①，「自指平台指针警告频出」）──
+// daemon junction 形态下（specRoot 经 junction 指回本地 .sillyspec），每条 CLI 命令的
+// 恢复链/写入链都会命中自指检测并 warn——同一事实每进程重复刷屏。跨进程 10min 窗口
+// marker（与 sync-noise 的失败噪音闸同款机制）：窗口内静默，窗口外首报完整展示并续窗。
+const SELFREF_WARN_WINDOW_MS = 10 * 60 * 1000
+const SELFREF_WARN_MARKER = 'selfref-pointer-warn.json'
+
+export function warnSelfRefPointerOnce(cwd, specRoot, message) {
+  try {
+    const dir = join(cwd, '.sillyspec', '.runtime')
+    mkdirSync(dir, { recursive: true })
+    const markerPath = join(dir, SELFREF_WARN_MARKER)
+    const now = Date.now()
+    try {
+      const m = JSON.parse(readFileSync(markerPath, 'utf8'))
+      if (m && Number.isFinite(m.at) && now - m.at < SELFREF_WARN_WINDOW_MS) return
+    } catch { /* 无 marker / 损坏 → 首报 */ }
+    writeFileSync(markerPath, JSON.stringify({ at: now, specRoot: specRoot || null }) + '\n')
+  } catch { /* marker 落盘失败 → 照常 warn（降频是优化不是语义） */ }
+  console.warn(message)
+}
+
 export function writePlatformPointer(cwd, platformOpts, extra = {}) {
   if (!platformOpts || (!platformOpts.specRoot && !platformOpts.runtimeRoot)) return false
   // 自指写入拦截（FR-4，变更 2026-08-23-repo-native-spec-backfill）：specRoot 经 realpath
@@ -473,8 +495,10 @@ export function writePlatformPointer(cwd, platformOpts, extra = {}) {
   // 单点收口同时覆盖 runCommand 与 cmdInit(writeInitPlatformPointer) 两调用方——旧模板
   // scan flag / init 平台模式显式传自指 specRoot 也不再重新投毒。runtimeRoot-only 组合
   // 无 specRoot 可判（isSelfReferentialSpecRoot 对 null 恒 false），原语义不变。
+  // 警告经 warnSelfRefPointerOnce 跨进程窗口降频（junction 形态下每命令命中的重复噪音）。
   if (isSelfReferentialSpecRoot(cwd, platformOpts.specRoot)) {
-    console.warn(`⚠️ 检测到自指平台指针（repo-native junction 回环，specRoot 指回本地 .sillyspec），已跳过指针写入并按本地模式运行: ${platformOpts.specRoot}`)
+    warnSelfRefPointerOnce(cwd, platformOpts.specRoot,
+      `⚠️ 检测到自指平台指针（repo-native junction 回环，specRoot 指回本地 .sillyspec），已跳过指针写入并按本地模式运行: ${platformOpts.specRoot}（10 分钟内不重复提示）`)
     return false
   }
   // temp 残留写侧守卫（2026-09-08 temp 投毒治理，防患于未然）：specRoot 在系统 temp 且

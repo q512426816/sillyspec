@@ -23,7 +23,7 @@ import { basename, join, resolve, dirname } from 'node:path'
 import { existsSync, readdirSync, mkdirSync, writeFileSync, readFileSync, rmSync, unlinkSync } from 'node:fs'
 import { randomBytes, randomUUID } from 'node:crypto'
 import { writeAtomicSync } from '../fs-atomic.js'
-import { resolveSpecDir, countAncestorSpecDirs, ancestorSpecDirs, resolveAncestorCeiling, resolveChangeDir, triggerSync, getStageSteps, formatWaitOptions, checkApproval, warnApprovalUnknown, didYouMean, assertSafeChangeName, detectQuickSessionDrift, detectWorktreeSpecDrift, resolveRuntimeRoot, resolveQuickSessionsDir, writePlatformPointer, checkPlatformManaged, isSelfReferentialSpecRoot, isTempResidueSpecRoot, PLATFORM_MANAGED_FILENAME } from './shared.js'
+import { resolveSpecDir, countAncestorSpecDirs, ancestorSpecDirs, resolveAncestorCeiling, resolveChangeDir, triggerSync, getStageSteps, formatWaitOptions, checkApproval, warnApprovalUnknown, didYouMean, assertSafeChangeName, detectQuickSessionDrift, detectWorktreeSpecDrift, resolveRuntimeRoot, resolveQuickSessionsDir, writePlatformPointer, checkPlatformManaged, isSelfReferentialSpecRoot, isTempResidueSpecRoot, PLATFORM_MANAGED_FILENAME, warnSelfRefPointerOnce } from './shared.js'
 import { resolveQuickLinkedChanges } from './quick-audit.js'
 import { outputStep, collectStageWaitHistory } from './prompt.js'
 import { completeStep, skipStep, waitStep, continueStep } from './complete.js'
@@ -395,7 +395,9 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
         // 忽略恢复（specRoot/runtimeRoot/workspaceId/scanRunId 全不回填，platformOpts 保持
         // 无平台参数状态），按本地模式运行——内置 sync 走本地链路，specRoot 保持本地取值链。
         if (isSelfReferentialSpecRoot(cwd, saved.specRoot)) {
-          console.warn(`⚠️ 检测到自指平台指针（repo-native junction 回环，specRoot 指回本地 .sillyspec），已忽略并按本地模式运行: ${platformOptsFile}`)
+          // 跨进程窗口降频（2026-09-10 驾驭小结第五批①）：daemon junction 形态下每命令命中的重复噪音
+          warnSelfRefPointerOnce(cwd, saved.specRoot,
+            `⚠️ 检测到自指平台指针（repo-native junction 回环，specRoot 指回本地 .sillyspec），已忽略并按本地模式运行: ${platformOptsFile}（10 分钟内不重复提示）`)
         } else {
           if (saved.specRoot) platformOpts.specRoot = saved.specRoot
           if (saved.runtimeRoot) platformOpts.runtimeRoot = saved.runtimeRoot

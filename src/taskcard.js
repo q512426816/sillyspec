@@ -232,6 +232,18 @@ export function cmdTaskcard(changeName, opts = {}) {
   // 本地墙钟（坑 taskcard-created-at-utc：toISOString 落 UTC，本地 09:39 写 01:39，子代理手工改两次）
   const now = nowWallClock()
 
+  // ── depends_on 的 plan.md Wave 反填（坑 taskcard-depends-wave-backfill，2026-09-10 驾驭
+  // 小结第五批③，三批子代理均发现骨架 depends_on 为空）：注册表行内注解
+  // `(depends_on: task-01,02)` 是第一来源，但 agent 写 tasks.md 常漏注解 → 骨架全空 →
+  // plan-adopt-waves 拓扑退化全进 Wave 1。plan.md Wave 段（`## Wave N` + `- task-NN` 纯 ID
+  // 引用行）是 plan 阶段的分组真相——Wave N 任务 depends_on = Wave N-1 全部任务（波间串行
+  // 波内并行的既定语义，传递闭包等价）。仅注解缺失时兜底，注解在场优先（更细粒度）。
+  const waveDepsByTask = parsePlanWaveDeps(existsSync(planPath) ? planPath : null)
+  function depsFor(id, reg) {
+    if (reg && Array.isArray(reg.dependsOn) && reg.dependsOn.length > 0) return reg.dependsOn
+    return waveDepsByTask.get(id) || []
+  }
+
   const tasksDir = join(changeDir, 'tasks')
   mkdirSync(tasksDir, { recursive: true })
 
@@ -248,12 +260,41 @@ export function cmdTaskcard(changeName, opts = {}) {
     }
     writeFileSync(filePath, buildTaskcardSkeleton({
       taskId: id, title: finalTitle, titleZh: finalTitleZh, author, now,
-      // depends_on 从 tasks.md 行内注解反填（坑 taskcard-design-field-conflicts）：注册表
-      // 注解与 plan/design 的依赖声明同源，骨架直接带上省主代理逐卡转录
-      dependsOn: reg ? reg.dependsOn : [],
+      // depends_on 双来源：① tasks.md 行内注解反填（坑 taskcard-design-field-conflicts）
+      // ②注解缺失时按 plan.md Wave 分组兜底（坑 taskcard-depends-wave-backfill，见上）
+      dependsOn: depsFor(id, reg),
       sets,
     }), 'utf8')
     created.push(filePath)
   }
   return { created, skipped, tasksDir }
+}
+
+/**
+ * plan.md Wave 段解析 → 每任务的跨波依赖（Wave N 任务 → Wave N-1 全部任务 ID）。
+ * Wave 段形态（plan 铁律）：`## Wave N` 标题 + `- task-NN` 纯 ID 引用行。Wave 1 / 无 Wave /
+ * 解析异常 → 空 Map（调用方回退注解来源，fail-soft）。
+ * @param {string|null} planPath plan.md 绝对路径（null → 空 Map）
+ * @returns {Map<string, string[]>} taskId → 前一波任务 ID 列表
+ */
+export function parsePlanWaveDeps(planPath) {
+  const out = new Map()
+  if (!planPath) return out
+  let content
+  try { content = readFileSync(planPath, 'utf8').replace(/\r\n/g, '\n') } catch { return out }
+  const waves = [] // 每元素：task id 数组（按 Wave 标题出现顺序）
+  let cur = null
+  for (const line of content.split('\n')) {
+    const w = line.match(/^##\s+Wave\s+(\d+)\s*$/i)
+    if (w) { cur = []; waves.push(cur); continue }
+    if (cur === null) continue
+    const t = line.match(/^[-*]\s+(task-\d{1,3})\s*$/i)
+    if (t) cur.push(`task-${t[1].replace(/^task-/i, '').padStart(2, '0')}`)
+  }
+  for (let w = 1; w < waves.length; w++) {
+    const prev = waves[w - 1]
+    if (!prev || prev.length === 0) continue
+    for (const id of waves[w]) out.set(id, [...prev])
+  }
+  return out
 }

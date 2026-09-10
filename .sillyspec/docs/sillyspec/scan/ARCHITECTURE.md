@@ -166,7 +166,7 @@ W6 重构后的结构：`src/progress.js` 是 ProgressManager facade（1127 行�
 
 | 文件 | 职责 |
 | --- | --- |
-| `src/progress.js` | `ProgressManager` facade（`src/progress.js:210` 类声明）：持久化核心（_ensureDB / read / _write 本体留在 facade），其余按组 delegate 到子模块 |
+| `src/progress.js` | `ProgressManager` facade（`src/progress.js:218` 类声明）：持久化核心（_ensureDB / read / _write 本体留在 facade），其余按组 delegate 到子模块 |
 | `src/progress/stage-machine.js` | 阶段状态机：completeStage / reopen / reset / validate / show / status + 产物校验门 + 下游级联 |
 | `src/progress/step-store.js` | stages / steps / batch_progress 三表读写（setStage / addStep / updateStep / batch） |
 | `src/progress/change-registry.js` | 变更注册表：changes 表生命周期（注册/注销/重命名/隔离状态/平台同步戳/审批状态） |
