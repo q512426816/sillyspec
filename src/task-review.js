@@ -791,15 +791,54 @@ export function generateExecuteRunId() {
 }
 
 /**
- * execute run id 格式校验：exec-YYYY-MM-DD-HHMMSS。
+ * 排他认领 execute run 目录（坑 exec-run-id-same-second-collision，2026-09-10 用户两次实锤）：
+ * generateExecuteRunId 是秒级时间戳，并行会话（不同 change）同秒启动 execute 会生成同一
+ * runId——两变更的 tasks/task-NN/review.json 落进同一 execute-runs/<runId>/ 互相覆盖。
+ * 认领靠非递归 mkdir 的原子性：目录已存在（EEXIST）= 他者已认领同秒 ID → 附随机短后缀
+ * 重试；真实 fs 障碍（execute-runs 被普通文件占用等）原样上抛，由四处写入点既有分层 fail
+ * 语义接管（stage throw / gates 直穿 fail-closed / prompt+task-review catch 降级，
+ * execute-run-dir-fail-loud.test.mjs 锁定）。认领成功即含 tasks/ 子目录（不变量：认领则在，
+ * 后续 marker 写入点 mkdir 为幂等 no-op）。
+ * @param {string} runtimeRoot .sillyspec/.runtime 绝对路径
+ * @param {string|null} [baseId] 认领基准 ID（须为裸秒级形态；缺省现取 generateExecuteRunId()。
+ *   测试注入定值以确定性模拟「同秒两会话」，消除跨秒抖动）
+ * @returns {string} 已认领的 runId（无碰撞=原样秒级形态；碰撞=带 -<rand4> 后缀）
+ */
+export function claimExecuteRunId(runtimeRoot, baseId = null) {
+  const base = baseId || generateExecuteRunId()
+  mkdirSync(join(runtimeRoot, 'execute-runs'), { recursive: true })
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const candidate = attempt === 0 ? base : `${base}-${randomRunIdSuffix()}`
+    try {
+      mkdirSync(join(runtimeRoot, 'execute-runs', candidate)) // 非递归=排他：EEXIST 即同秒碰撞
+      mkdirSync(join(runtimeRoot, 'execute-runs', candidate, 'tasks'), { recursive: true })
+      return candidate
+    } catch (e) {
+      if (e.code !== 'EEXIST') throw e
+    }
+  }
+  // 极端拥挤兜底：放弃排他返回带后缀 ID（调用方 marker 写入点的 recursive mkdir 兜住；
+  // 同秒 8 次随机后缀连续碰撞的概率可忽略，行为不劣于修复前）
+  return `${base}-${randomRunIdSuffix()}`
+}
+
+function randomRunIdSuffix() {
+  return Math.random().toString(36).slice(2, 6).padEnd(4, '0')
+}
+
+/**
+ * execute run id 格式校验：exec-YYYY-MM-DD-HHMMSS（可选 -<小写字母数字> 短后缀）。
  * marker 文件是 agent 可写内容，读回后既注入 prompt（{EXECUTE_RUN_ID}）又拼进
  * join(runtimeRoot, 'execute-runs', runId) 路径——格式校验同时防提示词注入与路径穿越
  * （对齐 stage-review marker 的 review- 前缀校验范式）。
+ * 后缀形态（2026-09-10 驾驭小结①，坑 exec-run-id-same-second-collision）：claimExecuteRunId
+ * 同秒碰撞时附随机短后缀换道；存量无后缀 ID（历史 run / 无碰撞路径）继续通过，读侧双形态兼容。
  * @param {string} runId
  * @returns {boolean}
  */
 export function isValidExecuteRunId(runId) {
-  return typeof runId === 'string' && /^exec-\d{4}-\d{2}-\d{2}-\d{6}$/.test(runId)
+  return typeof runId === 'string'
+    && /^exec-\d{4}-\d{2}-\d{2}-\d{6}(?:-[a-z0-9]{1,8})?$/.test(runId)
 }
 
 /**
@@ -1059,6 +1098,8 @@ export async function generateTaskReviewDrafts({ changeName, cwd, platformOpts =
     // 保留 fail-open 契约（调用方 catch 降级）——只去静默：失败 console.error 留痕，不 throw
     //（草稿兜底缺了也只是退回 gate 报缺 review.json，不比修复前差）。
     try {
+      // 排他认领（坑 exec-run-id-same-second-collision）：并行会话同秒 runId 碰撞在认领处消解
+      executeRunId = claimExecuteRunId(runtimeRoot, executeRunId)
       mkdirSync(join(runtimeRoot, 'execute-runs', executeRunId, 'tasks'), { recursive: true })
       writeFileSync(runIdFile, executeRunId + '\n')
       stampExecuteRunChange(runtimeRoot, executeRunId, changeName)
@@ -1587,11 +1628,13 @@ export async function writeTaskReview({
   }
   if (!executeRunId) {
     executeRunId = generateExecuteRunId()
-    warnings.push(`无 execute run marker——已生成新 runId ${executeRunId} 并建目录（正常应先跑过 execute Wave 步）`)
     try {
+      // 排他认领（坑 exec-run-id-same-second-collision）+ 幂等 mkdir，认领碰撞换后缀
+      executeRunId = claimExecuteRunId(runtimeRoot, executeRunId)
       mkdirSync(join(runtimeRoot, 'execute-runs', executeRunId, 'tasks'), { recursive: true })
       writeFileSync(markerFile, executeRunId + '\n')
       stampExecuteRunChange(runtimeRoot, executeRunId, changeName)
+      warnings.push(`无 execute run marker——已生成新 runId ${executeRunId} 并建目录（正常应先跑过 execute Wave 步）`)
     } catch (e) {
       return { ok: false, errors: [`execute run 目录/marker 写入失败：${e.message}`], warnings }
     }

@@ -119,7 +119,7 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
   // ── execute 阶段启动时固定 executeRunId（绑定变更名，避免跨变更复用） ──
   let currentExecuteRunId = null
   if (stageName === 'execute') {
-    const { generateExecuteRunId, isValidExecuteRunId } = await import('../task-review.js')
+    const { generateExecuteRunId, isValidExecuteRunId, claimExecuteRunId } = await import('../task-review.js')
     const execSpecBase = platformOpts?.specRoot || join(cwd, '.sillyspec')
     const runtimeRoot = resolveRuntimeRoot(platformOpts, execSpecBase)
     const runIdFile = join(runtimeRoot, `current-execute-run-id-${changeName}`)
@@ -141,6 +141,9 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
       // archive 完成度扫描/漂移兜底不再落到「有 marker 无目录」的空 run）。失败直接 throw——execute
       // 启动即失败优于事后 review 错配（调用方 runCommand 冒到 CLI 顶层 exit 1，给出修复指引）。
       try {
+        // 排他认领（坑 exec-run-id-same-second-collision，2026-09-10 驾驭小结①）：并行会话同秒
+        // 生成同一 runId 时在认领处消解（碰撞换随机后缀），per-task review.json 不再跨变更互相覆盖
+        currentExecuteRunId = claimExecuteRunId(runtimeRoot, currentExecuteRunId)
         mkdirSync(join(runtimeRoot, 'execute-runs', currentExecuteRunId, 'tasks'), { recursive: true })
       } catch (e) {
         throw new Error(`execute run 目录创建失败（${join(runtimeRoot, 'execute-runs', currentExecuteRunId)}）: ${e.message}；` +

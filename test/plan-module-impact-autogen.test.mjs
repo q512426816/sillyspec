@@ -130,3 +130,35 @@ test('无 module-map → skipped no-module-map（缺失仍由 1e 契约校验兜
   assert.equal(r.reason, 'no-module-map')
   assert.ok(!existsSync(join(changeDir, 'module-impact.md')))
 })
+
+// ── NEW: 前缀剥离（坑 module-impact-new-prefix-mismatch，2026-09-10 驾驭小结③）──
+// design 清单待建文件带 NEW: 标记（表格 cell 形态——解析器不剥前缀，validateDesignFileList
+// 豁免判就是 startsWith 'NEW:'），归类比对语义下剥前缀对齐（pathMatches 比对侧同源先例）——
+// 此前不剥导致 classifyFile 前缀匹配必失配、NEW 文件全部落「未匹配文件」逼手动回填。
+const DESIGN_WITH_NEW_LIST = [
+  '## 文件变更清单',
+  '',
+  '| 操作 | 文件路径 | 说明 |',
+  '|---|---|---|',
+  '| 新增 | NEW: src/core/new-engine.js | 待建 |',
+  '| 修改 | src/core/engine.js | 既有 |',
+  '| 修改 | NEW: src/core/engine.js | 与上行同文件（书写冗余） |',
+  '| 新增 | docs/orphan-new.md | 游离 |',
+  '',
+].join('\n')
+
+test('NEW: 前缀剥离：待建文件正常归类 + 与裸路径去重', async () => {
+  const cwd = makeProject()
+  const changeDir = writeDesign(cwd, '2026-09-10-newprefix', DESIGN_WITH_NEW_LIST)
+
+  const r = await generatePlanModuleImpactFirstVersion(changeDir, cwd)
+
+  assert.equal(r.status, 'generated')
+  assert.equal(r.matchedCount, 2, 'NEW: engine.js 与裸 engine.js 去重后 core 共 2 文件')
+  assert.equal(r.unmatchedCount, 1, '未匹配仅 orphan（NEW 文件不再误落未匹配章）')
+  const md = readFileSync(join(changeDir, 'module-impact.md'), 'utf8')
+  assert.ok(md.includes('| core | `src/core/new-engine.js` |'), 'NEW: 待建文件剥前缀后按 map 前缀归类命中')
+  assert.ok(!md.includes('NEW:'), '矩阵/未匹配章不残留 NEW: 前缀')
+  assert.equal(md.split('src/core/engine.js').length - 1, 1, 'engine.js 只一行（去重）')
+  assert.ok(md.includes('`docs/orphan-new.md`'), '未匹配文件仍如实列出')
+})

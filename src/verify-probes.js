@@ -356,6 +356,22 @@ export function buildVerifyFacts(result, { changeName, now } = {}) {
 }
 
 /**
+ * 平台模式产物路径回显注记（2026-09-10 驾驭小结②，用户实锤「显示混乱」）：
+ * verify-probes --init 在平台模式（.sillyspec-platform.json pointer 存在）下 spec 根解析为
+ * hub 镜像目录——回显的物理路径（骨架生成/已存在/facts 刷新）都在镜像根下，而产物经
+ * daemon spec-sync 落主仓 .sillyspec/changes/<change>/。agent/人工核对以主仓路径为准，
+ * 回显行尾追加本注记消歧义（本地模式返回空串，回显零变化）。
+ * @param {string|null} platformBase 平台镜像根（null/undefined = 非平台模式）
+ * @param {string} changeName 变更名
+ * @param {string} file 产物文件名（verify-result.md / verify-facts.json）
+ * @returns {string} 注记文本（非平台模式为 ''）
+ */
+export function formatPlatformPathNote(platformBase, changeName, file) {
+  if (!platformBase) return ''
+  return `（平台模式：物理写盘在 hub 镜像根 ${platformBase}；主仓同步位置 .sillyspec/changes/${changeName}/${file}，核对以主仓路径为准）`
+}
+
+/**
  * verify-probes --init 落盘 verify-facts.json（CLI 全权写）。v2（2026-09-08-ir-verify-facts）改
  * 分段合并：re-init 刷新机器段（probes/generatedAt），保留既有 slot-backfill/实测固化段
  * （conclusion/tests/requiredEvidence/runtimeEvidence）——旧「无条件覆盖」会抹掉 --done 回填数据
@@ -363,9 +379,10 @@ export function buildVerifyFacts(result, { changeName, now } = {}) {
  * @param {string} changeDir 变更目录（spec 根下 changes/<name>）
  * @param {object} result runVerifyProbes 返回值
  * @param {string} changeName 变更名（统一命令行呈现）
+ * @param {{ platformNote?: string }} [opts] platformNote 回显行尾追加（平台模式路径消歧，纯回显层不进落盘）
  * @returns {{ facts: object, path: string }}
  */
-export function writeVerifyFacts(changeDir, result, changeName) {
+export function writeVerifyFacts(changeDir, result, changeName, opts = {}) {
   const fresh = buildVerifyFacts(result, { changeName })
   const factsPath = join(changeDir, 'verify-facts.json')
   let facts = fresh
@@ -383,7 +400,7 @@ export function writeVerifyFacts(changeDir, result, changeName) {
     }
   } catch { /* 首次落盘/v1/损坏 → 全新快照（v1 无固化段，直接升 v2） */ }
   writeFileSync(factsPath, JSON.stringify(facts, null, 2) + '\n')
-  console.log(`📝 已刷新 verify-facts.json 机器底稿: ${factsPath}（v2 分段合并，固化段保留；CLI 全权写，勿手改）`)
+  console.log(`📝 已刷新 verify-facts.json 机器底稿: ${factsPath}（v2 分段合并，固化段保留；CLI 全权写，勿手改）${opts.platformNote || ''}`)
   return { facts, path: factsPath }
 }
 

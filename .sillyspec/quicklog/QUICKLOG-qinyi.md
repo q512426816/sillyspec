@@ -171,3 +171,26 @@
 根因：connect 原样写 gateway_url（完整端点）进 mcp.url，而 client 历来按 origin 语义自拼 /mcp/ → /mcp/mcp/ 必 404（活体首跑实证）；平台侧 daemon local-yaml-writer 也写 origin+/mcp 形态，两种形态在野，任一单侧修都会破坏另一形态
 方案：client 构造器端点解析改双形态：url 以 /mcp 结尾视为完整端点（补尾斜杠即用），否则视为 origin 拼 /mcp/；测试补端点 5 断言（origin/完整/尾斜杠/子路径/未配置）并修 getDaemonStatus 未配置用例的 cwd 隔离（仓自身 local.yaml 现为活配置，进程 cwd 会真发网）
 结果：test/sillyhub-mcp-platform-fixes.test.mjs 5 组全绿，dispatch 族回归不变绿；活体验证全链路点亮：endpoint 归一 https://crrcdt.ppdmq.top/mcp/ + probeDaemon true + daemonOnline true（成对 token read scope 生效）
+
+## ql-20260910-007-124c | 2026-09-10 13:57:19 | 修驾驭小结三负面：exec-run runId 同秒碰撞误写 review.json + verify-probes 平台镜像回显混乱 + module-imp…
+状态：已完成
+关联变更：2026-09-10-review-dispatch
+文件：
+- src/task-review.js（claimExecuteRunId 排他认领 + isValid 后缀双形态 + drafts/writeTaskReview 两补写点接线）
+- src/run/stage.js（主写入点接 claim（保持 fail-loud 文案，行号+3 已补 platform-interface-map.md stage.js:226→221 锚点））
+- src/run/gates.js（fallback 写入点接 claim（直穿外层 fail-closed））
+- src/run/prompt.js（渲染降级写入点接 claim（catch 降级语义不变））
+- src/verify-probes.js（formatPlatformPathNote + writeVerifyFacts opts.platformNote）
+- src/index.js（verify-probes --init 三处回显 + facts 回传注记）
+- src/module-impact.js（sourceFiles 剥 NEW: 前缀+去重）
+- test/execute-run-id-collision.test.mjs（新增 5 断言组）
+- test/verify-probes-platform-note.test.mjs（新增 3 用例）
+- test/plan-module-impact-autogen.test.mjs（补 NEW: 表格形态用例）
+- .sillyspec/docs/sillyspec/modules/core-engine.md（task-review 行补 claim + 新增 verify-probes 行）
+- .sillyspec/docs/sillyspec/modules/runtime.md（marker 写入点行补排他认领）
+- .sillyspec/docs/sillyspec/modules/docs-consistency.md（module-impact 行补 NEW: 剥离）
+- docs/sillyspec/platform-interface-map.md（stage.js:226→221 行号漂移补偿）
+需求：修驾驭小结三负面：exec-run runId 同秒碰撞误写 review.json + verify-probes 平台镜像回显混乱 + module-impact NEW: 前缀失配
+根因：①generateExecuteRunId 秒级时间戳，并行会话同秒启动 execute 生成同一 runId，两变更 per-task review.json 落同一 execute-runs/<runId>/tasks/ 互相覆盖（用户两次实锤）；②平台模式 spec 根=hub 镜像，--init 回显镜像物理路径而产物经 daemon 同步落主仓，核对口径分裂显示混乱；③design 清单待建文件带 NEW: 前缀（表格 cell 解析器不剥），module-impact 归类比对漏剥前缀致 classifyFile 前缀匹配必失配、NEW 文件全落未匹配逼手动回填（pathMatches 比对侧早剥，此处漏同步）
+方案：①task-review.js 新增 claimExecuteRunId：非递归 mkdir 排他认领 run 目录（EEXIST=碰撞→4位随机后缀重试），认领即含 tasks/，isValidExecuteRunId 双形态兼容（存量秒级+可选短后缀，注入/穿越仍拒）；接线 stage.js 主点/gates.js/prompt.js/task-review 两补写点共五处 generate 写入点，分层 fail 语义不变。②verify-probes.js 新增 formatPlatformPathNote（平台模式回显行尾补镜像根+主仓同步位置注记，本地零变化）+ writeVerifyFacts opts.platformNote；index.js --init 三处回显接线。③module-impact.js sourceFiles 归一化剥 NEW: + 去重
+结果：新增测试 execute-run-id-collision 5/5、verify-probes-platform-note 3/3，plan-module-impact-autogen 补 NEW: 用例 7/7；回归 fail-loud/marker-drift/change-stamp/verify-probes 系全过；npm run lint 525 文件 0 hard fail；全量 npm test 403 过 2 挂均非本次（doc-ref 7 失效引用 HEAD 已存在实证 + sillyhub-mcp 并发 flake 单独跑 5/5、移除本变更新测试复跑仍挂）

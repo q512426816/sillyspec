@@ -152,7 +152,14 @@ export function generateModuleImpactSkeleton({ cwd, changeName, specDir = null, 
 
   let sourceFileList
   if (sourceFiles) {
-    sourceFileList = sourceFiles.map(f => f.split('\\').join('/')).filter(f => !f.startsWith('.sillyspec/'))
+    // NEW: 前缀剥离（坑 module-impact-new-prefix-mismatch，2026-09-10 驾驭小结③，用户实锤）：
+    // design 清单待建文件带 NEW: 标记，pathMatches 比对侧早已剥（坑
+    // platform-sync-progress-rollback-and-db-corruption 坑3「仅在比对处剥」），本归类是同
+    // 语义比对（目标文件 × module-map paths）却漏剥——前缀不剥则 classifyFile 前缀匹配必
+    // 失配，NEW 文件全部落「未匹配文件」逼手动回填。剥后与裸路径去重（NEW: a.js 与 a.js 同文件）。
+    sourceFileList = [...new Set(sourceFiles
+      .map(f => String(f).replace(/^NEW:\s*/, '').split('\\').join('/').trim())
+      .filter(f => f && !f.startsWith('.sillyspec/')))]
   } else {
     // includeWorkingTree 同 verify module 子集（坑 module-subset-zero-hit-uncommitted）：
     // worktree 未提交改动也计入模块影响面（module-impact 按实际 diff 归属模块）

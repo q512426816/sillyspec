@@ -803,13 +803,15 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
       }
     } catch {}
     if (!runId) {
-      const { generateExecuteRunId } = await import('../task-review.js')
+      const { generateExecuteRunId, claimExecuteRunId } = await import('../task-review.js')
       runId = generateExecuteRunId()
       // 落盘（与启动站点一致），保证 agent 收到的 ID == gate/checkbox 读取的 ID
       // D-001#1 fallback 写入点：mkdir execute-runs/<runId>/tasks 先于 marker（不变量：marker 在则目录在）。
       // 渲染路径异常不能炸 prompt 输出 → catch 内 console.error 留痕 + 保留降级（ID 注入继续，
       // 目录由下游 review 写入 / 其他写入点补齐）。
       try {
+        // 排他认领（坑 exec-run-id-same-second-collision）：并行会话同秒碰撞在认领处消解
+        runId = claimExecuteRunId(runtimeRoot, runId)
         mkdirSync(join(runtimeRoot, 'execute-runs', runId, 'tasks'), { recursive: true })
         writeAtomicSync(runIdFile, runId + '\n')
       } catch (e) {

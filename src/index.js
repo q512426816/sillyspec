@@ -908,7 +908,7 @@ async function main() {
         process.exit(2);
       }
       assertSafeChangeName(vpChange, '--change 变更名');
-      const { runVerifyProbes, renderVerifyProbesReport, generateVerifyResultSkeleton, resolveVerifyProbesSpecBase, writeVerifyFacts } = await import('./verify-probes.js');
+      const { runVerifyProbes, renderVerifyProbesReport, generateVerifyResultSkeleton, resolveVerifyProbesSpecBase, writeVerifyFacts, formatPlatformPathNote } = await import('./verify-probes.js');
       // spec 根统一走漂移锚定（坑 worktree-spec-artifact-misplace）：在 worktree 内跑时锚回主仓，
       // 探针读取与 --init 骨架都落主仓——与 plan/execute/verify/archive 的 command.js 守卫同口径。
       // resolvePlatformSpecDir 仍先调（保留平台接管 fail-closed 检查副作用），但仅 pointer 存在时
@@ -917,6 +917,9 @@ async function main() {
       const vpResolved = resolvePlatformSpecDir(dir, specDir);
       const vpPlatformBase = existsSync(join(dir, '.sillyspec-platform.json')) ? vpResolved : null;
       const vpSpecBase = resolveVerifyProbesSpecBase(dir, specDir, vpPlatformBase);
+      // 平台模式回显注记（2026-09-10 驾驭小结②）：物理路径在 hub 镜像根，产物经 daemon
+      // spec-sync 落主仓——回显补主仓同步位置，消「回显镜像路径 / 核对主仓路径」的显示混乱
+      const vpPlatformNote = formatPlatformPathNote(vpPlatformBase, vpChange, 'verify-result.md');
       const vpResult = runVerifyProbes({ cwd: dir, changeName: vpChange, specDir: vpSpecBase });
       if (json) {
         console.log(JSON.stringify({ command: 'verify-probes', change: vpChange, ...vpResult }, null, 2));
@@ -937,15 +940,17 @@ async function main() {
             // 尾部补注入（正文其余不动），判别子自此有子节可对账。
             const vpSection = `\n## 探针结果（CLI 机械预填，--init 补注入） [层：可复跑探针——gate 抽查防篡改]\n${renderVerifyProbesReport(vpResult)}\n`;
             writeFileSync(vpReportPath, vpExisting.replace(/\s*$/, '\n') + vpSection);
-            console.log(`\n📄 存量旧格式 verify-result.md 已补注入探针预填段: ${vpReportPath}（正文其余未动；补注后按新预填段如实核对结论）`);
+            console.log(`\n📄 存量旧格式 verify-result.md 已补注入探针预填段: ${vpReportPath}（正文其余未动；补注后按新预填段如实核对结论）${vpPlatformNote}`);
           } else {
-            console.log(`\nℹ️  verify-result.md 已存在，不覆盖: ${vpReportPath}`);
+            console.log(`\nℹ️  verify-result.md 已存在，不覆盖: ${vpReportPath}${vpPlatformNote}`);
           }
         } else {
           writeFileSync(vpReportPath, generateVerifyResultSkeleton(vpResult));
-          console.log(`\n📄 已生成 verify-result.md 骨架: ${vpReportPath}（探针已预填；结论必须写明 PASS/FAIL，留待填会被 gate 判不过）`);
+          console.log(`\n📄 已生成 verify-result.md 骨架: ${vpReportPath}（探针已预填；结论必须写明 PASS/FAIL，留待填会被 gate 判不过）${vpPlatformNote}`);
         }
-        writeVerifyFacts(join(vpSpecBase, 'changes', vpChange), vpResult, vpChange); // P3b：facts 底稿随 --init 刷新（骨架已存在也刷新；v2 起分段合并保留固化段）
+        writeVerifyFacts(join(vpSpecBase, 'changes', vpChange), vpResult, vpChange, {
+          platformNote: formatPlatformPathNote(vpPlatformBase, vpChange, 'verify-facts.json'),
+        }); // P3b：facts 底稿随 --init 刷新（骨架已存在也刷新；v2 起分段合并保留固化段）
         // 2026-09-08-ir-verify-facts R-02：已存在 md 缺证据账/回执槽段时仅追加骨架（幂等二跑
         // 零改动）；task 行按 verify-required-evidence.json 预填（存在时）。
         if (existsSync(vpReportPath)) {
