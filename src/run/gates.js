@@ -556,12 +556,14 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
   // ── verify 收尾前置：facts slot-backfill + verifyStartAt（2026-09-08-ir-verify-facts FR-03）──
   // 执行次序（design Phase 3）：backfill（结论/证据/回执槽固化）先行 → runValidators（结论门/
   // 集成证据门读得到固化值与 context.verifyStartAt）→ verify 专属块（test 实测 → tests 段二次
-  // 回填 → cannot_verify 硬门）。verifyStartAt = DB execute 行 completed_at（只读；缺省 null →
-  // 证据核验走 R-05 design created_at fallback）。
+  // 回填 → cannot_verify 硬门）。verifyStartAt 锚点（2026-09-10 用户反馈②放宽）：execute 行
+  // **started_at**（证据合法产自 execute 或 verify 两窗口）→ 缺列/旧行退 completed_at →
+  // 再缺走 R-05 design created_at fallback。
   let verifyStartAtIso = null
   if (stageName === 'verify') {
     try {
-      verifyStartAtIso = pm.getStageCompletedAt(cwd, changeName, 'execute')
+      verifyStartAtIso = (pm.getStageStartedAt && pm.getStageStartedAt(cwd, changeName, 'execute'))
+        || pm.getStageCompletedAt(cwd, changeName, 'execute')
     } catch { verifyStartAtIso = null }
     try {
       const verifyMdPath = join(specBase, 'changes', changeName, 'verify-result.md')
@@ -720,9 +722,19 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
     // execute Task Review Gate 把 cannot_verify 任务的 evidence 落盘 verify-required-evidence.json。
     // v2 槽优先分类核验（FR-02）：blocked = missing 无豁免或 satisfied 核验不过 → 阻断 verify 完成
     // （此前 advisory 只查「提及」——死链不闭环）；无槽存量 md 降级 legacy 子串对账（warning 不阻断）。
-    const { runVerifyRequiredEvidenceCheck, printVerifyRequiredEvidenceCheck } = await import('../verify-postcheck.js')
+    const { runVerifyRequiredEvidenceCheck, printVerifyRequiredEvidenceCheck, trackVerifyResultRegression } = await import('../verify-postcheck.js')
     const evidenceCheck = runVerifyRequiredEvidenceCheck({ cwd, specBase, changeName, verifyStartAt: verifyStartAtIso })
     printVerifyRequiredEvidenceCheck(evidenceCheck)
+    // verify-result.md 内容回退检测（2026-09-10 用户反馈③：报告被平台同步覆盖回旧版一次，
+    // 只能靠人眼发现重写）：高水位指纹（hash+mtime）检出「内容变且 mtime 回退」→ ⚠️ 告警。
+    // 纯 advisory——真回退也由 agent 决定重写，CLI 只保证可见。
+    try {
+      const vr = trackVerifyResultRegression(specBase, changeName, join(specBase, 'changes', changeName, 'verify-result.md'))
+      if (vr.regressed) {
+        console.warn(`\n⚠️ verify-result.md 疑被覆盖回旧版（内容变化 + mtime 回退至 ${new Date(vr.prevMtime).toLocaleString('zh-CN')} 之前）——平台/daemon 按服务端旧版本回写的指纹。`)
+        console.warn(`   若你刚重写过请忽略本行（下次读取刷新高水位）；否则当前盘上可能是旧内容，需对照记忆/git 重新补写。`)
+      }
+    } catch { /* 检测失败静默（advisory） */ }
     if (evidenceCheck.status === 'blocked') {
       console.error(`\n❌ verify 阶段被阻断：cannot_verify 证据账未闭环（${evidenceCheck.summary}）。`)
       for (const d of (evidenceCheck.detailed || [])) {

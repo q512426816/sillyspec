@@ -23,6 +23,7 @@
  */
 
 import { execSync, spawnSync } from 'child_process'
+import { createHash } from 'crypto'
 import { IR_STRICT_SINCE } from './constants.js'
 import { gitQuiet } from './git-helper.js'
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync } from 'fs'
@@ -1058,8 +1059,33 @@ export function resolveVerifyChangedFiles(cwd, changeName, ctx = null, opts = {}
             !p.startsWith('.sillyspec/changes/') &&
             !p.startsWith('.sillyspec/.runtime/') &&
             !p.startsWith('.sillyspec/quicklog/'))
-        if (wtFiles.length > 0) {
-          mainFiles = [...new Set([...(mainFiles || []), ...wtFiles])]
+        // 已提交口径补齐（2026-09-10 用户反馈②「先提交则 diff 空」时序两难的 diff 半边）：
+        // worktree 内已 commit 的改动对主仓 base..HEAD 与 status --porcelain 双双不可见——
+        // 用 merge-base(主仓 HEAD, worktree HEAD)（= worktree 创建锚点）到 worktree HEAD 的
+        // commit diff 补入，未提交 ∪ 已提交两形态全覆盖。wtGitDir===cwd（in-place 退化）时
+        // 已提交改动已在 mainFiles，跳过防双并。fail-open：git 失败退回 status-only 现状。
+        let committedFiles = []
+        if (wtGitDir !== cwd) {
+          try {
+            const mainHead = gitQuiet(cwd, ['rev-parse', 'HEAD'], { timeout: 15000 })
+            const wtHead = gitQuiet(wtGitDir, ['rev-parse', 'HEAD'], { timeout: 15000 })
+            const mb = (mainHead && wtHead)
+              ? gitQuiet(wtGitDir, ['merge-base', wtHead, mainHead], { timeout: 15000 })
+              : null
+            if (mb) {
+              const diffOut = gitQuiet(wtGitDir, ['diff', '--name-only', mb, wtHead], { timeout: 30000 })
+              committedFiles = String(diffOut || '').split('\n')
+                .map(p => p.replace(/^"|"$/g, '').replace(/\\/g, '/').trim())
+                .filter(p => p && p !== '.sillyspec' &&
+                  !p.startsWith('.sillyspec/changes/') &&
+                  !p.startsWith('.sillyspec/.runtime/') &&
+                  !p.startsWith('.sillyspec/quicklog/'))
+            }
+          } catch { /* 已提交补齐失败退回 status-only（fail-open，不拖垮未提交并入） */ }
+        }
+        const merged = [...new Set([...(mainFiles || []), ...wtFiles, ...committedFiles])]
+        if (wtFiles.length > 0 || committedFiles.length > 0) {
+          mainFiles = merged
         }
       }
     } catch { /* working-tree 并入失败退回 commit diff 口径（fail-open） */ }
@@ -1927,6 +1953,40 @@ export function printVerifyDeletionCheck(result) {
     if (result.mediumRisk.length > 20) console.warn(`   …还有 ${result.mediumRisk.length - 20} 个`)
   }
   console.warn('   提示：确认删除是否预期。预期删除请在 design.md 清单用「删除」操作显式声明；误删请恢复。')
+}
+
+/**
+ * verify-result.md 内容回退检测（2026-09-10 用户反馈③：报告在 verify 中途被平台同步覆盖
+ * 回旧版一次，只能靠人眼发现后重写）。覆盖者在本仓之外（daemon/平台侧按服务端版本回写），
+ * CLI 侧能做的是**检测可见**：每次 CLI 读到该文件时记高水位指纹（content hash + mtime），
+ * 下次读到「内容变了且 mtime 回退」= 旧版复活的确定性指纹（服务端回写会顺带恢复服务端
+ * mtime，时间倒流唯此一路）→ ⚠️ 告警。纯 advisory 不阻断；高水位只前进不后退（回退态
+ * 不覆盖指纹，agent 重写后新指纹正常接管）。fail-open：任何异常视为无回退。
+ * @param {string} specBase spec 根（hwm 文件落 .runtime/）
+ * @param {string} changeName 变更名
+ * @param {string} absPath verify-result.md 绝对路径
+ * @returns {{ regressed: boolean, prevMtime: number|null }}
+ */
+export function trackVerifyResultRegression(specBase, changeName, absPath) {
+  try {
+    if (!absPath || !existsSync(absPath)) return { regressed: false, prevMtime: null }
+    const st = statSync(absPath)
+    const hash = createHash('sha256').update(readFileSync(absPath)).digest('hex')
+    const hwmPath = join(specBase, '.runtime', `verify-result-hwm-${changeName}.json`)
+    let prev = null
+    try { prev = JSON.parse(readFileSync(hwmPath, 'utf8')) } catch { prev = null }
+    const regressed = !!(prev && typeof prev.hash === 'string' &&
+      prev.hash !== hash && typeof prev.mtimeMs === 'number' &&
+      st.mtimeMs < prev.mtimeMs - 1000)
+    // 高水位只前进：当前 mtime 更新（正常编辑/重写）才覆盖指纹；回退态保留旧指纹供重写后再比对
+    if (!prev || st.mtimeMs >= (prev.mtimeMs || 0)) {
+      try {
+        mkdirSync(join(specBase, '.runtime'), { recursive: true })
+        writeFileSync(hwmPath, JSON.stringify({ hash, mtimeMs: st.mtimeMs, ts: Date.now() }) + '\n')
+      } catch { /* hwm 落盘失败 → 下次当首次（fail-open） */ }
+    }
+    return { regressed, prevMtime: prev && prev.mtimeMs ? prev.mtimeMs : null }
+  } catch { return { regressed: false, prevMtime: null } }
 }
 
 /**

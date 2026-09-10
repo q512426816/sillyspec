@@ -43,3 +43,7 @@ updated_at: 2026-09-02T11:20:00+08:00
 ## getStageCompletedAt（2026-09-08-ir-verify-facts）
 
 新只读访问器：DB stages.completed_at（change-registry 查询 + ProgressManager 委托；无行/读失败 null，调用方走 R-05 fallback）——verify 证据分类核验的 verifyStartAt 基准（execute 行完成时刻）。
+
+## getStageStartedAt（2026-09-10 用户反馈②：evidence mtime 锚点放宽）
+
+同族只读访问器：DB stages.started_at。gates verify 收尾接线改为 `getStageStartedAt('execute') || getStageCompletedAt('execute')`——证据合法产自 execute 或 verify 两窗口，锚「execute 完成时刻」会把 execute 期间产的证据判旧，逼出「先提交则 diff 空、不提交则 mtime 旧」的时序两难（PI 会话实证，只能 missing+豁免收口）。锚 started_at 后 execute/verify 两窗口证据均入窗，变更窗口外的陈旧证据照拦。

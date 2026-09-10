@@ -666,6 +666,7 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
       // 走下方 _getNextSuggestion 会因 scan 是 STAGE_ORDER 首位、永未完成而误推 scan（回头路），
       // 与 brainstorm 同类问题（见上注释），故给 quick 专属分支。
       console.log('\n👉 quick 已完成。下一步：提交本次改动（git commit / sillyspec-commit），或 sillyspec run <stage> 继续其他阶段。')
+      console.log('   ⚠️ 多会话共享仓禁目录级 git add / git add -A（会夹带并行会话文件，2026-09-10 实证误删已提交文档）：用显式 pathspec（git add -- 文件…），提交前 git status 核对暂存面。')
     } else {
       // D1 暗衔接修：阶段刚完成，CLI 本就知道状态机下一步是哪个阶段（_getNextSuggestion），
       // 却只丢一句「下一步由你决定」让 agent 自己猜命令。改为按 progress 实际状态给出精确命令。

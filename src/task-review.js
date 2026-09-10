@@ -1086,9 +1086,27 @@ export async function generateTaskReviewDrafts({ changeName, cwd, platformOpts =
       const wtFiles = parsePorcelainFiles(wtStatus)
         .map(p => String(p).replace(/\\/g, '/'))
         .filter(p => p !== '.sillyspec' && !p.startsWith('.sillyspec/'))
-      if (wtFiles.length > 0) {
-        diffFiles = [...new Set([...(Array.isArray(diffFiles) ? diffFiles : []), ...wtFiles])]
-        console.log(`[sillyspec] 草稿归属并入 ${wtFiles.length} 个 worktree 未提交文件（子代理未 commit 的改动按 allowed_paths 归属）`)
+      // 已提交口径补齐（2026-09-10 用户反馈②「先提交则 diff 空」：worktree 内已 commit 的改动
+      // 对主仓 base..head 与 status 双不可见，草稿 changedFiles 恒空）——merge-base(主仓 HEAD,
+      // worktree HEAD)（= 创建锚点）..worktree HEAD 的 commit diff 并入，与
+      // resolveVerifyChangedFiles 的同款补齐同源（verify-postcheck.js，两处口径须同步改）。
+      // in-place 退化（wtGitDir===cwd）时已提交改动在主仓 diff 内，跳过防双并；git 失败 fail-open。
+      let committedFiles = []
+      if (wtGitDir !== cwd) {
+        try {
+          const mainHead = runGit(cwd, ['rev-parse', 'HEAD'])
+          const wtHead = runGit(wtGitDir, ['rev-parse', 'HEAD'])
+          const mb = (mainHead && wtHead) ? runGit(wtGitDir, ['merge-base', wtHead, mainHead]) : null
+          if (mb) {
+            committedFiles = String(runGit(wtGitDir, ['diff', '--name-only', mb, wtHead]) || '')
+              .split('\n').map(p => p.replace(/^"|"$/g, '').replace(/\\/g, '/').trim())
+              .filter(p => p && p !== '.sillyspec' && !p.startsWith('.sillyspec/'))
+          }
+        } catch { /* 已提交补齐失败退回 status-only（fail-open，不拖垮未提交并入） */ }
+      }
+      if (wtFiles.length > 0 || committedFiles.length > 0) {
+        diffFiles = [...new Set([...(Array.isArray(diffFiles) ? diffFiles : []), ...wtFiles, ...committedFiles])]
+        console.log(`[sillyspec] 草稿归属并入 worktree 改动 ${wtFiles.length + committedFiles.length} 个（未提交 ${wtFiles.length} + 已提交 ${committedFiles.length}，按 allowed_paths 归属）`)
       }
     }
   } catch { /* working-tree 并入失败退回 commit diff 口径（fail-open，不阻断草稿） */ }

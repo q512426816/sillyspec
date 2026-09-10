@@ -62,6 +62,24 @@ export class ChangeRegistry {
     } catch { return null; }
   }
 
+  /**
+   * 读某变更某阶段的 started_at（2026-09-10 用户反馈②：evidence mtime 窗口锚点从
+   * execute completed_at 放宽到 started_at——证据合法产自 execute 或 verify 两窗口，
+   * 锚「完成时刻」会把 execute 期间产的证据判旧，逼出「先提交则 diff 空、不提交则
+   * mtime 旧」的时序两难）。只读不抛：无行/列空/读失败返回 null（调用方退
+   * getStageCompletedAt → R-05 fallback，与 getStageCompletedAt 同族容错）。
+   */
+  getStageStartedAt(cwd, changeName, stage) {
+    try {
+      const db = this.pm._ensureDB(cwd);
+      const row = db.getDb().prepare(
+        `SELECT s.started_at FROM stages s JOIN changes c ON s.change_id = c.id
+         WHERE c.name = ? AND s.stage = ? ORDER BY s.started_at DESC LIMIT 1`
+      ).get(changeName, stage);
+      return row && row.started_at ? row.started_at : null;
+    } catch { return null; }
+  }
+
   getChangeStage(cwd, changeName) {
     const db = this.pm._ensureDB(cwd);
     const sqlDb = db.getDb();

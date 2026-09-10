@@ -106,3 +106,23 @@
 根因：PI agent 等宿主环境无 Agent tool，tier=independent 硬要求子代理时只能降级自审（2026-09-10 用户反馈①，三处）；prompt 降级条款已有（并行会话未提交改动），但 gate 静默放行降级 review、缺件报错无降级出口，事后审计无法区分降级与真子代理审查
 方案：stage-review.js 新增 isDegradedSelfReview（reviewerNotes 首行降级 colon 约定检测，向后兼容不新增阻断），gates.js Stage Review Gate 放行时检测到降级标记留 ⚠️ 审计行；缺 review.json 报错与 gate FAILED 提示补降级出口指引，renderReviewJsonContract 契约文档化该约定
 结果：test/stage-review-degraded-selfreview.test.mjs 13 断言全绿，stage-review 回归 8 套与 lint 绿，core-engine 模块卡与 sidecar 同步
+
+## ql-20260910-003-2709 | 2026-09-10 09:34:54 | verify 证据核验时序两难与同步覆盖/夹带三坑修复
+状态：已完成
+关联变更：（无）
+文件：
+- src/verify-postcheck.js（resolveVerifyChangedFiles worktree 并入补已提交口径（merge-base diff）+ trackVerifyResultRegression 高水位回退检测）
+- src/task-review.js（草稿归属并入同款已提交补齐（口径与 verify-postcheck 同源））
+- src/progress/change-registry.js（getStageStartedAt 只读访问器）
+- src/progress.js（facade 委托 getStageStartedAt）
+- src/run/gates.js（verifyStartAt 锚改 execute startedAt + 回退检测告警接线）
+- src/run/complete.js（quick 完成提示加 pathspec 禁令）
+- templates/agents-instruction.md（核心规则 18 目录级 git add 禁令）
+- AGENTS.md（本仓同步规则 18）
+- test/verify-window-regression.test.mjs（三段（worktree 已提交 diff / startedAt roundtrip / 回退检测））
+- .sillyspec/docs/sillyspec/modules/core-engine.md（模块卡同步）
+- .sillyspec/docs/sillyspec/modules/progress.md（模块卡同步）
+需求：verify 证据核验时序两难与同步覆盖/夹带三坑修复
+根因：PI 会话实证②：worktree 已提交改动对主仓 diff 与 status 双盲区致草稿 changedFiles 空，mtime 锚 execute 完成时刻把 execute 期间产的证据判旧，两核验互斥只能 missing+豁免收口；③ verify-result.md 被平台同步覆盖回旧版无告警；④ 目录级 git add 夹带并行会话文件甚至误删已提交文档（2026-09-10 用户反馈）
+方案：②a 两处 worktree 并入点补 merge-base(主仓HEAD, worktreeHEAD)..worktreeHEAD 已提交 diff；②b getStageStartedAt 锚点放宽（gates started 优先 completed 兜底）；③ trackVerifyResultRegression 高水位指纹（hash+mtime）检出内容回退+mtime 倒流即告警（覆盖者在仓外，CLI 侧保证可见）；④ agents 模板核心规则 18 + 本仓 AGENTS.md + quick 完成提示三处禁目录级 git add
+结果：test/verify-window-regression.test.mjs 3 断言组全绿（worktree 真实 git worktree 构造），回归 8 套与 lint 绿，core-engine/progress 模块卡与 sidecar 同步
