@@ -2284,14 +2284,20 @@ function parsePorcelainFilePaths(raw) {
  * 统一收尾：filterDeliverableFiles 过滤基建产物（.sillyspec/changes|.runtime|quicklog、
  * meta.json——流程产物不算 scope creep）+ 去重排序（输出确定性）。
  *
- * @returns {{ ok: boolean, form: 'worktree'|'post-apply', files: string[], sources: string[], foreignExcluded: number, degradedReason: string|null }}
+ * baseAnchor：与 files 同源的 diff 基点锚（scope-audit 行数采集复用，本模块自身不消费）——
+ * 形态 A 读同一份 worktree meta.json（优先级 baselineCommit>actualBaseHash>baseHash，与
+ * resolveMainChangedFiles 同口径，三锚全缺 null）；形态 B 取 merge-base hash（分支不存在/
+ * merge-base 不可得 null）；降级返回恒 null。
+ *
+ * @returns={{ ok: boolean, form: 'worktree'|'post-apply', files: string[], sources: string[], foreignExcluded: number, degradedReason: string|null, baseAnchor: string|null }}
  */
-function resolveReconcileActualFiles({ cwd, specBase, runtimeRoot, changeName }) {
+export function resolveReconcileActualFiles({ cwd, specBase, runtimeRoot, changeName }) {
   const metaPath = join(specBase, '.runtime', 'worktrees', changeName, 'meta.json')
   const form = existsSync(metaPath) ? 'worktree' : 'post-apply'
   const sources = []
   const union = new Set()
   let foreignExcluded = 0
+  let baseAnchor = null
 
   if (form === 'worktree') {
     // —— 形态 A：worktree 存活，整链复用（锚点优先级 baselineCommit>actualBaseHash>baseHash、
@@ -2299,8 +2305,14 @@ function resolveReconcileActualFiles({ cwd, specBase, runtimeRoot, changeName })
     const files = resolveVerifyChangedFiles(cwd, changeName, null, { includeWorkingTree: true, specBase })
     if (files === null) {
       return { ok: false, form, files: [], sources, foreignExcluded,
-        degradedReason: 'worktree 锚点 diff 与主仓 fallback 均失败（git 不可用 / 非仓库）' }
+        degradedReason: 'worktree 锚点 diff 与主仓 fallback 均失败（git 不可用 / 非仓库）', baseAnchor: null }
     }
+    // baseAnchor：读同一份 worktree meta.json 锚点（baselineCommit>actualBaseHash>baseHash，
+    // resolveMainChangedFiles 同口径；解析失败/三锚全缺 → null）
+    try {
+      const meta = JSON.parse(readFileSync(metaPath, 'utf8'))
+      baseAnchor = meta?.baselineCommit || meta?.actualBaseHash || meta?.baseHash || null
+    } catch {}
     sources.push('worktree:diff-base..HEAD', 'worktree:status-porcelain(uncommitted)')
     for (const f of files) union.add(normalizeReconcilePath(f))
   } else {
@@ -2315,6 +2327,7 @@ function resolveReconcileActualFiles({ cwd, specBase, runtimeRoot, changeName })
       // 主分支叫 master 等仓库 merge-base 失败 → 与分支不存在同处置（省略该源）
       const mergeBase = gitQuiet(cwd, ['merge-base', 'main', branch], { timeout: 30 * 1000 })
       if (typeof mergeBase === 'string' && mergeBase.trim()) {
+        baseAnchor = mergeBase.trim()
         const files = runGitDiffNameOnly(cwd, mergeBase.trim())
         if (files !== null) {
           diffOk = true
@@ -2349,12 +2362,12 @@ function resolveReconcileActualFiles({ cwd, specBase, runtimeRoot, changeName })
     }
     if (!diffOk && !statusOk) {
       return { ok: false, form, files: [], sources, foreignExcluded,
-        degradedReason: 'merge-base 锚定 diff 未得且主仓 status 失败（git 不可用 / 非仓库 / 无锚点分支）' }
+        degradedReason: 'merge-base 锚定 diff 未得且主仓 status 失败（git 不可用 / 非仓库 / 无锚点分支）', baseAnchor: null }
     }
   }
 
   const files = [...new Set(filterDeliverableFiles([...union]).filter(Boolean))].sort()
-  return { ok: true, form, files, sources, foreignExcluded, degradedReason: null }
+  return { ok: true, form, files, sources, foreignExcluded, degradedReason: null, baseAnchor }
 }
 
 /**

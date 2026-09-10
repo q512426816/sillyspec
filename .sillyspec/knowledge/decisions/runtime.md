@@ -65,3 +65,38 @@ supersedes：无（修订 design 初稿注入时机）
 锚点：未记录
 最近确认：99d255c
 理由：用户指令立项（P3d 多次提示）。采集：sillyspec endpoints baseline --change <名>（幂等——已存在不覆盖，首次跑=变更前状态基线）落 .runtime/endpoint-baselines/<change>.json（endpoints[] method/path/source + baseCommit + generatedAt）；execute Step 3（worktree 确认步）prompt 指引 agent 跑一次（对齐 verify-probes --init 先例）。消费：归档时 archive-delta 增第五源——endpoint-extractor 现算当前端点集 × 基线 → diffEndpointSets 纯函数（added/removed）→ delta.md「端点增删」节（替代 P3d 的「独立立项提示」条件行）。provider 产物 endpoints.json 不动（contract-matrix 零改动）。
+
+## D-001@v1 : 计划侧不做行数（含估算值），只做文件级三态
+状态：implemented
+变更：2026-09-10-change-scope-audit
+锚点：未记录
+最近确认：3f22d6b
+理由：用户初始提议「计划侧行数没有的话给个大概也行」；讨论后收敛不做——design.md 清单是文件级声明无行数语义，LLM 估行数无法追责（估 50 实 300 分不清是计划错还是估算错），与本仓「每条数据要么机械真实要么明确是人的判断」门禁哲学冲突。规模感如需后续用 T-shirt 尺寸（明确是判断的粗粒度），不在本变更。
+
+## D-002@v1 : 实际侧行数一律 git 真值（numstat 优先）
+状态：implemented
+变更：2026-09-10-change-scope-audit
+锚点：未记录
+最近确认：3f22d6b
+理由：用户明确「实际改动的文件（+ - 行数，这个要真实的）」。tracked 改动用 `git diff --numstat`（与文件清单同基点，天然自洽）；untracked 新文件 numstat 不可得 → wc -l 记全 + 行；binary（numstat 为 `-`）显 BIN。
+
+## D-003@v1 : 架构 = 纯函数单一真相 + 独立命令随时查 + 阶段点薄注入
+状态：implemented
+变更：2026-09-10-change-scope-audit
+锚点：未记录
+最近确认：3f22d6b
+理由：用户提议「独立一个参数或者命令去展示，可以随时查看」。三层：computeChangeScopeAudit 纯函数（单一真相）；sillyspec scope-audit 命令（人类可读 + --json）；execute --done / verify --done / archive --confirm 三处薄注入调同一函数。对齐 verify-probes / module-impact 已验证的「纯函数 + 命令 + 阶段集成」三层模式。
+
+## D-004@v1 : quick 流程纳入——复用 auditQuickCompletion 窗口归属，归属状态表而非三态
+状态：implemented
+变更：2026-09-10-change-scope-audit
+锚点：未记录
+最近确认：3f22d6b
+理由：用户问「quick 的范围是否也能统计到呢」，评估后纳入。quick 无事前计划（--files 是事后声明），不做三态做归属状态表：已声明（--files）/ 软归属（同模块测试）/ ⚠️ 未声明 / 他者声明（排除面）。窗口归属复用 auditQuickCompletion（baseline 快照/他者退栈/软归属已存在）；随时查看依赖 guard.json 持久化 + locateQuickSessionGuard。quick 提交后窗口已 commit，降级读 QUICKLOG 条目文件行（记录态非实时）。
+
+## D-006@v1 : ⚠️ 计划外/计划未动/未声明均为 advisory，不阻断
+状态：implemented
+变更：2026-09-10-change-scope-audit
+锚点：未记录
+最近确认：3f22d6b
+理由：不阻断。多 agent 并行是本仓常态（AGENTS.md 核心前提），计划外文件可能是他者演进或 plan 后 design 漏更新（常态），硬拦会把正常流逼进 rescue 手动路径（diff 规模两档制先例同教训）。⚠️ 项给出明确出口：execute 时点补 design.md 声明或 --output 注明原因。

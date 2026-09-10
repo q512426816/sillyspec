@@ -34,6 +34,7 @@ import { printQuickAuditReview, runQuickTestLintGate, printQuickTestLintGate } f
 import { validateQuickResult, allocateQuicklogEntry, appendQuicklogEntryWithId, findQuicklogEntry, completeQuicklogEntry, extractTitleFromResult, parseFileNotes, getQuickFileNotes } from '../quicklog.js'
 import { getRule } from '../stage-contract-spec.js'
 import { archiveDestDirName } from '../stage-contract.js'
+import { collectNumstatByPath } from '../scope-audit.js'
 
 /**
  * 清洗项目名：只保留 ASCII 字母/数字/横线/下划线/点，过滤中文和特殊字符。
@@ -1209,6 +1210,8 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
       // attributedFiles——硬归属口径「声明即归属」不变（2026-08-18 误归属修复）。
       const softFiles = (Array.isArray(review?.softTestFiles) ? review.softTestFiles : [])
         .map(f => String(f).replace(/\\/g, '/')).filter(f => !isQuickMetadata(f, linkedChanges))
+      // task-06（FR-04）：文件行/审计行并上 numstat 行数——attachQuickLineCounts 见文件尾（声明提升）
+      const { annotatedRealFiles, annotatedSoftFiles, fmtLineCounts } = attachQuickLineCounts({ cwd, realFiles, softFiles, review, auditFiles, qlId })
       // D-8 落盘（2026-08-18 修）：advisory 欠账信号从「纯打印」升级为「随条目落盘」——修复
       // 「欠账已记录（QUICKLOG reasons）」的不实承诺（交叉审查实证 reasons 纯 stdout，事后不可审计）。
       // 两周实测（2026-08-31 裁决，doc-consistency-debt §七）需要分母：信号触发次数必须可追溯。
@@ -1248,17 +1251,17 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
         const softSet = new Set(softFiles)
         const undeclared = review.undeclaredFiles.filter(f => !isQuickMetadata(f, linkedChanges) && !softSet.has(String(f).replace(/\\/g, '/')))
         if (undeclared.length > 0) {
-          auditNotes.push(`⚖️ 归属切分：${undeclared.length} 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：${undeclared.join(', ')}`)
+          auditNotes.push(`⚖️ 归属切分：${undeclared.length} 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：${undeclared.map(f => `${f}${fmtLineCounts(f)}`).join(', ')}`)
         }
         if (softFiles.length > 0) {
-          auditNotes.push(`🔍 软归属：${softFiles.length} 个窗口内未声明同模块测试文件已补入文件行（若属并行会话改动请手工剔除）：${softFiles.join(', ')}`)
-          console.log(`🔍 软归属：${softFiles.length} 个窗口内未声明同模块测试文件已按软归属补入文件行（若属并行会话改动请手工剔除）：${softFiles.join(', ')}`)
+          auditNotes.push(`🔍 软归属：${softFiles.length} 个窗口内未声明同模块测试文件已补入文件行（若属并行会话改动请手工剔除）：${annotatedSoftFiles.join(', ')}`)
+          console.log(`🔍 软归属：${softFiles.length} 个窗口内未声明同模块测试文件已按软归属补入文件行（若属并行会话改动请手工剔除）：${annotatedSoftFiles.join(', ')}`)
         }
       }
       await completeQuicklogEntry(specBase, gitUser, qlId, {
         resultText: outputText || '',
         linkedChanges,
-        changedFiles: realFiles,
+        changedFiles: annotatedRealFiles,
         auditNotes,
         softFiles,
       })
@@ -1840,5 +1843,48 @@ export async function handleScanStageCompleted({ stageName, currentIdx, cwd, pro
     }
   }
   return null
+}
+
+// ── task-06（2026-09-10-change-scope-audit，FR-04）：quick 文件行/审计行 numstat 行数注入 ──
+// collectNumstatByPath 与 scope-audit 命令同源采集（D-003 单一真相；R-03 单次 git 调用非逐文件）。
+// 基点 'HEAD' = 未提交工作区窗口（D-004：quick 无 merge-base 锚，对未提交窗口采集语义自洽；
+// untracked 新文件 wc-l 记全 + 行、binary 显 BIN）。纯展示列（advisory，D-006）：采集失败/行数
+// 不可得 → 括注省略不出伪数据；不改 auditQuickCompletion 判定、runQuickTestLintGate 与任何门禁。
+// 放文件尾（函数声明提升）而不内联进 handleQuickStageCompletion：docs/platform-interface-map
+// 行号锚在上方（complete-handlers.js:1688 handleScanStageCompleted），内联大块会把 doc-ref 锚
+// 推出关键词窗口。
+//
+// 消费分工（调用方 quick 收尾）：
+//   - annotatedRealFiles → completeQuicklogEntry changedFiles（QUICKLOG「文件：」行/bullet 带括注；
+//     fileNotes 模式下 realFiles 本就不渲染，括注只出现在回退渲染面）
+//   - annotatedSoftFiles → 🔍 软归属审计行 + console；softFiles 传参保持**裸路径**——
+//     flipEntryInContent 用它与 fileNotes.path 精确等值去重（带括注会不等值 → 同文件双 bullet）
+//   - fmtLineCounts → ⚖️ 归属切分审计行逐文件括注（降级返回空串 → 原样不带）
+//   - 已提交降级（D-004）：窗口空（改动已 commit/会话未产生改动）且 QUICKLOG 条目已存在 →
+//     记录态提示读 QUICKLOG 条目文件行，不以空表冒充实时（与 scope-audit quick 模式 note 同口径）
+function attachQuickLineCounts({ cwd, realFiles, softFiles, review, auditFiles, qlId }) {
+  const posix = (f) => String(f).replace(/\\/g, '/')
+  const lineCountFiles = [...new Set([...(realFiles || []).map(posix), ...(softFiles || [])])]
+  let numstatByPath = new Map()
+  if (lineCountFiles.length > 0) {
+    try {
+      numstatByPath = collectNumstatByPath(cwd, lineCountFiles, { baseRef: 'HEAD' })
+    } catch { /* 采集异常 → 行数列整体降级省略（fail-soft） */ }
+  }
+  const fmtLineCounts = (f) => {
+    const st = numstatByPath.get(posix(f))
+    if (!st) return ''
+    if (st.kind === 'binary') return '（BIN）'
+    if (!Number.isFinite(st.additions) || !Number.isFinite(st.deletions)) return ''
+    return `（+${st.additions}/-${st.deletions}）`
+  }
+  const annotatedRealFiles = (realFiles || []).map(f => `${f}${fmtLineCounts(f)}`)
+  const annotatedSoftFiles = (softFiles || []).map(f => `${f}${fmtLineCounts(f)}`)
+  if (lineCountFiles.length > 0) {
+    console.log(`📊 变更行数（vs HEAD 未提交窗口）：${[...annotatedRealFiles, ...annotatedSoftFiles].join(', ')}`)
+  } else if (review && Array.isArray(auditFiles) && auditFiles.length === 0) {
+    console.log(`ℹ️ 本会话无未提交改动（窗口已提交或会话未产生改动）——实时行数不可采，文件行请读 QUICKLOG 条目 ${qlId}（记录态）`)
+  }
+  return { annotatedRealFiles, annotatedSoftFiles, fmtLineCounts }
 }
 

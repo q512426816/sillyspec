@@ -72,3 +72,10 @@ supersedes：无（修订 design 初稿注入时机）
 锚点：未记录
 最近确认：6c3509b
 理由：方案A：①validateDecisionModuleRefs（纯函数+brainstorm 末步 gate 接线，D-002 语义）②design-init CLI 命令（design.md 十三章节骨架：决策追踪表从 decisions.md 当前版本 D 条目预填、文件变更清单表骨架；Step 6 prompt 卸责为填骨架、不强制——存量手写路径保留）③brainstorm Step2 注入 docs/<project>/scan/_facts.md（存在时全文注入，红线同 scan：禁止重新 grep 底稿覆盖的机械事实）。拒绝方案B（新 YAML 载体：agent 手写前科、与 decisions.md 双写漂移）。
+
+## D-005@v1 : 三个阶段点展示分工（execute 全表 / verify 一行 / archive 全表）
+状态：implemented
+变更：2026-09-10-change-scope-audit
+锚点：未记录
+最近确认：3f22d6b
+理由：用户问「是不是应该在执行完成阶段就展示下更好呢」——采纳：execute --done 是代码改动冻结点且修正成本最低（agent 还在 execute 上下文可当场消化 ⚠️：补 design 声明或 output 注明）。verify 阶段禁改源码，全表必重复 → 一行漂移确认（与 execute 时点对比）。archive --confirm 是用户最终决策材料 → 全表复现。

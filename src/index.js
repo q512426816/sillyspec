@@ -104,6 +104,7 @@ SillySpec CLI — 规范驱动开发工具包
   sillyspec commit [--json]                 智能提交建议：收集 QUICKLOG/已勾 task/阶段产出语义，生成建议 message（只建议不执行）
   sillyspec verify-probes --change <name> [--init]  verify 机械探针（TODO 标记/测试覆盖/API 对账/删除对账）；--init 生成 verify-result.md 骨架
   sillyspec module-impact --change <name>       生成 module-impact.md 骨架（文件×模块归属按 module-map 预填 + 未匹配清单）
+  sillyspec scope-audit --change <name> [--json]  变更范围对账：计划×实际三态全表 + 行数（✓ 计划内/⚠️ 计划外/⚠️ 计划未动；quick 会话传 quick-<id> 出归属表；advisory 只读不设门禁）
   sillyspec module-docs-sync --change <name> [--note ...]  diff 归属模块 → sidecar 追加变更索引行 + 卡 updated_at 戳（幂等）
   sillyspec endpoints extract --change <name> [--task task-NN | --all-tasks] [--dir <dir>|--files <a.py,b.js>]  静态扫描路由装饰器生成 endpoints.json
   sillyspec endpoints baseline --change <name> [--spec-dir <path>] [--json]  拍变更前端点基线（幂等不覆盖；worktree 内跑自动锚主仓；归档 delta 端点增删 before 侧）
@@ -1074,6 +1075,68 @@ async function main() {
       console.log(`   归类 ${miResult.matchedCount} 个文件，未匹配 ${miResult.unmatchedCount} 个；影响类型列逐行替换 <!--TODO-->。`);
       break;
     }
+    case 'scope-audit': {
+      // 变更范围对账命令化（2026-09-10-change-scope-audit task-03，FR-02）：Wave 1 纯函数
+      // computeChangeScopeAudit 的 CLI 形态——用户与 agent 不依赖阶段 --done 时点，随时查
+      // 「计划改动 × 实际改动」三态全表（✓ 计划内 / ⚠️ 计划外 / ⚠️ 计划未动；quick 会话出
+      // 归属表）。advisory only（D-006）：只读不落盘、不写门禁状态、既有命令行为零变化；
+      // 路由形态对齐 verify-probes（:897）/ module-impact（:1041）先例——--change 必填缺参
+      // 用法错 exit 2、assertSafeChangeName 消毒、动态 import、--json 结构化输出、运行错
+      // fail-soft 出错误摘要 exit 1 不抛栈。
+      const saChangeIdx = args.indexOf('--change');
+      const saChange = saChangeIdx >= 0 && args[saChangeIdx + 1] ? args[saChangeIdx + 1] : null;
+      if (!saChange) {
+        console.error('用法: sillyspec scope-audit --change <name> [--json] [--spec-dir <path>]\n  变更范围对账：计划×实际三态全表 + 行数（quick 会话传 quick-<8hex> 出归属表）；advisory 只读展示，不构成门禁');
+        process.exit(2);
+      }
+      assertSafeChangeName(saChange, '--change 变更名');
+      const { computeChangeScopeAudit, renderScopeAuditTable } = await import('./scope-audit.js');
+      // specBase 解析对齐 verify-probes 的 worktree 锚定主仓口径（坑 worktree-spec-artifact-misplace）：
+      // resolvePlatformSpecDir 仍先调（保留平台接管 fail-closed 检查副作用），但仅 pointer 存在时才把
+      // 返回值当平台根——无 pointer 时它回退 resolveSpecDir(cwd) 会返回 worktree 副本根，误当
+      // platformBase 会让锚定被跳过。无显式 --spec-dir 时 detectWorktreeSpecDrift 锚回主仓
+      // （worktree 副本里查不到主仓 change 目录——dogfood 自测即此形态）。
+      const saResolved = resolvePlatformSpecDir(dir, specDir);
+      const saPlatformBase = existsSync(join(dir, '.sillyspec-platform.json')) ? saResolved : null;
+      let saSpecBase = saPlatformBase || resolveSpecDir(dir, { specDir: specDir || undefined });
+      let saDriftAnchor = null;
+      if (!saPlatformBase && !specDir) {
+        const saWt = detectWorktreeSpecDrift(saSpecBase);
+        if (saWt) {
+          console.warn(`⚠️ 已自动锚定主仓 spec：${saWt.mainSpecBase}（原 cwd 命中 worktree 副本 ${saWt.changeName}，scope-audit 对账读主仓，流程继续）`);
+          saSpecBase = saWt.mainSpecBase;
+          saDriftAnchor = saWt.mainSpecBase;
+        }
+      }
+      // full-flow 变更目录存在性预检（endpoints baseline 先例同款）：post-apply 形态下实际侧三源
+      // 对「变更不存在」不敏感（status 成功即 ok=true，会把主仓脏区误当实际侧），靠预检给明确
+      // 错误摘要 exit 1；quick 会话 id 无 changes/ 目录（guard 祖先链定位），不预检。
+      if (!/^quick-[0-9a-f]{8}$/.test(saChange) && !existsSync(join(saSpecBase, 'changes', saChange))) {
+        console.error(`❌ 变更目录不存在: ${join(saSpecBase, 'changes', saChange)}（确认 --change 名，或 --spec-dir 指向主仓 .sillyspec）`);
+        process.exit(1);
+      }
+      // 计算包在 withJsonOutput 内（gate/derive 先例同款）：quick 模式重跑 auditQuickCompletion
+      // 的既有 console 输出（并发 warn 等，R-07）不污染 --json 的 stdout。
+      let saResult;
+      try {
+        saResult = await withJsonOutput(json, () => computeChangeScopeAudit({ cwd: dir, specBase: saSpecBase, changeName: saChange, platformOpts: saDriftAnchor ? { specDriftAnchor: saDriftAnchor } : null }));
+      } catch (e) {
+        console.error(`❌ scope-audit 计算失败: ${e && e.message ? String(e.message).split('\n')[0] : e}`);
+        process.exit(1);
+      }
+      if (json) {
+        console.log(JSON.stringify({ command: 'scope-audit', change: saChange, ...saResult }, null, 2));
+      } else {
+        console.log(renderScopeAuditTable(saResult));
+      }
+      // ok=false（quick 会话不存在 / 实际侧整体失败）→ 明确错误摘要 + exit 1（json 面摘要走
+      // stderr，stdout 保持合法 JSON）
+      if (saResult && saResult.ok === false) {
+        console.error(`❌ scope-audit 对账不可用: ${saResult.degradedReason || '未知原因'}`);
+        process.exitCode = 1;
+      }
+      break;
+    }
     case 'endpoints': {
       // endpoints artifact 生成（2026-08-21 审计第三批 H6）：后端 router task 的 endpoints.json
       // 此前靠 agent 手扫装饰器手写（易漏 endpoint）。CLI 复用 endpoint-extractor 全套提取器
@@ -1797,45 +1860,29 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
               // 只读 stdout 可捕获）；stderr 仅留 ⚠️ 诊断（console.warn）与配置错误（exit 2 路径）。
               // 文本逐字不变，只改通道。
               console.log(`\n❌ docs check: ${result.invalid.length}/${result.total} 处引用失效：`);
-              // 显示去重（2026-09-10 驾驭小结第二批③）：同 doc+docLine+ref 的重复 invalid（同一
-              // 引用在行内多次出现时逐条收集）只显示一次、带 ×N 次数——invalid 集与 exit code
-              // 不动，纯渲染降噪。
-              const shownInvalid = [];
-              const dupCountByIdentity = new Map();
-              for (const inv of result.invalid) {
-                const key = `${inv.doc}#${inv.docLine}#${inv.ref}`;
-                dupCountByIdentity.set(key, (dupCountByIdentity.get(key) || 0) + 1);
-                if (dupCountByIdentity.get(key) === 1) shownInvalid.push(inv);
-              }
-              const dupTotal = result.invalid.length - shownInvalid.length;
               let appliedLeft = fixResult ? fixResult.applied : 0;
               const skippedQueue = fixResult ? [...fixResult.skipped] : [];
-              for (const inv of shownInvalid) {
-                const dupN = dupCountByIdentity.get(`${inv.doc}#${inv.docLine}#${inv.ref}`);
-                const dupTag = dupN > 1 ? `（同引用重复 ×${dupN}）` : '';
+              for (const inv of result.invalid) {
                 const newRef = newRefByInv.get(inv);
                 if (newRef !== undefined && appliedLeft > 0) {
                   // 已应用（dry-run 为将应用）：归因按构造顺序消耗 applied 计数——写回 skipped 仅
                   // 防御路径（文档消失/行内失配）触发，CLI 正常流 fixable 必然落位
-                  console.log(`  ✅ [${inv.doc}:L${inv.docLine}] ${inv.ref} → ${newRef}${dryRun ? '（dry-run 未写盘）' : ''}${dupTag}`);
+                  console.log(`  ✅ [${inv.doc}:L${inv.docLine}] ${inv.ref} → ${newRef}${dryRun ? '（dry-run 未写盘）' : ''}`);
                   appliedLeft--;
                 } else if (newRef !== undefined) {
                   const s = skippedQueue.shift();
-                  console.log(`  ⚠️ [${inv.doc}:L${inv.docLine}] ${inv.ref} → 写回跳过：${s ? s.reason : '未知原因'}${dupTag}`);
+                  console.log(`  ⚠️ [${inv.doc}:L${inv.docLine}] ${inv.ref} → 写回跳过：${s ? s.reason : '未知原因'}`);
                 } else if (fixResult) {
                   // needs-manual：多命中歧义/零命中/无 token——fix.reason 含候选行号，交人工
-                  console.log(`  ❌ [${inv.doc}:L${inv.docLine}] ${inv.ref} → ${(inv.fix && inv.fix.reason) || inv.reason}（待人工）${dupTag}`);
+                  console.log(`  ❌ [${inv.doc}:L${inv.docLine}] ${inv.ref} → ${(inv.fix && inv.fix.reason) || inv.reason}（待人工）`);
                 } else {
-                  console.log(`  ❌ [${inv.doc}:L${inv.docLine}] ${inv.ref} → ${inv.reason}${dupTag}`);
+                  console.log(`  ❌ [${inv.doc}:L${inv.docLine}] ${inv.ref} → ${inv.reason}`);
                 }
                 if (inv.suggest && inv.suggest.length > 0) {
                   // 2026-09-07-ir-hardening task-08：原 --suggest 旗标删除（no-op 首选路径退役），
                   // 候选行号提示改为 needs-manual 默认输出——旗标唯一用途，默认开更有信息量
                   console.log(`     💡 候选行号: ${inv.suggest.join(', ')}（token 命中行，人工确认后更新文档锚）`);
                 }
-              }
-              if (dupTotal > 0) {
-                console.log(`  ℹ️ 已折叠 ${dupTotal} 条同文档行同引用的重复条目（计数 ×N 已并入上文）。`);
               }
               if (fixResult) {
                 console.log(`\n🔧 重锚报告：${fixResult.applied} 处已${dryRun ? '预览' : '改写'}${dryRun ? '（dry-run 未写盘）' : ''}、${result.invalid.length - fixes.length} 处待人工${fixResult.skipped.length > 0 ? `、${fixResult.skipped.length} 处写回跳过` : ''}。`);
@@ -1849,21 +1896,9 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
             // 变更名提名 advisory 段（主结果之后、exit 之前；不参与 ok/invalid 与 exit code）。
             // 零输出原则（docs-check-fix 契约：无新 flag 时 stdout 逐字节一致；决策规则族同款
             // 「无信号零输出」）：仅 findings 非空才输出——悬空即信号，无悬空不打扰。
-            // 输出降噪（2026-09-10 驾驭小结第二批③）：①advisory 固定尾部分区（硬失效区块与
-            // 修复指引之后），标题明示「不阻断、不进 exit code」，与硬失效 ❌ 视觉分离；②同一
-            // 悬空名多处提名按名聚合一行（名 + 提及处数 + 首处定位），不再逐处刷屏。
             if (changeNameReport && changeNameReport.findings.length > 0) {
-              console.log(`\n⚠️ ── 变更名提名悬空（advisory：不阻断、不进 exit code / docs gate）──`);
-              const byName = new Map(); // name -> { count, first }
-              for (const f of changeNameReport.findings) {
-                const e = byName.get(f.name) || { count: 0, first: f };
-                e.count++;
-                byName.set(f.name, e);
-              }
-              for (const [name, e] of byName) {
-                console.log(`   - 「${name}」${e.count} 处提及悬空（活跃∪归档变更名单中不存在；首处 ${e.first.doc}:L${e.first.docLine}）——拼错 / 改名未同步 / 他仓变更？修正后复跑，或 local.yaml known_failures 加 "change-name.${name}" 豁免`);
-              }
-              console.log(`   （共 ${changeNameReport.findings.length} 处 / ${changeNameReport.uniqueNames} 个名字，全文提及 ${changeNameReport.mentions} 处）`);
+              console.warn(`⚠️ 变更名提名悬空 ${changeNameReport.findings.length}/${changeNameReport.mentions} 处（advisory 不阻断、不进 docs gate）：`);
+              for (const f of changeNameReport.findings) console.warn(`   - ${f.message}`);
               if (changeNameReport.exempted.length > 0) {
                 console.log(`ℹ️ 另有 ${changeNameReport.exempted.length} 处经 known_failures change-name.* 键豁免`);
               }

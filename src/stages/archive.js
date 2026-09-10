@@ -169,10 +169,14 @@ created_at: <now-datetime>
 
 ### 操作
 1. 展示：变更目录名、包含的文件列表（含 module-impact.md）、生成总结
-2. 确保任务清单（tasks.md）所有 task checkbox 都已勾选
-3. 让用户确认后，用 \`--confirm\` 完成本步骤：
+2. 展示变更范围对账表（计划改动 × 实际改动三态全表 + 行数——CLI 机械注入如下，勿手算勿手改；⚠️ 计划外文件补 design.md 声明或 --output 注明原因，计划未动文件确认是否遗漏；advisory 对账不阻断归档，注入异常时该区置换单行降级指引，回退手跑 \`sillyspec scope-audit --change <变更名>\`）：
+
+{SCOPE_AUDIT_TABLE}
+
+3. 确保任务清单（tasks.md）所有 task checkbox 都已勾选
+4. 让用户确认后，用 \`--confirm\` 完成本步骤：
    \`sillyspec run archive --done --confirm --output "确认归档"\`
-4. CLI 会创建 \`.sillyspec/changes/archive/\`，并将变更目录移动到 \`.sillyspec/changes/archive/<原变更名>/\`
+5. CLI 会创建 \`.sillyspec/changes/archive/\`，并将变更目录移动到 \`.sillyspec/changes/archive/<原变更名>/\`
 
 ### 输出
 归档完成 + archive 目录路径`,

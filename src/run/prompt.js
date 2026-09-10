@@ -1018,6 +1018,29 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
     promptText = promptText.split('{ARCHIVE_IMPACT_AUDIT}').join(auditBlock)
   }
 
+  // {SCOPE_AUDIT_TABLE}（2026-09-10-change-scope-audit task-05，FR-03）：archive「确认归档」步的
+  // 变更范围对账全表注入——computeChangeScopeAudit + renderScopeAuditTable 代算（计划×实际
+  // 三态 + 行数，D-003 同源：只 import scope-audit.js 导出，不自研采集）。maxRows 60 截断防
+  // prompt 膨胀（R-03，表尾自带「完整表跑 scope-audit」指引）。fail-soft：注入异常降级单行
+  // 指引（回退手跑 scope-audit 命令），不阻断归档 prompt 输出（对齐 {ARCHIVE_IMPACT_AUDIT}
+  // 注入先例）；ok=false（quick 会话不存在 / 实际侧整体失败等）同样附手跑指引——归档零新增
+  // 阻断面（D-006）。
+  if (stageName === 'archive' && promptText.includes('{SCOPE_AUDIT_TABLE}')) {
+    let scopeTable = ''
+    try {
+      const { computeChangeScopeAudit, renderScopeAuditTable } = await import('../scope-audit.js')
+      const saSpecBase = resolvePromptSpecBase(platformOpts, cwd)
+      const saResult = await computeChangeScopeAudit({ cwd, specBase: saSpecBase, changeName, platformOpts })
+      scopeTable = renderScopeAuditTable(saResult, { maxRows: 60 })
+      if (saResult && saResult.ok === false) {
+        scopeTable += '\n（对账降级——回退手跑 sillyspec scope-audit --change <name> 查看原因后再确认归档，注入失败不阻断归档）'
+      }
+    } catch (e) {
+      scopeTable = '（变更范围对账表注入失败：' + (e && e.message ? e.message : e) + '——回退手跑 sillyspec scope-audit --change <name> 查看后再确认归档，注入失败不阻断归档）'
+    }
+    promptText = promptText.split('{SCOPE_AUDIT_TABLE}').join(scopeTable)
+  }
+
   // 注入模块上下文（brainstorm/plan/execute 阶段全步 + quick 首步「理解任务」——刀①：quick
   // step1 原让 agent cat module-map 再挑模块卡读，改为按任务描述匹配后注入，基于 Module Context Index）
   const quickFirstStep = stageName === 'quick' && step && step.name === '理解任务'

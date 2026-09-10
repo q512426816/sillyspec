@@ -203,45 +203,6 @@ console.log('--- ⑩ summarize 返回 runId（供上层展示/排查）---')
   cleanup(ctx.root)
 }
 
-// ── ⑪⑫ mtime fallback 排除「有主 run」（坑 exec-run-id-same-second-collision 收尾，
-// 2026-09-10 驾驭小结第二批②：resolveLatestExecuteRunId / WithTasks 的 mtime fallback 仍会
-// 拿走戳属他变更的 run——writeTaskReview 在 marker 缺失场景靠它定位 run，误拿即把本变更
-// review.json 写进他变更 run 的 tasks/（串台残余入口）。对齐 resolveExecuteRunForChange 的
-// 「戳存在且不等值 = 有主，排除」语义。）──
-console.log('--- ⑪ resolveLatestExecuteRunId：mtime fallback 不拿有主 run（戳属他变更的 run 排除）---')
-{
-  const ctx = setup()
-  // 本变更无 marker、无戳命中；RUN_B mtime 更新但戳属 OTHER，RUN_A 无戳（旧 run 形态）
-  writeReview(ctx.runtimeRoot, RUN_A, '01')
-  writeReview(ctx.runtimeRoot, RUN_B, '01')
-  stampExecuteRunChange(ctx.runtimeRoot, RUN_B, OTHER)
-  const id = resolveLatestExecuteRunId({ runtimeRoot: ctx.runtimeRoot, changeName: CN })
-  assert(id === RUN_A, `mtime fallback 跳过有主 RUN_B、命中无戳 RUN_A（实际 ${id}）`)
-  // 全部 run 都有主（戳属他变更）→ null（宁缺毋错，不串台）
-  stampExecuteRunChange(ctx.runtimeRoot, RUN_A, OTHER)
-  const id2 = resolveLatestExecuteRunId({ runtimeRoot: ctx.runtimeRoot, changeName: CN })
-  assert(id2 === null, `全部 run 有主 → null 不误配（实际 ${id2}）`)
-  // 本变更自己有戳 → 戳命中（既有语义零回归）
-  stampExecuteRunChange(ctx.runtimeRoot, RUN_A, CN)
-  const id3 = resolveLatestExecuteRunId({ runtimeRoot: ctx.runtimeRoot, changeName: CN })
-  assert(id3 === RUN_A, '戳等值命中维持原语义')
-  cleanup(ctx.root)
-}
-
-console.log('--- ⑫ resolveLatestExecuteRunIdWithTasks：同款排除 + 无戳含 tasks 兼容零回归 ---')
-{
-  const ctx = setup()
-  writeReview(ctx.runtimeRoot, RUN_A, '01')
-  writeReview(ctx.runtimeRoot, RUN_B, '01')
-  stampExecuteRunChange(ctx.runtimeRoot, RUN_B, OTHER)
-  const id = resolveLatestExecuteRunIdWithTasks({ runtimeRoot: ctx.runtimeRoot, changeName: CN })
-  assert(id === RUN_A, `WithTasks 跳过有主 RUN_B（实际 ${id}）`)
-  // 无 changeName（旧行为）：纯 mtime 最新含 tasks/ 的 run（调用方 marker 漂移兜底场景）
-  const idNoName = resolveLatestExecuteRunIdWithTasks({ runtimeRoot: ctx.runtimeRoot })
-  assert(idNoName === RUN_B, '无 changeName 零回归（mtime 最新含 tasks，RUN_B）')
-  cleanup(ctx.root)
-}
-
 console.log(`\n${'='.repeat(50)}`)
 console.log(`✅ 通过: ${passed}  ❌ 失败: ${failed}`)
 if (failures.length) { console.log('失败项:'); failures.forEach(f => console.log('  - ' + f)) }

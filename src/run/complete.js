@@ -622,6 +622,10 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
     const total = steps.length
     console.log(`✅ ${stageName} 阶段已完成（${total}/${total} 步）`)
 
+    // task-04（2026-09-10-change-scope-audit）：execute 完成打范围对账全表+落 .runtime 快照 /
+    // verify 完成出一行漂移确认。advisory fail-soft（D-006）——helper 内部全兜，绝不阻断完成。
+    await printStageCompletionScopeAudit({ stageName, cwd, changeName, specBase, platformOpts })
+
     if (stageName === 'execute') {
       // execute run summary：展示真实可得的结构化信息
       try {
@@ -728,6 +732,95 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
     }
   }
   return { stageCompleted: false, currentIdx, nextPendingIdx }
+}
+
+// ── 变更范围对账 advisory 注入（2026-09-10-change-scope-audit task-04，FR-03）──
+// execute 完成打全表+落快照、verify 完成出一行漂移确认；completeStep 与 continueStep（wait
+// 解除完成）两路径收敛点同调 printStageCompletionScopeAudit（Grill G-2：单锚 completeStep 会漏
+// wait 解除路径致 verify 假报无快照）。全程 fail-soft（D-006）：任何异常只打单行 ⚠️，不阻断
+// 阶段完成、不进任何门禁判定。scope-audit.js 经动态 import 接入（本文件 runtime-hygiene /
+// design-facts 等同款先例）——只读纯函数模块，模块缓存下零重复加载。
+//   - execute：renderScopeAuditTable 全表（maxRows 60 截断 + 完整表跑 scope-audit 指引 +
+//     ⚠️ 出口指引行——计划外补 design.md 声明或 --output 注明原因，均 renderer 内置）+ 落
+//     .runtime/scope-audit-<change>.json 快照（结构即 ScopeAuditResult + savedAt 落盘时间戳，
+//     只写 .runtime 运行时产物区不动 git 状态）。
+//   - verify：读快照对比文件集差集出一行「变更范围：N 文件 +X/-Y（vs execute 时点：一致|漂移
+//     M 文件：<列表截断>）」。漂移过滤面 = filterDeliverableFiles 结果（resolveReconcileActualFiles
+//     已过、本就保留 docs 子树）再排除 .sillyspec/docs/**——verify 阶段合法文档同步不计漂移
+//     （Grill C-5/P2-②：组合过滤在本侧做，不动 worktree-apply.js 过滤器本体）。快照缺失/降级 →
+//     跳过对比只打当前 totals 一行。
+
+/** 漂移对比排除面：verify 阶段合法文档同步子树（posix 归一后前缀匹配） */
+const SCOPE_DRIFT_EXCLUDE_RE = /^\.sillyspec\/docs\//
+
+/** 快照/当前结果 → 漂移对比用文件集（posix 归一 + docs 子树排除）；畸形结构防御式得空集 */
+function scopeAuditPathSet(result) {
+  const rows = Array.isArray(result?.rows) ? result.rows : []
+  const set = new Set()
+  for (const r of rows) {
+    const p = r && typeof r.path === 'string' ? r.path.replace(/\\/g, '/') : ''
+    if (p && !SCOPE_DRIFT_EXCLUDE_RE.test(p)) set.add(p)
+  }
+  return set
+}
+
+/** execute 完成路径：全表 + 快照落盘（快照写失败只提示，verify 对比按无快照降级） */
+async function printExecuteScopeAudit({ cwd, changeName, specBase, platformOpts, computeChangeScopeAudit, renderScopeAuditTable }) {
+  const result = await computeChangeScopeAudit({ cwd, specBase, changeName, platformOpts })
+  console.log(`\n${renderScopeAuditTable(result, { maxRows: 60 })}`)
+  try {
+    const runtimeRoot = resolveRuntimeRoot(platformOpts, specBase)
+    const snapPath = join(runtimeRoot, `scope-audit-${changeName}.json`)
+    mkdirSync(runtimeRoot, { recursive: true })
+    writeFileSync(snapPath, JSON.stringify({ ...result, savedAt: new Date().toISOString() }, null, 2) + '\n')
+  } catch (e) {
+    console.warn(`   ⚠️ 范围对账快照写入失败（不阻断，verify 漂移对比将按无快照降级）：${e && e.message ? String(e.message).split('\n')[0] : e}`)
+  }
+}
+
+/** verify 完成路径：读 execute 时点快照对比文件集差集，一行结论（行数不比——execute 形态 A 锚
+ *  worktree meta、verify 形态 B 锚 merge-base，基点不同行数天然抖动，比行数必假阳） */
+async function printVerifyScopeDrift({ cwd, changeName, specBase, platformOpts, computeChangeScopeAudit }) {
+  const result = await computeChangeScopeAudit({ cwd, specBase, changeName, platformOpts })
+  const totals = result?.totals && typeof result.totals === 'object' ? result.totals : {}
+  const scopeLine = `变更范围：${totals.files ?? (Array.isArray(result?.rows) ? result.rows.length : 0)} 文件 +${totals.additions ?? 0}/-${totals.deletions ?? 0}`
+  if (result?.ok !== true) {
+    console.log(`   ⚠️ ${scopeLine}（对账降级：${result?.degradedReason || '实际侧文件集解析失败'}——advisory，不影响 verify 完成）`)
+    return
+  }
+  let snapshot = null
+  try {
+    snapshot = JSON.parse(readFileSync(join(resolveRuntimeRoot(platformOpts, specBase), `scope-audit-${changeName}.json`), 'utf8'))
+  } catch { /* 快照缺失/损坏 → 跳过对比只打当前 totals */ }
+  if (!snapshot || snapshot.ok !== true) {
+    console.log(`   ${scopeLine}（无 execute 时点快照可对比——完整表跑 sillyspec scope-audit --change ${changeName}）`)
+    return
+  }
+  const current = scopeAuditPathSet(result)
+  const baseline = scopeAuditPathSet(snapshot)
+  const drift = [...new Set([...current, ...baseline])].filter(p => current.has(p) !== baseline.has(p)).sort()
+  if (drift.length === 0) {
+    console.log(`   ${scopeLine}（vs execute 时点：一致）`)
+  } else {
+    const shown = drift.slice(0, 5).join(', ')
+    const tail = drift.length > 5 ? ` 等 ${drift.length} 个` : ''
+    console.log(`   ${scopeLine}（vs execute 时点：漂移 ${drift.length} 文件：${shown}${tail}——advisory 不阻断，请确认 verify 期改动并按需补 design.md 声明）`)
+  }
+}
+
+/** 两完成路径公共入口（stage 派发 + 动态 import + fail-soft 兜底，D-006） */
+async function printStageCompletionScopeAudit({ stageName, cwd, changeName, specBase, platformOpts }) {
+  try {
+    if (!changeName || (stageName !== 'execute' && stageName !== 'verify')) return
+    const { computeChangeScopeAudit, renderScopeAuditTable } = await import('../scope-audit.js')
+    if (stageName === 'execute') {
+      await printExecuteScopeAudit({ cwd, changeName, specBase, platformOpts, computeChangeScopeAudit, renderScopeAuditTable })
+    } else {
+      await printVerifyScopeDrift({ cwd, changeName, specBase, platformOpts, computeChangeScopeAudit })
+    }
+  } catch (e) {
+    console.warn(`⚠️ 变更范围对账输出异常（advisory，不阻断 ${stageName} 阶段完成）：${e && e.message ? String(e.message).split('\n')[0] : e}`)
+  }
 }
 
 // ── Step 调度兄弟函数（W6 Step7b-2 从 run.js 搬入：skip/wait/continue + formatWaitHistory）──
@@ -1338,6 +1431,9 @@ export async function continueStep(pm, progress, stageName, cwd, answer, options
     // gate 全过：persist completed（task-03 移后；此处无 triggerSync）。
     pm._write(cwd, progress, changeName)
     console.log(`\n✅ ${stageName} 阶段已完成（${stageData.steps.length}/${stageData.steps.length} 步）`)
+    // task-04：wait 解除完成路径与 completeStep 完成分支同源注入（Grill G-2：本路径不漏，
+    // 否则 execute 快照缺失 → verify 假报「无快照可对比」）。
+    await printStageCompletionScopeAudit({ stageName, cwd, changeName, specBase, platformOpts })
     // 阶段完成后明确下一步（agent 常卡：stageData completed 但不知要 run <下一阶段> 推进 currentStage）
     const nextStageHint = { brainstorm: 'plan', plan: 'execute', execute: 'verify', verify: 'archive' }[stageName]
     if (nextStageHint) {

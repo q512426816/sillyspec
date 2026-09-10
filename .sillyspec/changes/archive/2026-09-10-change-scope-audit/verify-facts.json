@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 2,
+  "change": "2026-09-10-change-scope-audit",
+  "generatedAt": "2026-09-10T04:18:44.246Z",
+  "probes": {
+    "probe1": {
+      "command": "sillyspec verify-probes --change 2026-09-10-change-scope-audit",
+      "metrics": {
+        "matches": 27,
+        "skippedFiles": 2,
+        "worktreeHits": 0,
+        "globEntries": 0
+      }
+    },
+    "probe3": {
+      "command": "sillyspec verify-probes --change 2026-09-10-change-scope-audit",
+      "metrics": {
+        "tasks": 7,
+        "hasTest": 3
+      }
+    },
+    "probe5": {
+      "command": "sillyspec verify-probes --change 2026-09-10-change-scope-audit",
+      "metrics": {
+        "backendEndpoints": 2,
+        "frontendCalls": 0
+      }
+    },
+    "probe6": {
+      "command": "sillyspec verify-probes --change 2026-09-10-change-scope-audit",
+      "metrics": {
+        "deletions": 0,
+        "unavailable": false
+      }
+    }
+  },
+  "conclusion": "PASS WITH NOTES",
+  "tests": {
+    "command": "module[cli-core,run-gates]",
+    "exitCode": 0,
+    "strategy": "module-subset",
+    "failedRemaining": [],
+    "passedAt": "2026-09-10T04:25:49.908Z"
+  },
+  "requiredEvidence": [
+    {
+      "task": "task-01",
+      "status": "satisfied",
+      "verifiedFiles": [
+        "src/scope-audit.js"
+      ]
+    },
+    {
+      "task": "task-02",
+      "status": "satisfied",
+      "verifiedFiles": [
+        "src/verify-postcheck.js"
+      ]
+    },
+    {
+      "task": "task-03",
+      "status": "satisfied",
+      "verifiedFiles": [
+        "src/index.js",
+        "docs/sillyspec/platform-interface-map.md"
+      ]
+    },
+    {
+      "task": "task-04",
+      "status": "satisfied",
+      "verifiedFiles": [
+        "src/run/complete.js"
+      ]
+    },
+    {
+      "task": "task-05",
+      "status": "satisfied",
+      "verifiedFiles": [
+        "src/stages/archive.js",
+        "src/run/prompt.js"
+      ]
+    },
+    {
+      "task": "task-06",
+      "status": "satisfied",
+      "verifiedFiles": [
+        "src/run/complete-handlers.js"
+      ]
+    },
+    {
+      "task": "task-07",
+      "status": "satisfied",
+      "verifiedFiles": [
+        "test/scope-audit.test.mjs"
+      ]
+    }
+  ],
+  "factsConsistency": {
+    "checked": [
+      "probe1",
+      "probe3",
+      "probe5",
+      "probe6"
+    ],
+    "verdict": "match",
+    "detail": null
+  }
+}

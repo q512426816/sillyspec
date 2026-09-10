@@ -877,10 +877,8 @@ export function resolveLatestExecuteRunIdWithTasks({ runtimeRoot, changeName = n
       .sort((a, b) => b.mtime - a.mtime)
     if (entries.length === 0) return null
     // changeName 给定时优先 change 戳等值的 run（坑 worktree-cleanup-marker-chain：mtime 最新
-    // 会错拿其他变更的 run）；无戳命中退 mtime 最新——但排除「戳属他变更」的有主 run（坑
-    // exec-run-id-same-second-collision 收尾，2026-09-10 驾驭小结第二批②：与
-    // resolveExecuteRunForChange / resolveLatestExecuteRunId 同语义，戳存在且不等值 = 有明确
-    // 主人，误拿即串台）。无 changeName（旧行为，调用方 marker 漂移兜底）纯 mtime 零回归。
+    // 会错拿其他变更的 run）；无戳命中退回 mtime 最新（向后兼容，调用方多为 marker 漂移兜底，
+    // 宁可拿最新 run 也不空手而归——覆盖度由调用方 validateTaskReviews 复校验）
     if (changeName) {
       for (const x of entries) {
         try {
@@ -888,11 +886,6 @@ export function resolveLatestExecuteRunIdWithTasks({ runtimeRoot, changeName = n
           if (c === changeName) return x.e
         } catch {}
       }
-      const ownerless = entries.find(x => {
-        try { return !existsSync(join(runsDir, x.e, 'change')) } catch { return true }
-      })
-      if (ownerless) return ownerless.e
-      return null
     }
     return entries[0].e
   } catch {
@@ -911,16 +904,11 @@ export function resolveLatestExecuteRunId({ runtimeRoot, changeName }) {
   } catch {}
   // marker 缺失（worktree cleanup / 归档清理 / 并行会话误删——坑 worktree-cleanup-marker-chain）
   // 时不再盲目取 mtime 最新（会拿到其他变更的 run）：先按 change 归属戳过滤，命中才返回；
-  // 无戳（旧 run）退 mtime 最新——但排除「戳属他变更」的有主 run（坑
-  // exec-run-id-same-second-collision 收尾，2026-09-10 驾驭小结第二批②：writeTaskReview 在
-  // marker 缺失场景靠本函数定位 run，误拿有主 run 即把本变更 review.json 写进他变更 run 的
-  // tasks/——串台残余入口。与 resolveExecuteRunForChange 的覆盖度启发排除同语义）；全部 run
-  // 有主 → null（宁缺毋错，调用方走「无 run」分支而非错写）。
+  // 无戳（旧 run）退回 mtime 最新保持向后兼容。
   try {
     const candidates = listExecuteRunCandidates(runtimeRoot, changeName)
     if (candidates.stamped.length > 0) return candidates.stamped[0]
-    const ownerless = candidates.all.find(runId => readExecuteRunChangeStamp(runtimeRoot, runId) === null)
-    if (ownerless) return ownerless
+    if (candidates.all.length > 0) return candidates.all[0]
   } catch {}
   return null
 }

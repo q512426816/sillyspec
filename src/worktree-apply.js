@@ -235,19 +235,13 @@ export function resolveApplyAllowSet(projectRoot, changeName, opts = {}) {
     return repoMap.get(key);
   };
   const specBase = opts.specBase || _silentPointerSpecRoot(projectRoot) || join(projectRoot, '.sillyspec');
-  // 变更目录读侧归档回退（坑 apply-archived-evidence-recycled，2026-09-10 驾驭小结第二批①）：
-  // archive 收尾对「未 apply 的 worktree」有意保留并期待归档后补 apply，但归档同时把变更目录
-  // rename 到 changes/archive/<name>/ ——旧读侧只认活跃路径，归档后补 apply 时 design/tasks
-  // 全部失联，allow 集恒空 → Gate1 整批误拦「不在清单」。活跃目录缺 design.md 而（且）归档
-  // 目录在 → 回退读归档版（取证自愈，不改归档回收策略）。
-  const changeDir = resolveActiveOrArchiveChangeDir(specBase, changeName);
   // design §6 清单归属 main（清单路径相对主仓根；跨仓 task 的 allowed_paths 由 task 卡 repo 切片）
   const mainSet = getOrCreate('main');
   parseFileChangeList(
-    join(changeDir, 'design.md'),
+    join(specBase, 'changes', changeName, 'design.md'),
     { keepSillyspecDocs: true }
   ).forEach(p => mainSet.add(p));
-  const tasksDir = join(changeDir, 'tasks');
+  const tasksDir = join(specBase, 'changes', changeName, 'tasks');
   if (existsSync(tasksDir)) {
     for (const tf of readdirSync(tasksDir).filter(f => /^task-\d+\.md$/.test(f))) {
       const content = readFileSync(join(tasksDir, tf), 'utf8');
@@ -258,24 +252,6 @@ export function resolveApplyAllowSet(projectRoot, changeName, opts = {}) {
     }
   }
   return repoMap;
-}
-
-/**
- * 变更文档目录读侧解析：活跃 changes/<name> 优先；活跃目录缺 design.md 而归档
- * changes/archive/<name>/design.md 存在 → 返回归档目录（apply 校验在「归档后补 apply」
- * 场景仍能取到 design/tasks 取证，坑 apply-archived-evidence-recycled）。两处皆缺返回
- * 活跃路径原样（调用方 existsSync 自行降级，行为与旧版一致）。行为经 resolveApplyAllowSet
- * 直测（apply-archive-docs-fallback.test.mjs）覆盖。
- * @param {string} specBase
- * @param {string} changeName
- * @returns {string} 变更目录路径（活跃或归档）
- */
-function resolveActiveOrArchiveChangeDir(specBase, changeName) {
-  const active = join(specBase, 'changes', changeName);
-  if (existsSync(join(active, 'design.md'))) return active;
-  const archived = join(specBase, 'changes', 'archive', changeName);
-  if (existsSync(join(archived, 'design.md'))) return archived;
-  return active;
 }
 
 // 平台指针静默读（worktree-apply 内部用）：只读 <projectRoot>/.sillyspec-platform.json 的
@@ -1754,11 +1730,8 @@ export function assessApplyRisk(changeName, { cwd } = {}) {
   // design §6 标记为「顺带修复」的文件（坑 worktree-execute-apply-friction 坑1）：合规修预存债，
   // 不属任何 task 边界，assess 豁免 allowed_paths 严格校验（降级 warning），避免被迫 cherry-pick 绕过。
   // specBase 走指针/本地解析（2026-09-08 平台模式修复，与 resolveApplyAllowSet 同族）。
-  // 归档回退（坑 apply-archived-evidence-recycled）：归档后补 apply 时变更目录已 rename，
-  // design/tasks 从 changes/archive/<name>/ 读（与 resolveApplyAllowSet 同口径）。
   const assessSpecBase = _silentPointerSpecRoot(projectRoot) || join(projectRoot, '.sillyspec');
-  const assessChangeDir = resolveActiveOrArchiveChangeDir(assessSpecBase, changeName);
-  const designPath = join(assessChangeDir, 'design.md');
+  const designPath = join(assessSpecBase, 'changes', changeName, 'design.md');
   const incidentalSet = new Set(
     parseFileChangeListDetailed(designPath).filter(e => e.incidental).map(e => e.path)
   );
