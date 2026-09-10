@@ -29,6 +29,7 @@ core-engine 是 SillySpec 的基础设施层，由三个层次组成：持久化
 - `src/stage-contract-engine.js` — 产物字面校验通用引擎（消费 spec manifest 按 kind dispatch 产出 errors/warnings；引擎不碰 fs，readFile 由调用方注入）
 - `src/check-primitives.js` — 共享产物字面校验原语（纯函数：contains_sections/min_lines/no_placeholder/no_empty_files 全仓单一语义源），workflow 与 stage-contract 两引擎共用
 - `src/stage-review.js` — 阶段级审查门（brainstorm/plan/execute-acceptance 的阶段级 review.json 校验：文档证据 reviewedFiles + docHash）；降级自审配套（2026-09-10 用户反馈①，PI agent 等宿主无 Agent tool）：`isDegradedSelfReview`（reviewerNotes 首行「降级：」约定检测）供 run/gates.js Stage Review Gate 放行时留 ⚠️ 审计行（独立性折损可见可追溯，不构成新阻断）；缺 review.json 报错与 gate FAILED 提示均带降级出口指引，契约（renderReviewJsonContract）同步文档化该约定。通道优先序批次（同日用户裁决「顺序归配置」）：`readReviewChannelPriority`（local.yaml `review_dispatch.channel_priority`，缺省现状序 [agent-tool, platform, host-mcp, self]、未知值忽略、self 恒隐式垫底）+ 契约头部「审查执行通道」段按配置序渲染（platform 通道 P2 review-dispatch 未落地前标注暂跳过，不引用不存在命令）+ `classifyReviewerChannel`（reviewer.channel 结构化落款 > 首行「降级：」兼容 > unspecified；gate 分支：self ⚠️ / platform ℹ️ missionId / 其余静默）
+- `src/stage-review-checklist.js`——三 stage 审查清单单一来源 `REVIEW_CHECKLISTS`（2026-09-10-review-dispatch task-01/FR-05）：条目自 stages prompt 逐字迁移（下游可能字面引用），渲染前缀规则见模块 docblock；一致性由 test/stage-review-checklist.test.mjs 内嵌快照钉死；prompt 渲染与 review-dispatch worker_prompt 同源消费。stage-review.js 同批增：printStageReviewResult 平台在途区分（内联读 .runtime/review-dispatch-<change>.json 防静态环 fail-open）+ 契约 platform 描述改指 review-dispatch 命令。
 - `src/task-review.js` — execute 每 task 的 review.json 校验（git 代码 diff 证据：base/head）；runId 并行碰撞根治（2026-09-10 驾驭小结①，坑 exec-run-id-same-second-collision）：`claimExecuteRunId`（非递归 mkdir 排他认领 run 目录，EEXIST=同秒碰撞 → 随机短后缀重试；认领即含 tasks/，真实 fs 障碍原样上抛由写入点分层 fail 接管）接入四处 generate 写入点（run/stage.js 主点 + run/gates.js/run/prompt.js/本文件 drafts 与 writeTaskReview 补写点）；`isValidExecuteRunId` 双形态兼容（存量 `exec-YYYY-MM-DD-HHMMSS` + 碰撞后缀 `…-<a-z0-9≤8>`，注入/穿越仍拒）——并行会话同秒启动 execute 不再共享 run 目录互相覆盖 per-task review.json。串台残余收口（同日第二批②）：`resolveLatestExecuteRunId` / `resolveLatestExecuteRunIdWithTasks` 的 mtime fallback 排除「戳属他变更」的有主 run（戳存在且不等值 = 有主，与 resolveExecuteRunForChange 同语义；全部有主 → null 宁缺毋错）——writeTaskReview 在 marker 缺失场景经它们定位 run，不再把本变更 review.json 写进他变更 run 的 tasks/
 - `src/verify-postcheck.js` — verify 完成时 CLI 亲自执行 local.yaml 测试命令与 verify-result.md 自报告对账（自报 PASS 但实测失败 → 阻断）；
 - `src/verify-probes.js` — verify 机械探针（TODO 标记/测试覆盖/API 对账/删除对账）+ verify-result.md 骨架与 verify-facts.json 底稿（写入细节见下方 verify-facts v2 节）；平台模式回显注记（2026-09-10 驾驭小结②）：`formatPlatformPathNote`（pointer 存在时产物回显行尾补「物理写盘在 hub 镜像根 / 主仓同步位置 .sillyspec/changes/<change>/<file>」，本地模式返回空串零变化）+ `writeVerifyFacts` 增 opts.platformNote（纯回显层不进落盘），消「回显镜像路径 / 核对主仓路径」的显示混乱
@@ -45,6 +46,15 @@ core-engine 是 SillySpec 的基础设施层，由三个层次组成：持久化
 - `src/scan-postcheck.js` — CLI 层 scan 完成后强制校验（不依赖 agent 自检报告；平台模式须全过才 success 否则降级）
 
 ## 对外接口（表格）
+
+### src/scope-audit.js — 变更范围对账纯函数（2026-09-10-change-scope-audit 新增）
+| 函数/常量 | 说明 | 参数 |
+|-----------|------|------|
+| `computeChangeScopeAudit(opts)` | 变更范围对账单一数据源：quick-<8hex> 会话走归属表（复用 auditQuickCompletion 窗口），否则 full-flow 三态（计划侧 change-list.js 解析 × 实际侧 resolveReconcileActualFiles + numstat 真实行数）；全 advisory fail-soft | `{cwd, specBase, changeName, platformOpts}` |
+| `renderScopeAuditTable(result, opts?)` | 人类可读表渲染（三态/归属标记、BIN/— 占位、合计、⚠️ 出口指引、maxRows 截断） | `ScopeAuditResult, {maxRows}` |
+| `collectNumstatByPath(cwd, paths, opts)` | 行数三档采集（tracked=numstat / untracked=wc-l / binary=BIN），quick 与 full-flow 共用 | `cwd, paths, {baseRef}` |
+
+消费方（scope-audit 命令 / execute--done / verify--done / archive--confirm / quick--done 四注入）只 import 本三导出，禁止自研采集（D-003）。
 
 ### src/db.js — DB 类
 | 函数/常量 | 说明 | 参数 |

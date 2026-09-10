@@ -235,3 +235,16 @@
 根因：无，纯新增——apply+cleanup 删分支后形态 B 的 merge-base 源因分支 rev-parse 失败被静默省略，baseAnchor 恒 null，行数降级 HEAD 未提交窗口口径（不含已提交改动）；而 worktree.js:1065 早就打了 sillyspec-audit/<branch> 审计 tag，数据在却没用
 方案：resolveReconcileActualFiles 形态 B diffRef 三级解析：分支 → sillyspec-audit/<分支全名> tag → null；merge-base 与 B1 diff 用 tag ref 照算，baseAnchor 恢复真值、文件集与行数恢复完整锚定口径
 结果：node --test 12/12（新增 tag 锚用例+保留 HEAD 兜底用例双路径）；npm test 全量 0 失败；dogfood 实测本变更基点 3f22d6b 真锚、+2365/-101 完整行数
+
+## ql-20260910-011-a479 | 2026-09-10 19:22:47 | P2 模块卡正文补账
+状态：已完成
+关联变更：（无）
+文件：
+- .sillyspec/docs/sillyspec/modules/dispatch.md（D-007 显式例外定位段 + review-dispatch 契约条目）
+- .sillyspec/docs/sillyspec/modules/dispatch.changelog.md（sidecar 追加 P2 行）
+- .sillyspec/docs/sillyspec/modules/core-engine.md（stage-review-checklist 条目 + 在途区分说明）
+- .sillyspec/docs/sillyspec/modules/core-engine.changelog.md（sidecar 追加 P2 行）
+需求：P2 模块卡正文补账
+根因：archive step3 跳过致卡正文与 module-map 脱节
+方案：dispatch.md 落 D-007 显式例外与防泛化护栏并补 runReviewDispatch 三条目；core-engine.md 补 checklist 单源条目与在途区分；双 sidecar 追加
+结果：四文件落盘纯文档批次门禁自动跳过

@@ -14,6 +14,7 @@ created_at: 2026-08-07T14:50:00+08:00
 **关键定位（D-007）：dispatcher 不是 JS 执行体**。本机 Agent tool 与 SillyHub MCP tool 都只有 agent 能调，CLI（Node）进程调不了。所以本模块 = **探测（probe.js）+ 派发策略生成（strategy.js）+ 后端指令模板（backends/）**，生成注入 execute prompt 的「派发指令文本」，实际 tool 调用由 agent 执行。
 
 ## 契约摘要
+- `src/review-dispatch.js`（2026-09-10-review-dispatch P2）——独立审查平台派发命令核心（D-007 显式例外：单 worker 一次性任务，CLI 直发；防泛化护栏见该变更 design）。`runReviewDispatch` 三链：create（probeSillyHub 三层前置 → createMission(external) → dispatchWorker(read_only, workerPrompt=REVIEW_CHECKLISTS+renderReviewJsonContract 任务书) → 在途记录 O_EXCL → 异步返回）/ status（listWorkers 迁移 → detectStall(queued 不计时) → completed 回收 getWorkerResult→extractReviewFromArtifacts→persistStageReview）/ kill（清记录+平台处置指引，不自动 kill）。MCP client 参数注入（不 import client.js），probe 注入（测试零网络）。gate 在途区分（stage-review.js printStageReviewResult 内联读 .runtime/review-dispatch-<change>.json，防静态环 fail-open）。
 
 - **src/dispatch/probe.js** — `probeSillyHub({client?, worktreePath?, rootPath?, ttlMs?})` → `Promise<{available, reason?}>`；`clearProbeCache()`；`DEFAULT_PROBE_TTL_MS`。env 缺 → `{available:false, reason:'no-config'}` 不发网络（零回归关键）；负面缓存 TTL（daemon 抖动免反复探测，R-06）；root_path 越界校验（R-08）。
 - **src/dispatch/strategy.js** — `renderDispatchInstruction(contract, probe)` → `{instruction, backend}`。backend 由 `probe.available` 驱动（sillyhub/local）；sillyhub 分支始终附 Local 兜底；路径A 未支持时附降级提示（不改 backend 标签）。
