@@ -884,3 +884,15 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 **修复**：三处阶段完成持久化点统一钉 `progress.currentStage = stageName`（主阶段；辅助阶段不写，与入口写点同语义）——completeStep 主完成分支（complete.js:513 区）/ continueStep wait 解除分支（:1247 区）/ noAI 完成分支（stage.js:558 区）。测试 `test/stage-completion-currentstage.test.mjs`（4 断言：--done 直达完成钉阶段/归档转换放行/辅助阶段不写）。
 
 **workaround（已无需，保留历史）**：① `run archive --skip-approval` ② 重跑裸 `run verify` 后归档。**相关裁决**：SS-META requiresUser 的 WAIT_MARKER_RE 正文源在 auto 流程实际为零命中（auto prompt 无 [WAIT_FOR_USER] 类标记）——auto 的 wait 语义步全部有显式三键（brainstorm-auto step2 conditionalWait / step4 requiresWait），无三键步（step3 生成设计产物）免交互是 auto 本义，无需补标（2026-09-08 复查结论）。
+
+## 57. 两坑：pre-commit stash-restore 吞常规提交（三现）/ 批量文本替换无 assert 静默流失（2026-09-10 用户实证，workaround 文档化）
+
+**症状①**：husky/pre-commit 系 hook 的 stash-restore 机制（部分 lint-staged 实现跑检查前 stash 未暂存改动、跑完 restore）在多会话共享仓**又吞掉两次常规提交**——提交看似走完 hook，restore 后工作区/暂存区内容丢失或错位。加上此前两次，**此坑已三现**；同族前科见 §17（ruff format × CRLF stash 死循环）。
+
+**根因①**：多会话共享仓里 stash 栈是**全局共享可变状态**——A 会话 hook stash 期间，B 会话的提交/ stash 操作插队改变栈顶与工作区基线，A 的 restore（按引用 pop stash@{0}）恢复到错误快照。单会话环境下该机制稳定，并发下无锁互踩是本质（与 sillyspec 主仓互斥锁 withMainRepoLock 治理的 apply/cleanup/归档互踩同族，但 pre-commit hook 在 sillyspec 管理面之外）。
+
+**workaround①（唯一可靠，三现验证）**：**路径限定提交**——`git commit -- <显式 pathspec>`（pathspec commit 不走 staged 快照，直接从工作区取指定路径内容，绕开 stash-restore 全程）。这与 AGENTS.md 规则 18「禁目录级 git add / git add -A，提交一律显式 pathspec」同源——该规则原防「夹带他者改动」，本坑证明它同时是并发 stash 互踩的可靠绕法。多会话活跃期避免依赖 hook 的 stash 机制（或给 hook 加 --no-stash 类选项）。
+
+**症状②**：B-6 修正用 python `str.replace()` 落盘**无 assert**——替换目标串不匹配时 replace 静默 no-op，修正内容凭空流失，直到复审才发现（自查流程缺陷）。
+
+**workaround②（已改并获复审确认）**：批量文本替换一律 **count-assert + grep 复核**——替换前后断言出现次数（`assert s.count(old) == n`）、落盘后 `grep` 复核关键标记存在；sed/python 单行替换同理。该实践与 sillyspec 的 fail-closed 哲学同构（静默 no-op = 最危险的失败模式）。

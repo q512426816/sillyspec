@@ -330,3 +330,12 @@
 结果：新测试 9 用例全绿（mirror 2/2 含端到端、snapshot 4/4 含脏坏文件不拦门、threeway 3/3 真实 worktree）；apply 系回归 21/21；lint 545 文件 0 fail；全量 npm test 420/420；docs check 547 全过（漂移 13 处重锚含并行会话 knowledge 2 处）
 审计：⚖️ 归属切分：9 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：.claude/skills/sillyspec-archive/SKILL.md, .claude/skills/sillyspec-auto/SKILL.md, .claude/skills/sillyspec-verify/SKILL.md, src/docs-check.js, src/stages/archive.js, test/decisions-lifecycle.test.mjs, test/output-synthesis-and-gate-precheck.test.mjs, src/run/archive-distill.js, test/archive-distill-noai.test.mjs
 
+## ql-20260910-024-d902 | 2026-09-10 23:44:32 | 坑文档化：pre-commit stash-restore 吞常规提交（三现）+ python replace 无 assert 静默流失入 troublesh…
+状态：已完成
+关联变更：（无）
+文件：
+- docs/sillyspec/troubleshooting.md（§57 两坑条目）
+需求：坑文档化：pre-commit stash-restore 吞常规提交（三现）+ python replace 无 assert 静默流失入 troubleshooting §57
+根因：①stash 栈是多会话共享全局可变状态，hook stash 期间他者会话插队致 restore 按引用 pop 到错误快照（三现；与 §17 同族，hook 在 sillyspec 管理面之外只能 workaround 文档化）；②str.replace 目标不匹配时静默 no-op，修正流失到复审才暴露（用户自流程已改，实践条沉淀防复潮）
+方案：troubleshooting.md 追加 §57 两坑四段条目（症状/根因/workaround/关联）——workaround①=路径限定 git commit -- <pathspec>（三现验证唯一可靠，与 AGENTS 规则 18 显式 pathspec 同源互证）；workaround②=count-assert+grep 复核（fail-closed 同构）
+结果：纯 doc 改动；docs check 548 处引用全通过（新增条目零新失效）；lint/test 门禁未触发（无 src/test 触及）
