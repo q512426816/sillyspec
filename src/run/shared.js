@@ -1033,8 +1033,47 @@ export function predictProtectedQuickFiles(files, { linkedChanges = [], forceBas
 }
 
 /**
+ * 软归属匹配（2026-09-10 用户反馈：--file-notes 括注只落声明文件，同模块测试文件漏声明时审计行
+ * 有提示但文件行不自动补齐，连续多批需手工核对）：窗口内未声明的**测试文件**按 basename stem 对上
+ * 声明文件 stem → 软归属候选。stem 相等或「声明 stem + 分隔符(- _ .)」前缀（src/change-list.js ↔
+ * test/change-list-operation.test.mjs 两种布局均命中）。测试文件判定：tests/__tests__/specs? 目录内
+ * 任意文件，或 basename 带 .test./_test./-test./.spec. 标记（JS/TS/Go/Python 主流命名，前缀式
+ * test_foo.py 仅在测试目录内才认——防 src/test-utils.js 这类助手误判）。
+ * 只出候选，不动 attributedFiles——硬归属口径仍是「声明即归属」（2026-08-18 误归属修复），软归属
+ * 错认可由审计行 🔍 追溯后手工剔除。
+ * @param {string[]} declaredFiles 声明边界（allowedFiles）
+ * @param {string[]} undeclaredFiles 窗口内未声明脏文件
+ * @returns {string[]} undeclaredFiles 的软归属子集（正斜杠归一、保序去重）
+ */
+export function matchSameModuleTestFiles(declaredFiles, undeclaredFiles) {
+  const TEST_DIR_RE = /(^|\/)(tests?|__tests__|specs?)\//i
+  const TEST_BASENAME_RE = /[._-](test|spec)\.[^.]+$/i
+  const stemOf = (p) => {
+    const base = basename(String(p).replace(/\\/g, '/'))
+    const dot = base.lastIndexOf('.')
+    let stem = dot > 0 ? base.slice(0, dot) : base
+    stem = stem.replace(/[._-](test|spec)$/i, '').replace(/^(test|spec)[._-]/i, '')
+    return stem.toLowerCase()
+  }
+  const anchors = (Array.isArray(declaredFiles) ? declaredFiles : [])
+    .map(stemOf).filter((s) => s !== '')
+  if (anchors.length === 0) return []
+  const out = []
+  for (const f of (Array.isArray(undeclaredFiles) ? undeclaredFiles : [])) {
+    const posix = String(f).replace(/\\/g, '/')
+    const base = posix.slice(posix.lastIndexOf('/') + 1)
+    if (!base) continue
+    if (!TEST_DIR_RE.test(posix) && !TEST_BASENAME_RE.test(base)) continue
+    const stem = stemOf(posix)
+    const hit = anchors.some((a) => stem === a || stem.startsWith(a + '-') || stem.startsWith(a + '_') || stem.startsWith(a + '.'))
+    if (hit && !out.includes(posix)) out.push(posix)
+  }
+  return out
+}
+
+/**
  * quick 完成审计：对比 baseline 与实际变更。
- * @returns {{ status: 'safe'|'warning'|'blocked', reasons: string[], changedFiles: string[], newFiles: string[], deletedFiles: string[], baselineHit: string[], stagedTotal: number, attributedFiles: string[], undeclaredFiles: string[], foreignSessionDeclared: Array<{file: string, sessions: string[]}> }}
+ * @returns {{ status: 'safe'|'warning'|'blocked', reasons: string[], changedFiles: string[], newFiles: string[], deletedFiles: string[], baselineHit: string[], stagedTotal: number, attributedFiles: string[], undeclaredFiles: string[], softTestFiles: string[], foreignSessionDeclared: Array<{file: string, sessions: string[]}> }}
  */
 /**
  * D-8 O-1 模块归属（2026-08-15 docs-signals-o12）：quick 欠账 hint 从"改了 N 文件"升级为
@@ -1144,7 +1183,7 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
   // stagedTotal：当前所有非 quick 元数据的未提交条目（含前序 baseline 残留）。
   // 与 changedFiles（扣 baseline 后的本轮新增）区分，供审计文案同时展示「本轮新增 vs 累计暂存」，
   // 避免叠加 quick 会话时把前序会话未提交文件误读为「本会话只动了 N 个」。
-  const result = { status: 'safe', reasons: [], changedFiles: [], newFiles: [], deletedFiles: [], baselineHit: [], stagedTotal: 0, attributedFiles: [], undeclaredFiles: [], foreignSessionDeclared: [] }
+  const result = { status: 'safe', reasons: [], changedFiles: [], newFiles: [], deletedFiles: [], baselineHit: [], stagedTotal: 0, attributedFiles: [], undeclaredFiles: [], softTestFiles: [], foreignSessionDeclared: [] }
 
   try {
     // safeGit 带 -c safe.directory，避免 linked worktree/容器异 uid/挂载点下裸 `git status` 抛错被
@@ -1451,9 +1490,13 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
       for (const f of sameFileHits) if (!own.includes(f)) own.push(f)
       result.attributedFiles = own
       result.undeclaredFiles = result.changedFiles.filter(f => !declaredNorm.has(normalizeGitPath(f)))
+      // 软归属（2026-09-10 用户反馈）：未声明测试文件 stem 对上声明 stem → softTestFiles（收尾
+      // 补入文件行带「软归属」括注 + 审计行单列 🔍，与 ⚖️ 真未知区分，错认可追溯剔除）。
+      result.softTestFiles = matchSameModuleTestFiles(allowedFiles, result.undeclaredFiles)
     } else {
       result.attributedFiles = result.changedFiles
       result.undeclaredFiles = []
+      result.softTestFiles = []
     }
 
     // --confirm 模式：展示 diff 并等待确认

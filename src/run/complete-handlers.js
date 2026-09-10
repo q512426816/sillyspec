@@ -1203,6 +1203,12 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
         ? review.attributedFiles
         : (Array.isArray(review?.changedFiles) ? review.changedFiles : [])
       const realFiles = auditFiles.filter(f => !isQuicklogFileLineNoise(f, linkedChanges))
+      // 软归属（2026-09-10 用户反馈：--file-notes 括注只落声明文件，同模块测试文件漏声明时文件行
+      // 不自动补齐，连续多批手工核对）：auditQuickCompletion 判定的「窗口内未声明同模块测试文件」
+      // → 补入文件行 bullet 带软归属括注；审计面单列 🔍 行（可追溯、错认可手工剔除），⚠️ 不进
+      // attributedFiles——硬归属口径「声明即归属」不变（2026-08-18 误归属修复）。
+      const softFiles = (Array.isArray(review?.softTestFiles) ? review.softTestFiles : [])
+        .map(f => String(f).replace(/\\/g, '/')).filter(f => !isQuickMetadata(f, linkedChanges))
       // D-8 落盘（2026-08-18 修）：advisory 欠账信号从「纯打印」升级为「随条目落盘」——修复
       // 「欠账已记录（QUICKLOG reasons）」的不实承诺（交叉审查实证 reasons 纯 stdout，事后不可审计）。
       // 两周实测（2026-08-31 裁决，doc-consistency-debt §七）需要分母：信号触发次数必须可追溯。
@@ -1236,10 +1242,17 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
       }
       // 归属切分注（2026-08-18 误归属修复）：窗口内未声明脏文件不进「文件：」行，但必须落盘可追溯
       // （多 agent 并发仓他者窗口改动 / 本会话漏声明均可能），防真实改动被静默挤走。
+      // 软归属拆分（2026-09-10）：softFiles 中的同模块测试文件已补入文件行，不再占 ⚖️「未计入」
+      // 文案（否则审计行与文件行自相矛盾），单列 🔍 行交代软归属依据与剔除指引。
       if (Array.isArray(review?.undeclaredFiles) && review.undeclaredFiles.length > 0) {
-        const undeclared = review.undeclaredFiles.filter(f => !isQuickMetadata(f, linkedChanges))
+        const softSet = new Set(softFiles)
+        const undeclared = review.undeclaredFiles.filter(f => !isQuickMetadata(f, linkedChanges) && !softSet.has(String(f).replace(/\\/g, '/')))
         if (undeclared.length > 0) {
           auditNotes.push(`⚖️ 归属切分：${undeclared.length} 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：${undeclared.join(', ')}`)
+        }
+        if (softFiles.length > 0) {
+          auditNotes.push(`🔍 软归属：${softFiles.length} 个窗口内未声明同模块测试文件已补入文件行（若属并行会话改动请手工剔除）：${softFiles.join(', ')}`)
+          console.log(`🔍 软归属：${softFiles.length} 个窗口内未声明同模块测试文件已按软归属补入文件行（若属并行会话改动请手工剔除）：${softFiles.join(', ')}`)
         }
       }
       await completeQuicklogEntry(specBase, gitUser, qlId, {
@@ -1247,6 +1260,7 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
         linkedChanges,
         changedFiles: realFiles,
         auditNotes,
+        softFiles,
       })
       console.log(`📝 QUICKLOG 条目 ${qlId} 已标记完成`)
       // 刷新 DB title：从 step3「需求：」提取（agent 可改 title 的途径），覆盖启动时的兜底快照。

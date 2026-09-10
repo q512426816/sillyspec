@@ -76,3 +76,19 @@
 方案：sync.js _getPlatform / run/shared.js triggerSync / agent-session-log.js 两处 docstring 统一改写并澄清平台模式回传主凭据实为 local.yaml platform 段；随注释增行平移 platform-interface-map.md 三锚与 prompt-control-debt.md 一锚。
 结果：纯注释零逻辑变化；node --check 过；CLI 门禁 npm test 全绿 + lint 0 告警；docs check 行号锚归零（残余 2 条历史 change-name advisory 非阻断）。
 审计：⚖️ 归属切分：2 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：docs/sillyspec/platform-interface-map.md, docs/sillyspec/prompt-control-debt.md
+
+## ql-20260910-001-7ae6 | 2026-09-10 09:00:54 | quick 收尾软归属：窗口内未声明同模块测试文件自动补入 QUICKLOG 文件行
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/shared.js（matchSameModuleTestFiles stem 匹配 + auditQuickCompletion 计算 review.softTestFiles）
+- src/quicklog.js（flipEntryInContent/completeQuicklogEntry 接 softFiles，文件行补软归属 bullet）
+- src/run/complete-handlers.js（审计行拆 ⚖️ 真未知 / 🔍 软归属单列 + softFiles 透传）
+- test/quicklog-soft-attribution.test.mjs（27 断言（纯函数/落盘/CLI 端到端））
+- .sillyspec/docs/sillyspec/modules/change-management.md（模块卡同步软归属口径）
+- .sillyspec/docs/sillyspec/modules/change-management.changelog.md（sidecar 追加 ql-20260910-001-7ae6）
+- docs/sillyspec/platform-interface-map.md（complete-handlers 行号引用随插入漂移重锚 1674→1688）
+需求：quick 收尾软归属：窗口内未声明同模块测试文件自动补入 QUICKLOG 文件行
+根因：file-notes 括注只落声明文件，测试文件漏声明时审计行有提示但文件行不自动补齐，连续两批需手工核对（2026-09-10 用户反馈）
+方案：matchSameModuleTestFiles（run/shared.js）按 stem 相等/前缀+分隔符匹配窗口内未声明测试文件，auditQuickCompletion 出 review.softTestFiles，flipEntryInContent 补入文件行 bullet 带软归属括注；审计行拆 ⚖️ 真未知与 🔍 软归属单列，硬归属口径声明即归属不变
+结果：test/quicklog-soft-attribution.test.mjs 27 断言全绿，相关回归 6 套与 lint 绿，docs check 520 引用通过，change-management 模块卡与 sidecar 同步

@@ -568,7 +568,7 @@ function splitSingleLineFields(body) {
   return scanFields(body, findBoundaryLabel) ?? scanFields(body, (b, l, f) => b.indexOf(l, f))
 }
 
-function flipEntryInContent(content, qlId, result, changedFiles = [], fileNotes = [], auditNotes = []) {
+function flipEntryInContent(content, qlId, result, changedFiles = [], fileNotes = [], auditNotes = [], softFiles = []) {
   const lines = content.split('\n')
   const startIdx = lines.findIndex(l => l.startsWith(`## ${qlId} |`))
   if (startIdx === -1) return null
@@ -591,9 +591,19 @@ function flipEntryInContent(content, qlId, result, changedFiles = [], fileNotes 
     // 都空则不动（保持「（见实际改动）」）。bullet 用「数组元素内嵌 \n」写——lines.join('\n') 展平为
     // 多行，数组长度不变 → 与下方状态/结果 splice 的索引完全解耦（changedFiles 单行同理原地替换）。
     if (lines[i].startsWith('文件：')) {
+      // 软归属（2026-09-10 用户反馈）：softFiles = 审计判定的「窗口内未声明同模块测试文件」——
+      // 补入文件行 bullet 带括注标记，消每回手工核对；fileNotes 已显式括注的不重复加。
+      // fileNotes 空但有 softFiles 时同样升级 bullet（单行格式放不下括注标记）。
+      const notedPaths = new Set(fileNotes.map((n) => n.path))
+      const softBullets = []
+      for (const f of softFiles) {
+        if (!notedPaths.has(f)) softBullets.push(`- ${f}（软归属·同模块测试，未声明）`)
+      }
       if (fileNotes.length > 0) {
-        const bullets = fileNotes.map((n) => `- ${n.path}${n.note ? `（${n.note}）` : ''}`)
+        const bullets = [...fileNotes.map((n) => `- ${n.path}${n.note ? `（${n.note}）` : ''}`), ...softBullets]
         lines[i] = `文件：\n${bullets.join('\n')}`
+      } else if (softBullets.length > 0) {
+        lines[i] = `文件：\n${[...changedFiles.map((f) => `- ${f}`), ...softBullets].join('\n')}`
       } else if (changedFiles.length > 0) {
         lines[i] = `文件：${changedFiles.join(', ')}`
       }
@@ -775,7 +785,7 @@ export async function appendQuicklogEntryWithId(specBase, gitUser, qlId, { descr
 /**
  * 翻某 qlId 条目为「已完成」+ 追加结果 + 勾选关联 tasks.md。持锁。
  */
-export async function completeQuicklogEntry(specBase, gitUser, qlId, { resultText = '', linkedChanges = [], changedFiles = [], auditNotes = [] } = {}) {
+export async function completeQuicklogEntry(specBase, gitUser, qlId, { resultText = '', linkedChanges = [], changedFiles = [], auditNotes = [], softFiles = [] } = {}) {
   const quicklogDir = join(specBase, 'quicklog')
   // 与 allocateQuicklogEntry 同源消毒：锁文件路径含 user（防穿越写，两入口必须一致否则锁不上同一文件）
   const user = sanitizeQuicklogUser(gitUser) || 'unknown'
@@ -788,6 +798,11 @@ export async function completeQuicklogEntry(specBase, gitUser, qlId, { resultTex
   // 读后即清（per-process，防残留跨调用）。flipEntryInContent 优先用 fileNotes，空则回退 realFiles。
   const fileNotes = parseFileNotes(_pendingFileNotes)
   _pendingFileNotes = ''
+  // 软归属文件（complete-handlers 传入，已过 isQuickMetadata；反斜杠归一与 fileNotes 同口径）：
+  // 窗口内未声明同模块测试文件，flipEntryInContent 补入文件行 bullet 带「软归属」括注。
+  const soft = Array.isArray(softFiles)
+    ? softFiles.filter(Boolean).map((f) => String(f).replace(/\\/g, '/'))
+    : []
 
   await withFileLock(lockPath, async () => {
     // 条目可能在主文件或轮转归档中
@@ -798,7 +813,7 @@ export async function completeQuicklogEntry(specBase, gitUser, qlId, { resultTex
       let content = ''
       try { content = readFileSync(filePath, 'utf8') } catch { continue }
       const updated = flipEntryInContent(content, qlId, result, realFiles, fileNotes,
-        Array.isArray(auditNotes) ? auditNotes.filter((n) => typeof n === 'string' && n.trim() !== '') : [])
+        Array.isArray(auditNotes) ? auditNotes.filter((n) => typeof n === 'string' && n.trim() !== '') : [], soft)
       if (updated !== null) {
         await writeAtomic(filePath, updated) // 命中处原子落盘（只改含目标条目的那一个文件）
         updatedContent = updated
