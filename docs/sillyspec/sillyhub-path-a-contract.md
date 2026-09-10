@@ -77,7 +77,7 @@ SillyHub daemon 的 `ws.root_path` / `daemon_instances.allowed_roots`（`assertW
 
 落地：`docs/integrations/sillyspec-dispatch.md` 集成指引 + `scripts/check-dispatch-allowed-roots.mjs` smoke 前置硬校验脚本（task-10）。当前本机 daemon `allowed_roots=["C:\\Users\\qinyi"]`，已覆盖 multi-agent-platform 仓根及其 worktree。
 
-SillySpec 侧 `probeSillyHub`（`src/dispatch/probe.js:204-218`）已实现 root_path 校验：caller 传 `rootPath` 或 `client.getRootPath()` 拿到时，校验 `worktreePath` 在内，越界 → `{available:false, reason:'worktree-outside-root'}` → fallback Local。
+SillySpec 侧 `probeSillyHub`（`src/dispatch/probe.js:225-240`）已实现 root_path 校验：caller 传 `rootPath` 或 `client.getRootPath()` 拿到时，校验 `worktreePath` 在内，越界 → `{available:false, reason:'worktree-outside-root'}` → fallback Local。
 
 > ⚠️ **限制 ①（已知 gap，暂不阻断生产）**：当前 SillyHub MCP gateway 的 `tools/list` 响应仅返 `{tools:[...]}`，**不在顶层暴露 `root_path`**；daemon 亦无独立 MCP tool 查 `root_path`。故 SillySpec `client.getRootPath()`（`client.js:391-409`，defensively 读 `result.root_path`）**实际返回 null** → `probe.js` 的 worktree 越界校验在真实派发流程里**不触发**（生产不会因这个误判 fallback；但越界保护等于暂未生效）。`task-12 constraints` 已预见此 gap。待 daemon 暴露 `root_path`（如 `tools/list` 顶层增字段或增能力查询 tool）后，该校验自动生效——届时更新本节并补单测。
 
