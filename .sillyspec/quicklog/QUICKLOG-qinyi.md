@@ -194,3 +194,25 @@
 根因：①generateExecuteRunId 秒级时间戳，并行会话同秒启动 execute 生成同一 runId，两变更 per-task review.json 落同一 execute-runs/<runId>/tasks/ 互相覆盖（用户两次实锤）；②平台模式 spec 根=hub 镜像，--init 回显镜像物理路径而产物经 daemon 同步落主仓，核对口径分裂显示混乱；③design 清单待建文件带 NEW: 前缀（表格 cell 解析器不剥），module-impact 归类比对漏剥前缀致 classifyFile 前缀匹配必失配、NEW 文件全落未匹配逼手动回填（pathMatches 比对侧早剥，此处漏同步）
 方案：①task-review.js 新增 claimExecuteRunId：非递归 mkdir 排他认领 run 目录（EEXIST=碰撞→4位随机后缀重试），认领即含 tasks/，isValidExecuteRunId 双形态兼容（存量秒级+可选短后缀，注入/穿越仍拒）；接线 stage.js 主点/gates.js/prompt.js/task-review 两补写点共五处 generate 写入点，分层 fail 语义不变。②verify-probes.js 新增 formatPlatformPathNote（平台模式回显行尾补镜像根+主仓同步位置注记，本地零变化）+ writeVerifyFacts opts.platformNote；index.js --init 三处回显接线。③module-impact.js sourceFiles 归一化剥 NEW: + 去重
 结果：新增测试 execute-run-id-collision 5/5、verify-probes-platform-note 3/3，plan-module-impact-autogen 补 NEW: 用例 7/7；回归 fail-loud/marker-drift/change-stamp/verify-probes 系全过；npm run lint 525 文件 0 hard fail；全量 npm test 403 过 2 挂均非本次（doc-ref 7 失效引用 HEAD 已存在实证 + sillyhub-mcp 并发 flake 单独跑 5/5、移除本变更新测试复跑仍挂）
+
+## ql-20260910-008-6d84 | 2026-09-10 14:32:00 | 修驾驭小结第二批三负面：apply 归档取证自相矛盾 + exec-run 串台残余 + docs check 输出噪音
+状态：已完成
+关联变更：2026-09-10-review-dispatch
+文件：
+- src/worktree-apply.js（resolveActiveOrArchiveChangeDir 归档回退 + allowset/assess 接线）
+- src/task-review.js（两 resolver fallback 排除有主 run）
+- src/index.js（docs check 渲染降噪）
+- test/apply-archive-docs-fallback.test.mjs（新增）
+- test/execute-run-change-stamp.test.mjs（增 ⑪⑫）
+- test/docs-check-output-noise.test.mjs（新增）
+- docs/sillyspec/*.md+ARCHITECTURE.md（重锚 20 处）
+- modules/*.md（worktree/core-engine/docs-consistency 更新）
+需求：修驾驭小结第二批三负面：apply 归档取证自相矛盾 + exec-run 串台残余 + docs check 输出噪音
+根因：①archive 对未 apply 的 worktree 有意保留期待归档后补 apply，归档却把变更目录 rename 到 changes/archive/，apply 读侧只认活跃路径 → 补 apply 时 allow 集恒空被 Gate1 整批误拦；②resolveLatestExecuteRunId/WithTasks 的 mtime fallback 仍拿走戳属他变更的 run，writeTaskReview 在 marker 缺失场景误写他变更 run（上批 claim 只治写侧同秒碰撞，这是读侧残余）；③docs check 硬失效与 advisory 混流、同行同引用重复与同名多处分悬空逐条刷屏
+方案：①worktree-apply.js 新增 resolveActiveOrArchiveChangeDir（活跃缺 design.md 而归档在→回退读归档目录），resolveApplyAllowSet 与 assess 段豁免集统一接线，不动归档回收策略；②两 resolver 的 mtime fallback 排除有主 run（戳属他变更即跳过，全部有主→null；无 changeName 旧调用零回归）；③index.js docs check 渲染层折叠重复硬失效（×N）+ advisory 尾部分区 + 按名聚合，invalid 集与 exit code 不动；顺手重锚 7 份活文档 20 处行号漂移（docs check 520 全过、gate 基线 0 恢复绿）
+结果：新增测试 4+1+2 断言组全绿（apply-archive-docs-fallback 4/4、docs-check-output-noise 1/1 含 exit 1 断言、change-stamp ⑪⑫ 25/25）；worktree-apply 回归 17/17、marker-drift/isolation/docs-check 系全绿；lint 527 文件 0 hard fail；全量 405 过 2 挂均他者在途（sillyhub-mcp flake 单独跑过、scope-audit 他者 AM 态）
+
+## ql-20260910-009-a684 | 2026-09-10 15:20:00 | scope-audit 归档形态支持：预检接受 changes/archive/<名>、快照优先记录态展示、无锚点时 HEAD 未提交窗口行数兜底
+状态：进行中
+关联变更：（无）
+文件：（见实际改动）
