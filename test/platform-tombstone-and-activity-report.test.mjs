@@ -197,6 +197,34 @@ test('X1-4 平台 409 code=change_deleted → 拒收非冲突：不落冲突文�
   } finally { m.restore() }
 })
 
+test('X1-4b 本地已注销（CLI 主动墓碑）撞 409 change_deleted → ℹ️ 预期回执口吻，不再滞后提示排查', async () => {
+  const cwd = makeFixture()
+  const name = 'archived-then-tombstone-409'
+  seedChange(cwd, name)
+  // CLI 归档/change-delete 收尾已注销（unregisterChange 链置 DB status）——本次上行是 CLI 自己的墓碑
+  const pm2 = new ProgressManager({ specDir: join(cwd, '.sillyspec') })
+  pm2.unregisterChange(cwd, name)
+
+  const m = mockFetch({
+    progressStatus: 409,
+    progressBody: { code: 'change_deleted', message: '该变更已在平台删除', change_name: name },
+  })
+  const origLog = console.log, origWarn = console.warn
+  let logBuf = '', warnBuf = ''
+  console.log = (...a) => { logBuf += a.join(' ') + '\n' }
+  console.warn = (...a) => { warnBuf += a.join(' ') + '\n' }
+  try {
+    const r = await new SyncManager(cwd).sync(name)
+    assert.equal(r.platformDeleted, true, 'platformDeleted 标记不变（两分支同返回值）')
+    assert.ok(logBuf.includes('本地注销已由 CLI 完成') && logBuf.includes('预期回执'),
+      `走 ℹ️ 预期回执口吻（log：${logBuf.slice(0, 120)}）`)
+    assert.ok(!warnBuf.includes('请在平台侧确认'), `不再 warn 滞后排查口吻（warn：${warnBuf.slice(0, 120)}）`)
+  } finally {
+    console.log = origLog; console.warn = origWarn
+    m.restore()
+  }
+})
+
 test('X1-5 quick 会话名直调 sync → 不墓碑（quick 无平台 change 实体）', async () => {
   const cwd = makeFixture()
   const pm = new ProgressManager({ specDir: join(cwd, '.sillyspec') })

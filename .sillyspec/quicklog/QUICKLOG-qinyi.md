@@ -266,3 +266,23 @@
 根因：①两并行会话共用 exec run 目录互相覆写 review（task-01/02/03 被另一变更污染）——claim 排他认领只治同 ID 两主，不同变更同秒仍天生同 ID；②design-init/verify-probes --init 两次把产物写到 daemon specs 同步目录而非主仓 changeDir，单点依赖 spec-sync 回程兜底；③verify 收尾 PID 回收只杀登记的 shell 包装 PID，python 服务本体子进程成孤儿泄漏（坑 verify-service-process-leak）
 方案：①generateExecuteRunId(changeName) 附 change 名 FNV-1a 6 位 hex 段（两变更同秒必不同 runId、同变更幂等、无参裸秒级兼容），isValidExecuteRunId 放宽 0-2 段后缀，五处 generate 写入点全接线；②run/shared.js 新增 mirrorPlatformArtifactToMainRepo（pointer 态 agent 本地跑时 design.md/verify-result.md/verify-facts.json 双写镜像主仓 changeDir；daemon 显式 --spec-dir、本地无 changeDir、路径同构跳过），design-init 与 verify-probes --init 接线；③reapVerifyServices 改 killProcessTree（win32 taskkill /PID /T /F；POSIX ps 递归枚举子进程），ESRCH/128 静默保留；verify prompt 补登记服务本体 PID 指引
 结果：新增/扩展测试全绿（collision 9/9、platform-note 4/4、concurrency-fixes 28/28 含真实进程树实杀、fail-loud 锚同步后全过）；全量 npm test 409/409 全绿（含此前 flaky 两项）；lint 531 文件 0 hard fail；docs check 520 全过（index.js 漂移 6 处重锚）
+
+## ql-20260910-013-6906 | 2026-09-10 20:46:35 | 修驾驭小结第四批三负面：模块文档 worktree 副本泄漏铁律 + 决策提炼扁平格式静默 0 条 + change_deleted 409 提示滞后
+状态：已完成
+关联变更：（无）
+文件：
+- src/stages/execute.js（两处主仓铁律升格）
+- src/decision-distill.js（双格式解析 + zeroWithContent + distill warn）
+- src/sync.js（409 预期回执分流）
+- test/execute-prompt-mainrepo-docs.test.mjs（扫描锁定）
+- test/decision-distill-flat-list.test.mjs（5 用例）
+- test/platform-tombstone-and-activity-report.test.mjs（X1-4b 用例）
+- docs/sillyspec/platform-interface-map.md（sync.js 锚重锚）
+- .sillyspec/docs/sillyspec/scan/ARCHITECTURE.md（sync.js 锚重锚）
+- .sillyspec/docs/sillyspec/modules/stages.md（铁律补记）
+- .sillyspec/docs/sillyspec/modules/docs-consistency.md（双格式补记）
+- .sillyspec/docs/sillyspec/modules/sync.md（409 分流补记）
+需求：修驾驭小结第四批三负面：模块文档 worktree 副本泄漏铁律 + 决策提炼扁平格式静默 0 条 + change_deleted 409 提示滞后
+根因：①task-13 子代理把模块文档写进 worktree 的 .sillyspec 副本而非主仓（原「只写主仓」规则埋在长 prompt 尾部一句带过未遵守），归档被迫 checkout 补救；②决策提炼器只认 ## 标题式条目，扁平列表格式 decisions.md 解析 0 条静默放行；③本地注销已由 CLI 完成（CLI 主动上行墓碑）撞平台 409 change_deleted，CLI 仍按「需排查」口吻 warn——提示语义滞后一个动作
+方案：①execute.js 两处升格铁律（Wave prompt 欠账段原地重申 + 派发 prompt 注意段 ⚠️ 铁律：主仓 {SPEC_ROOT} 绝对路径、点破 checkout 副本随 cleanup 蒸发、子代理透传绝对路径）；②parseDecisions 兼容扁平列表式（行内 ｜ 字段白名单 + 缩进子项字段 + applyField 补中文别名），0 条含 D-xxx 形态 → zeroWithContent + distill 显式 warn；③sync.js 409 分流：本地墓碑态降 ℹ️ 预期回执（注销已完成无需动作），active 态维持 ⚠️
+结果：新测试 execute-prompt-mainrepo-docs 2/2 + decision-distill-flat-list 5/5 + tombstone X1-4b（11/11）；distill 系回归 32/32；全量 npm test 410 文件仅 doc-ref 锚漂（我 sync.js 插入所致）已重锚 4 处，docs check 520 全过；lint 533 文件 0 hard fail

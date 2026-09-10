@@ -699,10 +699,21 @@ export class SyncManager {
       });
 
       // X1（task-04 契约）：409 + code='change_deleted' = 平台已删 key 拒收——不是 base_ts 冲突。
-      // 单行提示即可，不落冲突文件、不打全幅横幅：墓碑已收敛后的重复上行（归档收尾多步各推一次）、
+      // 不落冲突文件、不打全幅横幅：墓碑已收敛后的重复上行（归档收尾多步各推一次）、
       // 多用户下他端删除后本地仍在推进，都是可预期态，按冲突卡死人工 resolve 反而是误报。
       if (res.status === 409 && res.body && res.body.code === 'change_deleted') {
-        console.warn(`⚠️ [sync] 平台已删除变更「${changeName}」，本次进度上行被拒收（change_deleted）；本地如仍需推进请在平台侧确认`);
+        // 预期回执分流（2026-09-10 驾驭小结第四批③，用户实锤「提示语义滞后一个动作」）：本地 DB
+        // status 已是 archived/deleted（unregisterChange 链——CLI 归档/change-delete 收尾自己置的）
+        // 时，本次上行本就是 CLI 主动发的墓碑，409 是平台「已删」幂等回执——本地注销早已完成，
+        // 「请在平台侧确认」口吻滞后一个动作；降为 ℹ️ 单行。仅本地仍 active（他端删除）才 warn。
+        const localTombstone = tombstoneDue
+          || progressData?.changes?.[0]?.status === 'archived'
+          || progressData?.changes?.[0]?.status === 'deleted'
+        if (localTombstone) {
+          console.log(`ℹ️ [sync] 平台已删除变更「${changeName}」——本地注销已由 CLI 完成，墓碑上行 409 属预期回执，无需动作`);
+        } else {
+          console.warn(`⚠️ [sync] 平台已删除变更「${changeName}」，本次进度上行被拒收（change_deleted）；本地如仍需推进请在平台侧确认`);
+        }
         return { synced: 0, errors: [], platformDeleted: true, reason: '平台已删除（change_deleted 拒收）' };
       }
 

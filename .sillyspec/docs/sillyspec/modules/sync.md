@@ -60,6 +60,7 @@ SillyHub 平台同步模块，负责与远程 SillyHub 服务建立连接、同�
 5. **CLI 分发**：`syncModule(args, cwd)` 解析 `args[0]` 子命令名，调用对应 `SyncManager` 方法
 6. **下行 pull**（2026-08-10-platform-progress-sync）：`pull(name)` → GET /api/changes/{name}/progress → 本地脏度比对（last_local_modified_ts > last_synced_platform_ts AND 平台 last_pushed_at > last_synced → 冲突）→ 无冲突 `pm.import` 重建 DB 行；`pullList()` 先拉轻量列表控制 pull 性能
 7. **双向冲突持久化**：push 409（base_ts 过期）或 pull 脏度命中 → `_writeConflictFile` 写 `.runtime/sync-conflict-<change>.json`（含 base_ts/local_modified_ts/platform_last_pushed_at/platform_progress，禁止字段级 auto-merge）→ `resolve` 三选一后 `clearConflictFile`
+7b. **change_deleted 409 预期回执分流**（2026-09-10 驾驭小结第四批③，「提示语义滞后一个动作」）：409 code=change_deleted 且本地 DB status=archived/deleted（CLI unregisterChange 链已注销——本次上行本就是 CLI 主动发的墓碑）→ ℹ️「本地注销已由 CLI 完成，属预期回执，无需动作」；仅本地仍 active（他端删除场景）才 ⚠️ 排查口吻。两分支返回值同为 platformDeleted，不落冲突文件。
 8. **POST 元字段走 header**（D-015）：sync() 的 user/base_ts/pushed_at 走 X-SillySpec-* header，body 保持裸 progress JSON（sillyhub 老版忽略 header 零回归）；`fetchJsonWithStatus` 识别 409 读回 platform_progress
 
 ## 设计决策（表格）

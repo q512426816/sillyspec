@@ -69,8 +69,8 @@ function dispositionOf(entry) {
 /** decisions.md 列表字段标签 → entry 字段（兼容中英标签与中英冒号；其余字段仅留在 raw） */
 function applyField(entry, label, value) {
   switch (label) {
-    case 'type': entry.type = firstToken(value); break
-    case 'status': entry.status = firstToken(value); break
+    case 'type': case '类型': entry.type = firstToken(value); break
+    case 'status': case '状态': entry.status = firstToken(value); break
     case 'question': case '问题': entry.question = value; break
     case 'answer': case '答案': entry.answer = value; break
     case '锚点': case 'anchor': entry.anchor = value; break
@@ -111,6 +111,11 @@ export function parseDecisions(changeDir) {
     entries.push(cur)
   }
   for (const line of content.replace(/\r\n/g, '\n').split('\n')) {
+    // 条目开头两形态（坑 decision-flat-list-silent-zero，2026-09-10 驾驭小结第四批②，用户实证：
+    // 扁平列表格式 decisions.md 解析 0 条静默放行）：
+    //   ①标题式（模板正统）：`## D-001@v2 标题`，正文行 `- 字段：值`
+    //   ②扁平列表式（agent 实际产出）：`- D-001@v2：标题` 或 `- D-001@v2 | 状态：implemented | 模块域：x`
+    //     ——行内 ｜ 分段即字段；后续缩进子项 `  - 字段：值` 同样进字段
     const h = line.match(/^##\s+(D-\d+)(?:@v(\d+))?\s*(.*)$/)
     if (h) {
       flush()
@@ -118,14 +123,43 @@ export function parseDecisions(changeDir) {
       cur = { id: `${h[1]}@v${version}`, number: h[1], version, title: h[3].trim(), rawLines: [line] }
       continue
     }
+    const b = line.match(/^[-*]\s+(D-\d+)(?:@v(\d+))?\s*(?:[：:]\s*|\s+—\s*|\s*——\s*|\s*\|\s*)?\s*(.*)$/)
+    if (b) {
+      flush()
+      const version = b[2] ? parseInt(b[2], 10) : 1
+      cur = { id: `${b[1]}@v${version}`, number: b[1], version, title: '', rawLines: [line] }
+      // 行内 ｜ 分段字段：`- D-001@v1 标题 ｜ 状态：implemented ｜ 模块域：core`
+      // 首个非「字段：值」形态的分段为标题；每段独立过 applyField（未知标签忽略）。
+      const rest = (b[3] || '').trim()
+      const segs = rest.split(/[｜|]/).map(s => s.trim()).filter(Boolean)
+      const nonFieldSegs = []
+      for (const seg of segs) {
+        const inline = seg.match(/^([^：:]{1,20})[：:]\s*(.*)$/)
+        if (inline && FIELD_LABEL_RE.test(inline[1].trim())) {
+          applyField(cur, inline[1].trim().toLowerCase(), inline[2].trim())
+        } else {
+          nonFieldSegs.push(seg)
+        }
+      }
+      cur.title = nonFieldSegs.join(' ｜ ')
+      continue
+    }
     if (!cur) continue
     cur.rawLines.push(line)
-    const f = line.match(/^-\s+([^\s：:]+)\s*[：:]\s*(.*)$/)
-    if (f) applyField(cur, f[1].toLowerCase(), f[2].trim())
+    // 字段行：标题式条目的顶格 `- 字段：值` + 扁平式条目的缩进子项 `  - 字段：值`（缩进至多 4 空格，
+    // 不吞正文嵌套散文——字段标签白名单外的行不进字段，见 applyField default 忽略）
+    const f = line.match(/^(?: {1,4})?[-*]\s+([^\s：:]{1,20})\s*[：:]\s*(.*)$/)
+    if (f && FIELD_LABEL_RE.test(f[1])) applyField(cur, f[1].toLowerCase(), f[2].trim())
   }
   flush()
-  return { entries, missing: false }
+  // 0 条告警素材（消费方 distillIntoKnowledge 据此显式 warn，不再静默放行）：
+  // 文件非空、正文出现 D-xxx 形态却一条都没解析出 = 格式两种都不匹配，必须可见
+  const hasDecisionLike = /D-\d+/.test(content)
+  return { entries, missing: false, zeroWithContent: hasDecisionLike && entries.length === 0 }
 }
+
+/** applyField 认识的字段标签白名单（行内 ｜ 分段与缩进子项只按白名单进字段，散文误伤为零） */
+const FIELD_LABEL_RE = /^(type|types|status|question|问题|answer|答案|锚点|anchor|模块域|模块|domains|domain|否决理由|reject_reason|rejectreason|复潮条件|revisit_when|revisitwhen|supersedes|impacts|影响|normalized_requirement|状态|类型)$/i
 
 // ---------------------------------------------------------------------------
 // 域三级兜底（FR-03）
@@ -433,6 +467,12 @@ export function distillIntoKnowledge(changeDir, knowledgeRoot, headHash, moduleI
   const parsed = parseDecisions(changeDir)
   if (parsed.missing) {
     return { written: [], skipped: `decisions.md 不存在（${join(changeDir, 'decisions.md')}），零输出`, needsWait: null }
+  }
+  // 0 条告警（坑 decision-flat-list-silent-zero，2026-09-10 驾驭小结第四批②）：文件有内容、
+  // 正文含 D-xxx 形态却 0 条可解析 = 标题式/扁平列表式两种格式都不匹配——此前静默放行
+  // （skipped 文案还误导成「解析 0 条，0 条入选」），决策知识凭空丢失不可见。显式 warn 留痕。
+  if (parsed.zeroWithContent) {
+    console.warn(`⚠️ decisions.md 存在且含 D-xxx 条目形态，但 0 条可解析（既非「## D-xxx」标题式、也非「- D-xxx@vN」扁平列表式）——格式不识别，本次提炼零输出；请核对格式（标题式 \`## D-001@v1 标题\` + 正文 \`- 字段：值\`，或扁平式 \`- D-001@v1：标题 ｜ 状态：implemented\`）`)
   }
   const selected = parsed.entries.filter(e => e.selected)
   if (selected.length === 0) {

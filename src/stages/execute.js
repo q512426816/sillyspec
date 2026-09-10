@@ -324,6 +324,7 @@ worktree 路径 + 分支名 + 模式
 
 如上为 CLI 用 git 事实算出的本变更触及模块文档欠账（无输出=无欠账或归属数据缺失）。
 欠账处理：Wave 收尾时顺手同步对应模块卡，不必为此停下。变更索引类条目追加到卡同目录 \`<module>.changelog.md\` sidecar（无则创建；可先跑 \`sillyspec modules split-changelog\` 迁出历史段）——勿把历史条目堆回模块卡正文（卡是子代理的读取税）。
+⚠️ **铁律：模块卡 / sidecar 一律写主仓绝对路径 \`{SPEC_ROOT}/docs/<project>/modules/\`（CLI 已替换为绝对路径）**——在 worktree 内执行时**绝不**写 worktree checkout 出来的 \`.sillyspec\` 副本（该副本随 worktree cleanup 整目录蒸发，主仓永远读不到；2026-09-10 实证 task-13 子代理写副本、归档阶段被迫 checkout 补救）。
 
 ### 铁律
 - **不要询问用户确认频率**，默认 wave 模式；用户已明确口头指定时遵从其指定`,
@@ -1111,7 +1112,9 @@ ${workdirLines}
 \`\`\`
 
 ### 注意
-蓝图文件（tasks.md / design.md / proposal.md / requirements.md）在主工作区 {SPEC_ROOT}/changes/<change>/ 下（CLI 已替换为主仓绝对路径），它们可能不在 worktree 中。读取蓝图时使用主工作区路径，不要拼接到 worktree 路径下；同理，spec 流程产物（module-impact.md / knowledge 条目 / 模块文档）只写主仓 {SPEC_ROOT}，绝不写进 worktree 副本。
+蓝图文件（tasks.md / design.md / proposal.md / requirements.md）在主工作区 {SPEC_ROOT}/changes/<change>/ 下（CLI 已替换为主仓绝对路径），它们可能不在 worktree 中。读取蓝图时使用主工作区路径，不要拼接到 worktree 路径下。
+
+⚠️ **铁律：spec 流程产物只写主仓 {SPEC_ROOT}，绝不写进 worktree 副本**——包括 module-impact.md / knowledge 条目 / 模块卡与 \`<module>.changelog.md\` sidecar。在 worktree 内发现 \`.sillyspec/\` 目录是 checkout 副本，写进去的任何内容都会随 worktree cleanup 整目录蒸发（2026-09-10 实证：模块文档写副本、归档被迫 checkout 补救）。子代理 prompt 中涉及此类产物时，必须原样带上主仓绝对路径。
 `
       : ''
   }
