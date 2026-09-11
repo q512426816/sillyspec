@@ -173,6 +173,14 @@ export const LOCAL_YAML_SCHEMA = {
         { path: 'friction_hint.enabled', type: 'boolean', optional: true, status: 'live', readers: ['readFrictionHintEnabled (src/friction-tally.js)'], desc: '摩擦提示开关，默认 true；设 false 关闭摩擦提示（gate 回滚/验证失败/审查打回的收尾 advisory 与计数落盘全停，.runtime 零写入）。', example: 'true' },
       ],
     },
+    {
+      id: 'semantic_guard',
+      title: '语义守卫开关',
+      note: 'quick 进场注入与 --done 断言 WARNING 的跨变更决策守卫配置（cross-change-decision-guard）。读键按「存在则读、不存在用缺省」容错：读失败与未配置同兜底为默认开（fail-open，advisory 误开无害）。',
+      keys: [
+        { path: 'semantic_guard.enabled', type: 'boolean', optional: true, status: 'live', readers: ['readSemanticGuardEnabled (src/semantic-guard.js)'], desc: '语义守卫总开关，默认 true；设 false 时 quick 进场注入与 --done 断言 WARNING 全停零开销。', example: 'true' },
+      ],
+    },
   ],
 };
 
@@ -305,6 +313,11 @@ decisions:
 # ── 摩擦提示开关（quick/verify 收尾的摩擦信号一行 advisory：gate 回滚/验证失败/审查打回计数）──
 # 默认 true 开启；false 一键全关（计数与提示双停，.runtime 零写入）
 friction_hint:
+  enabled: true
+
+# ── 语义守卫开关（quick 进场注入 + --done 断言 WARNING 的跨变更决策守卫）──
+# 默认 true 开启；false 一键全停（进场注入与断言 WARNING 双停，零开销）
+semantic_guard:
   enabled: true
 
 # ── 预存失败豁免清单（变更前就失败的测试行；务必定期复核，防误豁免真实失败）──
