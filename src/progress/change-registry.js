@@ -63,6 +63,32 @@ export class ChangeRegistry {
   }
 
   /**
+   * 读某变更最近一次进度活动时刻（quick-done-autoarchive-misfire 缺陷②，D-002@v1 复潮
+   * 2026-09-11 实证：stage 阶段态区分不了「活跃在途」与「启动后弃单」——brainstorm
+   * in_progress + tasks.md 仅含他者 quick 行时「全勾」是空洞真值）。取该变更全部
+   * stages/steps completed_at 的最大值：活跃会话分钟级在推进（最近活动必新）；僵尸的
+   * 最后一步完成时刻必然陈旧。只读不抛：无变更/无完成行/读失败返回 null（调用方按
+   * 无近期活动放行，僵尸逃生通道语义不变——与 getStageCompletedAt 同族容错）。
+   */
+  getLatestActivityAt(cwd, changeName) {
+    try {
+      const db = this.pm._ensureDB(cwd);
+      const sqlDb = db.getDb();
+      const ch = sqlDb.prepare(`SELECT id FROM changes WHERE name = ?`).get(changeName);
+      if (!ch) return null;
+      const row = sqlDb.prepare(
+        `SELECT MAX(ts) AS latest FROM (
+           SELECT MAX(completed_at) AS ts FROM stages WHERE change_id = ?
+           UNION ALL
+           SELECT MAX(st.completed_at) AS ts FROM steps st
+             JOIN stages s ON st.stage_id = s.id WHERE s.change_id = ?
+         )`
+      ).get(ch.id, ch.id);
+      return row && row.latest ? row.latest : null;
+    } catch { return null; }
+  }
+
+  /**
    * 读某变更某阶段的 started_at（2026-09-10 用户反馈②：evidence mtime 窗口锚点从
    * execute completed_at 放宽到 started_at——证据合法产自 execute 或 verify 两窗口，
    * 锚「完成时刻」会把 execute 期间产的证据判旧，逼出「先提交则 diff 空、不提交则

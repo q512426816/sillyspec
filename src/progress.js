@@ -908,6 +908,9 @@ export class ProgressManager {
   // verifyStartAt 基准只读（2026-09-08-ir-verify-facts）：execute 行 completed_at；无行 null 走 R-05 fallback
   getStageCompletedAt(cwd, changeName, stage) { return this._changeRegistry.getStageCompletedAt(cwd, changeName, stage); }
 
+  // 最近进度活动时刻只读（D-002@v1 复潮）：quick --done 自动归档闸的时近性信号
+  getLatestActivityAt(cwd, changeName) { return this._changeRegistry.getLatestActivityAt(cwd, changeName); }
+
   // evidence mtime 窗口锚点（2026-09-10 用户反馈②）：execute 行 started_at——证据合法产自 execute
   // 或 verify 两窗口，锚「完成时刻」会把 execute 期间产的证据判旧（时序两难）；无行 null 走 completed_at → R-05
   getStageStartedAt(cwd, changeName, stage) { return this._changeRegistry.getStageStartedAt(cwd, changeName, stage); }

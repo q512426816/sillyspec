@@ -95,3 +95,12 @@ supersedes：无（修订 design 初稿注入时机）
 文件：src/run/complete-handlers.js
 最近确认：358af35
 理由：**任务行追加是设计内行为**（quick 启动契约：对每个关联变更 tasks.md 追加 `- [ ] <ql-id> <任务描述>`，stages/quick.js step1；关联本身是协作声明——两变更共享 decision-distill.js，ql-020 allowedFiles 含该文件），保留该行不覆盖，本变更任务追加其下。**真缺陷（quick-done-autoarchive-misfire 缺陷②，ql-20260819-010 只修了缺陷①）**：closeQuickLinkedChanges 阶段闸允许集含 brainstorm，stage_status=completed 闸只堵「brainstorm 完成→plan 开始」空窗——**brainstorm 进行中 + tasks.md 仅含 ql 行**（完整流程 plan 前无自有任务行，「isChangeTasksComplete 全勾」恒真空洞）时，关联 quick --done 勾掉 ql 行即触发在途变更被轻量归档注销。防护（本变更已落地）：写入自有未勾选 task-01..07 行——isChangeTasksComplete 恒 false 直至 execute/verify，彼时阶段不在允许集，竞态窗口关闭。
+
+## D-002@v2 quick --done 自动归档闸补时近性闸（缺陷②修复实现选型）
+状态：implemented
+变更：2026-09-11-cross-change-decision-guard
+锚点：未记录
+文件：src/run/complete-handlers.js, src/progress/change-registry.js
+最近确认：手动确认
+理由：**复潮实现取时近性信号（v1 复潮条件三候选均被否）**——新增 getLatestActivityAt（变更全部 stages/steps completed_at 最大值，时近性只读），closeQuickLinkedChanges 在阶段闸后增 60 分钟进度活动窗：窗口内=会话分钟级在推进（在途）不自动归档，僵尸最后活动陈旧（或 null 无完成步）照常清理。否决理由：候选①「全勾判定要求存在非 ql 自有任务行」推翻 small 逃生通道（僵尸 tasks.md 本就仅含 ql 行，quick-done-linked-changes.test :249 锁定）；候选②「in_progress 一律不归档」推翻真·僵尸清理（:299 锁定）——阶段态区分不了「活跃在途」与「启动后弃单」，时近性是唯一同时保两条逃生通道语义的信号。pm 无 getLatestActivityAt（旧 mock/旧库）按无近期活动放行：误放行最坏回到缺陷②现状（tasks.md 自有未勾任务行防护兜底），误拦截则僵尸永不清——权衡取放行。
+supersedes：D-002@v1（v1 的防护措施继续有效；本条补齐热修）

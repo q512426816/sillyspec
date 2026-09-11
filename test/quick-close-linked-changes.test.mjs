@@ -354,3 +354,68 @@ test('getChangeStage 查询抛错 → fail-closed skipped，不归档', async ()
     cleanup(specBase)
   }
 })
+
+// ── 时近性闸（quick-done-autoarchive-misfire 缺陷②，D-002@v1 复潮，2026-09-11
+//    cross-change-decision-guard 实证）──────────────────────────────────────────
+// 事故形态：brainstorm in_progress（活跃会话步进中）+ tasks.md 仅含他者 quick 行
+//（完整流程 plan 前无自有任务行，「全勾」空洞真值）→ 关联 quick --done 勾掉 ql 行
+// 即把在途变更轻量归档。信号取时近性：最近 stage/step 完成时刻 60 分钟内 = 在途不归档；
+// 僵尸最后活动陈旧（或 null）→ 逃生通道保留（:299 语义不变）。
+
+test('缺陷②事故场景：brainstorm in_progress + tasks 全勾 + 10 分钟内有进度活动 → skipped 不归档', async () => {
+  const specBase = makeSpecBase('qclc-recency-live-')
+  const cwd = specBase
+  const changeName = '2026-09-11-active-midflight'
+  try {
+    const changeDir = makeChange(specBase, changeName, '- [x] ql-20260911-020-1397 他者会话已完成\n')
+    const pm = makePm({ [changeName]: { current_stage: 'brainstorm', status: 'active', stage_status: 'in-progress' } })
+    pm.getLatestActivityAt = () => new Date(Date.now() - 10 * 60 * 1000).toISOString()
+
+    const result = await closeQuickLinkedChanges({ pm, cwd, specBase, linkedChanges: [changeName] })
+
+    assert.deepEqual(result.closed, [], 'closed 应为空（在途变更不自动归档——本坑主体）')
+    assert.equal(result.skipped.length, 1, 'skipped 应含 1 条')
+    assert.match(result.skipped[0].reason, /进度活动/, 'reason 应指明时近性信号')
+    assert.equal(pm._calls.length, 0, 'unregisterChange 不应被调用')
+    assert.ok(existsSync(changeDir), '源目录应保持原位')
+  } finally {
+    cleanup(specBase)
+  }
+})
+
+test('缺陷②僵尸保留：in_progress + 最近活动 2 小时前 → closed（逃生通道语义不变）', async () => {
+  const specBase = makeSpecBase('qclc-recency-stale-')
+  const cwd = specBase
+  const changeName = '2026-09-11-abandoned-zombie'
+  try {
+    const changeDir = makeChange(specBase, changeName, '- [x] ql-xxx 已完成任务\n')
+    const pm = makePm({ [changeName]: { current_stage: 'brainstorm', status: 'active', stage_status: 'in-progress' } })
+    pm.getLatestActivityAt = () => new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
+
+    const result = await closeQuickLinkedChanges({ pm, cwd, specBase, linkedChanges: [changeName] })
+
+    assert.deepEqual(result.closed, [changeName], 'closed 应含该变更（陈旧活动 = 僵尸照常清理）')
+    assert.equal(pm._calls.length, 1, 'unregisterChange 应被调用')
+    assert.ok(!existsSync(changeDir), '源目录应被移走')
+  } finally {
+    cleanup(specBase)
+  }
+})
+
+test('缺陷②边界：无任何完成步（latestActivityAt=null，propose 骨架）→ closed', async () => {
+  const specBase = makeSpecBase('qclc-recency-null-')
+  const cwd = specBase
+  const changeName = '2026-09-11-skeleton-husk'
+  try {
+    const changeDir = makeChange(specBase, changeName, '- [x] ql-xxx 已完成任务\n')
+    const pm = makePm({ [changeName]: { current_stage: 'brainstorm', status: 'active' } })
+    pm.getLatestActivityAt = () => null
+
+    const result = await closeQuickLinkedChanges({ pm, cwd, specBase, linkedChanges: [changeName] })
+
+    assert.deepEqual(result.closed, [changeName], 'closed 应含该变更（无完成步=从未推进=骨架，照常清理）')
+    assert.ok(!existsSync(changeDir), '源目录应被移走')
+  } finally {
+    cleanup(specBase)
+  }
+})

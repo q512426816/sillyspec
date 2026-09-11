@@ -1,0 +1,195 @@
+diff --git a/.sillyspec/knowledge/decisions/stages.md b/.sillyspec/knowledge/decisions/stages.md
+index b6b4807..9a18942 100644
+--- a/.sillyspec/knowledge/decisions/stages.md
++++ b/.sillyspec/knowledge/decisions/stages.md
+@@ -95,3 +95,12 @@ supersedes：无（修订 design 初稿注入时机）
+ 文件：src/run/complete-handlers.js
+ 最近确认：358af35
+ 理由：**任务行追加是设计内行为**（quick 启动契约：对每个关联变更 tasks.md 追加 `- [ ] <ql-id> <任务描述>`，stages/quick.js step1；关联本身是协作声明——两变更共享 decision-distill.js，ql-020 allowedFiles 含该文件），保留该行不覆盖，本变更任务追加其下。**真缺陷（quick-done-autoarchive-misfire 缺陷②，ql-20260819-010 只修了缺陷①）**：closeQuickLinkedChanges 阶段闸允许集含 brainstorm，stage_status=completed 闸只堵「brainstorm 完成→plan 开始」空窗——**brainstorm 进行中 + tasks.md 仅含 ql 行**（完整流程 plan 前无自有任务行，「isChangeTasksComplete 全勾」恒真空洞）时，关联 quick --done 勾掉 ql 行即触发在途变更被轻量归档注销。防护（本变更已落地）：写入自有未勾选 task-01..07 行——isChangeTasksComplete 恒 false 直至 execute/verify，彼时阶段不在允许集，竞态窗口关闭。
++
++## D-002@v2 quick --done 自动归档闸补时近性闸（缺陷②修复实现选型）
++状态：implemented
++变更：2026-09-11-cross-change-decision-guard
++锚点：未记录
++文件：src/run/complete-handlers.js, src/progress/change-registry.js
++最近确认：手动确认
++理由：**复潮实现取时近性信号（v1 复潮条件三候选均被否）**——新增 getLatestActivityAt（变更全部 stages/steps completed_at 最大值，时近性只读），closeQuickLinkedChanges 在阶段闸后增 60 分钟进度活动窗：窗口内=会话分钟级在推进（在途）不自动归档，僵尸最后活动陈旧（或 null 无完成步）照常清理。否决理由：候选①「全勾判定要求存在非 ql 自有任务行」推翻 small 逃生通道（僵尸 tasks.md 本就仅含 ql 行，quick-done-linked-changes.test :249 锁定）；候选②「in_progress 一律不归档」推翻真·僵尸清理（:299 锁定）——阶段态区分不了「活跃在途」与「启动后弃单」，时近性是唯一同时保两条逃生通道语义的信号。pm 无 getLatestActivityAt（旧 mock/旧库）按无近期活动放行：误放行最坏回到缺陷②现状（tasks.md 自有未勾任务行防护兜底），误拦截则僵尸永不清——权衡取放行。
++supersedes：D-002@v1（v1 的防护措施继续有效；本条补齐热修）
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index 40a340f..353fe2d 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -112,7 +112,7 @@ mcp:
+ 
+ ## 4. 链路 C：scan 指针握手（平台模式专用）
+ 
+-scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时，**不发任何 HTTP**，而是落盘供 daemon 轮询消费（`complete-handlers.js:1771` `handleScanStageCompleted`）：
++scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时，**不发任何 HTTP**，而是落盘供 daemon 轮询消费（`complete-handlers.js:1794` `handleScanStageCompleted`）：
+ 
+ 1. 写 `manifest.json`（workspace_id/scan_run_id/source_commit/spec_root/scan_profile/postcheck…）到 `specRoot`。
+ 2. 跑 `scan-postcheck` → 写 `postcheck-result.json`（结构化结果）。
+diff --git a/src/progress.js b/src/progress.js
+index b7c9f18..3ad0774 100644
+--- a/src/progress.js
++++ b/src/progress.js
+@@ -908,6 +908,9 @@ export class ProgressManager {
+   // verifyStartAt 基准只读（2026-09-08-ir-verify-facts）：execute 行 completed_at；无行 null 走 R-05 fallback
+   getStageCompletedAt(cwd, changeName, stage) { return this._changeRegistry.getStageCompletedAt(cwd, changeName, stage); }
+ 
++  // 最近进度活动时刻只读（D-002@v1 复潮）：quick --done 自动归档闸的时近性信号
++  getLatestActivityAt(cwd, changeName) { return this._changeRegistry.getLatestActivityAt(cwd, changeName); }
++
+   // evidence mtime 窗口锚点（2026-09-10 用户反馈②）：execute 行 started_at——证据合法产自 execute
+   // 或 verify 两窗口，锚「完成时刻」会把 execute 期间产的证据判旧（时序两难）；无行 null 走 completed_at → R-05
+   getStageStartedAt(cwd, changeName, stage) { return this._changeRegistry.getStageStartedAt(cwd, changeName, stage); }
+diff --git a/src/progress/change-registry.js b/src/progress/change-registry.js
+index c56a098..6062868 100644
+--- a/src/progress/change-registry.js
++++ b/src/progress/change-registry.js
+@@ -62,6 +62,32 @@ export class ChangeRegistry {
+     } catch { return null; }
+   }
+ 
++  /**
++   * 读某变更最近一次进度活动时刻（quick-done-autoarchive-misfire 缺陷②，D-002@v1 复潮
++   * 2026-09-11 实证：stage 阶段态区分不了「活跃在途」与「启动后弃单」——brainstorm
++   * in_progress + tasks.md 仅含他者 quick 行时「全勾」是空洞真值）。取该变更全部
++   * stages/steps completed_at 的最大值：活跃会话分钟级在推进（最近活动必新）；僵尸的
++   * 最后一步完成时刻必然陈旧。只读不抛：无变更/无完成行/读失败返回 null（调用方按
++   * 无近期活动放行，僵尸逃生通道语义不变——与 getStageCompletedAt 同族容错）。
++   */
++  getLatestActivityAt(cwd, changeName) {
++    try {
++      const db = this.pm._ensureDB(cwd);
++      const sqlDb = db.getDb();
++      const ch = sqlDb.prepare(`SELECT id FROM changes WHERE name = ?`).get(changeName);
++      if (!ch) return null;
++      const row = sqlDb.prepare(
++        `SELECT MAX(ts) AS latest FROM (
++           SELECT MAX(completed_at) AS ts FROM stages WHERE change_id = ?
++           UNION ALL
++           SELECT MAX(st.completed_at) AS ts FROM steps st
++             JOIN stages s ON st.stage_id = s.id WHERE s.change_id = ?
++         )`
++      ).get(ch.id, ch.id);
++      return row && row.latest ? row.latest : null;
++    } catch { return null; }
++  }
++
+   /**
+    * 读某变更某阶段的 started_at（2026-09-10 用户反馈②：evidence mtime 窗口锚点从
+    * execute completed_at 放宽到 started_at——证据合法产自 execute 或 verify 两窗口，
+diff --git a/src/run/complete-handlers.js b/src/run/complete-handlers.js
+index 37d95a0..5c594c2 100644
+--- a/src/run/complete-handlers.js
++++ b/src/run/complete-handlers.js
+@@ -1472,6 +1472,10 @@ async function closeSingleQuickLinkedChange({ pm, cwd, specBase, changeName, pla
+  */
+ const QUICK_CLOSE_ALLOWED_STAGES = new Set(['', 'scan', 'brainstorm'])
+ 
++/** 时近性闸窗口（缺陷②复潮实现）：最近进度活动 60 分钟内的变更不自动归档——活跃会话
++ * 步进间隔为分钟级（brainstorm 8 步通常 <1h），僵尸的最后活动以小时/天计。 */
++const QUICK_CLOSE_ACTIVITY_WINDOW_MS = 60 * 60 * 1000
++
+ /**
+  * quick --done 完成后，自动关闭任务已全部完成的关联真实变更。
+  * quick-<hex> sessionId 自身不在此处理（由调用方单独注销）。
+@@ -1521,6 +1525,25 @@ export async function closeQuickLinkedChanges({ pm, cwd, specBase, linkedChanges
+         })
+         continue
+       }
++      // 时近性闸（quick-done-autoarchive-misfire 缺陷②，D-002@v1 复潮，2026-09-11
++      // cross-change-decision-guard 实证）：阶段态区分不了「活跃在途」与「启动后弃单」——
++      // brainstorm in_progress + tasks.md 仅含他者 quick 行时「全勾」是空洞真值（完整流程
++      // plan 前无自有任务行），关联 quick --done 勾掉 ql 行即触发在途变更被轻量归档。
++      // 信号取时近性：最近一次 stage/step 完成时刻在窗口内 = 会话分钟级在推进（在途），
++      // 不自动归档；僵尸的最后活动必然陈旧（或无完成步 → null），逃生通道语义不变
++      //（既有「真·僵尸 in_progress→closed」行为保留）。pm 无此方法（旧 mock/旧进度库）
++      // 按无近期活动放行——与 getChangeStage 缺失 skip 的 fail-safe 不同向：本闸误放行的
++      // 最坏后果是回到缺陷②现状（有 D-002 防护兜底），误拦截则僵尸永不清——权衡取放行。
++      if (typeof pm.getLatestActivityAt === 'function') {
++        const latest = pm.getLatestActivityAt(cwd, changeName)
++        if (latest && Date.now() - new Date(latest).getTime() < QUICK_CLOSE_ACTIVITY_WINDOW_MS) {
++          skipped.push({
++            name: changeName,
++            reason: `变更 ${Math.round((Date.now() - new Date(latest).getTime()) / 60000)} 分钟内仍有进度活动（在途会话，非僵尸），不自动归档——确已弃单请走原流程收尾或窗口过后重试`,
++          })
++          continue
++        }
++      }
+       if (!isChangeTasksComplete(specBase, changeName)) {
+         skipped.push({ name: changeName, reason: 'tasks.md 未全勾选或不存在' })
+         continue
+diff --git a/test/quick-close-linked-changes.test.mjs b/test/quick-close-linked-changes.test.mjs
+index 941c7fb..8575223 100644
+--- a/test/quick-close-linked-changes.test.mjs
++++ b/test/quick-close-linked-changes.test.mjs
+@@ -354,3 +354,68 @@ test('getChangeStage 查询抛错 → fail-closed skipped，不归档', async ()
+     cleanup(specBase)
+   }
+ })
++
++// ── 时近性闸（quick-done-autoarchive-misfire 缺陷②，D-002@v1 复潮，2026-09-11
++//    cross-change-decision-guard 实证）──────────────────────────────────────────
++// 事故形态：brainstorm in_progress（活跃会话步进中）+ tasks.md 仅含他者 quick 行
++//（完整流程 plan 前无自有任务行，「全勾」空洞真值）→ 关联 quick --done 勾掉 ql 行
++// 即把在途变更轻量归档。信号取时近性：最近 stage/step 完成时刻 60 分钟内 = 在途不归档；
++// 僵尸最后活动陈旧（或 null）→ 逃生通道保留（:299 语义不变）。
++
++test('缺陷②事故场景：brainstorm in_progress + tasks 全勾 + 10 分钟内有进度活动 → skipped 不归档', async () => {
++  const specBase = makeSpecBase('qclc-recency-live-')
++  const cwd = specBase
++  const changeName = '2026-09-11-active-midflight'
++  try {
++    const changeDir = makeChange(specBase, changeName, '- [x] ql-20260911-020-1397 他者会话已完成\n')
++    const pm = makePm({ [changeName]: { current_stage: 'brainstorm', status: 'active', stage_status: 'in-progress' } })
++    pm.getLatestActivityAt = () => new Date(Date.now() - 10 * 60 * 1000).toISOString()
++
++    const result = await closeQuickLinkedChanges({ pm, cwd, specBase, linkedChanges: [changeName] })
++
++    assert.deepEqual(result.closed, [], 'closed 应为空（在途变更不自动归档——本坑主体）')
++    assert.equal(result.skipped.length, 1, 'skipped 应含 1 条')
++    assert.match(result.skipped[0].reason, /进度活动/, 'reason 应指明时近性信号')
++    assert.equal(pm._calls.length, 0, 'unregisterChange 不应被调用')
++    assert.ok(existsSync(changeDir), '源目录应保持原位')
++  } finally {
++    cleanup(specBase)
++  }
++})
++
++test('缺陷②僵尸保留：in_progress + 最近活动 2 小时前 → closed（逃生通道语义不变）', async () => {
++  const specBase = makeSpecBase('qclc-recency-stale-')
++  const cwd = specBase
++  const changeName = '2026-09-11-abandoned-zombie'
++  try {
++    const changeDir = makeChange(specBase, changeName, '- [x] ql-xxx 已完成任务\n')
++    const pm = makePm({ [changeName]: { current_stage: 'brainstorm', status: 'active', stage_status: 'in-progress' } })
++    pm.getLatestActivityAt = () => new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
++
++    const result = await closeQuickLinkedChanges({ pm, cwd, specBase, linkedChanges: [changeName] })
++
++    assert.deepEqual(result.closed, [changeName], 'closed 应含该变更（陈旧活动 = 僵尸照常清理）')
++    assert.equal(pm._calls.length, 1, 'unregisterChange 应被调用')
++    assert.ok(!existsSync(changeDir), '源目录应被移走')
++  } finally {
++    cleanup(specBase)
++  }
++})
++
++test('缺陷②边界：无任何完成步（latestActivityAt=null，propose 骨架）→ closed', async () => {
++  const specBase = makeSpecBase('qclc-recency-null-')
++  const cwd = specBase
++  const changeName = '2026-09-11-skeleton-husk'
++  try {
++    const changeDir = makeChange(specBase, changeName, '- [x] ql-xxx 已完成任务\n')
++    const pm = makePm({ [changeName]: { current_stage: 'brainstorm', status: 'active' } })
++    pm.getLatestActivityAt = () => null
++
++    const result = await closeQuickLinkedChanges({ pm, cwd, specBase, linkedChanges: [changeName] })
++
++    assert.deepEqual(result.closed, [changeName], 'closed 应含该变更（无完成步=从未推进=骨架，照常清理）')
++    assert.ok(!existsSync(changeDir), '源目录应被移走')
++  } finally {
++    cleanup(specBase)
++  }
++})

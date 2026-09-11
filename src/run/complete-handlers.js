@@ -1472,6 +1472,10 @@ async function closeSingleQuickLinkedChange({ pm, cwd, specBase, changeName, pla
  */
 const QUICK_CLOSE_ALLOWED_STAGES = new Set(['', 'scan', 'brainstorm'])
 
+/** 时近性闸窗口（缺陷②复潮实现）：最近进度活动 60 分钟内的变更不自动归档——活跃会话
+ * 步进间隔为分钟级（brainstorm 8 步通常 <1h），僵尸的最后活动以小时/天计。 */
+const QUICK_CLOSE_ACTIVITY_WINDOW_MS = 60 * 60 * 1000
+
 /**
  * quick --done 完成后，自动关闭任务已全部完成的关联真实变更。
  * quick-<hex> sessionId 自身不在此处理（由调用方单独注销）。
@@ -1520,6 +1524,25 @@ export async function closeQuickLinkedChanges({ pm, cwd, specBase, linkedChanges
           reason: `变更当前阶段「${stageInfo.current_stage || '(空)'}」已完成（推进/收尾中，非僵尸变更），不自动归档——请走原流程收尾（sillyspec progress show 查看进度）`,
         })
         continue
+      }
+      // 时近性闸（quick-done-autoarchive-misfire 缺陷②，D-002@v1 复潮，2026-09-11
+      // cross-change-decision-guard 实证）：阶段态区分不了「活跃在途」与「启动后弃单」——
+      // brainstorm in_progress + tasks.md 仅含他者 quick 行时「全勾」是空洞真值（完整流程
+      // plan 前无自有任务行），关联 quick --done 勾掉 ql 行即触发在途变更被轻量归档。
+      // 信号取时近性：最近一次 stage/step 完成时刻在窗口内 = 会话分钟级在推进（在途），
+      // 不自动归档；僵尸的最后活动必然陈旧（或无完成步 → null），逃生通道语义不变
+      //（既有「真·僵尸 in_progress→closed」行为保留）。pm 无此方法（旧 mock/旧进度库）
+      // 按无近期活动放行——与 getChangeStage 缺失 skip 的 fail-safe 不同向：本闸误放行的
+      // 最坏后果是回到缺陷②现状（有 D-002 防护兜底），误拦截则僵尸永不清——权衡取放行。
+      if (typeof pm.getLatestActivityAt === 'function') {
+        const latest = pm.getLatestActivityAt(cwd, changeName)
+        if (latest && Date.now() - new Date(latest).getTime() < QUICK_CLOSE_ACTIVITY_WINDOW_MS) {
+          skipped.push({
+            name: changeName,
+            reason: `变更 ${Math.round((Date.now() - new Date(latest).getTime()) / 60000)} 分钟内仍有进度活动（在途会话，非僵尸），不自动归档——确已弃单请走原流程收尾或窗口过后重试`,
+          })
+          continue
+        }
       }
       if (!isChangeTasksComplete(specBase, changeName)) {
         skipped.push({ name: changeName, reason: 'tasks.md 未全勾选或不存在' })

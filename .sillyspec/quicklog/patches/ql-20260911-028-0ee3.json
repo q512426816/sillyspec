@@ -1,0 +1,70 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-6761ff32",
+  "totals": {
+    "files": 6,
+    "additions": 127,
+    "deletions": 1
+  },
+  "rows": [
+    {
+      "path": "src/run/complete-handlers.js",
+      "declared": true,
+      "additions": 23,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/progress.js",
+      "declared": true,
+      "additions": 3,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/progress/change-registry.js",
+      "declared": true,
+      "additions": 26,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/quick-close-linked-changes.test.mjs",
+      "declared": true,
+      "additions": 65,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": ".sillyspec/knowledge/decisions/stages.md",
+      "declared": true,
+      "additions": 9,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/sillyspec/platform-interface-map.md",
+      "declared": true,
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "qlId": "ql-20260911-028-0ee3",
+  "sessionId": "quick-6761ff32",
+  "savedAt": "2026-09-11T13:24:53.332Z",
+  "patchSha256": "2c9003e83642c418030bb3fc09ac624684f6ccca44f72973ced67bafc5b643a2",
+  "patchStatus": "ok"
+}

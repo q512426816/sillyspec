@@ -318,3 +318,12 @@
 根因：verify 走的冒烟路径，真实 run quick 渲染链未实战
 方案：起真实 quick 观察 step1 注入即收尾
 结果：注入完整开火：决策命中 3 条+交付归因 5 文件；已知展示噪音：同文件多域同号条目重复渲染，非缺陷
+
+## ql-20260911-028-0ee3 | 2026-09-11 21:23:34 | D-002 复潮：自动归档闸时近性闸（缺陷②热修）
+状态：已完成
+关联变更：（无）
+文件：src/run/complete-handlers.js, src/progress.js, src/progress/change-registry.js, test/quick-close-linked-changes.test.mjs, .sillyspec/knowledge/decisions/stages.md, docs/sillyspec/platform-interface-map.md
+需求：D-002 复潮：自动归档闸时近性闸（缺陷②热修）
+根因：阶段态区分不了活跃在途与弃单，v1 三候选被逃生通道测试否决
+方案：getLatestActivityAt+60 分钟活动窗挂 closeQuickLinkedChanges，回归 3 用例+D-002@v2 落库
+结果：16/0+2/0+全量 440/0+lint 绿，test gate 诚实全量
