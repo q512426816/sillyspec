@@ -35,6 +35,13 @@
  * （链路 A 进度同步在平台模式跳过是因为 daemon 自有进度回传链路；agent 日志没有
  * daemon 链路，本上报就是它的主通道）。env SILLYSPEC_AGENT_LOG_PUSH=0 可关。
  *
+ * 会话身份锚定（2026-09-11-agent-log-attribution-refactor）：探测之上叠 own 集合解析
+ * （resolveOwnLogPaths）——per harness 锚定「本 run 所属 agent 会话」的日志文件（claude-code
+ * =CLAUDE_SESSION_ID 精确/project 目录最新；zcode=db.sqlite 主会话+parent_id 子代理链，
+ * 不可用回退最新 cwd 匹配主文件（workdir 标记校验，不匹配不打标）；pi/dsh=safePath 目录直算；
+ * codex=rollout 首行 cwd 最新；SILLYSPEC_AGENT_LOG 覆盖=own）。ctx 打标与平台推送只作用于 own 条目（D-001/D-007），
+ * quick/change 双向互斥（D-006@v2）；cursor/opencode（loose）不锚定不打标不推送仅本地留底。
+ *
  * 铁律：全程 best-effort——探测不到不发不写、任何失败只 warn 一行绝不阻断 run 主流程。
  * 只上报路径 + 元信息（session_id/format/originator），不读日志内容（解析归平台侧），
  * 不引入新依赖。
@@ -42,9 +49,16 @@
 import { existsSync, readdirSync, statSync, readFileSync, mkdirSync, openSync, readSync, closeSync } from 'fs';
 import { join, isAbsolute } from 'path';
 import { homedir } from 'os';
+import { createRequire } from 'module';
+import { pathToFileURL } from 'url';
 import { writeAtomicSync } from './fs-atomic.js';
 import { withFileLock } from './quicklog.js';
 import { resolveRuntimeRoot } from './run/shared.js';
+
+// node:sqlite 惰性同步加载通道（zcode 锚定读 db.sqlite 用）：ESM 下无同步动态 import，
+// createRequire 在调用点 require——node:sqlite 不可用（Node<22.13/构建裁剪）时 try/catch
+// 降级回退链，绝不在模块顶层 import 硬依赖。
+const nodeRequire = createRequire(import.meta.url);
 
 export const AGENT_LOG_SCHEMA_VERSION = 1;
 export const AGENT_LOG_ARTIFACT_FILENAME = 'agent-session-log.json';
@@ -493,21 +507,326 @@ const HARNESS_DETECTORS = [
   { name: 'opencode', tier: 'loose', detect: detectOpencode },
 ];
 
+// ── 会话身份锚定器（2026-09-11-agent-log-attribution-refactor，D-001/D-008）──
+//
+// own 集合 = 本 run 所属 agent 会话的日志文件（锚定主会话 + zcode parent_id 子代理链）。
+// 用途：① ctx 打标收敛——recordAgentLogInvocation 仅对 detected∩own 条目写 ctx/计数；
+// ② 推送收敛（D-007）——push payload 只含 own 条目（留底仍全量）；③ 探测上限豁免
+// （DG-17）——own 文件被 MAX_PER_HARNESS 裁剪或 cwd 等值过滤挤出 detected 时定向补收
+// （zcode worktree 子代理 directory=worktree≠仓库根，绕过 cwd 等值过滤是主场景）。
+// 宁缺毋滥（D-001）：锚定识别失败不打标，绝不用 cwd 猜测兜底打标。
+// cursor/opencode（loose 档）无归属线索不锚定——不出现在 own 集，仅本地留底探测（DG-06）。
+// anchor 对象与探测 entry 同构（除 mtime_ms 外字段一致），补收时只需补 stat。
+
+/** env 覆盖（SILLYSPEC_AGENT_LOG 绝对路径）：显式指定 = 调用方负责正确性，恒视为 own。 */
+function anchorEnvOverride(ctx) {
+  const { cwdCandidates, env } = ctx;
+  const override = env[AGENT_LOG_ENV_OVERRIDE];
+  if (typeof override !== 'string' || !override.trim()) return [];
+  const p = override.trim();
+  if (!isAbsolute(p)) return [];
+  return [{
+    harness: 'env-override', format: p.endsWith('.jsonl') ? 'jsonl' : 'unknown', detected_via: 'env',
+    log_path: toPosix(p), agent_cwd: toPosix(cwdCandidates[0] || ''),
+    session_id: null, originator: null,
+  }];
+}
+
 /**
- * 探测当前驱动 CLI 的本地 agent 会话日志（纯读，不写盘）。
- *
- * @param {object} [opts]
- * @param {string[]} [opts.cwdCandidates] - agent 可能的 cwd 列表（CLI 原始 cwd + 纠正后项目根；
- *   agent 在子目录启动时部分 harness 日志挂在子目录维度，两者都探）
- * @param {object}   [opts.env]       - 默认 process.env（可注入测试）
- * @param {string}   [opts.homeDir]   - 默认 homedir()（可注入测试）
- * @param {number}   [opts.now]       - 默认 Date.now()（可注入测试）
- * @param {number}   [opts.windowMs]  - 活跃窗口，默认 15min
- * @returns {Array<{harness:string, log_path:string, format:string, detected_via:string,
- *   agent_cwd:string, session_id:string|null, originator:string|null, mtime_ms:number|null}>}
- *   探测结果（mtime_ms 新→旧）；空数组 = 未探测到（不在 agent 环境或无活跃会话）
+ * claude-code 锚定：env CLAUDE_SESSION_ID → <claudeRoot>/projects/<slug(cwd)>/<sessionId>.jsonl
+ * 精确（cwd 候选逐个试，命中存在的）；env 缺席/未命中回退 project 目录窗口内最新 mtime 的
+ * jsonl（DG-07）。与探测同 env 门控（CLAUDECODE/CLAUDE_CODE_ENTRYPOINT）——不在 claude 会话
+ * 内时不应认领其他窗口的会话文件。
  */
-export function detectAgentLogEntries({
+function anchorClaudeCode(ctx) {
+  const { cwdCandidates, env, homeDir, now, windowMs } = ctx;
+  if (!(env.CLAUDECODE === '1' || (typeof env.CLAUDE_CODE_ENTRYPOINT === 'string' && env.CLAUDE_CODE_ENTRYPOINT))) {
+    return [];
+  }
+  const claudeRoot = env.CLAUDE_CONFIG_DIR || join(homeDir, '.claude');
+  const projectsRoot = join(claudeRoot, 'projects');
+  const sessionId = typeof env.CLAUDE_SESSION_ID === 'string' ? env.CLAUDE_SESSION_ID.trim() : '';
+  if (sessionId) {
+    for (const rawCwd of cwdCandidates) {
+      if (!rawCwd) continue;
+      const exact = join(projectsRoot, mungeClaudeProjectDir(rawCwd), `${sessionId}.jsonl`);
+      if (!statSafe(exact)) continue;
+      return [{
+        harness: 'claude-code', format: 'claude-code-jsonl', detected_via: 'claude-code-own-anchor',
+        log_path: toPosix(exact), agent_cwd: toPosix(rawCwd), session_id: sessionId, originator: null,
+      }];
+    }
+  }
+  // 回退：各 cwd 候选 project 目录内窗口内最新者（同一会话 transcript 只有一个，取全局最新）
+  let best = null;
+  for (const rawCwd of cwdCandidates) {
+    if (!rawCwd) continue;
+    const files = listActiveFiles(join(projectsRoot, mungeClaudeProjectDir(rawCwd)), { now, windowMs, limit: 1 });
+    if (files.length && (!best || files[0].mtimeMs > best.mtimeMs)) best = { ...files[0], cwd: rawCwd };
+  }
+  if (!best) return [];
+  return [{
+    harness: 'claude-code', format: 'claude-code-jsonl', detected_via: 'claude-code-own-anchor',
+    log_path: toPosix(best.full), agent_cwd: toPosix(best.cwd),
+    session_id: best.name.replace(/\.jsonl$/, ''), originator: null,
+  }];
+}
+
+/**
+ * zcode 锚定主路径（D-008）：node:sqlite 只读 URI（mode=ro）开 ~/.zcode/cli/db/db.sqlite，
+ * session 表取 directory==cwd 的最新主会话（time_updated desc；directory 实测存 Windows
+ * 反斜杠原样，候选「原样/正斜杠归一/normCwd 归一」逐形态等值尝试，全 miss 再近期主会话
+ * 扫描 + cwdsMatch 归一兜底——DG-16）+ parent_id==主会话 id 的全部子代理行（不比
+ * directory——worktree TaskCard 子代理 directory=worktree≠仓库根）。
+ * @returns {Array|null} anchor 列表（主会话 rollout 文件在才算命中）；null = 库不可用/无主会话，走回退链
+ */
+function anchorZcodeFromDb(ctx) {
+  const { cwdCandidates, homeDir } = ctx;
+  let db = null;
+  try {
+    let DatabaseSync = null;
+    try {
+      ({ DatabaseSync } = nodeRequire('node:sqlite'));
+    } catch (e) {
+      debugLog(`zcode 锚定回退（原因：node:sqlite 不可用: ${e && e.message ? e.message : e}）`);
+      return null;
+    }
+    try {
+      // 只读打开（file:...?mode=ro + readOnly，不写入不加锁不重试）；pathToFileURL 处理
+      // Windows 反斜杠/盘符/特殊字符的 URI 编码
+      db = new DatabaseSync(pathToFileURL(join(homeDir, '.zcode', 'cli', 'db', 'db.sqlite')).href + '?mode=ro', { readOnly: true });
+    } catch (e) {
+      debugLog(`zcode 锚定回退（原因：db.sqlite 打开失败: ${e && e.message ? e.message : e}）`);
+      return null;
+    }
+    // 候选形态逐个等值尝试：原样 / 正斜杠归一 / normCwd 归一（DG-16——directory 实测存
+    // Windows 反斜杠原样，但等值口径要对齐 cwdsMatch 的归一语义）；全部 miss 再用一次
+    // 近期主会话扫描 + JS 侧 cwdsMatch 兜底（覆盖 db 侧大小写/分隔符形态差异）。
+    const forms = [...new Set(cwdCandidates.flatMap(c => (c ? [c, toPosix(c), normCwd(c)] : [])))];
+    for (const dirVal of forms) {
+      let main = null;
+      try {
+        main = db.prepare("SELECT id, directory FROM session WHERE directory = ? AND parent_id IS NULL AND id NOT LIKE 'sess_subagent_agent_%' ORDER BY time_updated DESC LIMIT 1").get(dirVal);
+      } catch (e) {
+        debugLog(`zcode 锚定回退（原因：session 表查询失败: ${e && e.message ? e.message : e}）`);
+        return null;
+      }
+      if (!main) continue;
+      const anchored = anchorsForMainSession(db, homeDir, main);
+      if (anchored) return anchored;
+    }
+    const scanned = matchMainSessionByNorm(db, cwdCandidates);
+    if (scanned) {
+      const anchored = anchorsForMainSession(db, homeDir, scanned);
+      if (anchored) return anchored;
+    }
+    debugLog('zcode 锚定回退（原因：db 无该 cwd 的主会话行）');
+    return null;
+  } finally {
+    if (db) { try { db.close(); } catch { /* best effort */ } }
+  }
+}
+
+/** 近期主会话扫描 + cwdsMatch 归一匹配（形态等值全 miss 时的兜底，DG-16 归一口径）。 */
+function matchMainSessionByNorm(db, cwdCandidates) {
+  const cwds = cwdCandidates.filter(Boolean);
+  if (cwds.length === 0) return null;
+  try {
+    for (const row of db.prepare("SELECT id, directory FROM session WHERE parent_id IS NULL AND id NOT LIKE 'sess_subagent_agent_%' ORDER BY time_updated DESC LIMIT 50").all()) {
+      if (cwds.some(c => row.directory && cwdsMatch(c, row.directory))) return row;
+    }
+  } catch { /* 兜底扫描失败按未命中处理 */ }
+  return null;
+}
+
+/**
+ * 主会话行 → anchor 列表（主会话 rollout 文件在才算命中；附 parent_id 子代理链，
+ * 子代理不比 directory——worktree TaskCard 子代理 directory=worktree≠仓库根）。
+ * @returns {Array|null}
+ */
+function anchorsForMainSession(db, homeDir, main) {
+  // session id → rollout 文件名映射（两形态通用）：sess_<x> / sess_subagent_agent_<x>
+  // 都映射为 model-io-<id>.jsonl
+  const anchorFor = (id, directory) => {
+    const filePath = join(homeDir, '.zcode', 'cli', 'rollout', `model-io-${id}.jsonl`);
+    if (!statSafe(filePath)) return null; // 行在但 rollout 已清理（实证存在）不算命中
+    return {
+      harness: 'zcode', format: 'zcode-model-io-jsonl', detected_via: 'zcode-own-anchor',
+      log_path: toPosix(filePath), agent_cwd: toPosix(directory || ''),
+      session_id: `model-io-${id}.jsonl`.replace(/^model-io-sess_/, '').replace(/\.jsonl$/, ''),
+      originator: null,
+    };
+  };
+  const mainAnchor = anchorFor(main.id, main.directory);
+  if (!mainAnchor) return null; // 主文件不在 → 调用方试下一形态/走回退
+  const anchors = [mainAnchor];
+  try {
+    for (const sub of db.prepare('SELECT id, directory FROM session WHERE parent_id = ?').all(main.id)) {
+      const a = anchorFor(sub.id, sub.directory);
+      if (a) anchors.push(a); // 子代理文件可能已清理，缺一个不少链
+    }
+  } catch { /* 子代理链查询失败按空链处理（主会话锚定不受影响，best-effort） */ }
+  return anchors;
+}
+
+/**
+ * zcode 锚定：与探测同 env 门控（ZCODE_*）——不在 zcode 会话内不认领 rollout 文件。
+ * db 主路径命中即用；失败回退链（D-008）：rollout 目录窗口内主文件（排除 subagent 文件
+ * 名）按 mtime 新→旧逐个过 cwd 校验——extractZcodeWorkdir 读首块工作目录标记与
+ * cwdCandidates cwdsMatch（与探测同源同口径），标记读不出 fail-closed 跳过；取首个匹配，
+ * 全不匹配返回空集不打标（宁缺毋滥——回退无 db 身份证据，绝不做无 cwd 校验的认领，
+ * 否则多项目机器会把别的项目活跃会话错认成 own，复现 D-001 跨项目抢标）。子代理不打标，
+ * debug 输出原因行。
+ */
+function anchorZcode(ctx) {
+  const { cwdCandidates, env, homeDir, now, windowMs } = ctx;
+  if (!(env.ZCODE_APP_VERSION || env.ZCODE_ENV || env.ZCODE_RUNTIME_ENV)) return [];
+  const fromDb = anchorZcodeFromDb(ctx);
+  if (fromDb) return fromDb;
+  const rolloutDir = join(homeDir, '.zcode', 'cli', 'rollout');
+  // 回退：仅主文件（model-io-sess_<uuid>.jsonl，排除 sess_subagent_agent_ 前缀），mtime 新→旧
+  const active = listActiveFiles(rolloutDir, { now, windowMs, limit: 64 })
+    .filter(f => !f.name.startsWith('model-io-sess_subagent_agent_'));
+  if (active.length === 0) {
+    debugLog('zcode 锚定回退：rollout 窗口内无主文件，own 为空（不打标）');
+    return [];
+  }
+  for (const f of active) {
+    const workdir = extractZcodeWorkdir(f.full);
+    if (!workdir) continue; // 标记读不出 fail-closed（错认比漏认危害大，协议 §3 同口径）
+    if (!cwdCandidates.some(c => c && cwdsMatch(c, workdir))) continue;
+    debugLog(`zcode 锚定回退生效：rollout 主文件 cwd 匹配 ${f.name}（子代理不打标）`);
+    return [{
+      harness: 'zcode', format: 'zcode-model-io-jsonl', detected_via: 'zcode-own-anchor',
+      log_path: toPosix(f.full), agent_cwd: toPosix(workdir),
+      session_id: f.name.replace(/^model-io-sess_/, '').replace(/\.jsonl$/, ''),
+      originator: null,
+    }];
+  }
+  debugLog('zcode 锚定回退：窗口内主文件无一 cwd 匹配（含无标记跳过），own 为空（不打标）');
+  return [];
+}
+
+/**
+ * codex 锚定：与探测同口径扫描（今天/昨天 sessions 目录，首行 session_meta.cwd 与 cwd
+ * 候选 cwdsMatch），取最新主文件一条（跨目录按 mtime 取最新——零点前后两个日期目录都
+ * 可能持有活跃文件）。
+ */
+function anchorCodex(ctx) {
+  const { cwdCandidates, env, homeDir, now, windowMs } = ctx;
+  const codexHome = env.CODEX_HOME || join(homeDir, '.codex');
+  const sessionsRoot = join(codexHome, 'sessions');
+  if (!existsSync(sessionsRoot)) return [];
+  const dayDirs = [new Date(now), new Date(now - 24 * 60 * 60 * 1000)]
+    .map(d => join(sessionsRoot, String(d.getFullYear()), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')));
+  let best = null;
+  for (const dir of [...new Set(dayDirs)]) {
+    for (const f of listActiveFiles(dir, { now, windowMs, limit: MAX_PER_HARNESS })) {
+      const meta = readFirstLineJson(f.full);
+      const payload = meta && meta.type === 'session_meta' ? (meta.payload || {}) : {};
+      if (!cwdCandidates.some(c => c && payload.cwd && cwdsMatch(c, payload.cwd))) continue;
+      if (!best || f.mtimeMs > best.f.mtimeMs) best = { f, payload };
+    }
+  }
+  if (!best) return [];
+  return [{
+    harness: 'codex', format: 'codex-rollout-jsonl', detected_via: 'codex-session-meta-cwd',
+    log_path: toPosix(best.f.full), agent_cwd: toPosix(best.payload.cwd),
+    session_id: typeof best.payload.session_id === 'string' ? best.payload.session_id : null,
+    originator: typeof best.payload.originator === 'string' ? best.payload.originator : null,
+  }];
+}
+
+/** pi 锚定：safePath 目录名即 cwd 编码（天然锚定），主文件恒为该目录 session.jsonl。 */
+function anchorPi(ctx) {
+  const { cwdCandidates, homeDir, now, windowMs } = ctx;
+  const anchors = [];
+  for (const rawCwd of cwdCandidates) {
+    if (!rawCwd) continue;
+    const sessionFile = join(homeDir, '.pi', 'agent', 'sessions', mungePiSafePath(rawCwd), 'session.jsonl');
+    const st = statSafe(sessionFile);
+    if (!st || now - st.mtimeMs > windowMs) continue;
+    anchors.push({
+      harness: 'pi', format: 'pi-session-jsonl', detected_via: 'pi-safe-path',
+      log_path: toPosix(sessionFile), agent_cwd: toPosix(rawCwd), session_id: null, originator: null,
+    });
+  }
+  return anchors;
+}
+
+/** dsh 锚定：同 pi 构 safePath 直算，取目录下最新活跃 session-<uuid>/session.jsonl.zstd。 */
+function anchorDsh(ctx) {
+  const { cwdCandidates, homeDir, now, windowMs } = ctx;
+  const anchors = [];
+  for (const rawCwd of cwdCandidates) {
+    if (!rawCwd) continue;
+    const projectDir = join(homeDir, '.dsh', 'sessions', mungeDshSafePath(rawCwd));
+    let sessionDirs;
+    try {
+      sessionDirs = readdirSync(projectDir, { withFileTypes: true }).filter(d => d.isDirectory()).map(d => d.name);
+    } catch { continue; }
+    let best = null;
+    for (const name of sessionDirs) {
+      const logFile = join(projectDir, name, 'session.jsonl.zstd');
+      const st = statSafe(logFile);
+      if (!st || now - st.mtimeMs > windowMs) continue;
+      if (!best || st.mtimeMs > best.mtimeMs) best = { name, logFile, mtimeMs: st.mtimeMs };
+    }
+    if (!best) continue;
+    anchors.push({
+      harness: 'deepseek-dsh', format: 'dsh-session-jsonl-zstd', detected_via: 'dsh-safe-path',
+      log_path: toPosix(best.logFile), agent_cwd: toPosix(rawCwd),
+      session_id: best.name.replace(/^session-/, ''), originator: null,
+    });
+  }
+  return anchors;
+}
+
+/** own anchor 全量解析（env 覆盖优先；cursor/opencode 不参与）。任何异常由调用方兜底。 */
+function resolveOwnLogAnchors(ctx) {
+  const anchors = [];
+  for (const a of [
+    ...anchorEnvOverride(ctx),
+    ...anchorClaudeCode(ctx),
+    ...anchorZcode(ctx),
+    ...anchorCodex(ctx),
+    ...anchorPi(ctx),
+    ...anchorDsh(ctx),
+  ]) {
+    if (!anchors.some(x => x.log_path === a.log_path)) anchors.push(a);
+  }
+  return anchors;
+}
+
+/**
+ * 解析本 run 的 own 日志文件集合（锚定主会话 + 子代理，posix log_path，与 ledger/push 同口径）。
+ * 识别失败返回空集（仅回退主文件或空）——调用方据此不打标不推送（宁缺毋滥，D-001）。
+ * @param {object} [opts] - 入参与 detectAgentLogEntries 对齐（cwdCandidates/env/homeDir/now/windowMs）
+ * @returns {Set<string>} posix log_path 集合
+ */
+export function resolveOwnLogPaths({
+  cwdCandidates = [],
+  env = process.env,
+  homeDir = homedir(),
+  now = Date.now(),
+  windowMs = ACTIVE_WINDOW_MS,
+} = {}) {
+  return new Set(resolveOwnLogAnchors({ cwdCandidates, env, homeDir, now, windowMs }).map(a => a.log_path));
+}
+
+/**
+ * 探测当前驱动 CLI 的本地 agent 会话日志（纯读，不写盘）+ own 锚定。
+ *
+ * 常规探测照旧（cwd 等值过滤 + 单 harness 上限裁剪 + loose 压制）；其上叠加 own 豁免
+ * （DG-17）：锚定命中但被裁剪/被 cwd 过滤挤出的 own 文件（zcode worktree 子代理为主场景）
+ * 定向补收进 entries——own 不得漏推优先于 12 条总数上限。锚定本身 best-effort，任何异常
+ * 按空 own 处理（探测结果不受影响）。
+ *
+ * @param {object} [opts] - 同 detectAgentLogEntries
+ * @returns {{entries: Array, ownAnchors: Array}} entries 同 detectAgentLogEntries 返回形状；
+ *   ownAnchors 与 entry 同构（无 mtime_ms）
+ */
+function detectAgentLogEntriesWithOwn({
   cwdCandidates = [],
   env = process.env,
   homeDir = homedir(),
@@ -551,7 +870,42 @@ export function detectAgentLogEntries({
   }
 
   entries.sort((a, b) => (b.mtime_ms ?? 0) - (a.mtime_ms ?? 0));
-  return entries.slice(0, 12);
+  const capped = entries.slice(0, 12);
+
+  // ── own 豁免补收（DG-17）：own 集合中不在 entries 的文件（被上限挤出/被 cwd 等值过滤，
+  // 如 directory=worktree 的 zcode 子代理）定向补收；own 不漏推优先于 12 条上限 ──
+  let ownAnchors = [];
+  try {
+    ownAnchors = resolveOwnLogAnchors(ctx);
+  } catch (e) {
+    debugLog(`own 锚定异常（按空 own 处理）: ${e && e.message ? e.message : e}`);
+  }
+  const seen = new Set(capped.map(e => e.log_path));
+  for (const a of ownAnchors) {
+    if (seen.has(a.log_path)) continue;
+    const st = statSafe(a.log_path);
+    if (!st) continue;
+    capped.push({ ...a, mtime_ms: st.mtimeMs });
+  }
+  return { entries: capped, ownAnchors };
+}
+
+/**
+ * 探测当前驱动 CLI 的本地 agent 会话日志（纯读，不写盘）。
+ *
+ * @param {object} [opts]
+ * @param {string[]} [opts.cwdCandidates] - agent 可能的 cwd 列表（CLI 原始 cwd + 纠正后项目根；
+ *   agent 在子目录启动时部分 harness 日志挂在子目录维度，两者都探）
+ * @param {object}   [opts.env]       - 默认 process.env（可注入测试）
+ * @param {string}   [opts.homeDir]   - 默认 homedir()（可注入测试）
+ * @param {number}   [opts.now]       - 默认 Date.now()（可注入测试）
+ * @param {number}   [opts.windowMs]  - 活跃窗口，默认 15min
+ * @returns {Array<{harness:string, log_path:string, format:string, detected_via:string,
+ *   agent_cwd:string, session_id:string|null, originator:string|null, mtime_ms:number|null}>}
+ *   探测结果（mtime_ms 新→旧，含 own 豁免补收条目）；空数组 = 未探测到（不在 agent 环境或无活跃会话）
+ */
+export function detectAgentLogEntries(opts) {
+  return detectAgentLogEntriesWithOwn(opts).entries;
 }
 
 /**
@@ -670,8 +1024,10 @@ export function readAgentLogArtifact(runtimeRoot) {
  * @param {string}   [p.command]    - 触发登记的命令描述（flag 名级，不含 flag 值）
  * @param {object}   [p.context]    - 会话化上下文（2026-08-23-agent-activity-sessions，可选）：
  *   {hubSessionId, changeKey, quickId}——hubSessionId 为 body 级（run 所属平台会话唯一，
- *   daemon 注入 env SILLYHUB_SESSION_ID 的兜底也在此读取）；changeKey/quickId 为 entry 级
- *   （本次 run 检出/更新的 entry 随 run 持久化，quick 会话 quickId 优先互斥）。缺省全不带。
+ *   daemon 注入 env SILLYHUB_SESSION_ID 的兜底也在此读取）；changeKey/quickId 为 entry 级，
+ *   仅写入本 run own 条目（D-001 会话身份锚定：锚定主会话+子代理，非 own 只留底不被改写），
+ *   双向互斥（D-006@v2：quick run 清 change_key，change run 清 quick_id；两键皆空 keep-prev）。
+ *   缺省全不带。
  * @param {object}   [p.env]        - 探测用 env（默认 process.env；测试注入用）
  * @param {string}   [p.homeDir]    - 探测用 home（默认 homedir()；测试注入用）
  * @param {number}   [p.now]        - 探测用时钟（默认 Date.now()；测试注入用）
@@ -683,8 +1039,11 @@ export async function recordAgentLogInvocation({ cwd, invokedCwd, platformOpts =
   try {
     if (!cwd || !specBase) return null;
     const cwdCandidates = [...new Set([invokedCwd, cwd].filter(Boolean))];
-    const detected = detectAgentLogEntries({ cwdCandidates, env, homeDir, now, windowMs });
+    const { entries: detected, ownAnchors } = detectAgentLogEntriesWithOwn({ cwdCandidates, env, homeDir, now, windowMs });
     if (detected.length === 0) return null;
+    // own 集合（D-001 会话身份锚定）：仅 detected∩own 条目写 ctx/计数/推送；锚定识别
+    // 失败为空集 → 只留底不归属（宁缺毋滥）
+    const ownPaths = new Set(ownAnchors.map(a => a.log_path));
 
     // 会话化上下文（best-effort 消毒，解析失败不带）：entry 级 ctx（changeKey/quickId）随
     // 检出/更新该 entry 的本次 run 持久化；hubSessionId 为 body 级——context 显式传入优先，
@@ -710,6 +1069,51 @@ export async function recordAgentLogInvocation({ cwd, invokedCwd, platformOpts =
       for (const det of detected) {
         const st = statSafe(det.log_path);
         const prev = byPath.get(det.log_path);
+        // 非 own 条目（D-001 打标收敛）：只留底探测事实（exists/size/mtime 刷新），ctx/计数/
+        // 时间戳/last_command 全部 keep-prev 不动——同 cwd 活跃窗口内他人会话的日志不被本
+        // run 改写归属（FR-01/FR-06）。新见的非 own 条目也入留底（本地可见性不变），不计数。
+        if (!ownPaths.has(det.log_path)) {
+          byPath.set(det.log_path, prev ? {
+            ...prev,
+            exists: Boolean(st),
+            size_bytes: st ? st.size : null,
+            mtime_ms: st ? st.mtimeMs : (det.mtime_ms ?? null),
+          } : {
+            harness: det.harness,
+            log_path: det.log_path,
+            format: det.format,
+            detected_via: det.detected_via,
+            agent_cwd: det.agent_cwd,
+            session_id: det.session_id ?? null,
+            originator: det.originator ?? null,
+            change_key: null,
+            quick_id: null,
+            exists: Boolean(st),
+            size_bytes: st ? st.size : null,
+            mtime_ms: st ? st.mtimeMs : (det.mtime_ms ?? null),
+            first_seen_at: nowIso,
+            last_seen_at: nowIso,
+            invocations: 0,
+            last_command: null,
+            seq: ++seq,
+          });
+          continue;
+        }
+        // own 条目：entry 级 ctx 双向互斥（D-006@v2）——quick run 置 quick_id 且清空
+        // change_key；change run 置 change_key 且清空 quick_id（单向清会留镜像键，change
+        // 日志漏进旧 quick 会话）；两键皆空的 run（如 status）keep-prev 保留原值。
+        let nextChangeKey;
+        let nextQuickId;
+        if (ctxQuickId) {
+          nextQuickId = ctxQuickId;
+          nextChangeKey = null;
+        } else if (ctxChangeKey) {
+          nextChangeKey = ctxChangeKey;
+          nextQuickId = null;
+        } else {
+          nextChangeKey = prev?.change_key ?? null;
+          nextQuickId = prev?.quick_id ?? null;
+        }
         byPath.set(det.log_path, {
           ...(prev || {}),
           harness: det.harness,
@@ -719,10 +1123,8 @@ export async function recordAgentLogInvocation({ cwd, invokedCwd, platformOpts =
           agent_cwd: det.agent_cwd,
           session_id: det.session_id ?? prev?.session_id ?? null,
           originator: det.originator ?? prev?.originator ?? null,
-          // entry 级 ctx（D-009）：本次 run 非空者写入；context 未带（如无 --change 的 run）
-          // 保留原值——未被本次 run 触及的存量 entry 不进此循环，展开即保留原 ctx 不追新
-          change_key: ctxChangeKey ?? prev?.change_key ?? null,
-          quick_id: ctxQuickId ?? prev?.quick_id ?? null,
+          change_key: nextChangeKey,
+          quick_id: nextQuickId,
           exists: Boolean(st),
           size_bytes: st ? st.size : null,
           mtime_ms: st ? st.mtimeMs : (det.mtime_ms ?? null),
@@ -756,21 +1158,30 @@ export async function recordAgentLogInvocation({ cwd, invokedCwd, platformOpts =
 
     // 上报平台（主通道，与进度上报同风格；失败本地产物兜底）。不受平台模式 sentinel
     // 限制——进度同步在平台模式跳过是因为 daemon 有自有进度链路，agent 日志没有。
-    const push = await pushAgentLogToPlatform({
-      specBase,
-      env: env || process.env,
-      payload: {
-        schema_version: AGENT_LOG_SCHEMA_VERSION,
-        pushed_at: nowIso,
-        agent_cwd: toPosix(invokedCwd || cwd),
-        workspace_id: platformOpts.workspaceId ?? null,
-        scan_run_id: platformOpts.scanRunId ?? null,
-        // body 级会话关联键（run 所属平台会话唯一；非空才带，schema_version 保持 1 纯可选增量）
-        ...(hubSessionId ? { hub_session_id: hubSessionId } : {}),
-        // entries 各自带 entry 级 ctx（change_key/quick_id，随 entry 持久化的原值或本次 run 的新值）
-        entries: merged.entries,
-      },
-    });
+    // 推送收敛（D-007）：payload 只含本 run own 条目（按 log_path 过滤，非 own 不进任何
+    // 推送——hub 会话不再把共享留底里别人的条目整批挂走）；留底产物已写全量（上方
+    // merged.entries，本地 sillyspec agent-log 可见性不变）；own 留底条目为空不发请求。
+    const payloadEntries = merged.entries.filter(e => ownPaths.has(e.log_path));
+    let push = { pushed: null, reason: 'no-own-entries' };
+    if (payloadEntries.length > 0) {
+      push = await pushAgentLogToPlatform({
+        specBase,
+        env: env || process.env,
+        payload: {
+          schema_version: AGENT_LOG_SCHEMA_VERSION,
+          pushed_at: nowIso,
+          agent_cwd: toPosix(invokedCwd || cwd),
+          workspace_id: platformOpts.workspaceId ?? null,
+          scan_run_id: platformOpts.scanRunId ?? null,
+          // body 级会话关联键（run 所属平台会话唯一；非空才带，schema_version 保持 1 纯可选增量）
+          ...(hubSessionId ? { hub_session_id: hubSessionId } : {}),
+          // entries 各自带 entry 级 ctx（change_key/quick_id，随 entry 持久化的原值或本次 run 的新值）
+          entries: payloadEntries,
+        },
+      });
+    } else {
+      debugLog('无 own 留底条目（D-007 推送收敛），跳过上报');
+    }
 
     return {
       artifactPath: toPosix(artifactPath),
