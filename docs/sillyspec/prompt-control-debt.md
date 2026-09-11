@@ -175,7 +175,7 @@ updated_at: 2026-08-14T22:20:00+08:00
 ### 2026-08-08 候选增补（多 agent 并发写预检）→ 已实现
 状态：`✅ 已实现（2026-08-08 主会话 in-place execute，task-01..05 全完成，npm test 全量 EXIT=0 + lint 73 文件；详见下方「实现落地」）`
 
-来源：2026-08-08 自审收尾 + multi-agent-review 同步推进中，主会话与并行会话在同一仓库实打实撞车（俩 session 都要动 `quick-audit.js` / `shared.js` / `complete.js`）。复盘暴露**真实功能缺口**：CLAUDE.md 第一段立身之本就是「多 agent 同时操作代码」，但 SillySpec 无任何命令让 agent 感知「工作树里有他者未提交改动 / 存在其他活跃 change 目录」——`src/run/shared.js:976`（`isQuickMetadata`）已在 quick-audit 内部识别出「并发他者会话的工作」，却作为元数据噪音整体放行（「非关联变更目录整体视为元数据放行」），agent 完全无从知情。对应记忆坑：git commit 扫入预暂存并行工作、并发 session 撞重叠 change。
+来源：2026-08-08 自审收尾 + multi-agent-review 同步推进中，主会话与并行会话在同一仓库实打实撞车（俩 session 都要动 `quick-audit.js` / `shared.js` / `complete.js`）。复盘暴露**真实功能缺口**：CLAUDE.md 第一段立身之本就是「多 agent 同时操作代码」，但 SillySpec 无任何命令让 agent 感知「工作树里有他者未提交改动 / 存在其他活跃 change 目录」——`src/run/shared.js:998`（`isQuickMetadata`）已在 quick-audit 内部识别出「并发他者会话的工作」，却作为元数据噪音整体放行（「非关联变更目录整体视为元数据放行」），agent 完全无从知情。对应记忆坑：git commit 扫入预暂存并行工作、并发 session 撞重叠 change。
 
 **钩子点（用户指定设计约束）**：并发检测应在 **quick / execute 写操作前**预检（`quick --done` 前、`execute --done` 前），而非仅作独立诊断命令——写操作是撞车高发点，预检才有拦截价值。
 
@@ -216,7 +216,7 @@ updated_at: 2026-08-14T22:20:00+08:00
 来源：两轮工具驾驭复盘（brainstorm 跑通 + plan 跑通），6 条逐条对源码核实裁决（先查本债单 + 实证，不重复已决策项）。
 
 **brainstorm 复盘**
-- ⊘ **bs-a step7 四件套门时机错配（裁决：用户误判，代码无此 gate）**。`validateFileLocations`（gates.js:1155）= advisory 打印不阻断（gates.js:1155 注释 + stage-artifacts.md:57），守卫 `settledCount===total && total>0`（gates.js:1310）仅阶段全部步骤完成时跑，step7（Design Grill）--done 时 step8 还 pending 不触发。「step7 被拦补三件」与代码不符，疑似把 step8（生成规范文件）--done 的 advisory `⬜ 未找到` 误读为硬拦 / 混淆 Stage Review Gate（查 design.md docHash 不查四件套）。**搁置**：待用户贴现场 CLI 输出（⚠️/❌/⬜ 标记 + exit code）再定 advisory 可读性优化（⬜→ℹ️ 提示不阻断）。
+- ⊘ **bs-a step7 四件套门时机错配（裁决：用户误判，代码无此 gate）**。`validateFileLocations`（gates.js:1160）= advisory 打印不阻断（gates.js:1160 注释 + stage-artifacts.md:57），守卫 `settledCount===total && total>0`（gates.js:1316）仅阶段全部步骤完成时跑，step7（Design Grill）--done 时 step8 还 pending 不触发。「step7 被拦补三件」与代码不符，疑似把 step8（生成规范文件）--done 的 advisory `⬜ 未找到` 误读为硬拦 / 混淆 Stage Review Gate（查 design.md docHash 不查四件套）。**搁置**：待用户贴现场 CLI 输出（⚠️/❌/⬜ 标记 + exit code）再定 advisory 可读性优化（⬜→ℹ️ 提示不阻断）。
 - ⏭ **bs-b platform sync 10s 超时反复 warn（登记 defer）**。`sync.js:28` REQUEST_TIMEOUT_MS=10_000 + `:204-208` 超时 console.warn。契约 sillyhub-progress-sync-contract.md §10 明确「超时 → warn 不阻断」intentional（网络失败可见性，否决静默）。根因 sillyhub 后端 POST progress 端点未就绪（契约 §11 P0 待排期）→ 每步完成触发 sync 干等 10s + warn。**真新建议（债单+契约均无）**：客户端连续失败 N 次后该 session 退避降频（首失败仍 warn 保可见性）。defer——根治在 sillyhub 后端落地，客户端降频是缓解候选单独排。
 - ✅ **bs-c _module-map.yaml schema_version warn 缺升级路径（已修 ql-20260811-006-a73f）**。`prompt.js:44-46` 两行 warn（B2 advisory）只报问题不给 CLI 出路，预存 v1 漂移文件每个读 map 的 step（brainstorm step2/3/7）都刷屏。修法（纯文案）：两行各追加「跑 sillyspec modules rebuild 升级到 schema_version: 2 可消除此警告」。node --check + lint 250 文件 + npm test（除 pre-existing db-concurrency 无关失败）全绿。
 
@@ -318,7 +318,7 @@ P2 遗留（按优先级登记）：
 
 **批次② 状态机 fail-open 组 → 完整流程 brainstorm（行为语义变更，单一 change 立项）**
 - **A5** `--done` 阶段产物 gate 失败只打 ❌ 但 exit 0：`src/run/complete.js:328-329` gate 早退 return 不设 process.exitCode——与 quick 审计 blocked→exit 1 同仓惯例分裂，agent/CI/hook 按 exit code 消费即 fail-open。
-- **B6** `--done` 完全绕过阶段转换守卫 + 辅助阶段污染 currentStage：`src/run/command.js:1417` --done 直接进 `completeStep` 不查 `checkTransition`（stage.js:27-44 只在 runStage 调）；status/doctor 等 auxiliary 跑一次即写 `progress.currentStage`（stage.js:233）→ fromStage 变 status 后跳阶段静默放行（stage-contract.js:954 `AUXILIARY_STAGES` 一律放行）。
+- **B6** `--done` 完全绕过阶段转换守卫 + 辅助阶段污染 currentStage：`src/run/command.js:1433` --done 直接进 `completeStep` 不查 `checkTransition`（stage.js:27-44 只在 runStage 调）；status/doctor 等 auxiliary 跑一次即写 `progress.currentStage`（stage.js:233）→ fromStage 变 status 后跳阶段静默放行（stage-contract.js:954 `AUXILIARY_STAGES` 一律放行）。
 - **B7** status/doctor 自称只读实则写库：`src/run/command.js:950` auxiliary fallback `initChange` 建 default 行 + 落盘 currentStage，与 SKILL「status 只读」矛盾，多 agent 并发 lastActive 互相覆盖。
 - **B8** `run brainstorm` 无 --change 多活跃变更仓静默建幽灵变更：`src/run/command.js:717-731` 无条件 initChange（DB 实锤 08-15 一小时 4 个 `*-new-change-*` 活跃行）。
 - 裁决理由：四者共性强——状态机守卫 fail-open + 幽灵变更/幽灵阶段污染，属行为语义变更（多命令交互路径），非单点行修复。走完整流程 brainstorm → plan → execute，含 8b（新项目首跑 auxiliary 幽灵 default 变更）一并评估。

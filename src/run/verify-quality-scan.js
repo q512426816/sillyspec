@@ -27,7 +27,7 @@ import { existsSync, readFileSync, mkdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { writeAtomicSync } from '../fs-atomic.js'
 import { gitQuiet } from '../git-helper.js'
-import { resolveRuntimeRoot } from './shared.js'
+import { resolveRuntimeRoot, parsePorcelainPath } from './shared.js'
 import { detectChangeRisk } from '../change-risk-profile.js'
 import { recordFrictionEvent } from '../friction-tally.js'
 
@@ -244,6 +244,20 @@ export function renderCoverageExistenceReport(cov) {
   return lines.join('\n')
 }
 
+
+/** fallback 口径可见性（2026-09-11 驾驭第十二批）：快照不可用回退主仓且主仓存在非 .sillyspec
+ * 脏文件时，明示实测判定面含并行 WIP——第三撞根因是「静默 fallback 看不出走了哪个口径」。 */
+function warnIfMainRepoDirtyForGate(cwd) {
+  try {
+    const st = gitQuiet(cwd, ['status', '--porcelain'])
+    if (!st) return
+    const dirty = st.split('\n').map(l => parsePorcelainPath(l)).filter(p => p && !p.startsWith('.sillyspec/'))
+    if (dirty.length > 0) {
+      console.warn(`⚠️ 本次实测未走隔离快照（基建不可用/变更文件集为空），判定面 = main 工作区——当前存在 ${dirty.length} 个非 .sillyspec 脏文件（${dirty.slice(0, 3).join('、')}${dirty.length > 3 ? ' 等' : ''}），并行会话 WIP 可能影响判定；失败时先做污染归属鉴定再修。`)
+    }
+  } catch { /* git 不可用 → 静默（原本也无快照） */ }
+}
+
 /**
  * noAI 动作本体：提前实测 test+lint → 指纹落盘 → 全绿返回（stage.js 盖 completed 自动前进）；
  * 失败（test failed / lint 硬门档 failed）打印归因提示后 throw——步骤不推进，agent 修复后
@@ -251,22 +265,48 @@ export function renderCoverageExistenceReport(cov) {
  */
 export async function executeVerifyQualityScan({ cwd, specBase, changeName, platformOpts }) {
   const { runVerifyTestCheck, printVerifyTestCheck, runVerifyLintCheck, printVerifyLintCheck, shouldBlockVerifyLint } = await import('../verify-postcheck.js')
+  // ── 隔离快照定向跑（2026-09-11 驾驭第十二批，用户第三次撞上：noAI 质量扫描是 verify 的
+  // 第一实测执行点，第八批只接了 gates.js verify 块——本步仍跑 main 工作区，并行 WIP 在此弄红
+  // 无辜变更）。与 gates.js 同款：createVerifyGateSnapshot（HEAD + 本变更文件集，native worktree
+  // 定向源），ENV 同 SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF，基建失败 fallback 主仓 + 脏文件在场时
+  // ⚠️ 口径可见。指纹（storeQualityScan）仍按主仓 cwd 算——--done 对账复用的指纹匹配口径不变。
+  let snap = null
+  if (!process.env.SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF) {
+    try {
+      const { createVerifyGateSnapshot } = await import('./gate-snapshot.js')
+      snap = await createVerifyGateSnapshot({ cwd, changeName, specBase, platformOpts })
+      if (snap) {
+        console.log(`🧪 noAI 扫描隔离快照：HEAD + 本变更 ${snap.changeFileCount} 个文件${snap.sourceRoot ? '（overlay 自 worktree——本变更分支内容定向跑）' : ''}（并行会话脏文件不参与判定）`)
+      }
+    } catch { /* 快照链路异常 → 主仓现行为 */ }
+  }
+  const gateCwd = snap ? snap.snapshotRoot : cwd
+  const gateSpecBase = snap ? join(snap.snapshotRoot, '.sillyspec') : specBase
+  if (!snap) {
+    warnIfMainRepoDirtyForGate(cwd)
+  }
   console.log(`\n⏳ noAI 质量扫描：CLI 亲自实测 commands.test（同步，长套件 2~10 分钟无输出属正常）——结果按代码指纹落盘，最终 --done 对账直接复用免重跑。`)
-  const testCheck = runVerifyTestCheck({ cwd, specBase, changeName })
-  printVerifyTestCheck(testCheck)
-  const lintCheck = runVerifyLintCheck({ cwd, specBase })
+  let testCheck
+  let lintCheck
+  let coverageCheck = null
+  try {
+    testCheck = runVerifyTestCheck({ cwd: gateCwd, specBase: gateSpecBase, changeName })
+    printVerifyTestCheck(testCheck)
+    lintCheck = runVerifyLintCheck({ cwd: gateCwd, specBase: gateSpecBase })
   if (lintCheck.status !== 'skipped') {
     console.log(`\n⏳ noAI 质量扫描：CLI 亲自实测 commands.lint…`)
   }
   printVerifyLintCheck(lintCheck)
   // P2（noai-ir-roadmap §5）：coverage 存在性事实——commands.coverage 显式配置才采集，
   // 只证「有覆盖记录」不证「覆盖了行为」（渲染自带语义边界），fail-soft 不阻断。
-  let coverageCheck = null
   try {
     coverageCheck = await runCoverageExistenceCheck({ cwd, specBase, changeName })
     console.log(renderCoverageExistenceReport(coverageCheck))
   } catch (e) {
     console.warn(`⚠️  coverage 存在性事实采集异常（fail-soft）: ${e && e.message ? e.message : e}`)
+  }
+  } finally {
+    if (snap) { try { snap.cleanup() } catch {} }
   }
   storeQualityScan({ specBase, cwd, changeName, testResult: testCheck, lintResult: lintCheck, coverageCheck })
   const testFailed = testCheck.status === 'failed'

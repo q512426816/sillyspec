@@ -150,3 +150,18 @@
 审计：🔧 行号漂移已自动重锚 14 处（同口径复跑：14 → 0；剩余 0 处需人工 sillyspec docs check）
 审计：⚖️ 归属切分：5 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：src/index.js, src/progress.js, src/progress/change-registry.js, src/run/command.js, src/stages/brainstorm.js
 
+## ql-20260911-020-1397 | 2026-09-11 14:01:47 | 修驾驭第三撞 verify 门（noAI 扫描步漏接快照）+ 决策解析器第三格式盲区（H3/冒号，归档 8 条决策双重盲区零入库）
+状态：已完成
+关联变更：2026-09-11-cross-change-decision-guard
+文件：
+- src/run/verify-quality-scan.js（扫描步快照 + fallback 可见性 + coverageCheck 作用域）
+- src/decision-distill.js（标题级/冒号容收 + 类型集补录）
+- test/decision-distill-heading-variants.test.mjs（2 用例）
+- .sillyspec/knowledge/decisions/unmapped.md（存量 7 条补录 + 锚重锚）
+- .sillyspec/knowledge/INDEX.md（路由验证）
+- docs/sillyspec/prompt-control-debt.md（锚重锚）
+- modules/runtime.md,docs-consistency.md（补记）
+需求：修驾驭第三撞 verify 门（noAI 扫描步漏接快照）+ 决策解析器第三格式盲区（H3/冒号，归档 8 条决策双重盲区零入库）
+根因：①verify 有两个实测执行点，第八批只接 gates.js verify --done 块——noAI 质量扫描步仍跑 main 工作区（第三撞来源），且 fallback 静默看不出判定面；②### D-xxx@v1: 标题形态（H3+冒号）不被 ^## 正则识别，且 type feasibility/consistency 不在五类集——本仓归档实证 8 条 accepted 决策从未入知识库
+方案：①executeVerifyQualityScan 接 createVerifyGateSnapshot（指纹仍主仓口径保复用匹配）+ fallback 时 warnIfMainRepoDirtyForGate 点名脏文件在场；②标题正则 ^#{2,4}+冒号容收、类型集补 feasibility/consistency；存量归档补录 7 条（幂等）+ 过期锚重锚（? 纯位置锚 dogfood）
+结果：heading-variants 2/2；distill 系回归 39/39；verify-quality-scan 6/6；全量 npm test 437/437；lint 566 文件 0 fail；docs check 555 全过

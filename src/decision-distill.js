@@ -25,7 +25,10 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 
 import { basename, dirname, join } from 'node:path'
 
 /** FR-02：有实现影响的五类 type（scope 与未知 type 的 confirmed/accepted 不入选） */
-const IMPLEMENTED_TYPES = new Set(['architecture', 'compatibility', 'boundary', 'definition', 'process'])
+// feasibility 补录（2026-09-11 驾驭第十二批，本仓归档 2026-08-08-concurrent-write-preflight 实证：
+// 8 条 feasibility+accepted 决策因五类集漏选从未入知识库）——可行性裁决是设计决策（技术选型/
+// 可行 vs 不可行），与五类同格；排除集本意只针对 scope（范围裁决不入库）。
+const IMPLEMENTED_TYPES = new Set(['architecture', 'compatibility', 'boundary', 'definition', 'process', 'feasibility', 'consistency'])
 /** FR-02：implemented 入选的 status（superseded 等其余状态不入选） */
 const IMPLEMENTED_STATUSES = new Set(['confirmed', 'accepted'])
 /** 三级兜底终点域（仍不中归此；域文件由本模块自管） */
@@ -116,7 +119,10 @@ export function parseDecisions(changeDir) {
     //   ①标题式（模板正统）：`## D-001@v2 标题`，正文行 `- 字段：值`
     //   ②扁平列表式（agent 实际产出）：`- D-001@v2：标题` 或 `- D-001@v2 | 状态：implemented | 模块域：x`
     //     ——行内 ｜ 分段即字段；后续缩进子项 `  - 字段：值` 同样进字段
-    const h = line.match(/^##\s+(D-\d+)(?:@v(\d+))?\s*(.*)$/)
+    // 标题级放宽 ^#{2,4}（坑 decision-heading-h3-colon-variant，2026-09-11 驾驭第十二批，
+    // 本仓 2026-08-08-concurrent-write-preflight 实证：### D-001@v1: 标题 形态 8 条 accepted
+    // 决策未入知识库）——agent 落盘的标题级漂移（##/###/####）与标题前导冒号均容收
+    const h = line.match(/^#{2,4}\s+(D-\d+)(?:@v(\d+))?\s*[:：]?\s*(.*)$/)
     if (h) {
       flush()
       const version = h[2] ? parseInt(h[2], 10) : 1
