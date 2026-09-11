@@ -26,6 +26,11 @@ import {
   renderSemanticGuardBlock,
   readSemanticGuardEnabled,
 } from '../src/semantic-guard.js'
+import {
+  runQuickTestLintGate,
+  printQuickTestLintGate,
+  buildSemanticGuardHits,
+} from '../src/run/quick-audit.js'
 
 /** git 调用：数组参数不经 shell（Windows 路径安全），stdio pipe 吞输出 */
 function sh(cwd, args) {
@@ -349,4 +354,148 @@ test('开关：读取异常（local.yaml 是目录）→ true（fail-open）', (
     mkdirSync(join(d, 'local.yaml'), { recursive: true }) // readFileSync 抛 EISDIR
     assert.equal(readSemanticGuardEnabled(d), true)
   } finally { cleanup(d) }
+})
+
+// ───────────────────────── 组 5：task-06 gate 集成（FR-04 WARNING 非阻断） ─────────────────────────
+
+// quick-audit gate 消费端集成（task-06）：buildSemanticGuardHits（检测+交集+组装）单测 +
+// runQuickTestLintGate / printQuickTestLintGate 门内集成。集成仓不配 local.yaml commands →
+// test/lint 未配置自动 skipped，不真跑命令（卡内可测性豁免——避免测试里真跑 npm test）；
+// SILLYSPEC_QUICK_GATE_SNAPSHOT_OFF=1 关隔离快照 → gateCwd 回落主仓 cwd，与检测层主仓
+// 口径同层（快照语义=实测隔离，检测=本会话工作树改动，两者不同层——Grill X-001 附注）。
+
+/** gate 用例环境：关隔离快照 + 可选覆盖 SILLYSPEC_QUICK_TEST_GATE；返回恢复函数（finally 调） */
+function gateTestEnv({ testGate } = {}) {
+  const savedSkip = process.env.SILLYSPEC_QUICK_TEST_GATE
+  const savedSnap = process.env.SILLYSPEC_QUICK_GATE_SNAPSHOT_OFF
+  process.env.SILLYSPEC_QUICK_GATE_SNAPSHOT_OFF = '1'
+  if (testGate !== undefined) process.env.SILLYSPEC_QUICK_TEST_GATE = testGate
+  return () => {
+    if (savedSkip === undefined) delete process.env.SILLYSPEC_QUICK_TEST_GATE
+    else process.env.SILLYSPEC_QUICK_TEST_GATE = savedSkip
+    if (savedSnap === undefined) delete process.env.SILLYSPEC_QUICK_GATE_SNAPSHOT_OFF
+    else process.env.SILLYSPEC_QUICK_GATE_SNAPSHOT_OFF = savedSnap
+  }
+}
+
+/** 捕获 console 三通道输出为单串（printQuickTestLintGate 渲染断言用；同步调用内 patch/restore） */
+function captureConsoleText(fn) {
+  const chunks = []
+  const orig = { log: console.log, warn: console.warn, error: console.error }
+  const push = (...a) => chunks.push(a.join(' '))
+  console.log = push
+  console.warn = push
+  console.error = push
+  try { fn() } finally {
+    console.log = orig.log
+    console.warn = orig.warn
+    console.error = orig.error
+  }
+  return chunks.join('\n')
+}
+
+test('gate：他者交付测试文件断言被改 → hits 点名 + 渲染 ⚠️（含变更名与样例行），action 判定不受影响', async () => {
+  const d = makeRepo('sg-gate-hit-')
+  const restoreEnv = gateTestEnv()
+  try {
+    commitFile(d, 'test/foo.test.js', "test('t', () => { expect(1).toBe(1) })\n", '变更 2026-09-04-other-change：修 A')
+    writeFileSync(join(d, 'test', 'foo.test.js'), "test('t', () => { expect(1).toBe(2) })\n")
+    const gate = await runQuickTestLintGate({ cwd: d, specBase: join(d, '.sillyspec'), changedFiles: ['test/foo.test.js'], changeName: CUR })
+    // WARNING 非阻断（D-001@v1）：action/failed 判定不受 semanticGuard 影响（调用方只读这两键）
+    assert.equal(gate.action, 'pass')
+    assert.deepEqual(gate.failed, [])
+    assert.deepEqual(gate.semanticGuard, {
+      hits: [{ file: 'test/foo.test.js', deliveredBy: '2026-09-04-other-change', sampleLines: ["test('t', () => { expect(1).toBe(1) })"] }],
+    })
+    const out = captureConsoleText(() => printQuickTestLintGate(gate))
+    for (const piece of ['⚠️ 语义护栏', 'test/foo.test.js', '2026-09-04-other-change', 'expect(1).toBe(1)', 'quicklog --solution', '关联决策']) {
+      assert.ok(out.includes(piece), `渲染含 ${piece}`)
+    }
+  } finally { restoreEnv(); cleanup(d) }
+})
+
+test('gate：断言被改但无归因标记 → hits 空 + 渲染无 ⚠️ 段', async () => {
+  const d = makeRepo('sg-gate-noattr-')
+  const restoreEnv = gateTestEnv()
+  try {
+    commitFile(d, 'test/foo.test.js', "test('t', () => { expect(1).toBe(1) })\n", 'chore: init')
+    writeFileSync(join(d, 'test', 'foo.test.js'), "test('t', () => { expect(1).toBe(2) })\n")
+    const gate = await runQuickTestLintGate({ cwd: d, specBase: join(d, '.sillyspec'), changedFiles: ['test/foo.test.js'], changeName: CUR })
+    assert.deepEqual(gate.semanticGuard, { hits: [] })
+    const out = captureConsoleText(() => printQuickTestLintGate(gate))
+    assert.ok(!out.includes('语义护栏'), 'hits 空 → 零 WARNING 输出')
+  } finally { restoreEnv(); cleanup(d) }
+})
+
+test('组装：纯新增断言（他者交付同文件）→ hits 空', () => {
+  const d = makeRepo('sg-bld-addonly-')
+  try {
+    commitFile(d, 'test/foo.test.js', 'const a = 1\n', '变更 2026-09-04-other-change：修 A')
+    writeFileSync(join(d, 'test', 'foo.test.js'), "const a = 1\ntest('x', () => expect(a).toBe(1))\n")
+    assert.deepEqual(buildSemanticGuardHits({ cwd: d, specBase: join(d, '.sillyspec'), files: ['test/foo.test.js'], changeName: CUR }), { hits: [] })
+  } finally { cleanup(d) }
+})
+
+test('组装：断言被改但无标记 / 仅本变更交付 → hits 空（currentChange 透传跳过）', () => {
+  const d = makeRepo('sg-bld-cur-')
+  try {
+    commitFile(d, 'test/a.test.js', "test('a', () => expect(1).toBe(1))\n", 'chore: init')
+    writeFileSync(join(d, 'test', 'a.test.js'), "test('a', () => expect(1).toBe(2))\n")
+    commitFile(d, 'test/b.test.js', "test('b', () => expect(1).toBe(1))\n", `变更 ${CUR}：本次改`)
+    writeFileSync(join(d, 'test', 'b.test.js'), "test('b', () => expect(1).toBe(2))\n")
+    assert.deepEqual(
+      buildSemanticGuardHits({ cwd: d, specBase: join(d, '.sillyspec'), files: ['test/a.test.js', 'test/b.test.js'], changeName: CUR }),
+      { hits: [] },
+    )
+  } finally { cleanup(d) }
+})
+
+test('组装：非测试文件（删除侧含 token + 他者交付）→ hits 空', () => {
+  const d = makeRepo('sg-bld-nontest-')
+  try {
+    commitFile(d, 'src/plain.js', 'expect(1).toBe(1)\n', '变更 2026-09-04-other-change：修 A')
+    writeFileSync(join(d, 'src', 'plain.js'), 'expect(1).toBe(2)\n')
+    assert.deepEqual(buildSemanticGuardHits({ cwd: d, specBase: join(d, '.sillyspec'), files: ['src/plain.js'], changeName: CUR }), { hits: [] })
+  } finally { cleanup(d) }
+})
+
+test('组装+gate：semantic_guard.enabled=false → 不检测（断言被改+他者交付也 hits 空、渲染零输出）', async () => {
+  const d = makeRepo('sg-bld-sw-off-')
+  const restoreEnv = gateTestEnv()
+  try {
+    const specBase = join(d, '.sillyspec')
+    mkdirSync(specBase, { recursive: true })
+    writeFileSync(join(specBase, 'local.yaml'), 'semantic_guard:\n  enabled: false\n')
+    commitFile(d, 'test/foo.test.js', "test('t', () => { expect(1).toBe(1) })\n", '变更 2026-09-04-other-change：修 A')
+    writeFileSync(join(d, 'test', 'foo.test.js'), "test('t', () => { expect(1).toBe(2) })\n")
+    assert.deepEqual(
+      buildSemanticGuardHits({ cwd: d, specBase, files: ['test/foo.test.js'], changeName: CUR }),
+      { hits: [] },
+      '组装层：开关关 → 跳过检测',
+    )
+    const gate = await runQuickTestLintGate({ cwd: d, specBase, changedFiles: ['test/foo.test.js'], changeName: CUR })
+    assert.deepEqual(gate.semanticGuard, { hits: [] }, 'gate 层：开关关 → hits 空')
+    const out = captureConsoleText(() => printQuickTestLintGate(gate))
+    assert.ok(!out.includes('语义护栏'), '渲染零 ⚠️ 输出')
+  } finally { restoreEnv(); cleanup(d) }
+})
+
+test('gate：SILLYSPEC_QUICK_TEST_GATE=skip / 无文件 / 纯 doc → 不跑检测（无 semanticGuard 字段）', async () => {
+  const d = makeRepo('sg-gate-early3-')
+  const restoreEnv = gateTestEnv({ testGate: 'skip' })
+  try {
+    // 摆好「若检测跑必命中」的现场：他者交付测试文件 + 断言被改——三条早退必须在检测前返回
+    commitFile(d, 'test/foo.test.js', "test('t', () => { expect(1).toBe(1) })\n", '变更 2026-09-04-other-change：修 A')
+    writeFileSync(join(d, 'test', 'foo.test.js'), "test('t', () => { expect(1).toBe(2) })\n")
+    const specBase = join(d, '.sillyspec')
+    const g1 = await runQuickTestLintGate({ cwd: d, specBase, changedFiles: ['test/foo.test.js'], changeName: CUR })
+    assert.equal(g1.action, 'skip')
+    assert.equal('semanticGuard' in g1, false, 'env skip：不跑检测无字段')
+    const g2 = await runQuickTestLintGate({ cwd: d, specBase, changedFiles: [], declaredFiles: [], changeName: CUR })
+    assert.equal(g2.action, 'skip')
+    assert.equal('semanticGuard' in g2, false, '无文件：不跑检测无字段')
+    const g3 = await runQuickTestLintGate({ cwd: d, specBase, changedFiles: ['docs/readme.md'], changeName: CUR })
+    assert.equal(g3.action, 'skip')
+    assert.equal('semanticGuard' in g3, false, '纯 doc：不跑检测无字段')
+  } finally { restoreEnv(); cleanup(d) }
 })
