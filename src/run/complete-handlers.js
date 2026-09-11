@@ -1223,6 +1223,10 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
       }
       if (review?.docsCheckHint && review.docsCheckHint.invalid > 0) {
         auditNotes.push(`📎 文档引用失效：${review.docsCheckHint.invalid}/${review.docsCheckHint.total} 处 file:line 失效（sillyspec docs check 可复现）`)
+        // 逐条指名（2026-09-11 同 quick-audit 侧：门禁输出直接带文件:行号，封顶 5 保持注记紧凑）
+        for (const i of (review.docsCheckHint.invalidRefs || []).slice(0, 5)) {
+          auditNotes.push(`   ❌ [${i.doc}:${i.docLine}] ${i.ref} → ${i.reason}`)
+        }
         // 行号漂移自动重锚（2026-09-08 用户反馈②：活文档 file:line 硬编码随任何插入失效，
         // 每回手跑 docs check --fix 是机械活）：autoReanchorDocRefs = --fix 主链路编程化封装
         // （fixable 唯一/优选命中才改 + 定点替换 + 同口径回执），只作用于本次改动的文档。
@@ -1851,7 +1855,7 @@ export async function handleScanStageCompleted({ stageName, currentIdx, cwd, pro
 // untracked 新文件 wc-l 记全 + 行、binary 显 BIN）。纯展示列（advisory，D-006）：采集失败/行数
 // 不可得 → 括注省略不出伪数据；不改 auditQuickCompletion 判定、runQuickTestLintGate 与任何门禁。
 // 放文件尾（函数声明提升）而不内联进 handleQuickStageCompletion：docs/platform-interface-map
-// 行号锚在上方（complete-handlers.js:1688 handleScanStageCompleted），内联大块会把 doc-ref 锚
+// 行号锚在上方（complete-handlers.js:1695 handleScanStageCompleted），内联大块会把 doc-ref 锚
 // 推出关键词窗口。
 //
 // 消费分工（调用方 quick 收尾）：

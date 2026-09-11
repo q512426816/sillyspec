@@ -125,3 +125,28 @@
 根因：层 2 把引用行全部反引号 token（OR）对锚点文件窗口断言——跨文件引用+反话论述（锚 A、token 全是 B 概念）必失败，唯一绕法删行号让引用退出核验，锚点信息丢失
 方案：REF_RE 增第 5 捕获组 (?)?；collectDocRefs 解析 kwSkip；runDocsCheck 与 collectInvalidDocRefs（scan-postcheck 共用内核）两层 2 点 kwSkip 跳过断言、层 1 照校；层 2 失败 reason 尾附加 ? 教学提示（勿删行号）
 结果：docs-check-positional-anchor 4/4；回归 55/55（deepEqual 补 kwSkip 字段 + S7 字节对照 strip 扩展契约演化后缀）；全量 npm test 433/433；lint 561 文件 0 fail；docs check 559 全过
+
+## ql-20260911-016-8e13 | 2026-09-11 11:08:58 | 修驾驭两点：文档门失效只报计数不指名 + 审计拦截 flag 建议全家桶（归属问题被推危险文件豁免）
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/shared.js（docsCheckHint invalidRefs 明细）
+- src/run/quick-audit.js（逐条渲染 + BLOCKED 三分流点名）
+- src/run/complete-handlers.js（审计注记明细 + 自引注释同步）
+- src/run/stage.js（step1 脏文件点名）
+- test/quick-audit-blocked-guidance.test.mjs（3 用例）
+- test/audit-quick-completion.test.mjs（case 12 契约对齐）
+- docs/sillyspec/platform-interface-map.md,prompt-control-debt.md（锚重锚）
+需求：修驾驭两点：文档门失效只报计数不指名 + 审计拦截 flag 建议全家桶（归属问题被推危险文件豁免）
+根因：①docsCheckHint 生产端只存 {invalid,total} 计数，两渲染点只打 N/M——用户四轮复现才定位一处预存债（应门禁输出直接带文件：行号）；②BLOCKED 渲染把危险/新增/超出 allowedFiles 三类混进一条咒语推 --force-baseline——allowedFiles 推断漏掉的实改文件（归属问题非危险）被迫用危险豁免解锁，语义过宽吓人
+方案：①生产端 invalidRefs 明细（封顶 10+truncated 标记），quick-audit/complete-handlers 两渲染点逐条 [doc:line] ref → reason；②BLOCKED 按 reason 类别三分流点名：超出 allowedFiles → 点名文件+精确 --files 追加命令（明示非危险）；危险/baseline → --force-baseline 独占；新增 → --allow-new 独占；最小 flag 集拼装；step1 未带 --files 时点名 src/test 脏文件封顶 8 供当场确认归属
+结果：quick-audit-blocked-guidance 3/3；audit-quick-completion 回归 55/55（case 12 断言对齐新契约）；全量 npm test 434/434；lint 562 文件 0 hard fail（门禁内 lint 挂项为并行会话 shared.js 在途导出 isDatedChangeName 骑行在同名文件 overlay——非本会话改动，SILLYSPEC_QUICK_TEST_GATE=skip 带审计逃生，主仓全量已另行验证）；docs check 559 全过
+审计：📎 文档引用失效：14/87 处 file:line 失效（sillyspec docs check 可复现）
+审计：   ❌ [docs/sillyspec/platform-interface-map.md:3] shared.js:657 → 多候选全失败 → src/progress/shared.js: 行号超界（start=657 > 总行数 42）；范围 end=657 超界（总行数 42）；关键词缺失：期望任一「triggerSync / isPlatformMode 
+审计：   ❌ [docs/sillyspec/platform-interface-map.md:80] shared.js:699 → 多候选全失败 → src/progress/shared.js: 行号超界（start=699 > 总行数 42）；范围 end=699 超界（总行数 42）；关键词缺失：期望任一「triggerSync / SILLYSPEC_SYNC_
+审计：   ❌ [docs/sillyspec/platform-interface-map.md:80] shared.js:697 → 多候选全失败 → src/progress/shared.js: 行号超界（start=697 > 总行数 42）；范围 end=697 超界（总行数 42）；关键词缺失：期望任一「triggerSync / SILLYSPEC_SYNC_
+审计：   ❌ [docs/sillyspec/platform-interface-map.md:81] shared.js:838 → 多候选全失败 → src/progress/shared.js: 行号超界（start=838 > 总行数 42）；范围 end=838 超界（总行数 42）；关键词缺失：期望任一「triggerPull / skipIfLocalDirt
+审计：   ❌ [docs/sillyspec/platform-interface-map.md:82] shared.js:906 → 多候选全失败 → src/progress/shared.js: 行号超界（start=906 > 总行数 42）；范围 end=906 超界（总行数 42）；关键词缺失：期望任一「checkApproval / syncMod.check
+审计：🔧 行号漂移已自动重锚 14 处（同口径复跑：14 → 0；剩余 0 处需人工 sillyspec docs check）
+审计：⚖️ 归属切分：5 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：src/index.js, src/progress.js, src/progress/change-registry.js, src/run/command.js, src/stages/brainstorm.js
+

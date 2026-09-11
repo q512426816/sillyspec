@@ -1427,7 +1427,13 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
         const dc = runDocsCheck({ projectRoot: cwd, docs: mdChanged, crossRepoRoots: quickCfg.crossRepoRoots })
         if (!dc.ok) {
           result.reasons.push(`本次改动文档含 ${dc.invalid.length} 处失效 file:line 引用（sillyspec docs check 可复现）`)
-          result.docsCheckHint = { invalid: dc.invalid.length, total: dc.total }
+          // invalidRefs 明细（2026-09-11 用户实证：只报计数 N/M 不指名哪处，四轮才定位到一处
+          // 预存债——门禁输出直接带 文件:行号，另跑 docs check 复现是逃生不是定位）：封顶 10 条
+          result.docsCheckHint = {
+            invalid: dc.invalid.length, total: dc.total,
+            invalidRefs: dc.invalid.slice(0, 10).map(i => ({ doc: i.doc, docLine: i.docLine, ref: i.ref, reason: String(i.reason || '').slice(0, 120) })),
+            invalidTruncated: dc.invalid.length > 10,
+          }
           if (result.status === 'safe') result.status = 'warning'
         }
       } catch { /* docs-check 不可用（老版本包等）→ 静默跳过，不阻断 quick */ }

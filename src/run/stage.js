@@ -476,6 +476,20 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
         if (allowNew) parts.push('允许新增文件')
         if (allowDelete) parts.push('允许删除文件')
         console.log(`🛡️ quick 变更边界已记录: ${parts.join(', ')}`)
+        // 归属点名（2026-09-11 用户实证：--done 审计的 allowedFiles 自动推断可漏实改文件，
+        // 被拦后与危险文件混推 --force-baseline。启动未显式 --files 时，把工作区 src/test 前缀
+        // 脏文件点名让用户当场确认归属——预声明即精确边界，免去收尾被拦一轮）。
+        if (allowedFiles.length === 0 && Array.isArray(baselineFiles)) {
+          const declCandidates = baselineFiles
+            .map((p) => String(p).split('\\').join('/'))
+            .filter((p) => p.startsWith('src/') || p.startsWith('test/'))
+          if (declCandidates.length > 0) {
+            console.log(`👀 工作区已有 ${declCandidates.length} 个 src/test 脏文件（本会话如会改到其中部分，建议现在声明边界；并行会话的他者改动勿声明）：`)
+            for (const p of declCandidates.slice(0, 8)) console.log(`   - ${p}`)
+            if (declCandidates.length > 8) console.log(`   … 共 ${declCandidates.length} 个`)
+            console.log(`   声明：sillyspec run quick --files <a.js,b.js> --change ${changeName}（恢复会话追加边界）`)
+          }
+        }
         console.log(`📝 QUICKLOG 条目已创建: ${qlId}`)
         // 空壳会话探测（坑 quick-duplicate-empty-shell，2026-09-03 用户实证：一次输出被吞 →
         // agent 误判失败重跑 → 重复空壳会话，此前只能手工 reset + 删骨架）。新会话起步时点名

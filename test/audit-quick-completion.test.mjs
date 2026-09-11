@@ -192,7 +192,10 @@ console.log('--- auditQuickCompletion characterization ---')
     console.error = origErr
   }
   const out = errs.join('\n')
-  assert(out.includes('--force-baseline --allow-new'), `非删除 blocked 仍保留 flag 建议（回归保护）`)
+  // 2026-09-11 分流点名起：flag 建议按 reason 类别最小拼装（危险-only → 仅 --force-baseline，
+  // 不再全家桶）——意图不变（非删除 blocked 保留 flag 建议），断言对齐新契约
+  assert(out.includes('--force-baseline'), `非删除 blocked 仍保留 flag 建议（回归保护）`)
+  assert(out.includes('危险文件变更'), `危险文件点名在场`)
 }
 
 // ── D-8 文档欠账显性化：改源码没动文档 → docSyncHint 打标记（advisory 不改 status）──

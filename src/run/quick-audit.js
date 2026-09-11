@@ -33,9 +33,38 @@ export function printQuickAuditReview(review) {
       console.error(`     sillyspec run quick --done --allow-delete --change <id> --output "..."`)
       console.error(`   （--force-baseline / --allow-new 不能解锁删除；不确认请 git restore 撤回删除后再 --done，或走完整流程 execute 由 review 把关）`)
     } else {
-      console.error(`   如确认接受这些变更，重新运行 --done 时带上对应 flag 即可解锁：`)
-      console.error(`     sillyspec run quick --done --force-baseline --allow-new --change <id> --output "..."`)
-      console.error(`     （--force-baseline 覆盖受保护/危险文件如 src/run.js；--allow-new 允许新增文件；--allow-delete 允许删除文件）`)
+      // 分流点名（2026-09-11 用户实证：allowedFiles 推断漏了三个实改文件，被与「危险文件」
+      // 混在一起推 --force-baseline——语义过宽且吓人）。按 reason 类别给精确最小解锁：
+      //   超出 allowedFiles（非危险）→ 追加 --files 并入边界即可；危险/baseline → --force-baseline；
+      //   新增 → --allow-new。未命中的 flag 不再出现在咒语里。
+      const prot = review.reasons.filter((r) => r.startsWith('危险文件变更') || r.startsWith('覆盖 baseline'))
+        .map((r) => r.split(': ')[1]).filter(Boolean)
+      const news = review.reasons.filter((r) => r.startsWith('新增文件'))
+        .map((r) => r.split(': ')[1]).filter(Boolean)
+      const undecl = review.reasons.filter((r) => r.startsWith('超出 allowedFiles'))
+        .map((r) => r.split(': ')[1]).filter(Boolean)
+      const flags = []
+      if (undecl.length > 0) {
+        flags.push('--files <原声明文件>,' + undecl.join(','))
+        console.error(`   📋 边界归属未声明（非危险变更）：${undecl.join(', ')}——本会话实际改动但未在 --files 边界内（自动推断漏掉），追加声明即可：`)
+        console.error(`     sillyspec run quick --files ${undecl.join(',')} --change <id>（恢复会话追加边界，追加不替换）`)
+      }
+      if (news.length > 0) {
+        flags.push('--allow-new')
+        console.error(`   📋 新增文件待放行：${news.join(', ')}——确认收进本会话带 --allow-new。`)
+      }
+      if (prot.length > 0) {
+        flags.push('--force-baseline')
+        console.error(`   ⛔ 受保护/危险文件变更：${prot.join(', ')}——放行开关唯 --force-baseline（--files 只声明归属不改变危险判定）。`)
+      }
+      if (flags.length > 0) {
+        console.error(`   解锁命令（按上方分类携带最小 flag 集）：`)
+        console.error(`     sillyspec run quick --done ${flags.join(' ')} --change <id> --output "..."`)
+      } else {
+        console.error(`   如确认接受这些变更，重新运行 --done 时带上对应 flag 即可解锁：`)
+        console.error(`     sillyspec run quick --done --force-baseline --allow-new --change <id> --output "..."`)
+        console.error(`     （--force-baseline 覆盖受保护/危险文件如 src/run.js；--allow-new 允许新增文件；--allow-delete 允许删除文件）`)
+      }
       // 两套开关明示（坑 files-flag-not-unlock-protected，2026-08-22 实证：模块文档被判危险
       // 文件，追加 --files 边界不解锁仍被拦——「追加边界」与「解锁拦截」是两套开关，交互上易误解
       // 前者能解决后者）。命中危险文件 reason 时点名：--files 只改归属口径（哪些文件计入本
@@ -109,6 +138,14 @@ export function printQuickAuditReview(review) {
   }
   if (review.docsCheckHint && review.docsCheckHint.invalid > 0) {
     console.warn(`\n📎 文档引用失效（docs check）：本次改动的文档含 ${review.docsCheckHint.invalid}/${review.docsCheckHint.total} 处失效 file:line 引用。`)
+    // 逐条指名（2026-09-11 用户实证：只报计数不指名哪处，四轮复现才定位——门禁输出
+    // 直接带 文件:行号，另跑命令是复现不是定位）；封顶 10 与生产端对齐，超出提示全量口径
+    for (const i of (review.docsCheckHint.invalidRefs || [])) {
+      console.warn(`   ❌ [${i.doc}:${i.docLine}] ${i.ref} → ${i.reason}`)
+    }
+    if (review.docsCheckHint.invalidTruncated) {
+      console.warn(`   … 共 ${review.docsCheckHint.invalid} 处（上方封顶 10，全量跑 sillyspec docs check）`)
+    }
     console.warn(`   行号漂移 → 更新到当前源码；文件删改名 → 更新引用路径。跑 sillyspec docs check 可看完整清单。`)
     console.warn(`   引用格式：\`src/foo.js:42\`（或 42-48）+ 同行反引号代码符号（如 \`runDocsCheck\`）——符号可让 --suggest 给出候选行号。`)
   }
