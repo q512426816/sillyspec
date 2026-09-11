@@ -198,7 +198,7 @@ async function main() {
 
   // E22：重路径统一加载（轻路径 --version/help 已早退，未付此税）。
   const { ProgressManager, resolvePlatformSpecDir, resolvePlatformOpts } = await import('./progress.js');
-  const { didYouMean, assertSafeChangeName, resolveSpecDir, detectWorktreeSpecDrift } = await import('./run/shared.js');
+  const { didYouMean, assertSafeChangeName, assertDatedChangeName, resolveSpecDir, detectWorktreeSpecDrift } = await import('./run/shared.js');
 
   // 解析全局选项
   let json = false;
@@ -3524,9 +3524,12 @@ checkbox 行；depends_on 自动反填行内注解 "(depends_on: task-01,02)"；
         process.exit(1);
       }
       // F6 路径穿越消毒：renameChange 会 mv changes/<old> → changes/<new>，名含 ../ 会逃出 changes/。
+      // 日期前缀门禁（brainstorm step6 规则 CLI 化）：改名产生的新名必须 YYYY-MM-DD-<描述>
+      // （2026-09-11 实证：friction-signal-hint 重命名丢前缀被静默物化）。
       try {
         assertSafeChangeName(oldName, '旧变更名');
         assertSafeChangeName(newName, '新变更名');
+        assertDatedChangeName(newName, '新变更名');
       } catch (e) {
         console.error(`❌ ${e.message}`);
         process.exit(2);

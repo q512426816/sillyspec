@@ -35,3 +35,4 @@
 - 2026-09-09-plan-derived | Wave 违规自动修复（提案-验证-落盘）+ 合法串行静默 + plan_level 复核 warn；plan.js 审查清单补说明
 - 2026-09-09-doctor-noai | doctor 阶段折叠 6→3 步（noAI 诊断步/修复决策/汇总）+ 移出 READONLY 常量
 - ql-20260909-004 | archive 三重核对机械化：auditModuleImpactAgainstDiff + {ARCHIVE_IMPACT_AUDIT} 注入（agent 只裁决不一致项）
+- ql-20260911-017-0c35 | brainstorm step6 变更名规则三处标注「CLI 已强制：不合规 exit 2」（prompt 约束升级为硬门提示）

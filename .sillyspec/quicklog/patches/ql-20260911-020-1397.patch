@@ -1,0 +1,287 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/docs-consistency.md b/.sillyspec/docs/sillyspec/modules/docs-consistency.md
+index 298b52e..183af8d 100644
+--- a/.sillyspec/docs/sillyspec/modules/docs-consistency.md
++++ b/.sillyspec/docs/sillyspec/modules/docs-consistency.md
+@@ -17,13 +17,13 @@ updated_at: 2026-09-08T21:56:00+08:00
+ 
+ | 文件 | 职责 |
+ |------|------|
+-| `src/docs-check.js` | 文档行号引用校验核心：层1 存在性（文件存在 + 行号在界，范围引用查 end）+ 层2 关键词断言（引用行反引号代码 token 在源码窗口内命中，多候选任一全过即通过）+ 失效引用修复分类（classifyFix：token 全量候选唯一命中 → fixable，多/零命中或无 token → needs-manual）；核心逻辑纯函数无 fs 依赖可单测；校验链路只读，`--fix` 显式触发时 applyFixes 按 docLine+行内偏移定点改写行号（只改行号数字，不改引用文件名与 token，CRLF 保持，同行多引用从后往前不错位），是本模块唯一写回面。2026-08-23 起新增决策规则族 `runDecisionRules`（`src/docs-check.js:880`，async advisory）——扫 knowledge/decisions/<域>.md 的 D-xxx@vN implemented 条目做锚点存在性 + 锚定模块源码 behind 超阈值复核（`readDecisionRulesConfig` 读 local.yaml decisions.behind_threshold 缺省 10）；不进 ok/invalid 阻断链、校验链路只读零写盘、无 decisions 库/无超阈 → findings 空零输出；known_failures decisions.* 命名空间豁免（规则级/条目级伞形，与 verify-postcheck 读法逐字对齐）；消费者 = doctor 决策待复核检查步骤与 verify evidence-auto 推荐链。2026-09-08 docs-fix-capability 起：REF_RE 文件段展开循环形支持括号路径（Next.js 路由组，markdown 链接零回归；D-006 否决原子序列形 ReDoS）；含 `...` 模糊路径跳过校验计 skippedFuzzy；豁免双通道 isExemptDoc（路径段 archive/finished + frontmatter doc_type: snapshot，opts.exempt 默认开、`--no-exempt` 关，豁免文档计 skippedExempt 不进 invalid）；classifyFix tie 与带 / 路径文件不存在分支附 fix.candidates 机械候选数组（仅 --json 面）；runDocsCheck 返回增 skippedExempt/skippedFuzzy；纯位置锚语法 file.js:line?（2026-09-11 用户实证层 2 误伤：跨文件引用+反话论述——锚 A 行内 token 全是 B 概念必失败，被迫删行号绕开）：REF_RE 尾 ? 捕获组 → kwSkip，层 2 跳过、层 1 照校；层 2 失败 reason 附教学提示。输出降噪（2026-09-10 驾驭小结第二批③，渲染层在 index.js docs check 命令）：硬失效同 doc+行+ref 重复条目折叠为一行带 ×N、变更名提名 advisory 固定尾部分区 + 按名聚合一行（名+提及数+首处定位），invalid 集与 exit code 不动 |
++| `src/docs-check.js` | 文档行号引用校验核心：层1 存在性（文件存在 + 行号在界，范围引用查 end）+ 层2 关键词断言（引用行反引号代码 token 在源码窗口内命中，多候选任一全过即通过）+ 失效引用修复分类（classifyFix：token 全量候选唯一命中 → fixable，多/零命中或无 token → needs-manual）；核心逻辑纯函数无 fs 依赖可单测；校验链路只读，`--fix` 显式触发时 applyFixes 按 docLine+行内偏移定点改写行号（只改行号数字，不改引用文件名与 token，CRLF 保持，同行多引用从后往前不错位），是本模块唯一写回面。2026-08-23 起新增决策规则族 `runDecisionRules`（`src/docs-check.js:880`，async advisory）——扫 knowledge/decisions/<域>.md 的 D-xxx@vN implemented 条目做锚点存在性 + 锚定模块源码 behind 超阈值复核（`readDecisionRulesConfig` 读 local.yaml decisions.behind_threshold 缺省 10）；不进 ok/invalid 阻断链、校验链路只读零写盘、无 decisions 库/无超阈 → findings 空零输出；known_failures decisions.* 命名空间豁免（规则级/条目级伞形，与 verify-postcheck 读法逐字对齐）；消费者 = doctor 决策待复核检查步骤与 verify evidence-auto 推荐链。2026-09-08 docs-fix-capability 起：REF_RE 文件段展开循环形支持括号路径（Next.js 路由组，markdown 链接零回归；D-006 否决原子序列形 ReDoS）；含 `...` 模糊路径跳过校验计 skippedFuzzy；豁免双通道 isExemptDoc（路径段 archive/finished + frontmatter doc_type: snapshot，opts.exempt 默认开、`--no-exempt` 关，豁免文档计 skippedExempt 不进 invalid）；classifyFix tie 与带 / 路径文件不存在分支附 fix.candidates 机械候选数组（仅 --json 面）；runDocsCheck 返回增 skippedExempt/skippedFuzzy；输出降噪（2026-09-10 驾驭小结第二批③，渲染层在 index.js docs check 命令）：硬失效同 doc+行+ref 重复条目折叠为一行带 ×N、变更名提名 advisory 固定尾部分区 + 按名聚合一行（名+提及数+首处定位），invalid 集与 exit code 不动 |
+ | `src/docs-migrate.js` | 确定性批量路径前缀迁移（2026-09-08 docs-fix-capability）：`docs migrate --from X --to Y` 对 docs check 同源文档集的 file:line 引用做前缀替换——默认 dry-run 输出计划零写盘、`--apply` 复用 applyFixes 写盘+自动 docs check 复核、目标不存在标 unverified（防 from/to 写反）；薄模块 import 复用 docs-check 导出不复制解析正则；exit 0=dry-run 零计划或 postCheck 全绿 / 1=apply 后仍失效或 unverified>0 / 2=用法错误；无 --from/--to 落回旧结构迁移 migrate.js 兼容 |
+ | `src/docs-gate.js` | docs check 的 ratchet 门：失效数 ≤ 基线（`.sillyspec/docs-check-baseline`）即过、超基线拦——不管历史存量只拦增量；首次须显式 `--init-baseline`；exit 0 过 / 1 拦 / 2 配置或 IO 错误 |
+ | `src/docs-debt.js` | 模块文档欠账事实计算：变更触及文件按 module.paths/core_files 归属到模块，git 双时间戳算 behind 计数；结论注入 execute Wave prompt（advisory、无债零输出、git 失败降级不抛）。2026-08-23 起新增导出 `computeModuleBehind`（`src/docs-debt.js:169`，单模块 behind 计数）——与 moduleDebt 共用 behind 口径单一真相源，供决策规则族复核调用，不改现有 debt 行为 |
+ | `src/scan-staleness.js` | scan 文档新鲜度提示：source_commit vs HEAD 落后数生成 fresh / needs-refresh / unknown 三态结论，brainstorm 加载 scan 文档前注入一行提示（behind 只是「建议核对/重扫」的提示信号；引用失效判据归 docs-check） |
+ | `src/module-impact.js` | module-impact.md 归类骨架生成（`sillyspec module-impact` 命令与 plan --done 首版共用，2026-08-21 建）：_module-map.yaml paths 前缀匹配把变更文件归属模块，双输入来源——diff 来源（archive/execute 后真实改动，resolveVerifyChangedFiles worktree-aware）与声明来源（plan --done 首版，design 文件变更清单 main 段，`sourceFiles` 参数，2026-09-08 刀②）；声明来源归一化剥 `NEW:` 待建前缀 + 去重（2026-09-10 驾驭小结③，坑 module-impact-new-prefix-mismatch：与 pathMatches 比对侧剥除同源——不剥则 classifyFile 前缀匹配必失配、NEW 文件全落「未匹配」逼手动回填）；无 module-map / 无可归类文件返回 null（agent 手写兜底）；「更新结果」表按命中模块机械生成 pending 行（verify/archive 死信门目标）；卡此前漏登本文件（map paths 已归属、表格缺行，2026-09-08 补） |
+-| `src/decision-distill.js` | 决策提炼纯函数（2026-08-23 新增，归本模块）：`parseDecisions`（`src/decision-distill.js:98-401`）解析变更 decisions.md 的 D-xxx@vN 条目（FR-01 四字段全可选容旧格式、入选裁决 implemented/rejected）；`distillIntoKnowledge` 把入选条目幂等提炼进 knowledge/decisions/<模块域>.md 并幂等维护 INDEX decisions 路由行——rejected 优先留痕（缺否决理由/复潮条件 → needsWait 该条不写盘，步骤层转 --wait 裁决）；条目双格式解析（坑 decision-flat-list-silent-zero，2026-09-10 驾驭小结第四批②：扁平列表式 decisions.md 此前解析 0 条静默放行）——标题式 ## D-xxx 正文 - 字段：值 之外，兼容扁平式 - D-xxx@vN：标题 ｜ 状态：… ｜ 模块域：…（行内 ｜ 分段按字段白名单 FIELD_LABEL_RE 进条目，缩进子项 - 字段：值 同收，中文别名 状态/类型 补齐 applyField）；0 条但正文含 D-xxx 形态 → zeroWithContent 标记 + distillIntoKnowledge 显式 warn（不再静默）。域三级兜底（条目「模块域」→ impacts 路径与 _module-map.yaml paths/core_files 前缀匹配 → unmapped）；幂等键 = 号+变更（2026-08-28 坑 distill-cross-change-supersede：条目带「变更：<name>」限定行，同 ID 同版本重写、@vN+1 整段替换旧版注 supersedes、同变更同号只留最高版本；跨变更同号共存不互删，legacy 无变更行段只共存不触碰）；写入责任全部在本模块——archive 步骤只调用、knowledge-match/docs-check 只消费，不 import 它们也不接 DB/网络 |
++| `src/decision-distill.js` | 决策提炼纯函数（2026-08-23 新增，归本模块）：`parseDecisions`（`src/decision-distill.js:98-401`）解析变更 decisions.md 的 D-xxx@vN 条目（FR-01 四字段全可选容旧格式、入选裁决 implemented/rejected）；`distillIntoKnowledge` 把入选条目幂等提炼进 knowledge/decisions/<模块域>.md 并幂等维护 INDEX decisions 路由行——rejected 优先留痕（缺否决理由/复潮条件 → needsWait 该条不写盘，步骤层转 --wait 裁决）；条目双格式解析（坑 decision-flat-list-silent-zero，2026-09-10 驾驭小结第四批②：扁平列表式 decisions.md 此前解析 0 条静默放行）——标题式 ## D-xxx 正文 - 字段：值 之外，兼容扁平式 - D-xxx@vN：标题 ｜ 状态：… ｜ 模块域：…（行内 ｜ 分段按字段白名单 FIELD_LABEL_RE 进条目，缩进子项 - 字段：值 同收，中文别名 状态/类型 补齐 applyField）；0 条但正文含 D-xxx 形态 → zeroWithContent 标记 + distillIntoKnowledge 显式 warn（不再静默）。域三级兜底（条目「模块域」→ impacts 路径与 _module-map.yaml paths/core_files 前缀匹配 → unmapped）；幂等键 = 号+变更（2026-08-28 坑 distill-cross-change-supersede：条目带「变更：<name>」限定行，同 ID 同版本重写、@vN+1 整段替换旧版注 supersedes、同变更同号只留最高版本；跨变更同号共存不互删，legacy 无变更行段只共存不触碰）；写入责任全部在本模块——archive 步骤只调用、knowledge-match/docs-check 只消费，。标题级/类型集容收（坑 decision-heading-h3-colon-variant，2026-09-11 驾驭第十二批：归档 ### D-xxx@v1: 标题（H3+冒号）形态 8 条 accepted 决策双重盲区未入库）——标题正则 ^#{2,4} + 前导冒号容收；IMPLEMENTED_TYPES 补 feasibility/consistency（排除集本意只针对 scope）；存量归档已补录（2026-08-08-concurrent-write-preflight 7 条入 decisions/unmapped.md，幂等 update） |
+ 
+ ## 关键逻辑
+ 
+diff --git a/.sillyspec/docs/sillyspec/modules/runtime.md b/.sillyspec/docs/sillyspec/modules/runtime.md
+index 707c1eb..97a6a0d 100644
+--- a/.sillyspec/docs/sillyspec/modules/runtime.md
++++ b/.sillyspec/docs/sillyspec/modules/runtime.md
+@@ -79,7 +79,7 @@ ProgressManager.alignExecuteToPlan(cwd, changeName, specBase, {confirm})
+ - **brainstorm/verify 双占位符注入（fail-soft）**（2026-08-23-adopt-harness-practices，`src/run/prompt.js:429-464`）：brainstorm Step2 的 {DECISION_HITS} ← matchKnowledge decisionHits——命中 rejected 条目渲染「否决决策提示」段（ID/标题/否决理由/复潮条件），无命中替换空串零输出（不留残留占位符）；注入结果同步落 runtime JSON（.runtime/decision-hits.json，与 KNOWLEDGE_HIT_REPORT 落盘同口径）；advisory 展示不改步骤流程，异常单行说明不抛（全降级）。
+   verify「运行测试和质量扫描」步的 {EVIDENCE_AUTO_RECOMMENDATION}（`src/run/prompt.js:719-746`）← resolveTestStrategy 的 evidence_auto_recommendation.summary 渲染进 step prompt——verify-postcheck 在 --done 事后才解析 evidence-auto，agent 写 verify-result.md 时看不到推荐无从否决，故在 prompt 时点注入（含推荐理由、降级注记与「可在 verify-result.md 否决并改跑全量」路径，FR-11）；同样 fail-soft（注入失败给读 local.yaml 确认 test_strategy 的指引，--done 仍按 resolveTestStrategy 实测对账）。
+ - **archive CLI 下沉 git add**（坑4，`run/complete-handlers.js:410`）：`unregisterChange` 后 CLI 确定性 `safeGit add -- .sillyspec/changes/archive/ + .sillyspec/docs/`，不靠 archive step5 prompt 驱动（step5 prompt 的 git add 保留作幂等兜底）；safeGit 失败不阻断归档（目录已移动 + change 已注销）
+-- **execute run marker 写入原子化 + 分层 fail**（2026-08-16-state-split-fixes #1，D-001@v1）：四处 marker 写入点（`run/stage.js` 主点 + `run/gates.js`/`run/prompt.js`/`task-review.js` 补写点）统一「mkdir `execute-runs/<runId>/tasks` 先于 marker」不变量——目录不再只随 review.json 写入创建，消除「有 marker 无目录」空 run 被 archive 完成度扫描误用。分层失败语义：stage 主点 throw（execute 启动 exit 1 + 修复指引）；gates 补写点异常直穿外层 catch fail-closed；prompt 渲染路径降级（console.error 留痕 + runId 仍注入）；task-review 去静默保 fail-open。测试 execute-run-dir-fail-loud.test.mjs（33 断言）。runId 同秒碰撞根治（2026-09-10 驾驭小结①，坑 exec-run-id-same-second-collision）：四处写入点在 mkdir 前先经 `claimExecuteRunId`（task-review.js，非递归 mkdir 排他认领，碰撞换随机短后缀）——并行会话（不同 change）同秒启动 execute 不再生成同一 runId 共享 run 目录互相覆盖 per-task review.json；分层 fail 语义不变。第三批①再加固：generateExecuteRunId 携 changeName 附 6 位 FNV 哈希段（exec-…-<hash>）——不同变更 runId 结构性不同，五处 generate 写入点全部传 changeName。第八批：verify 实测门同款隔离（createVerifyGateSnapshot——resolveVerifyChangedFiles 变更文件集 + native worktree 时 overlay 源=worktree 根（--worktree 定向跑等价）+ 他者显式声明剔除 + 变更文档/local.yaml 随快照；gates.js verify 块 test/lint 快照内跑，fallback 主仓 + lint 阻断补污染归属提示，SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF 可关）。第六批：quick --done test+lint 门禁隔离快照（run/gate-snapshot.js createGateSnapshot——HEAD worktree + 会话文件 overlay + node_modules junction + local.yaml 复制，并行会话脏文件不参与本会话门禁判定；基建失败 fallback 主仓现行为；SILLYSPEC_QUICK_GATE_SNAPSHOT_OFF 可关）；taskcard --all 平台产物镜像主仓（mirrorPlatformArtifactToMainRepo 增 ensureParentDir——tasks/ 子目录在 changeDir 存在时自动建，index.js taskcard case pointer 态接线）。第五批①：自指平台指针警告跨进程 10min 窗口降频（warnSelfRefPointerOnce marker，writePlatformPointer 与 command.js 恢复链两处接线——daemon junction 形态下每命令重复告警的噪音闸）+ resolvePlatformSpecDir 对 pointer specRoot realpath 规范化（junction 坍缩为真实路径：design-init/endpoints 等落盘不再锚到 daemon junction 副本路径）。同批③：reapVerifyServices 改 killProcessTree 进程树击杀（win32 taskkill /PID <pid> /T /F；POSIX ps 递归枚举子进程后杀——坑 verify-service-process-leak 子进程泄漏：原 process.kill 只杀登记的 shell 包装 PID，python 服务本体成孤儿挂机；verify prompt 同步补「优先登记服务本体（叶子）PID」指引）。同批②：run/shared.js 新增 mirrorPlatformArtifactToMainRepo（平台模式产物双写镜像主仓 changeDir——design-init / verify-probes --init 在 pointer 态 agent 本地跑时不再单点依赖 spec-sync 回程；daemon 显式 --spec-dir / 本地无 changeDir / 路径同构跳过）。
++- **execute run marker 写入原子化 + 分层 fail**（2026-08-16-state-split-fixes #1，D-001@v1）：四处 marker 写入点（`run/stage.js` 主点 + `run/gates.js`/`run/prompt.js`/`task-review.js` 补写点）统一「mkdir `execute-runs/<runId>/tasks` 先于 marker」不变量——目录不再只随 review.json 写入创建，消除「有 marker 无目录」空 run 被 archive 完成度扫描误用。分层失败语义：stage 主点 throw（execute 启动 exit 1 + 修复指引）；gates 补写点异常直穿外层 catch fail-closed；prompt 渲染路径降级（console.error 留痕 + runId 仍注入）；task-review 去静默保 fail-open。测试 execute-run-dir-fail-loud.test.mjs（33 断言）。runId 同秒碰撞根治（2026-09-10 驾驭小结①，坑 exec-run-id-same-second-collision）：四处写入点在 mkdir 前先经 `claimExecuteRunId`（task-review.js，非递归 mkdir 排他认领，碰撞换随机短后缀）——并行会话（不同 change）同秒启动 execute 不再生成同一 runId 共享 run 目录互相覆盖 per-task review.json；分层 fail 语义不变。第三批①再加固：generateExecuteRunId 携 changeName 附 6 位 FNV 哈希段（exec-…-<hash>）——不同变更 runId 结构性不同，五处 generate 写入点全部传 changeName。第十二批：noAI 质量扫描步（executeVerifyQualityScan，verify 第一实测执行点）补接同款快照（第八批只接 gates.js verify 块——用户第三次撞上的真实来源）；两处 fallback 主仓时若非 .sillyspec 脏文件在场打 ⚠️ 口径可见提示（warnIfMainRepoDirtyForGate）。第八批：verify 实测门同款隔离（createVerifyGateSnapshot——resolveVerifyChangedFiles 变更文件集 + native worktree 时 overlay 源=worktree 根（--worktree 定向跑等价）+ 他者显式声明剔除 + 变更文档/local.yaml 随快照；gates.js verify 块 test/lint 快照内跑，fallback 主仓 + lint 阻断补污染归属提示，SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF 可关）。第六批：quick --done test+lint 门禁隔离快照（run/gate-snapshot.js createGateSnapshot——HEAD worktree + 会话文件 overlay + node_modules junction + local.yaml 复制，并行会话脏文件不参与本会话门禁判定；基建失败 fallback 主仓现行为；SILLYSPEC_QUICK_GATE_SNAPSHOT_OFF 可关）；taskcard --all 平台产物镜像主仓（mirrorPlatformArtifactToMainRepo 增 ensureParentDir——tasks/ 子目录在 changeDir 存在时自动建，index.js taskcard case pointer 态接线）。第五批①：自指平台指针警告跨进程 10min 窗口降频（warnSelfRefPointerOnce marker，writePlatformPointer 与 command.js 恢复链两处接线——daemon junction 形态下每命令重复告警的噪音闸）+ resolvePlatformSpecDir 对 pointer specRoot realpath 规范化（junction 坍缩为真实路径：design-init/endpoints 等落盘不再锚到 daemon junction 副本路径）。同批③：reapVerifyServices 改 killProcessTree 进程树击杀（win32 taskkill /PID <pid> /T /F；POSIX ps 递归枚举子进程后杀——坑 verify-service-process-leak 子进程泄漏：原 process.kill 只杀登记的 shell 包装 PID，python 服务本体成孤儿挂机；verify prompt 同步补「优先登记服务本体（叶子）PID」指引）。同批②：run/shared.js 新增 mirrorPlatformArtifactToMainRepo（平台模式产物双写镜像主仓 changeDir——design-init / verify-probes --init 在 pointer 态 agent 本地跑时不再单点依赖 spec-sync 回程；daemon 显式 --spec-dir / 本地无 changeDir / 路径同构跳过）。
+ - **`.runtime` 根解析统一 `resolveRuntimeRoot`**（坑 execute-runs-isolation，`run/shared.js`）：`.runtime` 根（含 `sillyspec.db` / execute-runs / stage-reviews / quick-sessions）由 `resolveRuntimeRoot(platformOpts, localSpecBase)` 统一解析，三级优先级 `platformOpts.runtimeRoot`（平台）> `platformOpts.specDriftAnchor`（drift 锚点）> `localSpecBase/.runtime`（本地兜底）。drift 守卫（`run/command.js`）命中时设 `specDriftAnchor = 主仓 specBase`（**不**设 `specRoot`/`runtimeRoot`——否则触发平台 sentinel，误跳 `triggerSync`/`checkApproval`、误进平台渲染分支）→ 下游 15 处站点解析落主仓 `.runtime`，execute-runs / stage-reviews 不随 worktree cleanup 整目录删消失，archive step1 完成度 gate 真相源（磁盘主仓 review.json）不再丢
+ 
+ - **--done 前非阻断并发预检 advisory**（`run/complete-handlers.js` quick 钩子 + `run/gates.js` execute 钩子 + `run/concurrent-detect.js`）：quick --done（`auditQuickCompletion` 后）与 execute --done（`completeStageGates` 入口 guard `stageName==='execute'`）完成前调 `detectConcurrentChanges()`（复用 `isQuickMetadata` 分类）扫工作树他者脏文件 + 他者活跃 change 目录，命中则 `console.warn` 多行 ⚠️（foreignFiles + otherActiveChanges + pathspec 提示），**绝不阻断**——不改 audit `result.status` / gate 通过性 / `isQuickMetadata` 语义（fail-open：`git status` 不可读时 `hasForeign=false` 不崩）。ownFiles 排除自身：quick 经 `resolveConcurrentAnchor`（concurrent-detect 纯函数，2026-08-18 误归属修复）——声明会话=`baselineFiles∪allowedFiles`（窗口 diff 含他者污染不再自吞），未声明会话维持旧口径 `changedFiles∪baselineFiles`；execute=design §6 交付文件（in-place 模式）或 `[]`（worktree 模式）
+diff --git a/.sillyspec/knowledge/decisions/unmapped.md b/.sillyspec/knowledge/decisions/unmapped.md
+index b7fe953..5abeaa1 100644
+--- a/.sillyspec/knowledge/decisions/unmapped.md
++++ b/.sillyspec/knowledge/decisions/unmapped.md
+@@ -15,3 +15,52 @@
+ 锚点：未记录
+ 最近确认：6d72aca
+ 理由：种子稿 §4 三点全部落地：①验证结论表的机器半边（CLI 全权生成 verify-facts.json：探针命令行+首跑关键指标快照）②探针复跑抽查（verify gate 重跑对比防篡改）③claims 三层分级标注（确定性检查/可复跑探针/人工判断）。不做 verify.facts.yaml 的 agent 半边（agent 手写 IR 是已知前科风险，判断层保持 verify-result.md 散文）。
++
++## D-001@v1 quick ownFiles 须并入 baselineFiles
++状态：implemented
++变更：2026-08-08-concurrent-write-preflight
++锚点：未记录
++最近确认：a69021cc85e6d19af0893fd5d74fe833ba61cea8
++理由：否。`review.changedFiles`（shared.js:1313? push）在 shared.js:1313? `if (isBaselineFile(file)) continue` 处排除了 baseline 文件——而多 agent 脏工作树起 quick 时，baselineFiles 正是本会话预存改动。仅用 changedFiles 会把自身预存文件误报为他者（§1 core 场景直接失效）。
++
++## D-002@v1 execute ownFiles 源优先级链 + in-place 噪音决策
++状态：implemented
++变更：2026-08-08-concurrent-write-preflight
++锚点：未记录
++最近确认：a69021cc85e6d19af0893fd5d74fe833ba61cea8
++理由：不可接受「空」。in-place 模式（`meta.mode==='in-place-fallback'`，gates.js:744 / complete-handlers.js:744）下主仓 git status 含本会话 src/ 交付文件，空 ownFiles 会把自身交付全报他者。worktree 模式下主仓看不见交付文件，空 ownFiles 无害。
++
++## D-004@v1 detectConcurrentChanges 强制 safeGit trim:false
++状态：implemented
++变更：2026-08-08-concurrent-write-preflight
++锚点：未记录
++最近确认：a69021cc85e6d19af0893fd5d74fe833ba61cea8
++理由：
++
++## D-005@v1 「活跃变更目录」术语澄清
++状态：implemented
++变更：2026-08-08-concurrent-write-preflight
++锚点：未记录
++最近确认：a69021cc85e6d19af0893fd5d74fe833ba61cea8
++理由：
++
++## D-007@v1 verify/archive --done 排除理由
++状态：implemented
++变更：2026-08-08-concurrent-write-preflight
++锚点：未记录
++最近确认：a69021cc85e6d19af0893fd5d74fe833ba61cea8
++理由：
++
++## D-003@v1 quick 钩子 review=null brownfield 兜底
++状态：implemented
++变更：2026-08-08-concurrent-write-preflight
++锚点：未记录
++最近确认：a69021cc85e6d19af0893fd5d74fe833ba61cea8
++理由：complete-handlers.js:1081 `let review = null`，仅 `if(guard)` 内赋值。brownfield 无 guard 时 review=null → `review.changedFiles` 抛 TypeError。design §5 只给 execute「取不到则空」兜底，quick 缺。
++
++## D-006@v1 措辞「写操作前预检」vs 实际「完成时报告」
++状态：implemented
++变更：2026-08-08-concurrent-write-preflight
++锚点：未记录
++最近确认：a69021cc85e6d19af0893fd5d74fe833ba61cea8
++理由：
+diff --git a/src/decision-distill.js b/src/decision-distill.js
+index 8df375c..fc6b5cd 100644
+--- a/src/decision-distill.js
++++ b/src/decision-distill.js
+@@ -25,7 +25,10 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from
+ import { basename, dirname, join } from 'node:path'
+ 
+ /** FR-02：有实现影响的五类 type（scope 与未知 type 的 confirmed/accepted 不入选） */
+-const IMPLEMENTED_TYPES = new Set(['architecture', 'compatibility', 'boundary', 'definition', 'process'])
++// feasibility 补录（2026-09-11 驾驭第十二批，本仓归档 2026-08-08-concurrent-write-preflight 实证：
++// 8 条 feasibility+accepted 决策因五类集漏选从未入知识库）——可行性裁决是设计决策（技术选型/
++// 可行 vs 不可行），与五类同格；排除集本意只针对 scope（范围裁决不入库）。
++const IMPLEMENTED_TYPES = new Set(['architecture', 'compatibility', 'boundary', 'definition', 'process', 'feasibility', 'consistency'])
+ /** FR-02：implemented 入选的 status（superseded 等其余状态不入选） */
+ const IMPLEMENTED_STATUSES = new Set(['confirmed', 'accepted'])
+ /** 三级兜底终点域（仍不中归此；域文件由本模块自管） */
+@@ -116,7 +119,10 @@ export function parseDecisions(changeDir) {
+     //   ①标题式（模板正统）：`## D-001@v2 标题`，正文行 `- 字段：值`
+     //   ②扁平列表式（agent 实际产出）：`- D-001@v2：标题` 或 `- D-001@v2 | 状态：implemented | 模块域：x`
+     //     ——行内 ｜ 分段即字段；后续缩进子项 `  - 字段：值` 同样进字段
+-    const h = line.match(/^##\s+(D-\d+)(?:@v(\d+))?\s*(.*)$/)
++    // 标题级放宽 ^#{2,4}（坑 decision-heading-h3-colon-variant，2026-09-11 驾驭第十二批，
++    // 本仓 2026-08-08-concurrent-write-preflight 实证：### D-001@v1: 标题 形态 8 条 accepted
++    // 决策未入知识库）——agent 落盘的标题级漂移（##/###/####）与标题前导冒号均容收
++    const h = line.match(/^#{2,4}\s+(D-\d+)(?:@v(\d+))?\s*[:：]?\s*(.*)$/)
+     if (h) {
+       flush()
+       const version = h[2] ? parseInt(h[2], 10) : 1
+diff --git a/src/run/verify-quality-scan.js b/src/run/verify-quality-scan.js
+index b71728e..74f043b 100644
+--- a/src/run/verify-quality-scan.js
++++ b/src/run/verify-quality-scan.js
+@@ -27,7 +27,7 @@ import { existsSync, readFileSync, mkdirSync } from 'node:fs'
+ import { join, dirname } from 'node:path'
+ import { writeAtomicSync } from '../fs-atomic.js'
+ import { gitQuiet } from '../git-helper.js'
+-import { resolveRuntimeRoot } from './shared.js'
++import { resolveRuntimeRoot, parsePorcelainPath } from './shared.js'
+ import { detectChangeRisk } from '../change-risk-profile.js'
+ import { recordFrictionEvent } from '../friction-tally.js'
+ 
+@@ -244,6 +244,20 @@ export function renderCoverageExistenceReport(cov) {
+   return lines.join('\n')
+ }
+ 
++
++/** fallback 口径可见性（2026-09-11 驾驭第十二批）：快照不可用回退主仓且主仓存在非 .sillyspec
++ * 脏文件时，明示实测判定面含并行 WIP——第三撞根因是「静默 fallback 看不出走了哪个口径」。 */
++function warnIfMainRepoDirtyForGate(cwd) {
++  try {
++    const st = gitQuiet(cwd, ['status', '--porcelain'])
++    if (!st) return
++    const dirty = st.split('\n').map(l => parsePorcelainPath(l)).filter(p => p && !p.startsWith('.sillyspec/'))
++    if (dirty.length > 0) {
++      console.warn(`⚠️ 本次实测未走隔离快照（基建不可用/变更文件集为空），判定面 = main 工作区——当前存在 ${dirty.length} 个非 .sillyspec 脏文件（${dirty.slice(0, 3).join('、')}${dirty.length > 3 ? ' 等' : ''}），并行会话 WIP 可能影响判定；失败时先做污染归属鉴定再修。`)
++    }
++  } catch { /* git 不可用 → 静默（原本也无快照） */ }
++}
++
+ /**
+  * noAI 动作本体：提前实测 test+lint → 指纹落盘 → 全绿返回（stage.js 盖 completed 自动前进）；
+  * 失败（test failed / lint 硬门档 failed）打印归因提示后 throw——步骤不推进，agent 修复后
+@@ -251,23 +265,49 @@ export function renderCoverageExistenceReport(cov) {
+  */
+ export async function executeVerifyQualityScan({ cwd, specBase, changeName, platformOpts }) {
+   const { runVerifyTestCheck, printVerifyTestCheck, runVerifyLintCheck, printVerifyLintCheck, shouldBlockVerifyLint } = await import('../verify-postcheck.js')
++  // ── 隔离快照定向跑（2026-09-11 驾驭第十二批，用户第三次撞上：noAI 质量扫描是 verify 的
++  // 第一实测执行点，第八批只接了 gates.js verify 块——本步仍跑 main 工作区，并行 WIP 在此弄红
++  // 无辜变更）。与 gates.js 同款：createVerifyGateSnapshot（HEAD + 本变更文件集，native worktree
++  // 定向源），ENV 同 SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF，基建失败 fallback 主仓 + 脏文件在场时
++  // ⚠️ 口径可见。指纹（storeQualityScan）仍按主仓 cwd 算——--done 对账复用的指纹匹配口径不变。
++  let snap = null
++  if (!process.env.SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF) {
++    try {
++      const { createVerifyGateSnapshot } = await import('./gate-snapshot.js')
++      snap = await createVerifyGateSnapshot({ cwd, changeName, specBase, platformOpts })
++      if (snap) {
++        console.log(`🧪 noAI 扫描隔离快照：HEAD + 本变更 ${snap.changeFileCount} 个文件${snap.sourceRoot ? '（overlay 自 worktree——本变更分支内容定向跑）' : ''}（并行会话脏文件不参与判定）`)
++      }
++    } catch { /* 快照链路异常 → 主仓现行为 */ }
++  }
++  const gateCwd = snap ? snap.snapshotRoot : cwd
++  const gateSpecBase = snap ? join(snap.snapshotRoot, '.sillyspec') : specBase
++  if (!snap) {
++    warnIfMainRepoDirtyForGate(cwd)
++  }
+   console.log(`\n⏳ noAI 质量扫描：CLI 亲自实测 commands.test（同步，长套件 2~10 分钟无输出属正常）——结果按代码指纹落盘，最终 --done 对账直接复用免重跑。`)
+-  const testCheck = runVerifyTestCheck({ cwd, specBase, changeName })
+-  printVerifyTestCheck(testCheck)
+-  const lintCheck = runVerifyLintCheck({ cwd, specBase })
++  let testCheck
++  let lintCheck
++  let coverageCheck = null
++  try {
++    testCheck = runVerifyTestCheck({ cwd: gateCwd, specBase: gateSpecBase, changeName })
++    printVerifyTestCheck(testCheck)
++    lintCheck = runVerifyLintCheck({ cwd: gateCwd, specBase: gateSpecBase })
+   if (lintCheck.status !== 'skipped') {
+     console.log(`\n⏳ noAI 质量扫描：CLI 亲自实测 commands.lint…`)
+   }
+   printVerifyLintCheck(lintCheck)
+   // P2（noai-ir-roadmap §5）：coverage 存在性事实——commands.coverage 显式配置才采集，
+   // 只证「有覆盖记录」不证「覆盖了行为」（渲染自带语义边界），fail-soft 不阻断。
+-  let coverageCheck = null
+   try {
+     coverageCheck = await runCoverageExistenceCheck({ cwd, specBase, changeName })
+     console.log(renderCoverageExistenceReport(coverageCheck))
+   } catch (e) {
+     console.warn(`⚠️  coverage 存在性事实采集异常（fail-soft）: ${e && e.message ? e.message : e}`)
+   }
++  } finally {
++    if (snap) { try { snap.cleanup() } catch {} }
++  }
+   storeQualityScan({ specBase, cwd, changeName, testResult: testCheck, lintResult: lintCheck, coverageCheck })
+   const testFailed = testCheck.status === 'failed'
+   const lintBlocked = shouldBlockVerifyLint(lintCheck)
+diff --git a/test/decision-distill-heading-variants.test.mjs b/test/decision-distill-heading-variants.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/decision-distill-heading-variants.test.mjs
+@@ -0,0 +1,76 @@
++/**
++ * 决策条目标题级/冒号变体容收 + 类型集补录（坑 decision-heading-h3-colon-variant，
++ * 2026-09-11 驾驭第十二批，本仓归档 2026-08-08-concurrent-write-preflight 实证：
++ * `### D-001@v1: 标题`（H3+冒号）形态 8 条 accepted 决策因 (a) 标题正则只认 `##`
++ * (b) type feasibility/consistency 不在五类集——双重盲区从未入知识库）。
++ *
++ * 锁定语义：
++ *   - ### / #### 标题级 + 标题前导冒号（中英）均可解析
++ *   - feasibility / consistency 类型 + accepted → 入选（与五类同格；scope 排除语义不变）
++ *   - 存量归档补录幂等：同变更重跑 update 不重复 append
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'fs'
++import { join } from 'path'
++import { tmpdir } from 'os'
++import { parseDecisions, distillIntoKnowledge } from '../src/decision-distill.js'
++
++const tmpRoots = []
++function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); tmpRoots.push(d); return d }
++test.after(() => { for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
++
++const H3_ARCHIVE = [
++  '# 决策追踪',
++  '',
++  '### D-001@v1: H3 带冒号标题',
++  '- type: feasibility',
++  '- status: accepted',
++  '- answer: 并入基线集',
++  '',
++  '#### D-002 H4 无冒号标题',
++  '- type: consistency',
++  '- 状态: accepted',
++  '',
++  '### D-003@v1: scope 语义验证',
++  '- type: scope',
++  '- status: accepted',
++  '',
++  '### D-004@v1: deferred 不入选',
++  '- type: feasibility',
++  '- status: deferred',
++  '',
++].join('\n') + '\n'
++
++test('H3/H4 标题级 + 前导冒号容收；feasibility/consistency 入选、scope/deferred 不入选', () => {
++  const changeDir = mk('h3v-')
++  writeFileSync(join(changeDir, 'decisions.md'), H3_ARCHIVE)
++  const r = parseDecisions(changeDir)
++  assert.equal(r.entries.length, 4, '四种标题形态全解析')
++  const d1 = r.entries.find(e => e.number === 'D-001')
++  assert.equal(d1.title, 'H3 带冒号标题', 'H3+冒号标题剥前导冒号')
++  assert.equal(d1.selected, 'implemented', 'feasibility+accepted 入选（类型集补录）')
++  const d2 = r.entries.find(e => e.number === 'D-002')
++  assert.equal(d2.title, 'H4 无冒号标题', 'H4 标题级容收')
++  assert.equal(d2.selected, 'implemented', 'consistency+accepted 入选')
++  assert.equal(r.entries.find(e => e.number === 'D-003').selected, null, 'scope 仍不入选（排除语义不变）')
++  assert.equal(r.entries.find(e => e.number === 'D-004').selected, null, 'deferred 不入选')
++})
++
++test('存量归档补录：H3 格式 distill 落知识库 + 幂等重跑不重复', () => {
++  const changeDir = mk('h3v-distill-')
++  mkdirSync(join(changeDir, '.sillyspec'), { recursive: true }) // 形态无碍
++  writeFileSync(join(changeDir, 'decisions.md'), H3_ARCHIVE)
++  const k = mk('h3v-k-')
++  const r1 = distillIntoKnowledge(changeDir, k, 'deadbeef')
++  assert.ok(r1.written.filter(w => w.action === 'append').length >= 2, `accepted 条目 append（实际 ${JSON.stringify(r1.written)}）`)
++  const file = join(k, 'decisions', 'unmapped.md')
++  const content1 = readFileSync(file, 'utf8')
++  assert.ok(content1.includes('D-001@v1') && content1.includes('变更：'), '条目含变更限定行')
++  // 幂等重跑：同号同变更 update 原地重写，不重复 append
++  const r2 = distillIntoKnowledge(changeDir, k, 'deadbeef')
++  const content2 = readFileSync(file, 'utf8')
++  assert.equal((content2.match(/D-001@v1/g) || []).length, (content1.match(/D-001@v1/g) || []).length,
++    '重跑条目数不变（幂等）')
++  assert.ok(r2.written.every(w => w.action !== 'append') || r2.written.length === 0, `重跑无 append（实际 ${JSON.stringify(r2.written.map(w => w.action))}）`)
++})

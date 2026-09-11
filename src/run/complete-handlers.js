@@ -1284,6 +1284,53 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
         softFiles,
       })
       console.log(`📝 QUICKLOG 条目 ${qlId} 已标记完成`)
+      // 范围快照/patch 审计级落盘（quick-359a48f1）：quicklog/patches/<qlId>.json+.patch——按
+      // ql-ID 对齐 QUICKLOG 条目（平台按条目抓取），json 冗余 sessionId 供 guard 清理后记录态
+      // 反查（computeQuickAudit → findQuickPatchRecord 同链）。patch 为 --done 时点全量冻结
+      // （HEAD 未提交窗口，untracked 自拼 hunk）。fail-soft：失败只提示，不阻断收尾。
+      try {
+        const { computeChangeScopeAudit, collectNumstatByPath, buildFrozenPatch } = await import('../scope-audit.js')
+        // changeName == sessionId（handleQuickStageCompletion 作用域内，§4.6 注释同款约定）
+        const snapResult = await computeChangeScopeAudit({ cwd, specBase, changeName, platformOpts, collectPatch: true })
+        let quickRows = snapResult && snapResult.mode === 'quick' && Array.isArray(snapResult.rows)
+          ? snapResult.rows.filter(r => r && r.attribution !== 'undeclared')
+          : null
+        let frozenPatch = snapResult ? snapResult.frozenPatch : undefined
+        // 窗口空兜底（baseline 会话常态）：--files 声明文件是会话启动时预存脏（audit baseline
+        // 剔除后窗口空，quickRows 空），但声明即归属——改用声明文件集构造 rows + patch（行数按
+        // HEAD 未提交窗口采集，同口径）。
+        if ((!quickRows || quickRows.length === 0) && Array.isArray(guard?.allowedFiles) && guard.allowedFiles.length > 0) {
+          const sessionRoot = dirname(specBase)
+          const declaredPosix = guard.allowedFiles.map(f => String(f).replace(/\\/g, '/')).filter(Boolean)
+          const stats = collectNumstatByPath(sessionRoot, declaredPosix, { baseRef: 'HEAD' })
+          quickRows = declaredPosix.filter(f => stats.has(f) || existsSync(join(sessionRoot, f)))
+            .map(f => {
+              const st = stats.get(f) || { additions: null, deletions: null, kind: existsSync(join(sessionRoot, f)) ? 'modified' : 'deleted' }
+              return { path: f, declared: true, additions: st.additions, deletions: st.deletions, kind: st.kind, attribution: 'declared' }
+            })
+          frozenPatch = buildFrozenPatch(sessionRoot, quickRows.map(r => r.path), { baseRef: 'HEAD' })
+        }
+        if (quickRows && quickRows.length > 0) {
+          const patchesDir = join(specBase, 'quicklog', 'patches')
+          mkdirSync(patchesDir, { recursive: true })
+          const { ...snapRest } = snapResult || {}
+          delete snapRest.frozenPatch
+          writeFileSync(join(patchesDir, `${qlId}.json`), JSON.stringify({
+            ...snapRest,
+            rows: quickRows,
+            totals: { files: quickRows.length, additions: quickRows.reduce((n, r) => n + (Number.isFinite(r.additions) ? r.additions : 0), 0), deletions: quickRows.reduce((n, r) => n + (Number.isFinite(r.deletions) ? r.deletions : 0), 0) },
+            qlId,
+            sessionId: changeName,
+            savedAt: new Date().toISOString(),
+          }, null, 2) + '\n')
+          if (typeof frozenPatch === 'string' && frozenPatch) {
+            writeFileSync(join(patchesDir, `${qlId}.patch`), frozenPatch.endsWith('\n') ? frozenPatch : frozenPatch + '\n')
+          }
+          console.log(`📦 范围快照已落 quicklog/patches/${qlId}.json${typeof frozenPatch === 'string' && frozenPatch ? ' + .patch（--done 时点冻结）' : ''}`)
+        }
+      } catch (e) {
+        console.warn(`   ⚠️ quick 范围快照落盘失败（不阻断收尾）：${e && e.message ? String(e.message).split('\n')[0] : e}`)
+      }
       // 刷新 DB title：从 step3「需求：」提取（agent 可改 title 的途径），覆盖启动时的兜底快照。
       // 与 QUICKLOG 标题刷新（flipEntryInContent 内 extractTitleFromResult）同源，保持 DB↔QUICKLOG 一致。
       try {

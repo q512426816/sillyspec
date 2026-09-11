@@ -24,7 +24,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { execFileSync } from 'node:child_process'
-import { computeChangeScopeAudit, renderScopeAuditTable, getFileDiff } from '../src/scope-audit.js'
+import { computeChangeScopeAudit, renderScopeAuditTable, getFileDiff, buildFrozenPatch } from '../src/scope-audit.js'
 
 /** git 调用：数组参数不经 shell（Windows 路径安全），stdio pipe 吞输出 */
 function sh(cwd, args) {
@@ -251,6 +251,7 @@ test('FR-01 无锚形态：baseAnchor 缺失 → 行数按 HEAD 未提交窗口�
     sh(d, ['commit', '-q', '-m', 'init'])
     const specBase = join(d, '.sillyspec')
     writeDesign(specBase, 'noanchor-change', ['| 修改 | src/planned-a.js | 无锚形态 |'])
+    writeWorktreeMeta(specBase, 'noanchor-change', null)  // 执行证据：meta 在但无锚字段（baseHash=null → baseAnchor 缺失 → HEAD 兜底）
     // 形态 B（无 meta.json）且无 sillyspec/<change> 分支 → merge-base 不可得，仅 status 源。
     // 新契约（quick-8aa52289）：不再恒降级 —，行数对未提交窗口采集（git diff HEAD --numstat 同口径）
     writeFileSync(join(d, 'src', 'planned-a.js'), 'a1\na2\na3\n')
@@ -291,6 +292,7 @@ test('归档形态：实时窗口空 + execute 快照在 → 记录态表（note
     const specBase = join(d, '.sillyspec')
     // 归档目录（changes/archive/<名>/design.md）
     writeDesign(specBase, 'archived-change', ['| 修改 | src/a.js | 说明 |'], { archived: true })
+    sh(d, ['tag', 'sillyspec-audit/sillyspec/archived-change'])  // 执行证据
     // execute 时点快照（.runtime/scope-audit-<名>.json，行数为 execute 采集真值）
     const runtimeRoot = join(specBase, '.runtime')
     mkdirSync(runtimeRoot, { recursive: true })
@@ -368,6 +370,7 @@ test('归档形态：快照缺失 + 实时窗口空 → 开放区间兜底 + 漂
     sh(d, ['commit', '-q', '-m', 'init'])
     const specBase = join(d, '.sillyspec')
     writeDesign(specBase, 'archmiss-change', ['| 修改 | src/a.js | 说明 |'], { archived: true })
+    sh(d, ['tag', 'sillyspec-audit/sillyspec/archmiss-change'])  // 执行证据
     // 无快照；窗口干净（本变更改动已提交/不存在的形态）
 
     const r = await computeChangeScopeAudit({ cwd: d, changeName: 'archmiss-change' })
@@ -448,6 +451,32 @@ test('FR-01 降级：design 清单解析失败 → 实际侧 only 视图，不�
   } finally { cleanup(d) }
 })
 
+// ───────────────────────── 组 6b：预执行形态（quick-bbb5037c） ─────────────────────────
+
+test('预执行形态：无 meta/分支/tag 三无 → 计划清单视图，工作区脏文件不进表、无收尾警告', async () => {
+  const d = makeRepo('sa-preexec-')
+  try {
+    mkdirSync(join(d, 'src'), { recursive: true })
+    writeFileSync(join(d, 'src', 'exist.js'), 'e1\n')
+    sh(d, ['add', '-A'])
+    sh(d, ['commit', '-q', '-m', 'init'])
+    const specBase = join(d, '.sillyspec')
+    writeDesign(specBase, 'preexec-change', ['| 新增 | NEW:src/todo.js | 待实现 |', '| 修改 | src/exist.js | 说明 |'])
+    // 无 meta、无分支、无 tag（预执行）；但工作区有脏文件（他者/本仓在途）
+    writeFileSync(join(d, 'src', 'dirty-parallel.js'), 'dirty\n')
+
+    const r = await computeChangeScopeAudit({ cwd: d, changeName: 'preexec-change' })
+    assert.equal(r.ok, true)
+    assert.equal(r.rows.length, 2, '只出 design 清单两行')
+    assert.ok(r.rows.every(x => x.verdict === 'untouched'), '全部待实现（untouched）')
+    assert.ok(!r.rows.some(x => x.path.includes('dirty-parallel')), '工作区脏文件不进表')
+    assert.ok(r.note && r.note.includes('尚未进入 execute'), `note 说明预执行（实际 ${r.note}）`)
+    assert.ok(!r.note.includes('快照缺失'), '不误报收尾漂移警告')
+    const out = renderScopeAuditTable(r)
+    assert.ok(!out.includes('dirty-parallel'), '渲染无脏文件')
+  } finally { cleanup(d) }
+})
+
 // ───────────────────────── 组 6：单文件 diff（quick-63776328，getFileDiff） ─────────────────────────
 
 test('getFileDiff：tracked 文件改动 → git 原生 diff 内容（锚点=形态 A meta 锚）', async () => {
@@ -508,6 +537,186 @@ test('getFileDiff：窗口内未改动 → diff 空串 + note', async () => {
     assert.equal(fd.ok, true)
     assert.equal(fd.diff, '')
     assert.ok(fd.note && fd.note.includes('无 diff'), `note 说明未改（实际 ${fd.note}）`)
+  } finally { cleanup(d) }
+})
+
+test('快照优先放宽（quick-bd84b852）：活跃 post-apply（无 meta=分支已删）+ 快照在 → 冻结快照优先于实时开放区间', async () => {
+  const d = makeRepo('sa-settle-')
+  try {
+    mkdirSync(join(d, 'src'), { recursive: true })
+    writeFileSync(join(d, 'src', 'a.js'), 'a1\n')
+    sh(d, ['add', '-A'])
+    sh(d, ['commit', '-q', '-m', 'init'])
+    const specBase = join(d, '.sillyspec')
+    writeDesign(specBase, 'settle-change', ['| 修改 | src/a.js | 说明 |']) // 活跃目录（非归档）
+    sh(d, ['tag', 'sillyspec-audit/sillyspec/settle-change'])  // 执行证据（post-apply 收尾信号）
+    // execute 已收尾：无 worktree meta.json（post-apply 形态）+ 快照在
+    const runtimeRoot = join(specBase, '.runtime')
+    mkdirSync(runtimeRoot, { recursive: true })
+    writeFileSync(join(runtimeRoot, 'scope-audit-settle-change.json'), JSON.stringify({
+      mode: 'full-flow', ok: true, degradedReason: null, baseAnchor: 'abc1234',
+      totals: { files: 1, additions: 9, deletions: 2 },
+      rows: [{ path: 'src/a.js', planned: '修改', additions: 9, deletions: 2, kind: 'modified', verdict: 'planned' }],
+      excluded: { foreignDeclared: [] }, savedAt: '2026-09-11T08:00:00.000Z',
+    }))
+    // 快照落盘后主仓继续演进（并行会话）——冻结语义下不进表
+    writeFileSync(join(d, 'src', 'parallel-later.js'), 'x\n')
+
+    const r = await computeChangeScopeAudit({ cwd: d, changeName: 'settle-change' })
+    assert.equal(r.ok, true)
+    assert.equal(r.rows.length, 1, '冻结文件集（后续并行新文件不进表）')
+    assert.equal(r.rows[0].additions, 9, '行数取快照真值')
+    assert.ok(!r.rows.some(x => x.path.includes('parallel-later')), '并行演进被冻结排除')
+    assert.ok(r.note && r.note.includes('execute 已收尾') && r.note.includes('冻结快照'),
+      `note 用活跃收尾措辞（实际 ${r.note}）`)
+    assert.ok(!r.note.includes('已归档'), '非归档变更不误称已归档')
+  } finally { cleanup(d) }
+})
+
+test('快照缺失漂移警告（quick-bd84b852）：活跃 post-apply 无快照 → 开放区间表 + 明示漂移与旧变更不可重建', async () => {
+  const d = makeRepo('sa-nosnap-')
+  try {
+    mkdirSync(join(d, 'src'), { recursive: true })
+    writeFileSync(join(d, 'src', 'a.js'), 'a1\n')
+    sh(d, ['add', '-A'])
+    sh(d, ['commit', '-q', '-m', 'init'])
+    const specBase = join(d, '.sillyspec')
+    writeDesign(specBase, 'nosnap-change', ['| 修改 | src/a.js | 说明 |']) // 活跃 + 无 meta（post-apply）+ 无快照
+    sh(d, ['tag', 'sillyspec-audit/sillyspec/nosnap-change'])  // 执行证据
+    writeFileSync(join(d, 'src', 'a.js'), 'a1\na2\n')
+
+    const r = await computeChangeScopeAudit({ cwd: d, changeName: 'nosnap-change' })
+    assert.equal(r.ok, true)
+    assert.equal(r.rows.length, 1, '实时开放区间仍出表（兜底不空转）')
+    assert.ok(r.note && r.note.includes('快照缺失') && r.note.includes('开放区间'),
+      `note 明示漂移语义（实际 ${r.note}）`)
+    assert.ok(r.note.includes('无法重建冻结记录'), '旧变更冻结记录不可重建如实告知')
+    const out = renderScopeAuditTable(r)
+    assert.ok(out.includes('快照缺失'), '渲染含漂移警告')
+  } finally { cleanup(d) }
+})
+
+// ───────────────────────── 组 7：审计级存储（quick-359a48f1，patch 生成/切片/quick 记录态） ─────────────────────────
+
+test('buildFrozenPatch：tracked diff 原文 + untracked 新文件自拼 hunk + binary 标记', async () => {
+  const d = makeRepo('sa-patch-')
+  try {
+    mkdirSync(join(d, 'src'), { recursive: true })
+    writeFileSync(join(d, 'src', 'a.js'), 'a1\n')
+    sh(d, ['add', '-A'])
+    sh(d, ['commit', '-q', '-m', 'init'])
+    const base = head(d)
+    const specBase = join(d, '.sillyspec')
+    writeDesign(specBase, 'patch-change', ['| 修改 | src/a.js | 说明 |', '| 新增 | NEW:src/fresh.js | 新文件 |'])
+    writeWorktreeMeta(specBase, 'patch-change', base)
+    writeFileSync(join(d, 'src', 'a.js'), 'a1\na2-new\n')
+    writeFileSync(join(d, 'src', 'fresh.js'), 'fresh-1\nfresh-2\n')
+    writeFileSync(join(d, 'logo.bin'), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0x0d]))
+
+    const patch = buildFrozenPatch(d, ['src/a.js', 'src/fresh.js', 'logo.bin'], { baseRef: base })
+    assert.ok(patch.includes('diff --git a/src/a.js b/src/a.js'), 'tracked 段 git 原生头')
+    assert.ok(patch.includes('+a2-new'), 'tracked 段含改动内容')
+    assert.ok(patch.includes('diff --git a/src/fresh.js b/src/fresh.js'), 'untracked 段拼接头')
+    assert.ok(patch.includes('new file mode 100644') && patch.includes('--- /dev/null'), 'untracked 段 new file 形态')
+    assert.ok(patch.includes('+fresh-1') && patch.includes('@@ -0,0 +1,2 @@'), 'untracked 段正文与计数')
+    assert.ok(!patch.includes('logo.bin\n+++'), 'binary 不进内容')
+    const { computeChangeScopeAudit, getFileDiff } = await import('../src/scope-audit.js')
+    const fd = await getFileDiff({ cwd: d, changeName: 'patch-change', filePath: 'src/fresh.js' })
+    // 形态 A 活跃（meta 在）无冻结 patch 文件 → 走实时锚 diff；untracked 不在 diff → note 提示（回归锚定）
+    assert.equal(fd.ok, true)
+    assert.ok(fd.note && fd.note.includes('未跟踪新文件'), `活跃形态 untracked 提示（实际 ${fd.note}）`)
+  } finally { cleanup(d) }
+})
+
+test('buildFrozenPatch 归属口径（quick-90015473）：tracked 段按 files 过滤，并行会话文件不进 patch', async () => {
+  const d = makeRepo('sa-pfilter-')
+  try {
+    mkdirSync(join(d, 'src'), { recursive: true })
+    writeFileSync(join(d, 'src', 'mine.js'), 'm1\n')
+    writeFileSync(join(d, 'src', 'foreign.js'), 'f1\n')
+    sh(d, ['add', '-A'])
+    sh(d, ['commit', '-q', '-m', 'init'])
+    const base = head(d)
+    writeFileSync(join(d, 'src', 'mine.js'), 'm1\nm2\n')
+    writeFileSync(join(d, 'src', 'foreign.js'), 'f1\nCHANGED-BY-PARALLEL\n')
+
+    const patch = buildFrozenPatch(d, ['src/mine.js'], { baseRef: base })
+    assert.ok(patch.includes('+m2'), '归属文件内容在')
+    assert.ok(!patch.includes('CHANGED-BY-PARALLEL'), '并行会话文件不进 patch（归属口径）')
+    assert.ok(!patch.includes('diff --git a/src/foreign.js'), '无 foreign 的 diff 段头')
+  } finally { cleanup(d) }
+})
+
+test('审计级 patch 落盘与切片（--file 真·当时内容比对）：归档目录 scope-audit.patch → 后续演进不混入', async () => {
+  const d = makeRepo('sa-slice-')
+  try {
+    mkdirSync(join(d, 'src'), { recursive: true })
+    writeFileSync(join(d, 'src', 'a.js'), 'a1\n')
+    sh(d, ['add', '-A'])
+    sh(d, ['commit', '-q', '-m', 'init'])
+    const base = head(d)
+    const specBase = join(d, '.sillyspec')
+    const archivedDir = join(specBase, 'changes', 'archive', 'slice-change')
+    mkdirSync(archivedDir, { recursive: true })
+    writeFileSync(join(archivedDir, 'design.md'), '# design（fixture）\n\n## 文件变更清单\n\n| 操作 | 文件路径 | 说明 |\n|---|---|---|\n| 修改 | src/a.js | 说明 |\n')
+    // 快照（记录态触发器）+ 冻结 patch（apply 时点内容：a1→a1/a2-frozen）
+    const runtimeRoot = join(specBase, '.runtime')
+    mkdirSync(runtimeRoot, { recursive: true })
+    writeFileSync(join(runtimeRoot, 'scope-audit-slice-change.json'), JSON.stringify({
+      mode: 'full-flow', ok: true, degradedReason: null, baseAnchor: base,
+      totals: { files: 1, additions: 1, deletions: 0 },
+      rows: [{ path: 'src/a.js', planned: '修改', additions: 1, deletions: 0, kind: 'modified', verdict: 'planned' }],
+      excluded: { foreignDeclared: [] }, savedAt: '2026-09-11T10:00:00.000Z',
+    }))
+    const frozenContent = 'diff --git a/src/a.js b/src/a.js\nindex 111..222 100644\n--- a/src/a.js\n+++ b/src/a.js\n@@ -1 +1,2 @@\n a1\n+a2-frozen\n'
+    writeFileSync(join(archivedDir, 'scope-audit.patch'), frozenContent)
+    // 后续演进（apply 之后）：同文件又被改——冻结切片不得混入
+    writeFileSync(join(d, 'src', 'a.js'), 'a1\na2-frozen\nLATER-EVOLUTION\n')
+
+    const fd = await getFileDiff({ cwd: d, changeName: 'slice-change', filePath: 'src/a.js' })
+    assert.equal(fd.ok, true)
+    assert.ok(fd.anchorLabel && fd.anchorLabel.includes('冻结 patch'), `优先冻结 patch（实际 ${fd.anchorLabel}）`)
+    assert.ok(fd.diff.includes('+a2-frozen'), '切片含当时改动')
+    assert.ok(!fd.diff.includes('LATER-EVOLUTION'), '后续演进不混入（真·当时比对）')
+  } finally { cleanup(d) }
+})
+
+test('quick 记录态（guard 清理后）：quicklog/patches/<qlId>.json 反查 → 记录态表 + --file 切片', async () => {
+  const d = makeRepo('sa-qrec-')
+  try {
+    mkdirSync(join(d, 'src'), { recursive: true })
+    writeFileSync(join(d, 'src', 'a.js'), 'a1\n')
+    sh(d, ['add', '-A'])
+    sh(d, ['commit', '-q', '-m', 'init'])
+    const specBase = join(d, '.sillyspec')
+    mkdirSync(join(specBase, 'quicklog'), { recursive: true })
+    writeFileSync(join(specBase, 'quicklog', '2026-09.md'), '# QUICKLOG\n')
+    // guard 已清理（不存在）+ patches 记录在
+    const patchesDir = join(specBase, 'quicklog', 'patches')
+    mkdirSync(patchesDir, { recursive: true })
+    writeFileSync(join(patchesDir, 'ql-20260911-001-abcd.json'), JSON.stringify({
+      mode: 'quick', ok: true, baseAnchor: 'quick-window:quick-abcd1234',
+      totals: { files: 1, additions: 3, deletions: 1 },
+      rows: [{ path: 'src/a.js', declared: true, additions: 3, deletions: 1, kind: 'modified', attribution: 'declared' }],
+      excluded: { foreignDeclared: [] }, qlId: 'ql-20260911-001-abcd', sessionId: 'quick-abcd1234',
+      savedAt: '2026-09-11T09:00:00.000Z',
+    }))
+    writeFileSync(join(patchesDir, 'ql-20260911-001-abcd.patch'),
+      'diff --git a/src/a.js b/src/a.js\n--- a/src/a.js\n+++ b/src/a.js\n@@ -1 +1,3 @@\n a1\n+q1\n+q2\n')
+
+    const r = await computeChangeScopeAudit({ cwd: d, changeName: 'quick-abcd1234' })
+    assert.equal(r.ok, true, 'guard 清理后不再 ok=false')
+    assert.equal(r.mode, 'quick')
+    assert.equal(r.rows.length, 1)
+    assert.equal(r.rows[0].additions, 3, '行数取冻结记录')
+    assert.ok(r.note && r.note.includes('记录态') && r.note.includes('ql-20260911-001-abcd'), `note 点名记录态（实际 ${r.note}）`)
+    assert.ok(r.frozenPatchPath && r.frozenPatchPath.includes('ql-20260911-001-abcd.patch'), 'frozenPatchPath 供 --file 切片')
+    const out = renderScopeAuditTable(r)
+    assert.ok(out.includes('记录态'), '渲染记录态说明')
+    // --file 切片走 frozenPatchPath
+    const fd = await getFileDiff({ cwd: d, changeName: 'quick-abcd1234', filePath: 'src/a.js' })
+    assert.ok(fd.ok && fd.diff && fd.diff.includes('+q2'), '--file 切冻结 patch 内容')
+    assert.ok(fd.anchorLabel.includes('冻结 patch'), '--file 锚点标注冻结')
   } finally { cleanup(d) }
 })
 

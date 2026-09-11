@@ -58,12 +58,12 @@ try {
   await pm0.init(repo)
 
   // 1. 先 in-process 跑一次 brainstorm，让 runStage 初始化真实 steps（名取自 stage 定义）
-  await captureStdout(() => runCommand(['brainstorm', '--change', 'test-change', '--non-interactive'], repo))
+  await captureStdout(() => runCommand(['brainstorm', '--change', '2026-09-11-test-change', '--non-interactive'], repo))
 
   // 2. 读真实 steps，全部置 completed + stage 回退为 in-progress（模拟崩溃中间态）；
   //    不写 design.md → completeStage 产物校验将失败 → 应走"保留进度 + 提示"分支。
   const pm1 = new ProgressManager({ specDir: specBase })
-  const prog = await pm1.read(repo, 'test-change')
+  const prog = await pm1.read(repo, '2026-09-11-test-change')
   if (!prog.stages.brainstorm || !prog.stages.brainstorm.steps?.length) {
     console.error('  ⚠️ 前置失败：brainstorm steps 未初始化'); failed++;
   } else {
@@ -71,16 +71,16 @@ try {
     prog.stages.brainstorm.steps = prog.stages.brainstorm.steps.map(s => ({ ...s, status: 'completed', completedAt: 't' }))
     prog.stages.brainstorm.status = 'in-progress'
     prog.stages.brainstorm.completedAt = null
-    await pm1._write(repo, prog, 'test-change')
+    await pm1._write(repo, prog, '2026-09-11-test-change')
 
     // 3. spawnSync 重跑 brainstorm → steps 全 completed（真实名，migration 保留）→ currentIdx===-1
     const res = spawnSync(process.execPath,
-      [cliBin, 'run', 'brainstorm', '--change', 'test-change', '--non-interactive'],
+      [cliBin, 'run', 'brainstorm', '--change', '2026-09-11-test-change', '--non-interactive'],
       { cwd: repo, encoding: 'utf8', timeout: 15000 })
     const combined = (res.stdout || '') + (res.stderr || '')
 
     // 核心：步骤进度保留，绝不被清空为 pending
-    const prog2 = await new ProgressManager({ specDir: specBase }).read(repo, 'test-change')
+    const prog2 = await new ProgressManager({ specDir: specBase }).read(repo, '2026-09-11-test-change')
     const allDone = prog2.stages.brainstorm.steps.every(s => s.status === 'completed')
     assert(allDone, '崩溃中间态重跑后步骤进度保留（未被清空）')
 

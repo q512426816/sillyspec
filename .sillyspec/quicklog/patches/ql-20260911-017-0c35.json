@@ -1,0 +1,84 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-7aae62e4",
+  "totals": {
+    "files": 8,
+    "additions": 170,
+    "deletions": 10
+  },
+  "rows": [
+    {
+      "path": "src/index.js",
+      "declared": true,
+      "additions": 4,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/progress.js",
+      "declared": true,
+      "additions": 3,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/progress/change-registry.js",
+      "declared": true,
+      "additions": 2,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/run/command.js",
+      "declared": true,
+      "additions": 17,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/stages/brainstorm.js",
+      "declared": true,
+      "additions": 3,
+      "deletions": 3,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/autoreset-preserves-progress.test.mjs",
+      "declared": true,
+      "additions": 5,
+      "deletions": 5,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/change-name-date-gate.test.mjs",
+      "declared": true,
+      "additions": 114,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/run/shared.js",
+      "declared": true,
+      "additions": 22,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": null,
+  "qlId": "ql-20260911-017-0c35",
+  "sessionId": "quick-7aae62e4",
+  "savedAt": "2026-09-11T05:29:48.033Z"
+}

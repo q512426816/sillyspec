@@ -14,3 +14,4 @@
 - 2026-09-07-endpoint-baseline | index.js endpoints case 子分发：新增 baseline 分支（--change/--spec-dir/--json；worktree 主仓锚定双保险——git-dir≠common-dir 判定 + detectWorktreeSpecDrift 恒跑兜显式副本漏锚）；extract 分支零语义变化。execute.js Step3 增基线指引一行。
 - ql-20260908-006-5f04 | doctor `--gc-unstamped-runs [--confirm]`：usage + case 'doctor' 接线 gcUnstampedExecuteRuns（默认 dry-run）；存量无戳 execute-runs 清扫，不进 archive 热路径。
 - 2026-09-09-plan-derived | adoptPlanWaves proposal 档（只读草稿 + rewritten/conflicts）
+- ql-20260911-017-0c35 | change-rename 入口新名日期前缀门禁（assertDatedChangeName，非日期前缀新名 exit 2；2026-09-11 实证 friction-signal-hint 重命名丢前缀被静默物化）

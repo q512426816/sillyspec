@@ -280,6 +280,8 @@ export class ChangeRegistry {
       console.warn('⚠️  renameChange: 新旧名称相同，跳过');
       return;
     }
+    // 注：新名日期前缀门禁只在 CLI 边界强制（index.js change-rename 入口）——renameChange 是
+    // 库函数，测试/平台工具合法用任意名（2026-09-11 决策）。
     const db = this.pm._ensureDB(cwd);
     // 检查旧名是否存在
     const existing = db.transaction(() => {

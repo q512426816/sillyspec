@@ -1,0 +1,271 @@
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index 599d1a4..2288f93 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -1,6 +1,6 @@
+ # SillySpec 平台接口操作地图
+ 
+-> updated_at: 2026-08-26（平台模式上行回传放行：`triggerSync` 不再受 `isPlatformMode` 门禁——本地/平台模式都推进度/四件套/spec 树；平台模式凭据经 env `SILLYHUB_PLATFORM_URL`+`SILLYHUB_PLATFORM_TOKEN`（daemon 注入通道，`sync.js _getPlatform`，链路 D 同款两键齐全才生效）。下行 `triggerPull`/`checkApproval` 门禁保留。历史：2026-08-23 门禁收敛为 `isPlatformMode` 单源（`shared.js:657`）+ 自指回环豁免，变更 2026-08-23-repo-native-spec-backfill；链路 D agent 日志上报见 src/agent-session-log.js 与 docs/platform-agent-log-protocol.md）
++> updated_at: 2026-08-26（平台模式上行回传放行：`triggerSync` 不再受 `isPlatformMode` 门禁——本地/平台模式都推进度/四件套/spec 树；平台模式凭据经 env `SILLYHUB_PLATFORM_URL`+`SILLYHUB_PLATFORM_TOKEN`（daemon 注入通道，`sync.js _getPlatform`，链路 D 同款两键齐全才生效）。下行 `triggerPull`/`checkApproval` 门禁保留。历史：2026-08-23 门禁收敛为 `isPlatformMode` 单源（`shared.js:680`）+ 自指回环豁免，变更 2026-08-23-repo-native-spec-backfill；链路 D agent 日志上报见 src/agent-session-log.js 与 docs/platform-agent-log-protocol.md）
+ > 范围：SillySpec CLI 在使用过程中**操作 SillyHub 平台接口**的全部触发点 —— 哪个步骤会发请求、打哪个端点、做什么事。
+ > 数据源：本文由源码（`src/sync.js` / `src/sillyhub-mcp/` / `src/dispatch/` / `src/run/`）实证归纳。改源码后同步本文。
+ > 配套文档：`sillyhub-progress-sync-contract.md`（同步协议契约）、`sillyhub-path-a-contract.md`（派发路径A）、`file-lifecycle.md`（运行时文件）、`interface-contract.md`、`sillyhub-api-reference.md`（接口参考——REST 8 端点 + MCP 12 tool 完整调用规范）、`api-verification-2026-08-14.md`（全接口实测报告——含 12 MCP tool + REST 8 端点验证快照与当日修复记录）。
+@@ -77,9 +77,9 @@ mcp:
+ `connect` / `disconnect` / `sync` / `syncDocuments` / `checkApproval` / `pull` / `pullList` / `resolve` / `collectStatus` / `approve` / `reject` 均 export 为顶层函数，`new SyncManager(cwd)` 包装。
+ 
+ ### run 流程里的三个触发器（`src/run/shared.js`）
+-- **`triggerSync(cwd, changeName, platformOpts)`**（`shared.js:699`）：包 `sync()` + **8s 总超时熔断**（预算经 env `SILLYSPEC_SYNC_TIMEOUT_MS` 可调，[1000,120000]ms 整数，非法回退 8s——`resolveSyncTotalTimeoutMs`，`shared.js:697`）。这是最常用的上推入口。
+-- **`triggerPull(cwd, changeName, platformOpts)`**（`shared.js:838`）：包 `pull()`，8s 熔断（同上 env 可调），`skipIfLocalDirty` 保守守卫（本地脏跳过 import，防平台旧快照覆盖本地领先进度，ql-20260818-008）。仅低频边界点触发，**不每步 pull**（避免高频写入/网络压力）。
+-- **`checkApproval(cwd, changeName, platformOpts)`**（`shared.js:906`）：包 `syncMod.checkApproval`。
++- **`triggerSync(cwd, changeName, platformOpts)`**（`shared.js:721`）：包 `sync()` + **8s 总超时熔断**（预算经 env `SILLYSPEC_SYNC_TIMEOUT_MS` 可调，[1000,120000]ms 整数，非法回退 8s——`resolveSyncTotalTimeoutMs`，`shared.js:721`）。这是最常用的上推入口。
++- **`triggerPull(cwd, changeName, platformOpts)`**（`shared.js:872`）：包 `pull()`，8s 熔断（同上 env 可调），`skipIfLocalDirty` 保守守卫（本地脏跳过 import，防平台旧快照覆盖本地领先进度，ql-20260818-008）。仅低频边界点触发，**不每步 pull**（避免高频写入/网络压力）。
++- **`checkApproval(cwd, changeName, platformOpts)`**（`shared.js:891`）：包 `syncMod.checkApproval`。
+ - **`triggerPullActiveChange`**（`shared.js:858`）：`triggerPull` 便捷封装，未传 changeName 时自动推导单活跃变更（多/无活跃则跳过）。
+ 
+ ---
+@@ -112,7 +112,7 @@ mcp:
+ 
+ ## 4. 链路 C：scan 指针握手（平台模式专用）
+ 
+-scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时，**不发任何 HTTP**，而是落盘供 daemon 轮询消费（`complete-handlers.js:1695` `handleScanStageCompleted`）：
++scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时，**不发任何 HTTP**，而是落盘供 daemon 轮询消费（`complete-handlers.js:1764` `handleScanStageCompleted`）：
+ 
+ 1. 写 `manifest.json`（workspace_id/scan_run_id/source_commit/spec_root/scan_profile/postcheck…）到 `specRoot`。
+ 2. 跑 `scan-postcheck` → 写 `postcheck-result.json`（结构化结果）。
+@@ -128,12 +128,12 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ | 步骤 / 命令 | 链路 | 具体动作 | 源码触发点 |
+ |---|---|---|---|
+ | `platform connect <url> <token>` | A | GET health ping → POST resolve-by-root-path 换 shpsync_ token → 写 platform/mcp 段 | `sync.js:260` |
+-| **每个进度落盘点**（step `--done` 完成、阶段启动/切换、stale 步骤重置、gate 拦截回滚等 `_write` 后） | A | `triggerSync` → POST `…/progress` 推六表进度（8s 熔断）。**本地/平台模式都执行**（2026-08-26 放行）：平台模式凭据经 env 通道（`_getPlatform`），无 env 且 local.yaml 无 platform 段时静默跳过 | complete.js:561/497/917/1027/1166（--done）；stage.js:221/155/177（启动/切换/stale 重置）；gates.js:511；command.js:1219/1306/1528/1580/1591/1767 |
+-| **execute 阶段启动前**（runStage / auto 流程，非平台模式，`--skip-approval` 可跳过） | A | `checkApproval` → GET `…/approval`：**rejected → `exit(1)` 硬阻断**；pending → 提示待审批；unknown → 放行 | stage.js:47-58；command.js:1728/1748/1828 |
++| **每个进度落盘点**（step `--done` 完成、阶段启动/切换、stale 步骤重置、gate 拦截回滚等 `_write` 后） | A | `triggerSync` → POST `…/progress` 推六表进度（8s 熔断）。**本地/平台模式都执行**（2026-08-26 放行）：平台模式凭据经 env 通道（`_getPlatform`），无 env 且 local.yaml 无 platform 段时静默跳过 | complete.js:561/497/917/1027/1166（--done）；stage.js:221/155/177（启动/切换/stale 重置）；gates.js:517；command.js:1235/1306/1528/1580/1591/1767 |
++| **execute 阶段启动前**（runStage / auto 流程，非平台模式，`--skip-approval` 可跳过） | A | `checkApproval` → GET `…/approval`：**rejected → `exit(1)` 硬阻断**；pending → 提示待审批；unknown → 放行 | stage.js:47-58；command.js:1744/1748/1828 |
+ | **run `<stage>` 入口**（所有 stage + 顶层别名，agent 环境内；平台/本地模式都上报，不受 sentinel 限制） | D | 探测本地 agent 会话日志（claude-code/codex/zcode 自动探测，env `SILLYSPEC_AGENT_LOG` 覆盖其他 CLI）→ 本地留底 + REST POST `…/api/agent-logs` 上报（best-effort 5s 熔断，失败不阻断；`SILLYSPEC_AGENT_LOG_PUSH=0` 可关） | command.js:723（`recordAgentLogInvocation`） |
+ | `platform sync-docs`（手动命令，**唯一触发点**） | A | POST `…/documents` 推四件套全量；run 流程**不**自动推文档（sync.js:30 头注释称由 run 流程触发，已过时） | sync.js:439；index.js:1275 |
+-| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:2221；shared.js:838 |
+-| **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2221/1855；shared.js:858 |
++| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:2221；shared.js:860 |
++| **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2221/1855；shared.js:884 |
+ | `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:3209；sync.js:1280/986 |
+ | `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:3161；sync.js:1998 |
+ | `platform resolve --keep-local/--take-platform/--abort` | 本地 | 读 sync-conflict 三选一，不网络 | sync.js:746 |
+@@ -151,7 +151,7 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ ### 本质
+ 平台模式是 **SillyHub daemon 调用 SillySpec CLI 时的模式**。它把默认落在 `cwd/.sillyspec/` 的产物目录（`specRoot`）和运行时目录（`runtimeRoot`）拆到别的位置，让 daemon 能多项目隔离管理。**人类本地用户默认不进平台模式。**
+ 
+-`specRoot` 是实际开关（平台模式判定只看 `specRoot || runtimeRoot` 任一存在，自指回环豁免见 §7）；`runtimeRoot` **可缺省**——缺省时经 `resolveRuntimeRoot` 回落 `<specBase>/.runtime`（`shared.js:308`：runtimeRoot > specDriftAnchor/.runtime > specBase/.runtime），即"只拆 specRoot、runtime 跟着走"也是合法平台模式。
++`specRoot` 是实际开关（平台模式判定只看 `specRoot || runtimeRoot` 任一存在，自指回环豁免见 §7）；`runtimeRoot` **可缺省**——缺省时经 `resolveRuntimeRoot` 回落 `<specBase>/.runtime`（`shared.js:338`：runtimeRoot > specDriftAnchor/.runtime > specBase/.runtime），即"只拆 specRoot、runtime 跟着走"也是合法平台模式。
+ 
+ ### 置位的两条路径（`command.js:245-317`）
+ 
+@@ -205,10 +205,10 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ 
+ ## 7. 关键开关与铁律
+ 
+-- **平台模式总开关**：`isPlatformMode(platformOpts, cwd)`（`shared.js:657`，判定式 `(specRoot || runtimeRoot) && !isSelfReferentialSpecRoot`）为真 → `triggerPull`/`triggerPullActiveChange`/`checkApproval` **early-return**（`shared.js:858/834/902`）；**`triggerSync` 已放行（2026-08-26）**：平台模式上行回传照常执行，凭据经 env `SILLYHUB_PLATFORM_URL`+`SILLYHUB_PLATFORM_TOKEN`（daemon 注入通道，`sync.js _getPlatform`，优先级 env > local.yaml platform 段，两键齐全才生效）；未注入 env 且 local.yaml 无 platform 段时静默跳过（合法状态）。**自指回环豁免**：specRoot 经 realpath 解析回 `<cwd>/.sillyspec`（repo-native junction 回环，`isSelfReferentialSpecRoot`，`shared.js:601`）不视为平台模式，内置 sync/auto-pull 按本地语义运行。**§5 表中链路 A 的下行触发点（pull/审批）仅非平台模式真正发请求。** 置位机制见上节 §6。
++- **平台模式总开关**：`isPlatformMode(platformOpts, cwd)`（`shared.js:624`，判定式 `(specRoot || runtimeRoot) && !isSelfReferentialSpecRoot`）为真 → `triggerPull`/`triggerPullActiveChange`/`checkApproval` **early-return**（`shared.js:858/834/902`）；**`triggerSync` 已放行（2026-08-26）**：平台模式上行回传照常执行，凭据经 env `SILLYHUB_PLATFORM_URL`+`SILLYHUB_PLATFORM_TOKEN`（daemon 注入通道，`sync.js _getPlatform`，优先级 env > local.yaml platform 段，两键齐全才生效）；未注入 env 且 local.yaml 无 platform 段时静默跳过（合法状态）。**自指回环豁免**：specRoot 经 realpath 解析回 `<cwd>/.sillyspec`（repo-native junction 回环，`isSelfReferentialSpecRoot`，`shared.js:624`）不视为平台模式，内置 sync/auto-pull 按本地语义运行。**§5 表中链路 A 的下行触发点（pull/审批）仅非平台模式真正发请求。** 置位机制见上节 §6。
+ - **未连接是合法默认**：`_getPlatform()`/`readMcpConfig()` 返回 null → 链路 A/B 静默跳过，不每步催连平台制造噪音。排查同步行为设 `SILLYSPEC_DEBUG_SYNC=1`（`debugLog` 在 `sync.js:50`）。
+ - **best-effort 边界**：除 `approve`/`reject`（显式用户动作，失败必须可见 exitCode=1），其余平台调用失败一律 warn 不阻断。
+-- **8s 熔断**：`triggerSync`/`triggerPull` 总超时 8s（`raceWithAbort`，`shared.js:709`），防 `--done` 在 sync 慢时体感 hang。熔断触发时 spec-sync 侧 warn 打「平台响应慢，本轮同步被总预算熔断让路」（`describeSyncError` 分类，`spec-sync.js:56`）——即旧版的英文 "This operation was aborted" 文本，不是 bug。总预算经 env `SILLYSPEC_SYNC_TIMEOUT_MS` 可调（`shared.js:697`，平台慢环境放宽用；放宽代价是 `--done` 最坏等待同比例变长）。
++- **8s 熔断**：`triggerSync`/`triggerPull` 总超时 8s（`raceWithAbort`，`shared.js:721`），防 `--done` 在 sync 慢时体感 hang。熔断触发时 spec-sync 侧 warn 打「平台响应慢，本轮同步被总预算熔断让路」（`describeSyncError` 分类，`spec-sync.js:56`）——即旧版的英文 "This operation was aborted" 文本，不是 bug。总预算经 env `SILLYSPEC_SYNC_TIMEOUT_MS` 可调（`shared.js:721`，平台慢环境放宽用；放宽代价是 `--done` 最坏等待同比例变长）。
+ - **MCP 不硬试**：路径A 未落地保守回退 Local（R-04）；CLI 不碰 DB 持久化 worktree_path（D-004 / client.js:18）。
+ - **派发不双写**：worker 不 commit，SillySpec 自己 apply（D-004），不调 SillyHub 合并 tool。
+ 
+diff --git a/src/run/complete-handlers.js b/src/run/complete-handlers.js
+index 55f2874..2e20757 100644
+--- a/src/run/complete-handlers.js
++++ b/src/run/complete-handlers.js
+@@ -35,6 +35,7 @@ import { validateQuickResult, allocateQuicklogEntry, appendQuicklogEntryWithId,
+ import { getRule } from '../stage-contract-spec.js'
+ import { archiveDestDirName } from '../stage-contract.js'
+ import { collectNumstatByPath } from '../scope-audit.js'
++import { recordFrictionEvent, consumeFrictionHint } from '../friction-tally.js'
+ 
+ /**
+  * 清洗项目名：只保留 ASCII 字母/数字/横线/下划线/点，过滤中文和特殊字符。
+@@ -170,6 +171,13 @@ export function pruneArchivedChangeRuntime(runtimeRoot, changeName) {
+     if (existsSync(pathspec)) gone(pathspec)
+   } catch {}
+ 
++  // friction tally（friction-signal-hint FR-05）：摩擦计数随变更终态一并回收——真实变更的
++  // friction-tally-<change>.json 落 runtimeRoot，变更归档/删除后无读者，残留即孤儿文件。
++  try {
++    const fp = join(runtimeRoot, `friction-tally-${changeName}.json`)
++    if (existsSync(fp)) gone(fp)
++  } catch {}
++
+   try {
+     const execDir = join(runtimeRoot, 'execute-runs')
+     if (existsSync(execDir)) {
+@@ -1056,6 +1064,9 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
+         steps[currentIdx].status = 'pending'
+         steps[currentIdx].completedAt = null
+         if (outputText) steps[currentIdx].output = null
++        // 摩擦计数（friction-signal-hint task-04）：quick 审计被拦也是摩擦信号——exit 前记
++        // 一笔（changeName=quick 会话 id，tally 落 session 目录，成功收尾 consume 后随目录清理）。
++        recordFrictionEvent({ cwd, changeName, platformOpts, type: 'gate_rollback', detail: 'quick-audit' })
+         process.exit(1)
+       }
+       // P0-2（2026-09-02 跨 agent 工单）：触及 src/test 的 quick --done 内置 test+lint
+@@ -1076,6 +1087,9 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
+         steps[currentIdx].status = 'pending'
+         steps[currentIdx].completedAt = null
+         if (outputText) steps[currentIdx].output = null
++        // 摩擦计数（friction-signal-hint task-04）：test/lint 实测门禁拦下同记摩擦——exit 前
++        // 落 session tally，与 quick-audit 同款静默降级。
++        recordFrictionEvent({ cwd, changeName, platformOpts, type: 'gate_rollback', detail: 'quick-test-lint' })
+         process.exit(1)
+       }
+       progress.lastQuickReview = review
+@@ -1270,6 +1284,53 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
+         softFiles,
+       })
+       console.log(`📝 QUICKLOG 条目 ${qlId} 已标记完成`)
++      // 范围快照/patch 审计级落盘（quick-359a48f1）：quicklog/patches/<qlId>.json+.patch——按
++      // ql-ID 对齐 QUICKLOG 条目（平台按条目抓取），json 冗余 sessionId 供 guard 清理后记录态
++      // 反查（computeQuickAudit → findQuickPatchRecord 同链）。patch 为 --done 时点全量冻结
++      // （HEAD 未提交窗口，untracked 自拼 hunk）。fail-soft：失败只提示，不阻断收尾。
++      try {
++        const { computeChangeScopeAudit, collectNumstatByPath, buildFrozenPatch } = await import('../scope-audit.js')
++        // changeName == sessionId（handleQuickStageCompletion 作用域内，§4.6 注释同款约定）
++        const snapResult = await computeChangeScopeAudit({ cwd, specBase, changeName, platformOpts, collectPatch: true })
++        let quickRows = snapResult && snapResult.mode === 'quick' && Array.isArray(snapResult.rows)
++          ? snapResult.rows.filter(r => r && r.attribution !== 'undeclared')
++          : null
++        let frozenPatch = snapResult ? snapResult.frozenPatch : undefined
++        // 窗口空兜底（baseline 会话常态）：--files 声明文件是会话启动时预存脏（audit baseline
++        // 剔除后窗口空，quickRows 空），但声明即归属——改用声明文件集构造 rows + patch（行数按
++        // HEAD 未提交窗口采集，同口径）。
++        if ((!quickRows || quickRows.length === 0) && Array.isArray(guard?.allowedFiles) && guard.allowedFiles.length > 0) {
++          const sessionRoot = dirname(specBase)
++          const declaredPosix = guard.allowedFiles.map(f => String(f).replace(/\\/g, '/')).filter(Boolean)
++          const stats = collectNumstatByPath(sessionRoot, declaredPosix, { baseRef: 'HEAD' })
++          quickRows = declaredPosix.filter(f => stats.has(f) || existsSync(join(sessionRoot, f)))
++            .map(f => {
++              const st = stats.get(f) || { additions: null, deletions: null, kind: existsSync(join(sessionRoot, f)) ? 'modified' : 'deleted' }
++              return { path: f, declared: true, additions: st.additions, deletions: st.deletions, kind: st.kind, attribution: 'declared' }
++            })
++          frozenPatch = buildFrozenPatch(sessionRoot, quickRows.map(r => r.path), { baseRef: 'HEAD' })
++        }
++        if (quickRows && quickRows.length > 0) {
++          const patchesDir = join(specBase, 'quicklog', 'patches')
++          mkdirSync(patchesDir, { recursive: true })
++          const { ...snapRest } = snapResult || {}
++          delete snapRest.frozenPatch
++          writeFileSync(join(patchesDir, `${qlId}.json`), JSON.stringify({
++            ...snapRest,
++            rows: quickRows,
++            totals: { files: quickRows.length, additions: quickRows.reduce((n, r) => n + (Number.isFinite(r.additions) ? r.additions : 0), 0), deletions: quickRows.reduce((n, r) => n + (Number.isFinite(r.deletions) ? r.deletions : 0), 0) },
++            qlId,
++            sessionId: changeName,
++            savedAt: new Date().toISOString(),
++          }, null, 2) + '\n')
++          if (typeof frozenPatch === 'string' && frozenPatch) {
++            writeFileSync(join(patchesDir, `${qlId}.patch`), frozenPatch.endsWith('\n') ? frozenPatch : frozenPatch + '\n')
++          }
++          console.log(`📦 范围快照已落 quicklog/patches/${qlId}.json${typeof frozenPatch === 'string' && frozenPatch ? ' + .patch（--done 时点冻结）' : ''}`)
++        }
++      } catch (e) {
++        console.warn(`   ⚠️ quick 范围快照落盘失败（不阻断收尾）：${e && e.message ? String(e.message).split('\n')[0] : e}`)
++      }
+       // 刷新 DB title：从 step3「需求：」提取（agent 可改 title 的途径），覆盖启动时的兜底快照。
+       // 与 QUICKLOG 标题刷新（flipEntryInContent 内 extractTitleFromResult）同源，保持 DB↔QUICKLOG 一致。
+       try {
+@@ -1295,6 +1356,14 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
+       console.warn(`⚠️ 关联变更轻量归档失败（不阻断 quick 完成）: ${e.message}`)
+     }
+ 
++    // 摩擦信号消费（friction-signal-hint task-04）：必须在 session 目录清理**前**——清理后
++    // tally 随目录删除，晚于此就读不到。QUICKLOG 完成打印之后 consume，提示里的 postmortem
++    // 建议有落点可循；全零/读失败零输出，摩擦提示失败不影响收尾。
++    try {
++      const fr = consumeFrictionHint({ cwd, changeName, platformOpts })
++      if (fr && fr.hint) console.log(`\n${fr.hint}`)
++    } catch { /* 摩擦提示失败不影响收尾 */ }
++
+     // 清理 session 目录（rmSync/unlinkSync 容忍不存在）。路径与写入对齐（Q4 resolveQuickSessionsDir）。
+     try {
+       if (changeName) {
+diff --git a/src/run/complete.js b/src/run/complete.js
+index a276e96..ba1774c 100644
+--- a/src/run/complete.js
++++ b/src/run/complete.js
+@@ -666,6 +666,17 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
+     // verify 完成出一行漂移确认。advisory fail-soft（D-006）——helper 内部全兜，绝不阻断完成。
+     await printStageCompletionScopeAudit({ stageName, cwd, changeName, specBase, platformOpts })
+ 
++    // 摩擦信号消费（friction-signal-hint task-03）：verify 收尾读一次 friction tally，非零打
++    // 一行 advisory 引导补 postmortem（consume 内部提示后清零）；全零/读失败零输出——
++    // 摩擦提示失败不影响收尾。
++    if (stageName === 'verify') {
++      try {
++        const { consumeFrictionHint } = await import('../friction-tally.js')
++        const r = consumeFrictionHint({ cwd, changeName, platformOpts })
++        if (r && r.hint) console.log(`\n${r.hint}`)
++      } catch { /* 摩擦提示失败不影响收尾 */ }
++    }
++
+     if (stageName === 'execute') {
+       // execute run summary：展示真实可得的结构化信息
+       try {
+@@ -804,15 +815,21 @@ function scopeAuditPathSet(result) {
+   return set
+ }
+ 
+-/** execute 完成路径：全表 + 快照落盘（快照写失败只提示，verify 对比按无快照降级） */
++/** execute 完成路径：全表 + 审计级快照/patch 落盘（quick-359a48f1：changes/<变更名>/ 随归档
++ *  入库；patch 为收尾时点全量冻结——--file 真·当时内容比对的数据源。写失败只提示，verify
++ *  对比按无快照降级） */
+ async function printExecuteScopeAudit({ cwd, changeName, specBase, platformOpts, computeChangeScopeAudit, renderScopeAuditTable }) {
+-  const result = await computeChangeScopeAudit({ cwd, specBase, changeName, platformOpts })
++  const result = await computeChangeScopeAudit({ cwd, specBase, changeName, platformOpts, collectPatch: true })
+   console.log(`\n${renderScopeAuditTable(result, { maxRows: 60 })}`)
+   try {
+-    const runtimeRoot = resolveRuntimeRoot(platformOpts, specBase)
+-    const snapPath = join(runtimeRoot, `scope-audit-${changeName}.json`)
+-    mkdirSync(runtimeRoot, { recursive: true })
+-    writeFileSync(snapPath, JSON.stringify({ ...result, savedAt: new Date().toISOString() }, null, 2) + '\n')
++    const changeDir = join(specBase, 'changes', changeName)
++    mkdirSync(changeDir, { recursive: true })
++    const { frozenPatch, ...snap } = result
++    writeFileSync(join(changeDir, 'scope-audit.json'), JSON.stringify({ ...snap, savedAt: new Date().toISOString() }, null, 2) + '\n')
++    if (typeof frozenPatch === 'string') {
++      writeFileSync(join(changeDir, 'scope-audit.patch'), frozenPatch.endsWith('\n') ? frozenPatch : frozenPatch + '\n')
++    }
++    console.log(`   📦 范围快照已落变更目录（scope-audit.json${typeof frozenPatch === 'string' ? ' + scope-audit.patch（收尾时点冻结）' : ''}）`)
+   } catch (e) {
+     console.warn(`   ⚠️ 范围对账快照写入失败（不阻断，verify 漂移对比将按无快照降级）：${e && e.message ? String(e.message).split('\n')[0] : e}`)
+   }
+@@ -829,9 +846,14 @@ async function printVerifyScopeDrift({ cwd, changeName, specBase, platformOpts,
+     return
+   }
+   let snapshot = null
++  // 快照读取链（quick-359a48f1）：变更目录（审计级，execute --done 落）→ .runtime（存量兼容）
+   try {
+-    snapshot = JSON.parse(readFileSync(join(resolveRuntimeRoot(platformOpts, specBase), `scope-audit-${changeName}.json`), 'utf8'))
+-  } catch { /* 快照缺失/损坏 → 跳过对比只打当前 totals */ }
++    snapshot = JSON.parse(readFileSync(join(specBase, 'changes', changeName, 'scope-audit.json'), 'utf8'))
++  } catch {
++    try {
++      snapshot = JSON.parse(readFileSync(join(resolveRuntimeRoot(platformOpts, specBase), `scope-audit-${changeName}.json`), 'utf8'))
++    } catch { /* 快照缺失/损坏 → 跳过对比只打当前 totals */ }
++  }
+   if (!snapshot || snapshot.ok !== true) {
+     console.log(`   ${scopeLine}（无 execute 时点快照可对比——完整表跑 sillyspec scope-audit --change ${changeName}）`)
+     return
+@@ -1474,6 +1496,15 @@ export async function continueStep(pm, progress, stageName, cwd, answer, options
+     // task-04：wait 解除完成路径与 completeStep 完成分支同源注入（Grill G-2：本路径不漏，
+     // 否则 execute 快照缺失 → verify 假报「无快照可对比」）。
+     await printStageCompletionScopeAudit({ stageName, cwd, changeName, specBase, platformOpts })
++    // 摩擦信号消费（friction-signal-hint task-03）：与 completeStep 完成分支同款（Grill CC-03：
++    // 漏此则 --continue 收尾丢提示丢清零）。全零/读失败零输出，摩擦提示失败不影响收尾。
++    if (stageName === 'verify') {
++      try {
++        const { consumeFrictionHint } = await import('../friction-tally.js')
++        const r = consumeFrictionHint({ cwd, changeName, platformOpts })
++        if (r && r.hint) console.log(`\n${r.hint}`)
++      } catch { /* 摩擦提示失败不影响收尾 */ }
++    }
+     // 阶段完成后明确下一步（agent 常卡：stageData completed 但不知要 run <下一阶段> 推进 currentStage）
+     const nextStageHint = { brainstorm: 'plan', plan: 'execute', execute: 'verify', verify: 'archive' }[stageName]
+     if (nextStageHint) {

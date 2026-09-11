@@ -22,3 +22,4 @@
 - 2026-09-07-ir-stage-p3c | IR P3c：complete.js 步骤级钩子链（warnMissingUiPrototype 同点位 :283-313）新增 brainstorm「生成规范文件」步模块域核验——errors→exit 1（步骤保持 pending）/warnings 放行/skipped info/fail-open；prompt.js :477-506 brainstorm Step2 _facts.md 注入（{SCAN_FACTS} 占位符+双重门，15KB 截断+fail-soft，plan/execute 零误染）。
 - 2026-09-07-ir-stage-p3d | IR P3d：complete-handlers.js handleArchiveConfirmStep :435-459 归档移动前自动生成 delta.md（fail-soft 不阻断，提示手动补）；产物随归档目录保存。
 - 2026-09-08-ir-verify-facts | gates verify 收尾次序接线：backfill 先行/verifyStartAt 注入/tests 二次回填/cannot_verify 硬门 rollback；getStageCompletedAt 基准
+- ql-20260911-017-0c35 | 变更名日期前缀门禁 CLI 化：shared.js 增 assertDatedChangeName/isDatedChangeName（豁免 default/quick-<8hex>）；run/command.js 净新建门（DB 无行+changes/ 含 archive/ 无目录→非 YYYY-MM-DD-<描述> exit 2 教学式报错；存量与归档旧名不追诉）

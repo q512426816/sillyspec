@@ -896,13 +896,3 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 **症状②**：B-6 修正用 python `str.replace()` 落盘**无 assert**——替换目标串不匹配时 replace 静默 no-op，修正内容凭空流失，直到复审才发现（自查流程缺陷）。
 
 **workaround②（已改并获复审确认）**：批量文本替换一律 **count-assert + grep 复核**——替换前后断言出现次数（`assert s.count(old) == n`）、落盘后 `grep` 复核关键标记存在；sed/python 单行替换同理。该实践与 sillyspec 的 fail-closed 哲学同构（静默 no-op = 最危险的失败模式）。
-
-## 58. 结构性盲区：CLI 实测门跑在 main 工作区，多会话并发任何人的 WIP 都能弄红别人的门（2026-09-10 第二次真实阻塞，已修复）
-
-**症状**：verify `--done` 的实测对账门（test/lint，CLI 亲自跑 `commands.test/lint`）在 main 共享工作区执行——并行会话的未提交 WIP（语法错误/半成品/锚漂）物理在场，把**无辜变更**的门弄红。同一会话内第二次真实阻塞；quick 门禁同构（第六批已修，本批补 verify 侧）。
-
-**根因**：实测门的执行面=主仓工作区，而工作区是多会话共享可变状态——门的输入没有隔离边界。quick 与 verify 两门同根因；test 侧失败路径的 `renderVerifyTestAttribution` 归因提示只是事后鉴别，不是隔离。
-
-**修复（2026-09-10 驾驭小结第八批，快照定向跑）**：`run/gate-snapshot.js createVerifyGateSnapshot`——HEAD 干净基线（`git worktree add --detach HEAD`）+ 本变更文件集 overlay（`resolveVerifyChangedFiles` worktree-aware；native worktree 时 overlay 源=worktree 根，等价「--worktree 定向跑本变更分支内容」，与 execute 隔离模型对齐）+ 他者显式声明文件剔除（`splitOwnVsForeignDiffFiles`，无主文件 fail-closed 保留）+ 变更文档（module-impact.md 等 test_strategy 消费）与 local.yaml 随快照。gates.js verify 块接线：test/lint 两检查在快照内跑（`🧪 Verify 实测隔离快照` 日志行），快照基建失败/`SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF=1` 回退主仓现行为；fallback 且 lint 阻断时补污染归属提示（对齐 test 侧先例 + `scope-audit` 出口）。测试 `test/verify-gate-snapshot.test.mjs`（native 定向/in-place 过滤/fallback 三态）。
-
-**边界**：无主脏文件（未被任何变更声明）在 in-place 模式仍进快照——无法证明非本变更产物，fail-closed 保留；native worktree 模式无此残留（overlay 只取 worktree 内容）。快照用 OS tmp + 一次性生命周期（create→run→cleanup），崩溃残留交 `git worktree prune`/tmp 清理。

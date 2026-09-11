@@ -1,0 +1,60 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-c802bc83",
+  "totals": {
+    "files": 5,
+    "additions": 180,
+    "deletions": 9
+  },
+  "rows": [
+    {
+      "path": ".sillyspec/knowledge/decisions/unmapped.md",
+      "declared": true,
+      "additions": 49,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/decision-distill.js",
+      "declared": true,
+      "additions": 8,
+      "deletions": 2,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/run/verify-quality-scan.js",
+      "declared": true,
+      "additions": 45,
+      "deletions": 5,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/decision-distill-heading-variants.test.mjs",
+      "declared": true,
+      "additions": 76,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    },
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/docs-consistency.md",
+      "declared": true,
+      "additions": 2,
+      "deletions": 2,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": null,
+  "qlId": "ql-20260911-020-1397",
+  "sessionId": "quick-c802bc83",
+  "savedAt": "2026-09-11T06:18:42.406Z"
+}

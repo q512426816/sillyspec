@@ -19,6 +19,7 @@ packages/dashboard/node_modules/
 # 构建产物 / 敏感凭证
 *.tgz
 .npm-publish-token
+bash.exe.stackdump
 
 # dashboard 纯开发期文件（运行时只依赖 dist/ + server/；src/ 是 Vite 构建源、public/ 与 dist/ 重复、
 # 根 index.html/vite.config.js/package-lock.json 仅本地构建用 —— 排除瘦身，保留 dist + server 供

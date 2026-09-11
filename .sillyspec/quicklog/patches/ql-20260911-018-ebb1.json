@@ -1,0 +1,51 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-359a48f1",
+  "totals": {
+    "files": 3,
+    "additions": 120,
+    "deletions": 20
+  },
+  "rows": [
+    {
+      "path": "src/run/complete.js",
+      "declared": true,
+      "additions": 39,
+      "deletions": 8,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/run/complete-handlers.js",
+      "declared": true,
+      "additions": 69,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/sillyspec/platform-interface-map.md",
+      "declared": true,
+      "additions": 12,
+      "deletions": 12,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": [
+      {
+        "file": "test/autoreset-preserves-progress.test.mjs",
+        "sessions": [
+          "quick-7aae62e4"
+        ]
+      }
+    ]
+  },
+  "note": null,
+  "qlId": "ql-20260911-018-ebb1",
+  "sessionId": "quick-359a48f1",
+  "savedAt": "2026-09-11T05:23:00.641Z"
+}

@@ -9,3 +9,4 @@
 - ql-20260907-002-b9d4 | ghost 判定排除 quick 会话行（stage-machine overview/show 同源 _isGhostChange）：quick-<8hex> 按设计无 changes/ 实体目录（initChange 跳过），「active+无目录」判定对 quick 是类别错误——进行中 quick 从写库起即误报 ghost（quick-inflight-ghost-misjudge，面板清了又长）；cleanup-ghosts 侧有意保留 quick 行归档能力（收尾中断兜底）
 - 2026-09-08-ir-verify-facts | getStageCompletedAt 只读访问器（verifyStartAt 基准）
 | 2026-09-10 | ql-20260910-003-2709（quick） | getStageStartedAt（change-registry + progress.js facade 委托）：evidence mtime 窗口锚点 execute completed_at→started_at（gates 接线 started 优先 completed 兜底）——消「先提交则 diff 空、不提交则 mtime 旧」时序两难的 mtime 半边（execute 期间产的证据不再判旧）。test/verify-window-regression.test.mjs ②b。 |
+- ql-20260911-017-0c35 | initChange/renameChange 注释标注：日期前缀门禁只在 CLI 边界强制，库函数保持宽松（测试/平台工具 fixture 依赖任意名，~30 处存量）
