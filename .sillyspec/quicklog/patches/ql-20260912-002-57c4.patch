@@ -1,0 +1,165 @@
+diff --git a/src/mcp-server.js b/src/mcp-server.js
+index 29019bb..5bc369f 100644
+--- a/src/mcp-server.js
++++ b/src/mcp-server.js
+@@ -64,8 +64,6 @@ const TOOLS = [
+ 
+ /** tools/call 路由：子进程 --json（stdout 纪律隔离；CLI 的 stderr 透传进 text 供诊断） */
+ async function callTool(name, args) {
+-  const argv = ['--meta'] // 占位防误配：--meta 是 run 的 flag，工具不走 run
+-  argv.length = 0
+   const specDir = args && typeof args.spec_dir === 'string' && args.spec_dir ? ['--spec-dir', args.spec_dir] : []
+   switch (name) {
+     case 'sillyspec_next':
+@@ -81,6 +79,14 @@ async function callTool(name, args) {
+   }
+ }
+ 
++// 子进程挂死兜底（2026-09-12 审查批 A-②）：gate/derive 会真实跑测试与 git 全家，测试进程
++// 不退/git 等锁时 tools/call 若无超时则永久挂起（stdio MCP 无请求级超时，host 侧表现为工具
++// 卡死）。默认 300s（全量测试套件 ~90s 的余量），env 可调；输出封顶防 stderr 刷屏型无界累积。
++const CALL_TIMEOUT_MS = Number(process.env.SILLYSPEC_MCP_CALL_TIMEOUT_MS) > 0
++  ? Number(process.env.SILLYSPEC_MCP_CALL_TIMEOUT_MS)
++  : 300_000
++const OUTPUT_CAP_BYTES = 8 * 1024 * 1024
++
+ function runCli(cliArgs) {
+   return new Promise((resolve) => {
+     const p = spawn(process.execPath, [CLI_ENTRY, ...cliArgs], {
+@@ -90,14 +96,34 @@ function runCli(cliArgs) {
+     })
+     let out = ''
+     let err = ''
+-    p.stdout.on('data', (d) => { out += String(d) })
+-    p.stderr.on('data', (d) => { err += String(d) })
++    let outTrunc = false
++    let errTrunc = false
++    let settled = false
++    const finish = (r) => {
++      if (settled) return
++      settled = true
++      clearTimeout(timer)
++      resolve(r)
++    }
++    const timer = setTimeout(() => {
++      try { p.kill() } catch { /* 已退出 */ }
++      finish({ text: `CLI 子进程超时（${CALL_TIMEOUT_MS}ms）被终止: sillyspec ${cliArgs.join(' ')}（挂死兜底；可用 SILLYSPEC_MCP_CALL_TIMEOUT_MS 调整）`, isError: true, exitCode: null })
++    }, CALL_TIMEOUT_MS)
++    p.stdout.on('data', (d) => {
++      if (out.length < OUTPUT_CAP_BYTES) out += String(d)
++      else outTrunc = true
++    })
++    p.stderr.on('data', (d) => {
++      if (err.length < OUTPUT_CAP_BYTES) err += String(d)
++      else errTrunc = true
++    })
+     p.on('close', (code) => {
+       // envelope 原样透传（text = stdout JSON 全文；machine 侧自解）；stderr 仅失败时附诊断
+-      const text = (out.trim() || err.trim().slice(-2000) || `（exit ${code}，无输出）`)
+-      resolve({ text, isError: code !== null && code !== 0 && code !== 1, exitCode: code })
++      const truncNote = outTrunc || errTrunc ? `\n（输出超 ${OUTPUT_CAP_BYTES} 字节封顶截断）` : ''
++      const text = (out.trim() || err.trim().slice(-2000) || `（exit ${code}，无输出）`) + truncNote
++      finish({ text, isError: code !== null && code !== 0 && code !== 1, exitCode: code })
+     })
+-    p.on('error', (e) => resolve({ text: `CLI 子进程失败: ${e.message}`, isError: true }))
++    p.on('error', (e) => finish({ text: `CLI 子进程失败: ${e.message}`, isError: true }))
+   })
+ }
+ 
+diff --git a/src/quicklog.js b/src/quicklog.js
+index b4e6c53..842af38 100644
+--- a/src/quicklog.js
++++ b/src/quicklog.js
+@@ -67,6 +67,13 @@ export async function withFileLock(lockPath, fn, opts = {}) {
+               if (!restored) { try { unlinkSync(claim) } catch {} }
+             }
+           } catch {}
++          // 偷锁重试前同样受超时与退避约束（坑 quicklog-lock-steal-spin，2026-09-12 审查批 A-③）：
++          // 旧版 continue 直接跳过下方检查——锁文件被 AV/索引器长期占用、renameSync 持续失败
++          // （每次被外层 catch 吞掉）时忙等自旋：不检查 timeoutMs、不让出 CPU，命令挂死 + 100% CPU。
++          if (Date.now() - start > timeoutMs) {
++            throw new Error(`文件锁超时（${timeoutMs}ms）: ${lockPath}`)
++          }
++          await sleep(retryMs)
+           continue
+         }
+       } catch {}
+@@ -80,7 +87,13 @@ export async function withFileLock(lockPath, fn, opts = {}) {
+     return await fn()
+   } finally {
+     try { closeSync(fd) } catch {}
+-    try { unlinkSync(lockPath) } catch {} // 释放（容忍已不存在）
++    // 释放前校验持有者身份（坑 quicklog-lock-release-mismatch，2026-09-12 审查批 A-③）：
++    // 本进程临界区超 staleMs 被他进程偷锁后，lockPath 上可能是**他人新建**的锁——无条件
++    // unlink 误删它会让第三方抢锁成功，形成双进程并发临界区。仅内容仍为本会话 myId 才删
++    // （读失败=锁已不在/被偷，容忍——偷锁路径自会回收旧 claim）。
++    try {
++      if (readFileSync(lockPath, 'utf8') === myId) unlinkSync(lockPath)
++    } catch {}
+   }
+ }
+ 
+diff --git a/src/task-review.js b/src/task-review.js
+index 9961e94..30befee 100644
+--- a/src/task-review.js
++++ b/src/task-review.js
+@@ -9,11 +9,12 @@
+  */
+ 
+ import { existsSync, readFileSync, mkdirSync, writeFileSync, readdirSync, statSync } from 'fs'
+-import { join, resolve } from 'path'
++import { join, resolve, basename, dirname } from 'path'
+ import { git, unquoteGitPath } from './git-helper.js'
+ import { pathMatches } from './change-list.js'
+ import { parseAllowedPaths, parseRepo, parseBaseCommit, parseHeadCommit } from './stages/plan-postcheck.js'
+ import { resolveVerifyChangedFiles } from './verify-postcheck.js'
++import { splitOwnVsForeignDiffFiles } from './foreign-declared.js'
+ import { WorktreeManager } from './worktree.js'
+ import { resolveRuntimeRoot } from './run/shared.js'
+ 
+@@ -493,7 +494,11 @@ export function validateTaskReviews(opts) {
+       }
+     }
+     if (reviewGitDir) {
+-      const evidence = verifyReviewGitEvidence(review, reviewGitDir, evidenceCache)
++      const evidence = verifyReviewGitEvidence(review, reviewGitDir, evidenceCache, {
++        mainGitDir: gitDir,
++        changeName: changeDir ? basename(changeDir) : null,
++        specBase: changeDir ? dirname(dirname(changeDir)) : null,
++      })
+       for (const w of evidence.warnings) warnings.push(`${taskId}: ${w}`)
+       if (!evidence.ok) {
+         for (const err of evidence.errors) errors.push(`${taskId}: ${err}`)
+@@ -622,7 +627,7 @@ function parsePorcelainFiles(statusOut) {
+  *   一次校验批：working-tree status 是快照语义，跨批复用会读到陈旧状态。
+  * @returns {{ ok: boolean, emptyDiff: boolean, errors: string[], warnings: string[], unavailable: boolean }}
+  */
+-export function verifyReviewGitEvidence(review, gitDir, cache = null) {
++export function verifyReviewGitEvidence(review, gitDir, cache = null, opts = {}) {
+   const errors = []
+   const warnings = []
+   const c = cache || (cache = {})
+@@ -703,7 +708,22 @@ export function verifyReviewGitEvidence(review, gitDir, cache = null) {
+       c.wtStatus.set(gitDir, wtStatus)
+     }
+     if (wtStatus && wtStatus.trim().length > 0) {
+-      const wtFiles = parsePorcelainFiles(wtStatus)
++      let wtFiles = parsePorcelainFiles(wtStatus)
++      // 归属过滤（2026-09-12 审查批 A-①，坑 task-review-foreign-wip-blindspot）：主仓 in-place
++      // 模式下 wtStatus 含**全部**并行会话的未提交文件——他者 WIP 稀释 diffFiles 使 emptyDiff
++      // （零改动→伪造 ERROR）在共享仓永不触发、交叉比对更易混过。对齐 verify-postcheck
++      // resolveMainChangedFiles 的 splitOwnVsForeignDiffFiles 剔除口径（他者声明文件归他者）。
++      // 仅主仓 gitDir 过滤（跨仓/worktree 无主 specBase 声明源，行为不变）；无 opts 零回归。
++      if (wtFiles.length > 0 && opts.mainGitDir && opts.changeName
++          && resolve(gitDir) === resolve(opts.mainGitDir)) {
++        try {
++          const { own, foreign } = splitOwnVsForeignDiffFiles(gitDir, opts.changeName, wtFiles, { specBase: opts.specBase })
++          if (foreign.length > 0) {
++            wtFiles = own
++            warnings.push(`working-tree 并入已排除 ${foreign.length} 个并行会话声明的文件（${foreign.slice(0, 3).map(x => x.file).join(', ')}${foreign.length > 3 ? ' 等' : ''}）`)
++          }
++        } catch { /* 归属过滤失败退回全量并入（fail-open 与旧口径一致） */ }
++      }
+       if (wtFiles.length > 0) diffFiles = diffFiles.concat(wtFiles)
+       if (commitDiffFiles.length === 0) {
+         warnings.push(`base..head 无 commit diff（${review.base.slice(0, 8)}..${review.head.slice(0, 8)}），交叉对账并入 working-tree 未提交改动 ${wtFiles.length} 个文件 —— 按有效改动处理，不判零改动伪造`)

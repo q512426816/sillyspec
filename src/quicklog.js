@@ -67,6 +67,13 @@ export async function withFileLock(lockPath, fn, opts = {}) {
               if (!restored) { try { unlinkSync(claim) } catch {} }
             }
           } catch {}
+          // 偷锁重试前同样受超时与退避约束（坑 quicklog-lock-steal-spin，2026-09-12 审查批 A-③）：
+          // 旧版 continue 直接跳过下方检查——锁文件被 AV/索引器长期占用、renameSync 持续失败
+          // （每次被外层 catch 吞掉）时忙等自旋：不检查 timeoutMs、不让出 CPU，命令挂死 + 100% CPU。
+          if (Date.now() - start > timeoutMs) {
+            throw new Error(`文件锁超时（${timeoutMs}ms）: ${lockPath}`)
+          }
+          await sleep(retryMs)
           continue
         }
       } catch {}
@@ -80,7 +87,13 @@ export async function withFileLock(lockPath, fn, opts = {}) {
     return await fn()
   } finally {
     try { closeSync(fd) } catch {}
-    try { unlinkSync(lockPath) } catch {} // 释放（容忍已不存在）
+    // 释放前校验持有者身份（坑 quicklog-lock-release-mismatch，2026-09-12 审查批 A-③）：
+    // 本进程临界区超 staleMs 被他进程偷锁后，lockPath 上可能是**他人新建**的锁——无条件
+    // unlink 误删它会让第三方抢锁成功，形成双进程并发临界区。仅内容仍为本会话 myId 才删
+    // （读失败=锁已不在/被偷，容忍——偷锁路径自会回收旧 claim）。
+    try {
+      if (readFileSync(lockPath, 'utf8') === myId) unlinkSync(lockPath)
+    } catch {}
   }
 }
 

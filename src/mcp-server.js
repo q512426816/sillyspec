@@ -64,8 +64,6 @@ const TOOLS = [
 
 /** tools/call 路由：子进程 --json（stdout 纪律隔离；CLI 的 stderr 透传进 text 供诊断） */
 async function callTool(name, args) {
-  const argv = ['--meta'] // 占位防误配：--meta 是 run 的 flag，工具不走 run
-  argv.length = 0
   const specDir = args && typeof args.spec_dir === 'string' && args.spec_dir ? ['--spec-dir', args.spec_dir] : []
   switch (name) {
     case 'sillyspec_next':
@@ -81,6 +79,14 @@ async function callTool(name, args) {
   }
 }
 
+// 子进程挂死兜底（2026-09-12 审查批 A-②）：gate/derive 会真实跑测试与 git 全家，测试进程
+// 不退/git 等锁时 tools/call 若无超时则永久挂起（stdio MCP 无请求级超时，host 侧表现为工具
+// 卡死）。默认 300s（全量测试套件 ~90s 的余量），env 可调；输出封顶防 stderr 刷屏型无界累积。
+const CALL_TIMEOUT_MS = Number(process.env.SILLYSPEC_MCP_CALL_TIMEOUT_MS) > 0
+  ? Number(process.env.SILLYSPEC_MCP_CALL_TIMEOUT_MS)
+  : 300_000
+const OUTPUT_CAP_BYTES = 8 * 1024 * 1024
+
 function runCli(cliArgs) {
   return new Promise((resolve) => {
     const p = spawn(process.execPath, [CLI_ENTRY, ...cliArgs], {
@@ -90,14 +96,34 @@ function runCli(cliArgs) {
     })
     let out = ''
     let err = ''
-    p.stdout.on('data', (d) => { out += String(d) })
-    p.stderr.on('data', (d) => { err += String(d) })
+    let outTrunc = false
+    let errTrunc = false
+    let settled = false
+    const finish = (r) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      resolve(r)
+    }
+    const timer = setTimeout(() => {
+      try { p.kill() } catch { /* 已退出 */ }
+      finish({ text: `CLI 子进程超时（${CALL_TIMEOUT_MS}ms）被终止: sillyspec ${cliArgs.join(' ')}（挂死兜底；可用 SILLYSPEC_MCP_CALL_TIMEOUT_MS 调整）`, isError: true, exitCode: null })
+    }, CALL_TIMEOUT_MS)
+    p.stdout.on('data', (d) => {
+      if (out.length < OUTPUT_CAP_BYTES) out += String(d)
+      else outTrunc = true
+    })
+    p.stderr.on('data', (d) => {
+      if (err.length < OUTPUT_CAP_BYTES) err += String(d)
+      else errTrunc = true
+    })
     p.on('close', (code) => {
       // envelope 原样透传（text = stdout JSON 全文；machine 侧自解）；stderr 仅失败时附诊断
-      const text = (out.trim() || err.trim().slice(-2000) || `（exit ${code}，无输出）`)
-      resolve({ text, isError: code !== null && code !== 0 && code !== 1, exitCode: code })
+      const truncNote = outTrunc || errTrunc ? `\n（输出超 ${OUTPUT_CAP_BYTES} 字节封顶截断）` : ''
+      const text = (out.trim() || err.trim().slice(-2000) || `（exit ${code}，无输出）`) + truncNote
+      finish({ text, isError: code !== null && code !== 0 && code !== 1, exitCode: code })
     })
-    p.on('error', (e) => resolve({ text: `CLI 子进程失败: ${e.message}`, isError: true }))
+    p.on('error', (e) => finish({ text: `CLI 子进程失败: ${e.message}`, isError: true }))
   })
 }
 

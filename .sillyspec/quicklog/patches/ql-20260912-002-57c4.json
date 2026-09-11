@@ -1,0 +1,46 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-0e52b32f",
+  "totals": {
+    "files": 3,
+    "additions": 71,
+    "deletions": 12
+  },
+  "rows": [
+    {
+      "path": "src/mcp-server.js",
+      "declared": true,
+      "additions": 33,
+      "deletions": 7,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/quicklog.js",
+      "declared": true,
+      "additions": 14,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/task-review.js",
+      "declared": true,
+      "additions": 24,
+      "deletions": 4,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "qlId": "ql-20260912-002-57c4",
+  "sessionId": "quick-0e52b32f",
+  "savedAt": "2026-09-11T21:13:59.649Z",
+  "patchSha256": "b37b496f5b5a42780055b740d012f4ae0b486740afaacb7e5240d87dcaaa7982",
+  "patchStatus": "ok"
+}

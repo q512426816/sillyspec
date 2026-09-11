@@ -36,3 +36,4 @@
 - 2026-09-09-doctor-noai | doctor 阶段折叠 6→3 步（noAI 诊断步/修复决策/汇总）+ 移出 READONLY 常量
 - ql-20260909-004 | archive 三重核对机械化：auditModuleImpactAgainstDiff + {ARCHIVE_IMPACT_AUDIT} 注入（agent 只裁决不一致项）
 - ql-20260911-017-0c35 | brainstorm step6 变更名规则三处标注「CLI 已强制：不合规 exit 2」（prompt 约束升级为硬门提示）
+- ql-20260912-002-57c4 | verifyReviewGitEvidence 主仓 WIP 并入前剔除他者声明文件（复用 splitOwnVsForeignDiffFiles，opts 第参向后兼容）——共享仓他者 WIP 不再使 emptyDiff 伪造检测永不触发

@@ -9,11 +9,12 @@
  */
 
 import { existsSync, readFileSync, mkdirSync, writeFileSync, readdirSync, statSync } from 'fs'
-import { join, resolve } from 'path'
+import { join, resolve, basename, dirname } from 'path'
 import { git, unquoteGitPath } from './git-helper.js'
 import { pathMatches } from './change-list.js'
 import { parseAllowedPaths, parseRepo, parseBaseCommit, parseHeadCommit } from './stages/plan-postcheck.js'
 import { resolveVerifyChangedFiles } from './verify-postcheck.js'
+import { splitOwnVsForeignDiffFiles } from './foreign-declared.js'
 import { WorktreeManager } from './worktree.js'
 import { resolveRuntimeRoot } from './run/shared.js'
 
@@ -493,7 +494,11 @@ export function validateTaskReviews(opts) {
       }
     }
     if (reviewGitDir) {
-      const evidence = verifyReviewGitEvidence(review, reviewGitDir, evidenceCache)
+      const evidence = verifyReviewGitEvidence(review, reviewGitDir, evidenceCache, {
+        mainGitDir: gitDir,
+        changeName: changeDir ? basename(changeDir) : null,
+        specBase: changeDir ? dirname(dirname(changeDir)) : null,
+      })
       for (const w of evidence.warnings) warnings.push(`${taskId}: ${w}`)
       if (!evidence.ok) {
         for (const err of evidence.errors) errors.push(`${taskId}: ${err}`)
@@ -622,7 +627,7 @@ function parsePorcelainFiles(statusOut) {
  *   一次校验批：working-tree status 是快照语义，跨批复用会读到陈旧状态。
  * @returns {{ ok: boolean, emptyDiff: boolean, errors: string[], warnings: string[], unavailable: boolean }}
  */
-export function verifyReviewGitEvidence(review, gitDir, cache = null) {
+export function verifyReviewGitEvidence(review, gitDir, cache = null, opts = {}) {
   const errors = []
   const warnings = []
   const c = cache || (cache = {})
@@ -703,7 +708,22 @@ export function verifyReviewGitEvidence(review, gitDir, cache = null) {
       c.wtStatus.set(gitDir, wtStatus)
     }
     if (wtStatus && wtStatus.trim().length > 0) {
-      const wtFiles = parsePorcelainFiles(wtStatus)
+      let wtFiles = parsePorcelainFiles(wtStatus)
+      // 归属过滤（2026-09-12 审查批 A-①，坑 task-review-foreign-wip-blindspot）：主仓 in-place
+      // 模式下 wtStatus 含**全部**并行会话的未提交文件——他者 WIP 稀释 diffFiles 使 emptyDiff
+      // （零改动→伪造 ERROR）在共享仓永不触发、交叉比对更易混过。对齐 verify-postcheck
+      // resolveMainChangedFiles 的 splitOwnVsForeignDiffFiles 剔除口径（他者声明文件归他者）。
+      // 仅主仓 gitDir 过滤（跨仓/worktree 无主 specBase 声明源，行为不变）；无 opts 零回归。
+      if (wtFiles.length > 0 && opts.mainGitDir && opts.changeName
+          && resolve(gitDir) === resolve(opts.mainGitDir)) {
+        try {
+          const { own, foreign } = splitOwnVsForeignDiffFiles(gitDir, opts.changeName, wtFiles, { specBase: opts.specBase })
+          if (foreign.length > 0) {
+            wtFiles = own
+            warnings.push(`working-tree 并入已排除 ${foreign.length} 个并行会话声明的文件（${foreign.slice(0, 3).map(x => x.file).join(', ')}${foreign.length > 3 ? ' 等' : ''}）`)
+          }
+        } catch { /* 归属过滤失败退回全量并入（fail-open 与旧口径一致） */ }
+      }
       if (wtFiles.length > 0) diffFiles = diffFiles.concat(wtFiles)
       if (commitDiffFiles.length === 0) {
         warnings.push(`base..head 无 commit diff（${review.base.slice(0, 8)}..${review.head.slice(0, 8)}），交叉对账并入 working-tree 未提交改动 ${wtFiles.length} 个文件 —— 按有效改动处理，不判零改动伪造`)

@@ -375,3 +375,16 @@
 方案：三个 quicklog 函数推送+sidecar 移锁外（payload 锁内组装锁外 best-effort 推送）；queryDbFirstCell 改 createRequire 进程内同步 node:sqlite（1.2ms 实测，语义四例保持）；卡片读取延后到 verdictUsable 之后
 结果：新测试 perf-batch-fixes 9/9（核心断言：慢推送 3s 在途时锁 1.5s 超时内立即可取——旧版必超时）；全量 443 文件 0 失败 + lint 573 绿（CLI --done 门禁实测通过）
 审计：⚖️ 归属切分：1 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：test/perf-batch-fixes.test.mjs
+
+## ql-20260912-002-57c4 | 2026-09-12 05:05:14 | backlog 批 A：task-review 他者 WIP 盲区 + mcp-server 挂死 + quicklog 锁三连
+状态：已完成
+关联变更：（无）
+文件：
+- src/task-review.js（WIP 并入归属过滤）
+- src/mcp-server.js（超时兜底）
+- src/quicklog.js（锁三连）
+需求：backlog 批 A：task-review 他者 WIP 盲区 + mcp-server 挂死 + quicklog 锁三连
+根因：① 主仓 in-place 模式 wtStatus 含全部并行会话未提交文件——他者 WIP 稀释 diffFiles 使 emptyDiff 伪造检测在共享仓永不触发（同仓 verify-postcheck 已有剔除口径未复用）；② tools/call 子进程无超时无 kill——gate 跑真实测试/git 挂死时 MCP 工具永久挂起且 stderr 无界累积；③ 偷锁分支 continue 跳过超时检查与 sleep（AV 占用锁文件时忙等自旋挂死）+ finally 无条件 unlink 不校验持有者（误删他人新锁→双写者）
+方案：verifyReviewGitEvidence 加 opts（mainGitDir/changeName/specBase）复用 splitOwnVsForeignDiffFiles 剔除他者声明（仅主仓、无 opts 零回归、失败退回旧口径）；runCli 300s 超时+kill+isError envelope+8MB 封顶+幂等结算+死代码清理；withFileLock 偷锁分支补 timeout/sleep+释放前 myId 比对
+结果：新测试 backlog-batch-a 12/12（伪造 review 拦截/超时 kill 39ms 回包/他人锁存活/自旋按预算抛错）；全量 444/0 + lint 574 绿（CLI --done 门禁实测通过）
+审计：⚖️ 归属切分：1 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：test/backlog-batch-a.test.mjs
