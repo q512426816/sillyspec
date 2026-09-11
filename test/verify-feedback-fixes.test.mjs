@@ -102,7 +102,7 @@ console.log('\n=== ③ junction 创建后实物复核（坑 provision-silent-fak
 
 console.log('\n=== ④ 模板自带元数据头（坑 skeleton-metadata-header-late）===\n')
 {
-  const step3 = archiveDef.steps.find(s => s.name === 'sync-module-docs')
+  const step3 = archiveDef.steps.find(s => s.name.includes('归档语义收尾') || s.name === 'sync-module-docs')
   const prompt = step3?.prompt || ''
   assertTrue(prompt.includes('author: <git-user>'), '模块卡模板 frontmatter 带 author: <git-user>（CLI 每步替换真值）')
   assertTrue(prompt.includes('created_at: <now-datetime>'), '模块卡模板带 created_at: <now-datetime>（秒级）')

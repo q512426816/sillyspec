@@ -51,7 +51,7 @@ export const definition = {
 ### ③ 模块文档同步（结构化事实改 _module-map.yaml，语义解释改模块卡片，一个信息只维护一次）
 - 按 module-impact 影响类型更新 _module-map.yaml（paths/depends_on/used_by/entrypoints/status/needs_review）与受影响模块卡片（契约摘要/关键逻辑/定位/注意事项；内部实现变化通常不更新卡片）。
 - 人工备注（MANUAL_NOTES 标记区间）永远保护回填；标记缺失/重复 → needs_review: true。
-- 新建卡片用骨架模板（frontmatter author/created_at 占位符由 CLI 替换）；一级标题 \`# <中文名>（<module-id>）\`。
+- 新建卡片用骨架模板（frontmatter \`author: <git-user>\` / \`created_at: <now-datetime>\` 占位符由 CLI 每步替换真值，照抄即过元数据校验）；一级标题 \`# <中文名>（<module-id>）\`。
 - 常规（无 needs_review 影响/无 unmapped/人工备注标记齐全）→ 直接写入 + --done；异常（needs_review/unmapped/备注标记缺失/覆盖丢手动字段）→ --wait 请用户裁决。
 - 回填 module-impact.md「更新结果」表（目标列 \`_module-map.yaml: <module-id>\` 或 \`modules/<module-id>.md\`，区分 done/skipped）——verify 已硬校验无 pending 死信，此处保持清零。
 - 如需 rebuild 索引：\`sillyspec modules rebuild --force\` 会清空手动维护字段，仅当可接受时用（优先手动更新）。
