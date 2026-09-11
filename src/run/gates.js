@@ -30,6 +30,7 @@ import { handleScanStageCompleted, handleExecuteWorktreeCleanup } from './comple
 import { detectConcurrentChanges, formatConcurrentWarning } from './concurrent-detect.js'
 import { stageRegistry } from '../stages/index.js'
 import { normalizeTaskId } from '../taskcard.js'
+import { recordFrictionEvent } from '../friction-tally.js'
 
 /**
  * 从任务注册表（tasks.md）提取全部 task id（task-XX）——符号影响面覆盖度校验用。
@@ -506,7 +507,11 @@ function rollbackStageCompletion(stageData, steps, currentIdx) {
  * 漏写 triggerSync / 写错 return 结构导致行为分裂。返回 nextPendingIdx=currentIdx，
  * 让上层走「完成但不推进」分支，--done 被拒、agent 修复产物后重跑。
  */
-function rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts) {
+function rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, friction) {
+  // friction 尾参（friction-signal-hint task-02）：gate 失败摩擦埋点标签 {type, detail}——各调用点
+  // 按所属 gate 段传来源标签（审查两段走 review_rejected），未传兜底通用 gate-cascade。
+  // recordFrictionEvent 自带静默降级（非法类型/写失败返回 null），不影响回滚/返回语义。
+  recordFrictionEvent({ cwd, changeName, platformOpts, ...(friction || { type: 'gate_rollback', detail: 'gate-cascade' }) })
   rollbackStageCompletion(stageData, steps, currentIdx)
   progress.lastActive = new Date().toLocaleString('zh-CN', { hour12: false })
   pm._write(cwd, progress, changeName)
@@ -596,7 +601,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
     // 产物校验失败必须阻断完成 —— 否则 validator 形同虚设，
     // verify 会带着 FAIL/缺 verify-result.md 被 ✅ 标记完成（历史教训）。
     // plan/execute 的专项契约校验（下方）在产物齐全后才需要继续跑，故此处先 return。
-    return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)
+    return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'validators' })
   }
   if (contractResult.warnings.length > 0) {
     console.warn(`\n⚠️ 阶段 ${stageName} 校验警告：`)
@@ -685,7 +690,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
         await renderVerifyTestAttribution({ cwd, changeName, specBase, runtimeRoot: resolveRuntimeRoot(platformOpts, specBase) })
       } catch { /* 归因提示失败不影响阻断语义 */ }
       console.error('   请修复失败的测试并更新 verify-result.md 后重新完成此步骤。')
-      return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)
+      return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'verify-test' })
     }
     // lint 对账（2026-08-21 审查 CLI-1）：test 侧"自报告 PASS 但实测失败→阻断"已闭环，
     // lint 侧此前纯口头——CLI 亲自执行 commands.lint，advisory 起步（失败打印不阻断，观察期后升级）
@@ -726,7 +731,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
         } catch { /* 归因提示失败不影响阻断语义 */ }
       }
       console.error('   修复后重跑 --done（进度不丢）；确认要跳过实测请设 SILLYSPEC_VERIFY_LINT_GATE=advisory（审计留痕）。')
-      return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)
+      return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'verify-lint' })
     }
     // 契约 parity 对账：扫前端 API 调用 vs execute 提取的 provider endpoint artifact。
     // 接线自 contract-matrix pipeline（verifyApiParity 的 CLI 入口）。
@@ -766,7 +771,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
       console.error(`   修复：在 verify-result.md「## 证据账（cannot_verify 任务）」槽段逐 task 一行——`)
       console.error(`   - task-NN: satisfied | verifiedFiles: <精确路径>（CLI 核验：代码类 存在×mtime×diff 交集；日志/文档类豁免 diff）`)
       console.error(`   - 确实无法验证 → 填 missing 并加（豁免：<一句话理由>）后缀；部分满足 → partial + 已核验路径`)
-      return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)
+      return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'verify-contract' })
     }
     // ── target_files 声明 ↔ 实际改动 对账（task-05 / ir-stage-p3a：②ERROR 阻断 / ③WARNING 放行）──
     // 「计划落空」（task 卡声明没做）此前全盲区：review.json changedFiles 是 agent 手写不能当
@@ -792,7 +797,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
     // 放行态），fail-soft 不影响 gate 判定；②类阻断回执同样留档供平台/审计消费
     writeReconcileRunResult({ runtimeRoot: reconcileRuntimeRoot, changeName, envelope: reconcileEnvelope, result: reconcileCheck })
     if (reconcileBlocked) {
-      return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)
+      return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'verify-contract' })
     }
     // ── verify-result.md 探针预填段一致性抽查（task-03 / ir-stage-p3b D-002@v1 方案A）──
     // 「#### 探针 N」机械预填段（verify-probes --init 生成）长在 agent 可编辑的正文里，其防篡改
@@ -821,7 +826,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
     // 两检查间耦合；各写各的回执、按文件名订阅更干净。fail-soft 不影响 gate 判定
     writeProbeConsistencyRunResult({ runtimeRoot: reconcileRuntimeRoot, changeName, envelope: probeEnvelope, result: probeCheck })
     if (probeBlocked) {
-      return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)
+      return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'verify-contract' })
     }
     // ── 行号漂移自动重锚（2026-09-09 §7-6：quick --done 已接，verify/archive 收尾补接）──
     // 本变更 diff 中的 .md 文档经 autoReanchorDocRefs 定点重锚（fixable 唯一/优选命中才改 +
@@ -855,7 +860,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
           console.error(`\n❌ verify 阶段被阻断：module-impact.md「更新结果」表存在 ${pendingRows.length} 个未清 pending/待办项（死信）`)
           for (const row of pendingRows) console.error(`   - ${row}`)
           console.error('   文档同步是 verify 的收尾义务：请完成模块文档同步并回填状态为 done/skipped（说明原因），再重新完成 verify。')
-          return rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)
+          return rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'verify-contract' })
         }
       }
     }
@@ -884,7 +889,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
         for (const err of planValidation.errors) console.error(`   - ${err}`)
         console.error(`\n   tasks.md/plan.md 不满足 execute 契约，请修复后重新完成此步骤。`)
         // 阻断 completed
-        return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)
+        return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'plan-execute-contract' })
       }
       if (planValidation.warnings.length > 0) {
         console.warn(`\n⚠️  Plan contract 警告（不阻断完成）：`)
@@ -945,7 +950,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
         const reviewResult = gated.result
         printStageReviewResult(reviewResult, { stage: stageName, reviewRunId, runtimeRoot, changeName })
         if (!reviewResult.ok) {
-          return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)
+          return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'review_rejected', detail: 'stage-review' })
         }
         // 降级自审留痕（2026-09-10 用户反馈①：PI agent 等宿主无 Agent tool，prompt 降级条款允许
         // 当前 agent 自审产出 review.json）。放行但独立性折损必须可见：⚠️ 审计行区分降级 review
@@ -965,7 +970,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
     } catch (e) {
       // fail-closed：Gate 自身异常阻断完成，不静默放行（与 Task Review Gate 一致）
       console.error('❌ Stage Review Gate 异常，阻断 ' + stageName + ' 完成: ' + e.message)
-      return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)
+      return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'review_rejected', detail: 'stage-review' })
     }
   }
 
@@ -1074,7 +1079,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
             console.error('\n⚠️  部分任务已在 tasks.md 中勾选，但 review.json 不存在。')
             console.error(`   请取消勾选这些任务的 checkbox，或补充对应的 review.json（execute run ID: ${executeRunId}）。`)
           }
-          return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)
+          return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'review_rejected', detail: 'task-review' })
         }
 
         // cannot_verify 的 requiredEvidence 写入 change 目录，供 verify 阶段消费
@@ -1090,7 +1095,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
       // fail-closed：Gate 自身异常时不能默认放行，否则异常成了绕过评审的通道
       console.error(`❌ Task Review Gate 异常，阻断 execute 完成: ${e.message}`)
       console.error('   请检查 review.json / plan.md 是否可读，修复后重新完成此步骤。')
-      return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)
+      return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'review_rejected', detail: 'task-review' })
     }
   }
   return null
@@ -1344,7 +1349,7 @@ export async function completeStageGates({ stageName, cwd, changeName, platformO
   }
   } catch (e) {
     console.error(`\n❌ ${stageName} 阶段完成收尾异常（已 rollback 为 in-progress，请修复后重新 --done）：${e?.message || e}`)
-    return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)
+    return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'internal-error' })
   }
 
   // execute worktree cleanup（completeStep / continueStep 完成分支统一调用，避免双清理）

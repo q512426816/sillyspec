@@ -23,6 +23,7 @@ modules:
     review_reasons: []
     paths:
       - src/agent-session-log.js
+      - src/friction-tally.js
       - src/runtime-hygiene.js
       - src/workspace.js
       - src/run.js

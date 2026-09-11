@@ -16,7 +16,7 @@ updated_at: 2026-08-16 14:45:00
 1. **engines `>=22.11.0` 虚低 + db.js 静态闭包 → Node 22.11/22.12 全 CLI 崩溃（含 --version）**
    `package.json:16` engines 写 `>=22.11.0`，`src/db-engine.js:5` 注释断言「v22.11.0+ 无需 flag」错误——Node 官方 v22.13.0 才解除 `--experimental-sqlite` flag；且 db.js 在 index.js 静态 import 闭包内（性能发现 2），import 即崩。修法：engines 抬 `>=22.13.0` + 修注释。【性能#1，已亲验】
 2. **Windows 下 `runPostCheck` 占位符替换炸 JSON → scan 质量门 fail-open + `workflow check` 崩**
-   `src/workflow.js:286`：`JSON.stringify` 后用 `new RegExp('{SPEC_ROOT}')` 把含反斜杠的 Windows 路径裸替换进 JSON 再 parse；`complete-handlers.js:785` catch 吞错放行。实测 `workflow check` 报「Bad escaped character」，scan 深度扫描门静默失效。【上手#1，已亲验】
+   `src/workflow.js:286`：`JSON.stringify` 后用 `new RegExp('{SPEC_ROOT}')` 把含反斜杠的 Windows 路径裸替换进 JSON 再 parse；`complete-handlers.js:793` catch 吞错放行。实测 `workflow check` 报「Bad escaped character」，scan 深度扫描门静默失效。【上手#1，已亲验】
 3. **dashboard 在 Windows 永不启动**：`packages/dashboard/server/index.js:567-580` listen 排在同步全盘扫描后（homedir/Temp/桌面，深度 2 readdirSync），每项目 3 次 execSync('git') stderr 裸刷。实测 150s+ 假死。【上手#2】
 4. **gate/derive 的 specBase 只对一半路径生效——平台模式机器门控不可用**
    `src/machine-interface.js:114-136`：runGate 守卫与 pm.read 用 `resolveSpecDir(cwd)`，planContent/changeDir 用传入 specBase——同一 envelope 两套事实源混拼；daemon 平台模式调 gate 恒 exit 2「无法核验」。index.js gate/derive case 也不读平台指针（对比 runCommand :290-313）。与 JSDoc/platform-interface-map.md 宣称矛盾。【CLI#1，已亲验】
@@ -25,9 +25,9 @@ updated_at: 2026-08-16 14:45:00
 ### B. 状态机与守卫 fail-open（P1）
 
 6. **`--done` 完全绕过阶段转换守卫 + 辅助阶段污染 currentStage**：`command.js:977` --done 直接进 `completeStep` 不查 checkTransition（stage.js:27-44 `checkTransition` 只在 runStage 调）；status/doctor 等 auxiliary 跑一次即写 `progress.currentStage`（stage.js:227 写库）→ fromStage 变 status 后跳阶段静默放行（stage-contract.js:850 `AUXILIARY_STAGES` 一律放行）。代理实测：brainstorm 仓跑 `run verify --done` 输出「Step 2/7 完成」无拦截。【驾驭#1，已亲验】
-7. **status/doctor 自称只读实则写库**：`command.js:940` auxiliary fallback `initChange` 建 default 行 + 落盘 currentStage；与 SKILL「status 只读」矛盾；多 agent 并发 lastActive 互相覆盖。【驾驭#2，已亲验】
+7. **status/doctor 自称只读实则写库**：`command.js:950` auxiliary fallback `initChange` 建 default 行 + 落盘 currentStage；与 SKILL「status 只读」矛盾；多 agent 并发 lastActive 互相覆盖。【驾驭#2，已亲验】
 8. **`run brainstorm` 无 --change 在多活跃变更仓静默建幽灵变更**：`command.js:717-731` 无条件 initChange。DB 实锤：08-15 一小时内 4 个 `*-new-change-*` 活跃行。审计代理自身触发一次（已精确清理 2026-08-16-new-change-6307433e）。【驾驭#3，已亲验】
-8b. **新项目首跑 auxiliary 即产生幽灵 default 变更 + doctor 清理指引落空**：`_ensureChangeDir`（progress.js:283）建空 `changes/default/`；单变更视图（_showChange）无 dirMissing 警告，仅多变更视图有（stage-machine.js:223 的 `dirMissing` 检查）；doctor change_db_consistency 容差放行、「可用 doctor 清理」承诺不存在。【上手#3】
+8b. **新项目首跑 auxiliary 即产生幽灵 default 变更 + doctor 清理指引落空**：`_ensureChangeDir`（progress.js:291）建空 `changes/default/`；单变更视图（_showChange）无 dirMissing 警告，仅多变更视图有（stage-machine.js:223 的 `dirMissing` 检查）；doctor change_db_consistency 容差放行、「可用 doctor 清理」承诺不存在。【上手#3】
 9. **docs gate 未知 flag 静默吞 + `--paths` 未接线**：`index.js:638-649` 只解析 --init-baseline；interface-contract.md §1.3b 宣称的「未知 flag exit 2」未实现，实测 `--nonexistent-flag` exit 0 放行；`--paths` 被 docs-gate.js:69 忽略。与 docs check 分支白名单治理口径不一致。【CLI#2，已亲验】
 10. **`docs <未知子命令>` / `progress <未知子命令>/缺参` usage 后 exit 0**：`index.js:650-652`/`:367-369`/`:311+`——typo 静默成功，hook 拼错即 fail-open；worktree/modules/runtime 家族均 exit 1/2 + didYouMean，口径分裂。【CLI#4，已亲验】
 11. **safeGit 未设 stdio，子进程 stderr 裸刷终端**：`git-helper.js:37` 无 stdio 配置，空仓跑 quick 冒出无上下文 `fatal:`；同仓其他调用点均显式 `stdio:['ignore','pipe','pipe']`。【驾驭#6】

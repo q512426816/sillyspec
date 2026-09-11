@@ -11,6 +11,8 @@
 //    同目录混有他变更 change 字段 → 整目录不删
 // 4. archiveWorktreeCleanup 无 meta 早退路径仍会回收（接线必须在 worktree return 之前）
 // 5. 相邻文件零误伤：sillyspec.db / last-delta.json / endpoint-baselines / contract-artifacts
+// 6. friction-tally-<change>.json 随归档精确回收，他变更零误伤（friction-signal-hint FR-05；
+//    短名不误伤日期前缀长名，同 apply-pathspec 口径）
 //
 // 隔离：os.tmpdir()，绝不碰真实 .sillyspec/.runtime。
 import { existsSync, mkdirSync, mkdtempSync, writeFileSync, rmSync } from 'fs'
@@ -172,6 +174,34 @@ console.log('\n--- 5. fail-open + 接线在 worktree 早退之前 ---')
   await archiveWorktreeCleanup(cwd, mine, specBase, {})
   assert(!existsSync(join(rt, `apply-pathspec-${mine}.txt`)), '无 meta 早退路径仍删 apply-pathspec（接线在 return 前）')
   assert(!existsSync(join(rt, 'execute-runs', 'exec-early')), '无 meta 早退路径仍删有戳 execute-run')
+}
+
+// ─────────────────────────────────────────
+// 6. friction tally 随变更归档回收（friction-signal-hint FR-05）
+// ─────────────────────────────────────────
+console.log('\n--- 6. friction-tally 回收与零误伤 ---')
+{
+  const rt = makeRt()
+  const mine = '2026-09-11-friction-mine'
+  const other = '2026-09-11-friction-other'
+  write(join(rt, `friction-tally-${mine}.json`), { events: { gate_rollback: { count: 2 } }, history: [] })
+  write(join(rt, `friction-tally-${other}.json`), { events: {}, history: [] })
+
+  const r = pruneArchivedChangeRuntime(rt, mine)
+  assert(r.ok === true, 'prune 返回 ok:true')
+  assert(!existsSync(join(rt, `friction-tally-${mine}.json`)), '本变更 friction-tally 已删')
+  assert(existsSync(join(rt, `friction-tally-${other}.json`)), '他变更 friction-tally 保留')
+}
+
+// 短名 change 不误伤日期前缀长名（与 apply-pathspec 同款后缀陷阱）
+{
+  const rt = makeRt()
+  write(join(rt, 'friction-tally-login.json'), { events: {}, history: [] })
+  write(join(rt, 'friction-tally-2026-08-01-login.json'), { events: {}, history: [] })
+
+  pruneArchivedChangeRuntime(rt, 'login')
+  assert(!existsSync(join(rt, 'friction-tally-login.json')), '短名 friction-tally 已删')
+  assert(existsSync(join(rt, 'friction-tally-2026-08-01-login.json')), '长名 friction-tally 保留（精确文件名，非后缀匹配）')
 }
 
 try { rmSync(tmpRoot, { recursive: true, force: true }) } catch { /* OS 清 */ }

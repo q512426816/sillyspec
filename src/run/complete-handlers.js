@@ -35,6 +35,7 @@ import { validateQuickResult, allocateQuicklogEntry, appendQuicklogEntryWithId, 
 import { getRule } from '../stage-contract-spec.js'
 import { archiveDestDirName } from '../stage-contract.js'
 import { collectNumstatByPath } from '../scope-audit.js'
+import { recordFrictionEvent, consumeFrictionHint } from '../friction-tally.js'
 
 /**
  * 清洗项目名：只保留 ASCII 字母/数字/横线/下划线/点，过滤中文和特殊字符。
@@ -168,6 +169,13 @@ export function pruneArchivedChangeRuntime(runtimeRoot, changeName) {
   try {
     const pathspec = join(runtimeRoot, `apply-pathspec-${changeName}.txt`)
     if (existsSync(pathspec)) gone(pathspec)
+  } catch {}
+
+  // friction tally（friction-signal-hint FR-05）：摩擦计数随变更终态一并回收——真实变更的
+  // friction-tally-<change>.json 落 runtimeRoot，变更归档/删除后无读者，残留即孤儿文件。
+  try {
+    const fp = join(runtimeRoot, `friction-tally-${changeName}.json`)
+    if (existsSync(fp)) gone(fp)
   } catch {}
 
   try {
@@ -1056,6 +1064,9 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
         steps[currentIdx].status = 'pending'
         steps[currentIdx].completedAt = null
         if (outputText) steps[currentIdx].output = null
+        // 摩擦计数（friction-signal-hint task-04）：quick 审计被拦也是摩擦信号——exit 前记
+        // 一笔（changeName=quick 会话 id，tally 落 session 目录，成功收尾 consume 后随目录清理）。
+        recordFrictionEvent({ cwd, changeName, platformOpts, type: 'gate_rollback', detail: 'quick-audit' })
         process.exit(1)
       }
       // P0-2（2026-09-02 跨 agent 工单）：触及 src/test 的 quick --done 内置 test+lint
@@ -1076,6 +1087,9 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
         steps[currentIdx].status = 'pending'
         steps[currentIdx].completedAt = null
         if (outputText) steps[currentIdx].output = null
+        // 摩擦计数（friction-signal-hint task-04）：test/lint 实测门禁拦下同记摩擦——exit 前
+        // 落 session tally，与 quick-audit 同款静默降级。
+        recordFrictionEvent({ cwd, changeName, platformOpts, type: 'gate_rollback', detail: 'quick-test-lint' })
         process.exit(1)
       }
       progress.lastQuickReview = review
@@ -1294,6 +1308,14 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
     } catch (e) {
       console.warn(`⚠️ 关联变更轻量归档失败（不阻断 quick 完成）: ${e.message}`)
     }
+
+    // 摩擦信号消费（friction-signal-hint task-04）：必须在 session 目录清理**前**——清理后
+    // tally 随目录删除，晚于此就读不到。QUICKLOG 完成打印之后 consume，提示里的 postmortem
+    // 建议有落点可循；全零/读失败零输出，摩擦提示失败不影响收尾。
+    try {
+      const fr = consumeFrictionHint({ cwd, changeName, platformOpts })
+      if (fr && fr.hint) console.log(`\n${fr.hint}`)
+    } catch { /* 摩擦提示失败不影响收尾 */ }
 
     // 清理 session 目录（rmSync/unlinkSync 容忍不存在）。路径与写入对齐（Q4 resolveQuickSessionsDir）。
     try {

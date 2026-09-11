@@ -165,6 +165,14 @@ export const LOCAL_YAML_SCHEMA = {
         { path: 'decisions.behind_threshold', type: 'integer', optional: true, status: 'live', readers: ['readDecisionRulesConfig (src/docs-check.js)'], desc: '决策 behind 复核阈值（锚定模块源码在「最近确认」commit 后的前进数），缺省 10；超阈报「决策待复核」提示。', example: '10' },
       ],
     },
+    {
+      id: 'friction_hint',
+      title: '摩擦提示开关',
+      note: 'quick/verify 收尾的摩擦信号计数提示配置（friction-signal-hint）。读键按「存在则读、不存在用缺省」容错：读失败与未配置同兜底为默认开。',
+      keys: [
+        { path: 'friction_hint.enabled', type: 'boolean', optional: true, status: 'live', readers: ['readFrictionHintEnabled (src/friction-tally.js)'], desc: '摩擦提示开关，默认 true；设 false 关闭摩擦提示（gate 回滚/验证失败/审查打回的收尾 advisory 与计数落盘全停，.runtime 零写入）。', example: 'true' },
+      ],
+    },
   ],
 };
 
@@ -293,6 +301,11 @@ test_strategy: full
 # ── 决策库 behind 复核阈值（docs-check 决策规则：源码在「最近确认」后前进超阈值 → 待复核提示；缺省 10）──
 decisions:
   behind_threshold: 10
+
+# ── 摩擦提示开关（quick/verify 收尾的摩擦信号一行 advisory：gate 回滚/验证失败/审查打回计数）──
+# 默认 true 开启；false 一键全关（计数与提示双停，.runtime 零写入）
+friction_hint:
+  enabled: true
 
 # ── 预存失败豁免清单（变更前就失败的测试行；务必定期复核，防误豁免真实失败）──
 known_failures:

@@ -21,3 +21,10 @@ created_at: 2026-08-23T22:40:00+08:00
 理由：修正认知前提：`full/module` 语义不变；`skip` 从「声明未接线（配置后实际全量）」接线为「真跳过」；新增 `evidence-auto`（按 module-impact.md 推荐检查组合，缺失降级 module）；消费端 extractTestStrategy 在 src/verify-postcheck.js 接线（v1 遗漏的真实 reader）
 来源：2026-08-23-adopt-harness-practices
 supersedes：D-005@v1
+
+## D-003@v1 提示克制语义：全零静默、每收尾最多一行、提示后清零、可关默认开
+状态：implemented
+变更：2026-09-11-friction-signal-hint
+锚点：未记录
+最近确认：2a46c07
+理由：照抄 teamai 的克制约束并适配：① 任何类型计数全零 → 收尾零输出（顺利会话零打扰）；② 每次收尾最多输出一行；③ 提示输出后计数清零（「每会话最多提示一次」的等价实现——同一段摩擦只提示一次）；④ 措辞保持「若其中有值得沉淀的坑」条件式（防 agent 为消除提示而制造记录）；⑤ local.yaml 新键 friction_hint.enabled，默认 true，可一键关。

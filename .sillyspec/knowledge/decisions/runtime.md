@@ -100,3 +100,38 @@ supersedes：无（修订 design 初稿注入时机）
 锚点：未记录
 最近确认：3f22d6b
 理由：不阻断。多 agent 并行是本仓常态（AGENTS.md 核心前提），计划外文件可能是他者演进或 plan 后 design 漏更新（常态），硬拦会把正常流逼进 rescue 手动路径（diff 规模两档制先例同教训）。⚠️ 项给出明确出口：execute 时点补 design.md 声明或 --output 注明原因。
+
+## D-001@v1 摩擦触发经验沉淀的触发器形态：CLI 结构化计数
+状态：implemented
+变更：2026-09-11-friction-signal-hint
+锚点：未记录
+最近确认：2a46c07
+理由：**CLI 状态机埋点计数 + 收尾 advisory 提示**（方案 B）。埋点选摩擦事件流经 CLI 自身状态机的三个高信噪比位置：gate 失败回滚（rollbackCompletionAndReturn）、verify test/lint 实测失败、审查 verdict=fail；计数非零时在 quick/verify --done 收尾输出一行提示，建议按 现象/根因/护栏/证据 补 postmortem（与 verify.js/doctor.js 已有 advisory 同一落点链路，不新建命令）。
+
+## D-002@v1 摩擦计数文件落点：.runtime 本机运行时区，禁止 changes/ 目录
+状态：implemented
+变更：2026-09-11-friction-signal-hint
+锚点：未记录
+最近确认：2a46c07
+理由：**落 .sillyspec/.runtime/friction-tally-<changeName>.json**；quick 会话落 .runtime/quick-sessions/<sessionId>/friction-tally.json；平台模式跟随 specBase 解析与 lint tally 同落点。**禁止落 changes/<change>/**。
+
+## D-003@v1 提示克制语义：全零静默、每收尾最多一行、提示后清零、可关默认开
+状态：implemented
+变更：2026-09-11-friction-signal-hint
+锚点：未记录
+最近确认：2a46c07
+理由：照抄 teamai 的克制约束并适配：① 任何类型计数全零 → 收尾零输出（顺利会话零打扰）；② 每次收尾最多输出一行；③ 提示输出后计数清零（「每会话最多提示一次」的等价实现——同一段摩擦只提示一次）；④ 措辞保持「若其中有值得沉淀的坑」条件式（防 agent 为消除提示而制造记录）；⑤ local.yaml 新键 friction_hint.enabled，默认 true，可一键关。
+
+## D-005@v1 隐私红线：只落结构化信号，不落内容
+状态：implemented
+变更：2026-09-11-friction-signal-hint
+锚点：未记录
+最近确认：2a46c07
+理由：**只允许计数/类型/时间戳（+gate 来源标签、failure reason 摘要等结构化短字段）**；禁止落地提示词、对话原文、任务语义摘要。sillyspec 的信号从头到尾不接触对话内容，比 teamai（需对任务摘要脱敏）更干净。
+
+## D-006@v1 Design Grill 修正包（independent 审查 3×P1 + 4×P2）
+状态：implemented
+变更：2026-09-11-friction-signal-hint
+锚点：未记录
+最近确认：2a46c07
+理由：全部采纳修入 design.md——① CC-03（P1）verify 收尾 consume 补第二落点 complete.js continueStep ~1475（wait 解除完成路径，G-2 注释已记录该双路径陷阱）；② CC-04（P1）friction-tally.js 内部推导 specBase（platformOpts.specRoot || specDriftAnchor || cwd/.sillyspec，与 complete.js:125 同序），gates.js 尾参只带 type/detail；③ CC-05（P1）file-lifecycle.md 真实路径为仓根 docs/sillyspec/（.sillyspec/docs/ 下只有 modules/+scan/）；④ CC-02 调用点核正 16→13；⑤ CC-10 verify_run_failed 计入 advisory lint 失败（记录条件与 throw 条件解耦）；⑥ CC-11 标签图补 verify-lint@697；⑦ CC-12 归档时 pruneArchivedChangeRuntime 清 friction-tally，放弃变更残留接受（R-06）。

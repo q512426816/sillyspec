@@ -1,0 +1,1097 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/_module-map.yaml b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+index bf477a4..c5c7263 100644
+--- a/.sillyspec/docs/sillyspec/modules/_module-map.yaml
++++ b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+@@ -29,6 +29,7 @@ modules:
+       - src/run/
+       - src/facade-hint.js
+       - src/quick-recommend.js
++      - src/friction-tally.js
+       - src/scan-diff.js
+ 
+   cli-entry:
+diff --git a/docs/sillyspec/architecture-4a.md b/docs/sillyspec/architecture-4a.md
+index 93ade4a..c0a27bd 100644
+--- a/docs/sillyspec/architecture-4a.md
++++ b/docs/sillyspec/architecture-4a.md
+@@ -78,7 +78,7 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
+ | archive `--confirm` | 归档步缺 `--confirm` | 回退该步 pending | `src/run/complete-handlers.js:262` |
+ | quick 边界审计 | 命中受保护/危险文件或删除 | BLOCKED `exit(1)` | `src/run/shared.js:497` |
+ 
+-**阶段完成 gate 级联**（`runStageCompletionGates` `src/run/gates.js:523`，统一收尾管线）顺序：
++**阶段完成 gate 级联**（`runStageCompletionGates` `src/run/gates.js:529`，统一收尾管线）顺序：
+ 1. `runValidators`（客观产物校验，`src/stage-contract.js:1024`）：`validateBrainstormOutputs` / `validatePlanOutputs` / `validateExecuteOutputs`+`checkExecuteCodeEvidence` / `validateVerifyOutputs` / `validateScanOutputs`。
+ 2. verify 实测对账：CLI 亲跑 `local.yaml` 的 `commands.test`，自报告 PASS 但实测失败→阻断（`gates.js:626`）。
+ 3. Plan→Execute Contract（`validatePlanForExecute` `gates.js:849`）。
+diff --git a/docs/sillyspec/multi-agent-review-2026-08-08.md b/docs/sillyspec/multi-agent-review-2026-08-08.md
+index 6db2473..fec5069 100644
+--- a/docs/sillyspec/multi-agent-review-2026-08-08.md
++++ b/docs/sillyspec/multi-agent-review-2026-08-08.md
+@@ -35,7 +35,7 @@ SillySpec 在 **Grill-Me v1.1 三大原则**上：原则 3（Facts/Decisions 区
+ - **位置**：`src/run/stage.js:315-345`
+ - **现象**：`runStage` 处理 `noAI: true` 步骤时，自动执行 `_cliAction` 后直接把 `stageData.status='completed'` 并落盘，**从不调用 `runStageCompletionGates`**。`runStageCompletionGates` 只在 `complete.js:384` 的 `completeStep` 阶段完成分支被调用——noAI 自动收尾与人工 `--done` 收尾走两套完全不同的逻辑。
+ - **直接受害者**：
+-  - **plan 阶段**：`buildPlanSteps` 返回 `[..., postcheck]`，postcheck 是 noAI 末步（`src/stages/plan.js:612`）。agent 完成 coordinator 后 `--done` → CLI 自动跑 postcheck → 直接标 plan completed。被绕过的 gate：Stage Review Gate（tier=independent 的 plan 审查 verdict=fail **不再阻断**）、`validatePlanOutputs`（FR 覆盖 / decision blocker / entry-point-wiring）、Plan→Execute Contract（`validatePlanForExecute`）。
++  - **plan 阶段**：`buildPlanSteps` 返回 `[..., postcheck]`，postcheck 是 noAI 末步（`src/stages/plan.js:604`）。agent 完成 coordinator 后 `--done` → CLI 自动跑 postcheck → 直接标 plan completed。被绕过的 gate：Stage Review Gate（tier=independent 的 plan 审查 verdict=fail **不再阻断**）、`validatePlanOutputs`（FR 覆盖 / decision blocker / entry-point-wiring）、Plan→Execute Contract（`validatePlanForExecute`）。
+   - **平台 quick scan**：`scan-profile.js:161` 把 step3 设为 noAI `scanPostcheck` 末步。平台模式 quick scan 完成 → 跳过 `handleScanStageCompleted` → manifest.json / postcheck-result.json / SCAN_COMPLETED 指针全部不落盘，**SillyHub 看不到 scan 完成**。
+ - **根因**："阶段完成"判定与"跑 gate"分散在 `completeStep` / `runStage-noAI` / `continueStep` 三处，没收敛到单一入口。
+ - **建议修法**：在 `runStage` 的 noAI 自动收尾分支标记 completed 前，调用 `runStageCompletionGates`（失败回滚不标 completed，与 completeStep 同范式）；或更稳妥——noAI 步骤只标自身 completed + 推进下一步，**不直接标阶段 completed**，把阶段完成决策权交还 `completeStep`。
+@@ -58,7 +58,7 @@ SillySpec 在 **Grill-Me v1.1 三大原则**上：原则 3（Facts/Decisions 区
+ ### 2.2 quick·progress 一致性类
+ 
+ #### 【Q1·中高·真 bug】quick 会话 change 行永不注销，listChanges 累积污染
+-- **位置**：`src/run/complete-handlers.js:462`（`handleQuickStageCompletion` 全函数无 `unregisterChange`）；`src/run/command.js:969`（quick 启动 `registerChange` 对 `quick-<hex>` 也执行）；`src/progress/change-registry.js:354`（`unregisterChange` 仅被 archive 调用）。
++- **位置**：`src/run/complete-handlers.js:470`（`handleQuickStageCompletion` 全函数无 `unregisterChange`）；`src/run/command.js:979`（quick 启动 `registerChange` 对 `quick-<hex>` 也执行）；`src/progress/change-registry.js:354`（`unregisterChange` 仅被 archive 调用）。
+ - **现象**：每个 quick sessionId（`quick-<8hex>`）启动时写入 `changes` 表 `status='active'`。`--done` 成功后只清 session 目录 + 重置 steps，**从不调用 `unregisterChange`**，归档也永远不走。结果 DB 里 active 的 `quick-<hex>` 行随每次 quick 单调累积。
+ - **后果**：
+   1. `resolveQuickLinkedChanges` 累积 ≥2 条后，新 quick 非交互环境返回 `[]`（不关联真正活跃变更），交互环境把僵尸 `quick-<hex>` 当可关联变更列出。
+@@ -81,7 +81,7 @@ SillySpec 在 **Grill-Me v1.1 三大原则**上：原则 3（Facts/Decisions 区
+ - **档位**：quick。
+ 
+ #### 【Q4·中·真 bug】平台模式 quick guard 写入路径与读取路径不一致
+-- **位置**：写 `src/run/stage.js:123`（`specBase/.runtime/quick-sessions/<change>`）；漂移检测读 `src/run/shared.js:308`（同 `specBase/.runtime`）；收尾读 `src/run/complete-handlers.js:901`（`resolveRuntimeRoot` → 设了 `runtimeRoot` 时返回 `runtimeRoot`，否则 `specBase/.runtime`）。
++- **位置**：写 `src/run/stage.js:123`（`specBase/.runtime/quick-sessions/<change>`）；漂移检测读 `src/run/shared.js:308`（同 `specBase/.runtime`）；收尾读 `src/run/complete-handlers.js:909`（`resolveRuntimeRoot` → 设了 `runtimeRoot` 时返回 `runtimeRoot`，否则 `specBase/.runtime`）。
+ - **现象**：stage.js 与 shared.js 恒用 `specBase/.runtime`，complete-handlers.js 用 `resolveRuntimeRoot`。当 `runtimeRoot` 被设且与 `specBase/.runtime` 不同时，guard 写到 specBase/.runtime、收尾从 runtimeRoot 读 → 读不到 → `handleQuickStageCompletion` 走 guard=null brownfield 分支 → **完全跳过边界审计** + 兜底重分配 qlId + session 目录清错位置。
+ - **建议修法**：把"quick-sessions 目录"位置抽成单一函数（`resolveQuickSessionsDir`），三处共用。
+ - **档位**：quick。
+@@ -174,7 +174,7 @@ SillySpec 在 **Grill-Me v1.1 三大原则**上：原则 3（Facts/Decisions 区
+ - **建议**：先做 self-audit「遗留」段建议的"AI 中继帧单独计数"（CLI 可机械判定），再考虑是否对 Step 3 / plan full 加硬门。**属定位决策，需 brainstorm**。
+ 
+ #### 【D2】plan.md / tasks.md 共享写竞态（lost update）
+-- **位置**：`src/run/complete.js:845`（`autoCheckPlanFromReviews` 持 `.plan.md.lock` 但 agent Edit/Write 不持锁）；tasks.md 无同款锁。
++- **位置**：`src/run/complete.js:896`（`autoCheckPlanFromReviews` 持 `.plan.md.lock` 但 agent Edit/Write 不持锁）；tasks.md 无同款锁。
+ - **现象**：CLI 的 read-modify-write 与 agent 写入存在 lost update；`enforceReviewJsonGate` 早跑只校验已勾 task，`autoCheckPlanFromReviews` 新勾的不复查。多 agent / 并发 session 撞同一 change 时高频。
+ - **根因**：agent 侧无法加锁是根本限制。
+ - **建议**：plan.md 的勾选权威收归 CLI（agent 只写 review.json，CLI 自动勾），彻底消除共享写；或 doctor 自检加"plan.md checkbox vs review.json verdict 对账"阻断型检查。
+@@ -208,9 +208,9 @@ SillySpec 在 **Grill-Me v1.1 三大原则**上：原则 3（Facts/Decisions 区
+ | L1 | `complete.js:857` | continueStep nextPendingIdx 只查 'pending' 漏 'in-progress'（latent，无现行触发路径） | 统一为 `pending \|\| in-progress` | quick |
+ | L2 | `quicklog.js:30-62` | withFileLock stale 30s 偏紧，偷锁后无 predicate 校验 | staleMs 提到 60-120s 或 CAS 语义 | quick |
+ | L3 | `command.js:172,689,781` | `--from-step`+`--done` 可同时传，前者被静默忽略 | 加入互斥校验 fail-fast | quick |
+-| L4 | `complete.js:291` | `status='blocked'` 后 exit 不落盘是隐式不变量，一旦有路径 `_write` 就卡死 | runStage findIndex 显式排除 'blocked' | quick |
++| L4 | `complete.js:321` | `status='blocked'` 后 exit 不落盘是隐式不变量，一旦有路径 `_write` 就卡死 | runStage findIndex 显式排除 'blocked' | quick |
+ | L5 | `shared.js:485-487` | 删除文件无 override flag，合法删除永久 BLOCKED | 显式声明"quick 禁删"或 `--force-baseline` 同时降级删除 | quick |
+-| L6 | `quicklog.js:463` | `rotateIfNeeded` 裸 renameSync，Windows 读端占用会崩 | 复用 writeAtomic 重试机制 | quick |
++| L6 | `quicklog.js:496` | `rotateIfNeeded` 裸 renameSync，Windows 读端占用会崩 | 复用 writeAtomic 重试机制 | quick |
+ | L7 | `quicklog.js:226-244` | tasks.md 无独立锁，跨 git-user 关联同一 change 有竞态 | 加 `.tasks.md.lock`（同 plan.md 范式） | quick |
+ | L8 | `shared.js:466` | 死分支 `status === ' D'`（trim 后永不命中） | 删或注释说明 | quick |
+ | L9 | `brainstorm.js:79,180` | maxWaitRounds=8 vs "2-3 轮即进入"张力 | 改"按 P0 歧义数决定轮次，P0 全澄清后即进入" | quick |
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index d24da3c..d41392e 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -112,7 +112,7 @@ mcp:
+ 
+ ## 4. 链路 C：scan 指针握手（平台模式专用）
+ 
+-scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时，**不发任何 HTTP**，而是落盘供 daemon 轮询消费（`complete-handlers.js:1688` `handleScanStageCompleted`）：
++scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时，**不发任何 HTTP**，而是落盘供 daemon 轮询消费（`complete-handlers.js:1713` `handleScanStageCompleted`）：
+ 
+ 1. 写 `manifest.json`（workspace_id/scan_run_id/source_commit/spec_root/scan_profile/postcheck…）到 `specRoot`。
+ 2. 跑 `scan-postcheck` → 写 `postcheck-result.json`（结构化结果）。
+@@ -128,7 +128,7 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ | 步骤 / 命令 | 链路 | 具体动作 | 源码触发点 |
+ |---|---|---|---|
+ | `platform connect <url> <token>` | A | GET health ping → POST resolve-by-root-path 换 shpsync_ token → 写 platform/mcp 段 | `sync.js:260` |
+-| **每个进度落盘点**（step `--done` 完成、阶段启动/切换、stale 步骤重置、gate 拦截回滚等 `_write` 后） | A | `triggerSync` → POST `…/progress` 推六表进度（8s 熔断）。**本地/平台模式都执行**（2026-08-26 放行）：平台模式凭据经 env 通道（`_getPlatform`），无 env 且 local.yaml 无 platform 段时静默跳过 | complete.js:561/497/917/1027/1166（--done）；stage.js:221/155/177（启动/切换/stale 重置）；gates.js:511；command.js:1219/1306/1528/1580/1591/1767 |
++| **每个进度落盘点**（step `--done` 完成、阶段启动/切换、stale 步骤重置、gate 拦截回滚等 `_write` 后） | A | `triggerSync` → POST `…/progress` 推六表进度（8s 熔断）。**本地/平台模式都执行**（2026-08-26 放行）：平台模式凭据经 env 通道（`_getPlatform`），无 env 且 local.yaml 无 platform 段时静默跳过 | complete.js:561/497/917/1027/1166（--done）；stage.js:221/155/177（启动/切换/stale 重置）；gates.js:517；command.js:1219/1306/1528/1580/1591/1767 |
+ | **execute 阶段启动前**（runStage / auto 流程，非平台模式，`--skip-approval` 可跳过） | A | `checkApproval` → GET `…/approval`：**rejected → `exit(1)` 硬阻断**；pending → 提示待审批；unknown → 放行 | stage.js:47-58；command.js:1728/1748/1828 |
+ | **run `<stage>` 入口**（所有 stage + 顶层别名，agent 环境内；平台/本地模式都上报，不受 sentinel 限制） | D | 探测本地 agent 会话日志（claude-code/codex/zcode 自动探测，env `SILLYSPEC_AGENT_LOG` 覆盖其他 CLI）→ 本地留底 + REST POST `…/api/agent-logs` 上报（best-effort 5s 熔断，失败不阻断；`SILLYSPEC_AGENT_LOG_PUSH=0` 可关） | command.js:723（`recordAgentLogInvocation`） |
+ | `platform sync-docs`（手动命令，**唯一触发点**） | A | POST `…/documents` 推四件套全量；run 流程**不**自动推文档（sync.js:30 头注释称由 run 流程触发，已过时） | sync.js:439；index.js:1275 |
+diff --git a/docs/sillyspec/review-2026-08-08.md b/docs/sillyspec/review-2026-08-08.md
+index 43eb07e..11a81eb 100644
+--- a/docs/sillyspec/review-2026-08-08.md
++++ b/docs/sillyspec/review-2026-08-08.md
+@@ -30,7 +30,7 @@ status: 待决策
+ 
+ ### 【架构/性能】_write export-on-write + gate-status 无条件重复写
+ 
+-- **位置**：src/progress.js:801 `_write`、:475 `_updateGateStatus`；src/db.js:58-75 `_save`
++- **位置**：src/progress.js:809 `_write`、:475 `_updateGateStatus`；src/db.js:58-75 `_save`
+ - **问题**：每次 `_write` = 315KB 整库 export + ~5 次 fs op；`_updateGateStatus` 跟在每次 `_write` 后无条件重写 gate-status.json（单条 `--done` 估 3-5 次 `_write`，产物只被下次 hook 异步读，纯冗余）。
+ - **决策建议**：lazy 化子项（`_gateStatusDirty` 标记 + 退出前 flush 一次）可走 quick；DB export-on-write 是 sql.js 固有，换引擎属架构级。
+ 
+diff --git a/docs/sillyspec/review-2026-08-09.md b/docs/sillyspec/review-2026-08-09.md
+index e0aa37a..89108ad 100644
+--- a/docs/sillyspec/review-2026-08-09.md
++++ b/docs/sillyspec/review-2026-08-09.md
+@@ -63,7 +63,7 @@ status: 第一批修复中
+ 
+ ### #2 [P1][共识：F+C] 先 persist completed → 再跑 gate 崩溃窗口 + complete-stage 后门
+ - **位置**：`src/run/complete.js:262-278`（及 `:720-726`）、`src/run/stage.js:352-358`、`src/progress/stage-machine.js:36-117`
+-- **问题**：完成分支先把 `stageData.status='completed'` 落盘（complete.js:609），之后才跑 `completeStageGates`（:278）。硬中断（Ctrl+C/OOM/CI 超时）落在中间 → DB 永久留 completed 而 review gate 从未跑。**verify 阶段窗口最宽**（`runVerifyTestCheck` gates.js:626 同步跑全量测试 2~10 分钟），agent 自报「测试通过」的谎话无校验落地
++- **问题**：完成分支先把 `stageData.status='completed'` 落盘（complete.js:649），之后才跑 `completeStageGates`（:278）。硬中断（Ctrl+C/OOM/CI 超时）落在中间 → DB 永久留 completed 而 review gate 从未跑。**verify 阶段窗口最宽**（`runVerifyTestCheck` gates.js:632 同步跑全量测试 2~10 分钟），agent 自报「测试通过」的谎话无校验落地
+ - **叠加**：`runStageCompletionGates` 里 `runValidators`(gates.js:27)、`runVerifyTestCheck`(:208) 两段**无 try/catch**——抛非结构化异常直冒顶层 exit 1，`rollbackStageCompletion` 触达不到 → 同样卡死 completed
+ - **后门**：`complete-stage`（stage-machine.js:9）只跑 `runValidators` 不跑 Stage Review/Task Review/verify-test，产物齐时**不需要 `--force`** 即可标 completed；崩溃恢复路径（stage.js:313 经 `completeStage`）也经此函数
+ - **建议**：① 落盘 completed 移到 gate 成功之后；② `runStageCompletionGates` 整体包 try/catch 触发 rollback；③ `complete-stage` 收敛到同一 gate 级联或显式 `--skip-review-gates` opt-in
+@@ -105,12 +105,12 @@ status: 第一批修复中
+ ### 数据/IO 健壮性（B/C）
+ | 编号 | 位置 | 问题 |
+ |------|------|------|
+-| #10 | `src/progress.js:465` | DB 句柄从不 close（无 `close()`），WAL 不 checkpoint + Windows teardown exit 127 风险迁移后未验证；`sync.js` 单次 sync 连 new 2 个 PM。共识 B+C |
++| #10 | `src/progress.js:473` | DB 句柄从不 close（无 `close()`），WAL 不 checkpoint + Windows teardown exit 127 风险迁移后未验证；`sync.js` 单次 sync 连 new 2 个 PM。共识 B+C |
+ | #11 | `src/progress.js:707-820` | `read()` 5 个 SELECT 跑在事务外，并发 `_write` 插中间拿拼凑态快照；包一层只读事务零成本修复 |
+ | #12 | `src/progress/step-store.js:117` | `updateStep` 阶段自动完成 TOCTOU（两事务间可被加新 pending 步），第二事务 UPDATE 不复查全 completed |
+ | #13 | `src/progress/change-registry.js:274` | `renameChange` 裸 `renameSync`（未用 renameSyncRetry）+ 回滚失败自认「DB/目录分裂无恢复」 |
+-| #14 | `src/sync.js:66` | `local.yaml` 非原子写，与 `index.js:1785`（已原子写）口径分裂；写一半被读 → 半截 YAML |
+-| #15 | `src/run/shared.js:937` | `auditQuickCompletion` 外层 catch 把**未知错误**判 warning（fail-open 放行），与 git-unavailable 的 fail-closed 矛盾 |
++| #14 | `src/sync.js:66` | `local.yaml` 非原子写，与 `index.js:1971`（已原子写）口径分裂；写一半被读 → 半截 YAML |
++| #15 | `src/run/shared.js:961` | `auditQuickCompletion` 外层 catch 把**未知错误**判 warning（fail-open 放行），与 git-unavailable 的 fail-closed 矛盾 |
+ | #16 | `src/worktree.js` 多处 | git `execSync` 无 timeout → git 挂起（credential/NFS/index lock）无限期阻塞 CLI；对照 safeGit 有 5000ms |
+ 
+ ### 代码质量（D）
+@@ -147,7 +147,7 @@ status: 第一批修复中
+ - `workflow.js:546 generateRetryPrompt` @deprecated 零调用死代码
+ - `db.js:73-83` schema-version 用 sidecar 戳而非 `PRAGMA user_version`（.bak 回退不同步戳）
+ - `fs-atomic.js:7-8` 头注释指向已删除的 `db.js _atomicWriteSync`
+-- `progress.js:801` `_write` 无 changeName 时静默跳过（应 fail-loud）
++- `progress.js:809` `_write` 无 changeName 时静默跳过（应 fail-loud）
+ - `index.js:1505` `main().catch` 打印全 stack 噪音淹没 stderr
+ - `stage.js:104` executeRunId 非原子写；`command.js:286` 平台指针写失败静默吞
+ - 根级 ~40 文件可归 `worktree/`、`contract/`、`postcheck/` 子目录（postcheck 家族分居 stages/ 和根级）
+diff --git a/docs/sillyspec/self-audit-2026-08-16.md b/docs/sillyspec/self-audit-2026-08-16.md
+index f05c27f..bfdaf86 100644
+--- a/docs/sillyspec/self-audit-2026-08-16.md
++++ b/docs/sillyspec/self-audit-2026-08-16.md
+@@ -16,7 +16,7 @@ updated_at: 2026-08-16 14:45:00
+ 1. **engines `>=22.11.0` 虚低 + db.js 静态闭包 → Node 22.11/22.12 全 CLI 崩溃（含 --version）**
+    `package.json:16` engines 写 `>=22.11.0`，`src/db-engine.js:5` 注释断言「v22.11.0+ 无需 flag」错误——Node 官方 v22.13.0 才解除 `--experimental-sqlite` flag；且 db.js 在 index.js 静态 import 闭包内（性能发现 2），import 即崩。修法：engines 抬 `>=22.13.0` + 修注释。【性能#1，已亲验】
+ 2. **Windows 下 `runPostCheck` 占位符替换炸 JSON → scan 质量门 fail-open + `workflow check` 崩**
+-   `src/workflow.js:286`：`JSON.stringify` 后用 `new RegExp('{SPEC_ROOT}')` 把含反斜杠的 Windows 路径裸替换进 JSON 再 parse；`complete-handlers.js:785` catch 吞错放行。实测 `workflow check` 报「Bad escaped character」，scan 深度扫描门静默失效。【上手#1，已亲验】
++   `src/workflow.js:286`：`JSON.stringify` 后用 `new RegExp('{SPEC_ROOT}')` 把含反斜杠的 Windows 路径裸替换进 JSON 再 parse；`complete-handlers.js:793` catch 吞错放行。实测 `workflow check` 报「Bad escaped character」，scan 深度扫描门静默失效。【上手#1，已亲验】
+ 3. **dashboard 在 Windows 永不启动**：`packages/dashboard/server/index.js:567-580` listen 排在同步全盘扫描后（homedir/Temp/桌面，深度 2 readdirSync），每项目 3 次 execSync('git') stderr 裸刷。实测 150s+ 假死。【上手#2】
+ 4. **gate/derive 的 specBase 只对一半路径生效——平台模式机器门控不可用**
+    `src/machine-interface.js:114-136`：runGate 守卫与 pm.read 用 `resolveSpecDir(cwd)`，planContent/changeDir 用传入 specBase——同一 envelope 两套事实源混拼；daemon 平台模式调 gate 恒 exit 2「无法核验」。index.js gate/derive case 也不读平台指针（对比 runCommand :290-313）。与 JSDoc/platform-interface-map.md 宣称矛盾。【CLI#1，已亲验】
+@@ -25,9 +25,9 @@ updated_at: 2026-08-16 14:45:00
+ ### B. 状态机与守卫 fail-open（P1）
+ 
+ 6. **`--done` 完全绕过阶段转换守卫 + 辅助阶段污染 currentStage**：`command.js:977` --done 直接进 `completeStep` 不查 checkTransition（stage.js:27-44 `checkTransition` 只在 runStage 调）；status/doctor 等 auxiliary 跑一次即写 `progress.currentStage`（stage.js:227 写库）→ fromStage 变 status 后跳阶段静默放行（stage-contract.js:850 `AUXILIARY_STAGES` 一律放行）。代理实测：brainstorm 仓跑 `run verify --done` 输出「Step 2/7 完成」无拦截。【驾驭#1，已亲验】
+-7. **status/doctor 自称只读实则写库**：`command.js:940` auxiliary fallback `initChange` 建 default 行 + 落盘 currentStage；与 SKILL「status 只读」矛盾；多 agent 并发 lastActive 互相覆盖。【驾驭#2，已亲验】
++7. **status/doctor 自称只读实则写库**：`command.js:950` auxiliary fallback `initChange` 建 default 行 + 落盘 currentStage；与 SKILL「status 只读」矛盾；多 agent 并发 lastActive 互相覆盖。【驾驭#2，已亲验】
+ 8. **`run brainstorm` 无 --change 在多活跃变更仓静默建幽灵变更**：`command.js:717-731` 无条件 initChange。DB 实锤：08-15 一小时内 4 个 `*-new-change-*` 活跃行。审计代理自身触发一次（已精确清理 2026-08-16-new-change-6307433e）。【驾驭#3，已亲验】
+-8b. **新项目首跑 auxiliary 即产生幽灵 default 变更 + doctor 清理指引落空**：`_ensureChangeDir`（progress.js:283）建空 `changes/default/`；单变更视图（_showChange）无 dirMissing 警告，仅多变更视图有（stage-machine.js:223 的 `dirMissing` 检查）；doctor change_db_consistency 容差放行、「可用 doctor 清理」承诺不存在。【上手#3】
++8b. **新项目首跑 auxiliary 即产生幽灵 default 变更 + doctor 清理指引落空**：`_ensureChangeDir`（progress.js:291）建空 `changes/default/`；单变更视图（_showChange）无 dirMissing 警告，仅多变更视图有（stage-machine.js:223 的 `dirMissing` 检查）；doctor change_db_consistency 容差放行、「可用 doctor 清理」承诺不存在。【上手#3】
+ 9. **docs gate 未知 flag 静默吞 + `--paths` 未接线**：`index.js:638-649` 只解析 --init-baseline；interface-contract.md §1.3b 宣称的「未知 flag exit 2」未实现，实测 `--nonexistent-flag` exit 0 放行；`--paths` 被 docs-gate.js:69 忽略。与 docs check 分支白名单治理口径不一致。【CLI#2，已亲验】
+ 10. **`docs <未知子命令>` / `progress <未知子命令>/缺参` usage 后 exit 0**：`index.js:650-652`/`:367-369`/`:311+`——typo 静默成功，hook 拼错即 fail-open；worktree/modules/runtime 家族均 exit 1/2 + didYouMean，口径分裂。【CLI#4，已亲验】
+ 11. **safeGit 未设 stdio，子进程 stderr 裸刷终端**：`git-helper.js:37` 无 stdio 配置，空仓跑 quick 冒出无上下文 `fatal:`；同仓其他调用点均显式 `stdio:['ignore','pipe','pipe']`。【驾驭#6】
+diff --git a/meta.json b/meta.json
+index 232ee6c..2c59aaa 100644
+--- a/meta.json
++++ b/meta.json
+@@ -1,11 +1,28 @@
+ {
+-  "name_zh": "worktree 元数据",
+-  "changeName": "friction-signal-hint",
+-  "branch": "sillyspec/friction-signal-hint",
++  "name_zh": "worktree \u5143\u6570\u636e",
++  "changeName": "2026-09-11-friction-signal-hint",
++  "branch": "sillyspec/2026-09-11-friction-signal-hint",
+   "baseBranch": "main",
+   "baseHash": "49356c2b3d1a8f9cfdd0aa28a904e2ff8ec972f0",
+-  "worktreePath": "C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\friction-signal-hint",
++  "actualBaseHash": "f7d83361b6dac6fc553f91d06be801c7c881df76",
++  "createdAt": "2026-09-11T02:25:44.239Z",
++  "worktreePath": "C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-11-friction-signal-hint",
+   "mode": "worktree",
+-  "createdAt": "2026-09-11T02:25:42.736Z",
+-  "provisioning": true
++  "baselineFiles": [
++    ".npmignore",
++    "bash.exe.stackdump"
++  ],
++  "baselineCommit": "f7d83361b6dac6fc553f91d06be801c7c881df76",
++  "baselineHash": "7a33588f531fd63b",
++  "syncDiagnostic": {
++    "status": "up-to-date",
++    "defaultBranch": "main",
++    "behind": 0,
++    "ahead": 0
++  },
++  "depsStatus": "linked",
++  "depsMethod": "junction",
++  "depsSource": "main-checkout",
++  "depsLockHash": "79acc670b33267cc",
++  "depsCheckedAt": "2026-09-11T02:25:44.196Z"
+ }
+diff --git a/src/config-schema.js b/src/config-schema.js
+index 52572f1..b940f13 100644
+--- a/src/config-schema.js
++++ b/src/config-schema.js
+@@ -165,6 +165,14 @@ export const LOCAL_YAML_SCHEMA = {
+         { path: 'decisions.behind_threshold', type: 'integer', optional: true, status: 'live', readers: ['readDecisionRulesConfig (src/docs-check.js)'], desc: '决策 behind 复核阈值（锚定模块源码在「最近确认」commit 后的前进数），缺省 10；超阈报「决策待复核」提示。', example: '10' },
+       ],
+     },
++    {
++      id: 'friction_hint',
++      title: '摩擦提示开关',
++      note: 'quick/verify 收尾的摩擦信号计数提示配置（friction-signal-hint）。读键按「存在则读、不存在用缺省」容错：读失败与未配置同兜底为默认开。',
++      keys: [
++        { path: 'friction_hint.enabled', type: 'boolean', optional: true, status: 'live', readers: ['readFrictionHintEnabled (src/friction-tally.js)'], desc: '摩擦提示开关，默认 true；设 false 关闭摩擦提示（gate 回滚/验证失败/审查打回的收尾 advisory 与计数落盘全停，.runtime 零写入）。', example: 'true' },
++      ],
++    },
+   ],
+ };
+ 
+@@ -294,6 +302,11 @@ test_strategy: full
+ decisions:
+   behind_threshold: 10
+ 
++# ── 摩擦提示开关（quick/verify 收尾的摩擦信号一行 advisory：gate 回滚/验证失败/审查打回计数）──
++# 默认 true 开启；false 一键全关（计数与提示双停，.runtime 零写入）
++friction_hint:
++  enabled: true
++
+ # ── 预存失败豁免清单（变更前就失败的测试行；务必定期复核，防误豁免真实失败）──
+ known_failures:
+   - tests/some-old-stable-failure
+diff --git a/src/run/complete-handlers.js b/src/run/complete-handlers.js
+index 7b362da..6e7a98a 100644
+--- a/src/run/complete-handlers.js
++++ b/src/run/complete-handlers.js
+@@ -35,6 +35,7 @@ import { validateQuickResult, allocateQuicklogEntry, appendQuicklogEntryWithId,
+ import { getRule } from '../stage-contract-spec.js'
+ import { archiveDestDirName } from '../stage-contract.js'
+ import { collectNumstatByPath } from '../scope-audit.js'
++import { recordFrictionEvent, consumeFrictionHint } from '../friction-tally.js'
+ 
+ /**
+  * 清洗项目名：只保留 ASCII 字母/数字/横线/下划线/点，过滤中文和特殊字符。
+@@ -170,6 +171,13 @@ export function pruneArchivedChangeRuntime(runtimeRoot, changeName) {
+     if (existsSync(pathspec)) gone(pathspec)
+   } catch {}
+ 
++  // friction tally（friction-signal-hint FR-05）：摩擦计数随变更终态一并回收——真实变更的
++  // friction-tally-<change>.json 落 runtimeRoot，变更归档/删除后无读者，残留即孤儿文件。
++  try {
++    const fp = join(runtimeRoot, `friction-tally-${changeName}.json`)
++    if (existsSync(fp)) gone(fp)
++  } catch {}
++
+   try {
+     const execDir = join(runtimeRoot, 'execute-runs')
+     if (existsSync(execDir)) {
+@@ -1056,6 +1064,9 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
+         steps[currentIdx].status = 'pending'
+         steps[currentIdx].completedAt = null
+         if (outputText) steps[currentIdx].output = null
++        // 摩擦计数（friction-signal-hint task-04）：quick 审计被拦也是摩擦信号——exit 前记
++        // 一笔（changeName=quick 会话 id，tally 落 session 目录，成功收尾 consume 后随目录清理）。
++        recordFrictionEvent({ cwd, changeName, platformOpts, type: 'gate_rollback', detail: 'quick-audit' })
+         process.exit(1)
+       }
+       // P0-2（2026-09-02 跨 agent 工单）：触及 src/test 的 quick --done 内置 test+lint
+@@ -1076,6 +1087,9 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
+         steps[currentIdx].status = 'pending'
+         steps[currentIdx].completedAt = null
+         if (outputText) steps[currentIdx].output = null
++        // 摩擦计数（friction-signal-hint task-04）：test/lint 实测门禁拦下同记摩擦——exit 前
++        // 落 session tally，与 quick-audit 同款静默降级。
++        recordFrictionEvent({ cwd, changeName, platformOpts, type: 'gate_rollback', detail: 'quick-test-lint' })
+         process.exit(1)
+       }
+       progress.lastQuickReview = review
+@@ -1291,6 +1305,14 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
+       console.warn(`⚠️ 关联变更轻量归档失败（不阻断 quick 完成）: ${e.message}`)
+     }
+ 
++    // 摩擦信号消费（friction-signal-hint task-04）：必须在 session 目录清理**前**——清理后
++    // tally 随目录删除，晚于此就读不到。QUICKLOG 完成打印之后 consume，提示里的 postmortem
++    // 建议有落点可循；全零/读失败零输出，摩擦提示失败不影响收尾。
++    try {
++      const fr = consumeFrictionHint({ cwd, changeName, platformOpts })
++      if (fr && fr.hint) console.log(`\n${fr.hint}`)
++    } catch { /* 摩擦提示失败不影响收尾 */ }
++
+     // 清理 session 目录（rmSync/unlinkSync 容忍不存在）。路径与写入对齐（Q4 resolveQuickSessionsDir）。
+     try {
+       if (changeName) {
+diff --git a/src/run/complete.js b/src/run/complete.js
+index a276e96..b7d713e 100644
+--- a/src/run/complete.js
++++ b/src/run/complete.js
+@@ -666,6 +666,17 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
+     // verify 完成出一行漂移确认。advisory fail-soft（D-006）——helper 内部全兜，绝不阻断完成。
+     await printStageCompletionScopeAudit({ stageName, cwd, changeName, specBase, platformOpts })
+ 
++    // 摩擦信号消费（friction-signal-hint task-03）：verify 收尾读一次 friction tally，非零打
++    // 一行 advisory 引导补 postmortem（consume 内部提示后清零）；全零/读失败零输出——
++    // 摩擦提示失败不影响收尾。
++    if (stageName === 'verify') {
++      try {
++        const { consumeFrictionHint } = await import('../friction-tally.js')
++        const r = consumeFrictionHint({ cwd, changeName, platformOpts })
++        if (r && r.hint) console.log(`\n${r.hint}`)
++      } catch { /* 摩擦提示失败不影响收尾 */ }
++    }
++
+     if (stageName === 'execute') {
+       // execute run summary：展示真实可得的结构化信息
+       try {
+@@ -1474,6 +1485,15 @@ export async function continueStep(pm, progress, stageName, cwd, answer, options
+     // task-04：wait 解除完成路径与 completeStep 完成分支同源注入（Grill G-2：本路径不漏，
+     // 否则 execute 快照缺失 → verify 假报「无快照可对比」）。
+     await printStageCompletionScopeAudit({ stageName, cwd, changeName, specBase, platformOpts })
++    // 摩擦信号消费（friction-signal-hint task-03）：与 completeStep 完成分支同款（Grill CC-03：
++    // 漏此则 --continue 收尾丢提示丢清零）。全零/读失败零输出，摩擦提示失败不影响收尾。
++    if (stageName === 'verify') {
++      try {
++        const { consumeFrictionHint } = await import('../friction-tally.js')
++        const r = consumeFrictionHint({ cwd, changeName, platformOpts })
++        if (r && r.hint) console.log(`\n${r.hint}`)
++      } catch { /* 摩擦提示失败不影响收尾 */ }
++    }
+     // 阶段完成后明确下一步（agent 常卡：stageData completed 但不知要 run <下一阶段> 推进 currentStage）
+     const nextStageHint = { brainstorm: 'plan', plan: 'execute', execute: 'verify', verify: 'archive' }[stageName]
+     if (nextStageHint) {
+diff --git a/src/run/gates.js b/src/run/gates.js
+index fed61fa..c89aaaf 100644
+--- a/src/run/gates.js
++++ b/src/run/gates.js
+@@ -30,6 +30,7 @@ import { handleScanStageCompleted, handleExecuteWorktreeCleanup } from './comple
+ import { detectConcurrentChanges, formatConcurrentWarning } from './concurrent-detect.js'
+ import { stageRegistry } from '../stages/index.js'
+ import { normalizeTaskId } from '../taskcard.js'
++import { recordFrictionEvent } from '../friction-tally.js'
+ 
+ /**
+  * 从任务注册表（tasks.md）提取全部 task id（task-XX）——符号影响面覆盖度校验用。
+@@ -506,7 +507,11 @@ function rollbackStageCompletion(stageData, steps, currentIdx) {
+  * 漏写 triggerSync / 写错 return 结构导致行为分裂。返回 nextPendingIdx=currentIdx，
+  * 让上层走「完成但不推进」分支，--done 被拒、agent 修复产物后重跑。
+  */
+-function rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts) {
++function rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, friction) {
++  // friction 尾参（friction-signal-hint task-02）：gate 失败摩擦埋点标签 {type, detail}——各调用点
++  // 按所属 gate 段传来源标签（审查两段走 review_rejected），未传兜底通用 gate-cascade。
++  // recordFrictionEvent 自带静默降级（非法类型/写失败返回 null），不影响回滚/返回语义。
++  recordFrictionEvent({ cwd, changeName, platformOpts, ...(friction || { type: 'gate_rollback', detail: 'gate-cascade' }) })
+   rollbackStageCompletion(stageData, steps, currentIdx)
+   progress.lastActive = new Date().toLocaleString('zh-CN', { hour12: false })
+   pm._write(cwd, progress, changeName)
+@@ -596,7 +601,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+     // 产物校验失败必须阻断完成 —— 否则 validator 形同虚设，
+     // verify 会带着 FAIL/缺 verify-result.md 被 ✅ 标记完成（历史教训）。
+     // plan/execute 的专项契约校验（下方）在产物齐全后才需要继续跑，故此处先 return。
+-    return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)
++    return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'validators' })
+   }
+   if (contractResult.warnings.length > 0) {
+     console.warn(`\n⚠️ 阶段 ${stageName} 校验警告：`)
+@@ -667,7 +672,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+         await renderVerifyTestAttribution({ cwd, changeName, specBase, runtimeRoot: resolveRuntimeRoot(platformOpts, specBase) })
+       } catch { /* 归因提示失败不影响阻断语义 */ }
+       console.error('   请修复失败的测试并更新 verify-result.md 后重新完成此步骤。')
+-      return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)
++      return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'verify-test' })
+     }
+     // lint 对账（2026-08-21 审查 CLI-1）：test 侧"自报告 PASS 但实测失败→阻断"已闭环，
+     // lint 侧此前纯口头——CLI 亲自执行 commands.lint，advisory 起步（失败打印不阻断，观察期后升级）
+@@ -694,7 +699,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+         for (const line of tail.split('\n')) console.error(`   | ${line}`)
+       }
+       console.error('   修复后重跑 --done（进度不丢）；确认要跳过实测请设 SILLYSPEC_VERIFY_LINT_GATE=advisory（审计留痕）。')
+-      return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)
++      return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'verify-lint' })
+     }
+     // 契约 parity 对账：扫前端 API 调用 vs execute 提取的 provider endpoint artifact。
+     // 接线自 contract-matrix pipeline（verifyApiParity 的 CLI 入口）。
+@@ -734,7 +739,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+       console.error(`   修复：在 verify-result.md「## 证据账（cannot_verify 任务）」槽段逐 task 一行——`)
+       console.error(`   - task-NN: satisfied | verifiedFiles: <精确路径>（CLI 核验：代码类 存在×mtime×diff 交集；日志/文档类豁免 diff）`)
+       console.error(`   - 确实无法验证 → 填 missing 并加（豁免：<一句话理由>）后缀；部分满足 → partial + 已核验路径`)
+-      return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)
++      return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'verify-contract' })
+     }
+     // ── target_files 声明 ↔ 实际改动 对账（task-05 / ir-stage-p3a：②ERROR 阻断 / ③WARNING 放行）──
+     // 「计划落空」（task 卡声明没做）此前全盲区：review.json changedFiles 是 agent 手写不能当
+@@ -760,7 +765,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+     // 放行态），fail-soft 不影响 gate 判定；②类阻断回执同样留档供平台/审计消费
+     writeReconcileRunResult({ runtimeRoot: reconcileRuntimeRoot, changeName, envelope: reconcileEnvelope, result: reconcileCheck })
+     if (reconcileBlocked) {
+-      return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)
++      return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'verify-contract' })
+     }
+     // ── verify-result.md 探针预填段一致性抽查（task-03 / ir-stage-p3b D-002@v1 方案A）──
+     // 「#### 探针 N」机械预填段（verify-probes --init 生成）长在 agent 可编辑的正文里，其防篡改
+@@ -789,7 +794,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+     // 两检查间耦合；各写各的回执、按文件名订阅更干净。fail-soft 不影响 gate 判定
+     writeProbeConsistencyRunResult({ runtimeRoot: reconcileRuntimeRoot, changeName, envelope: probeEnvelope, result: probeCheck })
+     if (probeBlocked) {
+-      return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)
++      return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'verify-contract' })
+     }
+     // ── 行号漂移自动重锚（2026-09-09 §7-6：quick --done 已接，verify/archive 收尾补接）──
+     // 本变更 diff 中的 .md 文档经 autoReanchorDocRefs 定点重锚（fixable 唯一/优选命中才改 +
+@@ -823,7 +828,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+           console.error(`\n❌ verify 阶段被阻断：module-impact.md「更新结果」表存在 ${pendingRows.length} 个未清 pending/待办项（死信）`)
+           for (const row of pendingRows) console.error(`   - ${row}`)
+           console.error('   文档同步是 verify 的收尾义务：请完成模块文档同步并回填状态为 done/skipped（说明原因），再重新完成 verify。')
+-          return rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)
++          return rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'verify-contract' })
+         }
+       }
+     }
+@@ -852,7 +857,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+         for (const err of planValidation.errors) console.error(`   - ${err}`)
+         console.error(`\n   tasks.md/plan.md 不满足 execute 契约，请修复后重新完成此步骤。`)
+         // 阻断 completed
+-        return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)
++        return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'plan-execute-contract' })
+       }
+       if (planValidation.warnings.length > 0) {
+         console.warn(`\n⚠️  Plan contract 警告（不阻断完成）：`)
+@@ -913,7 +918,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+         const reviewResult = gated.result
+         printStageReviewResult(reviewResult, { stage: stageName, reviewRunId, runtimeRoot, changeName })
+         if (!reviewResult.ok) {
+-          return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)
++          return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'review_rejected', detail: 'stage-review' })
+         }
+         // 降级自审留痕（2026-09-10 用户反馈①：PI agent 等宿主无 Agent tool，prompt 降级条款允许
+         // 当前 agent 自审产出 review.json）。放行但独立性折损必须可见：⚠️ 审计行区分降级 review
+@@ -933,7 +938,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+     } catch (e) {
+       // fail-closed：Gate 自身异常阻断完成，不静默放行（与 Task Review Gate 一致）
+       console.error('❌ Stage Review Gate 异常，阻断 ' + stageName + ' 完成: ' + e.message)
+-      return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)
++      return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'review_rejected', detail: 'stage-review' })
+     }
+   }
+ 
+@@ -1042,7 +1047,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+             console.error('\n⚠️  部分任务已在 tasks.md 中勾选，但 review.json 不存在。')
+             console.error(`   请取消勾选这些任务的 checkbox，或补充对应的 review.json（execute run ID: ${executeRunId}）。`)
+           }
+-          return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)
++          return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'review_rejected', detail: 'task-review' })
+         }
+ 
+         // cannot_verify 的 requiredEvidence 写入 change 目录，供 verify 阶段消费
+@@ -1058,7 +1063,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+       // fail-closed：Gate 自身异常时不能默认放行，否则异常成了绕过评审的通道
+       console.error(`❌ Task Review Gate 异常，阻断 execute 完成: ${e.message}`)
+       console.error('   请检查 review.json / plan.md 是否可读，修复后重新完成此步骤。')
+-      return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)
++      return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'review_rejected', detail: 'task-review' })
+     }
+   }
+   return null
+@@ -1312,7 +1317,7 @@ export async function completeStageGates({ stageName, cwd, changeName, platformO
+   }
+   } catch (e) {
+     console.error(`\n❌ ${stageName} 阶段完成收尾异常（已 rollback 为 in-progress，请修复后重新 --done）：${e?.message || e}`)
+-    return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)
++    return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'internal-error' })
+   }
+ 
+   // execute worktree cleanup（completeStep / continueStep 完成分支统一调用，避免双清理）
+diff --git a/src/run/verify-quality-scan.js b/src/run/verify-quality-scan.js
+index 772fa10..b71728e 100644
+--- a/src/run/verify-quality-scan.js
++++ b/src/run/verify-quality-scan.js
+@@ -29,6 +29,7 @@ import { writeAtomicSync } from '../fs-atomic.js'
+ import { gitQuiet } from '../git-helper.js'
+ import { resolveRuntimeRoot } from './shared.js'
+ import { detectChangeRisk } from '../change-risk-profile.js'
++import { recordFrictionEvent } from '../friction-tally.js'
+ 
+ const RECORD_SCHEMA_VERSION = 1
+ 
+@@ -270,6 +271,12 @@ export async function executeVerifyQualityScan({ cwd, specBase, changeName, plat
+   storeQualityScan({ specBase, cwd, changeName, testResult: testCheck, lintResult: lintCheck, coverageCheck })
+   const testFailed = testCheck.status === 'failed'
+   const lintBlocked = shouldBlockVerifyLint(lintCheck)
++  // 摩擦计数（friction-signal-hint task-03）：记录条件与 throw 条件**刻意解耦**——advisory 档
++  // lint 失败（SILLYSPEC_VERIFY_LINT_GATE=advisory 时不 throw）同样是摩擦信号，计数不应随
++  // 逃生阀漂移。recordFrictionEvent 自带静默降级，不影响本步推进/throw 语义。
++  if (testFailed || lintCheck.status === 'failed') {
++    recordFrictionEvent({ cwd, changeName, platformOpts, type: 'verify_run_failed', detail: testFailed ? 'test' : 'lint' })
++  }
+   if (testFailed || lintBlocked) {
+     const runtimeRoot = resolveRuntimeRoot(platformOpts, specBase)
+     await renderVerifyTestAttribution({ cwd, changeName, specBase, runtimeRoot })
+diff --git a/test/archive-runtime-prune.test.mjs b/test/archive-runtime-prune.test.mjs
+index f59a2d6..8db7b9a 100644
+--- a/test/archive-runtime-prune.test.mjs
++++ b/test/archive-runtime-prune.test.mjs
+@@ -11,6 +11,8 @@
+ //    同目录混有他变更 change 字段 → 整目录不删
+ // 4. archiveWorktreeCleanup 无 meta 早退路径仍会回收（接线必须在 worktree return 之前）
+ // 5. 相邻文件零误伤：sillyspec.db / last-delta.json / endpoint-baselines / contract-artifacts
++// 6. friction-tally-<change>.json 随归档精确回收，他变更零误伤（friction-signal-hint FR-05；
++//    短名不误伤日期前缀长名，同 apply-pathspec 口径）
+ //
+ // 隔离：os.tmpdir()，绝不碰真实 .sillyspec/.runtime。
+ import { existsSync, mkdirSync, mkdtempSync, writeFileSync, rmSync } from 'fs'
+@@ -174,6 +176,34 @@ console.log('\n--- 5. fail-open + 接线在 worktree 早退之前 ---')
+   assert(!existsSync(join(rt, 'execute-runs', 'exec-early')), '无 meta 早退路径仍删有戳 execute-run')
+ }
+ 
++// ─────────────────────────────────────────
++// 6. friction tally 随变更归档回收（friction-signal-hint FR-05）
++// ─────────────────────────────────────────
++console.log('\n--- 6. friction-tally 回收与零误伤 ---')
++{
++  const rt = makeRt()
++  const mine = '2026-09-11-friction-mine'
++  const other = '2026-09-11-friction-other'
++  write(join(rt, `friction-tally-${mine}.json`), { events: { gate_rollback: { count: 2 } }, history: [] })
++  write(join(rt, `friction-tally-${other}.json`), { events: {}, history: [] })
++
++  const r = pruneArchivedChangeRuntime(rt, mine)
++  assert(r.ok === true, 'prune 返回 ok:true')
++  assert(!existsSync(join(rt, `friction-tally-${mine}.json`)), '本变更 friction-tally 已删')
++  assert(existsSync(join(rt, `friction-tally-${other}.json`)), '他变更 friction-tally 保留')
++}
++
++// 短名 change 不误伤日期前缀长名（与 apply-pathspec 同款后缀陷阱）
++{
++  const rt = makeRt()
++  write(join(rt, 'friction-tally-login.json'), { events: {}, history: [] })
++  write(join(rt, 'friction-tally-2026-08-01-login.json'), { events: {}, history: [] })
++
++  pruneArchivedChangeRuntime(rt, 'login')
++  assert(!existsSync(join(rt, 'friction-tally-login.json')), '短名 friction-tally 已删')
++  assert(existsSync(join(rt, 'friction-tally-2026-08-01-login.json')), '长名 friction-tally 保留（精确文件名，非后缀匹配）')
++}
++
+ try { rmSync(tmpRoot, { recursive: true, force: true }) } catch { /* OS 清 */ }
+ 
+ if (failures > 0) {
+diff --git a/src/friction-tally.js b/src/friction-tally.js
+new file mode 100644
+--- /dev/null
++++ b/src/friction-tally.js
+@@ -0,0 +1,221 @@
++/**
++ * friction-tally.js — 摩擦信号计数数据层（friction-signal-hint Phase 1）
++ *
++ * 定位：gate 失败回滚 / verify 实测失败 / 审查打回三类摩擦事件全部流经 CLI 自身
++ * 状态机，但此前没有任何计数与消费——是否值得 postmortem 全凭 agent 自觉判断。
++ * 本模块用确定性代码做结构化计数（立场照抄 teamai-cli 摩擦触发器：顺利会话零
++ * 打扰、每次收尾最多提示一次、可配置关闭），收尾时计数非零才由调用方输出一行
++ * advisory，引导按 现象/根因/护栏/证据 补 postmortem。
++ *
++ * 落点红线（D-002/R-04）：计数文件只落 .runtime 树（平台同步排除区）——quick
++ * 会话落 quick-sessions/<sessionId>/friction-tally.json（session 目录收尾整体删除，
++ * 天然二次保险清零），真实变更落 <runtimeRoot>/friction-tally-<changeName>.json
++ * （归档时由 pruneArchivedChangeRuntime 一并清理）。**永不落 changes/ 目录**——
++ * 变更目录上平台同步，计数是本机行为数据，污染他机即事故。路径解析统一走
++ * shared.js 的 resolveRuntimeRoot/resolveQuickSessionsDir（比 verify-lint-tally
++ * 的 specBase 直拼更对齐平台模式，Grill CC-09）。
++ *
++ * 隐私红线（D-005）：落盘字段只含 count/lastAt/at/type/detail——type ∈ 三值枚举、
++ * detail ∈ 预定义标签集（gate 来源/测试类型），永不接触提示词与对话原文。
++ *
++ * 静默降级立场（同 verify-lint-tally「计数器不许反向阻断」）：读写全程 try/catch，
++ * 任何异常（只读目录/损坏 JSON/非法路径）吞掉返回 null/空 hint——埋点都在 gate
++ * 回滚、verify 失败这些已出错路径上，计数自身再抛异常只会火上浇油。本模块自身
++ * 不打印任何输出，提示何时打印由调用方决定。
++ */
++import { existsSync, mkdirSync, readFileSync, rmSync } from 'fs'
++import { dirname, join } from 'path'
++import { writeAtomicSync } from './fs-atomic.js'
++import { resolveRuntimeRoot, resolveQuickSessionsDir } from './run/shared.js'
++
++/** 摩擦事件类型枚举（D-004）：审查打回走专属 review_rejected，不与 gate_rollback 重复计 */
++const FRICTION_TYPES = new Set(['gate_rollback', 'verify_run_failed', 'review_rejected'])
++
++/** history 截尾上限（同 verify-lint-tally 的 20 条口径——台账防病态体量，不承载完整审计） */
++const FRICTION_HISTORY_CAP = 20
++
++/** quick 会话 id 形态：quick-<8 位 hex>（stage.js 建 session 目录的同一命名约定） */
++const QUICK_SESSION_ID_RE = /^quick-[0-9a-f]{8}$/i
++
++/** 提示文案的类型→中文标签映射（数组序即输出枚举序，固定 gate 回滚→验证失败→审查打回） */
++const FRICTION_LABELS = [
++  ['gate_rollback', 'gate 回滚'],
++  ['verify_run_failed', '验证失败'],
++  ['review_rejected', '审查打回'],
++]
++
++/**
++ * specBase 模块内部推导（D-006 CC-04）：gates.js 的 rollbackCompletionAndReturn
++ * 等埋点签名里没有 specBase，调用方只传 cwd/platformOpts。推导序与 complete.js:125
++ * 收尾落盘同序（specRoot(平台) > specDriftAnchor(worktree 漂移锚定主仓) >
++ * cwd/.sillyspec(本地)），否则 quick 会话计到 worktree 副本、收尾从主仓读不到。
++ */
++function deriveSpecBase(cwd, platformOpts) {
++  return platformOpts?.specRoot || platformOpts?.specDriftAnchor || join(cwd || process.cwd(), '.sillyspec')
++}
++
++/**
++ * changeName 安全校验：必须是单段文件名成分。含路径分隔符或「.」「..」会在拼
++ * friction-tally-<changeName>.json 时逃出 .runtime 树，违反 D-002 落点红线。
++ */
++function isSafeChangeSegment(name) {
++  return typeof name === 'string' && name !== '' && name !== '.' && name !== '..' && !/[\\/]/.test(name)
++}
++
++/**
++ * 计数文件路径的单一路由出口（D-002/R-04：路由单一出口 + 单测断言两类路径都在
++ * .runtime 树内）：quick-<8hex> 会话形态 → <sessionsDir>/<changeName>/friction-tally.json；
++ * 真实变更 → <runtimeRoot>/friction-tally-<changeName>.json。返回 null = 无有效
++ * 路径，调用方按 no-op 处理（空/非法 changeName 不记不消）。
++ */
++function frictionTallyPath({ cwd, platformOpts, changeName }) {
++  if (!isSafeChangeSegment(changeName)) return null
++  const specBase = deriveSpecBase(cwd, platformOpts)
++  if (QUICK_SESSION_ID_RE.test(changeName)) {
++    return join(resolveQuickSessionsDir(platformOpts, specBase), changeName, 'friction-tally.json')
++  }
++  return join(resolveRuntimeRoot(platformOpts, specBase), `friction-tally-${changeName}.json`)
++}
++
++/** YAML 布尔值宽松解析：仅显式 false（含引号形态）为关，其余值一律默认开（R-05） */
++function parseEnabledValue(raw) {
++  const v = String(raw || '').trim().replace(/^['"]|['"]$/g, '')
++  return v.toLowerCase() !== 'false'
++}
++
++/**
++ * 读 local.yaml 的 friction_hint.enabled（R-05：读失败=默认开，与「未配置=默认
++ * true」走同一条兜底路径——配置读取异常不该把提示误判为关）。
++ * 不引 yaml 依赖，行/正则解析（先例：extractTestCommand/extractLintCommand 同
++ * 风格）；兼容嵌套（friction_hint:\n  enabled: false）与 flat
++ * （friction_hint.enabled: false）两种写法；行尾先归一（坑
++ * verify-modules-crlf-blanket-fallback：Windows CRLF 残留致行式正则整体失配）。
++ * @param {string} specBase - spec 根（local.yaml 所在目录）
++ * @returns {boolean} false 仅当显式配了 false；缺键/文件缺失/解析异常/其它值 → true
++ */
++function readFrictionHintEnabled(specBase) {
++  try {
++    const yamlPath = join(specBase, 'local.yaml')
++    if (!existsSync(yamlPath)) return true
++    const text = String(readFileSync(yamlPath, 'utf8')).replace(/\r\n?/g, '\n')
++    let inSection = false
++    let sectionIndent = -1
++    for (const line of text.split('\n')) {
++      // flat 形态优先：键名带点，不与嵌套段头冲突
++      const flat = line.match(/^\s*friction_hint\.enabled\s*:\s*(.*?)\s*(?:#.*)?$/)
++      if (flat) return parseEnabledValue(flat[1])
++      const section = line.match(/^(\s*)friction_hint\s*:\s*(?:#.*)?$/)
++      if (section) {
++        inSection = true
++        sectionIndent = section[1].length
++        continue
++      }
++      if (!inSection) continue
++      if (line.trim() === '' || line.trim().startsWith('#')) continue
++      // 缩进回落到段头层级（或更浅）= friction_hint 段结束，之后的 enabled 不属于它
++      if (/^\s*/.exec(line)[0].length <= sectionIndent) {
++        inSection = false
++        continue
++      }
++      const kv = line.match(/^\s*enabled\s*:\s*(.*?)\s*(?:#.*)?$/)
++      if (kv) return parseEnabledValue(kv[1])
++    }
++    return true
++  } catch {
++    return true
++  }
++}
++
++/**
++ * 读旧计数并归一成 { events, history } 骨架：缺失/损坏 JSON/字段脏型按零计重新
++ * 累计（同 recordVerifyLintTally 立场——旁路计数器对脏数据从零重来，不修复不报错）。
++ */
++function readFrictionTally(tallyPath) {
++  const tally = { events: {}, history: [] }
++  try {
++    const raw = JSON.parse(readFileSync(tallyPath, 'utf8'))
++    if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
++      if (raw.events && typeof raw.events === 'object' && !Array.isArray(raw.events)) tally.events = raw.events
++      if (Array.isArray(raw.history)) tally.history = raw.history
++    }
++  } catch { /* 首记/文件损坏 → 重置重新累计 */ }
++  return tally
++}
++
++/**
++ * 纯渲染（单测用）：counts（type→count 平面映射）→ 一行提示文案；空/全零 → null。
++ * 只枚举非零段（三类不必同时出现）；措辞条件式（「若其中有」）防 agent 为消除
++ * 提示而灌水记录（R-03 三重防线之一）。
++ */
++export function renderFrictionHintLine(counts) {
++  const segments = []
++  for (const [type, label] of FRICTION_LABELS) {
++    const n = Number(counts ? counts[type] : null)
++    if (Number.isFinite(n) && n > 0) segments.push(`${label} ${n} 次`)
++  }
++  if (segments.length === 0) return null
++  return `🩹 本次会话累计摩擦信号：${segments.join('、')}——若其中有值得沉淀的坑，建议按 现象/根因/护栏/证据 补一条 postmortem（QUICKLOG 条目或正文核对）；护栏结论经人工确认后归入 knowledge/known-issues.md`
++}
++
++/**
++ * 记一次摩擦事件。全静默降级：非法类型/无有效路径/enabled=false/读写异常一律
++ * 返回 null，绝不抛（埋点位于已出错路径，见文件头「静默降级立场」）。写走
++ * writeAtomicSync（计数文件会被收尾进程并发读，半截 JSON 会让 consume 误判全零）。
++ * @param {object} p
++ * @param {string} [p.cwd] 调用方 cwd（specBase 兜底推导用）
++ * @param {object} [p.platformOpts] 平台选项（runtimeRoot/specRoot/specDriftAnchor）
++ * @param {string} p.changeName 变更名或 quick 会话 id（空/非法段 → no-op）
++ * @param {string} p.type 摩擦类型，必须 ∈ FRICTION_TYPES
++ * @param {string} [p.detail] 预定义来源标签（如 verify-test/quick-audit），非字符串落 null
++ * @returns {{ type: string, count: number } | null} 落盘成功返回新计数；null = 未落盘
++ */
++export function recordFrictionEvent({ cwd, platformOpts, changeName, type, detail }) {
++  try {
++    if (!FRICTION_TYPES.has(type)) return null
++    const tallyPath = frictionTallyPath({ cwd, platformOpts, changeName })
++    if (!tallyPath) return null
++    // enabled=false 直通：record/consume 双 no-op，.runtime 零写入（D-003 一键全关）
++    if (!readFrictionHintEnabled(deriveSpecBase(cwd, platformOpts))) return null
++    const tally = readFrictionTally(tallyPath)
++    const at = new Date().toISOString()
++    const prev = Number(tally.events[type] && tally.events[type].count)
++    const count = (Number.isFinite(prev) ? prev : 0) + 1
++    tally.events[type] = { count, lastAt: at }
++    tally.history = [
++      ...tally.history,
++      { at, type, detail: typeof detail === 'string' && detail ? detail : null },
++    ].slice(-FRICTION_HISTORY_CAP)
++    mkdirSync(dirname(tallyPath), { recursive: true })
++    writeAtomicSync(tallyPath, JSON.stringify(tally, null, 2))
++    return { type, count }
++  } catch {
++    return null
++  }
++}
++
++/**
++ * 读计数并消费（D-003 清零语义）：非零 → { hint: 一行提示, counts } 且删除计数
++ * 文件（提示后清零，防同一批摩擦在每个收尾点反复提示）；全零/缺文件/读失败/
++ * enabled=false → { hint: null, counts: {} }。counts 只含 count>0 的枚举类型
++ * （未知类型/脏数据不进提示）。删文件失败不影响 hint 返回——残留计数下次收尾
++ * 会再消费一次，advisory 容忍重复，不因删失败丢提示。
++ * @returns {{ hint: string | null, counts: Record<string, number> }}
++ */
++export function consumeFrictionHint({ cwd, platformOpts, changeName }) {
++  try {
++    const tallyPath = frictionTallyPath({ cwd, platformOpts, changeName })
++    if (!tallyPath || !existsSync(tallyPath)) return { hint: null, counts: {} }
++    if (!readFrictionHintEnabled(deriveSpecBase(cwd, platformOpts))) return { hint: null, counts: {} }
++    const tally = readFrictionTally(tallyPath)
++    const counts = {}
++    for (const type of FRICTION_TYPES) {
++      const n = Number(tally.events[type] && tally.events[type].count)
++      if (Number.isFinite(n) && n > 0) counts[type] = n
++    }
++    if (Object.keys(counts).length === 0) return { hint: null, counts }
++    try { rmSync(tallyPath, { force: true }) } catch { /* 删失败不吞提示 */ }
++    return { hint: renderFrictionHintLine(counts), counts }
++  } catch {
++    return { hint: null, counts: {} }
++  }
++}
+
+diff --git a/test/friction-tally.test.mjs b/test/friction-tally.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/friction-tally.test.mjs
+@@ -0,0 +1,306 @@
++// friction-tally.js — 摩擦信号计数数据层单测（friction-signal-hint task-06）
++//
++// 覆盖（FR-01~04 / D-002@v1 / D-003@v1 / D-005@v1）：
++// 1. 路由落点红线（D-002/R-04）：真实变更 → <specBase>/.runtime/friction-tally-<change>.json；
++//    quick-<8hex> 会话 → <specBase>/.runtime/quick-sessions/<id>/friction-tally.json——两类路径都必须
++//    在 .runtime 树内、绝不落 changes/（平台同步排除区红线）
++// 2. 计数正确性：同类型 3 连记 count=3 / lastAt / history 追加；非法类型拒绝且零写入
++// 3. history 截尾：25 条只留最近 20（FRICTION_HISTORY_CAP），events 计数不截
++// 4. consume 清零语义（D-003）：非零 → hint 含标签与计数 + 删文件；二次 consume → null
++// 5. 全零文件：hint null 且不删文件（无提示即无副作用）
++// 6. 配置开关（R-05）：嵌套/flat enabled:false → record/consume 双 no-op 零写入；
++//    enabled:true / 垃圾值 / 缺键 / 文件缺失 → 默认开
++// 7. 损坏 JSON 静默降级：从零重计不抛
++// 8. 隐私值域（D-005）：顶层只有 events/history，history 项只有 at/type/detail，detail 精确往返，
++//    落盘内容不含提示词/对话原文样例
++// 9. renderFrictionHintLine 纯渲染：空/全零 null、未知类型忽略、固定输出序
++// 10. 非法 changeName（路径分隔符/../空）→ no-op，无任何落盘
++//
++// 隔离：os.tmpdir() 下每组用例独立 cwd（specBase=cwd/.sillyspec 推导，不传 platformOpts），
++// 绝不碰真实 .sillyspec/.runtime；结束统一清理。
++import assert from 'node:assert/strict'
++import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
++import { dirname, join } from 'node:path'
++import { tmpdir } from 'node:os'
++import { recordFrictionEvent, consumeFrictionHint, renderFrictionHintLine } from '../src/friction-tally.js'
++
++// 跨平台：node:path join 在 win32 产反斜杠，统一成正斜杠再做包含断言
++const norm = (p) => String(p).replace(/\\/g, '/')
++
++const tmpRoot = mkdtempSync(join(tmpdir(), `sillyspec-friction-${process.pid}-`))
++let seq = 0
++const makeCwd = () => {
++  const cwd = join(tmpRoot, `case-${++seq}`)
++  mkdirSync(cwd, { recursive: true })
++  return cwd
++}
++const specBaseOf = (cwd) => join(cwd, '.sillyspec')
++const runtimeRootOf = (cwd) => join(specBaseOf(cwd), '.runtime')
++const realTallyPath = (cwd, change) => join(runtimeRootOf(cwd), `friction-tally-${change}.json`)
++const quickTallyPath = (cwd, sessionId) =>
++  join(runtimeRootOf(cwd), 'quick-sessions', sessionId, 'friction-tally.json')
++const record = (cwd, changeName, type, detail) => recordFrictionEvent({ cwd, changeName, type, detail })
++const consume = (cwd, changeName) => consumeFrictionHint({ cwd, changeName })
++const readTally = (p) => JSON.parse(readFileSync(p, 'utf8'))
++const writeLocalYaml = (cwd, body) => {
++  mkdirSync(specBaseOf(cwd), { recursive: true })
++  writeFileSync(join(specBaseOf(cwd), 'local.yaml'), body)
++}
++const ensureFile = (p, body) => {
++  mkdirSync(dirname(p), { recursive: true })
++  writeFileSync(p, typeof body === 'string' ? body : JSON.stringify(body))
++}
++
++console.log('\n[friction-tally] 摩擦信号计数数据层')
++
++// ─────────────────────────────────────────
++// 1. 路由落点红线（D-002/R-04）
++// ─────────────────────────────────────────
++console.log('\n--- 1. 路由落点：.runtime 树内、永不落 changes/ ---')
++{
++  const cwd = makeCwd()
++  const change = '2026-09-11-routing-check'
++
++  const r = record(cwd, change, 'gate_rollback')
++  assert.ok(r && r.count === 1, '真实变更首次记录返回 count:1')
++  const p = realTallyPath(cwd, change)
++  assert.ok(existsSync(p), '真实变更计数文件存在')
++  const np = norm(p)
++  assert.ok(np.includes('/.runtime/'), '真实变更路径在 .runtime 树内')
++  assert.ok(!np.includes('/changes/'), '真实变更路径不含 changes/（平台同步红线）')
++
++  const q = record(cwd, 'quick-abcd1234', 'gate_rollback')
++  assert.ok(q && q.count === 1, 'quick 会话首次记录返回 count:1')
++  const qp = quickTallyPath(cwd, 'quick-abcd1234')
++  assert.ok(existsSync(qp), 'quick 会话计数文件存在')
++  const nq = norm(qp)
++  assert.ok(
++    nq.includes('/.runtime/quick-sessions/quick-abcd1234/'),
++    'quick 会话路径落 .runtime/quick-sessions/<id>/'
++  )
++  assert.ok(!nq.includes('/changes/'), 'quick 会话路径不含 changes/')
++
++  // 大写 hex 同形态（QUICK_SESSION_ID_RE 为 /i）
++  const r2 = record(cwd, 'quick-ABCD1234', 'verify_run_failed')
++  assert.ok(r2 && r2.count === 1, '大写 hex quick id 同样按会话形态路由')
++  assert.ok(existsSync(quickTallyPath(cwd, 'quick-ABCD1234')), '大写 hex 会话目录存在')
++}
++
++// ─────────────────────────────────────────
++// 2. 计数正确性
++// ─────────────────────────────────────────
++console.log('\n--- 2. 计数 / lastAt / history / 非法类型拒绝 ---')
++{
++  const cwd = makeCwd()
++  const change = 'count-check'
++  let r
++  for (let i = 0; i < 3; i++) r = record(cwd, change, 'verify_run_failed', 'verify-test')
++  assert.deepEqual(r, { type: 'verify_run_failed', count: 3 }, '第 3 次记录返回 {type, count:3}')
++  const t = readTally(realTallyPath(cwd, change))
++  assert.equal(t.events.verify_run_failed.count, 3, 'events 计数累加到 3')
++  assert.ok(
++    typeof t.events.verify_run_failed.lastAt === 'string' && t.events.verify_run_failed.lastAt,
++    'lastAt 存在且非空'
++  )
++  assert.equal(t.history.length, 3, 'history 追加 3 条')
++
++  const cwd2 = makeCwd()
++  assert.equal(record(cwd2, 'bogus-type', 'bogus'), null, '非法类型返回 null')
++  assert.ok(!existsSync(runtimeRootOf(cwd2)), '非法类型不产生任何文件（连 .runtime 目录都不建）')
++}
++
++// ─────────────────────────────────────────
++// 3. history 截尾（FRICTION_HISTORY_CAP=20）
++// ─────────────────────────────────────────
++console.log('\n--- 3. history 截尾至 20，events 不截 ---')
++{
++  const cwd = makeCwd()
++  const change = 'cap-check'
++  for (let i = 0; i < 25; i++) record(cwd, change, 'gate_rollback', `d${i}`)
++  const t = readTally(realTallyPath(cwd, change))
++  assert.equal(t.events.gate_rollback.count, 25, 'events 计数累计 25 不截尾')
++  assert.equal(t.history.length, 20, 'history 截尾至 20 条')
++  assert.equal(t.history[0].detail, 'd5', '保留最近 20 条（最旧为第 6 条）')
++  assert.equal(t.history[19].detail, 'd24', '最新为第 25 条')
++}
++
++// ─────────────────────────────────────────
++// 4. consume 清零语义（D-003）
++// ─────────────────────────────────────────
++console.log('\n--- 4. consume 提示 + 删文件，二次 consume 为 null ---')
++{
++  const cwd = makeCwd()
++  const change = 'consume-check'
++  record(cwd, change, 'gate_rollback')
++  record(cwd, change, 'gate_rollback')
++  record(cwd, change, 'review_rejected')
++  const p = realTallyPath(cwd, change)
++
++  const out = consume(cwd, change)
++  assert.equal(out.counts.gate_rollback, 2, 'counts 含 gate_rollback:2')
++  assert.equal(out.counts.review_rejected, 1, 'counts 含 review_rejected:1')
++  assert.ok(
++    typeof out.hint === 'string' &&
++      out.hint.includes('gate 回滚 2 次') &&
++      out.hint.includes('审查打回 1 次'),
++    'hint 含两类标签与次数'
++  )
++  assert.ok(!existsSync(p), '消费后计数文件删除（提示后清零）')
++
++  const again = consume(cwd, change)
++  assert.equal(again.hint, null, '二次 consume hint 为 null')
++  assert.deepEqual(again.counts, {}, '二次 consume counts 为空')
++}
++
++// ─────────────────────────────────────────
++// 5. 全零文件：不提示也不删
++// ─────────────────────────────────────────
++console.log('\n--- 5. 全零文件 → hint null 且文件保留 ---')
++{
++  const cwd = makeCwd()
++  const change = 'zero-check'
++  const p = realTallyPath(cwd, change)
++  ensureFile(p, { events: {}, history: [] })
++
++  const out = consume(cwd, change)
++  assert.equal(out.hint, null, '全零 → hint null')
++  assert.deepEqual(out.counts, {}, '全零 → counts 空')
++  assert.ok(existsSync(p), '全零不删除文件（无提示即无副作用）')
++}
++
++// ─────────────────────────────────────────
++// 6. 配置开关（R-05：仅显式 false 关，缺键/缺文件/垃圾值默认开）
++// ─────────────────────────────────────────
++console.log('\n--- 6. enabled:false 双直通 / 默认开矩阵 ---')
++{
++  // 嵌套形态
++  const cwd = makeCwd()
++  writeLocalYaml(cwd, 'friction_hint:\n  enabled: false\n')
++  assert.equal(record(cwd, 'cfg-nested', 'gate_rollback'), null, '嵌套 enabled:false → record no-op')
++  assert.ok(!existsSync(runtimeRootOf(cwd)), '关闭态 .runtime 零写入')
++  const nestedP = realTallyPath(cwd, 'cfg-nested')
++  ensureFile(nestedP, { events: { gate_rollback: { count: 1, lastAt: '2026-09-11T00:00:00Z' } }, history: [] })
++  assert.equal(consume(cwd, 'cfg-nested').hint, null, '关闭态 consume 直通 null')
++  assert.ok(existsSync(nestedP), '关闭态 consume 不删文件（一键全关零副作用）')
++
++  // flat 形态
++  const cwd2 = makeCwd()
++  writeLocalYaml(cwd2, 'friction_hint.enabled: false\n')
++  assert.equal(record(cwd2, 'cfg-flat', 'gate_rollback'), null, 'flat enabled:false → record no-op')
++  assert.ok(!existsSync(realTallyPath(cwd2, 'cfg-flat')), 'flat 关闭态不落计数文件')
++  assert.equal(consume(cwd2, 'cfg-flat').hint, null, 'flat 关闭态 consume 直通 null')
++
++  // 默认开矩阵：enabled:true / 垃圾值 / 有 local.yaml 但缺键 / 无 local.yaml
++  const onCases = [
++    ['enabled-true', 'friction_hint:\n  enabled: true\n'],
++    ['enabled-garbage', 'friction_hint:\n  enabled: banana\n'],
++    ['key-missing', 'commands:\n  test: node --test\n'],
++  ]
++  for (const [change, yaml] of onCases) {
++    const c = makeCwd()
++    writeLocalYaml(c, yaml)
++    const r = record(c, change, 'gate_rollback')
++    assert.ok(r && r.count === 1, `${change} → 默认开照常记录`)
++    assert.ok(existsSync(realTallyPath(c, change)), `${change} → 计数文件落盘`)
++  }
++  const cwd4 = makeCwd()
++  assert.ok(record(cwd4, 'yaml-absent', 'gate_rollback'), 'local.yaml 缺失 → 默认开')
++}
++
++// ─────────────────────────────────────────
++// 7. 损坏 JSON 静默降级
++// ─────────────────────────────────────────
++console.log('\n--- 7. 损坏 JSON 从零重计，不抛 ---')
++{
++  const cwd = makeCwd()
++  const change = 'corrupt-check'
++  const p = realTallyPath(cwd, change)
++  ensureFile(p, '{not valid json')
++
++  const r = record(cwd, change, 'verify_run_failed')
++  assert.ok(r && r.count === 1, '损坏 JSON 后记录从 count:1 重新累计')
++  const out = consume(cwd, change)
++  assert.equal(out.counts.verify_run_failed, 1, 'consume 也能读回重计结果')
++  assert.ok(out.hint && out.hint.includes('验证失败 1 次'), '损坏后 hint 正常产出')
++}
++
++// ─────────────────────────────────────────
++// 8. 隐私值域（D-005）
++// ─────────────────────────────────────────
++console.log('\n--- 8. 落盘字段最小集，detail 精确往返 ---')
++{
++  const cwd = makeCwd()
++  const change = 'privacy-check'
++  record(cwd, change, 'verify_run_failed', 'verify-test')
++  const p = realTallyPath(cwd, change)
++  const raw = readFileSync(p, 'utf8')
++
++  assert.ok(raw.includes('verify-test'), 'detail 预定义标签按原样落盘')
++  assert.ok(!raw.includes('请帮我修复这个 bug'), '不含提示词/对话原文样例字符串')
++
++  const t = JSON.parse(raw)
++  assert.deepEqual(Object.keys(t).sort(), ['events', 'history'], '顶层只有 events/history')
++  assert.deepEqual(
++    Object.keys(t.events.verify_run_failed).sort(),
++    ['count', 'lastAt'],
++    'events 项只有 count/lastAt'
++  )
++  assert.equal(t.history.length, 1)
++  for (const h of t.history) {
++    assert.deepEqual(Object.keys(h).sort(), ['at', 'detail', 'type'], 'history 项只有 at/detail/type')
++    assert.equal(h.detail, 'verify-test', 'detail 精确往返（无加工）')
++    assert.equal(h.type, 'verify_run_failed', 'type 为枚举值')
++  }
++
++  // detail 非字符串 → 落 null（不进结构化字段）
++  record(cwd, change, 'gate_rollback', 123)
++  const t2 = readTally(p)
++  const last = t2.history[t2.history.length - 1]
++  assert.equal(last.detail, null, '非字符串 detail 落 null')
++}
++
++// ─────────────────────────────────────────
++// 9. renderFrictionHintLine 纯渲染
++// ─────────────────────────────────────────
++console.log('\n--- 9. 纯渲染：空/全零 null、未知忽略、固定序 ---')
++{
++  assert.equal(renderFrictionHintLine({}), null, '空 counts → null')
++  assert.equal(renderFrictionHintLine(null), null, 'null → null')
++  assert.equal(renderFrictionHintLine({ gate_rollback: 0 }), null, '全零 → null')
++
++  const one = renderFrictionHintLine({ gate_rollback: 2 })
++  assert.ok(one.includes('gate 回滚 2 次'), '单类型渲染标签与次数')
++
++  const mixed = renderFrictionHintLine({ gate_rollback: 1, verify_run_failed: 2, review_rejected: 3, bogus: 9 })
++  assert.ok(
++    mixed.includes('gate 回滚 1 次') &&
++      mixed.includes('验证失败 2 次') &&
++      mixed.includes('审查打回 3 次'),
++    '三类已知类型都渲染'
++  )
++  assert.ok(!mixed.includes('bogus'), '未知类型不进提示')
++  assert.ok(
++    mixed.indexOf('gate 回滚') < mixed.indexOf('验证失败') &&
++      mixed.indexOf('验证失败') < mixed.indexOf('审查打回'),
++    '固定输出序：gate 回滚 → 验证失败 → 审查打回'
++  )
++}
++
++// ─────────────────────────────────────────
++// 10. 非法 changeName：no-op 零落盘
++// ─────────────────────────────────────────
++console.log('\n--- 10. 非法 changeName 拒绝 ---')
++{
++  for (const bad of ['foo/bar', '..', 'a\\b', '']) {
++    const cwd = makeCwd()
++    assert.equal(record(cwd, bad, 'gate_rollback'), null, `changeName ${JSON.stringify(bad)} → record null`)
++    assert.ok(!existsSync(runtimeRootOf(cwd)), `${JSON.stringify(bad)} → 零写入`)
++    const out = consume(cwd, bad)
++    assert.equal(out.hint, null, `${JSON.stringify(bad)} → consume null`)
++    assert.deepEqual(out.counts, {}, `${JSON.stringify(bad)} → counts 空`)
++  }
++}
++
++try { rmSync(tmpRoot, { recursive: true, force: true }) } catch { /* OS 清 */ }
++
++console.log('\n[friction-tally] ✅ 全部通过')

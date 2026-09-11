@@ -29,6 +29,7 @@ import { writeAtomicSync } from '../fs-atomic.js'
 import { gitQuiet } from '../git-helper.js'
 import { resolveRuntimeRoot } from './shared.js'
 import { detectChangeRisk } from '../change-risk-profile.js'
+import { recordFrictionEvent } from '../friction-tally.js'
 
 const RECORD_SCHEMA_VERSION = 1
 
@@ -270,6 +271,12 @@ export async function executeVerifyQualityScan({ cwd, specBase, changeName, plat
   storeQualityScan({ specBase, cwd, changeName, testResult: testCheck, lintResult: lintCheck, coverageCheck })
   const testFailed = testCheck.status === 'failed'
   const lintBlocked = shouldBlockVerifyLint(lintCheck)
+  // 摩擦计数（friction-signal-hint task-03）：记录条件与 throw 条件**刻意解耦**——advisory 档
+  // lint 失败（SILLYSPEC_VERIFY_LINT_GATE=advisory 时不 throw）同样是摩擦信号，计数不应随
+  // 逃生阀漂移。recordFrictionEvent 自带静默降级，不影响本步推进/throw 语义。
+  if (testFailed || lintCheck.status === 'failed') {
+    recordFrictionEvent({ cwd, changeName, platformOpts, type: 'verify_run_failed', detail: testFailed ? 'test' : 'lint' })
+  }
   if (testFailed || lintBlocked) {
     const runtimeRoot = resolveRuntimeRoot(platformOpts, specBase)
     await renderVerifyTestAttribution({ cwd, changeName, specBase, runtimeRoot })

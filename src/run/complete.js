@@ -666,6 +666,17 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
     // verify 完成出一行漂移确认。advisory fail-soft（D-006）——helper 内部全兜，绝不阻断完成。
     await printStageCompletionScopeAudit({ stageName, cwd, changeName, specBase, platformOpts })
 
+    // 摩擦信号消费（friction-signal-hint task-03）：verify 收尾读一次 friction tally，非零打
+    // 一行 advisory 引导补 postmortem（consume 内部提示后清零）；全零/读失败零输出——
+    // 摩擦提示失败不影响收尾。
+    if (stageName === 'verify') {
+      try {
+        const { consumeFrictionHint } = await import('../friction-tally.js')
+        const r = consumeFrictionHint({ cwd, changeName, platformOpts })
+        if (r && r.hint) console.log(`\n${r.hint}`)
+      } catch { /* 摩擦提示失败不影响收尾 */ }
+    }
+
     if (stageName === 'execute') {
       // execute run summary：展示真实可得的结构化信息
       try {
@@ -1474,6 +1485,15 @@ export async function continueStep(pm, progress, stageName, cwd, answer, options
     // task-04：wait 解除完成路径与 completeStep 完成分支同源注入（Grill G-2：本路径不漏，
     // 否则 execute 快照缺失 → verify 假报「无快照可对比」）。
     await printStageCompletionScopeAudit({ stageName, cwd, changeName, specBase, platformOpts })
+    // 摩擦信号消费（friction-signal-hint task-03）：与 completeStep 完成分支同款（Grill CC-03：
+    // 漏此则 --continue 收尾丢提示丢清零）。全零/读失败零输出，摩擦提示失败不影响收尾。
+    if (stageName === 'verify') {
+      try {
+        const { consumeFrictionHint } = await import('../friction-tally.js')
+        const r = consumeFrictionHint({ cwd, changeName, platformOpts })
+        if (r && r.hint) console.log(`\n${r.hint}`)
+      } catch { /* 摩擦提示失败不影响收尾 */ }
+    }
     // 阶段完成后明确下一步（agent 常卡：stageData completed 但不知要 run <下一阶段> 推进 currentStage）
     const nextStageHint = { brainstorm: 'plan', plan: 'execute', execute: 'verify', verify: 'archive' }[stageName]
     if (nextStageHint) {
