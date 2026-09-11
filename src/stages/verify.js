@@ -98,7 +98,7 @@ export const definition = {
     },
     {
       name: '逐项检查任务',
-      prompt: `对照 tasks.md（任务注册表唯一真相）检查每个任务完成状态。勾选由 execute 双路写入（agent 按 review gate 手动勾 + CLI autoCheckPlanFromReviews 机器勾选器按 review.json 自动勾），本阶段只读对照、不改勾。
+      prompt: `对照 tasks.md（任务注册表唯一真相）检查每个任务完成状态。勾选唯一写入者是 CLI（review write 落盘即按 review.json verdict 勾选，execute --done 时 autoCheckPlanFromReviews 兜底；P2-f 起 agent 不再手勾），本阶段只读对照、不改勾。
 
 ### 勾选状态（CLI 注入，勿手数）
 {TASKS_CHECKBOX}
@@ -169,36 +169,17 @@ export const definition = {
     },
     {
       name: '运行测试和质量扫描',
-      prompt: `运行代码质量扫描（测试实测统一由 CLI 对账执行，本步不重复手动跑全量）。
-
-### 操作
-1. 构建命令（CLI 自 local.yaml 注入，勿再读文件；未配置时按注入说明跑 local detect）：
-{LOCAL_COMMANDS}
-2. **不要手动重复跑 commands.test**——CLI 会在最终 --done 时统一执行一次（按变更命中模块子集），本步再跑 = 与 CLI 对账重复耗时（实测 198s×2）。如为提前发现实现问题，可对变更模块做**针对性快速冒烟**（可选，非必需）：
-   - Maven：\`mvn test -pl <变更模块> -am\`（仅编译变更模块及其依赖）
-   - Gradle：\`./gradlew :<模块>:test\`
-   - npm/pnpm：\`pnpm test --filter=<包名>\` 或 \`npm test -- --testPathPattern=<相关文件>\`
-   - Python：\`pytest <变更模块路径>/\`
-3. 如果 local.yaml 有 lint 命令，运行 lint 检查并修复报出的问题（--done 时 CLI 会亲自实测 commands.lint 对账，实测失败会明示）
-4. 搜索技术债务：grep TODO/FIXME/HACK/XXX（仅限变更文件）
-
-### 注意
-- **CLI 对账机制**：verify 阶段最终 --done 时，CLI 会亲自执行 local.yaml 的 commands.test（同步，耗时可能较长）；实测失败会直接阻断 verify 完成，谎报测试结果没有意义。commands.lint 同样会被 CLI 实测对账（advisory）
-- 冒烟测试非必需：全量/模块实测结果以 CLI 对账为准，本步跑的结果仅供你提前发现问题并写入验证报告
-
-### 检查选择指引（按变更影响面收窄，本地聚焦；FR-12）
-按本次变更的实际影响面选择检查组合，避免无差别全量：
-- **行为类改动**（源码逻辑/数据结构/接口/调用关系/配置）→ 聚焦测试：只跑变更命中模块的子集（local.yaml 配 \`test_strategy: module\` + modules 映射），CLI --done 对账同口径收窄
-- **文档/prompt 类改动**（*.md、docs/** 等）→ 文档检查（\`sillyspec docs check\` 口径），不跑代码测试
-- **门禁/契约类改动**（gate/contract 相关文件、对外接口契约）→ 契约对账（\`sillyspec gate\` 口径）优先于跑测试
-- **全量**仅在用户明确要求、或仓库级不可分变更（横切基础设施/全仓重命名等无法按模块拆分）时执行——本地聚焦，全量留给 CI 或明确要求
-
-### 测试策略推荐（CLI 注入；test_strategy: evidence-auto 时非空，其余策略为空）
-{EVIDENCE_AUTO_RECOMMENDATION}
-
-### 输出
-质量扫描结果 + 技术债务标记`,
-      outputHint: '质量扫描结果 + 技术债务',
+      // noAI 化（P0-1，docs/sillyspec/noai-ir-roadmap.md §3）：test/lint 实测提前到本步由 CLI
+      // 亲自执行（run/verify-quality-scan.js executeVerifyQualityScan）——本步此前的 agent 角色
+      // 是「可选冒烟 + lint 转述」纯中继（旧 prompt 自述「CLI 会在 --done 统一跑，实测 198s×2」）。
+      // 结果按代码指纹落盘，--done 对账指纹匹配即复用免重跑（前置一）；失败打印输出 + 并行 WIP
+      // 归因提示后不盖 completed，agent 修复后 run verify 复入本步（前置二）。步骤名不变
+      //（存量进度库按名匹配迁移）；test_strategy 收窄（module/evidence-auto/skip）由实测函数
+      // 自行解析，检查选择指引随之退役。
+      noAI: true,
+      _cliAction: 'verifyRunQualityScan',
+      prompt: '',
+      outputHint: '质量扫描结果（CLI 实测输出 + 指纹复用记录）',
       optional: false
     },
     {

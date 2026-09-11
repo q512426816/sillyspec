@@ -177,3 +177,23 @@ import { pathMatches } from '../src/change-list.js'
       entries.some(e => e.path === 'NEW:src/future.js' && pathMatches(e.path, 'src/future.js')) === true)
   } finally { rmSync(root, { recursive: true, force: true }) }
 }
+
+// 坑 brainstorm-gate-agent-unavailable-and-list-path-parse 坑2：列表项「路径：描述」整行当路径
+// （existsSync 假阴性 → design_file_ref_invalid 幻觉路径误报）。修复：列表分支剥首个
+// 中/英冒号及之后描述（冒号前段须 looksLikePath；不全局剥——Windows 绝对路径会被毁）。
+{
+  const root = mkdtempSync(join(tmpdir(), 'clop-colon-'))
+  try {
+    const specDir = join(root, '.sillyspec')
+    mkdirSync(specDir, { recursive: true })
+    writeFileSync(join(specDir, 'design.md'),
+      '# d\n## 文件变更清单\n- `src/daemon.ts`：statusRootFor 注入；RPC handler 透传\n- src/service.py：补 workspace 解析\n- src/plain.js\n', 'utf8')
+    const entries = parseFileChangeListDetailed(join(specDir, 'design.md'))
+    assert('列表项中文冒号+描述 → 剥离出纯路径',
+      entries.some(e => e.path === 'src/daemon.ts') === true)
+    assert('无反引号列表项英文冒号+描述 → 剥离出纯路径',
+      entries.some(e => e.path === 'src/service.py') === true)
+    assert('纯路径列表项不受影响', entries.some(e => e.path === 'src/plain.js') === true)
+    assert('不产生整行脏条目', entries.every(e => !e.path.includes('：') && !e.path.includes('注入')))
+  } finally { rmSync(root, { recursive: true, force: true }) }
+}

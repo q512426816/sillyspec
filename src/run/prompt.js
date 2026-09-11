@@ -1116,7 +1116,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
     console.log('- CLI 子命令以本 prompt 或上一条 --done 输出的字面为准；不确定时停下问用户，猜测命令会让状态机推进到错误位置。')
     console.log('- 本步骤产物落盘后立即执行 prompt 末尾的 --done：CLI 据此校验产出并推进状态机；不跑则进度永远停在本步。')
     console.log('- 变更目录改名用 `sillyspec change-rename <旧名> <新名>`：mv/rename 会漏改进度库引用，导致变更失联。')
-    console.log('- 文档类型文件（.md/.yaml/.json 等）头部必须包含 author（git 用户名）和 created_at（精确到秒）')
+    console.log('- 变更产物文档一律用 CLI 骨架命令生成（fourpiece-init / design-init / taskcard / module-impact / verify-probes --init）——骨架已预填 author/created_at/generated_by 元数据，勿删勿手拼 frontmatter；仅从零手写的补充文档才需手填 author（git 用户名）与 created_at（精确到秒）')
     console.log('- 执行构建/测试前必须先读 local.yaml，优先使用其中配置的命令、路径和环境变量；未配置时才使用默认值')
   }
   // 平台模式 + 路径规则（安全关键，每步注入；step1+ 起带精简标题，不复述通用铁律）
@@ -1152,6 +1152,13 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
   const mayNeedWait = WAIT_MARKER_RE.test(stepPrompt) || requiresWait || conditionalWait
 
   console.log(`\n### 完成后执行`)
+  // P0-3（noai-ir-roadmap §3）：gate 预检前置——gate 失败 → rollback → 重做一轮是最贵的循环，
+  // 多数失败是机械的（占位符未替换/文件未建/行号失效）。gate 是只读聚合预检，--done 前跑一次
+  // 把「重做一轮」变「本地预检」。主阶段且有 change 才提示（quick 边界审计在 --done 内联、
+  // 辅助阶段无 gate 语义）。
+  if (['brainstorm', 'plan', 'execute', 'verify', 'archive'].includes(stageName) && changeName) {
+    console.log(`💡 预检（只读，省一轮 gate 失败重跑）：sillyspec gate ${stageName} --change ${changeName} [--json]`)
+  }
   // requiresConfirm 步骤（如 archive「确认归档」）的完成命令必须带 --confirm——坑
   // archive-batch-31-tool-notes ②：通用 --done 模板不带该 flag，agent 照抄执行撞
   // 「请添加 --confirm」确认门，误以为参数没带。
@@ -1175,15 +1182,24 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
     console.log(`如果不需要用户决策，正常完成：`)
   }
   console.log(doneCommand + (autoMeta ? '' : ' --input "用户原始需求/反馈"'))
+  // P0-2（noai-ir-roadmap §3）：--output 可省略提示（auto 模式除外——auto driver 的
+  // SS-META doneCommand 仍带 --output，照抄路径零变化；省略路径由 command.js 同源合成）。
+  if (!autoMeta) {
+    console.log(`（--output 可省略：省略时 CLI 按门禁与 diff 事实合成事实性摘要；方案取舍/用户反馈等语义说明才需要手写）`)
+  }
 
   // ── SS-META 机器可读元数据块（change: 2026-09-08-auto-driver，D-002@v1，FR-01）──
-  // 仅 auto 模式（autoMeta 非空）渲染：单行 HTML 注释内 JSON，agent 低噪可读、脚本一行正则
-  // 可提取（<!--SS-META:(.*)-->）。requiresUser 四源见上方纯函数；doneCommand 与正文同源。
-  if (autoMeta) {
+  // 单行 HTML 注释内 JSON，agent 低噪可读、脚本一行正则可提取（<!--SS-META:(.*)-->）。
+  // requiresUser 四源见上方纯函数；doneCommand 与正文同源。
+  // P1-3（noai-ir-roadmap §4）：SS-META 从 auto 专属毕业——常规模式 `run <stage> --meta`
+  // 同样渲染（command.js 置 SILLYSPEC_RUN_META=1，CLI 短进程生命周期内有效，不跨调用泄漏）；
+  // meta 增补 change 字段（宿主脚本免再从正文 header 行解析变更名，向后兼容追加）。
+  if (autoMeta || process.env.SILLYSPEC_RUN_META === '1') {
     const meta = {
       stage: stageName,
       stepIndex: stepIndex + 1,
       stepName: step.name,
+      change: changeName || null,
       requiresUser: requiresWait || mayNeedWait || step.requiresConfirm === true,
       doneCommand,
       waitHint: (requiresWait || mayNeedWait)

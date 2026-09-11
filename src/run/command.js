@@ -26,7 +26,7 @@ import { writeAtomicSync } from '../fs-atomic.js'
 import { resolveSpecDir, countAncestorSpecDirs, ancestorSpecDirs, resolveAncestorCeiling, resolveChangeDir, triggerSync, getStageSteps, formatWaitOptions, checkApproval, warnApprovalUnknown, didYouMean, assertSafeChangeName, detectQuickSessionDrift, detectWorktreeSpecDrift, resolveRuntimeRoot, resolveQuickSessionsDir, writePlatformPointer, checkPlatformManaged, isSelfReferentialSpecRoot, isTempResidueSpecRoot, PLATFORM_MANAGED_FILENAME, warnSelfRefPointerOnce } from './shared.js'
 import { resolveQuickLinkedChanges } from './quick-audit.js'
 import { outputStep, collectStageWaitHistory } from './prompt.js'
-import { completeStep, skipStep, waitStep, continueStep } from './complete.js'
+import { completeStep, skipStep, waitStep, continueStep, synthesizeStepOutput } from './complete.js'
 import { runStage } from './stage.js'
 import { sanitizeDesc } from '../quicklog.js'
 import { ProgressManager } from '../progress.js'
@@ -265,6 +265,13 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     console.error('❌ 请指定阶段，例如: sillyspec run brainstorm')
     console.error(`可选: ${Object.keys(stageRegistry).join(', ')}, auto`)
     process.exit(2) // 用法错 → exit 2
+  }
+
+  // P1-3（noai-ir-roadmap §4）：--meta → 本次调用渲染 SS-META 机器块（prompt.js outputStep
+  // 读 SILLYSPEC_RUN_META）。CLI 是短进程：env 只在本进程生命周期内有效，不跨调用泄漏；
+  // auto 模式本就恒渲染（autoMeta 路径不变），--meta 对常规模式补齐同款出口。
+  if (flags.includes('--meta')) {
+    process.env.SILLYSPEC_RUN_META = '1'
   }
 
   if (!stageRegistry[stageName] && stageName !== 'auto') {
@@ -822,6 +829,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     '--deep', '--quick', '--standard', // scan profile 三档显式选择（scan-profile.js 从 argv 读；互斥见下方 PROFILE_FLAGS 检测）
     '--adopt-branch', // execute 显式收编既有 sillyspec/<change> 分支为 worktree 工作分支（坑 worktree-user-branch-conflict）
     '--diff', '--base', '--full', '--report', // scan diff（D-001：command.js 只补 flag，裸 token 解析归 index.js 子命令拦截）
+    '--meta', // P1-3：渲染 SS-META 机器块（布尔 flag，不吃值）
     '-h',
   ])
   for (let i = 0; i < flags.length; i++) {
@@ -1740,8 +1748,12 @@ async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts = 
   }
 
   if (!outputText) {
-    console.error('auto --done requires --output')
-    process.exit(2) // 用法错 → exit 2
+    // P0-2（noai-ir-roadmap §3）：auto --done 的 --output 同样可省略——与 completeStep 同源
+    // 的事实性摘要合成（此前硬拒 exit 2 是用法守卫；SS-META 的 doneCommand 仍带 --output，
+    // 照抄路径零变化，省略路径不再罚一轮）。
+    const _autoStep = progress?.stages?.[currentStage]?.steps?.find((s) => s && ['pending', 'in-progress', 'blocked'].includes(s.status))
+    outputText = synthesizeStepOutput({ stageName: currentStage, stepName: _autoStep?.name || currentStage, cwd })
+    console.log(`🤖 auto --done 未带 --output——CLI 已按事实合成步骤摘要（语义说明下次带 --output 手写）。`)
   }
 
   const result = await completeStep(pm, progress, currentStage, cwd, outputText, inputText, { printNext: false, changeName, platformOpts })

@@ -2319,13 +2319,20 @@ export function resolveReconcileActualFiles({ cwd, specBase, runtimeRoot, change
     // —— 形态 B：post-apply 自取三源 ——
     let diffOk = false
     let statusOk = false
-    // B1 merge-base 锚定 diff（分支/merge-base 不可得时静默省略该源，不算 git 失败）
+    // B1 merge-base 锚定 diff（分支/merge-base 不可得时静默省略该源，不算 git 失败）。
+    // 分支删除后回退审计 tag（quick-df1fed77）：apply+cleanup 删分支时 worktree.js:1065 打
+    // sillyspec-audit/<branch> tag 锚定 tip（gc 安全）——tag ref 可继续算 merge-base，baseAnchor
+    // 与 B1 diff 源在归档/已提交形态下恢复完整（否则恒 null，行数只剩 HEAD 未提交窗口口径）。
     const branch = 'sillyspec/' + changeName
     const branchHash = gitQuiet(cwd, ['rev-parse', '--verify', '--quiet', branch + '^{commit}'], { timeout: 30 * 1000 })
-    if (typeof branchHash === 'string' && branchHash.trim()) {
+    const auditTag = 'sillyspec-audit/' + branch
+    const diffRef = (typeof branchHash === 'string' && branchHash.trim())
+      ? branch
+      : (gitQuiet(cwd, ['rev-parse', '--verify', '--quiet', auditTag + '^{commit}'], { timeout: 30 * 1000 }) ? auditTag : null)
+    if (diffRef) {
       // 形态 B 定义下 meta 已删，baseBranch 无从读 → 缺省 'main'（run/prompt.js:764 同缺省）；
       // 主分支叫 master 等仓库 merge-base 失败 → 与分支不存在同处置（省略该源）
-      const mergeBase = gitQuiet(cwd, ['merge-base', 'main', branch], { timeout: 30 * 1000 })
+      const mergeBase = gitQuiet(cwd, ['merge-base', 'main', diffRef], { timeout: 30 * 1000 })
       if (typeof mergeBase === 'string' && mergeBase.trim()) {
         baseAnchor = mergeBase.trim()
         const files = runGitDiffNameOnly(cwd, mergeBase.trim())

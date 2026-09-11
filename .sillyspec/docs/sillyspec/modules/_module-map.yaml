@@ -102,10 +102,13 @@ modules:
       - src/docs-debt.js
       - src/scan-staleness.js
       - src/decision-distill.js
+      - src/decisions-io.js
       - src/scan-facts.js
       - src/module-changelog.js
       - src/module-impact.js
       - src/module-resolve.js
+      - src/validate-artifacts.js
+      - src/mcp-server.js
       - src/design-facts.js
       - src/archive-delta.js
 

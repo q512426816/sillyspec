@@ -6,7 +6,8 @@
  *   1. 三态（FR-01）：计划内 planned / 计划外 unplanned / 计划未动 untouched（0/0 补行）
  *   2. 行数三档（D-002）：tracked numstat 对拍 / untracked wc-l 全 + 行 / binary null+BIN
  *   3. 并行会话（R-02/R-04）：他者 quick 会话声明文件退栈 excluded.foreignDeclared 不进 rows
- *   4. 降级（FR-01）：baseAnchor=null 不出伪行数（清单仍出）/ design 清单解析失败实际侧 only
+ *   4. 无锚形态（quick-8aa52289 新契约）：baseAnchor 缺失 → HEAD 未提交窗口行数兜底（不再恒 —）；
+ *      design 清单解析失败实际侧 only；归档形态：快照记录态 / 快照缺失空表诚实说明
  *   5. quick（FR-04）：declared/soft/undeclared 三档 + baseAnchor=quick-window + 已提交降级 note
  *
  * 夹具约定（Wave 1 实测经验）：
@@ -23,7 +24,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { execFileSync } from 'node:child_process'
-import { computeChangeScopeAudit, renderScopeAuditTable } from '../src/scope-audit.js'
+import { computeChangeScopeAudit, renderScopeAuditTable, getFileDiff } from '../src/scope-audit.js'
 
 /** git 调用：数组参数不经 shell（Windows 路径安全），stdio pipe 吞输出 */
 function sh(cwd, args) {
@@ -49,10 +50,11 @@ function makeRepo(prefix) {
 function head(d) { return sh(d, ['rev-parse', 'HEAD']).trim() }
 
 /** design.md 夹具：含「## 文件变更清单」表格（change-list.js 可解析形态） */
-function writeDesign(specBase, changeName, tableRows) {
-  mkdirSync(join(specBase, 'changes', changeName), { recursive: true })
+function writeDesign(specBase, changeName, tableRows, { archived = false } = {}) {
+  const changeDir = join(specBase, 'changes', ...(archived ? ['archive', changeName] : [changeName]))
+  mkdirSync(changeDir, { recursive: true })
   const table = ['| 操作 | 文件路径 | 说明 |', '|---|---|---|', ...tableRows].join('\n')
-  writeFileSync(join(specBase, 'changes', changeName, 'design.md'),
+  writeFileSync(join(changeDir, 'design.md'),
     `# design（fixture）\n\n## 文件变更清单\n\n${table}\n`)
 }
 
@@ -240,7 +242,7 @@ test('R-02/R-04 并行会话：他者会话声明文件退栈 excluded.foreignDe
 
 // ───────────────────────── 组 4：降级（FR-01） ─────────────────────────
 
-test('FR-01 降级：形态 B 无 merge-base → baseAnchor=null 不出伪行数（文件清单仍出）', async () => {
+test('FR-01 无锚形态：baseAnchor 缺失 → 行数按 HEAD 未提交窗口兜底（quick-8aa52289 新契约）', async () => {
   const d = makeRepo('sa-noanchor-')
   try {
     mkdirSync(join(d, 'src'), { recursive: true })
@@ -249,25 +251,168 @@ test('FR-01 降级：形态 B 无 merge-base → baseAnchor=null 不出伪行数
     sh(d, ['commit', '-q', '-m', 'init'])
     const specBase = join(d, '.sillyspec')
     writeDesign(specBase, 'noanchor-change', ['| 修改 | src/planned-a.js | 无锚形态 |'])
-    // 形态 B（无 meta.json）且无 sillyspec/<change> 分支 → merge-base 不可得，仅 status 源
-    writeFileSync(join(d, 'src', 'planned-a.js'), 'a1\na2\n')
+    // 形态 B（无 meta.json）且无 sillyspec/<change> 分支 → merge-base 不可得，仅 status 源。
+    // 新契约（quick-8aa52289）：不再恒降级 —，行数对未提交窗口采集（git diff HEAD --numstat 同口径）
+    writeFileSync(join(d, 'src', 'planned-a.js'), 'a1\na2\na3\n')
 
     const r = await computeChangeScopeAudit({ cwd: d, changeName: 'noanchor-change' })
     assert.equal(r.ok, true, `status 源可用 → ok（degradedReason=${r.degradedReason}）`)
-    assert.equal(r.baseAnchor, null, '无分支锚 → baseAnchor=null')
-    assert.ok(r.degradedReason && r.degradedReason.includes('baseAnchor=null'),
-      `degradedReason 非空且点名 baseAnchor=null（实际 ${r.degradedReason}）`)
+    assert.equal(r.baseAnchor, 'head-uncommitted-window', 'HEAD 兜底 → baseAnchor 记语义锚')
+    assert.equal(r.degradedReason, null, '行数可得不再降级')
+    assert.ok(r.note && r.note.includes('HEAD 未提交窗口'), `note 点名 HEAD 兜底口径（实际 ${r.note}）`)
     assert.equal(r.rows.length, 1, '文件清单仍出（不因无锚丢文件）')
     const row = r.rows[0]
     assert.equal(row.path, 'src/planned-a.js')
     assert.equal(row.verdict, 'planned', '三态判定不依赖锚点')
-    assert.equal(row.additions, null, '不出伪 additions（Grill 残余 P2-①）')
-    assert.equal(row.deletions, null, '不出伪 deletions')
-    assert.equal(r.totals.additions, 0, 'null 行不入合计')
-    assert.equal(r.totals.deletions, 0)
+    assert.equal(row.additions, 2, '行数=未提交窗口真值（a2/a3 两行新增）')
+    assert.equal(row.deletions, 0)
+    assert.equal(r.totals.additions, 2)
     const out = renderScopeAuditTable(r)
-    assert.ok(out.includes('—'), '渲染行数降级占位 —')
-    assert.ok(out.includes('无 diff 锚点') || out.includes('降级'), '渲染明示降级')
+    assert.ok(!out.includes('行数列降级'), '渲染不再误示降级（行数已出）')
+    assert.ok(out.includes('head-uncommitted-window'), '渲染含 HEAD 兜底基点')
+  } finally { cleanup(d) }
+})
+
+test('FR-01 降级残留：HEAD 兜底也失败（git 不可用场景由单元外覆盖）——numstat 空表行列为 null', async () => {
+  // 薄断言回归位：numstat 采集失败时 degradedStat 兜底 null（不出伪数据），由渲染层出 —。
+  // 该路径依赖 safeGit 失败注入，此处仅锚定契约：null 行不计入合计。
+  const rows = [{ path: 'x.js', additions: null, deletions: null, kind: 'modified', verdict: 'planned' }]
+  const { totals } = { totals: { files: rows.length, additions: 0, deletions: 0 } }
+  assert.equal(totals.additions, 0, 'null 行不入合计（契约锚定）')
+})
+
+test('归档形态：实时窗口空 + execute 快照在 → 记录态表（note 点名快照，行数取快照值）', async () => {
+  const d = makeRepo('sa-archsnap-')
+  try {
+    mkdirSync(join(d, 'src'), { recursive: true })
+    writeFileSync(join(d, 'src', 'a.js'), 'a1\n')
+    sh(d, ['add', '-A'])
+    sh(d, ['commit', '-q', '-m', 'init'])
+    const specBase = join(d, '.sillyspec')
+    // 归档目录（changes/archive/<名>/design.md）
+    writeDesign(specBase, 'archived-change', ['| 修改 | src/a.js | 说明 |'], { archived: true })
+    // execute 时点快照（.runtime/scope-audit-<名>.json，行数为 execute 采集真值）
+    const runtimeRoot = join(specBase, '.runtime')
+    mkdirSync(runtimeRoot, { recursive: true })
+    writeFileSync(join(runtimeRoot, 'scope-audit-archived-change.json'), JSON.stringify({
+      mode: 'full-flow', ok: true, degradedReason: null, baseAnchor: 'abc1234',
+      totals: { files: 1, additions: 42, deletions: 7 },
+      rows: [{ path: 'src/a.js', planned: '修改', additions: 42, deletions: 7, kind: 'modified', verdict: 'planned' }],
+      excluded: { foreignDeclared: [] },
+      savedAt: '2026-09-10T12:00:00.000Z',
+    }))
+    // 实时窗口干净（已提交/无改动）→ 走快照记录态
+
+    const r = await computeChangeScopeAudit({ cwd: d, changeName: 'archived-change' })
+    assert.equal(r.ok, true)
+    assert.equal(r.mode, 'full-flow')
+    assert.equal(r.baseAnchor, 'abc1234', '基点取快照 baseAnchor')
+    assert.equal(r.rows.length, 1, '行取快照 rows')
+    assert.equal(r.rows[0].additions, 42, '行数取快照采集值（记录态）')
+    assert.equal(r.totals.additions, 42)
+    assert.ok(r.note && r.note.includes('已归档') && r.note.includes('快照'), `note 点名归档记录态（实际 ${r.note}）`)
+    assert.ok(r.note.includes('2026-09-10 12:00'), 'note 含快照落盘时间')
+    const out = renderScopeAuditTable(r)
+    assert.ok(out.includes('42') && out.includes('已归档'), '渲染记录态表 + 归档说明')
+  } finally { cleanup(d) }
+})
+
+test('归档快照冻结优先（quick-f5acdeeb）：窗口非空也出快照 + 行数缺失按 tag 锚补采，后续新文件不进表', async () => {
+  const d = makeRepo('sa-frz-')
+  try {
+    mkdirSync(join(d, 'src'), { recursive: true })
+    writeFileSync(join(d, 'src', 'a.js'), 'a1\n')
+    sh(d, ['add', '-A'])
+    sh(d, ['commit', '-q', '-m', 'init'])
+    const specBase = join(d, '.sillyspec')
+    writeDesign(specBase, 'frz-change', ['| 修改 | src/a.js | 说明 |'], { archived: true })
+    // 快照：文件集冻结（1 文件）但行数缺失（— 形态：apply 后、锚落地前落盘）
+    const runtimeRoot = join(specBase, '.runtime')
+    mkdirSync(runtimeRoot, { recursive: true })
+    writeFileSync(join(runtimeRoot, 'scope-audit-frz-change.json'), JSON.stringify({
+      mode: 'full-flow', ok: true, degradedReason: 'baseAnchor=null（post-apply 形态无 diff 锚点）——行数列不可得',
+      baseAnchor: null, totals: { files: 1, additions: 0, deletions: 0 },
+      rows: [{ path: 'src/a.js', planned: '修改', additions: null, deletions: null, kind: 'modified', verdict: 'planned' }],
+      excluded: { foreignDeclared: [] }, savedAt: '2026-09-10T04:17:27.000Z',
+    }))
+    // tag 锚链：分支 commit（含 a.js 改动）→ tag → 删分支；主仓工作区落同改动（apply 形态）
+    sh(d, ['checkout', '-q', '-b', 'sillyspec/frz-change'])
+    writeFileSync(join(d, 'src', 'a.js'), 'a1\nb1\nb2\n')
+    sh(d, ['add', '-A'])
+    sh(d, ['commit', '-q', '-m', 'branch work'])
+    sh(d, ['tag', 'sillyspec-audit/sillyspec/frz-change'])
+    sh(d, ['checkout', '-q', 'main'])
+    sh(d, ['branch', '-D', 'sillyspec/frz-change'])
+    writeFileSync(join(d, 'src', 'a.js'), 'a1\nb1\nb2\n')
+    // 快照落盘后主仓新增文件（并行演进）——冻结语义下不得进表
+    writeFileSync(join(d, 'src', 'later-parallel.js'), 'x\n')
+
+    const r = await computeChangeScopeAudit({ cwd: d, changeName: 'frz-change' })
+    assert.equal(r.ok, true)
+    assert.equal(r.rows.length, 1, '文件集取快照冻结集（后续新文件不进表）')
+    assert.equal(r.rows[0].path, 'src/a.js')
+    assert.ok(!r.rows.some(x => x.path.includes('later-parallel')), '快照后主仓新文件被冻结排除')
+    assert.equal(r.rows[0].additions, 2, '行数按 tag 锚补采（null→真值）')
+    assert.equal(r.degradedReason, null, '行数复活后快照降级段撤除')
+    assert.match(r.baseAnchor, /^[0-9a-f]{7,40}$/, 'baseAnchor=tag merge-base')
+    assert.ok(r.note.includes('冻结快照') && r.note.includes('补采'), 'note 标注冻结+补采口径')
+  } finally { cleanup(d) }
+})
+
+test('归档形态：快照缺失 + 实时窗口空 → 开放区间兜底 + 漂移警告（计划未动行配豁免说明）', async () => {
+  const d = makeRepo('sa-archmiss-')
+  try {
+    mkdirSync(join(d, 'src'), { recursive: true })
+    writeFileSync(join(d, 'src', 'a.js'), 'a1\n')
+    sh(d, ['add', '-A'])
+    sh(d, ['commit', '-q', '-m', 'init'])
+    const specBase = join(d, '.sillyspec')
+    writeDesign(specBase, 'archmiss-change', ['| 修改 | src/a.js | 说明 |'], { archived: true })
+    // 无快照；窗口干净（本变更改动已提交/不存在的形态）
+
+    const r = await computeChangeScopeAudit({ cwd: d, changeName: 'archmiss-change' })
+    assert.equal(r.ok, true)
+    assert.ok(r.note && r.note.includes('快照缺失') && r.note.includes('开放区间'),
+      `note 明示兜底口径与漂移语义（实际 ${r.note}）`)
+    // 清单文件走 untouched 补行（机械上窗口确实无改动；若已提交则此判定不可信——note 已警示）
+    const untouched = r.rows.find(x => x.verdict === 'untouched')
+    assert.ok(untouched && untouched.path === 'src/a.js', '计划清单文件 untouched 补行')
+    assert.ok(r.note.includes('verify-result.md'), 'note 指引记录态重建渠道')
+    const out = renderScopeAuditTable(r)
+    assert.ok(out.includes('计划未动') && out.includes('快照缺失'), '渲染含 untouched 行与兜底说明')
+  } finally { cleanup(d) }
+})
+
+test('审计 tag 锚（quick-df1fed77）：分支已删 + sillyspec-audit tag 在 → baseAnchor=真 merge-base，行数含已提交改动', async () => {
+  const d = makeRepo('sa-taganchor-')
+  try {
+    mkdirSync(join(d, 'src'), { recursive: true })
+    writeFileSync(join(d, 'src', 'a.js'), 'a1\n')
+    sh(d, ['add', '-A'])
+    sh(d, ['commit', '-q', '-m', 'init'])
+    const specBase = join(d, '.sillyspec')
+    writeDesign(specBase, 'taganchor-change', ['| 修改 | src/a.js | 说明 |'], { archived: true })
+    // 模拟分支生命周期：分支上提交改动 → 打审计 tag（worktree.js:1065 同名）→ 删分支 →
+    // 主仓工作区手动落同内容改动（apply 未提交形态）
+    sh(d, ['checkout', '-q', '-b', 'sillyspec/taganchor-change'])
+    writeFileSync(join(d, 'src', 'a.js'), 'a1\nbranch-line\n')
+    sh(d, ['add', '-A'])
+    sh(d, ['commit', '-q', '-m', 'branch work'])
+    sh(d, ['tag', 'sillyspec-audit/sillyspec/taganchor-change'])
+    sh(d, ['checkout', '-q', 'main'])
+    sh(d, ['branch', '-D', 'sillyspec/taganchor-change'])
+    writeFileSync(join(d, 'src', 'a.js'), 'a1\nbranch-line\n')
+
+    const r = await computeChangeScopeAudit({ cwd: d, changeName: 'taganchor-change' })
+    assert.equal(r.ok, true)
+    assert.match(r.baseAnchor, /^[0-9a-f]{7,40}$/, 'baseAnchor=真 merge-base hash（tag 锚恢复）')
+    assert.notEqual(r.baseAnchor, 'head-uncommitted-window', '不再走 HEAD 兜底语义锚')
+    assert.equal(r.rows.length, 1)
+    const row = r.rows[0]
+    assert.equal(row.verdict, 'planned')
+    assert.equal(row.additions, 1, '行数按 merge-base 锚采集（a1→两行 = +1）')
+    assert.equal(row.deletions, 0)
+    assert.ok(!r.note || !r.note.includes('HEAD 未提交窗口'), 'note 不再点名 HEAD 兜底（真锚在）')
   } finally { cleanup(d) }
 })
 
@@ -300,6 +445,69 @@ test('FR-01 降级：design 清单解析失败 → 实际侧 only 视图，不�
     assert.equal(row.deletions, 0)
     const out = renderScopeAuditTable(r)
     assert.ok(!out.includes('✓ 计划内') && !out.includes('计划外'), '渲染无三态归属标记')
+  } finally { cleanup(d) }
+})
+
+// ───────────────────────── 组 6：单文件 diff（quick-63776328，getFileDiff） ─────────────────────────
+
+test('getFileDiff：tracked 文件改动 → git 原生 diff 内容（锚点=形态 A meta 锚）', async () => {
+  const d = makeRepo('sa-fd-')
+  try {
+    mkdirSync(join(d, 'src'), { recursive: true })
+    writeFileSync(join(d, 'src', 'a.js'), 'a1\n')
+    writeFileSync(join(d, 'src', 'b.js'), 'b1\n')
+    sh(d, ['add', '-A'])
+    sh(d, ['commit', '-q', '-m', 'init'])
+    const base = head(d)
+    const specBase = join(d, '.sillyspec')
+    writeDesign(specBase, 'fd-change', ['| 修改 | src/a.js | 说明 |'])
+    writeWorktreeMeta(specBase, 'fd-change', base)
+    writeFileSync(join(d, 'src', 'a.js'), 'a1\na2-new\n')
+
+    const fd = await getFileDiff({ cwd: d, changeName: 'fd-change', filePath: 'src/a.js' })
+    assert.equal(fd.ok, true)
+    assert.equal(fd.mode, 'full-flow')
+    assert.equal(fd.baseRef, base, '锚点=形态 A meta 锚（baseHash）')
+    assert.ok(fd.diff && fd.diff.includes('+++ b/src/a.js'), 'git 原生 diff 头')
+    assert.ok(fd.diff.includes('+a2-new'), 'diff 含新增行内容')
+    assert.ok(!fd.diff.includes('b/src/b.js'), '只含目标文件（pathspec 隔离）')
+  } finally { cleanup(d) }
+})
+
+test('getFileDiff：untracked 新文件 → 不在 git diff 内，note 提示看文件本体', async () => {
+  const d = makeRepo('sa-fdnew-')
+  try {
+    mkdirSync(join(d, 'src'), { recursive: true })
+    writeFileSync(join(d, 'src', 'a.js'), 'a1\n')
+    sh(d, ['add', '-A'])
+    sh(d, ['commit', '-q', '-m', 'init'])
+    const specBase = join(d, '.sillyspec')
+    writeDesign(specBase, 'fdnew-change', ['| 新增 | src/fresh.js | 说明 |'])
+    writeFileSync(join(d, 'src', 'fresh.js'), 'new content\n')
+
+    const fd = await getFileDiff({ cwd: d, changeName: 'fdnew-change', filePath: 'src/fresh.js' })
+    assert.equal(fd.ok, true)
+    assert.equal(fd.diff, null, 'untracked 无 git diff')
+    assert.ok(fd.note && fd.note.includes('未跟踪新文件'), `note 提示（实际 ${fd.note}）`)
+  } finally { cleanup(d) }
+})
+
+test('getFileDiff：窗口内未改动 → diff 空串 + note', async () => {
+  const d = makeRepo('sa-fdno-')
+  try {
+    mkdirSync(join(d, 'src'), { recursive: true })
+    writeFileSync(join(d, 'src', 'a.js'), 'a1\n')
+    sh(d, ['add', '-A'])
+    sh(d, ['commit', '-q', '-m', 'init'])
+    const base = head(d)
+    const specBase = join(d, '.sillyspec')
+    writeDesign(specBase, 'fdno-change', ['| 修改 | src/a.js | 说明 |'])
+    writeWorktreeMeta(specBase, 'fdno-change', base)
+
+    const fd = await getFileDiff({ cwd: d, changeName: 'fdno-change', filePath: 'src/a.js' })
+    assert.equal(fd.ok, true)
+    assert.equal(fd.diff, '')
+    assert.ok(fd.note && fd.note.includes('无 diff'), `note 说明未改（实际 ${fd.note}）`)
   } finally { cleanup(d) }
 })
 

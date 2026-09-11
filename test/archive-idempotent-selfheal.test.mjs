@@ -22,12 +22,9 @@ const count = { passed: 0, failed: 0, failures: [] }
 const assert = (cond, msg) => { cond ? (count.passed++, console.log(`  ✅ PASS: ${msg}`)) : (count.failed++, count.failures.push(msg), console.log(`  ❌ FAIL: ${msg}`)) }
 
 const ARCHIVE_STEPS = (lastStatus) => [
-  { name: '任务完成度检查', status: 'completed' },
-  { name: 'extract-module-impact', status: 'completed' },
-  { name: 'sync-module-docs', status: 'completed' },
   { name: 'decision-distill 决策提炼', status: 'completed' },
-  { name: '确认归档', status: 'pending' },
-  { name: '更新路线图和提交', status: lastStatus },
+  { name: 'extract-module-impact 与归档语义收尾', status: 'completed' },
+  { name: '确认归档', status: lastStatus },
 ]
 
 console.log('=== archive 幂等自愈（脱钩对账）===\n')
@@ -59,8 +56,14 @@ console.log('--- Case 1: 源已移到 archive/<原 changeName>/ → 自愈，不
   assert(r.combined.includes('自愈'), 'stdout 含「自愈」提示')
 
   const after = await pm.read(cwd, cn)
-  assert(after.stages.archive.steps[4].status === 'completed', 'DB: 确认归档 step 自愈后标 completed')
-  assert(after.stages.archive.steps[5].status === 'pending', 'DB: 更新路线图和提交仍 pending（非末步推进）')
+  // P0-4 并步后确认归档为末步：archive 是 auxiliary 阶段，完成收尾按设计重置步骤表（可重跑语义，
+  // gates.js auxiliary reset 先于本断言执行）——终态断言从「步骤 completed」改为「变更已注销归档」
+  // （自愈路径 unregisterChange 落 changes.status=archived；sqlite 直查避免 read 对注销变更的视图差异）：
+  const { DatabaseSync } = await import('node:sqlite')
+  const db = new DatabaseSync(join(specBase, '.runtime', 'sillyspec.db'))
+  const row = db.prepare('SELECT status, current_stage FROM changes WHERE name = ?').get(cn)
+  assert(row && row.status === 'archived', `DB: 变更已注销归档（实际 ${JSON.stringify(row)}）`)
+  assert(row.current_stage === '' || row.current_stage === 'archive', 'current_stage 终态一致化')
 }
 
 // ── Case 2: archive 目录名与 changeName 不一致 → 不自愈 ──

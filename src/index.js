@@ -104,7 +104,7 @@ SillySpec CLI — 规范驱动开发工具包
   sillyspec commit [--json]                 智能提交建议：收集 QUICKLOG/已勾 task/阶段产出语义，生成建议 message（只建议不执行）
   sillyspec verify-probes --change <name> [--init]  verify 机械探针（TODO 标记/测试覆盖/API 对账/删除对账）；--init 生成 verify-result.md 骨架
   sillyspec module-impact --change <name>       生成 module-impact.md 骨架（文件×模块归属按 module-map 预填 + 未匹配清单）
-  sillyspec scope-audit --change <name> [--json]  变更范围对账：计划×实际三态全表 + 行数（✓ 计划内/⚠️ 计划外/⚠️ 计划未动；quick 会话传 quick-<id> 出归属表；advisory 只读不设门禁）
+  sillyspec scope-audit --change <name> [--json]  变更范围对账：计划×实际三态全表 + 行数（✓ 计划内/⚠️ 计划外/⚠️ 计划未动；quick 会话传 quick-<id> 出归属表；已归档变更可查——快照记录态；advisory 只读不设门禁）
   sillyspec module-docs-sync --change <name> [--note ...]  diff 归属模块 → sidecar 追加变更索引行 + 卡 updated_at 戳（幂等）
   sillyspec endpoints extract --change <name> [--task task-NN | --all-tasks] [--dir <dir>|--files <a.py,b.js>]  静态扫描路由装饰器生成 endpoints.json
   sillyspec endpoints baseline --change <name> [--spec-dir <path>] [--json]  拍变更前端点基线（幂等不覆盖；worktree 内跑自动锚主仓；归档 delta 端点增删 before 侧）
@@ -629,6 +629,13 @@ async function main() {
       } else if (rwResult.ok) {
         console.log(`✅ review.json 已写入：${rwResult.reviewPath}`);
         console.log(`   executeRunId: ${rwResult.executeRunId}`);
+        // P2-f（noai-ir-roadmap §5）task 真源归一：review 落盘即由 CLI 渲染 checkbox——
+        // agent 永不手勾（review.json verdict 是唯一真源，tasks.md 勾选是它的显示态）。
+        try {
+          const { autoCheckPlanFromReviews } = await import('./run/complete.js');
+          const ac = await autoCheckPlanFromReviews({ stageName: 'execute', changeName: rwChange, cwd: dir, platformOpts: rwPlatformOpts });
+          if (ac.autoChecked && ac.checkedCount > 0) console.log(`   ✅ tasks.md checkbox 已按 review verdict 自动勾选（${ac.checkedCount} 个；task 真源 = review.json，CLI 唯一勾选者——勿手动勾选）`);
+        } catch { /* 勾选 fail-soft：--done 时 autoCheck 兜底 */ }
         for (const w of rwResult.warnings) console.log(`⚠️  ${w}`);
       } else {
         console.error('❌ review write 失败：');
@@ -818,8 +825,22 @@ async function main() {
       // 项目状态探测（2026-08-21 审计第二批 G7/G8）：吸收 continue/resume 两个 skill 的
       // 手工探测表（文件存在性状态机），一条命令输出「状态 + 下一步命令 + 依据」。
       // 纯 fs 零 token；活跃进度的权威状态仍归 progress show，本命令管无活跃进度时反推。
+      // --apply（P2，noai-ir-roadmap §5）：建议是本 CLI 命令形态时直接代跑（恢复链 noAI——
+      // 只建议不执行让 agent 当转述员）；非 CLI 命令形态的建议（自由文本）不代跑。
       const { detectNextStep } = await import('./run/next.js');
       const nxResult = detectNextStep({ cwd: dir, specDir });
+      if (args.includes('--apply')) {
+        const m = String(nxResult.next || '').match(/^sillyspec\s+(.+)$/);
+        if (!m) {
+          console.error(`❌ next --apply：建议不是可代跑的 CLI 命令形态（实得「${nxResult.next}」）——按建议手动执行`);
+          process.exit(2);
+        }
+        const childArgs = m[1].trim().split(/\s+/);
+        console.log(`🤖 next --apply 代跑：sillyspec ${childArgs.join(' ')}\n`);
+        const { spawnSync } = await import('node:child_process');
+        const r = spawnSync(process.execPath, [join(__dirname, '..', 'bin', 'sillyspec.js'), '--dir', dir, ...childArgs], { stdio: 'inherit' });
+        process.exit(r.status === null ? 1 : r.status);
+      }
       if (json) {
         console.log(JSON.stringify({ command: 'next', ...nxResult }, null, 2));
         break;
@@ -841,7 +862,30 @@ async function main() {
       // 智能提交建议（2026-08-21 审计第二批 G1-G3）：commit skill 此前让 agent 手工收集
       // 语义（LAST_COMMIT_TIME / cat QUICKLOG / 扫变更目录 / 按路径模式分类）——进度库、
       // quicklog、git 全在 CLI 手里。一条命令产出统计 + 语义来源 + conventional 建议 +
-      // 可照抄的 git 命令。**只建议不执行**（确认权在人，对齐 skill 绝对规则「不要自动提交」）。
+      // 可照抄的 git 命令。**默认只建议不执行**（确认权在人，对齐 skill 绝对规则「不要自动提交」）；
+      // --apply（P1-6，noai-ir-roadmap §4）唯一例外且只限归档语境（文件已验收 + pathspec
+      // 显式 + pathspec 限定 commit 不扫并行会话暂存）——agent 上下文「需人确认」是伪约束，
+      // 通用自动 git 在多会话仓是历史重灾区，故收窄到这一处。
+      if (args.includes('--apply')) {
+        const apChangeIdx = args.indexOf('--change');
+        const apChange = apChangeIdx >= 0 && args[apChangeIdx + 1] ? args[apChangeIdx + 1] : null;
+        if (!apChange) {
+          console.error('用法: sillyspec commit --apply --change <名>\n  只限归档语境（changes.status=archived 或 current_stage=archive）执行归档产物提交');
+          process.exit(2);
+        }
+        assertSafeChangeName(apChange, '--change 变更名');
+        const { applyArchiveCommit } = await import('./commit-suggest.js');
+        const r = applyArchiveCommit({ cwd: dir, specDir, changeName: apChange });
+        if (!r.ok) {
+          console.error(`❌ commit --apply 拒绝: ${r.reason}`);
+          process.exit(1);
+        }
+        console.log(`✅ 归档提交完成（pathspec 限定 ${r.paths.length} 个路径，不含并行会话暂存）：`);
+        for (const p of r.paths) console.log(`   - ${p}`);
+        console.log(`\n💬 ${r.subject}`);
+        if (r.output) console.log(r.output.split('\n').map(l => '   ' + l).join('\n'));
+        break;
+      }
       const { collectCommitContext } = await import('./commit-suggest.js');
       const cc = collectCommitContext({ cwd: dir, specDir });
       if (json) {
@@ -888,7 +932,8 @@ async function main() {
           console.log(cc.suggestion.body.split('\n').map(l => '   ' + l).join('\n'));
         }
         const bodyArgs = cc.suggestion.body ? ` -m "${cc.suggestion.body.replace(/"/g, '\\"').replace(/\n/g, ' ')}"` : '';
-        console.log(`\n   执行：git add -A && git commit -m "${cc.suggestion.subject.replace(/"/g, '\\"')}"${bodyArgs}`);
+        // 规则 18（2026-09-10 目录级 git add 事故）：建议命令用显式 pathspec，不再教 git add -A
+        console.log(`\n   执行：git add -- <本次文件…> && git commit -m "${cc.suggestion.subject.replace(/"/g, '\\"')}"${bodyArgs} -- <本次文件…>`);
       } else {
         console.log('\n💡 无语义来源匹配——请结合上方 diff stat 手写 message');
       }
@@ -986,6 +1031,92 @@ async function main() {
             console.log(`📄 已补齐缺失槽段（不触碰既有正文）: ${vpAdded.added.join('、')}`)
           }
         }
+        // P0-1（noai-ir-roadmap §3）两件机械预填，均幂等 fail-soft：
+        //   ①决策追踪矩阵机械半边——D→FR→task 链自 decisions.md × tasks/*.md frontmatter
+        //     结构化字段构建，Evidence/状态两列留 agent 逐格复核；
+        //   ②结论草稿——机械事实全绿（noAI 实测 + 探针 1/3/5/6 + 风险门）才预填 PASS，
+        //     「草稿待确认」形态，gate 判定链不动（前置三）。
+        try {
+          const { injectDecisionChainDraft } = await import('./verify-probes.js')
+          const vpChain = injectDecisionChainDraft(vpReportPath, join(vpSpecBase, 'changes', vpChange))
+          if (vpChain) {
+            try { await mirrorInitArtifact(vpReportPath, 'verify-result.md', readFileSync(vpReportPath, 'utf8')) } catch { /* 镜像失败不阻断 */ }
+            console.log(`🔗 决策追踪矩阵机械半边已预填：${vpChain.decisions} 条决策 × ${vpChain.tasks} 张 task 卡（Evidence/状态两列待逐格复核；未闭环行须在报告标注风险）`)
+          }
+        } catch { /* 链路预填失败不阻断 --init */ }
+        try {
+          const { extractVerifyConclusionSlot } = await import('./stage-contract.js')
+          const { evaluateConclusionDraft } = await import('./run/verify-quality-scan.js')
+          const { applyConclusionDraftToText } = await import('./verify-probes.js')
+          const vpMd = readFileSync(vpReportPath, 'utf8')
+          if (extractVerifyConclusionSlot(vpMd) === '') {
+            const vpDraftEval = evaluateConclusionDraft({ cwd: dir, specBase: vpSpecBase, changeName: vpChange, changeDir: join(vpSpecBase, 'changes', vpChange), probesResult: vpResult })
+            if (vpDraftEval.draft) {
+              const vpNext = applyConclusionDraftToText(vpMd, vpDraftEval.draft)
+              writeFileSync(vpReportPath, vpNext)
+              try { await mirrorInitArtifact(vpReportPath, 'verify-result.md', vpNext) } catch { /* 镜像失败不阻断 */ }
+              console.log(`🤖 结论草稿已预填 ${vpDraftEval.draft}（机械事实全绿：noAI 实测通过 + 探针 1/3/5/6 干净 + 风险门非 integration/deployment）——草稿待确认，复核后不同意即改写槽行；gate 独立复核不受预填影响。`)
+            } else {
+              console.log(`ℹ️  结论草稿未预填（${vpDraftEval.reasons.join('；')}）——槽行由你填写。`)
+            }
+          }
+        } catch { /* 草稿预填失败不阻断 --init */ }
+      }
+      break;
+    }
+    case 'review-dispatch': {
+      // tier=independent 独立审查的平台派发命令（2026-09-10-review-dispatch FR-01~04 / D-001~003@1）：
+      // 三形态——缺省=create（probe 三层前置 + createMission(external) + dispatchWorker(read_only)，
+      // 异步立即返回）、--status=轮询+停滞检测+终态回收（artifacts→schema/docHash 校验→落盘既有
+      // stage-reviews 路径）、--kill=清在途记录+平台处置指引（处置权在人）。薄壳：全部逻辑在
+      // src/review-dispatch.js（可测核心），此处只做 flag 解析与退出码。
+      const rdChangeIdx = args.indexOf('--change');
+      const rdChange = rdChangeIdx >= 0 && args[rdChangeIdx + 1] ? args[rdChangeIdx + 1] : null;
+      const rdStageIdx = args.indexOf('--stage');
+      const rdStage = rdStageIdx >= 0 && args[rdStageIdx + 1] ? args[rdStageIdx + 1] : null;
+      const rdStatus = args.includes('--status');
+      const rdKill = args.includes('--kill');
+      const rdMode = rdKill ? 'kill' : rdStatus ? 'status' : 'create';
+      const rdUsage = '用法: sillyspec review-dispatch --change <名> --stage <brainstorm|plan|execute> [--status] [--kill]\n' +
+        '  缺省=派发（probe 前置→create_mission(external)→dispatch_worker(read_only)，异步返回 missionId）\n' +
+        '  --status=轮询状态+停滞提示；worker completed 自动回收落盘 review.json（reviewer.channel=platform）\n' +
+        '  --kill=清本地在途记录+平台处置指引（不自动 kill，处置权在人）';
+      if (!rdChange) { console.error(rdUsage); process.exit(2); }
+      assertSafeChangeName(rdChange, '--change 变更名');
+      if (rdMode === 'create' && !['brainstorm', 'plan', 'execute'].includes(rdStage)) {
+        console.error(`❌ create 形态必须 --stage ∈ brainstorm|plan|execute（实际：${rdStage || '缺'}）\n${rdUsage}`);
+        process.exit(2);
+      }
+      const { runReviewDispatch, readReviewDispatchConfig } = await import('./review-dispatch.js');
+      const rdCfg = readReviewDispatchConfig(dir);
+      // MCP client：kill 不需要网络；create/status 需要（未配置时核心层 probe no-config 退出并给降级指引）
+      let rdClient = null;
+      if (rdMode !== 'kill') {
+        const { SillyHubMcpClient } = await import('./sillyhub-mcp/client.js');
+        rdClient = new SillyHubMcpClient({ cwd: dir });
+      }
+      // specBase：与其他顶级命令同口径（平台接管优先；无 pointer 回退本地 .sillyspec）
+      const rdSpecBase = resolvePlatformSpecDir(dir, specDir);
+      const r = await runReviewDispatch({
+        mode: rdMode, cwd: dir, specBase: rdSpecBase, changeName: rdChange, stage: rdStage,
+        client: rdClient, budgetUsd: rdCfg.budget_usd, stallMs: rdCfg.stall_ms,
+      });
+      if (r.ok) {
+        if (r.statusLine) console.log(`🛰️ ${r.statusLine}`);
+        if (r.state === 'completed') {
+          console.log(`✅ 平台审查回收完成：review.json 已落 ${r.reviewPath}（verdict ${r.verdict}）——重跑阶段 --done 走 Stage Review Gate`);
+        } else if (rdMode === 'create') {
+          console.log(`✅ 已派发：mission ${r.missionId} / worker ${r.workerId}（reviewRunId ${r.reviewRunId}）`);
+        }
+        if (r.stalled) console.warn(`⚠️ ${r.stallHint}`);
+        if (r.nextStep && rdMode !== 'kill') console.log(`👉 ${r.nextStep}`);
+        if (rdMode === 'kill') console.log(`👉 ${r.platformHint}`);
+      } else {
+        console.error(`❌ review-dispatch（${rdMode}）: ${r.reason}`);
+        if (r.statusLine) console.error(`   ${r.statusLine}`);
+        if (r.errors) for (const e of r.errors) console.error(`   - ${e}`);
+        if (r.guidance) console.error(`   下一步：\n${r.guidance}`);
+        process.exitCode = 1;
       }
       break;
     }
@@ -1103,11 +1234,15 @@ async function main() {
       const saChangeIdx = args.indexOf('--change');
       const saChange = saChangeIdx >= 0 && args[saChangeIdx + 1] ? args[saChangeIdx + 1] : null;
       if (!saChange) {
-        console.error('用法: sillyspec scope-audit --change <name> [--json] [--spec-dir <path>]\n  变更范围对账：计划×实际三态全表 + 行数（quick 会话传 quick-<8hex> 出归属表）；advisory 只读展示，不构成门禁');
+        console.error('用法: sillyspec scope-audit --change <name> [--file <path>] [--json] [--spec-dir <path>]\n  变更范围对账：计划×实际三态全表 + 行数（quick 会话传 quick-<8hex> 出归属表；已归档变更可查——快照冻结记录态）；--file <path> 看单文件变化内容（对账同源锚点的 git diff）；advisory 只读展示，不构成门禁');
         process.exit(2);
       }
       assertSafeChangeName(saChange, '--change 变更名');
-      const { computeChangeScopeAudit, renderScopeAuditTable } = await import('./scope-audit.js');
+      // --file（quick-63776328）：单文件 diff 内容查看——锚点与表格行数同源（getFileDiff 内部
+      // 复用 computeChangeScopeAudit 锚 + resolveDiffRoot），用户无需手记基点/worktree 路径。
+      const saFileIdx = args.indexOf('--file');
+      const saFile = saFileIdx >= 0 && args[saFileIdx + 1] && !String(args[saFileIdx + 1]).startsWith('--') ? args[saFileIdx + 1] : null;
+      const { computeChangeScopeAudit, renderScopeAuditTable, getFileDiff } = await import('./scope-audit.js');
       // specBase 解析对齐 verify-probes 的 worktree 锚定主仓口径（坑 worktree-spec-artifact-misplace）：
       // resolvePlatformSpecDir 仍先调（保留平台接管 fail-closed 检查副作用），但仅 pointer 存在时才把
       // 返回值当平台根——无 pointer 时它回退 resolveSpecDir(cwd) 会返回 worktree 副本根，误当
@@ -1128,9 +1263,33 @@ async function main() {
       // full-flow 变更目录存在性预检（endpoints baseline 先例同款）：post-apply 形态下实际侧三源
       // 对「变更不存在」不敏感（status 成功即 ok=true，会把主仓脏区误当实际侧），靠预检给明确
       // 错误摘要 exit 1；quick 会话 id 无 changes/ 目录（guard 祖先链定位），不预检。
-      if (!/^quick-[0-9a-f]{8}$/.test(saChange) && !existsSync(join(saSpecBase, 'changes', saChange))) {
-        console.error(`❌ 变更目录不存在: ${join(saSpecBase, 'changes', saChange)}（确认 --change 名，或 --spec-dir 指向主仓 .sillyspec）`);
+      // 归档形态兼容（quick-8aa52289）：changes/<名> 不在 → 接受 changes/archive/<名>（scope-audit
+      // 内部走快照记录态/HEAD 未提交窗口兜底）。
+      if (!/^quick-[0-9a-f]{8}$/.test(saChange)
+        && !existsSync(join(saSpecBase, 'changes', saChange))
+        && !existsSync(join(saSpecBase, 'changes', 'archive', saChange))) {
+        console.error(`❌ 变更目录不存在（活跃与归档区均未找到）: ${join(saSpecBase, 'changes', saChange)}（确认 --change 名，或 --spec-dir 指向主仓 .sillyspec）`);
         process.exit(1);
+      }
+      // --file 分支：单文件 diff（预检同表模式——锚点依赖变更上下文；json 面出结构化）
+      if (saFile) {
+        let fd;
+        try {
+          fd = await getFileDiff({ cwd: dir, specBase: saSpecBase, changeName: saChange, platformOpts: saDriftAnchor ? { specDriftAnchor: saDriftAnchor } : null, filePath: saFile });
+        } catch (e) {
+          console.error(`❌ scope-audit --file 执行失败: ${e && e.message ? String(e.message).split('\n')[0] : e}`);
+          process.exit(1);
+        }
+        if (json) {
+          console.log(JSON.stringify({ command: 'scope-audit', change: saChange, file: saFile, ...fd }, null, 2));
+        } else if (fd.ok && fd.diff) {
+          console.log(`📄 ${saFile}（${fd.mode}｜锚点 ${fd.anchorLabel}｜git diff 原生格式）`);
+          console.log(fd.diff);
+        } else {
+          console.log(`ℹ️ ${saFile}（${fd.mode}｜锚点 ${fd.anchorLabel || '—'}）：${fd.note || '无 diff'}`);
+        }
+        if (!fd.ok) process.exitCode = 1;
+        break;
       }
       // 计算包在 withJsonOutput 内（gate/derive 先例同款）：quick 模式重跑 auditQuickCompletion
       // 的既有 console 输出（并发 warn 等，R-07）不污染 --json 的 stdout。
@@ -1471,6 +1630,7 @@ async function main() {
       mk('proposal.md', `---
 author: qinyi
 created_at: ${fpStamp}
+generated_by: sillyspec-fourpiece-init
 ---
 # 提案书（Proposal）
 
@@ -1492,6 +1652,7 @@ created_at: ${fpStamp}
       mk('requirements.md', `---
 author: qinyi
 created_at: ${fpStamp}
+generated_by: sillyspec-fourpiece-init
 ---
 # 需求规格（Requirements）
 
@@ -1517,6 +1678,7 @@ Then <!--TODO-->
       mk('decisions.md', `---
 author: qinyi
 created_at: ${fpStamp}
+generated_by: sillyspec-fourpiece-init
 change: ${fpChange}
 ---
 
@@ -3143,6 +3305,108 @@ SillySpec platform — SillyHub 平台同步
           console.error(`❌ 未知子命令: platform ${platformSub}`);
           console.log('   运行 sillyspec platform --help 查看帮助');
           process.exit(1);
+      }
+      break;
+    }
+    case 'mcp': {
+      // MCP Phase 2（P2-g，noai-ir-roadmap §5）：最小 stdio MCP server——只读 tools
+      //（next/gate/derive/progress）经子进程 --json 隔离执行，schema 化参数锁死 flag 幻觉面。
+      // hosts 配 command=sillyspec args=[mcp]。Phase 3（--done 状态推进走 MCP）另计。
+      const { startMcpServer } = await import('./mcp-server.js');
+      await startMcpServer();
+      break;
+    }
+    case 'validate': {
+      // 产物 schema 校验总命令（P2-d，noai-ir-roadmap §5）：聚合既有校验器（verify-facts /
+      // task review / stage review / module-map）+ 轻形状检查（required-evidence / endpoints）
+      // 为一把伞——「新解析器写之前先过 schema」的统一落点。skip = 未生成不算失败。
+      const vaChangeIdx = args.indexOf('--change');
+      const vaChange = vaChangeIdx >= 0 && args[vaChangeIdx + 1] ? args[vaChangeIdx + 1] : null;
+      if (!vaChange) {
+        console.error('用法: sillyspec validate --change <名> [--json]');
+        console.error('  校验该变更的全部结构化产物（verify-facts/required-evidence/task reviews/stage reviews/endpoints + module-map）');
+        process.exit(2);
+      }
+      assertSafeChangeName(vaChange, '--change 变更名');
+      const { validateChangeArtifacts, renderValidateReport } = await import('./validate-artifacts.js');
+      const vaSpecBase = resolveSpecDir(dir, specDir && typeof specDir === 'string' ? { specDir } : undefined);
+      const vaResult = await validateChangeArtifacts({ cwd: dir, specBase: vaSpecBase, changeName: vaChange });
+      if (json) {
+        console.log(JSON.stringify({ command: 'validate', change: vaChange, ok: vaResult.ok, checks: vaResult.checks }, null, 2));
+      } else {
+        console.log(renderValidateReport(vaResult));
+      }
+      if (!vaResult.ok) process.exit(1);
+      break;
+    }
+    case 'decisions': {
+      // P1-5（noai-ir-roadmap §4）：decisions.md 单一写入者——canonical 格式只此一家（标题式
+      // 条目 + applyField 白名单中文标签），agent 不再手拼自由 markdown（扁平列表静默 0 条 /
+      // 字段拼写漂移事故族退役；读取侧 parseDecisions 零改动双向兼容）。
+      //   decisions add --change <c> --id D-001 [--version N] --title "…" [--status confirmed]
+      //     [--type architecture] [--domain a（可重复）] [--question/--answer/--anchor]
+      //     [--reject-reason/--revisit-when/--supersedes/--impacts] [--note "散文行（可重复）"]
+      //     同 id@v 整块替换（幂等）；新 id/version 追加。
+      //   decisions list --change <c>——parseDecisions 只读视图（id/状态/类型/模块域/标题）。
+      const decSub = filteredArgs[1];
+      const decChangeIdx = args.indexOf('--change');
+      const decChange = decChangeIdx >= 0 && args[decChangeIdx + 1] ? args[decChangeIdx + 1] : null;
+      if (!decChange || !['add', 'list'].includes(decSub)) {
+        console.error('用法: sillyspec decisions add --change <名> --id D-001 --title "…" [--version N] [--status confirmed] [--type architecture] [--domain x（可重复）] [--question/--answer/--anchor/--reject-reason/--revisit-when/--supersedes/--impacts/--note]\n  sillyspec decisions list --change <名>');
+        process.exit(2);
+      }
+      assertSafeChangeName(decChange, '--change 变更名');
+      const decChangeDir = join(resolveSpecDir(dir), 'changes', decChange);
+      if (decSub === 'list') {
+        const { parseDecisions } = await import('./decision-distill.js');
+        const parsed = parseDecisions(decChangeDir);
+        if (parsed.missing) { console.error(`❌ decisions.md 不存在: ${join(decChangeDir, 'decisions.md')}`); process.exit(1); }
+        for (const e of parsed.entries) {
+          console.log(`${e.id}  [${e.status || '?'}${e.type ? '/' + e.type : ''}]${(e.domains || []).length ? `[${e.domains.join(',')}]` : ''}  ${e.title || '(无标题)'}`);
+        }
+        console.log(`共 ${parsed.entries.length} 条`);
+        break;
+      }
+      // add：flag 收集（多值 --domain/--note 重复收集）
+      const decFlag = (name) => { const i = args.indexOf(name); return i >= 0 && args[i + 1] && !String(args[i + 1]).startsWith('--') ? args[i + 1] : null; };
+      const decMulti = (name) => { const out = []; for (let i = 0; i < args.length; i++) if (args[i] === name && args[i + 1] && !String(args[i + 1]).startsWith('--')) out.push(args[i + 1]); return out; };
+      const decId = decFlag('--id');
+      const decTitle = decFlag('--title');
+      if (!decId || !decTitle) { console.error('❌ decisions add 需要 --id D-xxx 与 --title'); process.exit(2); }
+      if (!/^D-\d+$/.test(decId)) { console.error(`❌ --id 形态非法（期望 D-xxx，实得 ${decId}）`); process.exit(2); }
+      const decVersionRaw = decFlag('--version');
+      const decVersion = decVersionRaw === null ? null : parseInt(decVersionRaw, 10);
+      const { parseDecisions } = await import('./decision-distill.js');
+      const decParsed = parseDecisions(decChangeDir);
+      let version = decVersion;
+      if (!Number.isInteger(version) || version < 1) {
+        const maxV = decParsed.entries.filter(e => e.number === decId).reduce((m, e) => Math.max(m, e.version), 0);
+        version = maxV + 1;
+      }
+      const decision = {
+        number: decId,
+        version,
+        title: decTitle,
+        status: decFlag('--status') || undefined,
+        type: decFlag('--type') || undefined,
+        domains: decMulti('--domain'),
+        question: decFlag('--question') || undefined,
+        answer: decFlag('--answer') || undefined,
+        anchor: decFlag('--anchor') || undefined,
+        rejectReason: decFlag('--reject-reason') || undefined,
+        revisitWhen: decFlag('--revisit-when') || undefined,
+        supersedes: decFlag('--supersedes') || undefined,
+        impacts: decFlag('--impacts') || undefined,
+        body: decMulti('--note'),
+      };
+      const { upsertDecision } = await import('./decisions-io.js');
+      try {
+        const r = upsertDecision(decChangeDir, decision);
+        console.log(`📝 决策 ${decId}@v${version} 已${r.action === 'replaced' ? '整块替换（幂等）' : '追加'}: ${r.path}`);
+        if (!decVersionRaw) console.log(`   版本缺省 → 既有最高 v${version - 1} + 1（显式版本用 --version）`);
+      } catch (e) {
+        console.error(`❌ 决策写入被拒: ${e.message}`);
+        process.exit(1);
       }
       break;
     }

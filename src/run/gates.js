@@ -625,10 +625,22 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
   // 自报告 PASS 但实测失败 → 阻断（防止"文案通过"绕过验证）。
   if (stageName === 'verify') {
     const { runVerifyTestCheck, printVerifyTestCheck } = await import('../verify-postcheck.js')
-    // 测试实测是同步 execSync，长套件可跑 2~10min 且中途无输出——先预告避免 agent 误判卡死
-    console.log(`\n⏳ Verify 测试对账：CLI 亲自执行 local.yaml 的 commands.test（同步，耗时可能较长，请等待…）`)
-    const testCheck = runVerifyTestCheck({ cwd, specBase, changeName, ctx })
-    printVerifyTestCheck(testCheck)
+    // P0-1 指纹复用（noai-ir-roadmap §3 前置一·防重复跑）：noAI 质量扫描步已实测且代码指纹
+    // 未变 → 直接复用免重跑（长套件 2~10 分钟不再跑两遍）；无记录/失配/git 不可用 → 照旧
+    // 亲测（本路径语义与产物逐字不变）。
+    const { loadReusableQualityScan } = await import('./verify-quality-scan.js')
+    const reusableScan = loadReusableQualityScan({ specBase, cwd, changeName })
+    let testCheck
+    if (reusableScan && reusableScan.testResult) {
+      testCheck = reusableScan.testResult
+      console.log(`\n♻️ Verify 测试对账：复用 noAI 质量扫描步的实测结果（代码指纹匹配，免重跑；实测于 ${reusableScan.ranAt || '本变更 verify 期间'}${testCheck.resultPath ? `，台账 ${testCheck.resultPath}` : ''}）`)
+      printVerifyTestCheck(testCheck)
+    } else {
+      // 测试实测是同步 execSync，长套件可跑 2~10min 且中途无输出——先预告避免 agent 误判卡死
+      console.log(`\n⏳ Verify 测试对账：CLI 亲自执行 local.yaml 的 commands.test（同步，耗时可能较长，请等待…）`)
+      testCheck = runVerifyTestCheck({ cwd, specBase, changeName, ctx })
+      printVerifyTestCheck(testCheck)
+    }
     // tests 段二次回填（2026-09-08-ir-verify-facts FR-03 次序：实测在 runValidators 之后，
     // tests 快照此刻才可得；不参与门禁——供 P3d 追溯）
     try {
@@ -646,44 +658,13 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
     } catch { /* fail-soft：回填失败不影响门禁 */ }
     if (testCheck.status === 'failed') {
       console.error('\n❌ verify 阶段被阻断：verify-result.md 自报告通过，但 CLI 实测测试失败。')
-      // 并行 WIP 归因鉴别（坑 verify-reconcile-foreign-wip）：实测跑在主仓共享工作区，并行会话
-      // 在途 WIP 物理在场——他者文件命中声明集时提示复验归因（EADDRINUSE 鉴别同款风格），不静默背锅。
+      // 并行 WIP 归因鉴别（坑 verify-reconcile-foreign-wip）：单一实现迁至 verify-quality-scan.js
+      // renderVerifyTestAttribution（P0-1 前置二：noAI 质量扫描失败路径与本 --done 路径共用，
+      // 输出逐字保持）——实测跑在主仓共享工作区，并行会话在途 WIP 物理在场，他者文件命中
+      // 声明集时提示复验归因（含判据②生成产物旧基线 / verify-attr2 双过滤），不静默背锅。
       try {
-        const { collectForeignDeclaredFiles } = await import('../verify-postcheck.js')
-        const { gitQuiet } = await import('../git-helper.js')
-        const foreignMap = collectForeignDeclaredFiles(cwd, changeName, { specBase, runtimeRoot: resolveRuntimeRoot(platformOpts, specBase) })
-        // dirty 集提前算好：归因提示①（他者在途）与②（生成产物旧基线）共用
-        const dirty = (gitQuiet(cwd, ['diff', '--name-only', 'HEAD']) || '')
-          .split('\n').filter(Boolean).map(f => f.replace(/\\/g, '/'))
-        const dirtySet = new Set(dirty)
-        if (foreignMap.size > 0) {
-          const hitForeign = dirty.filter(f => foreignMap.has(f))
-          if (hitForeign.length > 0) {
-            console.error(`   ℹ️ 归因提示：主仓检出 ${hitForeign.length} 个并行会话声明的在途文件（${hitForeign.slice(0, 5).join(', ')}${hitForeign.length > 5 ? ' 等' : ''}）——实测失败可能混入他者 WIP 而非本变更问题。待其提交/收尾后复验，仍失败才是本变更的。`)
-          }
-        }
-        // 第二判据（坑 derived-artifact-stale-baseline）：本变更 apply 的文件（apply-pathspec 落盘）
-        // 与主仓近期提交重叠——本变更旧基线的生成产物可能覆盖了已合入内容，先在新基线重跑生成命令再复验。
-        // 坑 verify-attr2-foreign-wip-misdirection（2026-08-28 实证）：并行会话在途/近期收尾文件
-        // 让重叠集虚高（51 文件），每轮误导 agent 重跑 gen:types，实际失败源是他者 WIP。两道过滤：
-        //   - 必须 dirty：apply 落盘的旧内容此刻物理在场（verify gate 时本变更未提交，旧基线覆盖
-        //     必然表现为对 HEAD 的修改）——内容与 HEAD 一致时重跑生成命令改变不了本轮实测；
-        //   - 剔除他者声明集：那是归因提示①的领地（待其收尾后复验），不是生成产物过期。
-        try {
-          const pathspecFile = join(resolveRuntimeRoot(platformOpts, specBase), `apply-pathspec-${changeName}.txt`)
-          if (changeName && existsSync(pathspecFile)) {
-            const ownFiles = new Set(readFileSync(pathspecFile, 'utf8').split('\n').map(l => l.trim()).filter(Boolean).map(f => f.replace(/\\/g, '/')))
-            if (ownFiles.size > 0) {
-              const recent = (gitQuiet(cwd, ['log', '-n', '10', '--name-only', '--pretty=format:']) || '')
-                .split('\n').map(l => l.trim().replace(/\\/g, '/')).filter(Boolean)
-              const overlap = [...new Set(recent)].filter(f => ownFiles.has(f))
-              const actionable = filterStaleBaselineOverlap(overlap, dirtySet, foreignMap)
-              if (actionable.length > 0) {
-                console.error(`   ℹ️ 归因提示②：本变更有 ${actionable.length} 个文件与主仓最近 10 条提交重叠且旧内容仍在工作区（${actionable.slice(0, 5).join(', ')}${actionable.length > 5 ? ' 等' : ''}）——若为生成产物（api-types 等），本变更可能在旧基线生成并覆盖了已合入内容；先在新基线重跑生成命令（如 gen:types）再复验。（重叠共 ${overlap.length} 个，其余未在工作区改动或属他者会话在途文件，已归提示①/无需处理）`)
-              }
-            }
-          }
-        } catch { /* 判据②失败不影响主流程 */ }
+        const { renderVerifyTestAttribution } = await import('./verify-quality-scan.js')
+        await renderVerifyTestAttribution({ cwd, changeName, specBase, runtimeRoot: resolveRuntimeRoot(platformOpts, specBase) })
       } catch { /* 归因提示失败不影响阻断语义 */ }
       console.error('   请修复失败的测试并更新 verify-result.md 后重新完成此步骤。')
       return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)
@@ -691,9 +672,15 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
     // lint 对账（2026-08-21 审查 CLI-1）：test 侧"自报告 PASS 但实测失败→阻断"已闭环，
     // lint 侧此前纯口头——CLI 亲自执行 commands.lint，advisory 起步（失败打印不阻断，观察期后升级）
     const { runVerifyLintCheck, printVerifyLintCheck } = await import('../verify-postcheck.js')
-    const lintCheck = runVerifyLintCheck({ cwd, specBase })
-    if (lintCheck.status !== 'skipped') {
-      console.log(`\n⏳ Verify lint 对账：CLI 亲自执行 local.yaml 的 commands.lint…`)
+    // P0-1 指纹复用：noAI 质量扫描记录同指纹时 lint 一并复用（lint tally 只记真实执行次数）
+    let lintCheck = (reusableScan && reusableScan.lintResult) || null
+    if (lintCheck) {
+      console.log(`\n♻️ Verify lint 对账：复用 noAI 质量扫描步的实测结果（代码指纹匹配，免重跑）`)
+    } else {
+      lintCheck = runVerifyLintCheck({ cwd, specBase })
+      if (lintCheck.status !== 'skipped') {
+        console.log(`\n⏳ Verify lint 对账：CLI 亲自执行 local.yaml 的 commands.lint…`)
+      }
     }
     printVerifyLintCheck(lintCheck)
     // lint 硬门（2026-09-09 升硬：观察期 14 次 5 败全真阳性，pre-push 本就硬拦——fail-fast 前移；
@@ -1292,9 +1279,13 @@ export async function completeStageGates({ stageName, cwd, changeName, platformO
     validateFileLocations(cwd, stageName, progress, changeName, specBase)
   }
 
-  // 辅助阶段完成后重置步骤（scan 等 auxiliary 阶段重置回 pending 可重跑）
+  // 辅助阶段完成后重置步骤（scan 等 auxiliary 阶段重置回 pending 可重跑）。
+  // archive 例外（P0-4 并步补丁）：确认归档成为末步后本重置会与 unregisterChange 的终态
+  // （steps 全 completed + current_stage=archive——平台按步骤数渲染完成度的数据源）互相
+  // 覆盖，把已注销变更抹回 0/N。archive 是终态阶段（变更已注销，不存在「重跑归档」流），
+  // 不参与可重跑重置。
   const stageDef = stageRegistry[stageName]
-  if (stageDef?.auxiliary) {
+  if (stageDef?.auxiliary && stageName !== 'archive') {
     const freshSteps = (stageDef.steps || []).map(s => ({
       name: s.name,
       status: 'pending',

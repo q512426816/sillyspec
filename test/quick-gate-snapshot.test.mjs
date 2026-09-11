@@ -65,13 +65,29 @@ test('createGateSnapshot：HEAD 基线 + 会话文件 overlay，并行脏文件�
   assert.ok(!existsSync(join(snap.snapshotRoot, 'src', 'mine.js')) || true, 'cleanup 已撤')
 })
 
-test('createGateSnapshot：会话文件含 ../ 逃逸或 .sillyspec/ 不 overlay', () => {
+test('createGateSnapshot：../ 逃逸与运行时面不 overlay；声明的 tracked docs overlay（P2-d 收窄）', () => {
   const proj = setupRepo()
   writeFileSync(join(proj, 'outside.js'), 'x\n')
-  const snap = createGateSnapshot({ cwd: proj, files: ['../outside.js', '.sillyspec/local.yaml', 'src/ok.js'] })
+  // 声明一份 tracked doc + 运行时面文件 + 越界路径
+  mkdirSync(join(proj, '.sillyspec', 'docs', 'p', 'modules'), { recursive: true })
+  mkdirSync(join(proj, '.sillyspec', '.runtime'), { recursive: true })
+  mkdirSync(join(proj, '.sillyspec', 'quicklog'), { recursive: true })
+  writeFileSync(join(proj, '.sillyspec', 'docs', 'p', 'modules', '_module-map.yaml'), 'schema_version: 2\n\nmodules:\n  a:\n    status: active\n')
+  writeFileSync(join(proj, '.sillyspec', '.runtime', 'marker.txt'), 'runtime\n')
+  writeFileSync(join(proj, '.sillyspec', 'quicklog', 'QUICKLOG-t.md'), '# QUICKLOG\n')
+  const snap = createGateSnapshot({ cwd: proj, files: [
+    '../outside.js',
+    '.sillyspec/local.yaml',
+    '.sillyspec/.runtime/marker.txt',
+    '.sillyspec/quicklog/QUICKLOG-t.md',
+    '.sillyspec/docs/p/modules/_module-map.yaml',
+    'src/ok.js',
+  ] })
   assert.ok(snap)
   try {
-    assert.ok(!existsSync(join(snap.snapshotRoot, '..', 'outside.js')) || true, '越界路径不进快照')
+    assert.ok(!existsSync(join(snap.snapshotRoot, '.sillyspec', '.runtime', 'marker.txt')), '.runtime 运行时面不 overlay（sqlite 锁/在途 marker 隔离）')
+    assert.ok(!existsSync(join(snap.snapshotRoot, '.sillyspec', 'quicklog', 'QUICKLOG-t.md')), 'quicklog 共享账本不经 overlay')
+    assert.ok(existsSync(join(snap.snapshotRoot, '.sillyspec', 'docs', 'p', 'modules', '_module-map.yaml')), '声明的 tracked doc overlay（module-map 补录不再被 HEAD 旧版打回）')
   } finally { snap.cleanup() }
 })
 

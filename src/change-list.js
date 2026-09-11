@@ -259,7 +259,17 @@ function _parseFileListDetailed(designMdPath, { keepSillyspecDocs = false } = {}
     // 分类列表项：`- path` / `- \`path\``
     const listItem = line.match(/^\s*-\s+(.+)/)
     if (listItem) {
-      const filePath = normalizePath(listItem[1])
+      // 坑 brainstorm-gate-agent-unavailable-and-list-path-parse 坑2：列表项「路径：描述」
+      // 整行当路径 existsSync 假阴性（文件存在却报幻觉路径）——剥首个中/英冒号及之后描述。
+      // 仅列表分支剥、且冒号前段须 looksLikePath：normalizePath 全局剥会毁 Windows 绝对路径
+      // （C:\...），列表项是仓根相对路径无盘符，安全。
+      let rawItem = listItem[1]
+      const colonIdx = rawItem.search(/[：:]/)
+      if (colonIdx > 0) {
+        const head = rawItem.slice(0, colonIdx).trim()
+        if (looksLikePath(head)) rawItem = head
+      }
+      const filePath = normalizePath(rawItem)
       if (isPlaceholder(filePath) || (filePath.startsWith('.sillyspec/') && !(keepSillyspecDocs && filePath.startsWith('.sillyspec/docs/')))) continue
       if (!looksLikePath(filePath)) continue // 脏描述兜底
       const incidental = INCIDENTAL_RE.test(listItem[1])

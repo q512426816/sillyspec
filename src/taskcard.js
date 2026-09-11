@@ -74,6 +74,7 @@ export function buildTaskcardSkeleton({ taskId, title, titleZh, author, now, dep
     title: yamlScalar(title),
     title_zh: yamlScalar(titleZh),
     author: yamlScalar(author),
+    generated_by: 'sillyspec-taskcard', // P2-e provenance 戳（CLI 骨架出品标记）
     created_at: now,
     priority: 'P0',
     depends_on: (Array.isArray(dependsOn) && dependsOn.length > 0)
@@ -93,6 +94,7 @@ id: ${fm.id}
 title: ${fm.title}
 title_zh: ${fm.title_zh}
 author: ${fm.author}
+generated_by: ${fm.generated_by}
 created_at: ${fm.created_at}
 priority: ${fm.priority}
 depends_on: ${fm.depends_on}

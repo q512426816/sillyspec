@@ -580,6 +580,18 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
         // 主流程 step1「进度确认」noAI 化（2026-09-07）：brainstorm/execute/verify——
         // 快照本就 CLI 注入、阶段路由已由 run 落定，省一轮「复述摘要→--done」往返
         executeProgressConfirm({ stageName, cwd, stageData, changeName, pm })
+      } else if (cliAction === 'verifyRunQualityScan') {
+        // P0-1（noai-ir-roadmap §3）：verify「运行测试和质量扫描」noAI 化——test/lint 实测提前，
+        // 指纹落盘供 --done 复用免重跑（长套件不再跑两遍）；失败 throw 不盖 completed，
+        // 输出 + 并行 WIP 归因提示透传给 agent（前置一/二）。
+        const { executeVerifyQualityScan } = await import('./verify-quality-scan.js')
+        await executeVerifyQualityScan({ cwd, specBase, changeName, platformOpts })
+      } else if (cliAction === 'archiveDistill') {
+        // P0-4 安全变体（noai-ir-roadmap §3）：archive「decision-distill 决策提炼」noAI 化——
+        // 提炼本体是 CLI 纯函数（旧 prompt 即「调函数转述输出」纯中继）；needsWait 裁决收敛到
+        // 「确认归档 --confirm」。全路径不抛（裁决是确认步输入，非本步阻断条件）。
+        const { executeArchiveDistill } = await import('./archive-distill.js')
+        await executeArchiveDistill({ cwd, specBase, changeName })
       } else {
         throw new Error(`noAI 步骤 ${stepName} 的未知 _cliAction: ${cliAction}——请在 stage.js 注册对应分支`)
       }

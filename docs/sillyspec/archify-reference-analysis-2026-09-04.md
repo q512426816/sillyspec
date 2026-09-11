@@ -26,7 +26,7 @@
 ## 二、scan 管线现状（子代理盘点结论）
 
 - 检查链几乎 100% 格式检查：scan-docs.yaml 只有 `file_exists / min_lines / contains_sections / no_placeholder / file_count / no_empty_files`；管线内嵌的事实核验仅 1.5 项（`local_config_invalid` 命令对账、`knowledge_broken_refs` 文件名级）。
-- 最强资产被埋没：`collectDocRefs` / `resolveCandidates` / `validateRefLines`（`src/docs-check.js:81` 起）已实现「行级+符号级核验+自动重锚（classifyFix）」，但 ① 只认 .js/.mjs（P1b 后扩展）；② 未接进 scan 管线（P0 后已接）；③ 读工作树而非钉住 commit。
+- 最强资产被埋没：`collectDocRefs` / `resolveCandidates` / `validateRefLines`（`src/docs-check.js:110` 起）已实现「行级+符号级核验+自动重锚（classifyFix）」，但 ① 只认 .js/.mjs（P1b 后扩展）；② 未接进 scan 管线（P0 后已接）；③ 读工作树而非钉住 commit。
 - 确定性抽取器错位：endpoint-extractor 的 FastAPI/Express/Spring 抽取（带 source:line）挂在 verify 侧，与 scan 零关联。
 - frontmatter 元数据靠 agent 手抄 CLI 注入值，`scan-fix-headers` 是兜底——欠账的证明。
 - 三个 postcheck 入口（深度档 handleWorkflowPostCheck / 平台收尾 handleScanStageCompleted / quick 档 executeScanPostcheck），加检查须三处同步。

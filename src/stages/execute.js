@@ -1062,7 +1062,7 @@ ${indexLines}
 ${crossLines}${crossWorktreeSection}${crossLegacySection}
 
 **回收跨仓 task（head 锡点，CLI 自动落盘，勿手写）：**
-- 子代理完成 commit 后，正常写 review.json（verdict/notes）并勾选 checkbox 即可。execute \`--done\` 时 CLI 自动对跨仓仓（worktree 模式=该仓 worktree，legacy=仓根）\`git rev-parse HEAD\` 写入该 task 卡 \`head_commit:\`（幂等，已存在不覆盖——你若手写了精确锚点则以你的为准）。
+- 子代理完成 commit 后，正常写 review.json（verdict/notes）即可——checkbox 由 CLI 按 review verdict 自动勾选（review write 落盘即勾）。execute \`--done\` 时 CLI 自动对跨仓仓（worktree 模式=该仓 worktree，legacy=仓根）\`git rev-parse HEAD\` 写入该 task 卡 \`head_commit:\`（幂等，已存在不覆盖——你若手写了精确锚点则以你的为准）。
 - review.json 的 mechanics 字段（\`base\`/\`head\`/\`changedFiles\`/\`diffPaths\`）无需手算：\`base\` 取 task 卡 \`base_commit\`、\`head\` 取 task 卡 \`head_commit\`，写完跑 \`sillyspec backfill-reviews --change <变更名> --adopt\` 一键代填（verdict 保留）。
 `
   }
@@ -1161,7 +1161,7 @@ ${workdirLines}
 你的角色是调度者 + 审查者（batch 只合并实现、不合并审查）：
 1. 为每个任务启动一个子代理（Agent tool），或按上述三条件把多个任务合并为一个 batch 子代理，同 Wave 内可并行
 2. 子代理完成后审查结果——batch 子代理只做实现与自验，task 审查、review.json 产出与 checkbox 勾选仍归你（主 agent），在子代理返回后逐 task 进行；审查 batch 报告时逐 task 对照 allowed_paths 检查改动文件清单有无越权
-3. 勾选 tasks.md 中对应任务的 checkbox
+3. checkbox 由 CLI 自动勾选（review write 落盘即按 verdict 勾选 tasks.md；勿手动勾选）
 4. 记录改动文件和测试结果
 
 ${worktreeSection}${crossRepoCommitSection}${dispatchSection}
@@ -1214,21 +1214,21 @@ ${taskList}
    - 用户明确要求编译时
 4. 每个任务完成后：
    - **在 worktree 内 git add -A && git commit -m "<task-NN 摘要>"**（坑 subagent-uncommitted-newfile-apply3way，2026-08-22 实证：纯新增文件不 commit 时 apply 的 git apply --3way 报 "does not exist in index" 直接炸——未 commit 的新文件不在 base commit 也不在 index，patch 生成取不到。commit 后 base..HEAD diff 完整、apply 顺畅，review.json 的 head 也有真实锚点）
-   - **先写 review.json 再勾选 checkbox**（见下方 Task Review Gate）
-   - **任务边界上报（每任务一次，主仓根目录）**：勾选 checkbox 后跑一次 \`sillyspec platform sync --change <change-name>\`——以任务粒度把「最后信号」（last_pushed_at）与 tasks.md 勾选状态推上平台（变更中心「进行中」可见性）；未连接平台时该命令静默跳过，无需先检查连接状态
+   - **写 review.json 即可**（checkbox 由 CLI 自动勾选，见下方 Task Review Gate）
+   - **任务边界上报（每任务一次，主仓根目录）**：review write 落盘（CLI 已自动勾选）后跑一次 \`sillyspec platform sync --change <change-name>\`——以任务粒度把「最后信号」（last_pushed_at）与 tasks.md 勾选状态推上平台（变更中心「进行中」可见性）；未连接平台时该命令静默跳过，无需先检查连接状态
    - **既跑 lint check 也跑 formatter**：凡变更涉及的源码跑项目的 lint 检查 **和** 格式化（如 \`ruff format\` / \`prettier --write\`），不要只跑 check——只 check 不 format 会把格式问题留到 commit 时被 pre-commit hook 拦截（worktree 内二进制可能缺失，先 \`which <bin>\` 确认，缺则 \`uv tool install\` / \`uv sync\`）
    - 记录改动文件和测试结果
 5. 遇到 BLOCKED → 记录原因，选择：重试/跳过/停止
 
 ### Task Review Gate
 
-每个子代理完成后、勾选 checkbox **之前**，你必须创建 task review。
+每个子代理完成后，你必须创建 task review（review write 落盘后 CLI 自动勾选 checkbox——P2-f 起勾选唯一写入者是 CLI）。
 
 **操作步骤：**
 1. 读取当前 task 的 git diff（从 task 开始到完成的变更）
 2. 对照 plan.md 中该 task 的描述和 tasks/task-XX.md（如果存在）检查实现是否符合要求
 3. 写入 review.json 文件
-4. **只有 review.json 写入成功后，才允许勾选 tasks.md 中对应任务的 checkbox**（勾选唯一落点；CLI 的 autoCheckPlanFromReviews 机器勾选器同样写 tasks.md，文件锁 .tasks.md.lock 串行化双路勾选）
+4. **禁止手动勾选 tasks.md 的 checkbox**（P2-f task 真源归一：review.json verdict 是唯一真源，tasks.md 勾选是它的显示态，唯一写入者是 CLI——review write 落盘即勾、execute --done 时 autoCheckPlanFromReviews 兜底；agent 手勾与机器勾的漂移面就此退役）
 
 **review.json 路径：**
 

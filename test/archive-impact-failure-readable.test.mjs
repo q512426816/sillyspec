@@ -18,11 +18,9 @@ const count = { passed: 0, failed: 0, failures: [] }
 const assert = (cond, msg) => { cond ? (count.passed++, console.log(`  ✅ PASS: ${msg}`)) : (count.failed++, count.failures.push(msg), console.log(`  ❌ FAIL: ${msg}`)) }
 
 const ARCHIVE_STEPS = [
-  { name: '任务完成度检查', status: 'completed' },
-  { name: 'extract-module-impact', status: 'pending' },
-  { name: 'sync-module-docs', status: 'pending' },
+  { name: 'decision-distill 决策提炼', status: 'completed' },
+  { name: 'extract-module-impact 与归档语义收尾', status: 'pending' },
   { name: '确认归档', status: 'pending' },
-  { name: '更新路线图和提交', status: 'pending' },
 ]
 
 // 与真实 .sillyspec/workflows/archive-impact.yaml 同构（impact-analyzer 角色三检查）

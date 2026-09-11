@@ -155,6 +155,39 @@ function extractRawBlock(content, qlId) {
 
 // 落盘条目块 → 推送 payload（design §5.3：以落盘终态为准，不从入参拼）。
 // 宽松标签解析对齐平台：全半角冒号、多条状态行取最后、文件行单行/多行 bullet。
+/**
+ * QUICKLOG 结构化 sidecar（P1-4，noai-ir-roadmap §4）：completeQuicklogEntry 组装 payload 的
+ * 同时把终态结构落 .runtime/quicklog-sidecar/<qlId>.json——一次解析持久化，daemon/查询/重推
+ * 直读结构化数据不必再解析 md（md 只给人看）。fail-soft：sidecar 是加速层不是正确性依赖，
+ * 落盘失败零阻断（读取侧自动回退 md 解析路径）。
+ */
+const QUICKLOG_SIDECAR_SCHEMA_VERSION = 1
+
+export function quicklogSidecarPath(specBase, qlId) {
+  return join(specBase, '.runtime', 'quicklog-sidecar', `${qlId}.json`)
+}
+
+export function writeQuicklogSidecar(specBase, payload) {
+  if (!payload || !payload.ql_id) return false
+  try {
+    const p = quicklogSidecarPath(specBase, payload.ql_id)
+    mkdirSync(dirname(p), { recursive: true })
+    writeAtomic(p, JSON.stringify({ schemaVersion: QUICKLOG_SIDECAR_SCHEMA_VERSION, ...payload }, null, 2) + String.fromCharCode(10))
+    return true
+  } catch {
+    return false
+  }
+}
+
+export function readQuicklogSidecar(specBase, qlId) {
+  try {
+    const rec = JSON.parse(readFileSync(quicklogSidecarPath(specBase, qlId), 'utf8'))
+    return rec && rec.schemaVersion === QUICKLOG_SIDECAR_SCHEMA_VERSION ? rec : null
+  } catch {
+    return null
+  }
+}
+
 function buildPushPayloadFromRaw(rawBlock, { ql_id, author_raw, status, linked_changes, fallback_title }) {
   const payload = {
     ql_id,
@@ -827,12 +860,15 @@ export async function completeQuicklogEntry(specBase, gitUser, qlId, { resultTex
     // （design §5.3：翻完成时标题行被 extractTitleFromResult 刷新，推送须与落盘一致，
     // 不能用入参拼——标题/结果块/文件行都会在 flipEntryInContent 中重写）。
     const rawBlock = extractRawBlock(updatedContent, qlId)
-    await pushQuicklogEntryToPlatform(specBase, buildPushPayloadFromRaw(rawBlock, {
+    const finalPayload = buildPushPayloadFromRaw(rawBlock, {
       ql_id: qlId,
       author_raw: user,
       status: 'completed',
       linked_changes: linked,
-    })).catch(() => {})
+    })
+    // P1-4：终态结构 sidecar 持久化（同一解析器产出，md/sidecar 恒一致；fail-soft）
+    writeQuicklogSidecar(specBase, finalPayload)
+    await pushQuicklogEntryToPlatform(specBase, finalPayload).catch(() => {})
   })
 }
 
@@ -910,6 +946,9 @@ export async function cancelQuickSession({ specBase, gitUser, qlId, sessionId = 
         // 会产出 \r\r\n 字节级污染（git diff 全文件红）；原子写防 agent/dashboard 轮询读半截
         const eol = content.includes('\r\n') ? '\r\n' : '\n'
         await writeAtomic(p, lines.join(eol))
+        // P1-4：sidecar 同步翻「已取消」（无 sidecar 的存量条目跳过——md 仍是真相源）
+        const _sc = readQuicklogSidecar(specBase, qlId)
+        if (_sc) writeQuicklogSidecar(specBase, { ..._sc, status: '已取消' })
       }
       break
     }

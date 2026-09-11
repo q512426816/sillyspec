@@ -20,12 +20,9 @@ const count = { passed: 0, failed: 0, failures: [] }
 const assert = (cond, msg) => { cond ? (count.passed++, console.log(`  ✅ PASS: ${msg}`)) : (count.failed++, count.failures.push(msg), console.log(`  ❌ FAIL: ${msg}`)) }
 
 const ARCHIVE_STEPS = (lastStatus) => [
-  { name: '任务完成度检查', status: 'completed' },
-  { name: 'extract-module-impact', status: 'completed' },
-  { name: 'sync-module-docs', status: 'completed' },
   { name: 'decision-distill 决策提炼', status: 'completed' },
-  { name: '确认归档', status: 'pending' },
-  { name: '更新路线图和提交', status: lastStatus },
+  { name: 'extract-module-impact 与归档语义收尾', status: 'completed' },
+  { name: '确认归档', status: lastStatus },
 ]
 
 // 让 CLI 初始化 archive 步骤 schema，再 seedStage 覆盖为「确认归档 pending」。
@@ -61,8 +58,13 @@ console.log('--- Case 1: confirm + 推荐文档齐全 → 移动 + ✅ 通过 --
   assert(r.combined.includes('归档校验通过'), '推荐文档齐全 → ✅ 归档校验通过')
 
   const after = await new ProgressManager({ specDir: specBase }).read(cwd, cn)
-  assert(after.stages.archive.steps[4].status === 'completed', 'DB: 确认归档 step 已标 completed')
-  assert(after.stages.archive.steps[5].status === 'pending', 'DB: 更新路线图和提交仍 pending（非末步推进）')
+  // P0-4 并步后确认归档为末步：archive 是 auxiliary 阶段，完成收尾按设计重置步骤表（gates.js
+  // auxiliary reset）——终态断言改为「变更已注销归档 + 目录已移动」（unregisterChange 语义）：
+  assert(after === null || Array.isArray(after.stages?.archive?.steps), '进度视图可读')
+  const { DatabaseSync } = await import('node:sqlite')
+  const _db = new DatabaseSync(join(specBase, '.runtime', 'sillyspec.db'))
+  const _row = _db.prepare('SELECT status FROM changes WHERE name = ?').get(cn)
+  assert(_row && _row.status === 'archived', `DB: 变更已注销归档（实际 ${JSON.stringify(_row)}）`)
 }
 
 // ── Case 2: --confirm + 缺 module-impact.md → ⚠️ 警告但不阻断，仍移动 ──
@@ -99,7 +101,7 @@ console.log('\n--- Case 3: 缺 --confirm → 不移动 + step 回退 ---')
   assert(r.combined.includes('请添加 --confirm') || r.combined.includes('--confirm'), 'stdout 含「请添加 --confirm」提示')
 
   const after = await new ProgressManager({ specDir: specBase }).read(cwd, cn)
-  assert(after.stages.archive.steps[4].status === 'pending', 'DB: 缺 confirm 时确认归档 step 回退为 pending')
+  assert(after.stages.archive.steps[2].status === 'pending', 'DB: 缺 confirm 时确认归档 step 回退为 pending（P0-4 并步后 steps[2]）')
 }
 
 // ── Case 4: 归档时清理该 change 的 runId marker（execute / stage-review）──

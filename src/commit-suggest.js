@@ -18,7 +18,8 @@
  */
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs'
 import { join } from 'path'
-import { gitQuiet } from './git-helper.js'
+import { DatabaseSync } from 'node:sqlite'
+import { gitQuiet, safeGit, stageArchiveArtifacts } from './git-helper.js'
 import { resolveSpecDir } from './run/shared.js'
 
 function listActiveChanges(specBase) {
@@ -221,4 +222,54 @@ export function collectCommitContext({ cwd, specDir = null }) {
     stageArtifacts,
     suggestion,
   }
+}
+
+
+/**
+ * archive 语境判定（P1-6，noai-ir-roadmap §4）：commit --apply 只在归档阶段内放行
+ * （changes.status=archived 或 current_stage=archive）——那里文件已验收、pathspec 显式
+ * （stageArchiveArtifacts 三路径）；其余阶段一律拒绝（agent 上下文「需人确认」是伪约束，
+ * 通用自动 git 在多会话仓是历史重灾区）。DB 直查避免 read 对注销变更的视图差异。
+ */
+export function resolveArchiveCommitScope({ cwd, specDir = null, changeName }) {
+  const specBase = resolveSpecDir(cwd, { specDir })
+  let status = null
+  let currentStage = null
+  try {
+    const db = new DatabaseSync(join(specBase, '.runtime', 'sillyspec.db'))
+    const row = db.prepare('SELECT status, current_stage FROM changes WHERE name = ?').get(changeName)
+    db.close()
+    if (row) { status = row.status; currentStage = row.current_stage }
+  } catch { /* DB 缺失/损坏 → 视为不可判定（拒绝） */ }
+  return { specBase, status, currentStage, inArchiveScope: status === 'archived' || currentStage === 'archive' }
+}
+
+/**
+ * 执行归档提交（P1-6）：语义来源（QUICKLOG/勾选 task → conventional message）× 显式
+ * pathspec（归档产物既有清单）。共享 index 安全：git add 用显式 pathspec（规则 18），
+ * git commit 带 `-- <paths>` pathspec 限定——同 main 并行会话暂存的其他文件不会被扫入
+ * （pathspec commit 只提交指定路径的内容，与暂存区其余部分无关）。
+ */
+export function applyArchiveCommit({ cwd, specDir = null, changeName }) {
+  const scope = resolveArchiveCommitScope({ cwd, specDir, changeName })
+  if (!scope.inArchiveScope) {
+    return { ok: false, reason: `变更 ${changeName} 不在归档语境（status=${scope.status}, current_stage=${scope.currentStage}）——commit --apply 只限归档阶段内使用（文件已验收 + pathspec 显式）；其余阶段请手写 message 手动提交` }
+  }
+  const cc = collectCommitContext({ cwd, specDir })
+  if (!cc.suggestion || !cc.suggestion.subject) {
+    return { ok: false, reason: '无语义来源（QUICKLOG/勾选 task 均无新条目）——请结合 git status 手写 message 后手动提交' }
+  }
+  const art = stageArchiveArtifacts(cwd)
+  const paths = (art.staged || []).filter((p) => existsSync(p))
+  if (paths.length === 0) {
+    return { ok: false, reason: '无归档产物路径可提交（stageArchiveArtifacts 候选全部不存在）' }
+  }
+  const add = safeGit(cwd, ['add', '--', ...paths])
+  if (add.error) return { ok: false, reason: `git add 失败: ${add.error}` }
+  const commitArgs = ['commit', '-m', cc.suggestion.subject]
+  if (cc.suggestion.body) commitArgs.push('-m', cc.suggestion.body)
+  commitArgs.push('--', ...paths)
+  const commit = safeGit(cwd, commitArgs)
+  if (commit.error) return { ok: false, reason: `git commit 失败: ${commit.error}`, paths }
+  return { ok: true, subject: cc.suggestion.subject, paths, output: commit.value }
 }

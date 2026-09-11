@@ -447,12 +447,9 @@ console.log('\n=== 4. delta CLI（bin/sillyspec.js 子进程）===\n')
 console.log('\n=== 5. 归档集成（run archive --done --confirm 子进程完整路径）===\n')
 
 const ARCHIVE_STEPS = [
-  { name: '任务完成度检查', status: 'completed' },
-  { name: 'extract-module-impact', status: 'completed' },
-  { name: 'sync-module-docs', status: 'completed' },
   { name: 'decision-distill 决策提炼', status: 'completed' },
+  { name: 'extract-module-impact 与归档语义收尾', status: 'completed' },
   { name: '确认归档', status: 'pending' },
-  { name: '更新路线图和提交', status: 'pending' },
 ]
 
 async function seedArchiveToConfirm(cwd, specBase, cn) {

@@ -37,10 +37,16 @@ export function createGateSnapshot({ cwd, files }) {
     snapshotRoot = mkdtempSync(join(tmpdir(), 'sillyspec-gate-'))
     git(cwd, ['worktree', 'add', '--detach', '--quiet', snapshotRoot, 'HEAD'])
 
-    // 会话文件 overlay：主仓工作区版本覆盖进快照（本会话的最新态；文件不存在=已删，跳过）
+    // 会话文件 overlay：主仓工作区版本覆盖进快照（本会话的最新态；文件不存在=已删，跳过）。
+    // .sillyspec/ 跳过面收窄（P2-d 落地实证的快照盲区）：原一刀切跳过整个 .sillyspec/ ——
+    // 会话声明的 tracked docs（module-map 补录/知识库/模块卡）进不了快照，门禁读到 HEAD
+    // 旧版恒误报（src 未录 module-map 的修复在主仓生效、快照里仍然失败）。真正需要隔离的
+    // 是共享运行时面：.runtime/（sqlite 锁/在途 marker）与 quicklog/（跨会话共享账本）；
+    // local.yaml 由下方 cfg 段显式复制（单一来源，不经 overlay）。
     let overlaid = 0
     for (const f of files) {
-      if (typeof f !== 'string' || f.includes('..') || f.startsWith('/') || f.startsWith('.sillyspec/')) continue
+      const isSillyspecRuntime = typeof f === 'string' && (f.startsWith('.sillyspec/.runtime/') || f.startsWith('.sillyspec/quicklog/') || f === '.sillyspec/local.yaml' || f === '.sillyspec/.sillyspec-platform.json')
+      if (typeof f !== 'string' || f.includes('..') || f.startsWith('/') || isSillyspecRuntime) continue
       const src = join(cwd, f)
       if (!existsSync(src)) continue
       const dst = join(snapshotRoot, f)

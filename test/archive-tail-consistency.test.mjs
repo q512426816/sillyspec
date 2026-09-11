@@ -117,12 +117,9 @@ console.log('\n=== ③ progress show 归档终态（坑 archive-progress-show-st
   const progress = pm.read(d, cn)
   progress.currentChange = cn
   progress.stages.archive = { status: 'in-progress', steps: [
-    { name: '任务完成度检查', status: 'completed' },
-    { name: 'extract-module-impact', status: 'completed' },
-    { name: 'sync-module-docs', status: 'completed' },
     { name: 'decision-distill 决策提炼', status: 'completed' },
+    { name: 'extract-module-impact 与归档语义收尾', status: 'completed' },
     { name: '确认归档', status: 'pending' },
-    { name: '更新路线图和提交', status: 'pending' },
   ]}
   pm._write(d, progress, cn)
   const r = run(`node "${binCLI}" --dir "${d}" run archive --done --confirm --change ${cn} --output "确认归档"`)

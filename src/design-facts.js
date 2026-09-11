@@ -261,6 +261,9 @@ export function generateDesignSkeleton({ changeName, decisionsText, author, now 
   lines.push('---')
   lines.push(`author: ${String(author || '').trim() || 'TODO（git 用户名）'}`)
   lines.push(`created_at: ${String(now || '').trim() || 'TODO（ISO 时间）'}`)
+  // P2-e provenance 戳（noai-ir-roadmap §5）：CLI 骨架出品的可审计标记——铁律 8 收窄为
+  //「骨架优先，仅手写补文档才手填元数据」的依据（validateMetadata 未来可据此只认 CLI 戳）
+  lines.push(`generated_by: sillyspec-design-init`)
   lines.push('scale: large')
   lines.push('---')
   lines.push('')

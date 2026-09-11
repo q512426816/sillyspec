@@ -181,6 +181,47 @@ function degradedStat(root, path) {
   return { additions: null, deletions: null, kind: existsSync(join(root, path)) ? 'modified' : 'deleted' }
 }
 
+/**
+ * 变更目录解析（活跃 → 归档两形态）：归档后目录在 changes/archive/<名>/，计划侧 design.md
+ * 与「已归档」判定都从这里取（quick-8aa52289：归档变更 scope-audit 可查）。
+ * @returns {{ dir: string, archived: boolean }|null}
+ */
+function resolveChangeDir(sb, changeName) {
+  const active = join(sb, 'changes', changeName)
+  if (existsSync(active)) return { dir: active, archived: false }
+  const archived = join(sb, 'changes', 'archive', changeName)
+  if (existsSync(archived)) return { dir: archived, archived: true }
+  return null
+}
+
+/**
+ * diff 执行根解析（computeFullFlowAudit 行数采集与 getFileDiff 单文件 diff 共用，防双实现）：
+ * 形态 A（worktree 存活）→ worktree 工作树（改动在那、主仓工作树不是对比面）；其余 → cwd。
+ */
+function resolveDiffRoot(sb, changeName, form, cwd) {
+  if (form === 'worktree') {
+    try {
+      const meta = JSON.parse(readFileSync(join(sb, '.runtime', 'worktrees', changeName, 'meta.json'), 'utf8'))
+      if (meta.worktreePath && meta.mode !== 'in-place-fallback' && existsSync(meta.worktreePath)) {
+        return meta.worktreePath
+      }
+    } catch { /* 读失败 → cwd 兜底（advisory） */ }
+  }
+  return cwd
+}
+
+/**
+ * execute --done 时点快照读取（归档记录态数据源）：结构即 computeFullFlowAudit 返回值 +
+ * savedAt。读失败/结构畸形返回 null（调用方降级，不出伪数据）。
+ */
+function readScopeSnapshot(runtimeRoot, changeName) {
+  try {
+    const snap = JSON.parse(readFileSync(join(runtimeRoot, `scope-audit-${changeName}.json`), 'utf8'))
+    if (snap && typeof snap === 'object' && Array.isArray(snap.rows)) return snap
+  } catch { /* 缺失/损坏 → null */ }
+  return null
+}
+
 /** 汇总非 null 行数（binary 与降级 null 不计入，不出伪数据） */
 function sumTotals(rows) {
   let additions = 0
@@ -288,15 +329,18 @@ async function computeQuickAudit({ cwd, platformOpts, sessionId, located }) {
 }
 
 /**
- * full-flow 模式对账：design.md 清单（change-list.js 解析）× resolveReconcileActualFiles
- * 实际文件集 → 三态 + 行数。三条降级路径见 design（清单解析失败 / baseAnchor=null / quick
- * 已提交归 quick 模式），全带 degradedReason 或 note。
+ * full-flow 模式对账：design.md 清单（change-list.js 解析，活跃/归档目录均可）×
+ * resolveReconcileActualFiles 实际文件集 → 三态 + 行数。降级路径：清单解析失败 → 实际侧
+ * only；baseAnchor 缺失 → 行数按 HEAD 未提交窗口兜底（quick 模式同口径，不再恒 —）；
+ * 归档且实时窗口空 → execute 时点快照记录态（快照也缺 → 空表诚实说明）。
  */
 async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts }) {
   const sb = specBase || join(cwd, '.sillyspec')
+  const runtimeRoot = resolveRuntimeRoot(platformOpts, sb)
+  const changeDirInfo = resolveChangeDir(sb, changeName)
 
-  // —— 计划侧（单一真相：change-list.js，禁自研表格解析）——
-  const designMdPath = join(sb, 'changes', changeName, 'design.md')
+  // —— 计划侧（单一真相：change-list.js，禁自研表格解析；归档形态目录兼容）——
+  const designMdPath = join(changeDirInfo ? changeDirInfo.dir : join(sb, 'changes', changeName), 'design.md')
   let plannedEntries = []
   let planDegraded = null
   try {
@@ -321,7 +365,6 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts })
     if (typeof mod.resolveReconcileActualFiles !== 'function') {
       throw new Error('resolveReconcileActualFiles 未导出（依赖契约未就绪）')
     }
-    const runtimeRoot = resolveRuntimeRoot(platformOpts, sb)
     actual = mod.resolveReconcileActualFiles({ cwd, specBase: sb, runtimeRoot, changeName })
   } catch (e) {
     actualFailure = e && e.message ? String(e.message).split('\n')[0] : String(e)
@@ -337,6 +380,7 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts })
     excluded: { foreignDeclared: [] },
     note: null,
   }
+  let archivedNoSnapshot = false
 
   if (!actual || actual.ok === false) {
     // 实际侧整体失败：三态无锚不出表（fail-soft 单行提示由注入点兑现），计划侧降级信息一并带出
@@ -346,29 +390,95 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts })
     return { ...base, degradedReason: [reason, planDegraded].filter(Boolean).join('；') }
   }
 
-  // —— 行数采集根与基点 ——
-  // 形态 A（worktree 存活）：改动在 worktree 工作树，baseAnchor 是 meta 锚 commit——numstat
-  // 必须对 worktree 跑（worktree 共享主仓对象库可解析锚 commit；对主仓跑会把主仓工作树当对比面）。
-  // 判定与 resolveVerifyChangedFiles :1048 同款（读同一份 meta，非另造口径）。
-  let numstatRoot = cwd
-  if (actual.form === 'worktree') {
-    try {
-      const meta = JSON.parse(readFileSync(join(sb, '.runtime', 'worktrees', changeName, 'meta.json'), 'utf8'))
-      if (meta.worktreePath && meta.mode !== 'in-place-fallback' && existsSync(meta.worktreePath)) {
-        numstatRoot = meta.worktreePath
+  // —— 归档形态·冻结快照优先（真实 > 冻结记录 > 实时开放区间）：归档变更的范围应封闭在
+  // apply 时点，不随后续主仓改动漂移（quick-f5acdeeb）。execute --done 落的快照即该时点
+  // 冻结记录（含行数）——archived 一律先出快照；实时窗口（开放区间，含并行 WIP 与后续演进）
+  // 只作快照缺失的兜底，note 明示会漂。tag 封闭区间不可用：分支上仅 baseline checkpoint
+  // （并行 WIP 快照），本变更改动经工作树 apply 从未 commit 到分支。 ——
+  if (changeDirInfo && changeDirInfo.archived) {
+    const snap = readScopeSnapshot(runtimeRoot, changeName)
+    if (snap && snap.rows.length > 0) {
+      // 行数补采：快照可能落盘于 apply 后、tag 锚落地前的窗口（行数列全 —）；tag 锚
+      // （quick-df1fed77）恢复 merge-base 后，对冻结文件集按锚补采行数——文件集不重算
+      // （冻结语义不变），仅行数从 — 复活；含主仓后续演进（同文件被再改会计入），口径标注。
+      let rows = snap.rows
+      let snapDegraded = snap.degradedReason || null
+      const needsStats = rows.some(r => r && !Number.isFinite(r.additions) && r.kind !== 'binary')
+      if (needsStats && actual && actual.ok && actual.baseAnchor) {
+        const paths = rows.map(r => (r && r.path ? toPosix(r.path) : '')).filter(Boolean)
+        const stats = collectNumstatByPath(cwd, paths, { baseRef: actual.baseAnchor })
+        let recovered = 0
+        rows = rows.map(r => {
+          if (!r || !r.path || Number.isFinite(r.additions) || r.kind === 'binary') return r
+          const st = stats.get(toPosix(r.path))
+          if (!st) return r
+          recovered++
+          return { ...r, additions: st.additions, deletions: st.deletions, kind: st.kind }
+        })
+        if (recovered > 0) snapDegraded = null
+        return {
+          ...base,
+          ok: true,
+          degradedReason: snapDegraded,
+          baseAnchor: actual.baseAnchor,
+          totals: { files: rows.length, ...sumTotals(rows) },
+          rows,
+          excluded: snap.excluded && Array.isArray(snap.excluded.foreignDeclared)
+            ? snap.excluded
+            : { foreignDeclared: [] },
+          note: `已归档——execute --done 时点冻结快照${snap.savedAt ? '（' + String(snap.savedAt).replace('T', ' ').slice(0, 19) + ' 落盘）' : ''}：文件集封闭在 apply 时点，主仓后续新文件不进表；行数按锚 ${actual.baseAnchor.slice(0, 7)}→当前工作树 补采（同文件后续演进会计入）`,
+        }
       }
-    } catch { /* meta 读失败 → 主仓根兜底（advisory） */ }
+      return {
+        ...base,
+        ok: true,
+        degradedReason: snapDegraded,
+        baseAnchor: typeof snap.baseAnchor === 'string' ? snap.baseAnchor : null,
+        totals: snap.totals && typeof snap.totals === 'object'
+          ? snap.totals
+          : { files: snap.rows.length, ...sumTotals(snap.rows) },
+        rows: snap.rows,
+        excluded: snap.excluded && Array.isArray(snap.excluded.foreignDeclared)
+          ? snap.excluded
+          : { foreignDeclared: [] },
+        note: `已归档——execute --done 时点冻结快照${snap.savedAt ? '（' + String(snap.savedAt).replace('T', ' ').slice(0, 19) + ' 落盘）' : ''}：范围封闭在 apply 时点，主仓后续改动不反映到本表；需要看当前工作区实时状态请跑 git status`,
+      }
+    }
+    // 快照缺失 → 实时开放区间兜底（下方主链路），note 追加漂移警告
+    archivedNoSnapshot = true
   }
 
   const degraded = []
   if (planDegraded) degraded.push(planDegraded)
-  if (!actual.baseAnchor) {
-    degraded.push(`baseAnchor=null（${actual.form} 形态无 diff 锚点）——行数列不可得，不出伪行数`)
+  const notes = []
+  // 归档但快照缺失（上方分支置位）：实时开放区间兜底，明示漂移语义
+  if (archivedNoSnapshot) {
+    notes.push('已归档但 execute 快照缺失——下表为实时开放区间（基点→当前工作树，含并行会话与后续演进，随主仓改动漂移），非本变更冻结范围；重建记录态看归档 verify-result.md / git log')
   }
 
-  const stats = actual.baseAnchor
-    ? collectNumstatByPath(numstatRoot, actual.files, { baseRef: actual.baseAnchor })
-    : new Map()
+  // —— 行数采集根与基点 ——
+  // 形态 A（worktree 存活）：改动在 worktree 工作树，baseAnchor 是 meta 锚 commit——numstat
+  // 必须对 worktree 跑（worktree 共享主仓对象库可解析锚 commit；对主仓跑会把主仓工作树当对比面）。
+  // 判定与 resolveVerifyChangedFiles :1048 同款（读同一份 meta，非另造口径）。
+  const numstatRoot = resolveDiffRoot(sb, changeName, actual.form, cwd)
+
+  // 无锚点兜底（post-apply 分支已清理 / 归档形态）：行数按 HEAD 未提交窗口采集——与 quick 模式
+  // 同口径（git diff HEAD --numstat 只含未提交改动，untracked 走 wc-l 档）；不再恒降级 —。
+  let stats = new Map()
+  let usedHeadFallback = false
+  if (actual.baseAnchor) {
+    stats = collectNumstatByPath(numstatRoot, actual.files, { baseRef: actual.baseAnchor })
+  } else if ((actual.files || []).length > 0) {
+    stats = collectNumstatByPath(numstatRoot, actual.files, { baseRef: 'HEAD' })
+    usedHeadFallback = true
+    notes.push('baseAnchor 缺失——行数按 HEAD 未提交窗口采集（不含已提交改动，quick 模式同口径；numstat 采集失败时行列为 —）')
+  }
+
+  // 他者声明排除面可见（R-04 同精神）：resolveReconcileActualFiles 只回计数不回名单，退栈的
+  // 计划内文件会误显「计划未动」——note 点破归属重叠可能性，让 ⚠️ 行可解释。
+  if (actual.foreignExcluded > 0) {
+    notes.push(`实际侧另有 ${actual.foreignExcluded} 个文件按他者会话声明退栈未进本表——「计划未动」行先怀疑归属重叠（声明即归属，git diff 核实）`)
+  }
 
   // —— 三态判定 ——
   const rows = []
@@ -401,11 +511,11 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts })
     ...base,
     ok: true,
     degradedReason: degraded.length > 0 ? degraded.join('；') : null,
-    baseAnchor: actual.baseAnchor || null,
+    baseAnchor: actual.baseAnchor || (usedHeadFallback ? 'head-uncommitted-window' : null),
     totals: { files: rows.length, ...sumTotals(rows) },
     rows,
     excluded: { foreignDeclared: [] },
-    note: null,
+    note: notes.length > 0 ? notes.join('；') : null,
   }
 }
 
@@ -461,6 +571,65 @@ export async function computeChangeScopeAudit({ cwd, specBase, changeName, platf
       ...empty,
       degradedReason: `scope-audit 内部异常: ${e && e.message ? String(e.message).split('\n')[0] : e}`,
     }
+  }
+}
+
+/**
+ * 单文件 diff 内容查看（quick-63776328）：按对账同源锚点跑 `git diff --no-color <baseRef> -- <file>`
+ * 出完整变化内容（git 原生 diff 格式）。锚点/执行根与表格行数同口径——worktree 形态 A 对
+ * worktree 工作树跑、quick 对会话根跑、归档冻结形态用快照补采基点；无锚时 HEAD 未提交窗口兜底。
+ *
+ * untracked 新文件不在 git diff 内（整个文件都是新增）→ note 提示看文件本体；该锚点窗口
+ * 无改动 → diff 空串 + note。纯读 fail-soft。
+ *
+ * @param {{ cwd: string, specBase?: string|null, changeName: string, platformOpts?: object|null, filePath: string }} opts
+ * @returns {Promise<{ ok: boolean, mode: string, root: string, baseRef: string|null,
+ *   anchorLabel: string|null, diff: string|null, note: string|null }>}
+ */
+export async function getFileDiff({ cwd, specBase, changeName, platformOpts, filePath } = {}) {
+  if (!cwd || !changeName || !filePath) {
+    return { ok: false, mode: 'full-flow', root: cwd || '', baseRef: null, anchorLabel: null, diff: null, note: '参数缺失：cwd / changeName / filePath 必填' }
+  }
+  try {
+    const result = await computeChangeScopeAudit({ cwd, specBase, changeName, platformOpts })
+    // 锚点解析（语义锚 head-uncommitted-window → 实际 baseRef 'HEAD'；无锚同兜底并标注）
+    let baseRef = 'HEAD'
+    let anchorLabel = 'HEAD 未提交窗口（无锚点兜底）'
+    if (result.baseAnchor && /^[0-9a-f]{7,40}$/.test(result.baseAnchor)) {
+      baseRef = result.baseAnchor
+      anchorLabel = result.baseAnchor
+    } else if (result.baseAnchor === 'head-uncommitted-window') {
+      anchorLabel = 'HEAD 未提交窗口'
+    }
+
+    // 执行根：quick=会话创建根（防 cd 漂移）；full-flow=resolveDiffRoot 共享口径
+    let root = cwd
+    const sb = specBase || join(cwd, '.sillyspec')
+    if (result.mode === 'quick') {
+      const located = locateQuickSessionGuard(cwd, changeName)
+      if (located) root = dirname(located.specBase)
+    } else {
+      const form = existsSync(join(sb, '.runtime', 'worktrees', changeName, 'meta.json')) ? 'worktree' : 'post-apply'
+      root = resolveDiffRoot(sb, changeName, form, cwd)
+    }
+
+    const norm = toPosix(filePath)
+    const r = safeGit(root, ['diff', '--no-color', baseRef, '--', norm], { timeout: 30 * 1000 })
+    if (r.error) {
+      return { ok: false, mode: result.mode, root, baseRef, anchorLabel, diff: null, note: `git diff 执行失败: ${r.error}` }
+    }
+    const diff = r.value || ''
+    if (diff) return { ok: true, mode: result.mode, root, baseRef, anchorLabel, diff, note: null }
+    // 空 diff：窗口内未改 / untracked 新文件（git diff 不含 untracked）
+    if (existsSync(join(root, norm))) {
+      const tracked = safeGit(root, ['ls-files', '--', norm], { timeout: 15 * 1000 })
+      if (!tracked || !tracked.value || !tracked.value.trim()) {
+        return { ok: true, mode: result.mode, root, baseRef, anchorLabel, diff: null, note: '未跟踪新文件——不在 git diff 内，文件全部行为新增；直接查看文件本体' }
+      }
+    }
+    return { ok: true, mode: result.mode, root, baseRef, anchorLabel, diff: '', note: '该文件在此锚点窗口内无 diff（未改动）' }
+  } catch (e) {
+    return { ok: false, mode: 'full-flow', root: cwd, baseRef: null, anchorLabel: null, diff: null, note: `getFileDiff 内部异常: ${e && e.message ? String(e.message).split('\n')[0] : e}` }
   }
 }
 

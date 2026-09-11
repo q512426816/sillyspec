@@ -36,8 +36,11 @@ import { parseModuleMapSimple } from './modules.js'
  * 展开循环每次迭代必含括号段 → 划分唯一 → 线性。 */
 const REF_RE = /(?:repo:\/\/([A-Za-z0-9_.\-]+)\/)?([A-Za-z0-9_.\-\/]*(?:\([A-Za-z0-9_.\-\/]+\)[A-Za-z0-9_.\-\/]*)*\.(?:js|mjs|cjs|ts|tsx|jsx|py|java|go)):(\d+)(?:-(\d+))?/g
 
-/** 缺省扫描范围：docs/ + .sillyspec/docs/（scan/modules 产物同是文档，失效即该暴露；2026-08-16 用户裁决改缺省，见 doc-consistency-debt.md §八） */
-export const DEFAULT_DOC_PATHS = ['docs/**/*.md', '.sillyspec/docs/**/*.md']
+/** 缺省扫描范围：docs/ + .sillyspec/docs/（scan/modules 产物同是文档，失效即该暴露；2026-08-16 用户裁决改缺省，见 doc-consistency-debt.md §八）
+ * + .sillyspec/changes/ + .sillyspec/knowledge/（P1-1，noai-ir-roadmap §4：最活跃、最易产生
+ * 漂移引用的变更目录与决策库此前零校验——纳入后 verify/archive 收尾的 autoReanchorDocRefs
+ * 同时覆盖变更文档（archive/ 路径段与 doc_type: snapshot 双通道豁免不变，归档件不回检）。 */
+export const DEFAULT_DOC_PATHS = ['docs/**/*.md', '.sillyspec/docs/**/*.md', '.sillyspec/changes/**/*.md', '.sillyspec/knowledge/**/*.md']
 
 /**
  * 读 local.yaml 的 docs-check 段（best-effort，绝不抛；缺文件/无段 → 全缺省）。
@@ -74,6 +77,32 @@ export function readDocsCheckConfig(projectRoot) {
 export class DocsCheckConfigError extends Error {}
 
 /**
+ * 符号锚正则（P1-2，noai-ir-roadmap §4）：`file.js::symbol` 形态——校验时解析符号定义行，
+ * 天然免疫行号漂移（重锚从「每次代码移动」降为「仅改名时」）。文件段与 REF_RE 同款（含
+ * repo:// 跨仓前缀与括号路径组展开），`::` 后只认 ASCII 标识符（自然语言/中文括注不触发，
+ * QUICKLOG file-notes 的 `path::注` 约定因注解非标识符而天然互斥）。与 REF_RE 互斥：
+ * `::ident` 无数字不匹配行号式；`file.js:12` 无 `::` 不匹配符号式。
+ */
+const SYMBOL_REF_RE = /(?:repo:\/\/([A-Za-z0-9_.\-]+)\/)?([A-Za-z0-9_.\-\/]*(?:\([A-Za-z0-9_.\-\/]+\)[A-Za-z0-9_.\-\/]*)*\.(?:js|mjs|cjs|ts|tsx|jsx|py|java|go))::([A-Za-z_$][A-Za-z0-9_$]*)/g
+
+/**
+ * 符号定义行定位（与 classifyFix 的 defRe 同款形态，单一判定口径）：function/const/let/
+ * class/def（含 export/async 前缀）后的精确符号名。命中返回 1-based 行号；文件内仅
+ * 「使用」未「定义」（import 消费/注释提及）不算命中——符号锚指向定义文件。
+ * @param {string[]} lines 源文件行数组
+ * @param {string} symbol 符号名（须为合法标识符）
+ * @returns {number|null}
+ */
+export function findSymbolDefLine(lines, symbol) {
+  if (!Array.isArray(lines) || !symbol || !/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(symbol)) return null
+  const defRe = new RegExp(`(?:export\\s+)?(?:async\\s+)?(?:function\\*?\\s+|class\\s+|(?:const|let|var)\\s+|def\\s+)${escapeReLocal(symbol)}\\b`)
+  for (let i = 0; i < lines.length; i++) {
+    if (defRe.test(lines[i])) return i + 1
+  }
+  return null
+}
+
+/**
  * 纯函数：从 markdown 全文提取全部 file:line 引用。
  * @param {string} md 文档全文
  * @returns {Array<{ ref, file, start, end, docLine }>} docLine 为 1-based 文档行号
@@ -99,6 +128,22 @@ export function collectDocRefs(md) {
       start: parseInt(m[3], 10),
       end: m[4] !== undefined ? parseInt(m[4], 10) : parseInt(m[3], 10),
       docLine: line,
+    })
+  }
+  // 符号锚引用（P1-2）：独立正则二遍扫描（与行号式互斥，无重叠去重需求）。
+  // 符号式引用量级远小于行号式，docLine 逐个 O(index) 计算不构成退化面。
+  const symRe = new RegExp(SYMBOL_REF_RE.source, 'g')
+  let sm
+  while ((sm = symRe.exec(md)) !== null) {
+    refs.push({
+      ref: sm[0],
+      repo: sm[1] !== undefined ? sm[1] : null,
+      file: sm[2],
+      symbol: sm[3],
+      kind: 'symbol',
+      start: null,
+      end: null,
+      docLine: md.slice(0, sm.index).split('\n').length,
     })
   }
   return refs
@@ -452,6 +497,8 @@ export function runDocsCheck(opts) {
   let skippedExempt = 0
   // 模糊路径引用数（含 `...` 省略号，跳过校验——FR-1.2）
   let skippedFuzzy = 0
+  // 符号锚（P1-2）命中数（计入 total，单独计数供可见性）
+  let symbolChecked = 0
   // per-call 缓存：裸名引用的 src/ 全树扫描结果 + 候选文件行数组——100 文档 × 10 裸名引用
   // 此前 = 1000 次全树 walk + 同文件 N 次重读（2026-08-21 性能审查 PERF-5）。仅本次调用
   // 生命周期内有效，不跨调用（防测试流程中途改树后读到陈旧结果）
@@ -522,6 +569,24 @@ export function runDocsCheck(opts) {
         })
         continue
       }
+      // 符号锚（P1-2）：按「候选文件内存在符号定义行」判定——不校验行号（校验时解析，
+      // 行漂移天然免疫），层 2 关键词断言由符号本身命中自动满足。失效只可能是符号拼错/
+      // 文件归属错/符号被删改名——均非重锚能修，fix 显式不可自动。
+      if (r.kind === 'symbol') {
+        let hit = false
+        for (const candAbs of candidates) {
+          const lines = readLines(candAbs, linesCache)
+          if (lines === null) continue
+          if (findSymbolDefLine(lines, r.symbol) !== null) { hit = true; break }
+        }
+        if (hit) { symbolChecked++; continue }
+        invalid.push({
+          doc: docRel, docLine: r.docLine, ref: r.ref,
+          reason: `符号锚未命中：候选文件内无 \`${r.symbol}\` 的定义行（function/const/let/var/class/def 形态）——符号锚不随行号漂移，失效即符号拼错/归属错/已删改名`,
+          fix: { fixable: false, reason: '符号锚失效非重锚可修：核对符号拼写或文件归属（改名请同步文档符号）' },
+        })
+        continue
+      }
       // 多候选宽容：逐候选跑层1+层2，任一全过即通过
       const tokens = keywordAssert
         ? extractExpectedTokensFromLine(mdLines[r.docLine - 1] || '')
@@ -558,7 +623,7 @@ export function runDocsCheck(opts) {
     }
   }
 
-  return { ok: invalid.length === 0, total, invalid, warnings, kwChecked, crossRepoSkipped, skippedExempt, skippedFuzzy }
+  return { ok: invalid.length === 0, total, invalid, warnings, kwChecked, crossRepoSkipped, skippedExempt, skippedFuzzy, symbolChecked }
 }
 
 /**

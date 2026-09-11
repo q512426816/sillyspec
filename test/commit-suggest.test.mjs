@@ -121,7 +121,10 @@ console.log('--- 4. CLI：只建议不提交 ---')
   assert(res.status === 0, `exit 0（实际 ${res.status}）`)
   assert(out.includes('建议 commit message'), '输出建议 message')
   assert(out.includes('只建议不提交'), '明示不自动提交')
-  assert(out.includes('git add -A && git commit'), '给出可照抄命令')
+  // P1-6（noai-ir-roadmap §4）随规则 18：建议命令改显式 pathspec 形态（2026-09-10 目录级
+  // git add 事故后不再教 git add -A——共享仓会扫入并行会话文件）
+  assert(out.includes('git add --') && out.includes('git commit -m'), '给出可照抄命令（显式 pathspec 形态）')
+  assert(!out.includes('git add -A'), '不再教 git add -A（规则 18）')
   const headAfter = git(fx.cwd, ['rev-parse', 'HEAD'])
   const logCount = git(fx.cwd, ['rev-list', '--count', 'HEAD'])
   assert(logCount === '1', '未产生新 commit（确认权在人）')

@@ -542,22 +542,26 @@ describe('FR-05 decisionHits（matchKnowledge 旧四键不变 + rejected 优先�
 // ── 7. FR-03 归档中途兼容（archive definition 结构契约）────────────────────
 
 describe('FR-03 归档中途兼容（archive steps 按名匹配，新步骤为待执行增量）', () => {
-  it('六个步骤名序列，新步骤插在 sync-module-docs 与确认归档之间且 conditionalWait', async () => {
+  it('三步名序列（P0-4 全量并步）：distill noAI 前置 + 四语义步合并 + 确认归档保留', async () => {
     const { definition } = await import('../src/stages/archive.js')
     const names = definition.steps.map(s => s.name)
     assert.deepEqual(names, [
-      '任务完成度检查',
-      'extract-module-impact',
-      'sync-module-docs',
       'decision-distill 决策提炼',
+      'extract-module-impact 与归档语义收尾',
       '确认归档',
-      '更新路线图和提交',
-    ], '六步名序列（存量五步 + decision-distill 插入）')
+    ], '三步名序列（任务完成度检查/extract-module-impact/sync-module-docs/更新路线图和提交经 migratedFrom 合并）')
     const i = names.indexOf('decision-distill 决策提炼')
-    assert.ok(i > 0)
-    assert.equal(names[i - 1], 'sync-module-docs', '前驱 = sync-module-docs')
-    assert.equal(names[i + 1], '确认归档', '后继 = 确认归档')
-    assert.equal(definition.steps[i].conditionalWait, true, 'conditionalWait 先例（非 requiresWait 硬门）')
+    assert.equal(i, 0, 'distill 前置（noAI 先跑，needsWait 早暴露）')
+    assert.deepEqual(definition.steps[1].migratedFrom,
+      ['任务完成度检查', 'extract-module-impact', 'sync-module-docs', '更新路线图和提交'],
+      '合并步 migratedFrom 全列（按名吸收存量进度：全 completed 才继承）')
+    assert.equal(definition.steps[1].conditionalWait, true, '合并步保留 conditionalWait（sync-module-docs 先例）')
+    assert.ok(definition.steps[1].name.includes('extract-module-impact'), '名含 extract-module-impact（workflow post_check 按名内含零改动）')
+    assert.equal(definition.steps[2].requiresConfirm, true, '确认归档 requiresConfirm（diff 注视点，§2 边界）')
+    // P0-4 安全变体（noai-ir-roadmap §3）：conditionalWait 三段式退役，改 noAI + _cliAction
+    // ——needsWait 人工裁决收敛到「确认归档 --confirm」（归档用户裁决本就归那里）。
+    assert.equal(definition.steps[i].noAI, true, 'distill 步 noAI 化（提炼本体是 CLI 纯函数）')
+    assert.equal(definition.steps[i]._cliAction, 'archiveDistill', '_cliAction=archiveDistill')
   })
 
   it('归档暂存含 knowledge/decisions/（C-20 语义迁移：prompt 指令 → CLI stageArchiveArtifacts）；存量五步名未变', async () => {
@@ -565,9 +569,9 @@ describe('FR-03 归档中途兼容（archive steps 按名匹配，新步骤为�
     const { stageArchiveArtifacts } = await import('../src/git-helper.js')
     const names = definition.steps.map(s => s.name)
     const last = definition.steps[definition.steps.length - 1]
-    assert.equal(last.name, '更新路线图和提交')
-    // C-20 原「末步 prompt 补 decisions git add 指令」——2026-09-05 全流程审计后该职责
-    // 迁至 CLI（归档完成时自动暂存三路径），prompt 改为声明「CLI 已自动完成」。
+    assert.equal(last.name, '确认归档', 'P0-4 并步后确认归档为末步（更新路线图并入语义收尾步 ④）')
+    // C-20 原「末步 prompt 补 decisions git add 指令」——职责迁至 CLI（归档完成时自动暂存
+    // 三路径），prompt 声明「CLI 已自动完成」。P0-4 并步后该声明随末步职责落在确认归档。
     assert.ok(last.prompt.includes('CLI 自动完成') && last.prompt.includes('knowledge/decisions/'),
       '末步 prompt 声明 CLI 自动暂存（含 decisions 路径说明）')
     assert.ok(!last.prompt.includes('git add .sillyspec'), 'agent 不再手动 git add（职责已迁移）')
@@ -582,9 +586,9 @@ describe('FR-03 归档中途兼容（archive steps 按名匹配，新步骤为�
       assert.ok(r.skipped.some(p => p.replaceAll('\\', '/').endsWith('knowledge/decisions')),
         `stageArchiveArtifacts 候选含 knowledge/decisions/（实际 ${JSON.stringify(r.skipped)}）`)
     } finally { rmSync(mk, { recursive: true, force: true }) }
-    assert.deepEqual(names.filter(n => n !== 'decision-distill 决策提炼'),
-      ['任务完成度检查', 'extract-module-impact', 'sync-module-docs', '确认归档', '更新路线图和提交'],
-      '存量五步名与顺序未变（按名匹配兼容已过 sync-module-docs 的在途变更）')
+    assert.deepEqual(names,
+      ['decision-distill 决策提炼', 'extract-module-impact 与归档语义收尾', '确认归档'],
+      '三步名与顺序（确认归档精确名匹配，四旧步经合并步 migratedFrom 吸收）')
   })
 })
 

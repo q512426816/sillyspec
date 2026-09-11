@@ -55,8 +55,8 @@ async function writeProgress(projectDir, changeName, progress) {
 console.log('\n=== Test 1: sync-module-docs 步骤 conditionalWait（非 requiresWait 硬门） ===')
 {
   const { stageRegistry } = await imp(join(root, 'src', 'stages', 'index.js'))
-  const step = stageRegistry.archive.steps.find(s => s.name === 'sync-module-docs')
-  assert(!!step, 'archive 有 sync-module-docs 步骤')
+  const step = stageRegistry.archive.steps.find(s => s.name === 'extract-module-impact 与归档语义收尾')
+  assert(!!step, 'archive 有归档语义收尾步（P0-4 并步吸收旧 sync-module-docs，conditionalWait 语义保留）')
   assert(step.conditionalWait === true, `conditionalWait===true（实际 ${step.conditionalWait}）——常规路径直接 --done`)
   assert(step.requiresWait !== true, `requiresWait 硬门已撤（实际 ${step.requiresWait}）——坑 archive-subconfirm-redundant`)
 }
@@ -77,8 +77,8 @@ console.log('\n=== Test 2: 常规路径直接 --done 推进（无子确认） ==
   run(`node "${binCLI}" --dir "${projectDir}" run archive --change ${changeName}`)
   const p = await readProgress(projectDir, changeName)
   const sd = p.stages.archive
-  const syncIdx = sd.steps.findIndex(s => s.name === 'sync-module-docs')
-  assert(syncIdx !== -1, '找到 sync-module-docs 步骤')
+  const syncIdx = sd.steps.findIndex(s => s.name === 'extract-module-impact 与归档语义收尾')
+  assert(syncIdx !== -1, '找到归档语义收尾步（原 sync-module-docs 语义并入）')
   for (let i = 0; i < syncIdx; i++) {
     sd.steps[i].status = 'completed'; sd.steps[i].completedAt = new Date().toISOString()
   }
@@ -113,7 +113,7 @@ console.log('\n=== Test 3: 异常路径 --wait → --continue --answer → pendi
   const sd = p.stages.archive
   assert(sd && sd.steps, 'archive steps 已初始化')
 
-  const syncIdx = sd.steps.findIndex(s => s.name === 'sync-module-docs')
+  const syncIdx = sd.steps.findIndex(s => s.name === 'extract-module-impact 与归档语义收尾')
   for (let i = 0; i < syncIdx; i++) {
     sd.steps[i].status = 'completed'; sd.steps[i].completedAt = new Date().toISOString()
   }

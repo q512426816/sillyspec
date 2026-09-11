@@ -24,6 +24,7 @@ import {
   FACTS_SCHEMA_VERSION, EVIDENCE_SLOT_HEADING, RECEIPT_SLOT_HEADING, parseEvidenceSlots,
 } from './verify-facts-schema.js'
 import { parseFileChangeListDetailed } from './change-list.js'
+import { parseDecisions } from './decision-distill.js'
 import { parseAllowedPaths } from './stages/plan-postcheck.js'
 import { verifyApiParity, _readWorktreeMeta } from './contract-matrix.js'
 import { splitOwnVsForeignDiffFiles } from './foreign-declared.js'
@@ -500,6 +501,108 @@ export function backfillMissingEvidenceSlots(mdPath, requiredEvidenceItems = [])
     writeFileSync(mdPath, normalized.replace(/\n?$/, '\n') + blocks.join('\n') + '\n')
   }
   return { added }
+}
+
+/**
+ * 结论草稿槽行预填（P0-1 前置三，noai-ir-roadmap §3）：机械事实全绿时把骨架「结论枚举：」
+ * 待填槽替换为 PASS 草稿——显式「草稿待确认」内联标注（非默认值语义），agent 复核后可改写；
+ * gate 对槽行的独立复核逻辑不经本函数（判定链不动，预填只省打字成本）。纯文本变换三态：
+ * 槽行未填（仍含「待填」）→ 改写；已填（任何枚举值）→ 原样返回；无槽行（legacy 存量）→
+ * 原样返回。改写后槽行满足 extractVerifyConclusionSlot 行首锚定枚举解析（返回 PASS）。
+ */
+export function applyConclusionDraftToText(text, draft = 'PASS') {
+  const normalized = String(text).replace(/\r\n/g, '\n')
+  const lines = normalized.split('\n')
+  for (let i = 0; i < lines.length; i++) {
+    if (/^结论枚举：/.test(lines[i]) && lines[i].includes('待填')) {
+      lines[i] = `结论枚举：${draft}（🤖 CLI 草稿待确认——机械事实全绿自动预填：noAI 实测通过 + 探针 1/3/5/6 干净 + 风险门非 integration/deployment；复核后不同意即改写本行枚举值，gate 独立复核不受预填影响）`
+      return lines.join('\n')
+    }
+  }
+  return text
+}
+
+/**
+ * 决策追踪矩阵机械半边（P0-1，noai-ir-roadmap §3）：D→FR→task 链自结构化字段构建——
+ * decisions.md 条目（parseDecisions 双格式解析，与 distill 同源单一实现）× tasks/task-NN.md
+ * frontmatter 的 decision_ids / requirement_ids（taskcard 9 硬校验字段，CLI 骨架写入——比
+ * tasks.md 行内注解可靠）。Evidence / 状态两列是人工判断置 <待填>；D 无 task 回指 →
+ * ⚠️ 未闭环显式列出（这正是矩阵要暴露的风险，不静默）。
+ * @returns {{ rows: string[], decisionCount: number, taskCount: number }|null}
+ *   null = 无 decisions.md / 解析 0 条（矩阵段留 TODO 不注入）
+ */
+export function buildDecisionChainMatrix(changeDir) {
+  let decisions
+  try {
+    decisions = parseDecisions(changeDir)
+  } catch {
+    return null
+  }
+  if (!decisions || decisions.missing || (decisions.entries || []).length === 0) return null
+  // task 卡 frontmatter 结构化字段反查（列表 [a, b] 形态；frontmatter 由 plan-postcheck 硬校验）
+  const taskRefs = []
+  const tasksDir = join(changeDir, 'tasks')
+  try {
+    if (existsSync(tasksDir)) {
+      for (const f of readdirSync(tasksDir).filter((f) => /^task-\d+\.md$/.test(f)).sort()) {
+        const raw = readFileSync(join(tasksDir, f), 'utf8')
+        const id = (raw.match(/^id:\s*(\S+)/m) || [])[1] || f.replace(/\.md$/, '')
+        const decLine = (raw.match(/^decision_ids:\s*\[([^\]]*)\]/m) || [])[1] || ''
+        const reqLine = (raw.match(/^requirement_ids:\s*\[([^\]]*)\]/m) || [])[1] || ''
+        taskRefs.push({
+          task: id,
+          decisions: new Set(decLine.split(',').map((s) => s.trim()).filter(Boolean)),
+          reqs: new Set(reqLine.split(',').map((s) => s.trim()).filter(Boolean)),
+        })
+      }
+    }
+  } catch { /* tasks 目录不可读 → 矩阵 task 列全标未闭环（信息仍在） */ }
+  const rows = []
+  for (const d of decisions.entries) {
+    // task 卡 decision_ids 可能写 D-001（无 @vN）——id 与 number 双匹配同源
+    const hitTasks = taskRefs.filter((t) => t.decisions.has(d.id) || t.decisions.has(d.number))
+    const frs = [...new Set(hitTasks.flatMap((t) => [...t.reqs]))].sort()
+    const taskCell = hitTasks.length > 0 ? hitTasks.map((t) => t.task).join('、') : '⚠️ 未闭环（无 task 回指）'
+    const frCell = frs.length > 0 ? frs.join('、') : '⚠️ 未映射'
+    rows.push(`| ${d.id} | ${frCell} | ${taskCell} | <待填：证据回指> | <待填> |`)
+  }
+  return { rows, decisionCount: decisions.entries.length, taskCount: taskRefs.length }
+}
+
+/**
+ * 矩阵机械半边注入 verify-result.md（--init 接线）：只在「决策追踪矩阵」段内仍是骨架
+ * TODO 行（含 D-xxx 形态）且段内无既有表格时替换注入——幂等（agent 已写/前次注入零改动），
+ * 不触碰正文其余部分。落盘失败 fail-soft 返回 null。
+ * @returns {{ decisions: number, tasks: number }|null} null = 无 decisions/无可替换 TODO/已注入
+ */
+export function injectDecisionChainDraft(mdPath, changeDir) {
+  let text
+  try { text = readFileSync(mdPath, 'utf8') } catch { return null }
+  const headingIdx = text.indexOf('## 决策追踪矩阵')
+  if (headingIdx === -1) return null
+  const nextHeading = text.indexOf('\n## ', headingIdx + 1)
+  const sectionEnd = nextHeading === -1 ? text.length : nextHeading
+  const section = text.slice(headingIdx, sectionEnd)
+  if (/^\|/m.test(section)) return null // 已有表格 → 尊重既有内容
+  const todoRe = /<!--TODO:[^\n]*D-xxx[^\n]*-->/
+  if (!todoRe.test(section)) return null // 无骨架 TODO（手写正文）→ 不动
+  const matrix = buildDecisionChainMatrix(changeDir)
+  if (!matrix || matrix.rows.length === 0) return null
+  const block = [
+    '<!-- 机械半边预填（CLI，P0-1）：D→FR→task 链自 decisions.md × tasks/*.md frontmatter 结构化字段构建；',
+    '     Evidence / 状态两列是人工判断——逐格复核，未闭环行必须在报告标注风险 -->',
+    '| 决策 ID | FR | Task | Evidence | 状态 |',
+    '|---|---|---|---|---|',
+    ...matrix.rows,
+  ].join('\n')
+  const next = text.slice(0, headingIdx) + section.replace(todoRe, block) + text.slice(sectionEnd)
+  try {
+    writeFileSync(mdPath, next)
+  } catch (e) {
+    console.warn(`⚠️ 决策追踪矩阵预填落盘失败（fail-soft）: ${e && e.message ? e.message : e}`)
+    return null
+  }
+  return { decisions: matrix.decisionCount, tasks: matrix.taskCount }
 }
 
 /**

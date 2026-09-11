@@ -151,12 +151,12 @@ test('② 旧 5 步表漂移：--done --confirm 首跑 fail-closed 指引重跑�
 
   const r1 = runCli(fx, ['run', 'archive', '--done', '--confirm', '--output', '确认归档', '--change', name])
   assert.notEqual(r1.status, 0, '首跑应中止（fail-closed），--confirm 不被耗在新插入的中间步骤')
-  assert.match(r1.stdout + r1.stderr, /当前步骤由「确认归档」变为「sync-module-docs」/, '显式告知当前步身份变化')
+  assert.match(r1.stdout + r1.stderr, /当前步骤由「确认归档」变为「extract-module-impact 与归档语义收尾」/, '显式告知当前步身份变化（P0-4 三步表：旧表 4 步名未全完成 → 合并步 pending 为首个待办）')
   assert.match(r1.stdout + r1.stderr, /原样重跑同一命令/, '指引原样重跑（原 flags 生效）')
 
   const r2 = runCli(fx, ['run', 'archive', '--done', '--confirm', '--output', '同步完成', '--change', name])
   assert.equal(r2.status, 0, '重跑按新步骤表正常完成首个 pending（sync-module-docs）')
-  assert.match(r2.stdout, /Step 3\/6 完成：sync-module-docs/, '重播种后的中间步骤被正确完成')
+  assert.match(r2.stdout, /Step 2\/3 完成：extract-module-impact 与归档语义收尾/, '重播种后的首个 pending（合并步）被正确完成')
 })
 
 test('② 「确认归档」步完成提示带 --confirm（requiresConfirm 数据驱动）', async () => {
@@ -170,6 +170,6 @@ test('② 「确认归档」步完成提示带 --confirm（requiresConfirm 数�
 
   const r = runCli(fx, ['run', 'archive', '--change', name])
   assert.equal(r.status, 0, '步骤 prompt 渲染成功')
-  assert.match(r.stdout, /Step 5\/6: 确认归档/, '当前为第 5 步确认归档')
+  assert.match(r.stdout, /Step 3\/3: 确认归档/, '当前为第 3 步（末步）确认归档')
   assert.match(r.stdout, /run archive --done --confirm --change/, '完成后执行提示带 --confirm（修复前通用模板不带，agent 照抄撞确认门）')
 })

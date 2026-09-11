@@ -87,18 +87,16 @@ export async function rebuildModuleMap(cwd, { force = false } = {}) {
     }
   }
 
-  // 解析现有 _module-map.yaml 保留已有字段（复用 parseModuleMapSimple：原内置解析只收模块名、
-  // 从不收集列表项 → existingPaths 恒空 → --force 重建后 core_files 全丢，scan-diff scope 退化
-  // 为全量、module-impact classifyFile 全 unmatched——注释声称的「从已有 map 保留」名存实亡）
+  // 解析现有 _module-map.yaml（复用 parseModuleMapSimple canonical 解析）。P2-c
+  //（noai-ir-roadmap §5 字段分离）：existing 条目**全字段**整体保留——merge 语义下
+  // rebuild 只做「补缺 + 增新卡」，--force 不再可能清空 tags/main_symbols/depends_on/
+  // used_by/status/needs_review 等人工维护字段（旧版只保 3 个列表字段，实例 map 文件头
+  // 常年挂着「勿跑 rebuild --force 会清空手动维护」的警告——该警告随本变更退役）。
   let existingModules = {};
   if (existingMap) {
     const parsed = parseModuleMapSimple(existingMap);
     for (const [id, fields] of Object.entries(parsed || {})) {
-      existingModules[id] = {
-        core_files: Array.isArray(fields.core_files) ? fields.core_files : [],
-        test_files: Array.isArray(fields.test_files) ? fields.test_files : [],
-        entrypoints: Array.isArray(fields.entrypoints) ? fields.entrypoints : [],
-      };
+      existingModules[id] = { ...(fields || {}) };
     }
   }
 
@@ -132,53 +130,67 @@ export async function rebuildModuleMap(cwd, { force = false } = {}) {
     ...cards.map(c => c.moduleId)
   ]);
 
+  // ── P2-c merge 语义发射：existing 全字段优先（人工维护不丢）→ 卡片补缺 → 骨架默认垫底 ──
+  const stripQuotes = (v) => String(v).replace(/^"|"$/g, '')
   for (const moduleId of allModuleIds) {
     const card = cards.find(c => c.moduleId === moduleId);
     const cardContent = card?.content || '';
 
     // 从模块卡片提取 context index 字段
     const role = extractSection(cardContent, '定位') || '';
-    const contract = extractSection(cardContent, '契约摘要') || '';
-    const logic = extractSection(cardContent, '关键逻辑') || '';
-    const notes = extractSection(cardContent, '注意事项') || '';
+
+    const existing = existingModules[moduleId] || {};
+    const merged = {
+      // 骨架默认（垫底）
+      status: 'active',
+      doc: `modules/${(card && card.filename) || moduleId + '.md'}`,
+      needs_review: false,
+      review_reasons: [],
+      risk_level: 'low',
+      verify_commands: [],
+      related_docs: [],
+      // existing 全字段覆盖（人工维护优先）
+      ...existing,
+    }
+    // 卡片补缺：role 仅当 existing 没有时从卡片取；doc 在卡片在场时以卡片文件名为准
+    //（existing.doc 可能指向已改名的旧文件）；卡片不在场则保留 existing.doc
+    if (!merged.role && role) merged.role = role
+    if (card) merged.doc = `modules/${card.filename}`
 
     yaml += `  ${moduleId}:\n`;
-    yaml += `    status: active\n`;
-    if (card) yaml += `    doc: modules/${card.filename}\n`;
-    else yaml += `    doc: modules/${moduleId}.md\n`;
-    yaml += `    needs_review: false\n`;
-    yaml += `    review_reasons: []\n`;
-    // context index 字段（v2）
-    if (role) yaml += `    role: "${escapeYamlString(role)}"\n`;
-    // core_files / test_files / entrypoints 从已有 _module-map.yaml 全量保留（列表项级保真）
-    const existing = existingModules[moduleId] || {};
-    for (const [field, items] of [['core_files', existing.core_files], ['test_files', existing.test_files], ['entrypoints', existing.entrypoints]]) {
-      if (Array.isArray(items) && items.length > 0) {
-        yaml += `    ${field}:\n`;
-        for (const p of items) yaml += `      - ${p}\n`;
-      }
+    for (const k of ['status', 'doc', 'needs_review']) {
+      if (merged[k] !== undefined) yaml += `    ${k}: ${typeof merged[k] === 'boolean' ? merged[k] : merged[k]}\n`;
     }
-    if (card) yaml += `    verify_commands: []\n`;
-    yaml += `    risk_level: low\n`;
-    if (contract || logic) yaml += `    related_docs: []\n`;
+    if (merged.role) yaml += `    role: "${escapeYamlString(stripQuotes(merged.role))}"\n`;
+    // 列表字段全量保真（existing 用什么字段名就保什么——paths/core_files 双形态兼容读者）
+    for (const k of ['paths', 'core_files', 'test_files', 'entrypoints', 'main_symbols', 'tags', 'aliases', 'depends_on', 'used_by', 'review_reasons', 'related_docs', 'verify_commands']) {
+      const items = merged[k];
+      if (items === undefined) continue;
+      if (Array.isArray(items) && items.length === 0) { yaml += `    ${k}: []\n`; continue }
+      if (!Array.isArray(items) || items.length === 0) continue;
+      yaml += `    ${k}:\n`;
+      for (const p of items) yaml += `      - ${p}\n`;
+    }
+    if (merged.risk_level !== undefined) yaml += `    risk_level: ${merged.risk_level}\n`;
     yaml += `\n`;
   }
 
-  // 破坏性保护（multi-agent-platform 坑 modules-rebuild-destructive）：默认 dry-run 只预览不写，--force 才覆盖。
+  // 写入保护（multi-agent-platform 坑 modules-rebuild-destructive）：默认 dry-run 只预览不写。
+  // P2-c 后 --force 为 merge 语义（手动字段全量保留），但重写仍会刷新 generated_at/source_commit
+  // 与排版——dry-run 预览默认保留，确认写入用 --force。
   if (!force && existingMap) {
-    console.log('⚠️  rebuild 默认不写入（破坏性保护）：该命令会覆盖 _module-map.yaml，清空 tags/entrypoints/main_symbols/depends_on/used_by 等手动维护字段');
-    console.log('    本次为预览，未写入磁盘。确认覆盖请运行：sillyspec modules rebuild --force');
+    console.log('⚠️  rebuild 默认不写入（预览保护）。--force 为 merge 语义：existing 全字段保留（tags/main_symbols/depends_on/used_by/status/needs_review 等手动维护字段不丢），只补缺 + 增新卡');
+    console.log('    本次为预览，未写入磁盘。确认写入请运行：sillyspec modules rebuild --force');
     return { dryRun: true, path: mapPath }
   }
 
   writeFileSync(mapPath, yaml, 'utf8');
-  console.log(`✅ _module-map.yaml 已重建：${mapPath}`);
+  console.log(`✅ _module-map.yaml 已重建（merge 语义）：${mapPath}`);
   console.log(`   模块数量：${allModuleIds.size}`);
   for (const id of allModuleIds) {
     console.log(`   - ${id}`);
   }
-  console.log(`\n⚠️  注意：rebuild 只重建骨架。tags/entrypoints/main_symbols/depends_on/used_by 需要重新运行 scan 或手动补充。`);
-  console.log(`ℹ️  schema 已升级到 v2，支持 role/core_files/test_files/entrypoints/depends_on/risk_level/verify_commands 等字段。`);
+  console.log(`\nℹ️  手动维护字段（tags/entrypoints/main_symbols/depends_on/used_by/status/needs_review 等）已全量保留；rebuild 只补缺与增新卡。`);
   return { dryRun: false, path: mapPath, modules: allModuleIds.size }
 }
 

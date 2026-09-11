@@ -19,6 +19,7 @@
 import { join } from 'node:path'
 import { existsSync, readFileSync, mkdirSync, writeFileSync, appendFileSync } from 'node:fs'
 import { writeAtomicSync } from '../fs-atomic.js'
+import { gitQuiet } from '../git-helper.js'
 import { withFileLock } from '../quicklog.js'
 import { triggerSync, WAIT_MARKER_RE, getStageSteps, formatWaitOptions, resolveRuntimeRoot, getOrCreateMultiRepoContext, resolveChangeDir } from './shared.js'
 
@@ -48,7 +49,6 @@ import { formatExecuteSummary } from '../worktree-apply.js'
 import { validateDecisionModuleRefs } from '../design-facts.js'
 import { isEndToEndTaskText } from '../change-risk-profile.js'
 import { deriveTitleFromLinkedChange } from '../quicklog.js'
-import { gitQuiet } from '../git-helper.js'
 
 // validateMetadata / readDesignScale / validateFileLocations 已迁至 ./gates.js（completeStageGates
 // 共享收尾管线，消除 noAI 末步 / continueStep 完成分支绕过 gate 的 S1/S2/S3 不对称）。
@@ -95,6 +95,26 @@ export function resolveWaitingStepWithAnswer(steps, doneAnswer, nowStr) {
   ws.status = 'pending'
   ws.completedAt = null
   return waitIdx
+}
+
+/**
+ * 事实性步骤摘要合成（P0-2，noai-ir-roadmap §3）：--output 省略时由 CLI 按既有事实合成
+ * ——步骤名 + 变更窗口（git porcelain 计数与前几个路径）+ 门禁以 CLI 校验输出为准。
+ * 纯事实零编造（无「通过/成功」等判断词——判断在 gate，不在摘要）；语义性说明（方案
+ * 取舍/用户反馈）不合成，摘要自带手写指引。长度控制在 MAX_OUTPUT(200) 截断线内。
+ */
+export function synthesizeStepOutput({ stageName, stepName, cwd }) {
+  let windowNote = ''
+  try {
+    const porcelain = gitQuiet(cwd, ['status', '--porcelain'])
+    if (porcelain !== null) {
+      const paths = porcelain.split('\n').filter(Boolean).map((l) => (l.slice(3) || '').trim()).filter(Boolean)
+      windowNote = paths.length === 0
+        ? '；工作区无未提交变更'
+        : `；变更窗口 ${paths.length} 文件（${paths.slice(0, 3).map((p) => p.split(/[\\/]/).pop()).join('、')}${paths.length > 3 ? ' 等' : ''}）`
+    }
+  } catch { /* git 不可读 → 窗口段缺省（摘要仍成立） */ }
+  return `【CLI 合成】步骤「${stepName}」完成${windowNote}；门禁以本次 CLI 校验输出为准（方案取舍等语义说明需 --output 手写）`
 }
 
 export async function completeStep(pm, progress, stageName, cwd, outputText, inputText = null, options = {}) {
@@ -157,6 +177,16 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
   if (_resolvedWaitIdx !== -1) {
     currentIdx = _resolvedWaitIdx
     console.log(`⚠️  Step "${steps[_resolvedWaitIdx].name}" 此前处于 waiting，--done --answer 已补回答并拉回待完成。`)
+  }
+
+  // ── P0-2（noai-ir-roadmap §3）：--output 省略 → CLI 按事实合成步骤摘要 ──
+  // agent 手打摘要是每步命中的幻觉源；事实面（步骤名 + 变更窗口 + 门禁以 CLI 校验为准）
+  // CLI 本就持有，纯事实合成零编造（判断词留给 gate）。语义性说明（方案取舍/用户反馈）仍应
+  // --output 手写——合成摘要自带该指引。quick 阶段除外（末步四字段硬契约
+  // validateQuickResult，合成文本过不了四字段校验；quick 的省略提示由其阶段文案承担）。
+  if (!outputText && stageName !== 'quick' && currentIdx !== -1 && steps[currentIdx]) {
+    outputText = synthesizeStepOutput({ stageName, stepName: steps[currentIdx].name, cwd })
+    console.log(`🤖 --output 未提供——CLI 已按事实合成步骤摘要（gate 校验照常；方案取舍等语义说明下次带 --output 手写）。`)
   }
   // ── waiting 前置守卫（坑 archive-step3-wait-answer-hint-late）──
   // 普通 --done（无 --answer）时若存在 waiting 步骤：currentIdx 会跳过它推进后续步骤
@@ -380,6 +410,16 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
     } else if (_cliAction === 'progressConfirm') {
       // 与 stage.js noAI 分支同语义（brainstorm/execute/verify step1 进度确认）
       executeProgressConfirm({ stageName, cwd, stageData, changeName, pm })
+    } else if (_cliAction === 'verifyRunQualityScan') {
+      // 与 stage.js noAI 分支同语义（P0-1 noai-ir-roadmap §3：verify 测试步实测提前 + 指纹复用；
+      // 失败 throw → completeStep 不推进，步骤保持 pending）
+      const { executeVerifyQualityScan } = await import('./verify-quality-scan.js')
+      await executeVerifyQualityScan({ cwd, specBase, changeName, platformOpts })
+    } else if (_cliAction === 'archiveDistill') {
+      // 与 stage.js noAI 分支同语义（P0-4 安全变体：distill 提炼 CLI 机械执行，needsWait 裁决
+      // 收敛到「确认归档 --confirm」；全路径不抛）
+      const { executeArchiveDistill } = await import('./archive-distill.js')
+      await executeArchiveDistill({ cwd, specBase, changeName })
     } else if (_cliAction === 'doctorRunDiagnostics') {
       // 2026-09-09-doctor-noai：与 stage.js 分支同语义（诊断+渲染+落盘）
       const { runDoctorDiagnostics, renderDoctorSummary, writeDoctorDiagnosis } = await import('../doctor-diagnostics.js')
@@ -952,7 +992,7 @@ export function shouldAutoCheckTask(r, endToEnd, ctx = null) {
 
   return true
 }
-async function autoCheckPlanFromReviews({ stageName, changeName, cwd, platformOpts }) {
+export async function autoCheckPlanFromReviews({ stageName, changeName, cwd, platformOpts }) {
   if (stageName !== 'execute' || !changeName) {
     return { autoChecked: false, checkedCount: 0, skippedCount: 0 }
   }
