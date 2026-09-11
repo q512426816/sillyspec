@@ -152,6 +152,11 @@ console.log('\n#4 worktree junction 解链 fail-loud（cleanup + _doctorReprovis
 // ────────────────────────────────────────────────────────────────────────────
 // #1 cleanup lstatSync EPERM → throw「junction 检测失败」+ git worktree remove 未被调
 // ────────────────────────────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────────────────────
+// 注：cleanup 用例统一 force:true——fixture 不写 meta.json，2026-09-11 安全包后 hasUnappliedChanges
+// 对无 meta 保守保留（blocked），未落仓闸行为由 security-batch-fixes.test.mjs 单独锁；本文件
+// 只测 junction 解链 fail-loud，force 跳闸不影响解链时序断言。
+// ────────────────────────────────────────────────────────────────────────────
 {
   const { wm, tmpBase } = makeFixture()
   resetCounters()
@@ -159,7 +164,7 @@ console.log('\n#4 worktree junction 解链 fail-loud（cleanup + _doctorReprovis
   execSyncImpl = () => undefined
 
   assertThrows(
-    () => wm.cleanup(CHANGE, { maxRetries: 1 }),
+    () => wm.cleanup(CHANGE, { maxRetries: 1, force: true }),
     /junction 检测失败/,
     '#1 cleanup lstatSync EPERM → throw「junction 检测失败」',
   )
@@ -183,7 +188,7 @@ console.log('\n#4 worktree junction 解链 fail-loud（cleanup + _doctorReprovis
   unlinkImpl = () => { throw new Error('unlink: EPERM（目录被占用）') }      // POSIX 解链失败
 
   assertThrows(
-    () => wm.cleanup(CHANGE, { maxRetries: 1 }),
+    () => wm.cleanup(CHANGE, { maxRetries: 1, force: true }),
     /junction 解链失败/,
     '#2 cleanup junction 解链失败 → throw「解链失败」',
   )
@@ -208,7 +213,7 @@ console.log('\n#4 worktree junction 解链 fail-loud（cleanup + _doctorReprovis
 
   let result
   try {
-    result = wm.cleanup(CHANGE, { maxRetries: 1 })
+    result = wm.cleanup(CHANGE, { maxRetries: 1, force: true })
     assert(true, '#3 cleanup 正常 junction → 不 throw（正常返回）')
   } catch (e) {
     assert(false, `#3 cleanup 正常 junction 不应抛错（${(e && e.message) || e}）`)
@@ -234,7 +239,7 @@ console.log('\n#4 worktree junction 解链 fail-loud（cleanup + _doctorReprovis
 
   let result
   try {
-    result = wm.cleanup(CHANGE, { maxRetries: 1 })
+    result = wm.cleanup(CHANGE, { maxRetries: 1, force: true })
     assert(true, '#4 cleanup 非 junction → 不 throw（正常返回）')
   } catch (e) {
     assert(false, `#4 cleanup 非 junction 不应抛错（${(e && e.message) || e}）`)

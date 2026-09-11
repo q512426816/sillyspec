@@ -1,0 +1,94 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-c6a7c731",
+  "totals": {
+    "files": 9,
+    "additions": 113,
+    "deletions": 45
+  },
+  "rows": [
+    {
+      "path": "src/hooks/worktree-guard.js",
+      "declared": true,
+      "additions": 36,
+      "deletions": 6,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/progress/change-registry.js",
+      "declared": true,
+      "additions": 15,
+      "deletions": 9,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/progress/consistency-doctor.js",
+      "declared": true,
+      "additions": 3,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/progress/stage-machine.js",
+      "declared": true,
+      "additions": 3,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/progress/step-store.js",
+      "declared": true,
+      "additions": 30,
+      "deletions": 17,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/run/shared.js",
+      "declared": true,
+      "additions": 8,
+      "deletions": 4,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/worktree.js",
+      "declared": true,
+      "additions": 6,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/worktree-has-unapplied-changes.test.mjs",
+      "declared": false,
+      "additions": 3,
+      "deletions": 2,
+      "kind": "modified",
+      "attribution": "soft"
+    },
+    {
+      "path": "test/worktree-junction-fail-loud.test.mjs",
+      "declared": false,
+      "additions": 9,
+      "deletions": 4,
+      "kind": "modified",
+      "attribution": "soft"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "qlId": "ql-20260911-030-bad4",
+  "sessionId": "quick-c6a7c731",
+  "savedAt": "2026-09-11T16:03:18.330Z",
+  "patchSha256": "1ffc9040720bb73a09db591e8d3aee6c7ccb48a95e04afcf5e4dd8f7ced983ae",
+  "patchStatus": "ok"
+}

@@ -343,3 +343,22 @@
 根因：全仓审查确认的 P1/P2 缺陷：① next --apply 用 ESM 未定义的 __dirname 必崩；② binSelf 子进程路径 URL pathname 不 decode 且 ../bin 少一级、--wait-interactive 未注册 knownFlags 致 FR-03 整条死路（两项绑定修）；③ skipStep/waitStep findIndex 漏 blocked（completeStep:152 修过但未同步，blocked 后错步记账且卡死）；④ Makefile 解析 \s* 吞换行两失效模式可致门禁假通过；⑤ doctor 分块正则 \w 双重转义整文件当一块 needs_review 漏检；⑥ modules resolve --json 查 filteredArgs 恒 false 机器输出死路。触及 run/command.js 与 run/complete.js 两门禁本体文件——修复即门禁自身缺陷、全量测试绿，按解锁通道走 --force-baseline
 方案：index.js:841 改 fileURLToPath；command.js binSelf 提为导出 resolveBinSelfPath()（fileURLToPath + ../../bin 层级修正）并补注册 --wait-interactive；complete.js 两处谓词纳入 blocked + skip 对 blocked 步输出指引；local-detect.js parseMakefileTestCommand 重写行扫描（行内按 make 语义是 prereq 回退 make test，新增 ; 同行配方，排除 test := 变量，配方边界=下一非缩进行）；doctor-diagnostics.js 转义修正+导出；index.js modules --json 改用顶层 json 变量。新增 test/urgent-batch-fixes.test.mjs 24 用例回归；local-detect.test.mjs Case 4 期望随 prereq 语义修正；四个模块卡 changelog sidecar 追加条目
 结果：新测试 24/24 通过；全量 441 文件 0 失败；lint 571 文件绿（CLI --done 门禁实测通过）
+
+## ql-20260911-030-bad4 | 2026-09-11 23:45:33 | 审查报告安全包五项修复（guard 收口/cleanup fail-closed/updateStep 事务/zh-CN 时间戳/checkApproval u…
+状态：已完成
+关联变更：（无）
+文件：
+- src/hooks/worktree-guard.js（branch/worktree 参数化收口+dangerBlockHint）
+- src/worktree.js（no-meta 保守 true）
+- src/progress/step-store.js（事务收口+复查）
+- src/progress/stage-machine.js,src/progress/consistency-doctor.js（ISO 时间戳）
+- src/progress/change-registry.js（解析侧取最新）
+- src/run/shared.js（checkApproval unknown+测试缝）
+- test/worktree-has-unapplied-changes.test.mjs（软归属·同模块测试，未声明）
+- test/worktree-junction-fail-loud.test.mjs（软归属·同模块测试，未声明）
+需求：审查报告安全包五项修复（guard 收口/cleanup fail-closed/updateStep 事务/zh-CN 时间戳/checkApproval unknown）
+根因：全仓审查确认的丢代码/丢数据向量与静默放行缺陷：① guard 按子命令名整类放行 branch/worktree，git branch -D 可删审计分支（task review base/head 引用悬空）、裸 bash git worktree remove --force 绕过 CLI 全部防护；② cleanup 对 meta 缺误报无未落变更直接 force 删（与 create 幽灵分支防护不对称）；③ updateStep id 事务外查询遇 _write 重插致并发 UPDATE 0 行静默假成功、阶段完成在 validator 15s 窗口后盲提交；④ zh-CN 时间戳 '/' 恒盖 ISO '-' 使时近性闸取错（活跃变更误归档方向）；⑤ checkApproval 异常折叠 null 绕过 HUB-07 留痕静默放行。触及 run/shared.js 门禁链文件按解锁通道走 --force-baseline
+方案：guard 白名单按参数细化+危险表扩充+拦截原因带替代路径指引；hasUnappliedChanges 无 meta 保守保留；stepId 收进同一事务+提交前复查；两写点 toISOString+getLatestActivityAt JS 解析侧取最新归一 ISO；checkApproval 异常改 unknown 走既有 warnApprovalUnknown 路由（平台 null 语义不变）+loadSyncMod 测试缝
+结果：新测试 security-batch-fixes 28/28；worktree-has-unapplied ⑩ 与 junction-fail-loud cleanup 用例随语义修正（force 跳闸聚焦 junction 断言）；全量 442 文件 0 失败 + lint 572 绿（CLI --done 门禁实测通过）
+审计：⚖️ 归属切分：1 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：test/security-batch-fixes.test.mjs
+审计：🔍 软归属：2 个窗口内未声明同模块测试文件已补入文件行（若属并行会话改动请手工剔除）：test/worktree-has-unapplied-changes.test.mjs（+3/-2）, test/worktree-junction-fail-loud.test.mjs（+9/-4）

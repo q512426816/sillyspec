@@ -29,14 +29,23 @@ const READONLY_COMMANDS = new Set([
   'node', 'npm', 'npx', // 只允许 --version 等只读子命令，在 matchReadonlyWhitelist 中处理
 ])
 
-/** 只读 git 子命令（stash 不在此列：drop/clear/pop 破坏性，仅下方 matchReadonly 细化放行 list/裸查询） */
-const READONLY_GIT_SUBS = new Set(['diff', 'status', 'log', 'show', 'branch'])
+/** 只读 git 子命令（stash/branch/worktree 不在此列：branch 的 -d/-D/-m/-M 破坏性、worktree
+ *  的 remove --force 可删未提交工作区——各自在下方按参数细化放行） */
+const READONLY_GIT_SUBS = new Set(['diff', 'status', 'log', 'show'])
 
 /** 危险 git 子命令 */
 const DANGER_GIT_SUBS = new Set([
   'add', 'commit', 'push', 'checkout', 'restore', 'reset', 'clean',
   'mv', 'rm',
 ])
+
+/** git branch 的破坏性 flag（-d/-D 删分支、-m/-M 改名、-f 强建重指；含长形同义）——
+ *  删/改分支会让 task review 的 base/head ref 引用悬空（gc 后真丢），2026-09-11 审查 P1 收口 */
+const BRANCH_DESTRUCTIVE_RE = /^(?:-[dDmMf]|--delete|--force|--move|--edit-description)(?:=|$)/
+
+function hasDestructiveBranchFlag(parts) {
+  return parts.slice(2).some(tok => BRANCH_DESTRUCTIVE_RE.test(tok))
+}
 
 /** 危险 git stash 操作 */
 const DANGER_STASH_ACTIONS = new Set(['drop', 'clear', 'pop'])
@@ -532,10 +541,13 @@ function isSingleCommandReadonly(cmd, extraReadonlyCommands = []) {
   if (cmdName === 'git') {
     const sub = parts[1] || ''
     if (READONLY_GIT_SUBS.has(sub)) return true
+    // git branch：裸查询/建分支放行；-d/-D/-m/-M/-f（含长形）破坏性不放行（按参数细化，不再整类放行）
+    if (sub === 'branch' && !hasDestructiveBranchFlag(parts)) return true
     // git stash list
     if (sub === 'stash' && (parts[2] === 'list' || parts.length === 2)) return true
-    // git worktree 管理（list/add/remove）放行
-    if (sub === 'worktree') return true
+    // git worktree：仅 list（裸 worktree 同 list）。remove --force 可删含未提交改动的工作区、
+    // 且 junction 会穿透删主仓 node_modules——add/remove/prune 一律走 sillyspec worktree 命令（内建护栏）
+    if (sub === 'worktree' && (parts.length === 2 || parts[2] === 'list')) return true
     return false
   }
 
@@ -563,6 +575,10 @@ function isSingleCommandDangerous(cmd) {
   if (cmdName === 'git') {
     const sub = parts[1] || ''
     if (DANGER_GIT_SUBS.has(sub)) return true
+    // git branch -d/-D/-m/-M/-f（含长形）：删/改分支让 task review 的 base/head 引用悬空
+    if (sub === 'branch' && hasDestructiveBranchFlag(parts)) return true
+    // git worktree remove/prune：删工作区（可能含未提交改动）——清理走 sillyspec worktree cleanup
+    if (sub === 'worktree' && ['remove', 'prune'].includes(parts[2] || '')) return true
     // git stash drop/clear/pop
     if (sub === 'stash' && DANGER_STASH_ACTIONS.has(parts[2] || '')) return true
   }
@@ -603,6 +619,20 @@ function matchReadonlyWhitelist(command, extraReadonlyCommands = []) {
  * @param {string} command
  * @returns {boolean}
  */
+/**
+ * 危险拦截原因的定向指引（branch/worktree 的破坏形态有官方替代路径，提示同步到拦截消息）
+ */
+function dangerBlockHint(command) {
+  const parts = String(command).trim().toLowerCase().split(/\s+/)
+  if (parts[0] === 'git' && parts[1] === 'branch') {
+    return '——分支删除/改名/强建会让 task review 的 base/head 引用悬空；分支管理走 sillyspec worktree 流程'
+  }
+  if (parts[0] === 'git' && parts[1] === 'worktree') {
+    return '——worktree 清理走 sillyspec worktree cleanup（内建未落仓护栏），勿裸删工作区'
+  }
+  return ''
+}
+
 function matchDangerBlacklist(command) {
   const parts = splitCommandParts(command)
   return parts.some(p => isSingleCommandDangerous(p))
@@ -825,7 +855,7 @@ function shouldBlockBash(command, cwd) {
   if (stage === 'quick') {
     // 危险黑名单仍然拦截
     if (matchDangerBlacklist(command)) {
-      return { blocked: true, reason: `dangerous command blocked: ${command.trim()}` }
+      return { blocked: true, reason: `dangerous command blocked: ${command.trim()}${dangerBlockHint(command)}` }
     }
     // 检查命令是否会覆盖 baseline files（并集 = 保护所有 session 的 baseline）
     const { baselineFiles } = readAllQuickGuards(projectRoot)
@@ -843,7 +873,7 @@ function shouldBlockBash(command, cwd) {
 
   // 危险黑名单
   if (matchDangerBlacklist(command)) {
-    return { blocked: true, reason: `dangerous command blocked: ${command.trim()}` }
+    return { blocked: true, reason: `dangerous command blocked: ${command.trim()}${dangerBlockHint(command)}` }
   }
 
   // 只读白名单放行

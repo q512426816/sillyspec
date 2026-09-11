@@ -1,0 +1,357 @@
+diff --git a/src/hooks/worktree-guard.js b/src/hooks/worktree-guard.js
+index 95207e0..a3c84eb 100644
+--- a/src/hooks/worktree-guard.js
++++ b/src/hooks/worktree-guard.js
+@@ -29,8 +29,9 @@ const READONLY_COMMANDS = new Set([
+   'node', 'npm', 'npx', // 只允许 --version 等只读子命令，在 matchReadonlyWhitelist 中处理
+ ])
+ 
+-/** 只读 git 子命令（stash 不在此列：drop/clear/pop 破坏性，仅下方 matchReadonly 细化放行 list/裸查询） */
+-const READONLY_GIT_SUBS = new Set(['diff', 'status', 'log', 'show', 'branch'])
++/** 只读 git 子命令（stash/branch/worktree 不在此列：branch 的 -d/-D/-m/-M 破坏性、worktree
++ *  的 remove --force 可删未提交工作区——各自在下方按参数细化放行） */
++const READONLY_GIT_SUBS = new Set(['diff', 'status', 'log', 'show'])
+ 
+ /** 危险 git 子命令 */
+ const DANGER_GIT_SUBS = new Set([
+@@ -38,6 +39,14 @@ const DANGER_GIT_SUBS = new Set([
+   'mv', 'rm',
+ ])
+ 
++/** git branch 的破坏性 flag（-d/-D 删分支、-m/-M 改名、-f 强建重指；含长形同义）——
++ *  删/改分支会让 task review 的 base/head ref 引用悬空（gc 后真丢），2026-09-11 审查 P1 收口 */
++const BRANCH_DESTRUCTIVE_RE = /^(?:-[dDmMf]|--delete|--force|--move|--edit-description)(?:=|$)/
++
++function hasDestructiveBranchFlag(parts) {
++  return parts.slice(2).some(tok => BRANCH_DESTRUCTIVE_RE.test(tok))
++}
++
+ /** 危险 git stash 操作 */
+ const DANGER_STASH_ACTIONS = new Set(['drop', 'clear', 'pop'])
+ 
+@@ -532,10 +541,13 @@ function isSingleCommandReadonly(cmd, extraReadonlyCommands = []) {
+   if (cmdName === 'git') {
+     const sub = parts[1] || ''
+     if (READONLY_GIT_SUBS.has(sub)) return true
++    // git branch：裸查询/建分支放行；-d/-D/-m/-M/-f（含长形）破坏性不放行（按参数细化，不再整类放行）
++    if (sub === 'branch' && !hasDestructiveBranchFlag(parts)) return true
+     // git stash list
+     if (sub === 'stash' && (parts[2] === 'list' || parts.length === 2)) return true
+-    // git worktree 管理（list/add/remove）放行
+-    if (sub === 'worktree') return true
++    // git worktree：仅 list（裸 worktree 同 list）。remove --force 可删含未提交改动的工作区、
++    // 且 junction 会穿透删主仓 node_modules——add/remove/prune 一律走 sillyspec worktree 命令（内建护栏）
++    if (sub === 'worktree' && (parts.length === 2 || parts[2] === 'list')) return true
+     return false
+   }
+ 
+@@ -563,6 +575,10 @@ function isSingleCommandDangerous(cmd) {
+   if (cmdName === 'git') {
+     const sub = parts[1] || ''
+     if (DANGER_GIT_SUBS.has(sub)) return true
++    // git branch -d/-D/-m/-M/-f（含长形）：删/改分支让 task review 的 base/head 引用悬空
++    if (sub === 'branch' && hasDestructiveBranchFlag(parts)) return true
++    // git worktree remove/prune：删工作区（可能含未提交改动）——清理走 sillyspec worktree cleanup
++    if (sub === 'worktree' && ['remove', 'prune'].includes(parts[2] || '')) return true
+     // git stash drop/clear/pop
+     if (sub === 'stash' && DANGER_STASH_ACTIONS.has(parts[2] || '')) return true
+   }
+@@ -603,6 +619,20 @@ function matchReadonlyWhitelist(command, extraReadonlyCommands = []) {
+  * @param {string} command
+  * @returns {boolean}
+  */
++/**
++ * 危险拦截原因的定向指引（branch/worktree 的破坏形态有官方替代路径，提示同步到拦截消息）
++ */
++function dangerBlockHint(command) {
++  const parts = String(command).trim().toLowerCase().split(/\s+/)
++  if (parts[0] === 'git' && parts[1] === 'branch') {
++    return '——分支删除/改名/强建会让 task review 的 base/head 引用悬空；分支管理走 sillyspec worktree 流程'
++  }
++  if (parts[0] === 'git' && parts[1] === 'worktree') {
++    return '——worktree 清理走 sillyspec worktree cleanup（内建未落仓护栏），勿裸删工作区'
++  }
++  return ''
++}
++
+ function matchDangerBlacklist(command) {
+   const parts = splitCommandParts(command)
+   return parts.some(p => isSingleCommandDangerous(p))
+@@ -825,7 +855,7 @@ function shouldBlockBash(command, cwd) {
+   if (stage === 'quick') {
+     // 危险黑名单仍然拦截
+     if (matchDangerBlacklist(command)) {
+-      return { blocked: true, reason: `dangerous command blocked: ${command.trim()}` }
++      return { blocked: true, reason: `dangerous command blocked: ${command.trim()}${dangerBlockHint(command)}` }
+     }
+     // 检查命令是否会覆盖 baseline files（并集 = 保护所有 session 的 baseline）
+     const { baselineFiles } = readAllQuickGuards(projectRoot)
+@@ -843,7 +873,7 @@ function shouldBlockBash(command, cwd) {
+ 
+   // 危险黑名单
+   if (matchDangerBlacklist(command)) {
+-    return { blocked: true, reason: `dangerous command blocked: ${command.trim()}` }
++    return { blocked: true, reason: `dangerous command blocked: ${command.trim()}${dangerBlockHint(command)}` }
+   }
+ 
+   // 只读白名单放行
+diff --git a/src/progress/change-registry.js b/src/progress/change-registry.js
+index 6062868..94984ef 100644
+--- a/src/progress/change-registry.js
++++ b/src/progress/change-registry.js
+@@ -76,15 +76,21 @@ export class ChangeRegistry {
+       const sqlDb = db.getDb();
+       const ch = sqlDb.prepare(`SELECT id FROM changes WHERE name = ?`).get(changeName);
+       if (!ch) return null;
+-      const row = sqlDb.prepare(
+-        `SELECT MAX(ts) AS latest FROM (
+-           SELECT MAX(completed_at) AS ts FROM stages WHERE change_id = ?
+-           UNION ALL
+-           SELECT MAX(st.completed_at) AS ts FROM steps st
+-             JOIN stages s ON st.stage_id = s.id WHERE s.change_id = ?
+-         )`
+-      ).get(ch.id, ch.id);
+-      return row && row.latest ? row.latest : null;
++      const rows = sqlDb.prepare(
++        `SELECT completed_at AS ts FROM stages WHERE change_id = ? AND completed_at IS NOT NULL
++         UNION ALL
++         SELECT st.completed_at AS ts FROM steps st
++           JOIN stages s ON st.stage_id = s.id WHERE s.change_id = ? AND st.completed_at IS NOT NULL`
++      ).all(ch.id, ch.id);
++      // JS 侧按解析后的时间取最新（归一 ISO 返回）：SQL 字符串 MAX 在 zh-CN（'/'）与 ISO（'-'）
++      // 混存时恒取 zh-CN（'/'0x2F>'-'0x2D）——存量 zh-CN 陈旧值会盖过新 ISO 致时近性闸取错
++      // 时间戳（活跃变更被误归档方向，2026-09-11 审查）。不可解析串跳过。
++      let latestMs = -Infinity;
++      for (const r of rows) {
++        const ms = new Date(r.ts).getTime();
++        if (Number.isFinite(ms) && ms > latestMs) latestMs = ms;
++      }
++      return latestMs === -Infinity ? null : new Date(latestMs).toISOString();
+     } catch { return null; }
+   }
+ 
+diff --git a/src/progress/consistency-doctor.js b/src/progress/consistency-doctor.js
+index f156ce4..f170652 100644
+--- a/src/progress/consistency-doctor.js
++++ b/src/progress/consistency-doctor.js
+@@ -314,7 +314,9 @@ export class ConsistencyDoctor {
+     const fixable = []; // { stage, action, description, apply: (data) => void }
+     const manual = [...splitManual];  // string
+ 
+-    const now = new Date().toLocaleString('zh-CN', { hour12: false });
++    // ISO（Fix d 的 reopenedAt / Fix e 的 completedAt 均落库）：zh-CN 串的 '/' 在字符串 MAX 中
++    // 恒盖过 ISO 值，会污染 getLatestActivityAt 时近性闸与平台同步（2026-09-11 审查）
++    const now = new Date().toISOString();
+ 
+     for (const stageName of STAGE_ORDER) {
+       const sd = data.stages[stageName];
+diff --git a/src/progress/stage-machine.js b/src/progress/stage-machine.js
+index 36ffec8..e8ab0bd 100644
+--- a/src/progress/stage-machine.js
++++ b/src/progress/stage-machine.js
+@@ -632,7 +632,9 @@ export class StageMachine {
+     // 执行重开操作
+     const newRevision = (stageData.revision || 0) + 1;
+     const fromStepName = steps[fromIdx].name;
+-    const now = new Date().toLocaleString('zh-CN', { hour12: false });
++    // ISO（落库字段）：toLocaleString('zh-CN') 的 '/' 在字符串 MAX 中恒大于 ISO 的 '-'，污染
++    // getLatestActivityAt 等取最大值比较与平台 pydantic 解析（2026-09-11 审查）
++    const now = new Date().toISOString();
+ 
+     // 更新步骤状态：fromStep 之前的保持 completed，fromStep 变 pending，之后的变 stale
+     for (let i = 0; i < steps.length; i++) {
+diff --git a/src/progress/step-store.js b/src/progress/step-store.js
+index c502b96..e6b56e5 100644
+--- a/src/progress/step-store.js
++++ b/src/progress/step-store.js
+@@ -134,24 +134,21 @@ export class StepStore {
+       return;
+     }
+ 
+-    // 查找 step_id：通过 changes → stages → steps JOIN 查询
+-    const sqlDb = db.getDb();
+-    const stepRow = sqlDb.prepare(
+-      `SELECT st.id, st.status FROM steps st
+-       JOIN stages sg ON st.stage_id = sg.id
+-       JOIN changes c ON sg.change_id = c.id
+-       WHERE c.name = ? AND sg.stage = ? AND st.name = ?`
+-    ).get(cn, stage, stepName);
+-    if (stepRow === undefined) {
+-      console.log(`❌ 步骤不存在: ${stage}/${stepName}`);
+-      return;
+-    }
+-    const stepId = stepRow.id;
+-
+-    // UPDATE steps
++    // UPDATE steps（id 查找收进同一事务：事务外查询拿到的 id，可能在 UPDATE 前被他进程 _write 的
++    // steps DELETE+重插换成新自增 id——UPDATE 命中 0 行静默丢写且照常打印成功，2026-09-11 审查 P1）
+     let stageCompletionCandidateId = null;
++    let stepFound = false;
+     db.transaction(() => {
+       const tDb = db.getDb();
++      const stepRow = tDb.prepare(
++        `SELECT st.id FROM steps st
++         JOIN stages sg ON st.stage_id = sg.id
++         JOIN changes c ON sg.change_id = c.id
++         WHERE c.name = ? AND sg.stage = ? AND st.name = ?`
++      ).get(cn, stage, stepName);
++      if (stepRow === undefined) return;
++      stepFound = true;
++      const stepId = stepRow.id;
+       const now = new Date().toISOString();
+       if (status) {
+         tDb.prepare('UPDATE steps SET status = ?, completed_at = ? WHERE id = ? AND name = ?').run(status, status === 'completed' ? now : null, stepId, stepName);
+@@ -179,6 +176,11 @@ export class StepStore {
+       this.pm._touchLocalModified(cwd, cn, now);
+     });
+ 
++    if (!stepFound) {
++      console.log(`❌ 步骤不存在: ${stage}/${stepName}`);
++      return;
++    }
++
+     if (stageCompletionCandidateId !== null) {
+       const { force = false } = options;
+       const validation = this.pm._validateStageArtifacts(cwd, stage, cn);
+@@ -199,11 +201,22 @@ export class StepStore {
+             validationErrors: validation.errors,
+           });
+         }
++        let stageMarkedCompleted = false;
+         db.transaction(() => {
+           const tDb = db.getDb();
+-          tDb.prepare(`UPDATE stages SET status = 'completed', completed_at = ? WHERE id = ?`).run(new Date().toISOString(), stageCompletionCandidateId);
++          // 提交前复查：validator 窗口（execute 校验可 spawn git 最长 15s+）内他进程 addStep 新增
++          // pending 步或 reset 本阶段——按候选 id 盲写会把未完成阶段错标 completed（2026-09-11 审查）
++          const recheck = tDb.prepare("SELECT COUNT(*) AS cnt FROM steps WHERE stage_id = ? AND status NOT IN ('completed','skipped')").get(stageCompletionCandidateId);
++          if (recheck.cnt === 0) {
++            tDb.prepare(`UPDATE stages SET status = 'completed', completed_at = ? WHERE id = ?`).run(new Date().toISOString(), stageCompletionCandidateId);
++            stageMarkedCompleted = true;
++          }
+         });
+-        console.log(`✅ 阶段 ${stage} 所有步骤已完成，阶段已标记为 completed`);
++        if (stageMarkedCompleted) {
++          console.log(`✅ 阶段 ${stage} 所有步骤已完成，阶段已标记为 completed`);
++        } else {
++          console.log(`ℹ️  阶段 ${stage} 在校验窗口内出现新的未完成步骤，本次不标记 completed`);
++        }
+       }
+     }
+ 
+diff --git a/src/run/shared.js b/src/run/shared.js
+index 24f22ca..8b8cc71 100644
+--- a/src/run/shared.js
++++ b/src/run/shared.js
+@@ -948,16 +948,20 @@ export function warnApprovalUnknown(cwd, changeName, reason) {
+ /**
+  * 审批检查：execute 阶段启动前检查（W6 Step8a 从 run.js 搬入，runStage + runAutoMode 共用）。
+  * 平台模式走自己的链路，跳过；否则 await import sync.js。
++ * 返回语义：null = 平台模式有意跳过；{status:'unknown'} = 检查链路意外失败——调用方走
++ * warnApprovalUnknown 横幅 + approval-unknown.log 留痕（HUB-07）。异常折叠成 null 会绕过
++ * unknown 留痕静默放行（2026-09-11 审查）。
+  * @returns {{ status: string, reason?: string } | null}
+- */export async function checkApproval(cwd, changeName, platformOpts = {}) {
++ */export async function checkApproval(cwd, changeName, platformOpts = {}, { loadSyncMod = null } = {}) {
+   // 平台模式不需要 CLI 内置审批检查；自指回环（repo-native junction）按本地模式处理
+   if (isPlatformMode(platformOpts, cwd)) return null
++  const load = loadSyncMod || (() => import('../sync.js'))
+   try {
+-    // shared.js 在 src/run/，sync.js 在 src/ → 退一层
+-    const syncMod = await import('../sync.js')
++    // shared.js 在 src/run/，sync.js 在 src/ → 退一层；loadSyncMod 为测试缝（注入抛错验证 unknown 路由）
++    const syncMod = await load()
+     return await syncMod.checkApproval(changeName, cwd)
+   } catch (e) {
+-    return null
++    return { status: 'unknown', reason: `审批检查异常: ${e?.message || e}` }
+   }
+ }
+ 
+diff --git a/src/worktree.js b/src/worktree.js
+index 4826b9b..fb3ef85 100644
+--- a/src/worktree.js
++++ b/src/worktree.js
+@@ -1468,7 +1468,12 @@ export class WorktreeManager {
+   hasUnappliedChanges(changeName) {
+     const name = validateChangeName(changeName);
+     const meta = this.getMeta(name);
+-    if (!meta) return { hasChanges: false, changedFiles: [], reason: 'no meta' };
++    if (!meta) {
++      // meta 缺失（写坏/误删）→ 无法定位与判定交付，与「目录不存在」同款保守保留（对齐 create()
++      // 幽灵分支的 fail-closed）。旧版返回 hasChanges:false 使 cleanup 跳过未落仓护栏直接
++      // worktree remove --force——可删未提交代码（2026-09-11 审查 P1）
++      return { hasChanges: true, changedFiles: [], reason: 'no meta (conservative keep)' };
++    }
+ 
+     const worktreePath = meta.worktreePath;
+     if (!worktreePath || !existsSync(worktreePath)) {
+diff --git a/test/worktree-has-unapplied-changes.test.mjs b/test/worktree-has-unapplied-changes.test.mjs
+index d5ffb47..f901344 100644
+--- a/test/worktree-has-unapplied-changes.test.mjs
++++ b/test/worktree-has-unapplied-changes.test.mjs
+@@ -174,10 +174,11 @@ console.log('--- ⑨ native-worktree 短路 → false（新，不调 git）---')
+ 
+ console.log('--- ⑩ 短路合集：no meta / dir 缺失 / 无 diffBase / 空 worktree ---')
+ {
+-  // no meta：不写 meta.json
++  // no meta：不写 meta.json → 保守 true（2026-09-11 审查 P1：旧版 false 使 cleanup 跳过未落仓
++  // 护栏直接 worktree remove --force，可删未提交代码——对齐「dir 缺失」同款保守）
+   const d1 = setupRepo(); makeWorktree(d1)
+   const r1 = hasUnapplied(d1)
+-  assertTrue(r1.hasChanges === false && r1.reason === 'no meta', 'no meta → false/no meta')
++  assertTrue(r1.hasChanges === true && (r1.reason || '').includes('conservative keep'), `no meta → 保守 true（实际: ${r1.reason}）`)
+   cleanup(d1)
+ 
+   // worktree dir 缺失 → 保守 true（execute 批量完成 cleanup 删分支盲区修复，memory execute-batch-cleanup-deletes-branch-recovery）
+diff --git a/test/worktree-junction-fail-loud.test.mjs b/test/worktree-junction-fail-loud.test.mjs
+index 0799894..73359eb 100644
+--- a/test/worktree-junction-fail-loud.test.mjs
++++ b/test/worktree-junction-fail-loud.test.mjs
+@@ -152,6 +152,11 @@ console.log('\n#4 worktree junction 解链 fail-loud（cleanup + _doctorReprovis
+ // ────────────────────────────────────────────────────────────────────────────
+ // #1 cleanup lstatSync EPERM → throw「junction 检测失败」+ git worktree remove 未被调
+ // ────────────────────────────────────────────────────────────────────────────
++// ────────────────────────────────────────────────────────────────────────────
++// 注：cleanup 用例统一 force:true——fixture 不写 meta.json，2026-09-11 安全包后 hasUnappliedChanges
++// 对无 meta 保守保留（blocked），未落仓闸行为由 security-batch-fixes.test.mjs 单独锁；本文件
++// 只测 junction 解链 fail-loud，force 跳闸不影响解链时序断言。
++// ────────────────────────────────────────────────────────────────────────────
+ {
+   const { wm, tmpBase } = makeFixture()
+   resetCounters()
+@@ -159,7 +164,7 @@ console.log('\n#4 worktree junction 解链 fail-loud（cleanup + _doctorReprovis
+   execSyncImpl = () => undefined
+ 
+   assertThrows(
+-    () => wm.cleanup(CHANGE, { maxRetries: 1 }),
++    () => wm.cleanup(CHANGE, { maxRetries: 1, force: true }),
+     /junction 检测失败/,
+     '#1 cleanup lstatSync EPERM → throw「junction 检测失败」',
+   )
+@@ -183,7 +188,7 @@ console.log('\n#4 worktree junction 解链 fail-loud（cleanup + _doctorReprovis
+   unlinkImpl = () => { throw new Error('unlink: EPERM（目录被占用）') }      // POSIX 解链失败
+ 
+   assertThrows(
+-    () => wm.cleanup(CHANGE, { maxRetries: 1 }),
++    () => wm.cleanup(CHANGE, { maxRetries: 1, force: true }),
+     /junction 解链失败/,
+     '#2 cleanup junction 解链失败 → throw「解链失败」',
+   )
+@@ -208,7 +213,7 @@ console.log('\n#4 worktree junction 解链 fail-loud（cleanup + _doctorReprovis
+ 
+   let result
+   try {
+-    result = wm.cleanup(CHANGE, { maxRetries: 1 })
++    result = wm.cleanup(CHANGE, { maxRetries: 1, force: true })
+     assert(true, '#3 cleanup 正常 junction → 不 throw（正常返回）')
+   } catch (e) {
+     assert(false, `#3 cleanup 正常 junction 不应抛错（${(e && e.message) || e}）`)
+@@ -234,7 +239,7 @@ console.log('\n#4 worktree junction 解链 fail-loud（cleanup + _doctorReprovis
+ 
+   let result
+   try {
+-    result = wm.cleanup(CHANGE, { maxRetries: 1 })
++    result = wm.cleanup(CHANGE, { maxRetries: 1, force: true })
+     assert(true, '#4 cleanup 非 junction → 不 throw（正常返回）')
+   } catch (e) {
+     assert(false, `#4 cleanup 非 junction 不应抛错（${(e && e.message) || e}）`)

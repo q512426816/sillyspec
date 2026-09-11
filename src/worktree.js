@@ -1468,7 +1468,12 @@ export class WorktreeManager {
   hasUnappliedChanges(changeName) {
     const name = validateChangeName(changeName);
     const meta = this.getMeta(name);
-    if (!meta) return { hasChanges: false, changedFiles: [], reason: 'no meta' };
+    if (!meta) {
+      // meta 缺失（写坏/误删）→ 无法定位与判定交付，与「目录不存在」同款保守保留（对齐 create()
+      // 幽灵分支的 fail-closed）。旧版返回 hasChanges:false 使 cleanup 跳过未落仓护栏直接
+      // worktree remove --force——可删未提交代码（2026-09-11 审查 P1）
+      return { hasChanges: true, changedFiles: [], reason: 'no meta (conservative keep)' };
+    }
 
     const worktreePath = meta.worktreePath;
     if (!worktreePath || !existsSync(worktreePath)) {

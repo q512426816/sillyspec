@@ -76,15 +76,21 @@ export class ChangeRegistry {
       const sqlDb = db.getDb();
       const ch = sqlDb.prepare(`SELECT id FROM changes WHERE name = ?`).get(changeName);
       if (!ch) return null;
-      const row = sqlDb.prepare(
-        `SELECT MAX(ts) AS latest FROM (
-           SELECT MAX(completed_at) AS ts FROM stages WHERE change_id = ?
-           UNION ALL
-           SELECT MAX(st.completed_at) AS ts FROM steps st
-             JOIN stages s ON st.stage_id = s.id WHERE s.change_id = ?
-         )`
-      ).get(ch.id, ch.id);
-      return row && row.latest ? row.latest : null;
+      const rows = sqlDb.prepare(
+        `SELECT completed_at AS ts FROM stages WHERE change_id = ? AND completed_at IS NOT NULL
+         UNION ALL
+         SELECT st.completed_at AS ts FROM steps st
+           JOIN stages s ON st.stage_id = s.id WHERE s.change_id = ? AND st.completed_at IS NOT NULL`
+      ).all(ch.id, ch.id);
+      // JS 侧按解析后的时间取最新（归一 ISO 返回）：SQL 字符串 MAX 在 zh-CN（'/'）与 ISO（'-'）
+      // 混存时恒取 zh-CN（'/'0x2F>'-'0x2D）——存量 zh-CN 陈旧值会盖过新 ISO 致时近性闸取错
+      // 时间戳（活跃变更被误归档方向，2026-09-11 审查）。不可解析串跳过。
+      let latestMs = -Infinity;
+      for (const r of rows) {
+        const ms = new Date(r.ts).getTime();
+        if (Number.isFinite(ms) && ms > latestMs) latestMs = ms;
+      }
+      return latestMs === -Infinity ? null : new Date(latestMs).toISOString();
     } catch { return null; }
   }
 

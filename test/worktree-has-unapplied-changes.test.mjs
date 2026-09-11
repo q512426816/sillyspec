@@ -174,10 +174,11 @@ console.log('--- ⑨ native-worktree 短路 → false（新，不调 git）---')
 
 console.log('--- ⑩ 短路合集：no meta / dir 缺失 / 无 diffBase / 空 worktree ---')
 {
-  // no meta：不写 meta.json
+  // no meta：不写 meta.json → 保守 true（2026-09-11 审查 P1：旧版 false 使 cleanup 跳过未落仓
+  // 护栏直接 worktree remove --force，可删未提交代码——对齐「dir 缺失」同款保守）
   const d1 = setupRepo(); makeWorktree(d1)
   const r1 = hasUnapplied(d1)
-  assertTrue(r1.hasChanges === false && r1.reason === 'no meta', 'no meta → false/no meta')
+  assertTrue(r1.hasChanges === true && (r1.reason || '').includes('conservative keep'), `no meta → 保守 true（实际: ${r1.reason}）`)
   cleanup(d1)
 
   // worktree dir 缺失 → 保守 true（execute 批量完成 cleanup 删分支盲区修复，memory execute-batch-cleanup-deletes-branch-recovery）

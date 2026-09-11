@@ -314,7 +314,9 @@ export class ConsistencyDoctor {
     const fixable = []; // { stage, action, description, apply: (data) => void }
     const manual = [...splitManual];  // string
 
-    const now = new Date().toLocaleString('zh-CN', { hour12: false });
+    // ISO（Fix d 的 reopenedAt / Fix e 的 completedAt 均落库）：zh-CN 串的 '/' 在字符串 MAX 中
+    // 恒盖过 ISO 值，会污染 getLatestActivityAt 时近性闸与平台同步（2026-09-11 审查）
+    const now = new Date().toISOString();
 
     for (const stageName of STAGE_ORDER) {
       const sd = data.stages[stageName];

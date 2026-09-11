@@ -948,16 +948,20 @@ export function warnApprovalUnknown(cwd, changeName, reason) {
 /**
  * 审批检查：execute 阶段启动前检查（W6 Step8a 从 run.js 搬入，runStage + runAutoMode 共用）。
  * 平台模式走自己的链路，跳过；否则 await import sync.js。
+ * 返回语义：null = 平台模式有意跳过；{status:'unknown'} = 检查链路意外失败——调用方走
+ * warnApprovalUnknown 横幅 + approval-unknown.log 留痕（HUB-07）。异常折叠成 null 会绕过
+ * unknown 留痕静默放行（2026-09-11 审查）。
  * @returns {{ status: string, reason?: string } | null}
- */export async function checkApproval(cwd, changeName, platformOpts = {}) {
+ */export async function checkApproval(cwd, changeName, platformOpts = {}, { loadSyncMod = null } = {}) {
   // 平台模式不需要 CLI 内置审批检查；自指回环（repo-native junction）按本地模式处理
   if (isPlatformMode(platformOpts, cwd)) return null
+  const load = loadSyncMod || (() => import('../sync.js'))
   try {
-    // shared.js 在 src/run/，sync.js 在 src/ → 退一层
-    const syncMod = await import('../sync.js')
+    // shared.js 在 src/run/，sync.js 在 src/ → 退一层；loadSyncMod 为测试缝（注入抛错验证 unknown 路由）
+    const syncMod = await load()
     return await syncMod.checkApproval(changeName, cwd)
   } catch (e) {
-    return null
+    return { status: 'unknown', reason: `审批检查异常: ${e?.message || e}` }
   }
 }
 

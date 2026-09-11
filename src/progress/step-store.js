@@ -134,24 +134,21 @@ export class StepStore {
       return;
     }
 
-    // 查找 step_id：通过 changes → stages → steps JOIN 查询
-    const sqlDb = db.getDb();
-    const stepRow = sqlDb.prepare(
-      `SELECT st.id, st.status FROM steps st
-       JOIN stages sg ON st.stage_id = sg.id
-       JOIN changes c ON sg.change_id = c.id
-       WHERE c.name = ? AND sg.stage = ? AND st.name = ?`
-    ).get(cn, stage, stepName);
-    if (stepRow === undefined) {
-      console.log(`❌ 步骤不存在: ${stage}/${stepName}`);
-      return;
-    }
-    const stepId = stepRow.id;
-
-    // UPDATE steps
+    // UPDATE steps（id 查找收进同一事务：事务外查询拿到的 id，可能在 UPDATE 前被他进程 _write 的
+    // steps DELETE+重插换成新自增 id——UPDATE 命中 0 行静默丢写且照常打印成功，2026-09-11 审查 P1）
     let stageCompletionCandidateId = null;
+    let stepFound = false;
     db.transaction(() => {
       const tDb = db.getDb();
+      const stepRow = tDb.prepare(
+        `SELECT st.id FROM steps st
+         JOIN stages sg ON st.stage_id = sg.id
+         JOIN changes c ON sg.change_id = c.id
+         WHERE c.name = ? AND sg.stage = ? AND st.name = ?`
+      ).get(cn, stage, stepName);
+      if (stepRow === undefined) return;
+      stepFound = true;
+      const stepId = stepRow.id;
       const now = new Date().toISOString();
       if (status) {
         tDb.prepare('UPDATE steps SET status = ?, completed_at = ? WHERE id = ? AND name = ?').run(status, status === 'completed' ? now : null, stepId, stepName);
@@ -179,6 +176,11 @@ export class StepStore {
       this.pm._touchLocalModified(cwd, cn, now);
     });
 
+    if (!stepFound) {
+      console.log(`❌ 步骤不存在: ${stage}/${stepName}`);
+      return;
+    }
+
     if (stageCompletionCandidateId !== null) {
       const { force = false } = options;
       const validation = this.pm._validateStageArtifacts(cwd, stage, cn);
@@ -199,11 +201,22 @@ export class StepStore {
             validationErrors: validation.errors,
           });
         }
+        let stageMarkedCompleted = false;
         db.transaction(() => {
           const tDb = db.getDb();
-          tDb.prepare(`UPDATE stages SET status = 'completed', completed_at = ? WHERE id = ?`).run(new Date().toISOString(), stageCompletionCandidateId);
+          // 提交前复查：validator 窗口（execute 校验可 spawn git 最长 15s+）内他进程 addStep 新增
+          // pending 步或 reset 本阶段——按候选 id 盲写会把未完成阶段错标 completed（2026-09-11 审查）
+          const recheck = tDb.prepare("SELECT COUNT(*) AS cnt FROM steps WHERE stage_id = ? AND status NOT IN ('completed','skipped')").get(stageCompletionCandidateId);
+          if (recheck.cnt === 0) {
+            tDb.prepare(`UPDATE stages SET status = 'completed', completed_at = ? WHERE id = ?`).run(new Date().toISOString(), stageCompletionCandidateId);
+            stageMarkedCompleted = true;
+          }
         });
-        console.log(`✅ 阶段 ${stage} 所有步骤已完成，阶段已标记为 completed`);
+        if (stageMarkedCompleted) {
+          console.log(`✅ 阶段 ${stage} 所有步骤已完成，阶段已标记为 completed`);
+        } else {
+          console.log(`ℹ️  阶段 ${stage} 在校验窗口内出现新的未完成步骤，本次不标记 completed`);
+        }
       }
     }
 

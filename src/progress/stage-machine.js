@@ -632,7 +632,9 @@ export class StageMachine {
     // 执行重开操作
     const newRevision = (stageData.revision || 0) + 1;
     const fromStepName = steps[fromIdx].name;
-    const now = new Date().toLocaleString('zh-CN', { hour12: false });
+    // ISO（落库字段）：toLocaleString('zh-CN') 的 '/' 在字符串 MAX 中恒大于 ISO 的 '-'，污染
+    // getLatestActivityAt 等取最大值比较与平台 pydantic 解析（2026-09-11 审查）
+    const now = new Date().toISOString();
 
     // 更新步骤状态：fromStep 之前的保持 completed，fromStep 变 pending，之后的变 stale
     for (let i = 0; i < steps.length; i++) {
