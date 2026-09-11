@@ -13,6 +13,7 @@
  */
 import { join } from 'node:path'
 import { parsePorcelainPath, safeGit } from './shared.js'
+import { collectRecentForeignDelivery, detectAssertionRewrites, readSemanticGuardEnabled } from '../semantic-guard.js'
 
 /**
  * 打印 quick 完成审计结论（按 review.status 输出 SAFE/WARNING/BLOCKED）。
@@ -243,6 +244,32 @@ export async function resolveQuickLinkedChanges({ pm, cwd, specDir, quickFiles, 
 // ============ quick --done test+lint 硬门禁（2026-09-02 跨 agent 工单 P0-2）============
 
 /**
+ * 语义护栏命中组装（change: 2026-09-11-cross-change-decision-guard，task-06，FR-04，
+ * D-001@v1）：断言重写检测 ∩ 近因他者交付归因 → hits 清单，gate 内一行调用拼进返回对象。
+ * 单独抽出导出是为了可测性（runQuickTestLintGate 会真跑 test/lint 命令，检测组装层
+ * 独立测可避免测试里真跑 npm test——卡内可测性豁免）。
+ * - 步骤 0 总开关：readSemanticGuardEnabled false → 跳过检测，hits 恒空（fail-open 同 task-03）
+ * - 纯新增断言（detect 不命中）/ 无他者归因标记 / 非测试文件 → 落不到 hits
+ * - WARNING 级非阻断：本函数只组装数据，不参与 gate action/failed 判定
+ * @param {{ cwd?: string, specBase?: string, files?: string[], changeName?: string|null }} opts
+ * @returns {{ hits: Array<{ file: string, deliveredBy: string, sampleLines: string[] }> }}
+ */
+export function buildSemanticGuardHits({ cwd, specBase, files, changeName } = {}) {
+  if (!readSemanticGuardEnabled(specBase)) return { hits: [] }
+  const rewrites = detectAssertionRewrites({ cwd, files: Array.isArray(files) ? files : [] })
+  if (Object.keys(rewrites).length === 0) return { hits: [] }
+  // 归因只查断言命中文件（省 git log 调用；collectRecentForeignDelivery 内部封顶 20 文件）
+  const delivery = collectRecentForeignDelivery({ cwd, files: Object.keys(rewrites), currentChange: changeName })
+  const hits = []
+  for (const file of Object.keys(rewrites)) {
+    // 无归因不点名：纯新增断言 / 无标记提交 / 交付者是本变更（currentChange 透传跳过）同落空
+    if (!delivery[file]) continue
+    hits.push({ file, deliveredBy: delivery[file], sampleLines: rewrites[file] })
+  }
+  return { hits }
+}
+
+/**
  * quick --done 内置 test+lint 实测门禁：把 CLAUDE.md 规则 8「触及 src/test 的改动先
  * npm test + npm run lint」从 agent 自律下沉为 CLI 卡点。
  *
@@ -265,8 +292,11 @@ export async function resolveQuickLinkedChanges({ pm, cwd, specDir, quickFiles, 
  * @param {string} opts.specBase - .sillyspec 目录（local.yaml 读取源，信任边界见 runVerifyTestCheck SEC-02 注释）
  * @param {string[]} [opts.changedFiles] - 审计口径的本轮变更文件（仓库根相对 POSIX 路径；空/null → 回退 declaredFiles）
  * @param {string[]} [opts.declaredFiles] - 会话声明边界（guard.allowedFiles；changedFiles 为空时的兜底判定源）
- * @param {string} [opts.changeName] - quick 会话名（evidence-auto 策略解析用）
- * @returns {Promise<{action:'pass'|'fail'|'skip', failed:string[], reason:string, test:object|null, lint:object|null}>}
+ * @param {string} [opts.changeName] - quick 会话名（evidence-auto 策略解析用 + 语义护栏归因 currentChange 透传）
+ * @returns {Promise<{action:'pass'|'fail'|'skip', failed:string[], reason:string, test:object|null, lint:object|null,
+ *   semanticGuard?:{hits:Array<{file:string,deliveredBy:string,sampleLines:string[]}>}}>}
+ *   semanticGuard 仅检测跑过（三条早退 skip 路径不跑检测、无字段）时挂载；WARNING 级
+ *   非阻断——action/failed 判定不受它影响（调用方 complete-handlers.js 只读 action/failed，零改动）。
  */
 export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], declaredFiles = [], changeName = null }) {
   if (process.env.SILLYSPEC_QUICK_TEST_GATE === 'skip') {
@@ -283,6 +313,13 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
   if (codeFiles.length === 0) {
     return { action: 'skip', failed: [], reason: `纯 doc/配置改动（${files.length} 个文件均未触及 src/test，规则 8 语义跳过 test+lint）`, test: null, lint: null }
   }
+
+  // ── 语义护栏检测（task-06，FR-04 断言重写 WARNING，D-001@v1 非阻断）──
+  // 三条早退（env skip / 无文件 / 纯 doc）已在上文 return，检测不跑——语义一致。
+  // 检测对主仓 cwd 执行而非 gateCwd 隔离快照（下方才建快照）：检测对象是本会话工作树
+  // 未提交改动（git diff HEAD 须见它），快照语义是 test/lint 实测隔离——两者不同层
+  // （Grill X-001 附注）。specBase 同理用主仓的（快照副本 local.yaml 不参与开关判定）。
+  const semanticGuard = buildSemanticGuardHits({ cwd, specBase, files, changeName })
 
   const { runVerifyTestCheck, runVerifyLintCheck } = await import('../verify-postcheck.js')
 
@@ -319,6 +356,8 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
         : `触及 src/test 共 ${codeFiles.length} 个文件，test+lint 实测通过（或未配置命令自动跳过）${snapshot ? '（隔离快照口径：并行会话脏文件不计入）' : ''}`,
       test,
       lint,
+      // 语义护栏 WARNING（task-06）：只增可选字段，action/failed 判定与调用方读取面均不受影响
+      semanticGuard,
     }
   } finally {
     if (snapshot) { try { snapshot.cleanup() } catch { /* 清理失败不连坐门禁结论 */ } }
@@ -349,5 +388,19 @@ export function printQuickTestLintGate(gate) {
     console.error(`   quick 已停止：修复后重跑 --done（进度不丢）；确认要跳过实测请设 SILLYSPEC_QUICK_TEST_GATE=skip（审计留痕）。`)
   } else {
     console.log(`\n✅ quick test+lint 门禁 — PASS（${gate.reason}）`)
+  }
+
+  // 语义护栏 WARNING（task-06 / FR-04，非阻断——D-001@v1：误报校准数据为零先 advisory，
+  // 复潮条件：误报率实证后可升 block）：他者近因交付的测试文件既有断言行被改 → 点名
+  // 文件 + 交付变更 + 被改样例行（上游 detectAssertionRewrites 已封顶 5/文件，渲染侧
+  // 再 slice(0,5) 兜底）。hits 空 / 字段缺失（三条早退 skip 路径不跑检测）→ 零输出。
+  const sgHits = gate.semanticGuard && Array.isArray(gate.semanticGuard.hits) ? gate.semanticGuard.hits : []
+  if (sgHits.length > 0) {
+    console.warn(`\n⚠️ 语义护栏 — 断言重写 WARNING（非阻断）：他者近因交付的测试文件既有断言被改`)
+    for (const h of sgHits) {
+      console.warn(`   - ${h.file} ← ${h.deliveredBy} 交付`)
+      for (const s of (h.sampleLines || []).slice(0, 5)) console.warn(`       被改: ${String(s).trim()}`)
+    }
+    console.warn(`   ➜ 若确需重写：重写理由写进 quicklog --solution（--done 四参数收尾）；并复查 ${[...new Set(sgHits.map(h => h.deliveredBy))].join('、')} 的关联决策——勿以改断言重定义绿灯。`)
   }
 }

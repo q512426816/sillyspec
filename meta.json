@@ -1,0 +1,11 @@
+{
+  "name_zh": "worktree 元数据",
+  "changeName": "2026-09-11-cross-change-decision-guard",
+  "branch": "sillyspec/2026-09-11-cross-change-decision-guard",
+  "baseBranch": "main",
+  "baseHash": "42aa9927f71b78c903709fadd681d71719855d66",
+  "worktreePath": "C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-11-cross-change-decision-guard",
+  "mode": "worktree",
+  "createdAt": "2026-09-11T06:50:20.659Z",
+  "provisioning": true
+}

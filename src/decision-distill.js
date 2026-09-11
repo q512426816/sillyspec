@@ -78,6 +78,8 @@ function applyField(entry, label, value) {
     case 'answer': case '答案': entry.answer = value; break
     case '锚点': case 'anchor': entry.anchor = value; break
     case '模块域': case '模块': case 'domains': case 'domain': entry.domains = parseListValue(value); break
+    // 文件字段（FR-01/D-001@v1，2026-09-11-cross-change-decision-guard）：列表语义同模块域 + 逐项反斜杠归一 POSIX
+    case '文件': case 'files': entry.files = parseListValue(value).map(s => s.replace(/\\/g, '/')); break
     case '否决理由': case 'reject_reason': case 'rejectreason': entry.rejectReason = value; break
     case '复潮条件': case 'revisit_when': case 'revisitwhen': entry.revisitWhen = value; break
     case 'supersedes': entry.supersedes = value; break
@@ -93,7 +95,7 @@ function applyField(entry, label, value) {
  * @returns {{ entries: Array<{
  *   id: string, number: string, version: number, title: string,
  *   type?: string, status?: string, question?: string, answer?: string,
- *   anchor?: string, domains?: string[], rejectReason?: string, revisitWhen?: string,
+ *   anchor?: string, domains?: string[], files?: string[], rejectReason?: string, revisitWhen?: string,
  *   supersedes?: string, impacts?: string, normalizedRequirement?: string,
  *   selected: 'implemented'|'rejected'|null, raw: string }>, missing: boolean }}
  *   missing=true = decisions.md 不存在；selected = FR-02 入选裁决，null 表示解析保留但不入选。
@@ -165,7 +167,7 @@ export function parseDecisions(changeDir) {
 }
 
 /** applyField 认识的字段标签白名单（行内 ｜ 分段与缩进子项只按白名单进字段，散文误伤为零） */
-const FIELD_LABEL_RE = /^(type|types|status|question|问题|answer|答案|锚点|anchor|模块域|模块|domains|domain|否决理由|reject_reason|rejectreason|复潮条件|revisit_when|revisitwhen|supersedes|impacts|影响|normalized_requirement|状态|类型)$/i
+const FIELD_LABEL_RE = /^(type|types|status|question|问题|answer|答案|锚点|anchor|模块域|模块|domains|domain|否决理由|reject_reason|rejectreason|复潮条件|revisit_when|revisitwhen|supersedes|impacts|影响|文件|files|normalized_requirement|状态|类型)$/i
 
 // ---------------------------------------------------------------------------
 // 域三级兜底（FR-03）
@@ -293,6 +295,8 @@ function renderBlockLines(entry, headHash, supersedesNote, changeName) {
   lines.push(`状态：${entry.selected}`)
   if (changeName) lines.push(`变更：${oneLine(changeName)}`)
   lines.push(`锚点：${oneLine(entry.anchor) || NOT_RECORDED}`)
+  // 文件行（FR-01/D-001@v1）：仅非空渲染——存量条目零迁移，幂等重归档不添空行
+  if (entry.files && entry.files.length > 0) lines.push(`文件：${entry.files.join(', ')}`)
   lines.push(`最近确认：${oneLine(headHash) || NOT_RECORDED}`)
   lines.push(`理由：${oneLine(entry.answer || entry.normalizedRequirement || entry.question)}`)
   if (supersedesNote) lines.push(`supersedes：${oneLine(supersedesNote)}`)

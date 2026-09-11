@@ -14,3 +14,4 @@ updated_at: 2026-08-24T00:40:00+08:00
 | 日期 | 变更名 | 摘要 |
 |------|--------|------|
 | 2026-08-23 | 2026-08-23-adopt-harness-practices | config-schema（local.yaml 单一数据源）：test_strategy 枚举扩 skip / evidence-auto（D-005@v2——skip=真跳过留审计痕迹、evidence-auto=按 module-impact 影响面推荐组合，full/module 语义不变）；新增 live 键 decisions.behind_threshold（决策 behind 复核阈值，缺省 10，reader=readDecisionRulesConfig/src/docs-check.js）；renderExample 落盘段与示例注释同步扩；config-schema 既有测试适配。 |
+| 2026-09-11 | 2026-09-11-cross-change-decision-guard | config-schema 增 semantic_guard 段（enabled：boolean optional live，默认 true，fail-open——缺键/读取异常恒 true 不拦门禁）；readers 登记引 readSemanticGuardEnabled（src/semantic-guard.js）；renderExample yaml 块同步（friction_hint 同款形态，live 键 example 防漂耦合测试覆盖）。 |

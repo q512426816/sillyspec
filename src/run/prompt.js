@@ -22,7 +22,8 @@ import { basename, join } from 'node:path'
 import { existsSync, readFileSync, mkdirSync, readdirSync } from 'node:fs'
 import { writeAtomicSync } from '../fs-atomic.js'
 import { stageRegistry } from '../stages/index.js'
-import { resolvePromptIncludes, resolveRuntimeRoot, safeGit, WAIT_MARKER_RE, QUICK_SID_RE } from './shared.js'
+import { resolvePromptIncludes, resolveRuntimeRoot, safeGit, parsePorcelainPath, WAIT_MARKER_RE, QUICK_SID_RE } from './shared.js'
+import { renderSemanticGuardBlock, readSemanticGuardEnabled } from '../semantic-guard.js'
 import { renderStageContract } from '../stage-contract-spec.js'
 import { nowWallClock } from '../datetime.js'
 import { parseModuleMapSimple } from '../modules.js'
@@ -178,6 +179,44 @@ export function buildQuickContextDigest(specBase, projectName) {
       : '（无项目登记/约定文档——需要时按 prompt 内路径自查）'
   } catch (e) {
     return `（项目上下文注入失败：${e && e.message ? e.message : e}——需要时再 cat {SPEC_ROOT}/projects/*.yaml 与 CONVENTIONS.md）`
+  }
+}
+
+/**
+ * quick step1 语义护栏进场注入拼装（task-05，FR-03，D-001@v1 模块四）：开关 → 候选文件采集 →
+ * renderSemanticGuardBlock 反查。候选 = 会话声明文件（guard.allowedFiles，readQuickGuardField
+ * 同源读取：session guard 优先 / legacy 单文件回退）∪ git status --porcelain 脏文件
+ * （parsePorcelainPath 同款解析口径：引号剥离 / -> rename / 反斜杠归一），反斜杠归一去重封顶 20。
+ * 返回 ''（开关关 / 无候选 / 双零命中——prompt 与现状字节一致，零命中静默）或 advisory 段；
+ * 全链 fail-soft：异常返回单行降级说明，不阻断 quick 启动。导出供注入单测直测
+ * （test/semantic-guard-prompt-inject.test.mjs）。
+ */
+export function buildQuickSemanticGuardInjection({ specBase, cwd, changeName } = {}) {
+  try {
+    // 开关首行（Grill X-012）：false 直接零输出——不采候选文件、不跑反查（开关语义全停非半停）
+    if (!readSemanticGuardEnabled(specBase)) return ''
+    // 会话声明文件（--files 落 guard.allowedFiles；缺失 / 形态异常按空）
+    const declaredRaw = readQuickGuardField(changeName, specBase, 'allowedFiles')
+    const declared = Array.isArray(declaredRaw) ? declaredRaw : []
+    // git 脏文件：porcelain 解析同源 quick-audit（trim:false——首列前导空格是状态码，trim 会削掉
+    // 致 parsePorcelainPath 丢首字符；.sillyspec/ 运行时产物过滤同款——候选面是代码文件）
+    let dirty = []
+    const statusResult = safeGit(cwd, ['status', '--porcelain'], { trim: false })
+    if (!statusResult.error) {
+      dirty = (statusResult.value || '').split('\n').filter(Boolean)
+        .map(l => parsePorcelainPath(l))
+        .filter(Boolean)
+        .filter(f => !f.startsWith('.sillyspec/'))
+    }
+    // 去重（反斜杠归一后；renderSemanticGuardBlock 内侧亦有同款归一，此处为封顶前的口径）
+    // 封顶 20 —— 与 collectRecentForeignDelivery 内侧文件封顶同数
+    const candidateFiles = [...new Set(
+      [...declared, ...dirty].map(f => String(f || '').trim().replace(/\\/g, '/')).filter(Boolean)
+    )].slice(0, 20)
+    if (candidateFiles.length === 0) return ''
+    return renderSemanticGuardBlock({ specBase, cwd, candidateFiles, currentChange: changeName })
+  } catch (e) {
+    return `【语义护栏】注入失败（${e && e.message ? e.message : e}）——跳过反查，不阻断本步骤；需要时自查 knowledge/INDEX.md 与 git log`
   }
 }
 
@@ -1058,6 +1097,19 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
       if (injection) {
         promptText = injection + '\n' + promptText
       }
+    }
+  }
+
+  // ── 语义护栏进场注入（task-05，FR-03，D-001@v1 模块四）──
+  // 判定口径独立：与上方模块上下文注入同锚（quickFirstStep——quick step1「理解任务」），不嵌进
+  // {QUICK_CONTEXT_DIGEST} 占位符守卫内——模板改版去占位符时护栏静默失效（plan 审查 N2）。
+  // 非空追加到 step1 prompt 末尾；空串（开关关 / 零命中）prompt 与现状字节一致（零命中静默）。
+  // 渲染层注入，src/stages/quick.js 模板零变更（design 明确不改清单）。全链 fail-soft 见 helper。
+  if (quickFirstStep) {
+    const sgSpecBase = resolvePromptSpecBase(platformOpts, cwd)
+    const semanticGuardBlock = buildQuickSemanticGuardInjection({ specBase: sgSpecBase, cwd, changeName })
+    if (semanticGuardBlock) {
+      promptText = promptText + '\n\n' + semanticGuardBlock
     }
   }
 
