@@ -70,6 +70,28 @@ export function assertSafeChangeName(name, label = '变更名') {
   }
 }
 
+// ── 变更名日期前缀门禁（brainstorm step6 规则 CLI 化）──
+// 规则出处：stages/brainstorm.js step6「变更名格式 YYYY-MM-DD-<简短描述>」此前只是 prompt 约束，
+// agent 自拟/重命名丢日期前缀时 CLI 照单全收静默物化（2026-09-11 实证：friction-signal-hint）。
+// 语义：只拦「新建/改名」——调用方须先确认名字未物化（无 DB 行、无 changes/ 目录含归档），
+// 历史 DB/目录已存在的旧变更不追诉（归档里 auto-flow-optimization 等 10 个无前缀名照常可读）。
+// 豁免：quick-<8hex> 会话 key 与 default 兜底 key 是系统生成名，非 agent 自拟描述名。
+// 日期只校验形状（月 01-12 日 01-31），不校验「当天」——跨天续跑/次日重命名不应被拦。
+const DATED_CHANGE_NAME_RE = /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])-[a-zA-Z0-9][\w.\-]*$/
+export function assertDatedChangeName(name, label = '变更名') {
+  if (name == null) return
+  const s = String(name)
+  if (s === 'default' || /^quick-[0-9a-f]{8}$/.test(s)) return
+  if (DATED_CHANGE_NAME_RE.test(s)) return
+  const now = new Date()
+  const pad = n => String(n).padStart(2, '0')
+  const example = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}-<简短描述>`
+  throw new Error(
+    `${label}「${s}」缺少日期前缀或格式非法——新变更名必须形如 YYYY-MM-DD-<简短描述>（例如 ${example}）。` +
+    `此为 brainstorm step6 既定规则，现由 CLI 强制：格式不合规不予执行。已存在的旧名变更不受影响`
+  )
+}
+
 import { buildExecuteSteps } from '../stages/execute.js'
 import { buildPlanSteps } from '../stages/plan.js'
 import { stageRegistry } from '../stages/index.js'

@@ -815,15 +815,21 @@ function scopeAuditPathSet(result) {
   return set
 }
 
-/** execute 完成路径：全表 + 快照落盘（快照写失败只提示，verify 对比按无快照降级） */
+/** execute 完成路径：全表 + 审计级快照/patch 落盘（quick-359a48f1：changes/<变更名>/ 随归档
+ *  入库；patch 为收尾时点全量冻结——--file 真·当时内容比对的数据源。写失败只提示，verify
+ *  对比按无快照降级） */
 async function printExecuteScopeAudit({ cwd, changeName, specBase, platformOpts, computeChangeScopeAudit, renderScopeAuditTable }) {
-  const result = await computeChangeScopeAudit({ cwd, specBase, changeName, platformOpts })
+  const result = await computeChangeScopeAudit({ cwd, specBase, changeName, platformOpts, collectPatch: true })
   console.log(`\n${renderScopeAuditTable(result, { maxRows: 60 })}`)
   try {
-    const runtimeRoot = resolveRuntimeRoot(platformOpts, specBase)
-    const snapPath = join(runtimeRoot, `scope-audit-${changeName}.json`)
-    mkdirSync(runtimeRoot, { recursive: true })
-    writeFileSync(snapPath, JSON.stringify({ ...result, savedAt: new Date().toISOString() }, null, 2) + '\n')
+    const changeDir = join(specBase, 'changes', changeName)
+    mkdirSync(changeDir, { recursive: true })
+    const { frozenPatch, ...snap } = result
+    writeFileSync(join(changeDir, 'scope-audit.json'), JSON.stringify({ ...snap, savedAt: new Date().toISOString() }, null, 2) + '\n')
+    if (typeof frozenPatch === 'string') {
+      writeFileSync(join(changeDir, 'scope-audit.patch'), frozenPatch.endsWith('\n') ? frozenPatch : frozenPatch + '\n')
+    }
+    console.log(`   📦 范围快照已落变更目录（scope-audit.json${typeof frozenPatch === 'string' ? ' + scope-audit.patch（收尾时点冻结）' : ''}）`)
   } catch (e) {
     console.warn(`   ⚠️ 范围对账快照写入失败（不阻断，verify 漂移对比将按无快照降级）：${e && e.message ? String(e.message).split('\n')[0] : e}`)
   }
@@ -840,9 +846,14 @@ async function printVerifyScopeDrift({ cwd, changeName, specBase, platformOpts, 
     return
   }
   let snapshot = null
+  // 快照读取链（quick-359a48f1）：变更目录（审计级，execute --done 落）→ .runtime（存量兼容）
   try {
-    snapshot = JSON.parse(readFileSync(join(resolveRuntimeRoot(platformOpts, specBase), `scope-audit-${changeName}.json`), 'utf8'))
-  } catch { /* 快照缺失/损坏 → 跳过对比只打当前 totals */ }
+    snapshot = JSON.parse(readFileSync(join(specBase, 'changes', changeName, 'scope-audit.json'), 'utf8'))
+  } catch {
+    try {
+      snapshot = JSON.parse(readFileSync(join(resolveRuntimeRoot(platformOpts, specBase), `scope-audit-${changeName}.json`), 'utf8'))
+    } catch { /* 快照缺失/损坏 → 跳过对比只打当前 totals */ }
+  }
   if (!snapshot || snapshot.ok !== true) {
     console.log(`   ${scopeLine}（无 execute 时点快照可对比——完整表跑 sillyspec scope-audit --change ${changeName}）`)
     return

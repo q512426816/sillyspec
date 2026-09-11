@@ -992,6 +992,9 @@ export class ProgressManager {
     }
     // quick 会话 id（quick-<uuid8>，见 run.js QUICK_SID_RE）只作 progress 的跨进程 session key，
     // 进度存 SQL 不需要实体 change 目录——跳过避免 changes/quick-<uuid>/ 空目录残留。
+    // 注：日期前缀门禁（assertDatedChangeName）只在 CLI 边界强制（run --change / change-rename，
+    // 见 run/command.js + index.js）——initChange 是库函数，测试/平台工具合法用任意名建 fixture，
+    // 不在此设门（2026-09-11 决策，避免 ~30 处测试 fixture 非日期名被拦）。
     if (!/^quick-[0-9a-f]{8}$/.test(changeName)) {
       this._ensureChangeDir(cwd, changeName);
     }

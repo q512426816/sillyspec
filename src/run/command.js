@@ -23,7 +23,7 @@ import { basename, join, resolve, dirname } from 'node:path'
 import { existsSync, readdirSync, mkdirSync, writeFileSync, readFileSync, rmSync, unlinkSync } from 'node:fs'
 import { randomBytes, randomUUID } from 'node:crypto'
 import { writeAtomicSync } from '../fs-atomic.js'
-import { resolveSpecDir, countAncestorSpecDirs, ancestorSpecDirs, resolveAncestorCeiling, resolveChangeDir, triggerSync, getStageSteps, formatWaitOptions, checkApproval, warnApprovalUnknown, didYouMean, assertSafeChangeName, detectQuickSessionDrift, detectWorktreeSpecDrift, resolveRuntimeRoot, resolveQuickSessionsDir, writePlatformPointer, checkPlatformManaged, isSelfReferentialSpecRoot, isTempResidueSpecRoot, PLATFORM_MANAGED_FILENAME, warnSelfRefPointerOnce } from './shared.js'
+import { resolveSpecDir, countAncestorSpecDirs, ancestorSpecDirs, resolveAncestorCeiling, resolveChangeDir, triggerSync, getStageSteps, formatWaitOptions, checkApproval, warnApprovalUnknown, didYouMean, assertSafeChangeName, assertDatedChangeName, detectQuickSessionDrift, detectWorktreeSpecDrift, resolveRuntimeRoot, resolveQuickSessionsDir, writePlatformPointer, checkPlatformManaged, isSelfReferentialSpecRoot, isTempResidueSpecRoot, PLATFORM_MANAGED_FILENAME, warnSelfRefPointerOnce } from './shared.js'
 import { resolveQuickLinkedChanges } from './quick-audit.js'
 import { outputStep, collectStageWaitHistory } from './prompt.js'
 import { completeStep, skipStep, waitStep, continueStep, synthesizeStepOutput } from './complete.js'
@@ -1044,6 +1044,22 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
           console.error(`   ③ 确要新建变更：先 sillyspec run brainstorm --change <名>（不带 ${actionFlag}）`)
         }
         process.exit(2) // 用法/环境错（目标变更不在当前库）→ exit 2
+      }
+    }
+    // ── 变更名日期前缀门禁（brainstorm step6 规则 CLI 化，2026-09-11 实证 friction-signal-hint）──
+    // 格式 YYYY-MM-DD-<简短描述> 此前只是 prompt 约束，agent 自拟名/重命名丢前缀时 CLI 照单
+    // 全收静默物化。只拦「净新建」：DB 无行（!progress 已证）+ changes/（含 archive/）无目录；
+    // 已物化存量（含归档无前缀旧名 auto-flow-optimization 等）不追诉，照常自愈初始化。
+    // quick 阶段豁免：其 changeName 是会话 key（quick-<8hex>），非变更名。
+    if (changeName && stageName !== 'quick' && !/^quick-[0-9a-f]{8}$/.test(changeName)
+      && !existsSync(join(specBase, 'changes', changeName))
+      && !existsSync(join(specBase, 'changes', 'archive', changeName))) {
+      try {
+        assertDatedChangeName(changeName)
+      } catch (e) {
+        console.error(`❌ ${e.message}`)
+        console.error(`   重试：sillyspec run ${stageName} --change <YYYY-MM-DD-简短描述>`)
+        process.exit(2) // 用法错（新变更名格式非法）→ exit 2
       }
     }
     // 如果指定了变更名或有变更目录，自动初始化变更的 progress

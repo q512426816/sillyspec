@@ -229,7 +229,7 @@ export const definition = {
 1. 简单项目：几句话整体描述
 2. 复杂项目：按模块/Phase 分段展示，每段 200-300 字
 3. 展示完整设计方案（不要逐段停顿，一次性展示）
-4. 确认变更名（格式：\`YYYY-MM-DD-<简短描述>\`，例如 \`2026-05-13-user-auth\`）
+4. 确认变更名（格式：\`YYYY-MM-DD-<简短描述>\`，例如 \`2026-05-13-user-auth\`——CLI 已强制：新建/改名不带日期前缀直接 exit 2）
 5. 按「HTML 原型分级」生成原型或写出跳过原因（二选一必填，见下）
 6. 暂停等待用户确认或修改意见
 
@@ -263,7 +263,7 @@ export const definition = {
 
 ### 注意
 - 不要一次输出大段文字，按模块/Phase 分段
-- 变更名必须以当天日期开头（YYYY-MM-DD-），后跟英文短横线分隔的简短描述`,
+- 变更名必须以当天日期开头（YYYY-MM-DD-），后跟英文短横线分隔的简短描述（CLI 强制：不合规 exit 2）`,
       outputHint: '用户确认的设计方案',
       optional: false
     },
@@ -342,7 +342,7 @@ design.md 第一行标题必须用中文：# 设计文档（Design）— <变更
 
 ### 操作
 1. 确认变更目录存在：\`mkdir -p {SPEC_ROOT}/changes/<change-name>\`（Windows 用 \`mkdir {SPEC_ROOT}/changes\\<变更名>\` 或 PowerShell \`New-Item -ItemType Directory -Force -Path {SPEC_ROOT}/changes/<change-name>\`）
-   - 变更名格式必须为 \`YYYY-MM-DD-<简短描述>\`（如 \`2026-05-13-user-auth\`）
+   - 变更名格式必须为 \`YYYY-MM-DD-<简短描述>\`（如 \`2026-05-13-user-auth\`；CLI 强制，不合规 exit 2）
 2. 将确认的设计写入 \`{SPEC_ROOT}/changes/<change-name>/design.md\`——优先跑 \`sillyspec design-init --change <change-name>\` 生成骨架再填散文（决策追踪表已按 decisions.md 当前版本预填，逐行补覆盖点后把「待确认」改「已覆盖」；文件清单表骨架就位）；存量手写路径仍合法（design-init 对已存在的 design.md 不覆盖）
 3. 对账整理 \`{SPEC_ROOT}/changes/<change-name>/decisions.md\`（「对话式探索」「提出方案」步已按增量规则随答落盘，本步做对账而非从零写入）：
    - decisions.md 是本次变更的决策台账，不是长期术语表

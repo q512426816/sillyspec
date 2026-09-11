@@ -20,7 +20,7 @@
  */
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
-import { locateQuickSessionGuard, auditQuickCompletion, resolveRuntimeRoot, collectOtherQuickSessionDeclarations } from './run/shared.js'
+import { locateQuickSessionGuard, auditQuickCompletion, resolveRuntimeRoot, collectOtherQuickSessionDeclarations, ancestorSpecDirs } from './run/shared.js'
 import { safeGit } from './git-helper.js'
 import { parseFileChangeListDetailed, pathMatches } from './change-list.js'
 
@@ -212,13 +212,136 @@ function resolveDiffRoot(sb, changeName, form, cwd) {
 
 /**
  * execute --done 时点快照读取（归档记录态数据源）：结构即 computeFullFlowAudit 返回值 +
- * savedAt。读失败/结构畸形返回 null（调用方降级，不出伪数据）。
+ * savedAt。读取链（quick-359a48f1）：变更目录 scope-audit.json（审计级，随归档入库）→
+ * .runtime/scope-audit-<change>.json（存量兼容）→ null（调用方降级，不出伪数据）。
  */
-function readScopeSnapshot(runtimeRoot, changeName) {
+function readScopeSnapshot(changeDir, runtimeRoot, changeName) {
+  if (changeDir) {
+    try {
+      const snap = JSON.parse(readFileSync(join(changeDir, 'scope-audit.json'), 'utf8'))
+      if (snap && typeof snap === 'object' && Array.isArray(snap.rows)) return snap
+    } catch { /* 缺失/损坏 → 下一源 */ }
+  }
   try {
     const snap = JSON.parse(readFileSync(join(runtimeRoot, `scope-audit-${changeName}.json`), 'utf8'))
     if (snap && typeof snap === 'object' && Array.isArray(snap.rows)) return snap
   } catch { /* 缺失/损坏 → null */ }
+  return null
+}
+
+/**
+ * 冻结 patch 读取（审计级存储，--file 已收尾切片的数据源）：变更目录 scope-audit.patch。
+ * @returns {string|null}
+ */
+function readFrozenPatch(changeDir) {
+  if (!changeDir) return null
+  try {
+    const text = readFileSync(join(changeDir, 'scope-audit.patch'), 'utf8')
+    return text && text.trim() ? text : null
+  } catch { return null }
+}
+
+/**
+ * patch 段过滤（quick-90015473）：全量 diff 按 `diff --git a/<old> b/<new>` 段头切分，
+ * 只保留 files 集合内的段——json rows（退栈归属集）与 patch 同口径，多会话仓不把并行
+ * 会话改动重复冻结进每份 patch（实测 341KB 中 98% 为并行文件）。
+ */
+function filterPatchForFiles(patchText, filesSet) {
+  if (!patchText) return ''
+  const lines = patchText.split('\n')
+  const out = []
+  let capturing = false
+  for (const line of lines) {
+    if (line.startsWith('diff --git ')) {
+      const m = line.match(/^diff --git a\/(.+) b\/(.+)$/)
+      const p = m ? toPosix(m[2]) : null
+      capturing = !!(p && filesSet.has(p))
+    }
+    if (capturing) out.push(line)
+  }
+  return out.join('\n')
+}
+
+/**
+ * 冻结 patch 生成（quick-359a48f1 审计级 / quick-90015473 归属口径修正）：tracked 改动 =
+ * `git diff --no-color <baseRef>` 后**按 files 过滤段**（与 rows 同归属口径，不含并行会话
+ * 文件）；untracked 新文件（git diff 天然不含）自拼 new file hunk（避 `diff --no-index`
+ * exit 1 坑），binary 只记标记行（防 base64 体积爆炸）。
+ * @param {string} root diff 执行根（execute=worktree 根 / quick=会话根 / 主仓根）
+ * @param {string[]} files 归属文件集（tracked 段过滤 + untracked 判定双重来源）
+ * @param {{ baseRef: string }} opts
+ * @returns {string|null} null=采集失败（调用方 fail-soft 不落伪 patch）
+ */
+export function buildFrozenPatch(root, files, { baseRef } = {}) {
+  if (!root || !baseRef) return null
+  const wanted = new Set((Array.isArray(files) ? files : []).map(toPosix).filter(Boolean))
+  const parts = []
+  try {
+    const r = safeGit(root, ['diff', '--no-color', baseRef], { timeout: 60 * 1000 })
+    const filtered = filterPatchForFiles(r.error ? null : r.value, wanted)
+    if (filtered) parts.push(filtered)
+    const trackedOut = safeGit(root, ['ls-files'], { timeout: 30 * 1000 })
+    const trackedSet = new Set(String(trackedOut.value || '').split('\n').map(toPosix).filter(Boolean))
+    for (const f of (Array.isArray(files) ? files : []).map(toPosix).filter(Boolean)) {
+      if (trackedSet.has(f)) continue
+      const abs = join(root, f)
+      if (!existsSync(abs)) continue
+      let buf
+      try { buf = readFileSync(abs) } catch { continue }
+      if (buf.includes(0)) {
+        parts.push(`diff --git a/${f} b/${f}\nnew file mode 100644\nBinary file ${f} differs\n`)
+        continue
+      }
+      const lines = buf.toString('utf8').split('\n')
+      if (lines.length && lines[lines.length - 1] === '') lines.pop()
+      const body = lines.map(l => '+' + l).join('\n')
+      parts.push(`diff --git a/${f} b/${f}\nnew file mode 100644\n--- /dev/null\n+++ b/${f}\n@@ -0,0 +1,${lines.length} @@\n${body}\n`)
+    }
+  } catch {
+    return null
+  }
+  return parts.length > 0 ? parts.join('\n') : ''
+}
+
+/**
+ * patch 切片（--file 已收尾优先路径）：从全量 patch 文本切出目标文件的 hunk 段
+ * （`diff --git a/<old> b/<new>` 到下一个 diff 头）。按 b/ 新路径匹配（rename 兼容旧路径）。
+ * @returns {string|null}
+ */
+function slicePatchForFile(patchText, filePath) {
+  if (!patchText || !filePath) return null
+  const norm = toPosix(filePath)
+  const lines = patchText.split('\n')
+  const out = []
+  let capturing = false
+  for (const line of lines) {
+    if (line.startsWith('diff --git ')) {
+      const m = line.match(/^diff --git a\/(.+) b\/(.+)$/)
+      capturing = !!(m && (toPosix(m[2]) === norm || toPosix(m[1]) === norm))
+    }
+    if (capturing) out.push(line)
+  }
+  return out.length > 0 ? out.join('\n') : null
+}
+
+/**
+ * quick 记录态反查（guard 清理后）：扫祖先链各 specBase 的 quicklog/patches/*.json，
+ * 按 json 内冗余的 sessionId 匹配。返回记录 + patch 路径（--file 切片源）。
+ */
+function findQuickPatchRecord(cwd, sessionId) {
+  for (const sb of ancestorSpecDirs(cwd)) {
+    const dir = join(sb, 'quicklog', 'patches')
+    let files
+    try { files = readdirSync(dir) } catch { continue }
+    for (const f of files.filter(x => x.endsWith('.json'))) {
+      try {
+        const j = JSON.parse(readFileSync(join(dir, f), 'utf8'))
+        if (j && j.sessionId === sessionId && Array.isArray(j.rows)) {
+          return { record: j, patchPath: join(dir, f.replace(/\.json$/, '.patch')), qlId: j.qlId || f.replace(/\.json$/, '') }
+        }
+      } catch { /* 单文件损坏跳过 */ }
+    }
+  }
   return null
 }
 
@@ -238,7 +361,7 @@ function sumTotals(rows) {
  * 他者会话声明索引与 --done 收尾同源实时采集（complete-handlers :1050 同款 merge），保证
  * foreignDeclared 豁免面与门禁口径一致（R-04：行数只对归属本会话的文件采集）。
  */
-async function computeQuickAudit({ cwd, platformOpts, sessionId, located }) {
+async function computeQuickAudit({ cwd, platformOpts, sessionId, located, collectPatch }) {
   const guardSpecBase = located.specBase
   const guard = located.guard
   // 审计在「创建会话的项目根」跑（located.specBase 父目录）：cd 漂移后 cwd 可能是子目录，
@@ -315,6 +438,10 @@ async function computeQuickAudit({ cwd, platformOpts, sessionId, located }) {
     }
   }
 
+  const frozenPatch = collectPatch
+    ? buildFrozenPatch(sessionRoot, rowFiles, { baseRef: 'HEAD' })
+    : undefined
+
   return {
     ...base,
     totals,
@@ -324,6 +451,7 @@ async function computeQuickAudit({ cwd, platformOpts, sessionId, located }) {
         ? audit.foreignSessionDeclared.filter(x => x && typeof x === 'object')
         : [],
     },
+    frozenPatch,
     note,
   }
 }
@@ -334,10 +462,43 @@ async function computeQuickAudit({ cwd, platformOpts, sessionId, located }) {
  * only；baseAnchor 缺失 → 行数按 HEAD 未提交窗口兜底（quick 模式同口径，不再恒 —）；
  * 归档且实时窗口空 → execute 时点快照记录态（快照也缺 → 空表诚实说明）。
  */
-async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts }) {
+async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, collectPatch }) {
   const sb = specBase || join(cwd, '.sillyspec')
   const runtimeRoot = resolveRuntimeRoot(platformOpts, sb)
   const changeDirInfo = resolveChangeDir(sb, changeName)
+
+  // —— 预执行形态（quick-bbb5037c）：执行证据三信号（worktree meta / 分支 sillyspec/<名> /
+  // 审计 tag）全无 = 尚未进入 execute——实际侧不存在（B2 会吞整个工作区脏文件误归属本变更，
+  // 2026-09-11-cross-change-decision-guard 实证 28 个「计划外」全是并行在途）。出计划清单
+  // 视图：rows=design 清单 untouched（待实现），工作区改动归属各自会话不进表。
+  const hasWorktreeMeta = existsSync(join(sb, '.runtime', 'worktrees', changeName, 'meta.json'))
+  const hasBranch = !!safeGit(cwd, ['rev-parse', '--verify', '--quiet', `sillyspec/${changeName}^{commit}`], { timeout: 15 * 1000 }).value
+  const hasAuditTag = !!safeGit(cwd, ['rev-parse', '--verify', '--quiet', `sillyspec-audit/sillyspec/${changeName}^{commit}`], { timeout: 15 * 1000 }).value
+  if (!hasWorktreeMeta && !hasBranch && !hasAuditTag) {
+    const emptyBase = {
+      mode: 'full-flow', ok: true, degradedReason: null, baseAnchor: null,
+      totals: { files: 0, additions: 0, deletions: 0 }, rows: [],
+      excluded: { foreignDeclared: [] }, frozenPatch: undefined,
+    }
+    let prePlanned = []
+    try {
+      prePlanned = parseFileChangeListDetailed(
+        join(changeDirInfo ? changeDirInfo.dir : join(sb, 'changes', changeName), 'design.md'),
+        { keepSillyspecDocs: true })
+    } catch { /* 清单解析失败 → 空清单 + 说明 */ }
+    const preRows = prePlanned.map(e => ({
+      path: e.path, planned: e.operation || null, additions: 0, deletions: 0,
+      kind: 'modified', verdict: 'untouched',
+    }))
+    return {
+      ...emptyBase,
+      totals: { files: preRows.length, additions: 0, deletions: 0 },
+      rows: preRows,
+      note: preRows.length > 0
+        ? '变更尚未进入 execute（无 worktree/分支/审计 tag）——下表为 design 清单（全部待实现）；工作区其他未提交改动归属各自会话/变更，不在本表（若确已执行过但三信号均被手工清理，此处会误判——git log 核实）'
+        : '变更尚未进入 execute（无 worktree/分支/审计 tag）且 design 无可解析清单——暂无可对账内容',
+    }
+  }
 
   // —— 计划侧（单一真相：change-list.js，禁自研表格解析；归档形态目录兼容）——
   const designMdPath = join(changeDirInfo ? changeDirInfo.dir : join(sb, 'changes', changeName), 'design.md')
@@ -380,7 +541,7 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts })
     excluded: { foreignDeclared: [] },
     note: null,
   }
-  let archivedNoSnapshot = false
+  let noSnapshotDrift = false
 
   if (!actual || actual.ok === false) {
     // 实际侧整体失败：三态无锚不出表（fail-soft 单行提示由注入点兑现），计划侧降级信息一并带出
@@ -390,14 +551,18 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts })
     return { ...base, degradedReason: [reason, planDegraded].filter(Boolean).join('；') }
   }
 
-  // —— 归档形态·冻结快照优先（真实 > 冻结记录 > 实时开放区间）：归档变更的范围应封闭在
-  // apply 时点，不随后续主仓改动漂移（quick-f5acdeeb）。execute --done 落的快照即该时点
-  // 冻结记录（含行数）——archived 一律先出快照；实时窗口（开放区间，含并行 WIP 与后续演进）
-  // 只作快照缺失的兜底，note 明示会漂。tag 封闭区间不可用：分支上仅 baseline checkpoint
-  // （并行 WIP 快照），本变更改动经工作树 apply 从未 commit 到分支。 ——
-  if (changeDirInfo && changeDirInfo.archived) {
-    const snap = readScopeSnapshot(runtimeRoot, changeName)
+  // —— 已收尾变更·冻结快照优先（真实 > 冻结记录 > 实时开放区间）：归档变更的范围应封闭在
+  // apply 时点，不随后续主仓改动漂移（quick-f5acdeeb）；quick-bd84b852 放宽——**post-apply
+  // （分支已删 = execute 已 apply 收尾）的活跃变更同样收尾**，此后实时区间只会被并行演进泡大
+  // （multi-agent-platform 2026-09-04 滞留变更实证：741 文件零提示刷屏）。execute --done 落的
+  // 快照即冻结记录（含行数）——已收尾一律先出快照；实时窗口（开放区间）只作快照缺失的兜底，
+  // note 明示会漂。tag 封闭区间不可用：分支上仅 baseline checkpoint（并行 WIP 快照），本变更
+  // 改动经工作树 apply 从未 commit 到分支。 ——
+  const settled = changeDirInfo && (changeDirInfo.archived || actual.form === 'post-apply')
+  if (settled) {
+    const snap = readScopeSnapshot(changeDirInfo.dir, runtimeRoot, changeName)
     if (snap && snap.rows.length > 0) {
+      const settleLabel = changeDirInfo.archived ? '已归档' : 'execute 已收尾（分支已清理，待 verify/archive）'
       // 行数补采：快照可能落盘于 apply 后、tag 锚落地前的窗口（行数列全 —）；tag 锚
       // （quick-df1fed77）恢复 merge-base 后，对冻结文件集按锚补采行数——文件集不重算
       // （冻结语义不变），仅行数从 — 复活；含主仓后续演进（同文件被再改会计入），口径标注。
@@ -426,7 +591,7 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts })
           excluded: snap.excluded && Array.isArray(snap.excluded.foreignDeclared)
             ? snap.excluded
             : { foreignDeclared: [] },
-          note: `已归档——execute --done 时点冻结快照${snap.savedAt ? '（' + String(snap.savedAt).replace('T', ' ').slice(0, 19) + ' 落盘）' : ''}：文件集封闭在 apply 时点，主仓后续新文件不进表；行数按锚 ${actual.baseAnchor.slice(0, 7)}→当前工作树 补采（同文件后续演进会计入）`,
+          note: `${settleLabel}——execute --done 时点冻结快照${snap.savedAt ? '（' + String(snap.savedAt).replace('T', ' ').slice(0, 19) + ' 落盘）' : ''}：文件集封闭在 apply 时点，主仓后续新文件不进表；行数按锚 ${actual.baseAnchor.slice(0, 7)}→当前工作树 补采（同文件后续演进会计入）`,
         }
       }
       return {
@@ -441,19 +606,20 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts })
         excluded: snap.excluded && Array.isArray(snap.excluded.foreignDeclared)
           ? snap.excluded
           : { foreignDeclared: [] },
-        note: `已归档——execute --done 时点冻结快照${snap.savedAt ? '（' + String(snap.savedAt).replace('T', ' ').slice(0, 19) + ' 落盘）' : ''}：范围封闭在 apply 时点，主仓后续改动不反映到本表；需要看当前工作区实时状态请跑 git status`,
+        note: `${settleLabel}——execute --done 时点冻结快照${snap.savedAt ? '（' + String(snap.savedAt).replace('T', ' ').slice(0, 19) + ' 落盘）' : ''}：范围封闭在 apply 时点，主仓后续改动不反映到本表；需要看当前工作区实时状态请跑 git status`,
       }
     }
     // 快照缺失 → 实时开放区间兜底（下方主链路），note 追加漂移警告
-    archivedNoSnapshot = true
+    noSnapshotDrift = true
   }
 
   const degraded = []
   if (planDegraded) degraded.push(planDegraded)
   const notes = []
-  // 归档但快照缺失（上方分支置位）：实时开放区间兜底，明示漂移语义
-  if (archivedNoSnapshot) {
-    notes.push('已归档但 execute 快照缺失——下表为实时开放区间（基点→当前工作树，含并行会话与后续演进，随主仓改动漂移），非本变更冻结范围；重建记录态看归档 verify-result.md / git log')
+  // 已收尾但快照缺失（上方分支置位）：实时开放区间兜底，明示漂移语义——快照机制上线
+  // （2026-09-10）前收尾的旧变更冻结记录无法重建，如实告知替代渠道。
+  if (noSnapshotDrift) {
+    notes.push('快照缺失（变更已收尾——已归档或 execute 分支已清理；快照机制上线前收尾的变更无法重建冻结记录）——下表为实时开放区间（基点→当前工作树，含并行会话与后续演进，随主仓改动漂移），非本变更冻结范围；记录态参考 verify-result.md / git log')
   }
 
   // —— 行数采集根与基点 ——
@@ -507,6 +673,12 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts })
     rows.push({ path: e.path, planned: e.operation || null, additions: 0, deletions: 0, kind: 'modified', verdict: 'untouched' })
   }
 
+  // 冻结 patch（collectPatch，execute --done 落盘方消费）：与行数同根同锚（numstatRoot +
+  // baseAnchor；无锚 HEAD 兜底同口径），全窗口 diff + untracked 自拼 hunk（buildFrozenPatch）
+  const frozenPatch = collectPatch
+    ? buildFrozenPatch(numstatRoot, actual.files, { baseRef: actual.baseAnchor || 'HEAD' })
+    : undefined
+
   return {
     ...base,
     ok: true,
@@ -515,6 +687,7 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts })
     totals: { files: rows.length, ...sumTotals(rows) },
     rows,
     excluded: { foreignDeclared: [] },
+    frozenPatch,
     note: notes.length > 0 ? notes.join('；') : null,
   }
 }
@@ -542,7 +715,7 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts })
  *   excluded: { foreignDeclared: Array<{ file: string, sessions: string[] }> },
  *   note?: string|null }>}
  */
-export async function computeChangeScopeAudit({ cwd, specBase, changeName, platformOpts } = {}) {
+export async function computeChangeScopeAudit({ cwd, specBase, changeName, platformOpts, collectPatch } = {}) {
   const empty = {
     mode: 'full-flow', ok: false, degradedReason: null, baseAnchor: null,
     totals: { files: 0, additions: 0, deletions: 0 },
@@ -556,15 +729,33 @@ export async function computeChangeScopeAudit({ cwd, specBase, changeName, platf
     if (QUICK_SID_RE.test(changeName)) {
       const located = locateQuickSessionGuard(cwd, changeName)
       if (located) {
-        return await computeQuickAudit({ cwd, platformOpts, sessionId: changeName, located })
+        return await computeQuickAudit({ cwd, platformOpts, sessionId: changeName, located, collectPatch })
+      }
+      // guard 已清理（会话收尾）→ quicklog/patches/ 记录态反查（quick-359a48f1）：
+      // 命中出冻结记录（行数为 --done 时点真值），patch 可供 --file 切片
+      const rec = findQuickPatchRecord(cwd, changeName)
+      if (rec) {
+        return {
+          mode: 'quick', ok: true, degradedReason: null,
+          baseAnchor: rec.record.baseAnchor || `quick-window:${changeName}`,
+          totals: rec.record.totals && typeof rec.record.totals === 'object'
+            ? rec.record.totals
+            : { files: rec.record.rows.length, ...sumTotals(rec.record.rows) },
+          rows: rec.record.rows,
+          excluded: rec.record.excluded && Array.isArray(rec.record.excluded.foreignDeclared)
+            ? rec.record.excluded
+            : { foreignDeclared: [] },
+          frozenPatchPath: rec.patchPath,
+          note: `quick 会话已收尾——记录态（quicklog/patches/${rec.qlId}，${rec.record.savedAt ? String(rec.record.savedAt).replace('T', ' ').slice(0, 19) + ' 落盘' : '--done 时点冻结'}）`,
+        }
       }
       return {
         ...empty,
         mode: 'quick',
-        degradedReason: `quick 会话 ${changeName} 不存在（祖先链各 specBase 下均无 guard.json——会话已清理或从未创建）`,
+        degradedReason: `quick 会话 ${changeName} 不存在（guard 已清理且 quicklog/patches/ 无记录——会话未产生改动或早于记录机制）`,
       }
     }
-    return await computeFullFlowAudit({ cwd, specBase, changeName, platformOpts })
+    return await computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, collectPatch })
   } catch (e) {
     // fail-soft 兜底（D-006 / 兼容策略）：注入点只打一行提示，不阻断阶段完成
     return {
@@ -592,6 +783,23 @@ export async function getFileDiff({ cwd, specBase, changeName, platformOpts, fil
   }
   try {
     const result = await computeChangeScopeAudit({ cwd, specBase, changeName, platformOpts })
+    const norm = toPosix(filePath)
+    const sb = specBase || join(cwd, '.sillyspec')
+
+    // —— 真·当时内容比对（quick-359a48f1）：已收尾变更优先冻结 patch 切片 ——
+    // ① quick 记录态自带 frozenPatchPath；② full-flow 变更目录 scope-audit.patch。
+    // patch 冻结在收尾时点，不含后续演进——实时锚 diff 只作 patch 缺失的兜底（口径标注）。
+    const frozenPatch = (result.frozenPatchPath
+        && (() => { try { return readFileSync(result.frozenPatchPath, 'utf8') } catch { return null } })())
+      || readFrozenPatch(resolveChangeDir(sb, changeName)?.dir || null)
+    if (frozenPatch) {
+      const sliced = slicePatchForFile(frozenPatch, norm)
+      if (sliced) {
+        return { ok: true, mode: result.mode, root: cwd, baseRef: null, anchorLabel: '冻结 patch（收尾时点内容，无后续演进混入）', diff: sliced, note: null }
+      }
+      return { ok: true, mode: result.mode, root: cwd, baseRef: null, anchorLabel: '冻结 patch', diff: null, note: '该文件不在冻结 patch 内（窗口外文件）' }
+    }
+
     // 锚点解析（语义锚 head-uncommitted-window → 实际 baseRef 'HEAD'；无锚同兜底并标注）
     let baseRef = 'HEAD'
     let anchorLabel = 'HEAD 未提交窗口（无锚点兜底）'
@@ -604,7 +812,6 @@ export async function getFileDiff({ cwd, specBase, changeName, platformOpts, fil
 
     // 执行根：quick=会话创建根（防 cd 漂移）；full-flow=resolveDiffRoot 共享口径
     let root = cwd
-    const sb = specBase || join(cwd, '.sillyspec')
     if (result.mode === 'quick') {
       const located = locateQuickSessionGuard(cwd, changeName)
       if (located) root = dirname(located.specBase)
@@ -613,7 +820,6 @@ export async function getFileDiff({ cwd, specBase, changeName, platformOpts, fil
       root = resolveDiffRoot(sb, changeName, form, cwd)
     }
 
-    const norm = toPosix(filePath)
     const r = safeGit(root, ['diff', '--no-color', baseRef, '--', norm], { timeout: 30 * 1000 })
     if (r.error) {
       return { ok: false, mode: result.mode, root, baseRef, anchorLabel, diff: null, note: `git diff 执行失败: ${r.error}` }
