@@ -8,11 +8,19 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { fileURLToPath } from 'node:url'
 import { SillyHubMcpClient } from '../src/sillyhub-mcp/client.js'
 import { probeSillyHub, clearProbeCache } from '../src/dispatch/probe.js'
 import { SyncManager } from '../src/sync.js'
+
+// 仓根锚（坑 probe-cwd-suite-runner，8904d4d 后套件必挂实证）：套件 runner（test/run-tests.mjs
+// runOne）以 cwd=<repo>/test/ 跑每个测试文件，process.cwd() 不再是仓根——probeSillyHub 的
+// readMcpConfig(cwd) 读 test/.sillyspec/local.yaml 落空 → no-config 短路，401 类型化断言必挂
+// （standalone 人工跑 cwd=仓根才过，正是本文件 probe-no-config-cwd-leak 注释警告的口径差）。
+// 探针类用例一律传仓根锚，不依赖进程 cwd。
+const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 
 test('① 端点双形态兼容（origin 拼 /mcp/ vs 完整端点不再叠加——活体实证 /mcp/mcp/ 404）', () => {
   const mk = (url) => new SillyHubMcpClient({ url, token: 't' })._endpoint
@@ -237,13 +245,13 @@ test('probe 401 类型化：token 失效 → mcp-token-invalid（非 daemon-unre
     getLastInitStatus: () => initStatus,
     listToolsWithMeta: async () => ({ tools: [] }),
   })
-  const r1 = await probeSillyHub({ client: mk(401), cwd: process.cwd() })
+  const r1 = await probeSillyHub({ client: mk(401), cwd: REPO_ROOT })
   assert.equal(r1.reason, 'mcp-token-invalid', '401 → 类型化 token 失效')
   clearProbeCache()
-  const r2 = await probeSillyHub({ client: mk(503), cwd: process.cwd() })
+  const r2 = await probeSillyHub({ client: mk(503), cwd: REPO_ROOT })
   assert.equal(r2.reason, 'daemon-unreachable', '非 401 → 仍 unreachable')
   clearProbeCache()
-  const r3 = await probeSillyHub({ client: { probeDaemon: async () => false }, cwd: process.cwd() })
+  const r3 = await probeSillyHub({ client: { probeDaemon: async () => false }, cwd: REPO_ROOT })
   assert.equal(r3.reason, 'daemon-unreachable', '无 getter（旧 client）→ 兜底 unreachable')
   clearProbeCache()
 })

@@ -291,3 +291,12 @@
 根因：dogfood 回填暴露预存盲区：域文件跨变更同号条目常见（runtime.md 七个 D-001@v1），parseDecisionEntries 去重键 file#id 先到先得，后来同号条目全被遮蔽——含 {DECISION_HITS} 防复潮的同号 rejected 决策
 方案：知识库 6 条目+归档 decisions.md 源头双侧补「文件：」行（重蒸馏幂等，--force-baseline 有意编辑受保护决策库）；knowledge-match 变更：行独立标签读入 entry.change、去重键改 file#id#变更（双路由完全重复仍折叠、legacy 无变更行互折叠维持旧行为）；回归 3 用例锁定
 结果：matchDecisionsByFiles 实测 6 文件全命中（含他变更锚点条目）；专项 decision-file-field 11/0+semantic-guard 30/0+prompt-inject 6/0+lint 570 绿；全量 438/2 经 stash A/B 复跑证明归属并行会话 8904d4d probe 分诊在途工作（本会话 440/0 基线在其落盘前）——非本变更回归，env skip 收尾留痕
+
+## ql-20260911-025-dc93 | 2026-09-11 20:55:02 | 跨会话协修 probe-cwd-suite-runner：401 类型化新测试套件必挂
+状态：已完成
+关联变更：（无）
+文件：test/sillyhub-mcp-platform-fixes.test.mjs
+需求：跨会话协修 probe-cwd-suite-runner：401 类型化新测试套件必挂
+根因：新测试以 cwd: process.cwd() 调 probeSillyHub，但套件 runner 以 cwd=test/ 跑文件，readMcpConfig 落空 no-config 短路，standalone 才过，从未在套件绿过
+方案：三处 probe 调用改传 REPO_ROOT=import.meta.url 推导仓根锚，文件头注释记录坑与实证链
+结果：standalone 7/0+全量 439/1（修复前 438/2 A/B 已证），残余 doc-ref-check 归并行会话在途文档不可代修，env skip 留痕
