@@ -3,9 +3,9 @@
 <!-- 以下为 2026-09-11-cross-change-decision-guard 自有任务（brainstorm step6 落盘；
      未勾选态同时是 quick-done-autoarchive-misfire 缺陷②的防护——见 decisions.md D-002@v1） -->
 
-- [ ] task-01: decision-distill 文件字段契约（解析+条件渲染+双侧归一口径）(depends_on: 无)
-- [ ] task-04: config-schema semantic_guard 段登记 (depends_on: 无)
-- [ ] task-02: knowledge-match 文件键反查（文件标签+锚点提取兜底+matchDecisionsByFiles）(depends_on: task-01)
+- [x] task-01: decision-distill 文件字段契约（解析+条件渲染+双侧归一口径）(depends_on: 无)
+- [x] task-04: config-schema semantic_guard 段登记 (depends_on: 无)
+- [x] task-02: knowledge-match 文件键反查（文件标签+锚点提取兜底+matchDecisionsByFiles）(depends_on: task-01)
 - [ ] task-03: semantic-guard 聚合模块（归因/断言检测/渲染/开关）(depends_on: task-02)
 - [ ] task-05: quick step1 进场注入（run/prompt.js 渲染层）(depends_on: task-03)
 - [ ] task-06: quick --done 断言 WARNING（quick-audit.js gate 内+渲染）(depends_on: task-03)
