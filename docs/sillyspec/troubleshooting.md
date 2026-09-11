@@ -910,3 +910,9 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 **症状③**：门禁隔离快照内实测环境不一致——venv 不含 dev 依赖（pytest-xdist 缺失）、node_modules 缺失——沙箱与真实仓环境不同的门禁持续误伤且难归因。
 **根因③**：快照只链接 node_modules——Python 项目的 commands.test 依赖 `.venv`（dev 依赖装在其中），快照内无 venv；链接失败/缺失也静默，误伤时看不出是环境问题。
 **修复③**：环境目录链接面扩 venv 族（node_modules/.venv/venv/env 全 junction——dev 依赖与主仓同源不缺）；链接失败或四者全缺时 ⚠️ 显式可见（宁可吵不可静默错）。
+
+## 60. 三坑：门禁沙箱环境缺失必挂（只能 advisory）/ 中断续跑半成品无主 / 回执解析全角缺陷（2026-09-12 用户实证，已修复）
+
+**① verify lint 沙箱必挂（node_modules 缺失）**：快照链接失败/布局差异时仍硬跑假环境。修复：`createGateSnapshot` 增环境完整性预检 `envDirsLinked`——主仓存在某环境目录（node_modules/.venv/venv/env）而快照内缺失 → 快照作废回退主仓（宁可主仓口径可能被并行污染、不可假沙箱必挂），回退原因 ⚠️ 可见。
+**② 中断续跑半成品无主**：新增 `sillyspec task start|finish|list`（`.runtime/task-progress/<change>/<task-NN>.json` 记 startedAt/note；list >2h 标红 🔴 中断遗留 + 接管审查指引）；execute 派发 prompt 注入开工/完工各一条命令的低摩擦指引。
+**③ 回执全角解析缺陷**（上一变更实证、本次手动避开后修根）：`RECEIPT_LINE_RE` 只认半角 `|` 分隔且 log 字段 `[^\s|]+` 遇空格截断——中文输入法手写全角 `｜` 整行不命中 → 回执槽 0 条 → integration-critical 误报无绿回执；含空格/全角括号路径截断 → 「日志不存在」假红。修复：分隔符双宽度容收（| 与 ｜）+ log 字段 rest-of-line + 行内尾注剥除。

@@ -1074,6 +1074,10 @@ ${crossLines}${crossWorktreeSection}${crossLegacySection}
       `  - task-${i.taskNum} (repo: ${i.repo}) → workdir: "${i.workdir}"`
     ).join('\n')
     worktreeSection = `
+### task 进行中标记（中断续跑的半成品归属，2026-09-12 起）
+
+每个 task **开工/完工各跑一条命令**（低摩擦，主代理或子代理均可）：开工「sillyspec task start --change {CHANGE_NAME} --task task-NN --note 一句话在做什么」；完工「sillyspec task finish --change {CHANGE_NAME} --task task-NN」。中断续跑时主代理用「sillyspec task list --change {CHANGE_NAME}」点名接管（>2h 标红为中断遗留），不再靠翻 git 工作区猜哪个半成品是谁的。
+
 ### 工作目录（per-task）
 
 调用 Task 工具启动子代理时，**workdir 参数是强制必传的**，且本 Wave 内不同 task 的 workdir 不同（主仓 task vs 跨仓 task）。

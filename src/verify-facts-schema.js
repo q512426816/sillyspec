@@ -42,8 +42,15 @@ export function classifyVerifiedFile(path) {
 /** 证据账 task 行：`- task-NN: <status> | verifiedFiles: a, b（豁免：…）`——占位 <待填：*> 不命中（fail-closed） */
 const EVIDENCE_LINE_RE = /^- (task-\d+):\s*(satisfied|missing|partial)\b([^\n]*)$/
 
-/** 回执行：`- claim: … | command: … | exit: 0 | log: path`——四字段行首锚定，占位不命中 */
-const RECEIPT_LINE_RE = /^- claim:\s*([^|]+)\|\s*command:\s*([^|]+)\|\s*exit:\s*(\d+)\s*\|\s*log:\s*([^\s|]+)/
+/**
+ * 回执行：`- claim: … | command: … | exit: 0 | log: path`——四字段行首锚定，占位不命中。
+ * 双宽度容收（坑 receipt-fullwidth-parse，2026-09-12 驾驭第十四批③，用户上一变更实证、
+ * 本次手动避开后要求修根：①分隔符同时认半角 | 与全角 ｜（中文输入法手写回执高频形态，
+ * 全角形态旧正则整行不命中 → 回执槽 0 条 → integration-critical 误报无绿回执）；
+ * ②log 字段 rest-of-line（旧 [^\s|+] 遇含空格/全角括号路径截断——`日志（第 1 次）.log`
+ * 被截成 `日志（第` → 「日志不存在」假红）；log 是末字段，行内若有 ｜/| 尾注取首段剥注。
+ */
+const RECEIPT_LINE_RE = /^- claim:\s*([^|｜\n]+)[|｜]\s*command:\s*([^|｜\n]+)[|｜]\s*exit:\s*(\d+)\s*[|｜]\s*log:\s*(.+)$/
 
 /**
  * 解析 verify-result.md 的两个受控槽段（D-001@v2 slot-backfill 录入界面）。
@@ -101,7 +108,7 @@ export function parseEvidenceSlots(mdText) {
         claim: m[1].trim(),
         command: m[2].trim(),
         exitCode: Number(m[3]),
-        logPath: m[4].trim().replace(/^`|`$/g, ''),
+        logPath: m[4].split(/[|｜]/)[0].trim().replace(/^`|`$/g, ''),
       })
     }
   }

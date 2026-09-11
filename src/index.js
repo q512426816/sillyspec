@@ -6,7 +6,7 @@
  * 只负责两件事：init（安装命令模板）和 setup（安装 MCP 工具）。
  * 状态管理通过 sillyspec.db（SQLite）完成，使用 `sillyspec progress` 命令。
  */
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync, unlinkSync } from 'fs';
 import { writeAtomicSync } from './fs-atomic.js';
 import { basename, dirname, extname, join, resolve, isAbsolute, sep, relative } from 'path';
 import { safeGit, git } from './git-helper.js';
@@ -642,6 +642,63 @@ async function main() {
         for (const e of rwResult.errors) console.error(`   - ${e}`);
         for (const w of rwResult.warnings) console.error(`⚠️  ${w}`);
         process.exit(1);
+      }
+      break;
+    }
+    case 'task': {
+      // task 级进行中状态标记（2026-09-12 驾驭第十四批②，用户实证「中断续跑时半成品无主，
+      // 主代理接管审查负担重」）：开工/完工各一条命令落 .runtime/task-progress/<change>/<task-NN>.json
+      // （startedAt + note），list 带陈旧标红（>2h 视为中断遗留——续跑时主代理据此点名接管审查，
+      // 不再靠翻 git 工作区猜半成品）。轻量 marker：不进 DB、不设门禁（状态可见性工具，非流程卡点）。
+      const taskSub = filteredArgs[1];
+      if (!taskSub || ['help', '--help', '-h'].includes(taskSub)) {
+        console.log(`用法:
+  sillyspec task start --change <名> --task task-NN [--note "一句话在做什么"]
+  sillyspec task finish --change <名> --task task-NN
+  sillyspec task list --change <名>
+task 进行中状态标记：开工/完工落 .runtime/task-progress/，list 标红 >2h 中断遗留（接管审查点名用）`);
+        break;
+      }
+      const tChangeIdx = filteredArgs.indexOf('--change');
+      const tChange = tChangeIdx >= 0 && filteredArgs[tChangeIdx + 1] ? filteredArgs[tChangeIdx + 1] : null;
+      const tTaskIdx = filteredArgs.indexOf('--task');
+      const tTask = tTaskIdx >= 0 && filteredArgs[tTaskIdx + 1] ? filteredArgs[tTaskIdx + 1] : null;
+      const tNoteIdx = filteredArgs.indexOf('--note');
+      const tNote = tNoteIdx >= 0 && filteredArgs[tNoteIdx + 1] ? filteredArgs[tNoteIdx + 1] : null;
+      if (!tChange) { console.error('❌ 缺 --change <变更名>'); process.exit(2); }
+      if (taskSub !== 'list') {
+        if (!tTask || !/^task-\d+$/.test(tTask)) { console.error('❌ --task 格式应为 task-NN'); process.exit(2); }
+      }
+      const tSpecBase = resolvePlatformSpecDir(dir, specDir) || join(dir, '.sillyspec');
+      const tRuntime = join(tSpecBase, '.runtime');
+      const tDir = join(tRuntime, 'task-progress', tChange);
+      if (taskSub === 'start') {
+        mkdirSync(tDir, { recursive: true });
+        writeFileSync(join(tDir, `${tTask}.json`), JSON.stringify({
+          task: tTask, change: tChange, note: tNote || '', startedAt: new Date().toISOString(),
+        }, null, 2) + '\n');
+        console.log(`📌 ${tTask} 已标记进行中${tNote ? '（' + tNote + '）' : ''}——完工时 sillyspec task finish --change ${tChange} --task ${tTask}`);
+      } else if (taskSub === 'finish') {
+        try { unlinkSync(join(tDir, `${tTask}.json`)); console.log(`✅ ${tTask} 进行中标记已清除（完工）`); }
+        catch { console.log(`ℹ️ ${tTask} 无进行中标记（已完工或从未 start）`); }
+      } else if (taskSub === 'list') {
+        if (!existsSync(tDir)) { console.log(`ℹ️ 无 ${tChange} 的进行中 task 标记`); break; }
+        const entries = readdirSync(tDir).filter(f => f.endsWith('.json'));
+        if (entries.length === 0) { console.log(`ℹ️ 无进行中标记（全部完工）`); break; }
+        console.log(`📋 ${tChange} 进行中 task（${entries.length} 个）——中断遗留接管审查点名用：`);
+        let stale = 0;
+        for (const f of entries.sort()) {
+          try {
+            const m = JSON.parse(readFileSync(join(tDir, f), 'utf8'));
+            const ageMin = Math.round((Date.now() - new Date(m.startedAt).getTime()) / 60000);
+            const isStale = ageMin > 120;
+            if (isStale) stale++;
+            console.log(`   ${isStale ? '🔴' : '🟢'} ${m.task}: 开始于 ${m.startedAt}（${ageMin >= 60 ? Math.floor(ageMin / 60) + 'h' + ageMin % 60 + 'm' : ageMin + 'm'} 前）${m.note ? '——' + m.note : ''}${isStale ? ' ⚠️ 超过 2h，疑似中断遗留（接管者：对照 task 卡 + git 工作区半成品审查）' : ''}`);
+          } catch { console.log(`   ⚠️ ${f} 标记损坏（忽略）`); }
+        }
+        if (stale > 0) console.log(`   共 ${stale} 个疑似中断遗留——主代理接管时逐一审查（半成品无主的痛点出口）`);
+      } else {
+        console.error(`❌ 未知子命令「${taskSub}」（start | finish | list）`); process.exit(2);
       }
       break;
     }
@@ -3821,7 +3878,7 @@ SillySpec modules — 模块文档管理
         const { registerRepoInLocalYaml } = await import('./local-register.js');
         let rrResult;
         try {
-          rrResult = registerRepoInLocalYaml(target.path, rrKey, absRepo);
+          rrResult = await registerRepoInLocalYaml(target.path, rrKey, absRepo);
         } catch (e) {
           console.error(`❌ 注册失败: ${e.message}`);
           process.exit(1);

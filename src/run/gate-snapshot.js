@@ -76,6 +76,18 @@ export function createGateSnapshot({ cwd, files, sourceRoot = null }) {
       console.warn(`⚠️ 门禁快照：主仓无 node_modules / venv 族环境目录——commands.test/lint 若依赖它们将快照/主仓都不可用（环境未安装？）`)
     }
 
+    // 环境完整性预检（坑 gate-snapshot-env-mismatch 二阶，2026-09-12 驾驭第十四批①，用户
+    // 实证「verify lint 沙箱必挂 node_modules 缺失只能 advisory」）：主仓存在某环境目录而
+    // 快照内缺失（链接失败/布局差异）→ 快照对该仓 commands 是假环境，实测必挂——快照作废
+    // 回退主仓现行为（主仓口径可能被并行脏文件污染，但环境真实；两害取轻 + 回退原因可见）。
+    const envMissing = envDirsLinked(cwd, snapshotRoot)
+    if (envMissing.length > 0) {
+      console.warn(`⚠️ 门禁快照环境不完整（${envMissing.join('、')} 在主仓存在、快照内缺失）——快照作废回退主仓实测（宁可主仓口径不可假沙箱硬挂；回退后失败先做污染归属鉴定）`)
+      try { git(cwd, ['worktree', 'remove', '--force', '--quiet', snapshotRoot]) } catch {}
+      try { rmSync(snapshotRoot, { recursive: true, force: true }) } catch {}
+      return null
+    }
+
     // local.yaml（gitignore 不进 HEAD；门禁命令配置来源）+ package-lock 保持 HEAD 版（npm test 不装新依赖）
     for (const cfg of [join('.sillyspec', 'local.yaml')]) {
       const src = join(cwd, cfg)
@@ -99,6 +111,22 @@ export function createGateSnapshot({ cwd, files, sourceRoot = null }) {
     }
     return null
   }
+}
+
+
+/**
+ * 环境完整性纯检（坑 gate-snapshot-env-mismatch 二阶）：主仓存在而快照缺失的环境目录清单。
+ * 任一命中 = 快照对该仓 commands 是假环境（链接失败/布局差异），调用方应作废快照回退主仓。
+ * @returns {string[]} 缺失目录名（空数组 = 完整/主仓本就无环境目录）
+ */
+export function envDirsLinked(cwd, snapshotRoot) {
+  const missing = []
+  for (const d of ['node_modules', '.venv', 'venv', 'env']) {
+    try {
+      if (existsSync(join(cwd, d)) && !existsSync(join(snapshotRoot, d))) missing.push(d)
+    } catch { missing.push(d) /* 判定异常按缺失算（保守作废快照） */ }
+  }
+  return missing
 }
 
 /**

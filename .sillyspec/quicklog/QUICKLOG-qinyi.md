@@ -419,3 +419,21 @@
 方案：①isCrossWorktreeDir 守卫进删除原语（isCross meta ∨ 命名双判据），主仓清理面拒删、cleanupCrossWorktrees allowCross 显式放行；②跨仓仓跳过 overlay+checkpoint（锚点恒=跨仓仓 HEAD，baselineFiles=[]）；③链接面扩 node_modules/.venv/venv/env 全 junction + 失败/全缺 ⚠️ 可见
 结果：cross-worktree-guard 4/4（含真实双仓端到端：外来文件不进分支）；worktree 系回归全绿；全量 npm test 447/447；lint 门禁实测过；docs check 我的漂移锚已重锚（余 11 处失效属并行会话在途文件，归其收口）
 审计：⚖️ 归属切分：4 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：src/index.js, test/crossrepo-three-fixes.test.mjs, test/local-register.test.mjs, test/backlog-batch-c.test.mjs
+
+## ql-20260912-006-42fc | 2026-09-12 07:22:57 | 修驾驭三负面：门禁沙箱环境预检回退 + task 进行中标记 + 回执解析双宽度容收
+状态：已完成
+关联变更：quick-c757822d
+文件：
+- src/run/gate-snapshot.js（envDirsLinked 预检回退）
+- src/index.js（task start/finish/list 命令）
+- src/stages/execute.js（prompt 标记指引）
+- src/verify-facts-schema.js（RECEIPT_LINE_RE 双宽度）
+- test/verify-facts-receipt-width.test.mjs（4 用例）
+- test/task-progress-marker.test.mjs（3 用例）
+- docs/sillyspec/troubleshooting.md（§60）
+- 5 文档（锚重锚×16）
+需求：修驾驭三负面：门禁沙箱环境预检回退 + task 进行中标记 + 回执解析双宽度容收
+根因：①快照链接失败/布局差异仍硬跑假环境（node_modules 缺失必挂只能 advisory 留痕）；②中断续跑半成品无 task 级状态载体，主代理接管审查靠翻 git 猜；③回执行只认半角 | 且 log 字段遇空格截断——全角 ｜ 手写整行不命中误报无绿回执、含空格/全角括号路径截断假红（上变更实证）
+方案：①envDirsLinked 纯检：主仓有而快照缺的环境目录命中即作废快照回退主仓+原因可见；②task start/finish/list（.runtime/task-progress/ 标记 + >2h 🔴 接管指引）+ execute prompt 开工/完工各一条命令指引；③RECEIPT_LINE_RE 分隔符双宽度（| 与 ｜）+ log rest-of-line + 尾注剥除
+结果：新测试 7/7（回执 4 + task 标记 3）；receipt/task 系回归全绿；全量 npm test 449/449；lint 579 文件 0 fail；docs check 553 全过（自漂移 7 + 他漂移 9 锚重锚）
+审计：⚖️ 归属切分：1 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：docs/sillyspec/platform-interface-map.md
