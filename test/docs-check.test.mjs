@@ -35,7 +35,8 @@ describe('collectDocRefs（全文扫描）', () => {
     const refs = collectDocRefs(md)
     assert.equal(refs.length, 2)
     // repo 字段：repo:// 跨仓标记（2026-08-20）——本地引用恒为 null
-    assert.deepEqual(refs[0], { ref: 'src/a.js:3', repo: null, file: 'src/a.js', start: 3, end: 3, docLine: 1 })
+    // kwSkip 字段（2026-09-11 纯位置锚语法 file.js:line?）：无 ? 尾标恒 false
+    assert.deepEqual(refs[0], { ref: 'src/a.js:3', repo: null, file: 'src/a.js', start: 3, end: 3, kwSkip: false, docLine: 1 })
     assert.deepEqual(refs[1].file, 'b.js')
     assert.equal(refs[1].start, 2)
     assert.equal(refs[1].end, 5)

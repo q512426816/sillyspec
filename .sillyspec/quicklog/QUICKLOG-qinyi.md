@@ -111,3 +111,17 @@
 方案：gate-snapshot.js 增 sourceRoot overlay + createVerifyGateSnapshot（变更文件集 resolveVerifyChangedFiles + 他者显式声明剔除 + native worktree 定向源 + 变更文档随快照）；gates.js verify 块 test/lint 快照内跑（ENV 可关，基建失败 fallback 主仓），lint 阻断 fallback 路径补污染归属提示 + scope-audit 出口；troubleshooting §58 四段坑条
 结果：verify-gate-snapshot 3/3（native 定向/in-place 声明剔除无主保留/fallback）；quick-gate-snapshot 回归 4/4；全量 npm test 432/432 全绿；lint 560 文件 0 hard fail；docs check 559 全过（漂移 4 锚重锚）
 审计：⚖️ 归属切分：4 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：docs/sillyspec/architecture-4a.md, docs/sillyspec/file-lifecycle.md, docs/sillyspec/prompt-control-debt.md, .sillyspec/changes/friction-signal-hint/symbol-impact.md
+
+## ql-20260911-014-3e32 | 2026-09-11 10:46:40 | 修 docs gate 窗口关键词误伤：纯位置锚语法 file.js:line?（层 2 跳过、层 1 照校）
+状态：已完成
+关联变更：friction-signal-hint
+文件：
+- src/docs-check.js（REF_RE ? 捕获组 + kwSkip 三点 + 教学提示）
+- test/docs-check-positional-anchor.test.mjs（4 用例）
+- test/docs-check.test.mjs（deepEqual 补 kwSkip 字段）
+- test/docs-check-fix.test.mjs（S7 strip 扩 POS_HINT）
+- .sillyspec/docs/sillyspec/modules/docs-consistency.md（卡补记）
+需求：修 docs gate 窗口关键词误伤：纯位置锚语法 file.js:line?（层 2 跳过、层 1 照校）
+根因：层 2 把引用行全部反引号 token（OR）对锚点文件窗口断言——跨文件引用+反话论述（锚 A、token 全是 B 概念）必失败，唯一绕法删行号让引用退出核验，锚点信息丢失
+方案：REF_RE 增第 5 捕获组 (?)?；collectDocRefs 解析 kwSkip；runDocsCheck 与 collectInvalidDocRefs（scan-postcheck 共用内核）两层 2 点 kwSkip 跳过断言、层 1 照校；层 2 失败 reason 尾附加 ? 教学提示（勿删行号）
+结果：docs-check-positional-anchor 4/4；回归 55/55（deepEqual 补 kwSkip 字段 + S7 字节对照 strip 扩展契约演化后缀）；全量 npm test 433/433；lint 561 文件 0 fail；docs check 559 全过

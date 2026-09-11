@@ -28,13 +28,16 @@ import { parseModuleMapSimple } from './modules.js'
  * 不同设备兄弟仓库位置不同，未配映射时默认跳过本地校验（防跨设备误报）；
  * 在本机 .sillyspec/local.yaml 的 docs-check.cross_repo_roots 配
  * `<仓库名>: <本机绝对路径>` 后，走与本地引用完全相同的层1（行号边界）+ 层2（关键词窗口）校验。
- * 正则组：1=仓库名（可选），2=文件，3=start，4=end。
+ * 正则组：1=仓库名（可选），2=文件，3=start，4=end，5=纯位置锚标记（可选尾 `?`）。
+ * 纯位置锚 `file.js:123?`（2026-09-11 用户实证 docs gate 误伤：跨文件引用+反话论述——锚 A
+ * 文件而行内反引号 token 全是 B 概念，层 2 必失败，被迫删行号绕开）：`?` 显式声明本锚只做
+ * 定位不做关键词断言，层 1（存在性+行界）照校——论述语境锚的一等语法，替代行号化绕开。
  * 文件段展开循环形（D-006，2026-09-08-docs-fix-capability）：普通段可选 + 零或多个「闭合括号段+普通段」
  * 迭代——支持 Next.js 路由组 (dashboard) 等括号路径；markdown 链接 [t](foo.js:12) 在 `(` 处括号段
  * 要求 `)` 先于 `:` 闭合而失败，回落 foo.js:12 零回归；嵌套 ((x)) 部分提取（与旧行为一致）。
  * ⚠ 不用原子序列 (?:A+|B+)+——经典嵌套量词 ReDoS（Grill 实证 n=30 长 token 73.8s），
  * 展开循环每次迭代必含括号段 → 划分唯一 → 线性。 */
-const REF_RE = /(?:repo:\/\/([A-Za-z0-9_.\-]+)\/)?([A-Za-z0-9_.\-\/]*(?:\([A-Za-z0-9_.\-\/]+\)[A-Za-z0-9_.\-\/]*)*\.(?:js|mjs|cjs|ts|tsx|jsx|py|java|go)):(\d+)(?:-(\d+))?/g
+const REF_RE = /(?:repo:\/\/([A-Za-z0-9_.\-]+)\/)?([A-Za-z0-9_.\-\/]*(?:\([A-Za-z0-9_.\-\/]+\)[A-Za-z0-9_.\-\/]*)*\.(?:js|mjs|cjs|ts|tsx|jsx|py|java|go)):(\d+)(?:-(\d+))?(\?)?/g
 
 /** 缺省扫描范围：docs/ + .sillyspec/docs/（scan/modules 产物同是文档，失效即该暴露；2026-08-16 用户裁决改缺省，见 doc-consistency-debt.md §八）
  * + .sillyspec/changes/ + .sillyspec/knowledge/（P1-1，noai-ir-roadmap §4：最活跃、最易产生
@@ -127,6 +130,7 @@ export function collectDocRefs(md) {
       file: m[2],
       start: parseInt(m[3], 10),
       end: m[4] !== undefined ? parseInt(m[4], 10) : parseInt(m[3], 10),
+      kwSkip: m[5] === '?', // 纯位置锚（file.js:123?）：层1 照校、层2 跳过
       docLine: line,
     })
   }
@@ -312,7 +316,7 @@ export function collectInvalidDocRefs(projectRoot, docEntries) {
         invalid.push({ doc: name, ref: ref.ref, reason: '文件不存在' })
         continue
       }
-      const tokens = extractExpectedTokensFromLine(docLines[ref.docLine - 1] || '')
+      const tokens = ref.kwSkip ? [] : extractExpectedTokensFromLine(docLines[ref.docLine - 1] || '')
       const infos = candidates.map(abs => ({ lines: readLines(abs, linesCache) }))
       const ok = infos.some(({ lines }) => {
         if (!lines || lines.length === 0) return false
@@ -588,7 +592,7 @@ export function runDocsCheck(opts) {
         continue
       }
       // 多候选宽容：逐候选跑层1+层2，任一全过即通过
-      const tokens = keywordAssert
+      const tokens = (keywordAssert && !r.kwSkip)
         ? extractExpectedTokensFromLine(mdLines[r.docLine - 1] || '')
         : []
       const candidateFails = []
@@ -613,7 +617,7 @@ export function runDocsCheck(opts) {
         const repoPrefix = r.repo ? `跨仓 repo://${r.repo} → ` : ''
         invalid.push({
           doc: docRel, docLine: r.docLine, ref: r.ref,
-          reason: repoPrefix + (candidateFails.length > 1 ? `多候选全失败 → ${candidateFails.join(' | ')}` : candidateFails[0]),
+          reason: repoPrefix + (candidateFails.length > 1 ? `多候选全失败 → ${candidateFails.join(' | ')}` : candidateFails[0]) + (candidateFails.some(f => f.includes('关键词缺失')) ? '（跨文件引用/论述语境的纯位置锚：行号后加 ? 跳过关键词断言，层1 行界仍校验——勿删行号）' : ''),
           // 建议行号（--suggest）：token 在首个候选文件的全量命中行，供人工确认改锚——不自动改文件
           suggest: suggestLines(candidates, tokens, linesCache),
           // 修复分类（--fix 判定依据）：全量候选 token 命中打分——唯一命中或选优严格领先可自动重锚
