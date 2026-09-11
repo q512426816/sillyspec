@@ -24,6 +24,7 @@ modules:
     paths:
       - src/agent-session-log.js
       - src/friction-tally.js
+      - src/semantic-guard.js
       - src/runtime-hygiene.js
       - src/workspace.js
       - src/run.js
