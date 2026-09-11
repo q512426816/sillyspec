@@ -437,3 +437,18 @@
 方案：①envDirsLinked 纯检：主仓有而快照缺的环境目录命中即作废快照回退主仓+原因可见；②task start/finish/list（.runtime/task-progress/ 标记 + >2h 🔴 接管指引）+ execute prompt 开工/完工各一条命令指引；③RECEIPT_LINE_RE 分隔符双宽度（| 与 ｜）+ log rest-of-line + 尾注剥除
 结果：新测试 7/7（回执 4 + task 标记 3）；receipt/task 系回归全绿；全量 npm test 449/449；lint 579 文件 0 fail；docs check 553 全过（自漂移 7 + 他漂移 9 锚重锚）
 审计：⚖️ 归属切分：1 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：docs/sillyspec/platform-interface-map.md
+
+## ql-20260912-007-63f7 | 2026-09-12 07:37:38 | 修驾驭两负面：门禁快照 monorepo 依赖布局可用性 + 失败归属可见 / baseline checkpoint 产物防御（289MB tar.gz 实证…
+状态：已完成
+关联变更：quick-c757822d
+文件：
+- src/run/gate-snapshot.js（discoverEnvDirs + envDirsLinked 发现集 + printSnapshotFailureHint）
+- src/run/quick-audit.js,src/run/gates.js,src/run/verify-quality-scan.js（路径可见 + 失败提示三接线）
+- src/worktree.js（isCheckpointSkippableArtifact + untracked 防御）
+- test/gate-snapshot-monorepo.test.mjs（5 用例）
+- docs/sillyspec/troubleshooting.md（§61）
+- 4 文档（锚重锚×6）
+需求：修驾驭两负面：门禁快照 monorepo 依赖布局可用性 + 失败归属可见 / baseline checkpoint 产物防御（289MB tar.gz 实证）
+根因：①快照只链根级四目录——workspace 子包 node_modules 不覆盖致快照内报无关错，且路径不可见、失败无归属提示（四次重试考古）；②untracked 收入口零防御——.gitignore 缺口的部署 tar.gz 被 checkpoint 带进分支（FF 破坏 + 二进制永久入 git）
+方案：①discoverEnvDirs 递归发现集（深度≤3）逐 junction + envDirsLinked 发现集口径 + 三执行点 🧺 行带快照根路径 + printSnapshotFailureHint（路径/排查顺序/SNAPSHOT_OFF 对照）；②isCheckpointSkippableArtifact（归档扩展名恒跳 + 10MB 帽 env 可调）+ 跳过清单点名 + gitignore 指引
+结果：gate-snapshot-monorepo 5/5（含 pnpm workspace e2e 与 tar.gz e2e）；快照/worktree 系回归全绿；全量 npm test 450/450；lint 580 文件 0 fail；docs check 553 全过

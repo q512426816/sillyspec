@@ -916,3 +916,8 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 **① verify lint 沙箱必挂（node_modules 缺失）**：快照链接失败/布局差异时仍硬跑假环境。修复：`createGateSnapshot` 增环境完整性预检 `envDirsLinked`——主仓存在某环境目录（node_modules/.venv/venv/env）而快照内缺失 → 快照作废回退主仓（宁可主仓口径可能被并行污染、不可假沙箱必挂），回退原因 ⚠️ 可见。
 **② 中断续跑半成品无主**：新增 `sillyspec task start|finish|list`（`.runtime/task-progress/<change>/<task-NN>.json` 记 startedAt/note；list >2h 标红 🔴 中断遗留 + 接管审查指引）；execute 派发 prompt 注入开工/完工各一条命令的低摩擦指引。
 **③ 回执全角解析缺陷**（上一变更实证、本次手动避开后修根）：`RECEIPT_LINE_RE` 只认半角 `|` 分隔且 log 字段 `[^\s|]+` 遇空格截断——中文输入法手写全角 `｜` 整行不命中 → 回执槽 0 条 → integration-critical 误报无绿回执；含空格/全角括号路径截断 → 「日志不存在」假红。修复：分隔符双宽度容收（| 与 ｜）+ log 字段 rest-of-line + 行内尾注剥除。
+
+## 61. 两坑：门禁快照对 monorepo 依赖布局不可用（四次重试才定位路径）/ baseline checkpoint 卷入 289MB 部署 tar.gz（2026-09-12 用户实证，已修复）
+
+**①快照 monorepo 失明**：根级四环境目录链接覆盖不了 pnpm/nx/lerna workspace 的 `packages/<pkg>/node_modules` 子包依赖——快照内实测报各种无关错，四次重试后才从日志摸到 `Temp\sillyspec-gate-*` 路径。修复：`discoverEnvDirs` 深度≤3 递归发现集（跳过环境目录内部/dist/build/.git）逐个 junction；`envDirsLinked` 预检改发现集口径；🧪 日志行带**快照根路径**；失败时 `printSnapshotFailureHint` 直给路径 + 排查顺序（本变更真实失败 → 环境差异对照复跑 `*_SNAPSHOT_OFF=1` → 并行污染已排除）——三个执行点（quick 门禁 / verify gates / noAI 扫描）全接线。
+**②checkpoint 产物吞噬**：部署 tar.gz（289MB untracked，.gitignore 缺口）被 baseline checkpoint 带进分支——FF 合并被迫改 merge commit + 二进制永久入 git。修复：untracked 收入口 `isCheckpointSkippableArtifact` 防御（归档/分发扩展名 tar.gz/zip/whl/exe 等恒跳 + >10MB 体积帽 `SILLYSPEC_BASELINE_MAX_FILE_MB` 可调），跳过清单 ⚠️ 点名 + 补 .gitignore 指引；tracked-modified 不设防（已在 git 历史，checkpoint diff 是原生形态）。

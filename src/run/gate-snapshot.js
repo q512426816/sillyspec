@@ -63,17 +63,22 @@ export function createGateSnapshot({ cwd, files, sourceRoot = null }) {
     // Python 项目的 commands.test 在快照内找不到 venv，误伤持续且难归因）。链接面扩 venv 族
     // （.venv/venv/env——链接后 dev 依赖与主仓同源，不缺 xdist）；链接失败/主仓本就没有时
     // ⚠️ 显式可见（环境不一致的门禁会持续误伤——宁可吵不可静默错）。
-    for (const envDir of ['node_modules', '.venv', 'venv', 'env']) {
-      const src = join(cwd, envDir)
-      if (!existsSync(src)) continue
+    // 递归依赖发现（坑 gate-snapshot-monorepo-layout，2026-09-12 驾驭第十五批①，用户实证
+    // 「对 monorepo 依赖布局完全不可用，四次重试才定位」）：pnpm/nx/lerna workspace 的
+    // packages/<pkg>/node_modules 子目录依赖不在根四目录——深度≤3 扫描发现集逐个 junction。
+    const envRelDirs = discoverEnvDirs(cwd)
+    for (const rel of envRelDirs) {
+      const src = join(cwd, rel)
+      const dst = join(snapshotRoot, rel)
       try {
-        symlinkSync(src, join(snapshotRoot, envDir), 'junction')
+        mkdirSync(dirname(dst), { recursive: true })
+        symlinkSync(src, dst, 'junction')
       } catch (e) {
-        console.warn(`⚠️ 门禁快照环境目录链接失败（${envDir}）：${e && e.message ? e.message : e}——快照内实测可能因缺 ${envDir} 误伤，失败时先核对快照环境`)
+        console.warn(`⚠️ 门禁快照环境目录链接失败（${rel}）：${e && e.message ? e.message : e}——快照内实测可能因缺该目录误伤，失败时先核对快照环境`)
       }
     }
-    if (!existsSync(join(cwd, 'node_modules')) && !existsSync(join(cwd, '.venv')) && !existsSync(join(cwd, 'venv')) && !existsSync(join(cwd, 'env'))) {
-      console.warn(`⚠️ 门禁快照：主仓无 node_modules / venv 族环境目录——commands.test/lint 若依赖它们将快照/主仓都不可用（环境未安装？）`)
+    if (envRelDirs.length === 0) {
+      console.warn(`⚠️ 门禁快照：主仓未发现任何环境目录（node_modules / venv 族，含子包递归）——commands.test/lint 若依赖它们将快照/主仓都不可用（环境未安装？）`)
     }
 
     // 环境完整性预检（坑 gate-snapshot-env-mismatch 二阶，2026-09-12 驾驭第十四批①，用户
@@ -114,19 +119,58 @@ export function createGateSnapshot({ cwd, files, sourceRoot = null }) {
 }
 
 
+/** 环境目录名集（根与子包通用） */
+const ENV_DIR_NAMES = new Set(['node_modules', '.venv', 'venv', 'env'])
+
 /**
- * 环境完整性纯检（坑 gate-snapshot-env-mismatch 二阶）：主仓存在而快照缺失的环境目录清单。
- * 任一命中 = 快照对该仓 commands 是假环境（链接失败/布局差异），调用方应作废快照回退主仓。
- * @returns {string[]} 缺失目录名（空数组 = 完整/主仓本就无环境目录）
+ * 递归依赖发现（坑 gate-snapshot-monorepo-layout）：深度 ≤3 扫描（跳过环境目录自身内部/
+ * .git/dist/build/.sillyspec），返回所有环境目录的仓库根相对 POSIX 路径（含根级四目录）。
+ * pnpm/nx/lerna workspace 的 packages/<pkg>/node_modules 覆盖。
+ */
+export function discoverEnvDirs(cwd, { maxDepth = 3 } = {}) {
+  const out = []
+  const skip = new Set(['.git', 'dist', 'build', '.sillyspec', 'out', 'target'])
+  const walk = (dir, rel, depth) => {
+    let entries
+    try { entries = readdirSync(dir, { withFileTypes: true }) } catch { return }
+    for (const e of entries) {
+      if (!e.isDirectory() || skip.has(e.name)) continue
+      const childRel = rel ? rel + '/' + e.name : e.name
+      if (ENV_DIR_NAMES.has(e.name)) {
+        out.push(childRel)
+        continue // 环境目录内部不再下钻（node_modules/node_modules 无意义且巨大）
+      }
+      if (depth < maxDepth) walk(join(dir, e.name), childRel, depth + 1)
+    }
+  }
+  walk(cwd, '', 0)
+  return out
+}
+
+/**
+ * 环境完整性纯检（坑 gate-snapshot-env-mismatch 二阶，发现集口径）：主仓存在（递归发现）
+ * 而快照缺失的环境目录清单。任一命中 = 快照对该仓 commands 是假环境，调用方作废回退主仓。
+ * @returns {string[]} 缺失目录相对路径（空数组 = 完整/主仓本就无环境目录）
  */
 export function envDirsLinked(cwd, snapshotRoot) {
   const missing = []
-  for (const d of ['node_modules', '.venv', 'venv', 'env']) {
+  for (const rel of discoverEnvDirs(cwd)) {
     try {
-      if (existsSync(join(cwd, d)) && !existsSync(join(snapshotRoot, d))) missing.push(d)
-    } catch { missing.push(d) /* 判定异常按缺失算（保守作废快照） */ }
+      if (existsSync(join(cwd, rel)) && !existsSync(join(snapshotRoot, rel))) missing.push(rel)
+    } catch { missing.push(rel) /* 判定异常按缺失算（保守作废快照） */ }
   }
   return missing
+}
+
+/**
+ * 快照内实测失败的归属提示（坑 gate-snapshot-monorepo-layout 配套：用户四次重试才从日志
+ * 摸到 Temp\sillyspec-gate-* 路径——失败时路径/疑点/对照复跑出口必须直给）。
+ * 调用方在「快照内执行且失败」的分支打印。
+ */
+export function printSnapshotFailureHint(snapInfo, { offEnv = 'SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF' } = {}) {
+  if (!snapInfo || !snapInfo.snapshotRoot) return
+  console.error(`   🔬 本次实测执行于隔离快照：${snapInfo.snapshotRoot}（HEAD + 本变更 ${snapInfo.changeFileCount ?? '?'} 个文件${snapInfo.sourceRoot ? '，overlay 自 worktree' : ''}）`)
+  console.error(`   失败疑点排查顺序：① 本变更文件自身的真实失败（最常见）→ 修代码；② 快照环境差异（monorepo 依赖布局/环境目录链接缺失）→ 设 ${offEnv}=1 回退主仓复跑对照——主仓过而快照挂即环境问题；③ 并行污染已被快照隔离，不在疑点内。`)
 }
 
 /**

@@ -109,6 +109,28 @@ export function isCrossWorktreeDir(worktreePath) {
  * 命名形态）拒绝删除——主仓清理面（cleanup force-remove / doctor ghost / 幽灵清理）不得
  * 波及跨仓 worktree（其注册在跨仓仓 .git，删除权在 cleanupCrossWorktrees 显式路径）。
  */
+
+/**
+ * baseline checkpoint 产物防御（坑 baseline-checkpoint-binary-sweep，2026-09-12 驾驭第十五
+ * 批②，用户实证：部署 tar.gz（289MB）被 checkpoint 带进分支——FF 合并被迫改 merge commit +
+ * 二进制永久入 git）。untracked 收入口对两类产物恒跳过：①已知归档/分发扩展名（tar.gz/zip/
+ * whl/exe 等——几乎不可能是源码 WIP）；②单文件超体积帽（缺省 10MB，SILLYSPEC_BASELINE_
+ * MAX_FILE_MB 可调）。跳过清单返回调用方点名 + 补 .gitignore 指引（gitignore 缺口的实际代价
+ * 由工具兜底提示）。tracked-modified 不走本防御（已在 git 历史里，checkpoint diff 是 git 原生）。
+ */
+const ARTIFACT_EXT_RE = /\.(?:tar\.gz|tgz|tar|zip|7z|rar|gz|bz2|xz|whl|exe|dll|so|dylib|iso|dmg|pkg|jar|war|apk|ipa)$/i
+
+export function isCheckpointSkippableArtifact(absPath) {
+  const rel = String(absPath).split('\\').join('/')
+  if (ARTIFACT_EXT_RE.test(rel)) return 'artifact-ext'
+  try {
+    const maxMB = Number(process.env.SILLYSPEC_BASELINE_MAX_FILE_MB) || 10
+    const st = statSync(absPath)
+    if (st.isFile() && st.size > maxMB * 1024 * 1024) return 'size-cap'
+  } catch { /* stat 失败按不跳过（后续 copy 自会报错） */ }
+  return null
+}
+
 export function safeRemoveWorktreeDir(worktreePath, meta = null, opts = {}) {
   if (!opts.allowCross && isCrossWorktreeDir(worktreePath)) {
     throw new Error(
@@ -1799,10 +1821,15 @@ export class WorktreeManager {
       // untracked 文件（排除 .sillyspec/.runtime 等）；目录跳过避免 readFileSync EISDIR
       const untracked = gitQuiet(mainCwd, ['ls-files', '--others', '--exclude-standard'], { timeout: 30000 }) || '';
       const skippedDirs = [];
+      const skippedArtifacts = [];
       if (untracked) {
         for (const f of untracked.split('\n').filter(Boolean)) {
           const norm = f.replace(/\\/g, '/')
           if (norm === '.sillyspec' || norm.startsWith('.sillyspec/')) { excludedSpecFiles.push(f); continue }
+          // 产物防御（坑 baseline-checkpoint-binary-sweep）：归档扩展名/超体积帽 untracked 恒不进
+          // baseline checkpoint——289MB tar.gz 入分支（FF 破坏 + 二进制永久入 git）的实际代价兜底
+          const artifactWhy = isCheckpointSkippableArtifact(join(mainCwd, f));
+          if (artifactWhy) { skippedArtifacts.push(`${f}（${artifactWhy}）`); continue }
           const r = copyUntrackedEntry(join(mainCwd, f), join(worktreePath, f));
           if (r.status === 'copied') files.push(f);
           else if (r.status === 'skipped-dir') skippedDirs.push(f);
@@ -1811,6 +1838,10 @@ export class WorktreeManager {
       }
       if (skippedDirs.length > 0) {
         console.log(`ℹ️  baseline overlay 跳过 ${skippedDirs.length} 个 untracked 目录（不读目录避免 EISDIR，坑 execute-worktree-overlay-untracked-dir-eisdir）`);
+      }
+      if (skippedArtifacts.length > 0) {
+        console.warn(`⚠️ baseline checkpoint 跳过 ${skippedArtifacts.length} 个产物/大文件（不进分支，留在主仓原位）：${skippedArtifacts.slice(0, 5).join('、')}${skippedArtifacts.length > 5 ? ' 等' : ''}`);
+        console.warn(`   归档/分发物与大文件不该入 git——补 .gitignore（如 *.tar.gz / dist/ / deploy/）或移出仓库；本跳过仅护 baseline checkpoint，git add -A 仍会把它们卷进提交`);
       }
       // 跨变更 spec 文档隔离可见性：列出被排除的 .sillyspec/ 文件（去重，截断展示），
       // 让「ROADMAP 被谁改动、为何不在本 baseline」在 create 时刻可查，不需事后考古

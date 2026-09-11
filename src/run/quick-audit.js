@@ -338,7 +338,7 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
       if (snapshot) {
         gateCwd = snapshot.snapshotRoot
         gateSpecBase = join(snapshot.snapshotRoot, '.sillyspec')
-        console.log(`🧪 门禁隔离快照：HEAD + 本会话 ${snapshot.overlaid} 个文件（并行会话脏文件不参与判定）`)
+        console.log(`🧪 门禁隔离快照（根：${snapshot.snapshotRoot}）：HEAD + 本会话 ${snapshot.overlaid} 个文件（并行会话脏文件不参与判定）`)
       }
     } catch { /* 快照链路异常 → 主仓现行为 */ }
   }
@@ -348,6 +348,11 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
     const failed = []
     if (test.status === 'failed') failed.push('test')
     if (lint.status === 'failed') failed.push('lint')
+    if (failed.length > 0 && snapshot) {
+      try { const { printSnapshotFailureHint } = await import('./gate-snapshot.js')
+        printSnapshotFailureHint({ snapshotRoot: snapshot.snapshotRoot, changeFileCount: snapshot.overlaid, sourceRoot: snapshot.sourceRoot || null }, { offEnv: 'SILLYSPEC_QUICK_GATE_SNAPSHOT_OFF' })
+      } catch { /* 提示失败不影响门禁语义 */ }
+    }
     return {
       action: failed.length > 0 ? 'fail' : 'pass',
       failed,

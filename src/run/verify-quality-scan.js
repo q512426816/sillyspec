@@ -276,7 +276,7 @@ export async function executeVerifyQualityScan({ cwd, specBase, changeName, plat
       const { createVerifyGateSnapshot } = await import('./gate-snapshot.js')
       snap = await createVerifyGateSnapshot({ cwd, changeName, specBase, platformOpts })
       if (snap) {
-        console.log(`🧪 noAI 扫描隔离快照：HEAD + 本变更 ${snap.changeFileCount} 个文件${snap.sourceRoot ? '（overlay 自 worktree——本变更分支内容定向跑）' : ''}（并行会话脏文件不参与判定）`)
+        console.log(`🧪 noAI 扫描隔离快照（根：${snap.snapshotRoot}）：HEAD + 本变更 ${snap.changeFileCount} 个文件${snap.sourceRoot ? '（overlay 自 worktree——本变更分支内容定向跑）' : ''}（并行会话脏文件不参与判定）`)
       }
     } catch { /* 快照链路异常 → 主仓现行为 */ }
   }
@@ -318,6 +318,10 @@ export async function executeVerifyQualityScan({ cwd, specBase, changeName, plat
     recordFrictionEvent({ cwd, changeName, platformOpts, type: 'verify_run_failed', detail: testFailed ? 'test' : 'lint' })
   }
   if (testFailed || lintBlocked) {
+    if (snap) {
+      try { const { printSnapshotFailureHint } = await import('./gate-snapshot.js')
+        printSnapshotFailureHint(snap) } catch { /* 提示失败不影响阻断 */ }
+    }
     const runtimeRoot = resolveRuntimeRoot(platformOpts, specBase)
     await renderVerifyTestAttribution({ cwd, changeName, specBase, runtimeRoot })
     const which = testFailed ? '测试' : 'lint'

@@ -646,7 +646,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
         const { createVerifyGateSnapshot } = await import('./gate-snapshot.js')
         verifyGateSnap = await createVerifyGateSnapshot({ cwd, changeName, specBase, platformOpts })
         if (verifyGateSnap) {
-          console.log(`🧪 Verify 实测隔离快照：HEAD + 本变更 ${verifyGateSnap.changeFileCount} 个文件${verifyGateSnap.sourceRoot ? '（overlay 自 worktree——本变更分支内容定向跑）' : ''}（并行会话脏文件不参与门判定）`)
+          console.log(`🧪 Verify 实测隔离快照（根：${verifyGateSnap.snapshotRoot}）：HEAD + 本变更 ${verifyGateSnap.changeFileCount} 个文件${verifyGateSnap.sourceRoot ? '（overlay 自 worktree——本变更分支内容定向跑）' : ''}（并行会话脏文件不参与门判定）`)
         }
       } catch { /* 快照链路异常 → 主仓现行为 */ }
     }
@@ -679,7 +679,11 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
       }
     } catch { /* fail-soft：回填失败不影响门禁 */ }
     if (testCheck.status === 'failed') {
-      if (verifyGateSnap) { try { verifyGateSnap.cleanup() } catch {} ; verifyGateSnap = null }
+      if (verifyGateSnap) {
+        try { const { printSnapshotFailureHint } = await import('./gate-snapshot.js')
+          printSnapshotFailureHint(verifyGateSnap) } catch { /* 提示失败不影响阻断 */ }
+        try { verifyGateSnap.cleanup() } catch {} ; verifyGateSnap = null
+      }
       console.error('\n❌ verify 阶段被阻断：verify-result.md 自报告通过，但 CLI 实测测试失败。')
       // 并行 WIP 归因鉴别（坑 verify-reconcile-foreign-wip）：单一实现迁至 verify-quality-scan.js
       // renderVerifyTestAttribution（P0-1 前置二：noAI 质量扫描失败路径与本 --done 路径共用，
@@ -707,6 +711,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
     }
     // 快照收尾（test+lint 两检查都已完成；parity/删除探针走主仓 git 事实不依赖快照）
     const usedSnapshot = Boolean(verifyGateSnap)
+    const usedSnapInfo = verifyGateSnap ? { snapshotRoot: verifyGateSnap.snapshotRoot, changeFileCount: verifyGateSnap.changeFileCount, sourceRoot: verifyGateSnap.sourceRoot } : null
     if (verifyGateSnap) { try { verifyGateSnap.cleanup() } catch {} ; verifyGateSnap = null }
     printVerifyLintCheck(lintCheck)
     // lint 硬门（2026-09-09 升硬：观察期 14 次 5 败全真阳性，pre-push 本就硬拦——fail-fast 前移；
@@ -714,6 +719,10 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
     const { shouldBlockVerifyLint } = await import('../verify-postcheck.js')
     if (shouldBlockVerifyLint(lintCheck)) {
       console.error('\n❌ verify 阶段被阻断：CLI 亲自实测 lint 失败（agent 的 lint 自报告与实测不符时以实测为准）。')
+      if (usedSnapInfo) {
+        try { const { printSnapshotFailureHint } = await import('./gate-snapshot.js')
+          printSnapshotFailureHint(usedSnapInfo) } catch { /* 提示失败不影响阻断 */ }
+      }
       if (lintCheck.outputTail) {
         const tail = lintCheck.outputTail.split('\n').slice(-8).join('\n')
         console.error('   输出（末尾）：')
