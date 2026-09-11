@@ -1,0 +1,228 @@
+diff --git a/src/hooks/worktree-guard.js b/src/hooks/worktree-guard.js
+index a3c84eb..a956c52 100644
+--- a/src/hooks/worktree-guard.js
++++ b/src/hooks/worktree-guard.js
+@@ -11,7 +11,7 @@
+ 
+ import { existsSync, readFileSync, readdirSync } from 'fs'
+ import path from 'path'
+-import { execFileSync } from 'child_process'
++import { createRequire } from 'node:module'
+ 
+ // ── 常量 ──
+ 
+@@ -244,9 +244,9 @@ function isInsideWorktreeStorage(filePath, cwd) {
+ /**
+  * 同步只读查询 sillyspec.db 第一行第一列（不依赖外部 sqlite3 CLI）。
+  *
+- * 用子进程跑 node:sqlite 的 DatabaseSync（execFileSync 等待）：
+- * - node:sqlite 是 Node 内置模块，子进程 require('node:sqlite') 直接可用，无需先 resolve 出
+- *   绝对路径再注入（旧方案需手动解析原生绑定路径，node:sqlite 无此步骤）。
++ * 进程内 createRequire 同步加载 node:sqlite 的 DatabaseSync（2026-09-11 审查性能包②：旧实现
++ * 每次查询 spawn 一个 node 子进程，Windows 100-300ms/次，hook 每次 Write/Edit/Bash 触发 1-2 次；
++ * hook 自身就是同一 node 二进制，子进程无隔离收益只有延迟）：
+  * - readOnly 打开只读连接（替代旧方案 readonly/fileMustExist 语义）：绝不写库；WAL 并发读不阻塞主进程写，
+  *   且只读连接可看到已 commit 但未 checkpoint 的过渡态（修复旧 WASM 内存库裸读 .db
+  *   看不见 WAL 的过渡态可见性窗口）。db 缺失/损坏由 open 异常自然触发 fail-closed（外层 catch）。
+@@ -254,7 +254,7 @@ function isInsideWorktreeStorage(filePath, cwd) {
+  * 环境假设（R-09）：WAL 模式下只读连接仍需在 .runtime/ 目录建/更新 -shm 索引文件，故 .runtime
+  * 必须可写（与主进程一致）——“只读”指不改 DB 数据，不等于不对 -shm 加索引。
+  *
+- * fail-closed：db 文件不存在 / 子进程打开、查询异常 / 子进程超时或崩溃——一律 console.warn
++ * fail-closed：db 文件不存在 / 打开、查询异常 / node:sqlite 不可用——一律 console.warn
+  * （含 e.stderr 详情）并返回 null，调用方（readCurrentStage/isNoWorktreeMode）对 null 走
+  * fail-closed，禁止 fail-open。
+  */
+@@ -266,26 +266,26 @@ function queryDbFirstCell(cwd, sql) {
+     console.warn('⚠️ sillyspec.db 不存在，hook 降级 fail-closed: ' + dbPath)
+     return null
+   }
+-  // 子进程同步内置 require('node:sqlite')（DatabaseSync 是同步 API，无 async/import().then 包装）。
+-  // prepare(sql).get() 取第一行整行后取首列值，无行返回 undefined（写空 stdout → 父侧 trim 后 null）。
+-  const script =
+-    "const {DatabaseSync}=require('node:sqlite')," +
+-    "dbPath=" + JSON.stringify(dbPath) + ",sql=" + JSON.stringify(sql) + ";" +
+-    "let db;" +
+-    "try{db=new DatabaseSync(dbPath,{readOnly:true});" +
+-    "const row=db.prepare(sql).get();" +
+-    "const v=row===undefined?undefined:Object.values(row)[0];" +
+-    "if(v!==undefined)process.stdout.write(String(v??''));db.close()}" +
+-    "catch(e){process.stderr.write('hook db query failed: '+String(e&&e.message||e));process.exit(1)};"
++  // 进程内同步 require node:sqlite（DatabaseSync 同步 API；2026-09-11 审查性能包②：旧实现每次
++  // hook 触发 spawn 一个 node 子进程查库，Windows 100-300ms/次×每 Write/Edit/Bash 1-2 次——
++  // hook 自身就是同一 node 二进制，子进程无隔离收益只有延迟）。异常路径与旧子进程版同语义：
++  // 捕获后 warn + 返回 null，调用方（readCurrentStage 等）对 null 走 fail-closed。
+   try {
+-    return execFileSync(process.execPath, ['-e', script], {
+-      encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'pipe'],
+-    }).trim() || null
++    const req = createRequire(import.meta.url)
++    const { DatabaseSync } = req('node:sqlite')
++    let db
++    try {
++      db = new DatabaseSync(dbPath, { readOnly: true })
++      const row = db.prepare(sql).get()
++      const v = row === undefined ? undefined : Object.values(row)[0]
++      return v === undefined ? null : (String(v ?? '') || null)
++    } finally {
++      if (db) db.close()
++    }
+   } catch (e) {
+-    // DB 查询失败（db 损坏 / readOnly 打开失败 / 子进程超时或崩溃）：降级返回 null，调用方
+-    //（readCurrentStage 等）对 null 走 fail-closed。补 warn 让 doctor/agent 能看到根因，
+-    // 而非完全静默（子进程把诊断写到了 stderr，execFileSync 抛错时挂在 e.stderr 上）。
+-    const detail = (e && e.stderr ? String(e.stderr).trim() : '') || (e && e.message) || 'timeout/crash'
++    // DB 查询失败（db 损坏 / readOnly 打开失败 / node:sqlite 不可用）：降级返回 null，调用方
++    //（readCurrentStage 等）对 null 走 fail-closed。补 warn 让 doctor/agent 能看到根因。
++    const detail = (e && e.message) ? e.message : String(e)
+     console.warn('⚠️ sillyspec.db 查询失败，hook 降级 fail-closed: ' + detail)
+     return null
+   }
+diff --git a/src/quicklog.js b/src/quicklog.js
+index 3aea219..b4e6c53 100644
+--- a/src/quicklog.js
++++ b/src/quicklog.js
+@@ -718,7 +718,12 @@ export async function allocateQuicklogEntry(specBase, gitUser, { description, li
+   const files = Array.isArray(allowedFiles) ? allowedFiles : []
+   const today = todayStamp()
+ 
+-  return await withFileLock(lockPath, async () => {
++  // 平台推送在锁外执行（2026-09-11 审查性能包①）：锁内 5s 网络推送 + 逐变更 tasks 锁
++  // （最坏各 10s）可使临界区突破 30s stale 偷锁阈值——他进程偷锁后双写者并发，正是本模块
++  // 头声明要根治的并发丢更新被重新打开。推送 best-effort 不回写本地，锁外语义等同（原注释
++  // 自证），仅放弃「分配即推送」的顺序一致性（平台为 best-effort 面板，乱序窗口极小）。
++  let pushPayload = null
++  const { qlId } = await withFileLock(lockPath, async () => {
+     const { maxSeq, usedSuffix } = scanExisting(quicklogDir, today)
+     const nextSeq = maxSeq + 1
+     // XXXX 4 位 hex 随机后缀（消歧；NNN 已在锁内顺序分配保证唯一，此处仅 belt-and-suspenders）
+@@ -744,9 +749,7 @@ export async function allocateQuicklogEntry(specBase, gitUser, { description, li
+ 
+     for (const c of linked) await appendTaskCheckbox(specBase, c, qlId, desc)
+ 
+-    // 平台推送（task-06 / FR-02 / D-003）：锁外语义等同（推送不回写本地），但放锁内
+-    // 保证「分配即推送」顺序一致；best-effort 失败不影响返回。
+-    await pushQuicklogEntryToPlatform(specBase, {
++    pushPayload = {
+       ql_id: qlId,
+       timestamp: nowDatetime(),
+       title: desc,
+@@ -758,10 +761,13 @@ export async function allocateQuicklogEntry(specBase, gitUser, { description, li
+       files: files.map(f => ({ path: f, note: null })),
+       body_sections: {},
+       raw_block: entry,
+-    }).catch(() => {}) // pushQuicklogEntryToPlatform 自身已吞错；双保险防未来改动破坏 best-effort 契约
+-
++    }
+     return { qlId }
+   })
++  if (pushPayload) {
++    await pushQuicklogEntryToPlatform(specBase, pushPayload).catch(() => {}) // 自身已吞错；双保险防未来改动破坏 best-effort 契约
++  }
++  return { qlId }
+ }
+ 
+ /**
+@@ -785,9 +791,11 @@ export async function appendQuicklogEntryWithId(specBase, gitUser, qlId, { descr
+   const linked = Array.isArray(linkedChanges) ? linkedChanges : []
+   const files = Array.isArray(allowedFiles) ? allowedFiles : []
+ 
+-  return await withFileLock(lockPath, async () => {
++  // 推送出锁（同 allocateQuicklogEntry 性能包①：临界区只留本地写 + tasks 挂载）
++  let pushPayload = null
++  const { existed } = await withFileLock(lockPath, async () => {
+     // 双检（锁内）：并发兜底同 ID 只落一条
+-    if (findQuicklogEntry(specBase, gitUser, qlId)) return { qlId, existed: true }
++    if (findQuicklogEntry(specBase, gitUser, qlId)) return { existed: true }
+     await rotateIfNeeded(userFile, user)
+     const entry = [
+       '',
+@@ -799,7 +807,7 @@ export async function appendQuicklogEntryWithId(specBase, gitUser, qlId, { descr
+     ].join('\n')
+     appendFileSync(userFile, entry)
+     for (const c of linked) await appendTaskCheckbox(specBase, c, qlId, desc)
+-    await pushQuicklogEntryToPlatform(specBase, {
++    pushPayload = {
+       ql_id: qlId,
+       timestamp: nowDatetime(),
+       title: desc,
+@@ -810,9 +818,13 @@ export async function appendQuicklogEntryWithId(specBase, gitUser, qlId, { descr
+       files: files.map(f => ({ path: f, note: null })),
+       body_sections: {},
+       raw_block: entry,
+-    }).catch(() => {})
+-    return { qlId, existed: false }
++    }
++    return { existed: false }
+   })
++  if (pushPayload && !existed) {
++    await pushQuicklogEntryToPlatform(specBase, pushPayload).catch(() => {})
++  }
++  return { qlId, existed }
+ }
+ 
+ /**
+@@ -837,10 +849,12 @@ export async function completeQuicklogEntry(specBase, gitUser, qlId, { resultTex
+     ? softFiles.filter(Boolean).map((f) => String(f).replace(/\\/g, '/'))
+     : []
+ 
++  // 推送出锁（性能包①）：终态 payload 以锁内落盘结果组装，锁外 best-effort 推送 + sidecar 持久化
++  // （sidecar 与推送同源同解析器，同移锁外不改变「以落盘终态为准」语义）
++  let finalPayload = null
+   await withFileLock(lockPath, async () => {
+     // 条目可能在主文件或轮转归档中
+     let updatedContent = null
+-    let updatedFile = null
+     for (const f of listQuicklogFiles(quicklogDir)) {
+       const filePath = join(quicklogDir, f)
+       let content = ''
+@@ -850,7 +864,6 @@ export async function completeQuicklogEntry(specBase, gitUser, qlId, { resultTex
+       if (updated !== null) {
+         await writeAtomic(filePath, updated) // 命中处原子落盘（只改含目标条目的那一个文件）
+         updatedContent = updated
+-        updatedFile = filePath
+         break
+       }
+     }
+@@ -860,16 +873,16 @@ export async function completeQuicklogEntry(specBase, gitUser, qlId, { resultTex
+     // （design §5.3：翻完成时标题行被 extractTitleFromResult 刷新，推送须与落盘一致，
+     // 不能用入参拼——标题/结果块/文件行都会在 flipEntryInContent 中重写）。
+     const rawBlock = extractRawBlock(updatedContent, qlId)
+-    const finalPayload = buildPushPayloadFromRaw(rawBlock, {
++    finalPayload = buildPushPayloadFromRaw(rawBlock, {
+       ql_id: qlId,
+       author_raw: user,
+       status: 'completed',
+       linked_changes: linked,
+     })
+-    // P1-4：终态结构 sidecar 持久化（同一解析器产出，md/sidecar 恒一致；fail-soft）
+-    writeQuicklogSidecar(specBase, finalPayload)
+-    await pushQuicklogEntryToPlatform(specBase, finalPayload).catch(() => {})
+   })
++  // P1-4：终态结构 sidecar 持久化（同一解析器产出，md/sidecar 恒一致；fail-soft）
++  writeQuicklogSidecar(specBase, finalPayload)
++  await pushQuicklogEntryToPlatform(specBase, finalPayload).catch(() => {})
+ }
+ 
+ /**
+diff --git a/src/run/complete.js b/src/run/complete.js
+index a88b56e..13fe8be 100644
+--- a/src/run/complete.js
++++ b/src/run/complete.js
+@@ -1071,8 +1071,14 @@ export async function autoCheckPlanFromReviews({ stageName, changeName, cwd, pla
+         const taskNum = match.match(/task-(\d+)/)[1].padStart(2, '0')
+         const reviewPath = join(runtimeRoot, 'execute-runs', executeRunId, 'tasks', `task-${taskNum}`, 'review.json')
+         const r = readReview(reviewPath)
+-        // 端到端 task：必须 pass（cannot_verify 不算）；普通 task：非 fail 即可（坑 execute-batch-complete-endtoend-checkbox）
+-        const endToEnd = isEndToEndTaskText(match + ' ' + readTaskCardText(changeDir, taskNum))
++        // 卡片读取延后到 verdict 可用之后（2026-09-11 审查性能包③）：review 缺失或 spec/quality
++        // 已 fail 时 endToEnd 取值不影响 shouldAutoCheckTask 结果（恒 false），先读卡片是纯浪费
++        // ——持 tasks 锁期间每 task 省一次 readFileSync。
++        const verdictUsable = r?.ok
++          && r.review?.specVerdict !== 'fail'
++          && r.review?.qualityVerdict !== 'fail'
++        const endToEnd = verdictUsable
++          && isEndToEndTaskText(match + ' ' + readTaskCardText(changeDir, taskNum))
+         if (shouldAutoCheckTask(r, endToEnd, ctx)) {
+           checkedCount++
+           return `${p1}x${p2}`   // 勾选

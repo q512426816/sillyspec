@@ -362,3 +362,16 @@
 结果：新测试 security-batch-fixes 28/28；worktree-has-unapplied ⑩ 与 junction-fail-loud cleanup 用例随语义修正（force 跳闸聚焦 junction 断言）；全量 442 文件 0 失败 + lint 572 绿（CLI --done 门禁实测通过）
 审计：⚖️ 归属切分：1 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：test/security-batch-fixes.test.mjs
 审计：🔍 软归属：2 个窗口内未声明同模块测试文件已补入文件行（若属并行会话改动请手工剔除）：test/worktree-has-unapplied-changes.test.mjs（+3/-2）, test/worktree-junction-fail-loud.test.mjs（+9/-4）
+
+## ql-20260912-001-ca16 | 2026-09-12 00:04:25 | 审查报告性能包三项优化（quicklog 推送出锁/guard 直连 sqlite/autoCheck 卡片读取延后）
+状态：已完成
+关联变更：（无）
+文件：
+- src/quicklog.js（三函数推送出锁）
+- src/hooks/worktree-guard.js（直连 sqlite）
+- src/run/complete.js（卡片读取延后）
+需求：审查报告性能包三项优化（quicklog 推送出锁/guard 直连 sqlite/autoCheck 卡片读取延后）
+根因：① withFileLock 临界区内 5s 网络推送+逐变更 tasks 锁（最坏各 10s）可破 30s stale 偷锁阈值——模块头声明根治的并发丢更新被重新打开（正确性+性能同病灶）；② guard 每次 Write/Edit/Bash spawn 1-2 个 node 子进程查 sillyspec.db（Windows 100-300ms/次），hook 自身即同二进制 node 无隔离收益；③ autoCheck replace 回调在 review 不可用时仍先读任务卡（endToEnd 不影响结果，纯浪费）且持 tasks 锁期间。触及 run/complete.js 门禁链文件按解锁通道走 --force-baseline。评估后不做：stage.js 两次 git status 合一（审计侧折叠口径语义耦合）、跨函数 mtime 解析缓存（暖缓存亚毫秒收益不值陈旧面）
+方案：三个 quicklog 函数推送+sidecar 移锁外（payload 锁内组装锁外 best-effort 推送）；queryDbFirstCell 改 createRequire 进程内同步 node:sqlite（1.2ms 实测，语义四例保持）；卡片读取延后到 verdictUsable 之后
+结果：新测试 perf-batch-fixes 9/9（核心断言：慢推送 3s 在途时锁 1.5s 超时内立即可取——旧版必超时）；全量 443 文件 0 失败 + lint 573 绿（CLI --done 门禁实测通过）
+审计：⚖️ 归属切分：1 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：test/perf-batch-fixes.test.mjs

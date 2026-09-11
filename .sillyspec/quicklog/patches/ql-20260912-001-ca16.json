@@ -1,0 +1,46 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-cd443613",
+  "totals": {
+    "files": 3,
+    "additions": 61,
+    "deletions": 42
+  },
+  "rows": [
+    {
+      "path": "src/hooks/worktree-guard.js",
+      "declared": true,
+      "additions": 23,
+      "deletions": 23,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/quicklog.js",
+      "declared": true,
+      "additions": 30,
+      "deletions": 17,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/run/complete.js",
+      "declared": true,
+      "additions": 8,
+      "deletions": 2,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "qlId": "ql-20260912-001-ca16",
+  "sessionId": "quick-cd443613",
+  "savedAt": "2026-09-11T16:17:03.749Z",
+  "patchSha256": "60bb9715fcb1afee7ee4130925660b26def985bbdf037373bfbaa9dd04d57a0e",
+  "patchStatus": "ok"
+}

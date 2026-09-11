@@ -718,7 +718,12 @@ export async function allocateQuicklogEntry(specBase, gitUser, { description, li
   const files = Array.isArray(allowedFiles) ? allowedFiles : []
   const today = todayStamp()
 
-  return await withFileLock(lockPath, async () => {
+  // 平台推送在锁外执行（2026-09-11 审查性能包①）：锁内 5s 网络推送 + 逐变更 tasks 锁
+  // （最坏各 10s）可使临界区突破 30s stale 偷锁阈值——他进程偷锁后双写者并发，正是本模块
+  // 头声明要根治的并发丢更新被重新打开。推送 best-effort 不回写本地，锁外语义等同（原注释
+  // 自证），仅放弃「分配即推送」的顺序一致性（平台为 best-effort 面板，乱序窗口极小）。
+  let pushPayload = null
+  const { qlId } = await withFileLock(lockPath, async () => {
     const { maxSeq, usedSuffix } = scanExisting(quicklogDir, today)
     const nextSeq = maxSeq + 1
     // XXXX 4 位 hex 随机后缀（消歧；NNN 已在锁内顺序分配保证唯一，此处仅 belt-and-suspenders）
@@ -744,9 +749,7 @@ export async function allocateQuicklogEntry(specBase, gitUser, { description, li
 
     for (const c of linked) await appendTaskCheckbox(specBase, c, qlId, desc)
 
-    // 平台推送（task-06 / FR-02 / D-003）：锁外语义等同（推送不回写本地），但放锁内
-    // 保证「分配即推送」顺序一致；best-effort 失败不影响返回。
-    await pushQuicklogEntryToPlatform(specBase, {
+    pushPayload = {
       ql_id: qlId,
       timestamp: nowDatetime(),
       title: desc,
@@ -758,10 +761,13 @@ export async function allocateQuicklogEntry(specBase, gitUser, { description, li
       files: files.map(f => ({ path: f, note: null })),
       body_sections: {},
       raw_block: entry,
-    }).catch(() => {}) // pushQuicklogEntryToPlatform 自身已吞错；双保险防未来改动破坏 best-effort 契约
-
+    }
     return { qlId }
   })
+  if (pushPayload) {
+    await pushQuicklogEntryToPlatform(specBase, pushPayload).catch(() => {}) // 自身已吞错；双保险防未来改动破坏 best-effort 契约
+  }
+  return { qlId }
 }
 
 /**
@@ -785,9 +791,11 @@ export async function appendQuicklogEntryWithId(specBase, gitUser, qlId, { descr
   const linked = Array.isArray(linkedChanges) ? linkedChanges : []
   const files = Array.isArray(allowedFiles) ? allowedFiles : []
 
-  return await withFileLock(lockPath, async () => {
+  // 推送出锁（同 allocateQuicklogEntry 性能包①：临界区只留本地写 + tasks 挂载）
+  let pushPayload = null
+  const { existed } = await withFileLock(lockPath, async () => {
     // 双检（锁内）：并发兜底同 ID 只落一条
-    if (findQuicklogEntry(specBase, gitUser, qlId)) return { qlId, existed: true }
+    if (findQuicklogEntry(specBase, gitUser, qlId)) return { existed: true }
     await rotateIfNeeded(userFile, user)
     const entry = [
       '',
@@ -799,7 +807,7 @@ export async function appendQuicklogEntryWithId(specBase, gitUser, qlId, { descr
     ].join('\n')
     appendFileSync(userFile, entry)
     for (const c of linked) await appendTaskCheckbox(specBase, c, qlId, desc)
-    await pushQuicklogEntryToPlatform(specBase, {
+    pushPayload = {
       ql_id: qlId,
       timestamp: nowDatetime(),
       title: desc,
@@ -810,9 +818,13 @@ export async function appendQuicklogEntryWithId(specBase, gitUser, qlId, { descr
       files: files.map(f => ({ path: f, note: null })),
       body_sections: {},
       raw_block: entry,
-    }).catch(() => {})
-    return { qlId, existed: false }
+    }
+    return { existed: false }
   })
+  if (pushPayload && !existed) {
+    await pushQuicklogEntryToPlatform(specBase, pushPayload).catch(() => {})
+  }
+  return { qlId, existed }
 }
 
 /**
@@ -837,10 +849,12 @@ export async function completeQuicklogEntry(specBase, gitUser, qlId, { resultTex
     ? softFiles.filter(Boolean).map((f) => String(f).replace(/\\/g, '/'))
     : []
 
+  // 推送出锁（性能包①）：终态 payload 以锁内落盘结果组装，锁外 best-effort 推送 + sidecar 持久化
+  // （sidecar 与推送同源同解析器，同移锁外不改变「以落盘终态为准」语义）
+  let finalPayload = null
   await withFileLock(lockPath, async () => {
     // 条目可能在主文件或轮转归档中
     let updatedContent = null
-    let updatedFile = null
     for (const f of listQuicklogFiles(quicklogDir)) {
       const filePath = join(quicklogDir, f)
       let content = ''
@@ -850,7 +864,6 @@ export async function completeQuicklogEntry(specBase, gitUser, qlId, { resultTex
       if (updated !== null) {
         await writeAtomic(filePath, updated) // 命中处原子落盘（只改含目标条目的那一个文件）
         updatedContent = updated
-        updatedFile = filePath
         break
       }
     }
@@ -860,16 +873,16 @@ export async function completeQuicklogEntry(specBase, gitUser, qlId, { resultTex
     // （design §5.3：翻完成时标题行被 extractTitleFromResult 刷新，推送须与落盘一致，
     // 不能用入参拼——标题/结果块/文件行都会在 flipEntryInContent 中重写）。
     const rawBlock = extractRawBlock(updatedContent, qlId)
-    const finalPayload = buildPushPayloadFromRaw(rawBlock, {
+    finalPayload = buildPushPayloadFromRaw(rawBlock, {
       ql_id: qlId,
       author_raw: user,
       status: 'completed',
       linked_changes: linked,
     })
-    // P1-4：终态结构 sidecar 持久化（同一解析器产出，md/sidecar 恒一致；fail-soft）
-    writeQuicklogSidecar(specBase, finalPayload)
-    await pushQuicklogEntryToPlatform(specBase, finalPayload).catch(() => {})
   })
+  // P1-4：终态结构 sidecar 持久化（同一解析器产出，md/sidecar 恒一致；fail-soft）
+  writeQuicklogSidecar(specBase, finalPayload)
+  await pushQuicklogEntryToPlatform(specBase, finalPayload).catch(() => {})
 }
 
 /**

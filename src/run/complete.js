@@ -1071,8 +1071,14 @@ export async function autoCheckPlanFromReviews({ stageName, changeName, cwd, pla
         const taskNum = match.match(/task-(\d+)/)[1].padStart(2, '0')
         const reviewPath = join(runtimeRoot, 'execute-runs', executeRunId, 'tasks', `task-${taskNum}`, 'review.json')
         const r = readReview(reviewPath)
-        // 端到端 task：必须 pass（cannot_verify 不算）；普通 task：非 fail 即可（坑 execute-batch-complete-endtoend-checkbox）
-        const endToEnd = isEndToEndTaskText(match + ' ' + readTaskCardText(changeDir, taskNum))
+        // 卡片读取延后到 verdict 可用之后（2026-09-11 审查性能包③）：review 缺失或 spec/quality
+        // 已 fail 时 endToEnd 取值不影响 shouldAutoCheckTask 结果（恒 false），先读卡片是纯浪费
+        // ——持 tasks 锁期间每 task 省一次 readFileSync。
+        const verdictUsable = r?.ok
+          && r.review?.specVerdict !== 'fail'
+          && r.review?.qualityVerdict !== 'fail'
+        const endToEnd = verdictUsable
+          && isEndToEndTaskText(match + ' ' + readTaskCardText(changeDir, taskNum))
         if (shouldAutoCheckTask(r, endToEnd, ctx)) {
           checkedCount++
           return `${p1}x${p2}`   // 勾选
