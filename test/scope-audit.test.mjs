@@ -24,7 +24,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { execFileSync } from 'node:child_process'
-import { computeChangeScopeAudit, renderScopeAuditTable, getFileDiff, buildFrozenPatch } from '../src/scope-audit.js'
+import { computeChangeScopeAudit, renderScopeAuditTable, getFileDiff, buildFrozenPatch, collectNumstatByPath } from '../src/scope-audit.js'
 
 /** git 调用：数组参数不经 shell（Windows 路径安全），stdio pipe 吞输出 */
 function sh(cwd, args) {
@@ -474,6 +474,147 @@ test('预执行形态：无 meta/分支/tag 三无 → 计划清单视图，工�
     assert.ok(!r.note.includes('快照缺失'), '不误报收尾漂移警告')
     const out = renderScopeAuditTable(r)
     assert.ok(!out.includes('dirty-parallel'), '渲染无脏文件')
+  } finally { cleanup(d) }
+})
+
+// ───────────────────────── 组 6c：审查修复批（quick-bbe7e08d） ─────────────────────────
+
+test('C-F03 rename 花括号形态：git mv + 编辑 → numstat 命中新路径（modified 档，非 wc-l 整文件新增）', async () => {
+  const d = makeRepo('sa-rename-')
+  try {
+    mkdirSync(join(d, 'src'), { recursive: true })
+    writeFileSync(join(d, 'src', 'old.js'), 'l1\nl2\nl3\n')
+    sh(d, ['add', '-A'])
+    sh(d, ['commit', '-q', '-m', 'init'])
+    sh(d, ['mv', 'src/old.js', 'src/new.js'])
+    writeFileSync(join(d, 'src', 'new.js'), 'l1\nl2\nl3\nl4\n')
+    const stats = collectNumstatByPath(d, ['src/new.js'], { baseRef: 'HEAD' })
+    const st = stats.get('src/new.js')
+    assert.ok(st, 'numstat 命中新路径（rename 解析正确）')
+    assert.equal(st.additions, 1, '行数=相对 HEAD 真值（+1）')
+    assert.equal(st.deletions, 0)
+    assert.equal(st.kind, 'modified', '非 new 档（不落 wc-l 整文件新增）')
+  } finally { cleanup(d) }
+})
+
+test('C-F01 freshActual：settled 默认出冻结快照，freshActual 绕过出新鲜实际侧（verify 漂移消费者契约）', async () => {
+  const d = makeRepo('sa-fresh-')
+  try {
+    mkdirSync(join(d, 'src'), { recursive: true })
+    writeFileSync(join(d, 'src', 'a.js'), 'a1\n')
+    sh(d, ['add', '-A'])
+    sh(d, ['commit', '-q', '-m', 'init'])
+    const specBase = join(d, '.sillyspec')
+    writeDesign(specBase, 'fresh-change', ['| 修改 | src/a.js | 说明 |'], { archived: true })
+    sh(d, ['tag', 'sillyspec-audit/sillyspec/fresh-change'])
+    const runtimeRoot = join(specBase, '.runtime')
+    mkdirSync(runtimeRoot, { recursive: true })
+    writeFileSync(join(runtimeRoot, 'scope-audit-fresh-change.json'), JSON.stringify({
+      mode: 'full-flow', ok: true, baseAnchor: null, totals: { files: 1, additions: 1, deletions: 0 },
+      rows: [{ path: 'src/a.js', planned: '修改', additions: 1, deletions: 0, kind: 'modified', verdict: 'planned' }],
+      excluded: { foreignDeclared: [] }, savedAt: '2026-09-11T10:00:00.000Z',
+    }))
+    writeFileSync(join(d, 'src', 'drifted.js'), 'x\n')
+
+    const frozen = await computeChangeScopeAudit({ cwd: d, changeName: 'fresh-change' })
+    assert.ok(frozen.note && frozen.note.includes('冻结快照'), '默认走快照捷径')
+    assert.ok(!frozen.rows.some(r => r.path.includes('drifted')), '冻结视图无漂移文件')
+    const fresh = await computeChangeScopeAudit({ cwd: d, changeName: 'fresh-change', freshActual: true })
+    assert.ok(fresh.rows.some(r => r.path.includes('drifted')), 'freshActual 见到漂移文件（verify 漂移检测恢复）')
+  } finally { cleanup(d) }
+})
+
+test('C-F02 归档三信号全缺：不误判预执行（走实时区间）', async () => {
+  const d = makeRepo('sa-archnosig-')
+  try {
+    mkdirSync(join(d, 'src'), { recursive: true })
+    writeFileSync(join(d, 'src', 'a.js'), 'a1\n')
+    sh(d, ['add', '-A'])
+    sh(d, ['commit', '-q', '-m', 'init'])
+    const specBase = join(d, '.sillyspec')
+    writeDesign(specBase, 'archnosig-change', ['| 修改 | src/a.js | 说明 |'], { archived: true })
+    writeFileSync(join(d, 'src', 'a.js'), 'a1\ndirty\n')
+
+    const r = await computeChangeScopeAudit({ cwd: d, changeName: 'archnosig-change' })
+    assert.equal(r.ok, true)
+    assert.ok(!(r.note || '').includes('尚未进入 execute'), `归档不误判预执行（实际 ${r.note}）`)
+    assert.ok(r.rows.some(x => x.path === 'src/a.js'), '实时区间出实际改动')
+  } finally { cleanup(d) }
+})
+
+test('C-F02 execute-runs change 戳：无三信号也判已执行（非预执行清单）', async () => {
+  const d = makeRepo('sa-stamp-')
+  try {
+    mkdirSync(join(d, 'src'), { recursive: true })
+    writeFileSync(join(d, 'src', 'a.js'), 'a1\n')
+    sh(d, ['add', '-A'])
+    sh(d, ['commit', '-q', '-m', 'init'])
+    const specBase = join(d, '.sillyspec')
+    writeDesign(specBase, 'stamp-change', ['| 修改 | src/a.js | 说明 |'])
+    const runsDir = join(specBase, '.runtime', 'execute-runs', 'exec-20260911-000000-abc')
+    mkdirSync(runsDir, { recursive: true })
+    writeFileSync(join(runsDir, 'change'), 'stamp-change')
+    writeFileSync(join(d, 'src', 'a.js'), 'a1\ndirty\n')
+
+    const r = await computeChangeScopeAudit({ cwd: d, changeName: 'stamp-change' })
+    assert.equal(r.ok, true)
+    assert.ok(!(r.note || '').includes('尚未进入 execute'), `run 戳即证据（实际 ${r.note}）`)
+    assert.ok(r.rows.some(x => x.path === 'src/a.js'), '出实际改动行')
+  } finally { cleanup(d) }
+})
+
+test('C-F05 quick patch 口径：他者声明文件不进冻结 patch（对齐落盘 rows）', async () => {
+  const d = makeRepo('sa-qpatch-')
+  try {
+    mkdirSync(join(d, 'src'), { recursive: true })
+    writeFileSync(join(d, 'src', 'mine.js'), 'm1\n')
+    writeFileSync(join(d, 'src', 'foreign.js'), 'f1\n')
+    sh(d, ['add', '-A'])
+    sh(d, ['commit', '-q', '-m', 'init'])
+    const specBase = join(d, '.sillyspec')
+    mkdirSync(join(specBase, 'quicklog'), { recursive: true })
+    writeFileSync(join(specBase, 'quicklog', '2026-09.md'), '# QUICKLOG\n')
+    writeQuickGuard(specBase, 'quick-abcd1234', { allowedFiles: ['src/mine.js'], quicklogId: 'ql-20260911-001-aa' })
+    writeQuickGuard(specBase, 'quick-ffff0000', { allowedFiles: ['src/foreign.js'] })
+    writeFileSync(join(d, 'src', 'mine.js'), 'm2\n')
+    writeFileSync(join(d, 'src', 'foreign.js'), 'FOREIGN-SECRET\n')
+
+    const r = await computeChangeScopeAudit({ cwd: d, changeName: 'quick-abcd1234', collectPatch: true })
+    assert.ok(typeof r.frozenPatch === 'string' && r.frozenPatch.includes('+m2'), '归属文件进 patch')
+    assert.ok(!r.frozenPatch.includes('FOREIGN-SECRET'), '他者声明文件不进冻结 patch')
+  } finally { cleanup(d) }
+})
+
+test('A-F01 篡改检测：patch 被改 → getFileDiff 报 sha256 不匹配拒绝出 diff', async () => {
+  const d = makeRepo('sa-tamper-')
+  try {
+    mkdirSync(join(d, 'src'), { recursive: true })
+    writeFileSync(join(d, 'src', 'a.js'), 'a1\n')
+    sh(d, ['add', '-A'])
+    sh(d, ['commit', '-q', '-m', 'init'])
+    const specBase = join(d, '.sillyspec')
+    const archivedDir = join(specBase, 'changes', 'archive', 'tamper-change')
+    mkdirSync(archivedDir, { recursive: true })
+    writeFileSync(join(archivedDir, 'design.md'), '# design\n\n## 文件变更清单\n\n| 操作 | 文件路径 | 说明 |\n|---|---|---|\n| 修改 | src/a.js | s |\n')
+    const patchText = 'diff --git a/src/a.js b/src/a.js\n--- a/src/a.js\n+++ b/src/a.js\n@@ -1 +1,2 @@\n a1\n+orig\n'
+    const { createHash } = await import('node:crypto')
+    const snapBody = {
+      mode: 'full-flow', ok: true, baseAnchor: null,
+      totals: { files: 1, additions: 1, deletions: 0 },
+      rows: [{ path: 'src/a.js', planned: '修改', additions: 1, deletions: 0, kind: 'modified', verdict: 'planned' }],
+      excluded: { foreignDeclared: [] }, savedAt: '2026-09-11T10:00:00.000Z',
+      patchSha256: createHash('sha256').update(patchText, 'utf8').digest('hex'),
+    }
+    writeFileSync(join(archivedDir, 'scope-audit.json'), JSON.stringify(snapBody))
+    const runtimeRoot = join(specBase, '.runtime')
+    mkdirSync(runtimeRoot, { recursive: true })
+    writeFileSync(join(runtimeRoot, 'scope-audit-tamper-change.json'), JSON.stringify(snapBody))
+    // 篡改 patch（与 json 记录的 hash 不再一致）
+    writeFileSync(join(archivedDir, 'scope-audit.patch'), patchText.replace('+orig', '+TAMPERED'))
+
+    const fd = await getFileDiff({ cwd: d, changeName: 'tamper-change', filePath: 'src/a.js' })
+    assert.equal(fd.ok, false, '篡改 → 拒绝出 diff')
+    assert.ok(fd.note && fd.note.includes('不匹配') && fd.note.includes('篡改'), `告警点名（实际 ${fd.note}）`)
   } finally { cleanup(d) }
 })
 

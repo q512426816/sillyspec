@@ -1,0 +1,62 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-bbe7e08d",
+  "totals": {
+    "files": 5,
+    "additions": 265,
+    "deletions": 30
+  },
+  "rows": [
+    {
+      "path": "docs/sillyspec/platform-interface-map.md",
+      "declared": true,
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/run/complete-handlers.js",
+      "declared": true,
+      "additions": 13,
+      "deletions": 6,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/run/complete.js",
+      "declared": true,
+      "additions": 20,
+      "deletions": 8,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/scope-audit.js",
+      "declared": true,
+      "additions": 89,
+      "deletions": 14,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/scope-audit.test.mjs",
+      "declared": true,
+      "additions": 142,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "qlId": "ql-20260911-022-0347",
+  "sessionId": "quick-bbe7e08d",
+  "savedAt": "2026-09-11T07:54:51.128Z",
+  "patchSha256": "1e7ef668138eda5daabf72d545d18deff4211365bc487c84e643da49efd85779",
+  "patchStatus": "ok"
+}

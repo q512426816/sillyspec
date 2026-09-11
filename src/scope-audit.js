@@ -19,6 +19,7 @@
  * 纯读：不落盘、不改 guard/进度库。Windows 路径 \\→/ 归一，ESM-only，零新依赖。
  */
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { join, dirname } from 'node:path'
 import { locateQuickSessionGuard, auditQuickCompletion, resolveRuntimeRoot, collectOtherQuickSessionDeclarations, ancestorSpecDirs } from './run/shared.js'
 import { safeGit } from './git-helper.js'
@@ -41,7 +42,9 @@ function toPosix(p) {
 function extractRenameTarget(raw) {
   const brace = raw.match(/^(.*)\{([^{}]*)=>([^{}]*)\}(.*)$/)
   if (brace) {
-    const merged = brace[1] + brace[3] + brace[4]
+    // git 花括号形态 `src/{old => new}.js`：组3 带前导对齐空格须剥（审查 C-F03——
+    // 不剥则拼出 `src/ new.js` 键错，改名文件落 untracked wc-l 档记成整文件新增）
+    const merged = brace[1] + brace[3].replace(/^ /, '') + brace[4]
     return merged.replace(/\/{2,}/g, '/')
   }
   const arrow = raw.indexOf(' => ')
@@ -263,6 +266,21 @@ function filterPatchForFiles(patchText, filesSet) {
 }
 
 /**
+/** patch 内容 sha256（A-F01 防篡改锚——写入方存 json.patchSha256，读取方校验） */
+function sha256Text(text) {
+  return createHash('sha256').update(text, 'utf8').digest('hex')
+}
+
+/**
+ * 冻结 patch 完整性校验（A-F01）：json 记录的 patchSha256 与 patch 实文比对。
+ * @returns {boolean|null} true=一致；false=不匹配（可能被篡改）；null=未记录 hash（旧记录）
+ */
+function verifyPatchIntegrity(recordedSha, patchText) {
+  if (!recordedSha || typeof recordedSha !== 'string') return null
+  return sha256Text(patchText) === recordedSha
+}
+
+/**
  * 冻结 patch 生成（quick-359a48f1 审计级 / quick-90015473 归属口径修正）：tracked 改动 =
  * `git diff --no-color <baseRef>` 后**按 files 过滤段**（与 rows 同归属口径，不含并行会话
  * 文件）；untracked 新文件（git diff 天然不含）自拼 new file hunk（避 `diff --no-index`
@@ -438,8 +456,12 @@ async function computeQuickAudit({ cwd, platformOpts, sessionId, located, collec
     }
   }
 
+  // 审查 C-F05：patch 文件集对齐落盘 rows（declared+soft）——undeclared 可能是并行会话的
+  // 改动，冻结进本会话审计 patch 违背 filterPatchForFiles 的归属契约（json rows 落盘时
+  // complete-handlers 滤 undeclared，patch 必须同口径）
+  const patchFiles = [...new Set([...attributed, ...softSet])]
   const frozenPatch = collectPatch
-    ? buildFrozenPatch(sessionRoot, rowFiles, { baseRef: 'HEAD' })
+    ? buildFrozenPatch(sessionRoot, patchFiles, { baseRef: 'HEAD' })
     : undefined
 
   return {
@@ -462,7 +484,7 @@ async function computeQuickAudit({ cwd, platformOpts, sessionId, located, collec
  * only；baseAnchor 缺失 → 行数按 HEAD 未提交窗口兜底（quick 模式同口径，不再恒 —）；
  * 归档且实时窗口空 → execute 时点快照记录态（快照也缺 → 空表诚实说明）。
  */
-async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, collectPatch }) {
+async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, collectPatch, freshActual }) {
   const sb = specBase || join(cwd, '.sillyspec')
   const runtimeRoot = resolveRuntimeRoot(platformOpts, sb)
   const changeDirInfo = resolveChangeDir(sb, changeName)
@@ -474,7 +496,30 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
   const hasWorktreeMeta = existsSync(join(sb, '.runtime', 'worktrees', changeName, 'meta.json'))
   const hasBranch = !!safeGit(cwd, ['rev-parse', '--verify', '--quiet', `sillyspec/${changeName}^{commit}`], { timeout: 15 * 1000 }).value
   const hasAuditTag = !!safeGit(cwd, ['rev-parse', '--verify', '--quiet', `sillyspec-audit/sillyspec/${changeName}^{commit}`], { timeout: 15 * 1000 }).value
-  if (!hasWorktreeMeta && !hasBranch && !hasAuditTag) {
+  // 审查 C-F02：预执行判定必须排除归档（归档=流程走完，58/77 归档变更三信号全缺被误判
+  // 「未执行」实证——tag 只在分支被 review 引用时才打）+ 补四类证据：快照文件本身 /
+  // execute-runs change 戳（task-review readExecuteRunChangeStamp 同口径）/ apply-pathspec /
+  // execute-cleanup 回执。任一命中 = 进过 execute。
+  const hasSnapshotFile = changeDirInfo
+    ? existsSync(join(changeDirInfo.dir, 'scope-audit.json')) || existsSync(join(runtimeRoot, `scope-audit-${changeName}.json`))
+    : existsSync(join(runtimeRoot, `scope-audit-${changeName}.json`))
+  const hasApplyPathspec = existsSync(join(runtimeRoot, `apply-pathspec-${changeName}.txt`))
+  const hasCleanupReceipt = existsSync(join(runtimeRoot, `execute-cleanup-${changeName}.json`))
+  let hasExecuteRunStamp = false
+  if (!hasWorktreeMeta && !hasBranch && !hasAuditTag && !hasSnapshotFile && !hasApplyPathspec && !hasCleanupReceipt) {
+    try {
+      const runsDir = join(runtimeRoot, 'execute-runs')
+      if (existsSync(runsDir)) {
+        for (const e of readdirSync(runsDir)) {
+          try {
+            if (readFileSync(join(runsDir, e, 'change'), 'utf8').trim() === changeName) { hasExecuteRunStamp = true; break }
+          } catch { /* 无戳 run 跳过 */ }
+        }
+      }
+    } catch { /* 扫描失败视为无证据（fail-open 到预执行视图，note 有 hedge） */ }
+  }
+  const isArchived = !!(changeDirInfo && changeDirInfo.archived)
+  if (!isArchived && !hasWorktreeMeta && !hasBranch && !hasAuditTag && !hasSnapshotFile && !hasApplyPathspec && !hasCleanupReceipt && !hasExecuteRunStamp) {
     const emptyBase = {
       mode: 'full-flow', ok: true, degradedReason: null, baseAnchor: null,
       totals: { files: 0, additions: 0, deletions: 0 }, rows: [],
@@ -495,8 +540,8 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
       totals: { files: preRows.length, additions: 0, deletions: 0 },
       rows: preRows,
       note: preRows.length > 0
-        ? '变更尚未进入 execute（无 worktree/分支/审计 tag）——下表为 design 清单（全部待实现）；工作区其他未提交改动归属各自会话/变更，不在本表（若确已执行过但三信号均被手工清理，此处会误判——git log 核实）'
-        : '变更尚未进入 execute（无 worktree/分支/审计 tag）且 design 无可解析清单——暂无可对账内容',
+        ? '变更尚未进入 execute（无 worktree/分支/审计 tag/快照/execute-run 戳/apply 记录）——下表为 design 清单（全部待实现）；工作区其他未提交改动归属各自会话/变更，不在本表（若确已执行过但全部执行证据被清理，此处会误判——git log 核实）'
+        : '变更尚未进入 execute（无 worktree/分支/审计 tag/快照/execute-run 戳/apply 记录）且 design 无可解析清单——暂无可对账内容',
     }
   }
 
@@ -558,7 +603,9 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
   // 快照即冻结记录（含行数）——已收尾一律先出快照；实时窗口（开放区间）只作快照缺失的兜底，
   // note 明示会漂。tag 封闭区间不可用：分支上仅 baseline checkpoint（并行 WIP 快照），本变更
   // 改动经工作树 apply 从未 commit 到分支。 ——
-  const settled = changeDirInfo && (changeDirInfo.archived || actual.form === 'post-apply')
+  // freshActual（审查 C-F01）：verify 漂移 current 侧走快照捷径会变成快照比快照恒「一致」
+  // （假阴性）；execute --done 采集重跑也会陈旧回写——两处传 true 绕过，快照捷径只留给查询面
+  const settled = !freshActual && changeDirInfo && (changeDirInfo.archived || actual.form === 'post-apply')
   if (settled) {
     const snap = readScopeSnapshot(changeDirInfo.dir, runtimeRoot, changeName)
     if (snap && snap.rows.length > 0) {
@@ -571,7 +618,9 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
       const needsStats = rows.some(r => r && !Number.isFinite(r.additions) && r.kind !== 'binary')
       if (needsStats && actual && actual.ok && actual.baseAnchor) {
         const paths = rows.map(r => (r && r.path ? toPosix(r.path) : '')).filter(Boolean)
-        const stats = collectNumstatByPath(cwd, paths, { baseRef: actual.baseAnchor })
+        // 审查 C-F04：补采执行根走共享 resolveDiffRoot（form=worktree 时必须对 worktree 跑，
+        // 与主链路 :629/:636 同源配对——直用 cwd 会基点×根错位）
+        const stats = collectNumstatByPath(resolveDiffRoot(sb, changeName, actual.form, cwd), paths, { baseRef: actual.baseAnchor })
         let recovered = 0
         rows = rows.map(r => {
           if (!r || !r.path || Number.isFinite(r.additions) || r.kind === 'binary') return r
@@ -591,6 +640,8 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
           excluded: snap.excluded && Array.isArray(snap.excluded.foreignDeclared)
             ? snap.excluded
             : { foreignDeclared: [] },
+          patchSha256: snap.patchSha256 || null,
+          patchStatus: snap.patchStatus || null,
           note: `${settleLabel}——execute --done 时点冻结快照${snap.savedAt ? '（' + String(snap.savedAt).replace('T', ' ').slice(0, 19) + ' 落盘）' : ''}：文件集封闭在 apply 时点，主仓后续新文件不进表；行数按锚 ${actual.baseAnchor.slice(0, 7)}→当前工作树 补采（同文件后续演进会计入）`,
         }
       }
@@ -606,6 +657,8 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
         excluded: snap.excluded && Array.isArray(snap.excluded.foreignDeclared)
           ? snap.excluded
           : { foreignDeclared: [] },
+        patchSha256: snap.patchSha256 || null,
+        patchStatus: snap.patchStatus || null,
         note: `${settleLabel}——execute --done 时点冻结快照${snap.savedAt ? '（' + String(snap.savedAt).replace('T', ' ').slice(0, 19) + ' 落盘）' : ''}：范围封闭在 apply 时点，主仓后续改动不反映到本表；需要看当前工作区实时状态请跑 git status`,
       }
     }
@@ -715,7 +768,7 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
  *   excluded: { foreignDeclared: Array<{ file: string, sessions: string[] }> },
  *   note?: string|null }>}
  */
-export async function computeChangeScopeAudit({ cwd, specBase, changeName, platformOpts, collectPatch } = {}) {
+export async function computeChangeScopeAudit({ cwd, specBase, changeName, platformOpts, collectPatch, freshActual } = {}) {
   const empty = {
     mode: 'full-flow', ok: false, degradedReason: null, baseAnchor: null,
     totals: { files: 0, additions: 0, deletions: 0 },
@@ -746,6 +799,8 @@ export async function computeChangeScopeAudit({ cwd, specBase, changeName, platf
             ? rec.record.excluded
             : { foreignDeclared: [] },
           frozenPatchPath: rec.patchPath,
+          patchSha256: rec.record.patchSha256 || null,
+          patchStatus: rec.record.patchStatus || null,
           note: `quick 会话已收尾——记录态（quicklog/patches/${rec.qlId}，${rec.record.savedAt ? String(rec.record.savedAt).replace('T', ' ').slice(0, 19) + ' 落盘' : '--done 时点冻结'}）`,
         }
       }
@@ -755,7 +810,7 @@ export async function computeChangeScopeAudit({ cwd, specBase, changeName, platf
         degradedReason: `quick 会话 ${changeName} 不存在（guard 已清理且 quicklog/patches/ 无记录——会话未产生改动或早于记录机制）`,
       }
     }
-    return await computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, collectPatch })
+    return await computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, collectPatch, freshActual })
   } catch (e) {
     // fail-soft 兜底（D-006 / 兼容策略）：注入点只打一行提示，不阻断阶段完成
     return {
@@ -789,15 +844,35 @@ export async function getFileDiff({ cwd, specBase, changeName, platformOpts, fil
     // —— 真·当时内容比对（quick-359a48f1）：已收尾变更优先冻结 patch 切片 ——
     // ① quick 记录态自带 frozenPatchPath；② full-flow 变更目录 scope-audit.patch。
     // patch 冻结在收尾时点，不含后续演进——实时锚 diff 只作 patch 缺失的兜底（口径标注）。
-    const frozenPatch = (result.frozenPatchPath
-        && (() => { try { return readFileSync(result.frozenPatchPath, 'utf8') } catch { return null } })())
-      || readFrozenPatch(resolveChangeDir(sb, changeName)?.dir || null)
-    if (frozenPatch) {
+    // A-F01：读取时按 json 记录的 patchSha256 校验，不匹配显式告警（防低级篡改）。
+    const patchRecord = result.frozenPatchPath
+      ? { path: result.frozenPatchPath, sha: result.patchSha256 || null }
+      : (() => { const d = resolveChangeDir(sb, changeName); return d ? { path: join(d.dir, 'scope-audit.patch'), sha: null } : null })()
+    let recordedSha = patchRecord ? patchRecord.sha : null
+    if (patchRecord && !recordedSha && result.rows) {
+      // json 里未直接带回 hash（记录态捷径不透传）→ 读 json 原文取（快照/quick 记录都存该字段）
+      try {
+        const snapRaw = JSON.parse(readFileSync(result.frozenPatchPath
+          ? result.frozenPatchPath.replace(/\.patch$/, '.json')
+          : join(resolveChangeDir(sb, changeName).dir, 'scope-audit.json'), 'utf8'))
+        recordedSha = snapRaw.patchSha256 || null
+      } catch { /* json 不可读 → 无 hash 可校验（null=不校验） */ }
+    }
+    const frozenPatch = (patchRecord
+        && (() => { try { return readFileSync(patchRecord.path, 'utf8') } catch { return null } })())
+    if (frozenPatch !== null && frozenPatch !== undefined && patchRecord) {
+      const integrity = verifyPatchIntegrity(recordedSha, frozenPatch)
+      if (integrity === false) {
+        return { ok: false, mode: result.mode, root: cwd, baseRef: null, anchorLabel: '冻结 patch', diff: null, note: '⚠️ 冻结 patch 与快照记录的 patchSha256 不匹配——记录可能被篡改，审计前人工核验（git 历史比对）' }
+      }
       const sliced = slicePatchForFile(frozenPatch, norm)
       if (sliced) {
         return { ok: true, mode: result.mode, root: cwd, baseRef: null, anchorLabel: '冻结 patch（收尾时点内容，无后续演进混入）', diff: sliced, note: null }
       }
       return { ok: true, mode: result.mode, root: cwd, baseRef: null, anchorLabel: '冻结 patch', diff: null, note: '该文件不在冻结 patch 内（窗口外文件）' }
+    }
+    if (result.patchStatus === 'failed') {
+      return { ok: true, mode: result.mode, root: cwd, baseRef: null, anchorLabel: '冻结记录', diff: null, note: '冻结 patch 当时采集失败（非无改动）——退实时锚比对' }
     }
 
     // 锚点解析（语义锚 head-uncommitted-window → 实际 baseRef 'HEAD'；无锚同兜底并标注）

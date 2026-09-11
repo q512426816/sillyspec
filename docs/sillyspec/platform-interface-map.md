@@ -95,7 +95,7 @@ mcp:
 |---|---|---|---|
 | `probeDaemon` | `list_agent_profiles` | 探连通性 + token 有效性 | `probe.js:163` |
 | `listTools` | `tools/list` | 列 tool schema；**探路径A**（dispatch_worker 是否含 `worktree_path`+`worker_prompt`） | `probe.js:113` |
-| `getRootPath` | `tools/list`(复用) | best-effort 拿 workspace root_path（越界校验用，当前 gateway 不暴露 → null） | `probe.js:231` |
+| `getRootPath` | `tools/list`(复用) | best-effort 拿 workspace root_path（越界校验用，当前 gateway 不暴露 → null） | `probe.js:238` |
 | `createMission` | `create_mission` | 一 Wave 一 mission | agent（指令注入） |
 | `dispatchWorker` | `dispatch_worker` | 派 worker（含 worktree_path/branch/worker_prompt 覆写） | agent（指令注入） |
 | `listWorkers` | `list_workers` | 轮询 worker 终态 | agent（指令注入） |
@@ -112,7 +112,7 @@ mcp:
 
 ## 4. 链路 C：scan 指针握手（平台模式专用）
 
-scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时，**不发任何 HTTP**，而是落盘供 daemon 轮询消费（`complete-handlers.js:1764` `handleScanStageCompleted`）：
+scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时，**不发任何 HTTP**，而是落盘供 daemon 轮询消费（`complete-handlers.js:1771` `handleScanStageCompleted`）：
 
 1. 写 `manifest.json`（workspace_id/scan_run_id/source_commit/spec_root/scan_profile/postcheck…）到 `specRoot`。
 2. 跑 `scan-postcheck` → 写 `postcheck-result.json`（结构化结果）。

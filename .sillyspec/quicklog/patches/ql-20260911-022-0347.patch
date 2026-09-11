@@ -1,0 +1,498 @@
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index 2288f93..f358542 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -112,7 +112,7 @@ mcp:
+ 
+ ## 4. 链路 C：scan 指针握手（平台模式专用）
+ 
+-scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时，**不发任何 HTTP**，而是落盘供 daemon 轮询消费（`complete-handlers.js:1764` `handleScanStageCompleted`）：
++scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时，**不发任何 HTTP**，而是落盘供 daemon 轮询消费（`complete-handlers.js:1771` `handleScanStageCompleted`）：
+ 
+ 1. 写 `manifest.json`（workspace_id/scan_run_id/source_commit/spec_root/scan_profile/postcheck…）到 `specRoot`。
+ 2. 跑 `scan-postcheck` → 写 `postcheck-result.json`（结构化结果）。
+diff --git a/src/run/complete-handlers.js b/src/run/complete-handlers.js
+index 2e20757..2d769a1 100644
+--- a/src/run/complete-handlers.js
++++ b/src/run/complete-handlers.js
+@@ -24,6 +24,7 @@
+  */
+ import { basename, join, resolve, relative, isAbsolute } from 'node:path'
+ import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync, unlinkSync, rmSync } from 'node:fs'
++import { createHash } from 'node:crypto'
+ import { renameSyncRetry, writeAtomicSync } from '../fs-atomic.js'
+ import { gitQuiet } from '../git-helper.js'
+ import { resolveChangeDir, resolveQuickSessionsDir, safeGit, auditQuickCompletion, triggerSync, isQuickMetadata, isQuicklogFileLineNoise, resolveRuntimeRoot, collectOtherQuickSessionDeclarations, mergeQuickBoundaryFiles } from './shared.js'
+@@ -1313,20 +1314,26 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
+         if (quickRows && quickRows.length > 0) {
+           const patchesDir = join(specBase, 'quicklog', 'patches')
+           mkdirSync(patchesDir, { recursive: true })
+-          const { ...snapRest } = snapResult || {}
+-          delete snapRest.frozenPatch
+-          writeFileSync(join(patchesDir, `${qlId}.json`), JSON.stringify({
++          const { frozenPatch: _fp, ...snapRest } = snapResult || {}
++          const snapObj = {
+             ...snapRest,
+             rows: quickRows,
+             totals: { files: quickRows.length, additions: quickRows.reduce((n, r) => n + (Number.isFinite(r.additions) ? r.additions : 0), 0), deletions: quickRows.reduce((n, r) => n + (Number.isFinite(r.deletions) ? r.deletions : 0), 0) },
+             qlId,
+             sessionId: changeName,
+             savedAt: new Date().toISOString(),
+-          }, null, 2) + '\n')
++          }
++          snapObj.note = 'quick --done 时点冻结（本文件落盘时采集）'
+           if (typeof frozenPatch === 'string' && frozenPatch) {
+-            writeFileSync(join(patchesDir, `${qlId}.patch`), frozenPatch.endsWith('\n') ? frozenPatch : frozenPatch + '\n')
++            const patchText = frozenPatch.endsWith('\n') ? frozenPatch : frozenPatch + '\n'
++            writeFileSync(join(patchesDir, `${qlId}.patch`), patchText)
++            snapObj.patchSha256 = createHash('sha256').update(patchText, 'utf8').digest('hex')
++            snapObj.patchStatus = 'ok'
++          } else if (frozenPatch === null) {
++            snapObj.patchStatus = 'failed'
+           }
+-          console.log(`📦 范围快照已落 quicklog/patches/${qlId}.json${typeof frozenPatch === 'string' && frozenPatch ? ' + .patch（--done 时点冻结）' : ''}`)
++          writeFileSync(join(patchesDir, `${qlId}.json`), JSON.stringify(snapObj, null, 2) + '\n')
++          console.log(`📦 范围快照已落 quicklog/patches/${qlId}.json${snapObj.patchStatus === 'ok' ? ' + .patch（--done 时点冻结，sha256 已锚）' : snapObj.patchStatus === 'failed' ? '——patch 采集失败已留痕' : ''}`)
+         }
+       } catch (e) {
+         console.warn(`   ⚠️ quick 范围快照落盘失败（不阻断收尾）：${e && e.message ? String(e.message).split('\n')[0] : e}`)
+diff --git a/src/run/complete.js b/src/run/complete.js
+index ba1774c..a2c047c 100644
+--- a/src/run/complete.js
++++ b/src/run/complete.js
+@@ -18,6 +18,7 @@
+  */
+ import { join } from 'node:path'
+ import { existsSync, readFileSync, mkdirSync, writeFileSync, appendFileSync } from 'node:fs'
++import { createHash } from 'node:crypto'
+ import { writeAtomicSync } from '../fs-atomic.js'
+ import { gitQuiet } from '../git-helper.js'
+ import { withFileLock } from '../quicklog.js'
+@@ -817,28 +818,39 @@ function scopeAuditPathSet(result) {
+ 
+ /** execute 完成路径：全表 + 审计级快照/patch 落盘（quick-359a48f1：changes/<变更名>/ 随归档
+  *  入库；patch 为收尾时点全量冻结——--file 真·当时内容比对的数据源。写失败只提示，verify
+- *  对比按无快照降级） */
++ *  对比按无快照降级。审查修复：freshActual 绕过 settled 快照捷径防陈旧回写（execute 重跑
++ *  场景 C-F01）；落盘 note 换冻结措辞防「自述漂移」污染（C-F06）；patchSha256/patchStatus
++ *  留防篡改锚与失败痕（A-F01/C-F07） */
+ async function printExecuteScopeAudit({ cwd, changeName, specBase, platformOpts, computeChangeScopeAudit, renderScopeAuditTable }) {
+-  const result = await computeChangeScopeAudit({ cwd, specBase, changeName, platformOpts, collectPatch: true })
++  const result = await computeChangeScopeAudit({ cwd, specBase, changeName, platformOpts, collectPatch: true, freshActual: true })
+   console.log(`\n${renderScopeAuditTable(result, { maxRows: 60 })}`)
+   try {
+-    const changeDir = join(specBase, 'changes', changeName)
++    // 归档竞态（审查 C-F10）：目录已被并行归档移动 → 写归档侧，不在活跃区重建假目录
++    const activeDir = join(specBase, 'changes', changeName)
++    const changeDir = existsSync(activeDir) ? activeDir : join(specBase, 'changes', 'archive', changeName)
+     mkdirSync(changeDir, { recursive: true })
+     const { frozenPatch, ...snap } = result
+-    writeFileSync(join(changeDir, 'scope-audit.json'), JSON.stringify({ ...snap, savedAt: new Date().toISOString() }, null, 2) + '\n')
++    snap.note = 'execute --done 时点冻结（本文件落盘时采集）'
+     if (typeof frozenPatch === 'string') {
+-      writeFileSync(join(changeDir, 'scope-audit.patch'), frozenPatch.endsWith('\n') ? frozenPatch : frozenPatch + '\n')
++      const patchText = frozenPatch.endsWith('\n') ? frozenPatch : frozenPatch + '\n'
++      writeFileSync(join(changeDir, 'scope-audit.patch'), patchText)
++      snap.patchSha256 = createHash('sha256').update(patchText, 'utf8').digest('hex')
++      snap.patchStatus = 'ok'
++    } else if (frozenPatch === null) {
++      snap.patchStatus = 'failed'
+     }
+-    console.log(`   📦 范围快照已落变更目录（scope-audit.json${typeof frozenPatch === 'string' ? ' + scope-audit.patch（收尾时点冻结）' : ''}）`)
++    writeFileSync(join(changeDir, 'scope-audit.json'), JSON.stringify({ ...snap, savedAt: new Date().toISOString() }, null, 2) + '\n')
++    console.log(`   📦 范围快照已落变更目录（scope-audit.json${snap.patchStatus === 'ok' ? ' + scope-audit.patch（收尾时点冻结，sha256 已锚）' : snap.patchStatus === 'failed' ? '——patch 采集失败已留痕' : ''}）`)
+   } catch (e) {
+     console.warn(`   ⚠️ 范围对账快照写入失败（不阻断，verify 漂移对比将按无快照降级）：${e && e.message ? String(e.message).split('\n')[0] : e}`)
+   }
+ }
+ 
+ /** verify 完成路径：读 execute 时点快照对比文件集差集，一行结论（行数不比——execute 形态 A 锚
+- *  worktree meta、verify 形态 B 锚 merge-base，基点不同行数天然抖动，比行数必假阳） */
++ *  worktree meta、verify 形态 B 锚 merge-base，基点不同行数天然抖动，比行数必假阳）。
++ *  审查 C-F01：current 侧 freshActual——settled 快照捷径会让本函数变成快照比快照恒「一致」 */
+ async function printVerifyScopeDrift({ cwd, changeName, specBase, platformOpts, computeChangeScopeAudit }) {
+-  const result = await computeChangeScopeAudit({ cwd, specBase, changeName, platformOpts })
++  const result = await computeChangeScopeAudit({ cwd, specBase, changeName, platformOpts, freshActual: true })
+   const totals = result?.totals && typeof result.totals === 'object' ? result.totals : {}
+   const scopeLine = `变更范围：${totals.files ?? (Array.isArray(result?.rows) ? result.rows.length : 0)} 文件 +${totals.additions ?? 0}/-${totals.deletions ?? 0}`
+   if (result?.ok !== true) {
+diff --git a/src/scope-audit.js b/src/scope-audit.js
+index fab763a..2773c91 100644
+--- a/src/scope-audit.js
++++ b/src/scope-audit.js
+@@ -19,6 +19,7 @@
+  * 纯读：不落盘、不改 guard/进度库。Windows 路径 \\→/ 归一，ESM-only，零新依赖。
+  */
+ import { existsSync, readFileSync, readdirSync } from 'node:fs'
++import { createHash } from 'node:crypto'
+ import { join, dirname } from 'node:path'
+ import { locateQuickSessionGuard, auditQuickCompletion, resolveRuntimeRoot, collectOtherQuickSessionDeclarations, ancestorSpecDirs } from './run/shared.js'
+ import { safeGit } from './git-helper.js'
+@@ -41,7 +42,9 @@ function toPosix(p) {
+ function extractRenameTarget(raw) {
+   const brace = raw.match(/^(.*)\{([^{}]*)=>([^{}]*)\}(.*)$/)
+   if (brace) {
+-    const merged = brace[1] + brace[3] + brace[4]
++    // git 花括号形态 `src/{old => new}.js`：组3 带前导对齐空格须剥（审查 C-F03——
++    // 不剥则拼出 `src/ new.js` 键错，改名文件落 untracked wc-l 档记成整文件新增）
++    const merged = brace[1] + brace[3].replace(/^ /, '') + brace[4]
+     return merged.replace(/\/{2,}/g, '/')
+   }
+   const arrow = raw.indexOf(' => ')
+@@ -262,6 +265,21 @@ function filterPatchForFiles(patchText, filesSet) {
+   return out.join('\n')
+ }
+ 
++/**
++/** patch 内容 sha256（A-F01 防篡改锚——写入方存 json.patchSha256，读取方校验） */
++function sha256Text(text) {
++  return createHash('sha256').update(text, 'utf8').digest('hex')
++}
++
++/**
++ * 冻结 patch 完整性校验（A-F01）：json 记录的 patchSha256 与 patch 实文比对。
++ * @returns {boolean|null} true=一致；false=不匹配（可能被篡改）；null=未记录 hash（旧记录）
++ */
++function verifyPatchIntegrity(recordedSha, patchText) {
++  if (!recordedSha || typeof recordedSha !== 'string') return null
++  return sha256Text(patchText) === recordedSha
++}
++
+ /**
+  * 冻结 patch 生成（quick-359a48f1 审计级 / quick-90015473 归属口径修正）：tracked 改动 =
+  * `git diff --no-color <baseRef>` 后**按 files 过滤段**（与 rows 同归属口径，不含并行会话
+@@ -438,8 +456,12 @@ async function computeQuickAudit({ cwd, platformOpts, sessionId, located, collec
+     }
+   }
+ 
++  // 审查 C-F05：patch 文件集对齐落盘 rows（declared+soft）——undeclared 可能是并行会话的
++  // 改动，冻结进本会话审计 patch 违背 filterPatchForFiles 的归属契约（json rows 落盘时
++  // complete-handlers 滤 undeclared，patch 必须同口径）
++  const patchFiles = [...new Set([...attributed, ...softSet])]
+   const frozenPatch = collectPatch
+-    ? buildFrozenPatch(sessionRoot, rowFiles, { baseRef: 'HEAD' })
++    ? buildFrozenPatch(sessionRoot, patchFiles, { baseRef: 'HEAD' })
+     : undefined
+ 
+   return {
+@@ -462,7 +484,7 @@ async function computeQuickAudit({ cwd, platformOpts, sessionId, located, collec
+  * only；baseAnchor 缺失 → 行数按 HEAD 未提交窗口兜底（quick 模式同口径，不再恒 —）；
+  * 归档且实时窗口空 → execute 时点快照记录态（快照也缺 → 空表诚实说明）。
+  */
+-async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, collectPatch }) {
++async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, collectPatch, freshActual }) {
+   const sb = specBase || join(cwd, '.sillyspec')
+   const runtimeRoot = resolveRuntimeRoot(platformOpts, sb)
+   const changeDirInfo = resolveChangeDir(sb, changeName)
+@@ -474,7 +496,30 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
+   const hasWorktreeMeta = existsSync(join(sb, '.runtime', 'worktrees', changeName, 'meta.json'))
+   const hasBranch = !!safeGit(cwd, ['rev-parse', '--verify', '--quiet', `sillyspec/${changeName}^{commit}`], { timeout: 15 * 1000 }).value
+   const hasAuditTag = !!safeGit(cwd, ['rev-parse', '--verify', '--quiet', `sillyspec-audit/sillyspec/${changeName}^{commit}`], { timeout: 15 * 1000 }).value
+-  if (!hasWorktreeMeta && !hasBranch && !hasAuditTag) {
++  // 审查 C-F02：预执行判定必须排除归档（归档=流程走完，58/77 归档变更三信号全缺被误判
++  // 「未执行」实证——tag 只在分支被 review 引用时才打）+ 补四类证据：快照文件本身 /
++  // execute-runs change 戳（task-review readExecuteRunChangeStamp 同口径）/ apply-pathspec /
++  // execute-cleanup 回执。任一命中 = 进过 execute。
++  const hasSnapshotFile = changeDirInfo
++    ? existsSync(join(changeDirInfo.dir, 'scope-audit.json')) || existsSync(join(runtimeRoot, `scope-audit-${changeName}.json`))
++    : existsSync(join(runtimeRoot, `scope-audit-${changeName}.json`))
++  const hasApplyPathspec = existsSync(join(runtimeRoot, `apply-pathspec-${changeName}.txt`))
++  const hasCleanupReceipt = existsSync(join(runtimeRoot, `execute-cleanup-${changeName}.json`))
++  let hasExecuteRunStamp = false
++  if (!hasWorktreeMeta && !hasBranch && !hasAuditTag && !hasSnapshotFile && !hasApplyPathspec && !hasCleanupReceipt) {
++    try {
++      const runsDir = join(runtimeRoot, 'execute-runs')
++      if (existsSync(runsDir)) {
++        for (const e of readdirSync(runsDir)) {
++          try {
++            if (readFileSync(join(runsDir, e, 'change'), 'utf8').trim() === changeName) { hasExecuteRunStamp = true; break }
++          } catch { /* 无戳 run 跳过 */ }
++        }
++      }
++    } catch { /* 扫描失败视为无证据（fail-open 到预执行视图，note 有 hedge） */ }
++  }
++  const isArchived = !!(changeDirInfo && changeDirInfo.archived)
++  if (!isArchived && !hasWorktreeMeta && !hasBranch && !hasAuditTag && !hasSnapshotFile && !hasApplyPathspec && !hasCleanupReceipt && !hasExecuteRunStamp) {
+     const emptyBase = {
+       mode: 'full-flow', ok: true, degradedReason: null, baseAnchor: null,
+       totals: { files: 0, additions: 0, deletions: 0 }, rows: [],
+@@ -495,8 +540,8 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
+       totals: { files: preRows.length, additions: 0, deletions: 0 },
+       rows: preRows,
+       note: preRows.length > 0
+-        ? '变更尚未进入 execute（无 worktree/分支/审计 tag）——下表为 design 清单（全部待实现）；工作区其他未提交改动归属各自会话/变更，不在本表（若确已执行过但三信号均被手工清理，此处会误判——git log 核实）'
+-        : '变更尚未进入 execute（无 worktree/分支/审计 tag）且 design 无可解析清单——暂无可对账内容',
++        ? '变更尚未进入 execute（无 worktree/分支/审计 tag/快照/execute-run 戳/apply 记录）——下表为 design 清单（全部待实现）；工作区其他未提交改动归属各自会话/变更，不在本表（若确已执行过但全部执行证据被清理，此处会误判——git log 核实）'
++        : '变更尚未进入 execute（无 worktree/分支/审计 tag/快照/execute-run 戳/apply 记录）且 design 无可解析清单——暂无可对账内容',
+     }
+   }
+ 
+@@ -558,7 +603,9 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
+   // 快照即冻结记录（含行数）——已收尾一律先出快照；实时窗口（开放区间）只作快照缺失的兜底，
+   // note 明示会漂。tag 封闭区间不可用：分支上仅 baseline checkpoint（并行 WIP 快照），本变更
+   // 改动经工作树 apply 从未 commit 到分支。 ——
+-  const settled = changeDirInfo && (changeDirInfo.archived || actual.form === 'post-apply')
++  // freshActual（审查 C-F01）：verify 漂移 current 侧走快照捷径会变成快照比快照恒「一致」
++  // （假阴性）；execute --done 采集重跑也会陈旧回写——两处传 true 绕过，快照捷径只留给查询面
++  const settled = !freshActual && changeDirInfo && (changeDirInfo.archived || actual.form === 'post-apply')
+   if (settled) {
+     const snap = readScopeSnapshot(changeDirInfo.dir, runtimeRoot, changeName)
+     if (snap && snap.rows.length > 0) {
+@@ -571,7 +618,9 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
+       const needsStats = rows.some(r => r && !Number.isFinite(r.additions) && r.kind !== 'binary')
+       if (needsStats && actual && actual.ok && actual.baseAnchor) {
+         const paths = rows.map(r => (r && r.path ? toPosix(r.path) : '')).filter(Boolean)
+-        const stats = collectNumstatByPath(cwd, paths, { baseRef: actual.baseAnchor })
++        // 审查 C-F04：补采执行根走共享 resolveDiffRoot（form=worktree 时必须对 worktree 跑，
++        // 与主链路 :629/:636 同源配对——直用 cwd 会基点×根错位）
++        const stats = collectNumstatByPath(resolveDiffRoot(sb, changeName, actual.form, cwd), paths, { baseRef: actual.baseAnchor })
+         let recovered = 0
+         rows = rows.map(r => {
+           if (!r || !r.path || Number.isFinite(r.additions) || r.kind === 'binary') return r
+@@ -591,6 +640,8 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
+           excluded: snap.excluded && Array.isArray(snap.excluded.foreignDeclared)
+             ? snap.excluded
+             : { foreignDeclared: [] },
++          patchSha256: snap.patchSha256 || null,
++          patchStatus: snap.patchStatus || null,
+           note: `${settleLabel}——execute --done 时点冻结快照${snap.savedAt ? '（' + String(snap.savedAt).replace('T', ' ').slice(0, 19) + ' 落盘）' : ''}：文件集封闭在 apply 时点，主仓后续新文件不进表；行数按锚 ${actual.baseAnchor.slice(0, 7)}→当前工作树 补采（同文件后续演进会计入）`,
+         }
+       }
+@@ -606,6 +657,8 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
+         excluded: snap.excluded && Array.isArray(snap.excluded.foreignDeclared)
+           ? snap.excluded
+           : { foreignDeclared: [] },
++        patchSha256: snap.patchSha256 || null,
++        patchStatus: snap.patchStatus || null,
+         note: `${settleLabel}——execute --done 时点冻结快照${snap.savedAt ? '（' + String(snap.savedAt).replace('T', ' ').slice(0, 19) + ' 落盘）' : ''}：范围封闭在 apply 时点，主仓后续改动不反映到本表；需要看当前工作区实时状态请跑 git status`,
+       }
+     }
+@@ -715,7 +768,7 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
+  *   excluded: { foreignDeclared: Array<{ file: string, sessions: string[] }> },
+  *   note?: string|null }>}
+  */
+-export async function computeChangeScopeAudit({ cwd, specBase, changeName, platformOpts, collectPatch } = {}) {
++export async function computeChangeScopeAudit({ cwd, specBase, changeName, platformOpts, collectPatch, freshActual } = {}) {
+   const empty = {
+     mode: 'full-flow', ok: false, degradedReason: null, baseAnchor: null,
+     totals: { files: 0, additions: 0, deletions: 0 },
+@@ -746,6 +799,8 @@ export async function computeChangeScopeAudit({ cwd, specBase, changeName, platf
+             ? rec.record.excluded
+             : { foreignDeclared: [] },
+           frozenPatchPath: rec.patchPath,
++          patchSha256: rec.record.patchSha256 || null,
++          patchStatus: rec.record.patchStatus || null,
+           note: `quick 会话已收尾——记录态（quicklog/patches/${rec.qlId}，${rec.record.savedAt ? String(rec.record.savedAt).replace('T', ' ').slice(0, 19) + ' 落盘' : '--done 时点冻结'}）`,
+         }
+       }
+@@ -755,7 +810,7 @@ export async function computeChangeScopeAudit({ cwd, specBase, changeName, platf
+         degradedReason: `quick 会话 ${changeName} 不存在（guard 已清理且 quicklog/patches/ 无记录——会话未产生改动或早于记录机制）`,
+       }
+     }
+-    return await computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, collectPatch })
++    return await computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, collectPatch, freshActual })
+   } catch (e) {
+     // fail-soft 兜底（D-006 / 兼容策略）：注入点只打一行提示，不阻断阶段完成
+     return {
+@@ -789,16 +844,36 @@ export async function getFileDiff({ cwd, specBase, changeName, platformOpts, fil
+     // —— 真·当时内容比对（quick-359a48f1）：已收尾变更优先冻结 patch 切片 ——
+     // ① quick 记录态自带 frozenPatchPath；② full-flow 变更目录 scope-audit.patch。
+     // patch 冻结在收尾时点，不含后续演进——实时锚 diff 只作 patch 缺失的兜底（口径标注）。
+-    const frozenPatch = (result.frozenPatchPath
+-        && (() => { try { return readFileSync(result.frozenPatchPath, 'utf8') } catch { return null } })())
+-      || readFrozenPatch(resolveChangeDir(sb, changeName)?.dir || null)
+-    if (frozenPatch) {
++    // A-F01：读取时按 json 记录的 patchSha256 校验，不匹配显式告警（防低级篡改）。
++    const patchRecord = result.frozenPatchPath
++      ? { path: result.frozenPatchPath, sha: result.patchSha256 || null }
++      : (() => { const d = resolveChangeDir(sb, changeName); return d ? { path: join(d.dir, 'scope-audit.patch'), sha: null } : null })()
++    let recordedSha = patchRecord ? patchRecord.sha : null
++    if (patchRecord && !recordedSha && result.rows) {
++      // json 里未直接带回 hash（记录态捷径不透传）→ 读 json 原文取（快照/quick 记录都存该字段）
++      try {
++        const snapRaw = JSON.parse(readFileSync(result.frozenPatchPath
++          ? result.frozenPatchPath.replace(/\.patch$/, '.json')
++          : join(resolveChangeDir(sb, changeName).dir, 'scope-audit.json'), 'utf8'))
++        recordedSha = snapRaw.patchSha256 || null
++      } catch { /* json 不可读 → 无 hash 可校验（null=不校验） */ }
++    }
++    const frozenPatch = (patchRecord
++        && (() => { try { return readFileSync(patchRecord.path, 'utf8') } catch { return null } })())
++    if (frozenPatch !== null && frozenPatch !== undefined && patchRecord) {
++      const integrity = verifyPatchIntegrity(recordedSha, frozenPatch)
++      if (integrity === false) {
++        return { ok: false, mode: result.mode, root: cwd, baseRef: null, anchorLabel: '冻结 patch', diff: null, note: '⚠️ 冻结 patch 与快照记录的 patchSha256 不匹配——记录可能被篡改，审计前人工核验（git 历史比对）' }
++      }
+       const sliced = slicePatchForFile(frozenPatch, norm)
+       if (sliced) {
+         return { ok: true, mode: result.mode, root: cwd, baseRef: null, anchorLabel: '冻结 patch（收尾时点内容，无后续演进混入）', diff: sliced, note: null }
+       }
+       return { ok: true, mode: result.mode, root: cwd, baseRef: null, anchorLabel: '冻结 patch', diff: null, note: '该文件不在冻结 patch 内（窗口外文件）' }
+     }
++    if (result.patchStatus === 'failed') {
++      return { ok: true, mode: result.mode, root: cwd, baseRef: null, anchorLabel: '冻结记录', diff: null, note: '冻结 patch 当时采集失败（非无改动）——退实时锚比对' }
++    }
+ 
+     // 锚点解析（语义锚 head-uncommitted-window → 实际 baseRef 'HEAD'；无锚同兜底并标注）
+     let baseRef = 'HEAD'
+diff --git a/test/scope-audit.test.mjs b/test/scope-audit.test.mjs
+index 64da9c8..df5631d 100644
+--- a/test/scope-audit.test.mjs
++++ b/test/scope-audit.test.mjs
+@@ -24,7 +24,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
+ import { join } from 'node:path'
+ import { tmpdir } from 'node:os'
+ import { execFileSync } from 'node:child_process'
+-import { computeChangeScopeAudit, renderScopeAuditTable, getFileDiff, buildFrozenPatch } from '../src/scope-audit.js'
++import { computeChangeScopeAudit, renderScopeAuditTable, getFileDiff, buildFrozenPatch, collectNumstatByPath } from '../src/scope-audit.js'
+ 
+ /** git 调用：数组参数不经 shell（Windows 路径安全），stdio pipe 吞输出 */
+ function sh(cwd, args) {
+@@ -477,6 +477,147 @@ test('预执行形态：无 meta/分支/tag 三无 → 计划清单视图，工
+   } finally { cleanup(d) }
+ })
+ 
++// ───────────────────────── 组 6c：审查修复批（quick-bbe7e08d） ─────────────────────────
++
++test('C-F03 rename 花括号形态：git mv + 编辑 → numstat 命中新路径（modified 档，非 wc-l 整文件新增）', async () => {
++  const d = makeRepo('sa-rename-')
++  try {
++    mkdirSync(join(d, 'src'), { recursive: true })
++    writeFileSync(join(d, 'src', 'old.js'), 'l1\nl2\nl3\n')
++    sh(d, ['add', '-A'])
++    sh(d, ['commit', '-q', '-m', 'init'])
++    sh(d, ['mv', 'src/old.js', 'src/new.js'])
++    writeFileSync(join(d, 'src', 'new.js'), 'l1\nl2\nl3\nl4\n')
++    const stats = collectNumstatByPath(d, ['src/new.js'], { baseRef: 'HEAD' })
++    const st = stats.get('src/new.js')
++    assert.ok(st, 'numstat 命中新路径（rename 解析正确）')
++    assert.equal(st.additions, 1, '行数=相对 HEAD 真值（+1）')
++    assert.equal(st.deletions, 0)
++    assert.equal(st.kind, 'modified', '非 new 档（不落 wc-l 整文件新增）')
++  } finally { cleanup(d) }
++})
++
++test('C-F01 freshActual：settled 默认出冻结快照，freshActual 绕过出新鲜实际侧（verify 漂移消费者契约）', async () => {
++  const d = makeRepo('sa-fresh-')
++  try {
++    mkdirSync(join(d, 'src'), { recursive: true })
++    writeFileSync(join(d, 'src', 'a.js'), 'a1\n')
++    sh(d, ['add', '-A'])
++    sh(d, ['commit', '-q', '-m', 'init'])
++    const specBase = join(d, '.sillyspec')
++    writeDesign(specBase, 'fresh-change', ['| 修改 | src/a.js | 说明 |'], { archived: true })
++    sh(d, ['tag', 'sillyspec-audit/sillyspec/fresh-change'])
++    const runtimeRoot = join(specBase, '.runtime')
++    mkdirSync(runtimeRoot, { recursive: true })
++    writeFileSync(join(runtimeRoot, 'scope-audit-fresh-change.json'), JSON.stringify({
++      mode: 'full-flow', ok: true, baseAnchor: null, totals: { files: 1, additions: 1, deletions: 0 },
++      rows: [{ path: 'src/a.js', planned: '修改', additions: 1, deletions: 0, kind: 'modified', verdict: 'planned' }],
++      excluded: { foreignDeclared: [] }, savedAt: '2026-09-11T10:00:00.000Z',
++    }))
++    writeFileSync(join(d, 'src', 'drifted.js'), 'x\n')
++
++    const frozen = await computeChangeScopeAudit({ cwd: d, changeName: 'fresh-change' })
++    assert.ok(frozen.note && frozen.note.includes('冻结快照'), '默认走快照捷径')
++    assert.ok(!frozen.rows.some(r => r.path.includes('drifted')), '冻结视图无漂移文件')
++    const fresh = await computeChangeScopeAudit({ cwd: d, changeName: 'fresh-change', freshActual: true })
++    assert.ok(fresh.rows.some(r => r.path.includes('drifted')), 'freshActual 见到漂移文件（verify 漂移检测恢复）')
++  } finally { cleanup(d) }
++})
++
++test('C-F02 归档三信号全缺：不误判预执行（走实时区间）', async () => {
++  const d = makeRepo('sa-archnosig-')
++  try {
++    mkdirSync(join(d, 'src'), { recursive: true })
++    writeFileSync(join(d, 'src', 'a.js'), 'a1\n')
++    sh(d, ['add', '-A'])
++    sh(d, ['commit', '-q', '-m', 'init'])
++    const specBase = join(d, '.sillyspec')
++    writeDesign(specBase, 'archnosig-change', ['| 修改 | src/a.js | 说明 |'], { archived: true })
++    writeFileSync(join(d, 'src', 'a.js'), 'a1\ndirty\n')
++
++    const r = await computeChangeScopeAudit({ cwd: d, changeName: 'archnosig-change' })
++    assert.equal(r.ok, true)
++    assert.ok(!(r.note || '').includes('尚未进入 execute'), `归档不误判预执行（实际 ${r.note}）`)
++    assert.ok(r.rows.some(x => x.path === 'src/a.js'), '实时区间出实际改动')
++  } finally { cleanup(d) }
++})
++
++test('C-F02 execute-runs change 戳：无三信号也判已执行（非预执行清单）', async () => {
++  const d = makeRepo('sa-stamp-')
++  try {
++    mkdirSync(join(d, 'src'), { recursive: true })
++    writeFileSync(join(d, 'src', 'a.js'), 'a1\n')
++    sh(d, ['add', '-A'])
++    sh(d, ['commit', '-q', '-m', 'init'])
++    const specBase = join(d, '.sillyspec')
++    writeDesign(specBase, 'stamp-change', ['| 修改 | src/a.js | 说明 |'])
++    const runsDir = join(specBase, '.runtime', 'execute-runs', 'exec-20260911-000000-abc')
++    mkdirSync(runsDir, { recursive: true })
++    writeFileSync(join(runsDir, 'change'), 'stamp-change')
++    writeFileSync(join(d, 'src', 'a.js'), 'a1\ndirty\n')
++
++    const r = await computeChangeScopeAudit({ cwd: d, changeName: 'stamp-change' })
++    assert.equal(r.ok, true)
++    assert.ok(!(r.note || '').includes('尚未进入 execute'), `run 戳即证据（实际 ${r.note}）`)
++    assert.ok(r.rows.some(x => x.path === 'src/a.js'), '出实际改动行')
++  } finally { cleanup(d) }
++})
++
++test('C-F05 quick patch 口径：他者声明文件不进冻结 patch（对齐落盘 rows）', async () => {
++  const d = makeRepo('sa-qpatch-')
++  try {
++    mkdirSync(join(d, 'src'), { recursive: true })
++    writeFileSync(join(d, 'src', 'mine.js'), 'm1\n')
++    writeFileSync(join(d, 'src', 'foreign.js'), 'f1\n')
++    sh(d, ['add', '-A'])
++    sh(d, ['commit', '-q', '-m', 'init'])
++    const specBase = join(d, '.sillyspec')
++    mkdirSync(join(specBase, 'quicklog'), { recursive: true })
++    writeFileSync(join(specBase, 'quicklog', '2026-09.md'), '# QUICKLOG\n')
++    writeQuickGuard(specBase, 'quick-abcd1234', { allowedFiles: ['src/mine.js'], quicklogId: 'ql-20260911-001-aa' })
++    writeQuickGuard(specBase, 'quick-ffff0000', { allowedFiles: ['src/foreign.js'] })
++    writeFileSync(join(d, 'src', 'mine.js'), 'm2\n')
++    writeFileSync(join(d, 'src', 'foreign.js'), 'FOREIGN-SECRET\n')
++
++    const r = await computeChangeScopeAudit({ cwd: d, changeName: 'quick-abcd1234', collectPatch: true })
++    assert.ok(typeof r.frozenPatch === 'string' && r.frozenPatch.includes('+m2'), '归属文件进 patch')
++    assert.ok(!r.frozenPatch.includes('FOREIGN-SECRET'), '他者声明文件不进冻结 patch')
++  } finally { cleanup(d) }
++})
++
++test('A-F01 篡改检测：patch 被改 → getFileDiff 报 sha256 不匹配拒绝出 diff', async () => {
++  const d = makeRepo('sa-tamper-')
++  try {
++    mkdirSync(join(d, 'src'), { recursive: true })
++    writeFileSync(join(d, 'src', 'a.js'), 'a1\n')
++    sh(d, ['add', '-A'])
++    sh(d, ['commit', '-q', '-m', 'init'])
++    const specBase = join(d, '.sillyspec')
++    const archivedDir = join(specBase, 'changes', 'archive', 'tamper-change')
++    mkdirSync(archivedDir, { recursive: true })
++    writeFileSync(join(archivedDir, 'design.md'), '# design\n\n## 文件变更清单\n\n| 操作 | 文件路径 | 说明 |\n|---|---|---|\n| 修改 | src/a.js | s |\n')
++    const patchText = 'diff --git a/src/a.js b/src/a.js\n--- a/src/a.js\n+++ b/src/a.js\n@@ -1 +1,2 @@\n a1\n+orig\n'
++    const { createHash } = await import('node:crypto')
++    const snapBody = {
++      mode: 'full-flow', ok: true, baseAnchor: null,
++      totals: { files: 1, additions: 1, deletions: 0 },
++      rows: [{ path: 'src/a.js', planned: '修改', additions: 1, deletions: 0, kind: 'modified', verdict: 'planned' }],
++      excluded: { foreignDeclared: [] }, savedAt: '2026-09-11T10:00:00.000Z',
++      patchSha256: createHash('sha256').update(patchText, 'utf8').digest('hex'),
++    }
++    writeFileSync(join(archivedDir, 'scope-audit.json'), JSON.stringify(snapBody))
++    const runtimeRoot = join(specBase, '.runtime')
++    mkdirSync(runtimeRoot, { recursive: true })
++    writeFileSync(join(runtimeRoot, 'scope-audit-tamper-change.json'), JSON.stringify(snapBody))
++    // 篡改 patch（与 json 记录的 hash 不再一致）
++    writeFileSync(join(archivedDir, 'scope-audit.patch'), patchText.replace('+orig', '+TAMPERED'))
++
++    const fd = await getFileDiff({ cwd: d, changeName: 'tamper-change', filePath: 'src/a.js' })
++    assert.equal(fd.ok, false, '篡改 → 拒绝出 diff')
++    assert.ok(fd.note && fd.note.includes('不匹配') && fd.note.includes('篡改'), `告警点名（实际 ${fd.note}）`)
++  } finally { cleanup(d) }
++})
++
+ // ───────────────────────── 组 6：单文件 diff（quick-63776328，getFileDiff） ─────────────────────────
+ 
+ test('getFileDiff：tracked 文件改动 → git 原生 diff 内容（锚点=形态 A meta 锚）', async () => {

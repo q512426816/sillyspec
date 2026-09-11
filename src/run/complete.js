@@ -18,6 +18,7 @@
  */
 import { join } from 'node:path'
 import { existsSync, readFileSync, mkdirSync, writeFileSync, appendFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { writeAtomicSync } from '../fs-atomic.js'
 import { gitQuiet } from '../git-helper.js'
 import { withFileLock } from '../quicklog.js'
@@ -817,28 +818,39 @@ function scopeAuditPathSet(result) {
 
 /** execute 完成路径：全表 + 审计级快照/patch 落盘（quick-359a48f1：changes/<变更名>/ 随归档
  *  入库；patch 为收尾时点全量冻结——--file 真·当时内容比对的数据源。写失败只提示，verify
- *  对比按无快照降级） */
+ *  对比按无快照降级。审查修复：freshActual 绕过 settled 快照捷径防陈旧回写（execute 重跑
+ *  场景 C-F01）；落盘 note 换冻结措辞防「自述漂移」污染（C-F06）；patchSha256/patchStatus
+ *  留防篡改锚与失败痕（A-F01/C-F07） */
 async function printExecuteScopeAudit({ cwd, changeName, specBase, platformOpts, computeChangeScopeAudit, renderScopeAuditTable }) {
-  const result = await computeChangeScopeAudit({ cwd, specBase, changeName, platformOpts, collectPatch: true })
+  const result = await computeChangeScopeAudit({ cwd, specBase, changeName, platformOpts, collectPatch: true, freshActual: true })
   console.log(`\n${renderScopeAuditTable(result, { maxRows: 60 })}`)
   try {
-    const changeDir = join(specBase, 'changes', changeName)
+    // 归档竞态（审查 C-F10）：目录已被并行归档移动 → 写归档侧，不在活跃区重建假目录
+    const activeDir = join(specBase, 'changes', changeName)
+    const changeDir = existsSync(activeDir) ? activeDir : join(specBase, 'changes', 'archive', changeName)
     mkdirSync(changeDir, { recursive: true })
     const { frozenPatch, ...snap } = result
-    writeFileSync(join(changeDir, 'scope-audit.json'), JSON.stringify({ ...snap, savedAt: new Date().toISOString() }, null, 2) + '\n')
+    snap.note = 'execute --done 时点冻结（本文件落盘时采集）'
     if (typeof frozenPatch === 'string') {
-      writeFileSync(join(changeDir, 'scope-audit.patch'), frozenPatch.endsWith('\n') ? frozenPatch : frozenPatch + '\n')
+      const patchText = frozenPatch.endsWith('\n') ? frozenPatch : frozenPatch + '\n'
+      writeFileSync(join(changeDir, 'scope-audit.patch'), patchText)
+      snap.patchSha256 = createHash('sha256').update(patchText, 'utf8').digest('hex')
+      snap.patchStatus = 'ok'
+    } else if (frozenPatch === null) {
+      snap.patchStatus = 'failed'
     }
-    console.log(`   📦 范围快照已落变更目录（scope-audit.json${typeof frozenPatch === 'string' ? ' + scope-audit.patch（收尾时点冻结）' : ''}）`)
+    writeFileSync(join(changeDir, 'scope-audit.json'), JSON.stringify({ ...snap, savedAt: new Date().toISOString() }, null, 2) + '\n')
+    console.log(`   📦 范围快照已落变更目录（scope-audit.json${snap.patchStatus === 'ok' ? ' + scope-audit.patch（收尾时点冻结，sha256 已锚）' : snap.patchStatus === 'failed' ? '——patch 采集失败已留痕' : ''}）`)
   } catch (e) {
     console.warn(`   ⚠️ 范围对账快照写入失败（不阻断，verify 漂移对比将按无快照降级）：${e && e.message ? String(e.message).split('\n')[0] : e}`)
   }
 }
 
 /** verify 完成路径：读 execute 时点快照对比文件集差集，一行结论（行数不比——execute 形态 A 锚
- *  worktree meta、verify 形态 B 锚 merge-base，基点不同行数天然抖动，比行数必假阳） */
+ *  worktree meta、verify 形态 B 锚 merge-base，基点不同行数天然抖动，比行数必假阳）。
+ *  审查 C-F01：current 侧 freshActual——settled 快照捷径会让本函数变成快照比快照恒「一致」 */
 async function printVerifyScopeDrift({ cwd, changeName, specBase, platformOpts, computeChangeScopeAudit }) {
-  const result = await computeChangeScopeAudit({ cwd, specBase, changeName, platformOpts })
+  const result = await computeChangeScopeAudit({ cwd, specBase, changeName, platformOpts, freshActual: true })
   const totals = result?.totals && typeof result.totals === 'object' ? result.totals : {}
   const scopeLine = `变更范围：${totals.files ?? (Array.isArray(result?.rows) ? result.rows.length : 0)} 文件 +${totals.additions ?? 0}/-${totals.deletions ?? 0}`
   if (result?.ok !== true) {

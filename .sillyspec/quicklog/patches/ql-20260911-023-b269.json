@@ -1,0 +1,30 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-3f27b201",
+  "totals": {
+    "files": 1,
+    "additions": 19,
+    "deletions": 0
+  },
+  "rows": [
+    {
+      "path": "test/sillyhub-mcp-platform-fixes.test.mjs",
+      "declared": true,
+      "additions": 19,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "qlId": "ql-20260911-023-b269",
+  "sessionId": "quick-3f27b201",
+  "savedAt": "2026-09-11T10:25:08.790Z",
+  "patchSha256": "8a0bfde4bba7050aa063d65a3d4baf069525725501d9b2a70fba1f7ee09f7b45",
+  "patchStatus": "ok"
+}

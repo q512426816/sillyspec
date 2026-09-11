@@ -22,8 +22,9 @@
  * archiveChangeDirectory 的 6 处 process.exit 全 exit(1)：5 个顶层 guard 直接终止；L1325 在 catch 内主动 exit
  * （非被外层吞）；process.exit 不可被 try 捕获 → 搬迁行为完全等价。
  */
-import { basename, join, resolve, relative, isAbsolute } from 'node:path'
+import { basename, dirname, join, resolve, relative, isAbsolute } from 'node:path'
 import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync, unlinkSync, rmSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { renameSyncRetry, writeAtomicSync } from '../fs-atomic.js'
 import { gitQuiet } from '../git-helper.js'
 import { resolveChangeDir, resolveQuickSessionsDir, safeGit, auditQuickCompletion, triggerSync, isQuickMetadata, isQuicklogFileLineNoise, resolveRuntimeRoot, collectOtherQuickSessionDeclarations, mergeQuickBoundaryFiles } from './shared.js'
@@ -1313,20 +1314,26 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
         if (quickRows && quickRows.length > 0) {
           const patchesDir = join(specBase, 'quicklog', 'patches')
           mkdirSync(patchesDir, { recursive: true })
-          const { ...snapRest } = snapResult || {}
-          delete snapRest.frozenPatch
-          writeFileSync(join(patchesDir, `${qlId}.json`), JSON.stringify({
+          const { frozenPatch: _fp, ...snapRest } = snapResult || {}
+          const snapObj = {
             ...snapRest,
             rows: quickRows,
             totals: { files: quickRows.length, additions: quickRows.reduce((n, r) => n + (Number.isFinite(r.additions) ? r.additions : 0), 0), deletions: quickRows.reduce((n, r) => n + (Number.isFinite(r.deletions) ? r.deletions : 0), 0) },
             qlId,
             sessionId: changeName,
             savedAt: new Date().toISOString(),
-          }, null, 2) + '\n')
-          if (typeof frozenPatch === 'string' && frozenPatch) {
-            writeFileSync(join(patchesDir, `${qlId}.patch`), frozenPatch.endsWith('\n') ? frozenPatch : frozenPatch + '\n')
           }
-          console.log(`📦 范围快照已落 quicklog/patches/${qlId}.json${typeof frozenPatch === 'string' && frozenPatch ? ' + .patch（--done 时点冻结）' : ''}`)
+          snapObj.note = 'quick --done 时点冻结（本文件落盘时采集）'
+          if (typeof frozenPatch === 'string' && frozenPatch) {
+            const patchText = frozenPatch.endsWith('\n') ? frozenPatch : frozenPatch + '\n'
+            writeFileSync(join(patchesDir, `${qlId}.patch`), patchText)
+            snapObj.patchSha256 = createHash('sha256').update(patchText, 'utf8').digest('hex')
+            snapObj.patchStatus = 'ok'
+          } else if (frozenPatch === null) {
+            snapObj.patchStatus = 'failed'
+          }
+          writeFileSync(join(patchesDir, `${qlId}.json`), JSON.stringify(snapObj, null, 2) + '\n')
+          console.log(`📦 范围快照已落 quicklog/patches/${qlId}.json${snapObj.patchStatus === 'ok' ? ' + .patch（--done 时点冻结，sha256 已锚）' : snapObj.patchStatus === 'failed' ? '——patch 采集失败已留痕' : ''}`)
         }
       } catch (e) {
         console.warn(`   ⚠️ quick 范围快照落盘失败（不阻断收尾）：${e && e.message ? String(e.message).split('\n')[0] : e}`)

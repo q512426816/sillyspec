@@ -1,0 +1,27 @@
+diff --git a/test/sillyhub-mcp-platform-fixes.test.mjs b/test/sillyhub-mcp-platform-fixes.test.mjs
+index 3ce560b..b3d82fb 100644
+--- a/test/sillyhub-mcp-platform-fixes.test.mjs
++++ b/test/sillyhub-mcp-platform-fixes.test.mjs
+@@ -228,3 +228,22 @@ test('② connect mcp 段成对签发：gateway_url+token 覆盖写；失败降
+     clearProbeCache()
+   }
+ })
++
++test('probe 401 类型化：token 失效 → mcp-token-invalid（非 daemon-unreachable）', async () => {
++  const { probeSillyHub, clearProbeCache } = await import('../src/dispatch/probe.js')
++  clearProbeCache()
++  const mk = (initStatus) => ({
++    probeDaemon: async () => false,
++    getLastInitStatus: () => initStatus,
++    listToolsWithMeta: async () => ({ tools: [] }),
++  })
++  const r1 = await probeSillyHub({ client: mk(401), cwd: process.cwd() })
++  assert.equal(r1.reason, 'mcp-token-invalid', '401 → 类型化 token 失效')
++  clearProbeCache()
++  const r2 = await probeSillyHub({ client: mk(503), cwd: process.cwd() })
++  assert.equal(r2.reason, 'daemon-unreachable', '非 401 → 仍 unreachable')
++  clearProbeCache()
++  const r3 = await probeSillyHub({ client: { probeDaemon: async () => false }, cwd: process.cwd() })
++  assert.equal(r3.reason, 'daemon-unreachable', '无 getter（旧 client）→ 兜底 unreachable')
++  clearProbeCache()
++})
