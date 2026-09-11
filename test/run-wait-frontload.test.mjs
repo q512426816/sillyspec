@@ -1,7 +1,7 @@
 /**
  * 坑 archive-step3-wait-answer-hint-late 回归：--answer 要求的前置提示
  *
- * 背景：requiresWait 步骤（如 archive step3 sync-module-docs）标 --wait 后，agent 习惯性
+ * 背景：requiresWait 步骤（如 archive step2 归档语义收尾）标 --wait 后，agent 习惯性
  * 直接 --done——旧逻辑要么静默跳过 waiting 步骤推进后续步骤，要么到别处报错才知道要 --answer。
  *
  * 锁定语义：
@@ -67,7 +67,7 @@ console.log('\n=== 1. waiting 步骤存在 → 普通 --done 被拒 + 前置 --a
   run(`node "${binCLI}" --dir "${projectDir}" run archive --change ${CN}`)
   const p = await readProgress(projectDir, CN)
   const sd = p.stages.archive
-  const syncIdx = sd.steps.findIndex(s => s.name === 'sync-module-docs')
+  const syncIdx = sd.steps.findIndex(s => s.name.includes('归档语义收尾') || s.name === 'sync-module-docs')
   for (let i = 0; i <= syncIdx; i++) {
     if (i < syncIdx) { sd.steps[i].status = 'completed'; sd.steps[i].completedAt = new Date().toISOString() }
     else {
@@ -106,7 +106,7 @@ console.log('\n=== 2. waitStep 标记 --wait 当场前置 requiresWait 语义 ==
   run(`node "${binCLI}" --dir "${projectDir}" run archive --change ${CN2}`)
   const p = await readProgress(projectDir, CN2)
   const sd = p.stages.archive
-  const syncIdx = sd.steps.findIndex(s => s.name === 'sync-module-docs')
+  const syncIdx = sd.steps.findIndex(s => s.name.includes('归档语义收尾') || s.name === 'sync-module-docs')
   for (let i = 0; i < syncIdx; i++) { sd.steps[i].status = 'completed'; sd.steps[i].completedAt = new Date().toISOString() }
   await writeProgress(projectDir, CN2, p)
 
@@ -125,7 +125,7 @@ console.log('\n=== 3. _getNextSuggestion 对 waiting 阶段建议 --continue --a
   run(`node "${binCLI}" --dir "${projectDir}" run archive --change ${CN3}`)
   const p = await readProgress(projectDir, CN3)
   const sd = p.stages.archive
-  const syncIdx = sd.steps.findIndex(s => s.name === 'sync-module-docs')
+  const syncIdx = sd.steps.findIndex(s => s.name.includes('归档语义收尾') || s.name === 'sync-module-docs')
   for (let i = 0; i <= syncIdx; i++) {
     if (i < syncIdx) { sd.steps[i].status = 'completed'; sd.steps[i].completedAt = new Date().toISOString() }
     else { sd.steps[i].status = 'waiting'; sd.steps[i].waitReason = '等待用户确认模块文档同步'; sd.steps[i].waitedAt = new Date().toISOString() }

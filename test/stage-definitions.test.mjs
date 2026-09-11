@@ -33,7 +33,7 @@ assertContains('scan', ['构建扫描项目列表', '生成本地配置', '生�
 assert.equal(stageSteps.quick.length, 3, 'quick should remain a short auxiliary workflow')
 assertContains('quick', ['理解任务', '实现并验证', '暂存和更新记录'])
 
-assert.equal(stageSteps.archive.length, 6, 'archive should keep its six-step lifecycle (decision-distill inserted before 确认归档)')
-assertContains('archive', ['extract-module-impact', 'sync-module-docs', 'decision-distill 决策提炼', '确认归档'])
+assert.equal(stageSteps.archive.length, 3, 'archive simplified to 3 steps (decision-distill + extract-module-impact归档语义收尾 + 确认归档)')
+assertContains('archive', ['extract-module-impact 与归档语义收尾', 'decision-distill 决策提炼', '确认归档'])
 
 console.log('✅ stage definition regression checks passed')
