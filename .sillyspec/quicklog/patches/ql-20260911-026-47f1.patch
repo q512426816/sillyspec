@@ -1,0 +1,18 @@
+diff --git a/.sillyspec/knowledge/known-issues.md b/.sillyspec/knowledge/known-issues.md
+index ab4338b..98ccd71 100644
+--- a/.sillyspec/knowledge/known-issues.md
++++ b/.sillyspec/knowledge/known-issues.md
+@@ -33,3 +33,13 @@ created_at: 2026-06-19T12:40:00+08:00
+ ## 无 Build/Lint 框架
+ 
+ sillyspec 纯源码分发（package.json 无 `build` script，无打包器）。无 eslint/prettier/biome，语法检查靠自定义 `test/check-syntax.mjs`。不要假设 `npm run build` 可用；CI/工具链改造时需注意无标准 lint。
++
++## Worktree Apply 三道坎（多会话归档实战，2026-09-11 cross-change-decision-guard 三连撞）
++
++**现象**：execute worktree 完成后 `sillyspec worktree apply` 连撞三道阻断——①文件清单校验拦「变更文件不在 design 清单也不在 review changedFiles」；②`--merge` 被「未跟踪工作树文件会被合并覆盖」拒绝启动；③合并真冲突留在主仓。
++
++**根因**：① task review.json 的 changedFiles 声明 `.sillyspec/` 路径时被 `collectReviewDeclaredFiles` 交付物过滤器（worktree-apply.js，`.sillyspec/` 前缀不进 allow）排除——声明面与过滤面口径错位，模块文档类交付物两头不靠；② execute 启动时 baseline checkpoint 会把主仓**未跟踪**文件（含崩溃转储等垃圾）快照进分支，apply --merge 要求主仓无同名未跟踪文件；③ 多会话对同一 changelog 追加（同位置各加一行）必然文本冲突。
++
++**护栏**：① 交付物文件写进 design.md §文件变更清单（清单是 apply 的第二真相源）；② apply 前删主仓未跟踪垃圾文件（或 `git clean` 谨慎核对后）；③ changelog 冲突双行保留（双方条目都是有效历史）。
++
++**证据**：49be5c0 归档链（design 补 `_module-map.yaml` 行解①、rm bash.exe.stackdump 解②、runtime.changelog 双行保留解③）；`--skip-overlap` 不跳过「已提交推进」类重叠，只能 --merge。

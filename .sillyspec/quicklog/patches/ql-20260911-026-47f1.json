@@ -1,0 +1,30 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-9d333946",
+  "totals": {
+    "files": 1,
+    "additions": 10,
+    "deletions": 0
+  },
+  "rows": [
+    {
+      "path": ".sillyspec/knowledge/known-issues.md",
+      "declared": true,
+      "additions": 10,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "qlId": "ql-20260911-026-47f1",
+  "sessionId": "quick-9d333946",
+  "savedAt": "2026-09-11T12:56:57.445Z",
+  "patchSha256": "1fc806a932314cf0269701b5d5f29280e17ea11d2f2cc4df362d1d1e83c5e779",
+  "patchStatus": "ok"
+}

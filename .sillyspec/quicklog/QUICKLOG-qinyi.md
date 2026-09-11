@@ -300,3 +300,12 @@
 根因：新测试以 cwd: process.cwd() 调 probeSillyHub，但套件 runner 以 cwd=test/ 跑文件，readMcpConfig 落空 no-config 短路，standalone 才过，从未在套件绿过
 方案：三处 probe 调用改传 REPO_ROOT=import.meta.url 推导仓根锚，文件头注释记录坑与实证链
 结果：standalone 7/0+全量 439/1（修复前 438/2 A/B 已证），残余 doc-ref-check 归并行会话在途文档不可代修，env skip 留痕
+
+## ql-20260911-026-47f1 | 2026-09-11 20:56:19 | 摩擦 postmortem：worktree apply 三道坎入知识库
+状态：已完成
+关联变更：（无）
+文件：.sillyspec/knowledge/known-issues.md（+10/-0）
+需求：摩擦 postmortem：worktree apply 三道坎入知识库
+根因：归档实战三连撞，坑跨变更可复用
+方案：known-issues.md 增四段条目
+结果：纯知识条目无代码改动，env skip 收尾
