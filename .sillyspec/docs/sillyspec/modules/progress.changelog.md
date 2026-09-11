@@ -11,3 +11,4 @@
 | 2026-09-10 | ql-20260910-003-2709（quick） | getStageStartedAt（change-registry + progress.js facade 委托）：evidence mtime 窗口锚点 execute completed_at→started_at（gates 接线 started 优先 completed 兜底）——消「先提交则 diff 空、不提交则 mtime 旧」时序两难的 mtime 半边（execute 期间产的证据不再判旧）。test/verify-window-regression.test.mjs ②b。 |
 - ql-20260911-017-0c35 | initChange/renameChange 注释标注：日期前缀门禁只在 CLI 边界强制，库函数保持宽松（测试/平台工具 fixture 依赖任意名，~30 处存量）
 ql-20260911-030-bad4 | updateStep stepId 查找收进 UPDATE 同一事务+阶段自动完成提交前复查 pending（堵并发丢写与 15s validator 窗口错标）；reopenStage/consistency-doctor 时间戳 zh-CN→ISO；getLatestActivityAt 改 JS 解析侧取最新（治字符串 MAX 恒取 zh-CN 致时近性闸误判）
+- ql-20260912-003-b696 | db._migrateAddColumn 仅吞 duplicate column（BUSY/磁盘满上抛）+.bak 恢复删伴生 -wal/-shm（防旧 WAL 回放二次损坏）

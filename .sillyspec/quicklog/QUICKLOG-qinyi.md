@@ -388,3 +388,17 @@
 方案：verifyReviewGitEvidence 加 opts（mainGitDir/changeName/specBase）复用 splitOwnVsForeignDiffFiles 剔除他者声明（仅主仓、无 opts 零回归、失败退回旧口径）；runCli 300s 超时+kill+isError envelope+8MB 封顶+幂等结算+死代码清理；withFileLock 偷锁分支补 timeout/sleep+释放前 myId 比对
 结果：新测试 backlog-batch-a 12/12（伪造 review 拦截/超时 kill 39ms 回包/他人锁存活/自旋按预算抛错）；全量 444/0 + lint 574 绿（CLI --done 门禁实测通过）
 审计：⚖️ 归属切分：1 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：test/backlog-batch-a.test.mjs
+
+## ql-20260912-003-b696 | 2026-09-12 05:14:35 | backlog 批 B：db 迁移吞错+.bak WAL 侧车/stage-review 原子写/verify bare 引号/quick --cancel 平…
+状态：已完成
+关联变更：（无）
+文件：
+- src/db.js（迁移收窄+侧车清理）
+- src/stage-review.js（原子写）
+- src/verify-postcheck.js（bare 引号）
+- src/run/command.js（cancel 平台对齐）
+需求：backlog 批 B：db 迁移吞错+.bak WAL 侧车/stage-review 原子写/verify bare 引号/quick --cancel 平台对齐
+根因：① catch-all 把 SQLITE_BUSY/磁盘满当 duplicate column 吞掉（列未加被当已存在，错误现场远离根因）+.bak 恢复不删旧 -wal/-shm（SQLite 官方要求删除，否则旧 WAL 回放到恢复库二次损坏）；② 四处裸 writeFileSync 崩溃中断留半截 review.json 硬阻断后续 gate（同仓 writeAtomicSync 未用）；③ bare char class 排除引号致 Windows 常见命令判未配置、test 硬门静默 skipped（fail-open）；④ --cancel 本地重建 specBase 遮蔽外层平台 specRoot（平台模式 guard 恒读不到、翻态落错库）。触及 run/command.js 门禁链文件按解锁通道走 --force-baseline
+方案：迁移吞错按 message 收窄+恢复后删侧车；四写点换 writeAtomicSync；bare 容忍引号+防吞换行；去遮蔽+resolveQuickSessionsDir 对齐
+结果：新测试 backlog-batch-b 13/13；全量 445/0 + lint 575 绿（CLI --done 门禁实测通过）
+审计：⚖️ 归属切分：1 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：test/backlog-batch-b.test.mjs

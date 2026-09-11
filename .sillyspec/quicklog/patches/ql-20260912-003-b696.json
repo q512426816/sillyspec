@@ -1,0 +1,54 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-a734e499",
+  "totals": {
+    "files": 4,
+    "additions": 29,
+    "deletions": 12
+  },
+  "rows": [
+    {
+      "path": "src/db.js",
+      "declared": true,
+      "additions": 12,
+      "deletions": 3,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/run/command.js",
+      "declared": true,
+      "additions": 5,
+      "deletions": 2,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/stage-review.js",
+      "declared": true,
+      "additions": 6,
+      "deletions": 5,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/verify-postcheck.js",
+      "declared": true,
+      "additions": 6,
+      "deletions": 2,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "qlId": "ql-20260912-003-b696",
+  "sessionId": "quick-a734e499",
+  "savedAt": "2026-09-11T21:22:18.071Z",
+  "patchSha256": "2f88ccba31fc0cf87f4558deecc8a5c7a0fe7cdbad99385f37f842d1747fd8ad",
+  "patchStatus": "ok"
+}

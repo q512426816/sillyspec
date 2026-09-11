@@ -1,5 +1,5 @@
 import { openDatabase, applyPragmas, runTransaction } from './db-engine.js';
-import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs';
 import { dirname } from 'path';
 
 // DB schema 版本（与 project.schema_version DEFAULT 对齐）。_createSchema 改动（加表/列/migration）时 bump，
@@ -171,6 +171,12 @@ export class DB {
           }
         }
         if (!copied) throw lastErr;
+        // SQLite 官方要求：替换 db 文件时必须删除伴生 WAL/SHM——旧 -wal 的 salt 与 db 内容
+        // 不绑定，打开恢复库时会对其跑 recovery，把损坏库的脏页回放到 .bak 内容上（再次损坏
+        // /混态）。copy 成功后、open 之前清侧车（2026-09-12 审查批 B-①）。
+        for (const suffix of ['-wal', '-shm']) {
+          try { rmSync(this.dbPath + suffix, { force: true }); } catch { /* 清理失败不阻断：open 若读到坏 WAL 会走损坏兜底 */ }
+        }
         return openDatabase(this.dbPath);
       }
     }
@@ -374,8 +380,11 @@ export class DB {
   _migrateAddColumn(table, column, type) {
     try {
       this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
-    } catch {
-      // 列已存在，静默跳过
+    } catch (e) {
+      // 仅「列已存在」可吞（幂等迁移的常态）：catch-all 会把 SQLITE_BUSY（并发 init 撞锁）、
+      // 磁盘满、未来 DDL 拼写错误一并吞掉——列实际未加却被当已存在，后续 INSERT 报
+      // "table has no column"，错误现场远离根因（2026-09-12 审查批 B-①）
+      if (!/duplicate column name/i.test(String(e && e.message || e))) throw e;
     }
   }
 }

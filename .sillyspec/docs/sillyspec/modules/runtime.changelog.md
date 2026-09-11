@@ -27,3 +27,4 @@
 - ql-20260911-029-2892 | 紧急包小修：command.js binSelf 提为 resolveBinSelfPath()（fileURLToPath 解 URL + ../bin→../../bin 层级修正）+ knownFlags 补注册 --wait-interactive；complete.js skipStep/waitStep 谓词纳入 blocked（与 completeStep 口径对齐，deps-gate-blocked-invisible 漏同步面）
 ql-20260911-030-bad4 | checkApproval 意外异常改 {status:unknown} 走 warnApprovalUnknown 留痕（不再折叠 null 静默放行）；平台模式有意跳过 null 不变；loadSyncMod 测试缝
 - ql-20260912-001-ca16 | autoCheckPlanFromReviews 卡片读取延后到 verdict 可用后（!ok/fail 时卡片值不影响结果，持 tasks 锁期间每 task 省一次 readFileSync）
+- ql-20260912-003-b696 | quick --cancel 去除本地 specBase 重建遮蔽（改用外层平台感知 specBase）+guard 查找走 resolveQuickSessionsDir

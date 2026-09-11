@@ -88,7 +88,11 @@ export function extractTestCommand(yamlText) {
   if (quoted && quoted[1]) {
     return quoted[1].toLowerCase() === 'unavailable' ? null : quoted[1].trim()
   }
-  const bare = yamlText.match(/^\s*test:\s*([^\n#"']+?)\s*(?:#.*)?$/m)
+  // bare 值不得排除引号字符（坑 verify-bare-quote-miss，2026-09-12 审查批 B-③）：
+  // `test: cd "C:\proj" && npm test` 是合法 YAML 裸标量，旧 char class [^\n#"'] 对含引号值
+  // 整体不匹配 → 判「未配置」→ 实测硬门静默 skipped（fail-open）。全引号形态已被上方
+  // quoted 分支先行消费，此处的引号只可能是嵌在值中部的。同款修正在 extractLintCommand。
+  const bare = yamlText.match(/^\s*test:[ \t]*([^\n#]+?)[ \t]*(?:#.*)?$/m)
   if (bare && bare[1]) {
     const cmd = bare[1].trim()
     return cmd.toLowerCase() === 'unavailable' ? null : cmd
@@ -109,7 +113,7 @@ function extractLintCommand(yamlText) {
   if (quoted && quoted[1]) {
     return quoted[1].toLowerCase() === 'unavailable' ? null : quoted[1].trim()
   }
-  const bare = yamlText.match(/^\s*lint:\s*([^\n#"']+?)\s*(?:#.*)?$/m)
+  const bare = yamlText.match(/^\s*lint:[ \t]*([^\n#]+?)[ \t]*(?:#.*)?$/m)
   if (bare && bare[1]) {
     const cmd = bare[1].trim()
     return cmd.toLowerCase() === 'unavailable' ? null : cmd

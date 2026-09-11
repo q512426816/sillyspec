@@ -37,3 +37,4 @@
 - ql-20260909-004 | archive 三重核对机械化：auditModuleImpactAgainstDiff + {ARCHIVE_IMPACT_AUDIT} 注入（agent 只裁决不一致项）
 - ql-20260911-017-0c35 | brainstorm step6 变更名规则三处标注「CLI 已强制：不合规 exit 2」（prompt 约束升级为硬门提示）
 - ql-20260912-002-57c4 | verifyReviewGitEvidence 主仓 WIP 并入前剔除他者声明文件（复用 splitOwnVsForeignDiffFiles，opts 第参向后兼容）——共享仓他者 WIP 不再使 emptyDiff 伪造检测永不触发
+- ql-20260912-003-b696 | stage-review 四处裸写改 writeAtomicSync（崩溃不留半截 review.json）+verify-postcheck bare 值引号容忍（Windows cd "..." 命令不再静默 skip test 硬门）

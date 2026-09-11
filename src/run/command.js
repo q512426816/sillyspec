@@ -1288,11 +1288,14 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
       console.error('用法: sillyspec run quick --cancel --change <quick-会话ID> [--ql <ql-xxx>]\n  取消误启动的 quick 会话：QUICKLOG 条目翻「已取消」+ tasks.md 挂载行移除 + 会话目录清理 + db 行注销。\n  已完成/已勾选的会话拒绝取消（真实工作记录）')
       process.exit(2)
     }
-    const specBase = resolveSpecDir(cwd, { specDir })
+    // 平台模式对齐（坑 quick-cancel-platform-specbase，2026-09-12 审查批 B-④）：此处原用
+    // resolveSpecDir 本地重建 specBase，遮蔽外层平台感知 specBase（:476 specRoot 优先）——
+    // 平台模式 guard 恒读不到、QUICKLOG 翻态落错库。guard 查找同其他收敛点走
+    // resolveQuickSessionsDir（runtimeRoot 可与 specBase/.runtime 异位，multi-agent-review Q4）。
     // qlId 优先 --ql 显式；否则读会话 guard.json（allocate 时 CLI 写入）；再退 current marker 旁的会话
     let qlId = qlFlag
     if (!qlId) {
-      const guardPath = join(specBase, '.runtime', 'quick-sessions', cancelSessionRaw, 'guard.json')
+      const guardPath = join(resolveQuickSessionsDir(platformOpts, specBase), cancelSessionRaw, 'guard.json')
       try {
         if (existsSync(guardPath)) {
           // 字段名 bug 修复（2026-09-09 §7-5，会话实证：guard 在场仍报「缺失/损坏」）：

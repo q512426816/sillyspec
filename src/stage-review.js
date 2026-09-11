@@ -13,7 +13,8 @@
  *   （平台模式落 <runtimeRoot>/stage-reviews/...，与 execute-runs 同构）
  */
 
-import { existsSync, readFileSync, mkdirSync, readdirSync, writeFileSync } from 'fs'
+import { existsSync, readFileSync, mkdirSync, readdirSync } from 'fs'
+import { writeAtomicSync } from './fs-atomic.js'
 import { join } from 'path'
 import { createHash } from 'crypto'
 import jsYaml from 'js-yaml'
@@ -561,7 +562,7 @@ export function validateStageReviewWithAutoRefresh(opts) {
     reviewerNotes: `${result.review.reviewerNotes || ''}\ndocHash auto-refreshed at ${refreshedAt}（gate 检测主文档改版，机械重算；verdict 保留，结论是否仍适用需人工确认）`.trim(),
   }
   try {
-    writeFileSync(reviewPath, JSON.stringify(refreshed, null, 2) + '\n')
+    writeAtomicSync(reviewPath, JSON.stringify(refreshed, null, 2) + '\n')
   } catch {
     return { result, autoRefreshed: false } // 写失败回落原失败结果，不静默放行
   }
@@ -698,7 +699,7 @@ export function registerStageReview({ changeName, stage, fromFile, cwd, platform
       reviewedFiles,
       reviewerNotes: `${existing.reviewerNotes || ''}\ndocHash refreshed at ${refreshedAt}（主文档改版后机械重算；verdict 结论是否仍适用需人工确认）`.trim(),
     }
-    writeFileSync(existingPath, JSON.stringify(review, null, 2) + '\n')
+    writeAtomicSync(existingPath, JSON.stringify(review, null, 2) + '\n')
     const schemaRecheck = validateStageReviewSchema(review)
     if (!schemaRecheck.ok) {
       throw new Error(`register-stage-review: refresh 后 schema 自检失败 — ${schemaRecheck.errors.join('; ')}（原 review 字段异常，先修原文件）`)
@@ -750,7 +751,7 @@ export function registerStageReview({ changeName, stage, fromFile, cwd, platform
   const reviewDir = join(runtimeRoot, 'stage-reviews', `${stage}-${reviewRunId}`)
   const reviewPath = join(reviewDir, 'review.json')
   mkdirSync(reviewDir, { recursive: true })
-  writeFileSync(reviewPath, JSON.stringify(review, null, 2) + '\n')
+  writeAtomicSync(reviewPath, JSON.stringify(review, null, 2) + '\n')
   // stage-reviews 回收不在此处（ql-20260908-005 已定分野）：变更归属类证据走归档时精确
   // 回收（pruneArchivedChangeRuntime 按 reviewedFiles 归属）；写入侧滚动是启发式，
   // 活跃变更的 review 可能因他端高频写而跌出 keep 窗，不进证据类目录。
@@ -760,7 +761,7 @@ export function registerStageReview({ changeName, stage, fromFile, cwd, platform
     console.warn(`⚠️ register-stage-review: marker 已存在 ${markerPath}，将被覆盖为 ${reviewRunId}`)
   }
   mkdirSync(runtimeRoot, { recursive: true })
-  writeFileSync(markerPath, reviewRunId + '\n')
+  writeAtomicSync(markerPath, reviewRunId + '\n')
 
   // self-check（fail-closed）：刚写的 review 必过 schema + docHash 真实性。只验 mechanics，
   // 不判 verdict（verdict 是 agent/子代理的审查结论，even fail 也如实落盘，由 Stage Review Gate 裁决）。
