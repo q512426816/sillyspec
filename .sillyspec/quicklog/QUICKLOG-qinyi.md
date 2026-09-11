@@ -274,3 +274,20 @@
 方案：client initialize 握手留痕 HTTP 状态码并暴露 getLastInitStatus；probeSillyHub 在不可达分诊中识别 401 输出 mcp-token-invalid（进负面缓存 TTL 内不重试）；review-dispatch 对该 reason 前置重连指引（platform connect 成对签发可自愈）再给通道降级
 结果：sillyhub-mcp-platform-fixes 7 组含新增 401 三分支全绿，review-dispatch/dispatch 回归 15 绿，lint 绿
 审计：📝 文档欠账（D-8）：1 个源码文件改动未同步任何模块文档
+
+## ql-20260911-024-103b | 2026-09-11 18:49:31 | 决策文件字段回填+同号遮蔽修复（decision-cross-change-id-shadow）
+状态：已完成
+关联变更：（无）
+文件：
+- src/knowledge-match.js（变更行读入+去重键修复）
+- test/decision-file-field.test.mjs（回归 3 用例）
+- .sillyspec/knowledge/decisions/stages.md（D-001/D-002 文件行）
+- .sillyspec/knowledge/decisions/runtime.md（D-001 文件行）
+- .sillyspec/knowledge/decisions/core-engine.md（D-001 文件行）
+- .sillyspec/knowledge/decisions/docs-consistency.md（D-001 文件行）
+- .sillyspec/knowledge/decisions/setup.md（D-001 文件行）
+- .sillyspec/changes/archive/2026-09-11-cross-change-decision-guard/decisions.md（源头文件行（幂等））
+需求：决策文件字段回填+同号遮蔽修复（decision-cross-change-id-shadow）
+根因：dogfood 回填暴露预存盲区：域文件跨变更同号条目常见（runtime.md 七个 D-001@v1），parseDecisionEntries 去重键 file#id 先到先得，后来同号条目全被遮蔽——含 {DECISION_HITS} 防复潮的同号 rejected 决策
+方案：知识库 6 条目+归档 decisions.md 源头双侧补「文件：」行（重蒸馏幂等，--force-baseline 有意编辑受保护决策库）；knowledge-match 变更：行独立标签读入 entry.change、去重键改 file#id#变更（双路由完全重复仍折叠、legacy 无变更行互折叠维持旧行为）；回归 3 用例锁定
+结果：matchDecisionsByFiles 实测 6 文件全命中（含他变更锚点条目）；专项 decision-file-field 11/0+semantic-guard 30/0+prompt-inject 6/0+lint 570 绿；全量 438/2 经 stash A/B 复跑证明归属并行会话 8904d4d probe 分诊在途工作（本会话 440/0 基线在其落盘前）——非本变更回归，env skip 收尾留痕

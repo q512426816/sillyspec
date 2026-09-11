@@ -84,6 +84,7 @@ supersedes：无（修订 design 初稿注入时机）
 状态：implemented
 变更：2026-09-11-cross-change-decision-guard
 锚点：未记录
+文件：src/run/prompt.js, src/run/quick-audit.js
 最近确认：358af35
 理由：**方案 A——三层 advisory**：①决策条目增机械可解析「文件：」字段（存量条目用锚点路径提取兼容，零迁移）②quick 进场按候选文件（--files+脏文件）反查知识库 implemented/rejected 决策 + git log 近 7 天他者变更交付归因，命中注入 advisory、零命中静默 ③quick --done 对「他者交付的测试文件断言行被改」输出 WARNING 级点名（具体断言+交付变更+决策指针），建议理由写进 quicklog --solution。全部非阻断，单开关 semantic_guard.enabled 默认开。
 
@@ -91,5 +92,6 @@ supersedes：无（修订 design 初稿注入时机）
 状态：implemented
 变更：2026-09-11-cross-change-decision-guard
 锚点：未记录
+文件：src/run/complete-handlers.js
 最近确认：358af35
 理由：**任务行追加是设计内行为**（quick 启动契约：对每个关联变更 tasks.md 追加 `- [ ] <ql-id> <任务描述>`，stages/quick.js step1；关联本身是协作声明——两变更共享 decision-distill.js，ql-020 allowedFiles 含该文件），保留该行不覆盖，本变更任务追加其下。**真缺陷（quick-done-autoarchive-misfire 缺陷②，ql-20260819-010 只修了缺陷①）**：closeQuickLinkedChanges 阶段闸允许集含 brainstorm，stage_status=completed 闸只堵「brainstorm 完成→plan 开始」空窗——**brainstorm 进行中 + tasks.md 仅含 ql 行**（完整流程 plan 前无自有任务行，「isChangeTasksComplete 全勾」恒真空洞）时，关联 quick --done 勾掉 ql 行即触发在途变更被轻量归档注销。防护（本变更已落地）：写入自有未勾选 task-01..07 行——isChangeTasksComplete 恒 false 直至 execute/verify，彼时阶段不在允许集，竞态窗口关闭。

@@ -17,7 +17,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import { parseDecisions, distillIntoKnowledge } from '../src/decision-distill.js'
-import { matchDecisionsByFiles } from '../src/knowledge-match.js'
+import { matchDecisionsByFiles, parseDecisionEntries } from '../src/knowledge-match.js'
 
 const tmpRoots = []
 function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); tmpRoots.push(d); return d }
@@ -277,4 +277,64 @@ test('task-02 验收5：无 decisions 库 / INDEX 无 Decisions 路由 / 路由�
     '',
   ].join('\n') + '\n')
   assert.deepEqual(matchDecisionsByFiles(lib, []), {}, '空查询列表 → {}')
+})
+
+// ============ 坑 decision-cross-change-id-shadow 回归（2026-09-11 语义护栏 dogfood 首跑实证） ============
+
+test('同号跨变更条目不遮蔽：file#id#变更 去重键——两个 D-001@v1 分属两变更均存活且文件键反查各自命中', () => {
+  const lib = mkDecisionLib([
+    '# 决策知识 — change-management', '',
+    '## D-001@v1 先到的旧决策',
+    '状态：implemented',
+    '变更：2026-08-24-old-change',
+    '锚点：未记录',
+    '文件：src/old-file.js',
+    '理由：旧变更的 D-001', '',
+    '## D-001@v1 后到的新决策',
+    '状态：implemented',
+    '变更：2026-09-11-new-change',
+    '锚点：未记录',
+    '文件：src/new-file.js',
+    '理由：新变更的 D-001（旧 file#id 键会把它遮蔽）', '',
+  ].join('\n') + '\n')
+  const r = matchDecisionsByFiles(lib, ['src/old-file.js', 'src/new-file.js'])
+  assert.ok(Array.isArray(r['src/old-file.js']) && r['src/old-file.js'].length === 1, '旧条目命中')
+  assert.ok(Array.isArray(r['src/new-file.js']) && r['src/new-file.js'].length === 1, '新条目不被同号先到者遮蔽（本坑主体）')
+  // 变更名在 parse 层透出（matchDecisionsByFiles 投影按契约五字段，不含 change）
+  const parsed = parseDecisionEntries(lib)
+  assert.equal(parsed.filter(e => e.id === 'D-001@v1').length, 2, 'parse 层两同号条目均存活')
+  assert.ok(parsed.some(e => e.change === '2026-09-11-new-change'), '变更名随条目透出')
+})
+
+test('双路由完全重复仍折叠：同一域文件两条路由行 → 同变更同号条目只保留一份', () => {
+  const k = mk('dff-shadow-duproute-')
+  mkdirSync(join(k, 'decisions'), { recursive: true })
+  writeFileSync(join(k, 'decisions', 'dup.md'), [
+    '## D-001@v1 唯一条目',
+    '状态：implemented',
+    '变更：2026-09-11-some-change',
+    '文件：src/a.js',
+    '理由：完全重复应折叠', '',
+  ].join('\n') + '\n')
+  const route = { category: 'Decisions', keywords: ['决策'], file: 'decisions/dup.md', anchor: '', display: 'dup', line: '' }
+  // 同一路由传两次（模拟 INDEX 多条路由行指向同一域文件）
+  const entries = parseDecisionEntries(k, [route, route])
+  const same = entries.filter(e => e.id === 'D-001@v1')
+  assert.equal(same.length, 1, '同变更同号完全重复折叠为一份（去重原语义保持）')
+})
+
+test('legacy 无变更行条目维持旧行为：同号 legacy 条目互折叠', () => {
+  const lib = mkDecisionLib([
+    '# 决策知识 — change-management', '',
+    '## D-001@v1 legacy 甲',
+    '状态：implemented',
+    '锚点：未记录',
+    '理由：无变更行的历史条目', '',
+    '## D-001@v1 legacy 乙',
+    '状态：implemented',
+    '锚点：未记录',
+    '理由：同样无变更行——与甲互折叠（不放大历史条目数）', '',
+  ].join('\n') + '\n')
+  const entries = parseDecisionEntries(lib)
+  assert.equal(entries.filter(e => e.id === 'D-001@v1').length, 1, 'change="" 的同号 legacy 条目折叠')
 })

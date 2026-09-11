@@ -66,6 +66,8 @@ const DECISION_FIELD_RE = /^(状态|文件|理由|否决理由|复潮条件)\s*[
 // DECISION_FIELD_RE：其 else-if 链末尾的 reason 回填（else if (!cur.reason)）会把锚点值
 // 误吞进 reason（Grill X-002 隐性回归）。
 const DECISION_ANCHOR_RE = /^锚点\s*[：:]\s*(.*)$/
+// 变更：单独标签（变更名限定——D-xxx 是变更内局部序号，跨变更同号互不相干，去重键依赖它）
+const DECISION_CHANGE_RE = /^变更\s*[：:]\s*(.*)$/
 
 /** 「文件：」值切分 + 逐项反斜杠归一 POSIX（与 decision-distill 的 entry.files 契约对齐：
  *  split /[,，、\s]+/ + replace(/\\/g,'/')）。 */
@@ -109,7 +111,7 @@ function anchorFilePaths(anchor) {
  */
 function parseDecisionFile(filePath, file) {
   let content
-  try { content = readFileSync(filePath, 'utf8') } catch { return [] }
+  try { content = readFileSync(filePath, 'utf-8') } catch { return [] }
   const hits = []
   let cur = null
   const flush = () => {
@@ -120,13 +122,17 @@ function parseDecisionFile(filePath, file) {
     const h = line.match(DECISION_HEADER_RE)
     if (h) {
       flush()
-      cur = { file, id: h[1], title: h[2].trim(), status: '', reason: '', revisitWhen: '', files: [], anchor: '' }
+      cur = { file, id: h[1], title: h[2].trim(), status: '', reason: '', revisitWhen: '', files: [], anchor: '', change: '' }
       continue
     }
     if (!cur) continue
     // 锚点：单独标签先于字段链匹配（不在 DECISION_FIELD_RE 内，见常量处注释）
     const a = line.match(DECISION_ANCHOR_RE)
     if (a) { cur.anchor = a[1].trim(); continue }
+    // 变更：单独标签读入（坑 decision-cross-change-id-shadow，2026-09-11 语义护栏 dogfood 首跑实证：
+    // 域文件跨变更同号条目常见（D-xxx 是变更内局部序号），去重键须含变更名否则先到条目遮蔽后来者）
+    const c = line.match(DECISION_CHANGE_RE)
+    if (c) { cur.change = c[1].trim(); continue }
     const f = line.match(DECISION_FIELD_RE)
     if (!f) continue
     const value = f[2].trim()
@@ -157,10 +163,15 @@ export function parseDecisionEntries(indexDir, indexEntries = null) {
     if (!existsSync(filePath)) continue // 路由行失效（域文件已删）→ 跳过不阻断
     hits.push(...parseDecisionFile(filePath, route.file))
   }
-  // 多条路由行指向同一域文件时按 file+id 去重
+  // 多条路由行指向同一域文件时按 file+id+变更 去重（完全重复折叠）；键含变更名——
+  // 跨变更同号条目（D-xxx 是变更内局部序号，域文件内同 id 不同变更常见）不再被先到者
+  // 遮蔽（坑 decision-cross-change-id-shadow，2026-09-11 dogfood 实证：runtime.md 七个
+  // D-001@v1 分属七变更，旧键只放行首个——同号 rejected 决策在 {DECISION_HITS} 防复潮
+  // 注入同样被遮蔽）。无「变更：」行的 legacy 条目 change='' 与同号 legacy 条目互折叠
+  // （维持旧行为，不放大历史条目数）。
   const seen = new Set()
   return hits.filter(h => {
-    const key = `${h.file}#${h.id}`
+    const key = `${h.file}#${h.id}#${h.change || ''}`
     if (seen.has(key)) return false
     seen.add(key)
     return true

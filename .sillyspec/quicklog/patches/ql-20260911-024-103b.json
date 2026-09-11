@@ -1,0 +1,86 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-617d7958",
+  "totals": {
+    "files": 8,
+    "additions": 84,
+    "deletions": 5
+  },
+  "rows": [
+    {
+      "path": ".sillyspec/changes/archive/2026-09-11-cross-change-decision-guard/decisions.md",
+      "declared": true,
+      "additions": 2,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": ".sillyspec/knowledge/decisions/core-engine.md",
+      "declared": true,
+      "additions": 1,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": ".sillyspec/knowledge/decisions/docs-consistency.md",
+      "declared": true,
+      "additions": 1,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": ".sillyspec/knowledge/decisions/runtime.md",
+      "declared": true,
+      "additions": 1,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": ".sillyspec/knowledge/decisions/setup.md",
+      "declared": true,
+      "additions": 1,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": ".sillyspec/knowledge/decisions/stages.md",
+      "declared": true,
+      "additions": 2,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/knowledge-match.js",
+      "declared": true,
+      "additions": 15,
+      "deletions": 4,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/decision-file-field.test.mjs",
+      "declared": true,
+      "additions": 61,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "qlId": "ql-20260911-024-103b",
+  "sessionId": "quick-617d7958",
+  "savedAt": "2026-09-11T11:05:38.464Z",
+  "patchSha256": "3535081c21177d81cdb5f7cc39f3f10b845f442f2ae833c6dd5f1bbfa396b3d2",
+  "patchStatus": "ok"
+}
