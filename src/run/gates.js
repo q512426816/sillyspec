@@ -630,6 +630,23 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
     // 亲测（本路径语义与产物逐字不变）。
     const { loadReusableQualityScan } = await import('./verify-quality-scan.js')
     const reusableScan = loadReusableQualityScan({ specBase, cwd, changeName })
+    // ── 隔离快照定向跑（2026-09-10 驾驭小结第八批，用户第二次真实阻塞：verify 实测门跑
+    // main 工作区，多会话并发任何人的 WIP 都能弄红别人的门）：HEAD 干净基线 + 本变更文件集
+    // overlay（worktree meta 在则源=worktree 根——等价「--worktree 定向跑本变更分支内容」）+
+    // 变更文档随快照（test_strategy 消费）。并行会话在途文件物理不进快照、不参与本门判定。
+    // 快照基建失败 → 回退主仓现行为（失败路径沿用 renderVerifyTestAttribution 归因提示）。
+    let verifyGateSnap = null
+    if (!process.env.SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF) {
+      try {
+        const { createVerifyGateSnapshot } = await import('./gate-snapshot.js')
+        verifyGateSnap = await createVerifyGateSnapshot({ cwd, changeName, specBase, platformOpts })
+        if (verifyGateSnap) {
+          console.log(`🧪 Verify 实测隔离快照：HEAD + 本变更 ${verifyGateSnap.changeFileCount} 个文件${verifyGateSnap.sourceRoot ? '（overlay 自 worktree——本变更分支内容定向跑）' : ''}（并行会话脏文件不参与门判定）`)
+        }
+      } catch { /* 快照链路异常 → 主仓现行为 */ }
+    }
+    const gateCwd = verifyGateSnap ? verifyGateSnap.snapshotRoot : cwd
+    const gateSpecBase = verifyGateSnap ? join(verifyGateSnap.snapshotRoot, '.sillyspec') : specBase
     let testCheck
     if (reusableScan && reusableScan.testResult) {
       testCheck = reusableScan.testResult
@@ -638,7 +655,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
     } else {
       // 测试实测是同步 execSync，长套件可跑 2~10min 且中途无输出——先预告避免 agent 误判卡死
       console.log(`\n⏳ Verify 测试对账：CLI 亲自执行 local.yaml 的 commands.test（同步，耗时可能较长，请等待…）`)
-      testCheck = runVerifyTestCheck({ cwd, specBase, changeName, ctx })
+      testCheck = runVerifyTestCheck({ cwd: gateCwd, specBase: gateSpecBase, changeName, ctx })
       printVerifyTestCheck(testCheck)
     }
     // tests 段二次回填（2026-09-08-ir-verify-facts FR-03 次序：实测在 runValidators 之后，
@@ -657,6 +674,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
       }
     } catch { /* fail-soft：回填失败不影响门禁 */ }
     if (testCheck.status === 'failed') {
+      if (verifyGateSnap) { try { verifyGateSnap.cleanup() } catch {} ; verifyGateSnap = null }
       console.error('\n❌ verify 阶段被阻断：verify-result.md 自报告通过，但 CLI 实测测试失败。')
       // 并行 WIP 归因鉴别（坑 verify-reconcile-foreign-wip）：单一实现迁至 verify-quality-scan.js
       // renderVerifyTestAttribution（P0-1 前置二：noAI 质量扫描失败路径与本 --done 路径共用，
@@ -677,11 +695,14 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
     if (lintCheck) {
       console.log(`\n♻️ Verify lint 对账：复用 noAI 质量扫描步的实测结果（代码指纹匹配，免重跑）`)
     } else {
-      lintCheck = runVerifyLintCheck({ cwd, specBase })
+      lintCheck = runVerifyLintCheck({ cwd: gateCwd, specBase: gateSpecBase })
       if (lintCheck.status !== 'skipped') {
         console.log(`\n⏳ Verify lint 对账：CLI 亲自执行 local.yaml 的 commands.lint…`)
       }
     }
+    // 快照收尾（test+lint 两检查都已完成；parity/删除探针走主仓 git 事实不依赖快照）
+    const usedSnapshot = Boolean(verifyGateSnap)
+    if (verifyGateSnap) { try { verifyGateSnap.cleanup() } catch {} ; verifyGateSnap = null }
     printVerifyLintCheck(lintCheck)
     // lint 硬门（2026-09-09 升硬：观察期 14 次 5 败全真阳性，pre-push 本就硬拦——fail-fast 前移；
     // 逃生 SILLYSPEC_VERIFY_LINT_GATE=advisory）
@@ -692,6 +713,17 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
         const tail = lintCheck.outputTail.split('\n').slice(-8).join('\n')
         console.error('   输出（末尾）：')
         for (const line of tail.split('\n')) console.error(`   | ${line}`)
+      }
+      // 污染归属提示（2026-09-10 驾驭小结第八批建议②，对齐 test 侧 renderVerifyTestAttribution
+      // 先例）：实测跑在主仓共享工作区（快照不可用/被 ENV 关闭的 fallback 路径）且存在非本变更
+      // 的未提交文件时，失败可能是并行会话污染——先做归属鉴定，不静默背锅。
+      if (!usedSnapshot) {
+        try {
+          const { renderVerifyTestAttribution } = await import('./verify-quality-scan.js')
+          console.error('   ℹ️ 本次实测跑在主仓共享工作区（未走隔离快照）：')
+          await renderVerifyTestAttribution({ cwd, changeName, specBase, runtimeRoot: resolveRuntimeRoot(platformOpts, specBase) })
+          console.error('   亦可跑 sillyspec scope-audit --change ' + changeName + ' 做污染归属鉴定（计划×实际三态全表）。')
+        } catch { /* 归因提示失败不影响阻断语义 */ }
       }
       console.error('   修复后重跑 --done（进度不丢）；确认要跳过实测请设 SILLYSPEC_VERIFY_LINT_GATE=advisory（审计留痕）。')
       return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts)

@@ -95,3 +95,19 @@
 根因：P2-f 改了 execute 阶段七处 prompt 为 CLI 唯一勾选者——skill 的 batch 协议说明还写着 checkbox 勾选归主 agent，行为契约需同步
 方案：execute skill batch 说明改为：审查与 review.json 归主 agent，checkbox 勾选归 CLI（review write 落盘即按 verdict 自动勾选，禁止手动勾选）
 结果：skill 文案与 stages/execute.js 一致；全量回归 127/127 + lint 全绿 + docs check 547/547
+
+## ql-20260911-013-5dcf | 2026-09-11 10:25:00 | 修 verify 实测门结构性盲区：隔离快照定向跑本变更内容（--worktree 定向等价）+ 坑入 troubleshooting §58
+状态：已完成
+关联变更：friction-signal-hint
+文件：
+- src/run/gate-snapshot.js（sourceRoot + createVerifyGateSnapshot）
+- src/run/gates.js（verify 块快照接线 + lint 归因提示）
+- test/verify-gate-snapshot.test.mjs（3 用例）
+- docs/sillyspec/troubleshooting.md（§58）
+- .sillyspec/docs/sillyspec/modules/runtime.md（第八批补记）
+- docs/sillyspec/architecture-4a.md,file-lifecycle.md,prompt-control-debt.md（gates.js 锚重锚）
+需求：修 verify 实测门结构性盲区：隔离快照定向跑本变更内容（--worktree 定向等价）+ 坑入 troubleshooting §58
+根因：verify 门跑 main 共享工作区，多会话并发任何人的 WIP 都能弄红无辜变更的门（第二次真实阻塞）；quick 门第六批已快照化，verify 是同根因残余；test 侧 renderVerifyTestAttribution 只是事后归因不是隔离
+方案：gate-snapshot.js 增 sourceRoot overlay + createVerifyGateSnapshot（变更文件集 resolveVerifyChangedFiles + 他者显式声明剔除 + native worktree 定向源 + 变更文档随快照）；gates.js verify 块 test/lint 快照内跑（ENV 可关，基建失败 fallback 主仓），lint 阻断 fallback 路径补污染归属提示 + scope-audit 出口；troubleshooting §58 四段坑条
+结果：verify-gate-snapshot 3/3（native 定向/in-place 声明剔除无主保留/fallback）；quick-gate-snapshot 回归 4/4；全量 npm test 432/432 全绿；lint 560 文件 0 hard fail；docs check 559 全过（漂移 4 锚重锚）
+审计：⚖️ 归属切分：4 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：docs/sillyspec/architecture-4a.md, docs/sillyspec/file-lifecycle.md, docs/sillyspec/prompt-control-debt.md, .sillyspec/changes/friction-signal-hint/symbol-impact.md

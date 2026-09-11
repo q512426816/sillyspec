@@ -28,7 +28,7 @@ function git(cwd, args) {
  * @param {{ cwd: string, files: string[] }} opts cwd=主仓根；files=本会话变更文件（仓库根相对 POSIX）
  * @returns {{ snapshotRoot: string, cleanup: () => void, reason?: string }|null} 失败返回 null（调用方回退主仓）
  */
-export function createGateSnapshot({ cwd, files }) {
+export function createGateSnapshot({ cwd, files, sourceRoot = null }) {
   let snapshotRoot = null
   try {
     // 前置：主仓须是 git 仓且有 HEAD（无 git 环境回退主仓现行为）
@@ -38,16 +38,19 @@ export function createGateSnapshot({ cwd, files }) {
     git(cwd, ['worktree', 'add', '--detach', '--quiet', snapshotRoot, 'HEAD'])
 
     // 会话文件 overlay：主仓工作区版本覆盖进快照（本会话的最新态；文件不存在=已删，跳过）。
+    // sourceRoot（verify 门定向跑用，2026-09-10 驾驭小结第八批）：overlay 源切换为本变更
+    // worktree 根——「--worktree 定向跑本变更分支内容」的快照实现（缺省仍是主仓 cwd）。
     // .sillyspec/ 跳过面收窄（P2-d 落地实证的快照盲区）：原一刀切跳过整个 .sillyspec/ ——
     // 会话声明的 tracked docs（module-map 补录/知识库/模块卡）进不了快照，门禁读到 HEAD
     // 旧版恒误报（src 未录 module-map 的修复在主仓生效、快照里仍然失败）。真正需要隔离的
     // 是共享运行时面：.runtime/（sqlite 锁/在途 marker）与 quicklog/（跨会话共享账本）；
     // local.yaml 由下方 cfg 段显式复制（单一来源，不经 overlay）。
+    const overlayRoot = sourceRoot || cwd
     let overlaid = 0
     for (const f of files) {
       const isSillyspecRuntime = typeof f === 'string' && (f.startsWith('.sillyspec/.runtime/') || f.startsWith('.sillyspec/quicklog/') || f === '.sillyspec/local.yaml' || f === '.sillyspec/.sillyspec-platform.json')
       if (typeof f !== 'string' || f.includes('..') || f.startsWith('/') || isSillyspecRuntime) continue
-      const src = join(cwd, f)
+      const src = join(overlayRoot, f)
       if (!existsSync(src)) continue
       const dst = join(snapshotRoot, f)
       mkdirSync(dirname(dst), { recursive: true })
@@ -84,5 +87,73 @@ export function createGateSnapshot({ cwd, files }) {
       try { rmSync(snapshotRoot, { recursive: true, force: true }) } catch {}
     }
     return null
+  }
+}
+
+/**
+ * verify 门专用快照（2026-09-10 驾驭小结第八批，用户第二次真实阻塞：verify 实测门跑
+ * main 工作区，多会话并发任何人的 WIP 都能弄红别人的门）。等价「--worktree 定向跑」：
+ * overlay 文件集 = resolveVerifyChangedFiles（worktree-aware：含 merge-base 补齐与
+ * working-tree），overlay 源 = 本变更 worktree 根（meta 感知；in-place 退主仓 cwd）——
+ * 并行会话的在途文件物理不进快照。变更文档（changes/<name>/**，test_strategy 的
+ * module-impact.md 等消费）从主仓 specBase 随快照复制。
+ * @param {{ cwd: string, changeName: string, specBase: string, platformOpts?: object }} opts
+ * @returns {Promise<{snapshotRoot: string, cleanup: () => void, overlaid: number, changeFileCount: number}|null>}
+ */
+export async function createVerifyGateSnapshot({ cwd, changeName, specBase, platformOpts = {} }) {
+  try {
+    const { resolveVerifyChangedFiles } = await import('../verify-postcheck.js')
+    const { resolveRuntimeRoot } = await import('./shared.js')
+    const { splitOwnVsForeignDiffFiles } = await import('../foreign-declared.js')
+    let changeFiles = resolveVerifyChangedFiles(cwd, changeName, null, {
+      specBase, includeWorkingTree: true,
+    }) || []
+    if (changeFiles.length === 0) return null // 无变更文件集 → 无从定向，回退主仓
+    // 他者声明归属过滤（坑 verify-reconcile-foreign-wip 同款）：in-place 模式 working-tree
+    // 并入后主仓全部在途文件进场——他者活跃变更显式声明的文件（quick --files / 他者 design
+    // 清单）剔除，只留本变更相关面（无主文件保留，fail-closed 口径与 probe6 一致）。
+    try {
+      const runtimeRoot = resolveRuntimeRoot(platformOpts, specBase)
+      const { foreign } = splitOwnVsForeignDiffFiles(cwd, changeName, changeFiles, { specBase, runtimeRoot })
+      if (foreign.length > 0) {
+        const foreignSet = new Set(foreign.map(x => x.file))
+        changeFiles = changeFiles.filter(f => !foreignSet.has(f))
+        if (changeFiles.length === 0) return null
+      }
+    } catch { /* 过滤失败退全量（fail-closed：宁可多 overlay 不漏本变更文件） */ }
+
+    // overlay 源：worktree meta 感知（native worktree 在则从 worktree 根取「本变更分支内容」）
+    let sourceRoot = null
+    try {
+      const { WorktreeManager } = await import('../worktree.js')
+      const wm = new WorktreeManager({ cwd })
+      const meta = wm.getMeta(changeName)
+      if (meta && meta.worktreePath && meta.mode !== 'in-place-fallback' && existsSync(meta.worktreePath)) {
+        sourceRoot = meta.worktreePath
+      }
+    } catch { /* meta 读取失败 → 主仓 cwd 源（files 已含本变更 working-tree 改动） */ }
+
+    const snap = createGateSnapshot({ cwd, files: changeFiles, sourceRoot })
+    if (!snap) return null
+
+    // 变更文档随快照：module-impact.md（test_strategy=evidence-auto 消费）/tasks.md 等
+    // 在 .sillyspec（gitignore）不进 HEAD，从主仓 specBase 复制 changes/<name>/**
+    try {
+      const changeDir = join(specBase, 'changes', changeName)
+      if (existsSync(changeDir)) {
+        const copyDir = (srcDir, dstDir) => {
+          for (const e of readdirSync(srcDir, { withFileTypes: true })) {
+            const s = join(srcDir, e.name); const d = join(dstDir, e.name)
+            if (e.isDirectory()) { mkdirSync(d, { recursive: true }); copyDir(s, d) }
+            else { mkdirSync(dirname(d), { recursive: true }); copyFileSync(s, d) }
+          }
+        }
+        copyDir(changeDir, join(snap.snapshotRoot, '.sillyspec', 'changes', changeName))
+      }
+    } catch { /* 文档复制失败不连坐快照（test_strategy 降级 module 集仍可跑） */ }
+
+    return { ...snap, changeFileCount: changeFiles.length, sourceRoot }
+  } catch {
+    return null // 任一链路异常 → 回退主仓现行为
   }
 }
