@@ -8,12 +8,15 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync, readFileSync } from 'fs'
-import { join } from 'path'
+import { join, resolve } from 'path'
 import { tmpdir } from 'os'
 import { execSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 import { autoCheckPlanFromReviews } from '../src/run/complete.js'
 import { definition as verifyDef } from '../src/stages/verify.js'
 import { readFileSync as rf } from 'fs'
+
+const ROOT_ttu = resolve(fileURLToPath(new URL('.', import.meta.url)), '..')
 
 function makeFixture() {
   const cwd = mkdtempSync(join(tmpdir(), 'ttu-'))
@@ -56,7 +59,7 @@ test('prompt 契约：verify 逐项检查步声明 CLI 唯一勾选者、无手�
   assert.ok(!step.prompt.includes('agent 按 review gate 手动勾'), '旧双路说明退役')
   // execute 的 task review 协议条目
   const { execSync: es } = await import('node:child_process')
-  const src = rf(join(process.cwd(), 'src', 'stages', 'execute.js'), 'utf8')
+  const src = rf(join(ROOT_ttu, 'src', 'stages', 'execute.js'), 'utf8')
   assert.ok(src.includes('禁止手动勾选 tasks.md 的 checkbox'), 'execute 协议：禁止手动勾选')
   assert.ok(!src.includes('才允许勾选 tasks.md 中对应任务的 checkbox'), '旧「先写 review 再允许勾」退役')
 })

@@ -7,10 +7,13 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'fs'
-import { join } from 'path'
+import { join, resolve } from 'path'
 import { tmpdir } from 'os'
 import { spawn } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 import { startMcpServer } from '../src/mcp-server.js'
+
+const ROOT_mcp = resolve(fileURLToPath(new URL('.', import.meta.url)), '..')
 
 test('server 主循环：握手/tools 列表/tools 调用/error/notification 五协议面', async () => {
   const { PassThrough } = await import('node:stream')
@@ -74,7 +77,7 @@ test('CLI e2e：`sillyspec mcp` 子进程响应 initialize + tools/list', async 
   const cwd = mkdtempSync(join(tmpdir(), 'mcp-e2e-'))
   try {
     mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
-    const p = spawn(process.execPath, [join(process.cwd(), 'src', 'index.js'), 'mcp'], { cwd, stdio: ['pipe', 'pipe', 'inherit'] })
+    const p = spawn(process.execPath, [join(ROOT_mcp, 'src', 'index.js'), 'mcp'], { cwd, stdio: ['pipe', 'pipe', 'inherit'] })
     const out = []
     p.stdout.on('data', d => out.push(String(d)))
     p.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'initialize', id: 1, params: {} }) + '\n')

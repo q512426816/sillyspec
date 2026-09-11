@@ -7,13 +7,14 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync, mkdirSync, readFileSync, existsSync } from 'fs'
-import { join } from 'path'
+import { join, resolve } from 'path'
 import { tmpdir } from 'os'
 import { execFileSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 import { generateDesignSkeleton } from '../src/design-facts.js'
 import { buildTaskcardSkeleton } from '../src/taskcard.js'
 
-const REPO = join(process.cwd())
+const REPO = resolve(fileURLToPath(new URL('.', import.meta.url)), '..')
 const CLI = (args, cwd) => execFileSync('node', [join(REPO, 'src', 'index.js'), ...args], { cwd, encoding: 'utf8' })
 
 test('design 骨架：generated_by + author + created_at 三戳齐', () => {
