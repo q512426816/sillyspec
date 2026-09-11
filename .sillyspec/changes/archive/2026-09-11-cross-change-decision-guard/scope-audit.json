@@ -1,0 +1,268 @@
+{
+  "mode": "full-flow",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "f4d3ffb1c8190f13ae8d9340250e94a9b214edf0",
+  "totals": {
+    "files": 31,
+    "additions": 18701,
+    "deletions": 8
+  },
+  "rows": [
+    {
+      "path": ".npmignore",
+      "additions": 54,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+      "additions": 1,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/core-engine.changelog.md",
+      "additions": 1,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/docs-consistency.changelog.md",
+      "additions": 1,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/runtime.changelog.md",
+      "additions": 1,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/setup.changelog.md",
+      "additions": 1,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "bash.exe.stackdump",
+      "additions": 30,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "docs/sillyspec/platform-interface-map.md",
+      "additions": 231,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "docs/sillyspec/review-2026-08-08.md",
+      "additions": 75,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "docs/sillyspec/troubleshooting.md",
+      "additions": 898,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "src/config-schema.js",
+      "additions": 13,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "planned"
+    },
+    {
+      "path": "src/decision-distill.js",
+      "additions": 6,
+      "deletions": 2,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "planned"
+    },
+    {
+      "path": "src/index.js",
+      "additions": 4108,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "src/knowledge-match.js",
+      "additions": 76,
+      "deletions": 3,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "planned"
+    },
+    {
+      "path": "src/progress.js",
+      "additions": 1427,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "src/progress/change-registry.js",
+      "additions": 439,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "src/run/command.js",
+      "additions": 1977,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "src/run/complete-handlers.js",
+      "additions": 1963,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "src/run/complete.js",
+      "additions": 1601,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "src/run/prompt.js",
+      "additions": 53,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "planned"
+    },
+    {
+      "path": "src/run/quick-audit.js",
+      "additions": 55,
+      "deletions": 2,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "planned"
+    },
+    {
+      "path": "src/run/shared.js",
+      "additions": 1895,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "src/scope-audit.js",
+      "additions": 941,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "src/semantic-guard.js",
+      "additions": 207,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "planned"
+    },
+    {
+      "path": "src/stages/brainstorm.js",
+      "additions": 620,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "test/autoreset-preserves-progress.test.mjs",
+      "additions": 101,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "test/change-name-date-gate.test.mjs",
+      "additions": 114,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "test/decision-file-field.test.mjs",
+      "additions": 280,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "planned"
+    },
+    {
+      "path": "test/scope-audit.test.mjs",
+      "additions": 819,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "test/semantic-guard-prompt-inject.test.mjs",
+      "additions": 212,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "planned"
+    },
+    {
+      "path": "test/semantic-guard.test.mjs",
+      "additions": 501,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "planned"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "execute --done 时点冻结（本文件落盘时采集）",
+  "patchSha256": "6e58ceca592fa251589c95610c053dc60d3389fcc6dd53508e94c8cdc03168ff",
+  "patchStatus": "ok",
+  "savedAt": "2026-09-11T08:37:51.603Z"
+}

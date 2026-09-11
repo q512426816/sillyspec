@@ -18,7 +18,12 @@ created_at: 2026-09-11 15:05:00
 
 ## 未匹配文件
 
-- `test/semantic-guard.test.mjs`（新增）、`test/decision-file-field.test.mjs`（新增）—— 测试文件，按仓例不入模块索引，游离正常
+- `test/semantic-guard.test.mjs`（新增）、`test/decision-file-field.test.mjs`（新增）、`test/semantic-guard-prompt-inject.test.mjs`（新增）—— 测试文件，按仓例不入模块索引，游离正常
+
+## 文档文件（git diff 实际路径，模块索引产品不进影响矩阵）
+
+- `.sillyspec/docs/sillyspec/modules/_module-map.yaml` —— runtime paths 补录 src/semantic-guard.js（task-07）
+- `.sillyspec/docs/sillyspec/modules/{core-engine,docs-consistency,setup,runtime}.changelog.md` —— 四模块 changelog 各一条（task-07）
 
 ## 影响类型说明
 
@@ -28,7 +33,8 @@ created_at: 2026-09-11 15:05:00
 
 | 目标 | 操作 | 状态 |
 |------|------|------|
-| `modules/core-engine.changelog.md` | knowledge-match 反查条目（task-07） | pending |
-| `modules/docs-consistency.changelog.md` | decision-distill 文件字段条目（task-07） | pending |
-| `modules/setup.changelog.md` | config-schema semantic_guard 条目（task-07） | pending |
-| `modules/runtime.changelog.md` | semantic-guard 模块+两消费端条目（task-07） | pending |
+| `.sillyspec/docs/sillyspec/modules/core-engine.changelog.md` | knowledge-match 反查条目（task-07，commit c7304c7） | done |
+| `.sillyspec/docs/sillyspec/modules/docs-consistency.changelog.md` | decision-distill 文件字段条目（task-07，commit c7304c7） | done |
+| `.sillyspec/docs/sillyspec/modules/setup.changelog.md` | config-schema semantic_guard 条目（task-07，commit c7304c7） | done |
+| `.sillyspec/docs/sillyspec/modules/runtime.changelog.md` | semantic-guard 模块+两消费端条目（task-07，commit c7304c7） | done |
+| `.sillyspec/docs/sillyspec/modules/_module-map.yaml` | runtime paths 补录 src/semantic-guard.js（task-07 手工——rebuild merge 语义不扫源码） | done |

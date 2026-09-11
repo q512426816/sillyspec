@@ -85,3 +85,10 @@
 锚点：未记录
 最近确认：6db00e8
 理由：否决原子序列形，采用展开循环形 `[A-Za-z0-9_.\-\/]*(?:\([A-Za-z0-9_.\-\/]+\)[A-Za-z0-9_.\-\/]*)*`。否决理由：Design Grill 实证原子序列形为经典 `(a+)+` ReDoS——对无 `:N` 后缀的长 token 指数爆炸（n=24→1.2s、n=30→73.8s/token），GitHub 源码 URL/Java FQN 类常见文本即触发挂死 docs check；「两分支首字符不相交→无灾难回溯」推理不成立（只覆盖分支间歧义，未覆盖 plain 分支跨外层迭代的划分歧义）。展开循环形每次迭代必含括号段→划分唯一→线性（Grill 已验证 6 行为用例等价、evil 用例 0.01ms）。
+
+## D-001@v1 跨变更语义护栏的强制级别：advisory 注入系，不做硬阻断
+状态：implemented
+变更：2026-09-11-cross-change-decision-guard
+锚点：未记录
+最近确认：358af35
+理由：**方案 A——三层 advisory**：①决策条目增机械可解析「文件：」字段（存量条目用锚点路径提取兼容，零迁移）②quick 进场按候选文件（--files+脏文件）反查知识库 implemented/rejected 决策 + git log 近 7 天他者变更交付归因，命中注入 advisory、零命中静默 ③quick --done 对「他者交付的测试文件断言行被改」输出 WARNING 级点名（具体断言+交付变更+决策指针），建议理由写进 quicklog --solution。全部非阻断，单开关 semantic_guard.enabled 默认开。

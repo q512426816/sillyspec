@@ -23,7 +23,7 @@ created_at: 2026-09-11T14:35:00+08:00
 ## FR-04 quick --done 断言重写 WARNING
 - 检测范围：本会话变更文件中的测试文件（test/ 前缀或 *.test.* / *_test.* 命名）里**被修改**的断言行（启发式 token：`expect(`、`assert`、`t.equal`、`toBe`、`toEqual`、`strictEqual` 等）；纯新增断言不算。
 - 触发条件：断言被改的测试文件同时满足「他者近因交付归因」（FR-03 同源）。
-- 输出：⚠️ 点名文件+行号样例（封顶 5）+ 交付变更名 + 建议「重写理由写进 quicklog --solution / 关联决策复查」；WARNING 级非阻断。
+- 输出：⚠️ 点名文件+被改断言行样例（行内容而非行号——-U0 编辑后行号会漂移，行内容定位性更强，design.md 模块三有意细化；封顶 5 行/文件）+ 交付变更名 + 建议「重写理由写进 quicklog --solution / 关联决策复查」；WARNING 级非阻断。
 - 检测失败 fail-soft（内部 skip，不产伪数据）。
 
 ## FR-05 配置开关

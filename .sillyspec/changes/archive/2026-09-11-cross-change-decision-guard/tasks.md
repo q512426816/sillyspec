@@ -6,8 +6,9 @@
 - [x] task-01: decision-distill 文件字段契约（解析+条件渲染+双侧归一口径）(depends_on: 无)
 - [x] task-04: config-schema semantic_guard 段登记 (depends_on: 无)
 - [x] task-02: knowledge-match 文件键反查（文件标签+锚点提取兜底+matchDecisionsByFiles）(depends_on: task-01)
-- [ ] task-03: semantic-guard 聚合模块（归因/断言检测/渲染/开关）(depends_on: task-02)
-- [ ] task-05: quick step1 进场注入（run/prompt.js 渲染层）(depends_on: task-03)
-- [ ] task-06: quick --done 断言 WARNING（quick-audit.js gate 内+渲染）(depends_on: task-03)
-- [ ] task-07: 端到端验证+模块文档（npm test/lint 全量+冒烟+changelog）(depends_on: task-01,02,03,04,05,06)
+- [x] task-03: semantic-guard 聚合模块（归因/断言检测/渲染/开关）(depends_on: task-02)
+- [x] task-05: quick step1 进场注入（run/prompt.js 渲染层）(depends_on: task-03)
+- [x] task-06: quick --done 断言 WARNING（quick-audit.js gate 内+渲染）(depends_on: task-03)
+- [x] task-07: 端到端验证+模块文档（npm test/lint 全量+冒烟+changelog）(depends_on: task-01,02,03,04,05,06)
 - [x] ql-20260911-021-eca5 scope-audit 预执行形态：无 meta/分支/审计 tag 三无变更=尚未进入 execute——出计划清单视图（不出实际侧表不误报收尾警告，工作区脏文件归属他者不混入）
+- [x] ql-20260911-022-0347 scope-audit 审查修复批：C-F01 verify漂移freshActual绕过快照捷径（含execute重跑防陈旧回写）｜C-F02 预执行补4证据信号+归档排除（58/77归档误判修复）｜C-F03 rename花括号空格｜C…

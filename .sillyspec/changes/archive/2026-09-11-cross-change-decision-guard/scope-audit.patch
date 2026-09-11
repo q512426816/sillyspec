@@ -1,0 +1,1648 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/_module-map.yaml b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+index 9d57dcd..049fc2f 100644
+--- a/.sillyspec/docs/sillyspec/modules/_module-map.yaml
++++ b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+@@ -24,6 +24,7 @@ modules:
+     paths:
+       - src/agent-session-log.js
+       - src/friction-tally.js
++      - src/semantic-guard.js
+       - src/runtime-hygiene.js
+       - src/workspace.js
+       - src/run.js
+diff --git a/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md b/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md
+index 1955ed0..bf3ba08 100644
+--- a/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md
+@@ -22,3 +22,4 @@
+ | 2026-09-10 | ql-20260910-003-2709（quick） | ① resolveVerifyChangedFiles/generateTaskReviewDrafts worktree 并入补已提交口径（merge-base(主仓HEAD,worktreeHEAD)..wtHEAD commit diff，消「先提交则 diff 空」）；② trackVerifyResultRegression 高水位指纹（hash+mtime）检出 verify-result.md 被平台回写旧版（内容变+mtime 倒流指纹，gates verify 收尾 ⚠️ 告警 advisory）。test/verify-window-regression.test.mjs ②a/③。 |
+ | 2026-09-10 | ql-20260910-004-b807（quick） | 独立审查通道优先序 P1：readReviewChannelPriority（local.yaml review_dispatch.channel_priority，缺省现状序/未知忽略/self 恒垫底）+ 契约头部「审查执行通道」段按配置序渲染（platform 标注 P2 未落地暂跳过）+ reviewer.channel 审计字段（契约/示例/骨架）+ classifyReviewerChannel（gate 分支 self ⚠️ / platform ℹ️）。prompt.js 显式传 cwd 配置序。新增 test/review-channel-priority.test.mjs。 |
+ | 2026-09-10 | 2026-09-10-review-dispatch（P2） | src/stage-review-checklist.js 归属本模块（REVIEW_CHECKLISTS 单源+快照钉死）；stage-review.js 增平台在途区分（内联读 .runtime 记录）+ 契约 platform 描述指向 review-dispatch 命令。 |
++| 2026-09-11 | 2026-09-11-cross-change-decision-guard | knowledge-match 文件键反查：DECISION_FIELD_RE 增「文件|files」标签 + 独立 DECISION_ANCHOR_RE 锚点读入（不进 reason 回填链，X-002）；anchorFilePaths 锚点路径 token 提取兜底（D-905 实形态验证，扩展名降序排列防 jsx 截断）；新导出 matchDecisionsByFiles（file→entries 映射，查询侧与库侧双侧 POSIX 归一，空场景 {}）——供 quick 语义护栏按候选文件反查关联决策。 |
+diff --git a/.sillyspec/docs/sillyspec/modules/docs-consistency.changelog.md b/.sillyspec/docs/sillyspec/modules/docs-consistency.changelog.md
+index 2814d5c..a15f989 100644
+--- a/.sillyspec/docs/sillyspec/modules/docs-consistency.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/docs-consistency.changelog.md
+@@ -17,3 +17,4 @@ updated_at: 2026-08-24T00:40:00+08:00
+ - 2026-09-07-endpoint-baseline | archive-delta 第五源：endpointBaseline（fail-soft）+ 现算同口径 × diffEndpointSets → After「### 端点基线提示」四态（增删表/无增删/无基线降级/现算不可得）；门控与标题不动。
+ - ql-20260908-008 | 新增 autoReanchorDocRefs（--fix 主链路编程化封装：fixable 命中 → applyFixes → 同口径复跑回执），quick --done 检出引用失效时自动重锚并落「🔧 行号漂移已自动重锚」审计行；歧义/零命中仍留人工（无 --force 红线不变） |
+ - ql-20260908-010 | generateModuleImpactSkeleton 增声明来源入口（sourceFiles+origin 参数，plan --done 首版用 design 文件变更清单——代码未写无 diff；diff 来源语义不变）；卡补 module-impact.js 契约行（此前 map 已归属但表格漏登）
++- 2026-09-11-cross-change-decision-guard | decision-distill 增「文件：」字段契约：applyField/FIELD_LABEL_RE 增「文件|files」标签（parseListValue 切分 + 逐项 POSIX 归一），renderBlockLines 锚点行后条件渲染「文件：」行（仅非空才渲染）——存量决策无该字段零迁移；决策→文件映射经 knowledge-match matchDecisionsByFiles 进 quick 语义护栏反查链。
+diff --git a/.sillyspec/docs/sillyspec/modules/runtime.changelog.md b/.sillyspec/docs/sillyspec/modules/runtime.changelog.md
+index dd05274..6114e76 100644
+--- a/.sillyspec/docs/sillyspec/modules/runtime.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/runtime.changelog.md
+@@ -22,3 +22,4 @@
+ - 2026-09-07-ir-stage-p3c | IR P3c：complete.js 步骤级钩子链（warnMissingUiPrototype 同点位 :283-313）新增 brainstorm「生成规范文件」步模块域核验——errors→exit 1（步骤保持 pending）/warnings 放行/skipped info/fail-open；prompt.js :477-506 brainstorm Step2 _facts.md 注入（{SCAN_FACTS} 占位符+双重门，15KB 截断+fail-soft，plan/execute 零误染）。
+ - 2026-09-07-ir-stage-p3d | IR P3d：complete-handlers.js handleArchiveConfirmStep :435-459 归档移动前自动生成 delta.md（fail-soft 不阻断，提示手动补）；产物随归档目录保存。
+ - 2026-09-08-ir-verify-facts | gates verify 收尾次序接线：backfill 先行/verifyStartAt 注入/tests 二次回填/cannot_verify 硬门 rollback；getStageCompletedAt 基准
++- 2026-09-11-cross-change-decision-guard | 语义护栏三件套：① 新增 src/semantic-guard.js（paths 已录 _module-map runtime 段）——collectRecentForeignDelivery（git log 双标记归因：完整变更名/ql-ID，7 天窗封顶 20 文件，currentChange 跳过）/ detectAssertionRewrites（git diff HEAD -U0 删除侧断言 token，暂存后仍见改动 Grill X-001，纯新增 hunk 不算，样例封顶 5/文件）/ renderSemanticGuardBlock（决策段∪交付段，双零空串）/ readSemanticGuardEnabled（fail-open 默认 true）；② quick step1 进场注入 buildQuickSemanticGuardInjection（run/prompt.js：开关 false 首行全停，候选=guard.allowedFiles∪porcelain 脏文件，去重封顶 20，零命中字节一致静默，fail-soft 单行降级）；③ quick --done 断言 WARNING（run/quick-audit.js）——buildSemanticGuardHits（检测∩归因交集，挂 runQuickTestLintGate 返回对象 semanticGuard 可选字段，action/failed 判定与 complete-handlers 调用方零改动）+ printQuickTestLintGate ⚠️ 点名渲染（文件+交付变更+样例行+quicklog --solution 建议，非阻断 D-001@v1）。
+diff --git a/.sillyspec/docs/sillyspec/modules/setup.changelog.md b/.sillyspec/docs/sillyspec/modules/setup.changelog.md
+index 1d7002b..19bab81 100644
+--- a/.sillyspec/docs/sillyspec/modules/setup.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/setup.changelog.md
+@@ -14,3 +14,4 @@ updated_at: 2026-08-24T00:40:00+08:00
+ | 日期 | 变更名 | 摘要 |
+ |------|--------|------|
+ | 2026-08-23 | 2026-08-23-adopt-harness-practices | config-schema（local.yaml 单一数据源）：test_strategy 枚举扩 skip / evidence-auto（D-005@v2——skip=真跳过留审计痕迹、evidence-auto=按 module-impact 影响面推荐组合，full/module 语义不变）；新增 live 键 decisions.behind_threshold（决策 behind 复核阈值，缺省 10，reader=readDecisionRulesConfig/src/docs-check.js）；renderExample 落盘段与示例注释同步扩；config-schema 既有测试适配。 |
++| 2026-09-11 | 2026-09-11-cross-change-decision-guard | config-schema 增 semantic_guard 段（enabled：boolean optional live，默认 true，fail-open——缺键/读取异常恒 true 不拦门禁）；readers 登记引 readSemanticGuardEnabled（src/semantic-guard.js）；renderExample yaml 块同步（friction_hint 同款形态，live 键 example 防漂耦合测试覆盖）。 |
+diff --git a/src/config-schema.js b/src/config-schema.js
+index b940f13..e630a7e 100644
+--- a/src/config-schema.js
++++ b/src/config-schema.js
+@@ -173,6 +173,14 @@ export const LOCAL_YAML_SCHEMA = {
+         { path: 'friction_hint.enabled', type: 'boolean', optional: true, status: 'live', readers: ['readFrictionHintEnabled (src/friction-tally.js)'], desc: '摩擦提示开关，默认 true；设 false 关闭摩擦提示（gate 回滚/验证失败/审查打回的收尾 advisory 与计数落盘全停，.runtime 零写入）。', example: 'true' },
+       ],
+     },
++    {
++      id: 'semantic_guard',
++      title: '语义守卫开关',
++      note: 'quick 进场注入与 --done 断言 WARNING 的跨变更决策守卫配置（cross-change-decision-guard）。读键按「存在则读、不存在用缺省」容错：读失败与未配置同兜底为默认开（fail-open，advisory 误开无害）。',
++      keys: [
++        { path: 'semantic_guard.enabled', type: 'boolean', optional: true, status: 'live', readers: ['readSemanticGuardEnabled (src/semantic-guard.js)'], desc: '语义守卫总开关，默认 true；设 false 时 quick 进场注入与 --done 断言 WARNING 全停零开销。', example: 'true' },
++      ],
++    },
+   ],
+ };
+ 
+@@ -307,6 +315,11 @@ decisions:
+ friction_hint:
+   enabled: true
+ 
++# ── 语义守卫开关（quick 进场注入 + --done 断言 WARNING 的跨变更决策守卫）──
++# 默认 true 开启；false 一键全停（进场注入与断言 WARNING 双停，零开销）
++semantic_guard:
++  enabled: true
++
+ # ── 预存失败豁免清单（变更前就失败的测试行；务必定期复核，防误豁免真实失败）──
+ known_failures:
+   - tests/some-old-stable-failure
+diff --git a/src/decision-distill.js b/src/decision-distill.js
+index fc6b5cd..4fc66d3 100644
+--- a/src/decision-distill.js
++++ b/src/decision-distill.js
+@@ -78,6 +78,8 @@ function applyField(entry, label, value) {
+     case 'answer': case '答案': entry.answer = value; break
+     case '锚点': case 'anchor': entry.anchor = value; break
+     case '模块域': case '模块': case 'domains': case 'domain': entry.domains = parseListValue(value); break
++    // 文件字段（FR-01/D-001@v1，2026-09-11-cross-change-decision-guard）：列表语义同模块域 + 逐项反斜杠归一 POSIX
++    case '文件': case 'files': entry.files = parseListValue(value).map(s => s.replace(/\\/g, '/')); break
+     case '否决理由': case 'reject_reason': case 'rejectreason': entry.rejectReason = value; break
+     case '复潮条件': case 'revisit_when': case 'revisitwhen': entry.revisitWhen = value; break
+     case 'supersedes': entry.supersedes = value; break
+@@ -93,7 +95,7 @@ function applyField(entry, label, value) {
+  * @returns {{ entries: Array<{
+  *   id: string, number: string, version: number, title: string,
+  *   type?: string, status?: string, question?: string, answer?: string,
+- *   anchor?: string, domains?: string[], rejectReason?: string, revisitWhen?: string,
++ *   anchor?: string, domains?: string[], files?: string[], rejectReason?: string, revisitWhen?: string,
+  *   supersedes?: string, impacts?: string, normalizedRequirement?: string,
+  *   selected: 'implemented'|'rejected'|null, raw: string }>, missing: boolean }}
+  *   missing=true = decisions.md 不存在；selected = FR-02 入选裁决，null 表示解析保留但不入选。
+@@ -165,7 +167,7 @@ export function parseDecisions(changeDir) {
+ }
+ 
+ /** applyField 认识的字段标签白名单（行内 ｜ 分段与缩进子项只按白名单进字段，散文误伤为零） */
+-const FIELD_LABEL_RE = /^(type|types|status|question|问题|answer|答案|锚点|anchor|模块域|模块|domains|domain|否决理由|reject_reason|rejectreason|复潮条件|revisit_when|revisitwhen|supersedes|impacts|影响|normalized_requirement|状态|类型)$/i
++const FIELD_LABEL_RE = /^(type|types|status|question|问题|answer|答案|锚点|anchor|模块域|模块|domains|domain|否决理由|reject_reason|rejectreason|复潮条件|revisit_when|revisitwhen|supersedes|impacts|影响|文件|files|normalized_requirement|状态|类型)$/i
+ 
+ // ---------------------------------------------------------------------------
+ // 域三级兜底（FR-03）
+@@ -293,6 +295,8 @@ function renderBlockLines(entry, headHash, supersedesNote, changeName) {
+   lines.push(`状态：${entry.selected}`)
+   if (changeName) lines.push(`变更：${oneLine(changeName)}`)
+   lines.push(`锚点：${oneLine(entry.anchor) || NOT_RECORDED}`)
++  // 文件行（FR-01/D-001@v1）：仅非空渲染——存量条目零迁移，幂等重归档不添空行
++  if (entry.files && entry.files.length > 0) lines.push(`文件：${entry.files.join(', ')}`)
+   lines.push(`最近确认：${oneLine(headHash) || NOT_RECORDED}`)
+   lines.push(`理由：${oneLine(entry.answer || entry.normalizedRequirement || entry.question)}`)
+   if (supersedesNote) lines.push(`supersedes：${oneLine(supersedesNote)}`)
+diff --git a/src/knowledge-match.js b/src/knowledge-match.js
+index 6950751..002e94a 100644
+--- a/src/knowledge-match.js
++++ b/src/knowledge-match.js
+@@ -5,6 +5,8 @@
+  * 路由行发现——路由行由 decision-distill 幂等写入，本引擎只消费不写）——命中路由行的
+  * 决策文件解析为 decisionHits（rejected 优先），供 brainstorm Step2 防复潮注入（task-04，FR-05）。
+  * decisions 库不存在时（INDEX 无 Decisions 段/文件不存在）一切行为与无 decisions 库时一致。
++ * 另导出 matchDecisionsByFiles（task-02，FR-02）：决策条目按代码文件路径反查——条目
++ * 「文件：」字段精确命中 ∪「锚点：」路径形态 token 提取兜底（quick 语义护栏的文件键引擎）。
+  */
+ 
+ import { existsSync, readFileSync } from 'fs'
+@@ -59,15 +61,51 @@ function isDecisionRoute(entry) {
+ }
+ 
+ const DECISION_HEADER_RE = /^##\s+(D-\d+@v\d+)\s*(.*)$/
+-const DECISION_FIELD_RE = /^(状态|理由|否决理由|复潮条件)\s*[：:]\s*(.*)$/
++const DECISION_FIELD_RE = /^(状态|文件|理由|否决理由|复潮条件)\s*[：:]\s*(.*)$/
++// 「锚点：」单独标签精确匹配读入（仿 docs-check.js parseDecisionEntries 先例）——绝不并入
++// DECISION_FIELD_RE：其 else-if 链末尾的 reason 回填（else if (!cur.reason)）会把锚点值
++// 误吞进 reason（Grill X-002 隐性回归）。
++const DECISION_ANCHOR_RE = /^锚点\s*[：:]\s*(.*)$/
++
++/** 「文件：」值切分 + 逐项反斜杠归一 POSIX（与 decision-distill 的 entry.files 契约对齐：
++ *  split /[,，、\s]+/ + replace(/\\/g,'/')）。 */
++function splitDecisionFiles(value) {
++  return String(value || '')
++    .split(/[,，、\s]+/)
++    .map(s => s.replace(/\\/g, '/'))
++    .filter(Boolean)
++}
++
++// 锚点路径 token 提取：路径形态 token + 扩展名白名单（扩展名按长度降序排列——
++// (js|…|jsx) 短前缀在前会把 foo.jsx 截断成 foo.js）。
++const ANCHOR_FILE_TOKEN_RE = /[\w./-]+\.(?:mjs|cjs|jsx|tsx|js|ts|py|go|java|rs)/g
++
++/**
++ * 锚点值 → 代码文件路径集（条目无「文件：」字段时的兜底命中源）。
++ * 真实先例：D-905 形态「锚点：src/quicklog.js:493」→ 提取 src/quicklog.js
++ * （token 字符类不含 : 故止于行号前，再防御性剥 :line/:line-line/:符号 后缀）。
++ * 「未记录」/无路径形态 token → []。
++ */
++function anchorFilePaths(anchor) {
++  const a = String(anchor || '').trim().replace(/\\/g, '/')
++  if (!a || a === '未记录') return []
++  const out = new Set()
++  for (const token of a.match(ANCHOR_FILE_TOKEN_RE) || []) {
++    const p = token.replace(/:(?:\d+(?:-\d+)?|[A-Za-z_$][A-Za-z0-9_$]*)$/, '')
++    if (p) out.add(p)
++  }
++  return [...out]
++}
+ 
+ /**
+  * 解析单个 decisions/<域>.md 的 D-xxx@vN 条目。
+  * reason 语义：rejected 条目取「否决理由」（expects_from task-02 的 reject_reason），
+  * 其余条目回退「理由」一句话；revisitWhen 仅 rejected 条目非空（复潮条件）。
++ * files =「文件：」字段切分归一（task-02，FR-02）；anchor =「锚点：」行原值（单独标签读入，
++ * 不进 reason 回填链——Grill X-002）。
+  * @param {string} filePath 决策文件绝对路径
+  * @param {string} file INDEX 相对路径（decisions/<域>.md），原样进 decisionHits.file
+- * @returns {{ file: string, id: string, title: string, status: string, reason: string, revisitWhen: string }[]}
++ * @returns {{ file: string, id: string, title: string, status: string, reason: string, revisitWhen: string, files: string[], anchor: string }[]}
+  */
+ function parseDecisionFile(filePath, file) {
+   let content
+@@ -82,14 +120,18 @@ function parseDecisionFile(filePath, file) {
+     const h = line.match(DECISION_HEADER_RE)
+     if (h) {
+       flush()
+-      cur = { file, id: h[1], title: h[2].trim(), status: '', reason: '', revisitWhen: '' }
++      cur = { file, id: h[1], title: h[2].trim(), status: '', reason: '', revisitWhen: '', files: [], anchor: '' }
+       continue
+     }
+     if (!cur) continue
++    // 锚点：单独标签先于字段链匹配（不在 DECISION_FIELD_RE 内，见常量处注释）
++    const a = line.match(DECISION_ANCHOR_RE)
++    if (a) { cur.anchor = a[1].trim(); continue }
+     const f = line.match(DECISION_FIELD_RE)
+     if (!f) continue
+     const value = f[2].trim()
+     if (f[1] === '状态') cur.status = value.toLowerCase()
++    else if (f[1] === '文件') cur.files = splitDecisionFiles(value)
+     else if (f[1] === '否决理由') cur.reason = value
+     else if (f[1] === '复潮条件') cur.revisitWhen = value
+     else if (!cur.reason) cur.reason = value // 理由：仅作 implemented（或否决理由缺失）时的回填
+@@ -125,6 +167,37 @@ export function parseDecisionEntries(indexDir, indexEntries = null) {
+   })
+ }
+ 
++/**
++ * 决策条目按代码文件路径反查（task-02，FR-02）——quick 语义护栏（task-03/05/06）的
++ * 文件键引擎。条目命中源 = 「文件：」字段（cur.files）∪「锚点：」路径形态 token 提取
++ * （anchorFilePaths 兜底）；查询侧与条目侧路径统一 POSIX 归一。
++ * @param {string} indexDir knowledge 目录路径
++ * @param {string[]} files 查询代码文件路径列表
++ * @returns {{ [file: string]: Array<{ id: string, title: string, status: string, reason: string, file: string }> }}
++ *   键 = 归一后的查询路径（结果键 ⊆ 查询集）；条目 file 字段沿 parseDecisionFile 既有
++ *   口径（INDEX 相对 decisions/<域>.md 路径）；rejected 条目同样进结果（status 透传，
++ *   消费方按需过滤）；无 decisions 库 / 路由失效 / 空查询 → {}。
++ */
++export function matchDecisionsByFiles(indexDir, files) {
++  const queries = [...new Set(
++    (Array.isArray(files) ? files : [files])
++      .map(f => String(f || '').trim().replace(/\\/g, '/'))
++      .filter(Boolean)
++  )]
++  if (queries.length === 0) return {}
++  const querySet = new Set(queries)
++  const result = {}
++  for (const hit of parseDecisionEntries(indexDir)) {
++    const sources = new Set([...(hit.files || []), ...anchorFilePaths(hit.anchor)])
++    for (const src of sources) {
++      if (!querySet.has(src)) continue
++      if (!result[src]) result[src] = []
++      result[src].push({ id: hit.id, title: hit.title, status: hit.status, reason: hit.reason, file: hit.file })
++    }
++  }
++  return result
++}
++
+ function escapeRegex(s) {
+   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+ }
+diff --git a/src/run/prompt.js b/src/run/prompt.js
+index 15c8225..1c7254f 100644
+--- a/src/run/prompt.js
++++ b/src/run/prompt.js
+@@ -22,7 +22,8 @@ import { basename, join } from 'node:path'
+ import { existsSync, readFileSync, mkdirSync, readdirSync } from 'node:fs'
+ import { writeAtomicSync } from '../fs-atomic.js'
+ import { stageRegistry } from '../stages/index.js'
+-import { resolvePromptIncludes, resolveRuntimeRoot, safeGit, WAIT_MARKER_RE, QUICK_SID_RE } from './shared.js'
++import { resolvePromptIncludes, resolveRuntimeRoot, safeGit, parsePorcelainPath, WAIT_MARKER_RE, QUICK_SID_RE } from './shared.js'
++import { renderSemanticGuardBlock, readSemanticGuardEnabled } from '../semantic-guard.js'
+ import { renderStageContract } from '../stage-contract-spec.js'
+ import { nowWallClock } from '../datetime.js'
+ import { parseModuleMapSimple } from '../modules.js'
+@@ -181,6 +182,44 @@ export function buildQuickContextDigest(specBase, projectName) {
+   }
+ }
+ 
++/**
++ * quick step1 语义护栏进场注入拼装（task-05，FR-03，D-001@v1 模块四）：开关 → 候选文件采集 →
++ * renderSemanticGuardBlock 反查。候选 = 会话声明文件（guard.allowedFiles，readQuickGuardField
++ * 同源读取：session guard 优先 / legacy 单文件回退）∪ git status --porcelain 脏文件
++ * （parsePorcelainPath 同款解析口径：引号剥离 / -> rename / 反斜杠归一），反斜杠归一去重封顶 20。
++ * 返回 ''（开关关 / 无候选 / 双零命中——prompt 与现状字节一致，零命中静默）或 advisory 段；
++ * 全链 fail-soft：异常返回单行降级说明，不阻断 quick 启动。导出供注入单测直测
++ * （test/semantic-guard-prompt-inject.test.mjs）。
++ */
++export function buildQuickSemanticGuardInjection({ specBase, cwd, changeName } = {}) {
++  try {
++    // 开关首行（Grill X-012）：false 直接零输出——不采候选文件、不跑反查（开关语义全停非半停）
++    if (!readSemanticGuardEnabled(specBase)) return ''
++    // 会话声明文件（--files 落 guard.allowedFiles；缺失 / 形态异常按空）
++    const declaredRaw = readQuickGuardField(changeName, specBase, 'allowedFiles')
++    const declared = Array.isArray(declaredRaw) ? declaredRaw : []
++    // git 脏文件：porcelain 解析同源 quick-audit（trim:false——首列前导空格是状态码，trim 会削掉
++    // 致 parsePorcelainPath 丢首字符；.sillyspec/ 运行时产物过滤同款——候选面是代码文件）
++    let dirty = []
++    const statusResult = safeGit(cwd, ['status', '--porcelain'], { trim: false })
++    if (!statusResult.error) {
++      dirty = (statusResult.value || '').split('\n').filter(Boolean)
++        .map(l => parsePorcelainPath(l))
++        .filter(Boolean)
++        .filter(f => !f.startsWith('.sillyspec/'))
++    }
++    // 去重（反斜杠归一后；renderSemanticGuardBlock 内侧亦有同款归一，此处为封顶前的口径）
++    // 封顶 20 —— 与 collectRecentForeignDelivery 内侧文件封顶同数
++    const candidateFiles = [...new Set(
++      [...declared, ...dirty].map(f => String(f || '').trim().replace(/\\/g, '/')).filter(Boolean)
++    )].slice(0, 20)
++    if (candidateFiles.length === 0) return ''
++    return renderSemanticGuardBlock({ specBase, cwd, candidateFiles, currentChange: changeName })
++  } catch (e) {
++    return `【语义护栏】注入失败（${e && e.message ? e.message : e}）——跳过反查，不阻断本步骤；需要时自查 knowledge/INDEX.md 与 git log`
++  }
++}
++
+ // parseModuleMapSimple 复用 modules.js 的 canonical 实现（合并历史 copy-paste 副本，2026-08-07；
+ // 无循环依赖：modules.js 仅 import fs/path/db.js，prompt.js → modules.js 单向）。
+ /**
+@@ -1061,6 +1100,19 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
+     }
+   }
+ 
++  // ── 语义护栏进场注入（task-05，FR-03，D-001@v1 模块四）──
++  // 判定口径独立：与上方模块上下文注入同锚（quickFirstStep——quick step1「理解任务」），不嵌进
++  // {QUICK_CONTEXT_DIGEST} 占位符守卫内——模板改版去占位符时护栏静默失效（plan 审查 N2）。
++  // 非空追加到 step1 prompt 末尾；空串（开关关 / 零命中）prompt 与现状字节一致（零命中静默）。
++  // 渲染层注入，src/stages/quick.js 模板零变更（design 明确不改清单）。全链 fail-soft 见 helper。
++  if (quickFirstStep) {
++    const sgSpecBase = resolvePromptSpecBase(platformOpts, cwd)
++    const semanticGuardBlock = buildQuickSemanticGuardInjection({ specBase: sgSpecBase, cwd, changeName })
++    if (semanticGuardBlock) {
++      promptText = promptText + '\n\n' + semanticGuardBlock
++    }
++  }
++
+   // 平台模式 prompt 自检：确保没有裸相对输出路径
+   // 只匹配正向写入指令中的裸路径，避免误杀「禁止写入 .sillyspec/」等安全说明
+   if ((platformOpts?.specRoot || platformOpts?.runtimeRoot) && stageName === 'scan') {
+diff --git a/src/run/quick-audit.js b/src/run/quick-audit.js
+index 42f5d18..b0b6815 100644
+--- a/src/run/quick-audit.js
++++ b/src/run/quick-audit.js
+@@ -13,6 +13,7 @@
+  */
+ import { join } from 'node:path'
+ import { parsePorcelainPath, safeGit } from './shared.js'
++import { collectRecentForeignDelivery, detectAssertionRewrites, readSemanticGuardEnabled } from '../semantic-guard.js'
+ 
+ /**
+  * 打印 quick 完成审计结论（按 review.status 输出 SAFE/WARNING/BLOCKED）。
+@@ -242,6 +243,32 @@ export async function resolveQuickLinkedChanges({ pm, cwd, specDir, quickFiles,
+ 
+ // ============ quick --done test+lint 硬门禁（2026-09-02 跨 agent 工单 P0-2）============
+ 
++/**
++ * 语义护栏命中组装（change: 2026-09-11-cross-change-decision-guard，task-06，FR-04，
++ * D-001@v1）：断言重写检测 ∩ 近因他者交付归因 → hits 清单，gate 内一行调用拼进返回对象。
++ * 单独抽出导出是为了可测性（runQuickTestLintGate 会真跑 test/lint 命令，检测组装层
++ * 独立测可避免测试里真跑 npm test——卡内可测性豁免）。
++ * - 步骤 0 总开关：readSemanticGuardEnabled false → 跳过检测，hits 恒空（fail-open 同 task-03）
++ * - 纯新增断言（detect 不命中）/ 无他者归因标记 / 非测试文件 → 落不到 hits
++ * - WARNING 级非阻断：本函数只组装数据，不参与 gate action/failed 判定
++ * @param {{ cwd?: string, specBase?: string, files?: string[], changeName?: string|null }} opts
++ * @returns {{ hits: Array<{ file: string, deliveredBy: string, sampleLines: string[] }> }}
++ */
++export function buildSemanticGuardHits({ cwd, specBase, files, changeName } = {}) {
++  if (!readSemanticGuardEnabled(specBase)) return { hits: [] }
++  const rewrites = detectAssertionRewrites({ cwd, files: Array.isArray(files) ? files : [] })
++  if (Object.keys(rewrites).length === 0) return { hits: [] }
++  // 归因只查断言命中文件（省 git log 调用；collectRecentForeignDelivery 内部封顶 20 文件）
++  const delivery = collectRecentForeignDelivery({ cwd, files: Object.keys(rewrites), currentChange: changeName })
++  const hits = []
++  for (const file of Object.keys(rewrites)) {
++    // 无归因不点名：纯新增断言 / 无标记提交 / 交付者是本变更（currentChange 透传跳过）同落空
++    if (!delivery[file]) continue
++    hits.push({ file, deliveredBy: delivery[file], sampleLines: rewrites[file] })
++  }
++  return { hits }
++}
++
+ /**
+  * quick --done 内置 test+lint 实测门禁：把 CLAUDE.md 规则 8「触及 src/test 的改动先
+  * npm test + npm run lint」从 agent 自律下沉为 CLI 卡点。
+@@ -265,8 +292,11 @@ export async function resolveQuickLinkedChanges({ pm, cwd, specDir, quickFiles,
+  * @param {string} opts.specBase - .sillyspec 目录（local.yaml 读取源，信任边界见 runVerifyTestCheck SEC-02 注释）
+  * @param {string[]} [opts.changedFiles] - 审计口径的本轮变更文件（仓库根相对 POSIX 路径；空/null → 回退 declaredFiles）
+  * @param {string[]} [opts.declaredFiles] - 会话声明边界（guard.allowedFiles；changedFiles 为空时的兜底判定源）
+- * @param {string} [opts.changeName] - quick 会话名（evidence-auto 策略解析用）
+- * @returns {Promise<{action:'pass'|'fail'|'skip', failed:string[], reason:string, test:object|null, lint:object|null}>}
++ * @param {string} [opts.changeName] - quick 会话名（evidence-auto 策略解析用 + 语义护栏归因 currentChange 透传）
++ * @returns {Promise<{action:'pass'|'fail'|'skip', failed:string[], reason:string, test:object|null, lint:object|null,
++ *   semanticGuard?:{hits:Array<{file:string,deliveredBy:string,sampleLines:string[]}>}}>}
++ *   semanticGuard 仅检测跑过（三条早退 skip 路径不跑检测、无字段）时挂载；WARNING 级
++ *   非阻断——action/failed 判定不受它影响（调用方 complete-handlers.js 只读 action/failed，零改动）。
+  */
+ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], declaredFiles = [], changeName = null }) {
+   if (process.env.SILLYSPEC_QUICK_TEST_GATE === 'skip') {
+@@ -284,6 +314,13 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
+     return { action: 'skip', failed: [], reason: `纯 doc/配置改动（${files.length} 个文件均未触及 src/test，规则 8 语义跳过 test+lint）`, test: null, lint: null }
+   }
+ 
++  // ── 语义护栏检测（task-06，FR-04 断言重写 WARNING，D-001@v1 非阻断）──
++  // 三条早退（env skip / 无文件 / 纯 doc）已在上文 return，检测不跑——语义一致。
++  // 检测对主仓 cwd 执行而非 gateCwd 隔离快照（下方才建快照）：检测对象是本会话工作树
++  // 未提交改动（git diff HEAD 须见它），快照语义是 test/lint 实测隔离——两者不同层
++  // （Grill X-001 附注）。specBase 同理用主仓的（快照副本 local.yaml 不参与开关判定）。
++  const semanticGuard = buildSemanticGuardHits({ cwd, specBase, files, changeName })
++
+   const { runVerifyTestCheck, runVerifyLintCheck } = await import('../verify-postcheck.js')
+ 
+   // ── 隔离快照执行（2026-09-10 驾驭小结第六批②，用户实证「lint 实测对账在主仓跑被并行
+@@ -319,6 +356,8 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
+         : `触及 src/test 共 ${codeFiles.length} 个文件，test+lint 实测通过（或未配置命令自动跳过）${snapshot ? '（隔离快照口径：并行会话脏文件不计入）' : ''}`,
+       test,
+       lint,
++      // 语义护栏 WARNING（task-06）：只增可选字段，action/failed 判定与调用方读取面均不受影响
++      semanticGuard,
+     }
+   } finally {
+     if (snapshot) { try { snapshot.cleanup() } catch { /* 清理失败不连坐门禁结论 */ } }
+@@ -350,4 +389,18 @@ export function printQuickTestLintGate(gate) {
+   } else {
+     console.log(`\n✅ quick test+lint 门禁 — PASS（${gate.reason}）`)
+   }
++
++  // 语义护栏 WARNING（task-06 / FR-04，非阻断——D-001@v1：误报校准数据为零先 advisory，
++  // 复潮条件：误报率实证后可升 block）：他者近因交付的测试文件既有断言行被改 → 点名
++  // 文件 + 交付变更 + 被改样例行（上游 detectAssertionRewrites 已封顶 5/文件，渲染侧
++  // 再 slice(0,5) 兜底）。hits 空 / 字段缺失（三条早退 skip 路径不跑检测）→ 零输出。
++  const sgHits = gate.semanticGuard && Array.isArray(gate.semanticGuard.hits) ? gate.semanticGuard.hits : []
++  if (sgHits.length > 0) {
++    console.warn(`\n⚠️ 语义护栏 — 断言重写 WARNING（非阻断）：他者近因交付的测试文件既有断言被改`)
++    for (const h of sgHits) {
++      console.warn(`   - ${h.file} ← ${h.deliveredBy} 交付`)
++      for (const s of (h.sampleLines || []).slice(0, 5)) console.warn(`       被改: ${String(s).trim()}`)
++    }
++    console.warn(`   ➜ 若确需重写：重写理由写进 quicklog --solution（--done 四参数收尾）；并复查 ${[...new Set(sgHits.map(h => h.deliveredBy))].join('、')} 的关联决策——勿以改断言重定义绿灯。`)
++  }
+ }
+diff --git a/src/semantic-guard.js b/src/semantic-guard.js
+new file mode 100644
+index 0000000..e99cab9
+--- /dev/null
++++ b/src/semantic-guard.js
+@@ -0,0 +1,207 @@
++/**
++ * semantic-guard.js — quick 语义护栏聚合模块（change: 2026-09-11-cross-change-decision-guard，
++ * task-03，FR-03/FR-04，D-001@v1）：近因他者交付归因 + 断言重写检测 + advisory 渲染 + 总开关。
++ *
++ * 被 run/prompt.js（task-05，进场注入）与 run/quick-audit.js（task-06，--done 断言 WARNING）
++ * 两端消费。纯模块纪律：不 console（渲染返回字符串，输出留给消费端）、不写盘、
++ * 不 import run/ 下模块（避免与 task-05/06 循环依赖）。
++ *
++ * git 交互一律走 git-helper 的 safeGit（数组参数不经 shell，Windows 路径安全）；失败静默
++ * 降级空结果不抛（acceptance：git 不可用 → 全部降级空结果）。
++ */
++import { existsSync, readFileSync } from 'node:fs'
++import { join } from 'node:path'
++import { safeGit } from './git-helper.js'
++import { matchDecisionsByFiles } from './knowledge-match.js'
++
++/** 路径反斜杠归一 POSIX（Windows 调用方传 \ 分隔时不丢匹配；与 matchDecisionsByFiles 双侧归一口径一致） */
++function toPosix(p) {
++  return String(p || '').trim().replace(/\\/g, '/')
++}
++
++// ───────────────────────── 交付归因（FR-03） ─────────────────────────
++
++/** 提交信息里的完整变更名标记：init 生成的 change 目录名形态（2026-09-11-cross-change-decision-guard） */
++const CHANGE_NAME_RE = /\d{4}-\d{2}-\d{2}-[a-z0-9][a-z0-9-]*/g
++/** quicklog 条目 ID 标记：ql-YYYYMMDD-NNN-xxxx（quick 会话提交信息的归因键） */
++const QL_ID_RE = /ql-\d{8}-\d{3}-[a-z0-9]{4}/g
++
++/** 单条提交信息 → 两类标记列表（按出现位置排序；两类正则无交集，ql-ID 的日期段无连字符） */
++function extractChangeMarkers(subject) {
++  const found = []
++  for (const re of [CHANGE_NAME_RE, QL_ID_RE]) {
++    for (const m of subject.matchAll(re)) found.push({ token: m[0], at: m.index })
++  }
++  return found.sort((a, b) => a.at - b.at).map(f => f.token)
++}
++
++/**
++ * 近因他者交付归因：每文件查最近 days 天提交信息（--format=%s，仅 subject），解析变更名 /
++ * ql-ID 两类标记，取最新一条非 currentChange 标记 → { [file]: changeName }。
++ * git log 输出行为提交 subject，无 porcelain 首行前导空格语义（git-helper.js:88 的
++ * trim 坑不影响此处），safeGit 默认 trim 安全。
++ * @param {{ cwd?: string, files?: string[], currentChange?: string, days?: number }} opts
++ * @returns {{ [file]: string }} 键 = POSIX 归一路径；无标记 / 仅本变更标记 / git 失败 /
++ *   第 20 个之后的文件 → 不记
++ */
++export function collectRecentForeignDelivery({ cwd, files, currentChange, days = 7 } = {}) {
++  const result = {}
++  if (!cwd || !Array.isArray(files)) return result
++  const list = files.map(toPosix).filter(Boolean).slice(0, 20)
++  for (const file of list) {
++    const r = safeGit(cwd, ['log', `--since=${days}.days`, '--format=%s', '--', file])
++    if (r.error || !r.value) continue
++    // git log 新→旧：逐提交找第一条非 currentChange 标记，命中即止（取最新他者标记）
++    for (const subject of r.value.split('\n')) {
++      const foreign = extractChangeMarkers(subject).find(m => m !== currentChange)
++      if (foreign) {
++        result[file] = foreign
++        break
++      }
++    }
++  }
++  return result
++}
++
++// ───────────────────────── 断言重写检测（FR-04） ─────────────────────────
++
++/** 删除侧断言 token：expect( / assert / t.equal / toBe / toEqual / strictEqual / should. */
++const ASSERTION_TOKEN_RE = /expect\(|assert|t\.equal|toBe|toEqual|strictEqual|should\./
++
++/** 测试文件判定：test/ 前缀 或 *.test.* / *_test.* 命名（路径先 POSIX 归一） */
++function isTestFilePath(p) {
++  return p.startsWith('test/') || /\.test\./.test(p) || /_test\./.test(p)
++}
++
++/**
++ * 断言重写检测：测试文件跑 git diff HEAD -U0（HEAD 口径非 index——quick step3 先 git add
++ * 暂存的时序下裸 diff 恒空转，坑 Grill X-001），hunk 删除侧（- 行）含断言 token → 命中；
++ * 纯新增 hunk（无 - 行）不算；样例行封顶 5/文件。
++ * @param {{ cwd?: string, files?: string[] }} opts
++ * @returns {{ [file]: string[] }} 键 = POSIX 归一测试文件路径，值 = 删除侧含 token 的原行
++ *   （去 - 前缀）；非测试文件不查；无命中 / git 失败 → 不记
++ */
++export function detectAssertionRewrites({ cwd, files } = {}) {
++  const result = {}
++  if (!cwd || !Array.isArray(files)) return result
++  for (const raw of files) {
++    const file = toPosix(raw)
++    if (!file || !isTestFilePath(file)) continue
++    const r = safeGit(cwd, ['diff', 'HEAD', '-U0', '--', file])
++    if (r.error || !r.value) continue
++    const samples = []
++    let inHunk = false
++    let deletedLines = []
++    const flushHunk = () => {
++      if (!inHunk || deletedLines.length === 0) return // 纯新增 hunk（无 - 行）不算
++      for (const line of deletedLines) {
++        if (samples.length >= 5) break
++        if (ASSERTION_TOKEN_RE.test(line)) samples.push(line)
++      }
++    }
++    for (const line of r.value.split('\n')) {
++      if (line.startsWith('@@')) {
++        flushHunk()
++        inHunk = true
++        deletedLines = []
++        continue
++      }
++      if (!inHunk) continue // 文件头（diff --git / index / --- / +++）不进 hunk 统计
++      if (line.startsWith('-')) deletedLines.push(line.slice(1)) // + 行与 "\ No newline" 行跳过
++    }
++    flushHunk()
++    if (samples.length > 0) result[file] = samples
++  }
++  return result
++}
++
++// ───────────────────────── advisory 渲染（FR-03/FR-04 组合） ─────────────────────────
++
++/**
++ * advisory 文本段渲染：决策命中（matchDecisionsByFiles，knowledge 目录 = specBase/knowledge，
++ * task-02 契约）+ 交付归因（collectRecentForeignDelivery 默认 7 天窗）组合成注入文本，
++ * 供 task-05 进场注入 / task-06 --done WARNING 拼接；两类均零命中 → ''（不留空段）。
++ * @param {{ specBase?: string, cwd?: string, candidateFiles?: string[], currentChange?: string }} opts
++ * @returns {string}
++ */
++export function renderSemanticGuardBlock({ specBase, cwd, candidateFiles, currentChange } = {}) {
++  if (!Array.isArray(candidateFiles) || candidateFiles.length === 0) return ''
++  const files = [...new Set(candidateFiles.map(toPosix).filter(Boolean))]
++  if (files.length === 0) return ''
++  const decisions = specBase
++    ? matchDecisionsByFiles(join(specBase, 'knowledge'), files)
++    : {}
++  const delivery = cwd
++    ? collectRecentForeignDelivery({ cwd, files, currentChange })
++    : {}
++  const decisionFiles = files.filter(f => Array.isArray(decisions[f]) && decisions[f].length > 0)
++  const deliveryFiles = files.filter(f => delivery[f])
++  if (decisionFiles.length === 0 && deliveryFiles.length === 0) return ''
++  const lines = ['【语义护栏】改动文件触及既有决策 / 近期他者交付，动手前请对照：']
++  if (decisionFiles.length > 0) {
++    lines.push(`■ 决策库命中（${decisionFiles.length} 文件）`)
++    for (const f of decisionFiles) {
++      for (const hit of decisions[f]) {
++        const rejected = hit.status === 'rejected'
++        lines.push(`  - ${f} → ${hit.id} ${hit.title}［${rejected ? 'rejected，已否决，勿复潮' : hit.status || 'unknown'}］`)
++        lines.push(`      理由：${hit.reason || '（未记录）'}`)
++        if (hit.file) lines.push(`      详见：knowledge/${hit.file}`)
++      }
++    }
++  }
++  if (deliveryFiles.length > 0) {
++    lines.push('■ 近 7 天他者交付归因（最后交付的非本变更标记）')
++    for (const f of deliveryFiles) lines.push(`  - ${f} ← ${delivery[f]}`)
++  }
++  return lines.join('\n')
++}
++
++// ───────────────────────── 总开关（D-001@v1） ─────────────────────────
++
++/** YAML 布尔宽松解析：仅显式 false（含引号形态）为关，其余值一律 true（fail-open，先例 friction-tally R-05） */
++function parseEnabledValue(raw) {
++  const v = String(raw || '').trim().replace(/^['"]|['"]$/g, '')
++  return v.toLowerCase() !== 'false'
++}
++
++/**
++ * 读 specBase/local.yaml 的 semantic_guard.enabled 总开关（D-001@v1）：默认 true；
++ * 缺键 / 文件缺失 / 解析异常 → true（fail-open——配置读取异常不该把护栏误判为关）。
++ * 轻量行式解析不引 yaml 依赖（先例 friction-tally readFrictionHintEnabled 同款形态），
++ * 兼容嵌套（semantic_guard:\n  enabled: false）与 flat（semantic_guard.enabled: false）；
++ * 行尾先归一（Windows CRLF 残留致行式正则整体失配）。
++ * @param {string} specBase - spec 根（local.yaml 所在目录）
++ * @returns {boolean}
++ */
++export function readSemanticGuardEnabled(specBase) {
++  try {
++    const yamlPath = join(specBase, 'local.yaml')
++    if (!existsSync(yamlPath)) return true
++    const text = String(readFileSync(yamlPath, 'utf8')).replace(/\r\n?/g, '\n')
++    let inSection = false
++    let sectionIndent = -1
++    for (const line of text.split('\n')) {
++      // flat 形态优先：键名带点，不与嵌套段头冲突
++      const flat = line.match(/^\s*semantic_guard\.enabled\s*:\s*(.*?)\s*(?:#.*)?$/)
++      if (flat) return parseEnabledValue(flat[1])
++      const section = line.match(/^(\s*)semantic_guard\s*:\s*(?:#.*)?$/)
++      if (section) {
++        inSection = true
++        sectionIndent = section[1].length
++        continue
++      }
++      if (!inSection) continue
++      if (line.trim() === '' || line.trim().startsWith('#')) continue
++      // 缩进回落到段头层级（或更浅）= semantic_guard 段结束，之后的 enabled 不属于它
++      if (/^\s*/.exec(line)[0].length <= sectionIndent) {
++        inSection = false
++        continue
++      }
++      const kv = line.match(/^\s*enabled\s*:\s*(.*?)\s*(?:#.*)?$/)
++      if (kv) return parseEnabledValue(kv[1])
++    }
++    return true
++  } catch {
++    return true
++  }
++}
+diff --git a/test/decision-file-field.test.mjs b/test/decision-file-field.test.mjs
+new file mode 100644
+index 0000000..2454265
+--- /dev/null
++++ b/test/decision-file-field.test.mjs
+@@ -0,0 +1,280 @@
++/**
++ * decision-distill 文件字段契约（change: 2026-09-11-cross-change-decision-guard，FR-01，D-001@v1）：
++ * decisions.md 条目支持「文件：」/「files:」标签 → entry.files（parseListValue 刌分 + 逐项
++ * 反斜杠归一 POSIX 分隔符）；归档渲染在「锚点：」行后增条件「文件：」行——仅非空渲染，
++ * 存量条目零迁移、幂等重归档不添空行。
++ *
++ * 锁定验收（task-01 五条）：
++ *   1. 含「文件：src/a.js, src/b.js」的条目渲染输出含精确行「文件：src/a.js, src/b.js」（锚点行后）
++ *   2. 不含文件字段的既有条目渲染输出与改动前字节级一致（存量零迁移）
++ *   3. 「files: src\foo.js」反斜杠形态解析为 src/foo.js
++ *   4. 「a.js，b.js、c.js」全角分隔符切分为 3 项
++ *   5. 同一条目二次归档（幂等路径）不新增空「文件：」行
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'fs'
++import { join } from 'path'
++import { tmpdir } from 'os'
++import { parseDecisions, distillIntoKnowledge } from '../src/decision-distill.js'
++import { matchDecisionsByFiles } from '../src/knowledge-match.js'
++
++const tmpRoots = []
++function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); tmpRoots.push(d); return d }
++test.after(() => { for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
++
++/** 固定变更名建 change 目录（basename 即变更名 → 「变更：」行内容确定，字节级断言可用） */
++function mkChange(name, decisionsMd) {
++  const root = mk('dff-')
++  const changeDir = join(root, name)
++  mkdirSync(changeDir, { recursive: true })
++  writeFileSync(join(changeDir, 'decisions.md'), decisionsMd)
++  return changeDir
++}
++
++test('验收1：有文件字段条目渲染精确「文件：src/a.js, src/b.js」行，位于锚点行后；重跑仍恰一行', () => {
++  const md = [
++    '# 决策追踪',
++    '',
++    '## D-001@v1 引入文件锚定',
++    '- type: architecture',
++    '- status: accepted',
++    '- answer: 以文件字段锚定代码位置',
++    '- 文件：src/a.js, src/b.js',
++    '',
++  ].join('\n') + '\n'
++  const changeDir = mkChange('feat-file-field', md)
++
++  const r = parseDecisions(changeDir)
++  const e = r.entries.find(x => x.number === 'D-001')
++  assert.ok(e, '条目可解析')
++  assert.deepEqual(e.files, ['src/a.js', 'src/b.js'], '解析侧 entry.files 为字符串数组')
++
++  const k = mk('dff-k1-')
++  distillIntoKnowledge(changeDir, k, 'deadbeef')
++  const content = readFileSync(join(k, 'decisions', 'unmapped.md'), 'utf8')
++  const lines = content.split('\n')
++  const anchorIdx = lines.indexOf('锚点：未记录')
++  const filesIdx = lines.indexOf('文件：src/a.js, src/b.js')
++  assert.ok(anchorIdx > -1, '锚点行存在')
++  assert.ok(filesIdx > -1, `渲染含精确行「文件：src/a.js, src/b.js」（实际 ${JSON.stringify(content)}）`)
++  assert.equal(filesIdx, anchorIdx + 1, '文件行紧跟锚点行后')
++
++  // 幂等重跑：同号同变更 update 原地重写，仍恰一行文件行
++  distillIntoKnowledge(changeDir, k, 'deadbeef')
++  const content2 = readFileSync(join(k, 'decisions', 'unmapped.md'), 'utf8')
++  assert.equal((content2.match(/文件：src\/a\.js, src\/b\.js/g) || []).length, 1, '重跑仍恰一行文件行')
++})
++
++test('验收2：无文件字段条目渲染输出与改动前字节级一致（存量零迁移）', () => {
++  const md = [
++    '## D-002@v1 存量条目',
++    '- type: architecture',
++    '- status: accepted',
++    '- answer: 无文件字段',
++    '',
++  ].join('\n') + '\n'
++  const changeDir = mkChange('legacy-no-files', md)
++  const k = mk('dff-k2-')
++  distillIntoKnowledge(changeDir, k, 'cafe1234')
++  const content = readFileSync(join(k, 'decisions', 'unmapped.md'), 'utf8')
++  const expected = [
++    '# 决策知识 — unmapped',
++    '',
++    '> decision-distill 从变更 decisions.md 幂等提炼（「最近确认」= 归档时 HEAD）。条目字段行为 docs-check 机械解析契约，勿手改。',
++    '',
++    '## D-002@v1 存量条目',
++    '状态：implemented',
++    '变更：legacy-no-files',
++    '锚点：未记录',
++    '最近确认：cafe1234',
++    '理由：无文件字段',
++    '',
++  ].join('\n')
++  assert.equal(content, expected, '无文件字段条目渲染字节级一致（不出现空「文件：」行）')
++})
++
++test('验收3+4：files 反斜杠归一 POSIX；全角分隔符切分', () => {
++  const md = [
++    '## D-003@v1 反斜杠归一',
++    '- type: definition',
++    '- status: confirmed',
++    '- files: src\\foo.js',
++    '',
++    '## D-004@v1 全角切分',
++    '- type: process',
++    '- status: accepted',
++    '- 文件：a.js，b.js、c.js',
++    '',
++  ].join('\n') + '\n'
++  const changeDir = mkChange('sep-normalize', md)
++
++  const r = parseDecisions(changeDir)
++  const d3 = r.entries.find(x => x.number === 'D-003')
++  const d4 = r.entries.find(x => x.number === 'D-004')
++  assert.deepEqual(d3.files, ['src/foo.js'], 'files: src\\foo.js → src/foo.js（反斜杠归一）')
++  assert.deepEqual(d4.files, ['a.js', 'b.js', 'c.js'], 'a.js，b.js、c.js → 3 项（全角分隔符切分）')
++
++  const k = mk('dff-k3-')
++  distillIntoKnowledge(changeDir, k, 'beef5678')
++  const content = readFileSync(join(k, 'decisions', 'unmapped.md'), 'utf8')
++  assert.ok(content.includes('\n文件：src/foo.js\n'), '反斜杠条目渲染归一后的精确行')
++})
++
++test('验收5：同条目二次归档不新增空「文件：」行，内容字节稳定', () => {
++  const md = [
++    '## D-005@v1 幂等重归档',
++    '- type: architecture',
++    '- status: accepted',
++    '- answer: 二次归档稳定',
++    '',
++  ].join('\n') + '\n'
++  const changeDir = mkChange('idem-files', md)
++  const k = mk('dff-k5-')
++  distillIntoKnowledge(changeDir, k, 'abc0001')
++  const c1 = readFileSync(join(k, 'decisions', 'unmapped.md'), 'utf8')
++  assert.ok(!/^文件：/m.test(c1), '一次归档无「文件：」行')
++  distillIntoKnowledge(changeDir, k, 'abc0001')
++  const c2 = readFileSync(join(k, 'decisions', 'unmapped.md'), 'utf8')
++  assert.equal(c2, c1, '二次归档字节级一致')
++  assert.ok(!/^文件：/m.test(c2), '二次归档仍不新增空「文件：」行')
++})
++
++// ── task-02（FR-02，change: 2026-09-11-cross-change-decision-guard）───────────
++// matchDecisionsByFiles 文件键反查 = quick 语义护栏（task-03/05/06）的文件键引擎：
++// 条目命中源 = 「文件：」字段精确值 ∪「锚点：」路径形态 token 提取（D-905 实形态
++// 「锚点：src/quicklog.js:493」→ src/quicklog.js）；锚点行经单独标签读入，绝不进
++// DECISION_FIELD_RE 的 reason 回填链（Grill X-002：else-if 链会把锚点值误吞进 reason）。
++
++/** 建临时知识库：INDEX.md（## Decisions 段路由行）+ decisions/change-management.md */
++function mkDecisionLib(domainMd) {
++  const k = mk('dff-task02-')
++  mkdirSync(join(k, 'decisions'), { recursive: true })
++  writeFileSync(join(k, 'decisions', 'change-management.md'), domainMd)
++  writeFileSync(join(k, 'INDEX.md'), [
++    '# Knowledge Index',
++    '',
++    '## Conventions',
++    '',
++    '## Decisions',
++    '- change-management|决策 → [change-management](decisions/change-management.md)',
++    '',
++  ].join('\n'))
++  return k
++}
++
++test('task-02 验收1：「文件：src/a.js」条目被精确反查命中，输出恰 {id,title,status,reason,file} 五字段', () => {
++  const k = mkDecisionLib([
++    '# 决策知识 — change-management',
++    '',
++    '## D-001@v1 引入文件锚定',
++    '状态：implemented',
++    '变更：feat-file-field',
++    '锚点：未记录',
++    '文件：src/a.js, src/b.js',
++    '最近确认：deadbeef',
++    '理由：以文件字段锚定代码位置',
++    '',
++  ].join('\n') + '\n')
++
++  const r = matchDecisionsByFiles(k, ['src/a.js'])
++  assert.ok(Array.isArray(r['src/a.js']), '「文件：src/a.js」条目被命中')
++  assert.equal(r['src/a.js'].length, 1)
++  const hit = r['src/a.js'][0]
++  assert.deepEqual(Object.keys(hit).sort(), ['file', 'id', 'reason', 'status', 'title'],
++    '输出条目恰五字段（file 沿 parseDecisionFile 既有字段名）')
++  assert.equal(hit.id, 'D-001@v1')
++  assert.equal(hit.title, '引入文件锚定')
++  assert.equal(hit.status, 'implemented')
++  assert.equal(hit.reason, '以文件字段锚定代码位置')
++  assert.equal(hit.file, 'decisions/change-management.md', 'file = 域文件 INDEX 相对路径')
++  assert.deepEqual(Object.keys(r), ['src/a.js'], '结果键 ⊆ 查询集：未查询的 src/b.js 不生成键')
++})
++
++test('task-02 验收2+3：D-905 锚点形态提取命中；锚点值不污染 reason；rejected 状态透传', () => {
++  const k = mkDecisionLib([
++    '# 决策知识 — change-management',
++    '',
++    '## D-905@v1 quicklog 标签切段先严格边界扫描再宽松兜底',
++    '状态：implemented',
++    '锚点：src/quicklog.js:493',
++    '最近确认：71a7fe6',
++    '理由：quicklog 单行四字段切段必须两层——严格扫描失败才退回宽松顺序扫描',
++    '',
++    '## D-906@v1 拒绝重量级依赖',
++    '状态：rejected',
++    '锚点：src/quicklog.js:500',
++    '理由：曾考虑引入',
++    '否决理由：包体过大拖慢启动',
++    '复潮条件：启动耗时优化到位后',
++    '',
++    '## D-907@v1 无命中源条目',
++    '状态：implemented',
++    '锚点：未记录',
++    '理由：无锚点路径形态',
++    '',
++  ].join('\n') + '\n')
++
++  const r = matchDecisionsByFiles(k, ['src/quicklog.js'])
++  const ids = (r['src/quicklog.js'] || []).map(h => h.id)
++  assert.deepEqual(ids, ['D-905@v1', 'D-906@v1'],
++    '「锚点：src/quicklog.js:493」经 token 提取（剥 :line 后缀）命中两条；「未记录」锚点条目不进结果')
++  const d905 = r['src/quicklog.js'][0]
++  assert.equal(d905.reason, 'quicklog 单行四字段切段必须两层——严格扫描失败才退回宽松顺序扫描',
++    'reason 取「理由」行，不被锚点值污染（Grill X-002 反例）')
++  const d906 = r['src/quicklog.js'][1]
++  assert.equal(d906.status, 'rejected', 'rejected 条目同样进反查结果（状态透传）')
++  assert.equal(d906.reason, '包体过大拖慢启动', 'rejected reason = 否决理由，不被锚点/理由行污染')
++})
++
++test('task-02 验收4：条目值与查询值双侧反斜杠归一命中（结果键为 POSIX 形态）', () => {
++  const k = mkDecisionLib([
++    '# 决策知识 — change-management',
++    '',
++    '## D-010@v1 Windows 路径形态',
++    '状态：implemented',
++    '锚点：src\\win\\anchor.js:12',
++    '文件：src\\win\\file.js，plain.js',
++    '理由：反斜杠形态双侧归一',
++    '',
++  ].join('\n') + '\n')
++
++  // 条目侧反斜杠 + 查询侧反斜杠 → POSIX 键命中；全角分隔符切出的 plain.js 同样成键
++  const r = matchDecisionsByFiles(k, ['src\\win\\file.js', 'plain.js'])
++  assert.ok(Array.isArray(r['src/win/file.js']), '反斜杠条目值 + 反斜杠查询值 → POSIX 键命中')
++  assert.equal(r['src/win/file.js'][0].id, 'D-010@v1')
++  assert.ok(Array.isArray(r['plain.js']), '全角分隔符切分出的 plain.js 亦成键')
++  assert.deepEqual(Object.keys(r), ['src/win/file.js', 'plain.js'])
++
++  // 反斜杠锚点提取归一后同样命中
++  const r2 = matchDecisionsByFiles(k, ['src\\win\\anchor.js'])
++  assert.ok(Array.isArray(r2['src/win/anchor.js']), '反斜杠锚点提取归一后命中')
++  assert.equal(r2['src/win/anchor.js'][0].id, 'D-010@v1')
++})
++
++test('task-02 验收5：无 decisions 库 / INDEX 无 Decisions 路由 / 路由失效 / 空查询 → {}', () => {
++  const empty = mk('dff-task02-none-') // 空目录（无 INDEX.md）
++  assert.deepEqual(matchDecisionsByFiles(empty, ['src/a.js']), {}, '无 INDEX.md → {}')
++
++  const noRoute = mk('dff-task02-noroute-')
++  writeFileSync(join(noRoute, 'INDEX.md'), [
++    '# Knowledge Index', '', '## Conventions', '- ESM|module → [ESM](conventions.md#esm)', '',
++  ].join('\n'))
++  assert.deepEqual(matchDecisionsByFiles(noRoute, ['src/a.js']), {}, 'INDEX 无 Decisions 段 → {}')
++
++  const broken = mk('dff-task02-broken-')
++  writeFileSync(join(broken, 'INDEX.md'), [
++    '# Knowledge Index', '', '## Decisions', '- 决策 → [x](decisions/gone.md)', '',
++  ].join('\n'))
++  assert.deepEqual(matchDecisionsByFiles(broken, ['src/a.js']), {}, '路由行指向已删域文件 → {}')
++
++  const lib = mkDecisionLib([
++    '# 决策知识 — change-management', '',
++    '## D-020@v1 有库但空查询',
++    '状态：implemented',
++    '文件：src/a.js',
++    '理由：空查询不命中',
++    '',
++  ].join('\n') + '\n')
++  assert.deepEqual(matchDecisionsByFiles(lib, []), {}, '空查询列表 → {}')
++})
+diff --git a/test/semantic-guard-prompt-inject.test.mjs b/test/semantic-guard-prompt-inject.test.mjs
+new file mode 100644
+index 0000000..ffb613c
+--- /dev/null
++++ b/test/semantic-guard-prompt-inject.test.mjs
+@@ -0,0 +1,212 @@
++/**
++ * quick step1 语义护栏进场注入测试（change: 2026-09-11-cross-change-decision-guard，
++ * task-05，FR-03，D-001@v1 模块四——挂载点 src/run/prompt.js 渲染层）。
++ *
++ * 与 test/semantic-guard.test.mjs（task-03/06）严格隔离：本文件只测注入分支
++ * （outputStep quick step1「理解任务」渲染 + buildQuickSemanticGuardInjection 拼装），
++ * 不碰 semantic-guard.js 内部单测面（plan-postcheck 硬约束——同 Wave 并行不共享文件）。
++ *
++ * TaskCard acceptance 四条 + 候选采集口径：
++ *   1. 零命中 → step1 prompt 输出与改动前一致（无空段残留，与开关关闭态字节一致）
++ *   2. 命中 → prompt 末尾含决策段 / 交付段（rejected 标注勿复潮）
++ *   3. semantic_guard.enabled=false → prompt 与现状一致
++ *   4. 知识库读取异常 → prompt 含单行降级说明，流程不中断
++ *   5. 候选 = guard.allowedFiles ∪ porcelain 脏文件（反斜杠归一去重）
++ *   6. 候选封顶 20（helper 直测）
++ *
++ * 夹具先例：test/semantic-guard.test.mjs makeRepo/commitFile/writeKnowledge
++ * （task-03，同变更同款形态）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { join, dirname } from 'node:path'
++import { tmpdir } from 'node:os'
++import { execFileSync } from 'node:child_process'
++import { outputStep, buildQuickSemanticGuardInjection } from '../src/run/prompt.js'
++
++/** git 调用：数组参数不经 shell（Windows 路径安全），stdio pipe 吞输出 */
++function sh(cwd, args) {
++  return execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
++}
++
++function cleanup(d) {
++  try { rmSync(d, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }) } catch { /* Windows 句柄延迟，重试后仍失败留给 OS Temp 回收 */ }
++}
++
++/** 临时 git 仓：main 分支 + 身份配置 + gitignore .sillyspec/（夹具内 spec 产物不进 git log） */
++function makeRepo(prefix) {
++  const d = mkdtempSync(join(tmpdir(), prefix))
++  sh(d, ['init', '-q', '-b', 'main'])
++  sh(d, ['config', 'user.email', 't@t.com'])
++  sh(d, ['config', 'user.name', 't'])
++  writeFileSync(join(d, '.gitignore'), '.sillyspec/\n')
++  return d
++}
++
++/** 写文件并提交（自动建父目录） */
++function commitFile(d, rel, content, subject) {
++  const p = join(d, rel)
++  mkdirSync(dirname(p), { recursive: true })
++  writeFileSync(p, content)
++  sh(d, ['add', '--', rel])
++  sh(d, ['commit', '-q', '-m', subject])
++}
++
++/** knowledge 决策库夹具：INDEX.md Decisions 段路由行 → decisions/eng.md（knowledge-match 解析契约） */
++function writeKnowledge(specBase, engMd) {
++  mkdirSync(join(specBase, 'knowledge', 'decisions'), { recursive: true })
++  writeFileSync(join(specBase, 'knowledge', 'INDEX.md'), [
++    '# Knowledge Index',
++    '',
++    '## Decisions',
++    '- 语义护栏|决策 → [决策库](decisions/eng.md)',
++    '',
++  ].join('\n'))
++  writeFileSync(join(specBase, 'knowledge', 'decisions', 'eng.md'), engMd)
++}
++
++/** quick 会话 guard.json（readQuickGuardField 同源读取路径：.runtime/quick-sessions/<sid>/） */
++function writeGuard(specBase, sid, guard) {
++  mkdirSync(join(specBase, '.runtime', 'quick-sessions', sid), { recursive: true })
++  writeFileSync(join(specBase, '.runtime', 'quick-sessions', sid, 'guard.json'), JSON.stringify(guard))
++}
++
++/** 渲染 quick step1「理解任务」并捕获 console 输出（outputStep 全输出走 console，无返回 prompt） */
++async function renderQuickStep1(cwd, sid, promptBody = '【任务正文锚点XYZ】理解本任务后动手。') {
++  const STEP = { name: '理解任务', prompt: promptBody, requiresWait: false }
++  const origLog = console.log, origErr = console.error, origWarn = console.warn
++  let buf = ''
++  const sink = (...a) => { buf += a.join(' ') + '\n' }
++  console.log = sink; console.error = sink; console.warn = sink
++  try {
++    await outputStep('quick', 0, [STEP], cwd, sid, null, {}, null)
++  } finally {
++    console.log = origLog; console.error = origErr; console.warn = origWarn
++  }
++  return buf
++}
++
++const SID = 'quick-1a2b3c4d'
++
++// ───────────────────────── acceptance ①②③④ + 采集口径 ─────────────────────────
++
++test('注入：零命中 → 不含护栏段，输出与开关关闭态字节一致（prompt 与现状一致）', async () => {
++  const d = makeRepo('sgi-zero-')
++  try {
++    const specBase = join(d, '.sillyspec')
++    // 候选管道真实跑：声明文件有候选，但无知识库 + 提交无标记 → 双零命中
++    commitFile(d, 'src/clean.js', 'v1\n', 'init clean')
++    writeGuard(specBase, SID, { allowedFiles: ['src/clean.js'] })
++    const outZero = await renderQuickStep1(d, SID)
++    assert.ok(!outZero.includes('【语义护栏】'), '零命中不出现护栏段（无空段残留）')
++    assert.ok(outZero.includes('## Step 1/1'), 'step 渲染正常')
++    // 字节一致对照：开关显式关闭后渲染，与零命中输出逐字节相同（无占位符/空段差异）
++    writeFileSync(join(specBase, 'local.yaml'), 'commands:\n  test: npm test\nsemantic_guard:\n  enabled: false\n')
++    const outOff = await renderQuickStep1(d, SID)
++    assert.equal(outZero, outOff, '零命中输出 == 开关关闭输出（与改动前现状字节一致）')
++  } finally { cleanup(d) }
++})
++
++test('注入：决策+交付命中 → prompt 末尾追加护栏段（rejected 标注勿复潮）', async () => {
++  const d = makeRepo('sgi-hit-')
++  try {
++    const specBase = join(d, '.sillyspec')
++    commitFile(d, 'src/foo.js', 'a1\n', '变更 2026-09-04-other-change：修 A')
++    writeKnowledge(specBase, [
++      '# 决策知识 — eng',
++      '',
++      '## D-102@v1 被否掉的方案',
++      '状态：rejected',
++      '文件：src/foo.js',
++      '理由：曾考虑引入',
++      '否决理由：否决理由内容xyz',
++      '复潮条件：启动耗时优化到位后',
++      '',
++    ].join('\n'))
++    writeGuard(specBase, SID, { allowedFiles: ['src/foo.js'] })
++    const out = await renderQuickStep1(d, SID)
++    assert.ok(out.includes('【语义护栏】'), '护栏段头出现')
++    assert.ok(out.includes('决策库命中'), '决策段出现')
++    assert.ok(out.includes('D-102@v1') && out.includes('已否决，勿复潮'), 'rejected 标注勿复潮')
++    assert.ok(out.includes('他者交付归因'), '交付段出现')
++    assert.ok(out.includes('src/foo.js ← 2026-09-04-other-change'), '交付归因 文件→变更名')
++    // 「prompt 末尾」：护栏段在 step 正文之后（追加非前置）
++    assert.ok(out.indexOf('【语义护栏】') > out.indexOf('【任务正文锚点XYZ】'), '护栏段追加在 prompt 正文之后')
++    // 流程完整：完成命令仍在（渲染未被注入阻断）
++    assert.ok(out.includes('run quick --done'), '完成命令仍在输出尾部')
++  } finally { cleanup(d) }
++})
++
++test('注入：semantic_guard.enabled=false（命中场景）→ prompt 与现状一致', async () => {
++  const d = makeRepo('sgi-off-')
++  try {
++    const specBase = join(d, '.sillyspec')
++    commitFile(d, 'src/foo.js', 'a1\n', '变更 2026-09-04-other-change：修 A')
++    writeKnowledge(specBase, [
++      '# 决策知识 — eng',
++      '',
++      '## D-102@v1 被否掉的方案',
++      '状态：rejected',
++      '文件：src/foo.js',
++      '理由：曾考虑引入',
++      '',
++    ].join('\n'))
++    writeGuard(specBase, SID, { allowedFiles: ['src/foo.js'] })
++    writeFileSync(join(specBase, 'local.yaml'), 'semantic_guard:\n  enabled: false\n')
++    const out = await renderQuickStep1(d, SID)
++    assert.ok(!out.includes('【语义护栏】'), '开关关 → 零输出（命中场景同样不注入）')
++    assert.ok(out.includes('## Step 1/1'), 'step 渲染正常（全停非半停，不阻断）')
++  } finally { cleanup(d) }
++})
++
++test('注入：知识库读取异常 → 单行降级说明，流程不中断', async () => {
++  const d = makeRepo('sgi-err-')
++  try {
++    const specBase = join(d, '.sillyspec')
++    commitFile(d, 'src/foo.js', 'a1\n', 'init')
++    writeGuard(specBase, SID, { allowedFiles: ['src/foo.js'] })
++    // INDEX.md 造成目录：existsSync 真 + readFileSync 抛 EISDIR → 反查链异常冒泡到注入层
++    mkdirSync(join(specBase, 'knowledge', 'INDEX.md'), { recursive: true })
++    const out = await renderQuickStep1(d, SID)
++    assert.ok(out.includes('【语义护栏】'), '降级行以护栏段头标记出现')
++    assert.ok(out.includes('注入失败'), '单行降级说明（fail-soft）')
++    assert.ok(out.includes('## Step 1/1') && out.includes('run quick --done'), '渲染与完成命令完整（流程不中断）')
++  } finally { cleanup(d) }
++})
++
++test('注入：候选 = allowedFiles ∪ porcelain 脏文件（反斜杠归一去重）', async () => {
++  const d = makeRepo('sgi-union-')
++  try {
++    const specBase = join(d, '.sillyspec')
++    // 声明侧命中（已提交 + 他者标记）
++    commitFile(d, 'src/foo.js', 'a1\n', '变更 2026-09-04-other-change：修 A')
++    // 脏文件侧命中：提交后保持未提交修改 → porcelain ' M src/bar.js'
++    commitFile(d, 'src/bar.js', 'b1\n', '变更 2026-09-05-other-change2：修 B')
++    writeFileSync(join(d, 'src', 'bar.js'), 'b2-dirty\n')
++    // 声明列表含反斜杠同形重复 → 归一后去重为一个候选
++    writeGuard(specBase, SID, { allowedFiles: ['src/foo.js', 'src\\foo.js'] })
++    const out = await renderQuickStep1(d, SID)
++    assert.ok(out.includes('src/foo.js ← 2026-09-04-other-change'), '声明文件命中交付归因')
++    assert.ok(out.includes('src/bar.js ← 2026-09-05-other-change2'), 'porcelain 脏文件并入候选')
++    assert.equal(out.split('src/foo.js ←').length - 1, 1, '反斜杠同形去重（foo 只归因一次）')
++  } finally { cleanup(d) }
++})
++
++test('注入：候选封顶 20（buildQuickSemanticGuardInjection 直测）', () => {
++  const d = makeRepo('sgi-cap-')
++  try {
++    const specBase = join(d, '.sillyspec')
++    mkdirSync(join(d, 'src'), { recursive: true })
++    for (let i = 1; i <= 25; i++) {
++      writeFileSync(join(d, 'src', `f${String(i).padStart(2, '0')}.js`), `v${i}\n`)
++    }
++    sh(d, ['add', '-A'])
++    sh(d, ['commit', '-q', '-m', '变更 2026-09-04-bulk：批量'])
++    const files = Array.from({ length: 25 }, (_, i) => `src/f${String(i + 1).padStart(2, '0')}.js`)
++    writeGuard(specBase, SID, { allowedFiles: files })
++    const block = buildQuickSemanticGuardInjection({ specBase, cwd: d, changeName: SID })
++    assert.ok(typeof block === 'string' && block.length > 0, '封顶场景仍有注入（前 20 候选）')
++    assert.equal(block.split(' ← ').length - 1, 20, '恰前 20 文件进反查（第 21+ 不采）')
++  } finally { cleanup(d) }
++})
+diff --git a/test/semantic-guard.test.mjs b/test/semantic-guard.test.mjs
+new file mode 100644
+index 0000000..79d53e7
+--- /dev/null
++++ b/test/semantic-guard.test.mjs
+@@ -0,0 +1,501 @@
++/**
++ * semantic-guard 测试（change: 2026-09-11-cross-change-decision-guard，task-03，FR-03/FR-04）。
++ *
++ * 四组场景（TaskCard acceptance）：
++ *   1. 交付归因 collectRecentForeignDelivery：变更名 / ql-ID 两类标记解析、本变更标记跳过
++ *      （含「最新=本变更、更旧=他者 → 取最新非本变更」）、无标记不归因、git 不可用降级空、
++ *      --since 窗口（days=0）、files 封顶 20
++ *   2. 断言重写 detectAssertionRewrites：删除断言行命中、git add 暂存后仍命中（HEAD 口径，
++ *      Grill X-001）、纯新增 hunk 不算、删除行无 token 不算、非测试文件不查、样例封顶 5/文件
++ *   3. 渲染 renderSemanticGuardBlock：仅决策段 / rejected「已否决，勿复潮」/ 仅交付段 / 双零空串
++ *   4. 开关 readSemanticGuardEnabled：嵌套与 flat 的显式 false → false；缺文件 / 缺键 /
++ *      读取异常 → true（fail-open）
++ *
++ * 夹具先例：test/scope-audit.test.mjs:42+93（mkdtemp + git init -b main + 身份配置 + commit）、
++ * test/decision-file-field.test.mjs mkDecisionLib（INDEX.md Decisions 段路由行 + 域文件）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { join, dirname } from 'node:path'
++import { tmpdir } from 'node:os'
++import { execFileSync } from 'node:child_process'
++import {
++  collectRecentForeignDelivery,
++  detectAssertionRewrites,
++  renderSemanticGuardBlock,
++  readSemanticGuardEnabled,
++} from '../src/semantic-guard.js'
++import {
++  runQuickTestLintGate,
++  printQuickTestLintGate,
++  buildSemanticGuardHits,
++} from '../src/run/quick-audit.js'
++
++/** git 调用：数组参数不经 shell（Windows 路径安全），stdio pipe 吞输出 */
++function sh(cwd, args) {
++  return execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
++}
++
++function cleanup(d) {
++  try { rmSync(d, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }) } catch { /* Windows 句柄延迟，重试后仍失败留给 OS Temp 回收 */ }
++}
++
++/** 临时 git 仓：main 分支 + 身份配置 + gitignore .sillyspec/（夹具内 spec 产物不进 git log） */
++function makeRepo(prefix) {
++  const d = mkdtempSync(join(tmpdir(), prefix))
++  sh(d, ['init', '-q', '-b', 'main'])
++  sh(d, ['config', 'user.email', 't@t.com'])
++  sh(d, ['config', 'user.name', 't'])
++  writeFileSync(join(d, '.gitignore'), '.sillyspec/\n')
++  return d
++}
++
++/** 写文件并提交（自动建父目录） */
++function commitFile(d, rel, content, subject) {
++  const p = join(d, rel)
++  mkdirSync(dirname(p), { recursive: true })
++  writeFileSync(p, content)
++  sh(d, ['add', '--', rel])
++  sh(d, ['commit', '-q', '-m', subject])
++}
++
++/** 同 commitFile，但钉死提交日期（--since 窗口用例需要确定性的旧提交；git 0.days 解析反直觉不可用） */
++function commitFileAt(d, rel, content, subject, isoDate) {
++  const p = join(d, rel)
++  mkdirSync(dirname(p), { recursive: true })
++  writeFileSync(p, content)
++  sh(d, ['add', '--', rel])
++  execFileSync('git', ['-C', d, 'commit', '-q', '-m', subject], {
++    encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
++    env: { ...process.env, GIT_AUTHOR_DATE: isoDate, GIT_COMMITTER_DATE: isoDate },
++  })
++}
++
++/** knowledge 决策库夹具：INDEX.md Decisions 段路由行 → decisions/eng.md（knowledge-match 解析契约） */
++function writeKnowledge(specBase, engMd) {
++  mkdirSync(join(specBase, 'knowledge', 'decisions'), { recursive: true })
++  writeFileSync(join(specBase, 'knowledge', 'INDEX.md'), [
++    '# Knowledge Index',
++    '',
++    '## Decisions',
++    '- 语义护栏|决策 → [决策库](decisions/eng.md)',
++    '',
++  ].join('\n'))
++  writeFileSync(join(specBase, 'knowledge', 'decisions', 'eng.md'), engMd)
++}
++
++const CUR = '2026-09-11-cross-change-decision-guard'
++
++// ───────────────────────── 组 1：交付归因（FR-03） ─────────────────────────
++
++test('归因：变更名标记 → 文件记他者变更名', () => {
++  const d = makeRepo('sg-attr-name-')
++  try {
++    commitFile(d, 'src/a.js', 'a1\n', 'task-01 变更 2026-09-04-other-change：修 A')
++    const r = collectRecentForeignDelivery({ cwd: d, files: ['src/a.js'], currentChange: CUR })
++    assert.deepEqual(r, { 'src/a.js': '2026-09-04-other-change' })
++  } finally { cleanup(d) }
++})
++
++test('归因：ql-ID 标记 → 文件记 ql-ID（quick 会话归因键）', () => {
++  const d = makeRepo('sg-attr-ql-')
++  try {
++    commitFile(d, 'src/b.js', 'b1\n', 'quick ql-20260910-002-ab3f：修 B')
++    const r = collectRecentForeignDelivery({ cwd: d, files: ['src/b.js'], currentChange: CUR })
++    assert.deepEqual(r, { 'src/b.js': 'ql-20260910-002-ab3f' })
++  } finally { cleanup(d) }
++})
++
++test('归因：最新提交是本变更、更旧是他者 → 取最新非本变更标记（旧者）', () => {
++  const d = makeRepo('sg-attr-skip-')
++  try {
++    commitFile(d, 'src/c.js', 'c1\n', '变更 2026-09-01-old-change：初版')
++    commitFile(d, 'src/c.js', 'c2\n', `变更 ${CUR}：本次改`)
++    const r = collectRecentForeignDelivery({ cwd: d, files: ['src/c.js'], currentChange: CUR })
++    assert.deepEqual(r, { 'src/c.js': '2026-09-01-old-change' })
++  } finally { cleanup(d) }
++})
++
++test('归因：仅本变更标记 → 不记', () => {
++  const d = makeRepo('sg-attr-only-cur-')
++  try {
++    commitFile(d, 'src/c.js', 'c1\n', `变更 ${CUR}：本次改`)
++    const r = collectRecentForeignDelivery({ cwd: d, files: ['src/c.js'], currentChange: CUR })
++    assert.deepEqual(r, {})
++  } finally { cleanup(d) }
++})
++
++test('归因：无标记提交 → 不记', () => {
++  const d = makeRepo('sg-attr-nomark-')
++  try {
++    commitFile(d, 'src/d.js', 'd1\n', 'chore: init')
++    const r = collectRecentForeignDelivery({ cwd: d, files: ['src/d.js'], currentChange: CUR })
++    assert.deepEqual(r, {})
++  } finally { cleanup(d) }
++})
++
++test('归因：git 不可用（非仓目录）→ 空结果不抛', () => {
++  const d = mkdtempSync(join(tmpdir(), 'sg-attr-nogit-'))
++  try {
++    writeFileSync(join(d, 'a.js'), 'x\n') // 无 git init
++    const r = collectRecentForeignDelivery({ cwd: d, files: ['a.js'], currentChange: CUR })
++    assert.deepEqual(r, {})
++  } finally { cleanup(d) }
++})
++
++test('归因：--since 窗口真实过滤（钉死 30 天前的他者提交）', () => {
++  const d = makeRepo('sg-attr-window-')
++  try {
++    const oldIso = new Date(Date.now() - 30 * 86400000).toISOString()
++    commitFileAt(d, 'src/e.js', 'e1\n', '变更 2026-09-04-other-change：修 E', oldIso)
++    // 默认 7 天窗：30 天前提交在窗外 → 不记
++    assert.deepEqual(
++      collectRecentForeignDelivery({ cwd: d, files: ['src/e.js'], currentChange: CUR }),
++      {},
++      '默认 7 天窗内无提交 → 不记',
++    )
++    // 放大到 90 天窗：命中（窗口参数真实下到 git --since）
++    assert.deepEqual(
++      collectRecentForeignDelivery({ cwd: d, files: ['src/e.js'], currentChange: CUR, days: 90 }),
++      { 'src/e.js': '2026-09-04-other-change' },
++      '90 天窗内 → 归因命中',
++    )
++  } finally { cleanup(d) }
++})
++
++test('归因：files 封顶 20，第 21+ 文件不查', () => {
++  const d = makeRepo('sg-attr-cap-')
++  try {
++    mkdirSync(join(d, 'src'), { recursive: true })
++    for (let i = 1; i <= 25; i++) {
++      writeFileSync(join(d, 'src', `f${String(i).padStart(2, '0')}.js`), `v${i}\n`)
++    }
++    sh(d, ['add', '-A'])
++    sh(d, ['commit', '-q', '-m', '变更 2026-09-04-bulk-change：批量'])
++    const files = Array.from({ length: 25 }, (_, i) => `src/f${String(i + 1).padStart(2, '0')}.js`)
++    const r = collectRecentForeignDelivery({ cwd: d, files, currentChange: CUR })
++    assert.equal(Object.keys(r).length, 20, '恰前 20 文件归因')
++  } finally { cleanup(d) }
++})
++
++// ───────────────────────── 组 2：断言重写（FR-04） ─────────────────────────
++
++test('断言：删除断言行（- 侧含 token）→ 命中并给样例行', () => {
++  const d = makeRepo('sg-assert-hit-')
++  try {
++    commitFile(d, 'test/foo.test.js', "test('t', () => { expect(1).toBe(1) })\n", 'init test')
++    writeFileSync(join(d, 'test', 'foo.test.js'), "test('t', () => { expect(1).toBe(2) })\n")
++    const r = detectAssertionRewrites({ cwd: d, files: ['test/foo.test.js'] })
++    assert.deepEqual(r, { 'test/foo.test.js': ["test('t', () => { expect(1).toBe(1) })"] })
++  } finally { cleanup(d) }
++})
++
++test('断言：git add 暂存后仍命中（HEAD 口径非 index，Grill X-001）', () => {
++  const d = makeRepo('sg-assert-staged-')
++  try {
++    commitFile(d, 'test/foo.test.js', 'test("t", () => expect(x).toEqual(1))\n', 'init test')
++    writeFileSync(join(d, 'test', 'foo.test.js'), 'test("t", () => expect(x).toEqual(2))\n')
++    sh(d, ['add', '--', 'test/foo.test.js']) // quick step3 先暂存时序
++    const r = detectAssertionRewrites({ cwd: d, files: ['test/foo.test.js'] })
++    assert.ok(Array.isArray(r['test/foo.test.js']) && r['test/foo.test.js'].length > 0, '暂存后 diff HEAD 仍见删除侧断言')
++  } finally { cleanup(d) }
++})
++
++test('断言：纯新增断言 hunk（无 - 行）→ 不算', () => {
++  const d = makeRepo('sg-assert-addonly-')
++  try {
++    commitFile(d, 'test/foo.test.js', 'const a = 1\n', 'init test')
++    writeFileSync(join(d, 'test', 'foo.test.js'), "const a = 1\ntest('x', () => expect(a).toBe(1))\n")
++    const r = detectAssertionRewrites({ cwd: d, files: ['test/foo.test.js'] })
++    assert.deepEqual(r, {})
++  } finally { cleanup(d) }
++})
++
++test('断言：hunk 有删除行但删除侧无 token → 不算', () => {
++  const d = makeRepo('sg-assert-notoken-')
++  try {
++    commitFile(d, 'test/foo.test.js', 'const x = 1\n', 'init test')
++    writeFileSync(join(d, 'test', 'foo.test.js'), 'const x = 2\n')
++    const r = detectAssertionRewrites({ cwd: d, files: ['test/foo.test.js'] })
++    assert.deepEqual(r, {})
++  } finally { cleanup(d) }
++})
++
++test('断言：非测试文件 → 不查（删除侧含 token 也空）', () => {
++  const d = makeRepo('sg-assert-nontest-')
++  try {
++    commitFile(d, 'src/plain.js', 'expect(1).toBe(1)\n', 'init')
++    writeFileSync(join(d, 'src', 'plain.js'), 'expect(1).toBe(2)\n')
++    const r = detectAssertionRewrites({ cwd: d, files: ['src/plain.js'] })
++    assert.deepEqual(r, {})
++  } finally { cleanup(d) }
++})
++
++test('断言：*_test.* 命名 + assert token + 样例行封顶 5/文件', () => {
++  const d = makeRepo('sg-assert-cap5-')
++  try {
++    const before = Array.from({ length: 8 }, (_, i) => `assert.equal(v${i}, ${i})\n`).join('')
++    const after = Array.from({ length: 8 }, (_, i) => `assert.equal(v${i}, ${i}+1)\n`).join('')
++    commitFile(d, 'test/unit/login_test.mjs', before, 'init test')
++    writeFileSync(join(d, 'test', 'unit', 'login_test.mjs'), after)
++    const r = detectAssertionRewrites({ cwd: d, files: ['test/unit/login_test.mjs'] })
++    assert.equal(r['test/unit/login_test.mjs'].length, 5, '样例行封顶 5/文件')
++    assert.ok(r['test/unit/login_test.mjs'][0].includes('assert.equal(v0, 0)'), '样例为删除侧原行')
++  } finally { cleanup(d) }
++})
++
++// ───────────────────────── 组 3：渲染组合 ─────────────────────────
++
++test('渲染：仅决策命中 → 决策段含 id/title/status/reason/库文件指针，无交付段', () => {
++  const d = makeRepo('sg-render-dec-')
++  try {
++    const specBase = join(d, '.sillyspec')
++    writeKnowledge(specBase, [
++      '# 决策知识 — eng',
++      '',
++      '## D-101@v1 测试决策标题甲',
++      '状态：implemented',
++      '文件：src/foo.js',
++      '理由：理由内容甲乙丙',
++      '',
++    ].join('\n'))
++    const out = renderSemanticGuardBlock({ specBase, cwd: d, candidateFiles: ['src/foo.js'], currentChange: CUR })
++    assert.ok(typeof out === 'string' && out.length > 0, '非空串')
++    for (const piece of ['D-101@v1', '测试决策标题甲', 'implemented', '理由内容甲乙丙', 'knowledge/decisions/eng.md']) {
++      assert.ok(out.includes(piece), `决策段含 ${piece}`)
++    }
++    // 断言查段头子串（引导行无条件含「他者交付」措辞，不能作判据）
++    assert.ok(!out.includes('他者交付归因'), '无交付段')
++  } finally { cleanup(d) }
++})
++
++test('渲染：rejected 决策 → 标注「已否决，勿复潮」，reason 取否决理由', () => {
++  const d = makeRepo('sg-render-rej-')
++  try {
++    const specBase = join(d, '.sillyspec')
++    writeKnowledge(specBase, [
++      '# 决策知识 — eng',
++      '',
++      '## D-102@v1 被否掉的方案',
++      '状态：rejected',
++      '文件：src/foo.js',
++      '理由：曾考虑引入',
++      '否决理由：否决理由内容xyz',
++      '复潮条件：启动耗时优化到位后',
++      '',
++    ].join('\n'))
++    const out = renderSemanticGuardBlock({ specBase, cwd: d, candidateFiles: ['src/foo.js'], currentChange: CUR })
++    assert.ok(out.includes('已否决，勿复潮'), 'rejected 标注')
++    assert.ok(out.includes('否决理由内容xyz'), 'reason = 否决理由')
++  } finally { cleanup(d) }
++})
++
++test('渲染：仅交付命中 → 交付段含 文件→变更名，无决策段', () => {
++  const d = makeRepo('sg-render-del-')
++  try {
++    commitFile(d, 'src/a.js', 'a1\n', '变更 2026-09-04-other-change：修 A')
++    const out = renderSemanticGuardBlock({ specBase: join(d, '.sillyspec'), cwd: d, candidateFiles: ['src/a.js'], currentChange: CUR })
++    assert.ok(out.includes('src/a.js ← 2026-09-04-other-change'), '交付段含 文件→变更名')
++    assert.ok(!out.includes('决策库命中'), '无决策段')
++  } finally { cleanup(d) }
++})
++
++test('渲染：决策与交付双零命中 → 空串（不留空段）', () => {
++  const d = makeRepo('sg-render-zero-')
++  try {
++    const out = renderSemanticGuardBlock({ specBase: join(d, '.sillyspec'), cwd: d, candidateFiles: ['src/nope.js'], currentChange: CUR })
++    assert.equal(out, '')
++  } finally { cleanup(d) }
++})
++
++// ───────────────────────── 组 4：开关（D-001@v1 fail-open） ─────────────────────────
++
++test('开关：嵌套 semantic_guard.enabled=false → false', () => {
++  const d = mkdtempSync(join(tmpdir(), 'sg-sw-nest-'))
++  try {
++    writeFileSync(join(d, 'local.yaml'), 'commands:\n  test: npm test\nsemantic_guard:\n  enabled: false\n')
++    assert.equal(readSemanticGuardEnabled(d), false)
++  } finally { cleanup(d) }
++})
++
++test('开关：flat semantic_guard.enabled: "false"（引号形态）→ false', () => {
++  const d = mkdtempSync(join(tmpdir(), 'sg-sw-flat-'))
++  try {
++    writeFileSync(join(d, 'local.yaml'), '# flat 形态\nsemantic_guard.enabled: "false"\n')
++    assert.equal(readSemanticGuardEnabled(d), false)
++  } finally { cleanup(d) }
++})
++
++test('开关：CRLF 行尾不破解析（Windows 坑）→ false', () => {
++  const d = mkdtempSync(join(tmpdir(), 'sg-sw-crlf-'))
++  try {
++    writeFileSync(join(d, 'local.yaml'), 'semantic_guard:\r\n  enabled: false\r\n')
++    assert.equal(readSemanticGuardEnabled(d), false)
++  } finally { cleanup(d) }
++})
++
++test('开关：local.yaml 缺失 / 段缺 enabled 键（不误读他段）/ 显式 true → true', () => {
++  const none = mkdtempSync(join(tmpdir(), 'sg-sw-none-'))
++  const has = mkdtempSync(join(tmpdir(), 'sg-sw-has-'))
++  try {
++    assert.equal(readSemanticGuardEnabled(none), true, '文件缺失默认 true')
++    // semantic_guard: 段下无 enabled 键；紧随其后的 friction_hint.enabled=false 不得误读
++    writeFileSync(join(has, 'local.yaml'), 'semantic_guard:\nfriction_hint:\n  enabled: false\n')
++    assert.equal(readSemanticGuardEnabled(has), true, '段缺键不误读他段 → true')
++    writeFileSync(join(has, 'local.yaml'), 'semantic_guard:\n  enabled: true\n')
++    assert.equal(readSemanticGuardEnabled(has), true, '显式 true → true')
++  } finally { cleanup(none); cleanup(has) }
++})
++
++test('开关：读取异常（local.yaml 是目录）→ true（fail-open）', () => {
++  const d = mkdtempSync(join(tmpdir(), 'sg-sw-err-'))
++  try {
++    mkdirSync(join(d, 'local.yaml'), { recursive: true }) // readFileSync 抛 EISDIR
++    assert.equal(readSemanticGuardEnabled(d), true)
++  } finally { cleanup(d) }
++})
++
++// ───────────────────────── 组 5：task-06 gate 集成（FR-04 WARNING 非阻断） ─────────────────────────
++
++// quick-audit gate 消费端集成（task-06）：buildSemanticGuardHits（检测+交集+组装）单测 +
++// runQuickTestLintGate / printQuickTestLintGate 门内集成。集成仓不配 local.yaml commands →
++// test/lint 未配置自动 skipped，不真跑命令（卡内可测性豁免——避免测试里真跑 npm test）；
++// SILLYSPEC_QUICK_GATE_SNAPSHOT_OFF=1 关隔离快照 → gateCwd 回落主仓 cwd，与检测层主仓
++// 口径同层（快照语义=实测隔离，检测=本会话工作树改动，两者不同层——Grill X-001 附注）。
++
++/** gate 用例环境：关隔离快照 + 可选覆盖 SILLYSPEC_QUICK_TEST_GATE；返回恢复函数（finally 调） */
++function gateTestEnv({ testGate } = {}) {
++  const savedSkip = process.env.SILLYSPEC_QUICK_TEST_GATE
++  const savedSnap = process.env.SILLYSPEC_QUICK_GATE_SNAPSHOT_OFF
++  process.env.SILLYSPEC_QUICK_GATE_SNAPSHOT_OFF = '1'
++  if (testGate !== undefined) process.env.SILLYSPEC_QUICK_TEST_GATE = testGate
++  return () => {
++    if (savedSkip === undefined) delete process.env.SILLYSPEC_QUICK_TEST_GATE
++    else process.env.SILLYSPEC_QUICK_TEST_GATE = savedSkip
++    if (savedSnap === undefined) delete process.env.SILLYSPEC_QUICK_GATE_SNAPSHOT_OFF
++    else process.env.SILLYSPEC_QUICK_GATE_SNAPSHOT_OFF = savedSnap
++  }
++}
++
++/** 捕获 console 三通道输出为单串（printQuickTestLintGate 渲染断言用；同步调用内 patch/restore） */
++function captureConsoleText(fn) {
++  const chunks = []
++  const orig = { log: console.log, warn: console.warn, error: console.error }
++  const push = (...a) => chunks.push(a.join(' '))
++  console.log = push
++  console.warn = push
++  console.error = push
++  try { fn() } finally {
++    console.log = orig.log
++    console.warn = orig.warn
++    console.error = orig.error
++  }
++  return chunks.join('\n')
++}
++
++test('gate：他者交付测试文件断言被改 → hits 点名 + 渲染 ⚠️（含变更名与样例行），action 判定不受影响', async () => {
++  const d = makeRepo('sg-gate-hit-')
++  const restoreEnv = gateTestEnv()
++  try {
++    commitFile(d, 'test/foo.test.js', "test('t', () => { expect(1).toBe(1) })\n", '变更 2026-09-04-other-change：修 A')
++    writeFileSync(join(d, 'test', 'foo.test.js'), "test('t', () => { expect(1).toBe(2) })\n")
++    const gate = await runQuickTestLintGate({ cwd: d, specBase: join(d, '.sillyspec'), changedFiles: ['test/foo.test.js'], changeName: CUR })
++    // WARNING 非阻断（D-001@v1）：action/failed 判定不受 semanticGuard 影响（调用方只读这两键）
++    assert.equal(gate.action, 'pass')
++    assert.deepEqual(gate.failed, [])
++    assert.deepEqual(gate.semanticGuard, {
++      hits: [{ file: 'test/foo.test.js', deliveredBy: '2026-09-04-other-change', sampleLines: ["test('t', () => { expect(1).toBe(1) })"] }],
++    })
++    const out = captureConsoleText(() => printQuickTestLintGate(gate))
++    for (const piece of ['⚠️ 语义护栏', 'test/foo.test.js', '2026-09-04-other-change', 'expect(1).toBe(1)', 'quicklog --solution', '关联决策']) {
++      assert.ok(out.includes(piece), `渲染含 ${piece}`)
++    }
++  } finally { restoreEnv(); cleanup(d) }
++})
++
++test('gate：断言被改但无归因标记 → hits 空 + 渲染无 ⚠️ 段', async () => {
++  const d = makeRepo('sg-gate-noattr-')
++  const restoreEnv = gateTestEnv()
++  try {
++    commitFile(d, 'test/foo.test.js', "test('t', () => { expect(1).toBe(1) })\n", 'chore: init')
++    writeFileSync(join(d, 'test', 'foo.test.js'), "test('t', () => { expect(1).toBe(2) })\n")
++    const gate = await runQuickTestLintGate({ cwd: d, specBase: join(d, '.sillyspec'), changedFiles: ['test/foo.test.js'], changeName: CUR })
++    assert.deepEqual(gate.semanticGuard, { hits: [] })
++    const out = captureConsoleText(() => printQuickTestLintGate(gate))
++    assert.ok(!out.includes('语义护栏'), 'hits 空 → 零 WARNING 输出')
++  } finally { restoreEnv(); cleanup(d) }
++})
++
++test('组装：纯新增断言（他者交付同文件）→ hits 空', () => {
++  const d = makeRepo('sg-bld-addonly-')
++  try {
++    commitFile(d, 'test/foo.test.js', 'const a = 1\n', '变更 2026-09-04-other-change：修 A')
++    writeFileSync(join(d, 'test', 'foo.test.js'), "const a = 1\ntest('x', () => expect(a).toBe(1))\n")
++    assert.deepEqual(buildSemanticGuardHits({ cwd: d, specBase: join(d, '.sillyspec'), files: ['test/foo.test.js'], changeName: CUR }), { hits: [] })
++  } finally { cleanup(d) }
++})
++
++test('组装：断言被改但无标记 / 仅本变更交付 → hits 空（currentChange 透传跳过）', () => {
++  const d = makeRepo('sg-bld-cur-')
++  try {
++    commitFile(d, 'test/a.test.js', "test('a', () => expect(1).toBe(1))\n", 'chore: init')
++    writeFileSync(join(d, 'test', 'a.test.js'), "test('a', () => expect(1).toBe(2))\n")
++    commitFile(d, 'test/b.test.js', "test('b', () => expect(1).toBe(1))\n", `变更 ${CUR}：本次改`)
++    writeFileSync(join(d, 'test', 'b.test.js'), "test('b', () => expect(1).toBe(2))\n")
++    assert.deepEqual(
++      buildSemanticGuardHits({ cwd: d, specBase: join(d, '.sillyspec'), files: ['test/a.test.js', 'test/b.test.js'], changeName: CUR }),
++      { hits: [] },
++    )
++  } finally { cleanup(d) }
++})
++
++test('组装：非测试文件（删除侧含 token + 他者交付）→ hits 空', () => {
++  const d = makeRepo('sg-bld-nontest-')
++  try {
++    commitFile(d, 'src/plain.js', 'expect(1).toBe(1)\n', '变更 2026-09-04-other-change：修 A')
++    writeFileSync(join(d, 'src', 'plain.js'), 'expect(1).toBe(2)\n')
++    assert.deepEqual(buildSemanticGuardHits({ cwd: d, specBase: join(d, '.sillyspec'), files: ['src/plain.js'], changeName: CUR }), { hits: [] })
++  } finally { cleanup(d) }
++})
++
++test('组装+gate：semantic_guard.enabled=false → 不检测（断言被改+他者交付也 hits 空、渲染零输出）', async () => {
++  const d = makeRepo('sg-bld-sw-off-')
++  const restoreEnv = gateTestEnv()
++  try {
++    const specBase = join(d, '.sillyspec')
++    mkdirSync(specBase, { recursive: true })
++    writeFileSync(join(specBase, 'local.yaml'), 'semantic_guard:\n  enabled: false\n')
++    commitFile(d, 'test/foo.test.js', "test('t', () => { expect(1).toBe(1) })\n", '变更 2026-09-04-other-change：修 A')
++    writeFileSync(join(d, 'test', 'foo.test.js'), "test('t', () => { expect(1).toBe(2) })\n")
++    assert.deepEqual(
++      buildSemanticGuardHits({ cwd: d, specBase, files: ['test/foo.test.js'], changeName: CUR }),
++      { hits: [] },
++      '组装层：开关关 → 跳过检测',
++    )
++    const gate = await runQuickTestLintGate({ cwd: d, specBase, changedFiles: ['test/foo.test.js'], changeName: CUR })
++    assert.deepEqual(gate.semanticGuard, { hits: [] }, 'gate 层：开关关 → hits 空')
++    const out = captureConsoleText(() => printQuickTestLintGate(gate))
++    assert.ok(!out.includes('语义护栏'), '渲染零 ⚠️ 输出')
++  } finally { restoreEnv(); cleanup(d) }
++})
++
++test('gate：SILLYSPEC_QUICK_TEST_GATE=skip / 无文件 / 纯 doc → 不跑检测（无 semanticGuard 字段）', async () => {
++  const d = makeRepo('sg-gate-early3-')
++  const restoreEnv = gateTestEnv({ testGate: 'skip' })
++  try {
++    // 摆好「若检测跑必命中」的现场：他者交付测试文件 + 断言被改——三条早退必须在检测前返回
++    commitFile(d, 'test/foo.test.js', "test('t', () => { expect(1).toBe(1) })\n", '变更 2026-09-04-other-change：修 A')
++    writeFileSync(join(d, 'test', 'foo.test.js'), "test('t', () => { expect(1).toBe(2) })\n")
++    const specBase = join(d, '.sillyspec')
++    const g1 = await runQuickTestLintGate({ cwd: d, specBase, changedFiles: ['test/foo.test.js'], changeName: CUR })
++    assert.equal(g1.action, 'skip')
++    assert.equal('semanticGuard' in g1, false, 'env skip：不跑检测无字段')
++    const g2 = await runQuickTestLintGate({ cwd: d, specBase, changedFiles: [], declaredFiles: [], changeName: CUR })
++    assert.equal(g2.action, 'skip')
++    assert.equal('semanticGuard' in g2, false, '无文件：不跑检测无字段')
++    const g3 = await runQuickTestLintGate({ cwd: d, specBase, changedFiles: ['docs/readme.md'], changeName: CUR })
++    assert.equal(g3.action, 'skip')
++    assert.equal('semanticGuard' in g3, false, '纯 doc：不跑检测无字段')
++  } finally { restoreEnv(); cleanup(d) }
++})

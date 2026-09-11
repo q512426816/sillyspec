@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 2,
+  "change": "2026-09-11-cross-change-decision-guard",
+  "generatedAt": "2026-09-11T08:38:40.058Z",
+  "probes": {
+    "probe1": {
+      "command": "sillyspec verify-probes --change 2026-09-11-cross-change-decision-guard",
+      "metrics": {
+        "matches": 0,
+        "skippedFiles": 4,
+        "worktreeHits": 0,
+        "globEntries": 0
+      }
+    },
+    "probe3": {
+      "command": "sillyspec verify-probes --change 2026-09-11-cross-change-decision-guard",
+      "metrics": {
+        "tasks": 7,
+        "hasTest": 6
+      }
+    },
+    "probe5": {
+      "command": "sillyspec verify-probes --change 2026-09-11-cross-change-decision-guard",
+      "metrics": {
+        "backendEndpoints": 2,
+        "frontendCalls": 0
+      }
+    },
+    "probe6": {
+      "command": "sillyspec verify-probes --change 2026-09-11-cross-change-decision-guard",
+      "metrics": {
+        "deletions": 0,
+        "unavailable": false
+      }
+    }
+  },
+  "conclusion": "PASS WITH NOTES",
+  "tests": {
+    "command": "module[cli-core,run-gates]",
+    "exitCode": 0,
+    "strategy": "module-subset",
+    "failedRemaining": [],
+    "passedAt": "2026-09-11T08:43:49.516Z"
+  },
+  "factsConsistency": {
+    "checked": [
+      "probe1",
+      "probe3",
+      "probe5",
+      "probe6"
+    ],
+    "verdict": "match",
+    "detail": null
+  }
+}

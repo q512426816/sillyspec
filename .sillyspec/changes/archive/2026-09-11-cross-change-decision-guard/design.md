@@ -74,6 +74,7 @@ quick step1 prompt 已有 CLI 代读注入先例（项目上下文摘要，promp
 | NEW:test/semantic-guard.test.mjs | 新 | 归因解析/断言检测/渲染/开关单测（task-03/06） |
 | NEW:test/semantic-guard-prompt-inject.test.mjs | 新 | quick step1 注入单测（task-05，与 task-03/06 隔离——同 Wave 并行不共享文件） |
 | NEW:test/decision-file-field.test.mjs | 新 | 文件字段契约 + matchDecisionsByFiles 集成 |
+| .sillyspec/docs/sillyspec/modules/_module-map.yaml | 改 | runtime paths 补录 src/semantic-guard.js（task-07——lint module-map 覆盖门要求） |
 
 **明确不改**（并行会话在改，提交夹带风险）：src/run/command.js、src/run/complete.js、src/run/complete-handlers.js、src/run/shared.js、src/scope-audit.js、src/stages/brainstorm.js、src/index.js、test/scope-audit.test.mjs。src/stages/quick.js 同样零改动——模板不动，注入在渲染层（D-001@v1 影响清单中的 quick.js 是消费面非改动面，Grill X-008）。
 
