@@ -5,6 +5,8 @@
  * 路由行发现——路由行由 decision-distill 幂等写入，本引擎只消费不写）——命中路由行的
  * 决策文件解析为 decisionHits（rejected 优先），供 brainstorm Step2 防复潮注入（task-04，FR-05）。
  * decisions 库不存在时（INDEX 无 Decisions 段/文件不存在）一切行为与无 decisions 库时一致。
+ * 另导出 matchDecisionsByFiles（task-02，FR-02）：决策条目按代码文件路径反查——条目
+ * 「文件：」字段精确命中 ∪「锚点：」路径形态 token 提取兜底（quick 语义护栏的文件键引擎）。
  */
 
 import { existsSync, readFileSync } from 'fs'
@@ -59,15 +61,51 @@ function isDecisionRoute(entry) {
 }
 
 const DECISION_HEADER_RE = /^##\s+(D-\d+@v\d+)\s*(.*)$/
-const DECISION_FIELD_RE = /^(状态|理由|否决理由|复潮条件)\s*[：:]\s*(.*)$/
+const DECISION_FIELD_RE = /^(状态|文件|理由|否决理由|复潮条件)\s*[：:]\s*(.*)$/
+// 「锚点：」单独标签精确匹配读入（仿 docs-check.js parseDecisionEntries 先例）——绝不并入
+// DECISION_FIELD_RE：其 else-if 链末尾的 reason 回填（else if (!cur.reason)）会把锚点值
+// 误吞进 reason（Grill X-002 隐性回归）。
+const DECISION_ANCHOR_RE = /^锚点\s*[：:]\s*(.*)$/
+
+/** 「文件：」值切分 + 逐项反斜杠归一 POSIX（与 decision-distill 的 entry.files 契约对齐：
+ *  split /[,，、\s]+/ + replace(/\\/g,'/')）。 */
+function splitDecisionFiles(value) {
+  return String(value || '')
+    .split(/[,，、\s]+/)
+    .map(s => s.replace(/\\/g, '/'))
+    .filter(Boolean)
+}
+
+// 锚点路径 token 提取：路径形态 token + 扩展名白名单（扩展名按长度降序排列——
+// (js|…|jsx) 短前缀在前会把 foo.jsx 截断成 foo.js）。
+const ANCHOR_FILE_TOKEN_RE = /[\w./-]+\.(?:mjs|cjs|jsx|tsx|js|ts|py|go|java|rs)/g
+
+/**
+ * 锚点值 → 代码文件路径集（条目无「文件：」字段时的兜底命中源）。
+ * 真实先例：D-905 形态「锚点：src/quicklog.js:493」→ 提取 src/quicklog.js
+ * （token 字符类不含 : 故止于行号前，再防御性剥 :line/:line-line/:符号 后缀）。
+ * 「未记录」/无路径形态 token → []。
+ */
+function anchorFilePaths(anchor) {
+  const a = String(anchor || '').trim().replace(/\\/g, '/')
+  if (!a || a === '未记录') return []
+  const out = new Set()
+  for (const token of a.match(ANCHOR_FILE_TOKEN_RE) || []) {
+    const p = token.replace(/:(?:\d+(?:-\d+)?|[A-Za-z_$][A-Za-z0-9_$]*)$/, '')
+    if (p) out.add(p)
+  }
+  return [...out]
+}
 
 /**
  * 解析单个 decisions/<域>.md 的 D-xxx@vN 条目。
  * reason 语义：rejected 条目取「否决理由」（expects_from task-02 的 reject_reason），
  * 其余条目回退「理由」一句话；revisitWhen 仅 rejected 条目非空（复潮条件）。
+ * files =「文件：」字段切分归一（task-02，FR-02）；anchor =「锚点：」行原值（单独标签读入，
+ * 不进 reason 回填链——Grill X-002）。
  * @param {string} filePath 决策文件绝对路径
  * @param {string} file INDEX 相对路径（decisions/<域>.md），原样进 decisionHits.file
- * @returns {{ file: string, id: string, title: string, status: string, reason: string, revisitWhen: string }[]}
+ * @returns {{ file: string, id: string, title: string, status: string, reason: string, revisitWhen: string, files: string[], anchor: string }[]}
  */
 function parseDecisionFile(filePath, file) {
   let content
@@ -82,14 +120,18 @@ function parseDecisionFile(filePath, file) {
     const h = line.match(DECISION_HEADER_RE)
     if (h) {
       flush()
-      cur = { file, id: h[1], title: h[2].trim(), status: '', reason: '', revisitWhen: '' }
+      cur = { file, id: h[1], title: h[2].trim(), status: '', reason: '', revisitWhen: '', files: [], anchor: '' }
       continue
     }
     if (!cur) continue
+    // 锚点：单独标签先于字段链匹配（不在 DECISION_FIELD_RE 内，见常量处注释）
+    const a = line.match(DECISION_ANCHOR_RE)
+    if (a) { cur.anchor = a[1].trim(); continue }
     const f = line.match(DECISION_FIELD_RE)
     if (!f) continue
     const value = f[2].trim()
     if (f[1] === '状态') cur.status = value.toLowerCase()
+    else if (f[1] === '文件') cur.files = splitDecisionFiles(value)
     else if (f[1] === '否决理由') cur.reason = value
     else if (f[1] === '复潮条件') cur.revisitWhen = value
     else if (!cur.reason) cur.reason = value // 理由：仅作 implemented（或否决理由缺失）时的回填
@@ -123,6 +165,37 @@ export function parseDecisionEntries(indexDir, indexEntries = null) {
     seen.add(key)
     return true
   })
+}
+
+/**
+ * 决策条目按代码文件路径反查（task-02，FR-02）——quick 语义护栏（task-03/05/06）的
+ * 文件键引擎。条目命中源 = 「文件：」字段（cur.files）∪「锚点：」路径形态 token 提取
+ * （anchorFilePaths 兜底）；查询侧与条目侧路径统一 POSIX 归一。
+ * @param {string} indexDir knowledge 目录路径
+ * @param {string[]} files 查询代码文件路径列表
+ * @returns {{ [file: string]: Array<{ id: string, title: string, status: string, reason: string, file: string }> }}
+ *   键 = 归一后的查询路径（结果键 ⊆ 查询集）；条目 file 字段沿 parseDecisionFile 既有
+ *   口径（INDEX 相对 decisions/<域>.md 路径）；rejected 条目同样进结果（status 透传，
+ *   消费方按需过滤）；无 decisions 库 / 路由失效 / 空查询 → {}。
+ */
+export function matchDecisionsByFiles(indexDir, files) {
+  const queries = [...new Set(
+    (Array.isArray(files) ? files : [files])
+      .map(f => String(f || '').trim().replace(/\\/g, '/'))
+      .filter(Boolean)
+  )]
+  if (queries.length === 0) return {}
+  const querySet = new Set(queries)
+  const result = {}
+  for (const hit of parseDecisionEntries(indexDir)) {
+    const sources = new Set([...(hit.files || []), ...anchorFilePaths(hit.anchor)])
+    for (const src of sources) {
+      if (!querySet.has(src)) continue
+      if (!result[src]) result[src] = []
+      result[src].push({ id: hit.id, title: hit.title, status: hit.status, reason: hit.reason, file: hit.file })
+    }
+  }
+  return result
 }
 
 function escapeRegex(s) {
