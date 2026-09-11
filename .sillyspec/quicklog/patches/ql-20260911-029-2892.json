@@ -1,0 +1,78 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-2585673f",
+  "totals": {
+    "files": 7,
+    "additions": 242,
+    "deletions": 28
+  },
+  "rows": [
+    {
+      "path": "src/doctor-diagnostics.js",
+      "declared": true,
+      "additions": 3,
+      "deletions": 2,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/index.js",
+      "declared": true,
+      "additions": 5,
+      "deletions": 2,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/local-detect.js",
+      "declared": true,
+      "additions": 30,
+      "deletions": 15,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/run/command.js",
+      "declared": true,
+      "additions": 12,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/run/complete.js",
+      "declared": true,
+      "additions": 13,
+      "deletions": 5,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/local-detect.test.mjs",
+      "declared": true,
+      "additions": 4,
+      "deletions": 3,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/urgent-batch-fixes.test.mjs",
+      "declared": true,
+      "additions": 175,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "qlId": "ql-20260911-029-2892",
+  "sessionId": "quick-2585673f",
+  "savedAt": "2026-09-11T15:44:50.049Z",
+  "patchSha256": "1cf158245a1a099c0b4ac008dfe7fe240ed6e6ca662a4d5590096df1771449a7",
+  "patchStatus": "ok"
+}

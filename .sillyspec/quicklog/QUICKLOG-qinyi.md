@@ -328,7 +328,18 @@
 方案：getLatestActivityAt+60 分钟活动窗挂 closeQuickLinkedChanges，回归 3 用例+D-002@v2 落库
 结果：16/0+2/0+全量 440/0+lint 绿，test gate 诚实全量
 
-## ql-20260911-029-2892 | 2026-09-11 23:26:20 | 审查报告紧急包六项小修：index.js next --apply 的 ESM __dirname 崩溃、command.js binSelf 子进程路径 fileURLToPath 化 + --wait-interactive 注册进 k…
-状态：进行中
+## ql-20260911-029-2892 | 2026-09-11 23:26:20 | 审查报告紧急包六项小修（ESM 路径/blocked 谓词/Makefile 正则/doctor 转义/JSON 死条件）
+状态：已完成
 关联变更：（无）
-文件：src/index.js, src/run/command.js, src/run/complete.js, src/local-detect.js, src/doctor-diagnostics.js
+文件：
+- src/index.js（next --apply fileURLToPath + modules resolve json 变量）
+- src/run/command.js（resolveBinSelfPath 导出 + knownFlags 注册）
+- src/run/complete.js（skipStep/waitStep blocked 谓词）
+- src/local-detect.js（parseMakefileTestCommand 行扫描重写）
+- src/doctor-diagnostics.js（分块正则转义修正）
+- test/urgent-batch-fixes.test.mjs（新增 24 用例回归）
+- test/local-detect.test.mjs（Case 4 期望随语义修正）
+需求：审查报告紧急包六项小修（ESM 路径/blocked 谓词/Makefile 正则/doctor 转义/JSON 死条件）
+根因：全仓审查确认的 P1/P2 缺陷：① next --apply 用 ESM 未定义的 __dirname 必崩；② binSelf 子进程路径 URL pathname 不 decode 且 ../bin 少一级、--wait-interactive 未注册 knownFlags 致 FR-03 整条死路（两项绑定修）；③ skipStep/waitStep findIndex 漏 blocked（completeStep:152 修过但未同步，blocked 后错步记账且卡死）；④ Makefile 解析 \s* 吞换行两失效模式可致门禁假通过；⑤ doctor 分块正则 \w 双重转义整文件当一块 needs_review 漏检；⑥ modules resolve --json 查 filteredArgs 恒 false 机器输出死路。触及 run/command.js 与 run/complete.js 两门禁本体文件——修复即门禁自身缺陷、全量测试绿，按解锁通道走 --force-baseline
+方案：index.js:841 改 fileURLToPath；command.js binSelf 提为导出 resolveBinSelfPath()（fileURLToPath + ../../bin 层级修正）并补注册 --wait-interactive；complete.js 两处谓词纳入 blocked + skip 对 blocked 步输出指引；local-detect.js parseMakefileTestCommand 重写行扫描（行内按 make 语义是 prereq 回退 make test，新增 ; 同行配方，排除 test := 变量，配方边界=下一非缩进行）；doctor-diagnostics.js 转义修正+导出；index.js modules --json 改用顶层 json 变量。新增 test/urgent-batch-fixes.test.mjs 24 用例回归；local-detect.test.mjs Case 4 期望随 prereq 语义修正；四个模块卡 changelog sidecar 追加条目
+结果：新测试 24/24 通过；全量 441 文件 0 失败；lint 571 文件绿（CLI --done 门禁实测通过）

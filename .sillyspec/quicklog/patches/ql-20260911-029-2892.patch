@@ -1,0 +1,413 @@
+diff --git a/src/doctor-diagnostics.js b/src/doctor-diagnostics.js
+index a167e92..d3aa72b 100644
+--- a/src/doctor-diagnostics.js
++++ b/src/doctor-diagnostics.js
+@@ -856,7 +856,7 @@ export function detectMcpEndpoints(cwd) {
+  * _module-map.yaml 的 needs_review=true 清单（卡缺失/精确校验归 modules rebuild/status）。
+  * 只读 fail-soft。
+  */
+-function detectModuleDocHealth(cwd) {
++export function detectModuleDocHealth(cwd) {
+   const base = { name: 'module_doc_health', label: '模块文档健康', safe_actions: [] }
+   try {
+     let mapText = null
+@@ -870,7 +870,8 @@ function detectModuleDocHealth(cwd) {
+     if (!mapText) return { ...base, findings: ['无 _module-map.yaml（未 scan）——skipped'], pass: true, severity: null, skipped: true }
+     const findings = []
+     // needs_review 清单（模块块内 needs_review: true）
+-    const blocks = mapText.split(/\n(?=  \\w)/)
++    // \\w 是「字面反斜杠+w」——永不分割，整文件当一块只查首个模块（ql-20260911-029）
++    const blocks = mapText.split(/\n(?=  \w)/)
+     for (const blk of blocks) {
+       const idM = blk.match(/^  ([\w.-]+):/)
+       if (idM && /needs_review:\s*true/.test(blk)) {
+diff --git a/src/index.js b/src/index.js
+index 12c0bfc..0a5a928 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -838,7 +838,9 @@ async function main() {
+         const childArgs = m[1].trim().split(/\s+/);
+         console.log(`🤖 next --apply 代跑：sillyspec ${childArgs.join(' ')}\n`);
+         const { spawnSync } = await import('node:child_process');
+-        const r = spawnSync(process.execPath, [join(__dirname, '..', 'bin', 'sillyspec.js'), '--dir', dir, ...childArgs], { stdio: 'inherit' });
++        const { fileURLToPath } = await import('node:url');
++        // ESM 无 __dirname（ql-20260911-029：此处曾直接引用，--apply 常态路径必 ReferenceError）
++        const r = spawnSync(process.execPath, [fileURLToPath(new URL('../bin/sillyspec.js', import.meta.url)), '--dir', dir, ...childArgs], { stdio: 'inherit' });
+         process.exit(r.status === null ? 1 : r.status);
+       }
+       if (json) {
+@@ -3765,7 +3767,8 @@ SillySpec modules — 模块文档管理
+         assertSafeChangeName(mrChange, '--change 变更名');
+         const mrSpecBase = resolvePlatformSpecDir(dir, specDir) || join(dir, '.sillyspec');
+         const { resolveChangeModuleCards, renderModuleResolveTable } = await import('./module-resolve.js');
+-        if (filteredArgs.includes('--json')) {
++        if (json) {
++          // 全局解析器把 --json 收进顶层 json 变量、不进 filteredArgs——查 filteredArgs 恒 false（ql-20260911-029）
+           const r = resolveChangeModuleCards({ cwd: dir, specBase: mrSpecBase, changeName: mrChange });
+           console.log(JSON.stringify(r, null, 2));
+         } else {
+diff --git a/src/local-detect.js b/src/local-detect.js
+index eea14c3..5d7fc06 100644
+--- a/src/local-detect.js
++++ b/src/local-detect.js
+@@ -15,26 +15,41 @@ import { join } from 'path'
+ 
+ /**
+  * 从 Makefile 文本提取 test 目标的命令（轻量正则，与 verify-postcheck 同风格）。
+- * 支持两种常见写法：
+- *   - 同行命令：`test: pytest`            → 'pytest'
+- *   - tab 续行：`test:\n\tpytest\n`        → 'pytest'（命令在下一 tab 开头行）
++ * 支持的写法（按 make 语义）：
++ *   - tab/空格 缩行配方：`test:\n\tpytest\n`   → 'pytest'
++ *   - `;` 同行配方：`test: ; pytest`            → 'pytest'
++ *   - 行内其他非空内容是 prerequisite（`test: unit integration`），不是命令——配方照常
++ *     向下找缩行；无配方回退 'make test'（make 会先跑依赖目标，语义正确）
+  * 边界：
+- *   - 纯空目标（`test:` 无同行命令、无 tab 续行）→ 回退 'make test'
+- *   - 命令行内 `#` 注释截断；取第一个非空命令行
++ *   - 配方行以「下一个非缩进非空行」为界——空目标后跳进后续目标的配方是旧版缺陷
++ *     （ql-20260911-029 复现：`test:\nbuild:\n\tnpm run build` 旧正则返回 'npm run build'）
++ *   - `test := x` 变量赋值不匹配 test 目标；命令行内 `#` 注释截断
+  * @param {string} makefileText
+  * @returns {string}
+  */
+-function parseMakefileTestCommand(makefileText) {
++export function parseMakefileTestCommand(makefileText) {
+   if (!makefileText) return 'make test'
+-  // 定位 `test:` 行；捕获 `:` 后同行内容（同行命令或空）
+-  const head = makefileText.match(/^test:\s*([^\n#]*?)\s*(?:#.*)?$/m)
+-  if (!head) return 'make test'
+-  const inline = (head[1] || '').trim()
+-  if (inline) return inline
+-  // 同行为空 → 找该行之后第一个 tab 续行命令（`\tcmd` 或 `    cmd`）
+-  const after = makefileText.slice(head.index + head[0].length)
+-  const cont = after.match(/^[ \t]+([^\n#]+?)\s*(?:#.*)?$/m)
+-  if (cont && cont[1]) return cont[1].trim()
++  const lines = String(makefileText).split(/\r?\n/)
++  // (?!=) 排除 `test :=` 变量赋值形态
++  const testIdx = lines.findIndex(l => /^test:(?!=)/.test(l))
++  if (testIdx === -1) return 'make test'
++  const inline = lines[testIdx].slice(lines[testIdx].indexOf('test:') + 'test:'.length).trim()
++  const semicolonRecipe = inline.match(/^;\s*(.+)$/)
++  if (semicolonRecipe) {
++    const cmd = semicolonRecipe[1].replace(/\s+#.*$/, '').trim()
++    if (cmd) return cmd
++  }
++  // 向下扫配方：第一条缩进行即 test 的配方（tab 或空格缩进）；遇非缩进非空行（下一
++  // 目标/变量/指令）即边界——空行与列 0 注释不构成边界
++  for (let i = testIdx + 1; i < lines.length; i++) {
++    const line = lines[i]
++    if (line.trim() === '' || line.startsWith('#')) continue
++    if (/^[ \t]+\S/.test(line)) {
++      const cmd = line.replace(/^[ \t]+/, '').replace(/\s+#.*$/, '').trim()
++      return cmd || 'make test'
++    }
++    return 'make test'
++  }
+   return 'make test'
+ }
+ 
+diff --git a/src/run/command.js b/src/run/command.js
+index f455b7d..2cd5c77 100644
+--- a/src/run/command.js
++++ b/src/run/command.js
+@@ -22,6 +22,7 @@
+ import { basename, join, resolve, dirname } from 'node:path'
+ import { existsSync, readdirSync, mkdirSync, writeFileSync, readFileSync, rmSync, unlinkSync } from 'node:fs'
+ import { randomBytes, randomUUID } from 'node:crypto'
++import { fileURLToPath } from 'node:url'
+ import { writeAtomicSync } from '../fs-atomic.js'
+ import { resolveSpecDir, countAncestorSpecDirs, ancestorSpecDirs, resolveAncestorCeiling, resolveChangeDir, triggerSync, getStageSteps, formatWaitOptions, checkApproval, warnApprovalUnknown, didYouMean, assertSafeChangeName, assertDatedChangeName, detectQuickSessionDrift, detectWorktreeSpecDrift, resolveRuntimeRoot, resolveQuickSessionsDir, writePlatformPointer, checkPlatformManaged, isSelfReferentialSpecRoot, isTempResidueSpecRoot, PLATFORM_MANAGED_FILENAME, warnSelfRefPointerOnce } from './shared.js'
+ import { resolveQuickLinkedChanges } from './quick-audit.js'
+@@ -819,6 +820,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+   const knownFlags = new Set([
+     '--done', '--skip', '--status', '--reset', '--confirm', '--skip-approval', '--cancel', '--ql',
+     '--wait', '--continue', '--non-interactive', '--interactive',
++    '--wait-interactive', // auto 模式 TTY 直通（带值形态 `--wait-interactive true`，autoFlagValue 消费；ql-20260911-029 补注册——此前漏登记，进命令前即被未知参数 exit(2) 拦死，FR-03 整条死路）
+     '--reason', '--options', '--answer', '--confirm-mode',
+     '--output', '--input', '--change', '--linked-changes',
+     '--req', '--cause', '--solution', '--result',
+@@ -1896,6 +1898,15 @@ async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts =
+  * 无新状态）；任一不满足/异常 → 静默或提示回三段式（fail-open，Grill P2-①时序）。
+  * 仅 runAutoMode 的首渲染点消费（--done 推进路径不重收）。
+  */
++/**
++ * 本 CLI 入口（bin/sillyspec.js）的绝对路径——wait 直通子进程自调用。
++ * fileURLToPath 解 URL（ql-20260911-029：旧 pathname.replace 手解百分号编码，含空格/中文
++ * 路径 ENOENT；且旧相对层级 ../bin 少一级——src/run/ 到仓根 bin 应为 ../../bin）。导出供单测锁层级。
++ */
++export function resolveBinSelfPath() {
++  return fileURLToPath(new URL('../../bin/sillyspec.js', import.meta.url))
++}
++
+ export async function maybeWaitInteractive(stepDef, changeName, stageName, { rlFactory = null } = {}) {
+   try {
+     if (!globalThis.__ssWaitInteractive) return
+@@ -1920,7 +1931,7 @@ export async function maybeWaitInteractive(stepDef, changeName, stageName, { rlF
+       console.log(`📩 已接收，自动续行：sillyspec run auto --continue --answer "${answer.trim().slice(0, 60)}${answer.trim().length > 60 ? '…' : ''}" ...`)
+       // 复用既有 continue 路径：与 runCommand 的 --continue 同源（子进程自调避免递归锁）
+       const { execFileSync } = await import('node:child_process')
+-      const binSelf = new URL('../bin/sillyspec.js', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')
++      const binSelf = resolveBinSelfPath()
+       try {
+         execFileSync(process.execPath, [binSelf, 'run', 'auto', '--continue', '--answer', answer.trim(), '--change', changeName], { stdio: 'inherit', cwd: process.cwd() })
+       } catch { /* continue 失败（非 waiting 态等）静默——回三段式由 agent 走 */ }
+diff --git a/src/run/complete.js b/src/run/complete.js
+index a2c047c..a88b56e 100644
+--- a/src/run/complete.js
++++ b/src/run/complete.js
+@@ -1251,10 +1251,11 @@ export async function waitStep(pm, progress, stageName, cwd, outputText, waitRea
+     process.exit(1)
+   }
+ 
+-  // 查找下一个 pending 或 in-progress 的步骤
+-  const currentIdx = stageData.steps.findIndex(s => s.status === 'pending' || s.status === 'in-progress')
++  // 查找下一个 pending / in-progress / blocked 的步骤（blocked 同为当前步——与 completeStep
++  // 的 findIndex 口径对齐，否则 blocked 后 --wait 落到其后第一个 pending 步上错步记账）
++  const currentIdx = stageData.steps.findIndex(s => s.status === 'pending' || s.status === 'in-progress' || s.status === 'blocked')
+   if (currentIdx === -1) {
+-    console.error(`没有可以等待的步骤（阶段 ${stageName} 已无 pending/in-progress 步骤）。当前阶段状态：${stageData?.status ?? '未知'}。用 \`sillyspec run ${stageName} --status\` 查看进度，或 \`sillyspec progress show\` 看全局下一步。`)
++    console.error(`没有可以等待的步骤（阶段 ${stageName} 已无 pending/in-progress/blocked 步骤）。当前阶段状态：${stageData?.status ?? '未知'}。用 \`sillyspec run ${stageName} --status\` 查看进度，或 \`sillyspec progress show\` 看全局下一步。`)
+     process.exit(1)
+   }
+ 
+@@ -1569,7 +1570,10 @@ export async function skipStep(pm, progress, stageName, cwd, changeName, platfor
+   }
+ 
+   const steps = stageData.steps
+-  const currentIdx = steps.findIndex(s => s.status === 'pending' || s.status === 'in-progress')
++  // blocked 同为当前步——与 completeStep 的 findIndex 口径对齐（坑 deps-gate-blocked-invisible
++  // 在 completeStep 修过但此处漏同步：blocked 后 --skip 落到其后第一个 pending 步上，错步跳过
++  // 且 blocked 步永久卡死只能 --reset）
++  const currentIdx = steps.findIndex(s => s.status === 'pending' || s.status === 'in-progress' || s.status === 'blocked')
+ 
+   if (currentIdx === -1) {
+     const wsIdx = steps.findIndex(s => s.status === 'waiting')
+@@ -1577,11 +1581,15 @@ export async function skipStep(pm, progress, stageName, cwd, changeName, platfor
+       console.error(`⏸️  Step ${wsIdx + 1} 正在等待用户输入，不能跳过。`)
+       console.error(`   请先使用 --continue --answer "..." 继续，或用 --reset 重置。`)
+     } else {
+-      console.error(`没有待跳过的步骤（阶段 ${stageName} 已无 pending/in-progress 步骤）。当前阶段状态：${stageData?.status ?? '未知'}。用 \`sillyspec run ${stageName} --status\` 查看进度，或 \`sillyspec progress show\` 看全局下一步。`)
++      console.error(`没有待跳过的步骤（阶段 ${stageName} 已无 pending/in-progress/blocked 步骤）。当前阶段状态：${stageData?.status ?? '未知'}。用 \`sillyspec run ${stageName} --status\` 查看进度，或 \`sillyspec progress show\` 看全局下一步。`)
+     }
+     process.exit(1)
+   }
+ 
++  if (steps[currentIdx].status === 'blocked') {
++    console.log(`⚠️  Step "${steps[currentIdx].name}" 此前被门控阻断（blocked），本次 --skip 将跳过该步——若门控条件已修复，更宜直接 --done 推进。`)
++  }
++
+   const defSteps = await getStageStepsAutoAware(stageName, cwd, progress, platformOpts?.specRoot || null)
+   const stepDef = defSteps ? defSteps[currentIdx] : null
+   if (stepDef && !stepDef.optional) {
+diff --git a/test/local-detect.test.mjs b/test/local-detect.test.mjs
+index ea4ecdb..694ee0e 100644
+--- a/test/local-detect.test.mjs
++++ b/test/local-detect.test.mjs
+@@ -5,7 +5,8 @@
+  * - nodejs（package.json 存在）→ type=nodejs + npm 系 commands
+  * - maven（pom.xml）→ type=maven + mvn 系 commands
+  * - gradle（build.gradle）→ type=gradle + gradlew 系 commands
+- * - make（Makefile 含 `test: pytest`）→ type=make, commands.test='pytest'
++ * - make（Makefile 含 `test: pytest`）→ type=make, commands.test='make test'（行内非空内容是
++ *   prerequisite 不是命令——make 语义；ql-20260911-029 纠正旧「当命令返回」的门禁假通过缺陷）
+  * - make 空 test 目标（`test:` 单独成行）→ commands.test='make test'
+  * - generic（空目录）→ type=generic, commands={}
+  * - 纯 fs：返回结构固定形状 { project:{type}, commands:{build?,test?,lint?} }
+@@ -125,13 +126,13 @@ console.log('=== task-02: detectLocalYaml 纯 fs 嗅探 ===\n')
+   rmSync(dir, { recursive: true, force: true })
+ }
+ 
+-// Case 4: make（Makefile 含 `test: pytest`）
++// Case 4: make（行内 `test:\tpytest` 是 prerequisite——配方只在缩行上，回退 make test）
+ {
+   const dir = mkdtempSync(join(tmpdir(), 'ld-make-'))
+   writeFileSync(join(dir, 'Makefile'), 'test:\tpytest\nbuild:\tgo build ./...\n')
+   const r = detectLocalYaml(dir)
+   assert(r.project.type === 'make', `make: type=make（=${r.project.type}）`)
+-  assert(r.commands.test === 'pytest', `make: commands.test 从 test: 解析='pytest'（=${r.commands.test}）`)
++  assert(r.commands.test === 'make test', `make: 行内 prereq 不再当命令（=${r.commands.test}）`)
+   assert(r.commands.build === undefined, 'make: commands.build 缺省（无 build 默认）')
+   assert(r.commands.lint === undefined, 'make: commands.lint 缺省（无 lint 默认）')
+   rmSync(dir, { recursive: true, force: true })
+diff --git a/test/urgent-batch-fixes.test.mjs b/test/urgent-batch-fixes.test.mjs
+new file mode 100644
+index 0000000..7ee3629
+--- /dev/null
++++ b/test/urgent-batch-fixes.test.mjs
+@@ -0,0 +1,175 @@
++/**
++ * 紧急包六项小修回归（ql-20260911-029，全仓审查报告 P1/P2 紧急包）。
++ *
++ * 锁行为：
++ *  1. parseMakefileTestCommand：\s 吞换行两失效模式（空目标跳下一目标行 / prereq 当命令）
++ *     + `;` 同行配方 + 配方边界（下一目标的配方不再泄漏给 test）
++ *  2. detectModuleDocHealth：\\w 双重转义致整文件当一块、needs_review 只查首个模块
++ *  3. skipStep/waitStep 谓词纳入 blocked（坑 deps-gate-blocked-invisible 在 completeStep
++ *     修过但 skip/wait 未同步：blocked 后 --skip/--wait 落到其后第一个 pending 步错步记账）
++ *  4. --wait-interactive 注册进 knownFlags（此前进命令前即被未知参数 exit(2) 拦死）
++ *  5. modules resolve --json 用顶层 json 变量（查 filteredArgs 恒 false，机器输出死路）
++ *  6. next --apply 的 ESM __dirname 崩溃 + binSelf 路径层级（fileURLToPath 化）
++ */
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs'
++import { join, dirname, resolve } from 'node:path'
++import { tmpdir } from 'node:os'
++import { execSync } from 'node:child_process'
++import { fileURLToPath } from 'node:url'
++import { parseMakefileTestCommand } from '../src/local-detect.js'
++import { detectModuleDocHealth } from '../src/doctor-diagnostics.js'
++import { resolveBinSelfPath } from '../src/run/command.js'
++import { skipStep, waitStep } from '../src/run/complete.js'
++import { makeRepo, initChange, seedStage, runStage, runCLI, cleanup, report } from './_cli-step-harness.mjs'
++import { ProgressManager } from '../src/progress.js'
++
++const count = { passed: 0, failed: 0, failures: [] }
++const assert = (cond, msg) => { cond ? (count.passed++, console.log(`  ✅ PASS: ${msg}`)) : (count.failed++, count.failures.push(msg), console.log(`  ❌ FAIL: ${msg}`)) }
++const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
++
++console.log('=== ① Makefile test 命令解析（\\s 吞换行两失效模式 + prereq 语义）===')
++{
++  const cases = [
++    // [输入, 期望, 说明]
++    ['test:\n\tnpm test\n', 'npm test', 'tab 配方'],
++    ['test:\n    pytest -k a # 单测\n', 'pytest -k a', '空格缩进配方 + 行尾注释剥除'],
++    ['test:\nbuild:\n\tnpm run build\n', 'make test', '空目标后不吞下一目标行（旧：返回 build:）/ 不泄漏 build 配方（旧：npm run build）'],
++    ['test: unit integration\nbuild:\n\techo b\n', 'make test', 'prereq 风格回退 make test（旧：返回 "unit integration" 当命令）'],
++    ['test: unit\n\tnpm test\n', 'npm test', 'prereq + 配方并存 → 取配方'],
++    ['test: ; npm test\n', 'npm test', '`;` 同行配方形态'],
++    ['build:\n\techo b\ntest := VAR\n', 'make test', 'test := 变量赋值不匹配目标 + 无 test 目标'],
++    ['test: npm test', 'make test', '行内裸词是 prereq 不是命令（make 语义）'],
++    ['test:\r\n\tnpm test\r\n', 'npm test', 'CRLF 耐受'],
++  ]
++  for (const [input, expected, label] of cases) {
++    const got = parseMakefileTestCommand(input)
++    assert(got === expected, `${label}（实得 ${JSON.stringify(got)}）`)
++  }
++}
++
++console.log('\n=== ② doctor needs_review 分块（\\w 双重转义）===')
++{
++  const tmp = mkdtempSync(join(tmpdir(), 'doc-modhealth-'))
++  try {
++    const modulesDir = join(tmp, '.sillyspec', 'docs', 'main', 'modules')
++    mkdirSync(modulesDir, { recursive: true })
++    writeFileSync(join(modulesDir, '_module-map.yaml'), [
++      'schema_version: 1',
++      'project: demo',
++      '',
++      'modules:',
++      '  auth:',
++      '    status: active',
++      '    needs_review: false',
++      '  billing:',
++      '    status: active',
++      '    needs_review: true',
++      '    review_reasons: [scan 后未复核]',
++      '',
++    ].join('\n'))
++    const r = detectModuleDocHealth(tmp)
++    assert(!r.pass && r.findings.some(f => f.includes('billing')),
++      `第二个模块的 needs_review=true 被检出且归因到正确模块（findings: ${JSON.stringify(r.findings)}）`)
++    assert(!r.findings.some(f => f.includes('auth')), '首模块 needs_review=false 不误报')
++  } finally { rmSync(tmp, { recursive: true, force: true }) }
++}
++
++console.log('\n=== ③ skipStep/waitStep 谓词纳入 blocked ===')
++console.log('--- ③a --wait 落在 blocked 步（CLI 载体 brainstorm）---')
++{
++  const { cwd, specBase } = makeRepo('ub-wait-blocked-')
++  const cn = '2026-09-11-ub-wait'
++  const pm = await initChange(cwd, specBase, cn)
++  runCLI(['--dir', cwd, 'run', 'brainstorm', '--change', cn], { cwd })
++  const real = (await pm.read(cwd, cn)).stages.brainstorm.steps
++  const seeded = real.map((s, i) => ({ name: s.name, status: i === 0 ? 'blocked' : i === 1 ? 'pending' : 'completed' }))
++  await seedStage(pm, cwd, cn, 'brainstorm', seeded)
++
++  const r = runStage('brainstorm', cn, cwd, { wait: true, reason: '需要用户拍板' })
++
++  const after = await new ProgressManager({ specDir: specBase }).read(cwd, cn)
++  const steps = after.stages.brainstorm.steps
++  assert(steps[0].status === 'waiting', `blocked 步（idx0）被置 waiting（实际 ${steps[0].status}）`)
++  assert(steps[1].status === 'pending', `后续 pending 步不被错标（实际 ${steps[1].status}）`)
++  assert(r.combined.includes(steps[0].name), `提示点名 blocked 步「${steps[0].name}」`)
++}
++console.log('--- ③b --skip 报错点名 blocked 步（全步骤 optional:false 走拒绝分支）---')
++{
++  const { cwd, specBase } = makeRepo('ub-skip-blocked-')
++  const cn = '2026-09-11-ub-skip'
++  const pm = await initChange(cwd, specBase, cn)
++  runCLI(['--dir', cwd, 'run', 'brainstorm', '--change', cn], { cwd })
++  const real = (await pm.read(cwd, cn)).stages.brainstorm.steps
++  const seeded = real.map((s, i) => ({ name: s.name, status: i === 0 ? 'blocked' : i === 1 ? 'pending' : 'completed' }))
++  await seedStage(pm, cwd, cn, 'brainstorm', seeded)
++
++  const r = runCLI(['--dir', cwd, 'run', 'brainstorm', '--change', cn, '--skip'], { cwd })
++
++  assert(r.status !== 0, `非 optional 步骤拒绝跳过（exit ${r.status}）`)
++  assert(r.combined.includes(seeded[0].name) && r.combined.includes('不可跳过'),
++    `拒绝的是 blocked 步「${seeded[0].name}」而非其后 pending 步`)
++  const after = await new ProgressManager({ specDir: specBase }).read(cwd, cn)
++  const steps = after.stages.brainstorm.steps
++  assert(steps[0].status === 'blocked' && steps[1].status === 'pending', '拒绝后状态不被错改')
++}
++console.log('--- ③c skipStep 正向：blocked 步被标记 skipped（进程内直调，未知阶段使 defSteps=null 绕 optional 门）---')
++{
++  const { cwd, specBase } = makeRepo('ub-skip-pos-')
++  const cn = '2026-09-11-ub-skip-pos'
++  const pm = await initChange(cwd, specBase, cn)
++  const steps = [
++    { name: 'blocked-step', status: 'blocked' },
++    { name: 'pending-step', status: 'pending' },
++  ]
++  await seedStage(pm, cwd, cn, 'customstage', steps)
++  const progress = await pm.read(cwd, cn)
++  await skipStep(pm, progress, 'customstage', cwd, cn, {})
++
++  const after = await new ProgressManager({ specDir: specBase }).read(cwd, cn)
++  const st = after.stages.customstage.steps
++  assert(st[0].status === 'skipped', `blocked 步本身被 skip（实际 ${st[0].status}）`)
++  assert(st[1].status === 'pending', `后续步不动（实际 ${st[1].status}）`)
++}
++
++console.log('\n=== ④ --wait-interactive 注册进 knownFlags ===')
++{
++  const { cwd } = makeRepo('ub-wi-flag-')
++  const r = runCLI(['--dir', cwd, 'run', 'quick', '--status', '--wait-interactive', 'true'], { cwd })
++  assert(!(r.status === 2 && /未知参数|你是想输入|wait-interactive/.test(r.combined)),
++    `--wait-interactive true 不再被未知参数拦死（exit ${r.status}，输出 ${JSON.stringify(r.combined.slice(0, 100))}）`)
++}
++
++console.log('\n=== ⑤ modules resolve --json 走顶层 json 变量 ===')
++{
++  const { cwd } = makeRepo('ub-mr-json-')
++  const cn = '2026-09-11-ub-mr'
++  mkdirSync(join(cwd, '.sillyspec', 'changes', cn), { recursive: true })
++  writeFileSync(join(cwd, '.sillyspec', 'changes', cn, 'tasks.md'), '- [ ] task-01: 示例\n')
++  const r = runCLI(['--dir', cwd, 'modules', 'resolve', '--change', cn, '--json'], { cwd })
++  const first = r.combined.indexOf('{')
++  const last = r.combined.lastIndexOf('}')
++  let parsed = null
++  try { parsed = JSON.parse(r.combined.slice(first, last + 1)) } catch { /* 留 null */ }
++  assert(parsed !== null && typeof parsed.hasMaps === 'boolean' && Array.isArray(parsed.rows),
++    `--json 输出可解析的机器 JSON（hasMaps/rows 形状）而非人类表格`)
++}
++
++console.log('\n=== ⑥ ESM 路径：next --apply 与 binSelf ===')
++console.log('--- ⑥a next --apply 不再 __dirname 崩溃 ---')
++{
++  const d = mkdtempSync(join(tmpdir(), 'ub-next-apply-'))
++  try {
++    execSync('git init -q', { cwd: d, stdio: 'pipe' })
++    const r = runCLI(['--dir', d, 'next', '--apply'], { cwd: d })
++    assert(!r.combined.includes('__dirname'), `无 __dirname ReferenceError（输出 ${JSON.stringify(r.combined.slice(0, 120))}）`)
++    assert(r.combined.includes('代跑'), '进入子进程代跑分支')
++  } finally { rmSync(d, { recursive: true, force: true }) }
++}
++console.log('--- ⑥b binSelf 指向真实存在的 CLI 入口 ---')
++{
++  const p = resolveBinSelfPath()
++  assert(existsSync(p), `resolveBinSelfPath 指向存在文件（${p}）`)
++}
++
++cleanup()
++report(count.passed, count.failed, count.failures)
