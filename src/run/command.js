@@ -22,6 +22,7 @@
 import { basename, join, resolve, dirname } from 'node:path'
 import { existsSync, readdirSync, mkdirSync, writeFileSync, readFileSync, rmSync, unlinkSync } from 'node:fs'
 import { randomBytes, randomUUID } from 'node:crypto'
+import { fileURLToPath } from 'node:url'
 import { writeAtomicSync } from '../fs-atomic.js'
 import { resolveSpecDir, countAncestorSpecDirs, ancestorSpecDirs, resolveAncestorCeiling, resolveChangeDir, triggerSync, getStageSteps, formatWaitOptions, checkApproval, warnApprovalUnknown, didYouMean, assertSafeChangeName, assertDatedChangeName, detectQuickSessionDrift, detectWorktreeSpecDrift, resolveRuntimeRoot, resolveQuickSessionsDir, writePlatformPointer, checkPlatformManaged, isSelfReferentialSpecRoot, isTempResidueSpecRoot, PLATFORM_MANAGED_FILENAME, warnSelfRefPointerOnce } from './shared.js'
 import { resolveQuickLinkedChanges } from './quick-audit.js'
@@ -819,6 +820,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
   const knownFlags = new Set([
     '--done', '--skip', '--status', '--reset', '--confirm', '--skip-approval', '--cancel', '--ql',
     '--wait', '--continue', '--non-interactive', '--interactive',
+    '--wait-interactive', // auto 模式 TTY 直通（带值形态 `--wait-interactive true`，autoFlagValue 消费；ql-20260911-029 补注册——此前漏登记，进命令前即被未知参数 exit(2) 拦死，FR-03 整条死路）
     '--reason', '--options', '--answer', '--confirm-mode',
     '--output', '--input', '--change', '--linked-changes',
     '--req', '--cause', '--solution', '--result',
@@ -1896,6 +1898,15 @@ async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts = 
  * 无新状态）；任一不满足/异常 → 静默或提示回三段式（fail-open，Grill P2-①时序）。
  * 仅 runAutoMode 的首渲染点消费（--done 推进路径不重收）。
  */
+/**
+ * 本 CLI 入口（bin/sillyspec.js）的绝对路径——wait 直通子进程自调用。
+ * fileURLToPath 解 URL（ql-20260911-029：旧 pathname.replace 手解百分号编码，含空格/中文
+ * 路径 ENOENT；且旧相对层级 ../bin 少一级——src/run/ 到仓根 bin 应为 ../../bin）。导出供单测锁层级。
+ */
+export function resolveBinSelfPath() {
+  return fileURLToPath(new URL('../../bin/sillyspec.js', import.meta.url))
+}
+
 export async function maybeWaitInteractive(stepDef, changeName, stageName, { rlFactory = null } = {}) {
   try {
     if (!globalThis.__ssWaitInteractive) return
@@ -1920,7 +1931,7 @@ export async function maybeWaitInteractive(stepDef, changeName, stageName, { rlF
       console.log(`📩 已接收，自动续行：sillyspec run auto --continue --answer "${answer.trim().slice(0, 60)}${answer.trim().length > 60 ? '…' : ''}" ...`)
       // 复用既有 continue 路径：与 runCommand 的 --continue 同源（子进程自调避免递归锁）
       const { execFileSync } = await import('node:child_process')
-      const binSelf = new URL('../bin/sillyspec.js', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')
+      const binSelf = resolveBinSelfPath()
       try {
         execFileSync(process.execPath, [binSelf, 'run', 'auto', '--continue', '--answer', answer.trim(), '--change', changeName], { stdio: 'inherit', cwd: process.cwd() })
       } catch { /* continue 失败（非 waiting 态等）静默——回三段式由 agent 走 */ }

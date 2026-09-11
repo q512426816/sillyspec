@@ -327,3 +327,8 @@
 根因：阶段态区分不了活跃在途与弃单，v1 三候选被逃生通道测试否决
 方案：getLatestActivityAt+60 分钟活动窗挂 closeQuickLinkedChanges，回归 3 用例+D-002@v2 落库
 结果：16/0+2/0+全量 440/0+lint 绿，test gate 诚实全量
+
+## ql-20260911-029-2892 | 2026-09-11 23:26:20 | 审查报告紧急包六项小修：index.js next --apply 的 ESM __dirname 崩溃、command.js binSelf 子进程路径 fileURLToPath 化 + --wait-interactive 注册进 k…
+状态：进行中
+关联变更：（无）
+文件：src/index.js, src/run/command.js, src/run/complete.js, src/local-detect.js, src/doctor-diagnostics.js

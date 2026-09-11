@@ -15,26 +15,41 @@ import { join } from 'path'
 
 /**
  * 从 Makefile 文本提取 test 目标的命令（轻量正则，与 verify-postcheck 同风格）。
- * 支持两种常见写法：
- *   - 同行命令：`test: pytest`            → 'pytest'
- *   - tab 续行：`test:\n\tpytest\n`        → 'pytest'（命令在下一 tab 开头行）
+ * 支持的写法（按 make 语义）：
+ *   - tab/空格 缩行配方：`test:\n\tpytest\n`   → 'pytest'
+ *   - `;` 同行配方：`test: ; pytest`            → 'pytest'
+ *   - 行内其他非空内容是 prerequisite（`test: unit integration`），不是命令——配方照常
+ *     向下找缩行；无配方回退 'make test'（make 会先跑依赖目标，语义正确）
  * 边界：
- *   - 纯空目标（`test:` 无同行命令、无 tab 续行）→ 回退 'make test'
- *   - 命令行内 `#` 注释截断；取第一个非空命令行
+ *   - 配方行以「下一个非缩进非空行」为界——空目标后跳进后续目标的配方是旧版缺陷
+ *     （ql-20260911-029 复现：`test:\nbuild:\n\tnpm run build` 旧正则返回 'npm run build'）
+ *   - `test := x` 变量赋值不匹配 test 目标；命令行内 `#` 注释截断
  * @param {string} makefileText
  * @returns {string}
  */
-function parseMakefileTestCommand(makefileText) {
+export function parseMakefileTestCommand(makefileText) {
   if (!makefileText) return 'make test'
-  // 定位 `test:` 行；捕获 `:` 后同行内容（同行命令或空）
-  const head = makefileText.match(/^test:\s*([^\n#]*?)\s*(?:#.*)?$/m)
-  if (!head) return 'make test'
-  const inline = (head[1] || '').trim()
-  if (inline) return inline
-  // 同行为空 → 找该行之后第一个 tab 续行命令（`\tcmd` 或 `    cmd`）
-  const after = makefileText.slice(head.index + head[0].length)
-  const cont = after.match(/^[ \t]+([^\n#]+?)\s*(?:#.*)?$/m)
-  if (cont && cont[1]) return cont[1].trim()
+  const lines = String(makefileText).split(/\r?\n/)
+  // (?!=) 排除 `test :=` 变量赋值形态
+  const testIdx = lines.findIndex(l => /^test:(?!=)/.test(l))
+  if (testIdx === -1) return 'make test'
+  const inline = lines[testIdx].slice(lines[testIdx].indexOf('test:') + 'test:'.length).trim()
+  const semicolonRecipe = inline.match(/^;\s*(.+)$/)
+  if (semicolonRecipe) {
+    const cmd = semicolonRecipe[1].replace(/\s+#.*$/, '').trim()
+    if (cmd) return cmd
+  }
+  // 向下扫配方：第一条缩进行即 test 的配方（tab 或空格缩进）；遇非缩进非空行（下一
+  // 目标/变量/指令）即边界——空行与列 0 注释不构成边界
+  for (let i = testIdx + 1; i < lines.length; i++) {
+    const line = lines[i]
+    if (line.trim() === '' || line.startsWith('#')) continue
+    if (/^[ \t]+\S/.test(line)) {
+      const cmd = line.replace(/^[ \t]+/, '').replace(/\s+#.*$/, '').trim()
+      return cmd || 'make test'
+    }
+    return 'make test'
+  }
   return 'make test'
 }
 

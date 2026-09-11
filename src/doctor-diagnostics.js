@@ -856,7 +856,7 @@ export function detectMcpEndpoints(cwd) {
  * _module-map.yaml 的 needs_review=true 清单（卡缺失/精确校验归 modules rebuild/status）。
  * 只读 fail-soft。
  */
-function detectModuleDocHealth(cwd) {
+export function detectModuleDocHealth(cwd) {
   const base = { name: 'module_doc_health', label: '模块文档健康', safe_actions: [] }
   try {
     let mapText = null
@@ -870,7 +870,8 @@ function detectModuleDocHealth(cwd) {
     if (!mapText) return { ...base, findings: ['无 _module-map.yaml（未 scan）——skipped'], pass: true, severity: null, skipped: true }
     const findings = []
     // needs_review 清单（模块块内 needs_review: true）
-    const blocks = mapText.split(/\n(?=  \\w)/)
+    // \\w 是「字面反斜杠+w」——永不分割，整文件当一块只查首个模块（ql-20260911-029）
+    const blocks = mapText.split(/\n(?=  \w)/)
     for (const blk of blocks) {
       const idM = blk.match(/^  ([\w.-]+):/)
       if (idM && /needs_review:\s*true/.test(blk)) {

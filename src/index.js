@@ -838,7 +838,9 @@ async function main() {
         const childArgs = m[1].trim().split(/\s+/);
         console.log(`🤖 next --apply 代跑：sillyspec ${childArgs.join(' ')}\n`);
         const { spawnSync } = await import('node:child_process');
-        const r = spawnSync(process.execPath, [join(__dirname, '..', 'bin', 'sillyspec.js'), '--dir', dir, ...childArgs], { stdio: 'inherit' });
+        const { fileURLToPath } = await import('node:url');
+        // ESM 无 __dirname（ql-20260911-029：此处曾直接引用，--apply 常态路径必 ReferenceError）
+        const r = spawnSync(process.execPath, [fileURLToPath(new URL('../bin/sillyspec.js', import.meta.url)), '--dir', dir, ...childArgs], { stdio: 'inherit' });
         process.exit(r.status === null ? 1 : r.status);
       }
       if (json) {
@@ -3765,7 +3767,8 @@ SillySpec modules — 模块文档管理
         assertSafeChangeName(mrChange, '--change 变更名');
         const mrSpecBase = resolvePlatformSpecDir(dir, specDir) || join(dir, '.sillyspec');
         const { resolveChangeModuleCards, renderModuleResolveTable } = await import('./module-resolve.js');
-        if (filteredArgs.includes('--json')) {
+        if (json) {
+          // 全局解析器把 --json 收进顶层 json 变量、不进 filteredArgs——查 filteredArgs 恒 false（ql-20260911-029）
           const r = resolveChangeModuleCards({ cwd: dir, specBase: mrSpecBase, changeName: mrChange });
           console.log(JSON.stringify(r, null, 2));
         } else {

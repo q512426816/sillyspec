@@ -5,7 +5,8 @@
  * - nodejs（package.json 存在）→ type=nodejs + npm 系 commands
  * - maven（pom.xml）→ type=maven + mvn 系 commands
  * - gradle（build.gradle）→ type=gradle + gradlew 系 commands
- * - make（Makefile 含 `test: pytest`）→ type=make, commands.test='pytest'
+ * - make（Makefile 含 `test: pytest`）→ type=make, commands.test='make test'（行内非空内容是
+ *   prerequisite 不是命令——make 语义；ql-20260911-029 纠正旧「当命令返回」的门禁假通过缺陷）
  * - make 空 test 目标（`test:` 单独成行）→ commands.test='make test'
  * - generic（空目录）→ type=generic, commands={}
  * - 纯 fs：返回结构固定形状 { project:{type}, commands:{build?,test?,lint?} }
@@ -125,13 +126,13 @@ console.log('=== task-02: detectLocalYaml 纯 fs 嗅探 ===\n')
   rmSync(dir, { recursive: true, force: true })
 }
 
-// Case 4: make（Makefile 含 `test: pytest`）
+// Case 4: make（行内 `test:\tpytest` 是 prerequisite——配方只在缩行上，回退 make test）
 {
   const dir = mkdtempSync(join(tmpdir(), 'ld-make-'))
   writeFileSync(join(dir, 'Makefile'), 'test:\tpytest\nbuild:\tgo build ./...\n')
   const r = detectLocalYaml(dir)
   assert(r.project.type === 'make', `make: type=make（=${r.project.type}）`)
-  assert(r.commands.test === 'pytest', `make: commands.test 从 test: 解析='pytest'（=${r.commands.test}）`)
+  assert(r.commands.test === 'make test', `make: 行内 prereq 不再当命令（=${r.commands.test}）`)
   assert(r.commands.build === undefined, 'make: commands.build 缺省（无 build 默认）')
   assert(r.commands.lint === undefined, 'make: commands.lint 缺省（无 lint 默认）')
   rmSync(dir, { recursive: true, force: true })

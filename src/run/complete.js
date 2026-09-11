@@ -1251,10 +1251,11 @@ export async function waitStep(pm, progress, stageName, cwd, outputText, waitRea
     process.exit(1)
   }
 
-  // 查找下一个 pending 或 in-progress 的步骤
-  const currentIdx = stageData.steps.findIndex(s => s.status === 'pending' || s.status === 'in-progress')
+  // 查找下一个 pending / in-progress / blocked 的步骤（blocked 同为当前步——与 completeStep
+  // 的 findIndex 口径对齐，否则 blocked 后 --wait 落到其后第一个 pending 步上错步记账）
+  const currentIdx = stageData.steps.findIndex(s => s.status === 'pending' || s.status === 'in-progress' || s.status === 'blocked')
   if (currentIdx === -1) {
-    console.error(`没有可以等待的步骤（阶段 ${stageName} 已无 pending/in-progress 步骤）。当前阶段状态：${stageData?.status ?? '未知'}。用 \`sillyspec run ${stageName} --status\` 查看进度，或 \`sillyspec progress show\` 看全局下一步。`)
+    console.error(`没有可以等待的步骤（阶段 ${stageName} 已无 pending/in-progress/blocked 步骤）。当前阶段状态：${stageData?.status ?? '未知'}。用 \`sillyspec run ${stageName} --status\` 查看进度，或 \`sillyspec progress show\` 看全局下一步。`)
     process.exit(1)
   }
 
@@ -1569,7 +1570,10 @@ export async function skipStep(pm, progress, stageName, cwd, changeName, platfor
   }
 
   const steps = stageData.steps
-  const currentIdx = steps.findIndex(s => s.status === 'pending' || s.status === 'in-progress')
+  // blocked 同为当前步——与 completeStep 的 findIndex 口径对齐（坑 deps-gate-blocked-invisible
+  // 在 completeStep 修过但此处漏同步：blocked 后 --skip 落到其后第一个 pending 步上，错步跳过
+  // 且 blocked 步永久卡死只能 --reset）
+  const currentIdx = steps.findIndex(s => s.status === 'pending' || s.status === 'in-progress' || s.status === 'blocked')
 
   if (currentIdx === -1) {
     const wsIdx = steps.findIndex(s => s.status === 'waiting')
@@ -1577,9 +1581,13 @@ export async function skipStep(pm, progress, stageName, cwd, changeName, platfor
       console.error(`⏸️  Step ${wsIdx + 1} 正在等待用户输入，不能跳过。`)
       console.error(`   请先使用 --continue --answer "..." 继续，或用 --reset 重置。`)
     } else {
-      console.error(`没有待跳过的步骤（阶段 ${stageName} 已无 pending/in-progress 步骤）。当前阶段状态：${stageData?.status ?? '未知'}。用 \`sillyspec run ${stageName} --status\` 查看进度，或 \`sillyspec progress show\` 看全局下一步。`)
+      console.error(`没有待跳过的步骤（阶段 ${stageName} 已无 pending/in-progress/blocked 步骤）。当前阶段状态：${stageData?.status ?? '未知'}。用 \`sillyspec run ${stageName} --status\` 查看进度，或 \`sillyspec progress show\` 看全局下一步。`)
     }
     process.exit(1)
+  }
+
+  if (steps[currentIdx].status === 'blocked') {
+    console.log(`⚠️  Step "${steps[currentIdx].name}" 此前被门控阻断（blocked），本次 --skip 将跳过该步——若门控条件已修复，更宜直接 --done 推进。`)
   }
 
   const defSteps = await getStageStepsAutoAware(stageName, cwd, progress, platformOpts?.specRoot || null)
