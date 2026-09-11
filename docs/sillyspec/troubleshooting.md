@@ -896,3 +896,17 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 **症状②**：B-6 修正用 python `str.replace()` 落盘**无 assert**——替换目标串不匹配时 replace 静默 no-op，修正内容凭空流失，直到复审才发现（自查流程缺陷）。
 
 **workaround②（已改并获复审确认）**：批量文本替换一律 **count-assert + grep 复核**——替换前后断言出现次数（`assert s.count(old) == n`）、落盘后 `grep` 复核关键标记存在；sed/python 单行替换同理。该实践与 sillyspec 的 fail-closed 哲学同构（静默 no-op = 最危险的失败模式）。
+
+## 59. 三坑 postmortem：跨仓 worktree 被主仓清理面误删 / 跨仓 baseline checkpoint 卷入外来文件 / 门禁沙箱环境不一致（2026-09-12 用户实证，已修复）
+
+**症状①**：verify 期间跨仓 worktree 被扫描清理误删——apply 时锚点校验连环失败，被迫 cherry-pick 重建干净分支。
+**根因①**：主仓 worktree 删除原语（`safeRemoveWorktreeDir`，cleanup force-remove / doctor ghost / 幽灵清理共用）对目录形态不设防——跨仓 worktree 落位 `.runtime/worktrees/<change>--<repoKey>`（与主仓 `<change>` 同父目录的兄弟），`_pathToChangeName` 解析出的名字对不上任何活跃主仓变更，易被当遗留清理；其 git 注册在跨仓仓 `.git/worktrees/`，主仓侧 prune/remove 均不感知，目录一删注册悬空。
+**修复①**：删除原语单点加跨仓守卫 `isCrossWorktreeDir`（meta.json `isCross:true` ∨ 目录名 `<change>--<repoKey>` 双连字符形态）——主仓清理面一律拒删；显式跨仓路径（`cleanupCrossWorktrees`）传 `allowCross:true` 放行。
+
+**症状②**：跨仓 worktree 创建时 baseline checkpoint 把并行会话的外来文件（2 个 pptx + meta.json）带进跨仓分支，污染 apply 锚点对账。
+**根因②**：`ensureCrossWorktrees` 借用主仓的 dirty baseline overlay（`_overlayBaseline` + `_createBaselineCheckpoint`）——该机制语义是「主仓共享工作区里本变更的预存改动需隔离」，但跨仓模型是子代理直接 commit 跨仓分支，跨仓主副本的 WIP（尤其并行会话的无关文件）根本不属于本变更隔离面，checkpoint 反而把它们固化进分支历史。
+**修复②**：跨仓仓跳过 dirty overlay + checkpoint（采纳用户建议「对跨仓仓跳过」）——锚点恒为跨仓仓 HEAD（baseHash），`meta.baselineFiles=[]` 显式记录；外来文件物理不进分支。
+
+**症状③**：门禁隔离快照内实测环境不一致——venv 不含 dev 依赖（pytest-xdist 缺失）、node_modules 缺失——沙箱与真实仓环境不同的门禁持续误伤且难归因。
+**根因③**：快照只链接 node_modules——Python 项目的 commands.test 依赖 `.venv`（dev 依赖装在其中），快照内无 venv；链接失败/缺失也静默，误伤时看不出是环境问题。
+**修复③**：环境目录链接面扩 venv 族（node_modules/.venv/venv/env 全 junction——dev 依赖与主仓同源不缺）；链接失败或四者全缺时 ⚠️ 显式可见（宁可吵不可静默错）。

@@ -10,7 +10,7 @@
 
 import { execFileSync } from 'child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, readdirSync, statSync, lstatSync, readlinkSync, unlinkSync, copyFileSync } from 'fs';
-import { join, resolve, dirname, relative, isAbsolute } from 'path';
+import { join, resolve, dirname, relative, isAbsolute, basename } from 'path';
 import { createHash } from 'crypto';
 import { provisionDeps, checkDepsFreshness, detectEditableInstallEscape } from './worktree-deps.js';
 import { writeAtomicSync } from './fs-atomic.js';
@@ -79,7 +79,43 @@ export function unlinkNodeModulesLinks(worktreePath, meta = null, details = null
  * 安全删除 worktree 目录：先解链全部 node_modules junction 再 rmSync。
  * 幽灵目录清理（create 强删 / doctor ghost 修复）的统一出口——不再裸 rmSync。
  */
-export function safeRemoveWorktreeDir(worktreePath, meta = null) {
+/**
+ * 跨仓 worktree 目录判定（坑 cross-worktree-swept-by-main-cleanup，2026-09-12 驾驭第十三批①，
+ * 用户实证：跨仓 worktree 被 verify 期间的主仓侧清理面误删，apply 锚点校验连环失败、被迫
+ * cherry-pick 重建）：目录内 meta.json 带 isCross:true，或目录名呈 <change>--<repoKey> 跨仓
+ * 形态（.runtime/worktrees/ 下主仓 worktree 恒为纯 <change>，双连字符后缀是跨仓专属命名）。
+ */
+export function isCrossWorktreeDir(worktreePath) {
+  try {
+    const metaPath = join(worktreePath, 'meta.json')
+    if (existsSync(metaPath)) {
+      try {
+        const m = JSON.parse(readFileSync(metaPath, 'utf8'))
+        if (m && m.isCross === true) return true
+      } catch { /* 损坏 meta → 落到命名形态判定 */ }
+    }
+    const base = basename(worktreePath)
+    // 主仓 changeName 可含连字符（2026-09-10-x），跨仓后缀是 '--<repoKey>'——要求双连字符
+    // 分隔且两侧非空、repoKey 段无路径分隔符
+    const m2 = base.match(/^(.+)--([A-Za-z0-9_.\-]+)$/)
+    return !!(m2 && m2[1].trim() && m2[2].trim() && !m2[2].includes('/') && !m2[2].includes('\\'))
+  } catch {
+    return false
+  }
+}
+
+/**
+ * worktree 目录安全删除原语。opts.allowCross（默认 false）：跨仓 worktree（isCross meta/
+ * 命名形态）拒绝删除——主仓清理面（cleanup force-remove / doctor ghost / 幽灵清理）不得
+ * 波及跨仓 worktree（其注册在跨仓仓 .git，删除权在 cleanupCrossWorktrees 显式路径）。
+ */
+export function safeRemoveWorktreeDir(worktreePath, meta = null, opts = {}) {
+  if (!opts.allowCross && isCrossWorktreeDir(worktreePath)) {
+    throw new Error(
+      `跨仓 worktree 拒绝删除（主仓清理面守卫，坑 cross-worktree-swept-by-main-cleanup）: ${worktreePath}` +
+      `——跨仓 worktree 由 sillyspec worktree cleanup <change>（跨仓一并清理）或 apply no-op 路径管理；主仓侧清理/doctor 扫描不碰它`
+    )
+  }
   unlinkNodeModulesLinks(worktreePath, meta);
   rmSync(worktreePath, { recursive: true, force: true });
 }

@@ -198,23 +198,16 @@ export function ensureCrossWorktrees({ cwd, changeName, specBase }) {
     };
     writeAtomicSync(join(worktreePath, META_FILE), JSON.stringify(meta, null, 2) + '\n');
 
-    // dirty baseline overlay：跨仓主工作副本在途改动 → worktree baseline（借主仓同款实现，
-    // 只用其参数化逻辑，不用实例路径状态）
-    try {
-      const wmHelper = new WorktreeManager({ cwd: repoRoot });
-      const baselineResult = wmHelper._overlayBaseline(repoRoot, worktreePath);
-      meta.baselineFiles = baselineResult.files;
-      meta.baselineHash = baselineResult.baselineHash;
-      if (baselineResult.files.length > 0) {
-        meta.baselineCommit = wmHelper._createBaselineCheckpoint(worktreePath, `${changeName}--${key}`, baselineResult.files);
-      }
-      if (baselineResult.errors && baselineResult.errors.length > 0) {
-        console.warn(`⚠️ 跨仓 ${key} baseline overlay 部分失败（${baselineResult.errors.join('; ')}）——在途改动未全量进 baseline，apply 前请人工核对跨仓主工作副本`);
-      }
-      writeAtomicSync(join(worktreePath, META_FILE), JSON.stringify(meta, null, 2) + '\n');
-    } catch (e) {
-      console.warn(`⚠️ 跨仓 ${key} baseline overlay 失败（${e.message}）——跨仓主工作副本如有在途改动，worktree 不含它们`);
-    }
+    // 跨仓仓跳过 dirty baseline overlay + checkpoint（坑 cross-baseline-checkpoint-foreign-files，
+    // 2026-09-12 驾驭第十三批②，用户实证：跨仓主副本在途的外来文件——并行会话的 2 个 pptx +
+    // meta.json——被 checkpoint 带进跨仓分支，污染 apply 锚点对账被迫 cherry-pick 重建）：
+    // 跨仓模型 = 子代理直接 commit 跨仓分支（NG-3），跨仓主副本的 WIP 不属于本变更隔离面，
+    // 不该被固化进分支。meta.baselineFiles=[] 显式记录「无 checkpoint」，apply 侧以 baseHash
+    // （跨仓仓 HEAD）为锚。
+    meta.baselineFiles = [];
+    meta.baselineHash = baseHash;
+    console.log(`ℹ️ 跨仓 ${key}: 跳过 dirty baseline checkpoint（跨仓主副本在途改动不进本变更分支——含并行会话外来文件时防污染；锚点 = 跨仓仓 HEAD ${String(baseHash).slice(0, 8)}）`);
+    writeAtomicSync(join(worktreePath, META_FILE), JSON.stringify(meta, null, 2) + '\n');
 
     // deps 供给：specBase 传 null —— sniff worktree 自身（主仓 local.yaml 的 project.type/install
     // 描述的是主仓，跨仓仓类型常不同，如实测 maven 主仓 + nodejs 前端仓，沿用会把 mvn 命令
@@ -284,7 +277,8 @@ export function cleanupCrossWorktrees({ cwd, changeName, specBase, force = false
       git(repoRoot, ['worktree', 'remove', '--force', wtPath], { timeout: 60000 });
     } catch {
       // remove 失败（脏文件/锁）：解链后安全删目录 + prune 注册
-      try { safeRemoveWorktreeDir(wtPath, meta) } catch (e) { residual.push(`目录残留 ${wtPath}: ${e.message}`) }
+      // allowCross:true——本函数就是跨仓清理的显式路径（主仓守卫放行；见 safeRemoveWorktreeDir 注释）
+      try { safeRemoveWorktreeDir(wtPath, meta, { allowCross: true }) } catch (e) { residual.push(`目录残留 ${wtPath}: ${e.message}`) }
       try { gitQuiet(repoRoot, ['worktree', 'prune'], { timeout: 30000 }) } catch { residual.push(`git worktree prune 失败（${repoRoot}）`) }
     }
     details.push(`分支 ${meta.branch} 保留作 review 锚点（确认无需回溯后可 git -C ${repoRoot} branch -D ${meta.branch}）`);

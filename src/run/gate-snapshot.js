@@ -58,11 +58,22 @@ export function createGateSnapshot({ cwd, files, sourceRoot = null }) {
       overlaid++
     }
 
-    // node_modules junction（依赖主仓安装态；junction Windows 无需特权，POSIX 用 symlink）
-    const nmSrc = join(cwd, 'node_modules')
-    if (existsSync(nmSrc)) {
-      try { symlinkSync(nmSrc, join(snapshotRoot, 'node_modules'), 'junction') }
-      catch { /* 依赖链接失败：test/lint 可能跑不起来 → 仍返回快照，命令层报错走 fallback */ }
+    // 环境目录链接（坑 gate-snapshot-env-mismatch，2026-09-12 驾驭第十三批③，用户实证：
+    // 沙箱实测 venv 不装 dev 依赖（xdist 缺失）+ node_modules 缺失——快照只链 node_modules 时
+    // Python 项目的 commands.test 在快照内找不到 venv，误伤持续且难归因）。链接面扩 venv 族
+    // （.venv/venv/env——链接后 dev 依赖与主仓同源，不缺 xdist）；链接失败/主仓本就没有时
+    // ⚠️ 显式可见（环境不一致的门禁会持续误伤——宁可吵不可静默错）。
+    for (const envDir of ['node_modules', '.venv', 'venv', 'env']) {
+      const src = join(cwd, envDir)
+      if (!existsSync(src)) continue
+      try {
+        symlinkSync(src, join(snapshotRoot, envDir), 'junction')
+      } catch (e) {
+        console.warn(`⚠️ 门禁快照环境目录链接失败（${envDir}）：${e && e.message ? e.message : e}——快照内实测可能因缺 ${envDir} 误伤，失败时先核对快照环境`)
+      }
+    }
+    if (!existsSync(join(cwd, 'node_modules')) && !existsSync(join(cwd, '.venv')) && !existsSync(join(cwd, 'venv')) && !existsSync(join(cwd, 'env'))) {
+      console.warn(`⚠️ 门禁快照：主仓无 node_modules / venv 族环境目录——commands.test/lint 若依赖它们将快照/主仓都不可用（环境未安装？）`)
     }
 
     // local.yaml（gitignore 不进 HEAD；门禁命令配置来源）+ package-lock 保持 HEAD 版（npm test 不装新依赖）
