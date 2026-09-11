@@ -64,3 +64,9 @@ checkProbeConsistency 增 facts 基线对比维度后，probe6 在 HEAD 前移�
 - **配额池不独立**：本地 agent 子代理与平台 worker（pi-coding-agent）同吃账号级池（429/1308 同锁两边，15:30-18:31 全通道瘫痪实证）——「本地耗尽→平台兜底」价值主张需平台 worker 支持独立 provider/key 才成立。已列平台侧提示词 P0-2。
 - 附带实证：平台独立 worker 抓到了归档 task-04.md frontmatter YAML 缩进缺陷（主代理自审与 CLI 门禁均漏过）——独立审查通道有效性的直接证据。
 - **存量债（2026-09-10 全量体检）**：归档 task 卡 16 张 frontmatter YAML 严格解析失败（mapping values/缩进类，跨 2026-07-06-execute-deps-gate-deadlock、2026-08-08-progress-db-concurrency、2026-08-15-docs-signals-o12、2026-08-16-scan-diff-command、2026-08-19-reopen-and-execute-batch-guard、2026-09-08-docs-fix-capability、2026-09-08-ir-verify-facts、2026-09-09-plan-derived 共 8 个历史变更）——CLI 自有解析宽容故流程无阻，属归档态化妆品债；触发点是平台独立 worker 用严格 YAML 解析审查时暴露。批量治理候选：写一次性修复脚本（dedent 列表后误缩进的键）+ taskcard 骨架生成时 YAML 校验。
+
+## 2026-09-11 平台侧 artifacts 代报竞态（真变更场景实测暴露，短任务躲过）
+
+- mission c4731a06（真变更 brainstorm 审查，~3 分钟）：worker 终态落库 10:21:11，最终 [ASSISTANT] 消息 10:22:06 才到日志——daemon 终态后代报立即执行，此刻 result 空白被门控③拦 → artifacts:[]。此前 v2/v3 短验证任务（<90s）终消息先于终态到达，恰好躲过竞态——「修复已验证」的结论被长任务推翻。另：终消息 override 标记 uuid（a30cd81a…）与 thinking 段 uuid（699c18e8…）不一致，事件流配对也需平台侧核查。
+- 修法建议（平台侧）：代报延迟重试（终态后短窗内轮询 result 非空白再报，或对空白 result 定长重试 N 次）；根治是 worker_done 工具自报通道（结构化提交不受消息时序影响）。
+- sillyspec 侧：completed-no-artifact 兜底路径正确触发（记录保留+人工核对指引）；结论可从 get_run_logs 尾部人工捞回。

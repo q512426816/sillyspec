@@ -262,7 +262,13 @@ export async function runReviewDispatch(opts = {}) {
       const probeFn = probe || (await import('./dispatch/probe.js')).probeSillyHub
       const pr = await probeFn({ client, worktreePath: null, cwd })
       if (!pr || pr.available !== true) {
-        return { ok: false, reason: `平台通道不可用（${pr && pr.reason ? pr.reason : 'probe 异常'}）`, guidance: renderFallbackGuidance(cwd) }
+        const why = pr && pr.reason ? pr.reason : 'probe 异常'
+        // token 失效给「重连再配对」出口（2026-09-11 用户实测：gateway/daemon 都活着，
+        // 死的只是凭据——一把 platform connect 就能救活平台通道，比直接降级更对症）。
+        const tokenHint = why === 'mcp-token-invalid'
+          ? `mcp token 已失效（吊销/过期）——重跑 \`sillyspec platform connect ${client && client._url ? client._url : '<平台url>'} --token <user级token>\` 重连（connect 会成对签发 read+dispatch 新 token 自动覆盖写 mcp 段），然后重试平台通道。\n若暂不重连，按通道优先序降级：\n`
+          : ''
+        return { ok: false, reason: `平台通道不可用（${why}）`, guidance: tokenHint + renderFallbackGuidance(cwd) }
       }
       // reviewRunId：优先复用 marker（与 prompt/gate 同链，勿手算）
       let runId = reviewRunId

@@ -282,9 +282,14 @@ export class SillyHubMcpClient {
     }
 
     if (!res.ok) {
+      // 401 状态留痕（2026-09-11 用户实测反馈：token 失效被 probe 报成 daemon-unreachable，
+      // 误导排障方向——吊销/过期的 shmcp_ 是「重连再配对」能解的，不是 daemon 的问题）。
+      // getLastInitStatus() 供 probeSillyHub 类型化 reason；成功/其他失败置 null（不误判旧状态）。
+      this._lastInitHttpStatus = res.status;
       if (!quiet) console.warn(`[sillyhub-mcp] initialize → HTTP ${res.status}`);
       return false;
     }
+    this._lastInitHttpStatus = null;
 
     // 优先取 header mcp-session-id（FastMCP 实测返回）；缺失再查 body _meta.sessionId。
     // ⚠️ 无论 header 是否有 session，都必须读完 body（消费 SSE 流）——FastMCP 在
@@ -389,6 +394,15 @@ export class SillyHubMcpClient {
     if (!this._configured) return false;
     const result = await this._callTool('list_agent_profiles', {});
     return result !== null;
+  }
+
+  /**
+   * 最近一次 initialize 握手的 HTTP 状态码（null = 无记录/成功/非 HTTP 失败）。
+   * 消费方：probeSillyHub 的 token 失效类型化（401 → reason='mcp-token-invalid'，
+   * 区别于 daemon-unreachable——2026-09-11 用户实测：吊销 token 被误报 daemon 不可达）。
+   */
+  getLastInitStatus() {
+    return this._lastInitHttpStatus ?? null;
   }
 
   /**

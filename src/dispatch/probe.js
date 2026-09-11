@@ -174,7 +174,14 @@ export async function probeSillyHub({ client, worktreePath, rootPath, ttlMs, tot
       console.warn(`[dispatch/probe] probeDaemon 抛异常（保守判 unavailable）: ${msg}`);
       reachable = false;
     }
-    if (!reachable) return cacheNegative('daemon-unreachable');
+    if (!reachable) {
+      // token 失效类型化（2026-09-11 用户实测反馈：吊销/过期 shmcp_ 被报成
+      // daemon-unreachable，误导排障——gateway 在、daemon 在，死的只是凭据）。
+      // 401 与 unreachable 分诊：进同款负面缓存（TTL 内不重试，token 不会自愈）。
+      const initStatus = typeof cli.getLastInitStatus === 'function' ? cli.getLastInitStatus() : null;
+      if (initStatus === 401) return cacheNegative('mcp-token-invalid');
+      return cacheNegative('daemon-unreachable');
+    }
 
     // 3.5+4 合并（HUB-12a）：一次 tools/list 同时拿 tools 数组（路径A schema 预热）与
     //     root_path（越界校验）。旧 client 无 listToolsWithMeta 时回退 listTools +

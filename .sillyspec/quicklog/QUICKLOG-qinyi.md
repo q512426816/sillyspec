@@ -245,3 +245,32 @@
 根因：收尾判定只看无 meta=post-apply，预执行变更同样无 meta 被误判已收尾——误报漂移警告+实际侧吞整个工作区脏文件（28 个计划外全为他者在途，与变更无关）
 方案：执行证据三信号（meta/分支/审计 tag）全无 → 预执行形态出 design 清单视图（untouched 待实现），工作区改动不进表，无收尾警告
 结果：node --test 23/23；npm test 全量 0 失败；dogfood 36 文件误报→8 文件计划清单+正确说明
+
+## ql-20260911-022-0347 | 2026-09-11 15:35:20 | scope-audit 双子代理审查修复批（七项+防篡改锚）
+状态：已完成
+关联变更：2026-09-11-cross-change-decision-guard
+文件：
+- src/scope-audit.js（七信号/freshActual/rename/sha256 校验/patch 口径）
+- src/run/complete.js（freshActual 双调用点+hash+归档竞态+note 措辞）
+- src/run/complete-handlers.js（hash+patchStatus）
+- test/scope-audit.test.mjs（六新用例）
+- docs/sillyspec/platform-interface-map.md（1 锚点平移）
+需求：scope-audit 双子代理审查修复批（七项+防篡改锚）
+根因：审查发现两个 P0 回归：verify 漂移快照比快照恒一致（假阴性）+预执行误判（58/77 归档变更被报未执行）；及 rename 解析/补采根配对/patch 口径分叉/失败静默五项 P1P2
+方案：freshActual 旁路；预执行七信号+归档排除；rename 剥空格；resolveDiffRoot 配对；quick patch 对齐 rows；patchStatus 留痕；patchSha256 锚+读取校验；A-F02 经证伪不修（tag tip 不含变更内容）
+结果：node --test 29/29；doc-ref 87/87；npm test 240 段 0 失败；dogfood 三无归档变更修复生效
+审计：⚖️ 归属切分：1 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：.sillyspec/changes/2026-09-11-cross-change-decision-guard/tasks.md
+
+## ql-20260911-023-b269 | 2026-09-11 18:20:27 | probe token 失效类型化分诊（用户实测 401 被误报 daemon-unreachable）
+状态：已完成
+关联变更：（无）
+文件：
+- src/sillyhub-mcp/client.js（_initialize 留痕 _lastInitHttpStatus + getLastInitStatus getter）
+- src/dispatch/probe.js（401→mcp-token-invalid 类型化（同款负面缓存））
+- src/review-dispatch.js（token 失效分支前置重连再配对指引）
+- test/sillyhub-mcp-platform-fixes.test.mjs（401/非401/无getter 三分支）
+需求：probe token 失效类型化分诊（用户实测 401 被误报 daemon-unreachable）
+根因：multi-agent-platform 仓 09-09 连接的旧 shmcp_ 已吊销，真场景撞 401 后 probe 报 daemon-unreachable 误导排障方向——gateway 与 daemon 都活着死的只是凭据
+方案：client initialize 握手留痕 HTTP 状态码并暴露 getLastInitStatus；probeSillyHub 在不可达分诊中识别 401 输出 mcp-token-invalid（进负面缓存 TTL 内不重试）；review-dispatch 对该 reason 前置重连指引（platform connect 成对签发可自愈）再给通道降级
+结果：sillyhub-mcp-platform-fixes 7 组含新增 401 三分支全绿，review-dispatch/dispatch 回归 15 绿，lint 绿
+审计：📝 文档欠账（D-8）：1 个源码文件改动未同步任何模块文档
