@@ -673,7 +673,7 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
     if (stageName === 'verify') {
       try {
         const { consumeFrictionHint } = await import('../friction-tally.js')
-        const r = consumeFrictionHint({ cwd, changeName, platformOpts })
+        const r = await consumeFrictionHint({ cwd, changeName, platformOpts })
         if (r && r.hint) console.log(`\n${r.hint}`)
       } catch { /* 摩擦提示失败不影响收尾 */ }
     }
@@ -1520,7 +1520,7 @@ export async function continueStep(pm, progress, stageName, cwd, answer, options
     if (stageName === 'verify') {
       try {
         const { consumeFrictionHint } = await import('../friction-tally.js')
-        const r = consumeFrictionHint({ cwd, changeName, platformOpts })
+        const r = await consumeFrictionHint({ cwd, changeName, platformOpts })
         if (r && r.hint) console.log(`\n${r.hint}`)
       } catch { /* 摩擦提示失败不影响收尾 */ }
     }

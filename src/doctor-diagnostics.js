@@ -1000,13 +1000,24 @@ function detectLifecycleDocStaleness(cwd) {
     return { ...base, pass: true, severity: null, findings: ['文档时间戳不可解析，跳过（不误报）'] };
   }
   // 生命周期代码侧最新提交（取各敏感路径 max %ct；任一路径 untracked 新文件不在 log 里，
-  // git 不可见性注记——工作树未提交改动本就不该由 doctor 报，提交后自然可见）
+  // git 不可见性注记——工作树未提交改动本就不该由 doctor 报，提交后自然可见）。
+  // 批 E-②：单次多 pathspec git log 取 max（原逐路径 6 个串行子进程，Windows ~0.4-1s）；
+  // 仅当检出「文档落后」需要归因到具体路径时，才退回逐路径解析（罕见告警路径）。
   let srcTs = 0;
   let srcPath = null;
-  for (const p of LIFECYCLE_SENSITIVE_PATHS) {
-    const r = safeGit(cwd, ['log', '-1', '--format=%ct', '--', p]);
-    const ts = Number(r.value);
-    if (Number.isFinite(ts) && ts > srcTs) { srcTs = ts; srcPath = p; }
+  const combined = safeGit(cwd, ['log', '-1', '--format=%ct', '--', ...LIFECYCLE_SENSITIVE_PATHS]);
+  srcTs = Number(combined.value);
+  if (!Number.isFinite(srcTs) || srcTs <= 0) srcTs = 0;
+  if (docTs < srcTs) {
+    // 归因：找 ts === srcTs 的路径（等不到就取最大有限值兜底）
+    let bestTs = 0
+    for (const p of LIFECYCLE_SENSITIVE_PATHS) {
+      const r = safeGit(cwd, ['log', '-1', '--format=%ct', '--', p]);
+      const ts = Number(r.value);
+      if (!Number.isFinite(ts)) continue;
+      if (ts === srcTs) { srcPath = p; break; }
+      if (ts > bestTs) { bestTs = ts; srcPath = p; }
+    }
   }
   if (srcTs === 0) {
     return { ...base, pass: true, severity: null, findings: ['生命周期代码无提交历史，跳过'] };

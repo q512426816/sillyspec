@@ -484,3 +484,20 @@
 方案：52 三元形+5 解析器分支加值位校验；merge-backups 备份；chunkPaths 分批+N+1 改哈希表；文案推导/NaN 判 STALE/大小写归一
 结果：新测试 backlog-batch-d 17/17；全量 451/0 + lint 581 绿（CLI --done 门禁实测通过）
 审计：⚖️ 归属切分：1 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：test/backlog-batch-d.test.mjs
+
+## ql-20260912-009-06b4 | 2026-09-12 10:50:58 | backlog 批 E：spec-sync O(N×M)+双读/doctor 串行 spawn/friction-tally 原子性/mcp exit-2 语义
+状态：已完成
+关联变更：（无）
+文件：
+- src/spec-sync.js（hash 索引+buf）
+- src/doctor-diagnostics.js（log 合并）
+- src/friction-tally.js（锁化）
+- src/mcp-server.js（exit-2）
+- src/run/*.js（调用点 await）
+- test/friction-tally.test.mjs（软归属·同模块测试，未声明）
+需求：backlog 批 E：spec-sync O(N×M)+双读/doctor 串行 spawn/friction-tally 原子性/mcp exit-2 语义
+根因：① rename 双重循环万级文件变慢+变更文件读两遍；② lifecycle 逐路径 6 个串行 git log 子进程；③ record 覆盖写/consume 读后删竞态与文件头账目完整性声明有出入；④ exit 2 的合法 envelope 诊断被 isError 吞。触及 run/* 门禁链文件按解锁通道走 --force-baseline；--done 窗口含并行会话未提交改动，提交用显式 pathspec 隔离
+方案：hash 索引+buf 随行；单次多 pathspec 取 max+落后才归因；async 化+withFileLock（6 调用点 await+1 处 void）；exit 2 并入合法退出码集
+结果：新测试 backlog-batch-e 8/8；friction-tally.test 23 调用点随 async 化补 await；全量 452/0 + lint 582 绿（CLI --done 门禁实测通过）
+审计：⚖️ 归属切分：3 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：src/run/complete-handlers.js, src/run/complete.js, test/backlog-batch-e.test.mjs
+审计：🔍 软归属：1 个窗口内未声明同模块测试文件已补入文件行（若属并行会话改动请手工剔除）：test/friction-tally.test.mjs（+25/-25）

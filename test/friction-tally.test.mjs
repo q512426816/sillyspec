@@ -39,7 +39,7 @@ const runtimeRootOf = (cwd) => join(specBaseOf(cwd), '.runtime')
 const realTallyPath = (cwd, change) => join(runtimeRootOf(cwd), `friction-tally-${change}.json`)
 const quickTallyPath = (cwd, sessionId) =>
   join(runtimeRootOf(cwd), 'quick-sessions', sessionId, 'friction-tally.json')
-const record = (cwd, changeName, type, detail) => recordFrictionEvent({ cwd, changeName, type, detail })
+const record = (cwd, changeName, type, detail) => recordFrictionEvent({ cwd, changeName, type, detail }) // async（批 E-③ 锁化）：调用点一律 await
 const consume = (cwd, changeName) => consumeFrictionHint({ cwd, changeName })
 const readTally = (p) => JSON.parse(readFileSync(p, 'utf8'))
 const writeLocalYaml = (cwd, body) => {
@@ -61,7 +61,7 @@ console.log('\n--- 1. 路由落点：.runtime 树内、永不落 changes/ ---')
   const cwd = makeCwd()
   const change = '2026-09-11-routing-check'
 
-  const r = record(cwd, change, 'gate_rollback')
+  const r = await record(cwd, change, 'gate_rollback')
   assert.ok(r && r.count === 1, '真实变更首次记录返回 count:1')
   const p = realTallyPath(cwd, change)
   assert.ok(existsSync(p), '真实变更计数文件存在')
@@ -69,7 +69,7 @@ console.log('\n--- 1. 路由落点：.runtime 树内、永不落 changes/ ---')
   assert.ok(np.includes('/.runtime/'), '真实变更路径在 .runtime 树内')
   assert.ok(!np.includes('/changes/'), '真实变更路径不含 changes/（平台同步红线）')
 
-  const q = record(cwd, 'quick-abcd1234', 'gate_rollback')
+  const q = await record(cwd, 'quick-abcd1234', 'gate_rollback')
   assert.ok(q && q.count === 1, 'quick 会话首次记录返回 count:1')
   const qp = quickTallyPath(cwd, 'quick-abcd1234')
   assert.ok(existsSync(qp), 'quick 会话计数文件存在')
@@ -81,7 +81,7 @@ console.log('\n--- 1. 路由落点：.runtime 树内、永不落 changes/ ---')
   assert.ok(!nq.includes('/changes/'), 'quick 会话路径不含 changes/')
 
   // 大写 hex 同形态（QUICK_SESSION_ID_RE 为 /i）
-  const r2 = record(cwd, 'quick-ABCD1234', 'verify_run_failed')
+  const r2 = await record(cwd, 'quick-ABCD1234', 'verify_run_failed')
   assert.ok(r2 && r2.count === 1, '大写 hex quick id 同样按会话形态路由')
   assert.ok(existsSync(quickTallyPath(cwd, 'quick-ABCD1234')), '大写 hex 会话目录存在')
 }
@@ -94,7 +94,7 @@ console.log('\n--- 2. 计数 / lastAt / history / 非法类型拒绝 ---')
   const cwd = makeCwd()
   const change = 'count-check'
   let r
-  for (let i = 0; i < 3; i++) r = record(cwd, change, 'verify_run_failed', 'verify-test')
+  for (let i = 0; i < 3; i++) r = await record(cwd, change, 'verify_run_failed', 'verify-test')
   assert.deepEqual(r, { type: 'verify_run_failed', count: 3 }, '第 3 次记录返回 {type, count:3}')
   const t = readTally(realTallyPath(cwd, change))
   assert.equal(t.events.verify_run_failed.count, 3, 'events 计数累加到 3')
@@ -105,7 +105,7 @@ console.log('\n--- 2. 计数 / lastAt / history / 非法类型拒绝 ---')
   assert.equal(t.history.length, 3, 'history 追加 3 条')
 
   const cwd2 = makeCwd()
-  assert.equal(record(cwd2, 'bogus-type', 'bogus'), null, '非法类型返回 null')
+  assert.equal(await record(cwd2, 'bogus-type', 'bogus'), null, '非法类型返回 null')
   assert.ok(!existsSync(runtimeRootOf(cwd2)), '非法类型不产生任何文件（连 .runtime 目录都不建）')
 }
 
@@ -116,7 +116,7 @@ console.log('\n--- 3. history 截尾至 20，events 不截 ---')
 {
   const cwd = makeCwd()
   const change = 'cap-check'
-  for (let i = 0; i < 25; i++) record(cwd, change, 'gate_rollback', `d${i}`)
+  for (let i = 0; i < 25; i++) await record(cwd, change, 'gate_rollback', `d${i}`)
   const t = readTally(realTallyPath(cwd, change))
   assert.equal(t.events.gate_rollback.count, 25, 'events 计数累计 25 不截尾')
   assert.equal(t.history.length, 20, 'history 截尾至 20 条')
@@ -131,12 +131,12 @@ console.log('\n--- 4. consume 提示 + 删文件，二次 consume 为 null ---')
 {
   const cwd = makeCwd()
   const change = 'consume-check'
-  record(cwd, change, 'gate_rollback')
-  record(cwd, change, 'gate_rollback')
-  record(cwd, change, 'review_rejected')
+  await record(cwd, change, 'gate_rollback')
+  await record(cwd, change, 'gate_rollback')
+  await record(cwd, change, 'review_rejected')
   const p = realTallyPath(cwd, change)
 
-  const out = consume(cwd, change)
+  const out = await consume(cwd, change)
   assert.equal(out.counts.gate_rollback, 2, 'counts 含 gate_rollback:2')
   assert.equal(out.counts.review_rejected, 1, 'counts 含 review_rejected:1')
   assert.ok(
@@ -147,7 +147,7 @@ console.log('\n--- 4. consume 提示 + 删文件，二次 consume 为 null ---')
   )
   assert.ok(!existsSync(p), '消费后计数文件删除（提示后清零）')
 
-  const again = consume(cwd, change)
+  const again = await consume(cwd, change)
   assert.equal(again.hint, null, '二次 consume hint 为 null')
   assert.deepEqual(again.counts, {}, '二次 consume counts 为空')
 }
@@ -162,7 +162,7 @@ console.log('\n--- 5. 全零文件 → hint null 且文件保留 ---')
   const p = realTallyPath(cwd, change)
   ensureFile(p, { events: {}, history: [] })
 
-  const out = consume(cwd, change)
+  const out = await consume(cwd, change)
   assert.equal(out.hint, null, '全零 → hint null')
   assert.deepEqual(out.counts, {}, '全零 → counts 空')
   assert.ok(existsSync(p), '全零不删除文件（无提示即无副作用）')
@@ -176,19 +176,19 @@ console.log('\n--- 6. enabled:false 双直通 / 默认开矩阵 ---')
   // 嵌套形态
   const cwd = makeCwd()
   writeLocalYaml(cwd, 'friction_hint:\n  enabled: false\n')
-  assert.equal(record(cwd, 'cfg-nested', 'gate_rollback'), null, '嵌套 enabled:false → record no-op')
+  assert.equal(await record(cwd, 'cfg-nested', 'gate_rollback'), null, '嵌套 enabled:false → record no-op')
   assert.ok(!existsSync(runtimeRootOf(cwd)), '关闭态 .runtime 零写入')
   const nestedP = realTallyPath(cwd, 'cfg-nested')
   ensureFile(nestedP, { events: { gate_rollback: { count: 1, lastAt: '2026-09-11T00:00:00Z' } }, history: [] })
-  assert.equal(consume(cwd, 'cfg-nested').hint, null, '关闭态 consume 直通 null')
+  assert.equal((await consume(cwd, 'cfg-nested')).hint, null, '关闭态 consume 直通 null')
   assert.ok(existsSync(nestedP), '关闭态 consume 不删文件（一键全关零副作用）')
 
   // flat 形态
   const cwd2 = makeCwd()
   writeLocalYaml(cwd2, 'friction_hint.enabled: false\n')
-  assert.equal(record(cwd2, 'cfg-flat', 'gate_rollback'), null, 'flat enabled:false → record no-op')
+  assert.equal(await record(cwd2, 'cfg-flat', 'gate_rollback'), null, 'flat enabled:false → record no-op')
   assert.ok(!existsSync(realTallyPath(cwd2, 'cfg-flat')), 'flat 关闭态不落计数文件')
-  assert.equal(consume(cwd2, 'cfg-flat').hint, null, 'flat 关闭态 consume 直通 null')
+  assert.equal((await consume(cwd2, 'cfg-flat')).hint, null, 'flat 关闭态 consume 直通 null')
 
   // 默认开矩阵：enabled:true / 垃圾值 / 有 local.yaml 但缺键 / 无 local.yaml
   const onCases = [
@@ -199,12 +199,12 @@ console.log('\n--- 6. enabled:false 双直通 / 默认开矩阵 ---')
   for (const [change, yaml] of onCases) {
     const c = makeCwd()
     writeLocalYaml(c, yaml)
-    const r = record(c, change, 'gate_rollback')
+    const r = await record(c, change, 'gate_rollback')
     assert.ok(r && r.count === 1, `${change} → 默认开照常记录`)
     assert.ok(existsSync(realTallyPath(c, change)), `${change} → 计数文件落盘`)
   }
   const cwd4 = makeCwd()
-  assert.ok(record(cwd4, 'yaml-absent', 'gate_rollback'), 'local.yaml 缺失 → 默认开')
+  assert.ok(await record(cwd4, 'yaml-absent', 'gate_rollback'), 'local.yaml 缺失 → 默认开')
 }
 
 // ─────────────────────────────────────────
@@ -217,9 +217,9 @@ console.log('\n--- 7. 损坏 JSON 从零重计，不抛 ---')
   const p = realTallyPath(cwd, change)
   ensureFile(p, '{not valid json')
 
-  const r = record(cwd, change, 'verify_run_failed')
+  const r = await record(cwd, change, 'verify_run_failed')
   assert.ok(r && r.count === 1, '损坏 JSON 后记录从 count:1 重新累计')
-  const out = consume(cwd, change)
+  const out = await consume(cwd, change)
   assert.equal(out.counts.verify_run_failed, 1, 'consume 也能读回重计结果')
   assert.ok(out.hint && out.hint.includes('验证失败 1 次'), '损坏后 hint 正常产出')
 }
@@ -231,7 +231,7 @@ console.log('\n--- 8. 落盘字段最小集，detail 精确往返 ---')
 {
   const cwd = makeCwd()
   const change = 'privacy-check'
-  record(cwd, change, 'verify_run_failed', 'verify-test')
+  await record(cwd, change, 'verify_run_failed', 'verify-test')
   const p = realTallyPath(cwd, change)
   const raw = readFileSync(p, 'utf8')
 
@@ -253,7 +253,7 @@ console.log('\n--- 8. 落盘字段最小集，detail 精确往返 ---')
   }
 
   // detail 非字符串 → 落 null（不进结构化字段）
-  record(cwd, change, 'gate_rollback', 123)
+  await record(cwd, change, 'gate_rollback', 123)
   const t2 = readTally(p)
   const last = t2.history[t2.history.length - 1]
   assert.equal(last.detail, null, '非字符串 detail 落 null')
@@ -293,9 +293,9 @@ console.log('\n--- 10. 非法 changeName 拒绝 ---')
 {
   for (const bad of ['foo/bar', '..', 'a\\b', '']) {
     const cwd = makeCwd()
-    assert.equal(record(cwd, bad, 'gate_rollback'), null, `changeName ${JSON.stringify(bad)} → record null`)
+    assert.equal(await record(cwd, bad, 'gate_rollback'), null, `changeName ${JSON.stringify(bad)} → record null`)
     assert.ok(!existsSync(runtimeRootOf(cwd)), `${JSON.stringify(bad)} → 零写入`)
-    const out = consume(cwd, bad)
+    const out = await consume(cwd, bad)
     assert.equal(out.hint, null, `${JSON.stringify(bad)} → consume null`)
     assert.deepEqual(out.counts, {}, `${JSON.stringify(bad)} → counts 空`)
   }

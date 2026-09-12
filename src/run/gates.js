@@ -511,7 +511,7 @@ function rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx,
   // friction 尾参（friction-signal-hint task-02）：gate 失败摩擦埋点标签 {type, detail}——各调用点
   // 按所属 gate 段传来源标签（审查两段走 review_rejected），未传兜底通用 gate-cascade。
   // recordFrictionEvent 自带静默降级（非法类型/写失败返回 null），不影响回滚/返回语义。
-  recordFrictionEvent({ cwd, changeName, platformOpts, ...(friction || { type: 'gate_rollback', detail: 'gate-cascade' }) })
+  void recordFrictionEvent({ cwd, changeName, platformOpts, ...(friction || { type: 'gate_rollback', detail: 'gate-cascade' }) })
   rollbackStageCompletion(stageData, steps, currentIdx)
   progress.lastActive = new Date().toLocaleString('zh-CN', { hour12: false })
   pm._write(cwd, progress, changeName)

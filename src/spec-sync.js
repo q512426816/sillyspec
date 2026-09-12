@@ -124,6 +124,9 @@ export function hashFiles(entries) {
       hash: _hashBuffer(buf),
       mtime: Math.floor(e.mtimeMs / 1000),
       absPath: e.absPath,
+      // 批 E-①：buf 随行携带（computeSpecOps 的 update/add 直接取用）——消除变更文件二次
+      // readFileSync（大文件双读）。docs 树为文本内容、量级有限，整批驻留可接受。
+      buf,
     };
   });
 }
@@ -177,20 +180,22 @@ export function computeSpecOps(serverManifest, localFiles) {
     return [];
   }
 
-  // rename 检测：旧路径（服务器有、本地无）↔ 新路径（本地有、服务器无）hash 相同
+  // rename 检测：旧路径（服务器有、本地无）↔ 新路径（本地有、服务器无）hash 相同。
+  // 批 E-①：候选新路径按 hash 建索引 O(N+M)——旧双重循环 O(N×M)，万级文件树明显变慢。
   const renames = [];
-  const consumedNew = new Set();
+  const newByHash = new Map(); // hash → 未被服务器收录且未被消费的新路径队列
+  for (const [newPath, entry] of localMap) {
+    if (serverSet.has(newPath)) continue
+    const list = newByHash.get(entry.hash)
+    if (list) list.push(newPath); else newByHash.set(entry.hash, [newPath])
+  }
   for (const oldPath of serverPaths) {
-    if (localSet.has(oldPath)) continue;
-    const cachedEntry = server[oldPath];
-    for (const newPath of localMap.keys()) {
-      if (serverSet.has(newPath)) continue;
-      if (consumedNew.has(newPath)) continue;
-      if (localMap.get(newPath).hash === cachedEntry.hash) {
-        renames.push({ oldPath, newPath });
-        consumedNew.add(newPath);
-        break;
-      }
+    if (localSet.has(oldPath)) continue
+    const candidates = newByHash.get(server[oldPath].hash)
+    if (candidates && candidates.length > 0) {
+      const newPath = candidates.shift()
+      renames.push({ oldPath, newPath })
+      if (candidates.length === 0) newByHash.delete(server[oldPath].hash)
     }
   }
   const renamedOld = new Set(renames.map((r) => r.oldPath));
@@ -212,7 +217,7 @@ export function computeSpecOps(serverManifest, localFiles) {
     if (localSet.has(p)) {
       const localEntry = localMap.get(p);
       if (localEntry.hash !== server[p].hash) {
-        const content = readFileSync(localEntry.absPath ?? join('.', p)).toString('base64');
+        const content = (localEntry.buf ?? readFileSync(localEntry.absPath ?? join('.', p))).toString('base64');
         ops.push({
           op: 'update',
           path: p,
@@ -235,7 +240,7 @@ export function computeSpecOps(serverManifest, localFiles) {
     if (renamedNew.has(p)) continue;
     if (!serverSet.has(p)) {
       const localEntry = localMap.get(p);
-      const content = readFileSync(localEntry.absPath ?? join('.', p)).toString('base64');
+      const content = (localEntry.buf ?? readFileSync(localEntry.absPath ?? join('.', p))).toString('base64');
       ops.push({
         op: 'add',
         path: p,

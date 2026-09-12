@@ -315,7 +315,7 @@ export async function executeVerifyQualityScan({ cwd, specBase, changeName, plat
   // lint 失败（SILLYSPEC_VERIFY_LINT_GATE=advisory 时不 throw）同样是摩擦信号，计数不应随
   // 逃生阀漂移。recordFrictionEvent 自带静默降级，不影响本步推进/throw 语义。
   if (testFailed || lintCheck.status === 'failed') {
-    recordFrictionEvent({ cwd, changeName, platformOpts, type: 'verify_run_failed', detail: testFailed ? 'test' : 'lint' })
+    await recordFrictionEvent({ cwd, changeName, platformOpts, type: 'verify_run_failed', detail: testFailed ? 'test' : 'lint' })
   }
   if (testFailed || lintBlocked) {
     if (snap) {

@@ -26,6 +26,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync } from 'fs'
 import { dirname, join } from 'path'
 import { writeAtomicSync } from './fs-atomic.js'
+import { withFileLock } from './quicklog.js'
 import { resolveRuntimeRoot, resolveQuickSessionsDir } from './run/shared.js'
 
 /** 摩擦事件类型枚举（D-004）：审查打回走专属 review_rejected，不与 gate_rollback 重复计 */
@@ -169,13 +170,14 @@ export function renderFrictionHintLine(counts) {
  * @param {string} [p.detail] 预定义来源标签（如 verify-test/quick-audit），非字符串落 null
  * @returns {{ type: string, count: number } | null} 落盘成功返回新计数；null = 未落盘
  */
-export function recordFrictionEvent({ cwd, platformOpts, changeName, type, detail }) {
+export async function recordFrictionEvent({ cwd, platformOpts, changeName, type, detail }) {
   try {
     if (!FRICTION_TYPES.has(type)) return null
     const tallyPath = frictionTallyPath({ cwd, platformOpts, changeName })
     if (!tallyPath) return null
     // enabled=false 直通：record/consume 双 no-op，.runtime 零写入（D-003 一键全关）
     if (!readFrictionHintEnabled(deriveSpecBase(cwd, platformOpts))) return null
+    return await withFileLock(tallyPath + ".lock", async () => {
     const tally = readFrictionTally(tallyPath)
     const at = new Date().toISOString()
     const prev = Number(tally.events[type] && tally.events[type].count)
@@ -188,6 +190,7 @@ export function recordFrictionEvent({ cwd, platformOpts, changeName, type, detai
     mkdirSync(dirname(tallyPath), { recursive: true })
     writeAtomicSync(tallyPath, JSON.stringify(tally, null, 2))
     return { type, count }
+    })
   } catch {
     return null
   }
@@ -201,11 +204,12 @@ export function recordFrictionEvent({ cwd, platformOpts, changeName, type, detai
  * 会再消费一次，advisory 容忍重复，不因删失败丢提示。
  * @returns {{ hint: string | null, counts: Record<string, number> }}
  */
-export function consumeFrictionHint({ cwd, platformOpts, changeName }) {
+export async function consumeFrictionHint({ cwd, platformOpts, changeName }) {
   try {
     const tallyPath = frictionTallyPath({ cwd, platformOpts, changeName })
     if (!tallyPath || !existsSync(tallyPath)) return { hint: null, counts: {} }
     if (!readFrictionHintEnabled(deriveSpecBase(cwd, platformOpts))) return { hint: null, counts: {} }
+    return await withFileLock(tallyPath + ".lock", async () => {
     const tally = readFrictionTally(tallyPath)
     const counts = {}
     for (const type of FRICTION_TYPES) {
@@ -215,6 +219,7 @@ export function consumeFrictionHint({ cwd, platformOpts, changeName }) {
     if (Object.keys(counts).length === 0) return { hint: null, counts }
     try { rmSync(tallyPath, { force: true }) } catch { /* 删失败不吞提示 */ }
     return { hint: renderFrictionHintLine(counts), counts }
+    })
   } catch {
     return { hint: null, counts: {} }
   }

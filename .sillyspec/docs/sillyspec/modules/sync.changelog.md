@@ -1,0 +1,1 @@
+- ql-20260912-009-06b4 | computeSpecOps rename 检测 O(N×M)→hash 索引；hashFiles buf 随行携带消除变更文件双读

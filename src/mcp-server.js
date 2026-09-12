@@ -118,10 +118,14 @@ function runCli(cliArgs) {
       else errTrunc = true
     })
     p.on('close', (code) => {
-      // envelope 原样透传（text = stdout JSON 全文；machine 侧自解）；stderr 仅失败时附诊断
+      // envelope 原样透传（text = stdout JSON 全文；machine 侧自解）；stderr 仅失败时附诊断。
+      // isError 口径（批 E-④）：exit 0=正常；1=BLOCKED（合法裁决结果）；2=EXIT_UNKNOWN
+      // （envelope 合法、含诊断信息）——三者都是机器可解析的合法结果，不标 isError；
+      // 部分 MCP host 把 isError 当「工具执行失败」处理而不向模型展示 text，exit 2 的
+      // 诊断信息会被吞。真失败（spawn error/超时）由 error/timeout 路径标 isError。
       const truncNote = outTrunc || errTrunc ? `\n（输出超 ${OUTPUT_CAP_BYTES} 字节封顶截断）` : ''
       const text = (out.trim() || err.trim().slice(-2000) || `（exit ${code}，无输出）`) + truncNote
-      finish({ text, isError: code !== null && code !== 0 && code !== 1, exitCode: code })
+      finish({ text, isError: code !== null && code !== 0 && code !== 1 && code !== 2, exitCode: code })
     })
     p.on('error', (e) => finish({ text: `CLI 子进程失败: ${e.message}`, isError: true }))
   })

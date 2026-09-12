@@ -1067,7 +1067,7 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
         if (outputText) steps[currentIdx].output = null
         // 摩擦计数（friction-signal-hint task-04）：quick 审计被拦也是摩擦信号——exit 前记
         // 一笔（changeName=quick 会话 id，tally 落 session 目录，成功收尾 consume 后随目录清理）。
-        recordFrictionEvent({ cwd, changeName, platformOpts, type: 'gate_rollback', detail: 'quick-audit' })
+        await recordFrictionEvent({ cwd, changeName, platformOpts, type: 'gate_rollback', detail: 'quick-audit' })
         process.exit(1)
       }
       // P0-2（2026-09-02 跨 agent 工单）：触及 src/test 的 quick --done 内置 test+lint
@@ -1090,7 +1090,7 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
         if (outputText) steps[currentIdx].output = null
         // 摩擦计数（friction-signal-hint task-04）：test/lint 实测门禁拦下同记摩擦——exit 前
         // 落 session tally，与 quick-audit 同款静默降级。
-        recordFrictionEvent({ cwd, changeName, platformOpts, type: 'gate_rollback', detail: 'quick-test-lint' })
+        await recordFrictionEvent({ cwd, changeName, platformOpts, type: 'gate_rollback', detail: 'quick-test-lint' })
         process.exit(1)
       }
       progress.lastQuickReview = review
@@ -1367,7 +1367,7 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
     // tally 随目录删除，晚于此就读不到。QUICKLOG 完成打印之后 consume，提示里的 postmortem
     // 建议有落点可循；全零/读失败零输出，摩擦提示失败不影响收尾。
     try {
-      const fr = consumeFrictionHint({ cwd, changeName, platformOpts })
+      const fr = await consumeFrictionHint({ cwd, changeName, platformOpts })
       if (fr && fr.hint) console.log(`\n${fr.hint}`)
     } catch { /* 摩擦提示失败不影响收尾 */ }
 

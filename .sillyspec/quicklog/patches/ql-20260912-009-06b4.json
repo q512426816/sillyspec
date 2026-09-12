@@ -1,0 +1,62 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-cca1b008",
+  "totals": {
+    "files": 5,
+    "additions": 73,
+    "deletions": 48
+  },
+  "rows": [
+    {
+      "path": "src/doctor-diagnostics.js",
+      "declared": true,
+      "additions": 16,
+      "deletions": 5,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/friction-tally.js",
+      "declared": true,
+      "additions": 7,
+      "deletions": 2,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/mcp-server.js",
+      "declared": true,
+      "additions": 6,
+      "deletions": 2,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/spec-sync.js",
+      "declared": true,
+      "additions": 19,
+      "deletions": 14,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/friction-tally.test.mjs",
+      "declared": false,
+      "additions": 25,
+      "deletions": 25,
+      "kind": "modified",
+      "attribution": "soft"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "qlId": "ql-20260912-009-06b4",
+  "sessionId": "quick-cca1b008",
+  "savedAt": "2026-09-12T03:06:08.951Z",
+  "patchSha256": "5308b29283e166669cff3acd2837cf6c44457e6826fe5c67fe59b49d94e20198",
+  "patchStatus": "ok"
+}
