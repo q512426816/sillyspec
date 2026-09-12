@@ -26,6 +26,24 @@ const BRANCH_PREFIX = 'sillyspec/';
 const META_FILE = 'meta.json';
 
 /**
+ * argv 长度分批（审查遗留终批-①；与 worktree-apply.js chunkPaths 同逻辑内联私有版——
+ * 那边 import 本文件，反向 import 成环，两处须同步演化）。Windows CreateProcess 命令行
+ * 32767 字符上限：数百个长路径全量展开时 spawn 直接失败（hash-object 失败返 null 会让
+ * hasUnappliedChanges 全量误判 pending 卡死 cleanup）。保守 8000 字符/批。
+ */
+function _chunkPathsPrivate(paths, maxChars = 8000) {
+  const batches = [[]]
+  let len = 0
+  for (const p of paths) {
+    const l = String(p).length + 1
+    if (batches[batches.length - 1].length > 0 && len + l > maxChars) { batches.push([]); len = 0 }
+    batches[batches.length - 1].push(p)
+    len += l
+  }
+  return batches
+}
+
+/**
  * 解除 worktree 内全部 node_modules junction/symlink（根 + meta.depsModules 各子模块）。
  *
  * 坑 ghost-dir-junction-pierce（2026-08-23 实证：worktree apply 后目录残留，人工 rm -rf 经
@@ -1659,9 +1677,14 @@ export class WorktreeManager {
     }
 
     if (untrackedFiles.length > 0) {
-      // hash-object 按 argv 顺序逐行输出 blob hash；某文件不存在则整命令失败 → gitQuiet 返回 null
-      const wtHashes = (gitQuiet(worktreePath, ['hash-object', '--', ...untrackedFiles], { timeout: 30000 }) || '')
-        .split('\n');
+      // hash-object 按 argv 顺序逐行输出 blob hash；某文件不存在则整批失败 → 该批各行为空串
+      // （视为未应用，保守保留——与旧整命令失败语义一致，只是失败面从全量缩小到单批）。
+      // 终批-①：argv 分批（批次间行序拼接保持与 untrackedFiles 的索引对齐）。
+      const wtHashes = []
+      for (const batch of _chunkPathsPrivate(untrackedFiles)) {
+        const out = gitQuiet(worktreePath, ['hash-object', '--', ...batch], { timeout: 30000 }) || ''
+        wtHashes.push(...out.split('\n'))
+      }
       const mainBlobs = this._lsTreeBlobs(this.cwd, 'HEAD', untrackedFiles);
       for (let i = 0; i < untrackedFiles.length; i++) {
         // wtHashes[i] 缺失（命令失败/行数不齐）→ 视为未应用，保守保留
@@ -1686,14 +1709,18 @@ export class WorktreeManager {
   _lsTreeBlobs(cwd, treeish, files) {
     const map = new Map();
     if (!files || files.length === 0) return map; // 空 pathspec 会列整棵树，必须拦
-    const raw = gitQuiet(cwd, ['ls-tree', treeish, '--', ...files]);
-    if (!raw) return map;
-    for (const line of raw.split('\n')) {
-      if (!line) continue;
-      const tab = line.indexOf('\t');
-      if (tab === -1) continue;
-      const hash = line.slice(0, tab).split(' ')[2]; // "<mode> <type> <hash>"
-      if (hash) map.set(line.slice(tab + 1), hash);
+    // 终批-①：argv 分批（worktree-apply.js 的 chunkPaths 同逻辑内联——那边 import 本文件，
+    // 反向 import 会成环；两处口径须同步演化）
+    for (const batch of _chunkPathsPrivate(files)) {
+      const raw = gitQuiet(cwd, ['ls-tree', treeish, '--', ...batch]);
+      if (!raw) continue;
+      for (const line of raw.split('\n')) {
+        if (!line) continue;
+        const tab = line.indexOf('\t');
+        if (tab === -1) continue;
+        const hash = line.slice(0, tab).split(' ')[2]; // "<mode> <type> <hash>"
+        if (hash) map.set(line.slice(tab + 1), hash);
+      }
     }
     return map;
   }
