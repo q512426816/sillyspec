@@ -1,0 +1,36 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-56cdac99",
+  "totals": {
+    "files": 2,
+    "additions": 2156,
+    "deletions": 0
+  },
+  "rows": [
+    {
+      "path": "src/worktree.js",
+      "declared": true,
+      "additions": 1973,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/git-helper.js",
+      "declared": true,
+      "additions": 183,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "qlId": "ql-20260912-010-0b9e",
+  "sessionId": "quick-56cdac99",
+  "savedAt": "2026-09-12T07:36:44.974Z"
+}
