@@ -1,0 +1,399 @@
+diff --git a/docs/sillyspec/file-lifecycle.md b/docs/sillyspec/file-lifecycle.md
+index ee5fc7a..a343a56 100644
+--- a/docs/sillyspec/file-lifecycle.md
++++ b/docs/sillyspec/file-lifecycle.md
+@@ -288,7 +288,7 @@ execute --done 批量完成（2026-07-28，`run/complete.js`）
+ - scan 第 10 步「Extract Project Knowledge」把长期有效的项目知识写入 `.sillyspec/knowledge/`（`conventions.md`/`patterns.md`/`known-issues.md` + 更新 `INDEX.md`）；`scan-postcheck.js` 校验产物（INDEX.md 存在、引用文件真实存在）。
+ - execute 启动时由 `knowledge-match.js` 按 plan.md 的 task 关键词匹配知识库，命中报告注入 prompt 并写 `.runtime/knowledge-hit-report.json`。
+ - 平台模式残留清理只删缓存、保留权威状态（`worktrees/`、`sillyspec.db`、`global.json`、`contract-artifacts/`、`execute-runs/`），不再整删 `.runtime/`——否则 worktree meta 被清掉会导致 `depsStatus` 恒为 unknown、`branch already exists` 死循环、`worktree doctor` orphan 误判。
+-- plan→execute Contract 校验（2026-08-20-task-truth-unify D-001@v1 重构为双文件）：`validatePlanForExecute(tasksContent, planContent)`——任务注册表从 tasks.md 解析（`parseTaskRegistry`：checkbox 行 + [model:xxx]/(depends_on:) 行内标注），plan.md 只解析 `## Wave N` 段下纯 ID 引用行（`- task-XX`，遇到非 Wave 标题行退出段）；交叉校验：引用悬空/注册表任务未被任何 Wave 覆盖/一任务多 Wave 重复覆盖/编号断档/旧格式（plan.md 含任务名 checkbox 行）分别拦截并给可照抄新格式示例；三类根因诊断（tasks.md 无 task-XX 行 / Wave 段无 ID 引用 / 旧格式残留）；Wave 标题格式不对（W1/Wave1/波次1）显式报错（引用行不收容、静默退化隐式全并行）。light 级 plan.md 无任务区（任务全在 tasks.md）→ 注册表合成单隐式 Wave（`implicit: true`）串行执行。唯一运行时调用方 gates.js:876（plan 完成门禁）；gates 三道门（extractTaskIdsFromRegistry/isCurrentWaveAllNoDepsVerify/enforceReviewJsonGate）、complete.js 机器勾选器与 detectExecuteBatchFinish、task-review/progress(doctor align)/doctor-diagnostics D5/taskcard/contract-matrix/run-prompt knowledge 匹配/plan-postcheck 对账/plan.js parseTaskCount·parseTaskNames 全部以 tasks.md 为任务源（Wave 结构仍取 plan.md）。
++- plan→execute Contract 校验（2026-08-20-task-truth-unify D-001@v1 重构为双文件）：`validatePlanForExecute(tasksContent, planContent)`——任务注册表从 tasks.md 解析（`parseTaskRegistry`：checkbox 行 + [model:xxx]/(depends_on:) 行内标注），plan.md 只解析 `## Wave N` 段下纯 ID 引用行（`- task-XX`，遇到非 Wave 标题行退出段）；交叉校验：引用悬空/注册表任务未被任何 Wave 覆盖/一任务多 Wave 重复覆盖/编号断档/旧格式（plan.md 含任务名 checkbox 行）分别拦截并给可照抄新格式示例；三类根因诊断（tasks.md 无 task-XX 行 / Wave 段无 ID 引用 / 旧格式残留）；Wave 标题格式不对（W1/Wave1/波次1）显式报错（引用行不收容、静默退化隐式全并行）。light 级 plan.md 无任务区（任务全在 tasks.md）→ 注册表合成单隐式 Wave（`implicit: true`）串行执行。唯一运行时调用方 gates.js:890（plan 完成门禁）；gates 三道门（extractTaskIdsFromRegistry/isCurrentWaveAllNoDepsVerify/enforceReviewJsonGate）、complete.js 机器勾选器与 detectExecuteBatchFinish、task-review/progress(doctor align)/doctor-diagnostics D5/taskcard/contract-matrix/run-prompt knowledge 匹配/plan-postcheck 对账/plan.js parseTaskCount·parseTaskNames 全部以 tasks.md 为任务源（Wave 结构仍取 plan.md）。
+ - `executePlanPostcheck`（`run/stage.js`）的 `resolveChangeDir` 从 `run/shared.js` 导入（W6 Step1 抽出的纯函数；历史上曾误从 `./modules.js` 导入，该模块未导出此函数）。
+ - `executePlanPostcheck`（noAI，execute 前最后关口）顺序跑确定性校验：`validateBlueprintConsistency`（task 结构/路径冲突/拓扑无环）、`validatePlanFeasibility`（TaskCard 字段齐全/依赖存在/id 连续；2026-08-24 坑 taskcard-placeholder-slip 起**骨架占位符硬拦**——`FR-XX`/`D-XXX`/`src/example/file.ts`/`一句话说明这个 task`/`具体步骤 1`/`可验证的验收条件 1`/`边界约束 1` 未替换视同缺字段，标记清单 `src/taskcard-placeholders.js` 与骨架同源、先剥 HTML 注释再匹配防骨架自述误伤）、`validateCrossTaskContracts`（consumer `expects_from` ↔ provider `provides` 字段对账）、`validateDesignFileCoverage`（`design.md` 文件变更清单 → tasks `allowed_paths` 覆盖对账；未覆盖的源码文件阻断 execute，避免子代理被 allowed_paths 锁死而无权改 → 漏改；2026-08-15 D-2 起 `.sillyspec/docs/` 模块文档亦须认领）、`validateBlueprintConsistency` 内含任务声明 ↔ tasks/ 卡片双向对账（2026-08-15 D-2b；2026-08-20-task-truth-unify 起声明源=tasks.md 注册表，plan.md 旧 checkbox 声明回退兼容：声明任务漏生成卡片——典型尾部文档同步任务——阻断，孤儿卡亦阻断）、`validatePlanArtifacts`（plan.md/tasks/ 产物存在）；Wave 段比对（坑 wave-dep-direction-unchecked，2026-08-24）：**依赖方向硬拦**（depends_on 落同 Wave——execute 同 Wave 强制并行——或后置 Wave → throw 阻断，报错指向 `sillyspec plan-adopt-waves --change <名>` 一键重排；plan-adopt-waves.js：tasks/*.md depends_on → topoSortWaves → 重写 `## Wave N` 段块 + best-effort 同步任务总表 W 列 + 写后复跑 validateBlueprintConsistency；--dry-run 只预览；幂等），仅分组数差异（手工过度串行化）合法保留 warning。`parseFileChangeList`（`change-list.js`）兼容表格与分类列表两种清单格式、表头列顺序自适应，跳过 `.sillyspec/` 非 docs 子路径与「不修改文件」子段，CRLF 容错（2026-08-15 D-2 起 plan 覆盖对账传 `keepSillyspecDocs: true`：`.sillyspec/docs/` 模块文档 = 交付物，须被 task `allowed_paths` 认领，与 worktree apply `resolveApplyAllowSet` 口径一致）；覆盖对账用双向前缀 + glob 容差匹配，与 `quick-recommend` 共用 `change-list.js` 的 `pathMatches`。
+ - Revision v1：`stages` 表新增 `revision`/`reopened_from_step`/`reopened_at`/`stale_reason` 列；阶段新增 `revising`/`stale` 状态；`sillyspec run <stage> --reopen --from-step <n>` 重开已完成阶段、级联标记下游 stale；`.runtime/postcheck-result.json` 由 `scan-postcheck.js` 的 `writeStructuredResult` 落盘（本地写 `specDir/.runtime`，平台写 `runtimeRoot/scan-runs/<id>`）。
+diff --git a/docs/sillyspec/troubleshooting.md b/docs/sillyspec/troubleshooting.md
+index 245a6a8..8c827dd 100644
+--- a/docs/sillyspec/troubleshooting.md
++++ b/docs/sillyspec/troubleshooting.md
+@@ -916,3 +916,8 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent 
+ **① verify lint 沙箱必挂（node_modules 缺失）**：快照链接失败/布局差异时仍硬跑假环境。修复：`createGateSnapshot` 增环境完整性预检 `envDirsLinked`——主仓存在某环境目录（node_modules/.venv/venv/env）而快照内缺失 → 快照作废回退主仓（宁可主仓口径可能被并行污染、不可假沙箱必挂），回退原因 ⚠️ 可见。
+ **② 中断续跑半成品无主**：新增 `sillyspec task start|finish|list`（`.runtime/task-progress/<change>/<task-NN>.json` 记 startedAt/note；list >2h 标红 🔴 中断遗留 + 接管审查指引）；execute 派发 prompt 注入开工/完工各一条命令的低摩擦指引。
+ **③ 回执全角解析缺陷**（上一变更实证、本次手动避开后修根）：`RECEIPT_LINE_RE` 只认半角 `|` 分隔且 log 字段 `[^\s|]+` 遇空格截断——中文输入法手写全角 `｜` 整行不命中 → 回执槽 0 条 → integration-critical 误报无绿回执；含空格/全角括号路径截断 → 「日志不存在」假红。修复：分隔符双宽度容收（| 与 ｜）+ log 字段 rest-of-line + 行内尾注剥除。
++
++## 61. 两坑：门禁快照对 monorepo 依赖布局不可用（四次重试才定位路径）/ baseline checkpoint 卷入 289MB 部署 tar.gz（2026-09-12 用户实证，已修复）
++
++**①快照 monorepo 失明**：根级四环境目录链接覆盖不了 pnpm/nx/lerna workspace 的 `packages/<pkg>/node_modules` 子包依赖——快照内实测报各种无关错，四次重试后才从日志摸到 `Temp\sillyspec-gate-*` 路径。修复：`discoverEnvDirs` 深度≤3 递归发现集（跳过环境目录内部/dist/build/.git）逐个 junction；`envDirsLinked` 预检改发现集口径；🧪 日志行带**快照根路径**；失败时 `printSnapshotFailureHint` 直给路径 + 排查顺序（本变更真实失败 → 环境差异对照复跑 `*_SNAPSHOT_OFF=1` → 并行污染已排除）——三个执行点（quick 门禁 / verify gates / noAI 扫描）全接线。
++**②checkpoint 产物吞噬**：部署 tar.gz（289MB untracked，.gitignore 缺口）被 baseline checkpoint 带进分支——FF 合并被迫改 merge commit + 二进制永久入 git。修复：untracked 收入口 `isCheckpointSkippableArtifact` 防御（归档/分发扩展名 tar.gz/zip/whl/exe 等恒跳 + >10MB 体积帽 `SILLYSPEC_BASELINE_MAX_FILE_MB` 可调），跳过清单 ⚠️ 点名 + 补 .gitignore 指引；tracked-modified 不设防（已在 git 历史，checkpoint diff 是原生形态）。
+diff --git a/src/run/gate-snapshot.js b/src/run/gate-snapshot.js
+index 4766ed4..085d226 100644
+--- a/src/run/gate-snapshot.js
++++ b/src/run/gate-snapshot.js
+@@ -63,17 +63,22 @@ export function createGateSnapshot({ cwd, files, sourceRoot = null }) {
+     // Python 项目的 commands.test 在快照内找不到 venv，误伤持续且难归因）。链接面扩 venv 族
+     // （.venv/venv/env——链接后 dev 依赖与主仓同源，不缺 xdist）；链接失败/主仓本就没有时
+     // ⚠️ 显式可见（环境不一致的门禁会持续误伤——宁可吵不可静默错）。
+-    for (const envDir of ['node_modules', '.venv', 'venv', 'env']) {
+-      const src = join(cwd, envDir)
+-      if (!existsSync(src)) continue
++    // 递归依赖发现（坑 gate-snapshot-monorepo-layout，2026-09-12 驾驭第十五批①，用户实证
++    // 「对 monorepo 依赖布局完全不可用，四次重试才定位」）：pnpm/nx/lerna workspace 的
++    // packages/<pkg>/node_modules 子目录依赖不在根四目录——深度≤3 扫描发现集逐个 junction。
++    const envRelDirs = discoverEnvDirs(cwd)
++    for (const rel of envRelDirs) {
++      const src = join(cwd, rel)
++      const dst = join(snapshotRoot, rel)
+       try {
+-        symlinkSync(src, join(snapshotRoot, envDir), 'junction')
++        mkdirSync(dirname(dst), { recursive: true })
++        symlinkSync(src, dst, 'junction')
+       } catch (e) {
+-        console.warn(`⚠️ 门禁快照环境目录链接失败（${envDir}）：${e && e.message ? e.message : e}——快照内实测可能因缺 ${envDir} 误伤，失败时先核对快照环境`)
++        console.warn(`⚠️ 门禁快照环境目录链接失败（${rel}）：${e && e.message ? e.message : e}——快照内实测可能因缺该目录误伤，失败时先核对快照环境`)
+       }
+     }
+-    if (!existsSync(join(cwd, 'node_modules')) && !existsSync(join(cwd, '.venv')) && !existsSync(join(cwd, 'venv')) && !existsSync(join(cwd, 'env'))) {
+-      console.warn(`⚠️ 门禁快照：主仓无 node_modules / venv 族环境目录——commands.test/lint 若依赖它们将快照/主仓都不可用（环境未安装？）`)
++    if (envRelDirs.length === 0) {
++      console.warn(`⚠️ 门禁快照：主仓未发现任何环境目录（node_modules / venv 族，含子包递归）——commands.test/lint 若依赖它们将快照/主仓都不可用（环境未安装？）`)
+     }
+ 
+     // 环境完整性预检（坑 gate-snapshot-env-mismatch 二阶，2026-09-12 驾驭第十四批①，用户
+@@ -114,21 +119,60 @@ export function createGateSnapshot({ cwd, files, sourceRoot = null }) {
+ }
+ 
+ 
++/** 环境目录名集（根与子包通用） */
++const ENV_DIR_NAMES = new Set(['node_modules', '.venv', 'venv', 'env'])
++
+ /**
+- * 环境完整性纯检（坑 gate-snapshot-env-mismatch 二阶）：主仓存在而快照缺失的环境目录清单。
+- * 任一命中 = 快照对该仓 commands 是假环境（链接失败/布局差异），调用方应作废快照回退主仓。
+- * @returns {string[]} 缺失目录名（空数组 = 完整/主仓本就无环境目录）
++ * 递归依赖发现（坑 gate-snapshot-monorepo-layout）：深度 ≤3 扫描（跳过环境目录自身内部/
++ * .git/dist/build/.sillyspec），返回所有环境目录的仓库根相对 POSIX 路径（含根级四目录）。
++ * pnpm/nx/lerna workspace 的 packages/<pkg>/node_modules 覆盖。
++ */
++export function discoverEnvDirs(cwd, { maxDepth = 3 } = {}) {
++  const out = []
++  const skip = new Set(['.git', 'dist', 'build', '.sillyspec', 'out', 'target'])
++  const walk = (dir, rel, depth) => {
++    let entries
++    try { entries = readdirSync(dir, { withFileTypes: true }) } catch { return }
++    for (const e of entries) {
++      if (!e.isDirectory() || skip.has(e.name)) continue
++      const childRel = rel ? rel + '/' + e.name : e.name
++      if (ENV_DIR_NAMES.has(e.name)) {
++        out.push(childRel)
++        continue // 环境目录内部不再下钻（node_modules/node_modules 无意义且巨大）
++      }
++      if (depth < maxDepth) walk(join(dir, e.name), childRel, depth + 1)
++    }
++  }
++  walk(cwd, '', 0)
++  return out
++}
++
++/**
++ * 环境完整性纯检（坑 gate-snapshot-env-mismatch 二阶，发现集口径）：主仓存在（递归发现）
++ * 而快照缺失的环境目录清单。任一命中 = 快照对该仓 commands 是假环境，调用方作废回退主仓。
++ * @returns {string[]} 缺失目录相对路径（空数组 = 完整/主仓本就无环境目录）
+  */
+ export function envDirsLinked(cwd, snapshotRoot) {
+   const missing = []
+-  for (const d of ['node_modules', '.venv', 'venv', 'env']) {
++  for (const rel of discoverEnvDirs(cwd)) {
+     try {
+-      if (existsSync(join(cwd, d)) && !existsSync(join(snapshotRoot, d))) missing.push(d)
+-    } catch { missing.push(d) /* 判定异常按缺失算（保守作废快照） */ }
++      if (existsSync(join(cwd, rel)) && !existsSync(join(snapshotRoot, rel))) missing.push(rel)
++    } catch { missing.push(rel) /* 判定异常按缺失算（保守作废快照） */ }
+   }
+   return missing
+ }
+ 
++/**
++ * 快照内实测失败的归属提示（坑 gate-snapshot-monorepo-layout 配套：用户四次重试才从日志
++ * 摸到 Temp\sillyspec-gate-* 路径——失败时路径/疑点/对照复跑出口必须直给）。
++ * 调用方在「快照内执行且失败」的分支打印。
++ */
++export function printSnapshotFailureHint(snapInfo, { offEnv = 'SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF' } = {}) {
++  if (!snapInfo || !snapInfo.snapshotRoot) return
++  console.error(`   🔬 本次实测执行于隔离快照：${snapInfo.snapshotRoot}（HEAD + 本变更 ${snapInfo.changeFileCount ?? '?'} 个文件${snapInfo.sourceRoot ? '，overlay 自 worktree' : ''}）`)
++  console.error(`   失败疑点排查顺序：① 本变更文件自身的真实失败（最常见）→ 修代码；② 快照环境差异（monorepo 依赖布局/环境目录链接缺失）→ 设 ${offEnv}=1 回退主仓复跑对照——主仓过而快照挂即环境问题；③ 并行污染已被快照隔离，不在疑点内。`)
++}
++
+ /**
+  * verify 门专用快照（2026-09-10 驾驭小结第八批，用户第二次真实阻塞：verify 实测门跑
+  * main 工作区，多会话并发任何人的 WIP 都能弄红别人的门）。等价「--worktree 定向跑」：
+diff --git a/src/run/gates.js b/src/run/gates.js
+index 253966b..18a7640 100644
+--- a/src/run/gates.js
++++ b/src/run/gates.js
+@@ -646,7 +646,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+         const { createVerifyGateSnapshot } = await import('./gate-snapshot.js')
+         verifyGateSnap = await createVerifyGateSnapshot({ cwd, changeName, specBase, platformOpts })
+         if (verifyGateSnap) {
+-          console.log(`🧪 Verify 实测隔离快照：HEAD + 本变更 ${verifyGateSnap.changeFileCount} 个文件${verifyGateSnap.sourceRoot ? '（overlay 自 worktree——本变更分支内容定向跑）' : ''}（并行会话脏文件不参与门判定）`)
++          console.log(`🧪 Verify 实测隔离快照（根：${verifyGateSnap.snapshotRoot}）：HEAD + 本变更 ${verifyGateSnap.changeFileCount} 个文件${verifyGateSnap.sourceRoot ? '（overlay 自 worktree——本变更分支内容定向跑）' : ''}（并行会话脏文件不参与门判定）`)
+         }
+       } catch { /* 快照链路异常 → 主仓现行为 */ }
+     }
+@@ -679,7 +679,11 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+       }
+     } catch { /* fail-soft：回填失败不影响门禁 */ }
+     if (testCheck.status === 'failed') {
+-      if (verifyGateSnap) { try { verifyGateSnap.cleanup() } catch {} ; verifyGateSnap = null }
++      if (verifyGateSnap) {
++        try { const { printSnapshotFailureHint } = await import('./gate-snapshot.js')
++          printSnapshotFailureHint(verifyGateSnap) } catch { /* 提示失败不影响阻断 */ }
++        try { verifyGateSnap.cleanup() } catch {} ; verifyGateSnap = null
++      }
+       console.error('\n❌ verify 阶段被阻断：verify-result.md 自报告通过，但 CLI 实测测试失败。')
+       // 并行 WIP 归因鉴别（坑 verify-reconcile-foreign-wip）：单一实现迁至 verify-quality-scan.js
+       // renderVerifyTestAttribution（P0-1 前置二：noAI 质量扫描失败路径与本 --done 路径共用，
+@@ -707,6 +711,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+     }
+     // 快照收尾（test+lint 两检查都已完成；parity/删除探针走主仓 git 事实不依赖快照）
+     const usedSnapshot = Boolean(verifyGateSnap)
++    const usedSnapInfo = verifyGateSnap ? { snapshotRoot: verifyGateSnap.snapshotRoot, changeFileCount: verifyGateSnap.changeFileCount, sourceRoot: verifyGateSnap.sourceRoot } : null
+     if (verifyGateSnap) { try { verifyGateSnap.cleanup() } catch {} ; verifyGateSnap = null }
+     printVerifyLintCheck(lintCheck)
+     // lint 硬门（2026-09-09 升硬：观察期 14 次 5 败全真阳性，pre-push 本就硬拦——fail-fast 前移；
+@@ -714,6 +719,10 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+     const { shouldBlockVerifyLint } = await import('../verify-postcheck.js')
+     if (shouldBlockVerifyLint(lintCheck)) {
+       console.error('\n❌ verify 阶段被阻断：CLI 亲自实测 lint 失败（agent 的 lint 自报告与实测不符时以实测为准）。')
++      if (usedSnapInfo) {
++        try { const { printSnapshotFailureHint } = await import('./gate-snapshot.js')
++          printSnapshotFailureHint(usedSnapInfo) } catch { /* 提示失败不影响阻断 */ }
++      }
+       if (lintCheck.outputTail) {
+         const tail = lintCheck.outputTail.split('\n').slice(-8).join('\n')
+         console.error('   输出（末尾）：')
+diff --git a/src/run/quick-audit.js b/src/run/quick-audit.js
+index b0b6815..36ef323 100644
+--- a/src/run/quick-audit.js
++++ b/src/run/quick-audit.js
+@@ -338,7 +338,7 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
+       if (snapshot) {
+         gateCwd = snapshot.snapshotRoot
+         gateSpecBase = join(snapshot.snapshotRoot, '.sillyspec')
+-        console.log(`🧪 门禁隔离快照：HEAD + 本会话 ${snapshot.overlaid} 个文件（并行会话脏文件不参与判定）`)
++        console.log(`🧪 门禁隔离快照（根：${snapshot.snapshotRoot}）：HEAD + 本会话 ${snapshot.overlaid} 个文件（并行会话脏文件不参与判定）`)
+       }
+     } catch { /* 快照链路异常 → 主仓现行为 */ }
+   }
+@@ -348,6 +348,11 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
+     const failed = []
+     if (test.status === 'failed') failed.push('test')
+     if (lint.status === 'failed') failed.push('lint')
++    if (failed.length > 0 && snapshot) {
++      try { const { printSnapshotFailureHint } = await import('./gate-snapshot.js')
++        printSnapshotFailureHint({ snapshotRoot: snapshot.snapshotRoot, changeFileCount: snapshot.overlaid, sourceRoot: snapshot.sourceRoot || null }, { offEnv: 'SILLYSPEC_QUICK_GATE_SNAPSHOT_OFF' })
++      } catch { /* 提示失败不影响门禁语义 */ }
++    }
+     return {
+       action: failed.length > 0 ? 'fail' : 'pass',
+       failed,
+diff --git a/src/run/verify-quality-scan.js b/src/run/verify-quality-scan.js
+index 74f043b..58715e3 100644
+--- a/src/run/verify-quality-scan.js
++++ b/src/run/verify-quality-scan.js
+@@ -276,7 +276,7 @@ export async function executeVerifyQualityScan({ cwd, specBase, changeName, plat
+       const { createVerifyGateSnapshot } = await import('./gate-snapshot.js')
+       snap = await createVerifyGateSnapshot({ cwd, changeName, specBase, platformOpts })
+       if (snap) {
+-        console.log(`🧪 noAI 扫描隔离快照：HEAD + 本变更 ${snap.changeFileCount} 个文件${snap.sourceRoot ? '（overlay 自 worktree——本变更分支内容定向跑）' : ''}（并行会话脏文件不参与判定）`)
++        console.log(`🧪 noAI 扫描隔离快照（根：${snap.snapshotRoot}）：HEAD + 本变更 ${snap.changeFileCount} 个文件${snap.sourceRoot ? '（overlay 自 worktree——本变更分支内容定向跑）' : ''}（并行会话脏文件不参与判定）`)
+       }
+     } catch { /* 快照链路异常 → 主仓现行为 */ }
+   }
+@@ -318,6 +318,10 @@ export async function executeVerifyQualityScan({ cwd, specBase, changeName, plat
+     recordFrictionEvent({ cwd, changeName, platformOpts, type: 'verify_run_failed', detail: testFailed ? 'test' : 'lint' })
+   }
+   if (testFailed || lintBlocked) {
++    if (snap) {
++      try { const { printSnapshotFailureHint } = await import('./gate-snapshot.js')
++        printSnapshotFailureHint(snap) } catch { /* 提示失败不影响阻断 */ }
++    }
+     const runtimeRoot = resolveRuntimeRoot(platformOpts, specBase)
+     await renderVerifyTestAttribution({ cwd, changeName, specBase, runtimeRoot })
+     const which = testFailed ? '测试' : 'lint'
+diff --git a/src/worktree.js b/src/worktree.js
+index a7e7ca1..c8ca91f 100644
+--- a/src/worktree.js
++++ b/src/worktree.js
+@@ -109,6 +109,28 @@ export function isCrossWorktreeDir(worktreePath) {
+  * 命名形态）拒绝删除——主仓清理面（cleanup force-remove / doctor ghost / 幽灵清理）不得
+  * 波及跨仓 worktree（其注册在跨仓仓 .git，删除权在 cleanupCrossWorktrees 显式路径）。
+  */
++
++/**
++ * baseline checkpoint 产物防御（坑 baseline-checkpoint-binary-sweep，2026-09-12 驾驭第十五
++ * 批②，用户实证：部署 tar.gz（289MB）被 checkpoint 带进分支——FF 合并被迫改 merge commit +
++ * 二进制永久入 git）。untracked 收入口对两类产物恒跳过：①已知归档/分发扩展名（tar.gz/zip/
++ * whl/exe 等——几乎不可能是源码 WIP）；②单文件超体积帽（缺省 10MB，SILLYSPEC_BASELINE_
++ * MAX_FILE_MB 可调）。跳过清单返回调用方点名 + 补 .gitignore 指引（gitignore 缺口的实际代价
++ * 由工具兜底提示）。tracked-modified 不走本防御（已在 git 历史里，checkpoint diff 是 git 原生）。
++ */
++const ARTIFACT_EXT_RE = /\.(?:tar\.gz|tgz|tar|zip|7z|rar|gz|bz2|xz|whl|exe|dll|so|dylib|iso|dmg|pkg|jar|war|apk|ipa)$/i
++
++export function isCheckpointSkippableArtifact(absPath) {
++  const rel = String(absPath).split('\\').join('/')
++  if (ARTIFACT_EXT_RE.test(rel)) return 'artifact-ext'
++  try {
++    const maxMB = Number(process.env.SILLYSPEC_BASELINE_MAX_FILE_MB) || 10
++    const st = statSync(absPath)
++    if (st.isFile() && st.size > maxMB * 1024 * 1024) return 'size-cap'
++  } catch { /* stat 失败按不跳过（后续 copy 自会报错） */ }
++  return null
++}
++
+ export function safeRemoveWorktreeDir(worktreePath, meta = null, opts = {}) {
+   if (!opts.allowCross && isCrossWorktreeDir(worktreePath)) {
+     throw new Error(
+@@ -1799,10 +1821,15 @@ export class WorktreeManager {
+       // untracked 文件（排除 .sillyspec/.runtime 等）；目录跳过避免 readFileSync EISDIR
+       const untracked = gitQuiet(mainCwd, ['ls-files', '--others', '--exclude-standard'], { timeout: 30000 }) || '';
+       const skippedDirs = [];
++      const skippedArtifacts = [];
+       if (untracked) {
+         for (const f of untracked.split('\n').filter(Boolean)) {
+           const norm = f.replace(/\\/g, '/')
+           if (norm === '.sillyspec' || norm.startsWith('.sillyspec/')) { excludedSpecFiles.push(f); continue }
++          // 产物防御（坑 baseline-checkpoint-binary-sweep）：归档扩展名/超体积帽 untracked 恒不进
++          // baseline checkpoint——289MB tar.gz 入分支（FF 破坏 + 二进制永久入 git）的实际代价兜底
++          const artifactWhy = isCheckpointSkippableArtifact(join(mainCwd, f));
++          if (artifactWhy) { skippedArtifacts.push(`${f}（${artifactWhy}）`); continue }
+           const r = copyUntrackedEntry(join(mainCwd, f), join(worktreePath, f));
+           if (r.status === 'copied') files.push(f);
+           else if (r.status === 'skipped-dir') skippedDirs.push(f);
+@@ -1812,6 +1839,10 @@ export class WorktreeManager {
+       if (skippedDirs.length > 0) {
+         console.log(`ℹ️  baseline overlay 跳过 ${skippedDirs.length} 个 untracked 目录（不读目录避免 EISDIR，坑 execute-worktree-overlay-untracked-dir-eisdir）`);
+       }
++      if (skippedArtifacts.length > 0) {
++        console.warn(`⚠️ baseline checkpoint 跳过 ${skippedArtifacts.length} 个产物/大文件（不进分支，留在主仓原位）：${skippedArtifacts.slice(0, 5).join('、')}${skippedArtifacts.length > 5 ? ' 等' : ''}`);
++        console.warn(`   归档/分发物与大文件不该入 git——补 .gitignore（如 *.tar.gz / dist/ / deploy/）或移出仓库；本跳过仅护 baseline checkpoint，git add -A 仍会把它们卷进提交`);
++      }
+       // 跨变更 spec 文档隔离可见性：列出被排除的 .sillyspec/ 文件（去重，截断展示），
+       // 让「ROADMAP 被谁改动、为何不在本 baseline」在 create 时刻可查，不需事后考古
+       const excludedUnique = [...new Set(excludedSpecFiles)]
+diff --git a/test/gate-snapshot-monorepo.test.mjs b/test/gate-snapshot-monorepo.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/gate-snapshot-monorepo.test.mjs
+@@ -0,0 +1,113 @@
++/**
++ * 门禁快照 monorepo 依赖布局（坑 gate-snapshot-monorepo-layout，2026-09-12 驾驭第十五批①，
++ * 用户实证「四次重试才从日志定位 Temp\sillyspec-gate-*」）+ baseline checkpoint 产物防御
++ * （坑 baseline-checkpoint-binary-sweep，②：289MB 部署 tar.gz 被带进分支）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'fs'
++import { join } from 'path'
++import { tmpdir } from 'os'
++import { spawnSync } from 'node:child_process'
++import { createGateSnapshot, discoverEnvDirs, envDirsLinked, printSnapshotFailureHint } from '../src/run/gate-snapshot.js'
++import { isCheckpointSkippableArtifact } from '../src/worktree.js'
++
++const tmpRoots = []
++function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); tmpRoots.push(d); return d }
++test.after(() => { for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
++
++function git(dir, args) {
++  const r = spawnSync('git', args, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
++  if (r.status !== 0) throw new Error(`git ${args.join(' ')}: ${r.stderr}`)
++  return r.stdout.trim()
++}
++
++test('discoverEnvDirs：monorepo 子包 node_modules 递归发现（深度≤3）', () => {
++  const root = mk('mono-disc-')
++  for (const p of ['node_modules', '.venv', 'packages/a/node_modules', 'packages/b/node_modules', 'apps/web/node_modules', 'packages/a/src']) {
++    mkdirSync(join(root, p), { recursive: true })
++  }
++  // 深度>3 不发现（packages/x/y/z/node_modules = 深度 4）
++  mkdirSync(join(root, 'deep/a/b/c/node_modules'), { recursive: true })
++  const found = discoverEnvDirs(root)
++  assert.ok(found.includes('node_modules') && found.includes('.venv'), '根级命中')
++  assert.ok(found.includes('packages/a/node_modules') && found.includes('apps/web/node_modules'), '子包依赖递归发现')
++  assert.ok(!found.includes('deep/a/b/c/node_modules'), '深度帽外不扫')
++  // envDirsLinked：主仓有快照缺 → 命中相对路径
++  const snap = mk('mono-snap-')
++  const missing = envDirsLinked(root, snap)
++  assert.ok(missing.includes('packages/a/node_modules'), '发现集口径校验缺失')
++})
++
++test('createGateSnapshot：pnpm workspace 形态子包依赖 junction 进快照（dev 依赖同源可达）', () => {
++  const proj = mk('mono-e2e-')
++  git(proj, ['init', '-q']); git(proj, ['config', 'user.email', 't@t.local']); git(proj, ['config', 'user.name', 't'])
++  writeFileSync(join(proj, '.gitignore'), '.sillyspec/\nnode_modules/\n**/node_modules/\ndist/\n')
++  mkdirSync(join(proj, 'packages', 'web', 'src'), { recursive: true })
++  writeFileSync(join(proj, 'packages', 'web', 'src', 'a.ts'), 'export const a = 1\n')
++  git(proj, ['add', '.']); git(proj, ['commit', '-q', '-m', 'init'])
++  // monorepo 依赖布局：根 + 子包 node_modules（pnpm workspace 形态）
++  mkdirSync(join(proj, 'node_modules', '.pnpm'), { recursive: true })
++  mkdirSync(join(proj, 'packages', 'web', 'node_modules', 'vue'), { recursive: true })
++  writeFileSync(join(proj, 'packages', 'web', 'node_modules', 'vue', 'pkg-marker.txt'), 'dev-deps')
++
++  const snap = createGateSnapshot({ cwd: proj, files: ['packages/web/src/a.ts'] })
++  assert.ok(snap, '快照创建')
++  try {
++    const marker = join(snap.snapshotRoot, 'packages', 'web', 'node_modules', 'vue', 'pkg-marker.txt')
++    assert.ok(existsSync(marker), '子包 node_modules junction 进快照（monorepo 布局可用性核心）')
++    assert.ok(existsSync(join(snap.snapshotRoot, 'node_modules', '.pnpm')), '根 node_modules 同链')
++  } finally { snap.cleanup() }
++})
++
++test('printSnapshotFailureHint：路径 + 排查顺序 + 对照复跑出口直给', () => {
++  const origErr = console.error
++  let buf = ''
++  console.error = (...a) => { buf += a.join(' ') + '\n' }
++  try {
++    printSnapshotFailureHint({ snapshotRoot: 'C:\\Temp\\sillyspec-gate-XYZ', changeFileCount: 3 })
++  } finally { console.error = origErr }
++  assert.ok(buf.includes('sillyspec-gate-XYZ'), '快照路径直给（不再从日志考古）')
++  assert.ok(buf.includes('SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF'), '对照复跑出口')
++  assert.ok(buf.includes('monorepo 依赖布局'), '环境差异疑点点名')
++})
++
++test('isCheckpointSkippableArtifact：归档扩展名恒跳 + 体积帽 + 源码不误伤', () => {
++  const root = mk('art-')
++  const tar = join(root, 'deploy.tar.gz')
++  writeFileSync(tar, 'x')
++  assert.equal(isCheckpointSkippableArtifact(tar), 'artifact-ext', '归档扩展名恒跳')
++  assert.equal(isCheckpointSkippableArtifact(join(root, 'app.exe')), 'artifact-ext')
++  // 体积帽：>10MB 普通扩展
++  const big = join(root, 'big.dat')
++  writeFileSync(big, Buffer.alloc(11 * 1024 * 1024))
++  assert.equal(isCheckpointSkippableArtifact(big), 'size-cap', '超 10MB 体积帽跳')
++  // 源码/小文件不误伤
++  const src = join(root, 'a.ts')
++  writeFileSync(src, 'x')
++  assert.equal(isCheckpointSkippableArtifact(src), null, '源码不跳')
++})
++
++test('e2e：untracked tar.gz 不进 baseline checkpoint（289MB 场景小规模复刻）', async (t) => {
++  const proj = mk('art-e2e-')
++  git(proj, ['init', '-q']); git(proj, ['config', 'user.email', 't@t.local']); git(proj, ['config', 'user.name', 't'])
++  writeFileSync(join(proj, '.gitignore'), '.sillyspec/\n')
++  writeFileSync(join(proj, 'a.js'), '1\n')
++  git(proj, ['add', '.']); git(proj, ['commit', '-q', '-m', 'init'])
++  // untracked 产物 + untracked 源码 WIP（后者应照常进 baseline）
++  writeFileSync(join(proj, 'deploy-2026.tar.gz'), Buffer.alloc(1024))
++  writeFileSync(join(proj, 'wip.js'), '// wip\n')
++  const wmMod = await import('../src/worktree.js')
++  const wm = new wmMod.WorktreeManager({ cwd: proj })
++  try {
++    wm.create('art-change')
++    const metaPath = join(proj, '.sillyspec', '.runtime', 'worktrees', 'art-change', 'meta.json')
++    assert.ok(existsSync(metaPath), 'worktree 已建')
++    const meta = JSON.parse(readFileSync(metaPath, 'utf8'))
++    assert.ok(!meta.baselineFiles.includes('deploy-2026.tar.gz'), 'tar.gz 不进 baseline（坑核心）')
++    assert.ok(meta.baselineFiles.includes('wip.js'), '源码 WIP 照常进 baseline（不误伤）')
++  } finally {
++    try { wm.cleanup('art-change', { force: true }) } catch { try { wm.cleanup('art-change') } catch {} }
++  }
++})
++

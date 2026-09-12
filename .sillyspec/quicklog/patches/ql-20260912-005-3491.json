@@ -1,0 +1,113 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-c656e681",
+  "totals": {
+    "files": 9,
+    "additions": 214,
+    "deletions": 30
+  },
+  "rows": [
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/runtime.md",
+      "declared": true,
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/worktree.md",
+      "declared": true,
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": ".sillyspec/docs/sillyspec/scan/CONVENTIONS.md",
+      "declared": true,
+      "additions": 2,
+      "deletions": 2,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": ".sillyspec/knowledge/uncategorized.md",
+      "declared": true,
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/sillyspec/troubleshooting.md",
+      "declared": true,
+      "additions": 14,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/run/gate-snapshot.js",
+      "declared": true,
+      "additions": 16,
+      "deletions": 5,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/worktree-cross.js",
+      "declared": true,
+      "additions": 12,
+      "deletions": 18,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/worktree.js",
+      "declared": true,
+      "additions": 38,
+      "deletions": 2,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/cross-worktree-guard.test.mjs",
+      "declared": true,
+      "additions": 129,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": [
+      {
+        "file": "src/docs-check.js",
+        "sessions": [
+          "quick-c757822d"
+        ]
+      },
+      {
+        "file": "src/progress/consistency-doctor.js",
+        "sessions": [
+          "quick-c757822d"
+        ]
+      },
+      {
+        "file": "src/verify-postcheck.js",
+        "sessions": [
+          "quick-c757822d"
+        ]
+      }
+    ]
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "qlId": "ql-20260912-005-3491",
+  "sessionId": "quick-c656e681",
+  "savedAt": "2026-09-11T23:19:34.830Z",
+  "patchSha256": "69652e2ea37793afffe4f9d68c7030afd3f06e28f34288ba20652f965b31656e",
+  "patchStatus": "ok"
+}

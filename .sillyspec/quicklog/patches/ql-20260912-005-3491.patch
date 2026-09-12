@@ -1,0 +1,353 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/runtime.md b/.sillyspec/docs/sillyspec/modules/runtime.md
+index 97a6a0d..aa7fe0c 100644
+--- a/.sillyspec/docs/sillyspec/modules/runtime.md
++++ b/.sillyspec/docs/sillyspec/modules/runtime.md
+@@ -79,7 +79,7 @@ ProgressManager.alignExecuteToPlan(cwd, changeName, specBase, {confirm})
+ - **brainstorm/verify 双占位符注入（fail-soft）**（2026-08-23-adopt-harness-practices，`src/run/prompt.js:429-464`）：brainstorm Step2 的 {DECISION_HITS} ← matchKnowledge decisionHits——命中 rejected 条目渲染「否决决策提示」段（ID/标题/否决理由/复潮条件），无命中替换空串零输出（不留残留占位符）；注入结果同步落 runtime JSON（.runtime/decision-hits.json，与 KNOWLEDGE_HIT_REPORT 落盘同口径）；advisory 展示不改步骤流程，异常单行说明不抛（全降级）。
+   verify「运行测试和质量扫描」步的 {EVIDENCE_AUTO_RECOMMENDATION}（`src/run/prompt.js:719-746`）← resolveTestStrategy 的 evidence_auto_recommendation.summary 渲染进 step prompt——verify-postcheck 在 --done 事后才解析 evidence-auto，agent 写 verify-result.md 时看不到推荐无从否决，故在 prompt 时点注入（含推荐理由、降级注记与「可在 verify-result.md 否决并改跑全量」路径，FR-11）；同样 fail-soft（注入失败给读 local.yaml 确认 test_strategy 的指引，--done 仍按 resolveTestStrategy 实测对账）。
+ - **archive CLI 下沉 git add**（坑4，`run/complete-handlers.js:410`）：`unregisterChange` 后 CLI 确定性 `safeGit add -- .sillyspec/changes/archive/ + .sillyspec/docs/`，不靠 archive step5 prompt 驱动（step5 prompt 的 git add 保留作幂等兜底）；safeGit 失败不阻断归档（目录已移动 + change 已注销）
+-- **execute run marker 写入原子化 + 分层 fail**（2026-08-16-state-split-fixes #1，D-001@v1）：四处 marker 写入点（`run/stage.js` 主点 + `run/gates.js`/`run/prompt.js`/`task-review.js` 补写点）统一「mkdir `execute-runs/<runId>/tasks` 先于 marker」不变量——目录不再只随 review.json 写入创建，消除「有 marker 无目录」空 run 被 archive 完成度扫描误用。分层失败语义：stage 主点 throw（execute 启动 exit 1 + 修复指引）；gates 补写点异常直穿外层 catch fail-closed；prompt 渲染路径降级（console.error 留痕 + runId 仍注入）；task-review 去静默保 fail-open。测试 execute-run-dir-fail-loud.test.mjs（33 断言）。runId 同秒碰撞根治（2026-09-10 驾驭小结①，坑 exec-run-id-same-second-collision）：四处写入点在 mkdir 前先经 `claimExecuteRunId`（task-review.js，非递归 mkdir 排他认领，碰撞换随机短后缀）——并行会话（不同 change）同秒启动 execute 不再生成同一 runId 共享 run 目录互相覆盖 per-task review.json；分层 fail 语义不变。第三批①再加固：generateExecuteRunId 携 changeName 附 6 位 FNV 哈希段（exec-…-<hash>）——不同变更 runId 结构性不同，五处 generate 写入点全部传 changeName。第十二批：noAI 质量扫描步（executeVerifyQualityScan，verify 第一实测执行点）补接同款快照（第八批只接 gates.js verify 块——用户第三次撞上的真实来源）；两处 fallback 主仓时若非 .sillyspec 脏文件在场打 ⚠️ 口径可见提示（warnIfMainRepoDirtyForGate）。第八批：verify 实测门同款隔离（createVerifyGateSnapshot——resolveVerifyChangedFiles 变更文件集 + native worktree 时 overlay 源=worktree 根（--worktree 定向跑等价）+ 他者显式声明剔除 + 变更文档/local.yaml 随快照；gates.js verify 块 test/lint 快照内跑，fallback 主仓 + lint 阻断补污染归属提示，SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF 可关）。第六批：quick --done test+lint 门禁隔离快照（run/gate-snapshot.js createGateSnapshot——HEAD worktree + 会话文件 overlay + node_modules junction + local.yaml 复制，并行会话脏文件不参与本会话门禁判定；基建失败 fallback 主仓现行为；SILLYSPEC_QUICK_GATE_SNAPSHOT_OFF 可关）；taskcard --all 平台产物镜像主仓（mirrorPlatformArtifactToMainRepo 增 ensureParentDir——tasks/ 子目录在 changeDir 存在时自动建，index.js taskcard case pointer 态接线）。第五批①：自指平台指针警告跨进程 10min 窗口降频（warnSelfRefPointerOnce marker，writePlatformPointer 与 command.js 恢复链两处接线——daemon junction 形态下每命令重复告警的噪音闸）+ resolvePlatformSpecDir 对 pointer specRoot realpath 规范化（junction 坍缩为真实路径：design-init/endpoints 等落盘不再锚到 daemon junction 副本路径）。同批③：reapVerifyServices 改 killProcessTree 进程树击杀（win32 taskkill /PID <pid> /T /F；POSIX ps 递归枚举子进程后杀——坑 verify-service-process-leak 子进程泄漏：原 process.kill 只杀登记的 shell 包装 PID，python 服务本体成孤儿挂机；verify prompt 同步补「优先登记服务本体（叶子）PID」指引）。同批②：run/shared.js 新增 mirrorPlatformArtifactToMainRepo（平台模式产物双写镜像主仓 changeDir——design-init / verify-probes --init 在 pointer 态 agent 本地跑时不再单点依赖 spec-sync 回程；daemon 显式 --spec-dir / 本地无 changeDir / 路径同构跳过）。
++- **execute run marker 写入原子化 + 分层 fail**（2026-08-16-state-split-fixes #1，D-001@v1）：四处 marker 写入点（`run/stage.js` 主点 + `run/gates.js`/`run/prompt.js`/`task-review.js` 补写点）统一「mkdir `execute-runs/<runId>/tasks` 先于 marker」不变量——目录不再只随 review.json 写入创建，消除「有 marker 无目录」空 run 被 archive 完成度扫描误用。分层失败语义：stage 主点 throw（execute 启动 exit 1 + 修复指引）；gates 补写点异常直穿外层 catch fail-closed；prompt 渲染路径降级（console.error 留痕 + runId 仍注入）；task-review 去静默保 fail-open。测试 execute-run-dir-fail-loud.test.mjs（33 断言）。runId 同秒碰撞根治（2026-09-10 驾驭小结①，坑 exec-run-id-same-second-collision）：四处写入点在 mkdir 前先经 `claimExecuteRunId`（task-review.js，非递归 mkdir 排他认领，碰撞换随机短后缀）——并行会话（不同 change）同秒启动 execute 不再生成同一 runId 共享 run 目录互相覆盖 per-task review.json；分层 fail 语义不变。第三批①再加固：generateExecuteRunId 携 changeName 附 6 位 FNV 哈希段（exec-…-<hash>）——不同变更 runId 结构性不同，五处 generate 写入点全部传 changeName。第十三批③：gate-snapshot 环境目录链接面扩 venv 族（node_modules/.venv/venv/env 全 junction，dev 依赖同源；链接失败/全缺 ⚠️ 可见——坑 gate-snapshot-env-mismatch）。第十二批：noAI 质量扫描步（executeVerifyQualityScan，verify 第一实测执行点）补接同款快照（第八批只接 gates.js verify 块——用户第三次撞上的真实来源）；两处 fallback 主仓时若非 .sillyspec 脏文件在场打 ⚠️ 口径可见提示（warnIfMainRepoDirtyForGate）。第八批：verify 实测门同款隔离（createVerifyGateSnapshot——resolveVerifyChangedFiles 变更文件集 + native worktree 时 overlay 源=worktree 根（--worktree 定向跑等价）+ 他者显式声明剔除 + 变更文档/local.yaml 随快照；gates.js verify 块 test/lint 快照内跑，fallback 主仓 + lint 阻断补污染归属提示，SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF 可关）。第六批：quick --done test+lint 门禁隔离快照（run/gate-snapshot.js createGateSnapshot——HEAD worktree + 会话文件 overlay + node_modules junction + local.yaml 复制，并行会话脏文件不参与本会话门禁判定；基建失败 fallback 主仓现行为；SILLYSPEC_QUICK_GATE_SNAPSHOT_OFF 可关）；taskcard --all 平台产物镜像主仓（mirrorPlatformArtifactToMainRepo 增 ensureParentDir——tasks/ 子目录在 changeDir 存在时自动建，index.js taskcard case pointer 态接线）。第五批①：自指平台指针警告跨进程 10min 窗口降频（warnSelfRefPointerOnce marker，writePlatformPointer 与 command.js 恢复链两处接线——daemon junction 形态下每命令重复告警的噪音闸）+ resolvePlatformSpecDir 对 pointer specRoot realpath 规范化（junction 坍缩为真实路径：design-init/endpoints 等落盘不再锚到 daemon junction 副本路径）。同批③：reapVerifyServices 改 killProcessTree 进程树击杀（win32 taskkill /PID <pid> /T /F；POSIX ps 递归枚举子进程后杀——坑 verify-service-process-leak 子进程泄漏：原 process.kill 只杀登记的 shell 包装 PID，python 服务本体成孤儿挂机；verify prompt 同步补「优先登记服务本体（叶子）PID」指引）。同批②：run/shared.js 新增 mirrorPlatformArtifactToMainRepo（平台模式产物双写镜像主仓 changeDir——design-init / verify-probes --init 在 pointer 态 agent 本地跑时不再单点依赖 spec-sync 回程；daemon 显式 --spec-dir / 本地无 changeDir / 路径同构跳过）。
+ - **`.runtime` 根解析统一 `resolveRuntimeRoot`**（坑 execute-runs-isolation，`run/shared.js`）：`.runtime` 根（含 `sillyspec.db` / execute-runs / stage-reviews / quick-sessions）由 `resolveRuntimeRoot(platformOpts, localSpecBase)` 统一解析，三级优先级 `platformOpts.runtimeRoot`（平台）> `platformOpts.specDriftAnchor`（drift 锚点）> `localSpecBase/.runtime`（本地兜底）。drift 守卫（`run/command.js`）命中时设 `specDriftAnchor = 主仓 specBase`（**不**设 `specRoot`/`runtimeRoot`——否则触发平台 sentinel，误跳 `triggerSync`/`checkApproval`、误进平台渲染分支）→ 下游 15 处站点解析落主仓 `.runtime`，execute-runs / stage-reviews 不随 worktree cleanup 整目录删消失，archive step1 完成度 gate 真相源（磁盘主仓 review.json）不再丢
+ 
+ - **--done 前非阻断并发预检 advisory**（`run/complete-handlers.js` quick 钩子 + `run/gates.js` execute 钩子 + `run/concurrent-detect.js`）：quick --done（`auditQuickCompletion` 后）与 execute --done（`completeStageGates` 入口 guard `stageName==='execute'`）完成前调 `detectConcurrentChanges()`（复用 `isQuickMetadata` 分类）扫工作树他者脏文件 + 他者活跃 change 目录，命中则 `console.warn` 多行 ⚠️（foreignFiles + otherActiveChanges + pathspec 提示），**绝不阻断**——不改 audit `result.status` / gate 通过性 / `isQuickMetadata` 语义（fail-open：`git status` 不可读时 `hasForeign=false` 不崩）。ownFiles 排除自身：quick 经 `resolveConcurrentAnchor`（concurrent-detect 纯函数，2026-08-18 误归属修复）——声明会话=`baselineFiles∪allowedFiles`（窗口 diff 含他者污染不再自吞），未声明会话维持旧口径 `changedFiles∪baselineFiles`；execute=design §6 交付文件（in-place 模式）或 `[]`（worktree 模式）
+diff --git a/.sillyspec/docs/sillyspec/modules/worktree.md b/.sillyspec/docs/sillyspec/modules/worktree.md
+index 2126d2a..d7804ff 100644
+--- a/.sillyspec/docs/sillyspec/modules/worktree.md
++++ b/.sillyspec/docs/sillyspec/modules/worktree.md
+@@ -44,7 +44,7 @@ worktree 模块提供基于 git worktree 的分支隔离机制，让每个变更
+ | `applyWorktree(changeName, { cwd, checkOnly?, merge?, base? })` | 将 worktree 变更应用到主工作区；允许集 = `resolveApplyAllowSet`（design §6 ∪ plan task allowed_paths）；主干**已提交**推进交 `--3way` 自动三路合并；`merge=true` 时先 `preAlignBaselineToMain`（2026-08-16-state-split-fixes #2，D-002@v1：baseline 含 main 已推进并行文件 → merge 前 checkout main 版 + 对齐 commit，消除 baseline vs main 冲突主因；四条件过滤保交付文件/dirty 不受伤，失败降级原 merge），未提交 dirty 拦截引导 commit/stash（判**排除规则下当前是否有未提交 dirty**，非比对启动时 baselineHash——主仓 dirty→clean 后不再死锁）；`merge=true` 显式走 git merge 兜底（D-001）；`base='baseline'` 回退旧锚点（默认 `merge-base`）；apply 文件经 `filterDeliverableFiles` 精细化过滤；dirty 拦截 fail-loud 保留，附加逐文件 cp rescue 指令（返回值新增 additive `rescueCommands`/`deletedFiles`；step3.5 前移 hashMismatch 计算，保 step4.5 拦截时 EXCLUDE-MISMATCH 可用）**+ --3way 冲突列表双源（stderr 解析 ∪ status 探测）** | `changeName, { cwd, checkOnly?, merge?, base? }` |
+ | `generateRescueCommands({ changedFiles, dirtyFiles, hashMismatchFiles, deletedFiles?, worktreePath, projectRoot })` | dirty 拦截 fail-loud 时逐文件四分类（SAFE-CP / EXCLUDE-DIRTY / EXCLUDE-MISMATCH / DELETE，优先级 DELETE>DIRTY>MISMATCH>CP）生成旁路 git apply 的 cp 指令，返回 {commands,warnings,cpFileCount,excludedCount}；纯函数无 git/fs 副作用 | `{ changedFiles, dirtyFiles:Set\|Array, hashMismatchFiles, deletedFiles?, worktreePath, projectRoot }` |
+ | `computeRescueDirtyFiles(projectRoot)` | 统一 rescue dirtyFiles 口径（git diff HEAD tracked-modified ∪ ls-files untracked 经 filterDeliverableFiles 过滤，保留 .sillyspec/docs/，DRY 复用）；与 step4.5 触发口径不混用（触发用内联排除 .claude/docs/CLAUDE.md，rescue 用 filterDeliverableFiles 保留 docs/） | `projectRoot` |
+-| `resolveApplyAllowSet(projectRoot, changeName)` | 解析 apply 允许文件集 = design.md §6 文件变更清单（`keepSillyspecDocs=true`，模块文档 `.sillyspec/docs/` 也进清单——默认 change-list 跳过全部 `.sillyspec/` 会导致模块文档 apply 永远缺清单）∪ 所有 task-*.md 的 allowed_paths（测试/产物文件设计常漏列但 task 已含，union 后不误拦；越界文件仍拦）。EXCLUDE-DIRTY 自动三方合并（坑 apply-dirty-block-no-merge，2026-09-10 驾驭小结第六批③）：mergeDirtyOverlapThreeWay——base=deliverableBase 锚点版 ours=主仓脏版 theirs=worktree 版，git merge-file clean 才写回（两侧并集，mergedDirtyFiles 审计），冲突维持原拦截+rescue（不留半合并现场），checkOnly 只读不试；4.5/5a 拦截口径同步引用合并残余集。变更目录读侧归档回退（坑 apply-archived-evidence-recycled，2026-09-10 驾驭小结第二批①）：活跃 `changes/<name>/` 缺 design.md 而 `changes/archive/<name>/` 在（归档后补 apply 场景——archive 有意保留未 apply worktree 却把变更目录 rename 走）→ design/tasks 从归档目录读（`resolveActiveOrArchiveChangeDir` 内部函数，assess 段 incidental/review 声明豁免集合同口径），allow 集不再恒空误拦整批 | `projectRoot, changeName` |
++| `resolveApplyAllowSet(projectRoot, changeName)` | 解析 apply 允许文件集 = design.md §6 文件变更清单（`keepSillyspecDocs=true`，模块文档 `.sillyspec/docs/` 也进清单——默认 change-list 跳过全部 `.sillyspec/` 会导致模块文档 apply 永远缺清单）∪ 所有 task-*.md 的 allowed_paths（测试/产物文件设计常漏列但 task 已含，union 后不误拦；越界文件仍拦）。跨仓双护（2026-09-12 驾驭第十三批，troubleshooting §59）：①safeRemoveWorktreeDir 加 isCrossWorktreeDir 守卫（isCross meta ∨ <change>--<repoKey> 命名）——主仓清理面（cleanup/doctor/幽灵）一律拒删跨仓目录，cleanupCrossWorktrees 显式路径 allowCross 放行；②ensureCrossWorktrees 跳过 dirty baseline overlay/checkpoint（跨仓模型=子代理直接 commit 分支，主副本 WIP 含并行外来文件不进分支；锚点恒=跨仓仓 HEAD）。EXCLUDE-DIRTY 自动三方合并（坑 apply-dirty-block-no-merge，2026-09-10 驾驭小结第六批③）：mergeDirtyOverlapThreeWay——base=deliverableBase 锚点版 ours=主仓脏版 theirs=worktree 版，git merge-file clean 才写回（两侧并集，mergedDirtyFiles 审计），冲突维持原拦截+rescue（不留半合并现场），checkOnly 只读不试；4.5/5a 拦截口径同步引用合并残余集。变更目录读侧归档回退（坑 apply-archived-evidence-recycled，2026-09-10 驾驭小结第二批①）：活跃 `changes/<name>/` 缺 design.md 而 `changes/archive/<name>/` 在（归档后补 apply 场景——archive 有意保留未 apply worktree 却把变更目录 rename 走）→ design/tasks 从归档目录读（`resolveActiveOrArchiveChangeDir` 内部函数，assess 段 incidental/review 声明豁免集合同口径），allow 集不再恒空误拦整批 | `projectRoot, changeName` |
+ | `filterDeliverableFiles(files)` | apply 交付物过滤：排除 `.sillyspec/changes/` + `.sillyspec/.runtime/` + `.sillyspec/quicklog/` + `meta.json`，**保留 `.sillyspec/docs/`（dogfood 模块规范文档视为交付物，随变更 apply 回主仓）**。原一刀切排除整个 `.sillyspec/` 导致模块文档滞留 worktree（坑3，exec-g defer 项落地） | `files: string[]` |
+ | `resolvePatchFiles(changedFiles, allowSet, hasAllowList)` | 确定进 patch 的文件：有清单取「实际变更 ∩ 清单（pathMatches 容差）」，无清单取全部变更——与 classifyAllowListViolations 同口径（glob/多路径 cell 覆盖的具体文件也能进 patch）。原字面 includes 导致 glob 清单覆盖的文件过 manifest 校验却静默丢失（坑 apply-glob-manifest-passes-check-but-not-patch） | `changedFiles, allowSet, hasAllowList` |
+ | `copyUntrackedEntry(src, dst)` | baseline overlay 复制单个 untracked 条目：目录返回 `skipped-dir` 跳过（不 readFileSync 撞目录 EISDIR），文件复制到 dst（mkdirSync recursive），不存在返回 `missing`（坑 execute-worktree-overlay-untracked-dir-eisdir） | `src, dst` |
+diff --git a/.sillyspec/docs/sillyspec/scan/CONVENTIONS.md b/.sillyspec/docs/sillyspec/scan/CONVENTIONS.md
+index 0be1b3b..49759d8 100644
+--- a/.sillyspec/docs/sillyspec/scan/CONVENTIONS.md
++++ b/.sillyspec/docs/sillyspec/scan/CONVENTIONS.md
+@@ -108,13 +108,13 @@ src/init.js:301    // ⚠️ 必须保护真实资产：若本地 .sillyspec 含
+ 
+ `src/docs-check.js` + `test/doc-ref-check.test.mjs`（npm test 自动收集）+ `.husky/pre-push` 的 docs gate 构成引用校验链：文档里的 `file.js:line` 引用必须文件存在且行号在界，关键词断言要求引用行的反引号 token 在源码对应窗口内命中。
+ 
+-**隐形规则**：文档引用源码一律带实测行号（`worktree.js:262` 形态）；改源码后同步受影响文档的行号引用；失效数走 ratchet 门只许减少不许增加（基线 `.sillyspec/docs-check-baseline`）。
++**隐形规则**：文档引用源码一律带实测行号（`worktree.js:303` 形态）；改源码后同步受影响文档的行号引用；失效数走 ratchet 门只许减少不许增加（基线 `.sillyspec/docs-check-baseline`）。
+ 
+ ## 代码风格
+ 
+ - **模块系统**：ESM only（`"type":"module"`），顶层 `import/export`，例外见上方「框架隐形规则 #1」。入口 `bin/sillyspec.js` 仅 2 行：`#!/usr/bin/env node` + `import '../src/index.js'`。
+ - **导出**：命名导出为主（`export function`/`export const`/`export class`），`src/db.js` 的 `DB`、`src/sync.js` 的 `SyncManager`、`src/progress.js` 的 `ProgressManager` 用 `export class`。无默认导出（stages 用 `export const definition` 而非 `export default`）。
+-- **数字解析**：优先 `parseInt(x, 10)`（显式基数，见 `worktree.js:262`），NaN 判断用 `Number.isNaN` 而非全局 `isNaN`。
++- **数字解析**：优先 `parseInt(x, 10)`（显式基数，见 `worktree.js:303`），NaN 判断用 `Number.isNaN` 而非全局 `isNaN`。
+ - **时间戳**：落盘统一 `new Date().toISOString()`（`contract-matrix.js:164`、`scan-postcheck.js:243`）。
+ - **barrel 模式**：W6 重构后 `src/run.js`（23 行）/`src/progress.js`（facade）为纯 re-export / delegate 层，外部 import 契约不变——叶子模块实现细节不得穿透 facade（改内部拆分零感知）。
+ 
+diff --git a/.sillyspec/knowledge/uncategorized.md b/.sillyspec/knowledge/uncategorized.md
+index e10ca53..7141ac1 100644
+--- a/.sillyspec/knowledge/uncategorized.md
++++ b/.sillyspec/knowledge/uncategorized.md
+@@ -37,7 +37,7 @@ CLI 命令用 `process.exit(exitCode)` 强制退出时，若事件循环仍有
+ 
+ ## ql-20260711-001-e5f3 | _resolveMainRepoRoot 用 existsSync('git rev-parse --git-common-dir') 该命令返回相对 .git
+ 
+-`src/worktree.js:183` 的 `_resolveMainRepoRoot` 用 `existsSync(commonDir)` 校验 `git rev-parse --git-common-dir` 返回值，但该命令返回**相对路径 `.git`**（非绝对）。`existsSync('.git')` 相对 `process.cwd()`——生产时 cwd=主仓库解析正确；但**测试时 process.cwd=测试运行目录**（如 sillyspec 主仓库根或 test/），worktreeBase 会解析到运行目录的 `.sillyspec/.runtime/worktrees` 而非临时仓库 d。后果：`new WorktreeManager({cwd:d}).getMeta('tc')` 在错误 worktreeBase 找 meta.json → 返回 null → applyWorktree 报"worktree not found: tc"。解法（测试侧，已采）：worktree 测试 `process.chdir(d)` 让解析落在临时仓库；根治（未采）：`_resolveMainRepoRoot` 应 `resolve(this.cwd, commonDir)` 把相对 .git 锚定到 this.cwd。execute-worktree-platform-gaps 变更 task-07（worktree-apply-merge-fallback 测试）踩此坑。**附带发现**：worktree-native-overlay test1 用 `console.assert`（条件假只打印不抛错）+ 无条件 `console.log('✅')`，掩盖了同一问题——实际 `_resolveMainRepoRoot(d)` 在测试环境返回非 d 也显示通过。建议归类到 known-issues.md（测试构造坑）/ patterns.md（worktree-isolation）。
++`src/worktree.js:407` 的 `_resolveMainRepoRoot` 用 `existsSync(commonDir)` 校验 `git rev-parse --git-common-dir` 返回值，但该命令返回**相对路径 `.git`**（非绝对）。`existsSync('.git')` 相对 `process.cwd()`——生产时 cwd=主仓库解析正确；但**测试时 process.cwd=测试运行目录**（如 sillyspec 主仓库根或 test/），worktreeBase 会解析到运行目录的 `.sillyspec/.runtime/worktrees` 而非临时仓库 d。后果：`new WorktreeManager({cwd:d}).getMeta('tc')` 在错误 worktreeBase 找 meta.json → 返回 null → applyWorktree 报"worktree not found: tc"。解法（测试侧，已采）：worktree 测试 `process.chdir(d)` 让解析落在临时仓库；根治（未采）：`_resolveMainRepoRoot` 应 `resolve(this.cwd, commonDir)` 把相对 .git 锚定到 this.cwd。execute-worktree-platform-gaps 变更 task-07（worktree-apply-merge-fallback 测试）踩此坑。**附带发现**：worktree-native-overlay test1 用 `console.assert`（条件假只打印不抛错）+ 无条件 `console.log('✅')`，掩盖了同一问题——实际 `_resolveMainRepoRoot(d)` 在测试环境返回非 d 也显示通过。建议归类到 known-issues.md（测试构造坑）/ patterns.md（worktree-isolation）。
+ 
+ ## ql-20260802-002-36ae | spec-dir.test.mjs 全量套件 Windows 罕见进程级崩溃（flaky）
+ 
+diff --git a/docs/sillyspec/troubleshooting.md b/docs/sillyspec/troubleshooting.md
+index 21a4a2d..615a844 100644
+--- a/docs/sillyspec/troubleshooting.md
++++ b/docs/sillyspec/troubleshooting.md
+@@ -896,3 +896,17 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent 
+ **症状②**：B-6 修正用 python `str.replace()` 落盘**无 assert**——替换目标串不匹配时 replace 静默 no-op，修正内容凭空流失，直到复审才发现（自查流程缺陷）。
+ 
+ **workaround②（已改并获复审确认）**：批量文本替换一律 **count-assert + grep 复核**——替换前后断言出现次数（`assert s.count(old) == n`）、落盘后 `grep` 复核关键标记存在；sed/python 单行替换同理。该实践与 sillyspec 的 fail-closed 哲学同构（静默 no-op = 最危险的失败模式）。
++
++## 59. 三坑 postmortem：跨仓 worktree 被主仓清理面误删 / 跨仓 baseline checkpoint 卷入外来文件 / 门禁沙箱环境不一致（2026-09-12 用户实证，已修复）
++
++**症状①**：verify 期间跨仓 worktree 被扫描清理误删——apply 时锚点校验连环失败，被迫 cherry-pick 重建干净分支。
++**根因①**：主仓 worktree 删除原语（`safeRemoveWorktreeDir`，cleanup force-remove / doctor ghost / 幽灵清理共用）对目录形态不设防——跨仓 worktree 落位 `.runtime/worktrees/<change>--<repoKey>`（与主仓 `<change>` 同父目录的兄弟），`_pathToChangeName` 解析出的名字对不上任何活跃主仓变更，易被当遗留清理；其 git 注册在跨仓仓 `.git/worktrees/`，主仓侧 prune/remove 均不感知，目录一删注册悬空。
++**修复①**：删除原语单点加跨仓守卫 `isCrossWorktreeDir`（meta.json `isCross:true` ∨ 目录名 `<change>--<repoKey>` 双连字符形态）——主仓清理面一律拒删；显式跨仓路径（`cleanupCrossWorktrees`）传 `allowCross:true` 放行。
++
++**症状②**：跨仓 worktree 创建时 baseline checkpoint 把并行会话的外来文件（2 个 pptx + meta.json）带进跨仓分支，污染 apply 锚点对账。
++**根因②**：`ensureCrossWorktrees` 借用主仓的 dirty baseline overlay（`_overlayBaseline` + `_createBaselineCheckpoint`）——该机制语义是「主仓共享工作区里本变更的预存改动需隔离」，但跨仓模型是子代理直接 commit 跨仓分支，跨仓主副本的 WIP（尤其并行会话的无关文件）根本不属于本变更隔离面，checkpoint 反而把它们固化进分支历史。
++**修复②**：跨仓仓跳过 dirty overlay + checkpoint（采纳用户建议「对跨仓仓跳过」）——锚点恒为跨仓仓 HEAD（baseHash），`meta.baselineFiles=[]` 显式记录；外来文件物理不进分支。
++
++**症状③**：门禁隔离快照内实测环境不一致——venv 不含 dev 依赖（pytest-xdist 缺失）、node_modules 缺失——沙箱与真实仓环境不同的门禁持续误伤且难归因。
++**根因③**：快照只链接 node_modules——Python 项目的 commands.test 依赖 `.venv`（dev 依赖装在其中），快照内无 venv；链接失败/缺失也静默，误伤时看不出是环境问题。
++**修复③**：环境目录链接面扩 venv 族（node_modules/.venv/venv/env 全 junction——dev 依赖与主仓同源不缺）；链接失败或四者全缺时 ⚠️ 显式可见（宁可吵不可静默错）。
+diff --git a/src/run/gate-snapshot.js b/src/run/gate-snapshot.js
+index 90db174..6014dc0 100644
+--- a/src/run/gate-snapshot.js
++++ b/src/run/gate-snapshot.js
+@@ -58,11 +58,22 @@ export function createGateSnapshot({ cwd, files, sourceRoot = null }) {
+       overlaid++
+     }
+ 
+-    // node_modules junction（依赖主仓安装态；junction Windows 无需特权，POSIX 用 symlink）
+-    const nmSrc = join(cwd, 'node_modules')
+-    if (existsSync(nmSrc)) {
+-      try { symlinkSync(nmSrc, join(snapshotRoot, 'node_modules'), 'junction') }
+-      catch { /* 依赖链接失败：test/lint 可能跑不起来 → 仍返回快照，命令层报错走 fallback */ }
++    // 环境目录链接（坑 gate-snapshot-env-mismatch，2026-09-12 驾驭第十三批③，用户实证：
++    // 沙箱实测 venv 不装 dev 依赖（xdist 缺失）+ node_modules 缺失——快照只链 node_modules 时
++    // Python 项目的 commands.test 在快照内找不到 venv，误伤持续且难归因）。链接面扩 venv 族
++    // （.venv/venv/env——链接后 dev 依赖与主仓同源，不缺 xdist）；链接失败/主仓本就没有时
++    // ⚠️ 显式可见（环境不一致的门禁会持续误伤——宁可吵不可静默错）。
++    for (const envDir of ['node_modules', '.venv', 'venv', 'env']) {
++      const src = join(cwd, envDir)
++      if (!existsSync(src)) continue
++      try {
++        symlinkSync(src, join(snapshotRoot, envDir), 'junction')
++      } catch (e) {
++        console.warn(`⚠️ 门禁快照环境目录链接失败（${envDir}）：${e && e.message ? e.message : e}——快照内实测可能因缺 ${envDir} 误伤，失败时先核对快照环境`)
++      }
++    }
++    if (!existsSync(join(cwd, 'node_modules')) && !existsSync(join(cwd, '.venv')) && !existsSync(join(cwd, 'venv')) && !existsSync(join(cwd, 'env'))) {
++      console.warn(`⚠️ 门禁快照：主仓无 node_modules / venv 族环境目录——commands.test/lint 若依赖它们将快照/主仓都不可用（环境未安装？）`)
+     }
+ 
+     // local.yaml（gitignore 不进 HEAD；门禁命令配置来源）+ package-lock 保持 HEAD 版（npm test 不装新依赖）
+diff --git a/src/worktree-cross.js b/src/worktree-cross.js
+index 9fcd8f1..ba1dea2 100644
+--- a/src/worktree-cross.js
++++ b/src/worktree-cross.js
+@@ -198,23 +198,16 @@ export function ensureCrossWorktrees({ cwd, changeName, specBase }) {
+     };
+     writeAtomicSync(join(worktreePath, META_FILE), JSON.stringify(meta, null, 2) + '\n');
+ 
+-    // dirty baseline overlay：跨仓主工作副本在途改动 → worktree baseline（借主仓同款实现，
+-    // 只用其参数化逻辑，不用实例路径状态）
+-    try {
+-      const wmHelper = new WorktreeManager({ cwd: repoRoot });
+-      const baselineResult = wmHelper._overlayBaseline(repoRoot, worktreePath);
+-      meta.baselineFiles = baselineResult.files;
+-      meta.baselineHash = baselineResult.baselineHash;
+-      if (baselineResult.files.length > 0) {
+-        meta.baselineCommit = wmHelper._createBaselineCheckpoint(worktreePath, `${changeName}--${key}`, baselineResult.files);
+-      }
+-      if (baselineResult.errors && baselineResult.errors.length > 0) {
+-        console.warn(`⚠️ 跨仓 ${key} baseline overlay 部分失败（${baselineResult.errors.join('; ')}）——在途改动未全量进 baseline，apply 前请人工核对跨仓主工作副本`);
+-      }
+-      writeAtomicSync(join(worktreePath, META_FILE), JSON.stringify(meta, null, 2) + '\n');
+-    } catch (e) {
+-      console.warn(`⚠️ 跨仓 ${key} baseline overlay 失败（${e.message}）——跨仓主工作副本如有在途改动，worktree 不含它们`);
+-    }
++    // 跨仓仓跳过 dirty baseline overlay + checkpoint（坑 cross-baseline-checkpoint-foreign-files，
++    // 2026-09-12 驾驭第十三批②，用户实证：跨仓主副本在途的外来文件——并行会话的 2 个 pptx +
++    // meta.json——被 checkpoint 带进跨仓分支，污染 apply 锚点对账被迫 cherry-pick 重建）：
++    // 跨仓模型 = 子代理直接 commit 跨仓分支（NG-3），跨仓主副本的 WIP 不属于本变更隔离面，
++    // 不该被固化进分支。meta.baselineFiles=[] 显式记录「无 checkpoint」，apply 侧以 baseHash
++    // （跨仓仓 HEAD）为锚。
++    meta.baselineFiles = [];
++    meta.baselineHash = baseHash;
++    console.log(`ℹ️ 跨仓 ${key}: 跳过 dirty baseline checkpoint（跨仓主副本在途改动不进本变更分支——含并行会话外来文件时防污染；锚点 = 跨仓仓 HEAD ${String(baseHash).slice(0, 8)}）`);
++    writeAtomicSync(join(worktreePath, META_FILE), JSON.stringify(meta, null, 2) + '\n');
+ 
+     // deps 供给：specBase 传 null —— sniff worktree 自身（主仓 local.yaml 的 project.type/install
+     // 描述的是主仓，跨仓仓类型常不同，如实测 maven 主仓 + nodejs 前端仓，沿用会把 mvn 命令
+@@ -284,7 +277,8 @@ export function cleanupCrossWorktrees({ cwd, changeName, specBase, force = false
+       git(repoRoot, ['worktree', 'remove', '--force', wtPath], { timeout: 60000 });
+     } catch {
+       // remove 失败（脏文件/锁）：解链后安全删目录 + prune 注册
+-      try { safeRemoveWorktreeDir(wtPath, meta) } catch (e) { residual.push(`目录残留 ${wtPath}: ${e.message}`) }
++      // allowCross:true——本函数就是跨仓清理的显式路径（主仓守卫放行；见 safeRemoveWorktreeDir 注释）
++      try { safeRemoveWorktreeDir(wtPath, meta, { allowCross: true }) } catch (e) { residual.push(`目录残留 ${wtPath}: ${e.message}`) }
+       try { gitQuiet(repoRoot, ['worktree', 'prune'], { timeout: 30000 }) } catch { residual.push(`git worktree prune 失败（${repoRoot}）`) }
+     }
+     details.push(`分支 ${meta.branch} 保留作 review 锚点（确认无需回溯后可 git -C ${repoRoot} branch -D ${meta.branch}）`);
+diff --git a/src/worktree.js b/src/worktree.js
+index fb3ef85..a7e7ca1 100644
+--- a/src/worktree.js
++++ b/src/worktree.js
+@@ -10,7 +10,7 @@
+ 
+ import { execFileSync } from 'child_process';
+ import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, readdirSync, statSync, lstatSync, readlinkSync, unlinkSync, copyFileSync } from 'fs';
+-import { join, resolve, dirname, relative, isAbsolute } from 'path';
++import { join, resolve, dirname, relative, isAbsolute, basename } from 'path';
+ import { createHash } from 'crypto';
+ import { provisionDeps, checkDepsFreshness, detectEditableInstallEscape } from './worktree-deps.js';
+ import { writeAtomicSync } from './fs-atomic.js';
+@@ -79,7 +79,43 @@ export function unlinkNodeModulesLinks(worktreePath, meta = null, details = null
+  * 安全删除 worktree 目录：先解链全部 node_modules junction 再 rmSync。
+  * 幽灵目录清理（create 强删 / doctor ghost 修复）的统一出口——不再裸 rmSync。
+  */
+-export function safeRemoveWorktreeDir(worktreePath, meta = null) {
++/**
++ * 跨仓 worktree 目录判定（坑 cross-worktree-swept-by-main-cleanup，2026-09-12 驾驭第十三批①，
++ * 用户实证：跨仓 worktree 被 verify 期间的主仓侧清理面误删，apply 锚点校验连环失败、被迫
++ * cherry-pick 重建）：目录内 meta.json 带 isCross:true，或目录名呈 <change>--<repoKey> 跨仓
++ * 形态（.runtime/worktrees/ 下主仓 worktree 恒为纯 <change>，双连字符后缀是跨仓专属命名）。
++ */
++export function isCrossWorktreeDir(worktreePath) {
++  try {
++    const metaPath = join(worktreePath, 'meta.json')
++    if (existsSync(metaPath)) {
++      try {
++        const m = JSON.parse(readFileSync(metaPath, 'utf8'))
++        if (m && m.isCross === true) return true
++      } catch { /* 损坏 meta → 落到命名形态判定 */ }
++    }
++    const base = basename(worktreePath)
++    // 主仓 changeName 可含连字符（2026-09-10-x），跨仓后缀是 '--<repoKey>'——要求双连字符
++    // 分隔且两侧非空、repoKey 段无路径分隔符
++    const m2 = base.match(/^(.+)--([A-Za-z0-9_.\-]+)$/)
++    return !!(m2 && m2[1].trim() && m2[2].trim() && !m2[2].includes('/') && !m2[2].includes('\\'))
++  } catch {
++    return false
++  }
++}
++
++/**
++ * worktree 目录安全删除原语。opts.allowCross（默认 false）：跨仓 worktree（isCross meta/
++ * 命名形态）拒绝删除——主仓清理面（cleanup force-remove / doctor ghost / 幽灵清理）不得
++ * 波及跨仓 worktree（其注册在跨仓仓 .git，删除权在 cleanupCrossWorktrees 显式路径）。
++ */
++export function safeRemoveWorktreeDir(worktreePath, meta = null, opts = {}) {
++  if (!opts.allowCross && isCrossWorktreeDir(worktreePath)) {
++    throw new Error(
++      `跨仓 worktree 拒绝删除（主仓清理面守卫，坑 cross-worktree-swept-by-main-cleanup）: ${worktreePath}` +
++      `——跨仓 worktree 由 sillyspec worktree cleanup <change>（跨仓一并清理）或 apply no-op 路径管理；主仓侧清理/doctor 扫描不碰它`
++    )
++  }
+   unlinkNodeModulesLinks(worktreePath, meta);
+   rmSync(worktreePath, { recursive: true, force: true });
+ }
+diff --git a/test/cross-worktree-guard.test.mjs b/test/cross-worktree-guard.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/cross-worktree-guard.test.mjs
+@@ -0,0 +1,129 @@
++/**
++ * 跨仓 worktree 三护（2026-09-12 驾驭第十三批，用户实证三连）：
++ * ① 主仓清理面守卫（坑 cross-worktree-swept-by-main-cleanup）：safeRemoveWorktreeDir 对
++ *    isCross meta / <change>--<repoKey> 命名形态目录拒绝删除；显式路径（allowCross）放行
++ * ② 跨仓仓跳过 dirty baseline checkpoint（坑 cross-baseline-checkpoint-foreign-files）：
++ *    ensureCrossWorktrees 不再把跨仓主副本在途文件（含并行会话外来 pptx/meta.json）固化进分支
++ * ③ 门禁快照环境目录链接面（坑 gate-snapshot-env-mismatch）：venv 族 junction 进快照
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'fs'
++import { join } from 'path'
++import { tmpdir } from 'os'
++import { spawnSync } from 'node:child_process'
++import { safeRemoveWorktreeDir, isCrossWorktreeDir } from '../src/worktree.js'
++import { ensureCrossWorktrees } from '../src/worktree-cross.js'
++import { createGateSnapshot } from '../src/run/gate-snapshot.js'
++
++const tmpRoots = []
++function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); tmpRoots.push(d); return d }
++test.after(() => { for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
++
++function git(dir, args) {
++  const r = spawnSync('git', args, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
++  if (r.status !== 0) throw new Error(`git ${args.join(' ')}: ${r.stderr}`)
++  return r.stdout.trim()
++}
++
++// ── ① 守卫 ──
++test('isCrossWorktreeDir：isCross meta 与 <change>--<repoKey> 命名双判据', () => {
++  const root = mk('xguard-')
++  // 判据 A：meta.json isCross:true
++  const byMeta = join(root, '2026-09-12-x')
++  mkdirSync(byMeta, { recursive: true })
++  writeFileSync(join(byMeta, 'meta.json'), JSON.stringify({ changeName: 'c', repoKey: 'hub', isCross: true }))
++  assert.equal(isCrossWorktreeDir(byMeta), true, 'isCross meta → 跨仓')
++  // 判据 B：命名形态（无 meta）
++  const byName = join(root, '2026-09-12-x--platform')
++  mkdirSync(byName, { recursive: true })
++  assert.equal(isCrossWorktreeDir(byName), true, '<change>--<repoKey> 命名 → 跨仓')
++  // 反例：主仓 worktree（纯 change 名 + 非 cross meta）
++  const mainWt = join(root, '2026-09-12-x2')
++  mkdirSync(mainWt, { recursive: true })
++  writeFileSync(join(mainWt, 'meta.json'), JSON.stringify({ changeName: '2026-09-12-x2' }))
++  assert.equal(isCrossWorktreeDir(mainWt), false, '主仓 worktree 不误判')
++})
++
++test('safeRemoveWorktreeDir：跨仓目录默认拒删、allowCross 放行；主仓目录照删', () => {
++  const root = mk('xrm-')
++  const cross = join(root, '2026-09-12-y--hub')
++  mkdirSync(cross, { recursive: true })
++  writeFileSync(join(cross, 'meta.json'), JSON.stringify({ isCross: true }))
++  assert.throws(() => safeRemoveWorktreeDir(cross), /跨仓 worktree 拒绝删除/, '主仓清理面拒删跨仓')
++  assert.ok(existsSync(cross), '目录未被动')
++  safeRemoveWorktreeDir(cross, null, { allowCross: true })
++  assert.ok(!existsSync(cross), '显式路径（allowCross）可清')
++
++  const mainWt = join(root, '2026-09-12-y')
++  mkdirSync(mainWt, { recursive: true })
++  safeRemoveWorktreeDir(mainWt)
++  assert.ok(!existsSync(mainWt), '主仓 worktree 删除零回归')
++})
++
++// ── ② 跨仓跳过 checkpoint（端到端：外来文件不进分支） ──
++test('ensureCrossWorktrees：跨仓主副本在途外来文件（pptx/meta.json）不进跨仓分支', () => {
++  const mainRepo = mk('xck-main-')
++  const crossRepo = mk('xck-cross-')
++  for (const d of [mainRepo, crossRepo]) {
++    git(d, ['init', '-q']); git(d, ['config', 'user.email', 't@t.local']); git(d, ['config', 'user.name', 't'])
++  }
++  writeFileSync(join(crossRepo, 'code.py'), 'x = 1\n')
++  git(crossRepo, ['add', '.']); git(crossRepo, ['commit', '-q', '-m', 'init'])
++  const crossHead = git(crossRepo, ['rev-parse', 'HEAD'])
++  // 跨仓主副本在途：并行会话外来文件（不 commit）
++  writeFileSync(join(crossRepo, 'foreign-a.pptx'), 'pptx-bytes')
++  writeFileSync(join(crossRepo, 'foreign-b.pptx'), 'pptx-bytes2')
++  writeFileSync(join(crossRepo, 'meta.json'), '{"foreign": true}')
++
++  // 主仓 spec：plan.md 声明跨仓 repo（aggregateDeclaredRepos 读 frontmatter repo: 键）+ local.yaml 注册
++  const specBase = join(mainRepo, '.sillyspec')
++  const changeDir = join(specBase, 'changes', '2026-09-12-ck')
++  mkdirSync(changeDir, { recursive: true })
++  writeFileSync(join(changeDir, 'plan.md'), [
++    '# Plan',
++    '',
++    '## Wave 1',
++    '',
++    '- task-01',
++    '',
++  ].join('\n') + '\n')
++  mkdirSync(join(changeDir, 'tasks'), { recursive: true })
++  writeFileSync(join(changeDir, 'tasks', 'task-01.md'),
++    '---\nid: task-01\nrepo: hub\nallowed_paths:\n  - hubfile.py\n---\n\n# task-01\n')
++  writeFileSync(join(specBase, 'local.yaml'), `repos:\n  hub: ${crossRepo.replace(/\\/g, '/')}\n`)
++
++  const r = ensureCrossWorktrees({ cwd: mainRepo, changeName: '2026-09-12-ck', specBase })
++  assert.equal(r.created.length, 1, '跨仓 worktree 创建')
++  const wtPath = r.created[0].worktreePath
++  // 分支 HEAD == 跨仓仓 HEAD（无 checkpoint commit）——外来文件不在分支
++  const wtHead = git(wtPath, ['rev-parse', 'HEAD'])
++  assert.equal(wtHead, crossHead, '无 baseline checkpoint commit（锚点=跨仓仓 HEAD）')
++  const tree = git(wtPath, ['ls-files'])
++  assert.ok(!tree.includes('pptx') && !tree.includes('meta.json'), `外来文件不在分支（tree: ${tree.replace(/\n/g, ',')}）`)
++  // meta 记录 baselineFiles=[]
++  const meta = JSON.parse(readFileSync(join(wtPath, 'meta.json'), 'utf8'))
++  assert.deepEqual(meta.baselineFiles, [], 'meta.baselineFiles=[] 显式记录')
++  // 清理（跨仓显式路径）
++  git(wtPath, ['checkout', '-q', '--', '.']) // worktree 内可能有未跟踪残留，先复位
++  git(crossRepo, ['worktree', 'remove', '--force', wtPath])
++})
++
++// ── ③ 快照 venv 链接 ──
++test('createGateSnapshot：venv 族目录 junction 进快照（dev 依赖同源不缺）', () => {
++  const proj = mk('xenv-')
++  git(proj, ['init', '-q']); git(proj, ['config', 'user.email', 't@t.local']); git(proj, ['config', 'user.name', 't'])
++  writeFileSync(join(proj, '.gitignore'), '.sillyspec/\nnode_modules/\n.venv/\n')
++  writeFileSync(join(proj, 'app.py'), 'x = 1\n')
++  git(proj, ['add', '.']); git(proj, ['commit', '-q', '-m', 'init'])
++  // 主仓 venv（含 dev 依赖标记文件）
++  mkdirSync(join(proj, '.venv', 'Lib', 'site-packages'), { recursive: true })
++  writeFileSync(join(proj, '.venv', 'Lib', 'site-packages', 'xdist-marker.txt'), 'dev-deps-here')
++
++  const snap = createGateSnapshot({ cwd: proj, files: ['app.py'] })
++  assert.ok(snap, '快照创建')
++  try {
++    const marker = join(snap.snapshotRoot, '.venv', 'Lib', 'site-packages', 'xdist-marker.txt')
++    assert.ok(existsSync(marker), 'venv 经 junction 可达（dev 依赖同源）')
++  } finally { snap.cleanup() }
++})

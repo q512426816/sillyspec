@@ -1,0 +1,118 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-573075f5",
+  "totals": {
+    "files": 12,
+    "additions": 235,
+    "deletions": 14
+  },
+  "rows": [
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/change-management.md",
+      "declared": true,
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/docs-consistency.md",
+      "declared": true,
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/sillyspec/architecture-4a.md",
+      "declared": true,
+      "additions": 4,
+      "deletions": 4,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/sillyspec/design-d7-scan-lifecycle.md",
+      "declared": true,
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/sillyspec/prompt-control-debt.md",
+      "declared": true,
+      "additions": 2,
+      "deletions": 2,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/stages/execute.js",
+      "declared": true,
+      "additions": 4,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/verify-facts-schema.js",
+      "declared": true,
+      "additions": 10,
+      "deletions": 3,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/task-progress-marker.test.mjs",
+      "declared": true,
+      "additions": 65,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/verify-facts-receipt-width.test.mjs",
+      "declared": true,
+      "additions": 54,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/run/gate-snapshot.js",
+      "declared": true,
+      "additions": 28,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/index.js",
+      "declared": true,
+      "additions": 59,
+      "deletions": 2,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/sillyspec/troubleshooting.md",
+      "declared": true,
+      "additions": 6,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "qlId": "ql-20260912-006-42fc",
+  "sessionId": "quick-573075f5",
+  "savedAt": "2026-09-11T23:35:21.324Z",
+  "patchSha256": "e6613b928f635b6752743a5658af9de2fe49cf5428b4f5f53405fc44e01bb862",
+  "patchStatus": "ok"
+}
