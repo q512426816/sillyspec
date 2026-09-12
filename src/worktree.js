@@ -949,11 +949,10 @@ export class WorktreeManager {
   _branchReviewReferences(branch) {
     const runsDir = join(this.cwd, '.sillyspec', '.runtime', 'execute-runs');
     if (!existsSync(runsDir)) return [];
-    const branchCommits = new Set(
-      (gitQuiet(this.cwd, ['rev-list', branch]) || '').split('\n').map(s => s.trim()).filter(Boolean)
-    );
-    if (branchCommits.size === 0) return [];
-    const refs = [];
+    // 终批-②：先收 review.json 里出现的候选 hash（少量），再逐个精确校验「是分支祖先或自身」
+    // ——旧实现整分支 rev-list 进 Set（大历史仓 10 万 commit 每次 cleanup/doctor 可观内存与
+    // 时间，而判定只用到 review 引用过的那几个 hash）。
+    const candidates = new Map(); // hash → 引用它的 review.json 路径数组
     const visit = (dir) => {
       for (const entry of readdirSync(dir, { withFileTypes: true })) {
         const p = join(dir, entry.name);
@@ -963,14 +962,25 @@ export class WorktreeManager {
             const r = JSON.parse(readFileSync(p, 'utf8'));
             for (const key of ['base', 'head']) {
               const h = typeof r[key] === 'string' ? r[key].trim() : '';
-              if (h && branchCommits.has(h)) { refs.push(p); break; }
+              if (h) {
+                if (!candidates.has(h)) candidates.set(h, []);
+                candidates.get(h).push(p);
+              }
             }
           } catch { /* review.json 损坏不参与判定 */ }
         }
       }
     };
     visit(runsDir);
-    return refs;
+    if (candidates.size === 0) return [];
+    const refs = [];
+    for (const [hash, paths] of candidates) {
+      // merge-base --is-ancestor：祖先或自身 → exit 0 输出空串（gitQuiet 返回 ''≠null）；
+      // 非祖先 → exit 1 → null；未知/畸形 hash → 报错非零 → null（不在分支内，语义正确）
+      const probe = gitQuiet(this.cwd, ['merge-base', '--is-ancestor', hash, branch]);
+      if (probe !== null) refs.push(...paths);
+    }
+    return [...new Set(refs)];
   }
 
   /**
@@ -1918,8 +1928,12 @@ export class WorktreeManager {
    * @returns {string} commit hash
    */
   _createBaselineCheckpoint(worktreePath, changeName, baselineFiles = []) {
-    // 使用临时 git identity，避免用户未配置 user.name/user.email 导致失败
+    // 临时 git identity（用户未配置 user.name/email 时兜底）。终批-③：{ ...process.env } 展开
+    // 而非裸替换——裸 env 丢 SystemRoot/USERPROFILE/TEMP（Windows 上 git 直接起不来）；
+    // 提交走统一 git() 入口（safe.directory/timeout/maxBuffer 与全仓其他调用同口径——
+    // 旧裸 execFileSync 在 dubious-ownership 环境（CI/挂载盘）必败且无超时无 maxBuffer）。
     const env = {
+      ...process.env,
       GIT_AUTHOR_NAME: 'sillyspec',
       GIT_AUTHOR_EMAIL: 'sillyspec@baseline',
       GIT_COMMITTER_NAME: 'sillyspec',
@@ -1944,10 +1958,10 @@ export class WorktreeManager {
       // 分支上以便区分「前置 baseline」与「子代理新增改动」。它不该触发项目 pre-commit
       // hook（如 ruff format），否则主仓库 dirty 文件中任一不达标的会被 hook reformat
       // 致 commit 失败 → worktree 创建失败 → execute 无法启动。
-      execFileSync(
-        'git',
+      git(
+        worktreePath,
         ['commit', '--no-verify', '-m', `sillyspec: baseline checkpoint for ${changeName}${body}`],
-        { cwd: worktreePath, encoding: 'utf8', stdio: ['pipe','pipe','pipe'], env }
+        { timeout: 30000, env }
       );
       const hash = git(worktreePath, ['rev-parse', 'HEAD']);
       console.log(`📌 baseline checkpoint: ${hash}`);

@@ -180,7 +180,7 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
 
 **dispatch 双后端 —— "派发策略生成器，不是 JS 执行体"**（`dispatch/strategy.js:4-9`）：它**不调任何 tool，只生成注入 prompt 的"派发指令文本"**——因为本机 Agent tool 和 SillyHub MCP tool 都只有 agent 能调，CLI（Node）调不了。后端选择纯由 `probe.available` 驱动（available→sillyhub，否则 local）。execute 三态派发（派发段注入起 `stages/execute.js:594` `getDispatchMode`）：`local`/`local-fallback`/`sillyhub`。回收约定（R-07）：无论哪个后端，worker **绝不 git commit**，SillySpec 主体自己 `git diff` worktree 写 review.json。
 
-**worktree-apply —— 跨仓 task 合并回主干**（`applyWorktree` `src/worktree-apply.js:729` 起，变更文件列表经 `filterDeliverableFiles` `src/worktree-apply.js:55`）：跨仓 task no-op 校验 → meta 校验 → 变更文件列表（`filterDeliverableFiles` 排除 `.sillyspec/`）→ allowList 校验（从 task 卡 `allowed_paths` 读）→ `assessApplyRisk` 风险审计（SAFE/WARNING 自动 apply 到 main）。
+**worktree-apply —— 跨仓 task 合并回主干**（`applyWorktree` `src/worktree-apply.js:768` 起，变更文件列表经 `filterDeliverableFiles` `src/worktree-apply.js:55`）：跨仓 task no-op 校验 → meta 校验 → 变更文件列表（`filterDeliverableFiles` 排除 `.sillyspec/`）→ allowList 校验（从 task 卡 `allowed_paths` 读）→ `assessApplyRisk` 风险审计（SAFE/WARNING 自动 apply 到 main）。
 
 **MCP 客户端**（`src/sillyhub-mcp/`）：`config.js` 统一凭据读源（local.yaml mcp 段 > env > null）；`client.js` 封装 `probeDaemon`/`listTools`/`dispatchWorker` 等。
 
@@ -228,7 +228,7 @@ git worktree 隔离多 Agent 并发改动：每个 change 在 `.sillyspec/.runti
 
 - **创建**（方法 `worktree.js:360`，类 `worktree.js:286`）：submodule/native-worktree 检测 → gitignore 守卫 → 幽灵 worktree fail-closed → 解析 base → `git worktree add`（失败降级 in-place-fallback）→ 占位 meta 原子写 → dirty baseline overlay（`git diff --binary | git apply`）→ baseline checkpoint commit → 依赖供给 → 写完整 meta。
 - **三种 mode**：`worktree`（标准）/ `native-worktree`（外部已 linked）/ `in-place-fallback`（沙箱/权限降级）。
-- **cleanup**（`worktree.js:953-1100`）：三重清理 + **fail-closed**（`hasUnappliedChanges` 有未 apply 交付则拒绝，需 `--force`）；**Windows junction 必须先解链**（`worktree.js:867-1050`），否则 `rmSync` 跟随 junction 误删主仓 node_modules。
+- **cleanup**（`worktree.js:953-1100`）：三重清理 + **fail-closed**（`hasUnappliedChanges` 有未 apply 交付则拒绝，需 `--force`）；**Windows junction 必须先解链**（`worktree.js:1077`），否则 `rmSync` 跟随 junction 误删主仓 node_modules。
 - **node_modules provision**（`src/worktree-deps.js`）：junction/symlink 快路径（Windows `mklink /J`，POSIX `ln -s`，lockfile 一致才 link）+ install 兜底（`inferInstallCommand` 推断 node/maven/gradle/python/generic）。
 
 ### 4.4 跨平台（Win/Linux/macOS）

@@ -124,9 +124,11 @@ export function safeGit(cwd, args, opts = {}) {
  * @returns {string|Buffer}
  */
 export function git(cwd, args, opts = {}) {
-  const { trim = true, timeout = 5000, encoding = 'utf8' } = opts
+  const { trim = true, timeout = 5000, encoding = 'utf8', env } = opts
   const fullArgs = buildFullArgs(cwd, args)
-  const value = execFileSync('git', fullArgs, { encoding, timeout, maxBuffer: GIT_MAX_BUFFER, stdio: ['ignore', 'pipe', 'pipe'] })
+  // env（终批-③）：可选注入（如 baseline checkpoint 的临时 GIT identity）——调用方必须
+  // 用 { ...process.env, GIT_xxx } 展开形式，裸替换会丢 SystemRoot/USERPROFILE/TEMP（Windows）
+  const value = execFileSync('git', fullArgs, { encoding, timeout, maxBuffer: GIT_MAX_BUFFER, stdio: ['ignore', 'pipe', 'pipe'], env })
   if (Buffer.isBuffer(value)) return value
   return trim ? value.trim() : value
 }

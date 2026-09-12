@@ -17,3 +17,4 @@
 - ql-20260908-008 | meta.json BOM 容错（parseJSON 剥 ﻿，带 BOM 不再被当损坏）+ apply allowlist 平台模式 specRoot 解析（resolveApplyAllowSet/collectReviewDeclaredFiles 加 specBase/runtimeRoot 参 + 指针静默回退；applyWorktree/applyCrossRepoWorktrees/assessApplyRisk/gates plan 预检接线）——治「平台模式整批 BLOCKED」「带 BOM 当损坏」 |
 ql-20260911-030-bad4 | hasUnappliedChanges 无 meta 改保守 true（对齐 dir 缺失分支与 create 幽灵分支 fail-closed）——cleanup 不带 --force 不再跳过未落仓护栏误删未提交代码
 - ql-20260912-008-8eff | EXCLUDE-DIRTY 合并覆写前备份在途原文至 merge-backups；chunkPaths argv 分批（diff/add/reset/getBlobHashMap）；trackedPatchFiles 判定 N+1 spawn 改单次哈希表
+- ql-20260912-010-0b9e | hash-object/_lsTreeBlobs argv 分批（内联 _chunkPathsPrivate——与 worktree-apply 反向环）；_branchReviewReferences 改候选 hash 精确 merge-base 校验（缩写 hash 漏检修复）；_createBaselineCheckpoint env 展开继承+统一 git() 入口（safe.directory/timeout，git() 新增 env 选项）
