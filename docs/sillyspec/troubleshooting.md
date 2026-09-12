@@ -921,3 +921,8 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 
 **①快照 monorepo 失明**：根级四环境目录链接覆盖不了 pnpm/nx/lerna workspace 的 `packages/<pkg>/node_modules` 子包依赖——快照内实测报各种无关错，四次重试后才从日志摸到 `Temp\sillyspec-gate-*` 路径。修复：`discoverEnvDirs` 深度≤3 递归发现集（跳过环境目录内部/dist/build/.git）逐个 junction；`envDirsLinked` 预检改发现集口径；🧪 日志行带**快照根路径**；失败时 `printSnapshotFailureHint` 直给路径 + 排查顺序（本变更真实失败 → 环境差异对照复跑 `*_SNAPSHOT_OFF=1` → 并行污染已排除）——三个执行点（quick 门禁 / verify gates / noAI 扫描）全接线。
 **②checkpoint 产物吞噬**：部署 tar.gz（289MB untracked，.gitignore 缺口）被 baseline checkpoint 带进分支——FF 合并被迫改 merge commit + 二进制永久入 git。修复：untracked 收入口 `isCheckpointSkippableArtifact` 防御（归档/分发扩展名 tar.gz/zip/whl/exe 等恒跳 + >10MB 体积帽 `SILLYSPEC_BASELINE_MAX_FILE_MB` 可调），跳过清单 ⚠️ 点名 + 补 .gitignore 指引；tracked-modified 不设防（已在 git 历史，checkpoint diff 是原生形态）。
+
+## 62. 两坑：审计 fail-closed 误伤并行会话 spec 残留（归档移动/未跟踪脚本）/ gen:types 行尾重写假 M（2026-09-12 用户实证，已修复）
+
+**①spec 共享面删除误拦**：并行会话的归档移动（docs/sillyspec + changes/ 的 D+A）落进本会话时间窗 → 删除门 fail-closed，只能 `--allow-delete`（+`--allow-new` 消新增噪声）解锁——审计无法区分「并发他者」与「本会话偷建」。修复：`.sillyspec/` 与 `docs/` 前缀的**非本会话声明**删除 → `foreignSpecChurn` 整栈退（deletedFiles 移除 + 软警告归因「疑似并行会话归档移动/收尾」）；src/test 交付面删除仍 fail-closed；新增文件 reason 按 mtime 归因（早于会话启动 = 预存残留/并行预存注记，晚于 = 本窗口新建）。
+**②EOL-only 假 M**：gen:types/编辑器重写行尾（内容零变化）制造假 M 状态混进审计窗口。修复：`git diff --name-only --ignore-cr-at-eol HEAD` 单次对照——tracked 修改不在真实变更集 = 纯行尾重写，剔出 changedFiles 归 `eolOnlyFiles` 软警告（.gitattributes 根治指引），文件行/各门不再触发。

@@ -137,6 +137,17 @@ export function printQuickAuditReview(review) {
     }
     console.warn(`   quick 不强制文档同步，欠账已随本条 QUICKLOG「审计：」行落盘（可事后追溯）。若改动触及接口/契约，建议顺手同步模块文档。`)
   }
+  // spec 共享面他者噪声（坑 foreign-spec-churn-fail-closed）：并行会话归档移动/文档收尾的
+  // 删除与 EOL-only 假 M——软警告点名归因，不再逼 --allow-delete/--allow-new 解锁。
+  if (review.foreignSpecChurn && review.foreignSpecChurn.length > 0) {
+    console.warn(`⚠️ spec 共享面 ${review.foreignSpecChurn.length} 个非本会话声明的删除（.sillyspec/ docs/，疑似并行会话归档移动/收尾——归其会话收口，本会话不阻断）：`)
+    for (const f2 of review.foreignSpecChurn.slice(0, 6)) console.warn(`   - ${f2}`)
+    if (review.foreignSpecChurn.length > 6) console.warn(`   … 共 ${review.foreignSpecChurn.length} 个`)
+  }
+  if (review.eolOnlyFiles && review.eolOnlyFiles.length > 0) {
+    console.warn(`⚠️ ${review.eolOnlyFiles.length} 个文件仅行尾重写（内容零变化，gen:types/编辑器 CRLF 假 M——已剔出本会话审计）：${review.eolOnlyFiles.slice(0, 5).join('、')}${review.eolOnlyFiles.length > 5 ? ' 等' : ''}`)
+    console.warn(`   根治：.gitattributes 声明 text=auto eol=lf（或按文件类型钉死），生成器重写不再制造假 M`)
+  }
   if (review.docsCheckHint && review.docsCheckHint.invalid > 0) {
     console.warn(`\n📎 文档引用失效（docs check）：本次改动的文档含 ${review.docsCheckHint.invalid}/${review.docsCheckHint.total} 处失效 file:line 引用。`)
     // 逐条指名（2026-09-11 用户实证：只报计数不指名哪处，四轮复现才定位——门禁输出
