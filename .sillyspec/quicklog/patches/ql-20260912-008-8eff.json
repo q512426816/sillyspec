@@ -1,0 +1,62 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-d4196acd",
+  "totals": {
+    "files": 5,
+    "additions": 124,
+    "deletions": 80
+  },
+  "rows": [
+    {
+      "path": "src/config-cat.js",
+      "declared": true,
+      "additions": 6,
+      "deletions": 3,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/constants.js",
+      "declared": true,
+      "additions": 3,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/git-helper.js",
+      "declared": true,
+      "additions": 2,
+      "deletions": 2,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/index.js",
+      "declared": true,
+      "additions": 57,
+      "deletions": 57,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/worktree-apply.js",
+      "declared": true,
+      "additions": 56,
+      "deletions": 18,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "qlId": "ql-20260912-008-8eff",
+  "sessionId": "quick-d4196acd",
+  "savedAt": "2026-09-12T02:37:29.217Z",
+  "patchSha256": "afb2433f31c4647369dec43dd9e9efba545f7d41fb21f188e05af7e787257a30",
+  "patchStatus": "ok"
+}

@@ -221,13 +221,13 @@ async function main() {
       json = true;
     } else if (args[i] === '--save') {
       saveWorkflowRunFlag = true;
-    } else if (args[i] === '--dir' && args[i + 1]) {
+    } else if (args[i] === '--dir' && args[i + 1] && !args[i + 1].startsWith('--')) {
       targetDir = resolve(args[i + 1]);
       i++;
-    } else if (args[i] === '--spec-dir' && args[i + 1]) {
+    } else if (args[i] === '--spec-dir' && args[i + 1] && !args[i + 1].startsWith('--')) {
       specDir = resolve(args[i + 1]);
       i++;
-    } else if (args[i] === '--tool' && args[i + 1]) {
+    } else if (args[i] === '--tool' && args[i + 1] && !args[i + 1].startsWith('--')) {
       // 多值支持：逗号分隔（--tool claude,codex）与重复 flag（--tool a --tool b）都收集进数组
       for (const v of args[i + 1].split(',')) {
         const t = v.trim();
@@ -237,13 +237,13 @@ async function main() {
     } else if (args[i] === '--no-skills') {
       // init 专属：跳过 skills 复制段（吞进变量，不透传 filteredArgs）
       noSkills = true;
-    } else if (args[i] === '--workspace-id' && args[i + 1]) {
+    } else if (args[i] === '--workspace-id' && args[i + 1] && !args[i + 1].startsWith('--')) {
       // 平台模式专属 flag（init 落平台指针用；--runtime-root/--scan-run-id 保持在
       // filteredArgs 由 runCommand 解析，init 侧只需要 workspaceId 作为平台信号 + runtimeRoot）
       platformWorkspaceId = args[i + 1];
       filteredArgs.push(args[i], args[i + 1]);
       i++;
-    } else if (args[i] === '--runtime-root' && args[i + 1]) {
+    } else if (args[i] === '--runtime-root' && args[i + 1] && !args[i + 1].startsWith('--')) {
       platformRuntimeRoot = resolve(args[i + 1]);
       filteredArgs.push(args[i], args[i + 1]);
       i++;
@@ -324,10 +324,10 @@ async function main() {
       const progDir = specDir ? dir : resolveEffectiveDir(dir);
       const subCommand = filteredArgs[1];
       const stageIdx = filteredArgs.indexOf('--stage');
-      const stage = stageIdx >= 0 && filteredArgs[stageIdx + 1] ? filteredArgs[stageIdx + 1] : null;
+      const stage = stageIdx >= 0 && filteredArgs[stageIdx + 1] && !String(filteredArgs[stageIdx + 1]).startsWith("--") ? filteredArgs[stageIdx + 1] : null;
       // 解析 --change 参数
       const progChangeIdx = args.indexOf('--change');
-      const progChangeName = progChangeIdx >= 0 && args[progChangeIdx + 1] ? args[progChangeIdx + 1] : null;
+      const progChangeName = progChangeIdx >= 0 && args[progChangeIdx + 1] && !String(args[progChangeIdx + 1]).startsWith("--") ? args[progChangeIdx + 1] : null;
       // 与 run 入口同源消毒（防路径穿越；progress 下游 completeStage 写 history 文件名拼 change 名）
       if (progChangeName) assertSafeChangeName(progChangeName, '--change 变更名');
 
@@ -469,7 +469,7 @@ async function main() {
       // 只读查询，不依赖 worktree、不写状态（D-002@v1）。
       const gateStage = filteredArgs[1];
       const gateChangeIdx = args.indexOf('--change');
-      const gateChange = gateChangeIdx >= 0 && args[gateChangeIdx + 1] ? args[gateChangeIdx + 1] : null;
+      const gateChange = gateChangeIdx >= 0 && args[gateChangeIdx + 1] && !String(args[gateChangeIdx + 1]).startsWith("--") ? args[gateChangeIdx + 1] : null;
       if (!gateStage || gateStage.startsWith('-') || !gateChange) {
         console.error('用法: sillyspec gate <stage> --change <name> [--json]\n  stage: brainstorm | plan | execute | verify | archive | ...');
         process.exit(2);
@@ -529,7 +529,7 @@ async function main() {
       // 单项事实核验（machine-interface v1）：查询变更某一 facet 的真实状态，返回结构化 data。
       const facet = filteredArgs[1];
       const deriveChangeIdx = args.indexOf('--change');
-      const deriveChange = deriveChangeIdx >= 0 && args[deriveChangeIdx + 1] ? args[deriveChangeIdx + 1] : null;
+      const deriveChange = deriveChangeIdx >= 0 && args[deriveChangeIdx + 1] && !String(args[deriveChangeIdx + 1]).startsWith("--") ? args[deriveChangeIdx + 1] : null;
       if (!facet || facet.startsWith('-') || !deriveChange) {
         console.error('用法: sillyspec derive <facet> --change <name> [--json]\n  facet: execute-evidence | verify-test | task-reviews | artifacts');
         process.exit(2);
@@ -587,7 +587,7 @@ async function main() {
       }
       const rwVal = (flag) => {
         const i = filteredArgs.indexOf(flag);
-        return i >= 0 && filteredArgs[i + 1] ? filteredArgs[i + 1] : null;
+        return i >= 0 && filteredArgs[i + 1] && !String(filteredArgs[i + 1]).startsWith("--") ? filteredArgs[i + 1] : null;
       };
       const rwChange = rwVal('--change');
       const rwTask = rwVal('--task');
@@ -660,11 +660,11 @@ task 进行中状态标记：开工/完工落 .runtime/task-progress/，list 标
         break;
       }
       const tChangeIdx = filteredArgs.indexOf('--change');
-      const tChange = tChangeIdx >= 0 && filteredArgs[tChangeIdx + 1] ? filteredArgs[tChangeIdx + 1] : null;
+      const tChange = tChangeIdx >= 0 && filteredArgs[tChangeIdx + 1] && !String(filteredArgs[tChangeIdx + 1]).startsWith("--") ? filteredArgs[tChangeIdx + 1] : null;
       const tTaskIdx = filteredArgs.indexOf('--task');
-      const tTask = tTaskIdx >= 0 && filteredArgs[tTaskIdx + 1] ? filteredArgs[tTaskIdx + 1] : null;
+      const tTask = tTaskIdx >= 0 && filteredArgs[tTaskIdx + 1] && !String(filteredArgs[tTaskIdx + 1]).startsWith("--") ? filteredArgs[tTaskIdx + 1] : null;
       const tNoteIdx = filteredArgs.indexOf('--note');
-      const tNote = tNoteIdx >= 0 && filteredArgs[tNoteIdx + 1] ? filteredArgs[tNoteIdx + 1] : null;
+      const tNote = tNoteIdx >= 0 && filteredArgs[tNoteIdx + 1] && !String(filteredArgs[tNoteIdx + 1]).startsWith("--") ? filteredArgs[tNoteIdx + 1] : null;
       if (!tChange) { console.error('❌ 缺 --change <变更名>'); process.exit(2); }
       if (taskSub !== 'list') {
         if (!tTask || !/^task-\d+$/.test(tTask)) { console.error('❌ --task 格式应为 task-NN'); process.exit(2); }
@@ -714,7 +714,7 @@ task 进行中状态标记：开工/完工落 .runtime/task-progress/，list 标
       // verdict——手算 hash、手抄 diff 清单是纯错误面，gate 校验的恰是这些字段。与草稿互补：
       // 草稿补「缺失」，adopt 修「已存在但 mechanics 错/缺」，verdict 原样保留。
       const brChangeIdx = args.indexOf('--change');
-      const brChange = brChangeIdx >= 0 && args[brChangeIdx + 1] ? args[brChangeIdx + 1] : null;
+      const brChange = brChangeIdx >= 0 && args[brChangeIdx + 1] && !String(args[brChangeIdx + 1]).startsWith("--") ? args[brChangeIdx + 1] : null;
       const brAdopt = args.includes('--adopt');
       if (!brChange) {
         console.error('用法: sillyspec backfill-reviews --change <name> [--adopt] [--json] [--spec-dir <path>]\n  缺失 review.json → 生成 cannot_verify 草稿（解 archive 客观完成度阻断）\n  --adopt → 已存在 review.json 的 base/head/changedFiles/diffPaths 等 mechanics 字段一键重算代填（verdict 保留；统一 commit 模式 diffPaths=task 卡 allowed_paths）');
@@ -796,7 +796,7 @@ task 进行中状态标记：开工/完工落 .runtime/task-progress/，list 标
       const wsArgs = filteredArgs.slice(2);
       const wsFlag = (name) => {
         const i = wsArgs.indexOf(name);
-        return i >= 0 && wsArgs[i + 1] ? wsArgs[i + 1] : null;
+        return i >= 0 && wsArgs[i + 1] && !String(wsArgs[i + 1]).startsWith("--") ? wsArgs[i + 1] : null;
       };
       const { workspaceAdd, workspaceRemove, workspaceStatus } = await import('./workspace.js');
       if (wsSub === 'add') {
@@ -927,7 +927,7 @@ task 进行中状态标记：开工/完工落 .runtime/task-progress/，list 标
       // 通用自动 git 在多会话仓是历史重灾区，故收窄到这一处。
       if (args.includes('--apply')) {
         const apChangeIdx = args.indexOf('--change');
-        const apChange = apChangeIdx >= 0 && args[apChangeIdx + 1] ? args[apChangeIdx + 1] : null;
+        const apChange = apChangeIdx >= 0 && args[apChangeIdx + 1] && !String(args[apChangeIdx + 1]).startsWith("--") ? args[apChangeIdx + 1] : null;
         if (!apChange) {
           console.error('用法: sillyspec commit --apply --change <名>\n  只限归档语境（changes.status=archived 或 current_stage=archive）执行归档产物提交');
           process.exit(2);
@@ -1006,7 +1006,7 @@ task 进行中状态标记：开工/完工落 .runtime/task-progress/，list 标
       // --init 顺带生成 verify-result.md 七章节骨架（探针结果预填；结论留「待填」——gate 找
       // 不到 PASS/FAIL 即判不过，骨架不能直接过门）。已存在不覆盖。
       const vpChangeIdx = args.indexOf('--change');
-      const vpChange = vpChangeIdx >= 0 && args[vpChangeIdx + 1] ? args[vpChangeIdx + 1] : null;
+      const vpChange = vpChangeIdx >= 0 && args[vpChangeIdx + 1] && !String(args[vpChangeIdx + 1]).startsWith("--") ? args[vpChangeIdx + 1] : null;
       const vpInit = args.includes('--init');
       if (!vpChange) {
         console.error('用法: sillyspec verify-probes --change <name> [--init] [--json] [--spec-dir <path>]\n  跑机械探针（TODO 标记/测试覆盖/API 对账/删除对账）输出 markdown；--init 生成 verify-result.md 骨架（探针预填，已存在不覆盖）');
@@ -1130,9 +1130,9 @@ task 进行中状态标记：开工/完工落 .runtime/task-progress/，list 标
       // stage-reviews 路径）、--kill=清在途记录+平台处置指引（处置权在人）。薄壳：全部逻辑在
       // src/review-dispatch.js（可测核心），此处只做 flag 解析与退出码。
       const rdChangeIdx = args.indexOf('--change');
-      const rdChange = rdChangeIdx >= 0 && args[rdChangeIdx + 1] ? args[rdChangeIdx + 1] : null;
+      const rdChange = rdChangeIdx >= 0 && args[rdChangeIdx + 1] && !String(args[rdChangeIdx + 1]).startsWith("--") ? args[rdChangeIdx + 1] : null;
       const rdStageIdx = args.indexOf('--stage');
-      const rdStage = rdStageIdx >= 0 && args[rdStageIdx + 1] ? args[rdStageIdx + 1] : null;
+      const rdStage = rdStageIdx >= 0 && args[rdStageIdx + 1] && !String(args[rdStageIdx + 1]).startsWith("--") ? args[rdStageIdx + 1] : null;
       const rdStatus = args.includes('--status');
       const rdKill = args.includes('--kill');
       const rdMode = rdKill ? 'kill' : rdStatus ? 'status' : 'create';
@@ -1183,9 +1183,9 @@ task 进行中状态标记：开工/完工落 .runtime/task-progress/，list 标
       // 模块文档 sidecar 同步命令化（2026-09-09 刀批）：diff 归属模块 → sidecar 追加变更索引行 +
       // 卡 updated_at 戳——机械部分 CLI 代算，卡片正文语义更新仍归 agent/归档流程。幂等。
       const mdsChangeIdx = args.indexOf('--change');
-      const mdsChange = mdsChangeIdx >= 0 && args[mdsChangeIdx + 1] ? args[mdsChangeIdx + 1] : null;
+      const mdsChange = mdsChangeIdx >= 0 && args[mdsChangeIdx + 1] && !String(args[mdsChangeIdx + 1]).startsWith("--") ? args[mdsChangeIdx + 1] : null;
       const mdsNoteIdx = args.indexOf('--note');
-      const mdsNote = mdsNoteIdx >= 0 && args[mdsNoteIdx + 1] ? args[mdsNoteIdx + 1] : null;
+      const mdsNote = mdsNoteIdx >= 0 && args[mdsNoteIdx + 1] && !String(args[mdsNoteIdx + 1]).startsWith("--") ? args[mdsNoteIdx + 1] : null;
       if (!mdsChange) {
         console.error('用法: sillyspec module-docs-sync --change <name> [--note "一句话"] [--json]\n  diff 归属模块 → sidecar 追加变更索引行 + 卡 updated_at 戳（幂等；卡片正文语义更新仍归 agent）');
         process.exit(2);
@@ -1210,7 +1210,7 @@ task 进行中状态标记：开工/完工落 .runtime/task-progress/，list 标
       // 手排 Wave 与拓扑比对不一致需手改；依赖方向硬拦（plan-postcheck）落地后给一条零手写出路。
       // depMap 与 postcheck 同源（collectTaskDepMap）→ topoSortWaves → 重写 Wave 段 + 同步任务总表 W 列。
       const pawChangeIdx = args.indexOf('--change');
-      const pawChange = pawChangeIdx >= 0 && args[pawChangeIdx + 1] ? args[pawChangeIdx + 1] : null;
+      const pawChange = pawChangeIdx >= 0 && args[pawChangeIdx + 1] && !String(args[pawChangeIdx + 1]).startsWith("--") ? args[pawChangeIdx + 1] : null;
       const pawDryRun = args.includes('--dry-run');
       if (!pawChange) {
         console.error('用法: sillyspec plan-adopt-waves --change <name> [--dry-run] [--json] [--spec-dir <path>]\n  把 plan.md 的 Wave 段一键重排为 depends_on 拓扑分组（同步任务总表 W 列；--dry-run 只看不写）');
@@ -1255,7 +1255,7 @@ task 进行中状态标记：开工/完工落 .runtime/task-progress/，list 标
       // archive 模块影响矩阵骨架（2026-08-21 审计第三批 D3）：文件×模块归属按 _module-map.yaml
       // paths 前缀匹配预填（机械），影响类型/review 标记留 <!--TODO-->（语义）。已存在不覆盖。
       const miChangeIdx = args.indexOf('--change');
-      const miChange = miChangeIdx >= 0 && args[miChangeIdx + 1] ? args[miChangeIdx + 1] : null;
+      const miChange = miChangeIdx >= 0 && args[miChangeIdx + 1] && !String(args[miChangeIdx + 1]).startsWith("--") ? args[miChangeIdx + 1] : null;
       if (!miChange) {
         console.error('用法: sillyspec module-impact --change <name> [--json] [--spec-dir <path>]\n  生成 module-impact.md 骨架（模块影响矩阵按 module-map 预填 + 未匹配文件清单；已存在不覆盖）');
         process.exit(2);
@@ -1291,7 +1291,7 @@ task 进行中状态标记：开工/完工落 .runtime/task-progress/，list 标
       // 用法错 exit 2、assertSafeChangeName 消毒、动态 import、--json 结构化输出、运行错
       // fail-soft 出错误摘要 exit 1 不抛栈。
       const saChangeIdx = args.indexOf('--change');
-      const saChange = saChangeIdx >= 0 && args[saChangeIdx + 1] ? args[saChangeIdx + 1] : null;
+      const saChange = saChangeIdx >= 0 && args[saChangeIdx + 1] && !String(args[saChangeIdx + 1]).startsWith("--") ? args[saChangeIdx + 1] : null;
       if (!saChange) {
         console.error('用法: sillyspec scope-audit --change <name> [--file <path>] [--json] [--spec-dir <path>]\n  变更范围对账：计划×实际三态全表 + 行数（quick 会话传 quick-<8hex> 出归属表；已归档变更可查——快照冻结记录态）；--file <path> 看单文件变化内容（对账同源锚点的 git diff）；advisory 只读展示，不构成门禁');
         process.exit(2);
@@ -1388,7 +1388,7 @@ task 进行中状态标记：开工/完工落 .runtime/task-progress/，list 标
         // 端点增删的 before 侧；扫描/落盘在 endpoint-baseline.js 纯函数，此处只做参数解析 +
         // worktree 主仓锚定 + 输出。
         const ebChangeIdx = args.indexOf('--change');
-        const ebChange = ebChangeIdx >= 0 && args[ebChangeIdx + 1] ? args[ebChangeIdx + 1] : null;
+        const ebChange = ebChangeIdx >= 0 && args[ebChangeIdx + 1] && !String(args[ebChangeIdx + 1]).startsWith("--") ? args[ebChangeIdx + 1] : null;
         if (!ebChange) {
           console.error('用法: sillyspec endpoints baseline --change <name> [--spec-dir <path>] [--json]\n  拍变更前端点基线（全仓现扫，幂等已拍过不覆盖）→ .runtime/endpoint-baselines/<change>.json；归档 delta 端点增删的 before 侧。\n  execute worktree 内跑：扫描根与落点自动锚定主仓（变更前代码在主仓；worktree 内是交付态且其 .runtime 随清理丢失）');
           process.exit(2);
@@ -1456,14 +1456,14 @@ task 进行中状态标记：开工/完工落 .runtime/task-progress/，list 标
         process.exit(2);
       }
       const epChangeIdx = args.indexOf('--change');
-      const epChange = epChangeIdx >= 0 && args[epChangeIdx + 1] ? args[epChangeIdx + 1] : null;
+      const epChange = epChangeIdx >= 0 && args[epChangeIdx + 1] && !String(args[epChangeIdx + 1]).startsWith("--") ? args[epChangeIdx + 1] : null;
       const epTaskIdx = args.indexOf('--task');
-      const epTask = epTaskIdx >= 0 && args[epTaskIdx + 1] ? args[epTaskIdx + 1] : null;
+      const epTask = epTaskIdx >= 0 && args[epTaskIdx + 1] && !String(args[epTaskIdx + 1]).startsWith("--") ? args[epTaskIdx + 1] : null;
       const epAllTasks = args.includes('--all-tasks');
       const epDirIdx = args.indexOf('--dir');
-      const epDir = epDirIdx >= 0 && args[epDirIdx + 1] ? args[epDirIdx + 1] : null;
+      const epDir = epDirIdx >= 0 && args[epDirIdx + 1] && !String(args[epDirIdx + 1]).startsWith("--") ? args[epDirIdx + 1] : null;
       const epFilesIdx = args.indexOf('--files');
-      const epFilesRaw = epFilesIdx >= 0 && args[epFilesIdx + 1] ? args[epFilesIdx + 1] : null;
+      const epFilesRaw = epFilesIdx >= 0 && args[epFilesIdx + 1] && !String(args[epFilesIdx + 1]).startsWith("--") ? args[epFilesIdx + 1] : null;
       if (!epChange) {
         console.error('❌ 缺 --change <变更名>');
         process.exit(2);
@@ -1611,7 +1611,7 @@ task 进行中状态标记：开工/完工落 .runtime/task-progress/，list 标
       // author/created_at 只 warning，agent 手改还常忘。本命令补齐（git user + 当前时间），
       // 已有两键的文件不动；有 frontmatter 就地插入，无则补一段。
       const sfhProjectIdx = args.indexOf('--project');
-      const sfhProject = sfhProjectIdx >= 0 && args[sfhProjectIdx + 1] ? args[sfhProjectIdx + 1] : null;
+      const sfhProject = sfhProjectIdx >= 0 && args[sfhProjectIdx + 1] && !String(args[sfhProjectIdx + 1]).startsWith("--") ? args[sfhProjectIdx + 1] : null;
       const { fixScanDocHeaders } = await import('./scan-postcheck.js');
       const sfhResult = fixScanDocHeaders({ cwd: dir, specDir, project: sfhProject });
       if (json) {
@@ -1631,7 +1631,7 @@ task 进行中状态标记：开工/完工落 .runtime/task-progress/，list 标
       // plan.md）注册表生成逐 task <!--TODO--> 骨架；gate 拒绝未替换的占位（防骨架直接过门），
       // agent 只需逐行填结论。已存在不覆盖（幂等，agent 产出优先）。
       const siChangeIdx = args.indexOf('--change');
-      const siChange = siChangeIdx >= 0 && args[siChangeIdx + 1] ? args[siChangeIdx + 1] : null;
+      const siChange = siChangeIdx >= 0 && args[siChangeIdx + 1] && !String(args[siChangeIdx + 1]).startsWith("--") ? args[siChangeIdx + 1] : null;
       if (!siChange) {
         console.error('用法: sillyspec symbol-impact --change <name> [--spec-dir <path>]\n  生成 symbol-impact.md 逐 task <!--TODO--> 骨架（已存在不覆盖）；gate 拒绝未替换的占位行');
         process.exit(2);
@@ -1667,7 +1667,7 @@ task 进行中状态标记：开工/完工落 .runtime/task-progress/，list 标
       // 手写 proposal/requirements/decisions 的 frontmatter/章节骨架是格式返工根源——本命令
       // 逐文件生成骨架（已存在不覆盖），agent 只填语义。与 design-init 同族（幂等）。
       const fpChangeIdx = args.indexOf('--change');
-      const fpChange = fpChangeIdx >= 0 && args[fpChangeIdx + 1] ? args[fpChangeIdx + 1] : null;
+      const fpChange = fpChangeIdx >= 0 && args[fpChangeIdx + 1] && !String(args[fpChangeIdx + 1]).startsWith("--") ? args[fpChangeIdx + 1] : null;
       if (!fpChange) {
         console.error('用法: sillyspec fourpiece-init --change <name> [--json] [--spec-dir <path>]\n  生成 proposal.md/requirements.md/decisions.md 骨架（frontmatter+章节标题+模板占位；已存在不覆盖；design.md 归 design-init）');
         process.exit(2);
@@ -1760,7 +1760,7 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
       // design-facts.js generateDesignSkeleton——本 case 只负责读盘/幂等保护/落盘）。已存在不覆盖
       // （幂等，agent 产出优先），--force 覆盖重生成。
       const diChangeIdx = args.indexOf('--change');
-      const diChange = diChangeIdx >= 0 && args[diChangeIdx + 1] ? args[diChangeIdx + 1] : null;
+      const diChange = diChangeIdx >= 0 && args[diChangeIdx + 1] && !String(args[diChangeIdx + 1]).startsWith("--") ? args[diChangeIdx + 1] : null;
       const diForce = args.includes('--force');
       if (!diChange) {
         console.error('用法: sillyspec design-init --change <name> [--force] [--json] [--spec-dir <path>]\n  从变更 decisions.md 生成 design.md 十三章节骨架（决策追踪表按当前版本 D 条目预填；已存在不覆盖，--force 覆盖）');
@@ -1824,7 +1824,7 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
       // （重跑即刷新）：与 design-init「agent 产出优先不覆盖」语义相反——delta 是源数据
       // （verify-runs/module-map）时点快照，旧报告天然过期，重新生成即对齐。
       const dlChangeIdx = args.indexOf('--change');
-      const dlChange = dlChangeIdx >= 0 && args[dlChangeIdx + 1] ? args[dlChangeIdx + 1] : null;
+      const dlChange = dlChangeIdx >= 0 && args[dlChangeIdx + 1] && !String(args[dlChangeIdx + 1]).startsWith("--") ? args[dlChangeIdx + 1] : null;
       if (!dlChange) {
         console.error('用法: sillyspec delta --change <name> [--spec-dir <path>] [--json]\n  生成变更 delta.md（Before/Delta/After 三段式；四源 fail-soft，缺源逐段降级注记；幂等覆盖重跑即刷新）');
         process.exit(2);
@@ -1886,11 +1886,11 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
       // 调度者手动派独立子代理不写 marker 的死锁。docHash 由 CLI computeDocHash 算（部分实现 P6.1b defer）。
       // 纯新增，不改 gate 语义。与 task 级 backfill-reviews 对称（stage 级等价物）。
       const rsrChangeIdx = args.indexOf('--change');
-      const rsrChange = rsrChangeIdx >= 0 && args[rsrChangeIdx + 1] ? args[rsrChangeIdx + 1] : null;
+      const rsrChange = rsrChangeIdx >= 0 && args[rsrChangeIdx + 1] && !String(args[rsrChangeIdx + 1]).startsWith("--") ? args[rsrChangeIdx + 1] : null;
       const rsrStageIdx = args.indexOf('--stage');
-      const rsrStage = rsrStageIdx >= 0 && args[rsrStageIdx + 1] ? args[rsrStageIdx + 1] : null;
+      const rsrStage = rsrStageIdx >= 0 && args[rsrStageIdx + 1] && !String(args[rsrStageIdx + 1]).startsWith("--") ? args[rsrStageIdx + 1] : null;
       const rsrFromIdx = args.indexOf('--from');
-      const rsrFrom = rsrFromIdx >= 0 && args[rsrFromIdx + 1] ? args[rsrFromIdx + 1] : null;
+      const rsrFrom = rsrFromIdx >= 0 && args[rsrFromIdx + 1] && !String(args[rsrFromIdx + 1]).startsWith("--") ? args[rsrFromIdx + 1] : null;
       // docHash 联动（坑 stage-review-dochash-manual-resync，2026-08-21 实证）：改一版 design 要
       // 重算 2-3 个 stage review 的 docHash，手工易漏、gate 报错才补。--refresh-hash 就地刷新单个
       // 既有 review 的 hash（保留结论）；--all 一次处理三个 stage（有 review 刷 hash，无 review
@@ -2296,7 +2296,7 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
       const dumpDbFlag = filteredArgs.includes('--dump-db');
       const doctorConfirm = filteredArgs.includes('--confirm');
       const pathIdx = filteredArgs.indexOf('--path');
-      const dbPath = pathIdx >= 0 && filteredArgs[pathIdx + 1] ? filteredArgs[pathIdx + 1] : null;
+      const dbPath = pathIdx >= 0 && filteredArgs[pathIdx + 1] && !String(filteredArgs[pathIdx + 1]).startsWith("--") ? filteredArgs[pathIdx + 1] : null;
 
       // --align-execute-progress：基于 plan.md 声明对齐 execute 派生戳（仿 --cleanup-remnant 范式）
       // 默认 dry-run（只报告将补哪些 step），加 --confirm 才写。命中即 break，绝不 fall-through。
@@ -2304,7 +2304,7 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
       if (alignFlag) {
         // --change 解析：显式优先，缺省用单活跃变更自动兜底（与 run.js resolveChangeNameAuto 同逻辑）
         const alignChangeIdx = filteredArgs.indexOf('--change');
-        let alignChange = alignChangeIdx >= 0 && filteredArgs[alignChangeIdx + 1] ? filteredArgs[alignChangeIdx + 1] : null;
+        let alignChange = alignChangeIdx >= 0 && filteredArgs[alignChangeIdx + 1] && !String(filteredArgs[alignChangeIdx + 1]).startsWith("--") ? filteredArgs[alignChangeIdx + 1] : null;
         if (!alignChange) {
           const changesDir = join(resolvePlatformSpecDir(doctorEffectiveDir, specDir) || join(doctorEffectiveDir, '.sillyspec'), 'changes');
           if (existsSync(changesDir)) {
@@ -2476,8 +2476,8 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
         const r = buildAndWriteScanFacts({
           cwd: factsEffectiveDir,
           specDir: resolvePlatformSpecDir(dir, specDir) || join(factsEffectiveDir, '.sillyspec'),
-          projectName: projIdx >= 0 && filteredArgs[projIdx + 1] ? filteredArgs[projIdx + 1] : basename(factsEffectiveDir),
-          projectPath: pathIdx >= 0 && filteredArgs[pathIdx + 1] ? filteredArgs[pathIdx + 1] : null,
+          projectName: projIdx >= 0 && filteredArgs[projIdx + 1] && !String(filteredArgs[projIdx + 1]).startsWith("--") ? filteredArgs[projIdx + 1] : basename(factsEffectiveDir),
+          projectPath: pathIdx >= 0 && filteredArgs[pathIdx + 1] && !String(filteredArgs[pathIdx + 1]).startsWith("--") ? filteredArgs[pathIdx + 1] : null,
         })
         const f = r.facts
         console.log(`scan facts 已写入: ${r.outPath}`)
@@ -2490,7 +2490,7 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
       if (filteredArgs[1] === 'diff') {
         const { runScanDiff } = await import('./scan-diff.js')
         const diffBaseIdx = filteredArgs.indexOf('--base')
-        const diffBase = diffBaseIdx >= 0 && filteredArgs[diffBaseIdx + 1] ? filteredArgs[diffBaseIdx + 1] : null
+        const diffBase = diffBaseIdx >= 0 && filteredArgs[diffBaseIdx + 1] && !String(filteredArgs[diffBaseIdx + 1]).startsWith("--") ? filteredArgs[diffBaseIdx + 1] : null
         // specBase/projectName 与 scan 主流程同口径（scan-profile.js：specBase=进度库根，projectName=仓库根 basename）。
         // A4 同族：平台指针 / 显式 --spec-dir / 本地 fallback 三合一，平台模式下 diff 不落本地孤儿库。
         const diffEffectiveDir = specDir ? dir : resolveEffectiveDir(dir)
@@ -2612,7 +2612,7 @@ SillySpec worktree — git worktree 隔离管理
           try { assertSafeChangeName(wtName, 'worktree 变更名'); }
           catch (e) { console.error(`❌ ${e.message}`); process.exit(2); }
           const baseIdx = args.indexOf('--base');
-          const base = baseIdx >= 0 && args[baseIdx + 1] ? args[baseIdx + 1] : undefined;
+          const base = baseIdx >= 0 && args[baseIdx + 1] && !String(args[baseIdx + 1]).startsWith("--") ? args[baseIdx + 1] : undefined;
           const adoptBranch = args.includes('--adopt-branch'); // 收编既有同名分支为工作分支（坑 worktree-user-branch-conflict）
           try {
             const info = wm.create(wtName, { base, adoptBranch });
@@ -2966,7 +2966,7 @@ SillySpec worktree — git worktree 隔离管理
           const staleIdx = args.indexOf('--stale-hours');
           const staleHours = staleIdx !== -1 && args[staleIdx + 1] ? parseInt(args[staleIdx + 1], 10) : 24;
           const changeIdx = args.indexOf('--change');
-          const changeName = changeIdx !== -1 && args[changeIdx + 1] ? args[changeIdx + 1] : null;
+          const changeName = changeIdx !== -1 && args[changeIdx + 1] && !String(args[changeIdx + 1]).startsWith("--") ? args[changeIdx + 1] : null;
           const diag = await wm.doctor({ fix: fixFlag, staleHours, changeName });
           if (diag.issues.length === 0) {
             console.log('✅ worktree 健康检查通过，无异常');
@@ -3049,7 +3049,7 @@ SillySpec dispatch — SillyHub 派发能力探测与策略生成（agent 调用
       if (dispatchSubCmd === 'hint') {
         // 解析 --contract <json>（仿 worktree 用 args.indexOf 取 flag 后一个值）
         const contractIdx = args.indexOf('--contract');
-        const contractRaw = contractIdx >= 0 && args[contractIdx + 1] ? args[contractIdx + 1] : null;
+        const contractRaw = contractIdx >= 0 && args[contractIdx + 1] && !String(args[contractIdx + 1]).startsWith("--") ? args[contractIdx + 1] : null;
         if (!contractRaw) {
           console.error('用法: sillyspec dispatch hint --contract <json> [--json]\n  生成派发指令（DispatchContract：brief/worktreePath/branch/allowedPaths/readOnly/...）');
           process.exit(2);
@@ -3121,7 +3121,7 @@ SillySpec platform — SillyHub 平台同步
       // join(runtimeDir, `sync-conflict-${changeName}.json`) 可被 ../ 穿越出 .runtime
       {
         const pChangeIdx = args.indexOf('--change');
-        const pChangeVal = pChangeIdx >= 0 && args[pChangeIdx + 1] ? args[pChangeIdx + 1] : null;
+        const pChangeVal = pChangeIdx >= 0 && args[pChangeIdx + 1] && !String(args[pChangeIdx + 1]).startsWith("--") ? args[pChangeIdx + 1] : null;
         if (pChangeVal) assertSafeChangeName(pChangeVal, 'platform --change 变更名');
       }
 
@@ -3189,7 +3189,7 @@ SillySpec platform — SillyHub 平台同步
             process.exit(1);
           }
           const tokenIdx = args.indexOf('--token');
-          const token = tokenIdx >= 0 && args[tokenIdx + 1] ? args[tokenIdx + 1] : undefined;
+          const token = tokenIdx >= 0 && args[tokenIdx + 1] && !String(args[tokenIdx + 1]).startsWith("--") ? args[tokenIdx + 1] : undefined;
           if (!token) {
             // 缺 token 直接终止（体检 HUB-02）：交互式输入尚未实现（task-11），此前
             // 继续执行会把 undefined 序列化成字符串 "undefined" 写入 local.yaml，
@@ -3205,13 +3205,13 @@ SillySpec platform — SillyHub 平台同步
           break;
         case 'sync': {
           const syncChangeIdx = args.indexOf('--change');
-          const syncChangeName = syncChangeIdx >= 0 && args[syncChangeIdx + 1] ? args[syncChangeIdx + 1] : null;
+          const syncChangeName = syncChangeIdx >= 0 && args[syncChangeIdx + 1] && !String(args[syncChangeIdx + 1]).startsWith("--") ? args[syncChangeIdx + 1] : null;
           await syncModule.sync(syncChangeName, dir);
           break;
         }
         case 'sync-docs': {
           const syncDocsChangeIdx = args.indexOf('--change');
-          const syncDocsChangeName = syncDocsChangeIdx >= 0 && args[syncDocsChangeIdx + 1] ? args[syncDocsChangeIdx + 1] : null;
+          const syncDocsChangeName = syncDocsChangeIdx >= 0 && args[syncDocsChangeIdx + 1] && !String(args[syncDocsChangeIdx + 1]).startsWith("--") ? args[syncDocsChangeIdx + 1] : null;
           await syncModule.syncDocuments(syncDocsChangeName, dir);
           break;
         }
@@ -3246,7 +3246,7 @@ SillySpec platform — SillyHub 平台同步
           // task-11 / D-006 / D-009 / FR-03：手动下行拉取平台进度到本地。
           // 与自动 triggerPull 共用 syncModule.pull（SyncManager.pull 实例方法），行为一致。
           const pullChangeIdx = args.indexOf('--change');
-          const pullChangeName = pullChangeIdx >= 0 && args[pullChangeIdx + 1] ? args[pullChangeIdx + 1] : null;
+          const pullChangeName = pullChangeIdx >= 0 && args[pullChangeIdx + 1] && !String(args[pullChangeIdx + 1]).startsWith("--") ? args[pullChangeIdx + 1] : null;
           // 未连接明确提示不崩（acceptance：未连接平台输出明确提示）
           const smForCheck = new syncModule.SyncManager(dir);
           if (!smForCheck._getPlatform()) {
@@ -3290,7 +3290,7 @@ SillySpec platform — SillyHub 平台同步
           // 第一个非 flag 位置参数 → 唯一未决冲突自动选中。修复：旧实现盲取 platformArgs[0]，
           // flag 放前面时（resolve --keep-local --change x）把 '--keep-local' 当变更名去读冲突文件。
           const changeIdx = args.indexOf('--change');
-          let resolveName = changeIdx >= 0 && args[changeIdx + 1] ? args[changeIdx + 1] : null;
+          let resolveName = changeIdx >= 0 && args[changeIdx + 1] && !String(args[changeIdx + 1]).startsWith("--") ? args[changeIdx + 1] : null;
           if (!resolveName) {
             resolveName = platformArgs.find((a) => a && !a.startsWith('--')) || null;
           }
@@ -3356,7 +3356,7 @@ SillySpec platform — SillyHub 平台同步
             process.exit(1);
           }
           const reasonIdx = args.indexOf('--reason');
-          const reason = reasonIdx >= 0 && args[reasonIdx + 1] ? args[reasonIdx + 1] : undefined;
+          const reason = reasonIdx >= 0 && args[reasonIdx + 1] && !String(args[reasonIdx + 1]).startsWith("--") ? args[reasonIdx + 1] : undefined;
           await syncModule.reject(rejectName, reason, dir);
           break;
         }
@@ -3380,7 +3380,7 @@ SillySpec platform — SillyHub 平台同步
       // task review / stage review / module-map）+ 轻形状检查（required-evidence / endpoints）
       // 为一把伞——「新解析器写之前先过 schema」的统一落点。skip = 未生成不算失败。
       const vaChangeIdx = args.indexOf('--change');
-      const vaChange = vaChangeIdx >= 0 && args[vaChangeIdx + 1] ? args[vaChangeIdx + 1] : null;
+      const vaChange = vaChangeIdx >= 0 && args[vaChangeIdx + 1] && !String(args[vaChangeIdx + 1]).startsWith("--") ? args[vaChangeIdx + 1] : null;
       if (!vaChange) {
         console.error('用法: sillyspec validate --change <名> [--json]');
         console.error('  校验该变更的全部结构化产物（verify-facts/required-evidence/task reviews/stage reviews/endpoints + module-map）');
@@ -3409,7 +3409,7 @@ SillySpec platform — SillyHub 平台同步
       //   decisions list --change <c>——parseDecisions 只读视图（id/状态/类型/模块域/标题）。
       const decSub = filteredArgs[1];
       const decChangeIdx = args.indexOf('--change');
-      const decChange = decChangeIdx >= 0 && args[decChangeIdx + 1] ? args[decChangeIdx + 1] : null;
+      const decChange = decChangeIdx >= 0 && args[decChangeIdx + 1] && !String(args[decChangeIdx + 1]).startsWith("--") ? args[decChangeIdx + 1] : null;
       if (!decChange || !['add', 'list'].includes(decSub)) {
         console.error('用法: sillyspec decisions add --change <名> --id D-001 --title "…" [--version N] [--status confirmed] [--type architecture] [--domain x（可重复）] [--question/--answer/--anchor/--reject-reason/--revisit-when/--supersedes/--impacts/--note]\n  sillyspec decisions list --change <名>');
         process.exit(2);
@@ -3708,12 +3708,12 @@ SillySpec workflow — 工作流管理
         }
         // 解析 --project
         const projectIdx = filteredArgs.indexOf('--project');
-        const project = projectIdx !== -1 && filteredArgs[projectIdx + 1] ? filteredArgs[projectIdx + 1] : null;
+        const project = projectIdx !== -1 && filteredArgs[projectIdx + 1] && !String(filteredArgs[projectIdx + 1]).startsWith("--") ? filteredArgs[projectIdx + 1] : null;
         // 解析 --json（已在顶层解析）
         const isJson = json;
         // 解析 --change
         const changeIdx = filteredArgs.indexOf('--change');
-        const changeName = changeIdx !== -1 && filteredArgs[changeIdx + 1] ? filteredArgs[changeIdx + 1] : null;
+        const changeName = changeIdx !== -1 && filteredArgs[changeIdx + 1] && !String(filteredArgs[changeIdx + 1]).startsWith("--") ? filteredArgs[changeIdx + 1] : null;
 
         if (!project && wfName !== 'archive-impact') {
           console.error('❌ 请指定 --project，例如：--project sillyspec');
@@ -3816,7 +3816,7 @@ SillySpec modules — 模块文档管理
         // per-task 模块卡级联解析（token 成本优化 P0a）：execute「加载上下文」步的
         // {MODULE_RESOLVE_TABLE} 注入同源；独立命令供 agent/人随时查（细卡优先，防整读大卡）
         const mrChangeIdx = args.indexOf('--change');
-        const mrChange = mrChangeIdx >= 0 && args[mrChangeIdx + 1] ? args[mrChangeIdx + 1] : null;
+        const mrChange = mrChangeIdx >= 0 && args[mrChangeIdx + 1] && !String(args[mrChangeIdx + 1]).startsWith("--") ? args[mrChangeIdx + 1] : null;
         if (!mrChange) {
           console.error('用法: sillyspec modules resolve --change <名> [--spec-dir <path>] [--json]\n  输出 per-task 最优模块卡表（跨全部 _module-map.yaml 最长前缀匹配，细卡优先）');
           process.exit(2);

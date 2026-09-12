@@ -43,6 +43,9 @@ export function isPointerStale(pointer) {
   if (!pointer.completedAt) return false
   const completed = new Date(pointer.completedAt)
   const age = Date.now() - completed.getTime()
+  // 非法时间串得 NaN，NaN > x 恒 false——损坏指针永不被标 STALE（2026-09-12 审查批 D-④）；
+  // 判 STALE 让损坏可见（CORRUPTED 通道只覆盖字段缺失形态）
+  if (!Number.isFinite(age)) return true
   return age > 24 * 60 * 60 * 1000
 }
 

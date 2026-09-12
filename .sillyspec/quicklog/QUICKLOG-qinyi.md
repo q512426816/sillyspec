@@ -469,3 +469,18 @@
 根因：①快照只链根级四目录——workspace 子包 node_modules 不覆盖致快照内报无关错，且路径不可见、失败无归属提示（四次重试考古）；②untracked 收入口零防御——.gitignore 缺口的部署 tar.gz 被 checkpoint 带进分支（FF 破坏 + 二进制永久入 git）
 方案：①discoverEnvDirs 递归发现集（深度≤3）逐 junction + envDirsLinked 发现集口径 + 三执行点 🧺 行带快照根路径 + printSnapshotFailureHint（路径/排查顺序/SNAPSHOT_OFF 对照）；②isCheckpointSkippableArtifact（归档扩展名恒跳 + 10MB 帽 env 可调）+ 跳过清单点名 + gitignore 指引
 结果：gate-snapshot-monorepo 5/5（含 pnpm workspace e2e 与 tar.gz e2e）；快照/worktree 系回归全绿；全量 npm test 450/450；lint 580 文件 0 fail；docs check 553 全过
+
+## ql-20260912-008-8eff | 2026-09-12 10:22:41 | backlog 批 D：flag 值位守卫/合并备份/argv 分批/三小修
+状态：已完成
+关联变更：（无）
+文件：
+- src/index.js（flag 值位守卫）
+- src/worktree-apply.js（备份+分批）
+- src/git-helper.js（文案）
+- src/constants.js（NaN）
+- src/config-cat.js（大小写守卫）
+需求：backlog 批 D：flag 值位守卫/合并备份/argv 分批/三小修
+根因：① 取下一参数式解析无值位校验（flag 名被当值吞掉，机器输出丢失且报错指向错误）；② 三方合并覆写主仓在途内容无备份且发生在 apply 成败判定前；③ 数百长路径全量 argv 逼近 Windows 32767 上限（add/reset/diff 整体炸）+per-file cat-file N+1；④ 文案与常量漂移；⑤ NaN 比较恒 false + startsWith 大小写敏感。触及 worktree-apply/index 门禁链文件按解锁通道走 --force-baseline；worktree.js hash-object 两处因并行会话未提交改动占用推迟（避免 pathspec commit 夹带他者改动）。--done 窗口含并行会话未提交改动，提交用显式 pathspec 隔离
+方案：52 三元形+5 解析器分支加值位校验；merge-backups 备份；chunkPaths 分批+N+1 改哈希表；文案推导/NaN 判 STALE/大小写归一
+结果：新测试 backlog-batch-d 17/17；全量 451/0 + lint 581 绿（CLI --done 门禁实测通过）
+审计：⚖️ 归属切分：1 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：test/backlog-batch-d.test.mjs

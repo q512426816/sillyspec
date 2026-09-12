@@ -16,3 +16,4 @@
 - 2026-09-09-plan-derived | adoptPlanWaves proposal 档（只读草稿 + rewritten/conflicts）
 - ql-20260911-017-0c35 | change-rename 入口新名日期前缀门禁（assertDatedChangeName，非日期前缀新名 exit 2；2026-09-11 实证 friction-signal-hint 重命名丢前缀被静默物化）
 - ql-20260911-029-2892 | 紧急包小修：index.js next --apply 的 ESM __dirname ReferenceError 改 fileURLToPath；modules resolve --json 死条件改用顶层 json 变量
+- ql-20260912-008-8eff | flag 值位守卫全量收口（52 三元形+解析器 5 分支）：值位为 flag 名/缺值视为未提供——--change --json 不再吞 flag

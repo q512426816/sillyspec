@@ -16,3 +16,4 @@
 | 2026-08-13 | ql-20260813-001-e83f | git-helper safeGit 加 retryOnTimeout 选项（ETIMEDOUT 用 2× timeout 重试一次，默认 false 向后兼容）；auditQuickCompletion 的 git status 启用（timeout 15000 + retryOnTimeout），治机器忙时审计 git 超时偏紧致 blocked 误拦；quick step3 prompt 澄清 --file-notes 只随 --done 同命令传（CLI 短进程跨 step 不透传） |
 - ql-20260908-008 | meta.json BOM 容错（parseJSON 剥 ﻿，带 BOM 不再被当损坏）+ apply allowlist 平台模式 specRoot 解析（resolveApplyAllowSet/collectReviewDeclaredFiles 加 specBase/runtimeRoot 参 + 指针静默回退；applyWorktree/applyCrossRepoWorktrees/assessApplyRisk/gates plan 预检接线）——治「平台模式整批 BLOCKED」「带 BOM 当损坏」 |
 ql-20260911-030-bad4 | hasUnappliedChanges 无 meta 改保守 true（对齐 dir 缺失分支与 create 幽灵分支 fail-closed）——cleanup 不带 --force 不再跳过未落仓护栏误删未提交代码
+- ql-20260912-008-8eff | EXCLUDE-DIRTY 合并覆写前备份在途原文至 merge-backups；chunkPaths argv 分批（diff/add/reset/getBlobHashMap）；trackedPatchFiles 判定 N+1 spawn 改单次哈希表

@@ -133,7 +133,7 @@ export function git(cwd, args, opts = {}) {
 
 /**
  * 静默版 git：内部调 git，失败 catch 返回 null（对齐 worktree 本地 gitQuiet() 语义）。
- * ENOBUFS（输出超 32MB）不是"无输出"，静默成 null 会让调用方把大输出误当空清单——
+ * ENOBUFS（输出超 GIT_MAX_BUFFER 上限）不是"无输出"，静默成 null 会让调用方把大输出误当空清单——
  * 至少 stderr 留一行，不与正常空结果同语义。
  * @param {string} cwd
  * @param {string[]} args
@@ -145,7 +145,7 @@ export function gitQuiet(cwd, args, opts = {}) {
     return git(cwd, args, opts)
   } catch (e) {
     if (e && e.code === 'ENOBUFS') {
-      console.error(`[sillyspec] git 输出超过 32MB 上限被截断：git ${args.join(' ')}`)
+      console.error(`[sillyspec] git 输出超过 ${GIT_MAX_BUFFER / (1024 * 1024)}MB 上限被截断：git ${args.join(' ')}`)
     }
     return null
   }

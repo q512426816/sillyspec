@@ -24,3 +24,4 @@
 | 2026-09-10 | 2026-09-10-review-dispatch（P2） | src/stage-review-checklist.js 归属本模块（REVIEW_CHECKLISTS 单源+快照钉死）；stage-review.js 增平台在途区分（内联读 .runtime 记录）+ 契约 platform 描述指向 review-dispatch 命令。 |
 | 2026-09-11 | 2026-09-11-cross-change-decision-guard | knowledge-match 文件键反查：DECISION_FIELD_RE 增「文件|files」标签 + 独立 DECISION_ANCHOR_RE 锚点读入（不进 reason 回填链，X-002）；anchorFilePaths 锚点路径 token 提取兜底（D-905 实形态验证，扩展名降序排列防 jsx 截断）；新导出 matchDecisionsByFiles（file→entries 映射，查询侧与库侧双侧 POSIX 归一，空场景 {}）——供 quick 语义护栏按候选文件反查关联决策。 |
 - ql-20260911-029-2892 | 紧急包小修：detectModuleDocHealth 分块正则 \w 双重转义修正（needs_review 整文件当一块只查首模块→逐模块归因），并导出供测试
+- ql-20260912-008-8eff | isPointerStale NaN 判 STALE；config-cat home 守卫大小写归一（win32）；git-helper ENOBUFS 文案由 GIT_MAX_BUFFER 推导

@@ -47,17 +47,20 @@ export function resolveLocalYaml(dir, opts = {}) {
   // 经 resolveLocalYamlWriteTarget 同链解析，误命中会把项目注册静默写进全局配置
   // （local-register.test.mjs 实证）。
   const home = homedir()
-  const originBelowHome = start !== home && start.startsWith(home + sep)
+  // 大小写归一比较（批 D-④）：Windows 盘符/路径大小写不敏感，--dir 手输小写形态绕过
+  // startsWith 守卫 → 误命中 ~/.sillyspec 全局配置（写侧同链会把项目注册写进全局）
+  const ci = (p) => (process.platform === 'win32' ? String(p).toLowerCase() : String(p))
+  const originBelowHome = start !== home && ci(start).startsWith(ci(home) + sep)
   if (opts.specBase) push(join(opts.specBase, 'local.yaml'), 'spec 根（--spec-dir/平台 pointer/最近 .sillyspec）')
   let passedHome = false
   for (let d = start; ; d = dirname(d)) {
     // passedHome：经过 home 后不再入候选（resolveSpecDir e4f2855 同款语义）——套件隔离下
     // HOME 与 fixture 可能同根（HOME=suiteTmp、fixture=suiteTmp/x），遍历越过 home 层后
     // 仍会撞真实 home 的 ~/.sillyspec/local.yaml，须整段截断。
-    if (!(passedHome || (originBelowHome && d === home))) {
+    if (!(passedHome || (originBelowHome && ci(d) === ci(home)))) {
       push(join(d, '.sillyspec', 'local.yaml'), 'cwd 祖先链（worktree 内向上命中主仓；home 层受守卫跳过）')
     }
-    if (d === home) passedHome = true
+    if (ci(d) === ci(home)) passedHome = true
     const parent = dirname(d)
     if (parent === d) break
   }

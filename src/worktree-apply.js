@@ -131,9 +131,18 @@ export function mergeDirtyOverlapThreeWay({ projectRoot, worktreePath, baseHash 
           if (code < 0) { conflicts.push(f); continue } // merge-file 本身不可用 → 原拦截
         }
         if (code === 0) {
+          // 覆写前备份主仓在途原文（2026-09-12 审查批 D-②）：合并写回发生在 apply 整体成败
+          // 判定之前——后续步骤（5a/7）失败返回时主仓已是合并版，而原文从未进任何 git 对象
+          // （也未 commit），不留备份即不可恢复。备份落 <projectRoot>/.sillyspec/.runtime/
+          // merge-backups/（运行时目录，doctor/hygiene 常规清理面，不污染工作区）。
+          try {
+            const backupDir = join(projectRoot, '.sillyspec', '.runtime', 'merge-backups')
+            mkdirSync(backupDir, { recursive: true })
+            writeFileSync(join(backupDir, `${Date.now()}-${f.replace(/[\\/]/g, '__')}`), mainRaw)
+          } catch { /* 备份失败不阻断合并（原文仍可经 rescue 出口重取，不静默弃救 */ }
           writeFileSync(join(projectRoot, f), outBuf)
           merged.push(f)
-          console.log(`🔀 EXCLUDE-DIRTY 三方合并成功（clean）: ${f}——主仓在途改动与 worktree 交付均已保留`)
+          console.log(`🔀 EXCLUDE-DIRTY 三方合并成功（clean）: ${f}——主仓在途改动与 worktree 交付均已保留（覆写前原文已备份至 .sillyspec/.runtime/merge-backups/）`)
         } else {
           conflicts.push(f)
         }
@@ -242,17 +251,37 @@ export function resolvePatchFiles(changedFiles, allowSet, hasAllowList) {
 function getBlobHashMap(cwd, treeish, files) {
   const map = new Map();
   if (files.length === 0) return map; // 空 pathspec 会让 ls-tree 列出整棵树，必须拦截
-  const raw = gitQuiet(cwd, ['ls-tree', treeish, '--', ...files]);
-  if (!raw) return map;
-  for (const line of raw.split('\n')) {
-    if (!line) continue;
-    const tabIdx = line.indexOf('\t');
-    if (tabIdx === -1) continue;
-    const filePath = line.slice(tabIdx + 1);
-    const hash = line.slice(0, tabIdx).split(' ')[2]; // "<mode> <type> <hash>"
-    if (hash) map.set(filePath, hash);
+  for (const batch of chunkPaths(files)) {
+    const raw = gitQuiet(cwd, ['ls-tree', treeish, '--', ...batch]);
+    if (!raw) continue
+    for (const line of raw.split('\n')) {
+      if (!line) continue;
+      const tabIdx = line.indexOf('\t');
+      if (tabIdx === -1) continue;
+      const filePath = line.slice(tabIdx + 1);
+      const hash = line.slice(0, tabIdx).split(' ')[2]; // "<mode> <type> <hash>"
+      if (hash) map.set(filePath, hash);
+    }
   }
   return map;
+}
+
+/**
+ * 按估算 argv 长度切批（2026-09-12 审查批 D-③）：Windows CreateProcess 命令行 32767 字符
+ * 上限——数百个长路径（Windows 深路径 160+ 字符 × 200 文件）全量展开时 spawn 直接失败，
+ * add/reset/diff 整体炸（hash-object 同病灶在 worktree.js，本文件先行收口）。保守 8000
+ * 字符/批，预留 git 参数与编码余量。返回至少一批（空输入返回单空批）。
+ */
+export function chunkPaths(paths, maxChars = 8000) {
+  const batches = [[]]
+  let len = 0
+  for (const p of paths) {
+    const l = String(p).length + 1
+    if (batches[batches.length - 1].length > 0 && len + l > maxChars) { batches.push([]); len = 0 }
+    batches[batches.length - 1].push(p)
+    len += l
+  }
+  return batches
 }
 
 /**
@@ -676,14 +705,24 @@ function applyCrossRepoWorktrees(changeName, projectRoot, ctx, { checkOnly = fal
       const untrackedPatchFiles = patchFiles.filter(f => !trackedFiles.includes(f));
       const patchParts = [];
       if (trackedFiles.length > 0) {
-        patchParts.push(git(cm.worktreePath, ['diff', '--binary', deliverableBase, '--', ...trackedFiles], { encoding: 'buffer', timeout: 60000 }));
+        // argv 分批（批 D-③）：数百长路径全量展开超 Windows 命令行上限；diff 输出按批拼接
+        // （各批均为完整 patch 文档，concat 对 git apply 合法）
+        for (const batch of chunkPaths(trackedFiles)) {
+          patchParts.push(git(cm.worktreePath, ['diff', '--binary', deliverableBase, '--', ...batch], { encoding: 'buffer', timeout: 60000 }));
+        }
       }
       if (untrackedPatchFiles.length > 0) {
-        git(cm.worktreePath, ['add', '--', ...untrackedPatchFiles]);
+        for (const batch of chunkPaths(untrackedPatchFiles)) {
+          git(cm.worktreePath, ['add', '--', ...batch]);
+        }
         try {
-          patchParts.push(git(cm.worktreePath, ['diff', '--binary', '--cached', '--', ...untrackedPatchFiles], { encoding: 'buffer', timeout: 60000 }));
+          for (const batch of chunkPaths(untrackedPatchFiles)) {
+            patchParts.push(git(cm.worktreePath, ['diff', '--binary', '--cached', '--', ...batch], { encoding: 'buffer', timeout: 60000 }));
+          }
         } finally {
-          gitQuiet(cm.worktreePath, ['reset', 'HEAD', '--', ...untrackedPatchFiles]);
+          for (const batch of chunkPaths(untrackedPatchFiles)) {
+            gitQuiet(cm.worktreePath, ['reset', 'HEAD', '--', ...batch]);
+          }
         }
       }
       const patchContent = Buffer.concat(patchParts);
@@ -1232,10 +1271,9 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
       // 回滚准备：记录 patch 涉及的 tracked 文件（--3way 冲突后需恢复 HEAD 版，不留半成品冲突标记）。
       // tracked 文件冲突 → git checkout -- <f> 还原；untracked 新建文件（--3way 不会对其冲突）不在回滚范围，
       // 但若 --3way 部分成功后冲突，已创建的新文件需删，故记录 untracked 集合。
-      const trackedPatchFiles = patchFiles.filter(f => {
-        // 该文件在主仓库 HEAD 存在 → 是 tracked（--3way 冲突时留标记需 checkout 还原）
-        return gitQuiet(projectRoot, ['cat-file', '-e', `HEAD:${f}`]) === null ? false : true;
-      });
+      // 批 D-③：per-file cat-file N+1 spawn 改单次 ls-tree blob 哈希表（同 :1188 既有口径复用）
+      const headBlobMap = getBlobHashMap(projectRoot, 'HEAD', patchFiles)
+      const trackedPatchFiles = patchFiles.filter(f => headBlobMap.has(f));
       const newPatchFiles = patchFiles.filter(f => !trackedPatchFiles.includes(f));
 
       // apply --3way 正式应用（主干已提交推进时自动三路合并）
