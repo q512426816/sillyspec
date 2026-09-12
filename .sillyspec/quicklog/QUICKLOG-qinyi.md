@@ -23,3 +23,18 @@
 根因：①删除门对路径域不设防——.sillyspec//docs/ 共享面的他者归档移动 D 面落进时间窗即拦，审计无归因信号；②行尾重写内容零变化产 M 状态混进 changedFiles 触发文件行/各门
 方案：①spec 共享面非声明删除整栈退 foreignSpecChurn 软警告（src/test 仍 fail-closed）+ 新增文件 mtime 归因注记；②--ignore-cr-at-eol 单次对照剔 EOL-only 归 eolOnlyFiles（.gitattributes 指引）；修首版 gitQuiet 未 import 致 new Set(null) 空集全误剔的坑（safeGit + null 透传，audit 回归抓出）
 结果：quick-audit-foreign-residue 4/4；audit-quick-completion 55/55（危险 blocked 恢复）；全量 npm test 460/460；lint 591 文件 0 fail；docs check 553 全过
+
+## ql-20260912-012-ce01 | 2026-09-12 19:09:17 | 修驾驭第十七批四摩擦+dogfood 快照 lint 超时主仓回退
+状态：已完成
+关联变更：（无）
+文件：.sillyspec/docs/sillyspec/modules/machine-interface.md（+1/-1）, docs/sillyspec/prompt-control-debt.md（+5/-5）, src/run/gate-snapshot.js（+27/-0）, src/task-review.js（+16/-1）, src/verify-postcheck.js（+4/-2）, src/verify-probes.js（+8/-3）, test/gate-snapshot-layout-guard.test.mjs（+90/-0）, docs/sillyspec/troubleshooting.md（+7/-0）
+需求：修驾驭第十七批四摩擦+dogfood 快照 lint 超时主仓回退
+根因：writer 无溯源、pnpm store 跨根失效、NEW 前缀失配、heredoc 截断、junction I/O 慢致 lint 超时假败
+方案：溯源戳四 writer+emptyDiff 直显；布局探测回退；探针剥前缀；落档；timeoutMs+超时主仓复跑（含 const→let 修复）
+结果：新测 4/4 回归 10/10 全量 461/461 主仓 lint 0 fail docs check 553 全过
+审计：📎 文档引用失效：3/100 处 file:line 失效（sillyspec docs check 可复现）
+审计：   ❌ [docs/sillyspec/prompt-control-debt.md:219] gates.js:1183 → src/run/gates.js: 关键词缺失：期望任一「validateFileLocations」在 [start-2, end+5] 窗口内（跨文件引用/论述语境的纯位置锚：行号后加 ? 跳过关键词断言，层1 行界仍校验——勿删行号）
+审计：   ❌ [docs/sillyspec/prompt-control-debt.md:219] gates.js:1183 → src/run/gates.js: 关键词缺失：期望任一「validateFileLocations」在 [start-2, end+5] 窗口内（跨文件引用/论述语境的纯位置锚：行号后加 ? 跳过关键词断言，层1 行界仍校验——勿删行号）
+审计：   ❌ [docs/sillyspec/prompt-control-debt.md:219] gates.js:1339 → src/run/gates.js: 关键词缺失：期望任一「validateFileLocations」在 [start-2, end+5] 窗口内（跨文件引用/论述语境的纯位置锚：行号后加 ? 跳过关键词断言，层1 行界仍校验——勿删行号）
+审计：🔧 行号漂移已自动重锚 3 处（同口径复跑：3 → 0；剩余 0 处需人工 sillyspec docs check）
+审计：⚖️ 归属切分：3 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：src/run/gates.js, src/run/verify-quality-scan.js, .patch16-tmp.mjs

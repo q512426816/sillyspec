@@ -355,7 +355,14 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
   }
   try {
     const test = runVerifyTestCheck({ cwd: gateCwd, specBase: gateSpecBase, changeName })
-    const lint = runVerifyLintCheck({ cwd: gateCwd, specBase: gateSpecBase })
+    let lint = runVerifyLintCheck({ cwd: gateCwd, specBase: gateSpecBase, timeoutMs: snapshot ? 5 * 60 * 1000 : undefined })
+    // 快照 lint 超时回退主仓（2026-09-12 dogfood 两连实证：junction I/O 病态慢，3min/5min 均被
+    // 超时杀——主仓 60~110s 正常。按用户建议「自动回退」而非假败/advisory：主仓复跑保硬门，
+    // 并行噪声混入时失败输出带归属鉴定提示）
+    if (snapshot && lint.status === 'failed' && /超时/.test(String(lint.reason || ''))) {
+      console.warn('⚠️ 快照 lint 超时（node_modules junction I/O 慢）→ 主仓复跑 lint（并行噪声可能混入——失败先做归属鉴定）')
+      lint = runVerifyLintCheck({ cwd, specBase })
+    }
     const failed = []
     if (test.status === 'failed') failed.push('test')
     if (lint.status === 'failed') failed.push('lint')

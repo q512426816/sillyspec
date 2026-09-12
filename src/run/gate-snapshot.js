@@ -34,6 +34,16 @@ export function createGateSnapshot({ cwd, files, sourceRoot = null }) {
     // 前置：主仓须是 git 仓且有 HEAD（无 git 环境回退主仓现行为）
     git(cwd, ['rev-parse', 'HEAD'])
 
+    // symlink-store 布局探测（坑 gate-snapshot-pnpm-store-break，2026-09-12 驾驭第十七批②，
+    // 用户第三次踩「lint 沙箱临时目录跑 pnpm 必假败」）：pnpm/bun/lerna 的 node_modules 内部
+    // 是指向 store 的符号链接网——junction 进临时目录后跨根解析失效，实测必假败。
+    // 与其让沙箱报无关错误逼 advisory，不如布局命中即作废快照回退主仓（宁可主仓口径）。
+    const layoutHit = detectSymlinkStoreLayout(cwd)
+    if (layoutHit) {
+      console.warn(`⚠️ 门禁快照对 ${layoutHit} 布局不可靠（node_modules 符号链接 store 经 junction 跨根失效，实测必假败）——跳过快照回退主仓实测；主仓失败再做污染归属鉴定`)
+      return null
+    }
+
     snapshotRoot = mkdtempSync(join(tmpdir(), 'sillyspec-gate-'))
     git(cwd, ['worktree', 'add', '--detach', '--quiet', snapshotRoot, 'HEAD'])
 
@@ -118,6 +128,23 @@ export function createGateSnapshot({ cwd, files, sourceRoot = null }) {
   }
 }
 
+
+/** symlink-store 包管理布局探测：命中即 junction 快照不可靠。返回布局名或 null。 */
+export function detectSymlinkStoreLayout(cwd) {
+  try {
+    if (existsSync(join(cwd, 'pnpm-lock.yaml'))) return 'pnpm'
+    if (existsSync(join(cwd, 'bun.lockb')) || existsSync(join(cwd, 'bun.lock'))) return 'bun'
+    if (existsSync(join(cwd, 'lerna.json'))) return 'lerna'
+    try {
+      const pkg = JSON.parse(readFileSync(join(cwd, 'package.json'), 'utf8'))
+      const pm = pkg && pkg.packageManager ? String(pkg.packageManager) : ''
+      if (/pnpm@/.test(pm)) return 'pnpm(packageManager)'
+      if (/yarn@/.test(pm)) return 'yarn(packageManager)'
+      if (/bun@/.test(pm)) return 'bun(packageManager)'
+    } catch { /* 无 package.json/损坏 → 仅锁文件判据 */ }
+    return null
+  } catch { return null }
+}
 
 /** 环境目录名集（根与子包通用） */
 const ENV_DIR_NAMES = new Set(['node_modules', '.venv', 'venv', 'env'])
