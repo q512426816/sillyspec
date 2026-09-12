@@ -317,10 +317,11 @@ const PLAN_RULES = [
     target: { root: 'change', path: 'design.md', scope: 'full' },
     data: {
       messageMissingList: 'design.md 缺少「文件变更清单」章节（或清单解析为空），无法做文件覆盖对账。该章节在 brainstorm 模板中为必填；请在 design.md 补上完整的文件变更清单（列出本次新增/修改/删除的源码文件）后重试。',
-      messageUncovered: 'design.md 文件变更清单中 ${count} 个文件未被任何 task 的 allowed_paths 覆盖：\n${files}\n   这些文件在 execute 阶段将无 task 有权修改 → 必然漏改。\n   修复：为每个遗漏文件新建/补充 task 并在其 allowed_paths 声明，或在 design.md「不修改文件」章节说明不改原因。',
+      messageUncovered: 'design.md 文件变更清单中 ${count} 个文件未被任何 task 的 allowed_paths 覆盖：\n${files}\n   这些文件在 execute 阶段将无 task 有权修改 → 必然漏改。\n   修复：为每个遗漏文件新建/补充 task 并在其 allowed_paths 声明，或在 design.md「不修改文件」章节说明不改原因。\n   若跨仓文件被标为 [main]：多为仓变更段头未被识别（段头须为「## <repo-key> 仓变更」），先核对段头格式再补 task。',
+      messageMalformedHeader: 'design.md「文件变更清单」内疑似仓变更段头但格式无法解析：「${line}」\n   该段下文件会被记到上一段仓（或 main）→ 文件覆盖对账整段错位（误报未覆盖或漏检）。\n   修复：段头写成「## <repo-key> 仓变更」（repo-key 限字母数字._-，可加编号前缀与（…）备注后缀）；若这是下一章节标题而非段头，请改名避免形如「<词> 仓变更…」。',
     },
-    spec: 'design.md「文件变更清单」中的每个源码文件,必须被至少一个 task 的 allowed_paths 覆盖(前缀/glob 容差匹配),否则 execute 子代理无权改它→必然漏改。有 task 卡片但 design 缺「文件变更清单」章节也阻断(清单是覆盖对账的基准)。',
-    failMessage: 'design.md 文件变更清单中 ${count} 个文件未被任何 task 的 allowed_paths 覆盖：\n${files}\n   这些文件在 execute 阶段将无 task 有权修改 → 必然漏改。\n   修复：为每个遗漏文件新建/补充 task 并在其 allowed_paths 声明，或在 design.md「不修改文件」章节说明不改原因。',
+    spec: 'design.md「文件变更清单」中的每个源码文件,必须被至少一个 task 的 allowed_paths 覆盖(前缀/glob 容差匹配),否则 execute 子代理无权改它→必然漏改。有 task 卡片但 design 缺「文件变更清单」章节也阻断(清单是覆盖对账的基准)。疑似仓变更段头但格式解析不了(repo-key 非法/仓变更后接自由文本)同样阻断并点名该行——段头错记仓会让对账整段错位。',
+    failMessage: 'design.md 文件变更清单中 ${count} 个文件未被任何 task 的 allowed_paths 覆盖：\n${files}\n   这些文件在 execute 阶段将无 task 有权修改 → 必然漏改。\n   修复：为每个遗漏文件新建/补充 task 并在其 allowed_paths 声明，或在 design.md「不修改文件」章节说明不改原因。\n   若跨仓文件被标为 [main]：多为仓变更段头未被识别（段头须为「## <repo-key> 仓变更」），先核对段头格式再补 task。',
   },
   // task-plan-reconciliation(custom):plan.md 声明任务 ↔ tasks/ 卡片双向对账（债单 D-2b）。
   // 修复场景：plan 列 17 个任务只生成 12 张卡（尾部文档同步类任务漏卡），execute 审计只看

@@ -151,6 +151,6 @@ export function formatConcurrentWarning(detected) {
     for (const c of otherActiveChanges) lines.push(`  - ${c}`)
   }
 
-  lines.push('提交请用显式 pathspec 隔离本变更文件，勿 git add . 扫入他者工作。')
+  lines.push('提交请用显式 pathspec 隔离本变更文件，勿 git add . 扫入他者工作（execute task 内建议 sillyspec wt-commit 串行提交）。')
   return lines.join('\n')
 }

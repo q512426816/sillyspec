@@ -77,6 +77,9 @@ export async function runDocsGate(opts = {}, checkOpts = {}) {
       skip: checkOpts.skip || cfg.skip,
       keywordAssert: checkOpts.keywordAssert ?? cfg.keywordAssert,
       crossRepoRoots: checkOpts.crossRepoRoots || cfg.crossRepoRoots,
+      // 坑 docs-gate-shared-worktree-parallel-block：--against <ref> 透传——按提交树校验
+      //（pre-push 语义），隔离并行会话在途编辑的锚点瞬时漂移（移动靶）
+      ...(checkOpts.against ? { against: checkOpts.against } : {}),
     });
   } catch (e) {
     if (e instanceof DocsCheckConfigError) {

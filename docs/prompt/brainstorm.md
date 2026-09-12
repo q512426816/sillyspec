@@ -356,7 +356,7 @@ design.md 第一行标题必须用中文：# 设计文档（Design）— <变更
    - 仅改内部实现、无对外字段变动时，说明列照常写「新增 xx 方法」即可，无需数据流。
 
    **跨仓变更写法**（本次变更涉及 local.yaml repos: 注册的其他仓时必读；纯主仓变更跳过）：
-   - 清单**按仓分段**：每个仓一个小节，标题格式固定 `## <repo-key> 仓变更`（如 `## sub-grid-security 仓变更`）。plan-postcheck 文件覆盖对账按此段头解析仓归属，写成「前端仓 / backend」等其他标题 → 对账不上
+   - 清单**按仓分段**：每个仓一个小节，标题格式固定 `## <repo-key> 仓变更`（如 `## sub-grid-security 仓变更`；可加编号前缀或（跨仓，X1-X4）这类括号备注后缀，其余后缀/写法解析不了）。plan-postcheck 文件覆盖对账按此段头解析仓归属，写成「前端仓 / backend」等其他标题 → 对账不上且会点名段头格式错误
    - 段内路径相对**该仓根**写（`src/routes/x.js`）；❌ 禁止带仓库名前缀（`sub-grid-security/src/routes/x.js`）、❌ 禁止绝对路径/盘符路径（`C:/repo/src/...`）——后续 TaskCard 的 allowed_paths 与 review 对账（`git -C <仓根> diff` 产仓根相对路径）都用同一口径，前缀/绝对路径永不命中
    - 主仓文件放在第一个段头之前（无段头区域 = main），或单独写 `## main 仓变更` 段
    - repo-key 必须是 local.yaml repos: 段已注册的键（未注册先跑 `sillyspec local register-repo <key> <仓根路径>`，main 隐式不用注册）

@@ -141,7 +141,9 @@ console.log('--- 5b. CLI --init 在 worktree 内跑 → 骨架落主仓 ---')
   git(proj, ['commit', '-q', '-m', 'init'])
   const wt = join(mainSpec, '.runtime', 'worktrees', 'c1')
   git(proj, ['worktree', 'add', '-q', '-b', 'sillyspec/c1', wt])
-  const out = spawnSync(process.execPath, [cliBin, 'verify-probes', '--change', 'c1', '--init'],
+  // 2026-08-29 起 CLI 入口对 worktree cwd 默认硬拦（坑 worktree-cwd-silent-split）；
+  // --allow-worktree-cwd 放行后验证漂移锚定：--init 骨架仍落主仓（原意图保留）
+  const out = spawnSync(process.execPath, [cliBin, '--allow-worktree-cwd', 'verify-probes', '--change', 'c1', '--init'],
     { cwd: wt, encoding: 'utf8' })
   const mainReport = join(mainSpec, 'changes', 'c1', 'verify-result.md')
   const wtReport = join(wt, '.sillyspec', 'changes', 'c1', 'verify-result.md')

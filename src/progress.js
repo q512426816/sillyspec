@@ -806,12 +806,35 @@ export class ProgressManager {
    *   3. 单进程内调用串行（design §9），事务窗口短（毫秒级），全量写正确性远高于 diff 的边际收益。
    * 结论：全量 UPSERT 的简单正确性 > 持锁窗口优化的边际收益，不强行改 diff。
    */
+  /** .bak 快照节流间隔（坑2②）：5 分钟——损坏回退最坏丢 5 分钟进度，换取每次写零额外负担 */
+  static SNAPSHOT_INTERVAL_MS = 5 * 60_000;
+
+  _maybeSnapshotBak(cwd) {
+    try {
+      const dbPath = this._runtimePath(cwd, 'sillyspec.db');
+      const bakPath = dbPath + '.bak';
+      const st = existsSync(bakPath) ? statSync(bakPath) : null;
+      if (st && Date.now() - st.mtimeMs < ProgressManager.SNAPSHOT_INTERVAL_MS) return;
+      const tmpPath = bakPath + '.tmp';
+      try { unlinkSync(tmpPath) } catch { /* 不存在即无事 */ }
+      this._ensureDB(cwd).getDb().exec(`VACUUM INTO '${tmpPath.replace(/'/g, "''")}'`);
+      renameSync(tmpPath, bakPath);
+    } catch { /* best-effort：快照失败只损失恢复源新鲜度，不影响写入主流程 */ }
+  }
+
   _write(cwd, data, changeName = null) {
     const cn = changeName || data.currentChange;
     if (!cn) {
       console.warn('⚠️  _write: 无变更名，跳过写入');
       return;
     }
+
+    // 坑 platform-sync-progress-rollback-and-db-corruption 坑2②（2026-09-08 实证）：并发写
+    // 把主库打成 0 字节时 .bak 全空——fail-loud 有其设计正当性但无恢复出路，只能删库重放。
+    // 定期 .bak 快照（5 分钟龄控）让 db.js _openWithFallback 的既有回退链获得新鲜恢复源：
+    // 损坏最坏回退到 ≤5min 前的进度，而不是从零重放。VACUUM INTO 产出一致性快照（对 WAL
+    // 并发写安全；比裸 copyFileSync 正确），best-effort 失败不影响写入主流程。
+    this._maybeSnapshotBak(cwd);
 
     const db = this._ensureDB(cwd);
     db.transaction(() => {

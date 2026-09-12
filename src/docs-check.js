@@ -14,9 +14,94 @@
  * 仅「目录递归」「目录单层」「字面路径」三形态）；Windows 路径归一化；兼容 CRLF/LF。
  */
 import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, resolve as pathResolve, relative as pathRelative, sep as pathSep } from 'node:path'
+import { execFileSync } from 'node:child_process'
 import jsYaml from 'js-yaml'
 import { parseModuleMapSimple } from './modules.js'
+
+// ── HEAD 模式内容解析层（坑 docs-gate-shared-worktree-parallel-block，2026-09-08 实证）──
+// pre-push gate 校验的语义对象是「被推送的提交树」，而磁盘工作区混有并行会话的未提交
+// 改动——活文档锚点被在途编辑瞬时漂移，任何会话此时推送都被拦（移动靶，5→7 波动实证）。
+// --against HEAD 模式：文档与源码内容一律取 HEAD 版本——干净文件磁盘直读（与 HEAD
+// 逐字节一致，零额外开销）、脏文件（M/D/R）git show 取 HEAD 内容、未跟踪（??）视为
+// 不存在（不随推送走，本就不该校验）。已知边界（接受并留档）：工作区未提交删除的
+// tracked 文档不出现在磁盘 doc 枚举里（walkGlob 扫盘）——其 HEAD 版本确属推送树，
+// 此边角漏检远轻于移动靶误拦；裸名引用仅命中「工作区已删」源文件时层1 找不到候选。
+// 模块级 active reader（set/try/finally restore，quicklog setQuickFileNotes 同款先例）：
+// readLines / resolveCandidates / runDocsCheck / collectInvalidDocRefs 的读统一经此层，
+// reader 未激活时行为与磁盘直读逐字节等价（既有调用方/单测零感知）。
+let _headReader = null
+/** 测试与 runDocsCheck 内部使用：激活/恢复 HEAD reader（返回前值供 finally 还原）。 */
+export function _setHeadReaderForCheck(reader) {
+  const prev = _headReader
+  _headReader = reader
+  return prev
+}
+
+function _rdText(absPath) {
+  if (!_headReader) {
+    try { return readFileSync(absPath, 'utf8') } catch { return null }
+  }
+  return _headReader.readText(absPath)
+}
+
+function _rdExists(absPath) {
+  if (!_headReader) return existsSync(absPath)
+  return _headReader.existsAt(absPath)
+}
+
+/**
+ * 构造 HEAD 模式 reader。非 git 仓 / projectRoot 非 git 根（porcelain 路径相对仓根，
+ * 归一失配）/ git 调用失败 → 返回 null（调用方回退磁盘模式并 warn）。
+ * git status 只列差异文件：不在 status 里的 tracked 文件 = 干净（磁盘读即 HEAD 读）；
+ * ?? 未跟踪 → HEAD 无此文件（existsAt=false, readText=null）；M/D/R → HEAD 仍在
+ * （existsAt=true），内容经 git show（带缓存，脏文件数量级 = 并行会话在途编辑数）。
+ */
+export function createHeadReader(projectRoot, ref = 'HEAD') {
+  const root = pathResolve(projectRoot)
+  const git = (args) => execFileSync('git', ['-C', root, ...args], {
+    encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  let toplevel
+  try { toplevel = git(['rev-parse', '--show-toplevel']).trim() } catch { return null }
+  if (toplevel.split(/[\\/]/).join('/') !== root.split(/[\\/]/).join('/')) return null
+  const status = new Map() // rel(正斜杠) → 'M' | 'D' | 'U'
+  try {
+    for (const line of git(['status', '--porcelain', '--', '.']).split(/\r?\n/)) {
+      if (!line) continue
+      const code = line.slice(0, 2)
+      let p = line.slice(3)
+      if (code.includes('R')) p = p.split(' -> ').pop() // 重命名记新路径
+      p = p.replace(/^"|"$/g, '')
+      const st = code.includes('?') ? 'U' : code.includes('D') ? 'D' : 'M'
+      status.set(p, st)
+    }
+  } catch { return null }
+  const showCache = new Map()
+  const relOf = (abs) => pathRelative(root, pathResolve(abs)).split(pathSep).join('/')
+  return {
+    ref,
+    readText(absPath) {
+      const rel = relOf(absPath)
+      const st = status.get(rel)
+      if (st === undefined) {
+        try { return readFileSync(absPath, 'utf8') } catch { return null } // 干净：磁盘即 HEAD
+      }
+      if (st === 'U') return null // 未跟踪：HEAD 无此文件
+      if (showCache.has(rel)) return showCache.get(rel)
+      let text = null
+      try { text = git(['show', `${ref}:${rel}`]) } catch { text = null }
+      showCache.set(rel, text)
+      return text
+    },
+    existsAt(absPath) {
+      const st = status.get(relOf(absPath))
+      if (st === 'U') return false // 未跟踪 → HEAD 不存在
+      if (st === 'D' || st === 'M') return true // 工作区删/改 → HEAD 仍在
+      return existsSync(absPath)
+    },
+  }
+}
 
 /** 提取 file.js:line / file.js:start-end 引用（反引号包裹与裸文本均命中，全文扫描 D-006）。
  * 扩展名覆盖（archify 借鉴 P1b，2026-09-04）：js/mjs/cjs/ts/tsx/jsx/py/java/go——
@@ -268,16 +353,19 @@ function findInTree(dir, baseName, rel = '', treeCache = null) {
 export function resolveCandidates(projectRoot, refFile, treeCache = null) {
   if (refFile.includes('/')) {
     const direct = join(projectRoot, refFile)
-    if (existsSync(direct)) return [direct]
+    if (_rdExists(direct)) return [direct]
     const inSrc = join(projectRoot, 'src', refFile)
-    if (existsSync(inSrc)) return [inSrc]
+    if (_rdExists(inSrc)) return [inSrc]
     const slash = refFile.lastIndexOf('/')
     const baseName = slash === -1 ? refFile : refFile.slice(slash + 1)
     return findInTree(join(projectRoot, 'src'), baseName, '', treeCache)
       .filter((rel) => ('src/' + rel).endsWith('/' + refFile) || 'src/' + rel === 'src/' + refFile)
       .map((rel) => join(projectRoot, 'src', rel))
+      .filter((abs) => _rdExists(abs)) // HEAD 模式：未跟踪源文件不进推送树，不作候选
   }
-  return findInTree(join(projectRoot, 'src'), refFile, '', treeCache).map((rel) => join(projectRoot, 'src', rel))
+  return findInTree(join(projectRoot, 'src'), refFile, '', treeCache)
+    .map((rel) => join(projectRoot, 'src', rel))
+    .filter((abs) => _rdExists(abs))
 }
 
 /**
@@ -301,9 +389,8 @@ export function collectInvalidDocRefs(projectRoot, docEntries) {
   const linesCache = new Map()
   for (const { name, absPath } of docEntries) {
     let content
-    try {
-      content = readFileSync(absPath, 'utf8')
-    } catch {
+    content = _rdText(absPath)
+    if (content === null) {
       readFailures++
       continue
     }
@@ -355,7 +442,9 @@ function readLines(absPath, linesCache = null) {
     return lines
   }
   try {
-    const lines = readFileSync(absPath, 'utf8').split(/\r?\n/)
+    const text = _rdText(absPath)
+    if (text === null) return null
+    const lines = text.split(/\r?\n/)
     if (lines.length > 0 && lines[lines.length - 1] === '') lines.pop()
     return lines
   } catch { return null }
@@ -479,6 +568,28 @@ function relDisplay(absPath, projectRoot) {
  * @throws {DocsCheckConfigError} glob 形态不支持
  */
 export function runDocsCheck(opts) {
+  // --against <ref>（坑 docs-gate-shared-worktree-parallel-block）：pre-push gate 校验
+  // 「被推送的提交树」而非工作区——激活 HEAD reader 隔离并行会话在途编辑（移动靶）。
+  // 非 git 仓/子目录/git 异常 → 回退磁盘模式并附 warning。--fix 路径不经此（applyFixes
+  // 恒操作工作区磁盘内容，against 对 fix 无意义，CLI 层已拒绝组合）。
+  const against = opts && opts.against ? String(opts.against) : null
+  if (!against) return _runDocsCheckCore(opts)
+  const reader = createHeadReader(opts.projectRoot, against)
+  if (!reader) {
+    const r = _runDocsCheckCore(opts)
+    r.warnings = [...(r.warnings || []),
+      `--against ${against} 不可用（非 git 仓 / 非 git 根子目录 / git 异常），已回退磁盘模式——并行在途编辑可能造成移动靶误拦`]
+    return r
+  }
+  const prev = _setHeadReaderForCheck(reader)
+  try {
+    return _runDocsCheckCore(opts)
+  } finally {
+    _setHeadReaderForCheck(prev)
+  }
+}
+
+function _runDocsCheckCore(opts) {
   // paths/docs 显式传 null（readDocsCheckConfig 无 local.yaml 段时的回退值）须落回缺省 glob，
   // 解构默认值只挡 undefined 不挡 null——docs-check 无配置裸跑曾因此 null.flatMap 崩溃。
   const {
@@ -511,7 +622,10 @@ export function runDocsCheck(opts) {
 
   for (const docRel of docFiles) {
     const docAbs = join(projectRoot, docRel)
-    if (!existsSync(docAbs)) {
+    // HEAD 模式：未跟踪文档（walkGlob 扫盘枚举到但不随推送走）静默跳过——不是失效，
+    // 也不该以「文档不存在」入 invalid（它存在于工作区，只是不属于被推送的提交树）。
+    if (_headReader && !_rdExists(docAbs)) { skippedExempt++; continue }
+    if (!_rdExists(docAbs)) {
       invalid.push({
         doc: docRel, docLine: 0, ref: '', reason: '文档不存在',
         fix: { fixable: false, reason: '文档不存在，无法自动定位' },
@@ -521,7 +635,16 @@ export function runDocsCheck(opts) {
     // 豁免双通道（FR-3 / D-003）：路径段判定免 IO（readFileSync 前）；
     // frontmatter 判定需读文件（读取后）。豁免文档整体跳过不计 invalid。
     if (exempt && isExemptDocPath(docRel)) { skippedExempt++; continue }
-    const md = readFileSync(docAbs, 'utf8')
+    const md = _rdText(docAbs)
+    if (md === null) {
+      // HEAD 模式下未跟踪文档（不随推送走，walkGlob 扫盘枚举到此）——不计失效不报警
+      if (_headReader) { skippedExempt++; continue }
+      invalid.push({
+        doc: docRel, docLine: 0, ref: '', reason: '文档不可读',
+        fix: { fixable: false, reason: '文档不可读（权限/路径异常）' },
+      })
+      continue
+    }
     if (exempt && isExemptDocFrontmatter(md)) { skippedExempt++; continue }
     const refs = collectDocRefs(md)
     const mdLines = md.split(/\r?\n/)

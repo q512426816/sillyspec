@@ -128,7 +128,7 @@ writeFileSync(join(copyRuntime, `current-execute-run-id-${changeName}`), 'exec-2
 // ════════════════════════════════════════════════════════════
 console.log('--- 场景 A：derive task-reviews 副本 cwd → 自动 anchor 读主仓 marker ---')
 {
-  const res = runCli(wtRoot, ['derive', 'task-reviews', '--change', changeName, '--json'])
+  const res = runCli(wtRoot, ['--allow-worktree-cwd', 'derive', 'task-reviews', '--change', changeName, '--json'])
   const combined = (res.stdout || '') + (res.stderr || '')
   assert(res.status === 0, `AC-A1: derive exit=0（实际 exit=${res.status}，尾=${combined.slice(-150)})`)
 
@@ -148,7 +148,7 @@ console.log('--- 场景 A：derive task-reviews 副本 cwd → 自动 anchor 读
 // ════════════════════════════════════════════════════════════
 console.log('\n--- 场景 B：derive task-reviews --spec-dir 副本 → 读副本 marker（负对照）---')
 {
-  const res = runCli(wtRoot, ['derive', 'task-reviews', '--change', changeName, '--spec-dir', copySpec, '--json'])
+  const res = runCli(wtRoot, ['--allow-worktree-cwd', 'derive', 'task-reviews', '--change', changeName, '--spec-dir', copySpec, '--json'])
   const combined = (res.stdout || '') + (res.stderr || '')
   assert(res.status === 1, `AC-B1: 读副本 marker → exit=1（BLOCKED，实际 exit=${res.status}，尾=${combined.slice(-150)})`)
 
@@ -165,9 +165,15 @@ console.log('\n--- 场景 B：derive task-reviews --spec-dir 副本 → 读副�
 // ════════════════════════════════════════════════════════════
 // 场景 C：gate execute 副本 cwd → 自动 anchor，task-reviews check 读主仓
 // ════════════════════════════════════════════════════════════
-console.log('\n--- 场景 C：gate execute 副本 cwd → 自动 anchor，task-reviews check 读主仓 ---')
+console.log('\n--- 场景 C：gate execute 副本 cwd → 入口硬拦默认拦、--allow-worktree-cwd 放行后自动 anchor 读主仓 ---')
 {
-  const res = runCli(wtRoot, ['gate', 'execute', '--change', changeName, '--json'])
+  // 2026-08-29 起 CLI 入口对 worktree cwd 默认硬拦（坑 worktree-cwd-silent-split）；
+  // 显式 --allow-worktree-cwd 放行后走原 anchor 路径（gateOpts.specDriftAnchor 锚回主仓）
+  const blocked = runCli(wtRoot, ['gate', 'execute', '--change', changeName, '--json'])
+  const blockedOut = (blocked.stdout || '') + (blocked.stderr || '')
+  assert(blocked.status === 2 && blockedOut.includes('隔离 worktree 内'),
+    `AC-C0: worktree cwd 默认被入口硬拦（status=${blocked.status}，尾=${blockedOut.slice(-100)}）`)
+  const res = runCli(wtRoot, ['--allow-worktree-cwd', 'gate', 'execute', '--change', changeName, '--json'])
   const combined = (res.stdout || '') + (res.stderr || '')
   let env = null
   try { env = JSON.parse(res.stdout || '') } catch (e) { assert(false, `AC-C1: stdout 合法 JSON（${e.message}，尾=${combined.slice(-150)})`) }

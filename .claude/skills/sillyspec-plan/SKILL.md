@@ -43,7 +43,7 @@ sillyspec run plan --done --answer "..." --output "..."    # 一步完成 wait+d
 
 ### 动态步骤
 
-plan 的步骤是动态的：`generate_plan`（生成分级计划）→ `review_plan`（审查计划，按规模分级：tier=self 当前 agent 自审 / tier=independent 启动独立审查子代理产出 stage review.json，避免生成+自审同一次输出的偏差）→ CLI 从 `tasks.md` 注册表解析出 task 自动插入"任务蓝图协调器"步骤（per-task；plan.md 只提供 Wave 引用分组）。这是正常行为，不要手动添加。
+plan 的步骤是动态的：`generate_plan`（生成分级计划）→ `review_plan`（审查计划，按规模分级：tier=self 当前 agent 自审 / tier=independent 启动独立审查子代理产出 stage review.json，避免生成+自审同一次输出的偏差；scale≠small 时该步还须当场产出 module-impact.md 首版——plan postcheck 硬校验存在性，漏生成会在收官被拦返工）→ CLI 从 `tasks.md` 注册表解析出 task 自动插入"任务蓝图协调器"步骤（per-task；plan.md 只提供 Wave 引用分组）。这是正常行为，不要手动添加。
 
 ### Stage Review Gate（plan 的 design review.json）
 

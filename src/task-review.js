@@ -672,7 +672,7 @@ export function verifyReviewGitEvidence(review, gitDir, cache = null, opts = {})
       // 可执行指引（坑 review-head-real-commit-late，2026-08-22 实证：head 必须真实 commit 的
       // 要求撞门才知道——报错直接给操作序列：worktree 改动先 commit，取 HEAD 作 head）
       errors.push(`${field} "${hash}" 不是仓库中的真实 commit — review.json 疑似伪造。` +
-        `head/base 必须是 git rev-parse 可解析的 commit hash：worktree 内先 git add -A && git commit -m "<task>"，` +
+        `head/base 必须是 git rev-parse 可解析的 commit hash：worktree 内先 sillyspec wt-commit --change <变更名> -m "<task-NN>" -- <本 task 精确路径>（串行锁 + pathspec，防卷入并行兄弟 WIP；退路 git add -- <精确路径> && git commit，禁 add -A），` +
         `再取 git rev-parse HEAD 作 head（base 用 task 卡锡点或基线 commit）；不要填分支名/伪 hash/working-tree 描述`)
     }
   }

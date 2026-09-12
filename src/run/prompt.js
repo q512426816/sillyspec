@@ -22,7 +22,7 @@ import { basename, join } from 'node:path'
 import { existsSync, readFileSync, mkdirSync, readdirSync } from 'node:fs'
 import { writeAtomicSync } from '../fs-atomic.js'
 import { stageRegistry } from '../stages/index.js'
-import { resolvePromptIncludes, resolveRuntimeRoot, safeGit, parsePorcelainPath, WAIT_MARKER_RE, QUICK_SID_RE } from './shared.js'
+import { resolvePromptIncludes, resolveRuntimeRoot, safeGit, parsePorcelainPath, WAIT_MARKER_RE, QUICK_SID_RE, triggerStepStartSync } from './shared.js'
 import { renderSemanticGuardBlock, readSemanticGuardEnabled } from '../semantic-guard.js'
 import { renderStageContract } from '../stage-contract-spec.js'
 import { nowWallClock } from '../datetime.js'
@@ -308,6 +308,14 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
     console.error(`   请检查 --change 指定的变更目录是否存在、specRoot 是否正确，然后重试。`)
     return false
   }
+
+  // X3 渲染侧接线（2026-08-29-change-delete-closure-and-spec-pull 遗留活跃坑收口；曾因并行
+  // 会话提交丢弃一次，2026-09-12 复检重接）：步骤 prompt 渲染即步骤起点——补推一次 progress
+  // 刷新平台 last_pushed_at（停滞判定不再把长步骤误报为「停滞」）。不 await：prompt 渲染不被
+  // 网络阻塞；未连接平台静默 / quick 会话降级跳过 / 8s 熔断 / 失败只 warn，契约全在
+  // triggerStepStartSync 内（shared.js docstring 即本接线点的说明），Node 事件循环保证在飞
+  // POST 落地后进程才退出。
+  triggerStepStartSync(cwd, changeName, platformOpts)
 
   // ── 首个 agent 可见步索引（「首步一次建立」类注入的锚点）──
   // step0 为 noAI（brainstorm/execute/verify 的 step1「进度确认」，2026-09-07）时不渲染 prompt，

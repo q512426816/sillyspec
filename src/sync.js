@@ -12,6 +12,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, unlink
 import { createHash } from 'crypto';
 import { writeAtomicSync } from './fs-atomic.js';
 import { join, dirname, basename, isAbsolute, relative } from 'path';
+import { homedir } from 'os';
 import { resolvePlatformSpecDir } from './progress.js';
 import { safeGit } from './git-helper.js';
 import { openDatabase } from './db-engine.js';
@@ -534,7 +535,20 @@ export class SyncManager {
    * 不删后两者则"disconnect 后恢复本地模式"不可达（指针健在时 resolvePlatformSpecDir
    * 仍解析平台 specRoot；声明健在时指针缺失会 fail-closed）。
    */
-  disconnect() {
+  disconnect(opts = {}) {
+    const { keepPointer = false } = opts
+    // 坑 platform-sync-progress-rollback-and-db-corruption 坑1③（2026-09-08 实证）：三清里的
+    // 指针/声明是 daemon 内嵌 CLI 的 specDir 解析依据——指针缺席期间 daemon 心跳读仓库
+    // .sillyspec（空）并把空状态推上平台，反而放大回滚。两道防线：
+    //   ① keepPointer（CLI `platform disconnect --keep-pointer`）：只清 local.yaml platform
+    //      段（自己 CLI 的同步断开），指针/声明保留给 daemon——回滚环恢复序列的正规化出口；
+    //   ② 默认三清前检测 daemon 主目录存在 → 醒目警告（在线 daemon 会失锚）。
+    const daemonHome = join(homedir(), '.sillyhub', 'daemon')
+    if (!keepPointer && existsSync(daemonHome)) {
+      console.warn(`⚠️ 检测到本机存在 SillyHub daemon（${daemonHome}）——三清将删除平台指针，daemon 内嵌 CLI 将失锚：`)
+      console.warn(`   指针缺席期间 daemon 心跳读仓库本地 .sillyspec（可能为空）并把空状态推上平台，会放大进度回滚。`)
+      console.warn(`   若只想断开自己 CLI 的同步（保留 daemon 锚点）：sillyspec platform disconnect --keep-pointer`)
+    }
     const p = join(this.cwd, LOCAL_YAML);
     if (existsSync(p)) {
       const text = readFileSync(p, 'utf8');
@@ -548,6 +562,10 @@ export class SyncManager {
           writeAtomicSync(p, newText, 'utf8');
         }
       }
+    }
+    if (keepPointer) {
+      console.log('[sync] 已断开连接（--keep-pointer：仅清 local.yaml platform 段，指针与接管声明保留给 daemon 内嵌 CLI）');
+      return;
     }
     // 三清之二/三：指针 + 接管声明（disconnect 是声明的唯一退出路径——design.md §5.4）。
     // HUB-12 有意不清 .sillyspec-platform-cleaned marker：它防的是「重新接入平台时 init
@@ -1723,7 +1741,51 @@ export class SyncManager {
     const cf = this.readConflictFile(changeName);
     const specCf = this.readSpecConflictFile(changeName);
     if (!cf && !specCf) {
-      return { ok: false, resolved: false, reason: `无可解决冲突: ${changeName}（无 sync-conflict / spec-sync-conflict 文件）` };
+      // 坑 platform-sync-progress-rollback-and-db-corruption 坑1②（2026-09-08 实证）：回滚环
+      // 中间态——冲突文件已被某次常规同步静默清除，但 DB 的 base_ts 仍落后，keep-local
+      // 找不到裁决目标被拒（「无可解决冲突」），恢复序列被迫走人肉 SQL。显式出口：keep-local
+      // 在无冲突文件时降级为「无冲突强推」——拉平台 last_pushed_at 推进 base_ts（与有冲突
+      // 路径同款 MAX/COALESCE 单调 SQL）+ 自动重推闭环，等价完成裁决意图。take-platform
+      // 依赖冲突文件里的 platform_progress 快照，无文件时仍拒绝（无可覆盖源）。
+      if (mode !== 'keep-local') {
+        return { ok: false, resolved: false, reason: `无可解决冲突: ${changeName}（无 sync-conflict / spec-sync-conflict 文件）` };
+      }
+      const platform = this._getPlatform();
+      if (!platform) {
+        return { ok: false, resolved: false, reason: `无可解决冲突且未连接平台: ${changeName}——keep-local 无冲突强推需拉平台 last_pushed_at` };
+      }
+      let pushedAt = null;
+      try {
+        const res = await fetchJson(
+          `${platform.url}/api/changes/${encodeURIComponent(changeName)}/progress`,
+          { headers: { Authorization: `Bearer ${platform.token}` } },
+        );
+        pushedAt = (res && res.last_pushed_at) || null;
+      } catch { /* 拉取失败按 null：仅跳过 base_ts 推进，重推仍可尝试 */ }
+      if (pushedAt) {
+        try {
+          const { ProgressManager } = await import('./progress.js');
+          const pm = new ProgressManager({ specDir: safePlatformSpecDir(this.cwd) });
+          const db = pm._ensureDB(this.cwd).getDb();
+          db.prepare('UPDATE changes SET last_synced_platform_ts = MAX(COALESCE(?, last_synced_platform_ts), COALESCE(last_synced_platform_ts, ?)) WHERE name = ?')
+            .run(pushedAt, pushedAt, changeName);
+        } catch (err) {
+          return { ok: false, resolved: false, reason: `无冲突 keep-local 推进 base_ts 失败: ${err.message}` };
+        }
+      }
+      let repush = null;
+      try {
+        repush = await this.sync(changeName, { fromResolve: true });
+      } catch (err) {
+        debugLog(`[sync] 无冲突 keep-local 重推异常: ${changeName}: ${err.message}`);
+      }
+      if (repush && repush.synced === 1) {
+        return { ok: true, resolved: true, mode: 'keep-local-noconflict', reason: '无冲突显式 keep-local：base_ts 已对齐平台最新，本地已重推——回滚环收敛出口' };
+      }
+      if (repush && repush.conflict) {
+        return { ok: true, resolved: true, mode: 'keep-local-noconflict', reason: '无冲突显式 keep-local：base_ts 已推进；重推被拒（平台刚又有更新，已落冲突文件）——再跑一次 resolve --keep-local 即可' };
+      }
+      return { ok: true, resolved: true, mode: 'keep-local-noconflict', reason: '无冲突显式 keep-local：base_ts ' + (pushedAt ? '已推进' : '未获取（平台拉取失败）') + '；重推未成功（未连接/网络），请手动 sillyspec platform sync --change ' + changeName };
     }
     const platformPushedAt = (cf && cf.platform_last_pushed_at) || null;
 
@@ -1954,8 +2016,8 @@ export async function connect(url, token, cwd) {
   return new SyncManager(cwd).connect(url, token);
 }
 
-export async function disconnect(cwd) {
-  return new SyncManager(cwd).disconnect();
+export async function disconnect(cwd, opts = {}) {
+  return new SyncManager(cwd).disconnect(opts);
 }
 
 export async function sync(changeName, cwd, opts) {

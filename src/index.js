@@ -1999,13 +1999,14 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
         // --dry-run 列独立存在（「报告修复预览 + exit 1」），即 dryRun 置位 = fix 语义自动生效
         // 但零写盘（本口径记录于此，防歧义）。
         const BARE_FLAGS = ['--fix', '--dry-run', '--no-exempt'];
-        const PAIRED_FLAGS = ['--paths'];
+        const PAIRED_FLAGS = ['--paths', '--against'];
         const rawDocsArgs = filteredArgs.slice(2);
         const docsCheckFlags = [];
         let cliPaths = null;
         let fix = false;
         let dryRun = false;
         let noExempt = false;
+        let againstRef = null;
         for (let i = 0; i < rawDocsArgs.length; i++) {
           const a = rawDocsArgs[i];
           if (a === '--paths' && rawDocsArgs[i + 1] !== undefined) {
@@ -2013,6 +2014,13 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
             i++; // 跳过值
           } else if (a === '--paths') {
             console.error('❌ docs check: --paths 缺值（逗号分隔 glob，如 --paths "docs/**/*.md"）');
+            process.exit(2);
+          } else if (a === '--against' && rawDocsArgs[i + 1] !== undefined && !rawDocsArgs[i + 1].startsWith('--')) {
+            // 坑 docs-gate-shared-worktree-parallel-block：按提交树校验，隔离并行在途编辑（移动靶）
+            againstRef = rawDocsArgs[i + 1];
+            i++;
+          } else if (a === '--against') {
+            console.error('❌ docs check: --against 缺值（如 --against HEAD）');
             process.exit(2);
           } else if (BARE_FLAGS.includes(a)) {
             if (a === '--fix') fix = true;
@@ -2024,6 +2032,11 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
           } else {
             docsCheckFlags.push(a);
           }
+        }
+        if ((fix || dryRun) && againstRef) {
+          // --fix 操作工作区磁盘内容，against 语义与其矛盾（修的是未提交文本、校验的是提交树）
+          console.error('❌ docs check: --fix/--dry-run 与 --against 互斥（fix 恒操作工作区，against 恒校验提交树）');
+          process.exit(2);
         }
         const { runDocsCheck, readDocsCheckConfig, DocsCheckConfigError, applyFixes, runChangeNameAdvisory } = await import('./docs-check.js');
         try {
@@ -2037,6 +2050,7 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
             keywordAssert: cfg.keywordAssert,
             crossRepoRoots: cfg.crossRepoRoots,
             exempt: !noExempt,
+            against: againstRef,
           });
           // task-03 修复链路（FR-04，platform-map-auto-anchors）：fixActive 才构造 fixes——
           // 仅 fix.fixable===true 且 newLine 为整数的条目可重锚；newRef = ref 的行号部分替换为
@@ -2212,10 +2226,11 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
         // B9（2026-08-16）：flag 白名单化（对齐 docs check 分支）——未知 --xxx 显式 exit 2
         // （interface-contract §1.3b 宣称），并接线 --paths 透传 runDocsGate.checkOpts（原被忽略）。
         const GATE_BARE_FLAGS = ['--init-baseline'];
-        const GATE_PAIRED_FLAGS = ['--paths'];
+        const GATE_PAIRED_FLAGS = ['--paths', '--against'];
         const rawGateArgs = filteredArgs.slice(2);
         let initBaseline = false;
         let cliGatePaths = null;
+        let gateAgainst = null;
         for (let i = 0; i < rawGateArgs.length; i++) {
           const a = rawGateArgs[i];
           if (a === '--paths' && rawGateArgs[i + 1] !== undefined) {
@@ -2224,13 +2239,21 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
           } else if (a === '--paths') {
             console.error('❌ docs gate: --paths 缺值（逗号分隔 glob，如 --paths "docs/**/*.md"）');
             process.exit(2);
+          } else if (a === '--against' && rawGateArgs[i + 1] !== undefined && !rawGateArgs[i + 1].startsWith('--')) {
+            // 坑 docs-gate-shared-worktree-parallel-block：按提交树校验（pre-push 语义——推的
+            // 是提交不是工作区），隔离并行会话在途编辑造成的锚点瞬时漂移（移动靶）
+            gateAgainst = rawGateArgs[i + 1];
+            i++;
+          } else if (a === '--against') {
+            console.error('❌ docs gate: --against 缺值（如 --against HEAD）');
+            process.exit(2);
           } else if (GATE_BARE_FLAGS.includes(a)) {
             if (a === '--init-baseline') initBaseline = true;
           } else if (a.startsWith('--')) {
             console.error(`❌ docs gate: 未知 flag「${a}」。已知 flag：${[...GATE_BARE_FLAGS, ...GATE_PAIRED_FLAGS].join(' ')}（--json 为全局 flag）`);
             process.exit(2);
           } else {
-            console.error(`❌ docs gate: 多余位置参数「${a}」。用法：sillyspec docs gate [--init-baseline] [--paths <glob,...>] [--json]`);
+            console.error(`❌ docs gate: 多余位置参数「${a}」。用法：sillyspec docs gate [--init-baseline] [--paths <glob,...>] [--against HEAD] [--json]`);
             process.exit(2);
           }
         }
@@ -2240,7 +2263,7 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
         const gateSpecBase = resolvePlatformSpecDir(dir, specDir) || join(dir, '.sillyspec');
         const g = await runDocsGate(
           { projectRoot: dir, specBase: gateSpecBase, initBaseline },
-          cliGatePaths ? { paths: cliGatePaths } : undefined
+          { ...(cliGatePaths ? { paths: cliGatePaths } : {}), ...(gateAgainst ? { against: gateAgainst } : {}) }
         );
         if (json) {
           console.log(JSON.stringify(g, null, 2));
@@ -3201,7 +3224,9 @@ SillySpec platform — SillyHub 平台同步
           break;
         }
         case 'disconnect':
-          await syncModule.disconnect(dir);
+          // --keep-pointer（坑 platform-sync-progress-rollback-and-db-corruption 坑1③）：只清
+          // local.yaml platform 段，保留指针/声明给 daemon 内嵌 CLI——回滚环恢复序列正规出口
+          await syncModule.disconnect(dir, { keepPointer: filteredArgs.includes('--keep-pointer') });
           break;
         case 'sync': {
           const syncChangeIdx = args.indexOf('--change');

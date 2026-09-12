@@ -478,7 +478,81 @@ describe('validateDesignFileCoverage 跨仓分段（D-014）', () => {
     ].join('\n') }))
     writeTaskRepo(dir, 'task-01', 'sillyspec', ['src/bar.js'])
     const r = validateDesignFileCoverage(dir)
-    assert.equal(r.ok, true, JSON.stringify(r.errors))
+    assert.equal(r.ok, true, r.errors.join('; '))
+  })
+
+  // 用户实证 2026-08-29：`### sillyspec 仓变更（跨仓，X1-X4）` 带备注后缀曾被整段判 main、
+  // 跨仓文件全量误报未覆盖，错误文案又不指向段头——正则现容忍全/半角括号备注后缀。
+  it('段头带全角括号备注后缀（### sillyspec 仓变更（跨仓，X1-X4））→ 仍识别', () => {
+    writeDesign(dir, designMd({ raw: [
+      '| 操作 | 文件路径 | 说明 |',
+      '|---|---|---|',
+      '| 修改 | src/main.js | 主仓 |',
+      '',
+      '### sillyspec 仓变更（跨仓，X1-X4）',
+      '',
+      '| 操作 | 文件路径 | 说明 |',
+      '|---|---|---|',
+      '| 修改 | src/task-review.js | 跨仓 |',
+    ].join('\n') }))
+    writeTask(dir, 'task-01', ['src/main.js'])
+    writeTaskRepo(dir, 'task-02', 'sillyspec', ['src/task-review.js'])
+    const r = validateDesignFileCoverage(dir)
+    assert.equal(r.ok, true, r.errors.join('; '))
+    assert.equal(r.uncovered.length, 0)
+  })
+
+  it('段头带半角括号后缀 + 尾随冒号（## sillyspec 仓变更 (cross-repo)：）→ 仍识别', () => {
+    writeDesign(dir, designMd({ raw: [
+      '## sillyspec 仓变更 (cross-repo)：',
+      '',
+      '| 操作 | 文件路径 | 说明 |',
+      '|---|---|---|',
+      '| 修改 | src/foo.js | 跨仓 |',
+    ].join('\n') }))
+    writeTaskRepo(dir, 'task-01', 'sillyspec', ['src/foo.js'])
+    const r = validateDesignFileCoverage(dir)
+    assert.equal(r.ok, true, r.errors.join('; '))
+    assert.equal(r.uncovered.length, 0)
+  })
+
+  it('疑似段头但 repo-key 非法（## 前端仓 仓变更）→ 点名报段头格式错误', () => {
+    // 旧行为：该 h2 静默截断清单章节，其下文件整段脱离对账基准（比误报更危险）
+    writeDesign(dir, designMd({ raw: [
+      '| 操作 | 文件路径 | 说明 |',
+      '|---|---|---|',
+      '| 修改 | src/a.js | 主仓 |',
+      '',
+      '## 前端仓 仓变更',
+      '',
+      '| 操作 | 文件路径 | 说明 |',
+      '|---|---|---|',
+      '| 修改 | src/b.js | 跨仓 |',
+    ].join('\n') }))
+    writeTask(dir, 'task-01', ['src/a.js'])
+    const r = validateDesignFileCoverage(dir)
+    assert.equal(r.ok, false)
+    assert.ok(
+      r.errors.some(e => e.includes('前端仓 仓变更') && e.includes('段头')),
+      r.errors.join('; ')
+    )
+  })
+
+  it('段头仓变更后接自由文本（### sillyspec 仓变更——跨仓说明）→ 点名报段头格式错误', () => {
+    writeDesign(dir, designMd({ raw: [
+      '### sillyspec 仓变更——跨仓说明',
+      '',
+      '| 操作 | 文件路径 | 说明 |',
+      '|---|---|---|',
+      '| 修改 | src/b.js | 跨仓 |',
+    ].join('\n') }))
+    writeTaskRepo(dir, 'task-01', 'sillyspec', ['src/b.js'])
+    const r = validateDesignFileCoverage(dir)
+    assert.equal(r.ok, false)
+    assert.ok(
+      r.errors.some(e => e.includes('仓变更——跨仓说明') && e.includes('段头')),
+      r.errors.join('; ')
+    )
   })
 
   it('多仓分段（main + sillyspec + multi-agent-platform）→ 各段各 task 覆盖', () => {

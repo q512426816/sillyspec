@@ -48,8 +48,8 @@ console.log('=== ① base/head 伪 hash 报错给可执行指引（坑 review-he
   const base = execSync('git rev-parse HEAD', { cwd: d, encoding: 'utf8' }).trim()
   const r = verifyReviewGitEvidence({ base, head: 'not-a-commit', changedFiles: [] }, d)
   assertTrue(r.ok === false && r.errors.some(e => e.includes('不是仓库中的真实 commit')), '伪 hash 仍判伪造')
-  assertTrue(r.errors.some(e => e.includes('git add -A && git commit') && e.includes('git rev-parse HEAD')),
-    `报错给可执行指引（commit 后取 HEAD 作 head）：${(r.errors[0] || '').slice(-100)}`)
+  assertTrue(r.errors.some(e => e.includes('wt-commit') && e.includes('git rev-parse HEAD')),
+    `报错给可执行指引（commit 后取 HEAD 作 head；2026-08-29 起指引为 wt-commit 串行提交替代裸 add -A）：${(r.errors[0] || '').slice(-100)}`)
   fs.rmSync(d, { recursive: true, force: true })
 }
 

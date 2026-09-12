@@ -840,10 +840,21 @@ export function validateTaskCommands(changeDir, projectRoot, modules = null) {
 
 /**
  * design §6 按仓分段段头识别（D-014）：`## <repo> 仓变更`（如 `## sillyspec 仓变更`）。
- * 段头为 h2，repo 名取段头首 token（去空白/编号前缀）。容忍可选编号前缀与尾随空白/冒号。
+ * 段头为 h2/h3，repo 名取段头首 token（去空白/编号前缀）。容忍可选编号前缀、（…）备注后缀
+ * （`（跨仓，X1-X4）` 等，全/半角括号均可）与尾随空白/冒号——后缀不容忍时（用户实证
+ * 2026-08-29）`### sillyspec 仓变更（跨仓，X1-X4）` 整段判 main、跨仓文件全量误报未覆盖。
  * 不命中（非仓变更段头）→ null。
  */
-const REPO_SECTION_HEADER_RE = /^#{2,3}\s+(?:\d+[.)]\s*)?([A-Za-z0-9_.\-]+)\s*仓变更\s*[:：]?\s*$/
+const REPO_SECTION_HEADER_RE = /^#{2,3}\s+(?:\d+[.)]\s*)?([A-Za-z0-9_.\-]+)\s*仓变更(?:\s*[（(][^（）()]*[)）])?\s*[:：]?\s*$/
+
+/**
+ * 疑似段头宽匹配：标题行含「<token> 仓变更」字样（token 与仓变更间有空白）。
+ * 宽匹配命中而严格式（REPO_SECTION_HEADER_RE）不命中 = 段头意图明确但格式解析不了
+ * （repo-key 含中文等非法字符 / 仓变更后接自由文本）。此时该段文件会被错记到上一段仓
+ * （或 main）→ 覆盖对账整段错位，validateDesignFileCoverage 据此点名报错，
+ * 不让用户对着「未覆盖」清单反推是段头问题。
+ */
+const REPO_SECTION_HEADER_LOOSE_RE = /^#{2,3}\s+(?:\d+[.)]\s*)?\S+\s+仓变更/
 
 /**
  * design §6 文件清单章节标题（与 change-list.js FILE_LIST_SECTION_RE 同源，避免 import 私有常量）。
@@ -867,19 +878,20 @@ const FILE_LIST_SECTION_RE = /^#{2,3}\s*(?:\d+[.)]\s*)?(文件变更清单|变�
  *   外加 _hasSegmentHeader 标记（调用方据此决定是否走分段对账路径）
  *
  * @param {string} designPath - design.md 绝对路径
- * @returns {{ byRepo: Map<string, Set<string>>, hasSegmentHeader: boolean, allFiles: string[] }}
+ * @returns {{ byRepo: Map<string, Set<string>>, hasSegmentHeader: boolean, allFiles: string[], malformedHeaders: string[] }}
  */
 function parseDesignCoverageByRepo(designPath) {
   const byRepo = new Map()
   const allFiles = []
+  const malformedHeaders = []
   if (!designPath || !existsSync(designPath)) {
-    return { byRepo, hasSegmentHeader: false, allFiles }
+    return { byRepo, hasSegmentHeader: false, allFiles, malformedHeaders }
   }
   const content = readFileSync(designPath, 'utf8')
 
   const sectionMatch = content.match(FILE_LIST_SECTION_RE)
   if (!sectionMatch) {
-    return { byRepo, hasSegmentHeader: false, allFiles }
+    return { byRepo, hasSegmentHeader: false, allFiles, malformedHeaders }
   }
 
   // 主章节起点（match index）→ 扫描到下一个非段头的 `## ` 标题或文件末尾。
@@ -891,10 +903,14 @@ function parseDesignCoverageByRepo(designPath) {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
     if (i > 0 && /^##\s/.test(line) && !REPO_SECTION_HEADER_RE.test(line)) {
-      // 遇到非段头的 h2 标题（如 `## 7. 接口定义`）→ 主章节结束
+      // 遇到非段头的 h2 标题（如 `## 7. 接口定义`）→ 主章节结束。
+      // 但若它疑似仓变更段头（宽匹配命中），先记格式错误再结束——静默截断会让
+      // 该段文件整段脱离对账基准，比报错更危险。
+      if (REPO_SECTION_HEADER_LOOSE_RE.test(line)) malformedHeaders.push(line.trim())
       break
     }
     if (REPO_SECTION_HEADER_RE.test(line)) hasSegmentHeader = true
+    else if (REPO_SECTION_HEADER_LOOSE_RE.test(line)) malformedHeaders.push(line.trim())
     sectionLines.push(line)
   }
 
@@ -905,7 +921,7 @@ function parseDesignCoverageByRepo(designPath) {
     const main = new Set(parseFileChangeList(designPath, { keepSillyspecDocs: true }))
     if (main.size > 0) byRepo.set('main', main)
     for (const p of main) allFiles.push(p)
-    return { byRepo, hasSegmentHeader: false, allFiles }
+    return { byRepo, hasSegmentHeader: false, allFiles, malformedHeaders }
   }
 
   // 有段头 → 按 repo 切片，每段构造临时 design 调 parseFileChangeList
@@ -951,7 +967,7 @@ function parseDesignCoverageByRepo(designPath) {
     rmSync(tmpDir, { recursive: true, force: true })
   }
 
-  return { byRepo, hasSegmentHeader: true, allFiles }
+  return { byRepo, hasSegmentHeader: true, allFiles, malformedHeaders }
 }
 
 /**
@@ -996,9 +1012,16 @@ export function validateDesignFileCoverage(changeDir) {
   }
 
   // 按仓分段解析 design §6（约束③）：段头 `## <repo> 仓变更` → 段内路径归该 repo；无段头 → 全 main
-  const { byRepo: designByRepo, hasSegmentHeader, allFiles: designFiles } = parseDesignCoverageByRepo(designPath)
+  const {
+    byRepo: designByRepo, hasSegmentHeader, allFiles: designFiles, malformedHeaders,
+  } = parseDesignCoverageByRepo(designPath)
   // 两种断裂文案(缺清单章节 / 文件未覆盖)从 manifest 同源(plan.design-file-coverage.data)。
   const dcRule = getRule('plan.design-file-coverage')
+  // 疑似仓变更段头但格式解析不了 → 点名报错（manifest 同源文案）。不拦的话该段文件被错记
+  // 到别的仓，下方未覆盖对账整段错位，报错又不指向段头本身（用户实证 2026-08-29：排查靠猜）。
+  for (const h of malformedHeaders) {
+    errors.push(dcRule.data.messageMalformedHeader.replaceAll('${line}', h))
+  }
   if (designFiles.length === 0) {
     // 走到 plan-postcheck 说明已生成 task 卡片（light/full），brainstorm 模板规定清单必填。
     // 无清单 = design↔execute 偏差温床（覆盖对账无从对起），阻断，不让它静默放过。
@@ -1046,6 +1069,13 @@ export function validateDesignFileCoverage(changeDir) {
 
   return { ok: errors.length === 0, errors, warnings, designFiles, uncovered }
 }
+
+// acceptance 标识符 grep 停用词：工具域/格式名词——acceptance 行文高频出现但不是代码实体，
+// 不排除会给几乎每张卡稳定制造一条误报（宁漏不噪，漏一条提示的代价远低于满屏噪音淹没人）。
+const ACCEPT_IDENT_STOPWORDS = new Set([
+  'snake_case', 'camelCase', 'kebab_case', // 格式名词（acceptance 常写「输出 snake_case 格式」）
+  'allowed_paths', 'related_tests', 'depends_on', 'expects_from', 'title_zh', // TaskCard 字段名
+])
 
 /**
  * 流程产物前缀（target_files 不该声明的路径域）。
@@ -1189,6 +1219,16 @@ export function validatePlanFeasibility(changeDir, projectRoot = null) {
   const allTaskIds = []
   const depMap = new Map()
 
+  // acceptance grep 降噪依据：design.md 全文——标识符已在 design 声明 = 本次计划要新增的
+  // 字段/函数（此刻自然不在源码里），不是噪音（用户实证 2026-08-29：15 卡 20+ 条 warning
+  // 全是这类误报）。无 design.md（none/light）→ 空串退化为纯源码 grep。
+  let designText = ''
+  try {
+    designText = readFileSync(pJoin(changeDir, 'design.md'), 'utf8')
+  } catch {
+    // design.md 不存在 → 跳过该降噪门，行为退化为只有源码 grep
+  }
+
   for (const file of taskFiles) {
     const content = readFileSync(pJoin(tasksDir, file), 'utf8')
     const fmMatch = content.match(/^---\n([\s\S]*?)\n---/)
@@ -1274,8 +1314,11 @@ export function validatePlanFeasibility(changeDir, projectRoot = null) {
 
     // 6. acceptance best-effort 字段 grep（D-05 软约束，warning 不阻断）
     // 从 acceptance 文本提取 snake_case/camelCase 标识符，grep allowed_paths 指向的源文件；
-    // 找不到 → warning（给 LLM 审查提线索，不阻断 execute）。宁漏不噪：只取 snake/camel，
-    // 正则天然避开命令（无 _ 或大写）/路径（无 /）/中文；glob allowed_path / 目录 / 不存在文件一律跳过。
+    // 找不到 → warning（给 LLM 审查提线索，不阻断 execute）。宁漏不噪，三道降噪门：
+    // ① 停用词（格式名词/TaskCard 字段名，ACCEPT_IDENT_STOPWORDS）；
+    // ② design.md 已声明的标识符跳过——本次计划新增的字段/函数此刻不在源码里是正常的；
+    // ③ 正则天然避开命令（无 _ 或大写）/路径（无 /）/中文；glob allowed_path / 目录 /
+    //    不存在文件一律跳过，且至少读到一个源文件才比对（防全读不到 → 全标识符误报）。
     if (projectRoot && hasAcceptance && allowedPaths.length > 0) {
       let acceptanceText = ''
       try {
@@ -1301,8 +1344,10 @@ export function validatePlanFeasibility(changeDir, projectRoot = null) {
           // 至少读到一个源文件才比对，避免「全没读到 → 全部标识符误报」噪声
           if (readableFiles.length > 0) {
             for (const ident of idents) {
+              if (ACCEPT_IDENT_STOPWORDS.has(ident)) continue
+              if (designText.includes(ident)) continue // design 已声明 → 本次计划新增，非噪音
               if (!readableFiles.some(c => c.includes(ident))) {
-                warnings.push(`${taskId}: acceptance 提到 ${ident} 但 allowed_paths 源文件未命中`)
+                warnings.push(`${taskId}: acceptance 提到 ${ident} 但 allowed_paths 源文件与 design.md 均未命中`)
               }
             }
           }

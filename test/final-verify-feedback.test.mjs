@@ -51,12 +51,14 @@ console.log('=== ① 探针5 现算端点并入（坑 probe5-endpoint-baseline-s
   fs.rmSync(d, { recursive: true, force: true })
 }
 
-console.log('\n=== ② execute 派发提示子代理 commit（坑 subagent-uncommitted-newfile-apply3way）===\n')
+console.log('\n=== ② execute 派发提示子代理 commit（坑 subagent-uncommitted-newfile-apply3way / wt-parallel-commit-race）===\n')
 {
-  // buildWavePrompt 的调度要求里含 commit 指令
+  // buildWavePrompt 的调度要求里含 commit 指令：wt-commit 串行提交（2026-08-29 起替代裸
+  // `git add -A && git commit`——同 Wave 兄弟子代理共享 worktree，裸 add -A 互卷 WIP / 撞 index.lock）
   const wave = { index: 1, tasks: [{ name: 't', id: 'task-01', index: 1, dependsOn: [], file: '' }] }
   const prompt = buildWavePrompt(wave, 1, '/tmp/x', '/tmp/wt', {})
-  assertTrue(prompt.includes('git add -A && git commit'), 'Wave prompt 调度要求含「git add -A && git commit」')
+  assertTrue(prompt.includes('sillyspec wt-commit --change'), 'Wave prompt 调度要求含 wt-commit 串行提交指令（坑 wt-parallel-commit-race）')
+  assertTrue(prompt.includes('禁 `git add -A`'), '明令禁止 git add -A（结构性竞态源头）')
   assertTrue(prompt.includes('does not exist in index'), '点明不 commit 的后果（apply --3way 炸）')
   assertTrue(prompt.includes('真实锚点'), '点明 commit 的附带收益（review head 锚点）')
 }

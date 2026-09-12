@@ -132,9 +132,14 @@ try {
     assert(r.out.includes('http://hub.local'), 'cat 输出文件内容')
   }
   {
+    // 2026-08-29 起 CLI 入口对 worktree cwd 硬拦（坑 worktree-cwd-silent-split）：默认 exit 2；
+    // 显式 --allow-worktree-cwd 放行后，git common-dir 兜底仍解析到主仓配置（原意图保留）
     const r = runCli(['cat'], stdWt)
-    assert(r.code === 0, `worktree cwd config cat 退出 0（实际 ${r.code}）`)
-    assert(r.out.includes(join(main, '.sillyspec', 'local.yaml')), 'worktree cwd 下解析到主仓配置')
+    assert(r.code === 2, `worktree cwd 默认硬拦 exit 2（实际 ${r.code}）`)
+    assert(r.out.includes('隔离 worktree 内'), `硬拦文案点明 worktree（实际：${r.out.slice(-120)}）`)
+    const r2 = runCli(['--allow-worktree-cwd', 'cat'], stdWt)
+    assert(r2.code === 0, `--allow-worktree-cwd 放行后退出 0（实际 ${r2.code}）`)
+    assert(r2.out.includes(join(main, '.sillyspec', 'local.yaml')), '放行后 worktree cwd 仍解析到主仓配置')
   }
   {
     const r = runCli(['cat', '--json'], main)

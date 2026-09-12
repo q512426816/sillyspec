@@ -485,8 +485,14 @@ export async function enforceReviewJsonGate(stageName, cwd, changeName, step, st
  * 若校验失败不回滚，DB 会与真实产物不一致（hook/doctor/下游阶段全部误判），
  * 且所有步骤都是 completed 时 agent 无法重新 --done（"没有待完成的步骤"）。
  * 此处将 stage 回滚为 in-progress，最后一步重置为 pending，供修复产物后重做。
+ *
+ * 批量乐观标记一并回滚（坑 execute-batch-rollback-half-state，2026-08-29 用户实证）：execute
+ * 批量完成（detectExecuteBatchFinish）把剩余步骤批量标 completed 后任一收尾 gate 失败，原先只
+ * 回滚 currentIdx → 落库「步骤 11 pending + 12-16 completed」半套状态，步骤序倒挂、要再补一次
+ * --done 才对齐。批量标记打 _batchAligned 戳（内存字段不落库），gate 失败 = 批量完成整体不成立，
+ * 戳上的步骤随当前步一起回滚 pending，下次 --done 满足条件再重新批量标记。
  */
-function rollbackStageCompletion(stageData, steps, currentIdx) {
+export function rollbackStageCompletion(stageData, steps, currentIdx) {
   // 辅助阶段在 validator 前已被重置为 pending（steps 也换成了新数组），不要覆盖
   if (stageData.status === 'completed') {
     stageData.status = 'in-progress'
@@ -495,6 +501,14 @@ function rollbackStageCompletion(stageData, steps, currentIdx) {
   if (steps[currentIdx] && steps[currentIdx].status === 'completed') {
     steps[currentIdx].status = 'pending'
     steps[currentIdx].completedAt = null
+  }
+  for (const s of steps) {
+    if (!s) continue
+    if (s._batchAligned && s.status === 'completed') {
+      s.status = 'pending'
+      s.completedAt = null
+    }
+    s._batchAligned = false
   }
 }
 

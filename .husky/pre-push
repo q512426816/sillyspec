@@ -12,7 +12,9 @@ if [ $? -ne 0 ]; then
 fi
 # docs gate ratchet（doc-consistency-debt 第七节）：docs check 失效数 ≤ 基线放行。
 # 基线 .sillyspec/docs-check-baseline 缺失/损坏时 fail-closed exit 2 拦截。
-node bin/sillyspec.js docs gate 2>&1
+# --against HEAD（坑 docs-gate-shared-worktree-parallel-block）：按被推送的提交树校验——
+# 推的是提交不是工作区；并行会话在途编辑造成的锚点瞬时漂移不再拦无关推送（移动靶）。
+node bin/sillyspec.js docs gate --against HEAD 2>&1
 if [ $? -ne 0 ]; then
   echo "❌ pre-push: docs gate failed, aborting push"
   exit 1

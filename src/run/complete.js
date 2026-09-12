@@ -1218,6 +1218,11 @@ async function detectExecuteBatchFinish({ pm, stageName, changeName, cwd, specBa
       if (step.status === 'pending' || step.status === 'in-progress') {
         step.status = 'completed'
         step.completedAt = now
+        // 乐观预标戳：这是本次 --done 的批量乐观标记而非逐步验证的完成。任一收尾 gate 失败时
+        // rollbackStageCompletion 据此一并回滚（坑 execute-batch-rollback-half-state：只回滚
+        // currentIdx 会落库「步骤 11 pending + 12-16 completed」半套状态）。内存字段，_write 只写
+        // 固定列不落库。
+        step._batchAligned = true
         aligned++
       }
     }

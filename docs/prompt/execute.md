@@ -258,6 +258,7 @@ execute 按 Wave 持久化进度，task 级进度靠 tasks.md checkbox 勾选。
    - 最后一个 Wave 完成后做一次全量编译验证
    - 用户明确要求编译时
 4. 每个任务完成后：
+   - **用 CLI 串行提交，不要裸跑 git add/commit**：在 worktree 内执行 `sillyspec wt-commit --change <change> -m "<task-NN 摘要>" -- <本 task allowed_paths 内的精确路径...>`（坑 wt-parallel-commit-race，2026-08-29 用户实证×2：同 Wave 兄弟子代理共享本 worktree，裸 `git add -A && git commit` 会把对方 WIP 卷进自己的提交 / 并发撞 index.lock，两次都靠子代理自觉救回。wt-commit 按变更文件锁串行 + 强制 pathspec 双保险；输出的 HEAD 直接填 review.json 的 head）。CLI 确不可用时的退路：`git add -- <精确路径> && git commit -m "..." -- <精确路径>`——任何情况下**禁 `git add -A` / `git add .`**。必须当场 commit（坑 subagent-uncommitted-newfile-apply3way，2026-08-22 实证：纯新增文件不 commit 时 apply 的 git apply --3way 报 "does not exist in index" 直接炸；commit 后 base..HEAD diff 完整、apply 顺畅，review.json 的 head 也有真实锚点）
    - **先写 review.json 再勾选 checkbox**（见下方 Task Review Gate）
    - **既跑 lint check 也跑 formatter**：凡变更涉及的源码跑项目的 lint 检查 **和** 格式化（如 `ruff format` / `prettier --write`），不要只跑 check——只 check 不 format 会把格式问题留到 commit 时被 pre-commit hook 拦截（worktree 内二进制可能缺失，先 `which <bin>` 确认，缺则 `uv tool install` / `uv sync`）
    - 记录改动文件和测试结果

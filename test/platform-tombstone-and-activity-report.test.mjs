@@ -23,6 +23,7 @@ import { join } from 'path'
 import { tmpdir } from 'os'
 import { SyncManager } from '../src/sync.js'
 import { triggerStepStartSync } from '../src/run/shared.js'
+import { outputStep } from '../src/run/prompt.js'
 import { buildWavePrompt } from '../src/stages/execute.js'
 
 // env 通道优先于 local.yaml（daemon 注入）——清掉防宿主机环境污染 mock
@@ -295,6 +296,32 @@ test('X3-3 triggerStepStartSync 钩子 → 无 --done 也推一次 progress（sh
     const genStep = m.progressBodies[0].steps.find(s => s.stage === 'plan' && s.name === '生成计划')
     assert.equal(genStep.status, 'in-progress', '钩子推送载荷含 steps[].status=in-progress')
   } finally { m.restore() }
+})
+
+test('X3-4 渲染侧接线 → outputStep 渲染步骤即推一次 progress（prompt.js 前段一行接线）', async () => {
+  const cwd = makeFixture()
+  const name = 'render-wiring-change'
+  seedChange(cwd, name)
+
+  const m = mockFetch()
+  const origLog = console.log
+  console.log = () => { /* 静音 prompt 渲染长输出 */ }
+  try {
+    const steps = [{ name: '生成计划', prompt: 'PROMPT' }]
+    await outputStep('plan', 0, steps, cwd, name, null, {}, null)
+    // 接线是 fire-and-forget：轮询等在飞 POST 落地（3s 上限，正常毫秒级）
+    const deadline = Date.now() + 3_000
+    while (Date.now() < deadline && !m.calls.some(c => c.startsWith('POST') && c.includes(`/api/changes/${name}/progress`))) {
+      await new Promise(r => setTimeout(r, 25))
+    }
+    const progressPosts = m.calls.filter(c => c.startsWith('POST') && c.includes(`/api/changes/${name}/progress`))
+    assert.ok(progressPosts.length >= 1, '步骤渲染即有一次 progress POST（X3 最后一环已接线）')
+    const genStep = m.progressBodies[0].steps.find(s => s.stage === 'plan' && s.name === '生成计划')
+    assert.equal(genStep.status, 'in-progress', '渲染触发的推送同样含步骤 in-progress 投影')
+  } finally {
+    console.log = origLog
+    m.restore()
+  }
 })
 
 // ─────────────────────────────────────────

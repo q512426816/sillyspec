@@ -299,7 +299,7 @@ export function detectWorktreeSpecDrift(specBase) {
   const seg = resolve(specBase).split(sep)
   // specBase 恒以 .sillyspec 结尾(command.js specBase=join(cwd,'.sillyspec'))。worktree 副本形如
   // <mainRepo>/.sillyspec/.runtime/worktrees/<change>/.sillyspec —— 尾段也须是 .sillyspec,
-  // 否则 worktree 根目录本身(<.../worktrees/<change>)会被误判(它不是 spec,不会作 specBase 传入)。
+  // 否则 worktree 根目录本身(<.../worktrees/<change>>)会被误判(它不是 spec,不会作 specBase 传入)。
   if (seg[seg.length - 1] !== '.sillyspec') return null
   for (let i = 0; i + 3 < seg.length; i++) {
     if (seg[i] === '.sillyspec' && seg[i + 1] === '.runtime' && seg[i + 2] === 'worktrees') {
@@ -311,6 +311,33 @@ export function detectWorktreeSpecDrift(specBase) {
         message: `当前 spec 命中 worktree 副本(${specBase})——这是 ${changeName} 隔离工作树内 checkout 出来的 .sillyspec,不是主仓 spec。\n` +
           `   在此跑 plan/execute/verify/archive 会把进度与产出写到副本,与主仓 .sillyspec 分裂(副本随工作树清理而丢失)。\n` +
           `   排查:① cd 回 ${dirname(mainSpec)}(主仓根)再跑;② 或 --spec-dir ${mainSpec} 显式指定主仓 spec。`,
+      }
+    }
+  }
+  return null
+}
+
+/**
+ * 判定「目录在 sillyspec 管理的隔离 worktree 内」（坑 worktree-cwd-silent-split，2026-08-29 用户实证：
+ * Bash cwd 残留两次误在 worktree 内跑 sillyspec——第一次走 status 类命令完全静默，进度险些写进
+ * worktree 副本 .sillyspec 与主仓进度库分裂）。
+ *
+ * 与 detectWorktreeSpecDrift 的分工：那边判 specBase（恒以 .sillyspec 结尾，runCommand 内自动
+ * 锚定用，只覆盖 plan/execute/verify/archive 四 stage）；这边判任意目录（CLI 入口硬拦用，目录
+ * 可以是 worktree 根或其任意子目录，无尾段要求）。
+ *
+ * @param {string} dir 目标目录（通常为 process.cwd() 或 --dir 显式值）
+ * @returns {{ changeName: string, mainRepoRoot: string, worktreeRoot: string } | null} null=不在 worktree 内
+ */
+export function detectCwdInsideWorktree(dir) {
+  if (!dir) return null
+  const seg = resolve(dir).split(sep)
+  for (let i = 0; i + 3 < seg.length; i++) {
+    if (seg[i] === '.sillyspec' && seg[i + 1] === '.runtime' && seg[i + 2] === 'worktrees' && seg[i + 3]) {
+      return {
+        changeName: seg[i + 3],
+        mainRepoRoot: seg.slice(0, i).join(sep),
+        worktreeRoot: seg.slice(0, i + 4).join(sep),
       }
     }
   }
@@ -791,14 +818,15 @@ export async function triggerSync(cwd, changeName, platformOpts = {}, opts = {})
  * 与 triggerSync 同款契约：quick 会话降级跳过（无 progress 实体）、未连接平台在
  * sync() 内部静默跳过、8s 总熔断（raceWithAbort + abort 在飞请求）、失败只 warn 不抛。
  *
- * 接线说明（本变更 allowed_paths 约束）：步骤 prompt 渲染点（run/stage.js outputStep
- * 前段 / run/prompt.js）不在本变更可改文件集内——本导出即「步骤开始钩子」本体，
- * 渲染侧一行 `triggerStepStartSync(cwd, changeName, platformOpts)` 的接线由后续
- * 变更补上；execute 阶段的任务粒度信号已由 X4（stages/execute.js Wave prompt
+ * 接线说明：已接线——run/prompt.js outputStep 步骤渲染前段 fire-and-forget 调用本钩子
+ * （task-13 当时 allowed_paths 不含渲染层，遗留活跃坑由 2026-08-29 docs/sillyspec
+ * 定期收口补上）；execute 阶段的任务粒度信号另由 X4（stages/execute.js Wave prompt
  * 每任务上报指引）覆盖。
  */
 export async function triggerStepStartSync(cwd, changeName, platformOpts = {}, opts = {}) {
   try {
+    // 无 changeName（渲染层个别路径/测试 fixture）直接静默——sync(null) 只会打 warn 噪音
+    if (!changeName) return
     const tsSpecBase = platformOpts?.specRoot || join(cwd, '.sillyspec')
     if (changeName && QUICK_SID_RE.test(changeName) && !existsSync(join(tsSpecBase, 'changes', changeName))) {
       return // quick 会话无 progress 实体（与 triggerSync 同判），无步骤可报

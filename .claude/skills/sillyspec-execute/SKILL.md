@@ -43,6 +43,8 @@ sillyspec run execute --reopen --from-step N   # 重新打开已完成阶段修�
 - worktree 创建失败时 CLI 报错退出，排查后重试
 - worktree 创建/进入不依赖工作区 git 状态（dirty/未提交文件均可）：直接按 CLI 输出的路径操作，无需自行检查 git 状态；`sillyspec worktree apply` 步以命令实际输出为准（apply 会校验 dirty，按输出处理）
 - create 时若检测到 base 落后/分叉 `origin/<默认分支>`，CLI 会醒目报告（⚠️「落后 N 个 commit」+ 对齐命令），**不阻断** execute。看到此报告时评估是否提示用户先对齐 main，但**不要自行 fetch/ff**——对齐是用户/主仓库的显式动作
+- **worktree 内提交用 `sillyspec wt-commit`**（2026-08-29 起）：`sillyspec wt-commit --change <变更名> -m "<task-NN 摘要>" -- <本 task 精确路径>`——同 Wave 多子代理共享 worktree，裸 `git add -A && git commit` 会互卷 WIP / 撞 index.lock（坑 wt-parallel-commit-race，两次实证）。wt-commit 文件锁串行 + 强制 pathspec，输出的 HEAD 直接填 review.json 的 head。退路：`git add -- <精确路径> && git commit -- <同一路径>`，任何情况禁 `git add -A` / `git add .`
+- **不要在 worktree 内跑 sillyspec 命令**（`wt-commit` 除外）：CLI 入口已硬拦（exit 2，坑 worktree-cwd-silent-split——cwd 残留误入 worktree 会把进度写进副本分裂库）。回主仓根跑，或确知例外用 `--allow-worktree-cwd`
 
 ### 依赖门控（depsStatus）
 
