@@ -124,6 +124,7 @@ modules:
       - src/worktree-apply.js
       - src/worktree-deps.js
       - src/worktree-cross.js
+      - src/wt-commit.js
       - src/git-helper.js
 
   machine-interface:
