@@ -198,7 +198,7 @@ async function main() {
 
   // E22：重路径统一加载（轻路径 --version/help 已早退，未付此税）。
   const { ProgressManager, resolvePlatformSpecDir, resolvePlatformOpts } = await import('./progress.js');
-  const { didYouMean, assertSafeChangeName, assertDatedChangeName, resolveSpecDir, detectWorktreeSpecDrift } = await import('./run/shared.js');
+  const { didYouMean, assertSafeChangeName, assertDatedChangeName, resolveSpecDir, detectWorktreeSpecDrift, detectCwdInsideWorktree } = await import('./run/shared.js');
 
   // 解析全局选项
   let json = false;
@@ -249,6 +249,9 @@ async function main() {
       i++;
     } else if (args[i] === '--interactive' || args[i] === '-i') {
       interactive = true;
+    } else if (args[i] === '--allow-worktree-cwd') {
+      // worktree cwd 硬拦逃生门：默认阻止在 .sillyspec/.runtime/worktrees/* 内跑 CLI，
+      // 此 flag 显式放行（坑 worktree-cwd-silent-split）
     } else if (args[i] === '--list' || args[i] === '-l') {
       filteredArgs.push('--list');
     } else {
@@ -309,6 +312,22 @@ async function main() {
   if (!existsSync(dir)) {
     console.error(`❌ 目录不存在: ${dir}`);
     process.exit(1);
+  }
+
+  // ── worktree cwd 硬拦（坑 worktree-cwd-silent-split，2026-08-29 用户实证）──
+  // Bash cwd 残留让 agent 两次误在 worktree 内跑 sillyspec：status 类完全静默、进度写进
+  // worktree 副本 .sillyspec 与主仓进度库分裂。守卫在命令分发前拦截，--dir 显式指向主仓
+  // 或 --allow-worktree-cwd 逃生门放行；wt-commit 命令豁免（子代理 workdir=worktree 内合法）。
+  if (!args.includes('--allow-worktree-cwd') && command !== 'wt-commit') {
+    const guardDir = args.includes('--dir') ? dir : process.cwd();
+    const wtInfo = detectCwdInsideWorktree(guardDir);
+    if (wtInfo) {
+      console.error(`\n❌ 当前在隔离 worktree 内（${wtInfo.changeName}）：${guardDir}`);
+      console.error(`   主仓根：${wtInfo.mainRepoRoot}`);
+      console.error('   SillySpec 进度库只存在于主仓，worktree 内跑会产生分裂进度（坑 worktree-cwd-silent-split）。');
+      console.error('   修复：cd 到主仓根后重跑，或用 --dir <主仓根>，或用 --allow-worktree-cwd 强制放行。');
+      process.exit(2);
+    }
   }
 
   switch (command) {

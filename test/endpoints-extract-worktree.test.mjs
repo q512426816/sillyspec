@@ -154,7 +154,7 @@ test('坑② e2e：CLI 在 worktree 副本内跑（cwd=worktree 含 checkout 出
     '    ...',
   ].join('\n'), 'utf8')
 
-  const r = spawnSync(process.execPath, [CLI, 'endpoints', 'extract', '--change', change, '--all-tasks'],
+  const r = spawnSync(process.execPath, [CLI, '--allow-worktree-cwd', 'endpoints', 'extract', '--change', change, '--all-tasks'],
     { cwd: wtRoot, encoding: 'utf8', timeout: 60_000 })
   assert.equal(r.status, 0, `CLI 应成功（stdout=${r.stdout}\nstderr=${r.stderr}）`)
   assert.match(r.stdout, /已自动锚定主仓 spec/, 'stdout 提示锚定主仓')

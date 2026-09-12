@@ -1217,7 +1217,8 @@ ${taskList}
    - 最后一个 Wave 完成后做一次全量编译验证
    - 用户明确要求编译时
 4. 每个任务完成后：
-   - **在 worktree 内 git add -A && git commit -m "<task-NN 摘要>"**（坑 subagent-uncommitted-newfile-apply3way，2026-08-22 实证：纯新增文件不 commit 时 apply 的 git apply --3way 报 "does not exist in index" 直接炸——未 commit 的新文件不在 base commit 也不在 index，patch 生成取不到。commit 后 base..HEAD diff 完整、apply 顺畅，review.json 的 head 也有真实锚点）
+   - **使用 \`sillyspec wt-commit --change <change-name> -- <task-files>\` 串行提交**（坑 wt-parallel-commit-race：同一 Wave 多子代理共享 worktree，裸 \`git add -A\` 互卷 WIP / 撞 index.lock；\`git add -A\` 还会把并行子代理未提交的半成品一并暂存——**禁 \`git add -A\`**；sillyspec wt-commit 自动处理分支切换与序列化，无需手动 git 操作；未 commit 的新文件不在 base commit 也不在 index，apply --3way 报 "does not exist in index"）
+   - commit 后 base..HEAD diff 完整、apply 顺畅，review.json 的 head 也有真实锚点
    - **写 review.json 即可**（checkbox 由 CLI 自动勾选，见下方 Task Review Gate）
    - **任务边界上报（每任务一次，主仓根目录）**：review write 落盘（CLI 已自动勾选）后跑一次 \`sillyspec platform sync --change <change-name>\`——以任务粒度把「最后信号」（last_pushed_at）与 tasks.md 勾选状态推上平台（变更中心「进行中」可见性）；未连接平台时该命令静默跳过，无需先检查连接状态
    - **既跑 lint check 也跑 formatter**：凡变更涉及的源码跑项目的 lint 检查 **和** 格式化（如 \`ruff format\` / \`prettier --write\`），不要只跑 check——只 check 不 format 会把格式问题留到 commit 时被 pre-commit hook 拦截（worktree 内二进制可能缺失，先 \`which <bin>\` 确认，缺则 \`uv tool install\` / \`uv sync\`）
