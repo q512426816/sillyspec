@@ -1,0 +1,70 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-c757822d",
+  "totals": {
+    "files": 6,
+    "additions": 69,
+    "deletions": 44
+  },
+  "rows": [
+    {
+      "path": "src/docs-check.js",
+      "declared": true,
+      "additions": 4,
+      "deletions": 2,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/local-register.js",
+      "declared": true,
+      "additions": 13,
+      "deletions": 4,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/progress/change-registry.js",
+      "declared": true,
+      "additions": 26,
+      "deletions": 26,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/progress/consistency-doctor.js",
+      "declared": true,
+      "additions": 8,
+      "deletions": 3,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/verify-postcheck.js",
+      "declared": true,
+      "additions": 11,
+      "deletions": 2,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/local-register.test.mjs",
+      "declared": false,
+      "additions": 7,
+      "deletions": 7,
+      "kind": "modified",
+      "attribution": "soft"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "qlId": "ql-20260912-004-afa2",
+  "sessionId": "quick-c757822d",
+  "savedAt": "2026-09-12T02:21:29.561Z",
+  "patchSha256": "c08a62fbcaf301fda6c4c5770b6c42e3db6caab7b5995bd3b1eace4ef9a67774",
+  "patchStatus": "ok"
+}

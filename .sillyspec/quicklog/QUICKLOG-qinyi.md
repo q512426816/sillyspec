@@ -403,6 +403,23 @@
 结果：新测试 backlog-batch-b 13/13；全量 445/0 + lint 575 绿（CLI --done 门禁实测通过）
 审计：⚖️ 归属切分：1 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：test/backlog-batch-b.test.mjs
 
+## ql-20260912-004-afa2 | 2026-09-12 07:07:27 | backlog 批 C：rename 并发竞态/local-register 锁/parseFlowValue 逗号/known_failures 截断/只读探…
+状态：已完成
+关联变更：（无）
+文件：
+- src/progress/change-registry.js（rename 收口）
+- src/local-register.js（锁+async）
+- src/verify-postcheck.js（parseFlowValue+known_failures）
+- src/docs-check.js（复刻同口径）
+- src/progress/consistency-doctor.js（readOnly）
+- test/local-register.test.mjs（软归属·同模块测试，未声明）
+需求：backlog 批 C：rename 并发竞态/local-register 锁/parseFlowValue 逗号/known_failures 截断/只读探测副作用
+根因：① rename 三段独立事务 check-then-act，并发 UPDATE 0 行不报错继续搬目录（DB/目录分裂）；② local.yaml RMW 无串行化，并发 register 丢条目；③ bare 值任意逗号截断（pytest -k a,b → pytest -k a 残损命令实测）；④ 流式值内 ] 截断整表清空（豁免丢失全量假红）；⑤ _readActiveQuiet 用 db.init() 开写连接（WAL PRAGMA+可能 DDL 迁移）。触及 progress 核心两文件按解锁通道走 --force-baseline；--done 窗口内含并行会话未提交改动（005/006/007 已完成未收尾的暂存面），提交用显式 pathspec 隔离本会话文件，已退回其 4 个暂存删除（工作区未动，零丢失）
+方案：rename 收口单事务+changes!==1 校验；registerRepoInLocalYaml async 化+withFileLock；parseFlowValue 分隔逗号按后随键形态双侧判别；known_failures 贪婪捕获（verify-postcheck+docs-check 双口径）；_readActiveQuiet 改 openDatabase readOnly。src/index.js 的 await 调用点被并行会话提交 e195953 顺带收录（内容一致）
+结果：新测试 backlog-batch-c 17/17（外部持锁 448ms 等待+4 进程并发注册全存活/DELETE 老库探测字节不变不产 -wal）；全量 447/0 + lint 577 绿（CLI --done 门禁实测通过）
+审计：⚖️ 归属切分：17 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：.sillyspec/docs/sillyspec/scan/CONVENTIONS.md, docs/sillyspec/architecture-4a.md, docs/sillyspec/design-d7-scan-lifecycle.md, docs/sillyspec/file-lifecycle.md, docs/sillyspec/platform-interface-map.md, docs/sillyspec/prompt-control-debt.md, docs/sillyspec/troubleshooting.md, src/run/gate-snapshot.js, src/run/gates.js, src/run/quick-audit.js, src/run/verify-quality-scan.js, src/stages/execute.js, src/verify-facts-schema.js, src/worktree-cross.js, src/worktree.js, test/backlog-batch-c.test.mjs, test/crossrepo-three-fixes.test.mjs
+审计：🔍 软归属：1 个窗口内未声明同模块测试文件已补入文件行（若属并行会话改动请手工剔除）：test/local-register.test.mjs（+7/-7）
+
 ## ql-20260912-005-3491 | 2026-09-12 07:08:56 | 跨仓 worktree 三护：主仓清理面守卫 + 跨仓跳过外来文件 checkpoint + 门禁快照 venv 链接（postmortem §59）
 状态：已完成
 关联变更：quick-c757822d

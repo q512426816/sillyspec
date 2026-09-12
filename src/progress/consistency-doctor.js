@@ -4,6 +4,7 @@
 import { appendFileSync, existsSync, readFileSync, readdirSync } from 'fs';
 import { join, resolve } from 'path';
 import { DB } from '../db.js';
+import { openDatabase } from '../db-engine.js';
 import { summarizeTaskCompletion } from '../task-review.js';
 import { STAGE_ORDER, MAIN_FLOW_ORDER } from './shared.js';
 
@@ -101,11 +102,15 @@ export class ConsistencyDoctor {
     if (!existsSync(dbPath)) return null;
     let db = null;
     try {
-      db = new DB(dbPath);
-      db.init();
-      const rows = db.getDb().prepare("SELECT name FROM changes WHERE status = 'active' ORDER BY name").all();
+      // 真只读（坑 read-active-quiet-write-open，2026-09-12 审查批 C-⑤）：旧 new DB().init()
+      // 会跑 WAL PRAGMA（创建 -wal/-shm 侧车）且 schema 戳不匹配时执行 DDL 迁移——「只读探测」
+      // 实际改写被探测库。readOnly 打开零副作用；打开失败（损坏/权限）→ unreadable 降级不变。
+      db = openDatabase(dbPath, { readOnly: true });
+      const rows = db.prepare("SELECT name FROM changes WHERE status = 'active' ORDER BY name").all();
+      db.close();
       return { activeChanges: rows.map(r => r.name) };
     } catch (e) {
+      try { if (db) db.close(); } catch { /* 已关闭/打开失败 */ }
       return { activeChanges: [], unreadable: true, error: e.message };
     }
   }

@@ -1,0 +1,269 @@
+diff --git a/src/docs-check.js b/src/docs-check.js
+index c383054..706c63b 100644
+--- a/src/docs-check.js
++++ b/src/docs-check.js
+@@ -836,10 +836,12 @@ export const DECISIONS_DEFAULT_BEHIND_THRESHOLD = 10
+  * @param {string} yamlText local.yaml 全文
+  * @returns {string[]} 键列表；无声明返回 []
+  */
+-function extractKnownFailureKeys(yamlText) {
++export function extractKnownFailureKeys(yamlText) {
+   if (!yamlText) return []
+   const yaml = String(yamlText).replace(/\r\n?/g, '\n')
+-  const inline = yaml.match(/^known_failures:\s*\[([^\]]*)\]\s*(?:#.*)?$/m)
++  // 贪婪 .* 同 verify-postcheck.extractKnownFailures（坑 known-failures-inline-nested-bracket：
++  // 值内 ] 使 [^\]]* 截断、整表静默清空；两处复刻必须同口径互指）
++  const inline = yaml.match(/^known_failures:\s*\[(.*)\]\s*(?:#.*)?$/m)
+   if (inline) {
+     return inline[1].split(',').map(s => s.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean)
+   }
+diff --git a/src/local-register.js b/src/local-register.js
+index 17c6f25..9df0c66 100644
+--- a/src/local-register.js
++++ b/src/local-register.js
+@@ -16,8 +16,9 @@
+  * （tmp+rename，防多会话并发写半截，与 local detect 写入口径一致）。
+  */
+ import { existsSync, readFileSync, mkdirSync } from 'fs'
+-import { dirname } from 'path'
++import { dirname, join } from 'path'
+ import { writeAtomicSync } from './fs-atomic.js'
++import { withFileLock } from './quicklog.js'
+ 
+ function escapeRe(s) {
+   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+@@ -26,13 +27,18 @@ function escapeRe(s) {
+ /**
+  * 把 `<key>: <path>` 注册进 local.yaml 的 repos: 段（幂等，已有该 key 则改值）。
+  *
++ * 读-改-写整段持 .local.yaml.lock（2026-09-12 审查批 C-②）：writeAtomicSync 只保证单次
++ * 写不撕裂，不串行化 RMW——多 agent 并行 register-repo（不同 key）或与 local detect /
++ * platform connect 的写入口并发时，后写者整体覆盖前写者、先注册条目静默丢失
++ * （quicklog 侧同场景用 withFileLock，此处对齐）。async 化：调用方须 await。
++ *
+  * @param {string} yamlPath - local.yaml 绝对路径（不存在则新建）
+  * @param {string} key - repo key（限 [A-Za-z0-9_.\-]+，'main' 隐式禁止注册）
+  * @param {string} repoPath - 跨仓仓根绝对路径（写入时统一正斜杠，与示例格式一致）
+- * @returns {{ fileCreated: boolean, sectionCreated: boolean, replaced: boolean }}
++ * @returns {Promise<{ fileCreated: boolean, sectionCreated: boolean, replaced: boolean }>}
+  * @throws {Error} key 非法 / key='main' / repoPath 空 / 读写失败
+  */
+-export function registerRepoInLocalYaml(yamlPath, key, repoPath) {
++export async function registerRepoInLocalYaml(yamlPath, key, repoPath) {
+   if (!yamlPath) throw new Error('registerRepoInLocalYaml: yamlPath 不能为空')
+   if (!key || !/^[A-Za-z0-9_.\-]+$/.test(key)) {
+     throw new Error(`repo key 非法: "${key}"（限字母数字 . _ -，与 parseRepoRegistry 读侧口径一致）`)
+@@ -42,7 +48,9 @@ export function registerRepoInLocalYaml(yamlPath, key, repoPath) {
+   }
+   if (!repoPath) throw new Error('registerRepoInLocalYaml: repoPath 不能为空')
+ 
+-  const existed = existsSync(yamlPath)
++  // 锁文件与 yaml 同目录（与 QUICKLOG/tasks 锁同机制；锁内读-判定-写，后写者不再覆盖前写者）
++  return await withFileLock(join(dirname(yamlPath), '.local.yaml.lock'), async () => {
++    const existed = existsSync(yamlPath)
+   // CRLF 归一后按 LF 写回（同 task 卡锚点写入的 CRLF 坑；local.yaml 各 CLI 写入口径均 LF）
+   const raw0 = existed ? readFileSync(yamlPath, 'utf8') : ''
+   const hadCr = raw0.includes('\r') // 磁盘原文带 CRLF → 幂等路径也要落盘治愈（见下方幂等分支）
+@@ -101,4 +109,5 @@ export function registerRepoInLocalYaml(yamlPath, key, repoPath) {
+   lines.splice(insertAt, 0, entryLine)
+   write(lines.join('\n'))
+   return { fileCreated: false, sectionCreated: false, replaced: false }
++  })
+ }
+diff --git a/src/progress/change-registry.js b/src/progress/change-registry.js
+index 94984ef..ec1abcb 100644
+--- a/src/progress/change-registry.js
++++ b/src/progress/change-registry.js
+@@ -315,44 +315,44 @@ export class ChangeRegistry {
+     // 注：新名日期前缀门禁只在 CLI 边界强制（index.js change-rename 入口）——renameChange 是
+     // 库函数，测试/平台工具合法用任意名（2026-09-11 决策）。
+     const db = this.pm._ensureDB(cwd);
+-    // 检查旧名是否存在
+-    const existing = db.transaction(() => {
+-      const sqlDb = db.getDb();
+-      const row = sqlDb.prepare(`SELECT name, status FROM changes WHERE name = ?`).get(oldName);
+-      if (row === undefined) return null;
+-      return { name: row.name, status: row.status };
+-    });
+-    if (!existing) {
+-      console.error(`❌ 变更 ${oldName} 不存在`);
+-      return;
+-    }
+-    // 检查新名是否已存在
+-    const conflict = db.transaction(() => {
+-      const sqlDb = db.getDb();
+-      const row = sqlDb.prepare(`SELECT name FROM changes WHERE name = ?`).get(newName);
+-      return row !== undefined;
+-    });
+-    if (conflict) {
+-      console.error(`❌ 变更 ${newName} 已存在`);
+-      return;
+-    }
+-    // 先更新 DB，再重命名目录；FS 失败则回滚 DB，避免"目录已改名但 DB 旧名"的孤儿
+-    // （旧实现 FS-first 无补偿：renameSync 成功后 DB transaction 抛 EPERM/EBUSY 会让
+-    //  目录已是 newName、DB 仍是 oldName，read(两名) 都失联且无自动恢复）。
++    // 存在性/冲突检查与 UPDATE 收进同一事务 + 校验影响行数（坑 rename-concurrent-split，
++    // 2026-09-12 审查批 C-①）：旧三段独立事务是 check-then-act——并发重命名 X→Y 与 X→Z 时，
++    // 后者的 UPDATE 命中 0 行不报错，继续搬目录造成 DB/目录分裂（空目录假成功）。
+     const oldDir = this.pm._changePath(cwd, oldName);
+     const newDir = this.pm._changePath(cwd, newName);
+     const now = new Date().toISOString();
++    let outcome;
+     try {
+-      db.transaction(() => {
++      outcome = db.transaction(() => {
+         const sqlDb = db.getDb();
+-        sqlDb.prepare(`UPDATE changes SET name = ?, last_active = ? WHERE name = ?`).run(newName, now, oldName);
++        const row = sqlDb.prepare(`SELECT name FROM changes WHERE name = ?`).get(oldName);
++        if (row === undefined) return 'missing';
++        if (sqlDb.prepare(`SELECT 1 FROM changes WHERE name = ?`).get(newName) !== undefined) return 'conflict';
++        const r = sqlDb.prepare(`UPDATE changes SET name = ?, last_active = ? WHERE name = ?`).run(newName, now, oldName);
++        if (r.changes !== 1) return 'stolen'; // 并发窗口：检查后他进程已把 oldName 改走
+         // 本地脏度（D-013 / task-04）：重命名也是本地推进（标新名）
+         this.pm._touchLocalModified(cwd, newName, now);
++        return 'ok';
+       });
+     } catch (e) {
+       console.error(`❌ 重命名失败：更新数据库时出错（${e.message}）`);
+       return;
+     }
++    if (outcome === 'missing') {
++      console.error(`❌ 变更 ${oldName} 不存在`);
++      return;
++    }
++    if (outcome === 'conflict') {
++      console.error(`❌ 变更 ${newName} 已存在`);
++      return;
++    }
++    if (outcome === 'stolen') {
++      console.error(`❌ 变更 ${oldName} 刚被并发操作重命名/删除（0 行更新），本次跳过——请重查后重试`);
++      return;
++    }
++    // 先更新 DB，再重命名目录；FS 失败则回滚 DB，避免"目录已改名但 DB 旧名"的孤儿
++    // （旧实现 FS-first 无补偿：renameSync 成功后 DB transaction 抛 EPERM/EBUSY 会让
++    //  目录已是 newName、DB 仍是 oldName，read(两名) 都失联且无自动恢复）。
+     let renamed = true;
+     if (existsSync(oldDir)) {
+       try {
+diff --git a/src/progress/consistency-doctor.js b/src/progress/consistency-doctor.js
+index f170652..0195e72 100644
+--- a/src/progress/consistency-doctor.js
++++ b/src/progress/consistency-doctor.js
+@@ -4,6 +4,7 @@
+ import { appendFileSync, existsSync, readFileSync, readdirSync } from 'fs';
+ import { join, resolve } from 'path';
+ import { DB } from '../db.js';
++import { openDatabase } from '../db-engine.js';
+ import { summarizeTaskCompletion } from '../task-review.js';
+ import { STAGE_ORDER, MAIN_FLOW_ORDER } from './shared.js';
+ 
+@@ -101,11 +102,15 @@ export class ConsistencyDoctor {
+     if (!existsSync(dbPath)) return null;
+     let db = null;
+     try {
+-      db = new DB(dbPath);
+-      db.init();
+-      const rows = db.getDb().prepare("SELECT name FROM changes WHERE status = 'active' ORDER BY name").all();
++      // 真只读（坑 read-active-quiet-write-open，2026-09-12 审查批 C-⑤）：旧 new DB().init()
++      // 会跑 WAL PRAGMA（创建 -wal/-shm 侧车）且 schema 戳不匹配时执行 DDL 迁移——「只读探测」
++      // 实际改写被探测库。readOnly 打开零副作用；打开失败（损坏/权限）→ unreadable 降级不变。
++      db = openDatabase(dbPath, { readOnly: true });
++      const rows = db.prepare("SELECT name FROM changes WHERE status = 'active' ORDER BY name").all();
++      db.close();
+       return { activeChanges: rows.map(r => r.name) };
+     } catch (e) {
++      try { if (db) db.close(); } catch { /* 已关闭/打开失败 */ }
+       return { activeChanges: [], unreadable: true, error: e.message };
+     }
+   }
+diff --git a/src/verify-postcheck.js b/src/verify-postcheck.js
+index dbb1349..091b498 100644
+--- a/src/verify-postcheck.js
++++ b/src/verify-postcheck.js
+@@ -581,7 +581,12 @@ export function extractModules(yamlText) {
+  */
+ function parseFlowValue(flowText, key) {
+   // 键可能带引号也可能不带：path: "x" 或 "path": "x"
+-  const re = new RegExp(String.raw`(?:^|[{,]\s*)"?${key}"?\s*:\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|(?:[^,}]+?))\s*(?=[,}]|$)`)
++  // bare 值的逗号终止是「下一键开始的逗号」而非任意逗号（坑 flow-value-comma-truncate，
++  // 2026-09-12 审查批 C-③）：`test: pytest -k a,b` 旧 [^,}]+? 在第一个逗号截断 → 实测跑
++  // 残损命令 `pytest -k a`（假红/碰巧假绿）。bare 分支与终止 lookahead 双侧同口径：只把
++  // 「后随键形态的逗号」当分隔符——消费侧负向前瞻排除它，终止侧正向前瞻要求它（或 } / 行尾）。
++  const sepComma = String.raw`,\s*"?[A-Za-z0-9_.\-]+"?\s*:`
++  const re = new RegExp(String.raw`(?:^|[{,]\s*)"?${key}"?\s*:\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|(?:[^,}]|,(?!${sepComma.slice(1)}))+?)\s*(?=\}|${sepComma}|$)`)
+   const m = flowText.match(re)
+   if (!m) return null
+   let v = m[1].trim()
+@@ -670,7 +675,11 @@ export function extractKnownFailures(yamlText) {
+   // CRLF 归一（坑 verify-modules-crlf-blanket-fallback）：块式正则的 `.+`/`\n?` 在 CRLF 行
+   // 间失配，只捕获到第一条豁免项就停——归一后整块捕获恢复
+   const yaml = normalizeLineEndings(yamlText)
+-  const inline = yaml.match(/^known_failures:\s*\[([^\]]*)\]\s*(?:#.*)?$/m)
++  // inline 捕获组用贪婪 .*（坑 known-failures-inline-nested-bracket，2026-09-12 审查批 C-④）：
++  // 旧 [^\]]* 在值内首个 ] 停——豁免项是 glob/pytest id 可含 [] 字符类（tests/\[x\]::case），
++  // 旧版整表静默清空 → 预存失败全落 remaining 假红且难归因。贪婪 .* + 后随 \] 行尾锚，
++  // 吃到最后一个 ]（行尾注释里含 ] 的极端形态会被并入值，远优于静默清空）。
++  const inline = yaml.match(/^known_failures:\s*\[(.*)\]\s*(?:#.*)?$/m)
+   if (inline) {
+     return inline[1].split(',').map(s => s.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean)
+   }
+diff --git a/test/local-register.test.mjs b/test/local-register.test.mjs
+index d3c5d8b..fc152b0 100644
+--- a/test/local-register.test.mjs
++++ b/test/local-register.test.mjs
+@@ -42,7 +42,7 @@ console.log('--- 1. 新文件：建段 ---')
+ {
+   const dir = makeTmpDir('lr-')
+   const p = join(dir, '.sillyspec', 'local.yaml')
+-  const r = registerRepoInLocalYaml(p, 'shared-lib', 'C:/x/shared-lib')
++  const r = await registerRepoInLocalYaml(p, 'shared-lib', 'C:/x/shared-lib')
+   assert(r.fileCreated === true && r.sectionCreated === true, '返回 fileCreated+sectionCreated')
+   const text = readFileSync(p, 'utf8')
+   assert(text.includes('repos:\n  shared-lib: C:/x/shared-lib\n'), '内容含 repos 段与条目（posix 路径）')
+@@ -64,7 +64,7 @@ console.log('--- 2. 既有文件追加段：注释/凭据段逐行保留 ---')
+     '',
+   ].join('\n')
+   writeFileSync(p, before)
+-  const r = registerRepoInLocalYaml(p, 'tool-repo', 'C:/x/tool-repo')
++  const r = await registerRepoInLocalYaml(p, 'tool-repo', 'C:/x/tool-repo')
+   assert(r.fileCreated === false && r.sectionCreated === true, '返回 sectionCreated')
+   const after = readFileSync(p, 'utf8')
+   for (const keep of ['# SillySpec 本地配置（gitignored）', 'mcp:', '  token: "shmcp_secret"', '  test: "npm test"']) {
+@@ -80,7 +80,7 @@ console.log('--- 3. 段内插入 / 同 key 改值 / 幂等 ---')
+   const p = join(dir, 'local.yaml')
+   writeFileSync(p, ['repos:', '  shared-lib: C:/old/shared-lib', '  # main 不用注册（隐式 = cwd）', '', 'commands:', '  test: "npm test"', ''].join('\n'))
+ 
+-  const rIns = registerRepoInLocalYaml(p, 'tool-repo', 'C:/x/tool-repo')
++  const rIns = await registerRepoInLocalYaml(p, 'tool-repo', 'C:/x/tool-repo')
+   assert(rIns.replaced === false && rIns.sectionCreated === false, '段内插入返回值')
+   let text = readFileSync(p, 'utf8')
+   assert(text.indexOf('  shared-lib: C:/old/shared-lib') < text.indexOf('  tool-repo: C:/x/tool-repo')
+@@ -88,14 +88,14 @@ console.log('--- 3. 段内插入 / 同 key 改值 / 幂等 ---')
+   assert(text.includes('  # main 不用注册（隐式 = cwd）'), '段内注释保留')
+   assert(parseRepoRegistry(text).size === 2, '读回 2 个 key')
+ 
+-  const rRep = registerRepoInLocalYaml(p, 'shared-lib', 'C:/new/shared-lib')
++  const rRep = await registerRepoInLocalYaml(p, 'shared-lib', 'C:/new/shared-lib')
+   assert(rRep.replaced === true, '同 key 改值返回 replaced')
+   text = readFileSync(p, 'utf8')
+   assert(text.includes('  shared-lib: C:/new/shared-lib') && !text.includes('C:/old'), '旧值被替换')
+   assert(parseRepoRegistry(text).get('shared-lib') === 'C:/new/shared-lib', '改值后读回一致')
+ 
+   const textBefore = readFileSync(p, 'utf8')
+-  const rIdem = registerRepoInLocalYaml(p, 'shared-lib', 'C:/new/shared-lib')
++  const rIdem = await registerRepoInLocalYaml(p, 'shared-lib', 'C:/new/shared-lib')
+   assert(rIdem.replaced === false, '同值幂等跳过')
+   assert(readFileSync(p, 'utf8') === textBefore, '幂等时不改文件内容')
+ }
+@@ -105,10 +105,10 @@ console.log('--- 4. key 校验 ---')
+   const dir = makeTmpDir('lr-')
+   const p = join(dir, 'local.yaml')
+   let threw = 0
+-  try { registerRepoInLocalYaml(p, 'main', 'C:/x') } catch { threw++ }
++  try { await registerRepoInLocalYaml(p, 'main', 'C:/x') } catch { threw++ }
+   assert(threw === 1, "key='main' 拒绝（隐式不用注册）")
+   threw = 0
+-  try { registerRepoInLocalYaml(p, 'bad key!', 'C:/x') } catch { threw++ }
++  try { await registerRepoInLocalYaml(p, 'bad key!', 'C:/x') } catch { threw++ }
+   assert(threw === 1, '非法字符 key 拒绝')
+ }

@@ -315,44 +315,44 @@ export class ChangeRegistry {
     // 注：新名日期前缀门禁只在 CLI 边界强制（index.js change-rename 入口）——renameChange 是
     // 库函数，测试/平台工具合法用任意名（2026-09-11 决策）。
     const db = this.pm._ensureDB(cwd);
-    // 检查旧名是否存在
-    const existing = db.transaction(() => {
-      const sqlDb = db.getDb();
-      const row = sqlDb.prepare(`SELECT name, status FROM changes WHERE name = ?`).get(oldName);
-      if (row === undefined) return null;
-      return { name: row.name, status: row.status };
-    });
-    if (!existing) {
-      console.error(`❌ 变更 ${oldName} 不存在`);
-      return;
-    }
-    // 检查新名是否已存在
-    const conflict = db.transaction(() => {
-      const sqlDb = db.getDb();
-      const row = sqlDb.prepare(`SELECT name FROM changes WHERE name = ?`).get(newName);
-      return row !== undefined;
-    });
-    if (conflict) {
-      console.error(`❌ 变更 ${newName} 已存在`);
-      return;
-    }
-    // 先更新 DB，再重命名目录；FS 失败则回滚 DB，避免"目录已改名但 DB 旧名"的孤儿
-    // （旧实现 FS-first 无补偿：renameSync 成功后 DB transaction 抛 EPERM/EBUSY 会让
-    //  目录已是 newName、DB 仍是 oldName，read(两名) 都失联且无自动恢复）。
+    // 存在性/冲突检查与 UPDATE 收进同一事务 + 校验影响行数（坑 rename-concurrent-split，
+    // 2026-09-12 审查批 C-①）：旧三段独立事务是 check-then-act——并发重命名 X→Y 与 X→Z 时，
+    // 后者的 UPDATE 命中 0 行不报错，继续搬目录造成 DB/目录分裂（空目录假成功）。
     const oldDir = this.pm._changePath(cwd, oldName);
     const newDir = this.pm._changePath(cwd, newName);
     const now = new Date().toISOString();
+    let outcome;
     try {
-      db.transaction(() => {
+      outcome = db.transaction(() => {
         const sqlDb = db.getDb();
-        sqlDb.prepare(`UPDATE changes SET name = ?, last_active = ? WHERE name = ?`).run(newName, now, oldName);
+        const row = sqlDb.prepare(`SELECT name FROM changes WHERE name = ?`).get(oldName);
+        if (row === undefined) return 'missing';
+        if (sqlDb.prepare(`SELECT 1 FROM changes WHERE name = ?`).get(newName) !== undefined) return 'conflict';
+        const r = sqlDb.prepare(`UPDATE changes SET name = ?, last_active = ? WHERE name = ?`).run(newName, now, oldName);
+        if (r.changes !== 1) return 'stolen'; // 并发窗口：检查后他进程已把 oldName 改走
         // 本地脏度（D-013 / task-04）：重命名也是本地推进（标新名）
         this.pm._touchLocalModified(cwd, newName, now);
+        return 'ok';
       });
     } catch (e) {
       console.error(`❌ 重命名失败：更新数据库时出错（${e.message}）`);
       return;
     }
+    if (outcome === 'missing') {
+      console.error(`❌ 变更 ${oldName} 不存在`);
+      return;
+    }
+    if (outcome === 'conflict') {
+      console.error(`❌ 变更 ${newName} 已存在`);
+      return;
+    }
+    if (outcome === 'stolen') {
+      console.error(`❌ 变更 ${oldName} 刚被并发操作重命名/删除（0 行更新），本次跳过——请重查后重试`);
+      return;
+    }
+    // 先更新 DB，再重命名目录；FS 失败则回滚 DB，避免"目录已改名但 DB 旧名"的孤儿
+    // （旧实现 FS-first 无补偿：renameSync 成功后 DB transaction 抛 EPERM/EBUSY 会让
+    //  目录已是 newName、DB 仍是 oldName，read(两名) 都失联且无自动恢复）。
     let renamed = true;
     if (existsSync(oldDir)) {
       try {

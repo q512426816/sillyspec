@@ -52,14 +52,14 @@ console.log('\n=== ①-2 registerRepoInLocalYaml 幂等路径治愈 CRLF（写�
   fs.mkdirSync(path.join(d, '.sillyspec'), { recursive: true })
   // 模拟外部写入的 CRLF（agent Write 工具/Windows 编辑器）且条目已存在同值
   fs.writeFileSync(yamlPath, 'repos:\r\n  shared-lib: C:/x/shared-lib\r\n')
-  const r = registerRepoInLocalYaml(yamlPath, 'shared-lib', 'C:/x/shared-lib')
+  const r = await registerRepoInLocalYaml(yamlPath, 'shared-lib', 'C:/x/shared-lib')
   assertTrue(r.replaced === false, `幂等（值未变）语义保持（replaced=${r.replaced}）`)
   const after = fs.readFileSync(yamlPath, 'utf8')
   assertTrue(!after.includes('\r'), `磁盘被治愈为 LF（幂等路径也落盘——治「假成功」死循环）`)
   assertTrue(parseRepoRegistry(after).get('shared-lib') === 'C:/x/shared-lib', '治愈后 parseRepoRegistry 可读回（循环解开）')
   // LF 文件幂等仍不改文件（零回归）
   const before2 = fs.readFileSync(yamlPath, 'utf8')
-  registerRepoInLocalYaml(yamlPath, 'shared-lib', 'C:/x/shared-lib')
+  await registerRepoInLocalYaml(yamlPath, 'shared-lib', 'C:/x/shared-lib')
   assertTrue(fs.readFileSync(yamlPath, 'utf8') === before2, 'LF 文件幂等仍不改文件（既有断言零回归）')
 }
 

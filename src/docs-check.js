@@ -836,10 +836,12 @@ export const DECISIONS_DEFAULT_BEHIND_THRESHOLD = 10
  * @param {string} yamlText local.yaml 全文
  * @returns {string[]} 键列表；无声明返回 []
  */
-function extractKnownFailureKeys(yamlText) {
+export function extractKnownFailureKeys(yamlText) {
   if (!yamlText) return []
   const yaml = String(yamlText).replace(/\r\n?/g, '\n')
-  const inline = yaml.match(/^known_failures:\s*\[([^\]]*)\]\s*(?:#.*)?$/m)
+  // 贪婪 .* 同 verify-postcheck.extractKnownFailures（坑 known-failures-inline-nested-bracket：
+  // 值内 ] 使 [^\]]* 截断、整表静默清空；两处复刻必须同口径互指）
+  const inline = yaml.match(/^known_failures:\s*\[(.*)\]\s*(?:#.*)?$/m)
   if (inline) {
     return inline[1].split(',').map(s => s.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean)
   }

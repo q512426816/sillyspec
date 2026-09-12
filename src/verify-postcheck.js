@@ -581,7 +581,12 @@ export function extractModules(yamlText) {
  */
 function parseFlowValue(flowText, key) {
   // 键可能带引号也可能不带：path: "x" 或 "path": "x"
-  const re = new RegExp(String.raw`(?:^|[{,]\s*)"?${key}"?\s*:\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|(?:[^,}]+?))\s*(?=[,}]|$)`)
+  // bare 值的逗号终止是「下一键开始的逗号」而非任意逗号（坑 flow-value-comma-truncate，
+  // 2026-09-12 审查批 C-③）：`test: pytest -k a,b` 旧 [^,}]+? 在第一个逗号截断 → 实测跑
+  // 残损命令 `pytest -k a`（假红/碰巧假绿）。bare 分支与终止 lookahead 双侧同口径：只把
+  // 「后随键形态的逗号」当分隔符——消费侧负向前瞻排除它，终止侧正向前瞻要求它（或 } / 行尾）。
+  const sepComma = String.raw`,\s*"?[A-Za-z0-9_.\-]+"?\s*:`
+  const re = new RegExp(String.raw`(?:^|[{,]\s*)"?${key}"?\s*:\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|(?:[^,}]|,(?!${sepComma.slice(1)}))+?)\s*(?=\}|${sepComma}|$)`)
   const m = flowText.match(re)
   if (!m) return null
   let v = m[1].trim()
@@ -670,7 +675,11 @@ export function extractKnownFailures(yamlText) {
   // CRLF 归一（坑 verify-modules-crlf-blanket-fallback）：块式正则的 `.+`/`\n?` 在 CRLF 行
   // 间失配，只捕获到第一条豁免项就停——归一后整块捕获恢复
   const yaml = normalizeLineEndings(yamlText)
-  const inline = yaml.match(/^known_failures:\s*\[([^\]]*)\]\s*(?:#.*)?$/m)
+  // inline 捕获组用贪婪 .*（坑 known-failures-inline-nested-bracket，2026-09-12 审查批 C-④）：
+  // 旧 [^\]]* 在值内首个 ] 停——豁免项是 glob/pytest id 可含 [] 字符类（tests/\[x\]::case），
+  // 旧版整表静默清空 → 预存失败全落 remaining 假红且难归因。贪婪 .* + 后随 \] 行尾锚，
+  // 吃到最后一个 ]（行尾注释里含 ] 的极端形态会被并入值，远优于静默清空）。
+  const inline = yaml.match(/^known_failures:\s*\[(.*)\]\s*(?:#.*)?$/m)
   if (inline) {
     return inline[1].split(',').map(s => s.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean)
   }

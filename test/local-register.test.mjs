@@ -42,7 +42,7 @@ console.log('--- 1. 新文件：建段 ---')
 {
   const dir = makeTmpDir('lr-')
   const p = join(dir, '.sillyspec', 'local.yaml')
-  const r = registerRepoInLocalYaml(p, 'shared-lib', 'C:/x/shared-lib')
+  const r = await registerRepoInLocalYaml(p, 'shared-lib', 'C:/x/shared-lib')
   assert(r.fileCreated === true && r.sectionCreated === true, '返回 fileCreated+sectionCreated')
   const text = readFileSync(p, 'utf8')
   assert(text.includes('repos:\n  shared-lib: C:/x/shared-lib\n'), '内容含 repos 段与条目（posix 路径）')
@@ -64,7 +64,7 @@ console.log('--- 2. 既有文件追加段：注释/凭据段逐行保留 ---')
     '',
   ].join('\n')
   writeFileSync(p, before)
-  const r = registerRepoInLocalYaml(p, 'tool-repo', 'C:/x/tool-repo')
+  const r = await registerRepoInLocalYaml(p, 'tool-repo', 'C:/x/tool-repo')
   assert(r.fileCreated === false && r.sectionCreated === true, '返回 sectionCreated')
   const after = readFileSync(p, 'utf8')
   for (const keep of ['# SillySpec 本地配置（gitignored）', 'mcp:', '  token: "shmcp_secret"', '  test: "npm test"']) {
@@ -80,7 +80,7 @@ console.log('--- 3. 段内插入 / 同 key 改值 / 幂等 ---')
   const p = join(dir, 'local.yaml')
   writeFileSync(p, ['repos:', '  shared-lib: C:/old/shared-lib', '  # main 不用注册（隐式 = cwd）', '', 'commands:', '  test: "npm test"', ''].join('\n'))
 
-  const rIns = registerRepoInLocalYaml(p, 'tool-repo', 'C:/x/tool-repo')
+  const rIns = await registerRepoInLocalYaml(p, 'tool-repo', 'C:/x/tool-repo')
   assert(rIns.replaced === false && rIns.sectionCreated === false, '段内插入返回值')
   let text = readFileSync(p, 'utf8')
   assert(text.indexOf('  shared-lib: C:/old/shared-lib') < text.indexOf('  tool-repo: C:/x/tool-repo')
@@ -88,14 +88,14 @@ console.log('--- 3. 段内插入 / 同 key 改值 / 幂等 ---')
   assert(text.includes('  # main 不用注册（隐式 = cwd）'), '段内注释保留')
   assert(parseRepoRegistry(text).size === 2, '读回 2 个 key')
 
-  const rRep = registerRepoInLocalYaml(p, 'shared-lib', 'C:/new/shared-lib')
+  const rRep = await registerRepoInLocalYaml(p, 'shared-lib', 'C:/new/shared-lib')
   assert(rRep.replaced === true, '同 key 改值返回 replaced')
   text = readFileSync(p, 'utf8')
   assert(text.includes('  shared-lib: C:/new/shared-lib') && !text.includes('C:/old'), '旧值被替换')
   assert(parseRepoRegistry(text).get('shared-lib') === 'C:/new/shared-lib', '改值后读回一致')
 
   const textBefore = readFileSync(p, 'utf8')
-  const rIdem = registerRepoInLocalYaml(p, 'shared-lib', 'C:/new/shared-lib')
+  const rIdem = await registerRepoInLocalYaml(p, 'shared-lib', 'C:/new/shared-lib')
   assert(rIdem.replaced === false, '同值幂等跳过')
   assert(readFileSync(p, 'utf8') === textBefore, '幂等时不改文件内容')
 }
@@ -105,10 +105,10 @@ console.log('--- 4. key 校验 ---')
   const dir = makeTmpDir('lr-')
   const p = join(dir, 'local.yaml')
   let threw = 0
-  try { registerRepoInLocalYaml(p, 'main', 'C:/x') } catch { threw++ }
+  try { await registerRepoInLocalYaml(p, 'main', 'C:/x') } catch { threw++ }
   assert(threw === 1, "key='main' 拒绝（隐式不用注册）")
   threw = 0
-  try { registerRepoInLocalYaml(p, 'bad key!', 'C:/x') } catch { threw++ }
+  try { await registerRepoInLocalYaml(p, 'bad key!', 'C:/x') } catch { threw++ }
   assert(threw === 1, '非法字符 key 拒绝')
 }
 

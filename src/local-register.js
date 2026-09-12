@@ -16,8 +16,9 @@
  * （tmp+rename，防多会话并发写半截，与 local detect 写入口径一致）。
  */
 import { existsSync, readFileSync, mkdirSync } from 'fs'
-import { dirname } from 'path'
+import { dirname, join } from 'path'
 import { writeAtomicSync } from './fs-atomic.js'
+import { withFileLock } from './quicklog.js'
 
 function escapeRe(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -26,13 +27,18 @@ function escapeRe(s) {
 /**
  * 把 `<key>: <path>` 注册进 local.yaml 的 repos: 段（幂等，已有该 key 则改值）。
  *
+ * 读-改-写整段持 .local.yaml.lock（2026-09-12 审查批 C-②）：writeAtomicSync 只保证单次
+ * 写不撕裂，不串行化 RMW——多 agent 并行 register-repo（不同 key）或与 local detect /
+ * platform connect 的写入口并发时，后写者整体覆盖前写者、先注册条目静默丢失
+ * （quicklog 侧同场景用 withFileLock，此处对齐）。async 化：调用方须 await。
+ *
  * @param {string} yamlPath - local.yaml 绝对路径（不存在则新建）
  * @param {string} key - repo key（限 [A-Za-z0-9_.\-]+，'main' 隐式禁止注册）
  * @param {string} repoPath - 跨仓仓根绝对路径（写入时统一正斜杠，与示例格式一致）
- * @returns {{ fileCreated: boolean, sectionCreated: boolean, replaced: boolean }}
+ * @returns {Promise<{ fileCreated: boolean, sectionCreated: boolean, replaced: boolean }>}
  * @throws {Error} key 非法 / key='main' / repoPath 空 / 读写失败
  */
-export function registerRepoInLocalYaml(yamlPath, key, repoPath) {
+export async function registerRepoInLocalYaml(yamlPath, key, repoPath) {
   if (!yamlPath) throw new Error('registerRepoInLocalYaml: yamlPath 不能为空')
   if (!key || !/^[A-Za-z0-9_.\-]+$/.test(key)) {
     throw new Error(`repo key 非法: "${key}"（限字母数字 . _ -，与 parseRepoRegistry 读侧口径一致）`)
@@ -42,7 +48,9 @@ export function registerRepoInLocalYaml(yamlPath, key, repoPath) {
   }
   if (!repoPath) throw new Error('registerRepoInLocalYaml: repoPath 不能为空')
 
-  const existed = existsSync(yamlPath)
+  // 锁文件与 yaml 同目录（与 QUICKLOG/tasks 锁同机制；锁内读-判定-写，后写者不再覆盖前写者）
+  return await withFileLock(join(dirname(yamlPath), '.local.yaml.lock'), async () => {
+    const existed = existsSync(yamlPath)
   // CRLF 归一后按 LF 写回（同 task 卡锚点写入的 CRLF 坑；local.yaml 各 CLI 写入口径均 LF）
   const raw0 = existed ? readFileSync(yamlPath, 'utf8') : ''
   const hadCr = raw0.includes('\r') // 磁盘原文带 CRLF → 幂等路径也要落盘治愈（见下方幂等分支）
@@ -101,4 +109,5 @@ export function registerRepoInLocalYaml(yamlPath, key, repoPath) {
   lines.splice(insertAt, 0, entryLine)
   write(lines.join('\n'))
   return { fileCreated: false, sectionCreated: false, replaced: false }
+  })
 }
