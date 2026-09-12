@@ -921,15 +921,3 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 
 **①快照 monorepo 失明**：根级四环境目录链接覆盖不了 pnpm/nx/lerna workspace 的 `packages/<pkg>/node_modules` 子包依赖——快照内实测报各种无关错，四次重试后才从日志摸到 `Temp\sillyspec-gate-*` 路径。修复：`discoverEnvDirs` 深度≤3 递归发现集（跳过环境目录内部/dist/build/.git）逐个 junction；`envDirsLinked` 预检改发现集口径；🧪 日志行带**快照根路径**；失败时 `printSnapshotFailureHint` 直给路径 + 排查顺序（本变更真实失败 → 环境差异对照复跑 `*_SNAPSHOT_OFF=1` → 并行污染已排除）——三个执行点（quick 门禁 / verify gates / noAI 扫描）全接线。
 **②checkpoint 产物吞噬**：部署 tar.gz（289MB untracked，.gitignore 缺口）被 baseline checkpoint 带进分支——FF 合并被迫改 merge commit + 二进制永久入 git。修复：untracked 收入口 `isCheckpointSkippableArtifact` 防御（归档/分发扩展名 tar.gz/zip/whl/exe 等恒跳 + >10MB 体积帽 `SILLYSPEC_BASELINE_MAX_FILE_MB` 可调），跳过清单 ⚠️ 点名 + 补 .gitignore 指引；tracked-modified 不设防（已在 git 历史，checkpoint diff 是原生形态）。
-
-## 62. 两坑：审计 fail-closed 误伤并行会话 spec 残留（归档移动/未跟踪脚本）/ gen:types 行尾重写假 M（2026-09-12 用户实证，已修复）
-
-**①spec 共享面删除误拦**：并行会话的归档移动（docs/sillyspec + changes/ 的 D+A）落进本会话时间窗 → 删除门 fail-closed，只能 `--allow-delete`（+`--allow-new` 消新增噪声）解锁——审计无法区分「并发他者」与「本会话偷建」。修复：`.sillyspec/` 与 `docs/` 前缀的**非本会话声明**删除 → `foreignSpecChurn` 整栈退（deletedFiles 移除 + 软警告归因「疑似并行会话归档移动/收尾」）；src/test 交付面删除仍 fail-closed；新增文件 reason 按 mtime 归因（早于会话启动 = 预存残留/并行预存注记，晚于 = 本窗口新建）。
-**②EOL-only 假 M**：gen:types/编辑器重写行尾（内容零变化）制造假 M 状态混进审计窗口。修复：`git diff --name-only --ignore-cr-at-eol HEAD` 单次对照——tracked 修改不在真实变更集 = 纯行尾重写，剔出 changedFiles 归 `eolOnlyFiles` 软警告（.gitattributes 根治指引），文件行/各门不再触发。
-
-## 63. 四坑：review.json 神秘空壳覆写（溯源戳根治）/ pnpm 沙箱必假败（布局探测跳过）/ probe1 NEW: 前缀失配噪声 / bash 长 heredoc 截断（2026-09-12 用户实证，已修复/落档）
-
-**①review 空壳覆写**：task-04 review.json 流程中被覆写成草稿壳（gate 报零改动疑似伪造，重写恢复）。四个 writer 均有覆盖守卫、无堆栈钉不死覆写者——修复为**溯源戳根治**：全部 writer（drafts×2/adopt/writeTaskReview）落盘附 `writtenBy`（通道#pid）+ `writtenAt`，emptyDiff 伪造 error 直显两字段——下次复现自曝写入者身份，事后可归因。
-**②pnpm 沙箱假败（第三次踩）**：pnpm node_modules 是指向 store 的符号链接网，junction 进临时目录跨根解析失效 → lint 必假败只能 advisory。修复：`detectSymlinkStoreLayout`（pnpm-lock.yaml/bun.lock/lerna.json/packageManager 字段）命中即快照作废回退主仓 + 明确 warn——不再让沙箱报无关错误。
-**③probe1 NEW: 失配**：design 清单 `NEW: src/x` 条目在文件已合入主仓后 `existsSync(join(cwd,'NEW:src/x'))` 恒 miss → skippedFiles ⚠️ 噪声。修复：探针路径剥 `NEW:` 前缀（主仓 + worktree 回退两处），matches 报告统一剥前缀路径（与 pathMatches 比对侧同源）。
-**④bash heredoc 截断**：本机 bash 通道长 heredoc 静默截断（双会话同款）——落档 knowledge/uncategorized.md（规避：长内容 Write 工具落盘，bash 只引用不内嵌）。

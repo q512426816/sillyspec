@@ -10,31 +10,3 @@
 方案：_chunkPathsPrivate 内联分批（环依赖规避，与 worktree-apply 同步演化注记）应用于 hash-object（批次行序拼接保索引对齐）与 _lsTreeBlobs；引用判定改先收候选 hash 再 merge-base --is-ancestor 精确校验；git() 新增可选 env 选项（缺省继承），baseline commit 走统一入口+env 展开
 结果：新测试 backlog-final-batch 7/7（60 长路径分批 ls-tree 全量命中/全 hash+缩写引用检出+无关不引用/baseline checkpoint author=sillyspec）；全量 453/0 + lint 583 绿（CLI --done 门禁实测通过）
 审计：⚖️ 归属切分：5 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：.sillyspec/docs/sillyspec/scan/CONVENTIONS.md, docs/sillyspec/architecture-4a.md, docs/sillyspec/doc-consistency-debt.md, docs/sillyspec/prompt-control-debt.md, test/backlog-final-batch.test.mjs
-
-## ql-20260912-011-ffdc | 2026-09-12 18:50:23 | 修审计两摩擦：并行会话 spec 残留 fail-closed 误拦（归档移动只能 --allow-delete）+ gen:types 行尾重写假 M 噪声
-状态：已完成
-关联变更：（无）
-文件：
-- src/run/shared.js（foreignSpecChurn 分流 + mtime 归因 + EOL safeGit 对照）
-- src/run/quick-audit.js（两软警告段渲染）
-- test/quick-audit-foreign-residue.test.mjs（4 用例）
-- docs/sillyspec/troubleshooting.md（§62）
-需求：修审计两摩擦：并行会话 spec 残留 fail-closed 误拦（归档移动只能 --allow-delete）+ gen:types 行尾重写假 M 噪声
-根因：①删除门对路径域不设防——.sillyspec//docs/ 共享面的他者归档移动 D 面落进时间窗即拦，审计无归因信号；②行尾重写内容零变化产 M 状态混进 changedFiles 触发文件行/各门
-方案：①spec 共享面非声明删除整栈退 foreignSpecChurn 软警告（src/test 仍 fail-closed）+ 新增文件 mtime 归因注记；②--ignore-cr-at-eol 单次对照剔 EOL-only 归 eolOnlyFiles（.gitattributes 指引）；修首版 gitQuiet 未 import 致 new Set(null) 空集全误剔的坑（safeGit + null 透传，audit 回归抓出）
-结果：quick-audit-foreign-residue 4/4；audit-quick-completion 55/55（危险 blocked 恢复）；全量 npm test 460/460；lint 591 文件 0 fail；docs check 553 全过
-
-## ql-20260912-012-ce01 | 2026-09-12 19:09:17 | 修驾驭第十七批四摩擦+dogfood 快照 lint 超时主仓回退
-状态：已完成
-关联变更：（无）
-文件：.sillyspec/docs/sillyspec/modules/machine-interface.md（+1/-1）, docs/sillyspec/prompt-control-debt.md（+5/-5）, src/run/gate-snapshot.js（+27/-0）, src/task-review.js（+16/-1）, src/verify-postcheck.js（+4/-2）, src/verify-probes.js（+8/-3）, test/gate-snapshot-layout-guard.test.mjs（+90/-0）, docs/sillyspec/troubleshooting.md（+7/-0）
-需求：修驾驭第十七批四摩擦+dogfood 快照 lint 超时主仓回退
-根因：writer 无溯源、pnpm store 跨根失效、NEW 前缀失配、heredoc 截断、junction I/O 慢致 lint 超时假败
-方案：溯源戳四 writer+emptyDiff 直显；布局探测回退；探针剥前缀；落档；timeoutMs+超时主仓复跑（含 const→let 修复）
-结果：新测 4/4 回归 10/10 全量 461/461 主仓 lint 0 fail docs check 553 全过
-审计：📎 文档引用失效：3/100 处 file:line 失效（sillyspec docs check 可复现）
-审计：   ❌ [docs/sillyspec/prompt-control-debt.md:219] gates.js:1183 → src/run/gates.js: 关键词缺失：期望任一「validateFileLocations」在 [start-2, end+5] 窗口内（跨文件引用/论述语境的纯位置锚：行号后加 ? 跳过关键词断言，层1 行界仍校验——勿删行号）
-审计：   ❌ [docs/sillyspec/prompt-control-debt.md:219] gates.js:1183 → src/run/gates.js: 关键词缺失：期望任一「validateFileLocations」在 [start-2, end+5] 窗口内（跨文件引用/论述语境的纯位置锚：行号后加 ? 跳过关键词断言，层1 行界仍校验——勿删行号）
-审计：   ❌ [docs/sillyspec/prompt-control-debt.md:219] gates.js:1339 → src/run/gates.js: 关键词缺失：期望任一「validateFileLocations」在 [start-2, end+5] 窗口内（跨文件引用/论述语境的纯位置锚：行号后加 ? 跳过关键词断言，层1 行界仍校验——勿删行号）
-审计：🔧 行号漂移已自动重锚 3 处（同口径复跑：3 → 0；剩余 0 处需人工 sillyspec docs check）
-审计：⚖️ 归属切分：3 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：src/run/gates.js, src/run/verify-quality-scan.js, .patch16-tmp.mjs

@@ -31,16 +31,6 @@ import { resolveRuntimeRoot } from './run/shared.js'
 // 跨仓 task 写 review.json 可用 v2 带 repo 字段，单仓/旧 change 仍用 v1。后续可拆分 stage-review 专用
 // 常量，本期遵循 allowed_paths 约束不扩散到 stage-review.js。
 export const REVIEW_SCHEMA_VERSION = 1
-
-/**
- * review.json 写入溯源戳（坑 review-json-mystery-overwrite，2026-09-12 驾驭第十七批①，
- * 用户实证 task-04 review 被覆写成空壳、gate 报零改动伪造重写恢复——四个 writer 均有
- * 覆盖守卫，无堆栈钉不死覆写者）：每次写入附 writtenBy（写入通道 + PID）+ writtenAt，
- * emptyDiff 伪造 error 直显两字段——下次复现自曝身份，事后可归因。
- */
-function reviewProvenanceStamp(channel) {
-  return { writtenBy: `${channel}#pid${process.pid}`, writtenAt: new Date().toISOString() }
-}
 const REVIEW_SCHEMA_VERSIONS_ACCEPTED = [1, 2]
 // repo 缺省值（review.repo / task 卡 repo 缺省时统一按 'main' 处理）。design §7.2 / §7.4。
 const DEFAULT_REPO_KEY = 'main'
@@ -530,8 +520,7 @@ export function validateTaskReviews(opts) {
           const scopeNote = Array.isArray(review.diffPaths) && review.diffPaths.length > 0
             ? `（diffPaths 路径限定切片为空——统一 commit 模式下 diffPaths 应为本 task 的 allowed_paths；task 确未实现请把 verdict 回 fail）`
             : ''
-          const prov = (review.writtenBy || review.writtenAt) ? `［写入溯源：${review.writtenBy || '?'} @ ${review.writtenAt || '?'}］` : '［无写入溯源—— older writer 产物］'
-          errors.push(`${taskId}: base..head（${review.base.slice(0, 8)}..${review.head.slice(0, 8)}）无任何代码变更 — 评审了一个零改动的任务，review 疑似伪造${scopeNote}${prov}`)
+          errors.push(`${taskId}: base..head（${review.base.slice(0, 8)}..${review.head.slice(0, 8)}）无任何代码变更 — 评审了一个零改动的任务，review 疑似伪造${scopeNote}`)
           continue
         }
       }
@@ -1352,7 +1341,6 @@ export async function generateTaskReviewDrafts({ changeName, cwd, platformOpts =
           ';verdict=未评审（无归属 diff 兜底草稿，坑 task-review-draft-skip-leak）',
       }
       if (draftRepo) draft.repo = draftRepo
-      Object.assign(draft, reviewProvenanceStamp('generateTaskReviewDrafts:no-attribution'))
       // fail-open（对齐函数头契约 + execute-run-dir-fail-loud 测试锁定的「写失败返回统计不抛」）：
       // 无归属草稿写入失败（如 tasks/ 被普通文件占位 ENOTDIR）降级 skipped，不崩整个草稿生成
       try {
@@ -1384,7 +1372,6 @@ export async function generateTaskReviewDrafts({ changeName, cwd, platformOpts =
       reviewerNotes: 'auto-generated draft from git diff ' + taskBase.slice(0, 8) + '..' + taskHead.slice(0, 8) + ';verdict=未评审（worktree execute 主 agent 实现模式兜底，坑2）',
     }
     if (draftRepo) draft.repo = draftRepo
-    Object.assign(draft, reviewProvenanceStamp('generateTaskReviewDrafts'))
     mkdirSync(reviewDir, { recursive: true })
     writeFileSync(reviewPath, JSON.stringify(draft, null, 2) + '\n')
     generated++
@@ -1601,7 +1588,6 @@ export async function adoptTaskReviewMechanics({ changeName, cwd, platformOpts =
 
     try {
       if (mechanicsChanged || verdictTouched || evidenceFilled) {
-        Object.assign(merged, reviewProvenanceStamp('adoptTaskReviewMechanics'))
         writeFileSync(reviewPath, JSON.stringify(merged, null, 2) + '\n')
         adopted++
       } else {
@@ -1804,7 +1790,6 @@ export async function writeTaskReview({
     ...(requiredEvidence.filter(Boolean).length > 0 ? { requiredEvidence: requiredEvidence.filter(Boolean) } : {}),
     reviewerNotes: reviewerNotes || `written by sillyspec review write (${base.slice(0, 8)}..${head.slice(0, 8)})`,
   }
-  Object.assign(review, reviewProvenanceStamp('writeTaskReview' + (force ? ':force' : '')))
   const schemaResult = validateReviewSchema(review)
   if (!schemaResult.ok) {
     return { ok: false, errors: schemaResult.errors, warnings }

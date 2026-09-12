@@ -70,9 +70,3 @@ checkProbeConsistency 增 facts 基线对比维度后，probe6 在 HEAD 前移�
 - mission c4731a06（真变更 brainstorm 审查，~3 分钟）：worker 终态落库 10:21:11，最终 [ASSISTANT] 消息 10:22:06 才到日志——daemon 终态后代报立即执行，此刻 result 空白被门控③拦 → artifacts:[]。此前 v2/v3 短验证任务（<90s）终消息先于终态到达，恰好躲过竞态——「修复已验证」的结论被长任务推翻。另：终消息 override 标记 uuid（a30cd81a…）与 thinking 段 uuid（699c18e8…）不一致，事件流配对也需平台侧核查。
 - 修法建议（平台侧）：代报延迟重试（终态后短窗内轮询 result 非空白再报，或对空白 result 定长重试 N 次）；根治是 worker_done 工具自报通道（结构化提交不受消息时序影响）。
 - sillyspec 侧：completed-no-artifact 兜底路径正确触发（记录保留+人工核对指引）；结论可从 get_run_logs 尾部人工捞回。
-
-## bash-heredoc-truncation（2026-09-12 双会话实证）
-
-本机 bash 通道对**长 heredoc**（大段内嵌脚本/文档经 `cat << 'EOF' > file` 落盘）发生静默截断——文件尾部丢失、无报错（pi 会话与本仓会话同款现象）。特征：截断点不稳定、重跑可变。
-
-**规避**：长内容一律改用 **Write 工具直接落盘**（不经 shell 通道，无长度截断面）；bash heredoc 仅用于短段（< 数十行）。需要 bash 执行的脚本先 Write 落 .mjs/.sh 再 `node <file>` 引用，不内嵌。

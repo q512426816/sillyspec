@@ -121,14 +121,9 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
       probe1.globEntries.push(e.path)
       continue
     }
-    // NEW: 待建前缀剥离（坑 probe1-new-prefix-miss，2026-09-12 驾驭第十七批③，用户实证
-    // 「NEW: 前缀文件已合入主仓」时 existsSync(join(cwd,'NEW:src/x')) 恒 miss 落 skippedFiles
-    // 留 ⚠️ 噪声）：design 清单的 NEW: 是「新建意图」标记，文件 apply 后已是无前缀实体——
-    // 探针按目标文件扫（与 pathMatches 比对侧剥除同源）。
-    const probePath = String(e.path).replace(/^NEW:\s*/, '')
-    let abs = join(cwd, probePath)
+    let abs = join(cwd, e.path)
     if (!existsSync(abs)) {
-      const wtAbs = wtRoot ? join(wtRoot, probePath) : null
+      const wtAbs = wtRoot ? join(wtRoot, e.path) : null
       if (wtAbs && existsSync(wtAbs)) {
         abs = wtAbs
         probe1.worktreeHits++
@@ -141,7 +136,7 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
       const lines = readFileSync(abs, 'utf8').split('\n')
       lines.forEach((line, i) => {
         if (probe1.matches.length >= PROBE1_MAX_MATCHES) return
-        if (TODO_MARKER_RE.test(line)) probe1.matches.push({ file: probePath, line: i + 1, content: line.trim().slice(0, 160) })
+        if (TODO_MARKER_RE.test(line)) probe1.matches.push({ file: e.path, line: i + 1, content: line.trim().slice(0, 160) })
       })
     } catch {
       probe1.skippedFiles.push(e.path)

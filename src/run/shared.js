@@ -1281,23 +1281,6 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
     // 不对整段 .trim()：会削首行前导空格致首文件路径丢首字符（见 parsePorcelainPath 注释）。
     const currentEntries = gitStatus.split('\n').filter(Boolean)
 
-    // EOL-only 噪声过滤（坑 eol-rewrite-fake-mtime-noise，2026-09-12 驾驭第十六批②，用户实证
-    // gen:types 重写行尾制造假 M）：git diff --ignore-cr-at-eol HEAD 的变更名单是「真实内容变更」
-    // 集——tracked 修改出现在 porcelain 但不在此集 = 纯行尾重写。单次对照调用，剔出 changedFiles
-    // 归 eolOnlyFiles 软警告（.gitattributes 指引），不再计入文件行/触发各门。
-    // 注意：gitQuiet 不在本模块 import 面（safeGit 才是）——首版用 gitQuiet 触发
-    // ReferenceError 被 catch 吞成 null，又被 new Set(null) 包装成空集 → 全部 tracked 修改
-    // 被误判 EOL-only 剔除（audit-quick-completion 回归抓出）。改用 safeGit（已 import，
-    // 返回 {value,error}），失败显式落 null 透传不过滤。
-    const eolRawList = (() => {
-      try {
-        const res = safeGit(cwd, ['diff', '--name-only', '--ignore-cr-at-eol', 'HEAD'], { timeout: 30000 })
-        if (!res || res.error) return null
-        return String(res.value || '').split('\n').filter(Boolean).map(p => p.replace(/\\/g, '/'))
-      } catch { return null }
-    })()
-    const eolRealChanged = eolRawList === null ? null : new Set(eolRawList)
-
     const normalizeGitPath = (p) => p.replace(/\\/g, '/')
     // step1 启动时记录的全量脏文件 = 预存改动（非本次 quick 产生）。审计必须排除它们，
     // 否则脏工作区下预存文件持续留在 git status → 命中 baselineFiles → 误判「覆盖 baseline」
@@ -1370,14 +1353,6 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
         continue
       }
 
-      // EOL-only（坑 eol-rewrite-fake-mtime-noise）：tracked 修改但真实内容零变化（仅行尾重写）
-      // → 剔出审计归属（changedFiles/各门），归 eolOnlyFiles 软警告。untracked（??）不经此径。
-      if (eolRealChanged instanceof Set && status !== '??' && rawStatus[0] !== 'D' && rawStatus[1] !== 'D'
-        && !eolRealChanged.has(file)) {
-        result.eolOnlyFiles = result.eolOnlyFiles || []
-        result.eolOnlyFiles.push(file)
-        continue
-      }
       result.changedFiles.push(file)
       if (rawStatus[0] === 'D' || rawStatus[1] === 'D') result.deletedFiles.push(file)
       if (status === '??') result.newFiles.push(file)
@@ -1414,28 +1389,8 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
     }
 
     // 检查 deleted files（--allow-delete 显式放行：删除是破坏性操作，默认 fail-closed，flag 即知情 opt-in）
-    // spec 共享面降级（坑 foreign-spec-churn-fail-closed，2026-09-12 驾驭第十六批①，用户实证
-    // 并行会话归档移动 docs/sillyspec + changes/ 被拦只能 --allow-delete）：.sillyspec/ 与 docs/
-    // 是多会话共享 spec 面——非本会话声明的删除在此面发生时，归因「并行他者 spec 收尾/归档移动」
-    // 降级软警告不阻断（src/test 交付面删除仍 fail-closed——那是本会话可支配域）。
-    const isSpecSharedPath = (p) => {
-      const n = p.replace(/\\/g, '/')
-      return n.startsWith('.sillyspec/') || n.startsWith('docs/')
-    }
     if (!allowDelete) {
-      const stillBlocked = []
       for (const f of result.deletedFiles) {
-        if (isSpecSharedPath(f) && !ownDeclaredNorm.has(f.replace(/\\/g, '/'))) {
-          result.foreignSpecChurn = result.foreignSpecChurn || []
-          result.foreignSpecChurn.push(f)
-          continue
-        }
-        stillBlocked.push(f)
-      }
-      // 整栈退（对齐 linkedChangeLeftovers 模式）：归他者的 spec 面删除从 deletedFiles 移除——
-      // 下方 status 判定与 --allow-delete 渲染均不再见它（否则 blocked-with-empty-reasons）
-      result.deletedFiles = stillBlocked
-      for (const f of stillBlocked) {
         result.reasons.push(`删除文件: ${f}`)
       }
     }
@@ -1451,18 +1406,7 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
     if (!allowNew) {
       for (const f of result.newFiles) {
         if (!isQuickMetadata(f, guard.linkedChanges)) {
-          // mtime 归因（坑 foreign-spec-churn-fail-closed 配套，用户建议「按 quick 启动后
-          // mtime 软判定」）：早于会话启动 = 预存残留（baseline 漏记或并行会话预存，非本
-          // 会话窗口新建）——reason 标注供裁决，门语义不变（新增本就 warning 档）。
-          let mtimeNote = ''
-          try {
-            const st = statSync(join(cwd, f))
-            const startedAtMs = guard.startedAt ? new Date(guard.startedAt).getTime() : 0
-            if (startedAtMs && st.mtimeMs < startedAtMs) {
-              mtimeNote = '（mtime 早于会话启动——预存残留/并行预存，非本会话新建；--files 声明归属或忽略）'
-            }
-          } catch { /* stat 失败无注记 */ }
-          result.reasons.push(`新增文件（需 --allow-new）: ${f}${mtimeNote}`)
+          result.reasons.push(`新增文件（需 --allow-new）: ${f}`)
         }
       }
     }

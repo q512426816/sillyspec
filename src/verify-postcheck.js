@@ -158,7 +158,7 @@ function recordVerifyLintTally({ specBase, result }) {
  * advisory 起步：失败只打印不阻断（test 门已 fail-closed，lint 门观察期后再升级）。
  * 信任边界与 runVerifyTestCheck 一致：命令只来源于主仓 .sillyspec/local.yaml。
  */
-export function runVerifyLintCheck({ cwd, specBase, timeoutMs } = {}) {
+export function runVerifyLintCheck({ cwd, specBase }) {
   const localYamlPath = join(specBase, 'local.yaml')
   const yamlText = existsSync(localYamlPath) ? readFileSync(localYamlPath, 'utf8') : null
   const command = extractLintCommand(yamlText)
@@ -176,9 +176,7 @@ export function runVerifyLintCheck({ cwd, specBase, timeoutMs } = {}) {
     }
   }
 
-  // timeoutMs（2026-09-12 驾驭第十七批 dogfood）：门禁快照内 node_modules 经 junction I/O 较慢，
-  // 3min 默认预算实测被超时杀（180.1s 假败）——快照路径显式传 5min；优先级 显式参 > env > 默认
-  const LINT_TIMEOUT_MS = timeoutMs || Number(process.env.SILLYSPEC_LINT_TIMEOUT_MS) || 3 * 60 * 1000
+  const LINT_TIMEOUT_MS = Number(process.env.SILLYSPEC_LINT_TIMEOUT_MS) || 3 * 60 * 1000
   const startedAt = Date.now()
   let exitCode = 0
   let output = ''
