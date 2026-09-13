@@ -1,0 +1,240 @@
+diff --git a/docs/sillyspec/troubleshooting.md b/docs/sillyspec/troubleshooting.md
+index 8c827dd..b6d23ad 100644
+--- a/docs/sillyspec/troubleshooting.md
++++ b/docs/sillyspec/troubleshooting.md
+@@ -921,3 +921,8 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent 
+ 
+ **①快照 monorepo 失明**：根级四环境目录链接覆盖不了 pnpm/nx/lerna workspace 的 `packages/<pkg>/node_modules` 子包依赖——快照内实测报各种无关错，四次重试后才从日志摸到 `Temp\sillyspec-gate-*` 路径。修复：`discoverEnvDirs` 深度≤3 递归发现集（跳过环境目录内部/dist/build/.git）逐个 junction；`envDirsLinked` 预检改发现集口径；🧪 日志行带**快照根路径**；失败时 `printSnapshotFailureHint` 直给路径 + 排查顺序（本变更真实失败 → 环境差异对照复跑 `*_SNAPSHOT_OFF=1` → 并行污染已排除）——三个执行点（quick 门禁 / verify gates / noAI 扫描）全接线。
+ **②checkpoint 产物吞噬**：部署 tar.gz（289MB untracked，.gitignore 缺口）被 baseline checkpoint 带进分支——FF 合并被迫改 merge commit + 二进制永久入 git。修复：untracked 收入口 `isCheckpointSkippableArtifact` 防御（归档/分发扩展名 tar.gz/zip/whl/exe 等恒跳 + >10MB 体积帽 `SILLYSPEC_BASELINE_MAX_FILE_MB` 可调），跳过清单 ⚠️ 点名 + 补 .gitignore 指引；tracked-modified 不设防（已在 git 历史，checkpoint diff 是原生形态）。
++
++## 62. 两坑：审计 fail-closed 误伤并行会话 spec 残留（归档移动/未跟踪脚本）/ gen:types 行尾重写假 M（2026-09-12 用户实证，已修复）
++
++**①spec 共享面删除误拦**：并行会话的归档移动（docs/sillyspec + changes/ 的 D+A）落进本会话时间窗 → 删除门 fail-closed，只能 `--allow-delete`（+`--allow-new` 消新增噪声）解锁——审计无法区分「并发他者」与「本会话偷建」。修复：`.sillyspec/` 与 `docs/` 前缀的**非本会话声明**删除 → `foreignSpecChurn` 整栈退（deletedFiles 移除 + 软警告归因「疑似并行会话归档移动/收尾」）；src/test 交付面删除仍 fail-closed；新增文件 reason 按 mtime 归因（早于会话启动 = 预存残留/并行预存注记，晚于 = 本窗口新建）。
++**②EOL-only 假 M**：gen:types/编辑器重写行尾（内容零变化）制造假 M 状态混进审计窗口。修复：`git diff --name-only --ignore-cr-at-eol HEAD` 单次对照——tracked 修改不在真实变更集 = 纯行尾重写，剔出 changedFiles 归 `eolOnlyFiles` 软警告（.gitattributes 根治指引），文件行/各门不再触发。
+diff --git a/src/run/quick-audit.js b/src/run/quick-audit.js
+index 36ef323..5353e16 100644
+--- a/src/run/quick-audit.js
++++ b/src/run/quick-audit.js
+@@ -137,6 +137,17 @@ export function printQuickAuditReview(review) {
+     }
+     console.warn(`   quick 不强制文档同步，欠账已随本条 QUICKLOG「审计：」行落盘（可事后追溯）。若改动触及接口/契约，建议顺手同步模块文档。`)
+   }
++  // spec 共享面他者噪声（坑 foreign-spec-churn-fail-closed）：并行会话归档移动/文档收尾的
++  // 删除与 EOL-only 假 M——软警告点名归因，不再逼 --allow-delete/--allow-new 解锁。
++  if (review.foreignSpecChurn && review.foreignSpecChurn.length > 0) {
++    console.warn(`⚠️ spec 共享面 ${review.foreignSpecChurn.length} 个非本会话声明的删除（.sillyspec/ docs/，疑似并行会话归档移动/收尾——归其会话收口，本会话不阻断）：`)
++    for (const f2 of review.foreignSpecChurn.slice(0, 6)) console.warn(`   - ${f2}`)
++    if (review.foreignSpecChurn.length > 6) console.warn(`   … 共 ${review.foreignSpecChurn.length} 个`)
++  }
++  if (review.eolOnlyFiles && review.eolOnlyFiles.length > 0) {
++    console.warn(`⚠️ ${review.eolOnlyFiles.length} 个文件仅行尾重写（内容零变化，gen:types/编辑器 CRLF 假 M——已剔出本会话审计）：${review.eolOnlyFiles.slice(0, 5).join('、')}${review.eolOnlyFiles.length > 5 ? ' 等' : ''}`)
++    console.warn(`   根治：.gitattributes 声明 text=auto eol=lf（或按文件类型钉死），生成器重写不再制造假 M`)
++  }
+   if (review.docsCheckHint && review.docsCheckHint.invalid > 0) {
+     console.warn(`\n📎 文档引用失效（docs check）：本次改动的文档含 ${review.docsCheckHint.invalid}/${review.docsCheckHint.total} 处失效 file:line 引用。`)
+     // 逐条指名（2026-09-11 用户实证：只报计数不指名哪处，四轮复现才定位——门禁输出
+diff --git a/src/run/shared.js b/src/run/shared.js
+index dd46b8c..00e4ee9 100644
+--- a/src/run/shared.js
++++ b/src/run/shared.js
+@@ -1281,6 +1281,23 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
+     // 不对整段 .trim()：会削首行前导空格致首文件路径丢首字符（见 parsePorcelainPath 注释）。
+     const currentEntries = gitStatus.split('\n').filter(Boolean)
+ 
++    // EOL-only 噪声过滤（坑 eol-rewrite-fake-mtime-noise，2026-09-12 驾驭第十六批②，用户实证
++    // gen:types 重写行尾制造假 M）：git diff --ignore-cr-at-eol HEAD 的变更名单是「真实内容变更」
++    // 集——tracked 修改出现在 porcelain 但不在此集 = 纯行尾重写。单次对照调用，剔出 changedFiles
++    // 归 eolOnlyFiles 软警告（.gitattributes 指引），不再计入文件行/触发各门。
++    // 注意：gitQuiet 不在本模块 import 面（safeGit 才是）——首版用 gitQuiet 触发
++    // ReferenceError 被 catch 吞成 null，又被 new Set(null) 包装成空集 → 全部 tracked 修改
++    // 被误判 EOL-only 剔除（audit-quick-completion 回归抓出）。改用 safeGit（已 import，
++    // 返回 {value,error}），失败显式落 null 透传不过滤。
++    const eolRawList = (() => {
++      try {
++        const res = safeGit(cwd, ['diff', '--name-only', '--ignore-cr-at-eol', 'HEAD'], { timeout: 30000 })
++        if (!res || res.error) return null
++        return String(res.value || '').split('\n').filter(Boolean).map(p => p.replace(/\\/g, '/'))
++      } catch { return null }
++    })()
++    const eolRealChanged = eolRawList === null ? null : new Set(eolRawList)
++
+     const normalizeGitPath = (p) => p.replace(/\\/g, '/')
+     // step1 启动时记录的全量脏文件 = 预存改动（非本次 quick 产生）。审计必须排除它们，
+     // 否则脏工作区下预存文件持续留在 git status → 命中 baselineFiles → 误判「覆盖 baseline」
+@@ -1353,6 +1370,14 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
+         continue
+       }
+ 
++      // EOL-only（坑 eol-rewrite-fake-mtime-noise）：tracked 修改但真实内容零变化（仅行尾重写）
++      // → 剔出审计归属（changedFiles/各门），归 eolOnlyFiles 软警告。untracked（??）不经此径。
++      if (eolRealChanged instanceof Set && status !== '??' && rawStatus[0] !== 'D' && rawStatus[1] !== 'D'
++        && !eolRealChanged.has(file)) {
++        result.eolOnlyFiles = result.eolOnlyFiles || []
++        result.eolOnlyFiles.push(file)
++        continue
++      }
+       result.changedFiles.push(file)
+       if (rawStatus[0] === 'D' || rawStatus[1] === 'D') result.deletedFiles.push(file)
+       if (status === '??') result.newFiles.push(file)
+@@ -1389,8 +1414,28 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
+     }
+ 
+     // 检查 deleted files（--allow-delete 显式放行：删除是破坏性操作，默认 fail-closed，flag 即知情 opt-in）
++    // spec 共享面降级（坑 foreign-spec-churn-fail-closed，2026-09-12 驾驭第十六批①，用户实证
++    // 并行会话归档移动 docs/sillyspec + changes/ 被拦只能 --allow-delete）：.sillyspec/ 与 docs/
++    // 是多会话共享 spec 面——非本会话声明的删除在此面发生时，归因「并行他者 spec 收尾/归档移动」
++    // 降级软警告不阻断（src/test 交付面删除仍 fail-closed——那是本会话可支配域）。
++    const isSpecSharedPath = (p) => {
++      const n = p.replace(/\\/g, '/')
++      return n.startsWith('.sillyspec/') || n.startsWith('docs/')
++    }
+     if (!allowDelete) {
++      const stillBlocked = []
+       for (const f of result.deletedFiles) {
++        if (isSpecSharedPath(f) && !ownDeclaredNorm.has(f.replace(/\\/g, '/'))) {
++          result.foreignSpecChurn = result.foreignSpecChurn || []
++          result.foreignSpecChurn.push(f)
++          continue
++        }
++        stillBlocked.push(f)
++      }
++      // 整栈退（对齐 linkedChangeLeftovers 模式）：归他者的 spec 面删除从 deletedFiles 移除——
++      // 下方 status 判定与 --allow-delete 渲染均不再见它（否则 blocked-with-empty-reasons）
++      result.deletedFiles = stillBlocked
++      for (const f of stillBlocked) {
+         result.reasons.push(`删除文件: ${f}`)
+       }
+     }
+@@ -1406,7 +1451,18 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
+     if (!allowNew) {
+       for (const f of result.newFiles) {
+         if (!isQuickMetadata(f, guard.linkedChanges)) {
+-          result.reasons.push(`新增文件（需 --allow-new）: ${f}`)
++          // mtime 归因（坑 foreign-spec-churn-fail-closed 配套，用户建议「按 quick 启动后
++          // mtime 软判定」）：早于会话启动 = 预存残留（baseline 漏记或并行会话预存，非本
++          // 会话窗口新建）——reason 标注供裁决，门语义不变（新增本就 warning 档）。
++          let mtimeNote = ''
++          try {
++            const st = statSync(join(cwd, f))
++            const startedAtMs = guard.startedAt ? new Date(guard.startedAt).getTime() : 0
++            if (startedAtMs && st.mtimeMs < startedAtMs) {
++              mtimeNote = '（mtime 早于会话启动——预存残留/并行预存，非本会话新建；--files 声明归属或忽略）'
++            }
++          } catch { /* stat 失败无注记 */ }
++          result.reasons.push(`新增文件（需 --allow-new）: ${f}${mtimeNote}`)
+         }
+       }
+     }
+diff --git a/test/quick-audit-foreign-residue.test.mjs b/test/quick-audit-foreign-residue.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/quick-audit-foreign-residue.test.mjs
+@@ -0,0 +1,108 @@
++/**
++ * 审计他者残留软判定（坑 foreign-spec-churn-fail-closed + eol-rewrite-fake-mtime-noise，
++ * 2026-09-12 驾驭第十六批，用户实证：并行会话 docs/sillyspec 归档移动 + 未跟踪脚本被
++ * fail-closed 拦下只能 --allow-delete/--allow-new 解锁；gen:types 行尾重写制造假 M）。
++ *
++ * 锁定语义：
++ *   - .sillyspec/ docs/ 非声明删除（归档移动形态）→ foreignSpecChurn 软警告，不进删除门
++ *   - src/test 删除仍 fail-closed（本会话可支配域）
++ *   - EOL-only tracked 修改 → 剔出 changedFiles 归 eolOnlyFiles（git --ignore-cr-at-eol 对照）
++ *   - 新增文件 mtime 早于会话启动 → reason 带「预存残留」归因注记
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, utimesSync } from 'fs'
++import { join } from 'path'
++import { tmpdir } from 'os'
++import { spawnSync } from 'node:child_process'
++import { auditQuickCompletion } from '../src/run/shared.js'
++
++const tmpRoots = []
++function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); tmpRoots.push(d); return d }
++test.after(() => { for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
++
++function git(dir, args) {
++  const r = spawnSync('git', args, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
++  if (r.status !== 0) throw new Error(`git ${args.join(' ')}: ${r.stderr}`)
++  return r.stdout.trim()
++}
++
++function setupBase() {
++  const cwd = mk('fsx-')
++  git(cwd, ['init', '-q']); git(cwd, ['config', 'user.email', 't@t.local']); git(cwd, ['config', 'user.name', 't'])
++  // 提交：spec 共享面文件 + src 交付文件（LF 行尾供 EOL 用例改写）
++  mkdirSync(join(cwd, '.sillyspec', 'changes', 'other-change'), { recursive: true })
++  writeFileSync(join(cwd, '.sillyspec', 'changes', 'other-change', 'design.md'), '# D\n')
++  mkdirSync(join(cwd, 'src'), { recursive: true })
++  writeFileSync(join(cwd, 'src', 'app.js'), 'a\nb\nc\n')
++  mkdirSync(join(cwd, 'src', 'del-me'), { recursive: true })
++  writeFileSync(join(cwd, 'src', 'del-me', 'x.js'), 'x\n')
++  mkdirSync(join(cwd, '.sillyspec', 'quicklog'), { recursive: true })
++  writeFileSync(join(cwd, '.sillyspec', 'quicklog', 'QUICKLOG-test.md'), '# ql' + String.fromCharCode(10))
++  git(cwd, ['add', '.']); git(cwd, ['commit', '-q', '-m', 'init'])
++  return cwd
++}
++
++function guardFor(cwd, startedAtIso) {
++  return {
++    sessionId: 'quick-test', startedAt: startedAtIso || new Date().toISOString(),
++    baselineFiles: [], allowedFiles: [], linkedChanges: [], otherSessionsDeclared: [],
++  }
++}
++
++test('spec 共享面归档移动删除 → foreignSpecChurn 软警告不阻断；src 删除仍阻断', async () => {
++  const cwd = setupBase()
++  // 并行会话归档移动：changes/other-change/design.md 删 + archive 侧加（删除面是本测焦点）
++  rmSync(join(cwd, '.sillyspec', 'changes', 'other-change', 'design.md'))
++  mkdirSync(join(cwd, '.sillyspec', 'changes', 'archive', 'other-change'), { recursive: true })
++  writeFileSync(join(cwd, '.sillyspec', 'changes', 'archive', 'other-change', 'design.md'), '# D\n')
++  // 本会话可支配域删除（应仍拦）
++  rmSync(join(cwd, 'src', 'del-me', 'x.js'))
++
++  const r = await auditQuickCompletion(cwd, guardFor(cwd))
++  assert.ok(r.foreignSpecChurn && r.foreignSpecChurn.some(f => f.includes('other-change/design.md')),
++    '归档移动删除进 foreignSpecChurn（软警告面）')
++  assert.ok(!r.reasons.some(x => x.includes('other-change/design.md')), 'spec 面删除不再进删除门 reason')
++  assert.ok(r.reasons.some(x => x.startsWith('删除文件: src/del-me/x.js')), 'src 删除仍 fail-closed')
++  assert.equal(r.status, 'blocked', 'src 删除在 → 整体仍 blocked（正确）')
++
++  // 无 src 删除的纯 spec 移动场景 → 不 blocked
++  const cwd2 = setupBase()
++  rmSync(join(cwd2, '.sillyspec', 'changes', 'other-change', 'design.md'))
++  const r2 = await auditQuickCompletion(cwd2, guardFor(cwd2))
++  assert.notEqual(r2.status, 'blocked', `纯 spec 面移动不阻断（实际 ${r2.status}）`)
++  assert.ok(r2.foreignSpecChurn && r2.foreignSpecChurn.length === 1, '归因清单在场')
++})
++
++test('声明过的 spec 删除不降级（ownDeclaredNorm 命中走原门）', async () => {
++  const cwd = setupBase()
++  rmSync(join(cwd, '.sillyspec', 'changes', 'other-change', 'design.md'))
++  const g = guardFor(cwd)
++  g.allowedFiles = ['.sillyspec/changes/other-change/design.md']
++  const r = await auditQuickCompletion(cwd, g)
++  assert.ok(!r.foreignSpecChurn || r.foreignSpecChurn.length === 0, '本会话声明的删除不归他者')
++  assert.ok(r.reasons.some(x => x.startsWith('删除文件')), '声明删除走原 fail-closed 门')
++})
++
++test('EOL-only 假 M 剔出审计；真实修改保留', async () => {
++  const cwd = setupBase()
++  // EOL-only：src/app.js LF → CRLF（内容零变化）
++  writeFileSync(join(cwd, 'src', 'app.js'), 'a\r\nb\r\nc\r\n')
++  // 真实修改
++  writeFileSync(join(cwd, 'src', 'new.js'), 'real change\n')
++  const r = await auditQuickCompletion(cwd, guardFor(cwd))
++  assert.ok(r.eolOnlyFiles && r.eolOnlyFiles.includes('src/app.js'), 'EOL-only 文件归 eolOnlyFiles')
++  assert.ok(!r.changedFiles.includes('src/app.js'), '假 M 不进 changedFiles（文件行/门不触发）')
++  assert.ok(r.changedFiles.includes('src/new.js'), '真实修改保留')
++})
++
++test('新增文件 mtime 早于会话启动 → reason 带预存残留归因注记', async () => {
++  const cwd = setupBase()
++  writeFileSync(join(cwd, 'residue.mjs'), 'x\n')
++  // mtime 拨回 1 小时前；会话 startedAt = 现在
++  const past = new Date(Date.now() - 3600_000)
++  utimesSync(join(cwd, 'residue.mjs'), past, past)
++  const r = await auditQuickCompletion(cwd, guardFor(cwd))
++  const hit = r.reasons.find(x => x.includes('residue.mjs'))
++  assert.ok(hit && hit.includes('预存残留'), `归因注记在场（实际：${hit}）`)
++})

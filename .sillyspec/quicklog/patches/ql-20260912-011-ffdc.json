@@ -1,0 +1,54 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-673400a2",
+  "totals": {
+    "files": 4,
+    "additions": 181,
+    "deletions": 1
+  },
+  "rows": [
+    {
+      "path": "docs/sillyspec/troubleshooting.md",
+      "declared": true,
+      "additions": 5,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/run/quick-audit.js",
+      "declared": true,
+      "additions": 11,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/run/shared.js",
+      "declared": true,
+      "additions": 57,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/quick-audit-foreign-residue.test.mjs",
+      "declared": true,
+      "additions": 108,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "qlId": "ql-20260912-011-ffdc",
+  "sessionId": "quick-673400a2",
+  "savedAt": "2026-09-12T11:06:48.825Z",
+  "patchSha256": "dfe6b04f2926c28efa35ff56bb42a7469264856fdf4b5a6849b950270784c6bd",
+  "patchStatus": "ok"
+}

@@ -292,7 +292,14 @@ export async function executeVerifyQualityScan({ cwd, specBase, changeName, plat
   try {
     testCheck = runVerifyTestCheck({ cwd: gateCwd, specBase: gateSpecBase, changeName })
     printVerifyTestCheck(testCheck)
-    lintCheck = runVerifyLintCheck({ cwd: gateCwd, specBase: gateSpecBase })
+    lintCheck = runVerifyLintCheck({ cwd: gateCwd, specBase: gateSpecBase, timeoutMs: snap ? 5 * 60 * 1000 : undefined })
+    // 快照 lint 超时回退主仓（2026-09-12 dogfood 两连实证：junction I/O 病态慢，3min/5min 均被
+    // 超时杀——主仓 60~110s 正常。按用户建议「自动回退」而非假败/advisory：主仓复跑保硬门，
+    // 并行噪声混入时失败输出带归属鉴定提示）
+    if (snap && lintCheck.status === 'failed' && /超时/.test(String(lintCheck.reason || ''))) {
+      console.warn('⚠️ 快照 lint 超时（node_modules junction I/O 慢）→ 主仓复跑 lint（并行噪声可能混入——失败先做归属鉴定）')
+      lintCheck = runVerifyLintCheck({ cwd, specBase })
+    }
   if (lintCheck.status !== 'skipped') {
     console.log(`\n⏳ noAI 质量扫描：CLI 亲自实测 commands.lint…`)
   }
