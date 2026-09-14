@@ -479,11 +479,17 @@ async function writeAtomic(filePath, content, opts = {}) {
   }
 }
 
-// 扫描所有 QUICKLOG-*.md（含轮转归档）当天最大 NNN + 已用 XXXX 后缀集
+// 扫描所有 QUICKLOG-*.md（含轮转归档）当天最大 NNN + 已用 XXXX 后缀集 + 当天已用全 ID 集
+// （坑 ql-id-double-occupancy 配套：全 ID 集供分配末检防整 ID 复用；容错正则见下）
 function scanExisting(quicklogDir, today) {
   let maxSeq = 0
   const usedSuffix = new Set()
+  const usedIds = new Set()
   const re = /^## ql-(\d{8})-(\d{3})-([0-9a-fA-F]{4})\b/gm
+  // 容错形态：手改/工具写入的畸形头（双空格、后缀紧贴 |）不匹配严格正则 → maxSeq 漏计 →
+  // 新分配复用同序号。第二正则只宽松空白，日期/序号/后缀结构仍须齐整；命中的序号并入
+  // maxSeq（防同序号双条目），全 ID 进 usedIds（防整 ID 复用）。引用字样（行首带前缀）不命中。
+  const reLoose = /^##[ \t]*ql-(\d{8})-(\d{3})-([0-9a-fA-F]{4})[ \t]*\|/gm
   // E22c：轮转归档按文件名日期过滤——归档名 = QUICKLOG-<user>-<YYYY-MM-DD>.md（最后条目日期），
   // 归档内全部条目 ≤ 名内日期；名内日期早于今天的归档不可能含当日条目，跳过读取
   // （O(全历史归档) → O(当日文件)，consumer 已 10 归档文件 756KB 时免全量扫描）。
@@ -493,16 +499,19 @@ function scanExisting(quicklogDir, today) {
     if (dm && dm[1] < todayDashed) continue // 早于今天的归档，必无当日条目
     let content = ''
     try { content = readFileSync(join(quicklogDir, f), 'utf8') } catch { continue }
-    let m
-    re.lastIndex = 0
-    while ((m = re.exec(content)) !== null) {
-      if (m[1] === today) {
-        maxSeq = Math.max(maxSeq, parseInt(m[2], 10))
-        usedSuffix.add(m[3].toLowerCase())
+    for (const reOne of [re, reLoose]) {
+      let m
+      reOne.lastIndex = 0
+      while ((m = reOne.exec(content)) !== null) {
+        if (m[1] === today) {
+          maxSeq = Math.max(maxSeq, parseInt(m[2], 10))
+          usedSuffix.add(m[3].toLowerCase())
+          usedIds.add(`ql-${today}-${m[2]}-${m[3].toLowerCase()}`)
+        }
       }
     }
   }
-  return { maxSeq, usedSuffix }
+  return { maxSeq, usedSuffix, usedIds }
 }
 
 // >500 行则轮转：rename QUICKLOG-<user>.md → QUICKLOG-<user>-<最后记录日期>.md
@@ -714,11 +723,80 @@ function flipEntryInContent(content, qlId, result, changedFiles = [], fileNotes 
 
 // ── 对外 API ──
 
+// 他者会话 guard 预留 ql-ID 的采集阈值：超龄会话的预留不再钉序号。与 run/shared.js
+// collectOtherQuickSessionDeclarations 的 FOREIGN_SESSION_STALE_MS 同口径（7 天）——正常并发
+// 会话间隔在分钟/小时级，7 天未收尾的会话按僵尸处理。本模块不 import run 层（分层：
+// run/* → quicklog，反向会成环），阈值在此独立声明。
+const GUARD_CLAIM_STALE_MS = 7 * 24 * 60 * 60 * 1000
+
+/**
+ * 采集当前库内各 quick 会话 guard.json 已预留的 ql-ID（坑 ql-id-double-occupancy）。
+ *
+ * quick 启动在锁内追加 QUICKLOG 条目后把 ql-ID 写入 guard.json。条目随后丢失（并行 git
+ * 操作回滚未提交 QUICKLOG / worktree 分裂合并等）时，QUICKLOG 扫描看不到该预留 → 下一个
+ * 会话分配复用同一序号（suffix 再撞上即整 ID 双占用，2026-09-13 实证 007-1351、历史
+ * 2026-06-04 001-7a4c 同款）。分配期对 guard 预留让位（allocateQuicklogEntry）、--done 期
+ * 对残留占用校验（complete-handlers）都以此为准。
+ *
+ * fail-open：目录不存在/损坏 guard.json/超龄僵尸/任何异常 → 跳过或空集，采集失败回到
+ * 无预留现状（不放大让位面）。
+ *
+ * @param {string} specBase .sillyspec 根目录
+ * @param {string|null} [sessionsDirHint] quick-sessions 目录（run 层经 resolveQuickSessionsDir
+ *   解析后传入；缺省 <specBase>/.runtime/quick-sessions）
+ * @param {number} [nowMs] 当前时间戳（可注入，测试用）
+ * @returns {Map<string, string[]>} qlId → 预留该 ID 的 sessionId 列表
+ */
+export function collectGuardReservedQuicklogIds(specBase, sessionsDirHint = null, nowMs = Date.now()) {
+  const out = new Map()
+  try {
+    const dir = sessionsDirHint || join(specBase, '.runtime', 'quick-sessions')
+    let sessionDirs = []
+    try {
+      sessionDirs = readdirSync(dir, { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name)
+    } catch { return out } // 目录不存在/不可读 → 无预留
+    for (const sessionName of sessionDirs) {
+      let guard = null
+      try { guard = JSON.parse(readFileSync(join(dir, sessionName, 'guard.json'), 'utf8')) } catch { continue } // 损坏/缺失跳过
+      if (!guard || typeof guard.quicklogId !== 'string' || !guard.quicklogId) continue
+      if (guard.startedAt) {
+        const startedAtMs = Date.parse(guard.startedAt)
+        if (Number.isFinite(startedAtMs) && nowMs - startedAtMs > GUARD_CLAIM_STALE_MS) continue // 僵尸不钉号
+      }
+      if (!out.has(guard.quicklogId)) out.set(guard.quicklogId, [])
+      out.get(guard.quicklogId).push(sessionName)
+    }
+  } catch { /* fail-open：采集失败等同无预留 */ }
+  return out
+}
+
+/**
+ * 数某 qlId 在所有 QUICKLOG-*.md 里的条目头出现次数（--done 占用校验用）。
+ * ≥2 = 分配竞态残留已损坏记录（同 ID 双条目）；容错空白形态与 scanExisting 的 reLoose 同口径。
+ * @returns {{count: number, files: string[]}} count=命中头总数；files=「文件名×次数」列表
+ */
+export function countQuicklogEntries(specBase, qlId) {
+  const out = { count: 0, files: [] }
+  if (!qlId || typeof qlId !== 'string') return out
+  const quicklogDir = join(specBase, 'quicklog')
+  if (!existsSync(quicklogDir)) return out
+  const re = new RegExp(`^##[ \\t]*${escapeRe(qlId)}[ \\t]*\\|`, 'gm')
+  for (const f of listQuicklogFiles(quicklogDir)) {
+    let content = ''
+    try { content = readFileSync(join(quicklogDir, f), 'utf8') } catch { continue }
+    const n = (content.match(re) || []).length
+    if (n > 0) { out.count += n; out.files.push(`${f}×${n}`) }
+  }
+  return out
+}
+
 /**
  * 分配 ql-ID 并写「进行中」条目 + 关联 tasks.md。持锁、当天唯一。
+ * 分配查重（坑 ql-id-double-occupancy）：盘上当天全 ID（含容错空白形态）+ 他者活跃会话
+ * guard 预留（sessionsDir）的序号一并让位，maxSeq 取三者最大后再 +1。
  * @returns {Promise<{qlId: string}>}
  */
-export async function allocateQuicklogEntry(specBase, gitUser, { description, linkedChanges = [], allowedFiles = [] } = {}) {
+export async function allocateQuicklogEntry(specBase, gitUser, { description, linkedChanges = [], allowedFiles = [], sessionsDir = null } = {}) {
   const quicklogDir = join(specBase, 'quicklog')
   mkdirSync(quicklogDir, { recursive: true })
   // git user.name 无字符限制，可含 / \ .. 等路径元字符（git config 或 .git/config 可控）——
@@ -737,19 +815,34 @@ export async function allocateQuicklogEntry(specBase, gitUser, { description, li
   // 自证），仅放弃「分配即推送」的顺序一致性（平台为 best-effort 面板，乱序窗口极小）。
   let pushPayload = null
   const { qlId } = await withFileLock(lockPath, async () => {
-    const { maxSeq, usedSuffix } = scanExisting(quicklogDir, today)
+    const { maxSeq: diskMaxSeq, usedSuffix, usedIds } = scanExisting(quicklogDir, today)
+    // 他者 guard 预留让位（坑 ql-id-double-occupancy）：同日预留序号并入 maxSeq；整 ID 进
+    // 末检集。QUICKLOG 条目丢失但 guard 仍在的窗口内，盘上扫描看不见该预留——正是
+    // 2026-09-13 007-1351 双占用的形态。
+    const claims = collectGuardReservedQuicklogIds(specBase, sessionsDir)
+    let maxSeq = diskMaxSeq
+    const claimedIds = new Set()
+    for (const [claimedId] of claims) {
+      claimedIds.add(claimedId.toLowerCase())
+      const cm = claimedId.match(/^ql-(\d{8})-(\d{3})-([0-9a-fA-F]{4})$/)
+      if (cm && cm[1] === today) maxSeq = Math.max(maxSeq, parseInt(cm[2], 10))
+    }
     const nextSeq = maxSeq + 1
-    // XXXX 4 位 hex 随机后缀（消歧；NNN 已在锁内顺序分配保证唯一，此处仅 belt-and-suspenders）
+    // XXXX 4 位 hex 随机后缀（消歧；NNN 已让位到所有已知占用之后，此处 belt-and-suspenders：
+    // usedSuffix 全日后缀避让 + 全 ID 末检，理论撞号需单日后缀空间耗尽，200 次兜底抛错）
     let suffix
+    let qlId
     let guard = 0
     do {
       suffix = randomBytes(2).toString('hex')
+      qlId = `ql-${today}-${String(nextSeq).padStart(3, '0')}-${suffix}`
       guard++
-    } while (usedSuffix.has(suffix) && guard < 100)
+    } while ((usedSuffix.has(suffix) || usedIds.has(qlId) || claimedIds.has(qlId)) && guard < 200)
+    if (usedIds.has(qlId) || claimedIds.has(qlId)) {
+      throw new Error('allocateQuicklogEntry: ql-ID 查重 200 次仍未命中空闲号（当日条目异常膨胀，请检查 quicklog/）')
+    }
 
     await rotateIfNeeded(userFile, user)
-
-    const qlId = `ql-${today}-${String(nextSeq).padStart(3, '0')}-${suffix}`
     const entry = [
       '',
       `## ${qlId} | ${nowDatetime()} | ${desc}`,

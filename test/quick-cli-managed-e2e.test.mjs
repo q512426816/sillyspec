@@ -123,7 +123,10 @@ assert(doneOut.includes('提交') && !doneOut.includes('run scan'), 'quick 完�
   assert(qfile2.includes('结果：52 passed'), '补全结构后 step3 重跑成功，结果已落盘')
 }
 
-// 验收 4：强校验 — 手动删条目后 step3 done 被阻断（桩 process.exit 捕获）
+// 验收 4：条目缺失自愈 — 手动删条目后 step3 done 按原 ID 补建骨架并完成
+// （坑 ql-id-double-occupancy 配套改契约：原「硬拦 exit 1 请检查后重跑」降为自愈——
+//  条目丢失多为并行 git 操作回滚未提交 QUICKLOG，人工检查一轮纯属机械活；占用校验
+//  （双条目硬拦/他者 guard 占用换号）在补建之前，自愈不会压到他者条目。）
 {
   const out3 = await captureStdout(() => runCommand(['quick', '删条目测试', '--linked-changes', 'none', '--non-interactive'], repo))
   const sid2 = extractSessionId(out3)
@@ -135,14 +138,13 @@ assert(doneOut.includes('提交') && !doneOut.includes('run scan'), 'quick 完�
   writeFileSync(qfile, lines.join('\n'))
   await captureStdout(() => runCommand(['quick', '--done', '--change', sid2, '--output', 's1', '--confirm'], repo))
   await captureStdout(() => runCommand(['quick', '--done', '--change', sid2, '--output', 's2', '--confirm'], repo))
-  const origExit = process.exit
-  let exitErr = null
-  process.exit = (code) => { throw new Error('EXIT_' + code) }
-  // step3 用结构化 output（避开结果结构校验），确保此处测的是「条目被删→强校验阻断」而非「结构缺失」
-  try { await captureStdout(() => runCommand(['quick', '--done', '--change', sid2, '--output', structured, '--confirm'], repo)) }
-  catch (e) { exitErr = e }
-  process.exit = origExit
-  assert(exitErr && exitErr.message === 'EXIT_1', `删条目后 step3 done 被强校验阻断（process.exit(1)）`)
+  // step3 用结构化 output（避开结果结构校验），确保此处测的是「条目被删→自愈补建」而非「结构缺失」
+  await captureStdout(() => runCommand(['quick', '--done', '--change', sid2, '--output', structured, '--confirm'], repo))
+  const healed = readFileSync(qfile, 'utf8')
+  assert(healed.includes(`## ${guard2.quicklogId} |`), `删条目后 step3 done 按原 ID 补建骨架（${guard2.quicklogId}）`)
+  const seg = healed.split(/^## /m).find(s => s.startsWith(`${guard2.quicklogId} |`)) || ''
+  assert(seg.includes('状态：已完成'), '补建条目翻已完成（限定本条目段，非他条完成态）')
+  assert(seg.includes('结果：52 passed'), '补建条目结果块落盘（限定本条目段）')
 }
 
 for (const dir of tmpRoots) { try { rmSync(dir, { recursive: true, force: true }) } catch {} }

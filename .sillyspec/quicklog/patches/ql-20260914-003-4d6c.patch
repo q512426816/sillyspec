@@ -1,0 +1,679 @@
+diff --git a/.sillyspec/docs/sillyspec/scan/ARCHITECTURE.md b/.sillyspec/docs/sillyspec/scan/ARCHITECTURE.md
+index 159cc59..61514bb 100644
+--- a/.sillyspec/docs/sillyspec/scan/ARCHITECTURE.md
++++ b/.sillyspec/docs/sillyspec/scan/ARCHITECTURE.md
+@@ -204,7 +204,7 @@ SQLite Schema（grep 自 `db.js`，仅记表名 + 用途 + 字段数）：
+   - `POST {platform.url}/api/changes/{changeName}/documents` 同步文档（`sync.js:501`）；
+   - 同步完更新 `changes.platform_last_sync`。
+ - 审批链路：`GET /api/changes/{name}/approval` 查询（`sync.js:36`，`checkApproval`）+ `approve` / `reject`
+-  入口（`sync.js:2097`，共用 `_submitApproval`，端点契约 TBD-hub-api）。
++  入口（`sync.js:2171`，共用 `_submitApproval`，端点契约 TBD-hub-api）。
+ - 配置读 `.sillyspec/local.yaml` platform 段（connect/disconnect 用文本级改写保留注释）。
+ - platform 子命令（connect / disconnect / sync / sync-docs / status / pull / resolve /
+   approve / reject / pointer）见 `src/index.js:1263`。主 CLI 无 WebSocket 依赖。
+diff --git a/.sillyspec/knowledge/known-issues.md b/.sillyspec/knowledge/known-issues.md
+index 98ccd71..4242d1a 100644
+--- a/.sillyspec/knowledge/known-issues.md
++++ b/.sillyspec/knowledge/known-issues.md
+@@ -43,3 +43,7 @@ sillyspec 纯源码分发（package.json 无 `build` script，无打包器）。
+ **护栏**：① 交付物文件写进 design.md §文件变更清单（清单是 apply 的第二真相源）；② apply 前删主仓未跟踪垃圾文件（或 `git clean` 谨慎核对后）；③ changelog 冲突双行保留（双方条目都是有效历史）。
+ 
+ **证据**：49be5c0 归档链（design 补 `_module-map.yaml` 行解①、rm bash.exe.stackdump 解②、runtime.changelog 双行保留解③）；`--skip-overlap` 不跳过「已提交推进」类重叠，只能 --merge。
++
++## ql-ID 双占用（分配竞态，坑 ql-id-double-occupancy）
++
++quick 启动预留的 ql-ID 写入 guard.json 后，QUICKLOG 条目可被并行 git 操作回滚丢失——分配端 scanExisting 看不见已预留的序号/后缀 → 并行会话复用同一 ID（实证 2026-09-13 ql-20260913-007-1351、历史 ql-20260604-001-7a4c 同款）。护栏三层（2026-09-14 修复）：分配时 maxSeq 并入他者活跃会话 guard 预留 + 盘上容错扫描；--done 落最终 ID 前校验——盘上同 ID ≥2 条硬拦（不猜归属），他者 guard 仍预留同 ID 则本会话换新号完成；最终 ID 回写 guard + 条目丢失原 ID 补建自愈。详见 docs/sillyspec/quick-sync-block-filenotes-and-quicklog-mixed-commit.md；回归 test/quicklog-ql-id-race.test.mjs。
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index 8787d08..83393ec 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -112,7 +112,7 @@ mcp:
+ 
+ ## 4. 链路 C：scan 指针握手（平台模式专用）
+ 
+-scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时，**不发任何 HTTP**，而是落盘供 daemon 轮询消费（`complete-handlers.js:1794` `handleScanStageCompleted`）：
++scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时，**不发任何 HTTP**，而是落盘供 daemon 轮询消费（`complete-handlers.js:1851` `handleScanStageCompleted`）：
+ 
+ 1. 写 `manifest.json`（workspace_id/scan_run_id/source_commit/spec_root/scan_profile/postcheck…）到 `specRoot`。
+ 2. 跑 `scan-postcheck` → 写 `postcheck-result.json`（结构化结果）。
+diff --git a/src/quicklog.js b/src/quicklog.js
+index 842af38..d55297d 100644
+--- a/src/quicklog.js
++++ b/src/quicklog.js
+@@ -479,11 +479,17 @@ async function writeAtomic(filePath, content, opts = {}) {
+   }
+ }
+ 
+-// 扫描所有 QUICKLOG-*.md（含轮转归档）当天最大 NNN + 已用 XXXX 后缀集
++// 扫描所有 QUICKLOG-*.md（含轮转归档）当天最大 NNN + 已用 XXXX 后缀集 + 当天已用全 ID 集
++// （坑 ql-id-double-occupancy 配套：全 ID 集供分配末检防整 ID 复用；容错正则见下）
+ function scanExisting(quicklogDir, today) {
+   let maxSeq = 0
+   const usedSuffix = new Set()
++  const usedIds = new Set()
+   const re = /^## ql-(\d{8})-(\d{3})-([0-9a-fA-F]{4})\b/gm
++  // 容错形态：手改/工具写入的畸形头（双空格、后缀紧贴 |）不匹配严格正则 → maxSeq 漏计 →
++  // 新分配复用同序号。第二正则只宽松空白，日期/序号/后缀结构仍须齐整；命中的序号并入
++  // maxSeq（防同序号双条目），全 ID 进 usedIds（防整 ID 复用）。引用字样（行首带前缀）不命中。
++  const reLoose = /^##[ \t]*ql-(\d{8})-(\d{3})-([0-9a-fA-F]{4})[ \t]*\|/gm
+   // E22c：轮转归档按文件名日期过滤——归档名 = QUICKLOG-<user>-<YYYY-MM-DD>.md（最后条目日期），
+   // 归档内全部条目 ≤ 名内日期；名内日期早于今天的归档不可能含当日条目，跳过读取
+   // （O(全历史归档) → O(当日文件)，consumer 已 10 归档文件 756KB 时免全量扫描）。
+@@ -493,16 +499,19 @@ function scanExisting(quicklogDir, today) {
+     if (dm && dm[1] < todayDashed) continue // 早于今天的归档，必无当日条目
+     let content = ''
+     try { content = readFileSync(join(quicklogDir, f), 'utf8') } catch { continue }
+-    let m
+-    re.lastIndex = 0
+-    while ((m = re.exec(content)) !== null) {
+-      if (m[1] === today) {
+-        maxSeq = Math.max(maxSeq, parseInt(m[2], 10))
+-        usedSuffix.add(m[3].toLowerCase())
++    for (const reOne of [re, reLoose]) {
++      let m
++      reOne.lastIndex = 0
++      while ((m = reOne.exec(content)) !== null) {
++        if (m[1] === today) {
++          maxSeq = Math.max(maxSeq, parseInt(m[2], 10))
++          usedSuffix.add(m[3].toLowerCase())
++          usedIds.add(`ql-${today}-${m[2]}-${m[3].toLowerCase()}`)
++        }
+       }
+     }
+   }
+-  return { maxSeq, usedSuffix }
++  return { maxSeq, usedSuffix, usedIds }
+ }
+ 
+ // >500 行则轮转：rename QUICKLOG-<user>.md → QUICKLOG-<user>-<最后记录日期>.md
+@@ -714,11 +723,80 @@ function flipEntryInContent(content, qlId, result, changedFiles = [], fileNotes
+ 
+ // ── 对外 API ──
+ 
++// 他者会话 guard 预留 ql-ID 的采集阈值：超龄会话的预留不再钉序号。与 run/shared.js
++// collectOtherQuickSessionDeclarations 的 FOREIGN_SESSION_STALE_MS 同口径（7 天）——正常并发
++// 会话间隔在分钟/小时级，7 天未收尾的会话按僵尸处理。本模块不 import run 层（分层：
++// run/* → quicklog，反向会成环），阈值在此独立声明。
++const GUARD_CLAIM_STALE_MS = 7 * 24 * 60 * 60 * 1000
++
++/**
++ * 采集当前库内各 quick 会话 guard.json 已预留的 ql-ID（坑 ql-id-double-occupancy）。
++ *
++ * quick 启动在锁内追加 QUICKLOG 条目后把 ql-ID 写入 guard.json。条目随后丢失（并行 git
++ * 操作回滚未提交 QUICKLOG / worktree 分裂合并等）时，QUICKLOG 扫描看不到该预留 → 下一个
++ * 会话分配复用同一序号（suffix 再撞上即整 ID 双占用，2026-09-13 实证 007-1351、历史
++ * 2026-06-04 001-7a4c 同款）。分配期对 guard 预留让位（allocateQuicklogEntry）、--done 期
++ * 对残留占用校验（complete-handlers）都以此为准。
++ *
++ * fail-open：目录不存在/损坏 guard.json/超龄僵尸/任何异常 → 跳过或空集，采集失败回到
++ * 无预留现状（不放大让位面）。
++ *
++ * @param {string} specBase .sillyspec 根目录
++ * @param {string|null} [sessionsDirHint] quick-sessions 目录（run 层经 resolveQuickSessionsDir
++ *   解析后传入；缺省 <specBase>/.runtime/quick-sessions）
++ * @param {number} [nowMs] 当前时间戳（可注入，测试用）
++ * @returns {Map<string, string[]>} qlId → 预留该 ID 的 sessionId 列表
++ */
++export function collectGuardReservedQuicklogIds(specBase, sessionsDirHint = null, nowMs = Date.now()) {
++  const out = new Map()
++  try {
++    const dir = sessionsDirHint || join(specBase, '.runtime', 'quick-sessions')
++    let sessionDirs = []
++    try {
++      sessionDirs = readdirSync(dir, { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name)
++    } catch { return out } // 目录不存在/不可读 → 无预留
++    for (const sessionName of sessionDirs) {
++      let guard = null
++      try { guard = JSON.parse(readFileSync(join(dir, sessionName, 'guard.json'), 'utf8')) } catch { continue } // 损坏/缺失跳过
++      if (!guard || typeof guard.quicklogId !== 'string' || !guard.quicklogId) continue
++      if (guard.startedAt) {
++        const startedAtMs = Date.parse(guard.startedAt)
++        if (Number.isFinite(startedAtMs) && nowMs - startedAtMs > GUARD_CLAIM_STALE_MS) continue // 僵尸不钉号
++      }
++      if (!out.has(guard.quicklogId)) out.set(guard.quicklogId, [])
++      out.get(guard.quicklogId).push(sessionName)
++    }
++  } catch { /* fail-open：采集失败等同无预留 */ }
++  return out
++}
++
++/**
++ * 数某 qlId 在所有 QUICKLOG-*.md 里的条目头出现次数（--done 占用校验用）。
++ * ≥2 = 分配竞态残留已损坏记录（同 ID 双条目）；容错空白形态与 scanExisting 的 reLoose 同口径。
++ * @returns {{count: number, files: string[]}} count=命中头总数；files=「文件名×次数」列表
++ */
++export function countQuicklogEntries(specBase, qlId) {
++  const out = { count: 0, files: [] }
++  if (!qlId || typeof qlId !== 'string') return out
++  const quicklogDir = join(specBase, 'quicklog')
++  if (!existsSync(quicklogDir)) return out
++  const re = new RegExp(`^##[ \\t]*${escapeRe(qlId)}[ \\t]*\\|`, 'gm')
++  for (const f of listQuicklogFiles(quicklogDir)) {
++    let content = ''
++    try { content = readFileSync(join(quicklogDir, f), 'utf8') } catch { continue }
++    const n = (content.match(re) || []).length
++    if (n > 0) { out.count += n; out.files.push(`${f}×${n}`) }
++  }
++  return out
++}
++
+ /**
+  * 分配 ql-ID 并写「进行中」条目 + 关联 tasks.md。持锁、当天唯一。
++ * 分配查重（坑 ql-id-double-occupancy）：盘上当天全 ID（含容错空白形态）+ 他者活跃会话
++ * guard 预留（sessionsDir）的序号一并让位，maxSeq 取三者最大后再 +1。
+  * @returns {Promise<{qlId: string}>}
+  */
+-export async function allocateQuicklogEntry(specBase, gitUser, { description, linkedChanges = [], allowedFiles = [] } = {}) {
++export async function allocateQuicklogEntry(specBase, gitUser, { description, linkedChanges = [], allowedFiles = [], sessionsDir = null } = {}) {
+   const quicklogDir = join(specBase, 'quicklog')
+   mkdirSync(quicklogDir, { recursive: true })
+   // git user.name 无字符限制，可含 / \ .. 等路径元字符（git config 或 .git/config 可控）——
+@@ -737,19 +815,34 @@ export async function allocateQuicklogEntry(specBase, gitUser, { description, li
+   // 自证），仅放弃「分配即推送」的顺序一致性（平台为 best-effort 面板，乱序窗口极小）。
+   let pushPayload = null
+   const { qlId } = await withFileLock(lockPath, async () => {
+-    const { maxSeq, usedSuffix } = scanExisting(quicklogDir, today)
++    const { maxSeq: diskMaxSeq, usedSuffix, usedIds } = scanExisting(quicklogDir, today)
++    // 他者 guard 预留让位（坑 ql-id-double-occupancy）：同日预留序号并入 maxSeq；整 ID 进
++    // 末检集。QUICKLOG 条目丢失但 guard 仍在的窗口内，盘上扫描看不见该预留——正是
++    // 2026-09-13 007-1351 双占用的形态。
++    const claims = collectGuardReservedQuicklogIds(specBase, sessionsDir)
++    let maxSeq = diskMaxSeq
++    const claimedIds = new Set()
++    for (const [claimedId] of claims) {
++      claimedIds.add(claimedId.toLowerCase())
++      const cm = claimedId.match(/^ql-(\d{8})-(\d{3})-([0-9a-fA-F]{4})$/)
++      if (cm && cm[1] === today) maxSeq = Math.max(maxSeq, parseInt(cm[2], 10))
++    }
+     const nextSeq = maxSeq + 1
+-    // XXXX 4 位 hex 随机后缀（消歧；NNN 已在锁内顺序分配保证唯一，此处仅 belt-and-suspenders）
++    // XXXX 4 位 hex 随机后缀（消歧；NNN 已让位到所有已知占用之后，此处 belt-and-suspenders：
++    // usedSuffix 全日后缀避让 + 全 ID 末检，理论撞号需单日后缀空间耗尽，200 次兜底抛错）
+     let suffix
++    let qlId
+     let guard = 0
+     do {
+       suffix = randomBytes(2).toString('hex')
++      qlId = `ql-${today}-${String(nextSeq).padStart(3, '0')}-${suffix}`
+       guard++
+-    } while (usedSuffix.has(suffix) && guard < 100)
++    } while ((usedSuffix.has(suffix) || usedIds.has(qlId) || claimedIds.has(qlId)) && guard < 200)
++    if (usedIds.has(qlId) || claimedIds.has(qlId)) {
++      throw new Error('allocateQuicklogEntry: ql-ID 查重 200 次仍未命中空闲号（当日条目异常膨胀，请检查 quicklog/）')
++    }
+ 
+     await rotateIfNeeded(userFile, user)
+-
+-    const qlId = `ql-${today}-${String(nextSeq).padStart(3, '0')}-${suffix}`
+     const entry = [
+       '',
+       `## ${qlId} | ${nowDatetime()} | ${desc}`,
+diff --git a/src/run/complete-handlers.js b/src/run/complete-handlers.js
+index 003c581..f3d91f1 100644
+--- a/src/run/complete-handlers.js
++++ b/src/run/complete-handlers.js
+@@ -32,7 +32,7 @@ import { detectConcurrentChanges, formatConcurrentWarning, resolveConcurrentAnch
+ import { stageRegistry } from '../stages/index.js'
+ import { SCAN_STATUS, POINTER_STATUS } from '../constants.js'
+ import { printQuickAuditReview, runQuickTestLintGate, printQuickTestLintGate } from './quick-audit.js'
+-import { validateQuickResult, allocateQuicklogEntry, appendQuicklogEntryWithId, findQuicklogEntry, completeQuicklogEntry, extractTitleFromResult, parseFileNotes, getQuickFileNotes } from '../quicklog.js'
++import { validateQuickResult, allocateQuicklogEntry, appendQuicklogEntryWithId, findQuicklogEntry, completeQuicklogEntry, extractTitleFromResult, parseFileNotes, getQuickFileNotes, countQuicklogEntries, collectGuardReservedQuicklogIds } from '../quicklog.js'
+ import { getRule } from '../stage-contract-spec.js'
+ import { archiveDestDirName } from '../stage-contract.js'
+ import { collectNumstatByPath } from '../scope-audit.js'
+@@ -1187,6 +1187,8 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
+           description: guard?.taskDescription || '(补分配)',
+           linkedChanges,
+           allowedFiles: Array.isArray(guard?.allowedFiles) ? guard.allowedFiles : [],
++          // 他者 guard 预留让位（坑 ql-id-double-occupancy）：与启动分配同源
++          sessionsDir: resolveQuickSessionsDir(platformOpts, specBase),
+         })
+         qlId = alloc.qlId
+         console.log(`📝 QUICKLOG 兜底补写: ${qlId}（guard 缺失/brownfield 会话）`)
+@@ -1198,14 +1200,69 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
+         process.exit(1)
+       }
+     }
+-    if (!findQuicklogEntry(specBase, gitUser, qlId)) {
+-      console.error(`\n❌ quick 阶段完成校验失败：QUICKLOG 条目 ${qlId} 不存在。`)
+-      console.error(`   会话期间记录被删除或从未写入。请检查 .sillyspec/quicklog/ 后重跑 --done。`)
++    // 占用校验（坑 ql-id-double-occupancy，2026-09-13 实证 007-1351 双占用）：启动预留 ql-ID
++    // 写入 guard.json 后，QUICKLOG 条目丢失/分裂窗口内并行会话可分得同一 ID。--done 落最终
++    // ID 前两级校验：
++    //   ① 盘上同 ID 条目 ≥2 → 记录已损坏，fail-closed 硬拦（不猜哪条属于本会话，手工去重后重跑）
++    //   ② 他者活跃会话 guard 仍预留同 ID → 本会话换新号完成（原 ID 让位他者，双方记录不混写）
++    const sessionsDirForClaims = resolveQuickSessionsDir(platformOpts, specBase)
++    const occupancy = countQuicklogEntries(specBase, qlId)
++    if (occupancy.count >= 2) {
++      console.error(`\n❌ QUICKLOG 条目 ${qlId} 双占用：${occupancy.count} 处命中（${occupancy.files.join('、')}）——分配竞态残留已损坏记录。`)
++      console.error(`   手工去重：编辑上述文件，同 ID 只保留属于本会话的一条（对照时间戳/任务描述），删除其余后重跑 --done。`)
+       steps[currentIdx].status = 'pending'
+       steps[currentIdx].completedAt = null
+       if (outputText) steps[currentIdx].output = null
+       process.exit(1)
+     }
++    const claimants = (collectGuardReservedQuicklogIds(specBase, sessionsDirForClaims).get(qlId) || []).filter(s => s !== changeName)
++    if (claimants.length > 0) {
++      const oldId = qlId
++      try {
++        const alloc = await allocateQuicklogEntry(specBase, gitUser, {
++          description: guard?.taskDescription || '(占用换号补分配)',
++          linkedChanges,
++          allowedFiles: Array.isArray(guard?.allowedFiles) ? guard.allowedFiles : [],
++          sessionsDir: sessionsDirForClaims,
++        })
++        qlId = alloc.qlId
++        console.warn(`⚠️ 预留 ql-ID ${oldId} 被并行会话占用（${claimants.join('、')}）——分配竞态残留（坑 ql-id-double-occupancy）。`)
++        console.warn(`   本会话已换新号完成：${qlId}；原 ID 让位该会话（其 --done 正常落原条目），双方 QUICKLOG 记录不混写。`)
++      } catch (e) {
++        console.error(`\n❌ 占用换号失败: ${e.message}`)
++        steps[currentIdx].status = 'pending'
++        steps[currentIdx].completedAt = null
++        if (outputText) steps[currentIdx].output = null
++        process.exit(1)
++      }
++    }
++    // 最终 ID 回写 guard（坑 ql-id-double-occupancy 建议项）：换号/兜底分配路径下预留 ID ≠
++    // 最终 ID 时对齐 guard 记录，会话期内 hook/审计读到的不说谎。
++    if (guard && guard.quicklogId !== qlId) {
++      guard.quicklogId = qlId
++      try { writeAtomicSync(sessionGuardFile, JSON.stringify(guard, null, 2)) } catch { /* 回写失败降级：本进程内已对齐 */ }
++    }
++    // 条目缺失自愈（原硬拦改补建，坑 ql-id-double-occupancy 同族）：条目在会话期间丢失
++    // （并行 git 操作回滚未提交 QUICKLOG 等）时，用最终 ID 补建「进行中」骨架再走完成翻态
++    // ——与 guard 缺失分支同 cure（坑 platform-takeover-phantom-progress-db 分裂形态），
++    // 消「检查后重跑」的人工一轮。占用校验已在前：补建不会压到他者条目/预留。
++    if (!findQuicklogEntry(specBase, gitUser, qlId)) {
++      try {
++        await appendQuicklogEntryWithId(specBase, gitUser, qlId, {
++          description: guard?.taskDescription || '(条目丢失补建)',
++          linkedChanges,
++          allowedFiles: Array.isArray(guard?.allowedFiles) ? guard.allowedFiles : [],
++        })
++        console.warn(`⚠️ QUICKLOG 条目 ${qlId} 会话期间丢失，已按原 ID 补建骨架（并行 git 操作回滚未提交 QUICKLOG 所致，详见坑 ql-id-double-occupancy）。`)
++      } catch (e) {
++        console.error(`\n❌ quick 阶段完成校验失败：QUICKLOG 条目 ${qlId} 不存在且补建失败（${e.message}）。`)
++        console.error(`   请检查 .sillyspec/quicklog/ 后重跑 --done。`)
++        steps[currentIdx].status = 'pending'
++        steps[currentIdx].completedAt = null
++        if (outputText) steps[currentIdx].output = null
++        process.exit(1)
++      }
++    }
+     // 翻状态进行中→已完成 + 追加结果 + 勾选关联 tasks.md
+     // resultText 不再截断：结构化结果块（需求/根因/方案/结果）完整落盘，多行写成字段化块。
+     try {
+diff --git a/src/run/stage.js b/src/run/stage.js
+index 6be5a65..93e0eb4 100644
+--- a/src/run/stage.js
++++ b/src/run/stage.js
+@@ -440,6 +440,9 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
+           description: quickDesc,
+           linkedChanges,
+           allowedFiles,
++          // 他者会话 guard 预留让位（坑 ql-id-double-occupancy）：与 guard 落盘同源目录
++          // （Q4 单一解析，平台模式 runtimeRoot 分裂时也对齐）
++          sessionsDir: resolveQuickSessionsDir(platformOpts, specBase),
+         })
+         progress.quickGuard = {
+           sessionId: changeName,
+diff --git a/test/quick-cli-managed-e2e.test.mjs b/test/quick-cli-managed-e2e.test.mjs
+index aa8231d..0daa0f3 100644
+--- a/test/quick-cli-managed-e2e.test.mjs
++++ b/test/quick-cli-managed-e2e.test.mjs
+@@ -123,7 +123,10 @@ assert(doneOut.includes('提交') && !doneOut.includes('run scan'), 'quick 完
+   assert(qfile2.includes('结果：52 passed'), '补全结构后 step3 重跑成功，结果已落盘')
+ }
+ 
+-// 验收 4：强校验 — 手动删条目后 step3 done 被阻断（桩 process.exit 捕获）
++// 验收 4：条目缺失自愈 — 手动删条目后 step3 done 按原 ID 补建骨架并完成
++// （坑 ql-id-double-occupancy 配套改契约：原「硬拦 exit 1 请检查后重跑」降为自愈——
++//  条目丢失多为并行 git 操作回滚未提交 QUICKLOG，人工检查一轮纯属机械活；占用校验
++//  （双条目硬拦/他者 guard 占用换号）在补建之前，自愈不会压到他者条目。）
+ {
+   const out3 = await captureStdout(() => runCommand(['quick', '删条目测试', '--linked-changes', 'none', '--non-interactive'], repo))
+   const sid2 = extractSessionId(out3)
+@@ -135,14 +138,13 @@ assert(doneOut.includes('提交') && !doneOut.includes('run scan'), 'quick 完
+   writeFileSync(qfile, lines.join('\n'))
+   await captureStdout(() => runCommand(['quick', '--done', '--change', sid2, '--output', 's1', '--confirm'], repo))
+   await captureStdout(() => runCommand(['quick', '--done', '--change', sid2, '--output', 's2', '--confirm'], repo))
+-  const origExit = process.exit
+-  let exitErr = null
+-  process.exit = (code) => { throw new Error('EXIT_' + code) }
+-  // step3 用结构化 output（避开结果结构校验），确保此处测的是「条目被删→强校验阻断」而非「结构缺失」
+-  try { await captureStdout(() => runCommand(['quick', '--done', '--change', sid2, '--output', structured, '--confirm'], repo)) }
+-  catch (e) { exitErr = e }
+-  process.exit = origExit
+-  assert(exitErr && exitErr.message === 'EXIT_1', `删条目后 step3 done 被强校验阻断（process.exit(1)）`)
++  // step3 用结构化 output（避开结果结构校验），确保此处测的是「条目被删→自愈补建」而非「结构缺失」
++  await captureStdout(() => runCommand(['quick', '--done', '--change', sid2, '--output', structured, '--confirm'], repo))
++  const healed = readFileSync(qfile, 'utf8')
++  assert(healed.includes(`## ${guard2.quicklogId} |`), `删条目后 step3 done 按原 ID 补建骨架（${guard2.quicklogId}）`)
++  const seg = healed.split(/^## /m).find(s => s.startsWith(`${guard2.quicklogId} |`)) || ''
++  assert(seg.includes('状态：已完成'), '补建条目翻已完成（限定本条目段，非他条完成态）')
++  assert(seg.includes('结果：52 passed'), '补建条目结果块落盘（限定本条目段）')
+ }
+ 
+ for (const dir of tmpRoots) { try { rmSync(dir, { recursive: true, force: true }) } catch {} }
+diff --git a/docs/sillyspec/quick-sync-block-filenotes-and-quicklog-mixed-commit.md b/docs/sillyspec/quick-sync-block-filenotes-and-quicklog-mixed-commit.md
+new file mode 100644
+--- /dev/null
++++ b/docs/sillyspec/quick-sync-block-filenotes-and-quicklog-mixed-commit.md
+@@ -0,0 +1,58 @@
++---
++author: qinyi
++created_at: 2026-09-14T09:42:27+08:00
++---
++
++# quick 记录完整性：ql-ID 分配竞态（双占用）
++
++> 本档是 quick 会话记录面（QUICKLOG / guard.json / 进度库 quicklog_id）完整性问题的知识档。
++> 首条：ql-ID 分配竞态根治（ql-20260914-003-4d6c）。后续 quick 记录面修复（如 filenotes
++> 阻塞、QUICKLOG 混合提交等）在此追加条目。
++
++## 坑 ql-id-double-occupancy（实证 2026-09-13 ql-20260913-007-1351 双占用）
++
++### 现象
++
++quick 启动预留的 ql-ID 已写入 guard.json 后，并行会话仍分到同一 ID——两会话的
++QUICKLOG 条目 / 结果块 / 范围快照（`quicklog/patches/<qlId>.json+.patch`）落在同一
++ql-ID 上，记录混写不可分账。
++
++### 机制
++
++分配端（`src/quicklog.js` `allocateQuicklogEntry`）在 per-user 文件锁内
++`scanExisting` 扫盘取 `maxSeq+1`，**唯一性依赖 QUICKLOG 条目在盘**。预留 ID 落
++guard.json 之后、条目在盘可见之前之外，还有一个持续窗口：
++
++**条目丢失窗口**——QUICKLOG 条目是未提交的本地写，并行会话的 git 操作（checkout /
++stash / worktree 分裂合并的文件级覆写等）可把它回滚掉，而 guard.json（.runtime，多为
++gitignore 面）与进度库 `changes.quicklog_id` 独立存活。窗口内：
++
++1. 下一个会话分配时盘上 maxSeq 回退 → **同序号复用**（007 再现）；
++2. 后缀 XXXX 仅对「盘上当日条目」避让，丢了条目 = 后缀也看不见 → 4-hex 随机再撞上
++   即**整 ID 双占用**（1351 再现，2026-06-04 `ql-20260604-001-7a4c` 同款先例）；
++3. `--done` 兜底路径（guard 缺失 → 进度库 quicklog_id → `appendQuicklogEntryWithId`
++   原号补建）会用**库里的旧 ID** 再落一条——若该 ID 已被他者会话占走，补建加剧混写。
++
++### 护栏（三层，2026-09-14 修复）
++
++| 层 | 位置 | 行为 |
++| --- | --- | --- |
++| 分配查重 | `allocateQuicklogEntry`（quicklog.js） | maxSeq 取三者最大：盘上严格扫描 / 盘上容错扫描（畸形头双空格、后缀紧贴 `\|`）/ **他者活跃会话 guard 预留**（`collectGuardReservedQuicklogIds`，7 天僵尸不钉号）。候选全 ID 对盘上 usedIds + guard 预留末检，撞则重摇后缀，200 次不中抛错。`sessionsDir` 由 run 层经 `resolveQuickSessionsDir` 传入（平台模式 runtimeRoot 分裂也对齐） |
++| 完成校验 | `handleQuickStageCompletion`（complete-handlers.js） | 落最终 ID 前两级：①盘上同 ID 条目 ≥2 → `countQuicklogEntries` 命中即 **fail-closed 硬拦**（记录已损坏，不猜归属，手工去重后重跑）；②他者活跃会话 guard 仍预留同 ID → **换新号完成**（原 ID 让位他者，双方记录不混写），警示输出新旧 ID |
++| 记录对齐 | 同上 | 最终 ID ≠ guard.quicklogId（换号/兜底分配路径）时**回写 guard.json**；条目缺失（会话期间丢失）原「硬拦请检查」降为**原 ID 补建自愈**（与 guard 缺失分支同 cure，坑 platform-takeover-phantom-progress-db 分裂形态） |
++
++### 证据
++
++- 实证：2026-09-13 `ql-20260913-007-1351` 双占用（用户报）；历史同款 2026-06-04
++  `ql-20260604-001-7a4c`（quicklog.js 文件头注释）。
++- 回归：`test/quicklog-ql-id-race.test.mjs` 25 断言——单元（guard 让位/僵尸不钉/畸形头
++  容错/计数/采集）+ e2e（双条目硬拦、他者占用换号、条目丢失自愈）。
++- `test/quick-cli-managed-e2e.test.mjs` 验收 4 契约随改：删条目 → 原硬拦改自愈补建。
++
++### 残余风险
++
++- 跨 specBase（worktree 各自的 .sillyspec 拷贝）分配互相不可见，本护栏只覆盖同库内；
++  合并带回产生的跨库同 ID 双条目由完成校验①兜底（硬拦可见，不再静默混写）。
++- guard 预留让位对「同库同 user」由锁+条目天然保证，跨 user 分配仍非互斥——靠 guard
++  预留扫描收窄窗口，极端并发（两 user 同时起步且都已越过扫描点）理论可撞序号，完成
++  校验②兜底。
+
+diff --git a/test/quicklog-ql-id-race.test.mjs b/test/quicklog-ql-id-race.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/quicklog-ql-id-race.test.mjs
+@@ -0,0 +1,253 @@
++/**
++ * quick 会话 ql-ID 分配竞态回归测试
++ * 坑 ql-id-double-occupancy（2026-09-13 实证 ql-20260913-007-1351 双占用）
++ *
++ * 背景：quick 启动在锁内追加 QUICKLOG 条目后把 ql-ID 写入 guard.json。条目随后丢失
++ * （并行 git 操作回滚未提交 QUICKLOG / worktree 分裂合并等）时，QUICKLOG 扫描看不到
++ * 该预留 → 下一个会话的分配复用同一序号（suffix 再撞上即整 ID 双占用，历史上
++ * ql-20260604-001-7a4c 也出现过同款）。修复三层：
++ *   1. 分配时查重：盘上全 ID（容错空白形态）+ 他者活跃会话 guard 预留的序号让位
++ *   2. --done 占用校验：盘上同 ID 条目 ≥2 → fail-closed 硬拦（记录已损坏，不猜归属）
++ *   3. --done 占用校验：他者活跃会话 guard 仍预留同 ID → 本会话换新号完成 + 回写 guard
++ *   4. --done 条目缺失自愈：原硬拦改按原 ID 补建骨架（与 guard 缺失分支同 cure）
++ *
++ * 单元（§1-5）：mkdtempSync 临时 specBase，不依赖 git。
++ * e2e（§6-8）：临时 git 仓库 + runCommand 全链路（参照 quick-completion-unregisters-change）。
++ */
++import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++import { execFileSync } from 'node:child_process'
++
++import {
++  allocateQuicklogEntry, countQuicklogEntries, collectGuardReservedQuicklogIds,
++} from '../src/quicklog.js'
++import { runCommand } from '../src/run.js'
++import { ProgressManager } from '../src/progress.js'
++
++let total = 0, failed = 0
++function assert(c, m) { total++; if (!c) { failed++; console.log(`  ❌ FAIL: ${m}`) } else console.log(`  ✅ PASS: ${m}`) }
++function makeTmpDir(p) { return mkdtempSync(join(tmpdir(), p)) }
++function todayStamp() {
++  const d = new Date()
++  return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`
++}
++const TODAY = todayStamp()
++
++const tmpRoots = []
++function tmp(p) { const d = makeTmpDir(p); tmpRoots.push(d); return d }
++function git(d, a) { return execFileSync('git', a, { cwd: d, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim() }
++async function hush(fn) { const o = console.log; console.log = () => {}; const oe = console.error; console.error = () => {}; try { await fn() } finally { console.log = o; console.error = oe } }
++function extractSid(s) { const m = s.match(/sessionId:\s*(quick-[0-9a-f]{8})/); return m ? m[1] : null }
++const STRUCTURED = '需求：占用校验测试\n根因：无，测试用例\n方案：分配查重 + 完成校验\n结果：测试全绿'
++
++console.log('=== ql-ID 分配竞态回归测试 ===\n')
++
++// ─────────────────────────────────────────
++// §1 分配查重：他者活跃 guard 预留的序号让位（核心坑形态：条目丢失、guard 仍在）
++// ─────────────────────────────────────────
++console.log('--- §1 分配让位他者 guard 预留 ---')
++{
++  const specBase = tmp('qlr-claim-')
++  const sessionsDir = join(specBase, '.runtime', 'quick-sessions')
++  // 会话 quick-aaaa1111 已预留 007-1351，但其 QUICKLOG 条目已丢失（盘上无 007 条目）
++  mkdirSync(join(sessionsDir, 'quick-aaaa1111'), { recursive: true })
++  writeFileSync(join(sessionsDir, 'quick-aaaa1111', 'guard.json'), JSON.stringify({
++    sessionId: 'quick-aaaa1111', quicklogId: `ql-${TODAY}-007-1351`,
++    taskDescription: '他者会话', startedAt: new Date().toISOString(),
++  }))
++  const r = await allocateQuicklogEntry(specBase, 'alice', { description: '本会话任务', sessionsDir })
++  assert(!r.qlId.includes('-007-'), `分配让位他者预留序号 007（实际 ${r.qlId}）`)
++  assert(r.qlId.includes('-008-'), `让位后取下一序号 008（实际 ${r.qlId}）`)
++  assert(r.qlId !== `ql-${TODAY}-007-1351`, '整 ID 不与他者预留相同')
++
++  // sessionsDir 省略 → 默认 <specBase>/.runtime/quick-sessions 同样生效
++  const specBase2 = tmp('qlr-claimdef-')
++  mkdirSync(join(specBase2, '.runtime', 'quick-sessions', 'quick-bbbb2222'), { recursive: true })
++  writeFileSync(join(specBase2, '.runtime', 'quick-sessions', 'quick-bbbb2222', 'guard.json'), JSON.stringify({
++    quicklogId: `ql-${TODAY}-007-1351`, startedAt: new Date().toISOString(),
++  }))
++  const r2 = await allocateQuicklogEntry(specBase2, 'alice', { description: '默认路径' })
++  assert(r2.qlId.includes('-008-'), `sessionsDir 缺省走默认路径同样让位（实际 ${r2.qlId}）`)
++}
++
++// ─────────────────────────────────────────
++// §2 分配查重：僵尸 guard（>7 天）不钉序号
++// ─────────────────────────────────────────
++console.log('--- §2 僵尸 guard 不钉序号 ---')
++{
++  const specBase = tmp('qlr-stale-')
++  const sessionsDir = join(specBase, '.runtime', 'quick-sessions')
++  mkdirSync(join(sessionsDir, 'quick-cccc3333'), { recursive: true })
++  writeFileSync(join(sessionsDir, 'quick-cccc3333', 'guard.json'), JSON.stringify({
++    quicklogId: `ql-${TODAY}-007-1351`,
++    startedAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(),
++  }))
++  const r = await allocateQuicklogEntry(specBase, 'alice', { description: '僵尸不钉号', sessionsDir })
++  assert(r.qlId.includes('-001-'), `超龄 guard 不钉序号，取 001（实际 ${r.qlId}）`)
++}
++
++// ─────────────────────────────────────────
++// §3 分配查重：盘上畸形头（双空格）容错——严格正则漏计的序号也让位
++// ─────────────────────────────────────────
++console.log('--- §3 盘上畸形头容错查重 ---')
++{
++  const specBase = tmp('qlr-loose-')
++  mkdirSync(join(specBase, 'quicklog'), { recursive: true })
++  // 双空格头：scanExisting 严格正则 ^## ql- 漏匹配 → 旧实现 maxSeq=0 会再分配 001
++  writeFileSync(join(specBase, 'quicklog', 'QUICKLOG-alice.md'),
++    `# QUICKLOG\n\n##  ql-${TODAY}-001-a1b2 | 畸形头条目\n状态：进行中\n\n`)
++  const r = await allocateQuicklogEntry(specBase, 'alice', { description: '容错查重' })
++  assert(!r.qlId.startsWith(`ql-${TODAY}-001-`), `畸形头占用的序号 001 不复用（实际 ${r.qlId}）`)
++  assert(r.qlId.includes('-002-'), `让位后取 002（实际 ${r.qlId}）`)
++}
++
++// ─────────────────────────────────────────
++// §4 countQuicklogEntries：跨文件 / 单文件双头 / 缺失
++// ─────────────────────────────────────────
++console.log('--- §4 countQuicklogEntries ---')
++{
++  const specBase = tmp('qlr-count-')
++  const qdir = join(specBase, 'quicklog')
++  mkdirSync(qdir, { recursive: true })
++  writeFileSync(join(qdir, 'QUICKLOG-alice.md'), `## ql-${TODAY}-001-aaaa | 一\n状态：进行中\n\n## ql-${TODAY}-001-aaaa | 二（合并带回重复）\n状态：进行中\n\n`)
++  writeFileSync(join(qdir, 'QUICKLOG-bob.md'), `## ql-${TODAY}-001-aaaa | 三（跨用户文件重复）\n状态：进行中\n\n`)
++  const c1 = countQuicklogEntries(specBase, `ql-${TODAY}-001-aaaa`)
++  assert(c1.count === 3, `同 ID 三处命中（单文件双头 + 跨文件，实际 ${c1.count}）`)
++  assert(c1.files.length === 2, `命中文件数 2（实际 ${c1.files.join('、')}）`)
++  const c2 = countQuicklogEntries(specBase, `ql-${TODAY}-009-zzzz`)
++  assert(c2.count === 0, '不存在的 ID 计 0')
++}
++
++// ─────────────────────────────────────────
++// §5 collectGuardReservedQuicklogIds：多会话 / 僵尸跳过 / 损坏跳过 / 目录缺失
++// ─────────────────────────────────────────
++console.log('--- §5 collectGuardReservedQuicklogIds ---')
++{
++  const specBase = tmp('qlr-collect-')
++  const sessionsDir = join(specBase, '.runtime', 'quick-sessions')
++  mkdirSync(join(sessionsDir, 'quick-dddd4444'), { recursive: true })
++  mkdirSync(join(sessionsDir, 'quick-eeee5555'), { recursive: true })
++  mkdirSync(join(sessionsDir, 'quick-ffff6666'), { recursive: true })
++  mkdirSync(join(sessionsDir, 'quick-dead0000'), { recursive: true })
++  writeFileSync(join(sessionsDir, 'quick-dddd4444', 'guard.json'), JSON.stringify({ quicklogId: `ql-${TODAY}-001-1111`, startedAt: new Date().toISOString() }))
++  writeFileSync(join(sessionsDir, 'quick-eeee5555', 'guard.json'), JSON.stringify({ quicklogId: `ql-${TODAY}-001-1111`, startedAt: new Date().toISOString() }))
++  writeFileSync(join(sessionsDir, 'quick-ffff6666', 'guard.json'), '{not json')
++  writeFileSync(join(sessionsDir, 'quick-dead0000', 'guard.json'), JSON.stringify({
++    quicklogId: `ql-${TODAY}-005-2222`,
++    startedAt: new Date(Date.now() - 9 * 24 * 60 * 60 * 1000).toISOString(),
++  }))
++  const m = collectGuardReservedQuicklogIds(specBase, sessionsDir)
++  assert(m.get(`ql-${TODAY}-001-1111`)?.length === 2, `同 ID 两会话预留（实际 ${JSON.stringify([...m])}）`)
++  assert(!m.has(`ql-${TODAY}-005-2222`), '超龄僵尸预留不计')
++  const empty = collectGuardReservedQuicklogIds(specBase, join(specBase, '.runtime', 'no-such'))
++  assert(empty.size === 0, '目录缺失 fail-open 返回空')
++}
++
++// ─────────────────────────────────────────
++// e2e 公共 harness（§6-8）
++// ─────────────────────────────────────────
++function initRepo(prefix) {
++  const repo = tmp(prefix)
++  git(repo, ['init', '-q']); git(repo, ['config', 'user.email', 't@t.local'])
++  git(repo, ['config', 'user.name', 't']); git(repo, ['config', 'commit.gpgsign', 'false'])
++  writeFileSync(join(repo, '.gitignore'), '.sillyspec/\n')
++  writeFileSync(join(repo, 'm.js'), 'console.log(1)\n')
++  git(repo, ['add', '.']); git(repo, ['commit', '-q', '-m', 'init'])
++  return repo
++}
++async function startQuickToStep3(repo) {
++  let out = ''
++  { const o = console.log; console.log = (...a) => { out += a.join(' ') + '\n' }; const oe = console.error; console.error = () => {}
++    try { await runCommand(['quick', 'ql-ID 竞态测试任务', '--linked-changes', 'none', '--non-interactive'], repo) } finally { console.log = o; console.error = oe } }
++  const sid = extractSid(out)
++  const m = out.match(/QUICKLOG 条目已创建:\s*(ql-\S+)/)
++  await hush(() => runCommand(['quick', '--done', '--change', sid, '--output', 's1 理解', '--confirm'], repo))
++  await hush(() => runCommand(['quick', '--done', '--change', sid, '--output', 's2 实现', '--confirm'], repo))
++  return { sid, qlId: m ? m[1] : null }
++}
++function readQuicklog(repo) {
++  return readFileSync(join(repo, '.sillyspec', 'quicklog', 'QUICKLOG-t.md'), 'utf8')
++}
++
++// ─────────────────────────────────────────
++// §6 e2e：--done 盘上同 ID 双条目 → 硬拦（不猜归属）
++// ─────────────────────────────────────────
++console.log('--- §6 e2e：双条目硬拦 ---')
++{
++  const repo = initRepo('qlr-e2e-dup-')
++  await new ProgressManager({ specDir: join(repo, '.sillyspec') }).init(repo)
++  const { sid, qlId } = await startQuickToStep3(repo)
++  assert(qlId !== null, `会话已到 step3（${sid} / ${qlId}）`)
++  // 复制条目块再追加一份 → 同 ID 双条目（合并带回的损坏形态）
++  const qfile = join(repo, '.sillyspec', 'quicklog', 'QUICKLOG-t.md')
++  const content = readFileSync(qfile, 'utf8')
++  writeFileSync(qfile, content + content)
++  let exitErr = null, capErr = ''
++  const oe = process.exit; process.exit = (c) => { throw new Error('EXIT_' + c) }
++  const oerr = console.error; console.error = (...a) => { capErr += a.join(' ') + '\n' }
++  const olog = console.log; console.log = () => {}
++  try { await runCommand(['quick', '--done', '--change', sid, '--output', STRUCTURED, '--confirm'], repo) } catch (e) { exitErr = e }
++  process.exit = oe; console.error = oerr; console.log = olog
++  assert(exitErr && exitErr.message === 'EXIT_1', `双占用被硬拦 exit 1（${exitErr && exitErr.message}）`)
++  assert(capErr.includes('双占用') || capErr.includes('去重'), `拦截信息含双占用指引（实际: ${capErr.slice(0, 120)}）`)
++  const prog = await new ProgressManager({ specDir: join(repo, '.sillyspec') }).read(repo, sid)
++  assert(prog.stages.quick.steps[prog.stages.quick.steps.length - 1].status === 'pending', '硬拦后末步回退 pending（不丢进度）')
++}
++
++// ─────────────────────────────────────────
++// §7 e2e：--done 他者活跃 guard 占用同 ID → 换新号完成
++// ─────────────────────────────────────────
++console.log('--- §7 e2e：他者占用换新号 ---')
++{
++  const repo = initRepo('qlr-e2e-mig-')
++  await new ProgressManager({ specDir: join(repo, '.sillyspec') }).init(repo)
++  const { sid, qlId } = await startQuickToStep3(repo)
++  // 伪造他者活跃会话 guard 预留同 ID（竞态残留形态）
++  const otherDir = join(repo, '.sillyspec', '.runtime', 'quick-sessions', 'quick-99999999')
++  mkdirSync(otherDir, { recursive: true })
++  writeFileSync(join(otherDir, 'guard.json'), JSON.stringify({
++    sessionId: 'quick-99999999', quicklogId: qlId, taskDescription: '他者并行会话',
++    startedAt: new Date().toISOString(),
++  }))
++  let out = ''
++  { const o = console.log; console.log = (...a) => { out += a.join(' ') + '\n' }; const oe = console.error; console.error = (...a) => { out += a.join(' ') + '\n' }; const ow = console.warn; console.warn = (...a) => { out += a.join(' ') + '\n' }
++    try { await runCommand(['quick', '--done', '--change', sid, '--output', STRUCTURED, '--confirm'], repo) } finally { console.log = o; console.error = oe; console.warn = ow } }
++  assert(out.includes('换新号') || out.includes('占用'), `完成输出含换号警示（${out.includes('换新号') ? '换新号' : '占用'} 命中）`)
++  const log = readQuicklog(repo)
++  const newIds = [...log.matchAll(/^## (ql-\S+) \|.*$/gm)].map(x => x[1]).filter(id => id !== qlId)
++  assert(newIds.length >= 1, `QUICKLOG 出现换号新条目（${newIds.join('、')}）`)
++  assert(log.includes(`## ${qlId} |`) && log.includes('状态：进行中'), '原 ID 条目保持进行中（让位他者，未被本会话翻态）')
++  const doneBlock = log.split(/^## /m).find(seg => newIds[0] && seg.startsWith(newIds[0]))
++  assert(doneBlock && doneBlock.includes('状态：已完成') && doneBlock.includes('结果：'), '新号条目已完成且含结果块')
++}
++
++// ─────────────────────────────────────────
++// §8 e2e：--done 条目缺失（会话期间丢失）→ 原硬拦改自愈补建
++// ─────────────────────────────────────────
++console.log('--- §8 e2e：条目丢失自愈 ---')
++{
++  const repo = initRepo('qlr-e2e-heal-')
++  await new ProgressManager({ specDir: join(repo, '.sillyspec') }).init(repo)
++  const { sid, qlId } = await startQuickToStep3(repo)
++  // 清空 QUICKLOG：模拟条目被并行 git 操作回滚丢失
++  writeFileSync(join(repo, '.sillyspec', 'quicklog', 'QUICKLOG-t.md'), '')
++  let out = '', exitErr = null
++  const oe = process.exit; process.exit = (c) => { throw new Error('EXIT_' + c) }
++  const olog = console.log; console.log = (...a) => { out += a.join(' ') + '\n' }
++  const oerr = console.error; console.error = (...a) => { out += a.join(' ') + '\n' }
++  const owarn = console.warn; console.warn = (...a) => { out += a.join(' ') + '\n' }
++  try { await runCommand(['quick', '--done', '--change', sid, '--output', STRUCTURED, '--confirm'], repo) } catch (e) { exitErr = e }
++  process.exit = oe; console.log = olog; console.error = oerr; console.warn = owarn
++  assert(!exitErr, `条目丢失不再硬拦（${exitErr ? exitErr.message : '正常完成'}）`)
++  assert(out.includes('补建'), `输出含补建提示`)
++  const log = readQuicklog(repo)
++  assert(log.includes(`## ${qlId} |`), `按原 ID 补建条目（${qlId}）`)
++  assert(log.includes('状态：已完成') && log.includes('结果：'), '补建条目翻已完成且含结果块')
++}
++
++for (const dir of tmpRoots) { try { rmSync(dir, { recursive: true, force: true }) } catch {} }
++console.log('\n==================================================')
++console.log(`✅ 通过: ${total - failed}  ❌ 失败: ${failed}`)
++console.log('==================================================')
++if (failed > 0) process.exit(1)

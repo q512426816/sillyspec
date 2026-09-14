@@ -43,3 +43,7 @@ sillyspec 纯源码分发（package.json 无 `build` script，无打包器）。
 **护栏**：① 交付物文件写进 design.md §文件变更清单（清单是 apply 的第二真相源）；② apply 前删主仓未跟踪垃圾文件（或 `git clean` 谨慎核对后）；③ changelog 冲突双行保留（双方条目都是有效历史）。
 
 **证据**：49be5c0 归档链（design 补 `_module-map.yaml` 行解①、rm bash.exe.stackdump 解②、runtime.changelog 双行保留解③）；`--skip-overlap` 不跳过「已提交推进」类重叠，只能 --merge。
+
+## ql-ID 双占用（分配竞态，坑 ql-id-double-occupancy）
+
+quick 启动预留的 ql-ID 写入 guard.json 后，QUICKLOG 条目可被并行 git 操作回滚丢失——分配端 scanExisting 看不见已预留的序号/后缀 → 并行会话复用同一 ID（实证 2026-09-13 ql-20260913-007-1351、历史 ql-20260604-001-7a4c 同款）。护栏三层（2026-09-14 修复）：分配时 maxSeq 并入他者活跃会话 guard 预留 + 盘上容错扫描；--done 落最终 ID 前校验——盘上同 ID ≥2 条硬拦（不猜归属），他者 guard 仍预留同 ID 则本会话换新号完成；最终 ID 回写 guard + 条目丢失原 ID 补建自愈。详见 docs/sillyspec/quick-sync-block-filenotes-and-quicklog-mixed-commit.md；回归 test/quicklog-ql-id-race.test.mjs。

@@ -32,7 +32,7 @@ import { detectConcurrentChanges, formatConcurrentWarning, resolveConcurrentAnch
 import { stageRegistry } from '../stages/index.js'
 import { SCAN_STATUS, POINTER_STATUS } from '../constants.js'
 import { printQuickAuditReview, runQuickTestLintGate, printQuickTestLintGate } from './quick-audit.js'
-import { validateQuickResult, allocateQuicklogEntry, appendQuicklogEntryWithId, findQuicklogEntry, completeQuicklogEntry, extractTitleFromResult, parseFileNotes, getQuickFileNotes } from '../quicklog.js'
+import { validateQuickResult, allocateQuicklogEntry, appendQuicklogEntryWithId, findQuicklogEntry, completeQuicklogEntry, extractTitleFromResult, parseFileNotes, getQuickFileNotes, countQuicklogEntries, collectGuardReservedQuicklogIds } from '../quicklog.js'
 import { getRule } from '../stage-contract-spec.js'
 import { archiveDestDirName } from '../stage-contract.js'
 import { collectNumstatByPath } from '../scope-audit.js'
@@ -1187,6 +1187,8 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
           description: guard?.taskDescription || '(补分配)',
           linkedChanges,
           allowedFiles: Array.isArray(guard?.allowedFiles) ? guard.allowedFiles : [],
+          // 他者 guard 预留让位（坑 ql-id-double-occupancy）：与启动分配同源
+          sessionsDir: resolveQuickSessionsDir(platformOpts, specBase),
         })
         qlId = alloc.qlId
         console.log(`📝 QUICKLOG 兜底补写: ${qlId}（guard 缺失/brownfield 会话）`)
@@ -1198,13 +1200,68 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
         process.exit(1)
       }
     }
-    if (!findQuicklogEntry(specBase, gitUser, qlId)) {
-      console.error(`\n❌ quick 阶段完成校验失败：QUICKLOG 条目 ${qlId} 不存在。`)
-      console.error(`   会话期间记录被删除或从未写入。请检查 .sillyspec/quicklog/ 后重跑 --done。`)
+    // 占用校验（坑 ql-id-double-occupancy，2026-09-13 实证 007-1351 双占用）：启动预留 ql-ID
+    // 写入 guard.json 后，QUICKLOG 条目丢失/分裂窗口内并行会话可分得同一 ID。--done 落最终
+    // ID 前两级校验：
+    //   ① 盘上同 ID 条目 ≥2 → 记录已损坏，fail-closed 硬拦（不猜哪条属于本会话，手工去重后重跑）
+    //   ② 他者活跃会话 guard 仍预留同 ID → 本会话换新号完成（原 ID 让位他者，双方记录不混写）
+    const sessionsDirForClaims = resolveQuickSessionsDir(platformOpts, specBase)
+    const occupancy = countQuicklogEntries(specBase, qlId)
+    if (occupancy.count >= 2) {
+      console.error(`\n❌ QUICKLOG 条目 ${qlId} 双占用：${occupancy.count} 处命中（${occupancy.files.join('、')}）——分配竞态残留已损坏记录。`)
+      console.error(`   手工去重：编辑上述文件，同 ID 只保留属于本会话的一条（对照时间戳/任务描述），删除其余后重跑 --done。`)
       steps[currentIdx].status = 'pending'
       steps[currentIdx].completedAt = null
       if (outputText) steps[currentIdx].output = null
       process.exit(1)
+    }
+    const claimants = (collectGuardReservedQuicklogIds(specBase, sessionsDirForClaims).get(qlId) || []).filter(s => s !== changeName)
+    if (claimants.length > 0) {
+      const oldId = qlId
+      try {
+        const alloc = await allocateQuicklogEntry(specBase, gitUser, {
+          description: guard?.taskDescription || '(占用换号补分配)',
+          linkedChanges,
+          allowedFiles: Array.isArray(guard?.allowedFiles) ? guard.allowedFiles : [],
+          sessionsDir: sessionsDirForClaims,
+        })
+        qlId = alloc.qlId
+        console.warn(`⚠️ 预留 ql-ID ${oldId} 被并行会话占用（${claimants.join('、')}）——分配竞态残留（坑 ql-id-double-occupancy）。`)
+        console.warn(`   本会话已换新号完成：${qlId}；原 ID 让位该会话（其 --done 正常落原条目），双方 QUICKLOG 记录不混写。`)
+      } catch (e) {
+        console.error(`\n❌ 占用换号失败: ${e.message}`)
+        steps[currentIdx].status = 'pending'
+        steps[currentIdx].completedAt = null
+        if (outputText) steps[currentIdx].output = null
+        process.exit(1)
+      }
+    }
+    // 最终 ID 回写 guard（坑 ql-id-double-occupancy 建议项）：换号/兜底分配路径下预留 ID ≠
+    // 最终 ID 时对齐 guard 记录，会话期内 hook/审计读到的不说谎。
+    if (guard && guard.quicklogId !== qlId) {
+      guard.quicklogId = qlId
+      try { writeAtomicSync(sessionGuardFile, JSON.stringify(guard, null, 2)) } catch { /* 回写失败降级：本进程内已对齐 */ }
+    }
+    // 条目缺失自愈（原硬拦改补建，坑 ql-id-double-occupancy 同族）：条目在会话期间丢失
+    // （并行 git 操作回滚未提交 QUICKLOG 等）时，用最终 ID 补建「进行中」骨架再走完成翻态
+    // ——与 guard 缺失分支同 cure（坑 platform-takeover-phantom-progress-db 分裂形态），
+    // 消「检查后重跑」的人工一轮。占用校验已在前：补建不会压到他者条目/预留。
+    if (!findQuicklogEntry(specBase, gitUser, qlId)) {
+      try {
+        await appendQuicklogEntryWithId(specBase, gitUser, qlId, {
+          description: guard?.taskDescription || '(条目丢失补建)',
+          linkedChanges,
+          allowedFiles: Array.isArray(guard?.allowedFiles) ? guard.allowedFiles : [],
+        })
+        console.warn(`⚠️ QUICKLOG 条目 ${qlId} 会话期间丢失，已按原 ID 补建骨架（并行 git 操作回滚未提交 QUICKLOG 所致，详见坑 ql-id-double-occupancy）。`)
+      } catch (e) {
+        console.error(`\n❌ quick 阶段完成校验失败：QUICKLOG 条目 ${qlId} 不存在且补建失败（${e.message}）。`)
+        console.error(`   请检查 .sillyspec/quicklog/ 后重跑 --done。`)
+        steps[currentIdx].status = 'pending'
+        steps[currentIdx].completedAt = null
+        if (outputText) steps[currentIdx].output = null
+        process.exit(1)
+      }
     }
     // 翻状态进行中→已完成 + 追加结果 + 勾选关联 tasks.md
     // resultText 不再截断：结构化结果块（需求/根因/方案/结果）完整落盘，多行写成字段化块。

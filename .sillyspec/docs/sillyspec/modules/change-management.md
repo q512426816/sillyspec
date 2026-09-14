@@ -17,7 +17,7 @@ updated_at: 2026-08-24T00:40:00+08:00
 
 模块设计极简，单文件单函数，无状态、无副作用。解析逻辑基于正则匹配 Markdown 表格行（`|` 分隔），跳过表头和分隔行。设计为 verify 阶段的前置工具：验证实现产出是否覆盖了 design 中声明的全部目标文件。
 
-**src/quicklog.js** 是 QUICKLOG 记录的 CLI 接管层：ql-ID 分配 + 条目追加 + O_EXCL lockfile 串行化全部下沉 CLI 进程内，消除 agent 手写漏记静默通过与多 quick 会话并发读-改-写丢更新（历史实证同一 ql-ID 出现两次）；导出 allocateQuicklogEntry / completeQuicklogEntry / findQuicklogEntry / deriveTitleFromLinkedChange / withFileLock 等，由 src/run/（command / complete-handlers / complete / stage）import 消费；无新 npm 依赖（仅 fs/path/crypto）。
+**src/quicklog.js** 是 QUICKLOG 记录的 CLI 接管层：ql-ID 分配 + 条目追加 + O_EXCL lockfile 串行化全部下沉 CLI 进程内，消除 agent 手写漏记静默通过与多 quick 会话并发读-改-写丢更新（历史实证同一 ql-ID 出现两次）；导出 allocateQuicklogEntry / completeQuicklogEntry / findQuicklogEntry / deriveTitleFromLinkedChange / withFileLock / countQuicklogEntries / collectGuardReservedQuicklogIds 等，由 src/run/（command / complete-handlers / complete / stage）import 消费；无新 npm 依赖（仅 fs/path/crypto）。**分配查重契约**（坑 ql-id-double-occupancy，2026-09-13 实证 007-1351 双占用）：QUICKLOG 条目可被并行 git 操作回滚丢失而 guard.json 预留存活，分配端 maxSeq 须并入他者活跃会话 guard 预留（collectGuardReservedQuicklogIds，7 天僵尸不钉号）与盘上容错扫描（畸形头双空格），候选全 ID 对两者末检；--done 落最终 ID 前经 countQuicklogEntries 校验占用（≥2 硬拦、他者 guard 占用换新号），最终 ID 回写 guard、条目丢失按原 ID 补建自愈。详见 docs/sillyspec/quick-sync-block-filenotes-and-quicklog-mixed-commit.md。
 
 **根因块嵌套四子字段**（2026-08-23-adopt-harness-practices，D-004@v1 / task-07）：postmortem 场景根因块内按列表行写 `- 现象：`/`- 根因：`/`- 护栏：`/`- 证据：` 四子字段为**合法形态**——顶层标签白名单正则 `^` 行首锚定（`src/quicklog.js:182`），「- 」前缀不匹配顶层标签、经 lastLabel 挂载进 body_sections[根因]，顶层四字段边界解析不受影响（R-03）；旧条目（无嵌套子字段）回退不受影响。
 `buildPushPayloadFromRaw`（`src/quicklog.js:204`）字段块复位修复——进入 需求/根因/方案/结果 字段块须关闭 inFiles/inLinked 续行模式，否则嵌套子字段列表行被「文件 bullet」分支劫进 payload.files、从根因正文截断丢失；

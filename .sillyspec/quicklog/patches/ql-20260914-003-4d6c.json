@@ -1,0 +1,94 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-4a7f14a3",
+  "totals": {
+    "files": 9,
+    "additions": 499,
+    "deletions": 29
+  },
+  "rows": [
+    {
+      "path": ".sillyspec/docs/sillyspec/scan/ARCHITECTURE.md",
+      "declared": true,
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": ".sillyspec/knowledge/known-issues.md",
+      "declared": true,
+      "additions": 4,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/sillyspec/platform-interface-map.md",
+      "declared": true,
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/quicklog.js",
+      "declared": true,
+      "additions": 107,
+      "deletions": 14,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/run/complete-handlers.js",
+      "declared": true,
+      "additions": 61,
+      "deletions": 4,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/run/stage.js",
+      "declared": true,
+      "additions": 3,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/quick-cli-managed-e2e.test.mjs",
+      "declared": true,
+      "additions": 11,
+      "deletions": 9,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/sillyspec/quick-sync-block-filenotes-and-quicklog-mixed-commit.md",
+      "declared": true,
+      "additions": 58,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/quicklog-ql-id-race.test.mjs",
+      "declared": true,
+      "additions": 253,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "qlId": "ql-20260914-003-4d6c",
+  "sessionId": "quick-4a7f14a3",
+  "savedAt": "2026-09-14T01:46:48.093Z",
+  "patchSha256": "3ad2dcd9e8d12e4e2da3ec0313e0662a96ac3b1ce1760c28e050a2a922774675",
+  "patchStatus": "ok"
+}

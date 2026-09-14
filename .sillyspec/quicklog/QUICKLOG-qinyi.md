@@ -52,3 +52,26 @@
 根因：multi-agent-platform 实证 6 个进度冲突全部是本机自推回声被误判为他端更新：①同机多进程并发推送时 base_ts 回填乱序落地，旧回执覆盖已推进的 base 重开回声窗，下次 push 409/pull 把自家回执当外来更新；②冲突判定只比时间戳先后，不用平台快照自带的 last_local_modified_ts 血统标记做归属；③冲突文件在即永跳自动推送且永不自清，即便 base 已被后续 resolve/自愈追平（ctx-usage 实证残留），人工 resolve 后下次 --done 再触发同竞态，故复发
 方案：① change-registry.js _updatePlatformLastSync：COALESCE 直写改 MAX 单调推进（双 COALESCE 防 SQLite MAX NULL 语义），旧回执不再覆盖已推进 base，与仓内 resolve/自愈四处 MAX 写法对齐；② sync.js push 409 与 pull 冲突两路径加自回声血统归属：平台快照 changes[0].last_local_modified_ts ∈ 本地 [base_ts, last_local_modified_ts] ⇒ 判为本机自推回声——pull 不 import 不落冲突文件、base 推进到平台 ts，push base 推进后自动重推；区间外维持原冲突判定（本地永不覆盖血统比自己新的平台状态，零误放行）；③ sync() 冲突抑制块加过期自清：base ≥ 冲突文件记录的 platform_last_pushed_at ⇒ 自动清除文件恢复推送，判不出维持抑制 fail-closed；status() 只读约束不动
 结果：聚焦 10 个 platform-sync/hub 套件全 PASS；npm run lint 通过（593 文件 0 告警）；全量 npm test 462/462 通过（含新增 test/platform-sync-self-echo.test.mjs 8 段与 doc-ref-check 87/87 锚校验）；未部署（CLI 发版另走流程）
+
+## ql-20260914-002-4670 | 2026-09-14 09:28:29 | 修复 quick 会话 ql-ID 分配竞态：启动预留的 ql-ID 写入 guard.json 后，并行会话可分到同一 ID（实证 2026-09-13 007-1351 双占用）。分配时对 QUICKLOG 已有条目查重 + 他者会话 …
+状态：已取消
+关联变更：2026-09-14-quick-exit-tiered-gates
+文件：src/quicklog.js, src/run/complete-handlers.js, src/run/stage.js
+
+## ql-20260914-003-4d6c | 2026-09-14 09:30:31 | 根治 quick 会话 ql-ID 分配竞态（坑 ql-id-double-occupancy…
+状态：已完成
+关联变更：（无）
+文件：
+- src/quicklog.js（分配查重（guard 预留让位+容错扫描+全 ID 末检）+ countQuicklogEntries/collectGuardReservedQuicklogIds 新导出）
+- src/run/complete-handlers.js（--done 占用校验（双条目硬拦/他者占用换号）+ 最终 ID 回写 guard + 条目丢失自愈）
+- src/run/stage.js（启动分配传 sessionsDir）
+- test/quicklog-ql-id-race.test.mjs（新回归 25 断言）
+- test/quick-cli-managed-e2e.test.mjs（验收 4 契约随改（硬拦→自愈））
+- docs/sillyspec/platform-interface-map.md（complete-handlers 行号锚重锚 1851）
+- docs/sillyspec/quick-sync-block-filenotes-and-quicklog-mixed-commit.md（新知识档（用户点名路径））
+- .sillyspec/docs/sillyspec/scan/ARCHITECTURE.md（sync.js 锚重锚 2171（并行会话提交遗留漂移））
+- .sillyspec/knowledge/known-issues.md（坑 ql-id-double-occupancy 条目）
+需求：根治 quick 会话 ql-ID 分配竞态（坑 ql-id-double-occupancy，实证 2026-09-13 ql-20260913-007-1351 双占用）
+根因：分配唯一性依赖 QUICKLOG 条目在盘；条目可被并行 git 操作回滚丢失而 guard.json/进度库预留存活——窗口内 scanExisting 看不见已预留序号/后缀，并行会话复用同 ID（历史 ql-20260604-001-7a4c 同款先例）
+方案：三层护栏：①分配查重——allocateQuicklogEntry maxSeq 并入他者活跃会话 guard 预留（collectGuardReservedQuicklogIds 新导出，7 天僵尸不钉号，sessionsDir 经 resolveQuickSessionsDir 对齐平台模式）+ 盘上容错扫描（畸形头）+ 候选全 ID 末检；②--done 占用校验——countQuicklogEntries 盘上同 ID ≥2 硬拦（不猜归属），他者 guard 仍预留同 ID 换新号完成（原 ID 让位，双方记录不混写）；③最终 ID 回写 guard.json + 条目丢失原硬拦改原 ID 补建自愈
+结果：新增回归 test/quicklog-ql-id-race.test.mjs 25 断言全绿（单元：guard 让位/僵尸不钉/畸形头容错/计数/采集 + e2e：双条目硬拦/他者占用换号/条目丢失自愈）；quick-cli-managed-e2e 验收 4 契约随改（删条目→自愈补建）；全量 npm test 463/463 + lint 0 告警 + docs check 555 处引用全过（顺带重锚 platform-interface-map/ARCHITECTURE 两处漂移锚）

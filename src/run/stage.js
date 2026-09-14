@@ -440,6 +440,9 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
           description: quickDesc,
           linkedChanges,
           allowedFiles,
+          // 他者会话 guard 预留让位（坑 ql-id-double-occupancy）：与 guard 落盘同源目录
+          // （Q4 单一解析，平台模式 runtimeRoot 分裂时也对齐）
+          sessionsDir: resolveQuickSessionsDir(platformOpts, specBase),
         })
         progress.quickGuard = {
           sessionId: changeName,
