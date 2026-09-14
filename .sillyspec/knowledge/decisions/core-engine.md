@@ -198,3 +198,10 @@ supersedes：D-003@v1
 锚点：未记录
 最近确认：d8fd9ce
 理由：CLI 在 prompt 组装时用任务描述跑 matchKnowledge，命中文件内容直接注入 prompt（top-3 限额，仿「📦 模块上下文」注入先例）+ 每次命中落 .runtime/knowledge-hits.jsonl（仿既有 decision-hits.json 遥测先例）+ 新子命令 knowledge stats 输出命中矩阵（从未命中的文件列死重清单）。明确不做「必须消费」硬门禁——先遥测后优化，数据说话再决定是否升级门禁。
+
+## D-001@v1 覆盖矩阵判定权归 agent 语义判定 + 槽位 fail-closed，关键词只做提示
+状态：implemented
+变更：2026-09-14-acceptance-test-matrix
+锚点：未记录
+最近确认：7d448ba
+理由：三层分工：机械层只做结构归属（allowed_paths∩测试模式 ∪ review.changedFiles∩test/）与关键词命中提示（从 acceptance 提取标识符 grep 归属测试文件，展示命中词）；判定层归 agent 四枚举（covered/partial/uncovered/non-testable）+ 证据必填（测试名或 file:line）；门禁层 fail-closed 只查「槽位已填 + 证据在场」，不查判定内容（防关键词误报阻断 + 防橡皮图章两头堵）。备选否决：纯机械判定——中文 acceptance 与测试名语义鸿沟大，误报会逼 agent 假对齐；硬性全覆盖——文档/部署类 acceptance 合法无测试，需要 non-testable 逃生门。

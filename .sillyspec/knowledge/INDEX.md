@@ -68,3 +68,4 @@ created_at: 2026-06-19T12:40:00+08:00
 - stages|decision|决策 → [decisions/stages.md](decisions/stages.md)
 - runtime|decision|决策 → [decisions/runtime.md](decisions/runtime.md)
 - cli-entry|decision|决策 → [decisions/cli-entry.md](decisions/cli-entry.md)
+- progress|decision|决策 → [decisions/progress.md](decisions/progress.md)

@@ -104,3 +104,10 @@ supersedes：无（修订 design 初稿注入时机）
 最近确认：手动确认
 理由：**复潮实现取时近性信号（v1 复潮条件三候选均被否）**——新增 getLatestActivityAt（变更全部 stages/steps completed_at 最大值，时近性只读），closeQuickLinkedChanges 在阶段闸后增 60 分钟进度活动窗：窗口内=会话分钟级在推进（在途）不自动归档，僵尸最后活动陈旧（或 null 无完成步）照常清理。否决理由：候选①「全勾判定要求存在非 ql 自有任务行」推翻 small 逃生通道（僵尸 tasks.md 本就仅含 ql 行，quick-done-linked-changes.test :249 锁定）；候选②「in_progress 一律不归档」推翻真·僵尸清理（:299 锁定）——阶段态区分不了「活跃在途」与「启动后弃单」，时近性是唯一同时保两条逃生通道语义的信号。pm 无 getLatestActivityAt（旧 mock/旧库）按无近期活动放行：误放行最坏回到缺陷②现状（tasks.md 自有未勾任务行防护兜底），误拦截则僵尸永不清——权衡取放行。
 supersedes：D-002@v1（v1 的防护措施继续有效；本条补齐热修）
+
+## D-001@v1 覆盖矩阵判定权归 agent 语义判定 + 槽位 fail-closed，关键词只做提示
+状态：implemented
+变更：2026-09-14-acceptance-test-matrix
+锚点：未记录
+最近确认：7d448ba
+理由：三层分工：机械层只做结构归属（allowed_paths∩测试模式 ∪ review.changedFiles∩test/）与关键词命中提示（从 acceptance 提取标识符 grep 归属测试文件，展示命中词）；判定层归 agent 四枚举（covered/partial/uncovered/non-testable）+ 证据必填（测试名或 file:line）；门禁层 fail-closed 只查「槽位已填 + 证据在场」，不查判定内容（防关键词误报阻断 + 防橡皮图章两头堵）。备选否决：纯机械判定——中文 acceptance 与测试名语义鸿沟大，误报会逼 agent 假对齐；硬性全覆盖——文档/部署类 acceptance 合法无测试，需要 non-testable 逃生门。

@@ -30,6 +30,6 @@
 
 | 目标 | 操作 | 状态 |
 |------|------|------|
-| `_module-map.yaml` | <!--TODO: 有未匹配文件，判定模块索引是否需增改（modules rebuild）--> | pending |
+| `_module-map.yaml` | 无新增源文件（3 新文件均测试/模板/docs 产物），map 无需增改 | skipped |
 
 规则：execute/verify 完成文档同步后把对应行回填 done；确定不同步的行改 skipped 并在操作列写明原因。

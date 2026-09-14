@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 2,
+  "change": "2026-09-14-acceptance-test-matrix",
+  "generatedAt": "2026-09-14T16:46:36.216Z",
+  "probes": {
+    "probe1": {
+      "command": "sillyspec verify-probes --change 2026-09-14-acceptance-test-matrix",
+      "metrics": {
+        "matches": 68,
+        "skippedFiles": 0,
+        "worktreeHits": 0,
+        "globEntries": 0
+      }
+    },
+    "probe3": {
+      "command": "sillyspec verify-probes --change 2026-09-14-acceptance-test-matrix",
+      "metrics": {
+        "tasks": 3,
+        "hasTest": 3
+      }
+    },
+    "probe5": {
+      "command": "sillyspec verify-probes --change 2026-09-14-acceptance-test-matrix",
+      "metrics": {
+        "backendEndpoints": 2,
+        "frontendCalls": 0
+      }
+    },
+    "probe6": {
+      "command": "sillyspec verify-probes --change 2026-09-14-acceptance-test-matrix",
+      "metrics": {
+        "deletions": 0,
+        "unavailable": false
+      }
+    }
+  },
+  "conclusion": "PASS WITH NOTES",
+  "runtimeEvidence": [
+    {
+      "claim": "探针 7 新套件全绿",
+      "command": "node test/acceptance-matrix-probe.test.mjs",
+      "exitCode": 0,
+      "logPath": ".sillyspec/.runtime/verify-logs-am/probe.log"
+    },
+    {
+      "claim": "门禁套件全绿",
+      "command": "node test/acceptance-matrix-gate.test.mjs",
+      "exitCode": 0,
+      "logPath": ".sillyspec/.runtime/verify-logs-am/gate.log"
+    },
+    {
+      "claim": "全量套件",
+      "command": "npm test",
+      "exitCode": 0,
+      "logPath": ".sillyspec/.runtime/verify-logs-am/full.log"
+    },
+    {
+      "claim": "docs/prompt 一致性",
+      "command": "node docs/prompt/_verify.mjs",
+      "exitCode": 0,
+      "logPath": ".sillyspec/.runtime/verify-logs-am/prompt-verify.log"
+    }
+  ],
+  "factsConsistency": {
+    "checked": [
+      "probe1",
+      "probe3",
+      "probe5",
+      "probe6"
+    ],
+    "verdict": "match",
+    "detail": null
+  }
+}
