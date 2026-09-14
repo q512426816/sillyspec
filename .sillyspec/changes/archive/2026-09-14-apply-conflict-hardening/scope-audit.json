@@ -1,0 +1,124 @@
+{
+  "mode": "full-flow",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "78f3ef62107bde7c1a65bd35d18f85a3662f62c9",
+  "totals": {
+    "files": 13,
+    "additions": 774,
+    "deletions": 42
+  },
+  "rows": [
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/change-management.md",
+      "additions": 6,
+      "deletions": 3,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/core-engine.changelog.md",
+      "additions": 1,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/core-engine.md",
+      "additions": 4,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/worktree.changelog.md",
+      "additions": 1,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/worktree.md",
+      "additions": 7,
+      "deletions": 4,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "meta.json",
+      "additions": 31,
+      "deletions": 2,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "src/doctor-diagnostics.js",
+      "additions": 123,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/index.js",
+      "additions": 11,
+      "deletions": 6,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/quicklog.js",
+      "additions": 60,
+      "deletions": 12,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/worktree-apply.js",
+      "additions": 237,
+      "deletions": 7,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/worktree-apply-rescue.test.mjs",
+      "additions": 11,
+      "deletions": 6,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "test/apply-conflict-hardening.test.mjs",
+      "additions": 282,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    },
+    {
+      "path": "docs/sillyspec/troubleshooting.md",
+      "planned": "修改",
+      "additions": 0,
+      "deletions": 0,
+      "kind": "modified",
+      "verdict": "untouched"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "execute --done 时点冻结（本文件落盘时采集）",
+  "patchSha256": "24c3db13c950619ada291faa736023bbf7509458df9e7c92c4a66423449d8bbf",
+  "patchStatus": "ok",
+  "savedAt": "2026-09-14T08:06:23.874Z"
+}

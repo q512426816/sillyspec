@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 2,
+  "change": "2026-09-14-apply-conflict-hardening",
+  "generatedAt": "2026-09-14T08:08:47.677Z",
+  "probes": {
+    "probe1": {
+      "command": "sillyspec verify-probes --change 2026-09-14-apply-conflict-hardening",
+      "metrics": {
+        "matches": 24,
+        "skippedFiles": 0,
+        "worktreeHits": 1,
+        "globEntries": 0
+      }
+    },
+    "probe3": {
+      "command": "sillyspec verify-probes --change 2026-09-14-apply-conflict-hardening",
+      "metrics": {
+        "tasks": 4,
+        "hasTest": 4
+      }
+    },
+    "probe5": {
+      "command": "sillyspec verify-probes --change 2026-09-14-apply-conflict-hardening",
+      "metrics": {
+        "backendEndpoints": 2,
+        "frontendCalls": 1
+      }
+    },
+    "probe6": {
+      "command": "sillyspec verify-probes --change 2026-09-14-apply-conflict-hardening",
+      "metrics": {
+        "deletions": 0,
+        "unavailable": false
+      }
+    }
+  },
+  "conclusion": "PASS WITH NOTES",
+  "tests": {
+    "command": "module[cli-core]",
+    "exitCode": 0,
+    "strategy": "module-subset",
+    "failedRemaining": [],
+    "passedAt": "2026-09-14T08:12:31.850Z"
+  },
+  "factsConsistency": {
+    "checked": [
+      "probe1",
+      "probe3",
+      "probe5",
+      "probe6"
+    ],
+    "verdict": "match",
+    "detail": null
+  }
+}
