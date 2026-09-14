@@ -259,3 +259,13 @@
 根因：uncategorized.md 是暂存区语义——条目归类即迁出（classify），永不注册 INDEX 路由，validate 当未注册文件告警是误报（knowledge-loop-close verify 遗留观察①）
 方案：stages/knowledge.js 校验循环豁免清单加 uncategorized.md（与 generated//proposed/ 同列）；新增 test/knowledge-validate-uncategorized.test.mjs 三态锁定（豁免生效/普通未注册仍告警/零警告回归）
 结果：新测 6/6（真实 CLI 子进程）；本仓 validate 0 警告；lint 过
+
+## ql-20260915-003-fc6e | 2026-09-15 05:04:51 | 三点工具摩擦修复——junction 归属清扫/cleanup meta 兜底探测/中断残留语法检测
+状态：已完成
+关联变更：（无）
+文件：docs/sillyspec/platform-interface-map.md（+4/-4）, src/index.js（+10/-1）, src/task-review.js（+93/-0）, src/worktree-deps.js（+100/-2）, src/worktree.js（+117/-5）, test/tooling-friction-fixes-003.test.mjs（+286/-0）
+需求：三点工具摩擦修复——junction 归属清扫/cleanup meta 兜底探测/中断残留语法检测
+根因：①主仓 node_modules 被留指向 worktree .pnpm 的反向 junction，apply 后被迫 --force 重装②cleanup 早退依赖 meta+双路径全缺，meta 在 apply 后丢失即误判 mode null 跳过与实际目录不符③中断子代理留半成品 import 语法坏文件无自动检测
+方案：sweepForeignNodeModulesJunctions 三挂点（create/cleanup/install 前零穿透删除）；_probeWorktreeRemnants 双探针兜底（git 分支注册+runtimeRoot 口径，全不命中输出诊断清单）；detectInterruptedSyntaxResidue 挂 writeTaskReview（.js 双跑仲裁防 Node v24 假阴，advisory）
+结果：npm test 483/483+lint 620 绿；新 10 用例双平台；--force-baseline 理由=worktree.js 受保护面的刻意机制修复（挂点+兜底探测，483 全绿实证）；--no-docs 理由=三卡当日已由 change-ownership task-04 更新且并行会话在途占用，避免冲突
+审计：[gate] L1（跨 3 模块 · 6 文件：4 代码/1 测试）advisory；每文件注记缺失（--file-notes 覆盖变更文件全集）；测试增量已含
