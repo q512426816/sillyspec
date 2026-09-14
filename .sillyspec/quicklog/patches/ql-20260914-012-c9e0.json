@@ -1,0 +1,71 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-32cb4d0a",
+  "totals": {
+    "files": 4,
+    "additions": 110,
+    "deletions": 12
+  },
+  "rows": [
+    {
+      "path": "src/scan-refresh.js",
+      "declared": true,
+      "additions": 29,
+      "deletions": 4,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/scan-postcheck.js",
+      "declared": true,
+      "additions": 8,
+      "deletions": 4,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/index.js",
+      "declared": true,
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/scan-refresh.test.mjs",
+      "declared": true,
+      "additions": 72,
+      "deletions": 3,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 0,
+    "codeFileCount": 0,
+    "testFileCount": 0,
+    "moduleSpan": 0,
+    "modules": [],
+    "unmappedFiles": [],
+    "riskHits": [],
+    "level": "L0",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": true,
+      "testDelta": "na",
+      "docClaim": "claimed",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260914-012-c9e0",
+  "sessionId": "quick-32cb4d0a",
+  "savedAt": "2026-09-14T06:19:15.243Z",
+  "patchSha256": "828add9701e3ee811de4dcce60f2b3e2e4df22d905b2fc56e104dccc0c35238a",
+  "patchStatus": "ok"
+}

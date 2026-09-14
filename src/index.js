@@ -61,7 +61,7 @@ SillySpec CLI — 规范驱动开发工具包
              --diff [--base <commit>] [--full] [--report]   scan 文档 vs 源码漂移清单（纯只读）
              （子命令: sillyspec scan diff 等价 --diff）
              refresh [--project <名>] [--force] [--json]   增量刷新①拍：门控+受影响文档手术工单
-             refresh --done [--docs a.md,b.md]              增量刷新②拍：内容比对+per-doc 基线推进+postcheck
+             refresh --done [--docs a.md,b.md] [--force]    增量刷新②拍：内容比对+per-doc 基线推进+postcheck
              （检出极限：refresh 只覆盖带 file:line 引用的检出项，不声称文档与源码一致）
     archive: --confirm                   归档确认（必须）
     auto:    --mode <模式>               显式指定流程模式

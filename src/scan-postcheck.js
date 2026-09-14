@@ -613,12 +613,14 @@ export function bumpScanDocBaselines({ cwd, specDir = null, project = null, docs
 }
 
 /** frontmatter 键替换内核：已有行替换、缺失行在 frontmatter 内补（无 frontmatter 则新建头部）。
- * 值为 undefined 的键跳过；键名限安全标识符（内部调用方固定三键，不做正则转义）。 */
+ * 值为 undefined 的键跳过；键名限安全标识符（内部调用方固定三键，不做正则转义）。
+ * 尾部 `---` 无换行（agent 手编删尾换行的中间态）也认既有 frontmatter——否则会走「无
+ * frontmatter」分支头部新建一段、旧块残留正文（双 frontmatter，重审 P3 实证）。 */
 function bumpFrontmatterKeys(content, bumpKeys) {
   const normalized = content.replace(/\r\n?/g, '\n')
-  const entries = Object.entries(bumpKeys).filter(([, v]) => v !== undefined)
+  const entries = Object.entries(bumpKeys).filter(([, v] ) => v !== undefined)
   if (entries.length === 0) return null
-  const fmMatch = normalized.match(/^---\n([\s\S]*?)\n---\n/)
+  const fmMatch = normalized.match(/^---\n([\s\S]*?)\n---(?:\n|$)/)
   if (!fmMatch) {
     return `---\n${entries.map(([k, v]) => `${k}: ${v}`).join('\n')}\n---\n\n` + normalized
   }
@@ -628,7 +630,9 @@ function bumpFrontmatterKeys(content, bumpKeys) {
     if (re.test(fm)) fm = fm.replace(re, `${k}: ${v}`)
     else fm += `\n${k}: ${v}`
   }
-  return normalized.replace(/^---\n[\s\S]*?\n---\n/, `---\n${fm}\n---\n`)
+  // 重建 frontmatter 块（fmMatch[0] 可能无尾换行——重建统一补 \n，余下正文原样接回）
+  const rest = normalized.slice(fmMatch[0].length)
+  return `---\n${fm}\n---\n${rest}`
 }
 
 /**

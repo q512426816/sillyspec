@@ -177,3 +177,16 @@
 结果：npm test 全量绿——design-facts 118 用例 0 失败（新增 2——消息自足/兄弟项目消歧），新建 validate-metadata-scope 9 用例 0 失败；lint 602 文件 0 问题；docs check 本会话引用 0 失效（prompt-control-debt L219 行号重锚 1190→1209/1346→1365；余 2 失效属并行会话 apply-conflict-hardening 在途变更非本会话产物）
 审计：[gate] L2（跨 5 模块 · 11 文件：5 代码/3 测试）advisory；模块文档认领缺失（同步模块卡进改动集，或 --no-docs 显式豁免）
 审计：⚖️ 归属切分：3 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：src/index.js, src/scan-postcheck.js, test/scan-refresh.test.mjs
+
+## ql-20260914-012-c9e0 | 2026-09-14 14:18:08 | scan-refresh 重审四缺陷修复（HEAD 逃逸门/路径穿越校验/help 补 force/bump 尾部容错）
+状态：已完成
+关联变更：（无）
+文件：
+- src/scan-refresh.js（HEAD 门+裸名校验+白名单哈希资格前置）
+- src/scan-postcheck.js（bumpFrontmatterKeys 尾部容错）
+- src/index.js（help --done 补 [--force]）
+- test/scan-refresh.test.mjs（4 新回归+审计字段断言+e2e fixture 重组）
+需求：scan-refresh 重审四缺陷修复（HEAD 逃逸门/路径穿越校验/help 补 force/bump 尾部容错）
+根因：P1 ①拍→--done 间 HEAD 被他者推进时 finalize 重取当前 HEAD 盖章，未核对 commit 被盖成已核对；P2 --docs 无裸文件名校验可 ../ 穿越盖章 modules/；P3 help --done 漏 --force、bump 遇尾 --- 无换行产生双 frontmatter；另 guard 白名单 push-before-hash fail-open
+方案：finalizeRefresh 前置 HEAD 一致性门（短哈希 vs guard.sourceCommit 7 位归一，不等 code 2 拒绝重跑①拍，硬门无 force）；--docs 逐名裸文件名校验拒路径分隔符；help 补 [--force]；bump 正则放宽尾部容错重建统一补换行；白名单成员资格=哈希在手 push 后置
+结果：scan-refresh.test 19/19（16→19，新增 HEAD 推进拒绝/穿越拦截/双块防护/键集不变式 4 回归）；lint 0 告警；npm test 全量 469 文件 0 失败（CLI 门禁亲测）

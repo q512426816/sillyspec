@@ -210,12 +210,18 @@ export function computeRefreshPlan({ projectRoot, specBase, projectName, force =
   const freshDocs = docEntries.filter(e => e.base === head.slice(0, 7)).map(e => e.file)
 
   // ── guard 握手（D-007@v1：原子写——hook 并发读，防半截 JSON fail-closed 窗口）──
+  // 白名单成员资格=哈希在手：读失败的文档**不进白名单**（无哈希无法过 --done 内容比对门，
+  // 白名单放行无凭据——push 必须在哈希成功之后，防 fail-open）。该文档仍出现在工单里
+  //（affectedDocs 已含），但 hook 不放行编辑、--done 也不推进——保守方向与 D-009 一致。
   const docHashes = {}
   const refreshDocs = []
   for (const e of affected) {
     const rel = `docs/${projectName}/scan/${e.file}`
+    let hash = null
+    try { hash = sha256File(join(scanDir, e.file)) } catch { /* 读失败 → 不进白名单（保守） */ }
+    if (hash === null) continue
     refreshDocs.push(rel)
-    try { docHashes[rel] = sha256File(join(scanDir, e.file)) } catch { /* 读失败不进白名单（保守） */ }
+    docHashes[rel] = hash
   }
   if (refreshDocs.length > 0) {
     try {
@@ -385,6 +391,23 @@ export async function finalizeRefresh(opts = {}) {
   const relOf = (name) => `docs/${projectName}/scan/${name}`
   const explicit = Array.isArray(docs) && docs.length > 0
 
+  // HEAD 一致性门（重审 P1 修复）：①拍→--done 之间 HEAD 被他者推进时，中间 commit 未核对
+  // 却会被盖章成「已核对至新 HEAD」——dirtyCheck 管不到这个形态（未提交→已提交未核对）。
+  // guard.sourceCommit 是①拍工单的基线锚，不等即拒绝（硬门：重跑①拍很便宜，不给 --force 通道）。
+  const nowHeadRes = safeGit(projectRoot, ['rev-parse', '--short', 'HEAD'])
+  const nowHeadShort = nowHeadRes.error ? null : nowHeadRes.value.trim()
+  if (nowHeadShort && guard.sourceCommit
+    && String(nowHeadShort).slice(0, 7) !== String(guard.sourceCommit).slice(0, 7)) {
+    console.error(`scan refresh --done：HEAD 已推进（①拍基线 ${String(guard.sourceCommit).slice(0, 7)} → 当前 ${nowHeadShort}）——中间新 commit 未核对，不可盖章`)
+    console.error('   → 重跑 sillyspec scan refresh（①拍基于新 HEAD 重出工单），编辑后再 --done')
+    return { code: 2, bumped: [], skipped: [], postCheckStatus: null, auditPath: null }
+  }
+
+  // --docs 裸文件名校验（重审 P2 修复）：relOf 纯拼接 + bump join 会归一化 ../，带路径分隔符/
+  // .. 的名字能穿越出 scan 目录（违反 D-001 写面限界）。只接受 scan 目录内裸文件名。
+  const isBareName = (name) => typeof name === 'string' && name.length > 0
+    && !name.includes('/') && !name.includes('\\') && !name.includes('..')
+
   // 内容比对门（D-009@v1）：默认面=工单受影响文档且内容有变者；未编辑文档不盖章
   const candidates = explicit
     ? docs.map((name) => ({ name }))
@@ -392,6 +415,10 @@ export async function finalizeRefresh(opts = {}) {
   const skipped = []
   const toBump = []
   for (const { name } of candidates) {
+    if (!isBareName(name)) {
+      skipped.push({ file: name, reason: '非法文档名（仅接受 scan 目录内裸文件名，如 ARCHITECTURE.md——防路径穿越出写面）' })
+      continue
+    }
     const rel = relOf(name)
     const baselineHash = guard.docHashes && guard.docHashes[rel]
     if (!explicit && !force && baselineHash) {
@@ -411,9 +438,7 @@ export async function finalizeRefresh(opts = {}) {
 
   // per-doc bump（task-03 单源）+ postcheck（specDir 转换口径对齐 executeScanFinalize，D-009@v1）
   const { bumpScanDocBaselines, runScanPostCheck, printScanPostCheckResult } = await import('./scan-postcheck.js')
-  const specDirForCheck = platformOpts?.specRoot || null
-  const headShortRes = safeGit(projectRoot, ['rev-parse', '--short', 'HEAD'])
-  const headShort = headShortRes.error ? null : headShortRes.value.trim()
+  const headShort = nowHeadShort // HEAD 一致性门已重取并校验过，此处复用同值
   const bump = bumpScanDocBaselines({ cwd: projectRoot, specDir: platformOpts?.specRoot || specBase, project: projectName, docs: toBump, headShort })
   console.log(`  📝 基线推进 ${bump.bumped.length} 份文档（source_commit→${headShort || '?'} / generator→sillyspec-scan-refresh）`)
   for (const s of bump.skipped) console.log(`  ⏭️  ${s.file}：${s.reason}`)

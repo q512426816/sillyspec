@@ -1,0 +1,225 @@
+diff --git a/src/index.js b/src/index.js
+index 339f48f..23b404e 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -61,7 +61,7 @@ SillySpec CLI — 规范驱动开发工具包
+              --diff [--base <commit>] [--full] [--report]   scan 文档 vs 源码漂移清单（纯只读）
+              （子命令: sillyspec scan diff 等价 --diff）
+              refresh [--project <名>] [--force] [--json]   增量刷新①拍：门控+受影响文档手术工单
+-             refresh --done [--docs a.md,b.md]              增量刷新②拍：内容比对+per-doc 基线推进+postcheck
++             refresh --done [--docs a.md,b.md] [--force]    增量刷新②拍：内容比对+per-doc 基线推进+postcheck
+              （检出极限：refresh 只覆盖带 file:line 引用的检出项，不声称文档与源码一致）
+     archive: --confirm                   归档确认（必须）
+     auto:    --mode <模式>               显式指定流程模式
+diff --git a/src/scan-postcheck.js b/src/scan-postcheck.js
+index 01b1f13..fc4f409 100644
+--- a/src/scan-postcheck.js
++++ b/src/scan-postcheck.js
+@@ -613,12 +613,14 @@ export function bumpScanDocBaselines({ cwd, specDir = null, project = null, docs
+ }
+ 
+ /** frontmatter 键替换内核：已有行替换、缺失行在 frontmatter 内补（无 frontmatter 则新建头部）。
+- * 值为 undefined 的键跳过；键名限安全标识符（内部调用方固定三键，不做正则转义）。 */
++ * 值为 undefined 的键跳过；键名限安全标识符（内部调用方固定三键，不做正则转义）。
++ * 尾部 `---` 无换行（agent 手编删尾换行的中间态）也认既有 frontmatter——否则会走「无
++ * frontmatter」分支头部新建一段、旧块残留正文（双 frontmatter，重审 P3 实证）。 */
+ function bumpFrontmatterKeys(content, bumpKeys) {
+   const normalized = content.replace(/\r\n?/g, '\n')
+-  const entries = Object.entries(bumpKeys).filter(([, v]) => v !== undefined)
++  const entries = Object.entries(bumpKeys).filter(([, v] ) => v !== undefined)
+   if (entries.length === 0) return null
+-  const fmMatch = normalized.match(/^---\n([\s\S]*?)\n---\n/)
++  const fmMatch = normalized.match(/^---\n([\s\S]*?)\n---(?:\n|$)/)
+   if (!fmMatch) {
+     return `---\n${entries.map(([k, v]) => `${k}: ${v}`).join('\n')}\n---\n\n` + normalized
+   }
+@@ -628,7 +630,9 @@ function bumpFrontmatterKeys(content, bumpKeys) {
+     if (re.test(fm)) fm = fm.replace(re, `${k}: ${v}`)
+     else fm += `\n${k}: ${v}`
+   }
+-  return normalized.replace(/^---\n[\s\S]*?\n---\n/, `---\n${fm}\n---\n`)
++  // 重建 frontmatter 块（fmMatch[0] 可能无尾换行——重建统一补 \n，余下正文原样接回）
++  const rest = normalized.slice(fmMatch[0].length)
++  return `---\n${fm}\n---\n${rest}`
+ }
+ 
+ /**
+diff --git a/src/scan-refresh.js b/src/scan-refresh.js
+index d87bcdd..6d22525 100644
+--- a/src/scan-refresh.js
++++ b/src/scan-refresh.js
+@@ -210,12 +210,18 @@ export function computeRefreshPlan({ projectRoot, specBase, projectName, force =
+   const freshDocs = docEntries.filter(e => e.base === head.slice(0, 7)).map(e => e.file)
+ 
+   // ── guard 握手（D-007@v1：原子写——hook 并发读，防半截 JSON fail-closed 窗口）──
++  // 白名单成员资格=哈希在手：读失败的文档**不进白名单**（无哈希无法过 --done 内容比对门，
++  // 白名单放行无凭据——push 必须在哈希成功之后，防 fail-open）。该文档仍出现在工单里
++  //（affectedDocs 已含），但 hook 不放行编辑、--done 也不推进——保守方向与 D-009 一致。
+   const docHashes = {}
+   const refreshDocs = []
+   for (const e of affected) {
+     const rel = `docs/${projectName}/scan/${e.file}`
++    let hash = null
++    try { hash = sha256File(join(scanDir, e.file)) } catch { /* 读失败 → 不进白名单（保守） */ }
++    if (hash === null) continue
+     refreshDocs.push(rel)
+-    try { docHashes[rel] = sha256File(join(scanDir, e.file)) } catch { /* 读失败不进白名单（保守） */ }
++    docHashes[rel] = hash
+   }
+   if (refreshDocs.length > 0) {
+     try {
+@@ -385,6 +391,23 @@ export async function finalizeRefresh(opts = {}) {
+   const relOf = (name) => `docs/${projectName}/scan/${name}`
+   const explicit = Array.isArray(docs) && docs.length > 0
+ 
++  // HEAD 一致性门（重审 P1 修复）：①拍→--done 之间 HEAD 被他者推进时，中间 commit 未核对
++  // 却会被盖章成「已核对至新 HEAD」——dirtyCheck 管不到这个形态（未提交→已提交未核对）。
++  // guard.sourceCommit 是①拍工单的基线锚，不等即拒绝（硬门：重跑①拍很便宜，不给 --force 通道）。
++  const nowHeadRes = safeGit(projectRoot, ['rev-parse', '--short', 'HEAD'])
++  const nowHeadShort = nowHeadRes.error ? null : nowHeadRes.value.trim()
++  if (nowHeadShort && guard.sourceCommit
++    && String(nowHeadShort).slice(0, 7) !== String(guard.sourceCommit).slice(0, 7)) {
++    console.error(`scan refresh --done：HEAD 已推进（①拍基线 ${String(guard.sourceCommit).slice(0, 7)} → 当前 ${nowHeadShort}）——中间新 commit 未核对，不可盖章`)
++    console.error('   → 重跑 sillyspec scan refresh（①拍基于新 HEAD 重出工单），编辑后再 --done')
++    return { code: 2, bumped: [], skipped: [], postCheckStatus: null, auditPath: null }
++  }
++
++  // --docs 裸文件名校验（重审 P2 修复）：relOf 纯拼接 + bump join 会归一化 ../，带路径分隔符/
++  // .. 的名字能穿越出 scan 目录（违反 D-001 写面限界）。只接受 scan 目录内裸文件名。
++  const isBareName = (name) => typeof name === 'string' && name.length > 0
++    && !name.includes('/') && !name.includes('\\') && !name.includes('..')
++
+   // 内容比对门（D-009@v1）：默认面=工单受影响文档且内容有变者；未编辑文档不盖章
+   const candidates = explicit
+     ? docs.map((name) => ({ name }))
+@@ -392,6 +415,10 @@ export async function finalizeRefresh(opts = {}) {
+   const skipped = []
+   const toBump = []
+   for (const { name } of candidates) {
++    if (!isBareName(name)) {
++      skipped.push({ file: name, reason: '非法文档名（仅接受 scan 目录内裸文件名，如 ARCHITECTURE.md——防路径穿越出写面）' })
++      continue
++    }
+     const rel = relOf(name)
+     const baselineHash = guard.docHashes && guard.docHashes[rel]
+     if (!explicit && !force && baselineHash) {
+@@ -411,9 +438,7 @@ export async function finalizeRefresh(opts = {}) {
+ 
+   // per-doc bump（task-03 单源）+ postcheck（specDir 转换口径对齐 executeScanFinalize，D-009@v1）
+   const { bumpScanDocBaselines, runScanPostCheck, printScanPostCheckResult } = await import('./scan-postcheck.js')
+-  const specDirForCheck = platformOpts?.specRoot || null
+-  const headShortRes = safeGit(projectRoot, ['rev-parse', '--short', 'HEAD'])
+-  const headShort = headShortRes.error ? null : headShortRes.value.trim()
++  const headShort = nowHeadShort // HEAD 一致性门已重取并校验过，此处复用同值
+   const bump = bumpScanDocBaselines({ cwd: projectRoot, specDir: platformOpts?.specRoot || specBase, project: projectName, docs: toBump, headShort })
+   console.log(`  📝 基线推进 ${bump.bumped.length} 份文档（source_commit→${headShort || '?'} / generator→sillyspec-scan-refresh）`)
+   for (const s of bump.skipped) console.log(`  ⏭️  ${s.file}：${s.reason}`)
+diff --git a/test/scan-refresh.test.mjs b/test/scan-refresh.test.mjs
+index fd8ef0d..af31484 100644
+--- a/test/scan-refresh.test.mjs
++++ b/test/scan-refresh.test.mjs
+@@ -251,6 +251,8 @@ describe('computeRefreshPlan 门控与受影响集', () => {
+     assert.equal(guard.mode, 'scan-refresh')
+     assert.deepEqual(guard.refreshDocs, ['docs/demo/scan/ARCHITECTURE.md'])
+     assert.ok(guard.docHashes['docs/demo/scan/ARCHITECTURE.md'], 'docHashes 记录内容哈希')
++    // 不变式（重审修复回归）：白名单成员必须有哈希——push 必须在哈希成功后（防读失败 fail-open 进白名单）
++    assert.deepEqual(Object.keys(guard.docHashes).sort(), [...guard.refreshDocs].sort(), 'refreshDocs 与 docHashes 键集一致（无哈希不进白名单）')
+     assert.equal(guard.sourceCommit.length, 7, 'sourceCommit 用 7 位短哈希（与盖章同格式）')
+     assert.equal(guard.forceRescan, false)
+   })
+@@ -344,6 +346,9 @@ describe('runRefresh / finalizeRefresh IO 面', () => {
+     const audit = JSON.parse(readFileSync(done.auditPath, 'utf8'))
+     assert.equal(audit.changeType, 'scan-refresh')
+     assert.equal(audit.bumped.length, 1)
++    assert.ok(typeof audit.guardSourceCommit === 'string' && audit.guardSourceCommit.length >= 7, '审计记①拍基线锚')
++    assert.ok(audit.detectionLimit.includes('file:line'), '审计含检出极限声明')
++    assert.ok(Array.isArray(audit.skippedUnedited), '审计记未编辑跳过清单')
+   })
+ })
+ 
+@@ -362,14 +367,15 @@ describe('scan refresh 全链路 e2e（临时 git 仓）', () => {
+     f.run('git add -A && git commit -q -m change')
+ 
+     // ①拍 → guard 白名单内 hook 放行（直接调 hook 主入口，不依赖宿主安装）
++    // 注意：白名单外的 PROJECT.md 在①拍**之前**写入（无过期引用→不进白名单）——
++    // HEAD 一致性门（重审 P1 修复）后，①拍与 --done 之间不允许再 commit，中途 commit 场景
++    // 由下方独立用例覆盖
++    writeFileSync(join(f.scanDir, 'PROJECT.md'), refDoc(f.base, '正文（无引用，不进白名单）'))
+     assert.equal(await runRefresh({ projectRoot: f.root, specBase: f.specBase, projectName: 'demo' }), 0)
+     const guard = JSON.parse(readFileSync(join(f.specBase, '.runtime', 'scan-guard.json'), 'utf8'))
+     assert.equal(guard.mode, 'scan-refresh')
+     const blocked = shouldBlock({ tool: 'Write', filePath: join(f.scanDir, 'ARCHITECTURE.md'), cwd: f.root })
+     assert.equal(blocked.blocked, false, '①拍后白名单内文档编辑被 hook 放行')
+-    // 白名单外（PROJECT.md）继续保护
+-    writeFileSync(join(f.scanDir, 'PROJECT.md'), refDoc(f.base, '正文'))
+-    f.run('git add -A && git commit -q -m doc2')
+     // PROJECT 无过期引用 → 不在白名单 → guard check-1 异基线拦截（mode 会话态下白名单外走原保护）
+     const blocked2 = shouldBlock({ tool: 'Write', filePath: join(f.scanDir, 'PROJECT.md'), cwd: f.root })
+     assert.equal(blocked2.blocked, true, '白名单外文档保护不放松')
+@@ -399,3 +405,66 @@ describe('scan refresh 全链路 e2e（临时 git 仓）', () => {
+     assert.ok(!existsSync(knowledgeDir), 'knowledge/ 零写入（D-001@v1 写面限界）')
+   })
+ })
++
++// ── 重审修复回归（独立审计 P1/P2/P3）──
++describe('重审修复：HEAD 一致性门 / --docs 路径穿越 / bump 尾部容错', () => {
++  async function mkPlanFixture() {
++    const f = mkRefreshRepo({ docs: {}, map: MAP })
++    writeFileSync(join(f.scanDir, 'ARCHITECTURE.md'), refDoc(f.base))
++    f.run('git add -A && git commit -q -m doc')
++    writeFileSync(join(f.root, 'src/a.js'), 'a2\n')
++    f.run('git add -A && git commit -q -m change')
++    const plan = computeRefreshPlan({ projectRoot: f.root, specBase: f.specBase, projectName: 'demo' })
++    assert.equal(plan.ok, true)
++    return f
++  }
++
++  it('P1：①拍→--done 之间 HEAD 被推进 → 拒绝盖章（code 2，未核对 commit 不被盖章成已核对）', async (t) => {
++    const f = await mkPlanFixture()
++    t.after(() => cleanup(f.root))
++    // 模拟 agent 已完成编辑
++    writeFileSync(join(f.scanDir, 'ARCHITECTURE.md'), refDoc(f.base).replace('src/a.js:1', 'src/a.js:2'))
++    // 他者会话推进 HEAD
++    writeFileSync(join(f.root, 'src/b.js'), 'b1\n')
++    f.run('git add -A && git commit -q -m other-session')
++    const r = await finalizeRefresh({ projectRoot: f.root, specBase: f.specBase, projectName: 'demo' })
++    assert.equal(r.code, 2, 'HEAD 推进 → 拒绝')
++    assert.equal(r.bumped.length, 0)
++    const after = readFileSync(join(f.scanDir, 'ARCHITECTURE.md'), 'utf8')
++    assert.match(after, new RegExp(`^source_commit: ${f.base.slice(0, 7)}`, 'm'), '基线仍是①拍前值（未被推进）')
++  })
++
++  it('P2：--docs 带路径分隔符/.. → 进 skipped 不写盘（写面限界防穿越）', async (t) => {
++    const f = await mkPlanFixture()
++    t.after(() => cleanup(f.root))
++    writeFileSync(join(f.scanDir, 'ARCHITECTURE.md'), refDoc(f.base).replace('src/a.js:1', 'src/a.js:2'))
++    const modulesDir = join(f.specBase, 'docs', 'demo', 'modules')
++    const victim = join(modulesDir, 'core.md')
++    writeFileSync(victim, '# 卡片\n')
++    const r = await finalizeRefresh({
++      projectRoot: f.root, specBase: f.specBase, projectName: 'demo',
++      docs: ['../modules/core.md', 'sub\dir.md', 'ARCHITECTURE.md'],
++    })
++    assert.equal(r.code, 0, '合法名照常推进')
++    assert.ok(r.bumped.every(p => !p.includes('modules')), 'modules/ 零写入')
++    assert.equal(readFileSync(victim, 'utf8'), '# 卡片\n', '穿越目标文件未被盖章')
++    assert.ok(r.skipped.some(s => s.file === '../modules/core.md' && s.reason.includes('穿越')))
++    assert.ok(r.skipped.some(s => s.file === 'sub\dir.md'))
++  })
++
++  it('P3：bump 对尾部 --- 无换行的 frontmatter 不产生双块', (t) => {
++    const f = mkSpec({ docs: {} })
++    t.after(() => cleanup(f.root))
++    const noTrailingNl = '---\nauthor: t\nsource_commit: 1111111\n---' // 尾 --- 无换行（agent 手编中间态）
++    writeFileSync(join(f.scanDir, 'ARCHITECTURE.md'), noTrailingNl)
++    const r = bumpScanDocBaselines({
++      cwd: f.cwd, specDir: f.specBase, project: 'demo',
++      docs: ['ARCHITECTURE.md'], headShort: 'abcdef1',
++    })
++    assert.equal(r.bumped.length, 1)
++    const after = readFileSync(join(f.scanDir, 'ARCHITECTURE.md'), 'utf8')
++    assert.equal((after.match(/^---$/gm) || []).length, 2, '恰好一对 frontmatter 界符（无双块）')
++    assert.match(after, /^source_commit: abcdef1$/m, '键原位替换')
++    assert.match(after, /^author: t$/m, '其余键保留')
++  })
++})
