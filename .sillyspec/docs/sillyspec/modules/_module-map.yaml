@@ -75,6 +75,7 @@ modules:
       - src/verify-postcheck.js
       - src/review-tier.js
       - src/change-risk-profile.js
+      - src/quick-gate-profile.js
       - src/scope-audit.js
       - src/classify-change.js
       - src/contract-matrix.js
