@@ -2577,7 +2577,7 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
           })
           process.exitCode = r.code
         } else {
-          process.exitCode = runRefresh({
+          process.exitCode = await runRefresh({
             projectRoot: refreshEffectiveDir,
             specBase: refreshSpecBase,
             projectName: refreshProjectName,
