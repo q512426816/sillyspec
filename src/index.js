@@ -3145,7 +3145,16 @@ SillySpec worktree — git worktree 隔离管理
               }
             } else if (result.result === 'skipped') {
               console.log(`⏭️  worktree 跳过清理: ${wtName} (mode: ${result.mode})`);
-              console.log(`   原因: in-place 模式没有隔离目录需要清理`);
+              // ql-20260915-003 修复②（坑 cleanup-meta-fallback，2026-09-15 实证「mode: null
+              // 跳过清理」但 worktree 实际创建过）：早退跳过（meta/目录/git 注册三路探针全未
+              // 命中）时，误导性的「in-place 模式」文案升级为诊断式——列三路探针路径 + meta
+              // 丢失可能原因 + doctor 指引。probePaths 由 cleanup 兜底探测带回。
+              if (Array.isArray(result.probePaths) && result.probePaths.length > 0) {
+                for (const p of result.probePaths) console.log(`   探针: ${p}`);
+                console.log(`   meta 丢失可能原因：apply/cleanup 后随目录删除、并行会话已清理、cwd/specDir 漂移。可用 sillyspec worktree doctor 检查 git 注册与分支残留。`);
+              } else {
+                console.log(`   原因: in-place 模式没有隔离目录需要清理`);
+              }
             } else if (result.result === 'blocked') {
               console.error(`🚫 拒绝清理：有未落主仓交付变更，请先 sillyspec worktree apply ${wtName} 或 --force`);
             } else if (result.result === 'partial') {

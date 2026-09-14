@@ -12,7 +12,8 @@ import { execFileSync } from 'child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, readdirSync, statSync, lstatSync, readlinkSync, unlinkSync, copyFileSync } from 'fs';
 import { join, resolve, dirname, relative, isAbsolute, basename } from 'path';
 import { createHash } from 'crypto';
-import { provisionDeps, checkDepsFreshness, detectEditableInstallEscape } from './worktree-deps.js';
+import { provisionDeps, checkDepsFreshness, detectEditableInstallEscape, sweepForeignNodeModulesJunctions } from './worktree-deps.js';
+import { resolveRuntimeRoot } from './run/shared.js';
 import { writeAtomicSync } from './fs-atomic.js';
 import { openDatabase } from './db-engine.js';
 import { git, gitQuiet } from './git-helper.js';
@@ -479,6 +480,44 @@ export class WorktreeManager {
   }
 
   /**
+   * ql-20260915-003 修复①（坑 junction-foreign-ownership，2026-09-15 用户实证：主仓
+   * frontend/node_modules 内 junction 指向历史 worktree 的 .pnpm——跨会话 node_modules
+   * 污染）：清扫主仓 node_modules（根 + local.yaml modules 子模块）内指向 worktrees 区的
+   * 外来 junction/symlink。正确链接方向只有 wt/node_modules → main；main 侧指向 worktrees
+   * 区的反向链接一律是 install 兜底/包管理器穿透写坏的污染，发现即清 + warn。
+   *
+   * 挂点：create 依赖供给前（5.7b，防新供给经污染链接写坏）与 cleanup（把本 worktree 可能
+   * 遗留的反向链接一并清）。清扫失败 fail-open 不阻断主流程（治理动作非卡点）。
+   *
+   * @param {string} label 调用场景（warn/details 文案用）
+   * @param {string[]|null} [details] 可选，cleanup details 兼容
+   * @returns {{ foreign: Array, removed: Array, failed: Array }} sweep 结果（异常时空集）
+   */
+  _sweepMainForeignJunctionLinks(label, details = null) {
+    try {
+      const mainRoot = this._resolveMainRepoRoot();
+      const sweep = sweepForeignNodeModulesJunctions(mainRoot, {
+        worktreesRoot: this.worktreeBase,
+        specBase: join(mainRoot, '.sillyspec'),
+      });
+      if (sweep.removed.length > 0) {
+        console.warn(`⚠️ 检测到主仓 node_modules 内指向历史 worktree 的外来 junction，已移除 ${sweep.removed.length} 个（坑 junction-foreign-ownership，${label}）`);
+        for (const r of sweep.removed) console.warn(`   ${r.link} → ${r.target}`);
+        if (details) details.push(`foreign junctions swept (${label}): ${sweep.removed.length}`);
+      }
+      if (sweep.failed.length > 0) {
+        console.warn(`⚠️ 主仓 node_modules 外来 junction 清理未全成（${sweep.failed.length} 个失败，可重跑 sillyspec worktree doctor 或手工 rmdir）: ${sweep.failed.map(f => f.link).join('、')}`);
+        if (details) details.push(`foreign junction sweep partial fail (${label}): ${sweep.failed.map(f => f.link).join('; ')}`);
+      }
+      return sweep;
+    } catch (e) {
+      // fail-open：清扫自身异常不阻断 create/cleanup 主流程
+      console.warn(`⚠️ 主仓 node_modules 外来 junction 清扫跳过（${e && e.message ? e.message : e}）`);
+      return { foreign: [], removed: [], failed: [] };
+    }
+  }
+
+  /**
    * 读取 worktree 元数据
    * @param {string} changeName
    * @returns {object|null} meta.json 内容，不存在或损坏返回 null
@@ -696,6 +735,10 @@ export class WorktreeManager {
 
     // 5.8 依赖供给（change 2026-06-28-worktree-deps-provision）
     // baseline overlay 后让 worktree 立即可构建/测试；失败不阻断 create，只记 meta。
+    // 5.7b ql-20260915-003 修复①（坑 junction-foreign-ownership）：依赖供给前清扫主仓
+    // node_modules 内指向历史 worktree 的外来 junction（反向链接污染，install 兜底穿透
+    // 写坏的源头）——发现即清 + warn，防新供给再经污染链接写坏主仓依赖。
+    this._sweepMainForeignJunctionLinks('worktree create');
     let deps = {};
     try {
       deps = provisionDeps(worktreePath, this.cwd, { specBase: join(this.cwd, '.sillyspec') }) || {};
@@ -1046,16 +1089,76 @@ export class WorktreeManager {
     }
   }
 
+  /**
+   * ql-20260915-003 修复②（坑 cleanup-meta-fallback，2026-09-15 用户实证：cleanup 报
+   * 「mode: null 跳过清理」但 worktree 目录实际创建过——meta 在 apply 后丢失 + cwd/specRoot
+   * 漂移让 getWorktreePath 解析到别处时，meta/worktreePath/metaDir 三缺被误判「什么都不
+   * 存在」早退）：meta 缺失时的 worktree 残留兜底探测。两路探针（异常一律 fail-open 视为
+   * 未命中）：
+   *   (a) `git worktree list --porcelain` 中分支 refs/heads/sillyspec/<name> 的注册路径——
+   *       git 注册是权威口径，不受本进程 worktreeBase 解析漂移影响；目录在不在都算命中
+   *       （注册残留本身就该 prune，目录在则连目录一起清）
+   *   (b) resolveRuntimeRoot 口径（cwd/.sillyspec 为 localSpecBase）下 worktrees/<name>
+   *       目录存在性——平台 runtimeRoot / cwd 漂移时的第二解析口径
+   * 全不命中 → hit:null + candidates（三路探针描述，供 CLI 诊断式跳过输出）。
+   * @param {string} name changeName（已过 validateChangeName）
+   * @returns {{ hit: { path: string, via: string }|null, candidates: string[] }}
+   */
+  _probeWorktreeRemnants(name) {
+    const stdPath = this.getWorktreePath(name);
+    const candidates = [`meta/目录探针（getWorktreePath 口径）: ${stdPath} 不存在`];
+    try {
+      const out = gitQuiet(this.cwd, ['worktree', 'list', '--porcelain'], { timeout: 30000 });
+      const wantBranch = `branch refs/heads/${BRANCH_PREFIX}${name}`;
+      let curPath = null;
+      let regHit = null;
+      for (const line of String(out || '').split('\n')) {
+        if (line.startsWith('worktree ')) curPath = line.slice('worktree '.length).trim();
+        else if (curPath && line.trim() === wantBranch) { regHit = curPath; break; }
+      }
+      if (regHit) {
+        candidates.push(`git 分支探针: 分支 ${BRANCH_PREFIX}${name} 注册于 ${regHit} —— 命中`);
+        return { hit: { path: regHit, via: `git worktree list 分支 ${BRANCH_PREFIX}${name} 注册路径` }, candidates };
+      }
+      candidates.push(`git 分支探针: git worktree list 无分支 ${BRANCH_PREFIX}${name} 注册`);
+    } catch {
+      candidates.push(`git 分支探针: git worktree list 失败（fail-open 视为未命中）`);
+    }
+    try {
+      const alt = join(resolveRuntimeRoot(null, join(this.cwd, '.sillyspec')), 'worktrees', name);
+      if (existsSync(alt)) {
+        candidates.push(`runtimeRoot 口径目录探针: ${alt} 存在 —— 命中`);
+        return { hit: { path: alt, via: `resolveRuntimeRoot 口径目录 ${alt}` }, candidates };
+      }
+      candidates.push(`runtimeRoot 口径目录探针: ${alt} 不存在`);
+    } catch {
+      candidates.push('runtimeRoot 口径目录探针: 解析失败（fail-open 视为未命中）');
+    }
+    return { hit: null, candidates };
+  }
+
   cleanup(changeName, { force = false, maxRetries = 3 } = {}) {
     const name = validateChangeName(changeName);
     const meta = this.getMeta(name);
-    const worktreePath = this.getWorktreePath(name);
+    let worktreePath = this.getWorktreePath(name);
     const metaDir = join(this.worktreeBase, name);
     const details = [];
 
-    // 幂等：什么都不存在 → 直接跳过
+    // 幂等：什么都不存在 → 直接跳过。
+    // ql-20260915-003 修复②（坑 cleanup-meta-fallback）：meta 缺失时不轻信「三缺 = 什么都不
+    // 存在」——先跑 _probeWorktreeRemnants 兜底（git 注册路径 + resolveRuntimeRoot 口径目录），
+    // 任一命中 → 不走早退，按命中路径继续清理（mode 推断 'worktree'，details 记兜底依据）；
+    // 全不命中才跳过，跳过结果带 probePaths 探针清单（CLI 诊断式输出 + doctor 指引）。
     if (!meta && !existsSync(worktreePath) && !existsSync(metaDir)) {
-      return { result: 'skipped', mode: null, details };
+      const probes = this._probeWorktreeRemnants(name);
+      if (probes.hit) {
+        worktreePath = probes.hit.path;
+        const note = `meta 缺失，目录/分支探测兜底（命中：${probes.hit.via}）`;
+        details.push(note);
+        console.warn(`⚠️ ${note}`);
+      } else {
+        return { result: 'skipped', mode: null, details, probePaths: probes.candidates };
+      }
     }
 
     const mode = meta?.mode || 'worktree';
@@ -1076,7 +1179,11 @@ export class WorktreeManager {
     if (!force) {
       const check = this.hasUnappliedChanges(name);
       if (check.hasChanges) {
-        console.error(`🚫 worktree cleanup 拒绝：${check.changedFiles.length} 个交付变更未落地主工作区 HEAD，清理会丢失代码。`);
+        // ql-20260915-003 修复② 配套：no-meta fail-closed 拦截时 changedFiles 为空，裸报
+        // 「0 个交付变更」让人误解——0 文件时改报无法判定的原因（保守保留语义不变）。
+        console.error(check.changedFiles.length > 0
+          ? `🚫 worktree cleanup 拒绝：${check.changedFiles.length} 个交付变更未落地主工作区 HEAD，清理会丢失代码。`
+          : `🚫 worktree cleanup 拒绝：无法判定交付是否已全部落地（${check.reason || 'meta 缺失，保守保留'}），保守不清理。`);
         for (const f of check.changedFiles) console.error(`   ${f}`);
         console.error('   请先落地（sillyspec worktree apply <name>）或 commit 到分支，或显式 --force 强制清理。');
         return { result: 'blocked', mode, details: [...details, 'blocked: uncommitted deliverable changes'], residual: [] };
@@ -1097,6 +1204,11 @@ export class WorktreeManager {
     if (!isInPlace && existsSync(worktreePath)) {
       unlinkNodeModulesLinks(worktreePath, meta, details)
     }
+
+    // ql-20260915-003 修复①（坑 junction-foreign-ownership）：cleanup 时同款清扫主仓
+    // node_modules——把本 worktree（及其他历史 worktree）可能遗留的反向链接一并清，
+    // 否则污染 junction 永久滞留主仓，直到下次人工 --force 重装依赖才发现。
+    this._sweepMainForeignJunctionLinks('worktree cleanup', details);
 
     // 1. git worktree remove（带 retry）—— in-place 跳过：无 git worktree 注册，且 worktreePath 即主工作区
     let gitRemoveOk = false;

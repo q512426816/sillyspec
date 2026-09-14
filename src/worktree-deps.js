@@ -13,8 +13,8 @@
  * node 校验与 java 校验各说各话。新生态补一行表项即可；表外项目落 generic → n/a 不阻断。
  */
 
-import { existsSync, readFileSync, realpathSync, lstatSync, readdirSync, unlinkSync } from 'fs';
-import { join, isAbsolute, relative, resolve as resolvePath, sep as pathSep } from 'path';
+import { existsSync, readFileSync, realpathSync, lstatSync, readdirSync, readlinkSync, unlinkSync } from 'fs';
+import { join, dirname, isAbsolute, relative, resolve as resolvePath, sep as pathSep } from 'path';
 import { fileURLToPath } from 'url';
 import { execFileSync } from 'child_process';
 import { createHash } from 'crypto';
@@ -388,6 +388,86 @@ function isSafeModulePath(p) {
 }
 
 /**
+ * resolved 路径是否严格位于 root 目录之下（不含 root 自身）。win32 大小写不敏感比较由
+ * path.win32.relative 自带（与 detectEditableInstallEscape 的越界判定同口径）。
+ */
+function isUnderDir(child, root) {
+  if (!child || !root) return false;
+  const rel = relative(resolvePath(root), resolvePath(child));
+  return rel !== '' && !rel.startsWith('..') && !isAbsolute(rel);
+}
+
+/**
+ * ql-20260915-003 修复①（坑 junction-foreign-ownership，2026-09-15 用户实证：主仓
+ * frontend/node_modules 内部发现 junction 指向 session-export worktree 的 .pnpm——跨会话
+ * node_modules 污染，apply 后被迫 --force 重装）。
+ *
+ * 归属判定：链接方向 wt/node_modules → main 是 SillySpec 的正确设计（worktree 共享主仓
+ * 依赖）；反向——main node_modules 内出现指向 .sillyspec/.runtime/worktrees/ 之下目标的
+ * junction/symlink——是 install 兜底/包管理器穿透写坏留下的污染，任何合法流程都不依赖它，
+ * 一律视为外来（foreign）。pnpm 自建的包链接（node_modules/&lt;pkg&gt; → 同 node_modules 内
+ * .pnpm/...）与全局 store 链接目标都不在 worktrees 区之下，零误伤。
+ *
+ * 扫描口径：main 的 node_modules（根 + 各子模块 node_modules）**顶层目录项**——单层
+ * readdir+lstat，不递归 .pnpm 内部（顶层已覆盖包链接；递归大仓 node_modules 的性能与
+ * 误删面都不可接受）。子模块清单：submodules 直传相对路径列表，或给 specBase 自动读
+ * local.yaml modules 块。
+ *
+ * 删除安全：junction/symlink 删除不跟随目标（win32 cmd /c rmdir / POSIX unlinkSync——与
+ * worktree.js unlinkNodeModulesLinks :82 同款安全删法）；单个清理失败 fail-open 记入
+ * failed 不阻断（清扫是治理动作，不拦主流程）。
+ *
+ * @param {string} mainDir 主仓根目录（node_modules 所在）
+ * @param {{ worktreesRoot?: string, specBase?: string|null, submodules?: string[]|null, dryRun?: boolean, onlyUnder?: string|null }} opts
+ *   - worktreesRoot 外来边界：resolved target 落在其下才算外来（缺省直接空手而归）
+ *   - submodules 为 null 且给了 specBase 时，自动读 local.yaml modules 块补子模块清单
+ *   - dryRun=true 只报清单零写盘
+ *   - onlyUnder 进一步收窄：只认 target 落在该目录之下的（install 兜底前只清指向本 worktree 的）
+ * @returns {{ foreign: Array<{link: string, target: string}>, removed: Array<{link: string, target: string}>, failed: Array<{link: string, error: string}> }}
+ *   dryRun 时 foreign=将清清单、removed/failed 恒空；非 dryRun 时 removed=实际已清、failed=清理失败
+ */
+export function sweepForeignNodeModulesJunctions(mainDir, { worktreesRoot, specBase = null, submodules = null, dryRun = false, onlyUnder = null } = {}) {
+  const result = { foreign: [], removed: [], failed: [] };
+  if (!mainDir || !worktreesRoot || !existsSync(mainDir)) return result;
+  let mods = submodules;
+  if (mods === null && specBase) mods = extractModulePaths(readLocalYaml(specBase, null));
+  const nmDirs = [join(mainDir, 'node_modules')];
+  for (const sp of Array.isArray(mods) ? mods : []) {
+    if (!isSafeModulePath(sp)) continue;
+    nmDirs.push(join(mainDir, sp, 'node_modules'));
+  }
+  for (const nmDir of nmDirs) {
+    let names;
+    try { names = readdirSync(nmDir); } catch { continue; } // 目录不存在/不可读 → 该层跳过
+    for (const nm of names) {
+      const linkPath = join(nmDir, nm);
+      let st;
+      try { st = lstatSync(linkPath); } catch { continue; }
+      if (!st.isSymbolicLink()) continue; // junction（reparse point）与 symlink 的 lstat 均报 isSymbolicLink
+      let target;
+      try { target = readlinkSync(linkPath); } catch { continue; }
+      // 相对 target（pnpm 自建包链接常态）相对链接所在目录解析
+      const resolved = resolvePath(dirname(linkPath), target);
+      if (!isUnderDir(resolved, worktreesRoot)) continue;
+      if (onlyUnder && !isUnderDir(resolved, onlyUnder)) continue;
+      result.foreign.push({ link: linkPath, target: resolved });
+      if (dryRun) continue;
+      try {
+        if (process.platform === 'win32') {
+          execFileSync('cmd.exe', ['/c', 'rmdir', linkPath], { stdio: ['pipe', 'pipe', 'pipe'] });
+        } else {
+          unlinkSync(linkPath);
+        }
+        result.removed.push({ link: linkPath, target: resolved });
+      } catch (e) {
+        result.failed.push({ link: linkPath, error: e.message });
+      }
+    }
+  }
+  return result;
+}
+
+/**
  * 对单个子模块目录 tryLink main 的 node_modules → wt 的 node_modules（modules 子模块专用）。
  * 仅走 link 快路径（不 install——子模块 install 慢且易失败；lockfile 不一致时交给用户 pnpm install）。
  * lockfile 一致才 link，避免误链不匹配的 deps。
@@ -464,6 +544,24 @@ export function provisionDeps(worktreePath, mainCwd, opts = {}) {
     }
     if (!linked) {
       // 兜底：install
+      // ql-20260915-003 修复①（坑 junction-foreign-ownership）防再犯：install 在 worktree cwd
+      // 执行，若 main node_modules 内残留指向**本次 worktree** 的外来 junction，包管理器会经
+      // 反向链接穿透写坏主仓 node_modules（2026-09-15 实证的污染源头）——先清再装。
+      // 只清指向本 worktree 的（onlyUnder），全量治理交给 create/cleanup 挂点
+      // （worktree.js _sweepMainForeignJunctionLinks）。
+      if (mainCwd && existsSync(join(mainCwd, 'node_modules'))) {
+        try {
+          const preSweep = sweepForeignNodeModulesJunctions(mainCwd, {
+            worktreesRoot: resolvePath(mainCwd, '.sillyspec', '.runtime', 'worktrees'),
+            submodules: extractModulePaths(yamlText),
+            onlyUnder: worktreePath,
+          });
+          if (preSweep.removed.length > 0) {
+            console.warn(`⚠️ install 前清理：主仓 node_modules 内检测到指向本 worktree 的外来 junction（坑 junction-foreign-ownership），已移除 ${preSweep.removed.length} 个`);
+            for (const r of preSweep.removed) console.warn(`   ${r.link} → ${r.target}`);
+          }
+        } catch { /* 清扫自身异常 fail-open，交 install 自然暴露问题 */ }
+      }
       const installResult = tryInstall(installCmd, worktreePath, timeout);
       result = installResult.ok
         ? { depsStatus: 'installed', depsMethod: 'install', depsSource: 'install', depsLockHash: wtHash }

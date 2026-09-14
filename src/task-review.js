@@ -10,6 +10,7 @@
 
 import { existsSync, readFileSync, mkdirSync, writeFileSync, readdirSync, statSync } from 'fs'
 import { join, resolve, basename, dirname } from 'path'
+import { execFileSync } from 'child_process'
 import { git, unquoteGitPath } from './git-helper.js'
 import { pathMatches } from './change-list.js'
 import { parseAllowedPaths, parseRepo, parseBaseCommit, parseHeadCommit } from './stages/plan-postcheck.js'
@@ -1822,6 +1823,89 @@ export async function adoptTaskReviewMechanics({ changeName, cwd, platformOpts =
  * @param {object} [opts.platformOpts]
  * @returns {Promise<{ok: boolean, reviewPath?: string, executeRunId?: string, errors: string[], warnings: string[]}>}
  */
+// ── ql-20260915-003 修复③（坑 interrupted-residue-detect，2026-09-15 用户实证：中断的
+// execute 子代理在工作区留下半成品 import 语法坏文件，无自动检测靠人工 diff 发现）──
+//
+// 对 changedFiles 中的 .js/.mjs/.cjs 逐个 `node --check`（子进程数组形式不经 shell，单文件
+// 5s 超时；总数 >60 抽样前 60 并提示——大变更全量查的耗时不可接受）。
+//
+// 判定分层（Node v24 实测：.js 的 file-check 受最近 package.json type 影响——无 type 时
+// ESM 半成品可能静默通过、合法 ESM 又会报 import 语句误错）：
+//   - .mjs/.cjs：file-check 权威（对应 module/commonjs 全量解析）
+//   - .js：file-check **与** stdin `--input-type=module` check 双跑，两者都报 SyntaxError
+//     才判残留（合法 ESM / 合法 CJS（含 sloppy-mode）必有一路通过，零假阳；真断档半成品
+//     两路都挂）。stdin check 不可用/无 SyntaxError 字样 → fail-open 跳过该文件。
+//
+// 语法失败 → 返回「疑似中断残留」warning（advisory：只提醒，不改 verdict / 勾选语义 /
+// 落盘行为——quick --done 的 test/lint 实测硬门才是卡点，这里补「中断半成品」的可见性）。
+// 文件在候选根下不存在（diff 里的删除态文件等）直接跳过；超时（e.killed）无法定论不报警。
+// 仅 review write 时点执行一次，非热路径。
+const SYNTAX_CHECK_EXT_RE = /\.(?:js|mjs|cjs)$/
+const SYNTAX_CHECK_MAX_FILES = 60
+// 严格 .js（.mjs/.cjs 也 endsWith('.js')，须排除——否则 sloppy-mode .cjs 会误入 stdin ESM
+// 复核路径产生假阳）
+const isPlainJs = (f) => f.endsWith('.js') && !f.endsWith('.mjs') && !f.endsWith('.cjs')
+function _syntaxErrLine(e) {
+  const raw = String((e.stderr && e.stderr.toString()) || e.message || '')
+  const line = raw.split('\n').find(l => l.includes('SyntaxError'))
+  return line ? line.trim() : null
+}
+function detectInterruptedSyntaxResidue(changedFiles, candidateRoots) {
+  const warnings = []
+  const jsFiles = (Array.isArray(changedFiles) ? changedFiles : [])
+    .filter(f => typeof f === 'string' && SYNTAX_CHECK_EXT_RE.test(f))
+  if (jsFiles.length === 0) return warnings
+  const overCap = jsFiles.length > SYNTAX_CHECK_MAX_FILES
+  for (const f of overCap ? jsFiles.slice(0, SYNTAX_CHECK_MAX_FILES) : jsFiles) {
+    let abs = null
+    for (const root of candidateRoots) {
+      if (!root) continue
+      const p = join(root, f)
+      if (existsSync(p)) { abs = p; break }
+    }
+    if (!abs) continue
+    try {
+      execFileSync(process.execPath, ['--check', abs], { timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'] })
+      if (isPlainJs(f)) {
+        // 无 type:module 上下文的 .js：file-check 通过不代表语法完整（Node v24 实测假阴），
+        // 再跑 stdin ESM 全量解析兜底——两路都挂才判残留
+        let src = ''
+        try { src = readFileSync(abs, 'utf8') } catch { continue }
+        try {
+          execFileSync(process.execPath, ['--input-type=module', '--check'], { input: src, timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'] })
+        } catch (e2) {
+          if (e2 && e2.killed) continue
+          const line = _syntaxErrLine(e2)
+          if (!line) continue // 非 SyntaxError（如版本不支持 stdin check）→ fail-open
+          warnings.push(`⚠️ 疑似中断残留：${f} 语法错误（${line}）——子代理异常退出可能留下半成品，请 diff 该文件确认还原或补完`)
+        }
+      }
+    } catch (e) {
+      if (e && e.killed) continue // 单文件超时：无法定论，不产假阳 warning
+      if (!isPlainJs(f)) {
+        const line = _syntaxErrLine(e)
+        if (line) warnings.push(`⚠️ 疑似中断残留：${f} 语法错误（${line}）——子代理异常退出可能留下半成品，请 diff 该文件确认还原或补完`)
+        continue
+      }
+      // .js file-check 挂可能是模块口径误错（合法 ESM 在无 type 上下文报 import 语句）——
+      // stdin ESM 解析仲裁：也挂才算真残留
+      let src = ''
+      try { src = readFileSync(abs, 'utf8') } catch { continue }
+      try {
+        execFileSync(process.execPath, ['--input-type=module', '--check'], { input: src, timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'] })
+      } catch (e2) {
+        if (e2 && e2.killed) continue
+        const line = _syntaxErrLine(e2) || _syntaxErrLine(e)
+        if (line) warnings.push(`⚠️ 疑似中断残留：${f} 语法错误（${line}）——子代理异常退出可能留下半成品，请 diff 该文件确认还原或补完`)
+      }
+    }
+  }
+  if (overCap) {
+    warnings.push(`⚠️ 中断残留检测抽样：changedFiles 含 ${jsFiles.length} 个 .js 系文件，仅语法检查前 ${SYNTAX_CHECK_MAX_FILES} 个（interrupted-residue-detect）`)
+  }
+  return warnings
+}
+
 export async function writeTaskReview({
   changeName, cwd, taskId, specVerdict, qualityVerdict,
   reviewerNotes = '', requiredEvidence = [],
@@ -1968,6 +2052,15 @@ export async function writeTaskReview({
       }
     }
   }
+
+  // ── ql-20260915-003 修复③（坑 interrupted-residue-detect）：changedFiles 定稿后的
+  // 语法检查（advisory warning，见 detectInterruptedSyntaxResidue 注释）。候选根依次试
+  // reviewGitDir（meta 活跃时的 worktree 根）、cwd、worktree-branch 归因的孤儿目录兜底。
+  for (const w of detectInterruptedSyntaxResidue(changedFiles, [
+    reviewGitDir,
+    cwd,
+    join(cwd, '.sillyspec', '.runtime', 'worktrees', changeName),
+  ])) warnings.push(w)
 
   // ── 组装 + schema 自检 + 落盘 ──
   const review = {
