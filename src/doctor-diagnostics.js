@@ -24,6 +24,7 @@
  */
 import { openDatabase, pluckGet, pluckAll } from './db-engine.js';
 import { safeGit } from './git-helper.js';
+import { createHash } from 'crypto';
 import { existsSync, statSync, readFileSync, readdirSync, mkdirSync, writeFileSync, unlinkSync, rmSync } from 'fs';
 import { join, relative, resolve, dirname } from 'path';
 import { gitQuiet } from './git-helper.js'
@@ -909,6 +910,124 @@ function detectDecisionDrift(cwd) {
 }
 
 /**
+ * apply-manifest 漂移检测（task-03 / FR-04 / D-005@v1，2026-09-14-apply-conflict-hardening）。
+ *
+ * 背景：apply 落地的交付文件可被并行会话的工作区级 git 操作（restore/clean 类）冲掉
+ * （troubleshooting §64），apply 成功尾声由 writeApplyManifest 落 apply-manifest.json
+ * 指纹（文件→sha256），本检查消费该指纹做 apply 后丢失/篡改检测。
+ *
+ * 扫描面（R-03 对齐）：活跃 changes/<变更目录>/apply-manifest.json ∪ 归档
+ * changes/archive/<变更目录>/apply-manifest.json 两目录 glob 统一收集（目录移动即换
+ * 扫描桶，manifest 自身 change
+ * 字段仅作显示名），按 appliedAt 降序取前 5。
+ *
+ * 哈希口径（design 接口定义定案）：manifest 的 sha256 = staged blob 内容（LF 规范态）。
+ * staged 态 = git show :<path> 内容直接 sha256（与写侧天然同基）；worktree 态 =
+ * readFile 后 CRLF→LF 归一（latin1 往返保字节）再算——防 autocrlf=true 工作区 CRLF
+ * 与 blob LF 恒异误报。git blob hash 是 sha1，与指纹 sha256 异构不可直比，故两态均
+ * 自算内容 sha256。approx:true 条目（写侧 staged 不可用、指纹取自磁盘的 fail-open 面）
+ * 跳过 staged 比对——指纹基不是 staged，比了必然误报。
+ *
+ * 三分支判定（advisory / WARNING，不阻断 doctor 既有退出码语义）：
+ *   ①worktree≠manifest → 落盘面漂移（丢失/被改）；②staged≠manifest → 暂存面漂移
+ *   （index 被动过）；③盘上与暂存区皆无 → 丢失。
+ * 单文件/单 manifest 异常 fail-open 跳过（坏一个文件不炸整个 doctor）；无 manifest
+ * 零告警（skipped）；doctor 只读不写。
+ */
+function detectApplyManifestDrift(cwd, specDir) {
+  const base = { name: 'apply_manifest_drift', label: 'apply 交付指纹漂移', safe_actions: [] }
+  try {
+    if (!specDir) {
+      return { ...base, findings: ['无权威 spec 目录，跳过 apply 指纹面——skipped'], pass: true, severity: null, skipped: true }
+    }
+    // 两桶 glob 收集：活跃 changes/ + 归档 changes/archive/
+    const manifests = []
+    let malformed = 0
+    const buckets = [join(specDir, 'changes')]
+    for (const bucket of buckets) {
+      if (!existsSync(bucket)) continue
+      // 归档桶（R-03：归档后补 apply 的 manifest 写在 archive/ 下，一并入扫描面）
+      const scanDirs = [{ dir: bucket, skip: 'archive' }]
+      const archiveDir = join(bucket, 'archive')
+      if (existsSync(archiveDir)) scanDirs.push({ dir: archiveDir, skip: null })
+      for (const { dir, skip } of scanDirs) {
+        let entries
+        try { entries = readdirSync(dir, { withFileTypes: true }) } catch { continue }
+        for (const e of entries) {
+          if (!e.isDirectory() || (skip && e.name === skip)) continue
+          const manifestPath = join(dir, e.name, 'apply-manifest.json')
+          if (!existsSync(manifestPath)) continue
+          try {
+            const m = JSON.parse(readFileSync(manifestPath, 'utf8').replace(/^\uFEFF/, ''))
+            if (!m || !Array.isArray(m.files)) { malformed++; continue }
+            manifests.push({ dirName: e.name, change: typeof m.change === 'string' && m.change ? m.change : e.name, appliedAt: m.appliedAt, files: m.files })
+          } catch { malformed++; continue } // 单 manifest 坏（JSON/形状）→ fail-open 跳过
+        }
+      }
+    }
+    if (manifests.length === 0) {
+      const findings = ['无 apply-manifest.json（无 apply 指纹面）——skipped']
+      if (malformed > 0) findings.push(`${malformed} 份 manifest 不可解析已跳过`)
+      return { ...base, findings, pass: true, severity: null, skipped: true }
+    }
+    // appliedAt 降序取前 5（最新 apply 优先；不可解析时间戳沉底）
+    manifests.sort((a, b) => (Date.parse(b.appliedAt) || 0) - (Date.parse(a.appliedAt) || 0))
+    const scanned = manifests.slice(0, 5)
+    const findings = []
+    let checked = 0
+    for (const m of scanned) {
+      for (const ent of m.files) {
+        if (!ent || typeof ent.path !== 'string' || typeof ent.sha256 !== 'string') continue // 坏条目跳过
+        checked++
+        const short = (h) => (h || '').slice(0, 8)
+        // worktree 态：readFile 后 CRLF→LF 归一（latin1 往返保字节，防 autocrlf 误报）
+        let worktreeHash = null
+        try {
+          const raw = readFileSync(join(cwd, ent.path))
+          worktreeHash = createHash('sha256')
+            .update(Buffer.from(raw.toString('latin1').replace(/\r\n/g, '\n'), 'latin1'))
+            .digest('hex')
+        } catch { /* 盘上无 → 丢失分支候选 */ }
+        // staged 态：git show :<path> buffer 直接 sha256（staged blob 即 LF 规范态，与写侧同基）
+        let stagedHash = null
+        const blob = gitQuiet(cwd, ['show', `:${ent.path}`], { encoding: 'buffer', timeout: 15000 })
+        if (Buffer.isBuffer(blob)) stagedHash = createHash('sha256').update(blob).digest('hex')
+        const tag = `${m.change}×${ent.path}`
+        if (worktreeHash === null && stagedHash === null) {
+          findings.push(`${tag} 丢失（盘上与暂存区皆无；期望 ${short(ent.sha256)}）`)
+          continue
+        }
+        if (worktreeHash !== null && worktreeHash !== ent.sha256) {
+          findings.push(`${tag} 落盘面漂移（期望 ${short(ent.sha256)} 实际 ${short(worktreeHash)}）`)
+        }
+        if (!ent.approx && stagedHash !== null && stagedHash !== ent.sha256) {
+          findings.push(`${tag} 暂存面漂移（期望 ${short(ent.sha256)} 实际 ${short(stagedHash)}）`)
+        }
+      }
+    }
+    if (malformed > 0) findings.push(`${malformed} 份 manifest 不可解析已跳过`)
+    if (findings.length === 0) {
+      return { ...base, findings: [`apply 指纹面一致（最近 ${scanned.length} 份 manifest × ${checked} 文件零漂移）`], pass: true, severity: CHECK_SEVERITY.PASSED }
+    }
+    return {
+      ...base,
+      findings,
+      pass: false,
+      severity: CHECK_SEVERITY.WARNING,
+      safe_actions: [{
+        dimension: 'apply_manifest_drift',
+        action: 'inspect_drifted_files',
+        risk: 'manual_edit',
+        rationale: 'apply 落地文件与指纹不符（丢失/被改/暂存区被动过）',
+        next_step: '对照 worktree（唯一可信源）逐文件判定直拷/手并，落地后立即 git add -- <files> 提交锁定',
+      }],
+    }
+  } catch (e) {
+    return { ...base, findings: [`探测降级（${e?.message || e}）——skipped`], pass: true, severity: null, skipped: true }
+  }
+}
+
+/**
  * renderDoctorSummary（FR-01，全新输出契约——2026-09-09-doctor-noai）：逐维
  * ✅/⚠️/❌ + label + findings 首行 + safe_actions 提示行。顶层非 --json 命令与
  * _cliAction 步共用。
@@ -955,7 +1074,10 @@ export async function runDoctorDiagnostics({ cwd }) {
   const worktreeHealth = detectWorktreeHealth(cwd)
   const buildEnv = detectBuildEnv(cwd)
   const mcpEndpoints = detectMcpEndpoints(cwd)
-  const dimensions = [multiDb, pointerHealth, changesSplit, changeDb, executeMismatch, docBloat, repoNativeChain, lifecycleDoc, worktreeHealth, buildEnv, mcpEndpoints];
+  // task-03（2026-09-14-apply-conflict-hardening）：apply-manifest 漂移（advisory，
+  // 扫描面走权威 specDir 定位链，git/文件内容比对走 cwd 主仓面）
+  const applyManifestDrift = detectApplyManifestDrift(cwd, authoritySpecDir)
+  const dimensions = [multiDb, pointerHealth, changesSplit, changeDb, executeMismatch, docBloat, repoNativeChain, lifecycleDoc, worktreeHealth, buildEnv, mcpEndpoints, applyManifestDrift];
 
   return {
     dimensions,

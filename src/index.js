@@ -2672,7 +2672,7 @@ SillySpec worktree — git worktree 隔离管理
 
 用法:
   sillyspec worktree create <change-name> [--base <branch>] [--adopt-branch]   创建隔离 worktree（--adopt-branch：收编既有同名分支为工作分支，分支现状作 baseline）
-  sillyspec worktree apply <change-name> [--check-only] [--base merge-base|baseline] [--merge] [--skip-overlap] [--stash-dirty]   校验并应用变更到主工作区（--stash-dirty：主仓在途改动自动 stash→apply→恢复，SHA 兜底可审计）
+  sillyspec worktree apply <change-name> [--check-only] [--base merge-base|baseline] [--merge] [--skip-overlap] [--stash-dirty] [--force]   校验并应用变更到主工作区（--stash-dirty：主仓在途改动自动 stash→apply→恢复，SHA 兜底可审计；--force：越过活跃 quick 会话 guard 相交预检，overlapForced 留痕）
   sillyspec worktree assess <change-name>                     风险审计 + 自动 apply
   sillyspec worktree diff <change-name> [--base <commit>]      查看 worktree 相对 base 的变更
   sillyspec worktree list                                      列出所有活跃 worktree
@@ -2720,13 +2720,14 @@ SillySpec worktree — git worktree 隔离管理
         }
         case 'apply': {
           if (!wtName) {
-            console.error('❌ 用法: sillyspec worktree apply <change-name> [--check-only] [--base merge-base|baseline] [--merge] [--skip-overlap] [--stash-dirty]');
+            console.error('❌ 用法: sillyspec worktree apply <change-name> [--check-only] [--base merge-base|baseline] [--merge] [--skip-overlap] [--stash-dirty] [--force]');
             process.exit(1);
           }
           const checkOnly = args.includes('--check-only');
           const merge = args.includes('--merge');
           const skipOverlap = args.includes('--skip-overlap');
           const stashDirty = args.includes('--stash-dirty');
+          const force = args.includes('--force'); // guard 相交预检显式解锁（task-02 / FR-03；人工 flag，自动路径永不带）
 
           // 解析 --base 参数（默认 merge-base）
           let base = 'merge-base';
@@ -2757,8 +2758,8 @@ SillySpec worktree — git worktree 隔离管理
           let result;
           try {
             result = checkOnly
-              ? applyWorktree(wtName, { cwd: dir, checkOnly, merge, base, ctx: _applyCtx, skipOverlap, stashDirty })
-              : await withMainRepoLock(dir, wtName, 'apply', () => applyWorktree(wtName, { cwd: dir, checkOnly, merge, base, ctx: _applyCtx, skipOverlap, stashDirty }));
+              ? applyWorktree(wtName, { cwd: dir, checkOnly, merge, base, ctx: _applyCtx, skipOverlap, stashDirty, force })
+              : await withMainRepoLock(dir, wtName, 'apply', () => applyWorktree(wtName, { cwd: dir, checkOnly, merge, base, ctx: _applyCtx, skipOverlap, stashDirty, force }));
           } catch (lockErr) {
             console.error(`❌ ${lockErr.message}`);
             process.exit(1);
@@ -2901,12 +2902,16 @@ SillySpec worktree — git worktree 隔离管理
             // 主仓互斥锁（与手动 apply 同款）：自动 apply 同样改主仓工作区，必须互斥
             let applyResult;
             try {
-              applyResult = await withMainRepoLock(dir, wtName, 'assess-auto-apply', () => applyWorktree(wtName, { cwd: dir, ctx: _assessCtx }));
+              applyResult = await withMainRepoLock(dir, wtName, 'assess-auto-apply', () => applyWorktree(wtName, { cwd: dir, ctx: _assessCtx, autoApply: true }));
             } catch (lockErr) {
               console.error(`❌ 自动 apply 未执行：${lockErr.message}`);
               break;
             }
-            if (applyResult.errors.length > 0) {
+            if (applyResult.overlapSkipped) {
+              // guard 相交软跳过（task-02 / FR-03）：无人值守不越权也不阻断审计流——不落盘，亮 warning 指引人工评估
+              for (const w of applyResult.warnings || []) console.log(`⚠️  ${w}`);
+              console.log('   → 人工评估后显式 apply: sillyspec worktree apply ' + wtName + '（确认与活跃 quick 会话无冲突；或等对方 --done 后重跑 assess）');
+            } else if (applyResult.errors.length > 0) {
               console.error('❌ apply 失败:', applyResult.errors.join('; '));
             } else {
               console.log(`✅ 已自动应用 ${applyResult.changedFiles.length} 个文件变更：`);

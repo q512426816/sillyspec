@@ -747,26 +747,74 @@ const GUARD_CLAIM_STALE_MS = 7 * 24 * 60 * 60 * 1000
  * @param {number} [nowMs] 当前时间戳（可注入，测试用）
  * @returns {Map<string, string[]>} qlId → 预留该 ID 的 sessionId 列表
  */
+/**
+ * 遍历 quick-sessions 目录，按同一僵尸窗口口径读各会话 guard.json（collectGuardReservedQuicklogIds
+ * 与 collectActiveQuickGuardFiles 共用，活跃判定勿分叉）：guard.json 损坏/缺失 → guard=null 保留
+ * 条目（消费方各自决定跳过或视为空声明）；startedAt 可解析且超 GUARD_CLAIM_STALE_MS → 僵尸剔除。
+ *
+ * @param {string} dir quick-sessions 目录
+ * @param {number} [nowMs] 当前时间戳（可注入，测试用）
+ * @returns {Array<{sessionId: string, guard: object|null}>}
+ */
+function listQuickSessionGuards(dir, nowMs = Date.now()) {
+  const out = []
+  let sessionDirs = []
+  try {
+    sessionDirs = readdirSync(dir, { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name)
+  } catch { return out } // 目录不存在/不可读 → 无会话
+  for (const sessionName of sessionDirs) {
+    let guard = null
+    try { guard = JSON.parse(readFileSync(join(dir, sessionName, 'guard.json'), 'utf8')) } catch { guard = null } // 损坏/缺失 → null
+    if (guard && guard.startedAt) {
+      const startedAtMs = Date.parse(guard.startedAt)
+      if (Number.isFinite(startedAtMs) && nowMs - startedAtMs > GUARD_CLAIM_STALE_MS) continue // 僵尸不活跃
+    }
+    out.push({ sessionId: sessionName, guard })
+  }
+  return out
+}
+
 export function collectGuardReservedQuicklogIds(specBase, sessionsDirHint = null, nowMs = Date.now()) {
   const out = new Map()
   try {
     const dir = sessionsDirHint || join(specBase, '.runtime', 'quick-sessions')
-    let sessionDirs = []
-    try {
-      sessionDirs = readdirSync(dir, { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name)
-    } catch { return out } // 目录不存在/不可读 → 无预留
-    for (const sessionName of sessionDirs) {
-      let guard = null
-      try { guard = JSON.parse(readFileSync(join(dir, sessionName, 'guard.json'), 'utf8')) } catch { continue } // 损坏/缺失跳过
+    for (const { sessionId, guard } of listQuickSessionGuards(dir, nowMs)) {
       if (!guard || typeof guard.quicklogId !== 'string' || !guard.quicklogId) continue
-      if (guard.startedAt) {
-        const startedAtMs = Date.parse(guard.startedAt)
-        if (Number.isFinite(startedAtMs) && nowMs - startedAtMs > GUARD_CLAIM_STALE_MS) continue // 僵尸不钉号
-      }
       if (!out.has(guard.quicklogId)) out.set(guard.quicklogId, [])
-      out.get(guard.quicklogId).push(sessionName)
+      out.get(guard.quicklogId).push(sessionId)
     }
   } catch { /* fail-open：采集失败等同无预留 */ }
+  return out
+}
+
+/**
+ * 采集各活跃 quick 会话 guard.json 声明的 allowedFiles（apply 前 guard 相交预检，FR-03 / D-002@v1）。
+ *
+ * 活跃口径与 collectGuardReservedQuicklogIds 同源（listQuickSessionGuards）：guard 目录存在即活跃
+ * （quick --done 完成时清理 guard 目录，完成态天然退出），超 7 天僵尸窗口（GUARD_CLAIM_STALE_MS，
+ * 异常残留不钉死）剔除。勿用 changes.last_active 判活跃（非周期心跳，D-002）。
+ *
+ * @param {string} specBase .sillyspec 根目录
+ * @param {{ excludeChange?: string|null, sessionsDir?: string|null, nowMs?: number }} [opts]
+ *   - excludeChange：排除自身 change 的 quick 会话——sessionId == changeName（quick 会话 id 即
+ *     change 名）或 guard.linkedChanges 显式关联该 change 的协作会话（自己人，非拦截面）
+ *   - sessionsDir：quick-sessions 目录（缺省 <specBase>/.runtime/quick-sessions）
+ *   - nowMs：当前时间戳（可注入，测试用）
+ * @returns {Map<string, string[]>} sessionId → guard.allowedFiles（无 guard/无声明 → 空数组；fail-open）
+ */
+export function collectActiveQuickGuardFiles(specBase, { excludeChange = null, sessionsDir = null, nowMs = Date.now() } = {}) {
+  const out = new Map()
+  try {
+    const dir = sessionsDir || join(specBase, '.runtime', 'quick-sessions')
+    for (const { sessionId, guard } of listQuickSessionGuards(dir, nowMs)) {
+      if (excludeChange && (sessionId === excludeChange
+        || (guard && Array.isArray(guard.linkedChanges) && guard.linkedChanges.includes(excludeChange)))) continue
+      const allowed = (guard && Array.isArray(guard.allowedFiles))
+        ? guard.allowedFiles.filter(f => typeof f === 'string' && f.length > 0)
+        : []
+      out.set(sessionId, allowed)
+    }
+  } catch { /* fail-open：采集失败等同无活跃 guard（不放大拦截面） */ }
   return out
 }
 

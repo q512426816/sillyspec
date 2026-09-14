@@ -15,12 +15,14 @@
 import { existsSync, unlinkSync, writeFileSync, mkdtempSync, rmSync, readdirSync, readFileSync, mkdirSync } from 'fs';
 import { join, resolve } from 'path';
 import { tmpdir } from 'os';
+import { createHash } from 'crypto';
 import { WorktreeManager } from './worktree.js';
 import { getCrossWorktreeMeta, cleanupCrossWorktrees } from './worktree-cross.js';
 import { parseFileChangeList, parseFileChangeListDetailed, pathMatches } from './change-list.js';
 import { parseAllowedPaths, parseRepo } from './stages/plan-postcheck.js';
-import { git, gitQuiet } from './git-helper.js';
+import { git, gitQuiet, safeGit } from './git-helper.js';
 import { resolveLatestExecuteRunId, resolveLatestExecuteRunIdWithTasks, readReview, normalizeRepoKey } from './task-review.js';
+import { collectActiveQuickGuardFiles } from './quicklog.js';
 
 const CHANGES_REL = '.sillyspec/changes';
 
@@ -151,7 +153,24 @@ export function mergeDirtyOverlapThreeWay({ projectRoot, worktreePath, baseHash 
   } finally {
     try { rmSync(tmpDir, { recursive: true, force: true }) } catch {}
   }
-  return { merged, conflicts }
+  // 批末统一暂存（task-01 / FR-01 / D-001@v1 前半，2026-09-14-apply-conflict-hardening）：
+  // 本写回点曾是全链路唯一未暂存的自动写点——未暂存文件对主仓工作区级 git 操作
+  // （restore / clean / checkout）零免疫（§64 事故的实际缺口）。对全部 clean 写回文件
+  // 显式 pathspec git add（safeGit 数组形式不经 shell；chunkPaths 分批防 Windows argv
+  // 上限，批 D-③ 同款）。fail-open：add 失败不抛（合并成果保留），console.warn 留痕 +
+  // 返回 stagedOk:false——manifest 侧对该批文件自动回退 readFile+归一 approx 口径。
+  let stagedOk = true
+  if (merged.length > 0) {
+    for (const batch of chunkPaths(merged)) {
+      const r = safeGit(projectRoot, ['add', '--', ...batch])
+      if (r && r.error) {
+        stagedOk = false
+        console.warn(`⚠️ merge 写回批末 git add 失败（fail-open：${merged.length} 个合并文件成果保留，但未暂存对 git restore/clean 不免疫，请尽快人工 git add）：${String(r.error).split('\n')[0]}`)
+        break
+      }
+    }
+  }
+  return { merged, conflicts, stagedOk }
 }
 
 export function generateRescueCommands({ changedFiles, dirtyFiles, hashMismatchFiles, deletedFiles = [], worktreePath, projectRoot }) {
@@ -183,6 +202,15 @@ export function generateRescueCommands({ changedFiles, dirtyFiles, hashMismatchF
     }
     commands.push(`cp "${join(worktreePath, f).replace(/\\/g, '/')}" "${join(projectRoot, f).replace(/\\/g, '/')}"`);
     cpFileCount++;
+  }
+
+  // D-003@v1（task-01，2026-09-14-apply-conflict-hardening）：rescue 是人工落地路径，落地文件
+  // 不进 manifest 也不自动暂存——主仓工作区级 git 操作（restore/clean/checkout）可静默冲掉
+  // 未暂存落地（§64 事故实际路径）。commands 末尾追加一行「落地后立即 git add 锁定」指引
+  // （# 注释形态，整块复制粘贴仍是合法 shell；纯文案，commands/warnings 结构语义与
+  // cpFileCount/excludedCount 口径不变；commands 为空 = 无可落地文件，不加指引）。
+  if (commands.length > 0) {
+    commands.push(`# 全部执行后立即 git add -- <上方 cp 落地的各文件路径> 锁定暂存区（staged 对 git restore / git clean 免疫，防止并行会话的工作区级操作冲掉刚落地的文件；rm 删除的文件无需 add）`);
   }
 
   return { commands, warnings, cpFileCount, excludedCount };
@@ -375,6 +403,97 @@ function _silentPointerSpecRoot(projectRoot) {
 }
 
 /**
+ * apply 成功尾声写 apply-manifest.json（task-01 / FR-02 / D-001@v1 后半，
+ * 2026-09-14-apply-conflict-hardening）。
+ *
+ * 目的：apply 后交付文件在主仓被并行会话的工作区级 git 操作冲掉（新文件删除/修改回退）时
+ * 靠指纹可检测（doctor 漂移检查项消费，Wave 3）。CLI 全权写（agent 勿手改，verify-facts
+ * 同款契约）；rescue 人工落地文件不进 manifest（design 非目标边界）。
+ *
+ * 哈希口径（design 接口定义定案，AGENTS.md 规则 13 Windows 兼容）：**staged blob 内容**
+ * （git show :<path>，autocrlf 归一后的 LF 规范态）——写侧在 git add / apply --3way（隐含
+ * --index）之后取值，与 doctor 的 staged 态比对天然同基。文件未进暂存（如 merge 写回批末
+ * add 失败的 fail-open 面）→ 回退 readFile 后 CRLF→LF 归一计算（latin1 往返保字节），条目
+ * 加 approx:true 标记；staged 与磁盘皆无（apply 删除的文件——无内容可指纹）→ 不进 manifest。
+ *
+ * 落点：<changeDir>/apply-manifest.json（resolveActiveOrArchiveChangeDir 归档感知——与
+ * resolveApplyAllowSet 同源，归档后补 apply 的重放写在归档目录）。已存在则覆盖（重放 apply
+ * 以最新为准）。manifest 落 .sillyspec/changes/ 面 → filterDeliverableFiles 排除，不构成
+ * apply 交付物、不进自身 files。
+ *
+ * 本函数自身不 catch 写失败（交调用方 fail-open warning）；files 为空时跳过不写（无落盘面
+ * 的成功出口不产 manifest，doctor 按存在性跳过）。
+ *
+ * @param {{ projectRoot: string, specBase?: string, changeName: string, baseHash?: string, files: string[] }} args
+ *   specBase 缺省时与 resolveApplyAllowSet 同链回退（指针 specRoot > 本地 .sillyspec）；
+ *   baseHash 记 apply 锚点（deliverableBase 语义：baselineCommit || baseHash）
+ * @returns {{ written: boolean, file?: string, files: Array<{path:string, sha256:string, approx?:true}>, skipped?: string }}
+ */
+function writeApplyManifest({ projectRoot, specBase, changeName, baseHash, files }) {
+  const face = [...new Set((Array.isArray(files) ? files : []).filter(Boolean))];
+  if (face.length === 0) return { written: false, files: [], skipped: 'empty-files' };
+  const base = specBase || _silentPointerSpecRoot(projectRoot) || join(projectRoot, '.sillyspec');
+  const changeDir = resolveActiveOrArchiveChangeDir(base, changeName);
+  const entries = [];
+  for (const f of face) {
+    let sha256 = null;
+    let approx = false;
+    try {
+      // staged blob（LF 规范态）：encoding buffer 保二进制原样；不在 index（删除/未 add）→ 抛错走回退
+      const blob = git(projectRoot, ['show', `:${f}`], { encoding: 'buffer', timeout: 15000 });
+      sha256 = createHash('sha256').update(blob).digest('hex');
+    } catch {
+      try {
+        const raw = readFileSync(join(projectRoot, f));
+        // CRLF→LF 归一（latin1 往返保字节，防 utf8 解码破坏二进制内容）
+        const norm = Buffer.from(raw.toString('latin1').replace(/\r\n/g, '\n'), 'latin1');
+        sha256 = createHash('sha256').update(norm).digest('hex');
+        approx = true;
+      } catch { continue; } // staged 与磁盘皆无（apply 删除面）→ 无内容可指纹，不进 manifest
+    }
+    entries.push(approx ? { path: f, sha256, approx: true } : { path: f, sha256 });
+  }
+  const manifest = {
+    schemaVersion: 1,
+    change: changeName,
+    appliedAt: new Date().toISOString(),
+    baseHash: baseHash || null,
+    files: entries,
+  };
+  mkdirSync(changeDir, { recursive: true });
+  const manifestPath = join(changeDir, 'apply-manifest.json');
+  writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
+  return { written: true, file: manifestPath, files: entries };
+}
+
+/**
+ * guard 相交预检（task-02 / FR-03 / D-002@v1，内部函数）。
+ *
+ * 活跃 quick 会话 guard.allowedFiles 与本次 apply 实际落盘集求交集——非空说明本变更文件正被
+ * 并行 quick 会话声明在途改动，此刻 apply 会互冲（2026-09-14 实证事故：apply 交付文件被并行
+ * 会话工作区 git 操作冲掉）。交集口径：字符串等值（guard.allowedFiles 与 changedFiles 同为
+ * 仓库根相对路径）。无活跃会话/无声明/交集空 → blocked=false（零行为变化）。
+ *
+ * @param {{ activeGuards: Map<string, string[]>, applyFiles: string[], selfChange?: string }} p
+ *   - activeGuards：collectActiveQuickGuardFiles 产物（已按 excludeChange 排除自身）
+ *   - applyFiles：changedFiles∪newPatchFiles（result 实际字段口径）
+ *   - selfChange：防御性再排除（sessionId == 本次 changeName 不拦自身）
+ * @returns {{ overlaps: Array<{sessionId: string, file: string}>, blocked: boolean }}
+ */
+function checkGuardOverlap({ activeGuards, applyFiles, selfChange }) {
+  const overlaps = [];
+  const fileSet = new Set((applyFiles || []).filter(Boolean));
+  if (!activeGuards || fileSet.size === 0) return { overlaps, blocked: false };
+  for (const [sessionId, allowedFiles] of activeGuards) {
+    if (selfChange && sessionId === selfChange) continue;
+    for (const f of (allowedFiles || [])) {
+      if (fileSet.has(f)) overlaps.push({ sessionId, file: f });
+    }
+  }
+  return { overlaps, blocked: overlaps.length > 0 };
+}
+
+/**
  * 收集最新 execute run 各 task review.json 的 changedFiles 声明 → Map<repoKey, string[]>。
  *
  * 坑 apply-undeclared-deviation-block（2026-08-24 用户反馈四期③）：执行期有据越界文件
@@ -510,9 +629,12 @@ function validateCrossRepoNoOp(ctx, projectRoot, changeName) {
  * 可清，wm.cleanup 只作用于主仓 worktree）。主仓 task 走原 A5 完整 apply 不动（GOAL-2 单仓零回归）。
  *
  * @param {string} changeName - 变更名
- * @param {{ cwd?: string, checkOnly?: boolean, merge?: boolean, ctx?: object }} opts
+ * @param {{ cwd?: string, checkOnly?: boolean, merge?: boolean, ctx?: object, force?: boolean, autoApply?: boolean }} opts
  *   - ctx：可选 MultiRepoContext（design §7.1）。缺省=单仓退化（仅主仓 apply，零行为变化，GOAL-2）。
  *     提供 ctx 且含跨仓 entry 时，触发跨仓 no-op 校验（校验 review.head 真实 + 不 cleanup 跨仓）。
+ *   - force（task-02 / FR-03）：guard 相交预检命中时显式放行并留痕 result.overlapForced（仅人工 CLI --force）。
+ *   - autoApply（task-02 / FR-03）：assess 自动入口置 true——相交命中软跳过（result.overlapSkipped + warning，
+ *     不抛错不落盘）；自动路径永不 force。
  * @returns {{
  *   ok: boolean,
  *   changedFiles: string[],
@@ -765,7 +887,7 @@ function applyCrossRepoWorktrees(changeName, projectRoot, ctx, { checkOnly = fal
   return out;
 }
 
-export function applyWorktree(changeName, { cwd, checkOnly = false, merge = false, base = 'merge-base', ctx = null, skipOverlap = false, stashDirty = false } = {}) {
+export function applyWorktree(changeName, { cwd, checkOnly = false, merge = false, base = 'merge-base', ctx = null, skipOverlap = false, stashDirty = false, force = false, autoApply = false } = {}) {
   const projectRoot = cwd || process.cwd();
   const wm = new WorktreeManager({ cwd: projectRoot });
   const meta = wm.getMeta(changeName);
@@ -982,6 +1104,52 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
     }
   }
 
+  // --- 4.3 guard 相交预检（task-02 / FR-03 / D-002@v1）：活跃 quick 会话 guard.allowedFiles ∩ 本次落盘集 ---
+  // 内嵌 applyWorktree 主流程：CLI apply（index.js apply 分支）与 assess 自动 apply（index.js assess
+  // 分支）全经此覆盖；真实 apply 由调用方 withMainRepoLock 包裹——判定与落盘同在锁内，无 TOCTOU。
+  // 位置在一切主仓写动作之前（4.4 stash / 4.5 合并写回 / 4.6 --merge / step7 patch / ENOBUFS 降级）。
+  // applyFiles=changedFiles∪newPatchFiles：newPatchFiles⊆patchFiles⊆changedFiles（resolvePatchFiles
+  // 是 changedFiles 的过滤），并集即 changedFiles∪patchFiles，此处显式两集合并忠于 result 实际字段口径。
+  // specBase/sessionsDir 复用上方 allowlist 同一解析链（allowSpecBase > 平台指针 > 本地），勿新造配置读取。
+  // checkOnly 只读零写盘 → 跳过（零行为变化）。无活跃会话/无声明/交集空 → 全段空转零路径变化。
+  if (!checkOnly) {
+    const guardSpecBase = allowSpecBase || _silentPointerSpecRoot(projectRoot) || join(projectRoot, '.sillyspec');
+    const guardSessionsDir = allowRuntimeRoot ? join(allowRuntimeRoot, 'quick-sessions') : undefined;
+    const activeGuards = collectActiveQuickGuardFiles(guardSpecBase, { excludeChange: changeName, sessionsDir: guardSessionsDir });
+    const guardApplyFiles = [...new Set([...changedFiles, ...resolvePatchFiles(changedFiles, allowSet, hasAllowList)])];
+    const guardCheck = checkGuardOverlap({ activeGuards, applyFiles: guardApplyFiles, selfChange: changeName });
+    if (guardCheck.blocked) {
+      const sessions = [...new Set(guardCheck.overlaps.map(o => o.sessionId))];
+      const files = [...new Set(guardCheck.overlaps.map(o => o.file))];
+      const pairLines = guardCheck.overlaps.map(o => `  [${o.sessionId}] ${o.file}`);
+      if (force) {
+        // 显式解锁：放行并留痕（审计可见——自动路径永不带 force，overlapForced 只可能来自人工 --force）
+        result.overlapForced = { sessions, files };
+        result.warnings = (result.warnings || []).concat([
+          `--force 越过 guard 相交预检：${guardCheck.overlaps.length} 个会话×文件对与活跃 quick 会话声明重叠——` +
+          pairLines.join('；') + `（对方会话在途改动可能被覆盖，overlapForced 留痕）`
+        ]);
+      } else if (autoApply) {
+        // 软跳过：无人值守不越权（不落地互冲）也不阻断审计流——不抛错，指引人工评估
+        result.overlapSkipped = true;
+        result.warnings = (result.warnings || []).concat([
+          `自动 apply 软跳过（未落盘）：${files.length} 个文件与活跃 quick 会话在途声明重叠——` +
+          pairLines.join('；') + `——请人工评估后显式 sillyspec worktree apply ${changeName}（确认无冲突），或等对方会话 --done 后重试`
+        ]);
+        return result; // 安全返回：result.ok 保持 false，主仓零写动作（本预检位于一切写动作之前）
+      } else {
+        // 人工 CLI 入口（fail-closed）：结构化错误含会话×文件对清单 + 串行化指引 + --force 提示
+        result.errors.push(
+          `guard 相交拦截：本次 apply 文件与 ${sessions.length} 个活跃 quick 会话的在途声明重叠（会话×文件对）：\n` +
+          pairLines.join('\n') +
+          `\n串行化指引：等对方会话 sillyspec run quick --done 完成（guard 目录随之清理）后重试；` +
+          `或确认无实际冲突后显式解锁：sillyspec worktree apply ${changeName} --force（overlapForced 留痕）`
+        );
+        return result; // index.js apply 分支对 result.errors 走 exit 1 展示
+      }
+    }
+  }
+
   // --- 4.4 --stash-dirty：主仓在途改动自动 stash（坑 apply-main-dirty-no-first-class， ---
   // 2026-08-24 用户反馈四期①：主仓并行在途改动下默认 / --skip-overlap（全重叠「无可应用子集」）/
   // --merge（git 拒在脏树启动合并）三路死锁，手工 stash→3way→pop 流程未内置。flag 显式 opt-in
@@ -1023,7 +1191,7 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
     // 用 --merge 时跳过未提交 dirty 拦截——merge 同样要求工作区相对干净，此处仅提示风险，真正失败由 applyByMerge 报告。
     // keepConflicts:true——显式 --merge 冲突时保留现场供手工解决（不再直接 abort 丢上下文）。
     if (merge && !checkOnly) {
-      return applyByMerge(result, changeName, projectRoot, wm, { keepConflicts: true });
+      return applyByMerge(result, changeName, projectRoot, wm, { keepConflicts: true, specBase: allowSpecBase });
     }
 
     // --- 4.5 校验：主工作区「未提交」脏文件是否与本次变更重叠（overlap-only 拦截）---
@@ -1068,6 +1236,13 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
               const m3 = mergeDirtyOverlapThreeWay({ projectRoot, worktreePath, baseHash: deliverableBase }, overlapDirty);
               if (m3.merged.length > 0) {
                 result.mergedDirtyFiles = (result.mergedDirtyFiles || []).concat(m3.merged);
+                if (m3.stagedOk === false) {
+                  // 批末 git add fail-open 留痕（task-01 / FR-01）：写回成功但未暂存——result 面
+                  // 可见（console.warn 已在 mergeDirtyOverlapThreeWay 内打），提示人工补 add。
+                  result.warnings = (result.warnings || []).concat([
+                    `EXCLUDE-DIRTY 三方合并 ${m3.merged.length} 个文件已写回主仓，但批末 git add 暂存失败（未暂存对 git restore / git clean 不免疫）——请尽快人工 git add -- <该批文件> 锁定`
+                  ]);
+                }
                 const mergedSet = new Set(m3.merged);
                 changedFiles = changedFiles.filter(f => !mergedSet.has(f));
                 result.changedFiles = changedFiles;
@@ -1259,6 +1434,21 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
       if (patchContent.length === 0) {
         // patch 为空（清单中部分文件可能没实际变更）
         result.ok = true;
+        // apply-manifest（task-01 出口③变体）：4.5 三方合并全部消解重叠时，merge 写回面是
+        // 本出口唯一落盘面——manifest 仍须覆盖（写回批末 add 已先行，指纹取 staged 态）。
+        if ((result.mergedDirtyFiles || []).length > 0) {
+          try {
+            const mf = writeApplyManifest({
+              projectRoot, specBase: allowSpecBase, changeName,
+              baseHash: deliverableBase, files: result.mergedDirtyFiles,
+            });
+            if (mf && mf.written) result.applyManifest = mf.file;
+          } catch (e) {
+            result.warnings = (result.warnings || []).concat([
+              `apply-manifest.json 写入失败（不影响 apply 结果；doctor 漂移检测将按无 manifest 跳过）: ${(e.message || '').split('\n')[0]}`
+            ]);
+          }
+        }
         rmSync(tmpDir, { recursive: true, force: true });
         return result;
       }
@@ -1308,6 +1498,26 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
       }
 
       result.ok = true;
+
+      // --- 7.2 apply 成功尾声写 apply-manifest.json（task-01 / FR-02 / D-001@v1 后半）---
+      // 三条成功出口之一（patch 主路径；含 4.5 三方合并写回后主流程继续至此的出口③）。指纹
+      // 口径 = staged blob（git show :<path> 的 LF 规范态——apply --3way 隐含 --index 已暂存，
+      // merge 写回批末 add 亦已先行）→ 与 doctor 漂移检测的 staged 态比对天然同基。files 面 =
+      // patch 实际落盘集 ∪ 4.5 三方合并写回集（mergeDirtyFiles 已从 changedFiles 剔除，须并回）；
+      // apply 删除的文件 staged/磁盘皆无，函数内自然跳过。fail-open：写失败不阻断 apply
+      // （warning 留痕）。已存在则覆盖（重放 apply 以最新为准）。锁内（调用方 withMainRepoLock）。
+      try {
+        const manifestFace = [...new Set([...patchFiles, ...(result.mergedDirtyFiles || [])])];
+        const mf = writeApplyManifest({
+          projectRoot, specBase: allowSpecBase, changeName,
+          baseHash: deliverableBase, files: manifestFace,
+        });
+        if (mf && mf.written) result.applyManifest = mf.file;
+      } catch (e) {
+        result.warnings = (result.warnings || []).concat([
+          `apply-manifest.json 写入失败（不影响 apply 结果；doctor 漂移检测将按无 manifest 跳过）: ${(e.message || '').split('\n')[0]}`
+        ]);
+      }
 
       // --- 7.5 提交复用 pathspec（坑 apply-commit-pathspec-sweep，2026-08-21 实证）---
       // apply 后主仓常混有无关未提交文件（他者会话/并行 quick），agent 习惯 `git add <目录>/`
@@ -1361,7 +1571,7 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
         );
         try {
           // keepConflicts:false——自动降级路径无人善后冲突状态，维持 abort 回滚干净态
-          return applyByMerge(result, changeName, projectRoot, wm, { keepConflicts: false });
+          return applyByMerge(result, changeName, projectRoot, wm, { keepConflicts: false, specBase: allowSpecBase });
         } catch (mergeErr) {
           result.errors.push(`ENOBUFS 降级 merge 也失败: ${mergeErr.message}`);
           return result;
@@ -1715,8 +1925,11 @@ function preAlignBaselineToMain({ meta, branch, projectRoot, result }) {
 //     git add + git commit；或 git merge --abort 放弃）。worktree/分支/meta 本就保留。
 //   false（ENOBUFS 自动降级路径，默认）→ 维持 abort——自动降级无人善后冲突状态，回滚到
 //     干净态让用户显式重来更安全。
+// opts.specBase（task-01，2026-09-14-apply-conflict-hardening）：applyWorktree 调用方透传的
+//   spec 基准目录（平台模式 ctx.platformOpts.specRoot），成功尾声 writeApplyManifest 用；缺省
+//   时函数内同链回退（指针 specRoot > 本地 .sillyspec）——外部直接调用零必填。
 export function applyByMerge(result, changeName, projectRoot, wm, opts = {}) {
-  const { keepConflicts = false } = opts;
+  const { keepConflicts = false, specBase } = opts;
   const meta = wm.getMeta(changeName);
   const changedFiles = result.changedFiles || [];
   // 用 meta.branch（native-worktree 模式分支名可能不是 sillyspec/<change>），不硬编码。
@@ -1793,6 +2006,23 @@ export function applyByMerge(result, changeName, projectRoot, wm, opts = {}) {
   }
 
   result.ok = true;
+  // apply 成功尾声写 apply-manifest.json（task-01 出口②：applyWorktree 显式 --merge 与
+  // ENOBUFS 自动降级两条提前 return 入口共用本成功出口）。merge 已 commit → staged 态 =
+  // HEAD = 合并内容，指纹口径（git show :<path> LF 规范态）与 patch 路径同基；files 面 =
+  // changedFiles（落地校验过的交付集）∪ mergedDirtyFiles（ENOBUFS 路径下 4.5 可能已写回），
+  // merge 删除面 staged/磁盘皆无、函数内自然跳过。fail-open：写失败不阻断 merge（warning 留痕）。
+  try {
+    const manifestFace = [...new Set([...(result.changedFiles || []), ...(result.mergedDirtyFiles || [])])];
+    const mf = writeApplyManifest({
+      projectRoot, specBase, changeName,
+      baseHash: meta.baselineCommit || meta.baseHash, files: manifestFace,
+    });
+    if (mf && mf.written) result.applyManifest = mf.file;
+  } catch (e) {
+    result.warnings = (result.warnings || []).concat([
+      `apply-manifest.json 写入失败（不影响 merge 结果；doctor 漂移检测将按无 manifest 跳过）: ${(e.message || '').split('\n')[0]}`
+    ]);
+  }
   try { result.mergeSummary = git(projectRoot, ['log', '--oneline', '-1']); } catch {}
   try {
     consumeCleanupResult(wm.cleanup(changeName, { force: true }), result);

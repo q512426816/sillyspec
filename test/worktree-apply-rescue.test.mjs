@@ -75,9 +75,12 @@ console.log('--- A1: 四分类基本（SAFE-CP / EXCLUDE-DIRTY / EXCLUDE-MISMATC
     worktreePath: '/wt',
     projectRoot: '/pr',
   })
-  assertTrue(r.commands.length === 2, `commands 数=2（1 cp + 1 rm），实际 ${r.commands.length}`)
-  assertTrue(r.commands[0] === 'cp "/wt/a.js" "/pr/a.js"', `commands[0]=SAFE-CP（cp a.js），实际: ${r.commands[0]}`)
-  assertTrue(r.commands[1] === 'rm "/pr/d.js"', `commands[1]=DELETE（rm d.js），实际: ${r.commands[1]}`)
+  // task-01 rescue 输出新增 # 指引行（D-003，落地后 git add 锁定）——精确计数改为过滤 # 注释行后计
+  const actionCmds = r.commands.filter(c => !c.startsWith('#'))
+  assertTrue(actionCmds.length === 2, `有效命令数=2（1 cp + 1 rm，# 指引行不计），实际 ${r.commands.length}`)
+  assertTrue(actionCmds[0] === 'cp "/wt/a.js" "/pr/a.js"', `commands[0]=SAFE-CP（cp a.js），实际: ${actionCmds[0]}`)
+  assertTrue(actionCmds[1] === 'rm "/pr/d.js"', `commands[1]=DELETE（rm d.js），实际: ${actionCmds[1]}`)
+  assertTrue(r.commands.some(c => c.startsWith('#') && c.includes('git add')), '末尾含 # 指引行（落地后 git add 锁定，D-003）')
   assertTrue(r.warnings.length === 2, `warnings 数=2（b.js EXCLUDE-DIRTY + c.js EXCLUDE-MISMATCH），实际 ${r.warnings.length}`)
   assertTrue(r.warnings.some(w => w.includes('b.js') && w.includes('EXCLUDE-DIRTY')), 'warnings 含 b.js EXCLUDE-DIRTY')
   assertTrue(r.warnings.some(w => w.includes('c.js') && w.includes('EXCLUDE-MISMATCH')), 'warnings 含 c.js EXCLUDE-MISMATCH')
@@ -95,7 +98,8 @@ console.log('--- A2: DELETE 优先级（同文件命中 deleted+dirty+mismatch �
     worktreePath: '/wt',
     projectRoot: '/pr',
   })
-  assertTrue(r.commands.length === 1 && r.commands[0] === 'rm "/pr/x.js"', `DELETE 最优先 → 只 rm x.js，实际: ${r.commands.join(';')}`)
+  const actionCmds = r.commands.filter(c => !c.startsWith('#'))
+  assertTrue(actionCmds.length === 1 && actionCmds[0] === 'rm "/pr/x.js"', `DELETE 最优先 → 只 rm x.js（# 指引行不计），实际: ${actionCmds.join(';')}`)
   assertTrue(r.warnings.length === 0, '不计 EXCLUDE-DIRTY / EXCLUDE-MISMATCH（warnings=0）')
   assertTrue(r.cpFileCount === 0, 'cpFileCount=0')
   assertTrue(r.excludedCount === 0, 'excludedCount=0（DELETE 不算 excluded）')
@@ -119,8 +123,9 @@ console.log('--- A4: 路径正斜杠（Windows 风格入参 → commands 路径�
     dirtyFiles: [], hashMismatchFiles: [], deletedFiles: [],
     worktreePath: winWt, projectRoot: winPr,
   })
-  assertTrue(r.commands.length === 1, `commands 数=1，实际 ${r.commands.length}`)
-  const cmd = r.commands[0]
+  const actionCmds = r.commands.filter(c => !c.startsWith('#'))
+  assertTrue(actionCmds.length === 1, `有效命令数=1（# 指引行不计），实际 ${r.commands.length}`)
+  const cmd = actionCmds[0]
   assertTrue(cmd.indexOf(BS) === -1, `command 路径无反斜杠（Git Bash cp 兼容），实际: ${cmd}`)
   assertTrue(cmd.includes('a.js') && cmd.startsWith('cp '), 'command 形如 cp "...a.js" "..."')
 }
