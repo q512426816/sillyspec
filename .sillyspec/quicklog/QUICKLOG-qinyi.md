@@ -158,3 +158,22 @@
 方案：troubleshooting §64 落档四段：护栏=①merge 写回补显式 pathspec git add+apply-manifest.json 指纹+rescue 提示补立即锁定 ②apply 前重叠检测升 fail-closed（文件集用活跃 quick guard.json --files 相交判定，勿用 last_active 当心跳）③所有权登记暂不做记 ROADMAP；盲区如实声明。顺带 docs check --fix 清偿本变更提交造成的 4 处活文档行号漂移
 结果：troubleshooting §64 落盘；docs check exit 0 零失效；纯文档无需测试；护栏三条可直接作 brainstorm 输入
 审计：[gate] L1（跨 0 模块 · 4 文件：0 代码/0 测试）advisory；每文件注记缺失（--file-notes 覆盖变更文件全集）；测试增量不适用（≤1 代码文件）
+
+## ql-20260914-011-be6b | 2026-09-14 13:56:24 | 模块域门禁三条 UX 修复（幻觉报错自足/NEW: 规则预告/收尾元数据告警按变更隔离）
+状态：已完成
+关联变更：（无）
+文件：
+- src/design-facts.js（幻觉 ERROR 消息自足（map 路径+id 示例）+ locateIdInSiblingProjects 兄弟项目归属消歧，仍 fail-closed）
+- src/run/gates.js（validateMetadata 增 changeName 按变更隔离（本变更逐列/他变更折叠汇总），缺省历史行为不变）
+- src/stages/brainstorm.js（step8 decisions.md 模板后补可选字段说明（NEW: 写法+勿读他子项目 map））
+- docs/prompt/brainstorm.md（_sync 镜像同步，附带收敛 3 处此前会话积压的 prompt 漂移（变更名 exit2 提示×2/Design Grill 无子代理降级））
+- docs/prompt/_extracted.json（_extract 再生产物）
+- test/design-facts.test.mjs（新增 2 用例（ERROR 消息自足/兄弟项目 map 归属消歧））
+- test/validate-metadata-scope.test.mjs（新建 9 用例（隔离折叠/缺省回退/零输出））
+- docs/sillyspec/prompt-control-debt.md（L219 行号重锚（gates.js:1190→1209、1346→1365））
+需求：模块域门禁三条 UX 修复（幻觉报错自足/NEW: 规则预告/收尾元数据告警按变更隔离）
+根因：用户实跑反馈三连——①模块域核验 ERROR 只说补录 map 不说哪张 map 合法，多项目仓 agent 按占位提示读子项目 map 拿回不认的 id 撞死胡同 ②NEW: 前缀规则只写在 step6 模板而门禁挂 step8 --done，step8 的 decisions.md 格式模板九字段无一预告，属先撞墙才知道的隐性契约 ③阶段收尾元数据告警整仓扫 changes/ 只按 10 分钟窗过滤，并行会话（session-export）文件逐条混入本变更输出易误读
+方案：①design-facts.js 幻觉 ERROR 内嵌解析出的 map 完整路径+合法 id 示例（≤5 全列+总数），新增 locateIdInSiblingProjects 查兄弟项目 map——id 属他子项目时报归属与「只认当前项目 map」（语义不变仍 ERROR 拦）②brainstorm.js step8 decisions.md 围栏后补可选字段 blockquote（锚点/模块域/否决理由/复潮条件；模块域含 NEW: 冒号后不加空格写法+多项目仓勿读他子项目 map），_extract/_sync/_verify 镜像同步 ③gates.js validateMetadata 增 changeName 参（completeStageGates 传入）——本变更目录逐列、其他变更目录折叠一行汇总（目录名×计数+并行会话忽略/同批包补录处置提示），changeName 缺省保持历史全量逐列
+结果：npm test 全量绿——design-facts 118 用例 0 失败（新增 2——消息自足/兄弟项目消歧），新建 validate-metadata-scope 9 用例 0 失败；lint 602 文件 0 问题；docs check 本会话引用 0 失效（prompt-control-debt L219 行号重锚 1190→1209/1346→1365；余 2 失效属并行会话 apply-conflict-hardening 在途变更非本会话产物）
+审计：[gate] L2（跨 5 模块 · 11 文件：5 代码/3 测试）advisory；模块文档认领缺失（同步模块卡进改动集，或 --no-docs 显式豁免）
+审计：⚖️ 归属切分：3 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：src/index.js, src/scan-postcheck.js, test/scan-refresh.test.mjs

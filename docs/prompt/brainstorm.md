@@ -279,7 +279,7 @@
 1. 简单项目：几句话整体描述
 2. 复杂项目：按模块/Phase 分段展示，每段 200-300 字
 3. 展示完整设计方案（不要逐段停顿，一次性展示）
-4. 确认变更名（格式：`YYYY-MM-DD-<简短描述>`，例如 `2026-05-13-user-auth`）
+4. 确认变更名（格式：`YYYY-MM-DD-<简短描述>`，例如 `2026-05-13-user-auth`——CLI 已强制：新建/改名不带日期前缀直接 exit 2）
 5. 按「HTML 原型分级」生成原型或写出跳过原因（二选一必填，见下）
 6. 暂停等待用户确认或修改意见
 
@@ -313,7 +313,7 @@
 
 ### 注意
 - 不要一次输出大段文字，按模块/Phase 分段
-- 变更名必须以当天日期开头（YYYY-MM-DD-），后跟英文短横线分隔的简短描述
+- 变更名必须以当天日期开头（YYYY-MM-DD-），后跟英文短横线分隔的简短描述（CLI 强制：不合规 exit 2）
 ````
 
 ---
@@ -405,7 +405,7 @@ design.md 第一行标题必须用中文：# 设计文档（Design）— <变更
 
 ### 操作
 1. 确认变更目录存在：`mkdir -p {SPEC_ROOT}/changes/<change-name>`（Windows 用 `mkdir {SPEC_ROOT}/changes\<变更名>` 或 PowerShell `New-Item -ItemType Directory -Force -Path {SPEC_ROOT}/changes/<change-name>`）
-   - 变更名格式必须为 `YYYY-MM-DD-<简短描述>`（如 `2026-05-13-user-auth`）
+   - 变更名格式必须为 `YYYY-MM-DD-<简短描述>`（如 `2026-05-13-user-auth`；CLI 强制，不合规 exit 2）
 2. 将确认的设计写入 `{SPEC_ROOT}/changes/<change-name>/design.md`——优先跑 `sillyspec design-init --change <change-name>` 生成骨架再填散文（决策追踪表已按 decisions.md 当前版本预填，逐行补覆盖点后把「待确认」改「已覆盖」；文件清单表骨架就位）；存量手写路径仍合法（design-init 对已存在的 design.md 不覆盖）
 3. 对账整理 `{SPEC_ROOT}/changes/<change-name>/decisions.md`（「对话式探索」「提出方案」步已按增量规则随答落盘，本步做对账而非从零写入）：
    - decisions.md 是本次变更的决策台账，不是长期术语表
@@ -464,6 +464,7 @@ design.md 文件路径 + 自审结果
 tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
 - tier=self：当前 agent 直接执行下方交叉审查（小变更）
 - tier=independent：必须用 Agent tool 启动一个独立的设计审查子代理（独立上下文，不共享你的分析与倾向），子代理按下方"交叉审查模型"审查 design.md 并输出 review.json。review.json 产物契约（CLI Stage Review Gate 将硬校验，schema + 完整示例 + docHash 算法如下，照抄改值）:
+  宿主环境无 Agent tool 可用（调用报 Unknown agent / Available agents: none）→ 不卡死：主代理切换为审查者角色自审替代，reviewerNotes 首行记录「降级：环境无子代理可用」，逐条结论附源码锚点（file:line 或 grep/read 证据）补偿独立性。
 {REVIEW_JSON_CONTRACT}
   子代理只产出 review + Unresolved Blockers，**是否调用 sillyspec run brainstorm --wait 仍由你（主 agent）根据其 verdict 决定**（子代理不直接操作 CLI 状态机）。
 
@@ -690,6 +691,8 @@ created_at: <now-datetime>
 - impacts: [FR-01, task-01, verify-01]
 - evidence: 用户回答轮次或代码/文档路径
 ```
+
+> 可选字段（按需另加，旧格式决策缺这些字段不受影响）：**锚点**（决策落点主文件，`<src 路径>:<行号或符号>`；status=confirmed 时必填）；**模块域**（决策涉及的模块 ID，可多个逗号分隔——合法 id 只取**当前变更所属项目**的 `{SPEC_ROOT}/docs/<project>/modules/_module-map.yaml`，多项目仓勿读其他子项目的 map（核验不认，报错会点名归属）；规划中的新模块用 `NEW:<名>` 前缀声明，冒号后不加空格：`NEW:foo` 合法、`NEW: foo` 属书写错误。本步 --done 的模块域核验对不认识的 id 直接阻断）；**否决理由**（status=rejected 时必填）；**复潮条件**（status=rejected 时必填）。
 
 ### 后续变更包处理
 如果 MASTER.md 中规划了后续变更包（拆分后的子阶段），**必须同时为每个后续包创建独立变更目录**：

@@ -215,6 +215,35 @@ console.log('--- 幻觉模块 ERROR（接线红路径·函数级：errors 非空
   assert(r.skipped === undefined, '非 skipped 路径无 skipped 字段')
 }
 
+console.log('--- 幻觉 ERROR 消息自足：内嵌 map 路径 + 合法 id 示例（2026-09-14 quick 反馈①）---')
+{
+  const { changeDir, specRoot, project } = buildValidationFixture({
+    decisions: '## D-001@v1 域声明\n- type: architecture\n- status: confirmed\n- 模块域: [mod-a, ghost-mod]\n',
+    mapYaml: MAP_YAML,
+  })
+  const r = validateDecisionModuleRefs({ changeDir, specRoot, project })
+  assert(r.ok === false && r.errors.length === 1, '幻觉模块仍恰一条 ERROR（消息增强不改分级）')
+  const e = r.errors[0]
+  assert(e.includes('docs/demo/modules/_module-map.yaml'), 'ERROR 内嵌解析出的 map 完整路径（含项目名，堵读错 map）')
+  assert(e.includes('mod-a、mod-b') && e.includes('共 2 个'), 'ERROR 附合法 id 示例与总数（≤5 个全列）')
+}
+
+console.log('--- id 命中兄弟项目 map → 归属消歧（报子项目名与路径，仍 fail-closed）---')
+{
+  const { changeDir, specRoot, project } = buildValidationFixture({
+    decisions: '## D-001@v1 域声明\n- type: architecture\n- status: confirmed\n- 模块域: workspace\n',
+    mapYaml: MAP_YAML,
+  })
+  // 兄弟项目 subproj 的 map 注册了 workspace——模拟多项目仓 agent 误读子项目 map 的反馈场景
+  mkdirSync(join(specRoot, 'docs', 'subproj', 'modules'), { recursive: true })
+  writeFileSync(join(specRoot, 'docs', 'subproj', 'modules', '_module-map.yaml'), 'modules:\n  workspace:\n    paths: [packages/ws/]\n')
+  const r = validateDecisionModuleRefs({ changeDir, specRoot, project })
+  assert(r.ok === false && r.errors.length === 1, '跨项目 id 不放行（语义不变，仍 ERROR 拦）')
+  assert(r.errors[0].includes('子项目 subproj') && r.errors[0].includes('docs/subproj/modules/_module-map.yaml'),
+    'ERROR 报出真实归属项目与其 map 路径（agent 不必再猜哪张 map 合法）')
+  assert(r.errors[0].includes('只认当前项目 docs/demo/modules/_module-map.yaml'), 'ERROR 点明本次核验只认当前项目 map')
+}
+
 console.log('--- NEW: 前缀豁免 / 裸 NEW:（冒号后带空格）书写 ERROR ---')
 {
   const { changeDir, specRoot, project } = buildValidationFixture({

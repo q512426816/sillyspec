@@ -1,0 +1,138 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-f82da281",
+  "totals": {
+    "files": 8,
+    "additions": 177,
+    "deletions": 16
+  },
+  "rows": [
+    {
+      "path": "docs/prompt/_extracted.json",
+      "declared": true,
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/prompt/brainstorm.md",
+      "declared": true,
+      "additions": 6,
+      "deletions": 3,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/sillyspec/prompt-control-debt.md",
+      "declared": true,
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/design-facts.js",
+      "declared": true,
+      "additions": 33,
+      "deletions": 3,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/run/gates.js",
+      "declared": true,
+      "additions": 27,
+      "deletions": 8,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/stages/brainstorm.js",
+      "declared": true,
+      "additions": 2,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/design-facts.test.mjs",
+      "declared": true,
+      "additions": 29,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/validate-metadata-scope.test.mjs",
+      "declared": true,
+      "additions": 78,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 11,
+    "codeFileCount": 5,
+    "testFileCount": 3,
+    "moduleSpan": 5,
+    "modules": [
+      {
+        "id": "docs-consistency",
+        "files": [
+          "src/design-facts.js"
+        ]
+      },
+      {
+        "id": "cli-entry",
+        "files": [
+          "src/index.js"
+        ]
+      },
+      {
+        "id": "runtime",
+        "files": [
+          "src/run/gates.js"
+        ]
+      },
+      {
+        "id": "core-engine",
+        "files": [
+          "src/scan-postcheck.js"
+        ]
+      },
+      {
+        "id": "stages",
+        "files": [
+          "src/stages/brainstorm.js"
+        ]
+      }
+    ],
+    "unmappedFiles": [
+      "test/design-facts.test.mjs",
+      "test/scan-refresh.test.mjs",
+      "test/validate-metadata-scope.test.mjs"
+    ],
+    "riskHits": [],
+    "level": "L2",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "ok",
+      "docClaim": "missing",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260914-011-be6b",
+  "sessionId": "quick-f82da281",
+  "savedAt": "2026-09-14T06:13:46.335Z",
+  "patchSha256": "134dfe8f19d0bd96b242b47c8a1c67baa844bab9b124c55c2b715a115f25351f",
+  "patchStatus": "ok"
+}

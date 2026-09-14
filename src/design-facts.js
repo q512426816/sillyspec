@@ -21,7 +21,7 @@
  *   decision_module_ref_invalid（ERROR）/ decision_module_domain_gap（WARNING）/
  *   decision_module_check_skipped（skipped 原因字符串，接线层包 code）。
  */
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { parseDecisions } from './decision-distill.js'
 import { parseFileChangeListDetailed } from './change-list.js'
@@ -134,6 +134,26 @@ export function loadModuleMap(specRoot, project) {
   return { ids, prefixPairs }
 }
 
+/**
+ * 在兄弟项目的 map 里定位模块 id 归属（多项目仓 docs/<其他项目>/modules/_module-map.yaml）。
+ * 幻觉 ERROR 的消歧源（2026-09-14 quick，用户反馈①）：id 真实存在但属另一子项目时报
+ * 「归属 + 本次核验只认当前项目 map」，堵 agent 按占位提示误读子项目 map 的死胡同。
+ * @param {string} specRoot 规范根目录
+ * @param {string} currentProject 当前核验项目（跳过自身）
+ * @param {string} id 模块 id
+ * @returns {string | null} 命中的项目名（docs/ 下第一段目录名），无命中/不可读 → null
+ */
+function locateIdInSiblingProjects(specRoot, currentProject, id) {
+  let entries
+  try { entries = readdirSync(join(specRoot, 'docs'), { withFileTypes: true }) } catch { return null }
+  for (const e of entries) {
+    if (!e.isDirectory() || e.name.startsWith('.') || e.name === currentProject) continue
+    const m = loadModuleMap(specRoot, e.name)
+    if (m && m.ids.has(id)) return e.name
+  }
+  return null
+}
+
 // ---------------------------------------------------------------------------
 // 核验（FR-02 分级：ERROR / WARNING / skipped）
 // ---------------------------------------------------------------------------
@@ -162,7 +182,8 @@ export function deriveActualModules(filePaths, prefixPairs) {
  * 核验变更决策的模块域引用（FR-02/D-002/D-004；brainstorm「生成规范文件」步 --done gate 本体，
  * 接线在 task-02）。分级：
  *   - ERROR（decision_module_ref_invalid）：
- *     · 模块域项 ∉ _module-map.yaml 且无 NEW: 前缀（模块幻觉）——出路提示二选一；
+ *     · 模块域项 ∉ _module-map.yaml 且无 NEW: 前缀（模块幻觉）——出路提示二选一；消息内嵌
+ *       当前项目 map 路径 + 合法 id 示例，id 命中兄弟项目 map 时改报归属消歧（仍拦）；
  *     · 裸项 'NEW:'（`NEW: <名>` 冒号后带空格被列表切分）——书写错误，附正确写法。
  *   - WARNING（decision_module_domain_gap）：
  *     · design.md 文件清单推导的实改模块集 × 声明域并集差异（双向，措辞留人工裁量）；
@@ -202,7 +223,16 @@ export function validateDecisionModuleRefs({ changeDir, specRoot, project } = {}
       } else if (item.startsWith('NEW:')) {
         // 新模块声明：豁免存在性核验（D-002/D-004），原样保留
       } else if (!moduleMap.ids.has(item)) {
-        errors.push(`[decision_module_ref_invalid] ${id} 模块域含未注册模块 "${item}"——补录 _module-map.yaml 或改用 NEW:${item} 前缀声明新模块`)
+        // 消息自足（2026-09-14 quick，用户反馈①）：内嵌解析出的 map 路径 + 合法 id 示例，
+        // agent 不必再猜「合法 id 从哪张 map 取」；多项目仓先查兄弟项目 map 消歧——id 真实
+        // 存在但属其他子项目时报归属，而非笼统「模块幻觉」（语义不变：仍 ERROR 拦）。
+        const mapRel = `docs/${project}/modules/_module-map.yaml`
+        const ids = [...moduleMap.ids]
+        const sample = `${ids.slice(0, 5).join('、')}${ids.length > 5 ? ' 等' : ''}`
+        const sibling = locateIdInSiblingProjects(specRoot, project, item)
+        errors.push(sibling
+          ? `[decision_module_ref_invalid] ${id} 模块域含未注册模块 "${item}"——该 id 属于子项目 ${sibling}（docs/${sibling}/modules/_module-map.yaml），本次核验只认当前项目 ${mapRel} 的 id（合法示例：${sample}，共 ${ids.length} 个）；跨项目引用请补录当前项目 map 或改用 NEW:${item} 前缀`
+          : `[decision_module_ref_invalid] ${id} 模块域含未注册模块 "${item}"——合法 id 来源：${mapRel}（示例：${sample}，共 ${ids.length} 个）；补录该 map 或改用 NEW:${item} 前缀声明新模块`)
       }
     }
   }

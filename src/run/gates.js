@@ -1151,13 +1151,17 @@ export function readDesignScale(specBase, changeName) {
 /**
  * 校验变更目录下近 10 分钟新增的 .md/.yaml/.yml 文件含 author/created_at 元数据（advisory 打印）。
  * 从 complete.js 迁入（completeStageGates 共享收尾管线消费）。
+ * 按变更隔离（2026-09-14 quick，用户反馈③）：带 changeName 时本变更目录的缺元数据文件逐个
+ * 列出；其他变更目录的命中折叠为一行汇总并点名目录与计数——多 agent 并发仓里并行会话的他者
+ * 文件不再逐条混入本变更收尾输出（同批后续变更包也走汇总行，agent 按目录名自认领）。
+ * changeName 缺省（历史调用面）保持全量逐列。
  */
-export function validateMetadata(cwd, stageName, specBase) {
+export function validateMetadata(cwd, stageName, specBase, changeName) {
   const changesDir = join(specBase, 'changes')
   if (!existsSync(changesDir)) return
 
   const cutoff = Date.now() - 10 * 60 * 1000
-  const missing = []
+  const missing = new Set()
 
   function walk(dir) {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -1168,18 +1172,33 @@ export function validateMetadata(cwd, stageName, specBase) {
         const mtime = statSync(full).mtimeMs
         if (mtime < cutoff) continue
         const content = readFileSync(full, 'utf-8')
-        if (!content.includes('author:') && !content.includes('author：')) missing.push(full)
-        if (!content.includes('created_at:') && !content.includes('created_at：')) missing.push(full)
+        if (!content.includes('author:') && !content.includes('author：')) missing.add(full)
+        if (!content.includes('created_at:') && !content.includes('created_at：')) missing.add(full)
       } catch (e) { /* skip unreadable files */ }
     }
   }
 
   walk(changesDir)
-  const unique = [...new Set(missing)]
-  if (unique.length > 0) {
+  if (missing.size === 0) return
+
+  // 归属分组：changes/ 下第一段目录名（[\\/] 切分兼容 Windows join 产物的反斜杠）
+  const current = []
+  const otherCounts = new Map()
+  for (const f of missing) {
+    const top = relative(changesDir, f).split(/[\\/]/)[0]
+    if (!changeName || top === changeName) current.push(f)
+    else otherCounts.set(top, (otherCounts.get(top) || 0) + 1)
+  }
+
+  if (current.length > 0) {
     console.log(`\n⚠️  以下文件缺少 author 或 created_at 元数据：`)
-    unique.forEach(f => console.log(`  - ${relative(cwd, f) || f}`))
+    current.forEach(f => console.log(`  - ${relative(cwd, f) || f}`))
     console.log('请在文件头部添加 author（git 用户名）和 created_at（精确到秒）')
+  }
+  if (otherCounts.size > 0) {
+    const parts = [...otherCounts.entries()].map(([dir, n]) => `${dir}×${n}`).join('、')
+    const total = [...otherCounts.values()].reduce((a, b) => a + b, 0)
+    console.log(`\nℹ️  另有 ${total} 个其他变更目录的文件近 10 分钟新增且缺元数据（${parts}）——已按变更隔离折叠：并行会话产物请忽略；若为本步骤创建的同批变更包，请补 author/created_at`)
   }
 }
 
@@ -1339,7 +1358,7 @@ export async function completeStageGates({ stageName, cwd, changeName, platformO
   const settledCount = steps.filter(s => s.status === 'completed' || s.status === 'skipped').length
   const total = steps.length
 
-  validateMetadata(cwd, stageName, specBase)
+  validateMetadata(cwd, stageName, specBase, changeName)
 
   // 验证关键文件位置（仅当所有步骤已结案 completed‖skipped 时才校验）
   if (settledCount === total && total > 0) {
