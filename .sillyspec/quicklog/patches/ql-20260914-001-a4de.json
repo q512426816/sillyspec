@@ -1,0 +1,62 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-a90a68b3",
+  "totals": {
+    "files": 5,
+    "additions": 335,
+    "deletions": 15
+  },
+  "rows": [
+    {
+      "path": "docs/sillyspec/platform-interface-map.md",
+      "declared": true,
+      "additions": 5,
+      "deletions": 5,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/progress/change-registry.js",
+      "declared": true,
+      "additions": 9,
+      "deletions": 2,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/sync.js",
+      "declared": true,
+      "additions": 76,
+      "deletions": 2,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/platform-sync-base-ts-advance.test.mjs",
+      "declared": true,
+      "additions": 10,
+      "deletions": 6,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/platform-sync-self-echo.test.mjs",
+      "declared": true,
+      "additions": 235,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "qlId": "ql-20260914-001-a4de",
+  "sessionId": "quick-a90a68b3",
+  "savedAt": "2026-09-14T01:23:16.927Z",
+  "patchSha256": "0377a05af8691bc3719611ba1eca7c657050f55ee3d6f5fd7be3f38ad07c9eb1",
+  "patchStatus": "ok"
+}

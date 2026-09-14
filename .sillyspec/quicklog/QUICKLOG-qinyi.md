@@ -38,3 +38,17 @@
 审计：   ❌ [docs/sillyspec/prompt-control-debt.md:219] gates.js:1339 → src/run/gates.js: 关键词缺失：期望任一「validateFileLocations」在 [start-2, end+5] 窗口内（跨文件引用/论述语境的纯位置锚：行号后加 ? 跳过关键词断言，层1 行界仍校验——勿删行号）
 审计：🔧 行号漂移已自动重锚 3 处（同口径复跑：3 → 0；剩余 0 处需人工 sillyspec docs check）
 审计：⚖️ 归属切分：3 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：src/run/gates.js, src/run/verify-quality-scan.js, .patch16-tmp.mjs
+
+## ql-20260914-001-a4de | 2026-09-14 09:11:25 | 根治平台进度同步自回声假冲突：血统归属判定 + base_ts 单调回填 + 冲突文件过期自清
+状态：已完成
+关联变更：（无）
+文件：
+- src/sync.js（pull 冲突路径加自回声血统归属（platLin∈[base,local_modified]⇒推进base不落冲突文件）+ push 409 同族判定（推进base后continue重推）+ 冲突抑制块过期自清（base≥文件平台ts⇒清文件恢复推送））
+- src/progress/change-registry.js（_updatePlatformLastSync 回填改 MAX 单调推进（双COALESCE防NULL），注释记坑 sync-base-ts-out-of-order-backfill）
+- test/platform-sync-self-echo.test.mjs（新增 8 段：pull 自回声/外来血统/低血统 fail-closed、push 409 自回声重推/外来、MAX 单调三态、冲突文件自清+对照）
+- test/platform-sync-base-ts-advance.test.mjs（第 2/3 段断言改写为单调契约（旧回执保高不降——原断言编码的正是本次修的覆写行为））
+- docs/sillyspec/platform-interface-map.md（5 处行号锚重锚（pullList 1298→1352、collectStatus 2060→2045、_submitApproval 2097→2171×2、syncDocuments 2029→1051））
+需求：根治平台进度同步自回声假冲突：血统归属判定 + base_ts 单调回填 + 冲突文件过期自清
+根因：multi-agent-platform 实证 6 个进度冲突全部是本机自推回声被误判为他端更新：①同机多进程并发推送时 base_ts 回填乱序落地，旧回执覆盖已推进的 base 重开回声窗，下次 push 409/pull 把自家回执当外来更新；②冲突判定只比时间戳先后，不用平台快照自带的 last_local_modified_ts 血统标记做归属；③冲突文件在即永跳自动推送且永不自清，即便 base 已被后续 resolve/自愈追平（ctx-usage 实证残留），人工 resolve 后下次 --done 再触发同竞态，故复发
+方案：① change-registry.js _updatePlatformLastSync：COALESCE 直写改 MAX 单调推进（双 COALESCE 防 SQLite MAX NULL 语义），旧回执不再覆盖已推进 base，与仓内 resolve/自愈四处 MAX 写法对齐；② sync.js push 409 与 pull 冲突两路径加自回声血统归属：平台快照 changes[0].last_local_modified_ts ∈ 本地 [base_ts, last_local_modified_ts] ⇒ 判为本机自推回声——pull 不 import 不落冲突文件、base 推进到平台 ts，push base 推进后自动重推；区间外维持原冲突判定（本地永不覆盖血统比自己新的平台状态，零误放行）；③ sync() 冲突抑制块加过期自清：base ≥ 冲突文件记录的 platform_last_pushed_at ⇒ 自动清除文件恢复推送，判不出维持抑制 fail-closed；status() 只读约束不动
+结果：聚焦 10 个 platform-sync/hub 套件全 PASS；npm run lint 通过（593 文件 0 告警）；全量 npm test 462/462 通过（含新增 test/platform-sync-self-echo.test.mjs 8 段与 doc-ref-check 87/87 锚校验）；未部署（CLI 发版另走流程）

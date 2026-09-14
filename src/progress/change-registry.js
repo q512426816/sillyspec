@@ -263,9 +263,16 @@ export class ChangeRegistry {
       // 永不携带（乐观锁失效）、本地脏度恒 false、platform status behind 恒跳过。值优先
       // 平台回执 last_pushed_at，缺省回退本次 X-SillySpec-Pushed-At（后端 _apply 存的就是
       // 该 header 原值，回写与服务器精确一致）。COALESCE 保旧值：无 syncedTs 只推进展示列。
+      // ql-20260914-001：COALESCE 直写改 MAX 单调推进（坑 sync-base-ts-out-of-order-backfill）——
+      // 同机多进程（CLI 会话 ×N + 步进链）并发推送时，A(t1)/B(t2) 乱序回填会让迟到的旧回执
+      // 覆盖已推进的 base（multi-agent-platform 实证：6 个假冲突的 base 全部停在上一轮值），
+      // 回声窗重开 → 下次 push 409/pull 假冲突。MAX 只升不降：base ≥ 回执恒安全（平台 409
+      // 判据是 stored > base，base 偏高只会让推送被接受，绝不产生假 409）；仅当回执比现存
+      // base 旧（乱序/平台侧回退）时改变行为——正是要防的覆写。与 resolve/自愈路径的
+      // MAX 写法（sync.js 四处）对齐，消除本仓最后一个直写点。
       sqlDb.prepare(
-        'UPDATE changes SET platform_last_sync = ?, platform_sync_enabled = 1, last_synced_platform_ts = COALESCE(?, last_synced_platform_ts) WHERE name = ?'
-      ).run(new Date().toISOString(), syncedTs, changeName);
+        'UPDATE changes SET platform_last_sync = ?, platform_sync_enabled = 1, last_synced_platform_ts = MAX(COALESCE(?, last_synced_platform_ts), COALESCE(last_synced_platform_ts, ?)) WHERE name = ?'
+      ).run(new Date().toISOString(), syncedTs, syncedTs, changeName);
     });
   }
 

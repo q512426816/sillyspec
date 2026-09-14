@@ -615,8 +615,30 @@ export class SyncManager {
     if (!fromResolve) {
       const pendingConflict = this.readConflictFile(changeName);
       if (pendingConflict) {
-        console.warn(`⚠️ [sync] 变更 ${changeName} 存在未决平台冲突，跳过自动推送。处理：sillyspec platform resolve ${changeName} --keep-local | --take-platform | --abort`);
-        return { synced: 0, errors: [`conflict pending: ${changeName}`], conflict: true, suppressed: true };
+        // 过期自清（坑 sync-self-echo-false-conflict 附带，2026-09-14 实证 ctx-usage：base_ts 已被
+        // 后续 resolve/自愈推进到 ≥ 冲突文件记录的平台 ts——冲突条件早已消散，但文件残留仍压着
+        // 自动推送（「文件在即抑制」只认文件存在，永不重判）。此时清除文件继续推送是安全的：
+        // base ≥ 平台 ts 意味着本地已同步到冲突点之后，重推只会更新镜像不会丢数据。判不出
+        // （无平台 ts / DB 读失败）维持抑制，fail-closed。
+        const stalePlatTs = pendingConflict.platform_last_pushed_at || null;
+        let stale = false;
+        if (stalePlatTs) {
+          try {
+            const { ProgressManager } = await import('./progress.js');
+            const pm = new ProgressManager({ specDir: safePlatformSpecDir(this.cwd) });
+            const row = pm._ensureDB(this.cwd).getDb().prepare(
+              'SELECT last_synced_platform_ts FROM changes WHERE name = ?'
+            ).get(changeName);
+            if (row && row.last_synced_platform_ts && row.last_synced_platform_ts >= stalePlatTs) stale = true;
+          } catch { /* 判定失败维持抑制（fail-closed） */ }
+        }
+        if (stale) {
+          this.clearConflictFile(changeName);
+          console.warn(`⚠️ [sync] 变更 ${changeName} 的未决冲突已过期（base_ts ≥ 平台 ts=${stalePlatTs}），自动清除并恢复推送`);
+        } else {
+          console.warn(`⚠️ [sync] 变更 ${changeName} 存在未决平台冲突，跳过自动推送。处理：sillyspec platform resolve ${changeName} --keep-local | --take-platform | --abort`);
+          return { synced: 0, errors: [`conflict pending: ${changeName}`], conflict: true, suppressed: true };
+        }
       }
     }
 
@@ -837,6 +859,38 @@ export class SyncManager {
           return { synced: 1, errors: [], selfHealed: true, reason: 'push 409 平台内容与本地一致（外来噪声重推），base_ts 已推进' };
         }
       } catch { /* 比对失败维持原判（fail-closed 到真冲突分支） */ }
+
+      // ── 自回声血统归属（坑 sync-self-echo-false-conflict，2026-09-14 multi-agent-platform
+      // 实证 6 个假冲突全为此形）：平台快照自带 changes[0].last_local_modified_ts——推送方
+      // 序列化时的本地脏度血统标记。若它落在本地 [base_ts, last_local_modified_ts] 区间内，
+      // 说明平台这份「更新」是本库自己推过的状态（并发推送的乱序/失败回填让 base 没跟上，
+      // 回声窗里自家回执被当成他端更新），不是外来分歧——推进 base_ts 到平台 ts 后重试
+      // 推送即收敛，不落冲突文件。区间外（平台持有本库从未有过的更新血统）维持原冲突
+      // 路径：本地永不覆盖血统比自己新的平台状态，无误放行。
+      if (!fromResolve && platformProgress && platformProgress.changes && platformProgress.changes[0]
+        && platformProgress.changes[0].last_local_modified_ts) {
+        const platLin = platformProgress.changes[0].last_local_modified_ts;
+        try {
+          const { ProgressManager } = await import('./progress.js');
+          const pm = new ProgressManager({ specDir: safePlatformSpecDir(this.cwd) });
+          const row = pm._ensureDB(this.cwd).getDb().prepare(
+            'SELECT last_local_modified_ts, last_synced_platform_ts FROM changes WHERE name = ?'
+          ).get(changeName);
+          const localMod = row && row.last_local_modified_ts;
+          const baseNow = row && row.last_synced_platform_ts;
+          if (localMod && baseNow && platLin >= baseNow && platLin <= localMod) {
+            const healTs = platformLastPushedAt || pushedAt;
+            pm._ensureDB(this.cwd).getDb().prepare(
+              'UPDATE changes SET last_synced_platform_ts = MAX(?, COALESCE(last_synced_platform_ts, ?)) WHERE name = ?'
+            ).run(healTs, healTs, changeName);
+            console.warn(`⚠️ [sync] push 409 自回声血统判定：平台 ts=${platformLastPushedAt} 为本机自推回声（血统 ${platLin} ∈ [${baseNow}, ${localMod}]），base_ts 已推进到 ${healTs}，自动重推`);
+            if (attempt < MAX_PUSH_ATTEMPTS) continue;
+            // 重试额度耗尽（attempt=2 仍进此分支，理论少见）：不落冲突文件——base 已推进，
+            // 下次常规同步按新 base 直接推送收敛
+            return { synced: 0, errors: [], conflict: false, selfHealed: true, reason: 'push 409 自回声血统判定：base_ts 已推进，重试额度耗尽，下次常规同步收敛' };
+          }
+        } catch { /* 归属判定失败维持原判（fail-closed 到真冲突分支） */ }
+      }
 
       // resolve --keep-local 的自动重推再撞 409：不落新冲突文件、不打「已卡死」横幅——
       // 原 conflict 已按用户裁决处理完（base_ts 已推进），此刻的 409 只是「平台在用户裁决期间
@@ -1422,6 +1476,26 @@ export class SyncManager {
             return { ok: true, imported: false, conflict: false, reason: '平台重推内容与本地一致（部署噪声），base_ts 已推进' };
           }
         } catch { /* 比对失败维持原判（fail-closed 到真冲突分支） */ }
+      }
+      // ── 自回声血统归属（坑 sync-self-echo-false-conflict，与 push 409 路径同族，2026-09-14）：
+      // 平台「更新」的血统标记（changes[0].last_local_modified_ts）落在本地 [base, local_modified]
+      // 区间内 = 本机自推回声（并发推送回填竞态窗口内读到自家回执），非外来分歧。不 import、
+      // 不落冲突文件，推进 base_ts 到平台 ts——本地内容 ≥ 回声状态（血统不新于本地），下次
+      // triggerSync 按新 base 正常推送，无损收敛。区间外维持原冲突判定，误放行为零。
+      if (localDirty && platformNewer && platformProgress && platformProgress.changes
+        && platformProgress.changes[0] && platformProgress.changes[0].last_local_modified_ts) {
+        const platLin = platformProgress.changes[0].last_local_modified_ts;
+        if (localLastModified && localLastSynced && platLin >= localLastSynced && platLin <= localLastModified) {
+          try {
+            const { ProgressManager } = await import('./progress.js');
+            const pm = new ProgressManager({ specDir: safePlatformSpecDir(this.cwd) });
+            pm._ensureDB(this.cwd).getDb().prepare(
+              'UPDATE changes SET last_synced_platform_ts = MAX(?, COALESCE(last_synced_platform_ts, ?)) WHERE name = ?'
+            ).run(platformPushedAt, platformPushedAt, changeName);
+          } catch { /* 推进失败不影响判定结论：不 import 不落冲突，下次同步重判 */ }
+          debugLog(`[sync] pull 自回声血统判定: 平台 ts ${platformPushedAt} 为本机自推回声（血统 ${platLin} ∈ [${localLastSynced}, ${localLastModified}]），base_ts 已推进`);
+          return { ok: true, imported: false, conflict: false, reason: '平台更新为本机自推回声（血统在本地同步区间内），base_ts 已推进' };
+        }
       }
       if (localDirty && platformNewer) {
         console.warn('');

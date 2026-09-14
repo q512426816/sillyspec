@@ -5,7 +5,8 @@
 //    （后端 _apply 存的就是该 header 原值，回写与服务器精确一致。修复前该列只在 pull
 //    import / resolve keep-local 写入，CLI 直跑恒 NULL——_updatePlatformLastSync 写
 //    platform_last_sync 而 sync()/pull 读 last_synced_platform_ts，写 A 读 B 断链）
-// 2. 服务器回执含 last_pushed_at 时优先用回执值（未来后端返回权威时钟不漂移）
+// 2. 服务器回执含 last_pushed_at 时优先用回执值（未来后端返回权威时钟不漂移）；
+//    ql-20260914-001 收紧为 MAX 单调：回执旧于现存 base 时保高不降（防乱序回填重开回声窗）
 // 3. 第二次 sync() 携带 X-SillySpec-Base-Ts = 已推进的 base_ts（乐观锁恢复工作）
 // 4. pull skipIfLocalDirty：本地脏（last_local_modified > last_synced）且平台更旧 →
 //    自动注入语义跳过 import（防平台旧快照覆盖本地领先进度）；手动 pull（不传 flag）仍 import
@@ -100,20 +101,23 @@ console.log('\n--- 1. push 成功推进 last_synced_platform_ts ---');
   assert(row1.last_synced_platform_ts === lastPostHeaders['x-sillyspec-pushed-at'],
     `push 后 last_synced_platform_ts = 本次 X-SillySpec-Pushed-At（实际 ${row1.last_synced_platform_ts}，header ${lastPostHeaders['x-sillyspec-pushed-at']}）`);
 
-  console.log('\n--- 2. 服务器回执 last_pushed_at 优先 ---');
+  console.log('\n--- 2. 服务器回执 last_pushed_at：新于现存 base 时回写，旧于时不降（MAX 单调） ---');
+  // ql-20260914-001：回填改 MAX 单调推进（坑 sync-base-ts-out-of-order-backfill）——乱序/迟到
+  // 的旧回执覆盖已推进 base 会重开回声窗（multi-agent-platform 6 个假冲突实证）。本段 mock 的
+  // 回执 02:00 旧于 push#1 落下的真实时钟 base：旧行为直写 02:00（覆写 bug），新行为保高不降。
   ackLastPushedAt = '2026-08-10T02:00:00.000Z';
   const r2 = await sm.sync('bt-change');
   assert(r2.synced === 1, `回执模式 push 成功（实际 synced=${r2.synced}）`);
   const row2 = pm._ensureDB(cwd).getDb().prepare(
     'SELECT last_synced_platform_ts FROM changes WHERE name = ?'
   ).get('bt-change');
-  assert(row2.last_synced_platform_ts === '2026-08-10T02:00:00.000Z',
-    `回执含 last_pushed_at 时优先回写回执值（实际 ${row2.last_synced_platform_ts}）`);
+  assert(row2.last_synced_platform_ts === row1.last_synced_platform_ts,
+    `旧回执不覆盖已推进 base（实际 ${row2.last_synced_platform_ts}，保持 ${row1.last_synced_platform_ts}）`);
 
   console.log('\n--- 3. 下次 push 携带 X-SillySpec-Base-Ts ---');
   await sm.sync('bt-change');
-  assert(lastPostHeaders['x-sillyspec-base-ts'] === '2026-08-10T02:00:00.000Z',
-    `第二次 sync 携带 Base-Ts=已推进 base_ts（实际 ${lastPostHeaders['x-sillyspec-base-ts']}）`);
+  assert(lastPostHeaders['x-sillyspec-base-ts'] === row1.last_synced_platform_ts,
+    `第二次 sync 携带 Base-Ts=单调保高的 base_ts（实际 ${lastPostHeaders['x-sillyspec-base-ts']}）`);
   ackLastPushedAt = null;
 }
 
