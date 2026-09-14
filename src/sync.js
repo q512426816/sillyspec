@@ -1262,6 +1262,11 @@ export class SyncManager {
         // last_pusher：服务端 GET 顶层回传的推送者元字段（ql-20260914 第二批）——与
         // last_pushed_at 同理是同步元数据非六表内容，不忽略会让内容一致自愈恒 false。
         'last_pusher',
+        // owner_session：所有权列（v6，2026-09-14-change-ownership-guards task-02）——与
+        // last_pusher 同理是归属元数据非六表内容：版本切换窗口（平台旧 v5 payload × 本地 v6
+        // 脏态）owner 差异会把内容一致判不等，部署噪声落人工 conflict（last_pusher 先例
+        // ql-20260914-006 同款一行）。
+        'owner_session',
       ]);
       const strip = (v) => {
         if (Array.isArray(v)) return v.map(strip);

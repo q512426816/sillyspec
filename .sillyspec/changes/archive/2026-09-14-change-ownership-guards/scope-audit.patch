@@ -1,0 +1,2352 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/cli-entry.md b/.sillyspec/docs/sillyspec/modules/cli-entry.md
+index 84b460f..ae40312 100644
+--- a/.sillyspec/docs/sillyspec/modules/cli-entry.md
++++ b/.sillyspec/docs/sillyspec/modules/cli-entry.md
+@@ -4,7 +4,7 @@ doc_type: module-card
+ module_id: cli-entry
+ author: qinyi
+ created_at: 2026-06-03T07:42:00+08:00
+-updated_at: 2026-09-14T11:20:00+08:00
++updated_at: 2026-09-14T22:35:00+08:00
+ ---
+ # cli-entry
+ 
+@@ -66,6 +66,11 @@ runStage(pm, progress, stageName, cwd, changeName)
+ - **apply / assess 自动 apply 消息同步**（坑3，`index.js`）：apply 与 assess 自动 apply 的用户面消息改为「`.sillyspec/changes/`、`.sillyspec/.runtime/`、`.sillyspec/quicklog/` 不自动 apply（worktree 进度/产物非交付物），模块文档 `.sillyspec/docs/` 会自动 apply 回主仓」——对齐 `worktree-apply.js#filterDeliverableFiles` 精细化过滤（保留 docs/、排除 changes/+.runtime/+quicklog/+meta.json）
+ - **apply / assess dirty 拦截 rescue 段**（2026-08-10-worktree-apply-dirty-resilient，`index.js`）：apply/assess 命中 step4.5/5a dirty fail-loud 拦截时，在 errors/reasons 主通道文本之后补结构化 rescue 段 `🆘 Rescue commands (N safe / M excluded，旁路 git apply，cp 后需手动 sillyspec worktree cleanup <wtName>):` + 逐行 cp 指令 + warnings（gated on `result.rescueCommands` / `assessment.rescueCommands` 非空，===null 时零影响）；rescue 指令由 `worktree-apply.js#generateRescueCommands` 逐文件四分类生成（SAFE-CP 给 cp、EXCLUDE-DIRTY/MISMATCH 进 warnings、DELETE 给 rm）
+ - **worktree cleanup 显式命令 blocked 提示 + reset force**（2026-08-13-worktree-execute-loss-guard，`index.js` + `run/command.js`）：显式 `sillyspec worktree cleanup <name>` 命中 fail-closed 保护（有未落主仓交付变更，D-001@v1）时输出 `🚫 拒绝清理：有未落主仓交付变更，请先 sillyspec worktree apply <name> 或 --force`；execute reset（`resetStage`）清理 worktree 显式传 `force:true`（D-006@v1，reset 语义即放弃 worktree 中未 apply 变更，交 apply 负责落地）
++- **--takeover / --session / --skip-apply flag（2026-09-14-change-ownership-guards，FR-01/FR-02）**：
++  - `worktree apply|cleanup <name> --takeover` — 所有权护栏显式强制接管口（index.js worktree 子命令层解析；他人且活跃被拒时解锁，放行后重写 owner=本会话留痕；**自动路径（assess）永不带**，人工 flag）
++  - `--session <id>` — 显式会话标识（所有权三级解析最高优先级层，缺省 env `SILLYSPEC_SESSION_ID`，再缺省 `anon@<host>` 机器级降级）。双层注册：index.js worktree 子命令层（apply/cleanup/assess 的 `_guardChangeOwnership` 消费）+ `run/command.js` knownFlags/VALUE_FLAGS 白名单（run 链启动 `claimChangeOwner` 与 archive 链消费）；run 链 `--session-id` 形近拼法挂定向指引
++  - `run archive --done --confirm --skip-apply` — 归档收口门显式跳过（run/command.js 白名单解析 `isSkipApply` → completeStep → `archiveChangeDirectory` gateOpts.skipApply 消费，skip-apply.record.json 留痕随归档包）
++  - 所有权护栏公共件 `_guardChangeOwnership`（index.js worktree case 内）：锁内、实际动作前判归属——soft=false（显式 apply/cleanup）拒绝走结构化错误 + exit 1；soft=true（assess 自动 apply，护栏①最可能的旁路）软跳零落盘 + warning 指引（无人值守不越权也不阻断审计流）；放行分支接管重写 owner。`--check-only` 只读路径不校验
+ 
+ ## 变更索引
+ 
+@@ -89,6 +94,7 @@ runStage(pm, progress, stageName, cwd, changeName)
+ | 2026-09-07 | 2026-09-07-ir-stage-p3c | IR P3c：index.js 新 design-init case（--change/--force/--json/--spec-dir；幂等不覆盖，决策追踪表预填；缺 decisions exit 1 带指引） |
+ | 2026-09-08 | ql-20260908-006-5f04 | doctor `--gc-unstamped-runs [--confirm]`：usage + case 'doctor' 接线 gcUnstampedExecuteRuns（默认 dry-run）；存量无戳 execute-runs 清扫，不进 archive 热路径 |
+ | 2026-09-14 | 2026-09-14-quick-exit-tiered-gates | scope-audit 命令分支双出口接分级门禁画像（task-03 / FR-04 / D-008）：表格 [gate] 画像段（renderScopeAuditTable 按 gateProfile 存在性渲染，quick 会话出、full-flow 零输出）+ --json gateProfile 字段（computeChangeScopeAudit quick 模式增量——实时态透传 review.gateProfile / 冻结态旧记录按 rows 现算重放）；usage 补 [gate] 分级门禁画像说明 |
++| 2026-09-14 | 2026-09-14-change-ownership-guards | worktree apply/cleanup `--takeover`（所有权显式强制接管，自动路径永不带）+ `--session <id>`（三级会话标识最高层，index.js 子命令层 + run/command.js 白名单双层注册）+ `run archive --done --confirm --skip-apply`（归档收口显式跳过留痕）；worktree case 内 `_guardChangeOwnership` 护栏公共件（锁内判归属，assess 软跳/显式拒绝双语义） |
+ 
+ ## adoptPlanWaves proposal 档（2026-09-09-plan-derived）
+ plan-adopt-waves.js adoptPlanWaves 加 mode 参：proposal 只读产拓扑布局草稿（planMdDraft/rewritten，不落盘）供 postcheck 自动修复验证；write 档向后兼容（CLI 命令行为等价，测试锁定）。
+diff --git a/.sillyspec/docs/sillyspec/modules/core-engine.md b/.sillyspec/docs/sillyspec/modules/core-engine.md
+index 9014b12..0172a36 100644
+--- a/.sillyspec/docs/sillyspec/modules/core-engine.md
++++ b/.sillyspec/docs/sillyspec/modules/core-engine.md
+@@ -6,7 +6,7 @@ created_at: 2026-06-01T09:05:00
+ 
+ # core-engine
+ > 最后更新：2026-09-14
+-> 最近变更：2026-09-14-apply-conflict-hardening（doctor 新增 apply_manifest_drift 漂移检查维——两态内容 sha256 vs manifest 指纹三分支矩阵，活跃∪归档扫描面 appliedAt 降序取前 5，advisory WARNING）/ 2026-09-14-quick-exit-tiered-gates（quick 出口分级门禁：信号层 src/quick-gate-profile.js 三导出 + change-risk-profile 补 QUICK_RISK_PATH_PATTERNS 路径模式表 + scope-audit 增 gateProfile 双出口；THRESHOLDS 定稿 2/4/4/8）/ ql-20260910-002-9beb（stage-review 降级自审 CLI 侧配套：isDegradedSelfReview + gate ⚠️ 审计行 + 报错/契约降级出口——PI agent 等宿主无 Agent tool）/ 2026-08-23-adopt-harness-practices（knowledge-match 增 decisionHits 防复潮解析 + verify-postcheck skip 真跳过/evidence-auto 推荐）/ 2026-08-16-scan-docs-reconcile（契约/评审族与基础原语补录归属 + propose 回收）/ ql-20260809-003-c88a（#5 next-action 读路径对齐变更根目录 + #6 initChange 用 VALID_STAGES 单一源 + 修正 propose 残留误述）
++> 最近变更：2026-09-14-change-ownership-guards（task-review 归因分流 D-004@v1：readChangeIsolationMode DB 判源 + resolveAttributionDiffFiles 四模式路由——worktree/worktree-branch/worktree-cleaned/main-window，见下方专节）/ 2026-09-14-apply-conflict-hardening（doctor 新增 apply_manifest_drift 漂移检查维——两态内容 sha256 vs manifest 指纹三分支矩阵，活跃∪归档扫描面 appliedAt 降序取前 5，advisory WARNING）/ 2026-09-14-quick-exit-tiered-gates（quick 出口分级门禁：信号层 src/quick-gate-profile.js 三导出 + change-risk-profile 补 QUICK_RISK_PATH_PATTERNS 路径模式表 + scope-audit 增 gateProfile 双出口；THRESHOLDS 定稿 2/4/4/8）/ ql-20260910-002-9beb（stage-review 降级自审 CLI 侧配套：isDegradedSelfReview + gate ⚠️ 审计行 + 报错/契约降级出口——PI agent 等宿主无 Agent tool）/ 2026-08-23-adopt-harness-practices（knowledge-match 增 decisionHits 防复潮解析 + verify-postcheck skip 真跳过/evidence-auto 推荐）/ 2026-08-16-scan-docs-reconcile（契约/评审族与基础原语补录归属 + propose 回收）/ ql-20260809-003-c88a（#5 next-action 读路径对齐变更根目录 + #6 initChange 用 VALID_STAGES 单一源 + 修正 propose 残留误述）
+ > 模块路径：src/db.js, src/db-engine.js + 契约/评审族与基础原语（stage-contract 三件、check-primitives、stage-review、task-review、verify-postcheck、review-tier、change-risk-profile、quick-gate-profile、classify-change、contract-matrix、endpoint-extractor、knowledge-match、doctor-diagnostics、fs-atomic、constants、scan-postcheck）；完整清单见 _module-map.yaml core-engine paths。历史正文中的 run.js / progress.js / index.js 章节已分属 runtime / progress / cli-entry 模块卡
+ 
+ ## 职责
+@@ -152,3 +152,15 @@ detectWorktreeHealth（复用 WorktreeManager.doctor 薄适配 + sillyspec/* 残
+ 
+ ## doctor apply-manifest 漂移检查（2026-09-14-apply-conflict-hardening，FR-04/D-005）
+ `detectApplyManifestDrift(cwd, specDir)`（src/doctor-diagnostics.js，内部函数，经 runDoctorDiagnostics 并入第十二维 `apply_manifest_drift`，advisory WARNING 不改 doctor 退出码语义）——消费 applyWorktree 成功尾声落的 apply-manifest.json 指纹（文件→sha256）做 apply 后丢失/篡改检测。**扫描面**（R-03）：权威 specDir 下活跃 `changes/<名>/` ∪ 归档 `changes/archive/<名>/` 两桶 glob 统一收集，按 appliedAt 降序取前 5；无 manifest 零输出零告警（skipped），单 manifest 坏 fail-open 跳过。**哈希口径**：两态均自算内容 sha256（git blob hash 是 sha1 与指纹 sha256 异构不可直比）——staged 态=`git show :<path>` buffer 直接算（与写侧 staged blob 指纹天然同基）；worktree 态=readFile 后 CRLF→LF 归一（latin1 往返保字节，防 autocrlf=true 误报）；`approx:true` 条目跳过 staged 比对（指纹基不是 staged，比了必误报）。**三分支判定**：①worktree≠manifest → 落盘面漂移（丢失/被改）；②staged≠manifest → 暂存面漂移（index 被动过）；③盘上与暂存区皆无 → 丢失。告警行含变更名×文件×期望/实际短 hash + safe_actions 指引（对照 worktree 判定直拷/手并，落地后立即 git add 锁定）。doctor 只读不写。测试 test/apply-conflict-hardening.test.mjs 块②（干净零告警/篡改触发/无 manifest skipped）。
++
++## task-review 归因分流（2026-09-14-change-ownership-guards，D-004@v1 / FR-03）
++
++`src/task-review.js` 草稿（`generateTaskReviewDrafts`）/代算（`writeTaskReview`）的 changedFiles 取数源路由——troubleshooting §65 事件②根因（review/草稿 changedFiles 按主仓共享工作区脏窗口归因，并行会话在途文件混入）：
++
++- **判定源 `readChangeIsolationMode`（模块内函数）**：读 `changes.isolation_mode` 列（DB 直连 db.js——task-review 是叶子模块，静态 import progress.js 会成环 progress→consistency-doctor→task-review；meta 缺失也可判）。DB 路径候选序 platformOpts.specRoot > specDriftAnchor > specBase > cwd/.sillyspec（首个存在 sillyspec.db 的根）；进程内按 dbPath+change 缓存（CLI 短进程生命周期内 isolation_mode 不变）。
++- **路由单一入口 `resolveAttributionDiffFiles`（模块内函数，两消费点共用）**，四模式：
++  - `worktree` — DB 判 worktree 且 meta/目录活 → 原口径（`resolveVerifyChangedFiles` meta 路径 + porcelain 并入）零回归；
++  - `worktree-branch` — meta 失联/in-place meta/目录已删但分支 ref 活 → merge-base(主仓 HEAD, 分支 tip)..tip 的 commit diff + 约定路径 worktree 目录在则 porcelain 并入（与 verify reconcile 同口径），**不落主仓共享脏窗口**；meta 与 DB 同属 worktree 族但值不一致时以 DB 为准（注记）；
++  - `worktree-cleaned` — 分支 ref 也已删（cleanup 后态）→ **fail-closed 空集 +「不可归因（worktree 已清理）」注记，绝不回退主仓窗口**（复审残留①）；草稿层 reason 显式区分终态空源与普通「无 diff」；
++  - `main-window` — 其余（DB in-place / NULL 存量）→ 主仓窗口原行为零回归；NULL 且 meta 缺失加存量路由注记（D-04 残留②：不追求完美只保安全）。DB in-place 但 meta 判 worktree 且目录活 → 仍取 worktree（fail-safe：归因源只会更隔离不会更共享）。
++- 测试 test/change-ownership-guards.test.mjs ⑥ 组（meta 活/分支活两形态主仓脏文件零吸入 + 分支已删空集注记）。
+diff --git a/.sillyspec/docs/sillyspec/modules/progress.md b/.sillyspec/docs/sillyspec/modules/progress.md
+index 272578a..edcbaa2 100644
+--- a/.sillyspec/docs/sillyspec/modules/progress.md
++++ b/.sillyspec/docs/sillyspec/modules/progress.md
+@@ -47,3 +47,16 @@ updated_at: 2026-09-02T11:20:00+08:00
+ ## getStageStartedAt（2026-09-10 用户反馈②：evidence mtime 锚点放宽）
+ 
+ 同族只读访问器：DB stages.started_at。gates verify 收尾接线改为 `getStageStartedAt('execute') || getStageCompletedAt('execute')`——证据合法产自 execute 或 verify 两窗口，锚「execute 完成时刻」会把 execute 期间产的证据判旧，逼出「先提交则 diff 空、不提交则 mtime 旧」的时序两难（PI 会话实证，只能 missing+豁免收口）。锚 started_at 后 execute/verify 两窗口证据均入窗，变更窗口外的陈旧证据照拦。
++
++## change 所有权（2026-09-14-change-ownership-guards）
++
++changes 表 v6 加 `owner_session` 列（NULL=无主——存量行迁移后任何会话可接管，向后兼容零行为变化；四处 schema 版本 bump 之一，版本口径见 runtime 卡）。owner 读写与判定 API（ProgressManager facade 转发 src/progress/change-registry.js）：
++
++- `getChangeOwner(cwd, changeName)` — 只读容错（无行/未登记/读失败 → null）
++- `claimChangeOwner(cwd, changeName, session)` — 认领：行不存在首建即得；他人已持有不覆盖（返回既有 owner，WHERE 守卫 + 单事务串行）；无主行（NULL）认领写入。run 链启动 claim 消费（run/command.js）
++- `setChangeOwner(cwd, changeName, session)` — 接管无条件重写 + 同事务刷新 last_active（新 owner 心跳从接管时刻起算，否则接管后立即可被 takeover-stale 抢回）
++- `assertChangeOwnership(cwd, changeName, opts)` — 所有权判定纯函数（**读行不写库**，判定与接管写分离，调用方锁内先判后写无 TOCTOU）五分支：`forced`（--takeover）→ takeover-forced 放行 / owner 为空 → no-owner 放行 / owner===selfSession → self 放行（本会话零路径变化）/ 他人且 now−last_active ≥ 心跳窗 → takeover-stale 放行（调用方重写 owner）/ 他人且活跃窗内 → blocked-active-owner 拒绝（结构化字段 owner+lastActive+heartbeatMs 供接线打指引）。last_active 缺失/不可解析按陈旧处理（逃生通道优先，不因时间戳损坏锁死）；心跳即既有 last_active（每次 CLI 写操作刷新），窗缺省 15 分钟（`change-ownership.heartbeat_minutes`，见 setup 卡）
++- `resolveSessionIdentity({ flagSession, quickChangeName, cwd, warn })` — 会话标识三级解析（src/progress.js 导出）：`--session` flag > env `SILLYSPEC_SESSION_ID` > quick 会话名（quick-<8hex>，既有 sessionId 机制天然跨进程）> `anon@<host>` 机器级降级 + 一次性教学 warning（进程内 memo + 24h marker 文件双层降频，`.runtime/anon-session-warn.json`）；同机并行不设防是 R-01 明示局限（防线=显式标识铁律 + 归档收口 + --takeover 摩擦）
++- `registerChange(cwd, changeName, { ownerSession })` — 首建者获得所有权（INSERT OR IGNORE 语义天然已有值不覆盖）
++
++平台同步投影扩列（D-005@v1）：`serializeForSync` changes 投影加 `owner_session`（NULL=无主随 payload 带出，平台消费端不强制）；`import()` 侧回写容错（payload 含该列才写）。接线点（apply/cleanup/assess/归档/quick 链）归 cli-entry / runtime / worktree 卡登记。
+diff --git a/.sillyspec/docs/sillyspec/modules/runtime.md b/.sillyspec/docs/sillyspec/modules/runtime.md
+index 172ff12..b849757 100644
+--- a/.sillyspec/docs/sillyspec/modules/runtime.md
++++ b/.sillyspec/docs/sillyspec/modules/runtime.md
+@@ -4,7 +4,7 @@ doc_type: module-card
+ module_id: runtime
+ author: qinyi
+ created_at: 2026-06-03T07:42:00+08:00
+-updated_at: 2026-09-14T11:20:00+08:00
++updated_at: 2026-09-14T22:30:00+08:00
+ ---
+ # runtime
+ 
+@@ -24,6 +24,7 @@ SQLite 数据库层 + 进度管理 + 迁移。提供 `.sillyspec/.runtime/sillys
+ - **scan-profile.js**（`src/run/scan-profile.js`，W6 Step2 从 run.js 抽出）— scan profile 数据生成 + quick scan CLI preflight/postcheck（executeScanPostcheck 动态 import scan-postcheck.js 做 CLI 确定性校验，不依赖 agent 自检报告）
+ - **quick-recommend.js**（`src/quick-recommend.js`，根级文件归 runtime）— quick 阶段多变更关联推荐打分：「脏文件 + 任务描述」双信号推测当前 quick 改动最可能归属哪些活跃变更，供交互式多选默认勾选；纯函数 + 只读文件系统无副作用
+ - **friction-tally.js**（`src/friction-tally.js`，根级文件归 runtime，friction-signal-hint Phase 1）— 摩擦信号计数数据层：gate 失败回滚（rollbackCompletionAndReturn）/ verify test·lint 实测失败 / 审查打回三类摩擦事件计数（events 按 type 记 count/lastAt + history 截尾 20 条），quick/verify --done 收尾 `consumeFrictionHint` 计数非零才输出一行 advisory（提示后删计数文件清零，全零零输出、每次收尾最多一行）；落点红线（D-002）——计数文件只落 .runtime 树（quick 会话 `quick-sessions/<sessionId>/friction-tally.json`、真实变更 `<runtimeRoot>/friction-tally-<changeName>.json`，路径统一走 resolveRuntimeRoot/resolveQuickSessionsDir），永不落 changes/（目录上平台同步，本机计数污染他机即事故）；隐私红线（D-005）——落盘字段只含 count/lastAt/at/type/detail（type ∈ 三值枚举、detail ∈ 预定义标签集），永不接触提示词与对话原文；local.yaml `friction_hint.enabled` 默认 true（仅显式 false 关，缺键/读失败同默认开）；读写全程 try/catch 静默降级返回 null/空 hint，绝不反向阻断收尾（同 verify-lint-tally「计数器不许反向阻断」立场）
++- **知识闭环消费端注入与收尾渲染**（2026-09-14-knowledge-loop-close，`src/run/prompt.js` + `src/run/complete-handlers.js`）— prompt.js `buildKnowledgeInjection` 命中知识机械注入：matchKnowledge 命中按 INDEX 行序取 top-3 不同 file、单文件首 40 行截断渲染「📚 命中知识」段（未命中 section='' 调用方零字节），三个注入点——execute「确认执行范围」step（升级既有 {KNOWLEDGE_HIT_REPORT}，报告级→正文级）/ quick step1 quickFirstStep（查询串 readQuickGuardField('taskDescription')）/ execute.js buildWavePrompt 本地孪生（静态 import 会成环触发 TDZ，格式等价由 test/knowledge-inject.test.mjs 锁定）；命中同时逐条 `appendKnowledgeHit` 落 `.runtime/knowledge-hits.jsonl` 事件流（type:inject，fail-soft；旧 knowledge-hit-report.json 照旧写，新旧遥测共存）。complete-handlers.js 生产端收尾渲染：quick --done 归类提议器（进程内四字段 outputText 拼查询串跑 matchKnowledge，命中渲染「📚 待归类提议」引导 `knowledge classify`，未命中/纯新增不提议）+ knowledge-baseline 棘轮（uncategorized 条数超线软警告不阻断、低于基线自动收紧、文件缺失视为未启用）+ archive 收尾 uncategorized 抽审清单渲染。stats 聚合命令消费同一事件流输出命中矩阵/死重清单（src/knowledge-stats.js 本体归 core-engine 卡）。
+ 
+ ### ProgressManager 对齐相关方法
+ 
+@@ -74,15 +75,22 @@ ProgressManager.alignExecuteToPlan(cwd, changeName, specBase, {confirm})
+ - `batch_progress` 和 `approvals` 表按 `change_id` UNIQUE，每个变更只能有一条记录
+ - **系统 key（default / quick-<hex8>）不物化 changes/ 目录**（坑 default-empty-dir-materialized，2026-09-14 用户反馈）：`initChange` 只为普通变更建 `changes/<名>/` 目录；default（辅助阶段无实体产物的进度容器——explore 产物在 DB、原型按 prompt 约定放 `{SPEC_ROOT}/explore/`）与 quick 会话键的进度真相在 DB 行，空目录纯污染（next.js 报「目录为空→清理」误导、resolveChangeNameAuto 目录计数被搅动、spec 树上行空目录）。配套锚定：`run/command.js` !progress 块的 `resolveAuxiliaryDefaultAffinity`（default 行有在途（非 completed 且 steps>0）的本阶段 → 无 --change 的辅助阶段命令锚回 default 行；显式 --change 恒优先）；done-like 幻影守卫加 `!progress` 前置（亲和已确证目标存在，不落磁盘物化判据）；守卫报错 ③ 对 explore + default 在活跃列表补「重试加 --change default」出口。回归 test/default-no-dir-and-affinity.test.mjs。
+ - 历史迁移：v1/v2 使用 `progress.json` 文件，v3 全部迁移至 SQLite（`CURRENT_VERSION = 3`）
+-- `db.js` DDL `project.schema_version DEFAULT`、`DB_SCHEMA_VERSION`、`shared.js CURRENT_VERSION`、`progress._version` 四处 schema 版本应一致（当前 v5，title/quicklog_id 列）；改动加表/列/migration 时同步 bump 四处 + 测试断言
++- `db.js` DDL `project.schema_version DEFAULT`、`DB_SCHEMA_VERSION`、`shared.js CURRENT_VERSION`、`progress._version` 四处 schema 版本应一致（当前 v6，owner_session 列——2026-09-14-change-ownership-guards task-01 bump，v5 库首开幂等 ALTER 自动加列、存量行 NULL=无主）；改动加表/列/migration 时同步 bump 四处 + 测试断言
+ - `migrateDocs` 是一次性脚本，不会幂等运行；已存在的文件会被跳过
+ - **stage review gate marker 缺失自生**（坑1，`run/gates.js:241`）：tier=independent 且 `getLatestStageReviewRunId` 返回空时（execute 批量完成跳过 prompt 渲染等），gate 自身调 `generateStageReviewRunId()` + `stageReviewMarkerPath()` 写盘 + `mkdirSync`——错误路径从 `execute-null`（不可执行）变为 `execute-review-<id>`（可执行）。补充 prompt 渲染时落 marker（gap 6）的兜底：prompt 路径未走到时 gate 路径自生，marker 文件名/位置不变
+ - **brainstorm/verify 双占位符注入（fail-soft）**（2026-08-23-adopt-harness-practices，`src/run/prompt.js:429-464`）：brainstorm Step2 的 {DECISION_HITS} ← matchKnowledge decisionHits——命中 rejected 条目渲染「否决决策提示」段（ID/标题/否决理由/复潮条件），无命中替换空串零输出（不留残留占位符）；注入结果同步落 runtime JSON（.runtime/decision-hits.json，与 KNOWLEDGE_HIT_REPORT 落盘同口径）；advisory 展示不改步骤流程，异常单行说明不抛（全降级）。
+   verify「运行测试和质量扫描」步的 {EVIDENCE_AUTO_RECOMMENDATION}（`src/run/prompt.js:719-746`）← resolveTestStrategy 的 evidence_auto_recommendation.summary 渲染进 step prompt——verify-postcheck 在 --done 事后才解析 evidence-auto，agent 写 verify-result.md 时看不到推荐无从否决，故在 prompt 时点注入（含推荐理由、降级注记与「可在 verify-result.md 否决并改跑全量」路径，FR-11）；同样 fail-soft（注入失败给读 local.yaml 确认 test_strategy 的指引，--done 仍按 resolveTestStrategy 实测对账）。
+-- **archive CLI 下沉 git add**（坑4，`run/complete-handlers.js:410`）：`unregisterChange` 后 CLI 确定性 `safeGit add -- .sillyspec/changes/archive/ + .sillyspec/docs/`，不靠 archive step5 prompt 驱动（step5 prompt 的 git add 保留作幂等兜底）；safeGit 失败不阻断归档（目录已移动 + change 已注销）
++- **archive CLI 下沉 git add**（坑4，`run/complete-handlers.js:424`）：`unregisterChange` 后 CLI 确定性 `safeGit add -- .sillyspec/changes/archive/ + .sillyspec/docs/`，不靠 archive step5 prompt 驱动（step5 prompt 的 git add 保留作幂等兜底）；safeGit 失败不阻断归档（目录已移动 + change 已注销）
+ - **execute run marker 写入原子化 + 分层 fail**（2026-08-16-state-split-fixes #1，D-001@v1）：四处 marker 写入点（`run/stage.js` 主点 + `run/gates.js`/`run/prompt.js`/`task-review.js` 补写点）统一「mkdir `execute-runs/<runId>/tasks` 先于 marker」不变量——目录不再只随 review.json 写入创建，消除「有 marker 无目录」空 run 被 archive 完成度扫描误用。分层失败语义：stage 主点 throw（execute 启动 exit 1 + 修复指引）；gates 补写点异常直穿外层 catch fail-closed；prompt 渲染路径降级（console.error 留痕 + runId 仍注入）；task-review 去静默保 fail-open。测试 execute-run-dir-fail-loud.test.mjs（33 断言）。runId 同秒碰撞根治（2026-09-10 驾驭小结①，坑 exec-run-id-same-second-collision）：四处写入点在 mkdir 前先经 `claimExecuteRunId`（task-review.js，非递归 mkdir 排他认领，碰撞换随机短后缀）——并行会话（不同 change）同秒启动 execute 不再生成同一 runId 共享 run 目录互相覆盖 per-task review.json；分层 fail 语义不变。第三批①再加固：generateExecuteRunId 携 changeName 附 6 位 FNV 哈希段（exec-…-<hash>）——不同变更 runId 结构性不同，五处 generate 写入点全部传 changeName。第十三批③：gate-snapshot 环境目录链接面扩 venv 族（node_modules/.venv/venv/env 全 junction，dev 依赖同源；链接失败/全缺 ⚠️ 可见——坑 gate-snapshot-env-mismatch）。第十二批：noAI 质量扫描步（executeVerifyQualityScan，verify 第一实测执行点）补接同款快照（第八批只接 gates.js verify 块——用户第三次撞上的真实来源）；两处 fallback 主仓时若非 .sillyspec 脏文件在场打 ⚠️ 口径可见提示（warnIfMainRepoDirtyForGate）。第八批：verify 实测门同款隔离（createVerifyGateSnapshot——resolveVerifyChangedFiles 变更文件集 + native worktree 时 overlay 源=worktree 根（--worktree 定向跑等价）+ 他者显式声明剔除 + 变更文档/local.yaml 随快照；gates.js verify 块 test/lint 快照内跑，fallback 主仓 + lint 阻断补污染归属提示，SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF 可关）。第六批：quick --done test+lint 门禁隔离快照（run/gate-snapshot.js createGateSnapshot——HEAD worktree + 会话文件 overlay + node_modules junction + local.yaml 复制，并行会话脏文件不参与本会话门禁判定；基建失败 fallback 主仓现行为；SILLYSPEC_QUICK_GATE_SNAPSHOT_OFF 可关）；taskcard --all 平台产物镜像主仓（mirrorPlatformArtifactToMainRepo 增 ensureParentDir——tasks/ 子目录在 changeDir 存在时自动建，index.js taskcard case pointer 态接线）。第五批①：自指平台指针警告跨进程 10min 窗口降频（warnSelfRefPointerOnce marker，writePlatformPointer 与 command.js 恢复链两处接线——daemon junction 形态下每命令重复告警的噪音闸）+ resolvePlatformSpecDir 对 pointer specRoot realpath 规范化（junction 坍缩为真实路径：design-init/endpoints 等落盘不再锚到 daemon junction 副本路径）。同批③：reapVerifyServices 改 killProcessTree 进程树击杀（win32 taskkill /PID <pid> /T /F；POSIX ps 递归枚举子进程后杀——坑 verify-service-process-leak 子进程泄漏：原 process.kill 只杀登记的 shell 包装 PID，python 服务本体成孤儿挂机；verify prompt 同步补「优先登记服务本体（叶子）PID」指引）。同批②：run/shared.js 新增 mirrorPlatformArtifactToMainRepo（平台模式产物双写镜像主仓 changeDir——design-init / verify-probes --init 在 pointer 态 agent 本地跑时不再单点依赖 spec-sync 回程；daemon 显式 --spec-dir / 本地无 changeDir / 路径同构跳过）。
+ - **`.runtime` 根解析统一 `resolveRuntimeRoot`**（坑 execute-runs-isolation，`run/shared.js`）：`.runtime` 根（含 `sillyspec.db` / execute-runs / stage-reviews / quick-sessions）由 `resolveRuntimeRoot(platformOpts, localSpecBase)` 统一解析，三级优先级 `platformOpts.runtimeRoot`（平台）> `platformOpts.specDriftAnchor`（drift 锚点）> `localSpecBase/.runtime`（本地兜底）。drift 守卫（`run/command.js`）命中时设 `specDriftAnchor = 主仓 specBase`（**不**设 `specRoot`/`runtimeRoot`——否则触发平台 sentinel，误跳 `triggerSync`/`checkApproval`、误进平台渲染分支）→ 下游 15 处站点解析落主仓 `.runtime`，execute-runs / stage-reviews 不随 worktree cleanup 整目录删消失，archive step1 完成度 gate 真相源（磁盘主仓 review.json）不再丢
+ 
++- **change 所有权接线 + 归档收口（2026-09-14-change-ownership-guards，task-02/task-03 / FR-01 / FR-02 / D-001 / D-002@v1）**：owner 读写与判定 API、会话标识三级解析归 progress 卡登记，本卡登记 run 层接线面——
++  - **启动 claim**：`run/command.js` run <stage> 启动即 `claimChangeOwner`（守卫语义：他人持有不抢也不拒；default 容器行不认领；fail-open 不阻断启动）；会话标识三级解析在该处消费（quick 会话=changeName 自身，full-flow=--session > env > anon@host）；
++  - **归档双门**（`run/complete-handlers.js` `archiveChangeDirectory`，`withMainRepoLock` 锁内）：①所有权硬校验——他人活跃 change 归档拒绝 exit 1（结构化 owner/最后活跃/`--takeover` 接管指引）；②归档收口——移动前调 `applyWorktree({checkOnly:true})` 探测未 apply 交付面（只读），非空阻断（错误含 apply 指引与 `--skip-apply` 出路），`--skip-apply`（run/command.js knownFlags/VALUE_FLAGS 白名单解析 `isSkipApply` → completeStep `sessionFlag` 同链透传）显式跳过 + `skip-apply.record.json` 留痕随归档包（flag/deliverableFiles/deliverableCount/note 可审计）；探测门自身异常 fail-open 留痕不叠加归档既有失败面；无 worktree（meta 缺失/in-place/native）或零交付面零行为变化；
++  - **quick 轻量归档链**：`closeQuickLinkedChanges` 对 linked full-flow change 归档移动前校验所有权（他人活跃 → skip + warning 不炸 quick --done；pm 缺接口 fail-open 放行留痕，校验异常 fail-closed 跳过不误归档）；
++  - **sync 投影**：`owner_session` 随 serializeForSync payload 照常上行（progress 卡登记）；`src/sync.js` `_progressContentEquals` 的 IGNORE_KEYS 同步纳入 `owner_session`（归属元数据非六表内容——版本切换窗口（平台旧 v5 payload × 本地 v6 脏态）owner 差异不落假冲突）。
++  - 测试 test/change-ownership-guards.test.mjs（迁移/四态/CLI 接线/放行过滤/归因分流/归档门/会话标识七组）。
++
+ - **--done 前非阻断并发预检 advisory**（`run/complete-handlers.js` quick 钩子 + `run/gates.js` execute 钩子 + `run/concurrent-detect.js`）：quick --done（`auditQuickCompletion` 后）与 execute --done（`completeStageGates` 入口 guard `stageName==='execute'`）完成前调 `detectConcurrentChanges()`（复用 `isQuickMetadata` 分类）扫工作树他者脏文件 + 他者活跃 change 目录，命中则 `console.warn` 多行 ⚠️（foreignFiles + otherActiveChanges + pathspec 提示），**绝不阻断**——不改 audit `result.status` / gate 通过性 / `isQuickMetadata` 语义（fail-open：`git status` 不可读时 `hasForeign=false` 不崩）。ownFiles 排除自身：quick 经 `resolveConcurrentAnchor`（concurrent-detect 纯函数，2026-08-18 误归属修复）——声明会话=`baselineFiles∪allowedFiles`（窗口 diff 含他者污染不再自吞），未声明会话维持旧口径 `changedFiles∪baselineFiles`；execute=design §6 交付文件（in-place 模式）或 `[]`（worktree 模式）
+ - **quick --done 同文件并发检测 advisory**（2026-08-13-quick-hunk-separation，`run/stage.js` + `run/shared.js`）：step1 启动将每个 allowedFile 内容 sha256 录 `guard.allowedFilesHash`（容错读，文件不存在/读失败跳过）；`auditQuickCompletion` 末尾检测——allowedFile 在 baseline（他者改过）且当前 hash ≠ 录入值（我也改了）→ 同文件并发，push reason + `console.warn` 给 `git add -p`/patch 分离指引（防 commit 整文件 pathspec 夹带他者 hunk），**advisory 不改 result.status**（与 detectConcurrentChanges 同族互补：后者检测他者脏文件，本检测 baseline 文件 hunk 混）。旧 guard 无该字段 → 可选链跳过，向后兼容。
+ - **safeGit 收口 src/git-helper.js**（2026-08-09-worktree-git-injection）：`run/shared.js` 原 safeGit 实现已移入根级 src/git-helper.js 作统一公共 git 调用入口（safeGit+git+gitQuiet，execFileSync 数组形式不经 shell），与 worktree 链共用消除口径分裂（原 safeGit vs worktree 本地 git/gitQuiet 双源）；run/shared.js 改 `import { safeGit } from '../git-helper.js'` + `export { safeGit }` 两段式（注：纯 `export { safeGit } from '...'` 不建本地词法绑定，内部 ancestorSpecDirs/auditQuickCompletion 等调用会 ReferenceError，故用 import+export 而非纯 re-export）；run/ 层调用方路径与行为不变
+diff --git a/.sillyspec/docs/sillyspec/modules/setup.md b/.sillyspec/docs/sillyspec/modules/setup.md
+index d8a1cdb..89d3ea9 100644
+--- a/.sillyspec/docs/sillyspec/modules/setup.md
++++ b/.sillyspec/docs/sillyspec/modules/setup.md
+@@ -1,12 +1,12 @@
+ ---
+ author: qinyi
+-created_at: 2026-06-01T09:05:00
+-updated_at: 2026-08-30T00:00:00+08:00
++created_at: 2026-06-01T09:05:00+08:00
++updated_at: 2026-09-14T22:40:00+08:00
+ ---
+ 
+ # setup
+-> 最后更新：2026-08-30
+-> 最近变更：2026-08-30 AGENTS.md 单源改造（init 指引注入：AGENTS.md 承载完整模板、CLAUDE.md 退化为 @AGENTS.md 指针，codex 与 claude 共用注入器）/ 2026-08-23-adopt-harness-practices（test_strategy 枚举扩 skip/evidence-auto + 新 live 键 decisions.behind_threshold）/ 2026-08-16-scan-docs-reconcile（config-schema/local-detect 补录归属；migrate.js 归属已划 migration 卡）
++> 最后更新：2026-09-14
++> 最近变更：2026-09-14-change-ownership-guards（config-schema 登记 live 键 change-ownership.heartbeat_minutes + local.yaml.example 注释段——所有者活跃心跳窗，reader=src/progress/change-registry.js 心跳窗解析）/ 2026-08-30 AGENTS.md 单源改造（init 指引注入：AGENTS.md 承载完整模板、CLAUDE.md 退化为 @AGENTS.md 指针，codex 与 claude 共用注入器）/ 2026-08-23-adopt-harness-practices（test_strategy 枚举扩 skip/evidence-auto + 新 live 键 decisions.behind_threshold）/ 2026-08-16-scan-docs-reconcile（config-schema/local-detect 补录归属；migrate.js 归属已划 migration 卡）
+ > 模块路径：src/init.js, src/setup.js, src/config-schema.js, src/local-detect.js（migrate.js 归 migration 卡）
+ 
+ ## 职责
+@@ -25,6 +25,8 @@ setup 模块由三个文件组成，分别处理 SillySpec 生命周期的不同
+ **config-schema.js** 是 local.yaml 配置键的单一数据源（LOCAL_YAML_SCHEMA 集中全部已知键 + 生效状态 + 读取点），供 `sillyspec config schema`（人类可读树 / --json 机读）打印与 `sillyspec init` 调 renderExample() 落盘脱敏 local.yaml.example。2026-08-23 起 test_strategy 枚举扩 skip / evidence-auto（`src/config-schema.js:120`，D-005@v2：skip=真跳过不回退全量、verify 输出显式标注留审计痕迹；evidence-auto=按变更 module-impact.md 影响面推荐检查组合，缺失/不可解析降级 module 并注记；full/module 语义不变），
+ 新增 live 键 `decisions.behind_threshold`（`src/config-schema.js:165`，决策 behind 复核阈值缺省 10，reader 为 `readDecisionRulesConfig` src/docs-check.js）；renderExample 落盘段与示例注释同步扩。
+ 
++2026-09-14-change-ownership-guards 新增 live 键 `change-ownership.heartbeat_minutes`（`src/config-schema.js`，optional integer，缺省 15）——change 所有权活跃心跳窗口（分钟）：owner 非本会话且 last_active 距今在窗口内 → 拒绝接管类操作（`--takeover` 显式接管）；窗口外 → 放行并自动接管。reader 为 `resolveHeartbeatMs`（src/progress/change-registry.js 模块私有，唯一消费方 `assertChangeOwnership` 的心跳窗缺省解析——定向行扫描不引 YAML 依赖；值非正整数（含 0）回落缺省，防误配把活跃窗清零废掉护栏）；判级语义与接线见 progress / runtime / cli-entry 卡。`renderExample()` 落 local.yaml.example 注释段同步。
++
+ **local-detect.js** 是纯 fs 项目类型嗅探（detectLocalYaml）：不 spawn 子进程、不耗 token，几秒完成项目类型判定；只返回数据结构不写盘（create/gate 无需为此跑完整 scan），落盘由 CLI 路由 / scan.js 调用方负责。
+ 
+ ## 对外接口（表格）
+@@ -78,3 +80,4 @@ setup 模块由三个文件组成，分别处理 SillySpec 生命周期的不同
+ | 日期 | 变更名 | 摘要 |
+ |------|--------|------|
+ | 2026-08-19 | ql-20260819-015-65fa | init.js 子项目 repo 探测的 git remote get-url 改 execFileSync（去 shell 注入面） |
++| 2026-09-14 | 2026-09-14-change-ownership-guards | config-schema.js 登记 live 键 `change-ownership.heartbeat_minutes`（optional integer，缺省 15；reader=src/progress/change-registry.js `resolveHeartbeatMs`）+ local.yaml.example 注释段（task-01） |
+diff --git a/.sillyspec/docs/sillyspec/modules/worktree.md b/.sillyspec/docs/sillyspec/modules/worktree.md
+index e6a022d..2a98130 100644
+--- a/.sillyspec/docs/sillyspec/modules/worktree.md
++++ b/.sillyspec/docs/sillyspec/modules/worktree.md
+@@ -5,7 +5,7 @@ created_at: 2026-06-01T09:05:00
+ 
+ # worktree
+ > 最后更新：2026-09-14
+-> 最近变更：2026-09-14-apply-conflict-hardening（merge 写回批末 git add + 三出口统一 writeApplyManifest + rescue # 指引行 + guard 相交预检三分支/--force/autoApply）/ ql-20260908-008（meta.json BOM 容错 + apply allowlist 平台模式读 specRoot——resolveApplyAllowSet/collectReviewDeclaredFiles 加 specBase/runtimeRoot 参 + 指针静默回退） / 2026-08-19-reopen-and-execute-batch-guard（W3 apply 锚点默认 merge-base + --base 回退 + 冲突列表 stderr 解析）/ 2026-08-16-state-split-fixes（#2 applyByMerge merge 前预对齐 baseline 并行文件：preAlignBase
++> 最近变更：2026-09-14-change-ownership-guards（放行相交过滤 D-003@v1：review 声明只承认与 allow 面相交文件，外来声明剔除进 violations + `result.reviewOverdeclaredFiles`；applyWorktree checkOnly 被归档收口门复用探测未 apply 交付面——接线见 runtime 卡）/ 2026-09-14-apply-conflict-hardening（merge 写回批末 git add + 三出口统一 writeApplyManifest + rescue # 指引行 + guard 相交预检三分支/--force/autoApply）/ ql-20260908-008（meta.json BOM 容错 + apply allowlist 平台模式读 specRoot——resolveApplyAllowSet/collectReviewDeclaredFiles 加 specBase/runtimeRoot 参 + 指针静默回退） / 2026-08-19-reopen-and-execute-batch-guard（W3 apply 锚点默认 merge-base + --base 回退 + 冲突列表 stderr 解析）/ 2026-08-16-state-split-fixes（#2 applyByMerge merge 前预对齐 baseline 并行文件：preAlignBase
+ > 模块路径：src/worktree.js, src/worktree-apply.js, src/worktree-deps.js, src/git-helper.js
+ 
+ ## 职责
+@@ -52,6 +52,7 @@ worktree 模块提供基于 git worktree 的分支隔离机制，让每个变更
+ | `mergeDirtyOverlapThreeWay({ projectRoot, worktreePath, baseHash }, overlapFiles)` | EXCLUDE-DIRTY 脏重叠自动三方合并（base=deliverableBase 锚点版，ours=主仓脏版，theirs=worktree 版，git merge-file clean 才写回两侧并集）；**2026-09-14-apply-conflict-hardening（FR-01）批末统一 `git add -- <显式 pathspec>`**（chunkPaths 分批）——本写回点曾是全链路唯一未暂存的自动写点（未暂存对工作区级 git restore/clean 零免疫，§64 事故实际缺口）；fail-open：add 失败不抛（合并成果保留）+ warn + 返回 `stagedOk:false`（manifest 侧对该批回退 readFile+CRLF 归一 approx 指纹口径）；返回 `{merged, conflicts, stagedOk}` | `{ projectRoot, worktreePath, baseHash }, overlapFiles` |
+ | `writeApplyManifest({ projectRoot, specBase?, changeName, baseHash?, files })`（内部） | apply 成功尾声写 `<changeDir>/apply-manifest.json`（resolveActiveOrArchiveChangeDir 归档感知；已存在覆盖——重放 apply 以最新为准；files 为空跳过不写）。**三出口统一**（2026-09-14-apply-conflict-hardening，FR-02/D-001）：①patch 主路径成功尾声（patch∪merge 写回面并集）②patch 为空但 merge 写回面非空的变体出口 ③applyByMerge 成功点（显式 `--merge` 与 ENOBUFS 自动降级两条提前 return）。schema `{schemaVersion:1, change, appliedAt, baseHash, files:[{path,sha256,approx?}]}`；sha256 一律取 **staged blob 内容**（`git show :<path>`，LF 规范态）与 doctor 漂移检测同基，staged 不可用回退磁盘 CRLF→LF 归一并标 `approx:true`，双无（删除面）不进 manifest；CLI 全权写，agent 勿手改 | `{ projectRoot, specBase?, changeName, baseHash?, files }` |
+ | `generateRescueCommands` 指引行（D-003） | rescue 人工落地路径不进 manifest 也不自动暂存——2026-09-14-apply-conflict-hardening 起 commands 末尾追加一行 `# 落地后立即 git add -- …` 锁定指引（注释形态整块复制仍是合法 shell；commands 为空不加；cpFileCount/excludedCount 口径不变） | 同上行 |
++| `result.reviewOverdeclaredFiles`（applyWorktree 返回字段） | **review 声明相交过滤（D-003@v1，2026-09-14-change-ownership-guards task-03 / FR-02）**：step 3b——review.json changedFiles 声明只承认与 allow 面（`resolveApplyAllowSet` 并集：design §6 清单 ∪ 各 task target_files/allowed_paths ∪ linked-change 声明）相交的文件（`pathMatches` 容差）；不相交的外来声明剔除出放行面，主仓切片进本字段 + violations 报告行（Gate1 拦截时分流「review 声明了越权文件」嫌疑标注 vs 完全未声明两族）+ 审计 warning（troubleshooting §65 事件②：并行会话在途文件混入声明不再经该通道放行——admission 增量归零，通道保留作审计报告位）。跨仓声明不进 main 切片（repo 键分流）；该 repo 无 design/任务卡清单时无相交可判不校验。主仓与跨仓（worktree-apply.js 内 reviewAdmittedFiles 两路径）同口径 | applyWorktree 返回值（字符串数组，无外来声明时 undefined） |
+ 
+ ### src/worktree-deps.js
+ | 函数/常量 | 说明 | 参数 |
+@@ -115,6 +116,7 @@ execute 验证硬门（`run.js completeStep` execute 分支）读 `depsStatus`
+ - **cleanup 不威胁 execute-runs / stage-reviews**（坑 execute-runs-isolation，方案 A）：drift 场景（agent cd worktree 跑 plan/execute/verify/archive）下，`.runtime` 根经 `resolveRuntimeRoot` + `platformOpts.specDriftAnchor` 锚定主仓，execute-runs / stage-reviews 从落盘起即在主仓 `.sillyspec/.runtime/`；cleanup（`rmSync(worktreePath, {recursive:true, force:true})` 整目录删 worktree 物理目录）物理上碰不到 → archive step1 完成度 gate 真相源（磁盘主仓 review.json）不再丢。`src/worktree.js` 的 9 处 cleanup 调用点 + `rmSync` 全无需改（方案 A 堵源头 runtimeRoot 解析，非下游 salvage）
+ - 依赖供给失败不阻断 create（只记 meta.depsStatus=failed），但 execute 验证硬门会阻断 --done
+ - **git 调用收口 src/git-helper.js**（2026-08-09-worktree-git-injection）：worktree.js（原 51 处本地 git()/gitQuiet() helper，`execSync(\`git ${args}\`)` 字符串拼接经 shell）+ worktree-apply.js（原 26 处）的 git 调用全部删本地实现、import 公共入口 src/git-helper.js（safeGit+git+gitQuiet，execFileSync 数组形式不经 shell）；调用点字符串拼接改数组（文件列表 `files.join(' ')` → `...files` 展开为独立 argv 元素），消除命令注入（文件名含 `;`/`$()` 经 shell 在用户机 RCE）+ 空格拆词（文件名含空格被 shell 切词致 apply 漏文件，Windows 用户目录常见）；二进制 diff/commit 保留 Buffer/env 语义用裸 execFileSync 数组形式（合理例外，注入面已消除）
++- **归档收口门复用 checkOnly 探测（2026-09-14-change-ownership-guards，D-002@v1 关联）**：run/complete-handlers.js archiveChangeDirectory 归档移动前调 `applyWorktree(name, { checkOnly: true })` 探测未 apply 交付面（只读零写盘），非空即阻断归档（`--skip-apply` 显式跳过留痕）——堵「归档完成但交付物未进主仓」悬空态（troubleshooting §65 事件①放大器）。门与所有权接线归 runtime 卡；本卡只登记 applyWorktree checkOnly 的这一新消费方
+ 
+ ## 变更索引
+ 
+diff --git a/.sillyspec/local.yaml.example b/.sillyspec/local.yaml.example
+index 50e0bcb..b2cbc13 100644
+--- a/.sillyspec/local.yaml.example
++++ b/.sillyspec/local.yaml.example
+@@ -99,3 +99,8 @@ docs-check:
+ #   l1_files: 4             # 或 ≥4 文件 → L1（旧规则「≤3 文件」边界连续性）
+ #   l2_span: 4              # 跨 ≥4 模块 → L2（4-10 文件档全表最差格 0-14.3%）
+ #   l2_files_degraded: 8    # module-map 缺失降级档：≥8 文件 → L2（覆盖最差文件桶 7-10 的 32.9-35.3%）
++
++# ── 变更所有权守卫（接管类操作 apply/cleanup/archive 对他人活跃 change 校验；缺省 15 分钟）──
++# owner 非本会话且 last_active 在窗口内 → 拒绝（--takeover 显式接管）；窗口外 → 自动接管。
++# change-ownership:
++#   heartbeat_minutes: 15   # 所有者活跃心跳窗口（分钟）
+diff --git a/AGENTS.md b/AGENTS.md
+index b184646..223e233 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -23,3 +23,4 @@
+ 16. **代码可能随时在修改**（多 agent 并行），Edit 前重跑 + 查最新态；破坏性 git op 前先备份。
+ 17. **不奉承用户**，禁止"你说得对"类话术，直接给结论、依据、方案。
+ 18. **禁止目录级 git add / git add -A**（多会话共享仓）：.sillyspec/ 等目录里有并行会话的进行中文件与已提交文档，目录级暂存会夹带他者改动甚至误删已提交文件（2026-09-10 实证）。提交一律用显式 pathspec（git add -- 文件1 文件2），提交前 git status 核对暂存面只含本会话文件。
++19. **会话启动先立身份**：agent 会话启动时 `export SILLYSPEC_SESSION_ID=<唯一标识>`（如 agent 名+任务名）——多会话并行时 change 所有权判定（apply / cleanup / assess 自动 apply / 归档对他会话活跃变更的接管拒绝）依赖此标识；缺省降级为 `anon@<主机名>` 机器级标识（只拦他机，同机并行不设防）。部分 harness 的 Bash 工具 shell 状态不持久（env 随命令丢失），此时接管类命令每条显式带 flag 回退：`sillyspec worktree apply <change> --session <唯一标识>`（`--session` 优先级高于 env）。
+diff --git a/meta.json b/meta.json
+index 8e8c9ed..d1817fe 100644
+--- a/meta.json
++++ b/meta.json
+@@ -4,8 +4,25 @@
+   "branch": "sillyspec/2026-09-14-change-ownership-guards",
+   "baseBranch": "main",
+   "baseHash": "65354a1c1062d8b86b049136f0adb9d423c9d532",
++  "actualBaseHash": "7773acc22ce44f1011ca1495a36ab37904687c08",
++  "createdAt": "2026-09-14T12:41:13.129Z",
+   "worktreePath": "C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-14-change-ownership-guards",
+   "mode": "worktree",
+-  "createdAt": "2026-09-14T12:41:11.582Z",
+-  "provisioning": true
++  "baselineFiles": [
++    "SillySpec-能力亮点全景-2026-09-14.pptx",
++    "~$SillySpec-能力亮点全景-2026-09-14.pptx"
++  ],
++  "baselineCommit": "7773acc22ce44f1011ca1495a36ab37904687c08",
++  "baselineHash": "60e10e4870e899ef",
++  "syncDiagnostic": {
++    "status": "ahead",
++    "defaultBranch": "main",
++    "behind": 0,
++    "ahead": 5
++  },
++  "depsStatus": "linked",
++  "depsMethod": "junction",
++  "depsSource": "main-checkout",
++  "depsLockHash": "ebc4ba1d35db5dc2",
++  "depsCheckedAt": "2026-09-14T12:41:13.100Z"
+ }
+diff --git a/src/config-schema.js b/src/config-schema.js
+index 705dc5f..28e5426 100644
+--- a/src/config-schema.js
++++ b/src/config-schema.js
+@@ -192,6 +192,14 @@ export const LOCAL_YAML_SCHEMA = {
+         { path: 'quick-gate.l2_files_degraded', type: 'integer', optional: true, status: 'live', readers: ['resolveGateThresholds (src/quick-gate-profile.js)'], desc: 'module-map 缺失降级档的 L2 文件数阈值：变更文件 ≥N → L2（缺省 8）。', example: '8' },
+       ],
+     },
++    {
++      id: 'change-ownership',
++      title: '变更所有权守卫',
++      note: '接管类操作（apply/cleanup/archive）对他人活跃 change 的所有权校验调参（2026-09-14-change-ownership-guards，D-001/D-005@v1）。缺省 15 分钟，仅确知调参时配置。',
++      keys: [
++        { path: 'change-ownership.heartbeat_minutes', type: 'integer', optional: true, status: 'live', readers: ['assertChangeOwnership (src/progress/change-registry.js — 本变更 task-02 接线消费)'], desc: '所有者活跃心跳窗口（分钟）：owner 非本会话且 last_active 距今在窗口内 → 拒绝接管类操作（--takeover 显式接管）；窗口外 → 放行并自动接管。缺省 15。', example: '15' },
++      ],
++    },
+   ],
+ };
+ 
+@@ -369,5 +377,10 @@ docs-check:
+ #   l1_files: 4             # 或 ≥4 文件 → L1
+ #   l2_span: 4              # 跨 ≥4 模块 → L2
+ #   l2_files_degraded: 8    # module-map 缺失降级档：≥8 文件 → L2
++
++# ── 变更所有权守卫（接管类操作 apply/cleanup/archive 对他人活跃 change 校验；缺省 15 分钟）──
++# owner 非本会话且 last_active 在窗口内 → 拒绝（--takeover 显式接管）；窗口外 → 自动接管。
++# change-ownership:
++#   heartbeat_minutes: 15   # 所有者活跃心跳窗口（分钟）
+ `;
+ }
+diff --git a/src/db.js b/src/db.js
+index 2efe6e2..491f217 100644
+--- a/src/db.js
++++ b/src/db.js
+@@ -7,7 +7,7 @@ import { dirname } from 'path';
+ // 每次 new ProgressManager 都过 init，靠版本戳跳过建表省开销）。
+ // node:sqlite（DatabaseSync）是原生 SQLite 引擎，打开即持久化（不像 sql.js 纯内存需整库 export 落盘），
+ // _createSchema 内 DDL 直接落盘，无需额外 _save。
+-const DB_SCHEMA_VERSION = 5;
++const DB_SCHEMA_VERSION = 6;
+ 
+ // SQLITE_BUSY 应用层有限重试（R-08 / NFR-03）：WAL 单写者模型，并发写第二者在
+ // busy_timeout=5000（init PRAGMA）后抛 SQLITE_BUSY。busy_timeout 已在引擎层处理大部分等待；
+@@ -252,7 +252,7 @@ export class DB {
+       CREATE TABLE IF NOT EXISTS project (
+         id INTEGER PRIMARY KEY DEFAULT 1,
+         name TEXT NOT NULL,
+-        schema_version INTEGER DEFAULT 5,
++        schema_version INTEGER DEFAULT 6,
+         created_at TEXT NOT NULL,
+         updated_at TEXT NOT NULL
+       )
+@@ -271,7 +271,8 @@ export class DB {
+         platform_change_id INTEGER,
+         platform_workspace_id INTEGER,
+         platform_last_sync TEXT,
+-        platform_sync_enabled INTEGER DEFAULT 0
++        platform_sync_enabled INTEGER DEFAULT 0,
++        owner_session TEXT
+       )
+     `);
+ 
+@@ -370,6 +371,13 @@ export class DB {
+     // 已语义化，title/quicklog_id 留空。不纳入平台同步脏度（本地展示用元信息）。
+     this._migrateAddColumn('changes', 'title', 'TEXT');
+     this._migrateAddColumn('changes', 'quicklog_id', 'TEXT');
++
++    // v6（2026-09-14-change-ownership-guards task-01，D-005@v1）：changes 表加 owner_session——
++    // change 级所有权载体（接管类操作对他人活跃 change 拒绝执行的心跳窗口判定数据源）。
++    // NULL=无主（存量行迁移后即此态，任何会话可接管——向后兼容零行为变化）；写入方=
++    // change-registry 首建/claimChangeOwner（task-02 接线会话标识）；消费方=assertChangeOwnership
++    // （task-02）+ serializeForSync 平台同步投影。幂等 ALTER（列存在跳过，v5 先例同款）。
++    this._migrateAddColumn('changes', 'owner_session', 'TEXT');
+   }
+ 
+   /**
+diff --git a/src/index.js b/src/index.js
+index 1c4c8bc..b70df8a 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -2642,12 +2642,40 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语
+     }
+     case 'worktree': {
+       const { WorktreeManager } = await import('./worktree.js');
+-      const { ProgressManager } = await import('./progress.js');
++      const { ProgressManager, resolveSessionIdentity } = await import('./progress.js');
+       const wtSubCmd = filteredArgs[1];
+       const wtName = filteredArgs.slice(2).find(a => !a.startsWith('-'));
+       const wm = new WorktreeManager({ cwd: dir });
+       const pm = new ProgressManager({ specDir: resolvePlatformSpecDir(dir, specDir) });
+ 
++      // ── 所有权护栏公共件（2026-09-14-change-ownership-guards task-02 / FR-01 / D-001@v1）──
++      // 接管类操作（apply / cleanup / assess 自动 apply）改主仓前校验 change 归属：
++      // 他人且活跃（活跃窗内，heartbeat_minutes 缺省 15min）→ 拒绝；无主 / 窗口外 / 本会话
++      // 自有 / --takeover → 放行，接管分支重写 owner=本会话（setChangeOwner 含 last_active
++      // 心跳起算）。调用点必须在 withMainRepoLock 锁内（判定与执行无 TOCTOU）；只读路径
++      // （diff/list/meta/doctor/--check-only）不接。会话标识三级解析：--session flag >
++      // env SILLYSPEC_SESSION_ID > anon@host 机器级降级（同机并行不设防是 R-01 明示局限）。
++      const sessionFlagIdx = args.indexOf('--session');
++      const sessionFlagValue = (sessionFlagIdx !== -1 && args[sessionFlagIdx + 1]
++        && !String(args[sessionFlagIdx + 1]).startsWith('--')) ? String(args[sessionFlagIdx + 1]).trim() : null;
++      // soft=true：assess 自动路径拒绝语义（跳过自动落盘 + warning 不抛错，同 overlapSkipped 软跳）；
++      // soft=false：显式 apply/cleanup 拒绝（结构化错误，调用方 exit 非零）。
++      function _guardChangeOwnership(changeName, { forced = false, soft = false } = {}) {
++        const { session } = resolveSessionIdentity({ flagSession: sessionFlagValue, cwd: dir });
++        const check = pm.assertChangeOwnership(dir, changeName, { selfSession: session, nowMs: Date.now(), forced });
++        if (check.allowed) {
++          if (check.action !== 'self') pm.setChangeOwner(dir, changeName, session);
++          return { allowed: true, action: check.action };
++        }
++        const lines = [
++          `变更 ${changeName} 正被其他会话持有（owner: ${check.owner}，最后活跃: ${check.lastActive || '未知'}），活跃窗口 ${Math.round(check.heartbeatMs / 60000)} 分钟内拒绝接管类操作`,
++          `确认对方已放弃且本会话应接管：加 --takeover 显式强制接管（重写 owner 并留痕）；或等对方会话收尾后重试`,
++        ];
++        if (soft) { for (const l of lines) console.warn(`⚠️  ${l}`); }
++        else { for (const l of lines) console.error(`🚫 ${l}`); }
++        return { allowed: false, action: check.action };
++      }
++
+       // isolation 写入 DB 的辅助函数
+       function _writeIsolationToDB(cwd, changeName, info) {
+         if (info.blocked) {
+@@ -2672,17 +2700,19 @@ SillySpec worktree — git worktree 隔离管理
+ 
+ 用法:
+   sillyspec worktree create <change-name> [--base <branch>] [--adopt-branch]   创建隔离 worktree（--adopt-branch：收编既有同名分支为工作分支，分支现状作 baseline）
+-  sillyspec worktree apply <change-name> [--check-only] [--base merge-base|baseline] [--merge] [--skip-overlap] [--stash-dirty] [--force]   校验并应用变更到主工作区（--stash-dirty：主仓在途改动自动 stash→apply→恢复，SHA 兜底可审计；--force：越过活跃 quick 会话 guard 相交预检，overlapForced 留痕）
+-  sillyspec worktree assess <change-name>                     风险审计 + 自动 apply
++  sillyspec worktree apply <change-name> [--check-only] [--base merge-base|baseline] [--merge] [--skip-overlap] [--stash-dirty] [--force] [--takeover]   校验并应用变更到主工作区（--stash-dirty：主仓在途改动自动 stash→apply→恢复，SHA 兜底可审计；--force：越过活跃 quick 会话 guard 相交预检，overlapForced 留痕；--takeover：越过所有权护栏显式强制接管，owner 重写留痕）
++  sillyspec worktree assess <change-name>                     风险审计 + 自动 apply（自动路径受所有权护栏约束：他人活跃 change 跳过自动落盘并 warning）
+   sillyspec worktree diff <change-name> [--base <commit>]      查看 worktree 相对 base 的变更
+   sillyspec worktree list                                      列出所有活跃 worktree
+   sillyspec worktree meta <change-name>                        读取 worktree meta.json
+-  sillyspec worktree cleanup <change-name> [--force]           强制清理 worktree
++  sillyspec worktree cleanup <change-name> [--force] [--takeover]   强制清理 worktree（受所有权护栏约束：他人活跃 change 拒绝，--takeover 显式接管）
+   sillyspec worktree doctor [--fix] [--stale-hours N] [--change <name>]   健康检查 + 修复（--change 仅扫指定 change）
+ 
+ 选项:
+   --base <branch>       create: 指定基础分支（默认当前 HEAD）
+   --check-only          apply: 只输出检查结果，不实际 apply
++  --takeover            apply/cleanup: 所有权护栏拒绝时的显式强制接管口（owner 他人且活跃时解锁，重写 owner 留痕）
++  --session <id>        显式会话标识（所有权三级解析最高优先级；缺省 env SILLYSPEC_SESSION_ID，再缺省 anon@<host> 机器级降级——同机并行不设防）
+ `);
+         break;
+       }
+@@ -2720,7 +2750,7 @@ SillySpec worktree — git worktree 隔离管理
+         }
+         case 'apply': {
+           if (!wtName) {
+-            console.error('❌ 用法: sillyspec worktree apply <change-name> [--check-only] [--base merge-base|baseline] [--merge] [--skip-overlap] [--stash-dirty] [--force]');
++            console.error('❌ 用法: sillyspec worktree apply <change-name> [--check-only] [--base merge-base|baseline] [--merge] [--skip-overlap] [--stash-dirty] [--force] [--takeover]');
+             process.exit(1);
+           }
+           const checkOnly = args.includes('--check-only');
+@@ -2728,6 +2758,7 @@ SillySpec worktree — git worktree 隔离管理
+           const skipOverlap = args.includes('--skip-overlap');
+           const stashDirty = args.includes('--stash-dirty');
+           const force = args.includes('--force'); // guard 相交预检显式解锁（task-02 / FR-03；人工 flag，自动路径永不带）
++          const takeover = args.includes('--takeover'); // 所有权护栏显式强制接管（2026-09-14-change-ownership-guards task-02 / FR-01；人工 flag，自动路径永不带）
+ 
+           // 解析 --base 参数（默认 merge-base）
+           let base = 'merge-base';
+@@ -2755,15 +2786,22 @@ SillySpec worktree — git worktree 隔离管理
+           }
+           // 主仓 apply 互斥锁（坑 main-apply-no-mutex）：真 apply（非 checkOnly）在锁内跑——
+           // apply 链（rollback/merge/cleanup）直接改主仓工作区，两会话并发互踩会互相清文件。
++          // 所有权护栏（2026-09-14-change-ownership-guards task-02 / FR-01）：锁内、实际 apply 前
++          // 判归属——他人且活跃（活跃窗内）拒绝；--check-only 是只读路径不校验（铁律：只读命令不接）。
++          // 拒绝时结构化错误已在护栏内打印，经哨兵返回值带出锁外统一 exit 1（不进结果展示分支）。
+           let result;
+           try {
+             result = checkOnly
+               ? applyWorktree(wtName, { cwd: dir, checkOnly, merge, base, ctx: _applyCtx, skipOverlap, stashDirty, force })
+-              : await withMainRepoLock(dir, wtName, 'apply', () => applyWorktree(wtName, { cwd: dir, checkOnly, merge, base, ctx: _applyCtx, skipOverlap, stashDirty, force }));
++              : await withMainRepoLock(dir, wtName, 'apply', () => {
++                if (!_guardChangeOwnership(wtName, { forced: takeover }).allowed) return { __ownershipDenied: true };
++                return applyWorktree(wtName, { cwd: dir, checkOnly, merge, base, ctx: _applyCtx, skipOverlap, stashDirty, force });
++              });
+           } catch (lockErr) {
+             console.error(`❌ ${lockErr.message}`);
+             process.exit(1);
+           }
++          if (result && result.__ownershipDenied) process.exit(1);
+ 
+           if (result.errors.length > 0) {
+             console.error(`❌ 校验失败:`);
+@@ -2899,15 +2937,25 @@ SillySpec worktree — git worktree 隔离管理
+           if (assessment.decision === 'SAFE' || assessment.decision === 'WARNING') {
+             console.log('Action: auto-applying...');
+             const { applyWorktree, withMainRepoLock } = await import('./worktree-apply.js');
+-            // 主仓互斥锁（与手动 apply 同款）：自动 apply 同样改主仓工作区，必须互斥
++            // 主仓互斥锁（与手动 apply 同款）：自动 apply 同样改主仓工作区，必须互斥。
++            // 所有权护栏（2026-09-14-change-ownership-guards task-02 / FR-01）：assess 自动 apply
++            // 是护栏①最可能的旁路（SAFE/WARNING 即自动改主仓+链内 cleanup）——锁内、实际动作前
++            // 判归属。自动路径永不带 --takeover；他人活跃 change 拒绝 = 跳过自动落盘 + warning
++            // 不抛错（同 overlapSkipped 软跳语义：无人值守不越权也不阻断审计流）。
+             let applyResult;
+             try {
+-              applyResult = await withMainRepoLock(dir, wtName, 'assess-auto-apply', () => applyWorktree(wtName, { cwd: dir, ctx: _assessCtx, autoApply: true }));
++              applyResult = await withMainRepoLock(dir, wtName, 'assess-auto-apply', () => {
++                if (!_guardChangeOwnership(wtName, { soft: true }).allowed) return { ownershipSkipped: true };
++                return applyWorktree(wtName, { cwd: dir, ctx: _assessCtx, autoApply: true });
++              });
+             } catch (lockErr) {
+               console.error(`❌ 自动 apply 未执行：${lockErr.message}`);
+               break;
+             }
+-            if (applyResult.overlapSkipped) {
++            if (applyResult.ownershipSkipped) {
++              // 所有权拒绝（结构化 warning 已在护栏内打印）：跳过自动落盘，指引人工显式接管
++              console.log('   → 确认对方会话已放弃：人工评估后显式接管 sillyspec worktree apply ' + wtName + ' --takeover（或等对方收尾后重跑 assess）');
++            } else if (applyResult.overlapSkipped) {
+               // guard 相交软跳过（task-02 / FR-03）：无人值守不越权也不阻断审计流——不落盘，亮 warning 指引人工评估
+               for (const w of applyResult.warnings || []) console.log(`⚠️  ${w}`);
+               console.log('   → 人工评估后显式 apply: sillyspec worktree apply ' + wtName + '（确认与活跃 quick 会话无冲突；或等对方 --done 后重跑 assess）');
+@@ -3004,15 +3052,23 @@ SillySpec worktree — git worktree 隔离管理
+         }
+         case 'cleanup': {
+           if (!wtName) {
+-            console.error('❌ 用法: sillyspec worktree cleanup <change-name>');
++            console.error('❌ 用法: sillyspec worktree cleanup <change-name> [--force] [--takeover]');
+             process.exit(1);
+           }
+           const forceFlag = args.includes('--force');
++          const takeover = args.includes('--takeover'); // 所有权护栏显式强制接管（task-02 / FR-01）
+           try {
+             // 主仓互斥锁（坑 main-repo-no-mutex 二批）：cleanup 删 worktree 注册表/分支/目录，
+-            // 与并行会话的 apply/cleanup 互踩会互相清——与其他写主仓操作共用一把 main-repo.lock
++            // 与并行会话的 apply/cleanup 互踩会互相清——与其他写主仓操作共用一把 main-repo.lock。
++            // 所有权护栏（2026-09-14-change-ownership-guards task-02 / FR-01）：锁内、实际清理前
++            // 判归属——他人且活跃拒绝（结构化错误在护栏内打印，哨兵带出统一 exit 1，跨仓清理
++            // 同步跳过）；--takeover 显式强制接管放行。
+             const { withMainRepoLock } = await import('./worktree-apply.js');
+-            const result = await withMainRepoLock(dir, wtName, 'worktree-cleanup', () => wm.cleanup(wtName, { force: forceFlag }));
++            const result = await withMainRepoLock(dir, wtName, 'worktree-cleanup', () => {
++              if (!_guardChangeOwnership(wtName, { forced: takeover }).allowed) return { __ownershipDenied: true };
++              return wm.cleanup(wtName, { force: forceFlag });
++            });
++            if (result && result.__ownershipDenied) process.exit(1);
+             // 跨仓 worktree（坑 cross-repo-no-worktree-isolation）：与主仓同锁清理——跨仓 worktree
+             // 注册在各跨仓仓 .git 内，但目录/meta 在主仓 .sillyspec 运行时区，同样怕并发互踩
+             const { cleanupCrossWorktrees } = await import('./worktree-cross.js');
+diff --git a/src/progress.js b/src/progress.js
+index c17e9a1..c3f5ac4 100644
+--- a/src/progress.js
++++ b/src/progress.js
+@@ -12,7 +12,7 @@
+ 
+ import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, unlinkSync, appendFileSync, copyFileSync, readdirSync, statSync, realpathSync } from 'fs';
+ import { join, basename, dirname, resolve, sep } from 'path';
+-import { tmpdir } from 'os';
++import { tmpdir, hostname } from 'os';
+ import { writeAtomicSync } from './fs-atomic.js';
+ import { DB } from './db.js';
+ import { checkExecuteCodeEvidence } from './stage-contract.js';
+@@ -81,6 +81,61 @@ export class PlatformManagedError extends PointerUnreachableError {
+   }
+ }
+ 
++// ── 会话标识三级解析（2026-09-14-change-ownership-guards task-02，FR-01 / D-001@v1）──
++// 优先级：--session flag > env SILLYSPEC_SESSION_ID > quick 场景 changeName（quick-<8hex>，
++// 既有 sessionId 机制——guard 按 change 名落盘天然跨进程）> anon@<hostname> 机器级降级。
++// 降级时打一次性教学 warning：指引 export SILLYSPEC_SESSION_ID=<唯一标识> 或 --session，
++// 明示无标识时同机并行不设防（R-01 明示局限，防线=显式标识铁律+归档收口+--takeover 摩擦）。
++// 「一次性」双层降频：进程内 memo（同进程多次解析只报一次）+ 跨进程 marker 文件窗口
++// （warnSelfRefPointerOnce 同款模式；CLI 每次调用即新进程，纯进程 memo 会退化成每命令必报）。
++const ANON_SESSION_WARN_MARKER = 'anon-session-warn.json';
++const ANON_SESSION_WARN_WINDOW_MS = 24 * 60 * 60 * 1000; // 教学指引 24h 窗口（非告警，不设短窗）
++const QUICK_SID_PATTERN_FOR_IDENTITY = /^quick-[0-9a-f]{8}$/;
++let _anonSessionWarnedThisProcess = false;
++
++/**
++ * 解析本会话的所有权标识（纯函数 + 降级侧的一次性教学 warn）。
++ * @param {{ flagSession?: string|null, quickChangeName?: string|null, cwd?: string|null, warn?: boolean }} [opts]
++ *   - flagSession：--session flag 值（最高优先级；空串/空白视为未提供）
++ *   - quickChangeName：quick 场景的 changeName（匹配 quick-<8hex> 才启用第三级）
++ *   - cwd：教学 warning marker 落盘根（不提供则跳过跨进程降频，仅进程内 memo）
++ *   - warn：false 关闭教学 warning（机器消费路径）
++ * @returns {{session: string, source: 'flag'|'env'|'quick-session'|'anon-host'}}
++ */
++export function resolveSessionIdentity({ flagSession = null, quickChangeName = null, cwd = null, warn = true } = {}) {
++  const flag = typeof flagSession === 'string' ? flagSession.trim() : '';
++  if (flag) return { session: flag, source: 'flag' };
++  const env = typeof process.env.SILLYSPEC_SESSION_ID === 'string' ? process.env.SILLYSPEC_SESSION_ID.trim() : '';
++  if (env) return { session: env, source: 'env' };
++  if (quickChangeName && QUICK_SID_PATTERN_FOR_IDENTITY.test(quickChangeName)) {
++    return { session: quickChangeName, source: 'quick-session' };
++  }
++  const session = `anon@${hostname()}`;
++  if (warn && !_anonSessionWarnedThisProcess) {
++    let suppressed = false;
++    if (cwd) {
++      try {
++        const markerDir = join(cwd, SPEC_DIR_NAME, RUNTIME_SUBDIR);
++        mkdirSync(markerDir, { recursive: true });
++        const markerPath = join(markerDir, ANON_SESSION_WARN_MARKER);
++        const now = Date.now();
++        try {
++          const m = JSON.parse(readFileSync(markerPath, 'utf8'));
++          if (m && Number.isFinite(m.at) && now - m.at < ANON_SESSION_WARN_WINDOW_MS) suppressed = true;
++        } catch { /* 无 marker / 损坏 → 首报 */ }
++        if (!suppressed) writeFileSync(markerPath, JSON.stringify({ at: now }) + '\n');
++      } catch { /* marker 落盘失败 → 照常 warn（降频是优化不是语义） */ }
++    }
++    if (!suppressed) {
++      _anonSessionWarnedThisProcess = true;
++      console.warn(`⚠️ 未显式配置会话标识，所有权护栏已降级为机器级标识 ${session}（只拦他机，同机并行会话不设防）`);
++      console.warn(`   指引：会话启动时 export SILLYSPEC_SESSION_ID=<唯一标识>（如 agent 名+任务名），或在接管类命令上带 --session <唯一标识>（三级解析最高优先级）`);
++      console.warn(`   （24 小时内不重复提示）`);
++    }
++  }
++  return { session, source: 'anon-host' };
++}
++
+ /**
+  * 平台感知的 specDir 解析（fail-closed，所有 CLI 子命令统一入口）。
+  *
+@@ -435,7 +490,7 @@ export class ProgressManager {
+     }
+ 
+     const result = {
+-      _version: 5,
++      _version: 6,
+       project: projectName,
+       currentChange: cName,
+       currentStage: currentStage || '',
+@@ -460,7 +515,9 @@ export class ProgressManager {
+    * 输出契约（字段名 = DB 列名 snake_case，import 直接对列写回，round-trip 无映射损耗）：
+    *   project        { name, schema_version }                                        —— 全局单行稳定字段（id/created_at/updated_at 本地元数据不同步）
+    *   changes        [{ name, current_stage, status, last_active,
+-   *                      last_synced_platform_ts, last_local_modified_ts }]           —— 只投影流程进度列；
++   *                      last_synced_platform_ts, last_local_modified_ts, owner_session }] —— 只投影流程进度列
++   *                     + 所有权列 owner_session（v6，2026-09-14-change-ownership-guards D-005@v1；
++   *                     NULL=无主随 payload 带出，平台消费端不强制）；
+    *                     排除 isolation_* 系列 与 platform_* 系列（platform_change_id/workspace_id/last_sync/sync_enabled）
+    *                     以及 created_at（本地强相关，不同步，B2）
+    *   stages         [{ change_name, stage, status, started_at, completed_at,
+@@ -490,9 +547,9 @@ export class ProgressManager {
+     const db = this._ensureDB(cwd);
+     const sqlDb = db.getDb();
+ 
+-    // 1. changes 行（投影流程进度列 + name 标识）
++    // 1. changes 行（投影流程进度列 + name 标识 + 所有权列 owner_session）
+     const changeRow = sqlDb.prepare(
+-      `SELECT id, name, current_stage, status, last_active, last_synced_platform_ts, last_local_modified_ts
++      `SELECT id, name, current_stage, status, last_active, last_synced_platform_ts, last_local_modified_ts, owner_session
+        FROM changes WHERE name = ?`
+     ).get(changeName);
+     if (changeRow === undefined) return null;
+@@ -504,6 +561,7 @@ export class ProgressManager {
+       last_active: changeRow.last_active,
+       last_synced_platform_ts: changeRow.last_synced_platform_ts ?? null,
+       last_local_modified_ts: changeRow.last_local_modified_ts ?? null,
++      owner_session: changeRow.owner_session ?? null,
+     };
+ 
+     // 2. project 全局单行（只投影稳定字段 name/schema_version；created_at/updated_at 是本地库元数据，
+@@ -600,7 +658,8 @@ export class ProgressManager {
+    *
+    * 语义：
+    * - 单个 DB.transaction() 包裹，原子重建 stages/steps/batch_progress/approvals 四表（任一失败整体回滚）
+-   * - changes 行用 UPDATE 选择投影列（current_stage/status/last_active/last_synced_platform_ts/last_local_modified_ts），
++   * - changes 行用 UPDATE 选择投影列（current_stage/status/last_active/last_synced_platform_ts/last_local_modified_ts
++   *   + owner_session 容错回写——payload 含该列才写），
+    *   保留 isolation_* / platform_* / created_at（本地强相关状态不被覆盖，B2；change 不存在时 INSERT 兜底平台新增）
+    * - import 后 last_synced_platform_ts 与 last_local_modified_ts 均置为 progressObj.pushed_at（D-013 例外：
+    *   不更新 now()——否则 now()>base_ts 下次 pull 误判冲突；pushed_at 由 sync.js pull() 从响应 header attach）
+@@ -673,6 +732,12 @@ export class ProgressManager {
+           ch && ch.last_active != null ? ch.last_active : now,
+           pushedAt, pushedAt, cn
+         );
++        // owner_session 回写容错（v6，2026-09-14-change-ownership-guards task-01）：payload 含
++        // 该列（非 null）才写——他端旧版本快照无此列 → 跳过不报错，且本地已有 owner 不被置空
++        // （平台权威态随 payload 往返；serializeForSync↔import 互逆在非 null 值上成立）。
++        if (ch && ch.owner_session != null) {
++          sqlDb.prepare('UPDATE changes SET owner_session = ? WHERE name = ?').run(ch.owner_session, cn);
++        }
+         const changeRow = sqlDb.prepare('SELECT id FROM changes WHERE name = ?').get(cn);
+         const changeId = changeRow.id;
+ 
+@@ -938,7 +1003,7 @@ export class ProgressManager {
+   // 或 verify 两窗口，锚「完成时刻」会把 execute 期间产的证据判旧（时序两难）；无行 null 走 completed_at → R-05
+   getStageStartedAt(cwd, changeName, stage) { return this._changeRegistry.getStageStartedAt(cwd, changeName, stage); }
+ 
+-  registerChange(cwd, changeName) { return this._changeRegistry.registerChange(cwd, changeName); }
++  registerChange(cwd, changeName, opts) { return this._changeRegistry.registerChange(cwd, changeName, opts); }
+ 
+   updateChangeIsolation(cwd, changeName, isolation) { return this._changeRegistry.updateChangeIsolation(cwd, changeName, isolation); }
+ 
+@@ -972,6 +1037,28 @@ export class ProgressManager {
+   // quick --done 兜底复用启动 ql-ID（坑 platform-takeover-phantom-progress-db 同日变体）
+   getQuicklogId(cwd, changeName) { return this._changeRegistry.getQuicklogId(cwd, changeName); }
+ 
++  // ── change 所有权读写 API（2026-09-14-change-ownership-guards task-01 数据载体，D-001/D-005@v1）──
++  // 只铺数据读写；所有权判定/心跳窗口/接管语义（assertChangeOwnership）归 task-02 接线。
++
++  /** 读变更所有者会话标识；无行/未登记/无主 → null */
++  getChangeOwner(cwd, changeName) { return this._changeRegistry.getChangeOwner(cwd, changeName); }
++
++  /** 认领所有权：首建写 own、已有值不覆盖；返回实际 owner（string|null） */
++  claimChangeOwner(cwd, changeName, session) { return this._changeRegistry.claimChangeOwner(cwd, changeName, session); }
++
++  // task-02 接线（FR-01 / D-001@v1）：判定/接管/心跳窗——会话标识三级解析见模块级
++  // resolveSessionIdentity；接线点=index.js apply/cleanup/assess 自动 apply（锁内、实际动作前）。
++
++  /**
++   * 所有权判定（纯读不写库，详见 change-registry.assertChangeOwnership）：
++   * 四分支 self/no-owner/takeover-stale/takeover-forced 放行；他人且活跃窗内 →
++   * { allowed:false, action:'blocked-active-owner' }（owner+lastActive+heartbeatMs 供结构化错误）。
++   */
++  assertChangeOwnership(cwd, changeName, opts) { return this._changeRegistry.assertChangeOwnership(cwd, changeName, opts); }
++
++  /** 强制重写所有者+心跳起算（接管放行后的写库侧；claimChangeOwner 是「已有值不覆盖」守卫版） */
++  setChangeOwner(cwd, changeName, session) { return this._changeRegistry.setChangeOwner(cwd, changeName, session); }
++
+   // ── CLI 命令 ──
+ 
+   init(cwd) {
+diff --git a/src/progress/change-registry.js b/src/progress/change-registry.js
+index 18e9d3e..6944724 100644
+--- a/src/progress/change-registry.js
++++ b/src/progress/change-registry.js
+@@ -1,7 +1,45 @@
+ // W6 Step9b: 变更注册表（changes 表生命周期）—— 注册/注销/重命名/隔离状态/平台同步戳/审批状态。
+ // 从 src/progress.js 单体 ProgressManager 抽出。持有 pm 引用（构造注入），调 pm._ensureDB /
+ // pm._changePath（persistence-core 留 facade 本体）。无共享常量依赖。
+-import { existsSync, mkdirSync, renameSync } from 'fs';
++import { existsSync, mkdirSync, readFileSync, renameSync } from 'fs';
++import { join } from 'path';
++
++// 所有权活跃心跳窗缺省（2026-09-14-change-ownership-guards task-02 / FR-01）：owner 非本会话
++// 且 now-last_active < 窗口 → 拒绝接管；窗口外 → 自动接管。local.yaml change-ownership.
++// heartbeat_minutes 可调（resolveHeartbeatMs），缺省 15 分钟（config-schema 已登记 live 读者=本文件）。
++const DEFAULT_HEARTBEAT_MINUTES = 15;
++
++/**
++ * 读 local.yaml 的 change-ownership.heartbeat_minutes → 毫秒窗（2026-09-14-change-ownership-guards
++ * task-02）。路径口径与 sync.js readLocalYaml / worktree-cross.js 一致：cwd/.sillyspec/local.yaml。
++ * 定向行扫描（只找 change-ownership: 顶层段下的 heartbeat_minutes），不引 YAML 解析依赖、
++ * 字节级容错（CRLF 去 \r、注释行天然不匹配）。缺文件/缺段/缺键/值非正整数（含 0——误配把
++ * 活跃窗清零会让护栏形同虚设）→ 缺省 15 分钟。纯读不抛。模块私有（唯一消费者=
++ * assertChangeOwnership 心跳窗缺省解析；config-schema 登记的读者即本文件）。
++ * @param {string} cwd - 项目根目录
++ * @returns {number} 心跳窗口毫秒
++ */
++function resolveHeartbeatMs(cwd) {
++  try {
++    const p = join(cwd || process.cwd(), '.sillyspec', 'local.yaml');
++    if (!existsSync(p)) return DEFAULT_HEARTBEAT_MINUTES * 60 * 1000;
++    let inSection = false;
++    for (const rawLine of readFileSync(p, 'utf8').split('\n')) {
++      const line = rawLine.replace(/\r$/, ''); // CRLF 兼容（CLAUDE.md #13）
++      if (/^\S/.test(line)) { // 顶层 key 行：进/出 change-ownership 段
++        inSection = line.startsWith('change-ownership:');
++        continue;
++      }
++      if (!inSection) continue;
++      const m = line.match(/^\s*heartbeat_minutes\s*:\s*(\d+)\s*$/);
++      if (m) {
++        const minutes = parseInt(m[1], 10);
++        return (Number.isFinite(minutes) && minutes >= 1) ? minutes * 60 * 1000 : DEFAULT_HEARTBEAT_MINUTES * 60 * 1000;
++      }
++    }
++  } catch { /* 读失败 → 缺省（缺省是安全下界，不是语义分支） */ }
++  return DEFAULT_HEARTBEAT_MINUTES * 60 * 1000;
++}
+ 
+ export class ChangeRegistry {
+   constructor(pm) {
+@@ -138,8 +176,13 @@ export class ChangeRegistry {
+   /**
+    * 注册变更到活跃列表
+    * SQL: INSERT OR IGNORE → 若已 archived 则 UPDATE status='active'
++   * @param {string} cwd
++   * @param {string} changeName
++   * @param {{ ownerSession?: string|null }} [opts] - owner_session（2026-09-14-change-ownership-guards
++   *   task-01：首建者获得所有权；INSERT OR IGNORE 语义天然「已有行不覆盖」——已存在行（含他人
++   *   活跃 change）owner 不动。会话标识三级方案的接线在 task-02，缺省 undefined=不写（列默认 NULL=无主））
+    */
+-  registerChange(cwd, changeName) {
++  registerChange(cwd, changeName, opts = {}) {
+     if (!changeName) {
+       console.warn('⚠️  registerChange: changeName 为空，跳过');
+       return;
+@@ -148,11 +191,11 @@ export class ChangeRegistry {
+     db.transaction(() => {
+       const sqlDb = db.getDb();
+       const now = new Date().toISOString();
+-      // 尝试插入新行
++      // 尝试插入新行（带 owner_session——首次创建者获得所有权，已有值不覆盖）
+       const ins = sqlDb.prepare(
+-        `INSERT OR IGNORE INTO changes (name, created_at, last_active)
+-         VALUES (?, ?, ?)`
+-      ).run(changeName, now, now);
++        `INSERT OR IGNORE INTO changes (name, created_at, last_active, owner_session)
++         VALUES (?, ?, ?, ?)`
++      ).run(changeName, now, now, opts.ownerSession || null);
+       // 只在真正创建 change 时标脏（D-013/task-04）；已存在行不标（读路径/重复调用不误判脏）
+       if (ins.changes > 0) this.pm._touchLocalModified(cwd, changeName, now);
+       // 注意：不复活已归档的变更——归档是不可逆操作
+@@ -160,6 +203,131 @@ export class ChangeRegistry {
+     });
+   }
+ 
++  /**
++   * 读变更所有者会话标识（2026-09-14-change-ownership-guards task-01 数据载体，D-001/D-005@v1）。
++   * 只读不抛（与 getQuicklogId 同族容错）：行缺失/未登记/读取失败 → null。
++   * NULL=无主（存量行 v6 迁移后即此态，任何会话可接管——判定/接管语义在 assertChangeOwnership，task-02）。
++   * @param {string} cwd
++   * @param {string} changeName
++   * @returns {string|null} owner 会话标识，无主/无行/读失败返回 null
++   */
++  getChangeOwner(cwd, changeName) {
++    if (!changeName) return null;
++    try {
++      const db = this.pm._ensureDB(cwd);
++      const row = db.getDb().prepare('SELECT owner_session FROM changes WHERE name = ?').get(changeName);
++      return (row && typeof row.owner_session === 'string' && row.owner_session) || null;
++    } catch {
++      return null;
++    }
++  }
++
++  /**
++   * 认领变更所有权（2026-09-14-change-ownership-guards task-01 数据载体）：
++   * - 行不存在 → 创建并写 owner=session（首建者获得）；
++   * - 行存在且 owner 非空 → 不覆盖，返回既有 owner（调用方对比可知认领未成功）；
++   * - 行存在且 owner 为 NULL（存量无主行）→ 认领写入。
++   * 单事务内「INSERT OR IGNORE + 守卫 UPDATE + 读回」，并发两个会话同时首认领时靠
++   * SQLite 单写者串行化——后者命中守卫（owner 已非 NULL）不覆盖，返回先到者。
++   * 实际变更（首建/认领）标本地脏度（owner 随同步 payload 上行，D-013 同族）。
++   * @param {string} cwd
++   * @param {string} changeName
++   * @param {string|null} session - 本会话标识（空值视为无主认领，只建行不写 owner）
++   * @returns {string|null} 实际 owner（首建/认领成功=session；他人已持有=其值；行刚建未写=null）
++   */
++  claimChangeOwner(cwd, changeName, session) {
++    if (!changeName) return null;
++    const db = this.pm._ensureDB(cwd);
++    const now = new Date().toISOString();
++    return db.transaction(() => {
++      const sqlDb = db.getDb();
++      // 1) 首建：INSERT OR IGNORE 写 own（行已存在则零行、既有 owner 不动）
++      const ins = sqlDb.prepare(
++        `INSERT OR IGNORE INTO changes (name, created_at, last_active, owner_session)
++         VALUES (?, ?, ?, ?)`
++      ).run(changeName, now, now, session || null);
++      // 2) 存量无主行（owner NULL/空串）补认领；WHERE 守卫保证已有值（他人）绝不覆盖
++      let claimed = 0;
++      if (session) {
++        claimed = sqlDb.prepare(
++          `UPDATE changes SET owner_session = ? WHERE name = ? AND (owner_session IS NULL OR owner_session = '')`
++        ).run(session, changeName).changes;
++      }
++      // 3) 实际变更（首建/认领命中）才标脏；纯读回（他人持有）不扰动同步脏度
++      if (ins.changes > 0 || claimed > 0) this.pm._touchLocalModified(cwd, changeName, now);
++      // 4) 读回实际 owner
++      const row = sqlDb.prepare('SELECT owner_session FROM changes WHERE name = ?').get(changeName);
++      return (row && row.owner_session) || null;
++    });
++  }
++
++  /**
++   * 所有权判定（2026-09-14-change-ownership-guards task-02，FR-01 / D-001@v1）：
++   * **读 changes 行不写库**——接管写库归调用方（setChangeOwner / claimChangeOwner），
++   * 判定与写分离让接线点可在锁内先判后写（判定-执行无 TOCTOU 由调用方锁保证）。
++   * 分支（self 判定 = 精确字符串等值）：
++   *   - opts.forced（--takeover）            → takeover-forced       放行（无条件接管，调用方重写 owner 留痕）
++   *   - owner 为空（无行/NULL）               → no-owner              放行（存量无主行，任何会话可接管）
++   *   - owner === selfSession                 → self                  放行（本会话自有 change 零路径变化）
++   *   - owner 他人 且 now-last_active ≥ 窗口  → takeover-stale        放行（窗口外自动接管重写）
++   *   - owner 他人 且活跃窗内                 → blocked-active-owner  拒绝（allowed:false，调用方打结构化错误）
++   * last_active 缺失/不可解析按陈旧处理：无法证明新鲜即不拦——护栏拦「可证活跃」，不因时间戳
++   * 损坏把 change 锁死到无人能接管（逃生通道优先，与 getLatestActivityAt 族 fail-open 同哲学）。
++   * 心跳即 last_active：每次 CLI 写操作既有刷新（updateChangeIsolation/registerChange 等族）。
++   * @param {string} cwd
++   * @param {string} changeName
++   * @param {{ selfSession?: string|null, nowMs?: number, heartbeatMs?: number, forced?: boolean }} [opts]
++   * @returns {{allowed: boolean, action: 'self'|'takeover-stale'|'takeover-forced'|'no-owner'|'blocked-active-owner', owner: string|null, lastActive: string|null, heartbeatMs: number}}
++   */
++  assertChangeOwnership(cwd, changeName, opts = {}) {
++    const heartbeatMs = (Number.isFinite(opts.heartbeatMs) && opts.heartbeatMs > 0)
++      ? opts.heartbeatMs
++      : resolveHeartbeatMs(cwd);
++    const deny = (action, owner, lastActive) => ({ allowed: false, action, owner, lastActive, heartbeatMs });
++    if (!changeName) return { allowed: true, action: 'no-owner', owner: null, lastActive: null, heartbeatMs };
++    const row = this.pm._ensureDB(cwd).getDb()
++      .prepare('SELECT owner_session, last_active FROM changes WHERE name = ?').get(changeName);
++    const owner = (row && typeof row.owner_session === 'string' && row.owner_session) || null;
++    const lastActive = (row && typeof row.last_active === 'string' && row.last_active) || null;
++    if (opts.forced) return { allowed: true, action: 'takeover-forced', owner, lastActive, heartbeatMs };
++    if (owner === null) return { allowed: true, action: 'no-owner', owner: null, lastActive, heartbeatMs };
++    if (owner === opts.selfSession) return { allowed: true, action: 'self', owner, lastActive, heartbeatMs };
++    // owner 他人：新鲜度决定拒绝 / 自动接管
++    const lastMs = lastActive ? new Date(lastActive).getTime() : NaN;
++    const nowMs = Number.isFinite(opts.nowMs) ? opts.nowMs : Date.now();
++    const stale = !Number.isFinite(lastMs) || (nowMs - lastMs) >= heartbeatMs;
++    return stale
++      ? { allowed: true, action: 'takeover-stale', owner, lastActive, heartbeatMs }
++      : deny('blocked-active-owner', owner, lastActive);
++  }
++
++  /**
++   * 强制重写所有者（task-02 接管写库侧；claimChangeOwner 的对照——那把守卫「已有值不覆盖」，
++   * 本方法无条件写）：assertChangeOwnership 放行 no-owner/takeover-stale/takeover-forced 后由
++   * 接线调用。同事务刷新 last_active——新 owner 的心跳从接管时刻起算，否则下次校验仍读到
++   * 旧 owner 的陈旧时间戳，接管形同没发生（立刻又可被他人 takeover-stale 抢走）。行缺失先建
++   * （INSERT OR IGNORE）。实际变更标本地脏度（owner_session 随同步 payload 上行，D-013 同族）。
++   * @param {string} cwd
++   * @param {string} changeName
++   * @param {string|null} session - 接管者的会话标识
++   */
++  setChangeOwner(cwd, changeName, session) {
++    if (!changeName) return;
++    const db = this.pm._ensureDB(cwd);
++    const now = new Date().toISOString();
++    db.transaction(() => {
++      const sqlDb = db.getDb();
++      const ins = sqlDb.prepare(
++        `INSERT OR IGNORE INTO changes (name, created_at, last_active, owner_session)
++         VALUES (?, ?, ?, ?)`
++      ).run(changeName, now, now, session || null);
++      const upd = sqlDb.prepare(
++        'UPDATE changes SET owner_session = ?, last_active = ? WHERE name = ?'
++      ).run(session || null, now, changeName);
++      if (ins.changes > 0 || upd.changes > 0) this.pm._touchLocalModified(cwd, changeName, now);
++    });
++  }
++
+   /**
+    * 更新变更的隔离状态
+    * @param {string} cwd - 项目根目录
+diff --git a/src/progress/shared.js b/src/progress/shared.js
+index 04254f6..ef96ff4 100644
+--- a/src/progress/shared.js
++++ b/src/progress/shared.js
+@@ -26,8 +26,9 @@ export const STAGE_ORDER = ['scan', 'brainstorm', 'plan', 'execute', 'verify', '
+ // （consistency-doctor 坑 + prompt-control-debt plan-c 同根因）。
+ export const MAIN_FLOW_ORDER = ['brainstorm', 'plan', 'execute', 'verify', 'archive'];
+ 
+-// progress 数据版本（v3 = SQLite；v4 = changes 加 base_ts / 本地脏度两列，platform-sync §8）
+-export const CURRENT_VERSION = 5;
++// progress 数据版本（v3 = SQLite；v4 = changes 加 base_ts / 本地脏度两列，platform-sync §8；
++// v6 = changes 加 owner_session 所有权列，2026-09-14-change-ownership-guards D-005@v1）
++export const CURRENT_VERSION = 6;
+ 
+ // 滞留提示阈值（天，2026-08-30 用户反馈②：7 个「代码全落地但流程没收口」的变更挂 38 天
+ // 无人发现）：活跃变更 last_active 距今超该天数且流程未收口（archive 未完成）时，progress
+diff --git a/src/run/command.js b/src/run/command.js
+index 475d403..1cc1dca 100644
+--- a/src/run/command.js
++++ b/src/run/command.js
+@@ -30,7 +30,7 @@ import { outputStep, collectStageWaitHistory } from './prompt.js'
+ import { completeStep, skipStep, waitStep, continueStep, synthesizeStepOutput } from './complete.js'
+ import { runStage } from './stage.js'
+ import { sanitizeDesc } from '../quicklog.js'
+-import { ProgressManager } from '../progress.js'
++import { ProgressManager, resolveSessionIdentity } from '../progress.js'
+ import { validateChangeExists, checkTransition } from '../stage-contract.js'
+ import { READONLY_AUXILIARY_STAGES } from '../constants.js'
+ import { stageRegistry, auxiliaryStages } from '../stages/index.js'
+@@ -48,6 +48,7 @@ const VALUE_FLAGS = new Set([
+   '--req', '--cause', '--solution', '--result', // quick 末步四字段参数（合成 --output，见 outputText 解析段）
+   '--ql', // quick --cancel 显式指定 qlId（缺省读会话 guard.json）
+   '--base', // scan diff 基线 commit（吃值；只在 run scan --diff 转发路径消费）
++  '--session', // 显式会话标识（吃值；2026-09-14-change-ownership-guards task-02 所有权三级解析最高优先级层，启动 claim 消费）
+ ])
+ 
+ /**
+@@ -806,17 +807,25 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+   // 豁免布尔 flag（先例上方同款 includes 解析）——只影响 gate 画像 docClaim（exempt-no-docs）
+   // 与 [gate] 落账留痕，不改 status/exit code（D-003 advisory），审计链经 completeStep options 透传。
+   const isNoDocs = flags.includes('--no-docs')
++  // --skip-apply（2026-09-14-change-ownership-guards task-03，D-002@v1）：归档收口门（archive
++  // step3 归档移动前 applyWorktree checkOnly 探测未 apply 交付面）的显式跳过布尔 flag——
++  // 语义出口在 completeStep → handleArchiveConfirmStep → archiveChangeDirectory（task-02 只
++  // 注册白名单透传，本行补 includes 解析进 completeStep options，isNoDocs 同款先例）。
++  const isSkipApply = flags.includes('--skip-apply')
+ 
+   // F10b（ql-20260818-010）：语义别名定向提示。did-you-mean 按编辑距离猜形近 flag，猜中的常是
+   // 形近但语义错的（--title → --files，ql-20260818-003 负面③实证）。常见「语义别名」在此登记
+   // 定向指引：命中时替代 did-you-mean 打印，引导到真正承载该语义的 flag/机制。
++  // 2026-09-14-change-ownership-guards task-02：原 '--session' 条目（quick 会话名提示）随
++  // --session 升格为真实 flag（所有权会话标识）而移除——提示只对未知 flag 生效，已知 flag
++  // 挂提示是死代码；'--session-id' 是最常见形近拼法，改挂新语义指引（所有权三级标识）。
+   const FLAG_SEMANTIC_HINTS = {
+     '--title': 'QUICKLOG 条目标题无独立参数——从 --output 的「需求：」字段自动提取（写成一句语义化短标题即可）',
+     '--message': '结果摘要用 --output（quick 末步须含 需求：/根因：/方案：/结果： 四字段）',
+     '--summary': '结果摘要用 --output（quick 末步须含 需求：/根因：/方案：/结果： 四字段）',
+     '--result': '结果摘要用 --output（quick 末步须含 需求：/根因：/方案：/结果： 四字段）',
+     '--name': 'quick 会话名由 CLI 自动分配（quick-<hash>），恢复会话用 --change <quick-session-id>；关联变更用 --linked-changes',
+-    '--session': 'quick 会话名由 CLI 自动分配（quick-<hash>），恢复会话用 --change <quick-session-id>',
++    '--session-id': '会话标识用 --session <id>（所有权三级解析最高优先级层；缺省 env SILLYSPEC_SESSION_ID，再缺省 anon@<host> 机器级降级）',
+     '--note': '文件括注用 --file-notes "path::注 || path::注"；启动时任务描述用 --input',
+     '--notes': '文件括注用 --file-notes "path::注 || path::注"',
+     '--desc': '启动时任务描述用 --input；QUICKLOG 标题从 --output「需求：」自动提取',
+@@ -840,6 +849,9 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+     '--adopt-branch', // execute 显式收编既有 sillyspec/<change> 分支为 worktree 工作分支（坑 worktree-user-branch-conflict）
+     '--diff', '--base', '--full', '--report', // scan diff（D-001：command.js 只补 flag，裸 token 解析归 index.js 子命令拦截）
+     '--meta', // P1-3：渲染 SS-META 机器块（布尔 flag，不吃值）
++    '--session', // 显式会话标识（吃值，VALUE_FLAGS 同步登记；2026-09-14-change-ownership-guards task-02：启动 claim 消费，所有权三级解析最高优先级层）
++    '--takeover', // 所有权护栏显式强制接管（task-02 / FR-01：本层只注册透传，实际消费在 index.js apply/cleanup 子命令层——run 侧带上不报未知参数，语义出口在 worktree 命令）
++    '--skip-apply', // 归档收口跳过 apply 校验（task-02 只注册透传不改行为，消费归 task-03 archive 接线）
+     '-h',
+   ])
+   for (let i = 0; i < flags.length; i++) {
+@@ -1226,6 +1238,28 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+   // 注册变更到全局活跃列表（如果尚未注册）
+   if (effectiveChange) {
+     pm.registerChange(cwd, effectiveChange)
++    // ── 所有权首建 claim（2026-09-14-change-ownership-guards task-02 / FR-01 / D-001@v1）──
++    // run <stage> 启动即认领 owner（claimChangeOwner 守卫语义：已有值不覆盖——他人持有不抢
++    // 也不拒；拒绝语义只锁接管类操作，见 index.js apply/cleanup/assess 接线）。会话标识三级：
++    // quick 会话=changeName 本身（quick-<8hex>，既有 sessionId 机制——guard 按 change 名落盘
++    // 天然跨进程，selfSession==changeName 恒 self）；full-flow=--session > env
++    // SILLYSPEC_SESSION_ID > anon@host 机器级降级（降级时一次性教学 warning）。
++    // default 容器行不认领：辅助阶段共享容器非真实变更，挂伪所有权没有消费者还添噪声。
++    // fail-open：claim 失败不阻断启动（护栏判定退回 no-owner 放行）。
++    try {
++      if (effectiveChange !== 'default') {
++        const ident = resolveSessionIdentity({
++          flagSession: getFlagValue('--session'),
++          quickChangeName: stageName === 'quick' ? effectiveChange : null,
++          // anon 降级教学 marker 落盘根用 dirname(specRoot)（锚定后的主仓根）而非裸 cwd：
++          // worktree 副本 cwd（execute 在 .sillyspec/.runtime/worktrees/<c>/ 内跑）会把
++          // marker mkdir 进副本 .runtime（worktree-execute-spec-drift AC-A6 副本零写入实证），
++          // 且副本随 cleanup 删除、marker 永不跨会话去重——落到持久主仓根才是教学降频语义。
++          cwd: dirname(specRoot),
++        })
++        pm.claimChangeOwner(cwd, effectiveChange, ident.session)
++      }
++    } catch { /* claim 失败不阻断启动 */ }
+   }
+ 
+   // --reset
+@@ -1483,7 +1517,9 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+       }
+     }
+     const doneAnswer = getFlagValue('--answer')
+-    return await completeStep(pm, progress, stageName, cwd, outputText, inputText, { confirm: isConfirm, changeName: effectiveChange, nonInteractive: isNonInteractive && !isInteractive, platformOpts, doneAnswer, isForceBaseline, isAllowNew, isAllowDelete, isNoDocs, quickFiles })
++    // isSkipApply/sessionFlag（task-03）：--skip-apply 归档收口跳过 + --session 所有权会话标识，
++    // 随 completeStep options 透传（isNoDocs 同款链路）——消费点 archive/quick 收尾 handler。
++    return await completeStep(pm, progress, stageName, cwd, outputText, inputText, { confirm: isConfirm, changeName: effectiveChange, nonInteractive: isNonInteractive && !isInteractive, platformOpts, doneAnswer, isForceBaseline, isAllowNew, isAllowDelete, isNoDocs, isSkipApply, sessionFlag: getFlagValue('--session'), quickFiles })
+   }
+ 
+   // 默认：输出当前步骤
+diff --git a/src/run/complete-handlers.js b/src/run/complete-handlers.js
+index e2ecbbe..3c81e8e 100644
+--- a/src/run/complete-handlers.js
++++ b/src/run/complete-handlers.js
+@@ -5,7 +5,7 @@
+  *   - handleArchiveConfirmStep：archive「确认归档」步骤 --confirm 门控 + 推荐文档校验
+  *   - handlePlanGeneratePlanStep：plan「generate_plan」完成后动态插入 coordinator + postcheck 步骤
+  *   - handleScanProjectListStep：scan step 2 完成后按项目展开 perProject 步骤（用 sanitizeProjectName/validateParsedProjects）
+- *   - archiveChangeDirectory：归档移动变更目录（6 处 process.exit(1) + worktree 清理；handleArchiveConfirmStep 内部调用）
++ *   - archiveChangeDirectory：归档移动变更目录（移动前所有权硬校验 + 未 apply 交付面门（--skip-apply 留痕）+ 6 处 process.exit(1) + worktree 清理；handleArchiveConfirmStep 内部调用）
+  *     srcDir 缺失时走 findAlreadyArchivedDir 幂等自愈（issue archive-stage-physical-tracking-desync）；
+  *     archiveChangeDirectory + findAlreadyArchivedDir 已 export 供 test 直接 import
+  *   - sanitizeProjectName / validateParsedProjects：项目名清洗 + 列表校验纯函数（handleScanProjectListStep 专用）
+@@ -37,6 +37,7 @@ import { getRule } from '../stage-contract-spec.js'
+ import { archiveDestDirName } from '../stage-contract.js'
+ import { collectNumstatByPath } from '../scope-audit.js'
+ import { recordFrictionEvent, consumeFrictionHint } from '../friction-tally.js'
++import { resolveSessionIdentity } from '../progress.js'
+ 
+ /**
+  * 清洗项目名：只保留 ASCII 字母/数字/横线/下划线/点，过滤中文和特殊字符。
+@@ -393,7 +394,7 @@ export function extractDoneDocTargets(content) {
+   return [...targets]
+ }
+ 
+-export async function archiveChangeDirectory(pm, cwd, progress, specBase, platformOpts = {}) {
++export async function archiveChangeDirectory(pm, cwd, progress, specBase, platformOpts = {}, gateOpts = {}) {
+   const archiveChangeName = progress.currentChange
+   if (!archiveChangeName) {
+     console.error('❌ 归档失败：未找到当前变更名（currentChange）')
+@@ -426,6 +427,68 @@ export async function archiveChangeDirectory(pm, cwd, progress, specBase, platfo
+     console.error(`   且 changes/archive/ 下未找到该变更的归档目录。若已手动归档请核对目录名；否则先补全变更产物。`)
+     process.exit(1)
+   }
++  // ── 所有权护栏（2026-09-14-change-ownership-guards task-03 / FR-01 / D-001@v1 接线点）──
++  // 归档=接管类操作（注销 change + 移目录 + 清 worktree），他人活跃 change 硬拒。判定在
++  // withMainRepoLock 锁内（handleArchiveConfirmStep 调用点），判定-执行无 TOCTOU；放行分支
++  // no-owner/takeover-stale 重写 owner=本会话（setChangeOwner 同事务刷新 last_active，心跳从
++  // 接管时刻起算）。会话标识三级解析：--session > env SILLYSPEC_SESSION_ID > anon@host（降级
++  // 时 resolveSessionIdentity 自带教学 warning）。消费 task-02 契约（assertChangeOwnership
++  // 纯读不写库），不重复实现判定语义。
++  {
++    const { session } = resolveSessionIdentity({ flagSession: gateOpts.sessionFlag || null, cwd })
++    const check = pm.assertChangeOwnership(cwd, archiveChangeName, { selfSession: session, nowMs: Date.now() })
++    if (!check.allowed) {
++      console.error(`🚫 归档失败：变更 ${archiveChangeName} 正被其他会话持有（owner: ${check.owner}，最后活跃: ${check.lastActive || '未知'}），活跃窗口 ${Math.round(check.heartbeatMs / 60000)} 分钟内拒绝归档`)
++      console.error(`   等对方会话收尾后重试（窗口过后自动接管）；确认对方已放弃且本会话应接管：先经 sillyspec worktree apply/cleanup ${archiveChangeName} --takeover 显式接管（重写 owner 留痕）再归档`)
++      process.exit(1)
++    }
++    if (check.action !== 'self') pm.setChangeOwner(cwd, archiveChangeName, session)
++  }
++  // ── 归档收口（2026-09-14-change-ownership-guards task-03 / FR-02 / D-002@v1）──
++  // worktree 有未 apply 交付面 → 归档阻断：归档会注销 change + 清理 worktree（目录/分支/meta），
++  // 交付物失去进主仓通道，形成「归档完成但交付物未进主仓」悬空态（troubleshooting §65 事件①
++  // 的代劳窗口放大器）。只拦不代跑（design 非目标：脏重叠场景人确认更稳）。--skip-apply 显式
++  // 跳过并留痕（控制台输出 + skip-apply.record.json 随归档包留存，可审计）。无 worktree
++  // （meta 缺失/in-place/native）或零交付面 → 零行为变化。探测用 applyWorktree checkOnly
++  // （只读零写盘，Gate 全收集不落盘、不短路）。
++  try {
++    const { WorktreeManager } = await import('../worktree.js')
++    const wmGate = new WorktreeManager({ cwd })
++    const gateMeta = wmGate.getMeta(archiveChangeName)
++    if (gateMeta
++      && gateMeta.mode !== 'in-place-fallback'
++      && gateMeta.mode !== 'native-worktree'
++      && gateMeta.worktreePath
++      && existsSync(gateMeta.worktreePath)) {
++      const { applyWorktree } = await import('../worktree-apply.js')
++      const checkApply = applyWorktree(archiveChangeName, { cwd, checkOnly: true })
++      const face = (checkApply && Array.isArray(checkApply.changedFiles)) ? checkApply.changedFiles : []
++      if (face.length > 0) {
++        const facePreview = `${face.slice(0, 5).join('、')}${face.length > 5 ? ' 等' : ''}`
++        if (!gateOpts.skipApply) {
++          console.error(`❌ 归档失败：worktree 存在未 apply 的交付面（${face.length} 个文件：${facePreview}）`)
++          console.error(`   归档会清理 worktree（目录+分支+meta），交付物将失去进主仓的通道，形成「归档完成但交付物未进主仓」悬空态。`)
++          console.error(`   先 apply 再归档: sillyspec worktree apply ${archiveChangeName}`)
++          console.error(`   确认无需 apply（交付面已由其他会话落地/纯探索性变更等）: sillyspec run archive --done --confirm --skip-apply（显式跳过并留痕归档记录）`)
++          process.exit(1)
++        }
++        console.warn(`⚠️  已按 --skip-apply 跳过未 apply 交付面检查（${face.length} 个文件未确认落地主仓：${facePreview}）——留痕归档记录`)
++        writeFileSync(join(srcDir, 'skip-apply.record.json'), JSON.stringify({
++          schemaVersion: 1,
++          change: archiveChangeName,
++          flag: '--skip-apply',
++          skippedAt: new Date().toISOString(),
++          deliverableCount: face.length,
++          deliverableFiles: face,
++          note: '归档时显式跳过未 apply 交付面检查（--skip-apply）：交付物未确认进主仓，本记录随归档包留存供审计',
++        }, null, 2) + '\n')
++      }
++    }
++  } catch (e) {
++    // 探测自身异常 fail-open 留痕：归档主流程既有失败面（rename/git/清理）不叠加；正常路径
++    // 的阻断语义不受影响（无异常时 face 判定照常生效）。
++    console.warn(`⚠️  归档前未 apply 交付面探测失败（不阻断归档）: ${e && e.message ? e.message : e}`)
++  }
+   // 移动前硬校验：变更包必须含 plan.md，否则不该归档。
+   // 在移动前阻断（而非移动后），目录尚未动，用户可直接修复后重试。
+   if (!existsSync(join(srcDir, 'plan.md'))) {
+@@ -542,7 +605,7 @@ export async function archiveChangeDirectory(pm, cwd, progress, specBase, platfo
+  *
+  * @returns {{stageCompleted:false,currentIdx,nextPendingIdx:number}|null}
+  */
+-export async function handleArchiveConfirmStep({ stageName, steps, currentIdx, confirm, outputText, pm, cwd, progress, changeName, specBase, platformOpts = {} }) {
++export async function handleArchiveConfirmStep({ stageName, steps, currentIdx, confirm, outputText, pm, cwd, progress, changeName, specBase, platformOpts = {}, isSkipApply = false, sessionFlag = null }) {
+   if (stageName !== 'archive' || steps[currentIdx]?.name !== '确认归档') return null
+   if (!confirm) {
+     steps[currentIdx].status = 'pending'
+@@ -584,7 +647,9 @@ export async function handleArchiveConfirmStep({ stageName, steps, currentIdx, c
+   // rename + 共享 index 的 git add + marker 删除 + worktree 清理），与并行会话的 apply/cleanup
+   // 互踩。exit 钩子兜底：其内部 guard 失败 exit(1) 时锁也会被清（见 withMainRepoLock）。
+   const { withMainRepoLock } = await import('../worktree-apply.js')
+-  const archivedDir = await withMainRepoLock(cwd, changeName, 'archive-finalize', () => archiveChangeDirectory(pm, cwd, progress, specBase, platformOpts))
++  // gateOpts（task-03）：--skip-apply（归档收口跳过留痕）+ --session（所有权会话标识）随链
++  // 透传——所有权硬校验与未 apply 交付面门都在 archiveChangeDirectory 内（即锁内）执行。
++  const archivedDir = await withMainRepoLock(cwd, changeName, 'archive-finalize', () => archiveChangeDirectory(pm, cwd, progress, specBase, platformOpts, { skipApply: isSkipApply, sessionFlag }))
+   if (archivedDir && existsSync(archivedDir)) {
+     // 内存快照同步（坑 archive-progress-show-stale，2026-08-21 实证）：archiveChangeDirectory 内
+     // unregisterChange 已在 DB 写 current_stage='archive'（终态一致化），但本进程 progress 是命令
+@@ -980,7 +1045,7 @@ export async function handleWorkflowPostCheck({ stageName, steps, currentIdx, cw
+  * isForceBaseline/isAllowNew/platformOpts。辅助函数直接 import（safeGit/auditQuickCompletion ← shared，
+  * printQuickAuditReview ← quick-audit，4 个 quicklog fns ← quicklog，unlinkSync/rmSync ← fs 静态）。
+  */
+-export async function handleQuickStageCompletion({ stageName, steps, currentIdx, cwd, progress, changeName, specBase, outputText, confirm, isForceBaseline, isAllowNew, isAllowDelete, isNoDocs, platformOpts, pm, quickFiles = [] }) {
++export async function handleQuickStageCompletion({ stageName, steps, currentIdx, cwd, progress, changeName, specBase, outputText, confirm, isForceBaseline, isAllowNew, isAllowDelete, isNoDocs, sessionFlag = null, platformOpts, pm, quickFiles = [] }) {
+   // quick 收尾：强校验 QUICKLOG 条目 + 翻状态 + 勾 tasks.md（CLI 接管）
+   if (stageName === 'quick') {
+     // §4.6 从 session guard.json 读 guard（不依赖 progress.quickGuard）。
+@@ -1423,7 +1488,9 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
+ 
+     // 轻量归档任务已全勾选的关联真实变更
+     try {
+-      const closeResult = await closeQuickLinkedChanges({ pm, cwd, specBase, linkedChanges, linkedChangesAuto, platformOpts })
++      // quickSessionName/sessionFlag（task-03 / FR-01）：quick 轻量归档链所有权校验入参——
++      // quick 会话标识（changeName=quick-<hex>，三级解析第三层）+ --session 显式标识。
++      const closeResult = await closeQuickLinkedChanges({ pm, cwd, specBase, linkedChanges, linkedChangesAuto, platformOpts, quickSessionName: changeName, sessionFlag })
+       if (closeResult.closed.length > 0) {
+         console.log(`📦 已自动归档 ${closeResult.closed.length} 个关联变更：${closeResult.closed.join(', ')}`)
+       }
+@@ -1564,9 +1631,11 @@ const QUICK_CLOSE_ACTIVITY_WINDOW_MS = 60 * 60 * 1000
+  * @param {string} opts.specBase
+  * @param {string[]} [opts.linkedChanges]
+  * @param {Object} [opts.platformOpts]
++ * @param {string|null} [opts.quickSessionName] quick 会话名（quick-<hex>，所有权三级标识第三层）
++ * @param {string|null} [opts.sessionFlag] --session 显式会话标识（所有权三级标识最高层）
+  * @returns {Promise<{closed:string[], skipped:{name:string,reason:string}[]}>}
+  */
+-export async function closeQuickLinkedChanges({ pm, cwd, specBase, linkedChanges = [], linkedChangesAuto = [], platformOpts = {} }) {
++export async function closeQuickLinkedChanges({ pm, cwd, specBase, linkedChanges = [], linkedChangesAuto = [], platformOpts = {}, quickSessionName = null, sessionFlag = null }) {
+   const closed = []
+   const skipped = []
+   // 只处理真实变更，跳过 quick 会话 sessionId
+@@ -1631,6 +1700,39 @@ export async function closeQuickLinkedChanges({ pm, cwd, specBase, linkedChanges
+         skipped.push({ name: changeName, reason: 'tasks.md 未全勾选或不存在' })
+         continue
+       }
++      // ── 所有权护栏（2026-09-14-change-ownership-guards task-03 / FR-01 接线点）──
++      // closeSingleQuickLinkedChange 归档移动前对 linked full-flow change 校验（消费 task-02
++      // 契约，不重复实现）：他人活跃 → 跳过该 linked 归档 + warning（不炸 quick --done）；无主/
++      // 窗口外/本会话自有 → 放行，接管分支重写 owner。quick 会话标识=quick-<hex>（三级解析
++      // 第三层，quickChangeName 传入）；quick 面互斥恒 self（design 非目标声明），本闸只拦
++      // full-flow change 的「他人活跃」态。pm 缺接口（旧 mock/旧进度库）fail-open 放行留痕
++      //（同 command.js claim fail-open 先例：护栏退回 no-owner 语义，不废僵尸逃生通道）；
++      // 校验自身异常则跳过该归档（fail-closed 不误归档）。
++      if (typeof pm.assertChangeOwnership !== 'function') {
++        console.warn(`⚠️ 进度库接口缺失（assertChangeOwnership），关联变更 ${changeName} 跳过所有权校验（fail-open 放行）`)
++      } else {
++        try {
++          const { session } = resolveSessionIdentity({
++            flagSession: sessionFlag || null,
++            quickChangeName: quickSessionName || null,
++            cwd,
++          })
++          const ownCheck = pm.assertChangeOwnership(cwd, changeName, { selfSession: session, nowMs: Date.now() })
++          if (!ownCheck.allowed) {
++            skipped.push({
++              name: changeName,
++              reason: `变更正被其他会话持有（owner: ${ownCheck.owner}，最后活跃: ${ownCheck.lastActive || '未知'}），跳过自动归档——由其会话自行收尾（sillyspec progress show 查看进度）`,
++            })
++            continue
++          }
++          if (ownCheck.action !== 'self') {
++            try { pm.setChangeOwner(cwd, changeName, session) } catch { /* 接管写库失败不阻断放行语义 */ }
++          }
++        } catch (e) {
++          skipped.push({ name: changeName, reason: `所有权校验异常（${e && e.message ? e.message : e}），跳过自动归档` })
++          continue
++        }
++      }
+       const result = await closeSingleQuickLinkedChange({ pm, cwd, specBase, changeName, platformOpts })
+       if (result.closed) {
+         closed.push(changeName)
+diff --git a/src/run/complete.js b/src/run/complete.js
+index a89b642..ffe7bba 100644
+--- a/src/run/complete.js
++++ b/src/run/complete.js
+@@ -119,7 +119,7 @@ export function synthesizeStepOutput({ stageName, stepName, cwd }) {
+ }
+ 
+ export async function completeStep(pm, progress, stageName, cwd, outputText, inputText = null, options = {}) {
+-  const { printNext = true, confirm = false, changeName, platformOpts = {}, nonInteractive = false, isForceBaseline = false, isAllowNew = false, isAllowDelete = false, isNoDocs = false, quickFiles = [] } = options
++  const { printNext = true, confirm = false, changeName, platformOpts = {}, nonInteractive = false, isForceBaseline = false, isAllowNew = false, isAllowDelete = false, isNoDocs = false, isSkipApply = false, sessionFlag = null, quickFiles = [] } = options
+   // specRoot(平台) > specDriftAnchor(worktree 漂移锚定主仓) > cwd/.sillyspec(本地)——
+   // 与 prompt.js resolvePromptSpecBase 同序：--done 收尾的 user-inputs.md/超长 artifact 落盘
+   // 必须与 prompt 渲染同一根，否则写进 worktree 副本目录、随 cleanup 整目录删除。
+@@ -494,7 +494,7 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
+   // archive「确认归档」收尾：--confirm 门控 + archiveChangeDirectory 移动 + 推荐文档校验
+   // （抽成 handleArchiveConfirmStep；缺 --confirm 时返回 early-return 对象，completeStep 透传）
+   {
+-    const _archiveEarlyReturn = await handleArchiveConfirmStep({ stageName, steps, currentIdx, confirm, outputText, pm, cwd, progress, changeName, specBase, platformOpts })
++    const _archiveEarlyReturn = await handleArchiveConfirmStep({ stageName, steps, currentIdx, confirm, outputText, pm, cwd, progress, changeName, specBase, platformOpts, isSkipApply, sessionFlag })
+     if (_archiveEarlyReturn) return _archiveEarlyReturn
+   }
+ 
+@@ -569,8 +569,9 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
+       return { stageCompleted: false, currentIdx, nextPendingIdx: -1 }
+     }
+     // quick 收尾（W6 Step6b 抽至 complete-handlers.js handleQuickStageCompletion）；
+-    // isNoDocs（task-02）--no-docs 豁免随链透传进 auditQuickCompletion options
+-    await handleQuickStageCompletion({ stageName, steps, currentIdx, cwd, progress, changeName, specBase, outputText, confirm, isForceBaseline, isAllowNew, isAllowDelete, isNoDocs, platformOpts, pm, quickFiles })
++    // isNoDocs（task-02）--no-docs 豁免随链透传进 auditQuickCompletion options；
++    // sessionFlag（task-03）--session 随链透传进 quick 轻量归档链所有权校验
++    await handleQuickStageCompletion({ stageName, steps, currentIdx, cwd, progress, changeName, specBase, outputText, confirm, isForceBaseline, isAllowNew, isAllowDelete, isNoDocs, sessionFlag, platformOpts, pm, quickFiles })
+ 
+     // ── reopen --done 回填（坑 brainstorm-reopen-step-state-desync）──
+     // nextPendingIdx === -1 且无 waiting，说明要进阶段完成分支。此时若存在 stale 步骤
+diff --git a/src/sync.js b/src/sync.js
+index 66929ae..9ab323d 100644
+--- a/src/sync.js
++++ b/src/sync.js
+@@ -1262,6 +1262,11 @@ export class SyncManager {
+         // last_pusher：服务端 GET 顶层回传的推送者元字段（ql-20260914 第二批）——与
+         // last_pushed_at 同理是同步元数据非六表内容，不忽略会让内容一致自愈恒 false。
+         'last_pusher',
++        // owner_session：所有权列（v6，2026-09-14-change-ownership-guards task-02）——与
++        // last_pusher 同理是归属元数据非六表内容：版本切换窗口（平台旧 v5 payload × 本地 v6
++        // 脏态）owner 差异会把内容一致判不等，部署噪声落人工 conflict（last_pusher 先例
++        // ql-20260914-006 同款一行）。
++        'owner_session',
+       ]);
+       const strip = (v) => {
+         if (Array.isArray(v)) return v.map(strip);
+diff --git a/src/task-review.js b/src/task-review.js
+index b42ac8f..5a8bf4c 100644
+--- a/src/task-review.js
++++ b/src/task-review.js
+@@ -17,6 +17,7 @@ import { resolveVerifyChangedFiles } from './verify-postcheck.js'
+ import { splitOwnVsForeignDiffFiles } from './foreign-declared.js'
+ import { WorktreeManager } from './worktree.js'
+ import { resolveRuntimeRoot } from './run/shared.js'
++import { DB } from './db.js'
+ 
+ // ── review.json schema version ──
+ //
+@@ -1103,6 +1104,130 @@ export function resolveExecuteRunForChange({ runtimeRoot, changeName, taskIds =
+   }
+ }
+ 
++// ── 归因模式分流（2026-09-14-change-ownership-guards task-03 / D-004@v1 / FR-03）──
++// 草稿/changedFiles 归因的取数源路由：判定源=changes.isolation_mode 列（DB 读，meta 缺失也可判，
++// 与 change-registry.readChangeIsolation 同列；此处直连 db.js 读——task-review 是叶子模块，
++// 静态 import progress.js 会成环 progress→consistency-doctor→task-review）。进程内按
++// dbPath+change 缓存（CLI 短进程生命周期内 isolation_mode 不变，避免重复 open/init）。
++const _isolationModeCache = new Map()
++
++/**
++ * 读 changes.isolation_mode（只读；无库/无行/读失败 → null）。DB 路径候选序：
++ * platformOpts.specRoot > specDriftAnchor > specBase > cwd/.sillyspec（首个存在 sillyspec.db 的根）。
++ * 模块内函数（非 export——check-syntax 22e-b 死码门禁：无跨文件消费不导出）。
++ * @param {{ cwd: string, specBase: string, platformOpts?: object, changeName: string }} opts
++ * @returns {string|null} isolation_mode（'worktree'|'native-worktree'|'in-place-fallback'）或 null
++ */
++function readChangeIsolationMode({ cwd, specBase, platformOpts = {}, changeName }) {
++  if (!changeName) return null
++  const roots = []
++  const addRoot = (r) => { if (r && !roots.includes(r)) roots.push(r) }
++  addRoot(platformOpts && platformOpts.specRoot)
++  addRoot(platformOpts && platformOpts.specDriftAnchor)
++  addRoot(specBase)
++  addRoot(join(cwd, '.sillyspec'))
++  for (const root of roots) {
++    const dbPath = join(root, '.runtime', 'sillyspec.db')
++    if (!existsSync(dbPath)) continue
++    const key = dbPath + '::' + changeName
++    if (_isolationModeCache.has(key)) return _isolationModeCache.get(key)
++    let mode = null
++    try {
++      const db = new DB(dbPath)
++      db.init()
++      const row = db.getDb().prepare('SELECT isolation_mode FROM changes WHERE name = ?').get(changeName)
++      mode = (row && typeof row.isolation_mode === 'string' && row.isolation_mode) || null
++    } catch { mode = null }
++    _isolationModeCache.set(key, mode)
++    return mode
++  }
++  return null
++}
++
++/**
++ * 归因取数源路由（单一入口，草稿生成 generateTaskReviewDrafts 与 mechanics 代算 writeTaskReview
++ * 两处共用）。判定优先级（D-004）：
++ *   1. DB isolation_mode ∈ {worktree, native-worktree} → worktree 归因：worktree 目录活则原口径
++ *      （resolveVerifyChangedFiles meta 路径 + porcelain 并入，零回归）；meta 缺失/in-place meta/
++ *      目录已删 → 分支 ref 口径（merge-base(主仓 HEAD, 分支 tip)..tip 的 commit diff + worktree
++ *      目录在则 porcelain 并入，与 verify reconcile 同口径）。分支 ref 也已删（cleanup 后态）→
++ *      fail-closed 空集 +「不可归因（worktree 已清理）」注记，绝不回退主仓窗口（复审残留①）。
++ *   2. DB in-place-fallback 但 meta 判 worktree 且目录活 → 仍取 worktree（fail-safe：不因 DB 行
++ *      陈旧切向主仓共享脏窗口——归因源只会更隔离不会更共享），注记不一致。
++ *   3. 其余（DB in-place / NULL）→ 主仓窗口原行为零回归；NULL 且 meta 缺失加存量路由注记
++ *      （存量态不追求完美只保安全，D-004 残留②/R-04）。
++ * meta 在时交叉校验不一致以 DB 为准（方向 1 的 worktree 覆盖）；返回 notes 逐条说明路由依据。
++ *
++ * @param {{ cwd: string, changeName: string, specBase: string, platformOpts?: object }} opts
++ * @returns {{ mode: 'worktree'|'worktree-branch'|'worktree-cleaned'|'main-window', diffFiles: string[]|null, notes: string[], meta: object|null, mergeGitDir: string|null, branch?: string, branchBase?: string, branchHead?: string }}
++ */
++function resolveAttributionDiffFiles({ cwd, changeName, specBase, platformOpts = {} }) {
++  const notes = []
++  const wm = new WorktreeManager({ cwd })
++  let meta = null
++  try { meta = wm.getMeta(changeName) } catch { meta = null }
++  const iso = readChangeIsolationMode({ cwd, specBase, platformOpts, changeName })
++  const isoWorktree = iso === 'worktree' || iso === 'native-worktree'
++
++  if (isoWorktree) {
++    const wtGitDir = (meta && meta.worktreePath && meta.mode !== 'in-place-fallback' && existsSync(meta.worktreePath))
++      ? meta.worktreePath
++      : null
++    if (wtGitDir) {
++      if (meta.mode !== iso) notes.push(`meta.mode=${meta.mode} 与 DB isolation_mode=${iso} 不一致——以 DB 为准（同属 worktree 族，归因源不变）`)
++      return { mode: 'worktree', diffFiles: resolveVerifyChangedFiles(cwd, changeName, null, { specBase }), notes, meta, mergeGitDir: wtGitDir }
++    }
++    // meta 缺失 / in-place meta / worktree 目录已删：分支 ref 判定（不落主仓窗口）
++    const branch = (meta && meta.branch) || `sillyspec/${changeName}`
++    let branchTip = null
++    try { branchTip = runGit(cwd, ['rev-parse', '--verify', '--quiet', `refs/heads/${branch}`]) } catch { branchTip = null }
++    if (!branchTip) {
++      notes.push(`不可归因（worktree 已清理）——DB 判 worktree（isolation_mode=${iso}）但分支 ref ${branch} 不存在（cleanup 后态），fail-closed 空集，不回退主仓窗口`)
++      return { mode: 'worktree-cleaned', diffFiles: [], notes, meta, mergeGitDir: null }
++    }
++    let branchBase = null
++    let files = []
++    try {
++      const mainHead = runGit(cwd, ['rev-parse', 'HEAD'])
++      const mb = mainHead ? runGit(cwd, ['merge-base', branchTip, mainHead]) : null
++      branchBase = mb || mainHead || null
++      if (branchBase) {
++        files = String(runGit(cwd, ['diff', '--name-only', branchBase, branchTip]) || '')
++          .split('\n').map(p => p.replace(/^"|"$/g, '').replace(/\\/g, '/').trim())
++          .filter(p => p && p !== '.sillyspec' && !p.startsWith('.sillyspec/'))
++      }
++    } catch { /* 已提交口径 git 失败 → 空集 fail-closed（不回退主仓窗口） */ }
++    // 未提交并入：约定路径 worktree 目录仍在（meta 失联孤儿）→ porcelain（与 verify reconcile 同口径）
++    const wtDirGuess = join(wm.worktreeBase, changeName)
++    if (existsSync(wtDirGuess)) {
++      try {
++        const st = runGit(wtDirGuess, ['status', '--porcelain', '--untracked-files=all'], { trim: false })
++        const wtFiles = parsePorcelainFiles(st)
++          .map(p => String(p).replace(/\\/g, '/'))
++          .filter(p => p !== '.sillyspec' && !p.startsWith('.sillyspec/'))
++        files = [...new Set([...files, ...wtFiles])]
++      } catch { /* porcelain 失败退回 commit diff 口径 */ }
++    }
++    notes.push(`meta 缺失/失效，DB isolation_mode=${iso} 判 worktree——归因源=worktree 分支 ${branch} diff（base..HEAD+porcelain，与 verify reconcile 同口径），不落主仓共享脏窗口`)
++    return { mode: 'worktree-branch', diffFiles: files, notes, meta, mergeGitDir: null, branch, branchBase, branchHead: branchTip }
++  }
++
++  if (iso === 'in-place-fallback' && meta && meta.mode !== 'in-place-fallback'
++    && meta.worktreePath && existsSync(meta.worktreePath)) {
++    notes.push(`DB isolation_mode=in-place-fallback 但 meta.mode=${meta.mode}——worktree 分支仍是隔离归因源（fail-safe：不因 DB 行陈旧切向主仓共享窗口），按 meta 取 worktree 归因`)
++    return { mode: 'worktree', diffFiles: resolveVerifyChangedFiles(cwd, changeName, null, { specBase }), notes, meta, mergeGitDir: meta.worktreePath }
++  }
++
++  // in-place（DB 或 meta）与 NULL 存量：主仓窗口（原行为零回归）
++  if (!meta && iso === null) {
++    notes.push('isolation_mode 未登记（存量变更/无 DB 行）且 worktree meta 缺失——按主仓窗口归因（存量兼容路由，D-004 残留②：不追求完美只保安全）')
++  }
++  const mergeGitDir = meta
++    ? ((meta.worktreePath && meta.mode !== 'in-place-fallback' && existsSync(meta.worktreePath)) ? meta.worktreePath : cwd)
++    : null
++  return { mode: 'main-window', diffFiles: resolveVerifyChangedFiles(cwd, changeName, null, { specBase }), notes, meta, mergeGitDir }
++}
++
+ /**
+  * worktree execute「主 agent 直接实现」模式收尾兜底：per-task review.json 缺失时，
+  * 据 git diff base..head 按 task allowed_paths 归属，自动落盘 cannot_verify 草稿。
+@@ -1170,21 +1295,30 @@ export async function generateTaskReviewDrafts({ changeName, cwd, platformOpts =
+     }
+   }
+ 
++  // ── 归因模式分流（task-03 / D-004@v1）：判定源=changes.isolation_mode（DB 读）──
++  // worktree 模式（含 meta 缺失回退态）归因唯一源=worktree 分支 diff（绝不落主仓共享脏窗口，
++  // troubleshooting §65 事件②根因）；in-place 维持主仓窗口；NULL 存量按 meta 在场路由。
++  // 分流自身异常 → 退回原 resolveVerifyChangedFiles 口径（fail-open，不比修复前差）。
++  let attribution
++  try {
++    attribution = resolveAttributionDiffFiles({ cwd, changeName, specBase, platformOpts })
++  } catch (e) {
++    attribution = { mode: 'main-window', diffFiles: resolveVerifyChangedFiles(cwd, changeName, null, { specBase }), notes: [`归因分流解析异常（${e && e.message ? e.message : e}）——退回原口径`], meta: null, mergeGitDir: null }
++  }
++  for (const note of attribution.notes) console.log(`[sillyspec] 归因注记：${note}`)
+   // base..head diff 文件集（worktree-aware；null=git 不可用，[]=无 commit diff）
+-  let diffFiles = resolveVerifyChangedFiles(cwd, changeName, null, { specBase })
++  let diffFiles = attribution.diffFiles
+   // ⚠️ 并入 worktree 未提交改动（坑 draft-attribution-uncommitted-worktree，2026-08-21 实证）：
+   // 子代理默认不 commit（execute 复盘 a 同源事实），真实改动全在 worktree working-tree——只看
+   // base..HEAD commit diff 时归属恒空，9/9 草稿全成「无归属」靠主代理手写升级。与
+   // verifyReviewGitEvidence 的 working-tree 并入口径同源：status --porcelain 文件（排除
+   // .sillyspec/ 运行时产物）并入归属集，按 allowed_paths 正常路径归属；review.head 仍为 HEAD
+   // commit——evidence 校验对「commit diff 空 + working-tree 有改动」明示不判伪造，语义一致。
+-  try {
+-    const wm = new WorktreeManager({ cwd })
+-    const meta = wm.getMeta(changeName)
+-    if (meta) {
+-      const wtGitDir = (meta.worktreePath && meta.mode !== 'in-place-fallback' && existsSync(meta.worktreePath))
+-        ? meta.worktreePath
+-        : cwd
++  // D-004 后仅在归因源指向活跃 worktree 目录 / in-place meta（mergeGitDir）时执行——
++  // worktree-branch/cleaned 归因的未提交并入已在 resolveAttributionDiffFiles 内按同口径完成。
++  if (attribution.mergeGitDir) {
++    try {
++      const wtGitDir = attribution.mergeGitDir
+       const wtStatus = runGit(wtGitDir, ['status', '--porcelain', '--untracked-files=all'], { trim: false })
+       const wtFiles = parsePorcelainFiles(wtStatus)
+         .map(p => String(p).replace(/\\/g, '/'))
+@@ -1211,12 +1345,19 @@ export async function generateTaskReviewDrafts({ changeName, cwd, platformOpts =
+         diffFiles = [...new Set([...(Array.isArray(diffFiles) ? diffFiles : []), ...wtFiles, ...committedFiles])]
+         console.log(`[sillyspec] 草稿归属并入 worktree 改动 ${wtFiles.length + committedFiles.length} 个（未提交 ${wtFiles.length} + 已提交 ${committedFiles.length}，按 allowed_paths 归属）`)
+       }
+-    }
+-  } catch { /* working-tree 并入失败退回 commit diff 口径（fail-open，不阻断草稿） */ }
++    } catch { /* working-tree 并入失败退回 commit diff 口径（fail-open，不阻断草稿） */ }
++  }
+   // 单仓模式（无 ctx）：主仓无 diff 即无任何 task 可生成 → 提前返回（原逻辑零回归）。
+   // 有 ctx：主仓无 diff 不阻断——跨仓 task 的 diff 在跨仓仓根独立取（per-task），主仓 task 自然跳过（空 changedFiles）。
++  // 终态空源（D-004）：worktree-cleaned（DB 判 worktree 但分支 ref 已删）空集的 reason 显式
++  // 注记「不可归因」，与普通「无 diff」区分——绝不回退主仓窗口补救。
+   if (!ctx && (!diffFiles || diffFiles.length === 0)) {
+-    return { generated: 0, skipped: 0, unattributed: [], executeRunId, reason: 'base..head 无代码 diff（改动未 commit？）' }
++    return {
++      generated: 0, skipped: 0, unattributed: [], executeRunId,
++      reason: attribution.mode === 'worktree-cleaned'
++        ? '不可归因（worktree 已清理）——DB 判 worktree 但分支 ref 已删，fail-closed 空集（不回退主仓窗口）'
++        : 'base..head 无代码 diff（改动未 commit？）',
++    }
+   }
+ 
+   // base/head + gitDir：与 gates.js reviewGitDir 同源（worktree 优先，in-place 回退 cwd）
+@@ -1248,6 +1389,15 @@ export async function generateTaskReviewDrafts({ changeName, cwd, platformOpts =
+       // 有 ctx：主仓 HEAD 失败不阻断跨仓 task；head 留 null，主仓 task 后续按空 changedFiles 跳过
+     }
+   }
++  // worktree-branch 归因的 base/head 锚定（task-03 / D-004）：meta 缺失但分支 ref 活着时用
++  // merge-base(主仓 HEAD, 分支 tip)=创建锚点..分支 tip 锚定——DB 判 worktree 的回退态仍能
++  // 生成带真实 git 锚点的草稿（否则上方「无 meta.baseHash」早退白费分支归因成果）。分支 ref
++  // 在主仓共享 .git 内，reviewGitDir=cwd 可解析，evidence 校验的 base..head diff 与归因同源。
++  if (!base && attribution.branchBase && attribution.branchHead) {
++    base = attribution.branchBase
++    head = attribution.branchHead
++    reviewGitDir = cwd
++  }
+ 
+   const taskFiles = readdirSync(tasksDir).filter(f => /^task-\d+\.md$/.test(f)).sort()
+   let generated = 0
+@@ -1758,22 +1908,30 @@ export async function writeTaskReview({
+     changedFiles = changedFilesOverride.map(p => String(p).replace(/\\/g, '/'))
+     warnings.push(`changedFiles 采用显式覆盖（${changedFiles.length} 个）——evidence 校验仍会与 git diff 相交比对`)
+   } else {
+-    let diffFiles = resolveVerifyChangedFiles(cwd, changeName, null, { specBase })
+-    // 并入 worktree 未提交改动（与草稿生成同源口径：子代理默认不 commit）
++    // ── 归因模式分流（task-03 / D-004@v1）：与草稿生成同源路由（判定源=changes.isolation_mode）──
++    // worktree 模式（含 meta 缺失回退态）取 worktree 分支 diff，绝不落主仓共享脏窗口；
++    // in-place/NULL 存量维持主仓窗口原口径。分流异常退回原 resolveVerifyChangedFiles（fail-open）。
++    let attribution
+     try {
+-      const wm = new WorktreeManager({ cwd })
+-      const meta = wm.getMeta(changeName)
+-      if (meta) {
+-        const wtGitDir = (meta.worktreePath && meta.mode !== 'in-place-fallback' && existsSync(meta.worktreePath))
+-          ? meta.worktreePath
+-          : cwd
++      attribution = resolveAttributionDiffFiles({ cwd, changeName, specBase, platformOpts })
++    } catch (e) {
++      attribution = { mode: 'main-window', diffFiles: resolveVerifyChangedFiles(cwd, changeName, null, { specBase }), notes: [`归因分流解析异常（${e && e.message ? e.message : e}）——退回原口径`], meta: null, mergeGitDir: null }
++    }
++    for (const note of attribution.notes) warnings.push(`归因注记：${note}`)
++    let diffFiles = attribution.diffFiles
++    // 并入 worktree 未提交改动（与草稿生成同源口径：子代理默认不 commit）。D-004 后仅在
++    // 归因源指向活跃 worktree 目录 / in-place meta（mergeGitDir）时执行——worktree-branch/
++    // cleaned 归因的未提交并入已在 resolveAttributionDiffFiles 内按同口径完成。
++    if (attribution.mergeGitDir) {
++      try {
++        const wtGitDir = attribution.mergeGitDir
+         const wtStatus = runGit(wtGitDir, ['status', '--porcelain', '--untracked-files=all'], { trim: false })
+         const wtFiles = parsePorcelainFiles(wtStatus)
+           .map(p => String(p).replace(/\\/g, '/'))
+           .filter(p => p !== '.sillyspec' && !p.startsWith('.sillyspec/'))
+         if (wtFiles.length > 0) diffFiles = [...new Set([...(Array.isArray(diffFiles) ? diffFiles : []), ...wtFiles])]
+-      }
+-    } catch { /* 退回 commit diff 口径 */ }
++      } catch { /* 退回 commit diff 口径 */ }
++    }
+     const mainDiff = Array.isArray(diffFiles) ? diffFiles : []
+     changedFiles = allowedPaths.length > 0
+       ? mainDiff.filter(f => allowedPaths.some(p => pathMatches(f, p)))
+diff --git a/src/worktree-apply.js b/src/worktree-apply.js
+index aa72e1c..b898291 100644
+--- a/src/worktree-apply.js
++++ b/src/worktree-apply.js
+@@ -5,7 +5,7 @@
+  * 1. 读取 meta.json 获取 baseHash
+  * 2. git diff --name-only baseHash 获取 worktree 中所有变更文件
+  * 3. 从 design.md 解析文件变更清单（无清单 = 允许所有）
+- * 4. 校验：变更文件 ⊆ 清单
++ * 4. 校验：变更文件 ⊆ 清单（review 声明与 allow 面相交过滤，D-003：外来声明不并入放行面）
+  * 5. 校验：主工作区文件 base hash 一致
+  * 6. --check-only 模式只输出检查结果
+  * 7. 非 checkOnly：生成 patch → apply --check → apply --3way
+@@ -499,8 +499,10 @@ function checkGuardOverlap({ activeGuards, applyFiles, selfChange }) {
+  * 坑 apply-undeclared-deviation-block（2026-08-24 用户反馈四期③）：执行期有据越界文件
+  * （facade 转发/名单测试）不在 design §6 也不在 allowed_paths，Gate1 拦 apply 只能回改
+  * design.md。review.json changedFiles 是 reviewer 对实际改动的声明（Task Review Gate 的
+- * verifyReviewGitEvidence 已交叉校验其与真实 git diff 相交），作为第三源并入 allow set——
+- * 放行仅限「已声明且过证据校验」的文件，完全越界仍拦。口径与 complete-handlers 的
++ * verifyReviewGitEvidence 已交叉校验其与真实 git diff 相交）。D-003@v1 收紧（2026-09-14
++ * change-ownership-guards task-03）：声明只与 allow 面相交（pathMatches 容差）才计入，
++ * 不相交的外来声明剔除出放行面、进 violations 报告行——本函数仍是声明收集口（口径不变），
++ * 相交过滤在主仓 3b/跨仓清单校验两消费点执行。口径与 complete-handlers 的
+  * collectExecuteChangedFiles 一致：change 戳归属 run、.sillyspec//meta.json 过滤、
+  * review.repo 切片（跨仓声明不进 main 集）。读不到 run/review → 空 Map（fail-closed 回退旧行为）。
+  *
+@@ -705,7 +707,7 @@ export async function withMainRepoLock(projectRoot, changeName, purpose, fn, opt
+  *
+  * 对有 worktree meta 的跨仓仓（worktree-cross.js 创建）执行与主仓 A5 同构的 patch 回落：
+  *   deliverables（diff baselineCommit||baseHash + untracked，filterDeliverableFiles 排除基础设施）
+- *   → 清单校验（resolveApplyAllowSet 按 repo 切片 ∪ review 声明切片）
++ *   → 清单校验（resolveApplyAllowSet 按 repo 切片 + review 声明相交过滤，D-003：不相交剔除）
+  *   → 跨仓主工作副本 dirty 重叠拦截
+  *   → patch（tracked diff + untracked add/diff --cached/reset，Buffer 防二进制损坏）
+  *   → git apply --3way 回跨仓主工作副本；成功后 cleanup 该跨仓 worktree（分支保留作锚）。
+@@ -763,24 +765,45 @@ function applyCrossRepoWorktrees(changeName, projectRoot, ctx, { checkOnly = fal
+       continue;
+     }
+ 
+-    // 清单校验（per-repo 切片 + review 声明切片并入，与主仓 Gate1/3b 同语义）。
++    // 清单校验（per-repo 切片 + review 声明相交过滤，与主仓 Gate1/3b 同语义）。
+     // specBase 显式传（平台模式 changes/ 在 specRoot；本地模式与旧硬编码同值零回归）。
++    // review 声明收紧（D-003@v1，2026-09-14-change-ownership-guards task-03）：声明文件须与
++    // allow 面（design 清单 ∪ 各 task target_files/allowed_paths ∪ linked-change 声明 =
++    // resolveApplyAllowSet 现有并集）相交（pathMatches 容差）才计入；不相交的外来声明剔除出
++    // 放行面、进 violations 报告行（「review 声明了越权文件」嫌疑标注），admission 增量归零。
+     const allowMap = resolveApplyAllowSet(projectRoot, changeName, { specBase });
+-    let allowSet = allowMap.get(repoKey) || new Set();
++    const allowSet = allowMap.get(repoKey) || new Set();
+     const reviewDeclared = collectReviewDeclaredFiles(projectRoot, changeName, { runtimeRoot: join(specBase, '.runtime') }).get(repoKey);
+-    if (reviewDeclared) {
+-      const merged = new Set([...allowSet]);
++    const reviewForeign = [];
++    if (reviewDeclared && allowSet.size > 0) {
++      const face = [...allowSet];
+       for (const f of reviewDeclared) {
+-        if (![...merged].some(ap => pathMatches(f, ap))) merged.add(f);
++        if (!face.some(ap => pathMatches(f, ap))) reviewForeign.push(f);
+       }
+-      allowSet = merged;
++    }
++    if (reviewForeign.length > 0) {
++      out.warnings.push(
++        `跨仓 ${repoKey}：${reviewForeign.length} 个 review 声明文件不在 allow 面（design 清单/任务卡 allowed_paths/linked 声明），已剔除出放行面（review 声明了越权文件——嫌疑：review 失实或并行会话在途文件混入声明）：${reviewForeign.join(', ')}`
++      );
+     }
+     if (allowSet.size > 0) {
+       const violations = classifyAllowListViolations(changedFiles, allowSet);
+       if (violations.length > 0) {
+-        out.errors.push(
+-          `跨仓 ${repoKey}：文件清单校验失败——以下变更文件不在 design.md 清单、也不在该仓 task review.json changedFiles 声明中：\n  ${violations.join('\n  ')}`
+-        );
++        const foreignSet = new Set(reviewForeign);
++        const foreignViolations = violations.filter(f => foreignSet.has(f));
++        const undeclaredViolations = violations.filter(f => !foreignSet.has(f));
++        const lines = [];
++        if (undeclaredViolations.length > 0) {
++          lines.push(
++            `跨仓 ${repoKey}：文件清单校验失败——以下变更文件不在 design.md 清单、也不在该仓 task review.json changedFiles 声明中：\n  ${undeclaredViolations.join('\n  ')}`
++          );
++        }
++        if (foreignViolations.length > 0) {
++          lines.push(
++            `跨仓 ${repoKey}：review 声明了越权文件——以下变更文件已被 review.json changedFiles 声明但不在 allow 面（design 清单/任务卡 allowed_paths/linked 声明），不予放行：\n  ${foreignViolations.join('\n  ')}\n（确属本变更交付：补进 design §6 清单或任务卡 allowed_paths 后重跑）`
++          );
++        }
++        out.errors.push(lines.join('\n'));
+         if (!checkOnly) continue;
+       }
+     }
+@@ -1034,27 +1057,30 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
+   // （主仓 worktree diff 只含主仓文件，跨仓文件在跨仓仓不进主仓 worktree diff）。跨仓 allowed_paths
+   // 仅作 Map 切片返回供上游用，主流程不消费（跨仓 apply=no-op，D-009）。
+   const allowMap = resolveApplyAllowSet(projectRoot, changeName, { specBase: allowSpecBase });
+-  // --- 3b. review.json 声明偏差文件并入（坑 apply-undeclared-deviation-block）---
+-  // 第三源：reviewer 声明的 changedFiles（已过 Task Review Gate git 证据交叉校验）——执行期
+-  // 有据越界（facade 转发/名单测试）不再逼回改 design.md。各 repo 切片各自并入；仅靠 review
+-  // 放行的文件记审计 warning（result.reviewAdmittedFiles），完全越界文件仍拦（Gate1 在扩展后判）。
++  // --- 3b. review.json 声明偏差文件相交过滤（坑 apply-undeclared-deviation-block → D-003@v1 收紧，
++  // 2026-09-14-change-ownership-guards task-03 / FR-02）---
++  // 旧语义：reviewer 声明的 changedFiles 整体并入 allow set（声明即放行）——troubleshooting §65
++  // 事件②实证该通道无 allowed_paths 相交校验，11 个并行会话在途文件经 review 声明真实放行。
++  // 新语义（D-003 翻转）：review 声明只承认与 allow 面（design 清单 ∪ 各 task
++  // target_files/allowed_paths ∪ linked-change 声明 = resolveApplyAllowSet 现有并集）相交的文件
++  // （pathMatches 容差）；不相交的外来声明剔除出放行面、进 violations 报告行（「review 声明了
++  // 越权文件」嫌疑标注）——admission 增量归零，通道保留作审计报告位（外来声明显式列出）。
+   const reviewDeclaredByRepo = collectReviewDeclaredFiles(projectRoot, changeName, { runtimeRoot: allowRuntimeRoot });
+-  const reviewAdmittedFiles = [];
++  const reviewForeignMain = [];
+   for (const [repoKey, files] of reviewDeclaredByRepo) {
+     const repoSet = allowMap.get(repoKey);
+-    if (!repoSet) continue; // 该 repo 无 design/任务卡清单（无清单=不校验），无需扩展
+-    const existing = [...repoSet];
++    if (!repoSet || repoSet.size === 0) continue; // 该 repo 无 design/任务卡清单（无清单=不校验），无相交可判
++    const face = [...repoSet];
+     for (const f of files) {
+-      if (!existing.some(ap => pathMatches(f, ap))) {
+-        repoSet.add(f);
+-        if (repoKey === 'main') reviewAdmittedFiles.push(f);
++      if (!face.some(ap => pathMatches(f, ap))) {
++        if (repoKey === 'main') reviewForeignMain.push(f);
+       }
+     }
+   }
+-  if (reviewAdmittedFiles.length > 0) {
+-    result.reviewAdmittedFiles = reviewAdmittedFiles;
++  if (reviewForeignMain.length > 0) {
++    result.reviewOverdeclaredFiles = reviewForeignMain;
+     result.warnings = (result.warnings || []).concat([
+-      `${reviewAdmittedFiles.length} 个变更文件不在 design.md/任务卡清单，但已被 task review.json changedFiles 声明（review 声明放行，已过 Task Review Gate git 证据校验；审计留痕）：${reviewAdmittedFiles.join(', ')}`
++      `${reviewForeignMain.length} 个 review 声明文件不在 allow 面（design 清单/任务卡 allowed_paths/linked 声明），已剔除出放行面（review 声明了越权文件——嫌疑：review 失实或并行会话在途文件混入声明）：${reviewForeignMain.join(', ')}；确属本变更交付请补进 design §6 清单或任务卡 allowed_paths`
+     ]);
+   }
+   const allowSet = allowMap.get('main') || new Set();
+@@ -1094,10 +1120,24 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
+   if (hasAllowList) {
+     const violations = classifyAllowListViolations(changedFiles, allowSet);
+     if (violations.length > 0) {
++      // D-003：violation 分流——已被 review 声明但不在 allow 面（越权声明）与完全未声明分报，
++      // 前者带「review 声明了越权文件」嫌疑标注（外来声明剔除后的落地拦截报告行）。
++      const foreignSet = new Set(result.reviewOverdeclaredFiles || []);
++      const foreignViolations = violations.filter(f => foreignSet.has(f));
++      const undeclaredViolations = violations.filter(f => !foreignSet.has(f));
+       result.extraFiles.push(...violations);
+-      result.errors.push(
+-        `文件清单校验失败：以下变更文件不在 design.md 清单、也不在 task review.json changedFiles 声明中：\n  ${violations.join('\n  ')}\n（若属执行期合理偏差：在 task review.json 的 changedFiles 声明，或在 design.md §6 清单补行）`
+-      );
++      const errLines = [];
++      if (undeclaredViolations.length > 0) {
++        errLines.push(
++          `文件清单校验失败：以下变更文件不在 design.md 清单、也不在 task review.json changedFiles 声明中：\n  ${undeclaredViolations.join('\n  ')}\n（若属执行期合理偏差：在 design.md §6 清单或任务卡 allowed_paths 补行——review.json 的 changedFiles 声明已不再放行清单外文件，仅作审计对照）`
++        );
++      }
++      if (foreignViolations.length > 0) {
++        errLines.push(
++          `review 声明了越权文件：以下变更文件已被 task review.json changedFiles 声明，但不在 allow 面（design 清单/任务卡 allowed_paths/linked 声明）——嫌疑：review 失实或并行会话在途文件混入声明，不予放行：\n  ${foreignViolations.join('\n  ')}\n（确属本变更交付：补进 design.md §6 清单或任务卡 allowed_paths 后重跑）`
++        );
++      }
++      result.errors.push(errLines.join('\n'));
+       // checkOnly（assess）模式不短路：继续跑 Gate3，收集所有道供一次报全（坑 worktree-execute-apply-friction 坑4）。
+       // 真实 apply（checkOnly=false）仍短路，保安全。
+       if (!checkOnly) return result;
+@@ -2110,6 +2150,9 @@ export function assessApplyRisk(changeName, { cwd } = {}) {
+   );
+   // review.json 声明偏差文件（坑 apply-undeclared-deviation-block）：与顺带修复同等待遇——
+   // reviewer 声明（已过 git 证据校验）的执行期偏差豁免 allowed_paths 严格校验，降 warning 注明来源。
++  // D-003@v1（task-03）后本豁免仅作用于 Gate2 的 allowed_paths 归属道——allow 面（design∪task
++  // 清单∪linked）之外的外来声明已在 Gate1（applyWorktree 3b 相交过滤）被剔除拦截，assess 整体
++  // 判定以 Gate1 收集的 errors 为准（BLOCKED）；两道口径不再重叠放行。
+   const reviewDeclaredSet = new Set(collectReviewDeclaredFiles(projectRoot, changeName, { runtimeRoot: join(assessSpecBase, '.runtime') }).get('main') || []);
+ 
+   // 检查 2: 变更在 allowed_paths 内（仅在 TaskCard 存在时）；顺带修复/review 声明文件豁免。
+diff --git a/test/platform-sync-schema.test.mjs b/test/platform-sync-schema.test.mjs
+index 2799585..9cb62b8 100644
+--- a/test/platform-sync-schema.test.mjs
++++ b/test/platform-sync-schema.test.mjs
+@@ -1,10 +1,11 @@
+ // task-01 验收：changes 表新增 last_synced_platform_ts / last_local_modified_ts 两列
+-// + DB schema 版本四处一致 bump 4→5（2026-08-11 changes 表加 title/quicklog_id 列；D-012 原始 3→4）。
++// + DB schema 版本四处一致 bump 4→5（2026-08-11 changes 表加 title/quicklog_id 列；D-012 原始 3→4）
++// + v6 再 bump（2026-09-14-change-ownership-guards task-01：changes 表加 owner_session 所有权列，D-005@v1）。
+ //
+ // 验收点（task-01.md acceptance）：
+ // 1. 全新 DB init 后 changes 表含两列且默认 NULL
+ // 2. 已有 schema 3 DB 经 _migrateAddColumn 幂等加列且新列 NULL，不丢既有数据
+-// 3. DB_SCHEMA_VERSION / schema_version DEFAULT / CURRENT_VERSION / progress.js _version 四处全为 5
++// 3. DB_SCHEMA_VERSION / schema_version DEFAULT / CURRENT_VERSION / progress.js _version 四处全为 6
+ //
+ // 用 DB 原语直接构造（对齐 db-atomic-write.test.mjs 风格），避免 ProgressManager 副作用干扰 DDL 断言。
+ import { DB } from '../src/db.js';
+@@ -43,22 +44,22 @@ const columnsOf = (file) => {
+   }
+ };
+ 
+-console.log('\n[platform-sync-schema] task-01：changes 加列 + 版本号四处一致');
++console.log('\n[platform-sync-schema] task-01：changes 加列 + 版本号四处一致（v6 owner_session bump）');
+ 
+ // ─────────────────────────────────────────
+-// 1. 版本号四处一致（4→5 bump，D-012 原始 3→4）
++// 1. 版本号四处一致（v6 bump：owner_session 列，2026-09-14-change-ownership-guards）
+ // ─────────────────────────────────────────
+-console.log('\n--- 1. 版本号四处一致（4→5 bump，D-012 原始 3→4）---');
++console.log('\n--- 1. 版本号四处一致（v6 bump：owner_session 列）---');
+ {
+   // (1) src/progress/shared.js CURRENT_VERSION（静态导出）
+-  assert(CURRENT_VERSION === 5, `src/progress/shared.js CURRENT_VERSION === 5（实际 ${CURRENT_VERSION}）`);
++  assert(CURRENT_VERSION === 6, `src/progress/shared.js CURRENT_VERSION === 6（实际 ${CURRENT_VERSION}）`);
+ 
+   // (2) src/db.js DB_SCHEMA_VERSION：经 init 后 .schema-version 戳内容间接验证（戳内容 == DB_SCHEMA_VERSION）
+   fresh();
+   let db = open();
+   db.close();
+   const stamp = readStamp();
+-  assert(stamp === '5', `DB_SCHEMA_VERSION === 5（init 后 .schema-version 戳=${stamp}）`);
++  assert(stamp === '6', `DB_SCHEMA_VERSION === 6（init 后 .schema-version 戳=${stamp}）`);
+ }
+ 
+ // ─────────────────────────────────────────
+@@ -131,7 +132,7 @@ console.log('\n--- 3. 幂等迁移：schema 3 旧库（无新列+有数据）→
+   // 写一个过期（schema 3）戳，使新版 init 判定 schemaCurrent=false → 重跑 _createSchema
+   writeFileSync(stampPath(), '3');
+ 
+-  // 用新版代码 init（DB_SCHEMA_VERSION=5，戳失配 → _createSchema → _migrateAddColumn 幂等加列）
++  // 用新版代码 init（DB_SCHEMA_VERSION=6，戳失配 → _createSchema → _migrateAddColumn 幂等加列）
+   const db = open();
+   db.close();
+ 
+@@ -151,14 +152,14 @@ console.log('\n--- 3. 幂等迁移：schema 3 旧库（无新列+有数据）→
+     probe.close();
+   }
+ 
+-  // 戳已更新为 5
+-  assert(readStamp() === '5', `迁移后 .schema-version 戳更新为 5（实际 ${readStamp()}）`);
++  // 戳已更新为 6
++  assert(readStamp() === '6', `迁移后 .schema-version 戳更新为 6（实际 ${readStamp()}）`);
+ }
+ 
+ // ─────────────────────────────────────────
+-// 4. project.schema_version DEFAULT 5（D-012 连带第二处）
++// 4. project.schema_version DEFAULT 6（连带第二处）
+ // ─────────────────────────────────────────
+-console.log('\n--- 4. project.schema_version DEFAULT 5（D-012 连带）---');
++console.log('\n--- 4. project.schema_version DEFAULT 6（连带）---');
+ {
+   fresh();
+   // 手动 INSERT project（不带 schema_version 列 → 取 DEFAULT）
+@@ -171,16 +172,16 @@ console.log('\n--- 4. project.schema_version DEFAULT 5（D-012 连带）---');
+   const probe = new DatabaseSync(dbPath(), { readOnly: true });
+   try {
+     const row = probe.prepare('SELECT schema_version FROM project WHERE id=1').get();
+-    assert(row && row.schema_version === 5, `project.schema_version DEFAULT 5（实际 ${row && row.schema_version}）`);
++    assert(row && row.schema_version === 6, `project.schema_version DEFAULT 6（实际 ${row && row.schema_version}）`);
+   } finally {
+     probe.close();
+   }
+ }
+ 
+ // ─────────────────────────────────────────
+-// 5. progress.js read() 输出 _version: 5（D-012 连带第四处）
++// 5. progress.js read() 输出 _version: 6（连带第四处）
+ // ─────────────────────────────────────────
+-console.log('\n--- 5. progress.js read()._version === 5（D-012 连带第四处）---');
++console.log('\n--- 5. progress.js read()._version === 6（连带第四处）---');
+ {
+   fresh();
+   const specDir = join(tmpRoot, 'spec');
+@@ -189,7 +190,7 @@ console.log('\n--- 5. progress.js read()._version === 5（D-012 连带第四处
+   await pm.init('demo');
+   await pm.initChange('demo', 'c1');
+   const data = await pm.read('demo', 'c1');
+-  assert(data && data._version === 5, `pm.read()._version === 5（实际 ${data && data._version}）`);
++  assert(data && data._version === 6, `pm.read()._version === 6（实际 ${data && data._version}）`);
+   // ProgressManager 无 close()：手动释放底层 node:sqlite 句柄（Windows 下 WAL 句柄占开会导致
+   // 末尾 rmSync EPERM；node:sqlite close() 自动 checkpoint 合并 -wal/-shm）。
+   try { if (pm._db) pm._db.close(); } catch { /* 已关忽略 */ }
+diff --git a/test/platform-sync-serialization.test.mjs b/test/platform-sync-serialization.test.mjs
+index 8cdd56d..8141ee5 100644
+--- a/test/platform-sync-serialization.test.mjs
++++ b/test/platform-sync-serialization.test.mjs
+@@ -80,7 +80,7 @@ if (json) {
+ 
+   // project 全局行
+   assert(json.project && json.project.name === basename(cwd), `project.name === basename(cwd)（实际 ${json.project && json.project.name}）`);
+-  assert(json.project && json.project.schema_version === 5, `project.schema_version === 5（实际 ${json.project && json.project.schema_version}）`);
++  assert(json.project && json.project.schema_version === 6, `project.schema_version === 6（实际 ${json.project && json.project.schema_version}）`);
+ 
+   // stages：initChange 插入全部 VALID_STAGES，每行 change_name+stage
+   assert(Array.isArray(json.stages) && json.stages.length >= 5, `stages 数组非空（实际 ${json.stages.length} 行）`);
+diff --git a/test/worktree-apply-review-allowlist.test.mjs b/test/worktree-apply-review-allowlist.test.mjs
+index 6a1dde4..53a0346 100644
+--- a/test/worktree-apply-review-allowlist.test.mjs
++++ b/test/worktree-apply-review-allowlist.test.mjs
+@@ -1,19 +1,21 @@
+ /**
+- * worktree apply review.json 声明偏差文件放行测试（坑 apply-undeclared-deviation-block，
+- * 2026-08-24 用户反馈四期③）。
++ * worktree apply review.json 声明偏差文件相交过滤测试（坑 apply-undeclared-deviation-block →
++ * D-003@v1 收紧翻转，2026-09-14-change-ownership-guards task-03）。
+  *
+- * 场景：执行期有据越界文件（facade 转发/名单测试）不在 design §6 也不在 allowed_paths，
+- * Gate1 拦 apply 只能回改 design.md。review.json changedFiles（Task Review Gate 已做 git 证据
+- * 交叉校验）作为 allow set 第三源：声明即放行 + 审计 warning；完全越界仍拦。
++ * 场景：旧语义下执行期有据越界文件（facade 转发/名单测试）不在 design §6 也不在
++ * allowed_paths，review.json changedFiles 声明即放行——troubleshooting §65 事件②实证该通道
++ * 无相交校验，并行会话在途文件经声明真实放行。D-003 翻转后：review 声明只承认与 allow 面
++ * （design 清单 ∪ 各 task target_files/allowed_paths ∪ linked-change 声明）相交的文件，
++ * 不相交的外来声明剔除出放行面、进 violations 报告行（「review 声明了越权文件」嫌疑标注）。
+  *
+  * 覆盖：
+- * 1. review 声明含未列文件 → Gate1 放行 + 审计 warning 点名 + result.reviewAdmittedFiles
+- * 2. 无 review → 仍拦（报错文案给 review/design 两条出路）
++ * 1. review 声明含未列文件 → Gate1 拦截 + violations 报告行（嫌疑标注）+ result.reviewOverdeclaredFiles
++ * 2. 无 review → 仍拦（报错文案给 review 对照/design 清单两条出路）
+  * 3. 跨仓 review（repo:other）不进 main 集 → 仍拦
+- * 4. assessApplyRisk Gate2 同步豁免（不再 BLOCKED，降 warning 注明来源）
++ * 4. assess：外来声明经 Gate1（checkOnly errors）→ BLOCKED，reasons 含嫌疑标注
+  * 5. review 声明 .sillyspec/ 运行时产物 → 不进 allow（过滤口径）
+  */
+-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs'
+ import { join } from 'node:path'
+ import { tmpdir } from 'node:os'
+ import { spawnSync } from 'node:child_process'
+@@ -84,7 +86,7 @@ function writeReview(d, changeName, changedFiles, repo) {
+   writeFileSync(join(taskDir, 'review.json'), JSON.stringify(review, null, 2))
+ }
+ 
+-console.log('--- 1. review 声明含未列文件 → Gate1 放行 + 审计 warning ---')
++console.log('--- 1. review 声明含未列文件 → Gate1 拦截 + violations 报告行（嫌疑标注）---')
+ {
+   const { d, changeName } = makeFixture()
+   writeReview(d, changeName, ['src-app.js', 'src-facade.js'])
+@@ -93,10 +95,11 @@ console.log('--- 1. review 声明含未列文件 → Gate1 放行 + 审计 warni
+   console.log = (...a) => logs.push(a.join(' ')); console.error = (...a) => logs.push(a.join(' ')); console.warn = (...a) => logs.push(a.join(' '))
+   let r
+   try { r = applyWorktree(changeName, { cwd: d }) } finally { console.log = orig.log; console.error = orig.error; console.warn = orig.warn }
+-  assert(r.ok === true, `apply 放行（errors: ${JSON.stringify(r.errors)}）`)
+-  assert(r.reviewAdmittedFiles && r.reviewAdmittedFiles.includes('src-facade.js'), `reviewAdmittedFiles 记录偏差文件（实际 ${JSON.stringify(r.reviewAdmittedFiles)}）`)
+-  assert((r.warnings || []).some(w => w.includes('review 声明放行') && w.includes('src-facade.js')), '审计 warning 点名 facade')
+-  assert(readFileSync(join(d, 'src-facade.js'), 'utf8') === 'facade forward\n', '偏差文件已落地主仓')
++  assert(r.ok !== true, `apply 拦截（D-003 翻转：外来声明不再放行，errors: ${JSON.stringify(r.errors)}）`)
++  assert(r.errors.some(e => e.includes('review 声明了越权文件') && e.includes('src-facade.js')), '外来声明进 violations 报告行（含嫌疑标注）')
++  assert(r.reviewOverdeclaredFiles && r.reviewOverdeclaredFiles.includes('src-facade.js'), `reviewOverdeclaredFiles 记录外来声明（实际 ${JSON.stringify(r.reviewOverdeclaredFiles)}）`)
++  assert((r.warnings || []).some(w => w.includes('review 声明了越权文件') && w.includes('src-facade.js')), '审计 warning 点名外来声明')
++  assert(!existsSync(join(d, 'src-facade.js')), '外来声明文件不落地主仓')
+   void logs
+   rmSync(d, { recursive: true, force: true })
+ }
+@@ -122,13 +125,13 @@ console.log('--- 3. 跨仓 review（repo:other）不进 main 集 ---')
+   rmSync(d, { recursive: true, force: true })
+ }
+ 
+-console.log('--- 4. assessApplyRisk Gate2 同步豁免 ---')
++console.log('--- 4. assess：外来声明经 Gate1（checkOnly errors）→ BLOCKED ---')
+ {
+   const { d, changeName } = makeFixture()
+   writeReview(d, changeName, ['src-app.js', 'src-facade.js'])
+   const assess = assessApplyRisk(changeName, { cwd: d })
+-  assert(assess.decision !== 'BLOCKED', `assess 不再 BLOCKED（decision=${assess.decision}, reasons=${JSON.stringify(assess.reasons)}）`)
+-  assert((assess.warnings || []).some(w => w.includes('review 声明偏差文件') && w.includes('src-facade.js')), 'Gate2 降 warning 注明 review 来源')
++  assert(assess.decision === 'BLOCKED', `assess BLOCKED（decision=${assess.decision}, reasons=${JSON.stringify(assess.reasons)}）`)
++  assert((assess.reasons || []).some(r => r.includes('review 声明了越权文件') && r.includes('src-facade.js')), 'reasons 含外来声明 violations 报告行')
+   rmSync(d, { recursive: true, force: true })
+ }
+diff --git a/test/change-ownership-guards.test.mjs b/test/change-ownership-guards.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/change-ownership-guards.test.mjs
+@@ -0,0 +1,486 @@
++/**
++ * change-ownership-guards 集成测试（2026-09-14-change-ownership-guards task-04）
++ *
++ * 真 git 临时仓（不 mock git / SQLite，fixture 形态沿用 apply-conflict-hardening.test.mjs
++ * + worktree-apply-review-allowlist.test.mjs 先例）。七组覆盖（FR-01/02/03，D-001~D-005@v1）：
++ *   ① 迁移：手工建 v5 库升级自动加 owner_session 列幂等 / 存量行 NULL 无主可认领
++ *   ② 所有权四态：自有放行 / 他人活跃结构化拒绝 / 窗口外 takeover-stale / --takeover 留痕
++ *      （+ setChangeOwner 心跳刷新 / claimChangeOwner 守卫不覆盖）
++ *   ③ 会话标识三级优先级（--session > env > quick 会话名 > anon@host 降级教学 warning）
++ *   ④ CLI 接线旁路堵点：apply 他人活跃 exit 1 带指引；assess 自动 apply 软跳零落盘；
++ *      --session 命中 self 后 assess 自动落盘（flag 接线回归）
++ *   ⑤ 放行过滤：review 外来声明剔除进 violations + reviewOverdeclaredFiles；allow 面内声明零扰动
++ *   ⑥ 归因分流：DB 判 worktree 归因零依赖主仓窗口（meta 活/分支活两形态）/ 分支已删 fail-closed 空集注记
++ *   ⑦ 归档门：未 apply 交付面阻断 / --skip-apply 留痕（record 随归档包）放行 / 他人活跃归档拒绝
++ *
++ * 执行顺序说明：③（anon 降级 warning 用例）必须先于 ⑦——resolveSessionIdentity 的
++ * 进程内一次性 warning memo 会被 archiveChangeDirectory 直调的 anon 降级路径消耗，
++ * 同进程后跑的 warning 断言会假红。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from 'node:fs'
++import { join, dirname } from 'node:path'
++import { tmpdir } from 'node:os'
++import { spawnSync } from 'node:child_process'
++import { fileURLToPath } from 'node:url'
++
++import { DB } from '../src/db.js'
++import { openDatabase } from '../src/db-engine.js'
++import { ProgressManager, resolveSessionIdentity } from '../src/progress.js'
++import { applyWorktree } from '../src/worktree-apply.js'
++import { archiveChangeDirectory } from '../src/run/complete-handlers.js'
++import { generateTaskReviewDrafts } from '../src/task-review.js'
++
++const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
++const binCLI = join(repoRoot, 'bin', 'sillyspec.js')
++
++const tmpRoots = []
++function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); tmpRoots.push(d); return d }
++test.after(() => { for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
++
++function git(dir, args) {
++  const r = spawnSync('git', args, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
++  if (r.status !== 0) throw new Error(`git ${args.join(' ')}: ${r.stderr}`)
++  return r.stdout.trim()
++}
++
++/** 临时 git 仓（含 .gitignore .sillyspec/ 的 base commit），返回 { cwd, specBase, base } */
++function makeRepo(prefix) {
++  const cwd = mk(prefix)
++  git(cwd, ['init', '-q'])
++  git(cwd, ['config', 'user.email', 't@t.local']); git(cwd, ['config', 'user.name', 't'])
++  git(cwd, ['config', 'commit.gpgsign', 'false'])
++  writeFileSync(join(cwd, '.gitignore'), '.sillyspec/\n')
++  mkdirSync(join(cwd, 'src'), { recursive: true })
++  writeFileSync(join(cwd, 'src', 'app.js'), 'app v1\n')
++  writeFileSync(join(cwd, 'README.md'), 'init\n')
++  git(cwd, ['add', '.']); git(cwd, ['commit', '-q', '-m', 'base'])
++  return { cwd, specBase: join(cwd, '.sillyspec'), base: git(cwd, ['rev-parse', 'HEAD']) }
++}
++
++/**
++ * worktree 交付面 fixture：主仓 base commit + worktree 改 src/app.js（未提交）+ 规范位 meta.json
++ * + changes/<c>/{design.md(§6 清单),tasks/task-01.md(allowed_paths)} + 进度库 changes 行。
++ */
++function setupWtFixture({ prefix = 'cog-', changeName = 'c1', owner = null } = {}) {
++  const { cwd, specBase, base } = makeRepo(prefix)
++  const wtDir = join(specBase, '.runtime', 'worktrees', changeName)
++  git(cwd, ['worktree', 'add', '-q', wtDir, '-b', `sillyspec/${changeName}`])
++  writeFileSync(join(wtDir, 'src', 'app.js'), 'app v2  // 本变更交付\n')
++  writeFileSync(join(wtDir, 'meta.json'), JSON.stringify({
++    changeName, branch: `sillyspec/${changeName}`, worktreePath: wtDir,
++    baseHash: base, actualBaseHash: base, baselineCommit: base, mode: 'worktree',
++  }))
++  const changeDir = join(specBase, 'changes', changeName)
++  mkdirSync(join(changeDir, 'tasks'), { recursive: true })
++  writeFileSync(join(changeDir, 'design.md'), [
++    '# D', '', '## 文件变更清单', '| 操作 | 文件路径 | 说明 |', '|---|---|---|',
++    `| 修改 | src/app.js | 改动 |`, '',
++  ].join('\n'))
++  writeFileSync(join(changeDir, 'tasks', 'task-01.md'), [
++    '---', 'id: task-01', 'title: t', 'title_zh: 任务', 'allowed_paths:', '  - src/app.js',
++    'goal: >', '  实现。', 'implementation:', '  - 步骤', 'acceptance:', '  - 验收',
++    'verify:', '  - node --version', 'constraints:', '  - 无', '---', '',
++  ].join('\n'))
++  const pm = new ProgressManager({ specDir: specBase })
++  pm.registerChange(cwd, changeName)
++  if (owner) pm.setChangeOwner(cwd, changeName, owner)
++  return { cwd, specBase, base, wtDir, changeDir, pm, changeName }
++}
++
++/** 捕获 console + 桩 process.exit（throw 隔离），供直调含 process.exit 的 handler */
++async function runCaptureExit(fn) {
++  const origLog = console.log, origErr = console.error, origWarn = console.warn, origExit = process.exit
++  let buf = '', exitCode = null, error = null, result
++  console.log = (...a) => { buf += a.join(' ') + '\n' }
++  console.error = (...a) => { buf += a.join(' ') + '\n' }
++  console.warn = (...a) => { buf += a.join(' ') + '\n' }
++  process.exit = (code) => { exitCode = code; throw new Error('EXIT_' + code) }
++  try { result = await fn() }
++  catch (e) { error = e }
++  finally {
++    console.log = origLog; console.error = origErr; console.warn = origWarn; process.exit = origExit
++  }
++  return { stdout: buf, exitCode, error, result }
++}
++
++function runCLI(args, { cwd } = {}) {
++  const env = { ...process.env }
++  delete env.SILLYSPEC_SESSION_ID // 隔离本进程 ⑦ 组 env 实验的泄漏
++  const r = spawnSync(process.execPath, [binCLI, ...args], {
++    cwd, env, encoding: 'utf8', timeout: 60_000, stdio: ['ignore', 'pipe', 'pipe'],
++  })
++  return { status: r.status, combined: (r.stdout || '') + (r.stderr || '') }
++}
++
++// ─────────────────────────────────────────────────────────────
++console.log('\n=== ① v5→v6 迁移：自动加列幂等 / 存量行 NULL 无主 ===\n')
++
++test('① 手工 v5 库（无 owner_session 列）→ init 自动加列 + 存量行 NULL + 戳升 6 + 重跑幂等', () => {
++  const root = mk('cog-mig-')
++  const runtimeDir = join(root, '.runtime')
++  mkdirSync(runtimeDir, { recursive: true })
++  const dbPath = join(runtimeDir, 'sillyspec.db')
++  // 手工建 v5 库：changes 表为 v6 前基座形态（无 owner_session；isolation/title 等列留给幂等 ALTER 补）；
++  // project 表不预建——由 _createSchema 以 DEFAULT 6 落盘（CREATE IF NOT EXISTS 不会改既有表默认值）
++  const raw = openDatabase(dbPath)
++  raw.exec(`
++    CREATE TABLE changes (
++      id INTEGER PRIMARY KEY AUTOINCREMENT,
++      name TEXT UNIQUE NOT NULL,
++      current_stage TEXT DEFAULT 'scan',
++      status TEXT DEFAULT 'active',
++      no_worktree INTEGER DEFAULT 0,
++      created_at TEXT NOT NULL,
++      last_active TEXT NOT NULL,
++      platform_change_id INTEGER,
++      platform_workspace_id INTEGER,
++      platform_last_sync TEXT,
++      platform_sync_enabled INTEGER DEFAULT 0
++    );
++  `)
++  raw.prepare("INSERT INTO changes (name, created_at, last_active) VALUES ('legacy', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')").run()
++  raw.close()
++  const stampPath = `${dbPath}.schema-version`
++  writeFileSync(stampPath, '5') // v5 戳 → 与 DB_SCHEMA_VERSION=6 不匹配 → init 重跑 _createSchema
++
++  const db = new DB(dbPath)
++  db.init()
++  const cols = db.getDb().prepare('PRAGMA table_info(changes)').all().map(c => c.name)
++  assert.ok(cols.includes('owner_session'), `owner_session 列已加（cols=${cols.join(',')}）`)
++  assert.ok(cols.includes('title') && cols.includes('isolation_mode'), '历史幂等 ALTER 照常补齐（v5 先例同款）')
++  const legacy = db.getDb().prepare("SELECT owner_session FROM changes WHERE name = 'legacy'").get()
++  assert.equal(legacy.owner_session, null, '存量行 owner_session=NULL（无主，任何会话可接管）')
++  assert.equal(readFileSync(stampPath, 'utf8').trim(), '6', 'schema 戳升 6')
++  const projDflt = db.getDb().prepare("SELECT dflt_value FROM pragma_table_info('project') WHERE name = 'schema_version'").get()
++  assert.equal(String(projDflt.dflt_value), '6', 'project.schema_version DEFAULT 同步 bump 6（新建库口径）')
++
++  // 幂等：删戳强制重跑 _createSchema——duplicate column 被吞，列数不翻倍、数据不丢
++  rmSync(stampPath)
++  const db2 = new DB(dbPath)
++  db2.init()
++  const nCols = db2.getDb().prepare("SELECT COUNT(*) AS c FROM pragma_table_info('changes') WHERE name = 'owner_session'").get()
++  assert.equal(nCols.c, 1, '重跑后 owner_session 仍只有一列（幂等 ALTER）')
++  assert.equal(db2.getDb().prepare("SELECT COUNT(*) AS c FROM changes WHERE name = 'legacy'").get().c, 1, '存量行未受迁移扰动')
++
++  // 迁移后的库可被 ProgressManager 直接消费：无主行认领成功（数据载体 ↔ 语义层打通）
++  const pm = new ProgressManager({ specDir: root })
++  assert.equal(pm.getChangeOwner(root, 'legacy'), null, '迁移前读 owner=null（无主）')
++  const claimed = pm.claimChangeOwner(root, 'legacy', 'sess-A')
++  assert.equal(claimed, 'sess-A', '存量无主行认领写入')
++})
++
++// ─────────────────────────────────────────────────────────────
++console.log('\n=== ② 所有权四态（assertChangeOwnership 直调）+ owner 读写语义 ===\n')
++
++test('② 四态：self 放行 / 他人活跃结构化拒绝 / 窗口外 takeover-stale / --takeover 留痕 + no-owner', () => {
++  const { cwd, specBase } = makeRepo('cog-own-')
++  const pm = new ProgressManager({ specDir: specBase })
++  pm.registerChange(cwd, 'c1')
++  const iso = new Date().toISOString()
++  const setLastActive = (isoStr) => pm._ensureDB(cwd).getDb()
++    .prepare("UPDATE changes SET last_active = ? WHERE name = 'c1'").run(isoStr)
++
++  // 态 0：无主（刚 registerChange 未写 owner）→ 放行
++  const t0 = pm.assertChangeOwnership(cwd, 'c1', { selfSession: 'sess-A', nowMs: Date.now() })
++  assert.equal(t0.allowed, true, '无主放行')
++  assert.equal(t0.action, 'no-owner')
++  assert.equal(t0.heartbeatMs, 15 * 60 * 1000, '心跳窗缺省 15 分钟')
++
++  // 态 1：自有 → 放行零路径变化
++  pm.setChangeOwner(cwd, 'c1', 'sess-A')
++  const t1 = pm.assertChangeOwnership(cwd, 'c1', { selfSession: 'sess-A', nowMs: Date.now() })
++  assert.equal(t1.allowed, true); assert.equal(t1.action, 'self')
++  assert.equal(t1.owner, 'sess-A')
++
++  // 态 2：他人且活跃窗内 → 拒绝（结构化字段 owner + lastActive + heartbeatMs）
++  pm.setChangeOwner(cwd, 'c1', 'other-session') // setChangeOwner 同事务刷新 last_active=now
++  const t2 = pm.assertChangeOwnership(cwd, 'c1', { selfSession: 'sess-B', nowMs: Date.now() })
++  assert.equal(t2.allowed, false, '他人活跃 → 拒绝接管类操作')
++  assert.equal(t2.action, 'blocked-active-owner')
++  assert.equal(t2.owner, 'other-session', '结构化字段 owner')
++  assert.ok(t2.lastActive && Math.abs(Date.now() - new Date(t2.lastActive).getTime()) < 60_000, '结构化字段 lastActive=新鲜心跳')
++  assert.equal(t2.heartbeatMs, 15 * 60 * 1000)
++
++  // 态 3：他人但 last_active 距今超窗 → 放行并标 takeover-stale（调用方重写 owner）
++  setLastActive(new Date(Date.now() - 30 * 60 * 1000).toISOString())
++  const t3 = pm.assertChangeOwnership(cwd, 'c1', { selfSession: 'sess-B', nowMs: Date.now() })
++  assert.equal(t3.allowed, true); assert.equal(t3.action, 'takeover-stale')
++  assert.equal(t3.owner, 'other-session')
++  // 接管写库侧：setChangeOwner 重写 + 心跳从接管时刻起算（下次校验不再读到旧 owner 陈旧时间戳）
++  pm.setChangeOwner(cwd, 'c1', 'sess-B')
++  const t3b = pm.assertChangeOwnership(cwd, 'c1', { selfSession: 'sess-C', nowMs: Date.now() })
++  assert.equal(t3b.action, 'blocked-active-owner', '接管后 last_active 已刷新（sess-C 立即抢不走）')
++
++  // 态 4：--takeover（forced）→ 活跃窗内也无条件放行留痕
++  const t4 = pm.assertChangeOwnership(cwd, 'c1', { selfSession: 'sess-C', nowMs: Date.now(), forced: true })
++  assert.equal(t4.allowed, true); assert.equal(t4.action, 'takeover-forced')
++
++  // last_active 不可解析 → 按陈旧处理（逃生通道优先，不把 change 锁死）
++  setLastActive('not-a-date')
++  const t5 = pm.assertChangeOwnership(cwd, 'c1', { selfSession: 'sess-C', nowMs: Date.now() })
++  assert.equal(t5.allowed, true); assert.equal(t5.action, 'takeover-stale', '时间戳损坏按陈旧放行')
++})
++
++test('②b claimChangeOwner 守卫：他人持有不覆盖 / NULL 行认领写入 / 首建即得', () => {
++  const { cwd, specBase } = makeRepo('cog-claim-')
++  const pm = new ProgressManager({ specDir: specBase })
++  // 首建即得
++  assert.equal(pm.claimChangeOwner(cwd, 'c9', 'sess-A'), 'sess-A', '行不存在 → 创建并认领')
++  // 他人持有 → 不覆盖
++  assert.equal(pm.claimChangeOwner(cwd, 'c9', 'sess-B'), 'sess-A', '他人已持有 → 返回既有 owner 不覆盖')
++  assert.equal(pm.getChangeOwner(cwd, 'c9'), 'sess-A')
++  // NULL 行 → 认领写入
++  pm.registerChange(cwd, 'c10') // 未带 owner → NULL
++  assert.equal(pm.claimChangeOwner(cwd, 'c10', 'sess-B'), 'sess-B', '无主行 → 认领写入')
++  // 无行 + 读容错
++  assert.equal(pm.getChangeOwner(cwd, 'no-such'), null)
++})
++
++// ─────────────────────────────────────────────────────────────
++console.log('\n=== ③ 会话标识三级优先级 + anon 降级教学 warning ===\n')
++// （本组先于 ⑦ 归档组跑：resolveSessionIdentity 的进程内一次性 warning memo 会被后续直调消耗）
++
++test('③ 三级解析：--session > env SILLYSPEC_SESSION_ID > quick 会话名 > anon@host 降级', () => {
++  const prevEnv = process.env.SILLYSPEC_SESSION_ID
++  try {
++    // 第一级：flag（空白 flag 视为未提供）
++    process.env.SILLYSPEC_SESSION_ID = 'env-id'
++    assert.deepEqual(resolveSessionIdentity({ flagSession: 'flag-id' }), { session: 'flag-id', source: 'flag' })
++    assert.deepEqual(resolveSessionIdentity({ flagSession: '   ' }), { session: 'env-id', source: 'env' }, '空白 flag 回落 env')
++    // 第二级：env
++    assert.deepEqual(resolveSessionIdentity({}), { session: 'env-id', source: 'env' })
++    // 第三级：quick 会话名（quick-<8hex> 才启用；full-flow 名不启用）
++    delete process.env.SILLYSPEC_SESSION_ID
++    assert.deepEqual(resolveSessionIdentity({ quickChangeName: 'quick-1a2b3c4d', warn: false }),
++      { session: 'quick-1a2b3c4d', source: 'quick-session' })
++    assert.equal(resolveSessionIdentity({ quickChangeName: 'full-flow-change', warn: false }).source, 'anon-host',
++      '非 quick-<8hex> 名不启用第三级')
++    // 第四级：anon@host 降级 + 一次性教学 warning + marker 落盘
++    const anonRoot = mk('cog-anon-')
++    const warns = []
++    const origWarn = console.warn
++    console.warn = (...a) => warns.push(a.join(' '))
++    let ident
++    try { ident = resolveSessionIdentity({ cwd: anonRoot, warn: true }) }
++    finally { console.warn = origWarn }
++    assert.equal(ident.source, 'anon-host')
++    assert.ok(ident.session.startsWith('anon@'), `anon 标识形态（实际 ${ident.session}）`)
++    assert.ok(warns.some(w => w.includes('SILLYSPEC_SESSION_ID')), '降级 warning 含 export 教学指引')
++    assert.ok(warns.some(w => w.includes('--session')), '降级 warning 含 --session flag 指引')
++    assert.ok(existsSync(join(anonRoot, '.sillyspec', '.runtime', 'anon-session-warn.json')), '降频 marker 已落盘')
++    // 同进程二次解析不再重复 warning（进程内 memo；跨进程 24h 窗由 marker 承担）
++    const warns2 = []
++    console.warn = (...a) => warns2.push(a.join(' '))
++    try { resolveSessionIdentity({ cwd: anonRoot, warn: true }) }
++    finally { console.warn = origWarn }
++    assert.equal(warns2.length, 0, '二次解析零重复 warning')
++  } finally {
++    if (prevEnv === undefined) delete process.env.SILLYSPEC_SESSION_ID
++    else process.env.SILLYSPEC_SESSION_ID = prevEnv
++  }
++})
++
++// ─────────────────────────────────────────────────────────────
++console.log('\n=== ④ CLI 接线：apply 他人活跃拒绝带指引 / assess 旁路软跳零落盘 / --session 命中 self ===\n')
++
++test('④a worktree apply 他人活跃 change → exit 1 + 结构化指引（owner/--takeover）+ 主仓零落盘', () => {
++  const { cwd, changeName } = setupWtFixture({ prefix: 'cog-apply-', owner: 'other-session' })
++  const r = runCLI(['--dir', cwd, 'worktree', 'apply', changeName])
++  assert.equal(r.status, 1, 'apply 被所有权护栏拒绝（exit 1）')
++  assert.ok(r.combined.includes('正被其他会话持有'), '报错含持有语义')
++  assert.ok(r.combined.includes('other-session'), '报错点名 owner（结构化字段）')
++  assert.ok(r.combined.includes('--takeover'), '报错含 --takeover 显式接管指引')
++  assert.equal(readFileSync(join(cwd, 'src', 'app.js'), 'utf8'), 'app v1\n', '主仓零落盘（拦截在实际 apply 前）')
++})
++
++test('④b assess 自动 apply 他人活跃 → 软跳零落盘（exit 0 + warning + --takeover 指引，旁路已堵）', () => {
++  const { cwd, changeName } = setupWtFixture({ prefix: 'cog-assess-', owner: 'other-session' })
++  const r = runCLI(['--dir', cwd, 'worktree', 'assess', changeName])
++  assert.equal(r.status, 0, '软跳不抛错（无人值守不越权也不阻断审计流）')
++  assert.ok(r.combined.includes('正被其他会话持有'), 'warning 含持有方信息')
++  assert.ok(r.combined.includes('--takeover'), 'warning 含显式接管指引')
++  assert.ok(!r.combined.includes('已自动应用'), '未执行自动落盘')
++  assert.equal(readFileSync(join(cwd, 'src', 'app.js'), 'utf8'), 'app v1\n', 'assess 旁路主仓零落盘')
++})
++
++test('④c assess 带 --session 命中 self → 自动 apply 落盘（flag 接线回归）', () => {
++  const { cwd, changeName } = setupWtFixture({ prefix: 'cog-self-', owner: 'other-session' })
++  const r = runCLI(['--dir', cwd, 'worktree', 'assess', changeName, '--session', 'other-session'])
++  assert.equal(r.status, 0)
++  assert.ok(r.combined.includes('已自动应用'), '所有权放行后自动 apply 执行')
++  assert.ok(readFileSync(join(cwd, 'src', 'app.js'), 'utf8').includes('app v2'), '交付面落主仓')
++})
++
++// ─────────────────────────────────────────────────────────────
++console.log('\n=== ⑤ 放行过滤：review 外来声明剔除进违规报告 / allow 面内声明零扰动 ===\n')
++
++function writeReview(specBase, changeName, changedFiles) {
++  const runDir = join(specBase, '.runtime', 'execute-runs', 'exec-2026-09-14-120000')
++  const taskDir = join(runDir, 'tasks', 'task-01')
++  mkdirSync(taskDir, { recursive: true })
++  writeFileSync(join(runDir, 'change'), changeName + '\n')
++  writeFileSync(join(taskDir, 'review.json'), JSON.stringify({
++    schemaVersion: 2, task: 'task-01',
++    base: '0'.repeat(40), head: '1'.repeat(40),
++    changedFiles, specVerdict: 'pass', qualityVerdict: 'pass',
++    reviewerNotes: 't', requiredEvidence: [],
++  }, null, 2))
++}
++
++test('⑤a review 声明含 allow 面外文件 → 剔除出放行面 + reviewOverdeclaredFiles + violations 嫌疑标注', () => {
++  const { cwd, specBase, changeName } = setupWtFixture({ prefix: 'cog-filter-' })
++  // worktree 追加外来文件（并行会话在途文件混入声明的形态）
++  writeFileSync(join(specBase, '.runtime', 'worktrees', changeName, 'src', 'foreign-wip.js'), 'foreign\n')
++  writeReview(specBase, changeName, ['src/app.js', 'src/foreign-wip.js'])
++  const r = applyWorktree(changeName, { cwd })
++  assert.equal(r.ok, false, '外来声明不再放行（D-003 翻转：admission 增量归零）')
++  assert.ok((r.reviewOverdeclaredFiles || []).includes('src/foreign-wip.js'),
++    `reviewOverdeclaredFiles 记录外来声明（实际 ${JSON.stringify(r.reviewOverdeclaredFiles)}）`)
++  assert.ok((r.errors || []).some(e => e.includes('review 声明了越权文件') && e.includes('src/foreign-wip.js')),
++    'violations 报告行含嫌疑标注')
++  assert.ok((r.warnings || []).some(w => w.includes('review 声明了越权文件') && w.includes('src/foreign-wip.js')),
++    '审计 warning 点名外来声明')
++  assert.ok(!existsSync(join(cwd, 'src', 'foreign-wip.js')), '外来声明文件不落地主仓')
++})
++
++test('⑤b review 声明全在 allow 面内 → 放行不受收紧影响', () => {
++  const { cwd, specBase, changeName } = setupWtFixture({ prefix: 'cog-inface-' })
++  writeReview(specBase, changeName, ['src/app.js'])
++  const r = applyWorktree(changeName, { cwd })
++  assert.equal(r.ok, true, '面内声明 apply 照常放行（errors=' + JSON.stringify(r.errors) + '）')
++  assert.equal(r.reviewOverdeclaredFiles, undefined, '无外来声明 → 无剔除留痕')
++  assert.ok(readFileSync(join(cwd, 'src', 'app.js'), 'utf8').includes('app v2'), '交付面落主仓')
++})
++
++// ─────────────────────────────────────────────────────────────
++console.log('\n=== ⑥ 归因分流：worktree 判源零依赖主仓窗口 / 分支已删 fail-closed 空集 ===\n')
++
++function setupAttributionFixture({ prefix }) {
++  const { cwd, specBase, base } = makeRepo(prefix)
++  const changeName = 'c6'
++  const wtDir = join(specBase, '.runtime', 'worktrees', changeName)
++  git(cwd, ['worktree', 'add', '-q', wtDir, '-b', `sillyspec/${changeName}`])
++  writeFileSync(join(wtDir, 'src', 'wt-file.js'), 'wt v1\n')
++  git(wtDir, ['add', 'src/wt-file.js']); git(wtDir, ['commit', '-q', '-m', 'base-wt'])
++  writeFileSync(join(wtDir, 'meta.json'), JSON.stringify({
++    changeName, branch: `sillyspec/${changeName}`, worktreePath: wtDir,
++    baseHash: base, actualBaseHash: base, baselineCommit: base, mode: 'worktree',
++  }))
++  const changeDir = join(specBase, 'changes', changeName)
++  mkdirSync(join(changeDir, 'tasks'), { recursive: true })
++  // plan.md：getOrCreateMultiRepoContext 无 plan.md 时返 null 退化单仓（execute 链同款前提）
++  writeFileSync(join(changeDir, 'plan.md'), '# plan\n\n- [ ] task-01\n')
++  writeFileSync(join(changeDir, 'tasks', 'task-01.md'), [
++    '---', 'id: task-01', 'title: t', 'title_zh: 任务', 'allowed_paths:', '  - src/wt-file.js',
++    'goal: >', '  实现。', 'implementation:', '  - 步骤', 'acceptance:', '  - 验收',
++    'verify:', '  - node --version', 'constraints:', '  - 无', '---', '',
++  ].join('\n'))
++  const pm = new ProgressManager({ specDir: specBase })
++  pm.registerChange(cwd, changeName)
++  pm.updateChangeIsolation(cwd, changeName, { status: 'verified', mode: 'worktree' }) // DB 判源
++  return { cwd, specBase, wtDir, changeName, pm }
++}
++
++function readDraft(specBase, changeName) {
++  const runId = readFileSync(join(specBase, '.runtime', `current-execute-run-id-${changeName}`), 'utf8').trim()
++  const p = join(specBase, '.runtime', 'execute-runs', runId, 'tasks', 'task-01', 'review.json')
++  return { exists: existsSync(p), draft: existsSync(p) ? JSON.parse(readFileSync(p, 'utf8')) : null }
++}
++
++test('⑥a DB 判 worktree + meta 活：草稿归因取 worktree，主仓脏文件不被吸入', async () => {
++  const { cwd, specBase, wtDir, changeName } = setupAttributionFixture({ prefix: 'cog-attrA-' })
++  // worktree 未提交交付 + 主仓并行会话脏窗口（未跟踪新文件 + 已跟踪文件改动）
++  writeFileSync(join(wtDir, 'src', 'wt-file.js'), 'wt v2  // 本变更交付\n')
++  writeFileSync(join(cwd, 'src', 'foreign-dirty.js'), 'other session wip\n')
++  writeFileSync(join(cwd, 'README.md'), 'init  // other session touched\n')
++  const r = await generateTaskReviewDrafts({ changeName, cwd, platformOpts: {} })
++  assert.ok(r.generated >= 1, `草稿已生成（generated=${r.generated}, reason=${r.reason}）`)
++  const { draft } = readDraft(specBase, changeName)
++  assert.ok(draft, 'task-01 review.json 草稿在盘')
++  assert.ok(draft.changedFiles.includes('src/wt-file.js'), 'worktree 交付文件被归因')
++  assert.ok(!draft.changedFiles.some(f => f.includes('foreign-dirty')), '主仓未跟踪脏文件不被吸入')
++  assert.ok(!draft.changedFiles.includes('README.md'), '主仓已跟踪脏改动不被吸入')
++})
++
++test('⑥b DB 判 worktree + meta 缺失但分支活：归因=分支 diff，主仓脏文件仍零吸入（不落共享窗口）', async () => {
++  const { cwd, specBase, wtDir, changeName } = setupAttributionFixture({ prefix: 'cog-attrB-' })
++  // 分支上提交交付（worktree-branch 口径的可归因源）
++  writeFileSync(join(wtDir, 'src', 'wt-file.js'), 'wt v2  // 分支交付\n')
++  git(wtDir, ['add', 'src/wt-file.js']); git(wtDir, ['commit', '-q', '-m', 'deliver'])
++  // 模拟 cleanup 后 meta 失联：删 meta + 删 worktree 目录 + prune（分支 ref 保留）
++  rmSync(join(wtDir, 'meta.json'))
++  rmSync(wtDir, { recursive: true, force: true })
++  git(cwd, ['worktree', 'prune'])
++  // 主仓脏窗口（旧口径会经 gitChangedFiles(cwd) 兜底吸入的正是这批）
++  writeFileSync(join(cwd, 'src', 'foreign-dirty2.js'), 'other session wip 2\n')
++  writeFileSync(join(cwd, 'README.md'), 'init  // other session touched 2\n')
++  // ctx 走 execute 链同款构造（getOrCreateMultiRepoContext 单仓退化 {main}）：
++  // meta 缺失时 base 锚定走 worktree-branch 分支锚（branchBase/branchHead）——无 ctx 的
++  // 单仓 legacy 路径在「无 meta.baseHash」早退，分支锚不可达（缺陷回报，不越卡修 src）
++  const { getOrCreateMultiRepoContext } = await import('../src/run/shared.js')
++  const ctx = await getOrCreateMultiRepoContext({ cwd, changeName, platformOpts: {} })
++  const r = await generateTaskReviewDrafts({ changeName, cwd, platformOpts: {}, ctx })
++  assert.ok(r.generated >= 1, `草稿已生成（generated=${r.generated}, reason=${r.reason}）`)
++  const { draft } = readDraft(specBase, changeName)
++  assert.ok(draft, 'task-01 review.json 草稿在盘')
++  assert.deepEqual(draft.changedFiles, ['src/wt-file.js'], '归因=worktree 分支 diff（仅分支交付文件）')
++})
++
++test('⑥c DB 判 worktree + 分支已删（cleanup 终态）→ fail-closed 空集 + 不可归因注记（不回退主仓窗口）', async () => {
++  const { cwd, specBase, changeName } = setupAttributionFixture({ prefix: 'cog-attrC-' })
++  rmSync(join(specBase, '.runtime', 'worktrees', changeName, 'meta.json'))
++  rmSync(join(specBase, '.runtime', 'worktrees', changeName), { recursive: true, force: true })
++  git(cwd, ['worktree', 'prune'])
++  git(cwd, ['branch', '-D', `sillyspec/${changeName}`])
++  // 主仓脏文件在场——若回退主仓窗口会被吸入（回归锁定的反向证明）
++  writeFileSync(join(cwd, 'src', 'foreign-dirty3.js'), 'other session wip 3\n')
++  const r = await generateTaskReviewDrafts({ changeName, cwd, platformOpts: {} })
++  assert.equal(r.generated, 0, '分支已删 → 零草稿生成')
++  assert.ok(r.reason && r.reason.includes('不可归因（worktree 已清理）'), `reason 含终态空源注记（实际 ${r.reason}）`)
++  assert.ok(!readDraft(specBase, changeName).exists, '未写任何草稿（fail-closed 空集）')
++})
++
++// ─────────────────────────────────────────────────────────────
++console.log('\n=== ⑦ 归档门：未 apply 交付面阻断 / --skip-apply 留痕放行 / 他人活跃归档拒绝 ===\n')
++
++test('⑦a worktree 有未 apply 交付面 → 归档阻断消息 + exit 1（探测门契约）', async () => {
++  const { cwd, specBase, changeName, changeDir, pm } = setupWtFixture({ prefix: 'cog-arch-' })
++  writeFileSync(join(changeDir, 'plan.md'), '# plan\n') // 归档移动前硬校验必需产物
++  // 注：直调用 exit 桩（throw）会被归档门的 fail-open 探测 catch 吞掉后继续走完归档——
++  // 这是桩伪象（生产 process.exit 真终止，拦截语义即生效）；故本用例只锁消息面 + exit 码
++  // 记录，目录未移动语义交由 CLI 真进程语义（process.exit 终止）保证，不在桩下断言。
++  const blocked = await runCaptureExit(() => archiveChangeDirectory(pm, cwd, { currentChange: changeName }, specBase, {}, {}))
++  assert.equal(blocked.exitCode, 1, '未 apply 交付面 → 归档 exit 1')
++  assert.ok(blocked.stdout.includes('未 apply 的交付面'), '报错含交付面语义')
++  assert.ok(blocked.stdout.includes(`worktree apply ${changeName}`), '报错含 apply 指引')
++  assert.ok(blocked.stdout.includes('--skip-apply'), '报错含 --skip-apply 出路')
++})
++
++test('⑦a2 --skip-apply → skip-apply.record.json 留痕随归档包 + 归档完成', async () => {
++  const { cwd, specBase, changeName, changeDir, pm } = setupWtFixture({ prefix: 'cog-arch-skip-' })
++  writeFileSync(join(changeDir, 'plan.md'), '# plan\n')
++  const passed = await runCaptureExit(() => archiveChangeDirectory(pm, cwd, { currentChange: changeName }, specBase, {}, { skipApply: true }))
++  assert.equal(passed.exitCode, null, '--skip-apply 放行归档（无 exit）')
++  const destDir = join(specBase, 'changes', 'archive', changeName)
++  const recordPath = join(destDir, 'skip-apply.record.json')
++  assert.ok(existsSync(recordPath), 'skip-apply.record.json 随归档包留存')
++  const record = JSON.parse(readFileSync(recordPath, 'utf8'))
++  assert.equal(record.flag, '--skip-apply')
++  assert.equal(record.change, changeName)
++  assert.ok(record.deliverableFiles.includes('src/app.js'), 'record 记录未确认落地的交付文件')
++  assert.ok(record.deliverableCount >= 1)
++  assert.ok(!existsSync(changeDir), '源目录已移动')
++  assert.ok(passed.stdout.includes('--skip-apply') || passed.stdout.includes('未确认落地'), '控制台留痕输出')
++})
++
++test('⑦b 他人活跃 change 归档 → 所有权拒绝（exit 1 + 接管指引）', async () => {
++  const { cwd, specBase, changeName, changeDir, pm } = setupWtFixture({ prefix: 'cog-arch2-', owner: 'other-session' })
++  writeFileSync(join(changeDir, 'plan.md'), '# plan\n')
++  const r = await runCaptureExit(() => archiveChangeDirectory(pm, cwd, { currentChange: changeName }, specBase, {}, {}))
++  assert.equal(r.exitCode, 1, '他人活跃 → 归档拒绝 exit 1')
++  assert.ok(r.stdout.includes('正被其他会话持有') && r.stdout.includes('other-session'), '报错含 owner 结构化字段')
++  assert.ok(r.stdout.includes('--takeover'), '报错含显式接管指引')
++  assert.ok(existsSync(changeDir), '目录未动')
++})

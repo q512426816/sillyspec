@@ -12,7 +12,7 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, unlinkSync, appendFileSync, copyFileSync, readdirSync, statSync, realpathSync } from 'fs';
 import { join, basename, dirname, resolve, sep } from 'path';
-import { tmpdir } from 'os';
+import { tmpdir, hostname } from 'os';
 import { writeAtomicSync } from './fs-atomic.js';
 import { DB } from './db.js';
 import { checkExecuteCodeEvidence } from './stage-contract.js';
@@ -79,6 +79,61 @@ export class PlatformManagedError extends PointerUnreachableError {
     });
     this.declarationPath = declarationPath;
   }
+}
+
+// ── 会话标识三级解析（2026-09-14-change-ownership-guards task-02，FR-01 / D-001@v1）──
+// 优先级：--session flag > env SILLYSPEC_SESSION_ID > quick 场景 changeName（quick-<8hex>，
+// 既有 sessionId 机制——guard 按 change 名落盘天然跨进程）> anon@<hostname> 机器级降级。
+// 降级时打一次性教学 warning：指引 export SILLYSPEC_SESSION_ID=<唯一标识> 或 --session，
+// 明示无标识时同机并行不设防（R-01 明示局限，防线=显式标识铁律+归档收口+--takeover 摩擦）。
+// 「一次性」双层降频：进程内 memo（同进程多次解析只报一次）+ 跨进程 marker 文件窗口
+// （warnSelfRefPointerOnce 同款模式；CLI 每次调用即新进程，纯进程 memo 会退化成每命令必报）。
+const ANON_SESSION_WARN_MARKER = 'anon-session-warn.json';
+const ANON_SESSION_WARN_WINDOW_MS = 24 * 60 * 60 * 1000; // 教学指引 24h 窗口（非告警，不设短窗）
+const QUICK_SID_PATTERN_FOR_IDENTITY = /^quick-[0-9a-f]{8}$/;
+let _anonSessionWarnedThisProcess = false;
+
+/**
+ * 解析本会话的所有权标识（纯函数 + 降级侧的一次性教学 warn）。
+ * @param {{ flagSession?: string|null, quickChangeName?: string|null, cwd?: string|null, warn?: boolean }} [opts]
+ *   - flagSession：--session flag 值（最高优先级；空串/空白视为未提供）
+ *   - quickChangeName：quick 场景的 changeName（匹配 quick-<8hex> 才启用第三级）
+ *   - cwd：教学 warning marker 落盘根（不提供则跳过跨进程降频，仅进程内 memo）
+ *   - warn：false 关闭教学 warning（机器消费路径）
+ * @returns {{session: string, source: 'flag'|'env'|'quick-session'|'anon-host'}}
+ */
+export function resolveSessionIdentity({ flagSession = null, quickChangeName = null, cwd = null, warn = true } = {}) {
+  const flag = typeof flagSession === 'string' ? flagSession.trim() : '';
+  if (flag) return { session: flag, source: 'flag' };
+  const env = typeof process.env.SILLYSPEC_SESSION_ID === 'string' ? process.env.SILLYSPEC_SESSION_ID.trim() : '';
+  if (env) return { session: env, source: 'env' };
+  if (quickChangeName && QUICK_SID_PATTERN_FOR_IDENTITY.test(quickChangeName)) {
+    return { session: quickChangeName, source: 'quick-session' };
+  }
+  const session = `anon@${hostname()}`;
+  if (warn && !_anonSessionWarnedThisProcess) {
+    let suppressed = false;
+    if (cwd) {
+      try {
+        const markerDir = join(cwd, SPEC_DIR_NAME, RUNTIME_SUBDIR);
+        mkdirSync(markerDir, { recursive: true });
+        const markerPath = join(markerDir, ANON_SESSION_WARN_MARKER);
+        const now = Date.now();
+        try {
+          const m = JSON.parse(readFileSync(markerPath, 'utf8'));
+          if (m && Number.isFinite(m.at) && now - m.at < ANON_SESSION_WARN_WINDOW_MS) suppressed = true;
+        } catch { /* 无 marker / 损坏 → 首报 */ }
+        if (!suppressed) writeFileSync(markerPath, JSON.stringify({ at: now }) + '\n');
+      } catch { /* marker 落盘失败 → 照常 warn（降频是优化不是语义） */ }
+    }
+    if (!suppressed) {
+      _anonSessionWarnedThisProcess = true;
+      console.warn(`⚠️ 未显式配置会话标识，所有权护栏已降级为机器级标识 ${session}（只拦他机，同机并行会话不设防）`);
+      console.warn(`   指引：会话启动时 export SILLYSPEC_SESSION_ID=<唯一标识>（如 agent 名+任务名），或在接管类命令上带 --session <唯一标识>（三级解析最高优先级）`);
+      console.warn(`   （24 小时内不重复提示）`);
+    }
+  }
+  return { session, source: 'anon-host' };
 }
 
 /**
@@ -435,7 +490,7 @@ export class ProgressManager {
     }
 
     const result = {
-      _version: 5,
+      _version: 6,
       project: projectName,
       currentChange: cName,
       currentStage: currentStage || '',
@@ -460,7 +515,9 @@ export class ProgressManager {
    * 输出契约（字段名 = DB 列名 snake_case，import 直接对列写回，round-trip 无映射损耗）：
    *   project        { name, schema_version }                                        —— 全局单行稳定字段（id/created_at/updated_at 本地元数据不同步）
    *   changes        [{ name, current_stage, status, last_active,
-   *                      last_synced_platform_ts, last_local_modified_ts }]           —— 只投影流程进度列；
+   *                      last_synced_platform_ts, last_local_modified_ts, owner_session }] —— 只投影流程进度列
+   *                     + 所有权列 owner_session（v6，2026-09-14-change-ownership-guards D-005@v1；
+   *                     NULL=无主随 payload 带出，平台消费端不强制）；
    *                     排除 isolation_* 系列 与 platform_* 系列（platform_change_id/workspace_id/last_sync/sync_enabled）
    *                     以及 created_at（本地强相关，不同步，B2）
    *   stages         [{ change_name, stage, status, started_at, completed_at,
@@ -490,9 +547,9 @@ export class ProgressManager {
     const db = this._ensureDB(cwd);
     const sqlDb = db.getDb();
 
-    // 1. changes 行（投影流程进度列 + name 标识）
+    // 1. changes 行（投影流程进度列 + name 标识 + 所有权列 owner_session）
     const changeRow = sqlDb.prepare(
-      `SELECT id, name, current_stage, status, last_active, last_synced_platform_ts, last_local_modified_ts
+      `SELECT id, name, current_stage, status, last_active, last_synced_platform_ts, last_local_modified_ts, owner_session
        FROM changes WHERE name = ?`
     ).get(changeName);
     if (changeRow === undefined) return null;
@@ -504,6 +561,7 @@ export class ProgressManager {
       last_active: changeRow.last_active,
       last_synced_platform_ts: changeRow.last_synced_platform_ts ?? null,
       last_local_modified_ts: changeRow.last_local_modified_ts ?? null,
+      owner_session: changeRow.owner_session ?? null,
     };
 
     // 2. project 全局单行（只投影稳定字段 name/schema_version；created_at/updated_at 是本地库元数据，
@@ -600,7 +658,8 @@ export class ProgressManager {
    *
    * 语义：
    * - 单个 DB.transaction() 包裹，原子重建 stages/steps/batch_progress/approvals 四表（任一失败整体回滚）
-   * - changes 行用 UPDATE 选择投影列（current_stage/status/last_active/last_synced_platform_ts/last_local_modified_ts），
+   * - changes 行用 UPDATE 选择投影列（current_stage/status/last_active/last_synced_platform_ts/last_local_modified_ts
+   *   + owner_session 容错回写——payload 含该列才写），
    *   保留 isolation_* / platform_* / created_at（本地强相关状态不被覆盖，B2；change 不存在时 INSERT 兜底平台新增）
    * - import 后 last_synced_platform_ts 与 last_local_modified_ts 均置为 progressObj.pushed_at（D-013 例外：
    *   不更新 now()——否则 now()>base_ts 下次 pull 误判冲突；pushed_at 由 sync.js pull() 从响应 header attach）
@@ -673,6 +732,12 @@ export class ProgressManager {
           ch && ch.last_active != null ? ch.last_active : now,
           pushedAt, pushedAt, cn
         );
+        // owner_session 回写容错（v6，2026-09-14-change-ownership-guards task-01）：payload 含
+        // 该列（非 null）才写——他端旧版本快照无此列 → 跳过不报错，且本地已有 owner 不被置空
+        // （平台权威态随 payload 往返；serializeForSync↔import 互逆在非 null 值上成立）。
+        if (ch && ch.owner_session != null) {
+          sqlDb.prepare('UPDATE changes SET owner_session = ? WHERE name = ?').run(ch.owner_session, cn);
+        }
         const changeRow = sqlDb.prepare('SELECT id FROM changes WHERE name = ?').get(cn);
         const changeId = changeRow.id;
 
@@ -938,7 +1003,7 @@ export class ProgressManager {
   // 或 verify 两窗口，锚「完成时刻」会把 execute 期间产的证据判旧（时序两难）；无行 null 走 completed_at → R-05
   getStageStartedAt(cwd, changeName, stage) { return this._changeRegistry.getStageStartedAt(cwd, changeName, stage); }
 
-  registerChange(cwd, changeName) { return this._changeRegistry.registerChange(cwd, changeName); }
+  registerChange(cwd, changeName, opts) { return this._changeRegistry.registerChange(cwd, changeName, opts); }
 
   updateChangeIsolation(cwd, changeName, isolation) { return this._changeRegistry.updateChangeIsolation(cwd, changeName, isolation); }
 
@@ -971,6 +1036,28 @@ export class ProgressManager {
 
   // quick --done 兜底复用启动 ql-ID（坑 platform-takeover-phantom-progress-db 同日变体）
   getQuicklogId(cwd, changeName) { return this._changeRegistry.getQuicklogId(cwd, changeName); }
+
+  // ── change 所有权读写 API（2026-09-14-change-ownership-guards task-01 数据载体，D-001/D-005@v1）──
+  // 只铺数据读写；所有权判定/心跳窗口/接管语义（assertChangeOwnership）归 task-02 接线。
+
+  /** 读变更所有者会话标识；无行/未登记/无主 → null */
+  getChangeOwner(cwd, changeName) { return this._changeRegistry.getChangeOwner(cwd, changeName); }
+
+  /** 认领所有权：首建写 own、已有值不覆盖；返回实际 owner（string|null） */
+  claimChangeOwner(cwd, changeName, session) { return this._changeRegistry.claimChangeOwner(cwd, changeName, session); }
+
+  // task-02 接线（FR-01 / D-001@v1）：判定/接管/心跳窗——会话标识三级解析见模块级
+  // resolveSessionIdentity；接线点=index.js apply/cleanup/assess 自动 apply（锁内、实际动作前）。
+
+  /**
+   * 所有权判定（纯读不写库，详见 change-registry.assertChangeOwnership）：
+   * 四分支 self/no-owner/takeover-stale/takeover-forced 放行；他人且活跃窗内 →
+   * { allowed:false, action:'blocked-active-owner' }（owner+lastActive+heartbeatMs 供结构化错误）。
+   */
+  assertChangeOwnership(cwd, changeName, opts) { return this._changeRegistry.assertChangeOwnership(cwd, changeName, opts); }
+
+  /** 强制重写所有者+心跳起算（接管放行后的写库侧；claimChangeOwner 是「已有值不覆盖」守卫版） */
+  setChangeOwner(cwd, changeName, session) { return this._changeRegistry.setChangeOwner(cwd, changeName, session); }
 
   // ── CLI 命令 ──
 

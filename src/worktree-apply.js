@@ -5,7 +5,7 @@
  * 1. 读取 meta.json 获取 baseHash
  * 2. git diff --name-only baseHash 获取 worktree 中所有变更文件
  * 3. 从 design.md 解析文件变更清单（无清单 = 允许所有）
- * 4. 校验：变更文件 ⊆ 清单
+ * 4. 校验：变更文件 ⊆ 清单（review 声明与 allow 面相交过滤，D-003：外来声明不并入放行面）
  * 5. 校验：主工作区文件 base hash 一致
  * 6. --check-only 模式只输出检查结果
  * 7. 非 checkOnly：生成 patch → apply --check → apply --3way
@@ -499,8 +499,10 @@ function checkGuardOverlap({ activeGuards, applyFiles, selfChange }) {
  * 坑 apply-undeclared-deviation-block（2026-08-24 用户反馈四期③）：执行期有据越界文件
  * （facade 转发/名单测试）不在 design §6 也不在 allowed_paths，Gate1 拦 apply 只能回改
  * design.md。review.json changedFiles 是 reviewer 对实际改动的声明（Task Review Gate 的
- * verifyReviewGitEvidence 已交叉校验其与真实 git diff 相交），作为第三源并入 allow set——
- * 放行仅限「已声明且过证据校验」的文件，完全越界仍拦。口径与 complete-handlers 的
+ * verifyReviewGitEvidence 已交叉校验其与真实 git diff 相交）。D-003@v1 收紧（2026-09-14
+ * change-ownership-guards task-03）：声明只与 allow 面相交（pathMatches 容差）才计入，
+ * 不相交的外来声明剔除出放行面、进 violations 报告行——本函数仍是声明收集口（口径不变），
+ * 相交过滤在主仓 3b/跨仓清单校验两消费点执行。口径与 complete-handlers 的
  * collectExecuteChangedFiles 一致：change 戳归属 run、.sillyspec//meta.json 过滤、
  * review.repo 切片（跨仓声明不进 main 集）。读不到 run/review → 空 Map（fail-closed 回退旧行为）。
  *
@@ -705,7 +707,7 @@ export async function withMainRepoLock(projectRoot, changeName, purpose, fn, opt
  *
  * 对有 worktree meta 的跨仓仓（worktree-cross.js 创建）执行与主仓 A5 同构的 patch 回落：
  *   deliverables（diff baselineCommit||baseHash + untracked，filterDeliverableFiles 排除基础设施）
- *   → 清单校验（resolveApplyAllowSet 按 repo 切片 ∪ review 声明切片）
+ *   → 清单校验（resolveApplyAllowSet 按 repo 切片 + review 声明相交过滤，D-003：不相交剔除）
  *   → 跨仓主工作副本 dirty 重叠拦截
  *   → patch（tracked diff + untracked add/diff --cached/reset，Buffer 防二进制损坏）
  *   → git apply --3way 回跨仓主工作副本；成功后 cleanup 该跨仓 worktree（分支保留作锚）。
@@ -763,24 +765,45 @@ function applyCrossRepoWorktrees(changeName, projectRoot, ctx, { checkOnly = fal
       continue;
     }
 
-    // 清单校验（per-repo 切片 + review 声明切片并入，与主仓 Gate1/3b 同语义）。
+    // 清单校验（per-repo 切片 + review 声明相交过滤，与主仓 Gate1/3b 同语义）。
     // specBase 显式传（平台模式 changes/ 在 specRoot；本地模式与旧硬编码同值零回归）。
+    // review 声明收紧（D-003@v1，2026-09-14-change-ownership-guards task-03）：声明文件须与
+    // allow 面（design 清单 ∪ 各 task target_files/allowed_paths ∪ linked-change 声明 =
+    // resolveApplyAllowSet 现有并集）相交（pathMatches 容差）才计入；不相交的外来声明剔除出
+    // 放行面、进 violations 报告行（「review 声明了越权文件」嫌疑标注），admission 增量归零。
     const allowMap = resolveApplyAllowSet(projectRoot, changeName, { specBase });
-    let allowSet = allowMap.get(repoKey) || new Set();
+    const allowSet = allowMap.get(repoKey) || new Set();
     const reviewDeclared = collectReviewDeclaredFiles(projectRoot, changeName, { runtimeRoot: join(specBase, '.runtime') }).get(repoKey);
-    if (reviewDeclared) {
-      const merged = new Set([...allowSet]);
+    const reviewForeign = [];
+    if (reviewDeclared && allowSet.size > 0) {
+      const face = [...allowSet];
       for (const f of reviewDeclared) {
-        if (![...merged].some(ap => pathMatches(f, ap))) merged.add(f);
+        if (!face.some(ap => pathMatches(f, ap))) reviewForeign.push(f);
       }
-      allowSet = merged;
+    }
+    if (reviewForeign.length > 0) {
+      out.warnings.push(
+        `跨仓 ${repoKey}：${reviewForeign.length} 个 review 声明文件不在 allow 面（design 清单/任务卡 allowed_paths/linked 声明），已剔除出放行面（review 声明了越权文件——嫌疑：review 失实或并行会话在途文件混入声明）：${reviewForeign.join(', ')}`
+      );
     }
     if (allowSet.size > 0) {
       const violations = classifyAllowListViolations(changedFiles, allowSet);
       if (violations.length > 0) {
-        out.errors.push(
-          `跨仓 ${repoKey}：文件清单校验失败——以下变更文件不在 design.md 清单、也不在该仓 task review.json changedFiles 声明中：\n  ${violations.join('\n  ')}`
-        );
+        const foreignSet = new Set(reviewForeign);
+        const foreignViolations = violations.filter(f => foreignSet.has(f));
+        const undeclaredViolations = violations.filter(f => !foreignSet.has(f));
+        const lines = [];
+        if (undeclaredViolations.length > 0) {
+          lines.push(
+            `跨仓 ${repoKey}：文件清单校验失败——以下变更文件不在 design.md 清单、也不在该仓 task review.json changedFiles 声明中：\n  ${undeclaredViolations.join('\n  ')}`
+          );
+        }
+        if (foreignViolations.length > 0) {
+          lines.push(
+            `跨仓 ${repoKey}：review 声明了越权文件——以下变更文件已被 review.json changedFiles 声明但不在 allow 面（design 清单/任务卡 allowed_paths/linked 声明），不予放行：\n  ${foreignViolations.join('\n  ')}\n（确属本变更交付：补进 design §6 清单或任务卡 allowed_paths 后重跑）`
+          );
+        }
+        out.errors.push(lines.join('\n'));
         if (!checkOnly) continue;
       }
     }
@@ -1034,27 +1057,30 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
   // （主仓 worktree diff 只含主仓文件，跨仓文件在跨仓仓不进主仓 worktree diff）。跨仓 allowed_paths
   // 仅作 Map 切片返回供上游用，主流程不消费（跨仓 apply=no-op，D-009）。
   const allowMap = resolveApplyAllowSet(projectRoot, changeName, { specBase: allowSpecBase });
-  // --- 3b. review.json 声明偏差文件并入（坑 apply-undeclared-deviation-block）---
-  // 第三源：reviewer 声明的 changedFiles（已过 Task Review Gate git 证据交叉校验）——执行期
-  // 有据越界（facade 转发/名单测试）不再逼回改 design.md。各 repo 切片各自并入；仅靠 review
-  // 放行的文件记审计 warning（result.reviewAdmittedFiles），完全越界文件仍拦（Gate1 在扩展后判）。
+  // --- 3b. review.json 声明偏差文件相交过滤（坑 apply-undeclared-deviation-block → D-003@v1 收紧，
+  // 2026-09-14-change-ownership-guards task-03 / FR-02）---
+  // 旧语义：reviewer 声明的 changedFiles 整体并入 allow set（声明即放行）——troubleshooting §65
+  // 事件②实证该通道无 allowed_paths 相交校验，11 个并行会话在途文件经 review 声明真实放行。
+  // 新语义（D-003 翻转）：review 声明只承认与 allow 面（design 清单 ∪ 各 task
+  // target_files/allowed_paths ∪ linked-change 声明 = resolveApplyAllowSet 现有并集）相交的文件
+  // （pathMatches 容差）；不相交的外来声明剔除出放行面、进 violations 报告行（「review 声明了
+  // 越权文件」嫌疑标注）——admission 增量归零，通道保留作审计报告位（外来声明显式列出）。
   const reviewDeclaredByRepo = collectReviewDeclaredFiles(projectRoot, changeName, { runtimeRoot: allowRuntimeRoot });
-  const reviewAdmittedFiles = [];
+  const reviewForeignMain = [];
   for (const [repoKey, files] of reviewDeclaredByRepo) {
     const repoSet = allowMap.get(repoKey);
-    if (!repoSet) continue; // 该 repo 无 design/任务卡清单（无清单=不校验），无需扩展
-    const existing = [...repoSet];
+    if (!repoSet || repoSet.size === 0) continue; // 该 repo 无 design/任务卡清单（无清单=不校验），无相交可判
+    const face = [...repoSet];
     for (const f of files) {
-      if (!existing.some(ap => pathMatches(f, ap))) {
-        repoSet.add(f);
-        if (repoKey === 'main') reviewAdmittedFiles.push(f);
+      if (!face.some(ap => pathMatches(f, ap))) {
+        if (repoKey === 'main') reviewForeignMain.push(f);
       }
     }
   }
-  if (reviewAdmittedFiles.length > 0) {
-    result.reviewAdmittedFiles = reviewAdmittedFiles;
+  if (reviewForeignMain.length > 0) {
+    result.reviewOverdeclaredFiles = reviewForeignMain;
     result.warnings = (result.warnings || []).concat([
-      `${reviewAdmittedFiles.length} 个变更文件不在 design.md/任务卡清单，但已被 task review.json changedFiles 声明（review 声明放行，已过 Task Review Gate git 证据校验；审计留痕）：${reviewAdmittedFiles.join(', ')}`
+      `${reviewForeignMain.length} 个 review 声明文件不在 allow 面（design 清单/任务卡 allowed_paths/linked 声明），已剔除出放行面（review 声明了越权文件——嫌疑：review 失实或并行会话在途文件混入声明）：${reviewForeignMain.join(', ')}；确属本变更交付请补进 design §6 清单或任务卡 allowed_paths`
     ]);
   }
   const allowSet = allowMap.get('main') || new Set();
@@ -1094,10 +1120,24 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
   if (hasAllowList) {
     const violations = classifyAllowListViolations(changedFiles, allowSet);
     if (violations.length > 0) {
+      // D-003：violation 分流——已被 review 声明但不在 allow 面（越权声明）与完全未声明分报，
+      // 前者带「review 声明了越权文件」嫌疑标注（外来声明剔除后的落地拦截报告行）。
+      const foreignSet = new Set(result.reviewOverdeclaredFiles || []);
+      const foreignViolations = violations.filter(f => foreignSet.has(f));
+      const undeclaredViolations = violations.filter(f => !foreignSet.has(f));
       result.extraFiles.push(...violations);
-      result.errors.push(
-        `文件清单校验失败：以下变更文件不在 design.md 清单、也不在 task review.json changedFiles 声明中：\n  ${violations.join('\n  ')}\n（若属执行期合理偏差：在 task review.json 的 changedFiles 声明，或在 design.md §6 清单补行）`
-      );
+      const errLines = [];
+      if (undeclaredViolations.length > 0) {
+        errLines.push(
+          `文件清单校验失败：以下变更文件不在 design.md 清单、也不在 task review.json changedFiles 声明中：\n  ${undeclaredViolations.join('\n  ')}\n（若属执行期合理偏差：在 design.md §6 清单或任务卡 allowed_paths 补行——review.json 的 changedFiles 声明已不再放行清单外文件，仅作审计对照）`
+        );
+      }
+      if (foreignViolations.length > 0) {
+        errLines.push(
+          `review 声明了越权文件：以下变更文件已被 task review.json changedFiles 声明，但不在 allow 面（design 清单/任务卡 allowed_paths/linked 声明）——嫌疑：review 失实或并行会话在途文件混入声明，不予放行：\n  ${foreignViolations.join('\n  ')}\n（确属本变更交付：补进 design.md §6 清单或任务卡 allowed_paths 后重跑）`
+        );
+      }
+      result.errors.push(errLines.join('\n'));
       // checkOnly（assess）模式不短路：继续跑 Gate3，收集所有道供一次报全（坑 worktree-execute-apply-friction 坑4）。
       // 真实 apply（checkOnly=false）仍短路，保安全。
       if (!checkOnly) return result;
@@ -2110,6 +2150,9 @@ export function assessApplyRisk(changeName, { cwd } = {}) {
   );
   // review.json 声明偏差文件（坑 apply-undeclared-deviation-block）：与顺带修复同等待遇——
   // reviewer 声明（已过 git 证据校验）的执行期偏差豁免 allowed_paths 严格校验，降 warning 注明来源。
+  // D-003@v1（task-03）后本豁免仅作用于 Gate2 的 allowed_paths 归属道——allow 面（design∪task
+  // 清单∪linked）之外的外来声明已在 Gate1（applyWorktree 3b 相交过滤）被剔除拦截，assess 整体
+  // 判定以 Gate1 收集的 errors 为准（BLOCKED）；两道口径不再重叠放行。
   const reviewDeclaredSet = new Set(collectReviewDeclaredFiles(projectRoot, changeName, { runtimeRoot: join(assessSpecBase, '.runtime') }).get('main') || []);
 
   // 检查 2: 变更在 allowed_paths 内（仅在 TaskCard 存在时）；顺带修复/review 声明文件豁免。

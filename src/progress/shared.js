@@ -26,8 +26,9 @@ export const STAGE_ORDER = ['scan', 'brainstorm', 'plan', 'execute', 'verify', '
 // （consistency-doctor 坑 + prompt-control-debt plan-c 同根因）。
 export const MAIN_FLOW_ORDER = ['brainstorm', 'plan', 'execute', 'verify', 'archive'];
 
-// progress 数据版本（v3 = SQLite；v4 = changes 加 base_ts / 本地脏度两列，platform-sync §8）
-export const CURRENT_VERSION = 5;
+// progress 数据版本（v3 = SQLite；v4 = changes 加 base_ts / 本地脏度两列，platform-sync §8；
+// v6 = changes 加 owner_session 所有权列，2026-09-14-change-ownership-guards D-005@v1）
+export const CURRENT_VERSION = 6;
 
 // 滞留提示阈值（天，2026-08-30 用户反馈②：7 个「代码全落地但流程没收口」的变更挂 38 天
 // 无人发现）：活跃变更 last_active 距今超该天数且流程未收口（archive 未完成）时，progress

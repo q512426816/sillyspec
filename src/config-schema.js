@@ -192,6 +192,14 @@ export const LOCAL_YAML_SCHEMA = {
         { path: 'quick-gate.l2_files_degraded', type: 'integer', optional: true, status: 'live', readers: ['resolveGateThresholds (src/quick-gate-profile.js)'], desc: 'module-map 缺失降级档的 L2 文件数阈值：变更文件 ≥N → L2（缺省 8）。', example: '8' },
       ],
     },
+    {
+      id: 'change-ownership',
+      title: '变更所有权守卫',
+      note: '接管类操作（apply/cleanup/archive）对他人活跃 change 的所有权校验调参（2026-09-14-change-ownership-guards，D-001/D-005@v1）。缺省 15 分钟，仅确知调参时配置。',
+      keys: [
+        { path: 'change-ownership.heartbeat_minutes', type: 'integer', optional: true, status: 'live', readers: ['assertChangeOwnership (src/progress/change-registry.js — 本变更 task-02 接线消费)'], desc: '所有者活跃心跳窗口（分钟）：owner 非本会话且 last_active 距今在窗口内 → 拒绝接管类操作（--takeover 显式接管）；窗口外 → 放行并自动接管。缺省 15。', example: '15' },
+      ],
+    },
   ],
 };
 
@@ -369,5 +377,10 @@ docs-check:
 #   l1_files: 4             # 或 ≥4 文件 → L1
 #   l2_span: 4              # 跨 ≥4 模块 → L2
 #   l2_files_degraded: 8    # module-map 缺失降级档：≥8 文件 → L2
+
+# ── 变更所有权守卫（接管类操作 apply/cleanup/archive 对他人活跃 change 校验；缺省 15 分钟）──
+# owner 非本会话且 last_active 在窗口内 → 拒绝（--takeover 显式接管）；窗口外 → 自动接管。
+# change-ownership:
+#   heartbeat_minutes: 15   # 所有者活跃心跳窗口（分钟）
 `;
 }

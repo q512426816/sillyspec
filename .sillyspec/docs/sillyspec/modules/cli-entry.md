@@ -4,7 +4,7 @@ doc_type: module-card
 module_id: cli-entry
 author: qinyi
 created_at: 2026-06-03T07:42:00+08:00
-updated_at: 2026-09-14T11:20:00+08:00
+updated_at: 2026-09-14T22:35:00+08:00
 ---
 # cli-entry
 
@@ -66,6 +66,11 @@ runStage(pm, progress, stageName, cwd, changeName)
 - **apply / assess 自动 apply 消息同步**（坑3，`index.js`）：apply 与 assess 自动 apply 的用户面消息改为「`.sillyspec/changes/`、`.sillyspec/.runtime/`、`.sillyspec/quicklog/` 不自动 apply（worktree 进度/产物非交付物），模块文档 `.sillyspec/docs/` 会自动 apply 回主仓」——对齐 `worktree-apply.js#filterDeliverableFiles` 精细化过滤（保留 docs/、排除 changes/+.runtime/+quicklog/+meta.json）
 - **apply / assess dirty 拦截 rescue 段**（2026-08-10-worktree-apply-dirty-resilient，`index.js`）：apply/assess 命中 step4.5/5a dirty fail-loud 拦截时，在 errors/reasons 主通道文本之后补结构化 rescue 段 `🆘 Rescue commands (N safe / M excluded，旁路 git apply，cp 后需手动 sillyspec worktree cleanup <wtName>):` + 逐行 cp 指令 + warnings（gated on `result.rescueCommands` / `assessment.rescueCommands` 非空，===null 时零影响）；rescue 指令由 `worktree-apply.js#generateRescueCommands` 逐文件四分类生成（SAFE-CP 给 cp、EXCLUDE-DIRTY/MISMATCH 进 warnings、DELETE 给 rm）
 - **worktree cleanup 显式命令 blocked 提示 + reset force**（2026-08-13-worktree-execute-loss-guard，`index.js` + `run/command.js`）：显式 `sillyspec worktree cleanup <name>` 命中 fail-closed 保护（有未落主仓交付变更，D-001@v1）时输出 `🚫 拒绝清理：有未落主仓交付变更，请先 sillyspec worktree apply <name> 或 --force`；execute reset（`resetStage`）清理 worktree 显式传 `force:true`（D-006@v1，reset 语义即放弃 worktree 中未 apply 变更，交 apply 负责落地）
+- **--takeover / --session / --skip-apply flag（2026-09-14-change-ownership-guards，FR-01/FR-02）**：
+  - `worktree apply|cleanup <name> --takeover` — 所有权护栏显式强制接管口（index.js worktree 子命令层解析；他人且活跃被拒时解锁，放行后重写 owner=本会话留痕；**自动路径（assess）永不带**，人工 flag）
+  - `--session <id>` — 显式会话标识（所有权三级解析最高优先级层，缺省 env `SILLYSPEC_SESSION_ID`，再缺省 `anon@<host>` 机器级降级）。双层注册：index.js worktree 子命令层（apply/cleanup/assess 的 `_guardChangeOwnership` 消费）+ `run/command.js` knownFlags/VALUE_FLAGS 白名单（run 链启动 `claimChangeOwner` 与 archive 链消费）；run 链 `--session-id` 形近拼法挂定向指引
+  - `run archive --done --confirm --skip-apply` — 归档收口门显式跳过（run/command.js 白名单解析 `isSkipApply` → completeStep → `archiveChangeDirectory` gateOpts.skipApply 消费，skip-apply.record.json 留痕随归档包）
+  - 所有权护栏公共件 `_guardChangeOwnership`（index.js worktree case 内）：锁内、实际动作前判归属——soft=false（显式 apply/cleanup）拒绝走结构化错误 + exit 1；soft=true（assess 自动 apply，护栏①最可能的旁路）软跳零落盘 + warning 指引（无人值守不越权也不阻断审计流）；放行分支接管重写 owner。`--check-only` 只读路径不校验
 
 ## 变更索引
 
@@ -89,6 +94,7 @@ runStage(pm, progress, stageName, cwd, changeName)
 | 2026-09-07 | 2026-09-07-ir-stage-p3c | IR P3c：index.js 新 design-init case（--change/--force/--json/--spec-dir；幂等不覆盖，决策追踪表预填；缺 decisions exit 1 带指引） |
 | 2026-09-08 | ql-20260908-006-5f04 | doctor `--gc-unstamped-runs [--confirm]`：usage + case 'doctor' 接线 gcUnstampedExecuteRuns（默认 dry-run）；存量无戳 execute-runs 清扫，不进 archive 热路径 |
 | 2026-09-14 | 2026-09-14-quick-exit-tiered-gates | scope-audit 命令分支双出口接分级门禁画像（task-03 / FR-04 / D-008）：表格 [gate] 画像段（renderScopeAuditTable 按 gateProfile 存在性渲染，quick 会话出、full-flow 零输出）+ --json gateProfile 字段（computeChangeScopeAudit quick 模式增量——实时态透传 review.gateProfile / 冻结态旧记录按 rows 现算重放）；usage 补 [gate] 分级门禁画像说明 |
+| 2026-09-14 | 2026-09-14-change-ownership-guards | worktree apply/cleanup `--takeover`（所有权显式强制接管，自动路径永不带）+ `--session <id>`（三级会话标识最高层，index.js 子命令层 + run/command.js 白名单双层注册）+ `run archive --done --confirm --skip-apply`（归档收口显式跳过留痕）；worktree case 内 `_guardChangeOwnership` 护栏公共件（锁内判归属，assess 软跳/显式拒绝双语义） |
 
 ## adoptPlanWaves proposal 档（2026-09-09-plan-derived）
 plan-adopt-waves.js adoptPlanWaves 加 mode 参：proposal 只读产拓扑布局草稿（planMdDraft/rewritten，不落盘）供 postcheck 自动修复验证；write 档向后兼容（CLI 命令行为等价，测试锁定）。

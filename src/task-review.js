@@ -17,6 +17,7 @@ import { resolveVerifyChangedFiles } from './verify-postcheck.js'
 import { splitOwnVsForeignDiffFiles } from './foreign-declared.js'
 import { WorktreeManager } from './worktree.js'
 import { resolveRuntimeRoot } from './run/shared.js'
+import { DB } from './db.js'
 
 // ── review.json schema version ──
 //
@@ -1103,6 +1104,130 @@ export function resolveExecuteRunForChange({ runtimeRoot, changeName, taskIds = 
   }
 }
 
+// ── 归因模式分流（2026-09-14-change-ownership-guards task-03 / D-004@v1 / FR-03）──
+// 草稿/changedFiles 归因的取数源路由：判定源=changes.isolation_mode 列（DB 读，meta 缺失也可判，
+// 与 change-registry.readChangeIsolation 同列；此处直连 db.js 读——task-review 是叶子模块，
+// 静态 import progress.js 会成环 progress→consistency-doctor→task-review）。进程内按
+// dbPath+change 缓存（CLI 短进程生命周期内 isolation_mode 不变，避免重复 open/init）。
+const _isolationModeCache = new Map()
+
+/**
+ * 读 changes.isolation_mode（只读；无库/无行/读失败 → null）。DB 路径候选序：
+ * platformOpts.specRoot > specDriftAnchor > specBase > cwd/.sillyspec（首个存在 sillyspec.db 的根）。
+ * 模块内函数（非 export——check-syntax 22e-b 死码门禁：无跨文件消费不导出）。
+ * @param {{ cwd: string, specBase: string, platformOpts?: object, changeName: string }} opts
+ * @returns {string|null} isolation_mode（'worktree'|'native-worktree'|'in-place-fallback'）或 null
+ */
+function readChangeIsolationMode({ cwd, specBase, platformOpts = {}, changeName }) {
+  if (!changeName) return null
+  const roots = []
+  const addRoot = (r) => { if (r && !roots.includes(r)) roots.push(r) }
+  addRoot(platformOpts && platformOpts.specRoot)
+  addRoot(platformOpts && platformOpts.specDriftAnchor)
+  addRoot(specBase)
+  addRoot(join(cwd, '.sillyspec'))
+  for (const root of roots) {
+    const dbPath = join(root, '.runtime', 'sillyspec.db')
+    if (!existsSync(dbPath)) continue
+    const key = dbPath + '::' + changeName
+    if (_isolationModeCache.has(key)) return _isolationModeCache.get(key)
+    let mode = null
+    try {
+      const db = new DB(dbPath)
+      db.init()
+      const row = db.getDb().prepare('SELECT isolation_mode FROM changes WHERE name = ?').get(changeName)
+      mode = (row && typeof row.isolation_mode === 'string' && row.isolation_mode) || null
+    } catch { mode = null }
+    _isolationModeCache.set(key, mode)
+    return mode
+  }
+  return null
+}
+
+/**
+ * 归因取数源路由（单一入口，草稿生成 generateTaskReviewDrafts 与 mechanics 代算 writeTaskReview
+ * 两处共用）。判定优先级（D-004）：
+ *   1. DB isolation_mode ∈ {worktree, native-worktree} → worktree 归因：worktree 目录活则原口径
+ *      （resolveVerifyChangedFiles meta 路径 + porcelain 并入，零回归）；meta 缺失/in-place meta/
+ *      目录已删 → 分支 ref 口径（merge-base(主仓 HEAD, 分支 tip)..tip 的 commit diff + worktree
+ *      目录在则 porcelain 并入，与 verify reconcile 同口径）。分支 ref 也已删（cleanup 后态）→
+ *      fail-closed 空集 +「不可归因（worktree 已清理）」注记，绝不回退主仓窗口（复审残留①）。
+ *   2. DB in-place-fallback 但 meta 判 worktree 且目录活 → 仍取 worktree（fail-safe：不因 DB 行
+ *      陈旧切向主仓共享脏窗口——归因源只会更隔离不会更共享），注记不一致。
+ *   3. 其余（DB in-place / NULL）→ 主仓窗口原行为零回归；NULL 且 meta 缺失加存量路由注记
+ *      （存量态不追求完美只保安全，D-004 残留②/R-04）。
+ * meta 在时交叉校验不一致以 DB 为准（方向 1 的 worktree 覆盖）；返回 notes 逐条说明路由依据。
+ *
+ * @param {{ cwd: string, changeName: string, specBase: string, platformOpts?: object }} opts
+ * @returns {{ mode: 'worktree'|'worktree-branch'|'worktree-cleaned'|'main-window', diffFiles: string[]|null, notes: string[], meta: object|null, mergeGitDir: string|null, branch?: string, branchBase?: string, branchHead?: string }}
+ */
+function resolveAttributionDiffFiles({ cwd, changeName, specBase, platformOpts = {} }) {
+  const notes = []
+  const wm = new WorktreeManager({ cwd })
+  let meta = null
+  try { meta = wm.getMeta(changeName) } catch { meta = null }
+  const iso = readChangeIsolationMode({ cwd, specBase, platformOpts, changeName })
+  const isoWorktree = iso === 'worktree' || iso === 'native-worktree'
+
+  if (isoWorktree) {
+    const wtGitDir = (meta && meta.worktreePath && meta.mode !== 'in-place-fallback' && existsSync(meta.worktreePath))
+      ? meta.worktreePath
+      : null
+    if (wtGitDir) {
+      if (meta.mode !== iso) notes.push(`meta.mode=${meta.mode} 与 DB isolation_mode=${iso} 不一致——以 DB 为准（同属 worktree 族，归因源不变）`)
+      return { mode: 'worktree', diffFiles: resolveVerifyChangedFiles(cwd, changeName, null, { specBase }), notes, meta, mergeGitDir: wtGitDir }
+    }
+    // meta 缺失 / in-place meta / worktree 目录已删：分支 ref 判定（不落主仓窗口）
+    const branch = (meta && meta.branch) || `sillyspec/${changeName}`
+    let branchTip = null
+    try { branchTip = runGit(cwd, ['rev-parse', '--verify', '--quiet', `refs/heads/${branch}`]) } catch { branchTip = null }
+    if (!branchTip) {
+      notes.push(`不可归因（worktree 已清理）——DB 判 worktree（isolation_mode=${iso}）但分支 ref ${branch} 不存在（cleanup 后态），fail-closed 空集，不回退主仓窗口`)
+      return { mode: 'worktree-cleaned', diffFiles: [], notes, meta, mergeGitDir: null }
+    }
+    let branchBase = null
+    let files = []
+    try {
+      const mainHead = runGit(cwd, ['rev-parse', 'HEAD'])
+      const mb = mainHead ? runGit(cwd, ['merge-base', branchTip, mainHead]) : null
+      branchBase = mb || mainHead || null
+      if (branchBase) {
+        files = String(runGit(cwd, ['diff', '--name-only', branchBase, branchTip]) || '')
+          .split('\n').map(p => p.replace(/^"|"$/g, '').replace(/\\/g, '/').trim())
+          .filter(p => p && p !== '.sillyspec' && !p.startsWith('.sillyspec/'))
+      }
+    } catch { /* 已提交口径 git 失败 → 空集 fail-closed（不回退主仓窗口） */ }
+    // 未提交并入：约定路径 worktree 目录仍在（meta 失联孤儿）→ porcelain（与 verify reconcile 同口径）
+    const wtDirGuess = join(wm.worktreeBase, changeName)
+    if (existsSync(wtDirGuess)) {
+      try {
+        const st = runGit(wtDirGuess, ['status', '--porcelain', '--untracked-files=all'], { trim: false })
+        const wtFiles = parsePorcelainFiles(st)
+          .map(p => String(p).replace(/\\/g, '/'))
+          .filter(p => p !== '.sillyspec' && !p.startsWith('.sillyspec/'))
+        files = [...new Set([...files, ...wtFiles])]
+      } catch { /* porcelain 失败退回 commit diff 口径 */ }
+    }
+    notes.push(`meta 缺失/失效，DB isolation_mode=${iso} 判 worktree——归因源=worktree 分支 ${branch} diff（base..HEAD+porcelain，与 verify reconcile 同口径），不落主仓共享脏窗口`)
+    return { mode: 'worktree-branch', diffFiles: files, notes, meta, mergeGitDir: null, branch, branchBase, branchHead: branchTip }
+  }
+
+  if (iso === 'in-place-fallback' && meta && meta.mode !== 'in-place-fallback'
+    && meta.worktreePath && existsSync(meta.worktreePath)) {
+    notes.push(`DB isolation_mode=in-place-fallback 但 meta.mode=${meta.mode}——worktree 分支仍是隔离归因源（fail-safe：不因 DB 行陈旧切向主仓共享窗口），按 meta 取 worktree 归因`)
+    return { mode: 'worktree', diffFiles: resolveVerifyChangedFiles(cwd, changeName, null, { specBase }), notes, meta, mergeGitDir: meta.worktreePath }
+  }
+
+  // in-place（DB 或 meta）与 NULL 存量：主仓窗口（原行为零回归）
+  if (!meta && iso === null) {
+    notes.push('isolation_mode 未登记（存量变更/无 DB 行）且 worktree meta 缺失——按主仓窗口归因（存量兼容路由，D-004 残留②：不追求完美只保安全）')
+  }
+  const mergeGitDir = meta
+    ? ((meta.worktreePath && meta.mode !== 'in-place-fallback' && existsSync(meta.worktreePath)) ? meta.worktreePath : cwd)
+    : null
+  return { mode: 'main-window', diffFiles: resolveVerifyChangedFiles(cwd, changeName, null, { specBase }), notes, meta, mergeGitDir }
+}
+
 /**
  * worktree execute「主 agent 直接实现」模式收尾兜底：per-task review.json 缺失时，
  * 据 git diff base..head 按 task allowed_paths 归属，自动落盘 cannot_verify 草稿。
@@ -1170,21 +1295,30 @@ export async function generateTaskReviewDrafts({ changeName, cwd, platformOpts =
     }
   }
 
+  // ── 归因模式分流（task-03 / D-004@v1）：判定源=changes.isolation_mode（DB 读）──
+  // worktree 模式（含 meta 缺失回退态）归因唯一源=worktree 分支 diff（绝不落主仓共享脏窗口，
+  // troubleshooting §65 事件②根因）；in-place 维持主仓窗口；NULL 存量按 meta 在场路由。
+  // 分流自身异常 → 退回原 resolveVerifyChangedFiles 口径（fail-open，不比修复前差）。
+  let attribution
+  try {
+    attribution = resolveAttributionDiffFiles({ cwd, changeName, specBase, platformOpts })
+  } catch (e) {
+    attribution = { mode: 'main-window', diffFiles: resolveVerifyChangedFiles(cwd, changeName, null, { specBase }), notes: [`归因分流解析异常（${e && e.message ? e.message : e}）——退回原口径`], meta: null, mergeGitDir: null }
+  }
+  for (const note of attribution.notes) console.log(`[sillyspec] 归因注记：${note}`)
   // base..head diff 文件集（worktree-aware；null=git 不可用，[]=无 commit diff）
-  let diffFiles = resolveVerifyChangedFiles(cwd, changeName, null, { specBase })
+  let diffFiles = attribution.diffFiles
   // ⚠️ 并入 worktree 未提交改动（坑 draft-attribution-uncommitted-worktree，2026-08-21 实证）：
   // 子代理默认不 commit（execute 复盘 a 同源事实），真实改动全在 worktree working-tree——只看
   // base..HEAD commit diff 时归属恒空，9/9 草稿全成「无归属」靠主代理手写升级。与
   // verifyReviewGitEvidence 的 working-tree 并入口径同源：status --porcelain 文件（排除
   // .sillyspec/ 运行时产物）并入归属集，按 allowed_paths 正常路径归属；review.head 仍为 HEAD
   // commit——evidence 校验对「commit diff 空 + working-tree 有改动」明示不判伪造，语义一致。
-  try {
-    const wm = new WorktreeManager({ cwd })
-    const meta = wm.getMeta(changeName)
-    if (meta) {
-      const wtGitDir = (meta.worktreePath && meta.mode !== 'in-place-fallback' && existsSync(meta.worktreePath))
-        ? meta.worktreePath
-        : cwd
+  // D-004 后仅在归因源指向活跃 worktree 目录 / in-place meta（mergeGitDir）时执行——
+  // worktree-branch/cleaned 归因的未提交并入已在 resolveAttributionDiffFiles 内按同口径完成。
+  if (attribution.mergeGitDir) {
+    try {
+      const wtGitDir = attribution.mergeGitDir
       const wtStatus = runGit(wtGitDir, ['status', '--porcelain', '--untracked-files=all'], { trim: false })
       const wtFiles = parsePorcelainFiles(wtStatus)
         .map(p => String(p).replace(/\\/g, '/'))
@@ -1211,12 +1345,19 @@ export async function generateTaskReviewDrafts({ changeName, cwd, platformOpts =
         diffFiles = [...new Set([...(Array.isArray(diffFiles) ? diffFiles : []), ...wtFiles, ...committedFiles])]
         console.log(`[sillyspec] 草稿归属并入 worktree 改动 ${wtFiles.length + committedFiles.length} 个（未提交 ${wtFiles.length} + 已提交 ${committedFiles.length}，按 allowed_paths 归属）`)
       }
-    }
-  } catch { /* working-tree 并入失败退回 commit diff 口径（fail-open，不阻断草稿） */ }
+    } catch { /* working-tree 并入失败退回 commit diff 口径（fail-open，不阻断草稿） */ }
+  }
   // 单仓模式（无 ctx）：主仓无 diff 即无任何 task 可生成 → 提前返回（原逻辑零回归）。
   // 有 ctx：主仓无 diff 不阻断——跨仓 task 的 diff 在跨仓仓根独立取（per-task），主仓 task 自然跳过（空 changedFiles）。
+  // 终态空源（D-004）：worktree-cleaned（DB 判 worktree 但分支 ref 已删）空集的 reason 显式
+  // 注记「不可归因」，与普通「无 diff」区分——绝不回退主仓窗口补救。
   if (!ctx && (!diffFiles || diffFiles.length === 0)) {
-    return { generated: 0, skipped: 0, unattributed: [], executeRunId, reason: 'base..head 无代码 diff（改动未 commit？）' }
+    return {
+      generated: 0, skipped: 0, unattributed: [], executeRunId,
+      reason: attribution.mode === 'worktree-cleaned'
+        ? '不可归因（worktree 已清理）——DB 判 worktree 但分支 ref 已删，fail-closed 空集（不回退主仓窗口）'
+        : 'base..head 无代码 diff（改动未 commit？）',
+    }
   }
 
   // base/head + gitDir：与 gates.js reviewGitDir 同源（worktree 优先，in-place 回退 cwd）
@@ -1247,6 +1388,15 @@ export async function generateTaskReviewDrafts({ changeName, cwd, platformOpts =
       }
       // 有 ctx：主仓 HEAD 失败不阻断跨仓 task；head 留 null，主仓 task 后续按空 changedFiles 跳过
     }
+  }
+  // worktree-branch 归因的 base/head 锚定（task-03 / D-004）：meta 缺失但分支 ref 活着时用
+  // merge-base(主仓 HEAD, 分支 tip)=创建锚点..分支 tip 锚定——DB 判 worktree 的回退态仍能
+  // 生成带真实 git 锚点的草稿（否则上方「无 meta.baseHash」早退白费分支归因成果）。分支 ref
+  // 在主仓共享 .git 内，reviewGitDir=cwd 可解析，evidence 校验的 base..head diff 与归因同源。
+  if (!base && attribution.branchBase && attribution.branchHead) {
+    base = attribution.branchBase
+    head = attribution.branchHead
+    reviewGitDir = cwd
   }
 
   const taskFiles = readdirSync(tasksDir).filter(f => /^task-\d+\.md$/.test(f)).sort()
@@ -1758,22 +1908,30 @@ export async function writeTaskReview({
     changedFiles = changedFilesOverride.map(p => String(p).replace(/\\/g, '/'))
     warnings.push(`changedFiles 采用显式覆盖（${changedFiles.length} 个）——evidence 校验仍会与 git diff 相交比对`)
   } else {
-    let diffFiles = resolveVerifyChangedFiles(cwd, changeName, null, { specBase })
-    // 并入 worktree 未提交改动（与草稿生成同源口径：子代理默认不 commit）
+    // ── 归因模式分流（task-03 / D-004@v1）：与草稿生成同源路由（判定源=changes.isolation_mode）──
+    // worktree 模式（含 meta 缺失回退态）取 worktree 分支 diff，绝不落主仓共享脏窗口；
+    // in-place/NULL 存量维持主仓窗口原口径。分流异常退回原 resolveVerifyChangedFiles（fail-open）。
+    let attribution
     try {
-      const wm = new WorktreeManager({ cwd })
-      const meta = wm.getMeta(changeName)
-      if (meta) {
-        const wtGitDir = (meta.worktreePath && meta.mode !== 'in-place-fallback' && existsSync(meta.worktreePath))
-          ? meta.worktreePath
-          : cwd
+      attribution = resolveAttributionDiffFiles({ cwd, changeName, specBase, platformOpts })
+    } catch (e) {
+      attribution = { mode: 'main-window', diffFiles: resolveVerifyChangedFiles(cwd, changeName, null, { specBase }), notes: [`归因分流解析异常（${e && e.message ? e.message : e}）——退回原口径`], meta: null, mergeGitDir: null }
+    }
+    for (const note of attribution.notes) warnings.push(`归因注记：${note}`)
+    let diffFiles = attribution.diffFiles
+    // 并入 worktree 未提交改动（与草稿生成同源口径：子代理默认不 commit）。D-004 后仅在
+    // 归因源指向活跃 worktree 目录 / in-place meta（mergeGitDir）时执行——worktree-branch/
+    // cleaned 归因的未提交并入已在 resolveAttributionDiffFiles 内按同口径完成。
+    if (attribution.mergeGitDir) {
+      try {
+        const wtGitDir = attribution.mergeGitDir
         const wtStatus = runGit(wtGitDir, ['status', '--porcelain', '--untracked-files=all'], { trim: false })
         const wtFiles = parsePorcelainFiles(wtStatus)
           .map(p => String(p).replace(/\\/g, '/'))
           .filter(p => p !== '.sillyspec' && !p.startsWith('.sillyspec/'))
         if (wtFiles.length > 0) diffFiles = [...new Set([...(Array.isArray(diffFiles) ? diffFiles : []), ...wtFiles])]
-      }
-    } catch { /* 退回 commit diff 口径 */ }
+      } catch { /* 退回 commit diff 口径 */ }
+    }
     const mainDiff = Array.isArray(diffFiles) ? diffFiles : []
     changedFiles = allowedPaths.length > 0
       ? mainDiff.filter(f => allowedPaths.some(p => pathMatches(f, p)))

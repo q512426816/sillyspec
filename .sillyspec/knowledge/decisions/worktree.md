@@ -48,3 +48,38 @@ created_at: 2026-08-23T22:40:00+08:00
 锚点：未记录
 最近确认：23dc755
 理由：用户选 A（2026-09-14 对话轮，确认 manifest 体量后拍板）：apply-manifest.json 落变更目录（verify-facts.json「CLI 全权写审计底稿」同款先例，随归档留存可审计）；漂移检测走 doctor 既有检查项形态（decision-touch-cli-drift D-001/D-002 先例：不加新命令/新步骤/新占位符）。体量依据：每文件≈150B（路径+sha256+JSON 结构），典型 apply 10-40 文件=3-6KB，极端 50 文件<8KB。拒绝 B（.runtime 随清理丢历史，检测时点优势不抵）；拒绝 C（丢 §64 护栏①后半「apply 后丢失/篡改可检测」价值）。
+
+## D-001@v1 change 所有权+心跳——owner_session 列 + 活跃会话拒绝 + --takeover
+状态：implemented
+变更：2026-09-14-change-ownership-guards
+锚点：未记录
+最近确认：ee966ed
+理由：§65 护栏①：changes 表加 owner_session 列（v6 迁移，四处版本号同步 bump——db.js DDL/DB_SCHEMA_VERSION/shared.js CURRENT_VERSION/progress._version）；run/<stage> 与 quick 启动时写 owner（会话标识=sessionId 或 pid@host，首次创建者获得，已有值不覆盖）；每次 CLI 写操作已刷新 last_active（现成心跳）；apply/cleanup/archive/归档内置 apply 前查所有权——owner 非本会话且 last_active 在活跃窗（15 分钟，可配）内 → 拒绝并列出 owner/最后活跃，--takeover 显式接管（重写 owner+留痕）；owner 停活跃（窗口外）→ 放行并提示接管完成。
+
+## D-002@v1 归档收口——worktree 有未 apply 交付物时归档硬拦
+状态：implemented
+变更：2026-09-14-change-ownership-guards
+锚点：未记录
+最近确认：ee966ed
+理由：§65 护栏②：archive step3（确认归档）前检查 worktree 未 apply 交付面（复用 applyWorktree checkOnly）——非空即阻断归档并给两条出路：先跑 worktree apply 或 --skip-apply 显式跳过留痕（明确知道自己要手动处理）。归档与 apply 不自动串联（自动 apply 在有脏重叠时行为复杂，人确认更稳）。
+
+## D-003@v1 review 放行通道收紧——allowed_paths 相交校验
+状态：implemented
+变更：2026-09-14-change-ownership-guards
+锚点：未记录
+最近确认：ee966ed
+理由：§65 护栏③：apply 校验的「review 声明放行」路径（reviewAdmittedFiles）加相交过滤——review changedFiles 只放行与该 task allowed_paths ∪ design 清单 ∪ 本变更 linked-change 声明面相交的文件；不相交的外来文件从 admitted 剔除、归入违规清单并显式报告（review 声明了越权文件的嫌疑留审计）。
+
+## D-004@v1 归因源切换——worktree 模式 changedFiles 取 worktree 分支 diff
+状态：implemented
+变更：2026-09-14-change-ownership-guards
+锚点：未记录
+最近确认：ee966ed
+理由：§65 护栏④：worktree 隔离模式的变更，其 review 草稿/changedFiles 归因一律取 worktree 分支 diff（git diff base..HEAD + worktree porcelain，现 verify 对账已用同口径）为唯一事实源；主仓脏窗口仅用于 in-place-fallback 模式。存量草稿归属逻辑（autoDraftAttribution）按模式分流。
+
+## D-005@v1 方案 A——DB 所有权（owner_session 列 v6 迁移 + last_active 心跳 + 锁内校验）
+状态：implemented
+变更：2026-09-14-change-ownership-guards
+锚点：未记录
+最近确认：ee966ed
+理由：用户选 A（2026-09-14 对话轮单字确认）：changes 表加 owner_session 列（schema v6 迁移，四处版本号同步——db.js DDL/DB_SCHEMA_VERSION/shared.js CURRENT_VERSION/progress._version，附迁移测试）；last_active 既有刷新点即心跳（run 命令每次写操作更新，活跃窗 15 分钟可配 local.yaml change-ownership.heartbeat_minutes）；所有权校验内嵌 withMainRepoLock 锁内。拒绝 B（DB/文件双真相源+平台模式 specRoot 分裂锁易丢+与 last_active 重复）；拒绝 C（§65 实证 warn 挡不住代劳——对方会话不读 warn）。

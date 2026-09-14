@@ -7,7 +7,7 @@ import { dirname } from 'path';
 // 每次 new ProgressManager 都过 init，靠版本戳跳过建表省开销）。
 // node:sqlite（DatabaseSync）是原生 SQLite 引擎，打开即持久化（不像 sql.js 纯内存需整库 export 落盘），
 // _createSchema 内 DDL 直接落盘，无需额外 _save。
-const DB_SCHEMA_VERSION = 5;
+const DB_SCHEMA_VERSION = 6;
 
 // SQLITE_BUSY 应用层有限重试（R-08 / NFR-03）：WAL 单写者模型，并发写第二者在
 // busy_timeout=5000（init PRAGMA）后抛 SQLITE_BUSY。busy_timeout 已在引擎层处理大部分等待；
@@ -252,7 +252,7 @@ export class DB {
       CREATE TABLE IF NOT EXISTS project (
         id INTEGER PRIMARY KEY DEFAULT 1,
         name TEXT NOT NULL,
-        schema_version INTEGER DEFAULT 5,
+        schema_version INTEGER DEFAULT 6,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       )
@@ -271,7 +271,8 @@ export class DB {
         platform_change_id INTEGER,
         platform_workspace_id INTEGER,
         platform_last_sync TEXT,
-        platform_sync_enabled INTEGER DEFAULT 0
+        platform_sync_enabled INTEGER DEFAULT 0,
+        owner_session TEXT
       )
     `);
 
@@ -370,6 +371,13 @@ export class DB {
     // 已语义化，title/quicklog_id 留空。不纳入平台同步脏度（本地展示用元信息）。
     this._migrateAddColumn('changes', 'title', 'TEXT');
     this._migrateAddColumn('changes', 'quicklog_id', 'TEXT');
+
+    // v6（2026-09-14-change-ownership-guards task-01，D-005@v1）：changes 表加 owner_session——
+    // change 级所有权载体（接管类操作对他人活跃 change 拒绝执行的心跳窗口判定数据源）。
+    // NULL=无主（存量行迁移后即此态，任何会话可接管——向后兼容零行为变化）；写入方=
+    // change-registry 首建/claimChangeOwner（task-02 接线会话标识）；消费方=assertChangeOwnership
+    // （task-02）+ serializeForSync 平台同步投影。幂等 ALTER（列存在跳过，v5 先例同款）。
+    this._migrateAddColumn('changes', 'owner_session', 'TEXT');
   }
 
   /**

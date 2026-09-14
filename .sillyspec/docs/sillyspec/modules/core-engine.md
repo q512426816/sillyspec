@@ -6,7 +6,7 @@ created_at: 2026-06-01T09:05:00
 
 # core-engine
 > 最后更新：2026-09-14
-> 最近变更：2026-09-14-apply-conflict-hardening（doctor 新增 apply_manifest_drift 漂移检查维——两态内容 sha256 vs manifest 指纹三分支矩阵，活跃∪归档扫描面 appliedAt 降序取前 5，advisory WARNING）/ 2026-09-14-quick-exit-tiered-gates（quick 出口分级门禁：信号层 src/quick-gate-profile.js 三导出 + change-risk-profile 补 QUICK_RISK_PATH_PATTERNS 路径模式表 + scope-audit 增 gateProfile 双出口；THRESHOLDS 定稿 2/4/4/8）/ ql-20260910-002-9beb（stage-review 降级自审 CLI 侧配套：isDegradedSelfReview + gate ⚠️ 审计行 + 报错/契约降级出口——PI agent 等宿主无 Agent tool）/ 2026-08-23-adopt-harness-practices（knowledge-match 增 decisionHits 防复潮解析 + verify-postcheck skip 真跳过/evidence-auto 推荐）/ 2026-08-16-scan-docs-reconcile（契约/评审族与基础原语补录归属 + propose 回收）/ ql-20260809-003-c88a（#5 next-action 读路径对齐变更根目录 + #6 initChange 用 VALID_STAGES 单一源 + 修正 propose 残留误述）
+> 最近变更：2026-09-14-change-ownership-guards（task-review 归因分流 D-004@v1：readChangeIsolationMode DB 判源 + resolveAttributionDiffFiles 四模式路由——worktree/worktree-branch/worktree-cleaned/main-window，见下方专节）/ 2026-09-14-apply-conflict-hardening（doctor 新增 apply_manifest_drift 漂移检查维——两态内容 sha256 vs manifest 指纹三分支矩阵，活跃∪归档扫描面 appliedAt 降序取前 5，advisory WARNING）/ 2026-09-14-quick-exit-tiered-gates（quick 出口分级门禁：信号层 src/quick-gate-profile.js 三导出 + change-risk-profile 补 QUICK_RISK_PATH_PATTERNS 路径模式表 + scope-audit 增 gateProfile 双出口；THRESHOLDS 定稿 2/4/4/8）/ ql-20260910-002-9beb（stage-review 降级自审 CLI 侧配套：isDegradedSelfReview + gate ⚠️ 审计行 + 报错/契约降级出口——PI agent 等宿主无 Agent tool）/ 2026-08-23-adopt-harness-practices（knowledge-match 增 decisionHits 防复潮解析 + verify-postcheck skip 真跳过/evidence-auto 推荐）/ 2026-08-16-scan-docs-reconcile（契约/评审族与基础原语补录归属 + propose 回收）/ ql-20260809-003-c88a（#5 next-action 读路径对齐变更根目录 + #6 initChange 用 VALID_STAGES 单一源 + 修正 propose 残留误述）
 > 模块路径：src/db.js, src/db-engine.js + 契约/评审族与基础原语（stage-contract 三件、check-primitives、stage-review、task-review、verify-postcheck、review-tier、change-risk-profile、quick-gate-profile、classify-change、contract-matrix、endpoint-extractor、knowledge-match、doctor-diagnostics、fs-atomic、constants、scan-postcheck）；完整清单见 _module-map.yaml core-engine paths。历史正文中的 run.js / progress.js / index.js 章节已分属 runtime / progress / cli-entry 模块卡
 
 ## 职责
@@ -152,3 +152,15 @@ detectWorktreeHealth（复用 WorktreeManager.doctor 薄适配 + sillyspec/* 残
 
 ## doctor apply-manifest 漂移检查（2026-09-14-apply-conflict-hardening，FR-04/D-005）
 `detectApplyManifestDrift(cwd, specDir)`（src/doctor-diagnostics.js，内部函数，经 runDoctorDiagnostics 并入第十二维 `apply_manifest_drift`，advisory WARNING 不改 doctor 退出码语义）——消费 applyWorktree 成功尾声落的 apply-manifest.json 指纹（文件→sha256）做 apply 后丢失/篡改检测。**扫描面**（R-03）：权威 specDir 下活跃 `changes/<名>/` ∪ 归档 `changes/archive/<名>/` 两桶 glob 统一收集，按 appliedAt 降序取前 5；无 manifest 零输出零告警（skipped），单 manifest 坏 fail-open 跳过。**哈希口径**：两态均自算内容 sha256（git blob hash 是 sha1 与指纹 sha256 异构不可直比）——staged 态=`git show :<path>` buffer 直接算（与写侧 staged blob 指纹天然同基）；worktree 态=readFile 后 CRLF→LF 归一（latin1 往返保字节，防 autocrlf=true 误报）；`approx:true` 条目跳过 staged 比对（指纹基不是 staged，比了必误报）。**三分支判定**：①worktree≠manifest → 落盘面漂移（丢失/被改）；②staged≠manifest → 暂存面漂移（index 被动过）；③盘上与暂存区皆无 → 丢失。告警行含变更名×文件×期望/实际短 hash + safe_actions 指引（对照 worktree 判定直拷/手并，落地后立即 git add 锁定）。doctor 只读不写。测试 test/apply-conflict-hardening.test.mjs 块②（干净零告警/篡改触发/无 manifest skipped）。
+
+## task-review 归因分流（2026-09-14-change-ownership-guards，D-004@v1 / FR-03）
+
+`src/task-review.js` 草稿（`generateTaskReviewDrafts`）/代算（`writeTaskReview`）的 changedFiles 取数源路由——troubleshooting §65 事件②根因（review/草稿 changedFiles 按主仓共享工作区脏窗口归因，并行会话在途文件混入）：
+
+- **判定源 `readChangeIsolationMode`（模块内函数）**：读 `changes.isolation_mode` 列（DB 直连 db.js——task-review 是叶子模块，静态 import progress.js 会成环 progress→consistency-doctor→task-review；meta 缺失也可判）。DB 路径候选序 platformOpts.specRoot > specDriftAnchor > specBase > cwd/.sillyspec（首个存在 sillyspec.db 的根）；进程内按 dbPath+change 缓存（CLI 短进程生命周期内 isolation_mode 不变）。
+- **路由单一入口 `resolveAttributionDiffFiles`（模块内函数，两消费点共用）**，四模式：
+  - `worktree` — DB 判 worktree 且 meta/目录活 → 原口径（`resolveVerifyChangedFiles` meta 路径 + porcelain 并入）零回归；
+  - `worktree-branch` — meta 失联/in-place meta/目录已删但分支 ref 活 → merge-base(主仓 HEAD, 分支 tip)..tip 的 commit diff + 约定路径 worktree 目录在则 porcelain 并入（与 verify reconcile 同口径），**不落主仓共享脏窗口**；meta 与 DB 同属 worktree 族但值不一致时以 DB 为准（注记）；
+  - `worktree-cleaned` — 分支 ref 也已删（cleanup 后态）→ **fail-closed 空集 +「不可归因（worktree 已清理）」注记，绝不回退主仓窗口**（复审残留①）；草稿层 reason 显式区分终态空源与普通「无 diff」；
+  - `main-window` — 其余（DB in-place / NULL 存量）→ 主仓窗口原行为零回归；NULL 且 meta 缺失加存量路由注记（D-04 残留②：不追求完美只保安全）。DB in-place 但 meta 判 worktree 且目录活 → 仍取 worktree（fail-safe：归因源只会更隔离不会更共享）。
+- 测试 test/change-ownership-guards.test.mjs ⑥ 组（meta 活/分支活两形态主仓脏文件零吸入 + 分支已删空集注记）。

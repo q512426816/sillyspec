@@ -5,7 +5,7 @@
  *   - handleArchiveConfirmStep：archive「确认归档」步骤 --confirm 门控 + 推荐文档校验
  *   - handlePlanGeneratePlanStep：plan「generate_plan」完成后动态插入 coordinator + postcheck 步骤
  *   - handleScanProjectListStep：scan step 2 完成后按项目展开 perProject 步骤（用 sanitizeProjectName/validateParsedProjects）
- *   - archiveChangeDirectory：归档移动变更目录（6 处 process.exit(1) + worktree 清理；handleArchiveConfirmStep 内部调用）
+ *   - archiveChangeDirectory：归档移动变更目录（移动前所有权硬校验 + 未 apply 交付面门（--skip-apply 留痕）+ 6 处 process.exit(1) + worktree 清理；handleArchiveConfirmStep 内部调用）
  *     srcDir 缺失时走 findAlreadyArchivedDir 幂等自愈（issue archive-stage-physical-tracking-desync）；
  *     archiveChangeDirectory + findAlreadyArchivedDir 已 export 供 test 直接 import
  *   - sanitizeProjectName / validateParsedProjects：项目名清洗 + 列表校验纯函数（handleScanProjectListStep 专用）
@@ -41,6 +41,7 @@ import { getRule } from '../stage-contract-spec.js'
 import { archiveDestDirName } from '../stage-contract.js'
 import { collectNumstatByPath } from '../scope-audit.js'
 import { recordFrictionEvent, consumeFrictionHint } from '../friction-tally.js'
+import { resolveSessionIdentity } from '../progress.js'
 
 /**
  * 清洗项目名：只保留 ASCII 字母/数字/横线/下划线/点，过滤中文和特殊字符。
@@ -397,7 +398,7 @@ export function extractDoneDocTargets(content) {
   return [...targets]
 }
 
-export async function archiveChangeDirectory(pm, cwd, progress, specBase, platformOpts = {}) {
+export async function archiveChangeDirectory(pm, cwd, progress, specBase, platformOpts = {}, gateOpts = {}) {
   const archiveChangeName = progress.currentChange
   if (!archiveChangeName) {
     console.error('❌ 归档失败：未找到当前变更名（currentChange）')
@@ -429,6 +430,68 @@ export async function archiveChangeDirectory(pm, cwd, progress, specBase, platfo
     console.error(`❌ 归档失败：源目录不存在 ${srcDir}`)
     console.error(`   且 changes/archive/ 下未找到该变更的归档目录。若已手动归档请核对目录名；否则先补全变更产物。`)
     process.exit(1)
+  }
+  // ── 所有权护栏（2026-09-14-change-ownership-guards task-03 / FR-01 / D-001@v1 接线点）──
+  // 归档=接管类操作（注销 change + 移目录 + 清 worktree），他人活跃 change 硬拒。判定在
+  // withMainRepoLock 锁内（handleArchiveConfirmStep 调用点），判定-执行无 TOCTOU；放行分支
+  // no-owner/takeover-stale 重写 owner=本会话（setChangeOwner 同事务刷新 last_active，心跳从
+  // 接管时刻起算）。会话标识三级解析：--session > env SILLYSPEC_SESSION_ID > anon@host（降级
+  // 时 resolveSessionIdentity 自带教学 warning）。消费 task-02 契约（assertChangeOwnership
+  // 纯读不写库），不重复实现判定语义。
+  {
+    const { session } = resolveSessionIdentity({ flagSession: gateOpts.sessionFlag || null, cwd })
+    const check = pm.assertChangeOwnership(cwd, archiveChangeName, { selfSession: session, nowMs: Date.now() })
+    if (!check.allowed) {
+      console.error(`🚫 归档失败：变更 ${archiveChangeName} 正被其他会话持有（owner: ${check.owner}，最后活跃: ${check.lastActive || '未知'}），活跃窗口 ${Math.round(check.heartbeatMs / 60000)} 分钟内拒绝归档`)
+      console.error(`   等对方会话收尾后重试（窗口过后自动接管）；确认对方已放弃且本会话应接管：先经 sillyspec worktree apply/cleanup ${archiveChangeName} --takeover 显式接管（重写 owner 留痕）再归档`)
+      process.exit(1)
+    }
+    if (check.action !== 'self') pm.setChangeOwner(cwd, archiveChangeName, session)
+  }
+  // ── 归档收口（2026-09-14-change-ownership-guards task-03 / FR-02 / D-002@v1）──
+  // worktree 有未 apply 交付面 → 归档阻断：归档会注销 change + 清理 worktree（目录/分支/meta），
+  // 交付物失去进主仓通道，形成「归档完成但交付物未进主仓」悬空态（troubleshooting §65 事件①
+  // 的代劳窗口放大器）。只拦不代跑（design 非目标：脏重叠场景人确认更稳）。--skip-apply 显式
+  // 跳过并留痕（控制台输出 + skip-apply.record.json 随归档包留存，可审计）。无 worktree
+  // （meta 缺失/in-place/native）或零交付面 → 零行为变化。探测用 applyWorktree checkOnly
+  // （只读零写盘，Gate 全收集不落盘、不短路）。
+  try {
+    const { WorktreeManager } = await import('../worktree.js')
+    const wmGate = new WorktreeManager({ cwd })
+    const gateMeta = wmGate.getMeta(archiveChangeName)
+    if (gateMeta
+      && gateMeta.mode !== 'in-place-fallback'
+      && gateMeta.mode !== 'native-worktree'
+      && gateMeta.worktreePath
+      && existsSync(gateMeta.worktreePath)) {
+      const { applyWorktree } = await import('../worktree-apply.js')
+      const checkApply = applyWorktree(archiveChangeName, { cwd, checkOnly: true })
+      const face = (checkApply && Array.isArray(checkApply.changedFiles)) ? checkApply.changedFiles : []
+      if (face.length > 0) {
+        const facePreview = `${face.slice(0, 5).join('、')}${face.length > 5 ? ' 等' : ''}`
+        if (!gateOpts.skipApply) {
+          console.error(`❌ 归档失败：worktree 存在未 apply 的交付面（${face.length} 个文件：${facePreview}）`)
+          console.error(`   归档会清理 worktree（目录+分支+meta），交付物将失去进主仓的通道，形成「归档完成但交付物未进主仓」悬空态。`)
+          console.error(`   先 apply 再归档: sillyspec worktree apply ${archiveChangeName}`)
+          console.error(`   确认无需 apply（交付面已由其他会话落地/纯探索性变更等）: sillyspec run archive --done --confirm --skip-apply（显式跳过并留痕归档记录）`)
+          process.exit(1)
+        }
+        console.warn(`⚠️  已按 --skip-apply 跳过未 apply 交付面检查（${face.length} 个文件未确认落地主仓：${facePreview}）——留痕归档记录`)
+        writeFileSync(join(srcDir, 'skip-apply.record.json'), JSON.stringify({
+          schemaVersion: 1,
+          change: archiveChangeName,
+          flag: '--skip-apply',
+          skippedAt: new Date().toISOString(),
+          deliverableCount: face.length,
+          deliverableFiles: face,
+          note: '归档时显式跳过未 apply 交付面检查（--skip-apply）：交付物未确认进主仓，本记录随归档包留存供审计',
+        }, null, 2) + '\n')
+      }
+    }
+  } catch (e) {
+    // 探测自身异常 fail-open 留痕：归档主流程既有失败面（rename/git/清理）不叠加；正常路径
+    // 的阻断语义不受影响（无异常时 face 判定照常生效）。
+    console.warn(`⚠️  归档前未 apply 交付面探测失败（不阻断归档）: ${e && e.message ? e.message : e}`)
   }
   // 移动前硬校验：变更包必须含 plan.md，否则不该归档。
   // 在移动前阻断（而非移动后），目录尚未动，用户可直接修复后重试。
@@ -546,7 +609,7 @@ export async function archiveChangeDirectory(pm, cwd, progress, specBase, platfo
  *
  * @returns {{stageCompleted:false,currentIdx,nextPendingIdx:number}|null}
  */
-export async function handleArchiveConfirmStep({ stageName, steps, currentIdx, confirm, outputText, pm, cwd, progress, changeName, specBase, platformOpts = {} }) {
+export async function handleArchiveConfirmStep({ stageName, steps, currentIdx, confirm, outputText, pm, cwd, progress, changeName, specBase, platformOpts = {}, isSkipApply = false, sessionFlag = null }) {
   if (stageName !== 'archive' || steps[currentIdx]?.name !== '确认归档') return null
   if (!confirm) {
     steps[currentIdx].status = 'pending'
@@ -588,7 +651,9 @@ export async function handleArchiveConfirmStep({ stageName, steps, currentIdx, c
   // rename + 共享 index 的 git add + marker 删除 + worktree 清理），与并行会话的 apply/cleanup
   // 互踩。exit 钩子兜底：其内部 guard 失败 exit(1) 时锁也会被清（见 withMainRepoLock）。
   const { withMainRepoLock } = await import('../worktree-apply.js')
-  const archivedDir = await withMainRepoLock(cwd, changeName, 'archive-finalize', () => archiveChangeDirectory(pm, cwd, progress, specBase, platformOpts))
+  // gateOpts（task-03）：--skip-apply（归档收口跳过留痕）+ --session（所有权会话标识）随链
+  // 透传——所有权硬校验与未 apply 交付面门都在 archiveChangeDirectory 内（即锁内）执行。
+  const archivedDir = await withMainRepoLock(cwd, changeName, 'archive-finalize', () => archiveChangeDirectory(pm, cwd, progress, specBase, platformOpts, { skipApply: isSkipApply, sessionFlag }))
   if (archivedDir && existsSync(archivedDir)) {
     // 内存快照同步（坑 archive-progress-show-stale，2026-08-21 实证）：archiveChangeDirectory 内
     // unregisterChange 已在 DB 写 current_stage='archive'（终态一致化），但本进程 progress 是命令
@@ -1000,7 +1065,7 @@ export async function handleWorkflowPostCheck({ stageName, steps, currentIdx, cw
  * isForceBaseline/isAllowNew/platformOpts。辅助函数直接 import（safeGit/auditQuickCompletion ← shared，
  * printQuickAuditReview ← quick-audit，4 个 quicklog fns ← quicklog，unlinkSync/rmSync ← fs 静态）。
  */
-export async function handleQuickStageCompletion({ stageName, steps, currentIdx, cwd, progress, changeName, specBase, outputText, confirm, isForceBaseline, isAllowNew, isAllowDelete, isNoDocs, platformOpts, pm, quickFiles = [] }) {
+export async function handleQuickStageCompletion({ stageName, steps, currentIdx, cwd, progress, changeName, specBase, outputText, confirm, isForceBaseline, isAllowNew, isAllowDelete, isNoDocs, sessionFlag = null, platformOpts, pm, quickFiles = [] }) {
   // quick 收尾：强校验 QUICKLOG 条目 + 翻状态 + 勾 tasks.md（CLI 接管）
   if (stageName === 'quick') {
     // §4.6 从 session guard.json 读 guard（不依赖 progress.quickGuard）。
@@ -1463,7 +1528,9 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
 
     // 轻量归档任务已全勾选的关联真实变更
     try {
-      const closeResult = await closeQuickLinkedChanges({ pm, cwd, specBase, linkedChanges, linkedChangesAuto, platformOpts })
+      // quickSessionName/sessionFlag（task-03 / FR-01）：quick 轻量归档链所有权校验入参——
+      // quick 会话标识（changeName=quick-<hex>，三级解析第三层）+ --session 显式标识。
+      const closeResult = await closeQuickLinkedChanges({ pm, cwd, specBase, linkedChanges, linkedChangesAuto, platformOpts, quickSessionName: changeName, sessionFlag })
       if (closeResult.closed.length > 0) {
         console.log(`📦 已自动归档 ${closeResult.closed.length} 个关联变更：${closeResult.closed.join(', ')}`)
       }
@@ -1609,9 +1676,11 @@ const QUICK_CLOSE_ACTIVITY_WINDOW_MS = 60 * 60 * 1000
  * @param {string} opts.specBase
  * @param {string[]} [opts.linkedChanges]
  * @param {Object} [opts.platformOpts]
+ * @param {string|null} [opts.quickSessionName] quick 会话名（quick-<hex>，所有权三级标识第三层）
+ * @param {string|null} [opts.sessionFlag] --session 显式会话标识（所有权三级标识最高层）
  * @returns {Promise<{closed:string[], skipped:{name:string,reason:string}[]}>}
  */
-export async function closeQuickLinkedChanges({ pm, cwd, specBase, linkedChanges = [], linkedChangesAuto = [], platformOpts = {} }) {
+export async function closeQuickLinkedChanges({ pm, cwd, specBase, linkedChanges = [], linkedChangesAuto = [], platformOpts = {}, quickSessionName = null, sessionFlag = null }) {
   const closed = []
   const skipped = []
   // 只处理真实变更，跳过 quick 会话 sessionId
@@ -1675,6 +1744,39 @@ export async function closeQuickLinkedChanges({ pm, cwd, specBase, linkedChanges
       if (!isChangeTasksComplete(specBase, changeName)) {
         skipped.push({ name: changeName, reason: 'tasks.md 未全勾选或不存在' })
         continue
+      }
+      // ── 所有权护栏（2026-09-14-change-ownership-guards task-03 / FR-01 接线点）──
+      // closeSingleQuickLinkedChange 归档移动前对 linked full-flow change 校验（消费 task-02
+      // 契约，不重复实现）：他人活跃 → 跳过该 linked 归档 + warning（不炸 quick --done）；无主/
+      // 窗口外/本会话自有 → 放行，接管分支重写 owner。quick 会话标识=quick-<hex>（三级解析
+      // 第三层，quickChangeName 传入）；quick 面互斥恒 self（design 非目标声明），本闸只拦
+      // full-flow change 的「他人活跃」态。pm 缺接口（旧 mock/旧进度库）fail-open 放行留痕
+      //（同 command.js claim fail-open 先例：护栏退回 no-owner 语义，不废僵尸逃生通道）；
+      // 校验自身异常则跳过该归档（fail-closed 不误归档）。
+      if (typeof pm.assertChangeOwnership !== 'function') {
+        console.warn(`⚠️ 进度库接口缺失（assertChangeOwnership），关联变更 ${changeName} 跳过所有权校验（fail-open 放行）`)
+      } else {
+        try {
+          const { session } = resolveSessionIdentity({
+            flagSession: sessionFlag || null,
+            quickChangeName: quickSessionName || null,
+            cwd,
+          })
+          const ownCheck = pm.assertChangeOwnership(cwd, changeName, { selfSession: session, nowMs: Date.now() })
+          if (!ownCheck.allowed) {
+            skipped.push({
+              name: changeName,
+              reason: `变更正被其他会话持有（owner: ${ownCheck.owner}，最后活跃: ${ownCheck.lastActive || '未知'}），跳过自动归档——由其会话自行收尾（sillyspec progress show 查看进度）`,
+            })
+            continue
+          }
+          if (ownCheck.action !== 'self') {
+            try { pm.setChangeOwner(cwd, changeName, session) } catch { /* 接管写库失败不阻断放行语义 */ }
+          }
+        } catch (e) {
+          skipped.push({ name: changeName, reason: `所有权校验异常（${e && e.message ? e.message : e}），跳过自动归档` })
+          continue
+        }
       }
       const result = await closeSingleQuickLinkedChange({ pm, cwd, specBase, changeName, platformOpts })
       if (result.closed) {

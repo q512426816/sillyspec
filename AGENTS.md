@@ -23,3 +23,4 @@
 16. **代码可能随时在修改**（多 agent 并行），Edit 前重跑 + 查最新态；破坏性 git op 前先备份。
 17. **不奉承用户**，禁止"你说得对"类话术，直接给结论、依据、方案。
 18. **禁止目录级 git add / git add -A**（多会话共享仓）：.sillyspec/ 等目录里有并行会话的进行中文件与已提交文档，目录级暂存会夹带他者改动甚至误删已提交文件（2026-09-10 实证）。提交一律用显式 pathspec（git add -- 文件1 文件2），提交前 git status 核对暂存面只含本会话文件。
+19. **会话启动先立身份**：agent 会话启动时 `export SILLYSPEC_SESSION_ID=<唯一标识>`（如 agent 名+任务名）——多会话并行时 change 所有权判定（apply / cleanup / assess 自动 apply / 归档对他会话活跃变更的接管拒绝）依赖此标识；缺省降级为 `anon@<主机名>` 机器级标识（只拦他机，同机并行不设防）。部分 harness 的 Bash 工具 shell 状态不持久（env 随命令丢失），此时接管类命令每条显式带 flag 回退：`sillyspec worktree apply <change> --session <唯一标识>`（`--session` 优先级高于 env）。

@@ -157,3 +157,17 @@ supersedes：无（修订 design 初稿注入时机）
 锚点：未记录
 最近确认：e84bc89
 理由：未声明脏文件是归属问题（可能是并行会话改动或漏申报，审计行自述两种可能），不是文档同步问题——挂文档对账会罚错人。触发归属确认（要求声明/剔除归属），与 L2 文档认领门分离。
+
+## D-002@v1 归档收口——worktree 有未 apply 交付物时归档硬拦
+状态：implemented
+变更：2026-09-14-change-ownership-guards
+锚点：未记录
+最近确认：ee966ed
+理由：§65 护栏②：archive step3（确认归档）前检查 worktree 未 apply 交付面（复用 applyWorktree checkOnly）——非空即阻断归档并给两条出路：先跑 worktree apply 或 --skip-apply 显式跳过留痕（明确知道自己要手动处理）。归档与 apply 不自动串联（自动 apply 在有脏重叠时行为复杂，人确认更稳）。
+
+## D-004@v1 归因源切换——worktree 模式 changedFiles 取 worktree 分支 diff
+状态：implemented
+变更：2026-09-14-change-ownership-guards
+锚点：未记录
+最近确认：ee966ed
+理由：§65 护栏④：worktree 隔离模式的变更，其 review 草稿/changedFiles 归因一律取 worktree 分支 diff（git diff base..HEAD + worktree porcelain，现 verify 对账已用同口径）为唯一事实源；主仓脏窗口仅用于 in-place-fallback 模式。存量草稿归属逻辑（autoDraftAttribution）按模式分流。

@@ -2685,11 +2685,39 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
     }
     case 'worktree': {
       const { WorktreeManager } = await import('./worktree.js');
-      const { ProgressManager } = await import('./progress.js');
+      const { ProgressManager, resolveSessionIdentity } = await import('./progress.js');
       const wtSubCmd = filteredArgs[1];
       const wtName = filteredArgs.slice(2).find(a => !a.startsWith('-'));
       const wm = new WorktreeManager({ cwd: dir });
       const pm = new ProgressManager({ specDir: resolvePlatformSpecDir(dir, specDir) });
+
+      // ── 所有权护栏公共件（2026-09-14-change-ownership-guards task-02 / FR-01 / D-001@v1）──
+      // 接管类操作（apply / cleanup / assess 自动 apply）改主仓前校验 change 归属：
+      // 他人且活跃（活跃窗内，heartbeat_minutes 缺省 15min）→ 拒绝；无主 / 窗口外 / 本会话
+      // 自有 / --takeover → 放行，接管分支重写 owner=本会话（setChangeOwner 含 last_active
+      // 心跳起算）。调用点必须在 withMainRepoLock 锁内（判定与执行无 TOCTOU）；只读路径
+      // （diff/list/meta/doctor/--check-only）不接。会话标识三级解析：--session flag >
+      // env SILLYSPEC_SESSION_ID > anon@host 机器级降级（同机并行不设防是 R-01 明示局限）。
+      const sessionFlagIdx = args.indexOf('--session');
+      const sessionFlagValue = (sessionFlagIdx !== -1 && args[sessionFlagIdx + 1]
+        && !String(args[sessionFlagIdx + 1]).startsWith('--')) ? String(args[sessionFlagIdx + 1]).trim() : null;
+      // soft=true：assess 自动路径拒绝语义（跳过自动落盘 + warning 不抛错，同 overlapSkipped 软跳）；
+      // soft=false：显式 apply/cleanup 拒绝（结构化错误，调用方 exit 非零）。
+      function _guardChangeOwnership(changeName, { forced = false, soft = false } = {}) {
+        const { session } = resolveSessionIdentity({ flagSession: sessionFlagValue, cwd: dir });
+        const check = pm.assertChangeOwnership(dir, changeName, { selfSession: session, nowMs: Date.now(), forced });
+        if (check.allowed) {
+          if (check.action !== 'self') pm.setChangeOwner(dir, changeName, session);
+          return { allowed: true, action: check.action };
+        }
+        const lines = [
+          `变更 ${changeName} 正被其他会话持有（owner: ${check.owner}，最后活跃: ${check.lastActive || '未知'}），活跃窗口 ${Math.round(check.heartbeatMs / 60000)} 分钟内拒绝接管类操作`,
+          `确认对方已放弃且本会话应接管：加 --takeover 显式强制接管（重写 owner 并留痕）；或等对方会话收尾后重试`,
+        ];
+        if (soft) { for (const l of lines) console.warn(`⚠️  ${l}`); }
+        else { for (const l of lines) console.error(`🚫 ${l}`); }
+        return { allowed: false, action: check.action };
+      }
 
       // isolation 写入 DB 的辅助函数
       function _writeIsolationToDB(cwd, changeName, info) {
@@ -2715,17 +2743,19 @@ SillySpec worktree — git worktree 隔离管理
 
 用法:
   sillyspec worktree create <change-name> [--base <branch>] [--adopt-branch]   创建隔离 worktree（--adopt-branch：收编既有同名分支为工作分支，分支现状作 baseline）
-  sillyspec worktree apply <change-name> [--check-only] [--base merge-base|baseline] [--merge] [--skip-overlap] [--stash-dirty] [--force]   校验并应用变更到主工作区（--stash-dirty：主仓在途改动自动 stash→apply→恢复，SHA 兜底可审计；--force：越过活跃 quick 会话 guard 相交预检，overlapForced 留痕）
-  sillyspec worktree assess <change-name>                     风险审计 + 自动 apply
+  sillyspec worktree apply <change-name> [--check-only] [--base merge-base|baseline] [--merge] [--skip-overlap] [--stash-dirty] [--force] [--takeover]   校验并应用变更到主工作区（--stash-dirty：主仓在途改动自动 stash→apply→恢复，SHA 兜底可审计；--force：越过活跃 quick 会话 guard 相交预检，overlapForced 留痕；--takeover：越过所有权护栏显式强制接管，owner 重写留痕）
+  sillyspec worktree assess <change-name>                     风险审计 + 自动 apply（自动路径受所有权护栏约束：他人活跃 change 跳过自动落盘并 warning）
   sillyspec worktree diff <change-name> [--base <commit>]      查看 worktree 相对 base 的变更
   sillyspec worktree list                                      列出所有活跃 worktree
   sillyspec worktree meta <change-name>                        读取 worktree meta.json
-  sillyspec worktree cleanup <change-name> [--force]           强制清理 worktree
+  sillyspec worktree cleanup <change-name> [--force] [--takeover]   强制清理 worktree（受所有权护栏约束：他人活跃 change 拒绝，--takeover 显式接管）
   sillyspec worktree doctor [--fix] [--stale-hours N] [--change <name>]   健康检查 + 修复（--change 仅扫指定 change）
 
 选项:
   --base <branch>       create: 指定基础分支（默认当前 HEAD）
   --check-only          apply: 只输出检查结果，不实际 apply
+  --takeover            apply/cleanup: 所有权护栏拒绝时的显式强制接管口（owner 他人且活跃时解锁，重写 owner 留痕）
+  --session <id>        显式会话标识（所有权三级解析最高优先级；缺省 env SILLYSPEC_SESSION_ID，再缺省 anon@<host> 机器级降级——同机并行不设防）
 `);
         break;
       }
@@ -2763,7 +2793,7 @@ SillySpec worktree — git worktree 隔离管理
         }
         case 'apply': {
           if (!wtName) {
-            console.error('❌ 用法: sillyspec worktree apply <change-name> [--check-only] [--base merge-base|baseline] [--merge] [--skip-overlap] [--stash-dirty] [--force]');
+            console.error('❌ 用法: sillyspec worktree apply <change-name> [--check-only] [--base merge-base|baseline] [--merge] [--skip-overlap] [--stash-dirty] [--force] [--takeover]');
             process.exit(1);
           }
           const checkOnly = args.includes('--check-only');
@@ -2771,6 +2801,7 @@ SillySpec worktree — git worktree 隔离管理
           const skipOverlap = args.includes('--skip-overlap');
           const stashDirty = args.includes('--stash-dirty');
           const force = args.includes('--force'); // guard 相交预检显式解锁（task-02 / FR-03；人工 flag，自动路径永不带）
+          const takeover = args.includes('--takeover'); // 所有权护栏显式强制接管（2026-09-14-change-ownership-guards task-02 / FR-01；人工 flag，自动路径永不带）
 
           // 解析 --base 参数（默认 merge-base）
           let base = 'merge-base';
@@ -2798,15 +2829,22 @@ SillySpec worktree — git worktree 隔离管理
           }
           // 主仓 apply 互斥锁（坑 main-apply-no-mutex）：真 apply（非 checkOnly）在锁内跑——
           // apply 链（rollback/merge/cleanup）直接改主仓工作区，两会话并发互踩会互相清文件。
+          // 所有权护栏（2026-09-14-change-ownership-guards task-02 / FR-01）：锁内、实际 apply 前
+          // 判归属——他人且活跃（活跃窗内）拒绝；--check-only 是只读路径不校验（铁律：只读命令不接）。
+          // 拒绝时结构化错误已在护栏内打印，经哨兵返回值带出锁外统一 exit 1（不进结果展示分支）。
           let result;
           try {
             result = checkOnly
               ? applyWorktree(wtName, { cwd: dir, checkOnly, merge, base, ctx: _applyCtx, skipOverlap, stashDirty, force })
-              : await withMainRepoLock(dir, wtName, 'apply', () => applyWorktree(wtName, { cwd: dir, checkOnly, merge, base, ctx: _applyCtx, skipOverlap, stashDirty, force }));
+              : await withMainRepoLock(dir, wtName, 'apply', () => {
+                if (!_guardChangeOwnership(wtName, { forced: takeover }).allowed) return { __ownershipDenied: true };
+                return applyWorktree(wtName, { cwd: dir, checkOnly, merge, base, ctx: _applyCtx, skipOverlap, stashDirty, force });
+              });
           } catch (lockErr) {
             console.error(`❌ ${lockErr.message}`);
             process.exit(1);
           }
+          if (result && result.__ownershipDenied) process.exit(1);
 
           if (result.errors.length > 0) {
             console.error(`❌ 校验失败:`);
@@ -2942,15 +2980,25 @@ SillySpec worktree — git worktree 隔离管理
           if (assessment.decision === 'SAFE' || assessment.decision === 'WARNING') {
             console.log('Action: auto-applying...');
             const { applyWorktree, withMainRepoLock } = await import('./worktree-apply.js');
-            // 主仓互斥锁（与手动 apply 同款）：自动 apply 同样改主仓工作区，必须互斥
+            // 主仓互斥锁（与手动 apply 同款）：自动 apply 同样改主仓工作区，必须互斥。
+            // 所有权护栏（2026-09-14-change-ownership-guards task-02 / FR-01）：assess 自动 apply
+            // 是护栏①最可能的旁路（SAFE/WARNING 即自动改主仓+链内 cleanup）——锁内、实际动作前
+            // 判归属。自动路径永不带 --takeover；他人活跃 change 拒绝 = 跳过自动落盘 + warning
+            // 不抛错（同 overlapSkipped 软跳语义：无人值守不越权也不阻断审计流）。
             let applyResult;
             try {
-              applyResult = await withMainRepoLock(dir, wtName, 'assess-auto-apply', () => applyWorktree(wtName, { cwd: dir, ctx: _assessCtx, autoApply: true }));
+              applyResult = await withMainRepoLock(dir, wtName, 'assess-auto-apply', () => {
+                if (!_guardChangeOwnership(wtName, { soft: true }).allowed) return { ownershipSkipped: true };
+                return applyWorktree(wtName, { cwd: dir, ctx: _assessCtx, autoApply: true });
+              });
             } catch (lockErr) {
               console.error(`❌ 自动 apply 未执行：${lockErr.message}`);
               break;
             }
-            if (applyResult.overlapSkipped) {
+            if (applyResult.ownershipSkipped) {
+              // 所有权拒绝（结构化 warning 已在护栏内打印）：跳过自动落盘，指引人工显式接管
+              console.log('   → 确认对方会话已放弃：人工评估后显式接管 sillyspec worktree apply ' + wtName + ' --takeover（或等对方收尾后重跑 assess）');
+            } else if (applyResult.overlapSkipped) {
               // guard 相交软跳过（task-02 / FR-03）：无人值守不越权也不阻断审计流——不落盘，亮 warning 指引人工评估
               for (const w of applyResult.warnings || []) console.log(`⚠️  ${w}`);
               console.log('   → 人工评估后显式 apply: sillyspec worktree apply ' + wtName + '（确认与活跃 quick 会话无冲突；或等对方 --done 后重跑 assess）');
@@ -3047,15 +3095,23 @@ SillySpec worktree — git worktree 隔离管理
         }
         case 'cleanup': {
           if (!wtName) {
-            console.error('❌ 用法: sillyspec worktree cleanup <change-name>');
+            console.error('❌ 用法: sillyspec worktree cleanup <change-name> [--force] [--takeover]');
             process.exit(1);
           }
           const forceFlag = args.includes('--force');
+          const takeover = args.includes('--takeover'); // 所有权护栏显式强制接管（task-02 / FR-01）
           try {
             // 主仓互斥锁（坑 main-repo-no-mutex 二批）：cleanup 删 worktree 注册表/分支/目录，
-            // 与并行会话的 apply/cleanup 互踩会互相清——与其他写主仓操作共用一把 main-repo.lock
+            // 与并行会话的 apply/cleanup 互踩会互相清——与其他写主仓操作共用一把 main-repo.lock。
+            // 所有权护栏（2026-09-14-change-ownership-guards task-02 / FR-01）：锁内、实际清理前
+            // 判归属——他人且活跃拒绝（结构化错误在护栏内打印，哨兵带出统一 exit 1，跨仓清理
+            // 同步跳过）；--takeover 显式强制接管放行。
             const { withMainRepoLock } = await import('./worktree-apply.js');
-            const result = await withMainRepoLock(dir, wtName, 'worktree-cleanup', () => wm.cleanup(wtName, { force: forceFlag }));
+            const result = await withMainRepoLock(dir, wtName, 'worktree-cleanup', () => {
+              if (!_guardChangeOwnership(wtName, { forced: takeover }).allowed) return { __ownershipDenied: true };
+              return wm.cleanup(wtName, { force: forceFlag });
+            });
+            if (result && result.__ownershipDenied) process.exit(1);
             // 跨仓 worktree（坑 cross-repo-no-worktree-isolation）：与主仓同锁清理——跨仓 worktree
             // 注册在各跨仓仓 .git 内，但目录/meta 在主仓 .sillyspec 运行时区，同样怕并发互踩
             const { cleanupCrossWorktrees } = await import('./worktree-cross.js');

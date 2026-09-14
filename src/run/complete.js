@@ -119,7 +119,7 @@ export function synthesizeStepOutput({ stageName, stepName, cwd }) {
 }
 
 export async function completeStep(pm, progress, stageName, cwd, outputText, inputText = null, options = {}) {
-  const { printNext = true, confirm = false, changeName, platformOpts = {}, nonInteractive = false, isForceBaseline = false, isAllowNew = false, isAllowDelete = false, isNoDocs = false, quickFiles = [] } = options
+  const { printNext = true, confirm = false, changeName, platformOpts = {}, nonInteractive = false, isForceBaseline = false, isAllowNew = false, isAllowDelete = false, isNoDocs = false, isSkipApply = false, sessionFlag = null, quickFiles = [] } = options
   // specRoot(平台) > specDriftAnchor(worktree 漂移锚定主仓) > cwd/.sillyspec(本地)——
   // 与 prompt.js resolvePromptSpecBase 同序：--done 收尾的 user-inputs.md/超长 artifact 落盘
   // 必须与 prompt 渲染同一根，否则写进 worktree 副本目录、随 cleanup 整目录删除。
@@ -494,7 +494,7 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
   // archive「确认归档」收尾：--confirm 门控 + archiveChangeDirectory 移动 + 推荐文档校验
   // （抽成 handleArchiveConfirmStep；缺 --confirm 时返回 early-return 对象，completeStep 透传）
   {
-    const _archiveEarlyReturn = await handleArchiveConfirmStep({ stageName, steps, currentIdx, confirm, outputText, pm, cwd, progress, changeName, specBase, platformOpts })
+    const _archiveEarlyReturn = await handleArchiveConfirmStep({ stageName, steps, currentIdx, confirm, outputText, pm, cwd, progress, changeName, specBase, platformOpts, isSkipApply, sessionFlag })
     if (_archiveEarlyReturn) return _archiveEarlyReturn
   }
 
@@ -569,8 +569,9 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
       return { stageCompleted: false, currentIdx, nextPendingIdx: -1 }
     }
     // quick 收尾（W6 Step6b 抽至 complete-handlers.js handleQuickStageCompletion）；
-    // isNoDocs（task-02）--no-docs 豁免随链透传进 auditQuickCompletion options
-    await handleQuickStageCompletion({ stageName, steps, currentIdx, cwd, progress, changeName, specBase, outputText, confirm, isForceBaseline, isAllowNew, isAllowDelete, isNoDocs, platformOpts, pm, quickFiles })
+    // isNoDocs（task-02）--no-docs 豁免随链透传进 auditQuickCompletion options；
+    // sessionFlag（task-03）--session 随链透传进 quick 轻量归档链所有权校验
+    await handleQuickStageCompletion({ stageName, steps, currentIdx, cwd, progress, changeName, specBase, outputText, confirm, isForceBaseline, isAllowNew, isAllowDelete, isNoDocs, sessionFlag, platformOpts, pm, quickFiles })
 
     // ── reopen --done 回填（坑 brainstorm-reopen-step-state-desync）──
     // nextPendingIdx === -1 且无 waiting，说明要进阶段完成分支。此时若存在 stale 步骤

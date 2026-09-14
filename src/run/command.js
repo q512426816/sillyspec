@@ -30,7 +30,7 @@ import { outputStep, collectStageWaitHistory } from './prompt.js'
 import { completeStep, skipStep, waitStep, continueStep, synthesizeStepOutput } from './complete.js'
 import { runStage } from './stage.js'
 import { sanitizeDesc } from '../quicklog.js'
-import { ProgressManager } from '../progress.js'
+import { ProgressManager, resolveSessionIdentity } from '../progress.js'
 import { validateChangeExists, checkTransition } from '../stage-contract.js'
 import { READONLY_AUXILIARY_STAGES } from '../constants.js'
 import { stageRegistry, auxiliaryStages } from '../stages/index.js'
@@ -48,6 +48,7 @@ const VALUE_FLAGS = new Set([
   '--req', '--cause', '--solution', '--result', // quick 末步四字段参数（合成 --output，见 outputText 解析段）
   '--ql', // quick --cancel 显式指定 qlId（缺省读会话 guard.json）
   '--base', // scan diff 基线 commit（吃值；只在 run scan --diff 转发路径消费）
+  '--session', // 显式会话标识（吃值；2026-09-14-change-ownership-guards task-02 所有权三级解析最高优先级层，启动 claim 消费）
 ])
 
 /**
@@ -806,17 +807,25 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
   // 豁免布尔 flag（先例上方同款 includes 解析）——只影响 gate 画像 docClaim（exempt-no-docs）
   // 与 [gate] 落账留痕，不改 status/exit code（D-003 advisory），审计链经 completeStep options 透传。
   const isNoDocs = flags.includes('--no-docs')
+  // --skip-apply（2026-09-14-change-ownership-guards task-03，D-002@v1）：归档收口门（archive
+  // step3 归档移动前 applyWorktree checkOnly 探测未 apply 交付面）的显式跳过布尔 flag——
+  // 语义出口在 completeStep → handleArchiveConfirmStep → archiveChangeDirectory（task-02 只
+  // 注册白名单透传，本行补 includes 解析进 completeStep options，isNoDocs 同款先例）。
+  const isSkipApply = flags.includes('--skip-apply')
 
   // F10b（ql-20260818-010）：语义别名定向提示。did-you-mean 按编辑距离猜形近 flag，猜中的常是
   // 形近但语义错的（--title → --files，ql-20260818-003 负面③实证）。常见「语义别名」在此登记
   // 定向指引：命中时替代 did-you-mean 打印，引导到真正承载该语义的 flag/机制。
+  // 2026-09-14-change-ownership-guards task-02：原 '--session' 条目（quick 会话名提示）随
+  // --session 升格为真实 flag（所有权会话标识）而移除——提示只对未知 flag 生效，已知 flag
+  // 挂提示是死代码；'--session-id' 是最常见形近拼法，改挂新语义指引（所有权三级标识）。
   const FLAG_SEMANTIC_HINTS = {
     '--title': 'QUICKLOG 条目标题无独立参数——从 --output 的「需求：」字段自动提取（写成一句语义化短标题即可）',
     '--message': '结果摘要用 --output（quick 末步须含 需求：/根因：/方案：/结果： 四字段）',
     '--summary': '结果摘要用 --output（quick 末步须含 需求：/根因：/方案：/结果： 四字段）',
     '--result': '结果摘要用 --output（quick 末步须含 需求：/根因：/方案：/结果： 四字段）',
     '--name': 'quick 会话名由 CLI 自动分配（quick-<hash>），恢复会话用 --change <quick-session-id>；关联变更用 --linked-changes',
-    '--session': 'quick 会话名由 CLI 自动分配（quick-<hash>），恢复会话用 --change <quick-session-id>',
+    '--session-id': '会话标识用 --session <id>（所有权三级解析最高优先级层；缺省 env SILLYSPEC_SESSION_ID，再缺省 anon@<host> 机器级降级）',
     '--note': '文件括注用 --file-notes "path::注 || path::注"；启动时任务描述用 --input',
     '--notes': '文件括注用 --file-notes "path::注 || path::注"',
     '--desc': '启动时任务描述用 --input；QUICKLOG 标题从 --output「需求：」自动提取',
@@ -840,6 +849,9 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     '--adopt-branch', // execute 显式收编既有 sillyspec/<change> 分支为 worktree 工作分支（坑 worktree-user-branch-conflict）
     '--diff', '--base', '--full', '--report', // scan diff（D-001：command.js 只补 flag，裸 token 解析归 index.js 子命令拦截）
     '--meta', // P1-3：渲染 SS-META 机器块（布尔 flag，不吃值）
+    '--session', // 显式会话标识（吃值，VALUE_FLAGS 同步登记；2026-09-14-change-ownership-guards task-02：启动 claim 消费，所有权三级解析最高优先级层）
+    '--takeover', // 所有权护栏显式强制接管（task-02 / FR-01：本层只注册透传，实际消费在 index.js apply/cleanup 子命令层——run 侧带上不报未知参数，语义出口在 worktree 命令）
+    '--skip-apply', // 归档收口跳过 apply 校验（task-02 只注册透传不改行为，消费归 task-03 archive 接线）
     '-h',
   ])
   for (let i = 0; i < flags.length; i++) {
@@ -1226,6 +1238,28 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
   // 注册变更到全局活跃列表（如果尚未注册）
   if (effectiveChange) {
     pm.registerChange(cwd, effectiveChange)
+    // ── 所有权首建 claim（2026-09-14-change-ownership-guards task-02 / FR-01 / D-001@v1）──
+    // run <stage> 启动即认领 owner（claimChangeOwner 守卫语义：已有值不覆盖——他人持有不抢
+    // 也不拒；拒绝语义只锁接管类操作，见 index.js apply/cleanup/assess 接线）。会话标识三级：
+    // quick 会话=changeName 本身（quick-<8hex>，既有 sessionId 机制——guard 按 change 名落盘
+    // 天然跨进程，selfSession==changeName 恒 self）；full-flow=--session > env
+    // SILLYSPEC_SESSION_ID > anon@host 机器级降级（降级时一次性教学 warning）。
+    // default 容器行不认领：辅助阶段共享容器非真实变更，挂伪所有权没有消费者还添噪声。
+    // fail-open：claim 失败不阻断启动（护栏判定退回 no-owner 放行）。
+    try {
+      if (effectiveChange !== 'default') {
+        const ident = resolveSessionIdentity({
+          flagSession: getFlagValue('--session'),
+          quickChangeName: stageName === 'quick' ? effectiveChange : null,
+          // anon 降级教学 marker 落盘根用 dirname(specRoot)（锚定后的主仓根）而非裸 cwd：
+          // worktree 副本 cwd（execute 在 .sillyspec/.runtime/worktrees/<c>/ 内跑）会把
+          // marker mkdir 进副本 .runtime（worktree-execute-spec-drift AC-A6 副本零写入实证），
+          // 且副本随 cleanup 删除、marker 永不跨会话去重——落到持久主仓根才是教学降频语义。
+          cwd: dirname(specRoot),
+        })
+        pm.claimChangeOwner(cwd, effectiveChange, ident.session)
+      }
+    } catch { /* claim 失败不阻断启动 */ }
   }
 
   // --reset
@@ -1483,7 +1517,9 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
       }
     }
     const doneAnswer = getFlagValue('--answer')
-    return await completeStep(pm, progress, stageName, cwd, outputText, inputText, { confirm: isConfirm, changeName: effectiveChange, nonInteractive: isNonInteractive && !isInteractive, platformOpts, doneAnswer, isForceBaseline, isAllowNew, isAllowDelete, isNoDocs, quickFiles })
+    // isSkipApply/sessionFlag（task-03）：--skip-apply 归档收口跳过 + --session 所有权会话标识，
+    // 随 completeStep options 透传（isNoDocs 同款链路）——消费点 archive/quick 收尾 handler。
+    return await completeStep(pm, progress, stageName, cwd, outputText, inputText, { confirm: isConfirm, changeName: effectiveChange, nonInteractive: isNonInteractive && !isInteractive, platformOpts, doneAnswer, isForceBaseline, isAllowNew, isAllowDelete, isNoDocs, isSkipApply, sessionFlag: getFlagValue('--session'), quickFiles })
   }
 
   // 默认：输出当前步骤

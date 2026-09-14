@@ -1,19 +1,21 @@
 /**
- * worktree apply review.json 声明偏差文件放行测试（坑 apply-undeclared-deviation-block，
- * 2026-08-24 用户反馈四期③）。
+ * worktree apply review.json 声明偏差文件相交过滤测试（坑 apply-undeclared-deviation-block →
+ * D-003@v1 收紧翻转，2026-09-14-change-ownership-guards task-03）。
  *
- * 场景：执行期有据越界文件（facade 转发/名单测试）不在 design §6 也不在 allowed_paths，
- * Gate1 拦 apply 只能回改 design.md。review.json changedFiles（Task Review Gate 已做 git 证据
- * 交叉校验）作为 allow set 第三源：声明即放行 + 审计 warning；完全越界仍拦。
+ * 场景：旧语义下执行期有据越界文件（facade 转发/名单测试）不在 design §6 也不在
+ * allowed_paths，review.json changedFiles 声明即放行——troubleshooting §65 事件②实证该通道
+ * 无相交校验，并行会话在途文件经声明真实放行。D-003 翻转后：review 声明只承认与 allow 面
+ * （design 清单 ∪ 各 task target_files/allowed_paths ∪ linked-change 声明）相交的文件，
+ * 不相交的外来声明剔除出放行面、进 violations 报告行（「review 声明了越权文件」嫌疑标注）。
  *
  * 覆盖：
- * 1. review 声明含未列文件 → Gate1 放行 + 审计 warning 点名 + result.reviewAdmittedFiles
- * 2. 无 review → 仍拦（报错文案给 review/design 两条出路）
+ * 1. review 声明含未列文件 → Gate1 拦截 + violations 报告行（嫌疑标注）+ result.reviewOverdeclaredFiles
+ * 2. 无 review → 仍拦（报错文案给 review 对照/design 清单两条出路）
  * 3. 跨仓 review（repo:other）不进 main 集 → 仍拦
- * 4. assessApplyRisk Gate2 同步豁免（不再 BLOCKED，降 warning 注明来源）
+ * 4. assess：外来声明经 Gate1（checkOnly errors）→ BLOCKED，reasons 含嫌疑标注
  * 5. review 声明 .sillyspec/ 运行时产物 → 不进 allow（过滤口径）
  */
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { spawnSync } from 'node:child_process'
@@ -84,7 +86,7 @@ function writeReview(d, changeName, changedFiles, repo) {
   writeFileSync(join(taskDir, 'review.json'), JSON.stringify(review, null, 2))
 }
 
-console.log('--- 1. review 声明含未列文件 → Gate1 放行 + 审计 warning ---')
+console.log('--- 1. review 声明含未列文件 → Gate1 拦截 + violations 报告行（嫌疑标注）---')
 {
   const { d, changeName } = makeFixture()
   writeReview(d, changeName, ['src-app.js', 'src-facade.js'])
@@ -93,10 +95,11 @@ console.log('--- 1. review 声明含未列文件 → Gate1 放行 + 审计 warni
   console.log = (...a) => logs.push(a.join(' ')); console.error = (...a) => logs.push(a.join(' ')); console.warn = (...a) => logs.push(a.join(' '))
   let r
   try { r = applyWorktree(changeName, { cwd: d }) } finally { console.log = orig.log; console.error = orig.error; console.warn = orig.warn }
-  assert(r.ok === true, `apply 放行（errors: ${JSON.stringify(r.errors)}）`)
-  assert(r.reviewAdmittedFiles && r.reviewAdmittedFiles.includes('src-facade.js'), `reviewAdmittedFiles 记录偏差文件（实际 ${JSON.stringify(r.reviewAdmittedFiles)}）`)
-  assert((r.warnings || []).some(w => w.includes('review 声明放行') && w.includes('src-facade.js')), '审计 warning 点名 facade')
-  assert(readFileSync(join(d, 'src-facade.js'), 'utf8') === 'facade forward\n', '偏差文件已落地主仓')
+  assert(r.ok !== true, `apply 拦截（D-003 翻转：外来声明不再放行，errors: ${JSON.stringify(r.errors)}）`)
+  assert(r.errors.some(e => e.includes('review 声明了越权文件') && e.includes('src-facade.js')), '外来声明进 violations 报告行（含嫌疑标注）')
+  assert(r.reviewOverdeclaredFiles && r.reviewOverdeclaredFiles.includes('src-facade.js'), `reviewOverdeclaredFiles 记录外来声明（实际 ${JSON.stringify(r.reviewOverdeclaredFiles)}）`)
+  assert((r.warnings || []).some(w => w.includes('review 声明了越权文件') && w.includes('src-facade.js')), '审计 warning 点名外来声明')
+  assert(!existsSync(join(d, 'src-facade.js')), '外来声明文件不落地主仓')
   void logs
   rmSync(d, { recursive: true, force: true })
 }
@@ -122,13 +125,13 @@ console.log('--- 3. 跨仓 review（repo:other）不进 main 集 ---')
   rmSync(d, { recursive: true, force: true })
 }
 
-console.log('--- 4. assessApplyRisk Gate2 同步豁免 ---')
+console.log('--- 4. assess：外来声明经 Gate1（checkOnly errors）→ BLOCKED ---')
 {
   const { d, changeName } = makeFixture()
   writeReview(d, changeName, ['src-app.js', 'src-facade.js'])
   const assess = assessApplyRisk(changeName, { cwd: d })
-  assert(assess.decision !== 'BLOCKED', `assess 不再 BLOCKED（decision=${assess.decision}, reasons=${JSON.stringify(assess.reasons)}）`)
-  assert((assess.warnings || []).some(w => w.includes('review 声明偏差文件') && w.includes('src-facade.js')), 'Gate2 降 warning 注明 review 来源')
+  assert(assess.decision === 'BLOCKED', `assess BLOCKED（decision=${assess.decision}, reasons=${JSON.stringify(assess.reasons)}）`)
+  assert((assess.reasons || []).some(r => r.includes('review 声明了越权文件') && r.includes('src-facade.js')), 'reasons 含外来声明 violations 报告行')
   rmSync(d, { recursive: true, force: true })
 }
 

@@ -47,3 +47,16 @@ updated_at: 2026-09-02T11:20:00+08:00
 ## getStageStartedAt（2026-09-10 用户反馈②：evidence mtime 锚点放宽）
 
 同族只读访问器：DB stages.started_at。gates verify 收尾接线改为 `getStageStartedAt('execute') || getStageCompletedAt('execute')`——证据合法产自 execute 或 verify 两窗口，锚「execute 完成时刻」会把 execute 期间产的证据判旧，逼出「先提交则 diff 空、不提交则 mtime 旧」的时序两难（PI 会话实证，只能 missing+豁免收口）。锚 started_at 后 execute/verify 两窗口证据均入窗，变更窗口外的陈旧证据照拦。
+
+## change 所有权（2026-09-14-change-ownership-guards）
+
+changes 表 v6 加 `owner_session` 列（NULL=无主——存量行迁移后任何会话可接管，向后兼容零行为变化；四处 schema 版本 bump 之一，版本口径见 runtime 卡）。owner 读写与判定 API（ProgressManager facade 转发 src/progress/change-registry.js）：
+
+- `getChangeOwner(cwd, changeName)` — 只读容错（无行/未登记/读失败 → null）
+- `claimChangeOwner(cwd, changeName, session)` — 认领：行不存在首建即得；他人已持有不覆盖（返回既有 owner，WHERE 守卫 + 单事务串行）；无主行（NULL）认领写入。run 链启动 claim 消费（run/command.js）
+- `setChangeOwner(cwd, changeName, session)` — 接管无条件重写 + 同事务刷新 last_active（新 owner 心跳从接管时刻起算，否则接管后立即可被 takeover-stale 抢回）
+- `assertChangeOwnership(cwd, changeName, opts)` — 所有权判定纯函数（**读行不写库**，判定与接管写分离，调用方锁内先判后写无 TOCTOU）五分支：`forced`（--takeover）→ takeover-forced 放行 / owner 为空 → no-owner 放行 / owner===selfSession → self 放行（本会话零路径变化）/ 他人且 now−last_active ≥ 心跳窗 → takeover-stale 放行（调用方重写 owner）/ 他人且活跃窗内 → blocked-active-owner 拒绝（结构化字段 owner+lastActive+heartbeatMs 供接线打指引）。last_active 缺失/不可解析按陈旧处理（逃生通道优先，不因时间戳损坏锁死）；心跳即既有 last_active（每次 CLI 写操作刷新），窗缺省 15 分钟（`change-ownership.heartbeat_minutes`，见 setup 卡）
+- `resolveSessionIdentity({ flagSession, quickChangeName, cwd, warn })` — 会话标识三级解析（src/progress.js 导出）：`--session` flag > env `SILLYSPEC_SESSION_ID` > quick 会话名（quick-<8hex>，既有 sessionId 机制天然跨进程）> `anon@<host>` 机器级降级 + 一次性教学 warning（进程内 memo + 24h marker 文件双层降频，`.runtime/anon-session-warn.json`）；同机并行不设防是 R-01 明示局限（防线=显式标识铁律 + 归档收口 + --takeover 摩擦）
+- `registerChange(cwd, changeName, { ownerSession })` — 首建者获得所有权（INSERT OR IGNORE 语义天然已有值不覆盖）
+
+平台同步投影扩列（D-005@v1）：`serializeForSync` changes 投影加 `owner_session`（NULL=无主随 payload 带出，平台消费端不强制）；`import()` 侧回写容错（payload 含该列才写）。接线点（apply/cleanup/assess/归档/quick 链）归 cli-entry / runtime / worktree 卡登记。

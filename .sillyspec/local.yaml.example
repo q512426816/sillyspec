@@ -99,3 +99,8 @@ docs-check:
 #   l1_files: 4             # 或 ≥4 文件 → L1（旧规则「≤3 文件」边界连续性）
 #   l2_span: 4              # 跨 ≥4 模块 → L2（4-10 文件档全表最差格 0-14.3%）
 #   l2_files_degraded: 8    # module-map 缺失降级档：≥8 文件 → L2（覆盖最差文件桶 7-10 的 32.9-35.3%）
+
+# ── 变更所有权守卫（接管类操作 apply/cleanup/archive 对他人活跃 change 校验；缺省 15 分钟）──
+# owner 非本会话且 last_active 在窗口内 → 拒绝（--takeover 显式接管）；窗口外 → 自动接管。
+# change-ownership:
+#   heartbeat_minutes: 15   # 所有者活跃心跳窗口（分钟）
