@@ -13,10 +13,14 @@ import { describe, it, beforeEach, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 import { execSync, spawnSync } from 'node:child_process'
 import { writeFileSync, mkdirSync, rmSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
+import { fileURLToPath } from 'node:url'
 
-const CLI = join(process.cwd(), 'bin', 'sillyspec.js')
+// suite runner 以 test/ 为子进程 cwd——CLI 路径必须从 import.meta.url 解析（house pattern，
+// 同 worktree-cwd-guard.test.mjs：20），用 process.cwd() 会拼出 test/bin/sillyspec.js
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const CLI = join(__dirname, '..', 'bin', 'sillyspec.js')
 const CHANGE = 'wtc-dispatch-demo'
 
 describe('wt-commit CLI dispatch（幽灵命令根治）', () => {
