@@ -1,0 +1,47 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-db2c424e",
+  "totals": {
+    "files": 1,
+    "additions": 1,
+    "deletions": 1
+  },
+  "rows": [
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/core-engine.md",
+      "declared": true,
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 1,
+    "codeFileCount": 0,
+    "testFileCount": 0,
+    "moduleSpan": null,
+    "modules": [],
+    "unmappedFiles": [],
+    "riskHits": [],
+    "level": "L0",
+    "degraded": true,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "na",
+      "docClaim": "claimed",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260914-009-4623",
+  "sessionId": "quick-db2c424e",
+  "savedAt": "2026-09-14T05:27:31.845Z",
+  "patchSha256": "f3ad385d756a6404b7f80d037e532583b768b4a092c307505aac0d48f0f2efd6",
+  "patchStatus": "ok"
+}

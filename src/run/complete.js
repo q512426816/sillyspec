@@ -835,7 +835,7 @@ async function printExecuteScopeAudit({ cwd, changeName, specBase, platformOpts,
     if (typeof frozenPatch === 'string') {
       const patchText = frozenPatch.endsWith('\n') ? frozenPatch : frozenPatch + '\n'
       writeFileSync(join(changeDir, 'scope-audit.patch'), patchText)
-      snap.patchSha256 = createHash('sha256').update(patchText, 'utf8').digest('hex')
+      snap.patchSha256 = createHash('sha256').update(patchText.replace(/\r\n/g, '\n'), 'utf8').digest('hex')
       snap.patchStatus = 'ok'
     } else if (frozenPatch === null) {
       snap.patchStatus = 'failed'

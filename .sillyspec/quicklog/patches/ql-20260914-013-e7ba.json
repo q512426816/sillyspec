@@ -1,0 +1,77 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-ec5fc714",
+  "totals": {
+    "files": 3,
+    "additions": 94,
+    "deletions": 13
+  },
+  "rows": [
+    {
+      "path": "src/run/complete-handlers.js",
+      "declared": true,
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/run/complete.js",
+      "declared": true,
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/scope-audit.js",
+      "declared": true,
+      "additions": 92,
+      "deletions": 11,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 3,
+    "codeFileCount": 3,
+    "testFileCount": 0,
+    "moduleSpan": 2,
+    "modules": [
+      {
+        "id": "runtime",
+        "files": [
+          "src/run/complete-handlers.js",
+          "src/run/complete.js"
+        ]
+      },
+      {
+        "id": "core-engine",
+        "files": [
+          "src/scope-audit.js"
+        ]
+      }
+    ],
+    "unmappedFiles": [],
+    "riskHits": [],
+    "level": "L1",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "missing",
+      "docClaim": "missing",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260914-013-e7ba",
+  "sessionId": "quick-ec5fc714",
+  "savedAt": "2026-09-14T06:47:55.250Z",
+  "patchSha256": "afbc0d3ac6d7580ebd089fab1c7d5944353c107875ad39b9eeacdbb52379eecc",
+  "patchStatus": "ok"
+}

@@ -1,0 +1,172 @@
+diff --git a/src/run/complete-handlers.js b/src/run/complete-handlers.js
+index 8655ea0..e2ecbbe 100644
+--- a/src/run/complete-handlers.js
++++ b/src/run/complete-handlers.js
+@@ -1400,7 +1400,7 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
+           if (typeof frozenPatch === 'string' && frozenPatch) {
+             const patchText = frozenPatch.endsWith('\n') ? frozenPatch : frozenPatch + '\n'
+             writeFileSync(join(patchesDir, `${qlId}.patch`), patchText)
+-            snapObj.patchSha256 = createHash('sha256').update(patchText, 'utf8').digest('hex')
++            snapObj.patchSha256 = createHash('sha256').update(patchText.replace(/\r\n/g, '\n'), 'utf8').digest('hex')
+             snapObj.patchStatus = 'ok'
+           } else if (frozenPatch === null) {
+             snapObj.patchStatus = 'failed'
+diff --git a/src/run/complete.js b/src/run/complete.js
+index 3ef616e..a89b642 100644
+--- a/src/run/complete.js
++++ b/src/run/complete.js
+@@ -835,7 +835,7 @@ async function printExecuteScopeAudit({ cwd, changeName, specBase, platformOpts,
+     if (typeof frozenPatch === 'string') {
+       const patchText = frozenPatch.endsWith('\n') ? frozenPatch : frozenPatch + '\n'
+       writeFileSync(join(changeDir, 'scope-audit.patch'), patchText)
+-      snap.patchSha256 = createHash('sha256').update(patchText, 'utf8').digest('hex')
++      snap.patchSha256 = createHash('sha256').update(patchText.replace(/\r\n/g, '\n'), 'utf8').digest('hex')
+       snap.patchStatus = 'ok'
+     } else if (frozenPatch === null) {
+       snap.patchStatus = 'failed'
+diff --git a/src/scope-audit.js b/src/scope-audit.js
+index 0e283df..9c1cd78 100644
+--- a/src/scope-audit.js
++++ b/src/scope-audit.js
+@@ -273,18 +273,20 @@ function filterPatchForFiles(patchText, filesSet) {
+ }
+ 
+ /**
+-/** patch 内容 sha256（A-F01 防篡改锚——写入方存 json.patchSha256，读取方校验） */
+-function sha256Text(text) {
+-  return createHash('sha256').update(text, 'utf8').digest('hex')
++ * patch sha256——换行归一化口径（quick-ec5fc714）：git autocrlf 会在提交/检出时把 patch
++ * 转 CRLF（平台仓实测 mtime 晚落盘一天的假篡改告警）——双侧统一 LF 归一后取 hash。
++ */
++function sha256PatchNormalized(text) {
++  return createHash('sha256').update(String(text).replace(/\r\n/g, '\n'), 'utf8').digest('hex')
+ }
+ 
+ /**
+- * 冻结 patch 完整性校验（A-F01）：json 记录的 patchSha256 与 patch 实文比对。
++ * 冻结 patch 完整性校验（A-F01）：json 记录的 patchSha256 与 patch 实文比对（LF 归一口径）。
+  * @returns {boolean|null} true=一致；false=不匹配（可能被篡改）；null=未记录 hash（旧记录）
+  */
+ function verifyPatchIntegrity(recordedSha, patchText) {
+   if (!recordedSha || typeof recordedSha !== 'string') return null
+-  return sha256Text(patchText) === recordedSha
++  return sha256PatchNormalized(patchText) === recordedSha
+ }
+ 
+ /**
+@@ -678,16 +680,71 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
+       : `design.md 不存在（${toPosix(designMdPath)}）——降级实际侧 only 视图（不出三态列）`
+   }
+ 
+-  // —— 实际侧（verify-postcheck.js task-02 契约：files + baseAnchor；动态 import 隔离
+-  //    并行时序——task-02 未落地时降级说明而非炸）——
++  // —— 实际侧采集 ——
++  // 形态 A（worktree 存活，quick-ec5fc714）：**自采纯 worktree 口径**——锚（meta baselineCommit
++  // 优先）..worktree 工作区 = 本变更真实边界（子代理未提交改动 + 分支已提交）。不沿用
++  // resolveVerifyChangedFiles（其语义是「verify 证据核验面」：主仓∪worktree 并集——对证据核验
++  // 合理，对本变更范围全是噪音：主仓侧 20 并行文件混入，且它们对 worktree 锚 diff miss 后落
++  // wc-l 档记成整文件行数，两放大器叠加出 +11840/22 文件的巨型表）。
++  // 形态 B（post-apply）：继续走 resolveReconcileActualFiles 三源（本变更活已回主仓，语义正确）。
+   let actual = null
+   let actualFailure = null
+   try {
+-    const mod = await import('./verify-postcheck.js')
+-    if (typeof mod.resolveReconcileActualFiles !== 'function') {
+-      throw new Error('resolveReconcileActualFiles 未导出（依赖契约未就绪）')
++    const metaPath = join(sb, '.runtime', 'worktrees', changeName, 'meta.json')
++    if (existsSync(metaPath)) {
++      const meta = JSON.parse(readFileSync(metaPath, 'utf8'))
++      const wtRoot = (meta.worktreePath && meta.mode !== 'in-place-fallback' && existsSync(meta.worktreePath))
++        ? meta.worktreePath
++        : cwd
++      const anchor = meta.baselineCommit || meta.actualBaseHash || meta.baseHash || null
++      if (anchor) {
++        const diffOut = safeGit(wtRoot, ['diff', '--name-only', anchor], { timeout: 30 * 1000 })
++        if (!diffOut.error && typeof diffOut.value === 'string') {
++          // 过滤口径与 resolveVerifyChangedFiles 的 wtFiles 同款（保留 docs 交付物，排运行时/进度面）
++          const wtFilter = (p) => p && p !== '.sillyspec'
++            && !p.startsWith('.sillyspec/changes/')
++            && !p.startsWith('.sillyspec/.runtime/')
++            && !p.startsWith('.sillyspec/quicklog/')
++          const files = diffOut.value.split('\n')
++            .map(p => toPosix(p.replace(/^"|"$/g, '').trim()))
++            .filter(wtFilter)
++          // untracked 新文件不在 diff（git diff 只看 tracked）——status --porcelain 并入
++          // （与旧链路 includeWorkingTree 的 wtFiles 半边同覆盖，行数侧走 wc-l 档）
++          const st = safeGit(wtRoot, ['status', '--porcelain', '--untracked-files=all'], { timeout: 30 * 1000, trim: false })
++          if (!st.error && typeof st.value === 'string') {
++            for (const line of st.value.split('\n')) {
++              if (!line.startsWith('??')) continue
++              const p = toPosix(line.slice(3).trim().replace(/^"|"$/g, '').split(' -> ').pop() || '')
++              if (wtFilter(p) && !files.includes(p)) files.push(p)
++            }
++          }
++          actual = { ok: true, form: 'worktree', files, sources: ['worktree:diff-anchor..worktree', 'worktree:status-untracked'], foreignExcluded: 0, degradedReason: null, baseAnchor: anchor }
++        } else {
++          actual = { ok: false, form: 'worktree', files: [], sources: [], foreignExcluded: 0, degradedReason: 'worktree 锚定 diff 失败', baseAnchor: null }
++        }
++      } else {
++        // 无锚 meta（baseHash 等字段缺失）：退 HEAD 未提交窗口口径——文件集=status 全量
++        // （tracked 改动 + untracked），行数侧由主链路 HEAD 兜底（quick-8aa52289 契约不变）
++        const st = safeGit(wtRoot, ['status', '--porcelain', '--untracked-files=all'], { timeout: 30 * 1000, trim: false })
++        const files = []
++        if (!st.error && typeof st.value === 'string') {
++          for (const line of st.value.split('\n')) {
++            const p = toPosix(line.slice(3).trim().replace(/^"|"$/g, '').split(' -> ').pop() || '')
++            if (p && p !== '.sillyspec'
++              && !p.startsWith('.sillyspec/changes/')
++              && !p.startsWith('.sillyspec/.runtime/')
++              && !p.startsWith('.sillyspec/quicklog/')) files.push(p)
++          }
++        }
++        actual = { ok: true, form: 'worktree', files, sources: ['worktree:status-porcelain(HEAD-window)'], foreignExcluded: 0, degradedReason: null, baseAnchor: null }
++      }
++    } else {
++      const mod = await import('./verify-postcheck.js')
++      if (typeof mod.resolveReconcileActualFiles !== 'function') {
++        throw new Error('resolveReconcileActualFiles 未导出（依赖契约未就绪）')
++      }
++      actual = mod.resolveReconcileActualFiles({ cwd, specBase: sb, runtimeRoot, changeName })
+     }
+-    actual = mod.resolveReconcileActualFiles({ cwd, specBase: sb, runtimeRoot, changeName })
+   } catch (e) {
+     actualFailure = e && e.message ? String(e.message).split('\n')[0] : String(e)
+   }
+@@ -712,6 +769,29 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
+     return { ...base, degradedReason: [reason, planDegraded].filter(Boolean).join('；') }
+   }
+ 
++  // —— execute --done 采集·apply-pathspec 归属收窄（quick-ec5fc714）：apply 时点在 .runtime
++  // 落过本变更精确文件清单（worktree-apply.js 产 apply-pathspec-<change>.txt）——execute 采集
++  // 形态（freshActual+collectPatch，仅 printExecuteScopeAudit 组合）下按它收窄 actual.files，
++  // 快照/patch 冻**归属面**而非开放区间（平台仓实测：186KB 快照中 23/44 段为并行会话 docs
++  // 同步等噪音）。查询面不收窄（快照说什么是什么）；pathspec 缺失退开放区间（in-place 等）。
++  let narrowNote = null
++  if (freshActual && collectPatch) {
++    try {
++      const pathspecFile = join(runtimeRoot, `apply-pathspec-${changeName}.txt`)
++      const owned = readFileSync(pathspecFile, 'utf8').split('\n').map(l => toPosix(l.trim())).filter(Boolean)
++      if (owned.length > 0) {
++        const ownedSet = new Set(owned)
++        const before = actual.files.length
++        actual = { ...actual, files: actual.files.filter(f => ownedSet.has(toPosix(f))) }
++        // 收窄掉的并行噪音可见性保留（审计不静默挤走）
++        const dropped = before - actual.files.length
++        if (dropped > 0) {
++          narrowNote = `快照已按 apply-pathspec 收窄至本变更归属文件（剔除开放区间并行文件 ${dropped} 个——它们归属各自会话/变更）`
++        }
++      }
++    } catch { /* pathspec 缺失 → 开放区间（旧行为） */ }
++  }
++
+   // —— 已收尾变更·冻结快照优先（真实 > 冻结记录 > 实时开放区间）：归档变更的范围应封闭在
+   // apply 时点，不随后续主仓改动漂移（quick-f5acdeeb）；quick-bd84b852 放宽——**post-apply
+   // （分支已删 = execute 已 apply 收尾）的活跃变更同样收尾**，此后实时区间只会被并行演进泡大
+@@ -785,6 +865,7 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
+   const degraded = []
+   if (planDegraded) degraded.push(planDegraded)
+   const notes = []
++  if (narrowNote) notes.push(narrowNote)
+   // 已收尾但快照缺失（上方分支置位）：实时开放区间兜底，明示漂移语义——快照机制上线
+   // （2026-09-10）前收尾的旧变更冻结记录无法重建，如实告知替代渠道。
+   if (noSnapshotDrift) {

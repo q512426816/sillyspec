@@ -1400,7 +1400,7 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
           if (typeof frozenPatch === 'string' && frozenPatch) {
             const patchText = frozenPatch.endsWith('\n') ? frozenPatch : frozenPatch + '\n'
             writeFileSync(join(patchesDir, `${qlId}.patch`), patchText)
-            snapObj.patchSha256 = createHash('sha256').update(patchText, 'utf8').digest('hex')
+            snapObj.patchSha256 = createHash('sha256').update(patchText.replace(/\r\n/g, '\n'), 'utf8').digest('hex')
             snapObj.patchStatus = 'ok'
           } else if (frozenPatch === null) {
             snapObj.patchStatus = 'failed'

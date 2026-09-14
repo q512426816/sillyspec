@@ -190,3 +190,17 @@
 根因：P1 ①拍→--done 间 HEAD 被他者推进时 finalize 重取当前 HEAD 盖章，未核对 commit 被盖成已核对；P2 --docs 无裸文件名校验可 ../ 穿越盖章 modules/；P3 help --done 漏 --force、bump 遇尾 --- 无换行产生双 frontmatter；另 guard 白名单 push-before-hash fail-open
 方案：finalizeRefresh 前置 HEAD 一致性门（短哈希 vs guard.sourceCommit 7 位归一，不等 code 2 拒绝重跑①拍，硬门无 force）；--docs 逐名裸文件名校验拒路径分隔符；help 补 [--force]；bump 正则放宽尾部容错重建统一补换行；白名单成员资格=哈希在手 push 后置
 结果：scan-refresh.test 19/19（16→19，新增 HEAD 推进拒绝/穿越拦截/双块防护/键集不变式 4 回归）；lint 0 告警；npm test 全量 469 文件 0 失败（CLI 门禁亲测）
+
+## ql-20260914-013-e7ba | 2026-09-14 14:31:53 | scope-audit 快照归属面修复（平台+本仓三实测）
+状态：已完成
+关联变更：（无）
+文件：
+- src/scope-audit.js（自采形态 A+pathspec 收窄+sha256 归一）
+- src/run/complete.js（写入方归一 hash）
+- src/run/complete-handlers.js（写入方归一 hash）
+- test/scope-audit.test.mjs（untracked 并入+无锚退 HEAD 窗口补路径）
+需求：scope-audit 快照归属面修复（平台+本仓三实测）
+根因：multi-agent-platform 186KB 快照 23/44 段并行噪音冻入+CRLF 假篡改告警；本仓 2026-09-14 执行中变更 22 文件+11840 夸张放大
+方案：execute 采集 apply-pathspec 收窄；形态 A 自采纯 worktree 口径（弃 verify 证据核验面）；sha256 CRLF 归一化双侧同口径
+结果：node --test 35/35；npm test 全量 0 失败；本仓 22 文件+11840→3 实改+7 计划未动；平台归档 --file 假篡改告警消除
+审计：[gate] L1（跨 2 模块 · 3 文件：3 代码/0 测试）advisory；每文件注记已全覆盖；测试增量缺失（3 个代码文件无测试改动）
