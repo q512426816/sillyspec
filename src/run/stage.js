@@ -464,6 +464,9 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
           allowDelete,
           forceBaseline,
           linkedChanges,
+          // 机器自动关联溯源（坑 quick-single-change-auto-link）：--done 归档闸对仅被自动
+          // 关联（信号命中猜测，非 --linked-changes 显式协作声明）的变更不触发轻量归档
+          linkedChangesAuto: Array.isArray(quickOpts?.linkedChangesAuto) ? quickOpts.linkedChangesAuto : [],
           quicklogId: qlId,
           // 刀①（2026-09-08）：启动 --input 的任务描述落 guard——prompt.js 渲染 step1 时据此做
           // 模块上下文关键词匹配（changeName 是 quick-<hash> 无语义，step.prompt 全文噪音大）

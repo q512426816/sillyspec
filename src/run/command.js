@@ -622,6 +622,9 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
   // 历史写法，语义与「指定变更名」冲突，新用法建议改用 --linked-changes）
   let changeName = null
   let linkedChanges = []
+  // 机器自动关联溯源（坑 quick-single-change-auto-link）：resolveQuickLinkedChanges 单候选
+  // 信号门控命中时标记，guard 落 linkedChangesAuto，--done 归档闸对这类变更不触发轻量归档
+  let linkedAuto = []
   const changeValue = getFlagValue('--change')
   if (changeValue !== null) {
     changeName = changeValue
@@ -894,6 +897,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     // D-002：guard 按 session 存（.runtime/quick-sessions/<sessionId>/guard.json）。
     // sessionId == changeName == quick-<uuid8>（上面参数解析已确定）。回退读旧单文件 quick-guard.json（task-03 前兼容）。
     let persistedLinked = null
+    let persistedAuto = null
     try {
       const sessionGuardFile = join(specRoot, '.runtime', 'quick-sessions', changeName, 'guard.json')
       const legacyGuardFile = join(specRoot, '.runtime', 'quick-guard.json')
@@ -901,15 +905,20 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
         ? JSON.parse(readFileSync(sessionGuardFile, 'utf8'))
         : (existsSync(legacyGuardFile) ? JSON.parse(readFileSync(legacyGuardFile, 'utf8')) : null)
       if (g && Array.isArray(g.linkedChanges)) persistedLinked = g.linkedChanges
+      if (g && Array.isArray(g.linkedChangesAuto)) persistedAuto = g.linkedChangesAuto
     } catch {}
     if (persistedLinked) {
       linkedChanges = persistedLinked
+      // autoLinked 溯源同步恢复（--done 复用启动 guard 的关联时，归档闸同样要看到「机器猜的」标记）
+      if (persistedAuto) linkedAuto = persistedAuto
     } else {
-      linkedChanges = await resolveQuickLinkedChanges({
+      const resolved = await resolveQuickLinkedChanges({
         pm, cwd, specDir: specRoot, quickFiles,
         taskDescription: inputText || '',
         nonInteractive: isNonInteractive,
       })
+      linkedChanges = resolved.changes
+      linkedAuto = resolved.autoLinked
     }
   }
 
@@ -1451,7 +1460,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
   }
 
   // 默认：输出当前步骤
-  return await runStage(pm, progress, stageName, cwd, effectiveChange, isSkipApproval, platformOpts, { quickFiles, isAllowNew, isAllowDelete, isForceBaseline, isForceRescan, linkedChanges, taskDescription: inputText, adoptBranch: stageName === 'execute' && flags.includes('--adopt-branch') })
+  return await runStage(pm, progress, stageName, cwd, effectiveChange, isSkipApproval, platformOpts, { quickFiles, isAllowNew, isAllowDelete, isForceBaseline, isForceRescan, linkedChanges, linkedChangesAuto: linkedAuto, taskDescription: inputText, adoptBranch: stageName === 'execute' && flags.includes('--adopt-branch') })
 }
 
 /**

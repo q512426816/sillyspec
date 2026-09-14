@@ -1004,6 +1004,9 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
     const gitUser = safeGit(cwd, ['config', 'user.name']).value || 'unknown'
     let qlId = guard?.quicklogId || null
     const linkedChanges = Array.isArray(guard?.linkedChanges) ? guard.linkedChanges : []
+    // 机器自动关联溯源（坑 quick-single-change-auto-link）：单候选信号门控命中自动关联的
+    // 子集——归档闸消费（这类变更不触发轻量归档），显式 --linked-changes 关联不在此列
+    const linkedChangesAuto = Array.isArray(guard?.linkedChangesAuto) ? guard.linkedChangesAuto : []
     // 审计结果（仅 guard 存在时填充）。提到 if(guard) 外声明，供下方回填 QUICKLOG 文件行复用
     // review.changedFiles；brownfield 无 guard 时保持 null → 文件行不回填（降级，不报错）。
     let review = null
@@ -1407,7 +1410,7 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
 
     // 轻量归档任务已全勾选的关联真实变更
     try {
-      const closeResult = await closeQuickLinkedChanges({ pm, cwd, specBase, linkedChanges, platformOpts })
+      const closeResult = await closeQuickLinkedChanges({ pm, cwd, specBase, linkedChanges, linkedChangesAuto, platformOpts })
       if (closeResult.closed.length > 0) {
         console.log(`📦 已自动归档 ${closeResult.closed.length} 个关联变更：${closeResult.closed.join(', ')}`)
       }
@@ -1550,13 +1553,23 @@ const QUICK_CLOSE_ACTIVITY_WINDOW_MS = 60 * 60 * 1000
  * @param {Object} [opts.platformOpts]
  * @returns {Promise<{closed:string[], skipped:{name:string,reason:string}[]}>}
  */
-export async function closeQuickLinkedChanges({ pm, cwd, specBase, linkedChanges = [], platformOpts = {} }) {
+export async function closeQuickLinkedChanges({ pm, cwd, specBase, linkedChanges = [], linkedChangesAuto = [], platformOpts = {} }) {
   const closed = []
   const skipped = []
   // 只处理真实变更，跳过 quick 会话 sessionId
   const realChanges = linkedChanges.filter((name) => !/^quick-[0-9a-f]{8}$/.test(name))
   for (const changeName of realChanges) {
     try {
+      // 止血（坑 quick-single-change-auto-link 配套）：仅被机器自动关联（单候选信号门控命中
+      // 的猜测，非 --linked-changes 显式协作声明）的变更不触发轻量归档——归档是破坏性动作，
+      // 机器猜的关联声明不够格；显式关联的僵尸清理通道（D-002@v1/v2 契约）不受影响。
+      if (linkedChangesAuto.includes(changeName)) {
+        skipped.push({
+          name: changeName,
+          reason: '自动关联（信号命中机器猜测，非显式协作声明），不触发自动归档——确要归档请走原流程收尾（sillyspec progress show）',
+        })
+        continue
+      }
       if (typeof pm.getChangeStage !== 'function') {
         skipped.push({ name: changeName, reason: '进度库接口缺失（getChangeStage），无法判定流程阶段，不自动归档' })
         continue

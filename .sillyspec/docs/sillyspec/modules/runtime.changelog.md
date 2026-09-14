@@ -29,3 +29,4 @@ ql-20260911-030-bad4 | checkApproval 意外异常改 {status:unknown} 走 warnAp
 - ql-20260912-001-ca16 | autoCheckPlanFromReviews 卡片读取延后到 verdict 可用后（!ok/fail 时卡片值不影响结果，持 tasks 锁期间每 task 省一次 readFileSync）
 - ql-20260912-003-b696 | quick --cancel 去除本地 specBase 重建遮蔽（改用外层平台感知 specBase）+guard 查找走 resolveQuickSessionsDir
 - ql-20260912-009-06b4 | friction-tally record/consume async 化+RMW 持锁（并发丢计数/丢条目收口）
+- ql-20260914-004-f4c9 | quick 单活跃变更自动关联改信号门控（坑 quick-single-change-auto-link，2026-09-14 实证误挂他者空骨架）：resolveQuickLinkedChanges 单候选也跑 quick-recommend 双信号打分，score>0 才自动关联+大声提示+返回 autoLinked 溯源（原无条件 return [activeChanges[0]]；顺带关掉单候选绕过 quick-<hex8> 会话过滤的互挂洞）；command/stage 传链 guard 落 linkedChangesAuto；closeQuickLinkedChanges 对仅被自动关联的变更 skip 归档（机器猜测非协作声明不触发破坏性归档，显式关联僵尸清理 D-002@v1/v2 契约不变）。回归 test/quick-single-change-auto-link.test.mjs 8 用例。

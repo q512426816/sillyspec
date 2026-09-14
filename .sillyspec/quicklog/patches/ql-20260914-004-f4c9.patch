@@ -1,0 +1,473 @@
+diff --git a/.sillyspec/docs/sillyspec/scan/ARCHITECTURE.md b/.sillyspec/docs/sillyspec/scan/ARCHITECTURE.md
+index 61514bb..8cbf5e0 100644
+--- a/.sillyspec/docs/sillyspec/scan/ARCHITECTURE.md
++++ b/.sillyspec/docs/sillyspec/scan/ARCHITECTURE.md
+@@ -108,7 +108,7 @@ scan-profile.js 扫描档位 / concurrent-detect.js 并发检测 / multi-repo-co
+   D-03@v1）。
+ - `runStage(...)`（`src/run/stage.js:31`）：单阶段执行器，做状态转换校验（调用
+   `stage-contract.js` 的 `checkTransition`），逐 step 推进，处理审批门控。
+-- `runAutoMode(...)`（`src/run/command.js:1598`）：自动模式，连续跑
++- `runAutoMode(...)`（`src/run/command.js:1607`）：自动模式，连续跑
+   `['brainstorm','plan','execute','verify']` 主流程直到 `--done`。
+ 
+ 阶段流转语义（grep 自 run/ 模块）：
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index 83393ec..b96358e 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -112,7 +112,7 @@ mcp:
+ 
+ ## 4. 链路 C：scan 指针握手（平台模式专用）
+ 
+-scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时，**不发任何 HTTP**，而是落盘供 daemon 轮询消费（`complete-handlers.js:1851` `handleScanStageCompleted`）：
++scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时，**不发任何 HTTP**，而是落盘供 daemon 轮询消费（`complete-handlers.js:1864` `handleScanStageCompleted`）：
+ 
+ 1. 写 `manifest.json`（workspace_id/scan_run_id/source_commit/spec_root/scan_profile/postcheck…）到 `specRoot`。
+ 2. 跑 `scan-postcheck` → 写 `postcheck-result.json`（结构化结果）。
+@@ -128,8 +128,8 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ | 步骤 / 命令 | 链路 | 具体动作 | 源码触发点 |
+ |---|---|---|---|
+ | `platform connect <url> <token>` | A | GET health ping → POST resolve-by-root-path 换 shpsync_ token → 写 platform/mcp 段 | `sync.js:260` |
+-| **每个进度落盘点**（step `--done` 完成、阶段启动/切换、stale 步骤重置、gate 拦截回滚等 `_write` 后） | A | `triggerSync` → POST `…/progress` 推六表进度（8s 熔断）。**本地/平台模式都执行**（2026-08-26 放行）：平台模式凭据经 env 通道（`_getPlatform`），无 env 且 local.yaml 无 platform 段时静默跳过 | complete.js:561/497/917/1027/1166（--done）；stage.js:221/155/177（启动/切换/stale 重置）；gates.js:517；command.js:1235/1306/1528/1580/1591/1767 |
+-| **execute 阶段启动前**（runStage / auto 流程，非平台模式，`--skip-approval` 可跳过） | A | `checkApproval` → GET `…/approval`：**rejected → `exit(1)` 硬阻断**；pending → 提示待审批；unknown → 放行 | stage.js:47-58；command.js:1744/1748/1828 |
++| **每个进度落盘点**（step `--done` 完成、阶段启动/切换、stale 步骤重置、gate 拦截回滚等 `_write` 后） | A | `triggerSync` → POST `…/progress` 推六表进度（8s 熔断）。**本地/平台模式都执行**（2026-08-26 放行）：平台模式凭据经 env 通道（`_getPlatform`），无 env 且 local.yaml 无 platform 段时静默跳过 | complete.js:561/497/917/1027/1166（--done）；stage.js:221/155/177（启动/切换/stale 重置）；gates.js:517；command.js:1244/1315/1537/1589/1600/1776 |
++| **execute 阶段启动前**（runStage / auto 流程，非平台模式，`--skip-approval` 可跳过） | A | `checkApproval` → GET `…/approval`：**rejected → `exit(1)` 硬阻断**；pending → 提示待审批；unknown → 放行 | stage.js:47-58；command.js:1753/1757/1837 |
+ | **run `<stage>` 入口**（所有 stage + 顶层别名，agent 环境内；平台/本地模式都上报，不受 sentinel 限制） | D | 探测本地 agent 会话日志（claude-code/codex/zcode 自动探测，env `SILLYSPEC_AGENT_LOG` 覆盖其他 CLI）→ 本地留底 + REST POST `…/api/agent-logs` 上报（best-effort 5s 熔断，失败不阻断；`SILLYSPEC_AGENT_LOG_PUSH=0` 可关） | command.js:723（`recordAgentLogInvocation`） |
+ | `platform sync-docs`（手动命令，**唯一触发点**） | A | POST `…/documents` 推四件套全量；run 流程**不**自动推文档（sync.js:30 头注释称由 run 流程触发，已过时） | sync.js:439；index.js:1275 |
+ | `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:2322；shared.js:888 |
+diff --git a/docs/sillyspec/prompt-control-debt.md b/docs/sillyspec/prompt-control-debt.md
+index 467dd70..12ba2c1 100644
+--- a/docs/sillyspec/prompt-control-debt.md
++++ b/docs/sillyspec/prompt-control-debt.md
+@@ -318,8 +318,8 @@ P2 遗留（按优先级登记）：
+ 
+ **批次② 状态机 fail-open 组 → 完整流程 brainstorm（行为语义变更，单一 change 立项）**
+ - **A5** `--done` 阶段产物 gate 失败只打 ❌ 但 exit 0：`src/run/complete.js:328-329` gate 早退 return 不设 process.exitCode——与 quick 审计 blocked→exit 1 同仓惯例分裂，agent/CI/hook 按 exit code 消费即 fail-open。
+-- **B6** `--done` 完全绕过阶段转换守卫 + 辅助阶段污染 currentStage：`src/run/command.js:1433` --done 直接进 `completeStep` 不查 `checkTransition`（stage.js:27-44 只在 runStage 调）；status/doctor 等 auxiliary 跑一次即写 `progress.currentStage`（stage.js:233）→ fromStage 变 status 后跳阶段静默放行（stage-contract.js:954 `AUXILIARY_STAGES` 一律放行）。
+-- **B7** status/doctor 自称只读实则写库：`src/run/command.js:950` auxiliary fallback `initChange` 建 default 行 + 落盘 currentStage，与 SKILL「status 只读」矛盾，多 agent 并发 lastActive 互相覆盖。
++- **B6** `--done` 完全绕过阶段转换守卫 + 辅助阶段污染 currentStage：`src/run/command.js:1442` --done 直接进 `completeStep` 不查 `checkTransition`（stage.js:27-44 只在 runStage 调）；status/doctor 等 auxiliary 跑一次即写 `progress.currentStage`（stage.js:233）→ fromStage 变 status 后跳阶段静默放行（stage-contract.js:954 `AUXILIARY_STAGES` 一律放行）。
++- **B7** status/doctor 自称只读实则写库：`src/run/command.js:959` auxiliary fallback `initChange` 建 default 行 + 落盘 currentStage，与 SKILL「status 只读」矛盾，多 agent 并发 lastActive 互相覆盖。
+ - **B8** `run brainstorm` 无 --change 多活跃变更仓静默建幽灵变更：`src/run/command.js:717-731` 无条件 initChange（DB 实锤 08-15 一小时 4 个 `*-new-change-*` 活跃行）。
+ - 裁决理由：四者共性强——状态机守卫 fail-open + 幽灵变更/幽灵阶段污染，属行为语义变更（多命令交互路径），非单点行修复。走完整流程 brainstorm → plan → execute，含 8b（新项目首跑 auxiliary 幽灵 default 变更）一并评估。
+ 
+diff --git a/src/run/command.js b/src/run/command.js
+index c557ec6..b7d0e82 100644
+--- a/src/run/command.js
++++ b/src/run/command.js
+@@ -622,6 +622,9 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+   // 历史写法，语义与「指定变更名」冲突，新用法建议改用 --linked-changes）
+   let changeName = null
+   let linkedChanges = []
++  // 机器自动关联溯源（坑 quick-single-change-auto-link）：resolveQuickLinkedChanges 单候选
++  // 信号门控命中时标记，guard 落 linkedChangesAuto，--done 归档闸对这类变更不触发轻量归档
++  let linkedAuto = []
+   const changeValue = getFlagValue('--change')
+   if (changeValue !== null) {
+     changeName = changeValue
+@@ -894,6 +897,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+     // D-002：guard 按 session 存（.runtime/quick-sessions/<sessionId>/guard.json）。
+     // sessionId == changeName == quick-<uuid8>（上面参数解析已确定）。回退读旧单文件 quick-guard.json（task-03 前兼容）。
+     let persistedLinked = null
++    let persistedAuto = null
+     try {
+       const sessionGuardFile = join(specRoot, '.runtime', 'quick-sessions', changeName, 'guard.json')
+       const legacyGuardFile = join(specRoot, '.runtime', 'quick-guard.json')
+@@ -901,15 +905,20 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+         ? JSON.parse(readFileSync(sessionGuardFile, 'utf8'))
+         : (existsSync(legacyGuardFile) ? JSON.parse(readFileSync(legacyGuardFile, 'utf8')) : null)
+       if (g && Array.isArray(g.linkedChanges)) persistedLinked = g.linkedChanges
++      if (g && Array.isArray(g.linkedChangesAuto)) persistedAuto = g.linkedChangesAuto
+     } catch {}
+     if (persistedLinked) {
+       linkedChanges = persistedLinked
++      // autoLinked 溯源同步恢复（--done 复用启动 guard 的关联时，归档闸同样要看到「机器猜的」标记）
++      if (persistedAuto) linkedAuto = persistedAuto
+     } else {
+-      linkedChanges = await resolveQuickLinkedChanges({
++      const resolved = await resolveQuickLinkedChanges({
+         pm, cwd, specDir: specRoot, quickFiles,
+         taskDescription: inputText || '',
+         nonInteractive: isNonInteractive,
+       })
++      linkedChanges = resolved.changes
++      linkedAuto = resolved.autoLinked
+     }
+   }
+ 
+@@ -1451,7 +1460,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+   }
+ 
+   // 默认：输出当前步骤
+-  return await runStage(pm, progress, stageName, cwd, effectiveChange, isSkipApproval, platformOpts, { quickFiles, isAllowNew, isAllowDelete, isForceBaseline, isForceRescan, linkedChanges, taskDescription: inputText, adoptBranch: stageName === 'execute' && flags.includes('--adopt-branch') })
++  return await runStage(pm, progress, stageName, cwd, effectiveChange, isSkipApproval, platformOpts, { quickFiles, isAllowNew, isAllowDelete, isForceBaseline, isForceRescan, linkedChanges, linkedChangesAuto: linkedAuto, taskDescription: inputText, adoptBranch: stageName === 'execute' && flags.includes('--adopt-branch') })
+ }
+ 
+ /**
+diff --git a/src/run/complete-handlers.js b/src/run/complete-handlers.js
+index f3d91f1..4819d21 100644
+--- a/src/run/complete-handlers.js
++++ b/src/run/complete-handlers.js
+@@ -1004,6 +1004,9 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
+     const gitUser = safeGit(cwd, ['config', 'user.name']).value || 'unknown'
+     let qlId = guard?.quicklogId || null
+     const linkedChanges = Array.isArray(guard?.linkedChanges) ? guard.linkedChanges : []
++    // 机器自动关联溯源（坑 quick-single-change-auto-link）：单候选信号门控命中自动关联的
++    // 子集——归档闸消费（这类变更不触发轻量归档），显式 --linked-changes 关联不在此列
++    const linkedChangesAuto = Array.isArray(guard?.linkedChangesAuto) ? guard.linkedChangesAuto : []
+     // 审计结果（仅 guard 存在时填充）。提到 if(guard) 外声明，供下方回填 QUICKLOG 文件行复用
+     // review.changedFiles；brownfield 无 guard 时保持 null → 文件行不回填（降级，不报错）。
+     let review = null
+@@ -1407,7 +1410,7 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
+ 
+     // 轻量归档任务已全勾选的关联真实变更
+     try {
+-      const closeResult = await closeQuickLinkedChanges({ pm, cwd, specBase, linkedChanges, platformOpts })
++      const closeResult = await closeQuickLinkedChanges({ pm, cwd, specBase, linkedChanges, linkedChangesAuto, platformOpts })
+       if (closeResult.closed.length > 0) {
+         console.log(`📦 已自动归档 ${closeResult.closed.length} 个关联变更：${closeResult.closed.join(', ')}`)
+       }
+@@ -1550,13 +1553,23 @@ const QUICK_CLOSE_ACTIVITY_WINDOW_MS = 60 * 60 * 1000
+  * @param {Object} [opts.platformOpts]
+  * @returns {Promise<{closed:string[], skipped:{name:string,reason:string}[]}>}
+  */
+-export async function closeQuickLinkedChanges({ pm, cwd, specBase, linkedChanges = [], platformOpts = {} }) {
++export async function closeQuickLinkedChanges({ pm, cwd, specBase, linkedChanges = [], linkedChangesAuto = [], platformOpts = {} }) {
+   const closed = []
+   const skipped = []
+   // 只处理真实变更，跳过 quick 会话 sessionId
+   const realChanges = linkedChanges.filter((name) => !/^quick-[0-9a-f]{8}$/.test(name))
+   for (const changeName of realChanges) {
+     try {
++      // 止血（坑 quick-single-change-auto-link 配套）：仅被机器自动关联（单候选信号门控命中
++      // 的猜测，非 --linked-changes 显式协作声明）的变更不触发轻量归档——归档是破坏性动作，
++      // 机器猜的关联声明不够格；显式关联的僵尸清理通道（D-002@v1/v2 契约）不受影响。
++      if (linkedChangesAuto.includes(changeName)) {
++        skipped.push({
++          name: changeName,
++          reason: '自动关联（信号命中机器猜测，非显式协作声明），不触发自动归档——确要归档请走原流程收尾（sillyspec progress show）',
++        })
++        continue
++      }
+       if (typeof pm.getChangeStage !== 'function') {
+         skipped.push({ name: changeName, reason: '进度库接口缺失（getChangeStage），无法判定流程阶段，不自动归档' })
+         continue
+diff --git a/src/run/quick-audit.js b/src/run/quick-audit.js
+index c6b88d0..639f5e3 100644
+--- a/src/run/quick-audit.js
++++ b/src/run/quick-audit.js
+@@ -181,11 +181,17 @@ export function printQuickAuditReview(review) {
+ }
+ 
+ /**
+- * quick 阶段多变更交互式选择关联变更。
+- * - 0 活跃变更 → []（仅记 QUICKLOG，不关联）
+- * - 1 活跃变更 → 默认关联它（保持现状友好，不弹交互）
++ * quick 阶段关联变更解析（含单候选信号门控）。
++ * - 0 活跃变更 → 不关联
++ * - 1 活跃变更 → 跑 recommendChanges 双信号打分：命中（score>0）→ 自动关联 + 大声提示
++ *   + autoLinked 溯源；未命中 → 不关联 + 提示。坑 quick-single-change-auto-link（2026-09-14
++ *   实证）：原实现无条件 `return [activeChanges[0]]`——多 agent 仓库里唯一活跃变更常是他者
++ *   会话遗留，挂载污染 tasks.md 且 --done 僵尸清理通道可误归档他者变更；单候选还绕过
++ *   recommend 的 quick-<hex8> 会话过滤（新 quick 互挂另一活跃 quick）。
+  * - ≥2 活跃变更 + 交互 → checkbox 多选（推荐项默认勾，空选 = 不关联）
+- * - ≥2 活跃变更 + 非交互 → []（不关联）+ 提示用 --change a,b
++ * - ≥2 活跃变更 + 非交互 → 不关联 + 提示用 --change a,b
++ * @returns {Promise<{changes: string[], autoLinked: string[]}>} changes=最终关联清单；
++ *   autoLinked=其中机器自动关联的子集（guard 落 linkedChangesAuto 溯源，--done 归档闸消费）
+  */
+ export async function resolveQuickLinkedChanges({ pm, cwd, specDir, quickFiles, taskDescription, nonInteractive }) {
+   let activeChanges = []
+@@ -194,13 +200,7 @@ export async function resolveQuickLinkedChanges({ pm, cwd, specDir, quickFiles,
+   } catch {
+     activeChanges = []
+   }
+-  if (activeChanges.length === 0) return []
+-  if (activeChanges.length === 1) return [activeChanges[0]]
+-
+-  if (nonInteractive || !process.stdin.isTTY) {
+-    console.log('💡 非交互环境，已默认不关联变更；如需关联请用 --change a,b')
+-    return []
+-  }
++  if (activeChanges.length === 0) return { changes: [], autoLinked: [] }
+ 
+   // 脏文件（推荐信号之一）。safeGit 带 safe.directory，避免 linked worktree/容器/挂载点下裸
+   // `git status` 抛错致推荐信号静默丢失（multi-agent-review Q3 同类）。推荐非关键路径，失败回退 []。
+@@ -214,7 +214,7 @@ export async function resolveQuickLinkedChanges({ pm, cwd, specDir, quickFiles,
+       .filter(f => !f.startsWith('.sillyspec/'))
+   }
+ 
+-  // 推荐打分（脏文件 + 任务描述双信号）
++  // 推荐打分（脏文件 + 任务描述双信号）——单候选也跑（信号门控），非仅 ≥2 交互推荐用
+   let recommendations = []
+   try {
+     // quick-recommend.js 在 src/，本模块在 src/run/ → 退一层（真环依赖，保留动态 import）
+@@ -223,6 +223,26 @@ export async function resolveQuickLinkedChanges({ pm, cwd, specDir, quickFiles,
+   } catch {
+     recommendations = activeChanges.map(name => ({ name, score: 0, reasons: [] }))
+   }
++
++  // 单候选信号门控（坑 quick-single-change-auto-link）：有真实信号（脏文件命中 design 清单 /
++  // 任务描述命中 proposal）才自动关联，且大声提示可反悔；无信号一律不关联。quick-<hex8> 会话
++  // 行已被 recommendChanges 过滤 → recommendations 无该候选 → 不关联（防会话互挂）。
++  if (activeChanges.length === 1) {
++    const name = activeChanges[0]
++    const rec = recommendations.find(r => r.name === name)
++    if (rec && rec.score > 0) {
++      console.log(`🔗 唯一活跃变更 ${name} 命中关联信号（${rec.reasons.slice(0, 2).join('；')}）——已自动关联；无关请带 --linked-changes none 重启`)
++      return { changes: [name], autoLinked: [name] }
++    }
++    console.log(`💡 唯一活跃变更 ${name} 未命中关联信号（任务描述/脏文件无重叠）——默认不关联；如需关联请带 --linked-changes ${name} 重启`)
++    return { changes: [], autoLinked: [] }
++  }
++
++  if (nonInteractive || !process.stdin.isTTY) {
++    console.log('💡 非交互环境，已默认不关联变更；如需关联请用 --change a,b')
++    return { changes: [], autoLinked: [] }
++  }
++
+   const scoreMap = new Map(recommendations.map(r => [r.name, r.score]))
+   const reasonMap = new Map(recommendations.map(r => [r.name, r.reasons]))
+   const recommendedSet = new Set(recommendations.filter(r => r.score > 0).map(r => r.name))
+@@ -249,7 +269,8 @@ export async function resolveQuickLinkedChanges({ pm, cwd, specDir, quickFiles,
+   // 动态 import：@inquirer/prompts 只在本交互分支加载，不进 run 命令通用启动路径
+   const { checkbox } = await import('@inquirer/prompts')
+   const selected = await checkbox({ message: '关联变更（空格切换，回车确认）', choices })
+-  return selected
++  // 用户在 TTY 上亲手勾选确认 = 显式协作声明，不进 autoLinked
++  return { changes: selected, autoLinked: [] }
+ }
+ 
+ // ============ quick --done test+lint 硬门禁（2026-09-02 跨 agent 工单 P0-2）============
+diff --git a/src/run/stage.js b/src/run/stage.js
+index 93e0eb4..6969959 100644
+--- a/src/run/stage.js
++++ b/src/run/stage.js
+@@ -464,6 +464,9 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
+           allowDelete,
+           forceBaseline,
+           linkedChanges,
++          // 机器自动关联溯源（坑 quick-single-change-auto-link）：--done 归档闸对仅被自动
++          // 关联（信号命中猜测，非 --linked-changes 显式协作声明）的变更不触发轻量归档
++          linkedChangesAuto: Array.isArray(quickOpts?.linkedChangesAuto) ? quickOpts.linkedChangesAuto : [],
+           quicklogId: qlId,
+           // 刀①（2026-09-08）：启动 --input 的任务描述落 guard——prompt.js 渲染 step1 时据此做
+           // 模块上下文关键词匹配（changeName 是 quick-<hash> 无语义，step.prompt 全文噪音大）
+diff --git a/test/quick-single-change-auto-link.test.mjs b/test/quick-single-change-auto-link.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/quick-single-change-auto-link.test.mjs
+@@ -0,0 +1,214 @@
++/**
++ * quick 单活跃变更自动关联信号门控 + 自动关联不触发归档（止血）回归测试
++ * 坑 quick-single-change-auto-link（2026-09-14 实证：唯一活跃变更恰为他者会话遗留的
++ * 空骨架，quick 启动被无条件挂载——tasks.md 污染 + --done 僵尸清理通道可误归档他者变更）
++ *
++ * 修复契约：
++ *   1. 单候选也跑 quick-recommend 双信号打分（脏文件×design 清单 / 任务描述×proposal）：
++ *      score>0 → 自动关联 + 大声提示 + autoLinked 溯源；score=0 → 不关联 + 提示
++ *   2. 单候选是 quick-<hex8> 会话行 → 不关联（原单候选分支绕过 recommend 的会话过滤）
++ *   3. resolver 返回 { changes, autoLinked }；guard 落 linkedChangesAuto 溯源
++ *   4. 止血：closeQuickLinkedChanges 对仅被自动关联的变更 skip 归档（机器猜测非协作
++ *      声明，不触发破坏性归档）；显式关联的僵尸清理通道（D-002@v1/v2 契约）不变
++ *
++ * 单元（§1-2）：mkdtemp specDir + mock pm；e2e（§3）：临时 git 仓库 + runCommand 全链路。
++ */
++import { test, after } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++import { execFileSync } from 'node:child_process'
++
++import { resolveQuickLinkedChanges } from '../src/run/quick-audit.js'
++import { closeQuickLinkedChanges } from '../src/run/complete-handlers.js'
++import { runCommand } from '../src/run.js'
++import { ProgressManager } from '../src/progress.js'
++
++function makeTmp(prefix) { return mkdtempSync(join(tmpdir(), prefix)) }
++function git(d, a) { return execFileSync('git', a, { cwd: d, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim() }
++async function hush(fn) { const o = console.log; console.log = () => {}; const oe = console.error; console.error = () => {}; const ow = console.warn; console.warn = () => {}; try { await fn() } finally { console.log = o; console.error = oe; console.warn = ow } }
++function extractSid(s) { const m = s.match(/sessionId:\s*(quick-[0-9a-f]{8})/); return m ? m[1] : null }
++const STRUCTURED = '需求：自动关联门控测试\n根因：无，测试用例\n方案：单候选信号打分 + 止血\n结果：测试全绿'
++
++const tmpRoots = []
++function tmp(p) { const d = makeTmp(p); tmpRoots.push(d); return d }
++
++// ─────────────────────────────────────────
++// §1 单元：resolver 单候选信号门控
++// ─────────────────────────────────────────
++test('§1 单候选：proposal 命中任务描述 → 自动关联 + autoLinked 溯源', async () => {
++  const specDir = tmp('qsal-hit-')
++  const name = '2026-09-14-fix-login-race'
++  mkdirSync(join(specDir, 'changes', name), { recursive: true })
++  writeFileSync(join(specDir, 'changes', name, 'proposal.md'), '# 提案\n\n修复登录校验的竞态窗口，登录并发场景下状态错乱。\n')
++  let out = ''
++  const o = console.log; console.log = (...a) => { out += a.join(' ') + '\n' }
++  try {
++    const r = await resolveQuickLinkedChanges({
++      pm: { listChanges: () => [name] },
++      cwd: specDir, // 非 git 目录 → safeGit 失败 → baselineFiles []，只留描述信号
++      specDir, quickFiles: [], taskDescription: '修复登录竞态问题', nonInteractive: true,
++    })
++    assert.deepEqual(r.changes, [name], `命中信号自动关联（实际 ${JSON.stringify(r.changes)}）`)
++    assert.deepEqual(r.autoLinked, [name], 'autoLinked 溯源标记')
++  } finally { console.log = o }
++  assert(out.includes('命中关联信号'), `自动关联大声提示（实际: ${out.slice(0, 80)}）`)
++})
++
++test('§1 单候选：无信号 → 不关联 + 提示', async () => {
++  const specDir = tmp('qsal-miss-')
++  const name = '2026-09-14-unrelated-skeleton'
++  mkdirSync(join(specDir, 'changes', name), { recursive: true })
++  writeFileSync(join(specDir, 'changes', name, 'proposal.md'), '# 提案\n\n做一件完全无关的事：看板拖拽排序。\n')
++  let out = ''
++  const o = console.log; console.log = (...a) => { out += a.join(' ') + '\n' }
++  try {
++    const r = await resolveQuickLinkedChanges({
++      pm: { listChanges: () => [name] },
++      cwd: specDir, specDir, quickFiles: [], taskDescription: '修复登录竞态问题', nonInteractive: true,
++    })
++    assert.deepEqual(r.changes, [], `未命中信号不关联（实际 ${JSON.stringify(r.changes)}）`)
++    assert.deepEqual(r.autoLinked, [], 'autoLinked 空')
++  } finally { console.log = o }
++  assert(out.includes('未命中关联信号'), `不关联提示（实际: ${out.slice(0, 80)}）`)
++})
++
++test('§1 单候选是 quick 会话行 → 不关联（防会话互挂）', async () => {
++  const specDir = tmp('qsal-sid-')
++  const r = await resolveQuickLinkedChanges({
++    pm: { listChanges: () => ['quick-abcdef12'] },
++    cwd: specDir, specDir, quickFiles: [], taskDescription: '任何任务', nonInteractive: true,
++  })
++  assert.deepEqual(r.changes, [], 'quick-<hex8> 会话行不被自动关联（原单候选分支绕过 recommend 会话过滤）')
++  assert.deepEqual(r.autoLinked, [], 'autoLinked 空')
++})
++
++test('§1 零活跃 / ≥2 非交互 → 不关联（原行为保持）', async () => {
++  const specDir = tmp('qsal-multi-')
++  const zero = await resolveQuickLinkedChanges({
++    pm: { listChanges: () => [] }, cwd: specDir, specDir, quickFiles: [], taskDescription: 'x', nonInteractive: true,
++  })
++  assert.deepEqual(zero.changes, [], '零活跃不关联')
++  const multi = await resolveQuickLinkedChanges({
++    pm: { listChanges: () => ['2026-09-14-a', '2026-09-14-b'] },
++    cwd: specDir, specDir, quickFiles: [], taskDescription: 'x', nonInteractive: true,
++  })
++  assert.deepEqual(multi.changes, [], '≥2 非交互不关联（原行为）')
++  assert.deepEqual(multi.autoLinked, [], 'autoLinked 空')
++})
++
++// ─────────────────────────────────────────
++// §2 单元：closeQuickLinkedChanges 止血
++// ─────────────────────────────────────────
++
++function makePm(stageByChange = null) {
++  const calls = []
++  return {
++    unregisterChange: (cwd, changeName) => { calls.push({ cwd, changeName }) },
++    getChangeStage: stageByChange === null
++      ? () => null
++      : (cwd, changeName) => {
++          const s = stageByChange[changeName]
++          return s ? { current_stage: s.current_stage ?? null, status: s.status ?? null, stage_status: s.stage_status ?? null } : null
++        },
++    _calls: calls,
++  }
++}
++function makeChange(specBase, changeName, tasksContent) {
++  const changeDir = join(specBase, 'changes', changeName)
++  mkdirSync(changeDir, { recursive: true })
++  if (tasksContent !== undefined) writeFileSync(join(changeDir, 'tasks.md'), tasksContent)
++  return changeDir
++}
++
++test('§2 止血：自动关联变更不触发归档（僵尸形态也 skip）', async () => {
++  const specBase = tmp('qsal-stop-')
++  const name = '2026-09-14-auto-linked-zombie'
++  makeChange(specBase, name, '- [x] ql-20260914-001-aaaa 修复竞态\n') // 全勾僵尸形态（原通道必归档）
++  const pm = makePm({ [name]: { current_stage: 'scan', status: 'active', stage_status: null } })
++  const r = await closeQuickLinkedChanges({ pm, cwd: specBase, specBase, linkedChanges: [name], linkedChangesAuto: [name] })
++  assert.deepEqual(r.closed, [], '自动关联不归档')
++  assert(r.skipped.some(s => s.name === name && s.reason.includes('自动关联')), `skip 原因含自动关联（实际 ${JSON.stringify(r.skipped)}）`)
++  assert(existsSync(join(specBase, 'changes', name)), '变更目录保持原位')
++  assert(pm._calls.length === 0, 'unregisterChange 未被调用')
++})
++
++test('§2 对照：显式关联 + 僵尸形态 → 归档照常（D-002 契约不破坏）', async () => {
++  const specBase = tmp('qsal-keep-')
++  const name = '2026-09-14-explicit-zombie'
++  makeChange(specBase, name, '- [x] ql-20260914-001-bbbb 修复竞态\n')
++  const pm = makePm({ [name]: { current_stage: 'scan', status: 'active', stage_status: null } })
++  const r = await closeQuickLinkedChanges({ pm, cwd: specBase, specBase, linkedChanges: [name] })
++  assert.deepEqual(r.closed, [name], '显式关联僵尸照常清理')
++  assert(!existsSync(join(specBase, 'changes', name)), '目录已归档移走')
++})
++
++// ─────────────────────────────────────────
++// §3 e2e：全链路（runCommand）
++// ─────────────────────────────────────────
++function initRepo(prefix) {
++  const repo = tmp(prefix)
++  git(repo, ['init', '-q']); git(repo, ['config', 'user.email', 't@t.local'])
++  git(repo, ['config', 'user.name', 't']); git(repo, ['config', 'commit.gpgsign', 'false'])
++  writeFileSync(join(repo, '.gitignore'), '.sillyspec/\n')
++  writeFileSync(join(repo, 'm.js'), 'console.log(1)\n')
++  git(repo, ['add', '.']); git(repo, ['commit', '-q', '-m', 'init'])
++  return repo
++}
++async function seedChange(repo, name, proposalText) {
++  const specBase = join(repo, '.sillyspec')
++  mkdirSync(join(specBase, 'changes', name), { recursive: true })
++  writeFileSync(join(specBase, 'changes', name, 'proposal.md'), `# 提案\n\n${proposalText}\n`)
++  const pm = new ProgressManager({ specDir: specBase })
++  await pm.registerChange(repo, name)
++  return pm
++}
++async function driveQuickToDone(repo, startArgs) {
++  let out = ''
++  { const o = console.log; console.log = (...a) => { out += a.join(' ') + '\n' }; const oe = console.error; console.error = () => {}; const ow = console.warn; console.warn = (...a) => { out += a.join(' ') + '\n' }
++    try { await runCommand(startArgs, repo) } finally { console.log = o; console.error = oe; console.warn = ow } }
++  const sid = extractSid(out)
++  let doneOut = ''
++  { const o = console.log; console.log = (...a) => { doneOut += a.join(' ') + '\n' }; const oe = console.error; console.error = () => {}; const ow = console.warn; console.warn = (...a) => { doneOut += a.join(' ') + '\n' }
++    try {
++      await runCommand(['quick', '--done', '--change', sid, '--output', 's1', '--confirm'], repo)
++      await runCommand(['quick', '--done', '--change', sid, '--output', 's2', '--confirm'], repo)
++      await runCommand(['quick', '--done', '--change', sid, '--output', STRUCTURED, '--confirm'], repo)
++    } finally { console.log = o; console.error = oe; console.warn = ow } }
++  return { sid, out, doneOut }
++}
++
++test('§3 e2e：信号命中自动关联 + guard 溯源 + --done 不误归档他者变更', async () => {
++  const repo = initRepo('qsal-e2e-auto-')
++  const name = '2026-09-14-fix-login-race'
++  await seedChange(repo, name, '修复登录校验的竞态窗口，登录并发场景下状态错乱。')
++  const { sid, out, doneOut } = await driveQuickToDone(repo, ['quick', '修复登录竞态问题', '--non-interactive'])
++  assert(sid !== null, `quick 会话完成（${sid}）`)
++  assert(out.includes('命中关联信号') && out.includes(name), `启动输出含自动关联提示（${out.includes(name) ? '含变更名' : '缺变更名'}）`)
++
++  // 自动关联发生（tasks.md 有 ql 挂载行且已勾）但变更不被归档
++  const specBase = join(repo, '.sillyspec')
++  const tasks = readFileSync(join(specBase, 'changes', name, 'tasks.md'), 'utf8')
++  assert(/- \[x\] ql-\S+/.test(tasks), `tasks.md ql 行已勾选（${tasks.trim().slice(0, 60)}）`)
++  const pm = new ProgressManager({ specDir: specBase })
++  const active = await pm.listChanges(repo)
++  assert(active.includes(name), `自动关联的变更未被归档（仍 active：${JSON.stringify(active)}）`)
++  assert(!existsSync(join(specBase, 'changes', 'archive', name)), '归档目录不存在')
++  assert(doneOut.includes('自动关联'), `--done 输出含不归档原因（实际: ${doneOut.slice(0, 200)}）`)
++})
++
++test('§3 e2e 对照：显式 --linked-changes + 同僵尸形态 → 归档照常', async () => {
++  const repo = initRepo('qsal-e2e-explicit-')
++  const name = '2026-09-14-fix-login-race'
++  await seedChange(repo, name, '修复登录校验的竞态窗口，登录并发场景下状态错乱。')
++  const { sid } = await driveQuickToDone(repo, ['quick', '修复登录竞态问题', '--linked-changes', name, '--non-interactive'])
++  assert(sid !== null, `quick 会话完成（${sid}）`)
++  const specBase = join(repo, '.sillyspec')
++  const pm = new ProgressManager({ specDir: specBase })
++  const active = await pm.listChanges(repo)
++  assert(!active.includes(name), `显式关联僵尸被归档（不再 active：${JSON.stringify(active)}）`)
++  assert(existsSync(join(specBase, 'changes', 'archive', name)), '归档目录存在')
++})
++
++after(() => { for (const dir of tmpRoots) { try { rmSync(dir, { recursive: true, force: true }) } catch {} } })

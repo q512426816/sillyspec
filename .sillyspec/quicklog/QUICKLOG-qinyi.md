@@ -75,3 +75,21 @@
 根因：分配唯一性依赖 QUICKLOG 条目在盘；条目可被并行 git 操作回滚丢失而 guard.json/进度库预留存活——窗口内 scanExisting 看不见已预留序号/后缀，并行会话复用同 ID（历史 ql-20260604-001-7a4c 同款先例）
 方案：三层护栏：①分配查重——allocateQuicklogEntry maxSeq 并入他者活跃会话 guard 预留（collectGuardReservedQuicklogIds 新导出，7 天僵尸不钉号，sessionsDir 经 resolveQuickSessionsDir 对齐平台模式）+ 盘上容错扫描（畸形头）+ 候选全 ID 末检；②--done 占用校验——countQuicklogEntries 盘上同 ID ≥2 硬拦（不猜归属），他者 guard 仍预留同 ID 换新号完成（原 ID 让位，双方记录不混写）；③最终 ID 回写 guard.json + 条目丢失原硬拦改原 ID 补建自愈
 结果：新增回归 test/quicklog-ql-id-race.test.mjs 25 断言全绿（单元：guard 让位/僵尸不钉/畸形头容错/计数/采集 + e2e：双条目硬拦/他者占用换号/条目丢失自愈）；quick-cli-managed-e2e 验收 4 契约随改（删条目→自愈补建）；全量 npm test 463/463 + lint 0 告警 + docs check 555 处引用全过（顺带重锚 platform-interface-map/ARCHITECTURE 两处漂移锚）
+
+## ql-20260914-004-f4c9 | 2026-09-14 10:01:42 | 根治 quick 单活跃变更无条件自动关联（坑 quick-single-change-auto-link，实证 2026-09-14 误挂他者空骨架变更）
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/quick-audit.js（resolver 单候选信号门控 + 返回 changes/autoLinked）
+- src/run/command.js（linkedAuto 传递链 + guard 持久化恢复）
+- src/run/stage.js（guard 落 linkedChangesAuto）
+- src/run/complete-handlers.js（归档闸止血（autoLinked 命中 skip））
+- test/quick-single-change-auto-link.test.mjs（新回归 8 用例）
+- docs/sillyspec/platform-interface-map.md（command.js 锚重锚）
+- docs/sillyspec/prompt-control-debt.md（command.js 锚重锚）
+- .sillyspec/docs/sillyspec/scan/ARCHITECTURE.md（command.js 锚重锚）
+需求：根治 quick 单活跃变更无条件自动关联（坑 quick-single-change-auto-link，实证 2026-09-14 误挂他者空骨架变更）
+根因：resolveQuickLinkedChanges 的「1 活跃变更直接 return」来自 2026-07-02 单用户流假设（43cf739）；多 agent 仓库里唯一活跃变更常是他者会话遗留——挂载污染 tasks.md，且 --done 僵尸清理通道可把他者变更误归档；单候选还绕过 quick-recommend 的 quick-hex8 会话过滤（会话互挂）
+方案：①信号门控：单候选也跑 quick-recommend 双信号打分（脏文件×design 清单/任务描述×proposal 2-gram），score>0 才自动关联+大声提示，否则不关联+提示；会话行被过滤天然不关联 ②autoLinked 溯源：resolver 返回 changes+autoLinked，command→runStage→guard 落 linkedChangesAuto，--done 复用 guard 同步恢复 ③归档止血：closeQuickLinkedChanges 对 linkedChangesAuto 命中变更 skip（机器猜测非协作声明不触发破坏性归档），显式关联僵尸清理 D-002 契约不变
+结果：新增回归 test/quick-single-change-auto-link.test.mjs 8 用例全绿（resolver 门控 4 + 归档闸止血/对照 2 + e2e 自动关联不归档/显式归档照常 2）；全量 npm test 464/464 + lint 0 告警 + docs check 557 处全过（command.js 漂移锚重锚 5 处）；既有 quick-close-linked-changes 契约测试零改动通过
+审计：⚖️ 归属切分：2 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：.sillyspec/knowledge/known-issues.md, docs/sillyspec/quick-sync-block-filenotes-and-quicklog-mixed-commit.md

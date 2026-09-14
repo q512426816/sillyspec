@@ -56,3 +56,53 @@ gitignore 面）与进度库 `changes.quicklog_id` 独立存活。窗口内：
 - guard 预留让位对「同库同 user」由锁+条目天然保证，跨 user 分配仍非互斥——靠 guard
   预留扫描收窄窗口，极端并发（两 user 同时起步且都已越过扫描点）理论可撞序号，完成
   校验②兜底。
+
+## 坑 quick-single-change-auto-link（实证 2026-09-14 误挂他者空骨架变更）
+
+### 现象
+
+quick 启动未显式带 `--linked-changes` 时，进度库里**恰好一个**活跃变更会被无条件自动
+关联——ql 任务行写进该变更 tasks.md、QUICKLOG 落关联变更行。多 agent 仓库里「唯一活跃
+变更」常是**他者会话遗留**（本次实证：01:28 创建的空骨架，与本任务毫无关系）。
+
+### 机制
+
+`resolveQuickLinkedChanges`（src/run/quick-audit.js）来自 2026-07-02 的 43cf739（修
+「quick 静默落 default 变更」），单用户流假设下「1 个活跃变更 = 大概率是它的」——
+`if (activeChanges.length === 1) return [activeChanges[0]]`，不看信号、不看 TTY，非交互
+环境也一样（≥2 个变更时非交互反而坚持不关联，规则自相矛盾）。连带三个危害：
+
+1. tasks.md 污染（无关任务行成为他者变更唯一任务行）；
+2. **误归档**：--done 的 closeQuickLinkedChanges 僵尸清理通道（阶段闸允许 + 60 分钟
+   活动窗外 + tasks 全勾即轻量归档）——被挂上的骨架变更三项全中，他者变更被归档掉；
+3. 单候选分支还绕过 quick-recommend 的 quick-<hex8> 会话过滤（新 quick 互挂另一活跃
+   quick，recommend 注释里记过冒烟实证）。
+
+### 护栏（2026-09-14 修复）
+
+- **信号门控**：单候选也跑 quick-recommend 双信号打分（脏文件×design.md 清单 /
+  任务描述×proposal.md 2-gram），`score>0` 才自动关联 + 大声提示（可 `--linked-changes
+  none` 重启反悔）；无信号不关联 + 提示。quick-<hex8> 会话行被 recommend 过滤 → 不关联。
+- **autoLinked 溯源**：resolver 返回 `{changes, autoLinked}`；command → runStage →
+  guard 落 `linkedChangesAuto`；--done 复用 guard 时同步恢复。
+- **归档止血**：closeQuickLinkedChanges 对 `linkedChangesAuto` 命中的变更直接 skip
+  （「自动关联（信号命中机器猜测，非显式协作声明），不触发自动归档」）——归档是破坏性
+  动作，机器猜的关联声明不够格。显式 `--linked-changes` 关联的僵尸清理契约
+  （D-002@v1/v2）不变。
+
+### 证据
+
+- 实证：2026-09-14 ql-20260914-002-4670（误挂 2026-09-14-quick-exit-tiered-gates，
+  发现于 --cancel 清理前核对）。
+- 回归：test/quick-single-change-auto-link.test.mjs 8 用例（resolver 门控 4 + 归档闸
+  止血/对照 2 + e2e 自动关联不归档/显式归档照常 2）；既有 quick-close-linked-changes
+  契约测试不动。
+- 修复前行为可复现：单活跃变更 + 无信号任务描述 → 旧代码直接关联（测试 §1「无信号」
+  用例即旧反例）。
+
+### 残余风险
+
+- 修复前启动的存量 guard 无 linkedChangesAuto 字段，按显式关联处理（无法追溯溯源，
+  一次性过渡噪音）。
+- 信号门控有误报面：任务描述与 proposal 撞 2-gram 仍会自动关联——但归档闸已止住
+  破坏性后果，关联本身可 `--linked-changes none` 重启撤销。

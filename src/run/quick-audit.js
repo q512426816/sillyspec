@@ -181,11 +181,17 @@ export function printQuickAuditReview(review) {
 }
 
 /**
- * quick 阶段多变更交互式选择关联变更。
- * - 0 活跃变更 → []（仅记 QUICKLOG，不关联）
- * - 1 活跃变更 → 默认关联它（保持现状友好，不弹交互）
+ * quick 阶段关联变更解析（含单候选信号门控）。
+ * - 0 活跃变更 → 不关联
+ * - 1 活跃变更 → 跑 recommendChanges 双信号打分：命中（score>0）→ 自动关联 + 大声提示
+ *   + autoLinked 溯源；未命中 → 不关联 + 提示。坑 quick-single-change-auto-link（2026-09-14
+ *   实证）：原实现无条件 `return [activeChanges[0]]`——多 agent 仓库里唯一活跃变更常是他者
+ *   会话遗留，挂载污染 tasks.md 且 --done 僵尸清理通道可误归档他者变更；单候选还绕过
+ *   recommend 的 quick-<hex8> 会话过滤（新 quick 互挂另一活跃 quick）。
  * - ≥2 活跃变更 + 交互 → checkbox 多选（推荐项默认勾，空选 = 不关联）
- * - ≥2 活跃变更 + 非交互 → []（不关联）+ 提示用 --change a,b
+ * - ≥2 活跃变更 + 非交互 → 不关联 + 提示用 --change a,b
+ * @returns {Promise<{changes: string[], autoLinked: string[]}>} changes=最终关联清单；
+ *   autoLinked=其中机器自动关联的子集（guard 落 linkedChangesAuto 溯源，--done 归档闸消费）
  */
 export async function resolveQuickLinkedChanges({ pm, cwd, specDir, quickFiles, taskDescription, nonInteractive }) {
   let activeChanges = []
@@ -194,13 +200,7 @@ export async function resolveQuickLinkedChanges({ pm, cwd, specDir, quickFiles, 
   } catch {
     activeChanges = []
   }
-  if (activeChanges.length === 0) return []
-  if (activeChanges.length === 1) return [activeChanges[0]]
-
-  if (nonInteractive || !process.stdin.isTTY) {
-    console.log('💡 非交互环境，已默认不关联变更；如需关联请用 --change a,b')
-    return []
-  }
+  if (activeChanges.length === 0) return { changes: [], autoLinked: [] }
 
   // 脏文件（推荐信号之一）。safeGit 带 safe.directory，避免 linked worktree/容器/挂载点下裸
   // `git status` 抛错致推荐信号静默丢失（multi-agent-review Q3 同类）。推荐非关键路径，失败回退 []。
@@ -214,7 +214,7 @@ export async function resolveQuickLinkedChanges({ pm, cwd, specDir, quickFiles, 
       .filter(f => !f.startsWith('.sillyspec/'))
   }
 
-  // 推荐打分（脏文件 + 任务描述双信号）
+  // 推荐打分（脏文件 + 任务描述双信号）——单候选也跑（信号门控），非仅 ≥2 交互推荐用
   let recommendations = []
   try {
     // quick-recommend.js 在 src/，本模块在 src/run/ → 退一层（真环依赖，保留动态 import）
@@ -223,6 +223,26 @@ export async function resolveQuickLinkedChanges({ pm, cwd, specDir, quickFiles, 
   } catch {
     recommendations = activeChanges.map(name => ({ name, score: 0, reasons: [] }))
   }
+
+  // 单候选信号门控（坑 quick-single-change-auto-link）：有真实信号（脏文件命中 design 清单 /
+  // 任务描述命中 proposal）才自动关联，且大声提示可反悔；无信号一律不关联。quick-<hex8> 会话
+  // 行已被 recommendChanges 过滤 → recommendations 无该候选 → 不关联（防会话互挂）。
+  if (activeChanges.length === 1) {
+    const name = activeChanges[0]
+    const rec = recommendations.find(r => r.name === name)
+    if (rec && rec.score > 0) {
+      console.log(`🔗 唯一活跃变更 ${name} 命中关联信号（${rec.reasons.slice(0, 2).join('；')}）——已自动关联；无关请带 --linked-changes none 重启`)
+      return { changes: [name], autoLinked: [name] }
+    }
+    console.log(`💡 唯一活跃变更 ${name} 未命中关联信号（任务描述/脏文件无重叠）——默认不关联；如需关联请带 --linked-changes ${name} 重启`)
+    return { changes: [], autoLinked: [] }
+  }
+
+  if (nonInteractive || !process.stdin.isTTY) {
+    console.log('💡 非交互环境，已默认不关联变更；如需关联请用 --change a,b')
+    return { changes: [], autoLinked: [] }
+  }
+
   const scoreMap = new Map(recommendations.map(r => [r.name, r.score]))
   const reasonMap = new Map(recommendations.map(r => [r.name, r.reasons]))
   const recommendedSet = new Set(recommendations.filter(r => r.score > 0).map(r => r.name))
@@ -249,7 +269,8 @@ export async function resolveQuickLinkedChanges({ pm, cwd, specDir, quickFiles, 
   // 动态 import：@inquirer/prompts 只在本交互分支加载，不进 run 命令通用启动路径
   const { checkbox } = await import('@inquirer/prompts')
   const selected = await checkbox({ message: '关联变更（空格切换，回车确认）', choices })
-  return selected
+  // 用户在 TTY 上亲手勾选确认 = 显式协作声明，不进 autoLinked
+  return { changes: selected, autoLinked: [] }
 }
 
 // ============ quick --done test+lint 硬门禁（2026-09-02 跨 agent 工单 P0-2）============
