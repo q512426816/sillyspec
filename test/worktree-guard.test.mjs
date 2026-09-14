@@ -95,18 +95,90 @@ try {
     false,
     'scan overwrite should allow stale source_commit with --force-rescan'
   )
+
+  // ── 7/40 位归一化比对（2026-09-14-scan-incremental-refresh D-007@v1）──
+  // run/stage.js 写 guard 用 40 位全哈希、scan-postcheck 盖章用 7 位短哈希：旧精确比对
+  // 恒不等 → guard 存在即恒拦。归一化后同基线放行 / 异基线拦截恢复设计本意。
+  writeFileSync(join(runtimeDir, 'scan-guard.json'), JSON.stringify({
+    sourceCommit: 'abc1234fullhash0000000000000000000000000000',
+    startedAt: '2026-06-16T10:00:00.000Z',
+    forceRescan: false,
+  }, null, 2))
+  writeFileSync(scanDoc, [
+    '---',
+    'source_commit: abc1234',
+    'updated_at: 2026-06-16T09:00:00.000Z',
+    '---',
+    '# Architecture',
+    '',
+  ].join('\n'))
+  assert.equal(
+    shouldBlock({ tool: 'Write', filePath: scanDoc, cwd: root }).blocked,
+    false,
+    'same-base 7/40 mixed hash lengths should pass after normalization'
+  )
+  writeFileSync(scanDoc, [
+    '---',
+    'source_commit: zzz9999',
+    'updated_at: 2026-06-16T09:00:00.000Z',
+    '---',
+    '# Architecture',
+    '',
+  ].join('\n'))
+  assert.equal(
+    shouldBlock({ tool: 'Write', filePath: scanDoc, cwd: root }).blocked,
+    true,
+    'different base 7/40 mixed hash lengths should still block after normalization'
+  )
+
+  // ── scan-refresh 会话态白名单（D-007@v1）：白名单内放行 / 白名单外原保护 ──
+  writeFileSync(join(runtimeDir, 'scan-guard.json'), JSON.stringify({
+    name_zh: '增量刷新守卫',
+    mode: 'scan-refresh',
+    refreshDocs: ['docs/app/scan/ARCHITECTURE.md'],
+    docHashes: { 'docs/app/scan/ARCHITECTURE.md': 'deadbeef' },
+    sourceCommit: 'ref-head',
+    startedAt: '2026-06-16T10:00:00.000Z',
+    forceRescan: false,
+  }, null, 2))
+  writeFileSync(scanDoc, [
+    '---',
+    'source_commit: old-base',
+    'updated_at: 2026-06-16T11:00:00.000Z', // 晚于 guard.startedAt：refresh 编辑后的正常态
+    '---',
+    '# Architecture',
+    '',
+  ].join('\n'))
+  assert.equal(
+    shouldBlock({ tool: 'Write', filePath: scanDoc, cwd: root }).blocked,
+    false,
+    'scan-refresh whitelisted doc should be writable even with newer updated_at'
+  )
+  const otherScanDoc = join(root, '.sillyspec', 'docs', 'app', 'scan', 'PROJECT.md')
+  writeFileSync(otherScanDoc, [
+    '---',
+    'source_commit: old-base',
+    'updated_at: 2026-06-16T09:00:00.000Z',
+    '---',
+    '# Project',
+    '',
+  ].join('\n'))
+  const r2 = shouldBlock({ tool: 'Write', filePath: otherScanDoc, cwd: root })
+  assert.equal(r2.blocked, true, 'scan-refresh non-whitelisted doc keeps original protection')
+  assert.ok(String(r2.reason || '').includes('source_commit'), 'non-whitelisted block cites source_commit mismatch')
+
   const externalSpec = join(root, 'external-spec')
   const externalScanDoc = join(externalSpec, 'docs', 'app', 'scan', 'ARCHITECTURE.md')
   mkdirSync(join(externalSpec, '.runtime'), { recursive: true })
   mkdirSync(join(externalSpec, 'docs', 'app', 'scan'), { recursive: true })
   writeFileSync(join(externalSpec, '.runtime', 'scan-guard.json'), JSON.stringify({
-    sourceCommit: 'external-new-head',
+    sourceCommit: 'extnew1-head',
     startedAt: '2026-06-16T10:00:00.000Z',
     forceRescan: false,
   }, null, 2))
   writeFileSync(externalScanDoc, [
     '---',
-    'source_commit: external-old-head',
+    'source_commit: extold9-head',
     'updated_at: 2026-06-16T09:00:00.000Z',
     '---',
     '# Architecture',

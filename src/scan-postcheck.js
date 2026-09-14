@@ -562,6 +562,76 @@ export function stampScanDocHeaders({ cwd, specDir = null, project = null, mode 
 }
 
 /**
+ * per-doc 基线推进盖章（2026-09-14-scan-incremental-refresh，D-002@v1/D-003@v2）。
+ * 与 stampScanDocHeaders 的「只补缺不覆盖」契约相互独立：本函数**只改点名文档**的
+ * source_commit / updated_at / generator 三键（已有则替换、缺失则补），其余 frontmatter 键
+ * 与其余文档逐字节不动——增量刷新（scan refresh --done）专用。幂等：同值重跑零 diff。
+ *
+ * @param {{ cwd: string, specDir?: string|null, project?: string|null, docs?: string[],
+ *   headShort?: string|null, generator?: string }} opts
+ *   docs：scan 目录内文档文件名列表（如 ['ARCHITECTURE.md']）；project 缺省时遍历全部项目
+ * @returns {{ bumped: string[], skipped: { file: string, reason: string }[] }}
+ */
+export function bumpScanDocBaselines({ cwd, specDir = null, project = null, docs = [], headShort = null, generator = 'sillyspec-scan-refresh' }) {
+  const specBase = specDir ? specDir : join(cwd, '.sillyspec')
+  const docsRoot = join(specBase, 'docs')
+  const projects = project
+    ? [project]
+    : (existsSync(docsRoot) ? readdirSync(docsRoot, { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name) : [])
+  if (!headShort) {
+    try { headShort = String(git(cwd, ['rev-parse', '--short', 'HEAD']) || '').trim() || null } catch { headShort = null }
+  }
+  const updatedIso = new Date().toISOString()
+  const bumped = []
+  const skipped = []
+  for (const p of projects) {
+    const scanDir = join(docsRoot, p, 'scan')
+    if (!existsSync(scanDir)) {
+      for (const name of docs) skipped.push({ file: name, reason: `无 scan 目录：${scanDir}` })
+      continue
+    }
+    for (const name of docs) {
+      const filePath = join(scanDir, name)
+      let content
+      try { content = readFileSync(filePath, 'utf8') } catch (e) {
+        skipped.push({ file: name, reason: `读取失败：${String((e && e.message) || e).split('\n')[0]}` })
+        continue
+      }
+      // headShort 拿不到（非 git 仓）→ source_commit 键跳过不写坏值；updated_at/generator 恒写
+      const out = bumpFrontmatterKeys(content, {
+        source_commit: headShort || undefined,
+        updated_at: updatedIso,
+        generator,
+      })
+      if (out === null) { skipped.push({ file: name, reason: 'frontmatter 写入失败（内部错误）' }); continue }
+      try { writeFileSync(filePath, out); bumped.push(filePath) } catch (e) {
+        skipped.push({ file: name, reason: `写入失败：${String((e && e.message) || e).split('\n')[0]}` })
+      }
+    }
+  }
+  return { bumped, skipped }
+}
+
+/** frontmatter 键替换内核：已有行替换、缺失行在 frontmatter 内补（无 frontmatter 则新建头部）。
+ * 值为 undefined 的键跳过；键名限安全标识符（内部调用方固定三键，不做正则转义）。 */
+function bumpFrontmatterKeys(content, bumpKeys) {
+  const normalized = content.replace(/\r\n?/g, '\n')
+  const entries = Object.entries(bumpKeys).filter(([, v]) => v !== undefined)
+  if (entries.length === 0) return null
+  const fmMatch = normalized.match(/^---\n([\s\S]*?)\n---\n/)
+  if (!fmMatch) {
+    return `---\n${entries.map(([k, v]) => `${k}: ${v}`).join('\n')}\n---\n\n` + normalized
+  }
+  let fm = fmMatch[1]
+  for (const [k, v] of entries) {
+    const re = new RegExp(`^${k}:[^\\n]*$`, 'm')
+    if (re.test(fm)) fm = fm.replace(re, `${k}: ${v}`)
+    else fm += `\n${k}: ${v}`
+  }
+  return normalized.replace(/^---\n[\s\S]*?\n---\n/, `---\n${fm}\n---\n`)
+}
+
+/**
  * source_root 污染一键修复（2026-08-21 agent-手工产出审计第四批 C-3）。
  *
  * runScanPostCheck 对「agent 把产物写到 <source_root>/.sillyspec/ 而非平台 specRoot」只报

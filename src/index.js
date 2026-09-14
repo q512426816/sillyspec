@@ -60,6 +60,9 @@ SillySpec CLI — 规范驱动开发工具包
              --force-rescan              覆盖已有 scan 文档保护
              --diff [--base <commit>] [--full] [--report]   scan 文档 vs 源码漂移清单（纯只读）
              （子命令: sillyspec scan diff 等价 --diff）
+             refresh [--project <名>] [--force] [--json]   增量刷新①拍：门控+受影响文档手术工单
+             refresh --done [--docs a.md,b.md]              增量刷新②拍：内容比对+per-doc 基线推进+postcheck
+             （检出极限：refresh 只覆盖带 file:line 引用的检出项，不声称文档与源码一致）
     archive: --confirm                   归档确认（必须）
     auto:    --mode <模式>               显式指定流程模式
     平台:    --runtime-root <path> / --workspace-id <id> / --scan-run-id <id>
@@ -2548,6 +2551,40 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
           full: filteredArgs.includes('--full'),
           report: filteredArgs.includes('--report'),
         })
+        break
+      }
+      // scan refresh 子命令（2026-09-14-scan-incremental-refresh D-002@v1：增量刷新两拍交互）。
+      // ①拍纯读出工单（含 guard 握手写）；②拍 --done 盖章收尾。与 diff 同为旁路：跳过
+      // triggerPullActiveChange、不走 scan 主流程。--project 支持子项目（缺省仓库根 basename，
+      // 与 scan facts 同口径）。
+      if (filteredArgs[1] === 'refresh') {
+        const { runRefresh, finalizeRefresh } = await import('./scan-refresh.js')
+        const refreshEffectiveDir = specDir ? dir : resolveEffectiveDir(dir)
+        const refreshSpecBase = resolvePlatformSpecDir(dir, specDir) || join(refreshEffectiveDir, '.sillyspec')
+        const projIdxR = filteredArgs.indexOf('--project')
+        const refreshProjectName = projIdxR >= 0 && filteredArgs[projIdxR + 1] && !String(filteredArgs[projIdxR + 1]).startsWith("--") ? filteredArgs[projIdxR + 1] : basename(refreshEffectiveDir)
+        if (filteredArgs.includes('--done')) {
+          const docsIdx = filteredArgs.indexOf('--docs')
+          const docsList = docsIdx >= 0 && filteredArgs[docsIdx + 1] && !String(filteredArgs[docsIdx + 1]).startsWith("--")
+            ? filteredArgs[docsIdx + 1].split(',').map(s => s.trim()).filter(Boolean) : null
+          const r = await finalizeRefresh({
+            projectRoot: refreshEffectiveDir,
+            specBase: refreshSpecBase,
+            projectName: refreshProjectName,
+            docs: docsList,
+            force: filteredArgs.includes('--force'),
+            platformOpts: platformWorkspaceId || platformRuntimeRoot ? { workspaceId: platformWorkspaceId, runtimeRoot: platformRuntimeRoot, specRoot: resolvePlatformSpecDir(dir, specDir) } : null,
+          })
+          process.exitCode = r.code
+        } else {
+          process.exitCode = runRefresh({
+            projectRoot: refreshEffectiveDir,
+            specBase: refreshSpecBase,
+            projectName: refreshProjectName,
+            force: filteredArgs.includes('--force'),
+            json: filteredArgs.includes('--json'),
+          })
+        }
         break
       }
     }

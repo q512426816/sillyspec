@@ -526,3 +526,53 @@ describe('staleRefs 边界（审查修复回归）', () => {
     assert.equal(r.staleRefs[0].change, 'A') // 基线后新增文件，状态 A（M 变体由 rename/src 归一用例覆盖）
   })
 })
+
+// ── 多文档异基线聚合 + 导出面（2026-09-14-scan-incremental-refresh，task-01）──
+describe('readSourceCommit 落后最多聚合 + 导出面', () => {
+  it('三文档三基线 → 缺省基线=落后最多者（拓扑序，与 readdir 顺序无关）', (t) => {
+    const f = mkRepo()
+    t.after(() => cleanup(f.root))
+    // base 之后造三个 commit：c1（落后3）、c2（落后2）、c3（落后1）
+    const commits = []
+    for (let i = 0; i < 3; i++) {
+      writeFileSync(join(f.root, 'src/core/a.js'), `a-${i}\n`)
+      f.run('git add -A')
+      f.run(`git commit -q -m c${i}`)
+      commits.push(f.run('git rev-parse HEAD'))
+    }
+    // 三文档各自指向不同基线：ARCH=c0（最落后）、CONV=c2、STRUCT=c1
+    writeFileSync(join(f.specBase, 'docs', f.proj, 'scan', 'ARCH.md'), scanDoc(commits[0]))
+    writeFileSync(join(f.specBase, 'docs', f.proj, 'scan', 'CONV.md'), scanDoc(commits[2]))
+    writeFileSync(join(f.specBase, 'docs', f.proj, 'scan', 'STRUCT.md'), scanDoc(commits[1]))
+    const r = computeScanDiff(opts(f))
+    assert.equal(r.ok, true)
+    assert.equal(r.base, commits[0].slice(0, 7), '聚合取落后最多（ARCH 的 c0）')
+  })
+
+  it('collectStaleRefs / parseNameStatus 导出可用且行为与抽取前一致', async (t) => {
+    const f = mkRepo()
+    t.after(() => cleanup(f.root))
+    writeFileSync(join(f.root, 'src/core/a.js'), 'a2\n')
+    f.run('git add -A')
+    f.run('git commit -q -m change')
+    // 导出面
+    const mod = await import('../src/scan-diff.js')
+    assert.equal(typeof mod.collectStaleRefs, 'function', 'collectStaleRefs 导出')
+    assert.equal(typeof mod.parseNameStatus, 'function', 'parseNameStatus 导出')
+    // parseNameStatus：R 双路径解析
+    const parsed = mod.parseNameStatus('R100\told/path.js\tnew/path.js\nM100\tm.js\tm.js\n')
+    assert.equal(parsed[0].status, 'R')
+    assert.equal(parsed[0].path, 'new/path.js')
+    assert.equal(parsed[0].oldPath, 'old/path.js')
+    // collectStaleRefs：src/ 前缀归一 + rename 旧路径入集
+    writeFileSync(join(f.specBase, 'docs', f.proj, 'scan', 'ARCH.md'), [
+      '---', 'author: test', `source_commit: ${f.base}`, '---', '',
+      '# ARCH', '', '引用 `src/core/a.js:1` 与 `moved.js:2`', '',
+    ].join('\n'))
+    const fullChanged = new Map([['src/core/a.js', 'M'], ['old/moved.js', 'R'], ['moved.js', 'R']])
+    const hits = mod.collectStaleRefs(join(f.specBase, 'docs', f.proj, 'scan'), fullChanged)
+    assert.equal(hits.length, 2, '两引用均命中')
+    assert.ok(hits.some(h => h.file === 'src/core/a.js' && h.change === 'M'))
+    assert.ok(hits.some(h => h.ref.includes('moved.js') && h.change === 'R'))
+  })
+})

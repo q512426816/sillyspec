@@ -203,6 +203,14 @@ function shouldBlockScanDocOverwrite(filePath, projectRoot) {
   const guard = readScanGuard(scanDocInfo, projectRoot)
   if (!guard || guard.forceRescan) return { blocked: false }
 
+  // 增量刷新会话态前置分支（2026-09-14-scan-incremental-refresh D-007@v1）：refresh ①拍写入
+  // mode='scan-refresh' + refreshDocs 白名单——白名单内=本次刷新工单面，agent 手术编辑放行；
+  // 白名单外的 scan 文档继续走原保护（非本次刷新面不放松）。存量 guard（无 mode 字段）不受影响。
+  if (guard.mode === 'scan-refresh' && Array.isArray(guard.refreshDocs)) {
+    const refreshRel = toPosixPath(path.relative(scanDocInfo.specRoot, filePath))
+    if (guard.refreshDocs.includes(refreshRel)) return { blocked: false }
+  }
+
   let frontmatter = {}
   try {
     frontmatter = parseFrontmatter(readFileSync(filePath, 'utf8'))
@@ -211,7 +219,11 @@ function shouldBlockScanDocOverwrite(filePath, projectRoot) {
   }
 
   const relPath = toPosixPath(path.relative(projectRoot, filePath))
-  if (frontmatter.source_commit && guard.sourceCommit && frontmatter.source_commit !== guard.sourceCommit) {
+  // 归一化比对（D-007@v1 顺带修复）：guard 写入方用 40 位全哈希（run/stage.js rev-parse HEAD）、
+  // frontmatter 盖章用 7 位短哈希（scan-postcheck.js --short）——旧精确比对恒不等，guard 存在
+  // 即恒拦。两侧截 7 位后恢复「同基线放行 / 异基线拦截」设计本意。
+  if (frontmatter.source_commit && guard.sourceCommit
+    && String(frontmatter.source_commit).slice(0, 7) !== String(guard.sourceCommit).slice(0, 7)) {
     return {
       blocked: true,
       reason: [

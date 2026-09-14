@@ -46,35 +46,47 @@ export function computeScanStaleness(opts) {
   const scanDir = join(specBase, 'docs', projectName, 'scan')
   if (!existsSync(scanDir)) return null
 
-  // 任一 scan 文档带 source_commit 即可代表整批（modules.js 同批写入同值）
-  let sourceCommit = null
+  // D-003@v2（2026-09-14-scan-incremental-refresh）：全文档收集再聚合取「落后最多」——
+  // 旧版「任一文档代表整批 break 首个命中」在 per-doc bump（增量刷新）后按 readdirSync
+  // 顺序随机读到新/旧基线：读到新基线则误报 fresh 掩盖其余旧文档，读到旧基线则永久噪声。
+  // 落后最多=最坏情况口径（宁多提醒不漏报）；任一基线非 HEAD 祖先（分支切换/rebase）→
+  // 整体 unknown 跳过判定（该文档历史已脱锚，计数无意义）。
   let checked = 0
+  const commits = []
   for (const f of readdirSync(scanDir)) {
     if (!f.endsWith('.md')) continue
     checked++
     const c = parseSourceCommit(readFileSync(join(scanDir, f), 'utf8'))
-    if (c) { sourceCommit = c; break }
+    if (c) commits.push(c)
   }
   if (checked === 0) return null
-  if (!sourceCommit) {
+  if (commits.length === 0) {
     return { status: 'unknown', behindCommits: null, daysSinceScan: null, sourceCommit: null,
       message: 'scan 文档无 source_commit 字段（旧版生成），无法算漂移提示——文档引用是否失效以 docs check 为准；如架构已大改建议重跑 sillyspec run scan --standard' }
   }
 
   const head = safeGit(projectRoot, ['rev-parse', 'HEAD'])
   if (head.error || !head.value) {
-    return { status: 'unknown', behindCommits: null, daysSinceScan: null, sourceCommit,
+    return { status: 'unknown', behindCommits: null, daysSinceScan: null, sourceCommit: null,
       message: `git 读取失败（${head.error || '无 HEAD'}），跳过漂移判定` }
   }
-  const isAncestor = safeGit(projectRoot, ['merge-base', '--is-ancestor', sourceCommit, head.value.trim()])
-  if (isAncestor.error) {
-    return { status: 'unknown', behindCommits: null, daysSinceScan: null, sourceCommit,
-      message: `source_commit ${sourceCommit.slice(0, 7)} 不在当前分支历史（分支切换/rebase），跳过漂移判定` }
+  const headFull = head.value.trim()
+  const distinct = [...new Set(commits)]
+  let sourceCommit = null
+  let behindCommits = null
+  for (const c of distinct) {
+    const isAncestor = safeGit(projectRoot, ['merge-base', '--is-ancestor', c, headFull])
+    if (isAncestor.error) {
+      return { status: 'unknown', behindCommits: null, daysSinceScan: null, sourceCommit: c,
+        message: `source_commit ${c.slice(0, 7)} 不在当前分支历史（分支切换/rebase），跳过漂移判定` }
+    }
+    const countRes = safeGit(projectRoot, ['rev-list', '--count', `${c}..HEAD`])
+    const n = countRes.error ? null : parseInt(countRes.value, 10)
+    if (n === null || Number.isNaN(n)) continue // 单基点计数失败降级跳过，其余基点继续
+    if (behindCommits === null || n > behindCommits) { behindCommits = n; sourceCommit = c }
   }
-  const countRes = safeGit(projectRoot, ['rev-list', '--count', `${sourceCommit}..HEAD`])
-  const behindCommits = countRes.error ? null : parseInt(countRes.value, 10)
-  if (behindCommits === null || Number.isNaN(behindCommits)) {
-    return { status: 'unknown', behindCommits: null, daysSinceScan: null, sourceCommit,
+  if (sourceCommit === null) {
+    return { status: 'unknown', behindCommits: null, daysSinceScan: null, sourceCommit: distinct[0],
       message: 'rev-list 计数失败，跳过漂移判定' }
   }
   const dateRes = safeGit(projectRoot, ['log', '-1', '--format=%cI', sourceCommit])

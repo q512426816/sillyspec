@@ -60,7 +60,7 @@ export function computeScanDiff({ projectRoot, specBase, projectName, base } = {
 
   // ── 基线：缺省读 specBase/docs/<projectName>/scan/*.md frontmatter 的 source_commit ──
   if (!base) {
-    const sourceCommit = readSourceCommit(specBase, projectName)
+    const sourceCommit = readSourceCommit(specBase, projectName, projectRoot)
     if (!sourceCommit) {
       return {
         ok: false, error:
@@ -169,34 +169,20 @@ export function computeScanDiff({ projectRoot, specBase, projectName, base } = {
   // 变更集取 parseNameStatus 全量——**不经 module-map scope 过滤**（引用自带范围：指向「已变更
   // 但范围外」文件的引用同样过时，advisory 信号不该被 scope 吞掉）；rename 的旧路径也入集
   //（文档写在 scan 时点，引用的是旧路径，重命名后引用必失效——最强失效信号）。
+  // 命中逻辑抽为导出 collectStaleRefs（2026-09-14-scan-incremental-refresh D-003@v2：scan-refresh
+  // 复用同一单源，防 A/D/M/R 标注与 src/ 前缀归一规则双源漂移）。
   // best-effort（读不到文档/异常 → 空清单不阻断文件级结果），不计入 driftCount / 退出码
   //（advisory：引用指向已变更文件 ≠ 引用失效，提示人工核对）。──
   const staleRefs = []
   try {
     const scanDir = join(specBase, 'docs', projectName, 'scan')
-    if (existsSync(scanDir)) {
-      const fullChanged = new Map() // POSIX path → A/D/M/R
-      for (const item of parseNameStatus(diffRes.value)) {
-        if (item.status === 'A' || item.status === 'D') fullChanged.set(item.path, item.status)
-        else if (item.status === 'M' || item.status === 'C') fullChanged.set(item.path, 'M')
-        else if (item.status === 'R') { fullChanged.set(item.path, 'R'); fullChanged.set(item.oldPath, 'R') }
-      }
-      const hitChange = (p) => {
-        if (fullChanged.has(p)) return { file: p, change: fullChanged.get(p) }
-        // src/ 前缀双向归一：文档 src 相对写法 ↔ git 仓库根路径
-        const alt = p.startsWith('src/') ? p.slice(4) : `src/${p}`
-        return fullChanged.has(alt) ? { file: alt, change: fullChanged.get(alt) } : null
-      }
-      for (const f of readdirSync(scanDir)) {
-        if (!f.endsWith('.md')) continue
-        const content = readFileSync(join(scanDir, f), 'utf8')
-        for (const ref of collectDocRefs(content)) {
-          if (ref.repo !== null) continue
-          const hit = hitChange(ref.file.replace(/\\/g, '/'))
-          if (hit) staleRefs.push({ doc: f, ref: ref.ref, change: hit.change, file: hit.file })
-        }
-      }
+    const fullChanged = new Map() // POSIX path → A/D/M/R
+    for (const item of parseNameStatus(diffRes.value)) {
+      if (item.status === 'A' || item.status === 'D') fullChanged.set(item.path, item.status)
+      else if (item.status === 'M' || item.status === 'C') fullChanged.set(item.path, 'M')
+      else if (item.status === 'R') { fullChanged.set(item.path, 'R'); fullChanged.set(item.oldPath, 'R') }
     }
+    staleRefs.push(...collectStaleRefs(scanDir, fullChanged))
   } catch { /* 引用级漂移为 advisory，异常静默降级 */ }
 
   return {
@@ -380,18 +366,62 @@ function writeReport(r, { specBase, projectName }) {
   }
 }
 
-/** 读 scan 目录任一 .md 的 source_commit（同 modules.js 写入同值，取首个命中；全失败 → null） */
-function readSourceCommit(specBase, projectName) {
+/**
+ * 读 scan 目录全部 .md 的 source_commit，多文档异基线保守聚合（D-003@v2/D-009@v1）。
+ * 聚合=落后最多：去重基线逐个 `rev-list --count <c>..HEAD` 取计数最大者——拓扑序免疫
+ * rebase/amend 日期倒挂，且落后最多=漂移窗最大=保守目标本体。git 全失败 fail-soft 回退
+ * 首个命中（与旧版批次同值场景输出一致）。
+ * @param {string} specBase @param {string} projectName @param {string} [projectRoot] git 锚（计数用；缺省不聚合）
+ * @returns {string|null}
+ */
+function readSourceCommit(specBase, projectName, projectRoot) {
   const scanDir = join(specBase, 'docs', projectName, 'scan')
   if (!existsSync(scanDir)) return null
+  const commits = []
   try {
     for (const f of readdirSync(scanDir)) {
       if (!f.endsWith('.md')) continue
       const c = parseSourceCommit(readFileSync(join(scanDir, f), 'utf8'))
-      if (c) return c
+      if (c) commits.push(c)
     }
-  } catch { /* 读失败 → null */ }
-  return null
+  } catch { /* 读失败 → 按空清单处理 */ }
+  if (commits.length === 0) return null
+  const distinct = [...new Set(commits)]
+  if (distinct.length === 1 || !projectRoot) return distinct[0]
+  let best = null, bestCount = -1
+  for (const c of distinct) {
+    const r = safeGit(projectRoot, ['rev-list', '--count', `${c}..HEAD`], { timeout: GIT_TIMEOUT_MS })
+    const n = r.error ? null : parseInt(r.value, 10)
+    if (n !== null && !Number.isNaN(n) && n > bestCount) { best = c; bestCount = n }
+  }
+  return best !== null ? best : distinct[0]
+}
+
+/**
+ * 引用级漂移命中（scan-refresh 与 computeScanDiff 共用单源，2026-09-14-scan-incremental-refresh）。
+ * @param {string} scanDir scan 文档目录
+ * @param {Map<string,string>} fullChanged POSIX 路径 → A/D/M/R（R 的旧路径须已入集）
+ * @returns {{doc:string, ref:string, change:string, file:string}[]} 命中清单（目录不存在/异常 → 空数组）
+ */
+export function collectStaleRefs(scanDir, fullChanged) {
+  const staleRefs = []
+  if (!existsSync(scanDir)) return staleRefs
+  const hitChange = (p) => {
+    if (fullChanged.has(p)) return { file: p, change: fullChanged.get(p) }
+    // src/ 前缀双向归一：文档 src 相对写法 ↔ git 仓库根路径
+    const alt = p.startsWith('src/') ? p.slice(4) : `src/${p}`
+    return fullChanged.has(alt) ? { file: alt, change: fullChanged.get(alt) } : null
+  }
+  for (const f of readdirSync(scanDir)) {
+    if (!f.endsWith('.md')) continue
+    const content = readFileSync(join(scanDir, f), 'utf8')
+    for (const ref of collectDocRefs(content)) {
+      if (ref.repo !== null) continue
+      const hit = hitChange(ref.file.replace(/\\/g, '/'))
+      if (hit) staleRefs.push({ doc: f, ref: ref.ref, change: hit.change, file: hit.file })
+    }
+  }
+  return staleRefs
 }
 
 /** 收集 module-map 全部 paths 去重（归一 Windows 反斜杠 + 去尾部斜杠；无 paths → 空数组） */
@@ -412,8 +442,9 @@ function inScope(filePath, scope) {
   return scope.some((p) => p && (filePath === p || filePath.startsWith(p + '/')))
 }
 
-/** 解析 `git diff --name-status --find-renames` 输出 → [{ status, path, oldPath? }]（R/C 双路径） */
-function parseNameStatus(out) {
+/** 解析 `git diff --name-status --find-renames` 输出 → [{ status, path, oldPath? }]（R/C 双路径）。
+ * 导出供 scan-refresh 复用（同单源，2026-09-14-scan-incremental-refresh）。 */
+export function parseNameStatus(out) {
   const items = []
   if (!out) return items
   for (const line of out.split('\n')) {

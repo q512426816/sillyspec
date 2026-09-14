@@ -32,6 +32,7 @@ modules:
       - src/facade-hint.js
       - src/quick-recommend.js
       - src/scan-diff.js
+      - src/scan-refresh.js
 
   cli-entry:
     status: active

@@ -113,3 +113,63 @@ describe('prompt 占位符接线（{SCAN_STALENESS}）', () => {
     assert.ok(pj.includes("{SCAN_STALENESS}"), 'prompt.js 有替换分支')
   })
 })
+
+// ── 多文档异基线聚合（2026-09-14-scan-incremental-refresh D-003@v2，task-02）──
+describe('computeScanStaleness 全文档聚合取落后最多', () => {
+  it('新/旧基线混排 → behindCommits 恒=最落后基线计数（与文件顺序无关）', () => {
+    const mk = (n) => {
+      execSync(`git commit -q --allow-empty -m c${n}`, { cwd: root, stdio: 'pipe' })
+      return execSync('git rev-parse HEAD', { cwd: root, stdio: 'pipe' }).toString().trim()
+    }
+    const c1 = mk(1)
+    const c2 = mk(2)
+    mk(3)
+    const scanDir = join(specBase, 'docs', 'demo', 'scan')
+    mkdirSync(scanDir, { recursive: true })
+    // 旧基线文档 + 新基线文档混排；旧版「break 首个命中」按 readdir 顺序随机取其一
+    writeFileSync(join(scanDir, 'A-NEW.md'), [
+      '---', 'author: t', `source_commit: ${c2}`, '---', '', '# N', '',
+    ].join('\n'))
+    writeFileSync(join(scanDir, 'B-OLD.md'), [
+      '---', 'author: t', `source_commit: ${c1}`, '---', '', '# O', '',
+    ].join('\n'))
+    const r = computeScanStaleness({ projectRoot: root, specBase, projectName: 'demo', thresholds: { commits: 1, days: 3650 } })
+    assert.equal(r.status, 'needs-refresh')
+    assert.equal(r.behindCommits, 2, '取最落后基线 c1（落后 2），不受 readdir 顺序影响')
+    assert.equal(r.sourceCommit, c1)
+  })
+
+  it('全部文档推进到 HEAD → fresh（refresh --done 闭环后 advisory 消警）', () => {
+    const head = execSync('git rev-parse HEAD', { cwd: root, stdio: 'pipe' }).toString().trim()
+    const scanDir = join(specBase, 'docs', 'demo', 'scan')
+    mkdirSync(scanDir, { recursive: true })
+    for (const name of ['A.md', 'B.md']) {
+      writeFileSync(join(scanDir, name), [
+        '---', 'author: t', `source_commit: ${head}`, '---', '', '# X', '',
+      ].join('\n'))
+    }
+    const r = computeScanStaleness({ projectRoot: root, specBase, projectName: 'demo' })
+    assert.equal(r.status, 'fresh')
+    assert.equal(r.behindCommits, 0)
+  })
+
+  it('任一基线非 HEAD 祖先（分支切换）→ 整体 unknown 跳过判定', () => {
+    const head = execSync('git rev-parse HEAD', { cwd: root, stdio: 'pipe' }).toString().trim()
+    const scanDir = join(specBase, 'docs', 'demo', 'scan')
+    mkdirSync(scanDir, { recursive: true })
+    writeFileSync(join(scanDir, 'A.md'), [
+      '---', 'author: t', `source_commit: ${head}`, '---', '', '# X', '',
+    ].join('\n'))
+    // 孤儿 commit：不在 HEAD 历史里（无父提交链）
+    execSync('git checkout -q --orphan detached', { cwd: root, stdio: 'pipe' })
+    execSync('git commit -q --allow-empty -m orphan', { cwd: root, stdio: 'pipe' })
+    const orphan = execSync('git rev-parse HEAD', { cwd: root, stdio: 'pipe' }).toString().trim()
+    execSync('git checkout -q master', { cwd: root, stdio: 'pipe' })
+    writeFileSync(join(scanDir, 'B.md'), [
+      '---', 'author: t', `source_commit: ${orphan}`, '---', '', '# Y', '',
+    ].join('\n'))
+    const r = computeScanStaleness({ projectRoot: root, specBase, projectName: 'demo' })
+    assert.equal(r.status, 'unknown')
+    assert.ok(r.message.includes('不在当前分支历史'))
+  })
+})

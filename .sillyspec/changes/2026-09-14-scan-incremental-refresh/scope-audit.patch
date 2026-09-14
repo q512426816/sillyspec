@@ -1,0 +1,1491 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/_module-map.yaml b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+index 38dd974..fa068bb 100644
+--- a/.sillyspec/docs/sillyspec/modules/_module-map.yaml
++++ b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+@@ -32,6 +32,7 @@ modules:
+       - src/facade-hint.js
+       - src/quick-recommend.js
+       - src/scan-diff.js
++      - src/scan-refresh.js
+ 
+   cli-entry:
+     status: active
+diff --git a/docs/sillyspec/file-lifecycle.md b/docs/sillyspec/file-lifecycle.md
+index 6c6b650..f1817df 100644
+--- a/docs/sillyspec/file-lifecycle.md
++++ b/docs/sillyspec/file-lifecycle.md
+@@ -45,7 +45,7 @@ updated_at: 2026-09-11（2026-09-11 批次：friction-signal-hint task-07 摩擦
+ 
+ | 阶段 | 当前步骤数 | 备注 |
+ |---|---:|---|
+-| scan | 11 | 辅助阶段；step 2 后会按项目动态展开 `perProject` 步骤；第 10 步「Extract Project Knowledge」由子代理从 scan 产物提取长期知识，写入 `knowledge/` 正式分类文件并更新 `INDEX.md`（人工/子代理写正式区）；**scan diff 增量命令**（2026-08-16，change 2026-08-16-scan-diff-command）：`sillyspec scan diff [--base <commit>] [--full] [--report]` 用 git diff 算 source_commit..HEAD 漂移清单（A/D/M/R 四分类，`src/scan-diff.js` 复用 `matchFilesToModules` 按 module-map v2 paths 归模块），agent 按清单定点补而非全量重扫 |
++| scan | 11 | 辅助阶段；step 2 后会按项目动态展开 `perProject` 步骤；第 10 步「Extract Project Knowledge」由子代理从 scan 产物提取长期知识，写入 `knowledge/` 正式分类文件并更新 `INDEX.md`（人工/子代理写正式区）；**scan diff 增量命令**（2026-08-16，change 2026-08-16-scan-diff-command）：`sillyspec scan diff [--base <commit>] [--full] [--report]` 用 git diff 算 source_commit..HEAD 漂移清单（A/D/M/R 四分类，`src/scan-diff.js` 复用 `matchFilesToModules` 按 module-map v2 paths 归模块），agent 按清单定点补而非全量重扫；**scan refresh 增量刷新命令**（2026-09-14，change 2026-09-14-scan-incremental-refresh）：`sillyspec scan refresh [--project <名>] [--force] [--json]`（①拍：dirtyCheck fail-closed——in-scope 未提交改动拒绝；三硬门 no-baseline/non-ancestor/quick-depth——`--force` 不可越；软门漂移>100 文件或落后>200 commit 可 `--force` 越；per-doc 基线分组 diff + staleRefs 受影响集 + 手术工单 + guard 握手写 `.runtime/scan-guard.json`（mode=scan-refresh/refreshDocs 白名单/docHashes，worktree-guard 白名单内放行编辑））与 `scan refresh --done [--docs a.md,b.md]`（②拍：内容比对门——未编辑默认不盖章；`bumpScanDocBaselines` per-doc 推进 source_commit/updated_at/generator；postcheck；审计 `.runtime/scan-refresh-<ts>.json`；退出码 0/1/2）。检出极限如实声明：只覆盖带 file:line 引用的检出项，不声称文档与源码一致（staleness advisory 不撤）。连带行为变化：worktree-guard check-1 比对归一 7 位（修复 guard 40 位 vs frontmatter 7 位恒拦存量 bug，恢复同基线放行/异基线拦截）；scan-diff `readSourceCommit` 与 scan-staleness 基线收集统一「全文档→落后最多聚合」（堵 per-doc bump 后 readdir 顺序失真；`collectStaleRefs`/`parseNameStatus` 转导出单源）|
+ | brainstorm | 8 | 独立包含”写设计文档并自审”（第 6 步）、”Design Grill 交叉审查”（第 7 步）、”生成规范文件”（第 8 步，原名”用户确认并生成规范文件”，已去确认门控——设计在第 5 步「分段展示设计」确认过，末步直接生成后展示摘要）；第 2 步加载上下文时含早期规模筛查（明显小变更建议走 quick），并提示按需求关键词查询 `knowledge/INDEX.md`（命中 known-issues/已知坑时方案期规避，不要等到 execute 命中报告）；2026-08-15 D-7 起该步另注入 `{SCAN_STALENESS}` 新鲜度提示（`src/scan-staleness.js` CLI 算 source_commit vs HEAD 落后数：≥50 commit 或 ≥14 天 → needs-refresh——提示核对/重扫而非判文档失效，文档引用是否失效由 docs check 判定；2026-08-16 ql-20260816-009-fb44 修正语义）；fresh/unknown/绿地各有降级文案，advisory 不阻断）；完成时按 design.md frontmatter `scale` 分叉产物（large→四件套进 plan / small→仅 design.md 进 quick）；**`validateBrainstormOutputs` 经 contract `condition(scale≠small)` 豁免 proposal/requirements/tasks 三规则**（2026-08-07 修复：末步 small 指引只写 design.md 后 validator 四件套全 error 撞墙的矛盾；fail-safe：读不到 scale → 四件套全要求，保守走重流程）；2026-08-26 起决策记录增量落盘（坑 brainstorm-decisions-lost-on-interrupt）：step3「对话式探索」每解决一个有实现影响的问题当场追加 `decisions.md`（含文件创建规则：mkdir + frontmatter + 标题；按 D-xxx@vN 判重幂等），step4 用户选定方案后当场落盘一条 architecture 决策，step6「写设计文档」改为对账整理（判重 + 补全字段 + 漏网补写）而非一次性写入——decisions.md 出现时机从 step6 提前到 step3，brainstorm 第 6 步之前会话中断时已确认决策可从文件恢复 |
+ | plan | 动态 | 默认 9 步（含独立"审查计划"step，按规模分级 tier=self 自审 / tier=independent 独立子代理 + stage review.json）；`plan.md` 解析到任务后插入任务蓝图协调器；全局验收标准模板含集成冒烟引导（集成敏感 task 建议加集成冒烟验收，组件单测全绿 ≠ 集成正确；2026-08-20 起该段为编号清单非 checkbox——机器侧零消费勿留执行态，验收结论统一落 verify-result.md）；postcheck 含确定性校验（结构/可行性/跨任务契约/design 文件覆盖/产物） |
+ | execute | 动态 | 默认 12 步；Wave 来自 `plan.md`（2026-08-20-task-truth-unify 起 Wave 段为纯 ID 引用行 `- task-XX`，任务注册表唯一真相在 `tasks.md`：`- [ ] task-XX: 名称 [model:xxx] (depends_on: …)`，ql-xxx 等 quick 挂载行正交不收），解析失败时默认 3 个 Wave；完成时 `validateExecuteOutputs` 客观核验存在真实代码变更（plan 有 task 但确证零变更则阻断），Task Review Gate 另做 review.json git 真实性交叉校验；`--done` 时若 tasks.md 全勾（agent 手动 + `complete.js autoCheckPlanFromReviews` 机器勾选双路写 tasks.md，锁 `.tasks.md.lock`）+ 代码客观核验通过则一次性补完剩余 step 直达完成（见后「execute --done 批量完成」）；Wave prompt 含中断续跑引导（429/API 配额/崩溃中断后，tasks.md 已勾选 task 跳过不重跑，`sillyspec status` + `run execute` 回当前 Wave step 续跑）；Wave 调度要求 + acceptance「运行测试」步要求子代理**既跑 lint check 也跑 formatter**（只 check 不 format 会把格式问题留到 commit 被 pre-commit hook 拦）；「确认 worktree 路径」步预告 worktree 内工具链可能缺失（先 `--version` 确认，缺则 `uv tool install`/`uv sync`）；「加载上下文」步 2026-08-16 起符号影响面报告落盘核验（`{SPEC_ROOT}/changes/<change>/symbol-impact.md`，`gates.js` `enforceSymbolImpactGate` 在该步 --done 硬校验：文件存在 + tasks.md 注册表每个 task-XX 在报告中有结论行，缺 → blocked exit 1，防前缀步被一句摘要盖章跳过）；2026-08-21 起每个 Wave prompt 末段含「知识沉淀」指引：Wave 收尾由主代理汇总 task 子代理报告中的项目特有坑，统一追加 `knowledge/uncategorized.md`（避免并行子代理改同一文件冲突），末步「知识库审阅」检查待确认条目并提示用户归类 |
+@@ -81,7 +81,7 @@ updated_at: 2026-09-11（2026-09-11 批次：friction-signal-hint task-07 摩擦
+ | 路径 | tracked | 创建/维护方 | 当前生命周期 |
+ |---|---|---|---|
+ | `.sillyspec/projects/` | 是 | `init.js`、scan prompt 人工确认后 | 项目注册表，`*.yaml` 描述项目名、路径、状态 |
+-| `.sillyspec/docs/<project>/scan/` | 是 | `init.js` 建目录；scan 阶段生成文档 | 代码扫描产物，workflow `scan-docs` 会检查 |
++| `.sillyspec/docs/<project>/scan/` | 是 | `init.js` 建目录；scan 阶段生成文档；增量刷新 `sillyspec scan refresh`（2026-09-14：①拍工单→agent 定点编辑→②拍 --done per-doc 推进 source_commit——只有核对过的文档吃新基线，未核对保留旧基线下轮覆盖） | 代码扫描产物，workflow `scan-docs` 会检查 |
+ | `.sillyspec/docs/<project>/modules/` | 是 | scan 可选步骤、archive sync、`modules` 子命令 | 模块索引和模块卡片 |
+ | `.sillyspec/changes/<change>/` | 是 | `ProgressManager.initChange()` 确保目录（quick session id `quick-<uuid8>` 例外：只作 SQL session key，不建实体目录，避免空残留）；阶段 prompt 写入 | 单个变更包文档和验收产物 |
+ | `.sillyspec/changes/archive/` | 是 | archive `确认归档 --confirm` 分支 | 已归档变更目录 |
+diff --git a/src/hooks/worktree-guard.js b/src/hooks/worktree-guard.js
+index a956c52..4f8e9c5 100644
+--- a/src/hooks/worktree-guard.js
++++ b/src/hooks/worktree-guard.js
+@@ -203,6 +203,14 @@ function shouldBlockScanDocOverwrite(filePath, projectRoot) {
+   const guard = readScanGuard(scanDocInfo, projectRoot)
+   if (!guard || guard.forceRescan) return { blocked: false }
+ 
++  // 增量刷新会话态前置分支（2026-09-14-scan-incremental-refresh D-007@v1）：refresh ①拍写入
++  // mode='scan-refresh' + refreshDocs 白名单——白名单内=本次刷新工单面，agent 手术编辑放行；
++  // 白名单外的 scan 文档继续走原保护（非本次刷新面不放松）。存量 guard（无 mode 字段）不受影响。
++  if (guard.mode === 'scan-refresh' && Array.isArray(guard.refreshDocs)) {
++    const refreshRel = toPosixPath(path.relative(scanDocInfo.specRoot, filePath))
++    if (guard.refreshDocs.includes(refreshRel)) return { blocked: false }
++  }
++
+   let frontmatter = {}
+   try {
+     frontmatter = parseFrontmatter(readFileSync(filePath, 'utf8'))
+@@ -211,7 +219,11 @@ function shouldBlockScanDocOverwrite(filePath, projectRoot) {
+   }
+ 
+   const relPath = toPosixPath(path.relative(projectRoot, filePath))
+-  if (frontmatter.source_commit && guard.sourceCommit && frontmatter.source_commit !== guard.sourceCommit) {
++  // 归一化比对（D-007@v1 顺带修复）：guard 写入方用 40 位全哈希（run/stage.js rev-parse HEAD）、
++  // frontmatter 盖章用 7 位短哈希（scan-postcheck.js --short）——旧精确比对恒不等，guard 存在
++  // 即恒拦。两侧截 7 位后恢复「同基线放行 / 异基线拦截」设计本意。
++  if (frontmatter.source_commit && guard.sourceCommit
++    && String(frontmatter.source_commit).slice(0, 7) !== String(guard.sourceCommit).slice(0, 7)) {
+     return {
+       blocked: true,
+       reason: [
+diff --git a/src/index.js b/src/index.js
+index 0c38b37..144709b 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -60,6 +60,9 @@ SillySpec CLI — 规范驱动开发工具包
+              --force-rescan              覆盖已有 scan 文档保护
+              --diff [--base <commit>] [--full] [--report]   scan 文档 vs 源码漂移清单（纯只读）
+              （子命令: sillyspec scan diff 等价 --diff）
++             refresh [--project <名>] [--force] [--json]   增量刷新①拍：门控+受影响文档手术工单
++             refresh --done [--docs a.md,b.md]              增量刷新②拍：内容比对+per-doc 基线推进+postcheck
++             （检出极限：refresh 只覆盖带 file:line 引用的检出项，不声称文档与源码一致）
+     archive: --confirm                   归档确认（必须）
+     auto:    --mode <模式>               显式指定流程模式
+     平台:    --runtime-root <path> / --workspace-id <id> / --scan-run-id <id>
+@@ -2546,6 +2549,40 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语
+         })
+         break
+       }
++      // scan refresh 子命令（2026-09-14-scan-incremental-refresh D-002@v1：增量刷新两拍交互）。
++      // ①拍纯读出工单（含 guard 握手写）；②拍 --done 盖章收尾。与 diff 同为旁路：跳过
++      // triggerPullActiveChange、不走 scan 主流程。--project 支持子项目（缺省仓库根 basename，
++      // 与 scan facts 同口径）。
++      if (filteredArgs[1] === 'refresh') {
++        const { runRefresh, finalizeRefresh } = await import('./scan-refresh.js')
++        const refreshEffectiveDir = specDir ? dir : resolveEffectiveDir(dir)
++        const refreshSpecBase = resolvePlatformSpecDir(dir, specDir) || join(refreshEffectiveDir, '.sillyspec')
++        const projIdxR = filteredArgs.indexOf('--project')
++        const refreshProjectName = projIdxR >= 0 && filteredArgs[projIdxR + 1] && !String(filteredArgs[projIdxR + 1]).startsWith("--") ? filteredArgs[projIdxR + 1] : basename(refreshEffectiveDir)
++        if (filteredArgs.includes('--done')) {
++          const docsIdx = filteredArgs.indexOf('--docs')
++          const docsList = docsIdx >= 0 && filteredArgs[docsIdx + 1] && !String(filteredArgs[docsIdx + 1]).startsWith("--")
++            ? filteredArgs[docsIdx + 1].split(',').map(s => s.trim()).filter(Boolean) : null
++          const r = await finalizeRefresh({
++            projectRoot: refreshEffectiveDir,
++            specBase: refreshSpecBase,
++            projectName: refreshProjectName,
++            docs: docsList,
++            force: filteredArgs.includes('--force'),
++            platformOpts: platformWorkspaceId || platformRuntimeRoot ? { workspaceId: platformWorkspaceId, runtimeRoot: platformRuntimeRoot, specRoot: resolvePlatformSpecDir(dir, specDir) } : null,
++          })
++          process.exitCode = r.code
++        } else {
++          process.exitCode = runRefresh({
++            projectRoot: refreshEffectiveDir,
++            specBase: refreshSpecBase,
++            projectName: refreshProjectName,
++            force: filteredArgs.includes('--force'),
++            json: filteredArgs.includes('--json'),
++          })
++        }
++        break
++      }
+     }
+     case 'status':
+     case 'quick':
+diff --git a/src/scan-diff.js b/src/scan-diff.js
+index 6261681..0ad3a23 100644
+--- a/src/scan-diff.js
++++ b/src/scan-diff.js
+@@ -60,7 +60,7 @@ export function computeScanDiff({ projectRoot, specBase, projectName, base } = {
+ 
+   // ── 基线：缺省读 specBase/docs/<projectName>/scan/*.md frontmatter 的 source_commit ──
+   if (!base) {
+-    const sourceCommit = readSourceCommit(specBase, projectName)
++    const sourceCommit = readSourceCommit(specBase, projectName, projectRoot)
+     if (!sourceCommit) {
+       return {
+         ok: false, error:
+@@ -169,34 +169,20 @@ export function computeScanDiff({ projectRoot, specBase, projectName, base } = {
+   // 变更集取 parseNameStatus 全量——**不经 module-map scope 过滤**（引用自带范围：指向「已变更
+   // 但范围外」文件的引用同样过时，advisory 信号不该被 scope 吞掉）；rename 的旧路径也入集
+   //（文档写在 scan 时点，引用的是旧路径，重命名后引用必失效——最强失效信号）。
++  // 命中逻辑抽为导出 collectStaleRefs（2026-09-14-scan-incremental-refresh D-003@v2：scan-refresh
++  // 复用同一单源，防 A/D/M/R 标注与 src/ 前缀归一规则双源漂移）。
+   // best-effort（读不到文档/异常 → 空清单不阻断文件级结果），不计入 driftCount / 退出码
+   //（advisory：引用指向已变更文件 ≠ 引用失效，提示人工核对）。──
+   const staleRefs = []
+   try {
+     const scanDir = join(specBase, 'docs', projectName, 'scan')
+-    if (existsSync(scanDir)) {
+-      const fullChanged = new Map() // POSIX path → A/D/M/R
+-      for (const item of parseNameStatus(diffRes.value)) {
+-        if (item.status === 'A' || item.status === 'D') fullChanged.set(item.path, item.status)
+-        else if (item.status === 'M' || item.status === 'C') fullChanged.set(item.path, 'M')
+-        else if (item.status === 'R') { fullChanged.set(item.path, 'R'); fullChanged.set(item.oldPath, 'R') }
+-      }
+-      const hitChange = (p) => {
+-        if (fullChanged.has(p)) return { file: p, change: fullChanged.get(p) }
+-        // src/ 前缀双向归一：文档 src 相对写法 ↔ git 仓库根路径
+-        const alt = p.startsWith('src/') ? p.slice(4) : `src/${p}`
+-        return fullChanged.has(alt) ? { file: alt, change: fullChanged.get(alt) } : null
+-      }
+-      for (const f of readdirSync(scanDir)) {
+-        if (!f.endsWith('.md')) continue
+-        const content = readFileSync(join(scanDir, f), 'utf8')
+-        for (const ref of collectDocRefs(content)) {
+-          if (ref.repo !== null) continue
+-          const hit = hitChange(ref.file.replace(/\\/g, '/'))
+-          if (hit) staleRefs.push({ doc: f, ref: ref.ref, change: hit.change, file: hit.file })
+-        }
+-      }
++    const fullChanged = new Map() // POSIX path → A/D/M/R
++    for (const item of parseNameStatus(diffRes.value)) {
++      if (item.status === 'A' || item.status === 'D') fullChanged.set(item.path, item.status)
++      else if (item.status === 'M' || item.status === 'C') fullChanged.set(item.path, 'M')
++      else if (item.status === 'R') { fullChanged.set(item.path, 'R'); fullChanged.set(item.oldPath, 'R') }
+     }
++    staleRefs.push(...collectStaleRefs(scanDir, fullChanged))
+   } catch { /* 引用级漂移为 advisory，异常静默降级 */ }
+ 
+   return {
+@@ -380,18 +366,62 @@ function writeReport(r, { specBase, projectName }) {
+   }
+ }
+ 
+-/** 读 scan 目录任一 .md 的 source_commit（同 modules.js 写入同值，取首个命中；全失败 → null） */
+-function readSourceCommit(specBase, projectName) {
++/**
++ * 读 scan 目录全部 .md 的 source_commit，多文档异基线保守聚合（D-003@v2/D-009@v1）。
++ * 聚合=落后最多：去重基线逐个 `rev-list --count <c>..HEAD` 取计数最大者——拓扑序免疫
++ * rebase/amend 日期倒挂，且落后最多=漂移窗最大=保守目标本体。git 全失败 fail-soft 回退
++ * 首个命中（与旧版批次同值场景输出一致）。
++ * @param {string} specBase @param {string} projectName @param {string} [projectRoot] git 锚（计数用；缺省不聚合）
++ * @returns {string|null}
++ */
++function readSourceCommit(specBase, projectName, projectRoot) {
+   const scanDir = join(specBase, 'docs', projectName, 'scan')
+   if (!existsSync(scanDir)) return null
++  const commits = []
+   try {
+     for (const f of readdirSync(scanDir)) {
+       if (!f.endsWith('.md')) continue
+       const c = parseSourceCommit(readFileSync(join(scanDir, f), 'utf8'))
+-      if (c) return c
++      if (c) commits.push(c)
++    }
++  } catch { /* 读失败 → 按空清单处理 */ }
++  if (commits.length === 0) return null
++  const distinct = [...new Set(commits)]
++  if (distinct.length === 1 || !projectRoot) return distinct[0]
++  let best = null, bestCount = -1
++  for (const c of distinct) {
++    const r = safeGit(projectRoot, ['rev-list', '--count', `${c}..HEAD`], { timeout: GIT_TIMEOUT_MS })
++    const n = r.error ? null : parseInt(r.value, 10)
++    if (n !== null && !Number.isNaN(n) && n > bestCount) { best = c; bestCount = n }
++  }
++  return best !== null ? best : distinct[0]
++}
++
++/**
++ * 引用级漂移命中（scan-refresh 与 computeScanDiff 共用单源，2026-09-14-scan-incremental-refresh）。
++ * @param {string} scanDir scan 文档目录
++ * @param {Map<string,string>} fullChanged POSIX 路径 → A/D/M/R（R 的旧路径须已入集）
++ * @returns {{doc:string, ref:string, change:string, file:string}[]} 命中清单（目录不存在/异常 → 空数组）
++ */
++export function collectStaleRefs(scanDir, fullChanged) {
++  const staleRefs = []
++  if (!existsSync(scanDir)) return staleRefs
++  const hitChange = (p) => {
++    if (fullChanged.has(p)) return { file: p, change: fullChanged.get(p) }
++    // src/ 前缀双向归一：文档 src 相对写法 ↔ git 仓库根路径
++    const alt = p.startsWith('src/') ? p.slice(4) : `src/${p}`
++    return fullChanged.has(alt) ? { file: alt, change: fullChanged.get(alt) } : null
++  }
++  for (const f of readdirSync(scanDir)) {
++    if (!f.endsWith('.md')) continue
++    const content = readFileSync(join(scanDir, f), 'utf8')
++    for (const ref of collectDocRefs(content)) {
++      if (ref.repo !== null) continue
++      const hit = hitChange(ref.file.replace(/\\/g, '/'))
++      if (hit) staleRefs.push({ doc: f, ref: ref.ref, change: hit.change, file: hit.file })
+     }
+-  } catch { /* 读失败 → null */ }
+-  return null
++  }
++  return staleRefs
+ }
+ 
+ /** 收集 module-map 全部 paths 去重（归一 Windows 反斜杠 + 去尾部斜杠；无 paths → 空数组） */
+@@ -412,8 +442,9 @@ function inScope(filePath, scope) {
+   return scope.some((p) => p && (filePath === p || filePath.startsWith(p + '/')))
+ }
+ 
+-/** 解析 `git diff --name-status --find-renames` 输出 → [{ status, path, oldPath? }]（R/C 双路径） */
+-function parseNameStatus(out) {
++/** 解析 `git diff --name-status --find-renames` 输出 → [{ status, path, oldPath? }]（R/C 双路径）。
++ * 导出供 scan-refresh 复用（同单源，2026-09-14-scan-incremental-refresh）。 */
++export function parseNameStatus(out) {
+   const items = []
+   if (!out) return items
+   for (const line of out.split('\n')) {
+diff --git a/src/scan-postcheck.js b/src/scan-postcheck.js
+index 4026338..01b1f13 100644
+--- a/src/scan-postcheck.js
++++ b/src/scan-postcheck.js
+@@ -561,6 +561,76 @@ export function stampScanDocHeaders({ cwd, specDir = null, project = null, mode
+   return { fixed, skipped, stampedKeys }
+ }
+ 
++/**
++ * per-doc 基线推进盖章（2026-09-14-scan-incremental-refresh，D-002@v1/D-003@v2）。
++ * 与 stampScanDocHeaders 的「只补缺不覆盖」契约相互独立：本函数**只改点名文档**的
++ * source_commit / updated_at / generator 三键（已有则替换、缺失则补），其余 frontmatter 键
++ * 与其余文档逐字节不动——增量刷新（scan refresh --done）专用。幂等：同值重跑零 diff。
++ *
++ * @param {{ cwd: string, specDir?: string|null, project?: string|null, docs?: string[],
++ *   headShort?: string|null, generator?: string }} opts
++ *   docs：scan 目录内文档文件名列表（如 ['ARCHITECTURE.md']）；project 缺省时遍历全部项目
++ * @returns {{ bumped: string[], skipped: { file: string, reason: string }[] }}
++ */
++export function bumpScanDocBaselines({ cwd, specDir = null, project = null, docs = [], headShort = null, generator = 'sillyspec-scan-refresh' }) {
++  const specBase = specDir ? specDir : join(cwd, '.sillyspec')
++  const docsRoot = join(specBase, 'docs')
++  const projects = project
++    ? [project]
++    : (existsSync(docsRoot) ? readdirSync(docsRoot, { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name) : [])
++  if (!headShort) {
++    try { headShort = String(git(cwd, ['rev-parse', '--short', 'HEAD']) || '').trim() || null } catch { headShort = null }
++  }
++  const updatedIso = new Date().toISOString()
++  const bumped = []
++  const skipped = []
++  for (const p of projects) {
++    const scanDir = join(docsRoot, p, 'scan')
++    if (!existsSync(scanDir)) {
++      for (const name of docs) skipped.push({ file: name, reason: `无 scan 目录：${scanDir}` })
++      continue
++    }
++    for (const name of docs) {
++      const filePath = join(scanDir, name)
++      let content
++      try { content = readFileSync(filePath, 'utf8') } catch (e) {
++        skipped.push({ file: name, reason: `读取失败：${String((e && e.message) || e).split('\n')[0]}` })
++        continue
++      }
++      // headShort 拿不到（非 git 仓）→ source_commit 键跳过不写坏值；updated_at/generator 恒写
++      const out = bumpFrontmatterKeys(content, {
++        source_commit: headShort || undefined,
++        updated_at: updatedIso,
++        generator,
++      })
++      if (out === null) { skipped.push({ file: name, reason: 'frontmatter 写入失败（内部错误）' }); continue }
++      try { writeFileSync(filePath, out); bumped.push(filePath) } catch (e) {
++        skipped.push({ file: name, reason: `写入失败：${String((e && e.message) || e).split('\n')[0]}` })
++      }
++    }
++  }
++  return { bumped, skipped }
++}
++
++/** frontmatter 键替换内核：已有行替换、缺失行在 frontmatter 内补（无 frontmatter 则新建头部）。
++ * 值为 undefined 的键跳过；键名限安全标识符（内部调用方固定三键，不做正则转义）。 */
++function bumpFrontmatterKeys(content, bumpKeys) {
++  const normalized = content.replace(/\r\n?/g, '\n')
++  const entries = Object.entries(bumpKeys).filter(([, v]) => v !== undefined)
++  if (entries.length === 0) return null
++  const fmMatch = normalized.match(/^---\n([\s\S]*?)\n---\n/)
++  if (!fmMatch) {
++    return `---\n${entries.map(([k, v]) => `${k}: ${v}`).join('\n')}\n---\n\n` + normalized
++  }
++  let fm = fmMatch[1]
++  for (const [k, v] of entries) {
++    const re = new RegExp(`^${k}:[^\\n]*$`, 'm')
++    if (re.test(fm)) fm = fm.replace(re, `${k}: ${v}`)
++    else fm += `\n${k}: ${v}`
++  }
++  return normalized.replace(/^---\n[\s\S]*?\n---\n/, `---\n${fm}\n---\n`)
++}
++
+ /**
+  * source_root 污染一键修复（2026-08-21 agent-手工产出审计第四批 C-3）。
+  *
+diff --git a/src/scan-refresh.js b/src/scan-refresh.js
+new file mode 100644
+index 0000000..d87bcdd
+--- /dev/null
++++ b/src/scan-refresh.js
+@@ -0,0 +1,452 @@
++/**
++ * scan-refresh — scan 文档增量刷新（change: 2026-09-14-scan-incremental-refresh）
++ *
++ * 定位：scan 产物漂移的「刷新执行闭环」。信号侧四路已通（scan-staleness / scan diff /
++ * archive-delta 建议 / last-delta 回灌），但 agent 定点补文档后 source_commit 不推进——
++ * 漂移信号永久重报旧账。本模块补闭环的另一半（D-7 设计稿「agent 按清单定点补」形态）：
++ *
++ *   两拍交互（D-002@v1）：
++ *     ① sillyspec scan refresh —— 门控 + 受影响文档集 + 手术工单渲染 + guard 握手写
++ *        （agent 按工单定点编辑文档正文，worktree-guard 白名单放行）
++ *     ② sillyspec scan refresh --done —— 内容比对门 + per-doc bump 盖章 + postcheck + 审计
++ *
++ * 分层（仿 scan-diff.js）：
++ *   computeRefreshPlan —— 计算层（git 只读 + frontmatter/module-map 读取 + guard 原子写）。
++ *     硬错误（门控拒绝）返回 { ok:false, kind, error, hint }；advisory 进 warnings。
++ *   runRefresh / finalizeRefresh —— IO 面（终端渲染 / --done 收尾），task-06 接线。
++ *
++ * 口径（D-008@v1）：
++ *   dirtyCheck——scope 非空限 module-map scope；scope 空回退全仓源码面（排除
++ *     .sillyspec/node_modules/dist/build/.git——scan 文档自身预期脏不阻断）。
++ *   受影响集变更集——全量变更集**不经 scope 过滤**（staleRefs 同语义：引用自带范围）。
++ *   软门漂移计数——scope 过滤后 driftCount（与 scan diff 同口径）。
++ *
++ * 检出极限（D-006@v1，如实声明）：staleRefs 只发现带 file:line 引用的过期陈述；
++ * 无引用论断检不出。refresh 只声称「核对至 HEAD 的检出项已处理」，不声称「一致」。
++ */
++import { existsSync, readFileSync, readdirSync, mkdirSync } from 'node:fs'
++import { join } from 'node:path'
++import { createHash } from 'node:crypto'
++import { safeGit } from './git-helper.js'
++import { writeAtomicSync } from './fs-atomic.js'
++import { parseSourceCommit } from './scan-staleness.js'
++import { collectStaleRefs, parseNameStatus } from './scan-diff.js'
++import { parseModuleMapSimple } from './modules.js'
++import { SCAN_REQUIRED_DOCS } from './constants.js'
++
++const GIT_TIMEOUT_MS = 10000
++
++/** 软门阈值（D-005@v1）：超限告警建议全量（--force 可越；工程默认值，量级仿 staleness 50/14 惯例放大） */
++const REFRESH_SOFT_GATE = { maxDriftFiles: 100, maxBehindCommits: 200 }
++
++/** 工单材料体积上限（FR-8 / R-04）：超限降级为提示 agent 自行 git diff */
++const MAX_HUNK_LINES_PER_DOC = 200
++const MAX_COMMIT_LINES = 30
++
++/** dirtyCheck 豁免前缀（scope 空回退全仓源码面时排除：进度库/依赖/产物/版本控制——D-008@v1） */
++const DIRTY_FALLBACK_EXCLUDE = ['.sillyspec/', 'node_modules/', 'dist/', 'build/', '.git/']
++
++/** scope 空回退时仍阻断的源码扩展名面（粗粒度：非二进制/产物即视为源码面） */
++const SOURCE_EXT = /\.(js|mjs|cjs|ts|tsx|jsx|py|java|go|rs|rb|php|c|cpp|h|vue|svelte|json|ya?ml|toml|xml|sql|sh|md)$/i
++
++/**
++ * 计算层：增量刷新计划。
++ * @param {{ projectRoot: string, specBase: string, projectName: string, force?: boolean }} opts
++ *   projectRoot：git 锚；specBase/projectName：scan 文档定位（specBase/docs/<projectName>/scan）
++ *   force：只越软门（漂移过大告警），不越硬门（D-005@v1）
++ * @returns {{ ok: true, head, headShort, behindCommits, scope, affectedDocs, freshDocs,
++ *     warnings, workOrderHeadline }
++ *   | { ok: false, kind: 'missing-args'|'no-baseline'|'non-ancestor'|'quick-depth'|'dirty-worktree'|'git-error', error, hint? }}
++ *   affectedDocs：[{ file, base, staleRefs: [{ref,change,file}], hunks, commits, hunksTruncated }]
++ *   （guard 握手文件已原子写——mode=scan-refresh + refreshDocs 白名单 + docHashes 内容哈希）
++ */
++export function computeRefreshPlan({ projectRoot, specBase, projectName, force = false } = {}) {
++  if (!projectRoot || !specBase || !projectName) {
++    return { ok: false, kind: 'missing-args', error: 'projectRoot / specBase / projectName 必填，缺一不可' }
++  }
++  const warnings = []
++  const scanDir = join(specBase, 'docs', projectName, 'scan')
++  if (!existsSync(scanDir)) {
++    return { ok: false, kind: 'no-baseline', error: `无 scan 文档目录 ${scanDir}`,
++      hint: '先跑 sillyspec run scan 生成基线，增量刷新无出发锚点' }
++  }
++
++  // ── per-doc 基线收集（含 scan_depth，quick 浅文档硬门用）──
++  // 基线载体只认 7 份标准文档（SCAN_REQUIRED_DOCS）——scan 目录内的其他 .md
++  //（scan-diff-report.md 报告、NOTES 草稿、_ 前缀底稿）不是基线载体，不参与门控不进受影响集
++  //（它们无 frontmatter 属正常，若硬拦会让 refresh 被杂项文件永久卡死）。
++  const docEntries = [] // { file, base, depth }
++  for (const f of readdirSync(scanDir)) {
++    if (!SCAN_REQUIRED_DOCS.includes(f)) continue
++    let content = ''
++    try { content = readFileSync(join(scanDir, f), 'utf8') } catch { continue }
++    const base = parseSourceCommit(content)
++    if (!base) {
++      return { ok: false, kind: 'no-baseline', error: `scan 文档 ${f} 无 source_commit（绿地/旧版生成）`,
++        hint: '无基线不可增量——跑 sillyspec run scan --standard --force-rescan 重建基线' }
++    }
++    const depthMatch = content.match(/^scan_depth:\s*(\S+)\s*$/m)
++    // 基线归一 7 位：盖章写短哈希、旧文档可能带 40 位——fresh 比对与分组都以短哈希为键
++    docEntries.push({ file: f, base: base.slice(0, 7), depth: depthMatch ? depthMatch[1] : null })
++  }
++  if (docEntries.length === 0) {
++    return { ok: false, kind: 'no-baseline', error: 'scan 目录内无 .md 文档', hint: '先跑 sillyspec run scan' }
++  }
++
++  // ── HEAD 解析（非 git 仓/失败 fail-soft 拒绝，R-06）──
++  const headRes = safeGit(projectRoot, ['rev-parse', 'HEAD'])
++  if (headRes.error || !headRes.value) {
++    return { ok: false, kind: 'git-error', error: `git rev-parse HEAD 失败（${headRes.error || '无输出'}）`,
++      hint: '非 git 仓不可增量刷新——走全量 sillyspec run scan' }
++  }
++  const head = headRes.value.trim()
++  const headShortRes = safeGit(projectRoot, ['rev-parse', '--short', 'HEAD'])
++  const headShort = headShortRes.error ? head.slice(0, 7) : headShortRes.value.trim()
++
++  // ── 硬门②：任一基线非 HEAD 祖先（分支切换/rebase，diff 两快照呈假象）──
++  for (const e of docEntries) {
++    const anc = safeGit(projectRoot, ['merge-base', '--is-ancestor', e.base, head])
++    if (anc.error) {
++      return { ok: false, kind: 'non-ancestor', error: `scan 文档 ${e.file} 的基线 ${e.base.slice(0, 7)} 不在当前分支历史（分支切换/rebase）`,
++        hint: '增量窗口脱锚不可算——跑 sillyspec run scan --standard --force-rescan 重建基线' }
++    }
++  }
++
++  // ── dirtyCheck（D-004@v1 fail-closed；scope 口径 D-008@v1）──
++  const moduleIndex = loadModuleIndex(specBase, projectName, warnings)
++  const scope = collectScope(moduleIndex)
++  const dirtyRes = checkDirtyWorktree(projectRoot, scope)
++  if (dirtyRes.length > 0) {
++    return { ok: false, kind: 'dirty-worktree',
++      error: `in-scope 路径有未提交改动 ${dirtyRes.length} 个：${dirtyRes.slice(0, 5).join(', ')}${dirtyRes.length > 5 ? ' …' : ''}`,
++      hint: '增量刷新只核对已提交面（base..HEAD）——先提交再重试，或走全量 sillyspec run scan（读工作区口径）' }
++  }
++  if (scope.length === 0) warnings.push('module-map 缺失/为空——dirtyCheck 回退全仓源码面，漂移范围无法归模块（建议先跑 sillyspec modules rebuild）')
++
++  // ── per-doc 分组 diff（D-003@v2 核心：每文档从自己的基线算漂移窗）──
++  const groups = new Map() // base → { files: [], changedFull: Map }
++  for (const e of docEntries) {
++    if (e.base === head.slice(0, 7)) continue // fresh：已在当前 HEAD（7 位归一口径）
++    if (!groups.has(e.base)) {
++      const diffRes = safeGit(projectRoot, ['diff', '--name-status', '--find-renames', `${e.base}..HEAD`], { timeout: GIT_TIMEOUT_MS })
++      if (diffRes.error) {
++        return { ok: false, kind: 'git-error', error: `git diff ${e.base.slice(0, 7)}..HEAD 失败（${diffRes.error}）`,
++          hint: 'git 异常不可增量——走全量 sillyspec run scan' }
++      }
++      const changedFull = new Map() // POSIX path → A/D/M/R（R 旧路径入集，与 scan-diff staleRefs 同构）
++      for (const item of parseNameStatus(diffRes.value)) {
++        if (item.status === 'A' || item.status === 'D') changedFull.set(item.path, item.status)
++        else if (item.status === 'M' || item.status === 'C') changedFull.set(item.path, 'M')
++        else if (item.status === 'R') { changedFull.set(item.path, 'R'); changedFull.set(item.oldPath, 'R') }
++      }
++      groups.set(e.base, { files: parseNameStatus(diffRes.value), changedFull })
++    }
++  }
++
++  // ── 受影响文档集：全量变更集 × 各文档 file:line 引用命中（staleRefs 单源复用）──
++  const staleByDoc = new Map() // file → [{ref,change,file}]
++  for (const [base, g] of groups) {
++    const hits = collectStaleRefs(scanDir, g.changedFull) // 返回 [{doc,ref,change,file}]
++    for (const h of hits) {
++      // 只保留属于本基线组的文档（他组文档的命中由其所属组的全量集重算——组间变更集不同）
++      if (!docEntries.some(e => e.file === h.doc && e.base === base)) continue
++      if (!staleByDoc.has(h.doc)) staleByDoc.set(h.doc, [])
++      staleByDoc.get(h.doc).push({ ref: h.ref, change: h.change, file: h.file })
++    }
++  }
++
++  // ── 硬门③：受影响文档含 scan_depth: quick（浅文档本就该 --deep 全量升级）──
++  const affected = docEntries.filter(e => staleByDoc.has(e.file))
++  for (const e of affected) {
++    if (e.depth === 'quick') {
++      return { ok: false, kind: 'quick-depth', error: `受影响文档 ${e.file} 是 scan_depth: quick 浅层版本`,
++        hint: '浅文档应全量升级——跑 sillyspec run scan --deep --force-rescan（会识别 quick 标记覆盖重写）' }
++    }
++  }
++
++  // ── 软门（scope 过滤后漂移 / 落后数；--force 可越，D-005@v1/D-008@v1）──
++  let driftCount = 0
++  for (const [, g] of groups) {
++    for (const item of g.files) {
++      if (item.status !== 'A' && item.status !== 'D' && item.status !== 'M' && item.status !== 'R' && item.status !== 'C') continue
++      if (scope.length === 0 || inScope(item.path, scope)) driftCount++
++    }
++  }
++  let behindCommits = 0
++  {
++    const countRes = safeGit(projectRoot, ['rev-list', '--count', `${docEntries[0].base}..HEAD`], { timeout: GIT_TIMEOUT_MS })
++    if (!countRes.error) behindCommits = parseInt(countRes.value, 10) || 0
++    // 多基线取最大（最坏情况；fail-soft：计数失败保底 0 不阻断）
++    for (const base of groups.keys()) {
++      const r = safeGit(projectRoot, ['rev-list', '--count', `${base}..HEAD`], { timeout: GIT_TIMEOUT_MS })
++      if (!r.error) behindCommits = Math.max(behindCommits, parseInt(r.value, 10) || 0)
++    }
++  }
++  const softHit = driftCount > REFRESH_SOFT_GATE.maxDriftFiles || behindCommits > REFRESH_SOFT_GATE.maxBehindCommits
++  if (softHit) {
++    const msg = `漂移过大（scope 内 ${driftCount} 文件 / 落后 ${behindCommits} commit，阈值 ${REFRESH_SOFT_GATE.maxDriftFiles}/${REFRESH_SOFT_GATE.maxBehindCommits}）——增量收益消失，建议全量 sillyspec run scan --standard --force-rescan`
++    if (force) warnings.push(`软门已 --force 越过：${msg}`)
++    else return { ok: false, kind: 'soft-gate', error: msg, hint: '确认增量继续：sillyspec scan refresh --force' }
++  }
++
++  // ── 工单材料（FR-8/R-04 截断）──
++  const affectedDocs = []
++  for (const e of affected) {
++    const refs = staleByDoc.get(e.file)
++    const refFiles = [...new Set(refs.map(r => r.file))]
++    let hunks = ''
++    let hunksTruncated = false
++    if (refFiles.length > 0) {
++      const d = safeGit(projectRoot, ['diff', `${e.base}..HEAD`, '--', ...refFiles], { timeout: GIT_TIMEOUT_MS })
++      if (!d.error && d.value) {
++        const lines = d.value.split('\n')
++        hunksTruncated = lines.length > MAX_HUNK_LINES_PER_DOC
++        hunks = lines.slice(0, MAX_HUNK_LINES_PER_DOC).join('\n')
++      }
++    }
++    const logRes = safeGit(projectRoot, ['log', '--oneline', `-n`, `${MAX_COMMIT_LINES}`, `${e.base}..HEAD`], { timeout: GIT_TIMEOUT_MS })
++    affectedDocs.push({ file: e.file, base: e.base, staleRefs: refs, hunks, hunksTruncated, commits: logRes.error ? '' : logRes.value.trim() })
++  }
++  const freshDocs = docEntries.filter(e => e.base === head.slice(0, 7)).map(e => e.file)
++
++  // ── guard 握手（D-007@v1：原子写——hook 并发读，防半截 JSON fail-closed 窗口）──
++  const docHashes = {}
++  const refreshDocs = []
++  for (const e of affected) {
++    const rel = `docs/${projectName}/scan/${e.file}`
++    refreshDocs.push(rel)
++    try { docHashes[rel] = sha256File(join(scanDir, e.file)) } catch { /* 读失败不进白名单（保守） */ }
++  }
++  if (refreshDocs.length > 0) {
++    try {
++      const guardDir = join(specBase, '.runtime')
++      mkdirSync(guardDir, { recursive: true })
++      writeAtomicSync(join(guardDir, 'scan-guard.json'), JSON.stringify({
++        name_zh: '增量刷新守卫',
++        mode: 'scan-refresh',
++        refreshDocs,
++        docHashes,
++        sourceCommit: headShort,
++        startedAt: new Date().toISOString(),
++        forceRescan: false,
++      }, null, 2) + '\n')
++    } catch (e) {
++      return { ok: false, kind: 'git-error', error: `guard 握手文件写入失败（${e.message}）`,
++        hint: '编辑拍将无 hook 放行通道——检查 .runtime/ 可写性后重试' }
++    }
++  }
++
++  return {
++    ok: true, head, headShort, behindCommits, scope,
++    affectedDocs, freshDocs, warnings,
++    workOrderHeadline: affected.length === 0
++      ? `零检出漂移（staleRefs 0 命中）——检出极限内无需刷新；无引用论断不在此保证（D-006）`
++      : `受影响文档 ${affected.length} 份 / 过时引用 ${affectedDocs.reduce((n, d) => n + d.staleRefs.length, 0)} 条——只编辑下列文档的受影响小节，未命中内容原样保留`,
++  }
++}
++
++// ── 内部工具 ─────────────────────────────────────────────────────
++
++function sha256File(p) {
++  return createHash('sha256').update(readFileSync(p)).digest('hex')
++}
++
++function loadModuleIndex(specBase, projectName, warnings) {
++  const mapPath = join(specBase, 'docs', projectName, 'modules', '_module-map.yaml')
++  if (!existsSync(mapPath)) return null
++  try { return parseModuleMapSimple(readFileSync(mapPath, 'utf8')) } catch {
++    warnings.push('module-map 解析失败——按缺失处理（dirtyCheck 回退全仓源码面）')
++    return null
++  }
++}
++
++/** module-map 全部 paths 去重归一（与 scan-diff collectScope 同口径；本模块内联防双向耦合） */
++function collectScope(moduleIndex) {
++  const set = new Set()
++  for (const m of Object.values(moduleIndex || {})) {
++    if (!Array.isArray(m.paths)) continue
++    for (const raw of m.paths) {
++      if (typeof raw !== 'string' || !raw) continue
++      set.add(raw.replace(/\\/g, '/').replace(/\/+$/, ''))
++    }
++  }
++  return [...set]
++}
++
++function inScope(filePath, scope) {
++  return scope.some((p) => p && (filePath === p || filePath.startsWith(p + '/')))
++}
++
++/** dirtyCheck：scope 非空限 scope；空回退全仓源码面（D-008@v1）。返回 in-scope 脏路径清单 */
++function checkDirtyWorktree(projectRoot, scope) {
++  const st = safeGit(projectRoot, ['status', '--porcelain'], { timeout: GIT_TIMEOUT_MS })
++  if (st.error || !st.value) return [] // git 失败 fail-soft 放行（后续 diff/门控仍会暴露 git 问题）
++  const dirty = []
++  for (const line of st.value.split('\n')) {
++    const l = line.replace(/\r$/, '')
++    if (!l) continue
++    // porcelain v1：`XY path`——状态列与路径间空格数不定（不同 git 版本对未暂存改动
++    // 输出 `M path` 或 ` M path`，固定 slice 会错位）；rename 形如 `R  old -> new` 取新路径
++    const m = l.match(/^\S+\s+(.+)$/)
++    if (!m) continue
++    let p = m[1].trim().replace(/^"(.*)"$/, '$1')
++    if (p.includes(' -> ')) p = p.split(' -> ').pop()
++    p = p.replace(/\\/g, '/')
++    if (!p) continue
++    if (scope.length > 0) {
++      if (inScope(p, scope)) dirty.push(p)
++    } else {
++      if (DIRTY_FALLBACK_EXCLUDE.some((pre) => p.startsWith(pre))) continue
++      if (SOURCE_EXT.test(p)) dirty.push(p)
++    }
++  }
++  return dirty
++}
++
++// ── IO 面（task-06）──────────────────────────────────────────────
++
++/** 状态字母 → 人话（工单渲染） */
++function changeLabel(c) {
++  return c === 'D' ? '文件已删除' : c === 'A' ? '文件为基线后新增' : c === 'R' ? '文件已重命名' : '文件已变更'
++}
++
++/**
++ * IO 面：第①拍——渲染手术工单。
++ * @param {{ projectRoot, specBase, projectName, force?, json? }} opts
++ * @returns {number} 退出码：0=工单就绪/零检出漂移；2=门控拒绝或错误
++ */
++export async function runRefresh(opts = {}) {
++  const { projectRoot, specBase, projectName, force = false, json = false } = opts
++  const r = computeRefreshPlan({ projectRoot, specBase, projectName, force })
++  if (json) {
++    console.log(JSON.stringify(r, null, 2))
++    return r.ok ? 0 : 2
++  }
++  if (!r.ok) {
++    console.error(`scan refresh：${r.error}`)
++    if (r.hint) console.error(`   → ${r.hint}`)
++    return 2
++  }
++  for (const w of r.warnings) console.warn(`  ⚠️ ${w}`)
++  // 顺带重跑 scan facts（全量幂等，D-002@v1；fail-soft 不阻断工单）
++  try {
++    const { buildAndWriteScanFacts } = await import('./scan-facts.js')
++    await buildAndWriteScanFacts({ cwd: projectRoot, specDir: specBase, projectName })
++    console.log('  📄 _facts.md 已重跑刷新')
++  } catch (e) {
++    console.warn(`  ⚠️ scan facts 重跑失败（不阻断）：${String((e && e.message) || e).split('\n')[0]}`)
++  }
++  console.log(`scan refresh（基线后 ${r.behindCommits} commit · HEAD ${r.headShort}）：${r.workOrderHeadline}`)
++  if (r.freshDocs.length > 0) console.log(`  已在当前 HEAD（跳过）：${r.freshDocs.join(', ')}`)
++  if (r.affectedDocs.length === 0) {
++    console.log('检出极限：本判定只覆盖带 file:line 引用的检出项，无引用论断不在保证范围（staleness advisory 仍有效）。')
++    return 0
++  }
++  console.log('')
++  for (const d of r.affectedDocs) {
++    console.log(`## ${d.file}（基线 ${d.base.slice(0, 7)}）`)
++    console.log(`过时引用 ${d.staleRefs.length} 条：`)
++    for (const s of d.staleRefs) console.log(`  - \`${s.ref}\`（${changeLabel(s.change)}：${s.file}）`)
++    if (d.commits) {
++      console.log('基线后提交：')
++      for (const l of d.commits.split('\n')) console.log(`  ${l}`)
++    }
++    if (d.hunks) {
++      console.log(`相关 diff${d.hunksTruncated ? '（已截断，完整自行 git diff）' : ''}：`)
++      for (const l of d.hunks.split('\n')) console.log(`  ${l}`)
++    }
++    console.log('编辑纪律：只动受影响小节；未命中内容原样保留；新引用须真实可核验（--done 时 postcheck 逐条核验）。')
++    console.log('')
++  }
++  console.log('编辑完成后收尾：sillyspec scan refresh --done（只推进核对过的文档；未编辑文档默认不盖章）')
++  console.log('检出极限：收尾后只声称「核对至 HEAD 的检出项已处理」，不声称文档与源码一致。')
++  return 0
++}
++
++/**
++ * IO 面：第②拍——内容比对门 + per-doc bump + postcheck + 审计落盘。
++ * @param {{ projectRoot, specBase, projectName, docs?: string[]|null, force?: boolean, platformOpts?: object|null }} opts
++ *   docs：显式点名（scan 目录内文件名，如 ARCHITECTURE.md）；缺省=①拍工单全部受影响文档
++ * @returns {{ code: number, bumped: string[], skipped: {file:string,reason:string}[], postCheckStatus: string, auditPath: string|null }}
++ *   code：0=盖章成功；1=postCheck failed（文档留待修复重跑）；2=参数/guard/错误
++ */
++export async function finalizeRefresh(opts = {}) {
++  const { projectRoot, specBase, projectName, docs = null, force = false, platformOpts = null } = opts
++  const scanDir = join(specBase, 'docs', projectName, 'scan')
++  // ①拍 guard 会话态必须存在（握手文件=工单受影响集与内容哈希的唯一来源）
++  let guard = null
++  const guardPath = join(specBase, '.runtime', 'scan-guard.json')
++  try { guard = JSON.parse(readFileSync(guardPath, 'utf8')) } catch { /* 缺失/坏 JSON → 下方拒绝 */ }
++  if (!guard || guard.mode !== 'scan-refresh') {
++    console.error('scan refresh --done：未找到增量刷新会话态（.runtime/scan-guard.json 无 mode=scan-refresh）')
++    console.error('   → 先跑 sillyspec scan refresh（①拍出工单），编辑完成后再 --done')
++    return { code: 2, bumped: [], skipped: [], postCheckStatus: null, auditPath: null }
++  }
++  const relOf = (name) => `docs/${projectName}/scan/${name}`
++  const explicit = Array.isArray(docs) && docs.length > 0
++
++  // 内容比对门（D-009@v1）：默认面=工单受影响文档且内容有变者；未编辑文档不盖章
++  const candidates = explicit
++    ? docs.map((name) => ({ name }))
++    : (guard.refreshDocs || []).map((rel) => ({ name: rel.split('/').pop() }))
++  const skipped = []
++  const toBump = []
++  for (const { name } of candidates) {
++    const rel = relOf(name)
++    const baselineHash = guard.docHashes && guard.docHashes[rel]
++    if (!explicit && !force && baselineHash) {
++      let curHash = null
++      try { curHash = sha256File(join(scanDir, name)) } catch { /* 读失败按未变处理（保守跳过） */ }
++      if (curHash === baselineHash) {
++        skipped.push({ file: name, reason: '内容未变（未编辑即盖章）——显式 --docs 点名或 --force 才推进' })
++        continue
++      }
++    }
++    toBump.push(name)
++  }
++  if (toBump.length === 0) {
++    console.log('scan refresh --done：无文档推进（全部未编辑/已点名为空）。工单未完成请先编辑，或显式 --docs 点名。')
++    return { code: 0, bumped: [], skipped, postCheckStatus: null, auditPath: null }
++  }
++
++  // per-doc bump（task-03 单源）+ postcheck（specDir 转换口径对齐 executeScanFinalize，D-009@v1）
++  const { bumpScanDocBaselines, runScanPostCheck, printScanPostCheckResult } = await import('./scan-postcheck.js')
++  const specDirForCheck = platformOpts?.specRoot || null
++  const headShortRes = safeGit(projectRoot, ['rev-parse', '--short', 'HEAD'])
++  const headShort = headShortRes.error ? null : headShortRes.value.trim()
++  const bump = bumpScanDocBaselines({ cwd: projectRoot, specDir: platformOpts?.specRoot || specBase, project: projectName, docs: toBump, headShort })
++  console.log(`  📝 基线推进 ${bump.bumped.length} 份文档（source_commit→${headShort || '?'} / generator→sillyspec-scan-refresh）`)
++  for (const s of bump.skipped) console.log(`  ⏭️  ${s.file}：${s.reason}`)
++  // specDir 传平台 specRoot（平台模式）或 null（本地模式——bump 用 specBase 参数，postcheck 用 null 走本地轻量）
++  const postCheck = runScanPostCheck({ cwd: projectRoot, specDir: platformOpts?.specRoot || null, scanProfile: null })
++  printScanPostCheckResult(postCheck)
++
++  // 审计（只写不读，取证面；平台模式经 resolveRuntimeRoot 定根）
++  let auditPath = null
++  try {
++    const { resolveRuntimeRoot } = await import('./run/shared.js')
++    const runtimeRoot = resolveRuntimeRoot(platformOpts, specBase)
++    mkdirSync(runtimeRoot, { recursive: true })
++    const ts = new Date().toISOString().replace(/[-:T.]/g, '').slice(0, 14)
++    auditPath = join(runtimeRoot, `scan-refresh-${ts}.json`)
++    writeAtomicSync(auditPath, JSON.stringify({
++      changeType: 'scan-refresh',
++      head: headShort,
++      project: projectName,
++      bumped: bump.bumped,
++      skippedBump: bump.skipped,
++      skippedUnedited: skipped,
++      postCheckStatus: postCheck.status,
++      guardSourceCommit: guard.sourceCommit || null,
++      detectionLimit: '只覆盖带 file:line 引用的检出项；无引用论断不在保证范围（staleness advisory 仍有效）',
++      finishedAt: new Date().toISOString(),
++    }, null, 2) + '\n')
++  } catch (e) {
++    console.warn(`  ⚠️ 审计落盘失败（不阻断）：${e.message}`)
++  }
++  const code = postCheck.status === 'failed' ? 1 : 0
++  if (code === 0) {
++    console.log('检出极限：本次只声称「核对至 HEAD 的检出项已处理」，不声称文档与源码一致（staleness advisory 仍有效）。')
++  }
++  return { code, bumped: bump.bumped, skipped: [...skipped, ...bump.skipped], postCheckStatus: postCheck.status, auditPath }
++}
+diff --git a/src/scan-staleness.js b/src/scan-staleness.js
+index 4471a1f..6a70836 100644
+--- a/src/scan-staleness.js
++++ b/src/scan-staleness.js
+@@ -46,35 +46,47 @@ export function computeScanStaleness(opts) {
+   const scanDir = join(specBase, 'docs', projectName, 'scan')
+   if (!existsSync(scanDir)) return null
+ 
+-  // 任一 scan 文档带 source_commit 即可代表整批（modules.js 同批写入同值）
+-  let sourceCommit = null
++  // D-003@v2（2026-09-14-scan-incremental-refresh）：全文档收集再聚合取「落后最多」——
++  // 旧版「任一文档代表整批 break 首个命中」在 per-doc bump（增量刷新）后按 readdirSync
++  // 顺序随机读到新/旧基线：读到新基线则误报 fresh 掩盖其余旧文档，读到旧基线则永久噪声。
++  // 落后最多=最坏情况口径（宁多提醒不漏报）；任一基线非 HEAD 祖先（分支切换/rebase）→
++  // 整体 unknown 跳过判定（该文档历史已脱锚，计数无意义）。
+   let checked = 0
++  const commits = []
+   for (const f of readdirSync(scanDir)) {
+     if (!f.endsWith('.md')) continue
+     checked++
+     const c = parseSourceCommit(readFileSync(join(scanDir, f), 'utf8'))
+-    if (c) { sourceCommit = c; break }
++    if (c) commits.push(c)
+   }
+   if (checked === 0) return null
+-  if (!sourceCommit) {
++  if (commits.length === 0) {
+     return { status: 'unknown', behindCommits: null, daysSinceScan: null, sourceCommit: null,
+       message: 'scan 文档无 source_commit 字段（旧版生成），无法算漂移提示——文档引用是否失效以 docs check 为准；如架构已大改建议重跑 sillyspec run scan --standard' }
+   }
+ 
+   const head = safeGit(projectRoot, ['rev-parse', 'HEAD'])
+   if (head.error || !head.value) {
+-    return { status: 'unknown', behindCommits: null, daysSinceScan: null, sourceCommit,
++    return { status: 'unknown', behindCommits: null, daysSinceScan: null, sourceCommit: null,
+       message: `git 读取失败（${head.error || '无 HEAD'}），跳过漂移判定` }
+   }
+-  const isAncestor = safeGit(projectRoot, ['merge-base', '--is-ancestor', sourceCommit, head.value.trim()])
+-  if (isAncestor.error) {
+-    return { status: 'unknown', behindCommits: null, daysSinceScan: null, sourceCommit,
+-      message: `source_commit ${sourceCommit.slice(0, 7)} 不在当前分支历史（分支切换/rebase），跳过漂移判定` }
++  const headFull = head.value.trim()
++  const distinct = [...new Set(commits)]
++  let sourceCommit = null
++  let behindCommits = null
++  for (const c of distinct) {
++    const isAncestor = safeGit(projectRoot, ['merge-base', '--is-ancestor', c, headFull])
++    if (isAncestor.error) {
++      return { status: 'unknown', behindCommits: null, daysSinceScan: null, sourceCommit: c,
++        message: `source_commit ${c.slice(0, 7)} 不在当前分支历史（分支切换/rebase），跳过漂移判定` }
++    }
++    const countRes = safeGit(projectRoot, ['rev-list', '--count', `${c}..HEAD`])
++    const n = countRes.error ? null : parseInt(countRes.value, 10)
++    if (n === null || Number.isNaN(n)) continue // 单基点计数失败降级跳过，其余基点继续
++    if (behindCommits === null || n > behindCommits) { behindCommits = n; sourceCommit = c }
+   }
+-  const countRes = safeGit(projectRoot, ['rev-list', '--count', `${sourceCommit}..HEAD`])
+-  const behindCommits = countRes.error ? null : parseInt(countRes.value, 10)
+-  if (behindCommits === null || Number.isNaN(behindCommits)) {
+-    return { status: 'unknown', behindCommits: null, daysSinceScan: null, sourceCommit,
++  if (sourceCommit === null) {
++    return { status: 'unknown', behindCommits: null, daysSinceScan: null, sourceCommit: distinct[0],
+       message: 'rev-list 计数失败，跳过漂移判定' }
+   }
+   const dateRes = safeGit(projectRoot, ['log', '-1', '--format=%cI', sourceCommit])
+diff --git a/test/scan-diff.test.mjs b/test/scan-diff.test.mjs
+index 7bf2a72..6ce2974 100644
+--- a/test/scan-diff.test.mjs
++++ b/test/scan-diff.test.mjs
+@@ -526,3 +526,53 @@ describe('staleRefs 边界（审查修复回归）', () => {
+     assert.equal(r.staleRefs[0].change, 'A') // 基线后新增文件，状态 A（M 变体由 rename/src 归一用例覆盖）
+   })
+ })
++
++// ── 多文档异基线聚合 + 导出面（2026-09-14-scan-incremental-refresh，task-01）──
++describe('readSourceCommit 落后最多聚合 + 导出面', () => {
++  it('三文档三基线 → 缺省基线=落后最多者（拓扑序，与 readdir 顺序无关）', (t) => {
++    const f = mkRepo()
++    t.after(() => cleanup(f.root))
++    // base 之后造三个 commit：c1（落后3）、c2（落后2）、c3（落后1）
++    const commits = []
++    for (let i = 0; i < 3; i++) {
++      writeFileSync(join(f.root, 'src/core/a.js'), `a-${i}\n`)
++      f.run('git add -A')
++      f.run(`git commit -q -m c${i}`)
++      commits.push(f.run('git rev-parse HEAD'))
++    }
++    // 三文档各自指向不同基线：ARCH=c0（最落后）、CONV=c2、STRUCT=c1
++    writeFileSync(join(f.specBase, 'docs', f.proj, 'scan', 'ARCH.md'), scanDoc(commits[0]))
++    writeFileSync(join(f.specBase, 'docs', f.proj, 'scan', 'CONV.md'), scanDoc(commits[2]))
++    writeFileSync(join(f.specBase, 'docs', f.proj, 'scan', 'STRUCT.md'), scanDoc(commits[1]))
++    const r = computeScanDiff(opts(f))
++    assert.equal(r.ok, true)
++    assert.equal(r.base, commits[0].slice(0, 7), '聚合取落后最多（ARCH 的 c0）')
++  })
++
++  it('collectStaleRefs / parseNameStatus 导出可用且行为与抽取前一致', async (t) => {
++    const f = mkRepo()
++    t.after(() => cleanup(f.root))
++    writeFileSync(join(f.root, 'src/core/a.js'), 'a2\n')
++    f.run('git add -A')
++    f.run('git commit -q -m change')
++    // 导出面
++    const mod = await import('../src/scan-diff.js')
++    assert.equal(typeof mod.collectStaleRefs, 'function', 'collectStaleRefs 导出')
++    assert.equal(typeof mod.parseNameStatus, 'function', 'parseNameStatus 导出')
++    // parseNameStatus：R 双路径解析
++    const parsed = mod.parseNameStatus('R100\told/path.js\tnew/path.js\nM100\tm.js\tm.js\n')
++    assert.equal(parsed[0].status, 'R')
++    assert.equal(parsed[0].path, 'new/path.js')
++    assert.equal(parsed[0].oldPath, 'old/path.js')
++    // collectStaleRefs：src/ 前缀归一 + rename 旧路径入集
++    writeFileSync(join(f.specBase, 'docs', f.proj, 'scan', 'ARCH.md'), [
++      '---', 'author: test', `source_commit: ${f.base}`, '---', '',
++      '# ARCH', '', '引用 `src/core/a.js:1` 与 `moved.js:2`', '',
++    ].join('\n'))
++    const fullChanged = new Map([['src/core/a.js', 'M'], ['old/moved.js', 'R'], ['moved.js', 'R']])
++    const hits = mod.collectStaleRefs(join(f.specBase, 'docs', f.proj, 'scan'), fullChanged)
++    assert.equal(hits.length, 2, '两引用均命中')
++    assert.ok(hits.some(h => h.file === 'src/core/a.js' && h.change === 'M'))
++    assert.ok(hits.some(h => h.ref.includes('moved.js') && h.change === 'R'))
++  })
++})
+diff --git a/test/scan-refresh.test.mjs b/test/scan-refresh.test.mjs
+new file mode 100644
+index 0000000..fd8ef0d
+--- /dev/null
++++ b/test/scan-refresh.test.mjs
+@@ -0,0 +1,401 @@
++/**
++ * scan-refresh 单测（change: 2026-09-14-scan-incremental-refresh）
++ *
++ * 本文件首版（task-03）：bumpScanDocBaselines 盖章函数——per-doc 三键推进 /
++ * 未点名不动 / 幂等 / 缺失 skipped / 其余 frontmatter 键保留。
++ * task-05 追加 computeRefreshPlan 计算层用例；task-07 追加临时 git 仓 e2e。
++ */
++import { describe, it } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++import { bumpScanDocBaselines } from '../src/scan-postcheck.js'
++
++const cleanup = (root) => { try { rmSync(root, { recursive: true, force: true }) } catch {} }
++
++function mkSpec({ docs = {} } = {}) {
++  const root = mkdtempSync(join(tmpdir(), 'scan-refresh-'))
++  const specBase = join(root, '.sillyspec')
++  const scanDir = join(specBase, 'docs', 'demo', 'scan')
++  mkdirSync(scanDir, { recursive: true })
++  for (const [name, content] of Object.entries(docs)) {
++    writeFileSync(join(scanDir, name), content)
++  }
++  return { root, specBase, scanDir, cwd: root }
++}
++
++const docA = [
++  '---',
++  'author: test',
++  'created_at: 2026-09-14 00:00:00',
++  'source_commit: 1111111',
++  'updated_at: 2026-09-14T00:00:00.000Z',
++  'generator: sillyspec-scan',
++  'scan_depth: standard',
++  '---',
++  '',
++  '# 架构（Architecture）',
++  '',
++  '内容引用 `src/a.js:1`',
++  '',
++].join('\n')
++
++const docB = docA.replace('1111111', '2222222').replace('# 架构（Architecture）', '# 约定（Conventions）')
++
++describe('bumpScanDocBaselines per-doc 盖章', () => {
++  it('点名文档三键推进；未点名文档逐字节不动', (t) => {
++    const f = mkSpec({ docs: { 'ARCHITECTURE.md': docA, 'CONVENTIONS.md': docB } })
++    t.after(() => cleanup(f.root))
++    const before = readFileSync(join(f.scanDir, 'CONVENTIONS.md'), 'utf8')
++    const r = bumpScanDocBaselines({
++      cwd: f.cwd, specDir: f.specBase, project: 'demo',
++      docs: ['ARCHITECTURE.md'], headShort: 'abcdef1',
++    })
++    assert.deepEqual(r.skipped, [])
++    assert.equal(r.bumped.length, 1)
++    const after = readFileSync(join(f.scanDir, 'ARCHITECTURE.md'), 'utf8')
++    assert.match(after, /^source_commit: abcdef1$/m)
++    assert.match(after, /^generator: sillyspec-scan-refresh$/m)
++    assert.match(after, /^updated_at: \d{4}-\d{2}-\d{2}T/m)
++    // 其余键保留
++    assert.match(after, /^author: test$/m)
++    assert.match(after, /^created_at: 2026-09-14 00:00:00$/m)
++    assert.match(after, /^scan_depth: standard$/m)
++    // 正文保留
++    assert.ok(after.includes('# 架构（Architecture）'))
++    assert.ok(after.includes('`src/a.js:1`'))
++    // 未点名文档不动
++    assert.equal(readFileSync(join(f.scanDir, 'CONVENTIONS.md'), 'utf8'), before)
++  })
++
++  it('幂等：同值重跑原位替换不重复追加（updated_at 键仍唯一）', (t) => {
++    const f = mkSpec({ docs: { 'ARCHITECTURE.md': docA } })
++    t.after(() => cleanup(f.root))
++    const call = () => bumpScanDocBaselines({
++      cwd: f.cwd, specDir: f.specBase, project: 'demo',
++      docs: ['ARCHITECTURE.md'], headShort: 'abcdef1',
++    })
++    call()
++    call()
++    const after = readFileSync(join(f.scanDir, 'ARCHITECTURE.md'), 'utf8')
++    assert.equal((after.match(/^source_commit: abcdef1$/gm) || []).length, 1, 'source_commit 唯一（原位替换）')
++    assert.equal((after.match(/^generator: sillyspec-scan-refresh$/gm) || []).length, 1, 'generator 唯一')
++    assert.equal((after.match(/^updated_at:/gm) || []).length, 1, 'updated_at 唯一（不追加重复键）')
++    assert.ok(after.includes('内容引用 `src/a.js:1`'), '正文保留')
++  })
++
++  it('缺失文档进 skipped（带 reason），已存在文档照常 bump', (t) => {
++    const f = mkSpec({ docs: { 'ARCHITECTURE.md': docA } })
++    t.after(() => cleanup(f.root))
++    const r = bumpScanDocBaselines({
++      cwd: f.cwd, specDir: f.specBase, project: 'demo',
++      docs: ['ARCHITECTURE.md', 'MISSING.md'], headShort: 'abcdef1',
++    })
++    assert.equal(r.bumped.length, 1)
++    assert.equal(r.skipped.length, 1)
++    assert.equal(r.skipped[0].file, 'MISSING.md')
++    assert.ok(r.skipped[0].reason.length > 0)
++  })
++
++  it('headShort 缺省且非 git 仓 → source_commit 键跳过，updated_at/generator 恒写', (t) => {
++    const f = mkSpec({ docs: { 'ARCHITECTURE.md': docA } })
++    t.after(() => cleanup(f.root))
++    const r = bumpScanDocBaselines({
++      cwd: f.cwd, specDir: f.specBase, project: 'demo', docs: ['ARCHITECTURE.md'],
++    })
++    assert.equal(r.bumped.length, 1)
++    const after = readFileSync(join(f.scanDir, 'ARCHITECTURE.md'), 'utf8')
++    assert.match(after, /^source_commit: 1111111$/m, '非 git 仓不动 source_commit（不写坏值）')
++    assert.match(after, /^generator: sillyspec-scan-refresh$/m)
++    assert.match(after, /^updated_at: \d{4}-\d{2}-\d{2}T/m)
++  })
++
++  it('无 frontmatter 文档 → 新建头部（三键 + 正文保留）', (t) => {
++    const f = mkSpec({ docs: { 'PROJECT.md': '# 项目（Project）\n\n正文\n' } })
++    t.after(() => cleanup(f.root))
++    const r = bumpScanDocBaselines({
++      cwd: f.cwd, specDir: f.specBase, project: 'demo',
++      docs: ['PROJECT.md'], headShort: 'abcdef1',
++    })
++    assert.equal(r.bumped.length, 1)
++    const after = readFileSync(join(f.scanDir, 'PROJECT.md'), 'utf8')
++    assert.ok(after.startsWith('---\n'), 'frontmatter 新建于头部')
++    assert.match(after, /^source_commit: abcdef1$/m)
++    assert.ok(after.includes('# 项目（Project）'), '正文保留')
++  })
++})
++
++// ── computeRefreshPlan 计算层（task-05）──
++import { execSync } from 'node:child_process'
++import { computeRefreshPlan } from '../src/scan-refresh.js'
++
++function mkRefreshRepo({ docs, map = null } = {}) {
++  const root = mkdtempSync(join(tmpdir(), 'scan-refresh-repo-'))
++  const run = (a) => execSync(a, { cwd: root, stdio: 'pipe' }).toString().trim()
++  run('git init -q')
++  run('git config user.email t@t.com')
++  run('git config user.name t')
++  mkdirSync(join(root, 'src'), { recursive: true })
++  writeFileSync(join(root, 'src/a.js'), 'a1\n')
++  run('git add -A')
++  run('git commit -q -m base')
++  const base = run('git rev-parse HEAD')
++  const specBase = join(root, '.sillyspec')
++  const scanDir = join(specBase, 'docs', 'demo', 'scan')
++  mkdirSync(scanDir, { recursive: true })
++  for (const [name, content] of Object.entries(docs)) writeFileSync(join(scanDir, name), content)
++  if (map) {
++    mkdirSync(join(specBase, 'docs', 'demo', 'modules'), { recursive: true })
++    writeFileSync(join(specBase, 'docs', 'demo', 'modules', '_module-map.yaml'), map)
++  }
++  if (Object.keys(docs).length > 0 || map) {
++    run('git add -A')
++    run('git commit -q -m docs')
++  }
++  return { root, base, specBase, scanDir, run }
++}
++
++const refDoc = (base, refs = '`src/a.js:1`') => [
++  '---', 'author: t', `source_commit: ${base}`, '---', '', '# 架构（Architecture）', '', `引用 ${refs}`, '',
++].join('\n')
++
++const MAP = `schema_version: 2\nmodules:\n  core:\n    status: active\n    paths:\n      - src/\n`
++
++describe('computeRefreshPlan 门控与受影响集', () => {
++  it('无 source_commit 文档 → 硬门 no-baseline 拒绝', (t) => {
++    const f = mkRefreshRepo({ docs: { 'ARCHITECTURE.md': '---\nauthor: t\n---\n\n# 无基线\n' } })
++    t.after(() => cleanup(f.root))
++    const r = computeRefreshPlan({ projectRoot: f.root, specBase: f.specBase, projectName: 'demo' })
++    assert.equal(r.ok, false)
++    assert.equal(r.kind, 'no-baseline')
++  })
++
++  it('in-scope 未提交改动 → dirty-worktree fail-closed（scope 非空限 scope 面）', (t) => {
++    const f = mkRefreshRepo({ docs: {}, map: MAP })
++    writeFileSync(join(f.scanDir, 'ARCHITECTURE.md'), refDoc(f.base))
++    f.run('git add -A && git commit -q -m doc')
++    t.after(() => cleanup(f.root))
++    writeFileSync(join(f.root, 'src/a.js'), 'uncommitted\n')
++    const r = computeRefreshPlan({ projectRoot: f.root, specBase: f.specBase, projectName: 'demo' })
++    assert.equal(r.ok, false)
++    assert.equal(r.kind, 'dirty-worktree')
++    assert.ok(r.error.includes('src/a.js'))
++    // scope 外脏不阻断
++    writeFileSync(join(f.root, 'src/a.js'), 'a1\n')
++    writeFileSync(join(f.root, 'README.md'), 'dirty\n')
++    const r2 = computeRefreshPlan({ projectRoot: f.root, specBase: f.specBase, projectName: 'demo' })
++    assert.equal(r2.ok, true, 'scope 外（README 不在 map paths）脏不阻断')
++  })
++
++  it('scope 空回退全仓源码面：.sillyspec 脏不阻断、源码脏阻断', (t) => {
++    const f = mkRefreshRepo({ docs: {}, map: null })
++    t.after(() => cleanup(f.root))
++    writeFileSync(join(f.scanDir, 'ARCHITECTURE.md'), refDoc(f.base))
++    f.run('git add -A && git commit -q -m doc')
++    writeFileSync(join(f.specBase, 'docs', 'demo', 'scan', 'NOTES.md'), '进度库自身脏\n')
++    const r1 = computeRefreshPlan({ projectRoot: f.root, specBase: f.specBase, projectName: 'demo' })
++    assert.equal(r1.ok, true, '.sillyspec/ 脏在回退面被排除')
++    writeFileSync(join(f.root, 'src/a.js'), 'uncommitted\n')
++    const r2 = computeRefreshPlan({ projectRoot: f.root, specBase: f.specBase, projectName: 'demo' })
++    assert.equal(r2.ok, false)
++    assert.equal(r2.kind, 'dirty-worktree')
++  })
++
++  it('非祖先基线 → 硬门 non-ancestor 拒绝', (t) => {
++    const f = mkRefreshRepo({ docs: {} })
++    t.after(() => cleanup(f.root))
++    writeFileSync(join(f.scanDir, 'ARCHITECTURE.md'), refDoc(f.base))
++    f.run('git add -A && git commit -q -m doc')
++    f.run('git checkout -q --orphan other')
++    f.run('git commit -q --allow-empty -m orphan')
++    const orphan = f.run('git rev-parse HEAD')
++    f.run('git checkout -q master')
++    writeFileSync(join(f.scanDir, 'ARCHITECTURE.md'), refDoc(orphan))
++    const r = computeRefreshPlan({ projectRoot: f.root, specBase: f.specBase, projectName: 'demo' })
++    assert.equal(r.ok, false)
++    assert.equal(r.kind, 'non-ancestor')
++  })
++
++  it('受影响文档 scan_depth: quick → 硬门 quick-depth 拒绝', (t) => {
++    const f = mkRefreshRepo({ docs: {} })
++    const quickDoc = refDoc(f.base).replace('---\n\n# 架构', 'scan_depth: quick\n---\n\n# 架构')
++    writeFileSync(join(f.scanDir, 'ARCHITECTURE.md'), quickDoc)
++    f.run('git add -A && git commit -q -m doc')
++    t.after(() => cleanup(f.root))
++    writeFileSync(join(f.root, 'src/a.js'), 'a2\n')
++    f.run('git add -A && git commit -q -m change')
++    const r = computeRefreshPlan({ projectRoot: f.root, specBase: f.specBase, projectName: 'demo' })
++    assert.equal(r.ok, false)
++    assert.equal(r.kind, 'quick-depth')
++  })
++
++  it('引用命中 → 受影响集 + guard 握手文件（白名单/docHashes/短哈希）+ hunks/commits 材料', (t) => {
++    const f = mkRefreshRepo({ docs: {}, map: MAP })
++    t.after(() => cleanup(f.root))
++    writeFileSync(join(f.scanDir, 'ARCHITECTURE.md'), refDoc(f.base))
++    writeFileSync(join(f.scanDir, 'PROJECT.md'), refDoc(f.base, '无引用正文'))
++    f.run('git add -A && git commit -q -m doc')
++    writeFileSync(join(f.root, 'src/a.js'), 'a2\n')
++    f.run('git add -A')
++    f.run('git commit -q -m change-a')
++    const r = computeRefreshPlan({ projectRoot: f.root, specBase: f.specBase, projectName: 'demo' })
++    assert.equal(r.ok, true)
++    assert.equal(r.affectedDocs.length, 1, '只有 ARCHITECTURE 引用命中')
++    assert.equal(r.affectedDocs[0].file, 'ARCHITECTURE.md')
++    assert.equal(r.affectedDocs[0].staleRefs[0].file, 'src/a.js')
++    assert.ok(r.affectedDocs[0].hunks.includes('a2'), 'hunks 材料含变更内容')
++    assert.ok(r.affectedDocs[0].commits.includes('change-a'), 'commits 材料含提交说明')
++    // guard 握手
++    const guard = JSON.parse(readFileSync(join(f.specBase, '.runtime', 'scan-guard.json'), 'utf8'))
++    assert.equal(guard.mode, 'scan-refresh')
++    assert.deepEqual(guard.refreshDocs, ['docs/demo/scan/ARCHITECTURE.md'])
++    assert.ok(guard.docHashes['docs/demo/scan/ARCHITECTURE.md'], 'docHashes 记录内容哈希')
++    assert.equal(guard.sourceCommit.length, 7, 'sourceCommit 用 7 位短哈希（与盖章同格式）')
++    assert.equal(guard.forceRescan, false)
++  })
++
++  it('基线=HEAD 的文档标 fresh；per-doc 分组（新基线文档不吃旧窗口）', (t) => {
++    const f = mkRefreshRepo({ docs: {} })
++    writeFileSync(join(f.scanDir, 'ARCHITECTURE.md'), refDoc(f.base))
++    f.run('git add -A && git commit -q -m doc')
++    t.after(() => cleanup(f.root))
++    writeFileSync(join(f.root, 'src/a.js'), 'a2\n')
++    f.run('git add -A')
++    f.run('git commit -q -m change')
++    const head = f.run('git rev-parse HEAD')
++    // PROJECT 已推进到 HEAD（模拟上轮 refresh --done），ARCHITECTURE 仍在旧基线
++    writeFileSync(join(f.scanDir, 'PROJECT.md'), refDoc(head))
++    const r = computeRefreshPlan({ projectRoot: f.root, specBase: f.specBase, projectName: 'demo' })
++    assert.equal(r.ok, true)
++    assert.ok(r.freshDocs.includes('PROJECT.md'), 'PROJECT 标 fresh 不进受影响集')
++    assert.equal(r.affectedDocs.length, 1)
++    assert.equal(r.affectedDocs[0].file, 'ARCHITECTURE.md')
++  })
++
++  it('软门：漂移超阈值拒绝（--force 可越并注入警告）', (t) => {
++    const f = mkRefreshRepo({ docs: {} })
++    t.after(() => cleanup(f.root))
++    writeFileSync(join(f.scanDir, 'ARCHITECTURE.md'), refDoc(f.base))
++    f.run('git add -A && git commit -q -m doc')
++    // 造 101 个 scope 内变更 commit（每 commit 一个新文件——漂移 101 > 100）
++    for (let i = 0; i < 101; i++) {
++      writeFileSync(join(f.root, `src/f${i}.js`), 'x\n')
++      f.run('git add -A')
++      f.run(`git commit -q -m c${i}`)
++    }
++    const r = computeRefreshPlan({ projectRoot: f.root, specBase: f.specBase, projectName: 'demo' })
++    assert.equal(r.ok, false)
++    assert.equal(r.kind, 'soft-gate')
++    const r2 = computeRefreshPlan({ projectRoot: f.root, specBase: f.specBase, projectName: 'demo', force: true })
++    assert.equal(r2.ok, true, '--force 越软门')
++    assert.ok(r2.warnings.some(w => w.includes('--force')))
++  })
++})
++
++// ── IO 面（task-06）──
++import { runRefresh, finalizeRefresh } from '../src/scan-refresh.js'
++
++describe('runRefresh / finalizeRefresh IO 面', () => {
++  it('runRefresh：拒绝场景退出 2 且输出含建议命令；工单就绪退出 0', async (t) => {
++    const f = mkRefreshRepo({ docs: {} })
++    t.after(() => cleanup(f.root))
++    writeFileSync(join(f.scanDir, 'ARCHITECTURE.md'), refDoc(f.base))
++    f.run('git add -A && git commit -q -m doc')
++    writeFileSync(join(f.root, 'src/a.js'), 'uncommitted\n')
++    const rej = await runRefresh({ projectRoot: f.root, specBase: f.specBase, projectName: 'demo' })
++    assert.equal(rej, 2, 'dirty 拒绝退出 2')
++    f.run('git checkout -q -- src/a.js')
++    writeFileSync(join(f.root, 'src/a.js'), 'a2\n')
++    f.run('git add -A && git commit -q -m change')
++    const ok = await runRefresh({ projectRoot: f.root, specBase: f.specBase, projectName: 'demo' })
++    assert.equal(ok, 0, '工单就绪退出 0')
++  })
++
++  it('finalize：无会话态拒绝（code 2）；内容比对门未编辑不 bump、编辑后 bump+审计落盘', async (t) => {
++    const f = mkRefreshRepo({ docs: {} })
++    t.after(() => cleanup(f.root))
++    writeFileSync(join(f.scanDir, 'ARCHITECTURE.md'), refDoc(f.base))
++    f.run('git add -A && git commit -q -m doc')
++    writeFileSync(join(f.root, 'src/a.js'), 'a2\n')
++    f.run('git add -A && git commit -q -m change')
++    const noSession = await finalizeRefresh({ projectRoot: f.root, specBase: f.specBase, projectName: 'demo' })
++    assert.equal(noSession.code, 2, '无 guard 会话态拒绝')
++
++    const plan = computeRefreshPlan({ projectRoot: f.root, specBase: f.specBase, projectName: 'demo' })
++    assert.equal(plan.ok, true)
++    // ①拍后未编辑 → 比对门拦截：默认不盖章
++    const unedited = await finalizeRefresh({ projectRoot: f.root, specBase: f.specBase, projectName: 'demo' })
++    assert.equal(unedited.code, 0)
++    assert.equal(unedited.bumped.length, 0)
++    assert.ok(unedited.skipped.some(s => s.reason.includes('未编辑')))
++    // 模拟 agent 手术编辑（引用更新到新行）
++    const head = f.run('git rev-parse HEAD')
++    writeFileSync(join(f.scanDir, 'ARCHITECTURE.md'), [
++      '---', 'author: t', `source_commit: ${f.base}`, '---', '', '# 架构（Architecture）', '', '引用 `src/a.js:2`（已更新）', '',
++    ].join('\n'))
++    const done = await finalizeRefresh({ projectRoot: f.root, specBase: f.specBase, projectName: 'demo' })
++    assert.equal(done.code, 0, `postCheck 不应 failed（实际 ${done.postCheckStatus}）`)
++    assert.equal(done.bumped.length, 1)
++    const after = readFileSync(join(f.scanDir, 'ARCHITECTURE.md'), 'utf8')
++    assert.match(after, new RegExp(`^source_commit: ${head.slice(0, 7)}$`, 'm'), '基线推进到 HEAD')
++    assert.match(after, /^generator: sillyspec-scan-refresh$/m)
++    assert.ok(done.auditPath && existsSync(done.auditPath), '审计文件落盘')
++    const audit = JSON.parse(readFileSync(done.auditPath, 'utf8'))
++    assert.equal(audit.changeType, 'scan-refresh')
++    assert.equal(audit.bumped.length, 1)
++  })
++})
++
++// ── 全链路 e2e（task-07）：闭环后下轮 diff 从新基线起算 + 写面限界 ──
++import { computeScanDiff } from '../src/scan-diff.js'
++import { shouldBlock } from '../src/hooks/worktree-guard.js'
++import { createHash } from 'node:crypto'
++
++describe('scan refresh 全链路 e2e（临时 git 仓）', () => {
++  it('闭环：refresh → 编辑 → --done → 下轮 scan diff 从新基线起算（旧漂移清零）', async (t) => {
++    const f = mkRefreshRepo({ docs: {}, map: MAP })
++    t.after(() => cleanup(f.root))
++    writeFileSync(join(f.scanDir, 'ARCHITECTURE.md'), refDoc(f.base))
++    f.run('git add -A && git commit -q -m doc')
++    writeFileSync(join(f.root, 'src/a.js'), 'a2\n')
++    f.run('git add -A && git commit -q -m change')
++
++    // ①拍 → guard 白名单内 hook 放行（直接调 hook 主入口，不依赖宿主安装）
++    assert.equal(await runRefresh({ projectRoot: f.root, specBase: f.specBase, projectName: 'demo' }), 0)
++    const guard = JSON.parse(readFileSync(join(f.specBase, '.runtime', 'scan-guard.json'), 'utf8'))
++    assert.equal(guard.mode, 'scan-refresh')
++    const blocked = shouldBlock({ tool: 'Write', filePath: join(f.scanDir, 'ARCHITECTURE.md'), cwd: f.root })
++    assert.equal(blocked.blocked, false, '①拍后白名单内文档编辑被 hook 放行')
++    // 白名单外（PROJECT.md）继续保护
++    writeFileSync(join(f.scanDir, 'PROJECT.md'), refDoc(f.base, '正文'))
++    f.run('git add -A && git commit -q -m doc2')
++    // PROJECT 无过期引用 → 不在白名单 → guard check-1 异基线拦截（mode 会话态下白名单外走原保护）
++    const blocked2 = shouldBlock({ tool: 'Write', filePath: join(f.scanDir, 'PROJECT.md'), cwd: f.root })
++    assert.equal(blocked2.blocked, true, '白名单外文档保护不放松')
++
++    // 模拟手术编辑 + ②拍
++    writeFileSync(join(f.scanDir, 'ARCHITECTURE.md'), [
++      '---', 'author: t', `source_commit: ${f.base}`, '---', '', '# 架构（Architecture）', '', '引用 `src/a.js:2`（行号已更新）', '',
++    ].join('\n'))
++    const done = await finalizeRefresh({ projectRoot: f.root, specBase: f.specBase, projectName: 'demo' })
++    assert.equal(done.code, 0)
++    assert.equal(done.bumped.length, 1)
++
++    // 下轮 scan diff：默认基线聚合=落后最多。ARCHITECTURE 已在 HEAD、PROJECT 在旧基线——
++    // 但 PROJECT 无过期引用命中；聚合基线仍取 PROJECT 的（保守），漂移窗含 docs commit（outOfScope）
++    const head = f.run('git rev-parse HEAD')
++    const after = readFileSync(join(f.scanDir, 'ARCHITECTURE.md'), 'utf8')
++    assert.match(after, new RegExp(`^source_commit: ${head.slice(0, 7)}$`, 'm'), 'bump 到 HEAD')
++    // 再跑一次 refresh：ARCHITECTURE fresh，无 staleRefs 命中 → 零检出漂移
++    const r2 = computeRefreshPlan({ projectRoot: f.root, specBase: f.specBase, projectName: 'demo' })
++    assert.equal(r2.ok, true)
++    assert.ok(r2.freshDocs.includes('ARCHITECTURE.md'))
++    assert.equal(r2.affectedDocs.length, 0, '刷新后旧漂移清零（下轮从新基线起算）')
++
++    // 写面限界：modules/ 与 knowledge/ 全程零写入
++    assert.ok(!existsSync(join(f.specBase, 'docs', 'demo', 'modules', 'anything-touched.txt')))
++    const knowledgeDir = join(f.specBase, 'knowledge')
++    assert.ok(!existsSync(knowledgeDir), 'knowledge/ 零写入（D-001@v1 写面限界）')
++  })
++})
+diff --git a/test/scan-staleness.test.mjs b/test/scan-staleness.test.mjs
+index ee99ece..c331cde 100644
+--- a/test/scan-staleness.test.mjs
++++ b/test/scan-staleness.test.mjs
+@@ -113,3 +113,63 @@ describe('prompt 占位符接线（{SCAN_STALENESS}）', () => {
+     assert.ok(pj.includes("{SCAN_STALENESS}"), 'prompt.js 有替换分支')
+   })
+ })
++
++// ── 多文档异基线聚合（2026-09-14-scan-incremental-refresh D-003@v2，task-02）──
++describe('computeScanStaleness 全文档聚合取落后最多', () => {
++  it('新/旧基线混排 → behindCommits 恒=最落后基线计数（与文件顺序无关）', () => {
++    const mk = (n) => {
++      execSync(`git commit -q --allow-empty -m c${n}`, { cwd: root, stdio: 'pipe' })
++      return execSync('git rev-parse HEAD', { cwd: root, stdio: 'pipe' }).toString().trim()
++    }
++    const c1 = mk(1)
++    const c2 = mk(2)
++    mk(3)
++    const scanDir = join(specBase, 'docs', 'demo', 'scan')
++    mkdirSync(scanDir, { recursive: true })
++    // 旧基线文档 + 新基线文档混排；旧版「break 首个命中」按 readdir 顺序随机取其一
++    writeFileSync(join(scanDir, 'A-NEW.md'), [
++      '---', 'author: t', `source_commit: ${c2}`, '---', '', '# N', '',
++    ].join('\n'))
++    writeFileSync(join(scanDir, 'B-OLD.md'), [
++      '---', 'author: t', `source_commit: ${c1}`, '---', '', '# O', '',
++    ].join('\n'))
++    const r = computeScanStaleness({ projectRoot: root, specBase, projectName: 'demo', thresholds: { commits: 1, days: 3650 } })
++    assert.equal(r.status, 'needs-refresh')
++    assert.equal(r.behindCommits, 2, '取最落后基线 c1（落后 2），不受 readdir 顺序影响')
++    assert.equal(r.sourceCommit, c1)
++  })
++
++  it('全部文档推进到 HEAD → fresh（refresh --done 闭环后 advisory 消警）', () => {
++    const head = execSync('git rev-parse HEAD', { cwd: root, stdio: 'pipe' }).toString().trim()
++    const scanDir = join(specBase, 'docs', 'demo', 'scan')
++    mkdirSync(scanDir, { recursive: true })
++    for (const name of ['A.md', 'B.md']) {
++      writeFileSync(join(scanDir, name), [
++        '---', 'author: t', `source_commit: ${head}`, '---', '', '# X', '',
++      ].join('\n'))
++    }
++    const r = computeScanStaleness({ projectRoot: root, specBase, projectName: 'demo' })
++    assert.equal(r.status, 'fresh')
++    assert.equal(r.behindCommits, 0)
++  })
++
++  it('任一基线非 HEAD 祖先（分支切换）→ 整体 unknown 跳过判定', () => {
++    const head = execSync('git rev-parse HEAD', { cwd: root, stdio: 'pipe' }).toString().trim()
++    const scanDir = join(specBase, 'docs', 'demo', 'scan')
++    mkdirSync(scanDir, { recursive: true })
++    writeFileSync(join(scanDir, 'A.md'), [
++      '---', 'author: t', `source_commit: ${head}`, '---', '', '# X', '',
++    ].join('\n'))
++    // 孤儿 commit：不在 HEAD 历史里（无父提交链）
++    execSync('git checkout -q --orphan detached', { cwd: root, stdio: 'pipe' })
++    execSync('git commit -q --allow-empty -m orphan', { cwd: root, stdio: 'pipe' })
++    const orphan = execSync('git rev-parse HEAD', { cwd: root, stdio: 'pipe' }).toString().trim()
++    execSync('git checkout -q master', { cwd: root, stdio: 'pipe' })
++    writeFileSync(join(scanDir, 'B.md'), [
++      '---', 'author: t', `source_commit: ${orphan}`, '---', '', '# Y', '',
++    ].join('\n'))
++    const r = computeScanStaleness({ projectRoot: root, specBase, projectName: 'demo' })
++    assert.equal(r.status, 'unknown')
++    assert.ok(r.message.includes('不在当前分支历史'))
++  })
++})
+diff --git a/test/worktree-guard.test.mjs b/test/worktree-guard.test.mjs
+index 81ac2ab..40b6d23 100644
+--- a/test/worktree-guard.test.mjs
++++ b/test/worktree-guard.test.mjs
+@@ -95,18 +95,90 @@ try {
+     false,
+     'scan overwrite should allow stale source_commit with --force-rescan'
+   )
++
++  // ── 7/40 位归一化比对（2026-09-14-scan-incremental-refresh D-007@v1）──
++  // run/stage.js 写 guard 用 40 位全哈希、scan-postcheck 盖章用 7 位短哈希：旧精确比对
++  // 恒不等 → guard 存在即恒拦。归一化后同基线放行 / 异基线拦截恢复设计本意。
++  writeFileSync(join(runtimeDir, 'scan-guard.json'), JSON.stringify({
++    sourceCommit: 'abc1234fullhash0000000000000000000000000000',
++    startedAt: '2026-06-16T10:00:00.000Z',
++    forceRescan: false,
++  }, null, 2))
++  writeFileSync(scanDoc, [
++    '---',
++    'source_commit: abc1234',
++    'updated_at: 2026-06-16T09:00:00.000Z',
++    '---',
++    '# Architecture',
++    '',
++  ].join('\n'))
++  assert.equal(
++    shouldBlock({ tool: 'Write', filePath: scanDoc, cwd: root }).blocked,
++    false,
++    'same-base 7/40 mixed hash lengths should pass after normalization'
++  )
++  writeFileSync(scanDoc, [
++    '---',
++    'source_commit: zzz9999',
++    'updated_at: 2026-06-16T09:00:00.000Z',
++    '---',
++    '# Architecture',
++    '',
++  ].join('\n'))
++  assert.equal(
++    shouldBlock({ tool: 'Write', filePath: scanDoc, cwd: root }).blocked,
++    true,
++    'different base 7/40 mixed hash lengths should still block after normalization'
++  )
++
++  // ── scan-refresh 会话态白名单（D-007@v1）：白名单内放行 / 白名单外原保护 ──
++  writeFileSync(join(runtimeDir, 'scan-guard.json'), JSON.stringify({
++    name_zh: '增量刷新守卫',
++    mode: 'scan-refresh',
++    refreshDocs: ['docs/app/scan/ARCHITECTURE.md'],
++    docHashes: { 'docs/app/scan/ARCHITECTURE.md': 'deadbeef' },
++    sourceCommit: 'ref-head',
++    startedAt: '2026-06-16T10:00:00.000Z',
++    forceRescan: false,
++  }, null, 2))
++  writeFileSync(scanDoc, [
++    '---',
++    'source_commit: old-base',
++    'updated_at: 2026-06-16T11:00:00.000Z', // 晚于 guard.startedAt：refresh 编辑后的正常态
++    '---',
++    '# Architecture',
++    '',
++  ].join('\n'))
++  assert.equal(
++    shouldBlock({ tool: 'Write', filePath: scanDoc, cwd: root }).blocked,
++    false,
++    'scan-refresh whitelisted doc should be writable even with newer updated_at'
++  )
++  const otherScanDoc = join(root, '.sillyspec', 'docs', 'app', 'scan', 'PROJECT.md')
++  writeFileSync(otherScanDoc, [
++    '---',
++    'source_commit: old-base',
++    'updated_at: 2026-06-16T09:00:00.000Z',
++    '---',
++    '# Project',
++    '',
++  ].join('\n'))
++  const r2 = shouldBlock({ tool: 'Write', filePath: otherScanDoc, cwd: root })
++  assert.equal(r2.blocked, true, 'scan-refresh non-whitelisted doc keeps original protection')
++  assert.ok(String(r2.reason || '').includes('source_commit'), 'non-whitelisted block cites source_commit mismatch')
++
+   const externalSpec = join(root, 'external-spec')
+   const externalScanDoc = join(externalSpec, 'docs', 'app', 'scan', 'ARCHITECTURE.md')
+   mkdirSync(join(externalSpec, '.runtime'), { recursive: true })
+   mkdirSync(join(externalSpec, 'docs', 'app', 'scan'), { recursive: true })
+   writeFileSync(join(externalSpec, '.runtime', 'scan-guard.json'), JSON.stringify({
+-    sourceCommit: 'external-new-head',
++    sourceCommit: 'extnew1-head',
+     startedAt: '2026-06-16T10:00:00.000Z',
+     forceRescan: false,
+   }, null, 2))
+   writeFileSync(externalScanDoc, [
+     '---',
+-    'source_commit: external-old-head',
++    'source_commit: extold9-head',
+     'updated_at: 2026-06-16T09:00:00.000Z',
+     '---',
+     '# Architecture',
