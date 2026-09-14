@@ -1,0 +1,12 @@
+diff --git a/test/scope-audit.test.mjs b/test/scope-audit.test.mjs
+index be9f991..4260140 100644
+--- a/test/scope-audit.test.mjs
++++ b/test/scope-audit.test.mjs
+@@ -670,7 +670,7 @@ test('ql-xxx 未命中：不存在的 ql-xxx 明确报错（非静默 full-flow
+     const r = await computeChangeScopeAudit({ cwd: d, changeName: 'ql-20260999-999-ffff' })
+     assert.equal(r.ok, false, `未命中 → ok=false（实际 ${r.degradedReason}）`)
+     assert.equal(r.mode, 'quick')
+-    assert.ok(r.degradedReason && r.degradedReason.includes('不存在'), `明确报错（实际 ${r.degradedReason}）`)
++    assert.ok(r.degradedReason && r.degradedReason.includes('无记录'), `明确报错（实际 ${r.degradedReason}）`)
+   } finally { cleanup(d) }
+ })

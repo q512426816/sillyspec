@@ -1,0 +1,63 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-89cd06b0",
+  "totals": {
+    "files": 3,
+    "additions": 5603,
+    "deletions": 1
+  },
+  "rows": [
+    {
+      "path": "src/scope-audit.js",
+      "declared": true,
+      "additions": 1346,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/index.js",
+      "declared": true,
+      "additions": 4256,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/scope-audit.test.mjs",
+      "declared": true,
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 1,
+    "codeFileCount": 0,
+    "testFileCount": 0,
+    "moduleSpan": 0,
+    "modules": [],
+    "unmappedFiles": [],
+    "riskHits": [],
+    "level": "L0",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "na",
+      "docClaim": "claimed",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260914-014-7da8",
+  "sessionId": "quick-89cd06b0",
+  "savedAt": "2026-09-14T07:44:16.133Z",
+  "patchSha256": "49c57b1fea5ec15ab7e3fbe93f53311c5f0552e1ebea29ae56bc83b195bb3b8d",
+  "patchStatus": "ok"
+}

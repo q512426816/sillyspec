@@ -206,3 +206,15 @@
 方案：execute 采集 apply-pathspec 收窄；形态 A 自采纯 worktree 口径（弃 verify 证据核验面）；sha256 CRLF 归一化双侧同口径
 结果：node --test 35/35；npm test 全量 0 失败；本仓 22 文件+11840→3 实改+7 计划未动；平台归档 --file 假篡改告警消除
 审计：[gate] L1（跨 2 模块 · 3 文件：3 代码/0 测试）advisory；每文件注记已全覆盖；测试增量缺失（3 个代码文件无测试改动）
+
+## ql-20260914-014-7da8 | 2026-09-14 15:43:38 | scope-audit ql-xxx 反查支持
+状态：已完成
+关联变更：（无）
+文件：
+- src/scope-audit.js（findQuickSessionByQlId+顶层 ql 分支+buildQuickRecordResult）
+- src/index.js（预检放行 ql-xxx）
+- test/scope-audit.test.mjs（ql 反查两例）
+需求：scope-audit ql-xxx 反查支持
+根因：「为什么不直接用 ql-xxx 查」——映射只在本机 guard、会话结束即清，历史 quick 拿不到 quick-xxxx 只能占位
+方案：patches 按 qlId 命名+json 冗余 sessionId 是平台可抓的持久映射；findQuickSessionByQlId 文件名前缀反查；ql 分支提升到主入口顶层；预检放行 ql-xxx
+结果：node --test 37/37；npm test 全量 0 失败；platform 实测 ql-xxx 直出记录态

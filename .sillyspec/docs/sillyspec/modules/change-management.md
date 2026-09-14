@@ -5,8 +5,8 @@ updated_at: 2026-08-24T00:40:00+08:00
 ---
 
 # change-management
-> 最后更新：2026-09-10
-> 最近变更：ql-20260910-001-7ae6（quick --done 软归属：窗口内未声明同模块测试文件自动补入「文件：」行 bullet 带「软归属·同模块测试，未声明」括注，审计行拆 ⚖️/🔍；matchSameModuleTestFiles stem 匹配在 run/shared.js）/ ql-20260908-007（QUICKLOG「文件：」行保留模块卡 + changelog sidecar——isQuicklogFileLineNoise 与审计豁免面 isQuickMetadata 分叉；--req 标题不再截首标点，超 80 字就近断句）/ 2026-08-16-scan-docs-reconcile（quicklog.js 补录归属）/ ql-20260807-010-9897（keepSillyspecDocs option：模块文档 .sillyspec/docs/ 可进清单）/ ql-20260713-001-3e46（文件清单标题编号前缀容忍）
+> 最后更新：2026-09-14
+> 最近变更：2026-09-14-apply-conflict-hardening（新增导出 collectActiveQuickGuardFiles——活跃 quick 会话 guard.allowedFiles 收集，与 collectGuardReservedQuicklogIds 共用 listQuickSessionGuards 同源活跃口径，供 worktree-apply guard 相交预检消费）/ ql-20260910-001-7ae6（quick --done 软归属：窗口内未声明同模块测试文件自动补入「文件：」行 bullet 带「软归属·同模块测试，未声明」括注，审计行拆 ⚖️/🔍；matchSameModuleTestFiles stem 匹配在 run/shared.js）/ ql-20260908-007（QUICKLOG「文件：」行保留模块卡 + changelog sidecar——isQuicklogFileLineNoise 与审计豁免面 isQuickMetadata 分叉；--req 标题不再截首标点，超 80 字就近断句）/ 2026-08-16-scan-docs-reconcile（quicklog.js 补录归属）/ ql-20260807-010-9897（keepSillyspecDocs option：模块文档 .sillyspec/docs/ 可进清单）/ ql-20260713-001-3e46（文件清单标题编号前缀容忍）
 > 模块路径：src/change-list.js, src/quicklog.js
 
 ## 职责
@@ -17,11 +17,13 @@ updated_at: 2026-08-24T00:40:00+08:00
 
 模块设计极简，单文件单函数，无状态、无副作用。解析逻辑基于正则匹配 Markdown 表格行（`|` 分隔），跳过表头和分隔行。设计为 verify 阶段的前置工具：验证实现产出是否覆盖了 design 中声明的全部目标文件。
 
-**src/quicklog.js** 是 QUICKLOG 记录的 CLI 接管层：ql-ID 分配 + 条目追加 + O_EXCL lockfile 串行化全部下沉 CLI 进程内，消除 agent 手写漏记静默通过与多 quick 会话并发读-改-写丢更新（历史实证同一 ql-ID 出现两次）；导出 allocateQuicklogEntry / completeQuicklogEntry / findQuicklogEntry / deriveTitleFromLinkedChange / withFileLock / countQuicklogEntries / collectGuardReservedQuicklogIds 等，由 src/run/（command / complete-handlers / complete / stage）import 消费；无新 npm 依赖（仅 fs/path/crypto）。**分配查重契约**（坑 ql-id-double-occupancy，2026-09-13 实证 007-1351 双占用）：QUICKLOG 条目可被并行 git 操作回滚丢失而 guard.json 预留存活，分配端 maxSeq 须并入他者活跃会话 guard 预留（collectGuardReservedQuicklogIds，7 天僵尸不钉号）与盘上容错扫描（畸形头双空格），候选全 ID 对两者末检；--done 落最终 ID 前经 countQuicklogEntries 校验占用（≥2 硬拦、他者 guard 占用换新号），最终 ID 回写 guard、条目丢失按原 ID 补建自愈。详见 docs/sillyspec/quick-sync-block-filenotes-and-quicklog-mixed-commit.md。
+**src/quicklog.js** 是 QUICKLOG 记录的 CLI 接管层：ql-ID 分配 + 条目追加 + O_EXCL lockfile 串行化全部下沉 CLI 进程内，消除 agent 手写漏记静默通过与多 quick 会话并发读-改-写丢更新（历史实证同一 ql-ID 出现两次）；导出 allocateQuicklogEntry / completeQuicklogEntry / findQuicklogEntry / deriveTitleFromLinkedChange / withFileLock / countQuicklogEntries / collectGuardReservedQuicklogIds / collectActiveQuickGuardFiles 等，由 src/run/（command / complete-handlers / complete / stage）import 消费；无新 npm 依赖（仅 fs/path/crypto）。**分配查重契约**（坑 ql-id-double-occupancy，2026-09-13 实证 007-1351 双占用）：QUICKLOG 条目可被并行 git 操作回滚丢失而 guard.json 预留存活，分配端 maxSeq 须并入他者活跃会话 guard 预留（collectGuardReservedQuicklogIds，7 天僵尸不钉号）与盘上容错扫描（畸形头双空格），候选全 ID 对两者末检；--done 落最终 ID 前经 countQuicklogEntries 校验占用（≥2 硬拦、他者 guard 占用换新号），最终 ID 回写 guard、条目丢失按原 ID 补建自愈。详见 docs/sillyspec/quick-sync-block-filenotes-and-quicklog-mixed-commit.md。
 
 **根因块嵌套四子字段**（2026-08-23-adopt-harness-practices，D-004@v1 / task-07）：postmortem 场景根因块内按列表行写 `- 现象：`/`- 根因：`/`- 护栏：`/`- 证据：` 四子字段为**合法形态**——顶层标签白名单正则 `^` 行首锚定（`src/quicklog.js:182`），「- 」前缀不匹配顶层标签、经 lastLabel 挂载进 body_sections[根因]，顶层四字段边界解析不受影响（R-03）；旧条目（无嵌套子字段）回退不受影响。
 `buildPushPayloadFromRaw`（`src/quicklog.js:204`）字段块复位修复——进入 需求/根因/方案/结果 字段块须关闭 inFiles/inLinked 续行模式，否则嵌套子字段列表行被「文件 bullet」分支劫进 payload.files、从根因正文截断丢失；
 复位点在 `src/quicklog.js:198-199`；单行四字段切分声明（`src/quicklog.js:493-500`）：边界扫描只作用于「单行四字段压缩归一」路径，嵌套列表行形态天然兼容无需改动三个边界函数（Grill C-15）。
+
+**collectActiveQuickGuardFiles（2026-09-14-apply-conflict-hardening，FR-03/D-002）**：`collectActiveQuickGuardFiles(specBase, { excludeChange, sessionsDir, nowMs })` 采集各活跃 quick 会话 guard.json 声明的 allowedFiles，返回 `Map<sessionId, string[]>`。活跃判定与 collectGuardReservedQuicklogIds **同源**——内部共用 `listQuickSessionGuards`（guard 目录存在即活跃，quick --done 完成时清理 guard 目录天然退出；startedAt 可解析且超 7 天僵尸窗口 GUARD_CLAIM_STALE_MS 剔除；guard.json 损坏/缺失 → guard=null 保留条目，无声明 → 空数组），两采集口径勿分叉。`excludeChange` 排除自身 change 的会话（sessionId == changeName 或 guard.linkedChanges 显式关联的协作会话，自己人非拦截面）。fail-open：目录不存在/采集异常等同无活跃 guard（不放大拦截面）。消费方：src/worktree-apply.js applyWorktree 锁内 guard 相交预检（勿用 changes.last_active 当活跃判定——非周期心跳）。
 
 ## 对外接口（表格）
 | 函数/常量 | 说明 | 参数 |
@@ -67,3 +69,4 @@ updated_at: 2026-08-24T00:40:00+08:00
 | 2026-08-07 | ql-20260807-010-9897 | `_parseFileListDetailed` 加 `keepSillyspecDocs` option（默认 false 跳过全部 `.sillyspec/` 保持 review-tier fileCount 判档，true 时保留 `.sillyspec/docs/` 模块文档=交付物），`parseFileChangeList`/`Detailed` 透传 opts；供 `resolveApplyAllowSet` 识别模块文档清单（原 change-list 跳过 `.sillyspec/` 与 `filterDeliverableFiles` 保留 `.sillyspec/docs/` 语义打架） |
 | 2026-09-08 | ql-20260908-007（quick） | ① 文件行保留模块卡+sidecar：isQuicklogFileLineNoise（run/shared.js）与 isQuickMetadata 审计豁免面分叉，complete-handlers realFiles 过滤切换；② extractTitleFromResult 废弃「截到首个标点」，超 80 字就近断句，stages/quick.js step3 prompt 口径同步。新增 test/quick-feedback-fileline-title.test.mjs。 |
 | 2026-09-10 | ql-20260910-001-7ae6（quick） | quick --done 软归属：matchSameModuleTestFiles（run/shared.js）stem 匹配窗口内未声明同模块测试文件 → review.softTestFiles → flipEntryInContent 补入文件行 bullet 带「软归属·同模块测试，未声明」括注；审计行拆 ⚖️（真未知）/🔍（软归属）。新增 test/quicklog-soft-attribution.test.mjs。 |
+| 2026-09-14 | 2026-09-14-apply-conflict-hardening | 新增导出 collectActiveQuickGuardFiles（活跃 quick 会话 guard.allowedFiles 收集）——与 collectGuardReservedQuicklogIds 共用 listQuickSessionGuards 同源活跃口径（guard 目录存在即活跃 ∪ 7 天僵尸窗口；excludeChange 排除自身/协作会话；fail-open 不放大拦截面）；消费方 src/worktree-apply.js applyWorktree 锁内 guard 相交预检。新增 test/apply-conflict-hardening.test.mjs 块③四态。 |
