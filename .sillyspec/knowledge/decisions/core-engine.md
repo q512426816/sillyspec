@@ -205,3 +205,13 @@ supersedes：D-003@v1
 锚点：未记录
 最近确认：7d448ba
 理由：三层分工：机械层只做结构归属（allowed_paths∩测试模式 ∪ review.changedFiles∩test/）与关键词命中提示（从 acceptance 提取标识符 grep 归属测试文件，展示命中词）；判定层归 agent 四枚举（covered/partial/uncovered/non-testable）+ 证据必填（测试名或 file:line）；门禁层 fail-closed 只查「槽位已填 + 证据在场」，不查判定内容（防关键词误报阻断 + 防橡皮图章两头堵）。备选否决：纯机械判定——中文 acceptance 与测试名语义鸿沟大，误报会逼 agent 假对齐；硬性全覆盖——文档/部署类 acceptance 合法无测试，需要 non-testable 逃生门。
+
+## D-001@v2 台账格式定案 JSON 数组 + 锁（supersedes D-001@v1 的 JSONL 措辞）
+状态：implemented
+变更：2026-09-15-tax-governance
+锚点：未记录
+最近确认：793951e
+理由：JSON 数组 + withFileLock + writeAtomicSync（friction-tally 锁先例）——改动面最小；坏文件=空数组重启全量历史为容忍立场（台账是行为数据非审计账，friction-tally history 本就 20 条截尾同哲学）。v1 answer 中「单行小 JSON + 容忍残行（同 hits.jsonl 模式）」措辞作废。滚动挂 consume 侧 merge-by-change（v1 未涉，Grill P1-1 补）。
+supersedes：D-001@v1
+故障面：台账坏文件=全量历史重启（容忍立场）；merge 写失败 fail-soft 丢本条不阻断收尾
+退役判据：台账积累 50+ 条后阈值提示从未触发行动，或字段覆盖率三个月 <50%，降级纯记录

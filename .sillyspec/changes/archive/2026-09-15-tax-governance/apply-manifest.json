@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-15-tax-governance",
+  "appliedAt": "2026-09-14T17:46:40.495Z",
+  "baseHash": "b76c1ae54b10ec7c829abd20286559e49ae18067",
+  "files": [
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+      "sha256": "b52d318cd50b96e025112c427fb731ea7d429acc42985f6c5dd0278f1d9067dd"
+    },
+    {
+      "path": "src/decision-distill.js",
+      "sha256": "38ab3f9c8d5b07961a4f659a57a0af0ab67ec5eb8ae07397c12195108a7fe52e"
+    },
+    {
+      "path": "src/doctor-diagnostics.js",
+      "sha256": "0705b7aa61f9ecb38a94472a92db25856f709a16d1c7ad8e3750f0f1c83cfae9"
+    },
+    {
+      "path": "src/friction-ledger.js",
+      "sha256": "2eae4245b3bb6fd9bbacf930002680ae76a34e67af1f467bc621cafee1afc2e9"
+    },
+    {
+      "path": "src/run/complete-handlers.js",
+      "sha256": "e0763f7c47b647b6e21caacfff5c9a86d84d825ccf688d96af332aaed0722376"
+    },
+    {
+      "path": "src/run/complete.js",
+      "sha256": "074bd974e522a5ee53eef893bcee760386d790292ebcf784e419a6df3f0fccf8"
+    },
+    {
+      "path": "src/stage-contract.js",
+      "sha256": "dd79f95f5ffbd29a59de6b5ae84bfa49667ff3d157971f003d01ea3ab9886471"
+    },
+    {
+      "path": "src/stages/brainstorm.js",
+      "sha256": "c50375cfb1ed358405016f2d2a482d159553b49c6deca4f4398f522093b968df"
+    },
+    {
+      "path": "test/tax-governance-fields.test.mjs",
+      "sha256": "a35839e859c7287c35cc2d8e3537ef2e5207cebb508f73357e8e0459943c8cc8"
+    },
+    {
+      "path": "test/tax-governance-ledger.test.mjs",
+      "sha256": "2c49ef29e96ed2344cbd5202dde33b65cb8aa5259f77d37c54781674142a982c"
+    }
+  ]
+}

@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 2,
+  "change": "2026-09-15-tax-governance",
+  "generatedAt": "2026-09-14T17:52:54.615Z",
+  "probes": {
+    "probe1": {
+      "command": "sillyspec verify-probes --change 2026-09-15-tax-governance",
+      "metrics": {
+        "matches": 5,
+        "skippedFiles": 0,
+        "worktreeHits": 0,
+        "globEntries": 0
+      }
+    },
+    "probe3": {
+      "command": "sillyspec verify-probes --change 2026-09-15-tax-governance",
+      "metrics": {
+        "tasks": 2,
+        "hasTest": 2
+      }
+    },
+    "probe5": {
+      "command": "sillyspec verify-probes --change 2026-09-15-tax-governance",
+      "metrics": {
+        "backendEndpoints": 2,
+        "frontendCalls": 0
+      }
+    },
+    "probe6": {
+      "command": "sillyspec verify-probes --change 2026-09-15-tax-governance",
+      "metrics": {
+        "deletions": 0,
+        "unavailable": false
+      }
+    }
+  },
+  "conclusion": "PASS",
+  "runtimeEvidence": [
+    {
+      "claim": "字段链套件全绿",
+      "command": "node test/tax-governance-fields.test.mjs",
+      "exitCode": 0,
+      "logPath": ".sillyspec/.runtime/verify-logs-tax/fields.log"
+    },
+    {
+      "claim": "台账套件全绿",
+      "command": "node test/tax-governance-ledger.test.mjs",
+      "exitCode": 0,
+      "logPath": ".sillyspec/.runtime/verify-logs-tax/ledger.log"
+    },
+    {
+      "claim": "全量套件",
+      "command": "npm test",
+      "exitCode": 0,
+      "logPath": ".sillyspec/.runtime/verify-logs-tax/full.log"
+    }
+  ],
+  "factsConsistency": {
+    "checked": [
+      "probe1",
+      "probe3",
+      "probe5",
+      "probe6"
+    ],
+    "verdict": "match",
+    "detail": null
+  }
+}

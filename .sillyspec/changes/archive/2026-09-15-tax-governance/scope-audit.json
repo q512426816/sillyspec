@@ -1,0 +1,108 @@
+{
+  "mode": "full-flow",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "b76c1ae54b10ec7c829abd20286559e49ae18067",
+  "totals": {
+    "files": 11,
+    "additions": 926,
+    "deletions": 15
+  },
+  "rows": [
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+      "additions": 1,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "meta.json",
+      "additions": 23,
+      "deletions": 2,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "src/decision-distill.js",
+      "additions": 15,
+      "deletions": 3,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/doctor-diagnostics.js",
+      "additions": 102,
+      "deletions": 2,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/friction-ledger.js",
+      "additions": 171,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/run/complete-handlers.js",
+      "additions": 43,
+      "deletions": 4,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/run/complete.js",
+      "additions": 20,
+      "deletions": 2,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/stage-contract.js",
+      "additions": 27,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/stages/brainstorm.js",
+      "additions": 5,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/tax-governance-fields.test.mjs",
+      "additions": 208,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/tax-governance-ledger.test.mjs",
+      "additions": 311,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "execute --done 时点冻结（本文件落盘时采集）",
+  "patchSha256": "b5d063031fb3f68005bfe6634ff53b4fde2ff912854069b0d31a7345bc7e64d3",
+  "patchStatus": "ok",
+  "savedAt": "2026-09-14T17:44:12.221Z"
+}
