@@ -1,0 +1,305 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/runtime.md b/.sillyspec/docs/sillyspec/modules/runtime.md
+index d14ae7d..cd319fd 100644
+--- a/.sillyspec/docs/sillyspec/modules/runtime.md
++++ b/.sillyspec/docs/sillyspec/modules/runtime.md
+@@ -80,7 +80,7 @@ ProgressManager.alignExecuteToPlan(cwd, changeName, specBase, {confirm})
+ - **stage review gate marker 缺失自生**（坑1，`run/gates.js:241`）：tier=independent 且 `getLatestStageReviewRunId` 返回空时（execute 批量完成跳过 prompt 渲染等），gate 自身调 `generateStageReviewRunId()` + `stageReviewMarkerPath()` 写盘 + `mkdirSync`——错误路径从 `execute-null`（不可执行）变为 `execute-review-<id>`（可执行）。补充 prompt 渲染时落 marker（gap 6）的兜底：prompt 路径未走到时 gate 路径自生，marker 文件名/位置不变
+ - **brainstorm/verify 双占位符注入（fail-soft）**（2026-08-23-adopt-harness-practices，`src/run/prompt.js:429-464`）：brainstorm Step2 的 {DECISION_HITS} ← matchKnowledge decisionHits——命中 rejected 条目渲染「否决决策提示」段（ID/标题/否决理由/复潮条件），无命中替换空串零输出（不留残留占位符）；注入结果同步落 runtime JSON（.runtime/decision-hits.json，与 KNOWLEDGE_HIT_REPORT 落盘同口径）；advisory 展示不改步骤流程，异常单行说明不抛（全降级）。
+   verify「运行测试和质量扫描」步的 {EVIDENCE_AUTO_RECOMMENDATION}（`src/run/prompt.js:719-746`）← resolveTestStrategy 的 evidence_auto_recommendation.summary 渲染进 step prompt——verify-postcheck 在 --done 事后才解析 evidence-auto，agent 写 verify-result.md 时看不到推荐无从否决，故在 prompt 时点注入（含推荐理由、降级注记与「可在 verify-result.md 否决并改跑全量」路径，FR-11）；同样 fail-soft（注入失败给读 local.yaml 确认 test_strategy 的指引，--done 仍按 resolveTestStrategy 实测对账）。
+-- **archive CLI 下沉 git add**（坑4，`run/complete-handlers.js:410`）：`unregisterChange` 后 CLI 确定性 `safeGit add -- .sillyspec/changes/archive/ + .sillyspec/docs/`，不靠 archive step5 prompt 驱动（step5 prompt 的 git add 保留作幂等兜底）；safeGit 失败不阻断归档（目录已移动 + change 已注销）
++- **archive CLI 下沉 git add**（坑4，`run/complete-handlers.js:424`）：`unregisterChange` 后 CLI 确定性 `safeGit add -- .sillyspec/changes/archive/ + .sillyspec/docs/`，不靠 archive step5 prompt 驱动（step5 prompt 的 git add 保留作幂等兜底）；safeGit 失败不阻断归档（目录已移动 + change 已注销）
+ - **execute run marker 写入原子化 + 分层 fail**（2026-08-16-state-split-fixes #1，D-001@v1）：四处 marker 写入点（`run/stage.js` 主点 + `run/gates.js`/`run/prompt.js`/`task-review.js` 补写点）统一「mkdir `execute-runs/<runId>/tasks` 先于 marker」不变量——目录不再只随 review.json 写入创建，消除「有 marker 无目录」空 run 被 archive 完成度扫描误用。分层失败语义：stage 主点 throw（execute 启动 exit 1 + 修复指引）；gates 补写点异常直穿外层 catch fail-closed；prompt 渲染路径降级（console.error 留痕 + runId 仍注入）；task-review 去静默保 fail-open。测试 execute-run-dir-fail-loud.test.mjs（33 断言）。runId 同秒碰撞根治（2026-09-10 驾驭小结①，坑 exec-run-id-same-second-collision）：四处写入点在 mkdir 前先经 `claimExecuteRunId`（task-review.js，非递归 mkdir 排他认领，碰撞换随机短后缀）——并行会话（不同 change）同秒启动 execute 不再生成同一 runId 共享 run 目录互相覆盖 per-task review.json；分层 fail 语义不变。第三批①再加固：generateExecuteRunId 携 changeName 附 6 位 FNV 哈希段（exec-…-<hash>）——不同变更 runId 结构性不同，五处 generate 写入点全部传 changeName。第十三批③：gate-snapshot 环境目录链接面扩 venv 族（node_modules/.venv/venv/env 全 junction，dev 依赖同源；链接失败/全缺 ⚠️ 可见——坑 gate-snapshot-env-mismatch）。第十二批：noAI 质量扫描步（executeVerifyQualityScan，verify 第一实测执行点）补接同款快照（第八批只接 gates.js verify 块——用户第三次撞上的真实来源）；两处 fallback 主仓时若非 .sillyspec 脏文件在场打 ⚠️ 口径可见提示（warnIfMainRepoDirtyForGate）。第八批：verify 实测门同款隔离（createVerifyGateSnapshot——resolveVerifyChangedFiles 变更文件集 + native worktree 时 overlay 源=worktree 根（--worktree 定向跑等价）+ 他者显式声明剔除 + 变更文档/local.yaml 随快照；gates.js verify 块 test/lint 快照内跑，fallback 主仓 + lint 阻断补污染归属提示，SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF 可关）。第六批：quick --done test+lint 门禁隔离快照（run/gate-snapshot.js createGateSnapshot——HEAD worktree + 会话文件 overlay + node_modules junction + local.yaml 复制，并行会话脏文件不参与本会话门禁判定；基建失败 fallback 主仓现行为；SILLYSPEC_QUICK_GATE_SNAPSHOT_OFF 可关）；taskcard --all 平台产物镜像主仓（mirrorPlatformArtifactToMainRepo 增 ensureParentDir——tasks/ 子目录在 changeDir 存在时自动建，index.js taskcard case pointer 态接线）。第五批①：自指平台指针警告跨进程 10min 窗口降频（warnSelfRefPointerOnce marker，writePlatformPointer 与 command.js 恢复链两处接线——daemon junction 形态下每命令重复告警的噪音闸）+ resolvePlatformSpecDir 对 pointer specRoot realpath 规范化（junction 坍缩为真实路径：design-init/endpoints 等落盘不再锚到 daemon junction 副本路径）。同批③：reapVerifyServices 改 killProcessTree 进程树击杀（win32 taskkill /PID <pid> /T /F；POSIX ps 递归枚举子进程后杀——坑 verify-service-process-leak 子进程泄漏：原 process.kill 只杀登记的 shell 包装 PID，python 服务本体成孤儿挂机；verify prompt 同步补「优先登记服务本体（叶子）PID」指引）。同批②：run/shared.js 新增 mirrorPlatformArtifactToMainRepo（平台模式产物双写镜像主仓 changeDir——design-init / verify-probes --init 在 pointer 态 agent 本地跑时不再单点依赖 spec-sync 回程；daemon 显式 --spec-dir / 本地无 changeDir / 路径同构跳过）。
+ - **`.runtime` 根解析统一 `resolveRuntimeRoot`**（坑 execute-runs-isolation，`run/shared.js`）：`.runtime` 根（含 `sillyspec.db` / execute-runs / stage-reviews / quick-sessions）由 `resolveRuntimeRoot(platformOpts, localSpecBase)` 统一解析，三级优先级 `platformOpts.runtimeRoot`（平台）> `platformOpts.specDriftAnchor`（drift 锚点）> `localSpecBase/.runtime`（本地兜底）。drift 守卫（`run/command.js`）命中时设 `specDriftAnchor = 主仓 specBase`（**不**设 `specRoot`/`runtimeRoot`——否则触发平台 sentinel，误跳 `triggerSync`/`checkApproval`、误进平台渲染分支）→ 下游 15 处站点解析落主仓 `.runtime`，execute-runs / stage-reviews 不随 worktree cleanup 整目录删消失，archive step1 完成度 gate 真相源（磁盘主仓 review.json）不再丢
+ 
+diff --git a/.sillyspec/knowledge/decisions/unmapped.md b/.sillyspec/knowledge/decisions/unmapped.md
+index 5abeaa1..dda0a57 100644
+--- a/.sillyspec/knowledge/decisions/unmapped.md
++++ b/.sillyspec/knowledge/decisions/unmapped.md
+@@ -56,7 +56,7 @@
+ 变更：2026-08-08-concurrent-write-preflight
+ 锚点：未记录
+ 最近确认：a69021cc85e6d19af0893fd5d74fe833ba61cea8
+-理由：complete-handlers.js:1081 `let review = null`，仅 `if(guard)` 内赋值。brownfield 无 guard 时 review=null → `review.changedFiles` 抛 TypeError。design §5 只给 execute「取不到则空」兜底，quick 缺。
++理由：complete-handlers.js:1111 `let review = null`，仅 `if(guard)` 内赋值。brownfield 无 guard 时 review=null → `review.changedFiles` 抛 TypeError。design §5 只给 execute「取不到则空」兜底，quick 缺。
+ 
+ ## D-006@v1 措辞「写操作前预检」vs 实际「完成时报告」
+ 状态：implemented
+diff --git a/.sillyspec/knowledge/known-issues.md b/.sillyspec/knowledge/known-issues.md
+index cd0172c..e3a626f 100644
+--- a/.sillyspec/knowledge/known-issues.md
++++ b/.sillyspec/knowledge/known-issues.md
+@@ -115,4 +115,6 @@ task 卡 frontmatter 的列表标量中出现 `X: `（半角冒号+空格，如
+ 
+ ## execute prompt 指引的 wt-commit 是幽灵命令（runWtCommit 未接线 dispatch）
+ 
+-execute Wave prompt（src/stages/execute.js 调度要求段）指示 agent 用 `sillyspec wt-commit --change <名> -- <文件>` 串行提交，且 index.js:324 的 worktree-cwd 守卫还专门豁免了 wt-commit 命令名——但 CLI dispatch 根本没有 `case 'wt-commit'`：src/wt-commit.js 的 `runWtCommit` 自 bd1cb91 引入以来无任何调用点（孤儿模块）。实际跑会报「未知命令: wt-commit」并打帮助。规避：主代理作为唯一提交者时，在 worktree 内手工 `git add -- <显式路径> && git commit`（串行无竞态，等价安全）；根治需给 index.js 补 dispatch 接线。（来源：2026-09-14-knowledge-loop-close execute W1，task-01 review notes 记档）
++execute Wave prompt（src/stages/execute.js 调度要求段）指示 agent 用 `sillyspec wt-commit --change <名> -- <文件>` 串行提交，且 index.js:324? 的 worktree-cwd 守卫还专门豁免了 wt-commit 命令名——但 CLI dispatch 根本没有 `case 'wt-commit'`：src/wt-commit.js 的 `runWtCommit` 自 bd1cb91 引入以来无任何调用点（孤儿模块）。实际跑会报「未知命令: wt-commit」并打帮助。规避：主代理作为唯一提交者时，在 worktree 内手工 `git add -- <显式路径> && git commit`（串行无竞态，等价安全）；根治需给 index.js 补 dispatch 接线。（来源：2026-09-14-knowledge-loop-close execute W1，task-01 review notes 记档）
++
++**已根治**（ql-20260914-016-8786，2026-09-14）：index.js 补 wt-commit dispatch case（--change/-m/--pathspec-from-file/-- pathspec 解析 + worktree cwd 推断 changeName）+ help 注册；新增 test/wt-commit-dispatch.test.mjs 5 断言锁三面（接通/参数面/豁免补强——原 worktree-cwd-guard 断言「未知命令也算过」的弱口已收紧为鬼命令回归哨兵）。
+diff --git a/.sillyspec/quicklog/QUICKLOG-qinyi.md b/.sillyspec/quicklog/QUICKLOG-qinyi.md
+index dc2cc75..cc8dfa8 100644
+--- a/.sillyspec/quicklog/QUICKLOG-qinyi.md
++++ b/.sillyspec/quicklog/QUICKLOG-qinyi.md
+@@ -223,3 +223,23 @@
+ 状态：进行中
+ 关联变更：（无）
+ 文件：（见实际改动）
++
++## ql-20260914-016-8786 | 2026-09-14 21:58:08 | wt-commit 幽灵命令根治——index.js 补 dispatch 接线 runWtCommit
++状态：已完成
++关联变更：（无）
++文件：
++- src/index.js（case wt-commit dispatch + help 行）
++- test/wt-commit-dispatch.test.mjs（新建 5 断言（含鬼命令回归哨兵））
++- .sillyspec/knowledge/known-issues.md（条目补已根治记录+锚加?）
++- docs/sillyspec/platform-interface-map.md（--fix 行号重锚）
++- docs/sillyspec/architecture-4a.md（--fix 行号重锚）
++- docs/sillyspec/file-lifecycle.md（--fix 行号重锚）
++- docs/sillyspec/prompt-control-debt.md（--fix 行号重锚）
++- docs/sillyspec/sillyhub-path-a-contract.md（--fix 行号重锚）
++- .sillyspec/docs/sillyspec/modules/runtime.md（--fix 行号重锚）
++- .sillyspec/knowledge/decisions/unmapped.md（--fix 行号重锚）
++需求：wt-commit 幽灵命令根治——index.js 补 dispatch 接线 runWtCommit
++根因：runWtCommit 模块自 bd1cb91 引入以来无任何调用点（孤儿模块），worktree-cwd 守卫还专门豁免了 wt-commit 命令名、execute Wave prompt 教 agent 用它，但 dispatch 无 case——实际跑报「未知命令」；worktree-cwd-guard 豁免测试断言太弱（未知命令错误不含拦截文案也算过），鬼命令存活至今（2026-09-14 knowledge-loop-close execute W1 实证，task-01 review notes 记档）
++方案：index.js 新增 case wt-commit：解析 --change/-m/--pathspec-from-file 与 -- 后 pathspec；--change 缺省从 cwd 的 worktrees/<名> 段推断（子代理 workdir=worktree 免传）；错误 catch exit 1；help 注册。新增 test/wt-commit-dispatch.test.mjs 5 断言（CLI 真跑提交 cwd 推断/显式 --change/缺 pathspec 报 add -A 语义/缺 -m/鬼命令回归哨兵——原弱口收紧）；known-issues 条目补根治记录；docs --fix 重锚 12 处（dispatch 插入 +44 行连带漂移；知识库两文件=known-issues 根治记录+unmapped 机械重锚，--force-baseline 解锁；余 1 处漂移属并行会话在飞变更，基线 2 内）
++结果：wt-commit-dispatch 5/5、wt-commit 5/5、worktree-cwd-guard 7/7；lint 611 文件 0 fail；docs check 1/576（≤基线 2）
++审计：[gate] L1（跨 1 模块 · 10 文件：1 代码/1 测试）advisory；每文件注记已全覆盖；测试增量不适用（≤1 代码文件）
+diff --git a/docs/sillyspec/architecture-4a.md b/docs/sillyspec/architecture-4a.md
+index 12967a1..277091e 100644
+--- a/docs/sillyspec/architecture-4a.md
++++ b/docs/sillyspec/architecture-4a.md
+@@ -178,7 +178,7 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
+ 
+ ### 3.3 集成方式
+ 
+-**dispatch 双后端 —— "派发策略生成器，不是 JS 执行体"**（`dispatch/strategy.js:4-9`）：它**不调任何 tool，只生成注入 prompt 的"派发指令文本"**——因为本机 Agent tool 和 SillyHub MCP tool 都只有 agent 能调，CLI（Node）调不了。后端选择纯由 `probe.available` 驱动（available→sillyhub，否则 local）。execute 三态派发（派发段注入起 `stages/execute.js:594` `getDispatchMode`）：`local`/`local-fallback`/`sillyhub`。回收约定（R-07）：无论哪个后端，worker **绝不 git commit**，SillySpec 主体自己 `git diff` worktree 写 review.json。
++**dispatch 双后端 —— "派发策略生成器，不是 JS 执行体"**（`dispatch/strategy.js:4-9`）：它**不调任何 tool，只生成注入 prompt 的"派发指令文本"**——因为本机 Agent tool 和 SillyHub MCP tool 都只有 agent 能调，CLI（Node）调不了。后端选择纯由 `probe.available` 驱动（available→sillyhub，否则 local）。execute 三态派发（派发段注入起 `stages/execute.js:674` `getDispatchMode`）：`local`/`local-fallback`/`sillyhub`。回收约定（R-07）：无论哪个后端，worker **绝不 git commit**，SillySpec 主体自己 `git diff` worktree 写 review.json。
+ 
+ **worktree-apply —— 跨仓 task 合并回主干**（`applyWorktree` `src/worktree-apply.js:748` 起，变更文件列表经 `filterDeliverableFiles` `src/worktree-apply.js:55`）：跨仓 task no-op 校验 → meta 校验 → 变更文件列表（`filterDeliverableFiles` 排除 `.sillyspec/`）→ allowList 校验（从 task 卡 `allowed_paths` 读）→ `assessApplyRisk` 风险审计（SAFE/WARNING 自动 apply 到 main）。
+ 
+diff --git a/docs/sillyspec/file-lifecycle.md b/docs/sillyspec/file-lifecycle.md
+index f1817df..9f5ad94 100644
+--- a/docs/sillyspec/file-lifecycle.md
++++ b/docs/sillyspec/file-lifecycle.md
+@@ -318,7 +318,7 @@ execute --done 批量完成（2026-07-28，`run/complete.js`）
+ - **工具驾驭复盘 4 坑确定性修复**（2026-08-06，change `2026-08-06-sillyspec-self-tooling-fixes`）：
+   - **stage review gate marker 缺失自生**（坑1，`run/gates.js:241`）：tier=independent 且 `getLatestStageReviewRunId` 返回空（execute 批量完成跳过 prompt 渲染、prompt 未落 marker 等场景）时，gate 自身调 `generateStageReviewRunId()` + `stageReviewMarkerPath()` 写盘 + `mkdirSync`，让 gate 读到确定 ID——错误路径从 `execute-null`（不可执行）变为 `execute-review-<review-前缀 id>`（可执行）。补充 gap 6（prompt 渲染时落 marker）的兜底：prompt 路径未走到时 gate 路径自生，两条落 marker 路径互不依赖。marker 文件名 / 位置不变（`current-stage-review-run-id-<stage>(-<change>)`）。
+   - **worktree apply 交付物过滤精细化**（坑3，`worktree-apply.js#filterDeliverableFiles`）：apply 时排除 `.sillyspec/changes/` + `.sillyspec/.runtime/` + `.sillyspec/quicklog/` + `meta.json`，**保留 `.sillyspec/docs/`（dogfood 模块规范文档视为交付物，随变更 apply 回主仓）**。原一刀切排除整个 `.sillyspec/` 导致模块文档改动滞留 worktree 分支（exec-g defer 项落地）。`verify-postcheck.js` 改 import `filterDeliverableFiles` 去双写；`index.js` apply / assess 自动 apply 的用户面消息同步为「changes/.runtime/quicklog 不自动 apply，模块文档 docs/ 会自动 apply」。
+-  - **archive CLI 下沉 git add**（坑4，`run/complete-handlers.js:410`）：`unregisterChange` 后 CLI 确定性 `safeGit add -- .sillyspec/changes/archive/ + .sillyspec/docs/`，不靠 archive step5 prompt 驱动。step5 prompt 的 git add 已精确化（`git add .sillyspec/changes/archive/` + `git add .sillyspec/docs/<project>/modules/`，勿用 changes/ 或 docs/ 整目录——会裹挟其他活跃变更；坑 index-staged-cross-change-contamination），保留作幂等兜底。safeGit 失败不阻断归档（目录已移动 + change 已注销），由 step5 prompt + agent `git status` 核对兜底。
++  - **archive CLI 下沉 git add**（坑4，`run/complete-handlers.js:424`）：`unregisterChange` 后 CLI 确定性 `safeGit add -- .sillyspec/changes/archive/ + .sillyspec/docs/`，不靠 archive step5 prompt 驱动。step5 prompt 的 git add 已精确化（`git add .sillyspec/changes/archive/` + `git add .sillyspec/docs/<project>/modules/`，勿用 changes/ 或 docs/ 整目录——会裹挟其他活跃变更；坑 index-staged-cross-change-contamination），保留作幂等兜底。safeGit 失败不阻断归档（目录已移动 + change 已注销），由 step5 prompt + agent `git status` 核对兜底。
+   - **归档清理 runId marker**（2026-08-10，`run/complete-handlers.js#archiveWorktreeCleanup`）：归档时除 worktree cleanup 外，顺带清理该 change 的 execute / stage-review runId marker（`current-execute-run-id-<change>` + `current-stage-review-run-id-<stage>-<change>`，normal + 自愈分支共用）。marker 只服务 execute→verify→archive 期间，归档后无读者；只写不删会让 `.runtime/` 随变更数无限累积（单仓库几十个）。runtimeRoot 解析同写入侧 `resolveRuntimeRoot(platformOpts, specBase)`（锚主仓，平台模式不误清理）。失败仅 warn 不阻断归档。
+   - 坑5（多代理中间态 import 链污染，D-05）架构级延后入 [ROADMAP.md](../../ROADMAP.md)。
+ - **跨仓 task 支持**（2026-08-12，change `2026-08-11-cross-repo-task-support`）：单个 change 的 task 可分散到主仓 + 多个跨仓仓实现（dogfood 自指、monorepo 多包仓等场景）。**单仓 change 零回归**（所有 task 无 `repo:` → MultiRepoContext 退化为 `{main:{...}}` 单值 map，7 个调用点全走原路径）。跨仓机制要点：
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index d678c95..ff4aa13 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -134,10 +134,10 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ | `platform sync-docs`（手动命令，**唯一触发点**） | A | POST `…/documents` 推四件套全量；run 流程**不**自动推文档（sync.js:30 头注释称由 run 流程触发，已过时） | sync.js:439；index.js:1275 |
+ | `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:2329；shared.js:888 |
+ | **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2329/1855；shared.js:912 |
+-| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:3361；sync.js:1387/986 |
+-| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:3313；sync.js:2089 |
++| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:3404；sync.js:1387/986 |
++| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:3356；sync.js:2089 |
+ | `platform resolve --keep-local/--take-platform/--abort` | 本地 | 读 sync-conflict 三选一，不网络 | sync.js:746 |
+-| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:3126/2847；probe.js:133 |
++| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:3169/2847；probe.js:133 |
+ | **execute Wave prompt 注入** | B | `getDispatchMode()` **同步三态判定**（读 MCP 配置 + 路径A 探测缓存，不发网络）：`sillyhub` → 注入完整派发指令（`{available:true}`）；`local-fallback`（配置但路径A 未落地）→ 短提示走 Local；`local` → 不注入 | execute.js:674/1058-1070 |
+ | **execute Wave 步骤** | B | 指令文本驱动 agent 调 create_mission/dispatch_worker/list_workers/report_progress | backends/sillyhub-mcp.js:136 |
+ | **scan 完成（平台模式）** | C | 落盘 manifest/postcheck + 指针 SCAN_COMPLETED；失败 exit(1) | complete-handlers.js:985 |
+@@ -162,8 +162,8 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ 
+ **收这些 flag 的入口不止 `run scan`**：
+ - **任何 `sillyspec run <stage>`**（scan/plan/execute/verify/archive/quick/brainstorm…）—— 都走 `runCommand`（`command.js:236`）公共入口，flag 在 `command.js:375`（`resolvedSpecDir`）起统一解析。scan 只是 daemon 流程的**第一个阶段**，所以是"典型首次激活点"，不是唯一入口。
+-- **`sillyspec init <dir> --spec-dir <path>`** —— 外部 specDir 安装（`init.js:291` `doInstall(specDir)`，含源码目录旧 `.sillyspec` 残留清理）。⚠️ init **只认 `--spec-dir`**（顶层 `index.js:231` 解析后经 `case 'init'`（`index.js:335`）透传 `specDir`）；传 `--spec-root` 会被**静默忽略**（init 分支不读 filteredArgs）。**平台模式 init 落指针**：带平台专属 flag（`--workspace-id` / `--runtime-root`）时，init 即写双指针（`writePlatformPointer`（`init.js:686`/`658` 调用 `writeInitPlatformPointer`），status: active），消除 init→scan 窗口期 agent 裸调静默回退本地模式的断点。
+-- **`backfill-reviews` / `register-stage-review` / worktree apply / assess 等子命令** —— 顶层 `--spec-dir` 透传为 `platformOpts.specRoot`（index.js:633（backfill-reviews）/ 1185-1192（register-stage-review）/ 1791（worktree apply）/ 1902（assess））。
++- **`sillyspec init <dir> --spec-dir <path>`** —— 外部 specDir 安装（`init.js:291` `doInstall(specDir)`，含源码目录旧 `.sillyspec` 残留清理）。⚠️ init **只认 `--spec-dir`**（顶层 `index.js:231` 解析后经 `case 'init'`（`index.js:341`）透传 `specDir`）；传 `--spec-root` 会被**静默忽略**（init 分支不读 filteredArgs）。**平台模式 init 落指针**：带平台专属 flag（`--workspace-id` / `--runtime-root`）时，init 即写双指针（`writePlatformPointer`（`init.js:686`/`658` 调用 `writeInitPlatformPointer`），status: active），消除 init→scan 窗口期 agent 裸调静默回退本地模式的断点。
++- **`backfill-reviews` / `register-stage-review` / worktree apply / assess 等子命令** —— 顶层 `--spec-dir` 透传为 `platformOpts.specRoot`（index.js:639（backfill-reviews）/ 1185-1192（register-stage-review）/ 1791（worktree apply）/ 1902（assess））。
+ - **gate / derive**（machine-interface）—— 只读查询接受 specBase，**不写指针**。
+ 
+ ⚠️ **`--spec-dir` 与平台模式共用开关**：`command.js:379` 把 `--spec-dir` 与 `--spec-root` 同等置位 `specRoot`。本地用户为消歧 monorepo 传 `--spec-dir`（`command.js:386` 的解析块就是这么引导的）也会点亮平台语义：跳过链路 A 的 REST 同步 + 写粘性指针文件 + 触发下方"首次接入清理"。设计上"外部 specDir = 平台模式"是合并处理，但与"本地只是换个目录"的直觉有偏差，易踩。
+@@ -194,7 +194,7 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ - **人类本地用户**：跑 `sillyspec run <stage>` 不带上述 flag，且 cwd 无 `.sillyspec-platform.json` → `platformOpts` 全 `null` → **本地模式**，走链路 A 的 REST `/api`（前提是 `platform connect` 过）。
+ - **SillyHub daemon**：传 flag 或借指针文件 → 平台模式 → 链路 A 上行回传经 env 凭据照常执行（2026-08-26 放行，daemon 注入 `SILLYHUB_PLATFORM_URL/TOKEN` 即生效）；下行 pull 与审批检查仍跳过（daemon 是权威数据面），链路 C（scan 指针握手）生效。
+ 
+-> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:44`、枚举消费在 `index.js:3223`）。
++> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:44`、枚举消费在 `index.js:3266`）。
+ 
+ **平台接管声明（`.sillyspec-platform-managed`）**：与指针并存的持久声明（`managed`/`specRoot` 副本/`workspaceId`/`declaredAt` 四字段，**无过期**——24h STALE 只作用指针不作用声明）。堵"指针该在但不在 → 静默建本地进度库"的状态分裂断点：
+ - **写入**：`writePlatformPointer` 三写收敛（`shared.js` 的 `writePlatformPointer`——主文件+指针+声明），init/scan 带平台参数自动落。**自指写入拦截（task-03，单点收口覆盖 run/init 两调用方）**：specRoot 自指回环 → warn 后 `return false` 零落盘（显式自指 flag 也不再投毒）。
+diff --git a/docs/sillyspec/prompt-control-debt.md b/docs/sillyspec/prompt-control-debt.md
+index c42b012..abd0ff5 100644
+--- a/docs/sillyspec/prompt-control-debt.md
++++ b/docs/sillyspec/prompt-control-debt.md
+@@ -206,7 +206,7 @@ updated_at: 2026-08-14T22:20:00+08:00
+ 
+ 来源：complete-gate-atomicity 变更 execute --done 卡「review.json 字段校验阻断」，诊断发现是 marker 漂移（非 review.json 真缺）。
+ 
+-- ⏭ **gate-atom-a enforceReviewJsonGate 漏 resolveLatestExecuteRunId fallback**：`current-execute-run-id-<change>` marker 与 run 目录可脱节——`generateExecuteRunId`（task-review.js:824）只生成时间戳字符串写 marker，run 目录由 `ensureTaskReviewDir`（task-review.js:824）在写 review.json 时才建。marker 在 stage.js:121 / prompt.js:842 / gates.js:427 / task-review.js:824 任一处被判「缺失」即 generate 新 ID 写盘（旧 marker 被删 / 格式迁移 / 并行 cleanup 时触发），新 run 目录隔离不继承旧 review.json → marker 漂移 = 旧 review 全部失联。**enforceReviewJsonGate（gates.js:112-133，每次 execute --done 早跑）直接 `readFileSync(marker)` 拿值就用，不校验目录存在、不 fallback**；而同文件阶段级 Task Review Gate（gates.js:273）marker 为空时已 fallback `resolveLatestExecuteRunId`（task-review.js:824，扫 mtime 最新真实目录）。**self-audit-2026-08-07.md:103/107 当年修了后者漏了前者——同一兜底两处口径不一致**。实证：marker=`exec-2026-08-09-141248`（14:12:48 写），141248 目录 14:21:22 才建出，--done 落在中间 → 去 141248 找 task-01 review.json 报「不存在」，而真实齐备的 review.json 在 `exec-2026-08-09-112734`（task-01~06 全有）。**修法（方案 A，最小正确）**：enforceReviewJsonGate 读 marker 后，若 `execute-runs/<executeRunId>/tasks/` 不存在，fallback `resolveLatestExecuteRunId({ runtimeRoot, changeName })`（对齐 gates.js:273）；补测试（marker 指向不存在目录 + 旧 run 含完整 review.json 时 --done 不误报）。**否决方案 B**（generateExecuteRunId 写 marker 时同步 mkdir 空目录）：只保证目录存在不保证 review.json 存在，marker 漂到新 run 后空目录照样报「review.json 不存在」，治标不治本。当前 complete-gate-atomicity 因 141248 事后补齐 task-01~04 review.json 不再被阻塞；待该 change 归档 + 主仓工作区干净（现有无关 staged brainstorm 改动需先厘清归属）后开独立 quick 落 A。
++- ⏭ **gate-atom-a enforceReviewJsonGate 漏 resolveLatestExecuteRunId fallback**：`current-execute-run-id-<change>` marker 与 run 目录可脱节——`generateExecuteRunId`（task-review.js:824）只生成时间戳字符串写 marker，run 目录由 `ensureTaskReviewDir`（task-review.js:824）在写 review.json 时才建。marker 在 stage.js:121 / prompt.js:867 / gates.js:427 / task-review.js:824 任一处被判「缺失」即 generate 新 ID 写盘（旧 marker 被删 / 格式迁移 / 并行 cleanup 时触发），新 run 目录隔离不继承旧 review.json → marker 漂移 = 旧 review 全部失联。**enforceReviewJsonGate（gates.js:112-133，每次 execute --done 早跑）直接 `readFileSync(marker)` 拿值就用，不校验目录存在、不 fallback**；而同文件阶段级 Task Review Gate（gates.js:273）marker 为空时已 fallback `resolveLatestExecuteRunId`（task-review.js:824，扫 mtime 最新真实目录）。**self-audit-2026-08-07.md:103/107 当年修了后者漏了前者——同一兜底两处口径不一致**。实证：marker=`exec-2026-08-09-141248`（14:12:48 写），141248 目录 14:21:22 才建出，--done 落在中间 → 去 141248 找 task-01 review.json 报「不存在」，而真实齐备的 review.json 在 `exec-2026-08-09-112734`（task-01~06 全有）。**修法（方案 A，最小正确）**：enforceReviewJsonGate 读 marker 后，若 `execute-runs/<executeRunId>/tasks/` 不存在，fallback `resolveLatestExecuteRunId({ runtimeRoot, changeName })`（对齐 gates.js:273）；补测试（marker 指向不存在目录 + 旧 run 含完整 review.json 时 --done 不误报）。**否决方案 B**（generateExecuteRunId 写 marker 时同步 mkdir 空目录）：只保证目录存在不保证 review.json 存在，marker 漂到新 run 后空目录照样报「review.json 不存在」，治标不治本。当前 complete-gate-atomicity 因 141248 事后补齐 task-01~04 review.json 不再被阻塞；待该 change 归档 + 主仓工作区干净（现有无关 staged brainstorm 改动需先厘清归属）后开独立 quick 落 A。
+ 
+ ---
+ 
+diff --git a/docs/sillyspec/sillyhub-path-a-contract.md b/docs/sillyspec/sillyhub-path-a-contract.md
+index d6622b1..e40827d 100644
+--- a/docs/sillyspec/sillyhub-path-a-contract.md
++++ b/docs/sillyspec/sillyhub-path-a-contract.md
+@@ -86,7 +86,7 @@ SillySpec 侧 `probeSillyHub`（`src/dispatch/probe.js:225-240`）已实现 root
+ - `isPathASupported()`（`src/dispatch/backends/sillyhub-mcp.js:104-109`）改为探测：
+   1. `process.env.SILLYHUB_PATH_A === '1'` → 强制 true（spike-01 备选 / 手动启用，最高优先级）；
+   2. 否则读 probe 预热的 schema 探测缓存（`_pathAProbe.supported`）：`probe.js` `preheatPathAProbe`(:109-120) 调 `client.listTools()` → `detectPathAFromTools`(:92-99) 查 `dispatch_worker.inputSchema.properties` 含 `worktree_path` **和** `worker_prompt` 全命中 → true，任一缺失/探测失败 → false（保守，R-04 不硬试）。
+-- `execute buildWavePrompt` 的 `getDispatchMode()`（`src/stages/execute.js:586`）：env 配置（`SILLYHUB_MCP_URL`+`SILLYHUB_MCP_TOKEN`）+ `isPathASupported()` 都满足才 'sillyhub'；否则 'local'（无配置，零回归）或 'local-fallback'（有配置但路径 A 不支持，短提示）。`buildWavePrompt`(:619) **同步读缓存**，不每 Wave 探测。
++- `execute buildWavePrompt` 的 `getDispatchMode()`（`src/stages/execute.js:674`）：env 配置（`SILLYHUB_MCP_URL`+`SILLYHUB_MCP_TOKEN`）+ `isPathASupported()` 都满足才 'sillyhub'；否则 'local'（无配置，零回归）或 'local-fallback'（有配置但路径 A 不支持，短提示）。`buildWavePrompt`(:619) **同步读缓存**，不每 Wave 探测。
+ - `killLease`（`client.js`）：无专用 kill tool，best-effort `report_progress` 带 kill 标记 + 保守 `killed=false`。路径 A 后续建议 SillyHub 增专用 kill/lease-revoke tool。
+ 
+ > ⚠️ **限制 ②（已知 gap，需运行时配置绕过）**：`execute.js` **自身不调 `probeSillyHub`**（grep 确认：execute.js 无 probe import / warming 调用，`getDispatchMode` 是同步读缓存）。`probeSillyHub` 预热只在 `src/index.js` 的 `dispatch-hint` CLI 子命令(:983/:1012)触发。故走 `sillyspec execute` 主流程时，schema 探测缓存**未被预热** → `isPathASupported()` 走分支 2 返回 false → dispatchMode 退 `local-fallback`，路径 A 不会自动启用。**两种启用方式**：(a) 设 env `SILLYHUB_PATH_A=1` 强制 true（推荐，绕过预热）；(b) 先跑一次 `sillyspec dispatch probe`（或 dispatch-hint）预热缓存再 execute。后续应在 execute 启动期接 `probeSillyHub` 预热（一次性）以消除该手动步骤——届时更新本节。
+diff --git a/src/index.js b/src/index.js
+index 1c4c8bc..e9274b8 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -73,6 +73,9 @@ SillySpec CLI — 规范驱动开发工具包
+     check | repair [--apply] | validate | reset [--stage X] |
+     batch --total N --completed M [--failed F] [--skipped K] | batch --status
+ 
++  sillyspec wt-commit [--change <名>] -m <信息> [--pathspec-from-file <f>] -- <path...>
++                                      worktree 内 per-task 串行化提交（文件锁排队 + 强制显式 pathspec，
++                                      防 add -A 卷入并行兄弟 WIP；worktree 内可省 --change，从 cwd 推断）
+   sillyspec worktree <cmd>     git worktree 隔离管理（execute 阶段相关）
+     create <change> [--base <branch>]   创建隔离 worktree
+     apply <change> [--check-only]       校验并应用变更到主工作区
+@@ -2640,6 +2643,46 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语
+       console.log('按 Ctrl+C 停止服务器');
+       break;
+     }
++    case 'wt-commit': {
++      // 坑 wt-commit-ghost-dispatch：runWtCommit 模块自 bd1cb91 存在但 dispatch 从未接线——
++      // execute Wave prompt 指示的 `sillyspec wt-commit` 一直报「未知命令」（2026-09-14
++      // knowledge-loop-close execute W1 实证，ql-20260914-016-8786 根治）。参数面见模块头：
++      // wt-commit [--change <名>] -m <信息> [--pathspec-from-file <f>] -- <path...>；
++      // worktree 内可省 --change（从 cwd 的 worktrees/<名> 段推断）。
++      const wtCommitRest = filteredArgs.slice(1);
++      const wtCommitDd = wtCommitRest.indexOf('--');
++      const wtCommitFlags = wtCommitDd === -1 ? wtCommitRest : wtCommitRest.slice(0, wtCommitDd);
++      const wtCommitPaths = wtCommitDd === -1 ? [] : wtCommitRest.slice(wtCommitDd + 1);
++      let wtCommitChange = null;
++      let wtCommitMessage = null;
++      let wtCommitPathspecFile = null;
++      for (let i = 0; i < wtCommitFlags.length; i++) {
++        if (wtCommitFlags[i] === '--change' && wtCommitFlags[i + 1]) wtCommitChange = wtCommitFlags[++i];
++        else if ((wtCommitFlags[i] === '-m' || wtCommitFlags[i] === '--message') && wtCommitFlags[i + 1]) wtCommitMessage = wtCommitFlags[++i];
++        else if (wtCommitFlags[i] === '--pathspec-from-file' && wtCommitFlags[i + 1]) wtCommitPathspecFile = wtCommitFlags[++i];
++      }
++      if (!wtCommitChange) {
++        const inferred = String(dir).match(/[\\/]worktrees[\\/]([^\\/]+)/);
++        wtCommitChange = inferred ? inferred[1] : null;
++      }
++      try {
++        const { runWtCommit } = await import('./wt-commit.js');
++        const r = await runWtCommit({
++          changeName: wtCommitChange,
++          message: wtCommitMessage,
++          pathspecs: wtCommitPaths,
++          pathspecFile: wtCommitPathspecFile,
++          cwd: dir,
++        });
++        if (json) console.log(JSON.stringify({ command: 'wt-commit', ...r }, null, 2));
++        else if (r.skipped) console.log(`⏭️  wt-commit 无变更跳过（HEAD 不动）：${r.shortHead}`);
++        else console.log(`✅ wt-commit 完成：${r.shortHead}（${r.files.length} 文件，worktree=${r.worktreePath}）`);
++      } catch (e) {
++        console.error(`❌ wt-commit 失败：${e.message}`);
++        process.exit(1);
++      }
++      break;
++    }
+     case 'worktree': {
+       const { WorktreeManager } = await import('./worktree.js');
+       const { ProgressManager } = await import('./progress.js');
+diff --git a/test/wt-commit-dispatch.test.mjs b/test/wt-commit-dispatch.test.mjs
+new file mode 100644
+index 0000000..3ae1f5e
+--- /dev/null
++++ b/test/wt-commit-dispatch.test.mjs
+@@ -0,0 +1,82 @@
++/**
++ * wt-commit CLI dispatch 接线测试（ql-20260914-016-8786）
++ *
++ * 坑 wt-commit-ghost-dispatch：src/wt-commit.js 的 runWtCommit 自 bd1cb91 引入以来无任何
++ * 调用点（孤儿模块），execute Wave prompt 却指示 agent 用 `sillyspec wt-commit`——实际跑报
++ * 「未知命令」打帮助。本测试锁三件事：
++ * ① dispatch 接通：CLI 真跑 wt-commit 能完成串行化提交（不再是未知命令）；
++ * ② 参数面：-m 必填 / `--` 后 pathspec / 缺 pathspec 报错文案含「add -A」语义；
++ * ③ 豁免测试补强：worktree cwd 内跑 wt-commit 不被硬拦（原断言太弱——「未知命令」也不含
++ *    拦截文案，鬼命令时代照样绿；现在要求真实错误而非未知命令）。
++ */
++import { describe, it, beforeEach, afterEach } from 'node:test'
++import assert from 'node:assert/strict'
++import { execSync, spawnSync } from 'node:child_process'
++import { writeFileSync, mkdirSync, rmSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++
++const CLI = join(process.cwd(), 'bin', 'sillyspec.js')
++const CHANGE = 'wtc-dispatch-demo'
++
++describe('wt-commit CLI dispatch（幽灵命令根治）', () => {
++  let repo
++  let wt
++
++  beforeEach(() => {
++    repo = join(tmpdir(), `wt-cli-${Math.random().toString(36).slice(2)}`)
++    wt = join(repo, '.sillyspec', '.runtime', 'worktrees', CHANGE)
++    mkdirSync(repo, { recursive: true })
++    const g = (cmd) => execSync(cmd, { cwd: repo, stdio: 'pipe' })
++    g('git init -b main')
++    g('git config user.email t@t.com')
++    g('git config user.name t')
++    writeFileSync(join(repo, 'base.txt'), 'base\n', 'utf8')
++    g('git add base.txt && git commit -q -m init')
++    execSync(`git worktree add "${wt}" -b ${CHANGE}-branch`, { cwd: repo, stdio: 'pipe' })
++  })
++  afterEach(() => {
++    try { execSync('git worktree prune', { cwd: repo, stdio: 'ignore' }) } catch {}
++    try { rmSync(repo, { recursive: true, force: true }) } catch {}
++  })
++
++  const runCli = (args, cwd) => spawnSync(process.execPath, [CLI, ...args], { cwd, encoding: 'utf8' })
++
++  it('① dispatch 接通：CLI 在 worktree 内提交成功（cwd 推断 changeName）', () => {
++    writeFileSync(join(wt, 'a.txt'), 'a\n', 'utf8')
++    const res = runCli(['wt-commit', '-m', 'task-01 a', '--', 'a.txt'], wt)
++    const combined = (res.stdout || '') + (res.stderr || '')
++    assert.equal(res.status, 0, `退出码应 0：\n${combined}`)
++    assert.ok(!combined.includes('未知命令'), `不应再是幽灵命令：\n${combined}`)
++    const committed = execSync('git show --name-only --format= HEAD', { cwd: wt, encoding: 'utf8' }).trim()
++    assert.ok(committed.includes('a.txt'), `a.txt 应已提交：${committed}`)
++  })
++
++  it('①b 显式 --change + 主仓 cwd 调用同样可用', () => {
++    writeFileSync(join(wt, 'b.txt'), 'b\n', 'utf8')
++    const res = runCli(['wt-commit', '--change', CHANGE, '-m', 'task-02 b', '--', 'b.txt'], repo)
++    const combined = (res.stdout || '') + (res.stderr || '')
++    assert.equal(res.status, 0, `退出码应 0：\n${combined}`)
++  })
++
++  it('② 缺 pathspec 报错含防 add -A 语义（exit 非 0）', () => {
++    const res = runCli(['wt-commit', '--change', CHANGE, '-m', 'x'], repo)
++    const combined = (res.stdout || '') + (res.stderr || '')
++    assert.notEqual(res.status, 0, '缺 pathspec 应失败')
++    assert.ok(combined.includes('add -A') || combined.includes('pathspec'), `错误文案应说明 pathspec 语义：\n${combined}`)
++  })
++
++  it('②b 缺 -m 报错（exit 非 0）', () => {
++    const res = runCli(['wt-commit', '--change', CHANGE, '--', 'a.txt'], repo)
++    assert.notEqual(res.status, 0, '缺 message 应失败')
++  })
++
++  it('③ worktree cwd 豁免补强：真实命令错误而非「未知命令」', () => {
++    // 无 --change 且 cwd 非 worktree → 应报「缺少 --change」类真实错误，既不被 worktree 硬拦、也不是未知命令
++    const res = runCli(['wt-commit', '-m', 'x', '--', 'a.txt'], repo)
++    const combined = (res.stdout || '') + (res.stderr || '')
++    assert.ok(!combined.includes('隔离 worktree 内'), `不应被 worktree 硬拦：\n${combined}`)
++    assert.ok(!combined.includes('未知命令'), `不应是未知命令（幽灵命令回归哨兵）：\n${combined}`)
++    assert.ok(combined.includes('--change') || combined.includes('变更名'), `应提示 change 缺失：\n${combined}`)
++  })
++})
