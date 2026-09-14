@@ -248,3 +248,14 @@
 状态：进行中
 关联变更：（无）
 文件：（见实际改动）
+
+## ql-20260915-002-f2b4 | 2026-09-15 01:58:57 | knowledge validate 对 uncategorized.md 误报 unregistered_file 豁免
+状态：已完成
+关联变更：（无）
+文件：
+- src/stages/knowledge.js（豁免清单+uncategorized）
+- test/knowledge-validate-uncategorized.test.mjs（三态锁定）
+需求：knowledge validate 对 uncategorized.md 误报 unregistered_file 豁免
+根因：uncategorized.md 是暂存区语义——条目归类即迁出（classify），永不注册 INDEX 路由，validate 当未注册文件告警是误报（knowledge-loop-close verify 遗留观察①）
+方案：stages/knowledge.js 校验循环豁免清单加 uncategorized.md（与 generated//proposed/ 同列）；新增 test/knowledge-validate-uncategorized.test.mjs 三态锁定（豁免生效/普通未注册仍告警/零警告回归）
+结果：新测 6/6（真实 CLI 子进程）；本仓 validate 0 警告；lint 过

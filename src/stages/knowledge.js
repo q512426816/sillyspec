@@ -225,8 +225,8 @@ export async function cmdValidate(dir, args, opts = {}) {
 
   for (const mdFile of allMdFiles) {
     if (mdFile === 'INDEX.md') continue
-    // generated/ 和 proposed/ 区不强制要求 INDEX 注册
-    if (mdFile.startsWith('generated/') || mdFile.startsWith('proposed/')) continue
+    // generated/ 和 proposed/ 区不强制要求 INDEX 注册；uncategorized.md 是暂存区（条目归类即迁出，语义上永不注册 INDEX）
+    if (mdFile.startsWith('generated/') || mdFile.startsWith('proposed/') || mdFile === 'uncategorized.md') continue
     if (!indexedFiles.has(mdFile)) {
       warnings.push({
         code: 'unregistered_file',

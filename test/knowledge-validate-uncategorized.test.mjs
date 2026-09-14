@@ -1,0 +1,47 @@
+/**
+ * knowledge validate 对 uncategorized.md 的 unregistered_file 误报豁免（ql-20260915-002-f2b4）
+ *
+ * uncategorized.md 是暂存区语义：条目归类即迁出（knowledge classify），永不注册 INDEX 路由——
+ * validate 把它当未注册文件告警是误报（2026-09-14 knowledge-loop-close verify 遗留观察①）。
+ * 本测试锁：①uncategorized.md 不再产生 unregistered_file 警告；②正常未注册文件仍告警（豁免不扩大）。
+ */
+import { describe, it } from 'node:test'
+import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
+import { mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+
+const CLI = join(import.meta.dirname, '..', 'bin', 'sillyspec.js')
+
+function makeSpecRoot() {
+  const root = join(tmpdir(), `kv-uncat-${Math.random().toString(36).slice(2)}`)
+  const kd = join(root, 'knowledge')
+  mkdirSync(kd, { recursive: true })
+  writeFileSync(join(kd, 'INDEX.md'), '---\nauthor: t\ncreated_at: 2026-09-15T00:00:00+08:00\n---\n\n# Knowledge Index\n', 'utf8')
+  return { root, kd }
+}
+
+const runValidate = (root) => JSON.parse(execFileSync(process.execPath,
+  [CLI, 'knowledge', 'validate', '--json', '--spec-dir', root],
+  { encoding: 'utf8', cwd: root }))
+
+describe('knowledge validate uncategorized 豁免', () => {
+  const a = makeSpecRoot(), b = makeSpecRoot(), c = makeSpecRoot()
+  it('uncategorized.md 存在且未注册 → 无 unregistered_file 警告', () => {
+    writeFileSync(join(a.kd, 'uncategorized.md'), '---\nauthor: t\n---\n# 未分类知识\n', 'utf8')
+    const r = runValidate(a.root)
+    assert.equal(r.ok, true)
+    assert.ok(!JSON.stringify(r.warnings).includes('unregistered_file'), `不应再有误报：${JSON.stringify(r.warnings)}`)
+  })
+  it('普通未注册文件仍告警（豁免不扩大）', () => {
+    writeFileSync(join(b.kd, 'random-pit.md'), '---\nauthor: t\n---\n# 随机坑\n', 'utf8')
+    const r = runValidate(b.root)
+    assert.ok(JSON.stringify(r.warnings).includes('unregistered_file'), '普通未注册文件应仍告警')
+  })
+  it('无 uncategorized 时零警告（回归）', () => {
+    const r = runValidate(c.root)
+    assert.deepEqual(r.warnings, [])
+  })
+  for (const x of [a, b, c]) it('teardown ' + x.root.slice(-6), () => rmSync(x.root, { recursive: true, force: true }))
+})
