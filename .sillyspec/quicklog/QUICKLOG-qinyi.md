@@ -191,10 +191,12 @@
 方案：finalizeRefresh 前置 HEAD 一致性门（短哈希 vs guard.sourceCommit 7 位归一，不等 code 2 拒绝重跑①拍，硬门无 force）；--docs 逐名裸文件名校验拒路径分隔符；help 补 [--force]；bump 正则放宽尾部容错重建统一补换行；白名单成员资格=哈希在手 push 后置
 结果：scan-refresh.test 19/19（16→19，新增 HEAD 推进拒绝/穿越拦截/双块防护/键集不变式 4 回归）；lint 0 告警；npm test 全量 469 文件 0 失败（CLI 门禁亲测）
 
-## ql-20260914-013-e7ba | 2026-09-14 14:31:53 | scope-audit 快照归属面修复（平台+本仓三实测）
+## ql-20260914-013-e7ba | 2026-09-14 14:31:53 | scope-audit quick 未声明噪音过滤修正
 状态：已完成
 关联变更：（无）
 文件：
+- src/scope-audit.js（声明即归属硬切+降级支过滤+isQuickMetadata import）
+- test/scope-audit.test.mjs（FR-04 断言按新语义更新）
 - src/scope-audit.js（自采形态 A+pathspec 收窄+sha256 归一）
 - src/run/complete.js（写入方归一 hash）
 - src/run/complete-handlers.js（写入方归一 hash）

@@ -13,3 +13,9 @@
   2. import 沙箱（子代理改动先进暂存区，验证通过才应用入链）
   3. 关键路径 task 顺序执行（牺牲并行换稳定）
 - **决策**：延后（P2），需独立 design 评估隔离边界 vs 并行收益。
+
+### 文件所有权登记（claims+心跳，D-004 延后）
+- **来源**：change `2026-09-14-apply-conflict-hardening` D-004@v1
+- **现象**：apply 落地的交付文件可被并行会话的工作区级 git 操作（restore/clean 类）冲掉（troubleshooting §64）。
+- **不做理由**：裸 git 拦不住，单独做收益不抵复杂度（该变更 design 非目标第 1 条）。
+- **复潮条件**：本护栏（merge 写回收口暂存 + apply-manifest 漂移检测 + 活跃 quick guard 相交拦截，见 change `2026-09-14-apply-conflict-hardening`）落地后，仍发生 apply/裸 git 冲掉造成实际损失 ≥2 次 → 重开评估。

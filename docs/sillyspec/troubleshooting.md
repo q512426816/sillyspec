@@ -934,7 +934,7 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 **③probe1 NEW: 失配**：design 清单 `NEW: src/x` 条目在文件已合入主仓后 `existsSync(join(cwd,'NEW:src/x'))` 恒 miss → skippedFiles ⚠️ 噪声。修复：探针路径剥 `NEW:` 前缀（主仓 + worktree 回退两处），matches 报告统一剥前缀路径（与 pathMatches 比对侧同源）。
 **④bash heredoc 截断**：本机 bash 通道长 heredoc 静默截断（双会话同款）——落档 knowledge/uncategorized.md（规避：长内容 Write 工具落盘，bash 只引用不内嵌）。
 
-## 64. apply 与并行会话工作区互相冲掉（2026-09-14 用户实证，护栏结论已立项方向）
+## 64. apply 与并行会话工作区互相冲掉（2026-09-14 用户实证，已修复/落档）
 
 **现象**：2026-09-14-quick-exit-tiered-gates 归档 apply 后，交付文件在主仓落盘且 63/63 测试通过；数分钟后续查发现 12 个文件缺失/回退（新文件 src/quick-gate-profile.js 被删、shared.js 等改回旧版），smoke 测试 scope-audit --json 的 gateProfile 字段 undefined 才暴露。恢复：worktree 仍完好（唯一可信源）→ 按「主仓当前==快照底版」逐文件判定直拷/手并（command.js 以对方 10:11 后最新版为底重放本变更三 hunk，保住对方 manual:true 修复）→ 显式 pathspec 立即提交锁定（7a0d624）。
 

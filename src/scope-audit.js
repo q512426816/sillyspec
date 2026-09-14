@@ -27,7 +27,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { join, dirname } from 'node:path'
-import { locateQuickSessionGuard, auditQuickCompletion, resolveRuntimeRoot, collectOtherQuickSessionDeclarations, ancestorSpecDirs } from './run/shared.js'
+import { locateQuickSessionGuard, auditQuickCompletion, resolveRuntimeRoot, collectOtherQuickSessionDeclarations, ancestorSpecDirs, isQuickMetadata } from './run/shared.js'
 import { computeGateProfile, resolveGateThresholds } from './quick-gate-profile.js'
 import { safeGit } from './git-helper.js'
 import { parseFileChangeListDetailed, pathMatches } from './change-list.js'
@@ -532,14 +532,39 @@ async function computeQuickAudit({ cwd, platformOpts, sessionId, located, collec
     return { ...base, ok: false, degradedReason: `quick 窗口审计失败: ${hardFailure}` }
   }
 
-  // 归属切分（消费 auditQuickCompletion 产物，不重算）：attributedFiles（含 sameFileHits）→
-  // declared；undeclaredFiles − softTestFiles → undeclared；softTestFiles → soft。
+  // 归属切分（quick-ec5fc714 平台实测修正）：scope-audit 是**范围视图**不是门禁——按
+  // 「声明即归属」硬切：declared=声明∩窗口；soft=软归属；其余（含 quick 元数据/其他变更
+  // 目录/linkedChanges 文件——audit 侧刻意保留它们供审计行落盘不静默挤走，范围视图则不该
+  // 把别人的活算进来）归为 undeclared 仅 note 交代。窗口文件全在 undeclared（如声明文件
+  // 已提交无 diff）时，undeclared 升格进 rows（范围视图只展示改了的东西）——本 quick
+  // 实测：声明两 pi-rpc 文件已提交 + 他者变更目录 19 文件未声明，行数贡献恰来自后者。
   const attributed = Array.isArray(audit.attributedFiles) ? audit.attributedFiles.map(toPosix) : []
   const undeclared = Array.isArray(audit.undeclaredFiles) ? audit.undeclaredFiles.map(toPosix) : []
   const softSet = new Set((Array.isArray(audit.softTestFiles) ? audit.softTestFiles : []).map(toPosix))
   const attrSet = new Set(attributed)
+  const linkedChangesArr = Array.isArray(guard.linkedChanges) ? guard.linkedChanges.map(c => String(c).replace(/\\/g, '/')) : []
+  const isLinkedLeftover = (f) => linkedChangesArr.some(lc => f.startsWith(`.sillyspec/changes/${lc}/`) || f.startsWith(`.sillyspec/changes/archive/${lc}/`))
 
-  const rowFiles = [...new Set([...attributed, ...undeclared])]
+  let rowFiles
+  let dropNote = null
+  if (attributed.length > 0 || softSet.size > 0) {
+    // 有归属文件时：undeclared 全部剔出范围视图——undeclared 即「不属于本 quick」的文件
+    // （他者变更目录/quicklog 产物/无关未提交），audit 侧留它们供审计行追溯，范围视图不该
+    // 展示（平台仓实测：窗口 13 个文件里 11 个是他者变更目录，唯二归属文件已提交）。
+    rowFiles = [...new Set([...attributed, ...softSet])]
+    if (undeclared.length > 0) {
+      dropNote = `${undeclared.length} 个未声明文件不计入范围视图（他者变更目录/quicklog 产物/漏声明——audit 行有追溯）`
+    }
+  } else {
+    // 窗口全 undeclared（如声明文件已提交无 diff）：范围视图仍剔 quick 元数据/变更目录
+    // ——audit 侧留它们供审计行追溯，范围视图不展示他者活（platform quick-ffb92f60 实测：
+    // 19 个 undeclared 中 17 个是他者变更目录/quicklog 产物，唯二声明文件已提交）。真未知的
+    // 源码/业务文件保留进 rows（他者窗口改动或漏声明，note 交代）。
+    rowFiles = [...new Set(undeclared.filter(f => !isQuickMetadata(f, linkedChangesArr) && !isLinkedLeftover(f)))]
+    if (rowFiles.length < undeclared.length) {
+      dropNote = `${undeclared.length - rowFiles.length} 个 quick 元数据/他者变更目录文件不计入范围视图`
+    }
+  }
   const stats = collectNumstatByPath(sessionRoot, rowFiles, { baseRef: 'HEAD' })
 
   const rows = rowFiles.map(f => {
@@ -559,7 +584,7 @@ async function computeQuickAudit({ cwd, platformOpts, sessionId, located, collec
 
   // 「quick 已提交」降级（design 总体方案）：窗口空（changedFiles 空）且 QUICKLOG 已有该会话
   // 条目 → 记录态提示读 QUICKLOG，不以空表冒充实时。
-  let note = null
+  let note = dropNote
   if (rowFiles.length === 0) {
     const qlId = guard.quicklogId || null
     if (quicklogHasEntry(guardSpecBase, qlId)) {
@@ -1013,13 +1038,18 @@ export async function computeChangeScopeAudit({ cwd, specBase, changeName, platf
             }
           }
         } catch { gateProfile = null }
+        // 记录态回放同样做「声明即归属」过滤（quick-ec5fc714 平台实测）：--done 时点采集的
+        // 老快照若含未过滤的并行会话变更目录/quicklog 产物（当时范围视图语义未收紧），回放时
+        // 按 isQuickMetadata 剔除——平台仓 2026-09-14 workspace-drag-sort 等 19 文件实证。
+        const filteredRows = rec.record.rows.filter(r => r && !isQuickMetadata(r.path || '', []))
+        const filterDropped = rec.record.rows.length - filteredRows.length
         return {
           mode: 'quick', ok: true, degradedReason: null,
           baseAnchor: rec.record.baseAnchor || `quick-window:${changeName}`,
-          totals: rec.record.totals && typeof rec.record.totals === 'object'
+          totals: rec.record.totals && typeof rec.record.totals === 'object' && filterDropped === 0
             ? rec.record.totals
-            : { files: rec.record.rows.length, ...sumTotals(rec.record.rows) },
-          rows: rec.record.rows,
+            : { files: filteredRows.length, ...sumTotals(filteredRows) },
+          rows: filteredRows,
           excluded: rec.record.excluded && Array.isArray(rec.record.excluded.foreignDeclared)
             ? rec.record.excluded
             : { foreignDeclared: [] },
@@ -1027,7 +1057,7 @@ export async function computeChangeScopeAudit({ cwd, specBase, changeName, platf
           patchSha256: rec.record.patchSha256 || null,
           patchStatus: rec.record.patchStatus || null,
           gateProfile,
-          note: `quick 会话已收尾——记录态（quicklog/patches/${rec.qlId}，${rec.record.savedAt ? String(rec.record.savedAt).replace('T', ' ').slice(0, 19) + ' 落盘' : '--done 时点冻结'}）`,
+          note: `quick 会话已收尾——记录态（quicklog/patches/${rec.qlId}，${rec.record.savedAt ? String(rec.record.savedAt).replace('T', ' ').slice(0, 19) + ' 落盘' : '--done 时点冻结'}）${filterDropped > 0 ? `；回放已剔除 ${filterDropped} 个 quick 元数据/并行变更目录文件（范围视图收紧）` : ''}`,
         }
       }
       return {

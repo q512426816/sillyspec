@@ -886,11 +886,19 @@ test('FR-04 quick：declared / soft / undeclared 三档 + baseAnchor=quick-windo
     writeFileSync(join(d, 'test', 'feature.test.js'), 't1\nt2\nt3\n') // 同模块测试未声明（untracked）
     writeFileSync(join(d, 'unrelated.js'), 'u1\nu2\nu3\nu4\n')        // 无关未声明（untracked）
 
+    {
+      const { locateQuickSessionGuard } = await import('../src/run/shared.js')
+      const loc = locateQuickSessionGuard(d, 'quick-1a2b3c4d')
+      console.error('DEBUG locate:', loc ? 'YES' : 'NULL', '| specBase tail:', loc ? String(loc.specBase).replace(d, '') : '-')
+      const quicklogDir = join(d, '.sillyspec', 'quicklog')
+      console.error('DEBUG quicklog dir exists:', (await import('node:fs')).existsSync(quicklogDir))
+    }
     const r = await computeChangeScopeAudit({ cwd: d, changeName: 'quick-1a2b3c4d' })
+    console.error('DEBUG mode:', r.mode, '| degraded:', String(r.degradedReason).slice(0, 50), '| rows:', JSON.stringify(r.rows.map(x=>x.path+':'+x.attribution)))
     assert.equal(r.mode, 'quick')
     assert.equal(r.ok, true, `ok（degradedReason=${r.degradedReason}）`)
     assert.equal(r.baseAnchor, 'quick-window:quick-1a2b3c4d')
-    assert.equal(r.rows.length, 3, '三档各一行')
+    assert.equal(r.rows.length, 2, '声明即归属：declared+soft 两行（unrelated 他者窗口改动被剔）')
     const byPath = new Map(r.rows.map(x => [x.path, x]))
 
     const f = byPath.get('src/feature.js')
@@ -909,17 +917,12 @@ test('FR-04 quick：declared / soft / undeclared 三档 + baseAnchor=quick-windo
     assert.equal(t.additions, 3, 'additions=文件总行数')
     assert.equal(t.deletions, 0)
 
-    const u = byPath.get('unrelated.js')
-    assert.ok(u, '未声明无关文件在 rows')
-    assert.equal(u.attribution, 'undeclared', '真未知 → undeclared')
-    assert.equal(u.declared, false)
-    assert.equal(u.kind, 'new')
-    assert.equal(u.additions, 4)
-    assert.equal(u.deletions, 0)
+    assert.ok(!byPath.has('unrelated.js'), 'unrelated（真未知未声明）被剔出 rows')
+    assert.ok(r.note && r.note.includes('未声明'), `note 交代被剔未声明文件（实际 ${r.note}）`)
 
     const out = renderScopeAuditTable(r)
     assert.ok(out.includes('软归属'), '渲染单列软归属档')
-    assert.ok(out.includes('未声明'), '渲染未声明档 + 出口指引')
+    assert.ok(!out.includes('未声明档'), '渲染不再单列未声明档（undeclared 已剔出范围视图）')
   } finally { cleanup(d) }
 })
 
