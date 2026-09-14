@@ -139,3 +139,12 @@
 根因：对外特性叙事停留在品类词层（SDD/TDD/worktree），scope-audit、contract-matrix、跨仓隔离、跨机派发、friction-tally 等后落地机制零暴露，维护者自己都数不出真实亮点（2026-09-14 全仓模块盘点实证能力面跑在叙事前面）
 方案：三文件纯文档变更：①新增 docs/sillyspec/capability-highlights-2026-09-14.md 推广基准稿（电梯稿三版/竞品本质区别表/四层能力地图带模块锚点/数据面板/四条质疑标准回应/诚实边界/叙事纪律）；②SKILL.md description 换变更账本+确定性验收定位，核心特性改四层结构；③README 标语与问题域更新（补多 agent 并行痛点），核心特性换四层结构保留平台同步细节，加基准稿链接
 结果：纯 doc 变更无触及 src/test；docs check 565 处引用全通过 exit 0（2 处 advisory 为存量他档问题非本次引入）；引用一律模块路径不带行号防锚点漂移
+
+## ql-20260914-009-4623 | 2026-09-14 13:26:08 | P1 判级基重审条件落卡——用户评审 quick-exit-tiered-gates 接受 fileCount（含文档）判级基但附条件…
+状态：已完成
+关联变更：（无）
+文件：.sillyspec/docs/sillyspec/modules/core-engine.md（+1/-1）
+需求：P1 判级基重审条件落卡——用户评审 quick-exit-tiered-gates 接受 fileCount（含文档）判级基但附条件：升 blocking 另立变更时须重审
+根因：裁决条件此前只在对话里，无载体即蒸发；未来升 blocking 变更 brainstorm 经模块路由必读 core-engine 卡，THRESHOLDS 行是最小合法落点（knowledge/decisions 机器维护勿手改，归档 decisions 加版本过重）
+方案：core-engine.md THRESHOLDS 行追加 ⚠️ 条件句：现裁决依据（旧规则边界连续+advisory 容忍）+ blocking 期两类成本（2代码+2文档误伤、文档同步者系统性跨阈激励成本）+ 候选（文件维改 codeFileCount）+ 溯源（用户裁决 2026-09-14/ql-20260914-009-4623）
+结果：docs check 定向通过（2 处悬空为 file-lifecycle/token-cost 他文件预存 advisory 与本卡无关）；纯文档单文件零测试面；P2 裁决（proposal 历史数字不修正——同目录校准记录 5.9% 为权威定稿且方向更强）按用户判断不动

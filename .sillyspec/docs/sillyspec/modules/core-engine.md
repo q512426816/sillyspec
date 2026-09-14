@@ -64,7 +64,7 @@ core-engine 是 SillySpec 的基础设施层，由三个层次组成：持久化
 |-----------|------|------|
 | `computeGateProfile(changedFiles, moduleIndex, opts)` | 画像计算：非文档文件 × paths/core_files 前缀聚类模块归属 + `QUICK_RISK_PATH_PATTERNS` 风险命中 → level（正常态 L2=跨 ≥L2_SPAN 模块或风险命中、L1=跨 ≥L1_SPAN 或 ≥L1_FILES 文件；module-map 缺失降级档 span 退出判级、L2=≥L2_FILES_DEGRADED 文件）+ checks{perFileNotes（--file-notes 覆盖率）, testDelta（na/missing/ok 机械规则）, docClaim（claimed/missing/exempt-no-docs，模块卡认领空真防假 advisory）, runtimeEvidence（风险命中→required）}；文档文件不计数不参与归属与风险命中（docSyncHint isDoc 同源口径） | `changedFiles, moduleIndex, {riskTable?, thresholds?, fileNotes?, noDocs?}` |
 | `resolveGateThresholds(config)` | local.yaml quick-gate 段覆写与代码默认值合并（无段全默认；键非法回退默认并 warn；D-009） | `config` |
-| `THRESHOLDS` | 阈值单点（缺省行为单一事实源）：L1_SPAN=2 / L1_FILES=4 / L2_SPAN=4 / L2_FILES_DEGRADED=8——task-05 真实图谱校准维持定稿，依据见 changes/2026-09-14-quick-exit-tiered-gates/design.md「阈值校准记录」节 | — |
+| `THRESHOLDS` | 阈值单点（缺省行为单一事实源）：L1_SPAN=2 / L1_FILES=4 / L2_SPAN=4 / L2_FILES_DEGRADED=8——task-05 真实图谱校准维持定稿，依据见 changes/2026-09-14-quick-exit-tiered-gates/design.md「阈值校准记录」节。⚠️ 升 blocking 另立变更时须重审判级基：现判级用 fileCount（含文档，裁决依据=与旧「≤3 文件」规则边界连续+advisory 噪音可容忍，见 quick-gate-profile.js 计数口径注释）；blocking 期「2 代码+2 文档抬进 L1」误伤与文档同步者系统性跨阈的激励成本需重估，届时改用 codeFileCount 为文件维判级基是候选（用户裁决条件 2026-09-14，ql-20260914-009-4623） | — |
 
 ### src/db.js — DB 类
 | 函数/常量 | 说明 | 参数 |
