@@ -41,6 +41,7 @@ import { getRule } from '../stage-contract-spec.js'
 import { archiveDestDirName } from '../stage-contract.js'
 import { collectNumstatByPath } from '../scope-audit.js'
 import { recordFrictionEvent, consumeFrictionHint } from '../friction-tally.js'
+import { mergeFrictionEntrySync } from '../friction-ledger.js'
 import { resolveSessionIdentity } from '../progress.js'
 // ql-20260915-001 修复④：chunkPaths（argv 分批）供归档窄化 add / minePaths 精确补暂存用。
 // 无环：worktree-apply 静态闭包（worktree/task-review/quicklog 等）不引本文件；既有
@@ -161,13 +162,21 @@ function ownerFromReviewedFiles(reviewedFiles) {
  *
  * fail-open：卫生动作失败不抛，返回 { ok:true }。
  *
+ * 台账兜底滚动（2026-09-15-tax-governance FR-02）：删 friction tally 前读残余
+ * events[type].count（X-10：tally 结构 events:{type:{count,lastAt}}，无 counts 字段）merge
+ * 进 <runtimeRoot>/friction-ledger.json 同 change 条目并落 archivedAt——verify 收尾 consume
+ * 已滚主账，此处只兜残余（tally 缺失/全零/坏 JSON 跳过，归档照常）。走 mergeFrictionEntrySync
+ * （同步契约：既有 {ok,removed} 消费方与测试直调，拿不了 async 锁；无锁读改写并发丢失按
+ * design R-02 P3 容忍）。台账写失败 fail-soft 只反映在 ledgerAppend:false，不抛不阻断归档。
+ *
  * @param {string} runtimeRoot
  * @param {string} changeName
- * @returns {{ ok: true, removed: number }}
+ * @returns {{ ok: true, removed: number, ledgerAppend: boolean }}
  */
 export function pruneArchivedChangeRuntime(runtimeRoot, changeName) {
-  if (!runtimeRoot || !changeName || !existsSync(runtimeRoot)) return { ok: true, removed: 0 }
+  if (!runtimeRoot || !changeName || !existsSync(runtimeRoot)) return { ok: true, removed: 0, ledgerAppend: false }
   let removed = 0
+  let ledgerAppend = false
   const gone = (p, recursive = false) => {
     try {
       if (recursive) rmSync(p, { recursive: true, force: true })
@@ -183,9 +192,18 @@ export function pruneArchivedChangeRuntime(runtimeRoot, changeName) {
 
   // friction tally（friction-signal-hint FR-05）：摩擦计数随变更终态一并回收——真实变更的
   // friction-tally-<change>.json 落 runtimeRoot，变更归档/删除后无读者，残留即孤儿文件。
+  // 删前残余先滚台账（tax-governance FR-02 兜底滚动点，见函数头注释）。
   try {
     const fp = join(runtimeRoot, `friction-tally-${changeName}.json`)
-    if (existsSync(fp)) gone(fp)
+    if (existsSync(fp)) {
+      const merged = mergeFrictionEntrySync(runtimeRoot, {
+        change: changeName,
+        counts: residualFrictionCounts(fp),
+        archivedAt: new Date().toISOString(),
+      })
+      ledgerAppend = !!(merged && merged.ok && !merged.skipped)
+      gone(fp)
+    }
   } catch {}
 
   try {
@@ -240,7 +258,28 @@ export function pruneArchivedChangeRuntime(runtimeRoot, changeName) {
     }
   } catch {}
 
-  return { ok: true, removed }
+  return { ok: true, removed, ledgerAppend }
+}
+
+/**
+ * 残余摩擦计数读取（tax-governance FR-02 prune 兜底用）：tally 的 events 结构是
+ * { type: { count, lastAt } }（X-10——无 counts 字段），转成 mergeFrictionEntry 认的
+ * counts 平面映射（只收三枚举类型且 count>0，与 consumeFrictionHint 的 counts 形态一致）。
+ * 文件缺失/坏 JSON/脏型 → {}（跳过入账，归档照常）。
+ */
+function residualFrictionCounts(tallyPath) {
+  try {
+    const raw = JSON.parse(readFileSync(tallyPath, 'utf8'))
+    const events = raw && typeof raw === 'object' && raw.events && typeof raw.events === 'object' && !Array.isArray(raw.events) ? raw.events : {}
+    const counts = {}
+    for (const type of ['gate_rollback', 'verify_run_failed', 'review_rejected']) {
+      const n = Number(events[type] && events[type].count)
+      if (Number.isFinite(n) && n > 0) counts[type] = n
+    }
+    return counts
+  } catch {
+    return {}
+  }
 }
 
 /**

@@ -678,7 +678,16 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
         const { consumeFrictionHint } = await import('../friction-tally.js')
         const r = await consumeFrictionHint({ cwd, changeName, platformOpts })
         if (r && r.hint) console.log(`\n${r.hint}`)
-      } catch { /* 摩擦提示失败不影响收尾 */ }
+        // 台账滚动（2026-09-15-tax-governance FR-02 主滚动点）：consume 得到的非零 counts 按
+        // change 滚动合并进 <runtimeRoot>/friction-ledger.json 幸存台账（merge-by-change——
+        // --reopen 重跑二次 consume 累加非双计）；空 counts 跳过写（防干净收尾落空文件）；
+        // archivedAt 此时不落（prune 侧落定）；runtimeRoot 与 consume 同源（specBase 同变量
+        // + resolveRuntimeRoot 单点）。台账写失败 fail-soft 在既有 try/catch 内，绝不阻断收尾。
+        if (changeName && r && r.counts && Object.keys(r.counts).length > 0) {
+          const { mergeFrictionEntry } = await import('../friction-ledger.js')
+          await mergeFrictionEntry(resolveRuntimeRoot(platformOpts, specBase), { change: changeName, counts: r.counts })
+        }
+      } catch { /* 摩擦提示/台账失败不影响收尾 */ }
     }
 
     if (stageName === 'execute') {
@@ -1547,7 +1556,16 @@ export async function continueStep(pm, progress, stageName, cwd, answer, options
         const { consumeFrictionHint } = await import('../friction-tally.js')
         const r = await consumeFrictionHint({ cwd, changeName, platformOpts })
         if (r && r.hint) console.log(`\n${r.hint}`)
-      } catch { /* 摩擦提示失败不影响收尾 */ }
+        // 台账滚动（2026-09-15-tax-governance FR-02 主滚动点）：consume 得到的非零 counts 按
+        // change 滚动合并进 <runtimeRoot>/friction-ledger.json 幸存台账（merge-by-change——
+        // --reopen 重跑二次 consume 累加非双计）；空 counts 跳过写（防干净收尾落空文件）；
+        // archivedAt 此时不落（prune 侧落定）；runtimeRoot 与 consume 同源（specBase 同变量
+        // + resolveRuntimeRoot 单点）。台账写失败 fail-soft 在既有 try/catch 内，绝不阻断收尾。
+        if (changeName && r && r.counts && Object.keys(r.counts).length > 0) {
+          const { mergeFrictionEntry } = await import('../friction-ledger.js')
+          await mergeFrictionEntry(resolveRuntimeRoot(platformOpts, specBase), { change: changeName, counts: r.counts })
+        }
+      } catch { /* 摩擦提示/台账失败不影响收尾 */ }
     }
     // 阶段完成后明确下一步（agent 常卡：stageData completed 但不知要 run <下一阶段> 推进 currentStage）
     const nextStageHint = { brainstorm: 'plan', plan: 'execute', execute: 'verify', verify: 'archive' }[stageName]

@@ -31,7 +31,8 @@ import { gitQuiet } from './git-helper.js'
 import jsYaml from 'js-yaml';
 import { pruneTimestampedEntries } from './runtime-hygiene.js';
 import { CHECK_SEVERITY } from './constants.js';
-import { checkPlatformManaged, isSelfReferentialSpecRoot, PLATFORM_MANAGED_FILENAME, QUICK_SID_RE } from './run/shared.js';
+import { checkPlatformManaged, isSelfReferentialSpecRoot, PLATFORM_MANAGED_FILENAME, QUICK_SID_RE, resolveRuntimeRoot } from './run/shared.js';
+import { readFrictionLedger } from './friction-ledger.js';
 
 // db 角色标签
 const DB_ROLE = {
@@ -1027,6 +1028,103 @@ function detectApplyManifestDrift(cwd, specDir) {
   }
 }
 
+// ══ 2026-09-15-tax-governance（task-02）：自维护税面 self_maintenance_tax（FR-03）══
+
+/** 税重阈值：单变更累计 total ≥3 记 WARNING（X-07 刻意拉状态——税重提示本就该拉状态） */
+const TAX_HEAVY_TOTAL = 3;
+/** 聚合窗口：近 90 天（archivedAt 口径；无 archivedAt = 变更未归档、摩擦是当前进行时，计入窗口） */
+const TAX_WINDOW_MS = 90 * 24 * 60 * 60 * 1000;
+/** 近窗口聚合展示条数 */
+const TAX_TOP_N = 5;
+/** 类型→中文标签（与 friction-tally.js FRICTION_LABELS 同枚举同序，此处本地复制不动其文件） */
+const TAX_TYPE_LABELS = [['gate_rollback', 'gate 回滚'], ['verify_run_failed', '验证失败'], ['review_rejected', '审查打回']];
+
+/**
+ * 自维护税面（FR-03，只读）：「哪个变更税重」从回忆变成可查数据。
+ *   ① 活跃变更非零 tally 列示（runtimeRoot 下 friction-tally-*.json——verify 收尾 consume 清零
+ *      后仍非零 = 有未消费的进行中摩擦）：纯信息不拉状态；
+ *   ② 台账聚合（friction-ledger.json）：近 90 天 total top5 + 累计总量：纯信息不拉状态；
+ *   ③ 仅单变更 total≥3 记 WARNING（X-07 刻意——detail 注明评估机制群简化/退役）；
+ *   ④ 台账缺失渲染「无台账数据（首次归档后生成）」不告警。
+ * severity 语义（Grill X-07）：聚合/列示 detail 走 pass:true，只有税重 WARNING 会拉低
+ * overall_status（formatDoctorJson 按 severity 计 warning）。runtimeRoot 与写入侧同源走
+ * resolveRuntimeRoot（X-08 平台模式防分裂，pointer.runtimeRoot 优先、同 gcUnstampedExecuteRuns
+ * 的 existsSync 前置门）。探测只读、全程 fail-soft 降级 skipped。
+ */
+export function detectSelfMaintenanceTax(cwd, authoritySpecDir) {
+  const base = { name: 'self_maintenance_tax', label: '自维护税面（摩擦信号台账）', safe_actions: [] };
+  try {
+    const pointer = resolvePointer(cwd);
+    const runtimeRoot = resolveRuntimeRoot(
+      { runtimeRoot: pointer.present && pointer.runtimeRoot && existsSync(pointer.runtimeRoot) ? pointer.runtimeRoot : null },
+      authoritySpecDir || join(cwd, '.sillyspec'),
+    );
+    const findings = [];
+    const warnings = [];
+
+    // ① 活跃非零 tally 列示（events:{type:{count,lastAt}}，X-10 结构）
+    try {
+      for (const f of readdirSync(runtimeRoot)) {
+        const m = f.match(/^friction-tally-(.+)\.json$/);
+        if (!m) continue;
+        let tally = null;
+        try { tally = JSON.parse(readFileSync(join(runtimeRoot, f), 'utf8')); } catch { continue; }
+        const events = tally && typeof tally === 'object' && tally.events && typeof tally.events === 'object' && !Array.isArray(tally.events) ? tally.events : {};
+        const segs = [];
+        let total = 0;
+        let lastAt = '';
+        for (const [type, label] of TAX_TYPE_LABELS) {
+          const n = Number(events[type] && events[type].count);
+          if (!Number.isFinite(n) || n <= 0) continue;
+          segs.push(`${label} ${n}`);
+          total += n;
+          const la = events[type] && typeof events[type].lastAt === 'string' ? events[type].lastAt : '';
+          if (la > lastAt) lastAt = la;
+        }
+        if (total <= 0) continue;
+        findings.push(`活跃摩擦：${m[1]}（${segs.join('、')}${lastAt ? `，最近 ${lastAt}` : ''}）`);
+        if (total >= TAX_HEAVY_TOTAL) warnings.push(`税重——评估该机制群简化/退役（对照其 decisions 退役判据）：${m[1]}（活跃 total ${total}）`);
+      }
+    } catch { /* runtimeRoot 不可读 → 无活跃数据，不误报 */ }
+
+    // ② 台账聚合（近 90 天 top5 + 累计总量）；④ 缺失渲染提示不告警
+    const ledger = readFrictionLedger(runtimeRoot);
+    if (ledger.length === 0) {
+      findings.push('无台账数据（首次归档后生成）');
+    } else {
+      const grandTotal = ledger.reduce((s, e) => s + (Number.isFinite(Number(e.total)) ? Number(e.total) : 0), 0);
+      findings.push(`台账累计：${ledger.length} 个变更 / 总摩擦 ${grandTotal} 次`);
+      const now = Date.now();
+      const recent = ledger.filter((e) => {
+        if (typeof e.archivedAt !== 'string' || !e.archivedAt) return true; // 未归档 = 当前进行时
+        const t = Date.parse(e.archivedAt);
+        return Number.isFinite(t) && now - t <= TAX_WINDOW_MS;
+      });
+      if (recent.length === 0) {
+        findings.push('近 90 天无台账条目');
+      } else {
+        const top = [...recent]
+          .sort((a, b) => (Number(b.total) || 0) - (Number(a.total) || 0))
+          .slice(0, TAX_TOP_N)
+          .map((e) => `${e.change}(${Number(e.total) || 0})`);
+        findings.push(`近 90 天税重 top${top.length}：${top.join('、')}`);
+      }
+      for (const e of ledger) {
+        if ((Number(e.total) || 0) >= TAX_HEAVY_TOTAL) {
+          warnings.push(`税重——评估该机制群简化/退役（对照其 decisions 退役判据）：${e.change}（total ${Number(e.total) || 0}）`);
+        }
+      }
+    }
+
+    if (warnings.length > 0) {
+      return { ...base, findings: [...warnings, ...findings], pass: false, severity: CHECK_SEVERITY.WARNING };
+    }
+    return { ...base, findings, pass: true, severity: CHECK_SEVERITY.PASSED };
+  } catch (e) {
+    return { ...base, findings: [`探测降级（${e?.message || e}）——skipped`], pass: true, severity: null, skipped: true };
+  }
+}
+
 /**
  * renderDoctorSummary（FR-01，全新输出契约——2026-09-09-doctor-noai）：逐维
  * ✅/⚠️/❌ + label + findings 首行 + safe_actions 提示行。顶层非 --json 命令与
@@ -1077,7 +1175,9 @@ export async function runDoctorDiagnostics({ cwd }) {
   // task-03（2026-09-14-apply-conflict-hardening）：apply-manifest 漂移（advisory，
   // 扫描面走权威 specDir 定位链，git/文件内容比对走 cwd 主仓面）
   const applyManifestDrift = detectApplyManifestDrift(cwd, authoritySpecDir)
-  const dimensions = [multiDb, pointerHealth, changesSplit, changeDb, executeMismatch, docBloat, repoNativeChain, lifecycleDoc, worktreeHealth, buildEnv, mcpEndpoints, applyManifestDrift];
+  // task-02（2026-09-15-tax-governance）：自维护税面（活跃 tally 列示 + 台账聚合 + 税重阈值，只读）
+  const selfMaintenanceTax = detectSelfMaintenanceTax(cwd, authoritySpecDir)
+  const dimensions = [multiDb, pointerHealth, changesSplit, changeDb, executeMismatch, docBloat, repoNativeChain, lifecycleDoc, worktreeHealth, buildEnv, mcpEndpoints, applyManifestDrift, selfMaintenanceTax];
 
   return {
     dimensions,

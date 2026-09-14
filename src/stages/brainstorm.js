@@ -173,6 +173,8 @@ export const definition = {
 - normalized_requirement: <可测试的约束>
 - impacts: [FR-?, task-?, verify-?]
 - evidence: <文件路径/代码位置/用户回答轮次>
+- 故障面: <本决策引入的新失败模式>（可选，type=architecture 时建议填写）
+- 退役判据: <出现什么信号时简化/删除本机制>（可选，type=architecture 时建议填写）
 \`\`\`
 
 - 幂等：写入前按 D-xxx@vN 查重，已存在的不重复追加；后续修正走新版本 D-001@v2 + supersedes（见 Design Grill 版本规则）
@@ -434,6 +436,8 @@ ${REVIEW_CHECKLISTS.brainstorm.slice(3).map((item) => '- ' + item).join('\n')}
 - normalized_requirement: TTL 过期且上游仍异常时返回 stale 标记，不刷新缓存。
 - impacts: [FR-02, task-03, verify-02]
 - evidence: design.md §3/§7, src/cache/...
+- 故障面: <本决策引入的新失败模式>（可选，type=architecture 时建议填写）
+- 退役判据: <出现什么信号时简化/删除本机制>（可选，type=architecture 时建议填写）
 \`\`\`
 
 ### 输出格式
@@ -590,7 +594,7 @@ created_at: <now-datetime>
 - evidence: 用户回答轮次或代码/文档路径
 \`\`\`
 
-> 可选字段（按需另加，旧格式决策缺这些字段不受影响）：**锚点**（决策落点主文件，\`<src 路径>:<行号或符号>\`；status=confirmed 时必填）；**模块域**（决策涉及的模块 ID，可多个逗号分隔——合法 id 只取**当前变更所属项目**的 \`{SPEC_ROOT}/docs/<project>/modules/_module-map.yaml\`，多项目仓勿读其他子项目的 map（核验不认，报错会点名归属）；规划中的新模块用 \`NEW:<名>\` 前缀声明，冒号后不加空格：\`NEW:foo\` 合法、\`NEW: foo\` 属书写错误。本步 --done 的模块域核验对不认识的 id 直接阻断）；**否决理由**（status=rejected 时必填）；**复潮条件**（status=rejected 时必填）。
+> 可选字段（按需另加，旧格式决策缺这些字段不受影响）：**锚点**（决策落点主文件，\`<src 路径>:<行号或符号>\`；status=confirmed 时必填）；**模块域**（决策涉及的模块 ID，可多个逗号分隔——合法 id 只取**当前变更所属项目**的 \`{SPEC_ROOT}/docs/<project>/modules/_module-map.yaml\`，多项目仓勿读其他子项目的 map（核验不认，报错会点名归属）；规划中的新模块用 \`NEW:<名>\` 前缀声明，冒号后不加空格：\`NEW:foo\` 合法、\`NEW: foo\` 属书写错误。本步 --done 的模块域核验对不认识的 id 直接阻断）；**否决理由**（status=rejected 时必填）；**复潮条件**（status=rejected 时必填）；**故障面**（本决策引入的新失败模式——新机制落地时留痕它引入什么失败模式；type=architecture 时建议填写，可选）；**退役判据**（出现什么信号时简化或删除本机制——信号出现就该简化它；type=architecture 时建议填写，可选）。
 
 ### 后续变更包处理
 如果 MASTER.md 中规划了后续变更包（拆分后的子阶段），**必须同时为每个后续包创建独立变更目录**：

@@ -123,7 +123,12 @@ function buildDecisionRecord(id, body) {
   const supersedes = supersedesRaw
     ? supersedesRaw.split(',').map(s => s.trim().toUpperCase().replace(/['"]/g, '')).filter(Boolean)
     : []
-  return { id: id.toUpperCase(), body, status, priority, blocker, priorityMissing, supersedes }
+  // 故障面/退役判据（FR-01/D-001@v1，2026-09-15-tax-governance）：自维护税治理字段，
+  // 软警告素材（warnMissingGovernanceFields）——type 缺省为 ''（非 architecture 不警告）
+  const type = readDecisionField(body, 'type').toLowerCase()
+  const failureMode = readDecisionField(body, '故障面')
+  const retireWhen = readDecisionField(body, '退役判据')
+  return { id: id.toUpperCase(), body, status, priority, blocker, priorityMissing, supersedes, type, failureMode, retireWhen }
 }
 
 function findNextDecisionBoundary(content, startIndex) {
@@ -230,6 +235,22 @@ function warnMissingIds(warnings, ids, targetContent, targetName, sourceName) {
     if (!re.test(targetUpper)) {
       warnings.push(getRule('shared.id-traceability').failMessage.replaceAll('${target}', targetName).replaceAll('${source}', sourceName).replaceAll('${id}', id))
     }
+  }
+}
+
+/**
+ * 故障面/退役判据软警告（FR-01/D-001@v1，change: 2026-09-15-tax-governance）：
+ * type=architecture 且 status=accepted 的条目缺任一字段 → warnings.push（不阻断）。
+ * 机制落地时被迫留痕「它引入什么失败模式、什么信号出现就该简化它」；definition/boundary
+ * 等其他类型不要求。扫描无法区分新旧条目（design R-03）——文案标注存量可忽略，
+ * 软警告不升 error（一个观测周期后再评估棘轮升级，D-001 退役判据锚定）。
+ */
+function warnMissingGovernanceFields(warnings, decisionsContent) {
+  if (!decisionsContent) return
+  for (const r of parseDecisionRecords(decisionsContent)) {
+    if (r.type !== 'architecture' || r.status !== 'accepted') continue
+    if (r.failureMode && r.retireWhen) continue
+    warnings.push(`decisions.md ${r.id}（architecture）缺「故障面/退役判据」——新决策建议补齐（存量条目可忽略）`)
   }
 }
 
@@ -356,6 +377,9 @@ function validateBrainstormOutputs(cwd, changeName, context = {}) {
       // tasks（骨架，待 plan 展开）不强求逐条引用每个架构决策，否则批量误报。
       warnMissingIds(warnings, decisionIds, design, 'design.md', 'decisions.md')
     }
+    // 故障面/退役判据软警告（FR-01，2026-09-15-tax-governance）：architecture+accepted 缺字段
+    // → warning 不阻断（经 gates warnings 通道打印，gates.js 零改动）
+    warnMissingGovernanceFields(warnings, decisions)
   }
 
   return { ok: errors.length === 0, errors, warnings }
@@ -397,6 +421,8 @@ function validatePlanOutputs(cwd, changeName, context = {}) {
     }
     const decisionIds = extractCurrentDecisionIds(decisions)
     warnMissingIds(warnings, decisionIds, plan, 'plan.md', 'decisions.md')
+    // 故障面/退役判据软警告（FR-01，2026-09-15-tax-governance）：brainstorm 侧同款（软警告不阻断）
+    warnMissingGovernanceFields(warnings, decisions)
   }
   // ── P0: 生产接线路径检查：design 提到入口但 task 的 allowed_paths 不含入口文件 ──
   // entry-point-wiring(custom):trigger/file 抽取/exemption/failMessage 从 manifest 同源

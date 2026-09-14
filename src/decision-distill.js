@@ -80,6 +80,10 @@ function applyField(entry, label, value) {
     case '模块域': case '模块': case 'domains': case 'domain': entry.domains = parseListValue(value); break
     // 文件字段（FR-01/D-001@v1，2026-09-11-cross-change-decision-guard）：列表语义同模块域 + 逐项反斜杠归一 POSIX
     case '文件': case 'files': entry.files = parseListValue(value).map(s => s.replace(/\\/g, '/')); break
+    // 故障面/退役判据（FR-01/D-001@v1，2026-09-15-tax-governance）：自维护税治理字段——本决策
+    // 引入的新失败模式 / 出现什么信号时简化或删除本机制；单值语义，仅中文标签（模板同源）
+    case '故障面': entry.failureMode = value; break
+    case '退役判据': entry.retireWhen = value; break
     case '否决理由': case 'reject_reason': case 'rejectreason': entry.rejectReason = value; break
     case '复潮条件': case 'revisit_when': case 'revisitwhen': entry.revisitWhen = value; break
     case 'supersedes': entry.supersedes = value; break
@@ -95,7 +99,8 @@ function applyField(entry, label, value) {
  * @returns {{ entries: Array<{
  *   id: string, number: string, version: number, title: string,
  *   type?: string, status?: string, question?: string, answer?: string,
- *   anchor?: string, domains?: string[], files?: string[], rejectReason?: string, revisitWhen?: string,
+ *   anchor?: string, domains?: string[], files?: string[], failureMode?: string, retireWhen?: string,
+ *   rejectReason?: string, revisitWhen?: string,
  *   supersedes?: string, impacts?: string, normalizedRequirement?: string,
  *   selected: 'implemented'|'rejected'|null, raw: string }>, missing: boolean }}
  *   missing=true = decisions.md 不存在；selected = FR-02 入选裁决，null 表示解析保留但不入选。
@@ -166,8 +171,10 @@ export function parseDecisions(changeDir) {
   return { entries, missing: false, zeroWithContent: hasDecisionLike && entries.length === 0 }
 }
 
-/** applyField 认识的字段标签白名单（行内 ｜ 分段与缩进子项只按白名单进字段，散文误伤为零） */
-const FIELD_LABEL_RE = /^(type|types|status|question|问题|answer|答案|锚点|anchor|模块域|模块|domains|domain|否决理由|reject_reason|rejectreason|复潮条件|revisit_when|revisitwhen|supersedes|impacts|影响|文件|files|normalized_requirement|状态|类型)$/i
+/** applyField 认识的字段标签白名单（行内 ｜ 分段与缩进子项只按白名单进字段，散文误伤为零）。
+ *  故障面/退役判据（2026-09-15-tax-governance FR-01）：白名单双触点之二——缺收录则两标签
+ *  永远留 raw 静默丢弃（applyField case 缺一不可）。 */
+const FIELD_LABEL_RE = /^(type|types|status|question|问题|answer|答案|锚点|anchor|模块域|模块|domains|domain|否决理由|reject_reason|rejectreason|复潮条件|revisit_when|revisitwhen|supersedes|impacts|影响|文件|files|normalized_requirement|状态|类型|故障面|退役判据)$/i
 
 // ---------------------------------------------------------------------------
 // 域三级兜底（FR-03）
@@ -300,6 +307,11 @@ function renderBlockLines(entry, headHash, supersedesNote, changeName) {
   lines.push(`最近确认：${oneLine(headHash) || NOT_RECORDED}`)
   lines.push(`理由：${oneLine(entry.answer || entry.normalizedRequirement || entry.question)}`)
   if (supersedesNote) lines.push(`supersedes：${oneLine(supersedesNote)}`)
+  // 故障面/退役判据行（FR-01/D-001@v1，2026-09-15-tax-governance）：仅非空渲染——存量条目零迁移、
+  // 幂等重归档不添空行（先例 :298-299 文件行）；位置在「理由：/supersedes：」之后、rejected 专属行
+  // 之前——绝不插在「锚点：」与「文件：」行之间（decision-file-field.test 行序断言红线）
+  if (entry.failureMode) lines.push(`故障面：${oneLine(entry.failureMode)}`)
+  if (entry.retireWhen) lines.push(`退役判据：${oneLine(entry.retireWhen)}`)
   if (entry.selected === 'rejected') {
     lines.push(`否决理由：${oneLine(entry.rejectReason)}`)
     lines.push(`复潮条件：${oneLine(entry.revisitWhen)}`)
