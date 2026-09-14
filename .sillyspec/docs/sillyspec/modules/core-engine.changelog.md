@@ -26,3 +26,4 @@
 - ql-20260911-029-2892 | 紧急包小修：detectModuleDocHealth 分块正则 \w 双重转义修正（needs_review 整文件当一块只查首模块→逐模块归因），并导出供测试
 - ql-20260912-008-8eff | isPointerStale NaN 判 STALE；config-cat home 守卫大小写归一（win32）；git-helper ENOBUFS 文案由 GIT_MAX_BUFFER 推导
 - ql-20260912-009-06b4 | doctor lifecycle 单次多 pathspec git log（原 6 串行子进程，落后归因才退回逐路径）
+| 2026-09-14 | 2026-09-14-apply-conflict-hardening | doctor-diagnostics 新增 apply_manifest_drift 检查维（第十二维，advisory WARNING 不改退出码）：活跃∪归档 apply-manifest.json 扫描面按 appliedAt 降序取前 5；两态内容 sha256 vs 指纹三分支（落盘面漂移/暂存面漂移/丢失），worktree 态 CRLF→LF 归一防 autocrlf 误报，approx 条目跳过 staged 比对；无 manifest skipped 零告警。消费 worktree-apply writeApplyManifest 指纹（FR-04/D-005）。新增 test/apply-conflict-hardening.test.mjs 块② |
