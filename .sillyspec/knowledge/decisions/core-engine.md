@@ -71,3 +71,52 @@ supersedes：D-005@v1
 文件：src/knowledge-match.js
 最近确认：358af35
 理由：**方案 A——三层 advisory**：①决策条目增机械可解析「文件：」字段（存量条目用锚点路径提取兼容，零迁移）②quick 进场按候选文件（--files+脏文件）反查知识库 implemented/rejected 决策 + git log 近 7 天他者变更交付归因，命中注入 advisory、零命中静默 ③quick --done 对「他者交付的测试文件断言行被改」输出 WARNING 级点名（具体断言+交付变更+决策指针），建议理由写进 quicklog --solution。全部非阻断，单开关 semantic_guard.enabled 默认开。
+
+## D-002@v1 quick 出口分级门禁（L0/L1/L2 机械画像），不新增第三条车道
+状态：implemented
+变更：2026-09-14-quick-exit-tiered-gates
+锚点：未记录
+最近确认：e84bc89
+理由：不新增 mid 车道（自选车道会被激励扭曲绕过：95% 超限 quick 本就是 agent 自选、独立完成绕过 full 仪式；新车道=新状态机+新 prompt 面，违背纯减法原则）。改为 quick --done 出口按 CLI 侧机械信号自动升级：L0=现状 test/lint 实测门；L1（跨≥2 模块 或 ≥4 文件）=+每文件注记非空+测试增量检查；L2（跨≥4 模块 或 风险特征命中）=+模块文档认领或显式 --no-docs 豁免留痕+运行时证据要求。判定输入用 CLI 自算 changedFiles×module-map，不用 --files 自声明（37.1% 超限条目存在未声明脏文件）。
+
+## D-003@v1 新门禁 advisory 起步，稳定后另立变更升 blocking
+状态：implemented
+变更：2026-09-14-quick-exit-tiered-gates
+锚点：未记录
+最近确认：e84bc89
+理由：沿用 docs-consistency D-003 先例（docs-check 决策规则 advisory 起步，稳定后升 error）：L1/L2 起步 advisory（warn 打印+quicklog reasons 落账），dogfood 一个稳定周期后另立小变更升级阻断。避免 sillyhub 等存量大流量仓升级即被新门禁卡死。
+
+## D-004@v2 风险命中 v1 收敛为路径模式，diff 关键词维度延后
+状态：implemented
+变更：2026-09-14-quick-exit-tiered-gates
+锚点：未记录
+最近确认：e84bc89
+理由：Design Grill 独立审查（2026-09-14 brainstorm-review-2026-09-14-093804）阻断 2：quick 审计链无 diff 文本入参（changedFiles 是路径清单），引入 diff 扫描需加 git 子进程（违背零子进程承诺）且 scope-audit 冻结重放态只有 rows 路径、diff 维度不可重放。收敛：v1 风险命中=路径模式 only（确定性、可重放、零子进程），覆盖 auth/permission/billing/migration/锁/调度主要踩坑域；diff 关键词维度出现真实需求时另立变更。运行时证据要求与人工确认排除条款不变。
+
+## D-006@v1 门禁切分点数字以真实模块图谱重算为准
+状态：implemented
+变更：2026-09-14-quick-exit-tiered-gates
+锚点：未记录
+最近确认：e84bc89
+理由：交叉表两套启发式模块映射下格子数字不稳定（同一格 n=8 vs n=38），但交互模式稳定。阈值初值按本轮统计取（L1: 跨≥2 或 ≥4 文件；L2: 跨≥4 或风险命中），design 期用 _module-map.yaml 真实图谱重算 sillyhub 数据校准，作为本变更第一个实证任务。
+
+## D-007@v1 实现形态选方案 B——独立纯函数信号模块 quick-gate-profile
+状态：implemented
+变更：2026-09-14-quick-exit-tiered-gates
+锚点：未记录
+最近确认：e84bc89
+理由：用户选方案 B（2026-09-14 对话轮，单字确认"b"）：新建纯函数信号模块（暂名 src/quick-gate-profile.js，命名 design 期可调），输入 changedFiles + _module-map.yaml + 风险特征表 → 输出画像 {模块跨度, 模块清单, 文件数, 风险命中, 门禁级别}；scope-audit.js 的 auditQuickCompletion 只调用不内联。拒绝 A（信号计算锁死 quick 链路、verify 侧将来无法复用、难单测）；拒绝 C（单消费场景 YAGNI、新配置面=新误判面、违背纯减法原则）。
+
+## D-008@v1 scope-audit 命令增强为门禁画像独立出口（表格 + --json，可重放）
+状态：implemented
+变更：2026-09-14-quick-exit-tiered-gates
+锚点：未记录
+最近确认：e84bc89
+理由：用户 2026-09-14 指定（设计确认轮顺带需求）：现有 `sillyspec scope-audit --change <变更名或quick会话id>` 增强为画像出口——表格与 `--json` 两条出口均含 gate 画像（文件数/模块跨度/模块清单/风险命中/门禁级别）与 L1/L2 advisory 发现；利用该命令既有的 quick 会话（quick-<8hex>）与归档变更重放能力，历史会话可回溯审计。与 D-006 校准任务打通：`--json` 批量重放 sillyhub 历史会话即真实图谱交叉表。维持命令 advisory 只读定位，不设门禁。
+
+## D-009@v1 门禁阈值支持 local.yaml quick-gate 段覆写，缺省=校准默认值
+状态：implemented
+变更：2026-09-14-quick-exit-tiered-gates
+锚点：未记录
+最近确认：e84bc89
+理由：用户 2026-09-14（execute Step2 期追加）：THRESHOLDS 四键（l1_span/l1_files/l2_span/l2_files_degraded）经 local.yaml quick-gate 段覆写，未配置时用代码内默认值（即 task-05 校准定稿值）。与 D-007 否决的「配置化 gate 引擎」边界不同——不引入规则表达式/检查项配置面，仅四个数值键；默认值仍集中 quick-gate-profile.js 单点，config-schema.js 按「local.yaml 键单一数据源」惯例登记四 optional 键。

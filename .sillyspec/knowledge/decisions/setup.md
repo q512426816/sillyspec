@@ -36,3 +36,17 @@ supersedes：D-005@v1
 文件：src/config-schema.js
 最近确认：358af35
 理由：**方案 A——三层 advisory**：①决策条目增机械可解析「文件：」字段（存量条目用锚点路径提取兼容，零迁移）②quick 进场按候选文件（--files+脏文件）反查知识库 implemented/rejected 决策 + git log 近 7 天他者变更交付归因，命中注入 advisory、零命中静默 ③quick --done 对「他者交付的测试文件断言行被改」输出 WARNING 级点名（具体断言+交付变更+决策指针），建议理由写进 quicklog --solution。全部非阻断，单开关 semantic_guard.enabled 默认开。
+
+## D-001@v1 选道判据从文件数改为"有无落盘设计决策"
+状态：implemented
+变更：2026-09-14-quick-exit-tiered-gates
+锚点：未记录
+最近确认：e84bc89
+理由：现行「≤3 文件且范围明确走 quick」中文件数是唯一可核验项、成了事实主判据；实证（sillyhub quicklog 交叉表）显示它量错维度——跨 2-3 模块×≤3 文件的改动文档同步率仅 24%，而单模块×4-6 文件反而 74%。改为语义判据：入口只回答"本次改动有没有需要落盘的设计决策"，有则走完整流程；AGENTS.md 判规模条款与 init 模板同步改写。
+
+## D-009@v1 门禁阈值支持 local.yaml quick-gate 段覆写，缺省=校准默认值
+状态：implemented
+变更：2026-09-14-quick-exit-tiered-gates
+锚点：未记录
+最近确认：e84bc89
+理由：用户 2026-09-14（execute Step2 期追加）：THRESHOLDS 四键（l1_span/l1_files/l2_span/l2_files_degraded）经 local.yaml quick-gate 段覆写，未配置时用代码内默认值（即 task-05 校准定稿值）。与 D-007 否决的「配置化 gate 引擎」边界不同——不引入规则表达式/检查项配置面，仅四个数值键；默认值仍集中 quick-gate-profile.js 单点，config-schema.js 按「local.yaml 键单一数据源」惯例登记四 optional 键。

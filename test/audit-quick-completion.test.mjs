@@ -9,13 +9,17 @@
  *   status: 'safe' | 'warning' | 'blocked'
  *
  * 覆盖五条核心路径：无变更/新增/删除/危险文件/forceBaseline 放行。
+ *
+ * 追加（2026-09-14-quick-exit-tiered-gates task-02 / FR-03）：[gate] 分级门禁三态集成用例——
+ * L0 零输出 / L1 注记+测试增量 / L2 文档认领+风险命中 / --no-docs 豁免 / D-005 归属分流 /
+ * D-009 阈值覆写 / module-map 缺失降级（消费 review.gateProfile + buildGateAuditNote）。
  */
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'fs'
-import { join } from 'path'
+import { join, dirname } from 'path'
 import { tmpdir } from 'os'
 import { execSync } from 'child_process'
 import { auditQuickCompletion } from '../src/run.js'
-import { printQuickAuditReview } from '../src/run/quick-audit.js'
+import { printQuickAuditReview, buildGateAuditNote } from '../src/run/quick-audit.js'
 
 let failed = 0, total = 0
 function assert(cond, msg) {
@@ -392,6 +396,230 @@ console.log('\n--- 归属切分（attributedFiles / undeclaredFiles）---')
   }, {})
   assert(r.attributedFiles.includes('shared.js'), `baseline 声明文件 hash 变化并入 attributed（实际 ${JSON.stringify(r.attributedFiles)}）`)
   assert(r.reasons.some(x => x.includes('同文件并发')), `同文件并发 warn 口径保留（不变）`)
+}
+
+// ── [gate] 分级门禁（FR-03，2026-09-14-quick-exit-tiered-gates task-02）：L0/L1/L2 三态 + --no-docs 豁免 ──
+// 照 D-8 docSyncHint 用例基座：auditQuickCompletion 挂 review.gateProfile（module-map 经
+// specBase/projectName 透传），printQuickAuditReview 打 [gate] 块，buildGateAuditNote 组装
+// QUICKLOG auditNotes 行。全部 advisory：不改 status 三态 / exit code（D-003）。
+console.log('\n--- [gate] 分级门禁画像 ---')
+
+// 测试基建：种子提交（改 tracked 文件 → changedFiles 干净无新增噪声）+ 模块 map + 打印捕获
+function seedRepo(files) {
+  const d = makeRepo()
+  for (const [rel, content] of Object.entries(files)) {
+    mkdirSync(dirname(join(d, rel)), { recursive: true })
+    writeFileSync(join(d, rel), content)
+  }
+  execSync('git add .', { cwd: d, stdio: 'pipe' })
+  execSync('git commit -q -m seed', { cwd: d, stdio: 'pipe' })
+  return d
+}
+function writeModuleMap(d, yaml) {
+  mkdirSync(join(d, '.sillyspec', 'docs', 'demo', 'modules'), { recursive: true })
+  writeFileSync(join(d, '.sillyspec', 'docs', 'demo', 'modules', '_module-map.yaml'), yaml)
+}
+function captureReviewPrint(review) {
+  const origWarn = console.warn, origErr = console.error, origLog = console.log
+  const lines = []
+  const grab = (...a) => { lines.push(a.join(' ')) }
+  console.warn = grab; console.error = grab; console.log = grab
+  try { printQuickAuditReview(review) } finally {
+    console.warn = origWarn; console.error = origErr; console.log = origLog
+  }
+  return lines.join('\n')
+}
+// N 模块 map 生成（doc 字段指 cards/modules/<id>.md——放在非 .sillyspec 路径以便 tracked 进窗口）
+function multiModuleMap(ids) {
+  return 'modules:\n' + ids.map(id =>
+    `  ${id}:\n    status: active\n    doc: modules/${id}.md\n    paths:\n      - src/${id}\n`).join('')
+}
+const gateGuard = (d, extra = {}) => ({ ...baseGuard, specBase: join(d, '.sillyspec'), projectName: 'demo', ...extra })
+
+// case G-0 (L0): 单模块少文件无风险命中 → level L0、无 [gate] 打印、无落账行；quick 簿记噪声不入画像
+{
+  const d = seedRepo({ 'src-index.js': 'v1\n' })
+  writeModuleMap(d, 'modules:\n  runtime:\n    status: active\n    doc: modules/runtime.md\n    paths:\n      - src-index.js\n')
+  // 簿记噪声：tracked 的 quicklog md 也在窗口（改它）——isQuicklogFileLineNoise 应滤出画像
+  execSync('git add -f .sillyspec/quicklog/test.md', { cwd: d, stdio: 'pipe' })
+  execSync('git commit -q -m track-quicklog', { cwd: d, stdio: 'pipe' })
+  writeFileSync(join(d, 'src-index.js'), 'v2\n')
+  writeFileSync(join(d, '.sillyspec', 'quicklog', 'test.md'), '# task v2\n')
+  const r = await auditQuickCompletion(d, gateGuard(d), {})
+  assert(r.gateProfile && r.gateProfile.level === 'L0', `单模块单文件 → L0（实际 ${r.gateProfile?.level}）`)
+  assert(r.gateProfile.moduleSpan === 1 && r.gateProfile.fileCount === 1, `L0 画像只计交付文件（span=${r.gateProfile?.moduleSpan} files=${r.gateProfile?.fileCount}，quicklog 簿记应滤出）`)
+  assert(r.status === 'safe', `L0 门禁不改 status（实际 ${r.status}）`)
+  const out = captureReviewPrint(r)
+  assert(!out.includes('[gate]'), `L0 零 [gate] 打印（实际出现）`)
+  assert(buildGateAuditNote(r.gateProfile) === null, `L0 无 gate 落账行（实际 ${JSON.stringify(buildGateAuditNote(r.gateProfile))}）`)
+}
+
+// case G-1 (L1 跨模块): 跨 2 模块 → L1；检查项 testDelta=missing（2 代码 0 测试）+ perFileNotes 缺失
+{
+  const d = seedRepo({ 'src/alpha/a.js': 'v1\n', 'src/beta/b.js': 'v1\n' })
+  writeModuleMap(d, multiModuleMap(['alpha', 'beta']))
+  writeFileSync(join(d, 'src', 'alpha', 'a.js'), 'v2\n')
+  writeFileSync(join(d, 'src', 'beta', 'b.js'), 'v2\n')
+  const r = await auditQuickCompletion(d, gateGuard(d), {})
+  assert(r.gateProfile.level === 'L1', `跨 2 模块 → L1（实际 ${r.gateProfile?.level}）`)
+  assert(r.gateProfile.checks.testDelta === 'missing', `2 代码 0 测试 → testDelta missing（实际 ${r.gateProfile?.checks.testDelta}）`)
+  assert(r.gateProfile.checks.perFileNotes === false, `无 --file-notes → perFileNotes false`)
+  assert(r.status === 'safe', `L1 advisory 不改 status（实际 ${r.status}）`)
+  const out = captureReviewPrint(r)
+  assert(out.includes('[gate] L1'), `[gate] L1 块打印（实际缺）`)
+  assert(out.includes('测试增量检查') && out.includes('每文件注记检查'), `L1 块含两项检查（实际 ${JSON.stringify(out)}）`)
+  const note = buildGateAuditNote(r.gateProfile)
+  assert(note && note.startsWith('[gate] L1') && note.includes('测试增量缺失') && note.includes('每文件注记缺失'),
+    `L1 落账行含注记+测试增量（实际 ${JSON.stringify(note)}）`)
+}
+
+// case G-1b (L1 fileNotes 覆盖): --file-notes 覆盖变更全集 → perFileNotes=true
+{
+  const d = seedRepo({ 'src/alpha/a.js': 'v1\n', 'src/beta/b.js': 'v1\n' })
+  writeModuleMap(d, multiModuleMap(['alpha', 'beta']))
+  writeFileSync(join(d, 'src', 'alpha', 'a.js'), 'v2\n')
+  writeFileSync(join(d, 'src', 'beta', 'b.js'), 'v2\n')
+  const r = await auditQuickCompletion(d, gateGuard(d), { fileNotes: [
+    { path: 'src/alpha/a.js', note: '修复边界' }, { path: 'src/beta/b.js', note: '配套调整' },
+  ] })
+  assert(r.gateProfile.level === 'L1' && r.gateProfile.checks.perFileNotes === true,
+    `fileNotes 全覆盖 → perFileNotes true（实际 ${r.gateProfile?.checks?.perFileNotes}）`)
+  const note = buildGateAuditNote(r.gateProfile)
+  assert(note.includes('每文件注记已全覆盖') && !note.includes('每文件注记缺失'), `落账行反映覆盖态（实际 ${JSON.stringify(note)}）`)
+}
+
+// case G-2 (L1 文件数): 单模块 4 文件（3 代码 + 1 测试）→ L1 且 testDelta=ok（有测试增量）
+{
+  const d = seedRepo({
+    'src/mono/f1.js': 'v1\n', 'src/mono/f2.js': 'v1\n', 'src/mono/f3.js': 'v1\n', 'test/mono.test.mjs': 'v1\n',
+  })
+  writeModuleMap(d, 'modules:\n  mono:\n    status: active\n    doc: modules/mono.md\n    paths:\n      - src/mono\n')
+  for (const f of ['src/mono/f1.js', 'src/mono/f2.js', 'src/mono/f3.js', 'test/mono.test.mjs']) {
+    writeFileSync(join(d, ...f.split('/')), 'v2\n')
+  }
+  const r = await auditQuickCompletion(d, gateGuard(d), {})
+  assert(r.gateProfile.level === 'L1', `单模块 4 文件 → L1（实际 ${r.gateProfile?.level}）`)
+  assert(r.gateProfile.moduleSpan === 1 && r.gateProfile.fileCount === 4, `跨度/文件计数（span=${r.gateProfile?.moduleSpan} files=${r.gateProfile?.fileCount}）`)
+  assert(r.gateProfile.codeFileCount === 3 && r.gateProfile.testFileCount === 1, `代码/测试分类（code=${r.gateProfile?.codeFileCount} test=${r.gateProfile?.testFileCount}）`)
+  assert(r.gateProfile.checks.testDelta === 'ok', `含测试改动 → testDelta ok（实际 ${r.gateProfile?.checks.testDelta}）`)
+}
+
+// case G-3 (L2 跨模块 + docClaim missing): 跨 4 模块 → L2；模块卡不在改动集 → missing + --no-docs 指引
+{
+  const d = seedRepo({ 'src/alpha/a.js': 'v1\n', 'src/beta/b.js': 'v1\n', 'src/gamma/c.js': 'v1\n', 'src/delta/e.js': 'v1\n' })
+  writeModuleMap(d, multiModuleMap(['alpha', 'beta', 'gamma', 'delta']))
+  for (const f of ['src/alpha/a.js', 'src/beta/b.js', 'src/gamma/c.js', 'src/delta/e.js']) {
+    writeFileSync(join(d, ...f.split('/')), 'v2\n')
+  }
+  const r = await auditQuickCompletion(d, gateGuard(d), {})
+  assert(r.gateProfile.level === 'L2', `跨 4 模块 → L2（实际 ${r.gateProfile?.level}）`)
+  assert(r.gateProfile.checks.docClaim === 'missing', `模块卡不在改动集 → docClaim missing（实际 ${r.gateProfile?.checks.docClaim}）`)
+  assert(r.gateProfile.checks.runtimeEvidence === 'na', `无风险命中 → runtimeEvidence na（实际 ${r.gateProfile?.checks.runtimeEvidence}）`)
+  assert(r.status === 'safe', `L2 advisory 不改 status 不阻断（实际 ${r.status}）`)
+  const out = captureReviewPrint(r)
+  assert(out.includes('[gate] L2') && out.includes('模块文档认领'), `L2 块含文档认领（实际 ${JSON.stringify(out)}）`)
+  assert(out.includes('--no-docs'), `missing 态给 --no-docs 指引（实际缺）`)
+  const note = buildGateAuditNote(r.gateProfile)
+  assert(note && note.startsWith('[gate] L2') && note.includes('模块文档认领缺失'), `L2 落账行（实际 ${JSON.stringify(note)}）`)
+}
+
+// case G-3b (L2 docClaim claimed): 触及模块的卡片文件在改动集（tracked 卡片同改）→ claimed
+{
+  const d = seedRepo({
+    'src/alpha/a.js': 'v1\n', 'src/beta/b.js': 'v1\n', 'src/gamma/c.js': 'v1\n', 'src/delta/e.js': 'v1\n',
+    'cards/modules/alpha.md': 'card\n', 'cards/modules/beta.md': 'card\n', 'cards/modules/gamma.md': 'card\n', 'cards/modules/delta.md': 'card\n',
+  })
+  writeModuleMap(d, multiModuleMap(['alpha', 'beta', 'gamma', 'delta']))
+  for (const f of ['src/alpha/a.js', 'src/beta/b.js', 'src/gamma/c.js', 'src/delta/e.js',
+    'cards/modules/alpha.md', 'cards/modules/beta.md', 'cards/modules/gamma.md', 'cards/modules/delta.md']) {
+    writeFileSync(join(d, ...f.split('/')), 'v2\n')
+  }
+  const r = await auditQuickCompletion(d, gateGuard(d), {})
+  assert(r.gateProfile.level === 'L2', `跨 4 模块 → L2（实际 ${r.gateProfile?.level}）`)
+  assert(r.gateProfile.checks.docClaim === 'claimed', `模块卡在改动集 → docClaim claimed（实际 ${r.gateProfile?.checks.docClaim}）`)
+  const note = buildGateAuditNote(r.gateProfile)
+  assert(note.includes('模块文档认领已覆盖'), `claimed 落账行（实际 ${JSON.stringify(note)}）`)
+}
+
+// case G-4 (L2 风险命中): auth 路径命中 → L2 + runtimeEvidence=required + 命中点名 pattern/file
+{
+  const d = seedRepo({ 'src/web/login.js': 'v1\n', 'src/web/auth.js': 'v1\n' })
+  writeModuleMap(d, 'modules:\n  web:\n    status: active\n    doc: modules/web.md\n    paths:\n      - src/web\n')
+  writeFileSync(join(d, 'src', 'web', 'login.js'), 'v2\n')
+  writeFileSync(join(d, 'src', 'web', 'auth.js'), 'v2\n')
+  const r = await auditQuickCompletion(d, gateGuard(d), {})
+  assert(r.gateProfile.level === 'L2', `风险路径命中 → L2（实际 ${r.gateProfile?.level}）`)
+  assert(r.gateProfile.riskHits.some(h => h.pattern === 'auth' && h.file === 'src/web/auth.js'),
+    `风险命中点名 pattern/file（实际 ${JSON.stringify(r.gateProfile?.riskHits)}）`)
+  assert(r.gateProfile.checks.runtimeEvidence === 'required', `风险命中 → runtimeEvidence required（实际 ${r.gateProfile?.checks?.runtimeEvidence}）`)
+  const out = captureReviewPrint(r)
+  assert(out.includes('[gate] L2') && out.includes('auth ← src/web/auth.js'), `L2 块点名风险命中（实际 ${JSON.stringify(out)}）`)
+  const note = buildGateAuditNote(r.gateProfile)
+  assert(note.includes('auth←src/web/auth.js') && note.includes('需运行时证据'), `风险落账行（实际 ${JSON.stringify(note)}）`)
+}
+
+// case G-5 (--no-docs 豁免): L2 + noDocs → docClaim=exempt-no-docs + 豁免留痕 + 完成不受阻
+{
+  const d = seedRepo({ 'src/alpha/a.js': 'v1\n', 'src/beta/b.js': 'v1\n', 'src/gamma/c.js': 'v1\n', 'src/delta/e.js': 'v1\n' })
+  writeModuleMap(d, multiModuleMap(['alpha', 'beta', 'gamma', 'delta']))
+  for (const f of ['src/alpha/a.js', 'src/beta/b.js', 'src/gamma/c.js', 'src/delta/e.js']) {
+    writeFileSync(join(d, ...f.split('/')), 'v2\n')
+  }
+  const r = await auditQuickCompletion(d, gateGuard(d), { noDocs: true })
+  assert(r.gateProfile.level === 'L2' && r.gateProfile.checks.docClaim === 'exempt-no-docs',
+    `--no-docs → docClaim exempt-no-docs（实际 ${r.gateProfile?.checks?.docClaim}）`)
+  assert(r.status === 'safe', `豁免完成不受阻（实际 ${r.status}）`)
+  const out = captureReviewPrint(r)
+  assert(out.includes('[gate] L2') && out.includes('--no-docs 显式豁免'), `豁免态打印留痕（实际 ${JSON.stringify(out)}）`)
+  const note = buildGateAuditNote(r.gateProfile)
+  assert(note.includes('--no-docs 显式豁免'), `豁免同通道落账（实际 ${JSON.stringify(note)}）`)
+}
+
+// case G-6 (D-005 归属分流): 声明会话窗口内他者脏文件（模块卡）不并入 docClaim 判定
+//   本会话声明改 4 模块代码 + beta/gamma/delta 三卡；他者窗口内改 alpha 卡（本会话未声明）——
+//   全窗口口径下四卡齐=claimed，但归属口径缺 alpha → missing（D-005 绝不并入）。
+{
+  const d = seedRepo({
+    'src/alpha/a.js': 'v1\n', 'src/beta/b.js': 'v1\n', 'src/gamma/c.js': 'v1\n', 'src/delta/e.js': 'v1\n',
+    'cards/modules/alpha.md': 'card\n', 'cards/modules/beta.md': 'card\n', 'cards/modules/gamma.md': 'card\n', 'cards/modules/delta.md': 'card\n',
+  })
+  writeModuleMap(d, multiModuleMap(['alpha', 'beta', 'gamma', 'delta']))
+  const declared = ['src/alpha/a.js', 'src/beta/b.js', 'src/gamma/c.js', 'src/delta/e.js',
+    'cards/modules/beta.md', 'cards/modules/gamma.md', 'cards/modules/delta.md']
+  for (const f of declared) writeFileSync(join(d, ...f.split('/')), 'v2\n')
+  writeFileSync(join(d, 'cards', 'modules', 'alpha.md'), 'foreign v2\n') // 模拟他者窗口内改卡（本会话未声明）
+  const r = await auditQuickCompletion(d, gateGuard(d, { allowedFiles: declared }), {})
+  assert(r.gateProfile.level === 'L2', `全窗口口径判级（4 模块代码计入 span——实际 ${r.gateProfile?.level}）`)
+  assert(r.gateProfile.checks.docClaim === 'missing', `他者改卡不并入 docClaim（D-005，实际 ${r.gateProfile?.checks?.docClaim}）`)
+  assert(r.undeclaredFiles.includes('cards/modules/alpha.md'), `他者文件仍走既有归属分流（undeclaredFiles 在场）`)
+}
+
+// case G-7 (阈值覆写): local.yaml quick-gate.l1_span=99 → 跨 2 模块降 L0（D-009 覆写链路通）
+{
+  const d = seedRepo({ 'src/alpha/a.js': 'v1\n', 'src/beta/b.js': 'v1\n' })
+  writeModuleMap(d, multiModuleMap(['alpha', 'beta']))
+  writeFileSync(join(d, '.sillyspec', 'local.yaml'), 'quick-gate:\n  l1_span: 99\n')
+  writeFileSync(join(d, 'src', 'alpha', 'a.js'), 'v2\n')
+  writeFileSync(join(d, 'src', 'beta', 'b.js'), 'v2\n')
+  const r = await auditQuickCompletion(d, gateGuard(d), {})
+  assert(r.gateProfile.level === 'L0', `l1_span=99 覆写 → 跨 2 模块降 L0（实际 ${r.gateProfile?.level}）`)
+}
+
+// case G-8 (module-map 缺失降级): 无 map → degraded；2 文件 <4 → L0；8 文件 → L2（降级档）
+{
+  const d = seedRepo({ 'a.js': 'v1\n', 'b.js': 'v1\n' })
+  writeFileSync(join(d, 'a.js'), 'v2\n')
+  writeFileSync(join(d, 'b.js'), 'v2\n')
+  const r = await auditQuickCompletion(d, gateGuard(d), {})
+  assert(r.gateProfile.degraded === true && r.gateProfile.moduleSpan === null, `无 map → degraded + span null（实际 degraded=${r.gateProfile?.degraded}）`)
+  assert(r.gateProfile.level === 'L0', `降级档 2 文件 → L0（实际 ${r.gateProfile?.level}）`)
+
+  const d2 = seedRepo(Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`f${i}.js`, 'v1\n'])))
+  for (let i = 0; i < 8; i++) writeFileSync(join(d2, `f${i}.js`), 'v2\n')
+  const r2 = await auditQuickCompletion(d2, gateGuard(d2), {})
+  assert(r2.gateProfile.degraded === true && r2.gateProfile.level === 'L2', `降级档 8 文件 → L2（实际 ${r2.gateProfile?.level}）`)
+  const out = captureReviewPrint(r2)
+  assert(out.includes('降级档'), `降级态打印注明判级口径（实际 ${JSON.stringify(out)}）`)
 }
 
 for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} }

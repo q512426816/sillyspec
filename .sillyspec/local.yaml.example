@@ -90,3 +90,12 @@ docs-check:
   #   - docs/sillyspec/architecture.md
   # cross_repo_roots:   # repo://<仓库名> 跨仓引用 → 本机仓库根（每台设备各自配，绝对路径勿提交）
   #   sillyspec: /c/Users/you/IdeaProjects/sillyspec
+
+# ── quick 出口门禁阈值（quick --done 分级门禁 L0/L1/L2 的 advisory 阈值覆写；缺省=代码内校准定稿值）──
+# 定稿依据：sillyhub 919 条 quicklog × 真实 _module-map.yaml 重算交叉表（2026-09-14 task-05，
+# 四值与初值一致维持，证据见变更目录 design.md「阈值校准记录」）。仅确知调参时配置；键非法（非 ≥1 整数）回退默认并 warn。
+# quick-gate:
+#   l1_span: 2              # 跨 ≥2 模块 → L1（≤3 文件档同步率断崖 33.3%→5.9% 的边界）
+#   l1_files: 4             # 或 ≥4 文件 → L1（旧规则「≤3 文件」边界连续性）
+#   l2_span: 4              # 跨 ≥4 模块 → L2（4-10 文件档全表最差格 0-14.3%）
+#   l2_files_degraded: 8    # module-map 缺失降级档：≥8 文件 → L2（覆盖最差文件桶 7-10 的 32.9-35.3%）

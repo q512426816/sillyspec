@@ -51,6 +51,26 @@ const INTEGRATION_FILE_PATTERNS = [
   /startup/i,
 ]
 
+// ============ quick 出口门禁：路径模式风险表（2026-09-14-quick-exit-tiered-gates task-01） ============
+//
+// quick 侧「风险特征命中」的单一数据源（design D-004@v2：v1 仅路径模式——不做 diff 关键词
+// 扫描、不加 git 子进程，R-04 零子进程承诺；diff 维度待真实需求另立变更）。与上方 verify 侧
+// INTEGRATION_FILE_PATTERNS 语义不同（那张表收跨进程/集成域、供 detectChangeRisk 判级），本表
+// 收 quick 实证踩坑域（R-03 从窄收录：auth/permission/billing/migration/锁/调度），供
+// quick-gate-profile.js 的 computeGateProfile 经 opts.riskTable 默认引用——命中即画像 L2 +
+// checks.runtimeEvidence='required'。detectChangeRisk 判级逻辑不消费本表（verify 侧行为零变化）。
+//
+// 匹配口径：POSIX 路径、大小写不敏感、段边界锚定——前界 (^|[/_-]) + 后界 (?=[/._-]|$)，
+// 防 author/booking/lockfile 类子串假阳（R-03）；pattern 为稳定域标识（riskHits 审计输出用）。
+export const QUICK_RISK_PATH_PATTERNS = [
+  { pattern: 'auth', re: /(?:^|[/_-])(?:oauth2?|auth(?:orization|entication|enticator)?)(?=[/._-]|$)/i },
+  { pattern: 'permission', re: /(?:^|[/_-])permissions?(?=[/._-]|$)/i },
+  { pattern: 'billing', re: /(?:^|[/_-])billing(?=[/._-]|$)/i },
+  { pattern: 'migration', re: /(?:^|[/_-])(?:migrations?|migrate)(?=[/._-]|$)/i },
+  { pattern: 'lock', re: /(?:^|[/_-])(?:locks?|mutex(?:es)?)(?=[/._-]|$)/i },
+  { pattern: 'scheduling', re: /(?:^|[/_-])(?:schedul(?:er|ing)|cron|jobs?)(?=[/._-]|$)/i },
+]
+
 /**
  * task 级「端到端/deployment-critical」文本判定（execute 批量完成 autoCheckPlanFromReviews 用）。
  *

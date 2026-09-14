@@ -178,6 +178,83 @@ export function printQuickAuditReview(review) {
       else console.warn(`   行号漂移 → 更新到当前源码；跑 sillyspec docs check 可看建议行号。`)
     }
   }
+
+  // ── [gate] 分级门禁 advisory 块（FR-03，2026-09-14-quick-exit-tiered-gates task-02）：L1/L2 画像
+  // 打印级别/跨度/模块清单/风险命中/检查项 + --no-docs 指引，L0 零输出。全部 advisory：不改 status
+  // 三态与 exit code（D-003）；窗口内未声明脏文件维持既有归属分流（上方 ⚖️/🔍 块），不并入文档
+  // 认领判定（D-005）；数据源 = review.gateProfile（auditQuickCompletion 挂载，scope-audit 重放同源）。
+  const gate = review.gateProfile
+  if (gate && (gate.level === 'L1' || gate.level === 'L2')) {
+    const isL2 = gate.level === 'L2'
+    const spanTxt = gate.degraded
+      ? 'module-map 缺失（降级档：按文件数判级）'
+      : `跨 ${gate.moduleSpan} 模块${Array.isArray(gate.modules) && gate.modules.length > 0 ? `（${gate.modules.map(m => m.id).join(' · ')}）` : ''}`
+    console.warn(`\n${isL2 ? '🛑' : '🚧'} [gate] ${gate.level} 规模门（${spanTxt} · ${gate.fileCount} 文件：${gate.codeFileCount} 代码 / ${gate.testFileCount} 测试）——advisory 提示不阻断：`)
+    if (Array.isArray(gate.unmappedFiles) && gate.unmappedFiles.length > 0) {
+      console.warn(`   ⚠️ ${gate.unmappedFiles.length} 个文件未命中 module-map（${gate.unmappedFiles.slice(0, 5).join(', ')}${gate.unmappedFiles.length > 5 ? ' 等' : ''}）`)
+    }
+    if (!isL2) {
+      // L1 检查项：每文件注记（--file-notes 覆盖率）+ 测试增量（机械规则）
+      console.warn(`   - 每文件注记检查：${gate.checks?.perFileNotes ? '✅ --file-notes 已覆盖全部变更文件' : `❌ 缺失——补 --file-notes "path1::注 || path2::注"（覆盖变更文件全集）`}`)
+      const td = gate.checks?.testDelta
+      console.warn(`   - 测试增量检查：${td === 'missing' ? `❌ missing——${gate.codeFileCount} 个代码文件改动无测试文件（补 test 改动进本会话）` : td === 'ok' ? '✅ 已含测试改动' : '— 不适用（≤1 代码文件）'}`)
+    } else {
+      // L2 检查项：模块文档认领（claimed/missing/exempt-no-docs）+ 风险命中的运行时证据要求
+      const dc = gate.checks?.docClaim
+      const noClaimable = gate.degraded || !Array.isArray(gate.modules) || gate.modules.length === 0
+      if (dc === 'exempt-no-docs') {
+        console.warn(`   - 模块文档认领：🛡️ 已 --no-docs 显式豁免（豁免已留痕 QUICKLOG 审计行）`)
+      } else if (noClaimable) {
+        // degraded / 无触及模块：computeGateProfile 空真 claimed——如实显示不适用，不出「已认领」误导
+        console.warn(`   - 模块文档认领：— 不适用（${gate.degraded ? '无 module-map' : '触及文件均未命中模块'}，无可认领卡片）`)
+      } else if (dc === 'claimed') {
+        console.warn(`   - 模块文档认领：✅ 触及模块的卡片文件已在改动集`)
+      } else {
+        console.warn(`   - 模块文档认领：❌ missing——触及模块（${Array.isArray(gate.modules) && gate.modules.length > 0 ? gate.modules.map(m => m.id).join(' · ') : '—'}）的卡片文件不在改动集`)
+        console.warn(`     ➜ 同步模块卡进本次改动，或确认无需文档落盘时 --done 带 --no-docs 显式豁免（豁免留痕，不阻断完成）`)
+      }
+      if (Array.isArray(gate.riskHits) && gate.riskHits.length > 0) {
+        console.warn(`   - 风险命中 ${gate.riskHits.length} 处（运行时证据要求——风险路径改动需在 --result「结果：」附运行验证说明，advisory 不等待）：`)
+        for (const h of gate.riskHits.slice(0, 8)) {
+          console.warn(`       ⚠️ ${h.pattern} ← ${h.file}`)
+        }
+        if (gate.riskHits.length > 8) console.warn(`       … 共 ${gate.riskHits.length} 处`)
+      }
+    }
+  }
+}
+
+/**
+ * [gate] 分级门禁 auditNote 组装（FR-03 task-02，gate-audit-note）：L1/L2 → 单行 `[gate]` 注记
+ * （随 complete-handlers 既有 auditNotes 通道落 QUICKLOG，--no-docs 豁免同通道留痕）；
+ * L0 / 无画像 → null（零落账，验收「L0 无 gate 落账行」）。纯函数、与上方 [gate] 打印块同一
+ * review.gateProfile 数据源；单独导出为可测（buildSemanticGuardHits 同款考量——避开
+ * handleQuickStageCompletion 的 quicklog 重机件直测组装层）。
+ * @param {object|null} gate review.gateProfile（auditQuickCompletion 产物；null/异常形状 → null）
+ * @returns {string|null}
+ */
+export function buildGateAuditNote(gate) {
+  if (!gate || typeof gate !== 'object' || (gate.level !== 'L1' && gate.level !== 'L2')) return null
+  const span = gate.degraded
+    ? 'module-map 缺失（降级档按文件数判级）'
+    : `跨 ${gate.moduleSpan} 模块`
+  const seg = [`[gate] ${gate.level}（${span} · ${gate.fileCount} 文件：${gate.codeFileCount} 代码/${gate.testFileCount} 测试）advisory`]
+  if (gate.level === 'L1') {
+    seg.push(`每文件注记${gate.checks?.perFileNotes ? '已全覆盖' : '缺失（--file-notes 覆盖变更文件全集）'}`)
+    const td = gate.checks?.testDelta
+    seg.push(`测试增量${td === 'ok' ? '已含' : td === 'missing' ? `缺失（${gate.codeFileCount} 个代码文件无测试改动）` : '不适用（≤1 代码文件）'}`)
+  } else {
+    const dc = gate.checks?.docClaim
+    const noClaimable = gate.degraded || !Array.isArray(gate.modules) || gate.modules.length === 0
+    seg.push(dc === 'exempt-no-docs' ? '模块文档认领已 --no-docs 显式豁免'
+      : noClaimable ? '模块文档认领不适用（无可认领模块）'
+        : dc === 'claimed' ? '模块文档认领已覆盖（模块卡在改动集）'
+          : '模块文档认领缺失（同步模块卡进改动集，或 --no-docs 显式豁免）')
+    if (Array.isArray(gate.riskHits) && gate.riskHits.length > 0) {
+      seg.push(`风险命中 ${gate.riskHits.length} 处（${gate.riskHits.slice(0, 5).map(h => `${h.pattern}←${h.file}`).join('、')}${gate.riskHits.length > 5 ? ' 等' : ''}）需运行时证据`)
+    }
+  }
+  return seg.join('；')
 }
 
 /**

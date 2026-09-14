@@ -9,6 +9,9 @@
  *   4. 无锚形态（quick-8aa52289 新契约）：baseAnchor 缺失 → HEAD 未提交窗口行数兜底（不再恒 —）；
  *      design 清单解析失败实际侧 only；归档形态：快照记录态 / 快照缺失空表诚实说明
  *   5. quick（FR-04）：declared/soft/undeclared 三档 + baseAnchor=quick-window + 已提交降级 note
+ *   8. quick 画像出口（2026-09-14-quick-exit-tiered-gates task-03，FR-04 / D-008）：gateProfile
+ *      实时态透传（--json 同源 + 表格 [gate] 段）/ 无 map 降级档 / 冻结记录透传（含哨兵防重算）/
+ *      旧记录 rows 清单重算重放（module-map + local.yaml 阈值同链路）/ full-flow 无画像零回归
  *
  * 夹具约定（Wave 1 实测经验）：
  *   - quick 夹具 gitignore 整个 .sillyspec/（porcelain 无 -uall，未忽略会整目录折叠成
@@ -956,5 +959,274 @@ test('FR-02 模式判定：quick id 形态命中但 guard 缺失 → ok=false �
       `degradedReason 明示会话不存在（实际 ${r.degradedReason}）`)
     const out = renderScopeAuditTable(r)
     assert.ok(out.includes('⚠️'), 'fail-soft 渲染单行降级提示')
+  } finally { cleanup(d) }
+})
+
+// ───────────────────────── 组 8：quick 画像出口（2026-09-14-quick-exit-tiered-gates task-03，FR-04 / D-008） ─────────────────────────
+
+/** _module-map.yaml 夹具（parseModuleMapSimple 可解析形态；m2 带 doc 卡片供 docClaim 断言） */
+function writeModuleMap(specBase, project = 'demo') {
+  const dir = join(specBase, 'docs', project, 'modules')
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(join(dir, '_module-map.yaml'), [
+    'modules:',
+    '  m1:',
+    '    status: active',
+    '    paths:',
+    '      - src/core/',
+    '  m2:',
+    '    status: active',
+    '    doc: modules/m2.md',
+    '    paths:',
+    '      - src/api/',
+    '',
+  ].join('\n'))
+}
+
+test('gate 实时态（module-map 在）：--json 含 gateProfile 与 review 同源 + 表格 [gate] 画像段（L2 风险命中）', async () => {
+  const d = makeRepo('sa-gate-live-')
+  try {
+    mkdirSync(join(d, 'src', 'core'), { recursive: true })
+    mkdirSync(join(d, 'src', 'api'), { recursive: true })
+    mkdirSync(join(d, 'test'), { recursive: true })
+    writeFileSync(join(d, 'src', 'core', 'a.js'), 'a1\n')
+    writeFileSync(join(d, 'src', 'api', 'c.js'), 'c1\n')
+    writeFileSync(join(d, 'test', 'keeper.test.js'), 'k1\n') // 防 untracked 测试文件目录折叠
+    sh(d, ['add', '-A'])
+    sh(d, ['commit', '-q', '-m', 'init'])
+    const specBase = join(d, '.sillyspec')
+    mkdirSync(join(specBase, 'quicklog'), { recursive: true })
+    writeFileSync(join(specBase, 'quicklog', '2026-09.md'), '# QUICKLOG\n')
+    writeModuleMap(specBase)
+    writeQuickGuard(specBase, 'quick-9a1b2c3d', {}) // 未声明会话：attributed = 窗口全量
+    // 窗口改动：m1×2（tracked 改 + untracked 新）+ m2 风险路径（auth 命中）+ 测试文件（unmapped）
+    writeFileSync(join(d, 'src', 'core', 'a.js'), 'a1\na2\n')
+    writeFileSync(join(d, 'src', 'core', 'b.js'), 'b1\n')
+    writeFileSync(join(d, 'src', 'api', 'auth-check.js'), 'h1\n')
+    writeFileSync(join(d, 'test', 'core.test.js'), 't1\n')
+
+    const r = await computeChangeScopeAudit({ cwd: d, changeName: 'quick-9a1b2c3d' })
+    assert.equal(r.mode, 'quick')
+    assert.equal(r.ok, true, `ok（degradedReason=${r.degradedReason}）`)
+    // 画像透传（不重复计算）：对象存在且为 git 事实窗口口径（4 文件 = rows 全集）
+    assert.ok(r.gateProfile && typeof r.gateProfile === 'object', 'gateProfile 随结果对象携带（gateProfile-json）')
+    assert.equal(r.gateProfile.fileCount, 4, `fileCount=窗口 git 事实 4（实际 ${r.gateProfile.fileCount}）`)
+    assert.equal(r.gateProfile.fileCount, r.rows.length, '同源：画像文件数与对账 rows 同窗口')
+    assert.equal(r.gateProfile.level, 'L2', `风险命中 → L2（实际 ${r.gateProfile.level}）`)
+    assert.equal(r.gateProfile.degraded, false, 'module-map 在 → 非降级')
+    assert.equal(r.gateProfile.moduleSpan, 2, `跨 2 模块（实际 ${r.gateProfile.moduleSpan}）`)
+    assert.equal(r.gateProfile.codeFileCount, 3)
+    assert.equal(r.gateProfile.testFileCount, 1)
+    assert.deepEqual(r.gateProfile.riskHits, [{ pattern: 'auth', file: 'src/api/auth-check.js' }], '路径模式风险命中清单')
+    assert.equal(r.gateProfile.checks.runtimeEvidence, 'required')
+    assert.equal(r.gateProfile.checks.docClaim, 'missing', 'm2 卡片不在改动集 → docClaim missing')
+    assert.equal(r.gateProfile.checks.testDelta, 'ok', '含测试改动 → ok')
+    assert.ok(Array.isArray(r.gateProfile.unmappedFiles) && r.gateProfile.unmappedFiles.includes('test/core.test.js'),
+      '测试目录未命中 module-map → unmappedFiles')
+    // --json 出口契约：结果对象可序列化且画像字段保留（index.js 按 ...saResult 展开）
+    const j = JSON.parse(JSON.stringify(r))
+    assert.equal(j.gateProfile.level, 'L2', '--json 序列化后 gateProfile 字段在')
+    assert.equal(j.gateProfile.riskHits[0].pattern, 'auth')
+    // 表格出口：gate-table-section（级别/跨度/模块/风险命中/缺失检查项）
+    const out = renderScopeAuditTable(r)
+    assert.ok(out.includes('[gate]'), '表格含 [gate] 画像段')
+    assert.ok(out.includes('L2 规模门'), '级别可见')
+    assert.ok(out.includes('跨 2 模块'), '跨度可见')
+    assert.ok(out.includes('m1 · m2'), '命中模块清单可见')
+    assert.ok(out.includes('风险命中 1 处'), '风险命中可见')
+    assert.ok(out.includes('[auth] src/api/auth-check.js'), '风险命中逐条列出')
+    assert.ok(out.includes('模块文档认领缺失'), 'L2 缺失检查项可见')
+    assert.ok(out.includes('advisory'), '段头标注 advisory')
+    assert.ok(out.includes('未命中 module-map'), 'unmapped 提示可见')
+  } finally { cleanup(d) }
+})
+
+test('gate 实时态（无 module-map）：degraded 降级档 + 级别按文件数 + L1 缺失检查项渲染', async () => {
+  const d = makeRepo('sa-gate-deg-')
+  try {
+    mkdirSync(join(d, 'src'), { recursive: true })
+    mkdirSync(join(d, 'test'), { recursive: true })
+    writeFileSync(join(d, 'src', 'a.js'), 'a1\n')
+    writeFileSync(join(d, 'test', 'keeper.test.js'), 'k1\n')
+    sh(d, ['add', '-A'])
+    sh(d, ['commit', '-q', '-m', 'init'])
+    const specBase = join(d, '.sillyspec')
+    mkdirSync(join(specBase, 'quicklog'), { recursive: true })
+    writeFileSync(join(specBase, 'quicklog', '2026-09.md'), '# QUICKLOG\n')
+    writeQuickGuard(specBase, 'quick-0e1f2a3b', {}) // 无 module-map（未写 docs/）
+    writeFileSync(join(d, 'src', 'a.js'), 'a1\na2\n')
+    writeFileSync(join(d, 'src', 'b.js'), 'b1\n')
+    writeFileSync(join(d, 'src', 'c.js'), 'c1\n')
+    writeFileSync(join(d, 'test', 'x.test.js'), 't1\n')
+
+    const r = await computeChangeScopeAudit({ cwd: d, changeName: 'quick-0e1f2a3b' })
+    assert.equal(r.ok, true)
+    assert.ok(r.gateProfile, '画像仍携带（degraded 非 null）')
+    assert.equal(r.gateProfile.degraded, true, 'module-map 缺失 → degraded')
+    assert.equal(r.gateProfile.moduleSpan, null, '降级档 span 退出')
+    assert.equal(r.gateProfile.level, 'L1', `≥4 文件 → L1（实际 ${r.gateProfile.level}）`)
+    assert.equal(r.gateProfile.fileCount, 4)
+    assert.equal(r.gateProfile.checks.testDelta, 'ok')
+    assert.equal(r.gateProfile.checks.perFileNotes, false)
+    const out = renderScopeAuditTable(r)
+    assert.ok(out.includes('[gate] L1 规模门'), '降级档也出画像段（级别可见）')
+    assert.ok(out.includes('降级档'), '降级口径标注')
+    assert.ok(!out.includes('跨 null'), '降级不出伪跨度')
+    assert.ok(out.includes('每文件注记缺失'), 'L1 缺失检查项（perFileNotes）渲染')
+  } finally { cleanup(d) }
+})
+
+test('gate 冻结重放：记录含 gateProfile → 原样透传（与 --done 时点实时态逐字一致）', async () => {
+  const d = makeRepo('sa-gate-frz-')
+  try {
+    writeFileSync(join(d, 'base.txt'), 'x\n')
+    sh(d, ['add', '-A'])
+    sh(d, ['commit', '-q', '-m', 'init'])
+    const specBase = join(d, '.sillyspec')
+    const patchesDir = join(specBase, 'quicklog', 'patches')
+    mkdirSync(patchesDir, { recursive: true })
+    const frozenProfile = {
+      fileCount: 3, codeFileCount: 2, testFileCount: 1, moduleSpan: 2,
+      modules: [{ id: 'm1', files: ['src/core/a.js'] }, { id: 'm2', files: ['src/api/b.js', 'test/api.test.js'] }],
+      unmappedFiles: [], riskHits: [], level: 'L1', degraded: false,
+      checks: { perFileNotes: false, testDelta: 'ok', docClaim: 'claimed', runtimeEvidence: 'na' },
+      replayMarker: 'frozen-at-done', // 防重算混入的哨兵字段（透传 ≠ 现算）
+    }
+    writeFileSync(join(patchesDir, 'ql-20260914-001-beef.json'), JSON.stringify({
+      mode: 'quick', ok: true, baseAnchor: 'quick-window:quick-feedface',
+      totals: { files: 3, additions: 9, deletions: 1 },
+      rows: [
+        { path: 'src/core/a.js', declared: true, additions: 2, deletions: 0, kind: 'modified', attribution: 'declared' },
+        { path: 'src/api/b.js', declared: true, additions: 5, deletions: 1, kind: 'modified', attribution: 'declared' },
+        { path: 'test/api.test.js', declared: true, additions: 2, deletions: 0, kind: 'new', attribution: 'declared' },
+      ],
+      excluded: { foreignDeclared: [] }, gateProfile: frozenProfile,
+      qlId: 'ql-20260914-001-beef', sessionId: 'quick-feedface', savedAt: '2026-09-14T08:00:00.000Z',
+    }))
+    writeFileSync(join(patchesDir, 'ql-20260914-001-beef.patch'),
+      'diff --git a/src/core/a.js b/src/core/a.js\n--- a/src/core/a.js\n+++ b/src/core/a.js\n@@ -1 +1,2 @@\n x\n+a\n')
+
+    const r = await computeChangeScopeAudit({ cwd: d, changeName: 'quick-feedface' })
+    assert.equal(r.ok, true)
+    assert.equal(r.mode, 'quick')
+    assert.ok(r.note && r.note.includes('记录态'), '冻结记录态')
+    assert.deepEqual(r.gateProfile, frozenProfile, '画像透传记录冻结值（不重算——哨兵字段在）')
+    const j = JSON.parse(JSON.stringify(r))
+    assert.equal(j.gateProfile.replayMarker, 'frozen-at-done', '--json 重放出口画像可重放')
+    const out = renderScopeAuditTable(r)
+    assert.ok(out.includes('[gate] L1 规模门'), '重放表格含画像段')
+    assert.ok(out.includes('跨 2 模块') && out.includes('m1 · m2'), '跨度/模块与实时态字段一致')
+  } finally { cleanup(d) }
+})
+
+test('gate 旧记录重算：记录无 gateProfile → rows 文件清单现算重放（module-map/阈值同链路，字段与实时态同构）', async () => {  const d = makeRepo('sa-gate-rec-')
+  try {
+    writeFileSync(join(d, 'base.txt'), 'x\n')
+    sh(d, ['add', '-A'])
+    sh(d, ['commit', '-q', '-m', 'init'])
+    const specBase = join(d, '.sillyspec')
+    writeModuleMap(specBase) // 与实时态同链路加载的 module-map
+    const patchesDir = join(specBase, 'quicklog', 'patches')
+    mkdirSync(patchesDir, { recursive: true })
+    // 画像机制上线前的旧记录：无 gateProfile 字段，rows 跨 2 模块
+    writeFileSync(join(patchesDir, 'ql-20260910-009-cafe.json'), JSON.stringify({
+      mode: 'quick', ok: true, baseAnchor: 'quick-window:quick-1234cdef',
+      totals: { files: 2, additions: 4, deletions: 0 },
+      rows: [
+        { path: 'src/core/a.js', declared: true, additions: 2, deletions: 0, kind: 'modified', attribution: 'declared' },
+        { path: 'src/api/b.js', declared: true, additions: 2, deletions: 0, kind: 'modified', attribution: 'declared' },
+      ],
+      excluded: { foreignDeclared: [] },
+      qlId: 'ql-20260910-009-cafe', sessionId: 'quick-1234cdef', savedAt: '2026-09-10T08:00:00.000Z',
+    }))
+
+    const r = await computeChangeScopeAudit({ cwd: d, changeName: 'quick-1234cdef' })
+    assert.equal(r.ok, true)
+    assert.ok(r.gateProfile, '旧记录无字段 → rows 清单重算出画像（重放可重放）')
+    assert.equal(r.gateProfile.degraded, false, 'module-map 在 → 重放非降级')
+    assert.equal(r.gateProfile.moduleSpan, 2, 'rows 跨 2 模块（m1/m2 命中）')
+    assert.equal(r.gateProfile.level, 'L1', `跨 ≥2 模块默认阈值 → L1（实际 ${r.gateProfile.level}）`)
+    assert.ok(r.gateProfile.modules.map(m => m.id).join(',').includes('m1'), '模块清单与实时态同构')
+    assert.ok(r.gateProfile.checks && typeof r.gateProfile.checks === 'object' && 'docClaim' in r.gateProfile.checks,
+      'checks 四键结构与实时态字段一致')
+    const out = renderScopeAuditTable(r)
+    assert.ok(out.includes('[gate] L1') && out.includes('跨 2 模块'), '重放表格画像段')
+
+    // 阈值同链路（D-009）：local.yaml quick-gate 覆写参与重放判级——l1_span 抬到 3 → 跨 2 不再 L1
+    writeFileSync(join(specBase, 'local.yaml'), 'quick-gate:\n  l1_span: 3\n')
+    try {
+      const r2 = await computeChangeScopeAudit({ cwd: d, changeName: 'quick-1234cdef' })
+      assert.equal(r2.gateProfile.level, 'L0', `l1_span=3 覆写 → 2 文件 2 模块降 L0（实际 ${r2.gateProfile.level}）`)
+    } finally {
+      rmSync(join(specBase, 'local.yaml'))
+    }
+  } finally { cleanup(d) }
+})
+
+test('gate 多项目 module-map 消歧：双 map 仓按 rows 归属得分选对项目（非降级），零归属样本平分 → degraded', async () => {
+  const d = makeRepo('sa-gate-multi-')
+  try {
+    writeFileSync(join(d, 'base.txt'), 'x\n')
+    sh(d, ['add', '-A'])
+    sh(d, ['commit', '-q', '-m', 'init'])
+    const specBase = join(d, '.sillyspec')
+    writeModuleMap(specBase, 'demo')            // 候选 A：src/core/ + src/api/
+    // 候选 B：另一项目 packages/dashboard/（与本仓双 map 形态同款——路径面与 A 不相交）
+    const dashDir = join(specBase, 'docs', 'panel', 'modules')
+    mkdirSync(dashDir, { recursive: true })
+    writeFileSync(join(dashDir, '_module-map.yaml'), [
+      'modules:',
+      '  server-index:',
+      '    status: active',
+      '    paths:',
+      '      - packages/dashboard/',
+      '',
+    ].join('\n'))
+    const patchesDir = join(specBase, 'quicklog', 'patches')
+    mkdirSync(patchesDir, { recursive: true })
+    const mkRecord = (file, sessionId, rows) => writeFileSync(join(patchesDir, file), JSON.stringify({
+      mode: 'quick', ok: true, baseAnchor: `quick-window:${sessionId}`,
+      totals: { files: rows.length, additions: 2 * rows.length, deletions: 0 },
+      rows: rows.map(p => ({ path: p, declared: true, additions: 2, deletions: 0, kind: 'modified', attribution: 'declared' })),
+      excluded: { foreignDeclared: [] }, qlId: file.replace(/\.json$/, ''), sessionId,
+      savedAt: '2026-09-10T08:00:00.000Z',
+    }))
+    // 记录 1：rows 全在 src/ → 唯一最高归属得分 = demo → 非降级重放
+    mkRecord('ql-20260910-010-a1b2.json', 'quick-5678abcd', ['src/core/a.js', 'src/api/b.js'])
+    const r = await computeChangeScopeAudit({ cwd: d, changeName: 'quick-5678abcd' })
+    assert.equal(r.gateProfile.degraded, false, '双 map 按 rows 得分选中 demo → 非降级')
+    assert.equal(r.gateProfile.moduleSpan, 2, 'demo map 归属生效（m1/m2）')
+    assert.equal(r.gateProfile.level, 'L1')
+    // 记录 2：rows 两 map 各归属一半（得分平分）→ fail-open degraded，不猜错归属
+    mkRecord('ql-20260910-011-c3d4.json', 'quick-5678ffff', ['packages/dashboard/srv.js', 'src/core/a.js'])
+    const r2 = await computeChangeScopeAudit({ cwd: d, changeName: 'quick-5678ffff' })
+    assert.equal(r2.gateProfile.degraded, true, '得分平分 → degraded（不猜）')
+    assert.equal(r2.gateProfile.moduleSpan, null)
+  } finally { cleanup(d) }
+})
+
+test('gate 无画像零回归：full-flow 全流程变更无 gateProfile 字段，表格零 [gate] 输出', async () => {
+  const d = makeRepo('sa-gate-none-')
+  try {
+    mkdirSync(join(d, 'src'), { recursive: true })
+    writeFileSync(join(d, 'src', 'a.js'), 'a1\n')
+    sh(d, ['add', '-A'])
+    sh(d, ['commit', '-q', '-m', 'init'])
+    const base = head(d)
+    const specBase = join(d, '.sillyspec')
+    writeDesign(specBase, 'nogate-change', ['| 修改 | src/a.js | 说明 |'])
+    writeWorktreeMeta(specBase, 'nogate-change', base)
+    writeFileSync(join(d, 'src', 'a.js'), 'a1\na2\n')
+
+    const r = await computeChangeScopeAudit({ cwd: d, changeName: 'nogate-change' })
+    assert.equal(r.mode, 'full-flow')
+    assert.equal(r.ok, true)
+    assert.equal(r.gateProfile, undefined, '非 quick 全流程变更恒无画像字段（消费方按存在性读取）')
+    assert.equal(r.rows.length, 1, '既有三态对账零回归')
+    assert.equal(r.rows[0].verdict, 'planned')
+    const out = renderScopeAuditTable(r)
+    assert.ok(!out.includes('[gate]'), '表格零画像段输出')
+    assert.ok(!out.includes('规模门'), '零 gate 术语混入')
+    assert.ok(out.includes('✓ 计划内'), '既有三态标记原样')
   } finally { cleanup(d) }
 })

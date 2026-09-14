@@ -20,6 +20,9 @@ import os from 'node:os'
 // unquoteGitPath 同理：parsePorcelainPath 内部消费 + re-export。
 import { safeGit, unquoteGitPath } from '../git-helper.js'
 import { createHash } from 'node:crypto'
+// 分级门禁画像信号层（2026-09-14-quick-exit-tiered-gates task-01 / FR-02）：纯函数零 IO，
+// 仅依赖 change-risk-profile，无环——auditQuickCompletion 静态 import 安全（task-02 接线）。
+import { computeGateProfile, resolveGateThresholds } from '../quick-gate-profile.js'
 export { safeGit, unquoteGitPath }
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -1151,7 +1154,7 @@ export function matchSameModuleTestFiles(declaredFiles, undeclaredFiles) {
 
 /**
  * quick 完成审计：对比 baseline 与实际变更。
- * @returns {{ status: 'safe'|'warning'|'blocked', reasons: string[], changedFiles: string[], newFiles: string[], deletedFiles: string[], baselineHit: string[], stagedTotal: number, attributedFiles: string[], undeclaredFiles: string[], softTestFiles: string[], foreignSessionDeclared: Array<{file: string, sessions: string[]}> }}
+ * @returns {{ status: 'safe'|'warning'|'blocked', reasons: string[], changedFiles: string[], newFiles: string[], deletedFiles: string[], baselineHit: string[], stagedTotal: number, attributedFiles: string[], undeclaredFiles: string[], softTestFiles: string[], foreignSessionDeclared: Array<{file: string, sessions: string[]}>, gateProfile: object|null }}
  */
 /**
  * D-8 O-1 模块归属（2026-08-15 docs-signals-o12）：quick 欠账 hint 从"改了 N 文件"升级为
@@ -1163,19 +1166,38 @@ export function matchSameModuleTestFiles(declaredFiles, undeclaredFiles) {
 async function matchQuickModules(srcChanged, specBase, projectName) {
   if (!specBase || !projectName || srcChanged.length === 0) return []
   try {
-    const { join } = await import('node:path')
-    const { existsSync: ex, readFileSync: rf } = await import('node:fs')
-    const mapPath = join(specBase, 'docs', projectName, 'modules', '_module-map.yaml')
-    if (!ex(mapPath)) return []
-    const { parseModuleMapSimple } = await import('../modules.js')
-    const idx = parseModuleMapSimple(rf(mapPath, 'utf8'))
-    if (!idx || Object.keys(idx).length === 0) return []
+    const idx = await loadQuickModuleIndex(specBase, projectName)
+    if (!idx) return []
     const { matchFilesToModules } = await import('../docs-debt.js')
     const cardsDir = join(specBase, 'docs', projectName, 'modules')
     const { byModule } = matchFilesToModules(srcChanged, idx, { cardsDir })
     return [...byModule.entries()].map(([id, e]) => ({ id, doc: e.doc }))
   } catch {
     return []
+  }
+}
+
+/**
+ * quick 审计链的 _module-map.yaml 原始索引加载（2026-09-14-quick-exit-tiered-gates task-02 抽取）：
+ * D-8 模块归属（matchQuickModules）与门禁画像（auditQuickCompletion 挂 review.gateProfile）的
+ * 同源单一加载点——路径 <specBase>/docs/<projectName>/modules/_module-map.yaml，解析
+ * parseModuleMapSimple（canonical）。缺失/解析空/specBase 缺参/异常 → null（画像走 degraded
+ * 降级档：span 退出判级，兼容策略第 1 条——未 scan/无 module-map 的存量项目零强制变化）。
+ * join/existsSync/readFileSync 用本模块顶部静态 import（auditQuickCompletion 既有同款）。
+ * @param {string} specBase .sillyspec 目录（guard 透传）
+ * @param {string} projectName 项目名（progress.project）
+ * @returns {Promise<object|null>} 模块索引（扁平 { id: {...} }）；不可得 → null
+ */
+async function loadQuickModuleIndex(specBase, projectName) {
+  if (!specBase || !projectName) return null
+  try {
+    const mapPath = join(specBase, 'docs', projectName, 'modules', '_module-map.yaml')
+    if (!existsSync(mapPath)) return null
+    const { parseModuleMapSimple } = await import('../modules.js')
+    const idx = parseModuleMapSimple(readFileSync(mapPath, 'utf8'))
+    return idx && Object.keys(idx).length > 0 ? idx : null
+  } catch {
+    return null
   }
 }
 
@@ -1257,11 +1279,14 @@ export function matchInvalidRefsToChanged(invalidRefs, srcChangedFiles) {
 
 export async function auditQuickCompletion(cwd, guard, options = {}) {
   const { baselineFiles, allowedFiles = [], allowNew = false, forceBaseline = false, allowDelete = false, specBase = null, projectName = null } = guard
-  const { isConfirm } = options
+  // noDocs/fileNotes（task-02）：--no-docs 显式豁免与 --file-notes 解析结果经 options 进审计链
+  // （command.js knownFlags 登记 → complete.js → complete-handlers 透传；scope-audit 重放不传 →
+  // noDocs/fileNotes 缺省的纯默认画像）。
+  const { isConfirm, noDocs = false, fileNotes = null } = options
   // stagedTotal：当前所有非 quick 元数据的未提交条目（含前序 baseline 残留）。
   // 与 changedFiles（扣 baseline 后的本轮新增）区分，供审计文案同时展示「本轮新增 vs 累计暂存」，
   // 避免叠加 quick 会话时把前序会话未提交文件误读为「本会话只动了 N 个」。
-  const result = { status: 'safe', reasons: [], changedFiles: [], newFiles: [], deletedFiles: [], baselineHit: [], stagedTotal: 0, attributedFiles: [], undeclaredFiles: [], softTestFiles: [], foreignSessionDeclared: [] }
+  const result = { status: 'safe', reasons: [], changedFiles: [], newFiles: [], deletedFiles: [], baselineHit: [], stagedTotal: 0, attributedFiles: [], undeclaredFiles: [], softTestFiles: [], foreignSessionDeclared: [], gateProfile: null }
 
   try {
     // safeGit 带 -c safe.directory，避免 linked worktree/容器异 uid/挂载点下裸 `git status` 抛错被
@@ -1638,6 +1663,47 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
       result.undeclaredFiles = []
       result.softTestFiles = []
     }
+
+    // ── 分级门禁画像（FR-03，2026-09-14-quick-exit-tiered-gates task-02）：照 docSyncHint 先例
+    // 挂 review.gateProfile（audit result 即 printQuickAuditReview 的 review / progress.lastQuickReview
+    // / scope-audit 重放的 audit），全部 advisory——不改 status 三态 / reasons / exit code（D-003），
+    // fail-open：任何异常只跳过（内层 try/catch，绝不落外层 catch 的 warning 语义）。
+    // 输入纪律：
+    //   - changedFiles = 本函数已算的 git 事实窗口（非 --files 自声明）；先经 isQuicklogFileLineNoise
+    //     滤会话簿记（quicklog/.runtime/_module-map 等）但保留模块卡与 changelog sidecar——模块卡恰是
+    //     L2 docClaim 的认领对象，用 isQuickMetadata 会把 claimed 判死成 missing（记录面谓词分叉）；
+    //   - moduleIndex 复用 matchQuickModules 同源加载（loadQuickModuleIndex，单点）；
+    //   - 阈值经 resolveGateThresholds 合并 local.yaml quick-gate 段覆写（读取走 readLocalYamlRaw +
+    //     js-yaml 动态 import，与 resolveLivingDocs 同款链路；未配置/坏 YAML → 纯默认，D-009）；
+    //   - noDocs/fileNotes 由 options 透传（--no-docs 豁免 / --file-notes 覆盖率）。
+    // 不加 git 子进程（约束：画像纯字符串运算，R-04）；未声明脏文件维持上方归属分流不并入
+    // docClaim 判定（D-005）——级判（span/files/risk）仍用 git 事实全窗口（防 37.1% 未声明面
+    // 漏判级），docClaim 单独用归属口径重算覆盖（他者窗口内改模块卡不得伪造成「已认领」）。
+    try {
+      let thresholds = null
+      const rawLocalYaml = readLocalYamlRaw(cwd)
+      if (rawLocalYaml) {
+        try {
+          const mod = await import('js-yaml')
+          const yamlLoad = mod.load || mod.default?.load
+          const cfg = yamlLoad(rawLocalYaml)
+          if (cfg && typeof cfg === 'object') thresholds = resolveGateThresholds(cfg)
+        } catch { /* 坏 YAML → 纯默认阈值 */ }
+      }
+      const gateFiles = result.changedFiles.filter(f => !isQuicklogFileLineNoise(f, guard.linkedChanges))
+      const gateOpts = {
+        ...(thresholds ? { thresholds } : {}),
+        ...(noDocs ? { noDocs: true } : {}),
+        ...(Array.isArray(fileNotes) && fileNotes.length > 0 ? { fileNotes } : {}),
+      }
+      const moduleIndex = await loadQuickModuleIndex(specBase, projectName)
+      result.gateProfile = computeGateProfile(gateFiles, moduleIndex, gateOpts)
+      if (result.undeclaredFiles.length > 0) {
+        const undeclaredNorm = new Set(result.undeclaredFiles.map(f => String(f).replace(/\\/g, '/')))
+        const attrGateFiles = gateFiles.filter(f => !undeclaredNorm.has(String(f).replace(/\\/g, '/')))
+        result.gateProfile.checks.docClaim = computeGateProfile(attrGateFiles, moduleIndex, gateOpts).checks.docClaim
+      }
+    } catch { /* 画像 fail-open：异常只跳过（gateProfile 保持 null，D-003 不碰 status） */ }
 
     // --confirm 模式：展示 diff 并等待确认
     if (isConfirm && (result.status === 'warning' || result.status === 'blocked')) {

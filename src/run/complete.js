@@ -119,7 +119,7 @@ export function synthesizeStepOutput({ stageName, stepName, cwd }) {
 }
 
 export async function completeStep(pm, progress, stageName, cwd, outputText, inputText = null, options = {}) {
-  const { printNext = true, confirm = false, changeName, platformOpts = {}, nonInteractive = false, isForceBaseline = false, isAllowNew = false, isAllowDelete = false, quickFiles = [] } = options
+  const { printNext = true, confirm = false, changeName, platformOpts = {}, nonInteractive = false, isForceBaseline = false, isAllowNew = false, isAllowDelete = false, isNoDocs = false, quickFiles = [] } = options
   // specRoot(平台) > specDriftAnchor(worktree 漂移锚定主仓) > cwd/.sillyspec(本地)——
   // 与 prompt.js resolvePromptSpecBase 同序：--done 收尾的 user-inputs.md/超长 artifact 落盘
   // 必须与 prompt 渲染同一根，否则写进 worktree 副本目录、随 cleanup 整目录删除。
@@ -568,8 +568,9 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
       console.log(`   恢复：sillyspec run ${stageName} --continue --answer "用户回答"${changeName ? ` --change ${changeName}` : ''}`)
       return { stageCompleted: false, currentIdx, nextPendingIdx: -1 }
     }
-    // quick 收尾（W6 Step6b 抽至 complete-handlers.js handleQuickStageCompletion）
-    await handleQuickStageCompletion({ stageName, steps, currentIdx, cwd, progress, changeName, specBase, outputText, confirm, isForceBaseline, isAllowNew, isAllowDelete, platformOpts, pm, quickFiles })
+    // quick 收尾（W6 Step6b 抽至 complete-handlers.js handleQuickStageCompletion）；
+    // isNoDocs（task-02）--no-docs 豁免随链透传进 auditQuickCompletion options
+    await handleQuickStageCompletion({ stageName, steps, currentIdx, cwd, progress, changeName, specBase, outputText, confirm, isForceBaseline, isAllowNew, isAllowDelete, isNoDocs, platformOpts, pm, quickFiles })
 
     // ── reopen --done 回填（坑 brainstorm-reopen-step-state-desync）──
     // nextPendingIdx === -1 且无 waiting，说明要进阶段完成分支。此时若存在 stale 步骤

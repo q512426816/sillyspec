@@ -181,6 +181,17 @@ export const LOCAL_YAML_SCHEMA = {
         { path: 'semantic_guard.enabled', type: 'boolean', optional: true, status: 'live', readers: ['readSemanticGuardEnabled (src/semantic-guard.js)'], desc: '语义守卫总开关，默认 true；设 false 时 quick 进场注入与 --done 断言 WARNING 全停零开销。', example: 'true' },
       ],
     },
+    {
+      id: 'quick-gate',
+      title: 'quick 出口门禁阈值',
+      note: 'quick --done 分级门禁（L0/L1/L2 advisory）的四个数值阈值覆写（2026-09-14-quick-exit-tiered-gates，D-009）。缺省=src/quick-gate-profile.js 的 THRESHOLDS 代码内校准值，仅确知调参时配置；键非法（非 ≥1 整数）回退默认并 warn。',
+      keys: [
+        { path: 'quick-gate.l1_span', type: 'integer', optional: true, status: 'live', readers: ['resolveGateThresholds (src/quick-gate-profile.js)'], desc: 'L1 模块跨度阈值：非文档文件命中 ≥N 个模块 → L1（缺省 2）。', example: '2' },
+        { path: 'quick-gate.l1_files', type: 'integer', optional: true, status: 'live', readers: ['resolveGateThresholds (src/quick-gate-profile.js)'], desc: 'L1 文件数阈值：变更文件 ≥N → L1（缺省 4）。', example: '4' },
+        { path: 'quick-gate.l2_span', type: 'integer', optional: true, status: 'live', readers: ['resolveGateThresholds (src/quick-gate-profile.js)'], desc: 'L2 模块跨度阈值：命中 ≥N 个模块 → L2（缺省 4）。', example: '4' },
+        { path: 'quick-gate.l2_files_degraded', type: 'integer', optional: true, status: 'live', readers: ['resolveGateThresholds (src/quick-gate-profile.js)'], desc: 'module-map 缺失降级档的 L2 文件数阈值：变更文件 ≥N → L2（缺省 8）。', example: '8' },
+      ],
+    },
   ],
 };
 
@@ -350,5 +361,13 @@ docs-check:
   #   - docs/sillyspec/architecture.md
   # cross_repo_roots:   # repo://<仓库名> 跨仓引用 → 本机仓库根（每台设备各自配，绝对路径勿提交）
   #   sillyspec: /c/Users/you/IdeaProjects/sillyspec
+
+# ── quick 出口门禁阈值（quick --done 分级门禁 L0/L1/L2 的 advisory 阈值覆写；缺省=代码内校准值）──
+# 仅确知调参时配置；键非法（非 ≥1 整数）回退默认并 warn。
+# quick-gate:
+#   l1_span: 2              # 跨 ≥2 模块 → L1
+#   l1_files: 4             # 或 ≥4 文件 → L1
+#   l2_span: 4              # 跨 ≥4 模块 → L2
+#   l2_files_degraded: 8    # module-map 缺失降级档：≥8 文件 → L2
 `;
 }

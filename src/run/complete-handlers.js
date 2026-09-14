@@ -31,7 +31,7 @@ import { resolveChangeDir, resolveQuickSessionsDir, safeGit, auditQuickCompletio
 import { detectConcurrentChanges, formatConcurrentWarning, resolveConcurrentAnchor } from './concurrent-detect.js'
 import { stageRegistry } from '../stages/index.js'
 import { SCAN_STATUS, POINTER_STATUS } from '../constants.js'
-import { printQuickAuditReview, runQuickTestLintGate, printQuickTestLintGate } from './quick-audit.js'
+import { printQuickAuditReview, runQuickTestLintGate, printQuickTestLintGate, buildGateAuditNote } from './quick-audit.js'
 import { validateQuickResult, allocateQuicklogEntry, appendQuicklogEntryWithId, findQuicklogEntry, completeQuicklogEntry, extractTitleFromResult, parseFileNotes, getQuickFileNotes, countQuicklogEntries, collectGuardReservedQuicklogIds } from '../quicklog.js'
 import { getRule } from '../stage-contract-spec.js'
 import { archiveDestDirName } from '../stage-contract.js'
@@ -980,7 +980,7 @@ export async function handleWorkflowPostCheck({ stageName, steps, currentIdx, cw
  * isForceBaseline/isAllowNew/platformOpts。辅助函数直接 import（safeGit/auditQuickCompletion ← shared，
  * printQuickAuditReview ← quick-audit，4 个 quicklog fns ← quicklog，unlinkSync/rmSync ← fs 静态）。
  */
-export async function handleQuickStageCompletion({ stageName, steps, currentIdx, cwd, progress, changeName, specBase, outputText, confirm, isForceBaseline, isAllowNew, isAllowDelete, platformOpts, pm, quickFiles = [] }) {
+export async function handleQuickStageCompletion({ stageName, steps, currentIdx, cwd, progress, changeName, specBase, outputText, confirm, isForceBaseline, isAllowNew, isAllowDelete, isNoDocs, platformOpts, pm, quickFiles = [] }) {
   // quick 收尾：强校验 QUICKLOG 条目 + 翻状态 + 勾 tasks.md（CLI 接管）
   if (stageName === 'quick') {
     // §4.6 从 session guard.json 读 guard（不依赖 progress.quickGuard）。
@@ -1062,7 +1062,13 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
         // → 回到无豁免现状。
         otherSessionsDeclared: collectOtherQuickSessionDeclarations(platformOpts, specBase, changeName),
       }
-      review = await auditQuickCompletion(cwd, mergedGuard, { isConfirm: confirm })
+      review = await auditQuickCompletion(cwd, mergedGuard, {
+        isConfirm: confirm,
+        // task-02（FR-03）：--no-docs 豁免 + --file-notes 覆盖率透传进门禁画像（per-process 值与
+        // 上方边界并入、下方 completeQuicklogEntry 消费同源；不传 → 纯默认画像）
+        noDocs: isNoDocs === true,
+        fileNotes: parseFileNotes(getQuickFileNotes()),
+      })
       printQuickAuditReview(review)
       if (review.status === 'blocked') {
         steps[currentIdx].status = 'pending'
@@ -1322,6 +1328,13 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
           }
         } catch { /* 自动重锚失败退化为纯 advisory（上方 auditNote 已落盘） */ }
       }
+      // ── [gate] 分级门禁落账（FR-03，2026-09-14-quick-exit-tiered-gates task-02）：L1/L2 画像
+      // 经 buildGateAuditNote 组装单行 [gate] 注记随既有 auditNotes 通道落 QUICKLOG（L1 每文件
+      // 注记+测试增量；L2 模块文档认领+风险命中；--no-docs 豁免同通道留痕）；L0/无画像 → null
+      // 零落账。纯 advisory：不阻断完成、不改 review.status 语义（D-003）；未声明脏文件维持上方
+      // 归属切分注（⚖️/🔍）不并入文档认领判定（D-005）。
+      const gateAuditNote = buildGateAuditNote(review?.gateProfile)
+      if (gateAuditNote) auditNotes.push(gateAuditNote)
       // 归属切分注（2026-08-18 误归属修复）：窗口内未声明脏文件不进「文件：」行，但必须落盘可追溯
       // （多 agent 并发仓他者窗口改动 / 本会话漏声明均可能），防真实改动被静默挤走。
       // 软归属拆分（2026-09-10）：softFiles 中的同模块测试文件已补入文件行，不再占 ⚖️「未计入」

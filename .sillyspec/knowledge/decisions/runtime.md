@@ -143,3 +143,17 @@ supersedes：无（修订 design 初稿注入时机）
 文件：src/semantic-guard.js, src/run/prompt.js, src/run/quick-audit.js
 最近确认：358af35
 理由：**方案 A——三层 advisory**：①决策条目增机械可解析「文件：」字段（存量条目用锚点路径提取兼容，零迁移）②quick 进场按候选文件（--files+脏文件）反查知识库 implemented/rejected 决策 + git log 近 7 天他者变更交付归因，命中注入 advisory、零命中静默 ③quick --done 对「他者交付的测试文件断言行被改」输出 WARNING 级点名（具体断言+交付变更+决策指针），建议理由写进 quicklog --solution。全部非阻断，单开关 semantic_guard.enabled 默认开。
+
+## D-002@v1 quick 出口分级门禁（L0/L1/L2 机械画像），不新增第三条车道
+状态：implemented
+变更：2026-09-14-quick-exit-tiered-gates
+锚点：未记录
+最近确认：e84bc89
+理由：不新增 mid 车道（自选车道会被激励扭曲绕过：95% 超限 quick 本就是 agent 自选、独立完成绕过 full 仪式；新车道=新状态机+新 prompt 面，违背纯减法原则）。改为 quick --done 出口按 CLI 侧机械信号自动升级：L0=现状 test/lint 实测门；L1（跨≥2 模块 或 ≥4 文件）=+每文件注记非空+测试增量检查；L2（跨≥4 模块 或 风险特征命中）=+模块文档认领或显式 --no-docs 豁免留痕+运行时证据要求。判定输入用 CLI 自算 changedFiles×module-map，不用 --files 自声明（37.1% 超限条目存在未声明脏文件）。
+
+## D-005@v1 未声明脏文件触发归属确认，不挂文档对账
+状态：implemented
+变更：2026-09-14-quick-exit-tiered-gates
+锚点：未记录
+最近确认：e84bc89
+理由：未声明脏文件是归属问题（可能是并行会话改动或漏申报，审计行自述两种可能），不是文档同步问题——挂文档对账会罚错人。触发归属确认（要求声明/剔除归属），与 L2 文档认领门分离。

@@ -1,0 +1,2064 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/_module-map.yaml b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+index f02d02e..38dd974 100644
+--- a/.sillyspec/docs/sillyspec/modules/_module-map.yaml
++++ b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+@@ -75,6 +75,7 @@ modules:
+       - src/verify-postcheck.js
+       - src/review-tier.js
+       - src/change-risk-profile.js
++      - src/quick-gate-profile.js
+       - src/scope-audit.js
+       - src/classify-change.js
+       - src/contract-matrix.js
+diff --git a/.sillyspec/docs/sillyspec/modules/cli-entry.md b/.sillyspec/docs/sillyspec/modules/cli-entry.md
+index 9bbce85..84b460f 100644
+--- a/.sillyspec/docs/sillyspec/modules/cli-entry.md
++++ b/.sillyspec/docs/sillyspec/modules/cli-entry.md
+@@ -4,7 +4,7 @@ doc_type: module-card
+ module_id: cli-entry
+ author: qinyi
+ created_at: 2026-06-03T07:42:00+08:00
+-updated_at: 2026-09-08T17:10:00+08:00
++updated_at: 2026-09-14T11:20:00+08:00
+ ---
+ # cli-entry
+ 
+@@ -88,6 +88,7 @@ runStage(pm, progress, stageName, cwd, changeName)
+ |------|--------|------|
+ | 2026-09-07 | 2026-09-07-ir-stage-p3c | IR P3c：index.js 新 design-init case（--change/--force/--json/--spec-dir；幂等不覆盖，决策追踪表预填；缺 decisions exit 1 带指引） |
+ | 2026-09-08 | ql-20260908-006-5f04 | doctor `--gc-unstamped-runs [--confirm]`：usage + case 'doctor' 接线 gcUnstampedExecuteRuns（默认 dry-run）；存量无戳 execute-runs 清扫，不进 archive 热路径 |
++| 2026-09-14 | 2026-09-14-quick-exit-tiered-gates | scope-audit 命令分支双出口接分级门禁画像（task-03 / FR-04 / D-008）：表格 [gate] 画像段（renderScopeAuditTable 按 gateProfile 存在性渲染，quick 会话出、full-flow 零输出）+ --json gateProfile 字段（computeChangeScopeAudit quick 模式增量——实时态透传 review.gateProfile / 冻结态旧记录按 rows 现算重放）；usage 补 [gate] 分级门禁画像说明 |
+ 
+ ## adoptPlanWaves proposal 档（2026-09-09-plan-derived）
+ plan-adopt-waves.js adoptPlanWaves 加 mode 参：proposal 只读产拓扑布局草稿（planMdDraft/rewritten，不落盘）供 postcheck 自动修复验证；write 档向后兼容（CLI 命令行为等价，测试锁定）。
+diff --git a/.sillyspec/docs/sillyspec/modules/core-engine.md b/.sillyspec/docs/sillyspec/modules/core-engine.md
+index 5ecf2ea..d816213 100644
+--- a/.sillyspec/docs/sillyspec/modules/core-engine.md
++++ b/.sillyspec/docs/sillyspec/modules/core-engine.md
+@@ -1,13 +1,13 @@
+ ---
+-updated_at: 2026-09-02T17:45:00+08:00
++updated_at: 2026-09-14T11:20:00+08:00
+ author: qinyi
+ created_at: 2026-06-01T09:05:00
+ ---
+ 
+ # core-engine
+-> 最后更新：2026-09-10
+-> 最近变更：ql-20260910-002-9beb（stage-review 降级自审 CLI 侧配套：isDegradedSelfReview + gate ⚠️ 审计行 + 报错/契约降级出口——PI agent 等宿主无 Agent tool）/ 2026-08-23-adopt-harness-practices（knowledge-match 增 decisionHits 防复潮解析 + verify-postcheck skip 真跳过/evidence-auto 推荐）/ 2026-08-16-scan-docs-reconcile（契约/评审族与基础原语补录归属 + propose 回收）/ ql-20260809-003-c88a（#5 next-action 读路径对齐变更根目录 + #6 initChange 用 VALID_STAGES 单一源 + 修正 propose 残留误述）
+-> 模块路径：src/db.js, src/db-engine.js + 契约/评审族与基础原语（stage-contract 三件、check-primitives、stage-review、task-review、verify-postcheck、review-tier、change-risk-profile、classify-change、contract-matrix、endpoint-extractor、knowledge-match、doctor-diagnostics、fs-atomic、constants、scan-postcheck）；完整清单见 _module-map.yaml core-engine paths。历史正文中的 run.js / progress.js / index.js 章节已分属 runtime / progress / cli-entry 模块卡
++> 最后更新：2026-09-14
++> 最近变更：2026-09-14-quick-exit-tiered-gates（quick 出口分级门禁：信号层 src/quick-gate-profile.js 三导出 + change-risk-profile 补 QUICK_RISK_PATH_PATTERNS 路径模式表 + scope-audit 增 gateProfile 双出口；THRESHOLDS 定稿 2/4/4/8）/ ql-20260910-002-9beb（stage-review 降级自审 CLI 侧配套：isDegradedSelfReview + gate ⚠️ 审计行 + 报错/契约降级出口——PI agent 等宿主无 Agent tool）/ 2026-08-23-adopt-harness-practices（knowledge-match 增 decisionHits 防复潮解析 + verify-postcheck skip 真跳过/evidence-auto 推荐）/ 2026-08-16-scan-docs-reconcile（契约/评审族与基础原语补录归属 + propose 回收）/ ql-20260809-003-c88a（#5 next-action 读路径对齐变更根目录 + #6 initChange 用 VALID_STAGES 单一源 + 修正 propose 残留误述）
++> 模块路径：src/db.js, src/db-engine.js + 契约/评审族与基础原语（stage-contract 三件、check-primitives、stage-review、task-review、verify-postcheck、review-tier、change-risk-profile、quick-gate-profile、classify-change、contract-matrix、endpoint-extractor、knowledge-match、doctor-diagnostics、fs-atomic、constants、scan-postcheck）；完整清单见 _module-map.yaml core-engine paths。历史正文中的 run.js / progress.js / index.js 章节已分属 runtime / progress / cli-entry 模块卡
+ 
+ ## 职责
+ SillySpec 的核心运行引擎 — 负责数据库存储、进度管理、阶段调度和 CLI 入口。
+@@ -36,7 +36,8 @@ core-engine 是 SillySpec 的基础设施层，由三个层次组成：持久化
+ - `src/verify-facts-schema.js` — verify-facts.json v2 schema 单点（2026-09-08-ir-verify-facts，D-005@v2）：FACTS_SCHEMA_VERSION/EVIDENCE_STATUS/EXEMPTION_RE/classifyVerifiedFile（code|artifact 证据核验口径分流）/parseEvidenceSlots（证据账+集成验证回执槽段解析，行首锚定占位 fail-closed）/validateFactsV2；builder/对账/集成证据/渲染四方 import 同源2026-08-23 起 test_strategy 新值接线（D-005@v2）：`resolveTestStrategy` 统一入口（`src/verify-postcheck.js:21`）解析配置策略 + evidence-auto 按 module-impact.md 影响面推荐检查组合（行为→module 聚焦测试、文档/prompt→docs-check、门禁契约→gate；缺失/不可解析降级 module 并注记）；
+   skip=真跳过（`src/verify-postcheck.js:1010` mode 'strategy-skip'）——不回退全量、verify 输出显式标注留审计痕迹（R-07），`--done` 对账按 skip 分支放行
+ - `src/review-tier.js` — 审查分级（self/independent）：plan_level 确定性映射（none/light→self、full→independent），无 plan_level 阶段退文件数启发式；run/gates.js 与 run/prompt.js 消费
+-- `src/change-risk-profile.js` — 变更风险分级检测（P0 阻塞确认 / P1 记录 / P2 通过，产出 risk-profile.json）
++- `src/change-risk-profile.js` — 变更风险分级检测（P0 阻塞确认 / P1 记录 / P2 通过，产出 risk-profile.json）；`QUICK_RISK_PATH_PATTERNS`（2026-09-14-quick-exit-tiered-gates）——auth/permission/billing/migration/lock/scheduling 六域路径模式表（`Array<{pattern, re}>`），供 quick-gate-profile 画像风险命中消费（纯增量导出，detectChangeRisk 判级语义零变化）
++- `src/quick-gate-profile.js` — quick 出口分级门禁画像信号层（2026-09-14-quick-exit-tiered-gates task-01 / FR-02，纯函数零 IO 零子进程，D-007）：`computeGateProfile`（CLI 审计链 git 事实 changedFiles × _module-map.yaml paths/core_files 前缀聚类 → L0/L1/L2 画像 + 检查项）+ `resolveGateThresholds`（local.yaml quick-gate 段覆写合并，D-009）+ `THRESHOLDS` 阈值单点；与 change-risk-profile/scope-audit 同卡，三导出明细见下方对外接口小节，全部 advisory 不阻断（D-003）
+ - `src/classify-change.js` — 变更规模分类器（quick/auto/full，供 auto 模式决定内部流程深度）
+ - `src/contract-matrix.js` / `src/endpoint-extractor.js` — API 契约矩阵生成与注入（provider/consumer 端点提取与 parity check）
+ - `src/knowledge-match.js` — knowledge 关键词匹配引擎（INDEX.md 条目解析 + 任务上下文匹配生成 hit report）；2026-08-23 起 INDEX `## Decisions` 段路由行进决策匹配（`src/knowledge-match.js:110-155`）：新增 `parseDecisionEntries` 解析 decisions/<域>.md 条目 + `matchKnowledge` 返回值新增 decisionHits——任务上下文命中的 Decisions 路由行所指向文件内全部 D-xxx@vN 条目，rejected 优先排序（防复潮信息最先可见）；matched/entries/report/json 旧四键结构与语义不变，无 decisions 库/路由行未命中 → decisionHits: []，供 brainstorm Step2 防复潮注入（runtime run/prompt.js 消费）
+@@ -50,11 +51,20 @@ core-engine 是 SillySpec 的基础设施层，由三个层次组成：持久化
+ ### src/scope-audit.js — 变更范围对账纯函数（2026-09-10-change-scope-audit 新增）
+ | 函数/常量 | 说明 | 参数 |
+ |-----------|------|------|
+-| `computeChangeScopeAudit(opts)` | 变更范围对账单一数据源：quick-<8hex> 会话走归属表（复用 auditQuickCompletion 窗口），否则 full-flow 三态（计划侧 change-list.js 解析 × 实际侧 resolveReconcileActualFiles + numstat 真实行数）；全 advisory fail-soft | `{cwd, specBase, changeName, platformOpts}` |
+-| `renderScopeAuditTable(result, opts?)` | 人类可读表渲染（三态/归属标记、BIN/— 占位、合计、⚠️ 出口指引、maxRows 截断） | `ScopeAuditResult, {maxRows}` |
++| `computeChangeScopeAudit(opts)` | 变更范围对账单一数据源：quick-<8hex> 会话走归属表（复用 auditQuickCompletion 窗口），否则 full-flow 三态（计划侧 change-list.js 解析 × 实际侧 resolveReconcileActualFiles + numstat 真实行数）；全 advisory fail-soft；quick 模式增量携带 `gateProfile`（2026-09-14-quick-exit-tiered-gates task-03 / FR-04 / D-008——实时态透传 auditQuickCompletion 挂的 review.gateProfile 不重复计算，冻结态旧记录无该字段时按 rows 冻结文件清单现算 `computeGateProfile` 重放，module-map/阈值与 --done 时点同链路、字段同构；消费方按存在性读取，full-flow 恒无此字段） | `{cwd, specBase, changeName, platformOpts}` |
++| `renderScopeAuditTable(result, opts?)` | 人类可读表渲染（三态/归属标记、BIN/— 占位、合计、⚠️ 出口指引、maxRows 截断）；result.gateProfile 存在时（quick 模式）追加 [gate] 画像段（与 run/quick-audit.js [gate] 打印块同数据源同 tier 语义，full-flow/画像 null 零输出） | `ScopeAuditResult, {maxRows}` |
+ | `collectNumstatByPath(cwd, paths, opts)` | 行数三档采集（tracked=numstat / untracked=wc-l / binary=BIN），quick 与 full-flow 共用 | `cwd, paths, {baseRef}` |
+ 
+-消费方（scope-audit 命令 / execute--done / verify--done / archive--confirm / quick--done 四注入）只 import 本三导出，禁止自研采集（D-003）。
++消费方（scope-audit 命令 / execute--done / verify--done / archive--confirm / quick--done 四注入）只 import 本三导出，禁止自研采集（D-003）。冻结重放/双 map 仓消歧走模块内 `pickModuleMapProject`（内部 helper 非导出）：按样本文件对候选 _module-map.yaml 归属得分唯一最高选项目，零归属样本平分 → degraded（与 computeGateProfile.unmappedFiles 同款归属口径）。
++
++### src/quick-gate-profile.js — quick 出口分级门禁画像（2026-09-14-quick-exit-tiered-gates 新增）
++定位：quick --done 分级门禁的信号单一来源——纯函数零 IO（moduleIndex/风险表/阈值全由参数或默认值，D-007 / R-04），接线消费见 runtime 卡（run/shared.js 挂 review.gateProfile）。
++
++| 函数/常量 | 说明 | 参数 |
++|-----------|------|------|
++| `computeGateProfile(changedFiles, moduleIndex, opts)` | 画像计算：非文档文件 × paths/core_files 前缀聚类模块归属 + `QUICK_RISK_PATH_PATTERNS` 风险命中 → level（正常态 L2=跨 ≥L2_SPAN 模块或风险命中、L1=跨 ≥L1_SPAN 或 ≥L1_FILES 文件；module-map 缺失降级档 span 退出判级、L2=≥L2_FILES_DEGRADED 文件）+ checks{perFileNotes（--file-notes 覆盖率）, testDelta（na/missing/ok 机械规则）, docClaim（claimed/missing/exempt-no-docs，模块卡认领空真防假 advisory）, runtimeEvidence（风险命中→required）}；文档文件不计数不参与归属与风险命中（docSyncHint isDoc 同源口径） | `changedFiles, moduleIndex, {riskTable?, thresholds?, fileNotes?, noDocs?}` |
++| `resolveGateThresholds(config)` | local.yaml quick-gate 段覆写与代码默认值合并（无段全默认；键非法回退默认并 warn；D-009） | `config` |
++| `THRESHOLDS` | 阈值单点（缺省行为单一事实源）：L1_SPAN=2 / L1_FILES=4 / L2_SPAN=4 / L2_FILES_DEGRADED=8——task-05 真实图谱校准维持定稿，依据见 changes/2026-09-14-quick-exit-tiered-gates/design.md「阈值校准记录」节 | — |
+ 
+ ### src/db.js — DB 类
+ | 函数/常量 | 说明 | 参数 |
+@@ -127,6 +137,7 @@ core-engine 是 SillySpec 的基础设施层，由三个层次组成：持久化
+ - runCommand 中的 resolveChangeName 有多级回退：显式指定 > progress.currentChange > 自动检测
+ - 自动模式 (runAutoMode) 按 MAIN_FLOW_ORDER（brainstorm→plan→execute→verify→archive）顺序推进，跳过已完成的阶段
+ - quick 守卫（`auditQuickCompletion`）：step 1 记录 baselineFiles（预存脏文件），`--done` 审计时排除它们；quick 自身写入的 `.sillyspec/` 元数据（quicklog/.runtime/modules/_module-map）由 `isQuickMetadata` 精确豁免。`--force-baseline`（覆盖受保护/危险文件如 src/run.js）/`--allow-new`（允许新增）在 step 1 持久化进 guard.json，也可在 `--done` 时传入（与持久化值取或）
++- quick 出口分级门禁（2026-09-14-quick-exit-tiered-gates）：quick --done 审计链挂 `review.gateProfile`（L0/L1/L2 画像，信号层 src/quick-gate-profile.js——判级/检查项/三导出见上方对外接口小节），全部 advisory 不改 status 三态与 exit code（D-003）。THRESHOLDS 定稿值 L1_SPAN=2 / L1_FILES=4 / L2_SPAN=4 / L2_FILES_DEGRADED=8（task-05 按 sillyhub 919 条 quicklog × 5 份真实 _module-map.yaml 校准维持，证据见 changes/2026-09-14-quick-exit-tiered-gates/design.md「阈值校准记录」节）。local.yaml quick-gate 段四 optional 键（l1_span/l1_files/l2_span/l2_files_degraded）可覆写代码默认值（D-009，readers=resolveGateThresholds，键非法回退默认并 warn；.sillyspec/local.yaml.example 有注释示例）。风险路径模式表 `QUICK_RISK_PATH_PATTERNS` 落 change-risk-profile.js（六域，detectChangeRisk 判级语义零变化）。测试 test/quick-gate-profile.test.mjs（27 用例）
+ 
+ ## 变更索引
+ 
+diff --git a/.sillyspec/docs/sillyspec/modules/runtime.md b/.sillyspec/docs/sillyspec/modules/runtime.md
+index 6222e6e..172ff12 100644
+--- a/.sillyspec/docs/sillyspec/modules/runtime.md
++++ b/.sillyspec/docs/sillyspec/modules/runtime.md
+@@ -4,7 +4,7 @@ doc_type: module-card
+ module_id: runtime
+ author: qinyi
+ created_at: 2026-06-03T07:42:00+08:00
+-updated_at: 2026-09-11T10:30:00+08:00
++updated_at: 2026-09-14T11:20:00+08:00
+ ---
+ # runtime
+ 
+@@ -20,7 +20,7 @@ SQLite 数据库层 + 进度管理 + 迁移。提供 `.sillyspec/.runtime/sillys
+ - **ProgressManager** (`src/progress.js`) — 进度读写入口，通过 DB 实例操作 `project / changes / stages / steps / batch_progress / approvals` 六张表；核心读写方法已同步化（`read`/`_write` 等不再 async），`read()` 每次经 `getDb()` 直查 DB 取最新不缓存快照；支持 `read()` / `init()` / `initChange()` / `show()` / `validate()` / `reset()` / `_updatePlatformLastSync()` / `_updateApprovalStatus()` / `alignExecuteToPlan()` 等方法
+ - **MultiRepoContext** (`src/run/multi-repo-context.js`) — 跨仓 task 支持的运行时多仓执行上下文（2026-08-12 新增）。进程级内存对象（随 CLI 进程生死，不入库不持久化，无状态机），`Map<repoKey, RepoEntry{repoKey,gitDir,worktreePath,projectRoot,isMain,resolveHead(),resolveBase(taskBaseCommit?)}>`。execute 启动由 `shared.js:getOrCreateMultiRepoContext` 构造一次贯穿 execute/apply/verify（D-013 G2），收口 7 单仓假设点（task-review/worktree-apply/verify-postcheck/gates/execute/index/machine-interface/complete 经 `ctx.resolve(repo)` 取 gitDir/base/head/projectRoot）。约束② fail-closed（未注册 repo / 跨仓 git 不可用抛错阻断 execute，不降级）。单仓 change 退化为 `{main:{...}}` 单值 map 零回归。head 经 resolveHead 实时 git rev-parse（不缓存）；task review 的 base/head 用 task 卡 base_commit/head_commit 双锡点（非 resolveHead）。declaredRepos 聚合双源：plan.md 内联 frontmatter 块 + tasks/task-NN.md 独立卡片（`collectTaskCardReposFallback` 兜底扫，坑7——plan.md 只留 checkbox 时跨仓仓仍注册进 ctx，不再误报 review 疑似伪造）
+ 
+-- **quick-audit.js**（`src/run/quick-audit.js`，W6 Step2 从 run.js 抽出）— quick 审计结论打印 + quick 多变更关联选择（resolveQuickLinkedChanges 动态 import quick-recommend.js 打分 + safeGit 脏文件信号，交互式 checkbox 默认勾选关联目标）+ **quick --done test+lint 硬门禁**（runQuickTestLintGate/printQuickTestLintGate，2026-09-02 P0-2：changedFiles 触及 src/test 才实测 local.yaml commands.test/lint（动态 import verify-postcheck，不进通用启动路径），未配置/doc-only/brownfield 自动跳过，fail 阻断 --done，env 逃生门 SILLYSPEC_QUICK_TEST_GATE=skip）
++- **quick-audit.js**（`src/run/quick-audit.js`，W6 Step2 从 run.js 抽出）— quick 审计结论打印 + quick 多变更关联选择（resolveQuickLinkedChanges 动态 import quick-recommend.js 打分 + safeGit 脏文件信号，交互式 checkbox 默认勾选关联目标；**单候选信号门控**——坑 quick-single-change-auto-link，2026-09-14 实证：原「唯一活跃变更无条件关联」在多 agent 仓库误挂他者遗留变更（tasks.md 污染 + --done 僵尸清理可误归档），改单候选也跑双信号打分 score>0 才自动关联并返回 autoLinked 溯源（guard 落 linkedChangesAuto，closeQuickLinkedChanges 对这类变更不触发轻量归档）；顺带关掉单候选绕过 quick-<hex8> 会话过滤的互挂洞）+ **quick --done test+lint 硬门禁**（runQuickTestLintGate/printQuickTestLintGate，2026-09-02 P0-2：changedFiles 触及 src/test 才实测 local.yaml commands.test/lint（动态 import verify-postcheck，不进通用启动路径），未配置/doc-only/brownfield 自动跳过，fail 阻断 --done，env 逃生门 SILLYSPEC_QUICK_TEST_GATE=skip）
+ - **scan-profile.js**（`src/run/scan-profile.js`，W6 Step2 从 run.js 抽出）— scan profile 数据生成 + quick scan CLI preflight/postcheck（executeScanPostcheck 动态 import scan-postcheck.js 做 CLI 确定性校验，不依赖 agent 自检报告）
+ - **quick-recommend.js**（`src/quick-recommend.js`，根级文件归 runtime）— quick 阶段多变更关联推荐打分：「脏文件 + 任务描述」双信号推测当前 quick 改动最可能归属哪些活跃变更，供交互式多选默认勾选；纯函数 + 只读文件系统无副作用
+ - **friction-tally.js**（`src/friction-tally.js`，根级文件归 runtime，friction-signal-hint Phase 1）— 摩擦信号计数数据层：gate 失败回滚（rollbackCompletionAndReturn）/ verify test·lint 实测失败 / 审查打回三类摩擦事件计数（events 按 type 记 count/lastAt + history 截尾 20 条），quick/verify --done 收尾 `consumeFrictionHint` 计数非零才输出一行 advisory（提示后删计数文件清零，全零零输出、每次收尾最多一行）；落点红线（D-002）——计数文件只落 .runtime 树（quick 会话 `quick-sessions/<sessionId>/friction-tally.json`、真实变更 `<runtimeRoot>/friction-tally-<changeName>.json`，路径统一走 resolveRuntimeRoot/resolveQuickSessionsDir），永不落 changes/（目录上平台同步，本机计数污染他机即事故）；隐私红线（D-005）——落盘字段只含 count/lastAt/at/type/detail（type ∈ 三值枚举、detail ∈ 预定义标签集），永不接触提示词与对话原文；local.yaml `friction_hint.enabled` 默认 true（仅显式 false 关，缺键/读失败同默认开）；读写全程 try/catch 静默降级返回 null/空 hint，绝不反向阻断收尾（同 verify-lint-tally「计数器不许反向阻断」立场）
+@@ -72,6 +72,7 @@ ProgressManager.alignExecuteToPlan(cwd, changeName, specBase, {confirm})
+ - node:sqlite（DatabaseSync，经 db-engine 抽象）是 Node.js 内置原生绑定，事务提交即持久化（WAL），无旧 WASM 引擎的全库 export 开销；旧「纯内存 + 每次 _save 全量序列化」模型已废；node:sqlite 仍发 ExperimentalWarning（v22.13+ 无需 --experimental-sqlite flag），engines.node >=22.13.0
+ - PRAGMA（WAL/busy_timeout/foreign_keys）在 `init()` 设一次持续生效，无旧 WASM 引擎 export 重置问题；`close()` 自动 WAL checkpoint 合并 -wal/-shm 回主库
+ - `batch_progress` 和 `approvals` 表按 `change_id` UNIQUE，每个变更只能有一条记录
++- **系统 key（default / quick-<hex8>）不物化 changes/ 目录**（坑 default-empty-dir-materialized，2026-09-14 用户反馈）：`initChange` 只为普通变更建 `changes/<名>/` 目录；default（辅助阶段无实体产物的进度容器——explore 产物在 DB、原型按 prompt 约定放 `{SPEC_ROOT}/explore/`）与 quick 会话键的进度真相在 DB 行，空目录纯污染（next.js 报「目录为空→清理」误导、resolveChangeNameAuto 目录计数被搅动、spec 树上行空目录）。配套锚定：`run/command.js` !progress 块的 `resolveAuxiliaryDefaultAffinity`（default 行有在途（非 completed 且 steps>0）的本阶段 → 无 --change 的辅助阶段命令锚回 default 行；显式 --change 恒优先）；done-like 幻影守卫加 `!progress` 前置（亲和已确证目标存在，不落磁盘物化判据）；守卫报错 ③ 对 explore + default 在活跃列表补「重试加 --change default」出口。回归 test/default-no-dir-and-affinity.test.mjs。
+ - 历史迁移：v1/v2 使用 `progress.json` 文件，v3 全部迁移至 SQLite（`CURRENT_VERSION = 3`）
+ - `db.js` DDL `project.schema_version DEFAULT`、`DB_SCHEMA_VERSION`、`shared.js CURRENT_VERSION`、`progress._version` 四处 schema 版本应一致（当前 v5，title/quicklog_id 列）；改动加表/列/migration 时同步 bump 四处 + 测试断言
+ - `migrateDocs` 是一次性脚本，不会幂等运行；已存在的文件会被跳过
+@@ -99,6 +100,7 @@ ProgressManager.alignExecuteToPlan(cwd, changeName, specBase, {confirm})
+ - ql-20260819-012-66fc | noAI 未知 cliAction fail-fast（stage.js/complete.js 加 else throw）、waitAnswers JSON 损坏诊断（progress.js catch 加 warn）、completed_at 条件写入（step-store.js）。
+ - ql-20260819-014-0082 | autoCheckPlanFromReviews catch 加 warn 留痕（原静默返回假阴性）；prompt.js quicklog-id guard.json 读取失败加 warn（原空 catch 降级 (未分配) 无根因）。
+ - 2026-09-02 P0-2（跨 agent 工单） | quick --done 内置 test+lint 硬门禁：complete-handlers.js quick 收尾在边界审计后接 runQuickTestLintGate（quick-audit.js），changedFiles 触及 src/test 时复用 verify-postcheck 的 runVerifyTestCheck/runVerifyLintCheck 亲自实测（commands.test/lint，含 test_strategy/known_failures/超时语义），任一 failed → step 回 pending + exit 1（与边界审计同款阻断），修复重跑不丢进度；纯 doc/配置、未配置命令、brownfield 无清单自动跳过不阻断；env 逃生门 SILLYSPEC_QUICK_TEST_GATE=skip 留痕跳过。治「--done 前跑 test+lint」靠 agent 自律的 CLAUDE.md 规则 8。新增 test/quick-test-gate.test.mjs（8 组 21 断言）；本仓 local.yaml 补 commands.test/lint 启用自监管。
++- 2026-09-14-quick-exit-tiered-gates | quick 出口分级门禁接线（run/ 四点，FR-03，信号层与 THRESHOLDS 定稿见 core-engine 卡 quick-gate-profile 小节）：① run/shared.js auditQuickCompletion 照 docSyncHint 先例挂 `review.gateProfile`——changedFiles 取本函数已算的 git 事实窗口（非 --files 自声明；先滤会话簿记噪声但保留模块卡与 changelog sidecar——模块卡恰是 L2 docClaim 认领对象，不沿用 isQuickMetadata 记录面谓词）、moduleIndex 复用 matchQuickModules 同源 loadQuickModuleIndex、阈值经 resolveGateThresholds 合并 local.yaml quick-gate 段（readLocalYamlRaw + js-yaml 动态 import，坏 YAML 纯默认，D-009）、noDocs/fileNotes 经 options 透传；**fail-open**——画像整块内层 try/catch，异常只跳过（gateProfile 保持 null），绝不碰 status 三态（D-003 advisory）；**D-005 归属分流**——undeclaredFiles 非空时 docClaim 单独按归属口径重算覆盖（级判 span/files/risk 仍用 git 事实全窗口防未声明面漏判级，他者窗口内改模块卡不得伪造成「已认领」）。② run/complete-handlers.js quick 收尾 [gate] 落账——buildGateAuditNote(review.gateProfile) 组装单行注记随既有 auditNotes 通道落 QUICKLOG（L1 每文件注记+测试增量 / L2 模块文档认领+风险命中 / --no-docs 豁免同通道留痕；L0/无画像 → null 零落账）。③ run/quick-audit.js printQuickAuditReview 增 [gate] advisory 打印块（L1/L2 级别/跨度/模块清单/风险命中/检查项 + --no-docs 指引，L0 零输出）+ buildGateAuditNote 单独导出（与打印块同 review.gateProfile 数据源，纯函数可测）。④ run/command.js 解析 --no-docs 布尔 flag 并登记 knownFlags + run/complete.js isNoDocs 随 completeStep options 透传进审计链（只影响 gate 画像 docClaim=exempt-no-docs 与 [gate] 落账留痕，不改 status/exit code，D-003）。测试：test/audit-quick-completion.test.mjs 增 G-0~G-8 九组（含 --no-docs 豁免/D-005 归属分流/D-009 阈值覆写/降级档）
+ 
+ ## 人工备注
+ <!-- MANUAL_NOTES_START -->
+diff --git a/.sillyspec/local.yaml.example b/.sillyspec/local.yaml.example
+index ff91a23..50e0bcb 100644
+--- a/.sillyspec/local.yaml.example
++++ b/.sillyspec/local.yaml.example
+@@ -90,3 +90,12 @@ docs-check:
+   #   - docs/sillyspec/architecture.md
+   # cross_repo_roots:   # repo://<仓库名> 跨仓引用 → 本机仓库根（每台设备各自配，绝对路径勿提交）
+   #   sillyspec: /c/Users/you/IdeaProjects/sillyspec
++
++# ── quick 出口门禁阈值（quick --done 分级门禁 L0/L1/L2 的 advisory 阈值覆写；缺省=代码内校准定稿值）──
++# 定稿依据：sillyhub 919 条 quicklog × 真实 _module-map.yaml 重算交叉表（2026-09-14 task-05，
++# 四值与初值一致维持，证据见变更目录 design.md「阈值校准记录」）。仅确知调参时配置；键非法（非 ≥1 整数）回退默认并 warn。
++# quick-gate:
++#   l1_span: 2              # 跨 ≥2 模块 → L1（≤3 文件档同步率断崖 33.3%→5.9% 的边界）
++#   l1_files: 4             # 或 ≥4 文件 → L1（旧规则「≤3 文件」边界连续性）
++#   l2_span: 4              # 跨 ≥4 模块 → L2（4-10 文件档全表最差格 0-14.3%）
++#   l2_files_degraded: 8    # module-map 缺失降级档：≥8 文件 → L2（覆盖最差文件桶 7-10 的 32.9-35.3%）
+diff --git a/AGENTS.md b/AGENTS.md
+index efb4b7f..b184646 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -8,9 +8,9 @@
+ 1. **禁止绕过本文件规则和 SillySpec 流程**。所有变更走 sillyspec 流程，不裸改裸提交。
+ 2. **改代码前必须先说明依据**——依据的文档路径（design.md / 模块文档 / file-lifecycle.md）或现有代码依据，无依据不改。
+ 3. **新功能 / 大改动走完整流程**：`brainstorm → plan → execute → verify → archive`。
+-4. **小修复 / 小调整走 quick**：`sillyspec run quick`。
++4. **小修复 / 小调整走 quick**（= 无需要落盘的设计决策的改动，选道判据见第 6 条）：`sillyspec run quick`。
+ 5. **执行顺序**：文档 → 读代码 → 写测试 → 写实现 → 跑测试 → 验收 → 更新文档。
+-6. **判规模选档**：≤3 文件、范围明确走 `quick`；多阶段 / 架构级走完整流程。
++6. **判规模选档**：看本次改动有无需要落盘的设计决策——有（新能力 / 行为契约变更 / 跨模块取舍 / 多阶段推进）走完整流程，无（范围明确的局部修补）走 `quick`。文件数不是选道判据，只作出口绊线——改动大或跨模块时 quick 收尾门禁会自动加查（分级提示补文件注记 / 测试增量 / 模块文档认领）。
+ 7. **代码先行不补流程（倒推 B 模式）**：代码若已先写好，**不回头补 brainstorm/plan 装样子**——用 `quick --done` 收尾 + 补 quicklog 条目，把已落盘改动如实登记进进度库。
+ 8. **实证核验再 `--done`**：触及 `src`/`test` 的改动，CLI 会在 `quick --done` 时**亲自实测** `.sillyspec/local.yaml` 的 `commands.test` / `commands.lint`（门禁：实测失败阻断 --done 回 pending；纯 doc/配置与未配置命令自动跳过；倒推 B 模式按 --files 声明边界兜底判定）。agent 侧预跑**可选**——想省「--done 被拦→修复→重跑」一轮时才预跑；纯 doc/配置改动无需跑。以落盘文件与测试结果为准，不信口头"已完成"。
+ 9. **中途停下不靠额外命令存进度**——进度已由上一次 `--done` 自动落盘；恢复时用 `sillyspec progress show` 查看进度，再用 `sillyspec run <stage>` 续跑，不直接 commit 半成品。
+diff --git a/src/change-risk-profile.js b/src/change-risk-profile.js
+index 6d7ec51..07ba9f5 100644
+--- a/src/change-risk-profile.js
++++ b/src/change-risk-profile.js
+@@ -51,6 +51,26 @@ const INTEGRATION_FILE_PATTERNS = [
+   /startup/i,
+ ]
+ 
++// ============ quick 出口门禁：路径模式风险表（2026-09-14-quick-exit-tiered-gates task-01） ============
++//
++// quick 侧「风险特征命中」的单一数据源（design D-004@v2：v1 仅路径模式——不做 diff 关键词
++// 扫描、不加 git 子进程，R-04 零子进程承诺；diff 维度待真实需求另立变更）。与上方 verify 侧
++// INTEGRATION_FILE_PATTERNS 语义不同（那张表收跨进程/集成域、供 detectChangeRisk 判级），本表
++// 收 quick 实证踩坑域（R-03 从窄收录：auth/permission/billing/migration/锁/调度），供
++// quick-gate-profile.js 的 computeGateProfile 经 opts.riskTable 默认引用——命中即画像 L2 +
++// checks.runtimeEvidence='required'。detectChangeRisk 判级逻辑不消费本表（verify 侧行为零变化）。
++//
++// 匹配口径：POSIX 路径、大小写不敏感、段边界锚定——前界 (^|[/_-]) + 后界 (?=[/._-]|$)，
++// 防 author/booking/lockfile 类子串假阳（R-03）；pattern 为稳定域标识（riskHits 审计输出用）。
++export const QUICK_RISK_PATH_PATTERNS = [
++  { pattern: 'auth', re: /(?:^|[/_-])(?:oauth2?|auth(?:orization|entication|enticator)?)(?=[/._-]|$)/i },
++  { pattern: 'permission', re: /(?:^|[/_-])permissions?(?=[/._-]|$)/i },
++  { pattern: 'billing', re: /(?:^|[/_-])billing(?=[/._-]|$)/i },
++  { pattern: 'migration', re: /(?:^|[/_-])(?:migrations?|migrate)(?=[/._-]|$)/i },
++  { pattern: 'lock', re: /(?:^|[/_-])(?:locks?|mutex(?:es)?)(?=[/._-]|$)/i },
++  { pattern: 'scheduling', re: /(?:^|[/_-])(?:schedul(?:er|ing)|cron|jobs?)(?=[/._-]|$)/i },
++]
++
+ /**
+  * task 级「端到端/deployment-critical」文本判定（execute 批量完成 autoCheckPlanFromReviews 用）。
+  *
+diff --git a/src/config-schema.js b/src/config-schema.js
+index e630a7e..705dc5f 100644
+--- a/src/config-schema.js
++++ b/src/config-schema.js
+@@ -181,6 +181,17 @@ export const LOCAL_YAML_SCHEMA = {
+         { path: 'semantic_guard.enabled', type: 'boolean', optional: true, status: 'live', readers: ['readSemanticGuardEnabled (src/semantic-guard.js)'], desc: '语义守卫总开关，默认 true；设 false 时 quick 进场注入与 --done 断言 WARNING 全停零开销。', example: 'true' },
+       ],
+     },
++    {
++      id: 'quick-gate',
++      title: 'quick 出口门禁阈值',
++      note: 'quick --done 分级门禁（L0/L1/L2 advisory）的四个数值阈值覆写（2026-09-14-quick-exit-tiered-gates，D-009）。缺省=src/quick-gate-profile.js 的 THRESHOLDS 代码内校准值，仅确知调参时配置；键非法（非 ≥1 整数）回退默认并 warn。',
++      keys: [
++        { path: 'quick-gate.l1_span', type: 'integer', optional: true, status: 'live', readers: ['resolveGateThresholds (src/quick-gate-profile.js)'], desc: 'L1 模块跨度阈值：非文档文件命中 ≥N 个模块 → L1（缺省 2）。', example: '2' },
++        { path: 'quick-gate.l1_files', type: 'integer', optional: true, status: 'live', readers: ['resolveGateThresholds (src/quick-gate-profile.js)'], desc: 'L1 文件数阈值：变更文件 ≥N → L1（缺省 4）。', example: '4' },
++        { path: 'quick-gate.l2_span', type: 'integer', optional: true, status: 'live', readers: ['resolveGateThresholds (src/quick-gate-profile.js)'], desc: 'L2 模块跨度阈值：命中 ≥N 个模块 → L2（缺省 4）。', example: '4' },
++        { path: 'quick-gate.l2_files_degraded', type: 'integer', optional: true, status: 'live', readers: ['resolveGateThresholds (src/quick-gate-profile.js)'], desc: 'module-map 缺失降级档的 L2 文件数阈值：变更文件 ≥N → L2（缺省 8）。', example: '8' },
++      ],
++    },
+   ],
+ };
+ 
+@@ -350,5 +361,13 @@ docs-check:
+   #   - docs/sillyspec/architecture.md
+   # cross_repo_roots:   # repo://<仓库名> 跨仓引用 → 本机仓库根（每台设备各自配，绝对路径勿提交）
+   #   sillyspec: /c/Users/you/IdeaProjects/sillyspec
++
++# ── quick 出口门禁阈值（quick --done 分级门禁 L0/L1/L2 的 advisory 阈值覆写；缺省=代码内校准值）──
++# 仅确知调参时配置；键非法（非 ≥1 整数）回退默认并 warn。
++# quick-gate:
++#   l1_span: 2              # 跨 ≥2 模块 → L1
++#   l1_files: 4             # 或 ≥4 文件 → L1
++#   l2_span: 4              # 跨 ≥4 模块 → L2
++#   l2_files_degraded: 8    # module-map 缺失降级档：≥8 文件 → L2
+ `;
+ }
+diff --git a/src/index.js b/src/index.js
+index 0a4dfc0..df124c2 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -1309,10 +1309,14 @@ task 进行中状态标记：开工/完工落 .runtime/task-progress/，list 标
+       // 路由形态对齐 verify-probes（:897）/ module-impact（:1041）先例——--change 必填缺参
+       // 用法错 exit 2、assertSafeChangeName 消毒、动态 import、--json 结构化输出、运行错
+       // fail-soft 出错误摘要 exit 1 不抛栈。
++      // 画像双出口（2026-09-14-quick-exit-tiered-gates task-03，FR-04 / D-008）：quick 会话的
++      // gateProfile 由 computeChangeScopeAudit 结果对象携带——--json 出口经 ...saResult 展开
++      // 自动透出（gateProfile-json）、表格出口经 renderScopeAuditTable 按存在性追加 [gate]
++      // 画像段（gate-table-section），本层零分支零新解析；--file 子命令行为不变。
+       const saChangeIdx = args.indexOf('--change');
+       const saChange = saChangeIdx >= 0 && args[saChangeIdx + 1] && !String(args[saChangeIdx + 1]).startsWith("--") ? args[saChangeIdx + 1] : null;
+       if (!saChange) {
+-        console.error('用法: sillyspec scope-audit --change <name> [--file <path>] [--json] [--spec-dir <path>]\n  变更范围对账：计划×实际三态全表 + 行数（quick 会话传 quick-<8hex> 出归属表；已归档变更可查——快照冻结记录态）；--file <path> 看单文件变化内容（对账同源锚点的 git diff）；advisory 只读展示，不构成门禁');
++        console.error('用法: sillyspec scope-audit --change <name> [--file <path>] [--json] [--spec-dir <path>]\n  变更范围对账：计划×实际三态全表 + 行数（quick 会话传 quick-<8hex> 出归属表，附 [gate] 分级门禁画像——表格画像段与 --json gateProfile 字段；已归档变更可查——快照冻结记录态）；--file <path> 看单文件变化内容（对账同源锚点的 git diff）；advisory 只读展示，不构成门禁');
+         process.exit(2);
+       }
+       assertSafeChangeName(saChange, '--change 变更名');
+diff --git a/src/run/command.js b/src/run/command.js
+index b7d0e82..b4f214b 100644
+--- a/src/run/command.js
++++ b/src/run/command.js
+@@ -802,6 +802,10 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+   const isAllowDelete = flags.includes('--allow-delete')
+   const isForceBaseline = flags.includes('--force-baseline')
+   const isForceRescan = flags.includes('--force-rescan')
++  // --no-docs（2026-09-14-quick-exit-tiered-gates task-02，no-docs-flag）：L2 门禁文档认领的显式
++  // 豁免布尔 flag（先例 :801-804 同款 includes 解析）——只影响 gate 画像 docClaim（exempt-no-docs）
++  // 与 [gate] 落账留痕，不改 status/exit code（D-003 advisory），审计链经 completeStep options 透传。
++  const isNoDocs = flags.includes('--no-docs')
+ 
+   // F10b（ql-20260818-010）：语义别名定向提示。did-you-mean 按编辑距离猜形近 flag，猜中的常是
+   // 形近但语义错的（--title → --files，ql-20260818-003 负面③实证）。常见「语义别名」在此登记
+@@ -829,6 +833,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+     '--req', '--cause', '--solution', '--result',
+     '--spec-dir', '--spec-root', '--runtime-root', '--workspace-id', '--scan-run-id',
+     '--files', '--file-notes', '--allow-new', '--allow-delete', '--force-baseline', '--force-rescan',
++    '--no-docs', // L2 门禁文档认领显式豁免（task-02 no-docs-flag：布尔 flag 不吃值，audit 链 docClaim → exempt-no-docs）
+     '--json', '--dir', '--help',
+     '--reopen', '--from-step', '--mode',
+     '--deep', '--quick', '--standard', // scan profile 三档显式选择（scan-profile.js 从 argv 读；互斥见下方 PROFILE_FLAGS 检测）
+@@ -1456,7 +1461,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+       }
+     }
+     const doneAnswer = getFlagValue('--answer')
+-    return await completeStep(pm, progress, stageName, cwd, outputText, inputText, { confirm: isConfirm, changeName: effectiveChange, nonInteractive: isNonInteractive && !isInteractive, platformOpts, doneAnswer, isForceBaseline, isAllowNew, isAllowDelete, quickFiles })
++    return await completeStep(pm, progress, stageName, cwd, outputText, inputText, { confirm: isConfirm, changeName: effectiveChange, nonInteractive: isNonInteractive && !isInteractive, platformOpts, doneAnswer, isForceBaseline, isAllowNew, isAllowDelete, isNoDocs, quickFiles })
+   }
+ 
+   // 默认：输出当前步骤
+diff --git a/src/run/complete-handlers.js b/src/run/complete-handlers.js
+index 4819d21..8655ea0 100644
+--- a/src/run/complete-handlers.js
++++ b/src/run/complete-handlers.js
+@@ -31,7 +31,7 @@ import { resolveChangeDir, resolveQuickSessionsDir, safeGit, auditQuickCompletio
+ import { detectConcurrentChanges, formatConcurrentWarning, resolveConcurrentAnchor } from './concurrent-detect.js'
+ import { stageRegistry } from '../stages/index.js'
+ import { SCAN_STATUS, POINTER_STATUS } from '../constants.js'
+-import { printQuickAuditReview, runQuickTestLintGate, printQuickTestLintGate } from './quick-audit.js'
++import { printQuickAuditReview, runQuickTestLintGate, printQuickTestLintGate, buildGateAuditNote } from './quick-audit.js'
+ import { validateQuickResult, allocateQuicklogEntry, appendQuicklogEntryWithId, findQuicklogEntry, completeQuicklogEntry, extractTitleFromResult, parseFileNotes, getQuickFileNotes, countQuicklogEntries, collectGuardReservedQuicklogIds } from '../quicklog.js'
+ import { getRule } from '../stage-contract-spec.js'
+ import { archiveDestDirName } from '../stage-contract.js'
+@@ -980,7 +980,7 @@ export async function handleWorkflowPostCheck({ stageName, steps, currentIdx, cw
+  * isForceBaseline/isAllowNew/platformOpts。辅助函数直接 import（safeGit/auditQuickCompletion ← shared，
+  * printQuickAuditReview ← quick-audit，4 个 quicklog fns ← quicklog，unlinkSync/rmSync ← fs 静态）。
+  */
+-export async function handleQuickStageCompletion({ stageName, steps, currentIdx, cwd, progress, changeName, specBase, outputText, confirm, isForceBaseline, isAllowNew, isAllowDelete, platformOpts, pm, quickFiles = [] }) {
++export async function handleQuickStageCompletion({ stageName, steps, currentIdx, cwd, progress, changeName, specBase, outputText, confirm, isForceBaseline, isAllowNew, isAllowDelete, isNoDocs, platformOpts, pm, quickFiles = [] }) {
+   // quick 收尾：强校验 QUICKLOG 条目 + 翻状态 + 勾 tasks.md（CLI 接管）
+   if (stageName === 'quick') {
+     // §4.6 从 session guard.json 读 guard（不依赖 progress.quickGuard）。
+@@ -1062,7 +1062,13 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
+         // → 回到无豁免现状。
+         otherSessionsDeclared: collectOtherQuickSessionDeclarations(platformOpts, specBase, changeName),
+       }
+-      review = await auditQuickCompletion(cwd, mergedGuard, { isConfirm: confirm })
++      review = await auditQuickCompletion(cwd, mergedGuard, {
++        isConfirm: confirm,
++        // task-02（FR-03）：--no-docs 豁免 + --file-notes 覆盖率透传进门禁画像（per-process 值与
++        // 上方边界并入、下方 completeQuicklogEntry 消费同源；不传 → 纯默认画像）
++        noDocs: isNoDocs === true,
++        fileNotes: parseFileNotes(getQuickFileNotes()),
++      })
+       printQuickAuditReview(review)
+       if (review.status === 'blocked') {
+         steps[currentIdx].status = 'pending'
+@@ -1322,6 +1328,13 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
+           }
+         } catch { /* 自动重锚失败退化为纯 advisory（上方 auditNote 已落盘） */ }
+       }
++      // ── [gate] 分级门禁落账（FR-03，2026-09-14-quick-exit-tiered-gates task-02）：L1/L2 画像
++      // 经 buildGateAuditNote 组装单行 [gate] 注记随既有 auditNotes 通道落 QUICKLOG（L1 每文件
++      // 注记+测试增量；L2 模块文档认领+风险命中；--no-docs 豁免同通道留痕）；L0/无画像 → null
++      // 零落账。纯 advisory：不阻断完成、不改 review.status 语义（D-003）；未声明脏文件维持上方
++      // 归属切分注（⚖️/🔍）不并入文档认领判定（D-005）。
++      const gateAuditNote = buildGateAuditNote(review?.gateProfile)
++      if (gateAuditNote) auditNotes.push(gateAuditNote)
+       // 归属切分注（2026-08-18 误归属修复）：窗口内未声明脏文件不进「文件：」行，但必须落盘可追溯
+       // （多 agent 并发仓他者窗口改动 / 本会话漏声明均可能），防真实改动被静默挤走。
+       // 软归属拆分（2026-09-10）：softFiles 中的同模块测试文件已补入文件行，不再占 ⚖️「未计入」
+diff --git a/src/run/complete.js b/src/run/complete.js
+index 2096660..3ef616e 100644
+--- a/src/run/complete.js
++++ b/src/run/complete.js
+@@ -119,7 +119,7 @@ export function synthesizeStepOutput({ stageName, stepName, cwd }) {
+ }
+ 
+ export async function completeStep(pm, progress, stageName, cwd, outputText, inputText = null, options = {}) {
+-  const { printNext = true, confirm = false, changeName, platformOpts = {}, nonInteractive = false, isForceBaseline = false, isAllowNew = false, isAllowDelete = false, quickFiles = [] } = options
++  const { printNext = true, confirm = false, changeName, platformOpts = {}, nonInteractive = false, isForceBaseline = false, isAllowNew = false, isAllowDelete = false, isNoDocs = false, quickFiles = [] } = options
+   // specRoot(平台) > specDriftAnchor(worktree 漂移锚定主仓) > cwd/.sillyspec(本地)——
+   // 与 prompt.js resolvePromptSpecBase 同序：--done 收尾的 user-inputs.md/超长 artifact 落盘
+   // 必须与 prompt 渲染同一根，否则写进 worktree 副本目录、随 cleanup 整目录删除。
+@@ -568,8 +568,9 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
+       console.log(`   恢复：sillyspec run ${stageName} --continue --answer "用户回答"${changeName ? ` --change ${changeName}` : ''}`)
+       return { stageCompleted: false, currentIdx, nextPendingIdx: -1 }
+     }
+-    // quick 收尾（W6 Step6b 抽至 complete-handlers.js handleQuickStageCompletion）
+-    await handleQuickStageCompletion({ stageName, steps, currentIdx, cwd, progress, changeName, specBase, outputText, confirm, isForceBaseline, isAllowNew, isAllowDelete, platformOpts, pm, quickFiles })
++    // quick 收尾（W6 Step6b 抽至 complete-handlers.js handleQuickStageCompletion）；
++    // isNoDocs（task-02）--no-docs 豁免随链透传进 auditQuickCompletion options
++    await handleQuickStageCompletion({ stageName, steps, currentIdx, cwd, progress, changeName, specBase, outputText, confirm, isForceBaseline, isAllowNew, isAllowDelete, isNoDocs, platformOpts, pm, quickFiles })
+ 
+     // ── reopen --done 回填（坑 brainstorm-reopen-step-state-desync）──
+     // nextPendingIdx === -1 且无 waiting，说明要进阶段完成分支。此时若存在 stale 步骤
+diff --git a/src/run/quick-audit.js b/src/run/quick-audit.js
+index 639f5e3..6339e71 100644
+--- a/src/run/quick-audit.js
++++ b/src/run/quick-audit.js
+@@ -178,6 +178,83 @@ export function printQuickAuditReview(review) {
+       else console.warn(`   行号漂移 → 更新到当前源码；跑 sillyspec docs check 可看建议行号。`)
+     }
+   }
++
++  // ── [gate] 分级门禁 advisory 块（FR-03，2026-09-14-quick-exit-tiered-gates task-02）：L1/L2 画像
++  // 打印级别/跨度/模块清单/风险命中/检查项 + --no-docs 指引，L0 零输出。全部 advisory：不改 status
++  // 三态与 exit code（D-003）；窗口内未声明脏文件维持既有归属分流（上方 ⚖️/🔍 块），不并入文档
++  // 认领判定（D-005）；数据源 = review.gateProfile（auditQuickCompletion 挂载，scope-audit 重放同源）。
++  const gate = review.gateProfile
++  if (gate && (gate.level === 'L1' || gate.level === 'L2')) {
++    const isL2 = gate.level === 'L2'
++    const spanTxt = gate.degraded
++      ? 'module-map 缺失（降级档：按文件数判级）'
++      : `跨 ${gate.moduleSpan} 模块${Array.isArray(gate.modules) && gate.modules.length > 0 ? `（${gate.modules.map(m => m.id).join(' · ')}）` : ''}`
++    console.warn(`\n${isL2 ? '🛑' : '🚧'} [gate] ${gate.level} 规模门（${spanTxt} · ${gate.fileCount} 文件：${gate.codeFileCount} 代码 / ${gate.testFileCount} 测试）——advisory 提示不阻断：`)
++    if (Array.isArray(gate.unmappedFiles) && gate.unmappedFiles.length > 0) {
++      console.warn(`   ⚠️ ${gate.unmappedFiles.length} 个文件未命中 module-map（${gate.unmappedFiles.slice(0, 5).join(', ')}${gate.unmappedFiles.length > 5 ? ' 等' : ''}）`)
++    }
++    if (!isL2) {
++      // L1 检查项：每文件注记（--file-notes 覆盖率）+ 测试增量（机械规则）
++      console.warn(`   - 每文件注记检查：${gate.checks?.perFileNotes ? '✅ --file-notes 已覆盖全部变更文件' : `❌ 缺失——补 --file-notes "path1::注 || path2::注"（覆盖变更文件全集）`}`)
++      const td = gate.checks?.testDelta
++      console.warn(`   - 测试增量检查：${td === 'missing' ? `❌ missing——${gate.codeFileCount} 个代码文件改动无测试文件（补 test 改动进本会话）` : td === 'ok' ? '✅ 已含测试改动' : '— 不适用（≤1 代码文件）'}`)
++    } else {
++      // L2 检查项：模块文档认领（claimed/missing/exempt-no-docs）+ 风险命中的运行时证据要求
++      const dc = gate.checks?.docClaim
++      const noClaimable = gate.degraded || !Array.isArray(gate.modules) || gate.modules.length === 0
++      if (dc === 'exempt-no-docs') {
++        console.warn(`   - 模块文档认领：🛡️ 已 --no-docs 显式豁免（豁免已留痕 QUICKLOG 审计行）`)
++      } else if (noClaimable) {
++        // degraded / 无触及模块：computeGateProfile 空真 claimed——如实显示不适用，不出「已认领」误导
++        console.warn(`   - 模块文档认领：— 不适用（${gate.degraded ? '无 module-map' : '触及文件均未命中模块'}，无可认领卡片）`)
++      } else if (dc === 'claimed') {
++        console.warn(`   - 模块文档认领：✅ 触及模块的卡片文件已在改动集`)
++      } else {
++        console.warn(`   - 模块文档认领：❌ missing——触及模块（${Array.isArray(gate.modules) && gate.modules.length > 0 ? gate.modules.map(m => m.id).join(' · ') : '—'}）的卡片文件不在改动集`)
++        console.warn(`     ➜ 同步模块卡进本次改动，或确认无需文档落盘时 --done 带 --no-docs 显式豁免（豁免留痕，不阻断完成）`)
++      }
++      if (Array.isArray(gate.riskHits) && gate.riskHits.length > 0) {
++        console.warn(`   - 风险命中 ${gate.riskHits.length} 处（运行时证据要求——风险路径改动需在 --result「结果：」附运行验证说明，advisory 不等待）：`)
++        for (const h of gate.riskHits.slice(0, 8)) {
++          console.warn(`       ⚠️ ${h.pattern} ← ${h.file}`)
++        }
++        if (gate.riskHits.length > 8) console.warn(`       … 共 ${gate.riskHits.length} 处`)
++      }
++    }
++  }
++}
++
++/**
++ * [gate] 分级门禁 auditNote 组装（FR-03 task-02，gate-audit-note）：L1/L2 → 单行 `[gate]` 注记
++ * （随 complete-handlers 既有 auditNotes 通道落 QUICKLOG，--no-docs 豁免同通道留痕）；
++ * L0 / 无画像 → null（零落账，验收「L0 无 gate 落账行」）。纯函数、与上方 [gate] 打印块同一
++ * review.gateProfile 数据源；单独导出为可测（buildSemanticGuardHits 同款考量——避开
++ * handleQuickStageCompletion 的 quicklog 重机件直测组装层）。
++ * @param {object|null} gate review.gateProfile（auditQuickCompletion 产物；null/异常形状 → null）
++ * @returns {string|null}
++ */
++export function buildGateAuditNote(gate) {
++  if (!gate || typeof gate !== 'object' || (gate.level !== 'L1' && gate.level !== 'L2')) return null
++  const span = gate.degraded
++    ? 'module-map 缺失（降级档按文件数判级）'
++    : `跨 ${gate.moduleSpan} 模块`
++  const seg = [`[gate] ${gate.level}（${span} · ${gate.fileCount} 文件：${gate.codeFileCount} 代码/${gate.testFileCount} 测试）advisory`]
++  if (gate.level === 'L1') {
++    seg.push(`每文件注记${gate.checks?.perFileNotes ? '已全覆盖' : '缺失（--file-notes 覆盖变更文件全集）'}`)
++    const td = gate.checks?.testDelta
++    seg.push(`测试增量${td === 'ok' ? '已含' : td === 'missing' ? `缺失（${gate.codeFileCount} 个代码文件无测试改动）` : '不适用（≤1 代码文件）'}`)
++  } else {
++    const dc = gate.checks?.docClaim
++    const noClaimable = gate.degraded || !Array.isArray(gate.modules) || gate.modules.length === 0
++    seg.push(dc === 'exempt-no-docs' ? '模块文档认领已 --no-docs 显式豁免'
++      : noClaimable ? '模块文档认领不适用（无可认领模块）'
++        : dc === 'claimed' ? '模块文档认领已覆盖（模块卡在改动集）'
++          : '模块文档认领缺失（同步模块卡进改动集，或 --no-docs 显式豁免）')
++    if (Array.isArray(gate.riskHits) && gate.riskHits.length > 0) {
++      seg.push(`风险命中 ${gate.riskHits.length} 处（${gate.riskHits.slice(0, 5).map(h => `${h.pattern}←${h.file}`).join('、')}${gate.riskHits.length > 5 ? ' 等' : ''}）需运行时证据`)
++    }
++  }
++  return seg.join('；')
+ }
+ 
+ /**
+diff --git a/src/run/shared.js b/src/run/shared.js
+index 00e4ee9..ece9f09 100644
+--- a/src/run/shared.js
++++ b/src/run/shared.js
+@@ -20,6 +20,9 @@ import os from 'node:os'
+ // unquoteGitPath 同理：parsePorcelainPath 内部消费 + re-export。
+ import { safeGit, unquoteGitPath } from '../git-helper.js'
+ import { createHash } from 'node:crypto'
++// 分级门禁画像信号层（2026-09-14-quick-exit-tiered-gates task-01 / FR-02）：纯函数零 IO，
++// 仅依赖 change-risk-profile，无环——auditQuickCompletion 静态 import 安全（task-02 接线）。
++import { computeGateProfile, resolveGateThresholds } from '../quick-gate-profile.js'
+ export { safeGit, unquoteGitPath }
+ 
+ const __dirname = dirname(fileURLToPath(import.meta.url))
+@@ -1151,7 +1154,7 @@ export function matchSameModuleTestFiles(declaredFiles, undeclaredFiles) {
+ 
+ /**
+  * quick 完成审计：对比 baseline 与实际变更。
+- * @returns {{ status: 'safe'|'warning'|'blocked', reasons: string[], changedFiles: string[], newFiles: string[], deletedFiles: string[], baselineHit: string[], stagedTotal: number, attributedFiles: string[], undeclaredFiles: string[], softTestFiles: string[], foreignSessionDeclared: Array<{file: string, sessions: string[]}> }}
++ * @returns {{ status: 'safe'|'warning'|'blocked', reasons: string[], changedFiles: string[], newFiles: string[], deletedFiles: string[], baselineHit: string[], stagedTotal: number, attributedFiles: string[], undeclaredFiles: string[], softTestFiles: string[], foreignSessionDeclared: Array<{file: string, sessions: string[]}>, gateProfile: object|null }}
+  */
+ /**
+  * D-8 O-1 模块归属（2026-08-15 docs-signals-o12）：quick 欠账 hint 从"改了 N 文件"升级为
+@@ -1163,13 +1166,8 @@ export function matchSameModuleTestFiles(declaredFiles, undeclaredFiles) {
+ async function matchQuickModules(srcChanged, specBase, projectName) {
+   if (!specBase || !projectName || srcChanged.length === 0) return []
+   try {
+-    const { join } = await import('node:path')
+-    const { existsSync: ex, readFileSync: rf } = await import('node:fs')
+-    const mapPath = join(specBase, 'docs', projectName, 'modules', '_module-map.yaml')
+-    if (!ex(mapPath)) return []
+-    const { parseModuleMapSimple } = await import('../modules.js')
+-    const idx = parseModuleMapSimple(rf(mapPath, 'utf8'))
+-    if (!idx || Object.keys(idx).length === 0) return []
++    const idx = await loadQuickModuleIndex(specBase, projectName)
++    if (!idx) return []
+     const { matchFilesToModules } = await import('../docs-debt.js')
+     const cardsDir = join(specBase, 'docs', projectName, 'modules')
+     const { byModule } = matchFilesToModules(srcChanged, idx, { cardsDir })
+@@ -1179,6 +1177,30 @@ async function matchQuickModules(srcChanged, specBase, projectName) {
+   }
+ }
+ 
++/**
++ * quick 审计链的 _module-map.yaml 原始索引加载（2026-09-14-quick-exit-tiered-gates task-02 抽取）：
++ * D-8 模块归属（matchQuickModules）与门禁画像（auditQuickCompletion 挂 review.gateProfile）的
++ * 同源单一加载点——路径 <specBase>/docs/<projectName>/modules/_module-map.yaml，解析
++ * parseModuleMapSimple（canonical）。缺失/解析空/specBase 缺参/异常 → null（画像走 degraded
++ * 降级档：span 退出判级，兼容策略第 1 条——未 scan/无 module-map 的存量项目零强制变化）。
++ * join/existsSync/readFileSync 用本模块顶部静态 import（auditQuickCompletion 既有同款）。
++ * @param {string} specBase .sillyspec 目录（guard 透传）
++ * @param {string} projectName 项目名（progress.project）
++ * @returns {Promise<object|null>} 模块索引（扁平 { id: {...} }）；不可得 → null
++ */
++async function loadQuickModuleIndex(specBase, projectName) {
++  if (!specBase || !projectName) return null
++  try {
++    const mapPath = join(specBase, 'docs', projectName, 'modules', '_module-map.yaml')
++    if (!existsSync(mapPath)) return null
++    const { parseModuleMapSimple } = await import('../modules.js')
++    const idx = parseModuleMapSimple(readFileSync(mapPath, 'utf8'))
++    return idx && Object.keys(idx).length > 0 ? idx : null
++  } catch {
++    return null
++  }
++}
++
+ // ── task-03（2026-08-16-state-split-fixes）: 活文档漂移提示辅助 ──
+ // 背景：platform-interface-map.md 等活文档持续维护 src 主入口的 file:line 映射；并行会话改
+ // src/ 后引用行号静默失效，docs gate 只能事后拦到别人的流程上。审计（auditQuickCompletion）
+@@ -1257,11 +1279,14 @@ export function matchInvalidRefsToChanged(invalidRefs, srcChangedFiles) {
+ 
+ export async function auditQuickCompletion(cwd, guard, options = {}) {
+   const { baselineFiles, allowedFiles = [], allowNew = false, forceBaseline = false, allowDelete = false, specBase = null, projectName = null } = guard
+-  const { isConfirm } = options
++  // noDocs/fileNotes（task-02）：--no-docs 显式豁免与 --file-notes 解析结果经 options 进审计链
++  // （command.js knownFlags 登记 → complete.js → complete-handlers 透传；scope-audit 重放不传 →
++  // noDocs/fileNotes 缺省的纯默认画像）。
++  const { isConfirm, noDocs = false, fileNotes = null } = options
+   // stagedTotal：当前所有非 quick 元数据的未提交条目（含前序 baseline 残留）。
+   // 与 changedFiles（扣 baseline 后的本轮新增）区分，供审计文案同时展示「本轮新增 vs 累计暂存」，
+   // 避免叠加 quick 会话时把前序会话未提交文件误读为「本会话只动了 N 个」。
+-  const result = { status: 'safe', reasons: [], changedFiles: [], newFiles: [], deletedFiles: [], baselineHit: [], stagedTotal: 0, attributedFiles: [], undeclaredFiles: [], softTestFiles: [], foreignSessionDeclared: [] }
++  const result = { status: 'safe', reasons: [], changedFiles: [], newFiles: [], deletedFiles: [], baselineHit: [], stagedTotal: 0, attributedFiles: [], undeclaredFiles: [], softTestFiles: [], foreignSessionDeclared: [], gateProfile: null }
+ 
+   try {
+     // safeGit 带 -c safe.directory，避免 linked worktree/容器异 uid/挂载点下裸 `git status` 抛错被
+@@ -1639,6 +1664,47 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
+       result.softTestFiles = []
+     }
+ 
++    // ── 分级门禁画像（FR-03，2026-09-14-quick-exit-tiered-gates task-02）：照 docSyncHint 先例
++    // 挂 review.gateProfile（audit result 即 printQuickAuditReview 的 review / progress.lastQuickReview
++    // / scope-audit 重放的 audit），全部 advisory——不改 status 三态 / reasons / exit code（D-003），
++    // fail-open：任何异常只跳过（内层 try/catch，绝不落外层 catch 的 warning 语义）。
++    // 输入纪律：
++    //   - changedFiles = 本函数已算的 git 事实窗口（非 --files 自声明）；先经 isQuicklogFileLineNoise
++    //     滤会话簿记（quicklog/.runtime/_module-map 等）但保留模块卡与 changelog sidecar——模块卡恰是
++    //     L2 docClaim 的认领对象，用 isQuickMetadata 会把 claimed 判死成 missing（记录面谓词分叉）；
++    //   - moduleIndex 复用 matchQuickModules 同源加载（loadQuickModuleIndex，单点）；
++    //   - 阈值经 resolveGateThresholds 合并 local.yaml quick-gate 段覆写（读取走 readLocalYamlRaw +
++    //     js-yaml 动态 import，与 resolveLivingDocs 同款链路；未配置/坏 YAML → 纯默认，D-009）；
++    //   - noDocs/fileNotes 由 options 透传（--no-docs 豁免 / --file-notes 覆盖率）。
++    // 不加 git 子进程（约束：画像纯字符串运算，R-04）；未声明脏文件维持上方归属分流不并入
++    // docClaim 判定（D-005）——级判（span/files/risk）仍用 git 事实全窗口（防 37.1% 未声明面
++    // 漏判级），docClaim 单独用归属口径重算覆盖（他者窗口内改模块卡不得伪造成「已认领」）。
++    try {
++      let thresholds = null
++      const rawLocalYaml = readLocalYamlRaw(cwd)
++      if (rawLocalYaml) {
++        try {
++          const mod = await import('js-yaml')
++          const yamlLoad = mod.load || mod.default?.load
++          const cfg = yamlLoad(rawLocalYaml)
++          if (cfg && typeof cfg === 'object') thresholds = resolveGateThresholds(cfg)
++        } catch { /* 坏 YAML → 纯默认阈值 */ }
++      }
++      const gateFiles = result.changedFiles.filter(f => !isQuicklogFileLineNoise(f, guard.linkedChanges))
++      const gateOpts = {
++        ...(thresholds ? { thresholds } : {}),
++        ...(noDocs ? { noDocs: true } : {}),
++        ...(Array.isArray(fileNotes) && fileNotes.length > 0 ? { fileNotes } : {}),
++      }
++      const moduleIndex = await loadQuickModuleIndex(specBase, projectName)
++      result.gateProfile = computeGateProfile(gateFiles, moduleIndex, gateOpts)
++      if (result.undeclaredFiles.length > 0) {
++        const undeclaredNorm = new Set(result.undeclaredFiles.map(f => String(f).replace(/\\/g, '/')))
++        const attrGateFiles = gateFiles.filter(f => !undeclaredNorm.has(String(f).replace(/\\/g, '/')))
++        result.gateProfile.checks.docClaim = computeGateProfile(attrGateFiles, moduleIndex, gateOpts).checks.docClaim
++      }
++    } catch { /* 画像 fail-open：异常只跳过（gateProfile 保持 null，D-003 不碰 status） */ }
++
+     // --confirm 模式：展示 diff 并等待确认
+     if (isConfirm && (result.status === 'warning' || result.status === 'blocked')) {
+       console.log(`\n📋 quick 变更概览：`)
+diff --git a/src/scope-audit.js b/src/scope-audit.js
+index 2773c91..0e283df 100644
+--- a/src/scope-audit.js
++++ b/src/scope-audit.js
+@@ -15,6 +15,12 @@
+  * 行数三档（D-002）：tracked → numstat；untracked 新文件 → wc-l 记全 + 行；binary（numstat
+  * 两列 '-'）→ additions/deletions=null。三态（full-flow）：planned / unplanned / untouched。
+  *
++ * quick 画像出口（2026-09-14-quick-exit-tiered-gates task-03，FR-04 / D-008）：quick 模式结果
++ * 增量携带 gateProfile（实时态透传 auditQuickCompletion 挂的 review.gateProfile，不重复计算；
++ * 冻结重放态透传 quicklog/patches 记录冻结值，旧记录按 rows 清单重算），表格出口按存在性
++ * 追加 [gate] 画像段、--json 出口随结果对象序列化——画像的独立可重放出口与阈值校准数据源。
++ * 既有三态对账表/归属表/--file 出口与返回字段语义零变化（gateProfile 为增量字段）。
++ *
+  * 全 advisory（D-006）：不抛错阻断、不写门禁状态；任何异常 catch 后并入 degradedReason。
+  * 纯读：不落盘、不改 guard/进度库。Windows 路径 \\→/ 归一，ESM-only，零新依赖。
+  */
+@@ -22,6 +28,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs'
+ import { createHash } from 'node:crypto'
+ import { join, dirname } from 'node:path'
+ import { locateQuickSessionGuard, auditQuickCompletion, resolveRuntimeRoot, collectOtherQuickSessionDeclarations, ancestorSpecDirs } from './run/shared.js'
++import { computeGateProfile, resolveGateThresholds } from './quick-gate-profile.js'
+ import { safeGit } from './git-helper.js'
+ import { parseFileChangeListDetailed, pathMatches } from './change-list.js'
+ 
+@@ -344,7 +351,8 @@ function slicePatchForFile(patchText, filePath) {
+ 
+ /**
+  * quick 记录态反查（guard 清理后）：扫祖先链各 specBase 的 quicklog/patches/*.json，
+- * 按 json 内冗余的 sessionId 匹配。返回记录 + patch 路径（--file 切片源）。
++ * 按 json 内冗余的 sessionId 匹配。返回记录 + patch 路径（--file 切片源）+ specBase
++ * （命中目录——画像重放的 module-map/local.yaml 加载锚，task-03）。
+  */
+ function findQuickPatchRecord(cwd, sessionId) {
+   for (const sb of ancestorSpecDirs(cwd)) {
+@@ -355,7 +363,7 @@ function findQuickPatchRecord(cwd, sessionId) {
+       try {
+         const j = JSON.parse(readFileSync(join(dir, f), 'utf8'))
+         if (j && j.sessionId === sessionId && Array.isArray(j.rows)) {
+-          return { record: j, patchPath: join(dir, f.replace(/\.json$/, '.patch')), qlId: j.qlId || f.replace(/\.json$/, '') }
++          return { record: j, patchPath: join(dir, f.replace(/\.json$/, '.patch')), qlId: j.qlId || f.replace(/\.json$/, ''), specBase: sb }
+         }
+       } catch { /* 单文件损坏跳过 */ }
+     }
+@@ -363,6 +371,99 @@ function findQuickPatchRecord(cwd, sessionId) {
+   return null
+ }
+ 
++/**
++ * quick 审计链 module-map 的项目推导（2026-09-14-quick-exit-tiered-gates task-03）：
++ * loadQuickModuleIndex（run/shared.js，未 export）的加载路径是
++ * <specBase>/docs/<projectName>/modules/_module-map.yaml——scope-audit 侧无 progress 上下文
++ * 拿 projectName，按候选 map 推导：
++ *   - 单候选 → 直取（绝大多数仓单项目）；
++ *   - 多候选 + 样本文件（实时态=guard.allowedFiles 声明面 / 重放态=记录 rows 冻结集）→ 按
++ *     「样本归属得分唯一最高」消歧（computeGateProfile.unmappedFiles 同款归属口径，纯函数
++ *     零 IO 重用——本仓 dashboard+sillyspec 双 map 实证需要）；
++ *   - 零候选 / 无样本 / 得分平分 → null（画像走 degraded 档，fail-open 不猜，兼容策略第 1 条）。
++ * @param {string} specBase
++ * @returns {string[]} 带 _module-map.yaml 的项目名清单
++ */
++function listModuleMapProjects(specBase) {
++  if (!specBase) return []
++  try {
++    const docsDir = join(specBase, 'docs')
++    return readdirSync(docsDir).filter(n => existsSync(join(docsDir, n, 'modules', '_module-map.yaml')))
++  } catch {
++    return []
++  }
++}
++
++/** 单项目 _module-map.yaml 读取（parseModuleMapSimple canonical 解析，与 loadQuickModuleIndex 同款）；不可得/解析空 → null。 */
++async function readModuleMap(specBase, project) {
++  try {
++    const { parseModuleMapSimple } = await import('./modules.js')
++    const idx = parseModuleMapSimple(readFileSync(join(specBase, 'docs', project, 'modules', '_module-map.yaml'), 'utf8'))
++    return idx && Object.keys(idx).length > 0 ? idx : null
++  } catch {
++    return null
++  }
++}
++
++/**
++ * 项目名推导（口径见 listModuleMapProjects 头注释）：唯一得分（样本非文档文件中归属最少
++ * unmapped 的 map）才采信，平分/无样本/多候选全失败 → null。
++ * @param {string} specBase
++ * @param {string[]} [sampleFiles] 归属得分样本（声明面 / 记录 rows）
++ * @returns {Promise<string|null>}
++ */
++async function pickModuleMapProject(specBase, sampleFiles = []) {
++  const names = listModuleMapProjects(specBase)
++  if (names.length === 1) return names[0]
++  if (names.length === 0 || !Array.isArray(sampleFiles)) return null
++  const files = sampleFiles.map(f => String(f || '')).filter(Boolean)
++  if (files.length === 0) return null
++  let best = null
++  let bestUnmapped = Infinity
++  let tie = false
++  for (const n of names) {
++    const idx = await readModuleMap(specBase, n)
++    if (!idx) continue
++    const unmapped = computeGateProfile(files, idx).unmappedFiles.length
++    if (unmapped < bestUnmapped) { best = n; bestUnmapped = unmapped; tie = false }
++    else if (unmapped === bestUnmapped) tie = true
++  }
++  return tie ? null : best
++}
++
++/**
++ * 画像重放的 moduleIndex 加载（task-03，FR-04）：与 run/shared.js loadQuickModuleIndex 同链路
++ * ——同路径 + parseModuleMapSimple（canonical）解析，项目按记录 rows 样本消歧；不可得 → null
++ * （computeGateProfile 走 degraded 档）。动态 import modules.js 隔离依赖（shared.js 同款）。
++ * @param {string} specBase quicklog/patches 记录命中的 spec 根
++ * @param {string[]} [sampleFiles] 项目消歧样本（记录 rows）
++ * @returns {Promise<object|null>}
++ */
++async function loadGateModuleIndex(specBase, sampleFiles = []) {
++  const project = await pickModuleMapProject(specBase, sampleFiles)
++  return project ? readModuleMap(specBase, project) : null
++}
++
++/**
++ * 画像重放的阈值合并（task-03，D-009）：与 auditQuickCompletion 画像挂载段同链路——
++ * <specBase>/local.yaml（= 实时态 readLocalYamlRaw(sessionRoot) 读的同一文件）+ js-yaml +
++ * resolveGateThresholds；缺失/坏 YAML → null（computeGateProfile 内回 THRESHOLDS 默认）。
++ * @param {string} specBase
++ * @returns {Promise<object|null>}
++ */
++async function resolveReplayGateThresholds(specBase) {
++  try {
++    const p = join(specBase, 'local.yaml')
++    if (!existsSync(p)) return null
++    const mod = await import('js-yaml')
++    const yamlLoad = mod.load || mod.default?.load
++    const cfg = yamlLoad(readFileSync(p, 'utf8'))
++    return cfg && typeof cfg === 'object' ? resolveGateThresholds(cfg) : null
++  } catch {
++    return null
++  }
++}
++
+ /** 汇总非 null 行数（binary 与降级 null 不计入，不出伪数据） */
+ function sumTotals(rows) {
+   let additions = 0
+@@ -391,6 +492,16 @@ async function computeQuickAudit({ cwd, platformOpts, sessionId, located, collec
+   try {
+     const mergedGuard = {
+       ...guard,
++      // 画像输入对齐（2026-09-14-quick-exit-tiered-gates task-03，FR-04）：specBase/projectName
++      // 透传——complete-handlers :1050 同款 merge（「--done 收尾同源实时采集」的既有约定）补齐。
++      // guard.json 落盘不含这两键，缺省会让 auditQuickCompletion 挂的 review.gateProfile 恒走
++      // degraded 档（moduleSpan=null），与 --done 时点 review.gateProfile 字段不一致。projectName
++      // 无 progress 上下文，按 module-map 候选推导（声明会话以 allowedFiles 为归属得分样本；
++      // 零候选/无样本/平分 → null → degraded，fail-open）。specBase/projectName 在 audit 内只喂
++      // quicklog 目录解析（与 cwd 推导同一路径）、docSyncHint 模块归属与 gate 画像（computeQuickAudit
++      // 不消费 docSyncHint），不触 status/reasons/归属切分语义。
++      specBase: guardSpecBase,
++      projectName: await pickModuleMapProject(guardSpecBase, guard.allowedFiles),
+       otherSessionsDeclared: collectOtherQuickSessionDeclarations(platformOpts, guardSpecBase, sessionId),
+     }
+     audit = await auditQuickCompletion(sessionRoot, mergedGuard, {})
+@@ -475,6 +586,11 @@ async function computeQuickAudit({ cwd, platformOpts, sessionId, located, collec
+     },
+     frozenPatch,
+     note,
++    // 画像透传（FR-04 / task-03 gateProfile-json）：auditQuickCompletion 挂的 review.gateProfile
++    // 原样随 review 携带进结果对象——不重复计算（与 --done 时点同源）；fail-open 时为 null
++    // （消费方按存在性读取）。complete-handlers --done 落 quicklog/patches/<qlId>.json 时随
++    // 快照对象冻结，供冻结重放路径透传。
++    gateProfile: audit.gateProfile && typeof audit.gateProfile === 'object' ? audit.gateProfile : null,
+   }
+ }
+ 
+@@ -766,7 +882,12 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
+  *                 kind: 'binary'|'new'|'modified'|'deleted',
+  *                 verdict?: 'planned'|'unplanned'|'untouched', attribution?: 'declared'|'soft'|'undeclared' }>,
+  *   excluded: { foreignDeclared: Array<{ file: string, sessions: string[] }> },
+- *   note?: string|null }>}
++ *   note?: string|null,
++ *   gateProfile?: object|null }>}
++ *   gateProfile（2026-09-14-quick-exit-tiered-gates task-03 增量字段，消费方按存在性读取）：
++ *   仅 quick 模式携带——实时态透传 auditQuickCompletion 挂的 review.gateProfile（不重复计算）；
++ *   冻结重放态透传 quicklog/patches 记录冻结值（旧记录无 → rows 文件清单现算重放）。full-flow
++ *   全流程变更恒无该字段（零回归契约）。
+  */
+ export async function computeChangeScopeAudit({ cwd, specBase, changeName, platformOpts, collectPatch, freshActual } = {}) {
+   const empty = {
+@@ -788,6 +909,29 @@ export async function computeChangeScopeAudit({ cwd, specBase, changeName, platf
+       // 命中出冻结记录（行数为 --done 时点真值），patch 可供 --file 切片
+       const rec = findQuickPatchRecord(cwd, changeName)
+       if (rec) {
++        // 画像重放（FR-04 / D-008 / task-03）：① 记录含 gateProfile（task-03 起 --done 落盘随
++        // 快照对象冻结）→ 原样透传——与 --done 时点实时态字段逐字一致；② 旧记录（画像机制上线
++        // 前）无该字段 → 用 rows 冻结文件清单现算 computeGateProfile 重放（module-map/阈值与
++        // 实时态同链路加载；noDocs/fileNotes 重放不可得 → 纯默认画像，live 查询面同口径——
++        // --json 批量重放即阈值校准数据源，设计目标 4）。fail-open：任何异常 → null 不出伪画像。
++        let gateProfile = null
++        try {
++          if (rec.record.gateProfile && typeof rec.record.gateProfile === 'object') {
++            gateProfile = rec.record.gateProfile
++          } else {
++            const rowsPaths = rec.record.rows
++              .map(r => (r && typeof r.path === 'string' ? r.path : ''))
++              .filter(Boolean)
++            if (rowsPaths.length > 0) {
++              const thresholds = await resolveReplayGateThresholds(rec.specBase)
++              gateProfile = computeGateProfile(
++                rowsPaths,
++                await loadGateModuleIndex(rec.specBase, rowsPaths),
++                thresholds ? { thresholds } : {},
++              )
++            }
++          }
++        } catch { gateProfile = null }
+         return {
+           mode: 'quick', ok: true, degradedReason: null,
+           baseAnchor: rec.record.baseAnchor || `quick-window:${changeName}`,
+@@ -801,6 +945,7 @@ export async function computeChangeScopeAudit({ cwd, specBase, changeName, platf
+           frozenPatchPath: rec.patchPath,
+           patchSha256: rec.record.patchSha256 || null,
+           patchStatus: rec.record.patchStatus || null,
++          gateProfile,
+           note: `quick 会话已收尾——记录态（quicklog/patches/${rec.qlId}，${rec.record.savedAt ? String(rec.record.savedAt).replace('T', ' ').slice(0, 19) + ' 落盘' : '--done 时点冻结'}）`,
+         }
+       }
+@@ -936,6 +1081,8 @@ function fmtCount(n) {
+  *
+  * 防御式：result 任意字段缺失/畸形不抛（advisory 展示层）。opts.maxRows 截断 + 指引行
+  * （R-03：大表注入场景由调用方传 60，命令直跑缺省全表）。
++ * [gate] 画像段（task-03，gate-table-section）：result.gateProfile 存在时（quick 模式）追加
++ * 级别/跨度/模块/风险命中/缺失检查项段；字段缺失/为 null（full-flow / 重放不可得）→ 零输出零回归。
+  *
+  * @param {object} result computeChangeScopeAudit 返回值
+  * @param {{ maxRows?: number }} [opts] 可选截断（缺省不截）
+@@ -1001,6 +1148,38 @@ export function renderScopeAuditTable(result, opts = {}) {
+   const undeclared = rows.filter(x => x && x.attribution === 'undeclared').length
+   if (undeclared > 0) lines.push(`   ⚠️ 未声明 ${undeclared} 文件——超出 allowedFiles 声明面，补 --files 声明或注明原因`)
+ 
++  // ── [gate] 画像段（2026-09-14-quick-exit-tiered-gates task-03，FR-04 / D-008 gate-table-section）：
++  // quick 会话分级门禁画像的表格出口。按 gateProfile 存在性渲染——full-flow 变更 / 画像为 null
++  // → 零输出零回归；检查项随级别分层（L1：每文件注记+测试增量；L2：模块文档认领+风险命中），
++  // 与 run/quick-audit.js [gate] 打印块同一 review.gateProfile 数据源、同 tier 语义（advisory 展示，
++  // 不构成门禁）。防御式：字段缺失/畸形不抛（degraded 无 span、modules 空集等均有占位）。
++  const gate = r.gateProfile && typeof r.gateProfile === 'object' ? r.gateProfile : null
++  if (gate) {
++    const gateModules = Array.isArray(gate.modules) ? gate.modules.filter(m => m && typeof m === 'object') : []
++    const spanTxt = gate.degraded
++      ? '无 module-map（降级档：span 不参与判级）'
++      : `跨 ${gate.moduleSpan ?? '—'} 模块${gateModules.length > 0 ? `（${gateModules.map(m => String(m.id)).join(' · ')}）` : ''}`
++    lines.push(`   🚦 [gate] ${gate.level ?? '—'} 规模门（${spanTxt} · ${gate.fileCount ?? '—'} 文件：${gate.codeFileCount ?? '—'} 代码 / ${gate.testFileCount ?? '—'} 测试）——advisory 画像不阻断`)
++    if (Array.isArray(gate.unmappedFiles) && gate.unmappedFiles.length > 0) {
++      lines.push(`   ⚠️ ${gate.unmappedFiles.length} 个文件未命中 module-map（${gate.unmappedFiles.slice(0, 5).join(', ')}${gate.unmappedFiles.length > 5 ? ' 等' : ''}）`)
++    }
++    const checks = gate.checks && typeof gate.checks === 'object' ? gate.checks : {}
++    if (gate.level === 'L1') {
++      if (checks.perFileNotes === false) lines.push('   - 每文件注记缺失——补 --file-notes "path1::注 || path2::注"（覆盖变更文件全集）')
++      if (checks.testDelta === 'missing') lines.push(`   - 测试增量缺失——${gate.codeFileCount} 个代码文件改动无测试文件`)
++    } else if (gate.level === 'L2') {
++      if (checks.docClaim === 'missing') lines.push('   - 模块文档认领缺失——触及模块的卡片文件不在改动集（补模块卡/changelog 或 --no-docs 豁免）')
++      if (checks.docClaim === 'exempt-no-docs') lines.push('   - 模块文档认领：--no-docs 显式豁免')
++    }
++    if (Array.isArray(gate.riskHits) && gate.riskHits.length > 0) {
++      lines.push(`   - 风险命中 ${gate.riskHits.length} 处（运行时证据要求——风险路径改动需附运行验证说明）：`)
++      for (const h of gate.riskHits.slice(0, 5)) {
++        if (h && typeof h === 'object') lines.push(`     · [${h.pattern}] ${h.file}`)
++      }
++      if (gate.riskHits.length > 5) lines.push(`     … 共 ${gate.riskHits.length} 处`)
++    }
++  }
++
+   // 他者会话声明排除面（R-04：不进 rows，单列可见）
+   if (foreignDeclared.length > 0) {
+     lines.push(`   他者会话声明（不进上表，归属对应会话审计）：`)
+diff --git a/templates/agents-instruction.md b/templates/agents-instruction.md
+index ad1871d..01f31ba 100644
+--- a/templates/agents-instruction.md
++++ b/templates/agents-instruction.md
+@@ -7,9 +7,9 @@
+ 1. **禁止绕过本文件规则和 SillySpec 流程**。所有变更走 sillyspec 流程，不裸改裸提交。
+ 2. **改代码前必须先说明依据**——依据的文档路径（design.md / 模块文档 / file-lifecycle.md）或现有代码依据，无依据不改。
+ 3. **新功能 / 大改动走完整流程**：`brainstorm → plan → execute → verify → archive`。
+-4. **小修复 / 小调整走 quick**：`sillyspec run quick`。
++4. **小修复 / 小调整走 quick**（= 无需要落盘的设计决策的改动，选道判据见第 6 条）：`sillyspec run quick`。
+ 5. **执行顺序**：文档 → 读代码 → 写测试 → 写实现 → 跑测试 → 验收 → 更新文档。
+-6. **判规模选档**：≤3 文件、范围明确走 `quick`；多阶段 / 架构级走完整流程。
++6. **判规模选档**：看本次改动有无需要落盘的设计决策——有（新能力 / 行为契约变更 / 跨模块取舍 / 多阶段推进）走完整流程，无（范围明确的局部修补）走 `quick`。文件数不是选道判据，只作出口绊线——改动大或跨模块时 quick 收尾门禁会自动加查（分级提示补文件注记 / 测试增量 / 模块文档认领）。
+ 7. **代码先行不补流程（倒推 B 模式）**：代码若已先写好，**不回头补 brainstorm/plan 装样子**——用 `quick --done` 收尾 + 补 quicklog 条目，把已落盘改动如实登记进进度库。
+ 8. **实证核验再 `--done`**：触及 `src`/`test` 的改动，CLI 会在 `quick --done` 时**亲自实测** `.sillyspec/local.yaml` 的 `commands.test` / `commands.lint`（门禁：实测失败阻断 --done 回 pending；纯 doc/配置与未配置命令自动跳过；倒推 B 模式按 --files 声明边界兜底判定）。agent 侧预跑**可选**——想省「--done 被拦→修复→重跑」一轮时才预跑；纯 doc/配置改动无需跑。以落盘文件与测试结果为准，不信口头"已完成"。
+ 9. **中途停下不靠额外命令存进度**——进度已由上一次 `--done` 自动落盘；恢复时用 `sillyspec progress show` 查看进度，再用 `sillyspec run <stage>` 续跑，不直接 commit 半成品。
+diff --git a/test/audit-quick-completion.test.mjs b/test/audit-quick-completion.test.mjs
+index cfb50f7..674d523 100644
+--- a/test/audit-quick-completion.test.mjs
++++ b/test/audit-quick-completion.test.mjs
+@@ -9,13 +9,17 @@
+  *   status: 'safe' | 'warning' | 'blocked'
+  *
+  * 覆盖五条核心路径：无变更/新增/删除/危险文件/forceBaseline 放行。
++ *
++ * 追加（2026-09-14-quick-exit-tiered-gates task-02 / FR-03）：[gate] 分级门禁三态集成用例——
++ * L0 零输出 / L1 注记+测试增量 / L2 文档认领+风险命中 / --no-docs 豁免 / D-005 归属分流 /
++ * D-009 阈值覆写 / module-map 缺失降级（消费 review.gateProfile + buildGateAuditNote）。
+  */
+ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'fs'
+-import { join } from 'path'
++import { join, dirname } from 'path'
+ import { tmpdir } from 'os'
+ import { execSync } from 'child_process'
+ import { auditQuickCompletion } from '../src/run.js'
+-import { printQuickAuditReview } from '../src/run/quick-audit.js'
++import { printQuickAuditReview, buildGateAuditNote } from '../src/run/quick-audit.js'
+ 
+ let failed = 0, total = 0
+ function assert(cond, msg) {
+@@ -394,6 +398,230 @@ console.log('\n--- 归属切分（attributedFiles / undeclaredFiles）---')
+   assert(r.reasons.some(x => x.includes('同文件并发')), `同文件并发 warn 口径保留（不变）`)
+ }
+ 
++// ── [gate] 分级门禁（FR-03，2026-09-14-quick-exit-tiered-gates task-02）：L0/L1/L2 三态 + --no-docs 豁免 ──
++// 照 D-8 docSyncHint 用例基座：auditQuickCompletion 挂 review.gateProfile（module-map 经
++// specBase/projectName 透传），printQuickAuditReview 打 [gate] 块，buildGateAuditNote 组装
++// QUICKLOG auditNotes 行。全部 advisory：不改 status 三态 / exit code（D-003）。
++console.log('\n--- [gate] 分级门禁画像 ---')
++
++// 测试基建：种子提交（改 tracked 文件 → changedFiles 干净无新增噪声）+ 模块 map + 打印捕获
++function seedRepo(files) {
++  const d = makeRepo()
++  for (const [rel, content] of Object.entries(files)) {
++    mkdirSync(dirname(join(d, rel)), { recursive: true })
++    writeFileSync(join(d, rel), content)
++  }
++  execSync('git add .', { cwd: d, stdio: 'pipe' })
++  execSync('git commit -q -m seed', { cwd: d, stdio: 'pipe' })
++  return d
++}
++function writeModuleMap(d, yaml) {
++  mkdirSync(join(d, '.sillyspec', 'docs', 'demo', 'modules'), { recursive: true })
++  writeFileSync(join(d, '.sillyspec', 'docs', 'demo', 'modules', '_module-map.yaml'), yaml)
++}
++function captureReviewPrint(review) {
++  const origWarn = console.warn, origErr = console.error, origLog = console.log
++  const lines = []
++  const grab = (...a) => { lines.push(a.join(' ')) }
++  console.warn = grab; console.error = grab; console.log = grab
++  try { printQuickAuditReview(review) } finally {
++    console.warn = origWarn; console.error = origErr; console.log = origLog
++  }
++  return lines.join('\n')
++}
++// N 模块 map 生成（doc 字段指 cards/modules/<id>.md——放在非 .sillyspec 路径以便 tracked 进窗口）
++function multiModuleMap(ids) {
++  return 'modules:\n' + ids.map(id =>
++    `  ${id}:\n    status: active\n    doc: modules/${id}.md\n    paths:\n      - src/${id}\n`).join('')
++}
++const gateGuard = (d, extra = {}) => ({ ...baseGuard, specBase: join(d, '.sillyspec'), projectName: 'demo', ...extra })
++
++// case G-0 (L0): 单模块少文件无风险命中 → level L0、无 [gate] 打印、无落账行；quick 簿记噪声不入画像
++{
++  const d = seedRepo({ 'src-index.js': 'v1\n' })
++  writeModuleMap(d, 'modules:\n  runtime:\n    status: active\n    doc: modules/runtime.md\n    paths:\n      - src-index.js\n')
++  // 簿记噪声：tracked 的 quicklog md 也在窗口（改它）——isQuicklogFileLineNoise 应滤出画像
++  execSync('git add -f .sillyspec/quicklog/test.md', { cwd: d, stdio: 'pipe' })
++  execSync('git commit -q -m track-quicklog', { cwd: d, stdio: 'pipe' })
++  writeFileSync(join(d, 'src-index.js'), 'v2\n')
++  writeFileSync(join(d, '.sillyspec', 'quicklog', 'test.md'), '# task v2\n')
++  const r = await auditQuickCompletion(d, gateGuard(d), {})
++  assert(r.gateProfile && r.gateProfile.level === 'L0', `单模块单文件 → L0（实际 ${r.gateProfile?.level}）`)
++  assert(r.gateProfile.moduleSpan === 1 && r.gateProfile.fileCount === 1, `L0 画像只计交付文件（span=${r.gateProfile?.moduleSpan} files=${r.gateProfile?.fileCount}，quicklog 簿记应滤出）`)
++  assert(r.status === 'safe', `L0 门禁不改 status（实际 ${r.status}）`)
++  const out = captureReviewPrint(r)
++  assert(!out.includes('[gate]'), `L0 零 [gate] 打印（实际出现）`)
++  assert(buildGateAuditNote(r.gateProfile) === null, `L0 无 gate 落账行（实际 ${JSON.stringify(buildGateAuditNote(r.gateProfile))}）`)
++}
++
++// case G-1 (L1 跨模块): 跨 2 模块 → L1；检查项 testDelta=missing（2 代码 0 测试）+ perFileNotes 缺失
++{
++  const d = seedRepo({ 'src/alpha/a.js': 'v1\n', 'src/beta/b.js': 'v1\n' })
++  writeModuleMap(d, multiModuleMap(['alpha', 'beta']))
++  writeFileSync(join(d, 'src', 'alpha', 'a.js'), 'v2\n')
++  writeFileSync(join(d, 'src', 'beta', 'b.js'), 'v2\n')
++  const r = await auditQuickCompletion(d, gateGuard(d), {})
++  assert(r.gateProfile.level === 'L1', `跨 2 模块 → L1（实际 ${r.gateProfile?.level}）`)
++  assert(r.gateProfile.checks.testDelta === 'missing', `2 代码 0 测试 → testDelta missing（实际 ${r.gateProfile?.checks.testDelta}）`)
++  assert(r.gateProfile.checks.perFileNotes === false, `无 --file-notes → perFileNotes false`)
++  assert(r.status === 'safe', `L1 advisory 不改 status（实际 ${r.status}）`)
++  const out = captureReviewPrint(r)
++  assert(out.includes('[gate] L1'), `[gate] L1 块打印（实际缺）`)
++  assert(out.includes('测试增量检查') && out.includes('每文件注记检查'), `L1 块含两项检查（实际 ${JSON.stringify(out)}）`)
++  const note = buildGateAuditNote(r.gateProfile)
++  assert(note && note.startsWith('[gate] L1') && note.includes('测试增量缺失') && note.includes('每文件注记缺失'),
++    `L1 落账行含注记+测试增量（实际 ${JSON.stringify(note)}）`)
++}
++
++// case G-1b (L1 fileNotes 覆盖): --file-notes 覆盖变更全集 → perFileNotes=true
++{
++  const d = seedRepo({ 'src/alpha/a.js': 'v1\n', 'src/beta/b.js': 'v1\n' })
++  writeModuleMap(d, multiModuleMap(['alpha', 'beta']))
++  writeFileSync(join(d, 'src', 'alpha', 'a.js'), 'v2\n')
++  writeFileSync(join(d, 'src', 'beta', 'b.js'), 'v2\n')
++  const r = await auditQuickCompletion(d, gateGuard(d), { fileNotes: [
++    { path: 'src/alpha/a.js', note: '修复边界' }, { path: 'src/beta/b.js', note: '配套调整' },
++  ] })
++  assert(r.gateProfile.level === 'L1' && r.gateProfile.checks.perFileNotes === true,
++    `fileNotes 全覆盖 → perFileNotes true（实际 ${r.gateProfile?.checks?.perFileNotes}）`)
++  const note = buildGateAuditNote(r.gateProfile)
++  assert(note.includes('每文件注记已全覆盖') && !note.includes('每文件注记缺失'), `落账行反映覆盖态（实际 ${JSON.stringify(note)}）`)
++}
++
++// case G-2 (L1 文件数): 单模块 4 文件（3 代码 + 1 测试）→ L1 且 testDelta=ok（有测试增量）
++{
++  const d = seedRepo({
++    'src/mono/f1.js': 'v1\n', 'src/mono/f2.js': 'v1\n', 'src/mono/f3.js': 'v1\n', 'test/mono.test.mjs': 'v1\n',
++  })
++  writeModuleMap(d, 'modules:\n  mono:\n    status: active\n    doc: modules/mono.md\n    paths:\n      - src/mono\n')
++  for (const f of ['src/mono/f1.js', 'src/mono/f2.js', 'src/mono/f3.js', 'test/mono.test.mjs']) {
++    writeFileSync(join(d, ...f.split('/')), 'v2\n')
++  }
++  const r = await auditQuickCompletion(d, gateGuard(d), {})
++  assert(r.gateProfile.level === 'L1', `单模块 4 文件 → L1（实际 ${r.gateProfile?.level}）`)
++  assert(r.gateProfile.moduleSpan === 1 && r.gateProfile.fileCount === 4, `跨度/文件计数（span=${r.gateProfile?.moduleSpan} files=${r.gateProfile?.fileCount}）`)
++  assert(r.gateProfile.codeFileCount === 3 && r.gateProfile.testFileCount === 1, `代码/测试分类（code=${r.gateProfile?.codeFileCount} test=${r.gateProfile?.testFileCount}）`)
++  assert(r.gateProfile.checks.testDelta === 'ok', `含测试改动 → testDelta ok（实际 ${r.gateProfile?.checks.testDelta}）`)
++}
++
++// case G-3 (L2 跨模块 + docClaim missing): 跨 4 模块 → L2；模块卡不在改动集 → missing + --no-docs 指引
++{
++  const d = seedRepo({ 'src/alpha/a.js': 'v1\n', 'src/beta/b.js': 'v1\n', 'src/gamma/c.js': 'v1\n', 'src/delta/e.js': 'v1\n' })
++  writeModuleMap(d, multiModuleMap(['alpha', 'beta', 'gamma', 'delta']))
++  for (const f of ['src/alpha/a.js', 'src/beta/b.js', 'src/gamma/c.js', 'src/delta/e.js']) {
++    writeFileSync(join(d, ...f.split('/')), 'v2\n')
++  }
++  const r = await auditQuickCompletion(d, gateGuard(d), {})
++  assert(r.gateProfile.level === 'L2', `跨 4 模块 → L2（实际 ${r.gateProfile?.level}）`)
++  assert(r.gateProfile.checks.docClaim === 'missing', `模块卡不在改动集 → docClaim missing（实际 ${r.gateProfile?.checks.docClaim}）`)
++  assert(r.gateProfile.checks.runtimeEvidence === 'na', `无风险命中 → runtimeEvidence na（实际 ${r.gateProfile?.checks.runtimeEvidence}）`)
++  assert(r.status === 'safe', `L2 advisory 不改 status 不阻断（实际 ${r.status}）`)
++  const out = captureReviewPrint(r)
++  assert(out.includes('[gate] L2') && out.includes('模块文档认领'), `L2 块含文档认领（实际 ${JSON.stringify(out)}）`)
++  assert(out.includes('--no-docs'), `missing 态给 --no-docs 指引（实际缺）`)
++  const note = buildGateAuditNote(r.gateProfile)
++  assert(note && note.startsWith('[gate] L2') && note.includes('模块文档认领缺失'), `L2 落账行（实际 ${JSON.stringify(note)}）`)
++}
++
++// case G-3b (L2 docClaim claimed): 触及模块的卡片文件在改动集（tracked 卡片同改）→ claimed
++{
++  const d = seedRepo({
++    'src/alpha/a.js': 'v1\n', 'src/beta/b.js': 'v1\n', 'src/gamma/c.js': 'v1\n', 'src/delta/e.js': 'v1\n',
++    'cards/modules/alpha.md': 'card\n', 'cards/modules/beta.md': 'card\n', 'cards/modules/gamma.md': 'card\n', 'cards/modules/delta.md': 'card\n',
++  })
++  writeModuleMap(d, multiModuleMap(['alpha', 'beta', 'gamma', 'delta']))
++  for (const f of ['src/alpha/a.js', 'src/beta/b.js', 'src/gamma/c.js', 'src/delta/e.js',
++    'cards/modules/alpha.md', 'cards/modules/beta.md', 'cards/modules/gamma.md', 'cards/modules/delta.md']) {
++    writeFileSync(join(d, ...f.split('/')), 'v2\n')
++  }
++  const r = await auditQuickCompletion(d, gateGuard(d), {})
++  assert(r.gateProfile.level === 'L2', `跨 4 模块 → L2（实际 ${r.gateProfile?.level}）`)
++  assert(r.gateProfile.checks.docClaim === 'claimed', `模块卡在改动集 → docClaim claimed（实际 ${r.gateProfile?.checks.docClaim}）`)
++  const note = buildGateAuditNote(r.gateProfile)
++  assert(note.includes('模块文档认领已覆盖'), `claimed 落账行（实际 ${JSON.stringify(note)}）`)
++}
++
++// case G-4 (L2 风险命中): auth 路径命中 → L2 + runtimeEvidence=required + 命中点名 pattern/file
++{
++  const d = seedRepo({ 'src/web/login.js': 'v1\n', 'src/web/auth.js': 'v1\n' })
++  writeModuleMap(d, 'modules:\n  web:\n    status: active\n    doc: modules/web.md\n    paths:\n      - src/web\n')
++  writeFileSync(join(d, 'src', 'web', 'login.js'), 'v2\n')
++  writeFileSync(join(d, 'src', 'web', 'auth.js'), 'v2\n')
++  const r = await auditQuickCompletion(d, gateGuard(d), {})
++  assert(r.gateProfile.level === 'L2', `风险路径命中 → L2（实际 ${r.gateProfile?.level}）`)
++  assert(r.gateProfile.riskHits.some(h => h.pattern === 'auth' && h.file === 'src/web/auth.js'),
++    `风险命中点名 pattern/file（实际 ${JSON.stringify(r.gateProfile?.riskHits)}）`)
++  assert(r.gateProfile.checks.runtimeEvidence === 'required', `风险命中 → runtimeEvidence required（实际 ${r.gateProfile?.checks?.runtimeEvidence}）`)
++  const out = captureReviewPrint(r)
++  assert(out.includes('[gate] L2') && out.includes('auth ← src/web/auth.js'), `L2 块点名风险命中（实际 ${JSON.stringify(out)}）`)
++  const note = buildGateAuditNote(r.gateProfile)
++  assert(note.includes('auth←src/web/auth.js') && note.includes('需运行时证据'), `风险落账行（实际 ${JSON.stringify(note)}）`)
++}
++
++// case G-5 (--no-docs 豁免): L2 + noDocs → docClaim=exempt-no-docs + 豁免留痕 + 完成不受阻
++{
++  const d = seedRepo({ 'src/alpha/a.js': 'v1\n', 'src/beta/b.js': 'v1\n', 'src/gamma/c.js': 'v1\n', 'src/delta/e.js': 'v1\n' })
++  writeModuleMap(d, multiModuleMap(['alpha', 'beta', 'gamma', 'delta']))
++  for (const f of ['src/alpha/a.js', 'src/beta/b.js', 'src/gamma/c.js', 'src/delta/e.js']) {
++    writeFileSync(join(d, ...f.split('/')), 'v2\n')
++  }
++  const r = await auditQuickCompletion(d, gateGuard(d), { noDocs: true })
++  assert(r.gateProfile.level === 'L2' && r.gateProfile.checks.docClaim === 'exempt-no-docs',
++    `--no-docs → docClaim exempt-no-docs（实际 ${r.gateProfile?.checks?.docClaim}）`)
++  assert(r.status === 'safe', `豁免完成不受阻（实际 ${r.status}）`)
++  const out = captureReviewPrint(r)
++  assert(out.includes('[gate] L2') && out.includes('--no-docs 显式豁免'), `豁免态打印留痕（实际 ${JSON.stringify(out)}）`)
++  const note = buildGateAuditNote(r.gateProfile)
++  assert(note.includes('--no-docs 显式豁免'), `豁免同通道落账（实际 ${JSON.stringify(note)}）`)
++}
++
++// case G-6 (D-005 归属分流): 声明会话窗口内他者脏文件（模块卡）不并入 docClaim 判定
++//   本会话声明改 4 模块代码 + beta/gamma/delta 三卡；他者窗口内改 alpha 卡（本会话未声明）——
++//   全窗口口径下四卡齐=claimed，但归属口径缺 alpha → missing（D-005 绝不并入）。
++{
++  const d = seedRepo({
++    'src/alpha/a.js': 'v1\n', 'src/beta/b.js': 'v1\n', 'src/gamma/c.js': 'v1\n', 'src/delta/e.js': 'v1\n',
++    'cards/modules/alpha.md': 'card\n', 'cards/modules/beta.md': 'card\n', 'cards/modules/gamma.md': 'card\n', 'cards/modules/delta.md': 'card\n',
++  })
++  writeModuleMap(d, multiModuleMap(['alpha', 'beta', 'gamma', 'delta']))
++  const declared = ['src/alpha/a.js', 'src/beta/b.js', 'src/gamma/c.js', 'src/delta/e.js',
++    'cards/modules/beta.md', 'cards/modules/gamma.md', 'cards/modules/delta.md']
++  for (const f of declared) writeFileSync(join(d, ...f.split('/')), 'v2\n')
++  writeFileSync(join(d, 'cards', 'modules', 'alpha.md'), 'foreign v2\n') // 模拟他者窗口内改卡（本会话未声明）
++  const r = await auditQuickCompletion(d, gateGuard(d, { allowedFiles: declared }), {})
++  assert(r.gateProfile.level === 'L2', `全窗口口径判级（4 模块代码计入 span——实际 ${r.gateProfile?.level}）`)
++  assert(r.gateProfile.checks.docClaim === 'missing', `他者改卡不并入 docClaim（D-005，实际 ${r.gateProfile?.checks?.docClaim}）`)
++  assert(r.undeclaredFiles.includes('cards/modules/alpha.md'), `他者文件仍走既有归属分流（undeclaredFiles 在场）`)
++}
++
++// case G-7 (阈值覆写): local.yaml quick-gate.l1_span=99 → 跨 2 模块降 L0（D-009 覆写链路通）
++{
++  const d = seedRepo({ 'src/alpha/a.js': 'v1\n', 'src/beta/b.js': 'v1\n' })
++  writeModuleMap(d, multiModuleMap(['alpha', 'beta']))
++  writeFileSync(join(d, '.sillyspec', 'local.yaml'), 'quick-gate:\n  l1_span: 99\n')
++  writeFileSync(join(d, 'src', 'alpha', 'a.js'), 'v2\n')
++  writeFileSync(join(d, 'src', 'beta', 'b.js'), 'v2\n')
++  const r = await auditQuickCompletion(d, gateGuard(d), {})
++  assert(r.gateProfile.level === 'L0', `l1_span=99 覆写 → 跨 2 模块降 L0（实际 ${r.gateProfile?.level}）`)
++}
++
++// case G-8 (module-map 缺失降级): 无 map → degraded；2 文件 <4 → L0；8 文件 → L2（降级档）
++{
++  const d = seedRepo({ 'a.js': 'v1\n', 'b.js': 'v1\n' })
++  writeFileSync(join(d, 'a.js'), 'v2\n')
++  writeFileSync(join(d, 'b.js'), 'v2\n')
++  const r = await auditQuickCompletion(d, gateGuard(d), {})
++  assert(r.gateProfile.degraded === true && r.gateProfile.moduleSpan === null, `无 map → degraded + span null（实际 degraded=${r.gateProfile?.degraded}）`)
++  assert(r.gateProfile.level === 'L0', `降级档 2 文件 → L0（实际 ${r.gateProfile?.level}）`)
++
++  const d2 = seedRepo(Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`f${i}.js`, 'v1\n'])))
++  for (let i = 0; i < 8; i++) writeFileSync(join(d2, `f${i}.js`), 'v2\n')
++  const r2 = await auditQuickCompletion(d2, gateGuard(d2), {})
++  assert(r2.gateProfile.degraded === true && r2.gateProfile.level === 'L2', `降级档 8 文件 → L2（实际 ${r2.gateProfile?.level}）`)
++  const out = captureReviewPrint(r2)
++  assert(out.includes('降级档'), `降级态打印注明判级口径（实际 ${JSON.stringify(out)}）`)
++}
++
+ for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} }
+ console.log(`\n${'='.repeat(50)}`)
+ console.log(`✅ 通过: ${total - failed}  ❌ 失败: ${failed}`)
+diff --git a/test/scope-audit.test.mjs b/test/scope-audit.test.mjs
+index df5631d..6e49f9e 100644
+--- a/test/scope-audit.test.mjs
++++ b/test/scope-audit.test.mjs
+@@ -9,6 +9,9 @@
+  *   4. 无锚形态（quick-8aa52289 新契约）：baseAnchor 缺失 → HEAD 未提交窗口行数兜底（不再恒 —）；
+  *      design 清单解析失败实际侧 only；归档形态：快照记录态 / 快照缺失空表诚实说明
+  *   5. quick（FR-04）：declared/soft/undeclared 三档 + baseAnchor=quick-window + 已提交降级 note
++ *   8. quick 画像出口（2026-09-14-quick-exit-tiered-gates task-03，FR-04 / D-008）：gateProfile
++ *      实时态透传（--json 同源 + 表格 [gate] 段）/ 无 map 降级档 / 冻结记录透传（含哨兵防重算）/
++ *      旧记录 rows 清单重算重放（module-map + local.yaml 阈值同链路）/ full-flow 无画像零回归
+  *
+  * 夹具约定（Wave 1 实测经验）：
+  *   - quick 夹具 gitignore 整个 .sillyspec/（porcelain 无 -uall，未忽略会整目录折叠成
+@@ -958,3 +961,272 @@ test('FR-02 模式判定：quick id 形态命中但 guard 缺失 → ok=false 
+     assert.ok(out.includes('⚠️'), 'fail-soft 渲染单行降级提示')
+   } finally { cleanup(d) }
+ })
++
++// ───────────────────────── 组 8：quick 画像出口（2026-09-14-quick-exit-tiered-gates task-03，FR-04 / D-008） ─────────────────────────
++
++/** _module-map.yaml 夹具（parseModuleMapSimple 可解析形态；m2 带 doc 卡片供 docClaim 断言） */
++function writeModuleMap(specBase, project = 'demo') {
++  const dir = join(specBase, 'docs', project, 'modules')
++  mkdirSync(dir, { recursive: true })
++  writeFileSync(join(dir, '_module-map.yaml'), [
++    'modules:',
++    '  m1:',
++    '    status: active',
++    '    paths:',
++    '      - src/core/',
++    '  m2:',
++    '    status: active',
++    '    doc: modules/m2.md',
++    '    paths:',
++    '      - src/api/',
++    '',
++  ].join('\n'))
++}
++
++test('gate 实时态（module-map 在）：--json 含 gateProfile 与 review 同源 + 表格 [gate] 画像段（L2 风险命中）', async () => {
++  const d = makeRepo('sa-gate-live-')
++  try {
++    mkdirSync(join(d, 'src', 'core'), { recursive: true })
++    mkdirSync(join(d, 'src', 'api'), { recursive: true })
++    mkdirSync(join(d, 'test'), { recursive: true })
++    writeFileSync(join(d, 'src', 'core', 'a.js'), 'a1\n')
++    writeFileSync(join(d, 'src', 'api', 'c.js'), 'c1\n')
++    writeFileSync(join(d, 'test', 'keeper.test.js'), 'k1\n') // 防 untracked 测试文件目录折叠
++    sh(d, ['add', '-A'])
++    sh(d, ['commit', '-q', '-m', 'init'])
++    const specBase = join(d, '.sillyspec')
++    mkdirSync(join(specBase, 'quicklog'), { recursive: true })
++    writeFileSync(join(specBase, 'quicklog', '2026-09.md'), '# QUICKLOG\n')
++    writeModuleMap(specBase)
++    writeQuickGuard(specBase, 'quick-9a1b2c3d', {}) // 未声明会话：attributed = 窗口全量
++    // 窗口改动：m1×2（tracked 改 + untracked 新）+ m2 风险路径（auth 命中）+ 测试文件（unmapped）
++    writeFileSync(join(d, 'src', 'core', 'a.js'), 'a1\na2\n')
++    writeFileSync(join(d, 'src', 'core', 'b.js'), 'b1\n')
++    writeFileSync(join(d, 'src', 'api', 'auth-check.js'), 'h1\n')
++    writeFileSync(join(d, 'test', 'core.test.js'), 't1\n')
++
++    const r = await computeChangeScopeAudit({ cwd: d, changeName: 'quick-9a1b2c3d' })
++    assert.equal(r.mode, 'quick')
++    assert.equal(r.ok, true, `ok（degradedReason=${r.degradedReason}）`)
++    // 画像透传（不重复计算）：对象存在且为 git 事实窗口口径（4 文件 = rows 全集）
++    assert.ok(r.gateProfile && typeof r.gateProfile === 'object', 'gateProfile 随结果对象携带（gateProfile-json）')
++    assert.equal(r.gateProfile.fileCount, 4, `fileCount=窗口 git 事实 4（实际 ${r.gateProfile.fileCount}）`)
++    assert.equal(r.gateProfile.fileCount, r.rows.length, '同源：画像文件数与对账 rows 同窗口')
++    assert.equal(r.gateProfile.level, 'L2', `风险命中 → L2（实际 ${r.gateProfile.level}）`)
++    assert.equal(r.gateProfile.degraded, false, 'module-map 在 → 非降级')
++    assert.equal(r.gateProfile.moduleSpan, 2, `跨 2 模块（实际 ${r.gateProfile.moduleSpan}）`)
++    assert.equal(r.gateProfile.codeFileCount, 3)
++    assert.equal(r.gateProfile.testFileCount, 1)
++    assert.deepEqual(r.gateProfile.riskHits, [{ pattern: 'auth', file: 'src/api/auth-check.js' }], '路径模式风险命中清单')
++    assert.equal(r.gateProfile.checks.runtimeEvidence, 'required')
++    assert.equal(r.gateProfile.checks.docClaim, 'missing', 'm2 卡片不在改动集 → docClaim missing')
++    assert.equal(r.gateProfile.checks.testDelta, 'ok', '含测试改动 → ok')
++    assert.ok(Array.isArray(r.gateProfile.unmappedFiles) && r.gateProfile.unmappedFiles.includes('test/core.test.js'),
++      '测试目录未命中 module-map → unmappedFiles')
++    // --json 出口契约：结果对象可序列化且画像字段保留（index.js 按 ...saResult 展开）
++    const j = JSON.parse(JSON.stringify(r))
++    assert.equal(j.gateProfile.level, 'L2', '--json 序列化后 gateProfile 字段在')
++    assert.equal(j.gateProfile.riskHits[0].pattern, 'auth')
++    // 表格出口：gate-table-section（级别/跨度/模块/风险命中/缺失检查项）
++    const out = renderScopeAuditTable(r)
++    assert.ok(out.includes('[gate]'), '表格含 [gate] 画像段')
++    assert.ok(out.includes('L2 规模门'), '级别可见')
++    assert.ok(out.includes('跨 2 模块'), '跨度可见')
++    assert.ok(out.includes('m1 · m2'), '命中模块清单可见')
++    assert.ok(out.includes('风险命中 1 处'), '风险命中可见')
++    assert.ok(out.includes('[auth] src/api/auth-check.js'), '风险命中逐条列出')
++    assert.ok(out.includes('模块文档认领缺失'), 'L2 缺失检查项可见')
++    assert.ok(out.includes('advisory'), '段头标注 advisory')
++    assert.ok(out.includes('未命中 module-map'), 'unmapped 提示可见')
++  } finally { cleanup(d) }
++})
++
++test('gate 实时态（无 module-map）：degraded 降级档 + 级别按文件数 + L1 缺失检查项渲染', async () => {
++  const d = makeRepo('sa-gate-deg-')
++  try {
++    mkdirSync(join(d, 'src'), { recursive: true })
++    mkdirSync(join(d, 'test'), { recursive: true })
++    writeFileSync(join(d, 'src', 'a.js'), 'a1\n')
++    writeFileSync(join(d, 'test', 'keeper.test.js'), 'k1\n')
++    sh(d, ['add', '-A'])
++    sh(d, ['commit', '-q', '-m', 'init'])
++    const specBase = join(d, '.sillyspec')
++    mkdirSync(join(specBase, 'quicklog'), { recursive: true })
++    writeFileSync(join(specBase, 'quicklog', '2026-09.md'), '# QUICKLOG\n')
++    writeQuickGuard(specBase, 'quick-0e1f2a3b', {}) // 无 module-map（未写 docs/）
++    writeFileSync(join(d, 'src', 'a.js'), 'a1\na2\n')
++    writeFileSync(join(d, 'src', 'b.js'), 'b1\n')
++    writeFileSync(join(d, 'src', 'c.js'), 'c1\n')
++    writeFileSync(join(d, 'test', 'x.test.js'), 't1\n')
++
++    const r = await computeChangeScopeAudit({ cwd: d, changeName: 'quick-0e1f2a3b' })
++    assert.equal(r.ok, true)
++    assert.ok(r.gateProfile, '画像仍携带（degraded 非 null）')
++    assert.equal(r.gateProfile.degraded, true, 'module-map 缺失 → degraded')
++    assert.equal(r.gateProfile.moduleSpan, null, '降级档 span 退出')
++    assert.equal(r.gateProfile.level, 'L1', `≥4 文件 → L1（实际 ${r.gateProfile.level}）`)
++    assert.equal(r.gateProfile.fileCount, 4)
++    assert.equal(r.gateProfile.checks.testDelta, 'ok')
++    assert.equal(r.gateProfile.checks.perFileNotes, false)
++    const out = renderScopeAuditTable(r)
++    assert.ok(out.includes('[gate] L1 规模门'), '降级档也出画像段（级别可见）')
++    assert.ok(out.includes('降级档'), '降级口径标注')
++    assert.ok(!out.includes('跨 null'), '降级不出伪跨度')
++    assert.ok(out.includes('每文件注记缺失'), 'L1 缺失检查项（perFileNotes）渲染')
++  } finally { cleanup(d) }
++})
++
++test('gate 冻结重放：记录含 gateProfile → 原样透传（与 --done 时点实时态逐字一致）', async () => {
++  const d = makeRepo('sa-gate-frz-')
++  try {
++    writeFileSync(join(d, 'base.txt'), 'x\n')
++    sh(d, ['add', '-A'])
++    sh(d, ['commit', '-q', '-m', 'init'])
++    const specBase = join(d, '.sillyspec')
++    const patchesDir = join(specBase, 'quicklog', 'patches')
++    mkdirSync(patchesDir, { recursive: true })
++    const frozenProfile = {
++      fileCount: 3, codeFileCount: 2, testFileCount: 1, moduleSpan: 2,
++      modules: [{ id: 'm1', files: ['src/core/a.js'] }, { id: 'm2', files: ['src/api/b.js', 'test/api.test.js'] }],
++      unmappedFiles: [], riskHits: [], level: 'L1', degraded: false,
++      checks: { perFileNotes: false, testDelta: 'ok', docClaim: 'claimed', runtimeEvidence: 'na' },
++      replayMarker: 'frozen-at-done', // 防重算混入的哨兵字段（透传 ≠ 现算）
++    }
++    writeFileSync(join(patchesDir, 'ql-20260914-001-beef.json'), JSON.stringify({
++      mode: 'quick', ok: true, baseAnchor: 'quick-window:quick-feedface',
++      totals: { files: 3, additions: 9, deletions: 1 },
++      rows: [
++        { path: 'src/core/a.js', declared: true, additions: 2, deletions: 0, kind: 'modified', attribution: 'declared' },
++        { path: 'src/api/b.js', declared: true, additions: 5, deletions: 1, kind: 'modified', attribution: 'declared' },
++        { path: 'test/api.test.js', declared: true, additions: 2, deletions: 0, kind: 'new', attribution: 'declared' },
++      ],
++      excluded: { foreignDeclared: [] }, gateProfile: frozenProfile,
++      qlId: 'ql-20260914-001-beef', sessionId: 'quick-feedface', savedAt: '2026-09-14T08:00:00.000Z',
++    }))
++    writeFileSync(join(patchesDir, 'ql-20260914-001-beef.patch'),
++      'diff --git a/src/core/a.js b/src/core/a.js\n--- a/src/core/a.js\n+++ b/src/core/a.js\n@@ -1 +1,2 @@\n x\n+a\n')
++
++    const r = await computeChangeScopeAudit({ cwd: d, changeName: 'quick-feedface' })
++    assert.equal(r.ok, true)
++    assert.equal(r.mode, 'quick')
++    assert.ok(r.note && r.note.includes('记录态'), '冻结记录态')
++    assert.deepEqual(r.gateProfile, frozenProfile, '画像透传记录冻结值（不重算——哨兵字段在）')
++    const j = JSON.parse(JSON.stringify(r))
++    assert.equal(j.gateProfile.replayMarker, 'frozen-at-done', '--json 重放出口画像可重放')
++    const out = renderScopeAuditTable(r)
++    assert.ok(out.includes('[gate] L1 规模门'), '重放表格含画像段')
++    assert.ok(out.includes('跨 2 模块') && out.includes('m1 · m2'), '跨度/模块与实时态字段一致')
++  } finally { cleanup(d) }
++})
++
++test('gate 旧记录重算：记录无 gateProfile → rows 文件清单现算重放（module-map/阈值同链路，字段与实时态同构）', async () => {  const d = makeRepo('sa-gate-rec-')
++  try {
++    writeFileSync(join(d, 'base.txt'), 'x\n')
++    sh(d, ['add', '-A'])
++    sh(d, ['commit', '-q', '-m', 'init'])
++    const specBase = join(d, '.sillyspec')
++    writeModuleMap(specBase) // 与实时态同链路加载的 module-map
++    const patchesDir = join(specBase, 'quicklog', 'patches')
++    mkdirSync(patchesDir, { recursive: true })
++    // 画像机制上线前的旧记录：无 gateProfile 字段，rows 跨 2 模块
++    writeFileSync(join(patchesDir, 'ql-20260910-009-cafe.json'), JSON.stringify({
++      mode: 'quick', ok: true, baseAnchor: 'quick-window:quick-1234cdef',
++      totals: { files: 2, additions: 4, deletions: 0 },
++      rows: [
++        { path: 'src/core/a.js', declared: true, additions: 2, deletions: 0, kind: 'modified', attribution: 'declared' },
++        { path: 'src/api/b.js', declared: true, additions: 2, deletions: 0, kind: 'modified', attribution: 'declared' },
++      ],
++      excluded: { foreignDeclared: [] },
++      qlId: 'ql-20260910-009-cafe', sessionId: 'quick-1234cdef', savedAt: '2026-09-10T08:00:00.000Z',
++    }))
++
++    const r = await computeChangeScopeAudit({ cwd: d, changeName: 'quick-1234cdef' })
++    assert.equal(r.ok, true)
++    assert.ok(r.gateProfile, '旧记录无字段 → rows 清单重算出画像（重放可重放）')
++    assert.equal(r.gateProfile.degraded, false, 'module-map 在 → 重放非降级')
++    assert.equal(r.gateProfile.moduleSpan, 2, 'rows 跨 2 模块（m1/m2 命中）')
++    assert.equal(r.gateProfile.level, 'L1', `跨 ≥2 模块默认阈值 → L1（实际 ${r.gateProfile.level}）`)
++    assert.ok(r.gateProfile.modules.map(m => m.id).join(',').includes('m1'), '模块清单与实时态同构')
++    assert.ok(r.gateProfile.checks && typeof r.gateProfile.checks === 'object' && 'docClaim' in r.gateProfile.checks,
++      'checks 四键结构与实时态字段一致')
++    const out = renderScopeAuditTable(r)
++    assert.ok(out.includes('[gate] L1') && out.includes('跨 2 模块'), '重放表格画像段')
++
++    // 阈值同链路（D-009）：local.yaml quick-gate 覆写参与重放判级——l1_span 抬到 3 → 跨 2 不再 L1
++    writeFileSync(join(specBase, 'local.yaml'), 'quick-gate:\n  l1_span: 3\n')
++    try {
++      const r2 = await computeChangeScopeAudit({ cwd: d, changeName: 'quick-1234cdef' })
++      assert.equal(r2.gateProfile.level, 'L0', `l1_span=3 覆写 → 2 文件 2 模块降 L0（实际 ${r2.gateProfile.level}）`)
++    } finally {
++      rmSync(join(specBase, 'local.yaml'))
++    }
++  } finally { cleanup(d) }
++})
++
++test('gate 多项目 module-map 消歧：双 map 仓按 rows 归属得分选对项目（非降级），零归属样本平分 → degraded', async () => {
++  const d = makeRepo('sa-gate-multi-')
++  try {
++    writeFileSync(join(d, 'base.txt'), 'x\n')
++    sh(d, ['add', '-A'])
++    sh(d, ['commit', '-q', '-m', 'init'])
++    const specBase = join(d, '.sillyspec')
++    writeModuleMap(specBase, 'demo')            // 候选 A：src/core/ + src/api/
++    // 候选 B：另一项目 packages/dashboard/（与本仓双 map 形态同款——路径面与 A 不相交）
++    const dashDir = join(specBase, 'docs', 'panel', 'modules')
++    mkdirSync(dashDir, { recursive: true })
++    writeFileSync(join(dashDir, '_module-map.yaml'), [
++      'modules:',
++      '  server-index:',
++      '    status: active',
++      '    paths:',
++      '      - packages/dashboard/',
++      '',
++    ].join('\n'))
++    const patchesDir = join(specBase, 'quicklog', 'patches')
++    mkdirSync(patchesDir, { recursive: true })
++    const mkRecord = (file, sessionId, rows) => writeFileSync(join(patchesDir, file), JSON.stringify({
++      mode: 'quick', ok: true, baseAnchor: `quick-window:${sessionId}`,
++      totals: { files: rows.length, additions: 2 * rows.length, deletions: 0 },
++      rows: rows.map(p => ({ path: p, declared: true, additions: 2, deletions: 0, kind: 'modified', attribution: 'declared' })),
++      excluded: { foreignDeclared: [] }, qlId: file.replace(/\.json$/, ''), sessionId,
++      savedAt: '2026-09-10T08:00:00.000Z',
++    }))
++    // 记录 1：rows 全在 src/ → 唯一最高归属得分 = demo → 非降级重放
++    mkRecord('ql-20260910-010-a1b2.json', 'quick-5678abcd', ['src/core/a.js', 'src/api/b.js'])
++    const r = await computeChangeScopeAudit({ cwd: d, changeName: 'quick-5678abcd' })
++    assert.equal(r.gateProfile.degraded, false, '双 map 按 rows 得分选中 demo → 非降级')
++    assert.equal(r.gateProfile.moduleSpan, 2, 'demo map 归属生效（m1/m2）')
++    assert.equal(r.gateProfile.level, 'L1')
++    // 记录 2：rows 两 map 各归属一半（得分平分）→ fail-open degraded，不猜错归属
++    mkRecord('ql-20260910-011-c3d4.json', 'quick-5678ffff', ['packages/dashboard/srv.js', 'src/core/a.js'])
++    const r2 = await computeChangeScopeAudit({ cwd: d, changeName: 'quick-5678ffff' })
++    assert.equal(r2.gateProfile.degraded, true, '得分平分 → degraded（不猜）')
++    assert.equal(r2.gateProfile.moduleSpan, null)
++  } finally { cleanup(d) }
++})
++
++test('gate 无画像零回归：full-flow 全流程变更无 gateProfile 字段，表格零 [gate] 输出', async () => {
++  const d = makeRepo('sa-gate-none-')
++  try {
++    mkdirSync(join(d, 'src'), { recursive: true })
++    writeFileSync(join(d, 'src', 'a.js'), 'a1\n')
++    sh(d, ['add', '-A'])
++    sh(d, ['commit', '-q', '-m', 'init'])
++    const base = head(d)
++    const specBase = join(d, '.sillyspec')
++    writeDesign(specBase, 'nogate-change', ['| 修改 | src/a.js | 说明 |'])
++    writeWorktreeMeta(specBase, 'nogate-change', base)
++    writeFileSync(join(d, 'src', 'a.js'), 'a1\na2\n')
++
++    const r = await computeChangeScopeAudit({ cwd: d, changeName: 'nogate-change' })
++    assert.equal(r.mode, 'full-flow')
++    assert.equal(r.ok, true)
++    assert.equal(r.gateProfile, undefined, '非 quick 全流程变更恒无画像字段（消费方按存在性读取）')
++    assert.equal(r.rows.length, 1, '既有三态对账零回归')
++    assert.equal(r.rows[0].verdict, 'planned')
++    const out = renderScopeAuditTable(r)
++    assert.ok(!out.includes('[gate]'), '表格零画像段输出')
++    assert.ok(!out.includes('规模门'), '零 gate 术语混入')
++    assert.ok(out.includes('✓ 计划内'), '既有三态标记原样')
++  } finally { cleanup(d) }
++})
+diff --git a/src/quick-gate-profile.js b/src/quick-gate-profile.js
+new file mode 100644
+--- /dev/null
++++ b/src/quick-gate-profile.js
+@@ -0,0 +1,251 @@
++/**
++ * quick-gate-profile.js — quick 出口分级门禁画像（信号层，纯函数零 IO）
++ *
++ * quick --done 分级门禁的信号单一来源（2026-09-14-quick-exit-tiered-gates task-01 / FR-02）：
++ * 输入 CLI 审计链的 git 事实 changedFiles（非 --files 自声明）+ 调用方传入的 moduleIndex
++ * （_module-map.yaml 解析结果），输出 L0/L1/L2 画像与检查项，供 Wave 2 接线消费
++ * （run/shared.js 挂 review.gateProfile → complete-handlers 落账 / quick-audit 打印 /
++ * scope-audit 表格与 --json 双出口）。本模块零 IO、零子进程：moduleIndex、风险表、阈值
++ * 全部由参数或默认值提供（D-007 独立纯函数模块；R-04 画像=纯字符串运算）。
++ *
++ * 判级（阈值只引用 THRESHOLDS 常量，不散落字面量）：
++ *   正常态（moduleIndex 可用）：L2 = 跨 ≥L2_SPAN 模块 或 风险命中；L1 = 跨 ≥L1_SPAN 模块
++ *     或 ≥L1_FILES 文件；否则 L0。
++ *   降级态（moduleIndex 为 null/undefined/空，如未 scan / 无 module-map 的存量项目）：
++ *     span 退出判级，L2 = ≥L2_FILES_DEGRADED 文件 或 风险命中；L1 = ≥L1_FILES 文件。
++ *   全部 advisory（D-003：升 blocking 是另立变更的显式决策），不抛错不阻断。
++ *
++ * 计数口径（design 接口定义，勿自创字段）：
++ *   fileCount     = 全部变更文件数（判级用的「文件数」信号与之一致——与旧「≤3 文件」规则
++ *                   及 sillyhub 校准统计同基）；
++ *   testFileCount = 非文档文件中：路径含 __tests__/、/tests/ 目录段、basename test_ 前缀
++ *                   （python 风格）或 .test./_test./.spec. 命名（对齐仓内既有测试判定先例）；
++ *   codeFileCount = 其余非文档文件。文档口径沿用 docSyncHint 的 isDoc（run/shared.js
++ *                   auditQuickCompletion 内 isDocFile 同款：.md/.yaml/.yml 扩展或 docs/、
++ *                   .sillyspec/docs/ 前缀——模块卡与 changelog sidecar 均 .md 天然覆盖），
++ *                   文档文件不计入 testFileCount/codeFileCount，也不参与模块归属与风险命中。
++ */
++import { QUICK_RISK_PATH_PATTERNS } from './change-risk-profile.js'
++
++/** 代码内默认阈值（task-05 真实图谱校准定稿，缺省行为的单一事实源；local.yaml quick-gate 段可覆写，D-009）。
++ *  定稿依据（2026-09-14，sillyhub 919 条 quicklog × 5 份真实 _module-map.yaml 重算交叉表，
++ *  证据全文见主仓 changes/2026-09-14-quick-exit-tiered-gates/design.md「阈值校准记录」）：
++ *  L1_SPAN=2 落在文档同步率断崖上（≤3 文件档 span1 33.3% → span2-3 5.9%，近期口径）；
++ *  L2_SPAN=4 边界内格子全档最差（近期 span4+×4-10 文件 0-14.3%）；L1_FILES=4 维持旧规则
++ *  「≤3 文件」边界连续性（文件维度无同步率断崖——量错维度的实证本身）；L2_FILES_DEGRADED=8
++ *  覆盖降级档最差文件桶 7-10（32.9-35.3%）。四值与 brainstorm 初值一致，维持不调。 */
++export const THRESHOLDS = {
++  L1_SPAN: 2,            // 跨 ≥2 模块 → L1
++  L1_FILES: 4,           // 或 ≥4 文件 → L1
++  L2_SPAN: 4,            // 跨 ≥4 模块 → L2
++  L2_FILES_DEGRADED: 8,  // module-map 缺失降级档：≥8 文件 → L2
++}
++
++/** local.yaml quick-gate 键 → THRESHOLDS 常量键（覆写面与代码默认值的单一对照）。 */
++const GATE_KEY_TO_THRESHOLD = {
++  l1_span: 'L1_SPAN',
++  l1_files: 'L1_FILES',
++  l2_span: 'L2_SPAN',
++  l2_files_degraded: 'L2_FILES_DEGRADED',
++}
++
++/** 阈值合法性：≥1 的有限整数（0/负数会让一切改动升 L1、浮点/字符串无意义）。 */
++function isValidThreshold(v) {
++  return typeof v === 'number' && Number.isInteger(v) && v >= 1
++}
++
++/**
++ * 合并 local.yaml quick-gate 段覆写与代码默认值（D-009）。
++ * @param {object} config local.yaml 解析结果（无 quick-gate 段 → 全默认；键非法回退默认并 warn）
++ * @returns {{ l1_span: number, l1_files: number, l2_span: number, l2_files_degraded: number }}
++ */
++export function resolveGateThresholds(config) {
++  const merged = {
++    l1_span: THRESHOLDS.L1_SPAN,
++    l1_files: THRESHOLDS.L1_FILES,
++    l2_span: THRESHOLDS.L2_SPAN,
++    l2_files_degraded: THRESHOLDS.L2_FILES_DEGRADED,
++  }
++  const section = config == null ? undefined : config['quick-gate']
++  if (section == null) return merged
++  if (typeof section !== 'object' || Array.isArray(section)) {
++    console.warn('[quick-gate] local.yaml quick-gate 段须为键值对象，已忽略（使用默认阈值）')
++    return merged
++  }
++  for (const [key, constName] of Object.entries(GATE_KEY_TO_THRESHOLD)) {
++    if (!(key in section)) continue
++    const v = section[key]
++    if (isValidThreshold(v)) merged[key] = v
++    else console.warn(`[quick-gate] local.yaml 配置键 quick-gate.${key}=${JSON.stringify(v)} 非法（须为 ≥1 整数），回退默认 ${THRESHOLDS[constName]}`)
++  }
++  return merged
++}
++
++// ── 计数口径判定（文档/测试/代码三分；口径见文件头注释） ──
++
++/** 文档文件口径：沿用 docSyncHint 的 isDoc（run/shared.js auditQuickCompletion 内 isDocFile 逐款同源）。 */
++function isDocPath(p) {
++  return p.endsWith('.md') || p.endsWith('.yaml') || p.endsWith('.yml') ||
++    p.startsWith('docs/') || p.startsWith('.sillyspec/docs/')
++}
++
++/** __tests__/ 或 tests/ 目录段（/test_ 前缀与命名判定在 isTestPath 内）。 */
++const TEST_DIR_RE = /(^|\/)(__tests__|tests)\//i
++
++/** 测试文件判定：目录段、basename test_ 前缀、.test./_test./.spec. 命名三信号任一命中。 */
++function isTestPath(p) {
++  if (TEST_DIR_RE.test(p)) return true
++  const base = p.slice(p.lastIndexOf('/') + 1)
++  if (/^test_/i.test(base)) return true
++  return /[._](test|spec)\.[^.]+$/i.test(base)
++}
++
++/** moduleIndex 兼容两种形态：parseModuleMapSimple 扁平 { id: {...} } 或 { modules: {...} } 包装；空 → null（degraded）。 */
++function resolveModulesObject(moduleIndex) {
++  if (moduleIndex == null || typeof moduleIndex !== 'object') return null
++  const wrapped = moduleIndex.modules
++  const obj = wrapped && typeof wrapped === 'object' && !Array.isArray(wrapped) ? wrapped : moduleIndex
++  return Object.keys(obj).length > 0 ? obj : null
++}
++
++/** 一级归属：paths/core_files 字面量或目录前缀命中（与 docs-debt matchFilesToModules 一级口径同款，纯内存零 IO）。 */
++function matchModuleForFile(posix, modulesObj) {
++  for (const [id, m] of Object.entries(modulesObj)) {
++    if (m == null || typeof m !== 'object') continue
++    const prefixes = [...(Array.isArray(m.paths) ? m.paths : []), ...(Array.isArray(m.core_files) ? m.core_files : [])]
++    for (const raw of prefixes) {
++      const p = String(raw).replace(/\\/g, '/').replace(/\/+$/, '')
++      if (!p) continue
++      if (posix === p || posix.startsWith(p + '/')) return id
++    }
++  }
++  return null
++}
++
++/** 卡片认领判定：模块 doc 字段（如 modules/core-engine.md）对应卡片文件在 changedFiles 内。
++ *  changedFiles 为仓库根相对路径（如 .sillyspec/docs/<project>/modules/core-engine.md），
++ *  本函数无 cwd/project 入参，按字面量或后缀对齐。 */
++function cardInFiles(doc, fileSet) {
++  const d = doc.replace(/\\/g, '/').replace(/^\.\//, '')
++  for (const f of fileSet) {
++    if (f === d || f.endsWith('/' + d)) return true
++  }
++  return false
++}
++
++/**
++ * quick 出口门禁画像（纯函数：无 IO、无子进程，moduleIndex/风险表/阈值全由参数或默认值）。
++ * @param {string[]} changedFiles 变更文件（CLI 审计链 git 事实；反斜杠自动归一 POSIX）
++ * @param {object|null} moduleIndex _module-map.yaml 解析结果（null/undefined/空 → degraded）
++ * @param {object} [opts]
++ * @param {Array<{pattern: string, re: RegExp}>} [opts.riskTable] 路径模式风险表（默认 QUICK_RISK_PATH_PATTERNS）
++ * @param {object} [opts.thresholds] 已合并阈值（resolveGateThresholds 产物；缺省用 THRESHOLDS，D-009）
++ * @param {Array<{path: string}>} [opts.fileNotes] --file-notes 解析结果（perFileNotes 覆盖率判定）
++ * @param {boolean} [opts.noDocs] --no-docs 显式豁免（docClaim → exempt-no-docs）
++ * @returns 画像对象（字段与判级规则见 design.md 接口定义）
++ */
++export function computeGateProfile(changedFiles, moduleIndex, opts = {}) {
++  const riskTable = Array.isArray(opts.riskTable) ? opts.riskTable : QUICK_RISK_PATH_PATTERNS
++
++  // 阈值：opts.thresholds 逐键取合法值，否则回 THRESHOLDS 默认（warn 责任在 resolveGateThresholds）
++  const th = {}
++  for (const [key, constName] of Object.entries(GATE_KEY_TO_THRESHOLD)) {
++    const v = opts.thresholds ? opts.thresholds[key] : undefined
++    th[key] = isValidThreshold(v) ? v : THRESHOLDS[constName]
++  }
++
++  const files = (Array.isArray(changedFiles) ? changedFiles : [])
++    .map((f) => String(f).replace(/\\/g, '/'))
++    .filter(Boolean)
++
++  const notedPaths = new Set(
++    (Array.isArray(opts.fileNotes) ? opts.fileNotes : [])
++      .filter((n) => n != null && typeof n.path === 'string' && typeof n.note === 'string' && n.note.trim() !== '')
++      .map((n) => n.path.replace(/\\/g, '/')),
++  )
++
++  const codeFiles = []
++  const testFiles = []
++  for (const f of files) {
++    if (isDocPath(f)) continue // 文档文件不计入两者、不参与归属与风险命中（口径见文件头）
++    if (isTestPath(f)) testFiles.push(f)
++    else codeFiles.push(f)
++  }
++
++  const modulesObj = resolveModulesObject(moduleIndex)
++  const degraded = modulesObj === null
++
++  // 模块归属（非文档文件 × paths/core_files 前缀聚类）；degraded 时不算，modules=[]、unmappedFiles=[]
++  const modules = []
++  const unmappedFiles = []
++  if (!degraded) {
++    const byModule = new Map()
++    for (const f of [...codeFiles, ...testFiles]) {
++      const id = matchModuleForFile(f, modulesObj)
++      if (id == null) { unmappedFiles.push(f); continue }
++      const entry = byModule.get(id)
++      if (entry) entry.files.push(f)
++      else byModule.set(id, { id, files: [f] })
++    }
++    modules.push(...byModule.values())
++  }
++  const moduleSpan = degraded ? null : modules.length
++
++  // 风险命中：非文档文件 × 路径模式表（v1 仅路径模式，无 diff 关键词维度；元素只含 pattern/file）
++  const riskHits = []
++  for (const f of [...codeFiles, ...testFiles]) {
++    for (const entry of riskTable) {
++      const re = entry == null ? null : entry.re
++      if (!(re instanceof RegExp)) continue
++      if (re.global) re.lastIndex = 0 // 防调用方传入 /g 正则跨文件携带 lastIndex 状态
++      if (re.test(f)) riskHits.push({ pattern: entry.pattern, file: f })
++    }
++  }
++
++  // 判级：正常态 span 参与；degraded 态 span 退出（L1=≥l1_files、L2=≥l2_files_degraded 或风险命中）
++  let level = 'L0'
++  if (degraded) {
++    if (files.length >= th.l2_files_degraded || riskHits.length > 0) level = 'L2'
++    else if (files.length >= th.l1_files) level = 'L1'
++  } else if (moduleSpan >= th.l2_span || riskHits.length > 0) level = 'L2'
++  else if (moduleSpan >= th.l1_span || files.length >= th.l1_files) level = 'L1'
++
++  // L1：--file-notes 覆盖率（changedFiles 全集均有非空注记 → true；`path::` 空括注不算——防形式化绕过；
++  // 空集空真 true——L0 不消费）
++  const perFileNotes = files.every((f) => notedPaths.has(f))
++
++  // L1 机械规则：codeFileCount ≥2 且 testFileCount===0 → missing；codeFileCount ≤1 → na；其余 ok
++  let testDelta
++  if (codeFiles.length <= 1) testDelta = 'na'
++  else if (testFiles.length === 0) testDelta = 'missing'
++  else testDelta = 'ok'
++
++  // L2：模块文档认领（触及模块中带 doc 卡片的模块，其卡片文件全在 changedFiles → claimed；
++  // 无带卡片的触及模块（含 degraded）→ 无可认领，空真 claimed 不出假 advisory；--no-docs 优先豁免）
++  let docClaim
++  if (opts.noDocs) docClaim = 'exempt-no-docs'
++  else {
++    const fileSet = new Set(files)
++    const claimable = modules.filter((e) => {
++      const m = modulesObj == null ? null : modulesObj[e.id]
++      return m != null && typeof m === 'object' && typeof m.doc === 'string' && m.doc.trim() !== ''
++    })
++    docClaim = claimable.every((e) => cardInFiles(modulesObj[e.id].doc, fileSet)) ? 'claimed' : 'missing'
++  }
++
++  // L2 风险命中：运行时证据要求（advisory 提示，不引入 quick 没有的 wait 机制）
++  const runtimeEvidence = riskHits.length > 0 ? 'required' : 'na'
++
++  return {
++    fileCount: files.length,
++    codeFileCount: codeFiles.length,
++    testFileCount: testFiles.length,
++    moduleSpan,
++    modules,
++    unmappedFiles,
++    riskHits,
++    level,
++    degraded,
++    checks: { perFileNotes, testDelta, docClaim, runtimeEvidence },
++  }
++}
+
+diff --git a/test/quick-gate-profile.test.mjs b/test/quick-gate-profile.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/quick-gate-profile.test.mjs
+@@ -0,0 +1,385 @@
++/**
++ * quick-gate-profile 矩阵单测（2026-09-14-quick-exit-tiered-gates task-01 / FR-02）。
++ *
++ * 纯函数零夹具覆盖 computeGateProfile / THRESHOLDS / resolveGateThresholds：
++ *   1. THRESHOLDS 单点常量（2/4/4/8）与判级只引用常量；
++ *   2. resolveGateThresholds：无配置=默认、逐键覆写、非法键回退默认并 warn、段非对象 warn；
++ *   3. 计数口径：code/test/doc 三分（isDoc 沿用 docSyncHint、测试判定四信号）、反斜杠归一；
++ *   4. 判级矩阵：span×files×risk×degraded 组合 + 阈值边界（≥2/≥4/≥4/≥8 的两侧）；
++ *   5. checks 四项：perFileNotes 覆盖率、testDelta 三态、docClaim 四路、runtimeEvidence；
++ *   6. opts 注入面：thresholds / riskTable / fileNotes / noDocs；
++ *   7. 风险表段边界锚定（author/booking/lockfile 假阳不命中）+ 文档文件不参与风险命中；
++ *   8. detectChangeRisk 判级零变化回归（quick 表新增不影响 verify 侧，task-01 验收项）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++
++import {
++  computeGateProfile,
++  THRESHOLDS,
++  resolveGateThresholds,
++} from '../src/quick-gate-profile.js'
++import { QUICK_RISK_PATH_PATTERNS, detectChangeRisk } from '../src/change-risk-profile.js'
++
++/** 四模块 fixture（parseModuleMapSimple 扁平形态：字面量 + 目录前缀两种 paths 写法） */
++const IDX = {
++  'core-engine': { paths: ['src/db.js', 'src/progress.js'] },
++  runtime: { paths: ['src/run/'] },
++  'cli-entry': { paths: ['src/index.js'] },
++  stages: { paths: ['src/stages/'] },
++}
++
++const DEFAULTS = { l1_span: 2, l1_files: 4, l2_span: 4, l2_files_degraded: 8 }
++
++/** 捕获 console.warn 调用（resolveGateThresholds 键非法回退的 warn 断言用），finally 必还原。 */
++function withWarnSpy(fn) {
++  const original = console.warn
++  const calls = []
++  console.warn = (...args) => calls.push(args.join(' '))
++  try {
++    return { result: fn(), calls }
++  } finally {
++    console.warn = original
++  }
++}
++
++// ── 1. THRESHOLDS 单点常量 ──
++
++test('THRESHOLDS 四阈值单点定义（L1_SPAN=2 / L1_FILES=4 / L2_SPAN=4 / L2_FILES_DEGRADED=8）', () => {
++  assert.deepEqual(THRESHOLDS, { L1_SPAN: 2, L1_FILES: 4, L2_SPAN: 4, L2_FILES_DEGRADED: 8 })
++})
++
++// ── 2. resolveGateThresholds ──
++
++test('resolveGateThresholds：未配置 quick-gate 段 → 输出与 THRESHOLDS 完全一致', () => {
++  for (const config of [undefined, null, {}, { commands: { test: 'npm test' } }, { 'quick-gate': {} }]) {
++    const { result, calls } = withWarnSpy(() => resolveGateThresholds(config))
++    assert.deepEqual(result, DEFAULTS, `无覆写配置 ${JSON.stringify(config)} → 全默认`)
++    assert.equal(calls.length, 0, '无键可校验，不 warn')
++  }
++  assert.equal(DEFAULTS.l1_span, THRESHOLDS.L1_SPAN)
++  assert.equal(DEFAULTS.l1_files, THRESHOLDS.L1_FILES)
++  assert.equal(DEFAULTS.l2_span, THRESHOLDS.L2_SPAN)
++  assert.equal(DEFAULTS.l2_files_degraded, THRESHOLDS.L2_FILES_DEGRADED)
++})
++
++test('resolveGateThresholds：四键逐一生效 + 整段覆写', () => {
++  for (const key of Object.keys(DEFAULTS)) {
++    const merged = resolveGateThresholds({ 'quick-gate': { [key]: 99 } })
++    assert.equal(merged[key], 99, `覆写键 ${key} 生效`)
++    for (const other of Object.keys(DEFAULTS)) {
++      if (other !== key) assert.equal(merged[other], DEFAULTS[other], `未覆写键 ${other} 保持默认`)
++    }
++  }
++  assert.deepEqual(
++    resolveGateThresholds({ 'quick-gate': { l1_span: 3, l1_files: 5, l2_span: 6, l2_files_degraded: 10 } }),
++    { l1_span: 3, l1_files: 5, l2_span: 6, l2_files_degraded: 10 },
++  )
++})
++
++test('resolveGateThresholds：键非法（字符串/0/负数/浮点/NaN）回退默认并 warn', () => {
++  for (const bad of ['2', 0, -1, 2.5, NaN]) {
++    const { result, calls } = withWarnSpy(() => resolveGateThresholds({ 'quick-gate': { l1_span: bad } }))
++    assert.deepEqual(result, DEFAULTS, `非法值 ${String(bad)} → l1_span 回退默认`)
++    assert.equal(calls.length, 1, `非法值 ${String(bad)} warn 一次`)
++    assert.ok(calls[0].includes('quick-gate.l1_span'), `warn 指名键：${calls[0]}`)
++    assert.ok(calls[0].includes('2'), `warn 提示默认值：${calls[0]}`)
++  }
++})
++
++test('resolveGateThresholds：段非对象（字符串/数组）warn 并全默认；未知键忽略不 warn', () => {
++  for (const bad of ['oops', [1, 2]]) {
++    const { result, calls } = withWarnSpy(() => resolveGateThresholds({ 'quick-gate': bad }))
++    assert.deepEqual(result, DEFAULTS, `段=${JSON.stringify(bad)} → 全默认`)
++    assert.equal(calls.length, 1, 'warn 一次')
++    assert.ok(calls[0].includes('键值对象'), 'warn 说明期望形态')
++  }
++  const { result, calls } = withWarnSpy(() => resolveGateThresholds({ 'quick-gate': { l9_span: 9 } }))
++  assert.deepEqual(result, DEFAULTS, '未知键不进合并面')
++  assert.equal(calls.length, 0, '未知键静默忽略（前向兼容），不 warn')
++})
++
++// ── 3. 计数口径 ──
++
++test('计数口径：code/test/doc 三分（isDoc 沿用 docSyncHint、测试判定四信号）', () => {
++  const p = computeGateProfile([
++    'src/run/a.js',        // code
++    'src/run/b.js',        // code
++    'test/x.test.mjs',     // test：.test. 命名
++    '__tests__/y.js',      // test：__tests__/ 目录段
++    'tests/test_z.py',     // test：/tests/ 目录段 + test_ 前缀
++    'pkg/test_helper.js',  // test：basename test_ 前缀（python 风格）
++    'src/run/c_spec.js',   // test：_spec. 命名（对齐既有 TEST_BASENAME_RE 先例）
++    'README.md',           // doc：.md
++    'docs/guide.md',       // doc：docs/ 前缀（亦是 .md）
++    '.sillyspec/docs/sillyspec/modules/core-engine.md',              // doc：.sillyspec/docs/ 前缀
++    '.sillyspec/docs/sillyspec/modules/core-engine.changelog.md',    // doc：changelog sidecar（.md）
++    'pkg/schema.yaml',     // doc：.yaml
++    'cfg.yml',             // doc：.yml
++  ], IDX)
++  assert.equal(p.fileCount, 13)
++  assert.equal(p.codeFileCount, 2)
++  assert.equal(p.testFileCount, 5)
++  // 模块归属只看非文档文件：a/b/c_spec 命中 runtime，其余 test 文件不落在任何 paths 前缀
++  assert.equal(p.moduleSpan, 1)
++  assert.deepEqual(p.modules, [{ id: 'runtime', files: ['src/run/a.js', 'src/run/b.js', 'src/run/c_spec.js'] }])
++  assert.ok(p.unmappedFiles.includes('test/x.test.mjs'))
++  assert.ok(!p.unmappedFiles.some((f) => f.endsWith('.md') || f.endsWith('.yaml') || f.endsWith('.yml')), '文档文件不进 unmapped')
++})
++
++test('计数口径：Windows 反斜杠路径归一后参与归属（fileNotes 同步归一）', () => {
++  const p = computeGateProfile(['src\\run\\a.js'], IDX, { fileNotes: [{ path: 'src\\run\\a.js', note: 'x' }] })
++  assert.equal(p.moduleSpan, 1)
++  assert.equal(p.unmappedFiles.length, 0)
++  assert.equal(p.checks.perFileNotes, true, 'fileNotes 反斜杠形态与 changedFiles 归一后对得上')
++})
++
++test('空输入：changedFiles 非数组/空 → fileCount 0、L0、不抛错', () => {
++  for (const empty of [undefined, null, []]) {
++    const p = computeGateProfile(empty, IDX)
++    assert.equal(p.fileCount, 0)
++    assert.equal(p.level, 'L0')
++    assert.equal(p.checks.perFileNotes, true, '空集空真（L0 不消费）')
++    assert.equal(p.checks.testDelta, 'na')
++  }
++})
++
++// ── 4. 判级矩阵（span × files × risk × degraded，含阈值边界两侧） ──
++
++test('正常态 L0：单模块单文件', () => {
++  const p = computeGateProfile(['src/db.js'], IDX)
++  assert.equal(p.level, 'L0')
++  assert.equal(p.degraded, false)
++  assert.equal(p.moduleSpan, 1)
++  assert.deepEqual(p.riskHits, [])
++})
++
++test('正常态 L1 边界：span=2 恰达 L1_SPAN（files=2 未达 L1_FILES）', () => {
++  const p = computeGateProfile(['src/db.js', 'src/run/shared.js'], IDX)
++  assert.equal(p.moduleSpan, 2)
++  assert.equal(p.fileCount, 2)
++  assert.equal(p.level, 'L1')
++})
++
++test('正常态 files 边界：单模块 3 文件 L0 / 4 文件恰达 L1_FILES', () => {
++  const three = computeGateProfile(['src/run/a.js', 'src/run/b.js', 'src/run/c.js'], IDX)
++  assert.equal(three.moduleSpan, 1)
++  assert.equal(three.fileCount, 3)
++  assert.equal(three.level, 'L0', 'span=1<2 且 files=3<4')
++  const four = computeGateProfile(['src/run/a.js', 'src/run/b.js', 'src/run/c.js', 'src/run/d.js'], IDX)
++  assert.equal(four.fileCount, 4)
++  assert.equal(four.level, 'L1', 'files=4 恰达 L1_FILES')
++})
++
++test('正常态 span 边界：span=3 → L1；span=4 恰达 L2_SPAN → L2', () => {
++  const three = computeGateProfile(['src/db.js', 'src/run/shared.js', 'src/index.js'], IDX)
++  assert.equal(three.moduleSpan, 3)
++  assert.equal(three.level, 'L1', 'span=3 未达 L2_SPAN')
++  const four = computeGateProfile(['src/db.js', 'src/run/shared.js', 'src/index.js', 'src/stages/plan.js'], IDX)
++  assert.equal(four.moduleSpan, 4)
++  assert.equal(four.level, 'L2')
++})
++
++test('正常态风险命中：单模块 2 文件 + auth 路径 → 直接 L2（risk 优先于 span/files）', () => {
++  const p = computeGateProfile(['src/run/a.js', 'src/auth/login.js'], IDX)
++  assert.equal(p.moduleSpan, 1)
++  assert.equal(p.fileCount, 2)
++  assert.equal(p.level, 'L2')
++  assert.deepEqual(p.riskHits, [{ pattern: 'auth', file: 'src/auth/login.js' }])
++  assert.equal(p.checks.runtimeEvidence, 'required')
++})
++
++test('降级态：moduleIndex null/undefined/{}/{modules:{}} → degraded、moduleSpan=null、span 退出判级', () => {
++  const files4 = ['src/a.js', 'src/b.js', 'src/c.js', 'src/d.js']
++  for (const empty of [null, undefined, {}, { modules: {} }]) {
++    const p = computeGateProfile(files4, empty)
++    assert.equal(p.degraded, true, `moduleIndex=${JSON.stringify(empty)} 降级`)
++    assert.equal(p.moduleSpan, null)
++    assert.deepEqual(p.modules, [])
++    assert.deepEqual(p.unmappedFiles, [])
++    assert.equal(p.level, 'L1', '降级档 files=4 恰达 L1_FILES')
++  }
++})
++
++test('降级态边界：7 文件 L1 / 8 文件恰达 L2_FILES_DEGRADED', () => {
++  const mk = (n) => Array.from({ length: n }, (_, i) => `src/f${i}.js`)
++  assert.equal(computeGateProfile(mk(7), null).level, 'L1')
++  assert.equal(computeGateProfile(mk(8), null).level, 'L2')
++})
++
++test('降级态风险命中照常升 L2（风险判定不依赖 module-map）', () => {
++  const p = computeGateProfile(['src/billing/invoice.js'], null)
++  assert.equal(p.degraded, true)
++  assert.equal(p.level, 'L2')
++  assert.deepEqual(p.riskHits, [{ pattern: 'billing', file: 'src/billing/invoice.js' }])
++})
++
++// ── 5. checks 四项 ──
++
++test('testDelta 三态：code≤1 → na；code≥2 且 test=0 → missing；有测试 → ok', () => {
++  assert.equal(computeGateProfile(['src/db.js'], IDX).checks.testDelta, 'na')
++  assert.equal(computeGateProfile(['src/db.js', 'src/progress.js'], IDX).checks.testDelta, 'missing')
++  const ok = computeGateProfile(['src/db.js', 'src/progress.js', 'test/db.test.mjs'], IDX)
++  assert.equal(ok.checks.testDelta, 'ok')
++  // 文档文件不计入 codeFileCount：2 文档 + 1 code 仍 na
++  const docOnly = computeGateProfile(['README.md', 'docs/x.md', 'src/db.js'], IDX)
++  assert.equal(docOnly.codeFileCount, 1)
++  assert.equal(docOnly.checks.testDelta, 'na')
++})
++
++test('perFileNotes：全集非空注记 true / 部分 false / 空括注不算 / 未提供 false', () => {
++  const files = ['src/db.js', 'src/run/a.js']
++  assert.equal(computeGateProfile(files, IDX, { fileNotes: [] }).checks.perFileNotes, false)
++  assert.equal(
++    computeGateProfile(files, IDX, { fileNotes: [{ path: 'src/db.js', note: 'x' }] }).checks.perFileNotes,
++    false,
++  )
++  assert.equal(
++    computeGateProfile(files, IDX, {
++      fileNotes: [{ path: 'src/db.js', note: 'x' }, { path: 'src/run/a.js', note: 'y' }],
++    }).checks.perFileNotes,
++    true,
++  )
++  // `path::` 空括注不算注记（防形式化绕过：逐文件落了条目但零信息）
++  assert.equal(
++    computeGateProfile(files, IDX, {
++      fileNotes: [{ path: 'src/db.js', note: 'x' }, { path: 'src/run/a.js', note: '' }],
++    }).checks.perFileNotes,
++    false,
++  )
++  // 注记含未变更文件不碍事（只看 changedFiles 全集覆盖）
++  assert.equal(
++    computeGateProfile(files, IDX, {
++      fileNotes: [{ path: 'src/db.js', note: 'x' }, { path: 'src/run/a.js', note: 'y' }, { path: 'src/zz.js', note: 'z' }],
++    }).checks.perFileNotes,
++    true,
++  )
++})
++
++test('docClaim：claimed / missing / exempt-no-docs / 无可认领空真 claimed', () => {
++  const idx = { 'core-engine': { paths: ['src/db.js'], doc: 'modules/core-engine.md' } }
++  const claimed = computeGateProfile(['src/db.js', '.sillyspec/docs/sillyspec/modules/core-engine.md'], idx)
++  assert.equal(claimed.checks.docClaim, 'claimed', '触及模块的卡片文件在 changedFiles')
++  const missing = computeGateProfile(['src/db.js'], idx)
++  assert.equal(missing.checks.docClaim, 'missing', '改了模块内文件但卡片未动')
++  const exempt = computeGateProfile(['src/db.js'], idx, { noDocs: true })
++  assert.equal(exempt.checks.docClaim, 'exempt-no-docs', '--no-docs 显式豁免优先')
++  // 模块无 doc 字段（无卡可认领）→ 空真 claimed；degraded（modules=[]）同理
++  assert.equal(computeGateProfile(['src/db.js'], IDX).checks.docClaim, 'claimed', '无 doc 条目无可认领')
++  assert.equal(computeGateProfile(['src/db.js'], null).checks.docClaim, 'claimed', 'degraded 无触及模块')
++})
++
++test('runtimeEvidence：风险命中 required / 无命中 na', () => {
++  assert.equal(computeGateProfile(['src/db.js'], IDX).checks.runtimeEvidence, 'na')
++  assert.equal(computeGateProfile(['src/run/cron.js'], IDX).checks.runtimeEvidence, 'required')
++})
++
++// ── 6. opts 注入面 ──
++
++test('opts.thresholds 覆写判级（resolveGateThresholds 产物形态：snake 四键）', () => {
++  const two = ['src/run/a.js', 'src/run/b.js']
++  assert.equal(computeGateProfile(two, IDX).level, 'L0', '默认阈值下 2 文件单模块 L0')
++  assert.equal(computeGateProfile(two, IDX, { thresholds: { l1_files: 2 } }).level, 'L1', 'l1_files 调到 2 → L1')
++  assert.equal(computeGateProfile(two, IDX, { thresholds: { l1_span: 1 } }).level, 'L1', 'l1_span 调到 1 → L1')
++  const twoModules = ['src/db.js', 'src/run/a.js'] // span=2、files=2：默认恰 L1
++  assert.equal(computeGateProfile(twoModules, IDX).level, 'L1')
++  assert.equal(computeGateProfile(twoModules, IDX, { thresholds: { l2_span: 2 } }).level, 'L2', 'l2_span 调到 2 → L2')
++  assert.equal(computeGateProfile(two, null, { thresholds: { l2_files_degraded: 2 } }).level, 'L2', '降级档阈值覆写生效')
++  assert.equal(resolveGateThresholds({ 'quick-gate': { l1_files: 2 } }).l1_files, 2, 'resolveGateThresholds 产物可直接作 opts.thresholds')
++  const chained = computeGateProfile(two, IDX, { thresholds: resolveGateThresholds({ 'quick-gate': { l1_files: 2 } }) })
++  assert.equal(chained.level, 'L1')
++})
++
++test('opts.riskTable 自定义表替换默认表', () => {
++  const custom = [{ pattern: 'widget', re: /widget/ }]
++  const hit = computeGateProfile(['src/run/widget.js'], IDX, { riskTable: custom })
++  assert.deepEqual(hit.riskHits, [{ pattern: 'widget', file: 'src/run/widget.js' }])
++  assert.equal(hit.level, 'L2')
++  const notHit = computeGateProfile(['src/run/auth.js'], IDX, { riskTable: custom })
++  assert.deepEqual(notHit.riskHits, [], '默认 auth 表被自定义表替换，不再命中')
++  assert.equal(notHit.level, 'L0')
++})
++
++// ── 7. 风险表段边界锚定（R-03 假阳防线）──
++
++test('六域路径模式正命中（目录段/文件名/连字符复合段）', () => {
++  const cases = [
++    ['src/auth/login.js', 'auth'],
++    ['src/oauth2/token.js', 'auth'],
++    ['src/user_auth.js', 'auth'],
++    ['src/authenticator.ts', 'auth'],
++    ['src/permissions.ts', 'permission'],
++    ['src/role-permission.js', 'permission'],
++    ['src/billing/invoice.ts', 'billing'],
++    ['billing-service/main.py', 'billing'],
++    ['db/migrations/001_init.sql', 'migration'],
++    ['src/migrate.ts', 'migration'],
++    ['src/locks.js', 'lock'],
++    ['src/mutex.ts', 'lock'],
++    ['src/db-lock.js', 'lock'],
++    ['src/scheduler.js', 'scheduling'],
++    ['src/cron-job.js', 'scheduling'],
++    ['src/jobs/worker.js', 'scheduling'],
++  ]
++  for (const [file, domain] of cases) {
++    const p = computeGateProfile([file], null)
++    assert.deepEqual(p.riskHits, [{ pattern: domain, file }], `${file} → ${domain}`)
++    assert.equal(p.level, 'L2')
++  }
++})
++
++test('子串假阳不命中：author/booking/lockfile/jobtitle/调度无关词', () => {
++  for (const file of ['src/author.js', 'src/booking.js', 'src/lockfile.js', 'src/jobtitle.ts', 'src/enjoy.js']) {
++    const p = computeGateProfile([file], IDX)
++    assert.deepEqual(p.riskHits, [], `${file} 不命中任何风险模式`)
++    assert.equal(p.level, 'L0')
++  }
++})
++
++test('文档文件不参与风险命中（常见 MIGRATION.md/changelog 不误报）', () => {
++  for (const file of ['MIGRATION.md', 'docs/auth-guide.md', '.sillyspec/docs/sillyspec/modules/billing.md']) {
++    const p = computeGateProfile([file], IDX)
++    assert.deepEqual(p.riskHits, [], `${file} 是文档文件，不构成运行时风险面`)
++    assert.equal(p.codeFileCount, 0)
++    assert.equal(p.level, 'L0', '纯文档改动不因路径含风险词升 L2')
++  }
++})
++
++test('QUICK_RISK_PATH_PATTERNS 表形状：六域齐全、条目只含 pattern+re', () => {
++  assert.ok(Array.isArray(QUICK_RISK_PATH_PATTERNS))
++  const domains = QUICK_RISK_PATH_PATTERNS.map((e) => e.pattern)
++  for (const d of ['auth', 'permission', 'billing', 'migration', 'lock', 'scheduling']) {
++    assert.ok(domains.includes(d), `踩坑域 ${d} 在表内`)
++  }
++  for (const e of QUICK_RISK_PATH_PATTERNS) {
++    assert.equal(typeof e.pattern, 'string')
++    assert.ok(e.re instanceof RegExp)
++  }
++  // riskHits 元素只含 pattern 与 file 字段（v1 无 diff 关键词维度）
++  const p = computeGateProfile(['src/auth/x.js'], null)
++  assert.deepEqual(Object.keys(p.riskHits[0]).sort(), ['file', 'pattern'])
++})
++
++// ── 8. detectChangeRisk 判级零变化回归（verify 侧） ──
++
++test('detectChangeRisk 判级零变化：quick 表新增不影响 verify 侧语义', () => {
++  const plain = detectChangeRisk({ designContent: '普通文本改动', planContent: '', changedFiles: ['src/run/a.js'] })
++  assert.equal(plain.level, 'doc-only')
++  assert.deepEqual(plain.triggers, [])
++
++  const integ = detectChangeRisk({ designContent: '涉及 daemon 与 backend 的联调', planContent: '', changedFiles: [] })
++  assert.equal(integ.level, 'integration-critical')
++  assert.ok(integ.triggers.includes('daemon'))
++
++  const dep = detectChangeRisk({ designContent: '', planContent: '', changedFiles: ['src/cli.ts'] })
++  assert.equal(dep.level, 'deployment-critical')
++
++  // 同句否定抑制语义不变（坑 risk-negation-blindness 回归锚点）
++  const neg = detectChangeRisk({ designContent: '本次不新增 daemon 协议', planContent: '', changedFiles: [] })
++  assert.equal(neg.level, 'doc-only')
++  assert.ok(neg.suppressedTriggers.includes('daemon'))
++
++  // 两表互不掺和：auth 路径只进 quick 风险表，不触发 detectChangeRisk 判级
++  const authOnly = detectChangeRisk({ designContent: '', planContent: '', changedFiles: ['src/auth/login.js'] })
++  assert.equal(authOnly.level, 'doc-only')
++})

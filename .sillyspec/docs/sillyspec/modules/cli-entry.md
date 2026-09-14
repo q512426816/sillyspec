@@ -4,7 +4,7 @@ doc_type: module-card
 module_id: cli-entry
 author: qinyi
 created_at: 2026-06-03T07:42:00+08:00
-updated_at: 2026-09-08T17:10:00+08:00
+updated_at: 2026-09-14T11:20:00+08:00
 ---
 # cli-entry
 
@@ -88,6 +88,7 @@ runStage(pm, progress, stageName, cwd, changeName)
 |------|--------|------|
 | 2026-09-07 | 2026-09-07-ir-stage-p3c | IR P3c：index.js 新 design-init case（--change/--force/--json/--spec-dir；幂等不覆盖，决策追踪表预填；缺 decisions exit 1 带指引） |
 | 2026-09-08 | ql-20260908-006-5f04 | doctor `--gc-unstamped-runs [--confirm]`：usage + case 'doctor' 接线 gcUnstampedExecuteRuns（默认 dry-run）；存量无戳 execute-runs 清扫，不进 archive 热路径 |
+| 2026-09-14 | 2026-09-14-quick-exit-tiered-gates | scope-audit 命令分支双出口接分级门禁画像（task-03 / FR-04 / D-008）：表格 [gate] 画像段（renderScopeAuditTable 按 gateProfile 存在性渲染，quick 会话出、full-flow 零输出）+ --json gateProfile 字段（computeChangeScopeAudit quick 模式增量——实时态透传 review.gateProfile / 冻结态旧记录按 rows 现算重放）；usage 补 [gate] 分级门禁画像说明 |
 
 ## adoptPlanWaves proposal 档（2026-09-09-plan-derived）
 plan-adopt-waves.js adoptPlanWaves 加 mode 参：proposal 只读产拓扑布局草稿（planMdDraft/rewritten，不落盘）供 postcheck 自动修复验证；write 档向后兼容（CLI 命令行为等价，测试锁定）。

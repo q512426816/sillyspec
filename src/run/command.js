@@ -802,6 +802,10 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
   const isAllowDelete = flags.includes('--allow-delete')
   const isForceBaseline = flags.includes('--force-baseline')
   const isForceRescan = flags.includes('--force-rescan')
+  // --no-docs（2026-09-14-quick-exit-tiered-gates task-02，no-docs-flag）：L2 门禁文档认领的显式
+  // 豁免布尔 flag（先例上方同款 includes 解析）——只影响 gate 画像 docClaim（exempt-no-docs）
+  // 与 [gate] 落账留痕，不改 status/exit code（D-003 advisory），审计链经 completeStep options 透传。
+  const isNoDocs = flags.includes('--no-docs')
 
   // F10b（ql-20260818-010）：语义别名定向提示。did-you-mean 按编辑距离猜形近 flag，猜中的常是
   // 形近但语义错的（--title → --files，ql-20260818-003 负面③实证）。常见「语义别名」在此登记
@@ -829,6 +833,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     '--req', '--cause', '--solution', '--result',
     '--spec-dir', '--spec-root', '--runtime-root', '--workspace-id', '--scan-run-id',
     '--files', '--file-notes', '--allow-new', '--allow-delete', '--force-baseline', '--force-rescan',
+    '--no-docs', // L2 门禁文档认领显式豁免（task-02：布尔 flag 不吃值，audit 链 docClaim → exempt-no-docs）
     '--json', '--dir', '--help',
     '--reopen', '--from-step', '--mode',
     '--deep', '--quick', '--standard', // scan profile 三档显式选择（scan-profile.js 从 argv 读；互斥见下方 PROFILE_FLAGS 检测）
@@ -1478,7 +1483,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
       }
     }
     const doneAnswer = getFlagValue('--answer')
-    return await completeStep(pm, progress, stageName, cwd, outputText, inputText, { confirm: isConfirm, changeName: effectiveChange, nonInteractive: isNonInteractive && !isInteractive, platformOpts, doneAnswer, isForceBaseline, isAllowNew, isAllowDelete, quickFiles })
+    return await completeStep(pm, progress, stageName, cwd, outputText, inputText, { confirm: isConfirm, changeName: effectiveChange, nonInteractive: isNonInteractive && !isInteractive, platformOpts, doneAnswer, isForceBaseline, isAllowNew, isAllowDelete, isNoDocs, quickFiles })
   }
 
   // 默认：输出当前步骤

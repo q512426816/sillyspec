@@ -1309,10 +1309,14 @@ task 进行中状态标记：开工/完工落 .runtime/task-progress/，list 标
       // 路由形态对齐 verify-probes（:897）/ module-impact（:1041）先例——--change 必填缺参
       // 用法错 exit 2、assertSafeChangeName 消毒、动态 import、--json 结构化输出、运行错
       // fail-soft 出错误摘要 exit 1 不抛栈。
+      // 画像双出口（2026-09-14-quick-exit-tiered-gates task-03，FR-04 / D-008）：quick 会话的
+      // gateProfile 由 computeChangeScopeAudit 结果对象携带——--json 出口经 ...saResult 展开
+      // 自动透出（gateProfile-json）、表格出口经 renderScopeAuditTable 按存在性追加 [gate]
+      // 画像段（gate-table-section），本层零分支零新解析；--file 子命令行为不变。
       const saChangeIdx = args.indexOf('--change');
       const saChange = saChangeIdx >= 0 && args[saChangeIdx + 1] && !String(args[saChangeIdx + 1]).startsWith("--") ? args[saChangeIdx + 1] : null;
       if (!saChange) {
-        console.error('用法: sillyspec scope-audit --change <name> [--file <path>] [--json] [--spec-dir <path>]\n  变更范围对账：计划×实际三态全表 + 行数（quick 会话传 quick-<8hex> 出归属表；已归档变更可查——快照冻结记录态）；--file <path> 看单文件变化内容（对账同源锚点的 git diff）；advisory 只读展示，不构成门禁');
+        console.error('用法: sillyspec scope-audit --change <name> [--file <path>] [--json] [--spec-dir <path>]\n  变更范围对账：计划×实际三态全表 + 行数（quick 会话传 quick-<8hex> 出归属表，附 [gate] 分级门禁画像——表格画像段与 --json gateProfile 字段；已归档变更可查——快照冻结记录态）；--file <path> 看单文件变化内容（对账同源锚点的 git diff）；advisory 只读展示，不构成门禁');
         process.exit(2);
       }
       assertSafeChangeName(saChange, '--change 变更名');

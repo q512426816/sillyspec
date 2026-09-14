@@ -1,13 +1,13 @@
 ---
-updated_at: 2026-09-02T17:45:00+08:00
+updated_at: 2026-09-14T11:20:00+08:00
 author: qinyi
 created_at: 2026-06-01T09:05:00
 ---
 
 # core-engine
-> 最后更新：2026-09-10
-> 最近变更：ql-20260910-002-9beb（stage-review 降级自审 CLI 侧配套：isDegradedSelfReview + gate ⚠️ 审计行 + 报错/契约降级出口——PI agent 等宿主无 Agent tool）/ 2026-08-23-adopt-harness-practices（knowledge-match 增 decisionHits 防复潮解析 + verify-postcheck skip 真跳过/evidence-auto 推荐）/ 2026-08-16-scan-docs-reconcile（契约/评审族与基础原语补录归属 + propose 回收）/ ql-20260809-003-c88a（#5 next-action 读路径对齐变更根目录 + #6 initChange 用 VALID_STAGES 单一源 + 修正 propose 残留误述）
-> 模块路径：src/db.js, src/db-engine.js + 契约/评审族与基础原语（stage-contract 三件、check-primitives、stage-review、task-review、verify-postcheck、review-tier、change-risk-profile、classify-change、contract-matrix、endpoint-extractor、knowledge-match、doctor-diagnostics、fs-atomic、constants、scan-postcheck）；完整清单见 _module-map.yaml core-engine paths。历史正文中的 run.js / progress.js / index.js 章节已分属 runtime / progress / cli-entry 模块卡
+> 最后更新：2026-09-14
+> 最近变更：2026-09-14-quick-exit-tiered-gates（quick 出口分级门禁：信号层 src/quick-gate-profile.js 三导出 + change-risk-profile 补 QUICK_RISK_PATH_PATTERNS 路径模式表 + scope-audit 增 gateProfile 双出口；THRESHOLDS 定稿 2/4/4/8）/ ql-20260910-002-9beb（stage-review 降级自审 CLI 侧配套：isDegradedSelfReview + gate ⚠️ 审计行 + 报错/契约降级出口——PI agent 等宿主无 Agent tool）/ 2026-08-23-adopt-harness-practices（knowledge-match 增 decisionHits 防复潮解析 + verify-postcheck skip 真跳过/evidence-auto 推荐）/ 2026-08-16-scan-docs-reconcile（契约/评审族与基础原语补录归属 + propose 回收）/ ql-20260809-003-c88a（#5 next-action 读路径对齐变更根目录 + #6 initChange 用 VALID_STAGES 单一源 + 修正 propose 残留误述）
+> 模块路径：src/db.js, src/db-engine.js + 契约/评审族与基础原语（stage-contract 三件、check-primitives、stage-review、task-review、verify-postcheck、review-tier、change-risk-profile、quick-gate-profile、classify-change、contract-matrix、endpoint-extractor、knowledge-match、doctor-diagnostics、fs-atomic、constants、scan-postcheck）；完整清单见 _module-map.yaml core-engine paths。历史正文中的 run.js / progress.js / index.js 章节已分属 runtime / progress / cli-entry 模块卡
 
 ## 职责
 SillySpec 的核心运行引擎 — 负责数据库存储、进度管理、阶段调度和 CLI 入口。
@@ -36,7 +36,8 @@ core-engine 是 SillySpec 的基础设施层，由三个层次组成：持久化
 - `src/verify-facts-schema.js` — verify-facts.json v2 schema 单点（2026-09-08-ir-verify-facts，D-005@v2）：FACTS_SCHEMA_VERSION/EVIDENCE_STATUS/EXEMPTION_RE/classifyVerifiedFile（code|artifact 证据核验口径分流）/parseEvidenceSlots（证据账+集成验证回执槽段解析，行首锚定占位 fail-closed）/validateFactsV2；builder/对账/集成证据/渲染四方 import 同源2026-08-23 起 test_strategy 新值接线（D-005@v2）：`resolveTestStrategy` 统一入口（`src/verify-postcheck.js:21`）解析配置策略 + evidence-auto 按 module-impact.md 影响面推荐检查组合（行为→module 聚焦测试、文档/prompt→docs-check、门禁契约→gate；缺失/不可解析降级 module 并注记）；
   skip=真跳过（`src/verify-postcheck.js:1010` mode 'strategy-skip'）——不回退全量、verify 输出显式标注留审计痕迹（R-07），`--done` 对账按 skip 分支放行
 - `src/review-tier.js` — 审查分级（self/independent）：plan_level 确定性映射（none/light→self、full→independent），无 plan_level 阶段退文件数启发式；run/gates.js 与 run/prompt.js 消费
-- `src/change-risk-profile.js` — 变更风险分级检测（P0 阻塞确认 / P1 记录 / P2 通过，产出 risk-profile.json）
+- `src/change-risk-profile.js` — 变更风险分级检测（P0 阻塞确认 / P1 记录 / P2 通过，产出 risk-profile.json）；`QUICK_RISK_PATH_PATTERNS`（2026-09-14-quick-exit-tiered-gates）——auth/permission/billing/migration/lock/scheduling 六域路径模式表（`Array<{pattern, re}>`），供 quick-gate-profile 画像风险命中消费（纯增量导出，detectChangeRisk 判级语义零变化）
+- `src/quick-gate-profile.js` — quick 出口分级门禁画像信号层（2026-09-14-quick-exit-tiered-gates task-01 / FR-02，纯函数零 IO 零子进程，D-007）：`computeGateProfile`（CLI 审计链 git 事实 changedFiles × _module-map.yaml paths/core_files 前缀聚类 → L0/L1/L2 画像 + 检查项）+ `resolveGateThresholds`（local.yaml quick-gate 段覆写合并，D-009）+ `THRESHOLDS` 阈值单点；与 change-risk-profile/scope-audit 同卡，三导出明细见下方对外接口小节，全部 advisory 不阻断（D-003）
 - `src/classify-change.js` — 变更规模分类器（quick/auto/full，供 auto 模式决定内部流程深度）
 - `src/contract-matrix.js` / `src/endpoint-extractor.js` — API 契约矩阵生成与注入（provider/consumer 端点提取与 parity check）
 - `src/knowledge-match.js` — knowledge 关键词匹配引擎（INDEX.md 条目解析 + 任务上下文匹配生成 hit report）；2026-08-23 起 INDEX `## Decisions` 段路由行进决策匹配（`src/knowledge-match.js:110-155`）：新增 `parseDecisionEntries` 解析 decisions/<域>.md 条目 + `matchKnowledge` 返回值新增 decisionHits——任务上下文命中的 Decisions 路由行所指向文件内全部 D-xxx@vN 条目，rejected 优先排序（防复潮信息最先可见）；matched/entries/report/json 旧四键结构与语义不变，无 decisions 库/路由行未命中 → decisionHits: []，供 brainstorm Step2 防复潮注入（runtime run/prompt.js 消费）
@@ -50,11 +51,20 @@ core-engine 是 SillySpec 的基础设施层，由三个层次组成：持久化
 ### src/scope-audit.js — 变更范围对账纯函数（2026-09-10-change-scope-audit 新增）
 | 函数/常量 | 说明 | 参数 |
 |-----------|------|------|
-| `computeChangeScopeAudit(opts)` | 变更范围对账单一数据源：quick-<8hex> 会话走归属表（复用 auditQuickCompletion 窗口），否则 full-flow 三态（计划侧 change-list.js 解析 × 实际侧 resolveReconcileActualFiles + numstat 真实行数）；全 advisory fail-soft | `{cwd, specBase, changeName, platformOpts}` |
-| `renderScopeAuditTable(result, opts?)` | 人类可读表渲染（三态/归属标记、BIN/— 占位、合计、⚠️ 出口指引、maxRows 截断） | `ScopeAuditResult, {maxRows}` |
+| `computeChangeScopeAudit(opts)` | 变更范围对账单一数据源：quick-<8hex> 会话走归属表（复用 auditQuickCompletion 窗口），否则 full-flow 三态（计划侧 change-list.js 解析 × 实际侧 resolveReconcileActualFiles + numstat 真实行数）；全 advisory fail-soft；quick 模式增量携带 `gateProfile`（2026-09-14-quick-exit-tiered-gates task-03 / FR-04 / D-008——实时态透传 auditQuickCompletion 挂的 review.gateProfile 不重复计算，冻结态旧记录无该字段时按 rows 冻结文件清单现算 `computeGateProfile` 重放，module-map/阈值与 --done 时点同链路、字段同构；消费方按存在性读取，full-flow 恒无此字段） | `{cwd, specBase, changeName, platformOpts}` |
+| `renderScopeAuditTable(result, opts?)` | 人类可读表渲染（三态/归属标记、BIN/— 占位、合计、⚠️ 出口指引、maxRows 截断）；result.gateProfile 存在时（quick 模式）追加 [gate] 画像段（与 run/quick-audit.js [gate] 打印块同数据源同 tier 语义，full-flow/画像 null 零输出） | `ScopeAuditResult, {maxRows}` |
 | `collectNumstatByPath(cwd, paths, opts)` | 行数三档采集（tracked=numstat / untracked=wc-l / binary=BIN），quick 与 full-flow 共用 | `cwd, paths, {baseRef}` |
 
-消费方（scope-audit 命令 / execute--done / verify--done / archive--confirm / quick--done 四注入）只 import 本三导出，禁止自研采集（D-003）。
+消费方（scope-audit 命令 / execute--done / verify--done / archive--confirm / quick--done 四注入）只 import 本三导出，禁止自研采集（D-003）。冻结重放/双 map 仓消歧走模块内 `pickModuleMapProject`（内部 helper 非导出）：按样本文件对候选 _module-map.yaml 归属得分唯一最高选项目，零归属样本平分 → degraded（与 computeGateProfile.unmappedFiles 同款归属口径）。
+
+### src/quick-gate-profile.js — quick 出口分级门禁画像（2026-09-14-quick-exit-tiered-gates 新增）
+定位：quick --done 分级门禁的信号单一来源——纯函数零 IO（moduleIndex/风险表/阈值全由参数或默认值，D-007 / R-04），接线消费见 runtime 卡（run/shared.js 挂 review.gateProfile）。
+
+| 函数/常量 | 说明 | 参数 |
+|-----------|------|------|
+| `computeGateProfile(changedFiles, moduleIndex, opts)` | 画像计算：非文档文件 × paths/core_files 前缀聚类模块归属 + `QUICK_RISK_PATH_PATTERNS` 风险命中 → level（正常态 L2=跨 ≥L2_SPAN 模块或风险命中、L1=跨 ≥L1_SPAN 或 ≥L1_FILES 文件；module-map 缺失降级档 span 退出判级、L2=≥L2_FILES_DEGRADED 文件）+ checks{perFileNotes（--file-notes 覆盖率）, testDelta（na/missing/ok 机械规则）, docClaim（claimed/missing/exempt-no-docs，模块卡认领空真防假 advisory）, runtimeEvidence（风险命中→required）}；文档文件不计数不参与归属与风险命中（docSyncHint isDoc 同源口径） | `changedFiles, moduleIndex, {riskTable?, thresholds?, fileNotes?, noDocs?}` |
+| `resolveGateThresholds(config)` | local.yaml quick-gate 段覆写与代码默认值合并（无段全默认；键非法回退默认并 warn；D-009） | `config` |
+| `THRESHOLDS` | 阈值单点（缺省行为单一事实源）：L1_SPAN=2 / L1_FILES=4 / L2_SPAN=4 / L2_FILES_DEGRADED=8——task-05 真实图谱校准维持定稿，依据见 changes/2026-09-14-quick-exit-tiered-gates/design.md「阈值校准记录」节 | — |
 
 ### src/db.js — DB 类
 | 函数/常量 | 说明 | 参数 |
@@ -127,6 +137,7 @@ core-engine 是 SillySpec 的基础设施层，由三个层次组成：持久化
 - runCommand 中的 resolveChangeName 有多级回退：显式指定 > progress.currentChange > 自动检测
 - 自动模式 (runAutoMode) 按 MAIN_FLOW_ORDER（brainstorm→plan→execute→verify→archive）顺序推进，跳过已完成的阶段
 - quick 守卫（`auditQuickCompletion`）：step 1 记录 baselineFiles（预存脏文件），`--done` 审计时排除它们；quick 自身写入的 `.sillyspec/` 元数据（quicklog/.runtime/modules/_module-map）由 `isQuickMetadata` 精确豁免。`--force-baseline`（覆盖受保护/危险文件如 src/run.js）/`--allow-new`（允许新增）在 step 1 持久化进 guard.json，也可在 `--done` 时传入（与持久化值取或）
+- quick 出口分级门禁（2026-09-14-quick-exit-tiered-gates）：quick --done 审计链挂 `review.gateProfile`（L0/L1/L2 画像，信号层 src/quick-gate-profile.js——判级/检查项/三导出见上方对外接口小节），全部 advisory 不改 status 三态与 exit code（D-003）。THRESHOLDS 定稿值 L1_SPAN=2 / L1_FILES=4 / L2_SPAN=4 / L2_FILES_DEGRADED=8（task-05 按 sillyhub 919 条 quicklog × 5 份真实 _module-map.yaml 校准维持，证据见 changes/2026-09-14-quick-exit-tiered-gates/design.md「阈值校准记录」节）。local.yaml quick-gate 段四 optional 键（l1_span/l1_files/l2_span/l2_files_degraded）可覆写代码默认值（D-009，readers=resolveGateThresholds，键非法回退默认并 warn；.sillyspec/local.yaml.example 有注释示例）。风险路径模式表 `QUICK_RISK_PATH_PATTERNS` 落 change-risk-profile.js（六域，detectChangeRisk 判级语义零变化）。测试 test/quick-gate-profile.test.mjs（27 用例）
 
 ## 变更索引
 
