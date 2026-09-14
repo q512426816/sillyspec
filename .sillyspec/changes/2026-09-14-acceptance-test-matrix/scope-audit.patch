@@ -1,0 +1,1287 @@
+diff --git a/docs/prompt/README.md b/docs/prompt/README.md
+index 3918264..3f6f37f 100644
+--- a/docs/prompt/README.md
++++ b/docs/prompt/README.md
+@@ -164,7 +164,7 @@ prompt 正文中出现的占位符，运行时由 `outputStep` 替换。下表
+ 
+ | 形式 | 行为 |
+ |---|---|
+-| `{{include: <name>}}` | `resolvePromptIncludes`（`src/run/shared.js`）在所有占位符替换**之前**，把仓库根 `templates/prompts/<name>.md` 文件内容拉进 prompt 正文（代码自动补 `.md` 后缀）。**verify 阶段「对照设计检查」step 使用了 `{{include: verify-probes}}`**（自动探针片段）；**plan 阶段「生成 TaskCard」step 使用了 `{{include: taskcard-rules}}`**（TaskCard 公共格式规则 + 保存前自检，每个子代理 prompt 展开后相同）；**execute 阶段「Wave 执行」step 使用了 `{{include: testcase-design}}`**（测试用例设计 6 条检查，任务含测试代码时调度者整段复制进子代理 prompt）。 |
++| `{{include: <name>}}` | `resolvePromptIncludes`（`src/run/shared.js`）在所有占位符替换**之前**，把仓库根 `templates/prompts/<name>.md` 文件内容拉进 prompt 正文（代码自动补 `.md` 后缀）。**verify 阶段「对照设计检查」step 使用了 `{{include: verify-probes}}`**（自动探针片段）；**plan 阶段「生成 TaskCard」step 使用了 `{{include: taskcard-rules}}`**（TaskCard 公共格式规则 + 保存前自检，每个子代理 prompt 展开后相同）；**execute 阶段「Wave 执行」step 使用了 `{{include: testcase-design}}`**（测试用例设计 7 条检查，任务含测试代码时调度者整段复制进子代理 prompt）。 |
+ 
+ > ⚠️ **重要**：本目录各 `<stage>.md` 与 `_extracted.json` 展示的是 `resolvePromptIncludes` **替换前**的 prompt 原文，即保留 `{{include: verify-probes}}` / `{{include: taskcard-rules}}` / `{{include: testcase-design}}` 字面。agent 实际收到的是替换后的片段内容（运行时从 `templates/prompts/` 读取注入）。要查看展开后的片段全文，读 `templates/prompts/verify-probes.md`、`templates/prompts/taskcard-rules.md` 或 `templates/prompts/testcase-design.md` 文件。
+ 
+diff --git a/docs/prompt/_extracted.json b/docs/prompt/_extracted.json
+index f2cb6e6..0ebbcb3 100644
+--- a/docs/prompt/_extracted.json
++++ b/docs/prompt/_extracted.json
+@@ -157,7 +157,7 @@
+       {
+         "index": 4,
+         "name": "任务蓝图验收",
+-        "prompt": "检查每个 task-N.md 的验收标准是否全部满足。\n\n### 操作\n1. 检查变更目录下 tasks/ 是否存在\n2. 如果存在：\n   - 逐个读取 tasks/task-NN.md，对照 frontmatter 的 `acceptance:` 列表逐条核验（TaskCard 协议的验收标准在 frontmatter YAML，正文无 checkbox）\n   - 每条 acceptance 对照实际实现/测试结果判定满足与否，未满足的项列为不通过\n3. 如果不存在：跳过此步骤\n\n### 输出\n验收结果：通过/不通过 + 未通过的项",
++        "prompt": "检查每个 task-N.md 的验收标准是否全部满足。\n\n### 操作\n1. 检查变更目录下 tasks/ 是否存在\n2. 如果存在：\n   - 逐个读取 tasks/task-NN.md，对照 frontmatter 的 `acceptance:` 列表逐条核验（TaskCard 协议的验收标准在 frontmatter YAML，正文无 checkbox）\n   - 每条 acceptance 对照实际实现/测试结果判定满足与否，未满足的项列为不通过\n   - 覆盖对账走探针 7 矩阵：verify-result.md「探针 7：验收×测试覆盖矩阵」段已由 CLI 预填归属测试文件与关键词提示（骨架未生成时先跑 `sillyspec verify-probes --change <change-name> --init`，幂等不覆盖已有正文）；逐行填判定（covered/partial/uncovered/non-testable 四选一）与证据——covered/partial 附测试锚点（`.test.` 文件或 file:line），non-testable 写一句理由；判定/证据未填会被 verify `--done` 门禁阻断（fail-closed）\n3. 如果不存在：跳过此步骤\n\n### 输出\n验收结果：通过/不通过 + 未通过的项",
+         "outputHint": "验收结果",
+         "optional": false
+       },
+@@ -301,7 +301,7 @@
+       {
+         "index": 0,
+         "name": "理解任务",
+-        "prompt": "解析任务参数，加载项目上下文。\n\n### 📌 本 quick 会话 sessionId: <quick-session-id>\n- CLI 是短进程，run 与 done 是独立进程，sessionId 靠 --change 跨进程传递\n- **完成每个 step 必须带 --change <quick-session-id>**（命令由 CLI 在下方注入）；多会话并发时不带会命中他者会话状态\n\n### ⚠️ 危险文件预声明（预判要改 src 核心时看一眼）\nstep 3 --done 审计会把 src 核心文件（CLI / 状态机 / 注入框架等危险清单）、新增文件、删除文件判为危险变更并拦截。若你**预判**本 quick 的修复目标本身就是这类文件，重新启动 quick 时带上 --force-baseline（受保护/危险文件）/ --allow-new（新增文件）/ --allow-delete（删除文件）预声明——flag 会持久化进会话守卫，后续 --done 直接生效，省一轮拦截重跑。不预带也可：step 3 拦截后按提示带 flag 重跑 --done 同样解锁。\n\n### 🧭 文件预声明（多 agent 并发仓库推荐）\n--done 审计按「时间窗 diff」归属文件：quick 窗口内**并行会话**改的文件也会被算进本会话的 QUICKLOG「文件：」行。多个 agent 同时操作本仓库时，启动 quick 建议带 `--files <a.js,b.js>` 声明预计要改的文件——声明即归属：文件行只落声明命中的文件，窗口内未声明脏文件以「审计：」行落盘追溯（不混入、不静默丢）。不预判也行：--done 后按 QUICKLOG 核对说明手动精修文件行兜底。中途发现要改声明外文件（如新写的测试），带新增文件恢复会话即追加边界（追加不替换）：`sillyspec run quick --files <新增文件> --change <sessionId>`。\n\n### 操作\n1. 检查关联变更（`<linked-changes>`，逗号分隔的变更名列表；显示「（无）」= 不关联变更），确定记录方式\n2. 理解任务：模糊则问一个问题确认（项目/约定/模块上下文已由 CLI 注入下方与开头，勿再 cat）\n3. 阅读「项目上下文注入」段（CLI 已代读 projects/*.yaml 摘要 + CONVENTIONS.md 开头）——注入标注截断且确需全文时才读原文件\n4. 构建命令（CLI 自 local.yaml 注入，勿再读文件）：\n{LOCAL_COMMANDS}\n5. 若有关联变更，加载每个变更的设计文档：`cat {SPEC_ROOT}/changes/<c>/design.md 2>/dev/null`（理解设计意图）\n6. 如有需要，查询知识库：`cat {SPEC_ROOT}/knowledge/INDEX.md 2>/dev/null`\n\n### 模块上下文（CLI 按任务描述匹配注入）\n按本会话任务描述从 _module-map.yaml 匹配的模块已注入本 prompt 开头「📦 模块上下文」段（职责/核心文件/风险/最近变更）——**不要再 cat _module-map.yaml 挑卡**；开头无该段 = 无命中模块，需要跨模块全局视野时才读 `{SPEC_ROOT}/docs/<project>/modules/_module-map.yaml` 自查。\n\n### 项目上下文注入（CLI 代读，刀①）\n{QUICK_CONTEXT_DIGEST}\n\n### QUICKLOG 记录（CLI 已接管，无需你手动创建）\n本 quick 会话的 ql-ID 由 CLI 在启动时分配，已注入为 `<quicklog-id>`。CLI 同时已自动：\n- 在 `{SPEC_ROOT}/quicklog/QUICKLOG-<git-user>.md` 写入「进行中」条目（含关联变更与预估文件）\n- 对每个关联变更 `<c>`：在 `{SPEC_ROOT}/changes/<c>/tasks.md` 追加未勾选 task `- [ ] <quicklog-id> <任务描述>`\n\n> 💡 启动时带 `--input \"<一句话任务描述>\"` 可让条目从第一分钟就有语义标题（平台「快速修复」列表默认隐藏进行中的「(quick 任务)」占位条目）；未带时标题要到 step 3 --done 才从「需求：」回填。若你启动时漏带且任务较长，建议按 CLI 启动警告指引重启会话补带。\n\n**你不要创建或修改任何 QUICKLOG 的条目骨架 / tasks.md 记录**——ql-ID 分配、「进行中」条目、状态翻转、task 勾选、轮转全由 CLI 接管，你无需手写。<quicklog-id> 可用于 design.md / plan.md / archive / 模块变更索引引用。\n\n> ℹ️ step 3 --done 时，CLI 已落盘结构化 QUICKLOG 条目（标题从「需求：」提取——届时写一句语义化短标题，规则见 step3 结果摘要模板；正文四字段分行、文件行可用 --file-notes 写多行括注）。事后只需按需核对，详见 step 3「QUICKLOG 正文核对」。\n\n### 输出\n任务理解 + 上下文摘要",
++        "prompt": "解析任务参数，加载项目上下文。\n\n### 📌 本 quick 会话 sessionId: <quick-session-id>\n- CLI 是短进程，run 与 done 是独立进程，sessionId 靠 --change 跨进程传递\n- **完成每个 step 必须带 --change <quick-session-id>**（命令由 CLI 在下方注入）；多会话并发时不带会命中他者会话状态\n\n### ⚠️ 危险文件预声明（预判要改 src 核心时看一眼）\nstep 3 --done 审计会把 src 核心文件（CLI / 状态机 / 注入框架等危险清单）、新增文件、删除文件判为危险变更并拦截。若你**预判**本 quick 的修复目标本身就是这类文件，重新启动 quick 时带上 --force-baseline（受保护/危险文件）/ --allow-new（新增文件）/ --allow-delete（删除文件）预声明——flag 会持久化进会话守卫，后续 --done 直接生效，省一轮拦截重跑。不预带也可：step 3 拦截后按提示带 flag 重跑 --done 同样解锁。\n\n### 🧭 文件预声明（多 agent 并发仓库推荐）\n--done 审计按「时间窗 diff」归属文件：quick 窗口内**并行会话**改的文件也会被算进本会话的 QUICKLOG「文件：」行。多个 agent 同时操作本仓库时，启动 quick 建议带 `--files <a.js,b.js>` 声明预计要改的文件——声明即归属：文件行只落声明命中的文件，窗口内未声明脏文件以「审计：」行落盘追溯（不混入、不静默丢）。不预判也行：--done 后按 QUICKLOG 核对说明手动精修文件行兜底。中途发现要改声明外文件（如新写的测试），带新增文件恢复会话即追加边界（追加不替换）：`sillyspec run quick --files <新增文件> --change <sessionId>`。\n\n### 操作\n1. 检查关联变更（`<linked-changes>`，逗号分隔的变更名列表；显示「（无）」= 不关联变更），确定记录方式\n2. 理解任务：模糊则问一个问题确认（项目/约定/模块上下文已由 CLI 注入下方与开头，勿再 cat）\n3. 阅读「项目上下文注入」段（CLI 已代读 projects/*.yaml 摘要 + CONVENTIONS.md 开头）——注入标注截断且确需全文时才读原文件\n4. 构建命令（CLI 自 local.yaml 注入，勿再读文件）：\n{LOCAL_COMMANDS}\n5. 若有关联变更，加载每个变更的设计文档：`cat {SPEC_ROOT}/changes/<c>/design.md 2>/dev/null`（理解设计意图）\n6. 知识库：CLI 已按本会话任务描述（--input）机械匹配知识库——命中时本 prompt 末尾注入「📚 命中知识」段（top-3 文件正文截断），直接阅读即可，勿自行重跑 INDEX 匹配；段未出现（无命中或未带 --input）且确有需要时才查询：`cat {SPEC_ROOT}/knowledge/INDEX.md 2>/dev/null`\n\n### 模块上下文（CLI 按任务描述匹配注入）\n按本会话任务描述从 _module-map.yaml 匹配的模块已注入本 prompt 开头「📦 模块上下文」段（职责/核心文件/风险/最近变更）——**不要再 cat _module-map.yaml 挑卡**；开头无该段 = 无命中模块，需要跨模块全局视野时才读 `{SPEC_ROOT}/docs/<project>/modules/_module-map.yaml` 自查。\n\n### 项目上下文注入（CLI 代读，刀①）\n{QUICK_CONTEXT_DIGEST}\n\n### QUICKLOG 记录（CLI 已接管，无需你手动创建）\n本 quick 会话的 ql-ID 由 CLI 在启动时分配，已注入为 `<quicklog-id>`。CLI 同时已自动：\n- 在 `{SPEC_ROOT}/quicklog/QUICKLOG-<git-user>.md` 写入「进行中」条目（含关联变更与预估文件）\n- 对每个关联变更 `<c>`：在 `{SPEC_ROOT}/changes/<c>/tasks.md` 追加未勾选 task `- [ ] <quicklog-id> <任务描述>`\n\n> 💡 启动时带 `--input \"<一句话任务描述>\"` 可让条目从第一分钟就有语义标题（平台「快速修复」列表默认隐藏进行中的「(quick 任务)」占位条目）；未带时标题要到 step 3 --done 才从「需求：」回填。若你启动时漏带且任务较长，建议按 CLI 启动警告指引重启会话补带。\n\n**你不要创建或修改任何 QUICKLOG 的条目骨架 / tasks.md 记录**——ql-ID 分配、「进行中」条目、状态翻转、task 勾选、轮转全由 CLI 接管，你无需手写。<quicklog-id> 可用于 design.md / plan.md / archive / 模块变更索引引用。\n\n> ℹ️ step 3 --done 时，CLI 已落盘结构化 QUICKLOG 条目（标题从「需求：」提取——届时写一句语义化短标题，规则见 step3 结果摘要模板；正文四字段分行、文件行可用 --file-notes 写多行括注）。事后只需按需核对，详见 step 3「QUICKLOG 正文核对」。\n\n### 输出\n任务理解 + 上下文摘要",
+         "outputHint": "任务理解",
+         "optional": false
+       },
+@@ -501,7 +501,7 @@
+         "index": 3,
+         "id": "generate_blueprints",
+         "name": "生成 TaskCard（子代理按 batch 并行）",
+-        "prompt": "为 plan.md 中的每个任务生成紧凑 TaskCard。\n\n⚠️ 生成卡片前先确认 plan.md 已满足（否则下一步 postcheck 会硬拦，导致返工重编号/重分 Wave）：\n- **共享文件须分 Wave**：若多个 task 的 allowed_path 含同一文件，plan.md 必须把它们分到不同「## Wave N」（同 Wave 共享文件会被 execute 强制并行，子代理互相覆盖；postcheck 拦同 Wave 共享）\n- **task id 从 1 连续**：task-01、task-02、task-03… 不能跳号或重号（postcheck 校验 id 连续性，gap 会拦）\n这两条是跨 task 全局约束，子代理只写单卡看不到全局——你（主 agent）分派子代理前必须先在 plan.md 里确认 Wave 划分与编号正确。\n\n⚠️ **TaskCard 必备字段（缺一 postcheck 直接阻断）：** id、title（英文）、**title_zh（中文标题，必填）**、allowed_paths、goal、implementation、acceptance、verify、constraints。骨架已由 taskcard CLI 预生成（含 title_zh 占位），子代理只需 Edit 填值，不要删除任何必备字段。\n\n可选字段 **target_files**（本 task 计划要改动的文件清单；骨架已预置 `target_files: []` 占位行，按任务计划 Edit 填值，无明确文件级意图保留 []）：✅ 精确仓根相对路径 `src/foo.js`、计划新建文件 `NEW:src/bar.js`；❌ `src/**`（glob）、`src/dir/`（目录前缀）、绝对路径。语义区分：target_files=计划要动的具体文件，allowed_paths=权限范围。\n\n## 任务清单\n- task-01: 添加用户创建接口（覆盖：FR-01, D-001@v1）\n- task-02: 添加角色创建接口（覆盖：FR-02）\n- task-03: 用户创建接口联调\n\n## 时间和用户\n当前时间：<now-datetime>\n当前用户：<git-user>\n\n## 执行方式（必须严格遵守）\n\n**你必须使用 Agent tool 启动子代理来写卡片，不要自己写。**\n\n0. **先由你（主 agent）一次性预生成全部骨架**（2026-08-25 实证：并行子代理各自跑 taskcard CLI 撞进度库 SQLite 锁，主代理单进程预生成 + 子代理只 Edit 才稳）：\n   ```\n   sillyspec taskcard 2026-05-13-demo-change --all\n   ```\n   幂等，已存在的卡跳过不覆盖；骨架带 LF 行尾 + 闭合 frontmatter + 硬校验 9 字段 + depends_on 反填。**只有主 agent 跑这一次，子代理一律不再运行 taskcard CLI。**\n1. 确认 `C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\changes\\2026-05-13-demo-change/tasks/` 目录存在（上一步预生成会自动创建）\n2. **按 batch 分派子代理（减少总子代理数量，而不是一个 task 一个子代理）：**\n   - 把任务按「同一 Wave + 同一模块/相近能力 + 无跨 batch 强依赖」原则分组\n   - **每个 batch 包含 2~4 个 task**；Wave 内任务数 ≤4 时整个 Wave 可作为一个 batch\n   - 有提供/消费契约的 task 尽量放到同一 batch（子代理能同时看到 consumer 与 provider，避免契约字段漏配）\n   - 跨 Wave 依赖的 task 不要放在同一 batch（子代理只需读 plan.md，但 batch 内 task 的 allowed_paths 不应互相阻塞）\n3. 为每个 batch 启动一个独立子代理（Agent tool），可并行启动多个 batch\n4. 每个子代理使用下方「批量 TaskCard 子代理 prompt」，一次生成该 batch 的全部 task-N.md\n5. 等待所有 batch 子代理完成\n6. 验证每个 task-N.md 文件已生成且非空\n\n> 设计意图：plan.md 里 task 数可以较多（能力拆分完整），但 TaskCard 生成阶段要合理合并，避免子代理数量随 task 数线性爆炸。一个子代理生成 2~4 张卡片与生成 1 张卡片的 token/时间成本接近，却能显著减少协调开销。\n\n### 批量 TaskCard 子代理 prompt\n```\n你是一个专注的 TaskCard 生成器。你的任务是为指定 batch 生成全部 TaskCard。\n\n## ⚠️ 格式形态（第一眼必读，坑 taskcard-body-section-rework）\nTaskCard 的契约字段全部在 **frontmatter**（首对 --- 包裹的 YAML 键值对：id/title/title_zh/allowed_paths/goal/...）——**不是 body 章节**（## 标题下的段落）。goal 是 frontmatter 的 `goal: >` 多行标量、implementation/acceptance/verify/constraints 是 frontmatter 的列表项；写成 body 章节（`## goal` / `## Goal` 等）会三组校验全挂返工。骨架已由主 agent 预生成（正确形态），直接 Edit 填充即可。\n\n## 输入\n- 变更目录：C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\changes\\2026-05-13-demo-change\n- 当前时间：<now-datetime>（frontmatter 的 created_at 使用此值）\n- 当前用户：<git-user>（frontmatter 的 author 使用此值）\n- 本 batch 任务列表：\n  <由主 agent 注入：task-01: 名称 / task-02: 名称 / ...>\n\n## 操作\n1. 读取 C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\changes\\2026-05-13-demo-change/design.md 和 C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\changes\\2026-05-13-demo-change/plan.md 了解整体上下文\n2. 读取本 batch 涉及的相关源文件\n3. **骨架已由主 agent 预生成**（`C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\changes\\2026-05-13-demo-change/tasks/task-NN.md` 已存在，LF 行尾 + 闭合 frontmatter + 硬校验 9 字段齐全）。**禁止再运行 `sillyspec taskcard` CLI**——并行子代理各起 CLI 进程会撞进度库 SQLite 锁（2026-08-25 实证）；若发现本 batch 某卡骨架缺失，报告主 agent 补跑，不要自己跑\n4. 用 Edit tool 逐卡填充骨架占位符（allowed_paths/target_files/goal/implementation/acceptance/verify/constraints 等）。**禁止用 Write 整文件重写**——手写整卡是 CRLF 行尾/漏闭合 --- /漏硬校验字段三类 postcheck 拒绝的根源，骨架 + Edit 从源头消灭\n5. 骨架字段含义与可选字段（provides/expects_from/related_tests，按需插进 frontmatter）参考下述模板：\n\n---\nid: <task-id>\ntitle: <task-name>\ntitle_zh: <任务中文标题>\nauthor: <git-user>\ncreated_at: <now-datetime>\npriority: P0\ndepends_on: []\nblocks: []\nrequirement_ids: [FR-XX]\ndecision_ids: [D-XXX@vN]\nrepo: <repo-key>                          # 可选。仅跨仓 task 填：local.yaml repos: 注册的仓 key（缺省=main，主仓 task 省略此行）\nallowed_paths:                            # ⚠️ 路径相对 repo 声明的仓根（跨仓=跨仓仓根，主仓=主仓根），禁止带仓库名前缀/绝对路径\n  - frontend/src/lib/errors.ts\ntarget_files:                             # 可选。本 task 计划要改动的文件清单（文件级意图，供对账；与 allowed_paths 语义不同——那是权限范围）。骨架已预置 [] 占位行，无明确意图保留 [] 不动\n  - src/foo.js                            # ✅ 精确仓根相对路径（口径同 allowed_paths）；计划新建文件加 NEW: 前缀（NEW:src/bar.js）。❌ 禁 glob（src/**）/目录前缀（src/dir/）/绝对路径\nprovides:                              # 可选。仅当本 task 给其他 task 提供接口/DTO/响应时填\n  - contract: <DTO或响应类型名>          # 如 DaemonRuntimeRead\n    fields: [field_a, field_b]\nexpects_from:                          # 可选。仅当本 task 消费其他 task 的契约时填\n  <provider-task-id>:                  # 如 task-05（占位符，不要照抄）\n    - contract: <DTO或响应类型名>\n      needs: [field_a]                 # 必须从该 provider 拿到的字段\ngoal: >\n  一句话说明这个 task 要做什么、为什么。\nimplementation:\n  - 具体步骤 1\n  - 具体步骤 2\n  - 具体步骤 3\nacceptance:\n  - 可验证的验收条件 1\n  - 可验证的验收条件 2\n  - 可验证的验收条件 3\nverify:\n  - cd frontend && pnpm exec tsc --noEmit\nconstraints:\n  - 边界约束 1（如：不加测试）\n  - 边界约束 2（如：不修改传入参数）\nrelated_tests:                           # 可选。当本 task 改动会导致既有测试断言失效时填（共享源文件/UI文案/常量/签名变更等，判据=测试是否失败非文件是否共享）\n  - path: frontend/src/lib/errors.test.ts # 因本次改动断言失效的既有测试文件\n    reason: 旧断言假设单例，改归属键后需同步\n---\n\n{{include: taskcard-rules}}\n\n## 约束\n- 每个 task 20~40 行；禁止在 TaskCard 里写实现细节之外的冗长设计\n- 同 batch 内 task 的 allowed_paths 不要互相冲突\n- **跨仓 task 路径口径（涉及 local.yaml repos: 注册仓的变更必读）**：跨仓 task frontmatter 必须填 `repo: <repo-key>`（local.yaml repos: 注册键，缺省=main 省略不填）；allowed_paths 相对**该仓根**写（`src/routes/x.js`），从 design.md「`## <repo-key> 仓变更`」段内路径原样搬。❌ 禁止带仓库名前缀（`sub-grid-security/src/...`）、❌ 禁止绝对路径/盘符（`C:/repo/src/...`）——review 对账按 `git -C <仓根> diff` 的仓根相对路径匹配 allowed_paths，带前缀/绝对路径永不命中 → task 改完却判「无归属」对账不上\n- 若 task 之间有 provides/expects_from 契约，同 batch 生成时必须字段对齐\n- 只生成本 batch 声明的任务，不要多写或少写\n- 不要在 TaskCard 里泄露 plan.md 中未出现的实现假设\n\n## 完成标志\n- 本 batch 的每个 task-N.md 都已写入 C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\changes\\2026-05-13-demo-change/tasks/\n- 每个文件非空且 frontmatter 完整（保持骨架的 --- 闭合与 LF 行尾）\n```\n\n## 验收（生成后自查，不另开步骤）\n- 每个 task-N.md 文件存在且非空\n- 所有 task 都被某个 batch 覆盖、无遗漏、无重复\n- frontmatter 字段分两组对照（与 plan-postcheck / taskcard-rules.md 同源，三处清单以此为准）：\n  - **硬校验 9 字段**（缺失 plan-postcheck 直接报错阻断）：id、title、title_zh、allowed_paths、goal、implementation、acceptance、verify、constraints\n  - **占位符硬拦**（骨架占位值未替换视同缺字段，plan --done 报错阻断）：FR-XX、D-XXX、src/example/file.ts、一句话说明这个 task、具体步骤 1、可验证的验收条件 1、边界约束 1\n  - **规范约定 5 字段**（应填但缺失只影响规范性，不阻断）：author、created_at、priority、depends_on、blocks\n- 每个 task 总长度 20~40 行\n- **一致性自查**：\n  - allowed_paths 有无冲突\n  - 跨仓 task：repo: 键是 local.yaml repos: 已注册键；allowed_paths 全部为仓根相对路径（无仓库名前缀、无绝对路径/盘符）；与 design.md 对应「仓变更」段路径同口径\n  - depends_on 与 plan.md Wave 分组是否一致\n  - provides/expects_from 契约自洽：每个 expects_from[provider].needs 字段都在该 provider task 的 provides.fields 里（plan-postcheck 会硬校验，这里提前自查）\n  - related_tests 判据 = 是否有既有测试因本次改动而失败（非「源文件是否共享」；UI 文案/常量/签名变更等单文件场景也算）；若填，测试路径必须都在本 task 或某 task 的 allowed_paths 内（否则子代理无权改 → execute 测试债、主代理事后兜底）\n  - 如发现矛盾，列出问题清单，不要自动修复",
++        "prompt": "为 plan.md 中的每个任务生成紧凑 TaskCard。\n\n⚠️ 生成卡片前先确认 plan.md 已满足（否则下一步 postcheck 会硬拦，导致返工重编号/重分 Wave）：\n- **共享文件须分 Wave**：若多个 task 的 allowed_path 含同一文件，plan.md 必须把它们分到不同「## Wave N」（同 Wave 共享文件会被 execute 强制并行，子代理互相覆盖；postcheck 拦同 Wave 共享）\n- **task id 从 1 连续**：task-01、task-02、task-03… 不能跳号或重号（postcheck 校验 id 连续性，gap 会拦）\n这两条是跨 task 全局约束，子代理只写单卡看不到全局——你（主 agent）分派子代理前必须先在 plan.md 里确认 Wave 划分与编号正确。\n\n⚠️ **TaskCard 必备字段（缺一 postcheck 直接阻断）：** id、title（英文）、**title_zh（中文标题，必填）**、allowed_paths、goal、implementation、acceptance、verify、constraints。骨架已由 taskcard CLI 预生成（含 title_zh 占位），子代理只需 Edit 填值，不要删除任何必备字段。\n\n可选字段 **target_files**（本 task 计划要改动的文件清单；骨架已预置 `target_files: []` 占位行，按任务计划 Edit 填值，无明确文件级意图保留 []）：✅ 精确仓根相对路径 `src/foo.js`、计划新建文件 `NEW:src/bar.js`；❌ `src/**`（glob）、`src/dir/`（目录前缀）、绝对路径。语义区分：target_files=计划要动的具体文件，allowed_paths=权限范围。\n\n## 任务清单\n- task-01: 添加用户创建接口（覆盖：FR-01, D-001@v1）\n- task-02: 添加角色创建接口（覆盖：FR-02）\n- task-03: 用户创建接口联调\n\n## 时间和用户\n当前时间：<now-datetime>\n当前用户：<git-user>\n\n## 执行方式（必须严格遵守）\n\n**你必须使用 Agent tool 启动子代理来写卡片，不要自己写。**\n\n0. **先由你（主 agent）一次性预生成全部骨架**（2026-08-25 实证：并行子代理各自跑 taskcard CLI 撞进度库 SQLite 锁，主代理单进程预生成 + 子代理只 Edit 才稳）：\n   ```\n   sillyspec taskcard 2026-05-13-demo-change --all\n   ```\n   幂等，已存在的卡跳过不覆盖；骨架带 LF 行尾 + 闭合 frontmatter + 硬校验 9 字段 + depends_on 反填。**只有主 agent 跑这一次，子代理一律不再运行 taskcard CLI。**\n1. 确认 `C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-14-acceptance-test-matrix\\.sillyspec\\changes\\2026-05-13-demo-change/tasks/` 目录存在（上一步预生成会自动创建）\n2. **按 batch 分派子代理（减少总子代理数量，而不是一个 task 一个子代理）：**\n   - 把任务按「同一 Wave + 同一模块/相近能力 + 无跨 batch 强依赖」原则分组\n   - **每个 batch 包含 2~4 个 task**；Wave 内任务数 ≤4 时整个 Wave 可作为一个 batch\n   - 有提供/消费契约的 task 尽量放到同一 batch（子代理能同时看到 consumer 与 provider，避免契约字段漏配）\n   - 跨 Wave 依赖的 task 不要放在同一 batch（子代理只需读 plan.md，但 batch 内 task 的 allowed_paths 不应互相阻塞）\n3. 为每个 batch 启动一个独立子代理（Agent tool），可并行启动多个 batch\n4. 每个子代理使用下方「批量 TaskCard 子代理 prompt」，一次生成该 batch 的全部 task-N.md\n5. 等待所有 batch 子代理完成\n6. 验证每个 task-N.md 文件已生成且非空\n\n> 设计意图：plan.md 里 task 数可以较多（能力拆分完整），但 TaskCard 生成阶段要合理合并，避免子代理数量随 task 数线性爆炸。一个子代理生成 2~4 张卡片与生成 1 张卡片的 token/时间成本接近，却能显著减少协调开销。\n\n### 批量 TaskCard 子代理 prompt\n```\n你是一个专注的 TaskCard 生成器。你的任务是为指定 batch 生成全部 TaskCard。\n\n## ⚠️ 格式形态（第一眼必读，坑 taskcard-body-section-rework）\nTaskCard 的契约字段全部在 **frontmatter**（首对 --- 包裹的 YAML 键值对：id/title/title_zh/allowed_paths/goal/...）——**不是 body 章节**（## 标题下的段落）。goal 是 frontmatter 的 `goal: >` 多行标量、implementation/acceptance/verify/constraints 是 frontmatter 的列表项；写成 body 章节（`## goal` / `## Goal` 等）会三组校验全挂返工。骨架已由主 agent 预生成（正确形态），直接 Edit 填充即可。\n\n## 输入\n- 变更目录：C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-14-acceptance-test-matrix\\.sillyspec\\changes\\2026-05-13-demo-change\n- 当前时间：<now-datetime>（frontmatter 的 created_at 使用此值）\n- 当前用户：<git-user>（frontmatter 的 author 使用此值）\n- 本 batch 任务列表：\n  <由主 agent 注入：task-01: 名称 / task-02: 名称 / ...>\n\n## 操作\n1. 读取 C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-14-acceptance-test-matrix\\.sillyspec\\changes\\2026-05-13-demo-change/design.md 和 C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-14-acceptance-test-matrix\\.sillyspec\\changes\\2026-05-13-demo-change/plan.md 了解整体上下文\n2. 读取本 batch 涉及的相关源文件\n3. **骨架已由主 agent 预生成**（`C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-14-acceptance-test-matrix\\.sillyspec\\changes\\2026-05-13-demo-change/tasks/task-NN.md` 已存在，LF 行尾 + 闭合 frontmatter + 硬校验 9 字段齐全）。**禁止再运行 `sillyspec taskcard` CLI**——并行子代理各起 CLI 进程会撞进度库 SQLite 锁（2026-08-25 实证）；若发现本 batch 某卡骨架缺失，报告主 agent 补跑，不要自己跑\n4. 用 Edit tool 逐卡填充骨架占位符（allowed_paths/target_files/goal/implementation/acceptance/verify/constraints 等）。**禁止用 Write 整文件重写**——手写整卡是 CRLF 行尾/漏闭合 --- /漏硬校验字段三类 postcheck 拒绝的根源，骨架 + Edit 从源头消灭\n5. 骨架字段含义与可选字段（provides/expects_from/related_tests，按需插进 frontmatter）参考下述模板：\n\n---\nid: <task-id>\ntitle: <task-name>\ntitle_zh: <任务中文标题>\nauthor: <git-user>\ncreated_at: <now-datetime>\npriority: P0\ndepends_on: []\nblocks: []\nrequirement_ids: [FR-XX]\ndecision_ids: [D-XXX@vN]\nrepo: <repo-key>                          # 可选。仅跨仓 task 填：local.yaml repos: 注册的仓 key（缺省=main，主仓 task 省略此行）\nallowed_paths:                            # ⚠️ 路径相对 repo 声明的仓根（跨仓=跨仓仓根，主仓=主仓根），禁止带仓库名前缀/绝对路径\n  - frontend/src/lib/errors.ts\ntarget_files:                             # 可选。本 task 计划要改动的文件清单（文件级意图，供对账；与 allowed_paths 语义不同——那是权限范围）。骨架已预置 [] 占位行，无明确意图保留 [] 不动\n  - src/foo.js                            # ✅ 精确仓根相对路径（口径同 allowed_paths）；计划新建文件加 NEW: 前缀（NEW:src/bar.js）。❌ 禁 glob（src/**）/目录前缀（src/dir/）/绝对路径\nprovides:                              # 可选。仅当本 task 给其他 task 提供接口/DTO/响应时填\n  - contract: <DTO或响应类型名>          # 如 DaemonRuntimeRead\n    fields: [field_a, field_b]\nexpects_from:                          # 可选。仅当本 task 消费其他 task 的契约时填\n  <provider-task-id>:                  # 如 task-05（占位符，不要照抄）\n    - contract: <DTO或响应类型名>\n      needs: [field_a]                 # 必须从该 provider 拿到的字段\ngoal: >\n  一句话说明这个 task 要做什么、为什么。\nimplementation:\n  - 具体步骤 1\n  - 具体步骤 2\n  - 具体步骤 3\nacceptance:\n  - 可验证的验收条件 1\n  - 可验证的验收条件 2\n  - 可验证的验收条件 3\nverify:\n  - cd frontend && pnpm exec tsc --noEmit\nconstraints:\n  - 边界约束 1（如：不加测试）\n  - 边界约束 2（如：不修改传入参数）\nrelated_tests:                           # 可选。当本 task 改动会导致既有测试断言失效时填（共享源文件/UI文案/常量/签名变更等，判据=测试是否失败非文件是否共享）\n  - path: frontend/src/lib/errors.test.ts # 因本次改动断言失效的既有测试文件\n    reason: 旧断言假设单例，改归属键后需同步\n---\n\n{{include: taskcard-rules}}\n\n## 约束\n- 每个 task 20~40 行；禁止在 TaskCard 里写实现细节之外的冗长设计\n- 同 batch 内 task 的 allowed_paths 不要互相冲突\n- **跨仓 task 路径口径（涉及 local.yaml repos: 注册仓的变更必读）**：跨仓 task frontmatter 必须填 `repo: <repo-key>`（local.yaml repos: 注册键，缺省=main 省略不填）；allowed_paths 相对**该仓根**写（`src/routes/x.js`），从 design.md「`## <repo-key> 仓变更`」段内路径原样搬。❌ 禁止带仓库名前缀（`sub-grid-security/src/...`）、❌ 禁止绝对路径/盘符（`C:/repo/src/...`）——review 对账按 `git -C <仓根> diff` 的仓根相对路径匹配 allowed_paths，带前缀/绝对路径永不命中 → task 改完却判「无归属」对账不上\n- 若 task 之间有 provides/expects_from 契约，同 batch 生成时必须字段对齐\n- 只生成本 batch 声明的任务，不要多写或少写\n- 不要在 TaskCard 里泄露 plan.md 中未出现的实现假设\n\n## 完成标志\n- 本 batch 的每个 task-N.md 都已写入 C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-14-acceptance-test-matrix\\.sillyspec\\changes\\2026-05-13-demo-change/tasks/\n- 每个文件非空且 frontmatter 完整（保持骨架的 --- 闭合与 LF 行尾）\n```\n\n## 验收（生成后自查，不另开步骤）\n- 每个 task-N.md 文件存在且非空\n- 所有 task 都被某个 batch 覆盖、无遗漏、无重复\n- frontmatter 字段分两组对照（与 plan-postcheck / taskcard-rules.md 同源，三处清单以此为准）：\n  - **硬校验 9 字段**（缺失 plan-postcheck 直接报错阻断）：id、title、title_zh、allowed_paths、goal、implementation、acceptance、verify、constraints\n  - **占位符硬拦**（骨架占位值未替换视同缺字段，plan --done 报错阻断）：FR-XX、D-XXX、src/example/file.ts、一句话说明这个 task、具体步骤 1、可验证的验收条件 1、边界约束 1\n  - **规范约定 5 字段**（应填但缺失只影响规范性，不阻断）：author、created_at、priority、depends_on、blocks\n- 每个 task 总长度 20~40 行\n- **一致性自查**：\n  - allowed_paths 有无冲突\n  - 跨仓 task：repo: 键是 local.yaml repos: 已注册键；allowed_paths 全部为仓根相对路径（无仓库名前缀、无绝对路径/盘符）；与 design.md 对应「仓变更」段路径同口径\n  - depends_on 与 plan.md Wave 分组是否一致\n  - provides/expects_from 契约自洽：每个 expects_from[provider].needs 字段都在该 provider task 的 provides.fields 里（plan-postcheck 会硬校验，这里提前自查）\n  - related_tests 判据 = 是否有既有测试因本次改动而失败（非「源文件是否共享」；UI 文案/常量/签名变更等单文件场景也算）；若填，测试路径必须都在本 task 或某 task 的 allowed_paths 内（否则子代理无权改 → execute 测试债、主代理事后兜底）\n  - 如发现矛盾，列出问题清单，不要自动修复",
+         "outputHint": "TaskCard 生成结果",
+         "optional": false
+       },
+@@ -558,7 +558,7 @@
+       {
+         "index": 3,
+         "name": "确认执行范围",
+-        "prompt": "解析任务，确认执行范围和确认模式。\n\n### 操作\n1. 从 plan 中解析 Wave 分组和任务列表\n2. 模型档位：若 tasks.md 中某 task 标注了 [model:xxx]，启动该 task 子代理时按标签选模型（档位由 plan 阶段或用户在 tasks.md 显式标注，execute 不在此自动建议——关键词→档位无统一映射，自动建议反而易误导）\n3. 确认频率：默认每个 Wave 完成后展示结果（wave 模式）；用户口头指定按 Task 展示或全自动时遵从\n4. 查询知识库：读取 `.sillyspec/knowledge/INDEX.md`，根据 Task 关键词匹配\n\n### 知识命中报告\n{KNOWLEDGE_HIT_REPORT}\n\n如上所示的知识条目与本次任务相关。请阅读这些条目以获取项目约定和已知模式。\n如无命中条目（Status: no matches），跳过本节。\n\n### 模块文档欠账（CLI 算事实）\n{DOCS_DEBT}\n\n如上为 CLI 用 git 事实算出的本变更触及模块文档欠账（无输出=无欠账或归属数据缺失）。\n欠账处理：Wave 收尾时顺手同步对应模块卡，不必为此停下。变更索引类条目追加到卡同目录 `<module>.changelog.md` sidecar（无则创建；可先跑 `sillyspec modules split-changelog` 迁出历史段）——勿把历史条目堆回模块卡正文（卡是子代理的读取税）。\n⚠️ **铁律：模块卡 / sidecar 一律写主仓绝对路径 `{SPEC_ROOT}/docs/<project>/modules/`（CLI 已替换为绝对路径）**——在 worktree 内执行时**绝不**写 worktree checkout 出来的 `.sillyspec` 副本（该副本随 worktree cleanup 整目录蒸发，主仓永远读不到；2026-09-10 实证 task-13 子代理写副本、归档阶段被迫 checkout 补救）。\n\n### 铁律\n- **不要询问用户确认频率**，默认 wave 模式；用户已明确口头指定时遵从其指定",
++        "prompt": "解析任务，确认执行范围和确认模式。\n\n### 操作\n1. 从 plan 中解析 Wave 分组和任务列表\n2. 模型档位：若 tasks.md 中某 task 标注了 [model:xxx]，启动该 task 子代理时按标签选模型（档位由 plan 阶段或用户在 tasks.md 显式标注，execute 不在此自动建议——关键词→档位无统一映射，自动建议反而易误导）\n3. 确认频率：默认每个 Wave 完成后展示结果（wave 模式）；用户口头指定按 Task 展示或全自动时遵从\n4. 知识库：CLI 已按任务上下文机械匹配（changeName + tasks.md 任务行）——命中时下方「知识命中报告」段直接含命中文件正文（top-3 截断），勿自行重跑 INDEX 匹配；无命中且确有需要时才读 `.sillyspec/knowledge/INDEX.md`\n\n### 知识命中报告\n{KNOWLEDGE_HIT_REPORT}\n\n命中条目正文已由 CLI 机械注入如上（INDEX 行序 top-3 不同文件、单文件截断）——直接阅读获取项目约定与已知模式；Sources 清单中未注入正文的其他命中条目，需要时按路径自行读取。\n如无命中条目（Status: no matches），跳过本节。\n\n### 模块文档欠账（CLI 算事实）\n{DOCS_DEBT}\n\n如上为 CLI 用 git 事实算出的本变更触及模块文档欠账（无输出=无欠账或归属数据缺失）。\n欠账处理：Wave 收尾时顺手同步对应模块卡，不必为此停下。变更索引类条目追加到卡同目录 `<module>.changelog.md` sidecar（无则创建；可先跑 `sillyspec modules split-changelog` 迁出历史段）——勿把历史条目堆回模块卡正文（卡是子代理的读取税）。\n⚠️ **铁律：模块卡 / sidecar 一律写主仓绝对路径 `{SPEC_ROOT}/docs/<project>/modules/`（CLI 已替换为绝对路径）**——在 worktree 内执行时**绝不**写 worktree checkout 出来的 `.sillyspec` 副本（该副本随 worktree cleanup 整目录蒸发，主仓永远读不到；2026-09-10 实证 task-13 子代理写副本、归档阶段被迫 checkout 补救）。\n\n### 铁律\n- **不要询问用户确认频率**，默认 wave 模式；用户已明确口头指定时遵从其指定",
+         "outputHint": "Wave 分组 + 模型分配",
+         "optional": false
+       },
+diff --git a/docs/prompt/verify.md b/docs/prompt/verify.md
+index d43f78f..8c00b97 100644
+--- a/docs/prompt/verify.md
++++ b/docs/prompt/verify.md
+@@ -128,7 +128,7 @@
+ **提示词原文**
+ 
+ ````markdown
+-对照 tasks.md（任务注册表唯一真相）检查每个任务完成状态。勾选由 execute 双路写入（agent 按 review gate 手动勾 + CLI autoCheckPlanFromReviews 机器勾选器按 review.json 自动勾），本阶段只读对照、不改勾。
++对照 tasks.md（任务注册表唯一真相）检查每个任务完成状态。勾选唯一写入者是 CLI（review write 落盘即按 review.json verdict 勾选，execute --done 时 autoCheckPlanFromReviews 兜底；P2-f 起 agent 不再手勾），本阶段只读对照、不改勾。
+ 
+ ### 勾选状态（CLI 注入，勿手数）
+ {TASKS_CHECKBOX}
+@@ -211,6 +211,7 @@
+ 2. 如果存在：
+    - 逐个读取 tasks/task-NN.md，对照 frontmatter 的 `acceptance:` 列表逐条核验（TaskCard 协议的验收标准在 frontmatter YAML，正文无 checkbox）
+    - 每条 acceptance 对照实际实现/测试结果判定满足与否，未满足的项列为不通过
++   - 覆盖对账走探针 7 矩阵：verify-result.md「探针 7：验收×测试覆盖矩阵」段已由 CLI 预填归属测试文件与关键词提示（骨架未生成时先跑 `sillyspec verify-probes --change <change-name> --init`，幂等不覆盖已有正文）；逐行填判定（covered/partial/uncovered/non-testable 四选一）与证据——covered/partial 附测试锚点（`.test.` 文件或 file:line），non-testable 写一句理由；判定/证据未填会被 verify `--done` 门禁阻断（fail-closed）
+ 3. 如果不存在：跳过此步骤
+ 
+ ### 输出
+@@ -305,9 +306,9 @@
+ 
+ ### 🧹 服务进程登记与自动回收（真实启动验证必读，坑 verify-service-process-leak）
+ 「真实启动一次」起的长驻服务（uvicorn/node server 等）**必须登记 PID，CLI 在 verify 收尾自动回收**——不登记的进程会挂死机器（实测 uvicorn 漏挂一天多）：
+-1. 后台启动服务并取 PID（PowerShell：`Start-Process -PassThru` 取 `.Id`；bash：`cmd & echo $!`）
++1. 后台启动服务并取 PID（PowerShell：`Start-Process -PassThru` 取 `.Id`；bash：`cmd & echo $!`）。**优先登记服务本体（叶子）PID**——经 shell 包装启动（`sh -c` / `cmd /c` / uvicorn --reload 的 reloader）时 CLI 虽已按进程树击杀（2026-09-10 起连带子进程），但叶子 PID 最稳：包装 shell 退出后子进程 PID 不漂移、跨平台一致
+ 2. 每行一个 PID 追加到 `{SPEC_ROOT}/.runtime/verify-services-<change-name>.pids`（`Add-Content` / `echo >>`；**按变更名分片**——多会话并发 verify 时各自的 --done 只回收自己的服务，互不误杀）
+-3. verify `--done` 时 CLI 读该文件逐个 kill 并清空——你在 verify-result.md 的「生命周期终态断言」里写「PID 已登记，CLI 收尾回收」即可
++3. verify `--done` 时 CLI 读该文件**逐进程树击杀**（包装进程连同子进程）并清空——你在 verify-result.md 的「生命周期终态断言」里写「PID 已登记，CLI 收尾回收」即可
+ 登记是硬要求：没有 PID 登记的「真实启动」证据在 deployment-critical 门控下视为不完整（进程无法证明被回收）。
+ 
+ ### 输出
+diff --git a/meta.json b/meta.json
+index 35fdfeb..85e4fbc 100644
+--- a/meta.json
++++ b/meta.json
+@@ -4,8 +4,27 @@
+   "branch": "sillyspec/2026-09-14-acceptance-test-matrix",
+   "baseBranch": "main",
+   "baseHash": "8d30a948c2e168615a57d8c733fd0b0ca26fef39",
++  "actualBaseHash": "2a8f5e8aad1b822d7b3895fdd4e2c8389c47b908",
++  "createdAt": "2026-09-14T16:02:41.357Z",
+   "worktreePath": "C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-14-acceptance-test-matrix",
+   "mode": "worktree",
+-  "createdAt": "2026-09-14T16:02:39.149Z",
+-  "provisioning": true
++  "baselineFiles": [
++    "docs/sillyspec/architecture-4a.md",
++    "docs/sillyspec/prompt-control-debt.md",
++    "SillySpec-能力亮点全景-2026-09-14.pptx",
++    "~$SillySpec-能力亮点全景-2026-09-14.pptx"
++  ],
++  "baselineCommit": "2a8f5e8aad1b822d7b3895fdd4e2c8389c47b908",
++  "baselineHash": "60e10e4870e899ef",
++  "syncDiagnostic": {
++    "status": "ahead",
++    "defaultBranch": "main",
++    "behind": 0,
++    "ahead": 14
++  },
++  "depsStatus": "linked",
++  "depsMethod": "junction",
++  "depsSource": "main-checkout",
++  "depsLockHash": "ebc4ba1d35db5dc2",
++  "depsCheckedAt": "2026-09-14T16:02:41.291Z"
+ }
+diff --git a/src/index.js b/src/index.js
+index 366db65..6e23d7f 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -1115,6 +1115,18 @@ task 进行中状态标记：开工/完工落 .runtime/task-progress/，list 标
+             console.log(`📄 已补齐缺失槽段（不触碰既有正文）: ${vpAdded.added.join('、')}`)
+           }
+         }
++        // 2026-09-14-acceptance-test-matrix：探针 7 验收×测试覆盖矩阵骨架幂等补段——
++        // verify-result.md 已存在但缺「#### 探针 7」段且 applicable（有 TaskCard）时补矩阵
++        // 骨架（学 backfillMissingEvidenceSlots 形态，不触既有正文；判定/证据槽 fail-closed
++        // 由 verify 门禁负责）。本变更自举：verify-result.md 先于特性存在的存量走此补段。
++        try {
++          const { ensureAcceptanceMatrixSection } = await import('./verify-probes.js')
++          const vpMatrix = ensureAcceptanceMatrixSection(vpReportPath, vpResult.probe7)
++          if (vpMatrix.added) {
++            try { await mirrorInitArtifact(vpReportPath, 'verify-result.md', readFileSync(vpReportPath, 'utf8')) } catch { /* 镜像失败不阻断 */ }
++            console.log(`🧩 探针 7 验收×测试覆盖矩阵骨架段已补齐（判定=四选一/证据两槽待填，命中≠判定；不触碰既有正文）: ${vpReportPath}${vpPlatformNote}`)
++          }
++        } catch { /* 矩阵补段失败不阻断 --init */ }
+         // P0-1（noai-ir-roadmap §3）两件机械预填，均幂等 fail-soft：
+         //   ①决策追踪矩阵机械半边——D→FR→task 链自 decisions.md × tasks/*.md frontmatter
+         //     结构化字段构建，Evidence/状态两列留 agent 逐格复核；
+diff --git a/src/stage-contract.js b/src/stage-contract.js
+index 48d3bdb..8a1bc7d 100644
+--- a/src/stage-contract.js
++++ b/src/stage-contract.js
+@@ -689,6 +689,161 @@ function validateVerifyOutputs(cwd, changeName, context = {}) {
+   return { ok: errors.length === 0, errors, warnings }
+ }
+ 
++// ============ 探针 7 验收×测试覆盖矩阵门禁（2026-09-14-acceptance-test-matrix FR-02） ============
++// 段格式与 src/verify-probes.js renderProbe7Lines 骨架渲染字面同源（禁第二套解析文法）：
++// 段标题「#### 探针 7：验收×测试覆盖矩阵」（全/半角冒号皆认）；每 task 前 **task-NN** 锚行；
++// 五列表 | acceptance 条目 | 归属测试文件 | 关键词命中 | 判定 | 证据 |；判定槽 <待填：四选一>、
++// 证据槽 <TODO>；列表防御行（卡无 acceptance…）与不适用行无槽不计。
++
++/** 判定列四枚举白名单（骨架口径注记字面同源） */
++const MATRIX_VERDICT_WHITELIST = new Set(['covered', 'partial', 'uncovered', 'non-testable'])
++/** 证据列未填占位（骨架字面同源） */
++const MATRIX_EVIDENCE_TODO = '<TODO>'
++
++/**
++ * 切分 markdown 表格行：按未转义管道切列（`\|` 是单元格内字面量，切列须忽略），
++ * 行首管道消费、行尾有管道则末段为收尾空段不产列。非 | 起始行返回 null。
++ * @returns {string[]|null} 单元格数组（未 trim）；null = 非表行
++ */
++function splitMatrixRowCells(line) {
++  const s = String(line).trim()
++  if (!s.startsWith('|')) return null
++  const cells = []
++  let cur = ''
++  for (let i = 1; i < s.length; i++) {
++    const ch = s[i]
++    if (ch === '\\' && s[i + 1] === '|') { cur += '|'; i++; continue }
++    if (ch === '|') { cells.push(cur); cur = ''; continue }
++    cur += ch
++  }
++  if (!s.endsWith('|')) cells.push(cur) // 行尾缺管道的宽容形态：尾段仍是单元格
++  return cells
++}
++
++/**
++ * covered/partial 行证据是否含测试锚点形态之一：`.test.` 文件名 / file:line（x.js:123）/
++ * 反引号包裹的标识符（骨架归属列即反引号路径，agent 引用复制即命中）。
++ */
++function matrixEvidenceHasAnchor(evidence) {
++  const e = String(evidence || '')
++  if (e.includes('.test.')) return true
++  if (/[A-Za-z0-9_\-./\\]+\.[A-Za-z0-9]+:\d+/.test(e)) return true
++  if (/`[^`]+`/.test(e)) return true
++  return false
++}
++
++/**
++ * 行级证据口径：covered/partial 须非 TODO 且含测试锚点；non-testable 须非 TODO 且非空
++ * （一句话理由）；uncovered 无证据要求；判定未填（不在三枚举内）的行只计 unfilled 不重复计证据。
++ */
++function matrixEvidenceMissing(verdict, evidence) {
++  if (verdict !== 'covered' && verdict !== 'partial' && verdict !== 'non-testable') return false
++  const e = String(evidence || '').trim()
++  if (e === '' || e === MATRIX_EVIDENCE_TODO || e.startsWith('<待填')) return true
++  if (verdict === 'non-testable') return false // 非 TODO 且非空即合规（理由一句话）
++  return !matrixEvidenceHasAnchor(e)
++}
++
++/**
++ * 行级提取 verify-result.md「#### 探针 7：验收×测试覆盖矩阵」段的判定/证据槽（纯字符串解析）。
++ * 段定位：探针 7 标题（全/半角冒号）到下个同级（####）或更高级（#~###）标题；##### 属段内。
++ * 只认五列表行（按忽略 \| 转义切列）；表头/分隔行、**task-NN** 锚行、列表防御行与
++ * 「不适用（无 TaskCard）」行不计槽。
++ * @param {string} verifyMd - verify-result.md 全文
++ * @returns {{
++ *   present: boolean,
++ *   rows: Array<{task: string, acceptance: string, verdict: string, evidence: string, unfilled?: boolean, evidenceMissing?: boolean}>,
++ *   unfilled: number,
++ *   missingEvidence: number
++ * }} 无段时 present=false、rows=[]、计数 0/0（调用方区分「无段」与「段在而未填」）
++ */
++export function extractAcceptanceMatrixSlots(verifyMd) {
++  const md = String(verifyMd || '')
++  const out = { present: false, rows: [], unfilled: 0, missingEvidence: 0 }
++  const hm = md.match(/^#### 探针 7[：:]/m)
++  if (!hm) return out
++  out.present = true
++  const rest = md.slice(hm.index + hm[0].length)
++  const endMatch = rest.match(/^#{1,4}(?:[ \t]|$)/m)
++  const sectionText = endMatch ? rest.slice(0, endMatch.index) : rest
++
++  let currentTask = ''
++  for (const rawLine of sectionText.split(/\r?\n/)) {
++    const anchor = rawLine.match(/^\*\*\s*(task-[A-Za-z0-9._-]+)\s*\*\*/)
++    if (anchor) { currentTask = anchor[1]; continue }
++    const cells = splitMatrixRowCells(rawLine)
++    if (!cells || cells.length !== 5) continue // 列表防御行/不适用行/非五列表行不计槽
++    const c = cells.map(x => x.trim())
++    if (c.every(x => /^:?-{3,}:?$/.test(x))) continue // 分隔行 |---|---|…|
++    if (c[3] === '判定' && c[4] === '证据') continue // 表头行
++    const verdict = c[3]
++    const evidence = c[4]
++    const row = { task: currentTask, acceptance: c[0], verdict, evidence }
++    if (!MATRIX_VERDICT_WHITELIST.has(verdict)) { row.unfilled = true; out.unfilled++ }
++    if (matrixEvidenceMissing(verdict, evidence)) { row.evidenceMissing = true; out.missingEvidence++ }
++    out.rows.push(row)
++  }
++  return out
++}
++
++/**
++ * 探针 7 矩阵门禁 validator（注册 contracts.verify.validators，走 runValidators errors
++ * 阻断链——勿进 gates.js fail-soft 回填块，catch 只 warn 会吞阻断）：
++ *   - 无 tasks/ 目录（quick 会话/旧变更，无 TaskCard）→ no-op 零行为变化
++ *   - verify-result.md 未落盘（verify 中间步骤）→ no-op：存在性归引擎 manifest，此处只读已落盘内容
++ *   - 段缺失：严格档（isIrStrictVerifyChange / IR_STRICT_SINCE 同源常量，与结论槽
++ *     「删槽回退已关闭」同口径）ERROR；非严格（存量变更）warning 提示补段不阻断
++ *   - 段在场：unfilled / missingEvidence > 0 → ERROR 列出违规行（task+acceptance 截断 40 字）
++ */
++function validateAcceptanceMatrix(cwd, changeName, context = {}) {
++  const { specRoot } = context
++  const errors = []
++  const warnings = []
++  const changeDir = resolveChangeDir(cwd, changeName, specRoot)
++
++  // 无 TaskCard（tasks/ 不存在）→ 不校验（设计兼容策略：brownfield 零行为变化）
++  if (!existsSync(join(changeDir, 'tasks'))) return { ok: true, errors, warnings }
++  // verify-result.md 中间步骤未落盘 → 不校验（末步引擎存在性规则兜底）
++  const verifyResultPath = join(changeDir, 'verify-result.md')
++  if (!existsSync(verifyResultPath)) return { ok: true, errors, warnings }
++
++  const matrix = extractAcceptanceMatrixSlots(readFileSync(verifyResultPath, 'utf8'))
++  if (!matrix.present) {
++    if (isIrStrictVerifyChange(changeDir)) {
++      errors.push(
++        `探针 7 矩阵段缺失（有 TaskCard 且严格档，created_at ≥ ${IR_STRICT_SINCE}）——` +
++        `verify-result.md 缺「#### 探针 7：验收×测试覆盖矩阵」段。` +
++        `修复：跑 \`sillyspec verify-probes --change ${changeName} --init\` 幂等补段（已有正文不覆盖），再逐行填判定与证据。`
++      )
++    } else {
++      warnings.push(
++        `verify-result.md 缺探针 7 验收×测试覆盖矩阵段（非严格档，存量变更不强制）——` +
++        `可跑 \`sillyspec verify-probes --change ${changeName} --init\` 幂等补段。`
++      )
++    }
++    return { ok: errors.length === 0, errors, warnings }
++  }
++
++  const clip = (s) => { const t = String(s || ''); return t.length > 40 ? t.slice(0, 40) + '…' : t }
++  const rowLabel = (r) => `${r.task || '（未知 task）'}｜${clip(r.acceptance)}`
++  if (matrix.unfilled > 0) {
++    const list = matrix.rows.filter(r => r.unfilled).map(rowLabel).join('；')
++    errors.push(
++      `探针 7 验收×测试覆盖矩阵有 ${matrix.unfilled} 行判定未填（四选一 covered/partial/uncovered/non-testable）：${list}。` +
++      `修复：编辑 verify-result.md 探针 7 段，把 <待填：四选一> 替换为判定值。`
++    )
++  }
++  if (matrix.missingEvidence > 0) {
++    const list = matrix.rows.filter(r => r.evidenceMissing).map(rowLabel).join('；')
++    errors.push(
++      `探针 7 验收×测试覆盖矩阵有 ${matrix.missingEvidence} 行证据缺失` +
++      `（covered/partial 证据须含测试锚点：\`.test.\` 文件名 / file:line / 反引号包裹的测试名；non-testable 证据须写一句理由）：${list}。` +
++      `修复：在证据列补测试锚点（如 \`test/foo.test.mjs\` 或 \`src/x.js:42\`）或 non-testable 理由。`
++    )
++  }
++  return { ok: errors.length === 0, errors, warnings }
++}
++
+ /**
+  * 计算归档目标目录名：保持原变更名不变，直接移入 archive/。
+  */
+@@ -881,7 +1036,9 @@ const contracts = {
+     description: '验证与测试',
+     allowedFrom: ['execute'],
+     allowedTo: ['archive'],
+-    validators: [validateVerifyOutputs],
++    // validateAcceptanceMatrix：探针 7 矩阵槽 fail-closed（2026-09-14-acceptance-test-matrix FR-02），
++    // 注册进 validator 链即覆盖 gates / machine-interface 等全部 runValidators 调用方（gates.js 零改动）。
++    validators: [validateVerifyOutputs, validateAcceptanceMatrix],
+   },
+   archive: {
+     stage: 'archive',
+diff --git a/src/stages/verify.js b/src/stages/verify.js
+index 7bef186..2b808fd 100644
+--- a/src/stages/verify.js
++++ b/src/stages/verify.js
+@@ -160,6 +160,7 @@ export const definition = {
+ 2. 如果存在：
+    - 逐个读取 tasks/task-NN.md，对照 frontmatter 的 \`acceptance:\` 列表逐条核验（TaskCard 协议的验收标准在 frontmatter YAML，正文无 checkbox）
+    - 每条 acceptance 对照实际实现/测试结果判定满足与否，未满足的项列为不通过
++   - 覆盖对账走探针 7 矩阵：verify-result.md「探针 7：验收×测试覆盖矩阵」段已由 CLI 预填归属测试文件与关键词提示（骨架未生成时先跑 \`sillyspec verify-probes --change <change-name> --init\`，幂等不覆盖已有正文）；逐行填判定（covered/partial/uncovered/non-testable 四选一）与证据——covered/partial 附测试锚点（\`.test.\` 文件或 file:line），non-testable 写一句理由；判定/证据未填会被 verify \`--done\` 门禁阻断（fail-closed）
+ 3. 如果不存在：跳过此步骤
+ 
+ ### 输出
+diff --git a/src/verify-probes.js b/src/verify-probes.js
+index 7548070..b9dbd1f 100644
+--- a/src/verify-probes.js
++++ b/src/verify-probes.js
+@@ -8,6 +8,9 @@
+  *   探针3 测试覆盖：逐 task 按 allowed_paths 定位模块目录，递归找测试文件（co-located tests/ 陷阱）
+  *   探针5 API 契约对账：复用 contract-matrix.verifyApiParity（endpoints.json × 前端调用）+ 表格渲染
+  *   探针6 删除对账：git diff --name-status HEAD 的 D/R × design 声明操作三态判定
++ *   探针7 验收×测试覆盖矩阵：task 卡 acceptance 自解析（jsYaml，string/array 双形态）+ 双源结构
++ *        归属（allowed_paths 测试模式 ∪ execute-runs review.json changedFiles test/ 前缀）+
++ *        关键词命中提示（命中≠判定，不参与门禁；2026-09-14-acceptance-test-matrix）
+  * 探针2（关键词提取半语义）/探针3.4 集成盲区/3.5 断言抽查/探针4（决策追踪语义）留 agent。
+  *
+  * verify-result.md 骨架：七章节固定结构 + 探针结果机械预填 + 其余章节 <!--TODO--> 占位。
+@@ -17,8 +20,9 @@
+  * ②--init 同步落盘 verify-facts.json 机器底稿（探针命令行 + 首跑关键指标 + 时间戳，CLI 全权写，
+  * 供事后独立复跑审计；重复 --init 覆盖为最近一次 init 快照）。
+  */
+-import { existsSync, readFileSync, readdirSync, writeFileSync } from 'fs'
++import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'fs'
+ import { join, dirname, basename } from 'path'
++import jsYaml from 'js-yaml'
+ import { gitQuiet } from './git-helper.js'
+ import {
+   FACTS_SCHEMA_VERSION, EVIDENCE_SLOT_HEADING, RECEIPT_SLOT_HEADING, parseEvidenceSlots,
+@@ -95,10 +99,196 @@ function findTestFiles(rootDir, cwd, cap = 10) {
+   return found
+ }
+ 
++// ── 探针 7（验收×测试覆盖矩阵，2026-09-14-acceptance-test-matrix FR-01）常量与纯函数 ──
++const PROBE7_HEADING = '#### 探针 7：验收×测试覆盖矩阵'
++// execute run id 格式（与 task-review.js isValidExecuteRunId 同口径锚定，防提示词注入/路径穿越）
++const PROBE7_EXEC_RUN_ID_RE = /^exec-\d{4}-\d{2}-\d{2}-\d{6}(?:-[a-z0-9]{1,8}){0,2}$/
++// 关键词提取：≥3 字符标识符（[A-Za-z_][A-Za-z0-9_]{2,}）∪ ≥2 字连续 CJK 片段，按出现顺序交错
++const PROBE7_TERM_RE = /[A-Za-z_][A-Za-z0-9_]{2,}|[\u4e00-\u9fff]{2,}/g
++const PROBE7_TERM_CAP = 5
++
++/**
++ * 解析 task-NN.md frontmatter 的 acceptance（string/array 双形态归一为数组）。
++ * 口径锚 src/stages/plan-postcheck.js acceptance best-effort 段（string → 原文单条、array →
++ * 逐条）——不 import 它：parseTaskContracts 只返回 provides/expects_from 不含 acceptance。
++ * @param {string} content task 卡全文
++ * @returns {string[]|null} acceptance 条目数组；null = 无 frontmatter（调用方跳过该卡）；
++ *   frontmatter 在场但无 acceptance / 非法 YAML → []（防御行，plan-postcheck 已拦缺失）
++ */
++export function parseTaskAcceptance(content) {
++  const fmMatch = String(content || '').match(/^---\r?\n([\s\S]*?)\r?\n---/)
++  if (!fmMatch) return null
++  try {
++    const fmObj = jsYaml.load(fmMatch[1]) || {}
++    if (typeof fmObj.acceptance === 'string') {
++      const t = fmObj.acceptance.trim()
++      return t ? [t] : []
++    }
++    if (Array.isArray(fmObj.acceptance)) {
++      return fmObj.acceptance.filter(x => typeof x === 'string' && x.trim() !== '').map(x => x.trim())
++    }
++  } catch { /* frontmatter 非法 YAML → 防御性空（plan-postcheck 侧已拦） */ }
++  return []
++}
++
++/**
++ * allowed_paths 条目是否测试形态（结构归属面）：test/ 前缀，或文件名含 .test. / _test. / spec
++ * 惯例（(?:^|[._-])test(?:[._-]|$) 覆盖 foo.test.mjs / foo_test.js / test-foo.js 三形）。
++ * 比探针 3 的存在性面（TEST_FILE_RE 子串宽松匹配）严格——这是 3/7 口径差异的落点。
++ */
++function isProbe7TestPath(p) {
++  const posix = String(p).split('\\').join('/')
++  if (/^test\//.test(posix)) return true
++  const name = basename(posix)
++  return /(?:^|[._-])test(?:[._-]|$)/i.test(name) || /spec/i.test(name)
++}
++
++/**
++ * 内联解析当前 execute runId（探针 7 专用——禁静态 import task-review：
++ * task-review→verify-postcheck→verify-probes 三步环，先例见 backfillFactsFromMdAndTests
++ * 对 stage-contract 的分层注释）。优先读 marker current-execute-run-id-<change>；
++ * 读不到/非法则扫描 execute-runs/ 下 mtime 最新的 exec-* 目录兜底；两路皆空 → null
++ * （review 源归空集，不报错）。
++ * @param {string} runtimeRoot
++ * @param {string} changeName
++ * @returns {string|null}
++ */
++function resolveExecuteRunIdInline(runtimeRoot, changeName) {
++  try {
++    const marker = join(runtimeRoot, `current-execute-run-id-${changeName}`)
++    if (existsSync(marker)) {
++      const c = readFileSync(marker, 'utf8').trim()
++      if (c && PROBE7_EXEC_RUN_ID_RE.test(c)) return c
++    }
++  } catch { /* marker 读取失败 → 目录扫描兜底 */ }
++  try {
++    const runsDir = join(runtimeRoot, 'execute-runs')
++    if (!existsSync(runsDir)) return null
++    const cands = readdirSync(runsDir)
++      .filter(n => PROBE7_EXEC_RUN_ID_RE.test(n))
++      .map(n => ({ n, p: join(runsDir, n) }))
++      .filter(x => { try { return statSync(x.p).isDirectory() } catch { return false } })
++      .map(x => { try { return { n: x.n, m: statSync(x.p).mtimeMs } } catch { return { n: x.n, m: 0 } } })
++      .sort((a, b) => b.m - a.m)
++    return cands.length > 0 ? cands[0].n : null
++  } catch {
++    return null
++  }
++}
++
+ /**
+- * 跑四个机械探针。
++ * 读当前 runId 下某 task 的 review.json changedFiles 中 test/ 前缀路径（归属第二源）。
++ * review.json 读不到 / JSON 非法 / changedFiles 非数组 → 空集不报错（提示面，宁缺毋噪）。
++ */
++function readReviewChangedTestFiles(runtimeRoot, runId, taskId) {
++  try {
++    const review = JSON.parse(readFileSync(join(runtimeRoot, 'execute-runs', runId, 'tasks', taskId, 'review.json'), 'utf8'))
++    if (!review || !Array.isArray(review.changedFiles)) return []
++    return review.changedFiles
++      .filter(f => typeof f === 'string')
++      .map(f => f.split('\\').join('/'))
++      .filter(f => f.startsWith('test/'))
++  } catch {
++    return []
++  }
++}
++
++/** acceptance 行关键词提取（标识符 ∪ CJK 片段，去重、按出现顺序，上限 5 词防膨胀） */
++function extractAcceptanceTerms(text) {
++  const terms = []
++  const seen = new Set()
++  const re = new RegExp(PROBE7_TERM_RE.source, 'g') // 共享 g 正则有 lastIndex 状态坑，每次新建
++  let m
++  while ((m = re.exec(String(text || ''))) !== null) {
++    if (!seen.has(m[0])) { seen.add(m[0]); terms.push(m[0]) }
++    if (terms.length >= PROBE7_TERM_CAP) break
++  }
++  return terms
++}
++
++/**
++ * 关键词命中提示：逐 acceptance 条目提取词，在归属测试文件内容里 grep（大小写敏感子串）。
++ * 命中≠判定（R-03，不参与门禁）——只有存在命中的条目才进 hints（键 = acceptance 条目下标）。
++ * 测试文件读取双根回退（cwd → worktree 根，坑 probe1-worktree-path-blind / probe3 双根同族：
++ * apply 前新测试只在 worktree）。读不到的文件计 null 跳过。
++ * @returns {Record<number, {terms: string[], files: string[]}>} 普通对象，可 JSON 序列化
++ */
++function buildAcceptanceHints(acceptanceItems, testFiles, cwd, wtRoot) {
++  const hints = {}
++  if (!testFiles || testFiles.length === 0) return hints
++  const cache = new Map()
++  const readTest = (rel) => {
++    if (cache.has(rel)) return cache.get(rel)
++    let content = null
++    const posix = String(rel).split('\\').join('/')
++    for (const root of [cwd, wtRoot]) {
++      if (!root) continue
++      try { content = readFileSync(join(root, posix), 'utf8'); break } catch { /* 换根重试 */ }
++    }
++    cache.set(rel, content)
++    return content
++  }
++  acceptanceItems.forEach((item, idx) => {
++    const hitTerms = []
++    const hitFiles = new Set()
++    for (const term of extractAcceptanceTerms(item)) {
++      const hits = testFiles.filter(f => { const c = readTest(f); return !!c && c.includes(term) })
++      if (hits.length > 0) {
++        hitTerms.push(term)
++        for (const f of hits) hitFiles.add(f)
++      }
++    }
++    if (hitTerms.length > 0) hints[idx] = { terms: hitTerms, files: [...hitFiles] }
++  })
++  return hints
++}
++
++/** 表格单元格转义：管道转 \|（GFM 行内字面量）、连续空白折叠、超长截断（纯展示层） */
++function mdEscapeCell(text, cap = 200) {
++  let s = String(text).replace(/\s+/g, ' ').trim().replace(/\|/g, '\\|')
++  if (s.length > cap) s = s.slice(0, cap) + '…'
++  return s
++}
++
++/**
++ * 渲染探针 7 段（骨架与幂等补段共用单一实现）。
++ * @param {{ applicable: boolean, tasks: Array<{task: string, acceptance: string[], testFiles: string[], hints: Record<number, {terms: string[], files: string[]}>}> }} p7
++ * @returns {string[]} 行数组（含段标题；调用方自理前后空行）
++ */
++function renderProbe7Lines(p7) {
++  const L = [PROBE7_HEADING]
++  if (!p7 || !p7.applicable) {
++    L.push('- 不适用（无 TaskCard）')
++    return L
++  }
++  L.push('<!-- 口径注记：探针 3 = 模块目录递归存在性面（allowed_paths 目录附近有没有测试）；探针 7 = allowed_paths ∪ review changedFiles 结构归属承接面（每条 acceptance 由哪些测试承接）；两者并排冲突以 7 为准。判定枚举（四选一）：covered / partial / uncovered / non-testable（文档/部署类显式逃生门）。关键词命中只是提示，命中≠判定。 -->')
++  for (const t of (p7.tasks || [])) {
++    L.push('')
++    L.push(`**${t.task}**`)
++    if (!Array.isArray(t.acceptance) || t.acceptance.length === 0) {
++      L.push('- （卡无 acceptance——防御，plan-postcheck 已拦）')
++      continue
++    }
++    L.push('| acceptance 条目 | 归属测试文件 | 关键词命中（提示，命中≠判定） | 判定 | 证据 |')
++    L.push('|---|---|---|---|---|')
++    t.acceptance.forEach((item, i) => {
++      const attribCell = (t.testFiles && t.testFiles.length > 0)
++        ? t.testFiles.map(f => `\`${f}\``).join('<br>')
++        : '无归属测试——判定大概率 uncovered'
++      const h = (t.hints && t.hints[i]) || null
++      const hintCell = h
++        ? `${h.terms.map(x => mdEscapeCell(x)).join('、')}（${(h.files || []).map(f => `\`${f}\``).join('、')}）`
++        : '—'
++      L.push(`| ${mdEscapeCell(item)} | ${attribCell} | ${hintCell} | <待填：四选一> | <TODO> |`)
++    })
++  }
++  return L
++}
++
++/**
++ * 跑四个机械探针 + 探针 7 验收×测试覆盖矩阵。
+  * @param {{ cwd: string, changeName: string, specDir?: string|null }} opts
+- * @returns {{ probe1: object, probe3: object, probe5: object, probe6: object }}
++ * @returns {{ probe1: object, probe3: object, probe5: object, probe6: object, probe7: object }}
+  */
+ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
+   const specBase = resolveVerifyProbesSpecBase(cwd, specDir)
+@@ -220,7 +410,44 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
+     probe6.deletions.push({ path: posix, status: st, designOp: op || null, verdict })
+   }
+ 
+-  return { probe1, probe3, probe5, probe6 }
++  // ── 探针 7：验收×测试覆盖矩阵（acceptance 自解析 + 双源结构归属 + 关键词提示）──
++  // applicable 顶层键：tasks/ 目录不存在或全无 frontmatter = false（quick 会话/旧变更零行为
++  // 变化——不渲染矩阵、不产生待填槽）。归属双源 = 卡 allowed_paths 测试模式 ∪ 当前 runId
++  // review.json changedFiles 的 test/ 前缀（runId 由 resolveExecuteRunIdInline 内联解析——
++  // 禁静态 import task-review，三步环见该函数注释）。
++  const probe7 = { applicable: false, tasks: [] }
++  {
++    const tasksDir = join(changeDir, 'tasks')
++    if (existsSync(tasksDir)) {
++      const runId = resolveExecuteRunIdInline(runtimeRoot, changeName)
++      const cards = []
++      try {
++        for (const f of readdirSync(tasksDir).filter(n => /^task-\d+\.md$/.test(n)).sort()) {
++          const raw = readFileSync(join(tasksDir, f), 'utf8')
++          const acceptance = parseTaskAcceptance(raw)
++          if (acceptance === null) continue // 无 frontmatter → 跳过（plan-postcheck 已拦）
++          const fmId = (raw.match(/^id:\s*(\S+)/m) || [])[1]
++          cards.push({ task: fmId || f.replace(/\.md$/, ''), acceptance, raw })
++        }
++      } catch { /* tasks 目录不可读 → applicable 维持 false */ }
++      probe7.applicable = cards.length > 0
++      for (const card of cards) {
++        const fromAllowed = parseAllowedPaths(card.raw)
++          .map(p => String(p).replace(/^NEW:\s*/, '').trim())
++          .filter(p => p && isProbe7TestPath(p))
++        const fromReview = runId ? readReviewChangedTestFiles(runtimeRoot, runId, card.task) : []
++        const testFiles = [...new Set([...fromAllowed, ...fromReview])]
++        probe7.tasks.push({
++          task: card.task,
++          acceptance: card.acceptance,
++          testFiles,
++          hints: buildAcceptanceHints(card.acceptance, testFiles, cwd, wtRoot),
++        })
++      }
++    }
++  }
++
++  return { probe1, probe3, probe5, probe6, probe7 }
+ }
+ 
+ /**
+@@ -262,6 +489,12 @@ export function renderVerifyProbesReport(result) {
+   L.push(`- ℹ️ ${probe3.note}`)
+   L.push('')
+ 
++  // 探针 7 紧随探针 3（3.5 已被断言有效性抽查占用，编号顺延取 7 兼容锚定正则 /#### 探针 (\d+)/）；
++  // 骨架序 3 → 7 → 4，ensureAcceptanceMatrixSection 补段同序。result 无 probe7 键（存量调用方/
++  // 合成 result）→ applicable=false 渲染「不适用」行，零回归。
++  L.push(...renderProbe7Lines(result.probe7 || { applicable: false, tasks: [] }))
++  L.push('')
++
+   L.push('#### 探针 4：决策追踪覆盖')
+   L.push('<!--TODO: 语义探针——D-xxx@vN → FR-xxx → plan/task 引用 → 证据回指闭环（agent 执行）-->')
+   L.push('')
+@@ -508,6 +741,46 @@ export function backfillMissingEvidenceSlots(mdPath, requiredEvidenceItems = [])
+   return { added }
+ }
+ 
++/**
++ * 探针 7 矩阵段幂等补齐（--init 段落级，2026-09-14-acceptance-test-matrix FR-01；学
++ * backfillMissingEvidenceSlots 形态）：verify-result.md 已存在但缺「#### 探针 7」段且
++ * applicable=true（有 TaskCard）时补矩阵骨架段——不触碰既有正文；二跑零改动（幂等）。
++ * 插入位置：文件内有「#### 探针 3」小节时插在该小节之后（保持骨架序 3 → 7 → 4），否则
++ * 文末追加（旧格式/手写正文）。段已在场（冒号全/半角均认，防走样标题绕过检测）或
++ * applicable=false → no-op。本变更自举通道：verify-result.md 先于特性存在的存量走此补段。
++ * @param {string} mdPath verify-result.md 路径
++ * @param {{ applicable: boolean, tasks: Array }} probe7 runVerifyProbes 返回的 probe7
++ * @returns {{ added: boolean, reason?: string }}
++ */
++export function ensureAcceptanceMatrixSection(mdPath, probe7) {
++  let text
++  try { text = readFileSync(mdPath, 'utf8') } catch { return { added: false, reason: 'verify-result.md 不存在或不可读' } }
++  const normalized = text.replace(/\r\n/g, '\n')
++  if (/^#### 探针 7[：:]/m.test(normalized)) return { added: false, reason: '探针 7 段已在场' }
++  const p7 = probe7 && typeof probe7 === 'object' ? probe7 : { applicable: false, tasks: [] }
++  if (!p7.applicable) return { added: false, reason: '不适用（无 TaskCard）' }
++  const blockLines = [...renderProbe7Lines(p7), '']
++  try {
++    const lines = normalized.split('\n')
++    const p3Idx = lines.findIndex(l => /^#### 探针 3[：:]/.test(l))
++    if (p3Idx === -1) {
++      writeFileSync(mdPath, normalized.replace(/\n?$/, '\n') + '\n' + blockLines.join('\n'))
++    } else {
++      // 探针 3 小节终点 = 下一个任意级别标题行（与 verify-postcheck extractProbeSubsections 同口径）
++      let end = lines.length
++      for (let i = p3Idx + 1; i < lines.length; i++) {
++        if (/^#{1,6}\s/.test(lines[i])) { end = i; break }
++      }
++      lines.splice(end, 0, ...blockLines)
++      writeFileSync(mdPath, lines.join('\n'))
++    }
++  } catch (e) {
++    console.warn(`⚠️ 探针 7 矩阵段补齐落盘失败（fail-soft，不阻断）: ${e && e.message ? e.message : e}`)
++    return { added: false, reason: '落盘失败' }
++  }
++  return { added: true }
++}
++
+ /**
+  * 结论草稿槽行预填（P0-1 前置三，noai-ir-roadmap §3）：机械事实全绿时把骨架「结论枚举：」
+  * 待填槽替换为 PASS 草稿——显式「草稿待确认」内联标注（非默认值语义），agent 复核后可改写；
+diff --git a/templates/prompts/testcase-design.md b/templates/prompts/testcase-design.md
+index 8814808..c753ff0 100644
+--- a/templates/prompts/testcase-design.md
++++ b/templates/prompts/testcase-design.md
+@@ -9,4 +9,5 @@
+ 3. **行为 vs 实现**：走公开 API 测行为；重构后功能不变，测试不应失败。
+ 4. **契约与回归**：覆盖本次改动会破坏的既有行为与相邻模块接口；改公共签名/文案/常量时同步修复受影响既有测试并跑全量，禁止删断言凑绿。
+ 5. **时间敏感分支**：超时/重试/并发分支别真等——超时参数做成可注入，测试传毫秒级极小值或注入可控时钟推进，再断言超时后的行为（走哪个分支/返回什么/资源是否回收）。
+-6. **隔离确定性**：独立 fixture、可重复跑，不依赖共享状态/执行顺序。
+\ No newline at end of file
++6. **隔离确定性**：独立 fixture、可重复跑，不依赖共享状态/执行顺序。
++7. **覆盖对账**：每条 TaskCard acceptance 至少对应一个测试用例，或显式标注 non-testable（文档/部署类——证据列写一句理由）；对应关系由 verify 探针 7 矩阵机械核对（判定 covered/partial 须给测试锚点）——写测试前先读卡的 acceptance 列表逐条对齐，勿只覆盖顺手的主路径。
+\ No newline at end of file
+diff --git a/templates/prompts/verify-probes.md b/templates/prompts/verify-probes.md
+index 3c8a8d2..e5ff9a2 100644
+--- a/templates/prompts/verify-probes.md
++++ b/templates/prompts/verify-probes.md
+@@ -3,7 +3,7 @@
+ > 🔧 **先跑 CLI 机械探针（一条命令）**：`sillyspec verify-probes --change <change-name> [--init]`
+ > 输出已包含四个纯机械探针的结果（可直接进验证报告）：**探针 1** 未实现标记扫描（design 清单文件逐行 TODO/FIXME 命中 + 行号）、**探针 3** 测试文件递归查找（含 co-located tests/，逐 task 覆盖）、**探针 5** API 契约对账表（endpoints.json × 前端调用 diff）、**探针 6** 删除对账三态（git 事实 × design 声明）。`--init` 顺带生成 verify-result.md 九章节骨架（探针结果已预填，`<!--TODO-->` 占位替换即可）。
+ >
+-> 下列条目中，只有**半语义部分**需要你执行：探针 2（关键词提取）、探针 3.4 集成盲区标注、探针 3.5 断言有效性抽查、探针 4（决策追踪闭环判定）。CLI 已跑的部分勿重复手跑——对 CLI 输出的 warning 项做语义复核即可。
++> 下列条目中，只有**半语义部分**需要你执行：探针 2（关键词提取）、探针 3.4 集成盲区标注、探针 3.5 断言有效性抽查、探针 4（决策追踪闭环判定）、探针 7（验收×测试覆盖矩阵判定填槽）。CLI 已跑的部分勿重复手跑——对 CLI 输出的 warning 项做语义复核即可。
+ 
+ **探针 2：设计关键词覆盖探针（你执行——关键词提取是语义）**
+ 1. 读取 design.md，从中提取所有能力关键词（如"登录"、"导出"、"批量"、"删除"、"搜索"等动作词）
+@@ -31,3 +31,6 @@ CLI 的 missing backend endpoint 是 advisory（不硬阻断归档）——但 c
+ 
+ **探针 6 补充（CLI 已出三态判定，你做终审）**
+ 以 git 事实为准（真实 > 声明）；CLI 的三态（合规/高风险/未声明）是机械判定，是否构成 FAIL blocker 由你诚实判定，务必如实记录——静默删除代码是 verify 的最大盲区。
++
++**探针 7 补充（CLI 已预填矩阵归属与提示，你填判定与证据）**
++验收×测试覆盖矩阵：CLI 机械半边已预填——逐 task 解析 TaskCard acceptance（frontmatter）、双源结构归属测试文件（allowed_paths 测试模式 ∪ execute review changedFiles 中 test/ 路径）、关键词命中提示（命中≠判定，仅提示）。你逐行填判定槽四枚举（covered / partial / uncovered / non-testable——non-testable 是文档/部署类显式逃生门）与证据：covered/partial 附测试锚点（`.test.` 文件或 file:line），non-testable 附一句理由；判定或证据未填 fail-closed，阻断 verify `--done`。与探针 3 口径差异：探针 3 查模块目录有没有测试文件（存在性面），探针 7 查每条 acceptance 由哪些测试承接（承接面）；两者并排冲突以 7 为准。
+diff --git a/test/acceptance-matrix-gate.test.mjs b/test/acceptance-matrix-gate.test.mjs
+new file mode 100644
+index 0000000..9a7cd24
+--- /dev/null
++++ b/test/acceptance-matrix-gate.test.mjs
+@@ -0,0 +1,318 @@
++/**
++ * 探针 7 验收×测试覆盖矩阵门禁（2026-09-14-acceptance-test-matrix FR-02）单测。
++ *
++ * 覆盖：
++ * 1. extractAcceptanceMatrixSlots（纯字符串解析）：
++ *    - 四枚举 covered/partial/uncovered/non-testable 正确解析（判定列原样进 rows）
++ *    - <待填：四选一> / 白名单外判定 → unfilled 计数
++ *    - 证据锚点三形态通过：`.test.` 文件名 / file:line（x.js:123）/ 反引号包裹标识符
++ *    - covered/partial 缺锚点 → missingEvidence；non-testable 空/<TODO> 理由 → missingEvidence；
++ *      uncovered 无证据要求（<TODO> 不计）
++ *    - 管道转义切列：acceptance 单元格内 \| 不偏移判定/证据列
++ *    - 段边界：全/半角冒号标题皆认；段止于下个同级/更高级标题（##### 属段内）
++ *    - 表头/分隔行、**task-NN** 锚行、列表防御行与「不适用」行不计槽；无段 present=false 0/0
++ * 2. validateAcceptanceMatrix（经 runValidators('verify') 注册链生效）：
++ *    - 有 tasks/ + 段在场 + 未填槽 → errors 阻断（task+acceptance 进错误文案）
++ *    - 证据缺失 → errors 阻断
++ *    - 全填放行（四枚举 + 证据齐 → runValidators verify ok=true，不误伤既有正常流）
++ *    - 无 tasks/ 目录 → no-op（严格档 + 无段也不产矩阵 error/warning——brownfield 零行为变化）
++ *    - 有 tasks/ + 无段 + 严格档（真实 IR_STRICT_SINCE 常量构造 created_at）→ ERROR
++ *    - 有 tasks/ + 无段 + 非严格档 → warning 不阻断
++ */
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++
++import { runValidators, extractAcceptanceMatrixSlots } from '../src/stage-contract.js'
++import { IR_STRICT_SINCE } from '../src/constants.js'
++
++let passed = 0
++let failed = 0
++const tmpRoots = []
++
++function assert(cond, msg) {
++  if (cond) { console.log(`  ✅ PASS: ${msg}`); passed++ }
++  else { console.log(`  ❌ FAIL: ${msg}`); failed++ }
++}
++
++function clip40(s) { return String(s).length > 40 ? String(s).slice(0, 40) + '…' : String(s) }
++
++console.log('=== 1. extractAcceptanceMatrixSlots 纯解析 ===')
++
++// 1.1 四枚举 + 锚行 + 表头/分隔行/防御行跳过 + 段边界（全角冒号 + 末尾更高级标题截断）
++{
++  const md = [
++    '#### 探针 1：未实现标记扫描',
++    '- ✅ 无命中',
++    '',
++    '#### 探针 7：验收×测试覆盖矩阵',
++    '<!-- 口径注记 -->',
++    '',
++    '**task-01**',
++    '- （卡无 acceptance——防御，plan-postcheck 已拦）',
++    '',
++    '**task-02**',
++    '| acceptance 条目 | 归属测试文件 | 关键词命中（提示，命中≠判定） | 判定 | 证据 |',
++    '|---|---|---|---|---|',
++    '| 判定枚举解析 | `test/a.test.mjs` | — | covered | `test/a.test.mjs` 全绿 |',
++    '| 部分承接 | `test/b.test.mjs` | — | partial | 见 src/b.js:42 断言 |',
++    '| 未承接声明 | 无归属测试 | — | uncovered | <TODO> |',
++    '| 文档类条目 | 无归属测试 | — | non-testable | 纯文档变更无测试面 |',
++    '',
++    '##### 段内低级标题（属段内，不截断）',
++    '',
++    '**task-03**',
++    '| 锚行归位 | `test/c.test.mjs` | — | covered | `runFullGate` 通过 |',
++    '',
++    '### 更高级标题（段终止）',
++    '| 段外行 | `test/x.test.mjs` | — | covered | `test/x.test.mjs` |',
++    '',
++  ].join('\n')
++
++  const r = extractAcceptanceMatrixSlots(md)
++  assert(r.present === true, '段在场 present=true（全角冒号标题识别）')
++  assert(r.rows.length === 5, `只计数据行（表头/分隔/防御行跳过），rows=5（实际 ${r.rows.length}）`)
++  assert(r.rows.filter(x => x.task === 'task-02').length === 4 && r.rows.filter(x => x.task === 'task-03').length === 1,
++    '**task-NN** 锚行正确归位行归属')
++  const verdicts = r.rows.map(x => x.verdict)
++  assert(JSON.stringify(verdicts.slice(0, 4)) === JSON.stringify(['covered', 'partial', 'uncovered', 'non-testable']),
++    `四枚举判定列原样解析（实际 ${JSON.stringify(verdicts.slice(0, 4))}）`)
++  const last = r.rows[r.rows.length - 1]
++  assert(last.task === 'task-03' && last.verdict === 'covered',
++    '##### 段内低级标题不截断；### 更高级标题后段外行不计（末行=task-03 段内行）')
++  assert(r.unfilled === 0, `四枚举全白名单 unfilled=0（实际 ${r.unfilled}）`)
++  assert(r.missingEvidence === 0, `uncovered 行 <TODO> 证据不计 missingEvidence；covered/partial 锚点齐、non-testable 有理由 → 0（实际 ${r.missingEvidence}）`)
++}
++
++// 1.2 证据锚点三形态逐项通过
++{
++  const rows = [
++    ['锚点A：.test. 文件名', 'covered', '跑 node test/gate.test.mjs 全绿'],
++    ['锚点B：file:line', 'covered', '断言见 src/feature.js:123'],
++    ['锚点C：反引号标识符', 'covered', '`extractAcceptanceMatrixSlots` 三用例通过'],
++    ['锚点C2：反引号路径', 'partial', '主路径 `test/gate.test.mjs` 通过，边界待补'],
++  ]
++  const md = [
++    '#### 探针 7：验收×测试覆盖矩阵',
++    '',
++    '**task-01**',
++    '| acceptance 条目 | 归属测试文件 | 关键词命中 | 判定 | 证据 |',
++    '|---|---|---|---|---|',
++    ...rows.map(r_ => `| ${r_[0]} | x | — | ${r_[1]} | ${r_[2]} |`),
++    '',
++  ].join('\n')
++  const r = extractAcceptanceMatrixSlots(md)
++  assert(r.unfilled === 0 && r.missingEvidence === 0,
++    `证据锚点三形态（.test. 文件名 / file:line / 反引号）全部通过（实际 ${r.unfilled}/${r.missingEvidence}）`)
++}
++
++// 1.3 待填计数（<待填：四选一> 与白名单外）
++{
++  const md = [
++    '#### 探针 7：验收×测试覆盖矩阵',
++    '',
++    '**task-01**',
++    '| acceptance 条目 | 归属测试文件 | 关键词命中 | 判定 | 证据 |',
++    '|---|---|---|---|---|',
++    '| 条目一 | `test/a.test.mjs` | — | <待填：四选一> | <TODO> |',
++    '| 条目二 | `test/a.test.mjs` | — | maybe | <TODO> |',
++    '| 条目三 | `test/a.test.mjs` | — | covered | `test/a.test.mjs` |',
++    '',
++  ].join('\n')
++  const r = extractAcceptanceMatrixSlots(md)
++  assert(r.unfilled === 2, `<待填：四选一> 与白名单外（maybe）各计一行 → unfilled=2（实际 ${r.unfilled}）`)
++  assert(r.missingEvidence === 0, '判定未填的行不重复计证据（只计 unfilled）')
++  assert(r.rows[0].unfilled === true && r.rows[1].unfilled === true && r.rows[2].unfilled !== true,
++    '行级 unfilled 标记与计数一致')
++}
++
++// 1.4 证据缺失三口径：covered 缺锚点 / partial <TODO> / non-testable 空理由
++{
++  const md = [
++    '#### 探针 7:验收×测试覆盖矩阵', // 半角冒号标题
++    '',
++    '**task-01**',
++    '| acceptance 条目 | 归属测试文件 | 关键词命中 | 判定 | 证据 |',
++    '|---|---|---|---|---|',
++    '| 缺锚点 | `test/a.test.mjs` | — | covered | 看过了没问题 |',
++    '| TODO 证据 | `test/a.test.mjs` | — | partial | <TODO> |',
++    '| 空理由 | 无归属测试 | — | non-testable |   |',
++    '| 有理由 | 无归属测试 | — | non-testable | 纯部署配置变更 |',
++    '',
++  ].join('\n')
++  const r = extractAcceptanceMatrixSlots(md)
++  assert(r.present === true, '半角冒号标题同样识别')
++  assert(r.missingEvidence === 3, `covered 缺锚点 + partial <TODO> + non-testable 空白理由 → 3（实际 ${r.missingEvidence}）`)
++  assert(r.missingEvidence > 0 && r.rows[3].evidenceMissing !== true, 'non-testable 带一句理由合规')
++}
++
++// 1.5 管道转义切列：acceptance 单元格 \| 不偏移判定/证据列
++{
++  const md = [
++    '#### 探针 7：验收×测试覆盖矩阵',
++    '',
++    '**task-01**',
++    '| acceptance 条目 | 归属测试文件 | 关键词命中 | 判定 | 证据 |',
++    '|---|---|---|---|---|',
++    '| 条件 a \\| b 二选一 | `test/a.test.mjs` | — | covered | `test/a.test.mjs` |',
++    '',
++  ].join('\n')
++  const r = extractAcceptanceMatrixSlots(md)
++  assert(r.rows.length === 1 && r.rows[0].verdict === 'covered' && r.rows[0].evidence.trim() === '`test/a.test.mjs`',
++    `\\| 转义不切列：判定/证据仍读自第 4/5 列（实际 ${JSON.stringify(r.rows[0] && r.rows[0].verdict)}）`)
++  assert(r.rows[0].acceptance === '条件 a | b 二选一', '\\| 解码为字面管道进 acceptance')
++  assert(r.unfilled === 0 && r.missingEvidence === 0, '转义行不误报未填/缺证据')
++}
++
++// 1.6 无段 present=false
++{
++  const r = extractAcceptanceMatrixSlots('# 验证报告\n\n## 结论\n\nPASS\n')
++  assert(r.present === false && Array.isArray(r.rows) && r.rows.length === 0 && r.unfilled === 0 && r.missingEvidence === 0,
++    '无探针 7 段 → present=false、rows=[]、0/0')
++}
++
++console.log('\n=== 2. validateAcceptanceMatrix（runValidators verify 链） ===')
++
++const tmpRoot = mkdtempSync(join(tmpdir(), 'amx-gate-'))
++tmpRoots.push(tmpRoot)
++
++/** 造一个能过 validateVerifyOutputs 基线的变更目录（结论槽 PASS + 低风险 design/plan） */
++function makeChange(cn, { strict = true, withTasks = true, verifyMd } = {}) {
++  const root = mkdtempSync(join(tmpRoot, cn + '-'))
++  tmpRoots.push(root)
++  const changeDir = join(root, '.sillyspec', 'changes', cn)
++  mkdirSync(changeDir, { recursive: true })
++  writeFileSync(join(changeDir, 'design.md'), [
++    '---',
++    `created_at: ${strict ? IR_STRICT_SINCE : '2026-01-01'} 08:00:00`,
++    '---',
++    '# 设计', '',
++    '## 文件变更清单', '',
++    '| 操作 | 文件路径 | 说明 |', '|---|---|---|', '| 修改 | src/feature.js | 特性 |', '',
++  ].join('\n'))
++  writeFileSync(join(changeDir, 'plan.md'), '# Plan\n\n## Wave 1\n\n- [x] task-01: 实现\n')
++  if (withTasks) {
++    mkdirSync(join(changeDir, 'tasks'))
++    writeFileSync(join(changeDir, 'tasks', 'task-01.md'), [
++      '---', 'id: task-01', 'title: 门禁', 'allowed_paths:', '  - src/stage-contract.js',
++      'acceptance:', '  - 判定枚举解析', '  - 证据锚点核验', '---', '',
++    ].join('\n'))
++  }
++  if (verifyMd !== null) writeFileSync(join(changeDir, 'verify-result.md'), verifyMd)
++  return { root, cn }
++}
++
++const MATRIX_HEAD = [
++  '#### 探针 7：验收×测试覆盖矩阵', '', '**task-01**',
++  '| acceptance 条目 | 归属测试文件 | 关键词命中 | 判定 | 证据 |', '|---|---|---|---|---|',
++].join('\n')
++
++function verifyDoc(bodyLines) {
++  return ['# 验证报告', '', '结论枚举：PASS', '', bodyLines.join('\n'), ''].join('\n')
++}
++
++// 2.1 未填槽 → errors 阻断
++{
++  const { root, cn } = makeChange('gate-unfilled', {
++    verifyMd: verifyDoc([
++      MATRIX_HEAD,
++      '| 判定枚举解析 | `test/x.test.mjs` | — | <待填：四选一> | <TODO> |',
++      '| 证据锚点核验 | `test/x.test.mjs` | — | covered | `test/x.test.mjs` |',
++    ]),
++  })
++  const r = runValidators('verify', root, cn)
++  const err = r.errors.find(e => e.includes('判定未填'))
++  assert(r.ok === false && !!err, '未填槽 → runValidators verify 阻断（判定未填 error）')
++  assert(err && err.includes('task-01') && err.includes(clip40('判定枚举解析')),
++    '错误文案点名 task + acceptance（40 字截断口径）')
++}
++
++// 2.2 证据缺失 → errors 阻断（covered 缺锚点 + non-testable <TODO>）
++{
++  const { root, cn } = makeChange('gate-evidence', {
++    verifyMd: verifyDoc([
++      MATRIX_HEAD,
++      '| 判定枚举解析 | `test/x.test.mjs` | — | covered | 应该没问题 |',
++      '| 证据锚点核验 | `test/x.test.mjs` | — | covered | <TODO> |',
++    ]),
++  })
++  const r = runValidators('verify', root, cn)
++  const err = r.errors.find(e => e.includes('证据缺失'))
++  assert(r.ok === false && !!err, '证据缺失（covered 缺锚点 + <TODO>）→ 阻断')
++  assert(err && err.includes('.test.') && err.includes('file:line') && err.includes('non-testable'),
++    '错误文案给三口径修复指引（.test. / file:line / non-testable 理由）')
++}
++
++// 2.3 全填放行（四枚举各一 + 证据齐 → 整链 ok=true，不误伤既有正常流）
++{
++  const { root, cn } = makeChange('gate-allfilled', {
++    verifyMd: verifyDoc([
++      MATRIX_HEAD,
++      '| 枚举一 covered | `test/x.test.mjs` | — | covered | `test/x.test.mjs` 全绿 |',
++      '| 枚举二 partial | `test/x.test.mjs` | — | partial | 断言见 src/feature.js:42 |',
++      '| 枚举三 uncovered | 无归属测试 | — | uncovered | — |',
++      '| 枚举四 non-testable | 无归属测试 | — | non-testable | 文档类条目无测试面 |',
++    ]),
++  })
++  const r = runValidators('verify', root, cn)
++  assert(r.ok === true, `四枚举 + 证据齐 → verify 整链放行（实际 errors=${JSON.stringify(r.errors)}）`)
++}
++
++// 2.4 无 tasks/ → no-op（严格档 + 无段零新增 error/warning——brownfield 零行为变化）
++{
++  const { root, cn } = makeChange('gate-notasks', {
++    strict: true, withTasks: false,
++    verifyMd: verifyDoc(['正文无矩阵段']),
++  })
++  const r = runValidators('verify', root, cn)
++  assert(r.ok === true
++    && !r.errors.some(e => e.includes('探针 7'))
++    && !r.warnings.some(w => w.includes('探针 7')),
++    '无 tasks/ 目录 → 矩阵门禁 no-op（严格档无段也不报）')
++}
++
++// 2.5 有 tasks/ + 无段 + 严格档 → ERROR（真实 IR_STRICT_SINCE 常量构造 created_at）
++{
++  const { root, cn } = makeChange('gate-strict-missing', {
++    strict: true, withTasks: true,
++    verifyMd: verifyDoc(['正文无矩阵段']),
++  })
++  const r = runValidators('verify', root, cn)
++  const err = r.errors.find(e => e.includes('探针 7 矩阵段缺失'))
++  assert(r.ok === false && !!err, '有 TaskCard 且严格档无段 → ERROR 阻断')
++  assert(err && err.includes(String(IR_STRICT_SINCE)) && err.includes('--init'),
++    `错误文案含 IR_STRICT_SINCE（${IR_STRICT_SINCE}）与 --init 修复指引`)
++}
++
++// 2.6 有 tasks/ + 无段 + 非严格档 → warning 不阻断
++{
++  const { root, cn } = makeChange('gate-legacy-missing', {
++    strict: false, withTasks: true,
++    verifyMd: verifyDoc(['正文无矩阵段']),
++  })
++  const r = runValidators('verify', root, cn)
++  assert(r.ok === true && r.warnings.some(w => w.includes('探针 7')),
++    '非严格档（存量变更）无段 → warning 不阻断')
++  assert(!r.errors.some(e => e.includes('探针 7')), '非严格档无段不产 error')
++}
++
++// 2.7 verify-result.md 未落盘（verify 中间步骤）→ no-op
++{
++  const { root, cn } = makeChange('gate-nomd', { strict: true, withTasks: true, verifyMd: null })
++  const r = runValidators('verify', root, cn)
++  assert(!r.errors.some(e => e.includes('探针 7')) && !r.warnings.some(w => w.includes('探针 7')),
++    'verify-result.md 未落盘 → 矩阵门禁 no-op（存在性归引擎 manifest，不提前拦中间步骤）')
++}
++
++// 2.8 注册面：contracts.verify.validators 含两个 validator（getContract 消费方可见）
++{
++  const { getContract } = await import('../src/stage-contract.js')
++  const c = getContract('verify')
++  assert(c && Array.isArray(c.validators) && c.validators.length === 2,
++    `verify validator 链注册为 2（validateVerifyOutputs + validateAcceptanceMatrix，实际 ${c && c.validators.length}）`)
++}
++
++for (const t of tmpRoots) { try { rmSync(t, { recursive: true, force: true }) } catch { /* 清理尽力 */ } }
++
++console.log(`\n合计: ${passed} 通过, ${failed} 失败`)
++process.exit(failed > 0 ? 1 : 0)
+diff --git a/test/acceptance-matrix-probe.test.mjs b/test/acceptance-matrix-probe.test.mjs
+new file mode 100644
+index 0000000..ae7d527
+--- /dev/null
++++ b/test/acceptance-matrix-probe.test.mjs
+@@ -0,0 +1,262 @@
++/**
++ * 探针 7（验收×测试覆盖矩阵，2026-09-14-acceptance-test-matrix FR-01）单测。
++ *
++ * 覆盖：
++ * 1. acceptance 解析：string/array 双形态归一（口径锚 plan-postcheck best-effort 段）、无
++ *    frontmatter → null、非法 YAML → []、无 acceptance 字段 → []（防御行）
++ * 2. 双源结构归属：allowed_paths 测试模式命中（test/ 前缀 + .test. 文件名 + NEW: 前缀剥离）
++ *    ∪ marker 解析的 runId 下 review.json changedFiles test/ 前缀；marker 读不到 → execute-runs
++ *    目录扫描兜底；review.json 读不到 → 该源空集不报错
++ * 3. 关键词提示：标识符 + CJK 片段命中、上限 5 词、命中≠判定（hints 只含命中的条目）
++ * 4. 无 tasks/ 目录 → applicable=false，渲染「不适用（无 TaskCard）」
++ * 5. 骨架渲染：探针 7 段位于探针 3 后、四枚举判定槽 + 证据槽、防御行、无归属提示、管道符转义
++ * 6. ensureAcceptanceMatrixSection 幂等补段：插探针 3 段后 / 文末追加两形态、二跑零改动、
++ *    applicable=false no-op
++ * 7. 禁 task-review 静态 import（三步环）源码级断言
++ */
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync, unlinkSync } from 'node:fs'
++import { join, dirname } from 'node:path'
++import { tmpdir } from 'node:os'
++import { fileURLToPath } from 'node:url'
++
++import {
++  runVerifyProbes, renderVerifyProbesReport, generateVerifyResultSkeleton,
++  ensureAcceptanceMatrixSection, parseTaskAcceptance,
++} from '../src/verify-probes.js'
++
++const __dirname = dirname(fileURLToPath(import.meta.url))
++
++let passed = 0
++let failed = 0
++const tmpRoots = []
++
++function assert(cond, msg) {
++  if (cond) { console.log(`  ✅ PASS: ${msg}`); passed++ }
++  else { console.log(`  ❌ FAIL: ${msg}`); failed++ }
++}
++
++function makeFixtureA() {
++  const proj = mkdtempSync(join(tmpdir(), 'amx7a-'))
++  tmpRoots.push(proj)
++  const specBase = join(proj, '.sillyspec')
++  const changeDir = join(specBase, 'changes', 'c1')
++  mkdirSync(join(changeDir, 'tasks'), { recursive: true })
++  writeFileSync(join(changeDir, 'design.md'), [
++    '## 文件变更清单', '',
++    '| 操作 | 文件 | 说明 |',
++    '|---|---|---|',
++    '| 修改 | src/feature.js | 特性 |',
++    '| 新增 | test/unit-foo.test.mjs | 测试 |',
++    '',
++  ].join('\n'))
++  writeFileSync(join(changeDir, 'tasks.md'), '- [ ] task-01: 矩阵\n- [ ] task-02: 幂等\n- [ ] task-03: 防御\n- [ ] task-04: 无归属\n')
++
++  // task-01：array 形态 acceptance + allowed_paths 双测试条目（test/ 前缀、.test. 文件名、NEW: 前缀）
++  writeFileSync(join(changeDir, 'tasks', 'task-01.md'), [
++    '---',
++    'id: task-01',
++    'allowed_paths:',
++    '  - src/feature.js',
++    '  - test/unit-foo.test.mjs',
++    '  - NEW:test/acceptance-matrix-probe.test.mjs',
++    'acceptance:',
++    '  - probe7 输出符合接口定义——runVerifyProbes 返回 applicable 顶层布尔',
++    '  - 归属并集含 parseTaskAcceptance extractAcceptanceTerms mdEscapeCell renderProbe7Lines isProbe7TestPath resolveExecuteRunIdInline 七个标识符',
++    '---',
++    '# task-01', '',
++  ].join('\n'))
++  // task-02：string 形态（folded >）acceptance + 非测试 allowed_paths → 归属只能来自 review 源
++  writeFileSync(join(changeDir, 'tasks', 'task-02.md'), [
++    '---',
++    'id: task-02',
++    'allowed_paths: [src/other.js]',
++    'acceptance: >',
++    '  ensureAcceptanceMatrixSection 幂等二跑零改动',
++    '---',
++    '# task-02', '',
++  ].join('\n'))
++  // task-03：有 frontmatter 无 acceptance → 防御行
++  writeFileSync(join(changeDir, 'tasks', 'task-03.md'), [
++    '---',
++    'id: task-03',
++    'allowed_paths: [docs/readme.md]',
++    '---',
++    '# task-03', '',
++  ].join('\n'))
++  // task-04：有 acceptance、双源皆空 → 无归属提示
++  writeFileSync(join(changeDir, 'tasks', 'task-04.md'), [
++    '---',
++    'id: task-04',
++    'allowed_paths: [docs/guide.md]',
++    'acceptance:',
++    '  - 文档类条目无测试承接（含管道符 | 的条目）',
++    '---',
++    '# task-04', '',
++  ].join('\n'))
++
++  // 源文件与归属测试文件（关键词 grep 的真实内容面）
++  mkdirSync(join(proj, 'src'), { recursive: true })
++  writeFileSync(join(proj, 'src', 'feature.js'), 'export const f = 1\n')
++  mkdirSync(join(proj, 'test'), { recursive: true })
++  writeFileSync(join(proj, 'test', 'unit-foo.test.mjs'), [
++    '// probe7 输出符合接口定义 返回 applicable 顶层布尔',
++    'import { runVerifyProbes } from "../src/verify-probes.js"',
++    '// 归属并集含 parseTaskAcceptance extractAcceptanceTerms mdEscapeCell renderProbe7Lines isProbe7TestPath resolveExecuteRunIdInline',
++    'export {}', '',
++  ].join('\n'))
++  writeFileSync(join(proj, 'test', 'acceptance-matrix-probe.test.mjs'), 'export const placeholder = 1 // 无关键词命中面\n')
++  writeFileSync(join(proj, 'test', 'review-attributed.test.mjs'), '// ensureAcceptanceMatrixSection 幂等二跑零改动\nexport {}\n')
++
++  // execute run：marker + review.json（task-02 双源第二例；其余 task 无 review → 空集防御）
++  const runtimeRoot = join(specBase, '.runtime')
++  const runId = 'exec-2026-09-14-120000'
++  mkdirSync(join(runtimeRoot, 'execute-runs', runId, 'tasks', 'task-02'), { recursive: true })
++  writeFileSync(join(runtimeRoot, `current-execute-run-id-c1`), runId + '\n')
++  writeFileSync(join(runtimeRoot, 'execute-runs', runId, 'tasks', 'task-02', 'review.json'), JSON.stringify({
++    schemaVersion: 1,
++    task: 'task-02',
++    changedFiles: ['src/other.js', 'test/review-attributed.test.mjs', 'src/nope.js'],
++  }, null, 2))
++
++  return { cwd: proj, specBase, changeDir, runtimeRoot, runId }
++}
++
++function makeFixtureB() {
++  const proj = mkdtempSync(join(tmpdir(), 'amx7b-'))
++  tmpRoots.push(proj)
++  const specBase = join(proj, '.sillyspec')
++  const changeDir = join(specBase, 'changes', 'c2')
++  mkdirSync(changeDir, { recursive: true })
++  writeFileSync(join(changeDir, 'design.md'), '## 文件变更清单\n\n| 操作 | 文件 | 说明 |\n|---|---|---|\n| 修改 | a.js | x |\n')
++  return { cwd: proj, specBase, changeDir }
++}
++
++try {
++  const fx = makeFixtureA()
++  const r = runVerifyProbes({ cwd: fx.cwd, changeName: 'c1' })
++  const t1 = r.probe7.tasks.find(t => t.task === 'task-01')
++  const t2 = r.probe7.tasks.find(t => t.task === 'task-02')
++  const t3 = r.probe7.tasks.find(t => t.task === 'task-03')
++  const t4 = r.probe7.tasks.find(t => t.task === 'task-04')
++
++  console.log('--- 1. acceptance 双形态解析 ---')
++  assert(parseTaskAcceptance('no frontmatter here') === null, '无 frontmatter → null（卡跳过）')
++  assert(parseTaskAcceptance('---\nid: x\nacceptance: 单条字符串\n---\n') .length === 1, 'string 形态 → 单条数组')
++  assert(parseTaskAcceptance('---\nid: x\nacceptance:\n  - a\n  - b\n---\n').length === 2, 'array 形态 → 逐条数组')
++  assert(parseTaskAcceptance('---\nid: x\n---\n').length === 0, '有 frontmatter 无 acceptance → []（防御）')
++  assert(parseTaskAcceptance('---\nid: x\nacceptance: [unclosed\n---\n').length === 0, '非法 YAML → []（防御不抛）')
++  assert(t1.acceptance.length === 2 && t2.acceptance.length === 1, `array/string 双形态归一（t1=${t1.acceptance.length} t2=${t2.acceptance.length}）`)
++  assert(t2.acceptance[0].includes('ensureAcceptanceMatrixSection'), 'folded > 字符串条目内容完整')
++  assert(t3.acceptance.length === 0, 'task-03 无 acceptance → 空数组（防御行）')
++  assert(r.probe7.applicable === true, 'tasks/ 在场且有 frontmatter 卡 → applicable=true')
++
++  console.log('--- 2. 双源结构归属 ---')
++  assert(t1.testFiles.includes('test/unit-foo.test.mjs'), '源一：allowed_paths test/ 前缀命中')
++  assert(t1.testFiles.includes('test/acceptance-matrix-probe.test.mjs'), '源一：NEW: 前缀剥离后 .test. 条目命中')
++  assert(!t1.testFiles.some(f => f.startsWith('src/')), '非测试 allowed_paths 不进归属')
++  assert(t2.testFiles.length === 1 && t2.testFiles[0] === 'test/review-attributed.test.mjs',
++    `源二：marker 解析 runId → review.json changedFiles test/ 前缀命中（实际 ${JSON.stringify(t2.testFiles)}）`)
++  assert(t4.testFiles.length === 0, '双源皆空 → 归属空集（不报错）')
++
++  console.log('--- 3. 关键词提示（命中≠判定）---')
++  assert(t1.hints[0] && t1.hints[0].terms.includes('runVerifyProbes') && t1.hints[0].terms.includes('输出符合接口定义'),
++    `标识符 + CJK 片段双命中（实际 ${JSON.stringify(t1.hints[0] && t1.hints[0].terms)}）`)
++  assert(t1.hints[0].files.includes('test/unit-foo.test.mjs'), '命中文件记录在 hints.files')
++  assert(t1.hints[1] && t1.hints[1].terms.length === 5 && !t1.hints[1].terms.includes('resolveExecuteRunIdInline'),
++    `提取上限 5 词（第 6/7 个标识符即便在测试文件在场也被裁，实际 ${JSON.stringify(t1.hints[1] && t1.hints[1].terms)}）`)
++  assert(!t3.hints[0] && !('1' in t2.hints), '无 acceptance / 无命中条目不产生 hints 键')
++  const rt = JSON.parse(JSON.stringify(r.probe7))
++  assert(rt.tasks[0].hints['0'].terms.includes('runVerifyProbes'), 'hints 普通对象可 JSON 序列化（键为条目下标）')
++  assert(t2.hints[0] && t2.hints[0].files[0] === 'test/review-attributed.test.mjs', 'review 归属文件同样进关键词 grep 面')
++
++  console.log('--- 4. runId 解析兜底 ---')
++  unlinkSync(join(fx.runtimeRoot, 'current-execute-run-id-c1'))
++  const rNoMarker = runVerifyProbes({ cwd: fx.cwd, changeName: 'c1' })
++  const t2NoMarker = rNoMarker.probe7.tasks.find(t => t.task === 'task-02')
++  assert(t2NoMarker.testFiles.length === 1 && t2NoMarker.testFiles[0] === 'test/review-attributed.test.mjs',
++    'marker 读不到 → execute-runs 目录扫描 exec-* 兜底命中')
++  rmSync(join(fx.runtimeRoot, 'execute-runs'), { recursive: true, force: true })
++  const rNoRun = runVerifyProbes({ cwd: fx.cwd, changeName: 'c1' })
++  const t2NoRun = rNoRun.probe7.tasks.find(t => t.task === 'task-02')
++  assert(rNoRun.probe7.applicable === true && t2NoRun.testFiles.length === 0,
++    'review.json 整体读不到 → 该源空集不报错（归属退空，applicable 不受影响）')
++
++  console.log('--- 5. 骨架渲染 ---')
++  const report = renderVerifyProbesReport(r)
++  const i3 = report.indexOf('#### 探针 3：')
++  const i7 = report.indexOf('#### 探针 7：验收×测试覆盖矩阵')
++  const i4 = report.indexOf('#### 探针 4：')
++  assert(i3 !== -1 && i7 !== -1 && i4 !== -1 && i3 < i7 && i7 < i4, '探针 7 段位于探针 3 后、探针 4 前')
++  assert((report.match(/<待填：四选一>/g) || []).length === 4, `判定槽四枚举待填数=acceptance 条目数（实际 ${(report.match(/<待填：四选一>/g) || []).length}）`)
++  assert((report.match(/<TODO>/g) || []).length === 4, '证据槽与判定槽同数')
++  assert(report.includes('covered / partial / uncovered / non-testable'), '四枚举图例在场')
++  assert(report.includes('命中≠判定'), '提示列头部标注命中≠判定')
++  assert(report.includes('（卡无 acceptance——防御，plan-postcheck 已拦）'), 'task-03 防御行渲染且无待填槽')
++  assert(!report.split('\n').find(l => l.includes('卡无 acceptance'))?.includes('待填'), '防御行本身不含待填槽')
++  assert(report.includes('无归属测试——判定大概率 uncovered'), '归属空渲染无归属提示')
++  const pipeRow = report.split('\n').find(l => l.includes('管道符') && l.startsWith('|'))
++  assert(pipeRow && (pipeRow.match(/(?<!\\)\|/g) || []).length === 6 && pipeRow.includes('\\|'),
++    'acceptance 含管道符 → 转义为 \\| 且行仍为五列六管')
++  assert(report.includes('**task-01**') && report.includes('**task-04**'), '每 task 一表（粗体 task 锚）')
++  const sk = generateVerifyResultSkeleton(r)
++  assert(sk.indexOf('#### 探针 3：') < sk.indexOf('#### 探针 7：验收×测试覆盖矩阵')
++    && sk.indexOf('#### 探针 7：验收×测试覆盖矩阵') < sk.indexOf('#### 探针 4：'), '骨架内探针 7 序同报告')
++
++  console.log('--- 6. 无 tasks 目录不适用 ---')
++  const fxB = makeFixtureB()
++  const rB = runVerifyProbes({ cwd: fxB.cwd, changeName: 'c2' })
++  assert(rB.probe7.applicable === false && rB.probe7.tasks.length === 0, '无 tasks/ → applicable=false')
++  assert(renderVerifyProbesReport(rB).includes('- 不适用（无 TaskCard）'), '不适用单行渲染')
++  assert(renderVerifyProbesReport({
++    probe1: { matches: [], globEntries: [], skippedFiles: [], worktreeHits: 0 },
++    probe3: { tasks: [] },
++    probe5: {},
++    probe6: { deletions: [], unavailable: false, note: 'x' },
++  }).includes('- 不适用（无 TaskCard）'), '存量合成 result（无 probe7 键）零回归 → 渲染不适用')
++
++  console.log('--- 7. ensureAcceptanceMatrixSection 幂等补段 ---')
++  {
++    const mdA = join(fx.cwd, 'verify-result-a.md')
++    writeFileSync(mdA, [
++      '## 结论', '',
++      '## 探针结果（CLI 机械预填，--init 补注入） [层：可复跑探针——gate 抽查防篡改]',
++      '#### 探针 3：验收标准测试覆盖', '- ✅ task-01: 模块目录（src）找到 1 个测试文件', '',
++      '#### 探针 4：决策追踪覆盖', '<!--TODO-->', '',
++    ].join('\n'))
++    const a1 = ensureAcceptanceMatrixSection(mdA, r.probe7)
++    const after1 = readFileSync(mdA, 'utf8')
++    assert(a1.added === true, '缺段 + applicable → 补段')
++    const j3 = after1.indexOf('#### 探针 3：')
++    const j7 = after1.indexOf('#### 探针 7：验收×测试覆盖矩阵')
++    const j4 = after1.indexOf('#### 探针 4：')
++    assert(j3 !== -1 && j7 !== -1 && j4 !== -1 && j3 < j7 && j7 < j4, '补段插入探针 3 小节后（骨架序 3→7→4）')
++    assert(after1.includes('## 结论') && after1.includes('<!--TODO-->'), '不触碰既有正文')
++    const a2 = ensureAcceptanceMatrixSection(mdA, r.probe7)
++    assert(a2.added === false && readFileSync(mdA, 'utf8') === after1, '幂等：二跑零改动（字节级）')
++
++    const mdB = join(fx.cwd, 'verify-result-b.md')
++    writeFileSync(mdB, '# 旧格式存量报告\n\n正文既有内容\n')
++    const b1 = ensureAcceptanceMatrixSection(mdB, r.probe7)
++    const afterB = readFileSync(mdB, 'utf8')
++    assert(b1.added === true && afterB.startsWith('# 旧格式存量报告\n\n正文既有内容\n'), '无探针 3 段 → 文末追加，正文前缀不动')
++    assert(afterB.indexOf('#### 探针 7：验收×测试覆盖矩阵') > afterB.indexOf('正文既有内容'), '追加段在文末')
++
++    const mdC = join(fx.cwd, 'verify-result-c.md')
++    writeFileSync(mdC, '# 手写报告\n')
++    const c1r = ensureAcceptanceMatrixSection(mdC, rB.probe7)
++    assert(c1r.added === false && readFileSync(mdC, 'utf8') === '# 手写报告\n', 'applicable=false → no-op 不落盘')
++  }
++
++  console.log('--- 8. 禁 task-review 静态 import（三步环）---')
++  {
++    const src = readFileSync(join(__dirname, '..', 'src', 'verify-probes.js'), 'utf8')
++    assert(!/^\s*import\b[^\n]*task-review/m.test(src) && !/import\s*\(\s*['"][^'"]*task-review/.test(src),
++      'verify-probes.js 全文件零 task-review 静态/动态 import（注释里的「禁 import」说明不算）')
++    assert(!existsSync(join(__dirname, '..', 'src', 'verify-probes.js.bak')), '无备份残渣')
++  }
++} finally {
++  for (const t of tmpRoots) { try { rmSync(t, { recursive: true, force: true }) } catch {} }
++}
++
++console.log(`\n合计: ${passed} 通过, ${failed} 失败`)
++process.exit(failed > 0 ? 1 : 0)

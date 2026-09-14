@@ -1,0 +1,116 @@
+{
+  "mode": "full-flow",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "2a8f5e8aad1b822d7b3895fdd4e2c8389c47b908",
+  "totals": {
+    "files": 12,
+    "additions": 1064,
+    "deletions": 17
+  },
+  "rows": [
+    {
+      "path": "docs/prompt/README.md",
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "docs/prompt/_extracted.json",
+      "additions": 4,
+      "deletions": 4,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "docs/prompt/verify.md",
+      "additions": 4,
+      "deletions": 3,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "meta.json",
+      "additions": 21,
+      "deletions": 2,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "src/index.js",
+      "additions": 12,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/stage-contract.js",
+      "additions": 158,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/stages/verify.js",
+      "additions": 1,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/verify-probes.js",
+      "additions": 277,
+      "deletions": 4,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "templates/prompts/testcase-design.md",
+      "additions": 2,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "templates/prompts/verify-probes.md",
+      "additions": 4,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/acceptance-matrix-gate.test.mjs",
+      "additions": 318,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/acceptance-matrix-probe.test.mjs",
+      "additions": 262,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "execute --done 时点冻结（本文件落盘时采集）",
+  "patchSha256": "3ecb67ae2ce9f041c207cb4db647432891078a7281f203d5de89c8ca97f69bbb",
+  "patchStatus": "ok",
+  "savedAt": "2026-09-14T16:42:55.829Z"
+}
