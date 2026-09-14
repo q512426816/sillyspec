@@ -76,3 +76,7 @@ checkProbeConsistency 增 facts 基线对比维度后，probe6 在 HEAD 前移�
 本机 bash 通道对**长 heredoc**（大段内嵌脚本/文档经 `cat << 'EOF' > file` 落盘）发生静默截断——文件尾部丢失、无报错（pi 会话与本仓会话同款现象）。特征：截断点不稳定、重跑可变。
 
 **规避**：长内容一律改用 **Write 工具直接落盘**（不经 shell 通道，无长度截断面）；bash heredoc 仅用于短段（< 数十行）。需要 bash 执行的脚本先 Write 落 .mjs/.sh 再 `node <file>` 引用，不内嵌。
+
+## execute prompt 指引的 wt-commit 是幽灵命令（runWtCommit 未接线 dispatch）
+
+execute Wave prompt（src/stages/execute.js 调度要求段）指示 agent 用 `sillyspec wt-commit --change <名> -- <文件>` 串行提交，且 index.js:324 的 worktree-cwd 守卫还专门豁免了 wt-commit 命令名——但 CLI dispatch 根本没有 `case 'wt-commit'`：src/wt-commit.js 的 `runWtCommit` 自 bd1cb91 引入以来无任何调用点（孤儿模块）。实际跑会报「未知命令: wt-commit」并打帮助。规避：主代理作为唯一提交者时，在 worktree 内手工 `git add -- <显式路径> && git commit`（串行无竞态，等价安全）；根治需给 index.js 补 dispatch 接线。（来源：2026-09-14-knowledge-loop-close execute W1，task-01 review notes 记档）
