@@ -35,5 +35,7 @@
 | 目标 | 操作 | 状态 |
 |------|------|------|
 | `_module-map.yaml` | 已增改：src/scan-refresh.js 登记 core-engine paths（task-06 执行期 lint 驱动补录，commit 9e97b3e） | done |
+| `modules/core-engine.md` `modules/docs-consistency.md` `modules/hooks.md` `modules/cli-entry.md` | module-docs-sync sidecar 变更索引行 + updated_at 戳（幂等） | done |
+| 并行变更产物裁决 | diff 多出的 5 文件（knowledge/decisions/*.md ×4 + design-d7-scan-lifecycle.md）属并行会话 quick-exit-tiered-gates 归档期的 decision-distill/文档写入，非本变更范围——不列入本表；module-impact 列出的 13 文件已在交付 commit（4613c0e 前身，见 git log scan-refresh 交付提交）落地 | skipped（归属裁决记录） |
 
 规则：execute/verify 完成文档同步后把对应行回填 done；确定不同步的行改 skipped 并在操作列写明原因。
