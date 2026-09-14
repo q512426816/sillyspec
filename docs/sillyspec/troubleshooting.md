@@ -943,3 +943,13 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 **护栏（立项方向，范围经代码现状校正后收窄）**：①mergeDirtyOverlapThreeWay clean 写回主仓后补 `git add -- <显式 pathspec>`（对齐 archive git add 下沉先例），并落 apply-manifest.json（文件→sha256 指纹）供 verify/doctor 做 apply 后丢失/篡改检测；rescue 提示补一句「落地后立即 git add -- <files> 锁定」；②apply 前重叠检测 advisory→fail-closed：文件集相交判定用**活跃 quick 会话 guard.json 的 --files 声明**（勿用 changes.last_active 当心跳——它只在 CLI 写操作时刷新非周期心跳，直接用会误判），命中即拒绝 apply 提示串行化，--force 解锁；③文件所有权登记表（claims+心跳）暂不做——裸 git 拦不住（git 无 hook 可拦截 restore/checkout 工作区写入），单独做收益不抵复杂度，记入 ROADMAP 观察复发。
 
 **证据**：时间线在 ql-20260914-010 会话输出（apply→测试绿→smoke 失败→12 文件缺失→worktree 恢复+7a0d624 提交）；git reflog 12:30-12:40 窗口无 reset/checkout 级事件、stash 空（工作区级操作天然不可溯源）；代码锚点 worktree-apply.js:11（主路径 3way patch）/:143（merge 写回无 add）/:539（withMainRepoLock——只串行化 sillyspec 面写操作，裸 git 是所有层的盲区）；对方会话 13:27 提交 106ccc9 已在维护本变更交付的 core-engine 卡——冲突是真实双向的，非单侧事故。
+
+## 65. 两坑：归档后 worktree 被并行会话代劳清理（change 无所有权）/ review 放行通道放进外来文件（2026-09-14 用户实证，护栏方向已立项）
+
+**现象**：apply-conflict-hardening 归档收官期两次惊险——①归档完成后再跑 `worktree apply` 报「worktree not found: meta.json 不存在或已损坏」：worktree 已被并行会话清理，且代码已被对方以 09943ff 提交（对方一条龙接管了 apply+commit+cleanup，本会话毫不知情，一度以为成果丢失）；②apply 校验预警「11 个变更文件不在 design.md/任务卡清单，但已被 task review.json changedFiles 声明（review 声明放行）」——src/run/complete.js、src/progress/stage-machine.js 等**并行会话的在途文件**经 review 声明通道真实放行进本变更 apply 面。
+
+**根因**：①change 无所有权——CLI 的 apply/cleanup/archive 任何会话可对任何 change 执行，withMainRepoLock 只串行化不鉴权；放大器是「归档完成但交付物未进主仓」悬空状态（两个变更连续踩到：归档绿灯、代码还在 worktree），谁先动 apply 谁接管收尾。②review 的 changedFiles 按主仓共享工作区脏窗口归因，并行会话文件混入；apply 的 review 声明放行通道（本意放行有据越界如 facade 转发）无 allowed_paths 相交校验，成了外来文件后门。
+
+**护栏（立项方向，四条全在 sillyspec 管辖内、不涉拦裸 git）**：①change 所有权+心跳——changes 表记 owner（会话/pid），run 命令刷新心跳；apply/cleanup/archive 发现 owner 为另一活跃会话（心跳 N 分钟内）即拒绝，--takeover 显式接管留痕；②归档收口——worktree 有未 apply 交付物时归档硬拦（或锁内自动 apply），消灭悬空状态；③review 放行通道收紧——review 声明只放行与该 task allowed_paths/design 清单相交的文件，外来文件只报告不 admitted；④归因源切换——worktree 模式下 changedFiles 一律取 worktree 分支 diff，不看主仓脏窗口。行为侧规则即刻生效：归档后立即 apply+显式 pathspec 提交当固定第六步；并行会话不代劳他者 change（见残留提醒而不是动手）。
+
+**证据**：时间线在 ql-20260914-015 会话（apply 报 worktree not found→git log 发现 09943ff 对方提交含本变更代码→grep HEAD 确认 collectActiveQuickGuardFiles/writeApplyManifest 在盘→仅提交归档命名空间 b89180f 收尾）；②的 11 文件清单在 apply 输出与 reconcile-result.json（.sillyspec/.runtime/verify-runs/20260914081048/）；ROADMAP「文件所有权登记」观察项的复潮证据挂本节两事件——证明的是 change 级所有权缺失（文件级+拦裸 git 仍不做）。

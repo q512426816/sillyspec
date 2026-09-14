@@ -218,3 +218,8 @@
 根因：「为什么不直接用 ql-xxx 查」——映射只在本机 guard、会话结束即清，历史 quick 拿不到 quick-xxxx 只能占位
 方案：patches 按 qlId 命名+json 冗余 sessionId 是平台可抓的持久映射；findQuickSessionByQlId 文件名前缀反查；ql 分支提升到主入口顶层；预检放行 ql-xxx
 结果：node --test 37/37；npm test 全量 0 失败；platform 实测 ql-xxx 直出记录态
+
+## ql-20260914-015-0b5e | 2026-09-14 19:13:31 | postmortem §65——归档后 worktree 被并行会话清理+review 放行通道放进外来文件（apply-conflict-hardening 收官期两惊险），四段落 troubleshooting
+状态：进行中
+关联变更：（无）
+文件：（见实际改动）
