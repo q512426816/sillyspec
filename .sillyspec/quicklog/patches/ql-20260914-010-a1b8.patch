@@ -1,0 +1,129 @@
+diff --git a/.sillyspec/quicklog/QUICKLOG-qinyi.md b/.sillyspec/quicklog/QUICKLOG-qinyi.md
+index b1bb51d..694864a 100644
+--- a/.sillyspec/quicklog/QUICKLOG-qinyi.md
++++ b/.sillyspec/quicklog/QUICKLOG-qinyi.md
+@@ -148,3 +148,13 @@
+ 根因：裁决条件此前只在对话里，无载体即蒸发；未来升 blocking 变更 brainstorm 经模块路由必读 core-engine 卡，THRESHOLDS 行是最小合法落点（knowledge/decisions 机器维护勿手改，归档 decisions 加版本过重）
+ 方案：core-engine.md THRESHOLDS 行追加 ⚠️ 条件句：现裁决依据（旧规则边界连续+advisory 容忍）+ blocking 期两类成本（2代码+2文档误伤、文档同步者系统性跨阈激励成本）+ 候选（文件维改 codeFileCount）+ 溯源（用户裁决 2026-09-14/ql-20260914-009-4623）
+ 结果：docs check 定向通过（2 处悬空为 file-lifecycle/token-cost 他文件预存 advisory 与本卡无关）；纯文档单文件零测试面；P2 裁决（proposal 历史数字不修正——同目录校准记录 5.9% 为权威定稿且方向更强）按用户判断不动
++
++## ql-20260914-010-a1b8 | 2026-09-14 13:29:09 | 把 apply 与并行会话工作区互相冲掉的事故按现象/根因/护栏/证据四段补进 troubleshooting（用户评审裁定的护栏结论三条）
++状态：已完成
++关联变更：（无）
++文件：docs/sillyspec/design-d7-scan-lifecycle.md（+1/-1）, docs/sillyspec/platform-interface-map.md（+8/-8）, docs/sillyspec/prompt-control-debt.md（+3/-3）, docs/sillyspec/troubleshooting.md（+10/-0）
++需求：把 apply 与并行会话工作区互相冲掉的事故按现象/根因/护栏/证据四段补进 troubleshooting（用户评审裁定的护栏结论三条）
++根因：主仓工作区共享可变缓冲区；本次 apply 走 rescue 出口人工落地未立即 git add，分钟级裸奔窗口被并行会话工作区级 git 操作命中（restore/clean 类 reflog 不可见）；自动主路径 3way+merge 已覆盖大半，真缺口仅 mergeDirtyOverlapThreeWay 写回 :143 不进暂存区
++方案：troubleshooting §64 落档四段：护栏=①merge 写回补显式 pathspec git add+apply-manifest.json 指纹+rescue 提示补立即锁定 ②apply 前重叠检测升 fail-closed（文件集用活跃 quick guard.json --files 相交判定，勿用 last_active 当心跳）③所有权登记暂不做记 ROADMAP；盲区如实声明。顺带 docs check --fix 清偿本变更提交造成的 4 处活文档行号漂移
++结果：troubleshooting §64 落盘；docs check exit 0 零失效；纯文档无需测试；护栏三条可直接作 brainstorm 输入
++审计：[gate] L1（跨 0 模块 · 4 文件：0 代码/0 测试）advisory；每文件注记缺失（--file-notes 覆盖变更文件全集）；测试增量不适用（≤1 代码文件）
+diff --git a/docs/sillyspec/design-d7-scan-lifecycle.md b/docs/sillyspec/design-d7-scan-lifecycle.md
+index d460496..0a1ccdf 100644
+--- a/docs/sillyspec/design-d7-scan-lifecycle.md
++++ b/docs/sillyspec/design-d7-scan-lifecycle.md
+@@ -35,7 +35,7 @@ sillyhub 实证：前端 72% 源文件无文档登记、`_module-map.yaml` 停
+ 
+ **不做自动刷新，只做过期检测 + 显性化信号。**
+ 
+-机制：scan 文档 frontmatter 已有 `source_commit`（覆盖保护 hook 在用，`worktree-guard.js:214`）。新增一个轻量探针（doctor 或 scan-profile preflight 内），比对：
++机制：scan 文档 frontmatter 已有 `source_commit`（覆盖保护 hook 在用，`worktree-guard.js:225`）。新增一个轻量探针（doctor 或 scan-profile preflight 内），比对：
+ 
+ ```
+ scan 文档 source_commit  vs  当前 HEAD（或 scan 文档涉及路径的最新 commit）
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index e015253..cc8b0f0 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -112,7 +112,7 @@ mcp:
+ 
+ ## 4. 链路 C：scan 指针握手（平台模式专用）
+ 
+-scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时，**不发任何 HTTP**，而是落盘供 daemon 轮询消费（`complete-handlers.js:1864` `handleScanStageCompleted`）：
++scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时，**不发任何 HTTP**，而是落盘供 daemon 轮询消费（`complete-handlers.js:1877` `handleScanStageCompleted`）：
+ 
+ 1. 写 `manifest.json`（workspace_id/scan_run_id/source_commit/spec_root/scan_profile/postcheck…）到 `specRoot`。
+ 2. 跑 `scan-postcheck` → 写 `postcheck-result.json`（结构化结果）。
+@@ -132,12 +132,12 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ | **execute 阶段启动前**（runStage / auto 流程，非平台模式，`--skip-approval` 可跳过） | A | `checkApproval` → GET `…/approval`：**rejected → `exit(1)` 硬阻断**；pending → 提示待审批；unknown → 放行 | stage.js:47-58；command.js:1796/1842/1922 |
+ | **run `<stage>` 入口**（所有 stage + 顶层别名，agent 环境内；平台/本地模式都上报，不受 sentinel 限制） | D | 探测本地 agent 会话日志（claude-code/codex/zcode 自动探测，env `SILLYSPEC_AGENT_LOG` 覆盖其他 CLI）→ 本地留底 + REST POST `…/api/agent-logs` 上报（best-effort 5s 熔断，失败不阻断；`SILLYSPEC_AGENT_LOG_PUSH=0` 可关） | command.js:723（`recordAgentLogInvocation`） |
+ | `platform sync-docs`（手动命令，**唯一触发点**） | A | POST `…/documents` 推四件套全量；run 流程**不**自动推文档（sync.js:30 头注释称由 run 流程触发，已过时） | sync.js:439；index.js:1275 |
+-| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:2322；shared.js:888 |
+-| **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2322/1855；shared.js:912 |
+-| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:3312；sync.js:1387/986 |
+-| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:3264；sync.js:2089 |
++| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:2329；shared.js:888 |
++| **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2329/1855；shared.js:912 |
++| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:3354；sync.js:1387/986 |
++| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:3306；sync.js:2089 |
+ | `platform resolve --keep-local/--take-platform/--abort` | 本地 | 读 sync-conflict 三选一，不网络 | sync.js:746 |
+-| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:3078/2847；probe.js:133 |
++| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:3119/2847；probe.js:133 |
+ | **execute Wave prompt 注入** | B | `getDispatchMode()` **同步三态判定**（读 MCP 配置 + 路径A 探测缓存，不发网络）：`sillyhub` → 注入完整派发指令（`{available:true}`）；`local-fallback`（配置但路径A 未落地）→ 短提示走 Local；`local` → 不注入 | execute.js:594/1058-1070 |
+ | **execute Wave 步骤** | B | 指令文本驱动 agent 调 create_mission/dispatch_worker/list_workers/report_progress | backends/sillyhub-mcp.js:136 |
+ | **scan 完成（平台模式）** | C | 落盘 manifest/postcheck + 指针 SCAN_COMPLETED；失败 exit(1) | complete-handlers.js:985 |
+@@ -162,7 +162,7 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ 
+ **收这些 flag 的入口不止 `run scan`**：
+ - **任何 `sillyspec run <stage>`**（scan/plan/execute/verify/archive/quick/brainstorm…）—— 都走 `runCommand`（`command.js:236`）公共入口，flag 在 `command.js:375`（`resolvedSpecDir`）起统一解析。scan 只是 daemon 流程的**第一个阶段**，所以是"典型首次激活点"，不是唯一入口。
+-- **`sillyspec init <dir> --spec-dir <path>`** —— 外部 specDir 安装（`init.js:291` `doInstall(specDir)`，含源码目录旧 `.sillyspec` 残留清理）。⚠️ init **只认 `--spec-dir`**（顶层 `index.js:224` 解析后经 `case 'init'`（`index.js:335`）透传 `specDir`）；传 `--spec-root` 会被**静默忽略**（init 分支不读 filteredArgs）。**平台模式 init 落指针**：带平台专属 flag（`--workspace-id` / `--runtime-root`）时，init 即写双指针（`writePlatformPointer`（`init.js:686`/`658` 调用 `writeInitPlatformPointer`），status: active），消除 init→scan 窗口期 agent 裸调静默回退本地模式的断点。
++- **`sillyspec init <dir> --spec-dir <path>`** —— 外部 specDir 安装（`init.js:291` `doInstall(specDir)`，含源码目录旧 `.sillyspec` 残留清理）。⚠️ init **只认 `--spec-dir`**（顶层 `index.js:231` 解析后经 `case 'init'`（`index.js:335`）透传 `specDir`）；传 `--spec-root` 会被**静默忽略**（init 分支不读 filteredArgs）。**平台模式 init 落指针**：带平台专属 flag（`--workspace-id` / `--runtime-root`）时，init 即写双指针（`writePlatformPointer`（`init.js:686`/`658` 调用 `writeInitPlatformPointer`），status: active），消除 init→scan 窗口期 agent 裸调静默回退本地模式的断点。
+ - **`backfill-reviews` / `register-stage-review` / worktree apply / assess 等子命令** —— 顶层 `--spec-dir` 透传为 `platformOpts.specRoot`（index.js:633（backfill-reviews）/ 1185-1192（register-stage-review）/ 1791（worktree apply）/ 1902（assess））。
+ - **gate / derive**（machine-interface）—— 只读查询接受 specBase，**不写指针**。
+ 
+@@ -194,7 +194,7 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ - **人类本地用户**：跑 `sillyspec run <stage>` 不带上述 flag，且 cwd 无 `.sillyspec-platform.json` → `platformOpts` 全 `null` → **本地模式**，走链路 A 的 REST `/api`（前提是 `platform connect` 过）。
+ - **SillyHub daemon**：传 flag 或借指针文件 → 平台模式 → 链路 A 上行回传经 env 凭据照常执行（2026-08-26 放行，daemon 注入 `SILLYHUB_PLATFORM_URL/TOKEN` 即生效）；下行 pull 与审批检查仍跳过（daemon 是权威数据面），链路 C（scan 指针握手）生效。
+ 
+-> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:44`、枚举消费在 `index.js:3175`）。
++> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:44`、枚举消费在 `index.js:3216`）。
+ 
+ **平台接管声明（`.sillyspec-platform-managed`）**：与指针并存的持久声明（`managed`/`specRoot` 副本/`workspaceId`/`declaredAt` 四字段，**无过期**——24h STALE 只作用指针不作用声明）。堵"指针该在但不在 → 静默建本地进度库"的状态分裂断点：
+ - **写入**：`writePlatformPointer` 三写收敛（`shared.js` 的 `writePlatformPointer`——主文件+指针+声明），init/scan 带平台参数自动落。**自指写入拦截（task-03，单点收口覆盖 run/init 两调用方）**：specRoot 自指回环 → warn 后 `return false` 零落盘（显式自指 flag 也不再投毒）。
+diff --git a/docs/sillyspec/prompt-control-debt.md b/docs/sillyspec/prompt-control-debt.md
+index ad0cd77..772f4ec 100644
+--- a/docs/sillyspec/prompt-control-debt.md
++++ b/docs/sillyspec/prompt-control-debt.md
+@@ -54,7 +54,7 @@ updated_at: 2026-08-14T22:20:00+08:00
+ ### P4 软判定归位
+ 状态：`部分完成`（P4.1 完成；P4.2/4.3 维持 defer）
+ 
+-- ✅ **P4.1 risk tier**：原 defer 理由「需新写 `computeRiskTier` + 注入，独立工程」**经实证已失效**——`detectChangeRisk()`（change-risk-profile.js:130）早已存在，且已在 stage-contract.js:323 detectChangeRisk `validateVerifyOutputs` 里 verify --done 时真兜底（扫 design.md/plan.md 关键词判 integration/deployment-critical，结论 PASS/PASS WITH NOTES 但缺真实集成证据则阻断）。verify prompt 让 agent 重复扫关键词+应用门控 = 同一份控制在 prompt 和 gate 付两次钱（P1 主题）。**纯减法**：verify.js「输出验证报告」step 删 23 行重复的「分级规则表 + 触发关键词 + 门控规则」，收敛为 2 行诚实标注（CLI 自动判定+门控；agent 只需如实填 verify-result.md 的「变更风险等级」「Runtime Evidence」section）。控制力零损失（靠 stage-contract.js 兜底），顺手消除关键词双份漂移（prompt 列表原是 gate INTEGRATION_CRITICAL_PATTERNS 的近似子集，gate 更全还扫文件名）。test(58/0)。
++- ✅ **P4.1 risk tier**：原 defer 理由「需新写 `computeRiskTier` + 注入，独立工程」**经实证已失效**——`detectChangeRisk()`（change-risk-profile.js:153）早已存在，且已在 stage-contract.js:323 detectChangeRisk `validateVerifyOutputs` 里 verify --done 时真兜底（扫 design.md/plan.md 关键词判 integration/deployment-critical，结论 PASS/PASS WITH NOTES 但缺真实集成证据则阻断）。verify prompt 让 agent 重复扫关键词+应用门控 = 同一份控制在 prompt 和 gate 付两次钱（P1 主题）。**纯减法**：verify.js「输出验证报告」step 删 23 行重复的「分级规则表 + 触发关键词 + 门控规则」，收敛为 2 行诚实标注（CLI 自动判定+门控；agent 只需如实填 verify-result.md 的「变更风险等级」「Runtime Evidence」section）。控制力零损失（靠 stage-contract.js 兜底），顺手消除关键词双份漂移（prompt 列表原是 gate INTEGRATION_CRITICAL_PATTERNS 的近似子集，gate 更全还扫文件名）。test(58/0)。
+ - ⏭ **P4.2 batch mode**：verify L1/L2/L3 批量抽查策略是 agent 必须做的语义工作（选哪几个实例、判系统性 bug），CLI 无法替代，无 gate 重复，非债务；措辞已随 P1.3a 收敛。维持 defer。
+ - ⏭ **P4.3 Grill verdict**：Grill 执行/critical 判定是语义软判定，按定位推 sillyhub，本仓不做。维持 defer。
+   - **P4.3a Grill fail 后复审边界未定义**（2026-08-04 复盘新观察，归 P4.3）：Grill 判 `fail`/`cannot_verify` 后 agent 修正 design.md，但 review step prompt（`src/stages/brainstorm.js`）未定义「修正后是否需再派独立复审 / 还是 agent 自判 pass 即可」——实证一次 brainstorm 修正后 agent 自判 pass 未再派独立复审，复审界定模糊（grep `复审|re-review|再派` 在 brainstorm.js 无命中，fail 后回路为空）。**裁决**：随 P4.3 维持 defer——「修正后够不够好」本身是语义软判定，推 sillyhub/人类，本仓不强制；**可选近零成本缓解**（留 follow-up，超 doc-only 范围）：review step 加一行诚实边界标注（fail 修正后不强制再派复审，由 agent/人类判断），符合「诚实标注优于加门」哲学（参 Q-C / P4.1）。（2026-08-04 plan 阶段亦命中：plan 审查初审 fail、修正后自判 pass 未二次独立复审——证实此 gap 为 stage 通用，非 brainstorm 独有；详见下方「2026-08-04 复盘增补」plan-d。）
+@@ -123,7 +123,7 @@ updated_at: 2026-08-14T22:20:00+08:00
+ 
+ 来源：verify 阶段使用复盘的 3 个负面点，逐条对源码核实后裁决。
+ 
+-- ⊘ **vrf-a 关键词判级不认否定语境**。**评估保留（已实现 + prompt 已充分告知）**：`detectChangeRisk`（change-risk-profile.js:211，显式豁免优先注释 :141）**显式豁免优先**——design.md frontmatter `risk_level:` 声明覆盖关键词判级，源码注释明确记载历史教训「与其在正则层做脆弱的否定识别，不如给一条显式、诚实、可审计（落在 design frontmatter + verify-result）的覆盖通道」；verify「输出验证报告」step prompt 已写「判级是机械字面匹配、不认否定语境」+「误判时的诚实出路（豁免级）：frontmatter risk_level 声明」+「留痕要求防逃逸」。用户实测用 `risk_level: contract-required` 豁免成功——机制正是设计意图，非缺陷。
++- ⊘ **vrf-a 关键词判级不认否定语境**。**评估保留（已实现 + prompt 已充分告知）**：`detectChangeRisk`（change-risk-profile.js:233，显式豁免优先注释 :141）**显式豁免优先**——design.md frontmatter `risk_level:` 声明覆盖关键词判级，源码注释明确记载历史教训「与其在正则层做脆弱的否定识别，不如给一条显式、诚实、可审计（落在 design frontmatter + verify-result）的覆盖通道」；verify「输出验证报告」step prompt 已写「判级是机械字面匹配、不认否定语境」+「误判时的诚实出路（豁免级）：frontmatter risk_level 声明」+「留痕要求防逃逸」。用户实测用 `risk_level: contract-required` 豁免成功——机制正是设计意图，非缺陷。
+ - ✅ **vrf-b 测试重复跑（step6 手动跑 + CLI 对账又跑，198s×2）**。**修法（纯减法）**：CLI 对账是防谎报 enforcement（verify.js:176 明说「谎报测试结果没有意义」）不可删；复用 step6 结果 = 信任 agent 报告，破坏核心信任边界不可做。改为 verify.js「运行测试和质量扫描」step prompt **不重复手动跑全量测试**（测试实测统一由 CLI --done 对账执行一次，按变更命中模块子集），step 只做 lint/静态检查 + 可选针对性冒烟（非必需）；同步首段「进度确认」💡 说明 + docs/prompt 重提取（verify.md 两处）+ file-lifecycle.md 补一句。
+ - ✅ **vrf-c 后台命令无进度提示（CLI 对账 execSync 同步静默 198s）**。**修法（轻量）**：`runVerifyTestCheck` 是同步 execSync，期间 stdout 全静默，`printVerifyTestCheck` 只在结束后打印耗时。gates.js verify 对账调用前加「⏳ Verify 测试对账：CLI 亲自执行 local.yaml 的 commands.test（同步，耗时可能较长，请等待…）」预告。**放 gates.js 调用点而非 verify-postcheck.js 内部**——`runVerifyTestCheck` 也被 `machine-interface.js:250/369`（derive verify-test facet，--json）调用，内部裸 console.log 会污染 JSON 输出。
+ 
+@@ -319,7 +319,7 @@ P2 遗留（按优先级登记）：
+ **批次② 状态机 fail-open 组 → 完整流程 brainstorm（行为语义变更，单一 change 立项）**
+ - **A5** `--done` 阶段产物 gate 失败只打 ❌ 但 exit 0：`src/run/complete.js:328-329` gate 早退 return 不设 process.exitCode——与 quick 审计 blocked→exit 1 同仓惯例分裂，agent/CI/hook 按 exit code 消费即 fail-open。
+ - **B6** `--done` 完全绕过阶段转换守卫 + 辅助阶段污染 currentStage：`src/run/command.js:1481` --done 直接进 `completeStep` 不查 `checkTransition`（stage.js:27-44 只在 runStage 调）；status/doctor 等 auxiliary 跑一次即写 `progress.currentStage`（stage.js:233）→ fromStage 变 status 后跳阶段静默放行（stage-contract.js:954 `AUXILIARY_STAGES` 一律放行）。
+-- **B7** status/doctor 自称只读实则写库：`src/run/command.js:959` auxiliary fallback `initChange` 建 default 行 + 落盘 currentStage，与 SKILL「status 只读」矛盾，多 agent 并发 lastActive 互相覆盖。
++- **B7** status/doctor 自称只读实则写库：`src/run/command.js:966` auxiliary fallback `initChange` 建 default 行 + 落盘 currentStage，与 SKILL「status 只读」矛盾，多 agent 并发 lastActive 互相覆盖。
+ - **B8** `run brainstorm` 无 --change 多活跃变更仓静默建幽灵变更：`src/run/command.js:717-731` 无条件 initChange（DB 实锤 08-15 一小时 4 个 `*-new-change-*` 活跃行）。
+ - 裁决理由：四者共性强——状态机守卫 fail-open + 幽灵变更/幽灵阶段污染，属行为语义变更（多命令交互路径），非单点行修复。走完整流程 brainstorm → plan → execute，含 8b（新项目首跑 auxiliary 幽灵 default 变更）一并评估。
+ 
+diff --git a/docs/sillyspec/troubleshooting.md b/docs/sillyspec/troubleshooting.md
+index f47f287..e97e36d 100644
+--- a/docs/sillyspec/troubleshooting.md
++++ b/docs/sillyspec/troubleshooting.md
+@@ -933,3 +933,13 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent 
+ **②pnpm 沙箱假败（第三次踩）**：pnpm node_modules 是指向 store 的符号链接网，junction 进临时目录跨根解析失效 → lint 必假败只能 advisory。修复：`detectSymlinkStoreLayout`（pnpm-lock.yaml/bun.lock/lerna.json/packageManager 字段）命中即快照作废回退主仓 + 明确 warn——不再让沙箱报无关错误。
+ **③probe1 NEW: 失配**：design 清单 `NEW: src/x` 条目在文件已合入主仓后 `existsSync(join(cwd,'NEW:src/x'))` 恒 miss → skippedFiles ⚠️ 噪声。修复：探针路径剥 `NEW:` 前缀（主仓 + worktree 回退两处），matches 报告统一剥前缀路径（与 pathMatches 比对侧同源）。
+ **④bash heredoc 截断**：本机 bash 通道长 heredoc 静默截断（双会话同款）——落档 knowledge/uncategorized.md（规避：长内容 Write 工具落盘，bash 只引用不内嵌）。
++
++## 64. apply 与并行会话工作区互相冲掉（2026-09-14 用户实证，护栏结论已立项方向）
++
++**现象**：2026-09-14-quick-exit-tiered-gates 归档 apply 后，交付文件在主仓落盘且 63/63 测试通过；数分钟后续查发现 12 个文件缺失/回退（新文件 src/quick-gate-profile.js 被删、shared.js 等改回旧版），smoke 测试 scope-audit --json 的 gateProfile 字段 undefined 才暴露。恢复：worktree 仍完好（唯一可信源）→ 按「主仓当前==快照底版」逐文件判定直拷/手并（command.js 以对方 10:11 后最新版为底重放本变更三 hunk，保住对方 manual:true 修复）→ 显式 pathspec 立即提交锁定（7a0d624）。
++
++**根因**：①主仓工作区是共享可变缓冲区——quick 会话（72% 流量）在途改动以未提交形态与其他会话的 apply 共存，git 无「文件此刻归谁」概念；②本次 apply 走到 rescue 出口（EXCLUDE-DIRTY/MISMATCH 跳过 + cp 指令人工执行），**手工落地的文件未立即 git add**，分钟级裸奔窗口被并行会话的工作区级 git 操作命中（restore/clean 类——reflog 不可见，stash 空，向量无法进一步归因）；③自动主路径（patch + `git apply --3way` 隐含 `--index`）与脏重叠自动合并（mergeDirtyOverlapThreeWay，worktree-apply.js:111/:1068）其实已覆盖大部分面——真正的缺口只有 merge 写回（:143 writeFileSync）**不进暂存区**一条。
++
++**护栏（立项方向，范围经代码现状校正后收窄）**：①mergeDirtyOverlapThreeWay clean 写回主仓后补 `git add -- <显式 pathspec>`（对齐 archive git add 下沉先例），并落 apply-manifest.json（文件→sha256 指纹）供 verify/doctor 做 apply 后丢失/篡改检测；rescue 提示补一句「落地后立即 git add -- <files> 锁定」；②apply 前重叠检测 advisory→fail-closed：文件集相交判定用**活跃 quick 会话 guard.json 的 --files 声明**（勿用 changes.last_active 当心跳——它只在 CLI 写操作时刷新非周期心跳，直接用会误判），命中即拒绝 apply 提示串行化，--force 解锁；③文件所有权登记表（claims+心跳）暂不做——裸 git 拦不住（git 无 hook 可拦截 restore/checkout 工作区写入），单独做收益不抵复杂度，记入 ROADMAP 观察复发。
++
++**证据**：时间线在 ql-20260914-010 会话输出（apply→测试绿→smoke 失败→12 文件缺失→worktree 恢复+7a0d624 提交）；git reflog 12:30-12:40 窗口无 reset/checkout 级事件、stash 空（工作区级操作天然不可溯源）；代码锚点 worktree-apply.js:11（主路径 3way patch）/:143（merge 写回无 add）/:539（withMainRepoLock——只串行化 sillyspec 面写操作，裸 git 是所有层的盲区）；对方会话 13:27 提交 106ccc9 已在维护本变更交付的 core-engine 卡——冲突是真实双向的，非单侧事故。

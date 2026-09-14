@@ -148,3 +148,13 @@
 根因：裁决条件此前只在对话里，无载体即蒸发；未来升 blocking 变更 brainstorm 经模块路由必读 core-engine 卡，THRESHOLDS 行是最小合法落点（knowledge/decisions 机器维护勿手改，归档 decisions 加版本过重）
 方案：core-engine.md THRESHOLDS 行追加 ⚠️ 条件句：现裁决依据（旧规则边界连续+advisory 容忍）+ blocking 期两类成本（2代码+2文档误伤、文档同步者系统性跨阈激励成本）+ 候选（文件维改 codeFileCount）+ 溯源（用户裁决 2026-09-14/ql-20260914-009-4623）
 结果：docs check 定向通过（2 处悬空为 file-lifecycle/token-cost 他文件预存 advisory 与本卡无关）；纯文档单文件零测试面；P2 裁决（proposal 历史数字不修正——同目录校准记录 5.9% 为权威定稿且方向更强）按用户判断不动
+
+## ql-20260914-010-a1b8 | 2026-09-14 13:29:09 | 把 apply 与并行会话工作区互相冲掉的事故按现象/根因/护栏/证据四段补进 troubleshooting（用户评审裁定的护栏结论三条）
+状态：已完成
+关联变更：（无）
+文件：docs/sillyspec/design-d7-scan-lifecycle.md（+1/-1）, docs/sillyspec/platform-interface-map.md（+8/-8）, docs/sillyspec/prompt-control-debt.md（+3/-3）, docs/sillyspec/troubleshooting.md（+10/-0）
+需求：把 apply 与并行会话工作区互相冲掉的事故按现象/根因/护栏/证据四段补进 troubleshooting（用户评审裁定的护栏结论三条）
+根因：主仓工作区共享可变缓冲区；本次 apply 走 rescue 出口人工落地未立即 git add，分钟级裸奔窗口被并行会话工作区级 git 操作命中（restore/clean 类 reflog 不可见）；自动主路径 3way+merge 已覆盖大半，真缺口仅 mergeDirtyOverlapThreeWay 写回 :143 不进暂存区
+方案：troubleshooting §64 落档四段：护栏=①merge 写回补显式 pathspec git add+apply-manifest.json 指纹+rescue 提示补立即锁定 ②apply 前重叠检测升 fail-closed（文件集用活跃 quick guard.json --files 相交判定，勿用 last_active 当心跳）③所有权登记暂不做记 ROADMAP；盲区如实声明。顺带 docs check --fix 清偿本变更提交造成的 4 处活文档行号漂移
+结果：troubleshooting §64 落盘；docs check exit 0 零失效；纯文档无需测试；护栏三条可直接作 brainstorm 输入
+审计：[gate] L1（跨 0 模块 · 4 文件：0 代码/0 测试）advisory；每文件注记缺失（--file-notes 覆盖变更文件全集）；测试增量不适用（≤1 代码文件）

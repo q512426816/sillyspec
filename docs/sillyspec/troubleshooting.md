@@ -933,3 +933,13 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 **②pnpm 沙箱假败（第三次踩）**：pnpm node_modules 是指向 store 的符号链接网，junction 进临时目录跨根解析失效 → lint 必假败只能 advisory。修复：`detectSymlinkStoreLayout`（pnpm-lock.yaml/bun.lock/lerna.json/packageManager 字段）命中即快照作废回退主仓 + 明确 warn——不再让沙箱报无关错误。
 **③probe1 NEW: 失配**：design 清单 `NEW: src/x` 条目在文件已合入主仓后 `existsSync(join(cwd,'NEW:src/x'))` 恒 miss → skippedFiles ⚠️ 噪声。修复：探针路径剥 `NEW:` 前缀（主仓 + worktree 回退两处），matches 报告统一剥前缀路径（与 pathMatches 比对侧同源）。
 **④bash heredoc 截断**：本机 bash 通道长 heredoc 静默截断（双会话同款）——落档 knowledge/uncategorized.md（规避：长内容 Write 工具落盘，bash 只引用不内嵌）。
+
+## 64. apply 与并行会话工作区互相冲掉（2026-09-14 用户实证，护栏结论已立项方向）
+
+**现象**：2026-09-14-quick-exit-tiered-gates 归档 apply 后，交付文件在主仓落盘且 63/63 测试通过；数分钟后续查发现 12 个文件缺失/回退（新文件 src/quick-gate-profile.js 被删、shared.js 等改回旧版），smoke 测试 scope-audit --json 的 gateProfile 字段 undefined 才暴露。恢复：worktree 仍完好（唯一可信源）→ 按「主仓当前==快照底版」逐文件判定直拷/手并（command.js 以对方 10:11 后最新版为底重放本变更三 hunk，保住对方 manual:true 修复）→ 显式 pathspec 立即提交锁定（7a0d624）。
+
+**根因**：①主仓工作区是共享可变缓冲区——quick 会话（72% 流量）在途改动以未提交形态与其他会话的 apply 共存，git 无「文件此刻归谁」概念；②本次 apply 走到 rescue 出口（EXCLUDE-DIRTY/MISMATCH 跳过 + cp 指令人工执行），**手工落地的文件未立即 git add**，分钟级裸奔窗口被并行会话的工作区级 git 操作命中（restore/clean 类——reflog 不可见，stash 空，向量无法进一步归因）；③自动主路径（patch + `git apply --3way` 隐含 `--index`）与脏重叠自动合并（mergeDirtyOverlapThreeWay，worktree-apply.js:111/:1068）其实已覆盖大部分面——真正的缺口只有 merge 写回（:143 writeFileSync）**不进暂存区**一条。
+
+**护栏（立项方向，范围经代码现状校正后收窄）**：①mergeDirtyOverlapThreeWay clean 写回主仓后补 `git add -- <显式 pathspec>`（对齐 archive git add 下沉先例），并落 apply-manifest.json（文件→sha256 指纹）供 verify/doctor 做 apply 后丢失/篡改检测；rescue 提示补一句「落地后立即 git add -- <files> 锁定」；②apply 前重叠检测 advisory→fail-closed：文件集相交判定用**活跃 quick 会话 guard.json 的 --files 声明**（勿用 changes.last_active 当心跳——它只在 CLI 写操作时刷新非周期心跳，直接用会误判），命中即拒绝 apply 提示串行化，--force 解锁；③文件所有权登记表（claims+心跳）暂不做——裸 git 拦不住（git 无 hook 可拦截 restore/checkout 工作区写入），单独做收益不抵复杂度，记入 ROADMAP 观察复发。
+
+**证据**：时间线在 ql-20260914-010 会话输出（apply→测试绿→smoke 失败→12 文件缺失→worktree 恢复+7a0d624 提交）；git reflog 12:30-12:40 窗口无 reset/checkout 级事件、stash 空（工作区级操作天然不可溯源）；代码锚点 worktree-apply.js:11（主路径 3way patch）/:143（merge 写回无 add）/:539（withMainRepoLock——只串行化 sillyspec 面写操作，裸 git 是所有层的盲区）；对方会话 13:27 提交 106ccc9 已在维护本变更交付的 core-engine 卡——冲突是真实双向的，非单侧事故。

@@ -1,0 +1,79 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-1531cc9c",
+  "totals": {
+    "files": 5,
+    "additions": 32,
+    "deletions": 12
+  },
+  "rows": [
+    {
+      "path": ".sillyspec/quicklog/QUICKLOG-qinyi.md",
+      "declared": true,
+      "additions": 10,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/sillyspec/design-d7-scan-lifecycle.md",
+      "declared": true,
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/sillyspec/platform-interface-map.md",
+      "declared": true,
+      "additions": 8,
+      "deletions": 8,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/sillyspec/prompt-control-debt.md",
+      "declared": true,
+      "additions": 3,
+      "deletions": 3,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/sillyspec/troubleshooting.md",
+      "declared": true,
+      "additions": 10,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 4,
+    "codeFileCount": 0,
+    "testFileCount": 0,
+    "moduleSpan": null,
+    "modules": [],
+    "unmappedFiles": [],
+    "riskHits": [],
+    "level": "L1",
+    "degraded": true,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "na",
+      "docClaim": "claimed",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260914-010-a1b8",
+  "sessionId": "quick-1531cc9c",
+  "savedAt": "2026-09-14T05:30:58.457Z",
+  "patchSha256": "6ae84c4aefdb50ca5a1f8336e732622eb0467d6409b44b70e08c53a57c98c8b0",
+  "patchStatus": "ok"
+}

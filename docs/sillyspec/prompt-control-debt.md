@@ -54,7 +54,7 @@ updated_at: 2026-08-14T22:20:00+08:00
 ### P4 软判定归位
 状态：`部分完成`（P4.1 完成；P4.2/4.3 维持 defer）
 
-- ✅ **P4.1 risk tier**：原 defer 理由「需新写 `computeRiskTier` + 注入，独立工程」**经实证已失效**——`detectChangeRisk()`（change-risk-profile.js:130）早已存在，且已在 stage-contract.js:323 detectChangeRisk `validateVerifyOutputs` 里 verify --done 时真兜底（扫 design.md/plan.md 关键词判 integration/deployment-critical，结论 PASS/PASS WITH NOTES 但缺真实集成证据则阻断）。verify prompt 让 agent 重复扫关键词+应用门控 = 同一份控制在 prompt 和 gate 付两次钱（P1 主题）。**纯减法**：verify.js「输出验证报告」step 删 23 行重复的「分级规则表 + 触发关键词 + 门控规则」，收敛为 2 行诚实标注（CLI 自动判定+门控；agent 只需如实填 verify-result.md 的「变更风险等级」「Runtime Evidence」section）。控制力零损失（靠 stage-contract.js 兜底），顺手消除关键词双份漂移（prompt 列表原是 gate INTEGRATION_CRITICAL_PATTERNS 的近似子集，gate 更全还扫文件名）。test(58/0)。
+- ✅ **P4.1 risk tier**：原 defer 理由「需新写 `computeRiskTier` + 注入，独立工程」**经实证已失效**——`detectChangeRisk()`（change-risk-profile.js:153）早已存在，且已在 stage-contract.js:323 detectChangeRisk `validateVerifyOutputs` 里 verify --done 时真兜底（扫 design.md/plan.md 关键词判 integration/deployment-critical，结论 PASS/PASS WITH NOTES 但缺真实集成证据则阻断）。verify prompt 让 agent 重复扫关键词+应用门控 = 同一份控制在 prompt 和 gate 付两次钱（P1 主题）。**纯减法**：verify.js「输出验证报告」step 删 23 行重复的「分级规则表 + 触发关键词 + 门控规则」，收敛为 2 行诚实标注（CLI 自动判定+门控；agent 只需如实填 verify-result.md 的「变更风险等级」「Runtime Evidence」section）。控制力零损失（靠 stage-contract.js 兜底），顺手消除关键词双份漂移（prompt 列表原是 gate INTEGRATION_CRITICAL_PATTERNS 的近似子集，gate 更全还扫文件名）。test(58/0)。
 - ⏭ **P4.2 batch mode**：verify L1/L2/L3 批量抽查策略是 agent 必须做的语义工作（选哪几个实例、判系统性 bug），CLI 无法替代，无 gate 重复，非债务；措辞已随 P1.3a 收敛。维持 defer。
 - ⏭ **P4.3 Grill verdict**：Grill 执行/critical 判定是语义软判定，按定位推 sillyhub，本仓不做。维持 defer。
   - **P4.3a Grill fail 后复审边界未定义**（2026-08-04 复盘新观察，归 P4.3）：Grill 判 `fail`/`cannot_verify` 后 agent 修正 design.md，但 review step prompt（`src/stages/brainstorm.js`）未定义「修正后是否需再派独立复审 / 还是 agent 自判 pass 即可」——实证一次 brainstorm 修正后 agent 自判 pass 未再派独立复审，复审界定模糊（grep `复审|re-review|再派` 在 brainstorm.js 无命中，fail 后回路为空）。**裁决**：随 P4.3 维持 defer——「修正后够不够好」本身是语义软判定，推 sillyhub/人类，本仓不强制；**可选近零成本缓解**（留 follow-up，超 doc-only 范围）：review step 加一行诚实边界标注（fail 修正后不强制再派复审，由 agent/人类判断），符合「诚实标注优于加门」哲学（参 Q-C / P4.1）。（2026-08-04 plan 阶段亦命中：plan 审查初审 fail、修正后自判 pass 未二次独立复审——证实此 gap 为 stage 通用，非 brainstorm 独有；详见下方「2026-08-04 复盘增补」plan-d。）
@@ -123,7 +123,7 @@ updated_at: 2026-08-14T22:20:00+08:00
 
 来源：verify 阶段使用复盘的 3 个负面点，逐条对源码核实后裁决。
 
-- ⊘ **vrf-a 关键词判级不认否定语境**。**评估保留（已实现 + prompt 已充分告知）**：`detectChangeRisk`（change-risk-profile.js:211，显式豁免优先注释 :141）**显式豁免优先**——design.md frontmatter `risk_level:` 声明覆盖关键词判级，源码注释明确记载历史教训「与其在正则层做脆弱的否定识别，不如给一条显式、诚实、可审计（落在 design frontmatter + verify-result）的覆盖通道」；verify「输出验证报告」step prompt 已写「判级是机械字面匹配、不认否定语境」+「误判时的诚实出路（豁免级）：frontmatter risk_level 声明」+「留痕要求防逃逸」。用户实测用 `risk_level: contract-required` 豁免成功——机制正是设计意图，非缺陷。
+- ⊘ **vrf-a 关键词判级不认否定语境**。**评估保留（已实现 + prompt 已充分告知）**：`detectChangeRisk`（change-risk-profile.js:233，显式豁免优先注释 :141）**显式豁免优先**——design.md frontmatter `risk_level:` 声明覆盖关键词判级，源码注释明确记载历史教训「与其在正则层做脆弱的否定识别，不如给一条显式、诚实、可审计（落在 design frontmatter + verify-result）的覆盖通道」；verify「输出验证报告」step prompt 已写「判级是机械字面匹配、不认否定语境」+「误判时的诚实出路（豁免级）：frontmatter risk_level 声明」+「留痕要求防逃逸」。用户实测用 `risk_level: contract-required` 豁免成功——机制正是设计意图，非缺陷。
 - ✅ **vrf-b 测试重复跑（step6 手动跑 + CLI 对账又跑，198s×2）**。**修法（纯减法）**：CLI 对账是防谎报 enforcement（verify.js:176 明说「谎报测试结果没有意义」）不可删；复用 step6 结果 = 信任 agent 报告，破坏核心信任边界不可做。改为 verify.js「运行测试和质量扫描」step prompt **不重复手动跑全量测试**（测试实测统一由 CLI --done 对账执行一次，按变更命中模块子集），step 只做 lint/静态检查 + 可选针对性冒烟（非必需）；同步首段「进度确认」💡 说明 + docs/prompt 重提取（verify.md 两处）+ file-lifecycle.md 补一句。
 - ✅ **vrf-c 后台命令无进度提示（CLI 对账 execSync 同步静默 198s）**。**修法（轻量）**：`runVerifyTestCheck` 是同步 execSync，期间 stdout 全静默，`printVerifyTestCheck` 只在结束后打印耗时。gates.js verify 对账调用前加「⏳ Verify 测试对账：CLI 亲自执行 local.yaml 的 commands.test（同步，耗时可能较长，请等待…）」预告。**放 gates.js 调用点而非 verify-postcheck.js 内部**——`runVerifyTestCheck` 也被 `machine-interface.js:250/369`（derive verify-test facet，--json）调用，内部裸 console.log 会污染 JSON 输出。
 
@@ -319,7 +319,7 @@ P2 遗留（按优先级登记）：
 **批次② 状态机 fail-open 组 → 完整流程 brainstorm（行为语义变更，单一 change 立项）**
 - **A5** `--done` 阶段产物 gate 失败只打 ❌ 但 exit 0：`src/run/complete.js:328-329` gate 早退 return 不设 process.exitCode——与 quick 审计 blocked→exit 1 同仓惯例分裂，agent/CI/hook 按 exit code 消费即 fail-open。
 - **B6** `--done` 完全绕过阶段转换守卫 + 辅助阶段污染 currentStage：`src/run/command.js:1481` --done 直接进 `completeStep` 不查 `checkTransition`（stage.js:27-44 只在 runStage 调）；status/doctor 等 auxiliary 跑一次即写 `progress.currentStage`（stage.js:233）→ fromStage 变 status 后跳阶段静默放行（stage-contract.js:954 `AUXILIARY_STAGES` 一律放行）。
-- **B7** status/doctor 自称只读实则写库：`src/run/command.js:959` auxiliary fallback `initChange` 建 default 行 + 落盘 currentStage，与 SKILL「status 只读」矛盾，多 agent 并发 lastActive 互相覆盖。
+- **B7** status/doctor 自称只读实则写库：`src/run/command.js:966` auxiliary fallback `initChange` 建 default 行 + 落盘 currentStage，与 SKILL「status 只读」矛盾，多 agent 并发 lastActive 互相覆盖。
 - **B8** `run brainstorm` 无 --change 多活跃变更仓静默建幽灵变更：`src/run/command.js:717-731` 无条件 initChange（DB 实锤 08-15 一小时 4 个 `*-new-change-*` 活跃行）。
 - 裁决理由：四者共性强——状态机守卫 fail-open + 幽灵变更/幽灵阶段污染，属行为语义变更（多命令交互路径），非单点行修复。走完整流程 brainstorm → plan → execute，含 8b（新项目首跑 auxiliary 幽灵 default 变更）一并评估。
 
