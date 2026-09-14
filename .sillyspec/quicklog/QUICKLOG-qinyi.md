@@ -127,3 +127,15 @@
 根因：initChange 对系统生成 key（default）无条件物化 changes/default/ 空目录——default 行是辅助阶段无实体产物的进度容器，空目录致 next.js 误报与目录计数失真，多活跃库中 explore --done 解析失败被守卫拒且报错只指 brainstorm；409 change_deleted 是终态幂等回执永不自愈，既有噪音闸只覆盖连接类失败
 方案：initChange 对 default 停建目录（同 quick-hex8 待遇）；command.js 新增 resolveAuxiliaryDefaultAffinity（default 行在途本阶段锚回、显式 --change 优先）+ 守卫 !progress 前置 + 报错补 explore --change default 提示；sync-noise.js 新增按变更名键控的 change_deleted 回执噪音闸（首报可见/窗口静默/过期重报/推送成功精清/manual 旁路），sync.js 三处接线 + index.js platform sync manual 旁路
 结果：回归 26 断言全过（default 停建与亲和 19 + 噪音闸 7）；全量 npm test 466 文件 0 失败、lint 0 告警、docs check 557 全过（5 处行号重锚）；sync/runtime 模块卡 + changelog + known-issues 同步
+
+## ql-20260914-008-49ad | 2026-09-14 11:19:01 | SKILL/README 特性叙事按四层能力地图补齐并新增推广基准稿
+状态：已完成
+关联变更：（无）
+文件：
+- docs/sillyspec/capability-highlights-2026-09-14.md（推广与介绍对外叙事的单一基准稿，新增能力落地时须同步本文）
+- SKILL.md（frontmatter 定位+核心特性四层化）
+- README.md（标语/问题域/核心特性四层化）
+需求：SKILL/README 特性叙事按四层能力地图补齐并新增推广基准稿
+根因：对外特性叙事停留在品类词层（SDD/TDD/worktree），scope-audit、contract-matrix、跨仓隔离、跨机派发、friction-tally 等后落地机制零暴露，维护者自己都数不出真实亮点（2026-09-14 全仓模块盘点实证能力面跑在叙事前面）
+方案：三文件纯文档变更：①新增 docs/sillyspec/capability-highlights-2026-09-14.md 推广基准稿（电梯稿三版/竞品本质区别表/四层能力地图带模块锚点/数据面板/四条质疑标准回应/诚实边界/叙事纪律）；②SKILL.md description 换变更账本+确定性验收定位，核心特性改四层结构；③README 标语与问题域更新（补多 agent 并行痛点），核心特性换四层结构保留平台同步细节，加基准稿链接
+结果：纯 doc 变更无触及 src/test；docs check 565 处引用全通过 exit 0（2 处 advisory 为存量他档问题非本次引入）；引用一律模块路径不带行号防锚点漂移

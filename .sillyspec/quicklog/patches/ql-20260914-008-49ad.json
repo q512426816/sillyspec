@@ -1,0 +1,46 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-464a8ed6",
+  "totals": {
+    "files": 3,
+    "additions": 221,
+    "deletions": 21
+  },
+  "rows": [
+    {
+      "path": "README.md",
+      "declared": true,
+      "additions": 35,
+      "deletions": 11,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "SKILL.md",
+      "declared": true,
+      "additions": 24,
+      "deletions": 10,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/sillyspec/capability-highlights-2026-09-14.md",
+      "declared": true,
+      "additions": 162,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "qlId": "ql-20260914-008-49ad",
+  "sessionId": "quick-464a8ed6",
+  "savedAt": "2026-09-14T03:23:27.537Z",
+  "patchSha256": "25eca0087044f7d380b7f906d4b2a1fdf17d921a819b7b98c2b3bed423a57a17",
+  "patchStatus": "ok"
+}

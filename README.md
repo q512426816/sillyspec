@@ -4,7 +4,7 @@
 
 <h1 align="center">SillySpec</h1>
 
-<p align="center">规范驱动开发工具包 · 流程状态机，让 AI 严格按步骤来</p>
+<p align="center">规范驱动开发工具包 · 多 agent 时代的变更账本与确定性验收层</p>
 
 <p align="center">
   融合 Superpowers + OpenSpec + GSD，从「你说要啥」到「代码能跑」的完整流程<br>
@@ -25,7 +25,9 @@
 
 AI agent（Claude Code / Cursor 等）直接上手编码时，容易跳过需求澄清、方案设计、任务拆解这些关键步骤，产出偏离预期、且无法审计。
 
-SillySpec 把一个变更的完整生命周期固化为一组**强制阶段**——每个阶段都有明确的入口契约、产物文件名和门禁校验，AI 必须按状态机推进，不能跳步、不能偷工。进度、决策、产物全部持久化到 SQLite，可审计、可回溯、可断点恢复。
+更要命的是**多 agent 并行**：多个会话同时改一个仓库时，谁改了哪个文件分不清、任务编号会被抢注、测试结果靠自报、中断即失忆、跨仓改动误伤用户在途文件。
+
+SillySpec 把一个变更的完整生命周期固化为一组**强制阶段**——每个阶段都有明确的入口契约、产物文件名和门禁校验，AI 必须按状态机推进，不能跳步、不能偷工。进度、决策、产物全部持久化到 SQLite，可审计、可回溯、可断点恢复。**纪律不靠模型自觉，靠进程、磁盘和门禁：自报的不算，CLI 亲自跑过的才算。**
 
 ## 快速开始
 
@@ -133,16 +135,38 @@ sillyspec change-delete <变更名>    删除变更（DB status=deleted 与归�
 
 ## 核心特性
 
-- **规范驱动** — 所有代码产出先有设计文档支撑，文档是 AI 的记忆
-- **阶段状态机** — 以 stage + step 粒度强制流转，sillyspec.db（SQLite）单一进度源记录状态
-- **TDD 强制** — execute 阶段先写测试再写实现
-- **子代理并行** — 同一 Wave 内任务并行执行，加快交付
+> 完整能力地图与对外叙事基准：[docs/sillyspec/capability-highlights-2026-09-14.md](docs/sillyspec/capability-highlights-2026-09-14.md)
+
+**第一层：护城河（外部状态，模型能力不可替代）**
+
+- **多 agent 并发控制** — 会话/变更/worktree 三级隔离；文件锁 ID 分配 + 双占用 fail-closed 硬拦；`--files` 边界声明切分"这是谁改的"；`--done` 前并发写预检告警他者未提交改动；平台同步乐观锁（base_ts + 身份 + 服务器权威钟）+ 冲突血统归属（自回声不误报）
+- **实测验收门禁** — verify / quick 收尾时 CLI **亲自执行** test / lint 与 agent 自报对账，不符即阻断回滚；docHash 重算比对 + git 提交证据交叉对账防伪造；门禁跑在隔离快照，不受并行会话脏文件污染
+- **持久账本 + 断点恢复** — SQLite（node:sqlite）单一进度源，进度/决策/审批答复全落库，跨会话跨天续跑；quicklog 四字段结构化台账可检索
+- **跨仓变更管理** — task 卡声明 `repo:` 字段即可管理跨仓任务：同构 worktree 隔离、base 锚快照、apply 永不覆盖用户在途改动
+
+**第二层：确定性对账（机械核验，零模型轮次）**
+
+- **范围对账** — 计划改动 × 实际改动三态对账（planned / unplanned / untouched），"偷偷改了计划外的东西"会被告警
+- **API 契约矩阵** — 自动识别 task 间 provider / consumer 关系，后端完成提取 endpoint 契约注入前端 task，verify 阶段前后端 API parity 对账
+- **文档一致性棘轮** — 文档里源码引用真实性校验（HEAD 模式），失败数只降不升
+- **noAI 下沉** — 机械轮次（骨架预生成 / 上下文注入 / 归档核对代算）下沉为 CLI 代码，判断层留给 agent，token 成本与模型能力同向优化
+
+**第三层：协作与流程**
+
+- **规范驱动 + 阶段状态机** — 入口契约 / 产物文件名 / 门禁校验强制流转，不能跳步
+- **子代理并行 + Wave 拓扑排序** — depends_on 自动排序，同 Wave 并行执行
 - **Worktree 隔离** — execute 在独立 git worktree 中工作，不污染主分支
-- **拓扑排序 Wave** — plan 阶段按蓝图依赖关系自动重排 Wave 分组
-- **进度持久化** — SQLite（node:sqlite）持久化，支持断点恢复
-- **模块文档** — 模块级知识库，AI 执行时按需加载相关上下文
-- **浏览器自动化** — 可选 MCP（Playwright / Chrome DevTools），供集成/E2E 冒烟验证
-- **平台同步** — 可选对接 SillyHub，文档同步 + 团队审批 + 本地 agent 会话日志路径主动上报（平台会话展示本地 agent 完整日志；支持 Claude Code / Codex / ZCode 自动探测，其他 CLI 用 `SILLYSPEC_AGENT_LOG` 显式指定）
+- **分层独立审查** — Design Grill / stage review / task review 带 provenance 盖章
+- **跨机派发** — 子代理任务可派到 SillyHub MCP 远端 worker 池，自动探测回退本机
+- **平台同步（可选）** — 对接 SillyHub：文档同步 + 团队审批 + 本地 agent 会话日志路径主动上报（支持 Claude Code / Codex / ZCode 自动探测，其他 CLI 用 `SILLYSPEC_AGENT_LOG` 显式指定）；本地独立使用功能完整
+- **棕地入库** — scan 扫描已有代码库生成 7 份架构文档 + 模块映射
+- **知识飞轮** — 模块知识按需注入、成功变更 export 为模板、决策 D-xxx@vN 版本化
+
+**第四层：自我运维**
+
+- **doctor 自诊自愈** — 13 维诊断，幽灵 worktree / 僵尸会话自动归档
+- **摩擦计数** — 门禁回滚 / 实测失败 / 审查打回结构化计数，喂改进循环
+- **dashboard 可视化** — 本地 Web 进度面板（`packages/dashboard/`）
 
 ## 可靠性保障
 
