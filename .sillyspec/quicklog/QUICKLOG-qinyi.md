@@ -93,3 +93,21 @@
 方案：①信号门控：单候选也跑 quick-recommend 双信号打分（脏文件×design 清单/任务描述×proposal 2-gram），score>0 才自动关联+大声提示，否则不关联+提示；会话行被过滤天然不关联 ②autoLinked 溯源：resolver 返回 changes+autoLinked，command→runStage→guard 落 linkedChangesAuto，--done 复用 guard 同步恢复 ③归档止血：closeQuickLinkedChanges 对 linkedChangesAuto 命中变更 skip（机器猜测非协作声明不触发破坏性归档），显式关联僵尸清理 D-002 契约不变
 结果：新增回归 test/quick-single-change-auto-link.test.mjs 8 用例全绿（resolver 门控 4 + 归档闸止血/对照 2 + e2e 自动关联不归档/显式归档照常 2）；全量 npm test 464/464 + lint 0 告警 + docs check 557 处全过（command.js 漂移锚重锚 5 处）；既有 quick-close-linked-changes 契约测试零改动通过
 审计：⚖️ 归属切分：2 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：.sillyspec/knowledge/known-issues.md, docs/sillyspec/quick-sync-block-filenotes-and-quicklog-mixed-commit.md
+
+## ql-20260914-005-5dd0 | 2026-09-14 10:17:41 | CLI 自回声归属升级身份优先：平台回传 last_pusher（服务端 ql-20260914-006-e395 已落）后，pusher≠本人一律真冲突堵跨机慢钟盲区；pusher==本人且血统不新于本地才自愈；身份缺失回退血统窗口
+状态：进行中
+关联变更：2026-09-14-quick-exit-tiered-gates
+文件：src/sync.js
+
+## ql-20260914-006-7221 | 2026-09-14 10:17:51 | CLI 自回声归属升级身份优先：last_pusher≠本人一律真冲突堵跨机慢钟盲区
+状态：已完成
+关联变更：（无）
+文件：
+- src/sync.js（_isSelfEchoAttribution 身份优先归属 + push409/pull 接线 + IGNORE_KEYS 补 last_pusher）
+- test/platform-sync-self-echo.test.mjs（第 8/9 段身份用例 + mock last_pusher/platform.user 注入）
+- docs/sillyspec/sillyhub-progress-sync-contract.md（§4.2 服务器权威钟算法 + §4.3 200 body + §4.4 409 body last_pusher + §6 GET 顶层）
+- docs/sillyspec/platform-interface-map.md（4 处锚重锚（syncDocuments 1058/pullList 1387/collectStatus 2089/_submitApproval 2215））
+需求：CLI 自回声归属升级身份优先：last_pusher≠本人一律真冲突堵跨机慢钟盲区
+根因：第一批血统归属判定基于客户端时间戳：他机慢钟可把外来更新的血统伪装进本地 [base, local_modified] 窗口被误判自回声覆盖（审查暴露的窄盲区）；且服务端存客户端时钟原值，乐观锁与『平台更新』判定跨机偏差本身失真。服务端已改（multi-agent-platform ql-20260914-006-e395）：last_pushed_at 存服务器权威钟、200/409/GET 回传 last_pusher
+方案：sync.js 新增 _isSelfEchoAttribution：身份优先（pusher≠本人外来否决 / ==本人仅保血统上界、下界放开 / 任一侧缺失回退双界窗口 / platLin 缺失 fail-closed），push 409 与 pull 两路径接线（身份来源与发送侧同口径 platform.user||resolvePlatformUser）；_progressContentEquals IGNORE_KEYS 补 last_pusher（服务端 GET 顶层新元字段，不忽略则内容一致自愈恒 false）；契约文档 §4.2/4.3/4.4/§6 同步 + interface-map 4 锚重锚
+结果：platform-sync-self-echo 新增身份匹配（下界放开）与身份否决（盲区关闭回归）4 用例全过；聚焦 11 套件含 doc-ref-check 87/87 全 PASS；lint 595 文件 0 告警；全量 npm test 464/464；CLI 未发版（需 bump+重装生效）

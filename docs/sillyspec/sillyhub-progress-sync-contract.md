@@ -82,35 +82,40 @@ X-SillySpec-Pushed-At: 2026-08-10T14:30:00.000Z  # 推送时刻（客户端时�
 
 ### 4.2 base_ts 冲突检测算法（sillyhub 必须实现）
 
-平台每 change 需持久化三项：`latest_progress`（最新 JSON）+ `last_pushed_at`（上次接受的 Pushed-At）+ `last_pusher`（上次 User）。POST 处理逻辑：
+平台每 change 需持久化三项：`latest_progress`（最新 JSON）+ `last_pushed_at`（上次接受的时间戳）+ `last_pusher`（上次 User）。POST 处理逻辑：
+
+**服务器权威时钟（ql-20260914-006-e395 起）**：`last_pushed_at` 存**服务器时钟**（UTC ISO 毫秒 Z，与 §7 字典序同构），不再存客户端 `X-SillySpec-Pushed-At` 原值——乐观锁与客户端「平台更新」判定统一到单一时钟，跨机客户端时钟偏差不再污染冲突检测。客户端 header 仍必发（老后端兼容），新后端只读不采信。
 
 ```
 baseTs   = header['X-SillySpec-Base-Ts']    # 可能为 null/缺失
-pushedAt = header['X-SillySpec-Pushed-At']
 user     = header['X-SillySpec-User']
+srvNow   = 服务器时钟 ISO 毫秒 Z              # ql-20260914：权威时间戳
 
 if baseTs 为空 or 缺失:
     # 首次同步 / 客户端无基准 → 无条件接受
     存 latest_progress = body
-    存 last_pushed_at  = pushedAt
+    存 last_pushed_at  = srvNow
     存 last_pusher     = user
-    return 200
+    return 200 { ok: true, last_pushed_at: srvNow }
 
 stored = 该 change 已存的 last_pushed_at
 if stored 存在 AND stored > baseTs:    # 字符串字典序比较（ISO 8601 UTC，见 §7）
     # base_ts 过期：别的用户在我之后推过 → 冲突
-    return 409 { conflict:true, platform_progress: latest_progress, last_pushed_at: stored }
+    return 409 { conflict:true, platform_progress: latest_progress,
+                 last_pushed_at: stored, last_pusher: 行内 last_pusher }
 
 # base_ts 有效 → 接受
 存 latest_progress = body
-存 last_pushed_at  = pushedAt
+存 last_pushed_at  = srvNow
 存 last_pusher     = user
-return 200
+return 200 { ok: true, last_pushed_at: srvNow }
 ```
+
+> **200 ack 必须回传 `last_pushed_at`（服务器钟）**：客户端回填 base_ts 必须与库中存储值同钟，否则后续推送必假 409（客户端读不到才回退自己的 pushedAt，过渡期单机时钟自洽）。**409 回传 `last_pusher`**：客户端身份归属用——pusher≠本人 ⇒ 一律真冲突（堵他机慢钟伪装进血统窗口的盲区）。
 
 ### 4.3 成功响应（200）
 
-任意 2xx 即可，body 客户端不读（可空）。客户端据此更新本地 `platform_last_sync`。
+任意 2xx 即可（老客户端不读 body）；新客户端读 `last_pushed_at`（服务器权威钟，见 §4.2）回填 base_ts。客户端据此更新本地 `platform_last_sync`。
 
 ### 4.4 冲突响应（409）⭐
 
@@ -118,7 +123,8 @@ return 200
 {
   "conflict": true,
   "platform_progress": { /* 平台当前 latest_progress（裸六表） */ },
-  "last_pushed_at": "2026-08-10T13:45:00.000Z"
+  "last_pushed_at": "2026-08-10T13:45:00.000Z",
+  "last_pusher": "zhangsan"
 }
 ```
 
@@ -157,18 +163,19 @@ Authorization: Bearer <token>
 **响应**（客户端兼容两种形态）：
 
 ```json
-// 形态 A：裸六表 + 顶层 last_pushed_at
+// 形态 A：裸六表 + 顶层 last_pushed_at / last_pusher（ql-20260914 起后两者必回传）
 {
   "project": {...}, "changes": [...], "stages": [...], "steps": [...],
   "batch_progress": [...], "approvals": [...],
-  "last_pushed_at": "2026-08-10T13:45:00.000Z"
+  "last_pushed_at": "2026-08-10T13:45:00.000Z",
+  "last_pusher": "zhangsan"
 }
 
 // 形态 B：包裹
-{ "progress": { /* 裸六表 */ }, "last_pushed_at": "..." }
+{ "progress": { /* 裸六表 */ }, "last_pushed_at": "...", "last_pusher": "..." }
 ```
 
-> **用途**：pull 第二级，客户端拿到后 `import()` 重建本地 DB 行。`last_pushed_at` 用于本地脏度冲突检测（pull 路径）。
+> **用途**：pull 第二级，客户端拿到后 `import()` 重建本地 DB 行。`last_pushed_at` 用于本地脏度冲突检测（pull 路径）；`last_pusher` 用于身份归属（pusher≠本人 ⇒ 真冲突，见 §4.2）。
 
 ## 7. 时间戳比对规则（必须对齐）
 

@@ -831,6 +831,9 @@ export class SyncManager {
       // 平台 409 响应 { conflict:true, platform_progress, last_pushed_at }，platform_progress 即平台最新 progress JSON
       const platformProgress = res.body && res.body.platform_progress ? res.body.platform_progress : res.body;
       const platformLastPushedAt = (res.body && res.body.last_pushed_at) || null;
+      // 身份归属（ql-20260914 第二批）：服务端 409 body 回传平台行既有 last_pusher——
+      // 与本地 pushUser 同口径比对（platform.user || resolvePlatformUser，与发送侧一致）
+      const platformLastPusher = (res.body && res.body.last_pusher) || null;
 
       // 自竞态自愈：fresh 重读本机 DB base_ts，若已被并发进程回填到 ≥ 平台 409 回执 ts，
       // 说明赢者是本机自己人——刷新 base_ts 重试一次即收敛，不落冲突文件（外来推送不可能
@@ -860,13 +863,14 @@ export class SyncManager {
         }
       } catch { /* 比对失败维持原判（fail-closed 到真冲突分支） */ }
 
-      // ── 自回声血统归属（坑 sync-self-echo-false-conflict，2026-09-14 multi-agent-platform
-      // 实证 6 个假冲突全为此形）：平台快照自带 changes[0].last_local_modified_ts——推送方
-      // 序列化时的本地脏度血统标记。若它落在本地 [base_ts, last_local_modified_ts] 区间内，
-      // 说明平台这份「更新」是本库自己推过的状态（并发推送的乱序/失败回填让 base 没跟上，
-      // 回声窗里自家回执被当成他端更新），不是外来分歧——推进 base_ts 到平台 ts 后重试
-      // 推送即收敛，不落冲突文件。区间外（平台持有本库从未有过的更新血统）维持原冲突
-      // 路径：本地永不覆盖血统比自己新的平台状态，无误放行。
+      // ── 自回声归属（坑 sync-self-echo-false-conflict，2026-09-14 multi-agent-platform
+      // 实证 6 个假冲突全为此形；第二批升级身份优先）：平台快照自带 changes[0].
+      // last_local_modified_ts（推送方序列化时的本地脏度血统标记）。归属判定走
+      // _isSelfEchoAttribution——服务端回传 last_pusher 时身份优先（≠本人一律真冲突，
+      // ==本人仅保血统上界），身份缺失回退 [base_ts, local_modified] 双界窗口（窗口内
+      // = 本机自推过的状态：并发推送乱序/失败回填让 base 没跟上，自家回执被当他端
+      // 更新）。判为自回声 ⇒ 推进 base_ts 到平台 ts 后重试推送即收敛，不落冲突文件；
+      // 判为外来 ⇒ 维持原冲突路径：本地永不覆盖血统比自己新的平台状态。
       if (!fromResolve && platformProgress && platformProgress.changes && platformProgress.changes[0]
         && platformProgress.changes[0].last_local_modified_ts) {
         const platLin = platformProgress.changes[0].last_local_modified_ts;
@@ -878,16 +882,19 @@ export class SyncManager {
           ).get(changeName);
           const localMod = row && row.last_local_modified_ts;
           const baseNow = row && row.last_synced_platform_ts;
-          if (localMod && baseNow && platLin >= baseNow && platLin <= localMod) {
+          if (this._isSelfEchoAttribution({
+            platformPusher: platformLastPusher, myPusher: pushUser,
+            platLin, baseTs: baseNow, localModified: localMod,
+          })) {
             const healTs = platformLastPushedAt || pushedAt;
             pm._ensureDB(this.cwd).getDb().prepare(
               'UPDATE changes SET last_synced_platform_ts = MAX(?, COALESCE(last_synced_platform_ts, ?)) WHERE name = ?'
             ).run(healTs, healTs, changeName);
-            console.warn(`⚠️ [sync] push 409 自回声血统判定：平台 ts=${platformLastPushedAt} 为本机自推回声（血统 ${platLin} ∈ [${baseNow}, ${localMod}]），base_ts 已推进到 ${healTs}，自动重推`);
+            console.warn(`⚠️ [sync] push 409 自回声判定：平台 ts=${platformLastPushedAt} 为本机自推回声（血统 ${platLin}，推送者 ${platformLastPusher || '未回传·窗口判定'}），base_ts 已推进到 ${healTs}，自动重推`);
             if (attempt < MAX_PUSH_ATTEMPTS) continue;
             // 重试额度耗尽（attempt=2 仍进此分支，理论少见）：不落冲突文件——base 已推进，
             // 下次常规同步按新 base 直接推送收敛
-            return { synced: 0, errors: [], conflict: false, selfHealed: true, reason: 'push 409 自回声血统判定：base_ts 已推进，重试额度耗尽，下次常规同步收敛' };
+            return { synced: 0, errors: [], conflict: false, selfHealed: true, reason: 'push 409 自回声判定：base_ts 已推进，重试额度耗尽，下次常规同步收敛' };
           }
         } catch { /* 归属判定失败维持原判（fail-closed 到真冲突分支） */ }
       }
@@ -1247,6 +1254,9 @@ export class SyncManager {
         'last_active', 'last_synced_platform_ts', 'last_local_modified_ts',
         'started_at', 'completed_at', 'pushed_at', 'last_pushed_at', 'created_at',
         'deps_checked_at', 'checked_at', 'waited_at', 'completedat',
+        // last_pusher：服务端 GET 顶层回传的推送者元字段（ql-20260914 第二批）——与
+        // last_pushed_at 同理是同步元数据非六表内容，不忽略会让内容一致自愈恒 false。
+        'last_pusher',
       ]);
       const strip = (v) => {
         if (Array.isArray(v)) return v.map(strip);
@@ -1267,6 +1277,31 @@ export class SyncManager {
       };
       return JSON.stringify(strip(local)) === JSON.stringify(strip(platform));
     } catch { return false }
+  }
+
+  /**
+   * 自回声归属判定（坑 sync-self-echo-false-conflict 身份加固，2026-09-14 第二批）。
+   *
+   * 身份优先——服务端回传 last_pusher（409 body / GET 顶层，服务端 ql-20260914-006-e395
+   * 起；last_pushed_at 亦改存服务器权威钟）且本机 pushUser 可解析时：
+   * - pusher ≠ 本人 ⇒ 一律非自回声（外来否决）——堵跨机时钟偏差把他机更新伪装进
+   *   [base, local_modified] 血统窗口的盲区（慢钟他机的血统可落窗口内，但身份对不上）；
+   * - pusher == 本人 ⇒ 只保血统上界 platLin ≤ local_modified（永不覆盖血统比自己新的
+   *   平台状态——含本人另一台机器的新进度），下界放开（身份已证自家推送，老于 base
+   *   的快照也只是自家旧态，重推无损）。
+   * 任一侧身份缺失（老服务端不回传 / 本地 user 解析不出）⇒ 回退第一批双界窗口
+   * [baseTs, localModified]（纯时间血统，已是当时最优）。platLin 缺失一律 false
+   * （fail-closed：无血统不判自回声）。
+   * @param {{platformPusher?: string|null, myPusher?: string|null, platLin?: string|null, baseTs?: string|null, localModified?: string|null}} a
+   * @returns {boolean} true=判为本机自推回声（可推进 base_ts 重推本地）
+   */
+  _isSelfEchoAttribution({ platformPusher, myPusher, platLin, baseTs, localModified } = {}) {
+    if (!platLin || !localModified) return false;
+    if (platformPusher != null && myPusher != null) {
+      if (platformPusher !== myPusher) return false; // 身份否决：外来更新
+      return platLin <= localModified; // 本人推送：仅保上界
+    }
+    return !!(baseTs && platLin >= baseTs && platLin <= localModified); // 窗口回退
   }
 
   _writeConflictFile(changeName, info = {}) {
@@ -1414,6 +1449,10 @@ export class SyncManager {
     // 平台响应：serializeForSync 六表 + 顶层 last_pushed_at（兼容 { progress: {...} } 包裹）
     const platformProgress = (result && result.project && result.changes) ? result : (result.progress || result);
     const platformPushedAt = (result && result.last_pushed_at) || null;
+    // 身份归属（ql-20260914 第二批）：服务端 GET 顶层回传 last_pusher（与发送侧同口径
+    // 的本机用户比对——platform.user || resolvePlatformUser）
+    const platformPusher = (result && result.last_pusher) || null;
+    const myPusher = (platform && platform.user) || resolvePlatformUser(this.cwd) || null;
 
     // 2. 本地脏度比对（非 force 时）：本地脏 AND 平台更新 → 冲突
     if (!force) {
@@ -1477,15 +1516,20 @@ export class SyncManager {
           }
         } catch { /* 比对失败维持原判（fail-closed 到真冲突分支） */ }
       }
-      // ── 自回声血统归属（坑 sync-self-echo-false-conflict，与 push 409 路径同族，2026-09-14）：
-      // 平台「更新」的血统标记（changes[0].last_local_modified_ts）落在本地 [base, local_modified]
-      // 区间内 = 本机自推回声（并发推送回填竞态窗口内读到自家回执），非外来分歧。不 import、
-      // 不落冲突文件，推进 base_ts 到平台 ts——本地内容 ≥ 回声状态（血统不新于本地），下次
-      // triggerSync 按新 base 正常推送，无损收敛。区间外维持原冲突判定，误放行为零。
+      // ── 自回声归属（坑 sync-self-echo-false-conflict，与 push 409 路径同族，2026-09-14；
+      // 第二批升级身份优先）：平台「更新」的血统标记（changes[0].last_local_modified_ts）
+      // 经 _isSelfEchoAttribution 判定——服务端回传 last_pusher 时身份优先（≠本人一律
+      // 真冲突；==本人仅保血统上界 ≤ local_modified），身份缺失回退 [base, local_modified]
+      // 双界窗口（本机自推回声：并发推送回填竞态窗口内读到自家回执）。判为自回声：
+      // 不 import、不落冲突文件，推进 base_ts 到平台 ts——本地内容 ≥ 回声状态，下次
+      // triggerSync 按新 base 正常推送，无损收敛。判为外来维持原冲突判定。
       if (localDirty && platformNewer && platformProgress && platformProgress.changes
         && platformProgress.changes[0] && platformProgress.changes[0].last_local_modified_ts) {
         const platLin = platformProgress.changes[0].last_local_modified_ts;
-        if (localLastModified && localLastSynced && platLin >= localLastSynced && platLin <= localLastModified) {
+        if (this._isSelfEchoAttribution({
+          platformPusher: platformPusher, myPusher: myPusher,
+          platLin, baseTs: localLastSynced, localModified: localLastModified,
+        })) {
           try {
             const { ProgressManager } = await import('./progress.js');
             const pm = new ProgressManager({ specDir: safePlatformSpecDir(this.cwd) });
@@ -1493,8 +1537,8 @@ export class SyncManager {
               'UPDATE changes SET last_synced_platform_ts = MAX(?, COALESCE(last_synced_platform_ts, ?)) WHERE name = ?'
             ).run(platformPushedAt, platformPushedAt, changeName);
           } catch { /* 推进失败不影响判定结论：不 import 不落冲突，下次同步重判 */ }
-          debugLog(`[sync] pull 自回声血统判定: 平台 ts ${platformPushedAt} 为本机自推回声（血统 ${platLin} ∈ [${localLastSynced}, ${localLastModified}]），base_ts 已推进`);
-          return { ok: true, imported: false, conflict: false, reason: '平台更新为本机自推回声（血统在本地同步区间内），base_ts 已推进' };
+          debugLog(`[sync] pull 自回声判定: 平台 ts ${platformPushedAt} 为本机自推回声（血统 ${platLin}，推送者 ${platformPusher || '未回传·窗口判定'}），base_ts 已推进`);
+          return { ok: true, imported: false, conflict: false, reason: '平台更新为本机自推回声（归属判定：身份/血统），base_ts 已推进' };
         }
       }
       if (localDirty && platformNewer) {

@@ -12,6 +12,9 @@
 // 6. base_ts 单调推进（MAX）：旧回执不覆盖已推进 base；新回执正常推进；null 保旧
 // 7. 冲突文件过期自清：文件在但 base ≥ 文件记录的平台 ts → 自动清除并恢复推送；
 //    base < 平台 ts → 维持抑制（fail-closed）
+// 8. 身份优先归属（ql-20260914 第二批）：平台回传 last_pusher==本人 → 血统上界内自愈，
+//    且下界放开（老于 base 的自家旧快照也判自回声）；push 409 同族
+// 9. 身份否决（盲区关闭回归）：last_pusher≠本人（他机慢钟血统落窗口内）→ 一律真冲突
 //
 // 隔离：cwd 用 os.tmpdir() + mock http server（响应形态可控：平台血统 / 409 序列）。
 import { mkdirSync, mkdtempSync, writeFileSync, rmSync, existsSync, readFileSync } from 'fs';
@@ -29,9 +32,10 @@ const assert = (cond, msg) => {
 
 const tmpRoot = mkdtempSync(join(tmpdir(), `sillyspec-selfecho-${process.pid}-`));
 
-// mock server 可控状态：GET 返回平台快照（血统/平台 ts 可控）；POST 按 seq 依次回响应
+// mock server 可控状态：GET 返回平台快照（血统/平台 ts/推送者可控）；POST 按 seq 依次回响应
 let platformLin = null;      // 平台快照 changes[0].last_local_modified_ts（血统标记）
 let platformPushedAt = null; // 平台 last_pushed_at
+let platformPusher;          // 平台 last_pusher（ql-20260914 第二批：undefined=老服务端不回传）
 let postResponses = [];      // POST 响应序列：{ status: 200 } | { status: 409 }（409 携带平台态）
 const server = http.createServer((req, res) => {
   const payload = (name, pushedAt, lin) => ({
@@ -46,17 +50,21 @@ const server = http.createServer((req, res) => {
     const m = req.url.match(/\/api\/changes\/([^/]+)\/progress/);
     const name = m ? decodeURIComponent(m[1]) : 'unknown';
     if (m && req.method === 'GET') {
+      const resp = { ...payload(name, platformPushedAt, platformLin) };
+      if (platformPusher !== undefined) resp.last_pusher = platformPusher; // 未设=老服务端不回传
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(payload(name, platformPushedAt, platformLin)));
+      res.end(JSON.stringify(resp));
     } else if (m && req.method === 'POST') {
       const next = postResponses.shift() || { status: 200 };
       if (next.status === 409) {
-        res.writeHead(409, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
+        const resp = {
           conflict: true,
           platform_progress: payload(name, platformPushedAt, platformLin),
           last_pushed_at: platformPushedAt,
-        }));
+        };
+        if (platformPusher !== undefined) resp.last_pusher = platformPusher;
+        res.writeHead(409, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(resp));
       } else {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ ok: true }));
@@ -81,12 +89,13 @@ const getBase = (cwd, name) =>
   ).get(name).last_synced_platform_ts;
 const conflictPathOf = (cwd, name) => join(cwd, '.sillyspec', '.runtime', `sync-conflict-${name}.json`);
 
-const setupCwd = (sub) => {
+const setupCwd = (sub, opts = {}) => {
   const cwd = join(tmpRoot, sub, 'proj');
   mkdirSync(join(cwd, '.sillyspec', 'changes', 'se-change'), { recursive: true });
   makePM(cwd).init(cwd);
   makePM(cwd).initChange(cwd, 'se-change');
-  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), `platform:\n  url: ${mockUrl}\n  token: tok\n`, 'utf8');
+  // opts.user：local.yaml platform.user（身份用例注入确定性推送者，与发送侧 X-SillySpec-User 同源）
+  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), `platform:\n  url: ${mockUrl}\n  token: tok\n` + (opts.user ? `  user: ${opts.user}\n` : ''), 'utf8');
   return cwd;
 };
 
@@ -221,6 +230,69 @@ console.log('\n--- 7. 冲突文件过期自清 ---');
   const r2 = await new SyncManager(cwd2).sync('se-change');
   assert(r2.synced === 0 && r2.conflict === true && r2.suppressed === true, '未追平：维持抑制（suppressed）');
   assert(existsSync(conflictPathOf(cwd2, 'se-change')), '未追平：冲突文件保留');
+}
+
+// ─────────────────────────────────────────
+// 8. 身份优先归属：last_pusher==本人 → 自愈（下界放开）
+// ─────────────────────────────────────────
+console.log('\n--- 8. 身份匹配自愈（下界放开） ---');
+{
+  // 8a. pull：血统低于 base（窗口下界外，第一批必冲突）+ pusher==本人 → 自愈
+  const cwd = setupCwd('ident-me-pull', { user: 'me' });
+  setLocalTs(cwd, 'se-change', '2026-08-10T03:00:00.000Z', '2026-08-10T02:00:00.000Z');
+  platformLin = '2026-08-10T01:00:00.000Z'; // < base：窗口回退会判外来
+  platformPushedAt = '2026-08-10T04:00:00.000Z';
+  platformPusher = 'me';
+
+  const r = await new SyncManager(cwd).pull('se-change');
+  assert(r.ok === true && r.conflict === false && r.imported === false, '身份匹配：pull 自愈（血统低于 base 也放行）');
+  assert(!existsSync(conflictPathOf(cwd, 'se-change')), '身份匹配：不落冲突文件');
+  assert(getBase(cwd, 'se-change') === '2026-08-10T04:00:00.000Z', `身份匹配：base 推进（实际 ${getBase(cwd, 'se-change')}）`);
+
+  // 8b. push 409：pusher==本人 + 血统在窗口内 → 推进 base 自动重推成功
+  const cwd2 = setupCwd('ident-me-push', { user: 'me' });
+  setLocalTs(cwd2, 'se-change', '2026-08-10T03:00:00.000Z', '2026-08-10T02:00:00.000Z');
+  platformLin = '2026-08-10T02:30:00.000Z';
+  platformPushedAt = '2026-08-10T04:00:00.000Z';
+  platformPusher = 'me';
+  postResponses = [{ status: 409 }, { status: 200 }];
+
+  const r2 = await new SyncManager(cwd2).sync('se-change');
+  assert(r2.synced === 1 && !r2.conflict, `身份匹配 409：重推成功（实际 synced=${r2.synced}）`);
+  assert(!existsSync(conflictPathOf(cwd2, 'se-change')), '身份匹配 409：不落冲突文件');
+
+  platformPusher = undefined; // 复位（后续用例回老服务端形态）
+}
+
+// ─────────────────────────────────────────
+// 9. 身份否决（盲区关闭回归）：last_pusher≠本人 + 血统在窗口内 → 真冲突
+// ─────────────────────────────────────────
+console.log('\n--- 9. 身份否决真冲突 ---');
+{
+  // 9a. pull：他机慢钟把血统落进窗口（第一批会误判自回声）+ pusher≠本人 → 真冲突
+  const cwd = setupCwd('ident-other-pull', { user: 'me' });
+  setLocalTs(cwd, 'se-change', '2026-08-10T03:00:00.000Z', '2026-08-10T02:00:00.000Z');
+  platformLin = '2026-08-10T02:30:00.000Z'; // 窗口内（血统回退会判自回声）
+  platformPushedAt = '2026-08-10T04:00:00.000Z';
+  platformPusher = 'someone-else';
+
+  const r = await new SyncManager(cwd).pull('se-change');
+  assert(r.ok === false && r.conflict === true && r.imported === false, '身份否决：pull 真冲突（血统窗口内也不放行）');
+  assert(existsSync(conflictPathOf(cwd, 'se-change')), '身份否决：冲突文件落盘');
+
+  // 9b. push 409：pusher≠本人 → 维持冲突文件
+  const cwd2 = setupCwd('ident-other-push', { user: 'me' });
+  setLocalTs(cwd2, 'se-change', '2026-08-10T03:00:00.000Z', '2026-08-10T02:00:00.000Z');
+  platformLin = '2026-08-10T02:30:00.000Z';
+  platformPushedAt = '2026-08-10T04:00:00.000Z';
+  platformPusher = 'someone-else';
+  postResponses = [{ status: 409 }, { status: 409 }];
+
+  const r2 = await new SyncManager(cwd2).sync('se-change');
+  assert(r2.synced === 0 && r2.conflict === true, '身份否决：push 409 真冲突');
+  assert(existsSync(conflictPathOf(cwd2, 'se-change')), '身份否决：push 409 冲突文件落盘');
+
+  platformPusher = undefined;
 }
 
 // 清理

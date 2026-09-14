@@ -1,0 +1,405 @@
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index b96358e..866f43f 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -66,11 +66,11 @@ mcp:
+ | `connect` | GET | `/api/health` | ping 验活平台可达 | `sync.js:263` |
+ | `connect` | POST | `/api/workspaces/resolve-by-root-path` | 用 user 级 token（shk_live_/JWT）+ 本地 `root_path` 换发 `shpsync_` workspace-scoped token | `sync.js:461` |
+ | `sync` | POST | `/api/changes/{name}/progress` | **推六表进度 JSON**（serializeForSync）；元字段走 header：`Authorization`/`X-SillySpec-User`/`X-SillySpec-Base-Ts`(乐观锁)/`X-SillySpec-Pushed-At`；**409** = base_ts 冲突 → 写 `.runtime/sync-conflict-<change>.json` | `sync.js:460` |
+-| `syncDocuments` | POST | `/api/changes/{name}/documents` | 推四件套（proposal/design/requirements/tasks.md）全量同步。**⚠️ 后端未实现（404，2026-08-14 实测）**——CLI 预留契约（`_submitApproval` 内 TBD-hub-api 注释），best-effort warn 静默失败 | `sync.js:1051` |
++| `syncDocuments` | POST | `/api/changes/{name}/documents` | 推四件套（proposal/design/requirements/tasks.md）全量同步。**⚠️ 后端未实现（404，2026-08-14 实测）**——CLI 预留契约（`_submitApproval` 内 TBD-hub-api 注释），best-effort warn 静默失败 | `sync.js:1058` |
+ | `checkApproval` | GET | `/api/changes/{name}/approval` | 读审批状态 `pending/approved/rejected`，回写本地 approvals 表 | `sync.js:36` |
+-| `pullList` | GET | `/api/changes` | 轻量 change 列表（name/stage/last_pushed_at），CLI 比对本地决定哪些需更新 | `sync.js:1352` |
++| `pullList` | GET | `/api/changes` | 轻量 change 列表（name/stage/last_pushed_at），CLI 比对本地决定哪些需更新 | `sync.js:1387` |
+ | `pull` | GET | `/api/changes/{name}/progress` | 拉平台权威 JSON → import 重建本地 DB 行；本地脏且平台更新 → 冲突写文件 | `sync.js:801` |
+-| `approve`/`reject` | POST | `/api/changes/{name}/approval` | 提交审批决定；**非 best-effort** —— 失败置 `process.exitCode=1`（`sync.js:2171` `_submitApproval`，D-006@v1「显式用户动作失败必须可见」）。**⚠️ 后端未实现（405，只有 GET，2026-08-14 实测）**——CLI 预留契约（TBD-hub-api 注释在 `_submitApproval` 内），当前 `platform approve` 必失败 | `sync.js:2171` |
++| `approve`/`reject` | POST | `/api/changes/{name}/approval` | 提交审批决定；**非 best-effort** —— 失败置 `process.exitCode=1`（`sync.js:2215` `_submitApproval`，D-006@v1「显式用户动作失败必须可见」）。**⚠️ 后端未实现（405，只有 GET，2026-08-14 实测）**——CLI 预留契约（TBD-hub-api 注释在 `_submitApproval` 内），当前 `platform approve` 必失败 | `sync.js:2215` |
+ | `resolve` | —（本地） | 读 sync-conflict 文件 | 三选一（keep-local/take-platform/abort），不发网络 | `sync.js:925` |
+ 
+ ### CLI 便捷封装（`sync.js:886-925`）
+@@ -134,8 +134,8 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ | `platform sync-docs`（手动命令，**唯一触发点**） | A | POST `…/documents` 推四件套全量；run 流程**不**自动推文档（sync.js:30 头注释称由 run 流程触发，已过时） | sync.js:439；index.js:1275 |
+ | `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:2322；shared.js:888 |
+ | **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2322/1855；shared.js:912 |
+-| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:3312；sync.js:1352/986 |
+-| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:3264；sync.js:2045 |
++| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:3312；sync.js:1387/986 |
++| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:3264；sync.js:2089 |
+ | `platform resolve --keep-local/--take-platform/--abort` | 本地 | 读 sync-conflict 三选一，不网络 | sync.js:746 |
+ | `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:3078/2847；probe.js:133 |
+ | **execute Wave prompt 注入** | B | `getDispatchMode()` **同步三态判定**（读 MCP 配置 + 路径A 探测缓存，不发网络）：`sillyhub` → 注入完整派发指令（`{available:true}`）；`local-fallback`（配置但路径A 未落地）→ 短提示走 Local；`local` → 不注入 | execute.js:594/1058-1070 |
+diff --git a/docs/sillyspec/sillyhub-progress-sync-contract.md b/docs/sillyspec/sillyhub-progress-sync-contract.md
+index 067f326..8d1c2ba 100644
+--- a/docs/sillyspec/sillyhub-progress-sync-contract.md
++++ b/docs/sillyspec/sillyhub-progress-sync-contract.md
+@@ -82,35 +82,40 @@ X-SillySpec-Pushed-At: 2026-08-10T14:30:00.000Z  # 推送时刻（客户端时
+ 
+ ### 4.2 base_ts 冲突检测算法（sillyhub 必须实现）
+ 
+-平台每 change 需持久化三项：`latest_progress`（最新 JSON）+ `last_pushed_at`（上次接受的 Pushed-At）+ `last_pusher`（上次 User）。POST 处理逻辑：
++平台每 change 需持久化三项：`latest_progress`（最新 JSON）+ `last_pushed_at`（上次接受的时间戳）+ `last_pusher`（上次 User）。POST 处理逻辑：
++
++**服务器权威时钟（ql-20260914-006-e395 起）**：`last_pushed_at` 存**服务器时钟**（UTC ISO 毫秒 Z，与 §7 字典序同构），不再存客户端 `X-SillySpec-Pushed-At` 原值——乐观锁与客户端「平台更新」判定统一到单一时钟，跨机客户端时钟偏差不再污染冲突检测。客户端 header 仍必发（老后端兼容），新后端只读不采信。
+ 
+ ```
+ baseTs   = header['X-SillySpec-Base-Ts']    # 可能为 null/缺失
+-pushedAt = header['X-SillySpec-Pushed-At']
+ user     = header['X-SillySpec-User']
++srvNow   = 服务器时钟 ISO 毫秒 Z              # ql-20260914：权威时间戳
+ 
+ if baseTs 为空 or 缺失:
+     # 首次同步 / 客户端无基准 → 无条件接受
+     存 latest_progress = body
+-    存 last_pushed_at  = pushedAt
++    存 last_pushed_at  = srvNow
+     存 last_pusher     = user
+-    return 200
++    return 200 { ok: true, last_pushed_at: srvNow }
+ 
+ stored = 该 change 已存的 last_pushed_at
+ if stored 存在 AND stored > baseTs:    # 字符串字典序比较（ISO 8601 UTC，见 §7）
+     # base_ts 过期：别的用户在我之后推过 → 冲突
+-    return 409 { conflict:true, platform_progress: latest_progress, last_pushed_at: stored }
++    return 409 { conflict:true, platform_progress: latest_progress,
++                 last_pushed_at: stored, last_pusher: 行内 last_pusher }
+ 
+ # base_ts 有效 → 接受
+ 存 latest_progress = body
+-存 last_pushed_at  = pushedAt
++存 last_pushed_at  = srvNow
+ 存 last_pusher     = user
+-return 200
++return 200 { ok: true, last_pushed_at: srvNow }
+ ```
+ 
++> **200 ack 必须回传 `last_pushed_at`（服务器钟）**：客户端回填 base_ts 必须与库中存储值同钟，否则后续推送必假 409（客户端读不到才回退自己的 pushedAt，过渡期单机时钟自洽）。**409 回传 `last_pusher`**：客户端身份归属用——pusher≠本人 ⇒ 一律真冲突（堵他机慢钟伪装进血统窗口的盲区）。
++
+ ### 4.3 成功响应（200）
+ 
+-任意 2xx 即可，body 客户端不读（可空）。客户端据此更新本地 `platform_last_sync`。
++任意 2xx 即可（老客户端不读 body）；新客户端读 `last_pushed_at`（服务器权威钟，见 §4.2）回填 base_ts。客户端据此更新本地 `platform_last_sync`。
+ 
+ ### 4.4 冲突响应（409）⭐
+ 
+@@ -118,7 +123,8 @@ return 200
+ {
+   "conflict": true,
+   "platform_progress": { /* 平台当前 latest_progress（裸六表） */ },
+-  "last_pushed_at": "2026-08-10T13:45:00.000Z"
++  "last_pushed_at": "2026-08-10T13:45:00.000Z",
++  "last_pusher": "zhangsan"
+ }
+ ```
+ 
+@@ -157,18 +163,19 @@ Authorization: Bearer <token>
+ **响应**（客户端兼容两种形态）：
+ 
+ ```json
+-// 形态 A：裸六表 + 顶层 last_pushed_at
++// 形态 A：裸六表 + 顶层 last_pushed_at / last_pusher（ql-20260914 起后两者必回传）
+ {
+   "project": {...}, "changes": [...], "stages": [...], "steps": [...],
+   "batch_progress": [...], "approvals": [...],
+-  "last_pushed_at": "2026-08-10T13:45:00.000Z"
++  "last_pushed_at": "2026-08-10T13:45:00.000Z",
++  "last_pusher": "zhangsan"
+ }
+ 
+ // 形态 B：包裹
+-{ "progress": { /* 裸六表 */ }, "last_pushed_at": "..." }
++{ "progress": { /* 裸六表 */ }, "last_pushed_at": "...", "last_pusher": "..." }
+ ```
+ 
+-> **用途**：pull 第二级，客户端拿到后 `import()` 重建本地 DB 行。`last_pushed_at` 用于本地脏度冲突检测（pull 路径）。
++> **用途**：pull 第二级，客户端拿到后 `import()` 重建本地 DB 行。`last_pushed_at` 用于本地脏度冲突检测（pull 路径）；`last_pusher` 用于身份归属（pusher≠本人 ⇒ 真冲突，见 §4.2）。
+ 
+ ## 7. 时间戳比对规则（必须对齐）
+ 
+diff --git a/src/sync.js b/src/sync.js
+index a3c2212..b4a7921 100644
+--- a/src/sync.js
++++ b/src/sync.js
+@@ -831,6 +831,9 @@ export class SyncManager {
+       // 平台 409 响应 { conflict:true, platform_progress, last_pushed_at }，platform_progress 即平台最新 progress JSON
+       const platformProgress = res.body && res.body.platform_progress ? res.body.platform_progress : res.body;
+       const platformLastPushedAt = (res.body && res.body.last_pushed_at) || null;
++      // 身份归属（ql-20260914 第二批）：服务端 409 body 回传平台行既有 last_pusher——
++      // 与本地 pushUser 同口径比对（platform.user || resolvePlatformUser，与发送侧一致）
++      const platformLastPusher = (res.body && res.body.last_pusher) || null;
+ 
+       // 自竞态自愈：fresh 重读本机 DB base_ts，若已被并发进程回填到 ≥ 平台 409 回执 ts，
+       // 说明赢者是本机自己人——刷新 base_ts 重试一次即收敛，不落冲突文件（外来推送不可能
+@@ -860,13 +863,14 @@ export class SyncManager {
+         }
+       } catch { /* 比对失败维持原判（fail-closed 到真冲突分支） */ }
+ 
+-      // ── 自回声血统归属（坑 sync-self-echo-false-conflict，2026-09-14 multi-agent-platform
+-      // 实证 6 个假冲突全为此形）：平台快照自带 changes[0].last_local_modified_ts——推送方
+-      // 序列化时的本地脏度血统标记。若它落在本地 [base_ts, last_local_modified_ts] 区间内，
+-      // 说明平台这份「更新」是本库自己推过的状态（并发推送的乱序/失败回填让 base 没跟上，
+-      // 回声窗里自家回执被当成他端更新），不是外来分歧——推进 base_ts 到平台 ts 后重试
+-      // 推送即收敛，不落冲突文件。区间外（平台持有本库从未有过的更新血统）维持原冲突
+-      // 路径：本地永不覆盖血统比自己新的平台状态，无误放行。
++      // ── 自回声归属（坑 sync-self-echo-false-conflict，2026-09-14 multi-agent-platform
++      // 实证 6 个假冲突全为此形；第二批升级身份优先）：平台快照自带 changes[0].
++      // last_local_modified_ts（推送方序列化时的本地脏度血统标记）。归属判定走
++      // _isSelfEchoAttribution——服务端回传 last_pusher 时身份优先（≠本人一律真冲突，
++      // ==本人仅保血统上界），身份缺失回退 [base_ts, local_modified] 双界窗口（窗口内
++      // = 本机自推过的状态：并发推送乱序/失败回填让 base 没跟上，自家回执被当他端
++      // 更新）。判为自回声 ⇒ 推进 base_ts 到平台 ts 后重试推送即收敛，不落冲突文件；
++      // 判为外来 ⇒ 维持原冲突路径：本地永不覆盖血统比自己新的平台状态。
+       if (!fromResolve && platformProgress && platformProgress.changes && platformProgress.changes[0]
+         && platformProgress.changes[0].last_local_modified_ts) {
+         const platLin = platformProgress.changes[0].last_local_modified_ts;
+@@ -878,16 +882,19 @@ export class SyncManager {
+           ).get(changeName);
+           const localMod = row && row.last_local_modified_ts;
+           const baseNow = row && row.last_synced_platform_ts;
+-          if (localMod && baseNow && platLin >= baseNow && platLin <= localMod) {
++          if (this._isSelfEchoAttribution({
++            platformPusher: platformLastPusher, myPusher: pushUser,
++            platLin, baseTs: baseNow, localModified: localMod,
++          })) {
+             const healTs = platformLastPushedAt || pushedAt;
+             pm._ensureDB(this.cwd).getDb().prepare(
+               'UPDATE changes SET last_synced_platform_ts = MAX(?, COALESCE(last_synced_platform_ts, ?)) WHERE name = ?'
+             ).run(healTs, healTs, changeName);
+-            console.warn(`⚠️ [sync] push 409 自回声血统判定：平台 ts=${platformLastPushedAt} 为本机自推回声（血统 ${platLin} ∈ [${baseNow}, ${localMod}]），base_ts 已推进到 ${healTs}，自动重推`);
++            console.warn(`⚠️ [sync] push 409 自回声判定：平台 ts=${platformLastPushedAt} 为本机自推回声（血统 ${platLin}，推送者 ${platformLastPusher || '未回传·窗口判定'}），base_ts 已推进到 ${healTs}，自动重推`);
+             if (attempt < MAX_PUSH_ATTEMPTS) continue;
+             // 重试额度耗尽（attempt=2 仍进此分支，理论少见）：不落冲突文件——base 已推进，
+             // 下次常规同步按新 base 直接推送收敛
+-            return { synced: 0, errors: [], conflict: false, selfHealed: true, reason: 'push 409 自回声血统判定：base_ts 已推进，重试额度耗尽，下次常规同步收敛' };
++            return { synced: 0, errors: [], conflict: false, selfHealed: true, reason: 'push 409 自回声判定：base_ts 已推进，重试额度耗尽，下次常规同步收敛' };
+           }
+         } catch { /* 归属判定失败维持原判（fail-closed 到真冲突分支） */ }
+       }
+@@ -1247,6 +1254,9 @@ export class SyncManager {
+         'last_active', 'last_synced_platform_ts', 'last_local_modified_ts',
+         'started_at', 'completed_at', 'pushed_at', 'last_pushed_at', 'created_at',
+         'deps_checked_at', 'checked_at', 'waited_at', 'completedat',
++        // last_pusher：服务端 GET 顶层回传的推送者元字段（ql-20260914 第二批）——与
++        // last_pushed_at 同理是同步元数据非六表内容，不忽略会让内容一致自愈恒 false。
++        'last_pusher',
+       ]);
+       const strip = (v) => {
+         if (Array.isArray(v)) return v.map(strip);
+@@ -1269,6 +1279,31 @@ export class SyncManager {
+     } catch { return false }
+   }
+ 
++  /**
++   * 自回声归属判定（坑 sync-self-echo-false-conflict 身份加固，2026-09-14 第二批）。
++   *
++   * 身份优先——服务端回传 last_pusher（409 body / GET 顶层，服务端 ql-20260914-006-e395
++   * 起；last_pushed_at 亦改存服务器权威钟）且本机 pushUser 可解析时：
++   * - pusher ≠ 本人 ⇒ 一律非自回声（外来否决）——堵跨机时钟偏差把他机更新伪装进
++   *   [base, local_modified] 血统窗口的盲区（慢钟他机的血统可落窗口内，但身份对不上）；
++   * - pusher == 本人 ⇒ 只保血统上界 platLin ≤ local_modified（永不覆盖血统比自己新的
++   *   平台状态——含本人另一台机器的新进度），下界放开（身份已证自家推送，老于 base
++   *   的快照也只是自家旧态，重推无损）。
++   * 任一侧身份缺失（老服务端不回传 / 本地 user 解析不出）⇒ 回退第一批双界窗口
++   * [baseTs, localModified]（纯时间血统，已是当时最优）。platLin 缺失一律 false
++   * （fail-closed：无血统不判自回声）。
++   * @param {{platformPusher?: string|null, myPusher?: string|null, platLin?: string|null, baseTs?: string|null, localModified?: string|null}} a
++   * @returns {boolean} true=判为本机自推回声（可推进 base_ts 重推本地）
++   */
++  _isSelfEchoAttribution({ platformPusher, myPusher, platLin, baseTs, localModified } = {}) {
++    if (!platLin || !localModified) return false;
++    if (platformPusher != null && myPusher != null) {
++      if (platformPusher !== myPusher) return false; // 身份否决：外来更新
++      return platLin <= localModified; // 本人推送：仅保上界
++    }
++    return !!(baseTs && platLin >= baseTs && platLin <= localModified); // 窗口回退
++  }
++
+   _writeConflictFile(changeName, info = {}) {
+     const specDir = safePlatformSpecDir(this.cwd);
+     if (!specDir) return null;
+@@ -1414,6 +1449,10 @@ export class SyncManager {
+     // 平台响应：serializeForSync 六表 + 顶层 last_pushed_at（兼容 { progress: {...} } 包裹）
+     const platformProgress = (result && result.project && result.changes) ? result : (result.progress || result);
+     const platformPushedAt = (result && result.last_pushed_at) || null;
++    // 身份归属（ql-20260914 第二批）：服务端 GET 顶层回传 last_pusher（与发送侧同口径
++    // 的本机用户比对——platform.user || resolvePlatformUser）
++    const platformPusher = (result && result.last_pusher) || null;
++    const myPusher = (platform && platform.user) || resolvePlatformUser(this.cwd) || null;
+ 
+     // 2. 本地脏度比对（非 force 时）：本地脏 AND 平台更新 → 冲突
+     if (!force) {
+@@ -1477,15 +1516,20 @@ export class SyncManager {
+           }
+         } catch { /* 比对失败维持原判（fail-closed 到真冲突分支） */ }
+       }
+-      // ── 自回声血统归属（坑 sync-self-echo-false-conflict，与 push 409 路径同族，2026-09-14）：
+-      // 平台「更新」的血统标记（changes[0].last_local_modified_ts）落在本地 [base, local_modified]
+-      // 区间内 = 本机自推回声（并发推送回填竞态窗口内读到自家回执），非外来分歧。不 import、
+-      // 不落冲突文件，推进 base_ts 到平台 ts——本地内容 ≥ 回声状态（血统不新于本地），下次
+-      // triggerSync 按新 base 正常推送，无损收敛。区间外维持原冲突判定，误放行为零。
++      // ── 自回声归属（坑 sync-self-echo-false-conflict，与 push 409 路径同族，2026-09-14；
++      // 第二批升级身份优先）：平台「更新」的血统标记（changes[0].last_local_modified_ts）
++      // 经 _isSelfEchoAttribution 判定——服务端回传 last_pusher 时身份优先（≠本人一律
++      // 真冲突；==本人仅保血统上界 ≤ local_modified），身份缺失回退 [base, local_modified]
++      // 双界窗口（本机自推回声：并发推送回填竞态窗口内读到自家回执）。判为自回声：
++      // 不 import、不落冲突文件，推进 base_ts 到平台 ts——本地内容 ≥ 回声状态，下次
++      // triggerSync 按新 base 正常推送，无损收敛。判为外来维持原冲突判定。
+       if (localDirty && platformNewer && platformProgress && platformProgress.changes
+         && platformProgress.changes[0] && platformProgress.changes[0].last_local_modified_ts) {
+         const platLin = platformProgress.changes[0].last_local_modified_ts;
+-        if (localLastModified && localLastSynced && platLin >= localLastSynced && platLin <= localLastModified) {
++        if (this._isSelfEchoAttribution({
++          platformPusher: platformPusher, myPusher: myPusher,
++          platLin, baseTs: localLastSynced, localModified: localLastModified,
++        })) {
+           try {
+             const { ProgressManager } = await import('./progress.js');
+             const pm = new ProgressManager({ specDir: safePlatformSpecDir(this.cwd) });
+@@ -1493,8 +1537,8 @@ export class SyncManager {
+               'UPDATE changes SET last_synced_platform_ts = MAX(?, COALESCE(last_synced_platform_ts, ?)) WHERE name = ?'
+             ).run(platformPushedAt, platformPushedAt, changeName);
+           } catch { /* 推进失败不影响判定结论：不 import 不落冲突，下次同步重判 */ }
+-          debugLog(`[sync] pull 自回声血统判定: 平台 ts ${platformPushedAt} 为本机自推回声（血统 ${platLin} ∈ [${localLastSynced}, ${localLastModified}]），base_ts 已推进`);
+-          return { ok: true, imported: false, conflict: false, reason: '平台更新为本机自推回声（血统在本地同步区间内），base_ts 已推进' };
++          debugLog(`[sync] pull 自回声判定: 平台 ts ${platformPushedAt} 为本机自推回声（血统 ${platLin}，推送者 ${platformPusher || '未回传·窗口判定'}），base_ts 已推进`);
++          return { ok: true, imported: false, conflict: false, reason: '平台更新为本机自推回声（归属判定：身份/血统），base_ts 已推进' };
+         }
+       }
+       if (localDirty && platformNewer) {
+diff --git a/test/platform-sync-self-echo.test.mjs b/test/platform-sync-self-echo.test.mjs
+index 2853811..73f5f1e 100644
+--- a/test/platform-sync-self-echo.test.mjs
++++ b/test/platform-sync-self-echo.test.mjs
+@@ -12,6 +12,9 @@
+ // 6. base_ts 单调推进（MAX）：旧回执不覆盖已推进 base；新回执正常推进；null 保旧
+ // 7. 冲突文件过期自清：文件在但 base ≥ 文件记录的平台 ts → 自动清除并恢复推送；
+ //    base < 平台 ts → 维持抑制（fail-closed）
++// 8. 身份优先归属（ql-20260914 第二批）：平台回传 last_pusher==本人 → 血统上界内自愈，
++//    且下界放开（老于 base 的自家旧快照也判自回声）；push 409 同族
++// 9. 身份否决（盲区关闭回归）：last_pusher≠本人（他机慢钟血统落窗口内）→ 一律真冲突
+ //
+ // 隔离：cwd 用 os.tmpdir() + mock http server（响应形态可控：平台血统 / 409 序列）。
+ import { mkdirSync, mkdtempSync, writeFileSync, rmSync, existsSync, readFileSync } from 'fs';
+@@ -29,9 +32,10 @@ const assert = (cond, msg) => {
+ 
+ const tmpRoot = mkdtempSync(join(tmpdir(), `sillyspec-selfecho-${process.pid}-`));
+ 
+-// mock server 可控状态：GET 返回平台快照（血统/平台 ts 可控）；POST 按 seq 依次回响应
++// mock server 可控状态：GET 返回平台快照（血统/平台 ts/推送者可控）；POST 按 seq 依次回响应
+ let platformLin = null;      // 平台快照 changes[0].last_local_modified_ts（血统标记）
+ let platformPushedAt = null; // 平台 last_pushed_at
++let platformPusher;          // 平台 last_pusher（ql-20260914 第二批：undefined=老服务端不回传）
+ let postResponses = [];      // POST 响应序列：{ status: 200 } | { status: 409 }（409 携带平台态）
+ const server = http.createServer((req, res) => {
+   const payload = (name, pushedAt, lin) => ({
+@@ -46,17 +50,21 @@ const server = http.createServer((req, res) => {
+     const m = req.url.match(/\/api\/changes\/([^/]+)\/progress/);
+     const name = m ? decodeURIComponent(m[1]) : 'unknown';
+     if (m && req.method === 'GET') {
++      const resp = { ...payload(name, platformPushedAt, platformLin) };
++      if (platformPusher !== undefined) resp.last_pusher = platformPusher; // 未设=老服务端不回传
+       res.writeHead(200, { 'Content-Type': 'application/json' });
+-      res.end(JSON.stringify(payload(name, platformPushedAt, platformLin)));
++      res.end(JSON.stringify(resp));
+     } else if (m && req.method === 'POST') {
+       const next = postResponses.shift() || { status: 200 };
+       if (next.status === 409) {
+-        res.writeHead(409, { 'Content-Type': 'application/json' });
+-        res.end(JSON.stringify({
++        const resp = {
+           conflict: true,
+           platform_progress: payload(name, platformPushedAt, platformLin),
+           last_pushed_at: platformPushedAt,
+-        }));
++        };
++        if (platformPusher !== undefined) resp.last_pusher = platformPusher;
++        res.writeHead(409, { 'Content-Type': 'application/json' });
++        res.end(JSON.stringify(resp));
+       } else {
+         res.writeHead(200, { 'Content-Type': 'application/json' });
+         res.end(JSON.stringify({ ok: true }));
+@@ -81,12 +89,13 @@ const getBase = (cwd, name) =>
+   ).get(name).last_synced_platform_ts;
+ const conflictPathOf = (cwd, name) => join(cwd, '.sillyspec', '.runtime', `sync-conflict-${name}.json`);
+ 
+-const setupCwd = (sub) => {
++const setupCwd = (sub, opts = {}) => {
+   const cwd = join(tmpRoot, sub, 'proj');
+   mkdirSync(join(cwd, '.sillyspec', 'changes', 'se-change'), { recursive: true });
+   makePM(cwd).init(cwd);
+   makePM(cwd).initChange(cwd, 'se-change');
+-  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), `platform:\n  url: ${mockUrl}\n  token: tok\n`, 'utf8');
++  // opts.user：local.yaml platform.user（身份用例注入确定性推送者，与发送侧 X-SillySpec-User 同源）
++  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), `platform:\n  url: ${mockUrl}\n  token: tok\n` + (opts.user ? `  user: ${opts.user}\n` : ''), 'utf8');
+   return cwd;
+ };
+ 
+@@ -223,6 +232,69 @@ console.log('\n--- 7. 冲突文件过期自清 ---');
+   assert(existsSync(conflictPathOf(cwd2, 'se-change')), '未追平：冲突文件保留');
+ }
+ 
++// ─────────────────────────────────────────
++// 8. 身份优先归属：last_pusher==本人 → 自愈（下界放开）
++// ─────────────────────────────────────────
++console.log('\n--- 8. 身份匹配自愈（下界放开） ---');
++{
++  // 8a. pull：血统低于 base（窗口下界外，第一批必冲突）+ pusher==本人 → 自愈
++  const cwd = setupCwd('ident-me-pull', { user: 'me' });
++  setLocalTs(cwd, 'se-change', '2026-08-10T03:00:00.000Z', '2026-08-10T02:00:00.000Z');
++  platformLin = '2026-08-10T01:00:00.000Z'; // < base：窗口回退会判外来
++  platformPushedAt = '2026-08-10T04:00:00.000Z';
++  platformPusher = 'me';
++
++  const r = await new SyncManager(cwd).pull('se-change');
++  assert(r.ok === true && r.conflict === false && r.imported === false, '身份匹配：pull 自愈（血统低于 base 也放行）');
++  assert(!existsSync(conflictPathOf(cwd, 'se-change')), '身份匹配：不落冲突文件');
++  assert(getBase(cwd, 'se-change') === '2026-08-10T04:00:00.000Z', `身份匹配：base 推进（实际 ${getBase(cwd, 'se-change')}）`);
++
++  // 8b. push 409：pusher==本人 + 血统在窗口内 → 推进 base 自动重推成功
++  const cwd2 = setupCwd('ident-me-push', { user: 'me' });
++  setLocalTs(cwd2, 'se-change', '2026-08-10T03:00:00.000Z', '2026-08-10T02:00:00.000Z');
++  platformLin = '2026-08-10T02:30:00.000Z';
++  platformPushedAt = '2026-08-10T04:00:00.000Z';
++  platformPusher = 'me';
++  postResponses = [{ status: 409 }, { status: 200 }];
++
++  const r2 = await new SyncManager(cwd2).sync('se-change');
++  assert(r2.synced === 1 && !r2.conflict, `身份匹配 409：重推成功（实际 synced=${r2.synced}）`);
++  assert(!existsSync(conflictPathOf(cwd2, 'se-change')), '身份匹配 409：不落冲突文件');
++
++  platformPusher = undefined; // 复位（后续用例回老服务端形态）
++}
++
++// ─────────────────────────────────────────
++// 9. 身份否决（盲区关闭回归）：last_pusher≠本人 + 血统在窗口内 → 真冲突
++// ─────────────────────────────────────────
++console.log('\n--- 9. 身份否决真冲突 ---');
++{
++  // 9a. pull：他机慢钟把血统落进窗口（第一批会误判自回声）+ pusher≠本人 → 真冲突
++  const cwd = setupCwd('ident-other-pull', { user: 'me' });
++  setLocalTs(cwd, 'se-change', '2026-08-10T03:00:00.000Z', '2026-08-10T02:00:00.000Z');
++  platformLin = '2026-08-10T02:30:00.000Z'; // 窗口内（血统回退会判自回声）
++  platformPushedAt = '2026-08-10T04:00:00.000Z';
++  platformPusher = 'someone-else';
++
++  const r = await new SyncManager(cwd).pull('se-change');
++  assert(r.ok === false && r.conflict === true && r.imported === false, '身份否决：pull 真冲突（血统窗口内也不放行）');
++  assert(existsSync(conflictPathOf(cwd, 'se-change')), '身份否决：冲突文件落盘');
++
++  // 9b. push 409：pusher≠本人 → 维持冲突文件
++  const cwd2 = setupCwd('ident-other-push', { user: 'me' });
++  setLocalTs(cwd2, 'se-change', '2026-08-10T03:00:00.000Z', '2026-08-10T02:00:00.000Z');
++  platformLin = '2026-08-10T02:30:00.000Z';
++  platformPushedAt = '2026-08-10T04:00:00.000Z';
++  platformPusher = 'someone-else';
++  postResponses = [{ status: 409 }, { status: 409 }];
++
++  const r2 = await new SyncManager(cwd2).sync('se-change');
++  assert(r2.synced === 0 && r2.conflict === true, '身份否决：push 409 真冲突');
++  assert(existsSync(conflictPathOf(cwd2, 'se-change')), '身份否决：push 409 冲突文件落盘');
++
++  platformPusher = undefined;
++}
++
+ // 清理
+ await new Promise((r) => server.close(r));
+ try { rmSync(tmpRoot, { recursive: true, force: true }); }
