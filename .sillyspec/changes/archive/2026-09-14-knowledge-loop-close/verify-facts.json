@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 2,
+  "change": "2026-09-14-knowledge-loop-close",
+  "generatedAt": "2026-09-14T13:43:16.946Z",
+  "probes": {
+    "probe1": {
+      "command": "sillyspec verify-probes --change 2026-09-14-knowledge-loop-close",
+      "metrics": {
+        "matches": 2,
+        "skippedFiles": 0,
+        "worktreeHits": 0,
+        "globEntries": 0
+      }
+    },
+    "probe3": {
+      "command": "sillyspec verify-probes --change 2026-09-14-knowledge-loop-close",
+      "metrics": {
+        "tasks": 5,
+        "hasTest": 5
+      }
+    },
+    "probe5": {
+      "command": "sillyspec verify-probes --change 2026-09-14-knowledge-loop-close",
+      "metrics": {
+        "backendEndpoints": 2,
+        "frontendCalls": 0
+      }
+    },
+    "probe6": {
+      "command": "sillyspec verify-probes --change 2026-09-14-knowledge-loop-close",
+      "metrics": {
+        "deletions": 0,
+        "unavailable": false
+      }
+    }
+  },
+  "conclusion": "PASS WITH NOTES",
+  "runtimeEvidence": [
+    {
+      "claim": "主仓全量测试套件通过（权威口径，worktree 内 14 个环境性失败已归因为 worktree-cwd 守卫）",
+      "command": "npm test",
+      "exitCode": 0,
+      "logPath": ".sillyspec/.runtime/verify-logs-knowledge-loop/npm-test.log"
+    },
+    {
+      "claim": "语法/内容规则/module-map 覆盖检查通过",
+      "command": "npm run lint",
+      "exitCode": 0,
+      "logPath": ".sillyspec/.runtime/verify-logs-knowledge-loop/lint.log"
+    },
+    {
+      "claim": "knowledge stats 真实运行出命中矩阵（24 次 classify 命中 + neverHit 死重清单）",
+      "command": "node bin/sillyspec.js knowledge stats --json",
+      "exitCode": 0,
+      "logPath": ".sillyspec/.runtime/verify-logs-knowledge-loop/stats.log"
+    },
+    {
+      "claim": "知识库校验 0 错误（18 条迁移后 INDEX 引用完整）",
+      "command": "node bin/sillyspec.js knowledge validate --json",
+      "exitCode": 0,
+      "logPath": ".sillyspec/.runtime/verify-logs-knowledge-loop/validate.log"
+    },
+    {
+      "claim": "AC-4 存量条目全量迁移——ql 标题行 9 条（--ql 寻址）+ 无标注 9 条（--title 模糊兜底，含验证期新记的 wt-commit 幽灵命令条）全部迁移成功，uncategorized 清零",
+      "command": "node bin/sillyspec.js knowledge classify --ql ql-20260709-002-a7c3 --file known-issues.md 等 18 连发",
+      "exitCode": 0,
+      "logPath": ".sillyspec/.runtime/knowledge-hits.jsonl（18 条 type:classify 审计行）"
+    }
+  ],
+  "factsConsistency": {
+    "checked": [
+      "probe1",
+      "probe3",
+      "probe5",
+      "probe6"
+    ],
+    "verdict": "match",
+    "detail": null
+  }
+}
