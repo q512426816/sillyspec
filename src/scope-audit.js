@@ -398,6 +398,50 @@ function findQuickSessionByQlId(cwd, qlId) {
 }
 
 /**
+ * quick 记录态回放结果构建（共用：guard 清理后 sessionId 反查 + ql-xxx 反查两入口）。
+ * 画像重放（FR-04 / D-008 / task-03）+ 「声明即归属」过滤（quick-ec5fc714）。
+ */
+async function buildQuickRecordResult(rec, requestedName) {
+  let gateProfile = null
+  try {
+    if (rec.record.gateProfile && typeof rec.record.gateProfile === 'object') {
+      gateProfile = rec.record.gateProfile
+    } else {
+      const rowsPaths = rec.record.rows
+        .map(r => (r && typeof r.path === 'string' ? r.path : ''))
+        .filter(Boolean)
+      if (rowsPaths.length > 0) {
+        const thresholds = await resolveReplayGateThresholds(rec.specBase)
+        gateProfile = computeGateProfile(
+          rowsPaths,
+          await loadGateModuleIndex(rec.specBase, rowsPaths),
+          thresholds ? { thresholds } : {},
+        )
+      }
+    }
+  } catch { gateProfile = null }
+  const filteredRows = rec.record.rows.filter(r => r && !isQuickMetadata(r.path || '', []))
+  const filterDropped = rec.record.rows.length - filteredRows.length
+  const viaQl = requestedName !== rec.record.sessionId && QL_ID_RE.test(requestedName)
+  return {
+    mode: 'quick', ok: true, degradedReason: null,
+    baseAnchor: rec.record.baseAnchor || `quick-window:${rec.record.sessionId || requestedName}`,
+    totals: rec.record.totals && typeof rec.record.totals === 'object' && filterDropped === 0
+      ? rec.record.totals
+      : { files: filteredRows.length, ...sumTotals(filteredRows) },
+    rows: filteredRows,
+    excluded: rec.record.excluded && Array.isArray(rec.record.excluded.foreignDeclared)
+      ? rec.record.excluded
+      : { foreignDeclared: [] },
+    frozenPatchPath: rec.patchPath,
+    patchSha256: rec.record.patchSha256 || null,
+    patchStatus: rec.record.patchStatus || null,
+    gateProfile,
+    note: `quick 会话已收尾——记录态（quicklog/patches/${rec.qlId}，${rec.record.savedAt ? String(rec.record.savedAt).replace('T', ' ').slice(0, 19) + ' 落盘' : '--done 时点冻结'}）${viaQl ? `；经 ql-Id 反查（会话 ${rec.record.sessionId}）` : ''}${filterDropped > 0 ? `；回放已剔除 ${filterDropped} 个 quick 元数据/并行变更目录文件（范围视图收紧）` : ''}`,
+  }
+}
+
+/**
  * quick 审计链 module-map 的项目推导（2026-09-14-quick-exit-tiered-gates task-03）：
  * loadQuickModuleIndex（run/shared.js，未 export）的加载路径是
  * <specBase>/docs/<projectName>/modules/_module-map.yaml——scope-audit 侧无 progress 上下文
@@ -1029,21 +1073,26 @@ export async function computeChangeScopeAudit({ cwd, specBase, changeName, platf
     if (!cwd || !changeName) {
       return { ...empty, degradedReason: '参数缺失：cwd 与 changeName 必填' }
     }
+    // ql-xxx 反查（「为什么不直接用 ql-xxx 查」根治）：patches 记录按 qlId 命名且 json 冗余
+    // sessionId——ql-xxx → quick-xxx 映射在 patches 里持久可查（guard 已清也能出记录态）。
+    // 提升到 quick 判定外层：ql-xxx 不匹配 QUICK_SID_RE，在内部分支永远进不去。
+    if (QL_ID_RE.test(changeName)) {
+      const byQl = findQuickSessionByQlId(cwd, changeName)
+      if (byQl) {
+        const rec = { record: byQl.record, patchPath: byQl.patchPath, qlId: byQl.qlId, specBase: byQl.specBase }
+        return buildQuickRecordResult(rec, changeName)
+      }
+      return {
+        ...empty,
+        mode: 'quick',
+        degradedReason: `quick 条目 ${changeName} 在 quicklog/patches/ 无记录——会话未产生改动、早于记录机制，或 patches 目录已被清理`,
+      }
+    }
     // quick 模式判定（pattern + guard 双条件，与 run/command.js :140/:652 口径一致）
     if (QUICK_SID_RE.test(changeName)) {
       const located = locateQuickSessionGuard(cwd, changeName)
       if (located) {
         return await computeQuickAudit({ cwd, platformOpts, sessionId: changeName, located, collectPatch })
-      }
-      // ql-xxx 反查（「为什么不直接用 ql-xxx 查」根治）：patches 记录按 qlId 命名且 json 冗余
-      // sessionId——ql-xxx → quick-xxx 映射在 patches 里持久可查（guard 已清也能出记录态）。
-      // 命中后同走记录态回放；未命中落原有「会话不存在」。
-      if (QL_ID_RE.test(changeName)) {
-        const byQl = findQuickSessionByQlId(cwd, changeName)
-        if (byQl) {
-          const rec = { record: byQl.record, patchPath: byQl.patchPath, qlId: byQl.qlId, specBase: byQl.specBase }
-          return buildQuickRecordResult(rec, changeName)
-        }
       }
       // guard 已清理（会话收尾）→ quicklog/patches/ 记录态反查（quick-359a48f1）：
       // 命中出冻结记录（行数为 --done 时点真值），patch 可供 --file 切片

@@ -1347,10 +1347,12 @@ task 进行中状态标记：开工/完工落 .runtime/task-progress/，list 标
       }
       // full-flow 变更目录存在性预检（endpoints baseline 先例同款）：post-apply 形态下实际侧三源
       // 对「变更不存在」不敏感（status 成功即 ok=true，会把主仓脏区误当实际侧），靠预检给明确
-      // 错误摘要 exit 1；quick 会话 id 无 changes/ 目录（guard 祖先链定位），不预检。
+      // 错误摘要 exit 1；quick 会话 id 无 changes/ 目录（guard 祖先链定位），不预检；ql-xxx
+      // 条目号同 quick 会话 id（ql-xxx 反查走 quicklog/patches，亦无 changes/ 目录）不预检。
       // 归档形态兼容（quick-8aa52289）：changes/<名> 不在 → 接受 changes/archive/<名>（scope-audit
       // 内部走快照记录态/HEAD 未提交窗口兜底）。
       if (!/^quick-[0-9a-f]{8}$/.test(saChange)
+        && !/^ql-\d{8}-\d{3}-[0-9a-f]{4}$/.test(saChange)
         && !existsSync(join(saSpecBase, 'changes', saChange))
         && !existsSync(join(saSpecBase, 'changes', 'archive', saChange))) {
         console.error(`❌ 变更目录不存在（活跃与归档区均未找到）: ${join(saSpecBase, 'changes', saChange)}（确认 --change 名，或 --spec-dir 指向主仓 .sillyspec）`);

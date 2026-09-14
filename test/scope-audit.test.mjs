@@ -621,6 +621,59 @@ test('A-F01 篡改检测：patch 被改 → getFileDiff 报 sha256 不匹配拒�
   } finally { cleanup(d) }
 })
 
+test('ql-xxx 反查：--change ql-xxx 直出记录态（guard 已清，patches 映射持久可查）', async () => {
+  const d = makeRepo('sa-qlid-')
+  try {
+    mkdirSync(join(d, 'src'), { recursive: true })
+    writeFileSync(join(d, 'src', 'a.js'), 'a1\n')
+    sh(d, ['add', '-A'])
+    sh(d, ['commit', '-q', '-m', 'init'])
+    const specBase = join(d, '.sillyspec')
+    mkdirSync(join(specBase, 'quicklog'), { recursive: true })
+    writeFileSync(join(specBase, 'quicklog', '2026-09.md'), '# QUICKLOG\n')
+    // guard 已清理；patches 记录按 qlId 命名 + json 冗余 sessionId（--done 时点落盘契约）
+    const patchesDir = join(specBase, 'quicklog', 'patches')
+    mkdirSync(patchesDir, { recursive: true })
+    writeFileSync(join(patchesDir, 'ql-20260910-014-6c29.json'), JSON.stringify({
+      mode: 'quick', ok: true, baseAnchor: 'quick-window:quick-a1b2c3d4',
+      totals: { files: 1, additions: 3, deletions: 1 },
+      rows: [{ path: 'src/a.js', declared: true, additions: 3, deletions: 1, kind: 'modified', attribution: 'declared' }],
+      excluded: { foreignDeclared: [] }, qlId: 'ql-20260910-014-6c29', sessionId: 'quick-a1b2c3d4',
+      savedAt: '2026-09-10T09:00:00.000Z',
+    }))
+    writeFileSync(join(patchesDir, 'ql-20260910-014-6c29.patch'),
+      'diff --git a/src/a.js b/src/a.js\n--- a/src/a.js\n+++ b/src/a.js\n@@ -1 +1,3 @@\n a1\n+q1\n+q2\n')
+
+    const r = await computeChangeScopeAudit({ cwd: d, changeName: 'ql-20260910-014-6c29' })
+    assert.equal(r.ok, true, `ql-xxx 反查成功（实际 ${r.degradedReason}）`)
+    assert.equal(r.mode, 'quick')
+    assert.equal(r.rows.length, 1)
+    assert.equal(r.rows[0].additions, 3)
+    assert.ok(r.note && r.note.includes('ql-20260910-014-6c29') && r.note.includes('quick-a1b2c3d4'),
+      `note 点名 ql→quick 反查路径（实际 ${r.note}）`)
+    // --file 经 ql-xxx 也通
+    const fd = await getFileDiff({ cwd: d, changeName: 'ql-20260910-014-6c29', filePath: 'src/a.js' })
+    assert.ok(fd.ok && fd.diff && fd.diff.includes('+q2'), '--file 经 ql-xxx 出冻结切片')
+  } finally { cleanup(d) }
+})
+
+test('ql-xxx 未命中：不存在的 ql-xxx 明确报错（非静默 full-flow）', async () => {
+  const d = makeRepo('sa-qlmiss-')
+  try {
+    mkdirSync(join(d, 'src'), { recursive: true })
+    writeFileSync(join(d, 'src', 'a.js'), 'a1\n')
+    sh(d, ['add', '-A'])
+    sh(d, ['commit', '-q', '-m', 'init'])
+    const specBase = join(d, '.sillyspec')
+    mkdirSync(join(specBase, 'quicklog', 'patches'), { recursive: true })
+
+    const r = await computeChangeScopeAudit({ cwd: d, changeName: 'ql-20260999-999-ffff' })
+    assert.equal(r.ok, false, `未命中 → ok=false（实际 ${r.degradedReason}）`)
+    assert.equal(r.mode, 'quick')
+    assert.ok(r.degradedReason && r.degradedReason.includes('不存在'), `明确报错（实际 ${r.degradedReason}）`)
+  } finally { cleanup(d) }
+})
+
 // ───────────────────────── 组 6：单文件 diff（quick-63776328，getFileDiff） ─────────────────────────
 
 test('getFileDiff：tracked 文件改动 → git 原生 diff 内容（锚点=形态 A meta 锚）', async () => {
