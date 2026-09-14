@@ -128,6 +128,23 @@ function validReview(overrides = {}) {
 
   assert(!validateStageReviewSchema(validReview({ reviewType: 'unknown' })).ok, `reviewType 非法 → fail`)
 
+  // ql-20260915-001 修复③：错误消息带本 stage 期望值（坑 stage-review-type-error-no-expected——
+  // 旧文案只列全部合法值，agent 试错才发现本 stage 要哪个）
+  {
+    const bad = validateStageReviewSchema(validReview({ reviewType: 'unknown' }), 'execute')
+    assert(!bad.ok, `reviewType 非法（带 stage）→ fail`)
+    assert(bad.errors.some(e => e.includes('本 stage=execute 期望 "acceptance"')),
+      `错误消息含本 stage 期望 reviewType（实际：${bad.errors.join(' | ')}）`)
+    // 不带 stage：文案与旧版一致（向后兼容）
+    const noStage = validateStageReviewSchema(validReview({ reviewType: 'unknown' }))
+    assert(noStage.errors.some(e => e.includes('应为 ') && !e.includes('本 stage=')),
+      `不带 stage 的错误文案保持旧形态（实际：${noStage.errors.join(' | ')}）`)
+    // reviewedFiles 缺失类错误同样给本 stage 主文档期望
+    const noFiles = validateStageReviewSchema(validReview({ reviewedFiles: undefined }), 'plan')
+    assert(noFiles.errors.some(e => e.includes('本 stage=plan 期望主文档 plan.md')),
+      `reviewedFiles 缺失错误含本 stage 主文档期望（实际：${noFiles.errors.join(' | ')}）`)
+  }
+
   assert(!validateStageReviewSchema(validReview({ specVerdict: 'maybe' })).ok, `specVerdict 非法 → fail`)
 
   assert(!validateStageReviewSchema(validReview({ qualityVerdict: 'nope' })).ok, `qualityVerdict 非法 → fail`)

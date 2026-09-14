@@ -23,6 +23,7 @@ import { writeAtomicSync } from '../fs-atomic.js'
 import { gitQuiet } from '../git-helper.js'
 import { withFileLock } from '../quicklog.js'
 import { triggerSync, WAIT_MARKER_RE, getStageSteps, formatWaitOptions, resolveRuntimeRoot, getOrCreateMultiRepoContext, resolveChangeDir } from './shared.js'
+import { isExplicitReviewWrite } from '../task-review.js'
 
 // auto 模式 brainstorm 步骤表感知解析（2026-09-08 E2E 实证 bug：--done/--wait 推进主模式 8 步表，
 // 与 runAutoMode getAutoSteps 的 4 步 auto 表双轨互踩——ensureAutoStage 判非 auto 表重种清零，
@@ -977,35 +978,49 @@ function prefetchDiffFileSet(ctx) {
  * changedFiles 非空且 git diff 实测非空。防 allowed_paths 误归属他人 diff 或陈旧 review.json 导致
  * 空任务被自动勾选/批量放行。ctx 缺省时保持现行判定（向后兼容）。
  *
- * @param {{ok?:boolean, review?:{specVerdict?:string, qualityVerdict?:string, reviewerNotes?:string, changedFiles?:string[]}}} r readReview 结果
+ * ql-20260915-001 修复②（坑 review-write-draft-marker-stuck，2026-09-14 用户实证：文档面任务
+ * 反复「草稿 changedFiles 为空，跳过自动勾选」断链）：显式 CLI 写入（writeTaskReview 通道，
+ * writtenBy 锚定，带 agent 供给 verdict）一律按非草稿处理——不受 changedFiles 空/实测 diff 空
+ * 限制（.sillyspec/ 文档面任务归因被滤、纯验证任务零 diff 是合法形态；agent 已用
+ * review write --force --changed-files 显式表态，verdict 即结论）。草稿守卫警告同步改为
+ * 可行动：含 task 名与解锁命令示例，不再只报现象。
+ *
+ * @param {{ok?:boolean, review?:{specVerdict?:string, qualityVerdict?:string, reviewerNotes?:string, changedFiles?:string[], task?:string, writtenBy?:string}}} r readReview 结果
  * @param {boolean} endToEnd 是否端到端/deployment-critical task
  * @param {{gitDir?:string, base?:string, head?:string}|null} [ctx] 实测 diff 上下文；缺省保持现行判定
+ * @param {string} [changeName] 变更名（草稿守卫警告里解锁命令示例用）
  * @returns {boolean}
  */
-export function shouldAutoCheckTask(r, endToEnd, ctx = null) {
+export function shouldAutoCheckTask(r, endToEnd, ctx = null, changeName = '') {
   if (!r?.ok) return false
   const spec = r.review?.specVerdict
   const quality = r.review?.qualityVerdict
   if (spec === 'fail' || quality === 'fail') return false
   if (endToEnd) return spec === 'pass' && quality === 'pass'
 
+  // ql-20260915-001 修复②：显式 CLI 写入（review write 通道）按非草稿处理，直接勾——
+  // verdict 非 fail 已过上面守卫，文档面/纯验证任务的空 changedFiles 不再拦截
+  if (isExplicitReviewWrite(r.review)) return true
+
   // W2 task-04 草稿零 diff 守卫（FR-03）
   // ctx 给定且 review 为自动草稿时，要求 changedFiles 非空且实测 diff 非空
   if (ctx && r.review?.reviewerNotes && r.review.reviewerNotes.includes('auto-generated draft')) {
+    const taskId = r.review.task || 'task-NN'
+    const unlockCmd = `sillyspec review write${changeName ? ` --change ${changeName}` : ' --change <变更名>'} --task ${taskId} --spec pass --quality pass --force --changed-files <文件>`
     const changedFiles = r.review.changedFiles || []
     if (changedFiles.length === 0) {
-      console.warn(`⚠️ 草稿 review changedFiles 为空，跳过自动勾选`)
+      console.warn(`⚠️ 草稿 review changedFiles 为空，跳过自动勾选（task=${taskId}）——解锁：${unlockCmd}（纯验证任务用 --changed-files "" + --evidence "<验证说明>"）`)
       return false
     }
     if (!ctx.gitDir || !ctx.base || !ctx.head) {
-      console.warn(`⚠️ ctx 信息不完整（gitDir=${ctx.gitDir}, base=${ctx.base}, head=${ctx.head}），跳过草稿 diff 校验，保守不勾`)
+      console.warn(`⚠️ ctx 信息不完整（gitDir=${ctx.gitDir}, base=${ctx.base}, head=${ctx.head}），跳过草稿 diff 校验，保守不勾（task=${taskId}）——解锁：${unlockCmd}`)
       return false
     }
     // 预取路径：一次全量 diff 文件集内存归属（autoCheckPlanFromReviews/批量路径已 prefetch）
     if (ctx.diffFileSet) {
       const hit = changedFiles.filter(f => ctx.diffFileSet.has(f))
       if (hit.length === 0) {
-        console.warn(`⚠️ 草稿 review 实测 diff 为空（base=${ctx.base.slice(0, 8)}, head=${ctx.head.slice(0, 8)}, files=${changedFiles.length}），跳过自动勾选`)
+        console.warn(`⚠️ 草稿 review 实测 diff 为空（task=${taskId}, base=${ctx.base.slice(0, 8)}, head=${ctx.head.slice(0, 8)}, files=${changedFiles.length}），跳过自动勾选——解锁：${unlockCmd}`)
         return false
       }
       console.log(`   ✓ 草稿 diff 校验通过（实测 ${hit.length}/${changedFiles.length} 个声明文件有改动）`)
@@ -1016,12 +1031,12 @@ export function shouldAutoCheckTask(r, endToEnd, ctx = null) {
       // 用数组参数避免 shell 拆词，复用 git-helper 安全模式
       const diffResult = gitQuiet(ctx.gitDir, ['diff', '--name-only', `${ctx.base}..${ctx.head}`, '--', ...changedFiles], { trim: true })
       if (!diffResult || diffResult.trim() === '') {
-        console.warn(`⚠️ 草稿 review 实测 diff 为空（base=${ctx.base.slice(0,8)}, head=${ctx.head.slice(0,8)}, files=${changedFiles.length}），跳过自动勾选`)
+        console.warn(`⚠️ 草稿 review 实测 diff 为空（task=${taskId}, base=${ctx.base.slice(0,8)}, head=${ctx.head.slice(0,8)}, files=${changedFiles.length}），跳过自动勾选——解锁：${unlockCmd}`)
         return false
       }
       console.log(`   ✓ 草稿 diff 校验通过（${diffResult.trim().split('\n').length} 个文件有改动）`)
     } catch (e) {
-      console.warn(`⚠️ 草稿 diff 校验失败（${e && e.message ? e.message : e}），保守不勾`)
+      console.warn(`⚠️ 草稿 diff 校验失败（task=${taskId}: ${e && e.message ? e.message : e}），保守不勾——解锁：${unlockCmd}`)
       return false
     }
   }
@@ -1081,7 +1096,7 @@ export async function autoCheckPlanFromReviews({ stageName, changeName, cwd, pla
           && r.review?.qualityVerdict !== 'fail'
         const endToEnd = verdictUsable
           && isEndToEndTaskText(match + ' ' + readTaskCardText(changeDir, taskNum))
-        if (shouldAutoCheckTask(r, endToEnd, ctx)) {
+        if (shouldAutoCheckTask(r, endToEnd, ctx, changeName)) {
           checkedCount++
           return `${p1}x${p2}`   // 勾选
         }
@@ -1177,7 +1192,10 @@ async function detectExecuteBatchFinish({ pm, stageName, changeName, cwd, specBa
       }
 
       // review 存在：判定是否为自动草稿且零 diff
-      if (review?.reviewerNotes && review.reviewerNotes.includes('auto-generated draft')) {
+      // （ql-20260915-001 修复②：显式 CLI 写入（writeTaskReview 通道）按非草稿处理——不阻断
+      // 批量，与勾选层 shouldAutoCheckTask 同口径；agent 已显式给 verdict 的 review 不该因
+      // notes 字面残留 'auto-generated draft' 被当草稿拦截）
+      if (!isExplicitReviewWrite(review) && review?.reviewerNotes && review.reviewerNotes.includes('auto-generated draft')) {
         const changedFiles = review.changedFiles || []
         // 草稿且 changedFiles 为空 → 阻断
         if (changedFiles.length === 0) {

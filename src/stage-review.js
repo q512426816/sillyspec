@@ -200,10 +200,17 @@ export function computeDocHash(filePath) {
  *   - 新增 reviewType（design/plan/proposal/code/acceptance）+ checklist
  *   - 复用 VALID_VERDICTS 三态 + cannot_verify 联动规则（task-review.js:65-69）
  *
+ * ql-20260915-001 修复③（坑 stage-review-type-error-no-expected，2026-09-14 用户实证：写错
+ * reviewType 时报错只列全部合法值不说本 stage 期望什么，试错才发现）：可选 stage 入参——
+ * 提供时 reviewType / reviewedFiles 缺失类错误同时给出本 stage 的期望值（期望 reviewType 取
+ * STAGE_REVIEW_TYPE[stage]、期望主文档取 STAGE_MAIN_DOC[stage]），消错一次到位。不提供时
+ * 报错文案与旧版一致（向后兼容，含 test 直接调用）。
+ *
  * @param {object} review - 解析后的 JSON 对象
+ * @param {string} [stage] - brainstorm|plan|execute（错误文案给期望值用；不影响判定逻辑）
  * @returns {{ ok: boolean, errors: string[] }}
  */
-export function validateStageReviewSchema(review) {
+export function validateStageReviewSchema(review, stage = null) {
   const errors = []
   if (!review || typeof review !== 'object') {
     return { ok: false, errors: ['stage review.json 不是有效 JSON 对象'] }
@@ -214,7 +221,11 @@ export function validateStageReviewSchema(review) {
   }
 
   if (!STAGE_REVIEW_TYPES.includes(review.reviewType)) {
-    errors.push(`reviewType 无效：${review.reviewType}（应为 ${STAGE_REVIEW_TYPES.join('/')}）`)
+    // ql-20260915-001 修复③：合法值之外同时给本 stage 期望——agent 不用从 5 个合法值里试错
+    const expectedType = stage && STAGE_REVIEW_TYPE[stage]
+    errors.push(expectedType
+      ? `reviewType 无效：${review.reviewType}（本 stage=${stage} 期望 "${expectedType}"；合法值 ${STAGE_REVIEW_TYPES.join('/')}）`
+      : `reviewType 无效：${review.reviewType}（应为 ${STAGE_REVIEW_TYPES.join('/')}）`)
   }
 
   if (!VALID_VERDICTS.includes(review.specVerdict)) {
@@ -233,7 +244,11 @@ export function validateStageReviewSchema(review) {
 
   // reviewedFiles 必须是非空数组
   if (!Array.isArray(review.reviewedFiles) || review.reviewedFiles.length === 0) {
-    errors.push('缺少 reviewedFiles 字段（应为被审查文档路径数组，[0] 为主审查对象，docHash 对应它）')
+    // ql-20260915-001 修复③顺手补：同款缺期望值问题——给本 stage 的主审查文档示例
+    const expectedDoc = stage && STAGE_MAIN_DOC[stage]
+    errors.push(expectedDoc
+      ? `缺少 reviewedFiles 字段（应为被审查文档路径数组，[0] 为主审查对象——本 stage=${stage} 期望主文档 ${expectedDoc}（如 changes/<变更名>/${expectedDoc}），docHash 对应它）`
+      : '缺少 reviewedFiles 字段（应为被审查文档路径数组，[0] 为主审查对象，docHash 对应它）')
   }
 
   // docHash 非空
@@ -480,7 +495,8 @@ export function validateStageReview(opts) {
     return { ok: false, errors: [`${stage} review.json 解析失败: ${e.message}`], warnings, review: null }
   }
 
-  const schemaResult = validateStageReviewSchema(parsed)
+  // ql-20260915-001 修复③：透传 stage——schema 错误文案给本 stage 期望值
+  const schemaResult = validateStageReviewSchema(parsed, stage)
   if (!schemaResult.ok) {
     return { ok: false, errors: [`${stage} review.json schema 校验失败 — ${schemaResult.errors.join('; ')}`], warnings, review: parsed }
   }
@@ -700,7 +716,7 @@ export function registerStageReview({ changeName, stage, fromFile, cwd, platform
       reviewerNotes: `${existing.reviewerNotes || ''}\ndocHash refreshed at ${refreshedAt}（主文档改版后机械重算；verdict 结论是否仍适用需人工确认）`.trim(),
     }
     writeAtomicSync(existingPath, JSON.stringify(review, null, 2) + '\n')
-    const schemaRecheck = validateStageReviewSchema(review)
+    const schemaRecheck = validateStageReviewSchema(review, stage)
     if (!schemaRecheck.ok) {
       throw new Error(`register-stage-review: refresh 后 schema 自检失败 — ${schemaRecheck.errors.join('; ')}（原 review 字段异常，先修原文件）`)
     }
@@ -725,7 +741,7 @@ export function registerStageReview({ changeName, stage, fromFile, cwd, platform
     } catch (e) {
       throw new Error(`register-stage-review: --from 文件 JSON 解析失败 ${fromAbs}: ${e.message}`)
     }
-    const schemaResult = validateStageReviewSchema(parsed)
+    const schemaResult = validateStageReviewSchema(parsed, stage)
     if (!schemaResult.ok) {
       throw new Error(`register-stage-review: --from 文件 schema 校验失败 — ${schemaResult.errors.join('; ')}`)
     }
@@ -765,7 +781,7 @@ export function registerStageReview({ changeName, stage, fromFile, cwd, platform
 
   // self-check（fail-closed）：刚写的 review 必过 schema + docHash 真实性。只验 mechanics，
   // 不判 verdict（verdict 是 agent/子代理的审查结论，even fail 也如实落盘，由 Stage Review Gate 裁决）。
-  const schemaRecheck = validateStageReviewSchema(review)
+  const schemaRecheck = validateStageReviewSchema(review, stage)
   if (!schemaRecheck.ok) {
     throw new Error(`register-stage-review: 写入后 schema 自检失败（不应发生）— ${schemaRecheck.errors.join('; ')}`)
   }

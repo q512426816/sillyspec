@@ -336,6 +336,26 @@ export function readReview(reviewPath) {
 }
 
 /**
+ * 判定 review 是否经显式 CLI 命令式写入（`sillyspec review write` → writeTaskReview）。
+ * （ql-20260915-001 修复②，坑 review-write-draft-marker-stuck：execute 期间反复
+ * 「草稿 review changedFiles 为空，跳过自动勾选」，主仓文档面任务自动勾选断链。）
+ *
+ * 判据：reviewProvenanceStamp 落的 writtenBy 以 'writeTaskReview' 开头（含 ':force' 变体）。
+ * 显式写入带 agent 供给的 verdict（非草稿兜底通道），即使 reviewerNotes 字面残留
+ * 'auto-generated draft'（agent 升级草稿时 --notes 引用/复述草稿文案、或 adopt 通道合并
+ * 保留旧 notes 的变体）也一律按非草稿处理——verdict 判定不再受草稿零 diff 守卫限制。
+ *
+ * 无 writtenBy 的存量 review（provenance 机制引入前手写）按非显式处理，走原 notes
+ * 启发式判定（向后兼容，行为不回退）。
+ *
+ * @param {object|null} review readReview 返回的 review 对象
+ * @returns {boolean}
+ */
+export function isExplicitReviewWrite(review) {
+  return typeof review?.writtenBy === 'string' && review.writtenBy.startsWith('writeTaskReview')
+}
+
+/**
  * 校验 plan.md 里所有「已勾选 [x]」task 的 review.json 是否 schema 完整（坑 review-json-field-gap）。
  *
  * Task Review Gate（validateTaskReviews）只在 execute 整阶段完成时跑，单 task --done 不校验 →

@@ -197,7 +197,8 @@ export function persistStageReview({ runtimeRoot, stage, changeName, reviewRunId
     const h = computeDocHash(mainDocPath)
     if (h) review.docHash = h
   }
-  const schema = validateStageReviewSchema(review)
+  // ql-20260915-001 修复③：透传 stage——schema 错误文案给本 stage 期望 reviewType
+  const schema = validateStageReviewSchema(review, stage)
   if (!schema.ok) return { ok: false, errors: schema.errors }
   review.reviewedFiles = Array.isArray(review.reviewedFiles) && review.reviewedFiles.length > 0
     ? review.reviewedFiles

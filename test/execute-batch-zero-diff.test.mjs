@@ -24,6 +24,11 @@ function eq(actual, expected, msg) {
   else console.log(`  ✅ PASS: ${msg}`)
 }
 
+// 布尔断言（ql-20260915-001 修复②用例：警告文案包含性检查）
+function ok(cond, msg) {
+  eq(!!cond, true, msg)
+}
+
 function arrayEq(actual, expected, msg) {
   const actualStr = JSON.stringify(actual)
   const expectedStr = JSON.stringify(expected)
@@ -92,6 +97,74 @@ eq(shouldAutoCheckTask(draftWithFiles, false, ctxIncomplete), false, 'ctx 不完
 console.log('\n--- 真实 review（非草稿）：ctx 给定不受影响（豁免）---')
 eq(shouldAutoCheckTask(realPass, false, ctxValid), true, 'ctx 给定 + 真实 pass → 勾（豁免）')
 eq(shouldAutoCheckTask(realFail, false, ctxValid), false, 'ctx 给定 + fail → 不勾')
+
+// ── ql-20260915-001 修复②（坑 review-write-draft-marker-stuck）──
+// 显式 CLI 写入（writeTaskReview 通道，writtenBy 锚定）一律按非草稿处理：verdict 双 pass 即勾、
+// 不受 changedFiles 空限制；即使 notes 字面残留 'auto-generated draft'（agent 升级草稿时复述文案）
+// 也不回草稿判定。草稿守卫警告改可行动：含 task 名 + 解锁命令示例。
+console.log('\n--- 修复②：显式 review write 通道豁免 + 草稿警告可行动 ---')
+{
+  // 显式写入 + 空 changedFiles（纯验证/文档面任务合法形态）+ notes 残留草稿字样
+  const explicitWriteEmptyFiles = {
+    ok: true,
+    review: {
+      task: 'task-03',
+      specVerdict: 'pass',
+      qualityVerdict: 'pass',
+      reviewerNotes: '复核 auto-generated draft 后升级：文档面任务，改动为模块卡',
+      changedFiles: [],
+      writtenBy: 'writeTaskReview:force#pid12345',
+    },
+  }
+  eq(shouldAutoCheckTask(explicitWriteEmptyFiles, false, ctxValid), true,
+    '修复②：显式 write + 空 changedFiles + notes 残留草稿字样 → 勾（按非草稿处理）')
+
+  // 显式写入 verdict=fail 仍不勾（fail 守卫在草稿判定之前，不受豁免影响）
+  const explicitWriteFail = {
+    ok: true,
+    review: {
+      task: 'task-03',
+      specVerdict: 'fail',
+      qualityVerdict: 'pass',
+      reviewerNotes: 'x',
+      writtenBy: 'writeTaskReview#pid1',
+    },
+  }
+  eq(shouldAutoCheckTask(explicitWriteFail, false, ctxValid), false,
+    '修复②：显式 write + fail → 仍不勾（fail 守卫优先）')
+
+  // 无 writtenBy 的存量 review：行为不变（notes 含草稿字样仍按草稿守卫走）
+  const legacyNotesDraft = {
+    ok: true,
+    review: {
+      task: 'task-04',
+      specVerdict: 'pass',
+      qualityVerdict: 'pass',
+      reviewerNotes: 'auto-generated draft from git diff aaaaaaaa..bbbbbbbb',
+      changedFiles: [],
+    },
+  }
+  eq(shouldAutoCheckTask(legacyNotesDraft, false, ctxValid), false,
+    '修复②：无 writtenBy 存量 review + 草稿 notes 空 changedFiles → 不勾（向后兼容）')
+
+  // 草稿守卫警告可行动：含 task 名 + 解锁命令（截获 console.warn 验证文案）
+  const warns = []
+  const origWarn = console.warn
+  console.warn = (...a) => warns.push(a.join(' '))
+  try {
+    eq(shouldAutoCheckTask({ ok: true, review: {
+      task: 'task-07', specVerdict: 'cannot_verify', qualityVerdict: 'cannot_verify',
+      reviewerNotes: 'auto-generated draft from git diff aaaaaaaa..bbbbbbbb', changedFiles: [],
+    } }, false, ctxValid, '2026-09-14-my-change'), false, '修复②：草稿空 changedFiles → 不勾')
+  } finally {
+    console.warn = origWarn
+  }
+  const warnText = warns.join('\n')
+  ok(warnText.includes('task-07'), `警告含 task 名（实际：${warnText.slice(0, 160)}）`)
+  ok(warnText.includes('--change 2026-09-14-my-change') && warnText.includes('--task task-07')
+      && warnText.includes('--force') && warnText.includes('--changed-files'),
+    `警告含解锁命令示例（review write --change/--task/--spec/--quality/--force/--changed-files）`)
+}
 
 console.log('\n=== 批量层：detectExecuteBatchFinish blockedTasks 守卫 ===\n')
 // 注：detectExecuteBatchFinish 未导出，此处只验证接口定义；实际行为在 CLI 集成测试中覆盖

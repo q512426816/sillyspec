@@ -173,6 +173,115 @@ export function mergeDirtyOverlapThreeWay({ projectRoot, worktreePath, baseHash 
   return { merged, conflicts, stagedOk }
 }
 
+/**
+ * 字节级 CRLF→LF 归一（ql-20260915-001 修复①，mergeMismatchThreeWay 专用）。
+ *
+ * 动机：本仓 core.autocrlf=true（2026-09-15 实测），git checkout 出的 worktree 磁盘内容是
+ * CRLF、blob（git show 取出）是 LF——ours(blob LF) 与 theirs(disk CRLF) 混形喂 merge-file 会
+ * 逐行假冲突（每一行都呈现为两侧各改一次）。三输入统一 LF 域合并，写回后 git add 按
+ * autocrlf 属性归一回 blob 域（磁盘 LF 形态 git status 亦不报幻影改动）。
+ *
+ * 字节级替换（latin1 语义，不经 utf8 解码）保任意非 UTF-8 文本字节不被替换字符污染；含 NUL
+ * （二进制标志）返回 null——二进制不可文本合并，调用方按冲突处理。
+ *
+ * @param {Buffer} buf
+ * @returns {Buffer|null} 归一后内容；二进制返回 null
+ */
+function _toLfBuffer(buf) {
+  if (!buf || buf.length === 0) return buf
+  if (buf.indexOf(0) !== -1) return null // 二进制
+  if (buf.indexOf(Buffer.from('\r\n')) === -1) return buf
+  const out = []
+  for (let i = 0; i < buf.length; i++) {
+    if (buf[i] === 0x0d && i + 1 < buf.length && buf[i + 1] === 0x0a) { out.push(0x0a); i++ }
+    else out.push(buf[i])
+  }
+  return Buffer.from(out)
+}
+
+/**
+ * EXCLUDE-MISMATCH 前置自动三方合并（ql-20260915-001 修复①，坑 apply-archived-mismatch-no-merge：
+ * 2026-09-14 用户实证归档后补 apply 时主仓文件已被并行会话提交推进 → rescue EXCLUDE-MISMATCH
+ * 跳过不落地，被迫手工 cp + 锚点合并）。
+ *
+ * 与 mergeDirtyOverlapThreeWay 同实现形态，base/ours 取源不同：
+ *   - base = apply 锚点（baseHash 形参，调用方传 deliverableBase=baselineCommit||baseHash）blob
+ *   - **ours = 主仓 HEAD blob（已提交推进态，非脏读——mismatch 面主仓无未提交改动，
+ *     调用方已按 pre-stash dirty 集排除，HEAD 即主仓当前态）**
+ *   - theirs = worktree 文件内容（磁盘读，子代理未 commit 的交付）
+ *
+ * clean 合并才写回主仓（两侧增量都保留）+ 批末 git add（chunkPaths 分批）+ 调用方从
+ * changedFiles/hashMismatchFiles 剔除（patch 不再重放，防 staged 内容与 patch 预像互踩）；
+ * conflict / 异常 fail-soft 维持原路径（rescue EXCLUDE-MISMATCH 新文案 / step7 --3way 实测）。
+ * 覆写前备份主仓磁盘原文至 .sillyspec/.runtime/merge-backups/（与脏读版同一惯例）。
+ *
+ * @param {{ projectRoot: string, worktreePath: string, baseHash: string }} ctx
+ * @param {string[]} mismatchFiles mismatch ∩ changedFiles 且主仓无未提交改动的文件（仓库根相对路径）
+ * @returns {{ merged: string[], conflicts: string[], stagedOk: boolean }}
+ */
+export function mergeMismatchThreeWay({ projectRoot, worktreePath, baseHash }, mismatchFiles) {
+  const merged = []
+  const conflicts = []
+  const tmpDir = mkdtempSync(join(tmpdir(), 'sillyspec-3way-m-'))
+  try {
+    for (const f of mismatchFiles) {
+      try {
+        // ours/HEAD 缺失（主干侧删除等 modify/delete 形态）→ git show 抛错 → conflicts（fail-soft，
+        // 删除语义 merge-file 无法表达，交既有出口 --3way/--merge 裁决）
+        const baseRaw = git(projectRoot, ['show', `${baseHash}:${f}`], { encoding: 'buffer', timeout: 15000 })
+        const oursRaw = git(projectRoot, ['show', `HEAD:${f}`], { encoding: 'buffer', timeout: 15000 })
+        const wtRaw = readFileSync(join(worktreePath, f))
+        const baseN = _toLfBuffer(baseRaw)
+        const oursN = _toLfBuffer(oursRaw)
+        const theirsN = _toLfBuffer(wtRaw)
+        if (!baseN || !oursN || !theirsN) { conflicts.push(f); continue } // 二进制 → 原路径
+        const p = (tag) => join(tmpDir, `${tag}-${Math.random().toString(36).slice(2, 8)}`)
+        const baseP = p('base'); const oursP = p('ours'); const theirsP = p('theirs')
+        writeFileSync(baseP, baseN); writeFileSync(oursP, oursN); writeFileSync(theirsP, theirsN)
+        let outBuf, code = 0
+        try {
+          outBuf = git(projectRoot, ['merge-file', '-p', oursP, baseP, theirsP], { encoding: 'buffer', timeout: 15000 })
+        } catch (e) {
+          code = (typeof e.status === 'number') ? e.status : -1
+          outBuf = (e.stdout instanceof Buffer) ? e.stdout : Buffer.alloc(0)
+          if (code < 0) { conflicts.push(f); continue }
+        }
+        if (code === 0) {
+          // 覆写前备份主仓磁盘原文（merge-backups 惯例；ours=HEAD 理论可经 git show 重取，仍留备份保审计）
+          try {
+            const backupDir = join(projectRoot, '.sillyspec', '.runtime', 'merge-backups')
+            mkdirSync(backupDir, { recursive: true })
+            let pre = oursRaw
+            try { pre = readFileSync(join(projectRoot, f)) } catch { /* 磁盘缺文件用 HEAD 原文 */ }
+            writeFileSync(join(backupDir, `${Date.now()}-${f.replace(/[\\/]/g, '__')}`), pre)
+          } catch { /* 备份失败不阻断合并 */ }
+          writeFileSync(join(projectRoot, f), outBuf)
+          merged.push(f)
+          console.log(`🔀 EXCLUDE-MISMATCH 三方合并成功（clean）: ${f}——主仓已提交推进与 worktree 交付均已保留（覆写前原文已备份至 .sillyspec/.runtime/merge-backups/）`)
+        } else {
+          conflicts.push(f)
+        }
+      } catch { conflicts.push(f) }
+    }
+  } finally {
+    try { rmSync(tmpDir, { recursive: true, force: true }) } catch {}
+  }
+  // 批末统一暂存（与 mergeDirtyOverlapThreeWay 同款：safeGit 数组形式 + chunkPaths 分批，
+  // fail-open：add 失败不抛、stagedOk:false 供调用方 warning 提示人工补 add）
+  let stagedOk = true
+  if (merged.length > 0) {
+    for (const batch of chunkPaths(merged)) {
+      const r = safeGit(projectRoot, ['add', '--', ...batch])
+      if (r && r.error) {
+        stagedOk = false
+        console.warn(`⚠️ mismatch merge 写回批末 git add 失败（fail-open：${merged.length} 个合并文件成果保留，但未暂存对 git restore/clean 不免疫，请尽快人工 git add）：${String(r.error).split('\n')[0]}`)
+        break
+      }
+    }
+  }
+  return { merged, conflicts, stagedOk }
+}
+
 export function generateRescueCommands({ changedFiles, dirtyFiles, hashMismatchFiles, deletedFiles = [], worktreePath, projectRoot }) {
   // 集合归一：dirtyFiles 接受 Set 或数组（调用方 step4.5/5a 可能传任一形态），其余统一数组→Set
   const dirtySet = dirtyFiles instanceof Set ? dirtyFiles : new Set(dirtyFiles || []);
@@ -196,7 +305,9 @@ export function generateRescueCommands({ changedFiles, dirtyFiles, hashMismatchF
       continue;
     }
     if (mismatchSet.has(f)) {
-      warnings.push(`跳过 ${f}：EXCLUDE-MISMATCH（主干已提交推进该文件，cp 会回退他人改动；请先 commit main 未提交改动再正常 apply 走 --3way 合并）`);
+      // ql-20260915-001 修复①：文案更新——前置三方合并已尝试过（4.5b），此处剩的是合并冲突面，
+      // 给出两条实际出路（手动锚点合并 / 先 commit 后 --3way），不再误导「正常 apply 走 --3way」即可解
+      warnings.push(`跳过 ${f}：EXCLUDE-MISMATCH（主干已提交推进该文件，已尝试自动三方合并，冲突——手动锚点合并，或先 commit 主仓未提交改动后正常 apply 走 --3way）`);
       excludedCount++;
       continue;
     }
@@ -1190,6 +1301,20 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
     }
   }
 
+  // ── ql-20260915-001 修复①：mismatch 前置合并的 dirty 排除集（4.4 stash 前取样）──
+  // 4.5b 的 EXCLUDE-MISMATCH 前置合并只碰「主仓无未提交改动」的 mismatch 文件——dirty∩mismatch
+  // 交 4.5 脏读合并处理（其 ours=主仓磁盘脏内容，已含已提交推进，语义更全）。排除集必须在
+  // 4.4 --stash-dirty 之前取样：stash 会把脏文件收走，事后取 diff 恒空，会把在途文件误判成
+  // 干净 mismatch 用 ours=HEAD 合并写回（stash 恢复时与合并写回互踩）。checkOnly 只读不合并，
+  // 无 mismatch 时零开销，均不取样。untracked 不可能是 mismatch（不在 HEAD，mainBlob=null
+  // 天然被合并函数的 ours=git show HEAD:f 失败挡住），此处只取 tracked-modified 口径即可。
+  let preStashDirtySet = null
+  if (!checkOnly && (result.hashMismatchFiles || []).length > 0) {
+    preStashDirtySet = new Set(
+      (gitQuiet(projectRoot, ['diff', '--name-only', 'HEAD']) || '').split('\n').filter(Boolean)
+    )
+  }
+
   // --- 4.4 --stash-dirty：主仓在途改动自动 stash（坑 apply-main-dirty-no-first-class， ---
   // 2026-08-24 用户反馈四期①：主仓并行在途改动下默认 / --skip-overlap（全重叠「无可应用子集」）/
   // --merge（git 拒在脏树启动合并）三路死锁，手工 stash→3way→pop 流程未内置。flag 显式 opt-in
@@ -1234,6 +1359,44 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
       return applyByMerge(result, changeName, projectRoot, wm, { keepConflicts: true, specBase: allowSpecBase });
     }
 
+    // --- 4.5b EXCLUDE-MISMATCH 前置三方合并（ql-20260915-001 修复①，坑 apply-archived-mismatch-no-merge，
+    // 2026-09-14 用户实证：归档后补 apply，主仓已被并行会话提交推进 → rescue EXCLUDE-MISMATCH 跳过
+    // 不落地，被迫手工 cp+锚点合并）---
+    // 对 hashMismatch ∩ changedFiles 且主仓无未提交改动（pre-stash dirty 集排除，dirty 面交 4.5
+    // 脏读合并）的文件逐个 merge-file：base=checkpoint（deliverableBase）blob、ours=主仓 HEAD blob、
+    // theirs=worktree 文件。clean → 写回主仓 + 批末 add + mergedMismatchFiles 留痕 + 从
+    // changedFiles/hashMismatchFiles/deletedFiles 剔除（后续 patch 不再重放——staged 合并内容若再进
+    // patch，apply --3way 对 staged≠HEAD 的文件报 does not match index）；conflict/异常 → 留原集走
+    // 既有出口（rescue EXCLUDE-MISMATCH 新文案 / step7 --3way 实测 / --merge 兜底）。
+    // checkOnly（assess 只读）零写盘不试合并；--merge 已在 4.6 早退不达此；位于 4.3 guard 预检
+    // （一切主仓写动作之前）与 Gate1 清单校验之后，越权文件不会被合并落地。
+    if (!checkOnly && (result.hashMismatchFiles || []).length > 0 && worktreePath && worktreePath !== projectRoot) {
+      const mismatchCandidates = result.hashMismatchFiles.filter(f =>
+        changedFiles.includes(f) && !(preStashDirtySet && preStashDirtySet.has(f)))
+      if (mismatchCandidates.length > 0) {
+        try {
+          const m3m = mergeMismatchThreeWay({ projectRoot, worktreePath, baseHash: deliverableBase }, mismatchCandidates)
+          if (m3m.merged.length > 0) {
+            result.mergedMismatchFiles = (result.mergedMismatchFiles || []).concat(m3m.merged)
+            if (m3m.stagedOk === false) {
+              result.warnings = (result.warnings || []).concat([
+                `EXCLUDE-MISMATCH 三方合并 ${m3m.merged.length} 个文件已写回主仓，但批末 git add 暂存失败（未暂存对 git restore / git clean 不免疫）——请尽快人工 git add -- <该批文件> 锁定`
+              ])
+            }
+            result.warnings = (result.warnings || []).concat([
+              `EXCLUDE-MISMATCH 前置三方合并：${m3m.merged.length} 个主干已推进文件 clean 合并已写回并暂存（主仓已提交推进与 worktree 交付均保留，覆写前原文备份于 .sillyspec/.runtime/merge-backups/）`
+            ])
+            const mergedMisSet = new Set(m3m.merged)
+            changedFiles = changedFiles.filter(f => !mergedMisSet.has(f))
+            result.changedFiles = changedFiles
+            result.deletedFiles = deletedFiles.filter(f => !mergedMisSet.has(f))
+            result.hashMismatchFiles = result.hashMismatchFiles.filter(f => !mergedMisSet.has(f))
+          }
+          // m3m.conflicts 面留在 result.hashMismatchFiles 原样（rescue 分类 / step7 --3way 既有路径）
+        } catch { /* 合并链路异常 → mismatch 集原样，走既有出口（fail-soft 不阻断 apply） */ }
+      }
+    }
+
     // --- 4.5 校验：主工作区「未提交」脏文件是否与本次变更重叠（overlap-only 拦截）---
     // 分工：4.5（排除规则下 dirty∩changedFiles）+ 5a（更宽口径的同一交集）挡「未提交」dirty 重叠；
     // 5b 管「已提交」HEAD 分叉（已放宽）。
@@ -1260,10 +1423,14 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
       // hash 必变，若仍比对会永久死锁（须手改 meta.baselineHash）。改判「排除规则下当前是否有未提交 dirty」。
       const hasUncommittedDirty = staged !== '' || unstaged !== '' || untracked !== '';
       if (hasUncommittedDirty) {
+        // ql-20260915-001 修复①：4.5b 已合并写回并暂存的 mismatch 文件不出现在此脏清单——它们
+        // 是本次 apply 自己的产物（非他者无关脏文件），列进「无关未提交文件」警告会误导。
+        // 对 overlapDirty 无影响（合并文件已从 changedFiles 剔除，交集恒空）；集合空时为恒等过滤。
+        const mergedMisSet45 = new Set(result.mergedMismatchFiles || [])
         const dirtyFiles = [...new Set(
           ((gitQuiet(projectRoot, ['diff', '--name-only', 'HEAD']) || '').split('\n').filter(Boolean))
             .concat((gitQuiet(projectRoot, ['ls-files', '--others', '--exclude-standard']) || '').split('\n').filter(Boolean))
-        )].filter(f => !f.startsWith('.sillyspec/') && f !== 'meta.json');
+        )].filter(f => !f.startsWith('.sillyspec/') && f !== 'meta.json' && !mergedMisSet45.has(f));
         const overlapDirty = dirtyFiles.filter(f => changedFiles.includes(f));
         if (overlapDirty.length > 0) {
           // 自动三方合并（坑 apply-dirty-block-no-merge，2026-09-10 驾驭小结第六批③）：先对
@@ -1346,11 +1513,15 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
         } else {
           // 无关脏文件放行（只校验重叠文件）：--3way 若因 autocrlf 报 does not match index 会被
           // step7 catch 回滚（交集空前提下无损，见上注释），stash 后重试即可——不再硬挡 rescue 手动路径
-          result.warnings = (result.warnings || []).concat([
-            `主工作区有 ${dirtyFiles.length} 个与本次 apply 无关的未提交文件，已放行（只校验重叠文件）：` +
-            `${dirtyFiles.slice(0, 5).join(', ')}${dirtyFiles.length > 5 ? ' 等' : ''}` +
-            `——若 apply --3way 因 CRLF/autocrlf 报 does not match index，可 git stash 后重试`
-          ]);
+          // （ql-20260915-001 修复①：dirtyFiles 已剔除本次合并写回面，剔除后为空 = 探针命中的
+          // 全是本 apply 自身 staged 产物——不打「0 个无关文件」的空警告）
+          if (dirtyFiles.length > 0) {
+            result.warnings = (result.warnings || []).concat([
+              `主工作区有 ${dirtyFiles.length} 个与本次 apply 无关的未提交文件，已放行（只校验重叠文件）：` +
+              `${dirtyFiles.slice(0, 5).join(', ')}${dirtyFiles.length > 5 ? ' 等' : ''}` +
+              `——若 apply --3way 因 CRLF/autocrlf 报 does not match index，可 git stash 后重试`
+            ])
+          }
         }
       }
     }
@@ -1476,11 +1647,14 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
         result.ok = true;
         // apply-manifest（task-01 出口③变体）：4.5 三方合并全部消解重叠时，merge 写回面是
         // 本出口唯一落盘面——manifest 仍须覆盖（写回批末 add 已先行，指纹取 staged 态）。
-        if ((result.mergedDirtyFiles || []).length > 0) {
+        // ql-20260915-001 修复①：4.5b mismatch 前置合并同样可能消解全部 changedFiles（本出口
+        // 另一来源），合并面并入 manifest files。
+        const emptyPatchManifestFace = [...(result.mergedDirtyFiles || []), ...(result.mergedMismatchFiles || [])]
+        if (emptyPatchManifestFace.length > 0) {
           try {
             const mf = writeApplyManifest({
               projectRoot, specBase: allowSpecBase, changeName,
-              baseHash: deliverableBase, files: result.mergedDirtyFiles,
+              baseHash: deliverableBase, files: emptyPatchManifestFace,
             });
             if (mf && mf.written) result.applyManifest = mf.file;
           } catch (e) {
@@ -1547,7 +1721,10 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
       // apply 删除的文件 staged/磁盘皆无，函数内自然跳过。fail-open：写失败不阻断 apply
       // （warning 留痕）。已存在则覆盖（重放 apply 以最新为准）。锁内（调用方 withMainRepoLock）。
       try {
-        const manifestFace = [...new Set([...patchFiles, ...(result.mergedDirtyFiles || [])])];
+        // ql-20260915-001 修复①：mergedMismatchFiles（4.5b 前置合并写回面）与 mergedDirtyFiles
+        // 同为 staged 落盘集，一并进 manifest 指纹面与提交复用 pathspec（缺列 = doctor 漂移检测
+        // 盲区 + agent 按 pathspec 提交漏文件）
+        const manifestFace = [...new Set([...patchFiles, ...(result.mergedDirtyFiles || []), ...(result.mergedMismatchFiles || [])])];
         const mf = writeApplyManifest({
           projectRoot, specBase: allowSpecBase, changeName,
           baseHash: deliverableBase, files: manifestFace,
@@ -1564,7 +1741,9 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
       // 会把无关文件扫进暂存需手工剔除。落盘本变更精确 pathspec 供提交直接复用：
       // 文件 + result 字段（CLI 输出可照抄 git add -- … / 长清单用 --pathspec-from-file）。
       try {
-        const commitFiles = [...new Set(patchFiles)].sort().filter(Boolean);
+        // ql-20260915-001 修复①：提交复用 pathspec 补并两个三方合并写回面（均为 staged 落盘、
+        // 属本变更交付——缺列时 agent 按此 pathspec 提交会漏掉合并成果）
+        const commitFiles = [...new Set([...patchFiles, ...(result.mergedDirtyFiles || []), ...(result.mergedMismatchFiles || [])])].sort().filter(Boolean);
         result.commitPathspec = commitFiles;
         const runtimeRoot = join(projectRoot, '.sillyspec', '.runtime');
         mkdirSync(runtimeRoot, { recursive: true });
@@ -2049,10 +2228,11 @@ export function applyByMerge(result, changeName, projectRoot, wm, opts = {}) {
   // apply 成功尾声写 apply-manifest.json（task-01 出口②：applyWorktree 显式 --merge 与
   // ENOBUFS 自动降级两条提前 return 入口共用本成功出口）。merge 已 commit → staged 态 =
   // HEAD = 合并内容，指纹口径（git show :<path> LF 规范态）与 patch 路径同基；files 面 =
-  // changedFiles（落地校验过的交付集）∪ mergedDirtyFiles（ENOBUFS 路径下 4.5 可能已写回），
+  // changedFiles（落地校验过的交付集）∪ mergedDirtyFiles（ENOBUFS 路径下 4.5 可能已写回）
+  // ∪ mergedMismatchFiles（ql-20260915-001 修复①：4.5b 前置合并写回面，同口径并入），
   // merge 删除面 staged/磁盘皆无、函数内自然跳过。fail-open：写失败不阻断 merge（warning 留痕）。
   try {
-    const manifestFace = [...new Set([...(result.changedFiles || []), ...(result.mergedDirtyFiles || [])])];
+    const manifestFace = [...new Set([...(result.changedFiles || []), ...(result.mergedDirtyFiles || []), ...(result.mergedMismatchFiles || [])])];
     const mf = writeApplyManifest({
       projectRoot, specBase, changeName,
       baseHash: meta.baselineCommit || meta.baseHash, files: manifestFace,

@@ -42,6 +42,10 @@ import { archiveDestDirName } from '../stage-contract.js'
 import { collectNumstatByPath } from '../scope-audit.js'
 import { recordFrictionEvent, consumeFrictionHint } from '../friction-tally.js'
 import { resolveSessionIdentity } from '../progress.js'
+// ql-20260915-001 修复④：chunkPaths（argv 分批）供归档窄化 add / minePaths 精确补暂存用。
+// 无环：worktree-apply 静态闭包（worktree/task-review/quicklog 等）不引本文件；既有
+// withMainRepoLock 走动态 import 是归档链防环的历史形态，chunkPaths 纯函数无此约束。
+import { chunkPaths } from '../worktree-apply.js'
 
 /**
  * 清洗项目名：只保留 ASCII 字母/数字/横线/下划线/点，过滤中文和特殊字符。
@@ -398,6 +402,120 @@ export function extractDoneDocTargets(content) {
   return [...targets]
 }
 
+/**
+ * 归档 docs 侧窄化 add 的目标解析：module-impact「更新结果」done 行 token → 仓相对 POSIX 路径
+ * （ql-20260915-001 修复④，坑 archive-git-add-sweeps-parallel-docs：2026-09-14 实证归档自动
+ * git add 用目录级 pathspec .sillyspec/docs/ 把并行会话同目录未提交文件夹带进共享暂存区）。
+ *
+ * 解析规则（与 extractDoneDocTargets 的 token 形态对齐，保守宁漏勿误扫）：
+ *   - `.sillyspec/docs/...` 全路径 token → 相对 cwd 解析，存在才收
+ *   - `modules/<id>.md` 相对写法（module-impact 骨架的规范形态）→ 扫 <specBase>/docs/ 下各
+ *     project 目录的 modules/<id>.md——project 归属不猜单值，多项目同名命中各自收（仍是
+ *     确定性文件级，不回退目录级）
+ *   - 其他形态 / 仓库外（relative 出 ..） / 不存在 → 跳过
+ *
+ * 纯函数（只读 fs），export 供 test 直接 import。
+ * @param {string} cwd 仓库根
+ * @param {string} specBase .sillyspec 绝对路径
+ * @param {string[]} tokens extractDoneDocTargets 产物
+ * @returns {string[]} 仓相对 POSIX 路径（去重）
+ */
+export function resolveArchiveDocAddPaths(cwd, specBase, tokens) {
+  const out = new Set()
+  const pushIfExists = (abs) => {
+    try {
+      if (abs && existsSync(abs)) {
+        const rel = relative(cwd, abs).replace(/\\/g, '/')
+        if (rel && !rel.startsWith('..')) out.add(rel)
+      }
+    } catch { /* 单 token 解析失败跳过（不收即不误 add） */ }
+  }
+  for (const t of (Array.isArray(tokens) ? tokens : [])) {
+    if (!t || typeof t !== 'string') continue
+    const norm = String(t).replace(/\\/g, '/')
+    if (norm.startsWith('.sillyspec/docs/')) {
+      pushIfExists(resolve(cwd, norm))
+      continue
+    }
+    const m = /^modules\/(.+\.md)$/.exec(norm)
+    if (m) {
+      const docsDir = join(specBase, 'docs')
+      if (!existsSync(docsDir)) continue
+      let projEntries
+      try { projEntries = readdirSync(docsDir, { withFileTypes: true }) } catch { continue }
+      for (const proj of projEntries) {
+        if (!proj.isDirectory()) continue
+        pushIfExists(join(docsDir, proj.name, 'modules', m[1]))
+      }
+    }
+  }
+  return [...out]
+}
+
+/**
+ * 归档收尾的窄化 git add（ql-20260915-001 修复④，坑 archive-git-add-sweeps-parallel-docs）。
+ *
+ * changes 侧：本变更归档目录精确 pathspec（closeSingleQuickLinkedChange 的 :1641 先例）——
+ * 目录级 .sillyspec/changes/archive/ 会把并行会话停在 archive/ 下的未提交归档包一并扫进
+ * 共享暂存区。docs 侧：从（已移动到归档目录的）module-impact.md「## 更新结果」done 行提取
+ * 目标文档逐文件 add；提取失败（无表 / 读取异常）回退目录级 add，但前置 warning 列出将被
+ * 扫入的未提交 docs 文件（git status --porcelain -- .sillyspec/docs/ 差集——回退态无本变更
+ * 声明面，差集即全部未提交项），提示 agent 提交时改用精确 pathspec。表在且解析成功（含
+ * 空集 = 无声明文档，docs 面零 add）不回退。幂等：git add 重复执行无有害副作用。
+ *
+ * 独立函数（非内联）+ export 供 test 直接构造双变更目录场景驱动（不依赖 process.exit 的
+ * archiveChangeDirectory 主链）。
+ *
+ * @param {{ cwd: string, specBase: string, destDir: string, destName: string }} opts
+ * @returns {{ docsAdded: string[]|null, fallbackDocs: boolean }} docsAdded=null 表示走了目录级回退
+ */
+export function archiveNarrowedGitAdd({ cwd, specBase, destDir, destName }) {
+  // changes 侧：本变更归档目录精确收窄（quick 轻量归档 closeSingleQuickLinkedChange 同款）
+  safeGit(cwd, ['add', '--', `.sillyspec/changes/archive/${destName}/`])
+
+  // docs 侧：module-impact「更新结果」done 行 → 精确文件集。
+  // 三态（对齐修复④要求）：
+  //   - module-impact.md 无「## 更新结果」段 / 文件缺失 / 读取异常 → docPaths=null → 回退目录级
+  //   - 表在但无 done 行（全 skipped / 只有表头）→ 精确空集 → docs 面零 add（不回退——
+  //     本变更声明了不同步，目录级扫入他者文件才是错）
+  //   - 表在有 done 行 → 逐文件精确 add
+  let docPaths = null
+  try {
+    const impactPath = join(destDir, 'module-impact.md')
+    if (existsSync(impactPath)) {
+      const content = readFileSync(impactPath, 'utf8')
+      // 段存在性判定与 extractDoneDocTargets/extractPendingDocSyncRows 同一标题正则口径
+      if (/^#{2,3}\s*更新结果\s*$/m.test(content.replace(/\r\n/g, '\n'))) {
+        docPaths = resolveArchiveDocAddPaths(cwd, specBase, extractDoneDocTargets(content))
+      }
+    }
+  } catch (e) {
+    docPaths = null
+    console.warn(`⚠️ 归档 docs 精确 add 目标提取失败（${e && e.message ? e.message : e}）——回退目录级 .sillyspec/docs/ add`)
+  }
+  if (Array.isArray(docPaths)) {
+    for (const batch of chunkPaths(docPaths)) {
+      safeGit(cwd, ['add', '--', ...batch])
+    }
+    return { docsAdded: docPaths, fallbackDocs: false }
+  }
+
+  // 回退：目录级（旧行为），前置 warning 列将被扫入的未提交 docs 文件（unstaged/untracked 面）
+  try {
+    const raw = gitQuiet(cwd, ['status', '--porcelain', '--', '.sillyspec/docs/'], { trim: false })
+    const swept = (raw ? String(raw).split('\n') : []).filter(Boolean)
+      .filter(l => l.length > 3 && (l.slice(0, 2).includes('?') || l[1] !== ' '))
+      .map(l => l.slice(3).trim().replace(/^"|"$/g, ''))
+    if (swept.length > 0) {
+      console.warn(`⚠️ 归档 git add 回退目录级 .sillyspec/docs/（module-impact.md 无「## 更新结果」表或读取失败）——以下 ${swept.length} 个未提交 docs 文件将被扫入共享暂存区（可能含并行会话在途文件），提交时请用精确 pathspec：`)
+      for (const p of swept.slice(0, 10)) console.warn(`   - ${p}`)
+      if (swept.length > 10) console.warn(`   … 共 ${swept.length} 个（git status --porcelain -- .sillyspec/docs/ 查看全量）`)
+    }
+  } catch { /* 差集探测失败不阻断 add 本身（advisory） */ }
+  safeGit(cwd, ['add', '--', '.sillyspec/docs/'])
+  return { docsAdded: null, fallbackDocs: true }
+}
+
 export async function archiveChangeDirectory(pm, cwd, progress, specBase, platformOpts = {}, gateOpts = {}) {
   const archiveChangeName = progress.currentChange
   if (!archiveChangeName) {
@@ -541,9 +659,12 @@ export async function archiveChangeDirectory(pm, cwd, progress, specBase, platfo
   // step5 prompt 的 git add 保留作幂等兜底；POSIX 路径跨平台（git 接受正斜杠）。
   // safeGit 内部已 try-catch（返回 {value,error} 不抛），外层 try 兜底防御；失败不阻断归档
   // （目录已移动 + change 已注销），由 step5 prompt git add + agent git status 核对兜底。
+  // ql-20260915-001 修复④（坑 archive-git-add-sweeps-parallel-docs，2026-09-14 实证：目录级
+  // pathspec 把并行会话同目录未提交文件夹带进共享暂存区）：改为窄化——changes 侧只 add 本变更
+  // 归档目录 archive/<destName>/，docs 侧按 module-impact「更新结果」done 行精确文件集（提取
+  // 失败回退目录级 + 前置 warning，见 archiveNarrowedGitAdd）。
   try {
-    safeGit(cwd, ['add', '--', '.sillyspec/changes/archive/'])
-    safeGit(cwd, ['add', '--', '.sillyspec/docs/'])
+    archiveNarrowedGitAdd({ cwd, specBase, destDir, destName })
   } catch {}
 
   // ── 他者半归档残留探测（坑 archive-other-residual-rename，2026-08-21 实证）──
@@ -581,7 +702,13 @@ export async function archiveChangeDirectory(pm, cwd, progress, specBase, platfo
         }
       }
       if (minePaths.length > 0) {
-        try { safeGit(cwd, ['add', '-A', '--', changesPrefix]) } catch {}
+        // ql-20260915-001 修复④：补暂存源侧移动改精确 pathspec（minePaths 已按本变更目录名
+        // 过滤，chunkPaths 分批防 Windows argv 上限）——原 add -A -- .sillyspec/changes/ 目录级
+        // 会顺带扫入并行会话在 changes/ 下的未提交文件（坑 archive-git-add-sweeps-parallel-docs
+        // 同坑不同点；git add -- <已删路径> 即暂存删除，语义等价 -A 限本变更面）
+        for (const batch of chunkPaths(minePaths)) {
+          safeGit(cwd, ['add', '--', ...batch])
+        }
         console.log(`🧾 已补暂存本变更归档的源侧移动（${minePaths.length} 项，归档成单次原子提交）`)
       }
       if (othersResidual.length > 0) {
