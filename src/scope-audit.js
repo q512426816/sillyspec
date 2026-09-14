@@ -373,6 +373,30 @@ function findQuickPatchRecord(cwd, sessionId) {
   return null
 }
 
+/** QUICKLOG 条目号形态（ql-20260914-001-abcd：日期-序号-短 hash，短 hash 4 hex） */
+const QL_ID_RE = /^ql-\d{8}-\d{3}-[0-9a-f]{4}$/
+
+/**
+ * ql-xxx → quick-xxx 反查（用户「为什么不直接用 ql-xxx 查」根治，ql-20260910-014 设计：
+ * 映射只在本机 guard，会话结束即清；patches 记录按 qlId 命名且 json 冗余 sessionId——
+ * 平台可抓的持久映射）。按文件名前缀匹配（qlId=文件名），避免逐文件解析全目录。
+ */
+function findQuickSessionByQlId(cwd, qlId) {
+  const norm = String(qlId || '').trim()
+  if (!QL_ID_RE.test(norm)) return null
+  for (const sb of ancestorSpecDirs(cwd)) {
+    try {
+      const jsonPath = join(sb, 'quicklog', 'patches', `${norm}.json`)
+      if (!existsSync(jsonPath)) continue
+      const j = JSON.parse(readFileSync(jsonPath, 'utf8'))
+      if (j && typeof j.sessionId === 'string' && QUICK_SID_RE.test(j.sessionId)) {
+        return { sessionId: j.sessionId, record: j, patchPath: join(sb, 'quicklog', 'patches', `${norm}.patch`), qlId: norm, specBase: sb }
+      }
+    } catch { /* 单文件损坏跳过 */ }
+  }
+  return null
+}
+
 /**
  * quick 审计链 module-map 的项目推导（2026-09-14-quick-exit-tiered-gates task-03）：
  * loadQuickModuleIndex（run/shared.js，未 export）的加载路径是
@@ -1011,54 +1035,21 @@ export async function computeChangeScopeAudit({ cwd, specBase, changeName, platf
       if (located) {
         return await computeQuickAudit({ cwd, platformOpts, sessionId: changeName, located, collectPatch })
       }
+      // ql-xxx 反查（「为什么不直接用 ql-xxx 查」根治）：patches 记录按 qlId 命名且 json 冗余
+      // sessionId——ql-xxx → quick-xxx 映射在 patches 里持久可查（guard 已清也能出记录态）。
+      // 命中后同走记录态回放；未命中落原有「会话不存在」。
+      if (QL_ID_RE.test(changeName)) {
+        const byQl = findQuickSessionByQlId(cwd, changeName)
+        if (byQl) {
+          const rec = { record: byQl.record, patchPath: byQl.patchPath, qlId: byQl.qlId, specBase: byQl.specBase }
+          return buildQuickRecordResult(rec, changeName)
+        }
+      }
       // guard 已清理（会话收尾）→ quicklog/patches/ 记录态反查（quick-359a48f1）：
       // 命中出冻结记录（行数为 --done 时点真值），patch 可供 --file 切片
       const rec = findQuickPatchRecord(cwd, changeName)
       if (rec) {
-        // 画像重放（FR-04 / D-008 / task-03）：① 记录含 gateProfile（task-03 起 --done 落盘随
-        // 快照对象冻结）→ 原样透传——与 --done 时点实时态字段逐字一致；② 旧记录（画像机制上线
-        // 前）无该字段 → 用 rows 冻结文件清单现算 computeGateProfile 重放（module-map/阈值与
-        // 实时态同链路加载；noDocs/fileNotes 重放不可得 → 纯默认画像，live 查询面同口径——
-        // --json 批量重放即阈值校准数据源，设计目标 4）。fail-open：任何异常 → null 不出伪画像。
-        let gateProfile = null
-        try {
-          if (rec.record.gateProfile && typeof rec.record.gateProfile === 'object') {
-            gateProfile = rec.record.gateProfile
-          } else {
-            const rowsPaths = rec.record.rows
-              .map(r => (r && typeof r.path === 'string' ? r.path : ''))
-              .filter(Boolean)
-            if (rowsPaths.length > 0) {
-              const thresholds = await resolveReplayGateThresholds(rec.specBase)
-              gateProfile = computeGateProfile(
-                rowsPaths,
-                await loadGateModuleIndex(rec.specBase, rowsPaths),
-                thresholds ? { thresholds } : {},
-              )
-            }
-          }
-        } catch { gateProfile = null }
-        // 记录态回放同样做「声明即归属」过滤（quick-ec5fc714 平台实测）：--done 时点采集的
-        // 老快照若含未过滤的并行会话变更目录/quicklog 产物（当时范围视图语义未收紧），回放时
-        // 按 isQuickMetadata 剔除——平台仓 2026-09-14 workspace-drag-sort 等 19 文件实证。
-        const filteredRows = rec.record.rows.filter(r => r && !isQuickMetadata(r.path || '', []))
-        const filterDropped = rec.record.rows.length - filteredRows.length
-        return {
-          mode: 'quick', ok: true, degradedReason: null,
-          baseAnchor: rec.record.baseAnchor || `quick-window:${changeName}`,
-          totals: rec.record.totals && typeof rec.record.totals === 'object' && filterDropped === 0
-            ? rec.record.totals
-            : { files: filteredRows.length, ...sumTotals(filteredRows) },
-          rows: filteredRows,
-          excluded: rec.record.excluded && Array.isArray(rec.record.excluded.foreignDeclared)
-            ? rec.record.excluded
-            : { foreignDeclared: [] },
-          frozenPatchPath: rec.patchPath,
-          patchSha256: rec.record.patchSha256 || null,
-          patchStatus: rec.record.patchStatus || null,
-          gateProfile,
-          note: `quick 会话已收尾——记录态（quicklog/patches/${rec.qlId}，${rec.record.savedAt ? String(rec.record.savedAt).replace('T', ' ').slice(0, 19) + ' 落盘' : '--done 时点冻结'}）${filterDropped > 0 ? `；回放已剔除 ${filterDropped} 个 quick 元数据/并行变更目录文件（范围视图收紧）` : ''}`,
-        }
+        return buildQuickRecordResult(rec, changeName)
       }
       return {
         ...empty,
