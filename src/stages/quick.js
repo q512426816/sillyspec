@@ -25,7 +25,7 @@ step 3 --done 审计会把 src 核心文件（CLI / 状态机 / 注入框架等�
 4. 构建命令（CLI 自 local.yaml 注入，勿再读文件）：
 {LOCAL_COMMANDS}
 5. 若有关联变更，加载每个变更的设计文档：\`cat {SPEC_ROOT}/changes/<c>/design.md 2>/dev/null\`（理解设计意图）
-6. 如有需要，查询知识库：\`cat {SPEC_ROOT}/knowledge/INDEX.md 2>/dev/null\`
+6. 知识库：CLI 已按本会话任务描述（--input）机械匹配知识库——命中时本 prompt 末尾注入「📚 命中知识」段（top-3 文件正文截断），直接阅读即可，勿自行重跑 INDEX 匹配；段未出现（无命中或未带 --input）且确有需要时才查询：\`cat {SPEC_ROOT}/knowledge/INDEX.md 2>/dev/null\`
 
 ### 模块上下文（CLI 按任务描述匹配注入）
 按本会话任务描述从 _module-map.yaml 匹配的模块已注入本 prompt 开头「📦 模块上下文」段（职责/核心文件/风险/最近变更）——**不要再 cat _module-map.yaml 挑卡**；开头无该段 = 无命中模块，需要跨模块全局视野时才读 \`{SPEC_ROOT}/docs/<project>/modules/_module-map.yaml\` 自查。

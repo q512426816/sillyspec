@@ -4,7 +4,7 @@ doc_type: module-card
 module_id: runtime
 author: qinyi
 created_at: 2026-06-03T07:42:00+08:00
-updated_at: 2026-09-14T11:20:00+08:00
+updated_at: 2026-09-14T21:40:00+08:00
 ---
 # runtime
 
@@ -24,6 +24,7 @@ SQLite 数据库层 + 进度管理 + 迁移。提供 `.sillyspec/.runtime/sillys
 - **scan-profile.js**（`src/run/scan-profile.js`，W6 Step2 从 run.js 抽出）— scan profile 数据生成 + quick scan CLI preflight/postcheck（executeScanPostcheck 动态 import scan-postcheck.js 做 CLI 确定性校验，不依赖 agent 自检报告）
 - **quick-recommend.js**（`src/quick-recommend.js`，根级文件归 runtime）— quick 阶段多变更关联推荐打分：「脏文件 + 任务描述」双信号推测当前 quick 改动最可能归属哪些活跃变更，供交互式多选默认勾选；纯函数 + 只读文件系统无副作用
 - **friction-tally.js**（`src/friction-tally.js`，根级文件归 runtime，friction-signal-hint Phase 1）— 摩擦信号计数数据层：gate 失败回滚（rollbackCompletionAndReturn）/ verify test·lint 实测失败 / 审查打回三类摩擦事件计数（events 按 type 记 count/lastAt + history 截尾 20 条），quick/verify --done 收尾 `consumeFrictionHint` 计数非零才输出一行 advisory（提示后删计数文件清零，全零零输出、每次收尾最多一行）；落点红线（D-002）——计数文件只落 .runtime 树（quick 会话 `quick-sessions/<sessionId>/friction-tally.json`、真实变更 `<runtimeRoot>/friction-tally-<changeName>.json`，路径统一走 resolveRuntimeRoot/resolveQuickSessionsDir），永不落 changes/（目录上平台同步，本机计数污染他机即事故）；隐私红线（D-005）——落盘字段只含 count/lastAt/at/type/detail（type ∈ 三值枚举、detail ∈ 预定义标签集），永不接触提示词与对话原文；local.yaml `friction_hint.enabled` 默认 true（仅显式 false 关，缺键/读失败同默认开）；读写全程 try/catch 静默降级返回 null/空 hint，绝不反向阻断收尾（同 verify-lint-tally「计数器不许反向阻断」立场）
+- **知识闭环消费端注入与收尾渲染**（2026-09-14-knowledge-loop-close，`src/run/prompt.js` + `src/run/complete-handlers.js`）— prompt.js `buildKnowledgeInjection` 命中知识机械注入：matchKnowledge 命中按 INDEX 行序取 top-3 不同 file、单文件首 40 行截断渲染「📚 命中知识」段（未命中 section='' 调用方零字节），三个注入点——execute「确认执行范围」step（升级既有 {KNOWLEDGE_HIT_REPORT}，报告级→正文级）/ quick step1 quickFirstStep（查询串 readQuickGuardField('taskDescription')）/ execute.js buildWavePrompt 本地孪生（静态 import 会成环触发 TDZ，格式等价由 test/knowledge-inject.test.mjs 锁定）；命中同时逐条 `appendKnowledgeHit` 落 `.runtime/knowledge-hits.jsonl` 事件流（type:inject，fail-soft；旧 knowledge-hit-report.json 照旧写，新旧遥测共存）。complete-handlers.js 生产端收尾渲染：quick --done 归类提议器（进程内四字段 outputText 拼查询串跑 matchKnowledge，命中渲染「📚 待归类提议」引导 `knowledge classify`，未命中/纯新增不提议）+ knowledge-baseline 棘轮（uncategorized 条数超线软警告不阻断、低于基线自动收紧、文件缺失视为未启用）+ archive 收尾 uncategorized 抽审清单渲染。stats 聚合命令消费同一事件流输出命中矩阵/死重清单（src/knowledge-stats.js 本体归 core-engine 卡）。
 
 ### ProgressManager 对齐相关方法
 

@@ -29,6 +29,11 @@ import { nowWallClock } from '../datetime.js'
 import { parseModuleMapSimple } from '../modules.js'
 import { readModuleRecentChanges } from '../module-changelog.js'
 import { REVIEW_SCHEMA_VERSION, isValidExecuteRunId } from '../task-review.js'
+// 机械知识注入（2026-09-14-knowledge-loop-close task-04，FR-04）：两者均为 fs/path 叶子模块，
+// 静态 import 不引入环（stages/* 反向引用本文件会撞 index.js 顶层 stageRegistry TDZ——见
+// buildKnowledgeInjection docstring）。
+import { matchKnowledge } from '../knowledge-match.js'
+import { appendKnowledgeHit } from '../knowledge-hits.js'
 
 /**
  * 从 _module-map.yaml 读取模块上下文索引
@@ -218,6 +223,95 @@ export function buildQuickSemanticGuardInjection({ specBase, cwd, changeName } =
   } catch (e) {
     return `【语义护栏】注入失败（${e && e.message ? e.message : e}）——跳过反查，不阻断本步骤；需要时自查 knowledge/INDEX.md 与 git log`
   }
+}
+
+// ── 机械知识注入共享底座（2026-09-14-knowledge-loop-close task-04，FR-04 / D-002@v1 总体方案 D）──
+// 知识消费从 report 级升级为正文级：matchKnowledge 命中 → 按 entries 出现序（INDEX 行序）取
+// 前 3 个不同 file，单文件首 40 行截断 + 截断标记，渲染「📚 命中知识」段（R-02 膨胀控制）；
+// 未命中 section=''（调用方零字节零变化）。命中同时经 task-01 的 appendKnowledgeHit 落
+// .runtime/knowledge-hits.jsonl 一条 type:inject 记录；既有 knowledge-hit-report.json 由
+// execute 调用方照旧落盘（X-004 升级既有机制而非并行新建，新旧遥测共存）。
+//
+// ⚠️ 同款格式在 src/stages/execute.js buildWavePrompt 内有本地孪生实现（Wave 粒度注入）——
+// 本文件无法被 execute.js 静态 import（prompt.js → stages/index.js → execute.js 既有依赖方向，
+// 反向边会在 execute.js 作模块图入口时触发 index.js 顶层 stageRegistry 对其 definition const 的
+// TDZ 求值，2026-09-14 ESM 环实证）。格式漂移由 test/knowledge-inject.test.mjs 的格式等价断言
+// 锁定——改此处必同步改孪生。
+export const KNOWLEDGE_INJECT_MAX_FILES = 3
+export const KNOWLEDGE_INJECT_MAX_LINES = 40
+
+/** top-N 选取：按 entries 出现序（INDEX 行序）取前 N 个不同 file（matchKnowledge 布尔 filter
+ *  无相关度排序，X-009——出现序即唯一稳定序），每 file 取首个命中 entry 作代表。 */
+function pickTopKnowledgeEntries(entries, maxFiles) {
+  const seen = new Set()
+  const picked = []
+  for (const e of entries) {
+    if (seen.has(e.file)) continue
+    seen.add(e.file)
+    picked.push(e)
+    if (picked.length >= maxFiles) break
+  }
+  return picked
+}
+
+/** 命中正文段渲染（段头 + Status/Sources 命中报告语义 + top-3 文件截断正文）。 */
+function renderKnowledgeInjectSection(knowledgeResult, { knowledgeDir, maxFiles, maxLines }) {
+  const ref = e => (e.anchor ? `${e.file}#${e.anchor}` : e.file)
+  const lines = []
+  lines.push(`📚 命中知识（CLI 按任务描述机械匹配，top-${maxFiles}）`)
+  lines.push(`Status: matched | Entries: ${knowledgeResult.entries.length} | Sources:`)
+  for (const e of knowledgeResult.entries) lines.push(` - ${ref(e)}`)
+  lines.push(`（命中清单如上；正文按 INDEX 行序注入前 ${maxFiles} 个不同文件，单文件首 ${maxLines} 行截断——未注入条目需要时按 Sources 路径自行读取）`)
+  for (const e of pickTopKnowledgeEntries(knowledgeResult.entries, maxFiles)) {
+    lines.push('')
+    lines.push(`── ${ref(e)}${e.display ? `（${e.display}）` : ''} ──`)
+    let body = ''
+    try {
+      // CRLF/CR 归一（Windows 知识文件 + 行数截断按 \n 切分）
+      body = readFileSync(join(knowledgeDir, e.file), 'utf8').replace(/\r\n?/g, '\n')
+    } catch (err) {
+      lines.push(`（文件不可读：${err && err.message ? err.message : err}）`)
+      continue
+    }
+    const bodyLines = body.split('\n')
+    if (bodyLines.length > maxLines) {
+      lines.push(bodyLines.slice(0, maxLines).join('\n'))
+      lines.push('…（截断）')
+    } else {
+      lines.push(body.replace(/\n+$/, ''))
+    }
+  }
+  return lines.join('\n')
+}
+
+/**
+ * 机械知识注入一站式入口（execute「确认执行范围」step 与 quick step1 两个 prompt.js 内注入点共用）。
+ *
+ * @param {object} opts
+ * @param {string} opts.knowledgeDir - knowledge 目录（INDEX.md 所在）
+ * @param {string} opts.runtimeDir - .runtime 目录（hits.jsonl 落点）
+ * @param {string} opts.change - 变更名 / quick sessionId（进遥测记录 change 字段）
+ * @param {string} opts.query - 匹配查询串（execute: changeName+tasks.md 任务行；quick: guard.taskDescription）
+ * @returns {{matched: boolean, section: string, report: string, json: object}}
+ *   section：命中时的「📚 命中知识」段（含段头与正文）；未命中恒 ''（调用方零字节）。
+ *   report/json：matchKnowledge 原样透传（execute 调用方沿用旧 report.json 落盘与未命中替换口径）。
+ *   遥测 append 单独 fail-soft（hits 写失败不影响注入本体）；匹配/渲染异常向上抛由调用方降级。
+ */
+export function buildKnowledgeInjection({ knowledgeDir, runtimeDir, change, query, maxFiles = KNOWLEDGE_INJECT_MAX_FILES, maxLines = KNOWLEDGE_INJECT_MAX_LINES } = {}) {
+  const knowledgeResult = matchKnowledge(knowledgeDir, String(query || ''))
+  if (!knowledgeResult.matched) {
+    return { matched: false, section: '', report: knowledgeResult.report, json: knowledgeResult.json }
+  }
+  const section = renderKnowledgeInjectSection(knowledgeResult, { knowledgeDir, maxFiles, maxLines })
+  try {
+    appendKnowledgeHit(runtimeDir, {
+      type: 'inject',
+      change: change || '',
+      query: String(query || ''),
+      matchedFiles: knowledgeResult.entries.map(e => (e.anchor ? `${e.file}#${e.anchor}` : e.file)),
+    })
+  } catch { /* 遥测 fail-soft（R-04）：hits 落盘失败不阻断注入本体 */ }
+  return { matched: true, section, report: knowledgeResult.report, json: knowledgeResult.json }
 }
 
 // parseModuleMapSimple 复用 modules.js 的 canonical 实现（合并历史 copy-paste 副本，2026-08-07；
@@ -754,9 +848,13 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
   }
 
   // Knowledge hit report: execute 阶段注入匹配结果
+  // 2026-09-14-knowledge-loop-close task-04（FR-04，X-004 升级既有机制）：命中清单报告 → 命中
+  // 正文注入——命中时占位符替换为「📚 命中知识」段（top-3 不同 file + 首 40 行截断，段头保留
+  // Status/Entries/Sources 命中报告语义），并逐条 appendKnowledgeHit 落 hits.jsonl 遥测；
+  // 未命中替换值与升级前字节一致（knowledgeResult.report == 'Status: no matches'，零膨胀）。
+  // 既有 knowledge-hit-report.json 照旧落盘（未命中也写 matched:false 快照，行为不变）。
   if (stageName === 'execute' && promptText.includes('{KNOWLEDGE_HIT_REPORT}')) {
     try {
-      const { matchKnowledge } = await import('../knowledge-match.js')
       const effectiveSpecBase = resolvePromptSpecBase(platformOpts, cwd)
       const knowledgeDir = join(effectiveSpecBase, 'knowledge')
       // taskContext: changeName + tasks.md 任务名（注册表唯一真相，2026-08-20-task-truth-unify）
@@ -774,12 +872,20 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
           }
         } catch {}
       }
-      const knowledgeResult = matchKnowledge(knowledgeDir, taskContext)
-      promptText = promptText.replace(/\{KNOWLEDGE_HIT_REPORT\}/g, knowledgeResult.report)
-      // 写入 runtime JSON
       const runtimeDir = join(effectiveSpecBase, '.runtime')
+      const knowledgeInjection = buildKnowledgeInjection({
+        knowledgeDir,
+        runtimeDir,
+        change: changeName || '',
+        query: taskContext,
+      })
+      promptText = promptText.replace(
+        /\{KNOWLEDGE_HIT_REPORT\}/g,
+        knowledgeInjection.matched ? knowledgeInjection.section : knowledgeInjection.report
+      )
+      // 写入 runtime JSON（既有机制照旧，新旧遥测共存）
       mkdirSync(runtimeDir, { recursive: true })
-      writeAtomicSync(join(runtimeDir, 'knowledge-hit-report.json'), JSON.stringify(knowledgeResult.json, null, 2) + '\n')
+      writeAtomicSync(join(runtimeDir, 'knowledge-hit-report.json'), JSON.stringify(knowledgeInjection.json, null, 2) + '\n')
     } catch (e) {
       promptText = promptText.replace(/\{KNOWLEDGE_HIT_REPORT\}/g, 'Status: no matches (error: ' + e.message + ')')
     }
@@ -1106,6 +1212,29 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
         promptText = injection + '\n' + promptText
       }
     }
+  }
+
+  // ── 机械知识注入（quick step1，2026-09-14-knowledge-loop-close task-04，FR-04）──
+  // 判定口径与上方模块上下文注入同锚（quickFirstStep）：查询串用 guard.taskDescription 现成
+  // 读取（X-008——changeName 是 quick-<hash> 无语义）；命中追加「📚 命中知识」段到 prompt 末尾
+  // （top-3 同规则），并 appendKnowledgeHit 落 hits.jsonl；未命中零字节（prompt 与现状字节一致，
+  // 零命中静默）。全链 fail-soft：注入失败不阻断 quick 启动。
+  if (quickFirstStep) {
+    try {
+      const kiSpecBase = resolvePromptSpecBase(platformOpts, cwd)
+      const kiQuery = String(readQuickGuardField(changeName, kiSpecBase, 'taskDescription') || '')
+      if (kiQuery.trim() !== '') {
+        const ki = buildKnowledgeInjection({
+          knowledgeDir: join(kiSpecBase, 'knowledge'),
+          runtimeDir: join(kiSpecBase, '.runtime'),
+          change: changeName || '',
+          query: kiQuery,
+        })
+        if (ki.section) {
+          promptText = promptText + '\n\n' + ki.section
+        }
+      }
+    } catch { /* fail-soft：知识注入异常不阻断 quick step1 prompt 输出 */ }
   }
 
   // ── 语义护栏进场注入（task-05，FR-03，D-001@v1 模块四）──

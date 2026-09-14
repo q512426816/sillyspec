@@ -15,6 +15,84 @@ import { resolveChangeModuleCards } from '../module-resolve.js'
 // 决策锚点触碰事实（2026-08-24-decision-touch-cli-drift task-01，W-A 主渲染点 D-003）：
 // changedFiles 口径与 {DOCS_DEBT} 现算同源（collectExecuteChangedFiles 唯一实现，勿双写）
 import { collectExecuteChangedFiles, computeDecisionTouches, renderDecisionTouchFacts } from '../docs-debt.js'
+// Wave 粒度机械知识注入（2026-09-14-knowledge-loop-close task-04，FR-04）：两模块均为 fs/path
+// 叶子，无环。为什么不 import run/prompt.js 的 buildKnowledgeInjection：prompt.js → stages/index.js
+// → 本文件的既有依赖方向（run 编排 stages），本文件反向静态 import 会在「本文件作模块图入口」
+// （test 直 import 本文件皆此形态）触发 stages/index.js 顶层 stageRegistry 对本文件 definition
+// const 的 TDZ 求值（ESM 环实证 2026-09-14）。此处为同格式本地孪生，漂移由
+// test/knowledge-inject.test.mjs 格式等价断言锁定——改 prompt.js 版必同步改此处。
+import { matchKnowledge } from '../knowledge-match.js'
+import { appendKnowledgeHit } from '../knowledge-hits.js'
+
+// 机械知识注入限额（与 run/prompt.js KNOWLEDGE_INJECT_MAX_FILES/MAX_LINES 同值孪生，R-02 膨胀控制）
+const KNOWLEDGE_INJECT_MAX_FILES = 3
+const KNOWLEDGE_INJECT_MAX_LINES = 40
+
+/**
+ * Wave 粒度机械知识注入段（task-04，FR-04 / D-002@v1 总体方案 D）：用本 Wave 各 task 标题拼接
+ * 串跑 matchKnowledge，命中文件正文以纯文本段注入 buildWavePrompt 输出（**禁止 {{include:}} 形式**
+ * ——execute-testcase-design-include.test.mjs:74 include 计数恰为 1 的断言约束）。未命中返回 ''
+ * （零字节零变化）。命中同时 appendKnowledgeHit 落 hits.jsonl 一条 type:inject 记录。
+ * best-effort：任何异常返回 ''，不阻断 Wave prompt 组装（INDEX/knowledge 缺失时 matchKnowledge
+ * 本就返回 matched:false，brownfield no-op）。
+ */
+function buildWaveKnowledgeSection(changeDir, wave) {
+  if (!changeDir) return ''
+  try {
+    const specBase = path.dirname(path.dirname(changeDir))
+    const knowledgeDir = path.join(specBase, 'knowledge')
+    // Wave 任务名串：本 Wave 各 task 标题拼接（buildWavePrompt 唯一稳定的 Wave 级任务语料）
+    const query = (Array.isArray(wave && wave.tasks) ? wave.tasks : [])
+      .map(t => String((t && t.name) || '')).filter(Boolean).join(' ')
+    if (!query.trim()) return ''
+    const result = matchKnowledge(knowledgeDir, query)
+    if (!result.matched) return ''
+    // ── 以下与 run/prompt.js renderKnowledgeInjectSection 同格式孪生（含段头文案/截断标记）──
+    const ref = e => (e.anchor ? `${e.file}#${e.anchor}` : e.file)
+    const lines = []
+    lines.push(`### 📚 命中知识（CLI 按 Wave 任务名机械匹配，top-${KNOWLEDGE_INJECT_MAX_FILES}——勿自行重跑 INDEX 匹配）`)
+    lines.push(`Status: matched | Entries: ${result.entries.length} | Sources:`)
+    for (const e of result.entries) lines.push(` - ${ref(e)}`)
+    lines.push(`（命中清单如上；正文按 INDEX 行序注入前 ${KNOWLEDGE_INJECT_MAX_FILES} 个不同文件，单文件首 ${KNOWLEDGE_INJECT_MAX_LINES} 行截断——未注入条目需要时按 Sources 路径自行读取）`)
+    const seen = new Set()
+    const picked = []
+    for (const e of result.entries) {
+      if (seen.has(e.file)) continue
+      seen.add(e.file)
+      picked.push(e)
+      if (picked.length >= KNOWLEDGE_INJECT_MAX_FILES) break
+    }
+    for (const e of picked) {
+      lines.push('')
+      lines.push(`── ${ref(e)}${e.display ? `（${e.display}）` : ''} ──`)
+      let body = ''
+      try {
+        body = readFileSync(path.join(knowledgeDir, e.file), 'utf8').replace(/\r\n?/g, '\n')
+      } catch (err) {
+        lines.push(`（文件不可读：${err && err.message ? err.message : err}）`)
+        continue
+      }
+      const bodyLines = body.split('\n')
+      if (bodyLines.length > KNOWLEDGE_INJECT_MAX_LINES) {
+        lines.push(bodyLines.slice(0, KNOWLEDGE_INJECT_MAX_LINES).join('\n'))
+        lines.push('…（截断）')
+      } else {
+        lines.push(body.replace(/\n+$/, ''))
+      }
+    }
+    try {
+      appendKnowledgeHit(path.join(specBase, '.runtime'), {
+        type: 'inject',
+        change: path.basename(changeDir),
+        query,
+        matchedFiles: result.entries.map(ref),
+      })
+    } catch { /* 遥测 fail-soft（R-04） */ }
+    return lines.join('\n') + '\n'
+  } catch {
+    return ''
+  }
+}
 
 /**
  * 任务注册表解析（2026-08-20-task-truth-unify D-001@v1：tasks.md 唯一任务真相）。
@@ -311,12 +389,12 @@ worktree 路径 + 分支名 + 模式
 1. 从 plan 中解析 Wave 分组和任务列表
 2. 模型档位：若 tasks.md 中某 task 标注了 [model:xxx]，启动该 task 子代理时按标签选模型（档位由 plan 阶段或用户在 tasks.md 显式标注，execute 不在此自动建议——关键词→档位无统一映射，自动建议反而易误导）
 3. 确认频率：默认每个 Wave 完成后展示结果（wave 模式）；用户口头指定按 Task 展示或全自动时遵从
-4. 查询知识库：读取 \`.sillyspec/knowledge/INDEX.md\`，根据 Task 关键词匹配
+4. 知识库：CLI 已按任务上下文机械匹配（changeName + tasks.md 任务行）——命中时下方「知识命中报告」段直接含命中文件正文（top-3 截断），勿自行重跑 INDEX 匹配；无命中且确有需要时才读 \`.sillyspec/knowledge/INDEX.md\`
 
 ### 知识命中报告
 {KNOWLEDGE_HIT_REPORT}
 
-如上所示的知识条目与本次任务相关。请阅读这些条目以获取项目约定和已知模式。
+命中条目正文已由 CLI 机械注入如上（INDEX 行序 top-3 不同文件、单文件截断）——直接阅读获取项目约定与已知模式；Sources 清单中未注入正文的其他命中条目，需要时按路径自行读取。
 如无命中条目（Status: no matches），跳过本节。
 
 ### 模块文档欠账（CLI 算事实）
@@ -956,6 +1034,10 @@ ${indexLines}
     }
   } catch { /* 触碰事实 best-effort：失败不注入不阻断 */ }
 
+  // ── Wave 粒度机械知识注入（task-04，FR-04）：Wave 任务名串匹配 → 命中正文纯文本段（未命中 ''，
+  // Wave prompt 与无知识库时字节一致）。pure text 注入，禁 {{include:}}（include 计数测试约束）。──
+  const waveKnowledgeSection = buildWaveKnowledgeSection(changeDir, wave)
+
   // 子代理要点 4 / Wave 开始前第 1 条：模块表 / 热区存在时换成「按注入内容执行」版文案，
   // 否则保留原文（零回归——无 map / 无 design 的项目 prompt 不变）
   const moduleDocPoint = moduleSection
@@ -1188,7 +1270,7 @@ ${taskSummary}
 
 {{include: testcase-design}}
 
-${designHotzone}${decisionTouchSection}
+${designHotzone}${decisionTouchSection}${waveKnowledgeSection}
 ### Wave 开始前
 ${waveStartItem1}
 2. 读取 plan.md 了解全局任务划分和依赖关系

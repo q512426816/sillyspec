@@ -39,3 +39,4 @@
 - ql-20260912-002-57c4 | verifyReviewGitEvidence 主仓 WIP 并入前剔除他者声明文件（复用 splitOwnVsForeignDiffFiles，opts 第参向后兼容）——共享仓他者 WIP 不再使 emptyDiff 伪造检测永不触发
 - ql-20260912-003-b696 | stage-review 四处裸写改 writeAtomicSync（崩溃不留半截 review.json）+verify-postcheck bare 值引号容忍（Windows cd "..." 命令不再静默 skip test 硬门）
 - ql-20260912-004-afa2 | parseFlowValue bare 逗号终止改键形态判别（pytest -k a,b 不截断）；known_failures 流式贪婪捕获（嵌套 ] 不清空，docs-check 复刻同口径）
+- 2026-09-14-knowledge-loop-close | knowledge classify/stats 子命令（动态 import）+ quick/execute prompt 知识注入段

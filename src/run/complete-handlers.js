@@ -13,6 +13,10 @@
  * 安全锚：run.js 始终 barrel。3 handler 由 run.js import 回来；sanitizeProjectName + validateParsedProjects
  * 被 test 直接 import（run-sanitize-project-name / run-scan-project-parse），run.js barrel re-export 契约保留。
  * 4 目标 handler 无 test 直接 import；archiveChangeDirectory + findAlreadyArchivedDir 供自愈 test 直接 import，无需 barrel re-export。completeStep（Step7 搬）将把 import 行带走。
+ *   - 知识闭环收尾渲染（2026-09-14-knowledge-loop-close task-03）：归类提议（quick --done 进程内
+ *     outputText 根因 × matchKnowledge）+ knowledge-baseline 棘轮（quick/archive 双宿主）+ archive
+ *     抽审清单（近 7 天 classify 审计）；countUncategorizedEntries / checkKnowledgeBaselineRatchet /
+ *     extractQuickCauseField export 供 test/knowledge-baseline.test.mjs 直接 import（实现收拢文件尾）。
  *
  * 路径修正（相对 src/run/）：
  *   - resolveChangeDir 从 './shared.js'；renameSyncRetry 从 '../fs-atomic.js'；stageRegistry 从 '../stages/index.js'
@@ -620,6 +624,22 @@ export async function handleArchiveConfirmStep({ stageName, steps, currentIdx, c
       }
     }
   }
+  // ── 知识闭环收尾渲染（2026-09-14-knowledge-loop-close task-03，X-006 定锚）──
+  // ① knowledge-baseline 棘轮（FR-03/R-05）：与 quick --done 收尾同款三态（超线软警告不阻断 /
+  //    降线自动收紧 / 基线缺失跳过），archive 时刻是归类清欠的另一自然卡点。
+  renderKnowledgeBaselineRatchet(specBase)
+  // ② 自动归类抽审清单：近 7 天 hits.jsonl 里 type:classify 的记录数——归类是机器提案经
+  //    classify 落地，人闸收敛到归档时抽审（R-01：错误归类 revert 的发现面）。读实现为
+  //    task-01 交付的 src/knowledge-hits.js（readKnowledgeHits 坏行容忍）；runtimeRoot 解析
+  //    与本文件既有 delta sidecar 同源（resolveRuntimeRoot，平台模式对齐）。无记录/读失败零输出。
+  try {
+    const { readKnowledgeHits } = await import('../knowledge-hits.js')
+    const classifyCount = readKnowledgeHits(resolveRuntimeRoot(platformOpts, specBase), { sinceDays: 7 })
+      .filter((h) => h && h.type === 'classify').length
+    if (classifyCount > 0) {
+      console.log(`\n🧪 本周期自动归类 ${classifyCount} 条（近 7 天 knowledge classify 审计），建议抽审：sillyspec knowledge stats`)
+    }
+  } catch { /* 抽审清单读取失败不影响归档（advisory fail-open） */ }
   return null
 }
 /**
@@ -1421,6 +1441,26 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
       console.warn(`⚠️ QUICKLOG 完成态写入失败: ${e.message}`)
     }
 
+    // ── 归类提议（2026-09-14-knowledge-loop-close task-03，FR-01/D-001@v1）──
+    // QUICKLOG 已落盘，用进程内已过四字段校验的 outputText（免读回盘）提取「根因：」拼查询串跑
+    // matchKnowledge（复用 knowledge-match 既有引擎；INDEX.md 缺失/未命中 matched:false 全链路
+    // no-op）。只渲染不自动执行：确认归类须 agent 显式跑 knowledge classify（R-01，错误归类靠
+    // archive/doctor 抽审 revert）。根因为「无，纯新增/纯样式」形态（无坑可归）或未命中时不渲染
+    // 任何提议（拿不准不写，零输出变化）。实现与口径见文件尾（函数声明提升 + B1 断言窗口约束）。
+    try {
+      const causeText = extractQuickCauseField(outputText)
+      if (causeText && !PURE_NEW_CAUSE_RE.test(causeText)) {
+        const { matchKnowledge } = await import('../knowledge-match.js')
+        const km = matchKnowledge(join(specBase, 'knowledge'), causeText)
+        if (km && km.matched && Array.isArray(km.entries) && km.entries.length > 0) {
+          const hit = km.entries[0]
+          const target = hit.anchor ? `${hit.file}#${hit.anchor}` : hit.file
+          console.log(`\n📚 待归类提议：${qlId} 根因疑似命中 ${target}`)
+          console.log(`   确认归类跑：sillyspec knowledge classify --ql ${qlId} --file ${hit.file}`)
+        }
+      }
+    } catch { /* 提议渲染失败零副作用（advisory fail-open，不阻断 --done 收尾） */ }
+
     // 轻量归档任务已全勾选的关联真实变更
     try {
       const closeResult = await closeQuickLinkedChanges({ pm, cwd, specBase, linkedChanges, linkedChangesAuto, platformOpts })
@@ -1465,6 +1505,11 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
         console.warn(`⚠️ 注销 quick 会话 changes 行失败（不阻断完成）: ${e.message}`)
       }
     }
+
+    // ── knowledge-baseline 棘轮（2026-09-14-knowledge-loop-close task-03，FR-03/R-05）──
+    // uncategorized 待归类条数对比基线：超线 ⚠️ 软警告（不阻断不抛错）、降线自动收紧写回、
+    // 基线文件缺失 = 未启用直接跳过（存量仓零迁移）。实现收拢文件尾（B1 断言窗口约束同上）。
+    renderKnowledgeBaselineRatchet(specBase)
   }
 
   return null
@@ -2072,5 +2117,99 @@ function attachQuickLineCounts({ cwd, realFiles, softFiles, review, auditFiles, 
     console.log(`ℹ️ 本会话无未提交改动（窗口已提交或会话未产生改动）——实时行数不可采，文件行请读 QUICKLOG 条目 ${qlId}（记录态）`)
   }
   return { annotatedRealFiles, annotatedSoftFiles, fmtLineCounts }
+}
+
+// ── 知识闭环收尾渲染（2026-09-14-knowledge-loop-close task-03，FR-01/FR-03）──
+// 放文件尾（函数声明提升，同 attachQuickLineCounts 先例）：归类提议/棘轮渲染挂在 quick --done 与
+// archive 收尾两处，插码位置受 concurrent-preflight-hooks.test.mjs B1 源码文本级断言窗口约束
+// （detectConcurrentChanges ±[200,600] 字符内禁 process.exit、须保 try/catch）——实现收拢在此，
+// 调用点只留小段调用，避免大段内联把断言锚推出窗口。全段 fail-open：任何异常只吞不阻断收尾。
+
+/**
+ * 数 knowledge/uncategorized.md 待归类条目数。计数正则与 `sillyspec knowledge` validate 同款
+ * /^#{2,3}\s+\S/gm（X-010 口径对齐，防双数字打架）；文件缺失算 0（未启用知识库的仓不警告）。
+ * 已 export 供 test/knowledge-baseline.test.mjs 直接断言计数口径。
+ */
+export function countUncategorizedEntries(knowledgeDir) {
+  const uncPath = join(knowledgeDir, 'uncategorized.md')
+  if (!existsSync(uncPath)) return 0
+  try {
+    return (readFileSync(uncPath, 'utf8').match(/^#{2,3}\s+\S/gm) || []).length
+  } catch {
+    return 0
+  }
+}
+
+/**
+ * 读 .sillyspec/knowledge-baseline 单整数（uncategorized 条数上限，语义/读写形态对齐
+ * docs-check-baseline：trim 后 parseInt，非负整数才有效）。缺失/不可解析 → null（未启用）。
+ */
+function readKnowledgeBaseline(specBase) {
+  try {
+    const baselinePath = join(specBase, 'knowledge-baseline')
+    if (!existsSync(baselinePath)) return null
+    const n = parseInt(readFileSync(baselinePath, 'utf8').trim(), 10)
+    return Number.isInteger(n) && n >= 0 ? n : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * knowledge-baseline 棘轮三态对比（FR-03/R-05）：
+ *   - 基线缺失 → { status:'disabled' }（未启用，调用方零输出零写盘）
+ *   - count > baseline → { status:'over' }（软警告，不阻断——棘轮起步只警告）
+ *   - count < baseline → 自动收紧：基线文件改写为当前值（writeAtomicSync，Windows 兼容），
+ *     → { status:'tightened' }；写盘失败降级 steady（下次收尾再试，不谎报收紧）
+ *   - count == baseline → { status:'steady' }
+ * 已 export 供 test/knowledge-baseline.test.mjs 断言三态与收紧副作用。
+ */
+export function checkKnowledgeBaselineRatchet(specBase) {
+  const baseline = readKnowledgeBaseline(specBase)
+  const count = countUncategorizedEntries(join(specBase, 'knowledge'))
+  if (baseline === null) return { status: 'disabled', count, baseline: null }
+  if (count > baseline) return { status: 'over', count, baseline }
+  if (count < baseline) {
+    try {
+      writeAtomicSync(join(specBase, 'knowledge-baseline'), `${count}\n`)
+      return { status: 'tightened', count, baseline }
+    } catch {
+      return { status: 'steady', count, baseline }
+    }
+  }
+  return { status: 'steady', count, baseline }
+}
+
+/**
+ * 棘轮对比 + console 渲染（quick --done 与 archive 收尾共用）：over → ⚠️ 软警告（条数 +
+ * 建议 knowledge classify 清单，不阻断不抛错）；tightened → 📉 单行留痕；disabled/steady
+ * 零输出。自身 try/catch fail-open（R-05：棘轮误伤的兜底就是什么都不做）。
+ */
+function renderKnowledgeBaselineRatchet(specBase) {
+  try {
+    const r = checkKnowledgeBaselineRatchet(specBase)
+    if (r && r.status === 'over') {
+      console.warn(`\n⚠️  knowledge/uncategorized.md 待归类 ${r.count} 条，超 knowledge-baseline 基线 ${r.baseline}（软警告不阻断）`)
+      console.warn(`   建议跑 sillyspec knowledge classify 逐条归类（待归类清单见 knowledge/uncategorized.md），条数降后基线自动收紧。`)
+    } else if (r && r.status === 'tightened') {
+      console.log(`📉 knowledge-baseline 已自动收紧：${r.baseline} → ${r.count}（uncategorized 待归类条数下降）`)
+    }
+  } catch { /* 棘轮渲染失败零副作用（fail-open，R-05） */ }
+}
+
+/** 根因「无，纯新增/纯样式」形态：无坑可归，归类提议不渲染（拿不准不写）。 */
+const PURE_NEW_CAUSE_RE = /^无(?:[，,].*)?$/
+
+/**
+ * 从 quick --done 四字段 outputText 提取「根因：」字段值（归类提议的查询串来源；进程内已过
+ * validateQuickResult 校验，免读回盘）。多行字段块与单行压缩形态都支持；根因块内嵌套子字段
+ * 列表行（- 现象：/- 根因： 等 D-004@v1 合法形态）随正文保留——只是匹配查询串，多文本无害。
+ * 提取失败/无根因字段返回 ''。已 export 供测试断言提取口径。
+ */
+export function extractQuickCauseField(outputText) {
+  const text = String(outputText || '')
+  const m = text.match(/根因\s*[：:]\s*([\s\S]*?)(?=(?:^|\n|\s)(?:方案|结果)\s*[：:]|$)/)
+  if (!m) return ''
+  return m[1].replace(/\s+/g, ' ').trim()
 }
 

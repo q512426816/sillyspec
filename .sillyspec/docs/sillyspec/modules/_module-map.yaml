@@ -85,6 +85,9 @@ modules:
       - src/verify-facts-schema.js
       - src/foreign-declared.js
       - src/knowledge-match.js
+      - src/knowledge-hits.js
+      - src/knowledge-classify.js
+      - src/knowledge-stats.js
       - src/doctor-diagnostics.js
       - src/fs-atomic.js
       - src/datetime.js

@@ -12,6 +12,8 @@
  *   validate — 校验知识库完整性
  *   refresh  — 从 scan 文档刷新自动知识（仅写 generated/）
  *   propose  — 提议新知识（写入 proposed/）
+ *   classify — 归类 uncategorized 条目到目标知识文件（动态 import src/knowledge-classify.js，task-02 交付）
+ *   stats    — 命中矩阵聚合与死重对照（动态 import src/knowledge-stats.js，task-05 交付）
  */
 
 import { existsSync, readFileSync, readdirSync, mkdirSync, statSync } from 'fs'
@@ -499,6 +501,29 @@ function extractSections(content) {
 // ── 入口路由 ──
 
 /**
+ * 动态加载 classify / stats 子命令实现（2026-09-14-knowledge-loop-close）。
+ *
+ * 实现文件由 Wave 2/3 的 task-02（src/knowledge-classify.js）/ task-05（src/knowledge-stats.js）交付，
+ * 落地前可能缺席——静态 import 会断链整个 knowledge 命令，故循 index.js case 'knowledge'
+ * 先例用动态 import；模块缺席时返回 null 由调用方输出友好错误，其余异常照抛。
+ * 实现侧须导出 CLI 入口 cmdKnowledgeClassify / cmdKnowledgeStats(dir, args, opts)，
+ * 形态对齐本文件 cmdSearch 等既有子命令。
+ *
+ * 遥测底座：两命令的归类/命中审计统一经 src/knowledge-hits.js 的
+ * appendKnowledgeHit / readKnowledgeHits（KnowledgeHitsAPI 契约，task-02/04/05 消费）。
+ */
+async function tryImportSubcommandImpl(importPath, moduleName) {
+  try {
+    return await import(importPath)
+  } catch (err) {
+    if (err && err.code === 'ERR_MODULE_NOT_FOUND' && String(err.message || '').includes(moduleName)) {
+      return null
+    }
+    throw err
+  }
+}
+
+/**
  * @param {string[]} args - filteredArgs.slice(1)（去掉 'knowledge'）
  * @param {string} dir - 项目根目录
  * @param {object} opts - { specDir }
@@ -517,11 +542,35 @@ export async function cmdKnowledge(args, dir, opts = {}) {
       return cmdRefresh(dir, args.slice(1), opts)
     case 'propose':
       return cmdPropose(dir, args.slice(1), opts)
+    case 'classify': {
+      const mod = await tryImportSubcommandImpl('../knowledge-classify.js', 'knowledge-classify.js')
+      if (!mod || typeof mod.cmdKnowledgeClassify !== 'function') {
+        output(false, {}, {
+          code: 'not_implemented',
+          subcommand: 'classify',
+          message: '实现未落地（task-02 交付 src/knowledge-classify.js）',
+        })
+        return
+      }
+      return mod.cmdKnowledgeClassify(dir, args.slice(1), opts)
+    }
+    case 'stats': {
+      const mod = await tryImportSubcommandImpl('../knowledge-stats.js', 'knowledge-stats.js')
+      if (!mod || typeof mod.cmdKnowledgeStats !== 'function') {
+        output(false, {}, {
+          code: 'not_implemented',
+          subcommand: 'stats',
+          message: '实现未落地（task-05 交付 src/knowledge-stats.js）',
+        })
+        return
+      }
+      return mod.cmdKnowledgeStats(dir, args.slice(1), opts)
+    }
     default:
       output(false, {}, {
         code: 'unknown_subcommand',
         subcommand: subCommand,
-        available: ['search', 'inspect', 'validate', 'refresh', 'propose'],
+        available: ['search', 'inspect', 'validate', 'refresh', 'propose', 'classify', 'stats'],
       })
   }
 }

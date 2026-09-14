@@ -4,7 +4,7 @@ doc_type: module-card
 module_id: stages
 author: qinyi
 created_at: 2026-06-04T16:55:00+08:00
-updated_at: 2026-08-24T00:40:00+08:00
+updated_at: 2026-09-14T21:40:00+08:00
 ---
 
 # stages
@@ -31,7 +31,9 @@ updated_at: 2026-08-24T00:40:00+08:00
 
 **brainstorm-auto.js** — auto/full 模式使用的 brainstorm 步骤定义（artifact-first 直接写文件对话只出摘要、按 AC-001~AC-011 checklist 自动决策、产出 next-action.json 驱动下游推进、步骤从 ~13 步精简为 4 步）；与 brainstorm.js 同为 name: 'brainstorm' 阶段，由 run 层按模式选择定义。
 
-**knowledge.js** — agent-safe knowledge 管理命令（search / inspect / validate / refresh / 新知识提案 五个子命令）：全部输出 JSON、不打开编辑器、不直接覆盖人工区、失败带明确错误码；`sillyspec knowledge` 顶层命令的实现，配套 skill sillyspec-knowledge。
+**knowledge.js** — agent-safe knowledge 管理命令（search / inspect / validate / refresh / 新知识提案 / classify / stats 七个子命令）：全部输出 JSON、不打开编辑器、不直接覆盖人工区、失败带明确错误码；`sillyspec knowledge` 顶层命令的实现，配套 skill sillyspec-knowledge。classify（归类 uncategorized 条目到目标知识文件，src/knowledge-classify.js）与 stats（命中矩阵聚合与死重对照，src/knowledge-stats.js）经 tryImportSubcommandImpl 动态 import 注册——实现文件缺席时输出 not_implemented 友好错误，不断链既有子命令。
+
+**knowledge 闭环 prompt 注入段**（2026-09-14-knowledge-loop-close）：quick step1 / execute「确认执行范围」step / execute buildWavePrompt 的 prompt 含 CLI 预注入的「📚 命中知识」段（matchKnowledge 机械匹配 top-3 文件限额 + 单文件截断，注入本体在 run 层 prompt.js，归 runtime 卡）——stage prompt 只说明该段来源，agent 勿自行重跑匹配；quick step3 收尾 prompt 留归类提议与 `knowledge classify` 指引（渲染本体在 run 层 complete-handlers，同归 runtime 卡）。归类/命中审计与 stats 聚合同消费 `.runtime/knowledge-hits.jsonl` 事件流（底座 src/knowledge-hits.js 归 core-engine 卡）。
 
 **execute prompt 路径约定**（2026-07-11 占位符化，坑 2）：execute stage prompt 中 review.json / endpoints.json 路径用 `{SPEC_ROOT}/.runtime/` 占位符（非裸 `.sillyspec/.runtime/` 硬编码）。`{SPEC_ROOT}` 由 run 层平台路径重写消费（W6 后在 `src/run/prompt.js`）——仓库内模式→`.sillyspec`，平台模式（specDir 指向外部目录）→specDir。修复平台模式下 review.json 落盘路径错位（如 `src/stages/execute.js:908/937`）。。模块文档主仓写入铁律（坑 module-docs-worktree-copy-leak，2026-09-10 驾驭小结第四批①，task-13 子代理实证写 worktree 副本归档被迫 checkout 补救）：Wave prompt「模块文档欠账」段与派发 prompt「注意」段原地重申——模块卡/sidecar/module-impact/knowledge 一律写主仓 {SPEC_ROOT} 绝对路径、绝不写 worktree checkout 副本（随 cleanup 蒸发），子代理 prompt 须透传主仓绝对路径（execute-prompt-mainrepo-docs.test.mjs 扫描锁定）
 
