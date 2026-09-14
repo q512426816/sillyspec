@@ -73,6 +73,9 @@ SillySpec CLI — 规范驱动开发工具包
     check | repair [--apply] | validate | reset [--stage X] |
     batch --total N --completed M [--failed F] [--skipped K] | batch --status
 
+  sillyspec wt-commit [--change <名>] -m <信息> [--pathspec-from-file <f>] -- <path...>
+                                      worktree 内 per-task 串行化提交（文件锁排队 + 强制显式 pathspec，
+                                      防 add -A 卷入并行兄弟 WIP；worktree 内可省 --change，从 cwd 推断）
   sillyspec worktree <cmd>     git worktree 隔离管理（execute 阶段相关）
     create <change> [--base <branch>]   创建隔离 worktree
     apply <change> [--check-only]       校验并应用变更到主工作区
@@ -2638,6 +2641,46 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
 
       // Keep process alive
       console.log('按 Ctrl+C 停止服务器');
+      break;
+    }
+    case 'wt-commit': {
+      // 坑 wt-commit-ghost-dispatch：runWtCommit 模块自 bd1cb91 存在但 dispatch 从未接线——
+      // execute Wave prompt 指示的 `sillyspec wt-commit` 一直报「未知命令」（2026-09-14
+      // knowledge-loop-close execute W1 实证，ql-20260914-016-8786 根治）。参数面见模块头：
+      // wt-commit [--change <名>] -m <信息> [--pathspec-from-file <f>] -- <path...>；
+      // worktree 内可省 --change（从 cwd 的 worktrees/<名> 段推断）。
+      const wtCommitRest = filteredArgs.slice(1);
+      const wtCommitDd = wtCommitRest.indexOf('--');
+      const wtCommitFlags = wtCommitDd === -1 ? wtCommitRest : wtCommitRest.slice(0, wtCommitDd);
+      const wtCommitPaths = wtCommitDd === -1 ? [] : wtCommitRest.slice(wtCommitDd + 1);
+      let wtCommitChange = null;
+      let wtCommitMessage = null;
+      let wtCommitPathspecFile = null;
+      for (let i = 0; i < wtCommitFlags.length; i++) {
+        if (wtCommitFlags[i] === '--change' && wtCommitFlags[i + 1]) wtCommitChange = wtCommitFlags[++i];
+        else if ((wtCommitFlags[i] === '-m' || wtCommitFlags[i] === '--message') && wtCommitFlags[i + 1]) wtCommitMessage = wtCommitFlags[++i];
+        else if (wtCommitFlags[i] === '--pathspec-from-file' && wtCommitFlags[i + 1]) wtCommitPathspecFile = wtCommitFlags[++i];
+      }
+      if (!wtCommitChange) {
+        const inferred = String(dir).match(/[\\/]worktrees[\\/]([^\\/]+)/);
+        wtCommitChange = inferred ? inferred[1] : null;
+      }
+      try {
+        const { runWtCommit } = await import('./wt-commit.js');
+        const r = await runWtCommit({
+          changeName: wtCommitChange,
+          message: wtCommitMessage,
+          pathspecs: wtCommitPaths,
+          pathspecFile: wtCommitPathspecFile,
+          cwd: dir,
+        });
+        if (json) console.log(JSON.stringify({ command: 'wt-commit', ...r }, null, 2));
+        else if (r.skipped) console.log(`⏭️  wt-commit 无变更跳过（HEAD 不动）：${r.shortHead}`);
+        else console.log(`✅ wt-commit 完成：${r.shortHead}（${r.files.length} 文件，worktree=${r.worktreePath}）`);
+      } catch (e) {
+        console.error(`❌ wt-commit 失败：${e.message}`);
+        process.exit(1);
+      }
       break;
     }
     case 'worktree': {

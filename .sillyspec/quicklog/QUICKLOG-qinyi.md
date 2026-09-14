@@ -223,3 +223,23 @@
 状态：进行中
 关联变更：（无）
 文件：（见实际改动）
+
+## ql-20260914-016-8786 | 2026-09-14 21:58:08 | wt-commit 幽灵命令根治——index.js 补 dispatch 接线 runWtCommit
+状态：已完成
+关联变更：（无）
+文件：
+- src/index.js（case wt-commit dispatch + help 行）
+- test/wt-commit-dispatch.test.mjs（新建 5 断言（含鬼命令回归哨兵））
+- .sillyspec/knowledge/known-issues.md（条目补已根治记录+锚加?）
+- docs/sillyspec/platform-interface-map.md（--fix 行号重锚）
+- docs/sillyspec/architecture-4a.md（--fix 行号重锚）
+- docs/sillyspec/file-lifecycle.md（--fix 行号重锚）
+- docs/sillyspec/prompt-control-debt.md（--fix 行号重锚）
+- docs/sillyspec/sillyhub-path-a-contract.md（--fix 行号重锚）
+- .sillyspec/docs/sillyspec/modules/runtime.md（--fix 行号重锚）
+- .sillyspec/knowledge/decisions/unmapped.md（--fix 行号重锚）
+需求：wt-commit 幽灵命令根治——index.js 补 dispatch 接线 runWtCommit
+根因：runWtCommit 模块自 bd1cb91 引入以来无任何调用点（孤儿模块），worktree-cwd 守卫还专门豁免了 wt-commit 命令名、execute Wave prompt 教 agent 用它，但 dispatch 无 case——实际跑报「未知命令」；worktree-cwd-guard 豁免测试断言太弱（未知命令错误不含拦截文案也算过），鬼命令存活至今（2026-09-14 knowledge-loop-close execute W1 实证，task-01 review notes 记档）
+方案：index.js 新增 case wt-commit：解析 --change/-m/--pathspec-from-file 与 -- 后 pathspec；--change 缺省从 cwd 的 worktrees/<名> 段推断（子代理 workdir=worktree 免传）；错误 catch exit 1；help 注册。新增 test/wt-commit-dispatch.test.mjs 5 断言（CLI 真跑提交 cwd 推断/显式 --change/缺 pathspec 报 add -A 语义/缺 -m/鬼命令回归哨兵——原弱口收紧）；known-issues 条目补根治记录；docs --fix 重锚 12 处（dispatch 插入 +44 行连带漂移；知识库两文件=known-issues 根治记录+unmapped 机械重锚，--force-baseline 解锁；余 1 处漂移属并行会话在飞变更，基线 2 内）
+结果：wt-commit-dispatch 5/5、wt-commit 5/5、worktree-cwd-guard 7/7；lint 611 文件 0 fail；docs check 1/576（≤基线 2）
+审计：[gate] L1（跨 1 模块 · 10 文件：1 代码/1 测试）advisory；每文件注记已全覆盖；测试增量不适用（≤1 代码文件）

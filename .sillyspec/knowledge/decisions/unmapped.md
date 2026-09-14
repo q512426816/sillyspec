@@ -56,7 +56,7 @@
 变更：2026-08-08-concurrent-write-preflight
 锚点：未记录
 最近确认：a69021cc85e6d19af0893fd5d74fe833ba61cea8
-理由：complete-handlers.js:1081 `let review = null`，仅 `if(guard)` 内赋值。brownfield 无 guard 时 review=null → `review.changedFiles` 抛 TypeError。design §5 只给 execute「取不到则空」兜底，quick 缺。
+理由：complete-handlers.js:1111 `let review = null`，仅 `if(guard)` 内赋值。brownfield 无 guard 时 review=null → `review.changedFiles` 抛 TypeError。design §5 只给 execute「取不到则空」兜底，quick 缺。
 
 ## D-006@v1 措辞「写操作前预检」vs 实际「完成时报告」
 状态：implemented

@@ -115,4 +115,6 @@ task 卡 frontmatter 的列表标量中出现 `X: `（半角冒号+空格，如�
 
 ## execute prompt 指引的 wt-commit 是幽灵命令（runWtCommit 未接线 dispatch）
 
-execute Wave prompt（src/stages/execute.js 调度要求段）指示 agent 用 `sillyspec wt-commit --change <名> -- <文件>` 串行提交，且 index.js:324 的 worktree-cwd 守卫还专门豁免了 wt-commit 命令名——但 CLI dispatch 根本没有 `case 'wt-commit'`：src/wt-commit.js 的 `runWtCommit` 自 bd1cb91 引入以来无任何调用点（孤儿模块）。实际跑会报「未知命令: wt-commit」并打帮助。规避：主代理作为唯一提交者时，在 worktree 内手工 `git add -- <显式路径> && git commit`（串行无竞态，等价安全）；根治需给 index.js 补 dispatch 接线。（来源：2026-09-14-knowledge-loop-close execute W1，task-01 review notes 记档）
+execute Wave prompt（src/stages/execute.js 调度要求段）指示 agent 用 `sillyspec wt-commit --change <名> -- <文件>` 串行提交，且 index.js:324? 的 worktree-cwd 守卫还专门豁免了 wt-commit 命令名——但 CLI dispatch 根本没有 `case 'wt-commit'`：src/wt-commit.js 的 `runWtCommit` 自 bd1cb91 引入以来无任何调用点（孤儿模块）。实际跑会报「未知命令: wt-commit」并打帮助。规避：主代理作为唯一提交者时，在 worktree 内手工 `git add -- <显式路径> && git commit`（串行无竞态，等价安全）；根治需给 index.js 补 dispatch 接线。（来源：2026-09-14-knowledge-loop-close execute W1，task-01 review notes 记档）
+
+**已根治**（ql-20260914-016-8786，2026-09-14）：index.js 补 wt-commit dispatch case（--change/-m/--pathspec-from-file/-- pathspec 解析 + worktree cwd 推断 changeName）+ help 注册；新增 test/wt-commit-dispatch.test.mjs 5 断言锁三面（接通/参数面/豁免补强——原 worktree-cwd-guard 断言「未知命令也算过」的弱口已收紧为鬼命令回归哨兵）。
