@@ -18,7 +18,7 @@ import { safeGit } from './git-helper.js';
 import { openDatabase } from './db-engine.js';
 import { PLATFORM_MANAGED_FILENAME, QUICK_SID_RE } from './run/shared.js';
 import { syncSpecTree } from './spec-sync.js';
-import { bindSyncNoiseFromCwd, syncConnectionWarn, isConnectionClassStatus, noteSyncSuccess } from './sync-noise.js';
+import { bindSyncNoiseFromCwd, syncConnectionWarn, isConnectionClassStatus, noteSyncSuccess, syncChangeDeletedLog, syncChangeDeletedWarn, noteChangeDeletedResolved } from './sync-noise.js';
 
 // sync 是 best-effort（网络失败只 warn）：平台指针失效时不抛，跳过平台、回退本地。
 function safePlatformSpecDir(cwd) {
@@ -595,7 +595,7 @@ export class SyncManager {
    * 外来推送（他机/他用户）不可能推进本机 DB 的 base_ts → 走原冲突路径，无误放行。
    */
   async sync(changeName, opts = {}) {
-    const { fromResolve = false } = opts;
+    const { fromResolve = false, manual = false } = opts;
     const platform = this._getPlatform();
     if (!platform) {
       debugLog('[sync] 未连接平台（本地合法状态）；如需平台同步：sillyspec platform connect');
@@ -656,7 +656,9 @@ export class SyncManager {
       // change-delete（2026-08-30）：DB status='deleted' 的行目录已随删除移除，属正常时序，
       // 单行 info 提示后继续推删除终态/墓碑（不落入「目录不存在」warn）
       if (this._changeDbStatus(changeName) === 'deleted') {
-        console.log(`[sync] 变更已删除（DB status=deleted），继续推送删除终态/墓碑: ${changeName}`);
+        // 变更级回执噪音闸（sync-noise.js change_deleted 闸）：status=deleted 是终态，此后每步
+        // 自动同步都会走到这里打同一行——首报后跨进程窗口内静默；手动 platform sync 旁路。
+        syncChangeDeletedLog(changeName, `[sync] 变更已删除（DB status=deleted），继续推送删除终态/墓碑: ${changeName}`, { noMute: manual });
       } else {
         archivedQuietly = existsSync(join(specBase, 'changes', 'archive', changeName))
           || this._changeDbStatus(changeName) === 'archived';
@@ -750,9 +752,10 @@ export class SyncManager {
           || progressData?.changes?.[0]?.status === 'archived'
           || progressData?.changes?.[0]?.status === 'deleted'
         if (localTombstone) {
-          console.log(`ℹ️ [sync] 平台已删除变更「${changeName}」——本地注销已由 CLI 完成，墓碑上行 409 属预期回执，无需动作`);
+          syncChangeDeletedLog(changeName, `ℹ️ [sync] 平台已删除变更「${changeName}」——本地注销已由 CLI 完成，墓碑上行 409 属预期回执，无需动作`, { noMute: manual });
         } else {
-          console.warn(`⚠️ [sync] 平台已删除变更「${changeName}」，本次进度上行被拒收（change_deleted）；本地如仍需推进请在平台侧确认`);
+          // 可行动信号（本地仍 active + 平台已删）：首报必须醒目，重复回执走变更级噪音闸
+          syncChangeDeletedWarn(changeName, `⚠️ [sync] 平台已删除变更「${changeName}」，本次进度上行被拒收（change_deleted）；本地如仍需推进请在平台侧确认`, { noMute: manual });
         }
         return { synced: 0, errors: [], platformDeleted: true, reason: '平台已删除（change_deleted 拒收）' };
       }
@@ -761,6 +764,8 @@ export class SyncManager {
         // 平台连接恢复信号（sync-noise.js）：此前静默窗口内的失败在恢复的第一笔成功时
         // 打一行提示并清 marker；之后照常「成功不打扰」。
         noteSyncSuccess();
+        // 该变更推送成功 = 平台侧未删/已重建，change_deleted 回执噪音窗按变更名精清
+        noteChangeDeletedResolved(changeName);
         // 更新 platform_last_sync + 推进 base_ts（ql-20260818-008：值优先平台回执 last_pushed_at，
         // 缺省用本次 pushedAt——服务器 _apply 存的就是客户端 X-SillySpec-Pushed-At 原值，回写一致。
         // 修复前该列从不写，下次 push 永不带 X-SillySpec-Base-Ts、pull 脏度检测恒 false）

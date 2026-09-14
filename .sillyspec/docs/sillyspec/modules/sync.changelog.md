@@ -1,1 +1,2 @@
 - ql-20260912-009-06b4 | computeSpecOps rename 检测 O(N×M)→hash 索引；hashFiles buf 随行携带消除变更文件双读
+- ql-20260914-007-fcb7 | sync-noise.js 加变更级 change_deleted 回执噪音闸（syncChangeDeletedLog/Warn/noteChangeDeletedResolved，按变更名 marker 窗口）；sync() 三处回执行走闸 + 成功精清 + platform sync manual 旁路

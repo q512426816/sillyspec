@@ -1,0 +1,798 @@
+diff --git a/.sillyspec/docs/sillyspec/scan/ARCHITECTURE.md b/.sillyspec/docs/sillyspec/scan/ARCHITECTURE.md
+index 8cbf5e0..db1732d 100644
+--- a/.sillyspec/docs/sillyspec/scan/ARCHITECTURE.md
++++ b/.sillyspec/docs/sillyspec/scan/ARCHITECTURE.md
+@@ -108,7 +108,7 @@ scan-profile.js 扫描档位 / concurrent-detect.js 并发检测 / multi-repo-co
+   D-03@v1）。
+ - `runStage(...)`（`src/run/stage.js:31`）：单阶段执行器，做状态转换校验（调用
+   `stage-contract.js` 的 `checkTransition`），逐 step 推进，处理审批门控。
+-- `runAutoMode(...)`（`src/run/command.js:1607`）：自动模式，连续跑
++- `runAutoMode(...)`（`src/run/command.js:1217`）：自动模式，连续跑
+   `['brainstorm','plan','execute','verify']` 主流程直到 `--done`。
+ 
+ 阶段流转语义（grep 自 run/ 模块）：
+@@ -204,7 +204,7 @@ SQLite Schema（grep 自 `db.js`，仅记表名 + 用途 + 字段数）：
+   - `POST {platform.url}/api/changes/{changeName}/documents` 同步文档（`sync.js:501`）；
+   - 同步完更新 `changes.platform_last_sync`。
+ - 审批链路：`GET /api/changes/{name}/approval` 查询（`sync.js:36`，`checkApproval`）+ `approve` / `reject`
+-  入口（`sync.js:2171`，共用 `_submitApproval`，端点契约 TBD-hub-api）。
++  入口（`sync.js:2220`，共用 `_submitApproval`，端点契约 TBD-hub-api）。
+ - 配置读 `.sillyspec/local.yaml` platform 段（connect/disconnect 用文本级改写保留注释）。
+ - platform 子命令（connect / disconnect / sync / sync-docs / status / pull / resolve /
+   approve / reject / pointer）见 `src/index.js:1263`。主 CLI 无 WebSocket 依赖。
+diff --git a/.sillyspec/knowledge/known-issues.md b/.sillyspec/knowledge/known-issues.md
+index ca5e68d..145f3e4 100644
+--- a/.sillyspec/knowledge/known-issues.md
++++ b/.sillyspec/knowledge/known-issues.md
+@@ -51,3 +51,9 @@ quick 启动预留的 ql-ID 写入 guard.json 后，QUICKLOG 条目可被并行
+ ## quick 单活跃变更无条件自动关联（坑 quick-single-change-auto-link）
+ 
+ quick 启动未带 --linked-changes 时，库里恰好一个活跃变更会被无条件自动关联（resolveQuickLinkedChanges `return [activeChanges[0]]`，2026-07-02 单用户流假设）——多 agent 仓库里唯一活跃变更常是他者会话遗留：挂载污染 tasks.md，且 --done 僵尸清理通道（closeQuickLinkedChanges）可把他者变更当僵尸误归档。修复（2026-09-14）：单候选也跑双信号打分（脏文件×design 清单 / 任务描述×proposal），score>0 才自动关联+提示+autoLinked 溯源（guard.linkedChangesAuto）；归档闸对仅被自动关联的变更 skip（机器猜测非协作声明不触发破坏性归档）。显式 --linked-changes 关联不受影响。详见 docs/sillyspec/quick-sync-block-filenotes-and-quicklog-mixed-commit.md；回归 test/quick-single-change-auto-link.test.mjs。
++
++## default 空目录物化 + explore --done 拒绝提示缺自身出口（坑 default-empty-dir-materialized / explore-done-change-default-hint，2026-09-14 用户反馈）
++
++**现象**：①辅助阶段（explore 等）不带 --change 启动时进度挂 DB `default` 变更行，但 `initChange` 会顺手物化 `changes/default/` 空目录——next.js 对它报「变更目录为空→清理该空目录」误导、resolveChangeNameAuto 目录计数被搅动、spec 树上行空目录（本仓实证 09-11 建目录零文件）。②多活跃变更库（多 agent 常态）里 `explore --done` 无 --change 被防幻影守卫拒绝，报错 ③ 只提示 brainstorm 新建路径，不提示进度就在 default 行（用户实证要靠 --status 才摸出来）。
++
++**修复（2026-09-14）**：①initChange 对 default 同 quick-<hex8> 系统键待遇停建目录；②目录停建后辅助阶段续跑锚定显式化——resolveAuxiliaryDefaultAffinity（default 行在途本阶段 → 锚回），done-like 守卫加 !progress 前置；③守卫报错补 explore 分支（default 在活跃列表 → 提示 --change default）。另同批修复 explore --done 的墓碑 409 回执刷屏（change_deleted 变更级噪音闸，见 sync 模块卡）。回归 test/default-no-dir-and-affinity.test.mjs + test/sync-change-deleted-noise.test.mjs。
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index 866f43f..e015253 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -128,8 +128,8 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ | 步骤 / 命令 | 链路 | 具体动作 | 源码触发点 |
+ |---|---|---|---|
+ | `platform connect <url> <token>` | A | GET health ping → POST resolve-by-root-path 换 shpsync_ token → 写 platform/mcp 段 | `sync.js:260` |
+-| **每个进度落盘点**（step `--done` 完成、阶段启动/切换、stale 步骤重置、gate 拦截回滚等 `_write` 后） | A | `triggerSync` → POST `…/progress` 推六表进度（8s 熔断）。**本地/平台模式都执行**（2026-08-26 放行）：平台模式凭据经 env 通道（`_getPlatform`），无 env 且 local.yaml 无 platform 段时静默跳过 | complete.js:561/497/917/1027/1166（--done）；stage.js:221/155/177（启动/切换/stale 重置）；gates.js:517；command.js:1244/1315/1537/1589/1600/1776 |
+-| **execute 阶段启动前**（runStage / auto 流程，非平台模式，`--skip-approval` 可跳过） | A | `checkApproval` → GET `…/approval`：**rejected → `exit(1)` 硬阻断**；pending → 提示待审批；unknown → 放行 | stage.js:47-58；command.js:1753/1757/1837 |
++| **每个进度落盘点**（step `--done` 完成、阶段启动/切换、stale 步骤重置、gate 拦截回滚等 `_write` 后） | A | `triggerSync` → POST `…/progress` 推六表进度（8s 熔断）。**本地/平台模式都执行**（2026-08-26 放行）：平台模式凭据经 env 通道（`_getPlatform`），无 env 且 local.yaml 无 platform 段时静默跳过 | complete.js:561/497/917/1027/1166（--done）；stage.js:221/155/177（启动/切换/stale 重置）；gates.js:517；command.js:1268/1404/1642/1705/1716/1906 |
++| **execute 阶段启动前**（runStage / auto 流程，非平台模式，`--skip-approval` 可跳过） | A | `checkApproval` → GET `…/approval`：**rejected → `exit(1)` 硬阻断**；pending → 提示待审批；unknown → 放行 | stage.js:47-58；command.js:1796/1842/1922 |
+ | **run `<stage>` 入口**（所有 stage + 顶层别名，agent 环境内；平台/本地模式都上报，不受 sentinel 限制） | D | 探测本地 agent 会话日志（claude-code/codex/zcode 自动探测，env `SILLYSPEC_AGENT_LOG` 覆盖其他 CLI）→ 本地留底 + REST POST `…/api/agent-logs` 上报（best-effort 5s 熔断，失败不阻断；`SILLYSPEC_AGENT_LOG_PUSH=0` 可关） | command.js:723（`recordAgentLogInvocation`） |
+ | `platform sync-docs`（手动命令，**唯一触发点**） | A | POST `…/documents` 推四件套全量；run 流程**不**自动推文档（sync.js:30 头注释称由 run 流程触发，已过时） | sync.js:439；index.js:1275 |
+ | `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:2322；shared.js:888 |
+diff --git a/docs/sillyspec/prompt-control-debt.md b/docs/sillyspec/prompt-control-debt.md
+index 12ba2c1..ad0cd77 100644
+--- a/docs/sillyspec/prompt-control-debt.md
++++ b/docs/sillyspec/prompt-control-debt.md
+@@ -318,7 +318,7 @@ P2 遗留（按优先级登记）：
+ 
+ **批次② 状态机 fail-open 组 → 完整流程 brainstorm（行为语义变更，单一 change 立项）**
+ - **A5** `--done` 阶段产物 gate 失败只打 ❌ 但 exit 0：`src/run/complete.js:328-329` gate 早退 return 不设 process.exitCode——与 quick 审计 blocked→exit 1 同仓惯例分裂，agent/CI/hook 按 exit code 消费即 fail-open。
+-- **B6** `--done` 完全绕过阶段转换守卫 + 辅助阶段污染 currentStage：`src/run/command.js:1442` --done 直接进 `completeStep` 不查 `checkTransition`（stage.js:27-44 只在 runStage 调）；status/doctor 等 auxiliary 跑一次即写 `progress.currentStage`（stage.js:233）→ fromStage 变 status 后跳阶段静默放行（stage-contract.js:954 `AUXILIARY_STAGES` 一律放行）。
++- **B6** `--done` 完全绕过阶段转换守卫 + 辅助阶段污染 currentStage：`src/run/command.js:1481` --done 直接进 `completeStep` 不查 `checkTransition`（stage.js:27-44 只在 runStage 调）；status/doctor 等 auxiliary 跑一次即写 `progress.currentStage`（stage.js:233）→ fromStage 变 status 后跳阶段静默放行（stage-contract.js:954 `AUXILIARY_STAGES` 一律放行）。
+ - **B7** status/doctor 自称只读实则写库：`src/run/command.js:959` auxiliary fallback `initChange` 建 default 行 + 落盘 currentStage，与 SKILL「status 只读」矛盾，多 agent 并发 lastActive 互相覆盖。
+ - **B8** `run brainstorm` 无 --change 多活跃变更仓静默建幽灵变更：`src/run/command.js:717-731` 无条件 initChange（DB 实锤 08-15 一小时 4 个 `*-new-change-*` 活跃行）。
+ - 裁决理由：四者共性强——状态机守卫 fail-open + 幽灵变更/幽灵阶段污染，属行为语义变更（多命令交互路径），非单点行修复。走完整流程 brainstorm → plan → execute，含 8b（新项目首跑 auxiliary 幽灵 default 变更）一并评估。
+diff --git a/src/index.js b/src/index.js
+index 0a4dfc0..0c38b37 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -3250,7 +3250,8 @@ SillySpec platform — SillyHub 平台同步
+         case 'sync': {
+           const syncChangeIdx = args.indexOf('--change');
+           const syncChangeName = syncChangeIdx >= 0 && args[syncChangeIdx + 1] && !String(args[syncChangeIdx + 1]).startsWith("--") ? args[syncChangeIdx + 1] : null;
+-          await syncModule.sync(syncChangeName, dir);
++          // manual：用户显式同步，change_deleted 回执噪音闸旁路（显式动作的回执必须可见）
++          await syncModule.sync(syncChangeName, dir, { manual: true });
+           break;
+         }
+         case 'sync-docs': {
+diff --git a/src/progress.js b/src/progress.js
+index 6aecdd5..c17e9a1 100644
+--- a/src/progress.js
++++ b/src/progress.js
+@@ -1018,10 +1018,15 @@ export class ProgressManager {
+     }
+     // quick 会话 id（quick-<uuid8>，见 run.js QUICK_SID_RE）只作 progress 的跨进程 session key，
+     // 进度存 SQL 不需要实体 change 目录——跳过避免 changes/quick-<uuid>/ 空目录残留。
++    // default 兜底 key 同款待遇（坑 default-empty-dir-materialized，2026-09-14 用户反馈）：
++    // default 行是辅助阶段（explore 等）无实体产物的进度容器，物化 changes/default/ 空目录
++    // 纯污染——next.js 会报「变更目录为空→清理该空目录」误导、resolveChangeNameAuto 的目录
++    // 计数被搅动、spec 树上行空目录（本仓实证 changes/default/ 建于 09-11 零文件）。进度真相
++    // 在 DB 行；辅助阶段续跑锚定改由 run/command.js 的 default 行阶段亲和解析承担。
+     // 注：日期前缀门禁（assertDatedChangeName）只在 CLI 边界强制（run --change / change-rename，
+     // 见 run/command.js + index.js）——initChange 是库函数，测试/平台工具合法用任意名建 fixture，
+     // 不在此设门（2026-09-11 决策，避免 ~30 处测试 fixture 非日期名被拦）。
+-    if (!/^quick-[0-9a-f]{8}$/.test(changeName)) {
++    if (!/^quick-[0-9a-f]{8}$/.test(changeName) && changeName !== 'default') {
+       this._ensureChangeDir(cwd, changeName);
+     }
+ 
+diff --git a/src/run/command.js b/src/run/command.js
+index b7d0e82..fedd751 100644
+--- a/src/run/command.js
++++ b/src/run/command.js
+@@ -1020,12 +1020,27 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+   }
+ 
+   if (!progress) {
++    // ── 辅助阶段 default 行亲和（坑 default-empty-dir-materialized 配套，2026-09-14 用户反馈①）──
++    // default 行是辅助阶段（explore 等）不带 --change 启动时的进度容器（下方 isAuxiliary
++    // 兜底 'default'）。此前「续跑也锚回 default」靠的是 changes/default/ 目录在目录计数
++    // 解析里的存在感——目录停建后（initChange 对系统 key 不再物化）该隐式锚定失效，
++    // 「default 在途 + 恰好一个其他变更目录」会把辅助阶段挂到别人的变更行。这里显式化：
++    // 无 --change 且 default 行有在途（非 completed）的本阶段 steps → 锚回 default。
++    // 显式 --change 恒优先；非辅助阶段（brainstorm/execute 等）从不落 default，不适用。
++    if (!changeName && isAuxiliary) {
++      const affinity = resolveAuxiliaryDefaultAffinity(pm, cwd, stageName)
++      if (affinity) {
++        changeName = affinity
++        progress = pm.read(cwd, affinity)
++      }
++    }
+     // ── done-like 存在性守卫（坑 done-phantom-change-silent-create，2026-09-04 事故元凶①）──
+     // --done/--skip/--wait/--continue/--reset/--reopen 都预设「目标 change 已存在于当前进度库」。
+     // 此前 !progress 时无条件 initChange 静默新建——接管指针切库/换库后 --change 指向旧库的
+     // 变更名，新库里凭空建幻影变更再把动作记上去。目标已物化（changes/ 目录或 quick 会话
+     // guard 存在）仍放行走下方 initChange 自愈（DB 重建/迁移后从目录物化是合法恢复路径）。
+-    if (isDone || isSkip || isWait || isContinue || isReset || isReopen) {
++    // !progress 前置：上方亲和已锚到 default 行（DB 在途）时目标已确证存在，不走磁盘物化判据。
++    if (!progress && (isDone || isSkip || isWait || isContinue || isReset || isReopen)) {
+       const actionFlag = isDone ? '--done' : isSkip ? '--skip' : isWait ? '--wait'
+         : isContinue ? '--continue' : isReset ? '--reset' : '--reopen'
+       const guardTarget = changeName || resolveChangeNameAuto(cwd, specRoot)
+@@ -1051,6 +1066,13 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+         }
+         if (stageName === 'quick' || /^quick-[0-9a-f]{8}$/.test(guardTarget || '')) {
+           console.error(`   ③ quick 会话跨进程恢复须带 --change <quick-session-id>；本库无该会话 guard——会话可能属于旧库`)
++        } else if (stageName === 'explore' && activeList.includes('default')) {
++          // 坑 explore-done-change-default-hint（2026-09-14 用户反馈①）：explore 不带 --change 启动
++          // 时进度按约定挂 default 变更行（isAuxiliary 兜底），多活跃变更库（多 agent 并行常态）
++          // 目标解析失败被拒时，③ 只指 brainstorm 新建路径——对「进度就在 default 行」的 explore
++          // 会话是误导（用户实证要靠 --status 才摸出来）。default 在活跃列表 = 有辅助阶段在途，
++          // 补指向自身的 --change default 出口。
++          console.error(`   ③ explore 阶段进度默认挂在 default 变更行——本库 default 在活跃列表，重试加 --change default`)
+         } else {
+           console.error(`   ③ 确要新建变更：先 sillyspec run brainstorm --change <名>（不带 ${actionFlag}）`)
+         }
+@@ -1463,6 +1485,22 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+   return await runStage(pm, progress, stageName, cwd, effectiveChange, isSkipApproval, platformOpts, { quickFiles, isAllowNew, isAllowDelete, isForceBaseline, isForceRescan, linkedChanges, linkedChangesAuto: linkedAuto, taskDescription: inputText, adoptBranch: stageName === 'execute' && flags.includes('--adopt-branch') })
+ }
+ 
++/**
++ * 辅助阶段 default 行亲和：default 行有在途（非 completed、steps 已物化）的本阶段时返回 'default'。
++ * steps>0 门槛排除「从未跑过」的空壳行（initChange 播的 pending 空表）——那种行不是在途会话，
++ * 不锚（防凭空把 --done 记上去）。只读不抛（无行/读失败 → null）。目录停建后辅助阶段续跑的
++ * 显式锚定（见 !progress 块内注释）。completed 永不锚（辅助阶段收尾会 reset 回 pending 可重跑，
++ * 见 gates.js auxiliary 重置——reset 后 pending+steps>0 照样锚，即「下一轮 explore 续用 default 行」）。
++ */
++function resolveAuxiliaryDefaultAffinity(pm, cwd, stageName) {
++  try {
++    const p = pm.read(cwd, 'default')
++    const st = p && p.stages && p.stages[stageName]
++    if (st && st.status && st.status !== 'completed' && Array.isArray(st.steps) && st.steps.length > 0) return 'default'
++  } catch { /* 读失败不猜（fail-closed，走原解析链） */ }
++  return null
++}
++
+ /**
+  * 自动推导变更名（不依赖 progress）
+  */
+diff --git a/src/sync-noise.js b/src/sync-noise.js
+index 03d1203..c7a4ebf 100644
+--- a/src/sync-noise.js
++++ b/src/sync-noise.js
+@@ -15,10 +15,13 @@
+  * - 任意一次同步成功清 marker，且此前在闸内时打一行恢复提示；
+  * - SILLYSPEC_DEBUG_SYNC=1 全程不静默。
+  *
+- * 边界：只覆盖「连接类」失败（HTTP 404/5xx、网络错、超时/abort）。409 冲突与其余
+- * 4xx 业务态（平台就绪但状态冲突/鉴权问题）不走闸——那些是每轮都该看见的语义信号，
+- * 且已有各自的冲突降噪机制（sync-conflict-banner-spam 一族）。用户显式命令
+- * （platform connect 的 health ping）不应被静默——调用方传 noMute 绕过本闸。
++ * 边界：连接类闸只覆盖「连接类」失败（HTTP 404/5xx、网络错、超时/abort）。409 与其余
++ * 4xx 业务态（平台就绪但状态冲突/鉴权问题）不走连接类闸——那些是每轮都该看见的语义信号，
++ * 且已有各自的冲突降噪机制（sync-conflict-banner-spam 一族）。例外：409 code='change_deleted'
++ * 是终态幂等回执（平台侧已删该变更 key，重推永远同回执、永不自愈），走下方按变更名键控的
++ * change_deleted 闸（2026-09-14 用户反馈②）：首报可见 + 跨进程窗口静默 + 推送成功清窗。
++ * 用户显式命令（platform connect 的 health ping / platform sync 手动推送）不应被静默——
++ * 调用方传 noMute 绕过。
+  */
+ import { readFileSync, writeFileSync, mkdirSync, unlinkSync } from 'fs'
+ import { join } from 'path'
+@@ -130,13 +133,116 @@ export function syncConnectionWarn(msg) {
+ }
+ 
+ /**
+- * 判定 HTTP 状态码是否属连接类（可静默）：404（端点未部署/未就绪）与 5xx（服务端故障）。
++ * 判定 HTTP 状态码是否属连接类（可静默）：404（端点未就绪/未部署）与 5xx（服务端故障）。
+  * 409 与其余 4xx 不在此列（见模块头注释边界）。
+  */
+ export function isConnectionClassStatus(status) {
+   return status === 404 || (typeof status === 'number' && status >= 500)
+ }
+ 
++// ── 变更级 change_deleted 回执噪音闸（2026-09-14 用户反馈②：--done 的真实报错被
++//    default 墓碑 409 回执刷屏淹没）──
++// 与连接类闸同构但按变更名键控。409 code='change_deleted' 是终态幂等回执：平台侧已删
++// 该变更 key 后，本地同名变更每次自动 push（每步 triggerSync/triggerStepStartSync）都收到
++// 同样的回执——多步流程下逐条重打属零新信息刷屏；且与 base_ts 409 不同，它永远不会自愈
++// （平台侧删除需人工介入）。语义边界（区别于连接类闸的「每轮都该看见」）：
++//   - 首报完整可见（含 ⚠️ 本地仍 active 的可行动信号）；
++//   - 跨进程窗口内同变更的回执静默（窗口过期后照常重报——保活信号，不静默死）；
++//   - 开窗进程内不同回执行照打（诊断完整性，与连接类闸同款）；
++//   - 该变更推送成功（平台侧重建/恢复）→ noteChangeDeletedResolved 清窗；
++//   - 手动 platform sync（opts.manual）与 SILLYSPEC_DEBUG_SYNC=1 旁路。
++const DELETED_MARKER = 'sync-noise-change-deleted.json'
++// 本进程开窗的变更名集合（区分「窗口是本进程开的」与「先前进程留的」，同 _openedByThisProcess）
++let _openedDeletedByThisProcess = new Set()
++// 本进程已见（打印/静默）过的 `${changeName}\u0000${msg}` 集合：同进程内逐字重复只打一次
++const _seenDeletedInProcess = new Set()
++
++function _readDeletedWindows() {
++  const p = _runtimeDir ? join(_runtimeDir, DELETED_MARKER) : null
++  if (!p) return null
++  try {
++    const s = JSON.parse(readFileSync(p, 'utf8'))
++    return s && typeof s === 'object' && !Array.isArray(s) ? s : null
++  } catch { return null }
++}
++
++function _writeDeletedWindows(map) {
++  const p = _runtimeDir ? join(_runtimeDir, DELETED_MARKER) : null
++  if (!p) return
++  try {
++    mkdirSync(_runtimeDir, { recursive: true })
++    const now = Date.now()
++    const pruned = {}
++    for (const [k, v] of Object.entries(map)) if (typeof v === 'number' && v > now) pruned[k] = v
++    if (Object.keys(pruned).length === 0) {
++      try { unlinkSync(p) } catch { /* 无文件/占用：留空 map 文件也等效 */ }
++      return
++    }
++    writeFileSync(p, JSON.stringify(pruned) + '\n', 'utf8')
++  } catch { /* marker 写失败 = 闸门失效退化为直通，仅损失降噪 */ }
++}
++
++function _deletedLineVisible(changeName, msg, noMute) {
++  if (!changeName || noMute || process.env.SILLYSPEC_DEBUG_SYNC) return true
++  const key = changeName + '\u0000' + msg
++  if (_seenDeletedInProcess.has(key)) return false
++  const now = Date.now()
++  const windows = _readDeletedWindows()
++  const until = windows ? windows[changeName] : undefined
++  if (typeof until === 'number' && now < until) {
++    _seenDeletedInProcess.add(key)
++    // 开窗进程内不同回执行可见（诊断完整性），先前进程留的窗口静默
++    return _openedDeletedByThisProcess.has(changeName)
++  }
++  _seenDeletedInProcess.add(key)
++  const next = windows || {}
++  next[changeName] = now + MUTE_WINDOW_MS
++  _writeDeletedWindows(next)
++  _openedDeletedByThisProcess.add(changeName)
++  return true
++}
++
++/**
++ * change_deleted 回执行（info 口吻：本地已注销的墓碑上行 409 属预期回执）。
++ * @returns {boolean} true=已输出
++ */
++export function syncChangeDeletedLog(changeName, msg, { noMute = false } = {}) {
++  if (_deletedLineVisible(changeName, msg, noMute)) {
++    console.log(msg)
++    return true
++  }
++  return false
++}
++
++/**
++ * change_deleted 回执行（warn 口吻：本地仍 active，上行被拒收的可行动信号）。
++ * @returns {boolean} true=已输出
++ */
++export function syncChangeDeletedWarn(changeName, msg, { noMute = false } = {}) {
++  if (_deletedLineVisible(changeName, msg, noMute)) {
++    console.warn(msg)
++    return true
++  }
++  return false
++}
++
++/**
++ * 该变更推送成功（平台侧未删/已重建）：清其回执噪音窗与进程内状态。
++ * 与 noteSyncSuccess 的「任意成功清连接闸」不同——本闸按变更名精清（他变更的窗口不受影响）。
++ */
++export function noteChangeDeletedResolved(changeName) {
++  if (!changeName) return
++  _openedDeletedByThisProcess.delete(changeName)
++  for (const k of _seenDeletedInProcess) {
++    if (k.startsWith(changeName + '\u0000')) _seenDeletedInProcess.delete(k)
++  }
++  const windows = _readDeletedWindows()
++  if (windows && windows[changeName] !== undefined) {
++    delete windows[changeName]
++    _writeDeletedWindows(windows)
++  }
++}
++
+ /**
+  * 任意一次同步成功：清 marker。此前处于闸内（marker 存在）时打一行恢复提示——
+  * 平台恢复的第一个信号应该可见，之后的成功照常静默（成功不打扰）。
+@@ -150,9 +256,11 @@ export function noteSyncSuccess() {
+   console.log('[sync] 平台连接已恢复（此前静默的同步失败已停止）')
+ }
+ 
+-/** 测试复位：清进程内绑定与开窗状态。 */
++/** 测试复位：清进程内绑定与开窗状态（连接类闸 + change_deleted 变更级闸）。 */
+ export function _resetSyncNoiseForTest() {
+   _runtimeDir = null
+   _openedByThisProcess = false
+   _seenInProcess.clear()
++  _openedDeletedByThisProcess = new Set()
++  _seenDeletedInProcess.clear()
+ }
+diff --git a/src/sync.js b/src/sync.js
+index b4a7921..66929ae 100644
+--- a/src/sync.js
++++ b/src/sync.js
+@@ -18,7 +18,7 @@ import { safeGit } from './git-helper.js';
+ import { openDatabase } from './db-engine.js';
+ import { PLATFORM_MANAGED_FILENAME, QUICK_SID_RE } from './run/shared.js';
+ import { syncSpecTree } from './spec-sync.js';
+-import { bindSyncNoiseFromCwd, syncConnectionWarn, isConnectionClassStatus, noteSyncSuccess } from './sync-noise.js';
++import { bindSyncNoiseFromCwd, syncConnectionWarn, isConnectionClassStatus, noteSyncSuccess, syncChangeDeletedLog, syncChangeDeletedWarn, noteChangeDeletedResolved } from './sync-noise.js';
+ 
+ // sync 是 best-effort（网络失败只 warn）：平台指针失效时不抛，跳过平台、回退本地。
+ function safePlatformSpecDir(cwd) {
+@@ -595,7 +595,7 @@ export class SyncManager {
+    * 外来推送（他机/他用户）不可能推进本机 DB 的 base_ts → 走原冲突路径，无误放行。
+    */
+   async sync(changeName, opts = {}) {
+-    const { fromResolve = false } = opts;
++    const { fromResolve = false, manual = false } = opts;
+     const platform = this._getPlatform();
+     if (!platform) {
+       debugLog('[sync] 未连接平台（本地合法状态）；如需平台同步：sillyspec platform connect');
+@@ -656,7 +656,9 @@ export class SyncManager {
+       // change-delete（2026-08-30）：DB status='deleted' 的行目录已随删除移除，属正常时序，
+       // 单行 info 提示后继续推删除终态/墓碑（不落入「目录不存在」warn）
+       if (this._changeDbStatus(changeName) === 'deleted') {
+-        console.log(`[sync] 变更已删除（DB status=deleted），继续推送删除终态/墓碑: ${changeName}`);
++        // 变更级回执噪音闸（sync-noise.js change_deleted 闸）：status=deleted 是终态，此后每步
++        // 自动同步都会走到这里打同一行——首报后跨进程窗口内静默；手动 platform sync 旁路。
++        syncChangeDeletedLog(changeName, `[sync] 变更已删除（DB status=deleted），继续推送删除终态/墓碑: ${changeName}`, { noMute: manual });
+       } else {
+         archivedQuietly = existsSync(join(specBase, 'changes', 'archive', changeName))
+           || this._changeDbStatus(changeName) === 'archived';
+@@ -750,9 +752,10 @@ export class SyncManager {
+           || progressData?.changes?.[0]?.status === 'archived'
+           || progressData?.changes?.[0]?.status === 'deleted'
+         if (localTombstone) {
+-          console.log(`ℹ️ [sync] 平台已删除变更「${changeName}」——本地注销已由 CLI 完成，墓碑上行 409 属预期回执，无需动作`);
++          syncChangeDeletedLog(changeName, `ℹ️ [sync] 平台已删除变更「${changeName}」——本地注销已由 CLI 完成，墓碑上行 409 属预期回执，无需动作`, { noMute: manual });
+         } else {
+-          console.warn(`⚠️ [sync] 平台已删除变更「${changeName}」，本次进度上行被拒收（change_deleted）；本地如仍需推进请在平台侧确认`);
++          // 可行动信号（本地仍 active + 平台已删）：首报必须醒目，重复回执走变更级噪音闸
++          syncChangeDeletedWarn(changeName, `⚠️ [sync] 平台已删除变更「${changeName}」，本次进度上行被拒收（change_deleted）；本地如仍需推进请在平台侧确认`, { noMute: manual });
+         }
+         return { synced: 0, errors: [], platformDeleted: true, reason: '平台已删除（change_deleted 拒收）' };
+       }
+@@ -761,6 +764,8 @@ export class SyncManager {
+         // 平台连接恢复信号（sync-noise.js）：此前静默窗口内的失败在恢复的第一笔成功时
+         // 打一行提示并清 marker；之后照常「成功不打扰」。
+         noteSyncSuccess();
++        // 该变更推送成功 = 平台侧未删/已重建，change_deleted 回执噪音窗按变更名精清
++        noteChangeDeletedResolved(changeName);
+         // 更新 platform_last_sync + 推进 base_ts（ql-20260818-008：值优先平台回执 last_pushed_at，
+         // 缺省用本次 pushedAt——服务器 _apply 存的就是客户端 X-SillySpec-Pushed-At 原值，回写一致。
+         // 修复前该列从不写，下次 push 永不带 X-SillySpec-Base-Ts、pull 脏度检测恒 false）
+diff --git a/test/default-no-dir-and-affinity.test.mjs b/test/default-no-dir-and-affinity.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/default-no-dir-and-affinity.test.mjs
+@@ -0,0 +1,149 @@
++/**
++ * 坑 default-empty-dir-materialized + explore-done-change-default-hint（2026-09-14 用户反馈）：
++ *
++ * 1. initChange 对系统 key（default / quick-<8hex>）不再物化 changes/<名>/ 空目录——
++ *    default 行是辅助阶段（explore 等）无实体产物的进度容器，空目录纯污染（next.js 报
++ *    「变更目录为空→清理」误导 + resolveChangeNameAuto 目录计数被搅动 + spec 树上行空目录）。
++ *    普通变更（日期名）物化目录回归不变。
++ * 2. 辅助阶段 default 行阶段亲和（run/command.js !progress 块）：目录停建后「续跑锚回
++ *    default」不再靠目录存在感，显式判 default 行有在途（非 completed）本阶段 → 锚回。
++ *    - explore --done 无 --change + default 在途 → 在 default 行完成（不挂到唯一目录变更上）
++ *    - 显式 --change 恒优先
++ * 3. 亲和救不了的残余拒绝路径（default 无在途/不存在）：守卫报错 ③ 对 explore + default
++ *    在活跃列表时补「加 --change default」出口；无 default 行时维持 brainstorm 提示。
++ *
++ * 隔离：mkdtempSync 临时目录 + 临时 specDir，不污染真实仓库。
++ */
++import { mkdtempSync, mkdirSync, rmSync, existsSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++import { runCommand } from '../src/run.js'
++import { ProgressManager } from '../src/progress.js'
++
++let total = 0, failed = 0
++function assert(condition, msg) {
++  total++
++  if (!condition) { failed++; console.log(`  ❌ FAIL: ${msg}`) }
++  else console.log(`  ✅ PASS: ${msg}`)
++}
++async function captureExit(fn) {
++  const origExit = process.exit
++  const origLog = console.log
++  const origErr = console.error
++  let exitCode = null
++  let stdout = ''
++  let stderr = ''
++  process.exit = (code) => { exitCode = code; throw new Error('EXIT_' + code) }
++  console.log = (...a) => { stdout += a.join(' ') + '\n' }
++  console.error = (...a) => { stderr += a.join(' ') + '\n' }
++  try {
++    await fn()
++  } catch (e) {
++    if (!/^EXIT_\d+$/.test(e.message)) { exitCode = null; throw e }
++  } finally {
++    process.exit = origExit
++    console.log = origLog
++    console.error = origErr
++  }
++  return { exitCode, stdout, stderr }
++}
++
++console.log('=== default 系统键不物化目录 + 辅助阶段亲和 + explore 拒绝提示 ===\n')
++
++const repo = mkdtempSync(join(tmpdir(), 'defdir-repo-'))
++const specBase = join(repo, '.sillyspec')
++await new ProgressManager({ specDir: specBase }).init(repo)
++
++// ── 1. initChange：default 不建目录，普通变更照建 ──
++{
++  const pm = new ProgressManager({ specDir: specBase })
++  pm.initChange(repo, 'default')
++  assert(!existsSync(join(specBase, 'changes', 'default')), 'initChange(default) 不物化 changes/default/ 目录')
++  assert(pm.read(repo, 'default') !== null, 'default DB 行存在（进度真相在 DB）')
++
++  pm.initChange(repo, '2026-09-13-real-work')
++  assert(existsSync(join(specBase, 'changes', '2026-09-13-real-work')), '普通变更（日期名）照常物化目录（回归）')
++
++  pm.initChange(repo, 'quick-abcd1234')
++  assert(!existsSync(join(specBase, 'changes', 'quick-abcd1234')), 'quick 会话键不物化目录（既有回归）')
++}
++
++// ── 公共 helper：给某变更行种 explore 阶段 ──
++function seedExploreStage(pm, name, stageStatus, stepStatus) {
++  pm._write(repo, {
++    currentStage: 'explore',
++    stages: {
++      explore: {
++        status: stageStatus,
++        steps: [{ name: '自由探索', status: stepStatus }],
++      },
++    },
++  }, name)
++}
++
++// ── 2. 亲和：default 在途 explore + 恰好一个其他变更目录 → explore --done 锚回 default ──
++// （目录停建前此场景靠 default 目录存在感把目标数成 2；停建后只剩 1 个目录，无亲和会把
++//  explore 挂到别人的变更行上——亲和显式化后续跑语义不变）
++// 注：explore 是辅助阶段，完成收尾会 reset 回 pending 可重跑（gates.js auxiliary 重置），
++// 断言用「完成消息 + default 已被 reset（in-progress→pending）+ 他者行未被挂步」三件套。
++{
++  const pm = new ProgressManager({ specDir: specBase })
++  // default 行在途（in-progress + 1 pending 步）；other 变更有目录 + DB 行
++  seedExploreStage(pm, 'default', 'in-progress', 'pending')
++  const r = await captureExit(() => runCommand(['explore', '--done', '--output', '探索结论'], repo))
++  assert(r.exitCode !== 2, `explore --done（无 --change，default 在途）不被拒（实际 ${r.exitCode}）`)
++  assert(r.stdout.includes('explore 阶段已完成'), 'explore 阶段走完完成分支（完成消息可见）')
++
++  const after = new ProgressManager({ specDir: specBase }).read(repo, 'default')
++  assert(after?.stages?.explore?.status === 'pending', 'default 行 explore 已完成并 reset 回 pending（in-progress 被消费，亲和锚定正确）')
++  const other = new ProgressManager({ specDir: specBase }).read(repo, '2026-09-13-real-work')
++  assert((other?.stages?.explore?.steps || []).length === 0, '其他变更行未被挂 explore 步（不偷目标）')
++  assert(!existsSync(join(specBase, 'changes', 'default')), '--done 流程也不补建 changes/default/ 目录')
++}
++
++// ── 3. 显式 --change 恒优先（亲和不覆盖用户指定）──
++{
++  const pm = new ProgressManager({ specDir: specBase })
++  seedExploreStage(pm, '2026-09-13-real-work', 'in-progress', 'pending')
++  const r = await captureExit(() => runCommand(['explore', '--done', '--change', '2026-09-13-real-work', '--output', 'x'], repo))
++  assert(r.exitCode !== 2, `显式 --change 不受亲和影响（实际 ${r.exitCode}）`)
++  assert(r.stdout.includes('explore 阶段已完成'), '显式指定的变更上完成消息可见')
++  const other = new ProgressManager({ specDir: specBase }).read(repo, '2026-09-13-real-work')
++  assert(other?.stages?.explore?.status === 'pending', '显式指定的变更行 explore 已 reset（完成落在此行）')
++  const dflt = new ProgressManager({ specDir: specBase }).read(repo, 'default')
++  assert(dflt?.stages?.explore?.status === 'pending', 'default 行保持 reset 态未被本次触碰')
++}
++
++// ── 4. 亲和救不了的残余路径：default 行存在但 explore 已完成 → 拒 + explore 专属提示 ──
++{
++  // 造两个变更目录（目录计数解析 → null）+ default 行（explore completed，无亲和）
++  const pm = new ProgressManager({ specDir: specBase })
++  pm.initChange(repo, '2026-09-12-second-change')
++  seedExploreStage(pm, 'default', 'completed', 'completed')
++  const r = await captureExit(() => runCommand(['explore', '--done', '--output', 'x'], repo))
++  assert(r.exitCode === 2, `default 无在途 explore 时 --done 仍拒（防幻影，实际 ${r.exitCode}）`)
++  assert(r.stderr.includes('拒绝静默新建'), '报错含守卫主文案')
++  assert(r.stderr.includes('--change default'), '③ 补 explore 专属提示：重试加 --change default')
++}
++
++// ── 5. 无 default 行：维持 brainstorm 提示（不误导）──
++{
++  const repo2 = mkdtempSync(join(tmpdir(), 'defdir-repo2-'))
++  const sb2 = join(repo2, '.sillyspec')
++  const pm2 = new ProgressManager({ specDir: sb2 })
++  await pm2.init(repo2)
++  for (const n of ['2026-09-12-alpha', '2026-09-13-beta']) {
++    mkdirSync(join(sb2, 'changes', n), { recursive: true })
++    pm2.initChange(repo2, n)
++  }
++  const r = await captureExit(() => runCommand(['explore', '--done', '--output', 'x'], repo2))
++  assert(r.exitCode === 2, '无 default 行 + 多活跃 → 守卫拒绝（回归不变）')
++  assert(!r.stderr.includes('--change default'), '无 default 行时不给 default 提示（避免误导）')
++  assert(r.stderr.includes('run brainstorm'), '维持 brainstorm 新建路径提示')
++  try { rmSync(repo2, { recursive: true, force: true }) } catch {}
++}
++
++try { rmSync(repo, { recursive: true, force: true }) } catch {}
++
++console.log(`\n结果: ${total - failed}/${total} 通过`)
++if (failed > 0) process.exit(1)
+
+diff --git a/test/sync-change-deleted-noise.test.mjs b/test/sync-change-deleted-noise.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/sync-change-deleted-noise.test.mjs
+@@ -0,0 +1,261 @@
++// 变更级 change_deleted 回执噪音闸（2026-09-14 用户反馈②：--done 的真实报错被
++// default 墓碑 409 回执刷屏淹没——平台侧已删的变更名每次自动 push 都打同样回执行）。
++//
++// 覆盖：
++//   1. 单元（sync-noise.js）：首报可见 + marker 落盘、进程内逐字重复静默、开窗进程不同行
++//      照打、后续进程窗口内静默、窗口过期重报、成功清窗（noteChangeDeletedResolved）、
++//      双变更独立窗口、debug env / noMute 旁路、未绑定目录直通
++//   2. 集成（sync.js 接线，mock fetch）：
++//      a. 本地 active + 平台 409 change_deleted → ⚠️ 可行动回执首报可见，同进程/后续进程静默
++//      b. 本地 deleted（A 行 info + B 行 ℹ️ 预期回执）→ 首轮两行都可见，后续进程全静默
++//      c. manual（platform sync 手动命令路径）→ 旁路恒可见
++//      d. 推送成功 → 清窗 → 下次 409 回执重新首报
++//
++// 隔离：marker 落 tmpdir 临时目录；console.warn/log 临时拦截后恢复；mock globalThis.fetch。
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'fs'
++import { join } from 'path'
++import { tmpdir } from 'os'
++import {
++  bindSyncNoiseRoot, syncChangeDeletedLog, syncChangeDeletedWarn,
++  noteChangeDeletedResolved, _resetSyncNoiseForTest,
++} from '../src/sync-noise.js'
++
++delete process.env.SILLYSPEC_DEBUG_SYNC
++
++const tmpRoot = mkdtempSync(join(tmpdir(), `sillyspec-sync-deleted-noise-${process.pid}-`))
++const roots = []
++function freshRoot(label) {
++  const rt = join(tmpRoot, label, '.runtime')
++  roots.push(join(tmpRoot, label))
++  return rt
++}
++function capture() {
++  const warns = [], logs = []
++  const ow = console.warn, ol = console.log
++  console.warn = (m) => warns.push(String(m))
++  console.log = (m) => logs.push(String(m))
++  return { warns, logs, restore() { console.warn = ow; console.log = ol } }
++}
++/** 模拟「下一条 CLI 命令」（新进程）：保 marker 文件，清进程内状态并重绑目录 */
++function simulateNextProcess(rt) {
++  _resetSyncNoiseForTest()
++  bindSyncNoiseRoot(rt)
++}
++
++// ─────────────────────────────────────────
++// 1. 单元：闸门行为
++// ─────────────────────────────────────────
++test('单元：首报可见 + marker 落盘 + 进程内重复静默 + 开窗进程不同行照打', () => {
++  const rt = freshRoot('u1')
++  bindSyncNoiseRoot(rt)
++
++  let cap = capture()
++  const shown1 = syncChangeDeletedWarn('c1', '⚠️ [sync] 平台已删除变更「c1」')
++  cap.restore()
++  assert.equal(shown1, true)
++  assert.equal(cap.warns.length, 1, '首报可见（可行动信号不丢）')
++  assert.ok(existsSync(join(rt, 'sync-noise-change-deleted.json')), 'marker 已落盘（跨进程窗口）')
++
++  cap = capture()
++  const shownDup = syncChangeDeletedWarn('c1', '⚠️ [sync] 平台已删除变更「c1」')
++  const shownDiff = syncChangeDeletedLog('c1', 'ℹ️ [sync] c1 预期回执')
++  cap.restore()
++  assert.equal(shownDup, false, '开窗进程内逐字重复静默')
++  assert.equal(shownDiff, true, '开窗进程内不同回执行照打（诊断完整性）')
++})
++
++test('单元：后续进程窗口内静默、过期重报', () => {
++  const rt = freshRoot('u2')
++  bindSyncNoiseRoot(rt)
++  syncChangeDeletedWarn('c2', '⚠️ x')
++
++  simulateNextProcess(rt)
++  let cap = capture()
++  const shownNext = syncChangeDeletedWarn('c2', '⚠️ x')
++  cap.restore()
++  assert.equal(shownNext, false, '后续进程窗口内静默（每步命令不刷屏）')
++
++  // 窗口过期：手写过去时间戳 → 重报（保活信号）
++  writeFileSync(join(rt, 'sync-noise-change-deleted.json'), JSON.stringify({ c2: Date.now() - 11 * 60_000 }) + '\n', 'utf8')
++  simulateNextProcess(rt)
++  cap = capture()
++  const shownExpired = syncChangeDeletedWarn('c2', '⚠️ x')
++  cap.restore()
++  assert.equal(shownExpired, true, '窗口过期重新首报（不静默死）')
++})
++
++test('单元：双变更独立窗口 + 成功清窗（noteChangeDeletedResolved）', () => {
++  const rt = freshRoot('u3')
++  bindSyncNoiseRoot(rt)
++  syncChangeDeletedWarn('a', '⚠️ a')
++  syncChangeDeletedWarn('b', '⚠️ b')
++
++  noteChangeDeletedResolved('a')
++  const raw = JSON.parse(readFileSync(join(rt, 'sync-noise-change-deleted.json'), 'utf8'))
++  assert.equal(raw.a, undefined, 'a 的窗口已清')
++  assert.ok(typeof raw.b === 'number', 'b 的窗口不受影响（按变更名精清）')
++
++  simulateNextProcess(rt)
++  let cap = capture()
++  const shownA = syncChangeDeletedWarn('a', '⚠️ a')
++  const shownB = syncChangeDeletedWarn('b', '⚠️ b')
++  cap.restore()
++  assert.equal(shownA, true, '清窗后 a 重新首报')
++  assert.equal(shownB, false, 'b 仍在窗口内静默')
++})
++
++test('单元：debug env / noMute / 未绑定目录旁路', () => {
++  const rt = freshRoot('u4')
++  bindSyncNoiseRoot(rt)
++  syncChangeDeletedWarn('c', '⚠️ c') // 开窗
++
++  let cap = capture()
++  process.env.SILLYSPEC_DEBUG_SYNC = '1'
++  const shownDebug = syncChangeDeletedWarn('c', '⚠️ c')
++  delete process.env.SILLYSPEC_DEBUG_SYNC
++  const shownNoMute = syncChangeDeletedWarn('c', '⚠️ c', { noMute: true })
++  cap.restore()
++  assert.ok(shownDebug && shownNoMute, 'debug env 与 noMute（手动 platform sync）全程可见')
++
++  _resetSyncNoiseForTest()
++  cap = capture()
++  const shownUnbound = syncChangeDeletedWarn('c', '⚠️ c')
++  cap.restore()
++  assert.equal(shownUnbound, true, '未绑定 runtime 目录时直通（宁多一行不丢信号）')
++})
++
++// ─────────────────────────────────────────
++// 2. 集成：sync.js 三处接线（mock fetch）
++// ─────────────────────────────────────────
++const { SyncManager } = await import('../src/sync.js')
++const { ProgressManager } = await import('../src/progress.js')
++
++function makeFixture() {
++  const cwd = mkdtempSync(join(tmpRoot, `fx-`))
++  roots.push(cwd)
++  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
++  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), `platform:\n  url: http://127.0.0.1:9\n  token: test-token\n`, 'utf8')
++  return cwd
++}
++function mockFetch({ progressStatus = 200, progressBody = { ok: true } } = {}) {
++  const calls = []
++  const impl = async (url, options = {}) => {
++    calls.push(`${options.method || 'GET'} ${url}`)
++    if (/\/api\/changes\/[^/]+\/progress$/.test(url) && (options.method || 'GET') === 'POST') {
++      return {
++        ok: progressStatus >= 200 && progressStatus < 300,
++        status: progressStatus,
++        headers: { get: () => 'application/json' },
++        text: async () => JSON.stringify(progressBody),
++      }
++    }
++    return { ok: true, status: 200, headers: { get: () => 'application/json' }, text: async () => JSON.stringify({ ok: true }) }
++  }
++  const saved = globalThis.fetch
++  globalThis.fetch = impl
++  return { calls, restore: () => { globalThis.fetch = saved } }
++}
++function seedChange(cwd, name) {
++  const pm = new ProgressManager({ specDir: join(cwd, '.sillyspec') })
++  pm.init(cwd)
++  pm.initChange(cwd, name)
++  pm._write(cwd, { currentStage: 'plan', stages: { plan: { status: 'in-progress', steps: [{ name: 'a', status: 'completed' }, { name: 'b', status: 'pending' }] } } }, name)
++  return pm
++}
++
++test('集成：本地 active 撞 409 change_deleted → ⚠️ 首报可见，重复（同进程/后续进程）静默，manual 旁路', async () => {
++  const cwd = makeFixture()
++  const name = 'plat-deleted-active'
++  seedChange(cwd, name)
++  _resetSyncNoiseForTest()
++
++  const m = mockFetch({ progressStatus: 409, progressBody: { code: 'change_deleted', message: '该变更已在平台删除', change_name: name } })
++  try {
++    let cap = capture()
++    const r1 = await new SyncManager(cwd).sync(name)
++    cap.restore()
++    assert.equal(r1.platformDeleted, true, '返回 platformDeleted 标记（接线不变）')
++    assert.equal(cap.warns.filter(w => w.includes('平台已删除变更')).length, 1, '首次推送 ⚠️ 可行动回执可见')
++
++    // 同进程第二次推送（同命令多次 triggerSync）：静默
++    cap = capture()
++    await new SyncManager(cwd).sync(name)
++    cap.restore()
++    assert.equal(cap.warns.filter(w => w.includes('平台已删除变更')).length, 0, '同进程重复回执静默')
++
++    // 模拟下一条命令（新进程，marker 保留）：仍静默
++    _resetSyncNoiseForTest()
++    cap = capture()
++    await new SyncManager(cwd).sync(name)
++    cap.restore()
++    assert.equal(cap.warns.filter(w => w.includes('平台已删除变更')).length, 0, '后续进程窗口内静默（不刷屏）')
++
++    // manual（platform sync 手动命令）：旁路可见
++    cap = capture()
++    await new SyncManager(cwd).sync(name, { manual: true })
++    cap.restore()
++    assert.equal(cap.warns.filter(w => w.includes('平台已删除变更')).length, 1, 'manual 显式同步回执可见')
++  } finally { m.restore() }
++})
++
++test('集成：本地 deleted（A 行 info + B 行 ℹ️ 预期回执）→ 首轮两行可见，后续进程全静默', async () => {
++  const cwd = makeFixture()
++  const name = 'plat-deleted-local-deleted'
++  const pm = seedChange(cwd, name)
++  pm.deleteChange(cwd, name) // DB status='deleted'（change-delete 收尾态）
++  // change-delete 真实流程同步移除实体目录（A 行的触发前提：目录已不在）
++  rmSync(join(cwd, '.sillyspec', 'changes', name), { recursive: true, force: true })
++  _resetSyncNoiseForTest()
++
++  const m = mockFetch({ progressStatus: 409, progressBody: { code: 'change_deleted', message: '该变更已在平台删除', change_name: name } })
++  try {
++    let cap = capture()
++    await new SyncManager(cwd).sync(name)
++    cap.restore()
++    assert.ok(cap.logs.some(l => l.includes('继续推送删除终态/墓碑')), '首推 A 行（变更已删除 info）可见')
++    assert.ok(cap.logs.some(l => l.includes('属预期回执，无需动作')), '首推 B 行（ℹ️ 预期回执）可见')
++
++    _resetSyncNoiseForTest()
++    cap = capture()
++    await new SyncManager(cwd).sync(name)
++    cap.restore()
++    assert.equal(cap.logs.filter(l => l.includes('继续推送删除终态/墓碑') || l.includes('属预期回执')).length, 0, '后续进程 A/B 行均静默')
++  } finally { m.restore() }
++})
++
++test('集成：推送成功清窗 → 下次 409 回执重新首报', async () => {
++  const cwd = makeFixture()
++  const name = 'plat-restored'
++  seedChange(cwd, name)
++  _resetSyncNoiseForTest()
++
++  let m = mockFetch({ progressStatus: 409, progressBody: { code: 'change_deleted', message: 'x', change_name: name } })
++  let cap = capture()
++  await new SyncManager(cwd).sync(name)
++  cap.restore()
++  assert.equal(cap.warns.filter(w => w.includes('平台已删除变更')).length, 1, '先吃一次 409 回执（开窗）')
++  m.restore()
++
++  // 平台恢复（重放/重建）：推送成功 → 清窗
++  m = mockFetch()
++  cap = capture()
++  await new SyncManager(cwd).sync(name)
++  cap.restore()
++  assert.ok(cap.logs.some(l => l.includes('已同步变更')), '推送成功照常可见')
++  m.restore()
++
++  _resetSyncNoiseForTest()
++  m = mockFetch({ progressStatus: 409, progressBody: { code: 'change_deleted', message: 'x', change_name: name } })
++  cap = capture()
++  await new SyncManager(cwd).sync(name)
++  cap.restore()
++  assert.equal(cap.warns.filter(w => w.includes('平台已删除变更')).length, 1, '清窗后再次 409 → 重新首报（新故障轮）')
++  m.restore()
++})
++
++test.after(() => {
++  for (const r of roots) { try { rmSync(r, { recursive: true, force: true }) } catch { /* Windows SQLite 句柄延迟释放，best-effort */ } }
++  try { rmSync(tmpRoot, { recursive: true, force: true }) } catch {}
++})

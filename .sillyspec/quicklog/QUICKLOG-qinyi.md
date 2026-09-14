@@ -111,3 +111,19 @@
 根因：第一批血统归属判定基于客户端时间戳：他机慢钟可把外来更新的血统伪装进本地 [base, local_modified] 窗口被误判自回声覆盖（审查暴露的窄盲区）；且服务端存客户端时钟原值，乐观锁与『平台更新』判定跨机偏差本身失真。服务端已改（multi-agent-platform ql-20260914-006-e395）：last_pushed_at 存服务器权威钟、200/409/GET 回传 last_pusher
 方案：sync.js 新增 _isSelfEchoAttribution：身份优先（pusher≠本人外来否决 / ==本人仅保血统上界、下界放开 / 任一侧缺失回退双界窗口 / platLin 缺失 fail-closed），push 409 与 pull 两路径接线（身份来源与发送侧同口径 platform.user||resolvePlatformUser）；_progressContentEquals IGNORE_KEYS 补 last_pusher（服务端 GET 顶层新元字段，不忽略则内容一致自愈恒 false）；契约文档 §4.2/4.3/4.4/§6 同步 + interface-map 4 锚重锚
 结果：platform-sync-self-echo 新增身份匹配（下界放开）与身份否决（盲区关闭回归）4 用例全过；聚焦 11 套件含 doc-ref-check 87/87 全 PASS；lint 595 文件 0 告警；全量 npm test 464/464；CLI 未发版（需 bump+重装生效）
+
+## ql-20260914-007-fcb7 | 2026-09-14 10:27:34 | 修复 explore --done 拒绝提示缺自身出口与 default 空目录污染，及墓碑 409 回执刷屏
+状态：已完成
+关联变更：（无）
+文件：
+- src/progress.js（initChange 对 default 停建 changes/ 目录（系统键与 quick-hex8 同待遇，进度真相在 DB））
+- src/run/command.js（resolveAuxiliaryDefaultAffinity 亲和锚定 + 守卫 !progress 前置 + explore 报错分支）
+- src/sync-noise.js（变更级 change_deleted 回执噪音闸（marker sync-noise-change-deleted.json 按变更名键控））
+- src/sync.js（三处回执行走闸 + res.ok 精清窗口 + manual 选项）
+- src/index.js（platform sync 手动命令传 manual:true 旁路）
+- test/default-no-dir-and-affinity.test.mjs（default 停建目录/亲和/文案回归 19 断言）
+- test/sync-change-deleted-noise.test.mjs（噪音闸单元+集成 7 用例）
+需求：修复 explore --done 拒绝提示缺自身出口与 default 空目录污染，及墓碑 409 回执刷屏
+根因：initChange 对系统生成 key（default）无条件物化 changes/default/ 空目录——default 行是辅助阶段无实体产物的进度容器，空目录致 next.js 误报与目录计数失真，多活跃库中 explore --done 解析失败被守卫拒且报错只指 brainstorm；409 change_deleted 是终态幂等回执永不自愈，既有噪音闸只覆盖连接类失败
+方案：initChange 对 default 停建目录（同 quick-hex8 待遇）；command.js 新增 resolveAuxiliaryDefaultAffinity（default 行在途本阶段锚回、显式 --change 优先）+ 守卫 !progress 前置 + 报错补 explore --change default 提示；sync-noise.js 新增按变更名键控的 change_deleted 回执噪音闸（首报可见/窗口静默/过期重报/推送成功精清/manual 旁路），sync.js 三处接线 + index.js platform sync manual 旁路
+结果：回归 26 断言全过（default 停建与亲和 19 + 噪音闸 7）；全量 npm test 466 文件 0 失败、lint 0 告警、docs check 557 全过（5 处行号重锚）；sync/runtime 模块卡 + changelog + known-issues 同步

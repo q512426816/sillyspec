@@ -51,3 +51,9 @@ quick 启动预留的 ql-ID 写入 guard.json 后，QUICKLOG 条目可被并行 
 ## quick 单活跃变更无条件自动关联（坑 quick-single-change-auto-link）
 
 quick 启动未带 --linked-changes 时，库里恰好一个活跃变更会被无条件自动关联（resolveQuickLinkedChanges `return [activeChanges[0]]`，2026-07-02 单用户流假设）——多 agent 仓库里唯一活跃变更常是他者会话遗留：挂载污染 tasks.md，且 --done 僵尸清理通道（closeQuickLinkedChanges）可把他者变更当僵尸误归档。修复（2026-09-14）：单候选也跑双信号打分（脏文件×design 清单 / 任务描述×proposal），score>0 才自动关联+提示+autoLinked 溯源（guard.linkedChangesAuto）；归档闸对仅被自动关联的变更 skip（机器猜测非协作声明不触发破坏性归档）。显式 --linked-changes 关联不受影响。详见 docs/sillyspec/quick-sync-block-filenotes-and-quicklog-mixed-commit.md；回归 test/quick-single-change-auto-link.test.mjs。
+
+## default 空目录物化 + explore --done 拒绝提示缺自身出口（坑 default-empty-dir-materialized / explore-done-change-default-hint，2026-09-14 用户反馈）
+
+**现象**：①辅助阶段（explore 等）不带 --change 启动时进度挂 DB `default` 变更行，但 `initChange` 会顺手物化 `changes/default/` 空目录——next.js 对它报「变更目录为空→清理该空目录」误导、resolveChangeNameAuto 目录计数被搅动、spec 树上行空目录（本仓实证 09-11 建目录零文件）。②多活跃变更库（多 agent 常态）里 `explore --done` 无 --change 被防幻影守卫拒绝，报错 ③ 只提示 brainstorm 新建路径，不提示进度就在 default 行（用户实证要靠 --status 才摸出来）。
+
+**修复（2026-09-14）**：①initChange 对 default 同 quick-<hex8> 系统键待遇停建目录；②目录停建后辅助阶段续跑锚定显式化——resolveAuxiliaryDefaultAffinity（default 行在途本阶段 → 锚回），done-like 守卫加 !progress 前置；③守卫报错补 explore 分支（default 在活跃列表 → 提示 --change default）。另同批修复 explore --done 的墓碑 409 回执刷屏（change_deleted 变更级噪音闸，见 sync 模块卡）。回归 test/default-no-dir-and-affinity.test.mjs + test/sync-change-deleted-noise.test.mjs。

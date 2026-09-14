@@ -1020,12 +1020,27 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
   }
 
   if (!progress) {
+    // ── 辅助阶段 default 行亲和（坑 default-empty-dir-materialized 配套，2026-09-14 用户反馈①）──
+    // default 行是辅助阶段（explore 等）不带 --change 启动时的进度容器（下方 isAuxiliary
+    // 兜底 'default'）。此前「续跑也锚回 default」靠的是 changes/default/ 目录在目录计数
+    // 解析里的存在感——目录停建后（initChange 对系统 key 不再物化）该隐式锚定失效，
+    // 「default 在途 + 恰好一个其他变更目录」会把辅助阶段挂到别人的变更行。这里显式化：
+    // 无 --change 且 default 行有在途（非 completed）的本阶段 steps → 锚回 default。
+    // 显式 --change 恒优先；非辅助阶段（brainstorm/execute 等）从不落 default，不适用。
+    if (!changeName && isAuxiliary) {
+      const affinity = resolveAuxiliaryDefaultAffinity(pm, cwd, stageName)
+      if (affinity) {
+        changeName = affinity
+        progress = pm.read(cwd, affinity)
+      }
+    }
     // ── done-like 存在性守卫（坑 done-phantom-change-silent-create，2026-09-04 事故元凶①）──
     // --done/--skip/--wait/--continue/--reset/--reopen 都预设「目标 change 已存在于当前进度库」。
     // 此前 !progress 时无条件 initChange 静默新建——接管指针切库/换库后 --change 指向旧库的
     // 变更名，新库里凭空建幻影变更再把动作记上去。目标已物化（changes/ 目录或 quick 会话
     // guard 存在）仍放行走下方 initChange 自愈（DB 重建/迁移后从目录物化是合法恢复路径）。
-    if (isDone || isSkip || isWait || isContinue || isReset || isReopen) {
+    // !progress 前置：上方亲和已锚到 default 行（DB 在途）时目标已确证存在，不走磁盘物化判据。
+    if (!progress && (isDone || isSkip || isWait || isContinue || isReset || isReopen)) {
       const actionFlag = isDone ? '--done' : isSkip ? '--skip' : isWait ? '--wait'
         : isContinue ? '--continue' : isReset ? '--reset' : '--reopen'
       const guardTarget = changeName || resolveChangeNameAuto(cwd, specRoot)
@@ -1051,6 +1066,13 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
         }
         if (stageName === 'quick' || /^quick-[0-9a-f]{8}$/.test(guardTarget || '')) {
           console.error(`   ③ quick 会话跨进程恢复须带 --change <quick-session-id>；本库无该会话 guard——会话可能属于旧库`)
+        } else if (stageName === 'explore' && activeList.includes('default')) {
+          // 坑 explore-done-change-default-hint（2026-09-14 用户反馈①）：explore 不带 --change 启动
+          // 时进度按约定挂 default 变更行（isAuxiliary 兜底），多活跃变更库（多 agent 并行常态）
+          // 目标解析失败被拒时，③ 只指 brainstorm 新建路径——对「进度就在 default 行」的 explore
+          // 会话是误导（用户实证要靠 --status 才摸出来）。default 在活跃列表 = 有辅助阶段在途，
+          // 补指向自身的 --change default 出口。
+          console.error(`   ③ explore 阶段进度默认挂在 default 变更行——本库 default 在活跃列表，重试加 --change default`)
         } else {
           console.error(`   ③ 确要新建变更：先 sillyspec run brainstorm --change <名>（不带 ${actionFlag}）`)
         }
@@ -1461,6 +1483,22 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
 
   // 默认：输出当前步骤
   return await runStage(pm, progress, stageName, cwd, effectiveChange, isSkipApproval, platformOpts, { quickFiles, isAllowNew, isAllowDelete, isForceBaseline, isForceRescan, linkedChanges, linkedChangesAuto: linkedAuto, taskDescription: inputText, adoptBranch: stageName === 'execute' && flags.includes('--adopt-branch') })
+}
+
+/**
+ * 辅助阶段 default 行亲和：default 行有在途（非 completed、steps 已物化）的本阶段时返回 'default'。
+ * steps>0 门槛排除「从未跑过」的空壳行（initChange 播的 pending 空表）——那种行不是在途会话，
+ * 不锚（防凭空把 --done 记上去）。只读不抛（无行/读失败 → null）。目录停建后辅助阶段续跑的
+ * 显式锚定（见 !progress 块内注释）。completed 永不锚（辅助阶段收尾会 reset 回 pending 可重跑，
+ * 见 gates.js auxiliary 重置——reset 后 pending+steps>0 照样锚，即「下一轮 explore 续用 default 行」）。
+ */
+function resolveAuxiliaryDefaultAffinity(pm, cwd, stageName) {
+  try {
+    const p = pm.read(cwd, 'default')
+    const st = p && p.stages && p.stages[stageName]
+    if (st && st.status && st.status !== 'completed' && Array.isArray(st.steps) && st.steps.length > 0) return 'default'
+  } catch { /* 读失败不猜（fail-closed，走原解析链） */ }
+  return null
 }
 
 /**

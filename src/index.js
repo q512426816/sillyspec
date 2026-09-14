@@ -3250,7 +3250,8 @@ SillySpec platform — SillyHub 平台同步
         case 'sync': {
           const syncChangeIdx = args.indexOf('--change');
           const syncChangeName = syncChangeIdx >= 0 && args[syncChangeIdx + 1] && !String(args[syncChangeIdx + 1]).startsWith("--") ? args[syncChangeIdx + 1] : null;
-          await syncModule.sync(syncChangeName, dir);
+          // manual：用户显式同步，change_deleted 回执噪音闸旁路（显式动作的回执必须可见）
+          await syncModule.sync(syncChangeName, dir, { manual: true });
           break;
         }
         case 'sync-docs': {

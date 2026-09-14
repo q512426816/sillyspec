@@ -72,6 +72,7 @@ ProgressManager.alignExecuteToPlan(cwd, changeName, specBase, {confirm})
 - node:sqlite（DatabaseSync，经 db-engine 抽象）是 Node.js 内置原生绑定，事务提交即持久化（WAL），无旧 WASM 引擎的全库 export 开销；旧「纯内存 + 每次 _save 全量序列化」模型已废；node:sqlite 仍发 ExperimentalWarning（v22.13+ 无需 --experimental-sqlite flag），engines.node >=22.13.0
 - PRAGMA（WAL/busy_timeout/foreign_keys）在 `init()` 设一次持续生效，无旧 WASM 引擎 export 重置问题；`close()` 自动 WAL checkpoint 合并 -wal/-shm 回主库
 - `batch_progress` 和 `approvals` 表按 `change_id` UNIQUE，每个变更只能有一条记录
+- **系统 key（default / quick-<hex8>）不物化 changes/ 目录**（坑 default-empty-dir-materialized，2026-09-14 用户反馈）：`initChange` 只为普通变更建 `changes/<名>/` 目录；default（辅助阶段无实体产物的进度容器——explore 产物在 DB、原型按 prompt 约定放 `{SPEC_ROOT}/explore/`）与 quick 会话键的进度真相在 DB 行，空目录纯污染（next.js 报「目录为空→清理」误导、resolveChangeNameAuto 目录计数被搅动、spec 树上行空目录）。配套锚定：`run/command.js` !progress 块的 `resolveAuxiliaryDefaultAffinity`（default 行有在途（非 completed 且 steps>0）的本阶段 → 无 --change 的辅助阶段命令锚回 default 行；显式 --change 恒优先）；done-like 幻影守卫加 `!progress` 前置（亲和已确证目标存在，不落磁盘物化判据）；守卫报错 ③ 对 explore + default 在活跃列表补「重试加 --change default」出口。回归 test/default-no-dir-and-affinity.test.mjs。
 - 历史迁移：v1/v2 使用 `progress.json` 文件，v3 全部迁移至 SQLite（`CURRENT_VERSION = 3`）
 - `db.js` DDL `project.schema_version DEFAULT`、`DB_SCHEMA_VERSION`、`shared.js CURRENT_VERSION`、`progress._version` 四处 schema 版本应一致（当前 v5，title/quicklog_id 列）；改动加表/列/migration 时同步 bump 四处 + 测试断言
 - `migrateDocs` 是一次性脚本，不会幂等运行；已存在的文件会被跳过

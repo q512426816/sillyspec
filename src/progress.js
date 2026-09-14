@@ -1018,10 +1018,15 @@ export class ProgressManager {
     }
     // quick 会话 id（quick-<uuid8>，见 run.js QUICK_SID_RE）只作 progress 的跨进程 session key，
     // 进度存 SQL 不需要实体 change 目录——跳过避免 changes/quick-<uuid>/ 空目录残留。
+    // default 兜底 key 同款待遇（坑 default-empty-dir-materialized，2026-09-14 用户反馈）：
+    // default 行是辅助阶段（explore 等）无实体产物的进度容器，物化 changes/default/ 空目录
+    // 纯污染——next.js 会报「变更目录为空→清理该空目录」误导、resolveChangeNameAuto 的目录
+    // 计数被搅动、spec 树上行空目录（本仓实证 changes/default/ 建于 09-11 零文件）。进度真相
+    // 在 DB 行；辅助阶段续跑锚定改由 run/command.js 的 default 行阶段亲和解析承担。
     // 注：日期前缀门禁（assertDatedChangeName）只在 CLI 边界强制（run --change / change-rename，
     // 见 run/command.js + index.js）——initChange 是库函数，测试/平台工具合法用任意名建 fixture，
     // 不在此设门（2026-09-11 决策，避免 ~30 处测试 fixture 非日期名被拦）。
-    if (!/^quick-[0-9a-f]{8}$/.test(changeName)) {
+    if (!/^quick-[0-9a-f]{8}$/.test(changeName) && changeName !== 'default') {
       this._ensureChangeDir(cwd, changeName);
     }
 

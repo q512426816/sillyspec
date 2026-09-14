@@ -15,10 +15,13 @@
  * - 任意一次同步成功清 marker，且此前在闸内时打一行恢复提示；
  * - SILLYSPEC_DEBUG_SYNC=1 全程不静默。
  *
- * 边界：只覆盖「连接类」失败（HTTP 404/5xx、网络错、超时/abort）。409 冲突与其余
- * 4xx 业务态（平台就绪但状态冲突/鉴权问题）不走闸——那些是每轮都该看见的语义信号，
- * 且已有各自的冲突降噪机制（sync-conflict-banner-spam 一族）。用户显式命令
- * （platform connect 的 health ping）不应被静默——调用方传 noMute 绕过本闸。
+ * 边界：连接类闸只覆盖「连接类」失败（HTTP 404/5xx、网络错、超时/abort）。409 与其余
+ * 4xx 业务态（平台就绪但状态冲突/鉴权问题）不走连接类闸——那些是每轮都该看见的语义信号，
+ * 且已有各自的冲突降噪机制（sync-conflict-banner-spam 一族）。例外：409 code='change_deleted'
+ * 是终态幂等回执（平台侧已删该变更 key，重推永远同回执、永不自愈），走下方按变更名键控的
+ * change_deleted 闸（2026-09-14 用户反馈②）：首报可见 + 跨进程窗口静默 + 推送成功清窗。
+ * 用户显式命令（platform connect 的 health ping / platform sync 手动推送）不应被静默——
+ * 调用方传 noMute 绕过。
  */
 import { readFileSync, writeFileSync, mkdirSync, unlinkSync } from 'fs'
 import { join } from 'path'
@@ -130,11 +133,114 @@ export function syncConnectionWarn(msg) {
 }
 
 /**
- * 判定 HTTP 状态码是否属连接类（可静默）：404（端点未部署/未就绪）与 5xx（服务端故障）。
+ * 判定 HTTP 状态码是否属连接类（可静默）：404（端点未就绪/未部署）与 5xx（服务端故障）。
  * 409 与其余 4xx 不在此列（见模块头注释边界）。
  */
 export function isConnectionClassStatus(status) {
   return status === 404 || (typeof status === 'number' && status >= 500)
+}
+
+// ── 变更级 change_deleted 回执噪音闸（2026-09-14 用户反馈②：--done 的真实报错被
+//    default 墓碑 409 回执刷屏淹没）──
+// 与连接类闸同构但按变更名键控。409 code='change_deleted' 是终态幂等回执：平台侧已删
+// 该变更 key 后，本地同名变更每次自动 push（每步 triggerSync/triggerStepStartSync）都收到
+// 同样的回执——多步流程下逐条重打属零新信息刷屏；且与 base_ts 409 不同，它永远不会自愈
+// （平台侧删除需人工介入）。语义边界（区别于连接类闸的「每轮都该看见」）：
+//   - 首报完整可见（含 ⚠️ 本地仍 active 的可行动信号）；
+//   - 跨进程窗口内同变更的回执静默（窗口过期后照常重报——保活信号，不静默死）；
+//   - 开窗进程内不同回执行照打（诊断完整性，与连接类闸同款）；
+//   - 该变更推送成功（平台侧重建/恢复）→ noteChangeDeletedResolved 清窗；
+//   - 手动 platform sync（opts.manual）与 SILLYSPEC_DEBUG_SYNC=1 旁路。
+const DELETED_MARKER = 'sync-noise-change-deleted.json'
+// 本进程开窗的变更名集合（区分「窗口是本进程开的」与「先前进程留的」，同 _openedByThisProcess）
+let _openedDeletedByThisProcess = new Set()
+// 本进程已见（打印/静默）过的 `${changeName}\u0000${msg}` 集合：同进程内逐字重复只打一次
+const _seenDeletedInProcess = new Set()
+
+function _readDeletedWindows() {
+  const p = _runtimeDir ? join(_runtimeDir, DELETED_MARKER) : null
+  if (!p) return null
+  try {
+    const s = JSON.parse(readFileSync(p, 'utf8'))
+    return s && typeof s === 'object' && !Array.isArray(s) ? s : null
+  } catch { return null }
+}
+
+function _writeDeletedWindows(map) {
+  const p = _runtimeDir ? join(_runtimeDir, DELETED_MARKER) : null
+  if (!p) return
+  try {
+    mkdirSync(_runtimeDir, { recursive: true })
+    const now = Date.now()
+    const pruned = {}
+    for (const [k, v] of Object.entries(map)) if (typeof v === 'number' && v > now) pruned[k] = v
+    if (Object.keys(pruned).length === 0) {
+      try { unlinkSync(p) } catch { /* 无文件/占用：留空 map 文件也等效 */ }
+      return
+    }
+    writeFileSync(p, JSON.stringify(pruned) + '\n', 'utf8')
+  } catch { /* marker 写失败 = 闸门失效退化为直通，仅损失降噪 */ }
+}
+
+function _deletedLineVisible(changeName, msg, noMute) {
+  if (!changeName || noMute || process.env.SILLYSPEC_DEBUG_SYNC) return true
+  const key = changeName + '\u0000' + msg
+  if (_seenDeletedInProcess.has(key)) return false
+  const now = Date.now()
+  const windows = _readDeletedWindows()
+  const until = windows ? windows[changeName] : undefined
+  if (typeof until === 'number' && now < until) {
+    _seenDeletedInProcess.add(key)
+    // 开窗进程内不同回执行可见（诊断完整性），先前进程留的窗口静默
+    return _openedDeletedByThisProcess.has(changeName)
+  }
+  _seenDeletedInProcess.add(key)
+  const next = windows || {}
+  next[changeName] = now + MUTE_WINDOW_MS
+  _writeDeletedWindows(next)
+  _openedDeletedByThisProcess.add(changeName)
+  return true
+}
+
+/**
+ * change_deleted 回执行（info 口吻：本地已注销的墓碑上行 409 属预期回执）。
+ * @returns {boolean} true=已输出
+ */
+export function syncChangeDeletedLog(changeName, msg, { noMute = false } = {}) {
+  if (_deletedLineVisible(changeName, msg, noMute)) {
+    console.log(msg)
+    return true
+  }
+  return false
+}
+
+/**
+ * change_deleted 回执行（warn 口吻：本地仍 active，上行被拒收的可行动信号）。
+ * @returns {boolean} true=已输出
+ */
+export function syncChangeDeletedWarn(changeName, msg, { noMute = false } = {}) {
+  if (_deletedLineVisible(changeName, msg, noMute)) {
+    console.warn(msg)
+    return true
+  }
+  return false
+}
+
+/**
+ * 该变更推送成功（平台侧未删/已重建）：清其回执噪音窗与进程内状态。
+ * 与 noteSyncSuccess 的「任意成功清连接闸」不同——本闸按变更名精清（他变更的窗口不受影响）。
+ */
+export function noteChangeDeletedResolved(changeName) {
+  if (!changeName) return
+  _openedDeletedByThisProcess.delete(changeName)
+  for (const k of _seenDeletedInProcess) {
+    if (k.startsWith(changeName + '\u0000')) _seenDeletedInProcess.delete(k)
+  }
+  const windows = _readDeletedWindows()
+  if (windows && windows[changeName] !== undefined) {
+    delete windows[changeName]
+    _writeDeletedWindows(windows)
+  }
 }
 
 /**
@@ -150,9 +256,11 @@ export function noteSyncSuccess() {
   console.log('[sync] 平台连接已恢复（此前静默的同步失败已停止）')
 }
 
-/** 测试复位：清进程内绑定与开窗状态。 */
+/** 测试复位：清进程内绑定与开窗状态（连接类闸 + change_deleted 变更级闸）。 */
 export function _resetSyncNoiseForTest() {
   _runtimeDir = null
   _openedByThisProcess = false
   _seenInProcess.clear()
+  _openedDeletedByThisProcess = new Set()
+  _seenDeletedInProcess.clear()
 }
