@@ -8,6 +8,9 @@
  *   探针3 测试覆盖：逐 task 按 allowed_paths 定位模块目录，递归找测试文件（co-located tests/ 陷阱）
  *   探针5 API 契约对账：复用 contract-matrix.verifyApiParity（endpoints.json × 前端调用）+ 表格渲染
  *   探针6 删除对账：git diff --name-status HEAD 的 D/R × design 声明操作三态判定
+ *   探针7 验收×测试覆盖矩阵：task 卡 acceptance 自解析（jsYaml，string/array 双形态）+ 双源结构
+ *        归属（allowed_paths 测试模式 ∪ execute-runs review.json changedFiles test/ 前缀）+
+ *        关键词命中提示（命中≠判定，不参与门禁；2026-09-14-acceptance-test-matrix）
  * 探针2（关键词提取半语义）/探针3.4 集成盲区/3.5 断言抽查/探针4（决策追踪语义）留 agent。
  *
  * verify-result.md 骨架：七章节固定结构 + 探针结果机械预填 + 其余章节 <!--TODO--> 占位。
@@ -17,8 +20,9 @@
  * ②--init 同步落盘 verify-facts.json 机器底稿（探针命令行 + 首跑关键指标 + 时间戳，CLI 全权写，
  * 供事后独立复跑审计；重复 --init 覆盖为最近一次 init 快照）。
  */
-import { existsSync, readFileSync, readdirSync, writeFileSync } from 'fs'
+import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'fs'
 import { join, dirname, basename } from 'path'
+import jsYaml from 'js-yaml'
 import { gitQuiet } from './git-helper.js'
 import {
   FACTS_SCHEMA_VERSION, EVIDENCE_SLOT_HEADING, RECEIPT_SLOT_HEADING, parseEvidenceSlots,
@@ -95,10 +99,196 @@ function findTestFiles(rootDir, cwd, cap = 10) {
   return found
 }
 
+// ── 探针 7（验收×测试覆盖矩阵，2026-09-14-acceptance-test-matrix FR-01）常量与纯函数 ──
+const PROBE7_HEADING = '#### 探针 7：验收×测试覆盖矩阵'
+// execute run id 格式（与 task-review.js isValidExecuteRunId 同口径锚定，防提示词注入/路径穿越）
+const PROBE7_EXEC_RUN_ID_RE = /^exec-\d{4}-\d{2}-\d{2}-\d{6}(?:-[a-z0-9]{1,8}){0,2}$/
+// 关键词提取：≥3 字符标识符（[A-Za-z_][A-Za-z0-9_]{2,}）∪ ≥2 字连续 CJK 片段，按出现顺序交错
+const PROBE7_TERM_RE = /[A-Za-z_][A-Za-z0-9_]{2,}|[\u4e00-\u9fff]{2,}/g
+const PROBE7_TERM_CAP = 5
+
 /**
- * 跑四个机械探针。
+ * 解析 task-NN.md frontmatter 的 acceptance（string/array 双形态归一为数组）。
+ * 口径锚 src/stages/plan-postcheck.js acceptance best-effort 段（string → 原文单条、array →
+ * 逐条）——不 import 它：parseTaskContracts 只返回 provides/expects_from 不含 acceptance。
+ * @param {string} content task 卡全文
+ * @returns {string[]|null} acceptance 条目数组；null = 无 frontmatter（调用方跳过该卡）；
+ *   frontmatter 在场但无 acceptance / 非法 YAML → []（防御行，plan-postcheck 已拦缺失）
+ */
+export function parseTaskAcceptance(content) {
+  const fmMatch = String(content || '').match(/^---\r?\n([\s\S]*?)\r?\n---/)
+  if (!fmMatch) return null
+  try {
+    const fmObj = jsYaml.load(fmMatch[1]) || {}
+    if (typeof fmObj.acceptance === 'string') {
+      const t = fmObj.acceptance.trim()
+      return t ? [t] : []
+    }
+    if (Array.isArray(fmObj.acceptance)) {
+      return fmObj.acceptance.filter(x => typeof x === 'string' && x.trim() !== '').map(x => x.trim())
+    }
+  } catch { /* frontmatter 非法 YAML → 防御性空（plan-postcheck 侧已拦） */ }
+  return []
+}
+
+/**
+ * allowed_paths 条目是否测试形态（结构归属面）：test/ 前缀，或文件名含 .test. / _test. / spec
+ * 惯例（(?:^|[._-])test(?:[._-]|$) 覆盖 foo.test.mjs / foo_test.js / test-foo.js 三形）。
+ * 比探针 3 的存在性面（TEST_FILE_RE 子串宽松匹配）严格——这是 3/7 口径差异的落点。
+ */
+function isProbe7TestPath(p) {
+  const posix = String(p).split('\\').join('/')
+  if (/^test\//.test(posix)) return true
+  const name = basename(posix)
+  return /(?:^|[._-])test(?:[._-]|$)/i.test(name) || /spec/i.test(name)
+}
+
+/**
+ * 内联解析当前 execute runId（探针 7 专用——禁静态 import task-review：
+ * task-review→verify-postcheck→verify-probes 三步环，先例见 backfillFactsFromMdAndTests
+ * 对 stage-contract 的分层注释）。优先读 marker current-execute-run-id-<change>；
+ * 读不到/非法则扫描 execute-runs/ 下 mtime 最新的 exec-* 目录兜底；两路皆空 → null
+ * （review 源归空集，不报错）。
+ * @param {string} runtimeRoot
+ * @param {string} changeName
+ * @returns {string|null}
+ */
+function resolveExecuteRunIdInline(runtimeRoot, changeName) {
+  try {
+    const marker = join(runtimeRoot, `current-execute-run-id-${changeName}`)
+    if (existsSync(marker)) {
+      const c = readFileSync(marker, 'utf8').trim()
+      if (c && PROBE7_EXEC_RUN_ID_RE.test(c)) return c
+    }
+  } catch { /* marker 读取失败 → 目录扫描兜底 */ }
+  try {
+    const runsDir = join(runtimeRoot, 'execute-runs')
+    if (!existsSync(runsDir)) return null
+    const cands = readdirSync(runsDir)
+      .filter(n => PROBE7_EXEC_RUN_ID_RE.test(n))
+      .map(n => ({ n, p: join(runsDir, n) }))
+      .filter(x => { try { return statSync(x.p).isDirectory() } catch { return false } })
+      .map(x => { try { return { n: x.n, m: statSync(x.p).mtimeMs } } catch { return { n: x.n, m: 0 } } })
+      .sort((a, b) => b.m - a.m)
+    return cands.length > 0 ? cands[0].n : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * 读当前 runId 下某 task 的 review.json changedFiles 中 test/ 前缀路径（归属第二源）。
+ * review.json 读不到 / JSON 非法 / changedFiles 非数组 → 空集不报错（提示面，宁缺毋噪）。
+ */
+function readReviewChangedTestFiles(runtimeRoot, runId, taskId) {
+  try {
+    const review = JSON.parse(readFileSync(join(runtimeRoot, 'execute-runs', runId, 'tasks', taskId, 'review.json'), 'utf8'))
+    if (!review || !Array.isArray(review.changedFiles)) return []
+    return review.changedFiles
+      .filter(f => typeof f === 'string')
+      .map(f => f.split('\\').join('/'))
+      .filter(f => f.startsWith('test/'))
+  } catch {
+    return []
+  }
+}
+
+/** acceptance 行关键词提取（标识符 ∪ CJK 片段，去重、按出现顺序，上限 5 词防膨胀） */
+function extractAcceptanceTerms(text) {
+  const terms = []
+  const seen = new Set()
+  const re = new RegExp(PROBE7_TERM_RE.source, 'g') // 共享 g 正则有 lastIndex 状态坑，每次新建
+  let m
+  while ((m = re.exec(String(text || ''))) !== null) {
+    if (!seen.has(m[0])) { seen.add(m[0]); terms.push(m[0]) }
+    if (terms.length >= PROBE7_TERM_CAP) break
+  }
+  return terms
+}
+
+/**
+ * 关键词命中提示：逐 acceptance 条目提取词，在归属测试文件内容里 grep（大小写敏感子串）。
+ * 命中≠判定（R-03，不参与门禁）——只有存在命中的条目才进 hints（键 = acceptance 条目下标）。
+ * 测试文件读取双根回退（cwd → worktree 根，坑 probe1-worktree-path-blind / probe3 双根同族：
+ * apply 前新测试只在 worktree）。读不到的文件计 null 跳过。
+ * @returns {Record<number, {terms: string[], files: string[]}>} 普通对象，可 JSON 序列化
+ */
+function buildAcceptanceHints(acceptanceItems, testFiles, cwd, wtRoot) {
+  const hints = {}
+  if (!testFiles || testFiles.length === 0) return hints
+  const cache = new Map()
+  const readTest = (rel) => {
+    if (cache.has(rel)) return cache.get(rel)
+    let content = null
+    const posix = String(rel).split('\\').join('/')
+    for (const root of [cwd, wtRoot]) {
+      if (!root) continue
+      try { content = readFileSync(join(root, posix), 'utf8'); break } catch { /* 换根重试 */ }
+    }
+    cache.set(rel, content)
+    return content
+  }
+  acceptanceItems.forEach((item, idx) => {
+    const hitTerms = []
+    const hitFiles = new Set()
+    for (const term of extractAcceptanceTerms(item)) {
+      const hits = testFiles.filter(f => { const c = readTest(f); return !!c && c.includes(term) })
+      if (hits.length > 0) {
+        hitTerms.push(term)
+        for (const f of hits) hitFiles.add(f)
+      }
+    }
+    if (hitTerms.length > 0) hints[idx] = { terms: hitTerms, files: [...hitFiles] }
+  })
+  return hints
+}
+
+/** 表格单元格转义：管道转 \|（GFM 行内字面量）、连续空白折叠、超长截断（纯展示层） */
+function mdEscapeCell(text, cap = 200) {
+  let s = String(text).replace(/\s+/g, ' ').trim().replace(/\|/g, '\\|')
+  if (s.length > cap) s = s.slice(0, cap) + '…'
+  return s
+}
+
+/**
+ * 渲染探针 7 段（骨架与幂等补段共用单一实现）。
+ * @param {{ applicable: boolean, tasks: Array<{task: string, acceptance: string[], testFiles: string[], hints: Record<number, {terms: string[], files: string[]}>}> }} p7
+ * @returns {string[]} 行数组（含段标题；调用方自理前后空行）
+ */
+function renderProbe7Lines(p7) {
+  const L = [PROBE7_HEADING]
+  if (!p7 || !p7.applicable) {
+    L.push('- 不适用（无 TaskCard）')
+    return L
+  }
+  L.push('<!-- 口径注记：探针 3 = 模块目录递归存在性面（allowed_paths 目录附近有没有测试）；探针 7 = allowed_paths ∪ review changedFiles 结构归属承接面（每条 acceptance 由哪些测试承接）；两者并排冲突以 7 为准。判定枚举（四选一）：covered / partial / uncovered / non-testable（文档/部署类显式逃生门）。关键词命中只是提示，命中≠判定。 -->')
+  for (const t of (p7.tasks || [])) {
+    L.push('')
+    L.push(`**${t.task}**`)
+    if (!Array.isArray(t.acceptance) || t.acceptance.length === 0) {
+      L.push('- （卡无 acceptance——防御，plan-postcheck 已拦）')
+      continue
+    }
+    L.push('| acceptance 条目 | 归属测试文件 | 关键词命中（提示，命中≠判定） | 判定 | 证据 |')
+    L.push('|---|---|---|---|---|')
+    t.acceptance.forEach((item, i) => {
+      const attribCell = (t.testFiles && t.testFiles.length > 0)
+        ? t.testFiles.map(f => `\`${f}\``).join('<br>')
+        : '无归属测试——判定大概率 uncovered'
+      const h = (t.hints && t.hints[i]) || null
+      const hintCell = h
+        ? `${h.terms.map(x => mdEscapeCell(x)).join('、')}（${(h.files || []).map(f => `\`${f}\``).join('、')}）`
+        : '—'
+      L.push(`| ${mdEscapeCell(item)} | ${attribCell} | ${hintCell} | <待填：四选一> | <TODO> |`)
+    })
+  }
+  return L
+}
+
+/**
+ * 跑四个机械探针 + 探针 7 验收×测试覆盖矩阵。
  * @param {{ cwd: string, changeName: string, specDir?: string|null }} opts
- * @returns {{ probe1: object, probe3: object, probe5: object, probe6: object }}
+ * @returns {{ probe1: object, probe3: object, probe5: object, probe6: object, probe7: object }}
  */
 export function runVerifyProbes({ cwd, changeName, specDir = null }) {
   const specBase = resolveVerifyProbesSpecBase(cwd, specDir)
@@ -220,7 +410,44 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
     probe6.deletions.push({ path: posix, status: st, designOp: op || null, verdict })
   }
 
-  return { probe1, probe3, probe5, probe6 }
+  // ── 探针 7：验收×测试覆盖矩阵（acceptance 自解析 + 双源结构归属 + 关键词提示）──
+  // applicable 顶层键：tasks/ 目录不存在或全无 frontmatter = false（quick 会话/旧变更零行为
+  // 变化——不渲染矩阵、不产生待填槽）。归属双源 = 卡 allowed_paths 测试模式 ∪ 当前 runId
+  // review.json changedFiles 的 test/ 前缀（runId 由 resolveExecuteRunIdInline 内联解析——
+  // 禁静态 import task-review，三步环见该函数注释）。
+  const probe7 = { applicable: false, tasks: [] }
+  {
+    const tasksDir = join(changeDir, 'tasks')
+    if (existsSync(tasksDir)) {
+      const runId = resolveExecuteRunIdInline(runtimeRoot, changeName)
+      const cards = []
+      try {
+        for (const f of readdirSync(tasksDir).filter(n => /^task-\d+\.md$/.test(n)).sort()) {
+          const raw = readFileSync(join(tasksDir, f), 'utf8')
+          const acceptance = parseTaskAcceptance(raw)
+          if (acceptance === null) continue // 无 frontmatter → 跳过（plan-postcheck 已拦）
+          const fmId = (raw.match(/^id:\s*(\S+)/m) || [])[1]
+          cards.push({ task: fmId || f.replace(/\.md$/, ''), acceptance, raw })
+        }
+      } catch { /* tasks 目录不可读 → applicable 维持 false */ }
+      probe7.applicable = cards.length > 0
+      for (const card of cards) {
+        const fromAllowed = parseAllowedPaths(card.raw)
+          .map(p => String(p).replace(/^NEW:\s*/, '').trim())
+          .filter(p => p && isProbe7TestPath(p))
+        const fromReview = runId ? readReviewChangedTestFiles(runtimeRoot, runId, card.task) : []
+        const testFiles = [...new Set([...fromAllowed, ...fromReview])]
+        probe7.tasks.push({
+          task: card.task,
+          acceptance: card.acceptance,
+          testFiles,
+          hints: buildAcceptanceHints(card.acceptance, testFiles, cwd, wtRoot),
+        })
+      }
+    }
+  }
+
+  return { probe1, probe3, probe5, probe6, probe7 }
 }
 
 /**
@@ -260,6 +487,12 @@ export function renderVerifyProbesReport(result) {
     }
   }
   L.push(`- ℹ️ ${probe3.note}`)
+  L.push('')
+
+  // 探针 7 紧随探针 3（3.5 已被断言有效性抽查占用，编号顺延取 7 兼容锚定正则 /#### 探针 (\d+)/）；
+  // 骨架序 3 → 7 → 4，ensureAcceptanceMatrixSection 补段同序。result 无 probe7 键（存量调用方/
+  // 合成 result）→ applicable=false 渲染「不适用」行，零回归。
+  L.push(...renderProbe7Lines(result.probe7 || { applicable: false, tasks: [] }))
   L.push('')
 
   L.push('#### 探针 4：决策追踪覆盖')
@@ -506,6 +739,46 @@ export function backfillMissingEvidenceSlots(mdPath, requiredEvidenceItems = [])
     writeFileSync(mdPath, normalized.replace(/\n?$/, '\n') + blocks.join('\n') + '\n')
   }
   return { added }
+}
+
+/**
+ * 探针 7 矩阵段幂等补齐（--init 段落级，2026-09-14-acceptance-test-matrix FR-01；学
+ * backfillMissingEvidenceSlots 形态）：verify-result.md 已存在但缺「#### 探针 7」段且
+ * applicable=true（有 TaskCard）时补矩阵骨架段——不触碰既有正文；二跑零改动（幂等）。
+ * 插入位置：文件内有「#### 探针 3」小节时插在该小节之后（保持骨架序 3 → 7 → 4），否则
+ * 文末追加（旧格式/手写正文）。段已在场（冒号全/半角均认，防走样标题绕过检测）或
+ * applicable=false → no-op。本变更自举通道：verify-result.md 先于特性存在的存量走此补段。
+ * @param {string} mdPath verify-result.md 路径
+ * @param {{ applicable: boolean, tasks: Array }} probe7 runVerifyProbes 返回的 probe7
+ * @returns {{ added: boolean, reason?: string }}
+ */
+export function ensureAcceptanceMatrixSection(mdPath, probe7) {
+  let text
+  try { text = readFileSync(mdPath, 'utf8') } catch { return { added: false, reason: 'verify-result.md 不存在或不可读' } }
+  const normalized = text.replace(/\r\n/g, '\n')
+  if (/^#### 探针 7[：:]/m.test(normalized)) return { added: false, reason: '探针 7 段已在场' }
+  const p7 = probe7 && typeof probe7 === 'object' ? probe7 : { applicable: false, tasks: [] }
+  if (!p7.applicable) return { added: false, reason: '不适用（无 TaskCard）' }
+  const blockLines = [...renderProbe7Lines(p7), '']
+  try {
+    const lines = normalized.split('\n')
+    const p3Idx = lines.findIndex(l => /^#### 探针 3[：:]/.test(l))
+    if (p3Idx === -1) {
+      writeFileSync(mdPath, normalized.replace(/\n?$/, '\n') + '\n' + blockLines.join('\n'))
+    } else {
+      // 探针 3 小节终点 = 下一个任意级别标题行（与 verify-postcheck extractProbeSubsections 同口径）
+      let end = lines.length
+      for (let i = p3Idx + 1; i < lines.length; i++) {
+        if (/^#{1,6}\s/.test(lines[i])) { end = i; break }
+      }
+      lines.splice(end, 0, ...blockLines)
+      writeFileSync(mdPath, lines.join('\n'))
+    }
+  } catch (e) {
+    console.warn(`⚠️ 探针 7 矩阵段补齐落盘失败（fail-soft，不阻断）: ${e && e.message ? e.message : e}`)
+    return { added: false, reason: '落盘失败' }
+  }
+  return { added: true }
 }
 
 /**

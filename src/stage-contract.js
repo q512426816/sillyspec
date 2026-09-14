@@ -689,6 +689,161 @@ function validateVerifyOutputs(cwd, changeName, context = {}) {
   return { ok: errors.length === 0, errors, warnings }
 }
 
+// ============ 探针 7 验收×测试覆盖矩阵门禁（2026-09-14-acceptance-test-matrix FR-02） ============
+// 段格式与 src/verify-probes.js renderProbe7Lines 骨架渲染字面同源（禁第二套解析文法）：
+// 段标题「#### 探针 7：验收×测试覆盖矩阵」（全/半角冒号皆认）；每 task 前 **task-NN** 锚行；
+// 五列表 | acceptance 条目 | 归属测试文件 | 关键词命中 | 判定 | 证据 |；判定槽 <待填：四选一>、
+// 证据槽 <TODO>；列表防御行（卡无 acceptance…）与不适用行无槽不计。
+
+/** 判定列四枚举白名单（骨架口径注记字面同源） */
+const MATRIX_VERDICT_WHITELIST = new Set(['covered', 'partial', 'uncovered', 'non-testable'])
+/** 证据列未填占位（骨架字面同源） */
+const MATRIX_EVIDENCE_TODO = '<TODO>'
+
+/**
+ * 切分 markdown 表格行：按未转义管道切列（`\|` 是单元格内字面量，切列须忽略），
+ * 行首管道消费、行尾有管道则末段为收尾空段不产列。非 | 起始行返回 null。
+ * @returns {string[]|null} 单元格数组（未 trim）；null = 非表行
+ */
+function splitMatrixRowCells(line) {
+  const s = String(line).trim()
+  if (!s.startsWith('|')) return null
+  const cells = []
+  let cur = ''
+  for (let i = 1; i < s.length; i++) {
+    const ch = s[i]
+    if (ch === '\\' && s[i + 1] === '|') { cur += '|'; i++; continue }
+    if (ch === '|') { cells.push(cur); cur = ''; continue }
+    cur += ch
+  }
+  if (!s.endsWith('|')) cells.push(cur) // 行尾缺管道的宽容形态：尾段仍是单元格
+  return cells
+}
+
+/**
+ * covered/partial 行证据是否含测试锚点形态之一：`.test.` 文件名 / file:line（x.js:123）/
+ * 反引号包裹的标识符（骨架归属列即反引号路径，agent 引用复制即命中）。
+ */
+function matrixEvidenceHasAnchor(evidence) {
+  const e = String(evidence || '')
+  if (e.includes('.test.')) return true
+  if (/[A-Za-z0-9_\-./\\]+\.[A-Za-z0-9]+:\d+/.test(e)) return true
+  if (/`[^`]+`/.test(e)) return true
+  return false
+}
+
+/**
+ * 行级证据口径：covered/partial 须非 TODO 且含测试锚点；non-testable 须非 TODO 且非空
+ * （一句话理由）；uncovered 无证据要求；判定未填（不在三枚举内）的行只计 unfilled 不重复计证据。
+ */
+function matrixEvidenceMissing(verdict, evidence) {
+  if (verdict !== 'covered' && verdict !== 'partial' && verdict !== 'non-testable') return false
+  const e = String(evidence || '').trim()
+  if (e === '' || e === MATRIX_EVIDENCE_TODO || e.startsWith('<待填')) return true
+  if (verdict === 'non-testable') return false // 非 TODO 且非空即合规（理由一句话）
+  return !matrixEvidenceHasAnchor(e)
+}
+
+/**
+ * 行级提取 verify-result.md「#### 探针 7：验收×测试覆盖矩阵」段的判定/证据槽（纯字符串解析）。
+ * 段定位：探针 7 标题（全/半角冒号）到下个同级（####）或更高级（#~###）标题；##### 属段内。
+ * 只认五列表行（按忽略 \| 转义切列）；表头/分隔行、**task-NN** 锚行、列表防御行与
+ * 「不适用（无 TaskCard）」行不计槽。
+ * @param {string} verifyMd - verify-result.md 全文
+ * @returns {{
+ *   present: boolean,
+ *   rows: Array<{task: string, acceptance: string, verdict: string, evidence: string, unfilled?: boolean, evidenceMissing?: boolean}>,
+ *   unfilled: number,
+ *   missingEvidence: number
+ * }} 无段时 present=false、rows=[]、计数 0/0（调用方区分「无段」与「段在而未填」）
+ */
+export function extractAcceptanceMatrixSlots(verifyMd) {
+  const md = String(verifyMd || '')
+  const out = { present: false, rows: [], unfilled: 0, missingEvidence: 0 }
+  const hm = md.match(/^#### 探针 7[：:]/m)
+  if (!hm) return out
+  out.present = true
+  const rest = md.slice(hm.index + hm[0].length)
+  const endMatch = rest.match(/^#{1,4}(?:[ \t]|$)/m)
+  const sectionText = endMatch ? rest.slice(0, endMatch.index) : rest
+
+  let currentTask = ''
+  for (const rawLine of sectionText.split(/\r?\n/)) {
+    const anchor = rawLine.match(/^\*\*\s*(task-[A-Za-z0-9._-]+)\s*\*\*/)
+    if (anchor) { currentTask = anchor[1]; continue }
+    const cells = splitMatrixRowCells(rawLine)
+    if (!cells || cells.length !== 5) continue // 列表防御行/不适用行/非五列表行不计槽
+    const c = cells.map(x => x.trim())
+    if (c.every(x => /^:?-{3,}:?$/.test(x))) continue // 分隔行 |---|---|…|
+    if (c[3] === '判定' && c[4] === '证据') continue // 表头行
+    const verdict = c[3]
+    const evidence = c[4]
+    const row = { task: currentTask, acceptance: c[0], verdict, evidence }
+    if (!MATRIX_VERDICT_WHITELIST.has(verdict)) { row.unfilled = true; out.unfilled++ }
+    if (matrixEvidenceMissing(verdict, evidence)) { row.evidenceMissing = true; out.missingEvidence++ }
+    out.rows.push(row)
+  }
+  return out
+}
+
+/**
+ * 探针 7 矩阵门禁 validator（注册 contracts.verify.validators，走 runValidators errors
+ * 阻断链——勿进 gates.js fail-soft 回填块，catch 只 warn 会吞阻断）：
+ *   - 无 tasks/ 目录（quick 会话/旧变更，无 TaskCard）→ no-op 零行为变化
+ *   - verify-result.md 未落盘（verify 中间步骤）→ no-op：存在性归引擎 manifest，此处只读已落盘内容
+ *   - 段缺失：严格档（isIrStrictVerifyChange / IR_STRICT_SINCE 同源常量，与结论槽
+ *     「删槽回退已关闭」同口径）ERROR；非严格（存量变更）warning 提示补段不阻断
+ *   - 段在场：unfilled / missingEvidence > 0 → ERROR 列出违规行（task+acceptance 截断 40 字）
+ */
+function validateAcceptanceMatrix(cwd, changeName, context = {}) {
+  const { specRoot } = context
+  const errors = []
+  const warnings = []
+  const changeDir = resolveChangeDir(cwd, changeName, specRoot)
+
+  // 无 TaskCard（tasks/ 不存在）→ 不校验（设计兼容策略：brownfield 零行为变化）
+  if (!existsSync(join(changeDir, 'tasks'))) return { ok: true, errors, warnings }
+  // verify-result.md 中间步骤未落盘 → 不校验（末步引擎存在性规则兜底）
+  const verifyResultPath = join(changeDir, 'verify-result.md')
+  if (!existsSync(verifyResultPath)) return { ok: true, errors, warnings }
+
+  const matrix = extractAcceptanceMatrixSlots(readFileSync(verifyResultPath, 'utf8'))
+  if (!matrix.present) {
+    if (isIrStrictVerifyChange(changeDir)) {
+      errors.push(
+        `探针 7 矩阵段缺失（有 TaskCard 且严格档，created_at ≥ ${IR_STRICT_SINCE}）——` +
+        `verify-result.md 缺「#### 探针 7：验收×测试覆盖矩阵」段。` +
+        `修复：跑 \`sillyspec verify-probes --change ${changeName} --init\` 幂等补段（已有正文不覆盖），再逐行填判定与证据。`
+      )
+    } else {
+      warnings.push(
+        `verify-result.md 缺探针 7 验收×测试覆盖矩阵段（非严格档，存量变更不强制）——` +
+        `可跑 \`sillyspec verify-probes --change ${changeName} --init\` 幂等补段。`
+      )
+    }
+    return { ok: errors.length === 0, errors, warnings }
+  }
+
+  const clip = (s) => { const t = String(s || ''); return t.length > 40 ? t.slice(0, 40) + '…' : t }
+  const rowLabel = (r) => `${r.task || '（未知 task）'}｜${clip(r.acceptance)}`
+  if (matrix.unfilled > 0) {
+    const list = matrix.rows.filter(r => r.unfilled).map(rowLabel).join('；')
+    errors.push(
+      `探针 7 验收×测试覆盖矩阵有 ${matrix.unfilled} 行判定未填（四选一 covered/partial/uncovered/non-testable）：${list}。` +
+      `修复：编辑 verify-result.md 探针 7 段，把 <待填：四选一> 替换为判定值。`
+    )
+  }
+  if (matrix.missingEvidence > 0) {
+    const list = matrix.rows.filter(r => r.evidenceMissing).map(rowLabel).join('；')
+    errors.push(
+      `探针 7 验收×测试覆盖矩阵有 ${matrix.missingEvidence} 行证据缺失` +
+      `（covered/partial 证据须含测试锚点：\`.test.\` 文件名 / file:line / 反引号包裹的测试名；non-testable 证据须写一句理由）：${list}。` +
+      `修复：在证据列补测试锚点（如 \`test/foo.test.mjs\` 或 \`src/x.js:42\`）或 non-testable 理由。`
+    )
+  }
+  return { ok: errors.length === 0, errors, warnings }
+}
+
 /**
  * 计算归档目标目录名：保持原变更名不变，直接移入 archive/。
  */
@@ -881,7 +1036,9 @@ const contracts = {
     description: '验证与测试',
     allowedFrom: ['execute'],
     allowedTo: ['archive'],
-    validators: [validateVerifyOutputs],
+    // validateAcceptanceMatrix：探针 7 矩阵槽 fail-closed（2026-09-14-acceptance-test-matrix FR-02），
+    // 注册进 validator 链即覆盖 gates / machine-interface 等全部 runValidators 调用方（gates.js 零改动）。
+    validators: [validateVerifyOutputs, validateAcceptanceMatrix],
   },
   archive: {
     stage: 'archive',

@@ -3,7 +3,7 @@
 > 🔧 **先跑 CLI 机械探针（一条命令）**：`sillyspec verify-probes --change <change-name> [--init]`
 > 输出已包含四个纯机械探针的结果（可直接进验证报告）：**探针 1** 未实现标记扫描（design 清单文件逐行 TODO/FIXME 命中 + 行号）、**探针 3** 测试文件递归查找（含 co-located tests/，逐 task 覆盖）、**探针 5** API 契约对账表（endpoints.json × 前端调用 diff）、**探针 6** 删除对账三态（git 事实 × design 声明）。`--init` 顺带生成 verify-result.md 九章节骨架（探针结果已预填，`<!--TODO-->` 占位替换即可）。
 >
-> 下列条目中，只有**半语义部分**需要你执行：探针 2（关键词提取）、探针 3.4 集成盲区标注、探针 3.5 断言有效性抽查、探针 4（决策追踪闭环判定）。CLI 已跑的部分勿重复手跑——对 CLI 输出的 warning 项做语义复核即可。
+> 下列条目中，只有**半语义部分**需要你执行：探针 2（关键词提取）、探针 3.4 集成盲区标注、探针 3.5 断言有效性抽查、探针 4（决策追踪闭环判定）、探针 7（验收×测试覆盖矩阵判定填槽）。CLI 已跑的部分勿重复手跑——对 CLI 输出的 warning 项做语义复核即可。
 
 **探针 2：设计关键词覆盖探针（你执行——关键词提取是语义）**
 1. 读取 design.md，从中提取所有能力关键词（如"登录"、"导出"、"批量"、"删除"、"搜索"等动作词）
@@ -31,3 +31,6 @@ CLI 的 missing backend endpoint 是 advisory（不硬阻断归档）——但 c
 
 **探针 6 补充（CLI 已出三态判定，你做终审）**
 以 git 事实为准（真实 > 声明）；CLI 的三态（合规/高风险/未声明）是机械判定，是否构成 FAIL blocker 由你诚实判定，务必如实记录——静默删除代码是 verify 的最大盲区。
+
+**探针 7 补充（CLI 已预填矩阵归属与提示，你填判定与证据）**
+验收×测试覆盖矩阵：CLI 机械半边已预填——逐 task 解析 TaskCard acceptance（frontmatter）、双源结构归属测试文件（allowed_paths 测试模式 ∪ execute review changedFiles 中 test/ 路径）、关键词命中提示（命中≠判定，仅提示）。你逐行填判定槽四枚举（covered / partial / uncovered / non-testable——non-testable 是文档/部署类显式逃生门）与证据：covered/partial 附测试锚点（`.test.` 文件或 file:line），non-testable 附一句理由；判定或证据未填 fail-closed，阻断 verify `--done`。与探针 3 口径差异：探针 3 查模块目录有没有测试文件（存在性面），探针 7 查每条 acceptance 由哪些测试承接（承接面）；两者并排冲突以 7 为准。

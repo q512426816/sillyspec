@@ -1115,6 +1115,18 @@ task 进行中状态标记：开工/完工落 .runtime/task-progress/，list 标
             console.log(`📄 已补齐缺失槽段（不触碰既有正文）: ${vpAdded.added.join('、')}`)
           }
         }
+        // 2026-09-14-acceptance-test-matrix：探针 7 验收×测试覆盖矩阵骨架幂等补段——
+        // verify-result.md 已存在但缺「#### 探针 7」段且 applicable（有 TaskCard）时补矩阵
+        // 骨架（学 backfillMissingEvidenceSlots 形态，不触既有正文；判定/证据槽 fail-closed
+        // 由 verify 门禁负责）。本变更自举：verify-result.md 先于特性存在的存量走此补段。
+        try {
+          const { ensureAcceptanceMatrixSection } = await import('./verify-probes.js')
+          const vpMatrix = ensureAcceptanceMatrixSection(vpReportPath, vpResult.probe7)
+          if (vpMatrix.added) {
+            try { await mirrorInitArtifact(vpReportPath, 'verify-result.md', readFileSync(vpReportPath, 'utf8')) } catch { /* 镜像失败不阻断 */ }
+            console.log(`🧩 探针 7 验收×测试覆盖矩阵骨架段已补齐（判定=四选一/证据两槽待填，命中≠判定；不触碰既有正文）: ${vpReportPath}${vpPlatformNote}`)
+          }
+        } catch { /* 矩阵补段失败不阻断 --init */ }
         // P0-1（noai-ir-roadmap §3）两件机械预填，均幂等 fail-soft：
         //   ①决策追踪矩阵机械半边——D→FR→task 链自 decisions.md × tasks/*.md frontmatter
         //     结构化字段构建，Evidence/状态两列留 agent 逐格复核；

@@ -160,6 +160,7 @@ export const definition = {
 2. 如果存在：
    - 逐个读取 tasks/task-NN.md，对照 frontmatter 的 \`acceptance:\` 列表逐条核验（TaskCard 协议的验收标准在 frontmatter YAML，正文无 checkbox）
    - 每条 acceptance 对照实际实现/测试结果判定满足与否，未满足的项列为不通过
+   - 覆盖对账走探针 7 矩阵：verify-result.md「探针 7：验收×测试覆盖矩阵」段已由 CLI 预填归属测试文件与关键词提示（骨架未生成时先跑 \`sillyspec verify-probes --change <change-name> --init\`，幂等不覆盖已有正文）；逐行填判定（covered/partial/uncovered/non-testable 四选一）与证据——covered/partial 附测试锚点（\`.test.\` 文件或 file:line），non-testable 写一句理由；判定/证据未填会被 verify \`--done\` 门禁阻断（fail-closed）
 3. 如果不存在：跳过此步骤
 
 ### 输出

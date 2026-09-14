@@ -128,7 +128,7 @@
 **提示词原文**
 
 ````markdown
-对照 tasks.md（任务注册表唯一真相）检查每个任务完成状态。勾选由 execute 双路写入（agent 按 review gate 手动勾 + CLI autoCheckPlanFromReviews 机器勾选器按 review.json 自动勾），本阶段只读对照、不改勾。
+对照 tasks.md（任务注册表唯一真相）检查每个任务完成状态。勾选唯一写入者是 CLI（review write 落盘即按 review.json verdict 勾选，execute --done 时 autoCheckPlanFromReviews 兜底；P2-f 起 agent 不再手勾），本阶段只读对照、不改勾。
 
 ### 勾选状态（CLI 注入，勿手数）
 {TASKS_CHECKBOX}
@@ -211,6 +211,7 @@
 2. 如果存在：
    - 逐个读取 tasks/task-NN.md，对照 frontmatter 的 `acceptance:` 列表逐条核验（TaskCard 协议的验收标准在 frontmatter YAML，正文无 checkbox）
    - 每条 acceptance 对照实际实现/测试结果判定满足与否，未满足的项列为不通过
+   - 覆盖对账走探针 7 矩阵：verify-result.md「探针 7：验收×测试覆盖矩阵」段已由 CLI 预填归属测试文件与关键词提示（骨架未生成时先跑 `sillyspec verify-probes --change <change-name> --init`，幂等不覆盖已有正文）；逐行填判定（covered/partial/uncovered/non-testable 四选一）与证据——covered/partial 附测试锚点（`.test.` 文件或 file:line），non-testable 写一句理由；判定/证据未填会被 verify `--done` 门禁阻断（fail-closed）
 3. 如果不存在：跳过此步骤
 
 ### 输出
@@ -305,9 +306,9 @@
 
 ### 🧹 服务进程登记与自动回收（真实启动验证必读，坑 verify-service-process-leak）
 「真实启动一次」起的长驻服务（uvicorn/node server 等）**必须登记 PID，CLI 在 verify 收尾自动回收**——不登记的进程会挂死机器（实测 uvicorn 漏挂一天多）：
-1. 后台启动服务并取 PID（PowerShell：`Start-Process -PassThru` 取 `.Id`；bash：`cmd & echo $!`）
+1. 后台启动服务并取 PID（PowerShell：`Start-Process -PassThru` 取 `.Id`；bash：`cmd & echo $!`）。**优先登记服务本体（叶子）PID**——经 shell 包装启动（`sh -c` / `cmd /c` / uvicorn --reload 的 reloader）时 CLI 虽已按进程树击杀（2026-09-10 起连带子进程），但叶子 PID 最稳：包装 shell 退出后子进程 PID 不漂移、跨平台一致
 2. 每行一个 PID 追加到 `{SPEC_ROOT}/.runtime/verify-services-<change-name>.pids`（`Add-Content` / `echo >>`；**按变更名分片**——多会话并发 verify 时各自的 --done 只回收自己的服务，互不误杀）
-3. verify `--done` 时 CLI 读该文件逐个 kill 并清空——你在 verify-result.md 的「生命周期终态断言」里写「PID 已登记，CLI 收尾回收」即可
+3. verify `--done` 时 CLI 读该文件**逐进程树击杀**（包装进程连同子进程）并清空——你在 verify-result.md 的「生命周期终态断言」里写「PID 已登记，CLI 收尾回收」即可
 登记是硬要求：没有 PID 登记的「真实启动」证据在 deployment-critical 门控下视为不完整（进程无法证明被回收）。
 
 ### 输出
