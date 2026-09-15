@@ -473,3 +473,13 @@
 根因：EHS二次复核实证：①review走查面跟测试覆盖走，编辑路径/相关方支线零覆盖恰是5个P1藏身处②doSubmit无操作人校验而delete/withdraw有——守卫一致性无checklist③复核结论只活在聊天记录，档案仍写PASS WITH NOTES
 方案：renderProbe7Lines零/半承接计数尾注（uncovered/partial>0→强制显式走查指引）；骨架代码审查TODO扩五项走查清单（编辑更新链路/非主分支流/守卫一致性/探针8配对核实/分页并发事务原子性）；骨架新增独立复核可选回流槽（P1/P2/P3分级+证据链+结论枚举影响改写）；verify-probes-facts计数13→14+回流槽断言
 结果：verify-probes-facts/acceptance-matrix/handover回归全绿；lint+全量npm test由--done CLI实测
+
+## ql-20260916-009-8b37 | 2026-09-16 01:13:08 | 平台接口图登记链路A已知问题（EHS实证核查结论备查daemon仓）
+状态：已完成
+关联变更：（无）
+文件：
+- docs/sillyspec/platform-interface-map.md（链路A已知问题登记块）
+需求：平台接口图登记链路A已知问题（EHS实证核查结论备查daemon仓）
+根因：EHS生产实证：全流程后平台行status=draft/current_stage空/title停提案书而updated_at在动——核查结论需留档给daemon仓
+方案：链路A节首插已知问题块：CLI载荷含current_stage/status（serializeForSync契约conformant）→daemon两嫌疑（§14.5投影覆盖未生效/progress POST被总预算熔断让路同环境实测）；title不在契约内需双边变更；MASTER行单变更交付exists=f正常态。自带论述锚brainstorm.js:109?降级纯位置锚
+结果：纯文档；docs check 570引用全过

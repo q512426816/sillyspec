@@ -1,0 +1,47 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-2350a99d",
+  "totals": {
+    "files": 1,
+    "additions": 2,
+    "deletions": 0
+  },
+  "rows": [
+    {
+      "path": "docs/sillyspec/platform-interface-map.md",
+      "declared": true,
+      "additions": 2,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 1,
+    "codeFileCount": 0,
+    "testFileCount": 0,
+    "moduleSpan": null,
+    "modules": [],
+    "unmappedFiles": [],
+    "riskHits": [],
+    "level": "L0",
+    "degraded": true,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "na",
+      "docClaim": "claimed",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260916-009-8b37",
+  "sessionId": "quick-2350a99d",
+  "savedAt": "2026-09-15T17:14:34.256Z",
+  "patchSha256": "36a2866f9fbe39dc62a05efb24cd0fba5bec9c92c4ee7ae5a6d71e0cc0a0aff7",
+  "patchStatus": "ok"
+}

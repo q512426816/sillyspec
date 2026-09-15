@@ -1,0 +1,13 @@
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index 57a76d8..2d86276 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -60,6 +60,8 @@ mcp:
+ 
+ **铁律：全程 best-effort** —— 网络失败 / 非 2xx / 超时一律 `console.warn` 不抛、不阻断主流程（`sync.js:1-9`）。唯一例外是 `approve`/`reject`（见下表脚注）。
+ 
++> **已知问题（平台侧，2026-09-16 EHS 生产实证核查）**：变更 `2026-09-15-ehs-reward-punishment` 走完全流程后平台 changes 行仍 `status=draft / current_stage 空 / title 停在「提案书」`，而 `updated_at` 持续跟进（文档推送通道活着）。CLI 侧核查结论：progress 载荷**含** `current_stage/status`（`serializeForSync` changes 投影，契约 §4 conformant）——滞后指向 daemon 侧两嫌疑之一：① `POST /progress` 的 §14.5 投影覆盖（权威 current_stage 覆盖表值）未生效；② progress POST 被 CLI 总预算熔断让路丢弃（同环境 2026-09-15 实测出现过「平台响应慢，本轮同步被总预算熔断让路」，文档通道与进度通道预算独立时会只动 `updated_at`）。`title` 不在 progress 契约内、由平台从文档派生且从不再刷新——如需随 stage 更新需双边契约变更。另：`change_documents` 的 MASTER 行在**单变更交付**（brainstorm 判定不拆分）时 `exists=f` 是正常态非 CLI 缺口（MASTER.md 是拆分场景产物，`stages/brainstorm.js:109?`）。归属 multi-agent-platform 仓修，此处登记备查。
++
+ ### 端点清单
+ | 方法 | HTTP | 端点 | 做什么 | 源码 |
+ |---|---|---|---|---|
